@@ -37,6 +37,7 @@ def select_variable(spec: SourceSpec, params: dict[str, Any]) -> tuple[str, dict
         raise router_input_error(
             spec.error_code_prefix,
             f"unknown variable {requested!r}; allowed: {sorted(variables)}",
+            spec.input_error_suffix,
         )
     return requested, variables[requested]
 

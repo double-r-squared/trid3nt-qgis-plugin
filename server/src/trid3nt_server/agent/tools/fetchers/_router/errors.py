@@ -14,6 +14,8 @@ base the twins subclass), so the server-side A.6 mapping treats them identically
 
 from __future__ import annotations
 
+from typing import Any
+
 from .._fetch_common import FetchError
 
 __all__ = [
@@ -26,6 +28,7 @@ __all__ = [
     "router_upstream_error",
     "router_empty_error",
     "router_not_available_error",
+    "bbox_error_suffix",
 ]
 
 
@@ -90,17 +93,40 @@ def _stamp(cls: type[RouterError], code_prefix: str, suffix: str, message: str) 
     return exc
 
 
-def router_input_error(code_prefix: str, message: str) -> RouterInputError:
-    return _stamp(RouterInputError, code_prefix, "INPUT_ERROR", message)  # type: ignore[return-value]
+def router_input_error(
+    code_prefix: str, message: str, suffix: str = "INPUT_ERROR"
+) -> RouterInputError:
+    """Typed bad-input error. ``suffix`` defaults to the byte-identical
+    ``INPUT_ERROR`` but a source may stamp its own (hifld/census ``INPUT_INVALID``,
+    esri per-param ``BBOX_INVALID`` / ``YEAR_INVALID``)."""
+    return _stamp(RouterInputError, code_prefix, suffix, message)  # type: ignore[return-value]
 
 
 def router_upstream_error(code_prefix: str, message: str) -> RouterUpstreamError:
     return _stamp(RouterUpstreamError, code_prefix, "UPSTREAM_ERROR", message)  # type: ignore[return-value]
 
 
-def router_empty_error(code_prefix: str, message: str) -> RouterEmptyError:
-    return _stamp(RouterEmptyError, code_prefix, "EMPTY", message)  # type: ignore[return-value]
+def router_empty_error(
+    code_prefix: str, message: str, suffix: str = "EMPTY"
+) -> RouterEmptyError:
+    """Typed empty/no-coverage error. ``suffix`` defaults to ``EMPTY`` but esri
+    stamps ``NO_COVERAGE`` (ESRI_LANDCOVER_NO_COVERAGE)."""
+    return _stamp(RouterEmptyError, code_prefix, suffix, message)  # type: ignore[return-value]
 
 
 def router_not_available_error(code_prefix: str, message: str) -> RouterNotAvailableError:
     return _stamp(RouterNotAvailableError, code_prefix, "NOT_AVAILABLE", message)  # type: ignore[return-value]
+
+
+def bbox_error_suffix(spec: Any) -> str:
+    """The A.6 input-error suffix for a bbox-class failure (gate / malformed bbox).
+
+    Returns the bbox param's ``error_suffix`` when it pins one (esri
+    ``BBOX_INVALID``), else the spec-level ``input_error_suffix`` (gridmet/coops
+    ``INPUT_ERROR``, hifld/census ``INPUT_INVALID``). Duck-typed over SourceSpec
+    so ``errors`` stays import-cycle free.
+    """
+    for pspec in getattr(spec, "params", {}).values():
+        if getattr(pspec, "type", None) == "bbox" and getattr(pspec, "error_suffix", None):
+            return pspec.error_suffix
+    return getattr(spec, "input_error_suffix", "INPUT_ERROR")

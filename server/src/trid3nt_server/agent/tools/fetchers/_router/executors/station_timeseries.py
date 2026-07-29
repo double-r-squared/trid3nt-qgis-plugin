@@ -128,6 +128,7 @@ def stations_to_point_fgb(
         raise router_empty_error(
             spec.error_code_prefix,
             "no station carried data in the requested bbox/window",
+            spec.empty_error_suffix,
         )
 
     df = pd.DataFrame(rows_out)

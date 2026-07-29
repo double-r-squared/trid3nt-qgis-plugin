@@ -124,6 +124,19 @@ class ParamSpec(GraceModel):
     values: list[Any] | None = None          # enum only
     quantize: str | None = None              # bbox only: round_6dp | res_<m>
     max_range_days: int | None = None        # iso_date pair ceiling (end param)
+    #: int/float inclusive range gate (esri year [2017,2023]). Out-of-range ->
+    #: a typed input error stamped with this param's ``error_suffix``.
+    min: float | None = None
+    max: float | None = None
+    #: iso_date coverage bounds (gridmet: start >= 1979-01-01, end <= today+1).
+    #: A violation is a typed ``*_NOT_AVAILABLE`` (twin GRIDMETNotAvailableError),
+    #: distinct from the ISO-format / range-days input errors.
+    min_date: str | None = None              # static ISO lower coverage bound
+    max_future_days: int | None = None       # end <= today + N (future ceiling)
+    #: Per-param A.6 input-error suffix override (VERDICT round-2). Most sources
+    #: use the spec-level ``input_error_suffix``; esri splits per-param
+    #: (bbox -> BBOX_INVALID, year -> YEAR_INVALID). Default (None) = spec-level.
+    error_suffix: str | None = None
 
 
 class GateSpec(GraceModel):
@@ -152,6 +165,10 @@ class OutputSpec(GraceModel):
     ext: Literal["tif", "fgb", "json"]
     role: Literal["primary", "context", "input"] = "primary"
     style_preset: str                        # may template on a param
+    #: Whether the emitted ``LayerURI`` carries the request bbox. Default True
+    #: (census/coops/hifld/esri set it); gridmet's twin omits it, so its spec
+    #: sets ``emit_bbox: false`` to stay byte-identical (VERDICT round-2 tell).
+    emit_bbox: bool = True
 
 
 class CacheSpec(GraceModel):
@@ -216,6 +233,18 @@ class SourceSpec(GraceModel):
     #: ``error_prefix`` to the twin's exact token; the router stamps error codes
     #: from :meth:`error_code_prefix`. Default (unset) = ``source_class.upper()``.
     error_prefix: str | None = None
+
+    #: A.6 input-error suffix (VERDICT round-2: twins split INPUT_ERROR vs
+    #: INPUT_INVALID). ``error_prefix`` fixes only the prefix; hifld/census stamp
+    #: ``*_INPUT_INVALID`` (a per-param ``error_suffix`` overrides this, e.g. esri
+    #: bbox -> BBOX_INVALID / year -> YEAR_INVALID). Default = the byte-identical
+    #: ``INPUT_ERROR`` (gridmet/coops).
+    input_error_suffix: str = "INPUT_ERROR"
+
+    #: A.6 empty/no-coverage suffix. Default ``EMPTY`` (GRIDMET_EMPTY /
+    #: COOPS_TIDES_EMPTY); esri stamps ``NO_COVERAGE`` (ESRI_LANDCOVER_NO_COVERAGE)
+    #: when no item covers the extent / the mosaic is entirely no-data.
+    empty_error_suffix: str = "EMPTY"
 
     # --- endpoints + auth ---
     endpoints: dict[str, EndpointSpec] = Field(min_length=1)

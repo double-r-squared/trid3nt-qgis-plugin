@@ -20,7 +20,7 @@ from trid3nt_contracts.tool_registry import AtomicToolMetadata
 
 from .._fetch_common import _validate_bbox, round_bbox_to_resolution
 from ...cache import read_through
-from .errors import router_input_error
+from .errors import bbox_error_suffix, router_input_error, router_not_available_error
 from .executors import raster_cog, station_timeseries, vector_fgb
 from .transforms import join as join_transform
 from .transforms import tiled_mosaic
@@ -136,6 +136,10 @@ def validate_params(spec: SourceSpec, raw: dict[str, Any]) -> dict[str, Any]:
     date_params: dict[str, _dt.date] = {}
 
     for pname, pspec in spec.params.items():
+        # Per-param A.6 input suffix: the param's override else the spec default
+        # (gridmet/coops INPUT_ERROR, hifld/census INPUT_INVALID, esri
+        # bbox->BBOX_INVALID / year->YEAR_INVALID).
+        sfx = pspec.error_suffix or spec.input_error_suffix
         present = pname in raw and raw[pname] is not None
         value = raw.get(pname)
 
@@ -146,8 +150,8 @@ def validate_params(spec: SourceSpec, raw: dict[str, Any]) -> dict[str, Any]:
             elif pspec.required:
                 # bbox=None global-query policy: honest typed error.
                 if pspec.type == "bbox" and not spec.supports_global_query:
-                    raise router_input_error(sc, f"{pname} is required (bbox); global query not supported")
-                raise router_input_error(sc, f"required param {pname!r} missing")
+                    raise router_input_error(sc, f"{pname} is required (bbox); global query not supported", sfx)
+                raise router_input_error(sc, f"required param {pname!r} missing", sfx)
             else:
                 continue
 
@@ -155,40 +159,44 @@ def validate_params(spec: SourceSpec, raw: dict[str, Any]) -> dict[str, Any]:
             try:
                 bbox = tuple(float(v) for v in value)
             except (TypeError, ValueError):
-                raise router_input_error(sc, f"{pname} must be a 4-tuple of floats; got {value!r}")
+                raise router_input_error(sc, f"{pname} must be a 4-tuple of floats; got {value!r}", sfx)
             if len(bbox) != 4:
-                raise router_input_error(sc, f"{pname} must be (min_lon,min_lat,max_lon,max_lat); got {value!r}")
+                raise router_input_error(sc, f"{pname} must be (min_lon,min_lat,max_lon,max_lat); got {value!r}", sfx)
             try:
                 _validate_bbox(bbox)
             except Exception as exc:  # noqa: BLE001 -- BboxInvalidError -> typed router error
-                raise router_input_error(sc, str(exc))
+                raise router_input_error(sc, str(exc), sfx)
             out[pname] = list(_quantize_bbox(bbox, pspec.quantize))
 
         elif pspec.type == "iso_date":
             try:
                 d = _dt.date.fromisoformat(str(value))
             except ValueError:
-                raise router_input_error(sc, f"{pname}={value!r} is not ISO YYYY-MM-DD")
+                raise router_input_error(sc, f"{pname}={value!r} is not ISO YYYY-MM-DD", sfx)
             date_params[pname] = d
             out[pname] = d.isoformat()
 
         elif pspec.type == "enum":
             allowed = pspec.values or []
             if value not in allowed:
-                raise router_input_error(sc, f"{pname}={value!r} not in {allowed}")
+                raise router_input_error(sc, f"{pname}={value!r} not in {allowed}", sfx)
             out[pname] = value
 
         elif pspec.type == "int":
             try:
-                out[pname] = int(value)
+                iv = int(value)
             except (TypeError, ValueError):
-                raise router_input_error(sc, f"{pname} must be an int; got {value!r}")
+                raise router_input_error(sc, f"{pname} must be an int; got {value!r}", sfx)
+            _check_range(sc, pname, pspec, iv, sfx)
+            out[pname] = iv
 
         elif pspec.type == "float":
             try:
-                out[pname] = float(value)
+                fv = float(value)
             except (TypeError, ValueError):
-                raise router_input_error(sc, f"{pname} must be a float; got {value!r}")
+                raise router_input_error(sc, f"{pname} must be a float; got {value!r}", sfx)
+            _check_range(sc, pname, pspec, fv, sfx)
+            out[pname] = fv
 
         else:  # str
             out[pname] = str(value)
@@ -200,20 +208,70 @@ def validate_params(spec: SourceSpec, raw: dict[str, Any]) -> dict[str, Any]:
     return out
 
 
+def _check_range(sc: str, pname: str, pspec: Any, value: float, sfx: str) -> None:
+    """Inclusive int/float range gate (esri year [2017,2023] -> YEAR_INVALID)."""
+    if pspec.min is not None and value < pspec.min:
+        raise router_input_error(sc, f"{pname}={value} below min {pspec.min}", sfx)
+    if pspec.max is not None and value > pspec.max:
+        raise router_input_error(sc, f"{pname}={value} above max {pspec.max}", sfx)
+
+
 def _check_date_range(spec: SourceSpec, date_params: dict[str, _dt.date]) -> None:
-    if len(date_params) < 2:
+    """Order + coverage + range-days gates over the declared iso_date params.
+
+    Order (start > end) and range-days over-cap are typed INPUT errors (both
+    twins). Coverage bounds (``min_date`` floor / ``max_future_days`` ceiling) are
+    typed NOT_AVAILABLE (gridmet GRIDMETNotAvailableError), distinct from input.
+    "start" is the FIRST declared iso_date, "end" the LAST (declaration order,
+    matching every twin's start_date/end_date signature).
+    """
+    sc = spec.error_code_prefix
+    iso_names = [n for n, p in spec.params.items() if p.type == "iso_date" and n in date_params]
+    if not iso_names:
         return
-    dates = sorted(date_params.items(), key=lambda kv: kv[1])
-    d0 = dates[0][1]
-    for pname, pspec in spec.params.items():
-        if pspec.type == "iso_date" and pspec.max_range_days is not None and pname in date_params:
-            d1 = date_params[pname]
-            n = (d1 - d0).days + 1
-            if n > pspec.max_range_days:
-                raise router_input_error(
-                    spec.error_code_prefix,
-                    f"date range {n} days exceeds max_range_days={pspec.max_range_days}",
+    d_start = date_params[iso_names[0]]
+
+    # Check ORDER (INPUT) before COVERAGE (NOT_AVAILABLE) before RANGE (INPUT) --
+    # the exact twin sequence (gridmet _validate_date_range), so a doubly-invalid
+    # date (order-violated AND out-of-coverage) stamps the same code as the twin.
+    if len(iso_names) >= 2:
+        d_end = date_params[iso_names[-1]]
+        if d_start > d_end:
+            raise router_input_error(
+                sc,
+                f"start_date must be <= end_date; got start={d_start}, end={d_end}",
+                spec.input_error_suffix,
+            )
+
+    today = _dt.date.today()
+    for pname in iso_names:
+        pspec = spec.params[pname]
+        d = date_params[pname]
+        if pspec.min_date is not None:
+            try:
+                floor = _dt.date.fromisoformat(str(pspec.min_date))
+            except ValueError:
+                floor = None
+            if floor is not None and d < floor:
+                raise router_not_available_error(
+                    sc, f"{pname} {d.isoformat()} before coverage start {floor.isoformat()}"
                 )
+        if pspec.max_future_days is not None and d > today + _dt.timedelta(days=pspec.max_future_days):
+            raise router_not_available_error(
+                sc, f"{pname} {d.isoformat()} is beyond the source's real-time coverage"
+            )
+
+    if len(iso_names) >= 2:
+        for pname in iso_names:
+            pspec = spec.params[pname]
+            if pspec.max_range_days is not None:
+                n = (date_params[pname] - d_start).days + 1
+                if n > pspec.max_range_days:
+                    raise router_input_error(
+                        sc,
+                        f"date range {n} days exceeds max_range_days={pspec.max_range_days}",
+                        spec.input_error_suffix,
+                    )
 
 
 def _apply_gates(spec: SourceSpec, params: dict[str, Any]) -> None:
@@ -225,12 +283,15 @@ def _apply_gates(spec: SourceSpec, params: dict[str, Any]) -> None:
             break
     if bbox is None:
         return
+    # bbox-class gate failures stamp the bbox param's A.6 suffix (esri
+    # BBOX_INVALID; gridmet/others INPUT_ERROR / INPUT_INVALID).
+    bsfx = bbox_error_suffix(spec)
     if g.conus_only:
         cw, cs, ce, cn = _CONUS_BBOX
         w, s, e, n = bbox
         if e < cw or w > ce or n < cs or s > cn:
             raise router_input_error(
-                spec.error_code_prefix, f"bbox {bbox} does not intersect CONUS {_CONUS_BBOX}"
+                spec.error_code_prefix, f"bbox {bbox} does not intersect CONUS {_CONUS_BBOX}", bsfx
             )
     if g.max_bbox_deg2 is not None:
         area_deg2 = (bbox[2] - bbox[0]) * (bbox[3] - bbox[1])
@@ -238,6 +299,7 @@ def _apply_gates(spec: SourceSpec, params: dict[str, Any]) -> None:
             raise router_input_error(
                 spec.error_code_prefix,
                 f"bbox area {area_deg2:.2f} deg^2 exceeds max_bbox_deg2={g.max_bbox_deg2}",
+                bsfx,
             )
 
 
@@ -259,7 +321,9 @@ def select_executor(spec: SourceSpec) -> Callable[[SourceSpec, dict[str, Any]], 
         return vector_fgb.execute
     if spec.shape == "station-timeseries-fgb":
         return station_timeseries.execute
-    raise router_input_error(spec.error_code_prefix, f"no executor for shape {spec.shape!r}")
+    raise router_input_error(
+        spec.error_code_prefix, f"no executor for shape {spec.shape!r}", spec.input_error_suffix
+    )
 
 
 def _template(text: str, params: dict[str, Any]) -> str:
@@ -280,6 +344,9 @@ def build_layer_uri(spec: SourceSpec, params: dict[str, Any], uri: str) -> Layer
             break
     variable = params.get("variable") or params.get("product") or spec.source_class
     layer_id = f"{spec.source_class}-{variable}"
+    # gridmet's twin omits LayerURI.bbox; emit_bbox=false suppresses it (parity).
+    if not spec.output.emit_bbox:
+        bbox = None
     return LayerURI(
         layer_id=layer_id,
         name=f"{spec.source_class} {variable}",

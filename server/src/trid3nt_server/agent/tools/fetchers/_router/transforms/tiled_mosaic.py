@@ -20,7 +20,7 @@ from typing import Any
 
 from trid3nt_contracts.source_spec import SourceSpec
 
-from ..errors import router_empty_error, router_input_error
+from ..errors import bbox_error_suffix, router_empty_error, router_input_error
 from ..executors import raster_cog
 
 logger = logging.getLogger(
@@ -140,6 +140,7 @@ def execute(spec: SourceSpec, params: dict[str, Any]) -> bytes:
             spec.error_code_prefix,
             f"bbox area {dlon * dlat:.2f} deg^2 exceeds max_bbox_deg2={max_deg2}; "
             f"use a coarser sibling source (e.g. NLCD) for a state-scale extent",
+            bbox_error_suffix(spec),
         )
 
     tiles = plan_tile_grid(tuple(bbox), tile_deg2)  # type: ignore[arg-type]
@@ -181,7 +182,7 @@ def execute(spec: SourceSpec, params: dict[str, Any]) -> bytes:
             else:
                 tile_paths.append(array_to_tempfile(arr, transform, crs))
         if not tile_paths:
-            raise router_empty_error(spec.error_code_prefix, f"no tile carried data for bbox={bbox}")
+            raise router_empty_error(spec.error_code_prefix, f"no tile carried data for bbox={bbox}", spec.empty_error_suffix)
         if categorical:
             return mosaic_tile_files(
                 tile_paths, method=method, resampling=resampling,

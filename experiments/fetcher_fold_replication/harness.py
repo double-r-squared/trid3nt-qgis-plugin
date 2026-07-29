@@ -39,6 +39,12 @@ class Check:
     twin: Any = None
     router: Any = None
     note: str = ""
+    #: A recorded-but-non-gating divergence whose ROOT CAUSE is a twin defect the
+    #: router must NOT copy (standing directive: do not silently copy a defect,
+    #: flag for NATE). Distinct from a fudged PASS -- ``ok`` is honestly False,
+    #: it is simply excluded from the gate because the twin, not the router, is
+    #: wrong. Surfaced loudly in the verdict + report.
+    reported: bool = False
 
 
 @dataclass
@@ -47,8 +53,9 @@ class SourceResult:
     checks: list[Check] = field(default_factory=list)
     error: str | None = None
 
-    def add(self, name: str, ok: bool, twin: Any = None, router: Any = None, note: str = "") -> None:
-        self.checks.append(Check(name, ok, twin, router, note))
+    def add(self, name: str, ok: bool, twin: Any = None, router: Any = None,
+            note: str = "", reported: bool = False) -> None:
+        self.checks.append(Check(name, ok, twin, router, note, reported))
 
     @property
     def n_ok(self) -> int:
@@ -59,31 +66,41 @@ class SourceResult:
         return len(self.checks)
 
     @property
+    def gate_checks(self) -> list[Check]:
+        """Every contract-4.2 gating check (excludes non-gating info.* and the
+        reported twin-defect divergences)."""
+        return [
+            c for c in self.checks
+            if not c.reported and (
+                c.name.startswith("values.")
+                or c.name.startswith("schema.")
+                or c.name.startswith("layer.")     # incl. layer.bbox_present (4.2 layer-output)
+                or c.name.startswith("error.")     # empty + upstream + every invalid-param class
+                or c.name.startswith("gate.")      # conus / max_bbox / cap parity
+                or c.name == "caveats.reproduced"
+            )
+        ]
+
+    @property
     def verdict(self) -> str:
         """PASS / PARTIAL / BLOCK per the contract sec 4.2 gate.
 
-        GATE checks (must all match for PASS): values.* AND schema.* (BOTH are
-        VALUES fields per contract sec 4.2 -- "property schema (column set)" and
-        the timestamp value spot-check are artifact semantics, NOT advisory INFO)
-        + layer.{type,style_preset,role,units} + error.* (both forced paths) +
-        caveats.reproduced. Only info.* (e.g. bbox present/absent, a cosmetic
-        superset) is non-gating. A source with a values-or-schema divergence
-        BLOCKS; one whose values+schema all match but a non-value gate (error
-        prefix / layer field) diverges is PARTIAL.
+        GATE (all must match for PASS): values.* + schema.* (both VALUES fields --
+        "property schema / column set" + timestamp spot-check) + layer.* (incl.
+        bbox present/absent, a 4.2 layer-output field) + error.* (empty + upstream
+        + EVERY invalid-param class: malformed bbox / out-of-range year+date /
+        bad enum) + gate.* (conus / max_bbox / cap parity) + caveats.reproduced.
+        Non-gating: info.* (cosmetic) and ``reported`` twin-defect divergences
+        (recorded honestly, root-caused to a twin bug, flagged for NATE). A
+        values/schema divergence BLOCKS; a non-value gate divergence (layer /
+        error-prefix / gate) is PARTIAL.
         """
         if self.error:
             return "ERROR"
-        gate = [
-            c for c in self.checks
-            if c.name.startswith("values.")
-            or c.name.startswith("schema.")
-            or c.name in {"layer.type", "layer.style_preset", "layer.role", "layer.units"}
-            or c.name.startswith("error.")
-            or c.name == "caveats.reproduced"
-        ]
+        gate = self.gate_checks
         values_checks = [
             c for c in self.checks
-            if c.name.startswith("values.") or c.name.startswith("schema.")
+            if not c.reported and (c.name.startswith("values.") or c.name.startswith("schema."))
         ]
         if gate and all(c.ok for c in gate):
             return "PASS"

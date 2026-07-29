@@ -6,6 +6,7 @@ schema_version: v1
 name: fetch_hifld_critical_infrastructure
 source_class: hifld_critical_infrastructure   # cache prefix == twin source_class
 error_prefix: HIFLD_INFRA                      # twin A.6 token (HIFLDInfra*Error) != cache prefix
+input_error_suffix: INPUT_INVALID              # twin HIFLDInfraInputError -> *_INPUT_INVALID
 shape: vector-fgb
 supports_global_query: false                  # HIFLD is US-only
 

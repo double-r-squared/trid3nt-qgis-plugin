@@ -22,8 +22,10 @@ params:
   bbox:       {type: bbox, required: true, quantize: round_6dp}
   variable:   {type: enum, required: true,
                values: [fm100, fm1000, pet, pdsi, tmmn, tmmx, vpd, vs, rmin, rmax, pr, srad]}
-  start_date: {type: iso_date, required: true}
-  end_date:   {type: iso_date, required: true, max_range_days: 366}
+  # coverage bounds -> GRIDMET_NOT_AVAILABLE (twin GRIDMETNotAvailableError):
+  # start before the 1979-01-01 aggregate start, or end beyond real time (today+1).
+  start_date: {type: iso_date, required: true, min_date: "1979-01-01"}
+  end_date:   {type: iso_date, required: true, max_range_days: 366, max_future_days: 1}
 gates:
   conus_only: true             # bbox must intersect gridMET CONUS domain
 
@@ -63,6 +65,7 @@ output:
   ext: tif
   role: primary
   style_preset: "gridmet_{variable}"
+  emit_bbox: false             # twin gridMET LayerURI omits bbox (parity tell)
 
 # --- cache + payload gate ------------------------------------------------
 cache:

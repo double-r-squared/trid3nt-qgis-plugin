@@ -187,12 +187,12 @@ def _opendap_to_array(spec: SourceSpec, params: dict[str, Any]) -> tuple[Any, An
             da = da.sel({lat_dim: slice(south, north)})
         da = da.sel({lon_dim: slice(west, east)})
         if da.size == 0 or any(s == 0 for s in da.shape):
-            raise router_empty_error(spec.error_code_prefix, f"bbox={bbox} produced an empty window")
+            raise router_empty_error(spec.error_code_prefix, f"bbox={bbox} produced an empty window", spec.empty_error_suffix)
         if time_dim is not None and time_dim in da.dims:
             da = da.mean(dim=time_dim, skipna=True)
         arr = np.asarray(da.values, dtype="float32")
         if not np.isfinite(arr).any():
-            raise router_empty_error(spec.error_code_prefix, f"bbox={bbox} produced no finite pixels")
+            raise router_empty_error(spec.error_code_prefix, f"bbox={bbox} produced no finite pixels", spec.empty_error_suffix)
         lons = da[lon_dim].values
         lat_vals = da[lat_dim].values
         transform = rtransform.from_bounds(
@@ -228,7 +228,7 @@ def _direct_window_to_array(spec: SourceSpec, params: dict[str, Any]) -> tuple[A
     except Exception as exc:  # noqa: BLE001
         raise router_upstream_error(spec.error_code_prefix, f"direct-window read failed: {exc}")
     if arr.size == 0:
-        raise router_empty_error(spec.error_code_prefix, f"bbox={bbox} produced an empty window")
+        raise router_empty_error(spec.error_code_prefix, f"bbox={bbox} produced an empty window", spec.empty_error_suffix)
     return np.asarray(arr, dtype="float32"), transform, crs
 
 
@@ -278,7 +278,8 @@ def _select_stac_items(spec: SourceSpec, params: dict[str, Any],
         ]
     if not items:
         raise router_empty_error(
-            spec.error_code_prefix, f"no STAC item covers bbox={bbox} for year {year}"
+            spec.error_code_prefix, f"no STAC item covers bbox={bbox} for year {year}",
+            spec.empty_error_suffix,
         )
     return items, stac, str(collection)
 
@@ -380,6 +381,7 @@ def stac_to_mosaic(spec: SourceSpec, params: dict[str, Any]) -> tuple[Any, Any, 
         raise router_empty_error(
             spec.error_code_prefix,
             f"io-lulc items intersected bbox={bbox} but the mosaic is entirely no-data",
+            spec.empty_error_suffix,
         )
     return mosaic, dst_transform, "EPSG:4326", colormap
 

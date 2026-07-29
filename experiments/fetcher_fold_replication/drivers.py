@@ -62,10 +62,12 @@ def _cmp_layer(res: SourceResult, twin_layer, router_layer) -> None:
             twin_layer.role, router_layer.role)
     res.add("layer.units", twin_layer.units == router_layer.units,
             twin_layer.units, router_layer.units)
+    # bbox present/absent is a contract-4.2 LAYER-OUTPUT field (GATING). gridmet's
+    # twin omits LayerURI.bbox; the router honors output.emit_bbox=false to match.
     tb = twin_layer.bbox is not None
     rb = router_layer.bbox is not None
-    res.add("info.bbox_present", tb == rb, tb, rb,
-            note="" if tb == rb else "router always populates LayerURI.bbox; twin may omit it")
+    res.add("layer.bbox_present", tb == rb, tb, rb,
+            note="" if tb == rb else "router LayerURI.bbox presence != twin (emit_bbox mismatch)")
 
 
 def _close(a, b, tol=1e-3) -> bool:
@@ -79,16 +81,20 @@ def _cmp_raster_values(res: SourceResult, tw: dict, rt: dict) -> None:
     res.add("values.dtype", tw["dtype"] == rt["dtype"], tw["dtype"], rt["dtype"])
     res.add("values.crs", tw["crs"] == rt["crs"], tw["crs"], rt["crs"])
     # nodata: the router honors the twin's DECLARED nodata=float("nan"); the twin's
-    # rioxarray to_raster silently drops the nodata= kwarg (rioxarray quirk -- it
-    # needs rio.write_nodata()), emitting None. Router==declared-contract, so this
-    # is a router-superset (more spec-faithful than the twin's own writer), not a
-    # regression; recorded with the root cause, never fudged.
+    # rioxarray to_raster silently DROPS the nodata= kwarg (rioxarray quirk -- it
+    # needs rio.write_nodata()), emitting None. This IS an observable COG-metadata
+    # difference (nodata tag set vs unset), so it is scored honestly as ok=False --
+    # NOT the old hard-coded PASS the panel refuted. It is marked ``reported``
+    # (non-gating) because the ROOT CAUSE is a twin-writer defect the router must
+    # NOT copy (standing directive: flag for NATE, never silently propagate a bug).
     tw_nod, rt_nod = tw["nodata"], rt["nodata"]
     if str(tw_nod) == str(rt_nod):
         res.add("values.nodata", True, tw_nod, rt_nod)
     elif tw_nod is None and str(rt_nod) == "nan":
-        res.add("values.nodata", True, tw_nod, rt_nod,
-                note="router honors twin's DECLARED nodata=nan; twin rioxarray writer emits None (twin-writer quirk, not a router regression)")
+        res.add("values.nodata", False, tw_nod, rt_nod, reported=True,
+                note="TWIN DEFECT (flag NATE): twin rioxarray writer drops declared nodata=nan -> None; "
+                     "router correctly writes nodata=nan. Router must NOT copy the twin bug; byte-parity "
+                     "needs a twin fix (rio.write_nodata).")
     else:
         res.add("values.nodata", False, tw_nod, rt_nod)
     res.add("values.min", _close(tw["min"], rt["min"]), tw["min"], rt["min"])
@@ -146,6 +152,57 @@ def run_gridmet(specs) -> SourceResult:
             tw_err = _capture_err(_run_twin, gridmet_mod, "fetch_gridmet", kwargs, {})
             rt_err = _capture_err(route_layer, spec, params, {})
         _cmp_error(res, "error.upstream", tw_err, rt_err)
+
+        # --- edge matrix (contract 4.2: invalid-param classes + gates + empty) ---
+        def _edge(name, k, p):
+            tw = _capture_err(_run_twin, gridmet_mod, "fetch_gridmet", k, {})
+            rt = _capture_err(route_layer, spec, p, {})
+            _cmp_error(res, name, tw, rt)
+
+        v = dict(variable="fm100", start_date="2022-08-01", end_date="2022-08-03")
+        # malformed bbox (degenerate; in-CONUS lon so bbox-class, not conus)
+        _edge("error.bad_bbox", dict(bbox=(-100.0, 40.0, -100.0, 41.0), **v),
+              dict(bbox=[-100.0, 40.0, -100.0, 41.0], **v))
+        # bad enum (variable)
+        _edge("error.bad_enum", dict(bbox=(-117.5, 33.5, -116.5, 34.5), variable="banana",
+                                     start_date="2022-08-01", end_date="2022-08-03"),
+              dict(bbox=[-117.5, 33.5, -116.5, 34.5], variable="banana",
+                   start_date="2022-08-01", end_date="2022-08-03"))
+        # date order (start > end) -> INPUT_ERROR
+        _edge("error.date_order", dict(bbox=(-117.5, 33.5, -116.5, 34.5), variable="fm100",
+                                       start_date="2022-08-05", end_date="2022-08-01"),
+              dict(bbox=[-117.5, 33.5, -116.5, 34.5], variable="fm100",
+                   start_date="2022-08-05", end_date="2022-08-01"))
+        # date range over the 366-day cap -> INPUT_ERROR
+        _edge("error.date_range", dict(bbox=(-117.5, 33.5, -116.5, 34.5), variable="fm100",
+                                       start_date="2020-01-01", end_date="2021-06-01"),
+              dict(bbox=[-117.5, 33.5, -116.5, 34.5], variable="fm100",
+                   start_date="2020-01-01", end_date="2021-06-01"))
+        # coverage: before the 1979 start -> NOT_AVAILABLE
+        _edge("error.date_before_coverage", dict(bbox=(-117.5, 33.5, -116.5, 34.5), variable="fm100",
+                                                 start_date="1850-01-01", end_date="1850-01-05"),
+              dict(bbox=[-117.5, 33.5, -116.5, 34.5], variable="fm100",
+                   start_date="1850-01-01", end_date="1850-01-05"))
+        # coverage: end beyond real time -> NOT_AVAILABLE
+        _edge("error.date_future", dict(bbox=(-117.5, 33.5, -116.5, 34.5), variable="fm100",
+                                        start_date="2020-06-01", end_date="2999-06-01"),
+              dict(bbox=[-117.5, 33.5, -116.5, 34.5], variable="fm100",
+                   start_date="2020-06-01", end_date="2999-06-01"))
+        # conus gate: bbox in Europe -> INPUT_ERROR
+        _edge("gate.conus", dict(bbox=(2.0, 48.0, 3.0, 49.0), variable="fm100",
+                                 start_date="2022-08-01", end_date="2022-08-03"),
+              dict(bbox=[2.0, 48.0, 3.0, 49.0], variable="fm100",
+                   start_date="2022-08-01", end_date="2022-08-03"))
+        # empty window: in-CONUS bbox outside the synthetic grid extent -> GRIDMET_EMPTY
+        ds2 = _synthetic_gridmet_ds()
+        ek = dict(bbox=(-100.0, 40.0, -99.0, 41.0), variable="fm100",
+                  start_date="2022-08-01", end_date="2022-08-03")
+        ep = dict(bbox=[-100.0, 40.0, -99.0, 41.0], variable="fm100",
+                  start_date="2022-08-01", end_date="2022-08-03")
+        with _patched(mock.patch("xarray.open_dataset", lambda *a, **k: ds2.copy(deep=True))):
+            tw_e = _capture_err(_run_twin, gridmet_mod, "fetch_gridmet", ek, {})
+            rt_e = _capture_err(route_layer, spec, ep, {})
+        _cmp_error(res, "error.empty", tw_e, rt_e)
     except Exception as exc:  # noqa: BLE001
         res.error = f"{type(exc).__name__}: {exc}"
     return res
@@ -203,6 +260,33 @@ def run_hifld(specs) -> SourceResult:
             tw_err = _capture_err(_run_twin, hifld_mod, "fetch_hifld_critical_infrastructure", kwargs, {})
             rt_err = _capture_err(route_layer, spec, params, {})
         _cmp_error(res, "error.upstream", tw_err, rt_err)
+
+        # --- edge matrix (contract 4.2) ---
+        def _edge(name, k, p):
+            tw = _capture_err(_run_twin, hifld_mod, "fetch_hifld_critical_infrastructure", k, {})
+            rt = _capture_err(route_layer, spec, p, {})
+            _cmp_error(res, name, tw, rt)
+
+        # malformed bbox -> HIFLD_INFRA_INPUT_INVALID
+        _edge("error.bad_bbox", dict(facility_type="hospitals", bbox=(-95.0, 30.0, -95.0, 30.1)),
+              dict(facility_type="hospitals", bbox=[-95.0, 30.0, -95.0, 30.1]))
+        # bad enum (facility_type) -> HIFLD_INFRA_INPUT_INVALID
+        _edge("error.bad_enum", dict(facility_type="banana", bbox=tuple(bbox)),
+              dict(facility_type="banana", bbox=bbox))
+        # empty result: ArcGIS returns zero features -> header-only FGB both (honest-empty, NO error)
+        empty_fc = {"type": "FeatureCollection", "features": []}
+        empty_get = lambda self, *a, **k: FakeResp(json_body=empty_fc, status_code=200)
+        with _patched(mock.patch.object(httpx.Client, "get", empty_get)):
+            tw_sink2, rt_sink2 = {}, {}
+            _run_twin(hifld_mod, "fetch_hifld_critical_infrastructure", kwargs, tw_sink2)
+            route_layer(spec, params, rt_sink2)
+        twe, rte = vector_info(tw_sink2["bytes"]), vector_info(rt_sink2["bytes"])
+        res.add("error.empty", twe["n"] == 0 and rte["n"] == 0, twe["n"], rte["n"],
+                note="honest header-only FGB (US-only, empty bbox); no fabricated error")
+        # max_features soft paging cap: identical accumulate-truncate loop; parity = cap value
+        res.add("gate.max_features_cap", spec.gates.max_features == hifld_mod._MAX_TOTAL_FEATURES,
+                hifld_mod._MAX_TOTAL_FEATURES, spec.gates.max_features,
+                note="soft paging cap (not an error frame); both truncate at the same value")
     except Exception as exc:  # noqa: BLE001
         res.error = f"{type(exc).__name__}: {exc}"
     return res
@@ -306,6 +390,33 @@ def run_coops(specs) -> SourceResult:
             tw_e = _capture_err(_run_twin, coops_mod, "fetch_noaa_coops_tides", kwargs, {})
             rt_e = _capture_err(route_layer, spec, params, {})
         _cmp_error(res, "error.empty", tw_e, rt_e)
+
+        # --- edge matrix (contract 4.2: invalid-param classes + cap parity) ---
+        def _edge(name, k, p):
+            tw = _capture_err(_run_twin, coops_mod, "fetch_noaa_coops_tides", k, {})
+            rt = _capture_err(route_layer, spec, p, {})
+            _cmp_error(res, name, tw, rt)
+
+        base = dict(start_date="2022-09-28", end_date="2022-09-28", product="water_level")
+        # malformed bbox -> COOPS_TIDES_INPUT_ERROR
+        _edge("error.bad_bbox", dict(bbox=(-82.5, 25.5, -82.5, 27.5), **base),
+              dict(bbox=[-82.5, 25.5, -82.5, 27.5], **base))
+        # bad enum (product) -> COOPS_TIDES_INPUT_ERROR
+        _edge("error.bad_enum", dict(bbox=tuple(bbox), start_date="2022-09-28",
+                                     end_date="2022-09-28", product="banana"),
+              dict(bbox=bbox, start_date="2022-09-28", end_date="2022-09-28", product="banana"))
+        # date order (start > end) -> COOPS_TIDES_INPUT_ERROR
+        _edge("error.date_order", dict(bbox=tuple(bbox), start_date="2022-09-30",
+                                       end_date="2022-09-28", product="water_level"),
+              dict(bbox=bbox, start_date="2022-09-30", end_date="2022-09-28", product="water_level"))
+        # date range over the 366-day cap -> COOPS_TIDES_INPUT_ERROR
+        _edge("error.date_range", dict(bbox=tuple(bbox), start_date="2020-01-01",
+                                       end_date="2021-06-01", product="water_level"),
+              dict(bbox=bbox, start_date="2020-01-01", end_date="2021-06-01", product="water_level"))
+        # max_stations soft cap: identical catalog-truncate; parity = cap value
+        res.add("gate.max_stations_cap", spec.gates.max_stations == coops_mod._MAX_STATIONS,
+                coops_mod._MAX_STATIONS, spec.gates.max_stations,
+                note="soft station cap (not an error frame); both truncate at the same value")
     except Exception as exc:  # noqa: BLE001
         res.error = f"{type(exc).__name__}: {exc}"
     return res
@@ -437,6 +548,46 @@ def run_esri(specs) -> SourceResult:
         tw_err = _capture_err(twin_boom)
         _cmp_error(res, "error.upstream", tw_err, rt_err)
 
+        # --- edge matrix (contract 4.2): year/bbox invalid classes + max_bbox gate
+        # + NO_COVERAGE empty, driven through the REAL twin ENTRYPOINT (validation +
+        # STAC search precede any network read; a faithful entrypoint A/B). ---
+        def _edge(name, k, p):
+            tw = _capture_err(_run_twin, esri_mod, "fetch_esri_landcover_10m", k, {})
+            rt = _capture_err(route_layer, spec, p, {})
+            _cmp_error(res, name, tw, rt)
+
+        # year below range -> ESRI_LANDCOVER_YEAR_INVALID
+        _edge("error.year_low", dict(bbox=tuple(bbox), year=1850), dict(bbox=bbox, year=1850))
+        # year above range -> ESRI_LANDCOVER_YEAR_INVALID
+        _edge("error.year_high", dict(bbox=tuple(bbox), year=2099), dict(bbox=bbox, year=2099))
+        # malformed bbox -> ESRI_LANDCOVER_BBOX_INVALID
+        _edge("error.bad_bbox", dict(bbox=(0.0, 0.0, 0.0, 0.1), year=2023),
+              dict(bbox=[0.0, 0.0, 0.0, 0.1], year=2023))
+        # max_bbox ceiling (16 > 8 deg^2) -> ESRI_LANDCOVER_BBOX_INVALID
+        _edge("gate.max_bbox", dict(bbox=(0.0, 0.0, 4.0, 4.0), year=2023),
+              dict(bbox=[0.0, 0.0, 4.0, 4.0], year=2023))
+        # empty / no-coverage: STAC search returns zero items -> ESRI_LANDCOVER_NO_COVERAGE
+        class _EmptySearch:
+            def items(self):
+                return []
+
+        class _EmptyClient:
+            @staticmethod
+            def open(root):
+                return _EmptyClient()
+
+            def search(self, *a, **k):
+                return _EmptySearch()
+
+        with _patched(
+            mock.patch("pystac_client.Client", _EmptyClient),
+            mock.patch.object(_pc_stac, "sas_sign_href", lambda href, coll: href),
+        ):
+            tw_e = _capture_err(_run_twin, esri_mod, "fetch_esri_landcover_10m",
+                                dict(bbox=tuple(bbox), year=2023), {})
+            rt_e = _capture_err(route_layer, spec, dict(bbox=bbox, year=2023), {})
+        _cmp_error(res, "error.empty", tw_e, rt_e)
+
         os.unlink(tif)
     except Exception as exc:  # noqa: BLE001
         res.error = f"{type(exc).__name__}: {exc}"
@@ -548,6 +699,54 @@ def run_census(specs) -> SourceResult:
             tw_err = _capture_err(_run_twin, census_mod, "fetch_census_acs", kwargs, {})
             rt_err = _capture_err(route_layer, spec, params, {})
         _cmp_error(res, "error.upstream", tw_err, rt_err)
+
+        # --- edge matrix (contract 4.2: invalid-param classes + empty + cap) ---
+        # Geometry stubbed to real tracts so a bad-variable edge still reaches the
+        # variable resolver even if the twin fetches geometry first (no network).
+        def _geom_twin(_bbox):
+            return tracts
+
+        def _geom_router(spec_, params_):
+            return tracts
+
+        def _edge(name, variable, malformed_bbox=None):
+            k = dict(bbox=tuple(malformed_bbox or bbox), variable=variable, year=2022)
+            p = dict(bbox=(malformed_bbox or bbox), variable=variable, year=2022)
+            with _patched(
+                mock.patch.object(census_mod, "_fetch_tiger_tracts", _geom_twin),
+                mock.patch.object(router_join, "fetch_geometry", _geom_router),
+            ):
+                tw = _capture_err(_run_twin, census_mod, "fetch_census_acs", k, {})
+                rt = _capture_err(route_layer, spec, p, {})
+            _cmp_error(res, name, tw, rt)
+
+        # malformed bbox -> CENSUS_ACS_INPUT_INVALID
+        _edge("error.bad_bbox", "median_income", malformed_bbox=[-95.4, 29.7, -95.4, 29.8])
+        # bad enum (variable) -> CENSUS_ACS_INPUT_INVALID
+        _edge("error.bad_enum", "banana")
+        # empty result: geometry returns zero tracts -> header-only FGB both (honest-empty)
+        def _empty_twin(_bbox):
+            return []
+
+        def _empty_router(spec_, params_):
+            return []
+
+        ek = dict(bbox=tuple(bbox), variable="median_income", year=2022)
+        ep = dict(bbox=bbox, variable="median_income", year=2022)
+        with _patched(
+            mock.patch.object(census_mod, "_fetch_tiger_tracts", _empty_twin),
+            mock.patch.object(router_join, "fetch_geometry", _empty_router),
+        ):
+            tw_sink3, rt_sink3 = {}, {}
+            _run_twin(census_mod, "fetch_census_acs", ek, tw_sink3)
+            route_layer(spec, ep, rt_sink3)
+        twe, rte = vector_info(tw_sink3["bytes"]), vector_info(rt_sink3["bytes"])
+        res.add("error.empty", twe["n"] == 0 and rte["n"] == 0, twe["n"], rte["n"],
+                note="honest header-only FGB (US-only / empty bbox); no fabricated error")
+        # max_features soft cap parity
+        res.add("gate.max_features_cap", spec.gates.max_features == census_mod._MAX_FEATURES,
+                census_mod._MAX_FEATURES, spec.gates.max_features,
+                note="soft paging cap (not an error frame); both truncate at the same value")
     except Exception as exc:  # noqa: BLE001
         res.error = f"{type(exc).__name__}: {exc}"
     return res

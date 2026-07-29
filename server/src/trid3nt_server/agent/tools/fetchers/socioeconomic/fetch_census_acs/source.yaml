@@ -5,6 +5,7 @@ schema_version: v1
 
 name: fetch_census_acs
 source_class: census_acs        # cache prefix == twin source_class
+input_error_suffix: INPUT_INVALID   # twin CensusACSInputError -> *_INPUT_INVALID
 shape: vector-fgb               # join block below selects the JOIN transform
 supports_global_query: false
 
