@@ -372,4 +372,116 @@ hand-built GDAL COG-translate pipeline with legend remap.
 
 <!-- SUMMARY-START -->
 
+### Counts per verdict class (all 97)
+
+| verdict | count | % | foldable lines |
+|---|---|---|---|
+| SPEC-EXPRESSIBLE | 31 | 32% | 16,304 |
+| HYBRID | 37 | 38% | 16,366 |
+| BESPOKE | 29 | 30% | 7,753 |
+| **total** | **97** | | **40,423** |
+
+- **68 of 97 (70%)** fold to spec-driven, fully (SPEC) or spec + one named
+  transform hook (HYBRID). This lands squarely in the spec's 60-80% expectation.
+- **~40,423 foldable lines (56% of the 71,836-line tree)** are removed and
+  replaced by YAML + the shared router - even the 29 BESPOKE modules fold their
+  ~30% boilerplate (errors/metadata/payload-est/cache/LayerURI), which is where
+  the 7,753 BESPOKE-column lines come from; their irreducible cores stay as code.
+- No fetcher is cut. Every endpoint survives (spec / hybrid / retained code).
+
+### Router modes the fold must provide (derived from the shapes)
+
+To make spec-driven sources indistinguishable from catalog-native, the router
+needs these ingestion executors (count = fetchers that would use each):
+
+- **vector-API-FGB / ArcGIS-FeatureServer-MapServer query** (~25): resultOffset
+  / exceededTransferLimit pagination, `where=`/geometry params, esri-json rings
+  ->GeoJSON. The single highest-leverage mode.
+- **vector-API-FGB / generic-JSON-GeoJSON-FDSN-OGC** (~15): plain query + parse.
+- **station-timeseries-FGB** (~10): station-catalog discover -> per-station or
+  bulk data loop -> point-FGB with inline `time_series_csv`.
+- **raster-COG / STAC-search** (~10): PC/earth-search search + asset sign +
+  windowed reproject. Needs **pluggable scene-selection + signing strategies**
+  (helper primitives cover the common case; Landsat/S1/Copernicus deviate).
+- **raster-COG / direct-COG-window** (~10): vsicurl windowed read of a known
+  COG/VRT/ImageServer, optional reproject + scale.
+- **raster-COG / OPeNDAP-xarray** (~6): THREDDS/CDS/ERDDAP netCDF subset+collapse.
+- **raster-COG / WMS-WCS** (~3): GetMap/GetCoverage URL template.
+- Named transform HOOKS that recur and should be first-class (the HYBRID glue):
+  two-source **geometry+values join on a key** (~6: census_acs, lehd_jobs,
+  usgs_gw, usgs_wq, volcano_alerts, openfema), **name/entity->ID resolution**
+  (~6: gbif, inat, ebird, high_water_marks, event-id, taxon), **nodata/coverage
+  pixel gate**, **CDS async-retrieve auth** (era5, gtsm), **S3 cycle/hour-key
+  walkback** (hrrr, mrms, nwm, goes-archive), **multi-source fallback stitch**
+  (dem, topobathy, buildings, population, river_geometry).
+
+### Top usage (telemetry, migration-ordering ONLY - not a cut signal)
+
+Only 7 fetchers fired in the thin 5-day window; ranking for pilot/migration
+sequencing, never for retention:
+
+1. fetch_dem - 1570 (BESPOKE; also nested in 7 workflows) - the workhorse
+2. geocode_location - 280 (BESPOKE resolver; nested in 4)
+3. fetch_storm_events_db - 158 / 20 ok (BESPOKE bulk CSV)
+4. fetch_nws_alerts_conus - 36 (HYBRID; nested in nws_flood_event)
+5. fetch_wdpa_protected_areas - 20 (HYBRID)
+6. fetch_esri_landcover_10m - 17 (HYBRID; nested in 2 processing tools)
+7. (all other 90 fetchers - 0 in-window; not a dead signal)
+
+Migration ordering should instead follow family cohesion + nested-consumer
+criticality. The `sfincs_forcing_autowire` stack (gcn250, gtsm, coops_tides,
+nwm_streamflow, nwis_gauges, storm_tracks) and the flood workflows are the
+highest-risk "do not regress" set.
+
+### Pilot picks (5, one per shape incl one awkward)
+
+The spec suggested `fetch_usgs_nwis_gauges` for the vector slot, but the audit
+found it BESPOKE (dual-mode RDB fallback + windowed-series schema), so the
+vector pilot is reassigned to a clean SPEC ArcGIS source (highest leverage).
+
+1. **raster-COG (OPeNDAP)** - `fetch_gridmet` (SPEC). Already read in full;
+   canonical netCDF-subset->time-mean->COG; proves the OPeNDAP-xarray mode.
+2. **vector-API (ArcGIS FeatureServer)** - `fetch_hifld_critical_infrastructure`
+   (SPEC). Proves the single most-replicated endpoint pattern (routing dict +
+   resultOffset pagination + where-clause); a passing spec migrates ~25
+   fetchers. Telemetry-backed alternate: `fetch_wdpa_protected_areas` (fired 20,
+   HYBRID); pure-simple alternate: `fetch_usgs_earthquakes` (FDSN, no auth).
+3. **station-timeseries** - `fetch_noaa_coops_tides` (SPEC). Already read;
+   catalog-discover + per-station loop + inline time_series_csv; real consumer
+   (`sfincs_forcing_autowire`).
+4. **tiled/imagery** - `fetch_esri_landcover_10m` (HYBRID). Proves the tractable
+   half of tiled-imagery: STAC-search + multi-tile grid + rasterio.merge mosaic
+   assembly (auto-tiling hook); fired (17) + nested in 2 tools. Full animation
+   assembly (GOES) stays Phase-3 bespoke.
+5. **awkward case** - `fetch_census_acs` (HYBRID). Best stress of the "named
+   transform indistinguishable from catalog-native" claim: the two-endpoint
+   geometry+values join on GEOID that 6+ fetchers share, plus optional-key /
+   keyless-fallback auth. If the router can carry this join as a declarative
+   named transform, the whole socioeconomic + USGS-join subfamily folds.
+
+### Biggest surprises
+
+1. **The hidden two-source JOIN is the pattern that decides the fold's ceiling.**
+   Many "simple census/USGS vector" fetchers are NOT single-endpoint: they fetch
+   geometry (TIGERweb/station list) and values (ACS/LODES/WQP/result CSV)
+   separately and join on a key, which quietly demotes them from SPEC to HYBRID
+   (census_acs, lehd_jobs, usgs_gw, usgs_wq, plus volcano_alerts/openfema
+   stitches). The router MUST make "join two sources on a key" a first-class
+   named transform or the socioeconomic/USGS families stall.
+2. **A subset of "fetchers" are mis-housed - they are resolvers/analyses, not
+   data fetches.** `fetch_wfigs_incident`, `geocode_location`, and
+   `lookup_precip_return_period` return a dict/table (point+bbox or a values
+   record), not a LayerURI; `fetch_goes_archive_animation` embeds a
+   Matson-Dozier fire-detection algorithm and `fetch_landcover` a legend-remap
+   COG pipeline - engine-grade postprocessing wearing a fetcher's name. These
+   are BESPOKE not because the endpoint is hard but because they do
+   composition/analysis - consistent with the "analysis is playground, not
+   tools" norm. The fold is a good moment to note (not act on) the mis-filing.
+3. **The good surprise: the ArcGIS FeatureServer pattern is genuinely uniform**
+   across ~25 hazard/socioeconomic/hydrology fetchers (same query + pagination +
+   routing-dict skeleton), which is what makes a single vector-ArcGIS router
+   mode pay for the whole campaign. And two telemetry "top" tool names
+   (`fetch_volcano_lava_flow`, `compute_terrain_relief_v2`) map to no module -
+   model hallucinations, not fetchers.
+
 <!-- SUMMARY-END -->
