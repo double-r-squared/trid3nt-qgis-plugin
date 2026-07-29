@@ -3,7 +3,7 @@
 Reads a gridded source to a CRS-tagged single-band COG. Three sub-modes keyed by
 ``ingest.access``:
   - ``opendap``       xarray subset + time_reduce collapse  (gridmet)
-  - ``direct_window`` rasterio /vsicurl/ windowed read of a known COG/VRT
+  - ``direct_window`` httpx-transport windowed read of a known COG/VRT (ADR-0044)
   - ``stac_search``   pystac-client search + windowed reproject (esri, single tile)
 
 Emits ``nodata=nan``, north-up (no lat sortby -- the gridmet orientation lesson
@@ -209,23 +209,46 @@ def _opendap_to_array(spec: SourceSpec, params: dict[str, Any]) -> tuple[Any, An
 
 
 def _direct_window_to_array(spec: SourceSpec, params: dict[str, Any]) -> tuple[Any, Any, Any]:
-    """rasterio /vsicurl/ windowed read of a known COG/VRT (direct-window)."""
+    """Windowed read of a known COG/VRT through the httpx transport (direct-window).
+
+    Reads via the coalescing/parallel range opener (ADR-0044) -- GDAL never
+    networks -- so the transport surfaces a typed status: a missing object (404 /
+    S3 NoSuchKey) maps to the typed EMPTY frame (the twins' no-coverage semantics),
+    403/AccessDenied to an auth-class upstream error, 429/5xx to a retryable
+    upstream error. This is where the old ``/vsicurl/`` path lost the 404->EMPTY
+    split (GDAL discarded the status, so every failure read as UPSTREAM_ERROR).
+    """
     import numpy as np
-    import rasterio
     from rasterio.windows import from_bounds as window_from_bounds
 
-    ingest = spec.ingest or {}
+    from ..transport import (
+        TransportAuthError,
+        TransportNotFound,
+        open_windowed_cog,
+    )
+
     bbox = params["bbox"]
     endpoint = spec.endpoints.get("data") or next(iter(spec.endpoints.values()))
     url = endpoint.url or endpoint.url_template or ""
-    vsi = f"/vsicurl/{url}" if not url.startswith("/vsicurl/") else url
+    if url.startswith("/vsicurl/"):
+        url = url[len("/vsicurl/"):]
     try:
-        with rasterio.open(vsi) as src:
+        with open_windowed_cog(url) as src:
             win = window_from_bounds(*bbox, transform=src.transform)
             arr = src.read(1, window=win)
             transform = src.window_transform(win)
             crs = src.crs
-    except Exception as exc:  # noqa: BLE001
+    except TransportNotFound as exc:
+        raise router_empty_error(
+            spec.error_code_prefix,
+            f"direct-window object not found (bbox={bbox}): {exc}",
+            spec.empty_error_suffix,
+        )
+    except TransportAuthError as exc:
+        err = router_upstream_error(spec.error_code_prefix, f"direct-window access denied: {exc}")
+        err.retryable = False
+        raise err
+    except Exception as exc:  # noqa: BLE001 -- retryable upstream (timeout/5xx/read)
         raise router_upstream_error(spec.error_code_prefix, f"direct-window read failed: {exc}")
     if arr.size == 0:
         raise router_empty_error(spec.error_code_prefix, f"bbox={bbox} produced an empty window", spec.empty_error_suffix)
