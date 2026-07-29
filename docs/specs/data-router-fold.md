@@ -61,9 +61,21 @@ Workflows/templates import ~a dozen fetchers directly (nested use). The
 router exposes the same callable seam per source (registry-resolved), so
 nested consumers migrate mechanically; envelope shapes unchanged.
 
+## Retention principle (NATE 2026-07-28)
+
+EVERY working endpoint is RETAINED - "they drive functionality." Usage/
+telemetry is NEVER a cut criterion (it informs migration ORDER and pilot
+picks only). A fetcher changes form solely by replication-proven
+substitution: spec-driven, hybrid (spec + named transform), or retained
+code. INDISTINGUISHABILITY: hand-rolled spec-driven sources flow through
+the IDENTICAL pipeline and surface as catalog-native ones - a consumer
+cannot tell the origin, because nothing differs.
+
 ## Sequencing
 
 After the in-flight SFINCS remediation lands: phase-1 audit (classify all
-~100 fetchers by shape + bespoke-ness + telemetry usage ranking) -> NATE
-reviews the classification -> build pilot -> gates -> fan out. THEN the
-tool/workflow extensions (template growth) follow, per NATE's ordering.
+~100 fetchers by shape + bespoke-ness; telemetry = ordering info only) ->
+NATE reviews the classification -> build pilot -> routing-parity EXPERIMENT
+(experiments/fetcher_fold_routing, NATE-signed inputs) + replication gates
+-> family fan-out. THEN the tool/workflow extensions (template growth),
+per NATE's ordering.
