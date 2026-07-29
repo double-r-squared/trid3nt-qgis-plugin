@@ -54,9 +54,14 @@ files, not editing shared ones.
                       (secrets, credentials, confirm replies, spatial input,
                       picker replies, mode2 reply, update/version) - each
                       self-registers into the transport table
-      http/           tool_catalog_http split: catalog serving, export/
-                      ingest routes, health/version route, future
-                      plugins.xml serving
+      http/           tool_catalog_http split: THIN route families only
+                      (catalog serving, export/ingest, plugins.xml + version
+                      - now landed); analytics/summary logic moves OUT to
+                      telemetry/
+      telemetry/      (NATE 2026-07-28) writer (emit_tool_call_event),
+                      reader (load_tool_call_records), summary builder
+                      (build_telemetry_summary lifted from the catalog
+                      server) - single JSONL sink, DuckDB-queryable
       persistence.py  (already cut down this batch), telemetry.py
       credentials/ sandbox/ emission/  (as-is)
       server.py       BOOTSTRAP ONLY: compose the above, < 500 lines.
@@ -70,8 +75,16 @@ AST no-logic-drift, canary, live WS turn)
   is the load-bearing new mechanism; handlers move family-by-family).
 - WAVE C: turns/ + cases/ extraction (turn loop is the riskiest move -
   its own wave, WS-turn smoke mandatory).
-- WAVE D: http/ split + server.py reduced to bootstrap; conformance suite
-  lands and turns RED-on-regression permanently.
+- WAVE D: http/ split + telemetry/ package + server.py reduced to
+  bootstrap; conformance suite lands RED-on-regression permanently -
+  as a RATCHET (fail-on-growth; ~8 files exceed the 1500-line cap today,
+  tightened per wave, not an instant bar).
+- WAVE E (agent-side heavies, after B-D): flood.py (post-SFINCS-remediation
+  residue), postprocess_modflow (4.7k), pipeline_emitter (2.8k) decomposed
+  under the same rules.
+- cases/ absorptions renamed honestly on the move: scenario_reuse.py ->
+  solve_reuse_guard.py (it is the expensive-solve reuse GATE, not generic
+  scenario reuse); case_lifecycle.py -> cases/qgs_lifecycle.py.
 - Comment judgment pass rides every wave on the code it touches (principle 5).
 
 ## Ownership matrix after (who can edit in parallel)
