@@ -120,3 +120,5 @@ been written yet but I don't want you to forget it.")
   point at MCP servers as endpoints (ras-commander-mcp = the HEC-RAS
   motivator). No MCP inside the current LLM loop - would add, not reduce,
   boilerplate. Persistence's "MCP-shaped" naming = wave-C rename, not MCP.
+
+- 2026-07-29: numpy DEM-product swap (hillshade/slope/aspect/color-relief as pure-wheel numpy stencils/LUT) - Mac-test-gated follow-on to processing-decloud-refactor; would remove the system gdal-bin machine prerequisite entirely. Contour vertex drift is the hard part.
