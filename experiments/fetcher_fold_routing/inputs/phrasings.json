@@ -1,6 +1,6 @@
 {
   "schema_version": "1.0",
-  "status": "AWAITING_NATE_SIGNOFF",
+  "status": "SIGNED_NATE_2026-07-29",
   "authority": [
     "docs/specs/data-router-fold.md",
     "docs/specs/fetcher-fold-audit.md",

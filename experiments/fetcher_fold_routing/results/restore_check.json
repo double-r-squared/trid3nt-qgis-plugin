@@ -1,0 +1,15 @@
+{
+  "parent_env_fold_unset": true,
+  "probe_ids": [
+    "fetch_gridmet#0",
+    "fetch_hifld_critical_infrastructure#0",
+    "fetch_noaa_coops_tides#0",
+    "fetch_esri_landcover_10m#0",
+    "fetch_census_acs#0",
+    "fetch_gridmet#8"
+  ],
+  "probe_mismatches": [],
+  "probe_restored": true,
+  "full_file_restore_mismatches": 0,
+  "note": "post-fold fresh baseline-state process (rep2) is byte-identical to the canonical baseline arm across all 71 records; pool restored."
+}

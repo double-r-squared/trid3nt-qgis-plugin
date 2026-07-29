@@ -1,0 +1,30 @@
+{
+  "arm": "baseline",
+  "fold_env_value": null,
+  "fold_arm_enabled": false,
+  "timestamp_utc": "20260729T125844Z",
+  "record_count": 71,
+  "record_depth": 25,
+  "catalog_size": 200,
+  "registered_spec_names": [],
+  "registered_aliases": [],
+  "index_tool_count": 180,
+  "index_build_ms": 8834.0,
+  "dense_backend": "sentence_transformers",
+  "bm25": true,
+  "twin_in_index": {
+    "fetch_gridmet": true,
+    "fetch_hifld_critical_infrastructure": true,
+    "fetch_noaa_coops_tides": true,
+    "fetch_esri_landcover_10m": true,
+    "fetch_census_acs": true
+  },
+  "spec_alias_in_index": {
+    "fetch_gridmet__spec": false,
+    "fetch_hifld_critical_infrastructure__spec": false,
+    "fetch_noaa_coops_tides__spec": false,
+    "fetch_esri_landcover_10m__spec": false,
+    "fetch_census_acs__spec": false
+  },
+  "external_calls": "none (model-free; in-process retrieval seam only)"
+}

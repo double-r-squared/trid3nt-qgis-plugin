@@ -1,0 +1,42 @@
+{
+  "arm": "fold",
+  "fold_env_value": "1",
+  "fold_arm_enabled": true,
+  "timestamp_utc": "20260729T125832Z",
+  "record_count": 71,
+  "record_depth": 25,
+  "catalog_size": 200,
+  "registered_spec_names": [
+    "fetch_census_acs",
+    "fetch_esri_landcover_10m",
+    "fetch_gridmet",
+    "fetch_hifld_critical_infrastructure",
+    "fetch_noaa_coops_tides"
+  ],
+  "registered_aliases": [
+    "fetch_census_acs__spec",
+    "fetch_esri_landcover_10m__spec",
+    "fetch_gridmet__spec",
+    "fetch_hifld_critical_infrastructure__spec",
+    "fetch_noaa_coops_tides__spec"
+  ],
+  "index_tool_count": 180,
+  "index_build_ms": 8582.2,
+  "dense_backend": "sentence_transformers",
+  "bm25": true,
+  "twin_in_index": {
+    "fetch_gridmet": true,
+    "fetch_hifld_critical_infrastructure": true,
+    "fetch_noaa_coops_tides": true,
+    "fetch_esri_landcover_10m": true,
+    "fetch_census_acs": true
+  },
+  "spec_alias_in_index": {
+    "fetch_gridmet__spec": false,
+    "fetch_hifld_critical_infrastructure__spec": false,
+    "fetch_noaa_coops_tides__spec": false,
+    "fetch_esri_landcover_10m__spec": false,
+    "fetch_census_acs__spec": false
+  },
+  "external_calls": "none (model-free; in-process retrieval seam only)"
+}
