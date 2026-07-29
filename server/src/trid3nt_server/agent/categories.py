@@ -51,7 +51,6 @@ search_tools).
 from __future__ import annotations
 
 import logging
-import os
 from dataclasses import dataclass, field
 from typing import Iterable
 
@@ -965,13 +964,11 @@ class AllowedToolSet:
     Composition (from ``project_wave_4_10_research_findings.md`` §
     Architecture decisions):
 
-    - **Hot set** (always on): the tools in ``HOT_SET_TOOLS`` (static), OR
-      the top-K tools from ``get_dynamic_hot_set`` when
-      ``TRID3NT_DYNAMIC_HOT_SET=1`` and Mongo is available (M6 wire-up).
-      The dynamic hot set is fetched lazily on the first ``as_frozenset``
-      call that goes through ``as_frozenset_async``; synchronous callers
-      (``validate_function_call``, ``__contains__``) always get the cached
-      value or the static fallback.
+    - **Hot set** (always on): the tools in ``HOT_SET_TOOLS`` (static). A
+      per-user Mongo-backed dynamic hot set (``get_dynamic_hot_set``, gated
+      behind ``TRID3NT_DYNAMIC_HOT_SET=1``) was cut as feature-creep - the
+      flag was never set in any live config, so this was already always the
+      static path in practice.
     - **Sticky-after-list**: every category id the LLM has called
       ``list_tools_in_category(category_id=...)`` on this session opens up
       the full member list of that category for the rest of the session.
@@ -989,12 +986,12 @@ class AllowedToolSet:
     leave. A new session (new WebSocket connection / new ``SessionState``)
     starts with a fresh ``AllowedToolSet`` seeded from the hot set.
 
-     M6 extension: the optional ``user_id`` field carries the
-    authenticated user identity so ``get_dynamic_hot_set`` can filter
-    telemetry per-user.  When ``None`` the global (all-users) tallying path
-    is used.  The ``TRID3NT_DYNAMIC_HOT_SET=1`` feature flag must also be set
-    for the dynamic path to engage; without the flag (the default) the static
-    ``HOT_SET_TOOLS`` is used regardless of ``user_id``.
+     M6 extension: the optional ``user_id`` field and the ``_dynamic_hot_set``
+    cache slot are vestigial now that the dynamic hot-set path (above) is
+    cut - nothing reads ``user_id`` any more and ``_dynamic_hot_set`` is
+    never assigned, so ``as_frozenset()`` always resolves the static
+    ``HOT_SET_TOOLS``. Left in place (not removed) - out of scope for the
+    dynamic-hot-set cut; a candidate for a follow-up cleanup.
     """
 
     #: Categories the LLM has opened via list_tools_in_category this session.
@@ -1003,10 +1000,12 @@ class AllowedToolSet:
     dispatched_tools: set[str] = field(default_factory=set)
     #: Explicit additions (category-router pre-warm, etc.).
     explicit_tools: set[str] = field(default_factory=set)
-    #: Authenticated user_id for per-user dynamic hot-set (None = global).
+    #: Authenticated user_id. Vestigial: was consumed only by the now-cut
+    #: per-user dynamic hot-set path; nothing reads it any more.
     user_id: str | None = None
-    #: Cached hot set (populated lazily by ``as_frozenset_async``; starts
-    #: as None so the first async call re-fetches from Mongo / static).
+    #: Vestigial: was populated by ``as_frozenset_async`` for the now-cut
+    #: dynamic hot-set path. Never assigned any more, so this stays ``None``
+    #: and ``as_frozenset()`` always resolves the static ``HOT_SET_TOOLS``.
     _dynamic_hot_set: frozenset[str] | None = field(default=None, repr=False)
 
     # Always-available meta-tools - never gated behind the hot set.
@@ -1069,40 +1068,17 @@ class AllowedToolSet:
         return self._build_from_hot_set(hot_set)
 
     async def as_frozenset_async(self) -> frozenset[str]:
-        """Async snapshot - fetches the dynamic hot set from Mongo when
-        ``TRID3NT_DYNAMIC_HOT_SET=1``, then caches it for subsequent
-        synchronous calls.
+        """Async snapshot - delegates to the synchronous static-hot-set path.
 
-        When the env flag is unset (the default), delegates immediately to
-        the synchronous ``as_frozenset()`` path (no Mongo round-trip,
-        backward-compat).
-
-        When Mongo is unavailable ``get_dynamic_hot_set`` falls back to the
-        static ``HOT_SET_TOOLS`` internally, so the caller always gets a
-        non-empty set.
+        Kept as a coroutine (rather than folded into ``as_frozenset()``) so
+        existing ``await ...as_frozenset_async()`` call sites (e.g. the
+        per-turn refresh in ``server.py``) need no change. The per-user
+        dynamic hot-set feature (Mongo-backed, gated behind
+        ``TRID3NT_DYNAMIC_HOT_SET=1``) was cut as feature-creep - the flag
+        was never set in any live config, so this was already always the
+        static path in practice.
         """
-        if os.environ.get("TRID3NT_DYNAMIC_HOT_SET") != "1":
-            return self.as_frozenset()
-
-        try:
-            from .tools.search.search_tools.search_tools import get_dynamic_hot_set as _get_dyn
-
-            dynamic = await _get_dyn(user_id=self.user_id, top_k=8)
-            # Merge with the static set so tools the user has never called
-            # (e.g. on a cold-start user account) still see the canonical
-            # baseline - the dynamic set only *replaces* the hot-set slot;
-            # the meta-tools are always present via ``_build_from_hot_set``.
-            self._dynamic_hot_set = dynamic if dynamic else HOT_SET_TOOLS
-        except Exception:  # noqa: BLE001 - Mongo unavailable; stay on static
-            import logging as _logging
-
-            _logging.getLogger("trid3nt_server.agent.categories").debug(
-                "dynamic hot-set fetch failed; falling back to static HOT_SET_TOOLS",
-                exc_info=True,
-            )
-            self._dynamic_hot_set = HOT_SET_TOOLS
-
-        return self._build_from_hot_set(self._dynamic_hot_set)
+        return self.as_frozenset()
 
     def __contains__(self, tool_name: object) -> bool:  # pragma: no cover - thin
         if not isinstance(tool_name, str):

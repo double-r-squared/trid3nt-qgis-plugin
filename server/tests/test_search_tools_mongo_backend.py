@@ -1,12 +1,14 @@
-"""search_tools co-occurrence (JSONL-backed) + hot-set tests.
+"""search_tools co-occurrence (JSONL-backed) tests.
 
 Telemetry is JSONL-only now (the ``tool_call_telemetry`` Persistence-collection
 route was cut). The co-occurrence channel reads the JSONL sink via
 ``telemetry.load_tool_call_records``; these tests feed a temp
-``TRID3NT_TELEMETRY_PATH`` file. ``get_dynamic_hot_set`` still reads the
-Persistence collection (a mongo path retained only for the DORMANT, flag-gated
-``TRID3NT_DYNAMIC_HOT_SET`` feature, unset in all live configs) -- its tests
-still drive a mock Persistence.
+``TRID3NT_TELEMETRY_PATH`` file.
+
+The per-user dynamic hot-set path (``get_dynamic_hot_set``, Mongo-backed,
+gated behind ``TRID3NT_DYNAMIC_HOT_SET`` and unset in all live configs) was
+cut as feature-creep; its dedicated tests were removed along with the
+function.
 
 Coverage:
     1. ``test_co_occurrence_boost_when_jsonl_populated`` — with a populated JSONL
@@ -18,18 +20,15 @@ Coverage:
     3. ``test_cooccurrence_index_cached_within_5min_window`` — a second call
        within the refresh window reuses the cached index (no second JSONL read);
        past the window the cache is rebuilt.
-    4. ``test_get_dynamic_hot_set_*`` — the (dormant) hot-set path against a mock
-       Persistence: top-K by dispatch frequency + static fallbacks.
-    5. ``test_existing_unit_tests_still_pass_smoke`` — guards against accidental
+    4. ``test_existing_unit_tests_still_pass_smoke`` — guards against accidental
        regression of the canonical 3-channel routing answers.
-    6. ``test_build_cooccurrence_from_docs_*`` — pure algorithmic correctness.
+    5. ``test_build_cooccurrence_from_docs_*`` — pure algorithmic correctness.
 """
 
 from __future__ import annotations
 
 import asyncio
 from typing import Any
-from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
@@ -47,10 +46,8 @@ from trid3nt_server.agent.workflows.sfincs.flood import flood  # noqa: F401
 from trid3nt_server.agent.tools.search.search_tools.search_tools import (
     _build_cooccurrence_from_docs,
     _reset_cooccurrence_cache_for_tests,
-    _reset_hot_set_cache_for_tests,
     _reset_index_for_tests,
     search_tools,
-    get_dynamic_hot_set,
 )
 
 
@@ -64,11 +61,9 @@ def _fresh_caches():
     """Reset all module-level caches before/after each test."""
     _reset_index_for_tests()
     _reset_cooccurrence_cache_for_tests()
-    _reset_hot_set_cache_for_tests()
     yield
     _reset_index_for_tests()
     _reset_cooccurrence_cache_for_tests()
-    _reset_hot_set_cache_for_tests()
 
 
 def _make_telemetry_docs(
@@ -97,17 +92,6 @@ def _make_telemetry_docs(
             }
         )
     return list(reversed(docs))  # newest-first
-
-
-def _make_mock_persistence(
-    find_result_docs: list[dict[str, Any]] | None = None,
-) -> MagicMock:
-    """Mock Persistence whose _mcp.call_tool returns ``{"documents": [...]}``."""
-    persistence = MagicMock()
-    persistence._mcp = MagicMock()
-    docs = find_result_docs or []
-    persistence._mcp.call_tool = AsyncMock(return_value={"documents": docs})
-    return persistence
 
 
 def _write_telemetry_jsonl(path, pairs: list[tuple[str, str]]) -> None:
@@ -282,115 +266,7 @@ def test_cooccurrence_index_cached_within_5min_window(tmp_path, monkeypatch) -> 
 
 
 # ---------------------------------------------------------------------------
-# 4. test_get_dynamic_hot_set_returns_top_k
-# ---------------------------------------------------------------------------
-
-
-def test_get_dynamic_hot_set_returns_top_k() -> None:
-    """With mocked telemetry, ``get_dynamic_hot_set`` returns the top-K by count."""
-    pairs: list[tuple[str, str]] = []
-    # fetch_dem dispatched 10 times across various sessions.
-    for i in range(10):
-        pairs.append((f"01SES{i:021d}", "fetch_dem"))
-    # compute_hillshade 5 times.
-    for i in range(5):
-        pairs.append((f"01SES{i:021d}", "compute_hillshade"))
-    # geocode_location 3 times.
-    for i in range(3):
-        pairs.append((f"01SES{i:021d}", "geocode_location"))
-    # Various single-call tools.
-    for i, tool in enumerate(
-        [
-            "fetch_nws_alerts_conus",
-            "compute_slope",
-            "compute_aspect",
-            "clip_raster_to_bbox",
-            "fetch_fema_nfhl_zones",
-            "fetch_wdpa_protected_areas",
-        ]
-    ):
-        pairs.append((f"01XSES{i:020d}", tool))
-
-    docs = _make_telemetry_docs(pairs)
-    persistence = _make_mock_persistence(docs)
-
-    with patch(
-        "trid3nt_server.agent.tools.search.search_tools.search_tools._get_persistence_safe",
-        return_value=persistence,
-    ):
-        hot_set = asyncio.run(get_dynamic_hot_set(top_k=3))
-
-    assert isinstance(hot_set, frozenset)
-    assert hot_set == frozenset({"fetch_dem", "compute_hillshade", "geocode_location"})
-
-
-def test_get_dynamic_hot_set_filters_by_user_id() -> None:
-    """``user_id`` is passed through to the find filter."""
-    docs = _make_telemetry_docs(
-        [("01SESS00000000000000000001", "fetch_dem")]
-    )
-    persistence = _make_mock_persistence(docs)
-
-    with patch(
-        "trid3nt_server.agent.tools.search.search_tools.search_tools._get_persistence_safe",
-        return_value=persistence,
-    ):
-        asyncio.run(get_dynamic_hot_set(user_id="01USR0000000000000000000XX", top_k=5))
-
-    # First call should be the find.
-    name, args = persistence._mcp.call_tool.call_args_list[0][0]
-    assert name == "find"
-    assert args["filter"].get("user_id") == "01USR0000000000000000000XX"
-
-
-# ---------------------------------------------------------------------------
-# 5. test_get_dynamic_hot_set_falls_back_to_static
-# ---------------------------------------------------------------------------
-
-
-def test_get_dynamic_hot_set_falls_back_to_static() -> None:
-    """Persistence unbound → static HOT_SET_TOOLS is returned verbatim."""
-    from trid3nt_server.agent.categories import HOT_SET_TOOLS as STATIC
-
-    with patch(
-        "trid3nt_server.agent.tools.search.search_tools.search_tools._get_persistence_safe",
-        return_value=None,
-    ):
-        result = asyncio.run(get_dynamic_hot_set())
-    assert result == STATIC
-
-
-def test_get_dynamic_hot_set_falls_back_when_mcp_raises() -> None:
-    """An MCP find error falls through to the static set, not an exception."""
-    from trid3nt_server.agent.categories import HOT_SET_TOOLS as STATIC
-
-    persistence = MagicMock()
-    persistence._mcp = MagicMock()
-    persistence._mcp.call_tool = AsyncMock(side_effect=RuntimeError("boom"))
-
-    with patch(
-        "trid3nt_server.agent.tools.search.search_tools.search_tools._get_persistence_safe",
-        return_value=persistence,
-    ):
-        result = asyncio.run(get_dynamic_hot_set())
-    assert result == STATIC
-
-
-def test_get_dynamic_hot_set_falls_back_when_no_telemetry_rows() -> None:
-    """Persistence bound but the find returns no rows → static fallback."""
-    from trid3nt_server.agent.categories import HOT_SET_TOOLS as STATIC
-
-    persistence = _make_mock_persistence([])  # empty docs
-    with patch(
-        "trid3nt_server.agent.tools.search.search_tools.search_tools._get_persistence_safe",
-        return_value=persistence,
-    ):
-        result = asyncio.run(get_dynamic_hot_set())
-    assert result == STATIC
-
-
-# ---------------------------------------------------------------------------
-# 6. test_existing_unit_tests_still_pass — smoke
+# 4. test_existing_unit_tests_still_pass — smoke
 # ---------------------------------------------------------------------------
 
 
@@ -422,7 +298,7 @@ def test_existing_unit_tests_still_pass_smoke(tmp_path, monkeypatch) -> None:
 
 
 # ---------------------------------------------------------------------------
-# 7. Build-cooccurrence-from-docs algorithmic correctness
+# 5. Build-cooccurrence-from-docs algorithmic correctness
 # ---------------------------------------------------------------------------
 
 

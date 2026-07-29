@@ -78,10 +78,8 @@ __all__ = [
     "_LEX_REINFORCE_GATE_DOOR",
     "_LEX_REINFORCE_GATE_GENERAL",
     "SearchToolsError",
-    "get_dynamic_hot_set",
     "_get_cooccurrence_index",
     "_reset_cooccurrence_cache_for_tests",
-    "_reset_hot_set_cache_for_tests",
     "CooccurrenceIndex",
 ]
 
@@ -125,11 +123,6 @@ _INDEX: "_DiscoverIndex | None" = None
 _COOCCURRENCE_LOCK = threading.Lock()
 _COOCCURRENCE_INDEX: "CooccurrenceIndex | None" = None
 _COOCCURRENCE_REFRESH_SECONDS: float = 5 * 60.0  # 5-minute refresh window
-
-# Hot-set cache (M6 substrate landing here for shared Mongo access path).
-_HOT_SET_LOCK = threading.Lock()
-_HOT_SET_CACHE: "dict[str | None, tuple[float, frozenset[str]]]" = {}
-_HOT_SET_REFRESH_SECONDS: float = 5 * 60.0
 
 
 class CooccurrenceIndex:
@@ -727,7 +720,7 @@ def _reset_index_for_tests() -> None:
 
 
 # ---------------------------------------------------------------------------
-# Co-occurrence + dynamic hot-set (M5).
+# Co-occurrence (M5).
 # ---------------------------------------------------------------------------
 
 
@@ -735,25 +728,6 @@ def _reset_index_for_tests() -> None:
 # Both knobs guard against runaway growth as the telemetry collection ages.
 _COOCC_SESSION_CAP: int = 30
 _COOCC_CALL_CAP: int = 1000
-
-# Default top-K for the dynamic hot set.  M6 will adjust as needed.
-_HOT_SET_TOP_K: int = 8
-
-
-def _get_persistence_safe() -> Any:
-    """Return the bound Persistence singleton, or ``None`` on any error.
-
-    Imports ``server.get_persistence`` lazily to avoid a circular import at
-    module load time.  Any failure (singleton unbound, server not yet
-    bootstrapped, ImportError) falls through to ``None`` so callers degrade
-    to the existing static/3-channel paths.
-    """
-    try:
-        from trid3nt_server.server import get_persistence as _server_get_persistence  # type: ignore[import-not-found]
-
-        return _server_get_persistence()
-    except Exception:  # noqa: BLE001 — best-effort lookup
-        return None
 
 
 async def _fetch_recent_telemetry_docs(
@@ -891,12 +865,6 @@ def _reset_cooccurrence_cache_for_tests() -> None:
         _COOCCURRENCE_INDEX = None
 
 
-def _reset_hot_set_cache_for_tests() -> None:
-    """Clear the dynamic-hot-set cache.  ONLY for tests."""
-    with _HOT_SET_LOCK:
-        _HOT_SET_CACHE.clear()
-
-
 def _name_matches_query(name: str, q_content_tokens: list[str]) -> bool:
     """True iff the query content tokens reference this tool name.
 
@@ -966,108 +934,6 @@ def _build_cooccurrence_ranking(
     # Sort by score DESC; stable on index to give a reproducible tiebreak.
     scores.sort(key=lambda triple: (-triple[1], triple[2]))
     return [i for i, _, _ in scores]
-
-
-async def get_dynamic_hot_set(
-    user_id: str | None = None,
-    *,
-    top_k: int = _HOT_SET_TOP_K,
-    call_cap: int = 100,
-) -> frozenset[str]:
-    """Return the top-K most-dispatched tools for a user (or globally).
-
-    Reads the last ``call_cap`` rows of ``tool_call_telemetry`` (filtered by
-    ``user_id`` when provided), tallies dispatch frequency, and returns the
-    top-K tool names as a frozenset.  Cached per ``user_id`` with a 5-min
-    refresh window.
-
-    Falls back to the static ``HOT_SET_TOOLS`` from ``categories.py`` when:
-    - Mongo / Persistence is unavailable;
-    - No telemetry rows match the filter (cold-start);
-    - The MCP find call raises.
-
-    The static fallback preserves the M1 behavior so a fresh deploy without
-    any telemetry still has a sensible hot set.
-
-    Args:
-        user_id: optional user filter.  ``None`` (default) tallies globally
-            across all sessions.
-        top_k: maximum tools to return (default 8 — matches the static
-            HOT_SET_TOOLS size).
-        call_cap: telemetry rows to sample (default 100).
-
-    Returns:
-        Frozen set of tool names.  Always non-empty when the static fallback
-        engages; may be empty only if the static HOT_SET_TOOLS is empty
-        (which it isn't in production).
-    """
-    # Resolve static fallback up-front so any failure path is symmetric.
-    try:
-        from trid3nt_server.agent.categories import HOT_SET_TOOLS as _STATIC_HOT_SET
-    except Exception:  # noqa: BLE001 — defensive against import-order races
-        _STATIC_HOT_SET = frozenset()
-
-    cache_key = user_id  # ``None`` is a valid key (global)
-    now = time.monotonic()
-    with _HOT_SET_LOCK:
-        cached = _HOT_SET_CACHE.get(cache_key)
-    if cached is not None and (now - cached[0]) < _HOT_SET_REFRESH_SECONDS:
-        return cached[1]
-
-    persistence = _get_persistence_safe()
-    if persistence is None or getattr(persistence, "_mcp", None) is None:
-        return _STATIC_HOT_SET
-
-    try:
-        from trid3nt_contracts.mongo_collections import TELEMETRY_COLLECTION
-        from trid3nt_server.persistence import DEFAULT_DATABASE, _unwrap_mcp_result
-    except Exception:  # noqa: BLE001
-        return _STATIC_HOT_SET
-
-    filt: dict[str, Any] = {}
-    if user_id is not None:
-        filt["user_id"] = user_id
-
-    try:
-        raw = await persistence._mcp.call_tool(
-            "find",
-            {
-                "database": DEFAULT_DATABASE,
-                "collection": TELEMETRY_COLLECTION,
-                "filter": filt,
-                "sort": {"_id": -1},
-                "limit": call_cap,
-            },
-        )
-    except Exception as exc:  # noqa: BLE001
-        logger.debug("dynamic hot-set: telemetry find failed (%s)", exc)
-        return _STATIC_HOT_SET
-
-    docs = _unwrap_mcp_result(raw) or []
-    if isinstance(docs, dict):
-        docs = [docs]
-    if not isinstance(docs, list) or not docs:
-        return _STATIC_HOT_SET
-
-    counts: dict[str, int] = {}
-    for d in docs:
-        if not isinstance(d, dict):
-            continue
-        tool = d.get("tool_name")
-        if not isinstance(tool, str):
-            continue
-        counts[tool] = counts.get(tool, 0) + 1
-
-    if not counts:
-        return _STATIC_HOT_SET
-
-    # Top-K by count DESC; stable tiebreak by name for determinism.
-    ranked = sorted(counts.items(), key=lambda kv: (-kv[1], kv[0]))
-    result = frozenset(name for name, _ in ranked[:top_k])
-
-    with _HOT_SET_LOCK:
-        _HOT_SET_CACHE[cache_key] = (now, result)
-    return result
 
 
 # ---------------------------------------------------------------------------

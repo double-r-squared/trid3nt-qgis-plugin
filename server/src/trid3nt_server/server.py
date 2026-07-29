@@ -257,8 +257,8 @@ CONFIRMATION_TRIGGERS: set[str] = set()
 # ---------------------------------------------------------------------------
 # Tool-retrieval mode (tool-retrieval kickoff -- orchestrator half).
 #
-# Three modes, read once at import time following the TRID3NT_DYNAMIC_HOT_SET /
-# TRID3NT_SYNC_TOOL_OFFLOAD env idiom (NO code change to flip):
+# Three modes, read once at import time following the TRID3NT_SYNC_TOOL_OFFLOAD
+# env idiom (NO code change to flip):
 #
 #   off     (DEFAULT) -- the catalog is the FULL flat registry, untouched. This
 #                        is BYTE-IDENTICAL to the pre-feature behavior: no
@@ -3655,15 +3655,12 @@ async def _stream_model_reply(
     for _pin_note in _pin_notes:
         contents.append(build_user_text_content(_pin_note))
 
-    # Wave 4.11 M6: refresh the dynamic hot set once per user-message dispatch
-    # so the allowed set is primed with the user's most-dispatched tools before
-    # any Gemini function_call arrives.  No-op when ``TRID3NT_DYNAMIC_HOT_SET``
-    # is unset (delegates synchronously to the static path).  Failure is silent
-    # -- the static fallback is always available inside ``as_frozenset_async``.
-    try:
-        await state.allowed_tool_set.as_frozenset_async()
-    except Exception:  # noqa: BLE001 -- dynamic hot-set is best-effort
-        pass
+    # Wave 4.11 M6 used to refresh a per-user dynamic hot set here before any
+    # Gemini function_call arrived. That feature (Mongo-backed, gated behind
+    # TRID3NT_DYNAMIC_HOT_SET=1, never set in any live config) was cut as
+    # feature-creep; ``as_frozenset_async`` now always resolves the static
+    # HOT_SET_TOOLS synchronously, so the pre-warm call here was a pure
+    # compute-and-discard no-op and has been removed.
 
     # Per-turn usage metadata harvested from the stream (job-B6).
     last_usage: UsageMetadataEvent | None = None
@@ -5492,16 +5489,17 @@ def _bind_auth_result(state: SessionState, result: AuthResult) -> None:
 
     Separate from ``_handle_auth_token`` so tests can drive the bind
     directly without parsing an envelope. Also propagates the resolved
-    ``user_id`` into ``state.allowed_tool_set.user_id`` so
-    ``get_dynamic_hot_set`` can filter telemetry per-user when
-    ``TRID3NT_DYNAMIC_HOT_SET=1``.
+    ``user_id`` into ``state.allowed_tool_set.user_id``. That field is
+    vestigial now (its sole reader, the per-user dynamic hot-set path, was
+    cut as feature-creep) - left in place, out of scope for that cut.
     """
     state.authenticated_user_id = result.user.user_id
     state.is_anonymous = result.is_anonymous
     state.firebase_uid = result.firebase_uid
     state.tier = result.tier
     state.auth_handshake_complete = True
-    # Propagate user_id so dynamic hot-set queries are per-user scoped.
+    # Vestigial propagation - state.allowed_tool_set.user_id has no readers
+    # since the per-user dynamic hot-set path was cut. Left in place.
     state.allowed_tool_set.user_id = result.user.user_id
 
 
