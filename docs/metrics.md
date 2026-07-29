@@ -16,3 +16,4 @@ matters, not the absolute).
 | 2026-07-27b | 219,681 (552f) | 176,598 (414f) | - | - | - | - | 202 | 15,441 | post cull (9 tools, replication-proven) + structural batch (agent/ umbrella, search/, 35 dead files); -4,461 pkg lines, -11 files, -9 registered tools vs morning row; suite true baseline = 10 |
 | 2026-07-28 | 219757 (558f) | - | - | - | - | - | 200 | 13,910 | post hygiene sweep: server.py -1,529 (cards extracted), comment archaeology -1,785 across 264 files (comment lines 25,317 -> 25301), meta renames, ADR offload notes; suite baseline 10 |
 | 2026-07-28b | 218614 | - | - | - | - | - | 200 | 13,228 | recall pass: narrative blocks 216->16, war-stories 0, -1143 lines, comment-lines -> 24502; 9 genuine-architecture ADRs |
+| 2026-07-28c | 217252 | - | 11381 | - | - | - | 200 | 13,072 | dynamic hot-set + mongo_collections cut: Mongo stratum fully closed; lessons/vertex-log/deadname-default/plugin-button batch landed
