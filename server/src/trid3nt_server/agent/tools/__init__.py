@@ -255,7 +255,8 @@ from .fetchers.hydrology.fetch_usgs_water_quality import fetch_usgs_water_qualit
 # -- fetchers/ocean --
 from .fetchers.ocean.fetch_gtsm_tide_surge import fetch_gtsm_tide_surge  # noqa: E402,F401
 from .fetchers.ocean.fetch_noaa_coops_currents import fetch_noaa_coops_currents  # noqa: E402,F401
-from .fetchers.ocean.fetch_noaa_coops_tides import fetch_noaa_coops_tides  # noqa: E402,F401
+# fetch_noaa_coops_tides: data-router fold pilot -- twin DELETED, now spec-driven
+# (source.yaml + router), registered by _register_router_specs() below.
 from .fetchers.ocean.fetch_noaa_slr_confidence import fetch_noaa_slr_confidence  # noqa: E402,F401
 from .fetchers.ocean.fetch_noaa_slr_marsh import fetch_noaa_slr_marsh  # noqa: E402,F401
 from .fetchers.ocean.fetch_noaa_slr_scenarios import fetch_noaa_slr_scenarios  # noqa: E402,F401
@@ -266,7 +267,8 @@ from .fetchers.ocean.fetch_topobathy import fetch_topobathy  # noqa: E402,F401
 from .fetchers.terrain.fetch_3dep_extra import fetch_3dep_extra  # noqa: E402,F401
 from .fetchers.terrain.fetch_copernicus_dem import fetch_copernicus_dem  # noqa: E402,F401
 from .fetchers.terrain.fetch_dem import fetch_dem  # noqa: E402,F401
-from .fetchers.terrain.fetch_esri_landcover_10m import fetch_esri_landcover_10m  # noqa: E402,F401
+# fetch_esri_landcover_10m: data-router fold pilot -- twin DELETED, now spec-driven
+# (source.yaml + router), registered by _register_router_specs() below.
 from .fetchers.terrain.fetch_landcover import fetch_landcover  # noqa: E402,F401
 
 # -- fetchers/imagery --
@@ -284,7 +286,8 @@ from .fetchers.imagery.fetch_viirs_day_fire import fetch_viirs_day_fire  # noqa:
 from .fetchers.climate.fetch_chirps_precipitation import fetch_chirps_precipitation  # noqa: E402,F401
 from .fetchers.climate.fetch_climate_normals import fetch_climate_normals  # noqa: E402,F401
 from .fetchers.climate.fetch_era5_reanalysis import fetch_era5_reanalysis  # noqa: E402,F401
-from .fetchers.climate.fetch_gridmet import fetch_gridmet  # noqa: E402,F401
+# fetch_gridmet: data-router fold pilot -- twin DELETED, now spec-driven
+# (source.yaml + router), registered by _register_router_specs() below.
 from .fetchers.climate.fetch_modis_lst import fetch_modis_lst  # noqa: E402,F401
 from .fetchers.climate.fetch_us_drought_monitor import fetch_us_drought_monitor  # noqa: E402,F401
 from .fetchers.climate.lookup_precip_return_period import lookup_precip_return_period  # noqa: E402,F401
@@ -302,7 +305,8 @@ from .fetchers.biodiversity.fetch_wdpa_protected_areas import fetch_wdpa_protect
 from .fetchers.socioeconomic.fetch_administrative_boundaries import fetch_administrative_boundaries  # noqa: E402,F401
 from .fetchers.socioeconomic.fetch_buildings import fetch_buildings  # noqa: E402,F401
 from .fetchers.socioeconomic.fetch_cdc_svi import fetch_cdc_svi  # noqa: E402,F401
-from .fetchers.socioeconomic.fetch_census_acs import fetch_census_acs  # noqa: E402,F401
+# fetch_census_acs: data-router fold pilot -- twin DELETED, now spec-driven
+# (source.yaml + router JOIN transform), registered by _register_router_specs() below.
 from .fetchers.socioeconomic.fetch_epa_ejscreen import fetch_epa_ejscreen  # noqa: E402,F401
 from .fetchers.socioeconomic.fetch_field_boundaries import fetch_field_boundaries  # noqa: E402,F401
 from .fetchers.socioeconomic.fetch_ghsl_population import fetch_ghsl_population  # noqa: E402,F401
@@ -319,7 +323,8 @@ from .fetchers.hazard.fetch_epa_frs_facilities import fetch_epa_frs_facilities  
 from .fetchers.hazard.fetch_fault_sources import fetch_fault_sources  # noqa: E402,F401
 from .fetchers.hazard.fetch_fema_nfhl_zones import fetch_fema_nfhl_zones  # noqa: E402,F401
 from .fetchers.hazard.fetch_firms_active_fire import fetch_firms_active_fire  # noqa: E402,F401
-from .fetchers.hazard.fetch_hifld_critical_infrastructure import fetch_hifld_critical_infrastructure  # noqa: E402,F401
+# fetch_hifld_critical_infrastructure: data-router fold pilot -- twin DELETED, now
+# spec-driven (source.yaml + router), registered by _register_router_specs() below.
 from .fetchers.hazard.fetch_hifld_transmission_lines import fetch_hifld_transmission_lines  # noqa: E402,F401
 from .fetchers.hazard.fetch_landfire_fuels import fetch_landfire_fuels  # noqa: E402,F401
 from .fetchers.hazard.fetch_mtbs_burn_severity import fetch_mtbs_burn_severity  # noqa: E402,F401
@@ -338,6 +343,18 @@ from .fetchers.soil.fetch_gcn250_curve_numbers import fetch_gcn250_curve_numbers
 from .fetchers.soil.fetch_snotel_snow import fetch_snotel_snow  # noqa: E402,F401
 from .fetchers.soil.fetch_soilgrids import fetch_soilgrids  # noqa: E402,F401
 from .fetchers.soil.fetch_statsgo_soils import fetch_statsgo_soils  # noqa: E402,F401
+
+# -- fetchers/_router: PROMOTED spec-driven sources (data-router fold, phase-2
+# wave 1 -- the fold's first real cut). The 5 pilots (fetch_gridmet,
+# fetch_hifld_critical_infrastructure, fetch_noaa_coops_tides,
+# fetch_esri_landcover_10m, fetch_census_acs) are now served by their
+# co-located source.yaml + the shared router engine, registered UNDER THE TWIN
+# NAMES at tier="general" (the default retrieval pool). The hand-written twins
+# were DELETED (both replication + routing parity gates passed -> cull doctrine).
+# Registration walks fetchers/**/source.yaml, so adding a source = adding a YAML.
+from .fetchers._router.registration import register_specs_from_tree as _register_router_specs  # noqa: E402,F401
+
+_register_router_specs()
 
 # -- processing (compute / clip / extract / vector-edit / charts) --
 from .processing.aggregate_claims_across_sources import aggregate_claims_across_sources  # noqa: E402,F401

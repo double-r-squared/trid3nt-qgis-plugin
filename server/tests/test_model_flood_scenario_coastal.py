@@ -239,6 +239,20 @@ def _patched_chain(
 
     from trid3nt_server.agent.tools.publish_layer.publish_layer import PublishLayerError
 
+    # data-router fold: fetch_noaa_coops_tides is a promoted spec-driven tool
+    # resolved by the auto-wire via TOOL_REGISTRY[name].fn (not a twin module
+    # import). Stub it OFFLINE by swapping the registry entry for a raising one.
+    from trid3nt_server.agent.tools import RegisteredTool, TOOL_REGISTRY as _TR
+
+    def _coops_offline(**_kw):  # noqa: ANN003
+        raise RuntimeError("offline test - no live CO-OPS")
+
+    _coops_stub = RegisteredTool(
+        metadata=_TR["fetch_noaa_coops_tides"].metadata,
+        fn=_coops_offline,
+        module="test_offline_stub",
+    )
+
     return (
         patch("trid3nt_server.agent.workflows.sfincs.flood.flood.fetch_dem", dem_mock),
         patch(
@@ -281,10 +295,7 @@ def _patched_chain(
         # must never hit the network or ambient object storage from a unit
         # test - stub both so the ladder degrades to the parametric
         # design-storm surge (rung 3, key-free and fully offline).
-        patch(
-            "trid3nt_server.agent.tools.fetchers.ocean.fetch_noaa_coops_tides.fetch_noaa_coops_tides.fetch_noaa_coops_tides",
-            side_effect=RuntimeError("offline test - no live CO-OPS"),
-        ),
+        patch.dict(_TR, {"fetch_noaa_coops_tides": _coops_stub}),
         patch(
             "trid3nt_server.agent.tools.fetchers.ocean.fetch_gtsm_tide_surge.fetch_gtsm_tide_surge.fetch_gtsm_tide_surge",
             side_effect=RuntimeError("offline test - no live GTSM"),

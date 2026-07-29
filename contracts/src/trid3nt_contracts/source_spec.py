@@ -246,6 +246,15 @@ class SourceSpec(GraceModel):
     #: when no item covers the extent / the mosaic is entirely no-data.
     empty_error_suffix: str = "EMPTY"
 
+    #: The LLM-facing tool docstring, carried verbatim from the hand-written twin
+    #: (dedented via ``inspect.getdoc``). This is the sole source of the promoted
+    #: tool's ``FunctionDeclaration`` description AND its retrieval-index document
+    #: text -- so a spec-driven source is INDISTINGUISHABLE from its twin to both
+    #: the LLM tool-selector and the BM25/dense retriever (the fold's first cut
+    #: registers the spec UNDER the twin's name; the docstring must not shift the
+    #: index). ``None`` = synthesize a spec-derived doc from caveats + corpus.
+    docstring: str | None = None
+
     # --- endpoints + auth ---
     endpoints: dict[str, EndpointSpec] = Field(min_length=1)
     auth: AuthSpec = Field(default_factory=AuthSpec)

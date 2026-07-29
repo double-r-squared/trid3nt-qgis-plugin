@@ -590,18 +590,11 @@ def _build_index(
     needing per-field weighting (rank_bm25 treats the corpus as a flat bag).
     """
     snapshot = registry_snapshot if registry_snapshot is not None else dict(TOOL_REGISTRY)
-    # Fetcher-fold arm (docs/specs/router-pilot-contract.md sec 3): env-gated
-    # pool substitution. STRICT no-op when TRID3NT_FETCHER_FOLD_ARM is unset OR
-    # no source specs are registered (the default) -- so the baseline index is
-    # byte-identical. When set, a twin's index entry is swapped for its
-    # spec-driven virtual entry (surfaced under the twin's name). Imported
-    # lazily to avoid an import cycle through tools/__init__.
-    try:
-        from ...fetchers._router.registration import apply_fold_substitution_registry
-
-        snapshot = apply_fold_substitution_registry(snapshot)
-    except Exception:  # noqa: BLE001 -- the fold arm must never break index build
-        pass
+    # The data-router fold's promoted spec-driven tools are ordinary
+    # tier="general" registry entries under the twin names, carrying the twin's
+    # docstring verbatim, so they index identically to the twins with no
+    # special-casing (the env-gated experiment substitution retired once
+    # promotion became the default).
     corpus = _load_corpus(corpus_path)
 
     tool_names: list[str] = []

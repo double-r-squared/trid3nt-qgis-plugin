@@ -55,3 +55,15 @@ indistinguishable from a hand-written twin on the graded surface; the two
 remaining live-mode notes carried forward (hifld facility_type -> per-service URL
 routing; census JOIN speaks api.census.gov not the twin's data.census.gov backend)
 are unrelated to the pilots' graded requests and tracked for their own lanes.
+
+Phase-2 promotion addendum (NATE decisions, 2026-07-29; see ADR 0038):
+
+- gridMET nodata GO-FORWARD: the one non-gating divergence (the twin's rioxarray
+  writer drops the declared nodata=nan; the router writes it correctly) is resolved
+  by ACCEPTING the router-correct nodata as the go-forward -- the twin's defect DIES
+  WITH THE TWIN (deleted in promotion), no twin fix is landed.
+- Census FULL FIDELITY: the raw ACS variable-code passthrough (e.g. B19013_001E,
+  units=count) is restored in the census spec + JOIN transform, and LayerURI.units is
+  now resolved per-variable for JOIN specs (usd/years/percent/count), closing the
+  documented single-string-units note. Census re-graded 31/31 (incl. a raw-code
+  request); live-proven (median_income=usd, B19013_001E=count).

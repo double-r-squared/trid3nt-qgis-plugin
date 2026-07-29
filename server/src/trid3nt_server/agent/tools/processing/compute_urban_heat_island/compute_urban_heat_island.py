@@ -447,9 +447,14 @@ def compute_urban_heat_island(
             )
         else:
             try:
-                from trid3nt_server.agent.tools.fetchers.terrain.fetch_esri_landcover_10m.fetch_esri_landcover_10m import fetch_esri_landcover_10m
+                # data-router fold: fetch_esri_landcover_10m is now a promoted
+                # spec-driven tool -- resolve the callable seam by registry name.
+                from trid3nt_server.agent.tools import TOOL_REGISTRY as _TR
 
-                layer = fetch_esri_landcover_10m(bbox=q_bbox)
+                _lc = _TR.get("fetch_esri_landcover_10m")
+                if _lc is None:
+                    raise UhiUpstreamError("fetch_esri_landcover_10m is not registered")
+                layer = _lc.fn(bbox=q_bbox)
             except UhiError:
                 raise
             except Exception as exc:  # noqa: BLE001

@@ -1408,29 +1408,14 @@ def _default_declarable_registry() -> dict[str, Any]:
     default-declaration path and the retrieval pool exclude templates
     identically.
     """
-    # Fetcher-fold arm (router-pilot-contract sec 3.3): env-gated pool
-    # substitution -- the twin's declarable entry is swapped for its spec-driven
-    # virtual entry (relabeled tier=general under the twin's name) when
-    # TRID3NT_FETCHER_FOLD_ARM is set. This MUST run on the FULL pre-filter
-    # snapshot: the virtual entry is a ``tier=template`` ``__spec`` alias, so
-    # filtering templates FIRST would drop it before the swap could fire (the
-    # round-2 drift bug -- the ON-path swap never fired here while _build_index,
-    # which substitutes pre-filter, did). Substitute-then-filter matches
-    # _build_index exactly (the drift guard). STRICT no-op when the env is unset
-    # OR no specs registered (default), so the default declarable set is
-    # byte-identical to today.
-    snapshot: dict[str, Any] = dict(TOOL_REGISTRY)
-    try:
-        from trid3nt_server.agent.tools.fetchers._router.registration import (
-            apply_fold_substitution_registry,
-        )
-
-        snapshot = apply_fold_substitution_registry(snapshot)
-    except Exception:  # noqa: BLE001 -- the fold arm must never break dispatch
-        pass
+    # The data-router fold's 5 promoted spec-driven tools are registered as
+    # ordinary tier="general" entries (registration.register_specs_from_tree at
+    # import), so they flow through this filter identically to any hand-written
+    # tool -- no special-casing (the env-gated experiment substitution retired
+    # once promotion became the default).
     _reg = {
         name: entry
-        for name, entry in snapshot.items()
+        for name, entry in TOOL_REGISTRY.items()
         if getattr(entry.metadata, "tier", "general") != "template"
     }
     return _reg

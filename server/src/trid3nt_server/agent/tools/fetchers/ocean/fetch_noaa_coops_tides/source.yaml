@@ -86,3 +86,102 @@ caveats:
 fallback: [fetch_gtsm_tide_surge]
 
 # corpus lifted from sibling corpus.yaml.
+
+# --- LLM docstring (carried VERBATIM from the twin via inspect.getdoc;
+# the sole source of the promoted FunctionDeclaration description + the
+# retrieval-index document text -> indistinguishable from the twin). ---
+docstring: |
+  Fetch NOAA CO-OPS tide-station observations or predictions as a FlatGeobuf.
+
+  **What it does:** Retrieves hourly water-level time series from the NOAA
+  Center for Operational Oceanographic Products and Services (CO-OPS) Data
+  API for all instrumented tide stations within a bbox, using the
+  ``products/water_level`` or ``products/predictions`` endpoint. Returns a
+  FlatGeobuf with one Point feature per station, carrying the full hourly
+  time series inline as a ``time_series_csv`` attribute suitable for SFINCS
+  coastal boundary forcing. Tier-1 free, no API key. Covers US coastal waters,
+  Great Lakes, and US territories.
+
+  **When to use:**
+  - User asks "what are the tide levels at Fort Myers / Key West / any US
+    coastal city" for a past or upcoming date range.
+  - Agent needs observed coastal water-level boundary conditions for a
+    compound-flood SFINCS model run at a US/territory location (composes
+    with ``model_flood_scenario`` as the coastal forcing input).
+  - User asks for tide predictions to plan coastal operations or assess
+    flood-tide coincidence risk.
+  - Agent needs to validate a GTSM global tide estimate against the
+    authoritative US tide-gauge record (cross-check via this tool).
+  - User asks for storm-surge context: "how high did the water get at
+    Fort Myers during Ian?" — use ``product="water_level"`` to retrieve
+    the observed record.
+
+  **When NOT to use:**
+  - For global coastal water-level (non-US) → use ``fetch_gtsm_tide_surge``
+    (GTSM v3.0 global reanalysis).
+  - For river-discharge / streamflow → use ``fetch_noaa_nwm_streamflow``
+    or ``fetch_streamflow`` (USGS NWIS).
+  - For wave height or ocean swell → CO-OPS does not serve wave products;
+    use ERA5 or NOAA WAVEWATCH III (not currently in the tool catalog).
+  - For gridded storm-surge inundation rasters → use ``model_flood_scenario``
+    (SFINCS) with this tool's output as coastal boundary forcing.
+  - For sub-hourly tide data (6-minute observations) → the current tool
+    returns hourly (``interval=h``); extend with ``interval=6`` in a
+    future version if SFINCS setup requires finer resolution.
+
+  **Parameters:**
+      bbox: ``(west, south, east, north)`` in EPSG:4326 (WGS84 decimal
+          degrees). Required — ``supports_global_query=False``. CO-OPS
+          has ~300 stations globally, primarily US coastline and territories;
+          specify a coastal bbox. Cap of 50 stations per call.
+          Example for Fort Myers + Naples area: ``(-82.5, 25.5, -81.0, 27.5)``
+          → returns 2 stations (8725520 Fort Myers + 8725114 Naples Bay).
+      start_date: ISO YYYY-MM-DD; inclusive start of the data window.
+          Example: ``"2022-09-28"`` (Hurricane Ian landfall day).
+      end_date: ISO YYYY-MM-DD; inclusive end of the data window.
+          Hard cap of 366 days from start_date. For multi-year spans, call
+          in annual chunks and aggregate.
+      product: One of:
+          - ``"water_level"`` (default): verified (or preliminary) observed
+            water level at the gauge, relative to MLLW datum. Best for
+            post-event analysis and compound-flood model validation.
+          - ``"predictions"``: astronomical tide prediction (no storm surge
+            component). Best for future planning, tide tables, and
+            decomposing the observed signal into tide vs surge residual.
+
+  **Returns:**
+      ``LayerURI`` pointing at a FlatGeobuf in the cache bucket:
+      ``s3://trid3nt-cache/cache/dynamic-1h/noaa_coops_tides/<key>.fgb``
+      Each feature is a Point at the station location (EPSG:4326) with
+      attributes: ``station_id`` (7-digit CO-OPS ID), ``station_name``,
+      ``lon``, ``lat``, ``product``, ``datum`` (always "MLLW"),
+      ``time_start`` / ``time_end`` (ISO-8601 UTC), ``n_timesteps`` (int),
+      ``wl_min_m`` / ``wl_max_m`` / ``wl_mean_m`` (float, meters),
+      ``time_series_csv`` (comma-separated "iso,value_m" rows for SFINCS
+      boundary input). ``layer_type="vector"``, ``role="primary"``,
+      ``units="m (MLLW)"``.
+
+  **Cross-tool dependencies:**
+      - Feeds INTO: ``model_flood_scenario`` (coastal boundary forcing),
+        ``publish_layer`` (map display).
+      - Cross-checks: ``fetch_gtsm_tide_surge`` (global non-US tide+surge
+        reanalysis) — CONUS basin with CO-OPS coverage should prefer this
+        tool; non-CONUS should prefer GTSM.
+      - Composes ALONGSIDE: ``fetch_mrms_qpe`` (precip forcing),
+        ``fetch_noaa_nwm_streamflow`` (river discharge), and
+        ``fetch_era5_reanalysis`` (offshore wind/wave forcing) for the
+        full SFINCS compound-flood forcing stack.
+      - Sibling NWM tool (river): ``fetch_noaa_nwm_streamflow`` for CONUS
+        fluvial forcing.
+
+  **Error types:**
+      - ``COOPSTidesInputError``: bad bbox / product / dates (retryable=False).
+      - ``COOPSTidesUpstreamError``: HTTP/network failure (retryable=True).
+      - ``COOPSTidesEmptyError``: no CO-OPS stations in bbox or all stations
+        have no data for the requested period (retryable=False).
+
+  Cache: ``ttl_class="dynamic-1h"``, ``source_class="noaa_coops_tides"``.
+  Cache key is SHA-256 of ``(bbox-rounded-6dp, start_date, end_date, product)``
+  so identical calls reuse the same FlatGeobuf.
+
+  Tier-1 free. No API key. ``supports_global_query=False``.

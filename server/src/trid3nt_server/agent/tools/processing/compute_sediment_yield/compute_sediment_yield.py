@@ -506,9 +506,14 @@ def _load_c(
         source_note = f"C-factor land cover from caller-supplied landcover_uri ({landcover_uri})"
     else:
         try:
-            from trid3nt_server.agent.tools.fetchers.terrain.fetch_esri_landcover_10m.fetch_esri_landcover_10m import fetch_esri_landcover_10m
+            # data-router fold: fetch_esri_landcover_10m is now a promoted
+            # spec-driven tool -- resolve the callable seam by registry name.
+            from trid3nt_server.agent.tools import TOOL_REGISTRY as _TR
 
-            layer = fetch_esri_landcover_10m(bbox=bbox)
+            _lc = _TR.get("fetch_esri_landcover_10m")
+            if _lc is None:
+                raise SedimentYieldUpstreamError("fetch_esri_landcover_10m is not registered")
+            layer = _lc.fn(bbox=bbox)
         except SedimentYieldError:
             raise
         except Exception as exc:  # noqa: BLE001

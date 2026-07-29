@@ -347,6 +347,20 @@ def build_layer_uri(spec: SourceSpec, params: dict[str, Any], uri: str) -> Layer
     # gridmet's twin omits LayerURI.bbox; emit_bbox=false suppresses it (parity).
     if not spec.output.emit_bbox:
         bbox = None
+    # Per-variable LayerURI.units (full fidelity): a JOIN spec carries the units
+    # on the resolved variable (census: usd / years / percent / count), matching
+    # the twin's LayerURI.units=spec["units"]. Non-JOIN sources keep the single
+    # normalize.units stamp. Resolution can only fail on an invalid variable,
+    # which the executor already rejected before this point (guarded regardless).
+    units = spec.normalize.units
+    if spec.join is not None:
+        try:
+            _, var_spec = join_transform.select_variable(spec, params)
+            resolved = var_spec.get("units")
+            if resolved:
+                units = resolved
+        except Exception:  # noqa: BLE001 -- never fail emission on units resolution
+            pass
     return LayerURI(
         layer_id=layer_id,
         name=f"{spec.source_class} {variable}",
@@ -354,7 +368,7 @@ def build_layer_uri(spec: SourceSpec, params: dict[str, Any], uri: str) -> Layer
         uri=uri,
         style_preset=_template(spec.output.style_preset, params),
         role=spec.output.role,
-        units=spec.normalize.units,
+        units=units,
         bbox=bbox,
     )
 

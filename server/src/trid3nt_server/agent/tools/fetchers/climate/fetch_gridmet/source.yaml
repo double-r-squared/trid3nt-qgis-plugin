@@ -83,3 +83,82 @@ caveats:
 fallback: [fetch_era5_reanalysis]
 
 # corpus omitted here -> loader lifts it verbatim from the sibling corpus.yaml.
+
+# --- LLM docstring (carried VERBATIM from the twin via inspect.getdoc;
+# the sole source of the promoted FunctionDeclaration description + the
+# retrieval-index document text -> indistinguishable from the twin). ---
+docstring: |
+  gridMET CONUS daily gridded meteorology (4 km, 1979 → present).
+
+  Fetches a daily gridded meteorological variable from the University of
+  Idaho gridMET dataset (Abatzoglou 2013) over the requested bbox + date
+  range, averages across the time window, and emits a CRS-tagged COG.
+  Access is via the NKN THREDDS OPeNDAP aggregate, which subsets by time +
+  bbox in a single wire call (<1 MB typical for a metro-scale request).
+
+  Use this when:
+    - User asks for fire-weather / fuel-moisture inside CONUS
+      ("fm100", "fm1000", "fuel moisture", "fire danger").
+    - User asks for daily-aggregated CONUS weather over a historical
+      window (drought, precip, ET, temperature, humidity, wind speed).
+    - The wildfire pipeline needs *dynamic* moisture state to pair with
+      LANDFIRE *static* fuel models.
+    - User asks for Palmer Drought Severity Index (pdsi) anywhere in
+      CONUS, 1979-01-01 → present (3-day lag).
+    - User asks for reference ET (pet) for water-balance computations.
+
+  Do NOT use this for:
+    - Non-CONUS bboxes — use ``fetch_era5_reanalysis`` (global 0.25°).
+    - Sub-daily timesteps — gridMET is daily; use ERA5, HRRR, NEXRAD,
+      or GOES for hourly / sub-hourly.
+    - Real-time / live forecast — gridMET lags ~3 days; use NWS Alerts
+      + HRRR for live CONUS forecast.
+    - Radar precipitation — use ``fetch_mrms_qpe`` (1 km gauge-corrected)
+      instead of gridMET ``pr`` (4 km PRISM-blended).
+    - Static fuel-model class / vegetation type — use
+      ``fetch_landfire_fuels`` instead.
+    - Vector data of any kind.
+
+  Parameters:
+    bbox: ``(west, south, east, north)`` in EPSG:4326 decimal degrees.
+      Must intersect CONUS (~-124.77, 25.05, -67.06, 49.40).
+      Example: ``(-117.5, 33.5, -116.5, 34.5)`` (Riverside Co., CA).
+    variable: one of ``fm100`` (100-hr dead fuel moisture, Percent),
+      ``fm1000`` (1000-hr dead fuel moisture, Percent),
+      ``pet`` (reference ET, mm),
+      ``pdsi`` (Palmer Drought Severity Index, unitless),
+      ``tmmn`` / ``tmmx`` (daily min/max near-surface temperature, K),
+      ``vpd`` (vapor pressure deficit, kPa),
+      ``vs`` (10 m wind speed, m s-1),
+      ``rmin`` / ``rmax`` (daily min/max relative humidity, Percent),
+      ``pr`` (daily precipitation, mm),
+      ``srad`` (downward shortwave radiation, W m-2).
+    start_date: ISO YYYY-MM-DD; inclusive. Must be >= 1979-01-01.
+    end_date: ISO YYYY-MM-DD; inclusive. Must be <= today. Hard cap
+      366 days from start_date.
+
+  Returns:
+    ``LayerURI`` pointing at a COG in the cache bucket
+    (``s3://trid3nt-cache/cache/static-30d/gridmet/<key>.tif``).
+    Single-band float32 EPSG:4326 raster, time-mean across the date
+    window, clipped to bbox. ``layer_type="raster"``, ``role="primary"``,
+    ``units`` per variable.
+
+  Cross-tool dependencies:
+    Consumes admin polygons from ``fetch_administrative_boundaries`` (via
+    ``clip_raster_to_polygon`` for state/county clipping). Feeds raster
+    outputs to ``compute_zonal_statistics``, ``clip_raster_to_polygon``,
+    ``clip_raster_to_bbox``, ``publish_layer`` (UI render via QGIS Server),
+    and fire-danger composers. Sibling fetchers: ``fetch_era5_reanalysis``
+    (global, hourly — non-CONUS choice), ``fetch_landfire_fuels`` (static
+    fuel-model class — pair with gridMET for full moisture state),
+    ``fetch_mrms_qpe`` (1 km gauge-corrected radar precip).
+
+  Raises:
+    ``GRIDMETInputError``: bad bbox / variable / dates / out-of-CONUS.
+    ``GRIDMETNotAvailableError``: dates outside published coverage.
+    ``GRIDMETEmptyError``: bbox subset has no finite pixels.
+    ``GRIDMETUpstreamError``: THREDDS DAP failure (retryable).
+
+  FR-CE-8: routed through ``read_through`` (``ttl_class="static-30d"``).
+  ``supports_global_query=False`` — gridMET is CONUS-only.

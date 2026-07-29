@@ -260,22 +260,15 @@ def _full_registry_floor(floor: set[str]) -> set[str]:
     # template into the pool. Templates reach the turn ONLY via their door's
     # gate expansion; any that were already surfaced live in ``floor`` (the
     # Case's accrued allowed set) and are preserved by the union below.
+    # The data-router fold's promoted spec-driven tools register as ordinary
+    # tier="general" entries under the twin names, so they appear in this
+    # non-template set with no special-casing (the env-gated experiment
+    # substitution retired once promotion became the default).
     non_template = {
         name
         for name, entry in TOOL_REGISTRY.items()
         if getattr(entry.metadata, "tier", "general") != "template"
     }
-    # Fetcher-fold arm (router-pilot-contract sec 3.3): consult the pool
-    # substitution map. Documented no-op on the visible NAME set (the twin name
-    # is present in BOTH arms; the ``__spec`` alias is tier=template already
-    # excluded above) -- kept for symmetry with the other two pool producers.
-    # Strict no-op when the env is unset OR no specs registered.
-    try:
-        from ..fetchers._router.registration import apply_fold_substitution_names
-
-        non_template = apply_fold_substitution_names(non_template)
-    except Exception:  # noqa: BLE001 -- the fold arm must never break fail-open
-        pass
     return non_template | floor
 
 

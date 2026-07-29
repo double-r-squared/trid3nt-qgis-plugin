@@ -650,10 +650,15 @@ def _autowire_coastal_surge_forcing(
 
     # --- 1) PRIMARY: NOAA CO-OPS tides (key-free, CONUS) -------------------- #
     try:
-        from trid3nt_server.agent.tools.fetchers.ocean.fetch_noaa_coops_tides.fetch_noaa_coops_tides import fetch_noaa_coops_tides
+        # data-router fold: fetch_noaa_coops_tides is now a promoted spec-driven
+        # tool -- resolve the callable seam by registry name (same envelope).
+        from trid3nt_server.agent.tools import TOOL_REGISTRY as _TR
 
-        layer = fetch_noaa_coops_tides(
-            bbox, start_date=start_date, end_date=end_date, product="water_level"
+        _coops = _TR.get("fetch_noaa_coops_tides")
+        if _coops is None:
+            raise RuntimeError("fetch_noaa_coops_tides is not registered")
+        layer = _coops.fn(
+            bbox=bbox, start_date=start_date, end_date=end_date, product="water_level"
         )
         uri = getattr(layer, "uri", None)
         if uri:

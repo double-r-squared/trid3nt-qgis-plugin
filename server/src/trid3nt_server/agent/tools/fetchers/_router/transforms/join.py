@@ -25,21 +25,59 @@ logger = logging.getLogger(
     "trid3nt_server.agent.tools.fetchers._router.transforms.join"
 )
 
-__all__ = ["compute_value", "join_on_key", "select_variable", "execute"]
+__all__ = ["compute_value", "join_on_key", "select_variable", "execute", "is_raw_passthrough_code"]
+
+
+def is_raw_passthrough_code(s: Any) -> bool:
+    """True if ``s`` looks like a raw ACS-style estimate code (e.g. ``B19013_001E``).
+
+    Mirrors the twin ``fetch_census_acs._is_raw_acs_code``: a leading ``B``/``C``
+    table letter, an ``E`` estimate suffix, and an underscore. This is the
+    full-fidelity passthrough NATE chose -- a raw variable code is accepted
+    alongside the friendly names, resolved to a ``kind=value`` fetch of that code
+    with ``units=count`` (the twin's units for a raw code).
+    """
+    if not isinstance(s, str) or not s:
+        return False
+    if s[0].upper() not in ("B", "C"):
+        return False
+    if not s.upper().endswith("E"):
+        return False
+    return "_" in s
 
 
 def select_variable(spec: SourceSpec, params: dict[str, Any]) -> tuple[str, dict[str, Any]]:
-    """Resolve the requested variable's declarative spec from ``join.values``."""
+    """Resolve the requested variable to ``(name, var_spec)`` -- full-fidelity.
+
+    Accepts, exactly as the twin ``_resolve_variable`` did: a friendly name
+    (case-insensitive) from ``join.values.variables``, OR a raw ACS estimate code
+    (``B19013_001E``) passed through as a ``kind=value`` fetch with ``units=count``.
+    An unknown/malformed variable raises the twin-identical typed input error.
+    """
     join_block = spec.join or {}
     variables = (join_block.get("values") or {}).get("variables") or {}
     requested = params.get("variable")
-    if requested not in variables:
+    if not isinstance(requested, str) or not requested.strip():
         raise router_input_error(
             spec.error_code_prefix,
-            f"unknown variable {requested!r}; allowed: {sorted(variables)}",
+            f"variable must be a non-empty string; got {requested!r}",
             spec.input_error_suffix,
         )
-    return requested, variables[requested]
+    key = requested.strip()
+    low = key.lower()
+    if low in variables:
+        return low, dict(variables[low])
+    # Raw ACS estimate-code passthrough (full fidelity, NATE-chosen).
+    if is_raw_passthrough_code(key):
+        code = key.upper()
+        table = code.split("_", 1)[0]
+        return code, {"table": table, "code": code, "kind": "value", "units": "count"}
+    raise router_input_error(
+        spec.error_code_prefix,
+        f"unknown variable {requested!r}; allowed: {sorted(variables)} "
+        f"or a raw ACS estimate code like 'B19013_001E'",
+        spec.input_error_suffix,
+    )
 
 
 def compute_value(

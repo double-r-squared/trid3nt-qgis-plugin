@@ -112,3 +112,11 @@ been written yet but I don't want you to forget it.")
   sandbox_hardening), ELMFIRE batch job-def + ECR names (live AWS - never
   rename in place; new-name + cutover), test env pins; retag + rebuild +
   env overrides as one job.
+- 2026-07-29 MCP INTEROP (NATE ask): (a) TRID3NT-as-MCP-server - thin dynamic
+  bridge over TOOL_REGISTRY via the official mcp SDK (schemas already exist;
+  ~200 lines); HARD PART = gate/confirm-card mapping for MCP clients that
+  cannot render our QGIS cards (elicitation or headless policy first).
+  (b) MCP as a router SOURCE TYPE - an mcp executor so source specs can
+  point at MCP servers as endpoints (ras-commander-mcp = the HEC-RAS
+  motivator). No MCP inside the current LLM loop - would add, not reduce,
+  boilerplate. Persistence's "MCP-shaped" naming = wave-C rename, not MCP.

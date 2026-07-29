@@ -8,8 +8,9 @@ Coverage:
   per_station / tiled).
 - ``route`` end-to-end with a monkeypatched executor + the in-memory S3 double:
   correct cache path + LayerURI, second call is a cache HIT.
-- Fold-arm toggle (contract sec 3): default pool UNCHANGED when the env is unset;
-  the spec-driven virtual entry swaps in under the twin's name when set.
+- Promotion (fold phase-2 wave 1): register_spec promotes a spec to a
+  tier="general" tool UNDER the twin name (default pool), signature synthesized
+  from spec.params, docstring carried -- the env-gated experiment toggle retired.
 
 No network.
 """
@@ -245,16 +246,23 @@ def test_route_vector_source_class_in_uri(fake_s3, monkeypatch):
 
 @pytest.fixture()
 def registered_spec():
-    """Register a spec-driven virtual tool; restore registry + spec map after."""
+    """PROMOTE a spec-driven tool under its real name; restore registry after.
+
+    Post-fold: registration promotes the spec to a tier="general" tool UNDER the
+    twin name (no env toggle, no ``__spec`` alias). Yields ``(spec, name)``.
+    """
     saved = dict(TOOL_REGISTRY)
     saved_specs = dict(registration._SPEC_REGISTRY)
+    # fetch_demo_raster is a test-only name absent from the live registry; drop it
+    # from the snapshot first so register_spec actually registers (idempotent skip).
+    saved.pop("fetch_demo_raster", None)
     clear_registry_for_tests()
     TOOL_REGISTRY.update(saved)
     registration.clear_specs_for_tests()
     spec = _raster_spec()
-    alias = registration.register_spec(spec)
+    name = registration.register_spec(spec)
     try:
-        yield spec, alias
+        yield spec, name
     finally:
         clear_registry_for_tests()
         TOOL_REGISTRY.update(saved)
@@ -262,49 +270,44 @@ def registered_spec():
         registration._SPEC_REGISTRY.update(saved_specs)
 
 
-def test_virtual_tool_registered_as_template(registered_spec):
-    spec, alias = registered_spec
-    assert alias == "fetch_demo_raster__spec"
-    assert alias in TOOL_REGISTRY
-    assert TOOL_REGISTRY[alias].metadata.tier == "template"
-    assert registration.substitution_map() == {"fetch_demo_raster": "fetch_demo_raster__spec"}
+def test_promoted_tool_registered_under_twin_name_general(registered_spec):
+    """The spec is registered UNDER its real name at tier=general (default pool)."""
+    spec, name = registered_spec
+    assert name == "fetch_demo_raster"
+    assert name in TOOL_REGISTRY
+    entry = TOOL_REGISTRY[name]
+    assert entry.metadata.tier == "general"          # NOT a template/alias
+    assert entry.metadata.source_class == "demo_raster"
+    assert entry.module.endswith("_router._promoted.fetch_demo_raster")
+    assert set(registration.registered_spec_names()) >= {name}
 
 
-def test_substitution_is_noop_when_fold_arm_off(registered_spec, monkeypatch):
-    spec, alias = registered_spec
-    monkeypatch.delenv(registration.FOLD_ARM_ENV, raising=False)
-    assert registration.fold_arm_enabled() is False
-    snapshot = dict(TOOL_REGISTRY)
-    out = registration.apply_fold_substitution_registry(snapshot)
-    assert out is snapshot  # SAME object -- provably unchanged when off
+def test_promoted_signature_synthesized_from_spec(registered_spec):
+    """The promoted callable exposes the spec's params (names + required set)."""
+    import inspect
+
+    spec, name = registered_spec
+    sig = inspect.signature(TOOL_REGISTRY[name].fn)
+    kinds = {p.name: p for p in sig.parameters.values()}
+    # every declared param is present; the twin's **_extra_ignored absorber too.
+    assert {"bbox", "variable", "start_date", "end_date"} <= set(kinds)
+    assert kinds["_extra_ignored"].kind is inspect.Parameter.VAR_KEYWORD
+    # all four are required (no default) in the demo spec.
+    for pn in ("bbox", "variable", "start_date", "end_date"):
+        assert kinds[pn].default is inspect.Parameter.empty
 
 
-def test_default_pool_excludes_virtual_when_off(registered_spec, monkeypatch):
-    """The pool producer (_build_index) excludes the tier=template virtual tool."""
+def test_promoted_tool_in_default_pool(registered_spec):
+    """tier=general -> the pool producer (_build_index) INCLUDES it by name."""
     from trid3nt_server.agent.tools.search.search_tools import search_tools as st
 
-    spec, alias = registered_spec
-    monkeypatch.delenv(registration.FOLD_ARM_ENV, raising=False)
-    snapshot = {alias: TOOL_REGISTRY[alias]}
-    index = st._build_index(registry_snapshot=snapshot)
-    assert alias not in index.tool_names  # template excluded from default pool
-    assert "fetch_demo_raster" not in index.tool_names  # no twin in this snapshot
+    spec, name = registered_spec
+    index = st._build_index(registry_snapshot={name: TOOL_REGISTRY[name]})
+    assert name in index.tool_names
 
 
-def test_fold_arm_on_surfaces_virtual_under_twin_name(registered_spec, monkeypatch):
-    from trid3nt_server.agent.tools.search.search_tools import search_tools as st
-
-    spec, alias = registered_spec
-    monkeypatch.setenv(registration.FOLD_ARM_ENV, "1")
-    assert registration.fold_arm_enabled() is True
-
-    snapshot = {alias: TOOL_REGISTRY[alias]}
-    swapped = registration.apply_fold_substitution_registry(snapshot)
-    assert "fetch_demo_raster" in swapped        # spec surfaces UNDER twin name
-    assert alias not in swapped                  # alias never leaks
-    assert swapped["fetch_demo_raster"].metadata.tier == "general"
-
-    # And the pool producer now includes it under the twin's name.
-    index = st._build_index(registry_snapshot={alias: TOOL_REGISTRY[alias]})
-    assert "fetch_demo_raster" in index.tool_names
-    assert alias not in index.tool_names
+def test_promoted_tool_carries_a_docstring(registered_spec):
+    """A docstring is always present (spec.docstring when set, else synthesized)."""
+    spec, name = registered_spec
+    doc = TOOL_REGISTRY[name].fn.__doc__
+    assert doc and "fetch_demo_raster" in doc

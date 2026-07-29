@@ -10,7 +10,7 @@ behavior is the contract; divergences are recorded, never fudged.
 | fetch_hifld_critical_infrastructure | PASS | 16/16 | - |
 | fetch_noaa_coops_tides | PASS | 19/19 | - |
 | fetch_esri_landcover_10m | PASS | 14/14 | - |
-| fetch_census_acs | PASS | 23/23 | - |
+| fetch_census_acs | PASS | 31/31 | - |
 
 ## Per-check detail
 
@@ -112,6 +112,14 @@ behavior is the contract; divergences are recorded, never fudged.
 - [ok] schema.columns
 - [ok] values.poverty_rate.value_spotcheck -- expected 25.0
 - [ok] values.poverty_rate.null_floor
+- [ok] layer.units.poverty_rate -- per-variable LayerURI.units=percent (full fidelity)
+- [ok] values.B19013_001E.n
+- [ok] values.B19013_001E.geom
+- [ok] values.B19013_001E.crs
+- [ok] schema.columns
+- [ok] values.B19013_001E.value_spotcheck -- expected 65000.0
+- [ok] values.B19013_001E.null_floor
+- [ok] layer.units.raw_code -- raw-code passthrough LayerURI.units=count (full fidelity)
 - [ok] caveats.reproduced -- null-never-fabricated caveat present
 - [ok] error.upstream
 - [ok] error.bad_bbox
@@ -172,9 +180,17 @@ scored honestly as ok=False but non-gating because the ROOT CAUSE is the twin
 writer (needs rio.write_nodata()); the router must not propagate the bug. Byte-
 identical nodata parity requires a twin fix, which only NATE lands.
 
-Documented (not a defect): LayerURI.units is a router single-string field while
-gridmet/census units are per-variable; the per-FEATURE units (census FGB) vary
-correctly via the JOIN. A general fix needs a normalize.units_by_param hook.
+NATE DECISION (2026-07-29, phase-2 promotion): router-correct nodata=nan is ACCEPTED
+as the go-forward; the twin's dropped-nodata defect DIES WITH THE TWIN (deleted in
+the pilot promotion) -- no twin fix is landed, the promoted fetch_gridmet writes the
+declared nodata=nan correctly and this divergence is closed by the twin's removal.
+
+Documented + CLOSED (full fidelity, NATE 2026-07-29): LayerURI.units was a router
+single-string field while census units are per-variable; the JOIN spec now resolves
+LayerURI.units per-variable (usd / years / percent / count-for-raw-codes), matching
+the twin, so both the per-FEATURE (FGB) and the per-LAYER units vary correctly. Raw
+ACS estimate-code passthrough (e.g. B19013_001E, units=count) restored in the JOIN
+transform. Census re-graded 31/31 PASS incl. a raw-code request.
 
 Fold-arm drift fix (out of the replication lens, from the regression lens): server
 ._default_declarable_registry applied the pool substitution AFTER the tier=template

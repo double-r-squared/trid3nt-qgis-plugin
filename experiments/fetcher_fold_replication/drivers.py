@@ -677,15 +677,28 @@ def run_census(specs) -> SourceResult:
         return twin_layer, router_layer
 
     try:
-        # value kind (median_income) -- tract3 missing -> null.
+        # value kind (median_income) -- tract3 missing -> null. LayerURI.units=usd.
         mi_vals = {"48201010101": {"B19013_001E": 65000.0},
                    "48201010102": {"B19013_001E": None}}
         twin_layer, router_layer = _drive("median_income", mi_vals, "48201010101", 65000.0)
         _cmp_layer(res, twin_layer, router_layer)
-        # pct kind (poverty_rate) -- 100*500/2000 = 25.0.
+        # pct kind (poverty_rate) -- 100*500/2000 = 25.0. LayerURI.units=percent
+        # (per-variable, full fidelity: the router now resolves it, not the single
+        # normalize.units stamp).
         pr_vals = {"48201010101": {"B17001_002E": 500.0, "B17001_001E": 2000.0},
                    "48201010102": {"B17001_002E": None, "B17001_001E": 1800.0}}
-        _drive("poverty_rate", pr_vals, "48201010101", 25.0)
+        pr_tw, pr_rt = _drive("poverty_rate", pr_vals, "48201010101", 25.0)
+        res.add("layer.units.poverty_rate", pr_tw.units == pr_rt.units, pr_tw.units, pr_rt.units,
+                note="per-variable LayerURI.units=percent (full fidelity)")
+        # RAW ACS estimate-code passthrough (FULL FIDELITY, NATE-chosen): a raw
+        # code (B19013_001E == the median_income code) is accepted alongside the
+        # friendly names and returns units=count. Proves the passthrough resolver
+        # + per-variable units on both the FGB and the LayerURI.
+        raw_vals = {"48201010101": {"B19013_001E": 65000.0},
+                    "48201010102": {"B19013_001E": None}}
+        raw_tw, raw_rt = _drive("B19013_001E", raw_vals, "48201010101", 65000.0)
+        res.add("layer.units.raw_code", raw_tw.units == raw_rt.units, raw_tw.units, raw_rt.units,
+                note="raw-code passthrough LayerURI.units=count (full fidelity)")
         res.add("caveats.reproduced", any("fabricated" in c for c in spec.caveats),
                 note="null-never-fabricated caveat present")
         # Forced upstream failure: geometry endpoint 500.
