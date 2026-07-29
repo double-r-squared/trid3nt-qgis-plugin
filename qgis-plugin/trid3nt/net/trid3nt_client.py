@@ -1979,11 +1979,6 @@ class AgentClient:
             # function_response. The dock renders a compact summary note in
             # chat. Previously fell through to "raw" and was dropped.
             return AgentEvent("impact-envelope", payload)
-        if etype == "lesson-added":
-            # The LESSONS LOOP ack (server _handle_lesson_add raw-JSON
-            # envelope): lesson_id + normalized lesson text. The dock shows a
-            # subtle status note. Previously fell through to "raw".
-            return AgentEvent("lesson-added", payload)
         if etype == "case-list":
             cases = parse_case_list(payload)
             # Mirror of the last_session_state stash above: the startup

@@ -1104,175 +1104,34 @@ def _empty_recall_at_k() -> dict[str, Any]:
     }
 
 
-async def _load_shadow_records_from_mongo(
-    persistence: Any,
-) -> list[dict[str, Any]]:
-    """Query the ``tool_call_telemetry`` collection for SHADOW rows via MCP.
-
-    Best-effort: any failure returns an empty list (recall@k then degrades to
-    the empty section / the file-backed shadow rows).
-    """
-    try:
-        from trid3nt_contracts.mongo_collections import TELEMETRY_COLLECTION
-        from .persistence import DEFAULT_DATABASE
-    except Exception:  # noqa: BLE001
-        return []
-    try:
-        raw = await persistence._mcp.call_tool(
-            "find",
-            {
-                "database": DEFAULT_DATABASE,
-                "collection": TELEMETRY_COLLECTION,
-                "filter": {"record_type": _SHADOW_RECORD_TYPE},
-                "sort": {"called_at_utc": -1},
-                "limit": 2000,
-            },
-        )
-    except Exception:  # noqa: BLE001 -- never break the dashboard on MCP error
-        logger.warning("recall@k: shadow mongo find failed", exc_info=True)
-        return []
-    docs: Any = raw
-    if isinstance(raw, dict):
-        if "documents" in raw:
-            docs = raw["documents"]
-        elif "content" in raw and isinstance(raw["content"], list) and raw["content"]:
-            first = raw["content"][0]
-            if isinstance(first, dict) and isinstance(first.get("text"), str):
-                try:
-                    docs = json.loads(first["text"])
-                except json.JSONDecodeError:
-                    docs = []
-    if isinstance(docs, dict):
-        docs = [docs]
-    if not isinstance(docs, list):
-        return []
-    return [d for d in docs if isinstance(d, dict)]
-
-
-async def _load_recent_records_from_mongo(
-    persistence: Any,
-    *,
-    last_n_sessions: int = 30,
-) -> list[dict[str, Any]]:
-    """Query the ``tool_call_telemetry`` collection via the MCP client.
-
-    Best-effort: any failure falls back to an empty list so the dashboard
-    can still render the file-backed path or an empty state.
-    """
-    try:
-        from trid3nt_contracts.mongo_collections import TELEMETRY_COLLECTION
-        from .persistence import DEFAULT_DATABASE
-    except Exception:  # noqa: BLE001
-        return []
-    try:
-        # Fetch newest 2000 records, then narrow to the last N sessions.
-        # The cap keeps a runaway collection from stalling the dashboard.
-        raw = await persistence._mcp.call_tool(
-            "find",
-            {
-                "database": DEFAULT_DATABASE,
-                "collection": TELEMETRY_COLLECTION,
-                # Exclude tool-retrieval SHADOW rows -- they share this
-                # collection but are not tool-call dispatches (recall@k reads
-                # them via _load_shadow_records_from_mongo).
-                "filter": {"record_type": {"$ne": _SHADOW_RECORD_TYPE}},
-                "sort": {"called_at_utc": -1},
-                "limit": 2000,
-            },
-        )
-    except Exception:  # noqa: BLE001 -- never break the dashboard on MCP error
-        logger.warning("telemetry summary: mongo find failed", exc_info=True)
-        return []
-    # Unwrap the MCP result envelope (mirrors Persistence._unwrap_mcp_result).
-    docs: Any = raw
-    if isinstance(raw, dict):
-        if "documents" in raw:
-            docs = raw["documents"]
-        elif "content" in raw and isinstance(raw["content"], list) and raw["content"]:
-            first = raw["content"][0]
-            if isinstance(first, dict) and isinstance(first.get("text"), str):
-                try:
-                    docs = json.loads(first["text"])
-                except json.JSONDecodeError:
-                    docs = []
-    if isinstance(docs, dict):
-        docs = [docs]
-    if not isinstance(docs, list):
-        return []
-    # Defensive: even if the $ne filter was a no-op on this MCP backend, never
-    # let a SHADOW row leak into the per-tool aggregation.
-    normalized = [
-        _normalize_record(d)
-        for d in docs
-        if isinstance(d, dict) and d.get("record_type") != _SHADOW_RECORD_TYPE
-    ]
-    # Constrain to last N sessions.
-    normalized.sort(key=lambda r: str(r.get("called_at_utc") or ""), reverse=True)
-    seen_sessions: list[str] = []
-    keep: list[dict[str, Any]] = []
-    for r in normalized:
-        sid = r.get("session_id") or ""
-        if sid and sid not in seen_sessions:
-            if len(seen_sessions) >= last_n_sessions:
-                break
-            seen_sessions.append(sid)
-        keep.append(r)
-    return keep
-
-
 async def build_telemetry_summary(
     *,
     last_n_sessions: int = 30,
 ) -> dict[str, Any]:
     """Build the routing-quality summary served by /api/telemetry/summary.
 
-    Routing order:
-
-    1. If the Persistence singleton is bound, query the MongoDB
-       ``tool_call_telemetry`` collection via MCP. If that returns records,
-       we aggregate against them.
-    2. Otherwise (or on MCP failure / empty), fall back to the
-       ``/tmp/trid3nt_tool_call_telemetry.jsonl`` file written by the M3
-       file-backed path.
+    Telemetry is JSONL-only (the ``tool_call_telemetry`` Persistence-collection
+    route was cut). Reads the per-tool-call rows from the
+    ``TRID3NT_TELEMETRY_PATH`` JSONL sink (default
+    ``/tmp/trid3nt_tool_call_telemetry.jsonl``) and aggregates against them.
 
     Returns the empty-summary shape (all-zero counts) if nothing is found.
     """
-    persistence = None
-    try:
-        from .server import get_persistence as _server_get_persistence
-        persistence = _server_get_persistence()
-    except Exception:  # noqa: BLE001 -- early-startup ImportError tolerated
-        persistence = None
-
-    records: list[dict[str, Any]] = []
-    used_source = "empty"
-    if persistence is not None:
-        records = await _load_recent_records_from_mongo(
-            persistence, last_n_sessions=last_n_sessions
-        )
-        if records:
-            used_source = "mongo"
-    if not records:
-        records = _load_recent_records_from_file(
-            _get_telemetry_path(), last_n_sessions=last_n_sessions
-        )
-        if records:
-            used_source = "file"
+    records: list[dict[str, Any]] = _load_recent_records_from_file(
+        _get_telemetry_path(), last_n_sessions=last_n_sessions
+    )
+    used_source = "file" if records else "empty"
 
     summary = _aggregate_records(records)
     summary["source"] = used_source
 
     # Fold in the tool-retrieval SHADOW recall@k section (tool-retrieval kickoff).
-    # Load the would-be-visible shadow rows (mongo when bound, else the JSONL
-    # sink) and join them against the dispatched llm tools above by turn_id.
-    # Best-effort: a read/compute fault leaves the zero-state section seeded by
-    # _aggregate_records (never breaks the dashboard).
+    # The would-be-visible shadow rows share the SAME JSONL sink (tagged by
+    # record_type); load them and join against the dispatched llm tools above by
+    # turn_id. Best-effort: a read/compute fault leaves the zero-state section
+    # seeded by _aggregate_records (never breaks the dashboard).
     try:
-        shadow_records: list[dict[str, Any]] = []
-        if persistence is not None:
-            shadow_records = await _load_shadow_records_from_mongo(persistence)
-        if not shadow_records:
-            shadow_records = _load_shadow_records_from_file(_get_telemetry_path())
+        shadow_records = _load_shadow_records_from_file(_get_telemetry_path())
         summary["recall_at_k"] = compute_recall_at_k(records, shadow_records)
     except Exception:  # noqa: BLE001 -- never break the dashboard on recall read
         logger.warning("telemetry summary: recall@k read failed", exc_info=True)

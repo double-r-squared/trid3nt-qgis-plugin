@@ -1,21 +1,21 @@
 """Tool-call telemetry writer.
 
 Emits one JSON-line per LLM-initiated or workflow-initiated tool call to a
-local JSONL file.
-
-Swaps the backend for MongoDB MCP when the Persistence singleton is bound
-(``TRID3NT_MONGO_MCP_STDIO=1``).  Falls back to the local-file path when
-Persistence is unbound (dev / CI without Atlas).
+local JSONL file -- the single tool-call telemetry sink. This is the product
+sink benches and routing scouts read; it is written UNCONDITIONALLY, regardless
+of whether the app-level ``Persistence`` singleton is bound. (A former variant
+mirrored these rows into a MongoDB ``tool_call_telemetry`` collection when
+Persistence was bound; that route was cut -- telemetry is JSONL-only now.)
 
 Write path is fire-and-forget: ``emit_tool_call_event`` schedules an async
 write task and returns immediately.  A write failure is logged at WARNING level
 but never raised -- telemetry must never break the tool-dispatch loop.
 
 Configuration:
-    ``TRID3NT_TELEMETRY_PATH`` env var overrides the default output path for the
-    local-file fallback.  Default: ``/tmp/trid3nt_tool_call_telemetry.jsonl``
+    ``TRID3NT_TELEMETRY_PATH`` env var overrides the default output path.
+    Default: ``/tmp/trid3nt_tool_call_telemetry.jsonl``
 
-Record shape (one JSON object per line, newline-terminated -- local-file path):
+Record shape (one JSON object per line, newline-terminated):
     {
         "session_id":                  str,
         "ts":                          str  (ISO-8601 UTC, e.g. "2026-06-09T...Z"),
@@ -27,18 +27,15 @@ Record shape (one JSON object per line, newline-terminated -- local-file path):
         "error_code":                  str | null,
         "retry_attempt":               int   (0 for first call),
         "cached_content_token_count":  int | null,
+        "result_usable":               bool | null,
+        "routed_ok":                   bool | null,
+        "model_id":                    str | null,
+        "turn_id":                     str | null   (omitted, not null, when absent),
     }
 
-MongoDB record shape (tool_call_telemetry collection -- MCP-backed path):
-    Maps 1:1 to ``ToolCallTelemetryDocument`` from
-    ``trid3nt_contracts.mongo_collections``.  Key differences from the local
-    file path:
-    - ``_id`` is a ULID (time-sortable; generated on write).
-    - ``called_at_utc`` is a UTC datetime (the TTL index field; 90-day expiry).
-    - ``result_ok`` replaces ``success`` (BSON-friendlier naming).
-    - ``session_id`` / ``tool_name`` / ``source`` / ``args_hash`` /
-      ``result_ok`` / ``latency_ms`` / ``error_code`` / ``retry_attempt`` /
-      ``cached_content_token_count`` map directly from the call args.
+Tool-retrieval SHADOW rows (``record_type="tool_retrieval_shadow"``) share this
+same JSONL sink; readers split the two by ``record_type`` (its ABSENCE marks a
+per-tool-call row -- see ``load_tool_call_records``).
 """
 
 from __future__ import annotations
@@ -138,95 +135,6 @@ def _blocking_append(path: str, line: str) -> None:
         fh.write(line)
 
 
-async def _write_to_mongo(
-    persistence: "Persistence",
-    session_id: str,
-    ts: str,
-    tool_name: str,
-    source: Literal["llm", "workflow", "manual"],
-    args_hash: str,
-    success: bool,
-    latency_ms: float,
-    error_code: str | None,
-    retry_attempt: int,
-    cached_content_token_count: int | None,
-    result_usable: bool | None = None,
-    routed_ok: bool | None = None,
-    model_id: str | None = None,
-    turn_id: str | None = None,
-) -> None:
-    """Emit one tool-call telemetry record to MongoDB via the MCP Persistence.
-
-    Constructs a ``ToolCallTelemetryDocument``, validates it against the schema,
-    and calls ``insert-one`` via the Persistence singleton's underlying MCP
-    client.  Telemetry insert is done directly on the MCP client (bypassing the
-    typed Persistence methods, which own Case/User/Secret shapes) using the
-    ``tool_call_telemetry`` collection name from the contracts constant.
-
-    Never raises -- any Persistence failure is logged at WARNING.
-    """
-    try:
-        from trid3nt_contracts import new_ulid
-        from trid3nt_contracts.mongo_collections import (
-            TELEMETRY_COLLECTION,
-            ToolCallTelemetryDocument,
-        )
-        from .persistence import DEFAULT_DATABASE
-
-        # Parse ts string to datetime for called_at_utc.  Accepts ISO-8601 with
-        # trailing Z (e.g. "2026-06-09T12:34:56.789Z") or offset-aware strings.
-        called_at: datetime
-        if isinstance(ts, str):
-            normalized = ts.replace("Z", "+00:00")
-            called_at = datetime.fromisoformat(normalized)
-        else:
-            called_at = ts  # type: ignore[assignment]
-        if called_at.tzinfo is None:
-            called_at = called_at.replace(tzinfo=timezone.utc)
-
-        doc = ToolCallTelemetryDocument(
-            _id=new_ulid(),
-            session_id=session_id,
-            tool_name=tool_name,
-            called_at_utc=called_at,
-            source=source,
-            args_hash=args_hash,
-            result_ok=success,
-            latency_ms=latency_ms,
-            error_code=error_code,
-            retry_attempt=retry_attempt,
-            cached_content_token_count=cached_content_token_count,
-            result_usable=result_usable,
-            routed_ok=routed_ok,
-            model_id=model_id,
-        )
-
-        body = doc.model_dump(mode="json", by_alias=True)
-        # ``turn_id`` (the per-user-message dispatch / pipeline id) is the recall@k
-        # join key (tool-retrieval shadow). The typed ToolCallTelemetryDocument is
-        # ``extra="forbid"`` so it is NOT a model field; inject it onto the wire
-        # body AFTER the validated dump so a recall@k reader can join a dispatched
-        # llm tool to ITS turn's shadow-selection row without a contract change.
-        if turn_id is not None:
-            body["turn_id"] = turn_id
-
-        await persistence._mcp.call_tool(
-            "insert-one",
-            {
-                "database": DEFAULT_DATABASE,
-                "collection": TELEMETRY_COLLECTION,
-                "document": body,
-            },
-        )
-    except Exception:  # noqa: BLE001 -- telemetry must never break the call loop
-        logger.warning(
-            "telemetry mongo write failed tool=%s session=%s",
-            tool_name,
-            session_id,
-            exc_info=True,
-        )
-
-
 async def emit_tool_call_event(
     session_id: str,
     ts: str,
@@ -250,13 +158,11 @@ async def emit_tool_call_event(
     bounded by the time to enqueue the task (microseconds), not the actual
     I/O.
 
-    Backend selection:
-    - When the app-level ``Persistence`` singleton (from ``server.get_persistence``)
-      is bound (i.e. ``TRID3NT_MONGO_MCP_STDIO=1`` or dev-file mode), the record
-      is written to the ``tool_call_telemetry`` MongoDB collection via MCP.
-    - When ``Persistence`` is unbound (M1 in-memory / CI without Atlas), the
-      record falls back to the local-file JSONL path (``TRID3NT_TELEMETRY_PATH``
-      or the default ``/tmp/trid3nt_tool_call_telemetry.jsonl``).
+    Sink: the record is ALWAYS written to the local-file JSONL path
+    (``TRID3NT_TELEMETRY_PATH`` or the default
+    ``/tmp/trid3nt_tool_call_telemetry.jsonl``), regardless of whether the
+    app-level ``Persistence`` singleton is bound. The former MongoDB-mirror
+    route was cut -- telemetry is JSONL-only.
 
     Args:
         session_id: WebSocket session identifier (ULID string).
@@ -299,42 +205,9 @@ async def emit_tool_call_event(
             model corrected); ``True`` when not superseded; ``None`` when the
             signal is unavailable.
     """
-    # Resolve the Persistence singleton via the module-level lazy wrapper.
-    # That wrapper defers the import of server.py to avoid a circular import
-    # at module load time.  Tests can patch ``trid3nt_server.telemetry.
-    # get_persistence`` to inject a mock without touching the server module.
-    # We defensively catch any exception from get_persistence() itself so that
-    # failures during early startup (e.g. ImportError) always fall through
-    # to the local-file path rather than propagating.
-    try:
-        persistence: "Persistence | None" = get_persistence()
-    except Exception:  # noqa: BLE001
-        persistence = None
-
-    if persistence is not None:
-        # MCP-backed path: fire-and-forget to Mongo.
-        asyncio.ensure_future(
-            _write_to_mongo(
-                persistence=persistence,
-                session_id=session_id,
-                ts=ts,
-                tool_name=tool_name,
-                source=source,
-                args_hash=args_hash,
-                success=success,
-                latency_ms=latency_ms,
-                error_code=error_code,
-                retry_attempt=retry_attempt,
-                cached_content_token_count=cached_content_token_count,
-                result_usable=result_usable,
-                routed_ok=routed_ok,
-                model_id=model_id,
-                turn_id=turn_id,
-            )
-        )
-        return
-
-    # Local-file fallback (v0 path -- preserved for backward compat).
+    # JSONL-only sink: written unconditionally (the Persistence-mirror route
+    # was cut). Fire-and-forget -- the event loop schedules the write; we do
+    # not await it.
     record: dict = {
         "session_id": session_id,
         "ts": ts,
@@ -368,6 +241,55 @@ def compute_args_hash(args: dict | None) -> str:
     return _hash_args(args)
 
 
+def load_tool_call_records(
+    path: str | None = None,
+    *,
+    limit: int | None = None,
+    newest_first: bool = True,
+) -> list[dict]:
+    """Read per-tool-call rows from the JSONL sink (the product telemetry file).
+
+    The shared reader for consumers that used to query the ``tool_call_telemetry``
+    Persistence collection (search-tool co-occurrence / hot-set ranking): now that
+    telemetry is JSONL-only, they read this file instead.
+
+    Tolerant reader: a missing / unreadable file or a malformed line yields what
+    could be read (never raises -- returns ``[]`` on OSError). Tool-retrieval
+    SHADOW rows (``record_type == SHADOW_RECORD_TYPE``) share this sink and are
+    EXCLUDED -- only per-tool-call rows (which carry no ``record_type``) are
+    returned.
+
+    The file is append-ordered (oldest-first). With ``limit`` set, only the last
+    ``limit`` tool-call rows are kept; with ``newest_first`` (default) the result
+    is returned newest-first so a session-cap consumer sees recent sessions first
+    (mirrors the old ``find ... sort {_id: -1}`` query the Mongo path issued).
+    """
+    target = path or _get_telemetry_path()
+    out: list[dict] = []
+    try:
+        with open(target, "r", encoding="utf-8") as fh:
+            for line in fh:
+                line = line.strip()
+                if not line:
+                    continue
+                try:
+                    rec = json.loads(line)
+                except json.JSONDecodeError:
+                    continue
+                if not isinstance(rec, dict):
+                    continue
+                if rec.get("record_type") == SHADOW_RECORD_TYPE:
+                    continue
+                out.append(rec)
+    except OSError:
+        return []
+    if limit is not None and len(out) > limit:
+        out = out[-limit:]
+    if newest_first:
+        out.reverse()
+    return out
+
+
 # --------------------------------------------------------------------------- #
 # Tool-retrieval SHADOW telemetry (tool-retrieval kickoff -- orchestrator half).
 #
@@ -379,11 +301,10 @@ def compute_args_hash(args: dict | None) -> str:
 # flow. recall = |dispatched-llm-tools that WERE in the retrieved set| /
 # |dispatched-llm-tools|.
 #
-# Same dual-sink discipline as ``emit_tool_call_event``: written to the SAME
-# ``tool_call_telemetry`` MongoDB collection when Persistence is bound (carrying
-# a ``record_type="tool_retrieval_shadow"`` discriminator so a reader can split
-# these rows from the per-tool ``tool_call`` rows), PLUS the /tmp JSONL fallback
-# when Persistence is unbound. Fire-and-forget; NEVER raises -- telemetry must
+# Same JSONL-only sink as ``emit_tool_call_event``: written to the SAME
+# ``tool_calls.jsonl`` file, carrying a ``record_type="tool_retrieval_shadow"``
+# discriminator so a reader can split these rows from the per-tool ``tool_call``
+# rows that share the file. Fire-and-forget; NEVER raises -- telemetry must
 # never break the dispatch loop (mirrors ``emit_tool_call_event``).
 # --------------------------------------------------------------------------- #
 
@@ -448,10 +369,10 @@ def emit_shadow_selection_event(
     """Emit one tool-retrieval shadow-selection record (non-blocking).
 
     Fire-and-forget + NEVER raises (mirrors ``emit_tool_call_event``): the write
-    is scheduled as an asyncio task and the caller does not await it. Backend
-    selection mirrors the per-tool path -- the bound MongoDB ``tool_call_telemetry``
-    collection (with the ``record_type`` discriminator) when Persistence is bound,
-    else the local-file JSONL fallback.
+    is scheduled as an asyncio task and the caller does not await it. JSONL-only
+    sink -- the SAME ``tool_calls.jsonl`` file as the per-tool path, carrying the
+    ``record_type`` discriminator so a reader can split shadow rows from tool-call
+    rows. (The former MongoDB-mirror route was cut.)
     """
     try:
         record = build_shadow_selection_record(
@@ -468,76 +389,13 @@ def emit_shadow_selection_event(
         logger.warning("shadow telemetry: record build failed", exc_info=True)
         return
 
-    try:
-        persistence: "Persistence | None" = get_persistence()
-    except Exception:  # noqa: BLE001
-        persistence = None
-
-    if persistence is not None:
-        try:
-            asyncio.ensure_future(
-                _write_shadow_to_mongo(persistence, record)
-            )
-        except Exception:  # noqa: BLE001 -- fall through to the file path
-            logger.warning(
-                "shadow telemetry: mongo schedule failed; falling to file",
-                exc_info=True,
-            )
-        else:
-            return
-
-    # Local-file fallback (same JSONL sink as the per-tool path).
+    # JSONL-only sink (same file as the per-tool path; the record_type
+    # discriminator separates shadow rows from tool-call rows).
     path = _get_telemetry_path()
     try:
         asyncio.ensure_future(_write_line(path, record))
     except Exception:  # noqa: BLE001 -- telemetry must never break the dispatch loop
         logger.warning("shadow telemetry: file schedule failed", exc_info=True)
-
-
-async def _write_shadow_to_mongo(
-    persistence: "Persistence", record: dict
-) -> None:
-    """Insert one shadow-selection record into the ``tool_call_telemetry``
-    collection via the MCP client. Never raises (logged at WARNING).
-
-    The shadow record carries a ``record_type`` discriminator + a ``visible_tools``
-    array that the per-tool ``ToolCallTelemetryDocument`` schema does not model, so
-    it is inserted as a raw document (the summary reader keys off ``record_type``).
-    """
-    try:
-        from trid3nt_contracts import new_ulid
-        from trid3nt_contracts.mongo_collections import TELEMETRY_COLLECTION
-        from .persistence import DEFAULT_DATABASE
-
-        body = dict(record)
-        body["_id"] = new_ulid()
-        # The TTL index keys off ``called_at_utc`` on the per-tool rows; mirror it
-        # so a shadow row expires on the same 90-day schedule.
-        ts = record.get("ts")
-        if isinstance(ts, str):
-            normalized = ts.replace("Z", "+00:00")
-            try:
-                body["called_at_utc"] = datetime.fromisoformat(normalized)
-            except ValueError:
-                body["called_at_utc"] = datetime.now(timezone.utc)
-        else:
-            body["called_at_utc"] = datetime.now(timezone.utc)
-
-        await persistence._mcp.call_tool(
-            "insert-one",
-            {
-                "database": DEFAULT_DATABASE,
-                "collection": TELEMETRY_COLLECTION,
-                "document": body,
-            },
-        )
-    except Exception:  # noqa: BLE001 -- telemetry must never break the dispatch loop
-        logger.warning(
-            "shadow telemetry mongo write failed turn=%s session=%s",
-            record.get("turn_id"),
-            record.get("session_id"),
-            exc_info=True,
-        )
 
 
 def now_iso_utc() -> str:
@@ -1108,6 +966,7 @@ def build_live_solve_progress(
 __all__ = [
     "emit_tool_call_event",
     "compute_args_hash",
+    "load_tool_call_records",
     "emit_solve_telemetry",
     "build_solve_telemetry_record",
     "record_solve_telemetry",

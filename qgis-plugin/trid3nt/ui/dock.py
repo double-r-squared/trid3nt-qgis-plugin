@@ -1947,12 +1947,6 @@ class Trid3ntDock(QDockWidget):
                 lines = gate.impact_summary_lines(summary)
                 self._ensure_pending().add_note("Impact summary:\n" + "\n".join(lines))
                 self._scroll_to_bottom()
-        elif kind == "lesson-added":
-            # LANE A (2026-07-23): the LESSONS LOOP ack -- a subtle status note.
-            added = gate.parse_lesson_added(data)
-            if added is not None:
-                self._ensure_pending().add_note(gate.lesson_added_line(added))
-                self._scroll_to_bottom()
         elif kind == "case-open":
             self._on_case_open_event(data)
         elif kind == "case-list":

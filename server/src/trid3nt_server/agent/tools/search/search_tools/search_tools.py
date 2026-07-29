@@ -45,6 +45,7 @@ the rest of the catalog is hidden.
 
 from __future__ import annotations
 
+import asyncio
 import difflib
 import functools
 import hashlib
@@ -111,12 +112,13 @@ _INDEX: "_DiscoverIndex | None" = None
 # ---------------------------------------------------------------------------
 # Co-occurrence index state (M5).
 #
-# The co-occurrence index is rebuilt from the ``tool_call_telemetry`` Mongo
-# collection on a ~5-minute cadence so that the RRF boost reflects recent
-# user behavior without round-tripping to Mongo on every search_tools
-# call.  When Mongo is unavailable (Persistence singleton unbound), the
-# index is left ``None`` and the 4th channel silently drops out — the 3-
-# channel ranking continues to work.
+# The co-occurrence index is rebuilt from the tool-call telemetry JSONL sink
+# (``telemetry.load_tool_call_records``) on a ~5-minute cadence so that the RRF
+# boost reflects recent user behavior without re-reading the file on every
+# search_tools call.  When the sink is empty/unreadable the index is EMPTY and
+# the 4th channel silently drops out — the 3-channel ranking continues to work.
+# (Telemetry is JSONL-only; the former ``tool_call_telemetry`` Persistence
+# collection read was cut with the telemetry write route.)
 # ---------------------------------------------------------------------------
 
 
@@ -755,49 +757,34 @@ def _get_persistence_safe() -> Any:
 
 
 async def _fetch_recent_telemetry_docs(
-    persistence: Any,
     *,
     call_cap: int = _COOCC_CALL_CAP,
 ) -> list[dict[str, Any]]:
-    """Read the most recent ``call_cap`` telemetry rows via MCP.
+    """Read the most recent ``call_cap`` tool-call rows from the telemetry JSONL.
 
     Returns an empty list on any error — the caller treats that the same as
     "no telemetry yet" and skips the co-occurrence channel.
 
-    The ULID ``_id`` field is time-sortable, so a descending sort by ``_id``
-    gives us the most recent rows even without a secondary ``called_at_utc``
-    index.  We pass ``limit`` when the MCP server supports it; the
-    file-backed dev shim ignores unknown fields, which is fine — the cap is
-    enforced in Python below either way.
+    Telemetry is JSONL-only (the Persistence-collection route was cut). The
+    shared reader ``telemetry.load_tool_call_records`` returns per-tool-call rows
+    newest-first (mirroring the old ``find ... sort {_id:-1}`` order) with SHADOW
+    rows excluded. The read runs in a thread so a large sink never blocks the
+    event loop (no-sync-blocking rule).
     """
     try:
-        from trid3nt_contracts.mongo_collections import TELEMETRY_COLLECTION
-        from trid3nt_server.persistence import DEFAULT_DATABASE, _unwrap_mcp_result
+        from trid3nt_server.telemetry import load_tool_call_records
     except Exception:  # noqa: BLE001
         return []
 
     try:
-        raw = await persistence._mcp.call_tool(
-            "find",
-            {
-                "database": DEFAULT_DATABASE,
-                "collection": TELEMETRY_COLLECTION,
-                "filter": {},
-                "sort": {"_id": -1},
-                "limit": call_cap,
-            },
-        )
+        docs = await asyncio.to_thread(load_tool_call_records, limit=call_cap)
     except Exception as exc:  # noqa: BLE001
-        logger.debug("co-occurrence: telemetry find failed (%s)", exc)
+        logger.debug("co-occurrence: telemetry read failed (%s)", exc)
         return []
 
-    docs = _unwrap_mcp_result(raw) or []
-    if isinstance(docs, dict):
-        docs = [docs]
     if not isinstance(docs, list):
         return []
-
-    # Defensive cap — the MCP server's ``limit`` semantics vary; enforce here.
+    # Defensive cap — the reader already caps, but enforce here too.
     return [d for d in docs if isinstance(d, dict)][:call_cap]
 
 
@@ -861,18 +848,14 @@ def _build_cooccurrence_from_docs(
 
 
 async def _refresh_cooccurrence_index() -> CooccurrenceIndex | None:
-    """Fetch telemetry from Mongo and rebuild the co-occurrence index.
+    """Read telemetry from the JSONL sink and rebuild the co-occurrence index.
 
-    Returns the new index on success, or ``None`` when Mongo is unavailable.
-    Callers should treat ``None`` as "stay on the 3-channel path".
+    Returns the rebuilt index (possibly EMPTY when the sink has no rows — an
+    empty index yields no co-occurrence boost, so the 3-channel ranking stands).
+    A read fault surfaces as an empty doc list (never raises), so this returns an
+    empty index rather than ``None``; the ranking outcome is identical.
     """
-    persistence = _get_persistence_safe()
-    if persistence is None:
-        return None
-    mcp = getattr(persistence, "_mcp", None)
-    if mcp is None:
-        return None
-    docs = await _fetch_recent_telemetry_docs(persistence)
+    docs = await _fetch_recent_telemetry_docs()
     return _build_cooccurrence_from_docs(docs)
 
 

@@ -102,3 +102,13 @@ been written yet but I don't want you to forget it.")
   dataclasses (Content/Part/FunctionDeclaration/FunctionResponse), rewrite
   the 4 importers (bedrock_adapter, openai_adapter, context_budget,
   adapter remnants), drop google-genai - the last GCP-era dependency.
+- 2026-07-28 VERTEX TEST-HARNESS MIGRATION (queued, NATE): replace the
+  vertex-shaped test fakes (conftest MODEL_PROVIDER=vertex pin + 28 files
+  faking build_client/generate_content_stream chunks) with a first-class
+  fake-provider seam; then remove the Vertex generate path from adapter.py
+  (typed UnsupportedModelProviderError already guards dispatch).
+- 2026-07-28 /OPT/GRACE2 IMAGE-REBUILD JOB (queued, NATE): the last deadname
+  stratum - container-baked /opt/grace2 paths (solver, geoclaw, swan,
+  sandbox_hardening), ELMFIRE batch job-def + ECR names (live AWS - never
+  rename in place; new-name + cutover), test env pins; retag + rebuild +
+  env overrides as one job.

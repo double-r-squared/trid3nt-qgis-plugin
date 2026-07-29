@@ -455,9 +455,8 @@ def test_build_telemetry_summary_folds_recall_section(monkeypatch, tmp_path):
     path.write_text("\n".join(_json.dumps(r) for r in rows) + "\n", encoding="utf-8")
     monkeypatch.setenv("TRID3NT_TELEMETRY_PATH", str(path))
 
-    # No Persistence bound -> file path.
-    with patch.object(http, "_load_recent_records_from_mongo", return_value=[]):
-        summary = asyncio.run(http.build_telemetry_summary())
+    # Telemetry is JSONL-only -> summary reads the sink directly.
+    summary = asyncio.run(http.build_telemetry_summary())
 
     # The shadow row did NOT inflate the per-tool dispatch counts.
     assert summary["total_dispatches"] == 1
