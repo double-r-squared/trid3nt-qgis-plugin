@@ -51,6 +51,15 @@ and one file.
    See [Remote daemon access (tailnet)](configuration.md#remote-daemon-access-tailnet)
    for how the plugin learns the MinIO / HTTP endpoints from that one URL.
 
+**Updates.** The in-dock Update button is gone -- the daemon now serves a real
+QGIS custom plugin repository, so QGIS's own Plugin Manager handles it: **Plugin
+Manager > Settings > Plugin Repositories > Add...**, name it anything, URL
+`http://<daemon-host>:8766/plugins/plugins.xml` (`http://127.0.0.1:8766/...` for a
+local daemon, the tailnet address for a remote one), and leave "Check for
+updates on startup" on. Plugin Manager then diffs the served version against
+what's installed and offers Upgrade like any other repository -- no zip, no
+`make plugin-zip`, on every client including a Mac over tailnet.
+
 Full plugin walkthrough (dev install, test suite): [qgis-plugin/README.md](../../qgis-plugin/README.md).
 
 ---
@@ -211,7 +220,7 @@ enable **TRID3NT** in the Plugin Manager if it is not already.
 | Port | Service | Notes |
 |------|---------|-------|
 | 8765 | Agent WebSocket | chat protocol (`TRID3NT_AGENT_PORT`) |
-| 8766 | Agent HTTP | tool catalog + stats endpoints (`TRID3NT_AGENT_HTTP_PORT`) |
+| 8766 | Agent HTTP | tool catalog + stats endpoints, QGIS plugin repository (`TRID3NT_AGENT_HTTP_PORT`) |
 | 9000 | MinIO S3 API | `AWS_ENDPOINT_URL` target; console on 9001 |
 | 11434 | Ollama | OpenAI-compatible endpoint at `/v1` |
 
@@ -224,6 +233,7 @@ enable **TRID3NT** in the Plugin Manager if it is not already.
 - `data/runs/` -- solver rundirs mounted into containers (`TRID3NT_RUNS_DIR`)
 - `data/telemetry/` -- tool-call telemetry JSONL
 - `logs/`, `run/` -- service logs and PID files
+- `run/plugin-repo-cache/` -- the built `trid3nt.zip` served at `/plugins/trid3nt.zip`, cached until the daemon's git HEAD moves (`TRID3NT_PLUGIN_REPO_CACHE_DIR`)
 
 ## Troubleshooting
 

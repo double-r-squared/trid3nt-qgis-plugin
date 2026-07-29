@@ -2040,10 +2040,14 @@ async def _handle_http(
         writer.close()
         return
 
-    # Drain headers; the only one we consume is Content-Length (so the
-    # export-qgis POST body can be read), but the socket must be advanced past
-    # them before we close so the client sees our response cleanly.
+    # Drain headers; the ones we consume are Content-Length (so a POST body
+    # can be read) and Host (so /plugins/plugins.xml can build a download_url
+    # that matches the host:port the client actually dialed -- e.g. a
+    # tailnet client's daemon-host address, not a hardcoded 127.0.0.1). The
+    # socket must be advanced past the rest before we close so the client
+    # sees our response cleanly.
     content_length = 0
+    host_header = ""
     while True:
         try:
             line = await asyncio.wait_for(reader.readline(), timeout=5.0)
@@ -2052,11 +2056,14 @@ async def _handle_http(
         if not line or line == b"\r\n" or line == b"\n":
             break
         name, _, value = line.decode("latin-1", "replace").partition(":")
-        if name.strip().lower() == "content-length":
+        header_name = name.strip().lower()
+        if header_name == "content-length":
             try:
                 content_length = int(value.strip())
             except ValueError:
                 content_length = 0
+        elif header_name == "host":
+            host_header = value.strip()
 
     if method == "OPTIONS":
         # CORS preflight.
@@ -2538,6 +2545,82 @@ async def _handle_http(
             writer.write(
                 _format_response(500, b'{"error":"export file serve failed"}')
             )
+    elif path == "/api/version":
+        # Daemon git sha + active model provider -- the version indicator the
+        # removed plugin-settings Update section wanted (see plugin_repo.py's
+        # module docstring). Cheap: one `git rev-parse` subprocess, off the
+        # event loop.
+        try:
+            from . import plugin_repo
+
+            payload = await asyncio.to_thread(plugin_repo.build_version_payload)
+            body = json.dumps(payload, separators=(",", ":")).encode("utf-8")
+            writer.write(_format_response(200, body))
+        except Exception:  # noqa: BLE001
+            logger.exception("version payload build failed")
+            writer.write(_format_response(500, b'{"error":"version lookup failed"}'))
+    elif proxy_path == "/plugins/plugins.xml":
+        # QGIS custom plugin repository index -- see plugin_repo.py for the
+        # zip-build + version-stamping story. download_url is built from the
+        # REQUEST's own Host header so a tailnet client's "Add repository"
+        # URL (http://<daemon-host>:8766/plugins/plugins.xml) round-trips to
+        # a reachable zip URL without a hardcoded host.
+        from . import plugin_repo
+
+        try:
+            host = host_header or (
+                f"127.0.0.1:{os.environ.get('TRID3NT_AGENT_HTTP_PORT', DEFAULT_HTTP_PORT)}"
+            )
+            download_url = f"http://{host}/plugins/{plugin_repo.PLUGIN_NAME}.zip"
+            body = await asyncio.to_thread(
+                plugin_repo.build_plugins_repo_xml, download_url
+            )
+            writer.write(
+                _format_response(200, body, content_type="text/xml; charset=utf-8")
+            )
+        except plugin_repo.PluginRepoBuildError as exc:
+            writer.write(
+                _format_response(
+                    503,
+                    json.dumps({"error": str(exc)}, separators=(",", ":")).encode(
+                        "utf-8"
+                    ),
+                )
+            )
+        except Exception:  # noqa: BLE001
+            logger.exception("plugins.xml build failed")
+            writer.write(
+                _format_response(500, b'{"error":"plugin repo index failed"}')
+            )
+    elif proxy_path == "/plugins/trid3nt.zip":
+        # The installable zip Plugin Manager downloads on install/update.
+        from . import plugin_repo
+
+        try:
+            info = await asyncio.to_thread(plugin_repo.ensure_plugin_zip)
+            data = await asyncio.to_thread(info["zip_path"].read_bytes)
+            writer.write(
+                _format_response(
+                    200,
+                    data,
+                    content_type="application/zip",
+                    extra_headers={
+                        "Content-Disposition": 'attachment; filename="trid3nt.zip"'
+                    },
+                )
+            )
+        except plugin_repo.PluginRepoBuildError as exc:
+            writer.write(
+                _format_response(
+                    503,
+                    json.dumps({"error": str(exc)}, separators=(",", ":")).encode(
+                        "utf-8"
+                    ),
+                )
+            )
+        except Exception:  # noqa: BLE001
+            logger.exception("plugin zip build/serve failed")
+            writer.write(_format_response(500, b'{"error":"plugin zip failed"}'))
     else:
         writer.write(_format_response(404, b'{"error":"not found"}'))
     await writer.drain()
