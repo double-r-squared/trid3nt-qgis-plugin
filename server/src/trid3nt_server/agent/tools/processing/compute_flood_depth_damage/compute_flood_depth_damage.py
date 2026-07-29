@@ -272,7 +272,7 @@ def _load_assets(
             raise FloodDamageInputError(
                 f"the depth raster spans {span:.2f} deg -- larger than the "
                 "USACE NSI ~1-degree query limit. Pass assets_uri, or clip the "
-                "depth raster (clip_raster_to_bbox) and re-run per tile."
+                "depth raster (clip_raster_to_polygon) and re-run per tile."
             )
         try:
             from trid3nt_server.agent.tools.fetchers.socioeconomic.fetch_usace_nsi.fetch_usace_nsi import fetch_usace_nsi

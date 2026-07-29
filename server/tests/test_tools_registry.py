@@ -207,7 +207,7 @@ def test_global_query_scope_audit():
         "fetch_firms_active_fire",   # FIRMS AREA endpoint rejects a global bbox
         "fetch_hrsl_population",
         "fetch_gbif_occurrences",
-        "clip_raster_to_bbox",
+        "clip_raster_to_polygon",
         "publish_layer",
     ):
         assert bbox_required in registry, f"{bbox_required} not registered"

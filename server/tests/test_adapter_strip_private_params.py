@@ -16,7 +16,7 @@ These tests cover:
    ``required`` (defensive; underscore params have defaults and never end up
    required in practice).
 4. The registry path — ``build_tool_declarations`` produces a declaration
-   for ``compute_zonal_statistics`` with NO underscore properties left.
+   for ``compute_hillshade`` with NO underscore properties left.
 """
 
 from __future__ import annotations
@@ -129,13 +129,11 @@ def test_build_tool_declarations_drops_storage_client_for_zonal_statistics() -> 
 
     # Tools known to expose _storage_client / _bucket in their public signature.
     sensitive = [
-        "compute_zonal_statistics",
         "compute_hillshade",
         "compute_slope",
         "compute_aspect",
         "compute_impervious_surface",
         "extract_landcover_class",
-        "clip_raster_to_bbox",
         "clip_raster_to_polygon",
     ]
     for tname in sensitive:

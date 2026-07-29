@@ -1,22 +1,23 @@
-"""Tests for chart-generation tools + agent chart-emission loop (job-0230).
+"""Tests for the generic ``generate_chart`` primitive + agent chart-emission loop.
 
-All tests use synthetic in-memory/temp-file data — no network, no Gemini calls.
+All tests use synthetic in-memory/temp-file data -- no network, no LLM calls.
+
+``generate_chart`` replaced the four fixed-shape chart tools (generate_histogram
+/ generate_choropleth_legend / generate_time_series / generate_damage_distribution)
+in the processing-wave cull (docs/decisions/0043): the SHAPE is now the caller's
+Vega-Lite spec + inline records (binning/classification composed in the
+playground), and interactivity is guaranteed by construction.
 
 Coverage:
-- Each of the 4 chart tools produces a structurally-valid ChartEmissionPayload
-  on synthetic rasters / GeoJSON (the contract's own validator runs on
-  construction, so a structurally-broken spec would raise).
-- Inline row cap (_MAX_ROWS) enforced.
-- generate_time_series: clean NO_TIME_DIMENSION error envelope on a non-temporal
-  layer; happy path on a temporal raster (band descriptions) + temporal vector
-  (time column).
-- generate_damage_distribution: DS0..DS4 bins on a synthetic Pelicun FGB;
-  MISSING_DAMAGE_COLUMN on a layer without ds_mean.
-- is_chart_emission_result: triggers on chart payloads, NOT on ordinary results.
-- adapter.summarize_tool_result: strips vega_lite_spec for chart payloads,
-  keeps the full result for ordinary tool dicts.
-- server._maybe_emit_chart: emits the chart-emission WS envelope AND calls the
-  persistence append; the emission helper does NOT fire for an ordinary result.
+- generate_chart emits a structurally-valid ChartEmissionPayload from inline
+  records and from a layer_uri; every mark is forced interactive (tooltip=true);
+  image marks are rejected (the anti-PNG honesty floor); a mark-less spec raises.
+- The four culled chart shapes are REPRODUCED via generate_chart (interactive
+  bar / line specs) -- the replication coverage baked into the suite.
+- Inline row cap (_MAX_ROWS) + $schema injection (build_chart_payload).
+- is_chart_emission_result: True on the generic chart, False on ordinary results.
+- adapter.summarize_tool_result strips vega_lite_spec for the chart.
+- server._maybe_emit_chart emits the chart-emission WS envelope AND persists.
 - Registration + category membership.
 """
 
@@ -28,11 +29,15 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-from trid3nt_server.agent.tools.processing.charts_common import ChartToolError, _MAX_ROWS, build_chart_payload, is_chart_emission_result
-from trid3nt_server.agent.tools.processing.charts.generate_choropleth_legend.generate_choropleth_legend import generate_choropleth_legend
-from trid3nt_server.agent.tools.processing.charts.generate_damage_distribution.generate_damage_distribution import generate_damage_distribution
-from trid3nt_server.agent.tools.processing.charts.generate_histogram.generate_histogram import generate_histogram
-from trid3nt_server.agent.tools.processing.charts.generate_time_series.generate_time_series import generate_time_series
+from trid3nt_server.agent.tools.processing.charts_common import (
+    ChartToolError,
+    _MAX_ROWS,
+    build_chart_payload,
+    is_chart_emission_result,
+)
+from trid3nt_server.agent.tools.processing.charts.generate_chart.generate_chart import (
+    generate_chart,
+)
 from trid3nt_contracts.chart_contracts import (
     ChartEmissionPayload,
     is_structurally_valid_vega_lite_spec,
@@ -44,19 +49,7 @@ from trid3nt_contracts.chart_contracts import (
 # ---------------------------------------------------------------------------
 
 
-def _make_raster(
-    tmp_path: Path,
-    values: np.ndarray,
-    nodata: float | None = None,
-    descriptions: list[str] | None = None,
-    name: str = "test_raster.tif",
-) -> str:
-    """Write a (possibly multiband) GeoTIFF and return its local path.
-
-    ``values`` is (bands, h, w) for multiband or (h, w) for single-band.
-    ``descriptions`` (one per band) marks the raster as temporal for the
-    time-series tool.
-    """
+def _make_raster(tmp_path: Path, values: np.ndarray, name: str = "r.tif") -> str:
     import rasterio
     from rasterio.transform import from_bounds
 
@@ -64,24 +57,13 @@ def _make_raster(
         values = values[np.newaxis, :, :]
     count, height, width = values.shape
     transform = from_bounds(0.0, 0.0, 1.0, 1.0, width, height)
-    profile = {
-        "driver": "GTiff",
-        "dtype": values.dtype,
-        "width": width,
-        "height": height,
-        "count": count,
-        "crs": "EPSG:4326",
-        "transform": transform,
-    }
-    if nodata is not None:
-        profile["nodata"] = nodata
     path = str(tmp_path / name)
-    with rasterio.open(path, "w", **profile) as dst:
+    with rasterio.open(
+        path, "w", driver="GTiff", dtype=values.dtype, width=width, height=height,
+        count=count, crs="EPSG:4326", transform=transform,
+    ) as dst:
         for b in range(count):
             dst.write(values[b], b + 1)
-        if descriptions:
-            for b, desc in enumerate(descriptions):
-                dst.set_band_description(b + 1, desc)
     return path
 
 
@@ -92,324 +74,201 @@ def _make_geojson_points(tmp_path: Path, records: list[dict], name: str = "pts.g
         x = r.pop("x")
         y = r.pop("y")
         features.append(
-            {
-                "type": "Feature",
-                "geometry": {"type": "Point", "coordinates": [x, y]},
-                "properties": r,
-            }
+            {"type": "Feature", "geometry": {"type": "Point", "coordinates": [x, y]},
+             "properties": r}
         )
-    fc = {"type": "FeatureCollection", "features": features}
     path = str(tmp_path / name)
     with open(path, "w") as f:
-        json.dump(fc, f)
+        json.dump({"type": "FeatureCollection", "features": features}, f)
     return path
 
 
-def _make_damage_fgb(tmp_path: Path, ds_means: list[float], name: str = "damage.fgb") -> str:
-    """Write a synthetic per-asset Pelicun damage FlatGeobuf with ds_mean."""
-    import geopandas as gpd
-    from shapely.geometry import Point
-
-    gdf = gpd.GeoDataFrame(
-        {
-            "ds_mean": ds_means,
-            "repair_cost_mean": [v * 1000.0 for v in ds_means],
-            "geometry": [Point(0.1 * i, 0.1 * i) for i in range(len(ds_means))],
+def _bar_spec(x_field: str = "label", y_field: str = "count") -> dict:
+    return {
+        "mark": "bar",
+        "encoding": {
+            "x": {"field": x_field, "type": "ordinal"},
+            "y": {"field": y_field, "type": "quantitative"},
         },
-        crs="EPSG:4326",
-    )
-    path = str(tmp_path / name)
-    gdf.to_file(path, driver="FlatGeobuf")
-    return path
+    }
 
 
-def _assert_valid_chart_payload(payload: dict, *, expect_source: str | None = None) -> None:
-    """Re-validate a returned chart payload against the contract."""
+def _assert_valid_interactive_chart(payload: dict, *, expect_source: str | None = None) -> str:
+    """Re-validate a returned chart payload against the contract; return mark type."""
     assert isinstance(payload, dict)
     assert payload["envelope_type"] == "chart-emission"
     assert isinstance(payload["chart_id"], str) and payload["chart_id"]
     assert isinstance(payload["title"], str) and payload["title"]
     spec = payload["vega_lite_spec"]
     assert is_structurally_valid_vega_lite_spec(spec), spec
-    # Round-trips through the pydantic contract (raises if structurally broken).
-    model = ChartEmissionPayload.model_validate(payload)
-    assert model.envelope_type == "chart-emission"
+    ChartEmissionPayload.model_validate(payload)  # raises if structurally broken
+    mark = spec.get("mark")
+    if mark is None and "layer" in spec:
+        mark = spec["layer"][0].get("mark")
+    assert isinstance(mark, dict), f"mark not normalized to dict: {mark}"
+    assert str(mark.get("type")).lower() != "image", "image mark leaked through"
+    assert mark.get("tooltip") is True, "tooltip not forced by construction"
     if expect_source is not None:
         assert payload["source_layer_uri"] == expect_source
+    return str(mark.get("type"))
 
 
 # ---------------------------------------------------------------------------
-# generate_histogram
+# Core: interactivity guaranteed by construction
 # ---------------------------------------------------------------------------
 
 
-class TestGenerateHistogram:
-    def test_raster_histogram(self, tmp_path):
-        arr = np.linspace(0, 100, 100, dtype=np.float32).reshape(10, 10)
-        path = _make_raster(tmp_path, arr)
+class TestInteractivityByConstruction:
+    def test_string_mark_becomes_interactive_dict(self):
+        payload = generate_chart(
+            vega_lite_spec=_bar_spec(),
+            title="Bars",
+            records=[{"label": "a", "count": 3}, {"label": "b", "count": 5}],
+        )
+        assert _assert_valid_interactive_chart(payload) == "bar"
 
-        payload = generate_histogram(layer_uri=path)
+    def test_existing_dict_mark_gets_tooltip(self):
+        spec = {"mark": {"type": "line"}, "encoding": {
+            "x": {"field": "t", "type": "ordinal"}, "y": {"field": "v", "type": "quantitative"}}}
+        payload = generate_chart(vega_lite_spec=spec, title="Line",
+                                 records=[{"t": "1", "v": 1.0}, {"t": "2", "v": 2.0}])
+        assert _assert_valid_interactive_chart(payload) == "line"
 
-        _assert_valid_chart_payload(payload, expect_source=path)
-        spec = payload["vega_lite_spec"]
-        assert spec["mark"]["type"] == "bar"
-        # 10 histogram bins inline.
-        assert len(spec["data"]["values"]) == 10
-        assert all("count" in row for row in spec["data"]["values"])
-        # Caption carries computed numbers (determinism boundary).
-        assert "min" in payload["caption"] and "max" in payload["caption"]
-
-    def test_vector_histogram_default_property(self, tmp_path):
-        records = [{"x": 0.1 * i, "y": 0.1 * i, "depth": float(i)} for i in range(20)]
-        path = _make_geojson_points(tmp_path, records)
-
-        payload = generate_histogram(layer_uri=path)
-
-        _assert_valid_chart_payload(payload)
-        # Default property is the first numeric column ("depth").
-        assert "depth" in payload["title"]
-
-    def test_vector_histogram_named_property(self, tmp_path):
-        records = [
-            {"x": 0.1 * i, "y": 0.1 * i, "depth": float(i), "value": float(i * 2)}
-            for i in range(10)
-        ]
-        path = _make_geojson_points(tmp_path, records)
-
-        payload = generate_histogram(layer_uri=path, property="value")
-
-        _assert_valid_chart_payload(payload)
-        assert "value" in payload["title"]
-
-    def test_property_not_found_raises(self, tmp_path):
-        records = [{"x": 0.1, "y": 0.1, "depth": 1.0}]
-        path = _make_geojson_points(tmp_path, records)
-
+    def test_image_mark_rejected(self):
         with pytest.raises(ChartToolError) as exc:
-            generate_histogram(layer_uri=path, property="nope")
-        assert exc.value.error_code == "PROPERTY_NOT_FOUND"
+            generate_chart(vega_lite_spec={"mark": {"type": "image", "url": "x"}, "encoding": {}},
+                           title="png", records=[{"a": 1}])
+        assert exc.value.error_code == "IMAGE_MARK_REJECTED"
 
-    def test_no_numeric_property_raises(self, tmp_path):
-        records = [{"x": 0.1, "y": 0.1, "label": "a"}]
-        path = _make_geojson_points(tmp_path, records)
-
+    def test_markless_spec_raises(self):
         with pytest.raises(ChartToolError) as exc:
-            generate_histogram(layer_uri=path)
-        assert exc.value.error_code == "NO_NUMERIC_PROPERTY"
+            generate_chart(vega_lite_spec={"encoding": {}}, title="nada", records=[{"a": 1}])
+        assert exc.value.error_code == "NO_MARK"
 
-    def test_missing_uri_raises(self):
-        with pytest.raises(ChartToolError) as exc:
-            generate_histogram(layer_uri="")
-        assert exc.value.error_code == "DOWNLOAD_FAILED"
-
-    def test_raster_sampling_cap_path(self, tmp_path, monkeypatch):
-        """Large raster path: cap the sample, still produce 10 bins."""
-        import trid3nt_server.agent.tools.processing.charts_common as ct
-
-        # Shrink the cap so a small raster exercises the sampling branch.
-        monkeypatch.setattr(ct, "_RASTER_SAMPLE_CAP", 50)
-        arr = np.arange(100, dtype=np.float32).reshape(10, 10)
-        path = _make_raster(tmp_path, arr)
-
-        payload = generate_histogram(layer_uri=path)
-        _assert_valid_chart_payload(payload)
-        assert len(payload["vega_lite_spec"]["data"]["values"]) == 10
+    def test_layered_spec_all_marks_interactive(self):
+        spec = {"layer": [
+            {"mark": "line", "encoding": {"x": {"field": "t"}, "y": {"field": "v"}}},
+            {"mark": {"type": "rule"}, "encoding": {"y": {"field": "thr"}}},
+        ]}
+        payload = generate_chart(vega_lite_spec=spec, title="Layered",
+                                 records=[{"t": "1", "v": 1.0, "thr": 2.0}])
+        spec_out = payload["vega_lite_spec"]
+        assert all(layer["mark"]["tooltip"] is True for layer in spec_out["layer"])
 
 
 # ---------------------------------------------------------------------------
-# generate_choropleth_legend
+# Data injection: inline records / vector layer / raster layer
 # ---------------------------------------------------------------------------
 
 
-class TestGenerateChoroplethLegend:
-    def test_vector_class_breaks(self, tmp_path):
-        records = [{"x": 0.05 * i, "y": 0.05 * i, "pop": float(i)} for i in range(50)]
-        path = _make_geojson_points(tmp_path, records)
+class TestDataInjection:
+    def test_inline_records(self):
+        rows = [{"label": str(i), "count": i} for i in range(6)]
+        payload = generate_chart(vega_lite_spec=_bar_spec(), title="Inline", records=rows)
+        assert payload["vega_lite_spec"]["data"]["values"] == rows
 
-        payload = generate_choropleth_legend(layer_uri=path, property="pop")
+    def test_records_precedence_over_layer(self, tmp_path):
+        path = _make_geojson_points(tmp_path, [{"x": 0.1, "y": 0.1, "v": 9.0}])
+        rows = [{"label": "a", "count": 1}]
+        payload = generate_chart(vega_lite_spec=_bar_spec(), title="Prec",
+                                 records=rows, layer_uri=path)
+        # records win; source_layer_uri NOT set (no layer read happened).
+        assert payload["vega_lite_spec"]["data"]["values"] == rows
+        assert payload["source_layer_uri"] is None
 
-        _assert_valid_chart_payload(payload, expect_source=path)
-        spec = payload["vega_lite_spec"]
-        assert spec["mark"]["type"] == "bar"
-        rows = spec["data"]["values"]
-        # 5 quantile classes for well-distributed data.
-        assert 1 <= len(rows) <= 5
-        # Class counts sum to the feature total.
-        assert sum(r["count"] for r in rows) == 50
-        assert "class" in payload["caption"] or "classes" in payload["caption"]
-
-    def test_degenerate_all_equal(self, tmp_path):
-        records = [{"x": 0.1 * i, "y": 0.1 * i, "pop": 5.0} for i in range(10)]
-        path = _make_geojson_points(tmp_path, records)
-
-        payload = generate_choropleth_legend(layer_uri=path, property="pop")
-        _assert_valid_chart_payload(payload)
+    def test_vector_layer_attribute_rows(self, tmp_path):
+        recs = [{"x": 0.1 * i, "y": 0.1 * i, "depth": float(i)} for i in range(8)]
+        path = _make_geojson_points(tmp_path, recs)
+        spec = {"mark": "point", "encoding": {
+            "x": {"field": "depth", "type": "quantitative"},
+            "y": {"field": "depth", "type": "quantitative"}}}
+        payload = generate_chart(vega_lite_spec=spec, title="Scatter", layer_uri=path)
+        _assert_valid_interactive_chart(payload, expect_source=path)
         rows = payload["vega_lite_spec"]["data"]["values"]
-        assert sum(r["count"] for r in rows) == 10
+        assert len(rows) == 8
+        assert all("depth" in r and "geometry" not in r for r in rows)
 
-    def test_raster_class_breaks(self, tmp_path):
+    def test_raster_layer_sampled_values(self, tmp_path):
         arr = np.linspace(0, 50, 100, dtype=np.float32).reshape(10, 10)
         path = _make_raster(tmp_path, arr)
-
-        payload = generate_choropleth_legend(layer_uri=path)
-        _assert_valid_chart_payload(payload)
-
-
-# ---------------------------------------------------------------------------
-# generate_time_series
-# ---------------------------------------------------------------------------
-
-
-class TestGenerateTimeSeries:
-    def test_temporal_raster(self, tmp_path):
-        # 4-band raster with band descriptions = temporal.
-        bands = np.stack(
-            [np.full((4, 4), float(t), dtype=np.float32) for t in range(4)]
-        )
-        path = _make_raster(
-            tmp_path,
-            bands,
-            descriptions=["2020-01", "2020-02", "2020-03", "2020-04"],
-            name="temporal.tif",
-        )
-
-        payload = generate_time_series(layer_uri=path)
-
-        _assert_valid_chart_payload(payload, expect_source=path)
-        spec = payload["vega_lite_spec"]
-        assert spec["mark"]["type"] == "line"
-        rows = spec["data"]["values"]
-        assert len(rows) == 4
-        assert [r["time"] for r in rows] == ["2020-01", "2020-02", "2020-03", "2020-04"]
-        # Per-band means: 0, 1, 2, 3.
-        assert [r["value"] for r in rows] == [0.0, 1.0, 2.0, 3.0]
-
-    def test_temporal_vector(self, tmp_path):
-        records = [
-            {"x": 0.1, "y": 0.1, "time": "2021-01-01", "discharge": 10.0},
-            {"x": 0.2, "y": 0.2, "time": "2021-01-02", "discharge": 20.0},
-            {"x": 0.3, "y": 0.3, "time": "2021-01-03", "discharge": 15.0},
-        ]
-        path = _make_geojson_points(tmp_path, records)
-
-        payload = generate_time_series(layer_uri=path)
-
-        _assert_valid_chart_payload(payload)
+        spec = {"mark": "point", "encoding": {"x": {"field": "value", "type": "quantitative"}}}
+        payload = generate_chart(vega_lite_spec=spec, title="Raster rows", layer_uri=path)
         rows = payload["vega_lite_spec"]["data"]["values"]
-        assert len(rows) == 3
-        # Sorted by time (geopandas may parse the time column to datetime, so
-        # the stringified label can carry a 00:00:00 suffix — check the prefix).
-        times = [r["time"] for r in rows]
-        assert times[0].startswith("2021-01-01")
-        assert times[1].startswith("2021-01-02")
-        assert times[2].startswith("2021-01-03")
-        # Values follow the (sorted-by-time) discharge sequence.
-        assert [r["value"] for r in rows] == [10.0, 20.0, 15.0]
+        assert rows and all("value" in r for r in rows)
 
-    def test_non_temporal_raster_error_envelope(self, tmp_path):
-        """Single-band raster -> NO_TIME_DIMENSION (clean error envelope)."""
-        arr = np.ones((4, 4), dtype=np.float32)
-        path = _make_raster(tmp_path, arr)
-
-        with pytest.raises(ChartToolError) as exc:
-            generate_time_series(layer_uri=path)
-        assert exc.value.error_code == "NO_TIME_DIMENSION"
-
-    def test_multiband_no_descriptions_not_temporal(self, tmp_path):
-        """An RGB-like 3-band raster with no descriptions is NOT temporal."""
-        bands = np.stack([np.ones((4, 4), dtype=np.float32) for _ in range(3)])
-        path = _make_raster(tmp_path, bands, name="rgb.tif")
-
-        with pytest.raises(ChartToolError) as exc:
-            generate_time_series(layer_uri=path)
-        assert exc.value.error_code == "NO_TIME_DIMENSION"
-
-    def test_non_temporal_vector_error_envelope(self, tmp_path):
-        records = [{"x": 0.1, "y": 0.1, "depth": 1.0}]
-        path = _make_geojson_points(tmp_path, records)
-
-        with pytest.raises(ChartToolError) as exc:
-            generate_time_series(layer_uri=path)
-        assert exc.value.error_code == "NO_TIME_DIMENSION"
-
-
-# ---------------------------------------------------------------------------
-# generate_damage_distribution
-# ---------------------------------------------------------------------------
-
-
-class TestGenerateDamageDistribution:
-    def test_damage_bins(self, tmp_path):
-        # ds_means spanning DS0..DS4: round() -> 0,0,1,2,3,4,4.
-        ds_means = [0.1, 0.4, 1.2, 2.0, 3.4, 3.6, 4.0]
-        path = _make_damage_fgb(tmp_path, ds_means)
-
-        payload = generate_damage_distribution(damage_layer_uri=path)
-
-        _assert_valid_chart_payload(payload, expect_source=path)
-        spec = payload["vega_lite_spec"]
-        assert spec["mark"]["type"] == "bar"
-        rows = spec["data"]["values"]
-        # Always 5 DS bins (DS0..DS4), zeros included.
-        assert len(rows) == 5
-        by_key = {r["ds_key"]: r["count"] for r in rows}
-        # round(0.1)=0, round(0.4)=0 -> DS0=2
-        assert by_key["DS0_none"] == 2
-        assert by_key["DS1_slight"] == 1  # round(1.2)=1
-        assert by_key["DS2_moderate"] == 1  # round(2.0)=2
-        assert by_key["DS3_extensive"] == 1  # round(3.4)=3
-        assert by_key["DS4_complete"] == 2  # round(3.6)=4, round(4.0)=4
-        # Total across bins == feature count.
-        assert sum(by_key.values()) == 7
-        # Caption carries damaged + destroyed counts.
-        assert "structures" in payload["caption"]
-
-    def test_missing_ds_mean_column(self, tmp_path):
-        records = [{"x": 0.1, "y": 0.1, "depth": 1.0}]
-        path = _make_geojson_points(tmp_path, records, name="nods.geojson")
-
-        with pytest.raises(ChartToolError) as exc:
-            generate_damage_distribution(damage_layer_uri=path)
-        assert exc.value.error_code == "MISSING_DAMAGE_COLUMN"
-
-    def test_empty_layer(self, tmp_path):
-        fc = {"type": "FeatureCollection", "features": []}
+    def test_empty_layer_raises(self, tmp_path):
         path = str(tmp_path / "empty.geojson")
         with open(path, "w") as f:
-            json.dump(fc, f)
-
+            json.dump({"type": "FeatureCollection", "features": []}, f)
         with pytest.raises(ChartToolError) as exc:
-            generate_damage_distribution(damage_layer_uri=path)
+            generate_chart(vega_lite_spec=_bar_spec(), title="Empty", layer_uri=path)
         assert exc.value.error_code == "NO_DATA"
 
 
 # ---------------------------------------------------------------------------
-# Row-cap enforcement (build_chart_payload)
+# Replication: the four culled chart shapes reproduced via generate_chart
+# ---------------------------------------------------------------------------
+
+
+class TestCulledShapeReplication:
+    def test_histogram_bars(self):
+        counts, edges = np.histogram(np.arange(100, dtype=float), bins=10)
+        rows = [{"bin": f"{edges[i]:.3g}-{edges[i+1]:.3g}", "count": int(counts[i])}
+                for i in range(10)]
+        payload = generate_chart(vega_lite_spec=_bar_spec("bin"), title="Histogram - value",
+                                 records=rows)
+        assert _assert_valid_interactive_chart(payload) == "bar"
+        assert len(payload["vega_lite_spec"]["data"]["values"]) == 10
+
+    def test_time_series_line(self):
+        rows = [{"time": f"2020-0{t}", "value": float(t)} for t in range(1, 5)]
+        spec = {"mark": "line", "encoding": {
+            "x": {"field": "time", "type": "ordinal"},
+            "y": {"field": "value", "type": "quantitative"}}}
+        payload = generate_chart(vega_lite_spec=spec, title="Time series", records=rows)
+        assert _assert_valid_interactive_chart(payload) == "line"
+
+    def test_damage_distribution_bars(self):
+        ds = ("DS0 None", "DS1 Slight", "DS2 Moderate", "DS3 Extensive", "DS4 Complete")
+        rows = [{"damage_state": ds[i], "count": c} for i, c in enumerate([2, 1, 1, 1, 2])]
+        spec = {"mark": "bar", "encoding": {
+            "x": {"field": "damage_state", "type": "ordinal", "sort": list(ds)},
+            "y": {"field": "count", "type": "quantitative"},
+            "color": {"field": "count", "type": "ordinal", "scale": {"scheme": "yellorred"}}}}
+        payload = generate_chart(vega_lite_spec=spec, title="Damage-state distribution", records=rows)
+        assert _assert_valid_interactive_chart(payload) == "bar"
+        assert len(payload["vega_lite_spec"]["data"]["values"]) == 5
+
+    def test_choropleth_legend_bars(self):
+        rows = [{"class_label": f"c{i}", "count": 10} for i in range(5)]
+        payload = generate_chart(vega_lite_spec=_bar_spec("class_label"),
+                                 title="Choropleth legend", records=rows)
+        assert _assert_valid_interactive_chart(payload) == "bar"
+
+
+# ---------------------------------------------------------------------------
+# Row-cap + schema injection (build_chart_payload)
 # ---------------------------------------------------------------------------
 
 
 class TestRowCap:
     def test_inline_rows_capped(self):
-        big = [{"x": i, "count": i} for i in range(_MAX_ROWS + 500)]
-        spec = {
-            "data": {"values": big},
-            "mark": "bar",
-            "encoding": {
-                "x": {"field": "x", "type": "ordinal"},
-                "y": {"field": "count", "type": "quantitative"},
-            },
-        }
-        payload = build_chart_payload(vega_lite_spec=spec, title="big")
+        big = [{"label": str(i), "count": i} for i in range(_MAX_ROWS + 500)]
+        payload = generate_chart(vega_lite_spec=_bar_spec(), title="big", records=big)
         assert len(payload["vega_lite_spec"]["data"]["values"]) == _MAX_ROWS
 
     def test_schema_injected(self):
-        spec = {
-            "data": {"values": [{"a": 1}]},
-            "mark": "bar",
-            "encoding": {"x": {"field": "a", "type": "quantitative"}},
-        }
-        payload = build_chart_payload(vega_lite_spec=spec, title="t")
+        payload = generate_chart(vega_lite_spec=_bar_spec(), title="t",
+                                 records=[{"label": "a", "count": 1}])
         assert "$schema" in payload["vega_lite_spec"]
+
+    def test_build_chart_payload_still_caps_direct(self):
+        big = [{"x": i, "count": i} for i in range(_MAX_ROWS + 10)]
+        spec = {"data": {"values": big}, "mark": "bar",
+                "encoding": {"x": {"field": "x", "type": "ordinal"},
+                             "y": {"field": "count", "type": "quantitative"}}}
+        payload = build_chart_payload(vega_lite_spec=spec, title="big")
+        assert len(payload["vega_lite_spec"]["data"]["values"]) == _MAX_ROWS
 
 
 # ---------------------------------------------------------------------------
@@ -418,20 +277,17 @@ class TestRowCap:
 
 
 class TestChartEmissionDiscriminator:
-    def test_true_on_chart_payload(self, tmp_path):
-        arr = np.arange(16, dtype=np.float32).reshape(4, 4)
-        path = _make_raster(tmp_path, arr)
-        payload = generate_histogram(layer_uri=path)
+    def test_true_on_generic_chart(self):
+        payload = generate_chart(vega_lite_spec=_bar_spec(), title="t",
+                                 records=[{"label": "a", "count": 1}])
         assert is_chart_emission_result(payload) is True
 
     def test_false_on_ordinary_results(self):
-        # Ordinary tool dict (e.g. a LayerURI / stats result).
         assert is_chart_emission_result({"layer_type": "raster", "count": 9}) is False
         assert is_chart_emission_result({"envelope_type": "impact-envelope"}) is False
         assert is_chart_emission_result(None) is False
         assert is_chart_emission_result("a string") is False
         assert is_chart_emission_result([1, 2, 3]) is False
-        # chart-emission discriminator but no vega spec -> still False.
         assert is_chart_emission_result(
             {"envelope_type": "chart-emission", "chart_id": "x"}
         ) is False
@@ -443,14 +299,12 @@ class TestChartEmissionDiscriminator:
 
 
 class TestSummarizeChartEmission:
-    def test_spec_stripped_for_chart(self, tmp_path):
+    def test_spec_stripped_for_chart(self):
         from trid3nt_server.agent.adapters.adapter import summarize_tool_result
 
-        records = [{"x": 0.1 * i, "y": 0.1 * i, "v": float(i)} for i in range(30)]
-        path = _make_geojson_points(tmp_path, records)
-        payload = generate_histogram(layer_uri=path, property="v")
-
-        summary = summarize_tool_result("generate_histogram", payload)
+        payload = generate_chart(vega_lite_spec=_bar_spec(), title="t", caption="cap",
+                                 records=[{"label": "a", "count": 1}, {"label": "b", "count": 2}])
+        summary = summarize_tool_result("generate_chart", payload)
 
         assert summary["status"] == "ok"
         res = summary["result"]
@@ -458,27 +312,22 @@ class TestSummarizeChartEmission:
         assert res["chart_id"] == payload["chart_id"]
         assert res["title"] == payload["title"]
         assert res["caption"] == payload["caption"]
-        # The full inline spec must NOT appear in the function_response.
         assert "vega_lite_spec" not in res
         assert "vega_lite_spec" not in json.dumps(summary)
-        # But the row-count IS surfaced (compact metadata).
-        assert res["n_data_rows"] == 10
+        assert res["n_data_rows"] == 2
         assert res["chart_type"] == "bar"
 
     def test_ordinary_dict_preserved(self):
         from trid3nt_server.agent.adapters.adapter import summarize_tool_result
 
-        # spatial_query (the Phase-B analytical fold) returns an ordinary
-        # data dict - it must pass through summarize_tool_result unstripped.
         ordinary = {"columns": ["count"], "rows": [[9]], "row_count": 1, "count": 9}
         summary = summarize_tool_result("spatial_query", ordinary)
         assert summary["status"] == "ok"
-        # Ordinary results keep their content (coerced summary).
         assert summary["result"]["count"] == 9
 
 
 # ---------------------------------------------------------------------------
-# server._maybe_emit_chart — emission + persistence
+# server._maybe_emit_chart -- emission + persistence
 # ---------------------------------------------------------------------------
 
 
@@ -505,13 +354,11 @@ class TestEmitChart:
         from trid3nt_server.server import SessionState
         from trid3nt_contracts import new_ulid
 
-        # job-0259: active_case_id is now a session-scoped property (not a
-        # dataclass field) — set it after construction.
         state = SessionState(session_id=session_id or new_ulid())
         state.active_case_id = case_id
         return state
 
-    async def test_emits_envelope_and_persists(self, tmp_path, monkeypatch):
+    async def test_emits_envelope_and_persists(self, monkeypatch):
         import trid3nt_server.server as server
         from trid3nt_server.persistence import Persistence
         from trid3nt_contracts import new_ulid
@@ -523,40 +370,33 @@ class TestEmitChart:
         case_id = new_ulid()
         turn_id = new_ulid()
         state = await self._make_state(case_id=case_id)
-        # current turn pipeline id used as the stack-grouping key.
         state.current_turn_pipeline_id = turn_id
 
-        arr = np.arange(16, dtype=np.float32).reshape(4, 4)
-        path = _make_raster(tmp_path, arr)
-        payload = generate_histogram(layer_uri=path)
+        payload = generate_chart(vega_lite_spec=_bar_spec(), title="t",
+                                 records=[{"label": "a", "count": 1}])
 
         ws = _FakeWS()
         await server._maybe_emit_chart(ws, state, payload)
 
-        # 1. WS envelope emitted with type=chart-emission and the full payload.
         assert len(ws.sent) == 1
         env = json.loads(ws.sent[0])
         assert env["type"] == "chart-emission"
         assert env["session_id"] == state.session_id
         assert env["payload"]["envelope_type"] == "chart-emission"
         assert "vega_lite_spec" in env["payload"]
-        # created_turn_id stamped from the current turn.
         assert env["payload"]["created_turn_id"] == turn_id
 
-        # 2. Persistence append called: update-one $push to sessions, keyed by
-        #    the active case id.
         assert len(fake_mcp.calls) == 1
         name, args = fake_mcp.calls[0]
         assert name == "update-one"
         assert args["collection"] == "sessions"
         assert args["filter"]["_id"] == case_id
-        assert "$push" in args["update"]
-        assert "charts" in args["update"]["$push"]
+        assert "$push" in args["update"] and "charts" in args["update"]["$push"]
         pushed = args["update"]["$push"]["charts"]
         assert pushed["payload"]["chart_id"] == payload["chart_id"]
         assert pushed["schema_version"] == "v1"
 
-    async def test_persist_keyed_by_session_when_no_case(self, tmp_path, monkeypatch):
+    async def test_persist_keyed_by_session_when_no_case(self, monkeypatch):
         import trid3nt_server.server as server
         from trid3nt_server.persistence import Persistence
 
@@ -565,49 +405,21 @@ class TestEmitChart:
         monkeypatch.setattr(server, "get_persistence", lambda: persistence)
 
         state = await self._make_state(case_id=None)
-        arr = np.arange(16, dtype=np.float32).reshape(4, 4)
-        path = _make_raster(tmp_path, arr)
-        payload = generate_histogram(layer_uri=path)
-
+        payload = generate_chart(vega_lite_spec=_bar_spec(), title="t",
+                                 records=[{"label": "a", "count": 1}])
         ws = _FakeWS()
         await server._maybe_emit_chart(ws, state, payload)
-
         name, args = fake_mcp.calls[0]
         assert args["filter"]["_id"] == state.session_id
 
-    async def test_no_persistence_singleton_is_safe(self, tmp_path, monkeypatch):
-        """When Persistence is unbound, emit still works, persistence skipped."""
+    async def test_no_persistence_singleton_is_safe(self, monkeypatch):
         import trid3nt_server.server as server
 
         monkeypatch.setattr(server, "get_persistence", lambda: None)
         state = await self._make_state()
-        arr = np.arange(16, dtype=np.float32).reshape(4, 4)
-        path = _make_raster(tmp_path, arr)
-        payload = generate_histogram(layer_uri=path)
-
+        payload = generate_chart(vega_lite_spec=_bar_spec(), title="t",
+                                 records=[{"label": "a", "count": 1}])
         ws = _FakeWS()
-        # Must not raise.
-        await server._maybe_emit_chart(ws, state, payload)
-        assert len(ws.sent) == 1
-
-    async def test_persistence_failure_does_not_raise(self, tmp_path, monkeypatch):
-        import trid3nt_server.server as server
-        from trid3nt_server.persistence import Persistence
-
-        class _BrokenMCP:
-            async def call_tool(self, name, arguments=None):
-                raise RuntimeError("mongo down")
-
-        persistence = Persistence(_BrokenMCP())
-        monkeypatch.setattr(server, "get_persistence", lambda: persistence)
-
-        state = await self._make_state()
-        arr = np.arange(16, dtype=np.float32).reshape(4, 4)
-        path = _make_raster(tmp_path, arr)
-        payload = generate_histogram(layer_uri=path)
-
-        ws = _FakeWS()
-        # Persistence failure is swallowed — emission still happened.
         await server._maybe_emit_chart(ws, state, payload)
         assert len(ws.sent) == 1
 
@@ -618,24 +430,15 @@ class TestEmitChart:
 
 
 def test_dispatch_detection_signal(tmp_path):
-    """The server dispatch loop uses is_chart_emission_result as its trigger.
-
-    Confirm a chart tool's result trips it while an ordinary tool result (a
-    spatial_query rows dict - the Phase-B fold of the analytical_qa surface)
-    does not — this is the exact branch condition in _stream_model_reply.
-    """
     from trid3nt_server.agent.tools.processing.spatial_query.spatial_query import spatial_query
 
-    arr = np.arange(16, dtype=np.float32).reshape(4, 4)
-    path = _make_raster(tmp_path, arr)
     records = [{"x": 0.1 * i, "y": 0.1 * i, "v": float(i)} for i in range(4)]
     vec_path = _make_geojson_points(tmp_path, records)
 
-    chart = generate_histogram(layer_uri=path)
-    stats = spatial_query(
-        sql="SELECT count(*) AS n, avg(v) AS mean FROM pts",
-        layer_refs={"pts": vec_path},
-    )
+    chart = generate_chart(vega_lite_spec=_bar_spec(), title="t",
+                           records=[{"label": "a", "count": 1}])
+    stats = spatial_query(sql="SELECT count(*) AS n, avg(v) AS mean FROM pts",
+                          layer_refs={"pts": vec_path})
 
     assert is_chart_emission_result(chart) is True
     assert is_chart_emission_result(stats) is False
@@ -647,30 +450,27 @@ def test_dispatch_detection_signal(tmp_path):
 
 
 class TestRegistration:
-    _TOOLS = (
-        "generate_histogram",
-        "generate_choropleth_legend",
-        "generate_time_series",
-        "generate_damage_distribution",
-    )
-
-    def test_all_in_tool_registry(self):
+    def test_in_tool_registry(self):
         from trid3nt_server.agent.tools import TOOL_REGISTRY
 
-        for name in self._TOOLS:
-            assert name in TOOL_REGISTRY, name
+        assert "generate_chart" in TOOL_REGISTRY
 
     def test_metadata(self):
         from trid3nt_server.agent.tools import TOOL_REGISTRY
 
-        for name in self._TOOLS:
-            m = TOOL_REGISTRY[name].metadata
-            assert m.ttl_class == "dynamic-1h"
-            assert m.source_class == "chart_tools"
-            assert m.read_only_hint is True
+        m = TOOL_REGISTRY["generate_chart"].metadata
+        assert m.ttl_class == "dynamic-1h"
+        assert m.source_class == "chart_tools"
+        assert m.read_only_hint is True
 
     def test_category_membership(self):
         from trid3nt_server.agent.categories import PRIMARY_CATEGORY
 
-        for name in self._TOOLS:
-            assert PRIMARY_CATEGORY[name] == "geographic_primitives"
+        assert PRIMARY_CATEGORY["generate_chart"] == "geographic_primitives"
+
+    def test_culled_chart_tools_absent(self):
+        from trid3nt_server.agent.tools import TOOL_REGISTRY
+
+        for dead in ("generate_histogram", "generate_choropleth_legend",
+                     "generate_time_series", "generate_damage_distribution"):
+            assert dead not in TOOL_REGISTRY

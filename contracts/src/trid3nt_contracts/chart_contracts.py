@@ -4,12 +4,13 @@ _analysis_layer`` + sprint-13 manifest job-0223).
 
 The conversational analysis layer lets a user ask data-backed follow-up
 questions about layers already on the map ("how many structures?", "show me a
-damage distribution") and get an inline chart back. The agent's chart-generation
-tools (job-0230: ``generate_histogram`` / ``generate_choropleth_legend`` /
-``generate_time_series`` / ``generate_damage_distribution``) compute the chart
-data, build a **Vega-Lite v5 JSON spec**, and emit a ``chart-emission`` envelope
-(agent -> client, Appendix A.4 amendment). The client (job-0231) renders the
-spec via ``vega-embed`` as an inline stacked preview and a full-viewport gallery.
+damage distribution") and get an inline chart back. The agent's generic chart
+tool (``generate_chart``, which replaced the fixed-shape generate_histogram /
+generate_choropleth_legend / generate_time_series / generate_damage_distribution
+tools) and the engine postprocessors compute the chart data, build a **Vega-Lite
+v5 JSON spec**, and emit a ``chart-emission`` envelope (agent -> client, Appendix
+A.4 amendment). The client renders the spec via ``vega-embed`` as an inline
+stacked preview and a full-viewport gallery.
 
 Why Vega-Lite as the wire format
 --------------------------------

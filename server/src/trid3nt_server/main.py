@@ -96,11 +96,9 @@ def _import_tools_registry() -> int:
     from .agent.tools.processing.compute_slope import compute_slope  # noqa: F401
     # register compute_aspect (gdaldem aspect; Horn + ZevenbergenThorne; zero_for_flat flag).
     from .agent.tools.processing.compute_aspect import compute_aspect  # noqa: F401
-    # register compute_zonal_statistics (hazard-analysis primitive; raster + vector zone).
-    from .agent.tools.processing.compute_zonal_statistics import compute_zonal_statistics  # noqa: F401
-    # register clip_raster_to_bbox (gdal_translate / gdalwarp bbox clip; gs:// or local).
-    from .agent.tools.processing.clip_raster_to_bbox import clip_raster_to_bbox  # noqa: F401
-    # register clip_raster_to_polygon (rasterio.mask; arbitrary polygon clip; gs:// or local).
+    # register clip_raster_to_polygon (rasterio.mask; polygon OR bbox clip; folded
+    # in clip_raster_to_bbox). compute_zonal_statistics demoted to the code_exec
+    # playground (docs/playbooks/zonal-statistics-recipe.md).
     from .agent.tools.processing.clip_raster_to_polygon import clip_raster_to_polygon  # noqa: F401
     # register fetch_administrative_boundaries (TIGER/Line 2024; state/county/place/zcta).
     from .agent.tools.fetchers.socioeconomic.fetch_administrative_boundaries import fetch_administrative_boundaries  # noqa: F401
@@ -120,8 +118,9 @@ def _import_tools_registry() -> int:
     from .agent.tools.fetchers.weather.fetch_nws_event import fetch_nws_event  # noqa: F401
     # register fetch_nws_alerts_conus (CONUS-wide companion to fetch_nws_event).
     from .agent.tools.fetchers.weather.fetch_nws_alerts_conus import fetch_nws_alerts_conus  # noqa: F401
-    # register aggregate_claims_across_sources (cross-source FR-HEP claim aggregator).
-    from .agent.tools.processing.aggregate_claims_across_sources import aggregate_claims_across_sources  # noqa: F401
+    # aggregate_claims_across_sources DEMOTED to an importable library (no longer
+    # an LLM-facing tool); model_groundwater imports its private extractors. News
+    # ingest re-homes onto web_fetch / fetch_nws_event / fetch_storm_events_db.
     # register compute_impervious_surface (NLCD impervious-fraction raster).
     from .agent.tools.processing.compute_impervious_surface import compute_impervious_surface  # noqa: F401
     # register extract_landcover_class (NLCD binary-mask extractor for zone_input).

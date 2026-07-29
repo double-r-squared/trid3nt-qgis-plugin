@@ -4,3 +4,4 @@ fetch_nws_event:
 - what hurricane warnings are currently in effect for the Gulf Coast?
 - give me active NWS alerts for Harris County, TX
 - show me winter storm warnings in Colorado today
+- ingest the active NWS alert areas for this event so we can derive its location and scale for review

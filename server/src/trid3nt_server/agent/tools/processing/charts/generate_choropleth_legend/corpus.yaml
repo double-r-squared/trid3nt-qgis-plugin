@@ -1,9 +1,0 @@
-generate_choropleth_legend:
-- summarize the choropleth classes behind this styled layer
-- how many features fall in each quantile class of this map
-- show me the legend distribution for the population density choropleth
-- give me a class-break breakdown of the values driving the color ramp
-- chart how the features split across the five color classes on this layer
-- what value ranges hold how much of the data in this choropleth
-- break this vector layer into quantile classes and count features per class
-- i want the legend bar chart that matches the choropleth coloring

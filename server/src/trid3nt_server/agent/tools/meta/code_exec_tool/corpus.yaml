@@ -7,6 +7,19 @@ code_exec_request:
 - calculate a weird derived metric from the features in this vector layer programmatically
 - do some custom number-crunching on the on-map layers in a sandbox
 - compute the correlation between elevation and damage for the pixels in this AOI with python
+# processing-wave cull (2026-07-29): zonal-statistics phrasings re-homed from the
+# DEMOTED compute_zonal_statistics (raster-values-within-zones reproduces exactly
+# in the playground; docs/playbooks/zonal-statistics-recipe.md).
+- compute the mean flood depth within each census tract from the actual pixels
+- how much forest area burned in each county in this fire
+- I need the average wind speed within the damage footprint polygon
+- what fraction of developed land is in the flood zone
+- which farm fields does the contamination plume reach
+- tell me which agricultural fields the groundwater plume affects and how badly
+- rank the affected farm fields by peak concentration in this contaminant plume
+- intersect the plume with the field boundaries and show the worst-hit fields
+- how many fields does the contaminant reach above the detection threshold
+- aggregate this raster's values within each zone polygon and summarize per zone
 # cull pass 2 (2026-07-27): coastal-wave nomograph + overtopping phrasings re-homed
 # from compute_wave_nomograph / compute_overtopping (cut on live replication proof;
 # the SPM-1984 fetch-growth and EurOtop-2018 overtopping equations reproduce exactly

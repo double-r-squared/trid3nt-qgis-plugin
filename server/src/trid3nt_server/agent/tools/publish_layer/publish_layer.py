@@ -2001,7 +2001,7 @@ def publish_layer(
         most common input), ``compute_hillshade`` / ``compute_colored_relief``
         / ``compute_slope`` / ``compute_aspect`` / ``compute_impervious_surface``
         (any raster ``LayerURI``), ``clip_raster_to_polygon`` /
-        ``clip_raster_to_bbox`` (clipped rasters for extent-scoped display).
+        ``clip_raster_to_polygon`` (clipped rasters for extent-scoped display).
         Downstream: QGIS plugin layer panel (loads the returned ``s3://``
         COG URI via GDAL ``/vsicurl/``); ``sfincs_flood`` calls this as the
         final step.

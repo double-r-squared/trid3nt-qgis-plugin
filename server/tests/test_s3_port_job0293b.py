@@ -13,7 +13,7 @@ seam (boto3-shaped; no network, no moto) + temp files:
    the finally-block unlink.
 3. postprocess_pelicun._download_uri_to_local + the async tool's was_remote
    unlink for an s3 damage layer.
-4. clip_raster_to_bbox._get_source_crs / clip_raster_to_polygon._get_source_crs
+4. clip_raster_to_polygon._get_source_crs
    — /vsis3/ header-read branch (mirrors /vsigs/ style).
 5. clip_vector_to_polygon._resolve_layer_to_local_path — (path, is_temp)
    tuple shape for s3 + typed ClipVectorError wrap.
@@ -355,25 +355,6 @@ def _tiny_tif_bytes(crs="EPSG:32613"):
                      crs=crs, transform=from_origin(0, 4, 1, 1)) as ds:
             ds.write(np.zeros((1, 4, 4), dtype="uint8"))
         return mf.read()
-
-
-def test_clip_raster_to_bbox_get_source_crs_s3_stages_via_boto3(monkeypatch):
-    # job-0293c: /vsis3/ creds don't resolve on the EC2 role in this env —
-    # the s3 branch must stage bytes via the shared boto3 reader.
-    from trid3nt_server.agent.tools import cache as cache_mod
-    from trid3nt_server.agent.tools.processing.clip_raster_to_bbox.clip_raster_to_bbox import _get_source_crs
-
-    calls: list[str] = []
-    data = _tiny_tif_bytes()
-
-    def fake_read(uri):
-        calls.append(uri)
-        return data
-
-    monkeypatch.setattr(cache_mod, "read_object_bytes_s3", fake_read)
-    crs = _get_source_crs("s3://bkt/dem/boulder.tif")
-    assert str(crs) == "EPSG:32613"
-    assert calls == ["s3://bkt/dem/boulder.tif"]
 
 
 def test_clip_raster_to_polygon_get_source_crs_s3_stages_via_boto3(monkeypatch):

@@ -1029,7 +1029,7 @@ async def test_emit_tool_call_ok_dict_marks_card_complete(
     status/anchor still completes (green). No false-positive failures."""
     ok = {"status": "ok", "value": 42, "rows": [1, 2, 3]}
     await emitter.emit_tool_call(
-        name="Zonal stats", tool_name="compute_zonal_statistics", invoke=lambda: ok
+        name="Hillshade", tool_name="compute_hillshade", invoke=lambda: ok
     )
     last = _pipeline_frames(sink)[-1]
     assert last["payload"]["steps"][0]["state"] == "complete"

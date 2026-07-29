@@ -6,8 +6,9 @@ error, layer staging/read helpers, and the engine-facing ``build_*_chart``
 builders (hazard curve / UHS / budget partition / head decline / subsidence /
 depletion / pollutograph / reach profile / saltwater wedge / head series).
 
-The four registered ``generate_*`` chart tools live in sibling one-tool
-modules; this module registers nothing.
+The generic ``generate_chart`` tool (the ONE registered chart tool, which
+replaced the four fixed-shape ``generate_*`` tools) lives in a sibling module;
+this module registers nothing.
 """
 
 from __future__ import annotations

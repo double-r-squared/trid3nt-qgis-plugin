@@ -504,11 +504,9 @@ PRIMARY_CATEGORY: dict[str, str] = {
     # ---- 11. geographic_primitives ----------------------------------------
     "geocode_location": "geographic_primitives",
     "fetch_administrative_boundaries": "geographic_primitives",
-    "clip_raster_to_bbox": "geographic_primitives",
     "clip_raster_to_polygon": "geographic_primitives",
-    "compute_zonal_statistics": "geographic_primitives",
     # compute_model_residuals: an analysis primitive over an existing raster +
-    # an existing/fetched vector layer -- same lane as compute_zonal_statistics
+    # an existing/fetched vector layer -- same lane as the other raster-plus-vector
     # (its closest sibling: raster-plus-vector -> aggregate result). Cross-
     # listed to hazard_modeling below (its primary use is MODFLOW head
     # calibration against observed wells).
@@ -533,12 +531,11 @@ PRIMARY_CATEGORY: dict[str, str] = {
     # count_features_above_threshold / aggregate_property_within_zone) - same
     # lane, same conversational-analysis surface.
     "spatial_query": "geographic_primitives",
-    # chart-generation tools - visual companions
-    # to the analytical Q&A tools above (conversational data-analysis layer).
-    "generate_histogram": "geographic_primitives",
-    "generate_choropleth_legend": "geographic_primitives",
-    "generate_time_series": "geographic_primitives",
-    "generate_damage_distribution": "geographic_primitives",
+    # generate_chart - the ONE generic interactive Vega-Lite chart primitive
+    # (histogram / time-series / damage-state / choropleth-legend / scatter /
+    # heatmap; shape = caller's spec). Visual companion to the analytical Q&A
+    # tools above (conversational data-analysis layer).
+    "generate_chart": "geographic_primitives",
     # cross-section / profile tool - the distance-along-a-line chart companion
     # to the time-series / histogram charts above (samples raster value(s) at N
     # stations along a drawn-or-derived line; multi-layer overlay). Filed in the
@@ -572,9 +569,12 @@ PRIMARY_CATEGORY: dict[str, str] = {
     "qgis_process": "geographic_primitives",
     "search_spatial_functions": "geographic_primitives",
     # ---- 12. news_events --------------------------------------------------
+    # aggregate_claims_across_sources DEMOTED to an importable library (no longer
+    # an LLM-facing tool); its news-ingest role re-homes onto web_fetch +
+    # fetch_storm_events_db + fetch_nws_event (cross-listed here via
+    # SECONDARY_CATEGORIES) and the frame-animation-recipe news section.
     "web_fetch": "news_events",
     "fetch_storm_events_db": "news_events",
-    "aggregate_claims_across_sources": "news_events",
     # a+b+c batch (2026-06-27)
     "digitize_water_body": "land_cover_development",
     "fetch_usgs_earthquakes": "hazard_modeling",
@@ -642,6 +642,10 @@ SECONDARY_CATEGORIES: dict[str, tuple[str, ...]] = {
     # NOAA SLR marsh-migration is a coastal product (primary) that materially
     # belongs to conservation/ecology too (it projects wetland habitat transition).
     "fetch_noaa_slr_marsh": ("conservation_ecology",),
+    # An NWS active alert/event is PRIMARY weather_atmosphere but materially
+    # belongs to news_events too: it is a canonical "what event is happening"
+    # ingest source the demoted aggregate_claims news role re-homes onto.
+    "fetch_nws_event": ("news_events",),
     # engine-door refactor (PELICUN slice): the DOOR carries the secondary
     # damage_assessment membership; its templates are pool-EXCLUDED (no membership).
     "run_pelicun": ("damage_assessment",),
@@ -860,9 +864,12 @@ HOT_SET_TOOLS: frozenset[str] = frozenset(
         # for at any point ("what's the population below 3m / chart it"), so they
         # belong in the floor like compute_layer_bounds above.
         "publish_layer",
-        "compute_zonal_statistics",
-        "generate_histogram",
-        "generate_time_series",
+        # generate_chart is the "chart it" floor slot (the ONE interactive-chart
+        # primitive; replaced the fixed-shape generate_histogram/time_series
+        # slots). Raster-zonal "how much within a zone" now routes to
+        # spatial_query + code_exec_request (both in the floor), so the former
+        # compute_zonal_statistics floor slot is retired with the tool.
+        "generate_chart",
         # DuckDB spatial-query fold (Phase B): spatial_query IS the layer-
         # analysis floor slot summarize_layer_statistics held (the folded SQL
         # surface answers the same "question about a layer" asks and more).

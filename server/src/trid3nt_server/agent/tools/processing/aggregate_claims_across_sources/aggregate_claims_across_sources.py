@@ -1,21 +1,25 @@
-"""``aggregate_claims_across_sources`` atomic tool - cross-source claim aggregation.
+"""``aggregate_claims_across_sources`` - cross-source claim aggregation LIBRARY.
 
-This tool sits at the centre of the FR-HEP news/event-ingest pipeline (FR-HEP-6):
-the agent fetches multiple news articles, agency pages, or similar texts about the
-same event via ``web_fetch``/``search_news``/``fetch_news_article``, then hands the
-``{url, text, fetched_at}`` triples to this aggregator together with the list of
-``claim_targets`` to extract. The tool runs deterministic regex-based extraction
-per target, groups identical values, and scores each candidate by the number of
-sources backing it. The best-supported value per target is returned as the
-``value`` + ``confidence`` + ``supporting_sources``; competing values land in
+DEMOTED from an LLM-facing tool to an importable library (processing-wave cull,
+docs/decisions/0043): it is no longer registered. The news/event-ingest role it
+played re-homes onto the retained ``web_fetch`` / ``fetch_nws_event`` /
+``fetch_storm_events_db`` fetchers plus the review-flow in
+``docs/playbooks/frame-animation-recipe.md`` (Recipe C). The module survives
+because ``model_groundwater_contamination_scenario`` imports its private
+extractors (``_extract_contaminants`` / ``_extract_locations`` /
+``_extract_scale``) as a curated deterministic-extraction library.
+
+The aggregator reconciles multiple pre-fetched texts about the same event: hand
+it ``{url, text, fetched_at}`` triples plus the list of ``claim_targets`` to
+extract, and it runs deterministic regex-based extraction per target, groups
+identical values, and scores each candidate by the number of sources backing
+it. The best-supported value per target is returned as the ``value`` +
+``confidence`` + ``supporting_sources``; competing values land in
 ``alternatives``.
 
-v0.1 deterministic-only strategy (no LLM call):
-
-This tool is REGISTERED ``cacheable=False`` / ``ttl_class="live-no-cache"``: each
-call's output is a function of the (possibly fresh) ``sources`` list passed in
-and cannot be reused across different source lists. The tool body itself does
-NOT touch GCS or the cache shim.
+v0.1 deterministic-only strategy (no LLM call): each call's output is a pure
+function of the ``sources`` list passed in. The body does NOT touch GCS or the
+cache shim.
 
 Per the audit (audit.md), v0.1 uses deterministic regex + keyword
 extraction for "date" / "scale" / "casualties" and naive title-case sweeps for
@@ -52,10 +56,6 @@ import re
 from collections import Counter, defaultdict
 from datetime import datetime
 from typing import Any
-
-from trid3nt_contracts.tool_registry import AtomicToolMetadata
-
-from trid3nt_server.agent.tools import register_tool
 
 __all__ = [
     "aggregate_claims_across_sources",
@@ -582,14 +582,6 @@ def _validate_targets(claim_targets: Any) -> list[str]:
 # ---------------------------------------------------------------------------
 
 
-_AGG_METADATA = AtomicToolMetadata(
-    name="aggregate_claims_across_sources",
-    ttl_class="live-no-cache",
-    source_class="claim_aggregator",
-    cacheable=False,
-)
-
-
 _EXTRACTORS = {
     "date": _extract_dates,
     "scale": _extract_scale,
@@ -599,19 +591,10 @@ _EXTRACTORS = {
 }
 
 
-@register_tool(
-    _AGG_METADATA,
-    # Annotations: readOnlyHint=True (pure in-memory computation; no GCS or DB
-    # writes), openWorldHint=False (processes caller-supplied source texts;
-    # no external API calls in this tool body), destructiveHint=False,
-    # idempotentHint=True (deterministic regex extraction; same inputs → same output).
-)
 def aggregate_claims_across_sources(
     sources: list[dict[str, Any]],
     claim_targets: list[str],
     confidence_threshold: float = 0.6,
-    # absorb LLM-invented kwargs (centralized at server.py via
-    # tool_arg_normalizer, but kept as belt-and-suspenders).
     **_extra_ignored: Any,
 ) -> dict[str, Any]:
     """Merge multiple pre-fetched text sources into one best-supported claim per target.

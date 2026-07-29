@@ -50,8 +50,9 @@ How it works:
    honestly to the tabular dict with a note in ``summary``.
 
 Rasters are OUT OF SCOPE for v1: a raster ref raises a typed error naming
-``compute_zonal_statistics`` and the ``code_exec_request`` Python playground
-as the alternatives (analysis-is-playground norm).
+the ``code_exec_request`` Python playground (rasterio/numpy zonal statistics,
+docs/playbooks/zonal-statistics-recipe.md) as the alternative
+(analysis-is-playground norm).
 
 Determinism (Invariant 1): pure DuckDB over already-fetched artifacts, no LLM
 calls. Caching: ``ttl_class="live-no-cache"`` - the query is CPU-cheap and
@@ -384,9 +385,9 @@ def _attach_layer_views(
             raise SpatialQueryError(
                 "RASTER_UNSUPPORTED",
                 f"layer_refs[{alias!r}] -> {uri!r} is a RASTER; spatial_query "
-                "v1 queries VECTOR layers only. For raster statistics use "
-                "compute_zonal_statistics, or the code_exec_request Python "
-                "playground (rasterio/numpy) for ad-hoc raster analysis.",
+                "v1 queries VECTOR layers only. For raster statistics (values "
+                "within a zone) use the code_exec_request Python playground "
+                "(rasterio/numpy; docs/playbooks/zonal-statistics-recipe.md).",
             )
         if uri.startswith("s3://"):
             if httpfs_ready is None:
@@ -762,10 +763,10 @@ def spatial_query(
     between two points") to get the exact function name + signature; (3)
     compose the SQL and call this tool.
 
-    Do NOT use for: rasters (v1 is vector-only - use compute_zonal_statistics
-    or the code_exec_request playground); rendering an EXISTING layer
-    (publish_layer); charts (generate_histogram / generate_time_series);
-    looking up a DuckDB spatial function by name (use
+    Do NOT use for: rasters (v1 is vector-only - use the code_exec_request
+    playground for raster zonal statistics); rendering an EXISTING layer
+    (publish_layer); charts (generate_chart); looking up a DuckDB spatial
+    function by name (use
     ``search_spatial_functions``, not this docstring).
 
     Params:

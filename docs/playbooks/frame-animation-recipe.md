@@ -93,17 +93,24 @@ before dispatching any solver (Invariant 9 across turns).
    article URLs; `fetch_nws_event(area)` for an NWS state/county; and
    `fetch_storm_events_db(year, state)` for a Storm-Events entry. Extract the
    text for each (title + body for URLs; layer name for the structured sources).
-2. `aggregate_claims_across_sources(sources=[{"url","text","fetched_at"}, ...],
+2. Reconcile the fetched texts into best-supported claims IN THE PLAYGROUND
+   (`code_exec_request`): `aggregate_claims_across_sources` is now an importable
+   LIBRARY (deregistered as an LLM tool in the processing-wave cull -- see
+   docs/decisions/0043), so call it from the sandbox:
+   `from trid3nt_server.agent.tools.processing.aggregate_claims_across_sources.aggregate_claims_across_sources import aggregate_claims_across_sources`
+   then `aggregate_claims_across_sources(sources=[{"url","text","fetched_at"}, ...],
    claim_targets=["location","date","scale","contaminant","casualties"])` ->
    best-supported value per target with source-agreement confidence + provenance.
+   (Its private `_extract_contaminants` / `_extract_locations` / `_extract_scale`
+   helpers are also directly importable for single-target extraction.)
 3. `geocode_location(derived_location_value)` -> bbox for the review card.
 4. Narrate the derived params + provenance + confidence and STOP; only after the
    user approves does a downstream solver (e.g. the `run_modflow` door) run.
 
 Live replication (2026-07-29) fired exactly
-`web_fetch` + `fetch_nws_event` + `fetch_storm_events_db` ->
-`aggregate_claims_across_sources` -> `geocode_location` and produced the same
-derived-param + geocoded-bbox envelope.
+`web_fetch` + `fetch_nws_event` + `fetch_storm_events_db` -> `code_exec_request`
+(importing the `aggregate_claims_across_sources` library) -> `geocode_location`
+and produced the same derived-param + geocoded-bbox envelope.
 
 ## Recipe D -- GLM lightning animation (replaces run_model_glm_lightning_animation)
 

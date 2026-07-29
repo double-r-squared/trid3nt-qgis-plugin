@@ -1,9 +1,0 @@
-generate_histogram:
-- show me a histogram of the flood depths in this layer
-- what does the damage-ratio distribution look like, chart it
-- histogram the population density raster
-- give me the distribution of cell values for this elevation grid
-- plot a frequency distribution of the discharge attribute on these features
-- bin the values of this raster and show me the counts as bars
-- i want to see the spread of the water-depth values across the AOI
-- chart the distribution of a numeric column on this vector layer

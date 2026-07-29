@@ -273,7 +273,7 @@ def test_terminal_raster_products_default_auto_publish_true() -> None:
         "compute_slope",
         "compute_aspect",
         "compute_colored_relief",
-        "clip_raster_to_bbox",
+        "clip_raster_to_polygon",
     ):
         entry = agent_tools.TOOL_REGISTRY.get(name)
         if entry is None:

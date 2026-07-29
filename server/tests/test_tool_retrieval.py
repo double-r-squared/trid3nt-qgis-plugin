@@ -51,9 +51,10 @@ def _allowed(opened=None, dispatched=None, explicit=None) -> AllowedToolSet:
 def test_step0_hot_set_floor_extended():
     for name in (
         "publish_layer",
-        "compute_zonal_statistics",
-        "generate_histogram",
-        "generate_time_series",
+        # processing-wave cull (2026-07-29): generate_chart is the ONE
+        # interactive-chart floor slot (replaced generate_histogram /
+        # generate_time_series); compute_zonal_statistics demoted to code_exec.
+        "generate_chart",
         # DuckDB spatial-query fold (Phase B): spatial_query holds the
         # layer-analysis floor slot summarize_layer_statistics held.
         "spatial_query",

@@ -162,9 +162,9 @@ def test_dispatched_tool_stays_allowed_on_subsequent_turns() -> None:
     stays in the allowed set for later turns (monotonic growth)."""
     allowed = AllowedToolSet()
     # job-0270: the first call auto-widens (real registry tool)...
-    assert validate_function_call("compute_zonal_statistics", allowed) is None
+    assert validate_function_call("compute_hillshade", allowed) is None
     # ...and the server records the dispatch on success.
-    allowed.record_dispatch("compute_zonal_statistics")
+    allowed.record_dispatch("compute_hillshade")
     # Subsequent turns keep passing; the set never shrinks.
-    assert validate_function_call("compute_zonal_statistics", allowed) is None
-    assert "compute_zonal_statistics" in allowed.as_frozenset()
+    assert validate_function_call("compute_hillshade", allowed) is None
+    assert "compute_hillshade" in allowed.as_frozenset()

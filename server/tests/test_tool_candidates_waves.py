@@ -55,14 +55,14 @@ def _cards(sock: _FakeSocket) -> list[dict]:
 # remaining stage) acquisition -> preprocessing -> analysis -> visualization.
 _PIPELINE = [
     ("fetch_dem", 0.050),
-    ("clip_raster_to_bbox", 0.040),
+    ("clip_raster_to_polygon", 0.040),
     ("compute_slope", 0.030),
     ("publish_layer", 0.020),
 ]
 
 _SCRIPT = [
     {"text": "fetching", "tool_call": {"name": "fetch_dem", "args": {}}},
-    {"text": "clipping", "tool_call": {"name": "clip_raster_to_bbox", "args": {}}},
+    {"text": "clipping", "tool_call": {"name": "clip_raster_to_polygon", "args": {}}},
     {"text": "analyzing", "tool_call": {"name": "compute_slope", "args": {}}},
     {"text": "done."},
 ]
@@ -144,8 +144,8 @@ async def test_auto_mode_emits_no_per_round_waves(monkeypatch):
 
 def test_stage_label_from_candidate_categories_plurality():
     slc = agent_server._stage_label_for_candidates
-    assert slc([("fetch_dem", 1.0), ("fetch_landcover", 0.9), ("clip_raster_to_bbox", 0.8)]) == "acquisition"
-    assert slc([("clip_raster_to_bbox", 1.0), ("cut_features_with_polygon", 0.9), ("compute_slope", 0.8)]) == "preprocessing"
+    assert slc([("fetch_dem", 1.0), ("fetch_landcover", 0.9), ("clip_raster_to_polygon", 0.8)]) == "acquisition"
+    assert slc([("clip_raster_to_polygon", 1.0), ("cut_features_with_polygon", 0.9), ("compute_slope", 0.8)]) == "preprocessing"
     assert slc([("compute_slope", 1.0), ("run_swmm", 0.9), ("code_exec_request", 0.8)]) == "analysis"
     assert slc([("publish_layer", 1.0), ("generate_chart", 0.9), ("open_case_in_qgis", 0.8)]) == "visualization"
 
@@ -154,7 +154,7 @@ def test_stage_label_ties_break_to_earliest_stage():
     slc = agent_server._stage_label_for_candidates
     # one per stage -> tie -> earliest pipeline stage wins.
     assert slc(
-        [("fetch_dem", 1.0), ("clip_raster_to_bbox", 0.9), ("compute_slope", 0.8), ("publish_layer", 0.7)]
+        [("fetch_dem", 1.0), ("clip_raster_to_polygon", 0.9), ("compute_slope", 0.8), ("publish_layer", 0.7)]
     ) == "acquisition"
 
 

@@ -69,9 +69,9 @@ def test_dispatch_is_cumulative() -> None:
     allowed = AllowedToolSet()
     allowed.record_dispatch("compute_hillshade")
     allowed.record_dispatch("fetch_landcover")
-    allowed.record_dispatch("compute_zonal_statistics")
+    allowed.record_dispatch("clip_raster_to_polygon")
     snapshot = allowed.as_frozenset()
-    assert {"compute_hillshade", "fetch_landcover", "compute_zonal_statistics"}.issubset(
+    assert {"compute_hillshade", "fetch_landcover", "clip_raster_to_polygon"}.issubset(
         snapshot
     )
     # Hot set still present.

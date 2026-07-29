@@ -13,9 +13,10 @@ playground), the composer is CUT:
 
 - the plume half IS the `modflow_contaminant_plume` template (single OR multi
   species), and
-- the zonal field-scoring half is the registered `analyze_affected_fields`
-  primitive (or `compute_zonal_statistics` for a generic raster-over-polygon
-  summary).
+- the zonal field-scoring half is a raster-over-polygon zonal pass composed in
+  the playground (the generic pattern lives in
+  docs/playbooks/zonal-statistics-recipe.md; both `analyze_affected_fields` and
+  `compute_zonal_statistics` were culled to the playground).
 
 The model composes them in `code_exec_request` (the python playground), which is
 flexible + auditable and needs no bespoke composer.
@@ -31,26 +32,39 @@ flexible + auditable and needs no bespoke composer.
    (FTW / fiboa FlatGeobuf; each feature carries `crop_name`). Take its
    `LayerURI.uri`.
 
-3. In the python playground (`code_exec_request`), call the registered
-   `analyze_affected_fields(plume_layer_uri=<plumes[0].uri>,
-   fields_layer_uri=<fields uri>, threshold_mgl=<optional>, rank_by="peak")`.
-   It returns the ranked affected fields (`field_id`, `crop_name`,
-   `max_concentration_mgl`, `mean_concentration_mgl`, `area_km2`) plus the
-   `worst_field` + a `headline`. For a generic raster-over-polygon summary with
-   no plume semantics, call `compute_zonal_statistics` directly instead.
+3. In the python playground (`code_exec_request`), stage the plume COG + the
+   fields vector as `layer_refs` and rasterize each field polygon over the plume
+   to score it (the per-zone stats pattern in
+   docs/playbooks/zonal-statistics-recipe.md). Rank the fields by peak (or mean)
+   concentration and keep the crop name.
 
 ### Sketch
 
 ```python
 # after: door -> modflow_contaminant_plume returned `plume_result`
-plume_uri = plume_result["plumes"][0]["uri"]
-fields = fetch_field_boundaries(bbox=aoi_bbox)          # or a place clip
-affected = analyze_affected_fields(
-    plume_layer_uri=plume_uri,
-    fields_layer_uri=fields["uri"],
-    rank_by="peak",
-)
-# affected["affected_fields"] is the ranked readout; affected["worst_field"] the headline
+# staged as layer_refs={"plume": plumes[0]["uri"], "fields": fields["uri"]}
+import numpy as np
+from rasterio.features import rasterize
+
+src, gdf = plume, fields
+if src.crs is None or gdf.crs is None:
+    raise ValueError("CRS_MISMATCH: plume or fields CRS missing")
+if gdf.crs != src.crs:
+    gdf = gdf.to_crs(src.crs)
+conc = src.read(1).astype("float64")
+nod = src.nodata
+valid = ~np.isnan(conc) if nod is None else ((conc != nod) & ~np.isnan(conc))
+
+scored = []
+for _, row in gdf.iterrows():
+    burned = rasterize([(row.geometry, 1)], out_shape=conc.shape,
+                       transform=src.transform, fill=0, dtype="uint8")
+    px = conc[(burned == 1) & valid]
+    if px.size:
+        scored.append({"crop_name": row.get("crop_name"),
+                       "max_mgl": float(px.max()), "mean_mgl": float(px.mean())})
+scored.sort(key=lambda f: f["max_mgl"], reverse=True)
+result = {"affected_fields": scored, "worst_field": scored[0] if scored else None}
 ```
 
 ## Honesty notes

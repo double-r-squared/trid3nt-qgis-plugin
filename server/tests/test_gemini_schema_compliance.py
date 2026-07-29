@@ -322,9 +322,8 @@ def test_build_tool_declarations_covers_all_registry_tools() -> None:
 # ---------------------------------------------------------------------------
 
 _KNOWN_PROBLEMATIC_TOOLS = [
-    "compute_zonal_statistics",   # job-0163: _storage_client typeless schema
-    "compute_hillshade",          # job-0163: same class
-    "clip_raster_to_bbox",        # B11: tuple[float,4] + -> LayerURI return
+    "compute_hillshade",          # job-0163: _storage_client typeless schema
+    "clip_raster_to_polygon",     # B11: tuple[float,4] bbox + -> LayerURI return
     "fetch_mrms_qpe",             # B11: bbox: tuple[float,4] | None
     "fetch_nws_event",            # B11: area: str | tuple[...]
     "fetch_gbif_occurrences",     # B11: year_range: tuple[int,int] | None

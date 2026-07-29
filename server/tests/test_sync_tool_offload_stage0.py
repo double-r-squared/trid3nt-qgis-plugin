@@ -40,7 +40,7 @@ def test_should_offload_modes(monkeypatch: pytest.MonkeyPatch) -> None:
     # Subset -> the compute_*/clip_* families (plus the always-set).
     monkeypatch.setattr(server, "_SYNC_OFFLOAD_MODE", "subset")
     assert server._should_offload_sync_tool("compute_slope") is True
-    assert server._should_offload_sync_tool("clip_raster_to_bbox") is True
+    assert server._should_offload_sync_tool("clip_raster_to_polygon") is True
     assert server._should_offload_sync_tool("geocode_location") is False
     assert server._should_offload_sync_tool("sfincs_flood") is False
 

@@ -8609,7 +8609,7 @@ def _ensure_emitter(websocket: ServerConnection, state: SessionState) -> None:
         # task-198: composer-side chart persistence goes through the SAME
         # _persist_chart_record the tool-result chart path uses, so a
         # composer-emitted chart replays on Case rehydration exactly like a
-        # generate_histogram chart. Best-effort inside _persist_chart_record.
+        # generate_chart chart. Best-effort inside _persist_chart_record.
         await _persist_chart_record(state, payload)
 
     async def _tool_card_persist(**kwargs: Any) -> None:
@@ -11194,10 +11194,9 @@ async def _maybe_emit_chart(
 ) -> None:
     """Emit a ``chart-emission`` WS envelope + persist the chart.
 
-    Called when a chart-generation tool (``generate_histogram`` /
-    ``generate_choropleth_legend`` / ``generate_time_series`` /
-    ``generate_damage_distribution``) returns a ChartEmissionPayload-shaped
-    dict (``is_chart_emission_result(result)`` is True). Fires IN ADDITION to
+    Called when the generic chart tool (``generate_chart``) or an engine
+    postprocessor returns a ChartEmissionPayload-shaped dict
+    (``is_chart_emission_result(result)`` is True). Fires IN ADDITION to
     the standard ``function_response``:
 
     - ``chart-emission`` -> the FULL Vega-Lite spec for the client to render

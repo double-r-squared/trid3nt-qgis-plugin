@@ -730,7 +730,7 @@ def _stage_uri_to_local(uri: str) -> str | None:
 
 def _gdal_bin(name: str) -> str | None:
     """Resolve a GDAL CLI binary (gdalbuildvrt / gdalwarp), honouring the same
-    env overrides clip_raster_to_bbox uses. Returns None if not found."""
+    env overrides the gdal helpers use. Returns None if not found."""
     import shutil
 
     env_key = {
@@ -740,7 +740,7 @@ def _gdal_bin(name: str) -> str | None:
     candidate = (env_key and os.environ.get(env_key)) or shutil.which(name)
     if candidate:
         return candidate
-    # conda grace2 env fallback (same as clip_raster_to_bbox).
+    # conda grace2 env fallback.
     home = os.path.expanduser("~")
     conda = os.path.join(home, "miniforge3", "envs", "grace2", "bin", name)
     if os.path.isfile(conda):

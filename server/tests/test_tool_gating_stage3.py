@@ -143,7 +143,10 @@ def test_gate_keeps_topk_plus_meta_floor():
 
 def test_gate_always_includes_used_tools():
     ranked = _ranked(24)
-    used = {"fetch_usgs_earthquakes", "compute_ndvi"}
+    # Pick used tools alphabetically far beyond the _ranked window (sorted
+    # names [:24] are compute_*-range), so registry adds/culls that shift the
+    # window never re-break the not-in-top-k precondition below.
+    used = {"fetch_usgs_earthquakes", "publish_layer"}
     assert used <= set(TOOL_REGISTRY)
     assert not (used & {n for n, _ in ranked[:24]})  # not already in top-k
     gated = gate_tool_registry(

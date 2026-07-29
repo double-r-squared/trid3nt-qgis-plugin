@@ -1,9 +1,0 @@
-generate_time_series:
-- plot how the discharge changes over time for this gauge layer
-- show me the precipitation time series for this AOI
-- chart the trend of water levels across the timesteps
-- give me a line chart of value vs time for this multiband raster
-- graph the per-band mean over the hours for this HRRR layer
-- make a line graph of this temporal layer's value through time
-- how does this layer evolve over time, plot it as a curve
-- show the time series of stage from this observed-gauge layer

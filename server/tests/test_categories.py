@@ -256,15 +256,17 @@ def test_hot_set_has_sixteen_tools() -> None:
     allowed-set validator)
     + the tool-retrieval STEP 0 floor (NATE 2026-06-23): publish_layer (survives
     today ONLY via validate_function_call's auto-widen — a latent gap once the
-    catalog is trimmed) + the core analysis surface compute_zonal_statistics /
-    generate_histogram / generate_time_series / spatial_query (the DuckDB
-    spatial-query fold's SQL surface, holding the floor slot the folded
-    summarize_layer_statistics held).
+    catalog is trimmed) + the core analysis surface generate_chart (the ONE
+    interactive-chart primitive) / spatial_query (the DuckDB spatial-query fold's
+    SQL surface, holding the floor slot the folded summarize_layer_statistics
+    held).
 
-    cull pass 2 (2026-07-27): run_model_flood_habitat_scenario was CUT (its
-    flood+habitat recipe re-homes to sfincs_flood + spatial tools), dropping
-    the hot set from 17 to 16."""
-    assert len(HOT_SET_TOOLS) == 16
+    processing-wave cull (2026-07-29): compute_zonal_statistics demoted to the
+    code_exec playground (its floor slot retired -> spatial_query +
+    code_exec_request), and the fixed-shape generate_histogram / generate_time_series
+    floor slots collapsed into ONE generate_chart slot, dropping the hot set from
+    16 to 14."""
+    assert len(HOT_SET_TOOLS) == 14
 
 
 def test_hot_set_contains_required_anchors() -> None:
@@ -295,10 +297,10 @@ def test_hot_set_contains_required_anchors() -> None:
         "request_spatial_input",
         # tool-retrieval STEP 0 floor (NATE 2026-06-23; spatial_query holds
         # the slot summarize_layer_statistics held before the Phase-B fold).
+        # generate_chart is the ONE interactive-chart floor slot (processing-wave
+        # cull, 2026-07-29); compute_zonal_statistics was demoted to code_exec.
         "publish_layer",
-        "compute_zonal_statistics",
-        "generate_histogram",
-        "generate_time_series",
+        "generate_chart",
         "spatial_query",
     }
     assert required == HOT_SET_TOOLS

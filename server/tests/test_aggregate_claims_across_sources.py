@@ -19,7 +19,6 @@ from __future__ import annotations
 
 import pytest
 
-from trid3nt_server.agent.tools import TOOL_REGISTRY
 from trid3nt_server.agent.tools.processing.aggregate_claims_across_sources.aggregate_claims_across_sources import (
     ClaimAggInputError,
     SUPPORTED_TARGETS,
@@ -311,13 +310,9 @@ def test_bad_confidence_threshold_raises() -> None:
 # ---------------------------------------------------------------------------
 
 
-def test_tool_is_registered() -> None:
-    """aggregate_claims_across_sources is in TOOL_REGISTRY at import time."""
-    assert "aggregate_claims_across_sources" in TOOL_REGISTRY
-    entry = TOOL_REGISTRY["aggregate_claims_across_sources"]
-    assert entry.metadata.cacheable is False
-    assert entry.metadata.ttl_class == "live-no-cache"
-    assert entry.metadata.source_class == "claim_aggregator"
+# aggregate_claims_across_sources is DEMOTED to an importable library
+# (processing-wave cull, docs/decisions/0043) -- no longer registered; the
+# extraction helpers below remain the tested contract model_groundwater imports.
 
 
 def test_supported_targets_complete() -> None:

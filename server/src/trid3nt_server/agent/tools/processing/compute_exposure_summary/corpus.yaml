@@ -6,3 +6,9 @@ compute_exposure_summary:
 - what is the exposure in the surge zone - people and buildings
 - count the buildings affected by this flood result
 - give me a population and building count inside the plume boundary
+# processing-wave cull (2026-07-29): population/building exposure phrasings
+# re-homed from the DEMOTED compute_zonal_statistics (population/buildings-within
+# -a-hazard is this tool's job; docs/decisions/0043).
+- how many people are in the projected flood inundation zone
+- what is the total building replacement value exposed to this storm surge
+- sum the population at risk within each flood zone category

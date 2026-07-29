@@ -146,14 +146,16 @@ class TestRegistration:
 
     def test_registry_core_membership_is_order_robust(self):
         """Order-robust replacement for the brittle count pin: other test files
-        import workflow modules that grow the module-global registry (191 -> 195
-        in full-suite order), so assert MEMBERSHIP not cardinality."""
+        import workflow modules that grow the module-global registry (post the
+        processing-wave cull, the plain-import surface is ~185, growing to ~191
+        once the full startup path runs in full-suite order), so assert
+        MEMBERSHIP not cardinality with a loose sanity floor."""
         from trid3nt_server.agent.tools import TOOL_REGISTRY
         assert "spatial_query" in TOOL_REGISTRY
         for retired in ("summarize_layer_statistics", "count_features_above_threshold",
                         "aggregate_property_within_zone"):
             assert retired not in TOOL_REGISTRY
-        assert len(TOOL_REGISTRY) >= 191
+        assert len(TOOL_REGISTRY) >= 185
 
 
     def test_primary_category(self):
@@ -389,7 +391,7 @@ class TestTypedErrors:
         assert exc.value.error_code == "RASTER_UNSUPPORTED"
         msg = str(exc.value)
         assert "code_exec_request" in msg
-        assert "compute_zonal_statistics" in msg
+        assert "zonal-statistics-recipe" in msg
 
     def test_bad_alias_rejected(self, points_path):
         with pytest.raises(SpatialQueryError) as exc:

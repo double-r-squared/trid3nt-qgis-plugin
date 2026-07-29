@@ -669,7 +669,7 @@ def fetch_hrrr_smoke(
           ``compute_zonal_statistics`` (aggregate to admin boundaries or
           county / ZIP code area-weighted exposure),
           ``clip_raster_to_polygon`` (further sub-clip to fire footprint
-          or admin polygon), ``clip_raster_to_bbox`` (bbox-only sub-clip).
+          or admin polygon), ``clip_raster_to_polygon`` (bbox or polygon sub-clip).
         - Composes with: ``fetch_nifc_fire_perimeters`` (active wildfire
           polygons — overlay smoke plume on the burning area),
           ``fetch_firms_active_fire`` (VIIRS/MODIS hot spots — overlay

@@ -156,14 +156,6 @@ _SAMPLE_GCS_URI = "gs://legacy-cloud-cog/cache/static-30d/sample.tif"
 # These are plausible real-world values, NOT magic that would make the tool
 # succeed (network/GCS access is expected to fail — only TypeError is forbidden).
 _MINIMAL_VALID_PARAMS: dict[str, dict[str, Any]] = {
-    "aggregate_claims_across_sources": {
-        "sources": [{"text": "floodwater", "type": "news"}],
-        "claim_targets": ["depth_m"],
-    },
-    "clip_raster_to_bbox": {
-        "raster_uri": _SAMPLE_RASTER_URI,
-        "bbox": _SAMPLE_BBOX,
-    },
     "clip_raster_to_polygon": {
         "raster_uri": _SAMPLE_RASTER_URI,
         "polygon_uri": _SAMPLE_VECTOR_URI,
@@ -174,9 +166,10 @@ _MINIMAL_VALID_PARAMS: dict[str, dict[str, Any]] = {
     "compute_hillshade": {"dem_uri": _SAMPLE_DEM_URI},
     "compute_impervious_surface": {"landcover_uri": _SAMPLE_LANDCOVER_URI},
     "compute_slope": {"dem_uri": _SAMPLE_DEM_URI},
-    "compute_zonal_statistics": {
-        "value_raster_uri": _SAMPLE_RASTER_URI,
-        "zone_input_uri": _SAMPLE_VECTOR_URI,
+    "generate_chart": {
+        "vega_lite_spec": {"mark": "bar", "encoding": {}},
+        "title": "t",
+        "records": [{"label": "a", "count": 1}],
     },
     "extract_landcover_class": {
         "landcover_uri": _SAMPLE_LANDCOVER_URI,

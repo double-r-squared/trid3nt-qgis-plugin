@@ -367,8 +367,6 @@ from .fetchers._router.registration import register_specs_from_tree as _register
 _register_router_specs()
 
 # -- processing (compute / clip / extract / vector-edit / charts) --
-from .processing.aggregate_claims_across_sources import aggregate_claims_across_sources  # noqa: E402,F401
-from .processing.clip_raster_to_bbox import clip_raster_to_bbox  # noqa: E402,F401
 from .processing.clip_raster_to_polygon import clip_raster_to_polygon  # noqa: E402,F401
 from .processing.compute_aspect import compute_aspect  # noqa: E402,F401
 from .processing.compute_blended_composite import compute_blended_composite  # noqa: E402,F401
@@ -395,7 +393,8 @@ from .processing.compute_sediment_yield import compute_sediment_yield  # noqa: E
 from .processing.compute_skill_metrics import compute_skill_metrics  # noqa: E402,F401
 from .processing.compute_slope import compute_slope  # noqa: E402,F401
 from .processing.compute_urban_heat_island import compute_urban_heat_island  # noqa: E402,F401
-from .processing.compute_zonal_statistics import compute_zonal_statistics  # noqa: E402,F401
+# compute_zonal_statistics DEMOTED to the code_exec playground
+# (docs/playbooks/zonal-statistics-recipe.md, docs/decisions/0043).
 from .processing.delineate_watershed import delineate_watershed  # noqa: E402,F401
 from .processing.digitize_water_body import digitize_water_body  # noqa: E402,F401
 from .processing.enhance_satellite_image import enhance_satellite_image  # noqa: E402,F401
@@ -404,10 +403,7 @@ from .processing.extract_landcover_class import extract_landcover_class  # noqa:
 from .processing.extract_model_at_observations import extract_model_at_observations  # noqa: E402,F401
 from .processing.extract_stream_network import extract_stream_network  # noqa: E402,F401
 from .processing.extract_timeseries_at_point import extract_timeseries_at_point  # noqa: E402,F401
-from .processing.charts.generate_choropleth_legend import generate_choropleth_legend  # noqa: E402,F401
-from .processing.charts.generate_damage_distribution import generate_damage_distribution  # noqa: E402,F401
-from .processing.charts.generate_histogram import generate_histogram  # noqa: E402,F401
-from .processing.charts.generate_time_series import generate_time_series  # noqa: E402,F401
+from .processing.charts.generate_chart import generate_chart  # noqa: E402,F401
 from .processing.query_point_hazard import query_point_hazard  # noqa: E402,F401
 # DuckDB spatial-query fold (Phase B): ONE read-only SQL surface replaces the
 # three analytical Q&A tools (summarize_layer_statistics /

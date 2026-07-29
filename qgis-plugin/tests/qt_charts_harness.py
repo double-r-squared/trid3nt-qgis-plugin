@@ -117,7 +117,7 @@ HAZARD_CHART = {
     },
 }
 
-# generate_damage_distribution shape: single-view bar + color field.
+# damage-state shape: single-view bar + color field (generate_chart).
 DAMAGE_CHART = {
     "envelope_type": "chart-emission",
     "chart_id": "01HARNESSDAMAGEAAAAAAAAAAA",
