@@ -112,8 +112,8 @@ async def elmfire_fire_spread(
     LANDFIRE 30m fuels+terrain. Do NOT use for: observed fire
     perimeters/detections (``fetch_nifc_fire_perimeters``/
     ``fetch_firms_active_fire``/``fetch_goes_active_fire``); satellite
-    animations of a real event (``run_model_goes_fire_animation``);
-    post-fire debris-flow (``model_debris_flow``); past burn severity
+    animations of a real event (``run_model_satellite_fire_animation``/
+    ``fetch_goes_animation``); post-fire debris-flow (``model_debris_flow``); past burn severity
     (``fetch_mtbs_burn_severity``).
 
     IGNITION POINT IS REQUIRED -- NEVER GUESS IT. If not given, ask the

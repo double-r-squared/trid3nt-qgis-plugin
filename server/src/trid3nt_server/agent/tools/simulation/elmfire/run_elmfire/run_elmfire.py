@@ -16,7 +16,7 @@ redirects off-engine asks to the right tool.
 Do NOT use for:
   - post-fire debris-flow hazard -> model_debris_flow
   - fire ANIMATION of an observed event (satellite / GOES, not a spread solve)
-    -> run_model_goes_fire_animation / run_model_satellite_fire_animation
+    -> run_model_satellite_fire_animation / fetch_goes_animation
 See ``mismatch_redirect`` in the return.
 
 Determinism (Invariant 1): every field is derived from the live registry /
@@ -72,7 +72,7 @@ _FIDELITY_BRIEF = (
 _MISMATCH_REDIRECT = {
     "post-fire debris-flow hazard": "model_debris_flow",
     "fire animation of an observed event (satellite / GOES, not a spread solve)": (
-        "run_model_goes_fire_animation / run_model_satellite_fire_animation"
+        "run_model_satellite_fire_animation / fetch_goes_animation"
     ),
 }
 
@@ -228,8 +228,8 @@ def run_elmfire() -> dict[str, Any]:
     them callable for the rest of the turn; then call the chosen one directly.
 
     NOT for post-fire debris-flow hazard (model_debris_flow) or fire ANIMATION
-    of an observed event (run_model_goes_fire_animation /
-    run_model_satellite_fire_animation) - see ``mismatch_redirect``.
+    of an observed event (run_model_satellite_fire_animation /
+    fetch_goes_animation) - see ``mismatch_redirect``.
 
     Returns the concierge envelope: ``engine``, ``kind``, ``templates`` (each
     with ``tool_name`` / ``question`` / ``required_inputs`` / ``knobs``),

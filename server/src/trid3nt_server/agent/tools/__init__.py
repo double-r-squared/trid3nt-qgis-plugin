@@ -283,6 +283,7 @@ from .fetchers.imagery.fetch_goes_archive_animation import fetch_goes_archive_an
 from .fetchers.imagery.fetch_goes_satellite import fetch_goes_satellite  # noqa: E402,F401
 from .fetchers.imagery.fetch_landsat_imagery import fetch_landsat_imagery  # noqa: E402,F401
 from .fetchers.imagery.fetch_naip import fetch_naip  # noqa: E402,F401
+from .fetchers.imagery.fetch_slider_timestamps.fetch_slider_timestamps import fetch_slider_timestamps  # noqa: E402,F401  -- P1: SLIDER availability + cadence index (frame-animation playground primitive)
 from .fetchers.imagery.fetch_sentinel1_sar import fetch_sentinel1_sar  # noqa: E402,F401
 from .fetchers.imagery.fetch_sentinel2_truecolor import fetch_sentinel2_truecolor  # noqa: E402,F401
 from .fetchers.imagery.fetch_viirs_day_fire import fetch_viirs_day_fire  # noqa: E402,F401
@@ -576,13 +577,6 @@ from ..workflows.pelicun.damage_assessment.damage_assessment import pelicun_dama
 # OWN @register_tool (run_model_satellite_fire_animation); import it so the
 # review-gated GOES/JPSS animation workflow is in TOOL_REGISTRY at startup.
 from ..workflows.shared.model_satellite_fire_animation import model_satellite_fire_animation as _model_satellite_fire_animation  # noqa: E402,F401 - fire-animation demos S5/J5: registers run_model_satellite_fire_animation (incident lookup -> bbox+window review gate -> GOES/VIIRS per-frame imagery -> FIRMS+NIFC overlays -> publish)
-
-# fire-demo Track A: the UNATTENDED GOES fire-animation composer carries its OWN
-# @register_tool (run_model_goes_fire_animation); import it so the no-confirm-gate
-# GOES animation workflow is in TOOL_REGISTRY at startup. It auto-snaps the
-# requested window to the nearest available SLIDER frames and proceeds without
-# parking (the sibling of model_satellite_fire_animation that does NOT review-gate).
-from ..workflows.shared.model_goes_fire_animation import model_goes_fire_animation as _model_goes_fire_animation  # noqa: E402,F401 - fire-demo Track A: registers run_model_goes_fire_animation (auto-snap window -> GOES GeoColor+Fire Temperature per-frame imagery -> FIRMS overlay -> publish; NO confirm gate)
 
 # GLM lightning demo: the DIRECT GOES-19 GLM Group-Energy-Density animation composer
 # carries its OWN @register_tool (run_model_glm_lightning_animation); import it so the

@@ -63,7 +63,6 @@ from trid3nt_server.agent.tools import TOOL_REGISTRY
 # at module level must appear here so the registry is fully populated.
 # ---------------------------------------------------------------------------
 import trid3nt_server.agent.workflows.sfincs.flood.flood  # noqa: F401 — side-effect import
-import trid3nt_server.agent.workflows.shared.model_news_event_ingest.model_news_event_ingest  # noqa: F401
 # PELICUN fold: pelicun_damage_with_buildings folded into the
 # pelicun_damage_assessment template's bbox AUTO-FETCH input mode.
 import trid3nt_server.agent.workflows.pelicun.damage_assessment.damage_assessment  # noqa: F401
@@ -251,9 +250,6 @@ _MINIMAL_VALID_PARAMS: dict[str, dict[str, Any]] = {
         "params": {"DISTANCE": 1000},
     },
     "sfincs_flood": {},
-    "run_model_news_event_ingest": {
-        "sources": [{"url": "https://example.com/flood", "type": "news"}]
-    },
     "pelicun_damage_assessment": {
         "hazard_raster_uri": _SAMPLE_RASTER_URI,
         "assets_uri": _SAMPLE_VECTOR_URI,

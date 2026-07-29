@@ -13,11 +13,11 @@ post (design doc: ``reports/design/glm_lightning_demo.md``).
 DIRECT, NO NEWS STEP. Unlike ``model_satellite_fire_animation`` (which has a
 news/incident front-half + a bbox/window review gate that the agent stumbled on),
 this composer takes a **direct AOI bbox + UTC time window** and goes STRAIGHT to
-fetch -> grid -> bake -> publish. There is NO ``model_news_event_ingest``, NO
+fetch -> grid -> bake -> publish. There is NO news-ingest step, NO
 NIFC/news lookup, NO geocode-from-news, NO SLIDER snap. The inputs ARE the AOI and
-the window. (Its sibling ``model_goes_fire_animation`` is ALSO a direct no-news
-entry, but it auto-snaps against the SLIDER availability index; this composer is
-even more direct -- it reads the raw ``noaa-goes19`` S3 archive at the requested
+the window. (The retained ``fetch_goes_animation`` fetcher is ALSO a direct
+no-news entry, but it auto-snaps against the SLIDER availability index; this
+composer is even more direct -- it reads the raw ``noaa-goes19`` S3 archive at the requested
 window with no availability pre-pass.)
 
 What it produces (the same FRAME SHAPE the web ``SequenceScrubber`` /
@@ -861,7 +861,8 @@ async def run_model_glm_lightning_animation(
     When NOT to use:
         - The AOI is NOT known and you need a news/geocode lookup first (there is no
           such path here by design -- resolve the bbox separately, then call this).
-        - A GOES fire-temperature imagery loop (run_model_goes_fire_animation).
+        - A GOES fire-temperature imagery loop (fetch_goes_animation /
+          fetch_goes_blend_animation).
         - A single most-recent lightning snapshot (fetch_glm_lightning, no
           accumulation_window_s).
 

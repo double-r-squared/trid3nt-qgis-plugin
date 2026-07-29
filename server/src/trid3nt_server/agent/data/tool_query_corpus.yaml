@@ -32,29 +32,11 @@ list_tools_in_category:
 - give me the tools in the damage assessment bucket
 - what's available in the geographic primitives category
 - expand the fire category and show every tool in it
-run_model_conservation_priority:
-- show me conservation priorities around the ACE Basin with imagery and biodiversity
-- map vegetation, imperiled-species importance, and panther sightings near Big Cypress
-- build a conservation-priority stack for this region with aerial base and species data
-- where should we focus protection here, give me NDVI plus biodiversity plus occurrences
-- overlay NatureServe biodiversity importance, NAIP, and GBIF records for this AOI
-- stack the habitat and biodiversity layers for this watershed for a conservation plan
-- show imperiled-species richness, vegetation greenness, and threatened ranges together
-- make the SC-DNR style priority map for this preserve with species occurrence points
 # engine-door refactor (SFINCS slice): the run_model_flood_scenario corpus block
 # migrated OUT of this main index. Hazard-common flood phrasings now live in the
 # run_sfincs door corpus (tools/simulation/sfincs/run_sfincs/corpus.yaml, DOOR
 # tier - walked into this index); template-specific phrasings live in
 # workflows/sfincs/flood/corpus.yaml (TEMPLATE tier - NOT indexed).
-run_model_goes_fire_animation:
-- animate the GOES fire loop over this AOI and just run it without asking me to confirm
-- recreate the CIRA GeoColor and Fire Temperature animation over this bbox
-- make a scrubbable GOES-18 fire animation for the most recent few hours over this area
-- blend the true-color and fire-temperature GOES frames into one animated loop here
-- animate the satellite fire imagery for this bbox and add the FIRMS hot pixels
-- run the unattended GOES fire timelapse over this window, snap to whatever frames exist
-- show the wildfire evolving over this region from geostationary imagery, hourly frames
-- loop the GOES-19 East fire-temperature scene over this AOI with active-fire detections
 run_model_glm_lightning_animation:
 - animate the GOES-19 GLM lightning over this storm for this time window
 - recreate the CIRA visible plus group energy density lightning loop for this Gulf hurricane
@@ -73,15 +55,6 @@ run_model_groundwater_contamination_scenario:
 - an industrial solvent spilled into the ground here, how concentrated will the groundwater get downstream
 - turn this spill report into a modeled groundwater plume layer with how big the plume is
 - news says benzene leaked over six hours, run the aquifer contamination model on it
-run_model_news_event_ingest:
-- here are a couple news article urls about this spill, pull out the location, amount, and contaminant for me to review
-- ingest these nws alert area codes and storm events db entries and derive the event parameters
-- i have an incident report link, extract the derived parameters before we model anything
-- summarize the key facts (where, how much, what) from these sources about the hurricane so i can approve them
-- read these articles about the flood and give me the location bbox and scale with confidence scores
-- gather what these sources say about the wildfire and show me the aggregated claims for review
-- pull the contaminant and release size out of this news coverage but do not run a simulation yet
-- cross-reference these source urls and storm event ids and tell me the best-supported event details
 run_model_nws_flood_event_scenario:
 - model the flood that's actually happening right now from the active flood warning in idaho
 - there is a flash flood warning over this area, run an inundation model on the warned region

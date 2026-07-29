@@ -225,8 +225,6 @@ def _wire_synthetic(monkeypatch, *, base_band_seen=None, news_guard=None):
     # --- NEWS GUARD: poison every news/geocode tool so a dispatch is a hard failure. -
     if news_guard is not None:
         for news_tool in (
-            "run_model_news_event_ingest",
-            "model_news_event_ingest",
             "geocode_location",
             "fetch_nifc_fire_perimeters",
         ):

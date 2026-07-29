@@ -247,16 +247,11 @@ PRIMARY_CATEGORY: dict[str, str] = {
     # surfaced only by the run_sfincs door's gate expansion). The DOOR carries the
     # category membership so hazard_modeling widening surfaces the flood entry.
     "run_sfincs": "hazard_modeling",
-    "run_model_news_event_ingest": "hazard_modeling",
     "run_model_nws_flood_event_scenario": "hazard_modeling",
     # fire-animation demos (GOES geostationary + JPSS/VIIRS polar): the
     # news/incident -> bbox+window -> per-frame imagery -> scrubber-group
     # composer (review-gated). Cross-listed to fire + news_events below.
     "run_model_satellite_fire_animation": "hazard_modeling",
-    # fire-demo Track A: the UNATTENDED GOES fire-animation composer (auto-snaps
-    # the window to available SLIDER frames + proceeds without a confirm gate).
-    # Cross-listed to fire below.
-    "run_model_goes_fire_animation": "hazard_modeling",
     # GLM lightning demo: the DIRECT GOES-19 GLM Group-Energy-Density animation
     # composer (AOI + UTC window -> purple GED baked over the C02 visible base;
     # NO news step). Cross-listed to weather_atmosphere below.
@@ -345,11 +340,6 @@ PRIMARY_CATEGORY: dict[str, str] = {
     # only by the run_swan door's gate expansion). The DOOR carries the
     # hazard_modeling membership.
     "run_swan": "hazard_modeling",
-    # conservation micro-North-Star composer: the run_* multi-tool workflow
-    # (species occurrences + NDVI + MoBI -> priority surface). Filed alongside
-    # the other run_model_* composers here; cross-listed to conservation_ecology
-    # (SECONDARY_CATEGORIES) since a user reaches it from the conservation lane.
-    "run_model_conservation_priority": "hazard_modeling",
     # canopy-height ML-inference tool (Meta HighResCanopyHeight on CPU Batch).
     # It is a compute-heavy run_* model that dispatches the canopy Batch worker
     # and publishes a canopy-height (m) raster -- filed alongside the other
@@ -395,6 +385,10 @@ PRIMARY_CATEGORY: dict[str, str] = {
     # noaa-goes18 S3 ABI-L2-MCMIPC archive (any past date) -- filed alongside
     # fetch_goes_animation, cross-listed to 'fire' via SECONDARY_CATEGORIES.
     "fetch_goes_archive_animation": "weather_atmosphere",
+    # SLIDER availability + cadence index (which frames exist for a GOES/VIIRS
+    # product) -- the frame-animation playground's auto-snap primitive, filed
+    # alongside the GOES imagery fetchers; cross-listed to 'fire' below.
+    "fetch_slider_timestamps": "weather_atmosphere",
     # GOES GLM optical-lightning group-energy-density (filed in weather next to
     # the GOES ABI fetchers; cross-listed to 'fire' via SECONDARY_CATEGORIES since
     # lightning is the dominant wildfire-ignition source).
@@ -664,9 +658,6 @@ SECONDARY_CATEGORIES: dict[str, tuple[str, ...]] = {
     # engine-door refactor: run_model_contamination_affected_fields is CUT (the
     # zonal field-analysis half re-homed to a playground recipe); its secondary
     # cross-listing is removed with it.
-    # NWS event ingest spans hazard_modeling (it's the news-event composer)
-    # AND news_events (it's the canonical entry point to that category).
-    "run_model_news_event_ingest": ("news_events",),
     # Case 2 groundwater composer spans hazard_modeling (it runs MODFLOW) AND
     # news_events (it's driven by a spill news article - the canonical "model
     # the spill from this article" entry point).
@@ -681,15 +672,15 @@ SECONDARY_CATEGORIES: dict[str, tuple[str, ...]] = {
     # engine-door refactor (SWAN slice): the DOOR run_swan carries the coastal
     # cross-listing; the swan_wave_field template is pool-excluded (no membership).
     "run_swan": ("coastal",),
-    # The conservation-priority composer spans hazard_modeling (it runs the
-    # multi-tool workflow) AND conservation_ecology (it IS the conservation
-    # micro-North-Star -- a user reaches it from the conservation lane).
-    "run_model_conservation_priority": ("conservation_ecology",),
     # The canopy-height ML-inference tool spans hazard_modeling (it dispatches a
     # CPU Batch worker like the other engines) AND conservation_ecology + land
     # cover (a canopy-height surface is a vegetation/ecology product a user
     # reaches from either lane).
     "compute_canopy_height": ("conservation_ecology", "land_cover_development"),
+    # The SLIDER availability index is primary weather_atmosphere but materially
+    # belongs to fire too (it is the availability step of the fire-animation
+    # playground recipe -- reached from the fire lane before fetching frames).
+    "fetch_slider_timestamps": ("fire",),
     # The GOES animation fetcher is primary-filed in weather_atmosphere (next to
     # fetch_goes_satellite) but materially belongs to the fire branch too.
     "fetch_goes_animation": ("fire",),
@@ -725,12 +716,6 @@ SECONDARY_CATEGORIES: dict[str, tuple[str, ...]] = {
     # multi-tool imagery pipeline) AND fire (it is the fire-branch demo) AND
     # news_events (it ingests the fire news / incident lookup up front).
     "run_model_satellite_fire_animation": ("fire", "news_events"),
-    # The UNATTENDED GOES fire-animation composer spans hazard_modeling (it
-    # composes the GOES imagery pipeline) AND fire (it is the fire-branch
-    # animation demo). No news_events cross-list -- it takes an AOI bbox directly
-    # rather than ingesting fire news (that front half is the review-gated
-    # run_model_satellite_fire_animation's lane).
-    "run_model_goes_fire_animation": ("fire",),
     # GLM lightning composer cross-lists to weather_atmosphere (it is the GOES
     # lightning/convection animation demo). No news_events cross-list -- it takes
     # an AOI bbox + UTC window DIRECTLY, with no news/geocode front-half.

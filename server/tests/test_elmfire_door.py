@@ -66,7 +66,7 @@ def test_door_listing_envelope_shape():
     # redirects name the neighbouring fire tools (NOT engine doors - debris-flow
     # is a general pfdf tool, the animations are general composers).
     redirect_text = " ".join(env["mismatch_redirect"].values())
-    for target in ("model_debris_flow", "run_model_goes_fire_animation"):
+    for target in ("model_debris_flow", "run_model_satellite_fire_animation"):
         assert target in redirect_text, f"mismatch redirect must point at {target}"
 
 

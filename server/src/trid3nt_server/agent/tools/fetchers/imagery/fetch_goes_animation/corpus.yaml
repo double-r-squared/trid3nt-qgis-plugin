@@ -5,6 +5,9 @@ fetch_goes_animation:
 - show the fire growing on GOES-West imagery frame by frame
 - build a scrubbable GOES fire-temperature loop over this AOI and time range
 - I want the geostationary satellite animation of the fire cluster
+- animate the goes fire loop over this aoi for the most recent few hours and just run it without asking me to confirm
+- run the unattended goes fire timelapse over this window and snap to whatever frames are available
+- show the wildfire evolving over this region from geostationary imagery with hourly frames
 fetch_goes_blend_animation:
 - recreate the cira geocolor and fire temperature fire animation over this aoi
 - make me the combined satellite loop where the active fire glows on the true-color scene

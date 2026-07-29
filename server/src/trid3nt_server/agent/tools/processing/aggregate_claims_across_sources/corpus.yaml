@@ -7,3 +7,6 @@ aggregate_claims_across_sources:
 - extract the spill date, town, and chemical from these fetched articles and score the agreement
 - consolidate what the wire stories say about this incident into one set of claims with confidence
 - how many sources back the vinyl chloride figure versus the other numbers in these texts
+- ingest these news urls, nws alert areas, and storm-events entries and derive the event location, date, and scale for review
+- pull the location, amount, and contaminant out of this news coverage for me to approve before any modeling
+- read these articles about the flood and give me the derived event parameters with confidence before we model anything

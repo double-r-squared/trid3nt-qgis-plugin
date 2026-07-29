@@ -1028,7 +1028,8 @@ async def run_model_groundwater_contamination_scenario(
         - A spill with explicit numeric parameters already in hand (call
           ``run_modflow_job`` directly with the forcing fields).
         - Ingesting a news event WITHOUT modeling it (use
-          ``run_model_news_event_ingest`` — it stops before any solver).
+          ``aggregate_claims_across_sources`` + ``geocode_location`` to derive
+          params for review — see docs/playbooks/frame-animation-recipe.md).
 
     Params:
         article_text: the pasted article body. Supply this OR ``source_url``.
