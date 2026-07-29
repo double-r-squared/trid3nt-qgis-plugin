@@ -103,7 +103,6 @@ OVERRIDES: dict[str, dict] = {
     "fetch_inaturalist_observations": {"taxon_id": 6930},
     "fetch_iucn_red_list_range": {"species_name": "Puma concolor"},
     "fetch_wfigs_incident": {"incident_name": "Park Fire"},
-    "run_model_satellite_fire_animation": {"incident_name": "Park Fire"},
     # satellite animation: explicit small window yesterday + a bbox that sees data
     "fetch_goes_archive_animation": {"bbox": (-121.5, 39.5, -121.0, 40.0), "start_utc": f"{YDAY}T18:00", "end_utc": f"{YDAY}T18:30"},
     "fetch_goes_blend_animation": {"start_utc": f"{YDAY}T18:00", "end_utc": f"{YDAY}T18:30"},

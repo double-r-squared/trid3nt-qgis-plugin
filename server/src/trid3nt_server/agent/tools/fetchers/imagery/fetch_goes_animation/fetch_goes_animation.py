@@ -452,7 +452,8 @@ def fetch_goes_animation(
     - Upstream: ``fetch_wfigs_incident`` (the AOI bbox + the window floor).
     - Pairs with: ``fetch_firms_active_fire`` (historical-date hot-pixel overlay)
       + ``fetch_nifc_fire_perimeters`` (perimeter overlay).
-    - Driven by: ``run_model_satellite_fire_animation``.
+    - Driven by: the frame-animation playground recipe
+      (docs/playbooks/frame-animation-recipe.md Recipe A).
     """
     # BLEND consolidation: a blend band token routes to the combined GeoColor +
     # Fire Temperature composite path (the folded-in fetch_goes_blend_animation).
@@ -664,7 +665,8 @@ def _blend_animation_impl(
     **Cross-tool dependencies:**
     - Upstream: ``fetch_wfigs_incident`` (the AOI bbox + the window floor).
     - Composites the two ``fetch_goes_animation`` products per timestep.
-    - Driven by: ``run_model_satellite_fire_animation`` (the GOES default path).
+    - Driven by: the frame-animation playground recipe
+      (docs/playbooks/frame-animation-recipe.md Recipe A, the GOES default path).
     """
     q_bbox = _round_bbox(_validate_bbox(bbox))
     # Normalize-then-validate: accept GOES-18 / goes18 / G18 / "GOES West" / 18

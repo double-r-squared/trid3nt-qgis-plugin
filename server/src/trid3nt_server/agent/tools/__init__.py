@@ -571,10 +571,6 @@ from ..workflows.elmfire.fire_spread.fire_spread import elmfire_fire_spread as _
 # postprocess_pelicun STAY general, NOT templates.
 from ..workflows.pelicun.damage_assessment.damage_assessment import pelicun_damage_assessment as _pelicun_damage_assessment  # noqa: E402,F401 - FOLD of run_pelicun_damage_assessment + run_pelicun_with_buildings (engine=pelicun, tier=template; explicit assets_uri OR bbox auto-fetch)
 
-# fire-animation demos S5/J5: the satellite fire-animation composer carries its
-# OWN @register_tool (run_model_satellite_fire_animation); import it so the
-# review-gated GOES/JPSS animation workflow is in TOOL_REGISTRY at startup.
-from ..workflows.shared.model_satellite_fire_animation import model_satellite_fire_animation as _model_satellite_fire_animation  # noqa: E402,F401 - fire-animation demos S5/J5: registers run_model_satellite_fire_animation (incident lookup -> bbox+window review gate -> GOES/VIIRS per-frame imagery -> FIRMS+NIFC overlays -> publish)
 
 # the 12-category registry + the two meta-tools
 # (``list_categories`` + ``list_tools_in_category``) live alongside the rest

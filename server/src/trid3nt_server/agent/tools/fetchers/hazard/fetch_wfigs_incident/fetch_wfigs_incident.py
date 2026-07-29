@@ -557,8 +557,8 @@ def fetch_wfigs_incident(
 
     **Cross-tool dependencies:**
     - Upstream of: ``fetch_goes_animation`` / ``fetch_viirs_day_fire`` (the AOI
-      bbox + the discovery-time floor for the animation window),
-      ``run_model_satellite_fire_animation``.
+      bbox + the discovery-time floor for the animation window; see the
+      frame-animation playground recipe, docs/playbooks/frame-animation-recipe.md).
     - Pairs with: ``fetch_firms_active_fire`` + ``fetch_nifc_fire_perimeters``
       (co-registered hot-pixel + perimeter overlays around the resolved point).
     """

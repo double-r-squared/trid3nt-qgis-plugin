@@ -368,7 +368,8 @@ def fetch_viirs_day_fire(
       AOI bbox + the window floor).
     - Pairs with: ``fetch_firms_active_fire`` (same VIIRS instrument; the hot
       pixels co-register with the Day Fire red pixels) + ``fetch_nifc_fire_perimeters``.
-    - Driven by: ``run_model_satellite_fire_animation``.
+    - Driven by: the frame-animation playground recipe
+      (docs/playbooks/frame-animation-recipe.md Recipe A).
     """
     q_bbox = _round_bbox(_validate_bbox(bbox))
     if satellite not in VIIRS_SATELLITES:

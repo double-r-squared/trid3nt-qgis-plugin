@@ -1,11 +1,11 @@
 # Playground recipe: frame animations, fire-AOI localization, news-event ingest
 
-Status: LIVE recipe (shared-workflows cull phase A, 2026-07-29).
-Replaces the CUT `run_model_goes_fire_animation` and `run_model_news_event_ingest`
-composers; captures the FIRMS densest-hotspot AOI-localization snippet the
-`run_model_satellite_fire_animation` composer still wraps (that composer is
-retained for now -- its cull is blocked only on a FIRMS-map-key live drive, not
-on any missing primitive).
+Status: LIVE recipe (shared-workflows cull phase A, 2026-07-29; satellite
+preemptive cull, 2026-07-29 -- see docs/decisions/0045-satellite-preemptive-cull.md).
+Replaces the CUT `run_model_goes_fire_animation`, `run_model_news_event_ingest`,
+and `run_model_satellite_fire_animation` composers. Recipe B (below) is the
+FIRMS densest-hotspot AOI-localization snippet the satellite composer used to
+wrap -- it is now the sole live form of that logic.
 
 ## Why these are recipes, not tools
 

@@ -8,8 +8,11 @@ fetch_goes_animation:
 - animate the goes fire loop over this aoi for the most recent few hours and just run it without asking me to confirm
 - run the unattended goes fire timelapse over this window and snap to whatever frames are available
 - show the wildfire evolving over this region from geostationary imagery with hourly frames
+- recreate the satellite fire animation of this wildfire cluster end to end
+- show me the AOI and time window then animate the fire from satellite imagery
 fetch_goes_blend_animation:
 - recreate the cira geocolor and fire temperature fire animation over this aoi
+- pull the news on the fires near Eureka Utah and recreate the CIRA GOES animation from imagery
 - make me the combined satellite loop where the active fire glows on the true-color scene
 - animate the goes-18 blended geocolor plus fire temperature for 2026-06-22
 - build the single composite fire timelapse from goes over this window

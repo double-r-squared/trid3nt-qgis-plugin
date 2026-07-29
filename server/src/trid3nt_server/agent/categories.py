@@ -248,10 +248,6 @@ PRIMARY_CATEGORY: dict[str, str] = {
     # category membership so hazard_modeling widening surfaces the flood entry.
     "run_sfincs": "hazard_modeling",
     "run_model_nws_flood_event_scenario": "hazard_modeling",
-    # fire-animation demos (GOES geostationary + JPSS/VIIRS polar): the
-    # news/incident -> bbox+window -> per-frame imagery -> scrubber-group
-    # composer (review-gated). Cross-listed to fire + news_events below.
-    "run_model_satellite_fire_animation": "hazard_modeling",
     "run_model_groundwater_contamination_scenario": "hazard_modeling",
     # engine-door refactor: run_model_contamination_affected_fields is CUT;
     # run_modflow_job folded into the modflow_contaminant_plume template. The 11
@@ -712,10 +708,6 @@ SECONDARY_CATEGORIES: dict[str, tuple[str, ...]] = {
     # / FIRMS wildfire lane). The elmfire_fire_spread template gets NO category
     # membership (pool-excluded, door-surfaced).
     "run_elmfire": ("fire",),
-    # The satellite fire-animation composer spans hazard_modeling (it composes a
-    # multi-tool imagery pipeline) AND fire (it is the fire-branch demo) AND
-    # news_events (it ingests the fire news / incident lookup up front).
-    "run_model_satellite_fire_animation": ("fire", "news_events"),
     # a+b+c batch (2026-06-27)
     "digitize_water_body": ('hydrology', 'terrain_elevation',),
     "fetch_usgs_earthquakes": ('news_events', 'geographic_primitives',),

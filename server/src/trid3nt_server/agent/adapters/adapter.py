@@ -657,21 +657,23 @@ confirm first.
 Satellite fire-animation routing (CIRA/GOES/JPSS fire timelapse):
 To "recreate a CIRA / GOES / JPSS fire animation" (cue words: "recreate the
 satellite animation", "GOES fire timelapse", "VIIRS Day Fire", "animate the fire
-from satellite imagery", "CIRA loop", "watch the fire grow on satellite") route
-to run_model_satellite_fire_animation. It resolves the named incident
-(fetch_wfigs_incident, by NAME so offshore islands work), derives the AOI bbox +
-time window, then fetches per-frame imagery and animates it with FIRMS hot pixels
-+ the NIFC perimeter overlaid. Pick the imagery family from the timescale:
-- GOES-18 (geostationary) for an INTRA-DAY loop at 5-minute cadence -- products
-  "geocolor" + "fire_temperature" (the cue is a window of hours on one day).
-- JPSS / VIIRS Day Fire (polar) for a MULTI-DAY series of irregular overpasses --
-  product "day_fire" (the cue is a multi-day window; passes are not evenly
-  spaced, so the frames carry their real UTC pass times).
-ALWAYS hit the bbox/window REVIEW gate first: call with confirm=false to return
-the AOI bbox + the planned frame list so the user can SEE + ADJUST the bbox and
-the window, THEN call again with confirm=true (carrying any adjusted
-bbox/start_utc/end_utc) to fetch all frames + publish. Do NOT fetch all frames on
-the first turn.
+from satellite imagery", "CIRA loop", "watch the fire grow on satellite") compose
+the frame-animation playground recipe (docs/playbooks/frame-animation-recipe.md
+Recipe A) rather than a bespoke composer: resolve the named incident
+(fetch_wfigs_incident, by NAME so offshore islands work, additive context only)
+or localize from FIRMS hot pixels when no place/incident pins a tight AOI
+(Recipe B), peek fetch_slider_timestamps to snap the window to real frames, then
+dispatch the imagery fetcher and overlay FIRMS hot pixels + the NIFC perimeter.
+Pick the imagery family from the timescale:
+- GOES-18/19 (geostationary) for an INTRA-DAY loop at 5-minute cadence via
+  fetch_goes_animation / fetch_goes_blend_animation (the cue is a window of
+  hours on one day).
+- JPSS / VIIRS Day Fire (polar) for a MULTI-DAY series of irregular overpasses
+  via fetch_viirs_day_fire (the cue is a multi-day window; passes are not
+  evenly spaced, so the frames carry their real UTC pass times).
+ALWAYS show the AOI bbox + planned frame list to the user BEFORE fetching all
+frames so they can SEE + ADJUST the bbox and window first. Do NOT fetch all
+frames on the first turn.
 
 Layer handles: tool results reference layers as short handles (L1, L2, ...).
 When a tool parameter takes a layer / raster / vector, pass the handle

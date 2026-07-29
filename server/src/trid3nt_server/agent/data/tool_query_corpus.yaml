@@ -1,10 +1,3 @@
-run_model_satellite_fire_animation:
-- pull the news on the fires near Eureka Utah and recreate the CIRA GOES animation
-- recreate the satellite fire animation of this wildfire cluster end to end
-- look the fire up by name, draw an AOI, and animate the GOES or VIIRS imagery
-- recreate the JPSS VIIRS Day Fire animation of the Santa Rosa Island fire
-- 'make the full fire-animation pipeline: incident lookup, bbox, imagery frames, overlays'
-- show me the AOI and time window then animate the fire from satellite imagery
 compute_impact_envelope:
 - how much damage will the 100-year flood cause in Fort Myers
 - estimate the expected dollar losses for this inundation scenario

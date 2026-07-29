@@ -1473,7 +1473,8 @@ def fetch_goes_archive_animation(
     - Upstream: ``fetch_wfigs_incident`` (the AOI bbox + the window floor).
     - Pairs with: ``fetch_firms_active_fire`` (historical-date hot-pixel overlay)
       + ``fetch_nifc_fire_perimeters`` (perimeter overlay).
-    - Driven by: ``run_model_satellite_fire_animation`` (the historical GOES path).
+    - Driven by: the frame-animation playground recipe
+      (docs/playbooks/frame-animation-recipe.md, the historical GOES path).
     """
     q_bbox = _round_bbox(_validate_bbox(bbox))
     # Normalize any human/LLM spelling (GOES-18 / goes18 / G18 / "GOES West" / 18)

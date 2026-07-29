@@ -6,3 +6,5 @@ fetch_firms_active_fire:
 - give me active fire locations with Fire Radiative Power in this bbox
 - are there any active fires near this forest community today?
 - fetch satellite fire detections for the last 7 days over western US
+- there's no named incident on record here, localize the active fire from hotspot detections and animate around the densest cluster
+- find the fire from FIRMS hot pixels when no place name or incident matches
