@@ -406,35 +406,13 @@ async def test_server_persist_and_seed_helpers_round_trip(tmp_path) -> None:
 
 
 def _make_fake_chunk_with_function_call(name: str, args: dict, call_id: str = "c1"):
-    fn_call = MagicMock()
-    fn_call.name = name
-    fn_call.id = call_id
-    fn_call.args = args
-    fake_part = MagicMock()
-    fake_part.function_call = fn_call
-    fake_part.text = None
-    fake_content = MagicMock()
-    fake_content.parts = [fake_part]
-    fake_candidate = MagicMock()
-    fake_candidate.content = fake_content
-    fake_chunk = MagicMock()
-    fake_chunk.candidates = [fake_candidate]
-    fake_chunk.text = None
-    return fake_chunk
+    """A fake turn (scripted-provider dict) emitting ONE function call."""
+    return {"tool_call": {"name": name, "args": args, "call_id": call_id}}
 
 
 def _make_fake_chunk_with_text(text: str):
-    fake_part = MagicMock()
-    fake_part.function_call = None
-    fake_part.text = text
-    fake_content = MagicMock()
-    fake_content.parts = [fake_part]
-    fake_candidate = MagicMock()
-    fake_candidate.content = fake_content
-    fake_chunk = MagicMock()
-    fake_chunk.candidates = [fake_candidate]
-    fake_chunk.text = None
-    return fake_chunk
+    """A fake turn (scripted-provider dict) emitting one narration delta."""
+    return {"text": text}
 
 
 @dataclass
@@ -457,7 +435,7 @@ def _function_response_payloads(contents_per_turn):
 
 
 @pytest.mark.asyncio
-async def test_emit_seam_llm_sees_handle_not_uri() -> None:
+async def test_emit_seam_llm_sees_handle_not_uri(fake_llm) -> None:
     from trid3nt_server import server as agent_server
     from trid3nt_server.agent.adapters.adapter import ModelSettings
     from trid3nt_server.main import _import_tools_registry
@@ -472,25 +450,13 @@ async def test_emit_seam_llm_sees_handle_not_uri() -> None:
         )
         return result
 
-    turn_chunks = [
-        [
-            _make_fake_chunk_with_function_call(
-                "sfincs_flood",
-                {"location_query": "Cedar Rapids, Iowa"},
-                "call-flood",
-            )
-        ],
-        [_make_fake_chunk_with_text("Done.")],
-    ]
-    turn_responses = iter([iter(chunks) for chunks in turn_chunks])
-    contents_per_turn: list[list[Any]] = []
-
-    def _capture_and_stream(**kwargs):
-        contents_per_turn.append(list(kwargs["contents"]))
-        return next(turn_responses)
-
-    fake_client = MagicMock()
-    fake_client.models.generate_content_stream.side_effect = _capture_and_stream
+    turn1_chunk = _make_fake_chunk_with_function_call(
+        "sfincs_flood",
+        {"location_query": "Cedar Rapids, Iowa"},
+        "call-flood",
+    )
+    turn2_chunk = _make_fake_chunk_with_text("Done.")
+    fake_llm.script([turn1_chunk, turn2_chunk])
 
     sock = _FakeSocket()
     state = SessionState(session_id=new_ulid())
@@ -498,13 +464,13 @@ async def test_emit_seam_llm_sees_handle_not_uri() -> None:
         model="gemini-2.5-pro", project="test", location="us-central1",
         use_vertex=True,
     )
-    with patch.object(agent_server, "build_client", return_value=fake_client), \
-         patch.object(agent_server, "_invoke_tool_via_emitter", side_effect=_fake_invoke), \
+    with patch.object(agent_server, "_invoke_tool_via_emitter", side_effect=_fake_invoke), \
          patch.object(agent_server, "build_tool_declarations", return_value=[]):
         await agent_server._stream_model_reply(
             sock, state, settings, "Model a flood for Cedar Rapids", "research",
         )
 
+    contents_per_turn = [call["contents"] for call in fake_llm.calls]
     payloads = _function_response_payloads(contents_per_turn)
     assert payloads, "no function_response reached the second turn"
     _name, payload = payloads[0]

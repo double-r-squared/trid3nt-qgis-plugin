@@ -21,7 +21,7 @@ from __future__ import annotations
 
 import json
 from dataclasses import dataclass, field
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 
 import pytest
 
@@ -51,21 +51,7 @@ class _FakeSocket:
 
 
 def _make_fake_chunk_with_function_call(name: str, args: dict, call_id: str):
-    fn_call = MagicMock()
-    fn_call.name = name
-    fn_call.id = call_id
-    fn_call.args = args
-    fake_part = MagicMock()
-    fake_part.function_call = fn_call
-    fake_part.text = None
-    fake_content = MagicMock()
-    fake_content.parts = [fake_part]
-    fake_candidate = MagicMock()
-    fake_candidate.content = fake_content
-    fake_chunk = MagicMock()
-    fake_chunk.candidates = [fake_candidate]
-    fake_chunk.text = None
-    return fake_chunk
+    return {"tool_call": {"name": name, "args": args, "call_id": call_id}}
 
 
 def _settings() -> ModelSettings:
@@ -101,7 +87,7 @@ def test_unknown_tool_is_not_terminal_composer():
 
 
 @pytest.mark.asyncio
-async def test_delivered_composer_concludes_without_loop_exhausted():
+async def test_delivered_composer_concludes_without_loop_exhausted(fake_llm):
     """A composer that delivers + a model that then spins ends CLEANLY.
 
     Round 1 the model calls ``sfincs_flood`` and it returns a
@@ -112,26 +98,21 @@ async def test_delivered_composer_concludes_without_loop_exhausted():
     """
     from trid3nt_server import server as agent_server
 
-    rounds = {"n": 0}
-
-    def _script(**_kwargs):
-        rounds["n"] += 1
-        if rounds["n"] == 1:
+    def _next_turn(i, _c):
+        if i == 0:
             # Deliver the SFINCS flood depth layer.
-            return iter([
-                _make_fake_chunk_with_function_call(
-                    "sfincs_flood",
-                    {"location": "Mexico Beach"},
-                    "call-composer",
-                )
-            ])
+            return _make_fake_chunk_with_function_call(
+                "sfincs_flood",
+                {"location": "Mexico Beach"},
+                "call-composer",
+            )
         # The model keeps spinning with an unproductive call (varied args so the
         # repeat-watchdog is NOT what stops it -- our crisp-end is).
-        return iter([
-            _make_fake_chunk_with_function_call(
-                "fetch_dem", {"bbox": [0, 0, rounds["n"], rounds["n"]]}, f"c-{rounds['n']}"
-            )
-        ])
+        return _make_fake_chunk_with_function_call(
+            "fetch_dem", {"bbox": [0, 0, i + 1, i + 1]}, f"c-{i + 1}"
+        )
+
+    fake_llm.on_call(_next_turn)
 
     dispatches = {"n": 0}
 
@@ -146,14 +127,10 @@ async def test_delivered_composer_concludes_without_loop_exhausted():
     sock = _FakeSocket()
     state = SessionState(session_id=new_ulid())
 
-    with patch.object(agent_server, "build_client", return_value=MagicMock()), \
-         patch.object(
+    with patch.object(
              agent_server, "_invoke_tool_via_emitter", side_effect=_dispatch
          ), \
          patch.object(agent_server, "build_tool_declarations", return_value=[]):
-        agent_server.build_client.return_value.models.generate_content_stream.side_effect = (
-            lambda **kw: _script(**kw)
-        )
         await agent_server._stream_model_reply(
             sock, state, _settings(), "model the Mexico Beach flood", "research"
         )
@@ -183,7 +160,7 @@ async def test_delivered_composer_concludes_without_loop_exhausted():
 
 
 @pytest.mark.asyncio
-async def test_composer_function_response_carries_completion_directive():
+async def test_composer_function_response_carries_completion_directive(fake_llm):
     """The delivered composer's function_response is stamped with the wrap-up note.
 
     The directive is appended to ``contents`` as the composer's function_response
@@ -193,23 +170,16 @@ async def test_composer_function_response_carries_completion_directive():
     """
     from trid3nt_server import server as agent_server
 
-    captured_contents: list = []
-    rounds = {"n": 0}
-
-    def _script(**kwargs):
-        rounds["n"] += 1
-        captured_contents.append(kwargs.get("contents"))
-        if rounds["n"] == 1:
-            return iter([
-                _make_fake_chunk_with_function_call(
-                    "sfincs_flood", {"location": "X"}, "call-composer"
-                )
-            ])
-        return iter([
-            _make_fake_chunk_with_function_call(
-                "fetch_dem", {"bbox": [0, 0, rounds["n"], rounds["n"]]}, f"c-{rounds['n']}"
+    def _next_turn(i, _c):
+        if i == 0:
+            return _make_fake_chunk_with_function_call(
+                "sfincs_flood", {"location": "X"}, "call-composer"
             )
-        ])
+        return _make_fake_chunk_with_function_call(
+            "fetch_dem", {"bbox": [0, 0, i + 1, i + 1]}, f"c-{i + 1}"
+        )
+
+    fake_llm.on_call(_next_turn)
 
     async def _dispatch(_ws, _state, name, _args):
         if name == "sfincs_flood":
@@ -219,15 +189,13 @@ async def test_composer_function_response_carries_completion_directive():
     sock = _FakeSocket()
     state = SessionState(session_id=new_ulid())
 
-    with patch.object(agent_server, "build_client", return_value=MagicMock()), \
-         patch.object(
+    with patch.object(
              agent_server, "_invoke_tool_via_emitter", side_effect=_dispatch
          ), \
          patch.object(agent_server, "build_tool_declarations", return_value=[]):
-        agent_server.build_client.return_value.models.generate_content_stream.side_effect = (
-            lambda **kw: _script(**kw)
-        )
         await agent_server._stream_model_reply(sock, state, _settings(), "x", "research")
+
+    captured_contents = [call["contents"] for call in fake_llm.calls]
 
     # The follow-up round (>=2) must have been handed the composer's
     # function_response carrying the wrap-up directive.
@@ -243,7 +211,7 @@ async def test_composer_function_response_carries_completion_directive():
 
 
 @pytest.mark.asyncio
-async def test_non_composer_runaway_still_trips_loop_exhausted():
+async def test_non_composer_runaway_still_trips_loop_exhausted(fake_llm):
     """A turn that NEVER produces a terminal deliverable still hits the cap.
 
     The model loops a non-composer tool that returns a layer-bearing dict every
@@ -253,17 +221,13 @@ async def test_non_composer_runaway_still_trips_loop_exhausted():
     """
     from trid3nt_server import server as agent_server
 
-    rounds = {"n": 0}
-
-    def _script(**_kwargs):
-        rounds["n"] += 1
-        # Vary args so the no-progress watchdog is not the thing that stops it;
-        # each round PRODUCES a layer so the watchdog never counts no-progress.
-        return iter([
-            _make_fake_chunk_with_function_call(
-                "fetch_dem", {"bbox": [0, 0, rounds["n"], rounds["n"]]}, f"c-{rounds['n']}"
-            )
-        ])
+    # Vary args so the no-progress watchdog is not the thing that stops it;
+    # each round PRODUCES a layer so the watchdog never counts no-progress.
+    fake_llm.on_call(
+        lambda i, _c: _make_fake_chunk_with_function_call(
+            "fetch_dem", {"bbox": [0, 0, i + 1, i + 1]}, f"c-{i + 1}"
+        )
+    )
 
     dispatches = {"n": 0}
 
@@ -274,14 +238,10 @@ async def test_non_composer_runaway_still_trips_loop_exhausted():
     sock = _FakeSocket()
     state = SessionState(session_id=new_ulid())
 
-    with patch.object(agent_server, "build_client", return_value=MagicMock()), \
-         patch.object(
+    with patch.object(
              agent_server, "_invoke_tool_via_emitter", side_effect=_dispatch
          ), \
          patch.object(agent_server, "build_tool_declarations", return_value=[]):
-        agent_server.build_client.return_value.models.generate_content_stream.side_effect = (
-            lambda **kw: _script(**kw)
-        )
         await agent_server._stream_model_reply(sock, state, _settings(), "spin", "research")
 
     # The historical runaway guard is untouched.

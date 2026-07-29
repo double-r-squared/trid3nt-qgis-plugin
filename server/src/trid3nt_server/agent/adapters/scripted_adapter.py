@@ -38,7 +38,7 @@ from __future__ import annotations
 import json
 import logging
 import os
-from collections.abc import AsyncIterator
+from collections.abc import AsyncIterator, Callable
 from typing import Any
 
 from .adapter import FunctionCallEvent, StreamEvent, TextDeltaEvent, UsageMetadataEvent
@@ -51,6 +51,15 @@ __all__ = [
     "set_script",
     "clear_script",
     "load_script",
+    # Test-harness (fake-provider) seam -- see the harness section below.
+    "install_harness",
+    "reset_harness",
+    "harness_active",
+    "harness_calls",
+    "text_turn",
+    "call_turn",
+    "calls_turn",
+    "raise_turn",
 ]
 
 #: MODEL_PROVIDER values that select this adapter.
@@ -126,6 +135,172 @@ def _turn_index(contents: Any) -> int:
     return sum(1 for c in contents if _role_of(c) == "model")
 
 
+# ---------------------------------------------------------------------------
+# Test-harness (fake-provider) seam.
+#
+# The agent-loop test suite drives the REAL server dispatch under
+# ``MODEL_PROVIDER=scripted`` and feeds fake model turns through this harness --
+# the single replacement for the retired "patch ``build_client`` + feed fake
+# ``generate_content_stream`` chunks" pattern (see the ``fake_llm`` conftest
+# fixture). A test installs a turn source, drives the loop, then inspects
+# ``harness_calls()`` for the ``contents`` the server built between turns.
+#
+# A fake turn is a plain dict (the JSON-transcript shape, extended):
+#   {"text": "..."}                         -- one narration delta
+#   {"tool_call": {"name","args","call_id"?,"thought_signature"?}}
+#   {"tool_calls": [ {..}, {..} ]}           -- parallel calls in ONE round
+#   {"raise": <BaseException>}               -- inject a model-stream error
+#   {"usage": {"total_token_count": ...}}    -- emit a UsageMetadataEvent
+# A turn may combine text + call(s) + usage. Absent keys emit nothing, so a bare
+# ``{}`` is a genuinely empty round (the qwen3 empty-completion shape) and
+# ``None`` (a fixed list run past its end) yields a terminal narration so the
+# loop stops. Usage is emitted ONLY when a turn carries a ``usage`` key -- the
+# direct-adapter tests assert exact event counts, so no phantom UsageMetadataEvent
+# is injected.
+#
+# The turn SOURCE is either a list of turn dicts (advanced by an internal
+# per-call counter) or a callable ``(call_index:int, contents) -> turn`` for
+# dynamic tests (e.g. the circuit-breaker suite that decides the next turn from
+# an external counter). Advance is CALL-SEQUENCED (one turn per stream_scripted
+# call), which -- unlike the production transcript path's contents-model-role
+# counting -- correctly handles a round that emits MULTIPLE tool calls (the loop
+# appends >1 model Content for such a round).
+# ---------------------------------------------------------------------------
+
+#: Installed fake-turn source (list of turn dicts OR a (index, contents)->turn
+#: callable). ``None`` => harness inactive (production transcript path runs).
+_HARNESS_SOURCE: list[dict[str, Any]] | Callable[[int, Any], Any] | None = None
+#: Per-call advance counter (one turn consumed per ``stream_scripted`` call).
+_HARNESS_INDEX: int = 0
+#: Recorded ``stream_scripted`` calls (contents built between turns) for tests.
+_HARNESS_CALLS: list[dict[str, Any]] = []
+
+
+def install_harness(source: list[dict[str, Any]] | Callable[[int, Any], Any]) -> None:
+    """Install a call-sequenced fake-turn source; reset the index + call log."""
+    global _HARNESS_SOURCE, _HARNESS_INDEX, _HARNESS_CALLS
+    _HARNESS_SOURCE = source
+    _HARNESS_INDEX = 0
+    _HARNESS_CALLS = []
+
+
+def reset_harness() -> None:
+    """Clear the harness source, advance counter, and recorded calls."""
+    global _HARNESS_SOURCE, _HARNESS_INDEX, _HARNESS_CALLS
+    _HARNESS_SOURCE = None
+    _HARNESS_INDEX = 0
+    _HARNESS_CALLS = []
+
+
+def harness_active() -> bool:
+    """True when a fake-turn source is installed (test harness in control)."""
+    return _HARNESS_SOURCE is not None
+
+
+def harness_calls() -> list[dict[str, Any]]:
+    """The recorded ``stream_scripted`` calls: each a dict with ``contents``,
+    ``tool_declarations``, ``system_prompt``, ``model``, ``index``. Tests read
+    ``harness_calls()[i]["contents"]`` in place of the retired
+    ``_capture_and_stream`` kwargs snapshot."""
+    return _HARNESS_CALLS
+
+
+def text_turn(text: str) -> dict[str, Any]:
+    """A fake turn that streams one narration delta."""
+    return {"text": text}
+
+
+def call_turn(
+    name: str,
+    args: dict[str, Any] | None = None,
+    call_id: str | None = None,
+    thought_signature: bytes | None = None,
+) -> dict[str, Any]:
+    """A fake turn that emits ONE tool call (optionally text via merge)."""
+    tc: dict[str, Any] = {"name": name, "args": args or {}}
+    if call_id is not None:
+        tc["call_id"] = call_id
+    if thought_signature is not None:
+        tc["thought_signature"] = thought_signature
+    return {"tool_call": tc}
+
+
+def calls_turn(*calls: dict[str, Any]) -> dict[str, Any]:
+    """A fake turn that emits N tool calls in ONE round (parallel bundling).
+
+    Each argument is a ``{"name","args","call_id"?,"thought_signature"?}`` dict.
+    """
+    return {"tool_calls": list(calls)}
+
+
+def raise_turn(exc: BaseException) -> dict[str, Any]:
+    """A fake turn that raises ``exc`` from the model stream (error injection)."""
+    return {"raise": exc}
+
+
+def _usage_event_from(usage: dict[str, Any]) -> UsageMetadataEvent:
+    """Build a UsageMetadataEvent from a turn's ``usage`` dict."""
+    ct = usage.get("cached_content_token_count")
+    return UsageMetadataEvent(
+        cached_content_token_count=ct,
+        total_token_count=usage.get("total_token_count"),
+        prompt_token_count=usage.get("prompt_token_count"),
+        candidates_token_count=usage.get("candidates_token_count"),
+        cache_hit=bool(ct and ct > 0),
+    )
+
+
+def _events_from_turn(turn: Any, index: int) -> list[StreamEvent]:
+    """Resolve a fake turn dict into the ordered ``StreamEvent`` list it emits.
+
+    A ``{"raise": exc}`` turn raises ``exc`` here (before any event), matching
+    the old fake ``generate_content_stream`` ``side_effect`` that raised. A
+    ``None`` turn (fixed list run past its end) yields a single terminal
+    narration so the agent loop stops.
+    """
+    if turn is None:
+        return [TextDeltaEvent(delta="[scripted harness] transcript exhausted.")]
+    # Escape hatch: a turn already expressed as a list of StreamEvents.
+    if isinstance(turn, (list, tuple)):
+        return list(turn)
+    if not isinstance(turn, dict):
+        return []
+    exc = turn.get("raise")
+    if exc is not None:
+        raise exc
+    events: list[StreamEvent] = []
+    text = turn.get("text")
+    if text:
+        events.append(TextDeltaEvent(delta=str(text)))
+    calls: list[dict[str, Any]] = []
+    single = turn.get("tool_call")
+    if isinstance(single, dict):
+        calls.append(single)
+    for tc in turn.get("tool_calls") or []:
+        if isinstance(tc, dict):
+            calls.append(tc)
+    for i, tc in enumerate(calls):
+        if not tc.get("name"):
+            continue
+        sig = tc.get("thought_signature")
+        args = tc.get("args")
+        events.append(
+            FunctionCallEvent(
+                name=str(tc["name"]),
+                call_id=str(tc.get("call_id") or f"scripted-{index}-{i}"),
+                args=args if isinstance(args, dict) else {},
+                # Mirror the retired Vertex producer's guard: a non-bytes
+                # signature (e.g. a MagicMock leak) is coerced to None so we
+                # never feed garbage back to the model.
+                thought_signature=sig if isinstance(sig, (bytes, bytearray)) else None,
+            )
+        )
+    usage = turn.get("usage")
+    if usage is not None:
+        events.append(_usage_event_from(usage))
+    return events
+
+
 async def stream_scripted(
     *,
     contents: Any,
@@ -139,7 +314,42 @@ async def stream_scripted(
     ``MODEL_PROVIDER`` switch. ``tool_declarations`` / ``system_prompt`` / ``model``
     are accepted for signature parity and intentionally ignored (the transcript
     is authored, not generated).
+
+    When a test harness source is installed (``install_harness``), this routes
+    to the CALL-SEQUENCED fake-turn path (records the call, advances one turn)
+    instead of the contents-counting production transcript path.
     """
+    if harness_active():
+        global _HARNESS_INDEX
+        index = _HARNESS_INDEX
+        _HARNESS_INDEX += 1
+        # Shallow-snapshot ``contents`` at CALL time: the server loop appends new
+        # Content objects to the SAME list in place between turns, so storing the
+        # live reference would make every recorded call show the final mutated
+        # list. The Content objects themselves are not mutated, so a shallow copy
+        # captures each turn's state faithfully.
+        _HARNESS_CALLS.append(
+            {
+                "contents": list(contents)
+                if isinstance(contents, (list, tuple))
+                else contents,
+                "tool_declarations": tool_declarations,
+                "system_prompt": system_prompt,
+                "model": model,
+                "index": index,
+            }
+        )
+        src = _HARNESS_SOURCE
+        if callable(src):
+            turn = src(index, contents)
+        elif isinstance(src, (list, tuple)):
+            turn = src[index] if index < len(src) else None
+        else:
+            turn = None
+        for ev in _events_from_turn(turn, index):
+            yield ev
+        return
+
     turns = load_script()
     idx = _turn_index(contents)
 

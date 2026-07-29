@@ -18,7 +18,6 @@ from __future__ import annotations
 import asyncio
 from dataclasses import dataclass, field
 from typing import Any
-from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
@@ -75,37 +74,22 @@ def test_build_tool_declarations_includes_flood_door():
 
 
 @pytest.mark.asyncio
-async def test_stream_events_yields_function_call_event():
-    """stream_events demultiplexes a Gemini function_call part into a FunctionCallEvent."""
+async def test_stream_events_yields_function_call_event(fake_llm):
+    """stream_events demultiplexes a function_call turn into a FunctionCallEvent."""
 
-    # Build a fake chunk that looks like a google-genai streaming chunk with
-    # a function_call part.
-    fake_fn_call = MagicMock()
-    fake_fn_call.name = "sfincs_flood"
-    fake_fn_call.id = "call-abc123"
-    fake_fn_call.args = {"location_query": "Fort Myers, FL", "return_period_yr": 100}
-
-    fake_part = MagicMock()
-    fake_part.function_call = fake_fn_call
-    fake_part.text = None
-
-    fake_content = MagicMock()
-    fake_content.parts = [fake_part]
-
-    fake_candidate = MagicMock()
-    fake_candidate.content = fake_content
-
-    fake_chunk = MagicMock()
-    fake_chunk.candidates = [fake_candidate]
-    fake_chunk.text = None
-
-    # Patch the sync generate_content_stream to return [fake_chunk].
-    fake_client = MagicMock()
-    fake_client.models.generate_content_stream.return_value = iter([fake_chunk])
+    # Script one fake turn that emits a single function call; the scripted
+    # provider surfaces it as a FunctionCallEvent (client arg is ignored).
+    fake_llm.script([
+        fake_llm.call(
+            "sfincs_flood",
+            {"location_query": "Fort Myers, FL", "return_period_yr": 100},
+            call_id="call-abc123",
+        ),
+    ])
 
     events: list = []
     async for event in stream_events(
-        fake_client,
+        None,
         "gemini-2.5-pro",
         "Model peak flood depth from a 100-year design storm in Fort Myers, FL",
         tool_declarations=[],  # declarations already built; skip here
@@ -129,29 +113,14 @@ async def test_stream_events_yields_function_call_event():
 
 
 @pytest.mark.asyncio
-async def test_stream_events_yields_text_delta_event():
-    """stream_events yields TextDeltaEvent for a normal text response chunk."""
+async def test_stream_events_yields_text_delta_event(fake_llm):
+    """stream_events yields TextDeltaEvent for a normal text response turn."""
 
-    fake_part = MagicMock()
-    fake_part.function_call = None
-    fake_part.text = "Hello, I can help with that."
-
-    fake_content = MagicMock()
-    fake_content.parts = [fake_part]
-
-    fake_candidate = MagicMock()
-    fake_candidate.content = fake_content
-
-    fake_chunk = MagicMock()
-    fake_chunk.candidates = [fake_candidate]
-    fake_chunk.text = None
-
-    fake_client = MagicMock()
-    fake_client.models.generate_content_stream.return_value = iter([fake_chunk])
+    fake_llm.script([fake_llm.text("Hello, I can help with that.")])
 
     events: list = []
     async for event in stream_events(
-        fake_client,
+        None,
         "gemini-2.5-pro",
         "What is GRACE?",
     ):

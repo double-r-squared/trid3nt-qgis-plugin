@@ -164,3 +164,20 @@ def test_dispatch_routes_to_scripted_with_no_client(monkeypatch):
     fc = next(e for e in evs if isinstance(e, FunctionCallEvent))
     assert fc.name == "swan_wave_field"
     assert fc.args["bbox"] == [-85.55, 29.85, -85.3, 30.05]
+
+
+# --------------------------------------------------------------------------- #
+# The decommissioned vertex/gemini google-genai generate path is REMOVED:
+# those providers (and any unknown value) now raise the typed error instead of
+# falling through to a genai client. ``bedrock`` (the unset default) is the
+# supported production path and is NOT raised here.
+# --------------------------------------------------------------------------- #
+@pytest.mark.parametrize("prov", ["vertex", "gemini", "GEMINI", "googlegenai", "gpt"])
+def test_removed_and_unknown_providers_raise_unsupported(monkeypatch, prov):
+    from trid3nt_server.agent.adapters.adapter import UnsupportedModelProviderError
+
+    monkeypatch.setenv("MODEL_PROVIDER", prov)
+    with pytest.raises(UnsupportedModelProviderError):
+        _run(_collect(stream_events_with_contents(
+            client=None, model="unused", contents=[{"role": "user"}],
+        )))

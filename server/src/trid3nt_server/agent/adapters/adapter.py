@@ -47,7 +47,6 @@ side effects).  This file stays the Gemini-containment seam.
 
 from __future__ import annotations
 
-import asyncio
 import functools
 import inspect
 import logging
@@ -57,7 +56,6 @@ from dataclasses import dataclass, field
 import types as _builtin_types
 from typing import Any, get_args, get_origin, Union
 
-from google import genai
 from google.genai import types as genai_types
 
 logger = logging.getLogger("trid3nt_server.agent.adapters.adapter")
@@ -246,10 +244,10 @@ class UnsupportedModelProviderError(RuntimeError):
     """``MODEL_PROVIDER`` names a provider the dispatch does not support.
 
     The provider dispatch in ``stream_events_with_contents`` is EXPLICIT:
-    scripted/replay/fake, bedrock, and openai each have a branch, and the
-    retained-dormant google-genai / Vertex seam handles ``vertex``/``gemini``.
-    Any OTHER value raises this (never a silent fall-through to the genai
-    path), so a typo or a decommissioned provider fails loudly.
+    scripted/replay/fake, bedrock, and openai each have a branch. Any OTHER
+    value -- including the decommissioned ``vertex``/``gemini`` google-genai
+    generate path (removed) and the empty default -- raises this (never a
+    silent fall-through), so a typo or a decommissioned provider fails loudly.
     """
 
     error_class = "internal"
@@ -1201,25 +1199,6 @@ def load_settings() -> ModelSettings:
         location=os.environ.get("GOOGLE_CLOUD_LOCATION", "us-central1"),
         use_vertex=os.environ.get("GOOGLE_GENAI_USE_VERTEXAI", "True").lower()
         in ("true", "1", "yes"),
-    )
-
-
-def build_client(settings: ModelSettings) -> genai.Client:
-    """Build a google-genai Client configured for Vertex AI.
-
-    Containment: nothing outside this module imports ``genai`` or
-    ``genai_types``. The server consumes the async-iterator of deltas this
-    module returns.
-    """
-    if not settings.use_vertex:
-        # Pre-MVP: Vertex-only path. Surface the misconfiguration loudly
-        # rather than silently falling back to API-key mode.
-        raise RuntimeError(
-            "TRID3NT agent runs Vertex-only (FR-AS-1). "
-            "Set GOOGLE_GENAI_USE_VERTEXAI=True."
-        )
-    return genai.Client(
-        vertexai=True, project=settings.project, location=settings.location
     )
 
 
@@ -2533,7 +2512,7 @@ def build_user_text_content(text: str) -> genai_types.Content:
 # ---------------------------------------------------------------------------
 
 async def stream_events(
-    client: genai.Client,
+    client: Any,
     model: str,
     user_text: str,
     tool_declarations: list[genai_types.FunctionDeclaration] | None = None,
@@ -2554,7 +2533,9 @@ async def stream_events(
       tool; caller dispatches through ``_invoke_tool_via_emitter``.
 
     Args:
-        client: google-genai ``Client`` built by ``build_client``.
+        client: accepted for signature parity and ignored -- the provider
+            adapters (bedrock / openai / scripted) open their own client at the
+            boundary. Pass ``None``.
         model: model identifier string (e.g. ``"gemini-2.5-pro"``).
         user_text: the user's message text.
         tool_declarations: optional list of ``FunctionDeclaration`` objects
@@ -2583,58 +2564,8 @@ async def stream_events(
 # ---------------------------------------------------------------------------
 
 
-def _coerce_int(v: Any) -> int | None:
-    """Return ``v`` as a real ``int``, or ``None`` for anything else.
-
-    Defends against MagicMock-on-attribute coercion in unit tests (whose
-    auto-attrs implement ``__int__`` and return 1, silently fabricating
-    usage counts) AND against protobuf scalars / pydantic-wrapped ints on
-    the wire (the genai SDK occasionally hands these back as objects that
-    coerce cleanly via ``int()`` but are not ``isinstance(int)``).
-    """
-    if v is None:
-        return None
-    if isinstance(v, bool):
-        # bool is a subclass of int; reject (no real usage count is a bool).
-        return None
-    if isinstance(v, int):
-        return v
-    # Accept "looks like a real number" -- int(str) / int(float) -- but NOT a
-    # MagicMock (whose __int__ returns 1 unconditionally and would inject
-    # phantom counts into the stream).
-    try:
-        import unittest.mock as _mock
-        if isinstance(v, _mock.NonCallableMock):
-            return None
-    except Exception:  # noqa: BLE001 -- defensive; mock import should always work
-        pass
-    try:
-        return int(v)
-    except (TypeError, ValueError):
-        return None
-
-
-def _usage_has_real_counts(usage: Any) -> bool:
-    """Return True only if ``usage`` carries at least one real integer count.
-
-    A MagicMock surfaces all attrs as MagicMocks -- ``_coerce_int`` rejects
-    those, so an all-MagicMock usage object returns False here.  A real
-    SDK ``UsageMetadata`` carries at least one int (typically
-    ``total_token_count`` is always populated).
-    """
-    for fname in (
-        "total_token_count",
-        "cached_content_token_count",
-        "prompt_token_count",
-        "candidates_token_count",
-    ):
-        if _coerce_int(getattr(usage, fname, None)) is not None:
-            return True
-    return False
-
-
 async def stream_events_with_contents(
-    client: genai.Client,
+    client: Any,
     model: str,
     contents: list[genai_types.Content],
     tool_declarations: list[genai_types.FunctionDeclaration] | None = None,
@@ -2652,15 +2583,14 @@ async def stream_events_with_contents(
     the Bedrock / Vertex / scripted paths.
 
     This is the primitive the multi-turn loop driver in ``server.py`` uses.
-    Each call corresponds to exactly one ``generate_content_stream`` round --
-    the driver appends function_call + function_response Content entries to
-    ``contents`` and re-calls this until Gemini emits no further function
-    calls (only text → terminal turn). ``stream_events`` (the user-text
-    variant) delegates here after building ``contents`` via
-    ``build_contents_from_history``.
-
-    Cancellation: ``asyncio.CancelledError`` cancels the underlying producer
-    thread and re-raises.
+    Each call corresponds to exactly one provider round -- the driver appends
+    function_call + function_response Content entries to ``contents`` and
+    re-calls this until the model emits no further function calls (only text →
+    terminal turn). ``stream_events`` (the user-text variant) delegates here
+    after building ``contents`` via ``build_contents_from_history``. Dispatch is
+    an EXPLICIT provider switch (scripted/replay/fake, bedrock, openai); any
+    other ``MODEL_PROVIDER`` (including the decommissioned vertex/gemini
+    google-genai generate path) raises ``UnsupportedModelProviderError``.
 
     CachedContent integration: when ``cached_content_name`` is provided, the
     request is built WITHOUT ``tools[]`` and WITHOUT ``tool_config`` -- the
@@ -2725,158 +2655,17 @@ async def stream_events_with_contents(
         return
 
     # Provider dispatch is EXPLICIT -- scripted/replay/fake, bedrock, and openai
-    # each returned above. The ONLY remaining valid value is the retained-dormant
-    # google-genai / Vertex seam (``vertex``/``gemini``, or the empty default the
-    # test harness pins). Any OTHER MODEL_PROVIDER is a typo or a decommissioned
-    # provider: raise a TYPED error instead of silently running the genai path.
-    # (Removal of the vertex generate path itself is deferred -- CLAUDE.md keeps
-    # it as a reversible seam and the turn-loop test harness drives it.)
-    _prov = model_provider()
-    if _prov not in ("vertex", "gemini", ""):
-        raise UnsupportedModelProviderError(
-            f"MODEL_PROVIDER={_prov!r} is not supported. Valid providers: "
-            "scripted/replay/fake, bedrock, openai (or the retained-dormant "
-            "vertex/gemini genai seam)."
-        )
-
-    loop = asyncio.get_running_loop()
-
-    # Build the tool list for the config. SKIPPED when a cache is supplied --
-    # the cache carries the catalog and Vertex 400s when both are passed.
-    gem_tools: list[genai_types.Tool] | None = None
-    if tool_declarations and not cached_content_name:
-        gem_tools = [genai_types.Tool(function_declarations=tool_declarations)]
-
-    def _open_stream():
-        if cached_content_name:
-            # Cached path: NO tools[], NO tool_config, NO system_instruction.
-            # All three live in the cache. Sending them alongside
-            # ``cached_content`` is a Vertex 400. The temperature / AFC fields
-            # are per-request, so they stay.
-            cfg = genai_types.GenerateContentConfig(
-                temperature=0.7,
-                cached_content=cached_content_name,
-                automatic_function_calling=genai_types.AutomaticFunctionCallingConfig(
-                    disable=True
-                ),
-            )
-        else:
-            cfg = genai_types.GenerateContentConfig(
-                temperature=0.7,
-                system_instruction=system_prompt or None,
-                tools=gem_tools or None,
-                # Disable automatic function calling -- we handle dispatch ourselves.
-                automatic_function_calling=genai_types.AutomaticFunctionCallingConfig(
-                    disable=True
-                ) if gem_tools else None,
-            )
-        return client.models.generate_content_stream(
-            model=model,
-            contents=contents,
-            config=cfg,
-        )
-
-    # Use a typed queue: items are StreamEvent | None (sentinel) | BaseException.
-    queue: asyncio.Queue[StreamEvent | None | BaseException] = asyncio.Queue()
-
-    def _producer() -> None:
-        try:
-            last_usage: Any = None  # last seen ``usage_metadata`` across chunks.
-            for chunk in _open_stream():
-                # Walk parts: each chunk may carry text OR function_call parts.
-                cands = getattr(chunk, "candidates", None) or []
-                emitted_something = False
-                for cand in cands:
-                    content = getattr(cand, "content", None)
-                    if content is None:
-                        continue
-                    parts = getattr(content, "parts", None) or []
-                    for part in parts:
-                        fn_call = getattr(part, "function_call", None)
-                        if fn_call is not None and getattr(fn_call, "name", None):
-                            # Harvest Gemini 3 thought_signature off the Part
-                            # level (``Part.thought_signature``, a bytes blob
-                            # the model uses to re-anchor its reasoning across
-                            # turns). None on Gemini 2.5 (no signatures
-                            # surfaced); on Gemini 3 it must be echoed back
-                            # unchanged on the function_call Part of the
-                            # replayed turn or generate_content_stream fails
-                            # with a ``thought-signature mismatch`` error.
-                            sig = getattr(part, "thought_signature", None)
-                            event = FunctionCallEvent(
-                                name=fn_call.name,
-                                call_id=getattr(fn_call, "id", None),
-                                args=dict(fn_call.args or {}),
-                                thought_signature=sig if isinstance(sig, (bytes, bytearray)) else None,
-                            )
-                            loop.call_soon_threadsafe(queue.put_nowait, event)
-                            emitted_something = True
-                        else:
-                            text = getattr(part, "text", None)
-                            if text:
-                                loop.call_soon_threadsafe(
-                                    queue.put_nowait, TextDeltaEvent(delta=text)
-                                )
-                                emitted_something = True
-                # Fallback: some SDK versions expose chunk.text directly.
-                if not emitted_something:
-                    delta = getattr(chunk, "text", None)
-                    if delta:
-                        loop.call_soon_threadsafe(
-                            queue.put_nowait, TextDeltaEvent(delta=delta)
-                        )
-                # Harvest usage_metadata as it appears -- Gemini surfaces
-                # aggregate counts only on the terminal response chunk; we
-                # capture every non-None value so a fallback path still works
-                # if the SDK changes which chunk carries usage. Require at
-                # least one bona-fide int field to avoid spurious
-                # UsageMetadataEvent emission from MagicMocks in unit tests
-                # (whose auto-attrs coerce to 1 via __int__) and from SDK
-                # chunks whose usage object has all-None fields.
-                usage = getattr(chunk, "usage_metadata", None)
-                if usage is not None and _usage_has_real_counts(usage):
-                    last_usage = usage
-            # Once the stream completes, emit a single UsageMetadataEvent so
-            # the caller can stash cached_content_token_count for telemetry +
-            # the cache-status envelope.
-            if last_usage is not None:
-                cached_tokens = _coerce_int(
-                    getattr(last_usage, "cached_content_token_count", None)
-                )
-                total_tokens = _coerce_int(
-                    getattr(last_usage, "total_token_count", None)
-                )
-                prompt_tokens = _coerce_int(
-                    getattr(last_usage, "prompt_token_count", None)
-                )
-                cand_tokens = _coerce_int(
-                    getattr(last_usage, "candidates_token_count", None)
-                )
-                ev = UsageMetadataEvent(
-                    cached_content_token_count=cached_tokens,
-                    total_token_count=total_tokens,
-                    prompt_token_count=prompt_tokens,
-                    candidates_token_count=cand_tokens,
-                    cache_hit=bool(cached_tokens and cached_tokens > 0),
-                )
-                loop.call_soon_threadsafe(queue.put_nowait, ev)
-            loop.call_soon_threadsafe(queue.put_nowait, None)
-        except BaseException as exc:  # noqa: BLE001 -- surface any error to caller
-            loop.call_soon_threadsafe(queue.put_nowait, exc)
-
-    producer_task = loop.run_in_executor(None, _producer)
-
-    try:
-        while True:
-            item = await queue.get()
-            if item is None:
-                return
-            if isinstance(item, BaseException):
-                raise item
-            yield item
-    except asyncio.CancelledError:
-        producer_task.cancel()
-        raise
+    # each returned above. Anything else (including the decommissioned
+    # ``vertex``/``gemini`` google-genai generate path, now removed, and the
+    # empty default) is unsupported: raise a TYPED error instead of a silent
+    # empty turn. ``google.genai.types`` stays imported as the load-bearing IR
+    # (Content / Part / FunctionCall builders), but there is no longer a
+    # ``generate_content_stream`` client path to fall through to.
+    raise UnsupportedModelProviderError(
+        f"MODEL_PROVIDER={model_provider()!r} is not supported. Valid providers: "
+        "scripted/replay/fake, bedrock, openai. The vertex/gemini google-genai "
+        "generate path is decommissioned and removed."
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -2906,7 +2695,6 @@ __all__ = [
     # Never-rehydrate guard (thinking persistence)
     "NEVER_REHYDRATE_FIELDS",
     "SYSTEM_PROMPT",
-    "build_client",
     "build_contents_from_history",
     "build_layers_present_note",
     "build_function_call_content",

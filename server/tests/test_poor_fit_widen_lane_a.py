@@ -72,8 +72,14 @@ def test_widen_k_exceeds_gate_floor():
 
 
 def _settings() -> ModelSettings:
+    # use_vertex=True so the real (unused -- stream_events_with_contents is
+    # faked below) Vertex client construction succeeds instead of raising its
+    # "Vertex-only" guard; the openai-path gating under test never reads this
+    # client. (The real dispatch for MODEL_PROVIDER=openai still constructs
+    # that client unconditionally -- see server.py's per-turn client
+    # resolution -- so it must not raise.)
     return ModelSettings(
-        model="qwen", project="t", location="us-central1", use_vertex=False
+        model="qwen", project="t", location="us-central1", use_vertex=True
     )
 
 
@@ -104,7 +110,7 @@ async def _drive_and_record_ks(top_score: float, monkeypatch) -> list[int]:
         return None
 
     sock.send = _noop_send
-    with patch.object(agent_server, "build_client", return_value=MagicMock()), patch.object(
+    with patch.object(
         agent_server, "build_tool_declarations", return_value=[]
     ), patch.object(
         agent_server, "stream_events_with_contents", _fake_stream

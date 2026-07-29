@@ -18,7 +18,7 @@ from __future__ import annotations
 import asyncio
 import json
 from dataclasses import dataclass, field
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 
 import pytest
 
@@ -218,8 +218,7 @@ async def _drive_turn_and_capture_registry(monkeypatch) -> dict:
 
     sock = _FakeSocket()
     state = agent_server.SessionState(session_id=new_ulid())
-    with patch.object(agent_server, "build_client", return_value=MagicMock()), \
-         patch.object(agent_server, "build_tool_declarations", _capture_decls), \
+    with patch.object(agent_server, "build_tool_declarations", _capture_decls), \
          patch.object(agent_server, "stream_events_with_contents", _fake_stream):
         await agent_server._stream_model_reply(
             sock, state, _settings(), "fetch something for Boulder", "research"
@@ -279,8 +278,7 @@ async def test_openai_gate_fails_open_on_cold_index(monkeypatch):
 
     sock = _FakeSocket()
     state = agent_server.SessionState(session_id=new_ulid())
-    with patch.object(agent_server, "build_client", return_value=MagicMock()), \
-         patch.object(agent_server, "build_tool_declarations", _capture_decls), \
+    with patch.object(agent_server, "build_tool_declarations", _capture_decls), \
          patch.object(agent_server, "stream_events_with_contents", _fake_stream):
         await agent_server._stream_model_reply(
             sock, state, _settings(), "fetch something", "research"

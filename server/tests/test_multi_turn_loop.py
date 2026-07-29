@@ -37,7 +37,7 @@ import asyncio
 import json
 from dataclasses import dataclass, field
 from typing import Any
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 
 import pytest
 
@@ -186,50 +186,28 @@ def test_build_function_call_and_response_content_pair():
 
 
 def _make_fake_chunk_with_function_call(name: str, args: dict, call_id: str = "c1"):
-    fn_call = MagicMock()
-    fn_call.name = name
-    fn_call.id = call_id
-    fn_call.args = args
-    fake_part = MagicMock()
-    fake_part.function_call = fn_call
-    fake_part.text = None
-    fake_content = MagicMock()
-    fake_content.parts = [fake_part]
-    fake_candidate = MagicMock()
-    fake_candidate.content = fake_content
-    fake_chunk = MagicMock()
-    fake_chunk.candidates = [fake_candidate]
-    fake_chunk.text = None
-    return fake_chunk
+    """A fake turn (scripted-provider dict) emitting ONE function call."""
+    return {"tool_call": {"name": name, "args": args, "call_id": call_id}}
 
 
 def _make_fake_chunk_with_text(text: str):
-    fake_part = MagicMock()
-    fake_part.function_call = None
-    fake_part.text = text
-    fake_content = MagicMock()
-    fake_content.parts = [fake_part]
-    fake_candidate = MagicMock()
-    fake_candidate.content = fake_content
-    fake_chunk = MagicMock()
-    fake_chunk.candidates = [fake_candidate]
-    fake_chunk.text = None
-    return fake_chunk
+    """A fake turn (scripted-provider dict) emitting one narration delta."""
+    return {"text": text}
 
 
 @pytest.mark.asyncio
-async def test_stream_events_with_contents_yields_function_call():
-    """stream_events_with_contents demultiplexes function_call parts."""
-    fake_chunk = _make_fake_chunk_with_function_call(
-        "geocode_location", {"query": "Fort Myers, FL"}, "call-1"
-    )
-    fake_client = MagicMock()
-    fake_client.models.generate_content_stream.return_value = iter([fake_chunk])
+async def test_stream_events_with_contents_yields_function_call(fake_llm):
+    """stream_events_with_contents demultiplexes a function_call turn."""
+    fake_llm.script([
+        _make_fake_chunk_with_function_call(
+            "geocode_location", {"query": "Fort Myers, FL"}, "call-1"
+        )
+    ])
 
     contents = build_contents_from_history("Show me Fort Myers.", None)
     events: list = []
     async for evt in stream_events_with_contents(
-        fake_client, "gemini-2.5-pro", contents
+        None, "gemini-2.5-pro", contents
     ):
         events.append(evt)
 
@@ -255,7 +233,7 @@ class _FakeSocket:
 
 
 @pytest.mark.asyncio
-async def test_stream_model_reply_multi_turn_loop():
+async def test_stream_model_reply_multi_turn_loop(fake_llm):
     """Proper recovery flow: geocode → list_tools_in_category → wdpa → narrative.
 
     Scenario mirrors the kickoff: "Show me protected areas in Fort Myers".
@@ -292,39 +270,7 @@ async def test_stream_model_reply_multi_turn_loop():
         "Found 2 protected areas in Fort Myers — listing them now."
     )
 
-    turn_responses = iter([
-        iter([turn1_chunk]),
-        iter([turn2_chunk]),
-        iter([turn3_chunk]),
-        iter([turn4_chunk]),
-    ])
-
-    fake_client = MagicMock()
-    fake_client.models.generate_content_stream.side_effect = (
-        lambda **_: next(turn_responses)
-    )
-
-    # Capture all contents lists passed to generate_content_stream across
-    # the four turns — this verifies the loop appends function_call +
-    # function_response between turns.
-    contents_per_turn: list[list[Any]] = []
-
-    def _capture_and_stream(**kwargs):
-        contents_per_turn.append([
-            (c.role, [
-                ("text", p.text) if p.text else (
-                    "function_call", p.function_call.name
-                ) if getattr(p, "function_call", None) else (
-                    "function_response",
-                    p.function_response.name,
-                ) if getattr(p, "function_response", None) else ("unknown", None)
-                for p in c.parts
-            ])
-            for c in kwargs["contents"]
-        ])
-        return next(turn_responses)
-
-    fake_client.models.generate_content_stream.side_effect = _capture_and_stream
+    fake_llm.script([turn1_chunk, turn2_chunk, turn3_chunk, turn4_chunk])
 
     # Stub the registry-dispatch helper so we can assert exactly which tools
     # were dispatched without bringing up GCS / Nominatim / WDPA.
@@ -364,12 +310,29 @@ async def test_stream_model_reply_multi_turn_loop():
         use_vertex=True,
     )
 
-    with patch.object(agent_server, "build_client", return_value=fake_client), \
-         patch.object(agent_server, "_invoke_tool_via_emitter", side_effect=_fake_invoke), \
+    with patch.object(agent_server, "_invoke_tool_via_emitter", side_effect=_fake_invoke), \
          patch.object(agent_server, "build_tool_declarations", return_value=[]):
         await agent_server._stream_model_reply(
             sock, state, settings, "Show me protected areas in Fort Myers", "research"
         )
+
+    # The contents the loop built + passed to the model on each turn — verifies
+    # the loop appends function_call + function_response between turns.
+    contents_per_turn: list[list[Any]] = [
+        [
+            (c.role, [
+                ("text", p.text) if p.text else (
+                    "function_call", p.function_call.name
+                ) if getattr(p, "function_call", None) else (
+                    "function_response",
+                    p.function_response.name,
+                ) if getattr(p, "function_response", None) else ("unknown", None)
+                for p in c.parts
+            ])
+            for c in call["contents"]
+        ]
+        for call in fake_llm.calls
+    ]
 
     # All three tools were dispatched in the correct order.
     assert [name for (name, _) in dispatch_log] == [
@@ -453,7 +416,7 @@ async def test_stream_model_reply_multi_turn_loop():
 
 
 @pytest.mark.asyncio
-async def test_stream_model_reply_tool_error_does_not_kill_loop():
+async def test_stream_model_reply_tool_error_does_not_kill_loop(fake_llm):
     """Dispatch error is summarized into the function_response; loop continues."""
     from trid3nt_server import server as agent_server
     from trid3nt_server.server import SessionState
@@ -464,10 +427,7 @@ async def test_stream_model_reply_tool_error_does_not_kill_loop():
     turn2_chunk = _make_fake_chunk_with_text(
         "Couldn't load the DEM; trying a different region."
     )
-    turn_iter = iter([iter([turn1_chunk]), iter([turn2_chunk])])
-
-    fake_client = MagicMock()
-    fake_client.models.generate_content_stream.side_effect = lambda **_: next(turn_iter)
+    fake_llm.script([turn1_chunk, turn2_chunk])
 
     async def _failing_invoke(_ws, _state, name, args):
         raise RuntimeError("DEM upstream 503 — temporary")
@@ -478,8 +438,7 @@ async def test_stream_model_reply_tool_error_does_not_kill_loop():
         model="gemini-2.5-pro", project="t", location="us-central1", use_vertex=True
     )
 
-    with patch.object(agent_server, "build_client", return_value=fake_client), \
-         patch.object(agent_server, "_invoke_tool_via_emitter", side_effect=_failing_invoke), \
+    with patch.object(agent_server, "_invoke_tool_via_emitter", side_effect=_failing_invoke), \
          patch.object(agent_server, "build_tool_declarations", return_value=[]):
         # MUST NOT raise — the error becomes a function_response payload.
         await agent_server._stream_model_reply(
@@ -497,23 +456,18 @@ async def test_stream_model_reply_tool_error_does_not_kill_loop():
 
 
 @pytest.mark.asyncio
-async def test_stream_model_reply_caps_runaway_loop():
+async def test_stream_model_reply_caps_runaway_loop(fake_llm):
     """A Gemini that emits a function_call every turn is fail-stopped at the cap."""
     from trid3nt_server import server as agent_server
     from trid3nt_server.server import SessionState
 
-    # Generator that always returns one chunk asking for another tool call.
-    def _infinite_calls():
-        i = 0
-        while True:
-            i += 1
-            yield iter([_make_fake_chunk_with_function_call(
-                "fetch_dem", {"bbox": [0, 0, 1, 1]}, f"call-{i}"
-            )])
-
-    chunks = _infinite_calls()
-    fake_client = MagicMock()
-    fake_client.models.generate_content_stream.side_effect = lambda **_: next(chunks)
+    # Dynamic source that ALWAYS emits the same fetch_dem call (identical
+    # tool+args every round -> the loop watchdog trips on the repeat).
+    fake_llm.on_call(
+        lambda i, _c: _make_fake_chunk_with_function_call(
+            "fetch_dem", {"bbox": [0, 0, 1, 1]}, f"call-{i + 1}"
+        )
+    )
 
     dispatch_count = 0
 
@@ -528,8 +482,7 @@ async def test_stream_model_reply_caps_runaway_loop():
         model="gemini-2.5-pro", project="t", location="us-central1", use_vertex=True
     )
 
-    with patch.object(agent_server, "build_client", return_value=fake_client), \
-         patch.object(agent_server, "_invoke_tool_via_emitter", side_effect=_counting_invoke), \
+    with patch.object(agent_server, "_invoke_tool_via_emitter", side_effect=_counting_invoke), \
          patch.object(agent_server, "build_tool_declarations", return_value=[]):
         await agent_server._stream_model_reply(
             sock, state, settings, "x", "research"
@@ -555,25 +508,13 @@ async def test_stream_model_reply_caps_runaway_loop():
 
 
 def _make_fake_chunk_multi_call(calls):
-    """A single chunk carrying N function_call parts (multiple calls one round)."""
-    parts = []
-    for name, args, call_id in calls:
-        fn_call = MagicMock()
-        fn_call.name = name
-        fn_call.id = call_id
-        fn_call.args = args
-        p = MagicMock()
-        p.function_call = fn_call
-        p.text = None
-        parts.append(p)
-    fake_content = MagicMock()
-    fake_content.parts = parts
-    fake_candidate = MagicMock()
-    fake_candidate.content = fake_content
-    fake_chunk = MagicMock()
-    fake_chunk.candidates = [fake_candidate]
-    fake_chunk.text = None
-    return fake_chunk
+    """A fake turn carrying N function calls (multiple calls in ONE round)."""
+    return {
+        "tool_calls": [
+            {"name": name, "args": args, "call_id": call_id}
+            for (name, args, call_id) in calls
+        ]
+    }
 
 
 def _agent_chunks(sock):
@@ -594,7 +535,7 @@ def _segment_ids_in_order(sock):
 
 
 @pytest.mark.asyncio
-async def test_stream_segments_interleave_distinct_message_ids():
+async def test_stream_segments_interleave_distinct_message_ids(fake_llm):
     """text -> tool -> text -> tool -> text emits THREE distinct bubble ids, each
     non-terminal segment finalized (done=True) BEFORE its round's tool frames,
     and no id ever receives an empty-only done=True without prior text."""
@@ -602,24 +543,25 @@ async def test_stream_segments_interleave_distinct_message_ids():
     from trid3nt_server.server import SessionState
 
     # Round 1: narrate then call geocode. Round 2: narrate then call publish.
-    # Round 3: narrate, no call (terminal).
-    turn1 = iter([
-        _make_fake_chunk_with_text("Fetching... "),
-        _make_fake_chunk_with_function_call(
-            "geocode_location", {"query": "Fort Myers, FL"}, "call-geo"
-        ),
-    ])
-    turn2 = iter([
-        _make_fake_chunk_with_text("Now publishing... "),
-        _make_fake_chunk_with_function_call(
-            "publish_layer", {"layer_uri": "h-1", "layer_id": "L"}, "call-pub"
-        ),
-    ])
-    turn3 = iter([_make_fake_chunk_with_text("Done.")])
-    turn_iter = iter([turn1, turn2, turn3])
-
-    fake_client = MagicMock()
-    fake_client.models.generate_content_stream.side_effect = lambda **_: next(turn_iter)
+    # Round 3: narrate, no call (terminal). Text + call merge into ONE turn.
+    turn1 = {
+        "text": "Fetching... ",
+        "tool_call": {
+            "name": "geocode_location",
+            "args": {"query": "Fort Myers, FL"},
+            "call_id": "call-geo",
+        },
+    }
+    turn2 = {
+        "text": "Now publishing... ",
+        "tool_call": {
+            "name": "publish_layer",
+            "args": {"layer_uri": "h-1", "layer_id": "L"},
+            "call_id": "call-pub",
+        },
+    }
+    turn3 = _make_fake_chunk_with_text("Done.")
+    fake_llm.script([turn1, turn2, turn3])
 
     # Record the wire length at each dispatch moment so we can prove the tool
     # dispatch lands BETWEEN the surrounding bubbles' frames (the emitter that
@@ -639,8 +581,7 @@ async def test_stream_segments_interleave_distinct_message_ids():
         model="gemini-2.5-pro", project="t", location="us-central1", use_vertex=True
     )
 
-    with patch.object(agent_server, "build_client", return_value=fake_client), \
-         patch.object(agent_server, "_invoke_tool_via_emitter", side_effect=_fake_invoke), \
+    with patch.object(agent_server, "_invoke_tool_via_emitter", side_effect=_fake_invoke), \
          patch.object(agent_server, "build_tool_declarations", return_value=[]):
         await agent_server._stream_model_reply(
             sock, state, settings, "Show me Fort Myers protected areas", "research"
@@ -700,23 +641,17 @@ async def test_stream_segments_interleave_distinct_message_ids():
 
 
 @pytest.mark.asyncio
-async def test_stream_no_leading_text_before_first_tool_no_empty_bubble():
+async def test_stream_no_leading_text_before_first_tool_no_empty_bubble(fake_llm):
     """Round 1 = function_call ONLY (no text), round 2 = text. Exactly ONE
     message_id appears across all agent frames (the tool round mints nothing),
     and it carries exactly one done=True."""
     from trid3nt_server import server as agent_server
     from trid3nt_server.server import SessionState
 
-    turn1 = iter([
-        _make_fake_chunk_with_function_call(
-            "geocode_location", {"query": "x"}, "call-geo"
-        ),
+    fake_llm.script([
+        _make_fake_chunk_with_function_call("geocode_location", {"query": "x"}, "call-geo"),
+        _make_fake_chunk_with_text("Here it is."),
     ])
-    turn2 = iter([_make_fake_chunk_with_text("Here it is.")])
-    turn_iter = iter([turn1, turn2])
-
-    fake_client = MagicMock()
-    fake_client.models.generate_content_stream.side_effect = lambda **_: next(turn_iter)
 
     async def _fake_invoke(_ws, _state, name, args):
         return {"bbox": [0, 0, 1, 1]}
@@ -727,8 +662,7 @@ async def test_stream_no_leading_text_before_first_tool_no_empty_bubble():
         model="gemini-2.5-pro", project="t", location="us-central1", use_vertex=True
     )
 
-    with patch.object(agent_server, "build_client", return_value=fake_client), \
-         patch.object(agent_server, "_invoke_tool_via_emitter", side_effect=_fake_invoke), \
+    with patch.object(agent_server, "_invoke_tool_via_emitter", side_effect=_fake_invoke), \
          patch.object(agent_server, "build_tool_declarations", return_value=[]):
         await agent_server._stream_model_reply(
             sock, state, settings, "x", "research"
@@ -746,25 +680,25 @@ async def test_stream_no_leading_text_before_first_tool_no_empty_bubble():
 
 
 @pytest.mark.asyncio
-async def test_stream_multiple_calls_one_round_single_finalize():
+async def test_stream_multiple_calls_one_round_single_finalize(fake_llm):
     """Round 1 = text + TWO function_calls in ONE generation, round 2 = text.
     Exactly TWO distinct bubbles (one contiguous run each), one done=True per
     id, and BOTH tool dispatches occur between the two bubbles' frames."""
     from trid3nt_server import server as agent_server
     from trid3nt_server.server import SessionState
 
-    turn1 = iter([
-        _make_fake_chunk_with_text("Fetching both. "),
-        _make_fake_chunk_multi_call([
-            ("geocode_location", {"query": "a"}, "c1"),
-            ("geocode_location", {"query": "b"}, "c2"),
-        ]),
-    ])
-    turn2 = iter([_make_fake_chunk_with_text("Both done.")])
-    turn_iter = iter([turn1, turn2])
-
-    fake_client = MagicMock()
-    fake_client.models.generate_content_stream.side_effect = lambda **_: next(turn_iter)
+    # Text + TWO parallel calls merge into ONE round (a round the server
+    # dispatches as a bundle, appending 2 model Contents -- the call-sequenced
+    # harness serves round 2 next regardless).
+    turn1 = {
+        "text": "Fetching both. ",
+        "tool_calls": [
+            {"name": "geocode_location", "args": {"query": "a"}, "call_id": "c1"},
+            {"name": "geocode_location", "args": {"query": "b"}, "call_id": "c2"},
+        ],
+    }
+    turn2 = _make_fake_chunk_with_text("Both done.")
+    fake_llm.script([turn1, turn2])
 
     dispatch_log: list[str] = []
     dispatch_at_wire_len: list[int] = []
@@ -780,8 +714,7 @@ async def test_stream_multiple_calls_one_round_single_finalize():
         model="gemini-2.5-pro", project="t", location="us-central1", use_vertex=True
     )
 
-    with patch.object(agent_server, "build_client", return_value=fake_client), \
-         patch.object(agent_server, "_invoke_tool_via_emitter", side_effect=_fake_invoke), \
+    with patch.object(agent_server, "_invoke_tool_via_emitter", side_effect=_fake_invoke), \
          patch.object(agent_server, "build_tool_declarations", return_value=[]):
         await agent_server._stream_model_reply(
             sock, state, settings, "x", "research"
@@ -891,7 +824,7 @@ def _turn_recorders(agent_server):
 
 
 @pytest.mark.asyncio
-async def test_turn_survives_client_ws_close_mid_dispatch():
+async def test_turn_survives_client_ws_close_mid_dispatch(fake_llm):
     """The client socket dies WHILE a tool runs: the tool result still feeds
     back to the model, the closing narration still persists, and neither an
     LLM_UNAVAILABLE error nor a terminal-failure card is produced."""
@@ -902,16 +835,7 @@ async def test_turn_survives_client_ws_close_mid_dispatch():
         "fetch_esri_landcover_10m", {"year": "2023"}, "call-lc"
     )
     turn2 = _make_fake_chunk_with_text("Landcover fetched and published.")
-    turn_responses = iter([iter([turn1]), iter([turn2])])
-    model_calls: list[int] = []
-
-    fake_client = MagicMock()
-
-    def _next_stream(**_):
-        model_calls.append(1)
-        return next(turn_responses)
-
-    fake_client.models.generate_content_stream.side_effect = _next_stream
+    fake_llm.script([turn1, turn2])
 
     sock = _DroppableSocket()
     dispatch_log: list[tuple[str, dict]] = []
@@ -933,8 +857,7 @@ async def test_turn_survives_client_ws_close_mid_dispatch():
         agent_server
     )
 
-    with patch.object(agent_server, "build_client", return_value=fake_client), \
-         patch.object(
+    with patch.object(
              agent_server, "_invoke_tool_via_emitter", side_effect=_fake_invoke
          ), \
          patch.object(agent_server, "build_tool_declarations", return_value=[]), \
@@ -946,7 +869,7 @@ async def test_turn_survives_client_ws_close_mid_dispatch():
 
     # The tool completed and its result fed the SECOND model round.
     assert dispatch_log == [("fetch_esri_landcover_10m", {"year": "2023"})]
-    assert len(model_calls) == 2, "turn did not run to completion"
+    assert len(fake_llm.calls) == 2, "turn did not run to completion"
 
     # The closing narration persisted (case-open replay backstop).
     agent_rows = [k for k in persisted if k.get("role") == "agent"]
@@ -960,18 +883,13 @@ async def test_turn_survives_client_ws_close_mid_dispatch():
 
 
 @pytest.mark.asyncio
-async def test_client_close_is_not_reported_as_llm_unavailable():
+async def test_client_close_is_not_reported_as_llm_unavailable(fake_llm):
     """Backstop branch: a ConnectionClosed that still escapes into the
     stream-failure handler logs only -- no error envelope, no failure card."""
     from trid3nt_server import server as agent_server
     from trid3nt_server.server import SessionState
 
-    fake_client = MagicMock()
-
-    def _raise_closed(**_):
-        raise ConnectionClosedError(None, None)
-
-    fake_client.models.generate_content_stream.side_effect = _raise_closed
+    fake_llm.script([fake_llm.raise_(ConnectionClosedError(None, None))])
 
     state = SessionState(session_id=new_ulid())
     settings = ModelSettings(
@@ -984,8 +902,7 @@ async def test_client_close_is_not_reported_as_llm_unavailable():
         agent_server
     )
 
-    with patch.object(agent_server, "build_client", return_value=fake_client), \
-         patch.object(agent_server, "build_tool_declarations", return_value=[]), \
+    with patch.object(agent_server, "build_tool_declarations", return_value=[]), \
          p1, p2, p3:
         await agent_server._stream_model_reply(
             _FakeSocket(), state, settings, "hi", "research"
@@ -996,18 +913,13 @@ async def test_client_close_is_not_reported_as_llm_unavailable():
 
 
 @pytest.mark.asyncio
-async def test_genuine_model_failure_still_reports_llm_unavailable():
+async def test_genuine_model_failure_still_reports_llm_unavailable(fake_llm):
     """Contrast guard: a REAL model error still surfaces LLM_UNAVAILABLE +
     the persisted terminal-failure card (the separation is not overbroad)."""
     from trid3nt_server import server as agent_server
     from trid3nt_server.server import SessionState
 
-    fake_client = MagicMock()
-
-    def _raise_model(**_):
-        raise RuntimeError("bedrock 500")
-
-    fake_client.models.generate_content_stream.side_effect = _raise_model
+    fake_llm.script([fake_llm.raise_(RuntimeError("bedrock 500"))])
 
     state = SessionState(session_id=new_ulid())
     settings = ModelSettings(
@@ -1020,8 +932,7 @@ async def test_genuine_model_failure_still_reports_llm_unavailable():
         agent_server
     )
 
-    with patch.object(agent_server, "build_client", return_value=fake_client), \
-         patch.object(agent_server, "build_tool_declarations", return_value=[]), \
+    with patch.object(agent_server, "build_tool_declarations", return_value=[]), \
          p1, p2, p3:
         await agent_server._stream_model_reply(
             _FakeSocket(), state, settings, "hi", "research"

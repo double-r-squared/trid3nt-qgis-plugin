@@ -128,21 +128,79 @@ def fake_s3(monkeypatch: pytest.MonkeyPatch) -> InMemoryS3Client:
 
 
 @pytest.fixture(autouse=True)
-def _default_vertex_provider(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Default the model provider to ``vertex`` for the agent test suite.
+def _default_scripted_provider(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Default the model provider to ``scripted`` for the agent test suite.
 
-    GCP/Vertex is decommissioned and the RUNTIME default is now ``bedrock``
-    (``bedrock_adapter.model_provider``). The bulk of the agent-loop tests,
-    however, drive the retained google-genai stream-parsing path: they patch
-    ``server.build_client`` and feed fake ``generate_content_stream`` chunks
-    into ``_stream_model_reply`` / ``stream_events_with_contents``. Those tests
-    pre-date the provider flip and assume the Vertex branch. Pinning the env to
-    ``vertex`` here keeps them exercising the Gemini path; any test that needs
-    the Bedrock branch sets ``MODEL_PROVIDER`` itself (monkeypatch wins inside
-    the test body). ``google-genai`` is the kept carve-out dependency, so the
-    Gemini stream-parser imports/runs fine.
+    GCP/Vertex is decommissioned and its generate path is removed; the RUNTIME
+    default is ``bedrock`` (``bedrock_adapter.model_provider``). The agent-loop
+    tests fake model turns through the scripted fake-provider seam (the
+    ``fake_llm`` fixture installs a call-sequenced turn source and pins
+    ``MODEL_PROVIDER=scripted`` itself; this autouse default covers the tests
+    that patch ``stream_events_with_contents`` directly or otherwise never reach
+    the provider dispatch). Any test that needs a specific provider sets
+    ``MODEL_PROVIDER`` itself (monkeypatch wins inside the test body).
     """
-    monkeypatch.setenv("MODEL_PROVIDER", "vertex")
+    monkeypatch.setenv("MODEL_PROVIDER", "scripted")
+
+
+@pytest.fixture(autouse=True)
+def _reset_fake_llm_harness():
+    """Reset the scripted-adapter test harness around every test.
+
+    Prevents an installed fake-turn source (``fake_llm``) from leaking across
+    tests. Cheap no-op when the harness was never installed.
+    """
+    from trid3nt_server.agent.adapters import scripted_adapter as _sa
+
+    _sa.reset_harness()
+    yield
+    _sa.reset_harness()
+
+
+@pytest.fixture()
+def fake_llm(monkeypatch: pytest.MonkeyPatch):
+    """Fake model provider for the agent-loop tests (the single replacement for
+    the retired ``patch build_client + feed fake generate_content_stream chunks``
+    harness).
+
+    Pins ``MODEL_PROVIDER=scripted`` so the REAL server dispatch
+    (``stream_events_with_contents``) routes to the scripted adapter, and hands
+    back a handle that installs a call-sequenced fake-turn source and exposes the
+    ``contents`` the server built between turns:
+
+      * ``fake_llm.script([turn, ...])``  -- a fixed list of fake turns.
+      * ``fake_llm.on_call(fn)``          -- a dynamic ``(call_index, contents) ->
+                                             turn`` source (external-counter tests).
+      * ``fake_llm.calls``                -- recorded calls; ``.calls[i]["contents"]``
+                                             replaces the ``_capture_and_stream`` snapshot.
+      * turn builders: ``fake_llm.text(...)``, ``.call(name, args, call_id=...,
+        thought_signature=...)``, ``.parallel(call, call, ...)``, ``.raise_(exc)``
+        (or author the turn dicts inline -- see ``scripted_adapter``).
+    """
+    from trid3nt_server.agent.adapters import scripted_adapter as sa
+
+    monkeypatch.setenv("MODEL_PROVIDER", "scripted")
+    sa.reset_harness()
+
+    class _FakeLLM:
+        def script(self, turns):
+            sa.install_harness(list(turns))
+            return self
+
+        def on_call(self, fn):
+            sa.install_harness(fn)
+            return self
+
+        @property
+        def calls(self):
+            return sa.harness_calls()
+
+        text = staticmethod(sa.text_turn)
+        call = staticmethod(sa.call_turn)
+        parallel = staticmethod(sa.calls_turn)
+        raise_ = staticmethod(sa.raise_turn)
+
+    return _FakeLLM()
 
 
 @pytest.fixture()

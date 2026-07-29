@@ -107,8 +107,7 @@ async def _drive_real_stream(ws, state, fake_stream):
     settings = ModelSettings(
         model="m", project="p", location="us-central1", use_vertex=True
     )
-    with patch.object(agent_server, "build_client", return_value=object()), \
-         patch.object(agent_server, "build_tool_declarations", return_value=[]), \
+    with patch.object(agent_server, "build_tool_declarations", return_value=[]), \
          patch.object(agent_server, "stream_events_with_contents", fake_stream):
         await agent_server._dispatch_gemini_and_persist(
             ws, state, settings, "do the thing", "research"

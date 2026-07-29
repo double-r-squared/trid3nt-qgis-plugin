@@ -29,7 +29,6 @@ Coverage:
 from __future__ import annotations
 
 import asyncio
-from unittest.mock import MagicMock
 
 import pytest
 
@@ -44,57 +43,27 @@ from trid3nt_server.agent.adapters.adapter import (
 )
 
 
-# Reusable fake-Part / fake-chunk builders. Mirror google-genai's chunk
-# shape: ``chunk.candidates[i].content.parts[j]`` carries the function_call
-# (and now thought_signature) for each emitted decision.
-def _fake_chunk_with_signed_function_call(
-    name: str,
-    args: dict,
-    call_id: str,
-    signature: bytes | None,
-):
-    fn_call = MagicMock()
-    fn_call.name = name
-    fn_call.id = call_id
-    fn_call.args = args
-    fake_part = MagicMock()
-    fake_part.function_call = fn_call
-    fake_part.text = None
-    # The SDK field is ``Part.thought_signature: Optional[bytes]``. We set
-    # it directly on the mock so ``getattr(part, "thought_signature", None)``
-    # finds it; MagicMock would otherwise return a MagicMock instance.
-    fake_part.thought_signature = signature
-    fake_content = MagicMock()
-    fake_content.parts = [fake_part]
-    fake_candidate = MagicMock()
-    fake_candidate.content = fake_content
-    fake_chunk = MagicMock()
-    fake_chunk.candidates = [fake_candidate]
-    fake_chunk.text = None
-    return fake_chunk
-
-
 # ---------------------------------------------------------------------------
 # Test 1: producer harvests signature off the Part
 # ---------------------------------------------------------------------------
 
 
 @pytest.mark.asyncio
-async def test_producer_harvests_thought_signature_off_part():
+async def test_producer_harvests_thought_signature_off_part(fake_llm):
     """Gemini emits a function_call Part with a thought_signature; the
     producer surfaces it on the FunctionCallEvent."""
     sig = b"\x01\x02\x03\x04\x05\x06opaque-thought-sig"
-    chunk = _fake_chunk_with_signed_function_call(
-        "geocode_location", {"query": "Fort Myers, FL"}, "call-1", sig
-    )
-    fake_client = MagicMock()
-    fake_client.models.generate_content_stream.return_value = iter([chunk])
+    fake_llm.script([
+        fake_llm.call(
+            "geocode_location", {"query": "Fort Myers, FL"}, "call-1", thought_signature=sig
+        )
+    ])
 
     events: list = []
     contents = [
         genai_types.Content(role="user", parts=[genai_types.Part(text="test")])
     ]
-    async for evt in stream_events_with_contents(fake_client, "gemini-3-pro", contents):
+    async for evt in stream_events_with_contents(None, "gemini-3-pro", contents):
         events.append(evt)
 
     assert len(events) == 1
@@ -105,20 +74,18 @@ async def test_producer_harvests_thought_signature_off_part():
 
 
 @pytest.mark.asyncio
-async def test_producer_handles_missing_signature_on_25():
+async def test_producer_handles_missing_signature_on_25(fake_llm):
     """Gemini 2.5 surfaces no signature; FunctionCallEvent carries None."""
-    chunk = _fake_chunk_with_signed_function_call(
-        "geocode_location", {"query": "x"}, "c", signature=None
-    )
-    fake_client = MagicMock()
-    fake_client.models.generate_content_stream.return_value = iter([chunk])
+    fake_llm.script([
+        fake_llm.call("geocode_location", {"query": "x"}, "c", thought_signature=None)
+    ])
 
     events: list = []
     contents = [
         genai_types.Content(role="user", parts=[genai_types.Part(text="test")])
     ]
     async for evt in stream_events_with_contents(
-        fake_client, "gemini-2.5-pro", contents
+        None, "gemini-2.5-pro", contents
     ):
         events.append(evt)
 
@@ -128,20 +95,20 @@ async def test_producer_handles_missing_signature_on_25():
 
 
 @pytest.mark.asyncio
-async def test_producer_rejects_non_bytes_signature():
+async def test_producer_rejects_non_bytes_signature(fake_llm):
     """A pathological signature that isn't bytes (e.g. a MagicMock leakage)
     is coerced to None so we never feed garbage back to Gemini."""
-    chunk = _fake_chunk_with_signed_function_call(
-        "geocode_location", {"query": "x"}, "c", signature="not-bytes"  # type: ignore[arg-type]
-    )
-    fake_client = MagicMock()
-    fake_client.models.generate_content_stream.return_value = iter([chunk])
+    fake_llm.script([
+        fake_llm.call(
+            "geocode_location", {"query": "x"}, "c", thought_signature="not-bytes"  # type: ignore[arg-type]
+        )
+    ])
 
     events: list = []
     contents = [
         genai_types.Content(role="user", parts=[genai_types.Part(text="t")])
     ]
-    async for evt in stream_events_with_contents(fake_client, "gemini-3-pro", contents):
+    async for evt in stream_events_with_contents(None, "gemini-3-pro", contents):
         events.append(evt)
 
     assert events[0].thought_signature is None

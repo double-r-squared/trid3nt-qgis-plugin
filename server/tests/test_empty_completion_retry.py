@@ -29,7 +29,7 @@ import asyncio
 from dataclasses import dataclass, field
 
 import pytest
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 
 from trid3nt_server.agent.adapters.adapter import (
     FunctionCallEvent,
@@ -132,8 +132,7 @@ def _drive(provider: str, rounds, monkeypatch, dispatch_side_effect=None):
     )
 
     async def _run():
-        with patch.object(agent_server, "build_client", return_value=MagicMock()), \
-             patch.object(
+        with patch.object(
                  agent_server, "_invoke_tool_via_emitter", side_effect=_fake_invoke
              ), \
              patch.object(agent_server, "build_tool_declarations", return_value=[]), \
@@ -224,14 +223,14 @@ def test_normal_text_answer_no_spurious_retry(monkeypatch):
 # (d) the non-openai provider path NEVER retries an empty round.
 # --------------------------------------------------------------------------- #
 def test_non_openai_provider_never_retries(monkeypatch):
-    # Two empty rounds queued, but the vertex path must break on the FIRST one.
+    # Two empty rounds queued, but the bedrock path must break on the FIRST one.
     rounds = [_empty_round(), _empty_round()]
     user_texts, model_calls, dispatch_log, _sock = _drive(
-        "vertex", rounds, monkeypatch
+        "bedrock", rounds, monkeypatch
     )
 
     assert len(model_calls) == 1, (
-        "vertex (production narration) must break on an empty round, not retry"
+        "bedrock (production narration) must break on an empty round, not retry"
     )
     assert _nudge_seen(user_texts) == 0
     assert dispatch_log == []

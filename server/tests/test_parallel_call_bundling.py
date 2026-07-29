@@ -30,7 +30,7 @@ import asyncio
 import json
 from dataclasses import dataclass, field
 from typing import Any
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 
 import pytest
 
@@ -41,38 +41,6 @@ from trid3nt_server.agent.adapters.adapter import (
     stream_events_with_contents,
 )
 from trid3nt_contracts import new_ulid
-
-
-# Re-use the chunk builders shape used by test_multi_turn_loop.py.
-def _fake_part_function_call(name: str, args: dict, call_id: str):
-    fn_call = MagicMock()
-    fn_call.name = name
-    fn_call.id = call_id
-    fn_call.args = args
-    part = MagicMock()
-    part.function_call = fn_call
-    part.text = None
-    part.thought_signature = None
-    return part
-
-
-def _fake_part_text(text: str):
-    part = MagicMock()
-    part.function_call = None
-    part.text = text
-    part.thought_signature = None
-    return part
-
-
-def _make_chunk(parts: list) -> MagicMock:
-    content = MagicMock()
-    content.parts = parts
-    cand = MagicMock()
-    cand.content = content
-    chunk = MagicMock()
-    chunk.candidates = [cand]
-    chunk.text = None
-    return chunk
 
 
 @dataclass
@@ -89,22 +57,18 @@ class _FakeSocket:
 
 
 @pytest.mark.asyncio
-async def test_producer_yields_three_function_calls_in_one_chunk():
+async def test_producer_yields_three_function_calls_in_one_chunk(fake_llm):
     """One Gemini chunk carrying 3 function_call Parts surfaces 3
     FunctionCallEvents — none dropped, order preserved."""
-    chunk = _make_chunk(
-        [
-            _fake_part_function_call("fetch_dem", {"bbox": [-82, 26, -81, 27]}, "call-a"),
-            _fake_part_function_call(
-                "fetch_landcover", {"bbox": [-82, 26, -81, 27]}, "call-b"
-            ),
-            _fake_part_function_call(
-                "fetch_river_geometry", {"bbox": [-82, 26, -81, 27]}, "call-c"
-            ),
-        ]
-    )
-    fake_client = MagicMock()
-    fake_client.models.generate_content_stream.return_value = iter([chunk])
+    fake_llm.script([
+        {
+            "tool_calls": [
+                {"name": "fetch_dem", "args": {"bbox": [-82, 26, -81, 27]}, "call_id": "call-a"},
+                {"name": "fetch_landcover", "args": {"bbox": [-82, 26, -81, 27]}, "call_id": "call-b"},
+                {"name": "fetch_river_geometry", "args": {"bbox": [-82, 26, -81, 27]}, "call_id": "call-c"},
+            ]
+        }
+    ])
 
     from google.genai import types as genai_types
 
@@ -112,7 +76,7 @@ async def test_producer_yields_three_function_calls_in_one_chunk():
         genai_types.Content(role="user", parts=[genai_types.Part(text="test")])
     ]
     events: list = []
-    async for evt in stream_events_with_contents(fake_client, "gemini-3-pro", contents):
+    async for evt in stream_events_with_contents(None, "gemini-3-pro", contents):
         events.append(evt)
 
     assert len(events) == 3
@@ -124,22 +88,20 @@ async def test_producer_yields_three_function_calls_in_one_chunk():
 
 
 @pytest.mark.asyncio
-async def test_producer_yields_parallel_calls_across_chunks():
+async def test_producer_yields_parallel_calls_across_chunks(fake_llm):
     """Parallel calls split across multiple chunks in the same stream are
     still surfaced — the producer drains every chunk before terminating."""
-    chunk1 = _make_chunk(
-        [_fake_part_function_call("fetch_dem", {"bbox": [0, 0, 1, 1]}, "a")]
-    )
-    chunk2 = _make_chunk(
-        [
-            _fake_part_function_call("fetch_landcover", {"bbox": [0, 0, 1, 1]}, "b"),
-            _fake_part_function_call(
-                "fetch_river_geometry", {"bbox": [0, 0, 1, 1]}, "c"
-            ),
-        ]
-    )
-    fake_client = MagicMock()
-    fake_client.models.generate_content_stream.return_value = iter([chunk1, chunk2])
+    # The old across-chunks distinction was a Vertex-wire artifact; all 3
+    # calls belong to the SAME round, so they collapse into one turn dict.
+    fake_llm.script([
+        {
+            "tool_calls": [
+                {"name": "fetch_dem", "args": {"bbox": [0, 0, 1, 1]}, "call_id": "a"},
+                {"name": "fetch_landcover", "args": {"bbox": [0, 0, 1, 1]}, "call_id": "b"},
+                {"name": "fetch_river_geometry", "args": {"bbox": [0, 0, 1, 1]}, "call_id": "c"},
+            ]
+        }
+    ])
 
     from google.genai import types as genai_types
 
@@ -147,7 +109,7 @@ async def test_producer_yields_parallel_calls_across_chunks():
         genai_types.Content(role="user", parts=[genai_types.Part(text="t")])
     ]
     events: list = []
-    async for evt in stream_events_with_contents(fake_client, "gemini-3-pro", contents):
+    async for evt in stream_events_with_contents(None, "gemini-3-pro", contents):
         events.append(evt)
 
     assert [e.name for e in events] == [
@@ -158,17 +120,15 @@ async def test_producer_yields_parallel_calls_across_chunks():
 
 
 @pytest.mark.asyncio
-async def test_producer_yields_mixed_text_and_function_calls():
+async def test_producer_yields_mixed_text_and_function_calls(fake_llm):
     """A chunk carrying both text and function_call Parts surfaces BOTH —
     neither is dropped."""
-    chunk = _make_chunk(
-        [
-            _fake_part_text("Fetching elevation..."),
-            _fake_part_function_call("fetch_dem", {"bbox": [0, 0, 1, 1]}, "a"),
-        ]
-    )
-    fake_client = MagicMock()
-    fake_client.models.generate_content_stream.return_value = iter([chunk])
+    fake_llm.script([
+        {
+            "text": "Fetching elevation...",
+            "tool_call": {"name": "fetch_dem", "args": {"bbox": [0, 0, 1, 1]}, "call_id": "a"},
+        }
+    ])
 
     from google.genai import types as genai_types
 
@@ -176,7 +136,7 @@ async def test_producer_yields_mixed_text_and_function_calls():
         genai_types.Content(role="user", parts=[genai_types.Part(text="t")])
     ]
     events: list = []
-    async for evt in stream_events_with_contents(fake_client, "gemini-3-pro", contents):
+    async for evt in stream_events_with_contents(None, "gemini-3-pro", contents):
         events.append(evt)
 
     assert len(events) == 2
@@ -192,7 +152,7 @@ async def test_producer_yields_mixed_text_and_function_calls():
 
 
 @pytest.mark.asyncio
-async def test_loop_dispatches_three_parallel_calls_in_one_turn():
+async def test_loop_dispatches_three_parallel_calls_in_one_turn(fake_llm):
     """Three parallel function_calls in one Gemini response → all three
     dispatch → all three function_response Parts land in the SAME
     follow-up contents list (one re-stream call, not three)."""
@@ -202,28 +162,49 @@ async def test_loop_dispatches_three_parallel_calls_in_one_turn():
     # Use 3 hot-set tools so ``validate_function_call`` doesn't reject them
     # before they reach the dispatch step. The goal is the bundling shape,
     # not the specific tools.
-    turn1_chunk = _make_chunk(
-        [
-            _fake_part_function_call("fetch_dem", {"bbox": [0, 0, 1, 1]}, "id-dem"),
-            _fake_part_function_call(
-                "geocode_location", {"query": "Fort Myers"}, "id-geo"
-            ),
-            _fake_part_function_call(
-                "fetch_nws_alerts_conus", {"bbox": [0, 0, 1, 1]}, "id-nws"
-            ),
+    turn1 = {
+        "tool_calls": [
+            {"name": "fetch_dem", "args": {"bbox": [0, 0, 1, 1]}, "call_id": "id-dem"},
+            {"name": "geocode_location", "args": {"query": "Fort Myers"}, "call_id": "id-geo"},
+            {"name": "fetch_nws_alerts_conus", "args": {"bbox": [0, 0, 1, 1]}, "call_id": "id-nws"},
         ]
+    }
+    turn2 = {"text": "All three datasets fetched."}
+    fake_llm.script([turn1, turn2])
+
+    dispatch_log: list[tuple[str, dict]] = []
+
+    async def _fake_invoke(_ws, _state, name, args):
+        dispatch_log.append((name, args))
+        return {"layer_id": f"{name}-result", "ok": True}
+
+    sock = _FakeSocket()
+    state = SessionState(session_id=new_ulid())
+    settings = ModelSettings(
+        model="gemini-3-pro", project="t", location="us-central1", use_vertex=True
     )
-    turn2_chunk = _make_chunk([_fake_part_text("All three datasets fetched.")])
 
-    turn_iter = iter([iter([turn1_chunk]), iter([turn2_chunk])])
+    with patch.object(
+        agent_server, "_invoke_tool_via_emitter", side_effect=_fake_invoke
+    ), patch.object(agent_server, "build_tool_declarations", return_value=[]):
+        await agent_server._stream_model_reply(
+            sock, state, settings, "Fetch DEM, landcover, and rivers for Fort Myers.",
+            "research",
+        )
 
+    # All three tools dispatched in one go, in the order Gemini emitted them.
+    assert [name for (name, _) in dispatch_log] == [
+        "fetch_dem",
+        "geocode_location",
+        "fetch_nws_alerts_conus",
+    ]
+
+    # Rebuild the per-turn (role, parts) snapshot from the recorded fake-provider
+    # calls (replaces the old ``_capture`` kwargs snapshot).
     captured_contents: list[list[Any]] = []
-
-    def _capture(**kwargs):
-        # Snapshot the per-Part kind so we can count function_call /
-        # function_response entries after the loop completes.
+    for call in fake_llm.calls:
         snapshot = []
-        for c in kwargs["contents"]:
+        for c in call["contents"]:
             parts_view = []
             for p in c.parts:
                 if getattr(p, "function_call", None) is not None and getattr(
@@ -240,37 +221,6 @@ async def test_loop_dispatches_three_parallel_calls_in_one_turn():
                     parts_view.append(("text", p.text, None))
             snapshot.append((c.role, parts_view))
         captured_contents.append(snapshot)
-        return next(turn_iter)
-
-    fake_client = MagicMock()
-    fake_client.models.generate_content_stream.side_effect = _capture
-
-    dispatch_log: list[tuple[str, dict]] = []
-
-    async def _fake_invoke(_ws, _state, name, args):
-        dispatch_log.append((name, args))
-        return {"layer_id": f"{name}-result", "ok": True}
-
-    sock = _FakeSocket()
-    state = SessionState(session_id=new_ulid())
-    settings = ModelSettings(
-        model="gemini-3-pro", project="t", location="us-central1", use_vertex=True
-    )
-
-    with patch.object(agent_server, "build_client", return_value=fake_client), patch.object(
-        agent_server, "_invoke_tool_via_emitter", side_effect=_fake_invoke
-    ), patch.object(agent_server, "build_tool_declarations", return_value=[]):
-        await agent_server._stream_model_reply(
-            sock, state, settings, "Fetch DEM, landcover, and rivers for Fort Myers.",
-            "research",
-        )
-
-    # All three tools dispatched in one go, in the order Gemini emitted them.
-    assert [name for (name, _) in dispatch_log] == [
-        "fetch_dem",
-        "geocode_location",
-        "fetch_nws_alerts_conus",
-    ]
 
     # Exactly TWO Gemini calls (turn 1 + turn 2 final narrative) — NOT four
     # (would-be split across three sub-turns).
@@ -322,35 +272,26 @@ async def test_loop_dispatches_three_parallel_calls_in_one_turn():
 
 
 @pytest.mark.asyncio
-async def test_loop_dispatches_parallel_calls_split_across_chunks():
+async def test_loop_dispatches_parallel_calls_split_across_chunks(fake_llm):
     """When Gemini's one turn streams across multiple chunks (the wire
     shape — chunks are token-level), all function_calls across all chunks
     in that ONE turn are still bundled into a single follow-up turn."""
     from trid3nt_server import server as agent_server
     from trid3nt_server.server import SessionState
 
-    # Turn 1: two chunks of function_calls (3 calls total).
-    # Use hot-set tools so dispatch validation accepts them.
-    turn1_chunk_1 = _make_chunk(
-        [_fake_part_function_call("fetch_dem", {"bbox": [0, 0, 1, 1]}, "a")]
-    )
-    turn1_chunk_2 = _make_chunk(
-        [
-            _fake_part_function_call("geocode_location", {"query": "x"}, "b"),
-            _fake_part_function_call(
-                "fetch_nws_alerts_conus", {"bbox": [0, 0, 1, 1]}, "c"
-            ),
+    # Turn 1: 3 calls total, split across two chunks on the old Vertex wire --
+    # that split was an artifact; they belong to the SAME round, so they
+    # collapse into one turn dict. Use hot-set tools so dispatch validation
+    # accepts them.
+    turn1 = {
+        "tool_calls": [
+            {"name": "fetch_dem", "args": {"bbox": [0, 0, 1, 1]}, "call_id": "a"},
+            {"name": "geocode_location", "args": {"query": "x"}, "call_id": "b"},
+            {"name": "fetch_nws_alerts_conus", "args": {"bbox": [0, 0, 1, 1]}, "call_id": "c"},
         ]
-    )
-    turn2_chunk = _make_chunk([_fake_part_text("Done.")])
-
-    turn_iter = iter([
-        iter([turn1_chunk_1, turn1_chunk_2]),
-        iter([turn2_chunk]),
-    ])
-
-    fake_client = MagicMock()
-    fake_client.models.generate_content_stream.side_effect = lambda **_: next(turn_iter)
+    }
+    turn2 = {"text": "Done."}
+    fake_llm.script([turn1, turn2])
 
     dispatch_log: list[str] = []
 
@@ -364,7 +305,7 @@ async def test_loop_dispatches_parallel_calls_split_across_chunks():
         model="gemini-3-pro", project="t", location="us-central1", use_vertex=True
     )
 
-    with patch.object(agent_server, "build_client", return_value=fake_client), patch.object(
+    with patch.object(
         agent_server, "_invoke_tool_via_emitter", side_effect=_fake_invoke
     ), patch.object(agent_server, "build_tool_declarations", return_value=[]):
         await agent_server._stream_model_reply(

@@ -120,7 +120,6 @@ from .agent.adapters.adapter import (
     ThinkingDeltaEvent,
     UpstreamProviderError,
     UsageMetadataEvent,
-    build_client,
     classify_provider_error_class,
     build_contents_from_history,
     build_layers_present_note,
@@ -3376,10 +3375,11 @@ async def _stream_model_reply(
         )
     )
 
-    # Under Bedrock there is no Vertex client to build --
-    # build_client() requires GCP ADC, which run-local and the AWS deploy do not
-    # have. stream_events_with_contents' bedrock branch ignores ``client``.
-    # Provider resolved once here and reused by the cache guard below.
+    # No model client is constructed here -- every live provider adapter
+    # (bedrock / openai / scripted) opens its own client at the boundary and
+    # ignores ``client``. The decommissioned Vertex generate path (the only
+    # consumer of a prebuilt google-genai client) is removed. Provider resolved
+    # once here and reused by the cache guard below.
     from .agent.adapters.bedrock_adapter import model_provider as _model_provider
 
     _provider = _model_provider()
@@ -3402,9 +3402,8 @@ async def _stream_model_reply(
             _effective_model = bedrock_model
     except Exception:  # noqa: BLE001 -- telemetry tag only, never fatal
         _effective_model = bedrock_model
-    # No Vertex client under bedrock OR the scripted/replay sandbox (neither has,
-    # nor needs, GCP ADC -- their stream_* branches ignore ``client``).
-    client = None if _provider in ("bedrock", "scripted", "replay", "fake") else build_client(settings)
+    # No model client is built here -- the provider adapters ignore ``client``.
+    client = None
     first_token_logged = False
     started_at = asyncio.get_running_loop().time()
 

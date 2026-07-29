@@ -25,7 +25,7 @@ from __future__ import annotations
 import json
 import logging
 from dataclasses import dataclass, field
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 
 import pytest
 
@@ -180,35 +180,11 @@ class _FakeSocket:
 
 
 def _fc_chunk(name: str, args: dict, call_id: str):
-    fn_call = MagicMock()
-    fn_call.name = name
-    fn_call.id = call_id
-    fn_call.args = args
-    part = MagicMock()
-    part.function_call = fn_call
-    part.text = None
-    content = MagicMock()
-    content.parts = [part]
-    cand = MagicMock()
-    cand.content = content
-    chunk = MagicMock()
-    chunk.candidates = [cand]
-    chunk.text = None
-    return chunk
+    return {"tool_call": {"name": name, "args": args, "call_id": call_id}}
 
 
 def _text_chunk(text: str):
-    part = MagicMock()
-    part.function_call = None
-    part.text = text
-    content = MagicMock()
-    content.parts = [part]
-    cand = MagicMock()
-    cand.content = content
-    chunk = MagicMock()
-    chunk.candidates = [cand]
-    chunk.text = text
-    return chunk
+    return {"text": text}
 
 
 def _settings() -> ModelSettings:
@@ -238,7 +214,7 @@ def eleven_templates():
         reset_uri_registries_for_tests()
 
 
-async def _drive_door_call(state, monkeypatch, decl_registries):
+async def _drive_door_call(state, monkeypatch, decl_registries, fake_llm):
     """Enforce mode trims the gate to {hot set + run_modflow}; round 1 calls the
     REAL run_modflow door; capture the registry keys handed to
     build_tool_declarations each build so the rebuild is observable."""
@@ -249,25 +225,19 @@ async def _drive_door_call(state, monkeypatch, decl_registries):
         lambda *_a, **_k: set(visible),
     )
 
-    rounds = {"n": 0}
-
-    def _script(**kwargs):
-        rounds["n"] += 1
-        if rounds["n"] == 1:
-            return iter([_fc_chunk("run_modflow", {}, "c1")])
-        return iter([_text_chunk("Here are the groundwater templates.")])
+    fake_llm.script([
+        _fc_chunk("run_modflow", {}, "c1"),
+        _text_chunk("Here are the groundwater templates."),
+    ])
 
     def _capture_decls(registry):
         decl_registries.append(set(registry.keys()))
         return []
 
     sock = _FakeSocket()
-    with patch.object(agent_server, "build_client", return_value=MagicMock()), patch.object(
+    with patch.object(
         agent_server, "build_tool_declarations", side_effect=_capture_decls
     ):
-        agent_server.build_client.return_value.models.generate_content_stream.side_effect = (
-            lambda **kw: _script(**kw)
-        )
         await agent_server._stream_model_reply(
             sock, state, _settings(), "model a groundwater contamination plume", "research"
         )
@@ -276,14 +246,14 @@ async def _drive_door_call(state, monkeypatch, decl_registries):
 
 @pytest.mark.asyncio
 async def test_door_call_surfaces_all_templates_past_discovery_cap(
-    eleven_templates, monkeypatch, caplog
+    eleven_templates, monkeypatch, caplog, fake_llm
 ):
     names = eleven_templates
     assert len(names) > agent_server._DISCOVERY_EXPAND_CAP, "need > +8 templates"
     decl_registries: list[set] = []
     state = agent_server.SessionState(session_id=new_ulid())
     with caplog.at_level(logging.INFO, logger="trid3nt_server.server"):
-        await _drive_door_call(state, monkeypatch, decl_registries)
+        await _drive_door_call(state, monkeypatch, decl_registries, fake_llm)
 
     assert len(decl_registries) >= 2, "expected a rebuild after the door round"
     pre_loop = decl_registries[0]
