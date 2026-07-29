@@ -26,3 +26,4 @@ matters, not the absolute).
 | date | agent/tools | agent/workflows | agent/other | AGENT total | root files | emission | sandbox | credentials | PLATFORM total |
 |---|---|---|---|---|---|---|---|---|---|
 | 2026-07-28 | 119,548 | 57,056 | 12,406 | 189,010 (87%) | 20,785 | 4,190 | 2,081 | 1,665 | 28,721 (13%) |
+| 2026-07-28d | 216078 | - | - | 32878 | - | - | 200 | 13,116 | SFINCS remediation: flood.py 5637->2405 (conformance: run_sfincs + forcing_autowire), deckbuilder worker gone, quadtree/waves arm deleted, shared hoist; TRUE BASELINE NOW 9 (coastal fixed) | 
