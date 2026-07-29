@@ -109,7 +109,6 @@ OVERRIDES: dict[str, dict] = {
     "fetch_goes_blend_animation": {"start_utc": f"{YDAY}T18:00", "end_utc": f"{YDAY}T18:30"},
     "fetch_goes_active_fire": {"bbox": (-121.5, 39.5, -121.0, 40.0)},
     "fetch_glm_lightning": {"bbox": (-90.0, 25.0, -85.0, 30.0), "start_utc": f"{YDAY}T18:00", "end_utc": f"{YDAY}T18:20"},
-    "run_model_glm_lightning_animation": {"bbox": (-90.0, 25.0, -85.0, 30.0)},
     "run_model_groundwater_contamination_scenario": {
         "article_text": "A tanker spill released benzene near Tampa, Florida on 2026-06-01, "
                         "contaminating shallow groundwater around 27.955N 82.455W per county officials."

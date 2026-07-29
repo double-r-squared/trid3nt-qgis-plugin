@@ -252,10 +252,6 @@ PRIMARY_CATEGORY: dict[str, str] = {
     # news/incident -> bbox+window -> per-frame imagery -> scrubber-group
     # composer (review-gated). Cross-listed to fire + news_events below.
     "run_model_satellite_fire_animation": "hazard_modeling",
-    # GLM lightning demo: the DIRECT GOES-19 GLM Group-Energy-Density animation
-    # composer (AOI + UTC window -> purple GED baked over the C02 visible base;
-    # NO news step). Cross-listed to weather_atmosphere below.
-    "run_model_glm_lightning_animation": "hazard_modeling",
     "run_model_groundwater_contamination_scenario": "hazard_modeling",
     # engine-door refactor: run_model_contamination_affected_fields is CUT;
     # run_modflow_job folded into the modflow_contaminant_plume template. The 11
@@ -716,10 +712,6 @@ SECONDARY_CATEGORIES: dict[str, tuple[str, ...]] = {
     # multi-tool imagery pipeline) AND fire (it is the fire-branch demo) AND
     # news_events (it ingests the fire news / incident lookup up front).
     "run_model_satellite_fire_animation": ("fire", "news_events"),
-    # GLM lightning composer cross-lists to weather_atmosphere (it is the GOES
-    # lightning/convection animation demo). No news_events cross-list -- it takes
-    # an AOI bbox + UTC window DIRECTLY, with no news/geocode front-half.
-    "run_model_glm_lightning_animation": ("weather_atmosphere",),
     # a+b+c batch (2026-06-27)
     "digitize_water_body": ('hydrology', 'terrain_elevation',),
     "fetch_usgs_earthquakes": ('news_events', 'geographic_primitives',),

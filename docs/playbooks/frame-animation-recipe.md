@@ -104,3 +104,53 @@ Live replication (2026-07-29) fired exactly
 `web_fetch` + `fetch_nws_event` + `fetch_storm_events_db` ->
 `aggregate_claims_across_sources` -> `geocode_location` and produced the same
 derived-param + geocoded-bbox envelope.
+
+## Recipe D -- GLM lightning animation (replaces run_model_glm_lightning_animation)
+
+Replaces the CUT `run_model_glm_lightning_animation` composer. The composer's
+baked grayscale-ABI base was a WEB-ERA artifact (a fixed base map baked INTO
+each frame); in QGIS the base map is native/switchable, so the base is dropped
+and the lightning animation is a straight-line composition over the retained
+`fetch_glm_lightning` fetcher, which already fans out an accumulation window
+into ordered scrubber frames.
+
+1. Resolve the AOI: `geocode_location("<place>")` -> bbox (or a canvas AOI).
+2. Fetch the lightning frames: `fetch_glm_lightning(bbox, satellite, start_utc,
+   end_utc, accumulation_window_s=60)`. With `accumulation_window_s` set, it
+   splits the window into per-bucket frames and returns an ORDERED
+   `list[LayerURI]` -- each a transparent purple Group-Energy-Density (GED) RGBA
+   COG named `"GLM Lightning GED step <N> <ISO> (<SAT>)"` (`step <N>` is the
+   monotonic scrubber token; `style_preset="glm_lightning"`). Default satellite
+   `goes-19` (GOES-East). The honesty floor is inherited: a window with no
+   in-AOI lightning in ANY bucket raises `GLM_EMPTY` -- never a blank overlay.
+3. Publish/emit each frame (`publish_layer` per frame).
+4. Scrubber: `render/temporal.py group_frame_layers` auto-groups the frames by
+   their shared name-token stem (>= 2 members, strictly-increasing `step`) so
+   QGIS's Temporal Controller plays them. NO web/plugin change is needed.
+
+Live replication (2026-07-29, Florida AOI, 2026-07-27 21:00..21:05Z, GOES-19)
+fired exactly `fetch_glm_lightning(accumulation_window_s=60)` -> 5 ordered GED
+frames -> `publish_layer` per frame -> `group_frame_layers` formed ONE scrubber
+group (stem `glm lightning ged (goes-19)`, members 1..5). Fired-set ==
+`{fetch_glm_lightning, publish_layer}`, no news/geocode/wrapper step.
+
+### Moving-base variant ("lightning over satellite")
+
+For "animate the lightning OVER the moving satellite imagery": co-publish an ABI
+imagery loop AS A SECOND GROUP under the GLM overlay group, rather than baking a
+single fixed base into each frame.
+
+1. GLM overlay frames: Recipe D steps 1-3 above (`fetch_glm_lightning`,
+   `accumulation_window_s=60`).
+2. Moving base frames: `fetch_goes_archive_animation(bbox, satellite, start_utc,
+   end_utc, step_minutes=5, band="true_color")` (or `band="fire_temperature"`
+   for a day/night thermal base) -> ordered ABI RGB COGs named
+   `"GOES True Color (Archive) step <N> <ISO> (<SAT>)"`.
+3. Publish/emit both. Their DISTINCT name stems make `group_frame_layers` return
+   TWO independent scrubber sequences -- the transparent GED overlay group over
+   the opaque moving-imagery group -- which the user toggles/scrubs together.
+
+Live replication (2026-07-29, same AOI, GOES-19) co-published the 5 GLM frames +
+3 `fetch_goes_archive_animation` true_color frames; `group_frame_layers` over the
+combined names returned EXACTLY 2 groups (`glm lightning ged` x5 +
+`goes true color (archive)` x3). Fired-set adds `fetch_goes_archive_animation`.

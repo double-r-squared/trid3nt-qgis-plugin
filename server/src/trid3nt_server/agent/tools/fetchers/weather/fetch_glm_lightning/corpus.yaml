@@ -6,3 +6,7 @@ fetch_glm_lightning:
 - give me a purple lightning-density raster over this hurricane right now
 - animate the GLM lightning activity over this storm minute by minute
 - how much lightning is this cell producing from the geostationary lightning mapper
+- recreate the CIRA group energy density lightning loop for this Gulf hurricane
+- make a one-minute GLM group energy density animation over this bbox and time window
+- scrubbable purple lightning loop over the storm from GOES-East GLM group energy density
+- where is the most electrically active part of this Gulf storm over this hour, animated

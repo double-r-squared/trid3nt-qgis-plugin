@@ -184,3 +184,34 @@ publish, emit) is retained via its independently-registered fetcher.
    goes + satellite -> build P2 -> cull glm. Confirm.
 7. Review-gate: accept the conversational loop as the replacement for the in-tool
    confirm=True/False handshake (news + satellite)?
+
+## Addendum 2026-07-29 -- P2 DROPPED, glm CULLED (NATE)
+
+This addendum supersedes the glm verdict above; the original sections are left
+verbatim as the historical proposal record.
+
+NATE (2026-07-29) REVISED the glm gate: the proposal's P2 (a historical single-
+band ABI grayscale primitive) is DROPPED, not built. Rationale:
+
+- The wrapper's baked grayscale-ABI base is a WEB-ERA ARTIFACT -- a fixed base
+  map baked INTO each frame. In QGIS the base map is native/switchable (or a
+  fetched imagery loop), so nothing needs a historical single-band ABI scan.
+- The GLM gridding / GED colorizer the composer wrapped ALREADY lives in the
+  retained `fetch_glm_lightning` fetcher, which fans an accumulation window into
+  ordered `step <N>` scrubber frames on its own.
+- Moving-base "lightning over satellite" asks are covered by the retained
+  `fetch_goes_archive_animation` (ABI true_color / fire_temperature frames)
+  co-published as a SECOND scrubber group under the GLM overlay group.
+
+So glm is no longer EXTRACT-FIRST/blocked: with P2 dropped it is a CULL-DIRECT
+playground composition, graded like phase A (fired-tool set == acceptable set +
+published layers + `group_frame_layers` grouping). The gate PASSED live
+(2026-07-29, Florida AOI, GOES-19): `fetch_glm_lightning(accumulation_window_s=
+60)` -> 5 ordered GED frames -> `publish_layer` -> ONE scrubber group; the
+moving-base variant co-published 3 `fetch_goes_archive_animation` true_color
+frames for TWO groups total. The `run_model_glm_lightning_animation` composer +
+its folder, tests, registration, categories, and central corpus block are
+deleted (registry 198 -> 197); the animation intents re-home onto
+`fetch_glm_lightning` / `fetch_goes_archive_animation` corpus, and the pattern is
+documented in `docs/playbooks/frame-animation-recipe.md` (Recipe D + moving-base
+variant). See `docs/decisions/0042-glm-cull-p2-dropped.md`.

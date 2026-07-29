@@ -37,15 +37,6 @@ list_tools_in_category:
 # run_sfincs door corpus (tools/simulation/sfincs/run_sfincs/corpus.yaml, DOOR
 # tier - walked into this index); template-specific phrasings live in
 # workflows/sfincs/flood/corpus.yaml (TEMPLATE tier - NOT indexed).
-run_model_glm_lightning_animation:
-- animate the GOES-19 GLM lightning over this storm for this time window
-- recreate the CIRA visible plus group energy density lightning loop for this Gulf hurricane
-- show the lightning flickering over this convective cluster as a scrubbable purple overlay on the visible imagery
-- make a one-minute GLM group energy density animation over this bbox and daytime window
-- bake the purple lightning density over the grayscale GOES-19 visible base and animate it here
-- where is the most electrically active part of this Gulf storm over this hour, animated
-- run the direct GLM lightning animation for this AOI and UTC window, no news lookup
-- 'scrubbable lightning loop over the storm: GOES-East GLM energy density with a visible base'
 run_model_groundwater_contamination_scenario:
 - here is a news article about a tce spill in twin falls, model the contaminant plume in the groundwater
 - a tanker leaked solvent near this town, how far will it spread through the aquifer
