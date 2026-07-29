@@ -106,6 +106,14 @@ PROMOTED = {
         "properties": ["comid", "direction", "distance_km", "seed_point"],
         "required": [],
     },
+    # --- phase-2 wave-4: station family (snapshot mode, ADR 0045) ---
+    "fetch_noaa_coops_currents": {
+        "source_class": "noaa_coops_currents",
+        # twin sig: fetch_noaa_coops_currents(bbox, product="currents", **_extra) --
+        # bbox required (no default), product optional (default="currents").
+        "properties": ["bbox", "product"],
+        "required": ["bbox"],
+    },
 }
 
 _SPECS = compose_specs_from_tree()
@@ -235,3 +243,94 @@ def test_nldi_input_validation(params: dict) -> None:
         _route("fetch_nhdplus_nldi_navigate", **params)
     assert exc.value.error_code == "NHDPLUS_NLDI_INPUT_INVALID"
     assert exc.value.retryable is False
+
+
+# ---------------------------------------------------------------------------
+# Phase-2 wave-4: CO-OPS currents snapshot (migrated from the deleted twin test
+# test_fetch_noaa_coops_currents -- the internal _parse_observed / _parse_predictions
+# helpers became the named `coops_currents` router transform). Input validation
+# routes through validate_params (offline, pre-network); the snapshot selector is
+# unit-tested directly with synthetic CO-OPS bodies.
+# ---------------------------------------------------------------------------
+
+import datetime as _dt  # noqa: E402
+
+from trid3nt_server.agent.tools.fetchers._router.executors.station_timeseries import (  # noqa: E402
+    coops_currents_select,
+)
+
+_CUR_NOW = _dt.datetime(2026, 6, 27, 23, 0, 0, tzinfo=_dt.timezone.utc)
+
+
+@pytest.mark.parametrize(
+    "params, code",
+    [
+        (dict(product="currents"), "COOPS_CURRENTS_INPUT_ERROR"),                        # missing bbox
+        (dict(bbox=(-122.5, 37.4, -122.5, 38.2)), "COOPS_CURRENTS_INPUT_ERROR"),          # degenerate
+        (dict(bbox=(-123.0, 37.4, -122.0, 38.2), product="water_level"), "COOPS_CURRENTS_INPUT_ERROR"),  # bad enum
+    ],
+)
+def test_coops_currents_input_validation(params: dict, code: str) -> None:
+    with pytest.raises(RouterInputError) as exc:
+        _route("fetch_noaa_coops_currents", **params)
+    assert exc.value.error_code == code
+    assert exc.value.retryable is False
+
+
+def test_coops_currents_select_observed_picks_latest() -> None:
+    body = {"data": [
+        {"t": "2026-06-27 22:00", "s": "0.30", "d": "120", "b": "4"},
+        {"t": "2026-06-27 23:00", "s": "0.45", "d": "167", "b": "4"},  # latest
+        {"t": "2026-06-27 21:00", "s": "0.20", "d": "90", "b": "4"},
+    ]}
+    snap = coops_currents_select(body, "currents", _CUR_NOW)
+    assert snap is not None
+    assert snap["speed_kn"] == pytest.approx(0.45)
+    assert snap["direction_deg"] == pytest.approx(167.0)
+    assert snap["datetime"] == "2026-06-27T23:00Z"
+    assert snap["bin"] == 4
+    assert snap["flow_state"] == ""
+
+
+def test_coops_currents_select_observed_skips_missing() -> None:
+    body = {"data": [
+        {"t": "2026-06-27 22:00", "s": "", "d": "120", "b": "4"},
+        {"t": "2026-06-27 23:00", "s": "0.45", "d": "", "b": "4"},
+        {"t": "2026-06-27 21:00", "s": "0.20", "d": "90", "b": "4"},  # only valid
+    ]}
+    snap = coops_currents_select(body, "currents", _CUR_NOW)
+    assert snap is not None and snap["speed_kn"] == pytest.approx(0.20)
+
+
+def test_coops_currents_select_predictions_flood_dir() -> None:
+    body = {"current_predictions": {"units": "knots", "cp": [
+        {"Time": "2026-06-27 20:00", "Type": "ebb", "Velocity_Major": -0.8,
+         "meanFloodDir": 356, "meanEbbDir": 170, "Bin": "8"},
+        {"Time": "2026-06-27 23:10", "Type": "flood", "Velocity_Major": 1.2,
+         "meanFloodDir": 356, "meanEbbDir": 170, "Bin": "8"},  # nearest now
+        {"Time": "2026-06-28 03:00", "Type": "slack", "Velocity_Major": 0,
+         "meanFloodDir": 356, "meanEbbDir": 170, "Bin": "8"},
+    ]}}
+    snap = coops_currents_select(body, "currents_predictions", _CUR_NOW)
+    assert snap is not None
+    assert snap["speed_kn"] == pytest.approx(1.2)
+    assert snap["direction_deg"] == pytest.approx(356.0)  # flood direction
+    assert snap["flow_state"] == "flood"
+    assert snap["datetime"] == "2026-06-27T23:10Z"
+
+
+def test_coops_currents_select_predictions_ebb_dir() -> None:
+    body = {"current_predictions": {"cp": [
+        {"Time": "2026-06-27 23:05", "Type": "ebb", "Velocity_Major": -0.9,
+         "meanFloodDir": 356, "meanEbbDir": 170, "Bin": "8"},
+    ]}}
+    snap = coops_currents_select(body, "currents_predictions", _CUR_NOW)
+    assert snap is not None
+    assert snap["speed_kn"] == pytest.approx(0.9)  # abs of negative velocity
+    assert snap["direction_deg"] == pytest.approx(170.0)  # ebb direction
+    assert snap["flow_state"] == "ebb"
+
+
+def test_coops_currents_select_empty() -> None:
+    assert coops_currents_select({"data": []}, "currents", _CUR_NOW) is None
+    assert coops_currents_select({"current_predictions": {"cp": []}}, "currents_predictions", _CUR_NOW) is None

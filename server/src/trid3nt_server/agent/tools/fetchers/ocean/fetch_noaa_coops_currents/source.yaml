@@ -1,0 +1,157 @@
+# Router source spec (data-router fold, phase-2 wave-4 station family) --
+# NOAA CO-OPS tidal-current stations. Twin: fetch_noaa_coops_currents.py (HYBRID,
+# station-timeseries-fgb SNAPSHOT). Sibling of the folded coops-tides pilot: same
+# station-catalog discover + per-station datagetter loop, but emits ONE snapshot
+# row per station (latest observed / nearest-now prediction) instead of the full
+# time series -- the `emit: snapshot` station mode + the `coops_currents` named
+# transform (the audit's `_parse_predictions` flood/ebb/slack hook).
+schema_version: v1
+
+name: fetch_noaa_coops_currents
+source_class: noaa_coops_currents   # cache prefix == twin source_class
+error_prefix: COOPS_CURRENTS        # twin A.6 token (COOPSCurrents*Error)
+shape: station-timeseries-fgb
+supports_global_query: false
+
+# --- endpoints ------------------------------------------------------------
+endpoints:
+  catalog:
+    url: "https://api.tidesandcurrents.noaa.gov/mdapi/prod/webapi/stations.json"
+    query: {type: currents, units: metric, format: json}
+  data:
+    url_template: "https://api.tidesandcurrents.noaa.gov/api/prod/datagetter"
+auth:
+  mode: none
+  user_agent: trid3nt_default
+
+# --- request-param schema -------------------------------------------------
+params:
+  bbox:    {type: bbox, required: true, quantize: round_6dp}
+  product: {type: enum, values: [currents, currents_predictions], default: currents}
+gates:
+  max_stations: 50
+
+# --- ingestion (station-timeseries-FGB, SNAPSHOT mode) -------------------
+ingest:
+  station_catalog: {lat_key: lat, lon_key: lng, id_key: id, name_key: name, rows_key: stations}
+  per_station:
+    # SNAPSHOT: one representative row per station (twin _parse_observed /
+    # _parse_predictions), NOT the rollup + time_series_csv path (coops-tides).
+    # Strict no-op for every timeseries spec (no `emit` key -> rollup path).
+    emit: snapshot
+    snapshot:
+      # Named selector = the audit's HYBRID hook (velocity-sign flood/ebb/slack
+      # direction + latest-observed / nearest-now prediction pick).
+      transform: coops_currents
+      columns: [station_id, station_name, lon, lat, product, speed_kn, direction_deg, datetime, bin, flow_state]
+      # now-relative window per product (twin _fetch_coops_currents_bytes):
+      # observed looks back 2d for the latest sample; predictions look ahead 2d.
+      window:
+        currents:             {mode: lookback,  days: 2}
+        currents_predictions: {mode: lookahead, days: 2}
+      # product-conditional extra request params (MAX_SLACK = flood/slack/ebb
+      # sequence with directions; observed omits it).
+      request_by_product:
+        currents_predictions: {interval: MAX_SLACK}
+    request:
+      begin_date: "{start:%Y%m%d}"
+      end_date: "{end:%Y%m%d}"
+      station: "{id}"
+      product: "{product}"
+      time_zone: gmt
+      units: english          # english -> speed in KNOTS (twin parity)
+      application: trid3nt
+      format: json
+
+# --- normalization stamps -------------------------------------------------
+normalize:
+  crs: "EPSG:4326"
+  units: "kn"
+  quantity: current_velocity
+
+# --- output surface -------------------------------------------------------
+output:
+  layer_type: vector
+  ext: fgb
+  role: primary
+  style_preset: "coops_{product}"
+
+# --- cache + payload gate -------------------------------------------------
+cache:
+  ttl_class: dynamic-1h
+payload_estimate:              # snapshot: ~0.4 KB/station, ~1 station/deg^2 (sparse)
+  model: per_station
+  kb_per_station_per_day: 0.4
+  overhead_kb: 0.0
+  stations_per_sq_deg: 1.0
+  floor_mb: 0.01
+
+# --- honesty: caveats + fallback -----------------------------------------
+caveats:
+  - "~88 US tidal-current stations globally (inlets/harbors/channels); empty bbox -> COOPS_CURRENTS_EMPTY (retryable=false)"
+  - "one bad station never aborts the bbox (swallowed to null); all-empty -> typed EMPTY, never fabricated"
+  - "snapshot semantics: latest observed sample / prediction nearest now, not a full time series"
+
+# corpus lifted from sibling corpus.yaml.
+
+# --- LLM docstring (carried VERBATIM from the twin via inspect.getdoc) ----
+docstring: |-
+  Fetch NOAA CO-OPS tidal-current stations + latest current as a FlatGeobuf.
+
+  **What it does:** Retrieves the latest observed (or predicted) tidal-current
+  speed + direction from the NOAA CO-OPS Data API for all current stations
+  within a bbox. Returns a POINT FlatGeobuf with one feature per station,
+  carrying ``speed_kn`` (knots), ``direction_deg`` (degrees true), and the
+  observation ``datetime``. A current-conditions snapshot — complements the
+  water-level time series from ``fetch_noaa_coops_tides``. Tier-1 free, no API
+  key. Covers US tidal inlets, harbors, and channels (~88 realtime stations).
+
+  **When to use:**
+  - User asks "what's the tidal current at the Golden Gate / San Francisco
+    Bay / New York Harbor right now" (speed + flood/ebb direction).
+  - Agent needs ebb/flood current context at a tidal inlet for navigation,
+    a spill-drift estimate, or a sediment-transport narrative.
+  - User asks for predicted slack/flood/ebb timing -> use
+    ``product="currents_predictions"``.
+
+  **When NOT to use:**
+  - For water LEVEL / tide height time series -> use ``fetch_noaa_coops_tides``.
+  - For global (non-US) currents -> CO-OPS does not cover; no global tool
+    currently in the catalog.
+  - For deep-ocean / large-scale circulation currents -> CO-OPS is tidal
+    (inlet/channel) only.
+  - For wave height / swell -> CO-OPS does not serve wave products.
+
+  **Parameters:**
+      bbox: ``(west, south, east, north)`` in EPSG:4326. Required
+          (``supports_global_query=False``). Example San Francisco Bay:
+          ``(-123.0, 37.4, -122.0, 38.2)`` -> 4 stations (Martinez,
+          Southampton Shoal, Oakland Outer/Inner Harbor). Cap of 50 stations.
+      product: One of:
+          - ``"currents"`` (default): latest observed current speed +
+            direction at the station's primary bin.
+          - ``"currents_predictions"``: predicted current nearest now from
+            the flood/slack/ebb sequence (carries ``flow_state``).
+
+  **Returns:**
+      ``LayerURI`` to a FlatGeobuf in the cache bucket. Each feature is a
+      Point (EPSG:4326) with attributes ``station_id``, ``station_name``,
+      ``lon``, ``lat``, ``product``, ``speed_kn`` (float, knots),
+      ``direction_deg`` (float, degrees true 0-359), ``datetime`` (ISO-8601
+      UTC), ``bin`` (int, -1 if N/A), ``flow_state`` ("flood"/"ebb"/"slack"
+      for predictions, "" for observed). ``layer_type="vector"``,
+      ``role="primary"``, ``units="kn"``.
+
+  **Cross-tool dependencies:**
+      - Complements: ``fetch_noaa_coops_tides`` (water level at the same
+        inlets), ``fetch_gtsm_tide_surge`` (global tide+surge).
+      - Feeds INTO: ``publish_layer`` (map display of current vectors).
+
+  **Error types:**
+      - ``COOPSCurrentsInputError``: bad bbox / product (retryable=False).
+      - ``COOPSCurrentsUpstreamError``: HTTP/network failure (retryable=True).
+      - ``COOPSCurrentsEmptyError``: no current stations in bbox or none
+        returned data (retryable=False).
+
+  Cache: ``ttl_class="dynamic-1h"``, ``source_class="noaa_coops_currents"``.
+  Tier-1 free. No API key. ``supports_global_query=False``.

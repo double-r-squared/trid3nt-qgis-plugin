@@ -259,7 +259,9 @@ from .fetchers.hydrology.fetch_usgs_nwis_gauges import fetch_usgs_nwis_gauges  #
 
 # -- fetchers/ocean --
 from .fetchers.ocean.fetch_gtsm_tide_surge import fetch_gtsm_tide_surge  # noqa: E402,F401
-from .fetchers.ocean.fetch_noaa_coops_currents import fetch_noaa_coops_currents  # noqa: E402,F401
+# fetch_noaa_coops_currents: data-router fold phase-2 wave-4 (ADR 0045) -- twin
+# DELETED, now spec-driven (source.yaml + the station snapshot router mode),
+# registered by _register_router_specs() below.
 # fetch_noaa_coops_tides: data-router fold pilot -- twin DELETED, now spec-driven
 # (source.yaml + router), registered by _register_router_specs() below.
 from .fetchers.ocean.fetch_noaa_slr_confidence import fetch_noaa_slr_confidence  # noqa: E402,F401
