@@ -38,8 +38,29 @@ from .common import GraceModel
 __all__ = [
     "ToolInputErrorCode",
     "TOOL_INPUT_ERROR_CODES",
+    "ActionabilityClass",
+    "ACTIONABILITY_CLASSES",
     "ToolInputError",
 ]
+
+#: Closed three-way discriminator (observability/retention batch item 3):
+#: who/what can ACT on a typed error, distinct from ``retryable`` (can it be
+#: retried at all).
+#:
+#: - ``"agent"`` -- upstream 4xx-arg/429/5xx/timeout, the existing FR-AS-11
+#:   surface: routes as a rich verbatim ``function_response`` (unchanged
+#:   behavior) so the model self-corrects args or narrates.
+#: - ``"user"`` -- missing-credential/auth-config: the function_response
+#:   carries a concise narration directive (what happened + what the user can
+#:   do), not the raw exception text.
+#: - ``"operator"`` -- a contract violation / internal exception: a terse,
+#:   honest acknowledgment reaches the model ("internal error, logged"); full
+#:   detail stays in the log + telemetry. Operator-class failures do not
+#:   consume the per-tool circuit-breaker's retry budget.
+ActionabilityClass = Literal["agent", "user", "operator"]
+
+#: Tuple form for parametrized tests + classifier assertions.
+ACTIONABILITY_CLASSES: tuple[str, ...] = ("agent", "user", "operator")
 
 
 #: Closed enum of ``ToolInputError`` codes. Members:
@@ -86,6 +107,16 @@ class ToolInputError(GraceModel):
       written against the ``ToolInputError`` shape branches on the same
       ``retryable`` discriminator other error families use (network
       errors, rate limits) without a special-case.
+
+    NOTE (observability/retention batch item 3): this family's server-side
+    ``actionability`` (see ``ActionabilityClass`` in this module) is always
+    ``"agent"`` — a malformed input is the model's own to self-correct and
+    retry — but that classification is NOT a field on this wire model: the
+    pinned 3-key wire shape (``{code, message, retryable}``, see
+    ``test_tool_input_error_wire_form_contains_all_three_fields``) is a
+    contract external consumers (the web client) type against, and is left
+    closed. ``actionability`` is computed dynamically at the dispatch
+    boundary (``agent.gates.actionability.classify_actionability``) instead.
 
     Notes on usage:
 

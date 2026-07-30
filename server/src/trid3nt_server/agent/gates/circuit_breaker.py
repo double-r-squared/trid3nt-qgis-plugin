@@ -176,6 +176,19 @@ def is_client_arg_error(error: BaseException | None) -> bool:
     return False
 
 
+def _is_operator_class_error(tool_name: str, error: BaseException) -> bool:
+    """True when ``error`` classifies as ``"operator"`` (observability/retention
+
+    batch item 3): a contract violation / internal exception, not a repeated
+    tool-side fault. Deferred import of the shared classifier (``agent.gates.
+    actionability``) avoids any import-time coupling between this module and
+    the credential registry it reaches into.
+    """
+    from .actionability import classify_actionability
+
+    return classify_actionability(tool_name, error) == "operator"
+
+
 # ---------------------------------------------------------------------------
 # Per-session breaker state
 # ---------------------------------------------------------------------------
@@ -264,6 +277,19 @@ class ToolCircuitBreaker:
                 "(%s); NOT counting toward trip threshold",
                 tool_name,
                 type(error).__name__ if error is not None else "None",
+            )
+            return
+        if error is not None and _is_operator_class_error(tool_name, error):
+            # Contract violation / internal exception (observability/retention
+            # batch item 3): OUR bug, not the tool's repeated upstream/arg
+            # fault — must NOT consume the tool's retry budget. Mirrors the
+            # client/arg exemption above.
+            logger.debug(
+                "circuit-breaker: tool=%r failure is operator-class "
+                "(contract violation/internal, %s); NOT counting toward "
+                "trip threshold",
+                tool_name,
+                type(error).__name__,
             )
             return
         if self.is_tripped(tool_name):

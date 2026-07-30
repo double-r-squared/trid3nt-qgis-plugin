@@ -16,6 +16,9 @@ from trid3nt_contracts.tool_registry import AtomicToolMetadata
 
 from trid3nt_server.agent.tools import register_tool
 from trid3nt_server.agent.tools.cache import read_through
+from trid3nt_server.agent.tools.fetchers._router.shape_classifier import (
+    classify_response,
+)
 
 __all__ = ["fetch_wdpa_protected_areas"]
 
@@ -409,11 +412,14 @@ def _wdpa_query_one_page(
             f"WDPA returned non-JSON body offset={offset}: {exc}"
         ) from exc
 
-    # ArcGIS REST surfaces errors inside a 200 envelope: {"error": {...}}.
-    if isinstance(payload, dict) and "error" in payload:
-        err = payload["error"]
+    # ArcGIS REST surfaces errors inside a 200 envelope: {"error": {...}} --
+    # detected via the shared shape classifier (observability/retention batch
+    # item 4) rather than an ad hoc dict check; same exception + wording.
+    verdict = classify_response(payload)
+    if verdict.kind == "error_envelope":
         raise WDPAUpstreamError(
-            f"WDPA query returned error envelope offset={offset}: {err}"
+            f"WDPA query returned error envelope offset={offset}: "
+            f"{verdict.error_payload}"
         )
 
     return payload

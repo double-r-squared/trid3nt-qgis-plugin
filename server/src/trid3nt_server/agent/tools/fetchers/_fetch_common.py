@@ -34,10 +34,20 @@ __all__ = [
 
 
 class FetchError(RuntimeError):
-    """Base class for data-fetch failures. ``error_code`` is the A.6 code."""
+    """Base class for data-fetch failures. ``error_code`` is the A.6 code.
+
+    ``actionability`` (item 3, observability/retention batch): closed
+    ``{"agent", "user", "operator"}``, read by
+    ``agent.gates.actionability.classify_actionability`` before its
+    credential-shape / untyped-exception fallbacks. Default "agent" -- the
+    upstream 4xx-arg/429/5xx/timeout class; unchanged routing (rich verbatim
+    function_response). A tool with a genuine missing-credential error should
+    override this to ``"user"`` on its own auth-error subclass.
+    """
 
     error_code: str = "UPSTREAM_API_ERROR"
     retryable: bool = True
+    actionability: str = "agent"
 
 class UpstreamAPIError(FetchError):
     """An upstream public-data API returned an error or timed out."""

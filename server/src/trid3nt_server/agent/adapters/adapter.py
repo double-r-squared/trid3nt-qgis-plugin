@@ -1823,6 +1823,35 @@ def _classify_error(error: BaseException) -> tuple[str, bool]:
     return code, True
 
 
+def _user_narration_message(tool_name: str, fallback: str) -> str:
+    """Concise user-actionable text for a credential/auth-config failure.
+
+    Reuses the credential registry's own copy (``CredentialProvider.
+    default_message`` -- already written as "what happened + what the user
+    can do") when the tool has a registered or generically-derivable
+    provider; falls back to appending a short, honest pointer to ``fallback``
+    (the original exception text, already truncated to 500 chars by the
+    caller) when the registry can't help. Never raises -- degrades to
+    ``fallback``.
+    """
+    try:
+        from trid3nt_server.credentials.credential_registry import (
+            generic_provider_for_tool,
+            provider_for_tool,
+        )
+
+        provider = provider_for_tool(tool_name)
+        if provider is not None:
+            return provider.default_message
+        generic = generic_provider_for_tool(tool_name)
+        return generic.default_message
+    except Exception:  # noqa: BLE001 -- narration must never break dispatch
+        return (
+            f"{fallback} This looks like a missing or invalid credential; "
+            "provide a valid API key/token and retry."
+        )
+
+
 def _summarize_chart_emission(tool_name: str, result: dict[str, Any]) -> dict[str, Any]:
     """Compact summary for a chart-emission tool result.
 
@@ -2096,8 +2125,26 @@ def summarize_tool_result(
     import json as _json
 
     if error is not None:
+        from trid3nt_server.agent.gates.actionability import classify_actionability
+
         code, retryable = _classify_error(error)
         message = str(error)[:500]
+        actionability = classify_actionability(tool_name, error)
+        if actionability == "operator":
+            # Contract violation / internal exception (observability/
+            # retention batch item 3): the model gets a terse, honest
+            # acknowledgment ONLY -- nothing here for it to act on. The FULL
+            # exception already reached the log at the dispatch site
+            # (server.py's tool-dispatch except-block calls
+            # logger.exception(...) before summarize_tool_result runs), and
+            # error_code/actionability still ride the telemetry record.
+            message = "internal error, logged"
+        elif actionability == "user":
+            # Missing-credential/auth-config: a concise narration directive
+            # (what happened + what the user can do) replaces the raw
+            # exception text so a small model relays it rather than
+            # paraphrasing internals.
+            message = _user_narration_message(tool_name, message)
         envelope = {
             "tool": tool_name,
             "status": "error",
@@ -2109,6 +2156,7 @@ def summarize_tool_result(
             # canonical field; both carry the same string.
             "error": message,
             "error_type": type(error).__name__,
+            "actionability": actionability,
         }
         # Typed no-data / recovery contract (2026-07-13): a tool exception
         # may carry a ``suggestions`` sequence of short recovery options

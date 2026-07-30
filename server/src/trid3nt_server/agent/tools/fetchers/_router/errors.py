@@ -33,10 +33,17 @@ __all__ = [
 
 
 class RouterError(FetchError):
-    """Base for router-driven fetch failures. Carries a dynamic ``error_code``."""
+    """Base for router-driven fetch failures. Carries a dynamic ``error_code``.
+
+    ``actionability`` (item 3, observability/retention batch): every router
+    error is the upstream 4xx-arg/429/5xx/timeout class -> "agent" (unchanged
+    routing: rich verbatim function_response). Router errors carry no
+    credential concept today, so no subclass overrides this.
+    """
 
     error_code: str = "ROUTER_ERROR"
     retryable: bool = True
+    actionability: str = "agent"
 
 
 class RouterInputError(RouterError):

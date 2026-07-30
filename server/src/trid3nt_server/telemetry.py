@@ -11,9 +11,18 @@ Write path is fire-and-forget: ``emit_tool_call_event`` schedules an async
 write task and returns immediately.  A write failure is logged at WARNING level
 but never raised -- telemetry must never break the tool-dispatch loop.
 
-Configuration:
-    ``TRID3NT_TELEMETRY_PATH`` env var overrides the default output path.
-    Default: ``/tmp/trid3nt_tool_call_telemetry.jsonl``
+Configuration (deliberate retention -- session/boot-segmented, NATE decision
+2026-07-30; ephemerality is POLICY, daemon-enforced, not accident):
+    ``TRID3NT_TELEMETRY_PATH`` unset, or set to a DIRECTORY, selects
+    directory-mode: one JSONL segment per daemon boot,
+    ``<dir>/tool_calls.<boot_id>.jsonl``. Default dir: ``/tmp/trid3nt_telemetry``.
+    ``main.run()`` prunes segments beyond the last ``TRID3NT_TELEMETRY_KEEP``
+    (default 3) at every daemon boot (``cleanup_telemetry_segments``).
+    ``TRID3NT_TELEMETRY_PATH`` set to an EXACT ``*.jsonl`` file is the legacy
+    unsegmented override (back-compat for pinned test/ops paths) -- reads and
+    writes go to exactly that one file, no segmentation, no cleanup.
+    Readers (``load_tool_call_records``) default to the CURRENT segment;
+    pass ``all_segments=True`` to read every retained segment.
 
 Record shape (one JSON object per line, newline-terminated):
     {
@@ -41,6 +50,7 @@ per-tool-call row -- see ``load_tool_call_records``).
 from __future__ import annotations
 
 import asyncio
+import glob
 import hashlib
 import json
 import logging
@@ -54,6 +64,77 @@ if TYPE_CHECKING:
 logger = logging.getLogger("trid3nt_server.telemetry")
 
 _DEFAULT_TELEMETRY_PATH = "/tmp/trid3nt_tool_call_telemetry.jsonl"
+
+# --------------------------------------------------------------------------- #
+# Deliberate telemetry retention (session/boot-segmented sink; NATE decision
+# 2026-07-30). Ephemerality is POLICY, daemon-enforced at boot
+# (``cleanup_telemetry_segments``), not a platform accident.
+#
+# Back-compat: an explicit ``TRID3NT_TELEMETRY_PATH`` ending in ``.jsonl`` is
+# an EXACT single-file override -- unsegmented, byte-identical to the prior
+# behavior (every existing test pins this env var to one tmp file and reads it
+# directly; that contract does not change). Unset, or set to a directory (no
+# ``.jsonl`` suffix), the sink is DIRECTORY-mode: one JSONL segment per daemon
+# boot, named ``tool_calls.<boot_id>.jsonl``, so a crash-looped or long-lived
+# daemon never re-grows one unbounded file. Default directory stays /tmp-class.
+# --------------------------------------------------------------------------- #
+
+_DEFAULT_TELEMETRY_DIR = "/tmp/trid3nt_telemetry"
+_TELEMETRY_BASENAME = "tool_calls"
+_DEFAULT_TELEMETRY_KEEP = 3
+
+#: Process-lifetime boot id (lazily generated once, cached). Override via
+#: ``TRID3NT_TELEMETRY_SESSION_ID`` for deterministic test/ops control.
+_BOOT_ID: str | None = None
+
+
+def _is_explicit_file_override(raw: str) -> bool:
+    """True when ``raw`` names an exact file (legacy unsegmented override)."""
+    return raw.endswith(".jsonl")
+
+
+def _telemetry_boot_id() -> str:
+    override = os.environ.get("TRID3NT_TELEMETRY_SESSION_ID")
+    if override:
+        return override
+    global _BOOT_ID
+    if _BOOT_ID is None:
+        _BOOT_ID = f"{datetime.now(timezone.utc):%Y%m%dT%H%M%S}Z-{os.getpid()}"
+    return _BOOT_ID
+
+
+def _telemetry_dir() -> str:
+    raw = os.environ.get("TRID3NT_TELEMETRY_PATH")
+    if raw and not _is_explicit_file_override(raw):
+        return raw
+    return _DEFAULT_TELEMETRY_DIR
+
+
+def _telemetry_keep() -> int:
+    raw = os.environ.get("TRID3NT_TELEMETRY_KEEP")
+    if raw is None:
+        return _DEFAULT_TELEMETRY_KEEP
+    try:
+        val = int(raw)
+        return val if val >= 1 else _DEFAULT_TELEMETRY_KEEP
+    except ValueError:
+        logger.warning(
+            "TRID3NT_TELEMETRY_KEEP=%r is not a valid positive integer; "
+            "using default %d",
+            raw,
+            _DEFAULT_TELEMETRY_KEEP,
+        )
+        return _DEFAULT_TELEMETRY_KEEP
+
+
+def _list_telemetry_segments() -> list[str]:
+    """Every retained segment file in directory mode, oldest-first (name-sorted;
+
+    the boot-id prefix is a UTC timestamp so lexical order == chronological
+    order). Empty when the directory does not exist yet.
+    """
+    pattern = os.path.join(_telemetry_dir(), f"{_TELEMETRY_BASENAME}.*.jsonl")
+    return sorted(glob.glob(pattern))
 
 
 def get_persistence() -> "Persistence | None":
@@ -75,8 +156,71 @@ def get_persistence() -> "Persistence | None":
 
 
 def _get_telemetry_path() -> str:
-    """Return the JSONL output path from env, falling back to the default."""
-    return os.environ.get("TRID3NT_TELEMETRY_PATH", _DEFAULT_TELEMETRY_PATH)
+    """Return the JSONL WRITE path: the legacy exact-file override, or the
+
+    current boot's segment inside the (env-overridable) telemetry directory.
+    """
+    raw = os.environ.get("TRID3NT_TELEMETRY_PATH")
+    if raw and _is_explicit_file_override(raw):
+        return raw
+    return os.path.join(
+        _telemetry_dir(), f"{_TELEMETRY_BASENAME}.{_telemetry_boot_id()}.jsonl"
+    )
+
+
+def telemetry_read_paths(*, all_segments: bool = False) -> list[str]:
+    """Resolve the JSONL file(s) a READER should consult.
+
+    Legacy explicit-file override: always exactly that one path (a single
+    file has no segments; ``all_segments`` is a no-op). Directory mode:
+    the CURRENT boot's segment by default, or every retained segment
+    (oldest-first) when ``all_segments=True``.
+    """
+    raw = os.environ.get("TRID3NT_TELEMETRY_PATH")
+    if raw and _is_explicit_file_override(raw):
+        return [raw]
+    if not all_segments:
+        return [_get_telemetry_path()]
+    segments = _list_telemetry_segments()
+    return segments if segments else [_get_telemetry_path()]
+
+
+def cleanup_telemetry_segments(keep: int | None = None) -> list[str]:
+    """Daemon-boot retention pass: delete segments beyond the last ``keep``.
+
+    Ephemerality is POLICY, enforced HERE (call this once at daemon boot --
+    ``main.run()`` does), not a platform accident. No-op (returns ``[]``) in
+    legacy explicit-file mode (nothing to prune) or when fewer than ``keep``
+    segments exist yet. ``keep`` defaults to ``TRID3NT_TELEMETRY_KEEP`` (3).
+    Best-effort: a failure removing one segment is logged and skipped --
+    retention must never raise or block boot.
+    """
+    raw = os.environ.get("TRID3NT_TELEMETRY_PATH")
+    if raw and _is_explicit_file_override(raw):
+        return []
+    if keep is None:
+        keep = _telemetry_keep()
+    segments = _list_telemetry_segments()
+    if len(segments) <= keep:
+        return []
+    stale = segments[: len(segments) - keep]
+    removed: list[str] = []
+    for seg in stale:
+        try:
+            os.remove(seg)
+            removed.append(seg)
+        except OSError:
+            logger.warning(
+                "telemetry retention: failed to remove segment=%s", seg, exc_info=True
+            )
+    if removed:
+        logger.info(
+            "telemetry retention: removed %d stale segment(s) (keep=%d): %s",
+            len(removed),
+            keep,
+            removed,
+        )
+    return removed
 
 
 def _hash_args(args: dict | None) -> str:
@@ -103,6 +247,9 @@ async def _write_line(path: str, record: dict) -> None:
     """
     line = json.dumps(record, default=str) + "\n"
     try:
+        parent = os.path.dirname(path)
+        if parent:
+            os.makedirs(parent, exist_ok=True)
         aiofiles = None
         try:
             import aiofiles as _aiofiles  # type: ignore[import-not-found]
@@ -246,6 +393,7 @@ def load_tool_call_records(
     *,
     limit: int | None = None,
     newest_first: bool = True,
+    all_segments: bool = False,
 ) -> list[dict]:
     """Read per-tool-call rows from the JSONL sink (the product telemetry file).
 
@@ -254,35 +402,43 @@ def load_tool_call_records(
     telemetry is JSONL-only, they read this file instead.
 
     Tolerant reader: a missing / unreadable file or a malformed line yields what
-    could be read (never raises -- returns ``[]`` on OSError). Tool-retrieval
-    SHADOW rows (``record_type == SHADOW_RECORD_TYPE``) share this sink and are
-    EXCLUDED -- only per-tool-call rows (which carry no ``record_type``) are
-    returned.
+    could be read (never raises -- a missing/unreadable target is skipped, not
+    fatal). Tool-retrieval SHADOW rows (``record_type == SHADOW_RECORD_TYPE``)
+    share this sink and are EXCLUDED -- only per-tool-call rows (which carry no
+    ``record_type``) are returned.
 
-    The file is append-ordered (oldest-first). With ``limit`` set, only the last
-    ``limit`` tool-call rows are kept; with ``newest_first`` (default) the result
-    is returned newest-first so a session-cap consumer sees recent sessions first
-    (mirrors the old ``find ... sort {_id: -1}`` query the Mongo path issued).
+    ``path`` (explicit) wins over everything -- read exactly that one file
+    (unchanged legacy behavior). Otherwise reads the CURRENT session/boot
+    segment by default (``all_segments=False``); pass ``all_segments=True`` to
+    read every retained segment (deliberate retention -- item 2). Segment
+    files are read oldest-first so the overall row order (pre-sort) matches
+    the single-file append order.
+
+    With ``limit`` set, only the last ``limit`` tool-call rows are kept; with
+    ``newest_first`` (default) the result is returned newest-first so a
+    session-cap consumer sees recent sessions first (mirrors the old
+    ``find ... sort {_id: -1}`` query the Mongo path issued).
     """
-    target = path or _get_telemetry_path()
+    targets = [path] if path is not None else telemetry_read_paths(all_segments=all_segments)
     out: list[dict] = []
-    try:
-        with open(target, "r", encoding="utf-8") as fh:
-            for line in fh:
-                line = line.strip()
-                if not line:
-                    continue
-                try:
-                    rec = json.loads(line)
-                except json.JSONDecodeError:
-                    continue
-                if not isinstance(rec, dict):
-                    continue
-                if rec.get("record_type") == SHADOW_RECORD_TYPE:
-                    continue
-                out.append(rec)
-    except OSError:
-        return []
+    for target in targets:
+        try:
+            with open(target, "r", encoding="utf-8") as fh:
+                for line in fh:
+                    line = line.strip()
+                    if not line:
+                        continue
+                    try:
+                        rec = json.loads(line)
+                    except json.JSONDecodeError:
+                        continue
+                    if not isinstance(rec, dict):
+                        continue
+                    if rec.get("record_type") == SHADOW_RECORD_TYPE:
+                        continue
+                    out.append(rec)
+        except OSError:
+            continue
     if limit is not None and len(out) > limit:
         out = out[-limit:]
     if newest_first:
@@ -967,6 +1123,8 @@ __all__ = [
     "emit_tool_call_event",
     "compute_args_hash",
     "load_tool_call_records",
+    "telemetry_read_paths",
+    "cleanup_telemetry_segments",
     "emit_solve_telemetry",
     "build_solve_telemetry_record",
     "record_solve_telemetry",

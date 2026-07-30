@@ -7,6 +7,15 @@ set -euo pipefail
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 PYTHON="$REPO_ROOT/venvs/agent/bin/python"
 LOG_FILE="$REPO_ROOT/logs/agent.log"
+# Boot-only capture: Python owns agent.log via a RotatingFileHandler (~10MB x3,
+# see trid3nt_server.main._configure_logging) so this script no longer pipes
+# routine output into it (that would double-write and race the handler's own
+# rotation). BOOT_LOG_FILE catches ONLY stderr (Python's console handler
+# targets stdout explicitly; stdout is discarded below) -- a pre-logging-init
+# crash traceback lands here, but routine INFO+ logging never does, so this
+# file stays small instead of re-growing unbounded like the old agent.log did.
+# Truncated fresh each start.
+BOOT_LOG_FILE="$REPO_ROOT/logs/agent_boot.log"
 PID_FILE="$REPO_ROOT/run/agent.pid"
 ENV_FILE="$REPO_ROOT/.env.local"
 
@@ -43,6 +52,9 @@ set +a
 # Override: ensure host is LAN-accessible, not loopback-only
 export TRID3NT_AGENT_HOST="${TRID3NT_AGENT_HOST:-0.0.0.0}"
 
+# Python owns log rotation at this exact path (main.py's RotatingFileHandler).
+export TRID3NT_AGENT_LOG_FILE="${TRID3NT_AGENT_LOG_FILE:-$LOG_FILE}"
+
 # Ensure no AWS Cognito pool is set (local = anonymous auth)
 
 # NATE 2026-07-12: no follow-up offers in replies - the user asks for what
@@ -53,10 +65,10 @@ export TRID3NT_OPENAI_EXTRA_SYSTEM="${TRID3NT_OPENAI_EXTRA_SYSTEM:-Never end a r
 
 echo "[start_agent] starting agent (WS :8765, HTTP :8766)..."
 echo "[start_agent] MODEL_PROVIDER=$MODEL_PROVIDER TRID3NT_OPENAI_MODEL=$TRID3NT_OPENAI_MODEL"
-echo "[start_agent] logs -> $LOG_FILE"
+echo "[start_agent] logs -> $LOG_FILE (rotated at the Python logging layer, ~10MB x3); boot crashes -> $BOOT_LOG_FILE"
 
 setsid nohup "$PYTHON" -m trid3nt_server.main \
-  >> "$LOG_FILE" 2>&1 &
+  >/dev/null 2>"$BOOT_LOG_FILE" &
 
 AGENT_PID=$!
 echo "$AGENT_PID" > "$PID_FILE"
@@ -65,8 +77,8 @@ echo "[start_agent] agent PID=$AGENT_PID (pidfile: $PID_FILE)"
 # Wait briefly and verify it didn't immediately crash
 sleep 2
 if ! kill -0 "$AGENT_PID" 2>/dev/null; then
-  echo "[start_agent] ERROR: agent process died immediately -- check $LOG_FILE" >&2
-  cat "$LOG_FILE" | tail -20 >&2
+  echo "[start_agent] ERROR: agent process died immediately -- check $BOOT_LOG_FILE and $LOG_FILE" >&2
+  cat "$BOOT_LOG_FILE" | tail -20 >&2
   exit 1
 fi
 

@@ -24,6 +24,8 @@ import asyncio
 import logging
 import os
 import sys
+from logging.handlers import RotatingFileHandler
+from pathlib import Path
 
 # ---------------------------------------------------------------------------
 # FR-FR-3: agent-side max-turns cap -- cheap insurance.
@@ -411,6 +413,82 @@ def _run_readiness_probe(submitter) -> None:
         )
 
 
+#: Size-capped rotation for the Python-owned agent log file (~10MB active +
+#: 3 rotated backups = ~40MB ceiling regardless of session length). Overridable
+#: via ``TRID3NT_AGENT_LOG_MAX_BYTES`` / ``TRID3NT_AGENT_LOG_BACKUPS`` for ops.
+_DEFAULT_LOG_MAX_BYTES = 10 * 1024 * 1024
+_DEFAULT_LOG_BACKUPS = 3
+
+
+def _resolve_agent_log_file() -> str | None:
+    """Resolve the rotating file-handler's target path, or ``None`` (console-only).
+
+    ``TRID3NT_AGENT_LOG_FILE`` (set by ``scripts/start_agent.sh``) is
+    authoritative. Unset -> ``<repo>/logs/agent.log`` inferred from this
+    module's install path (``trid3nt_server/main.py`` -> ``src`` -> ``server``
+    -> repo root), matching the path ``start_agent.sh`` has always used.
+    Falls back to ``None`` (console-only logging) if that layout assumption
+    doesn't hold (e.g. an unexpected install) -- logging setup must never
+    abort agent startup.
+    """
+    raw = os.environ.get("TRID3NT_AGENT_LOG_FILE")
+    if raw:
+        return raw
+    try:
+        repo_root = Path(__file__).resolve().parents[3]
+        return str(repo_root / "logs" / "agent.log")
+    except (IndexError, OSError):
+        return None
+
+
+def _configure_logging() -> None:
+    """Console + size-capped rotating file handler.
+
+    Python owns log rotation at the logging layer -- ``RotatingFileHandler``
+    (~10MB x 3 backups by default) -- so the on-disk log is size-bounded
+    regardless of how the process is started (``scripts/start_agent.sh``'s
+    shell redirection no longer needs to, and no longer does, pipe routine
+    output into the rotated file; see the script for the boot-crash-only
+    redirect it keeps instead). Uses plain ``logging.basicConfig`` (no
+    ``force=True``): this is a NO-OP when the root logger already has a
+    handler (e.g. pytest's ``caplog`` fixture pre-installs one for every
+    test), matching the prior behavior exactly and keeping test runs from
+    ever touching a real rotating file on disk.
+    """
+    level = os.environ.get("TRID3NT_AGENT_LOG", "INFO")
+    fmt = "%(asctime)s %(levelname)s %(name)s %(message)s"
+    # Explicit stdout (not the logging module's stderr default): start_agent.sh
+    # discards stdout and captures ONLY stderr into the boot-crash file, so
+    # routine INFO+ logging never accumulates there -- the RotatingFileHandler
+    # below is the sole durable, size-capped sink for routine output.
+    handlers: list[logging.Handler] = [logging.StreamHandler(sys.stdout)]
+
+    log_file = _resolve_agent_log_file()
+    if log_file:
+        try:
+            os.makedirs(os.path.dirname(log_file) or ".", exist_ok=True)
+            max_bytes = int(
+                os.environ.get("TRID3NT_AGENT_LOG_MAX_BYTES", _DEFAULT_LOG_MAX_BYTES)
+            )
+            backups = int(
+                os.environ.get("TRID3NT_AGENT_LOG_BACKUPS", _DEFAULT_LOG_BACKUPS)
+            )
+            handlers.append(
+                RotatingFileHandler(
+                    log_file, maxBytes=max_bytes, backupCount=backups, encoding="utf-8"
+                )
+            )
+        except (OSError, ValueError) as exc:
+            logging.getLogger("trid3nt_server.main").warning(
+                "log rotation file handler unavailable path=%s: %s -- "
+                "continuing console-only",
+                log_file,
+                exc,
+            )
+
+    logging.basicConfig(level=level, format=fmt, handlers=handlers)
+
+
 def run(argv: list[str] | None = None) -> int:
     """Console-script entry point. ``make run-agent`` calls this.
 
@@ -418,10 +496,7 @@ def run(argv: list[str] | None = None) -> int:
     the registered tools, and exits 0 without binding the WebSocket port.
     Used by acceptance and by container healthchecks.
     """
-    logging.basicConfig(
-        level=os.environ.get("TRID3NT_AGENT_LOG", "INFO"),
-        format="%(asctime)s %(levelname)s %(name)s %(message)s",
-    )
+    _configure_logging()
     logger = logging.getLogger("trid3nt_server.main")
 
     args = sys.argv[1:] if argv is None else argv
@@ -434,6 +509,23 @@ def run(argv: list[str] | None = None) -> int:
 
     tool_names = sorted(tools.TOOL_REGISTRY.keys())
     logger.info("tool registry loaded: %d tool(s): %s", n_tools, tool_names)
+
+    # Deliberate telemetry retention (daemon-boot cleanup pass): prune
+    # tool-call telemetry segments beyond the last TRID3NT_TELEMETRY_KEEP
+    # (default 3). Ephemerality is policy, enforced here, not a platform
+    # accident. Best-effort -- retention must never block boot.
+    try:
+        from . import telemetry as _telemetry
+
+        _removed = _telemetry.cleanup_telemetry_segments()
+        if _removed:
+            logger.info(
+                "telemetry retention: removed %d stale segment(s): %s",
+                len(_removed),
+                _removed,
+            )
+    except Exception:  # noqa: BLE001 -- retention must never block boot
+        logger.warning("telemetry retention cleanup failed", exc_info=True)
 
     # bind the qgis_process submitter so the discovery tools and the
     # qgis_process pass-through can reach the substrate. Best-effort: failure

@@ -24,6 +24,7 @@ from typing import Any
 from trid3nt_contracts.source_spec import SourceSpec
 
 from ..errors import router_upstream_error
+from ..shape_classifier import classify_response
 
 logger = logging.getLogger(
     "trid3nt_server.agent.tools.fetchers._router.executors.vector_fgb"
@@ -450,7 +451,14 @@ def build_query_params(
 
 
 def _fetch_one_page(spec: SourceSpec, url: str, params: dict[str, str]) -> list[dict[str, Any]]:
-    """GET one page of an ArcGIS query; return GeoJSON features. Network."""
+    """GET one page of an ArcGIS query; return GeoJSON features. Network.
+
+    Body-shape classification (JSON-parse / ArcGIS ``{"error": ...}`` envelope
+    / not-a-JSON-object) runs through the shared ``classify_response`` (item 4
+    of the observability/retention batch) -- same typed exception + same
+    message wording as before the migration, just sourced from ONE shape
+    classifier instead of ad hoc parsing here.
+    """
     import httpx
 
     ua = spec.auth.user_agent
@@ -464,14 +472,18 @@ def _fetch_one_page(spec: SourceSpec, url: str, params: dict[str, str]) -> list[
             spec.error_code_prefix,
             f"HTTP {resp.status_code} url={url}: {resp.text[:500]!r}",
         )
-    try:
-        body = resp.json()
-    except ValueError as exc:
-        raise router_upstream_error(spec.error_code_prefix, f"non-JSON response url={url}: {exc}")
-    if isinstance(body, dict) and "error" in body:
+
+    verdict = classify_response(resp.text)
+    if verdict.kind == "unparseable":
         raise router_upstream_error(
-            spec.error_code_prefix, f"error envelope url={url}: {body['error']}"
+            spec.error_code_prefix,
+            f"non-JSON response url={url}: {verdict.excerpt!r}",
         )
+    if verdict.kind == "error_envelope":
+        raise router_upstream_error(
+            spec.error_code_prefix, f"error envelope url={url}: {verdict.error_message}"
+        )
+    body = verdict.body
     if not isinstance(body, dict):
         raise router_upstream_error(spec.error_code_prefix, "response is not a JSON object")
     return body.get("features", []) or []

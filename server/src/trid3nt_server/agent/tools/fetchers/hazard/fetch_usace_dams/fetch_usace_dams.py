@@ -17,6 +17,9 @@ from trid3nt_contracts.tool_registry import AtomicToolMetadata
 
 from trid3nt_server.agent.tools import register_tool
 from trid3nt_server.agent.tools.cache import read_through
+from trid3nt_server.agent.tools.fetchers._router.shape_classifier import (
+    classify_response,
+)
 
 __all__ = [
     "fetch_usace_dams",
@@ -784,14 +787,21 @@ def _fetch_nid_geojson_page(
             f"USACE NID returned non-JSON url={url}: {exc}"
         ) from exc
 
-    if not isinstance(body, dict):
+    # Shape-classify the already-parsed body (observability/retention batch
+    # item 4): recognizes the ArcGIS {"error": ...} envelope; the explicit
+    # isinstance/FeatureCollection checks below stay -- they are THIS
+    # fetcher's own domain shape (a GeoJSON FeatureCollection), not part of
+    # the shared classifier's generic contract.
+    verdict = classify_response(body)
+
+    if not isinstance(verdict.body, dict):
         raise USACEDAMSUpstreamError(
             f"USACE NID response is not a JSON object url={url}: "
             f"type={type(body).__name__!r}"
         )
 
-    if "error" in body:
-        err = body["error"]
+    if verdict.kind == "error_envelope":
+        err = verdict.error_payload
         # ESRI token gate: code 499 (token required) / 498 (invalid token).
         # The authoritative ``geospatial.sec.usace.army.mil`` folder is
         # token-gated; either code is a credential signal the agent surfaces
@@ -806,13 +816,13 @@ def _fetch_nid_geojson_page(
             f"USACE NID query returned error envelope url={url}: {err}"
         )
 
-    if body.get("type") != "FeatureCollection":
+    if verdict.body.get("type") != "FeatureCollection":
         raise USACEDAMSUpstreamError(
             f"USACE NID response is not a GeoJSON FeatureCollection url={url}: "
-            f"type={body.get('type')!r}"
+            f"type={verdict.body.get('type')!r}"
         )
 
-    return body
+    return verdict.body
 
 
 # ---------------------------------------------------------------------------

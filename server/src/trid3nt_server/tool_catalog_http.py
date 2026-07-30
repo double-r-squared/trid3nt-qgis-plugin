@@ -313,14 +313,20 @@ def _first_paragraph(doc: str, *, max_chars: int = 400) -> str:
 # ---------------------------------------------------------------------------
 
 
-_DEFAULT_TELEMETRY_PATH = "/tmp/trid3nt_tool_call_telemetry.jsonl"
-
-
 def _get_telemetry_path() -> Path:
-    """Resolve the JSONL fallback path (env override + default)."""
-    return Path(
-        os.environ.get("TRID3NT_TELEMETRY_PATH", _DEFAULT_TELEMETRY_PATH)
-    )
+    """Resolve the JSONL fallback path (delegates to ``telemetry``'s canonical,
+
+    session/boot-segmented resolver -- item 2 of the observability/retention
+    batch: this used to duplicate ``telemetry._get_telemetry_path``'s
+    env-var + default logic; now it reads the SAME current-segment path that
+    module owns, so a dashboard read and a live write agree on where the
+    sink lives. Kept as its own callable (rather than inlining the import at
+    each call site) because tests monkeypatch THIS name directly to pin a
+    hermetic tmp file.
+    """
+    from trid3nt_server import telemetry as _telemetry
+
+    return Path(_telemetry._get_telemetry_path())
 
 
 # tool-retrieval SHADOW recall@k (tool-retrieval kickoff). The shadow-selection
@@ -824,39 +830,43 @@ def _aggregate_solve_telemetry(
 
 
 def _load_recent_records_from_file(
-    path: Path,
+    path: Path | list[Path],
     *,
     last_n_sessions: int = 30,
 ) -> list[dict[str, Any]]:
-    """Read the JSONL fallback file and return records from the most-recent
+    """Read the JSONL fallback file(s) and return records from the most-recent
     ``last_n_sessions`` distinct sessions (newest first).
 
-    Returns an empty list when the file is missing or unreadable -- the
-    dashboard renders an empty state in that case.
+    ``path`` is a single ``Path`` (the default -- unchanged behavior) or a
+    list of ``Path`` (the retained-telemetry-segments case, oldest-first).
+    A missing/unreadable file is skipped, not fatal -- the dashboard renders
+    an empty state only if EVERY target is missing/unreadable.
     """
-    if not path.exists():
-        return []
+    targets = [path] if isinstance(path, Path) else list(path)
     out: list[dict[str, Any]] = []
-    try:
-        with path.open("r", encoding="utf-8") as fh:
-            for line in fh:
-                line = line.strip()
-                if not line:
-                    continue
-                try:
-                    rec = json.loads(line)
-                except json.JSONDecodeError:
-                    continue
-                if not isinstance(rec, dict):
-                    continue
-                # tool-retrieval SHADOW rows share this JSONL sink but are NOT
-                # tool-call dispatches -- skip them here (the recall@k path reads
-                # them separately via _load_shadow_records_from_file).
-                if rec.get("record_type") == _SHADOW_RECORD_TYPE:
-                    continue
-                out.append(_normalize_record(rec))
-    except OSError:
-        return []
+    for target in targets:
+        if not target.exists():
+            continue
+        try:
+            with target.open("r", encoding="utf-8") as fh:
+                for line in fh:
+                    line = line.strip()
+                    if not line:
+                        continue
+                    try:
+                        rec = json.loads(line)
+                    except json.JSONDecodeError:
+                        continue
+                    if not isinstance(rec, dict):
+                        continue
+                    # tool-retrieval SHADOW rows share this JSONL sink but are NOT
+                    # tool-call dispatches -- skip them here (the recall@k path reads
+                    # them separately via _load_shadow_records_from_file).
+                    if rec.get("record_type") == _SHADOW_RECORD_TYPE:
+                        continue
+                    out.append(_normalize_record(rec))
+        except OSError:
+            continue
     if not out:
         return out
     # Newest-first, then keep only records belonging to the last N sessions.
@@ -873,31 +883,33 @@ def _load_recent_records_from_file(
     return keep
 
 
-def _load_shadow_records_from_file(path: Path) -> list[dict[str, Any]]:
-    """Read the tool-retrieval SHADOW rows from the JSONL sink.
+def _load_shadow_records_from_file(path: Path | list[Path]) -> list[dict[str, Any]]:
+    """Read the tool-retrieval SHADOW rows from the JSONL sink(s).
 
     Shadow rows carry ``record_type == _SHADOW_RECORD_TYPE`` and a
     ``visible_tools`` array (the would-be-visible set for that turn). Keyed for
-    recall@k by ``(session_id, turn_id)``. Returns an empty list when the file is
-    missing / unreadable.
+    recall@k by ``(session_id, turn_id)``. ``path`` is a single ``Path`` or a
+    list (retained-segments case); a missing/unreadable target is skipped.
     """
-    if not path.exists():
-        return []
+    targets = [path] if isinstance(path, Path) else list(path)
     out: list[dict[str, Any]] = []
-    try:
-        with path.open("r", encoding="utf-8") as fh:
-            for line in fh:
-                line = line.strip()
-                if not line:
-                    continue
-                try:
-                    rec = json.loads(line)
-                except json.JSONDecodeError:
-                    continue
-                if isinstance(rec, dict) and rec.get("record_type") == _SHADOW_RECORD_TYPE:
-                    out.append(rec)
-    except OSError:
-        return []
+    for target in targets:
+        if not target.exists():
+            continue
+        try:
+            with target.open("r", encoding="utf-8") as fh:
+                for line in fh:
+                    line = line.strip()
+                    if not line:
+                        continue
+                    try:
+                        rec = json.loads(line)
+                    except json.JSONDecodeError:
+                        continue
+                    if isinstance(rec, dict) and rec.get("record_type") == _SHADOW_RECORD_TYPE:
+                        out.append(rec)
+        except OSError:
+            continue
     return out
 
 
@@ -1107,18 +1119,30 @@ def _empty_recall_at_k() -> dict[str, Any]:
 async def build_telemetry_summary(
     *,
     last_n_sessions: int = 30,
+    all_segments: bool = False,
 ) -> dict[str, Any]:
     """Build the routing-quality summary served by /api/telemetry/summary.
 
     Telemetry is JSONL-only (the ``tool_call_telemetry`` Persistence-collection
-    route was cut). Reads the per-tool-call rows from the
-    ``TRID3NT_TELEMETRY_PATH`` JSONL sink (default
-    ``/tmp/trid3nt_tool_call_telemetry.jsonl``) and aggregates against them.
+    route was cut). Reads the per-tool-call rows from the deliberately-retained,
+    session/boot-segmented sink (``telemetry.py`` item 2) and aggregates
+    against them: the CURRENT boot segment by default (``_get_telemetry_path``,
+    monkeypatchable for tests), or every retained segment when
+    ``all_segments=True`` (``telemetry.telemetry_read_paths``).
 
     Returns the empty-summary shape (all-zero counts) if nothing is found.
     """
+    if all_segments:
+        from trid3nt_server import telemetry as _telemetry
+
+        read_targets: Path | list[Path] = [
+            Path(p) for p in _telemetry.telemetry_read_paths(all_segments=True)
+        ]
+    else:
+        read_targets = _get_telemetry_path()
+
     records: list[dict[str, Any]] = _load_recent_records_from_file(
-        _get_telemetry_path(), last_n_sessions=last_n_sessions
+        read_targets, last_n_sessions=last_n_sessions
     )
     used_source = "file" if records else "empty"
 
@@ -1131,7 +1155,7 @@ async def build_telemetry_summary(
     # turn_id. Best-effort: a read/compute fault leaves the zero-state section
     # seeded by _aggregate_records (never breaks the dashboard).
     try:
-        shadow_records = _load_shadow_records_from_file(_get_telemetry_path())
+        shadow_records = _load_shadow_records_from_file(read_targets)
         summary["recall_at_k"] = compute_recall_at_k(records, shadow_records)
     except Exception:  # noqa: BLE001 -- never break the dashboard on recall read
         logger.warning("telemetry summary: recall@k read failed", exc_info=True)

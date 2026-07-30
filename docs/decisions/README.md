@@ -38,3 +38,4 @@ lands; never rewrite history - supersede with a new note that links back.
 - [0033 - sandbox containment posture on a single host](0033-sandbox-containment-single-ec2.md)
 - [0034 - engine-door template registration](0034-engine-door-template-registration.md)
 - [0035 - local solver execution I/O contract](0035-local-solver-io-contract.md)
+- [0051 - observability/retention batch: rotation, telemetry retention, error actionability, shape classifier](0051-observability-retention-batch.md)
