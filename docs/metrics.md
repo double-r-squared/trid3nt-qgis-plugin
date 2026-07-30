@@ -38,3 +38,14 @@ matters, not the absolute).
 | 2026-07-29i | 204730 | - | - | - | - | - | 190 | 13,116 | satellite preemptive cull (NATE waiver, ADR 0046): last shared/ model_* wrapper out; corpus re-homed w/ retrieval proof |
 | 2026-07-29j | ~204790 | - | - | - | - | - | 190 | 13,116 | fold wave 5 (raster): STAC-tile seam onto transport (byte-identical live); 11 raster twins deferred by stop-rule, 6 mode-enablers scoped in ADR 0047 |
 | 2026-07-29k | ~204510 | - | - | - | - | - | 190 | 13,116 | processing de-cloud (ADR 0048): _gdal_runner shared module, in-process COG encoder, grace2 fallback deleted, golden parity 4/4; flood canary PASSED (depth COG + overviews via in-process encoder) |
+
+## CANONICAL METRIC (NATE 2026-07-30): CODED tools, rolling deltas
+
+The registry total counts REGISTRATIONS incl. spec-synthesized data-tools
+and is NOT the reduction metric. The metric is HAND-ROLLED PYTHON TOOLS
+(coded = registered minus _router._promoted) and their LOC, reported as
+rolling n-1 -> n deltas per landing, never arc-start comparisons.
+
+| date | coded tools | coded fetchers | spec-served (data) | bespoke fetcher LOC | debug surface note |
+|---|---|---|---|---|---|
+| 2026-07-30 (current) | 176 | 85 | 14 | 62,665 (of 67,056 fetchers-pkg; router+transport engine = 4,391) | 14 sources debug through ONE 4,391-line engine instead of ~14k lines of bespoke files |
