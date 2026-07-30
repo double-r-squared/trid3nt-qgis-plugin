@@ -49,3 +49,4 @@ rolling n-1 -> n deltas per landing, never arc-start comparisons.
 | date | coded tools | coded fetchers | spec-served (data) | bespoke fetcher LOC | debug surface note |
 |---|---|---|---|---|---|
 | 2026-07-30 (current) | 176 | 85 | 14 | 62,665 (of 67,056 fetchers-pkg; router+transport engine = 4,391) | 14 sources debug through ONE 4,391-line engine instead of ~14k lines of bespoke files |
+| 2026-07-30 | 176 | 85 | 14 | 62,665 | observability batch (ADR 0051): +902 LOC of NEW capability (rotation, retention, actionability, classifier); coded counts unchanged - infra landing, not a fold |
