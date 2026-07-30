@@ -1,4 +1,4 @@
-# Stratified retrieval pools (NATE-approved direction, 2026-07-30)
+# Stratified retrieval pools (NATE-APPROVED + SIGNED, 2026-07-30)
 
 Principle (NATE): pool-ify the UNBOUNDED populations; bounded surfaces
 with working mechanisms stay as they are. "The registry is a library;

@@ -309,7 +309,7 @@ SIGNED WITH DEFAULTS. Bindings:
   Design 2 outside the noise band on selection accuracy AND first-attempt
   param validity - a tie or within-band result selects Design 2.
 
-## Design 3 amendment (2026-07-30, PENDING NATE SIGN-OFF)
+## Design 3 amendment (2026-07-30, SIGNED NATE 2026-07-30 incl. controls-gate amendment)
 
 Arm 3 (auto-trigger composed declaration - the stratified-pools data
 lane, docs/specs/stratified-pools.md): the model NEVER initiates
