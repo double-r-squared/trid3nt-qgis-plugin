@@ -289,3 +289,22 @@ gate results), the control identity check, the scored comparison table, and
 table + the registry-delta integers). The verdict paper-trails the
 registry-shrink go/no-go and which surfacing design every future fold wave
 adopts.
+
+## Sign-off (NATE, 2026-07-30)
+
+SIGNED WITH DEFAULTS. Bindings:
+- All 52 previously NEW_UNSIGNED phrasings signed (tags updated in
+  inputs/phrasings.json); the 71 REUSED_SIGNED carry their prior signature.
+- Trials: N=1, temperature 0, tie-break noise band 2 pts.
+- Arm 2 expander: catalog discovery routes through search_tools (already a
+  gate-expander); search_data_catalog is NOT extended into an expander.
+- Arm 1 isolation: the 14 per-source tools hide behind an arm flag
+  (reversible), not hard pool-exclusion.
+- Model-in-the-loop framing ACCEPTED for selection/param grading (grading
+  itself stays deterministic; the model-free reachability check remains a
+  precondition gate).
+- FAVORED ARM (NATE 2026-07-30): Design 2 - surface stability is the
+  governing principle ("the surface it sees shouldn't have changed; only
+  the underlying code is generalized"). Design 1 ADVANCES ONLY IF IT BEATS
+  Design 2 outside the noise band on selection accuracy AND first-attempt
+  param validity - a tie or within-band result selects Design 2.

@@ -8,9 +8,9 @@
     "experiments/fetcher_fold_routing/inputs/phrasings.json"
   ],
   "note_do_not_run": "This file assembles the CATALOG-SURFACING experiment input set only (three arms: baseline per-source virtual tools; Design 1 card-carried search_data_catalog + fetch_from_catalog; Design 2 discovery-expands-declaration). Per standing methodology (NATE-first, sign-off on inputs BEFORE any run) the experiment MUST NOT be executed until NATE signs this file. Unlike the model-free fetcher_fold_routing parity run, the headline metrics here (source-selection accuracy + param fidelity + one-retry) are MODEL-IN-THE-LOOP; only the GRADING is deterministic (fired/selected names vs the acceptable set; validate_params pass/fail). status flips when NATE signs.",
-  "surfacing_note": "acceptable is the SAME source name in all three arms; only the LOCUS the grader reads differs. arm0 (baseline): the per-source virtual tool fired == acceptable[0]. arm1 (Design 1): the `source` argument passed to fetch_from_catalog == acceptable[0] (the model reaches it 2-hop: search_data_catalog -> fetch_from_catalog). arm2 (Design 2): the per-source tool DECLARED by the search-hit expansion AND then fired == acceptable[0]. Every phrasing is tagged origin=REUSED_SIGNED (carried verbatim from the SIGNED fetcher_fold_routing set, natealmanza 2026-07-29) or origin=NEW_UNSIGNED (NATE signs these).",
+  "surfacing_note": "acceptable is the SAME source name in all three arms; only the LOCUS the grader reads differs. arm0 (baseline): the per-source virtual tool fired == acceptable[0]. arm1 (Design 1): the `source` argument passed to fetch_from_catalog == acceptable[0] (the model reaches it 2-hop: search_data_catalog -> fetch_from_catalog). arm2 (Design 2): the per-source tool DECLARED by the search-hit expansion AND then fired == acceptable[0]. Every phrasing is tagged origin=REUSED_SIGNED (carried verbatim from the SIGNED fetcher_fold_routing set, natealmanza 2026-07-29) or origin=SIGNED_NATE_2026-07-30 (NATE signs these).",
   "validation": {
-    "method": "Every acceptable name below (14 source twin names + all control expected names) MUST be checked against the LIVE TOOL_REGISTRY at experiment load, exactly as experiments/fetcher_fold_routing/inputs/phrasings.json validation did (full surface import incl. workflows/solver/search). The 5 REUSED_SIGNED source names + the 12 REUSED_SIGNED control names already resolved True in the signed file (registry_size_at_check=200). The 9 NEW_UNSIGNED source names are the promoted spec twin names from the 14 fetchers/**/source.yaml specs; the 7 NEW_UNSIGNED distractor control names (run_sfincs, run_swmm, run_openquake, fetch_dem, run_openquake as door, fetch_naip, fetch_goes_active_fire, fetch_nws_alerts_conus) were grep-confirmed present in-tree during design and MUST be load-validated before sign-off.",
+    "method": "Every acceptable name below (14 source twin names + all control expected names) MUST be checked against the LIVE TOOL_REGISTRY at experiment load, exactly as experiments/fetcher_fold_routing/inputs/phrasings.json validation did (full surface import incl. workflows/solver/search). The 5 REUSED_SIGNED source names + the 12 REUSED_SIGNED control names already resolved True in the signed file (registry_size_at_check=200). The 9 SIGNED_NATE_2026-07-30 source names are the promoted spec twin names from the 14 fetchers/**/source.yaml specs; the 7 SIGNED_NATE_2026-07-30 distractor control names (run_sfincs, run_swmm, run_openquake, fetch_dem, run_openquake as door, fetch_naip, fetch_goes_active_fire, fetch_nws_alerts_conus) were grep-confirmed present in-tree during design and MUST be load-validated before sign-off.",
     "registry_size_at_check_reference": 200
   },
   "sources": [
@@ -122,131 +122,131 @@
       "source": "fetch_us_drought_monitor",
       "family": "climate",
       "source_yaml": "server/src/trid3nt_server/agent/tools/fetchers/climate/fetch_us_drought_monitor/source.yaml",
-      "origin_group": "NEW_UNSIGNED",
+      "origin_group": "SIGNED_NATE_2026-07-30",
       "acceptable": ["fetch_us_drought_monitor"],
       "phrasings": [
-        {"text": "show me the US Drought Monitor map for this area", "kind": "corpus_verbatim", "origin": "NEW_UNSIGNED"},
-        {"text": "which areas are in severe or extreme drought", "kind": "corpus_verbatim", "origin": "NEW_UNSIGNED"},
-        {"text": "drought intensity polygons D0 through D4 for the Southwest", "kind": "corpus_verbatim", "origin": "NEW_UNSIGNED"},
-        {"text": "how dry is it right now across this region", "kind": "paraphrase", "origin": "NEW_UNSIGNED"},
-        {"text": "drought conditions here", "kind": "vague", "origin": "NEW_UNSIGNED"}
+        {"text": "show me the US Drought Monitor map for this area", "kind": "corpus_verbatim", "origin": "SIGNED_NATE_2026-07-30"},
+        {"text": "which areas are in severe or extreme drought", "kind": "corpus_verbatim", "origin": "SIGNED_NATE_2026-07-30"},
+        {"text": "drought intensity polygons D0 through D4 for the Southwest", "kind": "corpus_verbatim", "origin": "SIGNED_NATE_2026-07-30"},
+        {"text": "how dry is it right now across this region", "kind": "paraphrase", "origin": "SIGNED_NATE_2026-07-30"},
+        {"text": "drought conditions here", "kind": "vague", "origin": "SIGNED_NATE_2026-07-30"}
       ]
     },
     {
       "source": "fetch_hifld_transmission_lines",
       "family": "hazard",
       "source_yaml": "server/src/trid3nt_server/agent/tools/fetchers/hazard/fetch_hifld_transmission_lines/source.yaml",
-      "origin_group": "NEW_UNSIGNED",
+      "origin_group": "SIGNED_NATE_2026-07-30",
       "acceptable": ["fetch_hifld_transmission_lines"],
       "phrasings": [
-        {"text": "where are the electric power transmission lines near Houston", "kind": "corpus_verbatim", "origin": "NEW_UNSIGNED"},
-        {"text": "show the high-voltage power grid in this area", "kind": "corpus_verbatim", "origin": "NEW_UNSIGNED"},
-        {"text": "map the bulk power transmission corridors for this region", "kind": "corpus_verbatim", "origin": "NEW_UNSIGNED"},
-        {"text": "which high-voltage lines could be exposed to this hazard", "kind": "paraphrase", "origin": "NEW_UNSIGNED"},
-        {"text": "power lines around here", "kind": "vague", "origin": "NEW_UNSIGNED"}
+        {"text": "where are the electric power transmission lines near Houston", "kind": "corpus_verbatim", "origin": "SIGNED_NATE_2026-07-30"},
+        {"text": "show the high-voltage power grid in this area", "kind": "corpus_verbatim", "origin": "SIGNED_NATE_2026-07-30"},
+        {"text": "map the bulk power transmission corridors for this region", "kind": "corpus_verbatim", "origin": "SIGNED_NATE_2026-07-30"},
+        {"text": "which high-voltage lines could be exposed to this hazard", "kind": "paraphrase", "origin": "SIGNED_NATE_2026-07-30"},
+        {"text": "power lines around here", "kind": "vague", "origin": "SIGNED_NATE_2026-07-30"}
       ]
     },
     {
       "source": "fetch_mtbs_burn_severity",
       "family": "hazard",
       "source_yaml": "server/src/trid3nt_server/agent/tools/fetchers/hazard/fetch_mtbs_burn_severity/source.yaml",
-      "origin_group": "NEW_UNSIGNED",
+      "origin_group": "SIGNED_NATE_2026-07-30",
       "acceptable": ["fetch_mtbs_burn_severity"],
       "phrasings": [
-        {"text": "show me historic wildfire burn scars in this area", "kind": "corpus_verbatim", "origin": "NEW_UNSIGNED"},
-        {"text": "give me the burn severity map for the Camp Fire footprint", "kind": "corpus_verbatim", "origin": "NEW_UNSIGNED"},
-        {"text": "what fires burned through this watershed in the last 10 years", "kind": "corpus_verbatim", "origin": "NEW_UNSIGNED"},
-        {"text": "how badly did past wildfires burn this landscape", "kind": "paraphrase", "origin": "NEW_UNSIGNED"},
-        {"text": "old burn scars here", "kind": "vague", "origin": "NEW_UNSIGNED"}
+        {"text": "show me historic wildfire burn scars in this area", "kind": "corpus_verbatim", "origin": "SIGNED_NATE_2026-07-30"},
+        {"text": "give me the burn severity map for the Camp Fire footprint", "kind": "corpus_verbatim", "origin": "SIGNED_NATE_2026-07-30"},
+        {"text": "what fires burned through this watershed in the last 10 years", "kind": "corpus_verbatim", "origin": "SIGNED_NATE_2026-07-30"},
+        {"text": "how badly did past wildfires burn this landscape", "kind": "paraphrase", "origin": "SIGNED_NATE_2026-07-30"},
+        {"text": "old burn scars here", "kind": "vague", "origin": "SIGNED_NATE_2026-07-30"}
       ]
     },
     {
       "source": "fetch_nifc_fire_perimeters",
       "family": "hazard",
       "source_yaml": "server/src/trid3nt_server/agent/tools/fetchers/hazard/fetch_nifc_fire_perimeters/source.yaml",
-      "origin_group": "NEW_UNSIGNED",
+      "origin_group": "SIGNED_NATE_2026-07-30",
       "acceptable": ["fetch_nifc_fire_perimeters"],
       "phrasings": [
-        {"text": "show me the active wildfire perimeters in California", "kind": "corpus_verbatim", "origin": "NEW_UNSIGNED"},
-        {"text": "give me the live fire boundary for the Park Fire in Northern California", "kind": "corpus_verbatim", "origin": "NEW_UNSIGNED"},
-        {"text": "show me every active wildfire in the western US right now", "kind": "corpus_verbatim", "origin": "NEW_UNSIGNED"},
-        {"text": "what wildfires are currently burning near this location", "kind": "paraphrase", "origin": "NEW_UNSIGNED"},
-        {"text": "current fires here", "kind": "vague", "origin": "NEW_UNSIGNED"}
+        {"text": "show me the active wildfire perimeters in California", "kind": "corpus_verbatim", "origin": "SIGNED_NATE_2026-07-30"},
+        {"text": "give me the live fire boundary for the Park Fire in Northern California", "kind": "corpus_verbatim", "origin": "SIGNED_NATE_2026-07-30"},
+        {"text": "show me every active wildfire in the western US right now", "kind": "corpus_verbatim", "origin": "SIGNED_NATE_2026-07-30"},
+        {"text": "what wildfires are currently burning near this location", "kind": "paraphrase", "origin": "SIGNED_NATE_2026-07-30"},
+        {"text": "current fires here", "kind": "vague", "origin": "SIGNED_NATE_2026-07-30"}
       ]
     },
     {
       "source": "fetch_nhdplus_nldi_navigate",
       "family": "hydrology",
       "source_yaml": "server/src/trid3nt_server/agent/tools/fetchers/hydrology/fetch_nhdplus_nldi_navigate/source.yaml",
-      "origin_group": "NEW_UNSIGNED",
+      "origin_group": "SIGNED_NATE_2026-07-30",
       "acceptable": ["fetch_nhdplus_nldi_navigate"],
       "phrasings": [
-        {"text": "trace the river network upstream from this gauge", "kind": "corpus_verbatim", "origin": "NEW_UNSIGNED"},
-        {"text": "navigate downstream from this dam to the coast", "kind": "corpus_verbatim", "origin": "NEW_UNSIGNED"},
-        {"text": "give me the full upstream tributary network from this location", "kind": "corpus_verbatim", "origin": "NEW_UNSIGNED"},
-        {"text": "follow the streams flowing down from this point", "kind": "paraphrase", "origin": "NEW_UNSIGNED"},
-        {"text": "river network from here", "kind": "vague", "origin": "NEW_UNSIGNED"}
+        {"text": "trace the river network upstream from this gauge", "kind": "corpus_verbatim", "origin": "SIGNED_NATE_2026-07-30"},
+        {"text": "navigate downstream from this dam to the coast", "kind": "corpus_verbatim", "origin": "SIGNED_NATE_2026-07-30"},
+        {"text": "give me the full upstream tributary network from this location", "kind": "corpus_verbatim", "origin": "SIGNED_NATE_2026-07-30"},
+        {"text": "follow the streams flowing down from this point", "kind": "paraphrase", "origin": "SIGNED_NATE_2026-07-30"},
+        {"text": "river network from here", "kind": "vague", "origin": "SIGNED_NATE_2026-07-30"}
       ]
     },
     {
       "source": "fetch_nhd_waterbodies",
       "family": "hydrology",
       "source_yaml": "server/src/trid3nt_server/agent/tools/fetchers/hydrology/fetch_nhd_waterbodies/source.yaml",
-      "origin_group": "NEW_UNSIGNED",
+      "origin_group": "SIGNED_NATE_2026-07-30",
       "acceptable": ["fetch_nhd_waterbodies"],
       "phrasings": [
-        {"text": "show me the lakes and ponds in this area", "kind": "corpus_verbatim", "origin": "NEW_UNSIGNED"},
-        {"text": "give me the reservoirs and lakes near here", "kind": "corpus_verbatim", "origin": "NEW_UNSIGNED"},
-        {"text": "show me the named lakes in this county", "kind": "corpus_verbatim", "origin": "NEW_UNSIGNED"},
-        {"text": "what standing water bodies are in this region", "kind": "paraphrase", "origin": "NEW_UNSIGNED"},
-        {"text": "lakes here", "kind": "vague", "origin": "NEW_UNSIGNED"}
+        {"text": "show me the lakes and ponds in this area", "kind": "corpus_verbatim", "origin": "SIGNED_NATE_2026-07-30"},
+        {"text": "give me the reservoirs and lakes near here", "kind": "corpus_verbatim", "origin": "SIGNED_NATE_2026-07-30"},
+        {"text": "show me the named lakes in this county", "kind": "corpus_verbatim", "origin": "SIGNED_NATE_2026-07-30"},
+        {"text": "what standing water bodies are in this region", "kind": "paraphrase", "origin": "SIGNED_NATE_2026-07-30"},
+        {"text": "lakes here", "kind": "vague", "origin": "SIGNED_NATE_2026-07-30"}
       ]
     },
     {
       "source": "fetch_usgs_water_quality",
       "family": "hydrology",
       "source_yaml": "server/src/trid3nt_server/agent/tools/fetchers/hydrology/fetch_usgs_water_quality/source.yaml",
-      "origin_group": "NEW_UNSIGNED",
+      "origin_group": "SIGNED_NATE_2026-07-30",
       "acceptable": ["fetch_usgs_water_quality"],
       "phrasings": [
-        {"text": "show me the nitrate water quality sample sites in this agricultural watershed", "kind": "corpus_verbatim", "origin": "NEW_UNSIGNED"},
-        {"text": "map the USGS water quality monitoring stations for lead in this area with their values", "kind": "corpus_verbatim", "origin": "NEW_UNSIGNED"},
-        {"text": "plot dissolved oxygen sample sites and their latest readings for this river basin", "kind": "corpus_verbatim", "origin": "NEW_UNSIGNED"},
-        {"text": "where can I find measured groundwater contaminant concentrations near here", "kind": "paraphrase", "origin": "NEW_UNSIGNED"},
-        {"text": "water quality samples here", "kind": "vague", "origin": "NEW_UNSIGNED"}
+        {"text": "show me the nitrate water quality sample sites in this agricultural watershed", "kind": "corpus_verbatim", "origin": "SIGNED_NATE_2026-07-30"},
+        {"text": "map the USGS water quality monitoring stations for lead in this area with their values", "kind": "corpus_verbatim", "origin": "SIGNED_NATE_2026-07-30"},
+        {"text": "plot dissolved oxygen sample sites and their latest readings for this river basin", "kind": "corpus_verbatim", "origin": "SIGNED_NATE_2026-07-30"},
+        {"text": "where can I find measured groundwater contaminant concentrations near here", "kind": "paraphrase", "origin": "SIGNED_NATE_2026-07-30"},
+        {"text": "water quality samples here", "kind": "vague", "origin": "SIGNED_NATE_2026-07-30"}
       ]
     },
     {
       "source": "fetch_noaa_coops_currents",
       "family": "ocean",
       "source_yaml": "server/src/trid3nt_server/agent/tools/fetchers/ocean/fetch_noaa_coops_currents/source.yaml",
-      "origin_group": "NEW_UNSIGNED",
+      "origin_group": "SIGNED_NATE_2026-07-30",
       "acceptable": ["fetch_noaa_coops_currents"],
       "phrasings": [
-        {"text": "tidal current speed and direction at San Francisco Bay right now", "kind": "corpus_verbatim", "origin": "NEW_UNSIGNED"},
-        {"text": "predicted slack flood ebb current timing for a coastal channel", "kind": "corpus_verbatim", "origin": "NEW_UNSIGNED"},
-        {"text": "ocean current flow direction at a US tidal inlet for navigation", "kind": "corpus_verbatim", "origin": "NEW_UNSIGNED"},
-        {"text": "how fast is the tidal current running through this inlet", "kind": "paraphrase", "origin": "NEW_UNSIGNED"},
-        {"text": "currents at this harbor", "kind": "vague", "origin": "NEW_UNSIGNED"}
+        {"text": "tidal current speed and direction at San Francisco Bay right now", "kind": "corpus_verbatim", "origin": "SIGNED_NATE_2026-07-30"},
+        {"text": "predicted slack flood ebb current timing for a coastal channel", "kind": "corpus_verbatim", "origin": "SIGNED_NATE_2026-07-30"},
+        {"text": "ocean current flow direction at a US tidal inlet for navigation", "kind": "corpus_verbatim", "origin": "SIGNED_NATE_2026-07-30"},
+        {"text": "how fast is the tidal current running through this inlet", "kind": "paraphrase", "origin": "SIGNED_NATE_2026-07-30"},
+        {"text": "currents at this harbor", "kind": "vague", "origin": "SIGNED_NATE_2026-07-30"}
       ]
     },
     {
       "source": "fetch_cdc_svi",
       "family": "socioeconomic",
       "source_yaml": "server/src/trid3nt_server/agent/tools/fetchers/socioeconomic/fetch_cdc_svi/source.yaml",
-      "origin_group": "NEW_UNSIGNED",
+      "origin_group": "SIGNED_NATE_2026-07-30",
       "acceptable": ["fetch_cdc_svi"],
       "phrasings": [
-        {"text": "CDC social vulnerability index for this area", "kind": "corpus_verbatim", "origin": "NEW_UNSIGNED"},
-        {"text": "which neighborhoods are most socially vulnerable", "kind": "corpus_verbatim", "origin": "NEW_UNSIGNED"},
-        {"text": "rank census tracts by social vulnerability percentile", "kind": "corpus_verbatim", "origin": "NEW_UNSIGNED"},
-        {"text": "which communities here are least able to cope with a disaster", "kind": "paraphrase", "origin": "NEW_UNSIGNED"},
-        {"text": "social vulnerability here", "kind": "vague", "origin": "NEW_UNSIGNED"}
+        {"text": "CDC social vulnerability index for this area", "kind": "corpus_verbatim", "origin": "SIGNED_NATE_2026-07-30"},
+        {"text": "which neighborhoods are most socially vulnerable", "kind": "corpus_verbatim", "origin": "SIGNED_NATE_2026-07-30"},
+        {"text": "rank census tracts by social vulnerability percentile", "kind": "corpus_verbatim", "origin": "SIGNED_NATE_2026-07-30"},
+        {"text": "which communities here are least able to cope with a disaster", "kind": "paraphrase", "origin": "SIGNED_NATE_2026-07-30"},
+        {"text": "social vulnerability here", "kind": "vague", "origin": "SIGNED_NATE_2026-07-30"}
       ]
     }
   ],
   "control": {
-    "note": "Non-catalog prompts. Per DESIGN sec Controls these MUST route to the SAME acceptable tool in ALL THREE arms -- any cross-arm divergence is an instrumentation/architecture bug (the surfacing change leaked into unrelated routing), not a result. Block splits into 12 REUSED_SIGNED (carried verbatim from the signed fetcher_fold_routing control block) + 7 NEW_UNSIGNED cross-family distractors chosen to sit NEAR a folded family yet route to an untouched non-catalog tool (the cannibalization guard).",
+    "note": "Non-catalog prompts. Per DESIGN sec Controls these MUST route to the SAME acceptable tool in ALL THREE arms -- any cross-arm divergence is an instrumentation/architecture bug (the surfacing change leaked into unrelated routing), not a result. Block splits into 12 REUSED_SIGNED (carried verbatim from the signed fetcher_fold_routing control block) + 7 SIGNED_NATE_2026-07-30 cross-family distractors chosen to sit NEAR a folded family yet route to an untouched non-catalog tool (the cannibalization guard).",
     "phrasings": [
       {"text": "weather alerts", "acceptable": ["fetch_nws_alerts_conus"], "origin": "REUSED_SIGNED", "source_test": "test_search_tools.py"},
       {"text": "show flood zones", "acceptable": ["fetch_fema_nfhl_zones"], "origin": "REUSED_SIGNED", "source_test": "test_search_tools.py"},
@@ -260,13 +260,13 @@
       {"text": "simulate urban street flooding from heavy rain in this city", "acceptable": ["run_swmm"], "origin": "REUSED_SIGNED", "source_test": "test_tool_retrieval.py::_RECALL_FIXTURE"},
       {"text": "fetch high resolution aerial imagery for this area", "acceptable": ["fetch_naip"], "origin": "REUSED_SIGNED", "source_test": "test_tool_retrieval.py::_RECALL_FIXTURE"},
       {"text": "model the groundwater contamination plume from this chemical spill", "acceptable": ["run_model_groundwater_contamination_scenario"], "origin": "REUSED_SIGNED", "source_test": "test_tool_retrieval.py::_RECALL_FIXTURE"},
-      {"text": "model storm surge flooding for this coastal city", "acceptable": ["run_sfincs"], "origin": "NEW_UNSIGNED", "distractor_near": "fetch_noaa_coops_tides / fetch_noaa_coops_currents (ocean)"},
-      {"text": "simulate urban storm sewer flooding from heavy rain here", "acceptable": ["run_swmm"], "origin": "NEW_UNSIGNED", "distractor_near": "hydrology family"},
-      {"text": "run a seismic hazard analysis for this region", "acceptable": ["run_openquake"], "origin": "NEW_UNSIGNED", "distractor_near": "cross-family solver door"},
-      {"text": "get the bare-earth elevation model for this watershed", "acceptable": ["fetch_dem"], "origin": "NEW_UNSIGNED", "distractor_near": "fetch_esri_landcover_10m (terrain)"},
-      {"text": "high-resolution NAIP aerial imagery for this area", "acceptable": ["fetch_naip"], "origin": "NEW_UNSIGNED", "distractor_near": "fetch_esri_landcover_10m (terrain)"},
-      {"text": "detect the active fire hot pixels from GOES over this region", "acceptable": ["fetch_goes_active_fire"], "origin": "NEW_UNSIGNED", "distractor_near": "fetch_mtbs_burn_severity / fetch_nifc_fire_perimeters (fire)"},
-      {"text": "current NWS weather warnings for this area", "acceptable": ["fetch_nws_alerts_conus"], "origin": "NEW_UNSIGNED", "distractor_near": "fetch_us_drought_monitor / fetch_gridmet (climate)"}
+      {"text": "model storm surge flooding for this coastal city", "acceptable": ["run_sfincs"], "origin": "SIGNED_NATE_2026-07-30", "distractor_near": "fetch_noaa_coops_tides / fetch_noaa_coops_currents (ocean)"},
+      {"text": "simulate urban storm sewer flooding from heavy rain here", "acceptable": ["run_swmm"], "origin": "SIGNED_NATE_2026-07-30", "distractor_near": "hydrology family"},
+      {"text": "run a seismic hazard analysis for this region", "acceptable": ["run_openquake"], "origin": "SIGNED_NATE_2026-07-30", "distractor_near": "cross-family solver door"},
+      {"text": "get the bare-earth elevation model for this watershed", "acceptable": ["fetch_dem"], "origin": "SIGNED_NATE_2026-07-30", "distractor_near": "fetch_esri_landcover_10m (terrain)"},
+      {"text": "high-resolution NAIP aerial imagery for this area", "acceptable": ["fetch_naip"], "origin": "SIGNED_NATE_2026-07-30", "distractor_near": "fetch_esri_landcover_10m (terrain)"},
+      {"text": "detect the active fire hot pixels from GOES over this region", "acceptable": ["fetch_goes_active_fire"], "origin": "SIGNED_NATE_2026-07-30", "distractor_near": "fetch_mtbs_burn_severity / fetch_nifc_fire_perimeters (fire)"},
+      {"text": "current NWS weather warnings for this area", "acceptable": ["fetch_nws_alerts_conus"], "origin": "SIGNED_NATE_2026-07-30", "distractor_near": "fetch_us_drought_monitor / fetch_gridmet (climate)"}
     ]
   },
   "counts": {
