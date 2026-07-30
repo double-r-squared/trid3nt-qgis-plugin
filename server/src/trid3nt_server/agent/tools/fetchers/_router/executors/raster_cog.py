@@ -313,44 +313,54 @@ def _read_tile_window(spec: SourceSpec, signed_href: str,
     """Warp+window-read a tile's band-1 categorical data to EPSG:4326 nearest.
 
     Reuses the esri twin ``_read_tile_window`` verbatim (reproject, nearest,
-    nodata read-back). Opens local paths directly (cached/test COGs) and https
-    hrefs through GDAL ``/vsicurl/``. Returns ``(uint8 (H,W), colormap|None)``.
+    nodata read-back). Local paths (cached/test COGs) open directly; remote https
+    hrefs read through the httpx transport (ADR-0044: the transport owns the
+    socket, GDAL parses only -- the /vsicurl/ residual the ingest-transport
+    decision named). Returns ``(uint8 (H,W), colormap|None)``.
     """
     import numpy as np
     import rasterio
     from rasterio.warp import reproject, Resampling
 
-    from ...imagery import _pc_stac
+    from ..transport import TransportError, open_windowed_cog
 
-    if os.path.exists(signed_href):
-        path = signed_href
-    elif signed_href.startswith(("http://", "https://")):
-        path = "/vsicurl/" + signed_href
-    else:
-        path = signed_href
-    try:
-        with rasterio.Env(**_pc_stac.VSICURL_ENV_KW):
-            with rasterio.open(path) as src:
-                try:
-                    colormap = src.colormap(1)
-                except (ValueError, KeyError):
-                    colormap = None
-                dst_transform = rasterio.transform.from_bounds(
-                    bbox[0], bbox[1], bbox[2], bbox[3], width_px, height_px
-                )
-                dst = np.zeros((height_px, width_px), dtype="uint8")
-                reproject(
-                    source=rasterio.band(src, 1),
-                    destination=dst,
-                    src_transform=src.transform,
-                    src_crs=src.crs,
-                    dst_transform=dst_transform,
-                    dst_crs="EPSG:4326",
-                    resampling=Resampling.nearest,
-                    src_nodata=src.nodata if src.nodata is not None else nodata,
-                    dst_nodata=nodata,
-                )
+    def _warp_from(src: Any) -> tuple[Any, dict | None]:
+        try:
+            colormap = src.colormap(1)
+        except (ValueError, KeyError):
+            colormap = None
+        dst_transform = rasterio.transform.from_bounds(
+            bbox[0], bbox[1], bbox[2], bbox[3], width_px, height_px
+        )
+        dst = np.zeros((height_px, width_px), dtype="uint8")
+        reproject(
+            source=rasterio.band(src, 1),
+            destination=dst,
+            src_transform=src.transform,
+            src_crs=src.crs,
+            dst_transform=dst_transform,
+            dst_crs="EPSG:4326",
+            resampling=Resampling.nearest,
+            src_nodata=src.nodata if src.nodata is not None else nodata,
+            dst_nodata=nodata,
+        )
         return dst, colormap
+
+    remote = signed_href.startswith(("http://", "https://")) and not os.path.exists(signed_href)
+    try:
+        if remote:
+            # httpx transport owns the socket; the coalescing range opener feeds
+            # GDAL, which never networks. A missing object / 403 / 5xx surfaces as
+            # a typed TransportError rather than an opaque RasterioIOError.
+            with open_windowed_cog(signed_href) as src:
+                return _warp_from(src)
+        with rasterio.open(signed_href) as src:
+            return _warp_from(src)
+    except TransportError as exc:
+        raise router_upstream_error(
+            spec.error_code_prefix,
+            f"STAC tile read failed (href={signed_href[:120]!r}): {exc}",
+        )
     except Exception as exc:  # noqa: BLE001 -- translate any rasterio/GDAL error
         raise router_upstream_error(
             spec.error_code_prefix, f"STAC tile read failed (href={signed_href[:120]!r}): {exc}"

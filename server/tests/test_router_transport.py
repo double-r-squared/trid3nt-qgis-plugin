@@ -385,3 +385,42 @@ def test_direct_window_truncation_maps_to_upstream_retryable(range_server):
     with pytest.raises(RouterUpstreamError) as ei:
         raster_cog.fetch_source_array(spec, {"bbox": [-104.9, 40.1, -104.8, 40.2]})
     assert ei.value.retryable is True
+
+
+# --------------------------------------------------------------------------- #
+# STAC-tile seam migration (scope 2): raster_cog._read_tile_window now reads a
+# remote https tile href through the transport instead of GDAL /vsicurl/. The
+# reproject body is unchanged, so a remote read must be BYTE-IDENTICAL to the
+# local read of the same COG bytes, and a transport error maps to the typed
+# router upstream frame.
+# --------------------------------------------------------------------------- #
+
+_STAC_TILE_BBOX = (-104.9, 40.1, -104.8, 40.2)
+_STAC_TILE_WH = 40
+
+
+def test_stac_tile_read_transport_byte_identical_to_local(range_server, tmp_path):
+    spec = _direct_window_spec(range_server.url)
+    # Local read of the SAME COG bytes -> the /vsicurl/-free reference path.
+    local = tmp_path / "tile.tif"
+    local.write_bytes(range_server.payload)
+    ref_arr, ref_cmap = raster_cog._read_tile_window(
+        spec, str(local), _STAC_TILE_BBOX, _STAC_TILE_WH, _STAC_TILE_WH, 0)
+    # Remote read of the identical bytes through the httpx transport.
+    got_arr, got_cmap = raster_cog._read_tile_window(
+        spec, range_server.url, _STAC_TILE_BBOX, _STAC_TILE_WH, _STAC_TILE_WH, 0)
+    assert got_arr.dtype == np.uint8
+    assert got_arr.shape == ref_arr.shape
+    assert np.array_equal(got_arr, ref_arr)
+    assert got_cmap == ref_cmap
+    assert range_server.get_count >= 1  # served over the wire, not /vsicurl/
+
+
+def test_stac_tile_transport_404_maps_to_router_upstream(range_server):
+    range_server.force_status = 404
+    range_server.force_body = b"<Error><Code>NoSuchKey</Code></Error>"
+    spec = _direct_window_spec(range_server.url)
+    with pytest.raises(RouterUpstreamError) as ei:
+        raster_cog._read_tile_window(
+            spec, range_server.url, _STAC_TILE_BBOX, _STAC_TILE_WH, _STAC_TILE_WH, 0)
+    assert ei.value.error_code == "DW_TEST_UPSTREAM_ERROR"
