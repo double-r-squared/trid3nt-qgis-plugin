@@ -89,10 +89,10 @@ class ClipRasterPolygonError(RuntimeError):
 
     Codes:
     - ``RASTER_OPEN_FAILED`` — could not open raster_uri with rasterio.
-    - ``RASTER_DOWNLOAD_FAILED`` — GCS download for raster URI failed.
+    - ``RASTER_DOWNLOAD_FAILED`` — S3/local read for raster URI failed.
     - ``UNKNOWN_RASTER_URI`` — raster_uri neither gs:// URI nor readable file.
     - ``POLYGON_OPEN_FAILED`` — could not read polygon_uri with geopandas.
-    - ``POLYGON_DOWNLOAD_FAILED`` — GCS download for polygon URI failed.
+    - ``POLYGON_DOWNLOAD_FAILED`` — S3/local read for polygon URI failed.
     - ``UNKNOWN_POLYGON_URI`` — polygon_uri neither gs:// URI nor readable file.
     - ``POLYGON_FILTER_EMPTY`` — feature_filter matched zero features.
     - ``POLYGON_REPROJECT_FAILED`` — CRS reprojection of the polygon failed.
@@ -142,12 +142,9 @@ def _get_source_crs(raster_uri: str) -> Any:
     try:
         import rasterio  # type: ignore[import-not-found]
 
-        # s3:// header-read.
+        # s3:// header-read: stage the bytes via the shared boto3 reader and
+        # open in-memory (boto3 owns the credential chain, not GDAL /vsis3/).
         if raster_uri.startswith("s3://"):
-            # GDAL's /vsis3/ credential chain does
-            # not resolve the EC2 instance role in this env (boto3 does) —
-            # observed live: "does not exist" on an existing object. Stage the
-            # bytes via the shared boto3 reader and open in-memory.
             from rasterio.io import MemoryFile
             from trid3nt_server.agent.tools.cache import read_object_bytes_s3
             with MemoryFile(read_object_bytes_s3(raster_uri)) as mf:
@@ -248,9 +245,6 @@ def _download_polygon_bytes(polygon_uri: str, storage_client: Any | None = None)
             f"Could not read local polygon path {polygon_uri!r}: {exc}",
         ) from exc
     suffix = os.path.splitext(polygon_uri)[1] or ".fgb"
-    return data, suffix
-
-    suffix = os.path.splitext(blob_path)[1] or ".fgb"
     return data, suffix
 
 

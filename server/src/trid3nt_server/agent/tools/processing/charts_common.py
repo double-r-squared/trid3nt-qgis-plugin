@@ -86,7 +86,7 @@ class ChartToolError(RuntimeError):
     ``summarize_tool_result`` (FR-AS-11 retry surface):
 
     - ``LAYER_OPEN_FAILED``  - raster/vector layer could not be opened.
-    - ``DOWNLOAD_FAILED``    - GCS download for a gs:// URI failed.
+    - ``DOWNLOAD_FAILED``    - S3/local read for the layer URI failed.
     - ``PROPERTY_NOT_FOUND`` - the named property/attribute is absent.
     - ``NO_NUMERIC_PROPERTY``- no numeric attribute available to chart.
     - ``NO_TIME_DIMENSION``  - generate_time_series on a non-temporal layer.

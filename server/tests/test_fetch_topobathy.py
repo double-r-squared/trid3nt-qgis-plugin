@@ -970,16 +970,12 @@ _MEXICO_BEACH_BBOX = (-85.47, 29.89, -85.36, 29.98)
 @pytest.mark.skipif(not _LIVE, reason="set TRID3NT_TEST_LIVE_TOPOBATHY=1 to run")
 def test_live_mexico_beach_merge_no_cli(monkeypatch: pytest.MonkeyPatch) -> None:
     """LIVE end-to-end: pull the REAL NOAA NCEI CUDEM tiles + the REAL 3DEP land
-    DEM for the Mexico-Beach demo AOI and run the FULL merge -> COG with the
-    GDAL CLI forced absent (``_gdal_bin`` -> None), exercising EXACTLY the prod
-    (no-CLI) path that crashed with the upside-down ``MergeError``.
+    DEM for the Mexico-Beach demo AOI and run the FULL in-process (rasterio.merge)
+    merge -> COG that once crashed with the upside-down ``MergeError``.
 
     Asserts a valid single-band float32 EPSG:32616 COG with bathymetry present.
     Takes a minute or two (real multi-source downloads).
     """
-    # Force the prod path: NO GDAL CLI available anywhere.
-    monkeypatch.setattr(ftb, "_gdal_bin", lambda *_a, **_k: None)
-
     cog_bytes, bathy_present, fallback_warning, cudem_count = (
         _fetch_topobathy_bytes_and_flags(
             bbox=_MEXICO_BEACH_BBOX,

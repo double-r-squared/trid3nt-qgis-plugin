@@ -29,7 +29,7 @@ stored under the FR-DC-3 cache shim at:
 
 **Implementation flow (cache miss):**
 
-1. Download the DEM bytes from GCS (or read a local path for dev/test).
+1. Read the DEM bytes from S3 (or a local path for dev/test).
 2. Write to a temp file (``gdaldem`` requires a file path).
 3. ``subprocess.run(["gdaldem", "hillshade", <input>, <output>, *flags])`` where:
    - ``-az <azimuth>`` sets the azimuth (315° default).
@@ -48,8 +48,8 @@ stored under the FR-DC-3 cache shim at:
 - **FR-DC-6 (cacheable): honors.** ``cacheable=True``, ``ttl_class="static-30d"``,
   ``source_class="hillshade"`` — DEM-derived output is stable for the lifetime of
   the cached DEM.
-- **NFR-R-1 (resilience): preserves.** ``subprocess.run`` failures surface as
-  ``HillshadeComputeError`` (typed, never unhandled exception); GCS download errors
+- **NFR-R-1 (resilience): preserves.** gdaldem failures surface as
+  ``HillshadeComputeError`` (typed, never unhandled exception); DEM read errors
   are let through for the agent FR-AS-11 surface to handle.
 """
 
@@ -57,7 +57,6 @@ from __future__ import annotations
 
 import logging
 import os
-import subprocess
 import tempfile
 from typing import Literal, Any
 
@@ -66,6 +65,12 @@ from trid3nt_contracts.tool_registry import AtomicToolMetadata
 
 from trid3nt_server.agent.tools import register_tool
 from trid3nt_server.agent.tools.cache import CACHE_BUCKET, read_through
+from trid3nt_server.agent.tools.processing._gdal_runner import (
+    read_raster_bytes,
+    resolve_gdaldem,
+    run_gdal,
+    translate_to_cog,
+)
 
 __all__ = [
     "compute_hillshade",
@@ -88,7 +93,7 @@ class HillshadeComputeError(RuntimeError):
     Codes:
     - ``GDALDEM_UNAVAILABLE`` — ``gdaldem`` binary not found on PATH.
     - ``GDALDEM_FAILED`` — ``gdaldem hillshade`` returned non-zero.
-    - ``DEM_DOWNLOAD_FAILED`` — GCS download for the DEM URI failed.
+    - ``DEM_DOWNLOAD_FAILED`` — S3/local read for the DEM URI failed.
     - ``BLEND_FAILED`` — numpy multiply-blend step failed (swiss_double only).
     """
 
@@ -109,132 +114,32 @@ _COMPUTE_HILLSHADE_METADATA = AtomicToolMetadata(
 )
 
 # ---------------------------------------------------------------------------
-# gdaldem binary resolution
+# gdaldem binary resolution + COG encode (shared runner)
 # ---------------------------------------------------------------------------
-
-# The ``gdaldem`` binary is expected on PATH. In the dev environment it lives
-# in the ``grace2`` conda env (``~/miniforge3/envs/grace2/bin/gdaldem``).
-# In the agent container it will be installed alongside GDAL. Override via
-# ``TRID3NT_GDALDEM_BIN`` env var for environments where the binary is not on
-# the default PATH.
-
-_GDALDEM_BIN: str | None = None
 
 
 def _get_gdaldem_bin() -> str:
-    """Resolve the ``gdaldem`` binary path, with env-var override support.
+    """Resolve the ``gdaldem`` binary path (env override -> PATH).
 
-    Checks ``TRID3NT_GDALDEM_BIN`` first, then PATH (via ``shutil.which``),
-    then the known conda-env path from the dev environment. Raises
-    ``HillshadeComputeError`` if not found.
+    Raises ``HillshadeComputeError(GDALDEM_UNAVAILABLE)`` if not found.
     """
-    global _GDALDEM_BIN
-    if _GDALDEM_BIN is not None:
-        return _GDALDEM_BIN
-
-    import shutil
-
-    candidate = (
-        os.environ.get("TRID3NT_GDALDEM_BIN")
-        or shutil.which("gdaldem")
-        or _conda_grace2_gdaldem()
-    )
-    if candidate is None or not os.path.isfile(candidate):
+    binary = resolve_gdaldem()
+    if binary is None:
         raise HillshadeComputeError(
             "GDALDEM_UNAVAILABLE",
             "gdaldem binary not found on PATH; set TRID3NT_GDALDEM_BIN "
-            "or install gdal-bin / activate the grace2 conda env.",
+            "or install gdal-bin.",
         )
-    _GDALDEM_BIN = candidate
-    return _GDALDEM_BIN
+    return binary
 
 
-def _conda_grace2_gdaldem() -> str | None:
-    """Return the grace2 conda-env gdaldem path if it exists."""
-    candidate = os.path.expanduser("~/miniforge3/envs/grace2/bin/gdaldem")
-    return candidate if os.path.isfile(candidate) else None
+def _translate_to_cog(input_path: str, gdaldem_bin: object | None = None) -> bytes:
+    """In-process COG encode (rasterio). ``gdaldem_bin`` accepted for back-compat, ignored.
 
-
-def _gdaldem_subprocess_env(gdaldem_bin: str) -> dict[str, str]:
-    """Build the subprocess env for ``gdaldem``, wiring PROJ/GDAL data dirs.
-
-     root-cause fix (hillshade broken CRS): when the conda-env
-    ``gdaldem`` binary is invoked via a bare ``subprocess.run`` (no conda
-    activation), ``PROJ_LIB``/``PROJ_DATA`` are unset, GDAL cannot find
-    ``proj.db``, and the output GeoTIFF's CRS silently degrades from the
-    DEM's projected CRS (e.g. EPSG:5070) to a degenerate
-    ``LOCAL_CS``/``ENGCRS`` with no EPSG code. QGIS Server then cannot
-    reproject the layer for WMS and the hillshade misrenders or vanishes.
-    Reproduced 2026-06-10: bare env → ``LOCAL_CS``; with
-    ``PROJ_LIB=<prefix>/share/proj`` → ``EPSG:5070``.
-
-    Derives ``<prefix>/share/proj`` + ``<prefix>/share/gdal`` from the
-    resolved binary path (``<prefix>/bin/gdaldem``) and sets
-    ``PROJ_LIB``/``PROJ_DATA``/``GDAL_DATA`` when the directories exist and
-    the variables are not already set (explicit user config wins).
+    Retained as the module-level entry point that publish_layer / fetch_landcover
+    import; delegates to the shared runner's rasterio COG encoder.
     """
-    env = os.environ.copy()
-    prefix = os.path.dirname(os.path.dirname(os.path.abspath(gdaldem_bin)))
-    proj_dir = os.path.join(prefix, "share", "proj")
-    gdal_dir = os.path.join(prefix, "share", "gdal")
-    if os.path.isdir(proj_dir):
-        env.setdefault("PROJ_LIB", proj_dir)
-        env.setdefault("PROJ_DATA", proj_dir)
-    if os.path.isdir(gdal_dir):
-        env.setdefault("GDAL_DATA", gdal_dir)
-    return env
-
-
-def _translate_to_cog(input_path: str, gdaldem_bin: str) -> bytes:
-    """Convert a flat GTiff to Cloud-Optimized GeoTIFF bytes.
-
-    ``gdaldem`` writes strip-organized GTiffs with no tiling and no
-    overviews. QGIS Server rendering one over ``/vsigs/`` issues a range
-    request per strip (1788 strips for a city-scale relief) — slow enough
-    to trip cold-load open timeouts (the layer-poison class the
-    verifier isolated) and the 60 s WMS gateway limit. The GDAL COG driver
-    tiles + builds overviews in one pass; flood products already go
-    through an equivalent step in ``postprocess_flood``, which is why they
-    always rendered. Falls back to the flat bytes when ``gdal_translate``
-    is unavailable or fails (old behavior, never raises).
-    """
-    gdal_translate = os.path.join(
-        os.path.dirname(os.path.abspath(gdaldem_bin)), "gdal_translate"
-    )
-    if not os.path.isfile(gdal_translate):
-        with open(input_path, "rb") as f:
-            return f.read()
-    with tempfile.NamedTemporaryFile(suffix=".tif", delete=False) as out:
-        cog_path = out.name
-    try:
-        result = subprocess.run(
-            [
-                gdal_translate,
-                "-of", "COG",
-                "-co", "COMPRESS=DEFLATE",
-                input_path,
-                cog_path,
-            ],
-            capture_output=True,
-            timeout=300,
-            check=False,
-            env=_gdaldem_subprocess_env(gdaldem_bin),
-        )
-        if result.returncode != 0:
-            logger.warning(
-                "COG translate failed rc=%s — returning flat GTiff bytes: %s",
-                result.returncode,
-                result.stderr.decode("utf-8", errors="replace")[:200],
-            )
-            with open(input_path, "rb") as f:
-                return f.read()
-        with open(cog_path, "rb") as f:
-            return f.read()
-    finally:
-        try:
-            os.unlink(cog_path)
-        except OSError:
-            pass
+    return translate_to_cog(input_path)
 
 
 def _ensure_output_crs_matches_dem(dem_path: str, output_path: str) -> None:
@@ -279,39 +184,20 @@ def _ensure_output_crs_matches_dem(dem_path: str, output_path: str) -> None:
 
 
 # ---------------------------------------------------------------------------
-# GCS download helper
+# DEM read helper
 # ---------------------------------------------------------------------------
 
 
 def _download_dem_bytes(dem_uri: str, storage_client: object | None = None) -> bytes:
-    """Download the DEM bytes from an ``s3://`` URI or a local path.
+    """Read the DEM bytes from an ``s3://`` URI or a local path (typed error on failure).
 
-    GCP is decommissioned: object-store reads route through boto3 (S3).
-    ``storage_client`` is retained for backward-compatible call signatures
-    but is ignored.
-
-    Raises ``HillshadeComputeError`` on any failure so callers get a typed error.
+    ``storage_client`` is ignored (retained for backward-compatible signatures).
     """
-    del storage_client  # GCP decommissioned — S3/local only.
-    # s3:// staging via the shared boto3 reader.
-    if dem_uri.startswith("s3://"):
-        from trid3nt_server.agent.tools.cache import read_object_bytes_s3
-        try:
-            return read_object_bytes_s3(dem_uri)
-        except Exception as exc:  # noqa: BLE001
-            raise HillshadeComputeError(
-                "DEM_DOWNLOAD_FAILED",
-                f"S3 download failed for {dem_uri!r}: {exc}",
-            ) from exc
-    # Local path — read directly (test / dev convenience).
-    try:
-        with open(dem_uri, "rb") as f:
-            return f.read()
-    except OSError as exc:
-        raise HillshadeComputeError(
-            "DEM_DOWNLOAD_FAILED",
-            f"Could not read local DEM path {dem_uri!r}: {exc}",
-        ) from exc
+    del storage_client
+    return read_raster_bytes(
+        dem_uri,
+        on_error=lambda msg: HillshadeComputeError("DEM_DOWNLOAD_FAILED", msg),
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -378,33 +264,11 @@ def _run_gdaldem_hillshade(
         multidirectional, combined, " ".join(cmd),
     )
 
-    try:
-        result = subprocess.run(
-            cmd,
-            capture_output=True,
-            check=False,
-            timeout=300,  # 5-min ceiling; hillshade of any reasonable DEM is seconds
-            env=_gdaldem_subprocess_env(gdaldem),  # PROJ/GDAL data dirs
-        )
-    except FileNotFoundError as exc:
-        raise HillshadeComputeError(
-            "GDALDEM_UNAVAILABLE",
-            f"gdaldem binary not executable at {gdaldem!r}: {exc}",
-        ) from exc
-    except subprocess.TimeoutExpired as exc:
-        raise HillshadeComputeError(
-            "GDALDEM_FAILED",
-            f"gdaldem hillshade timed out after 300 s for input={input_path!r}: {exc}",
-        ) from exc
-
-    if result.returncode != 0:
-        stderr = result.stderr.decode("utf-8", errors="replace").strip()
-        stdout = result.stdout.decode("utf-8", errors="replace").strip()
-        raise HillshadeComputeError(
-            "GDALDEM_FAILED",
-            f"gdaldem hillshade returned exit code {result.returncode}; "
-            f"stderr={stderr!r}; stdout={stdout!r}",
-        )
+    run_gdal(
+        cmd, gdaldem,
+        on_unavailable=lambda msg: HillshadeComputeError("GDALDEM_UNAVAILABLE", msg),
+        on_failed=lambda msg: HillshadeComputeError("GDALDEM_FAILED", msg),
+    )
 
     logger.info(
         "compute_hillshade: gdaldem hillshade completed output=%s", output_path
@@ -539,7 +403,7 @@ def _make_fetch_fn(
             _multiply_blend_hillshades(out_tmp, out_tmp_b, blend_tmp)
             _ensure_output_crs_matches_dem(in_tmp, blend_tmp)
             # serve a real COG - see _translate_to_cog.
-            return _translate_to_cog(blend_tmp, _get_gdaldem_bin())
+            return _translate_to_cog(blend_tmp)
 
         elif style == "multidirectional":
             _run_gdaldem_hillshade(
@@ -574,7 +438,7 @@ def _make_fetch_fn(
 
         _ensure_output_crs_matches_dem(in_tmp, out_tmp)
         # serve a real COG (tiled + overviews) - see _translate_to_cog.
-        return _translate_to_cog(out_tmp, _get_gdaldem_bin())
+        return _translate_to_cog(out_tmp)
 
     finally:
         for path in (in_tmp, out_tmp, out_tmp_b, blend_tmp):

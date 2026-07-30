@@ -16,7 +16,7 @@ cache-key derivation (FR-DC-3).
 
 **Implementation flow (cache miss):**
 
-1. Download the DEM bytes from GCS via ``google-cloud-storage``.
+1. Read the DEM bytes from S3 (or a local path for dev/test).
 2. Write to a temp file (``gdaldem`` requires a file path, not stdin).
 3. ``subprocess.run(["gdaldem", "slope", <input>, <output>, *flags])`` where:
    - ``-p`` is added when ``output_unit="percent"`` (percent rise/run).
@@ -31,8 +31,8 @@ cache-key derivation (FR-DC-3).
 - **FR-DC-6 (cacheable): honors.** ``cacheable=True``, ``ttl_class="static-30d"``,
   ``source_class="slope"`` — DEM-derived output is stable for the lifetime of
   the cached DEM.
-- **NFR-R-1 (resilience): preserves.** ``subprocess.run`` failures surface as
-  ``SlopeComputeError`` (typed, never unhandled exception); GCS download
+- **NFR-R-1 (resilience): preserves.** gdaldem failures surface as
+  ``SlopeComputeError`` (typed, never unhandled exception); DEM read
   errors are let through for the agent FR-AS-11 surface to handle.
 """
 
@@ -40,7 +40,6 @@ from __future__ import annotations
 
 import logging
 import os
-import subprocess
 import tempfile
 from typing import Literal, Any
 
@@ -49,12 +48,12 @@ from trid3nt_contracts.tool_registry import AtomicToolMetadata
 
 from trid3nt_server.agent.tools import register_tool
 from trid3nt_server.agent.tools.cache import CACHE_BUCKET, read_through
-
-# the PROJ/GDAL data-dir env fix (without it, conda-env
-# gdaldem silently degrades the output CRS to LOCAL_CS — same failure class
-# hillshade hit live; slope was never wired).
-# + COG conversion (flat gdaldem GTiffs render too slowly via WMS).
-from trid3nt_server.agent.tools.processing.compute_hillshade.compute_hillshade import _gdaldem_subprocess_env, _translate_to_cog
+from trid3nt_server.agent.tools.processing._gdal_runner import (
+    read_raster_bytes,
+    resolve_gdaldem,
+    run_gdal,
+    translate_to_cog as _translate_to_cog,
+)
 
 __all__ = [
     "compute_slope",
@@ -77,7 +76,7 @@ class SlopeComputeError(RuntimeError):
     Codes:
     - ``GDALDEM_UNAVAILABLE`` — ``gdaldem`` binary not found on PATH.
     - ``GDALDEM_FAILED`` — ``gdaldem slope`` returned non-zero.
-    - ``DEM_DOWNLOAD_FAILED`` — GCS download for the DEM URI failed.
+    - ``DEM_DOWNLOAD_FAILED`` — S3/local read for the DEM URI failed.
     """
 
     def __init__(self, error_code: str, message: str) -> None:
@@ -97,86 +96,35 @@ _COMPUTE_SLOPE_METADATA = AtomicToolMetadata(
 )
 
 # ---------------------------------------------------------------------------
-# gdaldem binary resolution
+# gdaldem binary resolution + DEM read (shared runner)
 # ---------------------------------------------------------------------------
-
-# The ``gdaldem`` binary is expected on PATH. In the dev environment it lives
-# in the ``grace2`` conda env (``~/miniforge3/envs/grace2/bin/gdaldem``).
-# In the agent container it will be installed alongside GDAL. Override via
-# ``TRID3NT_GDALDEM_BIN`` env var for environments where the binary is not on
-# the default PATH.
-
-_GDALDEM_BIN: str | None = None
 
 
 def _get_gdaldem_bin() -> str:
-    """Resolve the ``gdaldem`` binary path, with env-var override support.
+    """Resolve the ``gdaldem`` binary path (env override -> PATH).
 
-    Checks ``TRID3NT_GDALDEM_BIN`` first, then PATH (via ``shutil.which``),
-    then the known conda-env path from the dev environment. Raises
-    ``SlopeComputeError`` if not found.
+    Raises ``SlopeComputeError(GDALDEM_UNAVAILABLE)`` if not found.
     """
-    global _GDALDEM_BIN
-    if _GDALDEM_BIN is not None:
-        return _GDALDEM_BIN
-
-    import shutil
-
-    candidate = (
-        os.environ.get("TRID3NT_GDALDEM_BIN")
-        or shutil.which("gdaldem")
-        or _conda_grace2_gdaldem()
-    )
-    if candidate is None or not os.path.isfile(candidate):
+    binary = resolve_gdaldem()
+    if binary is None:
         raise SlopeComputeError(
             "GDALDEM_UNAVAILABLE",
             "gdaldem binary not found on PATH; set TRID3NT_GDALDEM_BIN "
-            "or install gdal-bin / activate the grace2 conda env.",
+            "or install gdal-bin.",
         )
-    _GDALDEM_BIN = candidate
-    return _GDALDEM_BIN
-
-
-def _conda_grace2_gdaldem() -> str | None:
-    """Return the grace2 conda-env gdaldem path if it exists."""
-    candidate = os.path.expanduser("~/miniforge3/envs/grace2/bin/gdaldem")
-    return candidate if os.path.isfile(candidate) else None
-
-
-# ---------------------------------------------------------------------------
-# GCS download helper
-# ---------------------------------------------------------------------------
+    return binary
 
 
 def _download_dem_bytes(dem_uri: str, storage_client: object | None = None) -> bytes:
-    """Download the DEM bytes from an ``s3://`` URI or a local path.
+    """Read the DEM bytes from an ``s3://`` URI or a local path (typed error on failure).
 
-    GCP is decommissioned: object-store reads route through boto3 (S3).
-    ``storage_client`` is retained for backward-compatible call signatures
-    but is ignored.
-
-    Raises ``SlopeComputeError`` on any failure so callers get a typed error.
+    ``storage_client`` is ignored (retained for backward-compatible signatures).
     """
-    del storage_client  # GCP decommissioned — S3/local only.
-    # s3:// staging via the shared boto3 reader.
-    if dem_uri.startswith("s3://"):
-        from trid3nt_server.agent.tools.cache import read_object_bytes_s3
-        try:
-            return read_object_bytes_s3(dem_uri)
-        except Exception as exc:  # noqa: BLE001
-            raise SlopeComputeError(
-                "DEM_DOWNLOAD_FAILED",
-                f"S3 download failed for {dem_uri!r}: {exc}",
-            ) from exc
-    # Local path — read directly (test / dev convenience).
-    try:
-        with open(dem_uri, "rb") as f:
-            return f.read()
-    except OSError as exc:
-        raise SlopeComputeError(
-            "DEM_DOWNLOAD_FAILED",
-            f"Could not read local DEM path {dem_uri!r}: {exc}",
-        ) from exc
+    del storage_client
+    return read_raster_bytes(
+        dem_uri,
+        on_error=lambda msg: SlopeComputeError("DEM_DOWNLOAD_FAILED", msg),
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -217,33 +165,11 @@ def _run_gdaldem_slope(
         " ".join(cmd),
     )
 
-    try:
-        result = subprocess.run(
-            cmd,
-            capture_output=True,
-            check=False,
-            timeout=300,  # 5-min ceiling; slope of any reasonable DEM completes in seconds
-            env=_gdaldem_subprocess_env(gdaldem),  # PROJ/GDAL dirs
-        )
-    except FileNotFoundError as exc:
-        raise SlopeComputeError(
-            "GDALDEM_UNAVAILABLE",
-            f"gdaldem binary not executable at {gdaldem!r}: {exc}",
-        ) from exc
-    except subprocess.TimeoutExpired as exc:
-        raise SlopeComputeError(
-            "GDALDEM_FAILED",
-            f"gdaldem slope timed out after 300 s for input={input_path!r}: {exc}",
-        ) from exc
-
-    if result.returncode != 0:
-        stderr = result.stderr.decode("utf-8", errors="replace").strip()
-        stdout = result.stdout.decode("utf-8", errors="replace").strip()
-        raise SlopeComputeError(
-            "GDALDEM_FAILED",
-            f"gdaldem slope returned exit code {result.returncode}; "
-            f"stderr={stderr!r}; stdout={stdout!r}",
-        )
+    run_gdal(
+        cmd, gdaldem,
+        on_unavailable=lambda msg: SlopeComputeError("GDALDEM_UNAVAILABLE", msg),
+        on_failed=lambda msg: SlopeComputeError("GDALDEM_FAILED", msg),
+    )
 
     logger.info(
         "compute_slope: gdaldem slope completed output=%s", output_path
@@ -320,8 +246,8 @@ def compute_slope(
             # 3. Run gdaldem slope.
             _run_gdaldem_slope(in_tmp, out_tmp, output_unit, algorithm)
 
-            # 4. return real COG bytes - see _translate_to_cog.
-            return _translate_to_cog(out_tmp, _get_gdaldem_bin())
+            # 4. return real COG bytes (tiled + overviews).
+            return _translate_to_cog(out_tmp)
         finally:
             for path in (in_tmp, out_tmp):
                 if path is not None:

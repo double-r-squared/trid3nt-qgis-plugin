@@ -18,8 +18,8 @@ it. The best-supported value per target is returned as the ``value`` +
 ``alternatives``.
 
 v0.1 deterministic-only strategy (no LLM call): each call's output is a pure
-function of the ``sources`` list passed in. The body does NOT touch GCS or the
-cache shim.
+function of the ``sources`` list passed in. The body does NOT touch object
+storage or the cache shim.
 
 Per the audit (audit.md), v0.1 uses deterministic regex + keyword
 extraction for "date" / "scale" / "casualties" and naive title-case sweeps for

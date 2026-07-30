@@ -55,8 +55,8 @@ IMPLEMENTATION FLOW (cache miss)
 4. Apply the per-pixel blend (numpy), honoring ``overlay_opacity``.
 5. Carry an alpha band: opaque where the base is valid, transparent where the
    base nodata mask says so (so the composite never paints over other layers).
-6. Write a flat GTiff then run ``_translate_to_cog`` (imported from
-   ``compute_hillshade``) → a **tiled COG WITH overviews**.
+6. Write a flat GTiff then run the shared ``translate_to_cog`` (in-process
+   rasterio COG driver) → a **tiled COG WITH overviews**.
 7. ``read_through`` caches the bytes (static-30d, source_class="blended").
 
 The output is clipped to the **overlap extent** of the two inputs (the base
@@ -84,9 +84,9 @@ from trid3nt_contracts.tool_registry import AtomicToolMetadata
 
 from trid3nt_server.agent.tools import register_tool
 from trid3nt_server.agent.tools.cache import read_through
-# reuse the hillshade COG writer (tiled + overviews) verbatim so the
-# composite renders fast over WMS/TiTiler exactly like every other derived COG.
-from trid3nt_server.agent.tools.processing.compute_hillshade.compute_hillshade import _translate_to_cog, _get_gdaldem_bin
+# shared in-process COG encoder (tiled + overviews) so the composite renders
+# fast over TiTiler like every other derived COG.
+from trid3nt_server.agent.tools.processing._gdal_runner import translate_to_cog as _translate_to_cog
 
 __all__ = [
     "compute_blended_composite",
@@ -428,20 +428,9 @@ def _run_blend(
                 rasterio.enums.ColorInterp.alpha,
             ]
 
-        # serve a real tiled COG with overviews (same writer the
-        # hillshade / colored-relief COGs use). Falls back to flat bytes only
-        # if gdal_translate is unavailable.
-        try:
-            gdal_bin = _get_gdaldem_bin()
-            return _translate_to_cog(flat_tmp, gdal_bin)
-        except Exception:  # noqa: BLE001 — COG step is best-effort
-            logger.warning(
-                "compute_blended_composite: COG translate unavailable; "
-                "returning flat RGBA GTiff bytes",
-                exc_info=True,
-            )
-            with open(flat_tmp, "rb") as fh:
-                return fh.read()
+        # serve a real tiled COG with overviews (in-process; falls back to flat
+        # bytes internally on any encode failure).
+        return _translate_to_cog(flat_tmp)
 
     except BlendedCompositeError:
         raise

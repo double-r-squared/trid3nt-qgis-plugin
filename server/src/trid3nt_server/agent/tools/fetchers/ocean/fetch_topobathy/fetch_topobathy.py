@@ -728,26 +728,6 @@ def _stage_uri_to_local(uri: str) -> str | None:
 # ---------------------------------------------------------------------------
 
 
-def _gdal_bin(name: str) -> str | None:
-    """Resolve a GDAL CLI binary (gdalbuildvrt / gdalwarp), honouring the same
-    env overrides the gdal helpers use. Returns None if not found."""
-    import shutil
-
-    env_key = {
-        "gdalbuildvrt": "TRID3NT_GDALBUILDVRT_BIN",
-        "gdalwarp": "TRID3NT_GDALWARP_BIN",
-    }.get(name)
-    candidate = (env_key and os.environ.get(env_key)) or shutil.which(name)
-    if candidate:
-        return candidate
-    # conda grace2 env fallback.
-    home = os.path.expanduser("~")
-    conda = os.path.join(home, "miniforge3", "envs", "grace2", "bin", name)
-    if os.path.isfile(conda):
-        return conda
-    return None
-
-
 def _build_merged_topobathy(
     cudem_vsicurl_paths: list[str],
     land_local_path: str | None,

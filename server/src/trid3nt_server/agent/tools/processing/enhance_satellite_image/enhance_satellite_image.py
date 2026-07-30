@@ -17,8 +17,8 @@ can offer "polish / enhance this image" on demand. It is NOT fire-specific and
 NOT GOES-specific - it operates on the pixels of any 3(+)-band RGB raster.
 
 It is the imagery sibling of ``compute_blended_composite``: read an RGB COG with
-rasterio, run a pure-numpy/PIL transform, write a tiled RGB COG (with overviews
-when ``gdal_translate`` is available), route through the ``read_through`` cache
+rasterio, run a pure-numpy/PIL transform, write a tiled RGB COG (with overviews,
+in-process via the rasterio COG driver), route through the ``read_through`` cache
 shim, and return a ``LayerURI`` that ``publish_layer`` renders verbatim via the
 existing multiband RGB passthrough (NO new style preset required).
 
@@ -85,12 +85,10 @@ from trid3nt_contracts.tool_registry import AtomicToolMetadata
 from trid3nt_server.agent.tools import register_tool
 from trid3nt_server.agent.tools.cache import read_through
 
-# Reuse the hillshade COG writer (tiled + overviews) verbatim so the enhanced
-# image renders fast over WMS/TiTiler exactly like every other derived COG, and
-# its env-var-overridable gdal binary resolver. Both fall back gracefully when
-# gdal_translate is unavailable (flat GTiff bytes), so the tool never hard-fails
-# on a box without gdal-bin.
-from trid3nt_server.agent.tools.processing.compute_hillshade.compute_hillshade import _translate_to_cog, _get_gdaldem_bin
+# shared in-process COG encoder (tiled + overviews) so the enhanced image
+# renders fast over TiTiler like every other derived COG; falls back to flat
+# bytes internally on any encode failure.
+from trid3nt_server.agent.tools.processing._gdal_runner import translate_to_cog as _translate_to_cog
 
 __all__ = [
     "enhance_satellite_image",
@@ -545,20 +543,9 @@ def _run_enhance(
                 interps.append(ColorInterp.alpha)
             dst.colorinterp = interps
 
-        # Serve a real tiled COG with overviews (same writer the hillshade /
-        # blended-composite COGs use). Falls back to flat bytes when
-        # gdal_translate is unavailable (e.g. no gdal-bin on the box).
-        try:
-            gdal_bin = _get_gdaldem_bin()
-            return _translate_to_cog(flat_tmp, gdal_bin)
-        except Exception:  # noqa: BLE001 - COG translate is best-effort
-            logger.warning(
-                "enhance_satellite_image: COG translate unavailable; "
-                "returning flat RGB GTiff bytes",
-                exc_info=True,
-            )
-            with open(flat_tmp, "rb") as fh:
-                return fh.read()
+        # Serve a real tiled COG with overviews (in-process; falls back to flat
+        # bytes internally on any encode failure).
+        return _translate_to_cog(flat_tmp)
 
     except EnhanceSatelliteImageError:
         raise

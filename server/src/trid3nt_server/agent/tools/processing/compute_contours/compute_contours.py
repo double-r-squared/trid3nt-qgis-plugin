@@ -59,7 +59,6 @@ from __future__ import annotations
 import logging
 import math
 import os
-import subprocess
 import tempfile
 from typing import Any
 
@@ -68,11 +67,11 @@ from trid3nt_contracts.tool_registry import AtomicToolMetadata
 
 from trid3nt_server.agent.tools import register_tool
 from trid3nt_server.agent.tools.cache import CACHE_BUCKET, read_through
-
-# Reuse the PROJ/GDAL data-dir env fix from compute_hillshade - without
-# it the conda-env GDAL binaries cannot find proj.db and reprojection /
-# CRS-tagging silently degrade (same failure class hillshade hit live).
-from trid3nt_server.agent.tools.processing.compute_hillshade.compute_hillshade import _download_dem_bytes, _gdaldem_subprocess_env
+from trid3nt_server.agent.tools.processing._gdal_runner import (
+    read_raster_bytes,
+    resolve_gdal_contour,
+    run_gdal,
+)
 
 __all__ = [
     "compute_contours",
@@ -119,70 +118,38 @@ _COMPUTE_CONTOURS_METADATA = AtomicToolMetadata(
 )
 
 # ---------------------------------------------------------------------------
-# gdal_contour binary resolution (mirrors compute_hillshade._get_gdaldem_bin —
-# the binary lives next to gdaldem, so resolve gdaldem then swap the name).
+# gdal_contour binary resolution + DEM read (shared runner)
 # ---------------------------------------------------------------------------
-
-_GDAL_CONTOUR_BIN: str | None = None
-
-
-def _conda_grace2_gdal_contour() -> str | None:
-    """Return the grace2 conda-env gdal_contour path if it exists."""
-    candidate = os.path.expanduser("~/miniforge3/envs/grace2/bin/gdal_contour")
-    return candidate if os.path.isfile(candidate) else None
 
 
 def _get_gdal_contour_bin() -> str:
-    """Resolve the ``gdal_contour`` binary path, with env-var override support.
+    """Resolve the ``gdal_contour`` binary path (env override -> gdaldem sibling -> PATH).
 
-    ``gdal_contour`` ships with GDAL and lives in the SAME directory as
-    ``gdaldem``. Resolution order mirrors ``compute_hillshade._get_gdaldem_bin``:
-
-    1. ``TRID3NT_GDAL_CONTOUR_BIN`` explicit override.
-    2. The sibling of the resolved ``gdaldem`` binary (so a single
-       ``TRID3NT_GDALDEM_BIN`` override covers both tools).
-    3. ``shutil.which("gdal_contour")`` on PATH.
-    4. The known conda-env path from the dev environment.
-
-    Raises ``ContourComputeError`` if not found.
+    A single ``TRID3NT_GDALDEM_BIN`` override covers both (gdal_contour ships
+    next to gdaldem); ``TRID3NT_GDAL_CONTOUR_BIN`` overrides it directly. Raises
+    ``ContourComputeError(GDAL_CONTOUR_UNAVAILABLE)`` if not found.
     """
-    global _GDAL_CONTOUR_BIN
-    if _GDAL_CONTOUR_BIN is not None:
-        return _GDAL_CONTOUR_BIN
-
-    import shutil
-
-    # Sibling-of-gdaldem: reuse compute_hillshade's resolver so a single
-    # TRID3NT_GDALDEM_BIN override (or the conda-env fallback) covers both.
-    sibling: str | None = None
-    try:
-        from trid3nt_server.agent.tools.processing.compute_hillshade.compute_hillshade import _get_gdaldem_bin
-
-        gdaldem = _get_gdaldem_bin()
-        candidate = os.path.join(
-            os.path.dirname(os.path.abspath(gdaldem)), "gdal_contour"
-        )
-        if os.path.isfile(candidate):
-            sibling = candidate
-    except Exception:  # noqa: BLE001 — gdaldem missing is fine; try other paths
-        sibling = None
-
-    candidate = (
-        os.environ.get("TRID3NT_GDAL_CONTOUR_BIN")
-        or sibling
-        or shutil.which("gdal_contour")
-        or _conda_grace2_gdal_contour()
-    )
-    if candidate is None or not os.path.isfile(candidate):
+    binary = resolve_gdal_contour()
+    if binary is None:
         raise ContourComputeError(
             "GDAL_CONTOUR_UNAVAILABLE",
             "gdal_contour binary not found on PATH; set "
             "TRID3NT_GDAL_CONTOUR_BIN (or TRID3NT_GDALDEM_BIN — gdal_contour is "
-            "resolved next to gdaldem) or install gdal-bin / activate the "
-            "grace2 conda env.",
+            "resolved next to gdaldem) or install gdal-bin.",
         )
-    _GDAL_CONTOUR_BIN = candidate
-    return _GDAL_CONTOUR_BIN
+    return binary
+
+
+def _download_dem_bytes(dem_uri: str, storage_client: object | None = None) -> bytes:
+    """Read the DEM bytes from an ``s3://`` URI or a local path (typed error on failure).
+
+    ``storage_client`` is ignored (retained for backward-compatible signatures).
+    """
+    del storage_client
+    return read_raster_bytes(
+        dem_uri,
+        on_error=lambda msg: ContourComputeError("DEM_DOWNLOAD_FAILED", msg),
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -328,33 +295,11 @@ def _run_gdal_contour(
         input_path, interval_m, " ".join(cmd),
     )
 
-    try:
-        result = subprocess.run(
-            cmd,
-            capture_output=True,
-            check=False,
-            timeout=300,  # 5-min ceiling; contours of any reasonable DEM are seconds
-            env=_gdaldem_subprocess_env(gdal_contour),  # PROJ/GDAL dirs
-        )
-    except FileNotFoundError as exc:
-        raise ContourComputeError(
-            "GDAL_CONTOUR_UNAVAILABLE",
-            f"gdal_contour binary not executable at {gdal_contour!r}: {exc}",
-        ) from exc
-    except subprocess.TimeoutExpired as exc:
-        raise ContourComputeError(
-            "GDAL_CONTOUR_FAILED",
-            f"gdal_contour timed out after 300 s for input={input_path!r}: {exc}",
-        ) from exc
-
-    if result.returncode != 0:
-        stderr = result.stderr.decode("utf-8", errors="replace").strip()
-        stdout = result.stdout.decode("utf-8", errors="replace").strip()
-        raise ContourComputeError(
-            "GDAL_CONTOUR_FAILED",
-            f"gdal_contour returned exit code {result.returncode}; "
-            f"stderr={stderr!r}; stdout={stdout!r}",
-        )
+    run_gdal(
+        cmd, gdal_contour,
+        on_unavailable=lambda msg: ContourComputeError("GDAL_CONTOUR_UNAVAILABLE", msg),
+        on_failed=lambda msg: ContourComputeError("GDAL_CONTOUR_FAILED", msg),
+    )
 
     logger.info(
         "compute_contours: gdal_contour completed output=%s", output_path

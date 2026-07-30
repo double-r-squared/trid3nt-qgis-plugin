@@ -27,7 +27,6 @@ from __future__ import annotations
 
 import logging
 import os
-import subprocess
 import tempfile
 from typing import Literal, Any
 
@@ -36,14 +35,12 @@ from trid3nt_contracts.tool_registry import AtomicToolMetadata
 
 from trid3nt_server.agent.tools import register_tool
 from trid3nt_server.agent.tools.cache import read_through
-
-# single source for the binary resolution + PROJ/GDAL data-dir env
-# (the CRS fix). compute_colored_relief shipped with a bare
-# ``"gdaldem"`` argv — FileNotFoundError in any env where gdaldem is not on
-# PATH (live failure 2026-06-10, Boulder colored relief) — and no PROJ env,
-# which silently degrades the output CRS to LOCAL_CS exactly as hillshade did.
-# + COG conversion (flat gdaldem GTiffs render too slowly via WMS).
-from trid3nt_server.agent.tools.processing.compute_hillshade.compute_hillshade import _gdaldem_subprocess_env, _translate_to_cog
+from trid3nt_server.agent.tools.processing._gdal_runner import (
+    read_raster_bytes,
+    resolve_gdaldem,
+    run_gdal,
+    translate_to_cog as _translate_to_cog,
+)
 
 __all__ = ["compute_colored_relief"]
 
@@ -67,69 +64,40 @@ class ColoredReliefError(RuntimeError):
 
 
 # --------------------------------------------------------------------------- #
-# gdaldem binary resolution (mirrors compute_slope/_aspect)
+# gdaldem binary resolution + DEM staging (shared runner)
 # --------------------------------------------------------------------------- #
-
-_GDALDEM_BIN: str | None = None
 
 
 def _get_gdaldem_bin() -> str:
-    """Resolve the ``gdaldem`` binary path, with env-var override support.
+    """Resolve the ``gdaldem`` binary path (env override -> PATH).
 
-    Checks ``TRID3NT_GDALDEM_BIN`` first, then PATH (via ``shutil.which``),
-    then the known conda-env path from the dev environment. Raises
-    ``ColoredReliefError`` if not found.
+    Raises ``ColoredReliefError`` if not found.
     """
-    global _GDALDEM_BIN
-    if _GDALDEM_BIN is not None:
-        return _GDALDEM_BIN
-
-    import shutil
-
-    candidate = (
-        os.environ.get("TRID3NT_GDALDEM_BIN")
-        or shutil.which("gdaldem")
-        or _conda_grace2_gdaldem()
-    )
-    if candidate is None or not os.path.isfile(candidate):
+    binary = resolve_gdaldem()
+    if binary is None:
         raise ColoredReliefError(
             "gdaldem binary not found on PATH; set TRID3NT_GDALDEM_BIN "
-            "or install gdal-bin / activate the grace2 conda env."
+            "or install gdal-bin."
         )
-    _GDALDEM_BIN = candidate
-    return _GDALDEM_BIN
-
-
-def _conda_grace2_gdaldem() -> str | None:
-    """Return the grace2 conda-env gdaldem path if it exists."""
-    candidate = os.path.expanduser("~/miniforge3/envs/grace2/bin/gdaldem")
-    return candidate if os.path.isfile(candidate) else None
+    return binary
 
 
 def _download_dem_to_local(dem_uri: str) -> str:
     """Stage an ``s3://`` DEM to a local temp file; pass local paths through.
 
-    replaces the ``/vsis3/`` input path - the subprocess gdaldem
-    has no guaranteed object-store auth context, while the agent process holds
-    the EC2 instance-role credentials boto3 resolves via IMDS. Mirrors the
-    compute_slope/_aspect staging pattern. Caller owns cleanup of the returned
-    temp file (only when it differs from ``dem_uri``).
+    ``gdaldem color-relief`` is a subprocess that reads a file path, so an
+    ``s3://`` DEM must be materialized locally. Caller owns cleanup of the
+    returned temp file (only when it differs from ``dem_uri``).
     """
-    # s3:// staging - download to a local temp file.
     if dem_uri.startswith("s3://"):
-        from trid3nt_server.agent.tools.cache import read_object_bytes_s3
-        try:
-            with tempfile.NamedTemporaryFile(
-                suffix=".tif", delete=False, prefix="trid3nt_relief_dem_"
-            ) as f:
-                f.write(read_object_bytes_s3(dem_uri))
-                return f.name
-        except ColoredReliefError:
-            raise
-        except Exception as exc:  # noqa: BLE001
-            raise ColoredReliefError(
-                f"S3 download failed for {dem_uri!r}: {exc}"
-            ) from exc
+        data = read_raster_bytes(
+            dem_uri, on_error=lambda msg: ColoredReliefError(msg)
+        )
+        with tempfile.NamedTemporaryFile(
+            suffix=".tif", delete=False, prefix="trid3nt_relief_dem_"
+        ) as f:
+            f.write(data)
+            return f.name
     # Local path — pass through (test / dev convenience).
     return dem_uri
 
@@ -318,10 +286,10 @@ _COMPUTE_COLORED_RELIEF_METADATA = AtomicToolMetadata(
 
 
 def _run_colored_relief(dem_uri: str, ramp: str) -> bytes:
-    """Download ``dem_uri`` from GCS, run ``gdaldem color-relief``, return COG bytes.
+    """Stage ``dem_uri``, run ``gdaldem color-relief``, return COG bytes.
 
     Args:
-        dem_uri: ``gs://…`` URI of the input DEM (COG/GeoTIFF).
+        dem_uri: ``s3://`` URI (or local path) of the input DEM (COG/GeoTIFF).
         ramp: one of the four preset names.
 
     Returns:
@@ -336,9 +304,8 @@ def _run_colored_relief(dem_uri: str, ramp: str) -> bytes:
     out_file: str | None = None
 
     try:
-        # stage gs:// DEMs to a local temp file (agent-process ADC)
-        # instead of /vsigs/ — the gdaldem subprocess has no guaranteed GCS
-        # auth. Local paths (tests / dev) pass straight through.
+        # gdaldem color-relief reads a file path; stage s3:// DEMs locally.
+        # Local paths (tests / dev) pass straight through.
         gdal_dem_path = _download_dem_to_local(dem_uri)
         if gdal_dem_path != dem_uri:
             dem_local = gdal_dem_path  # mark for cleanup in finally
@@ -377,24 +344,16 @@ def _run_colored_relief(dem_uri: str, ramp: str) -> bytes:
         ]
 
         logger.info("compute_colored_relief: running %s", " ".join(cmd))
-        result = subprocess.run(
-            cmd,
-            capture_output=True,
+        run_gdal(
+            cmd, gdaldem_bin,
+            on_unavailable=lambda msg: ColoredReliefError(msg),
+            on_failed=lambda msg: ColoredReliefError(msg),
             timeout=180,
-            check=False,
-            env=_gdaldem_subprocess_env(gdaldem_bin),  # PROJ/GDAL dirs
         )
-        if result.returncode != 0:
-            stderr_txt = result.stderr.decode("utf-8", errors="replace").strip()
-            raise ColoredReliefError(
-                f"gdaldem color-relief failed (rc={result.returncode}): {stderr_txt}"
-            )
 
-        # serve a real COG (tiled + overviews). The flat
-        # strip-organized gdaldem output rendered slower than the 60s WMS
-        # gateway limit over /vsigs/ and triggered the cold-load layer
-        # poisoning the verifier isolated.
-        return _translate_to_cog(out_file, gdaldem_bin)
+        # serve a real COG (tiled + overviews) so the strip-organized gdaldem
+        # output does not force a per-strip range request on render.
+        return _translate_to_cog(out_file)
 
     except ColoredReliefError:
         raise
