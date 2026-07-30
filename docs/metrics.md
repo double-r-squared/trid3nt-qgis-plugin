@@ -36,3 +36,4 @@ matters, not the absolute).
 | 2026-07-29g | ~202700 | - | - | - | - | - | 191 | 13,116 | fold wave 4 (stations): coops_currents folded (net -1,590), 5 deferred by stop-rule; twin-comparison experiment machinery retired |
 | 2026-07-29h | ~204000 | - | - | - | - | - | 191 | 13,116 | ingest transport (ADR 0044): httpx opener owns remote-file sockets, direct_window off vsicurl (parity sha-identical), 404->EMPTY restored; STAC-tile seam residual |
 | 2026-07-29i | 204730 | - | - | - | - | - | 190 | 13,116 | satellite preemptive cull (NATE waiver, ADR 0046): last shared/ model_* wrapper out; corpus re-homed w/ retrieval proof |
+| 2026-07-29j | ~204790 | - | - | - | - | - | 190 | 13,116 | fold wave 5 (raster): STAC-tile seam onto transport (byte-identical live); 11 raster twins deferred by stop-rule, 6 mode-enablers scoped in ADR 0047 |
