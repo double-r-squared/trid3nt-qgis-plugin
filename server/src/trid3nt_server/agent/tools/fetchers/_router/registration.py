@@ -62,18 +62,19 @@ _SPEC_REGISTRY: dict[str, SourceSpec] = {}
 
 #: Catalog-surfacing experiment flag (experiments/catalog_surfacing/DESIGN.md).
 #: UNSET (default) -> the 14 spec-served sources register tier="general" (ambient,
-#: today's behaviour, registry unchanged at 190). "1" (Design 1, card-carried) or
-#: "2" (Design 2, discovery-expands-declaration) -> they register tier="catalog":
-#: EXCLUDED from the default declarable pool but KEPT in the search index. The flag
-#: is read at import so each arm runs in its OWN process with a clean pool; DEFAULT
-#: behaviour is byte-identical when it is unset.
+#: today's behaviour, registry unchanged at 190). "1" (Design 1, card-carried),
+#: "2" (Design 2, discovery-expands-declaration), or "3" (Design 3, stratified-pool
+#: auto-trigger composed declaration; docs/specs/stratified-pools.md) -> they
+#: register tier="catalog": EXCLUDED from the default declarable pool but KEPT in
+#: the search index. The flag is read at import so each arm runs in its OWN process
+#: with a clean pool; DEFAULT behaviour is byte-identical when it is unset.
 CATALOG_ARM_ENV = "TRID3NT_CATALOG_ARM"
 
 
 def catalog_arm() -> str | None:
-    """The active catalog-surfacing arm ("1" / "2") or None when unset/invalid."""
+    """The active catalog-surfacing arm ("1" / "2" / "3") or None when unset/invalid."""
     val = os.environ.get(CATALOG_ARM_ENV, "").strip()
-    return val if val in ("1", "2") else None
+    return val if val in ("1", "2", "3") else None
 
 
 def _annotation_for(ptype: str) -> Any:

@@ -33,11 +33,14 @@ __all__ = ["fetch_from_catalog"]
 
 logger = logging.getLogger("trid3nt_server.agent.tools.search.fetch_from_catalog.fetch_from_catalog")
 
-#: Catalog-surfacing Design-1 arm (experiments/catalog_surfacing/DESIGN.md). Read
-#: at import so the registered ``fetch_from_catalog`` exposes a ``source`` param
-#: (spec-served source name) ONLY under the arm; DEFAULT config keeps the exact
-#: entry_id-only signature + docstring. Each arm runs in its own process.
-_ARM1_DESIGN1 = os.environ.get("TRID3NT_CATALOG_ARM", "").strip() == "1"
+#: Catalog-surfacing arms that route via a spec-served ``source`` name
+#: (experiments/catalog_surfacing/DESIGN.md): Design 1 (card-carried) and Design 3
+#: (stratified-pool composed fetcher; docs/specs/stratified-pools.md) both dispatch
+#: ``fetch_from_catalog(source=..., params=...)`` -> ``router.route``. Read at import
+#: so the registered tool exposes a ``source`` param ONLY under those arms; DEFAULT
+#: config keeps the exact entry_id-only signature + docstring. Each arm runs in its
+#: own process.
+_SOURCE_PARAM_ARM = os.environ.get("TRID3NT_CATALOG_ARM", "").strip() in ("1", "3")
 
 
 # ---------------------------------------------------------------------------
@@ -458,7 +461,7 @@ def _fetch_from_catalog_via_spec(
     }
 
 
-if _ARM1_DESIGN1:
+if _SOURCE_PARAM_ARM:
 
     def fetch_from_catalog(
         entry_id: str | None = None,
@@ -472,10 +475,10 @@ if _ARM1_DESIGN1:
 
     fetch_from_catalog.__doc__ = (
         (_fetch_from_catalog_entry.__doc__ or "")
-        + "\n\nCATALOG-SURFACING (Design 1): for a spec-served data source surfaced by "
-        "search_data_catalog, pass source=<source name> (e.g. 'fetch_gridmet') plus "
-        "params={...} (the card's typed param schema) instead of entry_id. The router "
-        "validates params and dispatches; a typed error feeds the retry loop."
+        + "\n\nCATALOG-SURFACING (Design 1/3): for a spec-served data source, pass "
+        "source=<source name> (e.g. 'fetch_gridmet') plus params={...} (the card's "
+        "typed param schema) instead of entry_id. The router validates params and "
+        "dispatches; a typed error feeds the retry loop."
     )
 else:
 

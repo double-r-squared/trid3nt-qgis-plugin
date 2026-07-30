@@ -120,6 +120,11 @@ def _reachability(arm: int, records: list[dict]) -> dict:
         elif arm == 1:
             names = [c["name"] for c in reg.search_spec_cards(prompt, MAX_K)]
             ok = target in names
+        elif arm == 3:
+            from trid3nt_server.agent.tools.fetchers._router import stratified as strat
+            ranked, _cos = strat.rank_source_stratum(prompt, MAX_K)
+            names = [n for n, _ in ranked]
+            ok = target in names
         else:  # arm 2
             names = [n for n, _ in retrieve_ranked_tools(prompt, MAX_K)]
             ok = target in names
@@ -352,6 +357,124 @@ async def _drive_record(arm, rec, adapter, reg, TOOL_REGISTRY, visible_names, de
     return out
 
 
+async def _drive_record_arm3(rec, adapter, reg, TOOL_REGISTRY, visible_names, declarable_floor):
+    """Drive one record under Design 3 (stratified pool).
+
+    Harness-side source-stratum retrieval (NO model-facing search tool) decides
+    whether to declare ONE composed generic fetcher whose ``source`` enum is the
+    matched candidates in rank order, with full source cards riding in context.
+    The 14 per-source tools are floor-excluded; search_tools / search_data_catalog
+    are NOT declared. Selection = the composed fetch_from_catalog(source=...) arg
+    (like arm 1); params validated router-side, one typed-error retry counted.
+    """
+    from trid3nt_server.agent.adapters.adapter import (
+        build_contents_from_history,
+        build_function_call_content,
+        build_function_response_content,
+        build_layers_present_note,
+        build_tool_declarations,
+    )
+    from trid3nt_server.agent.tools.fetchers._router import stratified as strat
+
+    prompt = rec["prompt"]
+    is_control = rec["group"] == "control"
+    target_source = rec["acceptable"][0]
+
+    # Harness-side stratum plan (per-turn, model NEVER initiates discovery).
+    plan = strat.stratum_declaration_plan(prompt, k=strat.SOURCE_ENUM_K)
+    note = build_layers_present_note([], case_bbox=_SEED_BBOX)
+    if plan["activated"]:
+        note = note + "\n\n" + strat.render_cards_context(plan)
+    contents = build_contents_from_history(prompt, [{"role": "user", "text": note}])
+
+    # Core surface = visible gate & ambient floor (the 14 are floor-excluded under
+    # arm 3). NO model-facing search / catalog tools; the composed fetcher (below)
+    # is the ONLY data-surface declaration and only when the stratum activated.
+    wanted = (set(visible_names) & declarable_floor) & set(TOOL_REGISTRY)
+    wanted -= {"fetch_from_catalog", "search_data_catalog", "search_tools"}
+    composed = strat.compose_fetcher_declaration(plan) if plan["activated"] else None
+
+    def _decls():
+        base = build_tool_declarations({n: TOOL_REGISTRY[n] for n in sorted(wanted)})
+        return (base + [composed]) if composed is not None else base
+
+    out: dict = {
+        "id": rec["id"], "group": rec["group"], "prompt": prompt,
+        "acceptable": rec["acceptable"], "arm": 3, "is_control": is_control,
+        "fired_sequence": [], "selected_name": None, "selected_args": None,
+        "first_attempt_valid": None, "one_retry_valid": None,
+        "outcome": None, "upstream_failure": False, "note": "",
+        "stratum_activated": bool(plan["activated"]),
+        "stratum_escalated": bool(plan["escalated"]),
+        "stratum_sources": list(plan["sources"]),
+        "stratum_top_cos": plan["top_cos"],
+    }
+
+    fc, text, err = await _one_model_turn(contents, _decls(), adapter)
+    if err is not None:
+        kind, msg = err
+        out["outcome"] = "UPSTREAM_FAILURE" if kind == "upstream_provider" else "INTERNAL_ERROR"
+        out["upstream_failure"] = kind == "upstream_provider"
+        out["note"] = msg[:300]
+        return out
+    if fc is None:
+        out["outcome"] = "NO_CALL"
+        out["note"] = ("text: " + text[:160]) if text else "no function_call"
+        return out
+
+    name, args = fc.name, dict(fc.args or {})
+    out["fired_sequence"].append({"name": name, "args": args})
+
+    if name == "fetch_from_catalog":
+        src = args.get("source")
+        sel_name = src if isinstance(src, str) else None
+        sel_args = args.get("params") if isinstance(args.get("params"), dict) else {}
+    else:
+        sel_name, sel_args = name, args
+    out["selected_name"] = sel_name
+    out["selected_args"] = sel_args
+
+    if is_control:
+        out["outcome"] = "SELECTED"
+        return out
+
+    selected_ok = sel_name == target_source
+    out["outcome"] = "SELECTED" if selected_ok else "WRONG_SOURCE"
+    if not selected_ok or sel_name is None:
+        return out
+
+    ok, emsg, ecode = _validate_source_args(sel_name, sel_args)
+    out["first_attempt_valid"] = ok
+    if ok:
+        out["one_retry_valid"] = True
+        return out
+
+    # One retry: feed the typed error back, capture the SECOND fetch call.
+    fail_resp = {"error": emsg, "error_code": ecode, "retryable": False,
+                 "hint": "correct the arguments per the schema and call again"}
+    contents = list(contents) + [
+        build_function_call_content("fetch_from_catalog", out["fired_sequence"][-1]["args"], None),
+        build_function_response_content("fetch_from_catalog", fail_resp, None),
+    ]
+    fc2, _t2, err2 = await _one_model_turn(contents, _decls(), adapter)
+    if err2 is not None or fc2 is None:
+        out["one_retry_valid"] = False
+        out["note"] = "retry produced no call" if err2 is None else f"retry {err2[0]}: {err2[1][:160]}"
+        out["upstream_failure"] = bool(err2 and err2[0] == "upstream_provider")
+        return out
+    rname, rargs = fc2.name, dict(fc2.args or {})
+    out["fired_sequence"].append({"name": rname, "args": rargs, "retry": True})
+    if rname == "fetch_from_catalog":
+        rsrc = rargs.get("source")
+        rparams = rargs.get("params") if isinstance(rargs.get("params"), dict) else {}
+        ok2, _, _ = _validate_source_args(rsrc if isinstance(rsrc, str) else "", rparams)
+        out["one_retry_valid"] = bool(ok2 and rsrc == target_source)
+    else:
+        ok2, _, _ = _validate_source_args(rname, rargs)
+        out["one_retry_valid"] = bool(ok2 and rname == target_source)
+    return out
+
+
 async def _exec_discovery(name, args, prompt, reg, TOOL_REGISTRY):
     """Execute an intermediate discovery tool in-process; return {payload, _tool_names}."""
     entry = TOOL_REGISTRY.get(name)
@@ -397,6 +520,52 @@ def _shape_discovery(name, result):
     return {"payload": result if isinstance(result, dict) else {"results": result}, "_tool_names": tool_names}
 
 
+async def _rerun_controls(ids, controls, n):
+    """Re-drive named control records N times under arm 3; write per-id fired-name
+    trials + majority to arm3_controls_rerun.jsonl (amended controls-gate)."""
+    from collections import Counter
+
+    import trid3nt_server.agent.adapters.adapter as adapter
+    from trid3nt_server.agent.tools import TOOL_REGISTRY
+    from trid3nt_server.agent.tools.fetchers._router import registration as reg
+    from trid3nt_server.agent.tools.fetchers._router import stratified as strat
+    from trid3nt_server.agent.tools.search.search_tools import search_tools as st
+    from trid3nt_server.agent.tools.search.tool_retrieval import (
+        MAX_K,
+        retrieve_visible_tools,
+    )
+
+    import trid3nt_server.server as srv
+
+    st._reset_index_for_tests()
+    st._get_index()
+    strat.reset_source_stratum_index_for_tests()
+    strat.source_stratum_index()
+    declarable_floor = set(srv._default_declarable_registry())
+
+    by_id = {c["id"]: c for c in controls}
+    out_path = RESULTS / "arm3_controls_rerun.jsonl"
+    with out_path.open("w", encoding="utf-8") as fh:
+        for cid in ids:
+            rec = by_id.get(cid)
+            if rec is None:
+                print(f"[arm3-rerun] unknown control id {cid!r}; skipping", flush=True)
+                continue
+            fired: list = []
+            for t in range(n):
+                visible = retrieve_visible_tools(rec["prompt"], None, MAX_K)
+                row = await _drive_record_arm3(
+                    rec, adapter, reg, TOOL_REGISTRY, visible, declarable_floor
+                )
+                fired.append(row["selected_name"])
+            maj = Counter(fired).most_common(1)[0][0]
+            rec_out = {"id": cid, "acceptable": rec["acceptable"],
+                       "fired_trials": fired, "majority": maj, "n": n}
+            fh.write(json.dumps(rec_out, sort_keys=True) + "\n")
+            fh.flush()
+            print(f"[arm3-rerun] {cid}: trials={fired} majority={maj}", flush=True)
+
+
 async def _run_drive(arm, records, out_jsonl):
     import trid3nt_server.agent.adapters.adapter as adapter
     from trid3nt_server.agent.tools import TOOL_REGISTRY
@@ -411,6 +580,10 @@ async def _run_drive(arm, records, out_jsonl):
 
     st._reset_index_for_tests()
     st._get_index()  # warm the retrieval index once
+    if arm == 3:
+        from trid3nt_server.agent.tools.fetchers._router import stratified as strat
+        strat.reset_source_stratum_index_for_tests()
+        strat.source_stratum_index()  # warm the source-stratum index once
     declarable_floor = set(srv._default_declarable_registry())
 
     # RESUME: each record is checkpointed to the jsonl as it completes (flush), so
@@ -431,9 +604,14 @@ async def _run_drive(arm, records, out_jsonl):
             if rec["id"] in done:
                 continue
             visible = retrieve_visible_tools(rec["prompt"], None, MAX_K)
-            row = await _drive_record(
-                arm, rec, adapter, reg, TOOL_REGISTRY, visible, declarable_floor
-            )
+            if arm == 3:
+                row = await _drive_record_arm3(
+                    rec, adapter, reg, TOOL_REGISTRY, visible, declarable_floor
+                )
+            else:
+                row = await _drive_record(
+                    arm, rec, adapter, reg, TOOL_REGISTRY, visible, declarable_floor
+                )
             rows.append(row)
             fh.write(json.dumps(row, sort_keys=True) + "\n")
             fh.flush()
@@ -449,10 +627,14 @@ async def _run_drive(arm, records, out_jsonl):
 
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__)
-    ap.add_argument("--arm", required=True, type=int, choices=[0, 1, 2])
+    ap.add_argument("--arm", required=True, type=int, choices=[0, 1, 2, 3])
     ap.add_argument("--reach-only", action="store_true",
                     help="run only the model-free reachability gate")
     ap.add_argument("--limit", type=int, default=0, help="cap records (debug)")
+    ap.add_argument("--rerun-controls", default="",
+                    help="comma-separated control ids to re-drive N times (arm3 "
+                         "controls-gate majority); writes arm3_controls_rerun.jsonl")
+    ap.add_argument("--n", type=int, default=3, help="trials for --rerun-controls")
     args = ap.parse_args()
     arm = args.arm
 
@@ -474,6 +656,14 @@ def main() -> int:
         records = sources[: args.limit] + controls[: max(2, args.limit // 5)]
 
     RESULTS.mkdir(parents=True, exist_ok=True)
+
+    # Controls-gate majority re-run (amended gate): re-drive named control ids N
+    # times, record fired-name trials + majority for the scorer. Arm 3 only.
+    if args.rerun_controls:
+        assert arm == 3, "--rerun-controls is arm-3 (controls-gate) only"
+        ids = [x.strip() for x in args.rerun_controls.split(",") if x.strip()]
+        asyncio.run(_rerun_controls(ids, controls, args.n))
+        return 0
 
     # Phase 1: reachability.
     reach = _reachability(arm, records)

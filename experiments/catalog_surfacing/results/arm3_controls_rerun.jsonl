@@ -1,0 +1,3 @@
+{"acceptable": ["fetch_nws_alerts_conus"], "fired_trials": [null, null, null], "id": "control#0", "majority": null, "n": 3}
+{"acceptable": ["fetch_fema_nfhl_zones"], "fired_trials": ["fetch_fema_nfhl_zones", "fetch_fema_nfhl_zones", "fetch_fema_nfhl_zones"], "id": "control#1", "majority": "fetch_fema_nfhl_zones", "n": 3}
+{"acceptable": ["run_sfincs"], "fired_trials": ["geocode_location", null, "fetch_gridmet"], "id": "control#4", "majority": "geocode_location", "n": 3}

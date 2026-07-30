@@ -206,6 +206,93 @@ def test_fetch_via_spec_unknown_source_raises(_registry_loaded):
         _fetch_from_catalog_via_spec("fetch_not_a_source", {"bbox": [-83, 27, -82, 28]})
 
 
+# --------------------------------------------------------------------------- #
+# Arm 3 (stratified-pool composed declaration) prerequisite + mechanisms.
+# --------------------------------------------------------------------------- #
+
+
+def test_arm3_specs_leave_pool_and_source_param():
+    """Arm 3 = the same pool exclusion as arms 1/2 (tier=catalog, -14 ambient,
+    still indexed) PLUS the fetch_from_catalog source-passthrough branch (the
+    composed fetcher's real dispatch path)."""
+    r = _run_arm("3")
+    assert r["arm"] == "3"
+    assert r["registry_size"] == 190  # registry does NOT shrink; only the pool does
+    assert r["gridmet_tier"] == "catalog"
+    assert r["any_spec_in_declarable"] is False  # -14 from the ambient pool
+    assert r["declarable_size"] == _run_arm(None)["declarable_size"] - 14
+    assert r["gridmet_in_index"] is True
+    # fetch_from_catalog exposes the source branch under Arm 3 (like Arm 1).
+    assert r["ffc_params"] == ["entry_id", "params", "source", "_extra_ignored"]
+
+
+@pytest.fixture()
+def _stratum(_registry_loaded):
+    from trid3nt_server.agent.tools.fetchers._router import stratified as strat
+    from trid3nt_server.agent.tools.search.search_tools import search_tools as st
+
+    st._reset_index_for_tests()
+    strat.reset_source_stratum_index_for_tests()
+    return strat
+
+
+def test_stratum_index_is_source_scoped(_stratum):
+    """Stratum split: the pool index ranks over ONLY the 14 spec-served sources."""
+    from trid3nt_server.agent.tools.fetchers._router import registration as reg
+
+    idx = _stratum.source_stratum_index()
+    assert set(idx.tool_names) == reg.registered_spec_names()
+    assert len(idx.tool_names) == 14  # sharpened per-pool IDF is expected, not a bug
+
+
+def test_stratum_activates_on_data_ask_enum_rank_order(_stratum):
+    """A data ask activates; the enum is the matched sources IN RANK ORDER (k<=5),
+    the target leads, and full cards accompany it."""
+    plan = _stratum.stratum_declaration_plan("gridMET daily weather fuel moisture burning index")
+    assert plan["activated"] is True
+    assert plan["sources"][0] == "fetch_gridmet"
+    assert 1 <= len(plan["sources"]) <= _stratum.SOURCE_ENUM_K
+    # cards parallel the enum, in the same order, carrying the FULL docstring.
+    assert [c["name"] for c in plan["cards"]] == plan["sources"]
+    from trid3nt_server.agent.tools.fetchers._router import registration as reg
+
+    spec = reg._SPEC_REGISTRY["fetch_gridmet"]
+    top_card = plan["cards"][0]
+    assert top_card["docstring"] == (spec.docstring or reg._synthesize_doc(spec))
+
+
+def test_stratum_declines_clearly_non_data_ask(_stratum):
+    """Trigger is a threshold, not always-on: an ask with no pool relevance does
+    NOT declare the composed fetcher (core surface only)."""
+    plan = _stratum.stratum_declaration_plan("please greet the user warmly")
+    assert plan["activated"] is False
+    assert plan["sources"] == []
+    assert _stratum.compose_fetcher_declaration(plan) is None
+    assert _stratum.render_cards_context(plan) == ""
+
+
+def test_composed_declaration_enum_matches_plan(_stratum):
+    """The composed generic fetcher carries the source enum in rank order + a
+    free-form params object; no per-source virtual tool is declared."""
+    plan = _stratum.stratum_declaration_plan("census demographics median household income")
+    assert plan["activated"] is True
+    decl = _stratum.compose_fetcher_declaration(plan)
+    assert decl.name == _stratum.COMPOSED_FETCHER_NAME == "fetch_from_catalog"
+    props = decl.parameters.properties
+    assert list(props["source"].enum) == plan["sources"]  # rank order preserved
+    assert set(decl.parameters.required) == {"source", "params"}
+
+
+def test_render_cards_context_carries_full_detail(_stratum):
+    plan = _stratum.stratum_declaration_plan("gridMET daily weather fuel moisture")
+    ctx = _stratum.render_cards_context(plan)
+    assert "fetch_gridmet" in ctx
+    assert "params:" in ctx
+    # the block names every enum source (the model's per-source view).
+    for name in plan["sources"]:
+        assert name in ctx
+
+
 def test_default_declarable_excludes_catalog_tier(_registry_loaded):
     """The pool filter drops tier in {template, catalog} (a search hit re-adds
     the specific expanded name); a gate-expander result naming a catalog source
