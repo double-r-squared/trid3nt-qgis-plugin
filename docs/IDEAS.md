@@ -122,3 +122,21 @@ been written yet but I don't want you to forget it.")
   boilerplate. Persistence's "MCP-shaped" naming = wave-C rename, not MCP.
 
 - 2026-07-29: numpy DEM-product swap (hillshade/slope/aspect/color-relief as pure-wheel numpy stencils/LUT) - Mac-test-gated follow-on to processing-decloud-refactor; would remove the system gdal-bin machine prerequisite entirely. Contour vertex drift is the hard part.
+- 2026-07-30: QGIS-native integration trio (from the PyQGIS piping discussion):
+  (1) CREDENTIALS FOLD - QgsAuthManager (encrypted store + native UI + authcfg
+  tokens) becomes the single credential home; plugin brokers server-consumed
+  secrets over the existing auth_handshake/secrets_handler WS seam at connect
+  (localhost transit = accepted in the one-user monolith, record as decision).
+  Kills custom credential storage/UI. Near-term candidate.
+  (2) DISPLAY-SERVICES POOL - 4th stratum of the pools architecture: public
+  WMS/WMTS/XYZ endpoints as catalog entries (provider + uri-template +
+  authcfg) surfaced via one generic load_service_layer verb, executed
+  natively by the plugin (QgsRasterLayer/QgsVectorLayer providers). Display
+  lane only - analysis lane stays on the router. Queued behind the 3 signed
+  strata.
+  (3) CLIENT-EDGE OBSERVABILITY HARVESTER - plugin hooks QgsMessageLog
+  messageReceived + QgsNetworkAccessManager reply signals, scoped around
+  every layer add (incl. published MinIO artifacts), reports structured
+  outcomes over WS (HTTP status + provider messages). Closes the
+  render-failure blind spot (layer-poison class); strengthens the honesty
+  floor at the client edge. Standalone, no pool dependency.
