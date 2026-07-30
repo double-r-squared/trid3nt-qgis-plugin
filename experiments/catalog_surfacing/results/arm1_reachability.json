@@ -1,0 +1,869 @@
+{
+  "arm": 1,
+  "n_sources": 104,
+  "reached": 103,
+  "recall": 0.9904,
+  "per_record": [
+    {
+      "id": "fetch_gridmet#0",
+      "group": "fetch_gridmet",
+      "target": "fetch_gridmet",
+      "reached": true,
+      "is_source": true
+    },
+    {
+      "id": "fetch_gridmet#1",
+      "group": "fetch_gridmet",
+      "target": "fetch_gridmet",
+      "reached": true,
+      "is_source": true
+    },
+    {
+      "id": "fetch_gridmet#2",
+      "group": "fetch_gridmet",
+      "target": "fetch_gridmet",
+      "reached": true,
+      "is_source": true
+    },
+    {
+      "id": "fetch_gridmet#3",
+      "group": "fetch_gridmet",
+      "target": "fetch_gridmet",
+      "reached": true,
+      "is_source": true
+    },
+    {
+      "id": "fetch_gridmet#4",
+      "group": "fetch_gridmet",
+      "target": "fetch_gridmet",
+      "reached": true,
+      "is_source": true
+    },
+    {
+      "id": "fetch_gridmet#5",
+      "group": "fetch_gridmet",
+      "target": "fetch_gridmet",
+      "reached": true,
+      "is_source": true
+    },
+    {
+      "id": "fetch_gridmet#6",
+      "group": "fetch_gridmet",
+      "target": "fetch_gridmet",
+      "reached": true,
+      "is_source": true
+    },
+    {
+      "id": "fetch_gridmet#7",
+      "group": "fetch_gridmet",
+      "target": "fetch_gridmet",
+      "reached": true,
+      "is_source": true
+    },
+    {
+      "id": "fetch_gridmet#8",
+      "group": "fetch_gridmet",
+      "target": "fetch_gridmet",
+      "reached": true,
+      "is_source": true
+    },
+    {
+      "id": "fetch_gridmet#9",
+      "group": "fetch_gridmet",
+      "target": "fetch_gridmet",
+      "reached": true,
+      "is_source": true
+    },
+    {
+      "id": "fetch_gridmet#10",
+      "group": "fetch_gridmet",
+      "target": "fetch_gridmet",
+      "reached": true,
+      "is_source": true
+    },
+    {
+      "id": "fetch_gridmet#11",
+      "group": "fetch_gridmet",
+      "target": "fetch_gridmet",
+      "reached": true,
+      "is_source": true
+    },
+    {
+      "id": "fetch_hifld_critical_infrastructure#0",
+      "group": "fetch_hifld_critical_infrastructure",
+      "target": "fetch_hifld_critical_infrastructure",
+      "reached": true,
+      "is_source": true
+    },
+    {
+      "id": "fetch_hifld_critical_infrastructure#1",
+      "group": "fetch_hifld_critical_infrastructure",
+      "target": "fetch_hifld_critical_infrastructure",
+      "reached": true,
+      "is_source": true
+    },
+    {
+      "id": "fetch_hifld_critical_infrastructure#2",
+      "group": "fetch_hifld_critical_infrastructure",
+      "target": "fetch_hifld_critical_infrastructure",
+      "reached": true,
+      "is_source": true
+    },
+    {
+      "id": "fetch_hifld_critical_infrastructure#3",
+      "group": "fetch_hifld_critical_infrastructure",
+      "target": "fetch_hifld_critical_infrastructure",
+      "reached": true,
+      "is_source": true
+    },
+    {
+      "id": "fetch_hifld_critical_infrastructure#4",
+      "group": "fetch_hifld_critical_infrastructure",
+      "target": "fetch_hifld_critical_infrastructure",
+      "reached": true,
+      "is_source": true
+    },
+    {
+      "id": "fetch_hifld_critical_infrastructure#5",
+      "group": "fetch_hifld_critical_infrastructure",
+      "target": "fetch_hifld_critical_infrastructure",
+      "reached": true,
+      "is_source": true
+    },
+    {
+      "id": "fetch_hifld_critical_infrastructure#6",
+      "group": "fetch_hifld_critical_infrastructure",
+      "target": "fetch_hifld_critical_infrastructure",
+      "reached": true,
+      "is_source": true
+    },
+    {
+      "id": "fetch_hifld_critical_infrastructure#7",
+      "group": "fetch_hifld_critical_infrastructure",
+      "target": "fetch_hifld_critical_infrastructure",
+      "reached": true,
+      "is_source": true
+    },
+    {
+      "id": "fetch_hifld_critical_infrastructure#8",
+      "group": "fetch_hifld_critical_infrastructure",
+      "target": "fetch_hifld_critical_infrastructure",
+      "reached": true,
+      "is_source": true
+    },
+    {
+      "id": "fetch_hifld_critical_infrastructure#9",
+      "group": "fetch_hifld_critical_infrastructure",
+      "target": "fetch_hifld_critical_infrastructure",
+      "reached": true,
+      "is_source": true
+    },
+    {
+      "id": "fetch_hifld_critical_infrastructure#10",
+      "group": "fetch_hifld_critical_infrastructure",
+      "target": "fetch_hifld_critical_infrastructure",
+      "reached": true,
+      "is_source": true
+    },
+    {
+      "id": "fetch_hifld_critical_infrastructure#11",
+      "group": "fetch_hifld_critical_infrastructure",
+      "target": "fetch_hifld_critical_infrastructure",
+      "reached": true,
+      "is_source": true
+    },
+    {
+      "id": "fetch_noaa_coops_tides#0",
+      "group": "fetch_noaa_coops_tides",
+      "target": "fetch_noaa_coops_tides",
+      "reached": true,
+      "is_source": true
+    },
+    {
+      "id": "fetch_noaa_coops_tides#1",
+      "group": "fetch_noaa_coops_tides",
+      "target": "fetch_noaa_coops_tides",
+      "reached": true,
+      "is_source": true
+    },
+    {
+      "id": "fetch_noaa_coops_tides#2",
+      "group": "fetch_noaa_coops_tides",
+      "target": "fetch_noaa_coops_tides",
+      "reached": true,
+      "is_source": true
+    },
+    {
+      "id": "fetch_noaa_coops_tides#3",
+      "group": "fetch_noaa_coops_tides",
+      "target": "fetch_noaa_coops_tides",
+      "reached": true,
+      "is_source": true
+    },
+    {
+      "id": "fetch_noaa_coops_tides#4",
+      "group": "fetch_noaa_coops_tides",
+      "target": "fetch_noaa_coops_tides",
+      "reached": true,
+      "is_source": true
+    },
+    {
+      "id": "fetch_noaa_coops_tides#5",
+      "group": "fetch_noaa_coops_tides",
+      "target": "fetch_noaa_coops_tides",
+      "reached": true,
+      "is_source": true
+    },
+    {
+      "id": "fetch_noaa_coops_tides#6",
+      "group": "fetch_noaa_coops_tides",
+      "target": "fetch_noaa_coops_tides",
+      "reached": true,
+      "is_source": true
+    },
+    {
+      "id": "fetch_noaa_coops_tides#7",
+      "group": "fetch_noaa_coops_tides",
+      "target": "fetch_noaa_coops_tides",
+      "reached": true,
+      "is_source": true
+    },
+    {
+      "id": "fetch_noaa_coops_tides#8",
+      "group": "fetch_noaa_coops_tides",
+      "target": "fetch_noaa_coops_tides",
+      "reached": true,
+      "is_source": true
+    },
+    {
+      "id": "fetch_noaa_coops_tides#9",
+      "group": "fetch_noaa_coops_tides",
+      "target": "fetch_noaa_coops_tides",
+      "reached": true,
+      "is_source": true
+    },
+    {
+      "id": "fetch_noaa_coops_tides#10",
+      "group": "fetch_noaa_coops_tides",
+      "target": "fetch_noaa_coops_tides",
+      "reached": true,
+      "is_source": true
+    },
+    {
+      "id": "fetch_esri_landcover_10m#0",
+      "group": "fetch_esri_landcover_10m",
+      "target": "fetch_esri_landcover_10m",
+      "reached": true,
+      "is_source": true
+    },
+    {
+      "id": "fetch_esri_landcover_10m#1",
+      "group": "fetch_esri_landcover_10m",
+      "target": "fetch_esri_landcover_10m",
+      "reached": true,
+      "is_source": true
+    },
+    {
+      "id": "fetch_esri_landcover_10m#2",
+      "group": "fetch_esri_landcover_10m",
+      "target": "fetch_esri_landcover_10m",
+      "reached": true,
+      "is_source": true
+    },
+    {
+      "id": "fetch_esri_landcover_10m#3",
+      "group": "fetch_esri_landcover_10m",
+      "target": "fetch_esri_landcover_10m",
+      "reached": true,
+      "is_source": true
+    },
+    {
+      "id": "fetch_esri_landcover_10m#4",
+      "group": "fetch_esri_landcover_10m",
+      "target": "fetch_esri_landcover_10m",
+      "reached": true,
+      "is_source": true
+    },
+    {
+      "id": "fetch_esri_landcover_10m#5",
+      "group": "fetch_esri_landcover_10m",
+      "target": "fetch_esri_landcover_10m",
+      "reached": true,
+      "is_source": true
+    },
+    {
+      "id": "fetch_esri_landcover_10m#6",
+      "group": "fetch_esri_landcover_10m",
+      "target": "fetch_esri_landcover_10m",
+      "reached": true,
+      "is_source": true
+    },
+    {
+      "id": "fetch_esri_landcover_10m#7",
+      "group": "fetch_esri_landcover_10m",
+      "target": "fetch_esri_landcover_10m",
+      "reached": true,
+      "is_source": true
+    },
+    {
+      "id": "fetch_esri_landcover_10m#8",
+      "group": "fetch_esri_landcover_10m",
+      "target": "fetch_esri_landcover_10m",
+      "reached": true,
+      "is_source": true
+    },
+    {
+      "id": "fetch_esri_landcover_10m#9",
+      "group": "fetch_esri_landcover_10m",
+      "target": "fetch_esri_landcover_10m",
+      "reached": true,
+      "is_source": true
+    },
+    {
+      "id": "fetch_esri_landcover_10m#10",
+      "group": "fetch_esri_landcover_10m",
+      "target": "fetch_esri_landcover_10m",
+      "reached": true,
+      "is_source": true
+    },
+    {
+      "id": "fetch_esri_landcover_10m#11",
+      "group": "fetch_esri_landcover_10m",
+      "target": "fetch_esri_landcover_10m",
+      "reached": true,
+      "is_source": true
+    },
+    {
+      "id": "fetch_census_acs#0",
+      "group": "fetch_census_acs",
+      "target": "fetch_census_acs",
+      "reached": true,
+      "is_source": true
+    },
+    {
+      "id": "fetch_census_acs#1",
+      "group": "fetch_census_acs",
+      "target": "fetch_census_acs",
+      "reached": true,
+      "is_source": true
+    },
+    {
+      "id": "fetch_census_acs#2",
+      "group": "fetch_census_acs",
+      "target": "fetch_census_acs",
+      "reached": true,
+      "is_source": true
+    },
+    {
+      "id": "fetch_census_acs#3",
+      "group": "fetch_census_acs",
+      "target": "fetch_census_acs",
+      "reached": true,
+      "is_source": true
+    },
+    {
+      "id": "fetch_census_acs#4",
+      "group": "fetch_census_acs",
+      "target": "fetch_census_acs",
+      "reached": true,
+      "is_source": true
+    },
+    {
+      "id": "fetch_census_acs#5",
+      "group": "fetch_census_acs",
+      "target": "fetch_census_acs",
+      "reached": true,
+      "is_source": true
+    },
+    {
+      "id": "fetch_census_acs#6",
+      "group": "fetch_census_acs",
+      "target": "fetch_census_acs",
+      "reached": true,
+      "is_source": true
+    },
+    {
+      "id": "fetch_census_acs#7",
+      "group": "fetch_census_acs",
+      "target": "fetch_census_acs",
+      "reached": true,
+      "is_source": true
+    },
+    {
+      "id": "fetch_census_acs#8",
+      "group": "fetch_census_acs",
+      "target": "fetch_census_acs",
+      "reached": false,
+      "is_source": true
+    },
+    {
+      "id": "fetch_census_acs#9",
+      "group": "fetch_census_acs",
+      "target": "fetch_census_acs",
+      "reached": true,
+      "is_source": true
+    },
+    {
+      "id": "fetch_census_acs#10",
+      "group": "fetch_census_acs",
+      "target": "fetch_census_acs",
+      "reached": true,
+      "is_source": true
+    },
+    {
+      "id": "fetch_census_acs#11",
+      "group": "fetch_census_acs",
+      "target": "fetch_census_acs",
+      "reached": true,
+      "is_source": true
+    },
+    {
+      "id": "fetch_us_drought_monitor#0",
+      "group": "fetch_us_drought_monitor",
+      "target": "fetch_us_drought_monitor",
+      "reached": true,
+      "is_source": true
+    },
+    {
+      "id": "fetch_us_drought_monitor#1",
+      "group": "fetch_us_drought_monitor",
+      "target": "fetch_us_drought_monitor",
+      "reached": true,
+      "is_source": true
+    },
+    {
+      "id": "fetch_us_drought_monitor#2",
+      "group": "fetch_us_drought_monitor",
+      "target": "fetch_us_drought_monitor",
+      "reached": true,
+      "is_source": true
+    },
+    {
+      "id": "fetch_us_drought_monitor#3",
+      "group": "fetch_us_drought_monitor",
+      "target": "fetch_us_drought_monitor",
+      "reached": true,
+      "is_source": true
+    },
+    {
+      "id": "fetch_us_drought_monitor#4",
+      "group": "fetch_us_drought_monitor",
+      "target": "fetch_us_drought_monitor",
+      "reached": true,
+      "is_source": true
+    },
+    {
+      "id": "fetch_hifld_transmission_lines#0",
+      "group": "fetch_hifld_transmission_lines",
+      "target": "fetch_hifld_transmission_lines",
+      "reached": true,
+      "is_source": true
+    },
+    {
+      "id": "fetch_hifld_transmission_lines#1",
+      "group": "fetch_hifld_transmission_lines",
+      "target": "fetch_hifld_transmission_lines",
+      "reached": true,
+      "is_source": true
+    },
+    {
+      "id": "fetch_hifld_transmission_lines#2",
+      "group": "fetch_hifld_transmission_lines",
+      "target": "fetch_hifld_transmission_lines",
+      "reached": true,
+      "is_source": true
+    },
+    {
+      "id": "fetch_hifld_transmission_lines#3",
+      "group": "fetch_hifld_transmission_lines",
+      "target": "fetch_hifld_transmission_lines",
+      "reached": true,
+      "is_source": true
+    },
+    {
+      "id": "fetch_hifld_transmission_lines#4",
+      "group": "fetch_hifld_transmission_lines",
+      "target": "fetch_hifld_transmission_lines",
+      "reached": true,
+      "is_source": true
+    },
+    {
+      "id": "fetch_mtbs_burn_severity#0",
+      "group": "fetch_mtbs_burn_severity",
+      "target": "fetch_mtbs_burn_severity",
+      "reached": true,
+      "is_source": true
+    },
+    {
+      "id": "fetch_mtbs_burn_severity#1",
+      "group": "fetch_mtbs_burn_severity",
+      "target": "fetch_mtbs_burn_severity",
+      "reached": true,
+      "is_source": true
+    },
+    {
+      "id": "fetch_mtbs_burn_severity#2",
+      "group": "fetch_mtbs_burn_severity",
+      "target": "fetch_mtbs_burn_severity",
+      "reached": true,
+      "is_source": true
+    },
+    {
+      "id": "fetch_mtbs_burn_severity#3",
+      "group": "fetch_mtbs_burn_severity",
+      "target": "fetch_mtbs_burn_severity",
+      "reached": true,
+      "is_source": true
+    },
+    {
+      "id": "fetch_mtbs_burn_severity#4",
+      "group": "fetch_mtbs_burn_severity",
+      "target": "fetch_mtbs_burn_severity",
+      "reached": true,
+      "is_source": true
+    },
+    {
+      "id": "fetch_nifc_fire_perimeters#0",
+      "group": "fetch_nifc_fire_perimeters",
+      "target": "fetch_nifc_fire_perimeters",
+      "reached": true,
+      "is_source": true
+    },
+    {
+      "id": "fetch_nifc_fire_perimeters#1",
+      "group": "fetch_nifc_fire_perimeters",
+      "target": "fetch_nifc_fire_perimeters",
+      "reached": true,
+      "is_source": true
+    },
+    {
+      "id": "fetch_nifc_fire_perimeters#2",
+      "group": "fetch_nifc_fire_perimeters",
+      "target": "fetch_nifc_fire_perimeters",
+      "reached": true,
+      "is_source": true
+    },
+    {
+      "id": "fetch_nifc_fire_perimeters#3",
+      "group": "fetch_nifc_fire_perimeters",
+      "target": "fetch_nifc_fire_perimeters",
+      "reached": true,
+      "is_source": true
+    },
+    {
+      "id": "fetch_nifc_fire_perimeters#4",
+      "group": "fetch_nifc_fire_perimeters",
+      "target": "fetch_nifc_fire_perimeters",
+      "reached": true,
+      "is_source": true
+    },
+    {
+      "id": "fetch_nhdplus_nldi_navigate#0",
+      "group": "fetch_nhdplus_nldi_navigate",
+      "target": "fetch_nhdplus_nldi_navigate",
+      "reached": true,
+      "is_source": true
+    },
+    {
+      "id": "fetch_nhdplus_nldi_navigate#1",
+      "group": "fetch_nhdplus_nldi_navigate",
+      "target": "fetch_nhdplus_nldi_navigate",
+      "reached": true,
+      "is_source": true
+    },
+    {
+      "id": "fetch_nhdplus_nldi_navigate#2",
+      "group": "fetch_nhdplus_nldi_navigate",
+      "target": "fetch_nhdplus_nldi_navigate",
+      "reached": true,
+      "is_source": true
+    },
+    {
+      "id": "fetch_nhdplus_nldi_navigate#3",
+      "group": "fetch_nhdplus_nldi_navigate",
+      "target": "fetch_nhdplus_nldi_navigate",
+      "reached": true,
+      "is_source": true
+    },
+    {
+      "id": "fetch_nhdplus_nldi_navigate#4",
+      "group": "fetch_nhdplus_nldi_navigate",
+      "target": "fetch_nhdplus_nldi_navigate",
+      "reached": true,
+      "is_source": true
+    },
+    {
+      "id": "fetch_nhd_waterbodies#0",
+      "group": "fetch_nhd_waterbodies",
+      "target": "fetch_nhd_waterbodies",
+      "reached": true,
+      "is_source": true
+    },
+    {
+      "id": "fetch_nhd_waterbodies#1",
+      "group": "fetch_nhd_waterbodies",
+      "target": "fetch_nhd_waterbodies",
+      "reached": true,
+      "is_source": true
+    },
+    {
+      "id": "fetch_nhd_waterbodies#2",
+      "group": "fetch_nhd_waterbodies",
+      "target": "fetch_nhd_waterbodies",
+      "reached": true,
+      "is_source": true
+    },
+    {
+      "id": "fetch_nhd_waterbodies#3",
+      "group": "fetch_nhd_waterbodies",
+      "target": "fetch_nhd_waterbodies",
+      "reached": true,
+      "is_source": true
+    },
+    {
+      "id": "fetch_nhd_waterbodies#4",
+      "group": "fetch_nhd_waterbodies",
+      "target": "fetch_nhd_waterbodies",
+      "reached": true,
+      "is_source": true
+    },
+    {
+      "id": "fetch_usgs_water_quality#0",
+      "group": "fetch_usgs_water_quality",
+      "target": "fetch_usgs_water_quality",
+      "reached": true,
+      "is_source": true
+    },
+    {
+      "id": "fetch_usgs_water_quality#1",
+      "group": "fetch_usgs_water_quality",
+      "target": "fetch_usgs_water_quality",
+      "reached": true,
+      "is_source": true
+    },
+    {
+      "id": "fetch_usgs_water_quality#2",
+      "group": "fetch_usgs_water_quality",
+      "target": "fetch_usgs_water_quality",
+      "reached": true,
+      "is_source": true
+    },
+    {
+      "id": "fetch_usgs_water_quality#3",
+      "group": "fetch_usgs_water_quality",
+      "target": "fetch_usgs_water_quality",
+      "reached": true,
+      "is_source": true
+    },
+    {
+      "id": "fetch_usgs_water_quality#4",
+      "group": "fetch_usgs_water_quality",
+      "target": "fetch_usgs_water_quality",
+      "reached": true,
+      "is_source": true
+    },
+    {
+      "id": "fetch_noaa_coops_currents#0",
+      "group": "fetch_noaa_coops_currents",
+      "target": "fetch_noaa_coops_currents",
+      "reached": true,
+      "is_source": true
+    },
+    {
+      "id": "fetch_noaa_coops_currents#1",
+      "group": "fetch_noaa_coops_currents",
+      "target": "fetch_noaa_coops_currents",
+      "reached": true,
+      "is_source": true
+    },
+    {
+      "id": "fetch_noaa_coops_currents#2",
+      "group": "fetch_noaa_coops_currents",
+      "target": "fetch_noaa_coops_currents",
+      "reached": true,
+      "is_source": true
+    },
+    {
+      "id": "fetch_noaa_coops_currents#3",
+      "group": "fetch_noaa_coops_currents",
+      "target": "fetch_noaa_coops_currents",
+      "reached": true,
+      "is_source": true
+    },
+    {
+      "id": "fetch_noaa_coops_currents#4",
+      "group": "fetch_noaa_coops_currents",
+      "target": "fetch_noaa_coops_currents",
+      "reached": true,
+      "is_source": true
+    },
+    {
+      "id": "fetch_cdc_svi#0",
+      "group": "fetch_cdc_svi",
+      "target": "fetch_cdc_svi",
+      "reached": true,
+      "is_source": true
+    },
+    {
+      "id": "fetch_cdc_svi#1",
+      "group": "fetch_cdc_svi",
+      "target": "fetch_cdc_svi",
+      "reached": true,
+      "is_source": true
+    },
+    {
+      "id": "fetch_cdc_svi#2",
+      "group": "fetch_cdc_svi",
+      "target": "fetch_cdc_svi",
+      "reached": true,
+      "is_source": true
+    },
+    {
+      "id": "fetch_cdc_svi#3",
+      "group": "fetch_cdc_svi",
+      "target": "fetch_cdc_svi",
+      "reached": true,
+      "is_source": true
+    },
+    {
+      "id": "fetch_cdc_svi#4",
+      "group": "fetch_cdc_svi",
+      "target": "fetch_cdc_svi",
+      "reached": true,
+      "is_source": true
+    },
+    {
+      "id": "control#0",
+      "group": "control",
+      "target": "fetch_nws_alerts_conus",
+      "reached": false,
+      "is_source": false
+    },
+    {
+      "id": "control#1",
+      "group": "control",
+      "target": "fetch_fema_nfhl_zones",
+      "reached": false,
+      "is_source": false
+    },
+    {
+      "id": "control#2",
+      "group": "control",
+      "target": "fetch_wdpa_protected_areas",
+      "reached": false,
+      "is_source": false
+    },
+    {
+      "id": "control#3",
+      "group": "control",
+      "target": "fetch_dem",
+      "reached": false,
+      "is_source": false
+    },
+    {
+      "id": "control#4",
+      "group": "control",
+      "target": "run_sfincs",
+      "reached": false,
+      "is_source": false
+    },
+    {
+      "id": "control#5",
+      "group": "control",
+      "target": "fetch_glm_lightning",
+      "reached": false,
+      "is_source": false
+    },
+    {
+      "id": "control#6",
+      "group": "control",
+      "target": "fetch_goes_active_fire",
+      "reached": false,
+      "is_source": false
+    },
+    {
+      "id": "control#7",
+      "group": "control",
+      "target": "geocode_location",
+      "reached": false,
+      "is_source": false
+    },
+    {
+      "id": "control#8",
+      "group": "control",
+      "target": "fetch_nexrad_reflectivity",
+      "reached": false,
+      "is_source": false
+    },
+    {
+      "id": "control#9",
+      "group": "control",
+      "target": "run_swmm",
+      "reached": false,
+      "is_source": false
+    },
+    {
+      "id": "control#10",
+      "group": "control",
+      "target": "fetch_naip",
+      "reached": false,
+      "is_source": false
+    },
+    {
+      "id": "control#11",
+      "group": "control",
+      "target": "run_model_groundwater_contamination_scenario",
+      "reached": false,
+      "is_source": false
+    },
+    {
+      "id": "control#12",
+      "group": "control",
+      "target": "run_sfincs",
+      "reached": false,
+      "is_source": false
+    },
+    {
+      "id": "control#13",
+      "group": "control",
+      "target": "run_swmm",
+      "reached": false,
+      "is_source": false
+    },
+    {
+      "id": "control#14",
+      "group": "control",
+      "target": "run_openquake",
+      "reached": false,
+      "is_source": false
+    },
+    {
+      "id": "control#15",
+      "group": "control",
+      "target": "fetch_dem",
+      "reached": false,
+      "is_source": false
+    },
+    {
+      "id": "control#16",
+      "group": "control",
+      "target": "fetch_naip",
+      "reached": false,
+      "is_source": false
+    },
+    {
+      "id": "control#17",
+      "group": "control",
+      "target": "fetch_goes_active_fire",
+      "reached": false,
+      "is_source": false
+    },
+    {
+      "id": "control#18",
+      "group": "control",
+      "target": "fetch_nws_alerts_conus",
+      "reached": false,
+      "is_source": false
+    }
+  ]
+}

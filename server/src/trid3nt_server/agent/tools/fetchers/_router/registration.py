@@ -30,6 +30,7 @@ from __future__ import annotations
 
 import inspect
 import logging
+import os
 import sys
 import types
 from pathlib import Path
@@ -50,10 +51,29 @@ __all__ = [
     "register_specs_from_tree",
     "registered_spec_names",
     "clear_specs_for_tests",
+    "catalog_arm",
+    "CATALOG_ARM_ENV",
+    "spec_card",
+    "search_spec_cards",
 ]
 
 #: twin_name -> SourceSpec for every promoted spec-driven tool (diagnostics/tests).
 _SPEC_REGISTRY: dict[str, SourceSpec] = {}
+
+#: Catalog-surfacing experiment flag (experiments/catalog_surfacing/DESIGN.md).
+#: UNSET (default) -> the 14 spec-served sources register tier="general" (ambient,
+#: today's behaviour, registry unchanged at 190). "1" (Design 1, card-carried) or
+#: "2" (Design 2, discovery-expands-declaration) -> they register tier="catalog":
+#: EXCLUDED from the default declarable pool but KEPT in the search index. The flag
+#: is read at import so each arm runs in its OWN process with a clean pool; DEFAULT
+#: behaviour is byte-identical when it is unset.
+CATALOG_ARM_ENV = "TRID3NT_CATALOG_ARM"
+
+
+def catalog_arm() -> str | None:
+    """The active catalog-surfacing arm ("1" / "2") or None when unset/invalid."""
+    val = os.environ.get(CATALOG_ARM_ENV, "").strip()
+    return val if val in ("1", "2") else None
 
 
 def _annotation_for(ptype: str) -> Any:
@@ -177,6 +197,11 @@ def register_spec(spec: SourceSpec) -> str:
     _promoted.__signature__ = sig  # type: ignore[attr-defined]
     _promoted.__annotations__ = dict(annotations)
 
+    # Catalog-surfacing experiment: under an arm flag the spec-served sources
+    # register tier="catalog" (excluded from the default declarable pool, kept in
+    # the search index) instead of the default tier="general". Unset -> "general",
+    # so the DEFAULT daemon surface is unchanged.
+    tier = "catalog" if catalog_arm() else "general"
     metadata = AtomicToolMetadata(
         name=name,
         ttl_class=spec.cache.ttl_class,
@@ -185,7 +210,7 @@ def register_spec(spec: SourceSpec) -> str:
         supports_global_query=spec.supports_global_query,
         payload_mb_estimator_name="estimate_payload_mb",
         open_world_hint=True,
-        # tier defaults to "general" -> the DEFAULT retrieval pool (not a template).
+        tier=tier,
     )
     _tools.register_tool(metadata)(_promoted)
     _SPEC_REGISTRY[name] = spec
@@ -209,6 +234,64 @@ def register_specs_from_tree(root: Path | None = None) -> list[str]:
 def registered_spec_names() -> set[str]:
     """Twin names now served by a promoted spec-driven tool."""
     return set(_SPEC_REGISTRY)
+
+
+def _param_schema_entry(pspec: Any) -> dict[str, Any]:
+    """The typed param schema for one spec param (card projection, Design 1)."""
+    entry: dict[str, Any] = {"type": pspec.type, "required": bool(pspec.required)}
+    if pspec.default is not None:
+        entry["default"] = pspec.default
+    if getattr(pspec, "values", None):
+        entry["values"] = list(pspec.values)
+    if getattr(pspec, "min", None) is not None:
+        entry["min"] = pspec.min
+    if getattr(pspec, "max", None) is not None:
+        entry["max"] = pspec.max
+    return entry
+
+
+def spec_card(spec: SourceSpec, relevance_score: float | None = None) -> dict[str, Any]:
+    """Project a ``SourceSpec`` into a Design-1 catalog CARD.
+
+    Carries the FULL untruncated docstring (NOT clipped at the provider ~1000-char
+    tool limit), the typed param schema derived from ``spec.params``, and the
+    honesty context (gates / caveats / fallback) -- the model's ONLY view of
+    per-source detail in Design 1.
+    """
+    card: dict[str, Any] = {
+        "name": spec.name,
+        "source_class": spec.source_class,
+        "docstring": _synthesize_doc(spec),
+        "params": {pn: _param_schema_entry(ps) for pn, ps in spec.params.items()},
+        "gates": spec.gates.model_dump(mode="json") if spec.gates is not None else {},
+        "caveats": list(spec.caveats),
+        "fallback": list(spec.fallback),
+    }
+    if relevance_score is not None:
+        card["relevance_score"] = float(relevance_score)
+    return card
+
+
+def search_spec_cards(topic: str, k: int = 10) -> list[dict[str, Any]]:
+    """Rank spec-served source CARDS for a free-text topic (Design 1 search path).
+
+    Ranks through the SAME BM25/dense retrieval index Design 2's discovery uses
+    (ranking parity), then keeps only the spec-served sources and projects each to
+    a card. Returns ``[]`` on a cold index (caller fails open / escalates).
+    """
+    from trid3nt_server.agent.tools.search.tool_retrieval import (
+        MAX_K,
+        retrieve_ranked_tools,
+    )
+
+    cards: list[dict[str, Any]] = []
+    for name, score in retrieve_ranked_tools(topic, MAX_K):
+        spec = _SPEC_REGISTRY.get(name)
+        if spec is not None:
+            cards.append(spec_card(spec, score))
+        if len(cards) >= k:
+            break
+    return cards
 
 
 def clear_specs_for_tests() -> None:

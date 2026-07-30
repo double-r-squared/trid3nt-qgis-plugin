@@ -1413,10 +1413,15 @@ def _default_declarable_registry() -> dict[str, Any]:
     # import), so they flow through this filter identically to any hand-written
     # tool -- no special-casing (the env-gated experiment substitution retired
     # once promotion became the default).
+    # ``catalog`` (catalog-surfacing experiment, arm-flagged) is excluded here
+    # for the same reason as ``template`` -- it leaves the ambient pool and is
+    # reached only by discovery expansion (Design 2) / card projection (Design 1).
+    # No tool carries tier="catalog" in the DEFAULT config, so this is a no-op
+    # unless an arm flag is set.
     _reg = {
         name: entry
         for name, entry in TOOL_REGISTRY.items()
-        if getattr(entry.metadata, "tier", "general") != "template"
+        if getattr(entry.metadata, "tier", "general") not in ("template", "catalog")
     }
     return _reg
 

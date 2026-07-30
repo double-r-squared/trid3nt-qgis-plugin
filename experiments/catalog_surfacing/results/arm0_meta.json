@@ -1,0 +1,22 @@
+{
+  "arm": 0,
+  "arm_env": null,
+  "catalog_arm": null,
+  "timestamp_utc": "20260730T175030Z",
+  "registry_size": 190,
+  "ambient_declarable_count": 170,
+  "n_source_records": 104,
+  "n_control_records": 19,
+  "model_provider": "openai",
+  "openai_model": "nvidia/nemotron-3-super-120b-a12b:free",
+  "temperature": "0",
+  "n_trials": 1,
+  "seed_bbox": [
+    -83.0,
+    27.5,
+    -82.0,
+    28.5
+  ],
+  "reachability_recall": 0.9904,
+  "drive_seconds": 1767.6
+}

@@ -33,6 +33,12 @@ __all__ = ["fetch_from_catalog"]
 
 logger = logging.getLogger("trid3nt_server.agent.tools.search.fetch_from_catalog.fetch_from_catalog")
 
+#: Catalog-surfacing Design-1 arm (experiments/catalog_surfacing/DESIGN.md). Read
+#: at import so the registered ``fetch_from_catalog`` exposes a ``source`` param
+#: (spec-served source name) ONLY under the arm; DEFAULT config keeps the exact
+#: entry_id-only signature + docstring. Each arm runs in its own process.
+_ARM1_DESIGN1 = os.environ.get("TRID3NT_CATALOG_ARM", "").strip() == "1"
+
 
 # ---------------------------------------------------------------------------
 # fetch_from_catalog — generic Tier-aware dispatcher.
@@ -301,15 +307,7 @@ def _tier4_region_fetch(
         f"`fetch_population` tools for Tier-4 sources in v0.1."
     )
 
-@register_tool(
-    _FETCH_FROM_CATALOG_METADATA,
-    # Annotations: readOnlyHint=True (dispatches to external API but does not
-    # mutate server state; writes to read-through cache only),
-    # openWorldHint=True (Tier-2 OGC services, Tier-3 HTTPS external endpoints),
-    # destructiveHint=False, idempotentHint=True (cache shim deduplicates).
-    open_world_hint=True,
-)
-def fetch_from_catalog(entry_id: str, params: dict[str, Any] | None = None, **_extra_ignored: Any) -> dict[str, Any]:
+def _fetch_from_catalog_entry(entry_id: str, params: dict[str, Any] | None = None) -> dict[str, Any]:
     """Fetch bytes for a vetted catalog entry by its stable id (§F.1.2 Mode 1).
 
     Use this (not search_data_catalog, which only LISTS candidates) when you already have a stable catalog entry id and want its actual layer BYTES.
@@ -430,6 +428,74 @@ def fetch_from_catalog(entry_id: str, params: dict[str, Any] | None = None, **_e
         len(result.data),
     )
     return payload
+
+
+def _fetch_from_catalog_via_spec(
+    source: str, params: dict[str, Any] | None
+) -> dict[str, Any]:
+    """Catalog-surfacing Design-1 branch: resolve a spec-served source name to its
+    ``SourceSpec`` and route it through ``router.route`` (which runs
+    ``validate_params`` -> typed ``RouterInputError`` on bad args, then dispatches).
+
+    The single-enforcement-locus shift the arm measures: there is no provider
+    inputSchema on this fetch, so ``router.validate_params`` is the sole gate.
+    """
+    from trid3nt_server.agent.tools.fetchers._router import registration as _reg
+    from trid3nt_server.agent.tools.fetchers._router import router as _router
+
+    spec = _reg._SPEC_REGISTRY.get(source)
+    if spec is None:
+        known = sorted(_reg._SPEC_REGISTRY)
+        raise CatalogNotFoundError(
+            f"catalog source {source!r} is not a spec-served source "
+            f"({len(known)} known; first 5: {known[:5]})"
+        )
+    layer = _router.route(spec, params or {})
+    return {
+        "layer": layer,
+        "source": source,
+        "source_class": spec.source_class,
+    }
+
+
+if _ARM1_DESIGN1:
+
+    def fetch_from_catalog(
+        entry_id: str | None = None,
+        params: dict[str, Any] | None = None,
+        source: str | None = None,
+        **_extra_ignored: Any,
+    ) -> dict[str, Any]:
+        if isinstance(source, str) and source.strip():
+            return _fetch_from_catalog_via_spec(source.strip(), params)
+        return _fetch_from_catalog_entry(entry_id, params)  # type: ignore[arg-type]
+
+    fetch_from_catalog.__doc__ = (
+        (_fetch_from_catalog_entry.__doc__ or "")
+        + "\n\nCATALOG-SURFACING (Design 1): for a spec-served data source surfaced by "
+        "search_data_catalog, pass source=<source name> (e.g. 'fetch_gridmet') plus "
+        "params={...} (the card's typed param schema) instead of entry_id. The router "
+        "validates params and dispatches; a typed error feeds the retry loop."
+    )
+else:
+
+    def fetch_from_catalog(
+        entry_id: str, params: dict[str, Any] | None = None, **_extra_ignored: Any
+    ) -> dict[str, Any]:
+        return _fetch_from_catalog_entry(entry_id, params)
+
+    # Reuse the SAME docstring object so the DEFAULT provider FunctionDeclaration +
+    # the retrieval-index document text are byte-identical to before the refactor.
+    fetch_from_catalog.__doc__ = _fetch_from_catalog_entry.__doc__
+
+# Annotations: readOnlyHint=True (dispatches to external API but does not mutate
+# server state; writes to read-through cache only), openWorldHint=True (Tier-2 OGC
+# services, Tier-3 HTTPS external endpoints), destructiveHint=False,
+# idempotentHint=True (cache shim deduplicates).
+fetch_from_catalog = register_tool(
+    _FETCH_FROM_CATALOG_METADATA, open_world_hint=True
+)(fetch_from_catalog)
+
 
 def _ext_hint_for(entry: CatalogEntry, params: dict[str, Any]) -> str:
     """Predict the cache file extension for an entry+params dispatch.

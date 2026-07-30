@@ -152,6 +152,22 @@ def openai_api_key() -> str:
     return os.environ.get("TRID3NT_OPENAI_API_KEY", "not-needed")
 
 
+def openai_temperature() -> float:
+    """Sampling temperature for the OpenAI-compat body (default 0.7, unchanged).
+
+    Env-overridable via ``TRID3NT_OPENAI_TEMPERATURE`` so a deterministic run
+    (e.g. the catalog-surfacing experiment's temp-0 methodology) can pin it
+    without editing the request body. A bad value falls back to the default.
+    """
+    raw = os.environ.get("TRID3NT_OPENAI_TEMPERATURE", "").strip()
+    if not raw:
+        return 0.7
+    try:
+        return float(raw)
+    except ValueError:
+        return 0.7
+
+
 def openai_default_headers() -> dict[str, str] | None:
     """Optional per-provider request headers (OpenRouter model extensibility).
     OpenRouter accepts an ``HTTP-Referer`` + ``X-Title`` for
@@ -1056,7 +1072,7 @@ async def stream_openai(
             "messages": messages,
             "stream": True,
             "stream_options": {"include_usage": True},
-            "temperature": 0.7,
+            "temperature": openai_temperature(),
             # BUG 3 (post-OPEN-14 acceptance rerun): cap generation so a
             # clipped/looping round cannot stream 16k-26k tokens of runaway
             # narration for ~22 minutes before the reactive clip guard below

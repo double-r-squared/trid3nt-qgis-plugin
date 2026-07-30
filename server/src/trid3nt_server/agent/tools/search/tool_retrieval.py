@@ -264,10 +264,14 @@ def _full_registry_floor(floor: set[str]) -> set[str]:
     # tier="general" entries under the twin names, so they appear in this
     # non-template set with no special-casing (the env-gated experiment
     # substitution retired once promotion became the default).
+    # tier="catalog" (catalog-surfacing experiment, arm-flagged) is dropped here
+    # alongside templates so a fail-open dump never re-leaks the pool-excluded
+    # spec-served sources; any already surfaced live in ``floor``. No tool carries
+    # tier="catalog" in the DEFAULT config, so this is a no-op unless an arm is set.
     non_template = {
         name
         for name, entry in TOOL_REGISTRY.items()
-        if getattr(entry.metadata, "tier", "general") != "template"
+        if getattr(entry.metadata, "tier", "general") not in ("template", "catalog")
     }
     return non_template | floor
 

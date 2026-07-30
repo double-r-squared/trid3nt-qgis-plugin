@@ -210,6 +210,19 @@ def search_data_catalog(
     if not isinstance(topic, str) or not topic.strip():
         raise CatalogNotFoundError("search_data_catalog requires a non-empty topic string")
 
+    # Catalog-surfacing Design 1 (arm-flagged): return spec-served source CARDS
+    # (full docstring + typed param schema + gates/caveats/fallback) instead of the
+    # YAML catalog entries. The model then calls fetch_from_catalog(source=..., params=...).
+    # DEFAULT config (no arm flag) is unaffected -- the YAML path below runs.
+    from trid3nt_server.agent.tools.fetchers._router import registration as _reg
+
+    if _reg.catalog_arm() == "1":
+        cards = _reg.search_spec_cards(topic.strip(), k=10)
+        logger.info(
+            "search_data_catalog[arm1] topic=%r n_cards=%d", topic, len(cards)
+        )
+        return cards
+
     # Normalize the bbox to a list for cache-key canonicalization.
     bbox_param: list[float] | None = list(location) if location is not None else None
     params = {

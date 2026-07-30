@@ -87,7 +87,11 @@ TTL_CLASSES: tuple[str, ...] = (
 #: is a registered engine template EXCLUDED from the default pool and surfaced only
 #: by its door's gate expansion (select-then-call). Registration is thereby
 #: decoupled from retrieval visibility.
-EngineTier = Literal["general", "door", "template"]
+#: ``catalog`` (catalog-surfacing experiment) is a spec-served data source EXCLUDED
+#: from the default declarable pool (like ``template``) BUT KEPT in the search index
+#: so a discovery hit can rank + gate-expand it (Design 2) or a card projection can
+#: surface it (Design 1). It diverges from ``template`` precisely in staying indexed.
+EngineTier = Literal["general", "door", "template", "catalog"]
 
 
 class AtomicToolMetadata(GraceModel):
