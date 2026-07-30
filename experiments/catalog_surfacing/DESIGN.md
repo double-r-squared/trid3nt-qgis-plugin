@@ -308,3 +308,31 @@ SIGNED WITH DEFAULTS. Bindings:
   the underlying code is generalized"). Design 1 ADVANCES ONLY IF IT BEATS
   Design 2 outside the noise band on selection accuracy AND first-attempt
   param validity - a tie or within-band result selects Design 2.
+
+## Design 3 amendment (2026-07-30, PENDING NATE SIGN-OFF)
+
+Arm 3 (auto-trigger composed declaration - the stratified-pools data
+lane, docs/specs/stratified-pools.md): the model NEVER initiates
+discovery. Harness-side per-turn source-stratum retrieval (the same
+index that measured 0.9904 reachability) selects matching sources;
+the declared set carries ONE generic fetcher whose `source` enum =
+the matched candidates, with full source cards as context; params
+validated by the router (typed-error retry counted, as arms 0-2).
+Escalation pass (threshold-triggered, harness-side) widens the match
+when the top score is weak. Build prereqs: stratum split of the index,
+per-stratum quota merge, declaration composition, trigger - all behind
+the TRID3NT_CATALOG_ARM flag family, default off, identity-gated.
+
+Grading identical to prior arms: selection = the `source` argument vs
+the acceptable set; param validity first-attempt and one-retry;
+controls must hold. PASS bar: selection accuracy >= arm0 baseline
+(60.58 pct) AND first-attempt validity >= arm0 - 5 pts AND one-retry
+>= arm0. Plausible upside recorded as a hypothesis, not a criterion:
+harness-narrowed candidates may BEAT arm0 selection.
+
+CONTROLS-GATE AMENDMENT (methodology fix from the invalidated run,
+needs sign-off): a control divergence counts against validity ONLY if
+the divergent behavior touches the catalog/data surface (leakage). A
+NO_CALL or unrelated-tool jitter divergence is recorded, and that
+control is re-run N=3 with majority grading; residual non-leakage
+divergence is reported but does not invalidate the run.
