@@ -412,6 +412,12 @@ def select_executor(spec: SourceSpec) -> Callable[[SourceSpec, dict[str, Any]], 
     if (spec.ingest or {}).get("delegate"):
         from .executors import dataretrieval_delegate
         return dataretrieval_delegate.execute
+    # Tier-3 hook-driven path (ADR 0056): a spec that names a build_request hook
+    # routes to the http_json executor (source-specific request + parse via named
+    # pure hooks). No-op for every prior spec (none declare hooks).
+    if spec.hooks is not None and spec.hooks.build_request:
+        from .executors import http_json
+        return http_json.execute
     if spec.join is not None:
         return join_transform.execute
     # Declarative fan-out (multi-query-per-value + merge, slr_scenarios). No-op
@@ -519,4 +525,55 @@ def route(spec: SourceSpec, raw_params: dict[str, Any]) -> LayerURI:
         fetch_fn=lambda: executor(spec, params),
     )
     assert result.uri is not None, "router source is cacheable; uri must be set"
-    return build_layer_uri(spec, params, result.uri)
+    layer = build_layer_uri(spec, params, result.uri)
+    # bbox_from_features (ADR 0056): stamp the camera bbox from the emitted vector
+    # features' extent (point-event fetchers auto-zoom to the events). Read from
+    # the produced FGB (result.data is populated on cache hit + miss), so the
+    # stamp is consistent across cache paths. No-op when unset.
+    bff = spec.output.bbox_from_features
+    if bff is not None and result.data:
+        extent = _extent_from_fgb(result.data, float(bff.get("pad", 0.1)))
+        if extent is not None:
+            layer = layer.model_copy(update={"bbox": extent})
+    return layer
+
+
+def _extent_from_fgb(data: bytes, pad: float) -> tuple[float, float, float, float] | None:
+    """The (west, south, east, north) extent of an FGB's features, degenerate-padded.
+
+    A single-point (or single-line) extent whose axis collapses is padded by
+    ``pad`` degrees so the camera does not zoom to an infinite level -- the exact
+    twin behavior for the point-event fetchers. Returns None on an unreadable /
+    empty FGB (the caller keeps the request-bbox stamp).
+    """
+    import os
+    import tempfile
+
+    import geopandas as gpd
+
+    tmp: str | None = None
+    try:
+        with tempfile.NamedTemporaryFile(suffix=".fgb", delete=False, prefix="trid3nt_router_ext_") as f:
+            tmp = f.name
+            f.write(data)
+        gdf = gpd.read_file(tmp)
+        if gdf.empty or gdf.geometry.isna().all():
+            return None
+        west, south, east, north = (float(v) for v in gdf.total_bounds)
+    except Exception:  # noqa: BLE001 -- never fail emission on an extent read
+        return None
+    finally:
+        if tmp is not None:
+            try:
+                os.unlink(tmp)
+            except OSError:
+                pass
+    if not all(_math.isfinite(v) for v in (west, south, east, north)):
+        return None
+    if west == east:
+        west -= pad
+        east += pad
+    if south == north:
+        south -= pad
+        north += pad
+    return (west, south, east, north)

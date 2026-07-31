@@ -79,3 +79,76 @@ NATE reviews the classification -> build pilot -> routing-parity EXPERIMENT
 (experiments/fetcher_fold_routing, NATE-signed inputs) + replication gates
 -> family fan-out. THEN the tool/workflow extensions (template growth),
 per NATE's ordering.
+
+## The endgame: one engine, three tiers (NATE 2026-07-31)
+
+NATE's endgame directive, verbatim: **"adding a data_fetch method is just adding
+a YAML entry."** Every data fetcher folds into ONE spec-driven engine; the coded
+fetcher tools go to ZERO. A source reaches the engine at one of three tiers:
+
+- **TIER 1 -- pure shape.** The source is a plain raster-COG / vector-FGB /
+  station-timeseries and needs NOTHING but ``shape`` + ``endpoints`` + ``params``
+  + ``normalize`` + ``output`` (the pilot: gridmet, coops_tides, ...).
+- **TIER 2 -- shape + a declarative mode.** A named declarative directive on the
+  ``ingest`` / ``params`` / ``normalize`` / ``output`` block carries the last
+  15-25%: ArcGIS paging + ``where_clauses`` + ``column_map``, the ``dataretrieval``
+  delegate, ``stac_float``, ``multi_url`` VRT fan-out, ``gzip_object``, the JOIN
+  transform, the declarative fan-out (waves 2-9). Still zero source code.
+- **TIER 3 -- shape + a hook (ADR 0056).** The source has ONE irreducible step no
+  declarative directive can carry -- bespoke request construction and/or a bespoke
+  payload decode. It references a REGISTERED PURE function by name
+  (``hooks.build_request`` / ``hooks.parse_response``); the router owns everything
+  else. This wave landed the contract + proved it on earthquakes (single GET),
+  tsunami (paged), volcano (multi-GET join).
+
+HOOK DOCTRINE: hooks are **PURE** (no I/O -- transport, caching, gates, stamps, and
+the typed-error factory machinery stay router-owned; a hook only computes and MAY
+call a shared ``router_*_error`` factory), **MINIMAL** (a hook point exists only
+because a real source needs it -- ``post_process`` was evaluated and rejected in
+favor of declarative ``output.bbox_from_features``), **REGISTERED** (a name string a
+spec load validates against ``HOOK_REGISTRY``), and **TESTED** (each hook module
+carries its own unit tests). END STATE: the fetcher package is ``_router/`` (the
+engine) + ``_router/hooks/`` (the pure per-source steps) + ``**/source.yaml`` (the
+data) + ``**/corpus.yaml`` (the phrasings). Coded fetcher tools -> 0.
+
+### Remaining coded-fetcher worklist (rough, by target tier)
+
+Post-wave-10: 27 sources spec-served, 72 coded fetchers remain. A ROUGH target-tier
+classification for future waves (pattern-inferred from the fold history + the
+wave-10 reads; NOT a per-tool audit -- each still gets its own read + two-gate
+replication before folding):
+
+- **TIER-2-able (~15) -- an existing declarative mode already covers them.**
+  Single-endpoint ArcGIS vector (fetch_fema_nfhl_zones, fetch_nwi_wetlands,
+  fetch_epa_frs_facilities), ``dataretrieval``/station (fetch_usgs_nwis_gauges,
+  fetch_usgs_groundwater_levels, fetch_snotel_snow, fetch_asos_metar,
+  fetch_raws_weather), single-COG raster (fetch_topobathy, fetch_3dep_extra,
+  fetch_landcover, fetch_ghsl_population, fetch_noaa_slr_confidence,
+  fetch_noaa_slr_marsh).
+- **TIER-3 hook-able (~14) -- ONE clean irreducible step (a JSON point/obs API).**
+  fetch_usace_nsi, fetch_usace_dams, fetch_firms_active_fire, fetch_nws_event,
+  fetch_openaq_measurements, fetch_airnow_air_quality, fetch_gbif_occurrences,
+  fetch_inaturalist_observations, fetch_ebird_observations, fetch_iucn_red_list_range,
+  fetch_lehd_jobs, fetch_storm_events_db, fetch_climate_normals, fetch_nws_river_forecast.
+- **SCOPED-JOB / needs a NEW mode (~43) -- genuinely multi-step.** Secondary-fetch
+  join / fan-out (fetch_openfema_disasters -> TIGER counties, fetch_nws_alerts_conus
+  -> zone geometries -- a "secondary-fetch" mode); dict-output not a layer
+  (fetch_wfigs_incident, geocode_location, lookup_precip_return_period -- an
+  ``output: scalar`` mode); Overpass QL construction (fetch_overpass_pois,
+  fetch_roads_osm, fetch_buildings); GRIB/netcdf gridded binary (fetch_hrrr_forecast,
+  fetch_hrrr_smoke, fetch_mrms_qpe, fetch_nexrad_reflectivity, fetch_glm_lightning,
+  fetch_noaa_nwm_streamflow, fetch_gtsm_tide_surge, fetch_cama_flood_discharge);
+  animation/frame assembly (fetch_goes_animation, fetch_goes_archive_animation,
+  fetch_slider_timestamps, the satellite family); CDS-async (fetch_era5_reanalysis);
+  projected-VRT reproject (fetch_soilgrids, ADR 0055); griddap/ERDDAP (fetch_noaa_sst,
+  HELD); custom-envelope + secondary-endpoint (fetch_high_water_marks); composites
+  over several sources (fetch_dem, fetch_population, fetch_administrative_boundaries);
+  colormap-ramp DSL (fetch_jrc_global_surface_water, dead by stop-rule); track/line
+  assembly (fetch_storm_tracks, fetch_movebank_tracks); other domain fetchers
+  (fetch_statsgo_soils, fetch_field_boundaries, fetch_river_geometry,
+  fetch_flood_extent_observation, fetch_mobi, fetch_fault_sources,
+  fetch_wdpa_protected_areas, fetch_naip/landsat/sentinel STAC-raster subset).
+
+The scoped-job bucket is where the next MODES come from (secondary-fetch, scalar
+-output, overpass-QL, grib-window, frame-assembly) -- each a small declarative
+addition that then collapses a whole family, exactly as multi_url/gzip_object did.

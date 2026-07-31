@@ -172,6 +172,25 @@ def _estimator_module(spec: SourceSpec) -> str:
     return mod_name
 
 
+def _validate_hooks(spec: SourceSpec) -> None:
+    """Assert every ``hooks.*`` name the spec declares resolves at load (ADR 0056).
+
+    The hook contract is a name-string reference; a typo or a deleted hook must
+    fail LOUDLY at registration, not silently at first call. Importing
+    ``_router.hooks`` populates ``HOOK_REGISTRY`` via the hook modules' decorators.
+    """
+    if spec.hooks is None:
+        return
+    from .hooks import HookResolutionError, has_hook
+
+    for point in ("build_request", "parse_response"):
+        name = getattr(spec.hooks, point)
+        if name and not has_hook(name):
+            raise HookResolutionError(
+                f"spec {spec.name!r} references unknown hook {point}={name!r}"
+            )
+
+
 def register_spec(spec: SourceSpec) -> str:
     """Register the spec-driven surface as THE tool under ``spec.name`` (tier=general).
 
@@ -182,6 +201,7 @@ def register_spec(spec: SourceSpec) -> str:
 
     from trid3nt_server.agent import tools as _tools
 
+    _validate_hooks(spec)
     name = spec.name
     if name in _tools.TOOL_REGISTRY:
         _SPEC_REGISTRY[name] = spec
@@ -229,9 +249,17 @@ def register_specs_from_tree(root: Path | None = None) -> list[str]:
     """Walk ``fetchers/**/source.yaml`` and promote each spec to a registered tool.
 
     Returns the registered names. Called ONCE from ``agent/tools/__init__.py`` at
-    import time (replacing the deleted twins' eager imports).
+    import time (replacing the deleted twins' eager imports). A single spec that
+    fails to register (e.g. an unresolved hook name) is logged and skipped so one
+    broken co-located file never takes down startup -- mirroring the compose walk.
     """
-    return [register_spec(spec) for spec in compose_specs_from_tree(root).values()]
+    registered: list[str] = []
+    for spec in compose_specs_from_tree(root).values():
+        try:
+            registered.append(register_spec(spec))
+        except Exception:  # noqa: BLE001 -- one bad spec must not brick the daemon
+            logger.error("router.registration: failed to register spec %r", spec.name, exc_info=True)
+    return registered
 
 
 def registered_spec_names() -> set[str]:

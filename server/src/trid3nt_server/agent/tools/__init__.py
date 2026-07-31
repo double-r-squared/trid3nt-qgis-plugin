@@ -353,7 +353,9 @@ from .fetchers.hazard.fetch_firms_active_fire import fetch_firms_active_fire  # 
 # wave-2 -- twins DELETED, now spec-driven (source.yaml + router), registered by
 # _register_router_specs() below.
 from .fetchers.hazard.fetch_openfema_disasters import fetch_openfema_disasters  # noqa: E402,F401
-from .fetchers.hazard.fetch_tsunami_events import fetch_tsunami_events  # noqa: E402,F401
+# fetch_tsunami_events: data-router fold phase-2 wave-10 (ADR 0056, tier-3 hooks) --
+# twin DELETED, now spec-driven (source.yaml + ncei_tsunami build_request/parse_response
+# hooks + paging), registered by _register_router_specs() below.
 from .fetchers.hazard.fetch_usace_dams import fetch_usace_dams  # noqa: E402,F401
 # fetch_usace_levees: data-router fold phase-2 wave-6 (ADR 0052) -- twin DELETED,
 # now spec-driven (source.yaml + endpoint_by_param sub-layer routing +
@@ -361,8 +363,12 @@ from .fetchers.hazard.fetch_usace_dams import fetch_usace_dams  # noqa: E402,F40
 # fetch_usfs_canopy_fuels: data-router fold phase-2 wave-7 (ADR 0053) -- twin
 # DELETED, now spec-driven (source.yaml + imageserver_export mode), registered by
 # _register_router_specs() below.
-from .fetchers.hazard.fetch_usgs_earthquakes import fetch_usgs_earthquakes  # noqa: E402,F401
-from .fetchers.hazard.fetch_usgs_volcano_alerts import fetch_usgs_volcano_alerts  # noqa: E402,F401
+# fetch_usgs_earthquakes: data-router fold phase-2 wave-10 (ADR 0056, tier-3 hooks) --
+# twin DELETED, now spec-driven (source.yaml + usgs_earthquakes build_request/parse_response
+# hooks, single-GET FDSN GeoJSON), registered by _register_router_specs() below.
+# fetch_usgs_volcano_alerts: data-router fold phase-2 wave-10 (ADR 0056, tier-3 hooks) --
+# twin DELETED, now spec-driven (source.yaml + usgs_volcano build_request/parse_response
+# hooks, multi-GET HANS join), registered by _register_router_specs() below.
 from .fetchers.hazard.fetch_wfigs_incident import fetch_wfigs_incident  # noqa: E402,F401
 
 # -- fetchers/soil --

@@ -1,0 +1,133 @@
+# Router source spec (data-router fold, phase-2 wave-10 tier-3 hooks, ADR 0056).
+# Twin: fetch_usgs_earthquakes.py -- FOLDED via hooks (single-GET FDSN GeoJSON point API).
+# Bespoke steps -> named PURE hooks: usgs_earthquakes.build_request (FDSN window+URL),
+# usgs_earthquakes.parse_response (GeoJSON decode, metadata.count cap, honest NO_EVENTS).
+schema_version: v1
+name: fetch_usgs_earthquakes
+source_class: usgs_earthquakes
+shape: vector-fgb
+supports_global_query: true
+empty_error_suffix: NO_EVENTS
+endpoints:
+  data:
+    url: https://earthquake.usgs.gov/fdsnws/event/1/query
+auth:
+  mode: none
+  user_agent: trid3nt/0.1 (Hazard Modeling Agent; https://github.com/double-r-squared/trid3nt-qgis-plugin;
+    agent@trid3nt.dev)
+params:
+  bbox:
+    type: bbox
+    required: false
+    schema_optional: true
+    quantize: round_6dp
+  start_date:
+    type: str
+    required: false
+    schema_optional: true
+  end_date:
+    type: str
+    required: false
+    schema_optional: true
+  min_magnitude:
+    type: float
+    required: false
+    default: 2.5
+hooks:
+  build_request: usgs_earthquakes.build_request
+  parse_response: usgs_earthquakes.parse_response
+ingest:
+  properties:
+  - id
+  - mag
+  - depth_km
+  - mag_type
+  - place
+  - time
+  - updated
+  - url
+  - event_type
+  - status
+  - tsunami
+  - felt
+  - sig
+  - net
+normalize:
+  crs: EPSG:4326
+  units: magnitude / km
+output:
+  layer_type: vector
+  ext: fgb
+  role: primary
+  style_preset: earthquakes
+  bbox_from_features:
+    pad: 0.1
+cache:
+  ttl_class: dynamic-1h
+payload_estimate:
+  model: bbox_area
+  mb_per_sq_deg: 0.002
+  floor_mb: 0.001
+  ceil_mb: 5.0
+caveats:
+- OBSERVED USGS FDSN event catalog (not a probabilistic seismic-hazard model); a seismically quiet scope
+  -> honest USGS_EARTHQUAKES_NO_EVENTS, never an empty layer.
+docstring: "Fetch REAL, RECORDED USGS earthquakes as a point FlatGeobuf.\n\nRetrieves recorded seismic\
+  \ events from the USGS FDSN Event Web Service (the\nmachine API behind the USGS \"Latest Earthquakes\"\
+  \ map) inside a bbox and time\nwindow, above a minimum magnitude. Returns one Point feature per event\
+  \ at\nthe epicenter, carrying the magnitude, depth, origin time, place\ndescription, and the USGS event-page\
+  \ URL. This is the canonical OBSERVED\nseismic-event source — the network/instrument record of what\
+  \ actually\nhappened — NOT a probabilistic seismic-hazard model.\n\nWhen to use:\n    - The user asks\
+  \ for recent / historical earthquakes, \"seismic events\",\n      \"quakes\", \"tremors\", or \"where\
+  \ did earthquakes happen\"\n      (e.g. \"show me the earthquakes in California this month\", \"recent\n\
+  \      quakes near Anchorage\", \"magnitude 5+ earthquakes in the last year\",\n      \"did anything\
+  \ shake near Ridgecrest last week\").\n    - You need actual recorded epicenters, magnitudes, and depths\
+  \ — the real\n      event catalog — to map, count, or annotate.\n    - Providing seismic context for\
+  \ a damage / shaking / infrastructure\n      discussion (\"what earthquakes preceded this?\").\n\nWhen\
+  \ NOT to use:\n    - PROBABILISTIC seismic HAZARD (PGA / shaking with a return period, the\n      USGS\
+  \ National Seismic Hazard Model) — that is a hazard surface, not an\n      event catalog. (If a probabilistic-hazard\
+  \ tool exists, use it; this\n      tool returns the OBSERVED event record only.)\n    - ShakeMap / ground-motion\
+  \ FOOTPRINT rasters for a single event — this\n      tool returns epicenter POINTS, not the modeled\
+  \ shaking field.\n    - Volcano / landslide / tsunami inundation — use the dedicated hazard\n      tools;\
+  \ ``tsunami`` here is only a per-event boolean flag from USGS.\n    - Faults / fault traces as polylines\
+  \ — this tool returns events, not the\n      fault geometry.\n\nParameters:\n    bbox: Optional ``(west,\
+  \ south, east, north)`` in EPSG:4326 to restrict\n        to an area of interest (a region, state, or\
+  \ metro). When omitted the\n        query is GLOBAL (``supports_global_query=True``) — bounded by the\n\
+  \        magnitude floor, the time window, and the 20000-event response cap.\n        Derive a bbox\
+  \ from a place name with ``geocode_location`` or\n        ``fetch_administrative_boundaries`` first\
+  \ for area-scoped asks.\n    start_date / end_date: Optional ISO ``YYYY-MM-DD`` (or full\n        ``YYYY-MM-DDTHH:MM:SS``)\
+  \ window bounds, UTC. When BOTH are omitted\n        the tool defaults to the most-recent ~30 days.\
+  \ When only one is\n        given the other is derived (a 30-day span anchored to the supplied\n   \
+  \     bound). The window is capped at 366 days; a longer span should be\n        chunked. Example: ``start_date=\"\
+  2019-07-04\"``,\n        ``end_date=\"2019-07-07\"`` for the Ridgecrest sequence.\n    min_magnitude:\
+  \ Minimum magnitude floor (default ``2.5`` — the threshold\n        below which events are mostly micro-quakes\
+  \ / noise). Pass a lower\n        value (e.g. ``0`` or ``1``) for a dense local micro-seismicity map,\n\
+  \        or a higher value (e.g. ``4.5`` or ``6``) for only the significant\n        events. Pass ``None``\
+  \ for no floor (all catalogued events).\n\nReturns:\n    ``LayerURI`` pointing at a FlatGeobuf in the\
+  \ cache bucket. Geometry:\n    Point at each epicenter, EPSG:4326. ``layer_type=\"vector\"``,\n    ``role=\"\
+  primary\"``, ``style_preset=\"earthquakes\"`` (the client sizes the\n    marker by ``mag`` and colors\
+  \ by ``depth_km``), ``units=\"magnitude / km\"``.\n    ``bbox`` is set to the events' extent so the\
+  \ camera auto-zooms.\n    Properties per event:\n        - ``id`` (USGS event id, e.g. ``\"nc75382006\"\
+  ``),\n        - ``mag`` (magnitude; null if not assigned),\n        - ``depth_km`` (focal depth, km;\
+  \ null if absent),\n        - ``mag_type`` (magnitude type: ``\"md\"``, ``\"ml\"``, ``\"mw\"``, ...),\n\
+  \        - ``place`` (human description, e.g. \"5 km SW of Ridgemark, CA\"),\n        - ``time`` (origin\
+  \ time, ISO-8601 UTC),\n        - ``updated`` (last-update time, ISO-8601 UTC),\n        - ``url`` (USGS\
+  \ event page),\n        - ``event_type`` (usually \"earthquake\"; can be \"quarry blast\", ...),\n \
+  \       - ``status`` (\"automatic\" | \"reviewed\"),\n        - ``tsunami`` (0/1 USGS tsunami flag),\n\
+  \        - ``felt`` (number of \"Did You Feel It?\" reports; null if none),\n        - ``sig`` (USGS\
+  \ significance score),\n        - ``net`` (contributing network code, e.g. \"nc\", \"ci\", \"us\").\n\
+  \nHonest-empty path (data-source fallback norm — primary -> honest typed\nerror): the FDSN service returns\
+  \ an HTTP 200 FeatureCollection with ZERO\nfeatures for a seismically quiet area/window. That is a legitimate\
+  \ \"no\nearthquakes\" answer, not a success — so ``EarthquakesNoEventsError`` is\nraised (never an empty\
+  \ success-shaped layer).\n\nCache: ``ttl_class=\"dynamic-1h\"``, ``source_class=\"usgs_earthquakes\"\
+  ``.\nCache key is SHA-256 of ``(bbox-rounded-6dp, starttime, endtime,\nmin_magnitude)``, so identical-scope\
+  \ calls within the hour reuse the FGB.\n\nCross-tool dependencies:\n    - Composes WITH: ``publish_layer``\
+  \ (map overlay), ``geocode_location``\n      (derive a bbox from a place name BEFORE this call),\n \
+  \     ``fetch_administrative_boundaries`` (state/county framing),\n      ``compute_zonal_statistics``\
+  \ (count events inside a polygon).\n    - Upstream data source: USGS FDSN Event Web Service\n      (earthquake.usgs.gov/fdsnws/event/1/query).\n\
+  \nErrors:\n    - ``EarthquakesInputError``: bad bbox / bad date / reversed window /\n      out-of-range\
+  \ magnitude (retryable=False).\n    - ``EarthquakesResultTooLargeError``: the query exceeds the FDSN\n\
+  \      20000-event response cap — narrow bbox / shorten window / raise\n      min_magnitude (retryable=False).\n\
+  \    - ``EarthquakesUpstreamError``: USGS network failure / HTTP 5xx / bad\n      body (retryable=True).\n\
+  \    - ``EarthquakesNoEventsError``: no events matched the scope\n      (retryable=False).\n\n\nTier-1\
+  \ free. No API key. ``supports_global_query=True``."

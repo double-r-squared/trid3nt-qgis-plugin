@@ -1,0 +1,116 @@
+# Router source spec (data-router fold, phase-2 wave-10 tier-3 hooks, ADR 0056).
+# Twin: fetch_usgs_volcano_alerts.py -- FOLDED via hooks (MULTI-GET HANS join).
+# usgs_volcano.build_request returns two static endpoints; usgs_volcano.parse_response
+# inner-joins alert+coord lists on vnum, filters to bbox, honest NO_VOLCANOES.
+schema_version: v1
+name: fetch_usgs_volcano_alerts
+source_class: usgs_volcano_alerts
+shape: vector-fgb
+supports_global_query: true
+empty_error_suffix: NO_VOLCANOES
+endpoints:
+  monitored:
+    url: https://volcanoes.usgs.gov/hans-public/api/volcano/getMonitoredVolcanoes
+  us_volcanoes:
+    url: https://volcanoes.usgs.gov/hans-public/api/volcano/getUSVolcanoes
+auth:
+  mode: none
+  user_agent: trid3nt/0.1 (Hazard Modeling Agent; https://github.com/double-r-squared/trid3nt-qgis-plugin;
+    agent@trid3nt.dev)
+params:
+  bbox:
+    type: bbox
+    required: false
+    schema_optional: true
+    quantize: round_6dp
+hooks:
+  build_request: usgs_volcano.build_request
+  parse_response: usgs_volcano.parse_response
+ingest:
+  properties:
+  - vnum
+  - volcano_name
+  - alert_level
+  - color_code
+  - alert_rank
+  - color_rank
+  - elevation_m
+  - region
+  - observatory
+  - sent_utc
+  - notice_url
+  - volcano_url
+  - nvews_threat
+normalize:
+  crs: EPSG:4326
+  units: alert level
+output:
+  layer_type: vector
+  ext: fgb
+  role: primary
+  style_preset: volcano_alerts
+  bbox_from_features:
+    pad: 0.25
+cache:
+  ttl_class: dynamic-1h
+payload_estimate:
+  model: bbox_area
+  mb_per_sq_deg: 0.002
+  floor_mb: 0.001
+  ceil_mb: 5.0
+caveats:
+- OBSERVED current USGS HANS volcano alert levels (not a probabilistic eruption-hazard model); a bbox
+  with no monitored volcano -> honest USGS_VOLCANO_ALERTS_NO_VOLCANOES, never an empty layer.
+docstring: "Fetch the CURRENT USGS volcano alert levels as a point FlatGeobuf.\n\nUse this (not fetch_usgs_earthquakes,\
+  \ and go past geocode_location) when you want CURRENT USGS VOLCANO alert levels.\n\nRetrieves the current\
+  \ volcanic-alert status of every monitored US volcano\nfrom the USGS Volcano Hazards Program HANS public\
+  \ API and returns one Point\nfeature per volcano at its summit, carrying the four-stage Volcano Alert\n\
+  Level (``NORMAL`` / ``ADVISORY`` / ``WATCH`` / ``WARNING``) and the ICAO\nAviation Color Code (``GREEN``\
+  \ / ``YELLOW`` / ``ORANGE`` / ``RED``), plus\nsummit elevation, region, and the responsible observatory.\
+  \ This is the\ncanonical OBSERVED volcanic-unrest status — each observatory's current call\non its volcanoes\
+  \ — NOT a probabilistic eruption-hazard model.\n\nWhen to use:\n    - The user asks for the current\
+  \ volcano alert status / \"which volcanoes\n      are at watch/warning\" / \"is any volcano erupting\"\
+  \ / \"volcano alert\n      levels\" / \"aviation color codes\" (e.g. \"show me volcanoes on alert\"\
+  ,\n      \"what is Kilauea's alert level\", \"any Alaska volcanoes acting up\",\n      \"map the Cascade\
+  \ volcanoes and their status\").\n    - You need the real current alert state — the observatory record\
+  \ — to\n      map, count, or annotate.\n    - Providing volcanic context for an ashfall / aviation /\
+  \ hazard\n      discussion (\"which volcanoes are currently elevated?\").\n\nWhen NOT to use:\n    -\
+  \ PROBABILISTIC eruption HAZARD or ashfall-dispersion modeling — this\n      tool returns the current\
+  \ alert STATUS, not a modeled hazard surface.\n    - Historical eruption catalogs / Holocene eruption\
+  \ records — this is the\n      CURRENT alert snapshot only.\n    - Earthquakes (use ``fetch_usgs_earthquakes``);\
+  \ a volcano's seismicity\n      is not returned here, only its summary alert level.\n    - Non-US volcanoes\
+  \ — the USGS monitored list covers the US volcano-\n      observatory network (Alaska/Aleutians, Hawaii,\
+  \ Cascades, western\n      CONUS, and a few Pacific/Mariana islands).\n\nParameters:\n    bbox: Optional\
+  \ ``(west, south, east, north)`` in EPSG:4326 to restrict\n        to an area of interest (a region\
+  \ or state). When omitted the query\n        is a GLOBAL all-US snapshot (``supports_global_query=True``)\
+  \ — the\n        monitored list is tiny/bounded (~70 volcanoes). Filtering is done\n        in-process\
+  \ (HANS has no server-side spatial query). Derive a bbox\n        from a place name with ``geocode_location``\
+  \ or\n        ``fetch_administrative_boundaries`` first for area-scoped asks.\n        Example: ``bbox=(-156.5,\
+  \ 18.8, -154.5, 20.5)`` for the Hawaiian\n        volcanoes (Kilauea, Mauna Loa, Mauna Kea, Hualalai).\n\
+  \nReturns:\n    ``LayerURI`` pointing at a FlatGeobuf in the cache bucket. Geometry:\n    Point at each\
+  \ summit, EPSG:4326. ``layer_type=\"vector\"``,\n    ``role=\"primary\"``, ``style_preset=\"volcano_alerts\"\
+  `` (the client colors\n    the marker by ``color_code`` / ``alert_level``), ``units=\"alert level\"\
+  ``.\n    ``bbox`` is set to the volcanoes' extent so the camera auto-zooms.\n    Properties per volcano:\n\
+  \        - ``vnum`` (Smithsonian GVP volcano number, e.g. ``\"332010\"``),\n        - ``volcano_name``\
+  \ (e.g. \"Kilauea\"),\n        - ``alert_level`` (\"NORMAL\" | \"ADVISORY\" | \"WATCH\" | \"WARNING\"\
+  ;\n          null if unassigned),\n        - ``color_code`` (\"GREEN\" | \"YELLOW\" | \"ORANGE\" | \"\
+  RED\"; null if\n          unassigned),\n        - ``alert_rank`` (0=NORMAL .. 3=WARNING; -1 if unknown\
+  \ — for styling),\n        - ``color_rank`` (0=GREEN .. 3=RED; -1 if unknown — for styling),\n     \
+  \   - ``elevation_m`` (summit elevation, meters; null if absent),\n        - ``region`` (e.g. \"Alaska\
+  \ - Aleutians\", \"Hawaii\", \"Cascade Range\"),\n        - ``observatory`` (responsible observatory\
+  \ abbreviation:\n          \"avo\" | \"cvo\" | \"hvo\" | \"yvo\" | \"vdap\"),\n        - ``sent_utc``\
+  \ (timestamp of the current notice, UTC),\n        - ``notice_url`` (the HANS notice page),\n      \
+  \  - ``volcano_url`` (the observatory volcano-info page),\n        - ``nvews_threat`` (National Volcano\
+  \ Early Warning System threat\n          class, e.g. \"Very High Threat\", \"Moderate Threat\").\n\n\
+  Honest-empty path (data-source fallback norm — primary -> honest typed\nerror): a bbox that contains\
+  \ no monitored US volcano is a legitimate \"no\nvolcanoes here\" answer, not a success — so ``VolcanoAlertsNoVolcanoesError``\n\
+  is raised (never an empty success-shaped layer).\n\nCache: ``ttl_class=\"dynamic-1h\"``, ``source_class=\"\
+  usgs_volcano_alerts\"``.\nCache key is SHA-256 of the bbox (rounded 6dp) or ``null`` for global, so\n\
+  identical-scope calls within the hour reuse the FGB.\n\nCross-tool dependencies:\n    - Composes WITH:\
+  \ ``publish_layer`` (map overlay), ``geocode_location``\n      (derive a bbox from a place name BEFORE\
+  \ this call),\n      ``fetch_administrative_boundaries`` (state/region framing),\n      ``fetch_usgs_earthquakes``\
+  \ (volcano-related seismicity nearby).\n    - Upstream data source: USGS Volcano Hazards Program HANS\
+  \ public API\n      (volcanoes.usgs.gov/hans-public/api/volcano/...).\n\nErrors:\n    - ``VolcanoAlertsInputError``:\
+  \ bad bbox shape / out-of-range coordinates\n      (retryable=False).\n    - ``VolcanoAlertsUpstreamError``:\
+  \ USGS HANS network failure / HTTP error\n      / bad body (retryable=True).\n    - ``VolcanoAlertsNoVolcanoesError``:\
+  \ no monitored volcano matched the\n      scope (retryable=False).\n\n\nTier-1 free. No API key. ``supports_global_query=True``."

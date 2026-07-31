@@ -1,0 +1,100 @@
+"""Tier-3 hook contract (ADR 0056): the named, registered, PURE extension points.
+
+A source whose bespoke-ness is a single clean irreducible step the declarative
+param/ingest surface cannot express references a registered pure function by name
+in its ``source.yaml`` (``hooks.build_request`` / ``hooks.parse_response``). This
+package is that function set: a name -> callable table (:data:`HOOK_REGISTRY`), the
+:func:`register_hook` decorator that fills it, and :func:`resolve_hook` /
+:func:`has_hook` the router + registration read.
+
+DOCTRINE (data-router-fold.md, tier-3): hooks are PURE, MINIMAL, REGISTERED,
+TESTED. Pure = no I/O (transport, caching, gates, stamps, and the typed-error
+FACTORY machinery stay router-owned; a hook only computes and MAY call a shared
+``router_*_error`` factory to raise a source-stamped typed error). Minimal = a
+hook point exists only because a real source needs it. Registered = referenced by
+a name string a spec load validates. Tested = each hook module carries its own
+unit tests.
+
+Hook signatures:
+- ``build_request(spec, params) -> list[RequestPlan]`` -- source-specific
+  request construction + bespoke pre-fetch input validation. 1..N plans.
+- ``parse_response(spec, params, bodies: list[bytes]) -> list[dict]`` -- decode
+  the source payload(s) into GeoJSON-ish point features; raise the honest-empty /
+  too-large / bad-body typed errors.
+"""
+
+from __future__ import annotations
+
+import logging
+from dataclasses import dataclass, field
+from typing import Any, Callable
+
+logger = logging.getLogger("trid3nt_server.agent.tools.fetchers._router.hooks")
+
+__all__ = [
+    "RequestPlan",
+    "HOOK_REGISTRY",
+    "register_hook",
+    "resolve_hook",
+    "has_hook",
+    "HookResolutionError",
+]
+
+
+@dataclass(frozen=True)
+class RequestPlan:
+    """One request the router transport executes on a ``build_request`` hook's behalf.
+
+    PURE data (no socket): the hook decides the URL / query params / headers; the
+    router owns the actual GET, its retry authority, and typed transport errors.
+    """
+
+    url: str
+    params: dict[str, Any] | None = None
+    headers: dict[str, str] = field(default_factory=dict)
+
+
+class HookResolutionError(ValueError):
+    """A spec referenced a ``hooks.*`` name absent from :data:`HOOK_REGISTRY`."""
+
+
+#: name -> pure callable. Filled by :func:`register_hook` at hook-module import.
+HOOK_REGISTRY: dict[str, Callable[..., Any]] = {}
+
+
+def register_hook(name: str) -> Callable[[Callable[..., Any]], Callable[..., Any]]:
+    """Register a pure hook under ``name`` (``<source_key>.<point>``).
+
+    A duplicate name is a defect (two hooks would answer one spec reference), so
+    it raises rather than silently last-wins.
+    """
+
+    def _wrap(fn: Callable[..., Any]) -> Callable[..., Any]:
+        if name in HOOK_REGISTRY and HOOK_REGISTRY[name] is not fn:
+            raise HookResolutionError(f"duplicate hook name {name!r}")
+        HOOK_REGISTRY[name] = fn
+        return fn
+
+    return _wrap
+
+
+def resolve_hook(name: str) -> Callable[..., Any]:
+    """Return the registered hook for ``name`` or raise :class:`HookResolutionError`."""
+    fn = HOOK_REGISTRY.get(name)
+    if fn is None:
+        raise HookResolutionError(
+            f"no hook registered under {name!r}; known: {sorted(HOOK_REGISTRY)}"
+        )
+    return fn
+
+
+def has_hook(name: str) -> bool:
+    """True iff ``name`` resolves in :data:`HOOK_REGISTRY`."""
+    return name in HOOK_REGISTRY
+
+
+# Import the hook modules so their ``@register_hook`` decorators populate the
+# registry at package import (registration validates names against it at load).
+from . import usgs_earthquakes  # noqa: E402,F401
+from . import ncei_tsunami  # noqa: E402,F401
+from . import usgs_volcano  # noqa: E402,F401

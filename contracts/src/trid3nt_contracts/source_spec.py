@@ -48,6 +48,7 @@ __all__ = [
     "OutputSpec",
     "CacheSpec",
     "PayloadEstimateSpec",
+    "HookSpec",
     "SourceSpec",
 ]
 
@@ -218,6 +219,15 @@ class OutputSpec(GraceModel):
     #: (census/coops/hifld/esri set it); gridmet's twin omits it, so its spec
     #: sets ``emit_bbox: false`` to stay byte-identical (VERDICT round-2 tell).
     emit_bbox: bool = True
+    #: Stamp ``LayerURI.bbox`` from the EXTENT of the emitted vector features
+    #: rather than the request bbox (tier-3 hook wave, ADR 0056). A dict
+    #: ``{pad: <deg>}`` -- the point-event fetchers (earthquakes / tsunami /
+    #: volcano) auto-zoom the camera to the events' bounds, padding a degenerate
+    #: single-point axis by ``pad`` degrees. The router reads the extent back from
+    #: the produced FGB (available on both cache hit + miss), so the stamp is
+    #: consistent regardless of the cache path. Default (None) = no override
+    #: (strict no-op for every prior spec; ``emit_bbox`` governs the bbox).
+    bbox_from_features: dict[str, Any] | None = None
 
 
 class CacheSpec(GraceModel):
@@ -253,6 +263,46 @@ class PayloadEstimateSpec(GraceModel):
     # tiled
     mb_per_tile: float | None = None
     tile_deg2: float | None = None
+
+
+class HookSpec(GraceModel):
+    """Named extension points for the ONE irreducible per-source step (ADR 0056).
+
+    The tier-3 hook contract: a source whose bespoke-ness is a single clean step
+    the declarative modes cannot express references a REGISTERED PURE FUNCTION by
+    name here, and the router calls it at that point. Everything else -- transport,
+    retry, caching, gates, payload estimate, LayerURI, typed-error machinery --
+    stays router-owned; a hook only computes (it performs no I/O).
+
+    The set is MINIMAL, derived from the wave-10 evidence (5-6 bespoke fetchers
+    read): the request-construction step and the payload-decode step are the two
+    that the declarative param/ingest surface genuinely cannot carry for a
+    single-GET / multi-GET / paged JSON point-event API. A post-process point was
+    evaluated and NOT added -- the only observed post-serialize need (stamp the
+    camera bbox from the feature extent) is declarative via
+    ``output.bbox_from_features``, so a post_process hook would be speculative
+    infra. A future wave adds a field here only when a real source needs it.
+
+    Hook name convention: ``<source_key>.<point>`` (e.g.
+    ``usgs_earthquakes.build_request``). ``registration.register_spec`` validates
+    each declared name resolves in ``_router.hooks.HOOK_REGISTRY`` at load.
+    """
+
+    #: ``(spec, params) -> list[RequestPlan]``. Constructs the source-specific
+    #: request(s) -- URL + query params + headers + any bespoke pre-fetch input
+    #: validation the declarative param gates cannot express (FDSN window
+    #: resolution + 366-day cap; NCEI year-window). Returns 1..N plans (N=1 single
+    #: GET, N>1 a static multi-endpoint set the parse hook joins). For a paged
+    #: source the router calls it once per page, injecting the page param.
+    build_request: str | None = None
+
+    #: ``(spec, params, bodies: list[bytes]) -> list[GeoJSON-feature dict]``.
+    #: Decodes the source-specific payload(s) into GeoJSON-ish point features the
+    #: shared ``vector_fgb`` serializer writes. Raises the router's typed
+    #: EMPTY / RESULT_TOO_LARGE / UPSTREAM errors (source-stamped via the shared
+    #: factories) on the honest-empty / cap / bad-body paths -- the twin's
+    #: no-events / too-large gate lives here, the one irreducible decode step.
+    parse_response: str | None = None
 
 
 # --------------------------------------------------------------------------- #
@@ -318,6 +368,9 @@ class SourceSpec(GraceModel):
 
     # --- ingestion (shape-specific; flexible dict keyed by shape, sec 1.2) ---
     ingest: dict[str, Any] = Field(default_factory=dict)
+
+    # --- tier-3 hooks: named pure fns for the ONE irreducible step (ADR 0056) ---
+    hooks: HookSpec | None = None
 
     # --- named transform: two-source JOIN-on-key (census, sec 2.5) ---
     join: dict[str, Any] | None = None
