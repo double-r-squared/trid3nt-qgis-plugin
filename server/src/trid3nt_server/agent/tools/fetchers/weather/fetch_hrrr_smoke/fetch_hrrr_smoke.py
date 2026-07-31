@@ -656,15 +656,15 @@ def fetch_hrrr_smoke(
         carrying the requested variable's forecast slice, EPSG:4326,
         float32, NaN nodata. ``layer_type="raster"``, ``role="primary"``,
         ``units`` per the variable (``"kg m-3"``, ``"kg m-2"``, or ``"1"``).
-        Downstream consumers (``publish_layer``, ``spatial_query``,
+        Downstream consumers (``publish_layer``, the code_exec playground,
         ``clip_raster_to_polygon``) read the COG and treat it as a
         single-band scalar field.
 
     Cross-tool dependencies:
         - Consumes nothing (Tier-1 substrate fetcher; no upstream tool).
         - Feeds: ``publish_layer`` (visualization on the web map),
-          ``spatial_query`` (aggregate to admin boundaries or
-          county / ZIP code area-weighted exposure),
+          AOI zonal stats in the code_exec playground (aggregate to admin
+          boundaries or county / ZIP code area-weighted exposure),
           ``clip_raster_to_polygon`` (further sub-clip to fire footprint
           or admin polygon), ``clip_raster_to_polygon`` (bbox or polygon sub-clip).
         - Composes with: ``fetch_nifc_fire_perimeters`` (active wildfire

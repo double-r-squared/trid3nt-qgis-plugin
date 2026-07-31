@@ -25,6 +25,7 @@ from trid3nt_contracts.source_spec import SourceSpec
 
 from ..errors import router_upstream_error
 from ..shape_classifier import classify_response
+from ..transport import TransportError, get_bytes, get_client
 
 logger = logging.getLogger(
     "trid3nt_server.agent.tools.fetchers._router.executors.vector_fgb"
@@ -571,27 +572,27 @@ def build_query_params(
 def _fetch_one_page(spec: SourceSpec, url: str, params: dict[str, str]) -> list[dict[str, Any]]:
     """GET one page of an ArcGIS query; return GeoJSON features. Network.
 
+    Routes through the shared transport (``..transport.get_bytes`` over the
+    pooled ``get_client()``) -- the ONE retry authority (429/5xx/timeout backoff
+    + Retry-After) instead of a bare per-call client. Any ``TransportError``
+    (typed >=400, or retry-exhaustion) is converted to the existing
+    ``router_upstream_error`` framing so callers see no shape change.
+
     Body-shape classification (JSON-parse / ArcGIS ``{"error": ...}`` envelope
     / not-a-JSON-object) runs through the shared ``classify_response`` (item 4
     of the observability/retention batch) -- same typed exception + same
     message wording as before the migration, just sourced from ONE shape
     classifier instead of ad hoc parsing here.
     """
-    import httpx
-
     ua = spec.auth.user_agent
     try:
-        with httpx.Client(timeout=60.0, follow_redirects=True) as client:
-            resp = client.get(url, params=params, headers={"User-Agent": ua})
-    except httpx.HTTPError as exc:
-        raise router_upstream_error(spec.error_code_prefix, f"request failed url={url}: {exc}")
-    if resp.status_code >= 400:
-        raise router_upstream_error(
-            spec.error_code_prefix,
-            f"HTTP {resp.status_code} url={url}: {resp.text[:500]!r}",
+        body, _ct, _final_url = get_bytes(
+            get_client(), url, headers={"User-Agent": ua}, params=params
         )
+    except TransportError as exc:
+        raise router_upstream_error(spec.error_code_prefix, f"request failed url={url}: {exc}")
 
-    verdict = classify_response(resp.text)
+    verdict = classify_response(body.decode("utf-8", "replace"))
     if verdict.kind == "unparseable":
         raise router_upstream_error(
             spec.error_code_prefix,

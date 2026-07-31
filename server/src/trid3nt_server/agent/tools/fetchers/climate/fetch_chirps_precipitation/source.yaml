@@ -126,8 +126,8 @@ docstring: |-
   **Cross-tool dependencies:**
 
   - Pair with ``fetch_us_drought_monitor`` (CONUS drought) for a global vs
-    CONUS drought view, or ``spatial_query`` for per-admin-unit or per-field
-    rainfall totals.
+    CONUS drought view, or summarize per-admin-unit or per-field rainfall
+    totals in the code_exec playground (zonal stats over a polygon).
   - Alternative for CONUS radar precip: ``fetch_mrms_qpe``. Alternative for
     global hourly reanalysis precip: ``fetch_era5_reanalysis`` (CDS key).
 

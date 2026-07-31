@@ -504,8 +504,9 @@ def fetch_ghsl_population(
     **Cross-tool dependencies:**
     - Downstream of: ``geocode_location`` (provides bbox), ``fetch_dem``
       (co-registered for elevation-weighted exposure).
-    - Upstream of: ``spatial_query`` (sum population within a polygon),
-      Pelicun impact post-processor, any population-at-risk workflow step.
+    - Upstream of: zonal population-within-a-polygon sums composed in the
+      code_exec playground, Pelicun impact post-processor, any
+      population-at-risk workflow step.
     - Complements: ``fetch_hrsl_population`` (Meta HRSL ~30 m global) and
       ``fetch_population`` (WorldPop / US Census) -- different methodologies,
       same persons/cell semantics.

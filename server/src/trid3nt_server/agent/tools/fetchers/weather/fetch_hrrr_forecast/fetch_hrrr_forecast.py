@@ -742,15 +742,15 @@ def fetch_hrrr_forecast(
         carrying the requested variable's forecast slice, EPSG:4326,
         float32, NaN nodata. ``layer_type="raster"``, ``role="primary"``,
         ``units`` per the variable (``"K"``, ``"m s-1"``, ``"kg m-2"``).
-        Downstream consumers (``publish_layer``, ``spatial_query``,
+        Downstream consumers (``publish_layer``, the code_exec playground,
         SFINCS forcing composers) read the COG and treat it as a single-band
         scalar field.
 
     Cross-tool dependencies:
         - Consumes nothing (Tier-1 substrate fetcher; no upstream tool).
         - Feeds: ``publish_layer`` (visualization on the web map),
-          ``spatial_query`` (aggregate to admin boundaries),
-          ``run_sfincs`` and downstream SFINCS composers (precip
+          AOI zonal stats in the code_exec playground (aggregate to admin
+          boundaries), ``run_sfincs`` and downstream SFINCS composers (precip
           / wind forcing), ``clip_raster_to_polygon`` (further sub-clip),
           the code_exec playground (combine with MRMS, ERA5,
           NWS alerts for compound claims).

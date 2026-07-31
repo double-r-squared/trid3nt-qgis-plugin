@@ -1,37 +1,26 @@
-"""Atomic tool ``open_case_in_qgis`` -- local-first QGIS bridge (v1).
+"""Case-layer hydration for the TRID3NT QGIS plugin -- two seams.
 
-Given a ``case_id`` (or an explicit ``layers`` list), export the case's layers
-into a self-contained folder a user can open directly in desktop QGIS 3.x:
+**PRIMARY path (``build_case_layers_manifest``):** serve a case's persisted
+layer registry as a lightweight manifest (each layer's ``uri`` / ``layer_type``
+/ ``style_preset`` / ``legend`` / ``name`` / ``wms_url``). The plugin adds each
+layer straight from its store URI using the SAME by-URI path live-published
+layers use -- no server-side materialization. This is how a case is opened in
+QGIS on the local single-user stack (MinIO reachable).
 
-- ``export.gpkg`` -- ONE GeoPackage holding every vector layer (EPSG:4326),
-  layer name = sanitized case-layer name.
+**REMOTE-mode fallback (``hydrate_case_layers``):** materialize a case's layers
+into a self-contained local folder for a client that CANNOT reach the object
+store directly (the remote agent surface, until presigned/proxied store access
+lands). Writes:
+
+- ``export.gpkg`` -- ONE GeoPackage holding every vector layer (EPSG:4326).
 - ``<name>.tif``  -- a downloaded local copy of every raster (COG) layer.
-- ``project.qgz`` -- a QGIS 3.x project (a zip holding ``project.qgs`` XML,
-  hand-built with ``xml.etree`` -- NO PyQGIS import) whose layer tree mirrors
-  the case's layer order, whose project CRS + initial map extent come from the
-  case AOI (or the union of layer bounds), and whose rasters carry a
-  singleband-pseudocolor renderer translated from our TiTiler style params.
+- ``<name>.qml``  -- a QGIS layer-style sidecar per raster (the TiTiler-derived
+  pseudocolor ramp) so a standalone-added COG renders the web colormap instead
+  of default grayscale.
 
-**Styling choice (documented per spec):** raster styling is embedded INLINE in
-the ``.qgs`` ``<maplayer><pipe><rasterrenderer>`` node AND written as a
-sidecar ``<name>.qml`` next to every exported GeoTIFF. Inside a QGIS project
-the project XML is the authoritative style source, so inline embedding is the
-reliable single-file path for "open the .qgz and it looks right"; the sidecar
-``.qml`` exists for the OTHER consumer -- the TRID3NT QGIS plugin's
-"open case in QGIS" flow adds the exported GeoTIFFs STANDALONE to the user's
-current project (it never opens the .qgz, which would replace their open
-project), so without a per-raster style file those layers rendered default
-grayscale (near-black flood frames). Both forms are built from the SAME
-``_raster_pipe_element`` translation, so the .qgz and the sidecars can never
-disagree. Sidecar paths are returned as ``qml_paths`` in the result JSON. The
-translation samples 5 interpolated stops from the matplotlib colormap named by
-``colormap_name`` over the ``rescale=<vmin>,<vmax>`` range (falling back to a
-viridis 0-1 ramp when params are absent or the colormap is unknown; colormap
-lookup is CASE-INSENSITIVE because TiTiler style params carry lowercase names
-like ``ylgnbu`` while matplotlib registers ``YlGnBu``). Ramps whose minimum is
-exactly 0 (flood/depth-style) additionally get a raster-transparency entry
-making 0-value cells fully transparent -- 0 depth means dry land, and nodata
-stays transparent via the default empty ``nodataColor``.
+NO QGIS project (``.qgz`` / ``.qgs``) is produced -- standalone project export
+is covered by native QGIS. The mesh siblings (MDAL) ride the manifest as
+``s3_uri`` references; the caller downloads them itself.
 
 **Local-first URI handling:** a layer ``uri`` may be a plain local path, an
 ``s3://`` object (boto3; honors ``AWS_ENDPOINT_URL_S3`` / ``AWS_ENDPOINT_URL``
@@ -41,17 +30,17 @@ underlying COG ``url=`` query param first (mirrors
 ``compute_layer_bounds._resolve_layer_to_local_path``). Vector layers may also
 carry ``inline_geojson`` instead of a readable uri.
 
-**Honesty floor:** a single unreadable layer is a per-layer SKIP with a note
-in the returned ``skipped`` list, not a hard fail -- but a result with ZERO
-exported layers never reads ``status="ok"``; it raises
+**Honesty floor:** a single unreadable layer is a per-layer SKIP with a note in
+the returned ``skipped`` list, not a hard fail -- but a result with ZERO
+materialized layers never reads ``status="ok"``; it raises
 ``NoExportableLayersError`` (render-honesty invariant: an empty envelope must
 not claim success).
 
 **Cross-cutting invariants:**
 
-- **FR-DC-6:** ``cacheable=False`` / ``ttl_class="live-no-cache"`` -- the tool
+- **FR-DC-6:** ``cacheable=False`` / ``ttl_class="live-no-cache"`` -- hydration
   writes files to the local export dir (a side effect), so caching is wrong.
-- **FR-AS-11 (typed errors):** every failure raises an ``ExportCaseError``
+- **FR-AS-11 (typed errors):** every failure raises a ``HydrateCaseError``
   subclass with a SCREAMING_SNAKE_CASE ``error_code``.
 
 **Mesh artifacts (MDAL phase 1, additive):** every SFINCS flood-depth layer
@@ -61,27 +50,27 @@ runs-bucket ``s3://<bucket>/<run_id>/...`` prefix is checked for a sibling
 QGIS's MDAL provider opens it directly, no conversion). When found, one entry
 per DISTINCT ``run_id`` (a case's peak + per-frame flood layers all share the
 same run) is appended to the result's ``mesh`` list -- NEVER a locally-copied
-file (unlike the GeoTIFF/GeoPackage entries): ``s3_uri`` points straight at
-the runs-bucket object; the caller (the QGIS plugin) downloads it itself. CRS
+file (unlike the GeoTIFF/GeoPackage entries): ``s3_uri`` points straight at the
+runs-bucket object; the caller (the QGIS plugin) downloads it itself. CRS
 resolution reuses ``postprocess_flood._read_crs_from_dataset`` -- the SAME
-reader that CRS-tags the flood-depth COG -- read off the mesh file's own
-``crs`` data variable; there is no separate per-run manifest carrying a
-resolved UTM EPSG for SFINCS (unlike MODFLOW's ``model_crs`` handoff). A
-CRS-read failure still lists the mesh with ``crs_authid=None`` (honest
-degrade -- the plugin falls back to "set CRS manually"); a missing
-``sfincs_map.nc`` sibling (HeadObject miss) yields no entry at all.
+reader that CRS-tags the flood-depth COG -- read off the mesh file's own ``crs``
+data variable; there is no separate per-run manifest carrying a resolved UTM
+EPSG for SFINCS (unlike MODFLOW's ``model_crs`` handoff). A CRS-read failure
+still lists the mesh with ``crs_authid=None`` (honest degrade -- the plugin
+falls back to "set CRS manually"); a missing ``sfincs_map.nc`` sibling
+(HeadObject miss) yields no entry at all.
 
 **MDAL phase 2 (MODFLOW, additive).** The groundwater engine's plume layer
 (``style_preset == "continuous_plume_concentration"``, ``modflow_contaminant_plume`` /
 ``postprocess_modflow``) gets the SAME treatment against a sibling
-``<run_id>/modflow_mesh.nc`` -- but unlike SFINCS's native quadtree output,
-this file does not come from the solver; ``workflows/modflow_mesh.py`` BUILDS
-it (a CF-1.8/UGRID-1.0 2D mesh over the DIS grid, carrying time-varying head +
-concentration datasets) and uploads it as a run-level sibling of the plume
-COG. ``_MESH_SIBLING_BY_STYLE_PRESET`` maps a raster layer's ``style_preset``
-to its engine's mesh filename/format/display-name-prefix; discovery,
-dedup-by-run_id, and CRS resolution are format-agnostic and shared verbatim
-between engines -- adding a THIRD engine's mesh only needs a new map entry.
+``<run_id>/modflow_mesh.nc`` -- but unlike SFINCS's native quadtree output, this
+file does not come from the solver; ``workflows/modflow_mesh.py`` BUILDS it (a
+CF-1.8/UGRID-1.0 2D mesh over the DIS grid, carrying time-varying head +
+concentration datasets) and uploads it as a run-level sibling of the plume COG.
+``_MESH_SIBLING_BY_STYLE_PRESET`` maps a raster layer's ``style_preset`` to its
+engine's mesh filename/format/display-name-prefix; discovery, dedup-by-run_id,
+and CRS resolution are format-agnostic and shared verbatim between engines --
+adding a THIRD engine's mesh only needs a new map entry.
 """
 
 from __future__ import annotations
@@ -93,8 +82,6 @@ import math
 import os
 import re
 import tempfile
-import uuid
-import zipfile
 import xml.etree.ElementTree as ET
 from datetime import datetime, timezone
 from pathlib import Path
@@ -104,14 +91,15 @@ from urllib.parse import parse_qs, unquote, urlparse
 from trid3nt_contracts.tool_registry import AtomicToolMetadata
 
 __all__ = [
-    "open_case_in_qgis",
-    "ExportCaseError",
-    "ExportInputError",
+    "build_case_layers_manifest",
+    "hydrate_case_layers",
+    "HydrateCaseError",
+    "HydrateInputError",
     "CaseNotFoundError",
     "NoExportableLayersError",
 ]
 
-logger = logging.getLogger("trid3nt_server.agent.tools.meta.open_case_in_qgis.open_case_in_qgis")
+logger = logging.getLogger("trid3nt_server.cases.hydrate_case_layers")
 
 
 # --------------------------------------------------------------------------- #
@@ -119,11 +107,11 @@ logger = logging.getLogger("trid3nt_server.agent.tools.meta.open_case_in_qgis.op
 # --------------------------------------------------------------------------- #
 
 
-class ExportCaseError(RuntimeError):
-    """Base typed error for the QGIS export. ``error_code`` is
-    SCREAMING_SNAKE_CASE and surfaced in the function_response."""
+class HydrateCaseError(RuntimeError):
+    """Base typed error for case-layer hydration. ``error_code`` is
+    SCREAMING_SNAKE_CASE and surfaced in the route's 4xx body."""
 
-    error_code: str = "EXPORT_FAILED"
+    error_code: str = "HYDRATE_FAILED"
 
     def __init__(self, message: str, error_code: str | None = None) -> None:
         super().__init__(message)
@@ -131,21 +119,21 @@ class ExportCaseError(RuntimeError):
             self.error_code = error_code
 
 
-class ExportInputError(ExportCaseError):
+class HydrateInputError(HydrateCaseError):
     """Exactly one of ``case_id`` / ``layers`` must be provided."""
 
     error_code = "INVALID_INPUT"
 
 
-class CaseNotFoundError(ExportCaseError):
+class CaseNotFoundError(HydrateCaseError):
     """The case does not exist (or persistence is unreachable from here)."""
 
     error_code = "CASE_NOT_FOUND"
 
 
-class NoExportableLayersError(ExportCaseError):
+class NoExportableLayersError(HydrateCaseError):
     """The case/list has no layers, or every layer was skipped -- an empty
-    export never reads status=ok (honesty floor)."""
+    materialization never reads status=ok (honesty floor)."""
 
     error_code = "NO_EXPORTABLE_LAYERS"
 
@@ -154,8 +142,8 @@ class NoExportableLayersError(ExportCaseError):
 # Metadata -- writes local files (side effect) => not cacheable (FR-DC-6).
 # --------------------------------------------------------------------------- #
 
-_OPEN_CASE_IN_QGIS_METADATA = AtomicToolMetadata(
-    name="open_case_in_qgis",
+_HYDRATE_CASE_LAYERS_METADATA = AtomicToolMetadata(
+    name="hydrate_case_layers",
     ttl_class="live-no-cache",
     source_class=None,
     cacheable=False,
@@ -163,15 +151,6 @@ _OPEN_CASE_IN_QGIS_METADATA = AtomicToolMetadata(
 
 _RASTER_EXTENSIONS = (".tif", ".tiff", ".img", ".vrt", ".nc")
 _VECTOR_EXTENSIONS = (".fgb", ".geojson", ".json", ".gpkg", ".shp", ".gml", ".kml", ".parquet", ".geoparquet")
-
-_WGS84_WKT = (
-    'GEOGCRS["WGS 84",DATUM["World Geodetic System 1984",'
-    'ELLIPSOID["WGS 84",6378137,298.257223563,LENGTHUNIT["metre",1]]],'
-    'PRIMEM["Greenwich",0,ANGLEUNIT["degree",0.0174532925199433]],'
-    'CS[ellipsoidal,2],AXIS["geodetic latitude (Lat)",north],'
-    'AXIS["geodetic longitude (Lon)",east],'
-    'ANGLEUNIT["degree",0.0174532925199433],ID["EPSG",4326]]'
-)
 
 
 # --------------------------------------------------------------------------- #
@@ -218,10 +197,10 @@ def _unwrap_tile_template(uri: str) -> str:
 def _read_uri_bytes(uri: str) -> bytes:
     """Read raw bytes for a local path / ``s3://`` / ``http(s)://`` uri.
 
-    Local-first: ``s3://`` goes through boto3 with an explicit
-    ``endpoint_url`` from ``AWS_ENDPOINT_URL_S3`` / ``AWS_ENDPOINT_URL`` when
-    set (MinIO), falling back to the default AWS endpoint. Raises on failure
-    (callers convert to a per-layer skip)."""
+    Local-first: ``s3://`` goes through boto3 with an explicit ``endpoint_url``
+    from ``AWS_ENDPOINT_URL_S3`` / ``AWS_ENDPOINT_URL`` when set (MinIO), falling
+    back to the default AWS endpoint. Raises on failure (callers convert to a
+    per-layer skip)."""
     if uri.startswith("s3://"):
         import boto3
 
@@ -246,9 +225,9 @@ def _read_uri_bytes(uri: str) -> bytes:
         with urllib.request.urlopen(uri, timeout=120) as resp:  # noqa: S310
             return resp.read()
 
-    # Local path (dev / MinIO-mounted / test convenience). A local uri may
-    # still carry TiTiler-style query params (?rescale=..&colormap_name=..) --
-    # strip them for the filesystem probe.
+    # Local path (dev / MinIO-mounted / test convenience). A local uri may still
+    # carry TiTiler-style query params (?rescale=..&colormap_name=..) -- strip
+    # them for the filesystem probe.
     for candidate in (Path(uri), Path(_strip_query(uri))):
         if candidate.is_file():
             return candidate.read_bytes()
@@ -266,8 +245,8 @@ def _read_uri_bytes(uri: str) -> bytes:
 def _s3_client() -> Any:
     """A boto3 S3 client honoring ``AWS_ENDPOINT_URL_S3`` / ``AWS_ENDPOINT_URL``
     (MinIO local-dev) -- same endpoint resolution as ``_read_uri_bytes``, kept
-    as its own client here so a HeadObject probe or a mesh download never
-    needs to round-trip a full raster/vector read first."""
+    as its own client here so a HeadObject probe or a mesh download never needs
+    to round-trip a full raster/vector read first."""
     import boto3
 
     endpoint = os.environ.get("AWS_ENDPOINT_URL_S3") or os.environ.get("AWS_ENDPOINT_URL")
@@ -291,12 +270,12 @@ def _parse_s3_uri(uri: str) -> tuple[str, str] | None:
 
 
 def _resolve_mesh_crs(bucket: str, mesh_key: str) -> str | None:
-    """Best-effort CRS for a runs-bucket ``sfincs_map.nc``: download it and
-    read its ``crs`` data variable via ``postprocess_flood``'s SAME parser --
-    the reader that CRS-tags the peak flood-depth COG, so the mesh and the
-    raster can never disagree. Returns ``None`` on ANY failure (unreachable
-    bucket, unreadable NetCDF, no recognizable crs encoding) -- the mesh
-    entry is still listed by the caller (honest degrade, never a hard fail)."""
+    """Best-effort CRS for a runs-bucket ``sfincs_map.nc``: download it and read
+    its ``crs`` data variable via ``postprocess_flood``'s SAME parser -- the
+    reader that CRS-tags the peak flood-depth COG, so the mesh and the raster can
+    never disagree. Returns ``None`` on ANY failure (unreachable bucket,
+    unreadable NetCDF, no recognizable crs encoding) -- the mesh entry is still
+    listed by the caller (honest degrade, never a hard fail)."""
     try:
         import xarray as xr  # type: ignore[import-not-found]
 
@@ -319,7 +298,7 @@ def _resolve_mesh_crs(bucket: str, mesh_key: str) -> str | None:
                 pass
     except Exception as exc:  # noqa: BLE001 -- CRS is a nicety, never a gate
         logger.warning(
-            "open_case_in_qgis: could not resolve mesh CRS for s3://%s/%s (%s)",
+            "hydrate_case_layers: could not resolve mesh CRS for s3://%s/%s (%s)",
             bucket,
             mesh_key,
             exc,
@@ -331,8 +310,8 @@ def _resolve_telemac_mesh_crs(bucket: str, run_id: str) -> str | None:
     """CRS for a TELEMAC SELAFIN mesh: read ``utm_epsg`` from the run's
     ``telemac_metrics.json`` sibling and format it as ``EPSG:<code>``.
 
-    SELAFIN (.slf) files embed NO coordinate system, so MDAL reports an empty
-    CRS and the plugin cannot place the mesh on the basemap. The worker's
+    SELAFIN (.slf) files embed NO coordinate system, so MDAL reports an empty CRS
+    and the plugin cannot place the mesh on the basemap. The worker's
     ``telemac_metrics.json`` (uploaded alongside the result .slf) carries the
     reach UTM zone the mesh was built in, which is the mesh's true CRS. Returns
     ``None`` on ANY failure (missing/unreadable metrics, no ``utm_epsg``) -- the
@@ -347,7 +326,7 @@ def _resolve_telemac_mesh_crs(bucket: str, run_id: str) -> str | None:
         return f"EPSG:{int(epsg)}"
     except Exception as exc:  # noqa: BLE001 -- CRS is a nicety, never a gate
         logger.warning(
-            "open_case_in_qgis: could not resolve TELEMAC mesh CRS for "
+            "hydrate_case_layers: could not resolve TELEMAC mesh CRS for "
             "s3://%s/%s (%s)",
             bucket,
             run_id,
@@ -356,17 +335,17 @@ def _resolve_telemac_mesh_crs(bucket: str, run_id: str) -> str | None:
         return None
 
 
-#: raster ``style_preset`` -> ``(mesh sibling filename, format id, display
-#: name prefix)``. One entry per hazard-model engine that publishes a run-
-#: level mesh sibling; SFINCS's is the engine's own native quadtree solve
-#: output, MODFLOW's is BUILT by ``workflows/modflow_mesh.py`` (see the module
-#: docstring's "MDAL phase 2" section). Only style_presets an engine's
-#: postprocess ACTUALLY wires a mesh emitter for belong here -- an unwired
-#: preset must stay absent (a HeadObject miss reads identically to "no mesh
-#: support" either way, but an absent map entry is honest about scope: today
-#: only the MODFLOW spill/plume path, modflow_contaminant_plume, emits a mesh; the
-#: GWF-only archetype postprocess functions -- drawdown/dewatering/mounding/
-#: ASR/hydroperiod/river-seepage -- do not call the emitter yet).
+#: raster ``style_preset`` -> ``(mesh sibling filename, format id, display name
+#: prefix)``. One entry per hazard-model engine that publishes a run-level mesh
+#: sibling; SFINCS's is the engine's own native quadtree solve output, MODFLOW's
+#: is BUILT by ``workflows/modflow_mesh.py`` (see the module docstring's "MDAL
+#: phase 2" section). Only style_presets an engine's postprocess ACTUALLY wires a
+#: mesh emitter for belong here -- an unwired preset must stay absent (a
+#: HeadObject miss reads identically to "no mesh support" either way, but an
+#: absent map entry is honest about scope: today only the MODFLOW spill/plume
+#: path, modflow_contaminant_plume, emits a mesh; the GWF-only archetype
+#: postprocess functions -- drawdown/dewatering/mounding/ASR/hydroperiod/
+#: river-seepage -- do not call the emitter yet).
 _MESH_SIBLING_BY_STYLE_PRESET: dict[str, tuple[str, str, str]] = {
     "continuous_flood_depth": ("sfincs_map.nc", "sfincs_map_netcdf", "SFINCS mesh"),
     "continuous_plume_concentration": (
@@ -400,16 +379,15 @@ _MESH_SIBLING_BY_STYLE_PRESET: dict[str, tuple[str, str, str]] = {
 
 def _mesh_entry_for_layer(layer: dict[str, Any]) -> dict[str, Any] | None:
     """For a raster layer whose ``style_preset`` names an engine with a mesh
-    sibling (``_MESH_SIBLING_BY_STYLE_PRESET``) and whose ``uri`` is (or
-    wraps, as a TiTiler display TEMPLATE) an ``s3://<bucket>/<run_id>/..``
-    object, probe the SAME bucket for that engine's mesh sibling and build the
-    additive mesh export entry (``None`` when the style_preset has no mapped
-    mesh sibling, its uri does not resolve to s3://, or no mesh sibling
-    exists).
+    sibling (``_MESH_SIBLING_BY_STYLE_PRESET``) and whose ``uri`` is (or wraps,
+    as a TiTiler display TEMPLATE) an ``s3://<bucket>/<run_id>/..`` object, probe
+    the SAME bucket for that engine's mesh sibling and build the additive mesh
+    entry (``None`` when the style_preset has no mapped mesh sibling, its uri does
+    not resolve to s3://, or no mesh sibling exists).
 
     A PERSISTED layer's ``uri`` is normally the TiTiler
-    ``/cog/tiles/...?url=<percent-encoded s3://...>`` display template, not a
-    raw ``s3://`` uri (confirmed against real dev-persistence case data) --
+    ``/cog/tiles/...?url=<percent-encoded s3://...>`` display template, not a raw
+    ``s3://`` uri (confirmed against real dev-persistence case data) --
     ``_unwrap_tile_template`` (the SAME helper the raster export path uses)
     resolves the underlying COG uri first."""
     sibling = _MESH_SIBLING_BY_STYLE_PRESET.get(str(layer.get("style_preset") or ""))
@@ -447,8 +425,8 @@ def _mesh_entry_for_layer(layer: dict[str, Any]) -> dict[str, Any] | None:
 
 def _collect_mesh_entries(raw_layers: list[dict[str, Any]]) -> list[dict[str, Any]]:
     """One mesh entry per DISTINCT ``run_id`` found across ``raw_layers`` (a
-    case's peak + per-frame flood-depth layers all share the same run, so a
-    naive per-layer scan would duplicate the same mesh many times)."""
+    case's peak + per-frame flood-depth layers all share the same run, so a naive
+    per-layer scan would duplicate the same mesh many times)."""
     entries: list[dict[str, Any]] = []
     seen_run_ids: set[str] = set()
     for layer in raw_layers:
@@ -467,6 +445,7 @@ def _collect_mesh_entries(raw_layers: list[dict[str, Any]]) -> list[dict[str, An
 
 # --------------------------------------------------------------------------- #
 # Style translation: TiTiler rescale/colormap_name -> QGIS pseudocolor stops
+# (the .qml sidecar; the ONLY styling face now that the .qgs project is gone).
 # --------------------------------------------------------------------------- #
 
 
@@ -475,8 +454,8 @@ def _style_from_layer(layer: dict[str, Any]) -> tuple[float, float, str]:
 
     Sources, in order: the layer's data-driven ``legend`` (LegendKey dict with
     ``vmin``/``vmax``/``colormap``), then the ``rescale=`` / ``colormap_name=``
-    query params of the layer's uri (the TiTiler display template carries
-    them). Fallback: viridis over 0..1."""
+    query params of the layer's uri (the TiTiler display template carries them).
+    Fallback: viridis over 0..1."""
     legend = layer.get("legend")
     if isinstance(legend, dict):
         vmin, vmax, cmap = legend.get("vmin"), legend.get("vmax"), legend.get("colormap")
@@ -503,8 +482,8 @@ def _style_from_layer(layer: dict[str, Any]) -> tuple[float, float, str]:
 
 
 def _colormap_stops(cmap_name: str, vmin: float, vmax: float, n: int = 5) -> list[tuple[float, str]]:
-    """Sample ``n`` interpolated ``(value, "#rrggbb")`` stops from the
-    matplotlib colormap ``cmap_name`` over [vmin, vmax].
+    """Sample ``n`` interpolated ``(value, "#rrggbb")`` stops from the matplotlib
+    colormap ``cmap_name`` over [vmin, vmax].
 
     Lookup is CASE-INSENSITIVE on a miss: TiTiler style params carry lowercase
     colormap names (``ylgnbu``, ``blues``) while matplotlib's registry is
@@ -523,7 +502,7 @@ def _colormap_stops(cmap_name: str, vmin: float, vmax: float, n: int = 5) -> lis
             cmap = colormaps[match]
         else:
             logger.warning(
-                "open_case_in_qgis: unknown colormap %r -- falling back to viridis",
+                "hydrate_case_layers: unknown colormap %r -- falling back to viridis",
                 cmap_name,
             )
             cmap = colormaps["viridis"]
@@ -538,13 +517,12 @@ def _colormap_stops(cmap_name: str, vmin: float, vmax: float, n: int = 5) -> lis
 
 def _raster_pipe_element(vmin: float, vmax: float, cmap_name: str) -> ET.Element:
     """Build the ``<pipe>`` node carrying a QGIS 3.x singleband pseudocolor
-    renderer with 5 interpolated stops. Shared by the inline ``.qgs`` maplayer
-    AND the sidecar ``.qml`` (single seam -- see module docstring).
+    renderer with 5 interpolated stops (the ``.qml`` sidecar body).
 
     Transparency: nodata is transparent via the empty ``nodataColor`` default;
     when the ramp starts at exactly 0 (flood/depth-style rescale=0,N) a
-    raster-transparency single-value entry additionally makes 0-value cells
-    fully transparent -- 0 depth is dry land, never a black cell."""
+    raster-transparency single-value entry additionally makes 0-value cells fully
+    transparent -- 0 depth is dry land, never a black cell."""
     pipe = ET.Element("pipe")
     renderer = ET.SubElement(
         pipe,
@@ -597,10 +575,10 @@ def _raster_pipe_element(vmin: float, vmax: float, cmap_name: str) -> ET.Element
 
 
 def _qml_bytes(vmin: float, vmax: float, cmap_name: str) -> bytes:
-    """Serialize a standalone QGIS layer-style document (``.qml``) carrying
-    the SAME pseudocolor pipe the ``.qgs`` embeds inline.
+    """Serialize a standalone QGIS layer-style document (``.qml``) carrying the
+    pseudocolor pipe.
 
-    Written as a sidecar next to every exported GeoTIFF so a consumer that
+    Written as a sidecar next to every materialized GeoTIFF so a consumer that
     adds the raster STANDALONE (the TRID3NT QGIS plugin's ``loadNamedStyle``
     call; QGIS also auto-loads a same-stem ``.qml`` on manual add) renders the
     web colormap instead of default grayscale."""
@@ -621,132 +599,17 @@ def _qml_bytes(vmin: float, vmax: float, cmap_name: str) -> bytes:
 
 
 # --------------------------------------------------------------------------- #
-# .qgs project XML (hand-built, QGIS 3.x -- NO PyQGIS)
-# --------------------------------------------------------------------------- #
-
-
-def _spatialrefsys_4326(parent: ET.Element) -> None:
-    srs = ET.SubElement(parent, "spatialrefsys", {"nativeFormat": "Wkt"})
-    ET.SubElement(srs, "wkt").text = _WGS84_WKT
-    ET.SubElement(srs, "proj4").text = "+proj=longlat +datum=WGS84 +no_defs"
-    ET.SubElement(srs, "srsid").text = "3452"
-    ET.SubElement(srs, "srid").text = "4326"
-    ET.SubElement(srs, "authid").text = "EPSG:4326"
-    ET.SubElement(srs, "description").text = "WGS 84"
-    ET.SubElement(srs, "projectionacronym").text = "longlat"
-    ET.SubElement(srs, "ellipsoidacronym").text = "EPSG:7030"
-    ET.SubElement(srs, "geographicflag").text = "true"
-
-
-def _build_qgs_xml(
-    project_name: str,
-    entries: list[dict[str, Any]],
-    extent: tuple[float, float, float, float] | None,
-) -> bytes:
-    """Serialize the minimal-but-valid QGIS 3.x project XML.
-
-    ``entries`` are exported-layer records in CASE LAYER ORDER, each carrying
-    ``layer_id`` (QGIS layer id), ``name``, ``kind`` ("vector"/"raster"),
-    ``datasource`` (relative: ``./export.gpkg|layername=X`` or ``./<n>.tif``),
-    and for rasters the style triple ``(vmin, vmax, cmap)``."""
-    root = ET.Element(
-        "qgis",
-        {
-            "projectname": project_name,
-            "version": "3.28.0-Firenze",
-            "saveUser": "trid3nt",
-            "saveUserFull": "TRID3NT open_case_in_qgis",
-        },
-    )
-    ET.SubElement(root, "homePath", {"path": ""})
-    ET.SubElement(root, "title").text = project_name
-
-    project_crs = ET.SubElement(root, "projectCrs")
-    _spatialrefsys_4326(project_crs)
-
-    # Layer tree: mirrors the case's layer ORDER (first case layer = first
-    # tree row, i.e. drawn on top in QGIS's tree-order convention).
-    tree = ET.SubElement(root, "layer-tree-group")
-    for e in entries:
-        ET.SubElement(
-            tree,
-            "layer-tree-layer",
-            {
-                "id": e["layer_id"],
-                "name": e["name"],
-                "source": e["datasource"],
-                "providerKey": "ogr" if e["kind"] == "vector" else "gdal",
-                "checked": "Qt::Checked",
-                "expanded": "1",
-                "legend_exp": "",
-                "patch_size": "-1,-1",
-            },
-        )
-
-    # Initial view extent = case AOI (or union of layer bounds), EPSG:4326.
-    if extent is not None:
-        canvas = ET.SubElement(root, "mapcanvas", {"name": "theMapCanvas", "annotationsVisible": "1"})
-        ET.SubElement(canvas, "units").text = "degrees"
-        ext = ET.SubElement(canvas, "extent")
-        ET.SubElement(ext, "xmin").text = repr(float(extent[0]))
-        ET.SubElement(ext, "ymin").text = repr(float(extent[1]))
-        ET.SubElement(ext, "xmax").text = repr(float(extent[2]))
-        ET.SubElement(ext, "ymax").text = repr(float(extent[3]))
-        ET.SubElement(canvas, "rotation").text = "0"
-        dest = ET.SubElement(canvas, "destinationsrs")
-        _spatialrefsys_4326(dest)
-
-    layers_el = ET.SubElement(root, "projectlayers")
-    for e in entries:
-        ml = ET.SubElement(
-            layers_el,
-            "maplayer",
-            {
-                "type": e["kind"],
-                "autoRefreshEnabled": "0",
-                "refreshOnNotifyEnabled": "0",
-                "styleCategories": "AllStyleCategories",
-                "legendPlaceholderImage": "",
-            }
-            | ({"geometry": e["geometry"]} if e["kind"] == "vector" and e.get("geometry") else {}),
-        )
-        ET.SubElement(ml, "id").text = e["layer_id"]
-        ET.SubElement(ml, "datasource").text = e["datasource"]
-        ET.SubElement(ml, "layername").text = e["name"]
-        if e["kind"] == "vector":
-            # Vectors are rewritten into the GPKG as EPSG:4326 by construction.
-            srs_el = ET.SubElement(ml, "srs")
-            _spatialrefsys_4326(srs_el)
-            ET.SubElement(ml, "provider", {"encoding": "UTF-8"}).text = "ogr"
-        else:
-            # Raster: omit <srs> so QGIS probes the GeoTIFF's native CRS
-            # (rasters are copied verbatim, NOT reprojected).
-            ET.SubElement(ml, "provider").text = "gdal"
-            vmin, vmax, cmap = e["style"]
-            ml.append(_raster_pipe_element(vmin, vmax, cmap))
-        ET.SubElement(ml, "blendMode").text = "0"
-        ET.SubElement(ml, "flags").text = "Identifiable|Removable|Searchable"
-
-    order = ET.SubElement(ET.SubElement(root, "layerorder"), "customOrder", {"enabled": "0"})
-    for e in entries:
-        ET.SubElement(order, "item").text = e["layer_id"]
-
-    header = b"<!DOCTYPE qgis PUBLIC 'http://mrcc.com/qgis.dtd' 'SYSTEM'>\n"
-    return header + ET.tostring(root, encoding="utf-8", xml_declaration=False)
-
-
-# --------------------------------------------------------------------------- #
-# Per-layer export helpers
+# Per-layer materialization helpers
 # --------------------------------------------------------------------------- #
 
 
 def _vector_gdf_from_layer(layer: dict[str, Any]) -> "Any":
     """Read a vector layer into a GeoDataFrame (EPSG:4326).
 
-    ``inline_geojson`` (FeatureCollection dict) wins when present; otherwise
-    the layer ``uri`` bytes are materialized to a temp file with the right
-    suffix and read via geopandas/pyogrio. Raises on any failure (caller
-    converts to a per-layer skip)."""
+    ``inline_geojson`` (FeatureCollection dict) wins when present; otherwise the
+    layer ``uri`` bytes are materialized to a temp file with the right suffix and
+    read via geopandas/pyogrio. Raises on any failure (caller converts to a
+    per-layer skip)."""
     import geopandas as gpd
 
     inline = layer.get("inline_geojson")
@@ -783,51 +646,6 @@ def _vector_gdf_from_layer(layer: dict[str, Any]) -> "Any":
     return gdf
 
 
-def _geometry_token(gdf: "Any") -> str:
-    """Map the GeoDataFrame's dominant geometry to the QGIS maplayer
-    ``geometry`` attribute token."""
-    try:
-        geom_type = str(gdf.geometry.geom_type.mode().iat[0])
-    except Exception:  # noqa: BLE001
-        return "Polygon"
-    if "Point" in geom_type:
-        return "Point"
-    if "LineString" in geom_type or "Line" in geom_type:
-        return "Line"
-    return "Polygon"
-
-
-def _raster_bounds_4326(path: str) -> tuple[float, float, float, float] | None:
-    """Best-effort raster extent in EPSG:4326 (None on failure -- extent is a
-    view nicety, never a gate)."""
-    try:
-        import rasterio
-        from rasterio.warp import transform_bounds
-
-        with rasterio.open(path) as ds:
-            b = ds.bounds
-            if ds.crs is not None and str(ds.crs).upper() != "EPSG:4326":
-                return tuple(float(v) for v in transform_bounds(ds.crs, "EPSG:4326", *b))  # type: ignore[return-value]
-            return (float(b.left), float(b.bottom), float(b.right), float(b.top))
-    except Exception as exc:  # noqa: BLE001
-        logger.warning("open_case_in_qgis: raster bounds probe failed for %s: %s", path, exc)
-        return None
-
-
-def _union_extent(
-    boxes: list[tuple[float, float, float, float]],
-) -> tuple[float, float, float, float] | None:
-    finite = [b for b in boxes if b and all(math.isfinite(v) for v in b)]
-    if not finite:
-        return None
-    return (
-        min(b[0] for b in finite),
-        min(b[1] for b in finite),
-        max(b[2] for b in finite),
-        max(b[3] for b in finite),
-    )
-
-
 # --------------------------------------------------------------------------- #
 # Case-layer resolution (persistence seam, with the explicit-layers fallback)
 # --------------------------------------------------------------------------- #
@@ -835,10 +653,10 @@ def _union_extent(
 
 async def _layers_from_case(case_id: str) -> tuple[list[dict[str, Any]], list[float] | None, str]:
     """Resolve ``(layer dicts, case bbox, case title)`` for ``case_id`` via the
-    app-level ``Persistence`` singleton (``telemetry.get_persistence`` -- the
-    same lazy seam telemetry uses, monkeypatchable in tests). Layers come from
-    the Case doc's persisted ``loaded_layer_summaries`` (ProjectLayerSummary
-    dicts -- the same source the cold case manifest marshals)."""
+    app-level ``Persistence`` singleton (``telemetry.get_persistence`` -- the same
+    lazy seam telemetry uses, monkeypatchable in tests). Layers come from the Case
+    doc's persisted ``loaded_layer_summaries`` (ProjectLayerSummary dicts -- the
+    same source the cold case manifest marshals)."""
     from trid3nt_server.telemetry import get_persistence
 
     try:
@@ -860,75 +678,98 @@ async def _layers_from_case(case_id: str) -> tuple[list[dict[str, Any]], list[fl
 
 
 # --------------------------------------------------------------------------- #
-# Tool registration
+# PRIMARY path: the case-layers manifest (no materialization)
 # --------------------------------------------------------------------------- #
 
 
-# DEREGISTERED (not LLM-visible): this function is NOT a registered tool. It
-# serves the ``/api/export-qgis`` HTTP route directly (lazy-imported there) and
-# is called by tests/routes as a plain coroutine. ``_OPEN_CASE_IN_QGIS_METADATA``
-# above is retained as the route's source-of-truth for the tool's ttl/cacheable
-# semantics.
-async def open_case_in_qgis(
+async def build_case_layers_manifest(case_id: str) -> dict[str, Any]:
+    """Serve a case's persisted layer registry as a lightweight manifest.
+
+    The PRIMARY case-hydration path: returns each persisted layer VERBATIM (its
+    ``uri`` / ``layer_type`` / ``style_preset`` / ``legend`` / ``name`` /
+    ``wms_url`` / ``visible``) under ``loaded_layers`` so the plugin adds each
+    layer straight from its store URI via the SAME by-URI path live-published
+    layers use -- no server-side materialization, no geo-deps touched. Reads the
+    case through the SAME persistence seam ``hydrate_case_layers`` uses.
+
+    Returns ``{"case_id", "title", "bbox", "loaded_layers": [...]}``. An empty
+    ``loaded_layers`` is honest (the case has no layers yet), never an error.
+
+    Raises ``CaseNotFoundError`` when the case does not exist or persistence is
+    unbound.
+    """
+    raw_layers, bbox, title = await _layers_from_case(case_id)
+    return {
+        "case_id": case_id,
+        "title": title,
+        "bbox": bbox,
+        "loaded_layers": raw_layers,
+    }
+
+
+# --------------------------------------------------------------------------- #
+# REMOTE-mode fallback: materialize the case's layers into a local folder
+# --------------------------------------------------------------------------- #
+
+
+async def hydrate_case_layers(
     case_id: str | None = None,
     layers: list[dict] | None = None,
     output_dir: str | None = None,
     project_name: str | None = None,
     **_extra_ignored: Any,
 ) -> dict[str, Any]:
-    """Export a case's layers as a ready-to-open desktop QGIS project.
+    """Materialize a case's layers into a self-contained local folder.
 
-    Use this when: the user asks to EXPORT a case to QGIS, download it for
-    desktop GIS, or get a GeoPackage/GeoTIFF/.qgz bundle. Writes a
-    self-contained folder: one GeoPackage (``export.gpkg``, all vectors in
-    EPSG:4326), a local GeoTIFF per raster, and a ``project.qgz`` QGIS 3.x
-    project with layer order, translated raster styling, and the case AOI
-    as the initial extent. Provide EXACTLY ONE of ``case_id`` or ``layers``.
+    The REMOTE-mode fallback for a client that cannot reach the object store
+    directly (the local primary path is ``build_case_layers_manifest``). Writes
+    one GeoPackage (``export.gpkg``, all vectors in EPSG:4326), a local GeoTIFF
+    per raster, and a ``.qml`` style sidecar per raster (the TiTiler-derived
+    pseudocolor ramp). NO QGIS project (.qgz/.qgs) is produced. Provide EXACTLY
+    ONE of ``case_id`` or ``layers``.
 
     Params:
-        case_id: case to export (preferred) -- its layer list/order/bbox/
-            title drive the project.
+        case_id: case to materialize (preferred) -- its layer list/order drive
+            the output.
         layers: fallback explicit list, each ``{"name", "layer_type":
             "raster"|"vector", "uri"}`` (uri may be local/s3/http/TiTiler
             template; vectors may carry ``inline_geojson`` instead).
         output_dir: destination folder; default
             ``${TRID3NT_EXPORT_DIR or ~/trid3nt-exports}/<case>-<hash>/``.
-        project_name: QGIS project title; default case title/case_id.
+        project_name: informational label for the output folder slug.
 
     Returns:
-        ``{"status": "ok"|"partial", "qgz_path", "gpkg_path" (None if no
-        vectors), "exported_vector_count", "exported_raster_count",
-        "qml_paths", "skipped": [{name, reason}], "output_dir", "mesh":
-        [{"kind": "mesh", "format": "sfincs_map_netcdf", "s3_uri" (not
-        copied locally), "crs_authid", "name"}, ...] (additive, [] if
-        none)}``.
+        ``{"status": "ok"|"partial", "gpkg_path" (None if no vectors),
+        "exported_vector_count", "exported_raster_count", "qml_paths",
+        "skipped": [{name, reason}], "output_dir", "mesh": [{"kind": "mesh",
+        "format", "s3_uri" (not copied locally), "crs_authid", "name"}, ...]
+        (additive, [] if none), "exported_at"}``.
 
     Raises:
-        ExportCaseError: INVALID_INPUT (not exactly one of case_id/
-            layers), CASE_NOT_FOUND, NO_EXPORTABLE_LAYERS (empty export
-            never claims success).
+        HydrateCaseError: INVALID_INPUT (not exactly one of case_id/layers),
+            CASE_NOT_FOUND, NO_EXPORTABLE_LAYERS (empty materialization never
+            claims success).
     """
     if (case_id is None) == (layers is None):
-        raise ExportInputError(
+        raise HydrateInputError(
             "provide exactly one of `case_id` or `layers` (got "
             f"case_id={'set' if case_id is not None else 'unset'}, "
             f"layers={'set' if layers is not None else 'unset'})."
         )
 
-    case_bbox: list[float] | None = None
     if case_id is not None:
-        raw_layers, case_bbox, case_title = await _layers_from_case(case_id)
+        raw_layers, _case_bbox, case_title = await _layers_from_case(case_id)
         title = project_name or case_title
         slug_seed = case_id
     else:
         raw_layers = [dict(entry) for entry in (layers or []) if isinstance(entry, dict)]
-        title = project_name or "trid3nt-export"
+        title = project_name or "trid3nt-case-layers"
         slug_seed = title
 
     if not raw_layers:
         raise NoExportableLayersError(
             f"{'case ' + case_id if case_id else 'the provided layer list'} "
-            f"has no layers to export."
+            f"has no layers to materialize."
         )
 
     # --- Output dir --------------------------------------------------------
@@ -941,11 +782,9 @@ async def open_case_in_qgis(
     out.mkdir(parents=True, exist_ok=True)
     gpkg_path = out / "export.gpkg"
 
-    # --- Per-layer export (skip-not-fail; case layer ORDER preserved) ------
-    entries: list[dict[str, Any]] = []  # .qgs records, in case layer order
-    qml_paths: list[str] = []  # sidecar style files, raster export order
+    # --- Per-layer materialization (skip-not-fail; case layer ORDER preserved) --
+    qml_paths: list[str] = []  # sidecar style files, raster order
     skipped: list[dict[str, str]] = []
-    bounds: list[tuple[float, float, float, float]] = []
     used_names: set[str] = set()
     n_vec = n_ras = 0
 
@@ -966,7 +805,6 @@ async def open_case_in_qgis(
             skipped.append({"name": name, "reason": f"unsupported or unknown layer type (uri={uri or 'absent'!r})"})
             continue
 
-        layer_qgis_id = f"{safe}_{uuid.uuid4().hex}"
         try:
             if layer_type == "vector":
                 gdf = _vector_gdf_from_layer({**layer, "uri": resolved_uri})
@@ -979,17 +817,6 @@ async def open_case_in_qgis(
                             lambda v: json.dumps(v) if isinstance(v, (dict, list)) else v
                         )
                 gdf.to_file(gpkg_path, layer=safe, driver="GPKG")
-                b = gdf.total_bounds
-                bounds.append((float(b[0]), float(b[1]), float(b[2]), float(b[3])))
-                entries.append(
-                    {
-                        "layer_id": layer_qgis_id,
-                        "name": name,
-                        "kind": "vector",
-                        "geometry": _geometry_token(gdf),
-                        "datasource": f"./export.gpkg|layername={safe}",
-                    }
-                )
                 n_vec += 1
             else:
                 if not resolved_uri:
@@ -997,11 +824,8 @@ async def open_case_in_qgis(
                 data = _read_uri_bytes(resolved_uri)
                 tif_path = out / f"{safe}.tif"
                 tif_path.write_bytes(data)
-                rb = _raster_bounds_4326(str(tif_path))
-                if rb is not None:
-                    bounds.append(rb)
                 vmin, vmax, cmap = _style_from_layer({**layer, "uri": uri or resolved_uri})
-                # Sidecar .qml (same translation as the .qgz pipe) so the
+                # Sidecar .qml (the SAME translation the web colormap uses) so the
                 # QGIS plugin's standalone-add path renders the web colormap
                 # instead of default grayscale. A sidecar write failure is a
                 # style-only degrade, never a reason to skip a good raster.
@@ -1011,64 +835,42 @@ async def open_case_in_qgis(
                     qml_paths.append(str(qml_path))
                 except OSError as exc:
                     logger.warning(
-                        "open_case_in_qgis: could not write style sidecar "
-                        "for %r (%s) -- raster exported unstyled",
+                        "hydrate_case_layers: could not write style sidecar for "
+                        "%r (%s) -- raster materialized unstyled",
                         name,
                         exc,
                     )
-                entries.append(
-                    {
-                        "layer_id": layer_qgis_id,
-                        "name": name,
-                        "kind": "raster",
-                        "datasource": f"./{safe}.tif",
-                        "style": (vmin, vmax, cmap),
-                    }
-                )
                 n_ras += 1
             used_names.add(safe)
         except Exception as exc:  # noqa: BLE001 -- per-layer skip, not a hard fail
             logger.warning(
-                "open_case_in_qgis: skipping layer %r (%s: %s)",
+                "hydrate_case_layers: skipping layer %r (%s: %s)",
                 name,
                 type(exc).__name__,
                 exc,
             )
             skipped.append({"name": name, "reason": f"{type(exc).__name__}: {exc}"})
 
-    if not entries:
+    if n_vec == 0 and n_ras == 0:
         raise NoExportableLayersError(
-            "no layer could be exported "
+            "no layer could be materialized "
             f"({len(skipped)} skipped: "
             + "; ".join(f"{s['name']}: {s['reason']}" for s in skipped)
-            + "). An empty export never claims success."
+            + "). An empty materialization never claims success."
         )
-
-    # --- Project extent: case AOI wins; else union of exported bounds ------
-    extent: tuple[float, float, float, float] | None = None
-    if case_bbox and len(case_bbox) == 4 and all(math.isfinite(float(v)) for v in case_bbox):
-        extent = (float(case_bbox[0]), float(case_bbox[1]), float(case_bbox[2]), float(case_bbox[3]))
-    else:
-        extent = _union_extent(bounds)
-
-    # --- .qgs -> .qgz -------------------------------------------------------
-    qgs_bytes = _build_qgs_xml(title, entries, extent)
-    qgz_path = out / "project.qgz"
-    with zipfile.ZipFile(qgz_path, "w", compression=zipfile.ZIP_DEFLATED) as zf:
-        zf.writestr("project.qgs", qgs_bytes)
 
     # --- Mesh siblings (MDAL phase 1, additive) -----------------------------
     # Best-effort: an unreachable runs bucket must never turn a good
-    # GeoTIFF/GeoPackage export into a failure -- the mesh list is just empty.
+    # GeoTIFF/GeoPackage materialization into a failure -- the mesh list is just
+    # empty.
     try:
         mesh_entries = _collect_mesh_entries(raw_layers)
     except Exception as exc:  # noqa: BLE001
-        logger.warning("open_case_in_qgis: mesh discovery failed (%s)", exc)
+        logger.warning("hydrate_case_layers: mesh discovery failed (%s)", exc)
         mesh_entries = []
 
     result = {
         "status": "ok" if not skipped else "partial",
-        "qgz_path": str(qgz_path),
         "gpkg_path": str(gpkg_path) if n_vec > 0 else None,
         "exported_vector_count": n_vec,
         "exported_raster_count": n_ras,
@@ -1079,7 +881,7 @@ async def open_case_in_qgis(
         "exported_at": datetime.now(timezone.utc).isoformat(),
     }
     logger.info(
-        "open_case_in_qgis: exported %d vector + %d raster layer(s) to %s "
+        "hydrate_case_layers: materialized %d vector + %d raster layer(s) to %s "
         "(%d skipped, %d mesh)",
         n_vec,
         n_ras,

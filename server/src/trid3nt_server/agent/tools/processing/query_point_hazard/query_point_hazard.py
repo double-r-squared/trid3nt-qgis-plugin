@@ -227,10 +227,10 @@ def stage_layer_local(uri: str, tmpdir: str, label: str) -> str:
     """Materialize a layer uri locally (s3:// via boto3, else a local path).
 
     Raster tile-template display URLs are unwrapped to the underlying COG
-    first (the open_case_in_qgis convention). Raises on failure -- callers
+    first (the hydrate_case_layers convention). Raises on failure -- callers
     convert to a per-layer honest entry.
     """
-    from trid3nt_server.agent.tools.meta.open_case_in_qgis.open_case_in_qgis import _strip_query, _unwrap_tile_template
+    from trid3nt_server.cases.hydrate_case_layers import _strip_query, _unwrap_tile_template
 
     resolved = _unwrap_tile_template(uri)
     if resolved.startswith("s3://"):

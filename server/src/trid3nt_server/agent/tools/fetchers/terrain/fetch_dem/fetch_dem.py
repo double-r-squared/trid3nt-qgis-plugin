@@ -419,8 +419,8 @@ def fetch_dem(
     - SFINCS setup (``set_sfincs_parameters`` + ``run_sfincs``) requires a
       DEM for the model grid; this tool supplies it.
     - Pre-processing step before ``compute_slope``, ``compute_hillshade``,
-      ``compute_aspect``, or an AOI-scoped tabular summary via
-      ``spatial_query``.
+      ``compute_aspect``, or an AOI-scoped raster summary composed in the
+      code_exec playground (zonal stats over a polygon).
 
     **When NOT to use:**
     - Coverage outside the continental US with the DEFAULT source -- 3DEP is
@@ -461,7 +461,7 @@ def fetch_dem(
     **Cross-tool dependencies:**
     - Downstream: ``set_sfincs_parameters`` / ``run_sfincs``,
       ``compute_slope``, ``compute_hillshade``, ``compute_aspect``,
-      ``compute_colored_relief``, ``spatial_query``.
+      ``compute_colored_relief``, AOI zonal stats in the code_exec playground.
     - Typically called after: ``geocode_location`` supplies the bbox.
     - Sibling source: ``source="copernicus"`` for non-US / global terrain.
     """

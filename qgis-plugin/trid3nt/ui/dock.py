@@ -101,6 +101,7 @@ from ._style import (
 )
 from ..case import aoi, case_export, push_layer
 from ..net.tasks import (
+    _CaseLayersTask,
     _CaseListTask,
     _EffectiveModelTask,
     _ExportTask,
@@ -114,6 +115,7 @@ from ..net.trid3nt_client import (
     PipelineStep,
     find_fallback_bbox,
     parse_case_open,
+    parse_layer_events,
     resolve_data_base,
     resolve_http_base,
 )
@@ -230,6 +232,7 @@ class Trid3ntDock(QDockWidget):
         self._cases: List[CaseInfo] = []
         self._cases_dialog: Optional[CasesDialog] = None
         self._export_tasks: List[_ExportTask] = []  # keep-alive refs
+        self._case_layers_tasks: List[_CaseLayersTask] = []  # keep-alive refs
         self._case_list_tasks: List[_CaseListTask] = []  # keep-alive refs
         self._push_tasks: List[_PushLayerTask] = []  # keep-alive refs
         self._probe_tasks: List[_ProbePointTask] = []  # keep-alive refs
@@ -1447,14 +1450,17 @@ class Trid3ntDock(QDockWidget):
     # -- open case in QGIS ------------------------------------------------------ #
 
     def open_case_in_qgis(self, case_id: str, label: str) -> None:
-        """Export ``case_id`` via /api/export-qgis and add the produced layers
-        to the CURRENT project (see ``case_export`` for why we add layers
-        instead of opening the .qgz).
+        """Add ``case_id``'s layers to the CURRENT project.
 
-        Local mode talks to the local agent's HTTP listener and reads the
-        artifact paths directly. Remote mode (milestone 3) POSTs the same
-        route on the HTTP base derived from the remote WS URL, then downloads
-        the .gpkg/.qgz through GET /api/export-qgis/file into a temp dir.
+        LOCAL mode (PRIMARY): fetch the case-layers MANIFEST via
+        /api/case-layers and add each layer straight from its store URI, the
+        SAME by-URI path live-published layers use (MinIO reachable) -- no
+        gpkg/tif download round trip.
+
+        REMOTE mode (fallback, until presigned store access lands): the client
+        cannot reach the store, so POST /api/export-qgis materializes the layers
+        server-side and the .gpkg/.tif/.qml are downloaded through
+        GET /api/export-qgis/file into a temp dir (see ``case_export``).
         """
         remote = self.settings.mode != MODE_LOCAL
         base_url = self._effective_http_base()
@@ -1463,15 +1469,52 @@ class Trid3ntDock(QDockWidget):
                 f"Exporting case '{label}' on the remote agent "
                 f"({base_url}) -- artifacts download to a local temp dir ..."
             )
-        else:
-            self._note(f"Exporting case '{label}' via the local agent ...")
-        task = _ExportTask(
-            base_url, case_id, self, remote=remote, minio_endpoint=self._effective_data_base()
-        )
-        task.finished.connect(self._on_export_finished)
+            task = _ExportTask(
+                base_url, case_id, self, remote=remote,
+                minio_endpoint=self._effective_data_base(),
+            )
+            task.finished.connect(self._on_export_finished)
+            task.errored.connect(self._on_export_errored)
+            self._export_tasks.append(task)
+            task.start()
+            return
+        self._note(f"Opening case '{label}' -- adding its layers from the store ...")
+        task = _CaseLayersTask(base_url, case_id, self)
+        task.finished.connect(self._on_case_layers_finished)
         task.errored.connect(self._on_export_errored)
-        self._export_tasks.append(task)
+        self._case_layers_tasks.append(task)
         task.start()
+
+    def _on_case_layers_finished(self, case_id: str, manifest: dict) -> None:
+        """Local "Open case in QGIS": add each manifest layer by store URI via
+        the SAME materializer live-published layers use."""
+        title = manifest.get("title") if isinstance(manifest, dict) else None
+        events = parse_layer_events(manifest if isinstance(manifest, dict) else {})
+        self.materializer.set_case(case_id, title or None)
+        if not events:
+            self._note(
+                "This case has no layers yet -- open it and run a prompt to "
+                "add some, then Open in QGIS."
+            )
+            return
+        notes = self.materializer.materialize(events)
+        for note in notes:
+            self._note(note)
+        if self.settings.auto_basemap:
+            note = ensure_basemap(self.settings.basemap_preset)
+            if note:
+                self._note(note)
+        # Zoom to the union of the just-added vector layers' extents (XYZ raster
+        # tile layers report a whole-world extent, so vector bounds are the
+        # honest focus target -- same choice the session-state replay makes).
+        try:
+            canvas = self.iface.mapCanvas()
+            dest_crs = canvas.mapSettings().destinationCrs()
+            extent = self.materializer.last_added_vector_extent(dest_crs)
+            zoom_to_extent(canvas, extent)
+        except Exception:  # noqa: BLE001 -- headless/no canvas, skip the zoom
+            pass
+        self._scroll_to_bottom()
 
     def _on_export_finished(self, case_id: str, result: dict) -> None:
         plan = case_export.plan_export_layers(result)

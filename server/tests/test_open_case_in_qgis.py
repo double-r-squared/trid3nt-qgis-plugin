@@ -1,24 +1,31 @@
-"""Tests for the ``open_case_in_qgis`` tool (QGIS bridge v1).
+"""Tests for the ``hydrate_case_layers`` seam (QGIS case-layer serving).
 
 No network / no S3: synthetic vector (geopandas -> GeoJSON file) + synthetic
 raster (rasterio 10x10 GeoTIFF) in ``tmp_path``, passed through the explicit
 ``layers`` param as plain local paths.
+
+Two seams under test:
+- ``build_case_layers_manifest`` -- the PRIMARY path: pass the case's persisted
+  layers straight through as a manifest (no materialization).
+- ``hydrate_case_layers`` -- the REMOTE-mode fallback: materialize the layers
+  into a GeoPackage + GeoTIFF + ``.qml`` style sidecars. NO ``.qgz`` project is
+  produced (standalone project export is covered by native QGIS).
 """
 
 from __future__ import annotations
 
 import xml.etree.ElementTree as ET
-import zipfile
 from pathlib import Path
 
 import pytest
 
-from trid3nt_server.agent.tools.meta.open_case_in_qgis.open_case_in_qgis import (
-    _OPEN_CASE_IN_QGIS_METADATA,
-    ExportCaseError,
-    ExportInputError,
+from trid3nt_server.cases.hydrate_case_layers import (
+    _HYDRATE_CASE_LAYERS_METADATA,
+    HydrateCaseError,
+    HydrateInputError,
     NoExportableLayersError,
-    open_case_in_qgis,
+    build_case_layers_manifest,
+    hydrate_case_layers,
 )
 
 # --------------------------------------------------------------------------- #
@@ -71,30 +78,102 @@ def raster_path(tmp_path: Path) -> Path:
     return path
 
 
-def _read_qgs(qgz_path: str) -> ET.Element:
-    """Unzip the .qgz, parse the inner .qgs XML, return the root element."""
-    with zipfile.ZipFile(qgz_path) as zf:
-        qgs_names = [n for n in zf.namelist() if n.endswith(".qgs")]
-        assert qgs_names, f".qgz holds no .qgs (contents: {zf.namelist()})"
-        raw = zf.read(qgs_names[0])
-    # Strip the DOCTYPE line -- ElementTree parses the rest.
+def _read_qml(qml_path: str) -> ET.Element:
+    """Parse a ``.qml`` style sidecar, stripping the DOCTYPE line."""
+    raw = Path(qml_path).read_bytes()
     body = raw.split(b"\n", 1)[1] if raw.startswith(b"<!DOCTYPE") else raw
     return ET.fromstring(body)
 
 
 # --------------------------------------------------------------------------- #
-# Happy path: vector + raster via the explicit layers param
+# PRIMARY path: the case-layers manifest (persistence passthrough, no geo deps)
+# --------------------------------------------------------------------------- #
+
+
+class _FakeCase:
+    def __init__(self, layers, bbox, title):
+        self.loaded_layer_summaries = layers
+        self.bbox = bbox
+        self.title = title
+
+
+class _FakePersistence:
+    def __init__(self, case):
+        self._case = case
+
+    async def get_case(self, case_id):  # noqa: D401 -- test double
+        return self._case
+
+
+@pytest.mark.asyncio
+async def test_manifest_passes_persisted_layers_through(monkeypatch) -> None:
+    """The manifest returns each persisted layer VERBATIM under ``loaded_layers``
+    plus case_id/title/bbox -- no materialization, no gpkg/tif."""
+    layers = [
+        {
+            "layer_id": "L1",
+            "name": "Water Depth",
+            "layer_type": "raster",
+            "uri": "s3://runs/01RUN/depth.tif",
+            "style_preset": "continuous_flood_depth",
+        },
+        {
+            "layer_id": "L2",
+            "name": "Flood Extent",
+            "layer_type": "vector",
+            "uri": "s3://runs/case-data/01CASE/L2.fgb",
+        },
+    ]
+    case = _FakeCase(layers, [-85.5, 29.9, -85.4, 30.0], "Mexico Beach")
+    import trid3nt_server.telemetry as tel
+
+    monkeypatch.setattr(tel, "get_persistence", lambda: _FakePersistence(case))
+    manifest = await build_case_layers_manifest("01CASE")
+    assert manifest["case_id"] == "01CASE"
+    assert manifest["title"] == "Mexico Beach"
+    assert manifest["bbox"] == [-85.5, 29.9, -85.4, 30.0]
+    assert manifest["loaded_layers"] == layers  # verbatim passthrough
+    assert [l["layer_id"] for l in manifest["loaded_layers"]] == ["L1", "L2"]
+
+
+@pytest.mark.asyncio
+async def test_manifest_empty_case_is_honest_not_an_error(monkeypatch) -> None:
+    """A case with no layers yields an empty ``loaded_layers`` list, never an
+    error (the plugin notes "no layers yet")."""
+    case = _FakeCase([], None, "Empty case")
+    import trid3nt_server.telemetry as tel
+
+    monkeypatch.setattr(tel, "get_persistence", lambda: _FakePersistence(case))
+    manifest = await build_case_layers_manifest("01EMPTY")
+    assert manifest["loaded_layers"] == []
+    assert manifest["bbox"] is None
+
+
+@pytest.mark.asyncio
+async def test_manifest_missing_case_raises_case_not_found(monkeypatch) -> None:
+    import trid3nt_server.telemetry as tel
+
+    monkeypatch.setattr(tel, "get_persistence", lambda: _FakePersistence(None))
+    from trid3nt_server.cases.hydrate_case_layers import CaseNotFoundError
+
+    with pytest.raises(CaseNotFoundError) as exc_info:
+        await build_case_layers_manifest("01GONE")
+    assert exc_info.value.error_code == "CASE_NOT_FOUND"
+
+
+# --------------------------------------------------------------------------- #
+# REMOTE-mode fallback: materialize vector + raster via the explicit layers param
 # --------------------------------------------------------------------------- #
 
 
 @pytest.mark.asyncio
-async def test_export_vector_and_raster_full_bundle(
+async def test_materialize_vector_and_raster_bundle(
     tmp_path: Path, vector_path: Path, raster_path: Path
 ) -> None:
     out_dir = tmp_path / "export"
     # Raster uri carries the TiTiler style params so the QML translation
     # (rescale=0,3 & colormap_name=Blues) is exercised end-to-end.
-    result = await open_case_in_qgis(
+    result = await hydrate_case_layers(
         layers=[
             {
                 "name": "Flood Extent",
@@ -116,6 +195,8 @@ async def test_export_vector_and_raster_full_bundle(
     assert result["exported_raster_count"] == 1
     assert result["skipped"] == []
     assert result["output_dir"] == str(out_dir)
+    # NO QGIS project is produced any more.
+    assert "qgz_path" not in result
 
     # (a) GPKG holds the vector layer, readable via pyogrio.
     import pyogrio
@@ -128,61 +209,22 @@ async def test_export_vector_and_raster_full_bundle(
     assert len(gdf) == 2
     assert set(gdf["name"]) == {"a", "b"}
 
-    # (b) GeoTIFF copied (byte-identical to the source COG) + its sidecar
-    # .qml style (same stem, listed in the result JSON).
+    # (b) GeoTIFF copied (byte-identical to the source COG) + its sidecar .qml
+    # style (same stem, listed in the result JSON).
     tif = out_dir / "Water_Depth.tif"
     assert tif.is_file()
     assert tif.read_bytes() == raster_path.read_bytes()
     assert result["qml_paths"] == [str(out_dir / "Water_Depth.qml")]
     assert (out_dir / "Water_Depth.qml").is_file()
 
-    # (c) .qgz unzips to a parseable .qgs with both maplayers + tree order.
-    assert result["qgz_path"].endswith(".qgz")
-    root = _read_qgs(result["qgz_path"])
-    assert root.tag == "qgis"
-    assert root.get("projectname") == "Mexico Beach"
-
-    # Project CRS is EPSG:4326.
-    authid = root.find("./projectCrs/spatialrefsys/authid")
-    assert authid is not None and authid.text == "EPSG:4326"
-
-    # Layer tree mirrors the case layer ORDER: vector first, raster second.
-    tree_layers = root.findall("./layer-tree-group/layer-tree-layer")
-    assert [t.get("name") for t in tree_layers] == ["Flood Extent", "Water Depth"]
-    assert [t.get("providerKey") for t in tree_layers] == ["ogr", "gdal"]
-
-    # Both maplayer nodes exist with the right providers + datasources.
-    maplayers = root.findall("./projectlayers/maplayer")
-    assert len(maplayers) == 2
-    by_name = {ml.findtext("layername"): ml for ml in maplayers}
-    vec_ml = by_name["Flood Extent"]
-    ras_ml = by_name["Water Depth"]
-    assert vec_ml.findtext("provider") == "ogr"
-    assert vec_ml.findtext("datasource") == "./export.gpkg|layername=Flood_Extent"
-    assert ras_ml.findtext("provider") == "gdal"
-    assert ras_ml.findtext("datasource") == "./Water_Depth.tif"
-
-    # Tree ids match projectlayers ids (QGIS joins the two by id).
-    tree_ids = {t.get("id") for t in tree_layers}
-    map_ids = {ml.findtext("id") for ml in maplayers}
-    assert tree_ids == map_ids
-
-    # Initial extent = union of layer bounds (covers the shared bbox).
-    ext = root.find("./mapcanvas/extent")
-    assert ext is not None
-    xmin, ymin = float(ext.findtext("xmin")), float(ext.findtext("ymin"))
-    xmax, ymax = float(ext.findtext("xmax")), float(ext.findtext("ymax"))
-    assert xmin <= -85.5 and xmax >= -85.4
-    assert ymin <= 29.9 and ymax >= 30.0
-
 
 @pytest.mark.asyncio
 async def test_raster_style_params_translate_to_pseudocolor(
     tmp_path: Path, raster_path: Path
 ) -> None:
-    """rescale=0,3 & colormap_name=Blues -> singleband pseudocolor renderer
-    with classification min 0 / max 3 and 5 Blues-sampled stops."""
-    result = await open_case_in_qgis(
+    """rescale=0,3 & colormap_name=Blues -> the .qml sidecar carries a singleband
+    pseudocolor renderer with classification min 0 / max 3 and 5 Blues stops."""
+    result = await hydrate_case_layers(
         layers=[
             {
                 "name": "depth",
@@ -192,8 +234,8 @@ async def test_raster_style_params_translate_to_pseudocolor(
         ],
         output_dir=str(tmp_path / "styled"),
     )
-    root = _read_qgs(result["qgz_path"])
-    renderer = root.find("./projectlayers/maplayer/pipe/rasterrenderer")
+    root = _read_qml(result["qml_paths"][0])
+    renderer = root.find("./pipe/rasterrenderer")
     assert renderer is not None
     assert renderer.get("type") == "singlebandpseudocolor"
     assert float(renderer.get("classificationMin")) == 0.0
@@ -216,12 +258,12 @@ async def test_raster_style_params_translate_to_pseudocolor(
 async def test_qml_sidecar_carries_ramp_and_zero_transparency(
     tmp_path: Path, raster_path: Path
 ) -> None:
-    """Every exported raster gets a sidecar .qml (for the QGIS plugin's
-    standalone-add path) with the SAME pseudocolor ramp the .qgz embeds, plus
-    a 0-value transparency entry when the ramp starts at 0 (flood depth: dry
-    cells transparent, never black)."""
+    """Every materialized raster gets a sidecar .qml (for the QGIS plugin's
+    standalone-add path) with the pseudocolor ramp, plus a 0-value transparency
+    entry when the ramp starts at 0 (flood depth: dry cells transparent, never
+    black)."""
     out_dir = tmp_path / "qml"
-    result = await open_case_in_qgis(
+    result = await hydrate_case_layers(
         layers=[
             {
                 "name": "depth",
@@ -232,9 +274,7 @@ async def test_qml_sidecar_carries_ramp_and_zero_transparency(
         output_dir=str(out_dir),
     )
     assert result["qml_paths"] == [str(out_dir / "depth.qml")]
-    raw = (out_dir / "depth.qml").read_bytes()
-    body = raw.split(b"\n", 1)[1] if raw.startswith(b"<!DOCTYPE") else raw
-    root = ET.fromstring(body)
+    root = _read_qml(result["qml_paths"][0])
     assert root.tag == "qgis"
 
     renderer = root.find("./pipe/rasterrenderer")
@@ -245,7 +285,7 @@ async def test_qml_sidecar_carries_ramp_and_zero_transparency(
     # nodata stays transparent (empty nodataColor = QGIS default transparent).
     assert renderer.get("nodataColor") == ""
 
-    # The ramp: 5 Blues stops over 0..3, identical to the .qgz translation.
+    # The ramp: 5 Blues stops over 0..3.
     items = renderer.findall("./rastershader/colorrampshader/item")
     assert len(items) == 5
     values = [float(i.get("value")) for i in items]
@@ -262,15 +302,6 @@ async def test_qml_sidecar_carries_ramp_and_zero_transparency(
     assert entry.get("min") == "0" and entry.get("max") == "0"
     assert entry.get("percentTransparent") == "100"
 
-    # The same transparency entry lands in the .qgz inline pipe (single seam).
-    qgs_root = _read_qgs(result["qgz_path"])
-    qgs_entry = qgs_root.find(
-        "./projectlayers/maplayer/pipe/rasterrenderer/rasterTransparency"
-        "/singleValuePixelList/pixelListEntry"
-    )
-    assert qgs_entry is not None
-    assert qgs_entry.get("percentTransparent") == "100"
-
 
 @pytest.mark.asyncio
 async def test_qml_zero_transparency_only_for_zero_min_ramps(
@@ -279,7 +310,7 @@ async def test_qml_zero_transparency_only_for_zero_min_ramps(
     """A ramp that does NOT start at 0 (e.g. a DEM rescale=100,500) must not
     punch a transparency hole at value 0."""
     out_dir = tmp_path / "dem"
-    result = await open_case_in_qgis(
+    result = await hydrate_case_layers(
         layers=[
             {
                 "name": "dem",
@@ -289,9 +320,7 @@ async def test_qml_zero_transparency_only_for_zero_min_ramps(
         ],
         output_dir=str(out_dir),
     )
-    raw = Path(result["qml_paths"][0]).read_bytes()
-    body = raw.split(b"\n", 1)[1] if raw.startswith(b"<!DOCTYPE") else raw
-    root = ET.fromstring(body)
+    root = _read_qml(result["qml_paths"][0])
     assert root.find(".//rasterTransparency") is None
 
 
@@ -300,9 +329,9 @@ async def test_lowercase_titiler_colormap_resolves_case_insensitively(
     tmp_path: Path, raster_path: Path
 ) -> None:
     """TiTiler carries lowercase colormap names (ylgnbu); matplotlib registers
-    YlGnBu. The translation must resolve case-insensitively instead of
-    silently degrading every real flood-depth export to viridis."""
-    result = await open_case_in_qgis(
+    YlGnBu. The translation must resolve case-insensitively instead of silently
+    degrading every real flood-depth export to viridis."""
+    result = await hydrate_case_layers(
         layers=[
             {
                 "name": "depth",
@@ -312,10 +341,9 @@ async def test_lowercase_titiler_colormap_resolves_case_insensitively(
         ],
         output_dir=str(tmp_path / "lc"),
     )
-    root = _read_qgs(result["qgz_path"])
+    root = _read_qml(result["qml_paths"][0])
     items = root.findall(
-        "./projectlayers/maplayer/pipe/rasterrenderer/rastershader"
-        "/colorrampshader/item"
+        "./pipe/rasterrenderer/rastershader/colorrampshader/item"
     )
     from matplotlib import colormaps
     from matplotlib.colors import to_hex
@@ -328,12 +356,12 @@ async def test_lowercase_titiler_colormap_resolves_case_insensitively(
 async def test_raster_without_style_params_falls_back_to_viridis(
     tmp_path: Path, raster_path: Path
 ) -> None:
-    result = await open_case_in_qgis(
+    result = await hydrate_case_layers(
         layers=[{"name": "plain", "layer_type": "raster", "uri": str(raster_path)}],
         output_dir=str(tmp_path / "plain"),
     )
-    root = _read_qgs(result["qgz_path"])
-    renderer = root.find("./projectlayers/maplayer/pipe/rasterrenderer")
+    root = _read_qml(result["qml_paths"][0])
+    renderer = root.find("./pipe/rasterrenderer")
     assert renderer is not None
     assert float(renderer.get("classificationMin")) == 0.0
     assert float(renderer.get("classificationMax")) == 1.0
@@ -358,16 +386,16 @@ async def test_titiler_tile_template_unwraps_url_param(
         "https://example.test/cog/tiles/WebMercatorQuad/{z}/{x}/{y}.png"
         f"?url={quote(str(raster_path), safe='')}&rescale=0,3&colormap_name=Blues"
     )
-    result = await open_case_in_qgis(
+    result = await hydrate_case_layers(
         layers=[{"name": "tiled depth", "layer_type": "raster", "uri": template}],
         output_dir=str(tmp_path / "tiled"),
     )
     assert result["exported_raster_count"] == 1
     tif = Path(result["output_dir"]) / "tiled_depth.tif"
     assert tif.read_bytes() == raster_path.read_bytes()
-    # Style params on the TEMPLATE still translate.
-    root = _read_qgs(result["qgz_path"])
-    renderer = root.find("./projectlayers/maplayer/pipe/rasterrenderer")
+    # Style params on the TEMPLATE still translate into the sidecar.
+    root = _read_qml(result["qml_paths"][0])
+    renderer = root.find("./pipe/rasterrenderer")
     assert float(renderer.get("classificationMax")) == 3.0
 
 
@@ -383,7 +411,7 @@ async def test_inline_geojson_vector(tmp_path: Path) -> None:
             }
         ],
     }
-    result = await open_case_in_qgis(
+    result = await hydrate_case_layers(
         layers=[{"name": "gauges", "layer_type": "vector", "inline_geojson": fc}],
         output_dir=str(tmp_path / "inline"),
     )
@@ -401,12 +429,12 @@ async def test_inline_geojson_vector(tmp_path: Path) -> None:
 
 @pytest.mark.asyncio
 async def test_exactly_one_of_case_id_or_layers_required(tmp_path: Path) -> None:
-    with pytest.raises(ExportInputError) as exc_info:
-        await open_case_in_qgis()
+    with pytest.raises(HydrateInputError) as exc_info:
+        await hydrate_case_layers()
     assert exc_info.value.error_code == "INVALID_INPUT"
 
-    with pytest.raises(ExportInputError):
-        await open_case_in_qgis(
+    with pytest.raises(HydrateInputError):
+        await hydrate_case_layers(
             case_id="01ARZ3NDEKTSV4RRFFQ69G5FAV",
             layers=[{"name": "x", "layer_type": "vector", "uri": "y"}],
         )
@@ -416,7 +444,7 @@ async def test_exactly_one_of_case_id_or_layers_required(tmp_path: Path) -> None
 async def test_unreadable_layer_is_a_skip_not_a_hard_fail(
     tmp_path: Path, vector_path: Path
 ) -> None:
-    result = await open_case_in_qgis(
+    result = await hydrate_case_layers(
         layers=[
             {"name": "good", "layer_type": "vector", "uri": str(vector_path)},
             {
@@ -433,15 +461,12 @@ async def test_unreadable_layer_is_a_skip_not_a_hard_fail(
     assert len(result["skipped"]) == 1
     assert result["skipped"][0]["name"] == "ghost"
     assert result["skipped"][0]["reason"]
-    # The project still opens with the surviving layer.
-    root = _read_qgs(result["qgz_path"])
-    assert len(root.findall("./projectlayers/maplayer")) == 1
 
 
 @pytest.mark.asyncio
 async def test_all_layers_skipped_raises_no_exportable_layers(tmp_path: Path) -> None:
     with pytest.raises(NoExportableLayersError) as exc_info:
-        await open_case_in_qgis(
+        await hydrate_case_layers(
             layers=[
                 {
                     "name": "ghost",
@@ -457,7 +482,7 @@ async def test_all_layers_skipped_raises_no_exportable_layers(tmp_path: Path) ->
 @pytest.mark.asyncio
 async def test_empty_layers_list_raises(tmp_path: Path) -> None:
     with pytest.raises(NoExportableLayersError):
-        await open_case_in_qgis(layers=[], output_dir=str(tmp_path / "none"))
+        await hydrate_case_layers(layers=[], output_dir=str(tmp_path / "none"))
 
 
 # --------------------------------------------------------------------------- #
@@ -465,17 +490,17 @@ async def test_empty_layers_list_raises(tmp_path: Path) -> None:
 # --------------------------------------------------------------------------- #
 
 
-def test_tool_is_not_registered() -> None:
-    # DEREGISTERED: open_case_in_qgis is no longer an LLM-visible tool -- its
-    # module function serves the /api/export-qgis HTTP route directly. The
-    # registry must NOT carry it (the catalog HTTP payload iterates the registry,
-    # so this keeps the two names out of the catalog too).
+def test_seam_is_not_registered() -> None:
+    # DEREGISTERED: hydrate_case_layers is not an LLM-visible tool -- it serves
+    # the /api/export-qgis HTTP route directly (and build_case_layers_manifest
+    # serves /api/case-layers). The registry must NOT carry it.
     from trid3nt_server.agent.tools import TOOL_REGISTRY
 
+    assert TOOL_REGISTRY.get("hydrate_case_layers") is None
     assert TOOL_REGISTRY.get("open_case_in_qgis") is None
     # The metadata object is still importable + carries the route's ttl/cacheable
-    # semantics even though the tool is not registered.
-    assert _OPEN_CASE_IN_QGIS_METADATA.cacheable is False
-    assert _OPEN_CASE_IN_QGIS_METADATA.ttl_class == "live-no-cache"
+    # semantics even though the seam is not registered.
+    assert _HYDRATE_CASE_LAYERS_METADATA.cacheable is False
+    assert _HYDRATE_CASE_LAYERS_METADATA.ttl_class == "live-no-cache"
     # Base error type is importable + typed (FR-AS-11).
-    assert issubclass(NoExportableLayersError, ExportCaseError)
+    assert issubclass(NoExportableLayersError, HydrateCaseError)

@@ -1238,9 +1238,13 @@ def _run_solver_local_docker(
     specs registered at import time (deferred via callables to avoid circular
     imports -- each workflow module self-registers when it is first imported).
 
-    An unregistered solver falls back to the SFINCS spec so that the original
-    local-docker path stays byte-identical for callers that only set
-    ``TRID3NT_SOLVER_BACKEND=local-docker`` for SFINCS.
+    Only ``solver == "sfincs"`` falls back to the hardcoded SFINCS docker spec
+    (the original local-docker path, kept byte-identical for callers that only
+    set ``TRID3NT_SOLVER_BACKEND=local-docker`` for SFINCS). Every other solver
+    MUST have a ``LOCAL_SOLVER_SPEC_REGISTRY`` entry registered by its own
+    workflow module at import time; a solver with no entry raises
+    ``SolverDispatchError`` rather than silently running under the SFINCS spec
+    (a wrong-engine dispatch is worse than a loud failure).
     """
     factory = LOCAL_SOLVER_SPEC_REGISTRY.get(solver)
     if factory is not None:
@@ -1252,11 +1256,16 @@ def _run_solver_local_docker(
                 f"{type(exc).__name__}: {exc}"
             ) from exc
         return launch_local_solver(spec, model_setup_uri, compute_class=compute_class)
-    # Default: SFINCS docker path.
-    return launch_local_solver(
-        _sfincs_local_spec(),
-        model_setup_uri,
-        compute_class=compute_class,
+    if solver == "sfincs":
+        return launch_local_solver(
+            _sfincs_local_spec(),
+            model_setup_uri,
+            compute_class=compute_class,
+        )
+    raise SolverDispatchError(
+        f"solver {solver!r} has no LOCAL_SOLVER_SPEC_REGISTRY entry -- its "
+        "workflow module must call register_local_solver_spec() (never a "
+        "wrong-spec dispatch)"
     )
 
 

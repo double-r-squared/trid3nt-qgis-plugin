@@ -1,11 +1,11 @@
-"""Tests for the ``open_case_in_qgis`` mesh (MDAL phase 1) additive field.
+"""Tests for the ``hydrate_case_layers`` mesh (MDAL phase 1) additive field.
 
 Every SFINCS flood-depth layer (``style_preset == "continuous_flood_depth"``)
 whose ``uri`` lives under a runs-bucket ``s3://<bucket>/<run_id>/...`` prefix
 is checked for a sibling ``<run_id>/sfincs_map.nc``; when found, ONE entry per
 distinct ``run_id`` is appended to the result's ``mesh`` list. No network / no
 real S3: a fake boto3-shaped client is monkeypatched onto
-``open_case_in_qgis._s3_client`` (the export tool's own local S3 seam).
+``hydrate_case_layers._s3_client`` (the materializer's own local S3 seam).
 
 Coverage:
 1. a runs-bucket flood-depth layer with a mesh sibling -> one mesh entry,
@@ -29,14 +29,14 @@ import pytest
 pytest.importorskip("xarray")
 pytest.importorskip("pyproj")
 
-from trid3nt_server.agent.tools.meta.open_case_in_qgis import open_case_in_qgis as export_mod
-from trid3nt_server.agent.tools.meta.open_case_in_qgis.open_case_in_qgis import open_case_in_qgis
+import trid3nt_server.cases.hydrate_case_layers as export_mod
+from trid3nt_server.cases.hydrate_case_layers import hydrate_case_layers as open_case_in_qgis
 
 pytestmark = pytest.mark.asyncio
 
 
 # --------------------------------------------------------------------------- #
-# Fake S3 client (module-local seam: open_case_in_qgis._s3_client)
+# Fake S3 client (module-local seam: hydrate_case_layers._s3_client)
 # --------------------------------------------------------------------------- #
 
 

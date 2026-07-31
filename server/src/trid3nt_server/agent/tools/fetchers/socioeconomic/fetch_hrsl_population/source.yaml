@@ -100,6 +100,7 @@ docstring: |-
   **Cross-tool dependencies:**
   - Downstream of: ``geocode_location`` (provides bbox), ``fetch_dem``
     (co-registered for elevation-weighted exposure).
-  - Upstream of: ``spatial_query`` (sum population within a polygon),
-    Pelicun impact post-processor, any population-at-risk workflow step.
+  - Upstream of: zonal population-within-a-polygon sums composed in the
+    code_exec playground, Pelicun impact post-processor, any
+    population-at-risk workflow step.
   - Pairs with: ``fetch_buildings`` (combine for occupancy-weighted analyses).

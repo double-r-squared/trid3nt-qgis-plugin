@@ -1,7 +1,7 @@
-"""Atomic tool ``register_case_layer`` -- bidirectional layer push (QGIS -> case).
+"""``register_case_layer`` core -- bidirectional layer push (QGIS -> case).
 
 Every existing layer seam flows agent -> QGIS (``publish_layer``,
-``open_case_in_qgis``). This module is the REVERSE seam: the TRID3NT QGIS
+``hydrate_case_layers``). This module is the REVERSE seam: the TRID3NT QGIS
 plugin's user has an ACTIVE layer in their desktop project (vector or raster)
 they want to bring INTO the current case as a first-class input layer.
 
@@ -13,44 +13,44 @@ Two entry points share ONE core (``ingest_user_layer``):
    + ``/api/case-list`` route conventions (local-single-user gated, typed
    errors -> honest 4xx bodies).
 2. The LLM-visible tool ``register_case_layer`` -- so a conversational request
-   ("use the file I uploaded as the AOI") can drive the SAME core once the
-   file already lives in object storage.
+   ("use the file I uploaded as the AOI") can drive the SAME core once the file
+   already lives in object storage.
 
 Both entry points assume the artifact bytes are ALREADY in object storage at
 ``s3_uri`` (bucket = ``TRID3NT_CACHE_BUCKET``, prefix ``user-uploads/<ulid>/
 <filename>`` -- the plugin uploads there first via
 ``POST /api/ingest-layer-file`` since the QGIS Python runtime has no boto3).
-This module never accepts raw bytes directly -- see ``upload_layer_file``
-below for the staging upload half.
+This module never accepts raw bytes directly -- see ``upload_layer_file`` below
+for the staging upload half.
 
 **Vector path:** the uploaded artifact (GeoJSON / FlatGeobuf / GeoPackage) is
 read via geopandas/pyogrio, reprojected to EPSG:4326, and written out as a
-FlatGeobuf -- the SAME durable-vector-data-face format every other vector
-case layer uses (see ``publish_layer`` module docstring: "Vectors are
-produced as FlatGeobuf"). The canonical FGB lands at
+FlatGeobuf -- the SAME durable-vector-data-face format every other vector case
+layer uses (see ``publish_layer`` module docstring: "Vectors are produced as
+FlatGeobuf"). The canonical FGB lands at
 ``s3://<runs_bucket>/case-data/<case_id>/<layer_id>.fgb`` (DATA face); the
 existing ``publish_layer._write_durable_vector_geojson`` helper is reused
-UNCHANGED to materialize the browser-readable GeoJSON DISPLAY face at the
-SAME Phase-0 key (``durable_vector_geojson_key``).
+UNCHANGED to materialize the browser-readable GeoJSON DISPLAY face at the SAME
+Phase-0 key (``durable_vector_geojson_key``).
 
-**Raster path:** the uploaded GeoTIFF is validated readable via rasterio,
-then handed to the existing ``publish_layer`` atomic tool VERBATIM -- it
-already owns COG-overview validation/auto-translate (F33,
-``_ensure_raster_has_overviews``), style-preset resolution, and TiTiler tile
--template minting for an ``s3://`` raster. No COG logic is duplicated here.
+**Raster path:** the uploaded GeoTIFF is validated readable via rasterio, then
+handed to the existing ``publish_layer`` atomic tool VERBATIM -- it already owns
+COG-overview validation/auto-translate (F33, ``_ensure_raster_has_overviews``),
+style-preset resolution, and TiTiler tile-template minting for an ``s3://``
+raster. No COG logic is duplicated here.
 
-**Persistence is the contract.** The ingested layer is merged into the
-Case's durable ``loaded_layer_summaries`` (the SAME field
+**Persistence is the contract.** The ingested layer is merged into the Case's
+durable ``loaded_layer_summaries`` (the SAME field
 ``_persist_case_loaded_layers`` writes, using the identical
 append/replace-by-layer_id merge policy) so a Case reopen -- cold OR live --
 always shows the pushed layer. A best-effort nudge additionally refreshes any
-LIVE WebSocket session with this Case open (see ``_notify_live_sessions``):
-it pushes the existing ``case-list`` envelope (the same side-channel every
-other case mutation uses), NOT a fabricated ``session-state`` -- this cold
-entry point has no live ``PipelineEmitter`` to source a truthful
-``chat_history``/``pipeline_history`` from, and inventing one risks the
-documented D1-class "chat blanks on case reopen" failure mode. The client
-repaints the pushed layer on its next Case reopen/reconnect regardless.
+LIVE WebSocket session with this Case open (see ``_notify_live_sessions``): it
+pushes the existing ``case-list`` envelope (the same side-channel every other
+case mutation uses), NOT a fabricated ``session-state`` -- this cold entry point
+has no live ``PipelineEmitter`` to source a truthful ``chat_history``/
+``pipeline_history`` from, and inventing one risks the documented D1-class "chat
+blanks on case reopen" failure mode. The client repaints the pushed layer on its
+next Case reopen/reconnect regardless.
 """
 
 from __future__ import annotations
@@ -65,7 +65,7 @@ from typing import Any
 from trid3nt_contracts import new_ulid, now_utc
 from trid3nt_contracts.tool_registry import AtomicToolMetadata
 
-logger = logging.getLogger("trid3nt_server.agent.tools.meta.register_case_layer.register_case_layer")
+logger = logging.getLogger("trid3nt_server.cases.ingest_user_layer")
 
 __all__ = [
     "ImportLayerError",
@@ -81,16 +81,16 @@ __all__ = [
     "register_case_layer",
 ]
 
-#: Size cap for a pushed layer (raw upload OR the object being ingested).
-#: 200 MB comfortably covers a desktop-drawn AOI polygon or a modest DEM tile
-#: while keeping a single HTTP round trip + in-memory read bounded.
+#: Size cap for a pushed layer (raw upload OR the object being ingested). 200 MB
+#: comfortably covers a desktop-drawn AOI polygon or a modest DEM tile while
+#: keeping a single HTTP round trip + in-memory read bounded.
 MAX_INGEST_BYTES: int = 200 * 1024 * 1024
 
 #: Staging prefix the plugin's raw-bytes upload lands under (bucket =
-#: ``TRID3NT_CACHE_BUCKET``). Content-addressed-cache TTL eviction rules do
-#: NOT apply here (this is a plain object, not a ``cache/<ttl-class>/...``
-#: key), but the artifact is still copied OUT to the durable runs bucket
-#: before it becomes a case layer -- see the module docstring.
+#: ``TRID3NT_CACHE_BUCKET``). Content-addressed-cache TTL eviction rules do NOT
+#: apply here (this is a plain object, not a ``cache/<ttl-class>/...`` key), but
+#: the artifact is still copied OUT to the durable runs bucket before it becomes
+#: a case layer -- see the module docstring.
 USER_UPLOAD_PREFIX = "user-uploads"
 
 _VECTOR_KIND = "vector"
@@ -99,7 +99,7 @@ _KINDS = (_VECTOR_KIND, _RASTER_KIND)
 
 
 # --------------------------------------------------------------------------- #
-# Typed errors (mirrors open_case_in_qgis.ExportCaseError shape)
+# Typed errors (mirrors hydrate_case_layers.HydrateCaseError shape)
 # --------------------------------------------------------------------------- #
 
 
@@ -147,8 +147,8 @@ class UnreadableLayerError(ImportLayerError):
 
 
 # --------------------------------------------------------------------------- #
-# S3 helpers (boto3; honors AWS_ENDPOINT_URL so MinIO works -- same posture
-# as every other s3:// read/write in this package, see cache.py / publish_layer.py)
+# S3 helpers (boto3; honors AWS_ENDPOINT_URL so MinIO works -- same posture as
+# every other s3:// read/write in this package, see cache.py / publish_layer.py)
 # --------------------------------------------------------------------------- #
 
 
@@ -165,8 +165,8 @@ def _s3_client():
 
 
 def _head_object_size(s3_uri: str) -> int:
-    """Return the object's byte size. Raises ``ObjectNotFoundError`` if it
-    does not exist. SYNC (boto3); callers wrap in ``asyncio.to_thread``."""
+    """Return the object's byte size. Raises ``ObjectNotFoundError`` if it does
+    not exist. SYNC (boto3); callers wrap in ``asyncio.to_thread``."""
     from botocore.exceptions import ClientError
 
     bucket, key = _split_s3_uri(s3_uri)
@@ -184,8 +184,8 @@ def _head_object_size(s3_uri: str) -> int:
 
 
 def _get_object_bytes(s3_uri: str) -> bytes:
-    """Read an object fully into memory. Caller must have already validated
-    it exists and is within ``MAX_INGEST_BYTES``. SYNC; wrap in
+    """Read an object fully into memory. Caller must have already validated it
+    exists and is within ``MAX_INGEST_BYTES``. SYNC; wrap in
     ``asyncio.to_thread``."""
     bucket, key = _split_s3_uri(s3_uri)
     s3 = _s3_client()
@@ -203,9 +203,9 @@ def _put_object_bytes(
 def _sanitize_filename(filename: str) -> str:
     """Strip any path components + control chars; keep the extension.
 
-    A path-traversal-shaped filename (``../../etc/passwd``) is collapsed to
-    its basename -- the object key is minted server-side under a fresh ULID
-    prefix regardless, so this is defense-in-depth, not the sole guard.
+    A path-traversal-shaped filename (``../../etc/passwd``) is collapsed to its
+    basename -- the object key is minted server-side under a fresh ULID prefix
+    regardless, so this is defense-in-depth, not the sole guard.
     """
     base = os.path.basename((filename or "").strip().replace("\\", "/"))
     base = base.strip().strip(".") or "layer"
@@ -222,8 +222,8 @@ def upload_layer_file(filename: str, data: bytes) -> str:
     SYNC (boto3); the caller (the HTTP route) wraps this in
     ``asyncio.to_thread``. This is the server-side half of the QGIS plugin's
     upload -- the plugin has no boto3 (stdlib-only QGIS Python runtime), so it
-    streams the exported file's bytes to the agent over plain HTTP and the
-    agent does the actual object-store PUT.
+    streams the exported file's bytes to the agent over plain HTTP and the agent
+    does the actual object-store PUT.
 
     Raises ``ObjectTooLargeError`` when ``data`` exceeds ``MAX_INGEST_BYTES``.
     """
@@ -322,9 +322,9 @@ def _read_uploaded_vector_to_gdf(raw_bytes: bytes, ext: str, crs_authid: str | N
 
 
 def _write_fgb_bytes(gdf) -> bytes:
-    """GeoDataFrame -> FlatGeobuf bytes (the DATA-face format every other
-    vector case layer uses; matches ``compute_contours`` etc's
-    ``to_file(..., driver="FlatGeobuf", engine="pyogrio")`` convention)."""
+    """GeoDataFrame -> FlatGeobuf bytes (the DATA-face format every other vector
+    case layer uses; matches ``compute_contours`` etc's ``to_file(...,
+    driver="FlatGeobuf", engine="pyogrio")`` convention)."""
     tmp_path: str | None = None
     try:
         with tempfile.NamedTemporaryFile(
@@ -371,11 +371,11 @@ async def _ingest_vector(
         _put_object_bytes, fgb_uri, fgb_bytes, content_type="application/octet-stream"
     )
 
-    # Reuse the Phase-0 durable-vector-GeoJSON writer UNCHANGED -- it
-    # re-reads the fgb we just wrote and materializes the browser-readable
-    # DISPLAY face at the frozen key. Fail-open (None) is honored: the layer
-    # still registers, just without a cold-view display asset (the live
-    # inline-GeoJSON path still works while the agent box is awake).
+    # Reuse the Phase-0 durable-vector-GeoJSON writer UNCHANGED -- it re-reads the
+    # fgb we just wrote and materializes the browser-readable DISPLAY face at the
+    # frozen key. Fail-open (None) is honored: the layer still registers, just
+    # without a cold-view display asset (the live inline-GeoJSON path still works
+    # while the agent box is awake).
     from trid3nt_server.agent.tools.publish_layer.publish_layer import _write_durable_vector_geojson
 
     geojson_uri = await asyncio.to_thread(
@@ -461,10 +461,10 @@ async def _ingest_raster(
 
     bounds = await asyncio.to_thread(_validate_raster_and_bounds, raw_bytes, crs_authid)
 
-    # Reuse publish_layer VERBATIM -- it owns F33 COG-overview validation,
-    # style resolution, and TiTiler tile-template minting for an s3:// raster.
-    # It is a blocking (sync) call (boto3 + rasterio internally); run it off
-    # the event loop.
+    # Reuse publish_layer VERBATIM -- it owns F33 COG-overview validation, style
+    # resolution, and TiTiler tile-template minting for an s3:// raster. It is a
+    # blocking (sync) call (boto3 + rasterio internally); run it off the event
+    # loop.
     from trid3nt_server.agent.tools.publish_layer.publish_layer import PublishLayerError, publish_layer
 
     try:
@@ -514,13 +514,13 @@ async def _merge_layer_into_case(
     case_id: str, summary: dict[str, Any], *, bbox: list[float] | None, make_aoi: bool
 ) -> bool:
     """Persist ``summary`` onto the Case's ``loaded_layer_summaries`` +
-    ``layer_summary`` (append, or replace-in-place on a ``layer_id``
-    collision). When ``make_aoi``, also pins ``Case.bbox`` from ``bbox``
-    (mirrors the F32 ``_pin_case_aoi_from_*`` write shape in ``server.py``:
+    ``layer_summary`` (append, or replace-in-place on a ``layer_id`` collision).
+    When ``make_aoi``, also pins ``Case.bbox`` from ``bbox`` (mirrors the F32
+    ``_pin_case_aoi_from_*`` write shape in ``server.py``:
     ``case.model_copy(update={...})`` + ``upsert_case``).
 
-    Returns True. Raises ``CaseNotFoundError`` when the case does not exist
-    or Persistence is unbound.
+    Returns True. Raises ``CaseNotFoundError`` when the case does not exist or
+    Persistence is unbound.
     """
     from trid3nt_server.server import get_persistence
 
@@ -558,12 +558,12 @@ async def _merge_layer_into_case(
 
 
 async def _require_case_exists(case_id: str) -> None:
-    """Fail fast with ``CaseNotFoundError`` before doing any ingest work
-    (S3 reads, geopandas/rasterio conversion, ``publish_layer``) for a case
-    that does not exist. ``_merge_layer_into_case`` re-reads the case right
-    before its write regardless (freshness -- mirrors the
-    ``_pin_case_aoi_from_*`` re-read-before-write convention in server.py),
-    so this is a cheap early exit, not the only guard.
+    """Fail fast with ``CaseNotFoundError`` before doing any ingest work (S3
+    reads, geopandas/rasterio conversion, ``publish_layer``) for a case that does
+    not exist. ``_merge_layer_into_case`` re-reads the case right before its write
+    regardless (freshness -- mirrors the ``_pin_case_aoi_from_*``
+    re-read-before-write convention in server.py), so this is a cheap early exit,
+    not the only guard.
     """
     from trid3nt_server.server import get_persistence
 
@@ -580,14 +580,14 @@ async def _require_case_exists(case_id: str) -> None:
 async def _notify_live_sessions(case_id: str) -> None:
     """Best-effort: nudge any LIVE session with ``case_id`` open.
 
-    Pushes the EXISTING ``case-list`` envelope (the same side-channel every
-    other case-mutating flow uses, e.g. ``_emit_case_list`` after create /
-    rename / archive / delete) rather than a fabricated ``session-state`` --
-    this cold entry point has no live ``PipelineEmitter`` to source a
-    truthful ``chat_history`` from. NEVER raises; a missing/unreachable
-    session, an unbound Persistence, or any send failure is silently
-    swallowed -- durable persistence (``_merge_layer_into_case``) is the real
-    contract; this is a nice-to-have nudge on top of it.
+    Pushes the EXISTING ``case-list`` envelope (the same side-channel every other
+    case-mutating flow uses, e.g. ``_emit_case_list`` after create / rename /
+    archive / delete) rather than a fabricated ``session-state`` -- this cold
+    entry point has no live ``PipelineEmitter`` to source a truthful
+    ``chat_history`` from. NEVER raises; a missing/unreachable session, an unbound
+    Persistence, or any send failure is silently swallowed -- durable persistence
+    (``_merge_layer_into_case``) is the real contract; this is a nice-to-have
+    nudge on top of it.
     """
     try:
         from trid3nt_server import server as _server
@@ -639,9 +639,9 @@ async def ingest_user_layer(
     Raises: ``ImportLayerInputError`` (bad kind / empty case_id or s3_uri),
     ``ObjectNotFoundError``/``ObjectTooLargeError`` (the s3_uri fails the
     existence/size gate), ``UnreadableLayerError`` (exists + in-cap but not a
-    valid artifact of ``kind``), ``CaseNotFoundError`` (no such case /
-    Persistence unbound). Never a bare traceback -- every failure is one of
-    the above typed subclasses of ``ImportLayerError``.
+    valid artifact of ``kind``), ``CaseNotFoundError`` (no such case / Persistence
+    unbound). Never a bare traceback -- every failure is one of the above typed
+    subclasses of ``ImportLayerError``.
     """
     import asyncio
 
@@ -745,22 +745,22 @@ async def register_case_layer(
 
     USE THIS when the user says something like "use the file I just
     uploaded/pushed from QGIS" or "make the layer I pushed the AOI" -- the
-    artifact must ALREADY be in object storage (the QGIS plugin uploads it
-    via its own HTTP route before this tool is ever reachable; there is no
-    way to hand this tool raw bytes).
+    artifact must ALREADY be in object storage (the QGIS plugin uploads it via
+    its own HTTP route before this tool is ever reachable; there is no way to hand
+    this tool raw bytes).
 
     Params:
         s3_uri: the ``s3://`` object holding the uploaded artifact.
         name: human-readable display name for the layer panel.
         kind: ``"vector"`` or ``"raster"``.
-        case_id: the case to register onto. REQUIRED in practice -- when
-            omitted the server-side dispatch wrapper substitutes the turn's
-            active case (mirrors ``publish_layer``'s ``case_id`` transport
-            convention); a genuinely case-less call raises CASE_NOT_FOUND.
-        make_aoi: when True, also pins the Case's AOI (bounding box) to the
-            pushed layer's extent.
-        crs_authid: optional CRS hint (e.g. ``"EPSG:2263"``) used ONLY when
-            the uploaded artifact carries no embedded CRS.
+        case_id: the case to register onto. REQUIRED in practice -- when omitted
+            the server-side dispatch wrapper substitutes the turn's active case
+            (mirrors ``publish_layer``'s ``case_id`` transport convention); a
+            genuinely case-less call raises CASE_NOT_FOUND.
+        make_aoi: when True, also pins the Case's AOI (bounding box) to the pushed
+            layer's extent.
+        crs_authid: optional CRS hint (e.g. ``"EPSG:2263"``) used ONLY when the
+            uploaded artifact carries no embedded CRS.
 
     Returns:
         {"status": "ok", "layer_id": str, "name": str,
@@ -769,8 +769,8 @@ async def register_case_layer(
          "aoi_pinned": bool, "feature_count": int | None}
 
     Raises:
-        ImportLayerError subclasses (see ``ingest_user_layer``) -- every
-        failure is typed and honest, never a bare traceback.
+        ImportLayerError subclasses (see ``ingest_user_layer``) -- every failure
+        is typed and honest, never a bare traceback.
     """
     if not case_id:
         raise CaseNotFoundError(

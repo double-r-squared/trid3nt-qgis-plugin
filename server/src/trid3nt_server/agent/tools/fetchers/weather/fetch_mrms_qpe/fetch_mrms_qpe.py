@@ -730,8 +730,9 @@ def fetch_mrms_qpe(
       for the same storm event) and ``fetch_nws_alerts_conus`` (NWS watches/
       warnings) for a complete storm-situation display.
     - Consumed by: ``run_sfincs`` (via ``set_sfincs_parameters``) as pluvial
-      precipitation forcing (Case 3 composer); ``spatial_query``
-      for per-watershed accumulation queries.
+      precipitation forcing (Case 3 composer); per-watershed accumulation
+      queries composed in the code_exec playground (zonal stats over a
+      polygon).
     - Alternative for non-CONUS: ``fetch_era5_reanalysis`` (global, 27 km,
       needs Copernicus CDS key).
 

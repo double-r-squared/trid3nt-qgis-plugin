@@ -1359,9 +1359,11 @@ async def _handle_building_detail(query_string: str) -> bytes:
 # ---------------------------------------------------------------------------
 #
 # Two routes back the web's per-case "Export to QGIS" kebab item:
-#   POST /api/export-qgis {"case_id": "..."}  -> run the open_case_in_qgis
-#     tool in-process; 200 with its result dict, typed tool errors -> 4xx
-#     with {"error": <honest message>} (never a traceback).
+#   POST /api/export-qgis {"case_id": "..."}  -> run hydrate_case_layers (the
+#     REMOTE-mode materialize fallback) in-process; 200 with its result dict,
+#     typed errors -> 4xx with {"error": <honest message>} (never a traceback).
+#     Wire-compatible with the installed field plugin; the NEW plugin uses
+#     /api/case-layers (manifest) locally and this route only in remote mode.
 #   GET  /api/export-qgis/file?path=<abs>     -> serve the produced .qgz/.gpkg
 #     bytes, ONLY when the resolved real path lives inside the export root
 #     (TRID3NT_EXPORT_DIR, default ~/trid3nt-exports) -- anything else is a
@@ -1381,20 +1383,21 @@ class _ExportQgisNotFound(Exception):
 
 
 def _export_qgis_fn():
-    """Lazy-import seam for the export tool (heavy geo deps load on first
-    call, not at listener start; monkeypatchable in tests)."""
-    from .agent.tools.meta.open_case_in_qgis.open_case_in_qgis import open_case_in_qgis
+    """Lazy-import seam for the case-layer materializer (heavy geo deps load on
+    first call, not at listener start; monkeypatchable in tests)."""
+    from .cases.hydrate_case_layers import hydrate_case_layers
 
-    return open_case_in_qgis
+    return hydrate_case_layers
 
 
 async def _handle_export_qgis_post(raw_body: bytes) -> bytes:
     """Resolve the JSON body for ``POST /api/export-qgis``.
 
-    Validates ``{"case_id": "..."}``, awaits the ``open_case_in_qgis`` tool,
-    and returns its encoded result dict. Raises ``_ExportQgisBadRequest``
-    (-> 400) on malformed input; the tool's own typed ``ExportCaseError``
-    subclasses propagate for the dispatcher to map to honest 4xx bodies.
+    Validates ``{"case_id": "..."}``, awaits ``hydrate_case_layers`` (the
+    REMOTE-mode materialize fallback), and returns its encoded result dict.
+    Raises ``_ExportQgisBadRequest`` (-> 400) on malformed input; the
+    materializer's own typed ``HydrateCaseError`` subclasses propagate for the
+    dispatcher to map to honest 4xx bodies.
     """
     try:
         payload = json.loads(raw_body.decode("utf-8")) if raw_body.strip() else None
@@ -1409,6 +1412,66 @@ async def _handle_export_qgis_post(raw_body: bytes) -> bytes:
         raise _ExportQgisBadRequest("missing or empty `case_id`")
 
     result = await _export_qgis_fn()(case_id=case_id.strip())
+    return json.dumps(result, separators=(",", ":")).encode("utf-8")
+
+
+# ---------------------------------------------------------------------------
+# /api/case-layers -- the PRIMARY case-hydration path (manifest, no
+# materialization).
+#
+# Returns the case's persisted layer registry as ``{"loaded_layers": [...]}``
+# (plus case_id/title/bbox) so the plugin's local "Open case in QGIS" adds each
+# layer straight from its store URI -- the SAME by-URI path live-published
+# layers use. The REMOTE-mode client (which cannot reach the object store
+# directly) uses the /api/export-qgis materialize fallback above instead.
+# Local-mode gated exactly like /api/case-list: ABSENT (404) outside the local
+# single-user seam (no honest per-user identity without a session on cloud).
+# ---------------------------------------------------------------------------
+
+
+class _CaseLayersBadRequest(Exception):
+    """Malformed /api/case-layers request (bad JSON / missing case_id)."""
+
+
+def _case_layers_route_enabled() -> bool:
+    """The route exists only under the local single-user seam (mirrors
+    ``_case_list_route_enabled``)."""
+    try:
+        from .credentials.auth_handshake import _is_local_single_user_mode
+
+        return _is_local_single_user_mode()
+    except Exception:  # noqa: BLE001 -- import fault -> route absent
+        return False
+
+
+def _case_layers_fn():
+    """Lazy-import seam for the manifest builder (monkeypatchable in tests)."""
+    from .cases.hydrate_case_layers import build_case_layers_manifest
+
+    return build_case_layers_manifest
+
+
+async def _handle_case_layers_post(raw_body: bytes) -> bytes:
+    """Resolve the JSON body for ``POST /api/case-layers``.
+
+    Validates ``{"case_id": "..."}``, awaits ``build_case_layers_manifest``, and
+    returns its encoded manifest dict. Raises ``_CaseLayersBadRequest`` (-> 400)
+    on malformed input; the builder's ``CaseNotFoundError`` propagates for the
+    dispatcher to map to an honest 404.
+    """
+    try:
+        payload = json.loads(raw_body.decode("utf-8")) if raw_body.strip() else None
+    except (UnicodeDecodeError, json.JSONDecodeError) as exc:
+        raise _CaseLayersBadRequest(f"body must be JSON: {exc}") from exc
+    if not isinstance(payload, dict):
+        raise _CaseLayersBadRequest(
+            'body must be a JSON object like {"case_id": "..."}'
+        )
+    case_id = payload.get("case_id")
+    if not isinstance(case_id, str) or not case_id.strip():
+        raise _CaseLayersBadRequest("missing or empty `case_id`")
+
+    result = await _case_layers_fn()(case_id.strip())
     return json.dumps(result, separators=(",", ":")).encode("utf-8")
 
 
@@ -1475,7 +1538,7 @@ def _apply_provider_config(raw_body: bytes) -> bytes:
 
 def _export_qgis_root() -> Path:
     """The only directory the file route may serve from: the export tool's
-    output root (same default as ``open_case_in_qgis``)."""
+    output root (same default as ``hydrate_case_layers``)."""
     raw = os.environ.get("TRID3NT_EXPORT_DIR") or str(Path.home() / "trid3nt-exports")
     return Path(raw).expanduser().resolve()
 
@@ -1612,7 +1675,7 @@ async def build_case_list_payload() -> dict[str, Any]:
 #   POST /api/ingest-layer {"case_id", "name", "kind", "s3_uri",
 #     "crs_authid"?, "make_aoi"?}  -- registers an ALREADY-uploaded object
 #     (normally the s3_uri from the call above) onto the case. Runs the
-#     ingest_user_layer core (register_case_layer.py): validates the object
+#     ingest_user_layer core (cases/ingest_user_layer.py): validates the object
 #     exists + is within the size cap, converts/validates the artifact,
 #     merges it into the case's durable loaded_layer_summaries, and
 #     best-effort-pins the AOI when make_aoi is true.
@@ -1640,14 +1703,14 @@ def _ingest_layer_route_enabled() -> bool:
 def _ingest_layer_fn():
     """Lazy-import seam for the ingest core (heavy geo deps load on first
     call, not at listener start; monkeypatchable in tests)."""
-    from .agent.tools.meta.register_case_layer.register_case_layer import ingest_user_layer
+    from .cases.ingest_user_layer import ingest_user_layer
 
     return ingest_user_layer
 
 
 def _upload_layer_file_fn():
     """Lazy-import seam for the staging-upload helper (monkeypatchable)."""
-    from .agent.tools.meta.register_case_layer.register_case_layer import upload_layer_file
+    from .cases.ingest_user_layer import upload_layer_file
 
     return upload_layer_file
 
@@ -2100,7 +2163,7 @@ async def _handle_http(
 
     if method == "POST" and proxy_path == "/api/export-qgis":
         # User-driven QGIS export: run the
-        # open_case_in_qgis tool for a case_id. Typed tool errors map to
+        # hydrate_case_layers materialize for a case_id. Typed errors map to
         # honest 4xx {"error": message} bodies -- never a traceback.
         raw_body = b""
         if content_length > 0:
@@ -2110,7 +2173,7 @@ async def _handle_http(
                 )
             except (asyncio.TimeoutError, asyncio.IncompleteReadError):
                 raw_body = b""
-        from .agent.tools.meta.open_case_in_qgis.open_case_in_qgis import CaseNotFoundError, ExportCaseError
+        from .cases.hydrate_case_layers import CaseNotFoundError, HydrateCaseError
 
         try:
             body = await _handle_export_qgis_post(raw_body)
@@ -2133,10 +2196,10 @@ async def _handle_http(
                     ),
                 )
             )
-        except ExportCaseError as exc:
-            # INVALID_INPUT / NO_EXPORTABLE_LAYERS / EXPORT_FAILED -- the
-            # tool's honest message, as a client error (the request was
-            # well-formed HTTP but the export cannot succeed).
+        except HydrateCaseError as exc:
+            # INVALID_INPUT / NO_EXPORTABLE_LAYERS / HYDRATE_FAILED -- the
+            # materializer's honest message, as a client error (the request was
+            # well-formed HTTP but the materialization cannot succeed).
             writer.write(
                 _format_response(
                     400,
@@ -2152,6 +2215,63 @@ async def _handle_http(
         writer.close()
         return
 
+    if method == "POST" and proxy_path == "/api/case-layers":
+        # PRIMARY case-hydration: return the case's persisted layer manifest so
+        # the plugin's local "Open case in QGIS" adds each layer by store URI
+        # (see the module section above _case_layers_route_enabled). Local-mode
+        # gated -- ABSENT (404) on the cloud surface.
+        if not _case_layers_route_enabled():
+            writer.write(_format_response(404, b'{"error":"not found"}'))
+            await writer.drain()
+            writer.close()
+            return
+        raw_body = b""
+        if content_length > 0:
+            try:
+                raw_body = await asyncio.wait_for(
+                    reader.readexactly(content_length), timeout=30.0
+                )
+            except (asyncio.TimeoutError, asyncio.IncompleteReadError):
+                raw_body = b""
+        from .cases.hydrate_case_layers import CaseNotFoundError, HydrateCaseError
+
+        try:
+            body = await _handle_case_layers_post(raw_body)
+            writer.write(_format_response(200, body))
+        except _CaseLayersBadRequest as exc:
+            writer.write(
+                _format_response(
+                    400,
+                    json.dumps({"error": str(exc)}, separators=(",", ":")).encode(
+                        "utf-8"
+                    ),
+                )
+            )
+        except CaseNotFoundError as exc:
+            writer.write(
+                _format_response(
+                    404,
+                    json.dumps({"error": str(exc)}, separators=(",", ":")).encode(
+                        "utf-8"
+                    ),
+                )
+            )
+        except HydrateCaseError as exc:
+            writer.write(
+                _format_response(
+                    400,
+                    json.dumps({"error": str(exc)}, separators=(",", ":")).encode(
+                        "utf-8"
+                    ),
+                )
+            )
+        except Exception:  # noqa: BLE001
+            logger.exception("case-layers manifest build failed")
+            writer.write(_format_response(500, b'{"error":"case layers failed"}'))
+        await writer.drain()
+        writer.close()
+        return
+
     if method == "POST" and proxy_path == "/api/ingest-layer-file":
         # Bidirectional layer push, half 1: stage the plugin's raw upload
         # bytes to object storage. Local-mode gated -- see the module section
@@ -2161,7 +2281,7 @@ async def _handle_http(
             await writer.drain()
             writer.close()
             return
-        from .agent.tools.meta.register_case_layer.register_case_layer import MAX_INGEST_BYTES
+        from .cases.ingest_user_layer import MAX_INGEST_BYTES
 
         if content_length <= 0:
             writer.write(
@@ -2187,7 +2307,7 @@ async def _handle_http(
             await writer.drain()
             writer.close()
             return
-        from .agent.tools.meta.register_case_layer.register_case_layer import ImportLayerError, ObjectTooLargeError
+        from .cases.ingest_user_layer import ImportLayerError, ObjectTooLargeError
 
         try:
             filename = _parse_ingest_layer_filename(proxy_qs)
@@ -2260,7 +2380,7 @@ async def _handle_http(
                 )
             except (asyncio.TimeoutError, asyncio.IncompleteReadError):
                 raw_body = b""
-        from .agent.tools.meta.register_case_layer.register_case_layer import CaseNotFoundError, ImportLayerError, ObjectNotFoundError
+        from .cases.ingest_user_layer import CaseNotFoundError, ImportLayerError, ObjectNotFoundError
 
         try:
             body = await _handle_ingest_layer_post(raw_body)

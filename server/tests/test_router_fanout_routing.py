@@ -237,6 +237,9 @@ class _FakeResp:
     def __init__(self, status_code=200, text=""):
         self.status_code = status_code
         self.text = text
+        self.content = text.encode("utf-8")
+        self.headers: dict[str, str] = {}
+        self.url = "http://example.test/fake"
 
 
 @pytest.mark.parametrize("status", [404, 403, 429, 500])

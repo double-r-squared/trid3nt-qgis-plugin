@@ -144,7 +144,7 @@ def _layer_stats_line(layer: dict[str, Any], tmpdir: str) -> str:
         _summarize_raster,
         _summarize_vector,
     )
-    from trid3nt_server.agent.tools.meta.open_case_in_qgis.open_case_in_qgis import _strip_query, _unwrap_tile_template
+    from trid3nt_server.cases.hydrate_case_layers import _strip_query, _unwrap_tile_template
 
     uri = str(layer.get("uri") or "")
     if not uri:

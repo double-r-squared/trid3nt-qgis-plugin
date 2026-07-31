@@ -1,10 +1,11 @@
-"""HTTP-route wiring tests for /api/export-qgis on the catalog listener.
+"""HTTP-route wiring tests for /api/export-qgis + /api/case-layers.
 
-User-driven QGIS export (NATE 2026-07-06): the web's per-case "Export to
-QGIS" kebab item POSTs a case_id here; the route awaits the
-``open_case_in_qgis`` tool and returns its result dict. A sibling GET
-serves the produced .qgz/.gpkg bytes, path-traversal guarded to the export
-root (TRID3NT_EXPORT_DIR, default ~/trid3nt-exports).
+The plugin's "Open case in QGIS" has two server routes: POST /api/case-layers
+returns the case-layers manifest (the PRIMARY local path -- add layers by store
+URI), and POST /api/export-qgis awaits ``hydrate_case_layers`` (the REMOTE-mode
+materialize fallback) and returns its result dict. A sibling GET serves the
+produced .qgz/.gpkg bytes, path-traversal guarded to the export root
+(TRID3NT_EXPORT_DIR, default ~/trid3nt-exports).
 
 Exercises ``tool_catalog_http._handle_http`` dispatch:
   - POST happy path (monkeypatched export fn) -> 200 with the result dict;
@@ -23,7 +24,7 @@ import asyncio
 import json
 
 from trid3nt_server import tool_catalog_http
-from trid3nt_server.agent.tools.meta.open_case_in_qgis.open_case_in_qgis import (
+from trid3nt_server.cases.hydrate_case_layers import (
     CaseNotFoundError,
     NoExportableLayersError,
 )
@@ -178,10 +179,10 @@ def test_export_qgis_post_case_not_found_404(monkeypatch):
 
 
 def test_export_qgis_post_typed_tool_error_400(monkeypatch):
-    """Other typed ExportCaseError subclasses map to an honest 400."""
+    """Other typed HydrateCaseError subclasses map to an honest 400."""
 
     async def _fake_export(**kwargs):
-        raise NoExportableLayersError("case '01EMPTY' has no layers to export.")
+        raise NoExportableLayersError("case '01EMPTY' has no layers to materialize.")
 
     monkeypatch.setattr(tool_catalog_http, "_export_qgis_fn", lambda: _fake_export)
 
@@ -190,6 +191,72 @@ def test_export_qgis_post_typed_tool_error_400(monkeypatch):
     assert "no layers" in _body_json(out)["error"]
     # Honest text only -- never a traceback.
     assert b"Traceback" not in out
+
+
+# ---------------------------------------------------------------------------
+# POST /api/case-layers -- the PRIMARY manifest path (local-mode gated)
+# ---------------------------------------------------------------------------
+
+
+def test_case_layers_post_happy_path(monkeypatch):
+    """A well-formed case_id runs the manifest builder and relays its dict."""
+    calls: list[str] = []
+    manifest = {
+        "case_id": "01CASE",
+        "title": "Mexico Beach",
+        "bbox": [-85.5, 29.9, -85.4, 30.0],
+        "loaded_layers": [
+            {"layer_id": "L1", "name": "Depth", "layer_type": "raster",
+             "uri": "s3://runs/01RUN/depth.tif"},
+        ],
+    }
+
+    async def _fake_manifest(case_id):
+        calls.append(case_id)
+        return dict(manifest)
+
+    monkeypatch.setattr(tool_catalog_http, "_case_layers_route_enabled", lambda: True)
+    monkeypatch.setattr(tool_catalog_http, "_case_layers_fn", lambda: _fake_manifest)
+
+    out = _drive(_post("/api/case-layers", b'{"case_id": "01CASE"}'))
+    assert b"200 OK" in out
+    assert _body_json(out) == manifest
+    assert calls == ["01CASE"]
+
+
+def test_case_layers_post_route_absent_when_not_local(monkeypatch):
+    """Outside the local single-user seam the route is ABSENT (404)."""
+    monkeypatch.setattr(tool_catalog_http, "_case_layers_route_enabled", lambda: False)
+    out = _drive(_post("/api/case-layers", b'{"case_id": "01CASE"}'))
+    assert b"404 Not Found" in out
+
+
+def test_case_layers_post_missing_case_id_400(monkeypatch):
+    """A body without case_id is a typed 400; the builder is never invoked."""
+
+    def _never():  # pragma: no cover -- validation must run first
+        raise AssertionError("manifest fn must not be resolved on a bad request")
+
+    monkeypatch.setattr(tool_catalog_http, "_case_layers_route_enabled", lambda: True)
+    monkeypatch.setattr(tool_catalog_http, "_case_layers_fn", _never)
+
+    out = _drive(_post("/api/case-layers", b"{}"))
+    assert b"400 Bad Request" in out
+    assert "case_id" in _body_json(out)["error"]
+
+
+def test_case_layers_post_case_not_found_404(monkeypatch):
+    """The builder's typed CASE_NOT_FOUND maps to an honest 404."""
+
+    async def _fake_manifest(case_id):
+        raise CaseNotFoundError("case '01GONE' not found.")
+
+    monkeypatch.setattr(tool_catalog_http, "_case_layers_route_enabled", lambda: True)
+    monkeypatch.setattr(tool_catalog_http, "_case_layers_fn", lambda: _fake_manifest)
+
+    out = _drive(_post("/api/case-layers", b'{"case_id": "01GONE"}'))
+    assert b"404 Not Found" in out
+    assert _body_json(out)["error"] == "case '01GONE' not found."
 
 
 # ---------------------------------------------------------------------------
