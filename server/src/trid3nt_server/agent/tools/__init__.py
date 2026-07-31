@@ -266,7 +266,9 @@ from .fetchers.ocean.fetch_gtsm_tide_surge import fetch_gtsm_tide_surge  # noqa:
 # (source.yaml + router), registered by _register_router_specs() below.
 from .fetchers.ocean.fetch_noaa_slr_confidence import fetch_noaa_slr_confidence  # noqa: E402,F401
 from .fetchers.ocean.fetch_noaa_slr_marsh import fetch_noaa_slr_marsh  # noqa: E402,F401
-from .fetchers.ocean.fetch_noaa_slr_scenarios import fetch_noaa_slr_scenarios  # noqa: E402,F401
+# fetch_noaa_slr_scenarios: data-router fold phase-2 wave-6 (ADR 0052) -- twin
+# DELETED, now spec-driven (source.yaml + the declarative fan-out router mode),
+# registered by _register_router_specs() below.
 from .fetchers.ocean.fetch_noaa_sst import fetch_noaa_sst  # noqa: E402,F401
 from .fetchers.ocean.fetch_topobathy import fetch_topobathy  # noqa: E402,F401
 
@@ -317,7 +319,9 @@ from .fetchers.socioeconomic.fetch_buildings import fetch_buildings  # noqa: E40
 # (source.yaml + router), registered by _register_router_specs() below.
 # fetch_census_acs: data-router fold pilot -- twin DELETED, now spec-driven
 # (source.yaml + router JOIN transform), registered by _register_router_specs() below.
-from .fetchers.socioeconomic.fetch_epa_ejscreen import fetch_epa_ejscreen  # noqa: E402,F401
+# fetch_epa_ejscreen: data-router fold phase-2 wave-6 (ADR 0052) -- twin DELETED,
+# now spec-driven (source.yaml + the esri_json ingest mode + percentile/fraction/
+# raw column kinds + from_param routing), registered by _register_router_specs().
 from .fetchers.socioeconomic.fetch_field_boundaries import fetch_field_boundaries  # noqa: E402,F401
 from .fetchers.socioeconomic.fetch_ghsl_population import fetch_ghsl_population  # noqa: E402,F401
 from .fetchers.socioeconomic.fetch_hrsl_population import fetch_hrsl_population  # noqa: E402,F401
@@ -344,7 +348,9 @@ from .fetchers.hazard.fetch_landfire_fuels import fetch_landfire_fuels  # noqa: 
 from .fetchers.hazard.fetch_openfema_disasters import fetch_openfema_disasters  # noqa: E402,F401
 from .fetchers.hazard.fetch_tsunami_events import fetch_tsunami_events  # noqa: E402,F401
 from .fetchers.hazard.fetch_usace_dams import fetch_usace_dams  # noqa: E402,F401
-from .fetchers.hazard.fetch_usace_levees import fetch_usace_levees  # noqa: E402,F401
+# fetch_usace_levees: data-router fold phase-2 wave-6 (ADR 0052) -- twin DELETED,
+# now spec-driven (source.yaml + endpoint_by_param sub-layer routing +
+# properties_by_param), registered by _register_router_specs() below.
 from .fetchers.hazard.fetch_usfs_canopy_fuels import fetch_usfs_canopy_fuels  # noqa: E402,F401
 from .fetchers.hazard.fetch_usgs_earthquakes import fetch_usgs_earthquakes  # noqa: E402,F401
 from .fetchers.hazard.fetch_usgs_volcano_alerts import fetch_usgs_volcano_alerts  # noqa: E402,F401

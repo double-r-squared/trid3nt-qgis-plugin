@@ -1,0 +1,141 @@
+# Router source spec (data-router fold, phase-2 wave-6 VECTOR/ZIP family, ADR 0052).
+# Twin: fetch_usace_levees.py (was SPEC-EXPRESSIBLE; wave-2 deferred it for lack
+# of per-enum sub-layer routing). Uses the NEW endpoint_by_param (layer -> NLD
+# FeatureServer sub-layer) + properties_by_param (per-layer kept-column set) +
+# json_coerce_nested (STATES/COUNTIES list fields -> JSON strings).
+schema_version: v1
+
+name: fetch_usace_levees
+source_class: usace_nld                     # cache prefix
+error_prefix: USACE_LEVEES                   # twin A.6 token (USACE_LEVEES_*)
+input_error_suffix: INPUT_INVALID           # USACELeveeInputError -> USACE_LEVEES_INPUT_INVALID
+shape: vector-fgb
+supports_global_query: true                 # None bbox -> CONUS+AK+HI sweep
+
+endpoints:
+  areas:
+    url: "https://services2.arcgis.com/FiaPA4ga0iQKduv3/arcgis/rest/services/NLD2_PUBLIC_v1/FeatureServer/16/query"
+  routes:
+    url: "https://services2.arcgis.com/FiaPA4ga0iQKduv3/arcgis/rest/services/NLD2_PUBLIC_v1/FeatureServer/14/query"
+  embankments:
+    url: "https://services2.arcgis.com/FiaPA4ga0iQKduv3/arcgis/rest/services/NLD2_PUBLIC_v1/FeatureServer/10/query"
+auth:
+  mode: none
+  user_agent: "trid3nt/0.1 (Hazard Modeling Agent; https://github.com/double-r-squared/trid3nt-qgis-plugin; agent@trid3nt.dev)"
+
+params:
+  bbox:  {type: bbox, required: false, schema_optional: true, quantize: round_6dp}
+  layer: {type: enum, required: false, default: leveed_areas,
+          values: [leveed_areas, system_routes, embankments]}
+gates:
+  max_features: 20000                        # twin _MAX_PAGES(20) * _PAGE_SIZE(1000)
+
+ingest:
+  query_template:
+    out_fields: "*"                           # twin requests all fields, projects client-side
+    f: geojson
+  pagination: {mode: exceeded_transfer_limit, page_size: 1000}
+  endpoint_by_param:                          # layer enum -> sub-layer endpoint
+    param: layer
+    map: {leveed_areas: areas, system_routes: routes, embankments: embankments}
+  json_coerce_nested: true                    # STATES/COUNTIES/... list fields -> JSON strings
+  properties_by_param:                        # per-layer kept-column set (twin _LAYER_PROPERTIES)
+    param: layer
+    map:
+      leveed_areas: [OBJECTID, SYSTEM_ID, SYSTEM_NAME, LEVEED_ID, LEVEED_AREA_SQ_MI,
+                     LEVEED_AREA_METHOD, STATES, COUNTIES, COMMUNITY_NAMES, DISTRICTS,
+                     FEMA_REGION_NAMES, FEMA_ACCREDITATION_RATING, OVERTOPPING_ACE,
+                     REHAB_PROGRAM_STATUS, RESPONSIBLE_ORGANIZATION, SPONSORS,
+                     SPONSOR_TYPE, FLOOD_SOURCES, WARNING_SYSTEM]
+      system_routes: [OBJECTID, SYSTEM_ID, SYSTEM_NAME, ROUTE_ID, SYSTEM_TYPE,
+                      SYSTEM_AUTHORIZATION, SYSTEM_IS_USACE, AVERAGE_HEIGHT, MAX_HEIGHT,
+                      MIN_HEIGHT, STATES, COUNTIES, DISTRICTS, FEMA_REGION_NAMES,
+                      FEMA_ACCREDITATION_RATING, OVERTOPPING_ACE, REHAB_PROGRAM_STATUS,
+                      RESPONSIBLE_ORGANIZATION, SPONSORS, FLOOD_SOURCES]
+      embankments: [OBJECTID, SYSTEM_ID, SYSTEM_NAME, STATES, COUNTIES,
+                    FEMA_REGION_NAMES, FEMA_ACCREDITATION_RATING, RESPONSIBLE_ORGANIZATION,
+                    SPONSORS]
+
+normalize:
+  crs: "EPSG:4326"
+  units: null
+
+output:
+  layer_type: vector
+  ext: fgb
+  role: context
+  style_preset: "usace_levees"
+  emit_bbox: false                            # twin LayerURI omits bbox
+
+cache:
+  ttl_class: static-30d
+payload_estimate:                             # twin: per-layer national-count * per-feature
+  model: per_feature
+  features_per_sq_deg: 2.0
+  kb_per_feature: 20.0
+  floor_mb: 0.02
+
+caveats:
+  - "USACE National Levee Database (federally inspected levees); layer=leveed_areas|system_routes|embankments"
+  - "None bbox -> CONUS+AK+HI sweep; empty bbox (no NLD levees) -> header-only FGB (honest-empty), never USACE_LEVEES_EMPTY by default"
+fallback: []
+
+docstring: |-
+  USACE National Levee Database (NLD) features as a FlatGeobuf layer.
+
+  The US-authoritative inventory of federally inspected levee infrastructure
+  (~1500 levee systems / ~3000 leveed areas / ~25000 embankment segments).
+  Wraps the USACE NLD ArcGIS REST FeatureService with server-side bbox
+  filtering, pagination, and a per-layer property subset.
+
+  Use this when:
+  - User asks "what levees protect [city]?" / "where are the levees in
+    [state]?" / "show me the New Orleans levees".
+  - A flood-modeling workflow needs a levee footprint as a critical-
+    infrastructure context overlay (breach risk, overtopping, FEMA
+    accreditation).
+  - Intersecting flood-warning polygons (``fetch_nws_alerts_conus``) or
+    FEMA flood zones (``fetch_fema_nfhl_zones``) with leveed-area polygons
+    to surface "X people / Y assets in protected areas under warning".
+
+  Do NOT use this for:
+  - Dam infrastructure (use a future ``fetch_usace_nid``).
+  - Building / structure inventories behind levees (use
+    ``fetch_usace_nsi`` or ``fetch_buildings``).
+  - Flood-zone or floodplain regulatory polygons (use
+    ``fetch_fema_nfhl_zones``).
+  - Private / non-federal levees outside the NLD (small agricultural
+    levees may not appear).
+  - Historical breach / failure case studies (publications, not a
+    FeatureService).
+
+  Parameters:
+      bbox: Optional ``(min_lon, min_lat, max_lon, max_lat)`` in EPSG:4326,
+          each value in ``[-180, 180]`` / ``[-90, 90]`` with min < max.
+          None → CONUS+AK+HI sweep. Example: ``(-90.3, 29.7, -89.7, 30.2)``
+          for the New Orleans metro area.
+      layer: One of ``"leveed_areas"`` (default; protected-area polygons,
+          best for impact analysis), ``"system_routes"`` (centerline
+          polylines, one per system_id, best for map overview), or
+          ``"embankments"`` (segment-level alignment polylines, best for
+          per-segment height / condition analysis).
+
+  Returns:
+      ``LayerURI`` pointing at a FlatGeobuf in the cache bucket:
+      ``s3://trid3nt-cache/cache/static-30d/usace_nld/<key>.fgb``.
+      ``layer_type="vector"``, ``role="context"``, ``units=None``.
+      Properties preserved per ``_LAYER_PROPERTIES[layer]``: at minimum
+      ``SYSTEM_ID``, ``SYSTEM_NAME``, ``STATES``, ``COUNTIES``,
+      ``FEMA_ACCREDITATION_RATING``, ``RESPONSIBLE_ORGANIZATION``.
+
+  Cross-tool dependencies: typically downstream of ``geocode_location`` /
+  ``fetch_administrative_boundaries`` to derive bbox; feeds
+  ``spatial_query`` (clip to a state/county polygon),
+  ``compute_zonal_statistics`` (population/asset rollups via
+  ``fetch_buildings`` + ``fetch_hrsl_population``), and intersection with
+  ``fetch_nws_alerts_conus`` flood warnings.
+
+  Cache: ``static-30d`` (NLD updates quarterly). Cache key: SHA-256 of
+  ``(bbox-rounded-6dp-or-"global", layer)``. Source-tier: FR-HEP-2 Tier 1
+  (USACE federal authority). On upstream failure raises
+  ``USACELeveeUpstreamError(retryable=True)`` per FR-AS-11.

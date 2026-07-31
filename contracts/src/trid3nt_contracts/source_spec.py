@@ -77,9 +77,13 @@ AuthMode = Literal["none", "api_key_env", "cds", "vault", "token"]
 #: ``point`` = a 2-element ``[lon, lat]`` float list (nldi seed_point); the
 #: router coerces + finite-checks it and leaves the CONUS / mutual-exclusion
 #: gate to the delegating executor (phase-2 wave-3, ADR 0040).
+#: ``float_list`` = a scalar float OR a ``list[float]`` (slr_scenarios
+#: scenario_ft) validated against ``values`` (the allowed level set),
+#: sorted + deduped -- the fan-out mode's per-value driver (phase-2 wave-6,
+#: ADR 0052). A scalar is coerced to a 1-element list.
 ParamType = Literal[
     "bbox", "iso_date", "enum", "int", "float", "str", "int_range", "date_compact",
-    "point",
+    "point", "float_list",
 ]
 
 #: Payload-estimate models (contract sec 1.1 ``payload_estimate.model``).
@@ -159,6 +163,11 @@ class ParamSpec(GraceModel):
     #: ``_resolve_characteristic`` alias-or-passthrough contract. Default (None) =
     #: no aliasing (strict no-op for every prior spec).
     aliases: dict[str, str] | None = None
+    #: enum only: lower-case + strip the value BEFORE the allowed-set check
+    #: (epa_ejscreen ``indicator`` accepts case-insensitive aliases, echoing the
+    #: normalized key). Default False = the byte-identical strict-match behaviour
+    #: for every prior enum param.
+    lowercase: bool = False
 
 
 class GateSpec(GraceModel):

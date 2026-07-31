@@ -179,6 +179,10 @@ def validate_params(spec: SourceSpec, raw: dict[str, Any]) -> dict[str, Any]:
 
         elif pspec.type == "enum":
             allowed = pspec.values or []
+            # Case-insensitive enum (ejscreen indicator): normalize BEFORE the
+            # allowed-set check, echoing the normalized key (no-op when unset).
+            if getattr(pspec, "lowercase", False) and isinstance(value, str):
+                value = value.strip().lower()
             if value not in allowed:
                 raise router_input_error(sc, f"{pname}={value!r} not in {allowed}", sfx)
             out[pname] = value
@@ -236,6 +240,33 @@ def validate_params(spec: SourceSpec, raw: dict[str, Any]) -> dict[str, Any]:
             if not (-90.0 <= lat <= 90.0):
                 raise router_input_error(sc, f"{pname} lat out of [-90,90]: {lat!r}", sfx)
             out[pname] = [lon, lat]
+
+        elif pspec.type == "float_list":
+            # A scalar float OR a list[float] (slr_scenarios scenario_ft). Each
+            # entry must be in the allowed `values` set; the result is sorted +
+            # deduped for cache-key stability (the twin's _validate_scenario_ft).
+            if isinstance(value, bool):
+                raise router_input_error(sc, f"{pname}={value!r} must be a float or list[float]", sfx)
+            if isinstance(value, (int, float)):
+                raw_levels = [float(value)]
+            elif isinstance(value, (list, tuple)):
+                if not value:
+                    # An empty list falls back to the declared default (twin: [] -> DEFAULT).
+                    dv = pspec.default
+                    raw_levels = [float(v) for v in dv] if isinstance(dv, (list, tuple)) else []
+                else:
+                    raw_levels = []
+                    for v in value:
+                        if isinstance(v, bool) or not isinstance(v, (int, float)):
+                            raise router_input_error(sc, f"{pname} entries must be numeric; got {type(v).__name__}: {v!r}", sfx)
+                        raw_levels.append(float(v))
+            else:
+                raise router_input_error(sc, f"{pname} must be a float or list[float]; got {type(value).__name__}", sfx)
+            allowed = pspec.values or []
+            for lv in raw_levels:
+                if allowed and lv not in allowed:
+                    raise router_input_error(sc, f"{pname}={lv!r} not in {sorted(allowed)}", sfx)
+            out[pname] = sorted(set(raw_levels))
 
         elif pspec.type == "date_compact":
             # Accept 'YYYY-MM-DD' or 'YYYYMMDD'; normalize to the 8-digit compact
@@ -379,6 +410,11 @@ def select_executor(spec: SourceSpec) -> Callable[[SourceSpec, dict[str, Any]], 
         return dataretrieval_delegate.execute
     if spec.join is not None:
         return join_transform.execute
+    # Declarative fan-out (multi-query-per-value + merge, slr_scenarios). No-op
+    # for every prior spec (none declare ingest.fan_out).
+    if (spec.ingest or {}).get("fan_out"):
+        from .transforms import fan_out
+        return fan_out.execute
     if spec.shape == "raster-cog":
         ingest = spec.ingest or {}
         if "mosaic" in ingest or "tile_deg2" in ingest:

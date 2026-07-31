@@ -101,9 +101,51 @@ def _num(raw: Any) -> float:
     return float(raw)
 
 
-def _resolve_column(rule: dict[str, Any], src_props: dict[str, Any], out_row: dict[str, Any]) -> Any:
+def _norm_env(v: Any, kind: str) -> float | None:
+    """EPA-EJScreen sentinel normalizers (percentile [0,100] / fraction [0,1] /
+
+    raw). ``<= -999`` (EJSCREEN_NULL_SENTINELS[0]) or non-finite -> None; percentile
+    /fraction clamp to their range and reject out-of-tolerance sentinels; raw
+    passes any finite non-sentinel float. Byte-identical to the twin's three
+    ``_normalize_*`` helpers.
+    """
+    if v is None:
+        return None
+    try:
+        f = float(v)
+    except (TypeError, ValueError):
+        return None
+    if not math.isfinite(f) or f <= -999.0:
+        return None
+    if kind == "raw":
+        return f
+    hi = 100.0 if kind == "percentile" else 1.0
+    if f < -0.001 or f > hi + 0.001:
+        return None
+    return max(0.0, min(hi, f))
+
+
+def _resolve_column(
+    rule: dict[str, Any], src_props: dict[str, Any], out_row: dict[str, Any],
+    params: dict[str, Any] | None = None,
+) -> Any:
     kind = rule.get("kind", "passthrough")
     on_error = rule.get("on_error", "null")
+
+    # A param-echo column (ejscreen `indicator` = the validated request param).
+    if kind == "param":
+        return (params or {}).get(rule.get("param"))
+    # from_param: the SOURCE field is chosen by a request param through a map
+    # (ejscreen `value` <- INDICATORS[indicator]); resolve then fall through to
+    # the declared kind over that field.
+    if "from_param" in rule:
+        fp = rule.get("from_param") or {}
+        field = (fp.get("map") or {}).get((params or {}).get(fp.get("param")))
+        rule = {**rule, "from": field}
+    if kind in ("percentile", "fraction", "raw"):
+        present = rule.get("from") in src_props
+        raw = src_props.get(rule.get("from")) if present else rule.get("default")
+        return _norm_env(raw, kind)
 
     if kind == "lookup":
         table = rule.get("table") or {}
@@ -162,10 +204,32 @@ def _resolve_column(rule: dict[str, Any], src_props: dict[str, Any], out_row: di
     return raw
 
 
-def apply_column_map(features: list[dict[str, Any]], spec: SourceSpec) -> list[dict[str, Any]]:
+def _resolve_column_map(spec: SourceSpec, params: dict[str, Any] | None) -> dict[str, Any] | None:
+    """The effective column_map for this call (static, or per-enum synthesized).
+
+    ``ingest.properties_by_param`` (phase-2 wave-6) reproduces a twin whose kept
+    property SET varies by an enum param (usace_levees ``layer`` -> a different
+    ``_LAYER_PROPERTIES`` tuple per sub-layer): it synthesizes a passthrough
+    column_map over the resolved per-value column list, so the projection +
+    honest-empty header schema both follow the selected value. No-op (returns the
+    static ``ingest.column_map``, possibly None) for every prior spec.
+    """
+    ingest = spec.ingest or {}
+    pbp = ingest.get("properties_by_param")
+    if isinstance(pbp, dict) and params is not None:
+        pval = params.get(pbp.get("param"))
+        cols = (pbp.get("map") or {}).get(pval)
+        if cols:
+            return {str(c): {"from": str(c), "kind": "passthrough"} for c in cols}
+    return ingest.get("column_map")
+
+
+def apply_column_map(
+    features: list[dict[str, Any]], spec: SourceSpec, params: dict[str, Any] | None = None
+) -> list[dict[str, Any]]:
     """Project each feature's props to the declared ``ingest.column_map`` columns."""
     ingest = spec.ingest or {}
-    cmap = ingest.get("column_map")
+    cmap = _resolve_column_map(spec, params)
     if not cmap:
         return features
     ci = bool(ingest.get("column_map_ci"))
@@ -181,7 +245,7 @@ def apply_column_map(features: list[dict[str, Any]], spec: SourceSpec) -> list[d
                 r = dict(rule)
                 if ci and "from" in r:
                     r["from"] = str(r["from"]).lower()
-                row[str(out_col)] = _resolve_column(r, src, row)
+                row[str(out_col)] = _resolve_column(r, src, row, params)
         except _SkipFeature:
             continue
         out.append({"type": "Feature", "geometry": feat.get("geometry"), "properties": row})
@@ -256,7 +320,7 @@ def apply_ingest_transforms(
     ingest = spec.ingest or {}
     # Column-map projection (rename/normalize) runs FIRST so geometry_filter /
     # json_coerce / derived_columns see the normalized output props.
-    features = apply_column_map(features, spec)
+    features = apply_column_map(features, spec, params)
     gf = ingest.get("geometry_filter")
     json_coerce = bool(ingest.get("json_coerce_nested"))
     derived = ingest.get("derived_columns") or {}
@@ -280,7 +344,9 @@ def apply_ingest_transforms(
     return out
 
 
-def _out_columns(spec: SourceSpec, features: list[dict[str, Any]]) -> list[str]:
+def _out_columns(
+    spec: SourceSpec, features: list[dict[str, Any]], params: dict[str, Any] | None = None
+) -> list[str]:
     """Resolve the output property columns (spec-declared or feature-derived).
 
     Derived-column names are always appended so an honest-empty header-only FGB
@@ -288,7 +354,7 @@ def _out_columns(spec: SourceSpec, features: list[dict[str, Any]]) -> list[str]:
     facility_label]`` empty schema).
     """
     ingest = spec.ingest or {}
-    cmap = ingest.get("column_map")
+    cmap = _resolve_column_map(spec, params)
     declared = ingest.get("properties")
     if cmap:
         # column_map is the authoritative projected schema (honest-empty header
@@ -334,7 +400,7 @@ def features_to_fgb_bytes(
         f for f in features
         if isinstance(f, dict) and f.get("geometry") is not None
     ]
-    cols = _out_columns(spec, features)
+    cols = _out_columns(spec, features, params)
 
     if not valid:
         empty_df = pd.DataFrame(columns=cols)
@@ -375,6 +441,42 @@ def features_to_fgb_bytes(
 # --------------------------------------------------------------------------- #
 
 
+def _esri_geometry_to_geojson(g: Any) -> dict[str, Any] | None:
+    """Decode one esri-json geometry to a GeoJSON geometry (rings/point/paths).
+
+    Polygon ``rings`` keep ALL rings under a single Polygon (the standard
+    ArcGIS->GeoJSON convention; pyogrio repairs winding on write); degenerate
+    rings (< 4 vertices) are dropped -- byte-identical to the ejscreen twin's
+    ``_esri_rings_to_geojson_geometry``.
+    """
+    if not isinstance(g, dict):
+        return None
+    if "rings" in g:
+        good = [r for r in (g.get("rings") or []) if isinstance(r, list) and len(r) >= 4]
+        return {"type": "Polygon", "coordinates": good} if good else None
+    if "paths" in g:
+        paths = [p for p in (g.get("paths") or []) if isinstance(p, list) and len(p) >= 2]
+        if not paths:
+            return None
+        if len(paths) == 1:
+            return {"type": "LineString", "coordinates": paths[0]}
+        return {"type": "MultiLineString", "coordinates": paths}
+    if "x" in g and "y" in g:
+        x, y = g.get("x"), g.get("y")
+        if isinstance(x, (int, float)) and isinstance(y, (int, float)):
+            return {"type": "Point", "coordinates": [x, y]}
+    return None
+
+
+def _esri_feature_to_geojson(feat: dict[str, Any]) -> dict[str, Any]:
+    """Esri ``{attributes, geometry}`` -> GeoJSON ``{properties, geometry}``."""
+    return {
+        "type": "Feature",
+        "geometry": _esri_geometry_to_geojson(feat.get("geometry")),
+        "properties": feat.get("attributes") or {},
+    }
+
+
 def resolve_endpoints(spec: SourceSpec, params: dict[str, Any]) -> list[Any]:
     """Ordered endpoint chain for the fetch: the SELECTED primary + fallbacks.
 
@@ -387,7 +489,13 @@ def resolve_endpoints(spec: SourceSpec, params: dict[str, Any]) -> list[Any]:
     endpoints = spec.endpoints
     ingest = spec.ingest or {}
     sel = ingest.get("endpoint_select")
-    if isinstance(sel, dict):
+    by_enum = ingest.get("endpoint_by_param")
+    if isinstance(by_enum, dict):
+        # Per-enum sub-layer routing (usace_levees ``layer`` -> FeatureServer
+        # sub-layer endpoint). No-op for every prior spec (none declare it).
+        pval = params.get(by_enum.get("param"))
+        primary = endpoints.get((by_enum.get("map") or {}).get(pval))
+    elif isinstance(sel, dict):
         pname = sel.get("param")
         chosen = sel.get("present") if params.get(pname) is not None else sel.get("absent")
         primary = endpoints.get(chosen)
@@ -438,11 +546,21 @@ def build_query_params(
     order_by = qt.get("order_by")
     if order_by:
         params["orderByFields"] = str(order_by)
+    # esri-json sources (f=json layers that reject f=geojson, ejscreen) need the
+    # geometry as a JSON envelope object + returnGeometry; a no-op for geojson.
+    if bool(ingest.get("esri_json")):
+        params["returnGeometry"] = "true"
     if bbox is not None:
         min_lon, min_lat, max_lon, max_lat = bbox
-        params["geometry"] = f"{min_lon},{min_lat},{max_lon},{max_lat}"
+        if ingest.get("geometry_envelope") == "json":
+            params["geometry"] = json.dumps({
+                "xmin": min_lon, "ymin": min_lat, "xmax": max_lon, "ymax": max_lat,
+                "spatialReference": {"wkid": 4326},
+            })
+        else:
+            params["geometry"] = f"{min_lon},{min_lat},{max_lon},{max_lat}"
+            params["inSR"] = "4326"
         params["geometryType"] = "esriGeometryEnvelope"
-        params["inSR"] = "4326"
         params["spatialRel"] = "esriSpatialRelIntersects"
     # merge static endpoint query
     for k, v in (endpoint.query or {}).items():
@@ -486,7 +604,13 @@ def _fetch_one_page(spec: SourceSpec, url: str, params: dict[str, str]) -> list[
     body = verdict.body
     if not isinstance(body, dict):
         raise router_upstream_error(spec.error_code_prefix, "response is not a JSON object")
-    return body.get("features", []) or []
+    features = body.get("features", []) or []
+    # esri-json (f=json) sources hand back {attributes, geometry:{rings/x,y/paths}};
+    # decode to GeoJSON {properties, geometry} so the shared transforms + serializer
+    # see the uniform shape (ejscreen). No-op for f=geojson features.
+    if bool((spec.ingest or {}).get("esri_json")):
+        return [_esri_feature_to_geojson(f) for f in features if isinstance(f, dict)]
+    return features
 
 
 def _fetch_from_endpoint(spec: SourceSpec, endpoint: Any, params: dict[str, Any]) -> list[dict[str, Any]]:
