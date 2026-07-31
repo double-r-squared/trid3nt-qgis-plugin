@@ -1,4 +1,4 @@
-"""Atomic tool ``compute_movement_trajectory`` — movement metrics from track POINTS (FR-TA-2, FR-CE-8).
+"""Atomic tool ``compute_movement_trajectory`` -- movement metrics from track POINTS (FR-TA-2, FR-CE-8).
 
 This module registers one atomic tool that turns a layer of timestamped animal /
 vehicle / asset track POINTS into an annotated movement-trajectory vector:
@@ -6,7 +6,7 @@ vehicle / asset track POINTS into an annotated movement-trajectory vector:
     ``compute_movement_trajectory(points_uri) -> LayerURI(layer_type="vector")``
 
 The input is a point FlatGeobuf shaped like ``fetch_movebank_tracks`` with
-``geometry_type="point"`` — one feature per telemetry fix, carrying a
+``geometry_type="point"`` -- one feature per telemetry fix, carrying a
 ``timestamp`` (ISO-8601) property and, optionally, an ``individual_id`` property
 that separates one animal's track from another's. (Any point vector with a
 parseable timestamp column works; the timestamp/individual column names are
@@ -29,13 +29,12 @@ and each segment also carries its individual's whole-track **summary**:
     net_displacement_m  geodesic distance first-fix -> last-fix
     straightness        net_displacement_m / path_length_m  (0..1; 1 = a straight line)
 
-The output is a FlatGeobuf of LineString segments in EPSG:4326 (the
-inline-GeoJSON vector render path ships it to MapLibre). The per-individual
-summary statistics are ALSO written to the layer ``metadata`` so a downstream
-reader gets the headline numbers without re-aggregating the segments.
+The output is a FlatGeobuf of LineString segments in EPSG:4326 (the QGIS
+plugin renders it natively). The per-individual summary statistics are ALSO
+written to the layer ``metadata`` so a downstream reader gets the headline
+numbers without re-aggregating the segments.
 
-**CPU path.** Geodesic math is hand-rolled on ``pyproj.Geod`` (``ellps="WGS84"``)
-— ``movingpandas`` is not in the agent venv, and the metric set here is small
+**CPU path.** Geodesic math is hand-rolled on ``pyproj.Geod`` (``ellps="WGS84"``) -- ``movingpandas`` is not in the agent venv, and the metric set here is small
 and well-defined, so a dependency-free implementation is preferable and keeps
 the result deterministic. ``geopandas`` / ``shapely`` (already on the box) read
 the input and serialize the output.
@@ -44,7 +43,7 @@ the input and serialize the output.
 segment; it is dropped (with a logged count). If NO individual yields >= 1
 segment (e.g. the input has < 2 points total, or no parseable timestamps), the
 tool raises ``MovementTrajectoryError("INSUFFICIENT_POINTS", ...)`` rather than
-emitting an empty layer that reads as success — a flat-out honest typed error
+emitting an empty layer that reads as success -- a flat-out honest typed error
 per the data-source-fallback norm.
 
 **Cache.** Result FlatGeobuf cached under the FR-DC-3 shim at
@@ -100,12 +99,12 @@ class MovementTrajectoryError(RuntimeError):
     strip / function_response envelope.
 
     Codes:
-    - ``DOWNLOAD_FAILED``      — the points layer could not be read from S3 / disk.
-    - ``VECTOR_OPEN_FAILED``   — the points file could not be parsed as a vector.
-    - ``NO_TIMESTAMP_FIELD``   — no timestamp-like column found in the points layer.
-    - ``NOT_POINT_GEOMETRY``   — the layer is not point/multipoint geometry.
-    - ``INSUFFICIENT_POINTS``  — no individual has >= 2 timestamped fixes (honest empty).
-    - ``WRITE_FAILED``         — the annotated trajectory FlatGeobuf could not be written.
+    - ``DOWNLOAD_FAILED`` -- the points layer could not be read from S3 / disk.
+    - ``VECTOR_OPEN_FAILED`` -- the points file could not be parsed as a vector.
+    - ``NO_TIMESTAMP_FIELD`` -- no timestamp-like column found in the points layer.
+    - ``NOT_POINT_GEOMETRY`` -- the layer is not point/multipoint geometry.
+    - ``INSUFFICIENT_POINTS`` -- no individual has >= 2 timestamped fixes (honest empty).
+    - ``WRITE_FAILED`` -- the annotated trajectory FlatGeobuf could not be written.
     """
 
     def __init__(self, error_code: str, message: str) -> None:
@@ -249,7 +248,7 @@ def _compute_segments_for_individual(
     NOT necessarily sorted. Returns ``None`` if fewer than 2 fixes (no segment
     can be formed). Otherwise returns ``(seg_rows, seg_geoms, summary)``.
     """
-    from shapely.geometry import LineString  # local import — keep module load light
+    from shapely.geometry import LineString  # local import -- keep module load light
 
     pts = sorted(fixes, key=lambda f: f[2])
     n = len(pts)
@@ -387,7 +386,7 @@ def _build_trajectory_fgb(
     ``summary_dict`` carries a per-individual breakdown plus an overall rollup;
     it is attached to the LayerURI metadata.
     """
-    import geopandas as gpd  # local import — keep module load light
+    import geopandas as gpd  # local import -- keep module load light
     import pandas as pd
     from pyproj import Geod
     from shapely.geometry import LineString  # noqa: F401  (used in helper)
@@ -520,7 +519,7 @@ def _build_trajectory_fgb(
         )
 
     if not all_seg_rows:
-        # Honest typed empty — no individual produced a segment.
+        # Honest typed empty -- no individual produced a segment.
         raise MovementTrajectoryError(
             "INSUFFICIENT_POINTS",
             f"points layer {points_uri!r} yielded no trajectory segment: no "
@@ -630,7 +629,7 @@ def estimate_payload_mb(**args: Any) -> float:
     payload_mb_estimator_name="estimate_payload_mb",
     # Annotations: readOnlyHint=True (reads the input point layer; writes a
     # cache artifact only via the read-through shim), openWorldHint=False (all
-    # computation is local pyproj/geopandas — no external API call),
+    # computation is local pyproj/geopandas -- no external API call),
     # destructiveHint=False, idempotentHint=True (deterministic transform; the
     # same input points + field names always produce the same segments).
     read_only_hint=True,
@@ -657,7 +656,7 @@ def compute_movement_trajectory(
     for: the raw track line with no metrics
     (``fetch_movebank_tracks(geometry_type="linestring")``); points with no
     timestamp (raises ``NO_TIMESTAMP_FIELD``); raster-in-zone aggregation
-    (``compute_zonal_statistics``).
+    (the code_exec playground).
 
     Params:
         points_uri: point vector of timestamped fixes, typically
@@ -704,7 +703,7 @@ def compute_movement_trajectory(
     effective_bucket = _bucket or CACHE_BUCKET
 
     # Capture the summary the fetch computed so the LayerURI metadata is accurate
-    # even on a cache HIT (where _fetch does not run — we then read it from the
+    # even on a cache HIT (where _fetch does not run -- we then read it from the
     # cached bytes' sibling is not available, so we re-attach a minimal note).
     captured: dict[str, Any] = {"summary": None}
 

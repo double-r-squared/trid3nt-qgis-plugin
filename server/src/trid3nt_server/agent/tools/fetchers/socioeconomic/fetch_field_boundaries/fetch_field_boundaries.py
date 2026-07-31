@@ -56,7 +56,7 @@ class FieldsNoCoverageError(FieldsError):
     This is the HONEST typed error per ``feedback_data_source_fallback_norm``:
     the FTW/fiboa benchmark is regional, not global, and on-demand inference is
     a separate (not-yet-built) tool. We refuse to fabricate boundaries. Not
-    retryable — retrying the same out-of-coverage bbox cannot succeed.
+    retryable -- retrying the same out-of-coverage bbox cannot succeed.
     """
 
     error_code = "FIELDS_NO_COVERAGE"
@@ -75,7 +75,7 @@ class FieldsUpstreamError(FieldsError):
 #
 # Each entry is a VERIFIED-WORKING published FTW/fiboa GeoParquet on Source
 # Cooperative. URLs + formats were live-probed 2026-06-17. We register only
-# datasets we have confirmed exist and read correctly — the ms-buildings-abfs
+# datasets we have confirmed exist and read correctly -- the ms-buildings-abfs
 # lesson (never stub against an unverified endpoint).
 #
 # ``coverage`` is the WGS84 (lon/lat) extent of the dataset (from its STAC
@@ -106,7 +106,7 @@ class FieldDataset:
 #: Verified FTW/fiboa datasets. Ordered most-specific-first within a region so
 #: the bbox→dataset match picks the best fit.
 FTW_DATASETS: tuple[FieldDataset, ...] = (
-    # CONUS — USDA Crop Sequence Boundaries (the headline coverage).
+    # CONUS -- USDA Crop Sequence Boundaries (the headline coverage).
     # GeoParquet 1.1.0, 648 row groups, 16.2M parcels, NAD83/Albers (projected).
     FieldDataset(
         key="us_usda_cropland",
@@ -117,7 +117,7 @@ FTW_DATASETS: tuple[FieldDataset, ...] = (
         license="USDA CSB (public, attribution)",
         crop_field="crop:name",
     ),
-    # Japan — fiboa, GeoParquet 1.1.0, 1177 row groups, 29.4M parcels.
+    # Japan -- fiboa, GeoParquet 1.1.0, 1177 row groups, 29.4M parcels.
     FieldDataset(
         key="japan",
         label="Japan Field Boundaries (fiboa)",
@@ -127,7 +127,7 @@ FTW_DATASETS: tuple[FieldDataset, ...] = (
         license="CC-BY-4.0",
         crop_field="land_type_en",
     ),
-    # Denmark — fiboa, GeoParquet 1.0.0, SINGLE row group, 0.61M parcels,
+    # Denmark -- fiboa, GeoParquet 1.0.0, SINGLE row group, 0.61M parcels,
     # 420 MB. NO covering column → cannot prune; read in full (small enough).
     FieldDataset(
         key="denmark",
@@ -260,7 +260,7 @@ def _open_parquet_fs(url: str):
 
 
 def _file_crs(parquet_file: Any) -> Any:
-    """Return the file's geometry CRS (pyproj CRS) — defaults to OGC:CRS84.
+    """Return the file's geometry CRS (pyproj CRS) -- defaults to OGC:CRS84.
 
     GeoParquet stores the CRS as PROJJSON under the primary column's ``crs``
     key in the ``geo`` file metadata. A missing ``crs`` means OGC:CRS84
@@ -479,18 +479,17 @@ def fetch_field_boundaries(
 ) -> LayerURI:
     """Agricultural FIELD BOUNDARIES (Fields of The World / fiboa) for an AOI.
 
-    **What it does:** Fetches published agricultural field-boundary polygons —
-    individual farm parcels / fields — for the requested bbox from the Fields of
+    **What it does:** Fetches published agricultural field-boundary polygons -- individual farm parcels / fields -- for the requested bbox from the Fields of
     The World (FTW) / fiboa open datasets on Source Cooperative, clips them to
     the exact AOI, and returns them as a vector layer that renders inline on the
     map automatically (like roads / protected areas). NO API key required. The
-    resulting vector renders inline — do NOT call ``publish_layer`` on it.
+    resulting vector renders inline -- do NOT call ``publish_layer`` on it.
 
-    **Coverage (IMPORTANT — regional, not global yet):** This serves the
+    **Coverage (IMPORTANT -- regional, not global yet):** This serves the
     PUBLISHED FTW/fiboa benchmark, which covers specific regions, currently:
     the contiguous United States (USDA Crop Sequence Boundaries), Japan, and
     Denmark. A bbox outside every covered region returns a structured
-    ``FIELDS_NO_COVERAGE`` error — there are simply no published boundaries
+    ``FIELDS_NO_COVERAGE`` error -- there are simply no published boundaries
     there. On-demand field-boundary INFERENCE from satellite imagery for an
     arbitrary AOI (running an FTW model anywhere on Earth) is a SEPARATE future
     tool and is not available through this one.
@@ -503,11 +502,11 @@ def fetch_field_boundaries(
     - Pairs with flood / drought / fire layers to quantify agricultural impact.
 
     **When NOT to use:**
-    - Land-cover CLASSIFICATION rasters (use ``fetch_landcover`` / NLCD) — this
+    - Land-cover CLASSIFICATION rasters (use ``fetch_landcover`` / NLCD) -- this
       returns vector PARCEL boundaries, not a per-pixel crop-type raster.
-    - Cadastral / legal property parcels — these are agricultural FIELD units,
+    - Cadastral / legal property parcels -- these are agricultural FIELD units,
       not legal land-ownership parcels (use a county assessor source for those).
-    - Areas outside the covered regions — the tool will honestly report no
+    - Areas outside the covered regions -- the tool will honestly report no
       coverage rather than guess; do not retry the same out-of-coverage bbox.
     - Administrative boundaries (use ``fetch_administrative_boundaries``).
 
@@ -528,7 +527,7 @@ def fetch_field_boundaries(
 
     **Cross-tool dependencies:**
     - Typically layered over flood / fire / drought hazard rasters as context.
-    - Pairs with ``compute_zonal_statistics`` to summarize a hazard over fields.
+    - Pairs with ``spatial_query`` to summarize a hazard over fields.
     - Use ``fetch_administrative_boundaries`` first if you need a county/AOI
       bbox to query within.
 
@@ -557,7 +556,7 @@ def fetch_field_boundaries(
 
     return LayerURI(
         layer_id=f"ftw-fields-{ds.key}-{q_bbox[0]:.4f}-{q_bbox[1]:.4f}",
-        name=f"Field Boundaries — {ds.label}",
+        name=f"Field Boundaries -- {ds.label}",
         layer_type="vector",
         uri=result.uri,
         style_preset="field_boundaries",

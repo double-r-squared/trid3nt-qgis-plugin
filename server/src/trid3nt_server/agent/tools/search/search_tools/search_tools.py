@@ -13,7 +13,7 @@ space without forcing the LLM to scan all 70+ atomic tools.
 Implementation choices (stage 2):
 - **BM25** via `rank_bm25.BM25Okapi`. Whitespace + lowercase tokenization;
   no stemming (the corpus and queries are English natural language + a few
-  domain terms that don't stem well — "USGS", "WDPA", "NWS", etc).
+  domain terms that don't stem well -- "USGS", "WDPA", "NWS", etc).
 - **Dense retrieval** is opportunistic:
     1. If `sentence-transformers` is importable, encode with the
        `all-MiniLM-L6-v2` checkpoint (384-dim).
@@ -21,7 +21,7 @@ Implementation choices (stage 2):
        a default `vertexai` client builds), call `text-embedding-005` for
        both the index and the query.
     3. Else fall back to a deterministic hashed token-count vector (cosine-
-       comparable but lexical only — the BM25 signal carries the load in
+       comparable but lexical only -- the BM25 signal carries the load in
        this degraded mode).
 - **Fusion**: Reciprocal Rank Fusion (RRF, k=60) interleaves BM25 ranking
   and dense-similarity ranking. RRF is rank-aware (not score-aware) so the
@@ -32,7 +32,7 @@ calls within the same Python process reuse the cached BM25 instance and
 dense-vector matrix. Reset for tests via ``_reset_index_for_tests()``.
 
 FR-TA-2 / FR-AS-3: registered with ``ttl_class="static-30d"``,
-``source_class="search_tools"``, ``cacheable=False`` — the routing
+``source_class="search_tools"``, ``cacheable=False`` -- the routing
 output depends on the live registry contents and synthetic-corpus file,
 both of which are import-time-frozen, but caching the result through the
 GCS read_through shim would be wasteful for a sub-millisecond CPU lookup.
@@ -114,7 +114,7 @@ _INDEX: "_DiscoverIndex | None" = None
 # (``telemetry.load_tool_call_records``) on a ~5-minute cadence so that the RRF
 # boost reflects recent user behavior without re-reading the file on every
 # search_tools call.  When the sink is empty/unreadable the index is EMPTY and
-# the 4th channel silently drops out — the 3-channel ranking continues to work.
+# the 4th channel silently drops out -- the 3-channel ranking continues to work.
 # (Telemetry is JSONL-only; the former ``tool_call_telemetry`` Persistence
 # collection read was cut with the telemetry write route.)
 # ---------------------------------------------------------------------------
@@ -129,9 +129,9 @@ class CooccurrenceIndex:
     """Per-tool dispatch + co-occurrence stats derived from telemetry.
 
     Fields:
-    - ``call_counts``: ``{tool_name: int}`` — total dispatch count over the
+    - ``call_counts``: ``{tool_name: int}`` -- total dispatch count over the
       sampled telemetry window.
-    - ``cooccurrence``: ``{tool_name: {co_tool_name: int}}`` — count of how
+    - ``cooccurrence``: ``{tool_name: {co_tool_name: int}}`` -- count of how
       many sessions dispatched BOTH ``tool_name`` and ``co_tool_name``.
       Symmetric (``cooccurrence[A][B] == cooccurrence[B][A]``).
     - ``built_at``: monotonic timestamp at index build (used for the
@@ -384,7 +384,7 @@ def _default_corpus_path() -> Path:
 def _read_corpus_yaml(p: Path) -> dict[str, list[str]]:
     """Load a single corpus YAML file into a ``{tool: [queries]}`` dict.
 
-    Missing / malformed files yield ``{}`` — the index still builds in
+    Missing / malformed files yield ``{}`` -- the index still builds in
     docstring-only mode when a corpus file is absent.
     """
     if not p.exists():
@@ -392,7 +392,7 @@ def _read_corpus_yaml(p: Path) -> dict[str, list[str]]:
     try:
         with p.open() as fh:
             data = yaml.safe_load(fh) or {}
-    except Exception:  # noqa: BLE001 — best-effort corpus read
+    except Exception:  # noqa: BLE001 -- best-effort corpus read
         logger.warning("failed to parse corpus YAML at %s", p)
         return {}
     if not isinstance(data, dict):
@@ -408,7 +408,7 @@ def _compose_corpus_from_tree() -> dict[str, list[str]]:
 
     Walks every co-located ``tools/**/corpus.yaml`` (one per atomic tool
     folder) and merges the residual ``data/tool_query_corpus.yaml`` (tools
-    registered outside the ``tools/`` tree). Flat composition — no tier
+    registered outside the ``tools/`` tree). Flat composition -- no tier
     semantics (that is the engine-door pilot's job). The result is the same
     shape and content as the pre-restructure monolith.
     """
@@ -429,7 +429,7 @@ def _load_corpus(path: Path | None = None) -> dict[str, list[str]]:
     Default: compose the co-located per-tool ``corpus.yaml`` files (walked
     under ``tools/``) with the residual ``data/tool_query_corpus.yaml``. An
     explicit ``path`` argument or the ``TRID3NT_TOOL_CORPUS_YAML`` env override
-    reads a single monolithic file instead (test / experiment pinning) — the
+    reads a single monolithic file instead (test / experiment pinning) -- the
     legacy single-file behaviour is preserved for those callers.
     """
     if path is not None:
@@ -486,7 +486,7 @@ def _try_vertex_backend() -> tuple[Any, Any, str] | None:
     """Try to load Vertex AI ``text-embedding-005`` backend.
 
     Returns ``(encode_fn, np_module, backend_name)`` or ``None`` if Vertex
-    creds aren't available. Avoid live calls at import time — defer to first
+    creds aren't available. Avoid live calls at import time -- defer to first
     ``encode_fn``.
     """
     try:
@@ -528,7 +528,7 @@ def _try_vertex_backend() -> tuple[Any, Any, str] | None:
 def _try_hashed_backend() -> tuple[Any, Any, str] | None:
     """Final-fallback "dense" backend: hashed token-count vectors (256-dim).
 
-    Lexical-only — produces near-duplicate signal to BM25 — but lets the
+    Lexical-only -- produces near-duplicate signal to BM25 -- but lets the
     hybrid-fusion path stay live even without sentence-transformers / Vertex.
     Tests that rely on dense-vector shape (not semantic correctness) pass.
     """
@@ -561,7 +561,7 @@ def _select_dense_backend() -> tuple[Any, Any, str] | None:
     ):
         try:
             picked = builder()
-        except Exception as exc:  # noqa: BLE001 — backend probe is best-effort
+        except Exception as exc:  # noqa: BLE001 -- backend probe is best-effort
             logger.debug("dense-backend probe %s raised: %s", builder.__name__, exc)
             picked = None
         if picked is not None:
@@ -616,7 +616,7 @@ def _build_index(
             continue
         doc = getattr(entry.fn, "__doc__", "") or ""
         snippet = _short_description(doc)
-        # Full docstring fed to BM25 + dense — much richer signal than just
+        # Full docstring fed to BM25 + dense -- much richer signal than just
         # the first paragraph. We keep ``snippet`` short for the returned
         # ``description_snippet`` payload (LLM-visible UX); the longer text
         # only lives in the indexed corpus.
@@ -642,7 +642,7 @@ def _build_index(
         tok for toks in corpus_tokens for tok in toks
     )
 
-    # BM25 (optional — degrades gracefully when rank_bm25 is absent).
+    # BM25 (optional -- degrades gracefully when rank_bm25 is absent).
     bm25 = None
     try:
         from rank_bm25 import BM25Okapi  # type: ignore[import-not-found]
@@ -651,11 +651,11 @@ def _build_index(
             # Typo-expansion proxy: expands QUERY tokens only (the corpus
             # is already tokenized and inside the wrapped BM25Okapi).
             bm25 = _TypoTolerantBM25(BM25Okapi(corpus_tokens), vocabulary)
-    except Exception as exc:  # noqa: BLE001 — non-fatal
+    except Exception as exc:  # noqa: BLE001 -- non-fatal
         logger.warning("rank_bm25 unavailable; BM25 path disabled (%s)", exc)
         bm25 = None
 
-    # Dense (optional — graceful degradation).
+    # Dense (optional -- graceful degradation).
     dense_matrix = None
     dense_encode_fn = None
     backend_name = None
@@ -672,7 +672,7 @@ def _build_index(
                 dense_encode_fn = _wrap_hashed_encode_with_expansion(
                     encode_fn, vocabulary
                 )
-        except Exception as exc:  # noqa: BLE001 — non-fatal
+        except Exception as exc:  # noqa: BLE001 -- non-fatal
             logger.warning(
                 "dense backend %r failed at index-build time (%s); disabling dense path",
                 backend_name,
@@ -729,7 +729,7 @@ def _reset_index_for_tests() -> None:
 # ---------------------------------------------------------------------------
 
 
-# Sampling caps — last 30 sessions OR last 1000 calls, whichever is smaller.
+# Sampling caps -- last 30 sessions OR last 1000 calls, whichever is smaller.
 # Both knobs guard against runaway growth as the telemetry collection ages.
 _COOCC_SESSION_CAP: int = 30
 _COOCC_CALL_CAP: int = 1000
@@ -741,7 +741,7 @@ async def _fetch_recent_telemetry_docs(
 ) -> list[dict[str, Any]]:
     """Read the most recent ``call_cap`` tool-call rows from the telemetry JSONL.
 
-    Returns an empty list on any error — the caller treats that the same as
+    Returns an empty list on any error -- the caller treats that the same as
     "no telemetry yet" and skips the co-occurrence channel.
 
     Telemetry is JSONL-only (the Persistence-collection route was cut). The
@@ -763,7 +763,7 @@ async def _fetch_recent_telemetry_docs(
 
     if not isinstance(docs, list):
         return []
-    # Defensive cap — the reader already caps, but enforce here too.
+    # Defensive cap -- the reader already caps, but enforce here too.
     return [d for d in docs if isinstance(d, dict)][:call_cap]
 
 
@@ -809,7 +809,7 @@ def _build_cooccurrence_from_docs(
         tools_in_session = by_session.get(sid, [])
         for t in tools_in_session:
             call_counts[t] = call_counts.get(t, 0) + 1
-        # Distinct tools for co-occurrence — pair count is per-session.
+        # Distinct tools for co-occurrence -- pair count is per-session.
         unique = sorted(set(tools_in_session))
         for i, a in enumerate(unique):
             row_a = cooccurrence.setdefault(a, {})
@@ -829,7 +829,7 @@ def _build_cooccurrence_from_docs(
 async def _refresh_cooccurrence_index() -> CooccurrenceIndex | None:
     """Read telemetry from the JSONL sink and rebuild the co-occurrence index.
 
-    Returns the rebuilt index (possibly EMPTY when the sink has no rows — an
+    Returns the rebuilt index (possibly EMPTY when the sink has no rows -- an
     empty index yields no co-occurrence boost, so the 3-channel ranking stands).
     A read fault surfaces as an empty doc list (never raises), so this returns an
     empty index rather than ``None``; the ranking outcome is identical.
@@ -854,7 +854,7 @@ async def _get_cooccurrence_index() -> CooccurrenceIndex | None:
         return cached
     new_index = await _refresh_cooccurrence_index()
     if new_index is None:
-        # Mongo unavailable — keep the stale entry (if any) rather than
+        # Mongo unavailable -- keep the stale entry (if any) rather than
         # nuking the cache.  The 3-channel ranking continues to work either
         # way; reusing a stale index just preserves any prior boost signal.
         return cached
@@ -902,7 +902,7 @@ def _build_cooccurrence_ranking(
 
     Two contributions, summed per candidate:
     1. Tools the user's query directly names get a boost proportional to
-       ``call_counts[name]`` (Σ over query-named tools — but here we score
+       ``call_counts[name]`` (Σ over query-named tools -- but here we score
        the candidate ITSELF when its name matches the query).
     2. Tools that co-occur with query-named tools get
        ``Σ cooccurrence[query_named_tool][candidate]``.
@@ -960,7 +960,7 @@ def _reciprocal_rank_fusion(
 
     Where rank starts at 1. Returns ``[(doc_index, fused_score), ...]``
     sorted by score descending. Docs absent from a ranking simply don't
-    contribute that modality's term — the formula is rank-aware so the two
+    contribute that modality's term -- the formula is rank-aware so the two
     retrieval modalities don't need score normalization.
     """
     scores: dict[int, float] = {}
@@ -1095,7 +1095,7 @@ _NAME_RANKER_GENERICS: set[str] = {
     "discover",
     "wait",
     "process",
-    "model",  # too common — present in many *_model_* names
+    "model",  # too common -- present in many *_model_* names
 }
 
 
@@ -1164,12 +1164,12 @@ async def search_tools(
     Vertex text-embedding-005 when available, else hashed token vector as a
     deterministic fallback) via reciprocal rank fusion (RRF, k=60).
 
-    Do NOT use this for: enumerating EVERY atomic tool the agent has (the ADK
-    tool catalog is the authoritative inventory); deciding whether to use
-    Mode 1 catalog substrate (use ``search_data_catalog`` for the curator-vetted
-    external-data catalog); finding a DuckDB spatial SQL function (use
-    ``search_spatial_functions``); planning multi-step workflows (use
-    ``solver``).
+    Do NOT use this for: enumerating EVERY atomic tool the agent has (the
+    live tool registry is the authoritative inventory); deciding whether to
+    use Mode 1 catalog substrate (use ``search_data_catalog`` for the
+    curator-vetted external-data catalog); finding a DuckDB spatial SQL
+    function (use ``search_spatial_functions``); dispatching a solver run
+    (use ``run_solver`` / the ``run_*`` engine doors directly).
 
     Params:
         query: free-text user query (required, non-empty). Lowercased and
@@ -1195,15 +1195,14 @@ async def search_tools(
         ``score`` is the RRF fused score (rank-aware; higher = more relevant).
         ``description_snippet`` is the first ~240 chars of the tool's
         docstring. ``matched_queries`` is up to 3 synthetic-corpus queries
-        that lexically overlap the user query — useful diagnostics for the
+        that lexically overlap the user query -- useful diagnostics for the
         LLM to confirm the routing made sense.
 
     Empty-query handling: returns ``{"results": []}`` rather than raising,
     so an LLM that fires the tool with a degenerate ``query=""`` doesn't
     surface a hard error mid-conversation.
 
-    FR-CE-8: registered with ``ttl_class="live-no-cache"``, ``cacheable=False``
-    — the routing call is sub-millisecond CPU and the result depends on the
+    FR-CE-8: registered with ``ttl_class="live-no-cache"``, ``cacheable=False`` -- the routing call is sub-millisecond CPU and the result depends on the
     LLM-supplied query verbatim, so caching would be wasteful.
     """
     if not isinstance(query, str):
@@ -1260,7 +1259,7 @@ async def search_tools(
         except Exception as exc:  # noqa: BLE001
             logger.warning("dense scoring failed (%s); dropping dense channel", exc)
 
-    # Name-substring ranking — third channel that catches "model flooding"
+    # Name-substring ranking -- third channel that catches "model flooding"
     # → run_sfincs even when BM25 misses ("flooding" ≠
     # "flood-modeling"). Score = count of query content tokens whose
     # (optionally de-suffixed) form is a substring of the tool name.
@@ -1301,7 +1300,7 @@ async def search_tools(
     cooc_ranking: list[int] = []
     try:
         cooc_index = await _get_cooccurrence_index()
-    except Exception as exc:  # noqa: BLE001 — telemetry-channel failure is non-fatal
+    except Exception as exc:  # noqa: BLE001 -- telemetry-channel failure is non-fatal
         logger.debug("co-occurrence index fetch failed (%s)", exc)
         cooc_index = None
     if cooc_index is not None:

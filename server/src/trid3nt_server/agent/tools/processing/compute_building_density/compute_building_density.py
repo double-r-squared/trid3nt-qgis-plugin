@@ -6,7 +6,7 @@ dataset and rasterizes building centroids onto a regular grid in EPSG:3857
 
 Strategy v0.1 (audit.md):
 
-- Source: Microsoft Global ML Building Footprints — published as a CSV-indexed
+- Source: Microsoft Global ML Building Footprints -- published as a CSV-indexed
   set of GeoJSONL tiles (despite ``.csv.gz`` extension, each line is a
   GeoJSON Feature) keyed by Bing-style zoom-9 quadkey. Static dataset, refreshed
   by Microsoft on an irregular cadence (most recent ~2026-02-03 at time of
@@ -17,7 +17,7 @@ Strategy v0.1 (audit.md):
   ``cell_size_m`` in EPSG:3857.
 - Output: float32 single-band COG, value = count of building centroids whose
   centroid falls inside each cell. Cells with no buildings carry the value 0
-  (NOT nodata — the absence of buildings is real signal in a density product).
+  (NOT nodata -- the absence of buildings is real signal in a density product).
 - ``cache_key = (source, bbox-rounded-6dp, cell_size_m)``. ``ttl_class=static-30d``,
   ``source_class=building_density``. Cache prefix:
   ``cache/static-30d/building_density/<key>.tif``.
@@ -32,15 +32,15 @@ at a gzipped CSV file whose rows are raw GeoJSON Feature strings (the same
 International coverage:
     The index covers >200 ``Location`` entries globally (Africa, Asia, Europe,
     Oceania, Americas). For a non-CONUS bbox we still emit quadkeys and look
-    them up — the index returns whatever region(s) the quadkey lives under
+    them up -- the index returns whatever region(s) the quadkey lives under
     (e.g. "Canada" for a Vancouver bbox, "Mexico" for Baja). When no row
     matches a requested quadkey we treat that tile as "0 buildings" rather
-    than erroring out — coverage gaps are legitimately empty.
+    than erroring out -- coverage gaps are legitimately empty.
 
 Codified lesson (geographic correctness):
     The acceptance test for this tool MUST assert the density signal is high
     where Fort Myers actually has dense buildings and low over the river/ocean
-    pixels in the same COG — not merely that the COG round-trips bytes.
+    pixels in the same COG -- not merely that the COG round-trips bytes.
     See ``tests/test_compute_building_density.py::test_geographic_correctness_*``.
 
 FR-TA-2: atomic tool, returns ``LayerURI``. FR-CE-8 / FR-DC-3/4: routed through
@@ -111,7 +111,7 @@ _MS_INDEX_URL = (
 #: Native zoom level of the Microsoft tile pyramid.
 _MS_QUADKEY_ZOOM = 9
 
-#: User-Agent — Microsoft hosts on Azure Storage which doesn't strictly enforce
+#: User-Agent -- Microsoft hosts on Azure Storage which doesn't strictly enforce
 #: a UA, but be polite.
 _USER_AGENT = (
     "trid3nt/0.1 (Hazard Modeling Agent; "
@@ -128,7 +128,7 @@ _INDEX_CACHE_DOWNLOAD_BYTES: int = 0
 
 
 # ---------------------------------------------------------------------------
-# AtomicToolMetadata — registered once at import time.
+# AtomicToolMetadata -- registered once at import time.
 # ---------------------------------------------------------------------------
 
 _METADATA = AtomicToolMetadata(
@@ -244,7 +244,7 @@ def _quadkeys_for_bbox(
 
 
 # ---------------------------------------------------------------------------
-# CSV index — fetch + parse + per-quadkey lookup.
+# CSV index -- fetch + parse + per-quadkey lookup.
 # ---------------------------------------------------------------------------
 
 
@@ -255,7 +255,7 @@ def _fetch_index() -> dict[str, list[str]]:
     multiple (RegionName) rows in border areas, so the value is a list of all
     URLs for that quadkey. We collect all of them and deduplicate by URL.
 
-    Cached at module level for the lifetime of the process — the index is
+    Cached at module level for the lifetime of the process -- the index is
     static for many days and re-fetching it per call would dominate the
     per-bbox runtime. To force a refresh (e.g. in a long-lived process), set
     ``_INDEX_CACHE = None`` (only the tool itself does this; user code does
@@ -314,7 +314,7 @@ def _index_for_quadkeys(quadkeys: Iterable[str]) -> dict[str, list[str]]:
     """Return ``{quadkey: [url, ...]}`` for the subset of ``quadkeys`` present.
 
     A quadkey absent from the index legitimately indicates a tile with no
-    detected buildings (ocean, ice cap, unmapped region) — the caller treats
+    detected buildings (ocean, ice cap, unmapped region) -- the caller treats
     that as a zero-count tile, not an error.
     """
     full = _fetch_index()
@@ -330,8 +330,7 @@ def _download_tile_features(url: str) -> list[dict]:
     """Download a single ``.csv.gz`` GeoJSONL tile and return its features.
 
     The file is gzipped; each line of the decompressed body is a complete
-    GeoJSON Feature (despite the ``.csv.gz`` extension Microsoft uses —
-    historically the file was once delivered with CSV columns; the current
+    GeoJSON Feature (despite the ``.csv.gz`` extension Microsoft uses -- historically the file was once delivered with CSV columns; the current
     format is line-delimited GeoJSON).
 
     Raises ``BuildingDensityUpstreamError`` on network or parse failure.
@@ -364,7 +363,7 @@ def _download_tile_features(url: str) -> list[dict]:
         try:
             feat = json.loads(line)
         except json.JSONDecodeError as exc:
-            # Be tolerant of one bad line — Microsoft's tile generator has
+            # Be tolerant of one bad line -- Microsoft's tile generator has
             # historically emitted occasional partial lines. Log and move on.
             logger.warning(
                 "compute_building_density: tile %s line %d JSON parse failed: %s",
@@ -381,7 +380,7 @@ def _download_tile_features(url: str) -> list[dict]:
 
 
 # ---------------------------------------------------------------------------
-# Geometry helpers — ring centroid in lon/lat.
+# Geometry helpers -- ring centroid in lon/lat.
 # ---------------------------------------------------------------------------
 
 
@@ -394,7 +393,7 @@ def _ring_centroid(ring: list[list[float]]) -> tuple[float, float] | None:
 
     Numerical care: building footprints are typically <100 m wide but their
     lon/lat coordinates have magnitudes around 80-150. A naive shoelace on
-    raw coordinates suffers catastrophic cancellation — the cross product
+    raw coordinates suffers catastrophic cancellation -- the cross product
     ``x0*y1 - x1*y0`` is the difference of two near-equal large numbers.
     We mitigate by shifting all vertices to a local origin (the first
     vertex) before applying the formula, then shifting the resulting
@@ -402,7 +401,7 @@ def _ring_centroid(ring: list[list[float]]) -> tuple[float, float] | None:
     1e-4° per metre) instead of ~1e4, which is well within float64
     precision.
 
-    For density rasterization we don't need geographic-area exactness — a
+    For density rasterization we don't need geographic-area exactness -- a
     cartesian centroid in lon/lat is consistent across the bbox (we then
     project the centroid into Web Mercator and bin it onto the grid).
     """
@@ -437,7 +436,7 @@ def _ring_centroid(ring: list[list[float]]) -> tuple[float, float] | None:
         cx += (x0 + x1) * cross
         cy += (y0 + y1) * cross
     if abs(area2) < 1e-30:
-        # Degenerate ring — fall back to vertex mean (in original coords).
+        # Degenerate ring -- fall back to vertex mean (in original coords).
         return (
             sum(p[0] for p in pts) / n,
             sum(p[1] for p in pts) / n,
@@ -458,7 +457,7 @@ def _feature_centroid(feat: dict) -> tuple[float, float] | None:
     if gtype == "Polygon" and isinstance(coords, list) and coords:
         return _ring_centroid(coords[0])
     if gtype == "MultiPolygon" and isinstance(coords, list):
-        # Pick the largest ring's centroid by absolute shoelace area — for
+        # Pick the largest ring's centroid by absolute shoelace area -- for
         # MS buildings MultiPolygons are vanishingly rare but possible (a
         # building split by a railway etc.). We want one centroid per
         # building Feature regardless.
@@ -505,10 +504,9 @@ def _build_density_grid(
 
     The choice of EPSG:3857 over a local UTM is deliberate (audit.md):
     Microsoft data ships in lon/lat covering a global grid, and emitting the
-    density in Web Mercator (the same projection QGIS Server WMS serves under
-    EPSG:3857) lets the QGIS Server / client display the layer without
-    reprojection. The metric is "buildings per (cell_size_m × cell_size_m)
-    cell on the Web Mercator grid" — at temperate US latitudes (~28-45°N) the
+    density in Web Mercator (EPSG:3857) lets the QGIS plugin display the
+    layer without reprojection. The metric is "buildings per (cell_size_m x cell_size_m)
+    cell on the Web Mercator grid" -- at temperate US latitudes (~28-45°N) the
     Web Mercator scale distortion is ~1.13-1.41x, so the cell footprint on
     the ground is slightly larger than ``cell_size_m`` square. We note this
     in the docstring rather than reprojecting to UTM (which would require a
@@ -544,7 +542,7 @@ def _build_density_grid(
     for lon, lat in centroids_lonlat:
         if not (math.isfinite(lon) and math.isfinite(lat)):
             continue
-        # Skip centroids outside the bbox — they came from tiles that overlap
+        # Skip centroids outside the bbox -- they came from tiles that overlap
         # the bbox at quadkey resolution but fall outside the actual area.
         if lon < min_lon or lon > max_lon or lat < min_lat or lat > max_lat:
             continue
@@ -577,7 +575,7 @@ def _fetch_building_density_bytes(
     - BuildingDensityUpstreamError for index / tile network failures.
 
     Returns the raw bytes of a CRS-tagged, LZW-compressed, tiled GeoTIFF
-    suitable for QGIS Server WMS publishing.
+    suitable for the QGIS plugin's native rendering.
     """
     import rasterio
 
@@ -599,9 +597,9 @@ def _fetch_building_density_bytes(
     qk_to_urls = _index_for_quadkeys(quadkeys)
     missing = [qk for qk in quadkeys if qk not in qk_to_urls]
     if missing and len(missing) == len(quadkeys):
-        # Every tile is absent — bbox is outside MS coverage.
+        # Every tile is absent -- bbox is outside MS coverage.
         logger.warning(
-            "compute_building_density: bbox=%s — every quadkey absent from MS index "
+            "compute_building_density: bbox=%s -- every quadkey absent from MS index "
             "(international or ocean coverage gap; emitting empty density raster)",
             bbox,
         )
@@ -615,7 +613,7 @@ def _fetch_building_density_bytes(
     centroids: list[tuple[float, float]] = []
     for qk, urls in qk_to_urls.items():
         # One quadkey can appear in multiple regions in border areas. We
-        # download each region's URL — duplicates may exist but the in-bbox
+        # download each region's URL -- duplicates may exist but the in-bbox
         # filter in _build_density_grid is exact enough to avoid double-
         # counting in practice (each region's tile owns distinct buildings).
         for url in urls:

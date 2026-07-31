@@ -476,7 +476,7 @@ async def model_flood_scenario(
     is_coastal = bool(coastal) or bool(surge_forcing) or bool(quadtree)
     logger.info(
         "model_flood_scenario coastal=%s (explicit=%s, surge_forcing=%s, "
-        "quadtree=%s) — DEM fetch routes through %s",
+        "quadtree=%s) -- DEM fetch routes through %s",
         is_coastal,
         bool(coastal),
         bool(surge_forcing),
@@ -540,7 +540,7 @@ async def model_flood_scenario(
     if breach_point is not None and breach_peak_discharge_m3s is None:
         logger.info(
             "model_flood_scenario: breach_point given without "
-            "breach_peak_discharge_m3s — returning USER_INPUT_REQUIRED (no "
+            "breach_peak_discharge_m3s -- returning USER_INPUT_REQUIRED (no "
             "fabricated breach hydrograph)."
         )
         return _build_failed_envelope(
@@ -550,7 +550,7 @@ async def model_flood_scenario(
             error_code="USER_INPUT_REQUIRED",
             error_detail=(
                 "A levee-breach scenario needs the peak breach discharge "
-                "(breach_peak_discharge_m3s, m^3/s) — please supply it; the "
+                "(breach_peak_discharge_m3s, m^3/s) -- please supply it; the "
                 "breach hydrograph is not fabricated."
             ),
             workflow_name=workflow_name,
@@ -563,7 +563,7 @@ async def model_flood_scenario(
         )
     if tsunami and tsunami_wave_height_m is None:
         logger.info(
-            "model_flood_scenario: tsunami=True without tsunami_wave_height_m — "
+            "model_flood_scenario: tsunami=True without tsunami_wave_height_m -- "
             "returning USER_INPUT_REQUIRED (no fabricated wave height)."
         )
         return _build_failed_envelope(
@@ -573,7 +573,7 @@ async def model_flood_scenario(
             error_code="USER_INPUT_REQUIRED",
             error_detail=(
                 "A tsunami scenario needs the peak wave height "
-                "(tsunami_wave_height_m, m) — please supply it; the wave form "
+                "(tsunami_wave_height_m, m) -- please supply it; the wave form "
                 "is not fabricated."
             ),
             workflow_name=workflow_name,
@@ -591,7 +591,7 @@ async def model_flood_scenario(
     if storm_requested and wind:
         logger.info(
             "model_flood_scenario: storm_name/storm_track_uri given WITH wind "
-            "param — returning STORM_WIND_CONFLICT (no silent precedence)."
+            "param -- returning STORM_WIND_CONFLICT (no silent precedence)."
         )
         return _build_failed_envelope(
             bbox=resolved_bbox,
@@ -713,7 +713,7 @@ async def model_flood_scenario(
             if not _bathy_present:
                 logger.warning(
                     "model_flood_scenario: coastal AOI but fetch_topobathy "
-                    "degraded to 3DEP-land-only (cudem_tile_count=%s) — %s",
+                    "degraded to 3DEP-land-only (cudem_tile_count=%s) -- %s",
                     _tile_count,
                     _fallback_warning
                     or "bathymetry absent; coastal inundation under-represented",
@@ -759,7 +759,7 @@ async def model_flood_scenario(
         except Exception as exc:  # noqa: BLE001 -- river is optional for pluvial
             logger.warning(
                 "model_flood_scenario: fetch_river_geometry failed for bbox=%s "
-                "(%s) — proceeding WITHOUT river geometry (pluvial deck does not "
+                "(%s) -- proceeding WITHOUT river geometry (pluvial deck does not "
                 "use river inflow; job-0055/job-0307).",
                 resolved_bbox,
                 exc,
@@ -799,7 +799,7 @@ async def model_flood_scenario(
             forcing_summary = ForcingSummary(
                 forcing_type="pluvial_synthetic",
                 source=(
-                    f"Observed precip raster {forcing_raster_uri} — "
+                    f"Observed precip raster {forcing_raster_uri} -- "
                     f"area-mean {area_mean_mm:.2f} mm over {duration_hr}-hr "
                     "accumulation → uniform netamt (OQ-6 area-mean fallback)"
                 ),
@@ -832,7 +832,7 @@ async def model_flood_scenario(
             forcing_summary = ForcingSummary(
                 forcing_type="pluvial_synthetic",
                 source=(
-                    f"{precip_result.get('vintage_volume', 'NOAA Atlas 14')} — "
+                    f"{precip_result.get('vintage_volume', 'NOAA Atlas 14')} -- "
                     f"{return_period_yr}-yr / {duration_hr}-hr design storm"
                 ),
                 parameters={
@@ -898,7 +898,7 @@ async def model_flood_scenario(
     except asyncio.TimeoutError:
         logger.warning(
             "model_flood_scenario: fetcher chain exceeded %.0fs budget for "
-            "bbox=%s — returning PRESOLVER_TIMEOUT failed envelope (a hang is "
+            "bbox=%s -- returning PRESOLVER_TIMEOUT failed envelope (a hang is "
             "now bounded + visible, not an infinite silent await).",
             _FETCHER_PHASE_TIMEOUT_S,
             resolved_bbox,
@@ -928,7 +928,7 @@ async def model_flood_scenario(
         # envelope (Invariant 7 -- never a fabricated topobathy success).
         logger.warning(
             "model_flood_scenario: fetch_topobathy hard-failed for coastal "
-            "bbox=%s (%s / %s) — returning failed envelope.",
+            "bbox=%s (%s / %s) -- returning failed envelope.",
             resolved_bbox,
             exc.error_code,
             exc,
@@ -1404,7 +1404,7 @@ async def model_flood_scenario(
     except asyncio.TimeoutError:
         logger.warning(
             "model_flood_scenario: build_sfincs_model exceeded %.0fs budget for "
-            "bbox=%s — returning PRESOLVER_TIMEOUT failed envelope.",
+            "bbox=%s -- returning PRESOLVER_TIMEOUT failed envelope.",
             _BUILD_PHASE_TIMEOUT_S,
             resolved_bbox,
         )
@@ -1429,7 +1429,7 @@ async def model_flood_scenario(
         # surface here. Invariant 7: the failed envelope carries the error
         # code instead of a fabricated FloodPayload.
         logger.warning(
-            "build_sfincs_model raised %s (details=%s) — returning failed envelope",
+            "build_sfincs_model raised %s (details=%s) -- returning failed envelope",
             exc.error_code,
             exc.details,
         )
@@ -1454,7 +1454,7 @@ async def model_flood_scenario(
         # surfaces as a typed failed envelope carrying the adapter error code --
         # NOT a silent degrade to a pluvial-only deck.
         logger.warning(
-            "surge forcing adapter raised %s (details=%s) — returning failed envelope",
+            "surge forcing adapter raised %s (details=%s) -- returning failed envelope",
             exc.error_code,
             exc.details,
         )
@@ -1477,7 +1477,7 @@ async def model_flood_scenario(
         # or out-of-range value) surfaces as a typed failed envelope rather than
         # an uncaught exception or a silently-wrong deck (Invariant 7).
         logger.warning(
-            "model_flood_scenario: invalid advanced_physics override (%s) — "
+            "model_flood_scenario: invalid advanced_physics override (%s) -- "
             "returning ADVANCED_PHYSICS_INVALID failed envelope.",
             exc,
         )
@@ -1913,7 +1913,7 @@ async def model_flood_scenario(
                     )
                 except PublishLayerError as exc:
                     logger.warning(
-                        "publish_layer failed for layer_id=%s error_code=%s (%s) — "
+                        "publish_layer failed for layer_id=%s error_code=%s (%s) -- "
                         "DROPPING the primary flood-depth layer from the emitted set "
                         "(job-0254 §1): a raw gs:// uri never renders in MapLibre, so "
                         "we do NOT fall back to it. The envelope's metrics/provenance "
@@ -1972,7 +1972,7 @@ async def model_flood_scenario(
                     # 2 members and simply not form -- acceptable, never a fake row.
                     logger.warning(
                         "publish_layer failed for frame layer_id=%s error_code=%s "
-                        "(%s) — dropping this frame from the animation group.",
+                        "(%s) -- dropping this frame from the animation group.",
                         lyr.layer_id, exc.error_code, exc,
                     )
                     continue
@@ -2002,7 +2002,7 @@ async def model_flood_scenario(
         elif frame_layers:
             logger.info(
                 "model_flood_scenario: %d animation frames available but no emitter "
-                "bound (direct/smoke/test) — frames not emitted to the map.",
+                "bound (direct/smoke/test) -- frames not emitted to the map.",
                 len(frame_layers),
             )
 
@@ -2144,13 +2144,15 @@ async def sfincs_flood(
     5. ``lookup_precip_return_period(bbox, return_period_years, duration_hours)``
        -- looks up NOAA Atlas 14 design-storm precipitation depth.
     6. ``build_sfincs_model(dem_uri, landcover_uri, river_uri, forcing, bbox)``
-       -- assembles the HydroMT-SFINCS deck in GCS with NLCD validation gate.
-    7. ``run_solver(model_setup)`` -- submits the SFINCS Cloud Run Job.
+       -- assembles the HydroMT-SFINCS deck (s3-staged) with the NLCD
+       validation gate.
+    7. ``run_solver(model_setup)`` -- dispatches the SFINCS solve to the
+       local Docker solver backend.
     8. ``wait_for_completion(run_id)`` -- polls until SUCCEEDED or FAILED;
        emits progress events per FR-WC-12.
     9. ``postprocess_flood(run_outputs_uri)`` → ``publish_layer(flood_depth_cog)``
        -- extracts peak depth COG, uploads to the runs bucket, and publishes
-       to QGIS Server WMS.
+       it as an ``s3://`` COG the QGIS plugin renders natively.
 
     When to use:
         - User asks to model a flood scenario, simulate flood inundation,
@@ -2191,7 +2193,7 @@ async def sfincs_flood(
             durations 5-min through 60-day. Default 24.
             (Alias ``duration_hr`` is accepted for backward compat.)
         compute_class: FR-CE-3 compute class. Default ``"medium"``.
-        forcing_raster_uri: optional ``gs://...`` URI of an OBSERVED
+        forcing_raster_uri: optional ``s3://...`` URI of an OBSERVED
             accumulated-precipitation raster (e.g. an MRMS QPE COG from
             ``fetch_mrms_qpe``). When provided, the workflow forces SFINCS
             with the AREA-MEAN of this raster over the model domain (converted
@@ -2340,8 +2342,8 @@ async def sfincs_flood(
         - ``pelicun_damage_assessment`` (explicit ``assets_uri`` OR bbox
           auto-fetch mode) -- consumes the returned flood-depth COG
           ``LayerURI.uri`` as ``hazard_raster_uri`` for building-damage assessment.
-        - ``compute_zonal_statistics`` -- flood-depth COG as ``value_raster_uri``
-          for population-in-flood-zone or habitat-impact metrics.
+        - ``spatial_query`` -- flood-depth COG as the value raster for
+          population-in-flood-zone or habitat-impact metrics.
     """
     envelope = await model_flood_scenario(
         bbox=bbox,

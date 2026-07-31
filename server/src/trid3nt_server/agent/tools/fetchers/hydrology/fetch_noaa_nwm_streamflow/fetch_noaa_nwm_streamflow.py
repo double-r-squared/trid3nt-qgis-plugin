@@ -92,7 +92,7 @@ _VALID_PRODUCTS: frozenset[str] = frozenset(
     {"analysis_assim", "short_range"}
 )
 
-#: CONUS bounding box (EPSG:4326) — the NHDPlus v2.1 CONUS domain.
+#: CONUS bounding box (EPSG:4326) -- the NHDPlus v2.1 CONUS domain.
 _CONUS_BBOX: tuple[float, float, float, float] = (-130.0, 20.0, -60.0, 55.0)
 
 #: User-Agent per AWS Open Data + NOAA usage guidelines.
@@ -117,7 +117,7 @@ _MAX_REACHES = 500
 
 
 # ---------------------------------------------------------------------------
-# AtomicToolMetadata — registered once at import time.
+# AtomicToolMetadata -- registered once at import time.
 # ---------------------------------------------------------------------------
 
 
@@ -711,27 +711,24 @@ def fetch_noaa_nwm_streamflow(
     """Fetch NOAA National Water Model streamflow as a point FlatGeobuf.
 
     Use this when: the agent needs gridded river discharge as fluvial-boundary
-    forcing for a compound-flood model run (composes with
-    ``model_flood_scenario`` and similar engines that ask for upstream
-    hydrographs), as a real-time discharge overlay for a hazard-event narrative
+    forcing for a compound-flood model run (composes with ``run_sfincs`` and
+    similar engines that ask for upstream hydrographs), as a real-time
+    discharge overlay for a hazard-event narrative
     ("how high is the Caloosahatchee flowing right now?"), or as a contextual
     river-network display for a CONUS hydrology query. NWM is the NOAA
     operational hydrologic forecast and the canonical CONUS streamflow source
     (~2.7M NHDPlus reaches at ~hourly cadence).
 
     Do NOT use this for: gauge-based observed point streamflow at a USGS
-    station (use ``fetch_streamflow`` — NWIS, the actual instrument record);
-    global / non-CONUS river discharge (use ``fetch_cama_flood_discharge`` for
-    the CaMa-Flood global product); river-reach polylines without flow values
-    (use ``fetch_river_geometry`` — NHDPlus HR); precipitation forcing (use
-    ``fetch_mrms_qpe`` for radar/gauge QPE or
-    ``lookup_precip_return_period`` for Atlas 14 design storms); flood-extent
-    rasters (NWM does not publish inundation directly — call
-    ``model_flood_scenario`` with NWM forcing).
+    station (use ``fetch_usgs_nwis_gauges`` -- NWIS, the actual instrument
+    record); global / non-CONUS river discharge (use
+    ``fetch_cama_flood_discharge`` for the CaMa-Flood global product);
+    river-reach polylines without flow values (use ``fetch_river_geometry`` -- NHDPlus HR); precipitation forcing (use ``fetch_mrms_qpe`` for
+    radar/gauge QPE or ``lookup_precip_return_period`` for Atlas 14 design
+    storms); flood-extent rasters (NWM does not publish inundation directly -- use ``run_sfincs`` with NWM forcing).
 
     Params:
-        bbox: ``(min_lon, min_lat, max_lon, max_lat)`` in EPSG:4326. Required
-            — NWM is CONUS-only, supports_global_query=False. The bbox MUST
+        bbox: ``(min_lon, min_lat, max_lon, max_lat)`` in EPSG:4326. Required -- NWM is CONUS-only, supports_global_query=False. The bbox MUST
             intersect ``(-130, 20, -60, 55)`` or
             ``NWMStreamflowInputError`` is raised. Typical scales:
             - Watershed (~1° × 1°): ~50-200 reaches returned
@@ -764,7 +761,7 @@ def fetch_noaa_nwm_streamflow(
           ``streamflow_cms`` (float, m^3/s), ``valid_time`` (ISO-8601 UTC),
           ``product``. The ``feature_id`` is the join key downstream composers
           use to map to NHDPlus reach polylines (via
-          ``fetch_river_geometry``) — this tool emits point centroids so the
+          ``fetch_river_geometry``) -- this tool emits point centroids so the
           layer renders standalone as a discharge map.
 
     Cache: ``ttl_class="dynamic-1h"``, ``source_class="nwm_streamflow"``.
@@ -773,11 +770,11 @@ def fetch_noaa_nwm_streamflow(
     so identical-bbox/hour calls hit the same FlatGeobuf.
 
     Cross-tool dependencies:
-        - Composes WITH: ``model_flood_scenario`` (fluvial forcing),
+        - Composes WITH: ``run_sfincs`` (fluvial forcing),
           ``fetch_river_geometry`` (downstream NHDPlus polyline join via
           ``feature_id``), ``publish_layer`` (display on the map).
         - Composes ALONGSIDE: ``fetch_mrms_qpe`` (precip forcing),
-          ``fetch_streamflow`` (NWIS point gauge cross-check),
+          ``fetch_usgs_nwis_gauges`` (NWIS point gauge cross-check),
           ``fetch_administrative_boundaries`` (watershed framing).
         - Sibling for non-CONUS coverage: ``fetch_cama_flood_discharge``
           (global, Tier-2, reanalysis-only).
@@ -861,7 +858,7 @@ def fetch_noaa_nwm_streamflow(
     return LayerURI(
         layer_id=f"nwm-streamflow-{product}-{seed}",
         name=(
-            f"NWM streamflow — {product} "
+            f"NWM streamflow -- {product} "
             f"({'latest' if valid_time is None else valid_time}"
             f"{f' +f{forecast_hour:03d}' if product == 'short_range' else ''})"
         ),

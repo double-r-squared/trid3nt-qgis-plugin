@@ -1,29 +1,27 @@
-"""``postprocess_pelicun`` - aggregate Pelicun per-feature damage FGB → ImpactEnvelope (P2).
+"""``postprocess_pelicun`` - aggregate Pelicun per-feature damage FGB -> ImpactEnvelope.
 
 This tool consumes the FlatGeobuf returned by ``pelicun_damage_assessment``
-(a per-asset damage layer) and produces an aggregate ``ImpactEnvelope`` —
+(a per-asset damage layer) and produces an aggregate ``ImpactEnvelope`` -
 the portfolio-level damage / loss / population summary defined in
 ``trid3nt_contracts.impact_envelope`` (SRS Appendix B.6c, Decision N).
 
-It is a **pure aggregation** step — it does NOT re-invoke Pelicun, sample new
-hazard values, or make any network calls beyond the GCS read of the damage
+It is a **pure aggregation** step - it does NOT re-invoke Pelicun, sample new
+hazard values, or make any network calls beyond the S3 read of the damage
 FlatGeobuf.  Every numeric field on the returned envelope is a deterministic
 aggregate computed from the source layer (Invariant 1).
 
-Design reference: ``reports/inflight/-11-p2-postprocess-pelicun-design-20260609/design.md``
-
 **Inputs**
 
-- ``damage_layer_uri`` (str): ``gs://`` URI (or local path) to the FlatGeobuf
+- ``damage_layer_uri`` (str): ``s3://`` URI (or local path) to the FlatGeobuf
   emitted by ``pelicun_damage_assessment``. Required.
 - ``flood_layer_uri`` (str | None): The hazard raster URI passed upstream to
-  ``pelicun_damage_assessment``. Optional — carried forward into the
+  ``pelicun_damage_assessment``. Optional - carried forward into the
   envelope's ``flood_layer_uri`` provenance field. ``""`` is used when None.
 
 **Output**
 
 A dict produced by ``ImpactEnvelope.model_dump(mode="json")``.  Returning a
-dict (rather than the pydantic model directly) keeps the ADK FunctionTool
+dict (rather than the pydantic model directly) keeps the tool-call JSON
 contract simple and avoids serialization edge cases in the agent loop.
 
 **Thresholds** (per design § 2.1 + ImpactEnvelope docstring):
@@ -106,14 +104,14 @@ class PelicunPostprocessInputError(PelicunPostprocessError):
 
 
 class PelicunPostprocessIOError(PelicunPostprocessError):
-    """GCS download or FlatGeobuf read failed. Retryable — transient I/O."""
+    """S3 download or FlatGeobuf read failed. Retryable - transient I/O."""
 
     error_code = "POSTPROCESS_PELICUN_IO"
     retryable = True
 
 
 class PelicunPostprocessEmptyError(PelicunPostprocessError):
-    """The FlatGeobuf has zero features. Not retryable — input is well-formed
+    """The FlatGeobuf has zero features. Not retryable -- input is well-formed
     but yields no work; the agent should pick a different damage layer."""
 
     error_code = "POSTPROCESS_PELICUN_EMPTY"
@@ -122,7 +120,7 @@ class PelicunPostprocessEmptyError(PelicunPostprocessError):
 
 class PelicunPostprocessSchemaError(PelicunPostprocessError):
     """Required columns (``ds_mean``, ``repair_cost_mean`` …) missing from
-    the FlatGeobuf. Not retryable — schema mismatch indicates the upstream
+    the FlatGeobuf. Not retryable -- schema mismatch indicates the upstream
     tool produced an incompatible artifact."""
 
     error_code = "POSTPROCESS_PELICUN_SCHEMA"
@@ -140,7 +138,7 @@ _DS_HIGH_RISK_THRESHOLD = 2.5     # ds_mean >= 2.5 ⇒ at high risk (DS3+)
 _LR_DISPLACED_THRESHOLD = 0.20    # loss_ratio_mean >= 0.20 ⇒ displaced (DS2+)
 
 # Required columns on the damage FlatGeobuf (per the upstream tool's
-# documented output contract — see pelicun_damage_assessment.py:932-945).
+# documented output contract -- see pelicun_damage_assessment.py:932-945).
 _REQUIRED_COLUMNS: tuple[str, ...] = (
     "component_type_used",
     "ds_mean",
@@ -164,7 +162,7 @@ _NSI_POP_COLUMNS = ("pop2amu65", "pop2amo65")
 
 
 # ---------------------------------------------------------------------------
-# AtomicToolMetadata — registered once at import time.
+# AtomicToolMetadata -- registered once at import time.
 # ---------------------------------------------------------------------------
 
 
@@ -173,7 +171,7 @@ _METADATA = AtomicToolMetadata(
     ttl_class="static-30d",
     source_class="pelicun_postprocess",
     cacheable=True,
-    # Aggregation tool — global query is meaningless (it operates on a
+    # Aggregation tool -- global query is meaningless (it operates on a
     # specific damage layer URI), so opt out per layer_global_bbox_policy.
     supports_global_query=False,
 )
@@ -224,7 +222,7 @@ def _download_uri_to_local(
     Raises:
         ``PelicunPostprocessIOError`` on download / read failure.
     """
-    del storage_client  # GCP decommissioned — S3/local only.
+    del storage_client  # GCP decommissioned -- S3/local only.
     # s3:// staging via the shared boto3 reader
     # (NOT s3fs - instance-role lesson). Stage to a
     # NamedTemporaryFile the caller unlinks.
@@ -260,7 +258,7 @@ def _infer_inventory_source(gdf_columns: list[str]) -> str:
     marker of an NSI-derived asset layer. If the column is absent, the upstream
     tool defaulted to the MS_BUILDINGS / synthetic-asset path.
 
-    USER_SUPPLIED is NOT inferred — see design OQ-P2-USER-SUPPLIED; the v0.1
+    USER_SUPPLIED is NOT inferred -- see design OQ-P2-USER-SUPPLIED; the v0.1
     inference treats it identically to MS_BUILDINGS (population fields None).
     Callers that need the USER_SUPPLIED literal must pass it explicitly when
     the tool wires through a future arg path.
@@ -295,13 +293,13 @@ def _damage_state_distribution(
     Modal DS = ``int(round(ds_mean)).clip(0, 4)``.  Returns a dict with all
     five DS labels present (zero counts included for missing bins so the
     contract dict is always full-shape).  Asserts the bin counts sum equals
-    the total feature count — this is the design § 2.1 closure check.
+    the total feature count -- this is the design § 2.1 closure check.
     """
     arr = np.asarray(ds_mean, dtype=np.float64)
     # Invariant 7: a non-finite ds_mean (NaN/inf - only possible from a
     # malformed/foreign damage FGB) would survive .clip() and become INT64_MIN under
     # .astype(int), then index out of _DS_LABELS with a raw IndexError. Refuse to
-    # fabricate a damage-state distribution from bad input — fail honestly instead.
+    # fabricate a damage-state distribution from bad input -- fail honestly instead.
     if arr.size and not np.all(np.isfinite(arr)):
         n_bad = int(np.count_nonzero(~np.isfinite(arr)))
         raise PelicunPostprocessSchemaError(
@@ -369,8 +367,7 @@ def _per_class_breakdown(
         c in gdf.columns for c in _NSI_POP_COLUMNS
     )
 
-    # Group by the component_type_used column (the Pelicun-resolved class —
-    # see design OQ-P2-GROUPING).
+    # Group by the component_type_used column (the Pelicun-resolved class -- # see design OQ-P2-GROUPING).
     grouped = gdf.groupby("component_type_used", dropna=False)
     for ctype, group in grouped:
         ctype_str = str(ctype) if ctype is not None else "UNKNOWN"
@@ -413,7 +410,7 @@ def _per_class_breakdown(
 def _convex_hull_area_km2(damaged_centroids: list[tuple[float, float]]) -> float:
     """Geodesic convex-hull area (km²) of a list of (lon, lat) damaged centroids.
 
-    Per design § 5.1 — convex hull of DS1+ centroids, projected via
+    Per design § 5.1 -- convex hull of DS1+ centroids, projected via
     ``pyproj.Geod`` (WGS84) so the area is in m² regardless of input CRS
     distortion.  Returns 0.0 when fewer than 3 points (no hull possible).
     """
@@ -436,7 +433,7 @@ def _convex_hull_area_km2(damaged_centroids: list[tuple[float, float]]) -> float
         geod = Geod(ellps="WGS84")
         area_m2, _perim = geod.geometry_area_perimeter(hull)
         return abs(float(area_m2)) / 1.0e6
-    except Exception as exc:  # noqa: BLE001 — surface as IO error
+    except Exception as exc:  # noqa: BLE001 -- surface as IO error
         logger.warning("convex-hull area computation failed: %s", exc)
         return 0.0
 
@@ -463,7 +460,7 @@ def _pelicun_run_id_from_inputs(
     16-byte ULID seed.  ``ulid.ULID.from_bytes`` accepts arbitrary 16-byte
     sequences (the timestamp prefix is just the first 6 bytes; we treat the
     full payload as the random component so identical inputs produce identical
-    IDs across runs — cache-stable).
+    IDs across runs -- cache-stable).
     """
     seed = hashlib.sha256(
         f"{damage_layer_uri}|{flood_layer_uri}".encode("utf-8")
@@ -479,7 +476,7 @@ def _pelicun_run_id_from_inputs(
 
 
 # ---------------------------------------------------------------------------
-# Core aggregation — pure-Python, testable without GCS.
+# Core aggregation -- pure-Python, testable without GCS.
 # ---------------------------------------------------------------------------
 
 
@@ -532,7 +529,7 @@ def _aggregate_gdf(
         gdf, source, ds_mean=ds_mean, loss_ratio_mean=loss_ratio_mean
     )
 
-    # Spatial summary — bbox from full layer; impact_area_km2 from damaged
+    # Spatial summary -- bbox from full layer; impact_area_km2 from damaged
     # centroids' convex hull.
     bbox = _bbox_from_gdf(gdf)
     damaged_centroids = _damaged_centroids(gdf, damaged_mask)
@@ -588,7 +585,7 @@ def _bbox_from_gdf(gdf: Any) -> tuple[float, float, float, float]:
 
     Best-effort reprojects to EPSG:4326 if the CRS is set and differs.  Falls
     back to the raw total_bounds when the CRS is None (caller bears the cost
-    of the assumption — matches the pelicun_damage_assessment convention
+    of the assumption -- matches the pelicun_damage_assessment convention
     which falls back to EPSG:4326).
     """
     try:
@@ -601,7 +598,7 @@ def _bbox_from_gdf(gdf: Any) -> tuple[float, float, float, float]:
         ):
             try:
                 gdf_4326 = gdf.to_crs("EPSG:4326")
-            except Exception:  # noqa: BLE001 — fall back to raw bounds
+            except Exception:  # noqa: BLE001 -- fall back to raw bounds
                 gdf_4326 = gdf
         else:
             gdf_4326 = gdf
@@ -663,7 +660,7 @@ def _damaged_centroids(
 
 @register_tool(
     _METADATA,
-    # MCP annotations: read-only (no GCS writes — the cache shim is bypassed
+    # MCP annotations: read-only (no GCS writes -- the cache shim is bypassed
     # for the v0.1 wiring; the envelope is returned in-process and written by
     # the caller's persistence layer), closed-world (no external API),
     # non-destructive, idempotent (deterministic aggregation of a fixed FGB).
@@ -694,7 +691,7 @@ async def postprocess_pelicun(
     "what's the expected loss". Do NOT use for: per-feature queries (read
     the FlatGeobuf directly); recomputing damage (call
     ``pelicun_damage_assessment``); exposure counts without Pelicun
-    (``compute_zonal_statistics``).
+    (``spatial_query``).
 
     Params:
         damage_layer_uri: FlatGeobuf from ``pelicun_damage_assessment``.
@@ -743,7 +740,7 @@ async def postprocess_pelicun(
 
     local_path: str | None = None
     # s3:// staging also lands in a temp file the
-    # finally-block must unlink — remote means either object-store scheme.
+    # finally-block must unlink -- remote means either object-store scheme.
     was_remote = damage_uri.startswith(("gs://", "s3://"))
     try:
         local_path = _download_uri_to_local(damage_uri, ".fgb")

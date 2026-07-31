@@ -15,7 +15,7 @@ FR-DC-3 cache shim at:
 **Typical use cases:**
 
 - Building a "water" mask from NLCD class 11 (Open Water) for zonal statistics
-  inside ``compute_zonal_statistics`` (use the mask as ``zone_input``).
+  via the code_exec playground (rasterio/numpy zonal-stats recipe).
 - Forest extent mask from NLCD classes 41 (Deciduous), 42 (Evergreen),
   43 (Mixed) for habitat / fuel-availability analysis.
 - Developed extent mask from NLCD classes 21-24 for exposure analysis.
@@ -444,7 +444,7 @@ def extract_landcover_class(
     "water" mask from class 11 for zonal flood-depth stats, a forest mask
     from 41/42/43 for habitat analysis, a developed mask from 21-24. Do
     NOT use for: non-NLCD landcover (ESA WorldCover has different codes);
-    per-pixel stats across classes (``compute_zonal_statistics`` directly).
+    per-pixel stats across classes (the code_exec playground directly).
 
     Params:
         landcover_uri: NLCD-coded GeoTIFF (canonical class integers, not
@@ -460,8 +460,8 @@ def extract_landcover_class(
     Returns:
         ``LayerURI`` for a binary uint8 mask GeoTIFF (1=match, 0=other,
         255=nodata; cache bucket, TTL 30d; ``style_preset=
-        "categorical_landcover"``). Suitable as ``zone_input`` for
-        ``compute_zonal_statistics``.
+        "categorical_landcover"``). Suitable as a zone mask for a
+        code_exec playground zonal-stats recipe.
 
     Raises:
         LandcoverClassError: empty/out-of-range classes, malformed bbox,
@@ -512,7 +512,7 @@ def extract_landcover_class(
         cls_label = f"NLCD {classes_sorted[0]}"
     else:
         cls_label = f"NLCD [{','.join(str(c) for c in classes_sorted)}]"
-    name = f"Landcover mask — {cls_label}"
+    name = f"Landcover mask -- {cls_label}"
 
     return LayerURI(
         layer_id=layer_id,

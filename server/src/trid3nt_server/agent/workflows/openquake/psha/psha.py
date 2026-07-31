@@ -5,7 +5,7 @@ seismic-hazard (PSHA) (engine-door refactor - OPENQUAKE slice; was
 The LLM-facing exposure of the OpenQuake classical-PSHA engine (the multi-hazard
 workbench's seismic driver, pairing with the existing Pelicun impact path).
 ``openquake_psha(...)`` takes the ``OpenQuakeRunArgs`` parameters, runs the
-deterministic assemble -> stage -> Batch-solve -> postprocess chain
+deterministic assemble -> stage -> solve -> postprocess chain
 (``workflows/openquake/model_seismic_hazard_scenario/``), and returns a
 ``SeismicHazardLayerURI`` the emitter loads onto the map (it subclasses
 ``LayerURI`` so the ``emit_tool_call`` ``add_loaded_layer`` gate fires).
@@ -21,9 +21,10 @@ workflow exposure surface; never touches the cache shim). Confirmation before
 consequence (Invariant 9 - a solver run) is enforced by the server confirmation
 hook around this template (SOLVER_CONFIRM_TOOLS keys on ``openquake_psha``).
 
-OpenQuake is CLOUD-ONLY (the engine is RAM-hungry ~2 GB/thread and ships as a
-containerized CLI), so unlike SWMM there is no in-process lane - the composer
-always dispatches to AWS Batch via the generic run_solver seam.
+OpenQuake is CONTAINER-ONLY (the engine is RAM-hungry ~2 GB/thread and ships as
+a containerized CLI), so unlike SWMM there is no in-process lane - the composer
+always dispatches to a local Docker solver container via the generic run_solver
+seam.
 
 Determinism boundary (Invariant 1): every hazard number the agent narrates comes
 from the typed ``SeismicHazardLayerURI.max_hazard_value`` / ``.hazard_area_km2`` /
@@ -197,7 +198,7 @@ async def openquake_psha(
             min_magnitude=float(min_magnitude),
             max_magnitude=float(max_magnitude),
         )
-    except Exception as exc:  # noqa: BLE001 — pydantic ValidationError or coercion
+    except Exception as exc:  # noqa: BLE001 -- pydantic ValidationError or coercion
         return {
             "status": "error",
             "error_code": "OQ_PARAMS_INVALID",
@@ -239,7 +240,7 @@ async def openquake_psha(
             "error_code": exc.error_code,
             "error_message": str(exc),
         }
-    except Exception as exc:  # noqa: BLE001 — defensive catch-all
+    except Exception as exc:  # noqa: BLE001 -- defensive catch-all
         logger.exception("openquake_psha unexpected failure")
         return {
             "status": "error",

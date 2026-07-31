@@ -4,9 +4,8 @@ This module registers one atomic tool that computes an impervious-surface
 fraction raster (float32, range 0.0-1.0) from either:
 
 - the **NLCD Impervious Surface** product (a separate USGS product whose pixel
-  values are percent impervious, integer 0-100) — direct read + scale by 1/100;
-- or the **NLCD Land Cover** product (the canonical NLCD class-code raster) —
-  derive impervious fraction from developed-class membership using the standard
+  values are percent impervious, integer 0-100) -- direct read + scale by 1/100;
+- or the **NLCD Land Cover** product (the canonical NLCD class-code raster) -- derive impervious fraction from developed-class membership using the standard
   USGS NLCD developed-density mapping:
 
       21 = Developed, Open Space         → 0.0
@@ -25,7 +24,7 @@ or whose raster tags include ``NLCD_Impervious_Surface`` is treated as the
 impervious product; otherwise the input is assumed to be NLCD landcover and
 the dev-class mapping is applied.
 
-**Cache key** is derived from ``(landcover_uri, bbox)`` — both materially affect
+**Cache key** is derived from ``(landcover_uri, bbox)`` -- both materially affect
 output pixels; the chosen path (impervious-product vs landcover-derive) is a
 deterministic function of the input URI so it does not need to enter the key.
 
@@ -38,12 +37,12 @@ Cache layout:
 - **Invariant 2 (Deterministic workflows): preserves.** Zero LLM calls; pure
   numpy reclass + scale via rasterio.
 - **FR-DC-6 (cacheable): honors.** ``cacheable=True``,
-  ``ttl_class="static-30d"``, ``source_class="impervious"`` — output is stable
+  ``ttl_class="static-30d"``, ``source_class="impervious"`` -- output is stable
   for the lifetime of the cached upstream NLCD raster.
 - **CRS hygiene (engine.md domain discipline):** the output preserves the input
   CRS verbatim (no reprojection); the transform / size / nodata are propagated.
 - **NFR-R-1 (resilience):** failures surface as ``ImperviousSurfaceError`` with
-  typed ``error_code``; GCS-read errors and rasterio-open errors are wrapped.
+  typed ``error_code``; S3-read errors and rasterio-open errors are wrapped.
 
 **Codified lesson check:** the input/output share grid + transform +
 CRS; the tool does not emit new geometry. The unit tests verify pixel-value
@@ -85,11 +84,11 @@ class ImperviousSurfaceError(RuntimeError):
     pipeline strip (NFR-R-1 typed-error requirement).
 
     Codes:
-    - ``RASTER_OPEN_FAILED`` — rasterio could not open the input.
-    - ``RASTER_DOWNLOAD_FAILED`` — GCS download failed.
-    - ``RASTER_WRITE_FAILED`` — output rasterio write failed.
-    - ``UNKNOWN_RASTER_URI`` — uri not a gs:// URI and not a readable file.
-    - ``BBOX_OUTSIDE_RASTER`` — requested bbox does not intersect the raster.
+    - ``RASTER_OPEN_FAILED`` -- rasterio could not open the input.
+    - ``RASTER_DOWNLOAD_FAILED`` -- S3 download failed.
+    - ``RASTER_WRITE_FAILED`` -- output rasterio write failed.
+    - ``UNKNOWN_RASTER_URI`` -- uri not an s3:// URI and not a readable file.
+    - ``BBOX_OUTSIDE_RASTER`` -- requested bbox does not intersect the raster.
     """
 
     def __init__(self, error_code: str, message: str) -> None:
@@ -142,7 +141,7 @@ def _download_raster_bytes(uri: str, storage_client: object | None = None) -> by
     Raises ``ImperviousSurfaceError`` on any failure so callers get a typed
     error.
     """
-    del storage_client  # GCP decommissioned — S3/local only.
+    del storage_client  # GCP decommissioned -- S3/local only.
     # s3:// staging via the shared boto3 reader.
     if uri.startswith("s3://"):
         from trid3nt_server.agent.tools.cache import read_object_bytes_s3
@@ -153,7 +152,7 @@ def _download_raster_bytes(uri: str, storage_client: object | None = None) -> by
                 "RASTER_DOWNLOAD_FAILED",
                 f"S3 download failed for {uri!r}: {exc}",
             ) from exc
-    # Local path — read directly (test / dev convenience).
+    # Local path -- read directly (test / dev convenience).
     try:
         with open(uri, "rb") as f:
             return f.read()
@@ -196,7 +195,7 @@ def _is_impervious_product(uri: str, tags: dict[str, object] | None) -> bool:
 
 
 # ---------------------------------------------------------------------------
-# Core computation — pure-numpy, no LLM
+# Core computation -- pure-numpy, no LLM
 # ---------------------------------------------------------------------------
 
 
@@ -218,7 +217,7 @@ def _derive_impervious_from_landcover(
 
     out = np.zeros(landcover_array.shape, dtype=np.float32)
     # Apply developed-class mapping. All other classes (water, forest, ag, …)
-    # remain at the default 0.0 — physically meaningful: a forest is impervious-
+    # remain at the default 0.0 -- physically meaningful: a forest is impervious-
     # 0%, a water body is impervious-0% from a runoff-routing perspective (the
     # water IS the runoff destination).
     for class_code, fraction in DEVELOPED_CLASS_TO_IMPERVIOUS.items():
@@ -338,7 +337,7 @@ def _compute_impervious_bytes(
                     raster_window = rasterio.windows.Window(
                         0, 0, src.width, src.height
                     )
-                    # rasterio's intersection helper — returns the overlap.
+                    # rasterio's intersection helper -- returns the overlap.
                     window = window.intersection(raster_window)
                 except (ValueError, rasterio.windows.WindowError) as exc:
                     raise ImperviousSurfaceError(
@@ -504,7 +503,7 @@ def compute_impervious_surface(
                 f"bbox is degenerate (min must be < max on both axes): {bbox!r}",
             )
 
-    # URI-based product detection — the inner _compute_impervious_bytes also
+    # URI-based product detection -- the inner _compute_impervious_bytes also
     # checks raster tags, but the URI heuristic is the strongest signal so
     # we apply it here and pass through as an override.
     uri_says_impervious = "impervious" in landcover_uri.lower()

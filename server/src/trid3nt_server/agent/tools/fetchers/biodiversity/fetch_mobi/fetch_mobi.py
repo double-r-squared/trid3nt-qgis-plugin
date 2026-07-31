@@ -340,7 +340,9 @@ def fetch_mobi(
     **When to use:**
     - User asks for biodiversity importance / imperiled-species richness /
       conservation-priority areas for a US region.
-    - As the biodiversity layer in ``model_conservation_priority``.
+    - As the biodiversity layer in a conservation-priority composition
+      (code_exec playground: ``geocode_location`` + ``fetch_naip`` +
+      ``fetch_mobi``).
 
     **When NOT to use:**
     - Outside the conterminous US (MoBI is CONUS-only)  --  a no-coverage result

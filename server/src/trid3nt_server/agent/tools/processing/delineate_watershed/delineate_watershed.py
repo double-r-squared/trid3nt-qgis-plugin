@@ -1,9 +1,7 @@
 """``delineate_watershed``: pysheds D8 catchment upstream of a snapped pour
 point -> watershed polygon vector.
 
-Carved out of the original two-tool ``hydrology_primitives`` module in the
-tools/ reorg; behavior and the registered tool surface are unchanged. Shared
-pysheds/DEM plumbing lives in
+Shared pysheds/DEM plumbing lives in
 ``trid3nt_server.agent.tools.processing._hydrology_common``.
 """
 
@@ -182,8 +180,8 @@ def delineate_watershed(
     """Delineate the watershed (drainage basin) upstream of a pour point (D8 flow analysis via pysheds).
 
     Use this when: "what drains to this point/gauge/outfall/dam site",
-    "delineate the watershed above here", or as an AOI mask for
-    ``compute_zonal_statistics``/``clip_raster_to_polygon``. Do NOT use
+    "delineate the watershed above here", or as an AOI mask for the
+    code_exec playground / ``clip_raster_to_polygon``. Do NOT use
     for: the stream network itself (``extract_stream_network``); regional
     named-basin boundaries (``fetch_nhdplus_nldi_navigate`` -- this is a
     local DEM delineation clamped to 0.3 deg).

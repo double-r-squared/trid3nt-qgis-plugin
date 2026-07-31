@@ -91,7 +91,7 @@ docstring: |-
   NOAA Sea Level Rise scenario inundation polygons as a FlatGeobuf vector layer.
 
   Fetches dissolved inundation-area polygons from NOAA's Office for Coastal
-  Management (OCM) SLR Viewer for one or more scenario levels (0–10 ft in
+  Management (OCM) SLR Viewer for one or more scenario levels (0 - 10 ft in
   0.5-ft increments). Returns a FlatGeobuf with one polygon feature per
   scenario level intersecting the bbox, annotated with ``slr_ft`` and
   ``scenario_label`` attributes for map display and downstream analysis.
@@ -122,7 +122,7 @@ docstring: |-
 
   **Parameters:**
       bbox: ``(min_lon, min_lat, max_lon, max_lat)`` in EPSG:4326. Required.
-          ``supports_global_query=False`` — CONUS coastal polygon source.
+          ``supports_global_query=False`` -- CONUS coastal polygon source.
           Recommended ≤ ~2° per side for tractable response times. Example
           for coastal Lee County FL (Fort Myers / Naples area):
           ``(-82.2, 26.2, -81.5, 26.9)``.
@@ -136,15 +136,15 @@ docstring: |-
       ``LayerURI`` pointing at a FlatGeobuf in the cache bucket. Each feature
       is a Polygon in EPSG:4326. Properties: ``slr_ft`` (float, scenario level
       in feet), ``scenario_label`` (str, e.g. "1.0 ft SLR"), ``dissolve``
-      (int, always 1 — source is fully dissolved per scenario). ``layer_type``
+      (int, always 1 -- source is fully dissolved per scenario). ``layer_type``
       is ``"vector"``, ``role`` is ``"primary"``, ``style_preset`` is
       ``"noaa_slr_scenarios"``, ``units`` is ``"feet"``.
 
   **Cross-tool dependencies:**
-      - Feeds INTO: ``compute_zonal_statistics`` (structure count / population
-        inside SLR footprint), ``spatial_query`` (admin-bounded SLR
-        exposure report), ``pelicun_damage_assessment`` (SLR exposure
-        footprint × NSI building stock).
+      - Feeds INTO: ``spatial_query`` (structure count / population inside
+        SLR footprint; admin-bounded SLR exposure report),
+        ``pelicun_damage_assessment`` (SLR exposure footprint x NSI
+        building stock).
       - Compare WITH: ``fetch_fema_nfhl_zones`` (regulatory floodplain
         vs. projected SLR inundation side-by-side), ``fetch_usace_nsi``
         (structure-level asset inventory for exposure counting).
@@ -158,7 +158,7 @@ docstring: |-
       - ``NOAA_SLR_SCENARIOSUpstreamError``: HTTP/network failure, ArcGIS
         error envelope, or FlatGeobuf serialization failure (retryable=True).
       - ``NOAA_SLR_SCENARIOSEmptyError``: no features in bbox for any scenario
-        (retryable=False; not raised by default — empty FGB is returned).
+        (retryable=False; not raised by default -- empty FGB is returned).
 
   Cache: ``ttl_class="static-30d"``, ``source_class="noaa_slr_scenarios"``.
   Cache key is SHA-256 of ``(bbox-rounded-6dp, sorted(scenario_ft_list))``.

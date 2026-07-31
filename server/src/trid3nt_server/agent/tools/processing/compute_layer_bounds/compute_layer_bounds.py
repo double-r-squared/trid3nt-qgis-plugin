@@ -10,7 +10,7 @@ Python sandbox.
 
 Live finding: when the user asked to "resize the bounding box
 to encompass all the <features>", the agent reached for the PYTHON SANDBOX
-(``code_exec_request``) to compute ``gdf.total_bounds`` — which is slow, gated
+(``code_exec_request``) to compute ``gdf.total_bounds`` -- which is slow, gated
 behind a user-confirm, frequently orphaned, and (worst of all) the computed
 extent was never applied, so the AOI stayed a tiny box "around a random house".
 The agent also wrongly claimed "I cannot pan/zoom your map" even though a
@@ -19,7 +19,7 @@ The agent also wrongly claimed "I cannot pan/zoom your map" even though a
 This tool replaces both failure modes:
 
 1. It computes the layer's EPSG:4326 bounding box deterministically with
-   geopandas (vector) or rasterio (raster) — reusing the
+   geopandas (vector) or rasterio (raster) -- reusing the
    ``postprocess_pelicun._bbox_from_gdf`` reproject-to-4326 pattern. Sub-second,
    no LLM, no sandbox, no user-confirm gate.
 2. It EMITS a ``map-command(zoom-to, bbox=<computed bbox>)`` so the VIEW
@@ -41,7 +41,7 @@ This tool replaces both failure modes:
 - **Invariant 1 (Determinism boundary): preserves.** Pure geopandas/rasterio
   bbox extraction; no LLM, no estimate. The emitted bbox is workflow-attributed.
 - **FR-DC-6 (cacheable): honors.** ``cacheable=False`` /
-  ``ttl_class="live-no-cache"`` — the tool has a side effect (it drives the map
+  ``ttl_class="live-no-cache"`` -- the tool has a side effect (it drives the map
   view) and is sub-second, so caching is both wrong and pointless.
 - **FR-AS-11 (typed errors): honors.** Every failure raises
   ``ComputeLayerBoundsError`` with a SCREAMING_SNAKE_CASE ``error_code``.
@@ -80,14 +80,14 @@ class ComputeLayerBoundsError(RuntimeError):
     strip / function_response (FR-AS-11 typed-error requirement).
 
     Codes:
-    - ``UNKNOWN_LAYER_URI`` — uri is neither a gs:///s3:// URI nor a readable
+    - ``UNKNOWN_LAYER_URI`` -- uri is neither an s3:// URI nor a readable
       local file.
-    - ``DOWNLOAD_FAILED`` — object-store download for a gs:///s3:// URI failed.
-    - ``RASTER_OPEN_FAILED`` — the raster could not be opened by rasterio.
-    - ``VECTOR_OPEN_FAILED`` — the vector could not be opened by geopandas.
-    - ``GEOPANDAS_UNAVAILABLE`` — geopandas / pyogrio not importable.
-    - ``EMPTY_LAYER`` — the layer has no features / no valid extent.
-    - ``DEGENERATE_BOUNDS`` — the computed bounds are non-finite (NaN/inf).
+    - ``DOWNLOAD_FAILED`` -- object-store download for an s3:// URI failed.
+    - ``RASTER_OPEN_FAILED`` -- the raster could not be opened by rasterio.
+    - ``VECTOR_OPEN_FAILED`` -- the vector could not be opened by geopandas.
+    - ``GEOPANDAS_UNAVAILABLE`` -- geopandas / pyogrio not importable.
+    - ``EMPTY_LAYER`` -- the layer has no features / no valid extent.
+    - ``DEGENERATE_BOUNDS`` -- the computed bounds are non-finite (NaN/inf).
     """
 
     def __init__(self, error_code: str, message: str) -> None:
@@ -96,7 +96,7 @@ class ComputeLayerBoundsError(RuntimeError):
 
 
 # ---------------------------------------------------------------------------
-# Metadata — NOT cacheable: this tool has a side effect (drives the map view)
+# Metadata -- NOT cacheable: this tool has a side effect (drives the map view)
 # and is sub-second. live-no-cache is the FR-DC-6-consistent declaration.
 # ---------------------------------------------------------------------------
 
@@ -133,12 +133,12 @@ def _resolve_layer_to_local_path(
 ) -> tuple[str, bool]:
     """Resolve ``uri`` to a local file path.
 
-    Returns ``(path, is_temp)`` — caller deletes the path iff ``is_temp``.
+    Returns ``(path, is_temp)`` -- caller deletes the path iff ``is_temp``.
     Supports ``s3://`` (boto3, EC2 instance-role - lesson) and local
     paths. GCP is decommissioned, so ``storage_client`` is ignored. Raises
     ``ComputeLayerBoundsError`` on failure.
     """
-    del storage_client  # GCP decommissioned — S3/local only.
+    del storage_client  # GCP decommissioned -- S3/local only.
     suffix = _infer_suffix(uri)
 
     if uri.startswith("s3://"):
@@ -172,8 +172,7 @@ def _resolve_layer_to_local_path(
         if cog:
             cog = unquote(cog)
             if cog.startswith("s3://"):
-                # storage_client was already del'd above (GCP decommissioned —
-                # ignored); recurse on the s3:// COG branch with None.
+                # storage_client was already del'd above (GCP decommissioned -- # ignored); recurse on the s3:// COG branch with None.
                 return _resolve_layer_to_local_path(cog, None)
 
     raise ComputeLayerBoundsError(
@@ -204,7 +203,7 @@ def _bounds_from_raster(path: str) -> tuple[float, float, float, float]:
     reprojecting the dataset bounds to EPSG:4326 when the CRS differs."""
     try:
         import rasterio  # type: ignore[import-not-found]
-    except ImportError as exc:  # pragma: no cover — rasterio is a hard dep
+    except ImportError as exc:  # pragma: no cover -- rasterio is a hard dep
         raise ComputeLayerBoundsError(
             "RASTER_OPEN_FAILED", f"rasterio not available: {exc}"
         ) from exc
@@ -244,7 +243,7 @@ def _bounds_from_vector(path: str) -> tuple[float, float, float, float]:
         ) from exc
     try:
         gdf = gpd.read_file(path, engine="pyogrio")
-    except Exception:  # noqa: BLE001 — retry without the explicit engine
+    except Exception:  # noqa: BLE001 -- retry without the explicit engine
         try:
             gdf = gpd.read_file(path)
         except Exception as exc:  # noqa: BLE001
@@ -333,7 +332,7 @@ async def compute_layer_bounds(
 
     Params:
         layer_uri: the layer's ``layer_id`` handle (preferred) from
-            [Case state]/loaded_layers, or a gs://s3:// URI / local path.
+            [Case state]/loaded_layers, or an s3:// URI / local path.
             Vector opens via geopandas, raster via rasterio; extent is
             reprojected to EPSG:4326.
         pad_fraction: fractional padding per side (0.0=exact, 0.05=5%
@@ -360,7 +359,7 @@ async def compute_layer_bounds(
         elif layer_type == "vector":
             raw_bbox = _bounds_from_vector(local_path)
         else:
-            # Unknown extension — probe raster first, then vector.
+            # Unknown extension -- probe raster first, then vector.
             try:
                 raw_bbox = _bounds_from_raster(local_path)
                 layer_type = "raster"
@@ -388,7 +387,7 @@ async def compute_layer_bounds(
     # _CURRENT_EMITTER ContextVar (bound by PipelineEmitter.emit_tool_call) and
     # fire ``map-command(zoom-to)``. Outside an emit_tool_call scope (direct
     # call, smoke harness, unit test without an emitter) current_emitter()
-    # returns None and we skip silently — emitting is a UX action, not a
+    # returns None and we skip silently -- emitting is a UX action, not a
     # correctness gate, and the bbox is still returned for the agent / server.
     map_fitted = False
     if fit_map:
@@ -404,7 +403,7 @@ async def compute_layer_bounds(
                     bbox,
                     layer_type,
                 )
-            except Exception as exc:  # noqa: BLE001 — non-fatal UX hint
+            except Exception as exc:  # noqa: BLE001 -- non-fatal UX hint
                 logger.warning(
                     "compute_layer_bounds: zoom-to emit failed (non-fatal): %s", exc
                 )

@@ -1,4 +1,4 @@
-"""``fetch_usgs_groundwater_levels`` atomic tool — real USGS NWIS groundwater levels (monitoring wells + their latest water-level) as points.
+"""``fetch_usgs_groundwater_levels`` atomic tool -- real USGS NWIS groundwater levels (monitoring wells + their latest water-level) as points.
 """
 
 from __future__ import annotations
@@ -64,7 +64,7 @@ class GwLevelsError(RuntimeError):
 
 
 class GwInputError(GwLevelsError):
-    """Invalid inputs — bad bbox shape, bad state code, no spatial selector.
+    """Invalid inputs -- bad bbox shape, bad state code, no spatial selector.
 
     Not retryable: the caller must fix the argument.
     """
@@ -76,7 +76,7 @@ class GwInputError(GwLevelsError):
 class GwUpstreamError(GwLevelsError):
     """USGS Water Data OGC API request failed (network error, HTTP 5xx, bad body).
 
-    Retryable — transient USGS outages recover on retry.
+    Retryable -- transient USGS outages recover on retry.
     """
 
     error_code = "USGS_GROUNDWATER_UPSTREAM_ERROR"
@@ -86,7 +86,7 @@ class GwUpstreamError(GwLevelsError):
 class GwNoWellsError(GwLevelsError):
     """No USGS groundwater wells with a water-level reading found in scope.
 
-    Not retryable — the area genuinely has no instrumented groundwater
+    Not retryable -- the area genuinely has no instrumented groundwater
     monitoring wells reporting a level. Either widen the scope or pick an area
     with a known monitoring network (e.g. the High Plains aquifer).
     """
@@ -99,13 +99,13 @@ class GwNoWellsError(GwLevelsError):
 # Constants.
 # ---------------------------------------------------------------------------
 
-#: USGS Water Data OGC API — latest discrete field measurements (per series).
+#: USGS Water Data OGC API -- latest discrete field measurements (per series).
 MEASUREMENTS_URL = (
     "https://api.waterdata.usgs.gov/ogcapi/v0/collections/"
     "latest-field-measurements/items"
 )
 
-#: USGS Water Data OGC API — monitoring-location metadata (well name/aquifer).
+#: USGS Water Data OGC API -- monitoring-location metadata (well name/aquifer).
 LOCATIONS_URL = (
     "https://api.waterdata.usgs.gov/ogcapi/v0/collections/"
     "monitoring-locations/items"
@@ -157,7 +157,7 @@ USPS_TO_FIPS: dict[str, str] = {
 
 
 # ---------------------------------------------------------------------------
-# AtomicToolMetadata — registered once at import time.
+# AtomicToolMetadata -- registered once at import time.
 # ---------------------------------------------------------------------------
 
 
@@ -273,7 +273,7 @@ def _round_bbox_to_6dp(
 def _http_get(url: str, timeout: float = _HTTP_TIMEOUT) -> bytes:
     """Plain HTTP GET. Raises ``GwUpstreamError`` on failure.
 
-    A 404 on the OGC items endpoint means "no items matched" — surfaced as an
+    A 404 on the OGC items endpoint means "no items matched" -- surfaced as an
     empty body so the caller's honest-empty gate engages instead of aborting.
     """
     req = urllib.request.Request(url, headers={"User-Agent": _USER_AGENT})
@@ -347,7 +347,7 @@ def _build_locations_url(
 
 
 # ---------------------------------------------------------------------------
-# Parsers — OGC GeoJSON FeatureCollections.
+# Parsers -- OGC GeoJSON FeatureCollections.
 # ---------------------------------------------------------------------------
 
 
@@ -441,7 +441,7 @@ def _parse_locations_geojson(raw: bytes) -> dict[str, dict[str, Any]]:
     """Parse the monitoring-locations GeoJSON -> {mlid: metadata} lookup.
 
     Metadata per well: ``site_name`` (human name), ``aquifer_code``,
-    ``well_depth_ft``. Returns ``{}`` for an empty body — the join then simply
+    ``well_depth_ft``. Returns ``{}`` for an empty body -- the join then simply
     leaves the enrichment fields blank (best-effort; never an error).
     """
     if not raw:
@@ -492,7 +492,7 @@ def _join_records(
 
     Best-effort join on ``monitoring_location_id``. A measurement with no
     matching location keeps ``site_name=""`` (and null aquifer/depth) but is
-    never dropped — the reading itself is the load-bearing datum.
+    never dropped -- the reading itself is the load-bearing datum.
     """
     joined: list[dict[str, Any]] = []
     for rec in measurements:
@@ -616,7 +616,7 @@ def _fetch_usgs_groundwater_levels_bytes(
     meas_raw = _http_get(meas_url)
     measurements = _parse_measurements_geojson(meas_raw)
 
-    # 2. Honest typed error if the primary misses — never an empty success layer.
+    # 2. Honest typed error if the primary misses -- never an empty success layer.
     if not measurements:
         raise GwNoWellsError(
             f"No USGS groundwater monitoring wells reporting a water-level "
@@ -635,7 +635,7 @@ def _fetch_usgs_groundwater_levels_bytes(
     )
 
     # 3. ENRICHMENT: monitoring-locations join for well name/aquifer/depth.
-    #    Best-effort — a failure here must NOT abort a successful primary fetch.
+    #    Best-effort -- a failure here must NOT abort a successful primary fetch.
     locations: dict[str, dict[str, Any]] = {}
     try:
         loc_url = _build_locations_url(state_fips=state_fips, bbox=bbox)
@@ -680,13 +680,13 @@ def fetch_usgs_groundwater_levels(
     """Fetch REAL, OBSERVED USGS groundwater monitoring wells as a point FlatGeobuf.
 
     Retrieves active USGS groundwater monitoring wells and their LATEST
-    water-level reading — depth-to-water (pcode 72019, ft below land surface)
-    and/or groundwater elevation (62611/62610/72150, ft) — from the modernized
+    water-level reading -- depth-to-water (pcode 72019, ft below land surface)
+    and/or groundwater elevation (62611/62610/72150, ft) -- from the modernized
     USGS Water Data OGC API (the machine API behind ``waterdata.usgs.gov``, which
     replaced the decommissioned ``nwis/gwlevels`` service). Returns one Point
     feature per well-level reading at the well's coordinates, carrying the latest
     value, its parameter code, unit, vertical datum and reading timestamp. This
-    is the canonical OBSERVED groundwater-head source — the field/instrument
+    is the canonical OBSERVED groundwater-head source -- the field/instrument
     record of how deep the water table is, NOT a model estimate.
 
     When to use:
@@ -696,22 +696,21 @@ def fetch_usgs_groundwater_levels(
           wells in the High Plains aquifer", "where are the wells near this farm
           and how deep is the water table", "plot the observed groundwater
           levels in central Kansas").
-        - You need the actual measured groundwater head at instrumented wells —
-          the real instrument record — to map, annotate, or ground-truth.
+        - You need the actual measured groundwater head at instrumented wells -- the real instrument record -- to map, annotate, or ground-truth.
         - Cross-checking / calibrating a MODELED groundwater head field (a
           MODFLOW run) against the observed monitoring-well network ("observed
           vs modeled heads").
 
     When NOT to use:
-        - MODELED groundwater heads / drawdown / a contaminant plume — those come
+        - MODELED groundwater heads / drawdown / a contaminant plume -- those come
           from a MODFLOW run (``run_solver`` with a MODFLOW deck), not this
           observed-well tool. This tool supplies the OBSERVED comparison points.
         - SURFACE-water stream gauges (discharge / gage height at river
-          stations) — use ``fetch_usgs_nwis_gauges`` (the observed stream-gauge
+          stations) -- use ``fetch_usgs_nwis_gauges`` (the observed stream-gauge
           companion). This tool is the GROUNDWATER (subsurface well) network.
-        - Soil-moisture / shallow vadose-zone water content — that is a different
+        - Soil-moisture / shallow vadose-zone water content -- that is a different
           measurement; this is the saturated-zone water table.
-        - Global / non-US wells — this tool is US + territories only
+        - Global / non-US wells -- this tool is US + territories only
           (``supports_global_query=False``).
 
     Spatial selector (pass EXACTLY ONE):
@@ -744,12 +743,12 @@ def fetch_usgs_groundwater_levels(
           ``aquifer_code`` (national aquifer code; "" if unknown),
           ``well_depth_ft`` (constructed well depth, ft; null if unknown).
 
-    Fallback behaviour (data-source fallback norm — primary -> honest typed
+    Fallback behaviour (data-source fallback norm -- primary -> honest typed
     error): the latest-field-measurements collection is the primary (observed
     readings). The monitoring-locations join (for well name / aquifer / depth) is
-    a best-effort ENRICHMENT — a failure there leaves names blank but never
+    a best-effort ENRICHMENT -- a failure there leaves names blank but never
     aborts. If the primary returns zero readings in scope, ``GwNoWellsError`` is
-    raised — never an empty success-shaped layer.
+    raised -- never an empty success-shaped layer.
 
     Cache: ``ttl_class="dynamic-1h"``, ``source_class="usgs_groundwater_levels"``.
     Cache key is SHA-256 of the resolved selector (``state_code`` or
@@ -759,11 +758,11 @@ def fetch_usgs_groundwater_levels(
         - Composes WITH: ``publish_layer`` (map overlay), ``geocode_location``
           (derive a bbox or surface a state from a place name BEFORE this call),
           ``fetch_administrative_boundaries`` (state/county framing),
-          ``compute_zonal_statistics`` (aggregate readings inside a polygon).
+          ``spatial_query`` (aggregate readings inside a polygon).
         - Cross-checks: a MODFLOW modeled-head layer (observed-vs-modeled head
-          comparison — the MODFLOW groundwater demos).
+          comparison -- the MODFLOW groundwater demos).
         - Upstream data source: USGS Water Data OGC API
-          (api.waterdata.usgs.gov/ogcapi/v0 — latest-field-measurements +
+          (api.waterdata.usgs.gov/ogcapi/v0 -- latest-field-measurements +
           monitoring-locations).
 
     Errors:
@@ -838,7 +837,7 @@ def fetch_usgs_groundwater_levels(
     )
 
     # 4. Resolve the camera extent. On a cache HIT the fetch_fn never ran so
-    # ``captured`` is empty — fall back to the requested bbox (state-level
+    # ``captured`` is empty -- fall back to the requested bbox (state-level
     # queries have no requested bbox, so leave it None: the inline-GeoJSON
     # vector path still fits the map to the rendered features).
     extent_bbox: tuple[float, float, float, float] | None = captured.get("extent")
@@ -856,7 +855,7 @@ def fetch_usgs_groundwater_levels(
         json.dumps(params, sort_keys=True, separators=(",", ":")).encode("utf-8")
     ).hexdigest()[:8]
 
-    name = f"USGS groundwater levels — {scope_tag}"
+    name = f"USGS groundwater levels -- {scope_tag}"
     layer_id = f"usgs-groundwater-{seed}"
 
     return LayerURI(

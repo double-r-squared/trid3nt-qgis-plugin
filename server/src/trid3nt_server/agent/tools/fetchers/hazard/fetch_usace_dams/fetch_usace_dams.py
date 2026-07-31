@@ -1153,8 +1153,8 @@ def fetch_usace_dams(
         ``geocode_location`` (typical agent workflow: geocode "Lake Mead" →
         derive bbox → call this tool). Feeds into ``spatial_query``
         (clip dams to watershed / county / Case AOI), and into
-        ``compute_zonal_statistics`` / Pelicun composers that pair dam
-        location with hazard footprints from ``sfincs_flood``.
+        Pelicun composers that pair dam location with hazard footprints
+        from ``sfincs_flood``.
 
     Cache: ``static-30d`` (NID is updated quarterly at fastest; a 30-day
     bucket gives ~12x amortization). Cache key: SHA-256 of bbox-rounded-6dp
@@ -1236,11 +1236,11 @@ def fetch_usace_dams(
     ) if filt_bits else ""
 
     if q_bbox is None:
-        name = "USACE National Inventory of Dams — CONUS+AK+HI" + filt_name
+        name = "USACE National Inventory of Dams -- CONUS+AK+HI" + filt_name
         layer_id = "usace-nid-dams-global" + filt_id
     else:
         name = (
-            f"USACE National Inventory of Dams — bbox "
+            f"USACE National Inventory of Dams -- bbox "
             f"({q_bbox[0]:.2f},{q_bbox[1]:.2f},{q_bbox[2]:.2f},{q_bbox[3]:.2f})"
             + filt_name
         )

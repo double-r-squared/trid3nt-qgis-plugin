@@ -625,8 +625,9 @@ def fetch_landcover(
     wrong answers).
 
     **When to use:**
-    - ``build_sfincs_model`` requires landcover for Manning's roughness
-      assignment -- this is the canonical supply tool.
+    - SFINCS setup (``set_sfincs_parameters`` + ``run_sfincs``) requires
+      landcover for Manning's roughness assignment -- this is the canonical
+      supply tool.
     - User asks "what land cover exists in this area?" for a CONUS location.
     - Exposure analysis: intersect a hazard footprint with impervious-surface
       or developed-land classes.
@@ -668,8 +669,8 @@ def fetch_landcover(
     - ``layer`` (LayerURI): COG at
       ``s3://trid3nt-cache/cache/static-30d/landcover/<key>.tif``;
       ``style_preset="categorical_landcover"``, ``units="nlcd_class_code"``.
-    - ``nlcd_vintage_year`` (int): vintage year consumed by
-      ``build_sfincs_model`` to validate the Manning's mapping CSV.
+    - ``nlcd_vintage_year`` (int): vintage year consumed by SFINCS setup
+      (``set_sfincs_parameters``) to validate the Manning's mapping CSV.
     - ``dataset`` (str): echo of the input dataset string for provenance.
     - ``source`` (str): ``"mrlc-wcs"`` for NLCD.
     - ``effective_resolution_m`` (int): actual pixel spacing used (equals
@@ -679,8 +680,9 @@ def fetch_landcover(
 
     **Cross-tool dependencies:**
     - Upstream: ``geocode_location`` for bbox derivation.
-    - Downstream: ``build_sfincs_model`` (Manning's roughness), QGIS Server
-      WMS rendering, ``extract_landcover_class``, ``compute_impervious_surface``.
+    - Downstream: ``set_sfincs_parameters`` / ``run_sfincs`` (Manning's
+      roughness), the QGIS plugin's native rendering, ``extract_landcover_class``,
+      ``compute_impervious_surface``.
     """
     if not isinstance(dataset, str) or not dataset:
         raise BboxInvalidError(

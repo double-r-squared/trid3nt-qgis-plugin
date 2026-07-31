@@ -1,4 +1,4 @@
-"""``fetch_ghsl_population`` atomic tool — JRC GHSL GHS-POP global population grid.
+"""``fetch_ghsl_population`` atomic tool -- JRC GHSL GHS-POP global population grid.
 """
 
 from __future__ import annotations
@@ -183,7 +183,7 @@ def _validate_bbox(bbox: tuple[float, float, float, float] | None) -> None:
     """Raise ``GHSLPopBboxRequiredError`` / ``GHSLPopInputError`` if invalid."""
     if bbox is None:
         raise GHSLPopBboxRequiredError(
-            "bbox is required for fetch_ghsl_population — the global GHS-POP "
+            "bbox is required for fetch_ghsl_population -- the global GHS-POP "
             "mosaic is ~12 GB; pass a (min_lon, min_lat, max_lon, max_lat) in "
             "EPSG:4326."
         )
@@ -330,7 +330,7 @@ def _fetch_ghsl_pop_bytes(
                         raise GHSLPopInputError(
                             f"bbox={bbox} would request "
                             f"{int(win.width) * int(win.height):,} pixels in tile "
-                            f"R{r}_C{c} — refuse to materialize > "
+                            f"R{r}_C{c} -- refuse to materialize > "
                             f"{_MAX_PIXELS:,}; narrow the bbox."
                         )
                     arr = src.read(1, window=win).astype(np.float32)
@@ -379,7 +379,7 @@ def _fetch_ghsl_pop_bytes(
             if not np.isfinite(mosaic).any():
                 raise GHSLPopEmptyError(
                     f"bbox={bbox} produced no valid GHS-POP pixels "
-                    "(all-NaN window — likely over open water)"
+                    "(all-NaN window -- likely over open water)"
                 )
 
             height, width = mosaic.shape
@@ -471,7 +471,7 @@ def fetch_ghsl_population(
     **When to use:**
     - GLOBAL population exposure modeling outside the US, or as an independent
       cross-check against ``fetch_hrsl_population`` (Meta HRSL) and the WorldPop
-      branch of ``fetch_population`` — GHS-POP uses a different built-up-area
+      branch of ``fetch_population`` -- GHS-POP uses a different built-up-area
       disaggregation methodology.
     - "How many people live inside this flood / surge / wildfire footprint?" for
       any non-US (or US) AOI, especially European, African, Asian, and South
@@ -489,7 +489,7 @@ def fetch_ghsl_population(
 
     **Parameters:**
     - ``bbox`` (tuple): ``(min_lon, min_lat, max_lon, max_lat)`` in EPSG:4326.
-      **Required** (``supports_global_query=False`` — the global mosaic is
+      **Required** (``supports_global_query=False`` -- the global mosaic is
       ~12 GB). Example: ``(3.10, 6.35, 3.70, 6.75)`` for Lagos, Nigeria.
     - ``epoch`` (int): GHS-POP epoch year; default 2020 (the only wired epoch
       in v0.1). Accepted for forward compatibility.
@@ -504,10 +504,10 @@ def fetch_ghsl_population(
     **Cross-tool dependencies:**
     - Downstream of: ``geocode_location`` (provides bbox), ``fetch_dem``
       (co-registered for elevation-weighted exposure).
-    - Upstream of: ``compute_zonal_statistics`` (sum population within a polygon),
+    - Upstream of: ``spatial_query`` (sum population within a polygon),
       Pelicun impact post-processor, any population-at-risk workflow step.
     - Complements: ``fetch_hrsl_population`` (Meta HRSL ~30 m global) and
-      ``fetch_population`` (WorldPop / US Census) — different methodologies,
+      ``fetch_population`` (WorldPop / US Census) -- different methodologies,
       same persons/cell semantics.
     """
     _validate_bbox(bbox)
@@ -535,7 +535,7 @@ def fetch_ghsl_population(
             f"ghsl-pop-{q_bbox[0]:.4f}-{q_bbox[1]:.4f}-"
             f"{q_bbox[2]:.4f}-{q_bbox[3]:.4f}"
         ),
-        name="Population (JRC GHS-POP E2020 — persons/cell)",
+        name="Population (JRC GHS-POP E2020 -- persons/cell)",
         layer_type="raster",
         uri=result.uri,
         style_preset="population_density",

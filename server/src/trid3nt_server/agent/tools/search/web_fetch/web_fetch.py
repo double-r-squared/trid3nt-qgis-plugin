@@ -5,12 +5,12 @@ arbitrary URL and returns a structured dict with one of four extraction modes:
 ``full_html``, ``main_text``, ``json``, or ``metadata``.
 
 Unlike the layer-producing fetchers in ``data_fetch.py``, this tool returns a
-plain ``dict`` — it is intended for the agent's research / discovery loop
+plain ``dict`` -- it is intended for the agent's research / discovery loop
 (e.g. confirming an article subject before extracting event metadata, pulling
 the body of a news article, parsing a small JSON API response). The result is
 NOT a ``LayerURI`` and does not feed the map.
 
-Cache class: ``dynamic-1h`` — web pages change. The 1-hour TTL boundary is
+Cache class: ``dynamic-1h`` -- web pages change. The 1-hour TTL boundary is
 the only freshness gate (the cache key does not include time directly; the
 TTL-bucket vintage in ``compute_cache_key`` rolls every hour).
 
@@ -35,13 +35,13 @@ Output shape (returned as dict; also persisted as JSON blob in the cache):
 Robots.txt: NOT honored in v0.1 (a future revision adds a per-host robots cache + allow-check).
 
 Typed errors (FR-AS-11):
-    - ``WebFetchInputError(retryable=False)`` — bad URL (no scheme, malformed)
+    - ``WebFetchInputError(retryable=False)`` -- bad URL (no scheme, malformed)
       or unknown extract mode.
-    - ``WebFetchUpstreamError(retryable=True)`` — 5xx, timeout, connect error,
+    - ``WebFetchUpstreamError(retryable=True)`` -- 5xx, timeout, connect error,
       or JSON decode failure on ``extract="json"``.
 
 External-API resilience (NFR-R-1): per-call timeout, single re-raise on
-fetch failure (no sentinel writes — see ``read_through``). The agent
+fetch failure (no sentinel writes -- see ``read_through``). The agent
 FR-AS-11 surface decides retry/clarify/fallback.
 
 FR-TA-3 docstring discipline: the public ``web_fetch`` carries "Use this when"
@@ -236,7 +236,7 @@ def _extract_metadata(html: str) -> tuple[dict[str, Any], str | None, str | None
 
 
 # ---------------------------------------------------------------------------
-# Fetch + extract — the body the cache shim calls on miss.
+# Fetch + extract -- the body the cache shim calls on miss.
 # ---------------------------------------------------------------------------
 
 
@@ -273,7 +273,7 @@ def _fetch_and_extract_bytes(
             f"web_fetch upstream {status} for url={url!r}"
         )
     if status >= 400:
-        # 4xx is a client-input problem (404, 401, etc.) — non-retryable at
+        # 4xx is a client-input problem (404, 401, etc.) -- non-retryable at
         # the same URL. Surface as input error so the agent doesn't retry-loop.
         raise WebFetchInputError(
             f"web_fetch client error {status} for url={url!r}"
@@ -306,7 +306,7 @@ def _fetch_and_extract_bytes(
                 f"for url={url!r}"
             )
         if "json" not in content_type:
-            # text/* or application/* — only proceed if it actually parses.
+            # text/* or application/* -- only proceed if it actually parses.
             pass
         try:
             content = response.json()
@@ -364,8 +364,9 @@ def web_fetch(
 ) -> dict[str, Any]:
     """Generic web-page ingest with content extraction modes (article text / HTML / JSON / metadata).
 
-    Use this when: fetching a news article or incident report URL (feeds
-    ``aggregate_claims_across_sources``); confirming a page's subject
+    Use this when: fetching a news article or incident report URL (compose
+    multiple fetches yourself in the ``code_exec_request`` playground to
+    cross-check claims across sources); confirming a page's subject
     cheaply (``extract="metadata"``); pulling a small public-data JSON API
     with no dedicated fetcher; a citation/research check. Do NOT use for:
     large file downloads (no streaming); JS-rendered SPA pages (empty
@@ -423,7 +424,7 @@ def web_fetch(
     try:
         decoded = json.loads(result.data.decode("utf-8"))
     except (json.JSONDecodeError, UnicodeDecodeError) as exc:
-        # Cache corruption — should not happen, but surface as upstream so
+        # Cache corruption -- should not happen, but surface as upstream so
         # the agent can decide to retry (which will force-refresh on next call).
         raise WebFetchUpstreamError(
             f"web_fetch cache entry could not be decoded as JSON: {exc}"

@@ -1,14 +1,11 @@
 """``modflow_contaminant_plume`` - MODFLOW groundwater contaminant-plume template.
 
-FOLD (engine-door refactor slice 1): the ONE registered MODFLOW template that
-answers "model a contaminant plume in groundwater" - single OR multi species. It
-REPLACES the two old registrations ``run_modflow_job`` (single-contaminant spill)
-and ``run_model_multi_species_scenario`` (N-species) with a single template whose
-``species`` knob (min 1) drives one shared GWF flow field + N GWT solute-transport
-models (one per species). A single contaminant is ``species`` of length 1 - the
-convenience fields ``contaminant`` / ``release_rate_kg_s`` are accepted and
-normalized into a one-element species list (minimal parameter surface, Invariant
-10).
+The ONE registered MODFLOW template that answers "model a contaminant plume in
+groundwater" - single OR multi species. Its ``species`` knob (min 1) drives one
+shared GWF flow field + N GWT solute-transport models (one per species). A
+single contaminant is ``species`` of length 1 - the convenience fields
+``contaminant`` / ``release_rate_kg_s`` are accepted and normalized into a
+one-element species list (minimal parameter surface, Invariant 10).
 
 Chain:
 

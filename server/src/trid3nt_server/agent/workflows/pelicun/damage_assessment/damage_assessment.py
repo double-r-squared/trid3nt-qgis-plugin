@@ -1,24 +1,16 @@
 """``pelicun_damage_assessment`` - Pelicun-backed fragility damage assessment.
 
-Engine template (engine-door refactor - PELICUN slice; was
-``run_pelicun_damage_assessment``). Tagged ``engine="pelicun", tier="template"``:
-EXCLUDED from the default retrieval pool and surfaced only by the ``run_pelicun``
-door's gate expansion (SELECT-THEN-CALL). Metadata (``source_class="pelicun_damage"``,
-``cacheable=True``, ``ttl_class="static-30d"``) is unchanged from the rename.
+Engine template tagged ``engine="pelicun", tier="template"``: EXCLUDED from the
+default retrieval pool and surfaced only by the ``run_pelicun`` door's gate
+expansion (SELECT-THEN-CALL).
 
-** composer** - replaces the stub with the real Pelicun-backed
-runtime. The LLM-visible API contract (name, parameters, allowed enums, return
-type) is unchanged; only the body is swapped.
-
-**PELICUN fold (engine-door refactor)** — ONE template, two input modes
-(functional-sameness fold of the former ``pelicun_damage_with_buildings``
-composer):
+ONE template, two input modes:
 
 - ``assets_uri`` provided  -> run against that EXPLICIT vector asset inventory
   (the classic behavior).
 - ``assets_uri`` absent + ``bbox`` provided -> AUTO-FETCH a building-density
   grid for the bbox (``compute_building_density`` -> point FlatGeobuf) and run
-  against it — spatially-distributed damage over the real built-area grid
+  against it - spatially-distributed damage over the real built-area grid
   rather than administrative polygons.
 - NEITHER given -> a typed ``USER_INPUT_REQUIRED`` failed envelope (never a
   bare ``TypeError``).
@@ -44,7 +36,7 @@ For each asset feature in ``assets_uri``:
    ``repair_cost_p95``.
 
 The output FlatGeobuf carries the original asset geometry + every numeric
-field the LLM might narrate. **Invariant 1**: no LLM-generated numbers — every
+field the LLM might narrate. **Invariant 1**: no LLM-generated numbers - every
 narrated quantity reads from a typed property on this layer.
 
 **Why HAZUS v6.1 flood loss functions, not classical fragility curves**
@@ -53,20 +45,20 @@ The Pelicun 3.9 DamageAndLossModelLibrary ships HAZUS v6.1 flood depth-damage
 data as piecewise-linear *loss functions* (loss-ratio vs. peak inundation
 height), not as classical fragility curves with damage-state probabilities.
 We compute damage states by binning realized loss ratios into the HAZUS DS
-ladder — the canonical convention used by HAZUS-MH itself when post-processing
+ladder - the canonical convention used by HAZUS-MH itself when post-processing
 loss-function outputs. The aleatory dispersion ``σ_lnD = 0.4`` is the
 standard HAZUS depth-damage dispersion (see HAZUS Flood Technical Manual §3.3,
 also Tate et al. 2015, Wing et al. 2020).
 
-**.1**: bundled HAZUS curves it is. FEMA P-58 swap (component-
-level fragility for seismic + finer-grain flood) is + work.
+v0.1 ships only the bundled HAZUS curves. A FEMA P-58 swap (component-level
+fragility for seismic + finer-grain flood) is future work.
 
 **Geographic-correctness gate (codified lesson)**
 
 Damage states MUST be monotonically non-decreasing with sampled hazard
 intensity. Test ``test_geographic_correctness_higher_depth_higher_damage``
 asserts this against a synthetic raster where the western half is dry and the
-eastern half is flooded — assets in the eastern half MUST come back with
+eastern half is flooded - assets in the eastern half MUST come back with
 higher ``ds_mean`` than assets in the western half. A sampling bug that maps
 every asset to the wrong raster pixel would fail this test.
 
@@ -83,8 +75,7 @@ realization_count)`` calls reuse the cached FlatGeobuf for 30 days.
 Acceptance run (``TRID3NT_TEST_LIVE_PELICUN=1``): Y-flip-fixed flood
 COG (``s3://trid3nt-runs/01KTJX71NKGDMXB9TN0DV75JWK/flood_depth_peak_0086.tif``)
 + Fort Myers place polygons from ``fetch_administrative_boundaries(level='place', bbox=...)``
-→ FlatGeobuf with populated ``ds_mean``/``repair_cost_mean`` per asset,
-saved to ``reports/inflight/-engine-20260608/evidence/``.
+-> FlatGeobuf with populated ``ds_mean``/``repair_cost_mean`` per asset.
 
 FR-TA-2 / FR-AS-3 / FR-CE-8 / FR-DC-3/4 invariants honored as documented in
 the per-section comments below.
@@ -119,7 +110,7 @@ __all__ = [
     "PelicunFragilityDataError",
     "PelicunNoAssetsError",
     # engine-door refactor (PELICUN fold): the auto-fetch (building-density)
-    # input mode is now a knob of this ONE template — the density->points
+    # input mode is now a knob of this ONE template -- the density->points
     # helper + its typed error moved here from the former
     # pelicun_damage_with_buildings composer.
     "PelicunWithBuildingsError",
@@ -148,7 +139,7 @@ class PelicunDamageError(RuntimeError):
 class PelicunInputError(PelicunDamageError):
     """Bad ``hazard_raster_uri`` / ``assets_uri`` / ``fragility_set`` / etc.
 
-    Not retryable — input validation failures are deterministic given the same
+    Not retryable -- input validation failures are deterministic given the same
     inputs, so the agent's retry loop should not re-invoke.
     """
 
@@ -160,7 +151,7 @@ class PelicunRuntimeError(PelicunDamageError):
     """The Pelicun runtime or geospatial I/O failed during damage assessment.
 
     Examples: cannot open hazard raster, asset file unreadable, CRS
-    reprojection failure. Retryable — transient I/O might succeed on retry.
+    reprojection failure. Retryable -- transient I/O might succeed on retry.
     """
 
     error_code = "PELICUN_RUNTIME_ERROR"
@@ -180,7 +171,7 @@ class PelicunFragilityDataError(PelicunDamageError):
 class PelicunNoAssetsError(PelicunDamageError):
     """Asset file has zero features overlapping the hazard raster footprint.
 
-    Not retryable — the inputs are well-formed but yield no work; the agent's
+    Not retryable -- the inputs are well-formed but yield no work; the agent's
     planning loop should pick a different bbox or asset source.
     """
 
@@ -194,8 +185,7 @@ class PelicunWithBuildingsError(RuntimeError):
     ``error_code`` / ``retryable`` mirror the atomic-tool error surface so the
     agent routes it to the WebSocket A.6 error frame (FR-AS-11 / NFR-R-1). For
     the specific error subclass (e.g. a building-density upstream failure)
-    inspect ``__cause__``. Folded here from the former
-    ``pelicun_damage_with_buildings`` composer (PELICUN fold).
+    inspect ``__cause__``.
     """
 
     error_code: str = "PELICUN_WITH_BUILDINGS_ERROR"
@@ -213,7 +203,7 @@ class PelicunWithBuildingsError(RuntimeError):
 # every non-zero cell centroid from the density COG and writing them as point
 # features (EPSG:4326) so they align with the flood COG which postprocess_flood
 # always writes in EPSG:4326. Empty-density cells (count == 0 or nodata) are
-# OMITTED — only cells where buildings were detected become assets, so the
+# OMITTED -- only cells where buildings were detected become assets, so the
 # damage choropleth follows the real built-area distribution.
 # ---------------------------------------------------------------------------
 
@@ -233,7 +223,7 @@ def _stage_cog_to_local(cog_uri: str) -> tuple[str, bool]:
     unlink ``local_path`` after reading it.
     """
     if not cog_uri.startswith("s3://"):
-        # Local path (unit-test fixture / already-staged file) — open in place.
+        # Local path (unit-test fixture / already-staged file) -- open in place.
         return cog_uri, False
 
     from trid3nt_server.agent.tools.cache import read_object_bytes_s3
@@ -263,7 +253,7 @@ def density_cog_to_point_fgb(cog_uri: str) -> str:
     """Convert a building-density COG to a temporary point FlatGeobuf.
 
     Reads the ``s3://`` or local-path COG at ``cog_uri`` (an ``s3://`` COG is
-    staged to a local temp file first via ``_stage_cog_to_local`` — the
+    staged to a local temp file first via ``_stage_cog_to_local`` -- the
     download-then-open pattern, never a raw ``rasterio.open("s3://...")``). For
     each cell with a non-zero (and non-nodata) value, emits one EPSG:4326 point
     feature at the cell centroid, carrying ``building_count`` and
@@ -318,7 +308,7 @@ def density_cog_to_point_fgb(cog_uri: str) -> str:
     if not mask.any():
         raise PelicunWithBuildingsError(
             f"density_cog_to_point_fgb: COG {cog_uri!r} has no non-zero cells; "
-            "no buildings detected — cannot create asset layer for Pelicun."
+            "no buildings detected -- cannot create asset layer for Pelicun."
         )
 
     # Building-density COGs are in EPSG:3857 (Web Mercator) per
@@ -388,7 +378,7 @@ def _autofetch_building_assets(
             f"(min_lon, min_lat, max_lon, max_lat); got {bbox!r}."
         )
     logger.info(
-        "pelicun_damage_assessment: AUTO-FETCH mode — compute_building_density "
+        "pelicun_damage_assessment: AUTO-FETCH mode -- compute_building_density "
         "bbox=%s cell_size_m=%s",
         tuple(coerced),
         cell_size_m,
@@ -552,7 +542,7 @@ _REPLACEMENT_VALUE_FALLBACK_USD = 500_000.0
 
 
 # ---------------------------------------------------------------------------
-# AtomicToolMetadata — registered once at import time.
+# AtomicToolMetadata -- registered once at import time.
 # ---------------------------------------------------------------------------
 
 _METADATA = AtomicToolMetadata(
@@ -575,7 +565,7 @@ TEMPLATE_CARD = TemplateCard(
         "inventory) OR bbox (auto-fetch a building-density inventory for the area)"
     ),
     # hazard_raster_uri is always required; the second required input is EITHER
-    # assets_uri OR bbox (one of the two input modes) — surfaced as a knob line
+    # assets_uri OR bbox (one of the two input modes) -- surfaced as a knob line
     # so the door lists a single, honest required input plus the either/or.
     required_inputs=["hazard_raster_uri", "assets_uri OR bbox"],
     knobs="assets_uri, bbox, cell_size_m (auto-fetch grid), fragility_set, component_types, realization_count",
@@ -617,7 +607,7 @@ def _validate_fragility_set(fragility_set: str) -> str:
             f"fragility_set={fragility_set!r} is not in the allowed set "
             f"{sorted(_VALID_FRAGILITY_SETS)}. v0.1 ships only 'hazus_flood_v6' "
             "(FEMA HAZUS-MH flood depth-damage curves) and 'fema_hazus_eq_2020' "
-            "(HAZUS earthquake curves — sprint-13+ when the seismic engine lands)."
+            "(HAZUS earthquake curves -- sprint-13+ when the seismic engine lands)."
         )
     return fragility_set
 
@@ -688,7 +678,7 @@ class _HazusLossCurve:
         component_type: HAZUS occupancy class (e.g. ``"RES1"``).
         depths_ft: 1-D ``np.ndarray`` of breakpoint depths in **feet**.
         loss_ratios: 1-D ``np.ndarray`` of mean loss ratios at each breakpoint
-            (0.0–0.6 typically; 0.6 is the HAZUS saturation).
+            (0.0 - 0.6 typically; 0.6 is the HAZUS saturation).
         curve_id: source ID string from the HAZUS CSV (for provenance).
     """
 
@@ -729,7 +719,7 @@ def _hazus_flood_loss_csv_path() -> str:
         file is missing.
     """
     try:
-        import pelicun  # noqa: F401 — used only for __file__
+        import pelicun  # noqa: F401 -- used only for __file__
     except ImportError as exc:
         raise PelicunFragilityDataError(
             "pelicun is not installed; cannot load HAZUS fragility curves. "
@@ -750,7 +740,7 @@ def _hazus_flood_loss_csv_path() -> str:
     if not os.path.isfile(flood_csv):
         raise PelicunFragilityDataError(
             f"Pelicun HAZUS v6.1 flood loss_repair.csv not found at {flood_csv!r}. "
-            "Pelicun's DLML data may not have been downloaded yet — "
+            "Pelicun's DLML data may not have been downloaded yet -- "
             "import pelicun in an interactive session to trigger the one-time download."
         )
     return flood_csv
@@ -798,8 +788,7 @@ def _load_hazus_flood_curves() -> dict[str, _HazusLossCurve]:
     Module-level memoized so repeated tool invocations don't re-parse the CSV.
 
     Curve-selection rule per component_type: the first ``structural.*`` row
-    whose ID parts are ``("FIA", "one_floor", "no_basement", "a_zone")`` —
-    the FEMA-issued canonical SFD configuration. If that exact variant is
+    whose ID parts are ``("FIA", "one_floor", "no_basement", "a_zone")`` -- the FEMA-issued canonical SFD configuration. If that exact variant is
     not present, falls back to the first ``structural.*`` row for the
     component type (e.g. some commercial codes don't have basement variants).
 
@@ -900,7 +889,7 @@ def _load_hazus_flood_curves() -> dict[str, _HazusLossCurve]:
 
 
 # ---------------------------------------------------------------------------
-# URI helpers — download GCS object bytes to a local temp file.
+# URI helpers -- download GCS object bytes to a local temp file.
 # ---------------------------------------------------------------------------
 
 
@@ -915,10 +904,10 @@ def _download_uri_to_local(uri: str, suffix: str, storage_client: Any | None = N
     Raises:
         ``PelicunRuntimeError`` on download / read failure.
     """
-    del storage_client  # GCP decommissioned — S3/local only.
+    del storage_client  # GCP decommissioned -- S3/local only.
     if uri.startswith(("http://", "https://")) and "LAYERS=" in uri:
         # the LLM copies the published
-        # layer's QGIS WMS GetMap URL verbatim — which IS the LayerURI.uri
+        # layer's QGIS WMS GetMap URL verbatim -- which IS the LayerURI.uri
         # field per (the s3:// COG never appears in its context).
         # Reverse-map the WMS layer id back to the runs-bucket COG:
         # LAYERS=flood-depth-peak-<run_id>  ->  s3://<runs>/<run_id>/flood_depth_peak.tif
@@ -1007,7 +996,7 @@ def _mc_loss_ratio_realizations(
     (μ_lnD = ln(mean_lr) − σ²/2). Realizations are clipped to ``[0, 0.6]``
     (the HAZUS saturation cap).
 
-    When ``mean_lr`` is 0 (asset is dry), all realizations are exactly 0 — no
+    When ``mean_lr`` is 0 (asset is dry), all realizations are exactly 0 -- no
     fictitious damage from numeric tail effects.
     """
     if mean_lr <= 0.0 or not math.isfinite(mean_lr):
@@ -1066,7 +1055,7 @@ def _sample_raster_at_point(
     """
     try:
         row, col = src.index(point_x, point_y)
-    except Exception:  # noqa: BLE001 — rasterio raises various index errors
+    except Exception:  # noqa: BLE001 -- rasterio raises various index errors
         return float("nan")
     if row < 0 or col < 0 or row >= raster_array.shape[0] or col >= raster_array.shape[1]:
         return float("nan")
@@ -1088,10 +1077,10 @@ def _assets_centroids_in_raster_crs(
     sub-pixel accuracy near boundaries vs. point-by-point reproject).
     """
     if gdf.crs is None:
-        # Tolerate missing CRS by assuming EPSG:4326 — TIGER and most
+        # Tolerate missing CRS by assuming EPSG:4326 -- TIGER and most
         # admin-boundary tools emit 4326. Log loudly.
         logger.warning(
-            "asset layer has no CRS — assuming EPSG:4326 for reprojection"
+            "asset layer has no CRS -- assuming EPSG:4326 for reprojection"
         )
         gdf = gdf.set_crs("EPSG:4326")
     if target_crs is None or (
@@ -1332,7 +1321,7 @@ def _gdf_to_fgb_bytes(gdf: Any) -> bytes:
     with tempfile.NamedTemporaryFile(suffix=".fgb", delete=False) as tf:
         tmp_path = tf.name
     try:
-        # Ensure GeoSeries with valid CRS — fall back to 4326 if missing.
+        # Ensure GeoSeries with valid CRS -- fall back to 4326 if missing.
         if gdf.crs is None:
             gdf = gdf.set_crs("EPSG:4326")
         gdf.to_file(tmp_path, driver="FlatGeobuf", engine="pyogrio")
@@ -1373,7 +1362,7 @@ def _fetch_pelicun_damage_bytes(
     hazard_local: str | None = None
     assets_local: str | None = None
     # s3:// staging also lands in a temp file the
-    # finally-block must unlink — remote means either object-store scheme.
+    # finally-block must unlink -- remote means either object-store scheme.
     hazard_was_remote = hazard_raster_uri.startswith(("gs://", "s3://"))
     assets_was_remote = assets_uri.startswith(("gs://", "s3://"))
 
@@ -1411,7 +1400,7 @@ def _fetch_pelicun_damage_bytes(
 @register_tool(
     _METADATA,
     # Annotations: readOnlyHint=False (writes a FlatGeobuf artifact to GCS
-    # and returns a LayerURI pointing at it — a new object is created per
+    # and returns a LayerURI pointing at it -- a new object is created per
     # call), openWorldHint=False (all computation is local / intra-GCP; HAZUS
     # curves are bundled in the package, no external API call),
     # destructiveHint=False (writes a fresh output file under a run-keyed
@@ -1446,24 +1435,24 @@ def pelicun_damage_assessment(
     administrative polygons). Pipeline: sample hazard at each asset centroid ->
     HAZUS v6.1 loss-function lookup -> Monte Carlo loss-ratio draws -> bin into
     DS0..DS4 -> repair_cost = replacement_value * loss_ratio. Do NOT use for:
-    plain exposure counts (``compute_zonal_statistics`` is cheaper); hazards
+    plain exposure counts (``spatial_query`` is cheaper); hazards
     outside flood (v0.1 ships flood only; ``fragility_set=
     "fema_hazus_eq_2020"`` raises).
 
     Params:
         hazard_raster_uri: layer_id handle (preferred) or verbatim URI from a
             prior result -- never construct/guess.
-        assets_uri: EXPLICIT-inventory mode — layer_id handle or URI to a
+        assets_uri: EXPLICIT-inventory mode -- layer_id handle or URI to a
             FlatGeobuf of points/polygons; optional ``component_type`` (default
             "RES1") and ``replacement_value``. Omit to use auto-fetch mode.
-        bbox: AUTO-FETCH mode — ``(min_lon, min_lat, max_lon, max_lat)`` in
+        bbox: AUTO-FETCH mode -- ``(min_lon, min_lat, max_lon, max_lat)`` in
             EPSG:4326. Used ONLY when ``assets_uri`` is absent: a
             building-density grid is fetched for the bbox and converted to a
             point inventory. Ignored when ``assets_uri`` is given.
         fragility_set: ``"hazus_flood_v6"`` (only wired set).
         component_types: restrict to these codes; ``None`` = all.
         realization_count: Monte Carlo draws per asset (default 100).
-        cell_size_m: AUTO-FETCH mode only — building-density grid cell size in
+        cell_size_m: AUTO-FETCH mode only -- building-density grid cell size in
             metres on EPSG:3857 (default 100). Smaller = finer damage points.
 
     ``assets_uri`` sourcing best-to-worst: ``fetch_usace_nsi`` (CONUS) >

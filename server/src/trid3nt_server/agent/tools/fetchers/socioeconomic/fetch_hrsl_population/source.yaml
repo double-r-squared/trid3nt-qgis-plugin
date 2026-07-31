@@ -86,7 +86,7 @@ docstring: |-
 
   **Parameters:**
   - ``bbox`` (tuple): ``(min_lon, min_lat, max_lon, max_lat)`` in EPSG:4326.
-    **Required** (``supports_global_query=False`` — the full mosaic is
+    **Required** (``supports_global_query=False`` -- the full mosaic is
     hundreds of GB). Example: ``(-81.95, 26.3, -81.7, 26.7)`` for Fort Myers FL.
   - ``year`` (int): HRSL release year; default 2020. v0.1 ignores this
     (bucket exposes a single "latest" VRT); accepted for forward compatibility.
@@ -100,6 +100,6 @@ docstring: |-
   **Cross-tool dependencies:**
   - Downstream of: ``geocode_location`` (provides bbox), ``fetch_dem``
     (co-registered for elevation-weighted exposure).
-  - Upstream of: ``compute_zonal_statistics`` (sum population within a polygon),
+  - Upstream of: ``spatial_query`` (sum population within a polygon),
     Pelicun impact post-processor, any population-at-risk workflow step.
   - Pairs with: ``fetch_buildings`` (combine for occupancy-weighted analyses).

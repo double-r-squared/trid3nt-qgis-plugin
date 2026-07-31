@@ -19,9 +19,9 @@ and surfaced only by the ``run_landlab`` door's gate expansion
 ``ttl_class="live-no-cache"`` + ``source_class="workflow_dispatch"`` (FR-DC-6 -
 workflow exposure surface; never touches the cache shim).
 
-Landlab runs OFF-BOX ONLY on AWS Batch (the scale-to-zero island norm) - it is
-inert until the orchestrator wires SOLVER_WORKFLOW_REGISTRY["landlab"] +
-TRID3NT_AWS_BATCH_JOB_DEF_LANDLAB.
+Landlab runs OFF-BOX ONLY in a local Docker solver container (the same
+scale-to-zero local-docker seam every engine dispatches through) via
+``run_solver``.
 
 Determinism boundary (Invariant 1): every number the agent narrates comes from
 the typed ``LandlabSusceptibilityLayerURI.unstable_area_fraction`` /
@@ -207,7 +207,7 @@ async def landlab_susceptibility(
         if storm_duration_hr is not None:
             kwargs["storm_duration_hr"] = float(storm_duration_hr)
         run_args = LandlabRunArgs(**kwargs)
-    except Exception as exc:  # noqa: BLE001 — pydantic ValidationError or coercion
+    except Exception as exc:  # noqa: BLE001 -- pydantic ValidationError or coercion
         return {
             "status": "error",
             "error_code": "LANDLAB_PARAMS_INVALID",
@@ -247,7 +247,7 @@ async def landlab_susceptibility(
             "error_code": exc.error_code,
             "error_message": str(exc),
         }
-    except Exception as exc:  # noqa: BLE001 — defensive catch-all
+    except Exception as exc:  # noqa: BLE001 -- defensive catch-all
         logger.exception("landlab_susceptibility unexpected failure")
         return {
             "status": "error",

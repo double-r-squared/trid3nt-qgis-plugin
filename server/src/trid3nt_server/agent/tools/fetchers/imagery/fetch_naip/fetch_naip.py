@@ -312,8 +312,9 @@ def fetch_naip(
 
     **When to use:**
     - User wants a high-res aerial / true-color basemap for a US area.
-    - As the aerial BASE layer under the conservation-priority stack
-      (``model_conservation_priority``), under species points + NDVI + MoBI.
+    - As the aerial BASE layer under a conservation-priority stack composed in
+      the code_exec playground (``geocode_location`` + ``fetch_naip`` +
+      ``fetch_mobi``), under species points + NDVI + MoBI.
 
     **When NOT to use:**
     - Outside the US (NAIP is CONUS + HI + PR + USVI only)  --  a no-coverage

@@ -1,4 +1,4 @@
-"""``fetch_airnow_air_quality`` atomic tool — EPA AirNow current AQI observations.
+"""``fetch_airnow_air_quality`` atomic tool -- EPA AirNow current AQI observations.
 """
 
 from __future__ import annotations
@@ -229,7 +229,7 @@ def estimate_payload_mb(**args: Any) -> float:
 
 
 # ---------------------------------------------------------------------------
-# AtomicToolMetadata — registered once at import time.
+# AtomicToolMetadata -- registered once at import time.
 # ---------------------------------------------------------------------------
 
 _METADATA = AtomicToolMetadata(
@@ -352,7 +352,7 @@ def _resolve_api_key(
             resolved = _materialize_secret(secret_ref)
         except AirNowMissingKeyError:
             raise
-        except Exception as exc:  # noqa: BLE001 — surface as missing-key
+        except Exception as exc:  # noqa: BLE001 -- surface as missing-key
             raise AirNowMissingKeyError(
                 f"AirNow secret_ref lookup failed: {exc}"
             ) from exc
@@ -825,8 +825,7 @@ def fetch_airnow_air_quality(
         ``fetch_administrative_boundaries`` or a fire footprint
         (``fetch_firms_active_fire`` / ``fetch_goes_active_fire``). Pairs with
         those fire layers for the smoke-exposure overlay, and feeds
-        ``compute_zonal_statistics`` / ``spatial_query`` for AOI-scoped
-        AQI summaries.
+        ``spatial_query`` for AOI-scoped AQI summaries.
 
     Cache: ``dynamic-1h`` (AQI is a current-hour observation; the AirNow feed
     updates hourly). Cache key includes the bbox (6dp), the parameter set, and
@@ -892,7 +891,7 @@ def fetch_airnow_air_quality(
     param_label = ", ".join(_PARAMETER_LONG_NAME.get(p, p) for p in param_norm)
     param_id = "-".join(p.lower() for p in param_norm)
     name = (
-        f"EPA AirNow air quality ({param_label}) — bbox "
+        f"EPA AirNow air quality ({param_label}) -- bbox "
         f"({q_bbox[0]:.2f},{q_bbox[1]:.2f},{q_bbox[2]:.2f},{q_bbox[3]:.2f})"
     )
     layer_id = (

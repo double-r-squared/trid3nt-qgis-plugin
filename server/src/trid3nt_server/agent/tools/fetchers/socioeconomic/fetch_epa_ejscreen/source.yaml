@@ -151,8 +151,8 @@ docstring: |-
   **Cross-tool dependencies:**
       - Combine WITH ``fetch_cdc_svi`` + ``fetch_epa_frs_facilities`` for
         cumulative environmental-justice exposure.
-      - Feeds ``compute_zonal_statistics`` / ``spatial_query`` to find
-        the most-burdened block groups inside a hazard footprint.
+      - Feeds ``spatial_query`` to find the most-burdened block groups
+        inside a hazard footprint.
 
   **Error types:**
       - ``EPA_EJScreenInputError``: bad bbox or unknown indicator

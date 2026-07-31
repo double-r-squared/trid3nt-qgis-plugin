@@ -1,10 +1,11 @@
 """Atomic tool ``compute_canopy_height`` -- canopy-height ML-inference tool.
 
 An ORDINARY agent tool (NOT a special "tier"): a compute-heavy ML-inference tool
-that runs on the SAME CPU SPOT AWS Batch substrate the physics engines (SFINCS /
-SWMM / OpenQuake / SWAN) use. It mirrors the OpenGeoAI "AI-using-AI" pattern --
-the outer agent picks the AOI + model variant and emits a tool call; the inner
-model (Meta's pretrained HighResCanopyHeight ViT+DPT) runs in the worker.
+that dispatches through the SAME local-docker solver substrate the physics
+engines (SFINCS / SWMM / OpenQuake / SWAN) use. It mirrors the OpenGeoAI
+"AI-using-AI" pattern -- the outer agent picks the AOI + model variant and
+emits a tool call; the inner model (Meta's pretrained HighResCanopyHeight
+ViT+DPT) runs in the worker.
 
 Flow (mirrors the seismic / SWAN stage -> run_solver -> wait -> publish chain;
 see reports/design/spike_canopy_height_tool.md):
@@ -12,20 +13,20 @@ see reports/design/spike_canopy_height_tool.md):
   1. Resolve / stage a sub-metre RGB COG for the AOI. A caller-supplied
      ``imagery_uri`` (an existing fetcher's COG handle, PREFERRED) wins; else we
      fetch NAIP (the CONUS sub-metre RGB source) via ``fetch_naip``. Either way
-     the model input is an ``s3://`` COG the ephemeral Batch worker can download
-     (the worker has NO access to the agent box FS -- same honesty guard
-     ``_run_solver_aws_batch`` enforces on ``model_setup_uri``).
+     the model input is an ``s3://`` COG the ephemeral local-docker worker
+     container can download (the worker has NO access to the agent box FS).
   2. Write a build_spec JSON ({imagery_uri, model_variant, output_glob}) to the
      cache bucket (same ``cache.storage_scheme()`` + ``solver._get_s3_client()``
      path the OpenQuake/SWMM/SWAN decks stage to).
   3. Dispatch through the generic ``run_solver('canopy', model_setup_uri=<build
-     spec>, compute_class=select_compute_class(tiles))`` seam. "canopy" is
-     registered in ``SOLVER_WORKFLOW_REGISTRY``; the per-solver Batch job-def
-     resolves from ``TRID3NT_AWS_BATCH_JOB_DEF_CANOPY`` and stays INERT (honest
-     typed error) until NATE flips that env after ``tofu apply`` registers the
-     job-def -- exactly the SWMM/OpenQuake/SWAN posture.
+     spec>, compute_class=select_compute_class(tiles))`` seam onto the
+     local-docker backend. "canopy" is registered in
+     ``SOLVER_WORKFLOW_REGISTRY`` (a presence gate); it needs its own
+     ``LOCAL_SOLVER_SPEC_REGISTRY`` entry (via ``register_local_solver_spec``)
+     to dispatch to a real canopy worker -- exactly the SWMM/OpenQuake/SWAN
+     posture.
   4. ``wait_for_completion`` polls the SAME ``completion.json`` schema the canopy
-     worker writes; the worker uploads ``canopy_height.tif`` under the Batch
+     worker writes; the worker uploads ``canopy_height.tif`` under the
      run_id prefix.
   5. ``publish_layer`` the canopy COG with the NEW ``canopy_height_m`` greens-ramp
      preset and return a ``LayerURI`` (so the ``emit_tool_call``
@@ -34,16 +35,16 @@ see reports/design/spike_canopy_height_tool.md):
 AOI CAP (load-bearing): a ViT-huge on CPU is minutes-to-hours, so the bbox is
 capped (the granularity gate's spirit) and ``select_compute_class`` grabs a
 bigger box for a denser AOI. A too-large bbox returns an honest typed error
-BEFORE any Spot spend, telling the caller to narrow the AOI.
+BEFORE any compute spend, telling the caller to narrow the AOI.
 
 Truthfulness floor: a canopy-height raster is a MODEL ESTIMATE (Tolan et al. MAE
 ~2.5 m aerial), not a measurement -- the layer name + result text say "estimated"
-and a non-complete Batch solve NEVER reads as success.
+and a non-complete solve NEVER reads as success.
 
 Determinism boundary (Invariant 1): the tool stages + dispatches + publishes; no
 LLM call anywhere. FR-DC-6: ``cacheable=False`` + ``ttl_class="live-no-cache"`` +
-``source_class="workflow_dispatch"`` -- the cache shim is NOT invoked (it spends
-SPOT, like the other solver dispatchers).
+``source_class="workflow_dispatch"`` -- the cache shim is NOT invoked (it
+dispatches a real solver run, like the other solver dispatchers).
 """
 
 from __future__ import annotations
@@ -131,7 +132,7 @@ class CanopyHeightError(RuntimeError):
     - ``CANOPY_AOI_TOO_LARGE`` -- the AOI exceeds the CPU-runtime cap.
     - ``CANOPY_IMAGERY_FAILED`` -- the RGB COG could not be staged/fetched.
     - ``CANOPY_STAGING_FAILED`` -- the build_spec upload failed.
-    - ``CANOPY_SOLVE_FAILED`` -- the Batch solve did not complete.
+    - ``CANOPY_SOLVE_FAILED`` -- the solver run did not complete.
     - ``CANOPY_OUTPUT_MISSING`` -- a 'complete' solve produced no canopy COG.
     - ``CANOPY_PUBLISH_FAILED`` -- the COG could not be published to the map.
     """
@@ -223,7 +224,7 @@ def stage_canopy_build_spec(
     fed STRAIGHT to ``run_solver('canopy', model_setup_uri=<this>)``.
 
     Raises ``CanopyHeightError('CANOPY_STAGING_FAILED')`` on upload failure (the
-    Batch lane cannot dispatch without a reachable build_spec -- fail loudly).
+    solver cannot dispatch without a reachable build_spec -- fail loudly).
     """
     from trid3nt_server.agent.tools.cache import CACHE_BUCKET, storage_scheme
     from trid3nt_server.agent.tools.simulation.solver.solver import _get_s3_client
@@ -309,8 +310,8 @@ async def compute_canopy_height(
     """Estimate tree-canopy HEIGHT (metres) over an AOI from RGB imagery (ML inference, not a measurement).
 
     Use this when: the user wants tree/forest canopy HEIGHT ("how tall are
-    the trees", "canopy height map") or a height raster to feed
-    ``compute_zonal_statistics``. Do NOT use for: vegetation greenness/health
+    the trees", "canopy height map") or a height raster to feed a
+    code_exec playground zonal-stats recipe. Do NOT use for: vegetation greenness/health
     (``compute_ndvi``); land-cover classes (``fetch_landcover``); building
     heights. Large AOIs are slow (CPU ViT inference) -- keep the bbox small.
 

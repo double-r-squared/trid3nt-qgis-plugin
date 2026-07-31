@@ -1,4 +1,4 @@
-"""``fetch_overpass_pois`` atomic tool — generic OpenStreetMap POI / tagged-feature points via Overpass API.
+"""``fetch_overpass_pois`` atomic tool -- generic OpenStreetMap POI / tagged-feature points via Overpass API.
 """
 
 from __future__ import annotations
@@ -67,7 +67,7 @@ class OverpassInputError(OverpassPoiError):
 class OverpassUpstreamError(OverpassPoiError):
     """Every Overpass mirror failed (network / HTTP 5xx / 429 / parse).
 
-    Retryable — transient Overpass load recovers on retry.
+    Retryable -- transient Overpass load recovers on retry.
     """
 
     error_code = "OVERPASS_POIS_UPSTREAM_ERROR"
@@ -77,7 +77,7 @@ class OverpassUpstreamError(OverpassPoiError):
 class OverpassNoFeaturesError(OverpassPoiError):
     """The query succeeded but matched ZERO features in scope.
 
-    Not retryable — the area genuinely has no OSM features carrying that tag.
+    Not retryable -- the area genuinely has no OSM features carrying that tag.
     Either widen the bbox or pick a different tag.
     """
 
@@ -97,7 +97,7 @@ OVERPASS_ENDPOINTS: tuple[str, ...] = (
     "https://overpass.private.coffee/api/interpreter",
 )
 
-#: HTTP timeout for each Overpass POST — Overpass can be slow; 120 s.
+#: HTTP timeout for each Overpass POST -- Overpass can be slow; 120 s.
 _HTTP_TIMEOUT = 120.0
 
 #: Overpass internal-query timeout (the ``[timeout:N]`` directive).
@@ -145,7 +145,7 @@ _VALUE_KEY_ALIASES: dict[str, str] = {
 }
 
 #: A small allow-list of OSM keys that take free-form values (used to validate
-#: an explicit ``key=value`` tag has a plausible key). NOT exhaustive — OSM has
+#: an explicit ``key=value`` tag has a plausible key). NOT exhaustive -- OSM has
 #: thousands of keys; this just rejects obvious garbage (e.g. a key with a
 #: space). A key outside this set is still allowed as long as it is a clean
 #: token, so the tool stays a GENERIC fetcher.
@@ -160,7 +160,7 @@ _COMMON_KEYS: frozenset[str] = frozenset(
 
 
 # ---------------------------------------------------------------------------
-# AtomicToolMetadata — registered once at import time.
+# AtomicToolMetadata -- registered once at import time.
 # ---------------------------------------------------------------------------
 
 
@@ -268,11 +268,11 @@ def _resolve_tag(
 
     Accepts several friendly forms, in priority order:
 
-    1. ``tag="key=value"`` — an explicit OSM tag (e.g. ``"emergency=fire_hydrant"``).
+    1. ``tag="key=value"`` -- an explicit OSM tag (e.g. ``"emergency=fire_hydrant"``).
        Also accepts a bare value (``tag="hospital"``) resolved via the alias map.
-    2. ``amenity="hospital"`` — the ``amenity`` key shortcut (value-only).
-    3. ``category="hospital"`` — alias-resolved value, or ``"key=value"``.
-    4. ``value="hospital"`` paired with no key — alias-resolved.
+    2. ``amenity="hospital"`` -- the ``amenity`` key shortcut (value-only).
+    3. ``category="hospital"`` -- alias-resolved value, or ``"key=value"``.
+    4. ``value="hospital"`` paired with no key -- alias-resolved.
 
     Raises ``OverpassInputError`` if no usable tag is supplied or the value
     cannot be mapped to a key.
@@ -302,7 +302,7 @@ def _resolve_tag(
         key, _, val = candidate.partition("=")
         key, val = key.strip(), val.strip()
     else:
-        # A bare value — resolve its key via the alias map.
+        # A bare value -- resolve its key via the alias map.
         val = candidate
         key = _VALUE_KEY_ALIASES.get(val.lower(), "")
         if not key:
@@ -333,8 +333,7 @@ def _build_overpass_ql(
 ) -> str:
     """Construct the Overpass QL payload querying node/way/relation for key=value.
 
-    Overpass expects the bbox corners as ``(south, west, north, east)`` —
-    OPPOSITE the caller's ``(min_lon, min_lat, max_lon, max_lat)``. ``out
+    Overpass expects the bbox corners as ``(south, west, north, east)`` -- OPPOSITE the caller's ``(min_lon, min_lat, max_lon, max_lat)``. ``out
     center`` yields a centroid for each way/relation so every feature is a Point.
     """
     min_lon, min_lat, max_lon, max_lat = bbox
@@ -354,7 +353,7 @@ def _post_overpass(ql: str) -> dict[str, Any]:
 
     Data-source fallback norm: walk ``OVERPASS_ENDPOINTS`` in order. A non-retryable
     4xx (other than 429) on an endpoint short-circuits the fallback (the QL is
-    bad — trying another mirror will not help). A 5xx / 429 / network error
+    bad -- trying another mirror will not help). A 5xx / 429 / network error
     advances to the next mirror. If EVERY mirror fails, raise
     ``OverpassUpstreamError`` (retryable).
     """
@@ -379,7 +378,7 @@ def _post_overpass(ql: str) -> dict[str, Any]:
                     ) from exc
         except httpx.HTTPStatusError as exc:
             status = exc.response.status_code if exc.response is not None else None
-            # A non-429 4xx means the QL itself is malformed — trying another
+            # A non-429 4xx means the QL itself is malformed -- trying another
             # mirror will not help, so fail fast as a non-retryable input error.
             if status is not None and 400 <= status < 500 and status != 429:
                 raise OverpassInputError(
@@ -547,7 +546,7 @@ def _records_to_flatgeobuf_bytes(
         gdf.to_file(tmp_fgb, driver="FlatGeobuf", engine="pyogrio")
         with open(tmp_fgb, "rb") as f:
             return f.read()
-    except Exception as exc:  # noqa: BLE001 — translate to typed error
+    except Exception as exc:  # noqa: BLE001 -- translate to typed error
         raise OverpassUpstreamError(
             f"FlatGeobuf write failed for {len(records)} POI(s): {exc}"
         ) from exc
@@ -628,7 +627,7 @@ def fetch_overpass_pois(
     use their centroid), and serializes the points to FlatGeobuf cached for 30
     days. Each feature carries ``osm_id``, ``osm_type``, ``name``, the matched
     ``key`` / ``value``, and the full OSM tag dictionary as ``tags_json``. The
-    resulting vector renders inline on the map automatically — do NOT call
+    resulting vector renders inline on the map automatically -- do NOT call
     ``publish_layer`` on it. This is the FLEXIBLE, global exposure-layer
     complement to the FIXED, US-only ``fetch_hifld_critical_infrastructure``
     tool: same uniform point shape, but the full OSM tag vocabulary worldwide.
@@ -648,7 +647,7 @@ def fetch_overpass_pois(
     **When NOT to use:**
     - For US critical-infrastructure categories where an authoritative federal
       dataset is preferable, ``fetch_hifld_critical_infrastructure`` is the
-      curated source (schools, hospitals, fire/police, power plants) — use that
+      curated source (schools, hospitals, fire/police, power plants) -- use that
       when the user wants the official US layer; use THIS tool for global
       coverage, niche tags, or when HIFLD lacks the category.
     - For ROAD / street centrelines use ``fetch_roads_osm`` (LineStrings).
@@ -660,17 +659,17 @@ def fetch_overpass_pois(
     **Parameters:**
     - ``bbox`` (tuple[float, float, float, float]): ``(min_lon, min_lat,
       max_lon, max_lat)`` in EPSG:4326. Required. Example San Francisco core:
-      ``(-122.45, 37.74, -122.38, 37.80)``. A bbox is REQUIRED — there is no
+      ``(-122.45, 37.74, -122.38, 37.80)``. A bbox is REQUIRED -- there is no
       global sweep (``supports_global_query=False``); a global POI query would
       time out and return an unbounded payload.
     - Tag selector (pass ONE; checked in this priority order):
         - ``amenity`` (str): an ``amenity`` key value, e.g. ``"hospital"``,
-          ``"school"``, ``"fire_station"`` — the most common shortcut.
+          ``"school"``, ``"fire_station"`` -- the most common shortcut.
         - ``tag`` (str): an explicit ``"key=value"`` OSM tag, e.g.
           ``"emergency=fire_hydrant"``, ``"shop=supermarket"``,
           ``"power=substation"``. A bare value (``"hospital"``) is also accepted
           and its key inferred for common classes.
-        - ``category`` (str): alias for ``tag`` — a ``"key=value"`` or a known
+        - ``category`` (str): alias for ``tag`` -- a ``"key=value"`` or a known
           bare value.
         - ``value`` (str): a bare value resolved to its key for common classes.
 
@@ -680,18 +679,18 @@ def fetch_overpass_pois(
     ``style_preset="overpass_pois"``, ``units=None``. ``bbox`` is set to the
     features' extent so the camera auto-zooms. Properties per feature:
     ``osm_id`` (int), ``osm_type`` (str), ``name`` (str | None), ``key`` (str),
-    ``value`` (str), ``tags_json`` (str — full OSM tag dict).
+    ``value`` (str), ``tags_json`` (str -- full OSM tag dict).
 
-    **Fallback behaviour (data-source fallback norm — primary -> fallback ->
+    **Fallback behaviour (data-source fallback norm -- primary -> fallback ->
     honest typed error):** the request is tried across several independent
     public Overpass mirrors in turn; if every mirror fails a retryable
     ``OverpassUpstreamError`` is raised. When the query succeeds but matches
-    ZERO features, a non-retryable ``OverpassNoFeaturesError`` is raised — never
+    ZERO features, a non-retryable ``OverpassNoFeaturesError`` is raised -- never
     an empty success-shaped layer.
 
     **Cross-tool dependencies:**
     - Composes WITH: ``geocode_location`` (derive a bbox from a place name
-      BEFORE this call), ``compute_zonal_statistics`` /
+      BEFORE this call), ``spatial_query`` /
       intersection tools (count POIs inside a hazard footprint),
       ``fetch_hifld_critical_infrastructure`` (the US-curated companion).
     - Upstream data source: OpenStreetMap via the Overpass API.
@@ -740,7 +739,7 @@ def fetch_overpass_pois(
     )
 
     # 4. Resolve the camera extent. On a cache HIT the fetch_fn never ran so
-    #    ``captured`` is empty — fall back to the requested bbox.
+    #    ``captured`` is empty -- fall back to the requested bbox.
     extent_bbox: tuple[float, float, float, float] | None = captured.get("extent")
     if extent_bbox is None:
         extent_bbox = q_bbox
@@ -748,7 +747,7 @@ def fetch_overpass_pois(
     # 5. Descriptive layer name + stable id.
     return LayerURI(
         layer_id=f"overpass-pois-{key}-{val}-{q_bbox[0]:.4f}-{q_bbox[1]:.4f}",
-        name=f"OSM POIs — {key}={val}",
+        name=f"OSM POIs -- {key}={val}",
         layer_type="vector",
         uri=result.uri,
         style_preset="overpass_pois",

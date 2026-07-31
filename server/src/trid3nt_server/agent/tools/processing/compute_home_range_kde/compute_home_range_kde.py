@@ -1,4 +1,4 @@
-"""Atomic tool ``compute_home_range_kde`` — kernel-density home range from tracks.
+"""Atomic tool ``compute_home_range_kde`` -- kernel-density home range from tracks.
 
 Takes the POINT FlatGeobuf that ``fetch_movebank_tracks(geometry_type="point")``
 emits (one feature per telemetry fix) and computes a **utilization distribution
@@ -28,7 +28,7 @@ shim:
    inputs are exploded to their vertices so a track-line layer also works).
 2. Optionally filter to a single ``individual_id`` (per-animal home range).
 3. Reproject to the local UTM zone (metres).
-4. ``scipy.stats.gaussian_kde`` over the (x, y) fixes — Scott's-rule bandwidth by
+4. ``scipy.stats.gaussian_kde`` over the (x, y) fixes -- Scott's-rule bandwidth by
    default, or a metre-scalar ``bandwidth_m`` override.
 5. Evaluate the KDE on a padded ``grid_size`` x ``grid_size`` grid; convert to a
    per-cell probability mass (the UD), normalised to sum 1.
@@ -40,8 +40,7 @@ shim:
 
 **Honest-empty / typed errors (NFR-R-1 / FR-AS-11).** Too-few points (below the
 KDE minimum, or a degenerate co-linear / single-location set that yields a
-singular covariance) surface as a typed ``HomeRangeKDEError(TOO_FEW_POINTS)`` —
-never a fabricated polygon. Bad isopleth percentiles, an empty input layer, and
+singular covariance) surface as a typed ``HomeRangeKDEError(TOO_FEW_POINTS)`` -- never a fabricated polygon. Bad isopleth percentiles, an empty input layer, and
 unreadable inputs each get their own typed code.
 
 **Cross-cutting invariants:**
@@ -49,12 +48,12 @@ unreadable inputs each get their own typed code.
 - **Invariant 2 (Deterministic workflows): preserves.** Zero LLM calls; the KDE
   is seeded only by the input geometry (Scott's rule is deterministic).
 - **FR-DC-6 (cacheable): honors.** ``cacheable=True``, ``ttl_class="static-30d"``,
-  ``source_class="home_range_kde"`` — derived from immutable historic tracks.
+  ``source_class="home_range_kde"`` -- derived from immutable historic tracks.
 - **NFR-R-1 (resilience): preserves.** Every failure path raises a typed
   ``HomeRangeKDEError`` with a SCREAMING_SNAKE_CASE ``error_code``.
 
 Pairs with ``fetch_movebank_tracks`` (supplies ``points_uri``) and
-``compute_zonal_statistics`` (overlay the home range on a hazard raster).
+the code_exec playground (overlay the home range on a hazard raster).
 """
 
 from __future__ import annotations
@@ -92,16 +91,16 @@ class HomeRangeKDEError(RuntimeError):
     strip / function_response envelope.
 
     Codes:
-    - ``NO_POINTS_INPUT``   — neither a readable layer nor any point geometry.
-    - ``DOWNLOAD_FAILED``   — the input FlatGeobuf could not be fetched/read.
-    - ``EMPTY_LAYER``       — the input layer has zero features.
-    - ``TOO_FEW_POINTS``    — fewer than the KDE minimum usable fixes, or a
+    - ``NO_POINTS_INPUT`` -- neither a readable layer nor any point geometry.
+    - ``DOWNLOAD_FAILED`` -- the input FlatGeobuf could not be fetched/read.
+    - ``EMPTY_LAYER`` -- the input layer has zero features.
+    - ``TOO_FEW_POINTS`` -- fewer than the KDE minimum usable fixes, or a
                               degenerate (co-linear / single-location) set that
                               yields a singular covariance. HONEST empty.
-    - ``BAD_ISOPLETH``      — an isopleth percentile is outside (0, 100].
-    - ``BAD_BANDWIDTH``     — bandwidth_m is non-positive / non-finite.
-    - ``NO_ISOPLETHS``      — no isopleth produced any polygon (all degenerate).
-    - ``KDE_FAILED``        — an unexpected failure inside the KDE / contouring.
+    - ``BAD_ISOPLETH`` -- an isopleth percentile is outside (0, 100].
+    - ``BAD_BANDWIDTH`` -- bandwidth_m is non-positive / non-finite.
+    - ``NO_ISOPLETHS`` -- no isopleth produced any polygon (all degenerate).
+    - ``KDE_FAILED`` -- an unexpected failure inside the KDE / contouring.
     """
 
     def __init__(self, error_code: str, message: str) -> None:
@@ -131,7 +130,7 @@ _DEFAULT_ISOPLETHS: tuple[float, ...] = (50.0, 95.0)
 #: Default UD evaluation grid resolution per axis.
 _DEFAULT_GRID = 200
 
-#: Hard caps (defensive — a huge grid is O(n_points * grid^2) for the KDE eval).
+#: Hard caps (defensive -- a huge grid is O(n_points * grid^2) for the KDE eval).
 _MAX_GRID = 600
 _MIN_GRID = 32
 
@@ -221,7 +220,7 @@ def _extract_xy(
     if gdf is None or len(gdf) == 0:
         raise HomeRangeKDEError(
             "EMPTY_LAYER",
-            f"input layer {points_uri!r} has zero features — no fixes to model.",
+            f"input layer {points_uri!r} has zero features -- no fixes to model.",
         )
 
     # Filter to a single individual if requested and the column exists.
@@ -330,7 +329,7 @@ def _compute_isopleths(
     """Build the UD via gaussian_kde and contour it at each isopleth percentile.
 
     ``xy_proj`` is an Nx2 array of projected (metre) coordinates. Returns
-    ``(records, geoms_proj)`` — one record + one (Multi)Polygon per isopleth that
+    ``(records, geoms_proj)`` -- one record + one (Multi)Polygon per isopleth that
     produced a polygon, in the projected CRS. Raises
     ``HomeRangeKDEError(TOO_FEW_POINTS)`` on a singular covariance.
     """
@@ -355,7 +354,7 @@ def _compute_isopleths(
         if data_std <= 0.0:
             raise HomeRangeKDEError(
                 "TOO_FEW_POINTS",
-                "all fixes are at a single location — cannot estimate a kernel "
+                "all fixes are at a single location -- cannot estimate a kernel "
                 "density (zero spatial spread).",
             )
         bw_method = max(1e-6, bandwidth_m / data_std)
@@ -366,7 +365,7 @@ def _compute_isopleths(
         raise HomeRangeKDEError(
             "TOO_FEW_POINTS",
             f"the {n} fix(es) lie in a lower-dimensional subspace (co-linear or "
-            f"coincident) — a kernel density home range is undefined. {exc}",
+            f"coincident) -- a kernel density home range is undefined. {exc}",
         ) from exc
     except Exception as exc:  # noqa: BLE001
         raise HomeRangeKDEError(
@@ -395,7 +394,7 @@ def _compute_isopleths(
     total = ud.sum()
     if not np.isfinite(total) or total <= 0:
         raise HomeRangeKDEError(
-            "KDE_FAILED", "UD integrates to zero — degenerate density."
+            "KDE_FAILED", "UD integrates to zero -- degenerate density."
         )
     ud = ud / total
 
@@ -423,7 +422,7 @@ def _compute_isopleths(
         if not rings:
             logger.info(
                 "compute_home_range_kde: isopleth %.1f%% produced no polygon "
-                "(threshold %.3e) — skipping",
+                "(threshold %.3e) -- skipping",
                 pct,
                 thr,
             )
@@ -492,7 +491,7 @@ def _compute_home_range_bytes(
     if not records:
         raise HomeRangeKDEError(
             "NO_ISOPLETHS",
-            "no isopleth produced a polygon — the kernel density was too diffuse "
+            "no isopleth produced a polygon -- the kernel density was too diffuse "
             "or the grid too coarse to contour.",
         )
 
@@ -617,9 +616,8 @@ def _validate_bandwidth(bandwidth_m: Any) -> float | None:
     _METADATA,
     payload_mb_estimator_name="estimate_payload_mb",
     # Annotations: readOnlyHint=True (reads the input vector; writes only the
-    # cache artifact via read_through), openWorldHint=False (pure local compute —
-    # no external network call of its own; the upstream fetch is its own tool),
-    # destructiveHint=False, idempotentHint=True (deterministic transform — the
+    # cache artifact via read_through), openWorldHint=False (pure local compute -- # no external network call of its own; the upstream fetch is its own tool),
+    # destructiveHint=False, idempotentHint=True (deterministic transform -- the
     # same points + params always yield the same isopleths).
 )
 def compute_home_range_kde(
@@ -727,7 +725,7 @@ def compute_home_range_kde(
     )
     name = f"Home range (KDE {iso_label}% UD)"
     if label and label != "all":
-        name = f"Home range — {label} (KDE {iso_label}% UD)"
+        name = f"Home range -- {label} (KDE {iso_label}% UD)"
 
     return LayerURI(
         layer_id=f"home-range-kde-{label}-{iso_label.replace('/', '-')}",

@@ -214,7 +214,7 @@ def set_sfincs_parameters(
     "set the land Manning's n to 0.08", "turn on 5 mm/hr infiltration".
 
     **When NOT to use:** building a NEW deck from DEM/landcover/forcing (use
-    the ``build_sfincs_model`` workflow, not this setter); spatially-distributed
+    ``run_sfincs``, not this setter); spatially-distributed
     pilot-point calibration fields (out of v1 scope, frozen with the group-E
     optimizer loops); dispatching a run (use ``run_solver`` on the returned
     ``child_setup_uri``'s ``model_root_uri``).

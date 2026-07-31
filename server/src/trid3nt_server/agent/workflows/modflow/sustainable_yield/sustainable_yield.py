@@ -4,7 +4,7 @@ The end-to-end higher-order workflow for the MODFLOW
 ``sustainable_yield`` archetype: it turns a place (or AOI point) + a pumping
 well (location + extraction rate) into a rendered drawdown-cone layer  -  the cone
 of depression a sustained extraction draws down around the well. It mirrors the
-chain shape of ``model_river_seepage_scenario`` (the J9 template) and the Case 2
+chain shape of ``model_river_seepage_scenario`` and the point-spill
 groundwater-contamination composer, minus the contaminant: this is a GWF-only
 transient flow run, no solute transport.
 

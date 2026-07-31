@@ -1,4 +1,4 @@
-"""``fetch_asos_metar`` atomic tool — Iowa State IEM ASOS/METAR station observations (job-A7).
+"""``fetch_asos_metar`` atomic tool -- Iowa State IEM ASOS/METAR station observations (job-A7).
 """
 
 from __future__ import annotations
@@ -56,7 +56,7 @@ class ASASMETARError(RuntimeError):
 
 
 class ASASMETARInputError(ASASMETARError):
-    """Invalid inputs — bad bbox, out-of-range dates, unknown data field.
+    """Invalid inputs -- bad bbox, out-of-range dates, unknown data field.
 
     Not retryable: the caller must fix the argument.
     """
@@ -68,7 +68,7 @@ class ASASMETARInputError(ASASMETARError):
 class ASASMETARUpstreamError(ASASMETARError):
     """IEM ASOS CGI request failed (network error, HTTP 5xx, malformed CSV).
 
-    Retryable — transient IEM outages recover on retry.
+    Retryable -- transient IEM outages recover on retry.
     """
 
     error_code = "ASOS_METAR_UPSTREAM_ERROR"
@@ -78,7 +78,7 @@ class ASASMETARUpstreamError(ASASMETARError):
 class ASASMETAREmptyError(ASASMETARError):
     """No ASOS stations found in the bbox, or all observations are missing.
 
-    Not retryable — the bbox contains no IEM-archived ASOS stations for
+    Not retryable -- the bbox contains no IEM-archived ASOS stations for
     the requested period. Either widen the bbox or check station coverage.
     """
 
@@ -201,7 +201,7 @@ _FGB_COLUMNS = (
 )
 
 # ---------------------------------------------------------------------------
-# AtomicToolMetadata — registered once at import time.
+# AtomicToolMetadata -- registered once at import time.
 # ---------------------------------------------------------------------------
 
 
@@ -296,7 +296,7 @@ def _http_get(url: str, timeout: float = _NETWORK_TIMEOUT) -> bytes:
 
 
 # ---------------------------------------------------------------------------
-# Station discovery — find all ASOS stations within a bbox.
+# Station discovery -- find all ASOS stations within a bbox.
 # ---------------------------------------------------------------------------
 
 
@@ -320,8 +320,8 @@ def _discover_stations_in_bbox(
     ``sname``, ``state``.
 
     Raises:
-        ``ASASMETARUpstreamError`` — network failure fetching station metadata.
-        ``ASASMETAREmptyError`` — no ASOS stations found in the bbox.
+        ``ASASMETARUpstreamError`` -- network failure fetching station metadata.
+        ``ASASMETAREmptyError`` -- no ASOS stations found in the bbox.
     """
     west, south, east, north = bbox
     stations: list[dict[str, Any]] = []
@@ -461,14 +461,14 @@ def _parse_csv_to_fgb(
     """Parse IEM ASOS CSV + serialize to FlatGeobuf.
 
     Each row becomes a Point feature at the station's lon/lat (taken from the
-    CSV's per-row ``lon``/``lat`` columns — IEM populates these when
+    CSV's per-row ``lon``/``lat`` columns -- IEM populates these when
     ``latlon=yes`` is set). Falls back to ``station_meta`` coordinates when
     the CSV row carries null coordinates (rare for ASOS).
 
     Raises:
-        ``ASASMETARUpstreamError`` — geopandas/pandas/shapely not available,
+        ``ASASMETARUpstreamError`` -- geopandas/pandas/shapely not available,
           or CSV is corrupt.
-        ``ASASMETAREmptyError`` — all rows have missing coordinates or the
+        ``ASASMETAREmptyError`` -- all rows have missing coordinates or the
           CSV has zero data rows after header stripping.
     """
     try:
@@ -706,17 +706,17 @@ def fetch_asos_metar(
         observed wind, humidity, or temperature fields.
 
     When NOT to use:
-      - Forecasts or future weather — ASOS is an observational archive; use
+      - Forecasts or future weather -- ASOS is an observational archive; use
         ``fetch_nws_event`` or ``fetch_nws_alerts_conus`` for current NWS
         products, or ``fetch_hrrr_forecast`` for model forecasts.
-      - Gridded analysis or reanalysis over large areas — use ``fetch_era5_reanalysis``
+      - Gridded analysis or reanalysis over large areas -- use ``fetch_era5_reanalysis``
         (global, hourly ERA5) or ``fetch_mrms_qpe`` (radar QPE for precipitation).
-      - Fire-weather station observations outside IEM ASOS coverage — use
+      - Fire-weather station observations outside IEM ASOS coverage -- use
         ``fetch_raws_weather`` for RAWS (remote automated weather stations
         used by fire agencies, often in non-airport locations).
-      - Tide gauge / coastal water-level observations — use
+      - Tide gauge / coastal water-level observations -- use
         ``fetch_noaa_coops_tides`` for NOAA CO-OPS.
-      - Non-US regions — IEM ASOS archive covers US + territories only.
+      - Non-US regions -- IEM ASOS archive covers US + territories only.
 
     Parameters:
         bbox: ``(min_lon, min_lat, max_lon, max_lat)`` in EPSG:4326. Required.
@@ -740,7 +740,7 @@ def fetch_asos_metar(
         ``s3://trid3nt-cache/cache/dynamic-1h/asos_metar/<key>.fgb``
         - ``layer_type="vector"``, ``role="context"``, ``units="mixed"``
           (temperature in °F, wind in knots, pressure in inHg/hPa,
-          visibility in miles — standard ASOS/METAR units).
+          visibility in miles -- standard ASOS/METAR units).
         - Geometry: Point at each ASOS station's coordinates, EPSG:4326.
         - Properties per observation: ``station`` (ICAO/FAA id),
           ``valid`` (UTC observation time ISO-8601), ``lon``, ``lat``,
@@ -750,12 +750,12 @@ def fetch_asos_metar(
           ``wxcodes`` (present weather), ``skyc1`` (sky cover), ``skyl1``
           (sky layer height ft). Missing values are ``null``.
 
-    Cache: ``dynamic-1h`` — identical ``(bbox-4dp, start_time, end_time)`` calls
+    Cache: ``dynamic-1h`` -- identical ``(bbox-4dp, start_time, end_time)`` calls
     within the same UTC hour reuse the cached FlatGeobuf.
 
     Cross-tool dependencies:
         - Composes WITH: ``publish_layer`` (map overlay), ``geocode_location``
-          (bbox derivation from place name), ``aggregate_claims_across_sources``
+          (bbox derivation from place name), the code_exec playground
           (wind/pressure claims from ASOS for FR-HEP consensus).
         - Complements: ``fetch_era5_reanalysis`` (gridded global reanalysis),
           ``fetch_mrms_qpe`` (radar precipitation), ``fetch_goes_satellite``
@@ -773,7 +773,7 @@ def fetch_asos_metar(
           missing coordinates (retryable=False).
 
 
-    supports_global_query=False — IEM ASOS archive covers US + territories only.
+    supports_global_query=False -- IEM ASOS archive covers US + territories only.
     """
     # 1. Validate and normalize inputs.
     if not isinstance(bbox, (tuple, list)) or len(bbox) != 4:
@@ -845,7 +845,7 @@ def fetch_asos_metar(
     )
     date_tag = start_iso[:10]
     if start_iso[:10] != end_iso[:10]:
-        date_tag += f"–{end_iso[:10]}"
+        date_tag += f" - {end_iso[:10]}"
 
     # Stable layer_id seed.
     seed = hashlib.sha256(
@@ -854,7 +854,7 @@ def fetch_asos_metar(
 
     return LayerURI(
         layer_id=f"asos-metar-{seed}",
-        name=f"ASOS/METAR observations — {bbox_tag} ({date_tag})",
+        name=f"ASOS/METAR observations -- {bbox_tag} ({date_tag})",
         layer_type="vector",
         uri=result.uri,
         style_preset="asos_metar",

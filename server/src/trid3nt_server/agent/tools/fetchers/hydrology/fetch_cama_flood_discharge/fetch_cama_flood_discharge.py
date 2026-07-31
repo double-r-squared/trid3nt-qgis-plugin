@@ -1,4 +1,4 @@
-"""``fetch_cama_flood_discharge`` atomic tool — CaMa-Flood global river discharge.
+"""``fetch_cama_flood_discharge`` atomic tool -- CaMa-Flood global river discharge.
 """
 
 from __future__ import annotations
@@ -74,7 +74,7 @@ class CaMaFloodEmptyError(CaMaFloodError):
 # ---------------------------------------------------------------------------
 
 # Kickoff-named default (legacy U.Tokyo Hydra server). As of 2026-02-12 this
-# URL returns an HTML migration page — see module docstring for the
+# URL returns an HTML migration page -- see module docstring for the
 # trade-off.
 _LEGACY_BASE_URL = (
     "https://hydro.iis.u-tokyo.ac.jp/~yamadai/cama-flood/CaMa-Flood_v4/data/runoff/"
@@ -84,7 +84,7 @@ _LEGACY_BASE_URL = (
 # MB for a year of global data; we pad generously.
 _TIMEOUT_S = 300.0
 
-# Sanity cap on date range — refuse multi-year ad-hoc retrievals. The CaMa-Flood
+# Sanity cap on date range -- refuse multi-year ad-hoc retrievals. The CaMa-Flood
 # data convention publishes one global yearly NetCDF; spanning multiple years
 # means multi-hundred-MB downloads.
 _MAX_DATE_RANGE_DAYS = 366
@@ -113,7 +113,7 @@ _NATIVE_RESOLUTION_DEG = 0.1
 
 
 # ---------------------------------------------------------------------------
-# AtomicToolMetadata — registered once at import time.
+# AtomicToolMetadata -- registered once at import time.
 # ---------------------------------------------------------------------------
 
 _METADATA = AtomicToolMetadata(
@@ -298,12 +298,12 @@ def _download_one_nc(
 
     The Tokyo server's legacy URL family currently redirects every
     ``~yamadai/*`` path to a single HTML migration page. We detect that
-    case by sniffing the first 4 bytes — netCDF/HDF5 magic vs HTML.
+    case by sniffing the first 4 bytes -- netCDF/HDF5 magic vs HTML.
 
     Returns:
         True if the downloaded file looks like netCDF/HDF5.
         False if it looks like HTML (the migration page sentinel) or is
-        empty / 4xx — we move on to the next candidate.
+        empty / 4xx -- we move on to the next candidate.
 
     Raises:
         ``CaMaFloodUpstreamError``: connection / 5xx error.
@@ -353,7 +353,7 @@ def _download_one_nc(
     # netCDF-4 (HDF5) magic: b'\x89HDF\r\n\x1a\n'.
     if head.startswith(b"CDF") or head.startswith(b"\x89HDF"):
         return True
-    # HTML migration page sentinel — leading '<' or '<!DOCTYPE'.
+    # HTML migration page sentinel -- leading '<' or '<!DOCTYPE'.
     return False
 
 
@@ -367,7 +367,7 @@ def _fetch_cama_nc_to_tempfile(
 
     Raises:
         ``CaMaFloodUnreachableError``: every candidate returned the HTML
-            migration sentinel — the no-auth legacy path is gone and no
+            migration sentinel -- the no-auth legacy path is gone and no
             mirror was configured.
         ``CaMaFloodUpstreamError``: network / 5xx.
     """
@@ -448,7 +448,7 @@ def _netcdf_to_cog_bytes(
     """
     try:
         import numpy as np
-        import rioxarray  # noqa: F401 — registers .rio accessor on DataArrays
+        import rioxarray  # noqa: F401 -- registers .rio accessor on DataArrays
         import xarray as xr
     except ImportError as exc:
         raise CaMaFloodUpstreamError(
@@ -559,7 +559,7 @@ def _netcdf_to_cog_bytes(
         # negative y-pixel-size). rioxarray's ``to_raster`` writes the array
         # rows as-they-are, so an ascending-latitude DataArray would produce
         # a south-up COG (rasterio's BoundingBox.bottom > top). We re-sort
-        # descending here so the written COG is north-up — the convention
+        # descending here so the written COG is north-up -- the convention
         # QGIS Server, MapLibre, and the rest of the raster pipeline
         # expect (codified lesson: geographic correctness).
         if "latitude" in da.dims and len(da["latitude"]) > 1:
@@ -737,14 +737,14 @@ def fetch_cama_flood_discharge(
     Lab (U.Tokyo) distribution, subsets to the requested bbox and date window,
     time-averages the discharge variable (``rivout``, m^3/s), and writes
     a CRS-tagged Cloud-Optimized GeoTIFF (EPSG:4326, float32, nodata=NaN) at the
-    model's native 0.1° (~10 km) resolution. Normalises longitudes 0–360° to
-    -180–180° and sorts latitude ascending before clipping (geographic-correctness
+    model's native 0.1° (~10 km) resolution. Normalises longitudes 0 - 360° to
+    -180 - 180° and sorts latitude ascending before clipping (geographic-correctness
     gate). v4.0.1 is the default; v4.20 and v4.30 also supported.
 
     **When to use:**
 
     - Fluvial boundary forcing for SFINCS / GeoFLOOD compound-flood runs in
-      non-CONUS basins — Mekong, Amazon, Niger, Ganges-Brahmaputra, etc.
+      non-CONUS basins -- Mekong, Amazon, Niger, Ganges-Brahmaputra, etc.
       Example: bbox ``(88.0, 21.0, 93.0, 27.0)`` for the Bangladesh delta,
       ``start_date="2017-08-01"``, ``end_date="2017-08-31"``.
     - Global flood-risk substrate where USGS NWIS streamflow gauges do not
@@ -753,11 +753,11 @@ def fetch_cama_flood_discharge(
 
     **When NOT to use:**
 
-    - CONUS point-discharge time series — use ``fetch_noaa_nwm_streamflow`` or
+    - CONUS point-discharge time series -- use ``fetch_noaa_nwm_streamflow`` or
       USGS NWIS (gauge-derived, instantaneous, sub-10km rivers).
-    - Real-time or forecast discharge — CaMa-Flood public outputs are historical
+    - Real-time or forecast discharge -- CaMa-Flood public outputs are historical
       reanalysis (no live feed available).
-    - Sub-10km river networks — for finer hydrography use ``fetch_river_geometry``
+    - Sub-10km river networks -- for finer hydrography use ``fetch_river_geometry``
       + a routing model on NHDPlus sub-grid channels.
 
     **KNOWN MIGRATION:** The kickoff names
@@ -770,8 +770,8 @@ def fetch_cama_flood_discharge(
     **Parameters:**
 
     - ``bbox``: ``(west, south, east, north)`` EPSG:4326. Required;
-      ``supports_global_query=False`` — global is ~500 MB/day; tile if needed.
-    - ``start_date``: ISO YYYY-MM-DD inclusive. Reasonable range: 1979–present.
+      ``supports_global_query=False`` -- global is ~500 MB/day; tile if needed.
+    - ``start_date``: ISO YYYY-MM-DD inclusive. Reasonable range: 1979 - present.
     - ``end_date``: ISO YYYY-MM-DD inclusive. Hard cap 366 days from start.
     - ``version``: CaMa-Flood release string; allowed ``{"v4.0.1", "v4.20",
       "v4.30"}``; default ``"v4.0.1"``.
@@ -796,8 +796,9 @@ def fetch_cama_flood_discharge(
     - Pair with: ``fetch_gtsm_tide_surge`` (coastal boundary) and
       ``fetch_era5_reanalysis`` (atmospheric forcing) for a complete SFINCS
       compound-flood forcing stack outside CONUS.
-    - Consumed by: ``build_sfincs_model`` (river inflow boundary) and
-      ``model_compound_flood_global`` (compound-flood composer).
+    - Consumed by: ``set_sfincs_parameters`` + ``run_sfincs`` (river inflow
+      boundary); compound-flood composition is assembled in the code_exec
+      playground.
     - For CONUS rivers, ``fetch_noaa_nwm_streamflow`` is preferred (gauged,
       higher resolution); this tool activates when NWM coverage ends.
 

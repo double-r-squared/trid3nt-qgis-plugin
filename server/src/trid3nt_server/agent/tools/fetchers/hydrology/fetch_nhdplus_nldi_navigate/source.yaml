@@ -68,9 +68,9 @@ docstring: |-
   What it does:
       Snaps the seed (a point lon/lat OR a known NHDPlus COMID) to the
       NHDPlus v2.1 channel network, then asks USGS NLDI to enumerate
-      the connected flowlines in one of four directions — upstream
+      the connected flowlines in one of four directions -- upstream
       main stem, upstream tributaries, downstream main stem, or
-      downstream with diversions — out to the requested distance.
+      downstream with diversions -- out to the requested distance.
       Returns the connected flowlines as a FlatGeobuf of LineString
       geometries tagged with ``nhdplus_comid``.
 
@@ -90,16 +90,16 @@ docstring: |-
 
   When NOT to use:
       - DO NOT use for raw, unfiltered NHDPlus reach geometry by
-        HUC4 — use ``fetch_river_geometry`` (the bulk NHDPlus HR
+        HUC4 -- use ``fetch_river_geometry`` (the bulk NHDPlus HR
         fetcher) instead; NLDI navigate is a *traversal* primitive,
         not a bbox-scoped reach dump.
-      - DO NOT use for streamflow / discharge values — pair with
+      - DO NOT use for streamflow / discharge values -- pair with
         ``fetch_noaa_nwm_streamflow`` (NWM model output keyed on the
-        same COMID) or ``fetch_streamflow`` (NWIS gauge observations).
-      - DO NOT use for global / non-CONUS hydrography — NLDI / NHDPlus
+        same COMID) or ``fetch_usgs_nwis_gauges`` (NWIS gauge observations).
+      - DO NOT use for global / non-CONUS hydrography -- NLDI / NHDPlus
         v2.1 covers CONUS only. For OUS use a future
         ``fetch_hydrosheds_rivers`` or similar.
-      - DO NOT use for catchment / basin polygons — that is the
+      - DO NOT use for catchment / basin polygons -- that is the
         NLDI ``/basin`` endpoint, surfaced separately when needed.
 
   Parameters:
@@ -114,15 +114,15 @@ docstring: |-
           ``nhdplus_comid`` (``fetch_noaa_nwm_streamflow``, NWIS gauge
           resolution, etc.). Example: ``15334434``.
       direction: One of:
-          - ``"UM"`` — upstream main stem (trunk only, single branch)
-          - ``"UT"`` — upstream tributaries (full upstream subnetwork)
-          - ``"DM"`` (default) — downstream main stem (trunk only)
-          - ``"DD"`` — downstream including diversions (anastomosing
+          - ``"UM"`` -- upstream main stem (trunk only, single branch)
+          - ``"UT"`` -- upstream tributaries (full upstream subnetwork)
+          - ``"DM"`` (default) -- downstream main stem (trunk only)
+          - ``"DD"`` -- downstream including diversions (anastomosing
             splits, distributaries).
       distance_km: traversal cutoff in km along the network from the
           seed. Range ``[0, 1000]``; default ``50.0``. Larger values
           risk hitting the ``_MAX_FLOWLINES=5000`` cap on the response
-          (especially with UT) — the payload estimator gates this via
+          (especially with UT) -- the payload estimator gates this via
           the chat warning.
 
   Returns:
@@ -131,18 +131,18 @@ docstring: |-
       ``layer_type="vector"``, ``role="context"``,
       ``style_preset="nhdplus_flowlines"``, ``units=None``. Geometry
       is LineString in EPSG:4326. Single property per feature:
-      ``nhdplus_comid`` (int) — the join key downstream tools (NWM,
+      ``nhdplus_comid`` (int) -- the join key downstream tools (NWM,
       NWIS, NHDPlus VAA tables) consume.
 
   Rendering: the returned flowlines are a VECTOR layer that renders
   INLINE on the map automatically (the agent surface streams the FlatGeobuf
-  as GeoJSON). Do NOT call ``publish_layer`` on this layer — ``publish_layer``
+  as GeoJSON). Do NOT call ``publish_layer`` on this layer -- ``publish_layer``
   is raster-only and publishing a vector trips the vector guard. Simply
   return / surface the ``LayerURI`` and it paints on its own.
 
   Cross-tool dependencies:
       - Composes WITH: ``fetch_noaa_nwm_streamflow`` (join NWM discharge
-        values to navigated reaches by COMID); ``fetch_streamflow``
+        values to navigated reaches by COMID); ``fetch_usgs_nwis_gauges``
         (point NWIS gauges along the traversal).
       - Composes ALONGSIDE: ``fetch_river_geometry`` (bulk NHDPlus
         HR fetch when bbox scope is wanted rather than network

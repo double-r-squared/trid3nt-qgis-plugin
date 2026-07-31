@@ -9,7 +9,7 @@ FR-CE-8 / FR-DC-3/4: routed through ``read_through`` so identical
 ``(dem_uri, ramp)`` calls reuse the cached artifact.
 
 ``gdaldem color-relief`` is already present in the deployment environment
-(confirmed GDAL availability in ``.venv-agent``).
+(confirmed GDAL availability in ``venvs/agent``).
 
 Ramp definitions live inline as Python dicts and are written to a temp file
 (the CSV format ``gdaldem color-relief`` requires). Each ramp entry is a
@@ -98,7 +98,7 @@ def _download_dem_to_local(dem_uri: str) -> str:
         ) as f:
             f.write(data)
             return f.name
-    # Local path — pass through (test / dev convenience).
+    # Local path -- pass through (test / dev convenience).
     return dem_uri
 
 
@@ -124,7 +124,7 @@ _RampEntry = tuple[int | str, int, int, int]  # (elevation | "nv", R, G, B)
 
 # fmt: off
 _RAMPS: dict[str, list[_RampEntry]] = {
-    # "terrain" — natural-earth green→brown→white (Imhof-style).
+    # "terrain" -- natural-earth green→brown→white (Imhof-style).
     # Inspired by the GRASS r.color terrain preset; suitable for general maps.
     "terrain": [
         ("nv", 0, 0, 0),      # no-data → black (will be masked by alpha)
@@ -140,7 +140,7 @@ _RAMPS: dict[str, list[_RampEntry]] = {
         (9000, 255, 255, 255), # extreme (ice/snow) → white
     ],
 
-    # "elevation_blue_green" — ocean-blue at sea level → green → tan → white.
+    # "elevation_blue_green" -- ocean-blue at sea level → green → tan → white.
     # Best for coastal and estuarine maps where the user wants to see the
     # land-sea transition clearly.
     "elevation_blue_green": [
@@ -156,9 +156,9 @@ _RAMPS: dict[str, list[_RampEntry]] = {
         (9000, 255, 255, 255),  # extreme → white
     ],
 
-    # "grayscale" — monochrome; intended as the multiply-blend companion for
+    # "grayscale" -- monochrome; intended as the multiply-blend companion for
     # hillshade in a Swiss-style stack. Low elevation → dark, high → light.
-    # Using a narrow band (30–230) rather than full 0-255 so the multiply blend
+    # Using a narrow band (30 - 230) rather than full 0-255 so the multiply blend
     # doesn't wash to pure black at low elevations.
     "grayscale": [
         ("nv", 0, 0, 0),
@@ -171,7 +171,7 @@ _RAMPS: dict[str, list[_RampEntry]] = {
         (9000, 230, 230, 230),
     ],
 
-    # "viridis" — perceptually-uniform; ideal for scientific / quantitative maps.
+    # "viridis" -- perceptually-uniform; ideal for scientific / quantitative maps.
     # Sampled from the matplotlib viridis palette at 10 equidistant points.
     "viridis": [
         ("nv", 0, 0, 0),
@@ -217,8 +217,8 @@ def _write_normalized_ramp_file(
 ) -> None:
     """Write ``ramp`` rescaled to the DEM's actual elevation span.
 
-    The preset ramps span a canonical 0–9000 m domain. An inland scene like
-    Boulder (~1600–2800 m) lands entirely in one band of that domain, so the
+    The preset ramps span a canonical 0 - 9000 m domain. An inland scene like
+    Boulder (~1600 - 2800 m) lands entirely in one band of that domain, so the
     relief renders as a near-uniform brown sheet (user-observed). Rescaling
     the non-negative anchor elevations linearly onto ``[dem_min, dem_max]``
     stretches the full green→brown→white progression across the scene's own
@@ -233,7 +233,7 @@ def _write_normalized_ramp_file(
             f"unknown ramp={ramp!r}; allowed: {sorted(_VALID_RAMPS)}"
         )
     span = dem_max - dem_min
-    if not (span > 1.0):  # degenerate / flat — canonical ramp is fine
+    if not (span > 1.0):  # degenerate / flat -- canonical ramp is fine
         _write_ramp_file(ramp, path)
         return
     positives = [e[0] for e in _RAMPS[ramp] if isinstance(e[0], (int, float)) and e[0] >= 0]
@@ -263,13 +263,13 @@ def _dem_min_max(local_path: str) -> tuple[float, float] | None:
             if band.mask.all():
                 return None
             return float(np.min(band)), float(np.max(band))
-    except Exception:  # noqa: BLE001 — stats are an enhancement, never fatal
+    except Exception:  # noqa: BLE001 -- stats are an enhancement, never fatal
         logger.warning("DEM min/max read failed; using canonical ramp", exc_info=True)
         return None
 
 
 # ---------------------------------------------------------------------------
-# AtomicToolMetadata — registered once at import time.
+# AtomicToolMetadata -- registered once at import time.
 # ---------------------------------------------------------------------------
 
 _COMPUTE_COLORED_RELIEF_METADATA = AtomicToolMetadata(
@@ -310,7 +310,7 @@ def _run_colored_relief(dem_uri: str, ramp: str) -> bytes:
         if gdal_dem_path != dem_uri:
             dem_local = gdal_dem_path  # mark for cleanup in finally
 
-        # Write ramp to a named temp file — gdaldem needs a real path.
+        # Write ramp to a named temp file -- gdaldem needs a real path.
         # rescale the ramp anchors onto the DEM's actual span so
         # inland scenes use the full color progression (Boulder rendered as
         # one near-uniform brown band of the canonical 0-9000m ramp).
@@ -398,7 +398,7 @@ def compute_colored_relief(
     ramp x ``compute_hillshade``), or the user asks for "colored elevation"/
     "terrain colormap". Do NOT use for: shadow visualization
     (``compute_hillshade``); slope/aspect (``compute_slope``/
-    ``compute_aspect``); quantitative stats (``compute_zonal_statistics``).
+    ``compute_aspect``); quantitative stats (the code_exec playground).
 
     Params:
         dem_uri: input DEM GeoTIFF (elevation in metres), typically from
@@ -440,7 +440,7 @@ def compute_colored_relief(
 
     return LayerURI(
         layer_id=f"colored-relief-{ramp}-{abs(hash(dem_uri)) % 100_000:05d}",
-        name=f"Colored Relief — {ramp_label}",
+        name=f"Colored Relief -- {ramp_label}",
         layer_type="raster",
         uri=result.uri,
         style_preset="continuous_dem",  # closest existing preset; colored-relief preset is follow-up

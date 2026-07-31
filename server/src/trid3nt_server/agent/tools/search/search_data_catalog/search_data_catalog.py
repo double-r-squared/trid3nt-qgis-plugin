@@ -35,7 +35,7 @@ logger = logging.getLogger("trid3nt_server.agent.tools.search.search_data_catalo
 
 
 # ---------------------------------------------------------------------------
-# search_data_catalog — topic-ranked retrieval over the YAML catalog.
+# search_data_catalog -- topic-ranked retrieval over the YAML catalog.
 # ---------------------------------------------------------------------------
 
 
@@ -98,13 +98,13 @@ def _score_entry(entry: CatalogEntry, topic: str) -> float:
         if t and t not in stopwords
     ]
     if not tokens:
-        return score  # all-filler topic produces zero — escalate to Mode 2.
+        return score  # all-filler topic produces zero -- escalate to Mode 2.
     matched_tokens = sum(1 for tok in tokens if tok in haystack)
     if matched_tokens == 0:
         return score  # no content-word hit at all.
     score += float(matched_tokens)
     # Require at least 1/3 of the content tokens to hit before the entry
-    # qualifies as a real match — guards against single-token false positives.
+    # qualifies as a real match -- guards against single-token false positives.
     if matched_tokens < max(1, len(tokens) // 3):
         score = max(0.0, score - 1.0)
     # Bias matches in the name (most authoritative) over description.
@@ -129,7 +129,7 @@ def _bbox_overlaps_world(
     if bbox is None:
         return True
     text = (entry.description + " " + entry.name + " " + entry.how_to_use).lower()
-    # CONUS / US-only entries — exclude any clearly non-US bbox center. We
+    # CONUS / US-only entries -- exclude any clearly non-US bbox center. We
     # treat both "CONUS" / "L48" tokens and the broader "us federal data" /
     # "(usgs)" curator language as US-only signals for the v0.1 heuristic.
     # "conterminous us" mentions usually accompany Hawaii/Alaska coverage but
@@ -172,13 +172,13 @@ def search_data_catalog(
 
     Use this when: the agent has a free-text need ("flood zones", "DEM",
     "river flow data", "building footprints") and wants the catalog's
-    curator-vetted endpoints + invocation hints (``how_to_use``) — the §F.1.2
+    curator-vetted endpoints + invocation hints (``how_to_use``) -- the §F.1.2
     Mode 1 substrate. The returned entries carry stable IDs the LLM passes
     to ``fetch_from_catalog``.
 
     Do NOT use this for: live geocoding (use ``geocode_location``); pulling
     actual bytes (use ``fetch_from_catalog`` or one of the dedicated fetchers);
-    enumerating GCS-cached layers (those are not catalog entries — the
+    enumerating already-cached layers (those are not catalog entries -- the
     catalog describes external sources).
 
     Params:
@@ -200,7 +200,7 @@ def search_data_catalog(
         credential_tier, ttl_class, source_class, license, citation,
         vintage, last_verified, status, how_to_use, api_key_secret_ref).
 
-        Empty list when no entries match — the LLM should escalate to Mode 2
+        Empty list when no entries match -- the LLM should escalate to Mode 2
         (offer-catalog-addition) per §F.1.2 prose.
 
     FR-DC-2 / FR-CE-8: registered with ``ttl_class="semi-static-7d"``,

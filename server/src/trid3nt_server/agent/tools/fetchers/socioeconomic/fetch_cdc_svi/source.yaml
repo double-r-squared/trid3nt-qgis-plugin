@@ -105,8 +105,8 @@ docstring: |-
       ``role="primary"``, ``style_preset="cdc_svi"``, ``units="percentile"``.
 
   **Cross-tool dependencies:**
-      - Feeds INTO: ``compute_zonal_statistics`` (vulnerable population inside
-        a hazard footprint), ``spatial_query`` (admin-bounded SVI).
+      - Feeds INTO: ``spatial_query`` (vulnerable population inside a hazard
+        footprint; admin-bounded SVI).
       - Combine WITH: ``sfincs_flood`` / ``fetch_noaa_slr_scenarios``
         / ``fetch_firms_active_fire`` (hazard footprints) for vulnerability-
         weighted exposure; ``fetch_administrative_boundaries`` (county scope).

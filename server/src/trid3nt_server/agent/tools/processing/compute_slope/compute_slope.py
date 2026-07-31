@@ -10,7 +10,7 @@ same CRS and grid as the input DEM, stored under the FR-DC-3 cache shim at:
 
     ``s3://trid3nt-cache/cache/static-30d/slope/<key>.tif``
 
-**Cache key** is derived from ``(dem_uri, output_unit, algorithm)`` — all three
+**Cache key** is derived from ``(dem_uri, output_unit, algorithm)`` -- all three
 parameters materially affect the output pixels, so all three participate in
 cache-key derivation (FR-DC-3).
 
@@ -29,7 +29,7 @@ cache-key derivation (FR-DC-3).
 
 - **Invariant 2 (Deterministic workflows): preserves.** Zero LLM calls.
 - **FR-DC-6 (cacheable): honors.** ``cacheable=True``, ``ttl_class="static-30d"``,
-  ``source_class="slope"`` — DEM-derived output is stable for the lifetime of
+  ``source_class="slope"`` -- DEM-derived output is stable for the lifetime of
   the cached DEM.
 - **NFR-R-1 (resilience): preserves.** gdaldem failures surface as
   ``SlopeComputeError`` (typed, never unhandled exception); DEM read
@@ -74,9 +74,9 @@ class SlopeComputeError(RuntimeError):
     pipeline strip (NFR-R-1 typed-error requirement).
 
     Codes:
-    - ``GDALDEM_UNAVAILABLE`` — ``gdaldem`` binary not found on PATH.
-    - ``GDALDEM_FAILED`` — ``gdaldem slope`` returned non-zero.
-    - ``DEM_DOWNLOAD_FAILED`` — S3/local read for the DEM URI failed.
+    - ``GDALDEM_UNAVAILABLE`` -- ``gdaldem`` binary not found on PATH.
+    - ``GDALDEM_FAILED`` -- ``gdaldem slope`` returned non-zero.
+    - ``DEM_DOWNLOAD_FAILED`` -- S3/local read for the DEM URI failed.
     """
 
     def __init__(self, error_code: str, message: str) -> None:
@@ -204,7 +204,7 @@ def compute_slope(
 
     Use this when: landslide susceptibility, evacuation/accessibility
     routing, engineering road-grade assessment, or terrain steepness input
-    to ``compute_zonal_statistics``. Do NOT use for: hillshade
+    to a code_exec playground zonal-stats recipe. Do NOT use for: hillshade
     (``compute_hillshade``); colored elevation (``compute_colored_relief``);
     aspect (``compute_aspect``).
 

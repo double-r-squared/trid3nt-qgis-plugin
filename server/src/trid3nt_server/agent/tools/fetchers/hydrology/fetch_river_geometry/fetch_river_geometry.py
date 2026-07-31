@@ -42,14 +42,14 @@ logger = logging.getLogger("trid3nt_server.agent.tools.fetchers.hydrology.fetch_
 # fetch_river_geometry - NHDPlus HR (USGS) (Stage B).
 # ---------------------------------------------------------------------------
 #
-# Access pattern tier — LIVE-VERIFIED matches kickoff inference (2026-06-07):
+# Access pattern tier -- LIVE-VERIFIED matches kickoff inference (2026-06-07):
 #
 #   * USGS publishes NHDPlus HR as **HUC4-scoped FileGDB zip files** under
 #     ``prd-tnm.s3.amazonaws.com/StagedProducts/Hydrography/NHDPlusHR/Beta/
 #     GDB/NHDPLUS_H_<HUC4>_HU4_GDB.zip``. Live probe (HUC4 ``0309`` for the
 #     Fort Myers / Caloosahatchee region): HTTP 200, accept-ranges=bytes,
 #     content-length=151,111,923 (~144 MB).
-#   * No per-bbox query API exists for NHDPlus HR raw geometry — the only
+#   * No per-bbox query API exists for NHDPlus HR raw geometry -- the only
 #     bbox-aware path is to download the HUC4 GDB and clip locally. The
 #     USGS National Map TNM Access REST API (`tnmaccess.nationalmap.gov`)
 #     returns the same download URL with file-size metadata.
@@ -67,7 +67,7 @@ logger = logging.getLogger("trid3nt_server.agent.tools.fetchers.hydrology.fetch_
 #
 # v0.1 substrate scope: the per-call clip extracts the NHDFlowline feature
 # class from the HUC4 GDB, clips by bbox, and writes a FlatGeobuf. The
-# implementation does NOT use the two-stage cache in v0.1 — the kickoff calls
+# implementation does NOT use the two-stage cache in v0.1 -- the kickoff calls
 # for a single ``read_through`` write per call, and the GDB download is
 # inside the fetcher (so the HUC4 region is fetched fresh on every cache
 # miss).
@@ -100,26 +100,26 @@ _NHDPLUSHR_BASE = (
 # region (the M5 demo target). Replacement with a real point-in-polygon over
 # the WBD HUC4 dataset is a tracked follow-up.
 _HUC4_BBOX_ENVELOPES: list[tuple[str, tuple[float, float, float, float]]] = [
-    # Florida — South Florida (Caloosahatchee, Big Cypress, Everglades)
+    # Florida -- South Florida (Caloosahatchee, Big Cypress, Everglades)
     ("0309", (-82.0, 25.0, -80.0, 27.5)),
-    # Florida — Peninsular (Tampa Bay south to about Lake Okeechobee)
+    # Florida -- Peninsular (Tampa Bay south to about Lake Okeechobee)
     ("0310", (-82.9, 26.7, -80.5, 28.7)),
-    # Florida — Suwannee / North Florida
+    # Florida -- Suwannee / North Florida
     ("0311", (-83.7, 28.5, -82.0, 31.0)),
-    # Texas — Lower Colorado (Houston / Galveston Bay)
+    # Texas -- Lower Colorado (Houston / Galveston Bay)
     ("1209", (-96.0, 28.0, -93.5, 31.5)),
-    # Louisiana — Lower Mississippi
+    # Louisiana -- Lower Mississippi
     ("0807", (-91.5, 28.5, -89.0, 31.0)),
-    # New York — Hudson (Hurricane Sandy reference region)
+    # New York -- Hudson (Hurricane Sandy reference region)
     ("0203", (-75.0, 40.5, -73.0, 43.0)),
-    # North Carolina — Cape Fear (Hurricane Florence reference region)
+    # North Carolina -- Cape Fear (Hurricane Florence reference region)
     ("0303", (-79.5, 33.0, -77.0, 35.8)),
-    # California — South Coast (Los Angeles basin)
+    # California -- South Coast (Los Angeles basin)
     ("1807", (-119.0, 33.0, -117.0, 35.0)),
 ]
 
 def _huc4_for_bbox(bbox: tuple[float, float, float, float]) -> str | None:
-    """Best-effort HUC4 lookup from a bbox center — heuristic only.
+    """Best-effort HUC4 lookup from a bbox center -- heuristic only.
 
     Returns ``None`` if no envelope matches. A future enrichment job replaces
     this with a real point-in-polygon over the WBD HUC4 dataset cached in the
@@ -134,7 +134,7 @@ def _huc4_for_bbox(bbox: tuple[float, float, float, float]) -> str | None:
     return None
 
 # ---------------------------------------------------------------------------
-# OSM Overpass waterway path — PRIMARY source for fetch_river_geometry.
+# OSM Overpass waterway path -- PRIMARY source for fetch_river_geometry.
 # ---------------------------------------------------------------------------
 #
 # Root-cause fix: the NHDPlus HR HUC4 routing heuristic only covers a handful
@@ -151,7 +151,7 @@ def _huc4_for_bbox(bbox: tuple[float, float, float, float]) -> str | None:
 #     (way["waterway"~"^(river|stream|canal)$"](s,w,n,e););
 #     out geom;
 #
-# Overpass returns the bbox corners as (south, west, north, east) — the
+# Overpass returns the bbox corners as (south, west, north, east) -- the
 # OPPOSITE corner-pair ordering from the caller's (min_lon, min_lat, max_lon,
 # max_lat). Same convention as the roads tool.
 
@@ -175,7 +175,7 @@ _WATERWAY_CLASSES: tuple[str, ...] = ("river", "stream", "canal")
 #: request via ``waterway_type``. ``river``/``stream``/``canal`` are the
 #: default channel network; ``ditch``/``drain`` are the small artificial
 #: drainage channels that dominate drained-agriculture and tiled-field
-#: landscapes (Imperial Valley, the Fens) — opt-in because they explode
+#: landscapes (Imperial Valley, the Fens) -- opt-in because they explode
 #: feature counts elsewhere. Anything outside this set is rejected so an
 #: LLM-invented value cannot inject arbitrary text into the Overpass regex.
 _WATERWAY_TYPE_ALIASES: dict[str, tuple[str, ...]] = {
@@ -273,7 +273,7 @@ def _build_overpass_waterway_ql(
     """Construct the Overpass QL payload for waterway ways inside ``bbox``.
 
     Overpass expects the bbox corners as ``(south, west, north, east)``
-    (lat first) — the OPPOSITE ordering from the caller's
+    (lat first) -- the OPPOSITE ordering from the caller's
     ``(min_lon, min_lat, max_lon, max_lat)``.
     """
     min_lon, min_lat, max_lon, max_lat = bbox
@@ -373,7 +373,7 @@ def _waterway_records_to_clipped_fgb_bytes(
     requested bbox so the layer fills the whole bbox without spilling outside
     it, and writes FlatGeobuf bytes (the same `.fgb` -> inline-GeoJSON render
     path drives via ``add_loaded_layer``). An empty record list still
-    produces a valid (empty) FlatGeobuf — never a sentinel (cache.py poison
+    produces a valid (empty) FlatGeobuf -- never a sentinel (cache.py poison
     contract).
     """
     try:
@@ -398,7 +398,7 @@ def _waterway_records_to_clipped_fgb_bytes(
         # Clip to the exact bbox so geometry doesn't spill outside the AOI.
         try:
             gdf = gdf.clip(shapely_box(*bbox))
-        except Exception as exc:  # noqa: BLE001 — clip is best-effort precision
+        except Exception as exc:  # noqa: BLE001 -- clip is best-effort precision
             logger.warning(
                 "OSM waterway clip failed; returning unclipped features: %s", exc
             )
@@ -445,12 +445,12 @@ def _fetch_osm_waterway_geometry_bytes(
     bbox: tuple[float, float, float, float],
     waterway_classes: tuple[str, ...] = _WATERWAY_CLASSES,
 ) -> bytes:
-    """PRIMARY river-geometry fetcher — OSM Overpass waterway query over the bbox.
+    """PRIMARY river-geometry fetcher -- OSM Overpass waterway query over the bbox.
 
     Queries Overpass for ``waterway`` ways (``waterway_classes``, default
     river/stream/canal) inside the bbox, projects each to a LineString, clips
     to the bbox, and returns FlatGeobuf bytes. Fills the WHOLE bbox (true
-    per-bbox query — not a seed-connected sub-network like NLDI). Raises
+    per-bbox query -- not a seed-connected sub-network like NLDI). Raises
     ``UpstreamAPIError`` on any failure so ``fetch_river_geometry`` can fall
     through to NHDPlus HR.
 
@@ -479,12 +479,12 @@ def _fetch_river_geometry_bytes(
     """Internal fallback chain for river geometry (data-source-fallback norm).
 
     Order:
-      1. PRIMARY — OSM Overpass waterway query over the bbox (global, true
+      1. PRIMARY -- OSM Overpass waterway query over the bbox (global, true
          per-bbox, fills the whole AOI). Empty-but-valid results are accepted
          (no rivers in the bbox is a legitimate answer, not a failure).
-      2. FALLBACK — NHDPlus HR HUC4 region download + local clip, but only
+      2. FALLBACK -- NHDPlus HR HUC4 region download + local clip, but only
          when the bbox routed to a HUC4 region (``huc4`` is not None).
-      3. Typed honest error (``UpstreamAPIError``) if every path fails — never
+      3. Typed honest error (``UpstreamAPIError``) if every path fails -- never
          a silent dead-end or a hallucinated success.
 
     ``waterway_classes`` controls the OSM ``waterway`` tag set on the PRIMARY
@@ -499,7 +499,7 @@ def _fetch_river_geometry_bytes(
     primary_exc: Exception | None = None
     try:
         return _fetch_osm_waterway_geometry_bytes(bbox, waterway_classes)
-    except Exception as exc:  # noqa: BLE001 — fall through to NHDPlus HR
+    except Exception as exc:  # noqa: BLE001 -- fall through to NHDPlus HR
         primary_exc = exc
         logger.warning(
             "fetch_river_geometry: OSM Overpass primary failed (%s: %s); "
@@ -512,7 +512,7 @@ def _fetch_river_geometry_bytes(
     if huc4 is not None:
         try:
             return _fetch_nhdplushr_geometry_bytes(bbox, huc4)
-        except Exception as exc:  # noqa: BLE001 — both paths failed
+        except Exception as exc:  # noqa: BLE001 -- both paths failed
             logger.warning(
                 "fetch_river_geometry: NHDPlus HR fallback also failed "
                 "(huc4=%s): %s: %s",
@@ -579,7 +579,7 @@ def _fetch_nhdplushr_geometry_bytes(
             if resp.status_code == 404:
                 raise UpstreamAPIError(
                     f"NHDPlus HR HUC4 GDB not found at {url} (huc4={huc4}); "
-                    "the staged-products tree may have moved — verify the base path."
+                    "the staged-products tree may have moved -- verify the base path."
                 )
             resp.raise_for_status()
         except requests.RequestException as exc:
@@ -629,7 +629,7 @@ def _fetch_nhdplushr_geometry_bytes(
             ) from exc
 
         # Clip by bbox polygon for tight precision (geopandas bbox read is
-        # a spatial filter, not a clip — features extending outside the bbox
+        # a spatial filter, not a clip -- features extending outside the bbox
         # are returned whole; clip trims them).
         try:
             bbox_geom = shapely_box(*bbox)
@@ -689,20 +689,21 @@ def fetch_river_geometry(
     vector path). Access pattern: Tier 2/Tier 4 with an internal fallback
     chain (data-source-fallback norm):
 
-    1. PRIMARY — OSM Overpass ``waterway`` query over the bbox
+    1. PRIMARY -- OSM Overpass ``waterway`` query over the bbox
        (river/stream/canal). Global, true per-bbox: fills the WHOLE bbox, not
        just a seed-connected sub-network. Clipped to the bbox.
-    2. FALLBACK — USGS NHDPlus High Resolution NHDFlowline (Tier 4 region
+    2. FALLBACK -- USGS NHDPlus High Resolution NHDFlowline (Tier 4 region
        download + local clip), used when the bbox routes to one of the v0.1
        HUC4 envelopes and OSM is unavailable.
-    3. Typed honest error if both fail — never a silent dead-end.
+    3. Typed honest error if both fail -- never a silent dead-end.
 
     Both paths serialize to FlatGeobuf and clip to the requested bbox. The
     30-day cache absorbs repeat calls.
 
     **When to use:**
-    - ``build_sfincs_model`` needs river flowlines for DEM hydro-conditioning
-      (HydroMT's ``setup_rivers_from_dem`` step burns channel geometry).
+    - SFINCS setup (``set_sfincs_parameters`` + ``run_sfincs``) needs river
+      flowlines for DEM hydro-conditioning (HydroMT's ``setup_rivers_from_dem``
+      step burns channel geometry).
     - Fluvial flood workflow requires channel network for boundary-condition
       placement (upstream inflow nodes, downstream outlets).
     - User asks to visualize stream networks or watershed drainage patterns.
@@ -710,11 +711,11 @@ def fetch_river_geometry(
       flowline outlet point to route upstream.
 
     **When NOT to use:**
-    - Real-time streamflow measurements — use ``fetch_streamflow`` (NWIS
-      USGS gauges) for discharge time series.
-    - Flow-direction / accumulation grids — derive from the DEM inside
+    - Real-time streamflow measurements -- use ``fetch_usgs_nwis_gauges``
+      (NWIS USGS gauges) for discharge time series.
+    - Flow-direction / accumulation grids -- derive from the DEM inside
       HydroMT; NHDPlus HR publishes those separately.
-    - Areas larger than 5,000 km² — the tool enforces a guardrail to keep a
+    - Areas larger than 5,000 km² -- the tool enforces a guardrail to keep a
       single fetch tractable (use a smaller bbox or a future tiled workflow).
 
     **Parameters:**
@@ -732,7 +733,7 @@ def fetch_river_geometry(
       ``"canal"``, ``"ditch"``, ``"drain"``) singly, comma/plus-joined
       (``"ditch,drain"``), or as a list (``["ditch", "drain"]``); or a
       convenience alias: ``"all"`` (every class incl. ditch+drain),
-      ``"drainage"`` / ``"ditches"`` (ditch+drain only — the artificial
+      ``"drainage"`` / ``"ditches"`` (ditch+drain only -- the artificial
       drainage channels that dominate drained-agriculture / tiled-field
       landscapes), or ``"default"`` / ``"rivers"`` / ``"channels"``
       (river+stream+canal). ``ditch``/``drain`` are opt-in because they
@@ -749,15 +750,15 @@ def fetch_river_geometry(
 
     **Cross-tool dependencies:**
     - Upstream: ``geocode_location`` for bbox derivation.
-    - Downstream: ``build_sfincs_model`` (river-burning DEM step),
-      ``delineate_watershed``, stream-network display in map panel.
+    - Downstream: ``set_sfincs_parameters`` / ``run_sfincs`` (river-burning
+      DEM step), ``delineate_watershed``, stream-network display in map panel.
     """
     if isinstance(source, str) and source.strip().lower() in ("nhdplus", "nhd"):
         # -class alias: the model's natural label for the NHDPlus family.
         # The fallback chain is OSM-primary regardless, so aliasing is safe.
         source = "nhdplus_hr"
     if source not in ("nhdplus_hr", "osm"):
-        # Reserved future sources (NHDPlus V2, MERIT-Hydro) — not in v0.1.
+        # Reserved future sources (NHDPlus V2, MERIT-Hydro) -- not in v0.1.
         raise BboxInvalidError(
             f"unsupported source={source!r}; allowed: 'nhdplus_hr' (Tier-4 HUC4 GDB) "
             "or 'osm' (Overpass waterway). The internal fallback chain runs "
@@ -773,7 +774,7 @@ def fetch_river_geometry(
     quantized = round_bbox_to_resolution(bbox, 10)
 
     # Guardrail: keep a single fetch tractable (OSM Overpass + NHDPlus HR HUC4
-    # GDBs are both heavy for huge bboxes). 5,000 km^2 explicit bound — matches
+    # GDBs are both heavy for huge bboxes). 5,000 km^2 explicit bound -- matches
     # the previous NHDPlus-only behavior.
     if _bbox_area_km2(quantized) > 5_000.0:
         raise BboxInvalidError(
@@ -782,7 +783,7 @@ def fetch_river_geometry(
             "tiled workflow)."
         )
 
-    # HUC4 routing is now BEST-EFFORT (fallback only) — a missing HUC4 no
+    # HUC4 routing is now BEST-EFFORT (fallback only) -- a missing HUC4 no
     # longer dead-ends the tool, because OSM Overpass is the primary path
     # (root-cause fix for "could not route bbox to a HUC4 region").
     huc4 = _huc4_for_bbox(quantized)

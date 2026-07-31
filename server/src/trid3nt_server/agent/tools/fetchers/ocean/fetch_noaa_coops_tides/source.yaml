@@ -107,31 +107,31 @@ docstring: |
     coastal city" for a past or upcoming date range.
   - Agent needs observed coastal water-level boundary conditions for a
     compound-flood SFINCS model run at a US/territory location (composes
-    with ``model_flood_scenario`` as the coastal forcing input).
+    with ``run_sfincs`` as the coastal forcing input).
   - User asks for tide predictions to plan coastal operations or assess
     flood-tide coincidence risk.
   - Agent needs to validate a GTSM global tide estimate against the
     authoritative US tide-gauge record (cross-check via this tool).
   - User asks for storm-surge context: "how high did the water get at
-    Fort Myers during Ian?" — use ``product="water_level"`` to retrieve
+    Fort Myers during Ian?" -- use ``product="water_level"`` to retrieve
     the observed record.
 
   **When NOT to use:**
   - For global coastal water-level (non-US) → use ``fetch_gtsm_tide_surge``
     (GTSM v3.0 global reanalysis).
   - For river-discharge / streamflow → use ``fetch_noaa_nwm_streamflow``
-    or ``fetch_streamflow`` (USGS NWIS).
+    or ``fetch_usgs_nwis_gauges`` (USGS NWIS).
   - For wave height or ocean swell → CO-OPS does not serve wave products;
     use ERA5 or NOAA WAVEWATCH III (not currently in the tool catalog).
-  - For gridded storm-surge inundation rasters → use ``model_flood_scenario``
-    (SFINCS) with this tool's output as coastal boundary forcing.
+  - For gridded storm-surge inundation rasters → use ``run_sfincs`` with
+    this tool's output as coastal boundary forcing.
   - For sub-hourly tide data (6-minute observations) → the current tool
     returns hourly (``interval=h``); extend with ``interval=6`` in a
     future version if SFINCS setup requires finer resolution.
 
   **Parameters:**
       bbox: ``(west, south, east, north)`` in EPSG:4326 (WGS84 decimal
-          degrees). Required — ``supports_global_query=False``. CO-OPS
+          degrees). Required -- ``supports_global_query=False``. CO-OPS
           has ~300 stations globally, primarily US coastline and territories;
           specify a coastal bbox. Cap of 50 stations per call.
           Example for Fort Myers + Naples area: ``(-82.5, 25.5, -81.0, 27.5)``
@@ -162,10 +162,10 @@ docstring: |
       ``units="m (MLLW)"``.
 
   **Cross-tool dependencies:**
-      - Feeds INTO: ``model_flood_scenario`` (coastal boundary forcing),
+      - Feeds INTO: ``run_sfincs`` (coastal boundary forcing),
         ``publish_layer`` (map display).
       - Cross-checks: ``fetch_gtsm_tide_surge`` (global non-US tide+surge
-        reanalysis) — CONUS basin with CO-OPS coverage should prefer this
+        reanalysis) -- CONUS basin with CO-OPS coverage should prefer this
         tool; non-CONUS should prefer GTSM.
       - Composes ALONGSIDE: ``fetch_mrms_qpe`` (precip forcing),
         ``fetch_noaa_nwm_streamflow`` (river discharge), and

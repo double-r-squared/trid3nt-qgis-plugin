@@ -12,20 +12,19 @@ stored under the FR-DC-3 cache shim at:
 
 **Style presets:**
 
-- ``"standard"`` — single hillshade, Horn algorithm, azimuth 315°, altitude 45°
+- ``"standard"`` -- single hillshade, Horn algorithm, azimuth 315°, altitude 45°
   (the GDAL default). Fast, suitable for general use.
-- ``"swiss_double"`` — two hillshades (Horn @ 315° + Horn @ 135°) multiply-blended
-  into a single GeoTIFF via numpy (Imhof-style richer cartographic depth). Pre-
-  composite approach selected (kickoff §A): the LLM-visible result is one layer.
-- ``"multidirectional"`` — single hillshade with ``-multidirectional`` flag; combines
+- ``"swiss_double"`` -- two hillshades (Horn @ 315° + Horn @ 135°) multiply-blended
+  into a single GeoTIFF via numpy (Imhof-style richer cartographic depth). The
+  blend is pre-composited server-side: the LLM-visible result is one layer.
+- ``"multidirectional"`` -- single hillshade with ``-multidirectional`` flag; combines
   NE/SE/NW/SW illuminations, no dead-lit sides.
-- ``"combined"`` — ``-combined`` flag; brightness incorporates slope steepness; best
+- ``"combined"`` -- ``-combined`` flag; brightness incorporates slope steepness; best
   for steep mountainous terrain.
-- ``"smooth"`` — Horn algorithm + ZevenbergenThorne smoothing flag; smoother results
+- ``"smooth"`` -- Horn algorithm + ZevenbergenThorne smoothing flag; smoother results
   on rough terrain.
 
-**Cache key** is derived from ``(dem_uri, style, algorithm, azimuth, altitude, z_factor)``
-— all six parameters materially affect the output pixels (FR-DC-3).
+**Cache key** is derived from ``(dem_uri, style, algorithm, azimuth, altitude, z_factor)`` -- all six parameters materially affect the output pixels (FR-DC-3).
 
 **Implementation flow (cache miss):**
 
@@ -46,7 +45,7 @@ stored under the FR-DC-3 cache shim at:
 
 - **Invariant 2 (Deterministic workflows): preserves.** Zero LLM calls.
 - **FR-DC-6 (cacheable): honors.** ``cacheable=True``, ``ttl_class="static-30d"``,
-  ``source_class="hillshade"`` — DEM-derived output is stable for the lifetime of
+  ``source_class="hillshade"`` -- DEM-derived output is stable for the lifetime of
   the cached DEM.
 - **NFR-R-1 (resilience): preserves.** gdaldem failures surface as
   ``HillshadeComputeError`` (typed, never unhandled exception); DEM read errors
@@ -91,10 +90,10 @@ class HillshadeComputeError(RuntimeError):
     pipeline strip (NFR-R-1 typed-error requirement).
 
     Codes:
-    - ``GDALDEM_UNAVAILABLE`` — ``gdaldem`` binary not found on PATH.
-    - ``GDALDEM_FAILED`` — ``gdaldem hillshade`` returned non-zero.
-    - ``DEM_DOWNLOAD_FAILED`` — S3/local read for the DEM URI failed.
-    - ``BLEND_FAILED`` — numpy multiply-blend step failed (swiss_double only).
+    - ``GDALDEM_UNAVAILABLE`` -- ``gdaldem`` binary not found on PATH.
+    - ``GDALDEM_FAILED`` -- ``gdaldem hillshade`` returned non-zero.
+    - ``DEM_DOWNLOAD_FAILED`` -- S3/local read for the DEM URI failed.
+    - ``BLEND_FAILED`` -- numpy multiply-blend step failed (swiss_double only).
     """
 
     def __init__(self, error_code: str, message: str) -> None:
@@ -151,7 +150,7 @@ def _ensure_output_crs_matches_dem(dem_path: str, output_path: str) -> None:
     CRS does not match the DEM's (typically a proj.db-less ``LOCAL_CS``
     fallback), rewriting the CRS tag in place is always correct.
 
-    Never raises — a failed stamp logs a warning and leaves the file as
+    Never raises -- a failed stamp logs a warning and leaves the file as
     gdaldem wrote it (legacy behavior).
     """
     try:
@@ -173,9 +172,9 @@ def _ensure_output_crs_matches_dem(dem_path: str, output_path: str) -> None:
             str(out_crs),
             str(dem_crs),
         )
-    except Exception as exc:  # noqa: BLE001 — stamp is best-effort
+    except Exception as exc:  # noqa: BLE001 -- stamp is best-effort
         logger.warning(
-            "compute_hillshade: CRS verification/stamp failed for %s (%s: %s) — "
+            "compute_hillshade: CRS verification/stamp failed for %s (%s: %s) -- "
             "leaving gdaldem output unchanged",
             output_path,
             type(exc).__name__,
@@ -221,8 +220,8 @@ def _run_gdaldem_hillshade(
     Args:
         input_path: local file path to the input DEM GeoTIFF.
         output_path: local file path for the output hillshade GeoTIFF.
-        azimuth: sun azimuth in degrees (0–360, clockwise from north).
-        altitude: sun altitude in degrees above the horizon (0–90).
+        azimuth: sun azimuth in degrees (0 - 360, clockwise from north).
+        altitude: sun altitude in degrees above the horizon (0 - 90).
         z_factor: vertical exaggeration factor (1.0 = no exaggeration).
         algorithm: gradient algorithm. ``"Horn"`` is the GDAL default.
             ``"ZevenbergenThorne"`` adds ``-alg ZevenbergenThorne``.
@@ -321,7 +320,7 @@ def _multiply_blend_hillshades(
         mask_b = (data_b == nodata_b) if nodata_b is not None else np.zeros_like(data_b, dtype=bool)
         nodata_mask = mask_a | mask_b
 
-        # Multiply blend: (A/255) * (B/255) * 255 — keeps values in [0, 255].
+        # Multiply blend: (A/255) * (B/255) * 255 -- keeps values in [0, 255].
         blended = (data_a / 255.0) * (data_b / 255.0) * 255.0
         blended = np.clip(blended, 0, 255)
         blended[nodata_mask] = 0.0
@@ -384,13 +383,13 @@ def _make_fetch_fn(
                 out_tmp_b = out_b_f.name
             os.unlink(out_tmp_b)
 
-            # First pass: primary azimuth (315° — the classic NW sun position).
+            # First pass: primary azimuth (315° -- the classic NW sun position).
             _run_gdaldem_hillshade(
                 in_tmp, out_tmp,
                 azimuth=315.0, altitude=altitude, z_factor=z_factor,
                 algorithm=algorithm,
             )
-            # Second pass: complementary azimuth (135° — SE, fills shadows from 315°).
+            # Second pass: complementary azimuth (135° -- SE, fills shadows from 315°).
             _run_gdaldem_hillshade(
                 in_tmp, out_tmp_b,
                 azimuth=135.0, altitude=altitude, z_factor=z_factor,
@@ -420,7 +419,7 @@ def _make_fetch_fn(
                 combined=True,
             )
         elif style == "smooth":
-            # ZevenbergenThorne smoothing — use the algorithm kwarg override if
+            # ZevenbergenThorne smoothing -- use the algorithm kwarg override if
             # the caller explicitly chose a different algorithm, but the preset
             # itself is intended for smoothed results.
             _run_gdaldem_hillshade(
@@ -466,7 +465,7 @@ def compute_hillshade(
     dem_uri: str,
     style: Literal["standard", "swiss_double", "multidirectional", "combined", "smooth"] = "standard",
     # Power-user overrides (primarily consulted for "standard"; presets override
-    # specific fields — e.g. "smooth" always uses ZevenbergenThorne).
+    # specific fields -- e.g. "smooth" always uses ZevenbergenThorne).
     algorithm: Literal["Horn", "ZevenbergenThorne", "Igor"] = "Horn",
     azimuth: float = 315.0,
     altitude: float = 45.0,
@@ -491,22 +490,22 @@ def compute_hillshade(
 
     Do NOT use for: slope/aspect analysis (compute_slope/compute_aspect);
     quantitative elevation display/stats (compute_colored_relief or
-    compute_zonal_statistics); bathymetry; animated/time-varying terrain
+    the code_exec playground); bathymetry; animated/time-varying terrain
     (static single-time raster only).
 
     Style presets:
         "standard" (default): single hillshade, Horn algorithm, azimuth
-            315deg, altitude 45deg — fast, general use.
+            315deg, altitude 45deg -- fast, general use.
         "swiss_double": two Horn hillshades (315deg + 135deg) multiply-blended
-            into one GeoTIFF (Imhof-style) — darker valleys, bright ridges;
+            into one GeoTIFF (Imhof-style) -- darker valleys, bright ridges;
             best for cartography/"professional"/"nice-looking" requests.
         "multidirectional": GDAL ``-multidirectional`` (NE/SE/NW/SW combined,
-            no dead-lit sides) — pick for "no dead spots"/"no shadows" on
+            no dead-lit sides) -- pick for "no dead spots"/"no shadows" on
             complex ridge terrain.
         "combined": GDAL ``-combined`` (brightness incorporates slope
-            steepness) — pick for mountains/steep terrain.
+            steepness) -- pick for mountains/steep terrain.
         "smooth": Horn + ZevenbergenThorne gradient estimator, less
-            high-frequency noise — pick for rough/noisy DEMs.
+            high-frequency noise -- pick for rough/noisy DEMs.
 
     Params:
         dem_uri: URI of a DEM GeoTIFF (typically from ``fetch_dem``),
@@ -531,7 +530,7 @@ def compute_hillshade(
         "swiss_double", the pre-blended composite). Single-band uint8
         (0-255), same CRS/grid as the input DEM.
 
-    FR-CE-8: routed through ``read_through`` — identical
+    FR-CE-8: routed through ``read_through`` -- identical
     ``(dem_uri, style, algorithm, azimuth, altitude, z_factor)`` reuses the
     cached hillshade (30-day TTL).
 
@@ -594,5 +593,5 @@ def compute_hillshade(
         uri=result.uri,
         style_preset="continuous_dem",  # grayscale via the F51 terrain passthrough -- CORRECT for shaded relief (tools-backlog #3: no colormap wanted)
         role="context",
-        units="intensity",  # 0–255 uint8 luminance
+        units="intensity",  # 0 - 255 uint8 luminance
     )

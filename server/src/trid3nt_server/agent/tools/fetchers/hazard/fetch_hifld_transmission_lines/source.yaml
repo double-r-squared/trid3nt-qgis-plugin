@@ -71,15 +71,14 @@ docstring: |-
   connected substations SUB_1 / SUB_2) plus ``infra_type`` / ``infra_label``.
 
   This is the LINE (power-grid backbone) complement to the POINT lifeline
-  inventory in ``fetch_hifld_critical_infrastructure`` — pair the two
+  inventory in ``fetch_hifld_critical_infrastructure`` -- pair the two
   (power_plants points + transmission lines) for full electric-power exposure.
 
   **When to use:**
   - "Where are the power transmission lines near [place]?"; "show the electric
     grid in this area"; "what high-voltage lines cross this footprint?".
   - A hazard / exposure workflow needs the transmission network inside a flood
-    / fire / surge / earthquake footprint (intersect with
-    ``compute_zonal_statistics`` or ``spatial_query``).
+    / fire / surge / earthquake footprint (intersect with ``spatial_query``).
   - Lifeline resilience: which corridors / voltage classes are hazard-exposed.
 
   **When NOT to use:**
@@ -89,8 +88,7 @@ docstring: |-
     (HIFLD is static). Last-mile distribution lines (HIFLD is bulk transmission).
 
   **Parameters:**
-      bbox: ``(min_lon, min_lat, max_lon, max_lat)`` in EPSG:4326. Required —
-          ``supports_global_query=False``. Example Houston metro:
+      bbox: ``(min_lon, min_lat, max_lon, max_lat)`` in EPSG:4326. Required -- ``supports_global_query=False``. Example Houston metro:
           ``(-95.8, 29.5, -95.0, 30.1)``.
       min_voltage_kv: Optional nominal-voltage floor in kV. When set, only
           segments with ``VOLTAGE >= min_voltage_kv`` are returned (e.g.
@@ -110,7 +108,7 @@ docstring: |-
       - ``HIFLDTransmissionUpstreamError``: HTTP/network failure, ArcGIS error
         envelope, or FlatGeobuf serialization failure (retryable=True).
       - ``HIFLDTransmissionEmptyError``: no segments in bbox (retryable=False;
-        not raised by default — empty FGB is returned).
+        not raised by default -- empty FGB is returned).
 
   Cache: ``ttl_class="static-30d"``, ``source_class="hifld_transmission_lines"``.
   Cache key is SHA-256 of ``(bbox-rounded-6dp, min_voltage_kv)``.

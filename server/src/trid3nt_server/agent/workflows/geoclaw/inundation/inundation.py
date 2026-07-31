@@ -5,7 +5,7 @@ shallow-water inundation engine (engine-door refactor - GEOCLAW slice; was
 The LLM-facing exposure of the GeoClaw shallow-water engine (tsunami run-up /
 dam-break / surge run-up - a hazard family SFINCS/SWMM do not cover).
 ``geoclaw_inundation(...)`` takes the ``GeoClawRunArgs`` scenario/forcing
-fields, runs the deterministic fetch -> stage -> Batch-solve -> postprocess chain
+fields, runs the deterministic fetch -> stage -> solve -> postprocess chain
 (``workflows/geoclaw/model_dambreak_geoclaw_scenario/``), and returns a
 ``GeoClawDepthLayerURI`` the emitter loads onto the map (it subclasses
 ``LayerURI`` so the ``emit_tool_call`` ``add_loaded_layer`` gate fires).
@@ -19,8 +19,9 @@ door's gate expansion (SELECT-THEN-CALL). Like the other templates it declares
 ``source_class="workflow_dispatch"`` (FR-DC-6 - workflow exposure surface; never
 touches the cache shim).
 
-GeoClaw is BATCH-ONLY (the Clawpack Fortran lives in the worker container image,
-never in the agent venv), so unlike SWMM this always dispatches to AWS Batch.
+GeoClaw is CONTAINER-ONLY (the Clawpack Fortran lives in the worker container
+image, never in the agent venv), so it always dispatches to a local Docker
+solver container via the generic run_solver seam.
 
 Determinism boundary (Invariant 1): every depth number the agent narrates comes
 from the typed ``GeoClawDepthLayerURI.max_depth_m`` / ``.flooded_area_km2`` /
@@ -236,7 +237,7 @@ async def geoclaw_inundation(
         if fgmax_arrival_tol_m is not None:
             kwargs["fgmax_arrival_tol_m"] = float(fgmax_arrival_tol_m)
         run_args = GeoClawRunArgs(**kwargs)
-    except Exception as exc:  # noqa: BLE001 — pydantic ValidationError or coercion
+    except Exception as exc:  # noqa: BLE001 -- pydantic ValidationError or coercion
         return {
             "status": "error",
             "error_code": "GEOCLAW_PARAMS_INVALID",
@@ -284,7 +285,7 @@ async def geoclaw_inundation(
             "error_code": exc.error_code,
             "error_message": str(exc),
         }
-    except Exception as exc:  # noqa: BLE001 — defensive catch-all
+    except Exception as exc:  # noqa: BLE001 -- defensive catch-all
         logger.exception("geoclaw_inundation unexpected failure")
         return {
             "status": "error",

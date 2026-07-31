@@ -978,7 +978,7 @@ def _supervise_local_run(run: _LocalRun) -> None:
     except Exception as exc:  # noqa: BLE001 -- no client ⇒ nothing more we can do
         logger.error(
             "local-docker supervisor could not build S3 client run_id=%s: %s "
-            "— completion.json NOT written (poller will time out)",
+            " -- completion.json NOT written (poller will time out)",
             run.run_id,
             exc,
         )
@@ -1038,7 +1038,7 @@ def _supervise_local_run(run: _LocalRun) -> None:
         )
     except Exception:  # noqa: BLE001 -- terminal-signal write failed; log loudly
         logger.exception(
-            "local-docker completion.json write FAILED run_id=%s — "
+            "local-docker completion.json write FAILED run_id=%s -- "
             "wait_for_completion will hit its timeout",
             run.run_id,
         )
@@ -1342,7 +1342,7 @@ def _kill_local_run(run_id: str) -> None:
     if run is None:
         logger.warning(
             "local kill for unknown run_id=%s (no in-process supervisor); "
-            "issuing docker kill only — an exec-kind run cannot be reached "
+            "issuing docker kill only -- an exec-kind run cannot be reached "
             "after an agent restart (OQ-291-LOCAL-CANCEL-CROSS-PROCESS)",
             run_id,
         )
@@ -1567,13 +1567,13 @@ def run_solver(
     # tool_arg_normalizer, but kept as belt-and-suspenders).
     **_extra_ignored: Any,
 ) -> ExecutionHandle:
-    """Submit a solver execution to the active backend (local / AWS Batch).
+    """Submit a solver execution to the local Docker solver backend.
 
     Use this when: the agent has a staged model (e.g. from
-    ``build_sfincs_model``) and needs to actually run the solver. Returns an
-    ``ExecutionHandle`` whose ``workflow_name`` pins the backend and which is
-    the Invariant-8 cancellation seam -- feed it to ``wait_for_completion`` to
-    poll progress and obtain the ``RunResult``.
+    ``set_sfincs_parameters``) and needs to actually run the solver. Returns
+    an ``ExecutionHandle`` whose ``workflow_name`` pins the backend and which
+    is the Invariant-8 cancellation seam -- feed it to ``wait_for_completion``
+    to poll progress and obtain the ``RunResult``.
 
     Do NOT use this for: cancelling a running execution (use the WS
     ``cancel`` envelope -- the cancel chain reaches the run automatically via
@@ -1597,8 +1597,8 @@ def run_solver(
         ``ExecutionHandle{handle_id, run_id, solver, compute_class,
         workflows_execution_id, workflow_name, workflow_location,
         submitted_at}`` -- the Invariant-8 cancellation contract. The
-        ``workflow_name`` pins the backend (``local-docker`` / ``local-exec``
-        / ``aws-batch``) so ``wait_for_completion`` routes correctly.
+        ``workflow_name`` pins the backend (``local-docker`` / ``local-exec``)
+        so ``wait_for_completion`` routes correctly.
 
     FR-DC-6: This tool is uncacheable-by-construction (solver dispatch is
     explicitly enumerated). The cache shim is NOT invoked.
@@ -1610,10 +1610,10 @@ def run_solver(
     Raises:
         SolverNotRegisteredError: ``solver`` not in
             ``SOLVER_WORKFLOW_REGISTRY``.
-        SolverDispatchError: the backend dispatch failed (IAM,
-            quota, malformed manifest). The exception is re-raised so the
-            emitter classifier surfaces ``UPSTREAM_API_ERROR`` to the
-            client.
+        SolverDispatchError: the backend dispatch failed (docker/binary
+            missing, S3 staging error, malformed manifest). The exception is
+            re-raised so the emitter classifier surfaces
+            ``UPSTREAM_API_ERROR`` to the client.
     """
     if not isinstance(solver, str) or not solver.strip():
         raise SolverNotRegisteredError(
@@ -1624,7 +1624,7 @@ def run_solver(
         raise SolverNotRegisteredError(
             f"solver {solver!r} not registered for v0.1; supported: "
             f"{sorted(SOLVER_WORKFLOW_REGISTRY)} (lazy per-milestone deploy "
-            "per sprint-07 strategy — TELEMAC / MODFLOW / HEC-HMS land in "
+            "per sprint-07 strategy -- TELEMAC / MODFLOW / HEC-HMS land in "
             "their respective milestones)."
         )
     if not isinstance(model_setup_uri, str) or not model_setup_uri:
@@ -1719,7 +1719,7 @@ async def wait_for_completion(
     Params:
         handle: the ``ExecutionHandle`` returned by ``run_solver``. The
             ``workflow_name`` field pins the backend (``local-docker`` /
-            ``local-exec`` / ``aws-batch``) so the poll routes correctly.
+            ``local-exec``) so the poll routes correctly.
         poll_interval_s: seconds between completion polls. Default 10s --
             matches NFR-P-4 <=15-min budget granularity (>=9 polls per run).
         timeout_s: hard ceiling. Defaults to 1800 s (30 min -- gives 2×

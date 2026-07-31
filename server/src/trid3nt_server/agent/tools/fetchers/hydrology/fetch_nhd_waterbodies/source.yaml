@@ -70,26 +70,25 @@ caveats:
 docstring: |-
   USGS NHD waterbody polygons (lakes / ponds / reservoirs) as a vector layer.
 
-  ROUTING — use this when the user wants OPEN-WATER BODY extent: "show the
+  ROUTING -- use this when the user wants OPEN-WATER BODY extent: "show the
   lakes / ponds / reservoirs here", "map the water bodies", "NHD waterbodies",
   "which lakes are in this area", or needs waterbody polygons to overlay on /
   intersect with a hazard footprint. KEY-FREE, US + territories, authoritative
   USGS National Hydrography Dataset (NHDPlus HR).
 
   Prefer THIS over:
-  - ``fetch_nhdplus_nldi_navigate`` — that navigates the FLOWLINE (river/stream
+  - ``fetch_nhdplus_nldi_navigate`` -- that navigates the FLOWLINE (river/stream
     LINE) network from a seed point; this returns waterbody POLYGONS.
-  - ``fetch_nwi_wetlands`` — that returns VEGETATED / classified wetlands
+  - ``fetch_nwi_wetlands`` -- that returns VEGETATED / classified wetlands
     (marshes, swamps); this returns OPEN water. Fetch both for "all water +
     wetland habitat".
-  - ``fetch_jrc_global_surface_water`` — that is a global surface-water RASTER
+  - ``fetch_jrc_global_surface_water`` -- that is a global surface-water RASTER
     (occurrence %), not vector lake/pond polygons.
   Do NOT use for: coastal shoreline (``fetch_topobathy``), stream gauges
   (``fetch_usgs_nwis_gauges``), or flood extent (a SFINCS modeled layer).
 
   Parameters:
-      bbox: ``(min_lon, min_lat, max_lon, max_lat)`` in EPSG:4326. REQUIRED —
-          NHD does not support a global query (national-scale polygon corpus).
+      bbox: ``(min_lon, min_lat, max_lon, max_lat)`` in EPSG:4326. REQUIRED -- NHD does not support a global query (national-scale polygon corpus).
           Recommended <= ~1 deg on a side. Example (Naples, FL):
           ``(-81.5, 26.0, -81.3, 26.2)``.
 
@@ -97,23 +96,23 @@ docstring: |-
       ``LayerURI`` (``layer_type="vector"``, ``role="context"``,
       ``style_preset="nhd_waterbodies"``, ``units=None``) pointing at a
       FlatGeobuf in the cache bucket with per-polygon columns:
-          permanent_identifier (str)   — stable NHD id
-          gnis_name            (str)   — GNIS place name (null for many small ponds)
-          ftype                (int)   — NHD feature-type code
-          ftype_label          (str)   — human label (LakePond / Reservoir /
+          permanent_identifier (str) -- stable NHD id
+          gnis_name            (str) -- GNIS place name (null for many small ponds)
+          ftype                (int) -- NHD feature-type code
+          ftype_label          (str) -- human label (LakePond / Reservoir /
                                          SwampMarsh / Playa / Estuary / IceMass)
-          fcode                (int)   — full NHD feature code
-          reachcode            (str)   — NHD reach code
-          elevation            (float) — waterbody elevation (source units)
-          areasqkm             (float) — polygon area in square km
+          fcode                (int) -- full NHD feature code
+          reachcode            (str) -- NHD reach code
+          elevation            (float) -- waterbody elevation (source units)
+          areasqkm             (float) -- polygon area in square km
       An empty bbox over dry upland returns a valid 0-feature FlatGeobuf
       (NOT an error).
 
   Cross-tool dependencies:
-      - Composed by ``analyze_affected_habitats`` (open-water channel of the
+      - Composed by the code_exec playground (open-water channel of a
         habitat-impact assessment, alongside ``fetch_nwi_wetlands``).
-      - Feeds ``compute_zonal_statistics`` (waterbody area inside a footprint)
-        and ``spatial_query`` (waterbodies within a place).
+      - Feeds ``spatial_query`` (waterbody area inside a footprint, or
+        waterbodies within a place).
 
   Resilience (feedback_data_source_fallback_norm): PRIMARY NHDPlus_HR ->
   FALLBACK medium-resolution NHD Waterbody -> honest

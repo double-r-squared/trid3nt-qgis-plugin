@@ -113,9 +113,9 @@ docstring: |-
       ``"us_drought_monitor"``, ``units`` is ``"dm_class"``.
 
   **Cross-tool dependencies:**
-      - Feeds INTO: ``compute_zonal_statistics`` (assets/acres inside a
-        drought footprint), ``spatial_query`` (admin/watershed-scoped
-        drought report with ``fetch_administrative_boundaries``).
+      - Feeds INTO: ``spatial_query`` (assets/acres inside a drought
+        footprint; admin/watershed-scoped drought report with
+        ``fetch_administrative_boundaries``).
       - Pairs WITH: ``fetch_field_boundaries`` (FTW/fiboa ag fields) for
         drought-on-agriculture demos, ``fetch_firms_active_fire`` /
         ``fetch_goes_active_fire`` for drought-as-fire-antecedent context.

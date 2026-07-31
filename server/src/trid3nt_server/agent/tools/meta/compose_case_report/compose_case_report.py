@@ -257,7 +257,7 @@ async def compose_case_report(
     - A desktop-GIS bundle of the layers themselves -- use
       ``open_case_in_qgis``.
     - A single number ("how many people are flooded") -- use
-      ``compute_exposure_summary`` / ``compute_zonal_statistics`` directly.
+      ``compute_exposure_summary`` directly.
 
     **Parameters:**
     - ``case_id``: the Case to report on. Default: the turn's bound Case.

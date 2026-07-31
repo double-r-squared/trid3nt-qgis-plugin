@@ -61,7 +61,7 @@ class HRRRForecastEmptyError(HRRRForecastError):
 class HRRRForecastNotAvailableError(HRRRForecastError):
     """Requested cycle/forecast_hour combination is not yet published on S3.
 
-    HRRR cycles post ~1–1.5 h after the cycle hour. The fetcher walks backward
+    HRRR cycles post ~1 - 1.5 h after the cycle hour. The fetcher walks backward
     looking for a cycle whose forecast slice is published; this surfaces when
     the search exhausts the backstop window (default 6 h) without finding one.
     """
@@ -88,7 +88,7 @@ _VARIABLE_SPEC: dict[str, tuple[str, str, str]] = {
 
 # Derived variable: wind SPEED magnitude = sqrt(u^2 + v^2) over the 10 m
 # UGRD/VGRD components. Not present in _VARIABLE_SPEC because it has no single
-# S3 array — the fetcher pulls both component slices and combines them. The
+# S3 array -- the fetcher pulls both component slices and combines them. The
 # components it depends on are named here so the fetch path can resolve them.
 _DERIVED_WIND_SPEED = "10m_wind_speed"
 _WIND_SPEED_COMPONENTS = ("10m_u_wind", "10m_v_wind")
@@ -133,7 +133,7 @@ _CYCLE_BACKSTOP_HOURS = 6
 
 
 # ---------------------------------------------------------------------------
-# AtomicToolMetadata — registered once at import time.
+# AtomicToolMetadata -- registered once at import time.
 # ---------------------------------------------------------------------------
 
 _METADATA = AtomicToolMetadata(
@@ -313,7 +313,7 @@ def _s3_exists(fs: Any, path_no_proto: str) -> bool:
     """Return True iff the s3 path exists (cheap probe)."""
     try:
         return bool(fs.exists(path_no_proto))
-    except Exception:  # noqa: BLE001 — treat any S3 error as "doesn't exist"
+    except Exception:  # noqa: BLE001 -- treat any S3 error as "doesn't exist"
         return False
 
 
@@ -326,7 +326,7 @@ def _resolve_cycle(
 ) -> tuple[_dt.date, int]:
     """Walk backward from target_cycle looking for a published cycle.
 
-    HRRR posts cycles ~1.0–1.5 h after their cycle hour. The caller passes a
+    HRRR posts cycles ~1.0 - 1.5 h after their cycle hour. The caller passes a
     candidate cycle; if its forecast Zarr is not yet on S3, we step back 1 h
     at a time up to ``_CYCLE_BACKSTOP_HOURS`` total.
 
@@ -381,7 +381,7 @@ def _open_component_4326(
         ``HRRRForecastEmptyError``: bbox produced an empty window after clip.
     """
     import fsspec
-    import rioxarray  # noqa: F401 — registers .rio accessor
+    import rioxarray  # noqa: F401 -- registers .rio accessor
     import xarray as xr
 
     level, s3_var, _units = _VARIABLE_SPEC[component_variable]
@@ -420,7 +420,7 @@ def _open_component_4326(
         # Map forecast_hour (1..18 or 0..48) to time index. For ``fcst`` zarrs
         # the time array is sorted ascending starting at cycle+1h; index 0 ==
         # +1 h forecast. We accept forecast_hour=0 by aliasing to index 0
-        # (the +1 h forecast — closest available analog).
+        # (the +1 h forecast -- closest available analog).
         idx = max(0, min(time_len - 1, forecast_hour - 1 if forecast_hour > 0 else 0))
         da = ds[s3_var].isel(time=idx)
 
@@ -508,7 +508,7 @@ def _write_da_to_cog_bytes(
                 compress="DEFLATE",
                 nodata=float("nan"),
             )
-        except Exception:  # noqa: BLE001 — fall back to GTiff if COG fails
+        except Exception:  # noqa: BLE001 -- fall back to GTiff if COG fails
             da_out.rio.to_raster(
                 out_path,
                 driver="GTiff",
@@ -560,9 +560,9 @@ def _zarr_slice_to_geotiff_bytes(
         ``HRRRForecastEmptyError``: bbox produced no finite pixels after clip.
     """
     try:
-        import fsspec  # noqa: F401 — required for the get_mapper
-        import numpy as np  # noqa: F401 — used by helpers
-        import rioxarray  # noqa: F401 — registers .rio accessor
+        import fsspec  # noqa: F401 -- required for the get_mapper
+        import numpy as np  # noqa: F401 -- used by helpers
+        import rioxarray  # noqa: F401 -- registers .rio accessor
         import xarray as xr  # noqa: F401
     except ImportError as exc:
         raise HRRRForecastUpstreamError(
@@ -592,7 +592,7 @@ def _zarr_slice_to_geotiff_bytes(
         speed.rio.write_crs("EPSG:4326", inplace=True)
         try:
             speed.rio.set_spatial_dims(x_dim="x", y_dim="y", inplace=True)
-        except Exception:  # noqa: BLE001 — dims already named x/y in most paths
+        except Exception:  # noqa: BLE001 -- dims already named x/y in most paths
             pass
 
         return _write_da_to_cog_bytes(
@@ -664,7 +664,7 @@ def fetch_hrrr_forecast(
     # tool_arg_normalizer, but kept as belt-and-suspenders).
     **_extra_ignored: Any,
 ) -> LayerURI:
-    """NOAA HRRR 3 km short-term weather forecast — Tier-1 CONUS fetcher.
+    """NOAA HRRR 3 km short-term weather forecast -- Tier-1 CONUS fetcher.
 
     What it does: returns a CRS-tagged GeoTIFF (EPSG:4326) of a single HRRR
     forecast field at a single forecast lead time, reprojected from the
@@ -674,7 +674,7 @@ def fetch_hrrr_forecast(
     published HRRR cycle whose forecast at the requested lead time is on
     S3, walking up to 6 h backward if the in-progress cycle has not yet
     posted (the NOAA Big Data Program mirror lags the cycle hour by
-    ~1.0–1.5 h).
+    ~1.0 - 1.5 h).
 
     When to use:
     - User asks for "the forecast for the next few hours" anywhere in CONUS
@@ -684,7 +684,7 @@ def fetch_hrrr_forecast(
     - A GENERIC wind request ("wind forecast", "how windy will it be",
       "show me the wind", "wind speed over Houston") → use
       ``variable="10m_wind_speed"``. This returns a SINGLE positive wind-speed
-      magnitude field (``sqrt(u^2 + v^2)``, m s-1) — the natural answer to "how
+      magnitude field (``sqrt(u^2 + v^2)``, m s-1) -- the natural answer to "how
       windy". Only reach for the lone signed ``10m_u_wind`` / ``10m_v_wind``
       components when the user explicitly needs wind DIRECTION or a vector
       component (e.g. onshore/offshore decomposition).
@@ -697,23 +697,23 @@ def fetch_hrrr_forecast(
       decision-support overlay.
 
     When NOT to use:
-    - Historical / reanalysis weather — use ``fetch_era5_reanalysis``
-      (global, 0.25°, 1940–present) instead. HRRR-Zarr archives ~2016+
+    - Historical / reanalysis weather -- use ``fetch_era5_reanalysis``
+      (global, 0.25°, 1940 - present) instead. HRRR-Zarr archives ~2016+
       cycles but the tool exposes only the current operational forecast.
     - Outside CONUS (Mexico interior, Caribbean except direct CONUS spillover,
-      Alaska, Hawaii, the open Pacific or Atlantic) — HRRR is CONUS-only;
+      Alaska, Hawaii, the open Pacific or Atlantic) -- HRRR is CONUS-only;
       bbox outside the coverage envelope raises ``HRRRForecastInputError``.
       Use ``fetch_era5_reanalysis`` for global, ECMWF AIFS/IFS for global
       forecast.
-    - Observed precipitation accumulation — use ``fetch_mrms_qpe``
+    - Observed precipitation accumulation -- use ``fetch_mrms_qpe``
       (1 km gauge-corrected). HRRR's APCP is model-predicted; MRMS is the
       observation.
-    - Observed radar reflectivity — use ``fetch_nexrad_reflectivity``.
-    - Watches / warnings — use ``fetch_nws_alerts_conus`` or
+    - Observed radar reflectivity -- use ``fetch_nexrad_reflectivity``.
+    - Watches / warnings -- use ``fetch_nws_alerts_conus`` or
       ``fetch_nws_event`` instead. Those carry the official advisory text;
       HRRR carries raw model output.
     - Hourly forecast horizons beyond 18 h on non-extended cycles, or
-      beyond 48 h on extended cycles — those leads are not in HRRR.
+      beyond 48 h on extended cycles -- those leads are not in HRRR.
 
     Parameters:
         bbox: ``(west, south, east, north)`` in EPSG:4326 (WGS84 decimal
@@ -721,14 +721,14 @@ def fetch_hrrr_forecast(
             lat 21..53). Example: ``(-82.4, 26.3, -81.6, 26.9)`` for the
             Fort Myers / Lee County area.
         variable: one of ``"2m_temperature"`` (K), ``"10m_wind_speed"``
-            (m s-1, DERIVED wind-speed magnitude ``sqrt(u^2 + v^2)`` — the
+            (m s-1, DERIVED wind-speed magnitude ``sqrt(u^2 + v^2)`` -- the
             answer to a generic "wind" request), ``"10m_u_wind"`` (m s-1,
             east component), ``"10m_v_wind"`` (m s-1, north component),
             ``"surface_precip_1hr"`` (kg m-2 = mm liquid-water equivalent,
             1-h accumulation). Default ``"2m_temperature"``. For any
             non-directional wind question pass ``"10m_wind_speed"``.
         forecast_hour: integer forecast lead time in hours (1 = +1 h from
-            cycle start). Range 1–18 for standard cycles, 1–48 for the
+            cycle start). Range 1 - 18 for standard cycles, 1 - 48 for the
             extended 00/06/12/18z cycles. ``0`` is accepted and aliased to
             the +1 h slice (HRRR analysis-time slices live in a separate
             ``_anl.zarr`` not exposed here). Default ``1``.
@@ -742,17 +742,17 @@ def fetch_hrrr_forecast(
         carrying the requested variable's forecast slice, EPSG:4326,
         float32, NaN nodata. ``layer_type="raster"``, ``role="primary"``,
         ``units`` per the variable (``"K"``, ``"m s-1"``, ``"kg m-2"``).
-        Downstream consumers (``publish_layer``, ``compute_zonal_statistics``,
+        Downstream consumers (``publish_layer``, ``spatial_query``,
         SFINCS forcing composers) read the COG and treat it as a single-band
         scalar field.
 
     Cross-tool dependencies:
         - Consumes nothing (Tier-1 substrate fetcher; no upstream tool).
         - Feeds: ``publish_layer`` (visualization on the web map),
-          ``compute_zonal_statistics`` (aggregate to admin boundaries),
-          ``model_flood_scenario`` and downstream SFINCS composers (precip
+          ``spatial_query`` (aggregate to admin boundaries),
+          ``run_sfincs`` and downstream SFINCS composers (precip
           / wind forcing), ``clip_raster_to_polygon`` (further sub-clip),
-          ``aggregate_claims_across_sources`` (combine with MRMS, ERA5,
+          the code_exec playground (combine with MRMS, ERA5,
           NWS alerts for compound claims).
 
     Raises:
@@ -815,7 +815,7 @@ def fetch_hrrr_forecast(
 
     # Resolve the cycle against a concrete on-S3 component. The derived
     # ``10m_wind_speed`` has no single S3 array, so probe its UGRD component
-    # (publishing is atomic per cycle — if UGRD is posted, VGRD is too).
+    # (publishing is atomic per cycle -- if UGRD is posted, VGRD is too).
     if variable == _DERIVED_WIND_SPEED:
         level, s3_var, _units = _VARIABLE_SPEC[_WIND_SPEED_COMPONENTS[0]]
         result_units = _WIND_SPEED_UNITS
@@ -867,7 +867,7 @@ def fetch_hrrr_forecast(
             f"{q_bbox[0]:.4f}-{q_bbox[1]:.4f}"
         ),
         name=(
-            f"HRRR Forecast — {variable.replace('_', ' ').title()} "
+            f"HRRR Forecast -- {variable.replace('_', ' ').title()} "
             f"(cycle {cycle_label}, F{forecast_hour:03d})"
         ),
         layer_type="raster",

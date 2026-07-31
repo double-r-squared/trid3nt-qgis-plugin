@@ -1,4 +1,4 @@
-"""``fetch_climate_normals`` atomic tool — NOAA NCEI 1991-2020 U.S. Climate Normals.
+"""``fetch_climate_normals`` atomic tool -- NOAA NCEI 1991-2020 U.S. Climate Normals.
 """
 
 from __future__ import annotations
@@ -52,7 +52,7 @@ class ClimateNormalsError(RuntimeError):
 
 
 class ClimateNormalsInputError(ClimateNormalsError):
-    """Invalid inputs — bad bbox geometry / out-of-range coordinates.
+    """Invalid inputs -- bad bbox geometry / out-of-range coordinates.
 
     Not retryable: the caller must fix the argument.
     """
@@ -64,7 +64,7 @@ class ClimateNormalsInputError(ClimateNormalsError):
 class ClimateNormalsUpstreamError(ClimateNormalsError):
     """NCEI request failed (network error, HTTP 5xx, malformed inventory/CSV).
 
-    Retryable — transient NCEI outages recover on retry.
+    Retryable -- transient NCEI outages recover on retry.
     """
 
     error_code = "CLIMATE_NORMALS_UPSTREAM_ERROR"
@@ -74,7 +74,7 @@ class ClimateNormalsUpstreamError(ClimateNormalsError):
 class ClimateNormalsEmptyError(ClimateNormalsError):
     """No Normals stations in the bbox, or none carry usable normals.
 
-    Not retryable — the bbox contains no 1991-2020 Normals stations with
+    Not retryable -- the bbox contains no 1991-2020 Normals stations with
     annual temperature or precipitation normals. Widen the bbox or move it
     over land within the U.S. + territories footprint.
     """
@@ -117,7 +117,7 @@ _COL_PRCP = "ANN-PRCP-NORMAL"   # annual total precipitation (inches)
 
 
 # ---------------------------------------------------------------------------
-# AtomicToolMetadata — registered once at import time.
+# AtomicToolMetadata -- registered once at import time.
 # ---------------------------------------------------------------------------
 
 
@@ -156,7 +156,7 @@ def estimate_payload_mb(
     Each Normals station is one small point feature (~150 bytes in FlatGeobuf
     with the handful of properties this tool exposes). The estimate uses bbox
     area and a rough CONUS Normals-station density (~6 stations per 1 deg
-    square — CoCoRaHS + COOP + first-order), capped at ``_MAX_STATIONS``.
+    square -- CoCoRaHS + COOP + first-order), capped at ``_MAX_STATIONS``.
     """
     n_stations = 10  # default guess when bbox unavailable
     if bbox is not None:
@@ -211,7 +211,7 @@ def _num(value: Any) -> float | None:
 
 
 # ---------------------------------------------------------------------------
-# Station discovery — find all Normals stations within a bbox.
+# Station discovery -- find all Normals stations within a bbox.
 # ---------------------------------------------------------------------------
 
 
@@ -263,14 +263,14 @@ def _discover_stations_in_bbox(
     ``state``, ``name``. Capped at ``_MAX_STATIONS``.
 
     Raises:
-        ``ClimateNormalsUpstreamError`` — inventory fetch / parse failure.
+        ``ClimateNormalsUpstreamError`` -- inventory fetch / parse failure.
     """
     if inv_bytes is None:
         inv_bytes = _http_get(_INVENTORY_URL, timeout=_INVENTORY_TIMEOUT)
     stations = _parse_inventory(inv_bytes)
     if not stations:
         raise ClimateNormalsUpstreamError(
-            "NCEI Normals inventory parsed to zero stations — file format "
+            "NCEI Normals inventory parsed to zero stations -- file format "
             "may have changed or the download was truncated"
         )
 
@@ -327,7 +327,7 @@ def _fetch_station_normals(
     """Download each station's annual normals and assemble records.
 
     Stations whose access file is missing (HTTP 404) or carries neither an
-    annual temperature nor an annual precipitation normal are skipped — many
+    annual temperature nor an annual precipitation normal are skipped -- many
     inventory stations are precip-only (CoCoRaHS) and a few have no published
     annual access file. A station kept with precip-only normals reports
     ``normal_temp_f=None``.
@@ -385,9 +385,9 @@ def _records_to_fgb(records: list[dict[str, Any]]) -> bytes:
     """Serialize normals records to FlatGeobuf bytes (point geometry).
 
     Raises:
-        ``ClimateNormalsUpstreamError`` — geopandas/shapely/pyogrio missing
+        ``ClimateNormalsUpstreamError`` -- geopandas/shapely/pyogrio missing
           or the FlatGeobuf write fails.
-        ``ClimateNormalsEmptyError`` — zero records.
+        ``ClimateNormalsEmptyError`` -- zero records.
     """
     if not records:
         raise ClimateNormalsEmptyError(
@@ -478,7 +478,7 @@ def _fetch_climate_normals_bytes(
     if not stations:
         raise ClimateNormalsEmptyError(
             f"No 1991-2020 Climate Normals stations found inside bbox={bbox}; "
-            "the NCEI Normals footprint is the U.S. + territories — widen the "
+            "the NCEI Normals footprint is the U.S. + territories -- widen the "
             "bbox or move it over U.S. land"
         )
     logger.info(
@@ -530,12 +530,12 @@ def fetch_climate_normals(
         across a region.
 
     When NOT to use:
-      - Current or historical *observed* weather — use fetch_asos_metar (ASOS
+      - Current or historical *observed* weather -- use fetch_asos_metar (ASOS
         station observations) or fetch_era5_reanalysis (gridded reanalysis).
-      - Forecasts — use fetch_nws_alerts_conus / fetch_hrrr_forecast.
-      - Gridded precipitation climatology over large or non-US areas — use
+      - Forecasts -- use fetch_nws_alerts_conus / fetch_hrrr_forecast.
+      - Gridded precipitation climatology over large or non-US areas -- use
         fetch_chirps_precipitation (global CHIRPS).
-      - Non-US regions — the NCEI Normals footprint is the U.S. + territories
+      - Non-US regions -- the NCEI Normals footprint is the U.S. + territories
         only (supports_global_query=False).
 
     Parameters:
@@ -558,13 +558,13 @@ def fetch_climate_normals(
           that is precipitation-only (e.g. CoCoRaHS) reports
           ``normal_temp_f=None``; missing values are ``null``.
 
-    Cache: ``static-30d`` — the 1991-2020 Normals are a fixed published
+    Cache: ``static-30d`` -- the 1991-2020 Normals are a fixed published
     product; identical ``bbox`` (rounded to 4 dp) reuses the cached FlatGeobuf.
 
     Cross-tool dependencies:
         - Composes WITH: ``publish_layer`` (map overlay), ``geocode_location``
           (bbox derivation from a place name),
-          ``aggregate_claims_across_sources`` (baseline-vs-observed framing).
+          the code_exec playground (baseline-vs-observed framing).
         - Complements: ``fetch_asos_metar`` (observed surface weather),
           ``fetch_era5_reanalysis`` (gridded reanalysis),
           ``fetch_chirps_precipitation`` (global precipitation climatology).
@@ -579,7 +579,7 @@ def fetch_climate_normals(
           usable annual normals (retryable=False).
 
 
-    supports_global_query=False — NCEI Normals cover the U.S. + territories.
+    supports_global_query=False -- NCEI Normals cover the U.S. + territories.
     """
     # 1. Validate and normalize inputs.
     if not isinstance(bbox, (tuple, list)) or len(bbox) != 4:
@@ -617,7 +617,7 @@ def fetch_climate_normals(
 
     return LayerURI(
         layer_id=f"climate-normals-{seed}",
-        name=f"Climate Normals 1991-2020 — {bbox_tag}",
+        name=f"Climate Normals 1991-2020 -- {bbox_tag}",
         layer_type="vector",
         uri=result.uri,
         style_preset="climate_normals",

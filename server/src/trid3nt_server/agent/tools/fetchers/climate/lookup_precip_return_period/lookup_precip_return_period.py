@@ -214,7 +214,7 @@ def _fetch_atlas14_pfds_bytes(lat: float, lon: float) -> bytes:
         # area';`` -- the "NOAA Atlas 14" header is absent, so this guard trips.)
         raise UpstreamAPIError(
             f"NOAA Atlas 14 PFDS returned no precip-frequency data for "
-            f"(lat={lat}, lon={lon}) — point may be outside the Atlas 14 "
+            f"(lat={lat}, lon={lon}) -- point may be outside the Atlas 14 "
             f"project areas (Western US: V1; SW: V2; ... ; OCONUS: not yet)."
         )
     return body.encode("utf-8")
@@ -413,7 +413,7 @@ def _fetch_atlas2_precip_bytes(
     duration_label = _pick_duration_label(duration_hours)
     row_depths = [round(_depth_at(ari), 3) for ari in _ATLAS14_ARI_YEARS]
     body_lines = [
-        "NOAA Atlas 2 (Western US) — design-storm fallback (job-0327)",
+        "NOAA Atlas 2 (Western US) -- design-storm fallback (job-0327)",
         f"Project area: {region}",
         f"{duration_label}:, " + ",".join(f"{d:.3f}" for d in row_depths),
     ]
@@ -513,9 +513,9 @@ def lookup_precip_return_period(
 
     **Cross-tool dependencies:**
 
-    - Consumed by: ``build_sfincs_model`` to construct a synthetic design-storm
-      hyetograph; ``run_pluvial_flood`` workflow (uses the returned depth to
-      drive the SFINCS rainfall input file).
+    - Consumed by: ``set_sfincs_parameters`` + ``run_sfincs`` to construct a
+      synthetic design-storm hyetograph and drive the SFINCS pluvial rainfall
+      input.
     - Compare with: ``fetch_mrms_qpe`` for observed accumulations vs Atlas 14
       design depths; the ratio gives the storm's return-period rank.
     - Pair with: ``fetch_gcn250_curve_numbers`` or NLCD-derived CNs when
@@ -599,7 +599,7 @@ def lookup_precip_return_period(
     except UpstreamAPIError as atlas14_exc:
         # --- FALLBACK 1: NOAA Atlas 2 (Western US). ---
         logger.info(
-            "Atlas 14 missed (lat=%s lon=%s): %s — trying NOAA Atlas 2 fallback",
+            "Atlas 14 missed (lat=%s lon=%s): %s -- trying NOAA Atlas 2 fallback",
             lat_q,
             lon_q,
             atlas14_exc,

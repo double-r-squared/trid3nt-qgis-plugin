@@ -1,26 +1,26 @@
-"""``compute_impact_envelope`` workflow composer - P3.
+"""``compute_impact_envelope`` workflow composer.
 
-This module chains the P2 ``postprocess_pelicun`` atomic tool with
+This module chains the ``postprocess_pelicun`` atomic tool with
 the existing structure-inventory fetch + Pelicun damage assessment chain into
 a single LLM-visible composer. The result is a single tool call that the
-agent can invoke to go from "flood layer URI" → portfolio-level
-``ImpactEnvelope`` (SRS Appendix B.6c, Decision N) — every numeric the agent
+agent can invoke to go from "flood layer URI" -> portfolio-level
+``ImpactEnvelope`` (SRS Appendix B.6c, Decision N) - every numeric the agent
 might cite ("X structures impacted, $Y damages, Z population displaced")
 read off a typed envelope, never invented (Invariant 1).
 
-**Pattern (mirrors ``model_flood_scenario``):**
+**Pattern:**
 
     geocode_location (if location_query, no bbox)
       → fetch_usace_nsi(bbox)  OR  compute_building_density(bbox)
       → pelicun_damage_assessment(hazard_raster_uri, assets_uri)
          (MS_BUILDINGS path: pelicun_damage_assessment(hazard_raster_uri, bbox)
-          — the AUTO-FETCH input mode does the building-density fetch itself)
+          - the AUTO-FETCH input mode does the building-density fetch itself)
       → postprocess_pelicun(damage_layer_uri, flood_layer_uri)
       → ImpactEnvelope dict + narrative string + provenance
 
 **Why a composer (and not just let the LLM chain the atomic tools)?**
 
-The four-step chain is deterministic Python — there is no LLM judgment in
+The four-step chain is deterministic Python - there is no LLM judgment in
 selecting the inventory source, picking thresholds, or aggregating values.
 Exposing it as one composer (Invariant 2: deterministic workflows) gives the
 agent one well-named verb ("compute the impact envelope") rather than four
@@ -82,7 +82,7 @@ logger = logging.getLogger("trid3nt_server.agent.workflows.pelicun.compute_impac
 
 
 # --------------------------------------------------------------------------- #
-# Error hierarchy — distinct error_code per upstream step.
+# Error hierarchy -- distinct error_code per upstream step.
 # --------------------------------------------------------------------------- #
 
 
@@ -118,7 +118,7 @@ class ComputeImpactEnvelopeGeocodeError(ComputeImpactEnvelopeError):
 class ComputeImpactEnvelopeNSIFetchError(ComputeImpactEnvelopeError):
     """``fetch_usace_nsi`` (or ``compute_building_density``) failed.
 
-    Retryable — NSI cluster occasionally returns 5xx; the agent's
+    Retryable -- NSI cluster occasionally returns 5xx; the agent's
     FR-AS-11 surface decides whether to retry.
     """
 
@@ -162,7 +162,7 @@ def _format_narrative(envelope: dict[str, Any]) -> str:
 
     Numbers are formatted with thousands separators for readability; the
     USD figure is rounded to the nearest dollar (the LLM may further
-    re-format for context — the load-bearing thing is that the dollar
+    re-format for context -- the load-bearing thing is that the dollar
     sign + number appears verbatim).
     """
     n_damaged = int(envelope.get("n_structures_damaged", 0))
@@ -185,7 +185,7 @@ def _format_narrative(envelope: dict[str, Any]) -> str:
 
 _METADATA = AtomicToolMetadata(
     name="compute_impact_envelope",
-    # The composer itself is uncacheable — the underlying atomic steps
+    # The composer itself is uncacheable -- the underlying atomic steps
     # (NSI fetch, Pelicun damage, postprocess) are each individually
     # cacheable so a re-call of the same inputs hits the per-step caches.
     # The composer's own surface is workflow_dispatch (FR-DC-6).
@@ -207,10 +207,10 @@ _METADATA = AtomicToolMetadata(
     _METADATA,
     # MCP annotations: read-only at the composer level (the underlying
     # Pelicun step writes a FlatGeobuf; the composer itself does not mutate
-    # any new state — it just chains tools). open_world=False because the
+    # any new state -- it just chains tools). open_world=False because the
     # underlying Pelicun step is intra-GCP; NSI fetch IS external but that
-    # tool declares its own open_world hint. destructive=False — additive
-    # writes only. idempotent=True — deterministic seeding gives the same
+    # tool declares its own open_world hint. destructive=False -- additive
+    # writes only. idempotent=True -- deterministic seeding gives the same
     # ImpactEnvelope for the same flood_layer_uri + bbox + source.
     read_only_hint=True,
     open_world_hint=False,
@@ -233,7 +233,7 @@ async def compute_impact_envelope(
     Four-step deterministic chain (no LLM in the loop):
 
     1. ``geocode_location(location_query)`` (only when ``bbox`` not given).
-    2. ``fetch_usace_nsi(bbox)`` — preferred for CONUS — OR (for international
+    2. ``fetch_usace_nsi(bbox)`` -- preferred for CONUS -- OR (for international
        bboxes) the ``pelicun_damage_assessment`` bbox AUTO-FETCH mode, which
        uses ``compute_building_density`` internally.
     3. ``pelicun_damage_assessment(flood_layer_uri, assets_uri=<nsi>)`` for the
@@ -253,10 +253,9 @@ async def compute_impact_envelope(
         - The Case summary panel needs a single envelope it can cite.
 
     Do NOT use this for:
-        - Cases where no flood layer exists yet — run
+        - Cases where no flood layer exists yet -- run
           ``sfincs_flood`` first.
-        - Per-feature damage layers for spatial exploration on the map —
-          call ``pelicun_damage_assessment`` directly (with ``assets_uri`` for
+        - Per-feature damage layers for spatial exploration on the map -- call ``pelicun_damage_assessment`` directly (with ``assets_uri`` for
           an explicit inventory, or ``bbox`` to auto-fetch one). This composer
           collapses per-feature properties into aggregate totals.
         - Non-flood hazards (the v0.1 fragility set is flood-only).
@@ -274,7 +273,7 @@ async def compute_impact_envelope(
             LayerURI value (copied verbatim) that a ``sfincs_flood`` /
             ``run_model_nws_flood_event_scenario`` call returned EARLIER IN THIS
             CONVERSATION. NEVER invent, construct, or guess this value (e.g. a
-            ``flood-depth-peak-<id>`` string you did not receive) — a fabricated id
+            ``flood-depth-peak-<id>`` string you did not receive) -- a fabricated id
             does not exist and the call will fail. If no flood scenario has been run
             yet, call ``sfincs_flood`` FIRST, wait for its result, then
             pass that result's layer URI here. Required; non-empty string.
@@ -283,7 +282,7 @@ async def compute_impact_envelope(
         location_query: free-text place name (geocoded via Nominatim).
             Ignored when ``bbox`` is supplied.
         structure_inventory_source: ``"USACE_NSI"`` (default, CONUS-only,
-            best fidelity — real HAZUS occupancy + per-structure value) or
+            best fidelity -- real HAZUS occupancy + per-structure value) or
             ``"MS_BUILDINGS"`` (international, Microsoft Global ML
             Buildings density grid → RES1 + class-default values).
         fragility_set: Pelicun fragility set. Defaults to
@@ -308,7 +307,7 @@ async def compute_impact_envelope(
         The agent surface cites
         ``envelope_summary.n_structures_damaged`` /
         ``envelope_summary.expected_loss_usd`` /
-        ``envelope_summary.population_at_high_risk`` — never invented
+        ``envelope_summary.population_at_high_risk`` -- never invented
         numbers (Invariant 1).
 
     Cache:
@@ -388,7 +387,7 @@ async def compute_impact_envelope(
     damage_uri: str
     if structure_inventory_source == "USACE_NSI":
         logger.info(
-            "compute_impact_envelope: NSI path — fetch_usace_nsi bbox=%s",
+            "compute_impact_envelope: NSI path -- fetch_usace_nsi bbox=%s",
             resolved_bbox,
         )
         try:
@@ -427,7 +426,7 @@ async def compute_impact_envelope(
         # FlatGeobuf is hidden inside the tool -- surface
         # ``"<ms_buildings>"`` for provenance.
         logger.info(
-            "compute_impact_envelope: MS_BUILDINGS path — pelicun_damage_assessment "
+            "compute_impact_envelope: MS_BUILDINGS path -- pelicun_damage_assessment "
             "AUTO-FETCH hazard=%s bbox=%s fragility=%s",
             flood_layer_uri,
             resolved_bbox,
@@ -477,7 +476,7 @@ async def compute_impact_envelope(
         raise ComputeImpactEnvelopePostprocessError(
             f"postprocess_pelicun failed ({exc.error_code}): {exc}"
         ) from exc
-    except Exception as exc:  # noqa: BLE001 — defensive: anything from the
+    except Exception as exc:  # noqa: BLE001 -- defensive: anything from the
         # geopandas read path / IO that escapes the typed hierarchy.
         raise ComputeImpactEnvelopePostprocessError(
             f"postprocess_pelicun failed: {exc}"
@@ -516,7 +515,7 @@ async def compute_impact_envelope(
     }
 
     logger.info(
-        "compute_impact_envelope: done — narrative=%r damage_uri=%s",
+        "compute_impact_envelope: done -- narrative=%r damage_uri=%s",
         narrative,
         damage_uri,
     )

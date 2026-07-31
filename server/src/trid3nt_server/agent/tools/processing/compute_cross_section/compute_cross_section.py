@@ -4,8 +4,8 @@ The "draw-a-line, see-a-profile" capability (cross-section / transect / long
 profile). Given a polyline and one or more height/depth rasters already in the
 Case, it samples each raster at N evenly-spaced stations along the line and
 returns the resulting (distance, value) series as a **Vega-Lite v5 line chart**
-the client renders inline (the same chart-emission chat-card path as
-``generate_time_series``). x = cumulative geodesic distance along the line in
+the QGIS plugin's chart panel renders inline (the same chart-emission
+envelope ``generate_chart`` emits). x = cumulative geodesic distance along the line in
 metres; y = elevation or depth in the raster's native units; one coloured line
 per sampled layer (DESIGN CALL B = multi-layer overlay).
 
@@ -57,7 +57,7 @@ LIMITATIONS (honest -- this is a sampler, not a hydraulic solver):
   the line -- uncovered stations read ``None`` and the line breaks there.
 - No vertical datum reconciliation across layers: if two layers use different
   vertical datums the overlay is only meaningful when they share one (the caller
-  owns datum hygiene, same as ``compute_zonal_statistics``).
+  owns datum hygiene, same as a code_exec playground zonal-stats recipe).
 """
 
 from __future__ import annotations
@@ -456,14 +456,13 @@ def compute_cross_section(
 
     Use this when: the user wants a "section view"/"long profile"/"transect"
     ALONG a line -- "elevation profile across this valley", "flood depth
-    along the road". The only chart keyed on DISTANCE (vs
-    ``generate_time_series``=TIME, ``generate_histogram``=DISTRIBUTION).
+    along the road". The only chart keyed on DISTANCE (``generate_chart``
+    handles a caller-composed distribution or time-series shape instead).
     Pass ``extra_layer_uris`` (up to 3) to overlay multiple surfaces on the
     same line/axis (ground vs water surface, DEM vs bathymetry). Do NOT use
-    for: a distribution (``generate_histogram``); over time
-    (``generate_time_series``); a single number for the line
-    (``compute_zonal_statistics`` with a buffered line); rendering the line
-    (``publish_layer``).
+    for: a distribution or a time series (``generate_chart``); a single
+    number for the line (the code_exec playground with a buffered line);
+    rendering the line (``publish_layer``).
 
     Params:
         layer_uri: primary raster to profile (DEM, flood depth, head
@@ -623,7 +622,7 @@ def _build_profile_spec(
 ) -> dict[str, Any]:
     """Build the Vega-Lite v5 line-chart spec for the profile.
 
-    Same line-chart shape as ``generate_time_series`` with a distance x-axis.
+    Same line-chart shape ``generate_chart`` would emit, with a distance x-axis.
     Single-layer: one line. Multi-layer with matching units: one shared y-axis,
     a ``color`` encoding on ``layer``. Multi-layer with DIFFERING units: a
     dual-axis ``layer`` (two independent y scales) -- the spike's units fallback.

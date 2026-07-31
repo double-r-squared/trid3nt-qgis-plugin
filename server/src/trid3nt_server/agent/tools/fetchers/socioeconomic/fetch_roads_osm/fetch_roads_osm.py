@@ -1,4 +1,4 @@
-"""``fetch_roads_osm`` atomic tool — OpenStreetMap road LineStrings via Overpass API.
+"""``fetch_roads_osm`` atomic tool -- OpenStreetMap road LineStrings via Overpass API.
 """
 
 from __future__ import annotations
@@ -64,7 +64,7 @@ class OSMUpstreamError(OSMError):
 
 _OVERPASS_URL = "https://overpass-api.de/api/interpreter"
 
-#: HTTP timeout for the Overpass POST — Overpass can be slow; 120 s per audit.
+#: HTTP timeout for the Overpass POST -- Overpass can be slow; 120 s per audit.
 _HTTP_TIMEOUT = 120.0
 
 #: Overpass internal-query timeout (the ``[timeout:N]`` directive). The
@@ -120,7 +120,7 @@ _USER_AGENT = (
 
 
 # ---------------------------------------------------------------------------
-# AtomicToolMetadata — registered once at import time.
+# AtomicToolMetadata -- registered once at import time.
 # ---------------------------------------------------------------------------
 
 _METADATA = AtomicToolMetadata(
@@ -161,7 +161,7 @@ def _validate_and_normalize_road_classes(
     """Validate ``road_classes`` and return a *sorted* immutable tuple.
 
     - ``None`` → the default major-plus-arterial-plus-link tier.
-    - Empty list/tuple → ``OSMInputError`` (ambiguous — caller probably meant
+    - Empty list/tuple → ``OSMInputError`` (ambiguous -- caller probably meant
       "give me everything"; require an explicit list).
     - Unknown highway tag value → ``OSMInputError``.
 
@@ -214,7 +214,7 @@ def _build_overpass_ql(
     """Construct the Overpass QL payload for the given bbox + highway-class set.
 
     Overpass expects the bbox corners as ``(south, west, north, east)``
-    (lat first, then lon) — note this is the OPPOSITE ordering from the
+    (lat first, then lon) -- note this is the OPPOSITE ordering from the
     caller's ``(min_lon, min_lat, max_lon, max_lat)``.
     """
     min_lon, min_lat, max_lon, max_lat = bbox
@@ -253,7 +253,7 @@ def _post_overpass(ql: str, *, client: httpx.Client | None = None) -> dict[str, 
             resp = client.post(_OVERPASS_URL, data={"data": ql})
             resp.raise_for_status()
         except httpx.HTTPStatusError as exc:
-            # Overpass uses 429 for rate-limit and 504 for timeout — both
+            # Overpass uses 429 for rate-limit and 504 for timeout -- both
             # retryable. 4xx other than 429 is non-retryable.
             status = exc.response.status_code if exc.response is not None else None
             err = OSMUpstreamError(
@@ -384,7 +384,7 @@ def _linestring_parts(geom: Any) -> list[list[tuple[float, float]]]:
     elif geom_type in ("MultiLineString", "GeometryCollection"):
         candidates = list(geom.geoms)
     else:
-        # Point / MultiPoint / Polygon — not a clipped road segment.
+        # Point / MultiPoint / Polygon -- not a clipped road segment.
         candidates = []
     for part in candidates:
         if getattr(part, "is_empty", True):
@@ -394,7 +394,7 @@ def _linestring_parts(geom: Any) -> list[list[tuple[float, float]]]:
             if len(coords) >= 2:
                 parts.append(coords)
         elif part.geom_type in ("MultiLineString", "GeometryCollection"):
-            # Nested collection — recurse one level.
+            # Nested collection -- recurse one level.
             parts.extend(_linestring_parts(part))
     return parts
 
@@ -422,7 +422,7 @@ def _clip_record_to_bbox(
         clipped = clip_by_rect(
             LineString(coords), min_lon, min_lat, max_lon, max_lat
         )
-    except Exception as exc:  # noqa: BLE001 — defend against degenerate geom
+    except Exception as exc:  # noqa: BLE001 -- defend against degenerate geom
         logger.warning(
             "fetch_roads_osm: clip failed for osm_id=%s (%s); dropping way",
             record.get("osm_id"),
@@ -464,8 +464,8 @@ def _records_to_flatgeobuf_bytes(records: list[dict[str, Any]]) -> bytes:
 
     Each record contributes one ``LineString`` feature in EPSG:4326. An empty
     record list still produces a valid (empty) FlatGeobuf so the cache write
-    succeeds — downstream callers identify the empty case by decoding the FGB;
-    we never write a sentinel (poisons future reads — see ``cache.py``).
+    succeeds -- downstream callers identify the empty case by decoding the FGB;
+    we never write a sentinel (poisons future reads -- see ``cache.py``).
 
     Raises:
         ``OSMUpstreamError``: serialization failure.
@@ -517,7 +517,7 @@ def _records_to_flatgeobuf_bytes(records: list[dict[str, Any]]) -> bytes:
             tmp_fgb = f.name
         try:
             gdf.to_file(tmp_fgb, driver="FlatGeobuf", engine="pyogrio")
-        except Exception as exc:  # noqa: BLE001 — translate to typed error
+        except Exception as exc:  # noqa: BLE001 -- translate to typed error
             raise OSMUpstreamError(
                 f"FlatGeobuf write failed: {exc}"
             ) from exc
@@ -592,7 +592,7 @@ def fetch_roads_osm(
     ``osm_id``, ``name``, ``highway``, ``lanes``, and ``maxspeed`` (a road
     that crosses the bbox boundary several times yields several segments that
     share the source way's attributes). The resulting vector renders inline
-    on the map automatically — do NOT call ``publish_layer`` on it.
+    on the map automatically -- do NOT call ``publish_layer`` on it.
 
     **When to use:**
     - User asks to "show roads" or "overlay the road network" for any area.
@@ -604,15 +604,14 @@ def fetch_roads_osm(
       or international areas (OSM is global).
 
     **When NOT to use:**
-    - DO NOT use for parcel or lot boundaries — use
+    - DO NOT use for parcel or lot boundaries -- use
       ``fetch_administrative_boundaries`` (TIGER/Line) for those.
-    - DO NOT use for pedestrian paths, bicycle routes, or rail lines —
-      those OSM tags (``footway``, ``cycleway``, ``railway``) are excluded
+    - DO NOT use for pedestrian paths, bicycle routes, or rail lines -- those OSM tags (``footway``, ``cycleway``, ``railway``) are excluded
       from this tool's valid ``road_classes`` set by design.
     - DO NOT use when turn-by-turn routing, signal phasing, or lane-level
       topology is needed; Overpass returns simplified LineStrings, not a
       routable graph with all OSM topology tags.
-    - DO NOT use for highly dynamic road changes — the 30-day cache means
+    - DO NOT use for highly dynamic road changes -- the 30-day cache means
       road geometry is refreshed at most once per month.
 
     **Parameters:**
@@ -635,7 +634,7 @@ def fetch_roads_osm(
     **Cross-tool dependencies:**
     - Typically layered over ``fetch_dem`` or flood-output rasters as a
       context overlay.
-    - Pairs with ``compute_zonal_statistics`` or intersection tools to
+    - Pairs with ``spatial_query`` or intersection tools to
       quantify road-length under flood inundation.
     - Overpass inserts a 1 s polite delay before each network request to
       respect rate limits; cache hits skip this delay.
@@ -672,7 +671,7 @@ def fetch_roads_osm(
     )
     return LayerURI(
         layer_id=f"osm-roads-{q_bbox[0]:.4f}-{q_bbox[1]:.4f}",
-        name=f"OSM Roads — {label_classes}",
+        name=f"OSM Roads -- {label_classes}",
         layer_type="vector",
         uri=result.uri,
         style_preset="osm_roads",

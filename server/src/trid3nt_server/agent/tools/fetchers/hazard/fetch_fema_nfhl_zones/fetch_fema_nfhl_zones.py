@@ -72,9 +72,9 @@ class FEMA_NFHL_ZONESUpstreamError(FEMA_NFHL_ZONESError):
 
 
 class FEMA_NFHL_ZONESEmptyError(FEMA_NFHL_ZONESError):
-    """FEMA returned an empty FeatureCollection — informational, not retryable.
+    """FEMA returned an empty FeatureCollection -- informational, not retryable.
 
-    NOT raised by the tool body (we serialize an empty FGB instead — an empty
+    NOT raised by the tool body (we serialize an empty FGB instead -- an empty
     bbox over open water or an un-mapped area is LEGITIMATE), but kept
     available for future strict-mode opt-in.
     """
@@ -134,7 +134,7 @@ _MAX_PAGES = 100
 #: slow under load (especially during named disasters), so we allow 60s.
 _HTTP_TIMEOUT_S = 60.0
 
-#: User-Agent — FEMA's terms of use ask for identifying agents on automated
+#: User-Agent -- FEMA's terms of use ask for identifying agents on automated
 #: clients hitting hazards.fema.gov.
 _USER_AGENT = (
     "trid3nt/0.1 (Hazard Modeling Agent; "
@@ -156,14 +156,14 @@ VALID_FLOOD_ZONES: frozenset[str] = frozenset({
     "AREA NOT INCLUDED", "OPEN WATER",
 })
 
-#: Cache-key payload estimation — bbox-area heuristic, MB/deg^2.
+#: Cache-key payload estimation -- bbox-area heuristic, MB/deg^2.
 _PAYLOAD_MB_PER_SQ_DEG = 0.5
 _PAYLOAD_MIN_MB = 0.05
 _PAYLOAD_MAX_MB = 50.0
 
 
 # ---------------------------------------------------------------------------
-# AtomicToolMetadata — registered once at import time.
+# AtomicToolMetadata -- registered once at import time.
 #
 # ``supports_global_query=False`` (polygon source per kickoff): NFHL's
 # CONUS+territories corpus is on the order of millions of polygons; a
@@ -252,8 +252,7 @@ def _round_bbox_to_6dp(
 def _bbox_to_envelope(bbox: tuple[float, float, float, float]) -> str:
     """Format a bbox as an ArcGIS ``geometryType=esriGeometryEnvelope`` string.
 
-    ArcGIS REST envelope format is the literal ``xmin,ymin,xmax,ymax`` —
-    no JSON wrapping when ``geometryType=esriGeometryEnvelope`` is set.
+    ArcGIS REST envelope format is the literal ``xmin,ymin,xmax,ymax`` -- no JSON wrapping when ``geometryType=esriGeometryEnvelope`` is set.
     """
     min_lon, min_lat, max_lon, max_lat = bbox
     return f"{min_lon},{min_lat},{max_lon},{max_lat}"
@@ -408,7 +407,7 @@ def _fetch_nfhl_features(
                 raise
             logger.warning(
                 "fetch_fema_nfhl_zones: upstream 500 on cursor page %d "
-                "(last_oid=%d); FEMA NFHL pagination quirk — returning "
+                "(last_oid=%d); FEMA NFHL pagination quirk -- returning "
                 "partial result of %d feature(s). Narrow bbox to avoid.",
                 page_idx,
                 last_object_id,
@@ -443,7 +442,7 @@ def _fetch_nfhl_features(
             if (f.get("properties") or {}).get("OBJECTID") is not None
         ]
         if not page_oids:
-            # Safety: server returned features but none had OBJECTID — can't
+            # Safety: server returned features but none had OBJECTID -- can't
             # advance the cursor. Stop to avoid an infinite loop.
             logger.warning(
                 "fetch_fema_nfhl_zones: page %d had %d features but no OBJECTIDs; "
@@ -468,7 +467,7 @@ def _fetch_nfhl_features(
     else:
         raise FEMA_NFHL_ZONESUpstreamError(
             f"FEMA NFHL pagination exceeded {_MAX_PAGES} pages for bbox={bbox}; "
-            "bbox is probably too large — reduce bbox extent."
+            "bbox is probably too large -- reduce bbox extent."
         )
 
     # Client-side zone filter (exact match against FLD_ZONE).
@@ -501,7 +500,7 @@ def _features_to_flatgeobuf(features: list[dict[str, Any]]) -> bytes:
 
     Features lacking a polygon geometry are dropped (the layer is polygon-only
     in the live schema; null-geom rows are junk). Always emits valid
-    FlatGeobuf bytes — an empty feature list yields an empty-schema FGB so
+    FlatGeobuf bytes -- an empty feature list yields an empty-schema FGB so
     the cache shim has something concrete to persist.
     """
     try:
@@ -525,7 +524,7 @@ def _features_to_flatgeobuf(features: list[dict[str, Any]]) -> bytes:
         # the FlatGeobuf output to match the documented schema.
         for key in _PRESERVED_PROPERTIES:
             v = props.get(key)
-            # Coerce non-scalar values to JSON strings — FlatGeobuf needs
+            # Coerce non-scalar values to JSON strings -- FlatGeobuf needs
             # scalar column types per field.
             if isinstance(v, (dict, list)):
                 v = json.dumps(v)
@@ -626,7 +625,7 @@ def fetch_fema_nfhl_zones(
     Map Service Center National Flood Hazard Layer (NFHL).
 
     Do NOT use this for: real-time / current flood EXTENT (use a SFINCS
-    modeled-flood layer or MRMS QPE-derived inundation — NFHL is a regulatory
+    modeled-flood layer or MRMS QPE-derived inundation -- NFHL is a regulatory
     static product, not a live observation); flood-insurance CLAIMS or paid
     losses (FEMA OpenFEMA NFIP-claims dataset, separate fetcher); FEMA
     disaster declarations / public-assistance funding (OpenFEMA, separate
@@ -638,14 +637,14 @@ def fetch_fema_nfhl_zones(
 
     Parameters:
         bbox: ``(min_lon, min_lat, max_lon, max_lat)`` in EPSG:4326.
-            REQUIRED — NFHL does not support a global query (the polygon corpus
+            REQUIRED -- NFHL does not support a global query (the polygon corpus
             is millions of features). Recommended ≤ ~2 deg on a side (≈220 km
             at the equator); larger envelopes risk hitting the 100k-feature
             pagination ceiling. Example for Fort Myers, FL:
             ``(-81.95, 26.55, -81.80, 26.70)``.
         sfha_only: If True, filter server-side to Special Flood Hazard Area
             polygons only (``SFHA_TF='T'``: zones A, AE, AH, AO, AR, A99,
-            V, VE — the regulatory 1% annual-chance floodplain that triggers
+            V, VE -- the regulatory 1% annual-chance floodplain that triggers
             NFIP mandatory-purchase). If False (default), return all zone
             polygons including 0.2% shaded-X, minimal-hazard X, and undetermined
             D. Example: ``True`` when the user asks "show the 100-year
@@ -666,13 +665,13 @@ def fetch_fema_nfhl_zones(
         D undetermined hatched). Downstream tools consume:
         ``FLD_ZONE`` (categorical legend), ``STATIC_BFE`` (numeric depth
         narration), ``SFHA_TF`` (boolean intersect summary by
-        ``compute_zonal_statistics``).
+        ``spatial_query``).
 
     Cross-tool dependencies:
         - Often paired with ``fetch_administrative_boundaries`` (TIGER county
           / city polygon) → ``spatial_query`` to produce the "FEMA
           flood zones in [place]" clipped output the user typically wants.
-        - Feeds ``compute_zonal_statistics`` for "% of [parcel] inside SFHA"
+        - Feeds ``spatial_query`` for "% of [parcel] inside SFHA"
           summaries, and ``pelicun_damage_assessment`` for the NSI
           structure inventory × NFHL intersection.
         - Companion to ``sfincs_flood`` (SFINCS) when the user
@@ -755,7 +754,7 @@ def fetch_fema_nfhl_zones(
     else:
         filter_label = ""
     name = (
-        f"FEMA NFHL Flood Hazard Zones — bbox "
+        f"FEMA NFHL Flood Hazard Zones -- bbox "
         f"({q_bbox[0]:.2f},{q_bbox[1]:.2f},{q_bbox[2]:.2f},{q_bbox[3]:.2f})"
         f"{filter_label}"
     )

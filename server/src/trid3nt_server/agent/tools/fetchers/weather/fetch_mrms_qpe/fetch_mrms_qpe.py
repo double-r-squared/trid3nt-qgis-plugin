@@ -83,7 +83,7 @@ class MRMSQPEEmptyError(MRMSQPEError):
 _S3_BASE = "https://noaa-mrms-pds.s3.amazonaws.com"
 
 #: Supported accumulation products. NOTE: 12H is included even though the
-#: kickoff lists 01H/03H/06H/24H/48H/72H — the bucket exposes 12H too and it
+#: kickoff lists 01H/03H/06H/24H/48H/72H -- the bucket exposes 12H too and it
 #: is a common SFINCS reference window; surfaced as a docstring note rather
 #: than expanding scope silently.
 _VALID_ACCUMULATIONS: frozenset[str] = frozenset(
@@ -134,7 +134,7 @@ def _normalize_accumulation(accumulation: str) -> str:
 #: is real-time radar-only. Surfaced.
 _QPE_PASS = "Pass2"
 
-#: CONUS bounding box (EPSG:4326) — the native MRMS QPE grid extent.
+#: CONUS bounding box (EPSG:4326) -- the native MRMS QPE grid extent.
 _CONUS_BBOX: tuple[float, float, float, float] = (-130.0, 20.0, -60.0, 55.0)
 
 #: GeoTIFF nodata sentinel. MRMS publishes -3.0 (no-precip) and -1.0 (masked
@@ -199,7 +199,7 @@ def estimate_payload_mb(
     MRMS QPE at 0.01° (~1 km) CONUS resolution: the full CONUS grid is
     3500 × 7000 pixels ≈ 49M pixels × 4 bytes = ~196 MB uncompressed.
     With DEFLATE compression (predictor 3) on typical precip data the
-    compression ratio is ~5–8×, so full CONUS is ~25–40 MB on disk.
+    compression ratio is ~5 - 8×, so full CONUS is ~25 - 40 MB on disk.
 
     For a clipped bbox we scale linearly by the fractional area vs CONUS.
     CONUS spans 70° × 35° = 2450 sq-deg; each sq-deg → ~0.015 MB of
@@ -270,7 +270,7 @@ def _parse_valid_time(valid_time: str | None) -> datetime | None:
             f"valid_time={valid_time!r} is not a parseable ISO-8601 string"
         ) from exc
     if dt.tzinfo is None:
-        # Caller passed a naive timestamp — assume UTC per the docstring
+        # Caller passed a naive timestamp -- assume UTC per the docstring
         # contract rather than guessing local time.
         dt = dt.replace(tzinfo=timezone.utc)
     return dt.astimezone(timezone.utc)
@@ -295,7 +295,7 @@ def _http_get(url: str, timeout: float) -> bytes:
         raise MRMSQPEUpstreamError(
             f"MRMS S3 network error for {url}: {exc.reason}"
         ) from exc
-    except TimeoutError as exc:  # noqa: PERF203 — explicit timeout surface
+    except TimeoutError as exc:  # noqa: PERF203 -- explicit timeout surface
         raise MRMSQPEUpstreamError(
             f"MRMS S3 timed out after {timeout}s for {url}"
         ) from exc
@@ -490,7 +490,7 @@ def _grib2_to_geotiff(
         # for CRS hygiene per the engine.md "CRS hygiene end-to-end" rule.
         dst_crs = CRS.from_epsg(4326)
 
-        # Clip to bbox BEFORE reprojection if requested — works on the source
+        # Clip to bbox BEFORE reprojection if requested -- works on the source
         # grid (cheaper) and preserves data integrity since the source CRS is
         # also geographic.
         if bbox is not None:
@@ -529,7 +529,7 @@ def _grib2_to_geotiff(
         # Reproject source → EPSG:4326 (in-place: same resolution).
         # We use rasterio.warp.reproject to a NEW array sized to the same
         # bbox in 4326. For MRMS the source IS already a geographic 0.01° grid
-        # so the reprojection is effectively a CRS-tag flip — but we go through
+        # so the reprojection is effectively a CRS-tag flip -- but we go through
         # the warp machinery so any future source-CRS change is handled.
         if src_crs is not None and src_crs != dst_crs:
             dst_transform, dst_width, dst_height = calculate_default_transform(
@@ -565,7 +565,7 @@ def _grib2_to_geotiff(
             out_height, out_width = src_height, src_width
 
         # Write GeoTIFF (COG-style profile, but plain TIF is fine for the cache
-        # — publish_layer or another tool can convert to COG later if needed).
+        # -- publish_layer or another tool can convert to COG later if needed).
         profile = {
             "driver": "GTiff",
             "height": out_height,
@@ -603,7 +603,7 @@ def _grib2_to_geotiff(
 
 
 # ---------------------------------------------------------------------------
-# Fetch function — bytes callable for read_through.
+# Fetch function -- bytes callable for read_through.
 # ---------------------------------------------------------------------------
 
 
@@ -669,7 +669,7 @@ def fetch_mrms_qpe(
 
     **When to use:**
 
-    - SFINCS pluvial-flood forcing precipitation for CONUS events — MRMS QPE
+    - SFINCS pluvial-flood forcing precipitation for CONUS events -- MRMS QPE
       Pass2 is the Harvey/Houston SFINCS reference forcing (GMD 2025). Typical
       call for Case 3 (Idaho NWS flood warning):
       ``fetch_mrms_qpe(bbox=warning_polygon_bbox, accumulation="24h")``.
@@ -677,18 +677,18 @@ def fetch_mrms_qpe(
       in 24 hours over the watershed?").
     - Near-real-time precipitation context: omit ``valid_time`` to fetch the
       most recently published file (~2 h behind current).
-    - Feeding ``model_flood_scenario(forcing_raster_uri=mrms_uri)`` as the real-
+    - Feeding ``run_sfincs`` (via ``set_sfincs_parameters``) as the real-
       precip forcing branch for Case 3 (composers).
 
     **When NOT to use:**
 
-    - Live radar reflectivity — use ``fetch_nexrad_reflectivity`` (Iowa Mesonet
+    - Live radar reflectivity -- use ``fetch_nexrad_reflectivity`` (Iowa Mesonet
       WMS; dBZ products n0r/n0q/vil).
-    - Historical return-period precipitation (design storms) — use
+    - Historical return-period precipitation (design storms) -- use
       ``lookup_precip_return_period`` (NOAA Atlas 14 PFDS).
-    - Global precipitation outside CONUS — MRMS is CONUS-only; for global
+    - Global precipitation outside CONUS -- MRMS is CONUS-only; for global
       use ``fetch_era5_reanalysis`` (27 km, daily/hourly ERA5 precip).
-    - Sub-hourly accumulations — MRMS publishes ``1h`` (01H) as the finest window.
+    - Sub-hourly accumulations -- MRMS publishes ``1h`` (01H) as the finest window.
 
     **Parameters:**
 
@@ -729,8 +729,8 @@ def fetch_mrms_qpe(
     - Pair with: ``fetch_nexrad_reflectivity`` (live radar reflectivity overlay
       for the same storm event) and ``fetch_nws_alerts_conus`` (NWS watches/
       warnings) for a complete storm-situation display.
-    - Consumed by: ``model_flood_scenario(forcing_raster_uri=...)`` as pluvial
-      precipitation forcing (Case 3 composer); ``compute_zonal_statistics``
+    - Consumed by: ``run_sfincs`` (via ``set_sfincs_parameters``) as pluvial
+      precipitation forcing (Case 3 composer); ``spatial_query``
       for per-watershed accumulation queries.
     - Alternative for non-CONUS: ``fetch_era5_reanalysis`` (global, 27 km,
       needs Copernicus CDS key).
@@ -761,14 +761,14 @@ def fetch_mrms_qpe(
     # Parse valid_time
     valid_time_dt = _parse_valid_time(valid_time)
 
-    # Build cache key params — use canonical (uppercase) accumulation in the key
+    # Build cache key params -- use canonical (uppercase) accumulation in the key
     # so "24h" and "24H" map to the same cached entry.
     params = {
         "accumulation": canonical_accumulation,
         "bbox": list(q_bbox) if q_bbox is not None else "CONUS",
         # Key on the literal valid_time string (or "LATEST") so two callers
         # asking for the same hour get the same key. We deliberately do NOT
-        # quantize the inbound timestamp before keying — the dynamic-1h
+        # quantize the inbound timestamp before keying -- the dynamic-1h
         # vintage already gives the cache its "this hour" semantic; pinned
         # timestamps deserve their own key.
         "valid_time": valid_time if valid_time is not None else "LATEST",

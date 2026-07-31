@@ -61,7 +61,7 @@ class HRRRSmokeEmptyError(HRRRSmokeError):
 class HRRRSmokeNotAvailableError(HRRRSmokeError):
     """Requested cycle/forecast_hour combination is not yet published on S3.
 
-    HRRR cycles post ~1–1.5 h after the cycle hour. The fetcher walks backward
+    HRRR cycles post ~1 - 1.5 h after the cycle hour. The fetcher walks backward
     looking for a cycle whose forecast slice is published; this surfaces when
     the search exhausts the backstop window (default 6 h) without finding one.
     """
@@ -131,7 +131,7 @@ _FILL_VALUE = -9999.0
 
 
 # ---------------------------------------------------------------------------
-# AtomicToolMetadata — registered once at import time.
+# AtomicToolMetadata -- registered once at import time.
 # ---------------------------------------------------------------------------
 
 _METADATA = AtomicToolMetadata(
@@ -313,7 +313,7 @@ def _s3_exists(fs: Any, path_no_proto: str) -> bool:
     """Return True iff the s3 path exists (cheap probe)."""
     try:
         return bool(fs.exists(path_no_proto))
-    except Exception:  # noqa: BLE001 — treat any S3 error as "doesn't exist"
+    except Exception:  # noqa: BLE001 -- treat any S3 error as "doesn't exist"
         return False
 
 
@@ -326,7 +326,7 @@ def _resolve_cycle(
 ) -> tuple[_dt.date, int]:
     """Walk backward from target_cycle looking for a published cycle.
 
-    HRRR posts cycles ~1.0–1.5 h after their cycle hour. The caller passes a
+    HRRR posts cycles ~1.0 - 1.5 h after their cycle hour. The caller passes a
     candidate cycle; if its forecast Zarr is not yet on S3, we step back 1 h
     at a time up to ``_CYCLE_BACKSTOP_HOURS`` total.
 
@@ -375,9 +375,9 @@ def _zarr_slice_to_geotiff_bytes(
         ``HRRRSmokeEmptyError``: bbox produced no finite pixels after clip.
     """
     try:
-        import fsspec  # noqa: F401 — required for the get_mapper
+        import fsspec  # noqa: F401 -- required for the get_mapper
         import numpy as np
-        import rioxarray  # noqa: F401 — registers .rio accessor
+        import rioxarray  # noqa: F401 -- registers .rio accessor
         import xarray as xr
     except ImportError as exc:
         raise HRRRSmokeUpstreamError(
@@ -425,7 +425,7 @@ def _zarr_slice_to_geotiff_bytes(
         # Map forecast_hour (1..18 or 0..48) to time index. For ``fcst`` zarrs
         # the time array is sorted ascending starting at cycle+1h; index 0 ==
         # +1 h forecast. We accept forecast_hour=0 by aliasing to index 0
-        # (the +1 h forecast — closest available analog; no analysis-time slice
+        # (the +1 h forecast -- closest available analog; no analysis-time slice
         # exists in the ``fcst`` zarr).
         idx = max(0, min(time_len - 1, forecast_hour - 1 if forecast_hour > 0 else 0))
         da = ds[s3_var].isel(time=idx)
@@ -437,7 +437,7 @@ def _zarr_slice_to_geotiff_bytes(
         # explicitly.
         try:
             da = da.where(da != _FILL_VALUE)
-        except Exception:  # noqa: BLE001 — defensive
+        except Exception:  # noqa: BLE001 -- defensive
             pass
 
         # Tag CRS + write spatial dim names so rioxarray can reproject.
@@ -499,7 +499,7 @@ def _zarr_slice_to_geotiff_bytes(
                     compress="DEFLATE",
                     nodata=float("nan"),
                 )
-            except Exception:  # noqa: BLE001 — fall back to GTiff if COG fails
+            except Exception:  # noqa: BLE001 -- fall back to GTiff if COG fails
                 da_out.rio.to_raster(
                     out_path,
                     driver="GTiff",
@@ -582,19 +582,19 @@ def fetch_hrrr_smoke(
     # tool_arg_normalizer, but kept as belt-and-suspenders).
     **_extra_ignored: Any,
 ) -> LayerURI:
-    """NOAA HRRR-Smoke 3 km smoke / aerosol forecast — Tier-1 CONUS fetcher.
+    """NOAA HRRR-Smoke 3 km smoke / aerosol forecast -- Tier-1 CONUS fetcher.
 
     What it does: returns a CRS-tagged GeoTIFF (EPSG:4326) of a single
     HRRR-Smoke forecast field at a single forecast lead time, reprojected
     from the native Lambert Conformal Conic grid and clipped to the
     requested CONUS bbox. Wraps the University of Utah CHPC HRRR-Zarr S3
     mirror (anonymous, Tier-1 free, no API key) that carries NCEP/EMC's
-    operational HRRR-Smoke run — smoke emissions sourced from NESDIS HMS
+    operational HRRR-Smoke run -- smoke emissions sourced from NESDIS HMS
     satellite fire detections, plume-rise via Freitas et al. (2006),
     advected on the 3 km HRRR dynamical core. Resolves the most-recently
     published HRRR cycle whose forecast at the requested lead time is on
     S3, walking up to 6 h backward if the in-progress cycle has not yet
-    posted (mirror lag ~1.0–1.5 h).
+    posted (mirror lag ~1.0 - 1.5 h).
 
     When to use:
     - User asks about "wildfire smoke" / "smoke plume" / "air quality from
@@ -611,23 +611,22 @@ def fetch_hrrr_smoke(
       US smoke-transport decision-support overlay.
 
     When NOT to use:
-    - Standard weather forecasts (temperature, wind, precip) — use
+    - Standard weather forecasts (temperature, wind, precip) -- use
       ``fetch_hrrr_forecast``. HRRR-Smoke shares the same dynamical core
       but this tool exposes only smoke / aerosol diagnostics.
-    - Observed surface particulate (PM2.5 / PM10 / AOD) — HRRR-Smoke is
+    - Observed surface particulate (PM2.5 / PM10 / AOD) -- HRRR-Smoke is
       model output. There is no HRRR-Smoke "observation"; use EPA AirNow
       (future tool) or NASA MODIS AOD (future) for measured aerosols.
-    - Active fire detection — use ``fetch_firms_active_fire`` (NASA VIIRS/
+    - Active fire detection -- use ``fetch_firms_active_fire`` (NASA VIIRS/
       MODIS hot spots) or ``fetch_goes_satellite`` (GOES-East/West fire
       products). HRRR-Smoke ingests these as forcing; it does not produce
       them.
-    - Fire perimeters — use ``fetch_nifc_fire_perimeters`` (active) or
+    - Fire perimeters -- use ``fetch_nifc_fire_perimeters`` (active) or
       ``fetch_mtbs_burn_severity`` (historical).
     - Outside CONUS (Mexico interior, Caribbean except direct CONUS
-      spillover, Alaska, Hawaii, the open Pacific or Atlantic) —
-      HRRR-Smoke is CONUS-only; bbox outside coverage raises
+      spillover, Alaska, Hawaii, the open Pacific or Atlantic) -- HRRR-Smoke is CONUS-only; bbox outside coverage raises
       ``HRRRSmokeInputError``.
-    - Long-range climatology / multi-day transport beyond 48 h — those
+    - Long-range climatology / multi-day transport beyond 48 h -- those
       leads are not in HRRR-Smoke.
 
     Parameters:
@@ -636,15 +635,13 @@ def fetch_hrrr_smoke(
             lat 21..53). Example: ``(-124.5, 41.0, -120.0, 46.3)`` for a
             northern California / southern Oregon wildfire footprint.
         variable: one of:
-            - ``"near_surface_smoke"`` (kg m-3, 8 m AGL smoke mass density —
-              the "what you'd breathe" layer; multiply by ~10⁹ for µg m-3)
+            - ``"near_surface_smoke"`` (kg m-3, 8 m AGL smoke mass density -- the "what you'd breathe" layer; multiply by ~10⁹ for µg m-3)
             - ``"smoke_column_mass"`` (kg m-2, vertically-integrated smoke
-              column — total atmospheric smoke load)
-            - ``"aerosol_optical_depth"`` (dimensionless, 550 nm AOD —
-              proxy for satellite-observable smoke opacity).
+              column -- total atmospheric smoke load)
+            - ``"aerosol_optical_depth"`` (dimensionless, 550 nm AOD -- proxy for satellite-observable smoke opacity).
             Default ``"near_surface_smoke"``.
         forecast_hour: integer forecast lead time in hours (1 = +1 h from
-            cycle start). Range 1–18 for standard cycles, 1–48 for the
+            cycle start). Range 1 - 18 for standard cycles, 1 - 48 for the
             extended 00/06/12/18z cycles. ``0`` is accepted and aliased to
             the +1 h slice (no analysis-time slice exists in the ``fcst``
             zarr). Default ``1``.
@@ -659,20 +656,20 @@ def fetch_hrrr_smoke(
         carrying the requested variable's forecast slice, EPSG:4326,
         float32, NaN nodata. ``layer_type="raster"``, ``role="primary"``,
         ``units`` per the variable (``"kg m-3"``, ``"kg m-2"``, or ``"1"``).
-        Downstream consumers (``publish_layer``, ``compute_zonal_statistics``,
+        Downstream consumers (``publish_layer``, ``spatial_query``,
         ``clip_raster_to_polygon``) read the COG and treat it as a
         single-band scalar field.
 
     Cross-tool dependencies:
         - Consumes nothing (Tier-1 substrate fetcher; no upstream tool).
         - Feeds: ``publish_layer`` (visualization on the web map),
-          ``compute_zonal_statistics`` (aggregate to admin boundaries or
+          ``spatial_query`` (aggregate to admin boundaries or
           county / ZIP code area-weighted exposure),
           ``clip_raster_to_polygon`` (further sub-clip to fire footprint
           or admin polygon), ``clip_raster_to_polygon`` (bbox or polygon sub-clip).
         - Composes with: ``fetch_nifc_fire_perimeters`` (active wildfire
-          polygons — overlay smoke plume on the burning area),
-          ``fetch_firms_active_fire`` (VIIRS/MODIS hot spots — overlay
+          polygons -- overlay smoke plume on the burning area),
+          ``fetch_firms_active_fire`` (VIIRS/MODIS hot spots -- overlay
           ignition sources), ``fetch_mtbs_burn_severity`` (historical
           burn footprints for context), ``fetch_asos_metar`` (surface
           visibility for validation), ``fetch_gridmet`` (RH / wind speed
@@ -779,7 +776,7 @@ def fetch_hrrr_smoke(
             f"{q_bbox[0]:.4f}-{q_bbox[1]:.4f}"
         ),
         name=(
-            f"HRRR-Smoke — {variable.replace('_', ' ').title()} "
+            f"HRRR-Smoke -- {variable.replace('_', ' ').title()} "
             f"(cycle {cycle_label}, F{forecast_hour:03d})"
         ),
         layer_type="raster",

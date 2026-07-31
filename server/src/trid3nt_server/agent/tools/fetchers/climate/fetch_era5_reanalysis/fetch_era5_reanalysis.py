@@ -983,8 +983,9 @@ def fetch_era5_reanalysis(
 
     **Cross-tool dependencies:**
     - Upstream: ``geocode_location`` supplies bbox from a place name.
-    - Downstream: ``build_sfincs_model`` consumes wind/precip COGs as forcing;
-      ``fetch_gtsm_tide_surge`` pairs for the coastal boundary condition.
+    - Downstream: ``set_sfincs_parameters`` + ``run_sfincs`` consume wind/precip
+      COGs as forcing; ``fetch_gtsm_tide_surge`` pairs for the coastal boundary
+      condition.
     - Alternative: ``fetch_mrms_qpe`` (CONUS, 1 km, gauge-corrected, no key),
       ``fetch_hrrr_forecast`` (CONUS, 3 km, forecast, no key).
 
@@ -1044,7 +1045,7 @@ def fetch_era5_reanalysis(
             f"{q_bbox[0]:.4f}-{q_bbox[1]:.4f}"
         ),
         name=(
-            f"ERA5 Reanalysis — {variable.replace('_', ' ').title()} "
+            f"ERA5 Reanalysis -- {variable.replace('_', ' ').title()} "
             f"({d0.isoformat()} → {d1.isoformat()})"
         ),
         layer_type="raster",

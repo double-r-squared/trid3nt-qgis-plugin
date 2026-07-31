@@ -77,7 +77,7 @@ docstring: |-
   **When to use:**
 
   - Quasi-global rainfall baseline for drought, agriculture, and pluvial-flood
-    context OUTSIDE CONUS / outside radar coverage — Africa, South Asia, Latin
+    context OUTSIDE CONUS / outside radar coverage -- Africa, South Asia, Latin
     America, the tropics. CHIRPS is the community standard for data-sparse
     regions.
   - Monsoon / wet-season precipitation totals: ``period="monthly"`` returns
@@ -90,13 +90,13 @@ docstring: |-
 
   **When NOT to use:**
 
-  - CONUS gauge-corrected radar precipitation at ~1 km / sub-daily — use
+  - CONUS gauge-corrected radar precipitation at ~1 km / sub-daily -- use
     ``fetch_mrms_qpe`` (NOAA MRMS QPE, CONUS only).
   - CONUS gridded daily meteorology (precip + temp + wind + humidity) at
-    ~4 km — use ``fetch_gridmet``.
-  - Hourly / forecast precipitation — use ``fetch_hrrr_forecast`` (CONUS) or
+    ~4 km -- use ``fetch_gridmet``.
+  - Hourly / forecast precipitation -- use ``fetch_hrrr_forecast`` (CONUS) or
     ``fetch_era5_reanalysis`` (global hourly, needs a Copernicus CDS key).
-  - Areas poleward of 50 deg latitude — CHIRPS coverage stops at 50 S / 50 N;
+  - Areas poleward of 50 deg latitude -- CHIRPS coverage stops at 50 S / 50 N;
     a bbox entirely outside that band raises ``CHIRPSEmptyError``.
 
   **Parameters:**
@@ -126,8 +126,8 @@ docstring: |-
   **Cross-tool dependencies:**
 
   - Pair with ``fetch_us_drought_monitor`` (CONUS drought) for a global vs
-    CONUS drought view, or ``compute_zonal_statistics`` for per-admin-unit or
-    per-field rainfall totals.
+    CONUS drought view, or ``spatial_query`` for per-admin-unit or per-field
+    rainfall totals.
   - Alternative for CONUS radar precip: ``fetch_mrms_qpe``. Alternative for
     global hourly reanalysis precip: ``fetch_era5_reanalysis`` (CDS key).
 

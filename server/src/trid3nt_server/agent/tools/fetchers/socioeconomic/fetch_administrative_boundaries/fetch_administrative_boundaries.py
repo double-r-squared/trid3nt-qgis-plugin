@@ -1,4 +1,4 @@
-"""``fetch_administrative_boundaries`` atomic tool — TIGER/Line 2024 polygon fetcher.
+"""``fetch_administrative_boundaries`` atomic tool -- TIGER/Line 2024 polygon fetcher.
 """
 
 from __future__ import annotations
@@ -70,7 +70,7 @@ _TIGER_YEAR = "2024"
 _VALID_LEVELS = frozenset({"state", "county", "place", "zcta"})
 
 # Bbox quantization step: 10m (matching buildings/population precedent).
-# Administrative boundaries are coarser than 10m — the snap is for cache-key
+# Administrative boundaries are coarser than 10m -- the snap is for cache-key
 # deduplication only, not data precision.
 _BBOX_QUANTIZE_M = 10
 
@@ -81,7 +81,7 @@ _USER_AGENT = (
 )
 
 # ---------------------------------------------------------------------------
-# AtomicToolMetadata — registered once at import time.
+# AtomicToolMetadata -- registered once at import time.
 # ---------------------------------------------------------------------------
 
 _METADATA = AtomicToolMetadata(
@@ -386,7 +386,7 @@ def _download_and_clip_zip(
             ) from exc
 
         # Ensure CRS is EPSG:4326 (TIGER files are always in geographic coords but
-        # check to be safe — a future TIGER release might ship in a different CRS).
+        # check to be safe -- a future TIGER release might ship in a different CRS).
         if gdf.crs is None or gdf.crs.to_epsg() != 4326:
             logger.warning(
                 "fetch_administrative_boundaries: CRS is %s, reprojecting to EPSG:4326",
@@ -464,7 +464,7 @@ def _download_and_clip_zip(
 
 
 # ---------------------------------------------------------------------------
-# Fetch function — builds the bytes callable for read_through.
+# Fetch function -- builds the bytes callable for read_through.
 # ---------------------------------------------------------------------------
 
 
@@ -539,7 +539,7 @@ def _fetch_admin_boundaries_bytes(
                         except OSError:
                             pass
             except AdminBoundaryEmptyError:
-                # This state file had no intersecting features — OK for multi-state
+                # This state file had no intersecting features -- OK for multi-state
                 # queries where the bbox clips into a state but misses all places.
                 logger.debug(
                     "fetch_administrative_boundaries: no place features in state FIPS=%s",
@@ -614,10 +614,10 @@ def fetch_administrative_boundaries(
     **When to use:**
     - Agent needs administrative outlines for spatial context alongside a
       hazard layer (e.g. county boundaries over a flood inundation surface).
-    - Workflow must aggregate or label results by jurisdiction — state, county,
+    - Workflow must aggregate or label results by jurisdiction -- state, county,
       city, or ZIP code.
     - User asks for a geographic boundary before calling
-      ``clip_raster_to_polygon`` or ``compute_zonal_statistics``.
+      ``clip_raster_to_polygon`` or ``spatial_query``.
     - ``geocode_location`` returned a bbox but the workflow needs the actual
       polygon for precise clipping.
 
@@ -631,7 +631,7 @@ def fetch_administrative_boundaries(
     - ``level`` (str): one of ``"state"`` (50 + DC + territories), ``"county"``
       (3000+ counties), ``"place"`` (cities/CDPs; per-state ZIPs; only states
       intersecting bbox are fetched), or ``"zcta"`` (ZIP Code Tabulation Areas;
-      ~504 MB download — subsequent calls hit 30-day cache).
+      ~504 MB download -- subsequent calls hit 30-day cache).
     - ``bbox`` (tuple): ``(min_lon, min_lat, max_lon, max_lat)`` in EPSG:4326.
       Example: ``(-82.2, 26.3, -81.5, 26.8)`` for Lee County FL.
 
@@ -641,7 +641,7 @@ def fetch_administrative_boundaries(
     to the requested bbox.
 
     **Cross-tool dependencies:**
-    - Upstream of: ``clip_raster_to_polygon``, ``compute_zonal_statistics``,
+    - Upstream of: ``clip_raster_to_polygon``, ``spatial_query``,
       overlay display.
     - Pairs with: ``geocode_location`` (resolve name → bbox first), then
       ``fetch_administrative_boundaries`` for the actual polygon.
@@ -682,7 +682,7 @@ def fetch_administrative_boundaries(
 
     return LayerURI(
         layer_id=f"admin-{level}-{q_bbox[0]:.4f}-{q_bbox[1]:.4f}",
-        name=f"Admin Boundaries — {level_label} (TIGER 2024)",
+        name=f"Admin Boundaries -- {level_label} (TIGER 2024)",
         layer_type="vector",
         uri=result.uri,
         style_preset="admin_boundaries",

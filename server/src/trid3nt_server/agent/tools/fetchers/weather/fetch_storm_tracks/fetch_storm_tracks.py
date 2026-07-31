@@ -540,7 +540,7 @@ def _parse_ibtracs_csv(
                 "pres_mb": pres,
                 "category": cat,
                 "status": _col(row, "USA_STATUS").strip() or None,
-                # Wind-structure (spiderweb) columns — blank-tolerant.
+                # Wind-structure (spiderweb) columns -- blank-tolerant.
                 "rmw_nmi": rmw_nmi,
                 "poci_mb": poci_mb,
                 "roci_nmi": roci_nmi,
@@ -1105,8 +1105,9 @@ def fetch_storm_tracks(
         ``category_label``, ``status``, plus the wind-structure columns
         (blank-tolerant): ``rmw_nmi`` (USA_RMW), ``poci_mb`` (USA_POCI),
         ``roci_nmi`` (USA_ROCI), ``r34_ne_nmi`` / ``r34_se_nmi`` /
-        ``r34_sw_nmi`` / ``r34_nw_nmi`` (USA_R34_*) — consumed by the
-        hurricane-spiderweb parametric (``model_flood_scenario`` storm branch).
+        ``r34_sw_nmi`` / ``r34_nw_nmi`` (USA_R34_*) -- consumed by the
+        hurricane-spiderweb parametric (the ``run_sfincs`` storm branch, via
+        ``set_sfincs_parameters``).
         Active point props: ``id``, ``name``, ``classification``,
         ``intensity_kt``, ``pressure_mb``, ``movement_dir_deg``,
         ``movement_speed_kt``, ``last_update``, ``tau_h`` (0 = current

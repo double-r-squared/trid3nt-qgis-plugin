@@ -1,9 +1,7 @@
 """``extract_stream_network``: D8 accumulation >= threshold cells -> stream
 LineStrings vector.
 
-Carved out of the original two-tool ``hydrology_primitives`` module in the
-tools/ reorg; behavior and the registered tool surface are unchanged. Shared
-pysheds/DEM plumbing lives in
+Shared pysheds/DEM plumbing lives in
 ``trid3nt_server.agent.tools.processing._hydrology_common``.
 """
 

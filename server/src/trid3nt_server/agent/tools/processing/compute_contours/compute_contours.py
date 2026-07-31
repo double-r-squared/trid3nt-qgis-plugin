@@ -1,35 +1,34 @@
-"""Atomic tool ``compute_contours`` — elevation contour LINES from a DEM (F35).
+"""Atomic tool ``compute_contours`` -- elevation contour LINES from a DEM (F35).
 
 This module registers one atomic tool that computes elevation contour lines
 (topographic isolines) from a DEM by wrapping GDAL's ``gdal_contour`` command:
 
     ``compute_contours(dem_uri | bbox, interval_m) → LayerURI(layer_type="vector")``
 
-The result is a vector contour layer — ``LineString`` features each carrying an
-``elev`` (elevation, metres) attribute — at a fixed contour INTERVAL. It is
-emitted as a FlatGeobuf in EPSG:4326 so the inline-GeoJSON vector path
-ships the parsed FeatureCollection to the client and the web vector renderer
-paints it as a line layer (``style_preset="contours"``). The artifact is stored
+The result is a vector contour layer -- ``LineString`` features each carrying an
+``elev`` (elevation, metres) attribute -- at a fixed contour INTERVAL. It is
+emitted as a FlatGeobuf in EPSG:4326 so the QGIS plugin renders it natively
+as a line layer (``style_preset="contours"``). The artifact is stored
 under the FR-DC-3 cache shim at:
 
     ``s3://trid3nt-cache/cache/static-30d/contours/<key>.fgb``
 
 **Sibling of ``compute_hillshade`` / ``compute_slope``.** Like every terrain
-``compute_*`` tool, ``gdal_contour`` ships with GDAL (already on the box — the
+``compute_*`` tool, ``gdal_contour`` ships with GDAL (already on the box -- the
 binary is resolved next to ``gdaldem``); it does NOT need the PyQGIS worker.
 
 **DEM acquisition.** The caller may pass an explicit ``dem_uri`` (typically the
 ``LayerURI.uri`` returned by ``fetch_dem``) OR a ``bbox`` with no DEM, in which
-case the DEM is fetched the SAME way the other terrain tools acquire one — via
+case the DEM is fetched the SAME way the other terrain tools acquire one -- via
 ``fetch_dem(bbox)`` (the shared 3DEP acquisition path; no reinvention).
 
 **Contour interval.** When ``interval_m`` is ``None`` a sensible interval is
-derived from the DEM relief so any AOI yields ~10–20 readable contours: roughly
+derived from the DEM relief so any AOI yields ~10 - 20 readable contours: roughly
 ``(max - min) / 15`` snapped to a "nice" number from
 ``{1, 2, 5, 10, 20, 25, 50, 100, 200, 250, 500, 1000}`` metres. The derived
 interval is never 0 or negative.
 
-**Cache key** is derived from ``(dem_uri, interval_m)`` — both materially affect
+**Cache key** is derived from ``(dem_uri, interval_m)`` -- both materially affect
 the output geometry (FR-DC-3).
 
 **Implementation flow (cache miss):**
@@ -47,7 +46,7 @@ the output geometry (FR-DC-3).
 
 - **Invariant 2 (Deterministic workflows): preserves.** Zero LLM calls.
 - **FR-DC-6 (cacheable): honors.** ``cacheable=True``, ``ttl_class="static-30d"``,
-  ``source_class="contours"`` — DEM-derived output is stable for the lifetime of
+  ``source_class="contours"`` -- DEM-derived output is stable for the lifetime of
   the cached DEM (same TTL class as the other terrain ``compute_*`` tools).
 - **NFR-R-1 (resilience): preserves.** ``subprocess.run`` failures surface as
   ``ContourComputeError`` (typed, never unhandled exception); DEM-acquisition
@@ -93,12 +92,12 @@ class ContourComputeError(RuntimeError):
     requirement).
 
     Codes:
-    - ``GDAL_CONTOUR_UNAVAILABLE`` — ``gdal_contour`` binary not found.
-    - ``GDAL_CONTOUR_FAILED`` — ``gdal_contour`` returned non-zero / timed out.
-    - ``DEM_DOWNLOAD_FAILED`` — DEM acquisition failed.
-    - ``DEM_READ_FAILED`` — the DEM raster could not be read for relief stats.
-    - ``REPROJECT_FAILED`` — the contour vector could not be reprojected to 4326.
-    - ``NO_DEM_INPUT`` — neither ``dem_uri`` nor ``bbox`` was supplied.
+    - ``GDAL_CONTOUR_UNAVAILABLE`` -- ``gdal_contour`` binary not found.
+    - ``GDAL_CONTOUR_FAILED`` -- ``gdal_contour`` returned non-zero / timed out.
+    - ``DEM_DOWNLOAD_FAILED`` -- DEM acquisition failed.
+    - ``DEM_READ_FAILED`` -- the DEM raster could not be read for relief stats.
+    - ``REPROJECT_FAILED`` -- the contour vector could not be reprojected to 4326.
+    - ``NO_DEM_INPUT`` -- neither ``dem_uri`` nor ``bbox`` was supplied.
     """
 
     def __init__(self, error_code: str, message: str) -> None:
@@ -134,7 +133,7 @@ def _get_gdal_contour_bin() -> str:
         raise ContourComputeError(
             "GDAL_CONTOUR_UNAVAILABLE",
             "gdal_contour binary not found on PATH; set "
-            "TRID3NT_GDAL_CONTOUR_BIN (or TRID3NT_GDALDEM_BIN — gdal_contour is "
+            "TRID3NT_GDAL_CONTOUR_BIN (or TRID3NT_GDALDEM_BIN -- gdal_contour is "
             "resolved next to gdaldem) or install gdal-bin.",
         )
     return binary
@@ -163,7 +162,7 @@ _NICE_INTERVALS_M: tuple[float, ...] = (
 )
 
 #: Target number of contour lines an AOI should produce (relief / target →
-#: raw interval, then snapped to a nice number). ~10–20 readable contours.
+#: raw interval, then snapped to a nice number). ~10 - 20 readable contours.
 _TARGET_CONTOUR_COUNT: float = 15.0
 
 
@@ -212,7 +211,7 @@ def _derive_interval_m(dem_path: str) -> float:
     """Derive a sensible contour interval (metres) from the DEM relief.
 
     ``relief / _TARGET_CONTOUR_COUNT`` → snapped to a nice number so any AOI
-    yields ~10–20 readable contours. Flat / degenerate relief falls back to the
+    yields ~10 - 20 readable contours. Flat / degenerate relief falls back to the
     smallest nice interval (1 m) so the call still produces a valid layer.
     """
     lo, hi = _read_dem_relief(dem_path)
@@ -224,7 +223,7 @@ def _derive_interval_m(dem_path: str) -> float:
 
 
 # ---------------------------------------------------------------------------
-# DEM bbox extent (for LayerURI.bbox auto-zoom) — in EPSG:4326
+# DEM bbox extent (for LayerURI.bbox auto-zoom) -- in EPSG:4326
 # ---------------------------------------------------------------------------
 
 
@@ -233,7 +232,7 @@ def _dem_bbox_4326(dem_path: str) -> tuple[float, float, float, float] | None:
 
     Reprojects the raster bounds from the DEM's native CRS to EPSG:4326 so the
     pipeline emitter can fly the camera to the contour layer. Returns ``None``
-    (no zoom-to) on any failure — best-effort, never raises.
+    (no zoom-to) on any failure -- best-effort, never raises.
     """
     try:
         import rasterio
@@ -247,9 +246,9 @@ def _dem_bbox_4326(dem_path: str) -> tuple[float, float, float, float] | None:
                 src.crs, "EPSG:4326", b.left, b.bottom, b.right, b.top
             )
         return (float(west), float(south), float(east), float(north))
-    except Exception as exc:  # noqa: BLE001 — zoom-to is best-effort
+    except Exception as exc:  # noqa: BLE001 -- zoom-to is best-effort
         logger.warning(
-            "compute_contours: could not derive 4326 bbox for %s (%s) — no zoom-to",
+            "compute_contours: could not derive 4326 bbox for %s (%s) -- no zoom-to",
             dem_path,
             exc,
         )
@@ -309,9 +308,9 @@ def _run_gdal_contour(
 def _reproject_fgb_to_4326(input_path: str, output_path: str) -> None:
     """Reproject a FlatGeobuf contour vector to EPSG:4326.
 
-    The inline-GeoJSON vector path reads the artifact server-side and
-    ships it to MapLibre, which expects WGS84 coordinates — so the contours must
-    be in EPSG:4326. If the input is already in 4326, this is effectively a copy.
+    The QGIS plugin's native rendering expects WGS84 coordinates -- so the
+    contours must be in EPSG:4326. If the input is already in 4326, this is
+    effectively a copy.
 
     Raises ``ContourComputeError(REPROJECT_FAILED)`` on any failure.
     """
@@ -321,7 +320,7 @@ def _reproject_fgb_to_4326(input_path: str, output_path: str) -> None:
         gdf = gpd.read_file(input_path)
         if gdf.crs is None:
             # gdal_contour carries the DEM CRS through; a missing CRS means the
-            # proj wiring failed. We cannot safely reproject — leave as-is.
+            # proj wiring failed. We cannot safely reproject -- leave as-is.
             logger.warning(
                 "compute_contours: contour vector has no CRS; writing without "
                 "reprojection (output may not align on the map)."
@@ -339,7 +338,7 @@ def _reproject_fgb_to_4326(input_path: str, output_path: str) -> None:
 
 
 # ---------------------------------------------------------------------------
-# DEM resolution (explicit dem_uri OR fetch via bbox — shared fetch_dem path)
+# DEM resolution (explicit dem_uri OR fetch via bbox -- shared fetch_dem path)
 # ---------------------------------------------------------------------------
 
 
@@ -350,8 +349,7 @@ def _resolve_dem_uri(
     """Return a DEM ``uri`` to contour.
 
     If ``dem_uri`` is supplied it is used directly. Otherwise a ``bbox`` is
-    required and the DEM is fetched the SAME way the other terrain tools do —
-    via ``fetch_dem(bbox)`` (the shared 3DEP acquisition path; no reinvention).
+    required and the DEM is fetched the SAME way the other terrain tools do -- via ``fetch_dem(bbox)`` (the shared 3DEP acquisition path; no reinvention).
 
     Raises ``ContourComputeError(NO_DEM_INPUT)`` if neither is supplied.
     """
@@ -362,7 +360,7 @@ def _resolve_dem_uri(
             "NO_DEM_INPUT",
             "compute_contours requires either dem_uri or bbox; neither given.",
         )
-    # Reuse fetch_dem — the shared DEM-acquisition path (do not reinvent).
+    # Reuse fetch_dem -- the shared DEM-acquisition path (do not reinvent).
     from trid3nt_server.agent.tools.fetchers.terrain.fetch_dem.fetch_dem import fetch_dem
 
     dem_layer = fetch_dem(bbox)
@@ -439,7 +437,7 @@ def _make_fetch_fn(
     _COMPUTE_CONTOURS_METADATA,
     # Annotations: readOnlyHint=True (reads input raster; writes cache artifact
     # only via the read-through shim), openWorldHint=False (all computation is
-    # local GDAL/geopandas — fetch_dem's external call is its own tool's
+    # local GDAL/geopandas -- fetch_dem's external call is its own tool's
     # concern), destructiveHint=False, idempotentHint=True (deterministic
     # transform; same DEM + interval always produce the same contours).
 )
@@ -460,7 +458,7 @@ def compute_contours(
     "topo map", or wants a line overlay on a hillshade/colored-relief base.
     Do NOT use for: the shaded-relief raster itself (``compute_hillshade``/
     ``compute_colored_relief``); slope/aspect (``compute_slope``/
-    ``compute_aspect``); per-zone stats (``compute_zonal_statistics``).
+    ``compute_aspect``); per-zone stats (the code_exec playground).
 
     Params:
         dem_uri: single-band elevation DEM (typically ``fetch_dem(...).uri``).
@@ -517,7 +515,7 @@ def compute_contours(
 
     # On a cache hit _fetch did not run; recover the interval for labelling.
     # If the caller pinned an interval, use it; otherwise re-derive a label
-    # value lazily would require the DEM — so fall back to "auto" in the name.
+    # value lazily would require the DEM -- so fall back to "auto" in the name.
     eff_interval = captured["interval_m"]
     dem_bbox = captured["bbox"]
 

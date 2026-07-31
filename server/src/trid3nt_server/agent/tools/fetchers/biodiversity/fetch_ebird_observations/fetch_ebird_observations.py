@@ -763,8 +763,7 @@ def fetch_ebird_observations(
 
     eBird does NOT expose a bbox query -- only radius queries around a
     ``(lat, lng)`` point. We tile the bbox into ~50 km circles (eBird's max
-    radius) and dedupe by ``subId``. Per audit.md, will replace
-    the row/col grid with a proper hex-tile cover; the v0.1 grid intentionally
+    radius) and dedupe by ``subId``; the row/col grid intentionally
     overlaps tiles so we don't miss slivers between rows/cols.
 
     Params:
@@ -832,7 +831,7 @@ def fetch_ebird_observations(
 
     return LayerURI(
         layer_id=f"ebird-{species_code_clean}-{q_bbox[0]:.4f}-{q_bbox[1]:.4f}",
-        name=f"eBird Recent Sightings — {species_code_clean}",
+        name=f"eBird Recent Sightings -- {species_code_clean}",
         layer_type="vector",
         uri=result.uri,
         style_preset="ebird_observations",

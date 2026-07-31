@@ -359,7 +359,7 @@ def compute_exposure_summary(
     this automatically). Do NOT use for: dollar losses/damage states
     (``compute_flood_depth_damage`` screening or
     ``pelicun_damage_assessment`` defensible); generic raster-in-zone
-    stats (``compute_zonal_statistics``).
+    stats (the code_exec playground).
 
     Params:
         hazard_layer_uri: hazard raster (band 1 defines the footprint).

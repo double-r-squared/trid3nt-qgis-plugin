@@ -1994,7 +1994,7 @@ def publish_layer(
 
     Invariant 6 (Metadata-payload pattern): published layer surfaces to the
     client via the layer-load envelope (``observe_published_layer``);
-    persistence is DynamoDB.
+    persistence is local (file-backed JSON store).
 
     Cross-tool dependencies:
         Upstream: ``postprocess_flood`` (via ``sfincs_flood``,

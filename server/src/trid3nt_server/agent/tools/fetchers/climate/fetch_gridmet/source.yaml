@@ -108,14 +108,14 @@ docstring: |
     - User asks for reference ET (pet) for water-balance computations.
 
   Do NOT use this for:
-    - Non-CONUS bboxes — use ``fetch_era5_reanalysis`` (global 0.25°).
-    - Sub-daily timesteps — gridMET is daily; use ERA5, HRRR, NEXRAD,
+    - Non-CONUS bboxes -- use ``fetch_era5_reanalysis`` (global 0.25°).
+    - Sub-daily timesteps -- gridMET is daily; use ERA5, HRRR, NEXRAD,
       or GOES for hourly / sub-hourly.
-    - Real-time / live forecast — gridMET lags ~3 days; use NWS Alerts
+    - Real-time / live forecast -- gridMET lags ~3 days; use NWS Alerts
       + HRRR for live CONUS forecast.
-    - Radar precipitation — use ``fetch_mrms_qpe`` (1 km gauge-corrected)
+    - Radar precipitation -- use ``fetch_mrms_qpe`` (1 km gauge-corrected)
       instead of gridMET ``pr`` (4 km PRISM-blended).
-    - Static fuel-model class / vegetation type — use
+    - Static fuel-model class / vegetation type -- use
       ``fetch_landfire_fuels`` instead.
     - Vector data of any kind.
 
@@ -147,11 +147,11 @@ docstring: |
   Cross-tool dependencies:
     Consumes admin polygons from ``fetch_administrative_boundaries`` (via
     ``clip_raster_to_polygon`` for state/county clipping). Feeds raster
-    outputs to ``compute_zonal_statistics``, ``clip_raster_to_polygon``,
-    ``clip_raster_to_polygon``, ``publish_layer`` (UI render via QGIS Server),
-    and fire-danger composers. Sibling fetchers: ``fetch_era5_reanalysis``
-    (global, hourly — non-CONUS choice), ``fetch_landfire_fuels`` (static
-    fuel-model class — pair with gridMET for full moisture state),
+    outputs to ``spatial_query``, ``clip_raster_to_polygon``, ``publish_layer``
+    (native render via the QGIS plugin), and fire-danger composers. Sibling
+    fetchers: ``fetch_era5_reanalysis``
+    (global, hourly -- non-CONUS choice), ``fetch_landfire_fuels`` (static
+    fuel-model class -- pair with gridMET for full moisture state),
     ``fetch_mrms_qpe`` (1 km gauge-corrected radar precip).
 
   Raises:
@@ -161,4 +161,4 @@ docstring: |
     ``GRIDMETUpstreamError``: THREDDS DAP failure (retryable).
 
   FR-CE-8: routed through ``read_through`` (``ttl_class="static-30d"``).
-  ``supports_global_query=False`` — gridMET is CONUS-only.
+  ``supports_global_query=False`` -- gridMET is CONUS-only.

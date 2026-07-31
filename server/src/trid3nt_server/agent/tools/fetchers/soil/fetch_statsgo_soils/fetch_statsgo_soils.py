@@ -73,13 +73,13 @@ class STATSGOSoilsEmptyError(STATSGOSoilsError):
 # ---------------------------------------------------------------------------
 
 #: Supported STATSGO fields. pfdf 3.0.4 surfaces exactly these two; new
-#: releases may extend the set (PHYS, RUNOFF, etc.) — the validator below
+#: releases may extend the set (PHYS, RUNOFF, etc.) -- the validator below
 #: re-derives the live allow-list lazily so a pfdf bump does not require a
 #: code change here.
 _DEFAULT_VALID_FIELDS: frozenset[str] = frozenset({"KFFACT", "THICK"})
 
 #: CONUS envelope for the STATSGO COG collection (EPSG:4326). Outside this
-#: envelope ScienceBase returns nothing and pfdf raises — we short-circuit
+#: envelope ScienceBase returns nothing and pfdf raises -- we short-circuit
 #: with a typed input error to spare the round-trip.
 _CONUS_BBOX: tuple[float, float, float, float] = (-125.0, 24.0, -66.5, 49.5)
 
@@ -201,7 +201,7 @@ def _normalize_field(field: str) -> str:
         valid: frozenset[str] = frozenset(
             str(name).upper() for name in statsgo.fields().index
         )
-    except Exception:  # noqa: BLE001 — pfdf unavailable or schema drift
+    except Exception:  # noqa: BLE001 -- pfdf unavailable or schema drift
         valid = _DEFAULT_VALID_FIELDS
     if field not in valid:
         raise STATSGOSoilsInputError(
@@ -229,7 +229,7 @@ def _fetch_statsgo_field_bytes(
     try:
         from pfdf.data.usgs import statsgo  # type: ignore[import-not-found]
         from pfdf.projection import BoundingBox  # type: ignore[import-not-found]
-        import rioxarray  # noqa: F401 — registers .rio accessor
+        import rioxarray  # noqa: F401 -- registers .rio accessor
     except Exception as exc:  # noqa: BLE001
         raise STATSGOSoilsUpstreamError(
             f"pfdf / rioxarray unavailable: {exc}"
@@ -240,7 +240,7 @@ def _fetch_statsgo_field_bytes(
 
     try:
         raster = statsgo.read(field, pfdf_bbox, timeout=timeout_s)
-    except Exception as exc:  # noqa: BLE001 — re-raise as typed
+    except Exception as exc:  # noqa: BLE001 -- re-raise as typed
         raise STATSGOSoilsUpstreamError(
             f"pfdf.data.usgs.statsgo.read failed for field={field} bbox={bbox}: {exc}"
         ) from exc
@@ -356,22 +356,23 @@ def fetch_statsgo_soils(
           soil thickness over Camp Fire footprint").
         - Post-fire debris-flow workflow (M1 / M3 / M4 logistic models
           from Staley et al. 2017) needs catchment-aggregated soil
-          covariates. Pair with ``compute_zonal_statistics`` over a
+          covariates. Pair with ``spatial_query`` over a
           burn-perimeter or watershed polygon.
         - Hydrologic / runoff modeling needs a CONUS-wide soil substrate
           when SSURGO is too detailed or unavailable for the bbox.
 
     When NOT to use:
-        - DO NOT use for fine-scale (1:24,000) county-level soils — use
+        - DO NOT use for fine-scale (1:24,000) county-level soils -- use
           SSURGO (no atomic tool yet; add in a future job) which is the
           high-resolution sibling of STATSGO.
-        - DO NOT use outside CONUS — STATSGO does not cover Alaska,
+        - DO NOT use outside CONUS -- STATSGO does not cover Alaska,
           Hawaii, Puerto Rico, or other territories; the input validator
           raises ``STATSGOSoilsInputError`` on out-of-CONUS bbox.
-        - DO NOT use for global soils — use SoilGrids (future tool); for
-          curve numbers use ``fetch_gcn250_curve_numbers`` (global SCS CN
-          raster) which already encodes hydrologic soil group + landcover.
-        - DO NOT use for organic-soil / peat depth — STATSGO THICK is the
+        - DO NOT use for global soils -- use ``fetch_soilgrids`` (ISRIC
+          SoilGrids 2.0, global 250 m); for curve numbers use
+          ``fetch_gcn250_curve_numbers`` (global SCS CN raster) which
+          already encodes hydrologic soil group + landcover.
+        - DO NOT use for organic-soil / peat depth -- STATSGO THICK is the
           generic soil-profile thickness, not a peatland-specific layer.
 
     Parameters:
@@ -379,7 +380,7 @@ def fetch_statsgo_soils(
             4-float tuple, lon/lat ordered min-then-max on each axis. Must
             intersect ``(-125, 24, -66.5, 49.5)`` CONUS envelope or
             ``STATSGOSoilsInputError`` is raised. Recommended scale:
-            watershed / county sized (≤1° × 1°) — larger bboxes still
+            watershed / county sized (≤1° × 1°) -- larger bboxes still
             work but emit MB-scale COGs; the payload-warning gate
             uses ``estimate_payload_mb`` to flag big requests.
             Example for Fort Myers watershed: ``(-82.0, 26.4, -81.7, 26.7)``.
@@ -400,17 +401,16 @@ def fetch_statsgo_soils(
         ``style_preset="statsgo_kffact"`` or ``"statsgo_thick"``,
         ``units="centimeters"`` for THICK and ``None`` for KFFACT.
         Downstream tools consume the COG as a catchment-aggregation input
-        (typically via ``compute_zonal_statistics`` against a watershed
+        (typically via ``spatial_query`` against a watershed
         polygon from ``fetch_administrative_boundaries`` /
         ``fetch_nhdplus_nldi_navigate`` basin).
 
     Cross-tool dependencies:
-        - Composes WITH: ``compute_zonal_statistics`` (catchment-mean
+        - Composes WITH: ``spatial_query`` (catchment-mean
           KFFACT for pfdf debris-flow scoring); ``clip_raster_to_polygon``
           (clip to a burn perimeter / watershed); ``publish_layer`` (map
           display via the ``statsgo_*`` QML preset).
-        - Sibling: ``fetch_gcn250_curve_numbers`` (global SCS CN raster —
-          overlaps semantically with KFFACT-as-HSG-proxy but is global +
+        - Sibling: ``fetch_gcn250_curve_numbers`` (global SCS CN raster -- overlaps semantically with KFFACT-as-HSG-proxy but is global +
           AMC-tiered; prefer GCN250 when leaving CONUS).
         - Upstream source: USGS ScienceBase STATSGO COG collection via
           ``pfdf.data.usgs.statsgo``.
@@ -474,7 +474,7 @@ def fetch_statsgo_soils(
             f"{q_bbox[0]:.4f}-{q_bbox[1]:.4f}-{q_bbox[2]:.4f}-{q_bbox[3]:.4f}"
         ),
         name=(
-            f"STATSGO {normalized_field} — bbox "
+            f"STATSGO {normalized_field} -- bbox "
             f"({q_bbox[0]:.2f},{q_bbox[1]:.2f},{q_bbox[2]:.2f},{q_bbox[3]:.2f})"
         ),
         layer_type="raster",

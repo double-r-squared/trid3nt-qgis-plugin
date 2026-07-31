@@ -44,7 +44,7 @@ _SOURCE_PARAM_ARM = os.environ.get("TRID3NT_CATALOG_ARM", "").strip() in ("1", "
 
 
 # ---------------------------------------------------------------------------
-# fetch_from_catalog — generic Tier-aware dispatcher.
+# fetch_from_catalog -- generic Tier-aware dispatcher.
 # ---------------------------------------------------------------------------
 
 
@@ -193,12 +193,12 @@ def _tier2_ogc_fetch(entry: CatalogEntry, params: dict[str, Any]) -> tuple[bytes
     elif "/wms" in sniff or "wmsserver" in sniff:
         service_type = "WMS"
     else:
-        # ArcGIS REST endpoints often have no /wms in the path — use REST.
+        # ArcGIS REST endpoints often have no /wms in the path -- use REST.
         service_type = "ARCGIS_REST" if "arcgis" in sniff else "WMS"
 
     # ArcGIS REST entry URLs typically point to /MapServer; the /query path
     # has to be on a specific layer. v0.1 default: layer 0 unless params.layer
-    # overrides. The kickoff's FEMA NFHL flood zones live on layer 28 — the
+    # overrides. The kickoff's FEMA NFHL flood zones live on layer 28 -- the
     # caller passes layer_name="28" (or an integer-coercible string).
     #
     # ArcGIS ImageServer endpoints (raster) do NOT support /<layer>/query;
@@ -210,7 +210,7 @@ def _tier2_ogc_fetch(entry: CatalogEntry, params: dict[str, Any]) -> tuple[bytes
     layer_name = layer_name_param or ""
     if service_type == "ARCGIS_REST":
         if "/imageserver" in sniff:
-            # ImageServer exportImage — produces a PNG / TIFF clip of the
+            # ImageServer exportImage -- produces a PNG / TIFF clip of the
             # raster mosaic. Different param shape than MapServer/query.
             base = url.rstrip("/")
             fetch_url = f"{base}/exportImage"
@@ -297,7 +297,7 @@ def _tier4_region_fetch(
 ) -> tuple[bytes, str]:
     """Tier-4 (region download + local clip) dispatch.
 
-    v0.1 substrate raises NotImplementedError — the per-source region
+    v0.1 substrate raises NotImplementedError -- the per-source region
     download + clip path is intricate (NHDPlus HR uses HUC4 routing; WorldPop
     uses ISO3 country files; HydroSHEDS uses continental files). The existing
     fetchers (``fetch_river_geometry`` for NHDPlus HR; ``fetch_population``
@@ -316,7 +316,7 @@ def _fetch_from_catalog_entry(entry_id: str, params: dict[str, Any] | None = Non
     Use this (not search_data_catalog, which only LISTS candidates) when you already have a stable catalog entry id and want its actual layer BYTES.
 
     Use this when: the LLM has chosen a `CatalogEntry` from `search_data_catalog`
-    and needs the actual layer bytes — generic dispatcher routes by the
+    and needs the actual layer bytes -- generic dispatcher routes by the
     entry's ``access_tier``: Tier 1 (STAC+COG), Tier 2 (OGC service), Tier 3
     (HTTPS+Range), Tier 4 (region+clip). The dispatched bytes are written
     through the FR-DC-3 cache and surfaced as a LayerURI.
@@ -324,7 +324,7 @@ def _fetch_from_catalog_entry(entry_id: str, params: dict[str, Any] | None = Non
     Do NOT use this for: discovering candidate sources (use ``search_data_catalog``);
     direct-bbox raster retrieval where a dedicated fetcher already exists
     (use ``fetch_dem`` / ``fetch_landcover`` etc.); user-supplied URLs not in
-    the catalog (use ``web_fetch`` once it lands).
+    the catalog (use ``web_fetch``).
 
     Params:
         entry_id: stable catalog id (e.g. ``"fema-nfhl-flood-zones"``,
@@ -338,7 +338,7 @@ def _fetch_from_catalog_entry(entry_id: str, params: dict[str, Any] | None = Non
             - ``service_type`` (Tier 2): override URL sniffing
               (``"WCS"`` / ``"WMS"`` / ``"WFS"`` / ``"ARCGIS_REST"``).
             - ``width_px`` / ``height_px`` (Tier 2 raster): explicit pixel
-              dimensions. Optional — when omitted, the dispatch derives an
+              dimensions. Optional -- when omitted, the dispatch derives an
               extent-aware raster grid from ``bbox`` (resolution lever below).
             - ``target_resolution_m`` (Tier 2 raster): ground cell size in
               metres for the auto-computed grid (the fetch-side resolution
@@ -372,7 +372,7 @@ def _fetch_from_catalog_entry(entry_id: str, params: dict[str, Any] | None = Non
     entry = _get_catalog_entry(entry_id)
     tier = entry.access_tier
 
-    # Cache key params — entry_id + (normalized) params dict.
+    # Cache key params -- entry_id + (normalized) params dict.
     cache_params = {"entry_id": entry.id, "tier": tier, "request": params}
 
     def _do_fetch() -> bytes:
@@ -385,7 +385,7 @@ def _fetch_from_catalog_entry(entry_id: str, params: dict[str, Any] | None = Non
             data, ext = _tier3_https_fetch(entry, params)
         elif tier == 4:
             data, ext = _tier4_region_fetch(entry, params)
-        else:  # pragma: no cover — Literal exhaustive
+        else:  # pragma: no cover -- Literal exhaustive
             raise CatalogNotFoundError(
                 f"unknown access_tier={tier!r} for entry={entry.id!r}"
             )

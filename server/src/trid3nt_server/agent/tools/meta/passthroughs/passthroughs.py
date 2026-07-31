@@ -253,27 +253,35 @@ def qgis_process(
     # tool_arg_normalizer, but kept as belt-and-suspenders).
     **_extra_ignored: Any,
 ) -> dict[str, Any]:
-    """Submit a PyQGIS Processing algorithm for execution on the worker.
+    """Submit a PyQGIS Processing algorithm for execution.
 
     Use this when: the agent needs to run a QGIS Processing algorithm
     (vector / raster / GDAL / GRASS / SAGA / plugin) that maps to one
     discovered via ``list_qgis_algorithms`` / ``describe_qgis_algorithm``.
-    The worker runs the algorithm and persists outputs under
-    ``gs://<bucket>/runs/<run_id>/`` per FR-CE-4.
+    Outputs persist under ``s3://<bucket>/runs/<run_id>/`` per FR-CE-4.
+
+    Heavy on-box execution is DISABLED by default: unless the operator has
+    set ``TRID3NT_QGIS_ONBOX_DOCKER=on``, this call returns an honest typed
+    "offloaded, did not run" error instead of spawning a container (never a
+    fabricated success). When enabled, it runs via a local Docker container
+    (``TRID3NT_QGIS_DOCKER_IMAGE``) or a local ``qgis_process`` binary on
+    this machine.
 
     Do NOT use this for: solver runs that have a dedicated workflow
-    (``run_sfincs_solver``, ``run_pelicun_impact``, etc. -- those go through
-    their own dispatchers); render-only requests (use the layer-style /
-    map-command path).
+    (``run_sfincs``, ``run_swmm``, ``run_modflow``, ``run_pelicun``, etc. --
+    those go through their own ``run_*`` dispatchers); render-only requests
+    (use the layer-style / map-command path).
 
     Params:
         algorithm: QGIS algorithm id (e.g. ``"native:reprojectlayer"``).
         params: algorithm parameters as a JSON-serializable dict.
 
     Returns:
-        A dict carrying the worker's ``ExecutionHandle`` (run_id, output
-        URIs, status). Shape comes from
-        ``trid3nt_contracts.execution.ExecutionHandle`` once wired.
+        A dict: on success, ``{status, tool, algorithm, run_id, outputs,
+        returncode, duration_s, stdout_tail, stderr_tail}``; when offloaded
+        (the default), ``{status: "error", error_code:
+        "QGIS_PROCESSING_OFFLOADED", retryable: False, did_run: False,
+        message}``.
 
     FR-DC-6: This tool is uncacheable-by-construction (solver / dispatcher
     outputs live under ``runs/`` not ``cache/``); the cache shim is

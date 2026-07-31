@@ -609,7 +609,7 @@ def fetch_lehd_jobs(
 
     **When to use:**
     - "How many jobs are inside this flood / fire / plume footprint?" (feed the
-      choropleth INTO ``compute_zonal_statistics`` over a hazard polygon).
+      choropleth INTO ``spatial_query`` over a hazard polygon).
     - "Show employment density by tract" / daytime-population proxy for a metro.
     - Recovery planning: tracts concentrating jobs at risk, by wage or sector.
 

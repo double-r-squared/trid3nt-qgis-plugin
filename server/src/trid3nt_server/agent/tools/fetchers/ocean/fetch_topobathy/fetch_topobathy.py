@@ -1,4 +1,4 @@
-"""``fetch_topobathy`` atomic tool — coastal merged topo-bathymetry DEM (SFINCS North Star P1).
+"""``fetch_topobathy`` atomic tool -- coastal merged topo-bathymetry DEM (SFINCS North Star P1).
 """
 
 from __future__ import annotations
@@ -70,8 +70,7 @@ class TopobathyUpstreamError(TopobathyError):
 class TopobathyEmptyError(TopobathyError):
     """Neither CUDEM nor 3DEP produced any usable elevation for the AOI.
 
-    This is the hard dead-end: no land DEM AND no bathy. The softer case —
-    CUDEM missing but 3DEP land present — does NOT raise; it degrades to a
+    This is the hard dead-end: no land DEM AND no bathy. The softer case -- CUDEM missing but 3DEP land present -- does NOT raise; it degrades to a
     land-only DEM and returns a ``TopobathyResult`` carrying an honest
     ``bathymetry_present=False`` warning (data-source fallback norm)."""
 
@@ -81,7 +80,7 @@ class TopobathyEmptyError(TopobathyError):
 
 class TopobathyDatumError(TopobathyError):
     """A CUDEM tile's vertical datum is NOT NAVD88 and no documented NAVD88
-    offset was supplied (Invariant 7 — never silently merge mismatched
+    offset was supplied (Invariant 7 -- never silently merge mismatched
     datums)."""
 
     error_code = "TOPOBATHY_DATUM_MISMATCH"
@@ -94,7 +93,7 @@ class TopobathyDatumError(TopobathyError):
 
 #: NOAA NCEI CUDEM 1/9 arc-second "Topobathy 2014" collection root (public
 #: S3, anonymous read). The same objects are mirrored under
-#: chs.coast.noaa.gov/htdata/raster2/elevation/ — the S3 host is faster +
+#: chs.coast.noaa.gov/htdata/raster2/elevation/ -- the S3 host is faster +
 #: range-request friendly for /vsicurl/.
 CUDEM_COLLECTION_ROOT = (
     "https://noaa-nos-coastal-lidar-pds.s3.amazonaws.com/"
@@ -102,7 +101,7 @@ CUDEM_COLLECTION_ROOT = (
 )
 
 #: Authoritative per-tile URL manifest (one https://...tif per line). This is
-#: the tile-index "footprint" we intersect with the AOI — the tile filenames
+#: the tile-index "footprint" we intersect with the AOI -- the tile filenames
 #: encode each tile's NW corner, so we don't need to crack open the shapefile
 #: tile index (tileindex_NCEI_ninth_Topobathy_2014.zip) to do the spatial
 #: intersect.
@@ -111,7 +110,7 @@ CUDEM_URLLIST_URL = CUDEM_COLLECTION_ROOT + "urllist8483.txt"
 #: Each CUDEM tile is a 0.25-degree square; the filename encodes its NW corner.
 _CUDEM_TILE_DEG = 0.25
 
-#: GLOBAL topo-bathy FALLBACK — NOAA NCEI ETOPO 2022 15 arc-second (~450 m)
+#: GLOBAL topo-bathy FALLBACK -- NOAA NCEI ETOPO 2022 15 arc-second (~450 m)
 #: "surface" relief COGs. CUDEM is pinned to a single US East/Gulf regional
 #: collection (8483) and therefore returns 0 intersecting tiles for the entire
 #: US PACIFIC / West-coast shoreline (Crescent City, the Cascadia tsunami sites,
@@ -123,7 +122,7 @@ _CUDEM_TILE_DEG = 0.25
 #: (HTTP 206) and tiled in 15-degree blocks named by their NW corner, e.g.
 #: ``ETOPO_2022_v1_15s_N45W135_surface.tif`` spans lat [30,45], lon [-135,-120].
 #: VERTICAL DATUM: ETOPO 2022 is referenced to EGM2008 (mean-sea-level geoid),
-#: NOT NAVD88 — a sub-metre offset. We do NOT silently relabel it NAVD88; the
+#: NOT NAVD88 -- a sub-metre offset. We do NOT silently relabel it NAVD88; the
 #: fallback path emits an honest ``fallback_warning`` flagging the source +
 #: datum (data-source fallback norm). For a tsunami/GeoClaw run (sea_level=0)
 #: an MSL-referenced bed is the natural reference, so no offset is applied.
@@ -169,12 +168,12 @@ NCEI_REGIONAL_COASTAL_DEMS: tuple[dict[str, Any], ...] = (
     },
 )
 
-#: Target output CRS — UTM 16N (covers the SFINCS North Star demo AOI, the
+#: Target output CRS -- UTM 16N (covers the SFINCS North Star demo AOI, the
 #: Florida panhandle / Mexico Beach). NAVD88 vertical is preserved (the merge
 #: + reproject only touches the horizontal grid).
 TARGET_CRS = "EPSG:32616"
 
-#: US coastal envelope (incl. AK + HI + territories) — a coarse pre-screen so a
+#: US coastal envelope (incl. AK + HI + territories) -- a coarse pre-screen so a
 #: clearly-inland or foreign bbox fails fast with TopobathyInputError before we
 #: download the manifest. The live manifest intersect is the authoritative
 #: coverage check.
@@ -199,7 +198,7 @@ _STYLE_PRESET = "continuous_dem"
 #: raster's ds.nodata does not declare them. Masked to NaN before the merge.
 _TOPOBATHY_SENTINEL_ABS = 9000.0
 
-#: GDAL no-sign-request env for anonymous public-S3 /vsicurl/ reads — mirrors
+#: GDAL no-sign-request env for anonymous public-S3 /vsicurl/ reads -- mirrors
 #: the scoped rasterio.Env in data_fetch.py:289.
 _VSICURL_ENV_KW = dict(
     AWS_NO_SIGN_REQUEST="YES",
@@ -230,7 +229,7 @@ _METADATA = AtomicToolMetadata(
 
 
 # ---------------------------------------------------------------------------
-# Result wrapper — a LayerURI plus an honest bathymetry-present flag.
+# Result wrapper -- a LayerURI plus an honest bathymetry-present flag.
 #
 # The tool returns a ``LayerURI`` for byte-format compatibility with
 # fetch_dem / fetch_3dep_extra (downstream build_sfincs_model treats the
@@ -248,13 +247,13 @@ class TopobathyResult(LayerURI):
 
     Extra fields beyond ``LayerURI``:
 
-    - ``bathymetry_present`` — True when at least one CUDEM tile contributed
+    - ``bathymetry_present`` -- True when at least one CUDEM tile contributed
       bathymetry to the merge; False when the tool degraded to 3DEP-land-only
       (CUDEM tiles missing / unreachable for the AOI).
-    - ``fallback_warning`` — a human-readable honest warning when
+    - ``fallback_warning`` -- a human-readable honest warning when
       ``bathymetry_present`` is False (None otherwise). NEVER a fabricated
       success; a coastal run that consumes a no-bathy DEM is flagged.
-    - ``cudem_tile_count`` — number of CUDEM tiles merged (0 on the land-only
+    - ``cudem_tile_count`` -- number of CUDEM tiles merged (0 on the land-only
       fallback path).
     """
 
@@ -377,11 +376,11 @@ def _fetch_cudem_urllist(timeout_s: float) -> list[str]:
     """Download the CUDEM per-tile URL manifest (urllist8483.txt).
 
     Returns the list of tile URLs (one .tif per line). Raises
-    ``TopobathyUpstreamError`` on a network / HTTP failure — that is a real
+    ``TopobathyUpstreamError`` on a network / HTTP failure -- that is a real
     upstream problem, distinct from "no tiles intersect the AOI" (which is an
     empty-intersection on a successfully-downloaded manifest).
     """
-    import requests  # lazy — keep module import cheap
+    import requests  # lazy -- keep module import cheap
 
     try:
         resp = requests.get(CUDEM_URLLIST_URL, timeout=timeout_s)
@@ -410,7 +409,7 @@ def _select_cudem_tiles(
     """Return the CUDEM tile URLs whose 0.25-deg footprint intersects the AOI.
 
     Empty list == no CUDEM coverage for the AOI (the manifest downloaded fine
-    but nothing overlapped) — the caller degrades to 3DEP-land-only.
+    but nothing overlapped) -- the caller degrades to 3DEP-land-only.
     """
     urls = _fetch_cudem_urllist(timeout_s)
     selected: list[str] = []
@@ -453,7 +452,7 @@ def _etopo_url_for_corner(nw_lat: float, nw_lon: float) -> str:
 
 def _select_etopo_tiles(bbox: tuple[float, float, float, float]) -> list[str]:
     """Return the ETOPO 2022 15" COG URLs whose 15-degree footprint intersects
-    the AOI — the GLOBAL topo-bathy fallback when CUDEM has no coverage.
+    the AOI -- the GLOBAL topo-bathy fallback when CUDEM has no coverage.
 
     The grid is complete (every 15-degree block has a tile), so we enumerate the
     NW corners spanning the bbox and AABB-test each tile (lat [nw_lat-15,nw_lat],
@@ -509,7 +508,7 @@ def _select_regional_coastal_dem_tiles(
     skipped (the caller degrades to CUDEM / ETOPO -- data-source fallback norm); an
     empty result == no registered fine collection covers the AOI.
     """
-    import requests  # lazy — keep module import cheap
+    import requests  # lazy -- keep module import cheap
 
     min_lon, min_lat, max_lon, max_lat = bbox
     tiles: list[str] = []
@@ -523,7 +522,7 @@ def _select_regional_coastal_dem_tiles(
             resp = requests.get(coll["stac_items_url"], timeout=timeout_s)
             resp.raise_for_status()
             fc = resp.json()
-        except Exception as exc:  # noqa: BLE001 — fine layer is best-effort
+        except Exception as exc:  # noqa: BLE001 -- fine layer is best-effort
             logger.warning(
                 "fetch_topobathy: could not load NCEI regional collection %s "
                 "STAC items (%s); skipping this fine source",
@@ -570,10 +569,10 @@ def _assert_navd88(
     - if ``navd88_offset_m`` is supplied (a DOCUMENTED tide-to-NAVD88 offset
       for this AOI), return it so the merge step can add it to the tile's
       elevations (bringing the tile onto NAVD88); else
-    - raise ``TopobathyDatumError`` — NEVER silently merge mismatched datums.
+    - raise ``TopobathyDatumError`` -- NEVER silently merge mismatched datums.
 
     Returns the offset (metres) to ADD to the tile's elevations to bring them
-    onto NAVD88 — 0.0 for a confirmed-NAVD88 tile.
+    onto NAVD88 -- 0.0 for a confirmed-NAVD88 tile.
 
     NOTE: the CUDEM 1/9 arc-second collection is NAVD88 by construction (the
     collection metadata XML states "The DEMs are referenced vertically to the
@@ -605,7 +604,7 @@ def _assert_navd88(
                 except Exception:  # noqa: BLE001
                     pass
     except Exception as exc:  # noqa: BLE001
-        # Could not read the header at all — that is an upstream read failure,
+        # Could not read the header at all -- that is an upstream read failure,
         # not a datum decision. Surface it so the caller can degrade / retry.
         raise TopobathyUpstreamError(
             f"could not read CUDEM tile header for datum check ({vsicurl_path}): {exc}"
@@ -626,10 +625,10 @@ def _classify_vertical_datum(
     raises ``TopobathyDatumError`` for a non-NAVD88 datum with no offset.
     """
     text = (datum_text or "").lower()
-    # Positive NAVD88 signal — accept, no offset.
+    # Positive NAVD88 signal -- accept, no offset.
     if "navd88" in text or "navd 88" in text or "navd_88" in text:
         return 0.0
-    # Explicit tidal / mean-water datums — the gate target.
+    # Explicit tidal / mean-water datums -- the gate target.
     tidal_markers = ("mhw", "mhhw", "mllw", "mlw", "lmsl", "msl", "mean sea level",
                      "mean high water", "mean low water", "tidal")
     if any(mk in text for mk in tidal_markers):
@@ -649,10 +648,10 @@ def _classify_vertical_datum(
     # No vertical-datum signal at all. The CUDEM 1/9 collection is NAVD88 by
     # construction (collection-level metadata), and bare GeoTIFF tiles commonly
     # omit a vertical CS in the per-file WKT. Treat absence-of-signal as the
-    # collection default (NAVD88) — this is NOT a silent cross-datum merge: a
+    # collection default (NAVD88) -- this is NOT a silent cross-datum merge: a
     # POSITIVE non-NAVD88 marker is what trips the gate.
     if navd88_offset_m is not None:
-        # Caller explicitly asserted an offset — honour it.
+        # Caller explicitly asserted an offset -- honour it.
         return float(navd88_offset_m)
     logger.info(
         "fetch_topobathy: tile %s carries no per-file vertical-CS tag; "
@@ -663,7 +662,7 @@ def _classify_vertical_datum(
 
 
 # ---------------------------------------------------------------------------
-# 3DEP land DEM (REUSE fetch_dem — do NOT reimplement 3DEP).
+# 3DEP land DEM (REUSE fetch_dem -- do NOT reimplement 3DEP).
 # ---------------------------------------------------------------------------
 
 
@@ -685,7 +684,7 @@ def _fetch_3dep_land_to_file(
         return None
     try:
         land_layer = fetch_dem(bbox, resolution_m=resolution_m)
-    except Exception as exc:  # noqa: BLE001 — land DEM is best-effort here
+    except Exception as exc:  # noqa: BLE001 -- land DEM is best-effort here
         logger.warning(
             "fetch_topobathy: 3DEP land fetch_dem failed for bbox=%s: %s",
             bbox, exc,
@@ -742,16 +741,16 @@ def _build_merged_topobathy(
 
     Precedence (LOW -> HIGH, last source WINS where it has valid data):
 
-      1. ``etopo_paths`` — GLOBAL ETOPO 2022 15" topo-bathy fallback (BASE,
+      1. ``etopo_paths`` -- GLOBAL ETOPO 2022 15" topo-bathy fallback (BASE,
          ~450 m). Only supplied when CUDEM has NO coverage; it lays down a real
          nearshore bed so a coastal/tsunami run is not left land-only. 3DEP land
          (higher res) paints over it on land; ETOPO survives offshore where
          3DEP is nodata.
-      2. ``land_local_path`` — USGS 3DEP land DEM (~10 m). Wins over ETOPO on
+      2. ``land_local_path`` -- USGS 3DEP land DEM (~10 m). Wins over ETOPO on
          land; CUDEM (when present) wins over it on the coast.
-      3. ``cudem_vsicurl_paths`` — NOAA NCEI CUDEM 1/9" (~3 m). Wins in the
+      3. ``cudem_vsicurl_paths`` -- NOAA NCEI CUDEM 1/9" (~3 m). Wins in the
          nearshore / shoreline overlap on the CUDEM-covered (Gulf/East) coast.
-      4. ``regional_paths`` — NCEI REGIONAL integrated topo-bathy DEM tiles
+      4. ``regional_paths`` -- NCEI REGIONAL integrated topo-bathy DEM tiles
          (~1 m, NAVD88; e.g. the CoNED Northern California collection that covers
          Crescent City). The FINEST source -- wins over everything where it has
          data. This is the fine SHORE layer for coasts CUDEM omits.
@@ -760,7 +759,7 @@ def _build_merged_topobathy(
     ``regional_paths`` are empty and the order is exactly the historical
     ``[land, CUDEM]`` (CUDEM wins). The merge reprojects EACH source individually
     from its own CRS onto a common bbox-clipped ``target_crs`` grid, then
-    composites LAST-wins (see ``_merge_sources``) — robust to heterogeneous CRS
+    composites LAST-wins (see ``_merge_sources``) -- robust to heterogeneous CRS
     (CUDEM-EPSG:4269 / 3DEP-EPSG:5070 / ETOPO-EPSG:9518 / CoNED-EPSG:3717) and to
     opposite pixel orientation, with NO GDAL-CLI dependency. ``min_pixel_m`` floors
     the output grid resolution (so a fine 1 m source does not blow up the AOI grid
@@ -782,14 +781,14 @@ def _build_merged_topobathy(
     if not have_cudem and not have_etopo and not have_regional and not have_land:
         raise TopobathyEmptyError(
             f"no CUDEM tiles, no NCEI regional fine DEM, no ETOPO global fallback "
-            f"AND no 3DEP land DEM for bbox={bbox} — no elevation data available "
+            f"AND no 3DEP land DEM for bbox={bbox} -- no elevation data available "
             "for this AOI"
         )
 
     tmp_paths: list[str] = []
     try:
         # --- Apply any documented datum offsets to CUDEM tiles up-front ---
-        # (offset == 0.0 for confirmed-NAVD88 tiles, the normal case — no copy).
+        # (offset == 0.0 for confirmed-NAVD88 tiles, the normal case -- no copy).
         adjusted_cudem: list[str] = []
         for path, offset in zip(cudem_vsicurl_paths, datum_offsets):
             if offset and abs(offset) > 1e-9:
@@ -828,7 +827,7 @@ def _build_merged_topobathy(
         # leak into statistics. byte-format match to fetch_dem (masked COG).
         try:
             da.rio.write_nodata(np.float32("nan"), encoded=True, inplace=True)
-        except Exception:  # noqa: BLE001 — older rioxarray signature
+        except Exception:  # noqa: BLE001 -- older rioxarray signature
             da.rio.write_nodata(float("nan"), inplace=True)
         with tempfile.NamedTemporaryFile(
             suffix=".tif", delete=False, prefix="trid3nt_topobathy_cog_"
@@ -910,7 +909,7 @@ def _merge_sources(
     """Mosaic ``sources_in_precedence`` (LAST wins) onto a common
     ``target_crs`` grid, clipped to ``bbox`` (EPSG:4326).
 
-    ROBUST per-source warp (the ONLY path — no GDAL CLI required, since prod
+    ROBUST per-source warp (the ONLY path -- no GDAL CLI required, since prod
     lacks it). The sources are HETEROGENEOUS: CUDEM tiles are EPSG:4269
     (NAD83 geographic) and the 3DEP land DEM is EPSG:5070 (CONUS Albers),
     and the two can even have opposite pixel orientation. A raw
@@ -922,7 +921,7 @@ def _merge_sources(
          ``target_crs`` metres). This grid is already bbox-clipped, so we
          never materialise a full 8000x8000 native tile in UTM.
       2. Reproject EACH source INDIVIDUALLY from its OWN CRS onto that grid
-         (bilinear, NaN nodata) — this normalises CRS *and* orientation.
+         (bilinear, NaN nodata) -- this normalises CRS *and* orientation.
       3. Composite by precedence: start from the first source (3DEP land),
          then for each later source (CUDEM) overwrite cells where it has
          valid (non-NaN) data. CUDEM is listed LAST, so it WINS on the coast.
@@ -996,7 +995,7 @@ def _compute_target_grid(
                         densify_pts=2,
                     )
                     res_m = min(abs(rt_e - rt_w), abs(rt_n - rt_s))
-            except Exception as exc:  # noqa: BLE001 — skip an unreadable source
+            except Exception as exc:  # noqa: BLE001 -- skip an unreadable source
                 logger.warning(
                     "fetch_topobathy: could not probe resolution of %s: %s",
                     src,
@@ -1007,7 +1006,7 @@ def _compute_target_grid(
                 finest_res = res_m
 
     if finest_res is None or finest_res <= 0:
-        # No source readable for resolution — fall back to ~3 m (CUDEM native).
+        # No source readable for resolution -- fall back to ~3 m (CUDEM native).
         finest_res = 3.0
 
     # Output-resolution FLOOR: a coastal/GeoClaw nested-topo caller wants a fine
@@ -1047,7 +1046,7 @@ def _merge_sources_rasterio(
     bbox: tuple[float, float, float, float],
     min_pixel_m: float | None = None,
 ) -> str:
-    """Per-source warp + precedence composite — the robust, no-GDAL-CLI merge.
+    """Per-source warp + precedence composite -- the robust, no-GDAL-CLI merge.
 
     NEVER ``rasterio.merge``s raw heterogeneous sources (that throws the
     upside-down ``MergeError`` for the CUDEM-EPSG:4269 + 3DEP-EPSG:5070 mix).
@@ -1091,7 +1090,7 @@ def _merge_sources_rasterio(
                     )
                     src_crs = ds.crs
                     src_transform = ds.transform
-            except Exception as exc:  # noqa: BLE001 — skip an unreadable source
+            except Exception as exc:  # noqa: BLE001 -- skip an unreadable source
                 logger.warning(
                     "fetch_topobathy: skipping unreadable merge source %s: %s",
                     src,
@@ -1120,7 +1119,7 @@ def _merge_sources_rasterio(
 
     if not any_painted:
         raise TopobathyUpstreamError(
-            "merge produced no valid cells — all sources were empty / "
+            "merge produced no valid cells -- all sources were empty / "
             "unreadable / outside the AOI"
         )
 
@@ -1144,7 +1143,7 @@ def _merge_sources_rasterio(
 
 
 # ---------------------------------------------------------------------------
-# Orchestration — the fetch_fn handed to the cache shim.
+# Orchestration -- the fetch_fn handed to the cache shim.
 # ---------------------------------------------------------------------------
 
 
@@ -1172,19 +1171,19 @@ def _fetch_topobathy_bytes_and_flags(
 
     ``force_bathy_base`` (the tsunami / coastal GeoClaw caller): lay the seamless
     GLOBAL ETOPO 2022 topo-bathy down as the ALWAYS-ON base over the FULL domain,
-    even when CUDEM has coverage — CUDEM / 3DEP then paint ON TOP where they
+    even when CUDEM has coverage -- CUDEM / 3DEP then paint ON TOP where they
     exist (land + fine coast). This guarantees the open-ocean portion of an
     offshore-extended domain is genuinely-negative bathymetry (ETOPO is negative
     offshore by construction) rather than a land-DEM fill (the GeoClaw flat-ocean
     root cause). Without it ETOPO is only a CUDEM-absent fallback, so a
     partially-covered or offshore-extended domain gets a flat / land-filled ocean.
     """
-    # 1) Select intersecting CUDEM tiles (best-effort — empty == no coverage).
+    # 1) Select intersecting CUDEM tiles (best-effort -- empty == no coverage).
     cudem_urls: list[str] = []
     try:
         cudem_urls = _select_cudem_tiles(bbox, timeout_s)
     except TopobathyUpstreamError as exc:
-        # Manifest unreachable — treat as "CUDEM unavailable" and degrade to
+        # Manifest unreachable -- treat as "CUDEM unavailable" and degrade to
         # land-only (data-source fallback norm); do NOT abort the coastal run.
         logger.warning(
             "fetch_topobathy: CUDEM tile-index unreachable (%s); degrading to "
@@ -1199,7 +1198,7 @@ def _fetch_topobathy_bytes_and_flags(
     gated_paths: list[str] = []
     for vp in cudem_vsicurl:
         # _assert_navd88 raises TopobathyDatumError for a non-NAVD88 tile with
-        # no offset (propagates — never a silent cross-datum merge). A header
+        # no offset (propagates -- never a silent cross-datum merge). A header
         # read failure raises TopobathyUpstreamError; we skip that single tile
         # rather than abort, but keep the rest.
         try:
@@ -1235,7 +1234,7 @@ def _fetch_topobathy_bytes_and_flags(
         try:
             etopo_urls = _select_etopo_tiles(bbox)
             etopo_vsicurl = [f"/vsicurl/{u}" for u in etopo_urls]
-        except Exception as exc:  # noqa: BLE001 — fallback is best-effort
+        except Exception as exc:  # noqa: BLE001 -- fallback is best-effort
             logger.warning(
                 "fetch_topobathy: ETOPO global-fallback tile selection failed "
                 "(%s); will degrade to 3DEP-land-only", exc,
@@ -1254,14 +1253,14 @@ def _fetch_topobathy_bytes_and_flags(
                 bbox, timeout_s
             )
             regional_vsicurl = [f"/vsicurl/{u}" for u in regional_urls]
-        except Exception as exc:  # noqa: BLE001 — fine layer is best-effort
+        except Exception as exc:  # noqa: BLE001 -- fine layer is best-effort
             logger.warning(
                 "fetch_topobathy: NCEI regional fine-DEM selection failed (%s); "
                 "degrading to CUDEM / ETOPO", exc,
             )
             regional_vsicurl = []
 
-    # 3) 3DEP land DEM (REUSE fetch_dem) — best-effort.
+    # 3) 3DEP land DEM (REUSE fetch_dem) -- best-effort.
     land_local = _fetch_3dep_land_to_file(bbox, resolution_m)
 
     # 4) Merge / reproject / COG.
@@ -1352,27 +1351,27 @@ def fetch_topobathy(
     **What it does:**
         Builds ONE continuous elevation surface across the shoreline by merging
         NOAA NCEI CUDEM 1/9 arc-second topo-bathymetry tiles (the canonical US
-        coastal merged topo+bathy product — only the 1/9 arc-second tiles
+        coastal merged topo+bathy product -- only the 1/9 arc-second tiles
         integrate BOTH bathymetry and topography) with the USGS 3DEP land DEM
         for the same area. CUDEM wins on the coast / nearshore; 3DEP fills the
         land. Output is a single-band float32 Cloud-Optimized GeoTIFF in
         EPSG:32616 (UTM 16N), NAVD88 metres, **positive-up** (land positive,
-        bathymetry NEGATIVE, NO sign flip) — byte-format identical to
-        ``fetch_dem`` so ``build_sfincs_model``'s ``setup_dep`` consumes it
-        unchanged.
+        bathymetry NEGATIVE, NO sign flip) -- byte-format identical to
+        ``fetch_dem`` so SFINCS setup's ``setup_dep`` step (via
+        ``set_sfincs_parameters`` + ``run_sfincs``) consumes it unchanged.
 
     **When to use:**
         - A COASTAL flood / surge / run-up workflow (SFINCS coastal) that needs
-          a continuous bed from the hills to the deep water — the canonical
+          a continuous bed from the hills to the deep water -- the canonical
           North Star entry point. ``fetch_dem`` alone is LAND-ONLY and leaves
           the nearshore as nodata.
         - User asks for "topobathy", "bathymetry + topography", "the sea floor
           and the land together", or "a DEM that includes the water depth".
 
     **When NOT to use:**
-        - A pure inland / pluvial flood with no coast — use ``fetch_dem`` (no
+        - A pure inland / pluvial flood with no coast -- use ``fetch_dem`` (no
           bathymetry needed; CUDEM has no inland coverage anyway).
-        - Outside the US coast — NOAA NCEI CUDEM is US-coast-only; the validator
+        - Outside the US coast -- NOAA NCEI CUDEM is US-coast-only; the validator
           raises ``TopobathyInputError`` for a bbox that misses the US coastal
           envelope.
 
@@ -1388,7 +1387,7 @@ def fetch_topobathy(
             reprojected).
         navd88_offset_m: OPTIONAL documented vertical offset (metres) to ADD to
             a CUDEM tile's elevations to bring a tidal-datum (MHW/MSL/LMSL) tile
-            onto NAVD88. Leave ``None`` for the normal NAVD88 path — a
+            onto NAVD88. Leave ``None`` for the normal NAVD88 path -- a
             non-NAVD88 tile with no offset raises ``TopobathyDatumError`` rather
             than silently merging (Invariant 7).
         timeout_s: tile-index download timeout (seconds, default 120).
@@ -1396,7 +1395,7 @@ def fetch_topobathy(
             the seamless GLOBAL ETOPO 2022 topo-bathy down as the ALWAYS-ON base
             over the FULL bbox even when CUDEM has coverage, with CUDEM / 3DEP
             painted ON TOP. Guarantees the open-ocean portion of the bbox is
-            genuinely-negative bathymetry (not a land-DEM fill) — the GeoClaw
+            genuinely-negative bathymetry (not a land-DEM fill) -- the GeoClaw
             flat-ocean root-cause fix. Default False keeps the original
             CUDEM-first / ETOPO-only-as-fallback behaviour for SFINCS.
         include_regional_fine: when True (the GeoClaw nested fine-SHORE caller),
@@ -1421,7 +1420,7 @@ def fetch_topobathy(
         fields: ``bathymetry_present`` (False on the land-only fallback),
         ``fallback_warning`` (set when bathy is absent), ``cudem_tile_count``.
 
-    **Fallback (data-source norm — CUDEM -> ETOPO-global -> land-only):**
+    **Fallback (data-source norm -- CUDEM -> ETOPO-global -> land-only):**
         CUDEM's hosted 1/9" collection only covers part of the US coast (it
         omits, e.g., the entire US Pacific / West coast). When NO CUDEM tile
         intersects the AOI the tool degrades to the GLOBAL NOAA ETOPO 2022 15
@@ -1429,7 +1428,7 @@ def fetch_topobathy(
         (so a coastal / tsunami run produces actual inundation). That ETOPO bed
         is coarser (~450 m) and EGM2008/MSL-referenced (not NAVD88): the result
         still reports ``bathymetry_present=True`` but carries an honest
-        ``fallback_warning`` naming the source + datum — never a silent relabel.
+        ``fallback_warning`` naming the source + datum -- never a silent relabel.
         Only if CUDEM, ETOPO and 3DEP are ALL unavailable does the result
         degrade to land-only (``bathymetry_present=False``, ``BATHYMETRY
         ABSENT`` warning); only if there is no elevation at all does it raise
@@ -1438,7 +1437,7 @@ def fetch_topobathy(
     **Errors:**
         - ``TopobathyInputError``: bad bbox / outside US coast (retryable=False).
         - ``TopobathyDatumError``: a CUDEM tile is non-NAVD88 with no offset
-          (retryable=False) — Invariant 7.
+          (retryable=False) -- Invariant 7.
         - ``TopobathyUpstreamError``: tile read / merge / COG failure
           (retryable=True).
         - ``TopobathyEmptyError``: no CUDEM AND no 3DEP for the AOI
@@ -1446,8 +1445,8 @@ def fetch_topobathy(
 
     **Cross-tool dependencies:**
         - REUSES ``fetch_dem`` for the 3DEP land DEM (does NOT reimplement 3DEP).
-        - Composes INTO ``build_sfincs_model`` (``setup_dep`` elevtn) — drop-in
-          for ``fetch_dem`` on the coastal path.
+        - Composes INTO SFINCS setup (``set_sfincs_parameters`` + ``run_sfincs``,
+          ``setup_dep`` elevtn) -- drop-in for ``fetch_dem`` on the coastal path.
         - Upstream sources: NOAA NCEI CUDEM 1/9 arc-second (public S3
           ``noaa-nos-coastal-lidar-pds``) + USGS 3DEP (via ``fetch_dem``).
 
@@ -1516,7 +1515,7 @@ def fetch_topobathy(
     # cache shim only persists/returns bytes. We capture them in a closure cell
     # so the LayerURI we build below carries them whether the bytes came from a
     # fresh fetch OR a cache hit (a cache hit means a prior fetch already proved
-    # CUDEM coverage for this exact bbox — bathy was present then).
+    # CUDEM coverage for this exact bbox -- bathy was present then).
     _flags: dict[str, Any] = {
         "bathymetry_present": True,
         "fallback_warning": None,
@@ -1567,7 +1566,7 @@ def fetch_topobathy(
         ),
         name=(
             "Coastal topo-bathymetry DEM (NOAA CUDEM 1/9\" + USGS 3DEP, "
-            "NAVD88 m) — bbox "
+            "NAVD88 m) -- bbox "
             f"({q_bbox[0]:.2f},{q_bbox[1]:.2f},{q_bbox[2]:.2f},{q_bbox[3]:.2f})"
         ),
         layer_type="raster",

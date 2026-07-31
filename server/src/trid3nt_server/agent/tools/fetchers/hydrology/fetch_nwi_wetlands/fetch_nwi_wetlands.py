@@ -1,4 +1,4 @@
-"""``fetch_nwi_wetlands`` atomic tool — USFWS National Wetlands Inventory polygons.
+"""``fetch_nwi_wetlands`` atomic tool -- USFWS National Wetlands Inventory polygons.
 """
 
 from __future__ import annotations
@@ -73,7 +73,7 @@ class NWIWetlandsUpstreamError(NWIWetlandsError):
 # Constants.
 # ---------------------------------------------------------------------------
 
-#: Public USFWS NWI Wetlands MapServer query endpoint (layer 0 — the single
+#: Public USFWS NWI Wetlands MapServer query endpoint (layer 0 -- the single
 #: national polygon feature layer). Probed live 2026-07-20.
 NWI_WETLANDS_URL = (
     "https://fwspublicservices.wim.usgs.gov/wetlandsmapservice/"
@@ -81,7 +81,7 @@ NWI_WETLANDS_URL = (
 )
 
 #: Browser-like header trio required to get JSON past the host WAF (a default
-#: programmatic User-Agent is served an HTML error page — see module docstring).
+#: programmatic User-Agent is served an HTML error page -- see module docstring).
 _NWI_HEADERS = {
     "User-Agent": (
         "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) "
@@ -105,7 +105,7 @@ _MAX_PAGES = 100
 #: Per-request timeout. The USFWS ArcGIS cluster can be slow under load.
 _HTTP_TIMEOUT_S = 60.0
 
-#: Payload heuristic — wetland polygon density is high in coastal/riverine
+#: Payload heuristic -- wetland polygon density is high in coastal/riverine
 #: areas. ~1.0 MB / square degree, clipped to [0.05, 50] MB.
 _PAYLOAD_MB_PER_SQ_DEG = 1.0
 _PAYLOAD_MIN_MB = 0.05
@@ -113,7 +113,7 @@ _PAYLOAD_MAX_MB = 50.0
 
 
 # ---------------------------------------------------------------------------
-# AtomicToolMetadata — registered once at import time.
+# AtomicToolMetadata -- registered once at import time.
 # ---------------------------------------------------------------------------
 
 _METADATA = AtomicToolMetadata(
@@ -237,7 +237,7 @@ def _esri_json_to_features(payload: dict[str, Any]) -> list[dict[str, Any]]:
     """Convert an Esri-JSON query response to a list of GeoJSON Feature dicts.
 
     Used by the FALLBACK path when the geojson format directive is rejected by a
-    mirror node but Esri JSON is still served. Raises nothing — a malformed
+    mirror node but Esri JSON is still served. Raises nothing -- a malformed
     feature is skipped.
     """
     out: list[dict[str, Any]] = []
@@ -271,7 +271,7 @@ def _nwi_query_one_page(
     Returns the parsed response dict. Raises ``NWIWetlandsUpstreamError`` on
     network / HTTP / non-JSON / ArcGIS-error-envelope. Also raises when the body
     parses to JSON but is neither a GeoJSON FeatureCollection (geojson mode) nor
-    an Esri feature envelope (json mode) — the WAF HTML-that-200s trap.
+    an Esri feature envelope (json mode) -- the WAF HTML-that-200s trap.
     """
     params = {
         "where": "1=1",
@@ -345,7 +345,7 @@ def _fetch_nwi_features(
     Esri-JSON fallback. Returns a list of GeoJSON Feature dicts (possibly empty).
 
     The format is decided ONCE on the first page: if the geojson request raises,
-    we retry that page as Esri JSON and — if THAT succeeds — carry the esri
+    we retry that page as Esri JSON and -- if THAT succeeds -- carry the esri
     format through the remaining pages. If both fail on the first page the
     upstream error propagates (honest fail-loud).
     """
@@ -358,7 +358,7 @@ def _fetch_nwi_features(
             payload = _nwi_query_one_page(bbox, offset, fmt)
         except NWIWetlandsUpstreamError:
             if page_idx == 0 and fmt == "geojson":
-                # Primary geojson failed on the very first page — try the
+                # Primary geojson failed on the very first page -- try the
                 # Esri-JSON fallback ONCE, then commit to it for all pages.
                 logger.warning(
                     "fetch_nwi_wetlands: geojson primary failed on page 0; "
@@ -398,7 +398,7 @@ def _fetch_nwi_features(
     else:
         raise NWIWetlandsUpstreamError(
             f"NWI pagination exceeded {_MAX_PAGES} pages for bbox={bbox}; "
-            "bbox is probably too large — reduce bbox extent."
+            "bbox is probably too large -- reduce bbox extent."
         )
 
     return all_features
@@ -413,7 +413,7 @@ def _features_to_flatgeobuf(features: list[dict[str, Any]]) -> bytes:
     """Convert NWI GeoJSON features to FlatGeobuf bytes, keeping the 3 NWI
     semantic columns (``attribute`` / ``wetland_type`` / ``acres``).
 
-    Always emits valid FlatGeobuf bytes — an empty feature list yields an
+    Always emits valid FlatGeobuf bytes -- an empty feature list yields an
     empty-schema FGB so the cache shim has something concrete to persist (an
     empty bbox over open ocean / an unmapped area is LEGITIMATE, not an error).
     """
@@ -504,7 +504,7 @@ def fetch_nwi_wetlands(
 ) -> LayerURI:
     """USFWS National Wetlands Inventory (NWI) wetland polygons as a vector layer.
 
-    ROUTING — use this when the user wants WETLAND EXTENT / boundaries: "show
+    ROUTING -- use this when the user wants WETLAND EXTENT / boundaries: "show
     the wetlands here", "map the marshes / swamps / bogs", "NWI wetlands",
     "Cowardin wetland classes", "freshwater emergent / forested wetlands",
     "estuarine wetlands", or needs wetland polygons to overlay on / intersect
@@ -512,20 +512,19 @@ def fetch_nwi_wetlands(
     source.
 
     Prefer THIS over:
-    - ``fetch_nhd_waterbodies`` — that returns OPEN-WATER polygons (lakes,
+    - ``fetch_nhd_waterbodies`` -- that returns OPEN-WATER polygons (lakes,
       ponds, reservoirs); this returns VEGETATED / classified WETLANDS. Fetch
       both when the user wants "all water + wetland habitat".
-    - ``fetch_jrc_global_surface_water`` — that is a global surface-water RASTER
+    - ``fetch_jrc_global_surface_water`` -- that is a global surface-water RASTER
       (occurrence %), not classified wetland polygons.
-    - ``digitize_water_body`` — that CV-vectorizes one water body from imagery;
+    - ``digitize_water_body`` -- that CV-vectorizes one water body from imagery;
       NWI is the pre-mapped national inventory.
     Do NOT use for: FEMA regulatory flood zones (``fetch_fema_nfhl_zones``),
     protected-area boundaries (``fetch_wdpa_protected_areas``), or soil types
     (``fetch_soilgrids`` / ``fetch_statsgo_soils``).
 
     Parameters:
-        bbox: ``(min_lon, min_lat, max_lon, max_lat)`` in EPSG:4326. REQUIRED —
-            NWI does not support a global query (national-scale polygon corpus).
+        bbox: ``(min_lon, min_lat, max_lon, max_lat)`` in EPSG:4326. REQUIRED -- NWI does not support a global query (national-scale polygon corpus).
             Recommended <= ~1 deg on a side; larger envelopes risk the
             100k-feature pagination ceiling. Example (Naples, FL):
             ``(-81.5, 26.0, -81.3, 26.2)``.
@@ -534,20 +533,19 @@ def fetch_nwi_wetlands(
         ``LayerURI`` (``layer_type="vector"``, ``role="context"``,
         ``style_preset="nwi_wetlands"``, ``units=None``) pointing at a
         FlatGeobuf in the cache bucket with per-polygon columns:
-            attribute     (str)   — NWI code (e.g. "L1UBHx", "PFO1A")
-            wetland_type  (str)   — Cowardin type (e.g. "Lake", "Freshwater
+            attribute     (str) -- NWI code (e.g. "L1UBHx", "PFO1A")
+            wetland_type  (str) -- Cowardin type (e.g. "Lake", "Freshwater
                                     Forested/Shrub Wetland", "Estuarine and
                                     Marine Wetland")
-            acres         (float) — polygon area in acres (from the source)
+            acres         (float) -- polygon area in acres (from the source)
         An empty bbox over open ocean / an unmapped area returns a valid
         0-feature FlatGeobuf (NOT an error).
 
     Cross-tool dependencies:
         - Composed by ``analyze_affected_habitats`` (the wetland channel of the
           habitat-impact assessment).
-        - Feeds ``compute_zonal_statistics`` (wetland area by type inside a
-          footprint) and ``spatial_query`` (wetlands within a place /
-          protected area).
+        - Feeds ``spatial_query`` (wetland area by type inside a footprint, or
+          wetlands within a place / protected area).
 
     Resilience (feedback_data_source_fallback_norm): PRIMARY geojson request ->
     FALLBACK Esri-JSON parse -> honest ``NWIWetlandsUpstreamError(retryable=True)``

@@ -97,8 +97,7 @@ docstring: |
   - "Where are the hospitals / schools / fire stations / police stations near
     [place]?"; "show critical infrastructure in this area".
   - A hazard / exposure workflow needs life-safety facility locations inside a
-    flood / fire / surge footprint (intersect with ``compute_zonal_statistics``
-    or ``spatial_query``).
+    flood / fire / surge footprint (intersect with ``spatial_query``).
   - Evacuation / shelter / damage-assessment context overlays.
 
   **When NOT to use:**
@@ -111,8 +110,7 @@ docstring: |
           ``"police"``, ``"power_plants"`` (aliases accepted: ``"hospital"``,
           ``"public_schools"``, ``"fire"``, ``"ems"``, ``"law_enforcement"``,
           ``"power_plant"``, etc.).
-      bbox: ``(min_lon, min_lat, max_lon, max_lat)`` in EPSG:4326. Required —
-          ``supports_global_query=False``. Example Houston metro:
+      bbox: ``(min_lon, min_lat, max_lon, max_lat)`` in EPSG:4326. Required -- ``supports_global_query=False``. Example Houston metro:
           ``(-95.8, 29.5, -95.0, 30.1)``.
 
   **Returns:**
@@ -128,7 +126,7 @@ docstring: |
       - ``HIFLDInfraUpstreamError``: HTTP/network failure, ArcGIS error
         envelope, or FlatGeobuf serialization failure (retryable=True).
       - ``HIFLDInfraEmptyError``: no features in bbox (retryable=False; not
-        raised by default — empty FGB is returned).
+        raised by default -- empty FGB is returned).
 
   Cache: ``ttl_class="static-30d"``, ``source_class="hifld_critical_infrastructure"``.
   Cache key is SHA-256 of ``(facility_key, bbox-rounded-6dp)``.

@@ -1,4 +1,4 @@
-"""Atomic tool ``request_spatial_input`` — FR-AS-10 / FR-WC-16 urban vector-draw.
+"""Atomic tool ``request_spatial_input`` -- FR-AS-10 / FR-WC-16 urban vector-draw.
 
 The LLM-facing surface that PAUSES the turn and asks the user to DRAW on the map
 (a terra-draw surface in the client): an area of interest, structural flood
@@ -10,8 +10,8 @@ features become the ``barriers`` FeatureCollection that feeds
 seam (wall = omitted overland conduit; flap_gate = one-way SWMM orifice).
 
 ARCHITECTURE NOTE (why this tool body is a thin sentinel): the actual
-websocket pause/resume — emit ``spatial-input-request``, await
-``spatial-input-response``, parse the drawn FeatureCollection — lives in
+websocket pause/resume -- emit ``spatial-input-request``, await
+``spatial-input-response``, parse the drawn FeatureCollection -- lives in
 ``server.py`` (``_handle_request_spatial_input``), where the live socket and the
 session-scoped pending-future registry are reachable. A catalog tool runs in
 isolation via ``_invoke_tool_via_emitter`` and has no socket, so this body just
@@ -22,7 +22,7 @@ pattern. The sentinel key is kept in lock-step with
 ``server.SPATIAL_INPUT_SENTINEL_KEY``.
 
 FR-DC-6: ``cacheable=False`` + ``ttl_class="live-no-cache"`` +
-``source_class="workflow_dispatch"`` — an interactive gate, never cached.
+``source_class="workflow_dispatch"`` -- an interactive gate, never cached.
 """
 
 from __future__ import annotations
@@ -57,7 +57,7 @@ _REQUEST_SPATIAL_INPUT_METADATA = AtomicToolMetadata(
 @register_tool(
     _REQUEST_SPATIAL_INPUT_METADATA,
     # readOnlyHint=True (asks the user for input; mutates no stored state),
-    # openWorldHint=True (the answer comes from outside — the user's drawing),
+    # openWorldHint=True (the answer comes from outside -- the user's drawing),
     # destructiveHint=False, idempotentHint=False (each call mints a request_id).
     read_only_hint=True,
     open_world_hint=True,
@@ -84,10 +84,10 @@ async def request_spatial_input(
     default -- result's ``barriers`` FeatureCollection passes straight to
     ``swmm_urban_flood(barriers=...)``, ``aoi_bbox`` as its ``bbox``);
     a neutral elevation/section LINE (``purpose="line"`` -- result's
-    ``line``/``linestring`` passes to ``compute_terrain_profile``/
-    ``compute_cross_section``); or a single click (``mode="point"``) /
-    drag-rectangle (``mode="bbox"``). Do NOT use when the user already
-    gave a clear place name/address/bbox in text (geocode instead).
+    ``line``/``linestring`` passes to ``compute_cross_section``); or a
+    single click (``mode="point"``) / drag-rectangle (``mode="bbox"``).
+    Do NOT use when the user already gave a clear place name/address/bbox
+    in text (geocode instead).
 
     Params:
         mode: ``"vector_draw"`` (default), ``"point"``, or ``"bbox"``.
@@ -110,7 +110,7 @@ async def request_spatial_input(
     """
     norm_mode = (mode or "vector_draw").strip()
     if norm_mode not in _VALID_MODES:
-        # Honest typed error — never silently coerce to a different mode.
+        # Honest typed error -- never silently coerce to a different mode.
         return {
             "status": "error",
             "error_code": "SPATIAL_INPUT_PARAMS_INVALID",

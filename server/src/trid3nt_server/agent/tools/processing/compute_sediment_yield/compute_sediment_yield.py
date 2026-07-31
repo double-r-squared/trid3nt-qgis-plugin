@@ -240,7 +240,7 @@ _METADATA = AtomicToolMetadata(
 
 
 def hex_to_rgba(color: str) -> list[int]:
-    """``"#rrggbb"`` -> ``[r, g, b, 255]`` (TiTiler colormap entry)."""
+    """``"#rrggbb"`` -> ``[r, g, b, 255]``."""
     c = color.lstrip("#")
     return [int(c[0:2], 16), int(c[2:4], 16), int(c[4:6], 16), 255]
 

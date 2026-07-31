@@ -8,16 +8,16 @@ layers into a single composite Cloud-Optimized GeoTIFF**:
 
 WHY THIS EXISTS
 ---------------
-MapLibre GL (the client's renderer) **cannot multiply-blend two raster
-layers on the client**. There is no client-side "multiply blend mode" for
-raster sources. So when a user wants a *shaded land cover* (land-cover RGB ×
-hillshade grayscale) or a *shaded relief* (colored relief × hillshade), the
-ONLY way to deliver it is to bake the two rasters into one composite raster
-here, server-side, and publish that single layer.
+The QGIS plugin renders each layer independently; there is no per-request
+"multiply-blend two rasters" compositing step exposed to the agent. So when
+a user wants a *shaded land cover* (land-cover RGB x hillshade grayscale) or
+a *shaded relief* (colored relief x hillshade), the way to deliver it is to
+bake the two rasters into one composite raster here, server-side, and
+publish that single layer.
 
-**The agent MUST use this tool for that — and must NEVER tell the user to set
-a client-side blend / multiply / opacity blend mode in the map. That is not a
-capability the client has.**
+**The agent MUST use this tool for that -- and must NEVER tell the user to
+manually configure a blend / multiply / opacity mode in QGIS as a
+substitute.**
 
 The multiply math is the same Imhof "multiply" used by
 ``compute_hillshade``'s ``swiss_double`` preset (two hillshades multiplied):
@@ -34,17 +34,17 @@ generalized here to an RGB base × a (typically grayscale) overlay:
 
 Supported ``blend_mode`` values:
 
-- ``"multiply"`` (default) — darkens the base where the overlay is dark; the
+- ``"multiply"`` (default) -- darkens the base where the overlay is dark; the
   canonical hillshade-drape / shaded-relief / shaded-landcover blend.
-- ``"screen"`` — inverse multiply; lightens (rarely used for shading).
-- ``"overlay"`` — multiply in the dark half, screen in the light half
+- ``"screen"`` -- inverse multiply; lightens (rarely used for shading).
+- ``"overlay"`` -- multiply in the dark half, screen in the light half
   (contrast-preserving).
-- ``"normal"`` — alpha-composite the overlay over the base (no shading math;
+- ``"normal"`` -- alpha-composite the overlay over the base (no shading math;
   honors ``overlay_opacity`` as straight alpha).
 
 IMPLEMENTATION FLOW (cache miss)
 --------------------------------
-1. Resolve + stage both layer URIs to local COGs (gs:// / s3:// / local path).
+1. Resolve + stage both layer URIs to local COGs (s3:// / local path).
 2. Read the BASE with rasterio → RGB(A) uint8. A single-band base that carries
    an embedded GDAL color table (e.g. the NLCD land-cover palette-index COG) is
    colorized through that table (index → palette RGBA) so the composite keeps
@@ -65,10 +65,10 @@ pixels with no overlay coverage keep the base unchanged via the nodata-safe
 overlay fill of 255 → factor 1.0).
 
 Cross-cutting invariants:
-- Invariant 2 (Deterministic workflows): preserves — zero LLM calls.
-- FR-DC-6 (cacheable): honors — ``cacheable=True``, ``ttl_class="static-30d"``,
+- Invariant 2 (Deterministic workflows): preserves -- zero LLM calls.
+- FR-DC-6 (cacheable): honors -- ``cacheable=True``, ``ttl_class="static-30d"``,
   ``source_class="blended"``; the composite is fully determined by its inputs.
-- NFR-R-1 (resilience): preserves — every failure surfaces as a typed
+- NFR-R-1 (resilience): preserves -- every failure surfaces as a typed
   ``BlendedCompositeError`` with a SCREAMING_SNAKE_CASE ``error_code``.
 """
 
@@ -109,10 +109,10 @@ class BlendedCompositeError(RuntimeError):
     FR-AS-11 convention so ``summarize_tool_result`` renders the envelope.
 
     Codes:
-    - ``BASE_DOWNLOAD_FAILED`` — the base layer URI could not be staged.
-    - ``OVERLAY_DOWNLOAD_FAILED`` — the overlay layer URI could not be staged.
-    - ``BLEND_FAILED`` — the numpy/rasterio blend step failed.
-    - ``INVALID_BLEND_MODE`` — an unsupported blend_mode was requested.
+    - ``BASE_DOWNLOAD_FAILED`` -- the base layer URI could not be staged.
+    - ``OVERLAY_DOWNLOAD_FAILED`` -- the overlay layer URI could not be staged.
+    - ``BLEND_FAILED`` -- the numpy/rasterio blend step failed.
+    - ``INVALID_BLEND_MODE`` -- an unsupported blend_mode was requested.
     """
 
     retryable = False
@@ -148,13 +148,13 @@ def _stage_uri_to_local(
     """Stage a layer URI to a local file path.
 
     Returns ``(local_path, is_temp)`` where ``is_temp`` marks paths the caller
-    must clean up. Handles ``s3://`` and local-path inputs exactly like
-    ``compute_zonal_statistics``/``compute_hillshade`` so handle-resolved COGs
-    work. GCP is decommissioned, so ``storage_client`` is ignored.
+    must clean up. Handles ``s3://`` and local-path inputs exactly like the
+    sibling ``compute_hillshade`` tool so handle-resolved COGs work. GCP is
+    decommissioned, so ``storage_client`` is ignored.
 
     Raises ``BlendedCompositeError(error_code, …)`` on any download failure.
     """
-    del storage_client  # GCP decommissioned — S3/local only.
+    del storage_client  # GCP decommissioned -- S3/local only.
     # s3:// staging via the shared boto3 reader.
     if uri.startswith("s3://"):
         try:
@@ -170,7 +170,7 @@ def _stage_uri_to_local(
                 error_code, f"S3 download failed for {uri!r}: {exc}"
             ) from exc
 
-    # Local path (test / dev convenience) — read in place.
+    # Local path (test / dev convenience) -- read in place.
     if not os.path.isfile(uri):
         raise BlendedCompositeError(
             error_code, f"local raster path {uri!r} does not exist"
@@ -212,14 +212,13 @@ def _read_base_rgb(base_path: str):
     """Read the base raster as an (3, H, W) uint8 RGB array + a valid-mask.
 
     A single-band base with an **embedded GDAL color table** (e.g. the NLCD
-    land-cover palette-index COG) is colorized through that table — each index
+    land-cover palette-index COG) is colorized through that table -- each index
     is mapped to its palette RGB(A) so the composite carries the real land-cover
     colors. A single-band base with NO color table is broadcast
-    to grayscale (R=G=B) — the historical behavior for true-grayscale bases such
+    to grayscale (R=G=B) -- the historical behavior for true-grayscale bases such
     as a hillshade used as the base. 3/4-band inputs use the first 3 bands as
     RGB; a 4th band (if present) is treated as alpha for the valid-mask. Returns
-    ``(rgb, valid_mask, profile)`` where ``valid_mask`` is a bool (H, W) array —
-    True == paint, False == transparent.
+    ``(rgb, valid_mask, profile)`` where ``valid_mask`` is a bool (H, W) array -- True == paint, False == transparent.
     """
     import numpy as np
     import rasterio
@@ -244,7 +243,7 @@ def _read_base_rgb(base_path: str):
                 colormap = src.colormap(1)
             except (ValueError, KeyError):
                 colormap = None  # no embedded color table → grayscale base
-            except Exception:  # noqa: BLE001 — any read failure → grayscale
+            except Exception:  # noqa: BLE001 -- any read failure → grayscale
                 colormap = None
             if colormap:
                 lut = _colormap_to_lut(colormap)
@@ -264,7 +263,7 @@ def _read_base_rgb(base_path: str):
         else:
             try:
                 valid = src.read_masks(1) > 0
-            except Exception:  # noqa: BLE001 — fall back to nodata compare
+            except Exception:  # noqa: BLE001 -- fall back to nodata compare
                 valid = np.ones(rgb.shape[1:], dtype=bool)
             if nodata is not None:
                 src_band = src.read(1)
@@ -283,7 +282,7 @@ def _read_overlay_aligned_gray(overlay_path: str, base_profile: dict):
     Returns a float32 (H, W) array of grayscale values in [0, 255] on the
     BASE's CRS + transform + shape. Pixels with no overlay coverage (outside
     the overlay extent, or overlay-nodata) are filled with **255** so the
-    multiply factor is 1.0 there — i.e. the base shows through unchanged
+    multiply factor is 1.0 there -- i.e. the base shows through unchanged
     (nodata-safe alignment).
     """
     import numpy as np
@@ -353,7 +352,7 @@ def _apply_blend(rgb, overlay_gray, blend_mode: str, overlay_opacity: float):
     elif blend_mode == "normal":
         # Straight alpha-composite of the (grayscale) overlay over the base.
         blended = over3
-    else:  # pragma: no cover — guarded by the caller
+    else:  # pragma: no cover -- guarded by the caller
         raise BlendedCompositeError(
             "INVALID_BLEND_MODE",
             f"unsupported blend_mode={blend_mode!r}; allowed: {sorted(_VALID_BLEND_MODES)}",
@@ -462,7 +461,7 @@ def _run_blend(
     _COMPUTE_BLENDED_COMPOSITE_METADATA,
     # Annotations: readOnlyHint=True (reads two input rasters; writes a cache
     # artifact only via the read-through shim), openWorldHint=False (all
-    # computation is local rasterio/numpy/GDAL — no external API calls),
+    # computation is local rasterio/numpy/GDAL -- no external API calls),
     # destructiveHint=False, idempotentHint=True (deterministic transform;
     # same inputs always produce the same output pixels).
 )
@@ -482,14 +481,13 @@ def compute_blended_composite(
 
     Reads two rasters, aligns the overlay to the base grid, blends them
     per-pixel, and returns a SINGLE new raster ``LayerURI`` (RGBA COG with
-    overviews) — produces a *shaded land cover* (land-cover RGB x hillshade),
+    overviews) -- produces a *shaded land cover* (land-cover RGB x hillshade),
     a *shaded relief* (colored relief x hillshade), or any "drape A over B".
 
-    CRITICAL — NEVER tell the user to set a client-side blend/multiply/
-    opacity mode on the map: MapLibre GL cannot multiply-blend two raster
-    layers in the browser. Baking with this tool + publishing the single
-    result is the ONLY way to deliver "combine"/"blend"/"multiply"/"drape"/
-    "shade the land cover with the hillshade"/"make a shaded relief".
+    CRITICAL -- NEVER tell the user to manually set a blend/multiply/opacity
+    mode in QGIS as a substitute. Baking with this tool + publishing the
+    single result is the way to deliver "combine"/"blend"/"multiply"/
+    "drape"/"shade the land cover with the hillshade"/"make a shaded relief".
 
     Use when: baking/combining/draping/blending two rasters into one, esp.
     shaded land cover (base=NLCD from fetch_landcover, overlay=hillshade,
@@ -509,16 +507,14 @@ def compute_blended_composite(
     ``overlay_opacity``, no shading math.
 
     Params:
-        base_layer_uri: layer handle or gs://s3:// URI of the BASE raster —
-            keeps its hue/colors. A single-band PALETTED/CATEGORICAL base
+        base_layer_uri: layer handle or s3:// URI of the BASE raster -- keeps its hue/colors. A single-band PALETTED/CATEGORICAL base
             (e.g. NLCD land cover, pixels = class indices with an embedded
             GDAL color table) is auto-colorized through that table before
-            blending — yields the real NLCD class colors. Pass the
+            blending -- yields the real NLCD class colors. Pass the
             fetch_landcover handle DIRECTLY, do not pre-colorize it. A true
             grayscale single-band base (no color table) is broadcast to
             R=G=B.
-        overlay_layer_uri: layer handle or URI of the OVERLAY raster —
-            typically a grayscale hillshade (compute_hillshade).
+        overlay_layer_uri: layer handle or URI of the OVERLAY raster -- typically a grayscale hillshade (compute_hillshade).
             Reprojected/resampled onto the base grid automatically; a
             multi-band overlay is averaged to grayscale.
         blend_mode: one of the four modes above. Default "multiply".
@@ -532,7 +528,7 @@ def compute_blended_composite(
         uncovered by the overlay keep the base color). Pass to
         ``publish_layer``. layer_id/name derived like "Shaded <base>".
 
-    FR-CE-8: routed through ``read_through`` — identical
+    FR-CE-8: routed through ``read_through`` -- identical
     ``(base_layer_uri, overlay_layer_uri, blend_mode, overlay_opacity)``
     calls reuse the cached composite (30-day TTL).
 
@@ -580,7 +576,7 @@ def compute_blended_composite(
         name=name,
         layer_type="raster",
         uri=result.uri,
-        style_preset="rgb_composite",  # RGBA COG — rendered as a true-color image
+        style_preset="rgb_composite",  # RGBA COG -- rendered as a true-color image
         role="context",
         units="rgb",
     )

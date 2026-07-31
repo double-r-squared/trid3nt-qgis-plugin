@@ -754,8 +754,9 @@ def geocode_location(query: str, **_extra_ignored: Any) -> dict[str, Any]:
       ``fetch_landcover``, ``fetch_river_geometry``,
       ``fetch_administrative_boundaries``, ``fetch_nws_event``,
       ``fetch_firms_active_fire``, and most other bbox-based fetchers.
-    - Called internally by ``model_flood_scenario`` workflow to resolve a
-      user-supplied location string before fetching DEM/landcover.
+    - Called internally by hazard-modeling workflow setups (e.g. before
+      ``run_sfincs``) to resolve a user-supplied location string before
+      fetching DEM/landcover.
 
     FR-CE-8: The fetch is routed through ``read_through`` so two identical
     queries within the same hourly window reuse the cached response. The
@@ -829,7 +830,7 @@ def geocode_location(query: str, **_extra_ignored: Any) -> dict[str, Any]:
         ):
             logger.info(
                 "geocode_location query=%r resolved OUTSIDE detected state %r "
-                "(centroid=%s,%s) — snapping to state bbox",
+                "(centroid=%s,%s) -- snapping to state bbox",
                 query,
                 detected_state,
                 lat,

@@ -1,4 +1,4 @@
-"""``fetch_raws_weather`` atomic tool — Iowa Mesonet RAWS fire-weather stations (job-A12).
+"""``fetch_raws_weather`` atomic tool -- Iowa Mesonet RAWS fire-weather stations (job-A12).
 """
 
 from __future__ import annotations
@@ -55,7 +55,7 @@ class RAWSWeatherError(RuntimeError):
 
 
 class RAWSWeatherInputError(RAWSWeatherError):
-    """Invalid inputs — bad bbox, out-of-range dates.
+    """Invalid inputs -- bad bbox, out-of-range dates.
 
     Not retryable: the caller must fix the argument.
     """
@@ -67,7 +67,7 @@ class RAWSWeatherInputError(RAWSWeatherError):
 class RAWSWeatherUpstreamError(RAWSWeatherError):
     """IEM network request failed (HTTP error, connection reset, malformed JSON).
 
-    Retryable — transient IEM outages recover on retry.
+    Retryable -- transient IEM outages recover on retry.
     """
 
     error_code = "RAWS_WEATHER_UPSTREAM_ERROR"
@@ -77,7 +77,7 @@ class RAWSWeatherUpstreamError(RAWSWeatherError):
 class RAWSWeatherEmptyError(RAWSWeatherError):
     """No RAWS stations found in bbox, or all retrieved observations are empty.
 
-    Not retryable — the bbox contains no IEM-archived RAWS stations for the
+    Not retryable -- the bbox contains no IEM-archived RAWS stations for the
     requested period. Widen the bbox or choose a different date window.
     """
 
@@ -129,7 +129,7 @@ _IEM_DCP_STATES = (
     "DC", "PR",
 )
 
-# Rough state bounding boxes (lon_min, lat_min, lon_max, lat_max) — intentionally
+# Rough state bounding boxes (lon_min, lat_min, lon_max, lat_max) -- intentionally
 # generous (~0.5° pad) so no RAWS-dense border area is silently missed.
 _STATE_BBOX: dict[str, tuple[float, float, float, float]] = {
     "AL": (-88.6, 30.1, -84.8, 35.0),
@@ -203,7 +203,7 @@ _FGB_COLUMNS = (
 
 
 # ---------------------------------------------------------------------------
-# AtomicToolMetadata — registered once at import time.
+# AtomicToolMetadata -- registered once at import time.
 # ---------------------------------------------------------------------------
 
 
@@ -330,8 +330,8 @@ def _discover_raws_stations_in_bbox(
         ``state``, ``elevation``, ``network``.
 
     Raises:
-        ``RAWSWeatherUpstreamError`` — network failure fetching station metadata.
-        ``RAWSWeatherEmptyError`` — no RAWS stations found in bbox.
+        ``RAWSWeatherUpstreamError`` -- network failure fetching station metadata.
+        ``RAWSWeatherEmptyError`` -- no RAWS stations found in bbox.
     """
     west, south, east, north = bbox
     stations: list[dict[str, Any]] = []
@@ -452,9 +452,9 @@ def _build_raws_fgb(
     standard RAWS fields mapped from IEM obhistory JSON.
 
     Raises:
-        ``RAWSWeatherUpstreamError`` — geopandas / shapely not available or
+        ``RAWSWeatherUpstreamError`` -- geopandas / shapely not available or
           FlatGeobuf write failed.
-        ``RAWSWeatherEmptyError`` — no rows with valid coordinates.
+        ``RAWSWeatherEmptyError`` -- no rows with valid coordinates.
     """
     try:
         import geopandas as gpd  # type: ignore[import-not-found]
@@ -669,8 +669,8 @@ def fetch_raws_weather(
     """Fetch RAWS fire-weather station observations as a point FlatGeobuf.
 
     **What it does:** Retrieves sub-hourly observations from Remote Automated
-    Weather Stations (RAWS) — fire-weather monitoring stations operated by the
-    US Forest Service, BLM, NPS, BIA, and state forestry agencies — sourced
+    Weather Stations (RAWS) -- fire-weather monitoring stations operated by the
+    US Forest Service, BLM, NPS, BIA, and state forestry agencies -- sourced
     from the Iowa State University Iowa Environmental Mesonet (IEM) DCP network
     archive. RAWS are sited specifically at fire-prone ridges, canyons, and
     forest margins and report the fire-weather parameters most relevant to
@@ -693,16 +693,16 @@ def fetch_raws_weather(
         NFDRS/NWS fire-weather products at a specific location.
 
     **When NOT to use:**
-      - Surface weather at airports — use ``fetch_asos_metar`` (ASOS/METAR
+      - Surface weather at airports -- use ``fetch_asos_metar`` (ASOS/METAR
         network, broader coverage, available for non-fire-weather use cases).
-      - Gridded weather analysis or reanalysis — use ``fetch_era5_reanalysis``
+      - Gridded weather analysis or reanalysis -- use ``fetch_era5_reanalysis``
         (global) or ``fetch_gridmet`` (CONUS daily 4 km; includes fire-weather
         variables like ERC and BI derived from NFDRS).
-      - Active fire detections / fire radiative power — use
+      - Active fire detections / fire radiative power -- use
         ``fetch_firms_active_fire`` (NASA VIIRS/MODIS thermal anomalies).
-      - Fire perimeter polygons — use ``fetch_nifc_fire_perimeters`` (NIFC
+      - Fire perimeter polygons -- use ``fetch_nifc_fire_perimeters`` (NIFC
         current perimeters) or ``fetch_mtbs_burn_severity`` (historical).
-      - Locations outside the western/southern US fire belt — RAWS coverage
+      - Locations outside the western/southern US fire belt -- RAWS coverage
         is sparse east of the Mississippi and non-existent outside the US.
         Use ``fetch_asos_metar`` or ``fetch_era5_reanalysis`` instead.
 
@@ -715,7 +715,7 @@ def fetch_raws_weather(
             Example for the Caldor Fire area (Sierra Nevada, CA):
             ``(-121.0, 38.5, -119.5, 39.5)``.
         start_time: Start date as ISO-8601 string (``"YYYY-MM-DD"`` or
-            ``"YYYY-MM-DDTHH:MM:SSZ"`` — time component is ignored; the tool
+            ``"YYYY-MM-DDTHH:MM:SSZ"`` -- time component is ignored; the tool
             requests full calendar days). Defaults to 1 day before ``end_time``
             (or 1 day before today when both are omitted). RAWS data at IEM
             extends back to the early 2000s for most western US stations.
@@ -730,7 +730,7 @@ def fetch_raws_weather(
         ``s3://trid3nt-cache/cache/dynamic-1h/raws_weather/<key>.fgb``
         - ``layer_type="vector"``, ``role="context"``, ``units="mixed"``
           (temperature in °F, wind in knots, RH in %, solar in W/m²,
-          precip in inches — standard RAWS/NFDRS units).
+          precip in inches -- standard RAWS/NFDRS units).
         - Geometry: Point at each RAWS station's coordinates, EPSG:4326.
         - Properties per observation: ``station`` (NWSLI/IEM ID),
           ``station_name``, ``state``, ``utc_valid`` (ISO-8601),
@@ -739,7 +739,7 @@ def fetch_raws_weather(
           ``gust`` (wind resultant kt), ``solar_rad`` (W/m²),
           ``precip_in`` (in). Missing values are ``null``.
 
-    Cache: ``dynamic-1h`` — identical ``(bbox-4dp, start_date, end_date)``
+    Cache: ``dynamic-1h`` -- identical ``(bbox-4dp, start_date, end_date)``
     calls within the same UTC hour reuse the cached FlatGeobuf.
 
     **Cross-tool dependencies:**
@@ -748,9 +748,9 @@ def fetch_raws_weather(
           (bbox from place name), ``fetch_nifc_fire_perimeters``
           (co-overlay fire perimeter + weather), ``fetch_firms_active_fire``
           (co-overlay thermal anomalies + RAWS obs).
-        - Feeds INTO: ``aggregate_claims_across_sources`` (wind/RH claims for
+        - Feeds INTO: the code_exec playground (wind/RH claims for
           FR-HEP wildfire event consensus), fire-weather index computation
-          (NFDRS/FWI pipeline — future tool).
+          (NFDRS/FWI pipeline -- future tool).
         - Complements: ``fetch_asos_metar`` (airport weather, no fire-weather
           specialization), ``fetch_gridmet`` (gridded daily fire-weather),
           ``fetch_landfire_fuels`` (fuel moisture context).
@@ -765,7 +765,7 @@ def fetch_raws_weather(
           observations for the period (retryable=False).
 
 
-    supports_global_query=False — IEM RAWS archive covers US + territories
+    supports_global_query=False -- IEM RAWS archive covers US + territories
     only; coverage is concentrated in the western US fire belt.
     """
     # 1. Validate and normalize inputs.
@@ -841,7 +841,7 @@ def fetch_raws_weather(
     )
     date_tag = start_iso
     if start_iso != end_iso:
-        date_tag += f"–{end_iso}"
+        date_tag += f" - {end_iso}"
 
     # Stable layer_id seed.
     seed = hashlib.sha256(
@@ -850,7 +850,7 @@ def fetch_raws_weather(
 
     return LayerURI(
         layer_id=f"raws-weather-{seed}",
-        name=f"RAWS fire-weather — {bbox_tag} ({date_tag})",
+        name=f"RAWS fire-weather -- {bbox_tag} ({date_tag})",
         layer_type="vector",
         uri=result.uri,
         style_preset="raws_weather",

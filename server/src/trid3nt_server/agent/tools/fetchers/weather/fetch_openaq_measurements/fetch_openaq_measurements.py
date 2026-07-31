@@ -1,4 +1,4 @@
-"""``fetch_openaq_measurements`` atomic tool — OpenAQ global air-quality fetcher.
+"""``fetch_openaq_measurements`` atomic tool -- OpenAQ global air-quality fetcher.
 """
 
 from __future__ import annotations
@@ -77,14 +77,13 @@ class OpenAQMissingKeyError(OpenAQError):
     """No OpenAQ API key resolved via any of the three lookup paths.
 
     Raised BEFORE any network call. OpenAQ v3 has NO public unauthenticated
-    mirror, so unlike fetch_usace_dams we cannot degrade to a key-less source
-    — the HONEST degrade IS this typed error. The ``error_code`` is the
+    mirror, so unlike fetch_usace_dams we cannot degrade to a key-less source -- the HONEST degrade IS this typed error. The ``error_code`` is the
     kickoff-specified ``OPENAQ_KEY_REQUIRED`` sentinel; the
     ``OpenAQMissingKeyError`` class name + the ``_KEY_REQUIRED`` /
     ``_AUTH_ERROR`` suffix family are recognised by the agent's
     provider-agnostic credential pipeline, which surfaces a NAME-ONLY
     credential-request card prompting the user to add an OpenAQ key via the
-    per-Case secrets panel. ``retryable=False`` — retrying without a key is
+    per-Case secrets panel. ``retryable=False`` -- retrying without a key is
     futile; the agent waits for the user to supply one.
     """
 
@@ -93,7 +92,7 @@ class OpenAQMissingKeyError(OpenAQError):
 
 
 class OpenAQAuthError(OpenAQError):
-    """OpenAQ API returned 401/403 — the supplied key is invalid/revoked.
+    """OpenAQ API returned 401/403 -- the supplied key is invalid/revoked.
 
     Distinct from ``OpenAQMissingKeyError`` (which fires pre-network when no
     key resolves at all). This fires when a key resolved (kwarg / secret_ref /
@@ -173,8 +172,7 @@ _TIMEOUT_S = 30.0
 _LOCATIONS_PAGE_SIZE = 200
 
 # Hard caps so a runaway whole-continent bbox can't burn the API budget. We
-# page locations up to this many stations, then stop (the bbox is too big —
-# the caller should narrow it).
+# page locations up to this many stations, then stop (the bbox is too big -- # the caller should narrow it).
 _MAX_LOCATIONS = 2000
 
 # User-Agent per OpenAQ usage guidelines.
@@ -197,8 +195,7 @@ _BYTES_PER_FEATURE_ESTIMATE = 320
 
 # Rough global density: OpenAQ aggregates ~30k active locations worldwide; the
 # inhabited land surface is ~1.5e8 sq km. We express density in features per
-# sq-degree (1 sq deg ~ 12300 sq km at the equator) and scale conservatively —
-# the estimator is advisory, so over-estimating slightly is the safe direction.
+# sq-degree (1 sq deg ~ 12300 sq km at the equator) and scale conservatively -- # the estimator is advisory, so over-estimating slightly is the safe direction.
 _FEATURES_PER_SQ_DEG_ESTIMATE = 4.0
 
 
@@ -226,9 +223,9 @@ def estimate_payload_mb(**args: Any) -> float:
 
 
 # ---------------------------------------------------------------------------
-# AtomicToolMetadata — registered once at import time.
+# AtomicToolMetadata -- registered once at import time.
 #
-# ``supports_global_query=False`` — a bbox is required; OpenAQ's global station
+# ``supports_global_query=False`` -- a bbox is required; OpenAQ's global station
 # population is not a meaningful single-layer sweep (and the per-station latest
 # fan-out would be enormous). The agent narrows by bbox.
 # ---------------------------------------------------------------------------
@@ -252,7 +249,7 @@ def _validate_bbox(bbox: tuple[float, float, float, float]) -> None:
     """Raise ``OpenAQInputError`` if bbox is invalid.
 
     bbox is ``(west, south, east, north)`` = ``(min_lon, min_lat, max_lon,
-    max_lat)`` in EPSG:4326 — the SAME order OpenAQ v3 expects, so no flip.
+    max_lat)`` in EPSG:4326 -- the SAME order OpenAQ v3 expects, so no flip.
     """
     if not isinstance(bbox, (list, tuple)) or len(bbox) != 4:
         raise OpenAQInputError(
@@ -321,7 +318,7 @@ def _validate_parameters(
 
 
 # ---------------------------------------------------------------------------
-# API-key resolution (canonical 3-path secret loader — mirrors
+# API-key resolution (canonical 3-path secret loader -- mirrors
 # fetch_ebird_observations / fetch_usace_dams).
 # ---------------------------------------------------------------------------
 
@@ -422,7 +419,7 @@ def _resolve_api_key(
     3. ``TRID3NT_OPENAQ_API_KEY`` env var (dev convenience).
 
     Raises ``OpenAQMissingKeyError`` (``OPENAQ_KEY_REQUIRED``) if NONE of the
-    three paths produce a key — OpenAQ has no public mirror, so the honest
+    three paths produce a key -- OpenAQ has no public mirror, so the honest
     degrade IS this typed error.
     """
     if api_key:
@@ -432,7 +429,7 @@ def _resolve_api_key(
             resolved = _materialize_secret(secret_ref)
         except OpenAQMissingKeyError:
             raise
-        except Exception as exc:  # noqa: BLE001 — surface as missing-key
+        except Exception as exc:  # noqa: BLE001 -- surface as missing-key
             raise OpenAQMissingKeyError(
                 f"OpenAQ secret_ref lookup failed: {exc}"
             ) from exc
@@ -449,7 +446,7 @@ def _resolve_api_key(
 
 
 # ---------------------------------------------------------------------------
-# OpenAQ HTTP fetch — locations (with bbox) + per-location latest.
+# OpenAQ HTTP fetch -- locations (with bbox) + per-location latest.
 # ---------------------------------------------------------------------------
 
 
@@ -468,7 +465,7 @@ def _check_response(resp: httpx.Response, *, context: str) -> dict[str, Any]:
         )
     if resp.status_code == 422:
         raise OpenAQUpstreamError(
-            f"OpenAQ rejected the request ({context}, HTTP 422 — likely an "
+            f"OpenAQ rejected the request ({context}, HTTP 422 -- likely an "
             f"out-of-range bbox): {resp.text[:200]!r}"
         )
     if resp.status_code >= 400:
@@ -662,7 +659,7 @@ def _assemble_measurement_rows(
             else ""
         )
         # Station-level fallback coordinates (used when a latest record has
-        # null coords — common for stationary monitors).
+        # null coords -- common for stationary monitors).
         st_coords = station.get("coordinates") or {}
         st_lon = st_coords.get("longitude") if isinstance(st_coords, dict) else None
         st_lat = st_coords.get("latitude") if isinstance(st_coords, dict) else None
@@ -775,7 +772,7 @@ def _rows_to_flatgeobuf_bytes(
 ) -> bytes:
     """Convert assembled (rows, geoms) to FlatGeobuf bytes.
 
-    Always emits a valid FlatGeobuf — an empty input yields a header-only FGB
+    Always emits a valid FlatGeobuf -- an empty input yields a header-only FGB
     with the documented column schema (honest-empty, never a fabricated layer).
     """
     try:
@@ -893,7 +890,7 @@ def fetch_openaq_measurements(
         FlatGeobuf POINT feature per (station, parameter) latest reading with
         ``parameter`` / ``value`` / ``unit`` / ``datetime`` properties. OpenAQ
         aggregates reference monitors and low-cost sensors from national
-        networks WORLDWIDE — this is the GLOBAL complement to the US-only
+        networks WORLDWIDE -- this is the GLOBAL complement to the US-only
         AirNow / EPA AQS surface.
 
     When to use:
@@ -906,16 +903,15 @@ def fetch_openaq_measurements(
           (HRRR-Smoke) or satellite aerosol layers.
 
     When NOT to use:
-        - DO NOT use for US-only regulatory AQI when a US source is preferred —
-          AirNow / EPA AQS give the official US AQI; OpenAQ ingests US data too
+        - DO NOT use for US-only regulatory AQI when a US source is preferred -- AirNow / EPA AQS give the official US AQI; OpenAQ ingests US data too
           but is not the US regulatory authority.
-        - DO NOT use for HISTORICAL time-series — this returns LATEST values
+        - DO NOT use for HISTORICAL time-series -- this returns LATEST values
           only; use the OpenAQ ``/sensors/{id}/measurements|hours|days``
           aggregate endpoints (a future tool) for time-series.
-        - DO NOT use for modeled / forecast air quality — OpenAQ is
+        - DO NOT use for modeled / forecast air quality -- OpenAQ is
           ground-truth observations; use HRRR-Smoke / CAMS for forecasts.
         - DO NOT use for satellite column densities (NO2/aerosol from
-          TROPOMI/Sentinel-5P) — those are a different (raster) source.
+          TROPOMI/Sentinel-5P) -- those are a different (raster) source.
 
     Parameters:
         bbox: REQUIRED ``(min_lon, min_lat, max_lon, max_lat)`` envelope in
@@ -924,7 +920,7 @@ def fetch_openaq_measurements(
             ``(76.8, 28.4, 77.4, 28.9)`` for the Delhi NCR returns the city's
             monitoring stations. Narrow the bbox to a city/metro: a
             country-sized sweep is capped at 2000 stations.
-        parameters: Optional pollutant filter — a single name or a list,
+        parameters: Optional pollutant filter -- a single name or a list,
             case-insensitive, each one of ``pm25`` / ``pm10`` / ``pm1`` /
             ``no2`` / ``no`` / ``nox`` / ``o3`` / ``so2`` / ``co`` / ``co2`` /
             ``bc`` / ``ch4`` / ``nh3``. Defaults to the six core pollutants
@@ -948,11 +944,11 @@ def fetch_openaq_measurements(
 
     Raises:
         ``OpenAQMissingKeyError`` (``OPENAQ_KEY_REQUIRED``): no API key resolved
-            from any of the three paths — raised BEFORE any network call. The
+            from any of the three paths -- raised BEFORE any network call. The
             agent surfaces a credential-request card (OpenAQ has no public
             mirror, so this honest typed error IS the degrade).
         ``OpenAQAuthError`` (``OPENAQ_AUTH_ERROR``): the API rejected the key
-            (401/403; revoked / invalid) — the agent surfaces a re-enter card.
+            (401/403; revoked / invalid) -- the agent surfaces a re-enter card.
         ``OpenAQInputError``: bad bbox or unknown parameter name.
         ``OpenAQUpstreamError``: OpenAQ 5xx / 422 / non-JSON / network failure
             (retryable).
@@ -962,12 +958,12 @@ def fetch_openaq_measurements(
         ``geocode_location`` (geocode "Delhi" -> derive bbox -> call this tool).
         Pairs with ``fetch_hrrr_smoke`` / satellite aerosol layers for
         observed-vs-modeled air-quality comparison, and feeds
-        ``compute_zonal_statistics`` for population-weighted exposure.
+        ``spatial_query`` for population-weighted exposure.
 
     Cache: ``dynamic-1h`` (OpenAQ latest values refresh as new readings land;
     an hourly window balances freshness against the API rate budget). Cache
     key: SHA-256 of (bbox rounded-6dp, parameters) + the top-of-hour vintage.
-    The key intentionally omits the api_key — the underlying measurements do
+    The key intentionally omits the api_key -- the underlying measurements do
     not vary by caller.
     """
     # ---- Input validation ----
@@ -1001,7 +997,7 @@ def fetch_openaq_measurements(
     param_label = ", ".join(p.upper() for p in param_norm)
     return LayerURI(
         layer_id=f"openaq-{q_bbox[0]:.4f}-{q_bbox[1]:.4f}",
-        name=f"OpenAQ Air Quality (latest) — {param_label}",
+        name=f"OpenAQ Air Quality (latest) -- {param_label}",
         layer_type="vector",
         uri=result.uri,
         style_preset="openaq_measurements",

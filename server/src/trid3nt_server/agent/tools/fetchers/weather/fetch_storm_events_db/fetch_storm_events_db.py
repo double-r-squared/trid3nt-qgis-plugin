@@ -1,4 +1,4 @@
-"""``fetch_storm_events_db`` atomic tool — NOAA Storm Events DB Tier-1 fetcher.
+"""``fetch_storm_events_db`` atomic tool -- NOAA Storm Events DB Tier-1 fetcher.
 """
 
 from __future__ import annotations
@@ -83,7 +83,7 @@ class StormEventsUpstreamError(StormEventsError):
 
 
 class StormEventsEmptyError(StormEventsError):
-    """No events remain after filtering. Not retryable — filter is the cause."""
+    """No events remain after filtering. Not retryable -- filter is the cause."""
 
     error_code = "STORM_EVENTS_EMPTY"
     retryable = False
@@ -97,7 +97,7 @@ class StormEventsArgError(StormEventsError):
 
 
 # ---------------------------------------------------------------------------
-# AtomicToolMetadata — registered once at import time.
+# AtomicToolMetadata -- registered once at import time.
 # ---------------------------------------------------------------------------
 
 _METADATA = AtomicToolMetadata(
@@ -185,7 +185,7 @@ def _validate_inputs(
     """Validate year/state/event_types/bbox/window or raise ``StormEventsArgError``.
 
     ``state`` accepts EITHER an ISO 2-letter code (``"OK"``) OR a full US state
-    name (``"Oklahoma"``), case-insensitive — the LLM routinely passes the
+    name (``"Oklahoma"``), case-insensitive -- the LLM routinely passes the
     word the user typed. Both forms are recognized against the NOAA state
     catalog; only a genuinely-unrecognized state is rejected. The query path
     (``_parse_filter_and_serialize``) is already tolerant of both, so we
@@ -447,7 +447,7 @@ def _parse_filter_and_serialize(
                 f"NOAA Storm Events gzip is corrupt: {exc}"
             ) from exc
 
-        # Parse CSV with pandas — handles quoting + embedded newlines correctly.
+        # Parse CSV with pandas -- handles quoting + embedded newlines correctly.
         try:
             # low_memory=False so dtype inference is single-pass and stable on
             # the EPISODE_NARRATIVE long-text column.
@@ -474,7 +474,7 @@ def _parse_filter_and_serialize(
             f"got {sorted(df.columns)[:10]}..."
         )
 
-    # State filter — NOAA writes the full state name; we accept either an ISO
+    # State filter -- NOAA writes the full state name; we accept either an ISO
     # 2-letter code ("OK") or a full name ("Oklahoma"), normalized here.
     if state is not None:
         state_name = _normalize_state(state)
@@ -555,7 +555,7 @@ def _parse_filter_and_serialize(
         gdf.to_file(tmp_fgb, driver="FlatGeobuf", engine="pyogrio")
         with open(tmp_fgb, "rb") as f:
             return f.read()
-    except Exception as exc:  # noqa: BLE001 — surface as upstream error
+    except Exception as exc:  # noqa: BLE001 -- surface as upstream error
         raise StormEventsUpstreamError(
             f"FlatGeobuf serialization failed: {exc}"
         ) from exc
@@ -649,7 +649,7 @@ def _normalize_state(state: str | None) -> str | None:
     (``"Oklahoma"``), case-insensitive. Returns the NOAA STATE-column spelling
     (e.g. ``"OKLAHOMA"``). ``None`` passes through. An unrecognized token is
     returned upper-cased unchanged (the query filter then matches the raw
-    STATE column directly) — ``_validate_inputs`` is the gate that rejects
+    STATE column directly) -- ``_validate_inputs`` is the gate that rejects
     genuinely-bad states before we get here.
     """
     if state is None:
@@ -664,7 +664,7 @@ def _normalize_state(state: str | None) -> str | None:
 
 
 # ---------------------------------------------------------------------------
-# Fetch function — builds the bytes callable for read_through.
+# Fetch function -- builds the bytes callable for read_through.
 # ---------------------------------------------------------------------------
 
 
@@ -748,7 +748,7 @@ def fetch_storm_events_db(
     from 1950 to present. Tier-1 free, no API key. Cached ``static-30d``.
 
     **When to use:**
-    - Agent needs historical storm-event locations for spatial context — e.g.
+    - Agent needs historical storm-event locations for spatial context -- e.g.
       "what flood events affected Lee County FL in 2022?"
     - User asks for storm events inside a specific map view / AOI (pass ``bbox``)
       or within a date range (pass ``begin_date``/``end_date``).
@@ -772,7 +772,7 @@ def fetch_storm_events_db(
     - ``year`` (int): calendar year in range [1950, 2100]. Coverage is sparse
       before ~1996 and comprehensive from that year onward. Acts as the anchor
       when no window is given. Example: ``2022``.
-    - ``state`` (str or None): US state — either a full name (``"Oklahoma"``,
+    - ``state`` (str or None): US state -- either a full name (``"Oklahoma"``,
       ``"Florida"``) OR an ISO 2-letter code (``"OK"``, ``"FL"``).
       Case-insensitive; ``None`` returns all states/territories.
     - ``event_types`` (list[str] or None): list of NOAA event-type name strings,
@@ -796,7 +796,7 @@ def fetch_storm_events_db(
     **Cross-tool dependencies:**
     - Pairs with: ``fetch_nws_event`` / ``fetch_nws_alerts_conus`` (historical
       baseline alongside current active alerts).
-    - Upstream of: ``compute_zonal_statistics`` (count events inside a polygon),
+    - Upstream of: ``spatial_query`` (count events inside a polygon),
       narrative hazard-impact summaries.
     - Complements: ``fetch_dem``, ``fetch_river_geometry`` for flood context.
     """
@@ -845,7 +845,7 @@ def fetch_storm_events_db(
         filter_bits.append("bbox")
     if begin_date is not None or end_date is not None:
         filter_bits.append(f"{begin_date or '..'}..{end_date or '..'}")
-    filter_str = f" — {' / '.join(filter_bits)}" if filter_bits else ""
+    filter_str = f" -- {' / '.join(filter_bits)}" if filter_bits else ""
 
     # layer_id seed: short content hash of the full filter set - stable.
     seed_payload = json.dumps(

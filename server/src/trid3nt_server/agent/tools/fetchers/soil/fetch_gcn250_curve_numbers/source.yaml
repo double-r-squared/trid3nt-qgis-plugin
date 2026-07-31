@@ -78,7 +78,7 @@ docstring: |-
 
   **When to use:**
   - Building a SFINCS or HydroMT pluvial-flood scenario for any non-CONUS
-    area where NLCD-derived curve numbers are unavailable — GCN250 covers
+    area where NLCD-derived curve numbers are unavailable -- GCN250 covers
     global land surface (84 N to 57 S).
   - AMC sensitivity analysis: run the same storm under ``"dry"``,
     ``"average"``, and ``"wet"`` antecedent conditions to bracket the
@@ -89,22 +89,21 @@ docstring: |-
     (NHESS 2023); the standard global substrate for SFINCS HydroMT workflows.
 
   **When NOT to use:**
-  - DO NOT use for CONUS work when NLCD is available — NLCD-derived curve
+  - DO NOT use for CONUS work when NLCD is available -- NLCD-derived curve
     numbers at ~30 m resolve urban heterogeneity far better than GCN250's
     250 m grid; use ``compute_impervious_surface`` + ``extract_landcover_class``
     for the NLCD pipeline.
-  - DO NOT use as a runoff coefficient — CN is an SCS depth-loss method;
+  - DO NOT use as a runoff coefficient -- CN is an SCS depth-loss method;
     the rational method uses ``C``, not CN. These are different empirical
     relationships.
-  - DO NOT use to infer Manning's roughness — CN governs infiltration loss
+  - DO NOT use to infer Manning's roughness -- CN governs infiltration loss
     only; surface roughness requires ``fetch_landcover`` + a roughness
     lookup table.
   - DO NOT use for Antarctica or above 84 N (GCN250 does not cover those).
 
   **Parameters:**
   - ``bbox`` (tuple[float, float, float, float]): ``(min_lon, min_lat,
-    max_lon, max_lat)`` in EPSG:4326. Required (``supports_global_query=False``
-    — the global mosaic is ~620 MB per AMC). Example for Bangladesh delta:
+    max_lon, max_lat)`` in EPSG:4326. Required (``supports_global_query=False`` -- the global mosaic is ~620 MB per AMC). Example for Bangladesh delta:
     ``(88.0, 21.0, 91.0, 24.0)``.
   - ``antecedent_moisture`` (str, default ``"average"``): SCS AMC condition.
     ``"dry"`` = AMC-I (5-day antecedent below 1.4 in growing season;
@@ -120,8 +119,8 @@ docstring: |-
 
   **Cross-tool dependencies:**
   - Upstream: ``geocode_location`` for bbox from a place name.
-  - Downstream: ``build_sfincs_model`` (HydroMT infiltration input),
-    pluvial-flood scenario composers.
+  - Downstream: ``set_sfincs_parameters`` + ``run_sfincs`` (HydroMT
+    infiltration input), pluvial-flood scenario composers.
   - CONUS alternative: ``compute_impervious_surface`` + ``extract_landcover_class``
     for higher-resolution NLCD-based curve numbers.
   - Pairs with: ``fetch_era5_reanalysis`` (precipitation forcing) and

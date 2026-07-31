@@ -1,4 +1,4 @@
-"""``fetch_movebank_tracks`` atomic tool — Movebank animal tracking Tier-2 fetcher.
+"""``fetch_movebank_tracks`` atomic tool -- Movebank animal tracking Tier-2 fetcher.
 """
 
 from __future__ import annotations
@@ -83,10 +83,10 @@ class MovebankUpstreamError(MovebankError):
 
 _MOVEBANK_URL = "https://www.movebank.org/movebank/service/direct-read"
 
-# Per-request timeout — Movebank studies can be large; pad generously.
+# Per-request timeout -- Movebank studies can be large; pad generously.
 _TIMEOUT_S = 120.0
 
-# Cap on records — defensive guard against a multi-million-row pull. The audit
+# Cap on records -- defensive guard against a multi-million-row pull. The audit
 # notes large multi-year studies ~50MB which still fits well under this cap.
 _MAX_RECORDS_HARD_CAP = 1_000_000
 
@@ -109,7 +109,7 @@ GeometryType = Literal["linestring", "point"]
 
 
 # ---------------------------------------------------------------------------
-# AtomicToolMetadata — registered once at import time.
+# AtomicToolMetadata -- registered once at import time.
 # ---------------------------------------------------------------------------
 
 _METADATA = AtomicToolMetadata(
@@ -180,7 +180,7 @@ def _resolve_credentials(
     Priority (most specific to most general):
 
     1. Explicit ``username`` + ``password`` kwargs (test fixtures, scripts).
-    2. ``secret_ref`` (a ``SecretRecord``) — looked up via
+    2. ``secret_ref`` (a ``SecretRecord``) -- looked up via
        ``Persistence.get_secret_value``. The vault payload is interpreted as
        either ``"username:password"`` (colon-separated) OR a JSON object
        ``{"username": "...", "password": "..."}``. The username field on the
@@ -207,15 +207,14 @@ def _resolve_credentials(
             import asyncio
             import json
 
-            from trid3nt_server.persistence import Persistence  # local — avoids cycle
+            from trid3nt_server.persistence import Persistence  # local -- avoids cycle
         except Exception as exc:  # noqa: BLE001
             raise MovebankInputError(
                 f"secret_ref provided but Persistence machinery is unavailable: {exc}"
             ) from exc
 
         # Persistence.get_secret_value is a coroutine; run it synchronously.
-        # We need an MCP-less helper that only touches Secret Manager —
-        # Persistence.get_secret_value is an instance method but doesn't
+        # We need an MCP-less helper that only touches Secret Manager -- # Persistence.get_secret_value is an instance method but doesn't
         # actually touch the MCP transport, so we instantiate a minimal
         # Persistence with a no-op MCP client.
         class _NoOpMCP:
@@ -350,7 +349,7 @@ def _fetch_movebank_events_csv(
                 f"(HTTP 401). Check username/password."
             )
         if resp.status_code == 403:
-            # Movebank returns 403 for "License not accepted" — the account
+            # Movebank returns 403 for "License not accepted" -- the account
             # must visit movebank.org and accept the study's Data Use Statement.
             raise MovebankLicenseError(
                 f"Movebank account has not accepted the Data Use Statement for "
@@ -494,7 +493,7 @@ def _records_to_flatgeobuf_bytes(
         - For points: each emitted point lies within bbox.
         - For linestrings: ONLY individuals whose ENTIRE track lies within
           bbox produce a linestring (a conservative interpretation that keeps
-          the geographic-correctness gate strict — a track that exits/enters
+          the geographic-correctness gate strict -- a track that exits/enters
           the bbox is dropped rather than truncated).
     """
     try:
@@ -549,7 +548,7 @@ def _records_to_flatgeobuf_bytes(
                 skipped_outside_bbox += len(recs_sorted)
                 continue
             if len(recs_sorted) < 2:
-                # A 1-point "track" is not a LineString — drop.
+                # A 1-point "track" is not a LineString -- drop.
                 continue
             coords = [(r["lon"], r["lat"]) for r in recs_sorted]
             rows.append(
@@ -571,7 +570,7 @@ def _records_to_flatgeobuf_bytes(
         )
 
     if not rows:
-        # Empty result — build an empty FlatGeobuf with the right schema.
+        # Empty result -- build an empty FlatGeobuf with the right schema.
         if geometry_type == "point":
             empty_df = pd.DataFrame(
                 columns=[
@@ -693,7 +692,7 @@ def fetch_movebank_tracks(
     """Movebank Tier-2 animal-tracking trajectory fetcher.
 
     Use this when: the agent needs animal-tracking telemetry (bird migration,
-    mammal movement, marine megafauna) for ecological or hazard overlay — e.g.
+    mammal movement, marine megafauna) for ecological or hazard overlay -- e.g.
     overlaying sandhill crane migration corridors on a wildfire footprint,
     plotting elephant movement against flood-risk surfaces, or visualizing
     sea turtle tracks against coastal storm surge. Returns either FlatGeobuf
@@ -701,15 +700,14 @@ def fetch_movebank_tracks(
     or Points (one per telemetry fix).
 
     Do NOT use this for: occurrence points without tracking continuity (use
-    ``fetch_gbif_occurrences`` or ``fetch_inaturalist_observations`` —
-    Movebank tracks are temporally ordered movement traces, not static
+    ``fetch_gbif_occurrences`` or ``fetch_inaturalist_observations`` -- Movebank tracks are temporally ordered movement traces, not static
     sighting points), live-streaming telemetry (Movebank's API is
     near-real-time but caches batches; for sub-minute live feeds use the
     publisher's own SCADA), or species-range polygons (use IUCN Red List
     range maps instead).
 
     Wraps the Movebank REST API (https://www.movebank.org/movebank/service/direct-read).
-    Authentication is **always required** — Movebank rejects unauthenticated
+    Authentication is **always required** -- Movebank rejects unauthenticated
     requests. Most studies further require accepting per-study Data Use
     Statements on movebank.org BEFORE the API serves data; on first access
     of a new study the tool surfaces ``MovebankLicenseError`` with the
@@ -717,18 +715,17 @@ def fetch_movebank_tracks(
 
     Credentials are resolved in priority order:
     1. Explicit ``username`` + ``password`` kwargs.
-    2. ``secret_ref`` (a ``SecretRecord``) — vault payload may be
+    2. ``secret_ref`` (a ``SecretRecord``) -- vault payload may be
        ``"user:pass"`` (colon-separated) OR a JSON ``{"username": "...",
        "password": "..."}``.
     3. ``TRID3NT_MOVEBANK_USER`` + ``TRID3NT_MOVEBANK_PASSWORD`` env vars
        (local dev / CI live-test gate).
 
-    Bbox filtering happens **client-side** after the fetch — Movebank does not
+    Bbox filtering happens **client-side** after the fetch -- Movebank does not
     reliably bbox-filter server-side, so the full study record set is pulled
     then trimmed. For linestrings the filter is conservative: ALL vertices of
     an individual's track must lie within the bbox or the individual is
-    dropped (avoids truncated/broken tracks). See
-     for the alternative considered.
+    dropped (avoids truncated/broken tracks).
 
     Params:
         study_id: Movebank ``study_id`` (int). Example: ``1259686571`` is the
@@ -748,7 +745,7 @@ def fetch_movebank_tracks(
         max_records: cap on records pulled from Movebank before serialization
             (default 500_000, hard cap 1_000_000). Beyond this the result
             FlatGeobuf is truncated, NOT an error.
-        geometry_type: ``"linestring"`` (default — one feature per individual)
+        geometry_type: ``"linestring"`` (default -- one feature per individual)
             or ``"point"`` (one feature per telemetry fix).
 
     Returns:
@@ -777,10 +774,10 @@ def fetch_movebank_tracks(
     username because Movebank access varies per account licence acceptance.
 
     Errors:
-        MovebankInputError       — bad bbox, missing credentials, bad params (retryable=False)
-        MovebankAuthError        — Movebank rejected credentials (401, retryable=False)
-        MovebankLicenseError     — account has not accepted study's Data Use Statement (403, retryable=False)
-        MovebankUpstreamError    — 5xx / network / malformed response (retryable=True)
+        MovebankInputError -- bad bbox, missing credentials, bad params (retryable=False)
+        MovebankAuthError -- Movebank rejected credentials (401, retryable=False)
+        MovebankLicenseError -- account has not accepted study's Data Use Statement (403, retryable=False)
+        MovebankUpstreamError -- 5xx / network / malformed response (retryable=True)
     """
     # ---- Input validation ----
     if not isinstance(study_id, int):
@@ -872,7 +869,7 @@ def fetch_movebank_tracks(
     layer_label = "Movebank Tracks" if gtype == "linestring" else "Movebank Points"
     return LayerURI(
         layer_id=f"movebank-{study_id}-{gtype}",
-        name=f"{layer_label} — study {study_id}",
+        name=f"{layer_label} -- study {study_id}",
         layer_type="vector",
         uri=result.uri,
         style_preset="movebank_tracks",

@@ -1,4 +1,4 @@
-"""``fetch_wdpa_protected_areas`` atomic tool — WDPA polygon fetcher.
+"""``fetch_wdpa_protected_areas`` atomic tool -- WDPA polygon fetcher.
 """
 
 from __future__ import annotations
@@ -283,12 +283,11 @@ def _normalize_designation_filter(
     canonical = {_normalize_one_designation(d) for d in designation_filter}
     return sorted(canonical)
 
-# Page size. WDPA's FeatureServer default cap is 2000 — request that
+# Page size. WDPA's FeatureServer default cap is 2000 -- request that
 # explicitly so server-side defaults do not surprise us.
 _PAGE_SIZE = 2000
 
-# Per-request timeout. WDPA's ArcGIS REST cluster can be slow under load —
-# the kickoff allots 60s.
+# Per-request timeout. WDPA's ArcGIS REST cluster can be slow under load -- # the kickoff allots 60s.
 _REQUEST_TIMEOUT = 60.0
 
 # Safety cap on pagination iterations. 50 * 2000 = 100k features. A bbox
@@ -296,7 +295,7 @@ _REQUEST_TIMEOUT = 60.0
 # query; fail loudly rather than silently paginate forever.
 _MAX_PAGES = 50
 
-# User-Agent — UNEP-WCMC's terms ask for identifying agents.
+# User-Agent -- UNEP-WCMC's terms ask for identifying agents.
 _USER_AGENT = (
     "trid3nt/0.1 (Hazard Modeling Agent; "
     "https://github.com/double-r-squared/trid3nt-qgis-plugin; agent@trid3nt.dev)"
@@ -304,7 +303,7 @@ _USER_AGENT = (
 
 
 # ---------------------------------------------------------------------------
-# AtomicToolMetadata — registered once at import time.
+# AtomicToolMetadata -- registered once at import time.
 # ---------------------------------------------------------------------------
 
 _METADATA = AtomicToolMetadata(
@@ -353,8 +352,7 @@ def _round_bbox_to_6dp(
 def _bbox_to_envelope(bbox: tuple[float, float, float, float]) -> str:
     """Format a bbox as an ArcGIS ``geometryType=esriGeometryEnvelope`` string.
 
-    ArcGIS REST envelope format is the literal ``xmin,ymin,xmax,ymax`` —
-    no JSON wrapping when ``geometryType=esriGeometryEnvelope`` is set.
+    ArcGIS REST envelope format is the literal ``xmin,ymin,xmax,ymax`` -- no JSON wrapping when ``geometryType=esriGeometryEnvelope`` is set.
     """
     min_lon, min_lat, max_lon, max_lat = bbox
     return f"{min_lon},{min_lat},{max_lon},{max_lat}"
@@ -467,7 +465,7 @@ def _fetch_wdpa_features(
     else:
         raise WDPAUpstreamError(
             f"WDPA pagination exceeded {_MAX_PAGES} pages for bbox={bbox}; "
-            "bbox is probably too large — reduce bbox extent."
+            "bbox is probably too large -- reduce bbox extent."
         )
 
     # Client-side designation filter (lowercase field name per the live schema).
@@ -523,7 +521,7 @@ def _features_to_flatgeobuf(features: list[dict[str, Any]]) -> bytes:
     """Convert a list of GeoJSON Features to FlatGeobuf bytes via geopandas.
 
     An empty feature list is returned as an empty FlatGeobuf (still valid
-    bytes) — callers (and the cache shim) treat that as a successful
+    bytes) -- callers (and the cache shim) treat that as a successful
     "no-features-in-bbox" response per the audit.md "Empty bbox over open
     water → 0 features without error" test.
     """
@@ -599,7 +597,7 @@ def _features_to_flatgeobuf(features: list[dict[str, Any]]) -> bytes:
 
 
 # ---------------------------------------------------------------------------
-# Fetch function — builds the bytes callable for read_through.
+# Fetch function -- builds the bytes callable for read_through.
 # ---------------------------------------------------------------------------
 
 
@@ -640,7 +638,7 @@ def fetch_wdpa_protected_areas(
     monthly WDPA releases, cached ``static-30d``. No API key required.
 
     **When to use:**
-    - Agent needs protected-area boundaries for a study area — e.g. overlay
+    - Agent needs protected-area boundaries for a study area -- e.g. overlay
       National Parks or National Wildlife Refuges on a flood risk surface.
     - Workflow must compute the fraction of a hazard footprint that intersects
       protected lands (conservation-impact analysis).
@@ -676,7 +674,7 @@ def fetch_wdpa_protected_areas(
     **Cross-tool dependencies:**
     - Pairs with: ``fetch_gbif_occurrences``, ``fetch_inaturalist_observations``
       (conservation layer context).
-    - Upstream of: ``compute_zonal_statistics`` for inside/outside protected
+    - Upstream of: ``spatial_query`` for inside/outside protected
       area summaries.
     - Complemented by: ``fetch_administrative_boundaries`` for jurisdictional
       boundary overlay.

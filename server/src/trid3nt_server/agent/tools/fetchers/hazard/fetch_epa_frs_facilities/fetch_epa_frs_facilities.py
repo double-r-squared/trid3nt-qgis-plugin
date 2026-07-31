@@ -1,4 +1,4 @@
-"""``fetch_epa_frs_facilities`` atomic tool — EPA regulated-facility POINTS by bbox.
+"""``fetch_epa_frs_facilities`` atomic tool -- EPA regulated-facility POINTS by bbox.
 """
 
 from __future__ import annotations
@@ -82,7 +82,7 @@ class EpaFrsEmptyError(EpaFrsError):
 
 
 # ---------------------------------------------------------------------------
-# Constants — program -> EPA NEPAssist MapServer layer mapping.
+# Constants -- program -> EPA NEPAssist MapServer layer mapping.
 # ---------------------------------------------------------------------------
 
 #: Public, unauthenticated EPA ArcGIS REST MapServer hosting the FRS
@@ -145,7 +145,7 @@ PROGRAM_ALIASES: dict[str, str] = {
     "acres": "brownfields",
 }
 
-# User-Agent — identify this client clearly to the EPA ESRI cluster.
+# User-Agent -- identify this client clearly to the EPA ESRI cluster.
 _USER_AGENT = (
     "trid3nt/0.1 (Hazard Modeling Agent; "
     "https://github.com/double-r-squared/trid3nt-qgis-plugin; agent@trid3nt.dev)"
@@ -157,7 +157,7 @@ _PAGE_SIZE = 2000
 # HTTP request timeout (seconds).
 _HTTP_TIMEOUT_S = 45.0
 
-# Hard cap on features paginated per underlying layer — keeps FGB + S3 write
+# Hard cap on features paginated per underlying layer -- keeps FGB + S3 write
 # tractable. An industrial metro bbox of all programs can run several thousand;
 # callers wanting more should narrow the bbox.
 _MAX_FEATURES_PER_LAYER = 20_000
@@ -183,7 +183,7 @@ _DEFAULT_DENSITY = 5000
 
 
 # ---------------------------------------------------------------------------
-# AtomicToolMetadata — registered once at import time.
+# AtomicToolMetadata -- registered once at import time.
 # ---------------------------------------------------------------------------
 
 
@@ -551,7 +551,7 @@ def _normalize_superfund_feature(
 # ---------------------------------------------------------------------------
 
 #: Stable column order for the emitted FlatGeobuf (so the schema is identical
-#: whether or not any features were found — important for the honest-empty path
+#: whether or not any features were found -- important for the honest-empty path
 #: and for downstream consumers).
 _OUTPUT_COLUMNS: list[str] = [
     "registry_id",
@@ -574,7 +574,7 @@ _OUTPUT_COLUMNS: list[str] = [
 def _features_to_flatgeobuf(cleaned: list[dict[str, Any]]) -> bytes:
     """Convert normalized FRS point features to FlatGeobuf bytes.
 
-    Always emits a valid FlatGeobuf — an empty input yields a header-only FGB
+    Always emits a valid FlatGeobuf -- an empty input yields a header-only FGB
     (with the stable column schema) so the cache shim has a concrete artifact to
     persist (honest-empty path).
 
@@ -703,7 +703,7 @@ def fetch_epa_frs_facilities(
     - "Show EPA regulated facilities / TRI sites / Superfund sites near [place]".
     - The MODFLOW contamination-plume demo: locate a candidate chemical-source
       facility, or determine which regulated facilities a modeled plume reaches
-      (intersect with ``compute_zonal_statistics`` / ``spatial_query``).
+      (intersect with ``spatial_query``).
     - Any hazard / exposure workflow needing regulated industrial / waste facility
       locations inside a flood / fire / surge / plume footprint.
 
@@ -715,10 +715,9 @@ def fetch_epa_frs_facilities(
       (FRS is a static inventory).
 
     **Parameters:**
-        bbox: ``(min_lon, min_lat, max_lon, max_lat)`` in EPSG:4326. Required —
-            ``supports_global_query=False``. Example Houston Ship Channel:
+        bbox: ``(min_lon, min_lat, max_lon, max_lat)`` in EPSG:4326. Required -- ``supports_global_query=False``. Example Houston Ship Channel:
             ``(-95.30, 29.68, -95.05, 29.80)``.
-        facility_program: One of ``"frs"`` (default — union of TRI + water +
+        facility_program: One of ``"frs"`` (default -- union of TRI + water +
             hazardous-waste + air + brownfields point layers), ``"tri"``,
             ``"superfund"``, ``"air"``, ``"water"``, ``"hazwaste"``,
             ``"brownfields"`` (aliases accepted: ``"all"``, ``"toxic_release"``,
@@ -738,7 +737,7 @@ def fetch_epa_frs_facilities(
         - ``EpaFrsUpstreamError``: HTTP/network failure, ArcGIS error envelope,
           or FlatGeobuf serialization failure (retryable=True).
         - ``EpaFrsEmptyError``: no features in bbox (retryable=False; not raised
-          by default — empty FGB is returned).
+          by default -- empty FGB is returned).
 
     Cache: ``ttl_class="static-30d"``, ``source_class="epa_frs_facilities"``.
     Cache key is SHA-256 of ``(program_key, bbox-rounded-6dp)``.
@@ -779,7 +778,7 @@ def fetch_epa_frs_facilities(
             f"{q_bbox[0]:.4f}-{q_bbox[1]:.4f}"
         ),
         name=(
-            f"EPA {label} — bbox "
+            f"EPA {label} -- bbox "
             f"({q_bbox[0]:.2f},{q_bbox[1]:.2f},{q_bbox[2]:.2f},{q_bbox[3]:.2f})"
         ),
         layer_type="vector",

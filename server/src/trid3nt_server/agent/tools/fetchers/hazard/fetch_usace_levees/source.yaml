@@ -130,10 +130,9 @@ docstring: |-
 
   Cross-tool dependencies: typically downstream of ``geocode_location`` /
   ``fetch_administrative_boundaries`` to derive bbox; feeds
-  ``spatial_query`` (clip to a state/county polygon),
-  ``compute_zonal_statistics`` (population/asset rollups via
-  ``fetch_buildings`` + ``fetch_hrsl_population``), and intersection with
-  ``fetch_nws_alerts_conus`` flood warnings.
+  ``spatial_query`` (clip to a state/county polygon; population/asset
+  rollups via ``fetch_buildings`` + ``fetch_hrsl_population``), and
+  intersection with ``fetch_nws_alerts_conus`` flood warnings.
 
   Cache: ``static-30d`` (NLD updates quarterly). Cache key: SHA-256 of
   ``(bbox-rounded-6dp-or-"global", layer)``. Source-tier: FR-HEP-2 Tier 1

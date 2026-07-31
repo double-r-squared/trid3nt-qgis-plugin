@@ -253,7 +253,7 @@ def code_exec_request(
     DataFrame, or matplotlib Figure); the user sees the exact code and
     must approve it first. Do NOT use for: fetching new data
     (``fetch_*``), running a hazard model (``run_model_*``), a standard
-    chart (``generate_histogram``/``generate_damage_distribution``), or
+    chart (``generate_chart``), or
     anything a purpose-built tool already does -- this is the escape
     hatch for ad-hoc computation only.
 

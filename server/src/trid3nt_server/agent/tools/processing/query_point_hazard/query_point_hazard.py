@@ -226,9 +226,9 @@ async def layers_from_case(
 def stage_layer_local(uri: str, tmpdir: str, label: str) -> str:
     """Materialize a layer uri locally (s3:// via boto3, else a local path).
 
-    TiTiler display tile templates are unwrapped to the underlying COG first
-    (the open_case_in_qgis convention). Raises on failure -- callers convert
-    to a per-layer honest entry.
+    Raster tile-template display URLs are unwrapped to the underlying COG
+    first (the open_case_in_qgis convention). Raises on failure -- callers
+    convert to a per-layer honest entry.
     """
     from trid3nt_server.agent.tools.meta.open_case_in_qgis.open_case_in_qgis import _strip_query, _unwrap_tile_template
 
@@ -316,8 +316,7 @@ async def query_point_hazard(
     this point?" or "what do all the layers say at Fort Myers pier?" --
     one call reads the whole loaded raster stack at a point instead of N
     zonal calls. Resolves ``lon``/``lat`` or a geocoded ``place``. Do NOT
-    use for: area statistics (``compute_zonal_statistics``/
-    ``spatial_query``); a time series over frames
+    use for: area statistics (``spatial_query``); a time series over frames
     (``extract_timeseries_at_point``); vector layers (skipped here; use
     vector query tools).
 

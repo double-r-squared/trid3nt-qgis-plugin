@@ -1012,9 +1012,9 @@ def fetch_gtsm_tide_surge(
 
     **Cross-tool dependencies:**
 
-    - Consumed by: ``build_sfincs_model`` (parses ``time_series_csv`` to
-      populate ``bnd.bzs`` coastal boundary); ``model_compound_flood_global``
-      (compound-flood composer).
+    - Consumed by: ``set_sfincs_parameters`` + ``run_sfincs`` (parses
+      ``time_series_csv`` to populate ``bnd.bzs`` coastal boundary);
+      compound-flood composition happens in the code_exec playground.
     - Pair with: ``fetch_era5_reanalysis`` (atmospheric + wave forcing for
       the same event window); ``fetch_cama_flood_discharge`` (fluvial inflow
       boundary); ``fetch_mrms_qpe`` / ERA5 precip (rainfall forcing).
@@ -1067,7 +1067,7 @@ def fetch_gtsm_tide_surge(
             f"{q_bbox[0]:.4f}-{q_bbox[1]:.4f}"
         ),
         name=(
-            f"GTSM Tide + Surge — {output.replace('_', ' ').title()} "
+            f"GTSM Tide + Surge -- {output.replace('_', ' ').title()} "
             f"({d0.isoformat()} → {d1.isoformat()})"
         ),
         layer_type="vector",

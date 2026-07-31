@@ -48,8 +48,7 @@ class DemPartialCoverageError(UpstreamAPIError):
     smaller than the requested extent; without a check we silently mesh / hillshade
     a partial DEM (the honesty floor forbids that).
 
-    Per the data-source-fallback norm this is a TYPED, RETRYABLE upstream signal —
-    it subclasses ``UpstreamAPIError`` so the urban workflow's
+    Per the data-source-fallback norm this is a TYPED, RETRYABLE upstream signal -- it subclasses ``UpstreamAPIError`` so the urban workflow's
     ``except Exception`` 1m->10m fallback still fires (the 10m seamless layer
     usually covers where a 1m tile is missing), and the standalone ``fetch_dem``
     tool surfaces the distinct ``error_code`` so the agent narrates the partial
@@ -77,11 +76,11 @@ class DemPrimaryTimeoutError(UpstreamAPIError):
     retryable = True
 
 # ---------------------------------------------------------------------------
-# fetch_dem — USGS 3DEP via py3dep
+# fetch_dem -- USGS 3DEP via py3dep
 # ---------------------------------------------------------------------------
 
 #: Coverage shortfall (in degrees) tolerated before a DEM is flagged partial.
-#: ~0.0008 deg ~= 90 m at the equator — generous enough to absorb a one-tile /
+#: ~0.0008 deg ~= 90 m at the equator -- generous enough to absorb a one-tile /
 #: half-cell edge snap (3DEP cells are 1-30 m) without flagging a good DEM, but
 #: tight enough to catch the live south-edge clip (~21% of the requested height).
 _DEM_COVERAGE_TOL_DEG = 0.0008
@@ -111,7 +110,7 @@ def _dem_wgs84_bounds(dem: Any) -> tuple[float, float, float, float] | None:
         tf = Transformer.from_crs(crs, "EPSG:4326", always_xy=True)
         xs, ys = tf.transform([left, right, left, right], [bottom, top, top, bottom])
         return (min(xs), min(ys), max(xs), max(ys))
-    except Exception:  # noqa: BLE001 — pyproj/CRS slip -> skip the gate
+    except Exception:  # noqa: BLE001 -- pyproj/CRS slip -> skip the gate
         return None
 
 def _bbox_covers(
@@ -206,14 +205,14 @@ def _fetch_3dep_dem_bytes(
     # heavy geo deps installed can still load the registry.
     try:
         import py3dep  # type: ignore[import-not-found]
-        import rioxarray  # noqa: F401 — registers .rio accessor on xr.DataArray
+        import rioxarray  # noqa: F401 -- registers .rio accessor on xr.DataArray
     except Exception as exc:  # noqa: BLE001
         raise UpstreamAPIError(f"py3dep / rioxarray unavailable: {exc}") from exc
 
     # py3dep reads the USGS 3DEP seamless DEM from the PUBLIC bucket
     # ``prd-tnm.s3.amazonaws.com`` via GDAL ``/vsicurl/``. On the AWS box the
     # instance-role AWS creds are in the environment, so GDAL tried to SIGN the
-    # request (and to readdir-list the bucket) — both fail on a public,
+    # request (and to readdir-list the bucket) -- both fail on a public,
     # no-ListBucket bucket, surfacing as "…USGS_Seamless_DEM_1.vrt does not
     # exist in the file system" even though the VRT is reachable (curl 200).
     # Cold DEM fetches for EVERY novel bbox failed (live Case 3, 2026-06-16);
@@ -228,14 +227,14 @@ def _fetch_3dep_dem_bytes(
             CPL_VSIL_CURL_ALLOWED_EXTENSIONS=".vrt,.tif,.tiff",
             VSI_CACHE=True,
         )
-    except Exception:  # noqa: BLE001 — rasterio always present where py3dep is
+    except Exception:  # noqa: BLE001 -- rasterio always present where py3dep is
         import contextlib
         _dem_env = contextlib.nullcontext()
 
     try:
         with _dem_env:
             dem = py3dep.get_dem(bbox, resolution=resolution_m)
-    except Exception as exc:  # noqa: BLE001 — re-raise as typed error
+    except Exception as exc:  # noqa: BLE001 -- re-raise as typed error
         raise UpstreamAPIError(
             f"py3dep.get_dem failed for bbox={bbox} resolution={resolution_m}: {exc}"
         ) from exc
@@ -246,11 +245,11 @@ def _fetch_3dep_dem_bytes(
     # bbox within a small tolerance; a material shortfall raises the typed
     # DemPartialCoverageError so we never silently mesh / hillshade a clipped DEM
     # (the urban workflow's 1m->10m fallback + the agent's honest narration act on
-    # it). Best-effort on the bounds read — a bounds-introspection failure leaves
+    # it). Best-effort on the bounds read -- a bounds-introspection failure leaves
     # the prior (no-check) behavior unchanged rather than blocking a good DEM.
     try:
         cov = _dem_wgs84_bounds(dem)
-    except Exception:  # noqa: BLE001 — never block a DEM on an introspection slip
+    except Exception:  # noqa: BLE001 -- never block a DEM on an introspection slip
         cov = None
     if cov is not None and not _bbox_covers(cov, bbox):
         raise DemPartialCoverageError(
@@ -416,20 +415,21 @@ def fetch_dem(
     - Any flood workflow step that needs terrain elevation: SFINCS model
       domain setup, watershed delineation, slope/hillshade computation.
     - User asks "show me the terrain elevation for [area]" or "what does the
-      ground look like here?" — render with the ``continuous_dem`` QML preset.
-    - ``build_sfincs_model`` requires a DEM for the SFINCS grid; this tool
-      supplies it.
+      ground look like here?" -- render with the ``continuous_dem`` QML preset.
+    - SFINCS setup (``set_sfincs_parameters`` + ``run_sfincs``) requires a
+      DEM for the model grid; this tool supplies it.
     - Pre-processing step before ``compute_slope``, ``compute_hillshade``,
-      ``compute_aspect``, or ``compute_zonal_statistics``.
+      ``compute_aspect``, or an AOI-scoped tabular summary via
+      ``spatial_query``.
 
     **When NOT to use:**
-    - Coverage outside the continental US with the DEFAULT source — 3DEP is
+    - Coverage outside the continental US with the DEFAULT source -- 3DEP is
       CONUS-only; pass ``source="copernicus"`` for a global GLO-30 30 m DEM.
-    - Bathymetry (below-water elevation) — 3DEP/GLO-30 are land/surface models;
+    - Bathymetry (below-water elevation) -- 3DEP/GLO-30 are land/surface models;
       use ``fetch_topobathy`` for coastal seafloor depth.
-    - Single-point elevation lookups — the tool fetches a raster window;
+    - Single-point elevation lookups -- the tool fetches a raster window;
       for a point query use a future ``point_elevation`` tool.
-    - Continent-scale bboxes (> 5,000,000 km²) — rejected with
+    - Continent-scale bboxes (> 5,000,000 km²) -- rejected with
       ``BboxInvalidError``. State/multi-state bboxes auto-coarsen instead of
       failing (not a dead end).
 
@@ -451,16 +451,17 @@ def fetch_dem(
     A ``LayerURI`` pointing at a Cloud-Optimized GeoTIFF in the cache bucket
     (``s3://trid3nt-cache/cache/static-30d/dem/<key>.tif``).
     CRS: EPSG:5070 (py3dep default); units: meters above NAVD88.
-    Fields consumed downstream: ``uri`` → by ``build_sfincs_model`` and QGIS
-    Server WMS; ``style_preset="continuous_dem"`` → map rendering. When the
+    Fields consumed downstream: ``uri`` → by ``set_sfincs_parameters`` /
+    ``run_sfincs`` and the QGIS plugin's native rendering;
+    ``style_preset="continuous_dem"`` → map rendering. When the
     bbox forced a coarser grid than requested, ``name`` carries an honest
     coarsening note (approximate terrain -- fine for a hillshade/overview,
     not site-scale analysis).
 
     **Cross-tool dependencies:**
-    - Downstream: ``build_sfincs_model``, ``compute_slope``,
-      ``compute_hillshade``, ``compute_aspect``, ``compute_colored_relief``,
-      ``compute_zonal_statistics``.
+    - Downstream: ``set_sfincs_parameters`` / ``run_sfincs``,
+      ``compute_slope``, ``compute_hillshade``, ``compute_aspect``,
+      ``compute_colored_relief``, ``spatial_query``.
     - Typically called after: ``geocode_location`` supplies the bbox.
     - Sibling source: ``source="copernicus"`` for non-US / global terrain.
     """

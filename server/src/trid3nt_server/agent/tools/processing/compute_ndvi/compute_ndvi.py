@@ -7,8 +7,8 @@ Computes the Normalized Difference Vegetation Index
 for a bbox + time window from Sentinel-2 L2A surface reflectance, via the
 Microsoft Planetary Computer (PC) STAC catalog. NDVI is the canonical
 vegetation-vigor / green-biomass index (range -1..1; bare soil / water near 0,
-dense healthy vegetation 0.6-0.9). It is the vegetation layer in the SC-DNR-style
-conservation-priority stack (``model_conservation_priority``).
+dense healthy vegetation 0.6-0.9). It is the vegetation layer in an SC-DNR-style
+conservation-priority stack (composed in the code_exec playground).
 
 Data source
 ===========
@@ -430,8 +430,8 @@ def compute_ndvi(
 
     Use this (not ``fetch_sentinel2_truecolor``) when you want NDVI
     vegetation-index values, not the raw picture -- vegetation condition/
-    greenness/canopy vigor, or the vegetation input to
-    ``model_conservation_priority``. Water/bare soil ~0, sparse vegetation
+    greenness/canopy vigor, or the vegetation input to a conservation-priority
+    composite (compose in the code_exec playground). Water/bare soil ~0, sparse vegetation
     0.2-0.5, dense canopy 0.6-0.9. Do NOT use for: land-cover classes
     (``fetch_landcover``/``extract_landcover_class``); true-color imagery
     (``fetch_naip``).

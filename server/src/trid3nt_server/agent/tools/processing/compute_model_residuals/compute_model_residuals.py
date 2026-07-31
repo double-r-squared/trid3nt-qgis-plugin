@@ -571,7 +571,7 @@ def compute_model_residuals(
 
     **When NOT to use:**
     - Aggregating a raster within polygons (zones) -- use
-      ``compute_zonal_statistics``.
+      the code_exec playground.
     - Running the model itself -- this tool only COMPARES an already-produced
       model raster against observations; it never simulates anything.
     - Comparing two MODELED rasters against each other (no real
