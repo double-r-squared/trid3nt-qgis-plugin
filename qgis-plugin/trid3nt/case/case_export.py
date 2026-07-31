@@ -1,7 +1,18 @@
-"""Open-case-in-QGIS support -- PURE PYTHON (no PyQGIS / PyQt imports).
+"""REMOTE-mode-ONLY case-layer materialize+download fallback -- PURE PYTHON
+(no PyQGIS / PyQt imports).
 
-Milestone 2 item 4: list the user's cases and open one in QGIS via the local
-agent's export API (``tool_catalog_http.py``, default ``http://127.0.0.1:8766``):
+Decision A (NATE 2026-07-31): LOCAL mode no longer calls anything in this
+module -- opening a case restores its layers automatically (by URI, straight
+from the store) in the same gesture as its chat, via
+``Trid3ntDock._on_case_open_event``; the manifest-fetch helper this module
+used to also expose for local mode (``fetch_case_layers_manifest``, the
+``/api/case-layers`` client) was fully redundant with that and has been
+deleted. What remains here is condemned in DELETION_LEDGER pending remote
+store access -- kept because REMOTE mode still cannot stream the store
+directly and has no other path to a case's layers yet.
+
+Talks to the local agent's export API (``tool_catalog_http.py``, default
+``http://127.0.0.1:8766``):
 
     POST /api/export-qgis {"case_id": "..."}
       -> 200 {"status": "ok"|"partial", "qgz_path": str,
@@ -88,7 +99,6 @@ __all__ = [
     "ExportRequestError",
     "download_export_file",
     "download_mesh_file",
-    "fetch_case_layers_manifest",
     "localize_mesh_entries",
     "localize_remote_export",
     "plan_export_layers",
@@ -275,56 +285,6 @@ def localize_remote_export(base_url: str, result: dict, dest_dir: str) -> dict:
     localized["skipped"] = skipped
     localized["output_dir"] = dest_dir
     return localized
-
-
-def fetch_case_layers_manifest(
-    base_url: str, case_id: str, timeout: float = 60.0
-) -> dict:
-    """``POST {base_url}/api/case-layers`` -> the case-layers manifest dict.
-
-    The PRIMARY local "Open case in QGIS" path: the manifest carries the case's
-    persisted layers verbatim under ``loaded_layers`` (each ``uri`` /
-    ``layer_type`` / ``style_preset`` / ``legend`` / ``name`` / ``wms_url``) so
-    the caller adds each layer straight from its store URI via the SAME by-URI
-    materializer live-published layers use -- no download, no gpkg/tif round
-    trip. Raises ``ExportRequestError`` with the server's own message on a
-    4xx/5xx or a transport failure (connection refused = agent HTTP listener not
-    up). Blocking -- the caller runs it OFF the UI thread.
-    """
-    url = f"{base_url.rstrip('/')}/api/case-layers"
-    body = json.dumps({"case_id": case_id}).encode("utf-8")
-    request = urllib.request.Request(
-        url,
-        data=body,
-        headers={"Content-Type": "application/json"},
-        method="POST",
-    )
-    try:
-        with urllib.request.urlopen(request, timeout=timeout) as resp:
-            raw = resp.read()
-    except urllib.error.HTTPError as exc:
-        detail = ""
-        try:
-            payload = json.loads(exc.read().decode("utf-8", "replace"))
-            if isinstance(payload, dict):
-                detail = str(payload.get("error") or "")
-        except Exception:  # noqa: BLE001 -- body may be anything
-            pass
-        raise ExportRequestError(
-            detail or f"case-layers API returned HTTP {exc.code}"
-        ) from exc
-    except (urllib.error.URLError, OSError, TimeoutError) as exc:
-        raise ExportRequestError(
-            f"case-layers API unreachable at {url} ({exc}) -- is the local agent "
-            "running with its HTTP listener?"
-        ) from exc
-    try:
-        result = json.loads(raw.decode("utf-8"))
-    except (UnicodeDecodeError, json.JSONDecodeError) as exc:
-        raise ExportRequestError(f"case-layers API returned non-JSON: {exc}") from exc
-    if not isinstance(result, dict):
-        raise ExportRequestError("case-layers API returned a non-object body")
-    return result
 
 
 def post_export_case(

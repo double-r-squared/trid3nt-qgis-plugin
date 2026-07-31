@@ -39,10 +39,16 @@ class CasesDialog(QDialog):
                 the dialog: ``Trid3ntDock.open_case`` -- case-command select
                 -> dock rebind when already connected, or (item d) connects
                 first and queues the select for the instant the handshake
-                completes when the row came from the cold list.
-      Right-click a case row -> context menu: Export GeoTIFFs / Delete
-                (moved off the button row -- a left click now opens, so
-                these secondary actions need a gesture that does not).
+                completes when the row came from the cold list. Opening a
+                case now restores its persisted LAYERS as well as its chat,
+                in the SAME gesture (decision A, NATE 2026-07-31,
+                ``Trid3ntDock._on_case_open_event``) -- there is no separate
+                layer-load action anymore.
+      Right-click a case row -> context menu: Rename / Delete (the old
+                "Export GeoTIFFs" action is gone -- opening the case does
+                this now; moved off the button row -- a left click now
+                opens, so these secondary actions need a gesture that does
+                not).
     """
 
     def __init__(self, dock: "Trid3ntDock", cases: List[CaseInfo]):
@@ -149,15 +155,11 @@ class CasesDialog(QDialog):
             return
         menu = QMenu(self)
         rename_action = menu.addAction("Rename")
-        export_action = menu.addAction("Export GeoTIFFs")
         delete_action = menu.addAction("Delete")
         global_pos = self.listw.viewport().mapToGlobal(pos)
         chosen = menu.exec(global_pos)
         if chosen is rename_action:
             self._begin_rename(item)
-        elif chosen is export_action:
-            self._dock.open_case_in_qgis(case_id, str(title))
-            self.accept()
         elif chosen is delete_action:
             self._delete_case(case_id, str(title))
 

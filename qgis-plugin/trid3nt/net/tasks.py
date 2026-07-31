@@ -87,42 +87,6 @@ class _ExportTask(QObject):
         self.finished.emit(self._case_id, result)
 
 
-class _CaseLayersTask(QObject):
-    """POST /api/case-layers off the UI thread (cross-thread signal emit) --
-    the PRIMARY local "Open case in QGIS" path.
-
-    Fetches the case-layers MANIFEST (persisted layers, each by store URI) so
-    the finished slot adds them via the SAME by-URI materializer live-published
-    layers use -- no gpkg/tif download round trip (that is the ``_ExportTask``
-    remote fallback). Follows the ``_ExportTask`` pattern so a slow/dead agent
-    HTTP listener never freezes the UI thread.
-    """
-
-    finished = pyqtSignal(str, dict)  # case_id, manifest
-    errored = pyqtSignal(str, str)    # case_id, message
-
-    def __init__(self, base_url: str, case_id: str, parent: Optional[QObject] = None):
-        super().__init__(parent)
-        self._base_url = base_url
-        self._case_id = case_id
-
-    def start(self) -> None:
-        threading.Thread(target=self._run, daemon=True).start()
-
-    def _run(self) -> None:
-        try:
-            manifest = case_export.fetch_case_layers_manifest(
-                self._base_url, self._case_id
-            )
-        except case_export.ExportRequestError as exc:
-            self.errored.emit(self._case_id, str(exc))
-            return
-        except Exception as exc:  # noqa: BLE001 -- surfaced, never silent
-            self.errored.emit(self._case_id, f"{type(exc).__name__}: {exc}")
-            return
-        self.finished.emit(self._case_id, manifest)
-
-
 class _CaseListTask(QObject):
     """GET /api/case-list off the UI thread (items b/c, live-feedback
     2026-07-09) -- follows the ``_ExportTask`` pattern (cross-thread signal

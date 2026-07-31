@@ -1453,74 +1453,46 @@ class Trid3ntDock(QDockWidget):
             return "Refreshing case list ..."
         return "Not connected -- the list refreshes on the next connect"
 
-    # -- open case in QGIS ------------------------------------------------------ #
+    # -- remote-mode case-layer hydration (condemned; see DELETION_LEDGER) ------ #
 
-    def open_case_in_qgis(self, case_id: str, label: str) -> None:
-        """Add ``case_id``'s layers to the CURRENT project.
+    def hydrate_case_layers(self, case_id: str, label: str) -> None:
+        """REMOTE-mode-ONLY case-layer materialize+download fallback (renamed
+        from ``open_case_in_qgis``, matching the server's ``cases.
+        hydrate_case_layers``, ADR 0058).
 
-        LOCAL mode (PRIMARY): fetch the case-layers MANIFEST via
-        /api/case-layers and add each layer straight from its store URI, the
-        SAME by-URI path live-published layers use (MinIO reachable) -- no
-        gpkg/tif download round trip.
+        LOCAL mode no longer calls this: ``_on_case_open_event`` already
+        restores a case's layers automatically, in the SAME gesture as the
+        chat replay, the instant the case becomes active (decision A,
+        NATE 2026-07-31) -- the by-URI manifest fetch this method used to
+        also perform for local mode was fully redundant with that (same
+        source data, same materializer) and has been deleted.
 
-        REMOTE mode (fallback, until presigned store access lands): the client
-        cannot reach the store, so POST /api/export-qgis materializes the layers
-        server-side and the .gpkg/.tif/.qml are downloaded through
-        GET /api/export-qgis/file into a temp dir (see ``case_export``).
+        REMOTE mode: not currently wired to any UI action either (zero
+        user-facing export remains -- native QGIS covers any file export a
+        user wants). Kept callable, not deleted, so the remote
+        materialize+download machinery (``_ExportTask`` /
+        ``case_export.post_export_case`` / ``materializer.
+        materialize_export``) is not lost outright -- condemned in
+        DELETION_LEDGER pending remote store access, at which point this is
+        the natural fold-in point for an automatic remote restore too. A
+        LOCAL-mode call is a defensive no-op (should never happen -- nothing
+        in the dock calls this for local anymore).
         """
-        remote = self.settings.mode != MODE_LOCAL
+        if self.settings.mode == MODE_LOCAL:
+            return
         base_url = self._effective_http_base()
-        if remote:
-            self._note(
-                f"Exporting case '{label}' on the remote agent "
-                f"({base_url}) -- artifacts download to a local temp dir ..."
-            )
-            task = _ExportTask(
-                base_url, case_id, self, remote=remote,
-                minio_endpoint=self._effective_data_base(),
-            )
-            task.finished.connect(self._on_export_finished)
-            task.errored.connect(self._on_export_errored)
-            self._export_tasks.append(task)
-            task.start()
-            return
-        self._note(f"Opening case '{label}' -- adding its layers from the store ...")
-        task = _CaseLayersTask(base_url, case_id, self)
-        task.finished.connect(self._on_case_layers_finished)
+        self._note(
+            f"Exporting case '{label}' on the remote agent "
+            f"({base_url}) -- artifacts download to a local temp dir ..."
+        )
+        task = _ExportTask(
+            base_url, case_id, self, remote=True,
+            minio_endpoint=self._effective_data_base(),
+        )
+        task.finished.connect(self._on_export_finished)
         task.errored.connect(self._on_export_errored)
-        self._case_layers_tasks.append(task)
+        self._export_tasks.append(task)
         task.start()
-
-    def _on_case_layers_finished(self, case_id: str, manifest: dict) -> None:
-        """Local "Open case in QGIS": add each manifest layer by store URI via
-        the SAME materializer live-published layers use."""
-        title = manifest.get("title") if isinstance(manifest, dict) else None
-        events = parse_layer_events(manifest if isinstance(manifest, dict) else {})
-        self.materializer.set_case(case_id, title or None)
-        if not events:
-            self._note(
-                "This case has no layers yet -- open it and run a prompt to "
-                "add some, then Open in QGIS."
-            )
-            return
-        notes = self.materializer.materialize(events)
-        for note in notes:
-            self._note(note)
-        if self.settings.auto_basemap:
-            note = ensure_basemap(self.settings.basemap_preset)
-            if note:
-                self._note(note)
-        # Zoom to the union of the just-added vector layers' extents (XYZ raster
-        # tile layers report a whole-world extent, so vector bounds are the
-        # honest focus target -- same choice the session-state replay makes).
-        try:
-            canvas = self.iface.mapCanvas()
-            dest_crs = canvas.mapSettings().destinationCrs()
-            extent = self.materializer.last_added_vector_extent(dest_crs)
-            zoom_to_extent(canvas, extent)
-        except Exception:  # noqa: BLE001 -- headless/no canvas, skip the zoom
-            pass
-        self._scroll_to_bottom()
 
     def _on_export_finished(self, case_id: str, result: dict) -> None:
         plan = case_export.plan_export_layers(result)
