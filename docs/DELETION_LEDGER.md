@@ -32,6 +32,7 @@ until DELETED (with the commit hash) - never silently dropped (NATE
 | gzip/vsizip native-GDAL collapse | _router modes | REJECTED - empirically refuted (36MB for 8x5px window) | REJECTED 2026-07-31 | gdal-collapse verdict |
 | jrc colormap-ramp DSL | would-be mode | REJECTED - one-consumer DSL fails generalization bar | REJECTED 2026-07-31 | ADR 0047/0053 |
 | project.qgz generation in case hydration | open_case_in_qgis | none - dead by module's own docstring | DELETED (ea36191) | NATE 2026-07-31 |
+| /api/case-layers route + build_case_layers_manifest | tool_catalog_http + cases/ | plugin-unreached since choice A - WS case-open replay already restores layers; delete (hygiene-batch HTTP path proved redundant) | CONDITION-MET | 0060 finding |
 | meta/probe_point.py deregistered route-server | agent/tools/meta | relocate to cases/ (same posture as hydration relocation) | QUEUED | 0058 open issue |
 | _strip_query/_unwrap_tile_template platform import from agent tools | cases/ vs agent | hoist to a shared agent URI util | QUEUED | 0058 open issue |
 | Plugin local case-layers manifest fetch (case_export.fetch_case_layers_manifest, net.tasks._CaseLayersTask, dock._on_case_layers_finished, open_case_in_qgis local branch) | qgis-plugin/trid3nt (case/ + net/ + ui/) | none - fully redundant with the pre-existing case-open WS layer replay (same source data, same materializer) | DELETED (commit-pending) | decision A / ADR 0060 |
