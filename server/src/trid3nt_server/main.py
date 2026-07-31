@@ -116,8 +116,8 @@ def _import_tools_registry() -> int:
     from .agent.tools.fetchers.biodiversity.fetch_gbif_occurrences import fetch_gbif_occurrences  # noqa: F401
     # register fetch_storm_events_db (NOAA Storm Events DB Tier-1 fetcher).
     from .agent.tools.fetchers.weather.fetch_storm_events_db import fetch_storm_events_db  # noqa: F401
-    # register fetch_nws_event (NWS active alerts/events; dynamic-1h Tier-1 fetcher).
-    from .agent.tools.fetchers.weather.fetch_nws_event import fetch_nws_event  # noqa: F401
+    # fetch_nws_event: data-router fold tier-3 hooks (ADR 0061) -- twin DELETED, now
+    # spec-driven (source.yaml + nws_event hooks), registered via register_specs_from_tree.
     # register fetch_nws_alerts_conus (CONUS-wide companion to fetch_nws_event).
     from .agent.tools.fetchers.weather.fetch_nws_alerts_conus import fetch_nws_alerts_conus  # noqa: F401
     # aggregate_claims_across_sources DEMOTED to an importable library (no longer

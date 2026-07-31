@@ -24,7 +24,7 @@ logger = logging.getLogger(
     "trid3nt_server.agent.tools.fetchers._router.transport.client"
 )
 
-__all__ = ["get_client", "range_get", "get_bytes", "head", "MAX_RETRIES"]
+__all__ = ["get_client", "range_get", "get_bytes", "post_bytes", "head", "MAX_RETRIES"]
 
 MAX_RETRIES = 4
 _RETRYABLE_STATUS = {429, 500, 502, 503, 504}
@@ -151,6 +151,49 @@ def get_bytes(
         return resp.content, resp.headers.get("content-type", ""), str(resp.url)
     assert last_exc is not None
     raise TransportUpstreamError(f"GET failed url={url}: {last_exc}") from last_exc
+
+
+def post_bytes(
+    client: httpx.Client, url: str, *, headers: dict[str, str] | None = None,
+    params: dict[str, Any] | None = None, json_body: Any = None,
+) -> tuple[bytes, str, str]:
+    """POST a JSON body and return ``(body, content_type, final_url)`` with the retry authority.
+
+    The write-method counterpart to :func:`get_bytes` for REST endpoints whose
+    query is a JSON request body rather than a query string (USACE NSI's
+    structures POST). Shares the ONE retry authority (429/5xx/timeout backoff +
+    ``Retry-After``); a 4xx classifies to a typed transport error immediately. A
+    POST is retried on the same idempotency assumption the whole router makes for
+    its cacheable read-through fetchers (the endpoint is a pure query, no side
+    effect), so the retry set is unchanged.
+    """
+    last_exc: Exception | None = None
+    for attempt in range(MAX_RETRIES + 1):
+        try:
+            resp = client.post(url, headers=headers, params=params, json=json_body)
+        except (httpx.TimeoutException, httpx.TransportError) as exc:
+            last_exc = exc
+            logger.warning("transport.post_bytes network error url=%s attempt=%d: %s",
+                           url, attempt, exc)
+            if attempt < MAX_RETRIES:
+                _sleep_backoff(attempt, None)
+                continue
+            raise TransportUpstreamError(
+                f"POST network failure url={url}: {exc}") from exc
+        if resp.status_code in _RETRYABLE_STATUS:
+            logger.warning("transport.post_bytes HTTP %d url=%s attempt=%d body=%r",
+                           resp.status_code, url, attempt, resp.text[:400])
+            if attempt < MAX_RETRIES:
+                _sleep_backoff(attempt, resp.headers.get("retry-after"))
+                continue
+            raise TransportUpstreamError(
+                f"POST exhausted retries at HTTP {resp.status_code} url={url}: {resp.text[:400]!r}",
+                status=resp.status_code, body=resp.text)
+        if resp.status_code >= 400:
+            raise classify_status(resp.status_code, resp.text, url)
+        return resp.content, resp.headers.get("content-type", ""), str(resp.url)
+    assert last_exc is not None
+    raise TransportUpstreamError(f"POST failed url={url}: {last_exc}") from last_exc
 
 
 def range_get(client: httpx.Client, url: str, lo: int, hi: int) -> bytes:

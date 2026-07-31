@@ -22,6 +22,7 @@ from trid3nt_server.agent.tools.fetchers._router.errors import (
     RouterInputError,
     RouterUpstreamError,
 )
+from trid3nt_server.agent.tools.fetchers._router import router as _router_mod
 from trid3nt_server.agent.tools.fetchers._router.executors import http_json, vector_fgb
 from trid3nt_server.agent.tools.fetchers._router.hooks import (
     HOOK_REGISTRY,
@@ -59,11 +60,13 @@ def _fgb_records(feats, spec) -> gpd.GeoDataFrame:
 # --------------------------------------------------------------------------- #
 
 
-def test_all_six_hooks_registered():
+def test_all_hooks_registered():
     for name in (
         "usgs_earthquakes.build_request", "usgs_earthquakes.parse_response",
         "ncei_tsunami.build_request", "ncei_tsunami.parse_response",
         "usgs_volcano.build_request", "usgs_volcano.parse_response",
+        "nws_event.build_request", "nws_event.parse_response",
+        "usace_nsi.build_request", "usace_nsi.parse_response",
     ):
         assert has_hook(name) and callable(resolve_hook(name))
 
@@ -279,3 +282,145 @@ def test_vol_parse_bbox_filter_excludes():
     coords = json.dumps([{"vnum": "332010", "latitude": 19.42, "longitude": -155.29}]).encode()
     with pytest.raises(RouterEmptyError):
         resolve_hook(spec.hooks.parse_response)(spec, {"bbox": [-100, 40, -90, 45]}, [alerts, coords])
+
+
+# --------------------------------------------------------------------------- #
+# nws_event (single-GET NWS /alerts/active; migrated from test_fetch_nws_event).
+# --------------------------------------------------------------------------- #
+
+
+def test_nws_build_request_url_state_and_events():
+    spec = _spec("fetch_nws_event")
+    br = resolve_hook(spec.hooks.build_request)
+    vp = _router_mod.validate_params(spec, {"area": "FL", "event_types": ["Flood Warning", "Coastal Flood Watch"]})
+    u = br(spec, vp)[0].url
+    assert "/alerts/active?" in u and "area=FL" in u and "status=actual" in u and "message_type=alert" in u
+    # str_list sorted + repeated &event= per entry.
+    assert "event=Coastal%20Flood%20Watch" in u and "event=Flood%20Warning" in u
+
+
+def test_nws_build_request_area_name_canonicalizes():
+    spec = _spec("fetch_nws_event")
+    br = resolve_hook(spec.hooks.build_request)
+    vp = _router_mod.validate_params(spec, {"area": "Texas"})
+    assert "area=TX" in br(spec, vp)[0].url
+
+
+@pytest.mark.parametrize("kw,ok", [
+    ({"area": "Nowhereland"}, False),   # unrecognized area -> INPUT_INVALID (build hook)
+    ({"area": "12071"}, True),          # a FIPS builds a URL (NWS rejects it live -- twin defect)
+])
+def test_nws_build_request_area_validation(kw, ok):
+    spec = _spec("fetch_nws_event")
+    br = resolve_hook(spec.hooks.build_request)
+    vp = _router_mod.validate_params(spec, kw)
+    if ok:
+        assert br(spec, vp)[0].url
+    else:
+        with pytest.raises(RouterInputError) as ei:
+            br(spec, vp)
+        assert ei.value.error_code == "NWS_EVENT_INPUT_INVALID"
+
+
+def test_nws_bad_status_enum_input_invalid():
+    spec = _spec("fetch_nws_event")
+    with pytest.raises(RouterInputError) as ei:
+        _router_mod.validate_params(spec, {"area": "FL", "status": "bogus"})
+    assert ei.value.error_code == "NWS_EVENT_INPUT_INVALID"
+
+
+def test_nws_parse_projects_props_and_drops_null_geometry():
+    spec = _spec("fetch_nws_event")
+    pr = resolve_hook(spec.hooks.parse_response)
+    body = json.dumps({"type": "FeatureCollection", "features": [
+        {"geometry": {"type": "Polygon", "coordinates": [[[-81.0, 26.0], [-80.0, 26.0], [-80.0, 27.0], [-81.0, 26.0]]]},
+         "properties": {"event": "Flood Warning", "severity": "Severe", "id": "urn:x:1",
+                        "geocode": {"UGC": ["FLZ048"]}}},
+        {"geometry": None, "properties": {"event": "Winter Storm Watch", "id": "urn:x:2"}},  # zone-only -> dropped
+    ]}).encode()
+    feats = pr(spec, {}, [body])
+    assert len(feats) == 1 and feats[0]["properties"]["event"] == "Flood Warning"
+    # nested props JSON-coerced to a scalar string.
+    assert isinstance(feats[0]["properties"]["id"], str)
+    g = _fgb_records(feats, spec)
+    assert list(g.columns)[:-1] == spec.ingest["properties"]
+
+
+def test_nws_parse_empty_and_bad_body():
+    spec = _spec("fetch_nws_event")
+    pr = resolve_hook(spec.hooks.parse_response)
+    assert pr(spec, {}, [json.dumps({"type": "FeatureCollection", "features": []}).encode()]) == []
+    with pytest.raises(RouterUpstreamError) as ue:
+        pr(spec, {}, [json.dumps({"type": "NotAFC"}).encode()])
+    assert ue.value.error_code == "NWS_EVENT_UPSTREAM_ERROR"
+
+
+# --------------------------------------------------------------------------- #
+# usace_nsi (single-POST NSI structures; migrated from test_fetch_usace_nsi).
+# --------------------------------------------------------------------------- #
+
+
+def test_nsi_build_request_post_body():
+    spec = _spec("fetch_usace_nsi")
+    br = resolve_hook(spec.hooks.build_request)
+    vp = _router_mod.validate_params(spec, {"bbox": [-81.88, 26.62, -81.86, 26.66]})
+    plan = br(spec, vp)[0]
+    assert plan.method == "POST" and plan.params == {"fmt": "fc"}
+    assert plan.json_body["type"] == "FeatureCollection"
+    ring = plan.json_body["features"][0]["geometry"]["coordinates"][0]
+    assert ring[0] == [-81.88, 26.62] and ring[-1] == ring[0] and len(ring) == 5
+
+
+def test_nsi_build_request_oversized_bbox_input_invalid():
+    spec = _spec("fetch_usace_nsi")
+    br = resolve_hook(spec.hooks.build_request)
+    vp = _router_mod.validate_params(spec, {"bbox": [-100.0, 30.0, -97.0, 33.0]})  # >1 deg/axis
+    with pytest.raises(RouterInputError) as ei:
+        br(spec, vp)
+    assert ei.value.error_code == "USACE_NSI_INPUT_INVALID"
+
+
+def test_nsi_parse_projects_and_derives_pelicun_cols():
+    spec = _spec("fetch_usace_nsi")
+    pr = resolve_hook(spec.hooks.parse_response)
+    body = json.dumps({"type": "FeatureCollection", "features": [
+        {"geometry": {"type": "Point", "coordinates": [-81.87, 26.63]},
+         "properties": {"fd_id": 7, "occtype": "RES1", "val_struct": 250000.0, "st_damcat": "RES"}},
+        {"geometry": None, "properties": {"fd_id": 8, "occtype": "COM1"}},  # dropped
+    ]}).encode()
+    feats = pr(spec, {}, [body])
+    assert len(feats) == 1
+    p = feats[0]["properties"]
+    assert p["component_type"] == "RES1" and p["replacement_value"] == 250000.0 and p["fd_id"] == 7
+    g = _fgb_records(feats, spec)
+    assert list(g.columns)[:-1] == spec.ingest["properties"]
+
+
+def test_nsi_parse_message_error_and_empty():
+    spec = _spec("fetch_usace_nsi")
+    pr = resolve_hook(spec.hooks.parse_response)
+    with pytest.raises(RouterUpstreamError) as ue:
+        pr(spec, {}, [json.dumps({"message": "boom"}).encode()])
+    assert ue.value.error_code == "USACE_NSI_UPSTREAM_ERROR"
+    assert pr(spec, {}, [json.dumps({"type": "FeatureCollection", "features": []}).encode()]) == []
+
+
+def test_nsi_post_transport_executor_end_to_end(monkeypatch):
+    """The POST plan flows through http_json.execute (transport monkeypatched)."""
+    spec = _spec("fetch_usace_nsi")
+    fc = json.dumps({"type": "FeatureCollection", "features": [
+        {"geometry": {"type": "Point", "coordinates": [-81.87, 26.63]},
+         "properties": {"fd_id": 1, "occtype": "RES1", "val_struct": 100000.0}},
+    ]}).encode()
+    monkeypatch.setattr(http_json, "_get", lambda s, p: fc)
+    data = http_json.execute(spec, _router_mod.validate_params(spec, {"bbox": [-81.88, 26.62, -81.86, 26.66]}))
+    import os
+    import tempfile
+    with tempfile.NamedTemporaryFile(suffix=".fgb", delete=False) as f:
+        f.write(data)
+        pth = f.name
+    try:
+        gdf = gpd.read_file(pth)
+    finally:
+        os.unlink(pth)
+    assert len(gdf) == 1 and gdf.iloc[0]["component_type"] == "RES1"

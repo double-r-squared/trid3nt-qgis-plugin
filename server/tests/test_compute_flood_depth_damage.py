@@ -263,7 +263,11 @@ def test_no_structures_raises(depth_and_assets, tmp_path) -> None:
 
 def test_nsi_fetch_used_when_no_assets(depth_and_assets, tmp_path, monkeypatch) -> None:
     raster, assets = depth_and_assets
-    import trid3nt_server.agent.tools.fetchers.socioeconomic.fetch_usace_nsi.fetch_usace_nsi as nsi_mod
+    # fetch_usace_nsi is spec-driven (ADR 0061); the consumer resolves it via the
+    # registry, so patch the (frozen) RegisteredTool's fn there.
+    import dataclasses
+
+    from trid3nt_server.agent.tools import TOOL_REGISTRY
 
     captured: dict = {}
 
@@ -277,7 +281,10 @@ def test_nsi_fetch_used_when_no_assets(depth_and_assets, tmp_path, monkeypatch) 
             style_preset="usace_nsi",
         )
 
-    monkeypatch.setattr(nsi_mod, "fetch_usace_nsi", _fake_nsi)
+    monkeypatch.setitem(
+        TOOL_REGISTRY, "fetch_usace_nsi",
+        dataclasses.replace(TOOL_REGISTRY["fetch_usace_nsi"], fn=_fake_nsi),
+    )
     result = compute_flood_depth_damage(
         depth_raster_uri=raster, _output_dir=str(tmp_path)
     )

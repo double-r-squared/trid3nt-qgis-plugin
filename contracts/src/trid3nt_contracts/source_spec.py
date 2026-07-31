@@ -82,9 +82,13 @@ AuthMode = Literal["none", "api_key_env", "cds", "vault", "token"]
 #: scenario_ft) validated against ``values`` (the allowed level set),
 #: sorted + deduped -- the fan-out mode's per-value driver (phase-2 wave-6,
 #: ADR 0052). A scalar is coerced to a 1-element list.
+#: ``str_list`` = a ``list[str]`` free-text filter set (nws_event event_types);
+#: each entry stripped, empties dropped, sorted + deduped for cache-key
+#: stability -- the string sibling of ``float_list`` with no allowed-set gate
+#: (tier-3 hook wave). A scalar string is coerced to a 1-element list.
 ParamType = Literal[
     "bbox", "iso_date", "enum", "int", "float", "str", "int_range", "date_compact",
-    "point", "float_list",
+    "point", "float_list", "str_list",
 ]
 
 #: Payload-estimate models (contract sec 1.1 ``payload_estimate.model``).

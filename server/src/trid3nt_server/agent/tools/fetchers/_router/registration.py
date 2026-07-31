@@ -92,6 +92,8 @@ def _annotation_for(ptype: str) -> Any:
         return list[int]
     if ptype == "float_list":
         return list[float]
+    if ptype == "str_list":
+        return list[str]
     if ptype == "int":
         return int
     if ptype == "float":

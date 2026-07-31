@@ -45,13 +45,21 @@ __all__ = [
 class RequestPlan:
     """One request the router transport executes on a ``build_request`` hook's behalf.
 
-    PURE data (no socket): the hook decides the URL / query params / headers; the
-    router owns the actual GET, its retry authority, and typed transport errors.
+    PURE data (no socket): the hook decides the URL / query params / headers /
+    method / JSON body; the router owns the actual GET or POST, its retry
+    authority, and typed transport errors.
+
+    ``method`` defaults to ``"GET"`` (every prior hook). ``"POST"`` sends
+    ``json_body`` as a JSON request body -- the write-method REST shape whose
+    query is a body, not a query string (USACE NSI's structures POST). No I/O
+    still happens in the hook: it only DESCRIBES the request.
     """
 
     url: str
     params: dict[str, Any] | None = None
     headers: dict[str, str] = field(default_factory=dict)
+    method: str = "GET"
+    json_body: Any = None
 
 
 class HookResolutionError(ValueError):
@@ -98,3 +106,5 @@ def has_hook(name: str) -> bool:
 from . import usgs_earthquakes  # noqa: E402,F401
 from . import ncei_tsunami  # noqa: E402,F401
 from . import usgs_volcano  # noqa: E402,F401
+from . import nws_event  # noqa: E402,F401
+from . import usace_nsi  # noqa: E402,F401

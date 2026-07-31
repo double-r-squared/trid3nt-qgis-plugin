@@ -94,8 +94,8 @@ def test_default_config_identity():
     r = _run_arm(None)
     assert r["arm"] is None
     assert r["registry_size"] == 190
-    assert r["n_specs"] == 27
-    # The 27 stay ambient (tier=general) and IN the declarable pool.
+    assert r["n_specs"] == 29
+    # The 29 stay ambient (tier=general) and IN the declarable pool.
     assert r["gridmet_tier"] == "general"
     assert r["any_spec_in_declarable"] is True
     # fetch_from_catalog keeps its exact entry_id-only signature (no source param).
@@ -114,10 +114,10 @@ def test_arm2_specs_leave_pool_but_stay_indexed():
     assert r["registry_size"] == 190  # registry does NOT shrink; only the pool does
     assert r["gridmet_tier"] == "catalog"
     assert r["any_spec_in_declarable"] is False  # every spec leaves the ambient pool
-    # -26, not -27: fetch_copernicus_dem is tier="internal" (wave-11 absorption into
+    # -28, not -29: fetch_copernicus_dem is tier="internal" (wave-11 absorption into
     # fetch_dem), so it is ALREADY out of the ambient pool in the None baseline; the
-    # arm moves the remaining 26 general->catalog.
-    assert r["declarable_size"] == _run_arm(None)["declarable_size"] - 26
+    # arm moves the remaining 28 general->catalog (27 + the 2 tier-3 hook folds, ADR 0061).
+    assert r["declarable_size"] == _run_arm(None)["declarable_size"] - 28
     # Still searchable + rankable so a search hit can gate-expand it.
     assert r["gridmet_in_index"] is True
     assert r["gridmet_ranked_top25"] is True
@@ -223,8 +223,8 @@ def test_arm3_specs_leave_pool_and_source_param():
     assert r["registry_size"] == 190  # registry does NOT shrink; only the pool does
     assert r["gridmet_tier"] == "catalog"
     assert r["any_spec_in_declarable"] is False  # every spec leaves the ambient pool
-    # -26, not -27: fetch_copernicus_dem is tier="internal" (already out of the pool).
-    assert r["declarable_size"] == _run_arm(None)["declarable_size"] - 26
+    # -28, not -29: fetch_copernicus_dem is tier="internal" (already out of the pool).
+    assert r["declarable_size"] == _run_arm(None)["declarable_size"] - 28
     assert r["gridmet_in_index"] is True
     # fetch_from_catalog exposes the source branch under Arm 3 (like Arm 1).
     assert r["ffc_params"] == ["entry_id", "params", "source", "_extra_ignored"]
@@ -253,7 +253,7 @@ def test_stratum_index_is_source_scoped(_stratum):
         if getattr(TOOL_REGISTRY[n].metadata, "tier", "general") != "internal"
     }
     assert set(idx.tool_names) == model_facing
-    assert len(idx.tool_names) == 26  # 27 specs minus the internal copernicus seam
+    assert len(idx.tool_names) == 28  # 29 specs minus the internal copernicus seam
 
 
 def test_stratum_activates_on_data_ask_enum_rank_order(_stratum):

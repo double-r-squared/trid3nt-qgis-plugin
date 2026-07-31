@@ -20,7 +20,7 @@ from trid3nt_contracts.source_spec import SourceSpec
 
 from ..errors import router_input_error, router_upstream_error
 from ..hooks import RequestPlan, resolve_hook
-from ..transport import TransportError, get_bytes, get_client
+from ..transport import TransportError, get_bytes, get_client, post_bytes
 from .vector_fgb import features_to_fgb_bytes
 
 logger = logging.getLogger(
@@ -31,9 +31,20 @@ __all__ = ["execute", "fetch_bodies"]
 
 
 def _get(spec: SourceSpec, plan: RequestPlan) -> bytes:
-    """GET one plan through the shared transport, mapping transport -> router errors."""
+    """Execute one plan through the shared transport, mapping transport -> router errors.
+
+    GET by default; ``plan.method == "POST"`` sends ``plan.json_body`` as a JSON
+    body (the write-method REST shape, NSI). The transport owns the retry
+    authority either way.
+    """
     try:
-        body, _ct, _url = get_bytes(get_client(), plan.url, headers=plan.headers, params=plan.params)
+        if plan.method == "POST":
+            body, _ct, _url = post_bytes(
+                get_client(), plan.url, headers=plan.headers, params=plan.params,
+                json_body=plan.json_body,
+            )
+        else:
+            body, _ct, _url = get_bytes(get_client(), plan.url, headers=plan.headers, params=plan.params)
     except TransportError as exc:
         raise router_upstream_error(spec.error_code_prefix, f"{type(exc).__name__}: {exc}")
     return body

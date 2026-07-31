@@ -272,6 +272,23 @@ def validate_params(spec: SourceSpec, raw: dict[str, Any]) -> dict[str, Any]:
                     raise router_input_error(sc, f"{pname}={lv!r} not in {sorted(allowed)}", sfx)
             out[pname] = sorted(set(raw_levels))
 
+        elif pspec.type == "str_list":
+            # A scalar string OR a list[str] free-text filter (nws_event
+            # event_types). Each entry stripped, empties dropped, then sorted +
+            # deduped for cache-key stability -- the twin's
+            # `sorted({e.strip() for e in event_types if e.strip()})`.
+            if isinstance(value, str):
+                raw_items: list[str] = [value]
+            elif isinstance(value, (list, tuple)):
+                raw_items = []
+                for v in value:
+                    if not isinstance(v, str):
+                        raise router_input_error(sc, f"{pname} entries must be strings; got {type(v).__name__}: {v!r}", sfx)
+                    raw_items.append(v)
+            else:
+                raise router_input_error(sc, f"{pname} must be a string or list[str]; got {type(value).__name__}", sfx)
+            out[pname] = sorted({s.strip() for s in raw_items if s.strip()})
+
         elif pspec.type == "date_compact":
             # Accept 'YYYY-MM-DD' or 'YYYYMMDD'; normalize to the 8-digit compact
             # form and validate it is a real calendar date (us_drought_monitor).

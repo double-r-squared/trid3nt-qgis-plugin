@@ -275,9 +275,11 @@ def _load_assets(
                 "depth raster (clip_raster_to_polygon) and re-run per tile."
             )
         try:
-            from trid3nt_server.agent.tools.fetchers.socioeconomic.fetch_usace_nsi.fetch_usace_nsi import fetch_usace_nsi
+            # fetch_usace_nsi is spec-driven (data-router fold, ADR 0061); resolve
+            # the promoted router closure by name (the twin module is deleted).
+            from trid3nt_server.agent.tools import TOOL_REGISTRY
 
-            layer = fetch_usace_nsi(bbox=raster_bbox_4326)
+            layer = TOOL_REGISTRY["fetch_usace_nsi"].fn(bbox=raster_bbox_4326)
         except FloodDamageError:
             raise
         except Exception as exc:  # noqa: BLE001

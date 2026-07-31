@@ -230,7 +230,9 @@ from .fetchers.weather.fetch_hrrr_smoke import fetch_hrrr_smoke  # noqa: E402,F4
 from .fetchers.weather.fetch_mrms_qpe import fetch_mrms_qpe  # noqa: E402,F401
 from .fetchers.weather.fetch_nexrad_reflectivity import fetch_nexrad_reflectivity  # noqa: E402,F401
 from .fetchers.weather.fetch_nws_alerts_conus import fetch_nws_alerts_conus  # noqa: E402,F401
-from .fetchers.weather.fetch_nws_event import fetch_nws_event  # noqa: E402,F401
+# fetch_nws_event: data-router fold tier-3 hooks (ADR 0061) -- twin DELETED, now
+# spec-driven (source.yaml + nws_event build_request/parse_response hooks, single-GET
+# NWS /alerts/active GeoJSON), registered by _register_router_specs() below.
 from .fetchers.weather.fetch_openaq_measurements import fetch_openaq_measurements  # noqa: E402,F401
 from .fetchers.weather.fetch_raws_weather import fetch_raws_weather  # noqa: E402,F401
 from .fetchers.weather.fetch_storm_events_db import fetch_storm_events_db  # noqa: E402,F401
@@ -334,7 +336,9 @@ from .fetchers.socioeconomic.fetch_lehd_jobs import fetch_lehd_jobs  # noqa: E40
 from .fetchers.socioeconomic.fetch_overpass_pois import fetch_overpass_pois  # noqa: E402,F401
 from .fetchers.socioeconomic.fetch_population import fetch_population  # noqa: E402,F401
 from .fetchers.socioeconomic.fetch_roads_osm import fetch_roads_osm  # noqa: E402,F401
-from .fetchers.socioeconomic.fetch_usace_nsi import fetch_usace_nsi  # noqa: E402,F401
+# fetch_usace_nsi: data-router fold tier-3 hooks (ADR 0061) -- twin DELETED, now
+# spec-driven (source.yaml + usace_nsi build_request/parse_response hooks + the
+# RequestPlan POST transport extension), registered by _register_router_specs() below.
 from .fetchers.socioeconomic.geocode_location import geocode_location  # noqa: E402,F401
 
 # -- fetchers/hazard --
