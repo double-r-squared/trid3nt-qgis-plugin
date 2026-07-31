@@ -25,6 +25,7 @@ from ..errors import (
     RouterError,
     router_empty_error,
     router_input_error,
+    router_not_available_error,
     router_upstream_error,
 )
 
@@ -135,6 +136,10 @@ def fetch_source_array(spec: SourceSpec, params: dict[str, Any]) -> tuple[Any, A
         return _opendap_to_array(spec, params)
     if access == "direct_window":
         return _direct_window_to_array(spec, params)
+    if access == "multi_url":
+        return _multi_url_to_array(spec, params)
+    if access == "gzip_object":
+        return _gzip_object_to_array(spec, params)
     if access == "stac_search":
         return _stac_to_array(spec, params)
     if access == "stac_float":
@@ -298,6 +303,332 @@ def _direct_window_to_array(spec: SourceSpec, params: dict[str, Any]) -> tuple[A
                 f"bbox={bbox} produced no valid pixels (all-nodata window -- over "
                 f"open water or outside coverage)", spec.empty_error_suffix)
     return np.asarray(arr, dtype="float32"), transform, crs
+
+
+# --------------------------------------------------------------------------- #
+# multi_url (VRT fan-out): a mosaic source declared over MANY member URLs. The
+# single-URL opener serves ONE object, so a multi-tile .vrt read returns all-NaN
+# (it re-serves the VRT bytes for every sub-tile open); this mode resolves the
+# member tiles, windows the intersecting ones through the SAME transport opener,
+# and mosaics them into the requested window (ADR-0047's highest-leverage enabler,
+# ADR 0055). Member discovery is pluggable (``mode: vrt`` today) so a future
+# declared-tile-grid source reuses the identical windowed-mosaic read path.
+# --------------------------------------------------------------------------- #
+
+
+class _VrtSource:
+    """One VRT member: its object URL + src/dst pixel rects (contract sec 2.1)."""
+
+    __slots__ = ("url", "sx", "sy", "sw", "sh", "dx", "dy", "dw", "dh")
+
+    def __init__(self, url: str, src: tuple[int, int, int, int],
+                 dst: tuple[int, int, int, int]) -> None:
+        self.url = url
+        self.sx, self.sy, self.sw, self.sh = src
+        self.dx, self.dy, self.dw, self.dh = dst
+
+
+def _parse_vrt(vrt_xml: bytes, base_url: str) -> tuple[Any, int, int, Any, float, list["_VrtSource"]]:
+    """Parse a GDAL ``.vrt`` mosaic into ``(transform, xsize, ysize, crs, nodata, sources)``.
+
+    Reads the mosaic geotransform / raster size / SRS / band NoDataValue and each
+    ``(Simple|Complex)Source``'s ``SourceFilename`` + ``SrcRect`` + ``DstRect`` -- the
+    exact fields GDAL uses to fan a windowed read out to the member tiles, so an
+    explicit member-by-member read reproduces ``/vsicurl/`` value-for-value.
+    """
+    import xml.etree.ElementTree as ET
+
+    import rasterio
+    from rasterio.transform import Affine
+
+    root = ET.fromstring(vrt_xml)
+    xsize = int(root.attrib["rasterXSize"])
+    ysize = int(root.attrib["rasterYSize"])
+    gt_el = root.find("GeoTransform")
+    if gt_el is None or not gt_el.text:
+        raise ValueError("VRT carries no GeoTransform")
+    gt = [float(v) for v in gt_el.text.replace(",", " ").split()]
+    transform = Affine.from_gdal(*gt)
+    srs_el = root.find("SRS")
+    crs = rasterio.crs.CRS.from_wkt(srs_el.text) if (srs_el is not None and srs_el.text) else rasterio.crs.CRS.from_epsg(4326)
+    band = root.find("VRTRasterBand")
+    if band is None:
+        raise ValueError("VRT carries no VRTRasterBand")
+    nod_el = band.find("NoDataValue")
+    nodata = float(nod_el.text) if (nod_el is not None and nod_el.text) else float("nan")
+
+    base_dir = base_url.rsplit("/", 1)[0]
+    sources: list[_VrtSource] = []
+    for src_el in list(band.findall("ComplexSource")) + list(band.findall("SimpleSource")):
+        fn_el = src_el.find("SourceFilename")
+        if fn_el is None or not fn_el.text:
+            continue
+        rel = fn_el.attrib.get("relativeToVRT", "0") == "1"
+        member = f"{base_dir}/{fn_el.text}" if rel else fn_el.text
+        sr = src_el.find("SrcRect")
+        dr = src_el.find("DstRect")
+        if sr is None or dr is None:
+            continue
+        src = tuple(int(round(float(sr.attrib[k]))) for k in ("xOff", "yOff", "xSize", "ySize"))
+        dst = tuple(int(round(float(dr.attrib[k]))) for k in ("xOff", "yOff", "xSize", "ySize"))
+        sources.append(_VrtSource(member, src, dst))  # type: ignore[arg-type]
+    return transform, xsize, ysize, crs, nodata, sources
+
+
+def _resolve_multi_url_members(spec: SourceSpec, params: dict[str, Any]) -> tuple[Any, int, int, Any, float, list["_VrtSource"]]:
+    """Resolve the mosaic grid + member tiles for a ``multi_url`` source.
+
+    ``mode: vrt`` fetches the declared ``.vrt`` whole-object through the transport
+    and parses it. The dispatch is isolated so a future ``mode: tile_grid`` can
+    synthesize members from a declarative grid and reuse the identical read path.
+    """
+    from ..transport import TransportError, get_bytes, get_client
+
+    ingest = spec.ingest or {}
+    mu = ingest.get("multi_url", {})
+    mode = mu.get("mode", "vrt")
+    endpoint = spec.endpoints.get("data") or next(iter(spec.endpoints.values()))
+    url = endpoint.url or endpoint.url_template or ""
+    if url.startswith("/vsicurl/"):
+        url = url[len("/vsicurl/"):]
+    if mode != "vrt":
+        raise router_upstream_error(spec.error_code_prefix, f"unknown multi_url mode {mode!r}")
+    ua = spec.auth.user_agent if spec.auth else "trid3nt_default"
+    try:
+        body, _ct, final_url = get_bytes(get_client(), url, headers={"User-Agent": ua})
+    except TransportError as exc:
+        raise router_upstream_error(spec.error_code_prefix, f"VRT fetch failed url={url}: {exc}")
+    try:
+        return _parse_vrt(body, final_url or url)
+    except Exception as exc:  # noqa: BLE001 -- malformed VRT is an upstream defect
+        raise router_upstream_error(spec.error_code_prefix, f"VRT parse failed url={url}: {exc}")
+
+
+def _multi_url_to_array(spec: SourceSpec, params: dict[str, Any]) -> tuple[Any, Any, Any]:
+    """VRT fan-out windowed mosaic read (ADR 0055; hrsl_population).
+
+    Windows the mosaic to ``bbox`` (outward integer-pixel rounding, the twin's
+    window math), reads each INTERSECTING member's sub-window through the coalescing
+    transport opener (bounded parallel), and pastes the non-nodata pixels into the
+    output window. An all-nodata window (over open water / off coverage) -> typed
+    EMPTY; ANY intersecting-member read failure -> typed UPSTREAM (never a silent
+    partial), matching the twin whose GDAL read fails the whole window.
+    """
+    from concurrent.futures import ThreadPoolExecutor
+
+    import numpy as np
+    import rasterio
+    from rasterio.windows import Window
+    from rasterio.windows import from_bounds as window_from_bounds
+
+    from ..transport import (
+        MAX_PARALLEL,
+        TransportError,
+        open_windowed_cog,
+    )
+
+    bbox = params["bbox"]
+    transform, xsize, ysize, crs, nodata, sources = _resolve_multi_url_members(spec, params)
+
+    # Window math reproduces the twin: from_bounds -> floor offsets, ceil lengths,
+    # clip to the mosaic extent. A window with no mosaic overlap -> typed EMPTY.
+    win = window_from_bounds(*bbox, transform=transform)
+    win = win.round_offsets(op="floor").round_lengths(op="ceil")
+    c0 = max(0, int(win.col_off))
+    r0 = max(0, int(win.row_off))
+    c1 = min(xsize, int(win.col_off) + int(win.width))
+    r1 = min(ysize, int(win.row_off) + int(win.height))
+    if c1 <= c0 or r1 <= r0:
+        raise router_empty_error(
+            spec.error_code_prefix,
+            f"bbox={bbox} produces a zero-size mosaic window (outside coverage)",
+            spec.empty_error_suffix)
+    out_w, out_h = c1 - c0, r1 - r0
+    out = np.full((out_h, out_w), nodata, dtype="float64")
+
+    def _member_window(s: "_VrtSource") -> tuple["_VrtSource", int, int, int, int] | None:
+        ox0, ox1 = max(c0, s.dx), min(c1, s.dx + s.dw)
+        oy0, oy1 = max(r0, s.dy), min(r1, s.dy + s.dh)
+        if ox1 <= ox0 or oy1 <= oy0:
+            return None
+        return s, ox0, oy0, ox1, oy1
+
+    hits = [w for w in (_member_window(s) for s in sources) if w is not None]
+
+    def _read_hit(hit: tuple["_VrtSource", int, int, int, int]) -> tuple[int, int, int, int, Any]:
+        s, ox0, oy0, ox1, oy1 = hit
+        # 1:1 src/dst mapping is the tiled-mosaic norm; scale by the rect ratio
+        # otherwise so a non-1:1 VRT source still reads the correct sub-window.
+        rx = s.sw / s.dw if s.dw else 1.0
+        ry = s.sh / s.dh if s.dh else 1.0
+        sx0 = s.sx + int(round((ox0 - s.dx) * rx))
+        sy0 = s.sy + int(round((oy0 - s.dy) * ry))
+        sw = max(1, int(round((ox1 - ox0) * rx)))
+        sh = max(1, int(round((oy1 - oy0) * ry)))
+        with open_windowed_cog(s.url) as src:
+            tile = src.read(1, window=Window(sx0, sy0, sw, sh),
+                            out_shape=(oy1 - oy0, ox1 - ox0)).astype("float64")
+        return ox0, oy0, ox1, oy1, tile
+
+    if hits:
+        workers = min(MAX_PARALLEL, len(hits))
+        try:
+            with ThreadPoolExecutor(max_workers=workers) as pool:
+                reads = list(pool.map(_read_hit, hits))
+        except TransportError as exc:
+            raise router_upstream_error(spec.error_code_prefix, f"VRT member read failed: {exc}")
+        except Exception as exc:  # noqa: BLE001 -- any member read failure -> upstream
+            raise router_upstream_error(spec.error_code_prefix, f"VRT member read failed: {exc}")
+        for ox0, oy0, ox1, oy1, tile in reads:
+            valid = (tile == tile) if nodata != nodata else (tile != nodata)
+            dst_slice = out[oy0 - r0:oy1 - r0, ox0 - c0:ox1 - c0]
+            dst_slice[valid] = tile[valid]
+
+    # all-nodata gate (honesty floor): a window with no valid pixel is honest
+    # no-coverage (over open water / off the mosaic), never a fabricated layer.
+    valid_any = bool(np.isfinite(out).any()) if nodata != nodata else bool((out != nodata).any())
+    if not valid_any:
+        raise router_empty_error(
+            spec.error_code_prefix,
+            f"bbox={bbox} produced no valid pixels (all-nodata window -- over open "
+            f"water or outside coverage)", spec.empty_error_suffix)
+
+    out_transform = rasterio.windows.transform(Window(c0, r0, out_w, out_h), transform)
+    return np.asarray(out, dtype="float32"), out_transform, crs
+
+
+# --------------------------------------------------------------------------- #
+# gzip_object: a whole-object GET of a date-templated ``.tif.gz``, gunzip, in-
+# memory open + window. A gzip stream is NOT a byte-servable COG (no windowable
+# layout), so the whole-object cost is accepted and gated honestly by the payload
+# estimator; ``bbox=None`` reads the full grid (supports_global_query). ADR 0055,
+# chirps_precipitation.
+# --------------------------------------------------------------------------- #
+
+
+def _resolve_gzip_url(spec: SourceSpec, params: dict[str, Any], go: dict[str, Any]) -> str:
+    """Build the date-templated object URL for a ``gzip_object`` source.
+
+    Period-selected template (chirps monthly vs daily path patterns) filled from a
+    parsed ``date`` param. A template that references ``{day}`` requires a full
+    ``YYYY-MM-DD``; a monthly template accepts ``YYYY-MM`` (or ``YYYY-MM-DD``, day
+    ignored). Coverage bounds (``min_year`` floor, no-future) raise a typed INPUT
+    error -- the twin's pre-network date validation, reproduced.
+    """
+    import re
+    from datetime import date as _date
+    from datetime import datetime, timezone
+
+    endpoint = spec.endpoints.get("data") or next(iter(spec.endpoints.values()))
+    base = (endpoint.url or endpoint.url_template or "").rstrip("/")
+    templates = go.get("url_templates", {})
+    period = params.get(go.get("period_param", "period"))
+    tmpl = templates.get(period)
+    if tmpl is None:
+        raise router_input_error(
+            spec.error_code_prefix, f"no URL template for period={period!r}", spec.input_error_suffix)
+    date_str = params.get(go.get("date_param", "date"))
+    if not isinstance(date_str, str) or not date_str.strip():
+        raise router_input_error(
+            spec.error_code_prefix, f"date must be a non-empty string; got {date_str!r}", spec.input_error_suffix)
+    needs_day = "{day" in tmpl
+    s = date_str.strip()
+    if needs_day:
+        m = re.fullmatch(r"(\d{4})-(\d{2})-(\d{2})", s)
+        if not m:
+            raise router_input_error(spec.error_code_prefix, f"date={date_str!r} is not a valid {period} date: expected YYYY-MM-DD", spec.input_error_suffix)
+        y, mo, d = int(m.group(1)), int(m.group(2)), int(m.group(3))
+    else:
+        m = re.fullmatch(r"(\d{4})-(\d{2})(?:-\d{2})?", s)
+        if not m:
+            raise router_input_error(spec.error_code_prefix, f"date={date_str!r} is not a valid {period} date: expected YYYY-MM or YYYY-MM-DD", spec.input_error_suffix)
+        y, mo, d = int(m.group(1)), int(m.group(2)), 1
+    try:
+        parsed = _date(y, mo, d)
+    except ValueError as exc:
+        raise router_input_error(spec.error_code_prefix, f"date={date_str!r} is not a valid {period} date: {exc}", spec.input_error_suffix)
+    min_year = int(go.get("min_year", 0))
+    if parsed.year < min_year:
+        raise router_input_error(spec.error_code_prefix, f"source record starts in {min_year}; date={date_str!r} predates it", spec.input_error_suffix)
+    if parsed > datetime.now(timezone.utc).date():
+        raise router_input_error(spec.error_code_prefix, f"date={date_str!r} is in the future; only past data is published", spec.input_error_suffix)
+    return tmpl.format(base=base, year=y, month=mo, day=d)
+
+
+def _gzip_object_to_array(spec: SourceSpec, params: dict[str, Any]) -> tuple[Any, Any, Any]:
+    """Whole-object GET + gunzip + in-memory window (ADR 0055; chirps_precipitation).
+
+    Reads the whole ``.tif.gz`` through the transport (accepting the whole-object
+    cost -- a gzip stream is not windowed-servable), gunzips, opens in memory, and
+    windows to ``bbox`` (``None`` -> the full grid). A source-embedded nodata
+    sentinel (``arr <= threshold``) collapses to NaN; an all-nodata window ->
+    typed EMPTY. A 404 -> typed NOT_AVAILABLE (the date is unpublished); any other
+    fetch/gunzip failure -> typed UPSTREAM.
+    """
+    import gzip
+    import math
+
+    import numpy as np
+    import rasterio
+    from rasterio.io import MemoryFile
+    from rasterio.windows import Window
+    from rasterio.windows import from_bounds as window_from_bounds
+
+    from ..transport import (
+        TransportError,
+        TransportNotFound,
+        get_bytes,
+        get_client,
+    )
+
+    ingest = spec.ingest or {}
+    go = ingest.get("gzip_object", {})
+    bbox = params.get("bbox")
+    url = _resolve_gzip_url(spec, params, go)
+    ua = spec.auth.user_agent if spec.auth else "trid3nt_default"
+    try:
+        gz_bytes, _ct, _u = get_bytes(get_client(), url, headers={"User-Agent": ua})
+    except TransportNotFound as exc:
+        raise router_not_available_error(
+            spec.error_code_prefix,
+            f"no raster published at {url} (HTTP 404) -- the date may be too recent or outside the record: {exc}")
+    except TransportError as exc:
+        raise router_upstream_error(spec.error_code_prefix, f"object fetch failed url={url}: {exc}")
+    if not gz_bytes:
+        raise router_upstream_error(spec.error_code_prefix, f"empty response from {url}")
+    try:
+        tif_bytes = gzip.decompress(gz_bytes)
+    except (OSError, gzip.BadGzipFile) as exc:
+        raise router_upstream_error(spec.error_code_prefix, f"gzip decompression failed for {url}: {exc}")
+
+    with MemoryFile(tif_bytes) as mf, mf.open() as src:
+        src_crs = src.crs or rasterio.crs.CRS.from_epsg(4326)
+        if bbox is not None:
+            window = window_from_bounds(bbox[0], bbox[1], bbox[2], bbox[3], transform=src.transform)
+            row_off = max(0, int(math.floor(window.row_off)))
+            col_off = max(0, int(math.floor(window.col_off)))
+            row_end = min(src.height, int(math.ceil(window.row_off + window.height)))
+            col_end = min(src.width, int(math.ceil(window.col_off + window.width)))
+            if row_end <= row_off or col_end <= col_off:
+                raise router_empty_error(
+                    spec.error_code_prefix, f"bbox={bbox} does not intersect the source extent",
+                    spec.empty_error_suffix)
+            rw = Window(col_off, row_off, col_end - col_off, row_end - row_off)
+            arr = src.read(1, window=rw).astype("float32")
+            out_transform = src.window_transform(rw)
+        else:
+            arr = src.read(1).astype("float32")
+            out_transform = src.transform
+
+    sentinel = go.get("nodata_sentinel")
+    if sentinel is not None:
+        arr = np.where(arr <= float(sentinel), np.nan, arr).astype("float32")
+    if not bool(np.isfinite(arr).any()):
+        raise router_empty_error(
+            spec.error_code_prefix,
+            f"bbox={bbox} clipped to all-nodata (ocean / outside land coverage); no valid pixels",
+            spec.empty_error_suffix)
+    return arr, out_transform, src_crs
 
 
 def _imageserver_size(bbox: tuple[float, float, float, float], ingest: dict[str, Any]) -> tuple[int, int]:

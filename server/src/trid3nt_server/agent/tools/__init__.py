@@ -294,7 +294,8 @@ from .fetchers.imagery.fetch_sentinel2_truecolor import fetch_sentinel2_truecolo
 from .fetchers.imagery.fetch_viirs_day_fire import fetch_viirs_day_fire  # noqa: E402,F401
 
 # -- fetchers/climate --
-from .fetchers.climate.fetch_chirps_precipitation import fetch_chirps_precipitation  # noqa: E402,F401
+# fetch_chirps_precipitation: data-router fold phase-2 wave-9 (ADR 0055) -- twin
+# DELETED, now spec-driven (source.yaml + gzip_object), auto-registered.
 from .fetchers.climate.fetch_climate_normals import fetch_climate_normals  # noqa: E402,F401
 from .fetchers.climate.fetch_era5_reanalysis import fetch_era5_reanalysis  # noqa: E402,F401
 # fetch_gridmet: data-router fold pilot -- twin DELETED, now spec-driven
@@ -327,7 +328,8 @@ from .fetchers.socioeconomic.fetch_buildings import fetch_buildings  # noqa: E40
 # raw column kinds + from_param routing), registered by _register_router_specs().
 from .fetchers.socioeconomic.fetch_field_boundaries import fetch_field_boundaries  # noqa: E402,F401
 from .fetchers.socioeconomic.fetch_ghsl_population import fetch_ghsl_population  # noqa: E402,F401
-from .fetchers.socioeconomic.fetch_hrsl_population import fetch_hrsl_population  # noqa: E402,F401
+# fetch_hrsl_population: data-router fold phase-2 wave-9 (ADR 0055) -- twin
+# DELETED, now spec-driven (source.yaml + multi_url VRT fan-out), auto-registered.
 from .fetchers.socioeconomic.fetch_lehd_jobs import fetch_lehd_jobs  # noqa: E402,F401
 from .fetchers.socioeconomic.fetch_overpass_pois import fetch_overpass_pois  # noqa: E402,F401
 from .fetchers.socioeconomic.fetch_population import fetch_population  # noqa: E402,F401

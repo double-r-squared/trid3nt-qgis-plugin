@@ -29,6 +29,8 @@ from trid3nt_contracts.source_spec import SourceSpec
 from trid3nt_server.agent.tools.fetchers._router.errors import (
     RouterEmptyError,
     RouterInputError,
+    RouterNotAvailableError,
+    RouterUpstreamError,
 )
 from trid3nt_server.agent.tools.fetchers._router.executors import (
     raster_cog,
@@ -876,3 +878,211 @@ def test_direct_window_nodata_gate_passes_with_data(monkeypatch):
     spec = _dw_spec(nodata_gate=True)
     arr, _tf, _crs = raster_cog._direct_window_to_array(spec, {"bbox": [0, 0, 1, 1], "amc": "average"})
     assert 80.0 in arr  # the one valid pixel survived; the gate did NOT fire
+
+
+# --------------------------------------------------------------------------- #
+# raster_cog: multi_url VRT fan-out mosaic (fold wave-9, ADR 0055; hrsl)
+# --------------------------------------------------------------------------- #
+
+
+class _FakeMember:
+    """A windowed member COG stand-in for the multi_url mosaic unit tests."""
+    def __init__(self, arr):
+        self._arr = np.asarray(arr)
+
+    def read(self, _band, window=None, out_shape=None):
+        r0 = int(getattr(window, "row_off", 0)); c0 = int(getattr(window, "col_off", 0))
+        h = int(getattr(window, "height", self._arr.shape[0]))
+        w = int(getattr(window, "width", self._arr.shape[1]))
+        return self._arr[r0:r0 + h, c0:c0 + w]
+
+
+def _mu_spec() -> SourceSpec:
+    return SourceSpec.model_validate({
+        "name": "fetch_demo_mu", "source_class": "demo_mu", "error_prefix": "DEMO_MU",
+        "empty_error_suffix": "EMPTY", "shape": "raster-cog",
+        "endpoints": {"data": {"url": "https://h/mosaic.vrt"}},
+        "params": {"bbox": {"type": "bbox", "required": True}},
+        "ingest": {"access": "multi_url", "multi_url": {"mode": "vrt"}},
+        "normalize": {"crs": "EPSG:4326", "units": "persons_per_cell"},
+        "output": {"layer_type": "raster", "ext": "tif", "role": "primary",
+                   "style_preset": "population_density"},
+        "cache": {"ttl_class": "static-30d"},
+        "payload_estimate": {"model": "bbox_area", "mb_per_sq_deg": 12.0},
+    })
+
+
+def _two_tile_grid(a, b):
+    """A 4x4 mosaic split into a left (A) + right (B) 4x2 tile pair (1:1 src/dst)."""
+    tf = rtransform.from_bounds(0, 0, 4, 4, 4, 4)
+    srcA = raster_cog._VrtSource("A", (0, 0, 2, 4), (0, 0, 2, 4))
+    srcB = raster_cog._VrtSource("B", (0, 0, 2, 4), (2, 0, 2, 4))
+    return tf, 4, 4, "EPSG:4326", float("nan"), [srcA, srcB]
+
+
+def test_multi_url_mosaic_pastes_members(monkeypatch):
+    """The fan-out reads each intersecting member's sub-window + pastes it in place."""
+    A = np.array([[1, 2]] * 4, dtype="float64")   # left half -> cols 0,1
+    B = np.array([[3, 4]] * 4, dtype="float64")   # right half -> cols 2,3
+    monkeypatch.setattr(raster_cog, "_resolve_multi_url_members", lambda s, p: _two_tile_grid(A, B))
+    import contextlib
+    @contextlib.contextmanager
+    def _fake_open(url):
+        yield _FakeMember(A if url == "A" else B)
+    monkeypatch.setattr("trid3nt_server.agent.tools.fetchers._router.transport.open_windowed_cog", _fake_open)
+    arr, tf, crs = raster_cog._multi_url_to_array(_mu_spec(), {"bbox": [0, 0, 4, 4]})
+    assert arr.shape == (4, 4) and str(crs) == "EPSG:4326"
+    assert list(arr[0]) == [1.0, 2.0, 3.0, 4.0]        # A pasted left, B pasted right
+    assert list(arr[3]) == [1.0, 2.0, 3.0, 4.0]
+
+
+def test_multi_url_all_nodata_window_is_empty(monkeypatch):
+    """A window whose members are entirely NaN is honest no-coverage -> typed EMPTY."""
+    nan2 = np.full((4, 2), np.nan, dtype="float64")
+    monkeypatch.setattr(raster_cog, "_resolve_multi_url_members", lambda s, p: _two_tile_grid(nan2, nan2))
+    import contextlib
+    @contextlib.contextmanager
+    def _fake_open(url):
+        yield _FakeMember(nan2)
+    monkeypatch.setattr("trid3nt_server.agent.tools.fetchers._router.transport.open_windowed_cog", _fake_open)
+    with pytest.raises(RouterEmptyError) as ei:
+        raster_cog._multi_url_to_array(_mu_spec(), {"bbox": [0, 0, 4, 4]})
+    assert ei.value.error_code == "DEMO_MU_EMPTY"
+
+
+def test_multi_url_member_read_failure_is_upstream(monkeypatch):
+    """ANY intersecting-member read failure -> typed UPSTREAM (never a silent partial)."""
+    from trid3nt_server.agent.tools.fetchers._router import transport as _tp
+    A = np.ones((4, 2), dtype="float64")
+    monkeypatch.setattr(raster_cog, "_resolve_multi_url_members", lambda s, p: _two_tile_grid(A, A))
+    import contextlib
+    @contextlib.contextmanager
+    def _boom_open(url):
+        raise _tp.TransportNotFound("member 404")
+        yield  # pragma: no cover
+    monkeypatch.setattr("trid3nt_server.agent.tools.fetchers._router.transport.open_windowed_cog", _boom_open)
+    with pytest.raises(RouterUpstreamError) as ei:
+        raster_cog._multi_url_to_array(_mu_spec(), {"bbox": [0, 0, 4, 4]})
+    assert ei.value.error_code == "DEMO_MU_UPSTREAM_ERROR"
+
+
+def test_parse_vrt_reads_grid_and_members():
+    """The VRT parser lifts the geotransform / size / nodata + member rects."""
+    vrt = (
+        b'<VRTDataset rasterXSize="8" rasterYSize="6">'
+        b'<SRS>GEOGCS["WGS 84",DATUM["WGS_1984",SPHEROID["WGS 84",6378137,298.257223563,'
+        b'AUTHORITY["EPSG","7030"]],AUTHORITY["EPSG","6326"]],PRIMEM["Greenwich",0],'
+        b'UNIT["degree",0.0174532925199433],AUTHORITY["EPSG","4326"]]</SRS>'
+        b'<GeoTransform>0.0, 1.0, 0.0, 6.0, 0.0, -1.0</GeoTransform>'
+        b'<VRTRasterBand dataType="Float64" band="1"><NoDataValue>nan</NoDataValue>'
+        b'<ComplexSource><SourceFilename relativeToVRT="1">tiles/a.tif</SourceFilename>'
+        b'<SrcRect xOff="0" yOff="0" xSize="4" ySize="6"/>'
+        b'<DstRect xOff="0" yOff="0" xSize="4" ySize="6"/></ComplexSource>'
+        b'</VRTRasterBand></VRTDataset>'
+    )
+    tf, xs, ys, crs, nod, srcs = raster_cog._parse_vrt(vrt, "https://h/dir/mosaic.vrt")
+    assert (xs, ys) == (8, 6) and nod != nod  # NaN nodata
+    assert srcs[0].url == "https://h/dir/tiles/a.tif"
+    assert (srcs[0].dx, srcs[0].dy, srcs[0].dw, srcs[0].dh) == (0, 0, 4, 6)
+
+
+# --------------------------------------------------------------------------- #
+# raster_cog: gzip_object whole-object date-templated read (fold wave-9; chirps)
+# --------------------------------------------------------------------------- #
+
+
+def _gz_spec(**go_extra) -> SourceSpec:
+    go = {
+        "date_param": "date", "period_param": "period", "min_year": 1981,
+        "nodata_sentinel": -9000.0,
+        "url_templates": {
+            "monthly": "{base}/m/chirps-v2.0.{year:04d}.{month:02d}.tif.gz",
+            "daily": "{base}/d/{year:04d}/chirps-v2.0.{year:04d}.{month:02d}.{day:02d}.tif.gz",
+        },
+    }
+    go.update(go_extra)
+    return SourceSpec.model_validate({
+        "name": "fetch_demo_gz", "source_class": "demo_gz", "error_prefix": "DEMO_GZ",
+        "shape": "raster-cog", "supports_global_query": True,
+        "endpoints": {"data": {"url": "https://h/base"}},
+        "params": {"bbox": {"type": "bbox", "required": False, "schema_optional": True},
+                   "date": {"type": "str", "required": True},
+                   "period": {"type": "enum", "default": "monthly", "values": ["monthly", "daily"]}},
+        "ingest": {"access": "gzip_object", "gzip_object": go,
+                   "serialize": {"nodata": -9999.0, "dtype": "float32"}},
+        "normalize": {"crs": "EPSG:4326", "units": "mm"},
+        "output": {"layer_type": "raster", "ext": "tif", "role": "primary",
+                   "style_preset": "precip_mm"},
+        "cache": {"ttl_class": "static-30d"},
+        "payload_estimate": {"model": "bbox_area", "mb_per_sq_deg": 0.01},
+    })
+
+
+def test_gzip_url_templating_monthly_and_daily():
+    """The period-selected template fills from a parsed date (monthly accepts YYYY-MM)."""
+    spec = _gz_spec()
+    u_m = raster_cog._resolve_gzip_url(spec, {"date": "2023-07", "period": "monthly"}, spec.ingest["gzip_object"])
+    assert u_m == "https://h/base/m/chirps-v2.0.2023.07.tif.gz"
+    u_d = raster_cog._resolve_gzip_url(spec, {"date": "2022-08-25", "period": "daily"}, spec.ingest["gzip_object"])
+    assert u_d == "https://h/base/d/2022/chirps-v2.0.2022.08.25.tif.gz"
+
+
+def test_gzip_bad_and_future_date_are_input_errors():
+    """Malformed / pre-record / future dates are typed INPUT errors (pre-network)."""
+    spec = _gz_spec()
+    go = spec.ingest["gzip_object"]
+    for bad in ({"date": "nope", "period": "monthly"},
+                {"date": "1970-01", "period": "monthly"},
+                {"date": "2999-01", "period": "monthly"}):
+        with pytest.raises(RouterInputError) as ei:
+            raster_cog._resolve_gzip_url(spec, bad, go)
+        assert ei.value.error_code == "DEMO_GZ_INPUT_ERROR"
+
+
+def _gz_tif(arr) -> bytes:
+    import gzip as _gz
+    prof = dict(driver="GTiff", height=arr.shape[0], width=arr.shape[1], count=1,
+                dtype="float32", crs="EPSG:4326",
+                transform=rtransform.from_bounds(0, 0, arr.shape[1], arr.shape[0], arr.shape[1], arr.shape[0]))
+    buf = io.BytesIO()
+    with rasterio.open(buf, "w", **prof) as dst:
+        dst.write(arr.astype("float32"), 1)
+    return _gz.compress(buf.getvalue())
+
+
+def test_gzip_object_windows_and_collapses_sentinel(monkeypatch):
+    """gunzip + window + sentinel(<=-9000)->NaN; the serialize path stamps -9999 nodata."""
+    arr = np.array([[5.0, 10.0], [-9999.0, 20.0]], dtype="float32")  # one sentinel pixel
+    gz = _gz_tif(arr)
+    monkeypatch.setattr("trid3nt_server.agent.tools.fetchers._router.transport.get_client", lambda: None)
+    monkeypatch.setattr("trid3nt_server.agent.tools.fetchers._router.transport.get_bytes",
+                        lambda *a, **k: (gz, "application/gzip", "u"))
+    out = raster_cog.execute(_gz_spec(), {"date": "2023-07", "period": "monthly"})
+    got, nodata, dtype = _read_cog(out)
+    assert nodata == -9999.0 and dtype == "float32"
+    assert got[0, 0] == 5.0 and got[1, 1] == 20.0        # data preserved
+    assert got[1, 0] == -9999.0                          # sentinel collapsed to nodata
+
+
+def test_gzip_object_all_nodata_is_empty(monkeypatch):
+    """A whole-nodata grid is honest no-coverage -> typed EMPTY."""
+    gz = _gz_tif(np.full((2, 2), -9999.0, dtype="float32"))
+    monkeypatch.setattr("trid3nt_server.agent.tools.fetchers._router.transport.get_client", lambda: None)
+    monkeypatch.setattr("trid3nt_server.agent.tools.fetchers._router.transport.get_bytes",
+                        lambda *a, **k: (gz, "application/gzip", "u"))
+    with pytest.raises(RouterEmptyError) as ei:
+        raster_cog._gzip_object_to_array(_gz_spec(), {"date": "2023-07", "period": "monthly"})
+    assert ei.value.error_code == "DEMO_GZ_EMPTY"
+
+
+def test_gzip_object_404_is_not_available(monkeypatch):
+    """A 404 for an unpublished date -> typed NOT_AVAILABLE (non-retryable)."""
+    from trid3nt_server.agent.tools.fetchers._router import transport as _tp
+
+    def _nf(*a, **k):
+        raise _tp.TransportNotFound("forced 404")
+    monkeypatch.setattr("trid3nt_server.agent.tools.fetchers._router.transport.get_client", lambda: None)
+    monkeypatch.setattr("trid3nt_server.agent.tools.fetchers._router.transport.get_bytes", _nf)
+    with pytest.raises(RouterNotAvailableError) as ei:
+        raster_cog._gzip_object_to_array(_gz_spec(), {"date": "2023-07", "period": "monthly"})
+    assert ei.value.error_code == "DEMO_GZ_NOT_AVAILABLE"

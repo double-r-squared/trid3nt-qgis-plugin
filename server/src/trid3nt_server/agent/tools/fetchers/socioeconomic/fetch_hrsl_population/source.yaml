@@ -1,0 +1,105 @@
+# Router source spec (fetcher-fold wave-9, multi_url VRT fan-out, ADR 0055).
+# Twin: fetch_hrsl_population.py -- Meta + CIESIN HRSL ~30 m gridded population.
+# The global mosaic is a multi-tile .vrt; the single-URL opener returns all-NaN,
+# so the VRT fan-out resolves the member tiles + windows the intersecting ones.
+schema_version: v1
+
+name: fetch_hrsl_population
+source_class: hrsl_population
+error_prefix: HRSL
+input_error_suffix: INPUT_INVALID
+empty_error_suffix: EMPTY
+shape: raster-cog
+supports_global_query: false
+
+endpoints:
+  data:
+    url: "https://dataforgood-fb-data.s3.amazonaws.com/hrsl-cogs/hrsl_general/hrsl_general-latest.vrt"
+auth:
+  mode: none
+  user_agent: "trid3nt/0.1 (Hazard Modeling Agent; https://github.com/double-r-squared/trid3nt-qgis-plugin; agent@trid3nt.dev)"
+
+params:
+  bbox: {type: bbox, required: true, quantize: round_6dp}
+  year: {type: int, default: 2020}
+  source: {type: enum, default: meta_hrsl, values: [meta_hrsl]}
+
+ingest:
+  access: multi_url
+  multi_url:
+    mode: vrt
+
+normalize:
+  crs: "EPSG:4326"
+  orientation: north_up
+  units: persons_per_cell
+  quantity: population_density
+
+output:
+  layer_type: raster
+  ext: tif
+  role: primary
+  emit_bbox: true
+  style_preset: "population_density"
+
+cache:
+  ttl_class: static-30d
+payload_estimate:
+  model: bbox_area
+  mb_per_sq_deg: 12.0
+  floor_mb: 0.05
+
+caveats:
+  - "global ~30 m (1 arcsec) Meta HRSL persons/cell (about -56 to +72 latitude; excludes Antarctica + far Arctic); an all-nodata window (open water / off coverage) -> HRSL_EMPTY (never a fabricated layer)"
+  - "gridded population, NOT per-building occupancy; combine fetch_buildings footprints with HRSL for building-level counts"
+fallback: []
+
+# corpus lifted from sibling corpus.yaml.
+
+docstring: |-
+  Fetch Meta + CIESIN HRSL gridded population clipped to a bbox.
+
+  **What it does:** Opens the global Meta High-Resolution Settlement Layer
+  (HRSL) VRT mosaic on AWS Open Data via GDAL ``/vsicurl/`` HTTP byte-range,
+  reads only the window covering the requested bbox, and writes a
+  Cloud-Optimized GeoTIFF of persons-per-cell values. Resolution ~1 arcsecond
+  (~30 m at the equator); float32, NaN nodata, EPSG:4326. Cached ``static-30d``.
+  Coverage: global land areas between approximately −56° and +72° latitude
+  (excludes Antarctica + far Arctic). No API key required.
+
+  **When to use:**
+  - Exposure modeling: "how many people live inside the flood inundation zone?"
+  - Population-at-risk summaries for storm surge, wildfire evacuation zones,
+    or any hazard footprint overlay.
+  - Pelicun damage/loss assessment: HRSL provides the population-density input
+    for the exposure term.
+  - Highest-resolution open population raster available globally; preferable
+    to WorldPop for sub-city-block analyses.
+
+  **When NOT to use:**
+  - Per-building occupancy counts (HRSL is gridded, not parcel-level; combine
+    ``fetch_buildings`` footprints with HRSL for building-level occupancy).
+  - Authoritative US census tabulation for reporting (use US Census API).
+  - Real-time or near-real-time population counts (HRSL is an annual model
+    output, not a live measurement).
+  - Bboxes covering Antarctica or far-north Arctic (raises ``HRSLEmptyError``).
+
+  **Parameters:**
+  - ``bbox`` (tuple): ``(min_lon, min_lat, max_lon, max_lat)`` in EPSG:4326.
+    **Required** (``supports_global_query=False`` — the full mosaic is
+    hundreds of GB). Example: ``(-81.95, 26.3, -81.7, 26.7)`` for Fort Myers FL.
+  - ``year`` (int): HRSL release year; default 2020. v0.1 ignores this
+    (bucket exposes a single "latest" VRT); accepted for forward compatibility.
+  - ``source`` (str): currently only ``"meta_hrsl"`` supported.
+
+  **Returns:**
+  ``LayerURI(layer_type="raster", role="primary", units="persons_per_cell")``
+  pointing at a COG (.tif). EPSG:4326, float32, NaN nodata, ~30 m pixels.
+  Tagged with ``units=persons_per_cell`` and ``source=Meta_HRSL_v1.5_latest``.
+
+  **Cross-tool dependencies:**
+  - Downstream of: ``geocode_location`` (provides bbox), ``fetch_dem``
+    (co-registered for elevation-weighted exposure).
+  - Upstream of: ``compute_zonal_statistics`` (sum population within a polygon),
+    Pelicun impact post-processor, any population-at-risk workflow step.
+  - Pairs with: ``fetch_buildings`` (combine for occupancy-weighted analyses).

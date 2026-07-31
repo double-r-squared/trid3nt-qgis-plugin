@@ -141,8 +141,9 @@ def _import_tools_registry() -> int:
     from .agent.tools.fetchers.imagery.fetch_goes_satellite import fetch_goes_satellite  # noqa: F401
     # register fetch_mrms_qpe (NOAA MRMS gauge-corrected QPE precipitation; SFINCS Harvey reference).
     from .agent.tools.fetchers.weather.fetch_mrms_qpe import fetch_mrms_qpe  # noqa: F401
-    # register fetch_hrsl_population (Meta + CIESIN HRSL persons/cell via global VRT; Wave 1.5).
-    from .agent.tools.fetchers.socioeconomic.fetch_hrsl_population import fetch_hrsl_population  # noqa: F401
+    # fetch_hrsl_population: data-router fold phase-2 wave-9 (ADR 0055) -- twin
+    # DELETED, now spec-driven (source.yaml + multi_url VRT fan-out), registered
+    # by register_specs_from_tree() via the agent.tools import above.
     # register fetch_firms_active_fire (NASA FIRMS VIIRS/MODIS active-fire detections; Wave 1.5).
     from .agent.tools.fetchers.hazard.fetch_firms_active_fire import fetch_firms_active_fire  # noqa: F401
     # fetch_landfire_fuels: data-router fold phase-2 wave-7 (ADR 0053) -- twin
