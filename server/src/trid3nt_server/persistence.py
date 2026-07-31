@@ -16,9 +16,11 @@ slim; both are preserved in git history for a future cloud re-weave).
 
 Supports ``CaseSummary`` round-trip (get/upsert/list/archive/delete),
 ``CaseChatMessage`` append + ``CaseSessionState`` hydration, ``User``
-round-trip (``get_user_by_firebase_uid``/``upsert_user``), ``SecretRecord``
-round-trip (vault-ref-only, Decision F: list/upsert/revoke), and
-``append_audit`` (fire-and-forget audit log line).
+round-trip (``get_user_by_firebase_uid``/``upsert_user``), and
+``append_audit`` (fire-and-forget audit log line). API-key credentials no
+longer persist here: the plugin brokers key values over the ``secret-add`` WS
+seam into the in-memory ``credentials.resolver`` session cache, with env vars
+the headless / dev floor.
 
 Containment: every storage call goes through
 ``mcp_client.call_tool("<mcp-method>", args)``, a single seam; callers pass
@@ -28,12 +30,8 @@ carveout (Appendix D.6, FR-AS-8) is enforced at the confirmation-hook layer
 (``server.CONFIRMATION_TRIGGERS``), not here; persistence is the I/O
 substrate, the hook policy is per-call.
 
-Invariants: ``SecretRecord`` serialization never carries a raw key value --
-``key_value`` only appears on the ``secret-add`` envelope (cleared at the
-server boundary before persistence); the redaction back-stop is at the
-schema layer (``__repr_args__`` on ``SecretAddEnvelopePayload``); persistence
-never receives a ``SecretAddEnvelopePayload``, only ``SecretRecord``s. No
-quota/cost/spend fields on any record. A ``sessions``-collection update (the
+Invariants: no quota/cost/spend fields on any record. A
+``sessions``-collection update (the
 agent's own session record) is not a confirmable write; a
 ``runs``-collection insert is (Decision F + FR-AS-8); this module exposes
 both seams, ``server.py`` is responsible for confirmation routing.
@@ -53,7 +51,6 @@ from trid3nt_contracts.case import (
     CaseSessionState,
     CaseSummary,
 )
-from trid3nt_contracts.secrets import SecretRecord
 from trid3nt_contracts.user import User
 
 logger = logging.getLogger("trid3nt_server.persistence")
@@ -121,7 +118,6 @@ CASES_COLLECTION = "projects"  # FR-MP-5/-6: Case <-> projects 1:1
 CHAT_COLLECTION = "case_chat_messages"  # per-turn message log (FR-MP-6)
 SESSIONS_COLLECTION = "sessions"  # D.6 -- agent's own session records
 USERS_COLLECTION = "users"  # D.13 (Auth/Users track stub)
-SECRETS_COLLECTION = "secrets"  # §F.3 per-Case secrets
 AUDIT_COLLECTION = "audit_log"  # fire-and-forget audit stream
 
 
@@ -1607,162 +1603,6 @@ class Persistence:
             logger.warning("malformed user doc for user_id=%s", user_id)
             return None
 
-    # ----- Per-Case secrets (§F.3) ----------------------------------------- #
-
-    async def list_secrets_refs(
-        self,
-        user_id: str,
-        case_id: str | None = None,
-    ) -> list[SecretRecord]:
-        """List active secret records.
-
-        Filters on ``is_active=True`` (revoked records are still in the
-        collection for audit but excluded from the listing). If ``case_id`` is
-        provided the filter narrows to per-Case records; otherwise returns
-        every active record for the user.
-
-        Decision F: the result NEVER includes the raw key value -- only the
-        ``vault_ref``. The schema enforces this at construct time.
-        """
-        filt: dict[str, Any] = {"is_active": True}
-        if case_id is not None:
-            filt["case_id"] = case_id
-        # user_id linking is enforced once Auth lands.
-        #: the ``{"user_id": {"$exists": False}}`` backward-
-        # compat clause is GONE -- it leaked pre-Auth secret records to every
-        # user. A secret record belongs only to its owner.
-        if user_id:
-            filt["$or"] = [
-                {"user_id": user_id},
-                {"owner_user_id": user_id},
-            ]
-        raw = await self._mcp.call_tool(
-            "find",
-            {
-                "database": self._db,
-                "collection": SECRETS_COLLECTION,
-                "filter": filt,
-            },
-        )
-        docs = _unwrap_mcp_result(raw) or []
-        if isinstance(docs, dict):
-            docs = [docs]
-        out: list[SecretRecord] = []
-        for d in docs:
-            if not isinstance(d, dict):
-                continue
-            normalized = {k: v for k, v in d.items() if k != "_id"}
-            if "secret_id" not in normalized and "_id" in d:
-                normalized["secret_id"] = d["_id"]
-            normalized.pop("user_id", None)
-            normalized.pop("owner_user_id", None)
-            # Defensive: even though the schema rejects key_value, scrub
-            # anything that looks like one before validation. This is the
-            # "fail closed" backstop if a malformed write ever leaked.
-            for k in list(normalized):
-                if "key" in k and "value" in k.lower():
-                    normalized.pop(k)
-            try:
-                out.append(SecretRecord.model_validate(normalized))
-            except Exception:  # noqa: BLE001
-                logger.warning("skipping malformed SecretRecord doc")
-                continue
-        return out
-
-    async def upsert_secret_ref(self, sec: SecretRecord) -> SecretRecord:
-        """Insert or update a vault-ref-only secret record.
-
-        Decision F backstop: this method takes a ``SecretRecord`` (which has
-        no ``key_value`` field at all). The agent service is responsible for
-        writing the raw key value to the vault BEFORE calling this method
-        and clearing the value from the in-memory envelope. The schema-side
-        contract ensures the persistence layer cannot accidentally accept a
-        raw key value.
-        """
-        body = sec.model_dump(mode="json")
-        body["_id"] = sec.secret_id
-        # Belt-and-braces: assert no key_value sneaked in via aliasing.
-        for k in list(body):
-            if "key" in k and "value" in k.lower():
-                raise ValueError(
-                    f"persistence refuses to write a key_value-shaped field "
-                    f"({k!r}) — vault-ref only (Decision F)"
-                )
-        await self._mcp.call_tool(
-            "update-one",
-            {
-                "database": self._db,
-                "collection": SECRETS_COLLECTION,
-                "filter": {"_id": sec.secret_id},
-                "update": {"$set": body},
-                "upsert": True,
-            },
-        )
-        return sec
-
-    async def revoke_secret(self, secret_id: str) -> None:
-        """Soft-revoke a secret (sets ``is_active=False``).
-
-        The vault entry is NOT deleted -- preserves audit trail and lets the
-        user un-revoke without re-entering the key. Mirrors §F.3 discipline.
-        """
-        await self._mcp.call_tool(
-            "update-one",
-            {
-                "database": self._db,
-                "collection": SECRETS_COLLECTION,
-                "filter": {"_id": secret_id},
-                "update": {"$set": {"is_active": False}},
-            },
-        )
-
-    async def get_secret_value(self, secret_ref: "SecretRecord") -> str:
-        """Read the live key value from the local file vault.
-
-        Called by Tier-2 fetchers (FIRMS / eBird / ERA5 / etc.) at
-        tool-invocation time to materialize the raw key for the outbound
-        HTTP request -- including the credential-card RETRY path. The caller
-        never logs the returned value.
-
-        TRID3NT is the local product: there is exactly ONE vault backend
-        (the local file vault, ``file-vault://…``). Legacy cloud refs
-        (``aws-ssm://…``, ``gcp-sm://…``, bare GCP resource names, the
-        interim ``local-file://…`` JSON store) can no longer resolve --
-        ``secrets_handler.read_secret_value`` raises the typed
-        ``SecretNotFoundError`` for them (never a crash, never a silent
-        empty value); the credential-request card re-prompts the user.
-
-        Fail-closed semantics:
-
-        - If the record's ``is_active`` flag is ``False`` (soft-revoked),
-          we raise ``SecretRevokedError`` BEFORE touching the vault so a
-          revoked secret never resurrects via stale cache.
-        - Otherwise resolution delegates to
-          ``secrets_handler.read_secret_value`` (the single read seam).
-
-        Args:
-            secret_ref: the persisted ``SecretRecord`` (vault-ref only).
-
-        Returns:
-            The raw key value as a string. **Caller MUST NOT log this.**
-
-        Raises:
-            SecretRevokedError: when ``secret_ref.is_active is False``.
-            SecretNotFoundError: when the vault_ref cannot be resolved
-                (missing, malformed, or a legacy cloud scheme).
-        """
-        # Local import -- avoids a circular dependency between persistence
-        # and secrets_handler (which imports Persistence).
-        from .credentials.secrets_handler import SecretRevokedError, read_secret_value
-
-        if not secret_ref.is_active:
-            raise SecretRevokedError(
-                f"secret {secret_ref.secret_id!r} has been revoked "
-                f"(provider={secret_ref.provider})"
-            )
-
-        return read_secret_value(secret_ref.vault_ref)
-
     # ----- Audit log -------------------------------------------------------- #
 
     async def append_audit(self, event_type: str, payload: dict) -> None:
@@ -2211,7 +2051,6 @@ __all__ = [
     "CHAT_COLLECTION",
     "SESSIONS_COLLECTION",
     "USERS_COLLECTION",
-    "SECRETS_COLLECTION",
     "AUDIT_COLLECTION",
     "CASE_VIEWS_BUCKET",
     "CASE_VIEWS_PREFIX",

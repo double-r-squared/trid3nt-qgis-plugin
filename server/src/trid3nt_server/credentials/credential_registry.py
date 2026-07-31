@@ -20,18 +20,17 @@ FIRMS (``fetch_firms_active_fire``), eBird (``fetch_ebird_observations``),
 Copernicus CDS -- ERA5 + GTSM share one CDS key
 (``fetch_era5_reanalysis`` / ``fetch_gtsm_tide_surge``), Movebank
 (``fetch_movebank_tracks``), and the IUCN Red List
-(``fetch_iucn_red_list_range``). Every entry mirrors the same
-``secret_ref`` → ``Persistence.get_secret_value`` → env-var key-resolution
-pattern, so a provider joins by adding one row here plus its tool-name →
-provider mapping in ``TOOL_PROVIDER`` and its auth/missing error codes in
-``TOOL_AUTH_ERROR_CODES``.
+(``fetch_iucn_red_list_range``). A provider joins by adding one row here plus
+its tool-name → provider mapping in ``TOOL_PROVIDER`` and its auth/missing error
+codes in ``TOOL_AUTH_ERROR_CODES``; ``credentials.resolver`` then resolves its
+value (session cache -> env) at dispatch time.
 
 ``ProviderID`` scope: every ``provider_id`` below is a member of the closed
 ``ProviderID`` Literal in ``trid3nt_contracts.secrets``, so the server's
 envelope builder validates each provider_id directly.
 The saved key therefore lands under the SAME provider scope the
-``credential-request`` named, which is exactly the scope
-``_resolve_active_secret_ref`` re-reads on retry, so the round-trip closes.
+``credential-request`` named, which is exactly the scope the resolver's session
+cache re-reads on retry, so the round-trip closes.
 We keep ``provider_id`` typed as a plain ``str`` here only so the registry
 stays import-light (it does not import the contracts Literal); the server
 validates it against the live ``ProviderID`` at emit time.
@@ -112,7 +111,7 @@ class CredentialProvider:
 # --------------------------------------------------------------------------- #
 # Provider registry -- ALL keyed atomic-tool data sources. Every provider_id is
 # a member of the closed ``ProviderID`` Literal in ``trid3nt_contracts.secrets``
-# so the saved key lands under the same scope ``_resolve_active_secret_ref``
+# so the saved key lands under the same scope the resolver's session cache
 # re-reads on retry. Each ``secret_key_name`` is the SAME env-var name the
 # tool's ``_resolve_*_key`` reads as its env fallback, so the user-facing name
 # and the code path agree.

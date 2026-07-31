@@ -73,8 +73,6 @@ from trid3nt_contracts.secrets import (
     CredentialProvidedEnvelopePayload,
     CredentialRequestEnvelopePayload,
     SecretAddEnvelopePayload,
-    SecretRevokeEnvelopePayload,
-    SecretsListEnvelopePayload,
 )
 from trid3nt_contracts.region_choice import (
     RegionCandidate,
@@ -172,11 +170,9 @@ from .emission.pipeline_emitter import (
     current_turn_case,
     mint_compaction_card,
 )
-from .credentials.secrets_handler import (
-    SecretError,
-    handle_secret_add,
-    handle_secret_revoke,
-    handle_secrets_list,
+from .credentials.resolver import (
+    resolve_credential,
+    set_session_credential,
 )
 from .telemetry import (
     compute_args_hash,
@@ -1561,7 +1557,7 @@ def _resolve_pending_confirmation(
 # ``credential-request`` envelope. The inbound ``credential-provided``
 # handler (which may arrive on a different WebSocket connection of the same
 # session) resolves the future, and the paused dispatch retries the tool
-# (which now reads the user's freshly-saved vault key). Tagged with the
+# (which now reads the freshly-pushed session-cache key). Tagged with the
 # owning session_id so a cross-session credential-provided is refused.
 _PENDING_CREDENTIALS: dict[str, tuple[str, asyncio.Future]] = {}
 
@@ -1885,54 +1881,12 @@ def set_persistence(p: Persistence | None) -> None:
 
     The agent service startup path calls this once after launching the MCP
     client; tests call it directly with a mock-backed ``Persistence`` to
-    exercise the wired-in code paths.
-
-    job credential-pipeline-generic: also binds the SAME ``Persistence`` into
-    EVERY keyed-tool secret-resolution seam (FIRMS / eBird / ERA5 / GTSM /
-    IUCN -- each exposes ``set_persistence_for_secrets``) so a tool dispatched
-    with a per-Case ``secret_ref`` can materialize the user's vault key without
-    importing the MCP client. (Movebank constructs its own MCP-less Persistence
-    inline, so it needs no seam.) Binding here keeps every persistence-set path
-    (production MCP, dev file-backed, test mocks) in sync without editing each
-    call site.
+    exercise the wired-in code paths. API-key credentials no longer resolve
+    through Persistence -- ``credentials.resolver`` (session cache -> env) owns
+    that, and keyed tools receive the resolved value as a ``str`` secret_ref.
     """
     global _PERSISTENCE
     _PERSISTENCE = p
-    _bind_secret_seams(p)
-
-
-# Keyed tools that expose a ``set_persistence_for_secrets(p)`` seam. The server
-# binds the live Persistence into all of them so any keyed tool can resolve a
-# per-Case ``secret_ref`` (vault -> env). Movebank is intentionally absent: it
-# builds its own MCP-less Persistence inline for credential resolution.
-_SECRET_SEAM_TOOL_MODULES: tuple[str, ...] = (
-    "fetchers.hazard.fetch_firms_active_fire",
-    "fetchers.biodiversity.fetch_ebird_observations",
-    "fetchers.climate.fetch_era5_reanalysis",
-    "fetchers.ocean.fetch_gtsm_tide_surge",
-    "fetchers.biodiversity.fetch_iucn_red_list_range",
-)
-
-
-def _bind_secret_seams(p: "Persistence | None") -> None:
-    """Bind ``p`` into every keyed tool's ``set_persistence_for_secrets`` seam.
-
-    Best-effort per tool: a missing module / seam logs at debug and does not
-    abort binding the rest (one tool's import hiccup must not starve the others
-    of their vault resolver).
-    """
-    import importlib
-
-    for mod_name in _SECRET_SEAM_TOOL_MODULES:
-        try:
-            mod = importlib.import_module(f".tools.{mod_name}", __package__)
-            mod.set_persistence_for_secrets(p)
-        except Exception:  # noqa: BLE001 -- secret-seam binding is best-effort
-            logger.debug(
-                "set_persistence: could not bind secret seam for %s",
-                mod_name,
-                exc_info=True,
-            )
 
 
 async def init_persistence_from_env() -> Persistence | None:
@@ -2614,7 +2568,8 @@ class SessionState:
     # Per-TURN set of tools that have already surfaced a credential-request
     # this turn. The credential pipeline pauses + prompts + retries ONCE per
     # tool per turn: after the single retry the tool either succeeds (key
-    # now in vault) or fails through the normal typed-error surface. Without
+    # now in the session cache) or fails through the normal typed-error
+    # surface. Without
     # this guard a still-invalid key would re-trip the auth error and
     # re-prompt forever. Reset at the start of every turn.
     credential_prompted_tools: set[str] = field(default_factory=set)
@@ -8644,84 +8599,40 @@ def _ensure_emitter(websocket: ServerConnection, state: SessionState) -> None:
 # --------------------------------------------------------------------------- #
 
 
-async def _resolve_active_secret_ref(
-    state: SessionState, tool_name: str, case_id: str | None
-) -> Any | None:
-    """Return the user's active ``SecretRecord`` for ``tool_name``'s provider.
-
-    Looks up the per-Case secret first (scoped to the turn's Case) then falls
-    back to user-level secrets, filtering by the provider the tool needs
-    (``credential_registry.provider_for_tool``). Returns the freshest active
-    record or ``None`` when the tool is not keyed, no Persistence is bound, or
-    no matching active secret exists.
-
-    Best-effort: a Persistence/MCP wobble logs and returns ``None`` so the tool
-    falls back to its env path / typed auth-error (which the credential-request
-    flow then acts on) -- a vault lookup hiccup must not crash the dispatch.
-    """
-    provider = provider_for_tool(tool_name)
-    if provider is None:
-        return None
-    p = get_persistence()
-    if p is None:
-        return None
-    user_id = state.authenticated_user_id or state.session_id
-    try:
-        # Prefer Case-scoped secrets; fall back to user-level (case_id=None)
-        # records so a key the user added outside a Case still resolves.
-        records = []
-        if case_id:
-            records = await p.list_secrets_refs(user_id=user_id, case_id=case_id)
-        if not records:
-            records = await p.list_secrets_refs(user_id=user_id, case_id=None)
-    except Exception:  # noqa: BLE001 -- vault lookup is best-effort
-        logger.debug(
-            "secret_ref lookup failed tool=%s case=%s", tool_name, case_id,
-            exc_info=True,
-        )
-        return None
-    # Filter to the tool's provider. ``provider_id`` on the registry may carry a
-    # value not yet in the ``ProviderID`` Literal (FIRMS pre-amendment); match
-    # the SecretRecord.provider string directly.
-    matches = [
-        r for r in records
-        if getattr(r, "provider", None) == provider.provider_id and r.is_active
-    ]
-    if not matches:
-        return None
-    # Freshest by added_at (records are SecretRecords with UTC added_at).
-    matches.sort(key=lambda r: getattr(r, "added_at", None) or "", reverse=True)
-    return matches[0]
-
-
 async def _inject_secret_ref(
     state: SessionState,
     tool_name: str,
     params: dict,
     case_id: str | None,
 ) -> dict:
-    """Thread the user's active per-Case ``secret_ref`` into a keyed tool's params.
+    """Thread the resolved credential VALUE into a keyed tool's ``secret_ref``.
+
+    Resolution runs through ``credentials.resolver`` (in-memory session cache the
+    plugin pushed over the ``secret-add`` seam -> env fallback). The raw value is
+    injected as a ``str`` ``secret_ref``, which every keyed fetcher's
+    ``_materialize_secret`` accepts verbatim -- no file vault, no Persistence
+    read on the path.
 
     No-op for non-keyed tools, when the caller already supplied an explicit
-    ``secret_ref`` / key kwarg, or when no active secret exists. The tool's
-    ``_resolve_*_key`` then reads the VAULT key first (then env), per the
-    eBird secret_ref convention.
+    ``secret_ref`` / key kwarg, or when neither source has a value (the fetcher's
+    own env fallback then runs, and absent a key raises its typed auth error,
+    which the credential-request flow acts on). ``case_id`` is unused: the
+    session cache is session-scoped, not per-Case.
     """
     if provider_for_tool(tool_name) is None:
         return params
     # Respect an explicit override already on params (dev/test path).
     if params.get("secret_ref") is not None:
         return params
-    record = await _resolve_active_secret_ref(state, tool_name, case_id)
-    if record is None:
+    value = resolve_credential(state.session_id, tool_name)
+    if not value:
         return params
     params = dict(params)
-    params["secret_ref"] = record
+    params["secret_ref"] = value
     logger.info(
-        "secret_ref injected tool=%s provider=%s secret_id=%s",
+        "secret_ref injected tool=%s provider=%s (session cache / env)",
         tool_name,
-        getattr(record, "provider", None),
-        getattr(record, "secret_id", None),
+        provider_for_tool(tool_name).provider_id,
     )
     return params
 
@@ -8749,8 +8660,9 @@ async def _maybe_handle_credential_error(
     Two paths:
     1. REGISTERED tool (``provider_for_tool`` resolves): emit the real
        per-provider card (real ``signup_url`` from the registry -- the ONLY
-       source of real URLs) and, on provided=True, re-resolve the per-Case
-       ``secret_ref`` so the retry reads the saved key.
+       source of real URLs) and, on provided=True, re-resolve the credential
+       (the plugin pushed the value into the session cache over ``secret-add``)
+       so the retry reads the freshly-supplied key.
     2. UNREGISTERED tool with a credential-SHAPED error (NATE principle 3,
        2026-06-18): emit a NAME-ONLY generic card (credential name derived from
        the tool, ``signup_url=None``, just the secret-entry form) so the user
@@ -8817,8 +8729,8 @@ async def _maybe_handle_credential_error(
         # Declined / timed out: surface the original typed error.
         return None
 
-    # Key saved to the vault: re-resolve the secret_ref so the retry reads the
-    # NEW key. Strip any stale secret_ref/map_key from params first.
+    # Key pushed to the session cache: re-resolve the secret_ref so the retry
+    # reads the NEW key. Strip any stale secret_ref/map_key from params first.
     retry_params = {
         k: v for k, v in params.items()
         if k not in ("secret_ref", "map_key", "api_key")
@@ -10149,7 +10061,8 @@ async def _invoke_tool_via_emitter(
         # keyed provider (e.g. FIRMS_AUTH_ERROR) we PAUSE, emit a
         # ``credential-request`` envelope, and await
         # ``credential-provided``. On provided=True we re-resolve the
-        # (now-saved) vault key and retry ONCE. One prompt per tool per turn
+        # freshly-pushed session-cache key and retry ONCE. One prompt per tool
+        # per turn
         # (``credential_prompted_tools``) so a still-bad key fails through the
         # normal typed-error surface instead of re-prompting forever.
         try:
@@ -10166,7 +10079,7 @@ async def _invoke_tool_via_emitter(
             )
             if retry_params is None:
                 raise
-            # Key provided + vault re-resolved: retry the tool ONCE.
+            # Key provided + session-cache re-resolved: retry the tool ONCE.
             params = retry_params
             result = await state.emitter.emit_tool_call(
                 name=entry.metadata.name,
@@ -11702,68 +11615,8 @@ async def _dispatch_tool_and_persist(
 
 
 # --------------------------------------------------------------------------- #
-# Secrets envelope handlers (FR-AS-4 + §F.3)
+# Secrets envelope handler (credential push over the WS seam)
 # --------------------------------------------------------------------------- #
-
-
-async def _emit_secrets_list(
-    websocket: ServerConnection,
-    state: SessionState,
-    *,
-    case_id: str | None = None,
-) -> None:
-    """Emit a fresh ``secrets-list`` envelope for the caller.
-
-    Multi-tenant isolation: scopes the listing on
-    ``state.authenticated_user_id``. Falls back to the session_id when
-    auth-handshake hasn't completed (the in-flight handshake fallback
-    elsewhere in the dispatcher ensures this is rare).
-
-    Best-effort on Persistence unbound -- emits an empty list rather than
-    raising so the client UI can render the "no secrets yet" empty state.
-    """
-    p = get_persistence()
-    user_id = state.authenticated_user_id or state.session_id
-    if p is None:
-        logger.warning(
-            "secrets-list session=%s: Persistence unbound; emitting empty",
-            state.session_id,
-        )
-        empty = SecretsListEnvelopePayload(secrets=[])
-        await websocket.send(
-            _new_envelope("secrets-list", state.session_id, empty)
-        )
-        return
-    try:
-        payload = await handle_secrets_list(
-            user_id=user_id, case_id=case_id, persistence=p
-        )
-    except SecretError as exc:
-        await _send_error(
-            websocket,
-            state.session_id,
-            "INTERNAL_ERROR",
-            f"secrets-list failed: {exc}",
-        )
-        return
-    except Exception as exc:  # noqa: BLE001
-        logger.exception("secrets-list failed session=%s", state.session_id)
-        await _send_error(
-            websocket,
-            state.session_id,
-            "INTERNAL_ERROR",
-            f"secrets-list failed: {exc}",
-        )
-        return
-    await websocket.send(
-        _new_envelope("secrets-list", state.session_id, payload)
-    )
-    logger.info(
-        "secrets-list emitted session=%s case=%s count=%d",
-        state.session_id,
-        case_id,
-        len(payload.secrets),
-    )
 
 
 async def _handle_secret_add(
@@ -11771,99 +11624,26 @@ async def _handle_secret_add(
     state: SessionState,
     envelope: SecretAddEnvelopePayload,
 ) -> None:
-    """Process a ``secret-add`` envelope and emit a refreshed ``secrets-list``.
+    """Store a plugin-pushed credential VALUE in the in-memory session cache.
 
-    Per Decision F the raw ``key_value`` field is consumed by the handler
-    (written to GCP Secret Manager) and **never** echoed back; the handler
-    returns a vault-ref-only ``SecretRecord`` which we drop, re-emitting a
-    full ``secrets-list`` so the client renders the new entry.
+    The plugin brokers key values over this ``secret-add`` seam -- at connect
+    (one call per QgsAuthManager entry the session needs) and in response to a
+    ``credential-request`` (the mid-turn retry path). The raw ``key_value`` is
+    written to ``credentials.resolver`` keyed by ``session_id -> provider``; it
+    is NEVER persisted, echoed back, or logged.
 
     Per FR-AS-8 this is NOT a confirmation trigger -- the user typing the key
-    into the form IS the confirmation -- so the handler proceeds without a
-    ``confirmation-request`` pause, matching the Case-lifecycle pattern.
+    into the plugin form IS the confirmation.
     """
-    p = get_persistence()
-    user_id = state.authenticated_user_id or state.session_id
-    if p is None:
+    if not envelope.key_value:
         await _send_error(
             websocket,
             state.session_id,
-            "INTERNAL_ERROR",
-            "secret-add requires Persistence; the agent service was started "
-            "without TRID3NT_MONGO_MCP_STDIO=1.",
+            "TOOL_PARAMS_INVALID",
+            "secret-add: key_value is empty",
         )
         return
-    try:
-        await handle_secret_add(
-            envelope, user_id=user_id, persistence=p,
-        )
-    except SecretError as exc:
-        await _send_error(
-            websocket,
-            state.session_id,
-            "INTERNAL_ERROR",
-            f"secret-add failed: {exc}",
-        )
-        return
-    except Exception as exc:  # noqa: BLE001
-        logger.exception("secret-add failed session=%s", state.session_id)
-        await _send_error(
-            websocket,
-            state.session_id,
-            "INTERNAL_ERROR",
-            f"secret-add failed: {exc}",
-        )
-        return
-    # Re-emit the full secrets-list so the client refreshes its panel.
-    await _emit_secrets_list(
-        websocket, state, case_id=envelope.case_id
-    )
-
-
-async def _handle_secret_revoke(
-    websocket: ServerConnection,
-    state: SessionState,
-    envelope: SecretRevokeEnvelopePayload,
-) -> None:
-    """Process a ``secret-revoke`` envelope (soft-revoke + refresh list).
-
-    The GCP Secret Manager entry is intentionally NOT deleted -- preserves
-    audit trail. Re-emits a refreshed ``secrets-list`` so the client UI
-    drops the revoked entry from its active list.
-    """
-    p = get_persistence()
-    user_id = state.authenticated_user_id or state.session_id
-    if p is None:
-        await _send_error(
-            websocket,
-            state.session_id,
-            "INTERNAL_ERROR",
-            "secret-revoke requires Persistence; the agent service was "
-            "started without TRID3NT_MONGO_MCP_STDIO=1.",
-        )
-        return
-    try:
-        await handle_secret_revoke(
-            envelope.secret_id, user_id=user_id, persistence=p,
-        )
-    except SecretError as exc:
-        await _send_error(
-            websocket,
-            state.session_id,
-            "INTERNAL_ERROR",
-            f"secret-revoke failed: {exc}",
-        )
-        return
-    except Exception as exc:  # noqa: BLE001
-        logger.exception("secret-revoke failed session=%s", state.session_id)
-        await _send_error(
-            websocket,
-            state.session_id,
-            "INTERNAL_ERROR",
-            f"secret-revoke failed: {exc}",
-        )
-        return
-    await _emit_secrets_list(websocket, state)
+    set_session_credential(state.session_id, envelope.provider, envelope.key_value)
 
 
 async def _delete_case_loaded_layer(
@@ -12438,38 +12218,15 @@ def _make_handler(settings: ModelSettings):
                         )
 
                     elif msg_type == "secret-add":
-                        # Per-Case secret add (FR-AS-4 + §F.3).
-                        # Key value is consumed by the handler (written to
-                        # GCP Secret Manager) and never echoed back. The
-                        # reply is a refreshed ``secrets-list`` envelope.
+                        # Credential push: the plugin brokers a QgsAuthManager
+                        # key VALUE over this seam (connect-time per provider, or
+                        # on a credential-request retry). The value lands in the
+                        # in-memory resolver session cache; never persisted or
+                        # echoed back (Decision F wire isolation).
                         sa = SecretAddEnvelopePayload.model_validate(
                             payload_dict
                         )
                         await _handle_secret_add(websocket, state, sa)
-
-                    elif msg_type == "secret-revoke":
-                        # Soft-revoke a per-Case secret.
-                        secret_revoke = SecretRevokeEnvelopePayload.model_validate(
-                            payload_dict
-                        )
-                        await _handle_secret_revoke(
-                            websocket, state, secret_revoke
-                        )
-
-                    elif msg_type == "secrets-list-request":
-                        # Explicit list-refresh request. The
-                        # envelope payload is loosely-shaped (an empty
-                        # object for global list; optional ``case_id`` to
-                        # scope) -- kept untyped on the schema side for
-                        # forward-compat. We read case_id directly here.
-                        req_case_id = None
-                        if isinstance(payload_dict, dict):
-                            cid = payload_dict.get("case_id")
-                            if isinstance(cid, str) and cid:
-                                req_case_id = cid
-                        await _emit_secrets_list(
-                            websocket, state, case_id=req_case_id
-                        )
 
                     elif msg_type == "cancel":
                         CancelPayload.model_validate(payload_dict)
@@ -13113,13 +12870,10 @@ __all__ = [
     "_auto_create_case_from_root",
     "_emit_auto_case_open",
     "_prepare_user_turn",
-    # Secrets envelope handlers.
-    "_emit_secrets_list",
+    # Secrets envelope handler (credential push to the resolver session cache).
     "_handle_secret_add",
-    "_handle_secret_revoke",
-    # job VAULT-READ: credential pipeline (secret_ref injection + JIT prompt).
+    # Credential pipeline (secret_ref injection + JIT prompt).
     "_inject_secret_ref",
-    "_resolve_active_secret_ref",
     "_maybe_handle_credential_error",
     "_emit_credential_request_and_wait",
     "_resolve_pending_credential",
