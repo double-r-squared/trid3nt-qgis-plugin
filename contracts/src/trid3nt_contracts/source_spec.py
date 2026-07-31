@@ -192,6 +192,13 @@ class NormalizeSpec(GraceModel):
     #: ``units=<resolved characteristic>``; setting ``units_from_param:
     #: characteristic`` reproduces it. Default (None) = the static ``units`` stamp.
     units_from_param: str | None = None
+    #: Per-param MAPPED units (phase-2 wave-7). Unlike ``units_from_param`` (which
+    #: stamps the raw param value), this maps a param value through a table to the
+    #: units string -- ``{"param": "layer", "map": {"cbh": "m * 10", ...}}`` -- so a
+    #: value ABSENT from the map stamps ``LayerURI.units=None`` (the landfire/usfs
+    #: categorical-vs-scaled split). Default (None) = no per-param units mapping
+    #: (strict no-op for every prior spec). Overrides the static ``units`` stamp.
+    units_by_param: dict[str, Any] | None = None
 
 
 class OutputSpec(GraceModel):
@@ -201,6 +208,12 @@ class OutputSpec(GraceModel):
     ext: Literal["tif", "fgb", "json"]
     role: Literal["primary", "context", "input"] = "primary"
     style_preset: str                        # may template on a param
+    #: Per-param MAPPED style preset (phase-2 wave-7). ``{"param": "layer", "map":
+    #: {"fbfm40": "categorical_landcover", "cbh": "continuous_dem", ...}}`` selects
+    #: the preset by a param value; a value absent from the map falls back to the
+    #: static ``style_preset``. Default (None) = the static preset for every prior
+    #: spec (strict no-op).
+    style_preset_by_param: dict[str, Any] | None = None
     #: Whether the emitted ``LayerURI`` carries the request bbox. Default True
     #: (census/coops/hifld/esri set it); gridmet's twin omits it, so its spec
     #: sets ``emit_bbox: false`` to stay byte-identical (VERDICT round-2 tell).
@@ -224,6 +237,10 @@ class PayloadEstimateSpec(GraceModel):
 
     model: PayloadModel
     floor_mb: float = 0.01
+    #: Optional upper clip on the estimate (phase-2 wave-7). The usfs twin clips
+    #: its estimate to ``[0.05, 50]``; ``ceil_mb: 50`` reproduces the ceiling.
+    #: Default (None) = no ceiling (strict no-op for every prior spec).
+    ceil_mb: float | None = None
     # bbox_area / tiled
     mb_per_sq_deg: float | None = None
     # per_station

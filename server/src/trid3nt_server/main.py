@@ -145,8 +145,8 @@ def _import_tools_registry() -> int:
     from .agent.tools.fetchers.socioeconomic.fetch_hrsl_population import fetch_hrsl_population  # noqa: F401
     # register fetch_firms_active_fire (NASA FIRMS VIIRS/MODIS active-fire detections; Wave 1.5).
     from .agent.tools.fetchers.hazard.fetch_firms_active_fire import fetch_firms_active_fire  # noqa: F401
-    # register fetch_landfire_fuels (LANDFIRE LF2022 fuels & canopy rasters; Wave 1.5).
-    from .agent.tools.fetchers.hazard.fetch_landfire_fuels import fetch_landfire_fuels  # noqa: F401
+    # fetch_landfire_fuels: data-router fold phase-2 wave-7 (ADR 0053) -- twin
+    # DELETED, now spec-driven (source.yaml + imageserver_export), auto-registered.
     # register fetch_gcn250_curve_numbers (GCN250 global SCS curve numbers; Wave 1.5).
     from .agent.tools.fetchers.soil.fetch_gcn250_curve_numbers import fetch_gcn250_curve_numbers  # noqa: F401
     # fetch_mtbs_burn_severity + fetch_nifc_fire_perimeters: data-router fold

@@ -24,7 +24,7 @@ logger = logging.getLogger(
     "trid3nt_server.agent.tools.fetchers._router.transport.client"
 )
 
-__all__ = ["get_client", "range_get", "head", "MAX_RETRIES"]
+__all__ = ["get_client", "range_get", "get_bytes", "head", "MAX_RETRIES"]
 
 MAX_RETRIES = 4
 _RETRYABLE_STATUS = {429, 500, 502, 503, 504}
@@ -109,6 +109,48 @@ def head(client: httpx.Client, url: str) -> httpx.Response:
         return resp
     assert last_exc is not None
     raise TransportUpstreamError(f"HEAD failed url={url}: {last_exc}") from last_exc
+
+
+def get_bytes(
+    client: httpx.Client, url: str, *, headers: dict[str, str] | None = None,
+    params: dict[str, Any] | None = None,
+) -> tuple[bytes, str, str]:
+    """GET a full object with the retry authority; return ``(body, content_type, final_url)``.
+
+    The whole-object counterpart to :func:`range_get` for REST endpoints that
+    hand back a ready artifact in one response (ArcGIS ImageServer exportImage),
+    NOT a byte-servable COG. Redirects are followed by the pooled client. Retries
+    429/5xx/timeout/connection with backoff + ``Retry-After``; a 404/403 (or any
+    other 4xx) classifies to a typed transport error immediately. On retry
+    exhaustion the verbatim upstream status/body is surfaced.
+    """
+    last_exc: Exception | None = None
+    for attempt in range(MAX_RETRIES + 1):
+        try:
+            resp = client.get(url, headers=headers, params=params)
+        except (httpx.TimeoutException, httpx.TransportError) as exc:
+            last_exc = exc
+            logger.warning("transport.get_bytes network error url=%s attempt=%d: %s",
+                           url, attempt, exc)
+            if attempt < MAX_RETRIES:
+                _sleep_backoff(attempt, None)
+                continue
+            raise TransportUpstreamError(
+                f"GET network failure url={url}: {exc}") from exc
+        if resp.status_code in _RETRYABLE_STATUS:
+            logger.warning("transport.get_bytes HTTP %d url=%s attempt=%d body=%r",
+                           resp.status_code, url, attempt, resp.text[:400])
+            if attempt < MAX_RETRIES:
+                _sleep_backoff(attempt, resp.headers.get("retry-after"))
+                continue
+            raise TransportUpstreamError(
+                f"GET exhausted retries at HTTP {resp.status_code} url={url}: {resp.text[:400]!r}",
+                status=resp.status_code, body=resp.text)
+        if resp.status_code >= 400:
+            raise classify_status(resp.status_code, resp.text, url)
+        return resp.content, resp.headers.get("content-type", ""), str(resp.url)
+    assert last_exc is not None
+    raise TransportUpstreamError(f"GET failed url={url}: {last_exc}") from last_exc
 
 
 def range_get(client: httpx.Client, url: str, lo: int, hi: int) -> bytes:

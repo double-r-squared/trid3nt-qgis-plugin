@@ -84,24 +84,28 @@ def synthesize_payload_estimator(spec: SourceSpec) -> Callable[..., float]:
         except (TypeError, ValueError):
             return 1
 
+    def _clip(v: float) -> float:
+        # ceil_mb (wave-7) reproduces the usfs [floor, ceil] clip; None = no cap.
+        return v if pe.ceil_mb is None else min(v, pe.ceil_mb)
+
     def estimate_payload_mb(bbox: Any = None, **kw: Any) -> float:
         sq = _sq_deg(bbox)
         floor = pe.floor_mb
         if pe.model == "bbox_area":
-            return max(floor, (pe.mb_per_sq_deg or 0.01) * sq)
+            return _clip(max(floor, (pe.mb_per_sq_deg or 0.01) * sq))
         if pe.model == "per_feature":
             feats = (pe.features_per_sq_deg or 100.0) * sq
-            return max(floor, feats * (pe.kb_per_feature or 1.0) / 1024.0)
+            return _clip(max(floor, feats * (pe.kb_per_feature or 1.0) / 1024.0))
         if pe.model == "per_station":
             stations = (pe.stations_per_sq_deg or 2.0) * sq
             n_days = _n_days(kw.get("start_date"), kw.get("end_date"))
             kb = stations * (pe.kb_per_station_per_day or 2.0) * n_days + (pe.overhead_kb or 0.0)
-            return max(floor, kb / 1024.0)
+            return _clip(max(floor, kb / 1024.0))
         if pe.model == "tiled":
             tile_deg2 = pe.tile_deg2 or 0.5
             ntiles = max(1, int(sq / tile_deg2 + 0.999))
-            return max(floor, ntiles * (pe.mb_per_tile or 0.05))
-        return max(floor, 0.01 * sq)
+            return _clip(max(floor, ntiles * (pe.mb_per_tile or 0.05)))
+        return _clip(max(floor, 0.01 * sq))
 
     return estimate_payload_mb
 
@@ -462,6 +466,11 @@ def build_layer_uri(spec: SourceSpec, params: dict[str, Any], uri: str) -> Layer
         pv = params.get(spec.normalize.units_from_param)
         if pv is not None:
             units = str(pv)
+    # units_by_param (wave-7): MAP a param value to units (landfire/usfs per-layer);
+    # a value absent from the map -> units=None. No-op when unset.
+    ubp = spec.normalize.units_by_param
+    if ubp:
+        units = (ubp.get("map") or {}).get(params.get(ubp.get("param")))
     if spec.join is not None:
         try:
             _, var_spec = join_transform.select_variable(spec, params)
@@ -470,12 +479,20 @@ def build_layer_uri(spec: SourceSpec, params: dict[str, Any], uri: str) -> Layer
                 units = resolved
         except Exception:  # noqa: BLE001 -- never fail emission on units resolution
             pass
+    # style_preset_by_param (wave-7): MAP a param value to the preset (landfire/usfs
+    # per-layer); a value absent from the map falls back to the static preset.
+    style_preset = _template(spec.output.style_preset, params)
+    sbp = spec.output.style_preset_by_param
+    if sbp:
+        style_preset = (sbp.get("map") or {}).get(
+            params.get(sbp.get("param")), style_preset
+        )
     return LayerURI(
         layer_id=layer_id,
         name=f"{spec.source_class} {variable}",
         layer_type=spec.output.layer_type,
         uri=uri,
-        style_preset=_template(spec.output.style_preset, params),
+        style_preset=style_preset,
         role=spec.output.role,
         units=units,
         bbox=bbox,

@@ -298,7 +298,9 @@ from .fetchers.climate.fetch_climate_normals import fetch_climate_normals  # noq
 from .fetchers.climate.fetch_era5_reanalysis import fetch_era5_reanalysis  # noqa: E402,F401
 # fetch_gridmet: data-router fold pilot -- twin DELETED, now spec-driven
 # (source.yaml + router), registered by _register_router_specs() below.
-from .fetchers.climate.fetch_modis_lst import fetch_modis_lst  # noqa: E402,F401
+# fetch_modis_lst: data-router fold phase-2 wave-7 (ADR 0053) -- twin DELETED, now
+# spec-driven (source.yaml + stac_float continuous-float mode), registered by
+# _register_router_specs() below.
 # fetch_us_drought_monitor: data-router fold phase-2 wave-2 -- twin DELETED, now
 # spec-driven (source.yaml + router), registered by _register_router_specs() below.
 from .fetchers.climate.lookup_precip_return_period import lookup_precip_return_period  # noqa: E402,F401
@@ -341,7 +343,9 @@ from .fetchers.hazard.fetch_firms_active_fire import fetch_firms_active_fire  # 
 # spec-driven (source.yaml + router), registered by _register_router_specs() below.
 # fetch_hifld_transmission_lines: data-router fold phase-2 wave-2 -- twin DELETED,
 # now spec-driven (source.yaml + router), registered by _register_router_specs().
-from .fetchers.hazard.fetch_landfire_fuels import fetch_landfire_fuels  # noqa: E402,F401
+# fetch_landfire_fuels: data-router fold phase-2 wave-7 (ADR 0053) -- twin DELETED,
+# now spec-driven (source.yaml + imageserver_export mode), registered by
+# _register_router_specs() below.
 # fetch_mtbs_burn_severity + fetch_nifc_fire_perimeters: data-router fold phase-2
 # wave-2 -- twins DELETED, now spec-driven (source.yaml + router), registered by
 # _register_router_specs() below.
@@ -351,7 +355,9 @@ from .fetchers.hazard.fetch_usace_dams import fetch_usace_dams  # noqa: E402,F40
 # fetch_usace_levees: data-router fold phase-2 wave-6 (ADR 0052) -- twin DELETED,
 # now spec-driven (source.yaml + endpoint_by_param sub-layer routing +
 # properties_by_param), registered by _register_router_specs() below.
-from .fetchers.hazard.fetch_usfs_canopy_fuels import fetch_usfs_canopy_fuels  # noqa: E402,F401
+# fetch_usfs_canopy_fuels: data-router fold phase-2 wave-7 (ADR 0053) -- twin
+# DELETED, now spec-driven (source.yaml + imageserver_export mode), registered by
+# _register_router_specs() below.
 from .fetchers.hazard.fetch_usgs_earthquakes import fetch_usgs_earthquakes  # noqa: E402,F401
 from .fetchers.hazard.fetch_usgs_volcano_alerts import fetch_usgs_volcano_alerts  # noqa: E402,F401
 from .fetchers.hazard.fetch_wfigs_incident import fetch_wfigs_incident  # noqa: E402,F401

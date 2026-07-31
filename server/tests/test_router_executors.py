@@ -180,6 +180,207 @@ def test_raster_execute_uses_fetch_source_array(monkeypatch):
 
 
 # --------------------------------------------------------------------------- #
+# raster_cog: imageserver_export mode (fold wave-7, ADR 0053; landfire/usfs)
+# --------------------------------------------------------------------------- #
+
+
+def _imageserver_spec() -> SourceSpec:
+    return SourceSpec.model_validate({
+        "name": "fetch_demo_imgsrv",
+        "source_class": "demo_imgsrv",
+        "error_prefix": "DEMO_IMG",
+        "shape": "raster-cog",
+        "endpoints": {"data": {"url": "https://img.test/rest/services/Fam"}},
+        "params": {
+            "bbox": {"type": "bbox", "required": True, "error_suffix": "BBOX_INVALID"},
+            "layer": {"type": "enum", "default": "a", "values": ["a", "b"], "error_suffix": "LAYER_INVALID"},
+        },
+        "ingest": {
+            "access": "imageserver_export",
+            "imageserver": {
+                "service_by_param": {"param": "layer", "map": {"a": "SVC_A", "b": "SVC_B"}},
+                "native_cell_m": 30.0, "px_min": 16, "px_max": 4096,
+                "export_query": {"bboxSR": "4326", "format": "tiff", "pixelType": "S16",
+                                 "imageSR": "4326", "f": "image"},
+                "nodata_sentinel": -32768, "zero_is_nodata": True,
+            },
+        },
+        "normalize": {"crs": "EPSG:4326",
+                      "units_by_param": {"param": "layer", "map": {"b": "m * 10"}}},
+        "output": {"layer_type": "raster", "ext": "tif", "role": "primary",
+                   "emit_bbox": False, "style_preset": "categorical_landcover",
+                   "style_preset_by_param": {"param": "layer",
+                                             "map": {"a": "categorical_landcover", "b": "continuous_dem"}}},
+        "cache": {"ttl_class": "static-30d"},
+        "payload_estimate": {"model": "bbox_area", "mb_per_sq_deg": 0.5, "floor_mb": 0.05, "ceil_mb": 50.0},
+    })
+
+
+def _s16_tiff(value: int, n: int = 8) -> bytes:
+    prof = dict(driver="GTiff", height=n, width=n, count=1, dtype="int16",
+                crs="EPSG:4326", nodata=-32768,
+                transform=rtransform.from_bounds(-112.0, 34.5, -111.9, 34.6, n, n))
+    buf = io.BytesIO()
+    with rasterio.open(buf, "w", **prof) as dst:
+        dst.write(np.full((n, n), value, dtype="int16"), 1)
+    return buf.getvalue()
+
+
+def test_imageserver_size_formula_and_clamp():
+    # ~0.06 deg lon at ~34.5N -> a few thousand metres / 30 m, well inside clamp.
+    w, h = raster_cog._imageserver_size((-112.02, 34.50, -111.96, 34.56),
+                                        {"native_cell_m": 30.0, "px_min": 16, "px_max": 4096})
+    assert 16 <= w <= 4096 and 16 <= h <= 4096
+    # A degenerate-tiny bbox clamps UP to px_min; a huge one clamps DOWN to px_max.
+    assert raster_cog._imageserver_size((-112.0, 34.5, -111.9999, 34.5001),
+                                        {"native_cell_m": 30.0, "px_min": 16, "px_max": 4096}) == (16, 16)
+    wg, hg = raster_cog._imageserver_size((-125.0, 25.0, -67.0, 49.0),
+                                          {"native_cell_m": 30.0, "px_min": 16, "px_max": 4096})
+    assert wg == 4096 and hg == 4096
+
+
+def _patch_transport(monkeypatch, body: bytes, ct: str = "image/tiff"):
+    tp = "trid3nt_server.agent.tools.fetchers._router.transport"
+    monkeypatch.setattr(f"{tp}.get_client", lambda: object())
+    monkeypatch.setattr(f"{tp}.get_bytes", lambda *a, **k: (body, ct, "x"))
+
+
+def test_imageserver_export_passthrough_bytes_unchanged(monkeypatch):
+    spec = _imageserver_spec()
+    body = _s16_tiff(121)
+    _patch_transport(monkeypatch, body)
+    out = raster_cog.execute(spec, {"bbox": [-112.02, 34.50, -111.96, 34.56], "layer": "a"})
+    assert out == body  # the exportImage body IS the artifact -- no reserialize
+
+
+def test_imageserver_export_json_envelope_is_upstream(monkeypatch):
+    spec = _imageserver_spec()
+    _patch_transport(monkeypatch, b'{"error":{"code":400}}', ct="application/json")
+    with pytest.raises(Exception) as ei:
+        raster_cog.execute(spec, {"bbox": [-112.0, 34.5, -111.9, 34.6], "layer": "a"})
+    assert ei.value.error_code == "DEMO_IMG_UPSTREAM_ERROR"
+
+
+def test_imageserver_export_non_tiff_is_upstream(monkeypatch):
+    spec = _imageserver_spec()
+    _patch_transport(monkeypatch, b"<html>gateway timeout</html>", ct="text/html")
+    with pytest.raises(Exception) as ei:
+        raster_cog.execute(spec, {"bbox": [-112.0, 34.5, -111.9, 34.6], "layer": "a"})
+    assert ei.value.error_code == "DEMO_IMG_UPSTREAM_ERROR"
+
+
+def test_imageserver_export_all_nodata_is_empty(monkeypatch):
+    spec = _imageserver_spec()
+    _patch_transport(monkeypatch, _s16_tiff(-32768))
+    with pytest.raises(RouterEmptyError) as ei:
+        raster_cog.execute(spec, {"bbox": [-112.0, 34.5, -111.9, 34.6], "layer": "a"})
+    assert ei.value.error_code == "DEMO_IMG_EMPTY"
+
+
+def test_imageserver_export_all_zero_is_empty(monkeypatch):
+    spec = _imageserver_spec()  # zero_is_nodata -> all-zero over water is EMPTY
+    _patch_transport(monkeypatch, _s16_tiff(0))
+    with pytest.raises(RouterEmptyError):
+        raster_cog.execute(spec, {"bbox": [-112.0, 34.5, -111.9, 34.6], "layer": "a"})
+
+
+def test_imageserver_layer_uri_param_keyed_style_and_units():
+    from trid3nt_server.agent.tools.fetchers._router import router as rmod
+    spec = _imageserver_spec()
+    # layer "a": categorical preset, units None (absent from units map), no bbox.
+    la = rmod.build_layer_uri(spec, {"bbox": [-112.0, 34.5, -111.9, 34.6], "layer": "a"}, "s3://x.tif")
+    assert la.style_preset == "categorical_landcover" and la.units is None
+    assert la.role == "primary" and la.bbox is None
+    # layer "b": continuous preset, mapped units.
+    lb = rmod.build_layer_uri(spec, {"bbox": [-112.0, 34.5, -111.9, 34.6], "layer": "b"}, "s3://x.tif")
+    assert lb.style_preset == "continuous_dem" and lb.units == "m * 10"
+
+
+# --------------------------------------------------------------------------- #
+# raster_cog: stac_float continuous-float mode (fold wave-7, ADR 0053; modis_lst)
+# --------------------------------------------------------------------------- #
+
+
+def _stac_float_spec() -> SourceSpec:
+    return SourceSpec.model_validate({
+        "name": "fetch_demo_float",
+        "source_class": "demo_float",
+        "error_prefix": "DEMO_FLOAT",
+        "empty_error_suffix": "NO_DATA",
+        "shape": "raster-cog",
+        "endpoints": {"data": {"url": "https://pc.test/stac"}},
+        "params": {
+            "bbox": {"type": "bbox", "required": True, "error_suffix": "BBOX_INVALID"},
+            "product": {"type": "str", "default": "11A2"},
+            "daynight": {"type": "str", "default": "day"},
+        },
+        "gates": {"max_bbox_deg2": 6.0},
+        "ingest": {
+            "access": "stac_float", "native_cell_m": 1000.0,
+            "stac": {"root": "https://pc.test/stac", "select": "latest",
+                     "param_error_suffix": "PARAM_INVALID",
+                     "collection_by_param": {"param": "product",
+                                             "map": {"11A2": "modis-11A2-061", "21A2": "modis-21A2-061"}},
+                     "asset_by_params": {"params": ["product", "daynight"],
+                                         "map": {"11A2": {"day": "LST_Day_1km", "night": "LST_Night_1km"},
+                                                 "21A2": {"day": "LST_Day_1KM", "night": "LST_Night_1KM"}}},
+                     "product_aliases": {"mod11a2": "11A2", "11a2": "11A2", "21a2": "21A2"},
+                     "daynight_aliases": {"day": "day", "d": "day", "night": "night", "n": "night"}},
+            "transform": {"scale": 0.02, "offset": -273.15, "fill_dn": 0, "src_nodata": 0},
+        },
+        "normalize": {"crs": "EPSG:4326", "units": "deg C"},
+        "output": {"layer_type": "raster", "ext": "tif", "role": "primary",
+                   "emit_bbox": False, "style_preset": "land_surface_temp_c"},
+        "cache": {"ttl_class": "static-30d"},
+        "payload_estimate": {"model": "bbox_area", "mb_per_sq_deg": 0.5, "floor_mb": 0.1},
+    })
+
+
+def test_normalize_via_aliases_maps_and_validates():
+    spec = _stac_float_spec()
+    al = {"mod11a2": "11A2", "11a2": "11A2"}
+    assert raster_cog._normalize_via_aliases(spec, "MOD11A2", al, ["11A2", "21A2"], "PARAM_INVALID") == "11A2"
+    # canonical passthrough via upper() fallback.
+    assert raster_cog._normalize_via_aliases(spec, "21A2", al, ["11A2", "21A2"], "PARAM_INVALID") == "21A2"
+    with pytest.raises(RouterInputError) as ei:
+        raster_cog._normalize_via_aliases(spec, "not_real", al, ["11A2", "21A2"], "PARAM_INVALID")
+    assert ei.value.error_code == "DEMO_FLOAT_PARAM_INVALID" and ei.value.retryable is False
+
+
+def test_stac_float_bad_product_is_param_invalid():
+    spec = _stac_float_spec()
+    with pytest.raises(RouterInputError) as ei:
+        raster_cog._stac_float_to_array(spec, {"bbox": [-112.3, 33.3, -111.8, 33.6],
+                                               "product": "not_real", "daynight": "day"})
+    assert ei.value.error_code == "DEMO_FLOAT_PARAM_INVALID"
+
+
+def test_stac_float_bad_daynight_is_param_invalid():
+    spec = _stac_float_spec()
+    with pytest.raises(RouterInputError) as ei:
+        raster_cog._stac_float_to_array(spec, {"bbox": [-112.3, 33.3, -111.8, 33.6],
+                                               "product": "11A2", "daynight": "dusk"})
+    assert ei.value.error_code == "DEMO_FLOAT_PARAM_INVALID"
+
+
+def test_fetch_source_array_dispatches_stac_float(monkeypatch):
+    spec = _stac_float_spec()
+    monkeypatch.setattr(raster_cog, "_stac_float_to_array",
+                        lambda s, p: ("SENTINEL", "T", "EPSG:4326"))
+    assert raster_cog.fetch_source_array(spec, {"bbox": [-112.3, 33.3, -111.8, 33.6]})[0] == "SENTINEL"
+
+
+def test_payload_ceil_mb_clips():
+    spec = _imageserver_spec()
+    from trid3nt_server.agent.tools.fetchers._router import router as rmod
+    est = rmod.synthesize_payload_estimator(spec)
+    # 0.5 MB/deg^2 * huge bbox would exceed 50 but ceil clips to 50.
+    assert est(bbox=[-125.0, 25.0, -67.0, 49.0]) == 50.0
+    # tiny bbox floors at 0.05.
+    assert est(bbox=[-112.0, 34.5, -111.99, 34.51]) == pytest.approx(0.05)
+
+
+# --------------------------------------------------------------------------- #
 # vector_fgb
 # --------------------------------------------------------------------------- #
 

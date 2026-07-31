@@ -9,7 +9,7 @@ router frame. ``/vsicurl/`` remains only as the documented fallback in the decis
 
 from __future__ import annotations
 
-from .client import get_client, head, range_get
+from .client import get_bytes, get_client, head, range_get
 from .errors import (
     TransportAuthError,
     TransportError,
@@ -25,6 +25,7 @@ __all__ = [
     "get_client",
     "head",
     "range_get",
+    "get_bytes",
     "preflight",
     "open_windowed_cog",
     "CoalescedRangeFile",

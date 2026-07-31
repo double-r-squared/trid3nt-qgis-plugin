@@ -1,0 +1,154 @@
+# Router source spec (fetcher-fold wave-7, stac_float continuous-float mode, ADR 0053).
+# Twin: fetch_modis_lst.py -- MODIS 8-day LST via PC STAC (most-recent item, DN
+# scale/offset to deg C, two-tier per-href sign). Continuous-float, NaN fill.
+schema_version: v1
+
+name: fetch_modis_lst
+source_class: modis_lst
+error_prefix: MODIS_LST
+empty_error_suffix: NO_DATA
+shape: raster-cog
+supports_global_query: false
+
+endpoints:
+  data:
+    url: "https://planetarycomputer.microsoft.com/api/stac/v1"
+auth:
+  mode: none
+
+params:
+  bbox: {type: bbox, required: true, quantize: round_6dp, error_suffix: BBOX_INVALID}
+  start_date: {type: str, schema_optional: true}
+  end_date: {type: str, schema_optional: true}
+  product: {type: str, default: "11A2"}
+  daynight: {type: str, default: day}
+gates:
+  max_bbox_deg2: 6.0
+
+ingest:
+  access: stac_float
+  native_cell_m: 1000.0
+  stac:
+    root: "https://planetarycomputer.microsoft.com/api/stac/v1"
+    select: latest
+    datetime_window: true
+    default_window_days: 120
+    param_error_suffix: PARAM_INVALID
+    collection_by_param:
+      param: product
+      map: {"11A2": modis-11A2-061, "21A2": modis-21A2-061}
+    asset_by_params:
+      params: [product, daynight]
+      map:
+        "11A2": {day: LST_Day_1km, night: LST_Night_1km}
+        "21A2": {day: LST_Day_1KM, night: LST_Night_1KM}
+    product_aliases:
+      mod11a2: "11A2"
+      myd11a2: "11A2"
+      "11a2": "11A2"
+      modis-11a2-061: "11A2"
+      modis-11a2: "11A2"
+      mod21a2: "21A2"
+      myd21a2: "21A2"
+      "21a2": "21A2"
+      modis-21a2-061: "21A2"
+      modis-21a2: "21A2"
+    daynight_aliases:
+      day: day
+      daytime: day
+      lst_day: day
+      d: day
+      night: night
+      nighttime: night
+      lst_night: night
+      n: night
+  transform:
+    scale: 0.02
+    offset: -273.15
+    fill_dn: 0
+    src_nodata: 0
+
+normalize:
+  crs: "EPSG:4326"
+  orientation: north_up
+  units: "Land-surface temperature (deg C)"
+  quantity: land_surface_temperature
+
+output:
+  layer_type: raster
+  ext: tif
+  role: primary
+  emit_bbox: false
+  style_preset: "land_surface_temp_c"
+
+cache:
+  ttl_class: static-30d
+payload_estimate:
+  model: bbox_area
+  mb_per_sq_deg: 0.5
+  floor_mb: 0.1
+
+caveats:
+  - "global 8-day 1 km MODIS LST composite scaled to deg C (T = DN*0.02 - 273.15); no tile / all-fill window -> MODIS_LST_NO_DATA (never a fabricated layer)"
+  - "AOI-scoped (<= 6 deg^2); LST is SURFACE skin temperature (much hotter than 2 m air on a sunny day)"
+fallback: []
+
+# corpus lifted from sibling corpus.yaml.
+
+docstring: |-
+  Fetch a MODIS 8-day land-surface-temperature (LST) grid in degrees C.
+
+  **What it does:** Searches the Microsoft Planetary Computer for the
+  most-recent MODIS 8-day LST tile covering ``bbox`` in the time window, reads
+  the requested ``LST_Day``/``LST_Night`` 1 km band clipped to the bbox, scales
+  the uint16 DN to degrees Celsius (``T = DN*0.02 - 273.15``; fill DN==0 ->
+  NaN), and returns a SINGLE-BAND float32 COG that paints as a thermal heat map.
+  Because it emits the physical deg-C scalar (not a baked RGB) the layer can be
+  zonal-summarized, differenced (day vs night, year vs year), or thresholded
+  for a heat-risk mask.
+
+  MODIS LST is a GLOBAL 8-day clear-sky COMPOSITE at 1 km, so this is the
+  keyless path to a clean urban-heat / drought / surface-temperature surface
+  over a city-to-region AOI without hunting for a cloud-free overpass.
+
+  **When to use:**
+  - Urban heat-island / extreme-heat surface over a metro or county
+    (``daynight="day"`` for peak surface heat; ``"night"`` for heat-retention
+    / overnight minimums, the public-health-relevant signal).
+  - Drought / thermal-stress context (high LST + low NDVI).
+  - A coarse-but-clean LST you can zonal-stat by neighborhood / land cover, or
+    difference between two windows (call twice).
+
+  **When NOT to use:**
+  - Fine-grained single-scene thermal detail  --  use
+    ``fetch_landsat_imagery(band_combo="thermal")`` (30 m, baked RGB snapshot).
+  - AIR temperature (2 m)  --  use ``fetch_era5_reanalysis`` / ``fetch_hrrr_forecast``
+    / ``fetch_gridmet`` (LST is the SURFACE skin temperature, much hotter than
+    air on a sunny day).
+  - Sea-surface temperature  --  use ``fetch_noaa_sst``.
+
+  **Parameters:**
+  - ``bbox`` (tuple): ``(min_lon, min_lat, max_lon, max_lat)`` EPSG:4326.
+    Required. AOI-scoped (<= 6 deg^2; 1 km native).
+  - ``start_date`` / ``end_date`` (str, optional): ``"YYYY-MM-DD"`` window
+    bounds. Default: a trailing ~120-day window ending today. For a specific
+    heat event set both to that month (e.g. a July heat wave).
+  - ``product`` (str, default ``"11A2"``): ``"11A2"`` (MOD/MYD11A2, default) or
+    ``"21A2"`` (MOD/MYD21A2 day/night algorithm).
+  - ``daynight`` (str, default ``"day"``): ``"day"`` (LST_Day, peak surface
+    heat) or ``"night"`` (LST_Night, overnight heat retention).
+
+  **Returns:** A ``LayerURI`` (``layer_type="raster"``, ``role="primary"`` --
+  LST is the analytical product) pointing at a single-band float32 deg-C COG in
+  the ``static-30d``/``modis_lst`` cache prefix.
+  ``style_preset="land_surface_temp_c"``, ``units="Land-surface temperature
+  (deg C)"``.
+
+  **Data source:** MODIS 8-day LST via the Microsoft Planetary Computer STAC
+  (``modis-11A2-061`` / ``modis-21A2-061``; asset ``LST_Day_1km`` /
+  ``LST_Night_1km``). MODIS COGs live in the Azure ``modiseuwest`` account, so
+  each href is signed via the per-href PC sign endpoint (the per-collection
+  token does not authorize that account).
+
+  FR-CE-8: routed through ``read_through`` so identical ``(bbox, window,
+  product, daynight)`` calls reuse the cached COG.

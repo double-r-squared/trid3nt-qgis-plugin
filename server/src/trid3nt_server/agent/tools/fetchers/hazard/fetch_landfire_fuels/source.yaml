@@ -1,0 +1,149 @@
+# Router source spec (fetcher-fold wave-7, imageserver_export mode, ADR 0053).
+# Twin: fetch_landfire_fuels.py -- LANDFIRE LF2022 ImageServer exportImage.
+# The exportImage GeoTIFF body IS the artifact (no reserialize); value-identical.
+schema_version: v1
+
+name: fetch_landfire_fuels
+source_class: landfire_fuels
+error_prefix: LANDFIRE_FUELS
+empty_error_suffix: EMPTY
+shape: raster-cog
+supports_global_query: false
+
+endpoints:
+  data:
+    url: "https://lfps.usgs.gov/arcgis/rest/services/Landfire_LF2022"
+auth:
+  mode: none
+  user_agent: "trid3nt/0.1 (Hazard Modeling Agent; https://github.com/double-r-squared/trid3nt-qgis-plugin; agent@trid3nt.dev)"
+
+params:
+  bbox: {type: bbox, required: true, quantize: round_6dp, error_suffix: BBOX_INVALID}
+  layer:
+    type: enum
+    default: fbfm40
+    values: [fbfm40, fbfm13, cbh, cbd, cc, ch]
+    error_suffix: LAYER_INVALID
+
+ingest:
+  access: imageserver_export
+  imageserver:
+    service_by_param:
+      param: layer
+      map:
+        fbfm40: LF2022_FBFM40_CONUS
+        fbfm13: LF2022_FBFM13_CONUS
+        cbh: LF2022_CBH_CONUS
+        cbd: LF2022_CBD_CONUS
+        cc: LF2022_CC_CONUS
+        ch: LF2022_CH_CONUS
+    native_cell_m: 30.0
+    px_min: 16
+    px_max: 4096
+    export_query: {bboxSR: "4326", format: tiff, pixelType: S16, imageSR: "4326", f: image}
+    nodata_sentinel: -32768
+    zero_is_nodata: true
+
+normalize:
+  crs: "EPSG:4326"
+  orientation: north_up
+  quantity: landfire_fuels
+  units_by_param:
+    param: layer
+    map: {cbh: "m * 10", cbd: "kg/m^3 * 100", cc: "percent", ch: "m * 10"}
+
+output:
+  layer_type: raster
+  ext: tif
+  role: primary
+  emit_bbox: false
+  style_preset: "categorical_landcover"
+  style_preset_by_param:
+    param: layer
+    map:
+      fbfm40: categorical_landcover
+      fbfm13: categorical_landcover
+      cbh: continuous_dem
+      cbd: continuous_dem
+      cc: continuous_dem
+      ch: continuous_dem
+
+cache:
+  ttl_class: static-30d
+payload_estimate:
+  model: bbox_area
+  mb_per_sq_deg: 0.5
+  floor_mb: 0.05
+
+caveats:
+  - "30 m LANDFIRE LF2022 CONUS fuels/vegetation via ImageServer exportImage; all-nodata raster (bbox outside CONUS) -> LANDFIRE_FUELS_EMPTY (never a fabricated layer)"
+  - "CONUS-only at v0.1 (AK/HI/PRVI mosaics exist, regional dispatch deferred)"
+fallback: []
+
+# corpus lifted from sibling corpus.yaml.
+
+docstring: |-
+  Fetch LANDFIRE fuels and vegetation raster for a CONUS bounding box.
+
+  **What it does:** Downloads a 30 m raster from the LANDFIRE LF2022 CONUS
+  ImageServer (USDA Forest Service + USGS), clips it server-side to the
+  requested bbox, and returns a CRS-tagged GeoTIFF via the 30-day cache.
+  Six layers are available: Scott and Burgan 40 surface fuel models
+  (``fbfm40``), Anderson 13 fuel models (``fbfm13``), canopy base height
+  (``cbh``), canopy bulk density (``cbd``), canopy cover (``cc``), and
+  canopy height (``ch``) — together the full ELMFIRE canopy-fuels stack.
+
+  **When to use:**
+  - User asks for wildfire fuel conditions, fuel maps, or fire-behavior
+    inputs for a specific area ("show me the fuel models near Flagstaff").
+  - Building a wildfire spread model run with FlamMap, FARSITE, FSim, or
+    ELMFIRE — those engines require LANDFIRE fuel rasters as primary inputs.
+  - Displaying ground-fuel context or canopy structure as a visualization
+    layer in a wildfire-risk narrative.
+  - Any workflow step that needs the USDA / USGS canonical nationwide
+    wildfire-modelling substrate at 30 m resolution.
+
+  **When NOT to use:**
+  - DO NOT use for live fire perimeters — LANDFIRE is a static fuels grid;
+    use ``fetch_nifc_fire_perimeters`` or ``fetch_firms_active_fire`` for
+    active and recent burn extents.
+  - DO NOT use for burn-severity products — LANDFIRE Disturbance services
+    carry post-fire severity rasters; they are a separate tool surface not
+    covered here.
+  - DO NOT use for weather / climate forcing — LANDFIRE is fuels-only;
+    use ``fetch_mrms_qpe``, ``fetch_hrrr_forecast``, or
+    ``fetch_raws_weather`` for meteorological inputs.
+  - DO NOT use outside CONUS at v0.1 — AK/HI/PRVI LANDFIRE mosaics exist
+    but regional dispatch is deferred.
+
+  **Parameters:**
+  - ``bbox`` (tuple[float, float, float, float]): ``(min_lon, min_lat,
+    max_lon, max_lat)`` in EPSG:4326. Required; CONUS-only.
+    Example: ``(-112.0, 34.5, -111.0, 35.5)`` (north-central Arizona).
+  - ``layer`` (str, default ``"fbfm40"``): one of ``"fbfm40"`` (Scott and
+    Burgan 40; integer codes 101-204 + 91/92/93/98/99 special classes),
+    ``"fbfm13"`` (Anderson 13; codes 1-13 + specials), ``"cbh"`` (canopy
+    base height, m x 10 scaled int), ``"cbd"`` (canopy bulk density,
+    kg/m^3 x 100 scaled int), ``"cc"`` (canopy cover, percent int),
+    ``"ch"`` (canopy height, m x 10 scaled int).
+
+  **Returns:** A ``LayerURI`` pointing at a GeoTIFF in the cache bucket
+  (``s3://trid3nt-cache/cache/static-30d/landfire_fuels/<key>.tif``).
+  ``layer_type="raster"``, ``role="primary"``. ``units`` is populated for
+  continuous canopy layers (``"m * 10"`` / ``"kg/m^3 * 100"``), ``None``
+  for categorical fuel-model layers. EPSG:4326, 30 m native resolution,
+  LANDFIRE 2022 vintage.
+
+  **Cross-tool dependencies:**
+  - Feeds: FlamMap / FARSITE / FSim wildfire spread workflows (deferred),
+    any engine step that needs fuel category codes per pixel.
+  - Pairs with: ``fetch_raws_weather`` or ``fetch_hrrr_forecast`` for the
+    meteorological forcing stack; ``fetch_dem`` for terrain-slope inputs.
+  - Provides ``fbfm40`` / ``fbfm13`` via ``role="primary"`` so QGIS Server
+    renders with the ``categorical_landcover`` style preset; canopy layers
+    use ``continuous_dem`` ramp.
+
+  FR-CE-8: Routed through ``read_through`` so identical ``(bbox, layer)``
+  calls reuse the cached GeoTIFF. Cache key includes ``(layer,
+  bbox-rounded-to-6dp, year="2022")`` so a future year upgrade (e.g.
+  LF2023) is a cache-key change, not a silent staleness.

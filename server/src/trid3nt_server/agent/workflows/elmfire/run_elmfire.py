@@ -240,7 +240,11 @@ def fetch_elmfire_inputs(
     from trid3nt_server.agent.tools.processing.compute_aspect.compute_aspect import compute_aspect
     from trid3nt_server.agent.tools.processing.compute_slope.compute_slope import compute_slope
     from trid3nt_server.agent.tools.fetchers.terrain.fetch_dem.fetch_dem import fetch_dem
-    from trid3nt_server.agent.tools.fetchers.hazard.fetch_landfire_fuels.fetch_landfire_fuels import fetch_landfire_fuels
+    # fetch_landfire_fuels is now the spec-driven promoted tool (fold wave-7, ADR
+    # 0053): resolve it through the registry seam, not a direct twin import.
+    from trid3nt_server.agent.tools import TOOL_REGISTRY
+
+    fetch_landfire_fuels = TOOL_REGISTRY["fetch_landfire_fuels"].fn
 
     inputs: dict[str, str] = {}
 
