@@ -692,9 +692,9 @@ def compute_sediment_yield(
             notes.append(f"DEM from caller-supplied dem_uri ({dem_uri}).")
         else:
             try:
-                from trid3nt_server.agent.tools.fetchers.terrain.fetch_copernicus_dem.fetch_copernicus_dem import fetch_copernicus_dem
+                from trid3nt_server.agent.tools import TOOL_REGISTRY
 
-                layer = fetch_copernicus_dem(bbox=q_bbox)
+                layer = TOOL_REGISTRY["fetch_copernicus_dem"].fn(bbox=q_bbox)
             except SedimentYieldError:
                 raise
             except Exception as exc:  # noqa: BLE001

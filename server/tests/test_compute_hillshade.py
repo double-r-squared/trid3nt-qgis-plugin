@@ -730,27 +730,32 @@ def test_fetch_fn_output_preserves_dem_crs_without_proj_env():
 # ---------------------------------------------------------------------------
 # 2026-07-13 DEM fallback ladder (FIX 3): the Copernicus GLO-30 fallback DEM
 # handle must flow through compute_hillshade UNCHANGED. The fallback layer's
-# uri points at a COG written by fetch_copernicus_dem._write_dem_cog (COG
-# driver, EPSG:4326 degrees, float32, nodata=-9999) -- a DIFFERENT byte shape
-# than the 3DEP EPSG:5070 path -- so this proves the uniform dem_uri contract
-# with the real writer + real gdaldem, not by assumption.
+# uri points at a COG the router serialize path emits (COG driver, EPSG:4326
+# degrees, float32, nodata=-9999; wave-8 fold ADR 0054 -- was the twin's
+# _write_dem_cog) -- a DIFFERENT byte shape than the 3DEP EPSG:5070 path -- so
+# this proves the uniform dem_uri contract with the real writer + real gdaldem.
 # ---------------------------------------------------------------------------
 
 
 @_SKIP_GDALDEM
 def test_copernicus_fallback_dem_flows_through_hillshade():
     """A GLO-30-shaped DEM COG (the 3DEP-fallback artifact) hillshades fine."""
-    from trid3nt_server.agent.tools.processing.compute_hillshade.compute_hillshade import _make_fetch_fn
-    from trid3nt_server.agent.tools.fetchers.terrain.fetch_copernicus_dem.fetch_copernicus_dem import _write_dem_cog
+    import rasterio.transform as _rt
 
-    # A small synthetic elevation grid over a Berkeley-ish bbox, produced by
-    # the SAME writer the fallback path uses (float32, EPSG:4326, nodata).
+    from trid3nt_server.agent.tools.processing.compute_hillshade.compute_hillshade import _make_fetch_fn
+    from trid3nt_server.agent.tools.fetchers._router.executors.raster_cog import array_to_cog_bytes
+
+    # A small synthetic elevation grid over a Berkeley-ish bbox, serialized by
+    # the SAME router path the copernicus fallback uses (float32, EPSG:4326,
+    # NaN -> -9999 fill + nodata=-9999).
     size = 32
     bbox = (-122.35, 37.82, -122.20, 37.92)
     rows = np.linspace(200.0, 20.0, size, dtype=np.float32)
     dem = np.repeat(rows[:, None], size, axis=1)
-    dem[0, 0] = np.nan  # one nodata cell -- exercised through _NODATA fill
-    cog_bytes = _write_dem_cog(dem, bbox, size, size)
+    dem[0, 0] = np.nan  # one nodata cell -- exercised through the -9999 fill
+    filled = np.where(np.isfinite(dem), dem, -9999.0).astype("float32")
+    transform = _rt.from_bounds(bbox[0], bbox[1], bbox[2], bbox[3], size, size)
+    cog_bytes = array_to_cog_bytes(filled, transform, "EPSG:4326", nodata=-9999.0, dtype="float32")
 
     with tempfile.TemporaryDirectory() as tmpdir:
         dem_path = os.path.join(tmpdir, "copdem_fallback.tif")

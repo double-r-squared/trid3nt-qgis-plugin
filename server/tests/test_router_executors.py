@@ -745,3 +745,134 @@ def test_validate_int_range_and_date_compact():
     # not a real calendar date -> typed input error
     with pytest.raises(RouterInputError):
         router_mod.validate_params(spec, {"bbox": [-1, 0, 1, 2], "date": "2020-13-40"})
+
+
+# --------------------------------------------------------------------------- #
+# raster_cog: serialize nodata/dtype directive (fold wave-8, ADR 0054; copernicus)
+# --------------------------------------------------------------------------- #
+
+
+def _serialize_spec(serialize: dict | None) -> SourceSpec:
+    ingest = {"access": "direct_window", "native_cell_m": 30.0}
+    if serialize is not None:
+        ingest["serialize"] = serialize
+    return SourceSpec.model_validate({
+        "name": "fetch_demo_dem", "source_class": "demo_dem", "error_prefix": "DEMO_DEM",
+        "shape": "raster-cog",
+        "endpoints": {"data": {"url": "https://pc.test/x.tif"}},
+        "params": {"bbox": {"type": "bbox", "required": True}},
+        "ingest": ingest,
+        "normalize": {"crs": "EPSG:4326", "units": "meters"},
+        "output": {"layer_type": "raster", "ext": "tif", "role": "input",
+                   "style_preset": "continuous_dem"},
+        "cache": {"ttl_class": "static-30d"},
+        "payload_estimate": {"model": "bbox_area", "mb_per_sq_deg": 8.0, "floor_mb": 0.1},
+    })
+
+
+def _read_cog(b: bytes):
+    with rasterio.io.MemoryFile(b) as m, m.open() as src:
+        return src.read(1), src.nodata, src.dtypes[0]
+
+
+def test_serialize_directive_fills_and_stamps_nodata(monkeypatch):
+    """serialize.nodata=-9999 fills NaN -> sentinel and stamps the band nodata."""
+    arr = np.array([[1.0, np.nan], [3.5, 4.0]], dtype="float32")
+    tf = rtransform.from_bounds(0, 0, 1, 1, 2, 2)
+    monkeypatch.setattr(raster_cog, "fetch_source_array", lambda s, p: (arr, tf, "EPSG:4326"))
+    spec = _serialize_spec({"nodata": -9999.0, "dtype": "float32"})
+    out, nodata, dtype = _read_cog(raster_cog.execute(spec, {"bbox": [0, 0, 1, 1]}))
+    assert nodata == -9999.0 and dtype == "float32"
+    assert out[0, 1] == -9999.0                 # NaN -> sentinel
+    assert out[0, 0] == 1.0 and out[1, 0] == 3.5  # finite pixels preserved
+
+
+def test_serialize_absent_is_nan_nodata_passthrough(monkeypatch):
+    """No serialize block -> NaN-nodata passthrough (every prior float spec)."""
+    arr = np.array([[1.0, np.nan]], dtype="float32")
+    tf = rtransform.from_bounds(0, 0, 2, 1, 2, 1)
+    monkeypatch.setattr(raster_cog, "fetch_source_array", lambda s, p: (arr, tf, "EPSG:4326"))
+    spec = _serialize_spec(None)
+    out, nodata, _ = _read_cog(raster_cog.execute(spec, {"bbox": [0, 0, 2, 1]}))
+    assert nodata != nodata                      # NaN nodata (self-inequality)
+    assert np.isnan(out[0, 1])
+
+
+# --------------------------------------------------------------------------- #
+# raster_cog: direct_window url_by_param + round_pixel + nodata_gate (wave-8; gcn250)
+# --------------------------------------------------------------------------- #
+
+
+class _FakeSrc:
+    """Minimal windowed-COG stand-in for direct_window unit tests."""
+    def __init__(self, arr, nodata):
+        self._arr = arr
+        self.nodata = nodata
+        self.height, self.width = arr.shape
+        self.crs = "EPSG:4326"
+        self.transform = rtransform.from_bounds(0, 0, 1, 1, self.width, self.height)
+
+    def read(self, _band, window=None):
+        r0 = int(getattr(window, "row_off", 0)); c0 = int(getattr(window, "col_off", 0))
+        h = int(getattr(window, "height", self.height)); w = int(getattr(window, "width", self.width))
+        return self._arr[r0:r0 + h, c0:c0 + w]
+
+    def window_transform(self, window):
+        return rtransform.from_bounds(0, 0, 1, 1, self.width, self.height)
+
+
+def _dw_spec(**ingest_extra) -> SourceSpec:
+    ingest = {"access": "direct_window"}
+    ingest.update(ingest_extra)
+    return SourceSpec.model_validate({
+        "name": "fetch_demo_dw", "source_class": "demo_dw", "error_prefix": "DEMO_DW",
+        "empty_error_suffix": "EMPTY", "shape": "raster-cog",
+        "endpoints": {"data": {"url": "https://h/default.tif"}},
+        "params": {"bbox": {"type": "bbox", "required": True},
+                   "amc": {"type": "enum", "default": "average", "values": ["dry", "average", "wet"]}},
+        "ingest": ingest,
+        "normalize": {"crs": "EPSG:4326", "units": "curve_number"},
+        "output": {"layer_type": "raster", "ext": "tif", "role": "primary",
+                   "style_preset": "curve_number"},
+        "cache": {"ttl_class": "static-30d"},
+        "payload_estimate": {"model": "bbox_area", "mb_per_sq_deg": 2.0},
+    })
+
+
+def test_direct_window_url_by_param_selects_endpoint(monkeypatch):
+    """url_by_param maps an enum value to the object URL (gcn250 AMC -> figshare)."""
+    seen = {}
+    import contextlib
+    @contextlib.contextmanager
+    def _fake_open(url):
+        seen["url"] = url
+        yield _FakeSrc(np.array([[70, 71], [72, 73]], dtype="uint8"), 255.0)
+    monkeypatch.setattr("trid3nt_server.agent.tools.fetchers._router.transport.open_windowed_cog", _fake_open)
+    spec = _dw_spec(url_by_param={"param": "amc", "map": {"dry": "https://h/d.tif", "wet": "https://h/w.tif"}})
+    raster_cog._direct_window_to_array(spec, {"bbox": [0, 0, 1, 1], "amc": "wet"})
+    assert seen["url"] == "https://h/w.tif"
+
+
+def test_direct_window_nodata_gate_raises_empty(monkeypatch):
+    """An all-nodata window is honest no-coverage -> typed EMPTY (never fabricated)."""
+    import contextlib
+    @contextlib.contextmanager
+    def _fake_open(url):
+        yield _FakeSrc(np.full((3, 3), 255, dtype="uint8"), 255.0)
+    monkeypatch.setattr("trid3nt_server.agent.tools.fetchers._router.transport.open_windowed_cog", _fake_open)
+    spec = _dw_spec(nodata_gate=True, default_nodata=255)
+    with pytest.raises(RouterEmptyError) as ei:
+        raster_cog._direct_window_to_array(spec, {"bbox": [0, 0, 1, 1], "amc": "average"})
+    assert ei.value.error_code == "DEMO_DW_EMPTY"
+
+
+def test_direct_window_nodata_gate_passes_with_data(monkeypatch):
+    """A window with at least one valid pixel is NOT gated as empty."""
+    import contextlib
+    @contextlib.contextmanager
+    def _fake_open(url):
+        yield _FakeSrc(np.array([[255, 80], [255, 255]], dtype="uint8"), 255.0)
+    monkeypatch.setattr("trid3nt_server.agent.tools.fetchers._router.transport.open_windowed_cog", _fake_open)
+    spec = _dw_spec(nodata_gate=True)
+    arr, _tf, _crs = raster_cog._direct_window_to_array(spec, {"bbox": [0, 0, 1, 1], "amc": "average"})
+    assert 80.0 in arr  # the one valid pixel survived; the gate did NOT fire

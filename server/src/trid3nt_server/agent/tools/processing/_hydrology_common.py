@@ -178,9 +178,9 @@ def _stage_dem(
         notes.append(f"DEM from caller-supplied dem_uri ({dem_uri}).")
         return local
     try:
-        from trid3nt_server.agent.tools.fetchers.terrain.fetch_copernicus_dem.fetch_copernicus_dem import fetch_copernicus_dem
+        from trid3nt_server.agent.tools import TOOL_REGISTRY
 
-        layer = fetch_copernicus_dem(bbox=bbox)
+        layer = TOOL_REGISTRY["fetch_copernicus_dem"].fn(bbox=bbox)
     except HydrologyPrimitivesError:
         raise
     except Exception as exc:  # noqa: BLE001

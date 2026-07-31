@@ -1118,9 +1118,9 @@ def _resolve_infiltration_uri(
         return infiltration
     # infiltration is True -> fetch the GCN250 CN raster (best-effort).
     try:
-        from trid3nt_server.agent.tools.fetchers.soil.fetch_gcn250_curve_numbers.fetch_gcn250_curve_numbers import fetch_gcn250_curve_numbers
+        from trid3nt_server.agent.tools import TOOL_REGISTRY
 
-        layer = fetch_gcn250_curve_numbers(bbox, antecedent_moisture="average")
+        layer = TOOL_REGISTRY["fetch_gcn250_curve_numbers"].fn(bbox, antecedent_moisture="average")
         uri = getattr(layer, "uri", None)
         if uri:
             data_sources.append(

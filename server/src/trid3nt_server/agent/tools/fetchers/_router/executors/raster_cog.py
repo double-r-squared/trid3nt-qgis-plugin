@@ -21,7 +21,12 @@ from typing import Any
 
 from trid3nt_contracts.source_spec import SourceSpec
 
-from ..errors import router_empty_error, router_input_error, router_upstream_error
+from ..errors import (
+    RouterError,
+    router_empty_error,
+    router_input_error,
+    router_upstream_error,
+)
 
 logger = logging.getLogger(
     "trid3nt_server.agent.tools.fetchers._router.executors.raster_cog"
@@ -221,6 +226,7 @@ def _direct_window_to_array(spec: SourceSpec, params: dict[str, Any]) -> tuple[A
     split (GDAL discarded the status, so every failure read as UPSTREAM_ERROR).
     """
     import numpy as np
+    from rasterio.windows import Window
     from rasterio.windows import from_bounds as window_from_bounds
 
     from ..transport import (
@@ -229,17 +235,43 @@ def _direct_window_to_array(spec: SourceSpec, params: dict[str, Any]) -> tuple[A
         open_windowed_cog,
     )
 
+    ingest = spec.ingest or {}
     bbox = params["bbox"]
-    endpoint = spec.endpoints.get("data") or next(iter(spec.endpoints.values()))
-    url = endpoint.url or endpoint.url_template or ""
+
+    # url_by_param (wave-8, gcn250): a param value (enum) selects the object URL;
+    # absent -> the single `data` endpoint URL (every prior direct_window spec).
+    ubp = ingest.get("url_by_param")
+    if ubp:
+        url = (ubp.get("map") or {}).get(params.get(ubp.get("param")))
+        if url is None:
+            raise router_upstream_error(
+                spec.error_code_prefix,
+                f"no direct-window URL for {ubp.get('param')}={params.get(ubp.get('param'))!r}",
+            )
+    else:
+        endpoint = spec.endpoints.get("data") or next(iter(spec.endpoints.values()))
+        url = endpoint.url or endpoint.url_template or ""
     if url.startswith("/vsicurl/"):
         url = url[len("/vsicurl/"):]
+
+    round_pixel = bool(ingest.get("round_pixel_window", False))
     try:
         with open_windowed_cog(url) as src:
             win = window_from_bounds(*bbox, transform=src.transform)
+            if round_pixel:
+                # gcn250 parity: outward-round to integer pixels, clip to extent.
+                win = win.round_offsets(op="floor").round_lengths(op="ceil")
+                win = win.intersection(Window(0, 0, src.width, src.height))
+                if win.width <= 0 or win.height <= 0:
+                    raise router_empty_error(
+                        spec.error_code_prefix,
+                        f"bbox={bbox} produces a zero-size window", spec.empty_error_suffix)
             arr = src.read(1, window=win)
             transform = src.window_transform(win)
             crs = src.crs
+            src_nodata = src.nodata
+    except RouterError:
+        raise  # a typed router error (zero-size empty) propagates unwrapped
     except TransportNotFound as exc:
         raise router_empty_error(
             spec.error_code_prefix,
@@ -254,6 +286,17 @@ def _direct_window_to_array(spec: SourceSpec, params: dict[str, Any]) -> tuple[A
         raise router_upstream_error(spec.error_code_prefix, f"direct-window read failed: {exc}")
     if arr.size == 0:
         raise router_empty_error(spec.error_code_prefix, f"bbox={bbox} produced an empty window", spec.empty_error_suffix)
+
+    # all-nodata coverage gate (wave-8, gcn250): a window entirely the source
+    # nodata sentinel is honest no-coverage (over open water / off-disk), never a
+    # fabricated layer. Absent `nodata_gate` -> no gate (every prior spec).
+    if ingest.get("nodata_gate"):
+        sentinel = src_nodata if src_nodata is not None else float(ingest.get("default_nodata", 255))
+        if not bool((arr != sentinel).any()):
+            raise router_empty_error(
+                spec.error_code_prefix,
+                f"bbox={bbox} produced no valid pixels (all-nodata window -- over "
+                f"open water or outside coverage)", spec.empty_error_suffix)
     return np.asarray(arr, dtype="float32"), transform, crs
 
 
@@ -740,4 +783,17 @@ def execute(spec: SourceSpec, params: dict[str, Any]) -> bytes:
             arr, transform, crs, nodata=nodata, dtype=dtype, colormap=colormap
         )
     arr, transform, crs = fetch_source_array(spec, params)
+    # serialize directive (wave-8): a float source that writes a NON-NaN nodata
+    # sentinel (copernicus_dem: fill NaN -> -9999, nodata=-9999) declares it here.
+    # Absent (every prior float spec) -> NaN-nodata passthrough (modis parity).
+    ser = (spec.ingest or {}).get("serialize") or {}
+    out_nodata = ser.get("nodata")
+    if out_nodata is not None:
+        import numpy as np
+
+        out_dtype = str(ser.get("dtype", "float32"))
+        filled = np.where(np.isfinite(arr), arr, out_nodata).astype(out_dtype)
+        return array_to_cog_bytes(
+            filled, transform, crs, nodata=float(out_nodata), dtype=out_dtype
+        )
     return array_to_cog_bytes(arr, transform, crs)

@@ -274,7 +274,8 @@ from .fetchers.ocean.fetch_topobathy import fetch_topobathy  # noqa: E402,F401
 
 # -- fetchers/terrain --
 from .fetchers.terrain.fetch_3dep_extra import fetch_3dep_extra  # noqa: E402,F401
-from .fetchers.terrain.fetch_copernicus_dem import fetch_copernicus_dem  # noqa: E402,F401
+# fetch_copernicus_dem: fetcher-fold wave-8 -- twin DELETED, now spec-driven
+# (source.yaml + router stac_float), registered by _register_router_specs() below.
 from .fetchers.terrain.fetch_dem import fetch_dem  # noqa: E402,F401
 # fetch_esri_landcover_10m: data-router fold pilot -- twin DELETED, now spec-driven
 # (source.yaml + router), registered by _register_router_specs() below.
@@ -363,7 +364,8 @@ from .fetchers.hazard.fetch_usgs_volcano_alerts import fetch_usgs_volcano_alerts
 from .fetchers.hazard.fetch_wfigs_incident import fetch_wfigs_incident  # noqa: E402,F401
 
 # -- fetchers/soil --
-from .fetchers.soil.fetch_gcn250_curve_numbers import fetch_gcn250_curve_numbers  # noqa: E402,F401
+# fetch_gcn250_curve_numbers: fetcher-fold wave-8 -- twin DELETED, now spec-driven
+# (source.yaml + router direct_window), registered by _register_router_specs() below.
 from .fetchers.soil.fetch_snotel_snow import fetch_snotel_snow  # noqa: E402,F401
 from .fetchers.soil.fetch_soilgrids import fetch_soilgrids  # noqa: E402,F401
 from .fetchers.soil.fetch_statsgo_soils import fetch_statsgo_soils  # noqa: E402,F401

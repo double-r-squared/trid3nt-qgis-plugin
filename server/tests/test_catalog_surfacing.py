@@ -2,10 +2,10 @@
 
 Covers the two arm prerequisites + the identity gate:
 
-- DEFAULT config (no arm flag): the 20 spec-served sources stay tier="general",
+- DEFAULT config (no arm flag): the 22 spec-served sources stay tier="general",
   ambient-declarable; registry == 190; fetch_from_catalog keeps its exact
   entry_id-only signature; search_data_catalog returns YAML catalog entries.
-- Arm flag ON (own process): the 20 leave the default declarable pool (tier="catalog")
+- Arm flag ON (own process): the 22 leave the default declarable pool (tier="catalog")
   but stay in the search index; Arm 1 exposes a fetch_from_catalog(source=...) branch
   + card projection; Arm 2 keeps them discoverable + gate-expandable.
 - Card content fidelity + the fetch-via-spec validation locus.
@@ -94,8 +94,8 @@ def test_default_config_identity():
     r = _run_arm(None)
     assert r["arm"] is None
     assert r["registry_size"] == 190
-    assert r["n_specs"] == 20
-    # The 20 stay ambient (tier=general) and IN the declarable pool.
+    assert r["n_specs"] == 22
+    # The 22 stay ambient (tier=general) and IN the declarable pool.
     assert r["gridmet_tier"] == "general"
     assert r["any_spec_in_declarable"] is True
     # fetch_from_catalog keeps its exact entry_id-only signature (no source param).
@@ -113,8 +113,8 @@ def test_arm2_specs_leave_pool_but_stay_indexed():
     assert r["arm"] == "2"
     assert r["registry_size"] == 190  # registry does NOT shrink; only the pool does
     assert r["gridmet_tier"] == "catalog"
-    assert r["any_spec_in_declarable"] is False  # -20 from the ambient pool
-    assert r["declarable_size"] == _run_arm(None)["declarable_size"] - 20
+    assert r["any_spec_in_declarable"] is False  # -22 from the ambient pool
+    assert r["declarable_size"] == _run_arm(None)["declarable_size"] - 22
     # Still searchable + rankable so a search hit can gate-expand it.
     assert r["gridmet_in_index"] is True
     assert r["gridmet_ranked_top25"] is True
@@ -219,8 +219,8 @@ def test_arm3_specs_leave_pool_and_source_param():
     assert r["arm"] == "3"
     assert r["registry_size"] == 190  # registry does NOT shrink; only the pool does
     assert r["gridmet_tier"] == "catalog"
-    assert r["any_spec_in_declarable"] is False  # -20 from the ambient pool
-    assert r["declarable_size"] == _run_arm(None)["declarable_size"] - 20
+    assert r["any_spec_in_declarable"] is False  # -22 from the ambient pool
+    assert r["declarable_size"] == _run_arm(None)["declarable_size"] - 22
     assert r["gridmet_in_index"] is True
     # fetch_from_catalog exposes the source branch under Arm 3 (like Arm 1).
     assert r["ffc_params"] == ["entry_id", "params", "source", "_extra_ignored"]
@@ -237,12 +237,12 @@ def _stratum(_registry_loaded):
 
 
 def test_stratum_index_is_source_scoped(_stratum):
-    """Stratum split: the pool index ranks over ONLY the 20 spec-served sources."""
+    """Stratum split: the pool index ranks over ONLY the 22 spec-served sources."""
     from trid3nt_server.agent.tools.fetchers._router import registration as reg
 
     idx = _stratum.source_stratum_index()
     assert set(idx.tool_names) == reg.registered_spec_names()
-    assert len(idx.tool_names) == 20  # sharpened per-pool IDF is expected, not a bug
+    assert len(idx.tool_names) == 22  # sharpened per-pool IDF is expected, not a bug
 
 
 def test_stratum_activates_on_data_ask_enum_rank_order(_stratum):

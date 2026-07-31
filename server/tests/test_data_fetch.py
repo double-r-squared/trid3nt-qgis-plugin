@@ -464,12 +464,28 @@ def _patch_dem_read_through(monkeypatch, fake_storage):
     )
 
 
+def _patch_copernicus_seam(monkeypatch, **mock_kw):
+    """Patch the promoted fetch_copernicus_dem registry seam fetch_dem resolves.
+
+    Wave-8 fold (ADR 0054): the copernicus twin + its ``_copernicus_dem_impl`` are
+    gone; fetch_dem now calls ``TOOL_REGISTRY["fetch_copernicus_dem"].fn(bbox=...)``.
+    RegisteredTool is frozen, so swap the whole entry for one carrying a MagicMock.
+    """
+    from unittest.mock import MagicMock
+
+    from trid3nt_server.agent.tools import TOOL_REGISTRY, RegisteredTool
+
+    orig = TOOL_REGISTRY["fetch_copernicus_dem"]
+    spy = MagicMock(**mock_kw)
+    monkeypatch.setitem(
+        TOOL_REGISTRY, "fetch_copernicus_dem",
+        RegisteredTool(metadata=orig.metadata, fn=spy, module=orig.module),
+    )
+    return spy
+
+
 def test_fetch_dem_service_down_falls_back_to_copernicus(monkeypatch):
     """(a) 3DEP service-unavailable -> Copernicus fallback + honest labeling."""
-    from unittest.mock import patch
-
-    from trid3nt_server.agent.tools.fetchers.terrain.fetch_copernicus_dem import fetch_copernicus_dem as cop_mod
-
     fake_storage = FakeStorageClient()
     _patch_dem_read_through(monkeypatch, fake_storage)
 
@@ -479,12 +495,10 @@ def test_fetch_dem_service_down_falls_back_to_copernicus(monkeypatch):
         )
 
     monkeypatch.setattr(dem_mod, "_fetch_3dep_dem_bytes", boom)
-    with patch.object(
-        cop_mod, "_copernicus_dem_impl", side_effect=_fake_copernicus_layer
-    ) as spy:
-        layer = fetch_dem(FORT_MYERS_BBOX, resolution_m=10)
+    spy = _patch_copernicus_seam(monkeypatch, side_effect=_fake_copernicus_layer)
+    layer = fetch_dem(FORT_MYERS_BBOX, resolution_m=10)
 
-    spy.assert_called_once_with(FORT_MYERS_BBOX)
+    spy.assert_called_once_with(bbox=FORT_MYERS_BBOX)
     assert "Copernicus GLO-30" in layer.name
     assert "3DEP unavailable" in layer.name
     assert layer.fallback_note is not None
@@ -500,9 +514,6 @@ def test_fetch_dem_service_down_falls_back_to_copernicus(monkeypatch):
 def test_fetch_dem_hang_times_out_within_budget_then_falls_back(monkeypatch):
     """(b) a hung py3dep grind is cut at the wall-clock budget -> fallback."""
     import time as _time
-    from unittest.mock import patch
-
-    from trid3nt_server.agent.tools.fetchers.terrain.fetch_copernicus_dem import fetch_copernicus_dem as cop_mod
 
     fake_storage = FakeStorageClient()
     _patch_dem_read_through(monkeypatch, fake_storage)
@@ -513,11 +524,9 @@ def test_fetch_dem_hang_times_out_within_budget_then_falls_back(monkeypatch):
         return b"TOO_LATE"
 
     monkeypatch.setattr(dem_mod, "_fetch_3dep_dem_bytes", hang)
+    _patch_copernicus_seam(monkeypatch, side_effect=_fake_copernicus_layer)
     start = _time.monotonic()
-    with patch.object(
-        cop_mod, "_copernicus_dem_impl", side_effect=_fake_copernicus_layer
-    ):
-        layer = fetch_dem(FORT_MYERS_BBOX, resolution_m=30)
+    layer = fetch_dem(FORT_MYERS_BBOX, resolution_m=30)
     elapsed = _time.monotonic() - start
 
     assert elapsed < 5.0, f"timeout did not bound the attempt (took {elapsed:.1f}s)"
@@ -535,10 +544,6 @@ def test_fetch_dem_timeout_error_is_typed_service_failure():
 
 def test_fetch_dem_both_sources_fail_raises_typed_error_naming_both(monkeypatch):
     """(c) 3DEP AND Copernicus fail -> one UpstreamAPIError naming both."""
-    from unittest.mock import patch
-
-    from trid3nt_server.agent.tools.fetchers.terrain.fetch_copernicus_dem import fetch_copernicus_dem as cop_mod
-
     fake_storage = FakeStorageClient()
     _patch_dem_read_through(monkeypatch, fake_storage)
 
@@ -546,13 +551,9 @@ def test_fetch_dem_both_sources_fail_raises_typed_error_naming_both(monkeypatch)
         raise UpstreamAPIError("3DEP: Service is currently not available")
 
     monkeypatch.setattr(dem_mod, "_fetch_3dep_dem_bytes", boom)
-    with patch.object(
-        cop_mod,
-        "_copernicus_dem_impl",
-        side_effect=RuntimeError("PC STAC search failed"),
-    ):
-        with pytest.raises(UpstreamAPIError, match="BOTH sources") as exc_info:
-            fetch_dem(FORT_MYERS_BBOX, resolution_m=10)
+    _patch_copernicus_seam(monkeypatch, side_effect=RuntimeError("PC STAC search failed"))
+    with pytest.raises(UpstreamAPIError, match="BOTH sources") as exc_info:
+        fetch_dem(FORT_MYERS_BBOX, resolution_m=10)
 
     msg = str(exc_info.value)
     assert "USGS 3DEP" in msg
@@ -562,10 +563,6 @@ def test_fetch_dem_both_sources_fail_raises_typed_error_naming_both(monkeypatch)
 
 def test_fetch_dem_pinned_3dep_no_fallback_suggests_copernicus(monkeypatch):
     """(d) explicit source='3dep' never falls back; error suggests copernicus."""
-    from unittest.mock import patch
-
-    from trid3nt_server.agent.tools.fetchers.terrain.fetch_copernicus_dem import fetch_copernicus_dem as cop_mod
-
     fake_storage = FakeStorageClient()
     _patch_dem_read_through(monkeypatch, fake_storage)
 
@@ -573,9 +570,9 @@ def test_fetch_dem_pinned_3dep_no_fallback_suggests_copernicus(monkeypatch):
         raise UpstreamAPIError("3DEP: Service is currently not available")
 
     monkeypatch.setattr(dem_mod, "_fetch_3dep_dem_bytes", boom)
-    with patch.object(cop_mod, "_copernicus_dem_impl") as spy:
-        with pytest.raises(UpstreamAPIError) as exc_info:
-            fetch_dem(FORT_MYERS_BBOX, resolution_m=10, source="3dep")
+    spy = _patch_copernicus_seam(monkeypatch)
+    with pytest.raises(UpstreamAPIError) as exc_info:
+        fetch_dem(FORT_MYERS_BBOX, resolution_m=10, source="3dep")
 
     spy.assert_not_called()
     msg = str(exc_info.value)
@@ -587,17 +584,13 @@ def test_fetch_dem_pinned_3dep_no_fallback_suggests_copernicus(monkeypatch):
 
 def test_fetch_dem_healthy_3dep_path_unchanged_no_fallback_note(monkeypatch):
     """(e) a healthy 3DEP fetch is unchanged: 3DEP name, no fallback_note."""
-    from unittest.mock import patch
-
-    from trid3nt_server.agent.tools.fetchers.terrain.fetch_copernicus_dem import fetch_copernicus_dem as cop_mod
-
     fake_storage = FakeStorageClient()
     _patch_dem_read_through(monkeypatch, fake_storage)
     monkeypatch.setattr(
         dem_mod, "_fetch_3dep_dem_bytes", lambda bbox, res: b"FAKE_COG_BYTES"
     )
-    with patch.object(cop_mod, "_copernicus_dem_impl") as spy:
-        layer = fetch_dem(FORT_MYERS_BBOX, resolution_m=10)
+    spy = _patch_copernicus_seam(monkeypatch)
+    layer = fetch_dem(FORT_MYERS_BBOX, resolution_m=10)
 
     spy.assert_not_called()
     assert layer.name.startswith("USGS 3DEP DEM (10m)")
@@ -606,9 +599,6 @@ def test_fetch_dem_healthy_3dep_path_unchanged_no_fallback_note(monkeypatch):
 
 def test_fetch_dem_partial_coverage_propagates_not_ladder(monkeypatch):
     """DemPartialCoverageError is a DATA signal: no cross-source ladder."""
-    from unittest.mock import patch
-
-    from trid3nt_server.agent.tools.fetchers.terrain.fetch_copernicus_dem import fetch_copernicus_dem as cop_mod
     from trid3nt_server.agent.tools.fetchers.terrain.fetch_dem.fetch_dem import DemPartialCoverageError
 
     fake_storage = FakeStorageClient()
@@ -618,9 +608,9 @@ def test_fetch_dem_partial_coverage_propagates_not_ladder(monkeypatch):
         raise DemPartialCoverageError("south edge short")
 
     monkeypatch.setattr(dem_mod, "_fetch_3dep_dem_bytes", clipped)
-    with patch.object(cop_mod, "_copernicus_dem_impl") as spy:
-        with pytest.raises(DemPartialCoverageError):
-            fetch_dem(FORT_MYERS_BBOX, resolution_m=10)
+    spy = _patch_copernicus_seam(monkeypatch)
+    with pytest.raises(DemPartialCoverageError):
+        fetch_dem(FORT_MYERS_BBOX, resolution_m=10)
     spy.assert_not_called()
 
 

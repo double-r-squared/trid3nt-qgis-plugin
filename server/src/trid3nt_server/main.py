@@ -147,8 +147,9 @@ def _import_tools_registry() -> int:
     from .agent.tools.fetchers.hazard.fetch_firms_active_fire import fetch_firms_active_fire  # noqa: F401
     # fetch_landfire_fuels: data-router fold phase-2 wave-7 (ADR 0053) -- twin
     # DELETED, now spec-driven (source.yaml + imageserver_export), auto-registered.
-    # register fetch_gcn250_curve_numbers (GCN250 global SCS curve numbers; Wave 1.5).
-    from .agent.tools.fetchers.soil.fetch_gcn250_curve_numbers import fetch_gcn250_curve_numbers  # noqa: F401
+    # fetch_gcn250_curve_numbers: data-router fold phase-2 wave-8 (ADR 0054) --
+    # twin DELETED, now spec-driven (source.yaml + direct_window skip-HEAD),
+    # registered by register_specs_from_tree() via the agent.tools import above.
     # fetch_mtbs_burn_severity + fetch_nifc_fire_perimeters: data-router fold
     # phase-2 wave-2 -- twins DELETED, now spec-driven (source.yaml + router),
     # registered by register_specs_from_tree() via agent.tools import (no eager

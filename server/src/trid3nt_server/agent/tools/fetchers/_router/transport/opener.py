@@ -59,9 +59,22 @@ def preflight(url: str, client: httpx.Client) -> int:
 
     A non-2xx HEAD status is classified with a verbatim body recovered via a tiny
     range GET (S3 HEAD returns no body): 404/NoSuchKey, 403/AccessDenied, 429/5xx.
+
+    Skip-HEAD recovery: some single-object hosts REJECT HEAD (figshare's
+    ndownloader 403s HEAD while the redirected S3 object is range-readable). A
+    403/405 HEAD therefore attempts a range-GET size probe FIRST; a 206 there
+    proves the object is accessible and yields the size, so the read proceeds.
+    Only when the range GET ALSO fails does the classified auth/not-found error
+    stand. This is additive: for hosts whose HEAD works (every prior COG) the
+    range-GET branch is never reached, so behavior is unchanged.
     """
     resp = head(client, url)
     if resp.status_code >= 400:
+        if resp.status_code in (403, 405):
+            try:
+                return _size_from_range(client, url)
+            except TransportError:
+                pass  # range GET confirmed the failure -> classify the HEAD error
         body = _recover_error_body(client, url, resp.status_code)
         raise classify_status(resp.status_code, body, url)
     cl = resp.headers.get("content-length")

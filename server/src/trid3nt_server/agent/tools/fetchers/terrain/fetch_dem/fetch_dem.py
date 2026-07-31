@@ -469,9 +469,9 @@ def fetch_dem(
     # contract + continuous_dem ramp; the impl lives in the copernicus module.
     src = source.strip().lower() if isinstance(source, str) else "auto"
     if src in _DEM_SOURCE_COPERNICUS_ALIASES:
-        from trid3nt_server.agent.tools.fetchers.terrain.fetch_copernicus_dem.fetch_copernicus_dem import _copernicus_dem_impl
+        from trid3nt_server.agent.tools import TOOL_REGISTRY
 
-        return _copernicus_dem_impl(bbox)
+        return TOOL_REGISTRY["fetch_copernicus_dem"].fn(bbox=bbox)
 
     # Pin semantics (2026-07-13 fallback ladder): an EXPLICIT source="3dep" is
     # honored with no silent cross-source fallback; anything else ("auto", the
@@ -553,10 +553,10 @@ def fetch_dem(
             _short_exc(primary_exc),
             bbox,
         )
-        from trid3nt_server.agent.tools.fetchers.terrain.fetch_copernicus_dem.fetch_copernicus_dem import _copernicus_dem_impl
+        from trid3nt_server.agent.tools import TOOL_REGISTRY
 
         try:
-            cop_layer = _copernicus_dem_impl(bbox)
+            cop_layer = TOOL_REGISTRY["fetch_copernicus_dem"].fn(bbox=bbox)
         except Exception as cop_exc:  # noqa: BLE001 -- typed both-failed error
             both_err = UpstreamAPIError(
                 f"DEM fetch failed on BOTH sources for bbox={bbox} -- "
