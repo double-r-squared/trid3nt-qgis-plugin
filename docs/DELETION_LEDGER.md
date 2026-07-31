@@ -31,4 +31,6 @@ until DELETED (with the commit hash) - never silently dropped (NATE
 | Deferred station-sibling twins (asos/raws/snotel/airnow/openaq) | fetchers | their ingestion modes get built (fold, not bare delete) | QUEUED | wave-4 deferrals |
 | gzip/vsizip native-GDAL collapse | _router modes | REJECTED - empirically refuted (36MB for 8x5px window) | REJECTED 2026-07-31 | gdal-collapse verdict |
 | jrc colormap-ramp DSL | would-be mode | REJECTED - one-consumer DSL fails generalization bar | REJECTED 2026-07-31 | ADR 0047/0053 |
-| project.qgz generation in case hydration | open_case_in_qgis | none - dead by module's own docstring | DELETING (0058 in flight) | NATE 2026-07-31 |
+| project.qgz generation in case hydration | open_case_in_qgis | none - dead by module's own docstring | DELETED (ea36191) | NATE 2026-07-31 |
+| meta/probe_point.py deregistered route-server | agent/tools/meta | relocate to cases/ (same posture as hydration relocation) | QUEUED | 0058 open issue |
+| _strip_query/_unwrap_tile_template platform import from agent tools | cases/ vs agent | hoist to a shared agent URI util | QUEUED | 0058 open issue |
