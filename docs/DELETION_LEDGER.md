@@ -17,7 +17,9 @@ until DELETED (with the commit hash) - never silently dropped (NATE
 |---|---|---|---|---|
 | /api/export-qgis + /file legacy routes | tool_catalog_http | NATE plugin reinstall confirms /api/case-layers | QUEUED | hygiene batch 0058 |
 | Remote materialize+download hydration fallback | cases/hydrate_case_layers | remote store access ships (presigned or agent-proxied ranges) | QUEUED | 0058 amendment |
-| credentials/ package (bulk) | server credentials/ | per docs/specs/credentials-chop-plan.md conditions (QGIS auth broker + plugin push seam ship) | QUEUED | chop-plan audit in flight |
+| secrets_handler file-vault + persistence secrets CRUD + server.py vault handlers (~935 LOC) | credentials/ + server.py + persistence.py | QGIS-store push seam + resolver.py ship (chop-plan wave); auth_handshake OUT of scope (session identity, not creds); credential_registry KEEPS | QUEUED | credentials-chop-plan.md |
+| Legacy vault schemes (aws-ssm/gcp-sm/local-file) + GCP Secret Manager docstrings | secrets_handler | zero live use confirmed - dies with the vault slice | CONDITION-MET | chop-plan audit |
+| Inert source.yaml auth: blocks (27 specs) | specs + contract | decide: wire to resolver or delete the field (TOOL_PROVIDER is the real surface) | QUEUED | chop-plan audit |
 | Cloud Run Jobs submitter binding | agent/tools/meta/passthroughs.py | verify zero live use (GCP-era); delete with on-box path as the only lane | QUEUED | 2026-07-31 qgis_process inspection |
 | compute_blended_composite | processing/ | QGIS-native per-layer blend modes verified to cover the product need | QUEUED | 0057 conflict (3) |
 | fetch_copernicus_dem ambient declaration | declarable pool | wave 11 item 0 (absorption into fetch_dem; internal seam stays) | QUEUED | NATE 2026-07-31 |
