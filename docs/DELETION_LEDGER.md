@@ -1,0 +1,32 @@
+# Deletion Ledger
+
+Every deletion candidate is REGISTERED here at decision time and stays
+until DELETED (with the commit hash) - never silently dropped (NATE
+2026-07-31). Rules:
+1. A candidate enters with its CONDITION - the specific thing that makes
+   it redundant. "Someday" is not a condition.
+2. Every wave close-out checks this ledger: conditions newly met ->
+   deletion executes in that wave or the next hygiene batch.
+3. Status flow: QUEUED -> CONDITION-MET -> DELETED(commit). Rejected
+   candidates move to the bottom with the reason (decision record).
+4. Standing ratchet (hooks): a hook pattern seen twice = directive
+   candidate; three times = mandatory promotion review - promoted
+   directives DELETE their hooks (entries added per occurrence).
+
+| Candidate | Scope | Condition to delete | Status | Source |
+|---|---|---|---|---|
+| /api/export-qgis + /file legacy routes | tool_catalog_http | NATE plugin reinstall confirms /api/case-layers | QUEUED | hygiene batch 0058 |
+| Remote materialize+download hydration fallback | cases/hydrate_case_layers | remote store access ships (presigned or agent-proxied ranges) | QUEUED | 0058 amendment |
+| credentials/ package (bulk) | server credentials/ | per docs/specs/credentials-chop-plan.md conditions (QGIS auth broker + plugin push seam ship) | QUEUED | chop-plan audit in flight |
+| Cloud Run Jobs submitter binding | agent/tools/meta/passthroughs.py | verify zero live use (GCP-era); delete with on-box path as the only lane | QUEUED | 2026-07-31 qgis_process inspection |
+| compute_blended_composite | processing/ | QGIS-native per-layer blend modes verified to cover the product need | QUEUED | 0057 conflict (3) |
+| fetch_copernicus_dem ambient declaration | declarable pool | wave 11 item 0 (absorption into fetch_dem; internal seam stays) | QUEUED | NATE 2026-07-31 |
+| TRID3NT_CATALOG_ARM flag scaffolding (arms 1-3) | _router/stratified.py + flags | capable-model re-run decides: rollout -> baseline per-source declarations die instead; no-rollout decision -> scaffolding dies | QUEUED | ADR 0050/0055-era |
+| 14+ per-source ambient declarations | declarable pool | Design-3-class arm ADVANCES on a capable model | QUEUED | pools architecture |
+| grace2_* identifiers | repo-wide | Layer B dual-read rename executes | QUEUED | rebrand scope |
+| env-var credential paths (as co-equal) | credentials resolution | QGIS store + broker ship; env demotes to last-resort (NOT deleted - demoted) | QUEUED | chop-plan direction |
+| Job-numbered test filenames + ~166 test-comment markers | server/tests | next test-hygiene wave (no functional condition - scheduling only) | QUEUED | deferred hygiene debt |
+| Deferred station-sibling twins (asos/raws/snotel/airnow/openaq) | fetchers | their ingestion modes get built (fold, not bare delete) | QUEUED | wave-4 deferrals |
+| gzip/vsizip native-GDAL collapse | _router modes | REJECTED - empirically refuted (36MB for 8x5px window) | REJECTED 2026-07-31 | gdal-collapse verdict |
+| jrc colormap-ramp DSL | would-be mode | REJECTED - one-consumer DSL fails generalization bar | REJECTED 2026-07-31 | ADR 0047/0053 |
+| project.qgz generation in case hydration | open_case_in_qgis | none - dead by module's own docstring | DELETING (0058 in flight) | NATE 2026-07-31 |
