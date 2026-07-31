@@ -1,9 +1,8 @@
 """Unit + integration tests for ``trid3nt_server.persistence`` (job-0115).
 
 The ``Persistence`` wrapper translates between agent-side typed contracts
-(``CaseSummary`` / ``CaseChatMessage`` / ``User`` / ``SecretRecord``) and the
-MongoDB Atlas MCP server's CRUD tools (``insert-one`` / ``update-one`` /
-``find-one`` / ``find``).
+(``CaseSummary`` / ``CaseChatMessage`` / ``User``) and the MongoDB Atlas MCP
+server's CRUD tools (``insert-one`` / ``update-one`` / ``find-one`` / ``find``).
 
 Coverage:
 - ``test_get_case_returns_none_on_missing`` — find-one with no match.
@@ -14,10 +13,6 @@ Coverage:
 - ``test_append_chat_message_and_hydrate_session`` — chat append +
   ``get_session_state`` re-hydrates.
 - ``test_user_round_trip`` — upsert + get_user_by_firebase_uid.
-- ``test_list_secrets_filters_active_only`` — list_secrets_refs only returns
-  ``is_active=True``.
-- ``test_upsert_secret_refuses_key_value_field`` — Decision F backstop.
-- ``test_revoke_secret_sets_is_active_false`` — revoke is soft.
 - ``test_append_audit_writes_log_entry`` — audit append produces an insert.
 - ``test_live_mcp_write_then_read_or_skip`` — live integration with the
   MongoDB MCP server when ``TRID3NT_MONGO_MCP_STDIO=1``; else surfaces the
@@ -36,13 +31,11 @@ from trid3nt_server.persistence import (
     AUDIT_COLLECTION,
     CASES_COLLECTION,
     CHAT_COLLECTION,
-    SECRETS_COLLECTION,
     USERS_COLLECTION,
     Persistence,
 )
 from trid3nt_contracts.case import CaseChatMessage, CaseSummary
 from trid3nt_contracts.common import new_ulid
-from trid3nt_contracts.secrets import SecretRecord
 from trid3nt_contracts.user import User
 
 
@@ -179,20 +172,6 @@ def _fresh_user_record() -> User:
         created_at=datetime(2026, 6, 8, 12, 0, 0, tzinfo=timezone.utc),
         is_active=True,
         prefs={"theme": "dark"},
-    )
-
-
-def _fresh_secret_record() -> SecretRecord:
-    return SecretRecord(
-        secret_id=new_ulid(),
-        provider="ebird",
-        case_id=new_ulid(),
-        vault_ref=(
-            "gcp-sm://projects/legacy-cloud-project/secrets/case-x-ebird/versions/latest"
-        ),
-        label="personal eBird key",
-        added_at=datetime(2026, 6, 8, 12, 0, 0, tzinfo=timezone.utc),
-        is_active=True,
     )
 
 
@@ -354,102 +333,6 @@ def test_user_lookup_returns_none_when_missing() -> None:
     mock = MockMCPClient()
     p = Persistence(mock)
     assert asyncio.run(p.get_user_by_firebase_uid("never-existed")) is None
-
-
-# --------------------------------------------------------------------------- #
-# Per-Case secrets (§F.3)
-# --------------------------------------------------------------------------- #
-
-
-def test_list_secrets_filters_active_only() -> None:
-    """An ``is_active=False`` record is excluded from the listing.
-
-    job-0252 (OQ-0115-CASE-USER-LINK): the ``$exists:false`` backward-compat
-    leak clause is GONE from ``list_secrets_refs`` too — a secret record is
-    owner-scoped. The live write path (``secrets_handler._upsert_with_user``)
-    stamps ``user_id`` after the schema-shaped upsert; we mirror that here by
-    setting ``user_id`` on the stored doc so the owner-scoped listing matches.
-    """
-    mock = MockMCPClient()
-    p = Persistence(mock)
-
-    case_id = new_ulid()
-    user_id = new_ulid()
-
-    s1 = _fresh_secret_record()
-    s1 = s1.model_copy(update={"case_id": case_id, "is_active": True})
-    s2 = _fresh_secret_record()
-    s2 = s2.model_copy(update={"case_id": case_id, "is_active": False, "provider": "movebank"})
-
-    asyncio.run(p.upsert_secret_ref(s1))
-    asyncio.run(p.upsert_secret_ref(s2))
-    # Stamp the owner the way secrets_handler._upsert_with_user does at runtime.
-    for sec in (s1, s2):
-        asyncio.run(
-            mock.call_tool(
-                "update-one",
-                {
-                    "collection": "secrets",
-                    "filter": {"_id": sec.secret_id},
-                    "update": {"$set": {"user_id": user_id}},
-                },
-            )
-        )
-
-    listed = asyncio.run(p.list_secrets_refs(user_id, case_id=case_id))
-    listed_ids = {s.secret_id for s in listed}
-    assert s1.secret_id in listed_ids
-    assert s2.secret_id not in listed_ids, "revoked secret leaked into active listing"
-
-
-def test_upsert_secret_refuses_key_value_field() -> None:
-    """Decision F backstop: persistence layer refuses any ``key_value``-shaped field.
-
-    The schema-level shape (``SecretRecord``) has no ``key_value`` field at all
-    so this code path is unreachable via the normal construct -> upsert flow.
-    The test exercises a hostile shim that simulates a future refactor accidentally
-    aliasing a key-value-shaped field through ``model_dump`` — the persistence
-    layer must catch it before the MCP write.
-    """
-    mock = MockMCPClient()
-    p = Persistence(mock)
-    sec = _fresh_secret_record()
-
-    class HostileShim:
-        """Stand-in that mimics SecretRecord but smuggles a hostile field."""
-
-        def __init__(self, real: SecretRecord) -> None:
-            self.secret_id = real.secret_id
-
-        def model_dump(self, mode="python"):
-            return {
-                "secret_id": self.secret_id,
-                "provider": "ebird",
-                "vault_ref": "gcp-sm://test",
-                "added_at": "2026-06-08T12:00:00Z",
-                "is_active": True,
-                "key_value": "REAL-LOOKING-KEY-DO-NOT-PERSIST",
-            }
-
-    with pytest.raises(ValueError, match="vault-ref only"):
-        asyncio.run(p.upsert_secret_ref(HostileShim(sec)))  # type: ignore[arg-type]
-
-
-def test_revoke_secret_sets_is_active_false() -> None:
-    """Soft-revoke: ``is_active=False`` on the matching record."""
-    mock = MockMCPClient()
-    p = Persistence(mock)
-    sec = _fresh_secret_record()
-    asyncio.run(p.upsert_secret_ref(sec))
-
-    asyncio.run(p.revoke_secret(sec.secret_id))
-    listed = asyncio.run(p.list_secrets_refs(new_ulid()))
-    listed_ids = {s.secret_id for s in listed}
-    assert sec.secret_id not in listed_ids
-
-    # The vault entry is NOT deleted — the document is still in the store
-    assert sec.secret_id in mock._store[SECRETS_COLLECTION]
-    assert mock._store[SECRETS_COLLECTION][sec.secret_id]["is_active"] is False
 
 
 # --------------------------------------------------------------------------- #

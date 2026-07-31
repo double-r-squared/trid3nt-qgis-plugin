@@ -1,11 +1,8 @@
-"""Case-layer hydration for the TRID3NT QGIS plugin -- two seams.
+"""Case-layer hydration for the TRID3NT QGIS plugin -- REMOTE-mode export.
 
-**PRIMARY path (``build_case_layers_manifest``):** serve a case's persisted
-layer registry as a lightweight manifest (each layer's ``uri`` / ``layer_type``
-/ ``style_preset`` / ``legend`` / ``name`` / ``wms_url``). The plugin adds each
-layer straight from its store URI using the SAME by-URI path live-published
-layers use -- no server-side materialization. This is how a case is opened in
-QGIS on the local single-user stack (MinIO reachable).
+On the local single-user stack a case's layers are restored over the WS
+case-open replay (``server._replay_active_case_layers``), so no HTTP manifest
+seam is needed there.
 
 **REMOTE-mode fallback (``hydrate_case_layers``):** materialize a case's layers
 into a self-contained local folder for a client that CANNOT reach the object
@@ -91,7 +88,6 @@ from urllib.parse import parse_qs, unquote, urlparse
 from trid3nt_contracts.tool_registry import AtomicToolMetadata
 
 __all__ = [
-    "build_case_layers_manifest",
     "hydrate_case_layers",
     "HydrateCaseError",
     "HydrateInputError",
@@ -678,36 +674,6 @@ async def _layers_from_case(case_id: str) -> tuple[list[dict[str, Any]], list[fl
 
 
 # --------------------------------------------------------------------------- #
-# PRIMARY path: the case-layers manifest (no materialization)
-# --------------------------------------------------------------------------- #
-
-
-async def build_case_layers_manifest(case_id: str) -> dict[str, Any]:
-    """Serve a case's persisted layer registry as a lightweight manifest.
-
-    The PRIMARY case-hydration path: returns each persisted layer VERBATIM (its
-    ``uri`` / ``layer_type`` / ``style_preset`` / ``legend`` / ``name`` /
-    ``wms_url`` / ``visible``) under ``loaded_layers`` so the plugin adds each
-    layer straight from its store URI via the SAME by-URI path live-published
-    layers use -- no server-side materialization, no geo-deps touched. Reads the
-    case through the SAME persistence seam ``hydrate_case_layers`` uses.
-
-    Returns ``{"case_id", "title", "bbox", "loaded_layers": [...]}``. An empty
-    ``loaded_layers`` is honest (the case has no layers yet), never an error.
-
-    Raises ``CaseNotFoundError`` when the case does not exist or persistence is
-    unbound.
-    """
-    raw_layers, bbox, title = await _layers_from_case(case_id)
-    return {
-        "case_id": case_id,
-        "title": title,
-        "bbox": bbox,
-        "loaded_layers": raw_layers,
-    }
-
-
-# --------------------------------------------------------------------------- #
 # REMOTE-mode fallback: materialize the case's layers into a local folder
 # --------------------------------------------------------------------------- #
 
@@ -722,7 +688,8 @@ async def hydrate_case_layers(
     """Materialize a case's layers into a self-contained local folder.
 
     The REMOTE-mode fallback for a client that cannot reach the object store
-    directly (the local primary path is ``build_case_layers_manifest``). Writes
+    directly (the local stack restores a case's layers over the WS case-open
+    replay instead). Writes
     one GeoPackage (``export.gpkg``, all vectors in EPSG:4326), a local GeoTIFF
     per raster, and a ``.qml`` style sidecar per raster (the TiTiler-derived
     pseudocolor ramp). NO QGIS project (.qgz/.qgs) is produced. Provide EXACTLY

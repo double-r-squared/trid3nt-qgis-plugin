@@ -4,9 +4,7 @@ No network / no S3: synthetic vector (geopandas -> GeoJSON file) + synthetic
 raster (rasterio 10x10 GeoTIFF) in ``tmp_path``, passed through the explicit
 ``layers`` param as plain local paths.
 
-Two seams under test:
-- ``build_case_layers_manifest`` -- the PRIMARY path: pass the case's persisted
-  layers straight through as a manifest (no materialization).
+Seam under test:
 - ``hydrate_case_layers`` -- the REMOTE-mode fallback: materialize the layers
   into a GeoPackage + GeoTIFF + ``.qml`` style sidecars. NO ``.qgz`` project is
   produced (standalone project export is covered by native QGIS).
@@ -24,7 +22,6 @@ from trid3nt_server.cases.hydrate_case_layers import (
     HydrateCaseError,
     HydrateInputError,
     NoExportableLayersError,
-    build_case_layers_manifest,
     hydrate_case_layers,
 )
 
@@ -83,82 +80,6 @@ def _read_qml(qml_path: str) -> ET.Element:
     raw = Path(qml_path).read_bytes()
     body = raw.split(b"\n", 1)[1] if raw.startswith(b"<!DOCTYPE") else raw
     return ET.fromstring(body)
-
-
-# --------------------------------------------------------------------------- #
-# PRIMARY path: the case-layers manifest (persistence passthrough, no geo deps)
-# --------------------------------------------------------------------------- #
-
-
-class _FakeCase:
-    def __init__(self, layers, bbox, title):
-        self.loaded_layer_summaries = layers
-        self.bbox = bbox
-        self.title = title
-
-
-class _FakePersistence:
-    def __init__(self, case):
-        self._case = case
-
-    async def get_case(self, case_id):  # noqa: D401 -- test double
-        return self._case
-
-
-@pytest.mark.asyncio
-async def test_manifest_passes_persisted_layers_through(monkeypatch) -> None:
-    """The manifest returns each persisted layer VERBATIM under ``loaded_layers``
-    plus case_id/title/bbox -- no materialization, no gpkg/tif."""
-    layers = [
-        {
-            "layer_id": "L1",
-            "name": "Water Depth",
-            "layer_type": "raster",
-            "uri": "s3://runs/01RUN/depth.tif",
-            "style_preset": "continuous_flood_depth",
-        },
-        {
-            "layer_id": "L2",
-            "name": "Flood Extent",
-            "layer_type": "vector",
-            "uri": "s3://runs/case-data/01CASE/L2.fgb",
-        },
-    ]
-    case = _FakeCase(layers, [-85.5, 29.9, -85.4, 30.0], "Mexico Beach")
-    import trid3nt_server.telemetry as tel
-
-    monkeypatch.setattr(tel, "get_persistence", lambda: _FakePersistence(case))
-    manifest = await build_case_layers_manifest("01CASE")
-    assert manifest["case_id"] == "01CASE"
-    assert manifest["title"] == "Mexico Beach"
-    assert manifest["bbox"] == [-85.5, 29.9, -85.4, 30.0]
-    assert manifest["loaded_layers"] == layers  # verbatim passthrough
-    assert [l["layer_id"] for l in manifest["loaded_layers"]] == ["L1", "L2"]
-
-
-@pytest.mark.asyncio
-async def test_manifest_empty_case_is_honest_not_an_error(monkeypatch) -> None:
-    """A case with no layers yields an empty ``loaded_layers`` list, never an
-    error (the plugin notes "no layers yet")."""
-    case = _FakeCase([], None, "Empty case")
-    import trid3nt_server.telemetry as tel
-
-    monkeypatch.setattr(tel, "get_persistence", lambda: _FakePersistence(case))
-    manifest = await build_case_layers_manifest("01EMPTY")
-    assert manifest["loaded_layers"] == []
-    assert manifest["bbox"] is None
-
-
-@pytest.mark.asyncio
-async def test_manifest_missing_case_raises_case_not_found(monkeypatch) -> None:
-    import trid3nt_server.telemetry as tel
-
-    monkeypatch.setattr(tel, "get_persistence", lambda: _FakePersistence(None))
-    from trid3nt_server.cases.hydrate_case_layers import CaseNotFoundError
-
-    with pytest.raises(CaseNotFoundError) as exc_info:
-        await build_case_layers_manifest("01GONE")
-    assert exc_info.value.error_code == "CASE_NOT_FOUND"
 
 
 # --------------------------------------------------------------------------- #
@@ -492,8 +413,7 @@ async def test_empty_layers_list_raises(tmp_path: Path) -> None:
 
 def test_seam_is_not_registered() -> None:
     # DEREGISTERED: hydrate_case_layers is not an LLM-visible tool -- it serves
-    # the /api/export-qgis HTTP route directly (and build_case_layers_manifest
-    # serves /api/case-layers). The registry must NOT carry it.
+    # the /api/export-qgis HTTP route directly. The registry must NOT carry it.
     from trid3nt_server.agent.tools import TOOL_REGISTRY
 
     assert TOOL_REGISTRY.get("hydrate_case_layers") is None

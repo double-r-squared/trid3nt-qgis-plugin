@@ -304,9 +304,9 @@ PRIMARY_CATEGORY: dict[str, str] = {
     # DOOR carries the hazard_modeling membership; cross-listed to fire below
     # (reached from the wildfire lane next to LANDFIRE / NIFC / FIRMS).
     "run_elmfire": "hazard_modeling",
-    # The case-layer serving seams (hydrate_case_layers / build_case_layers_manifest
-    # in cases/, and register_case_layer / ingest_user_layer) are DEREGISTERED
-    # (their functions serve the /api/case-layers + /api/export-qgis +
+    # The case-layer serving seams (hydrate_case_layers in cases/, and
+    # register_case_layer / ingest_user_layer) are DEREGISTERED
+    # (their functions serve the /api/export-qgis +
     # /api/ingest-layer HTTP routes directly, not the LLM catalog), so they carry
     # NO primary category -- a PRIMARY_CATEGORY entry for a non-registered tool
     # fails the test_no_primary_category_entry_points_to_missing_tool invariant.

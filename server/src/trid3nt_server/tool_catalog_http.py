@@ -1362,8 +1362,8 @@ async def _handle_building_detail(query_string: str) -> bytes:
 #   POST /api/export-qgis {"case_id": "..."}  -> run hydrate_case_layers (the
 #     REMOTE-mode materialize fallback) in-process; 200 with its result dict,
 #     typed errors -> 4xx with {"error": <honest message>} (never a traceback).
-#     Wire-compatible with the installed field plugin; the NEW plugin uses
-#     /api/case-layers (manifest) locally and this route only in remote mode.
+#     Wire-compatible with the installed field plugin; the local plugin restores
+#     a case's layers over the WS case-open replay, not an HTTP manifest fetch.
 #   GET  /api/export-qgis/file?path=<abs>     -> serve the produced .qgz/.gpkg
 #     bytes, ONLY when the resolved real path lives inside the export root
 #     (TRID3NT_EXPORT_DIR, default ~/trid3nt-exports) -- anything else is a
@@ -1416,65 +1416,6 @@ async def _handle_export_qgis_post(raw_body: bytes) -> bytes:
 
 
 # ---------------------------------------------------------------------------
-# /api/case-layers -- the PRIMARY case-hydration path (manifest, no
-# materialization).
-#
-# Returns the case's persisted layer registry as ``{"loaded_layers": [...]}``
-# (plus case_id/title/bbox) so the plugin's local "Open case in QGIS" adds each
-# layer straight from its store URI -- the SAME by-URI path live-published
-# layers use. The REMOTE-mode client (which cannot reach the object store
-# directly) uses the /api/export-qgis materialize fallback above instead.
-# Local-mode gated exactly like /api/case-list: ABSENT (404) outside the local
-# single-user seam (no honest per-user identity without a session on cloud).
-# ---------------------------------------------------------------------------
-
-
-class _CaseLayersBadRequest(Exception):
-    """Malformed /api/case-layers request (bad JSON / missing case_id)."""
-
-
-def _case_layers_route_enabled() -> bool:
-    """The route exists only under the local single-user seam (mirrors
-    ``_case_list_route_enabled``)."""
-    try:
-        from .credentials.auth_handshake import _is_local_single_user_mode
-
-        return _is_local_single_user_mode()
-    except Exception:  # noqa: BLE001 -- import fault -> route absent
-        return False
-
-
-def _case_layers_fn():
-    """Lazy-import seam for the manifest builder (monkeypatchable in tests)."""
-    from .cases.hydrate_case_layers import build_case_layers_manifest
-
-    return build_case_layers_manifest
-
-
-async def _handle_case_layers_post(raw_body: bytes) -> bytes:
-    """Resolve the JSON body for ``POST /api/case-layers``.
-
-    Validates ``{"case_id": "..."}``, awaits ``build_case_layers_manifest``, and
-    returns its encoded manifest dict. Raises ``_CaseLayersBadRequest`` (-> 400)
-    on malformed input; the builder's ``CaseNotFoundError`` propagates for the
-    dispatcher to map to an honest 404.
-    """
-    try:
-        payload = json.loads(raw_body.decode("utf-8")) if raw_body.strip() else None
-    except (UnicodeDecodeError, json.JSONDecodeError) as exc:
-        raise _CaseLayersBadRequest(f"body must be JSON: {exc}") from exc
-    if not isinstance(payload, dict):
-        raise _CaseLayersBadRequest(
-            'body must be a JSON object like {"case_id": "..."}'
-        )
-    case_id = payload.get("case_id")
-    if not isinstance(case_id, str) or not case_id.strip():
-        raise _CaseLayersBadRequest("missing or empty `case_id`")
-
-    result = await _case_layers_fn()(case_id.strip())
-    return json.dumps(result, separators=(",", ":")).encode("utf-8")
-
-
 class _ProviderConfigBadRequest(Exception):
     """POST /api/provider-config body was malformed. SECURITY: the message
     NEVER echoes the request body or the api_key -- only field-shape complaints
@@ -2211,63 +2152,6 @@ async def _handle_http(
         except Exception:  # noqa: BLE001
             logger.exception("export-qgis run failed")
             writer.write(_format_response(500, b'{"error":"qgis export failed"}'))
-        await writer.drain()
-        writer.close()
-        return
-
-    if method == "POST" and proxy_path == "/api/case-layers":
-        # PRIMARY case-hydration: return the case's persisted layer manifest so
-        # the plugin's local "Open case in QGIS" adds each layer by store URI
-        # (see the module section above _case_layers_route_enabled). Local-mode
-        # gated -- ABSENT (404) on the cloud surface.
-        if not _case_layers_route_enabled():
-            writer.write(_format_response(404, b'{"error":"not found"}'))
-            await writer.drain()
-            writer.close()
-            return
-        raw_body = b""
-        if content_length > 0:
-            try:
-                raw_body = await asyncio.wait_for(
-                    reader.readexactly(content_length), timeout=30.0
-                )
-            except (asyncio.TimeoutError, asyncio.IncompleteReadError):
-                raw_body = b""
-        from .cases.hydrate_case_layers import CaseNotFoundError, HydrateCaseError
-
-        try:
-            body = await _handle_case_layers_post(raw_body)
-            writer.write(_format_response(200, body))
-        except _CaseLayersBadRequest as exc:
-            writer.write(
-                _format_response(
-                    400,
-                    json.dumps({"error": str(exc)}, separators=(",", ":")).encode(
-                        "utf-8"
-                    ),
-                )
-            )
-        except CaseNotFoundError as exc:
-            writer.write(
-                _format_response(
-                    404,
-                    json.dumps({"error": str(exc)}, separators=(",", ":")).encode(
-                        "utf-8"
-                    ),
-                )
-            )
-        except HydrateCaseError as exc:
-            writer.write(
-                _format_response(
-                    400,
-                    json.dumps({"error": str(exc)}, separators=(",", ":")).encode(
-                        "utf-8"
-                    ),
-                )
-            )
-        except Exception:  # noqa: BLE001
-            logger.exception("case-layers manifest build failed")
-            writer.write(_format_response(500, b'{"error":"case layers failed"}'))
         await writer.drain()
         writer.close()
         return

@@ -35,12 +35,27 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 sys.path.insert(0, os.path.dirname(__file__))
 
 from trid3nt.net import trid3nt_client as tc  # noqa: E402
+from trid3nt.net.auth_broker import AuthBroker, QgsAuthManagerStore  # noqa: E402
 from trid3nt.ui import gate  # noqa: E402
 from stub_server import (  # noqa: E402
     CREDENTIAL_REQUEST_ROW,
     STUB_CREDENTIAL_REQUEST_ID,
     StubAgentServer,
 )
+
+
+class _FakeStore:
+    """In-memory :class:`CredentialStore` double (no QGIS)."""
+
+    def __init__(self, initial=None):
+        self._d = dict(initial or {})
+
+    def providers(self):
+        return dict(self._d)
+
+    def remember(self, provider_id, key_value):
+        self._d[provider_id] = key_value
+        return True
 
 # Distinctive so a leak into any other envelope / field is unambiguous.
 TEST_KEY = "stub-firms-key-a1b2c3d4e5f6"
@@ -214,6 +229,92 @@ class TestCredentialRoundTrip(unittest.TestCase):
                 }
             ],
         )
+
+
+class TestAuthBroker(unittest.TestCase):
+    """QgsAuthManager broker: connect-time push + prompt-store (mock store)."""
+
+    def test_push_all_pushes_each_stored_credential(self):
+        broker = AuthBroker(
+            _FakeStore({"firms": "k-firms", "ebird": "k-ebird"})
+        )
+        pushed = []
+        n = broker.push_all(lambda pid, key: pushed.append((pid, key)))
+        self.assertEqual(n, 2)
+        self.assertEqual(
+            sorted(pushed), [("ebird", "k-ebird"), ("firms", "k-firms")]
+        )
+
+    def test_push_all_empty_store_is_noop(self):
+        broker = AuthBroker(_FakeStore({}))
+        self.assertEqual(broker.push_all(lambda pid, key: None), 0)
+
+    def test_push_all_skips_a_bad_push_without_blocking(self):
+        broker = AuthBroker(_FakeStore({"firms": "k1", "ebird": "k2"}))
+        seen = []
+
+        def _push(pid, key):
+            if pid == "firms":
+                raise RuntimeError("transport blip")
+            seen.append((pid, key))
+
+        n = broker.push_all(_push)
+        self.assertEqual(n, 1)  # ebird still pushed despite firms failing
+        self.assertEqual(seen, [("ebird", "k2")])
+
+    def test_remember_delegates_to_store(self):
+        store = _FakeStore({})
+        broker = AuthBroker(store)
+        self.assertTrue(broker.remember("firms", "k-firms"))
+        self.assertEqual(store.providers(), {"firms": "k-firms"})
+
+    def test_qgs_store_degrades_gracefully_without_qgis(self):
+        # No QGIS in a headless driver: providers()->{}, remember()->False,
+        # never raising (connect-time push must not block; env fallback covers).
+        store = QgsAuthManagerStore()
+        self.assertEqual(store.providers(), {})
+        self.assertFalse(store.remember("firms", "k"))
+
+
+class TestBrokerConnectPush(unittest.TestCase):
+    """Connect-time push over the live stub: one secret-add per stored key,
+    NO credential-provided (there is no paused tool to resume)."""
+
+    def setUp(self):
+        self.server = StubAgentServer()
+        self.server.start()
+        self.addCleanup(self.server.stop)
+
+    def test_connect_pushes_stored_credentials(self):
+        client = tc.AgentClient(self.server.url)
+        self.addCleanup(client.close)
+        client.credential_broker = AuthBroker(
+            _FakeStore({"firms": "boot-firms", "ecmwf_cds": "boot-cds"})
+        )
+        client.connect()
+        # Both stored credentials rode secret-add at connect (poll: the stub
+        # consumes envelopes async after connect() returns).
+        deadline = time.monotonic() + 5.0
+        while time.monotonic() < deadline and len(self.server.secret_adds) < 2:
+            time.sleep(0.02)
+        providers = sorted(sa["provider"] for sa in self.server.secret_adds)
+        self.assertEqual(providers, ["ecmwf_cds", "firms"])
+        by_provider = {sa["provider"]: sa["key_value"] for sa in self.server.secret_adds}
+        self.assertEqual(by_provider["firms"], "boot-firms")
+        self.assertEqual(by_provider["ecmwf_cds"], "boot-cds")
+        # Connect-time push carries NO credential-provided.
+        self.assertEqual(self.server.credential_replies, [])
+
+    def test_submit_stores_key_to_broker(self):
+        client = tc.AgentClient(self.server.url)
+        self.addCleanup(client.close)
+        store = _FakeStore({})
+        client.credential_broker = AuthBroker(store)
+        client.connect()
+        client.create_case("broker test")
+        client.submit_credential(STUB_CREDENTIAL_REQUEST_ID, "firms", TEST_KEY)
+        # The prompt-answered key was stored back for the next connect.
+        self.assertEqual(store.providers().get("firms"), TEST_KEY)
 
 
 if __name__ == "__main__":

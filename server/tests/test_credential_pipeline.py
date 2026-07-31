@@ -1,19 +1,20 @@
-"""Tests for the agent-side credential pipeline (job VAULT-READ).
+"""Tests for the agent-side credential pipeline.
 
 Covers all four moving parts:
 
-1. FIRMS vault-read: ``_resolve_map_key`` resolves the per-Case vault key
-   (via ``secret_ref`` → ``Persistence.get_secret_value``) BEFORE the env var,
-   and the env / demo fallbacks still work. The cache key never includes the
-   raw key.
+1. FIRMS key resolution: the fetcher's own ``_resolve_map_key`` honors an
+   explicit key / a ``str`` secret_ref / the env var / the demo fallback (the
+   fetcher path is unchanged by the vault chop). The cache key never includes
+   the raw key.
 2. Provider registry: ``credential_registry`` maps FIRMS → provider metadata
    (label / signup_url / secret_key_name) and classifies FIRMS auth errors.
 3. Auth-error → credential-request: ``_invoke_tool_via_emitter`` pauses on a
    keyed-tool credential error, emits a ``credential-request`` envelope, and
    blocks awaiting ``credential-provided``.
 4. credential-provided → retry: resolving the pending credential future with
-   ``provided=True`` retries the tool (which now resolves the vault key) and
-   succeeds; one prompt per tool per turn is enforced.
+   ``provided=True`` retries the tool, which now re-resolves the key the plugin
+   pushed into the resolver session cache; one prompt per tool per turn is
+   enforced.
 """
 
 from __future__ import annotations
@@ -37,6 +38,7 @@ from trid3nt_server.server import (
     _resolve_pending_credential,
 )
 from trid3nt_server.credentials import credential_registry as cr
+from trid3nt_server.credentials import resolver as cred_resolver
 from trid3nt_server.agent.tools import (
     TOOL_REGISTRY,
     RegisteredTool,
@@ -617,6 +619,68 @@ def test_auth_error_emits_credential_request_and_retries_on_provided():
     result = asyncio.run(_run())
     assert isinstance(result, LayerURI)
     assert attempts["n"] == 2, "tool must be retried exactly once after provided"
+
+
+def test_reshaped_flow_pushes_to_session_cache_then_retry_resolves():
+    """The full reshaped mid-turn flow: a keyed-tool auth error emits a
+    credential-request; the (mocked) plugin push writes the value into the
+    resolver session cache; on ``credential-provided`` the retry re-resolves
+    the session-cache key as ``secret_ref`` and the tool succeeds. Proves the
+    file vault is off the path -- the value comes from the session cache.
+    """
+    PUSHED_KEY = "session-cache-firms-key"
+    seen_secret_ref = {"value": None}
+
+    def _firms_body(**kwargs):
+        secret_ref = kwargs.get("secret_ref")
+        if not secret_ref:
+            # First attempt (no key resolved yet) -> typed auth error.
+            raise FirmsAuthError("FIRMS rejected the MAP_KEY")
+        # Retry: the resolver injected the pushed session-cache value.
+        seen_secret_ref["value"] = secret_ref
+        return _ok_layer()
+
+    _register_firms_stub(_firms_body)
+    ws = MockWebSocket()
+    state = SessionState(session_id=new_ulid())
+    cred_resolver.clear_session(state.session_id)
+
+    async def _run():
+        dispatch = asyncio.create_task(
+            _invoke_tool_via_emitter(
+                ws, state, "fetch_firms_active_fire",
+                {"bbox": [-124.0, 32.5, -114.0, 42.0]},
+            )
+        )
+        for _ in range(50):
+            await asyncio.sleep(0)
+            req = [e for e in ws.sent if e["type"] == "credential-request"]
+            if req and server._PENDING_CREDENTIALS:
+                break
+        req = [e for e in ws.sent if e["type"] == "credential-request"]
+        assert len(req) == 1
+        request_id = req[0]["payload"]["request_id"]
+
+        # Mock the plugin: push the key over the secret-add seam (which the
+        # server folds into the resolver session cache) BEFORE the provided
+        # signal, mirroring the Decision-F wire order.
+        cred_resolver.set_session_credential(state.session_id, "firms", PUSHED_KEY)
+        ok = _resolve_pending_credential(
+            state.session_id,
+            CredentialProvidedEnvelopePayload(
+                request_id=request_id, secret_id=None, provided=True
+            ),
+        )
+        assert ok
+        return await dispatch
+
+    try:
+        result = asyncio.run(_run())
+    finally:
+        cred_resolver.clear_session(state.session_id)
+    assert isinstance(result, LayerURI)
+    # The retry resolved the pushed session-cache value as the secret_ref.
+    assert seen_secret_ref["value"] == PUSHED_KEY
 
 
 def test_credential_request_envelope_never_carries_raw_key():
