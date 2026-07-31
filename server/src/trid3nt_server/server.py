@@ -1418,10 +1418,14 @@ def _default_declarable_registry() -> dict[str, Any]:
     # reached only by discovery expansion (Design 2) / card projection (Design 1).
     # No tool carries tier="catalog" in the DEFAULT config, so this is a no-op
     # unless an arm flag is set.
+    # ``internal`` (an absorbed in-process seam, e.g. fetch_copernicus_dem folded
+    # into fetch_dem) is excluded identically: registry-resolvable but never
+    # declared to the model.
     _reg = {
         name: entry
         for name, entry in TOOL_REGISTRY.items()
-        if getattr(entry.metadata, "tier", "general") not in ("template", "catalog")
+        if getattr(entry.metadata, "tier", "general")
+        not in ("template", "catalog", "internal")
     }
     return _reg
 

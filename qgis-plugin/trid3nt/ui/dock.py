@@ -39,11 +39,20 @@ Milestone 2 chat surface on top of milestone 1's plain-text bubbles:
   * RECONNECT: the bridge's capped-jitter ladder drives the status dot
     (connecting amber / connected green / lost red); queued sends flush on
     resume.
-  * OPEN CASE IN QGIS: a Cases dialog listing the ``case-list`` envelope,
-    with per-case "Open in QGIS" -> POST /api/export-qgis on the local agent,
-    then the exported GeoPackage tables + GeoTIFFs are ADDED to the current
-    project (never ``QgsProject.read()`` -- that would replace the user's
-    open project; rationale in ``case_export``).
+  * CASE-OPEN RESTORES LAYERS (decision A, 2026-07-31): opening a case (the
+    Cases dialog row click / double-click, always ``select_case`` ->
+    ``_on_case_open_event``) restores its chat AND its persisted layers in
+    ONE gesture -- no separate "Open in QGIS"/"Export GeoTIFFs" action. The
+    layers ride the SAME ``case-open`` WS envelope the chat replay uses
+    (``session_state.loaded_layers``, LOCAL mode only -- ``MODE_LOCAL``
+    guard in ``_on_case_open_event``) and land via the SAME by-URI
+    materializer live-published layers use. REMOTE mode has no automatic
+    restore yet (it cannot stream the store directly); its old manual
+    export trigger is gone too (zero user-facing export -- native QGIS
+    covers any file export the user wants), so the remote
+    materialize+download fallback (``hydrate_case_layers``, ``_ExportTask``)
+    is currently unreached from the UI, condemned in DELETION_LEDGER pending
+    remote store access.
 
 All socket work lives on the AgentBridge worker thread; this widget only
 handles Qt signals. The export POST runs on a plain worker thread emitting
@@ -101,7 +110,6 @@ from ._style import (
 )
 from ..case import aoi, case_export, push_layer
 from ..net.tasks import (
-    _CaseLayersTask,
     _CaseListTask,
     _EffectiveModelTask,
     _ExportTask,
@@ -115,7 +123,6 @@ from ..net.trid3nt_client import (
     PipelineStep,
     find_fallback_bbox,
     parse_case_open,
-    parse_layer_events,
     resolve_data_base,
     resolve_http_base,
 )
@@ -231,8 +238,7 @@ class Trid3ntDock(QDockWidget):
         self._session_case_title: str = ""
         self._cases: List[CaseInfo] = []
         self._cases_dialog: Optional[CasesDialog] = None
-        self._export_tasks: List[_ExportTask] = []  # keep-alive refs
-        self._case_layers_tasks: List[_CaseLayersTask] = []  # keep-alive refs
+        self._export_tasks: List[_ExportTask] = []  # keep-alive refs (remote-mode only)
         self._case_list_tasks: List[_CaseListTask] = []  # keep-alive refs
         self._push_tasks: List[_PushLayerTask] = []  # keep-alive refs
         self._probe_tasks: List[_ProbePointTask] = []  # keep-alive refs
@@ -2050,19 +2056,32 @@ class Trid3ntDock(QDockWidget):
         INITIAL connect's create_case still consumes its case-open inside
         the worker handshake, via ``_on_case_ready``).
 
+        THE fold chokepoint for decision A (NATE 2026-07-31): a case is
+        confirmed open here with its chat AND its persisted layers restored
+        together, in one gesture -- the redundant explicit "Open in
+        QGIS"/"Export GeoTIFFs" action is gone (see ``hydrate_case_layers``).
+        ``info.layers`` already carries the case's persisted
+        ``loaded_layer_summaries`` (the SAME source ``/api/case-layers``'s
+        manifest would have served -- no extra HTTP round trip needed, it
+        rides the case-open envelope for free), parsed by the client the
+        SAME way a manual manifest fetch would. LOCAL-mode-only: the by-URI
+        materializer needs the store directly reachable, which remote mode
+        cannot do yet (it "keeps its existing explicit flow" -- currently
+        none, until remote store access lands; see DELETION_LEDGER).
+
         Rebinds the dock: authoritative title in the header, a FRESH layer
         group named for the case (dedup reset), the persisted loaded_layers
-        replayed into it, an OpenStreetMap basemap (settings-gated, item 4),
-        and a canvas zoom to the case bbox -- or, absent one, the union of
-        the vector layers just materialized, or a further fallback bbox --
-        so the canvas is never silently left wherever it was (item 1,
-        live-feedback 2026-07-09; the fallback ladder + honest note for a
-        genuinely bbox-less raster-only case is item D, live-feedback
-        2026-07-10). Runs LAST, unconditionally, on every case-open path
-        that reaches this handler (select, New case, and the startup-reuse
-        select alike -- ``_bind_startup_case`` also resolves through a
-        ``case-command select`` whose reply lands here) -- nothing above
-        this call may skip or short-circuit past it.
+        replayed into it (LOCAL mode), an OpenStreetMap basemap
+        (settings-gated, item 4), and a canvas zoom to the case bbox -- or,
+        absent one, the union of the vector layers just materialized, or a
+        further fallback bbox -- so the canvas is never silently left
+        wherever it was (item 1, live-feedback 2026-07-09; the fallback
+        ladder + honest note for a genuinely bbox-less raster-only case is
+        item D, live-feedback 2026-07-10). Runs LAST, unconditionally, on
+        every case-open path that reaches this handler (select, New case,
+        and the startup-reuse select alike -- ``_bind_startup_case`` also
+        resolves through a ``case-command select`` whose reply lands here)
+        -- nothing above this call may skip or short-circuit past it.
         """
         info = parse_case_open(payload)
         if info is None:
@@ -2083,7 +2102,13 @@ class Trid3ntDock(QDockWidget):
         self._refresh_model_label()  # status text = active model, not case-id
         self._replay_chat_history(info.chat_messages)
         self._note(f"Case '{info.title}' active")
-        if info.layers:
+        # Decision A (NATE 2026-07-31): layer restore rides the SAME gesture
+        # as the chat replay above, LOCAL mode only -- the by-URI
+        # materializer needs the store directly reachable (MinIO), which
+        # remote mode cannot do yet. Remote mode still gets its chat back;
+        # it just has no automatic (or, currently, any UI) layer restore
+        # until remote store access lands.
+        if self.settings.mode == MODE_LOCAL and info.layers:
             notes = self.materializer.materialize(info.layers)
             if notes:
                 # BUG 3a (live-feedback 2026-07-12): the case-open replay

@@ -50,24 +50,25 @@ agent_main._import_tools_registry()
 def _full_registry_size() -> int:
     """The DEFAULT declarable-registry size handed to ``build_tool_declarations``
     in the gating-OFF / fail-open paths -- membership-derived as
-    ``len(TOOL_REGISTRY) - count(tier="template")``.
+    ``len(TOOL_REGISTRY) - count(tier in {template, internal})``.
 
     ENGINE-DOOR invariant (refactor/engine-doors): ``tier=template`` engine
     templates are EXCLUDED from DEFAULT declarations -- they reach the model
-    ONLY via their door's gate expansion. So the disabled-by-env path, the
-    scripted/bedrock/vertex byte-unchanged path, and the stage-3 gate's own
-    cold-index fail-open all declare the full registry MINUS templates (the
-    live registry is 212 total, 21 templates -> 191 declarable). A prior pass
+    ONLY via their door's gate expansion. wave-11 (ADR 0059): ``tier=internal``
+    (an absorbed seam, fetch_copernicus_dem) is EXCLUDED identically -- never
+    model-facing. So the disabled-by-env path, the scripted/bedrock/vertex
+    byte-unchanged path, and the stage-3 gate's own cold-index fail-open all
+    declare the full registry MINUS templates MINUS internal seams. A prior pass
     flipped this helper to the raw ``len(TOOL_REGISTRY)`` (templates included),
     which re-baselined AROUND the very leak the door architecture forbids; this
     restores the pool-filtered invariant that
     ``server._default_declarable_registry`` now enforces on the product side."""
-    n_templates = sum(
+    n_hidden = sum(
         1
         for entry in TOOL_REGISTRY.values()
-        if getattr(entry.metadata, "tier", "general") == "template"
+        if getattr(entry.metadata, "tier", "general") in ("template", "internal")
     )
-    return len(TOOL_REGISTRY) - n_templates
+    return len(TOOL_REGISTRY) - n_hidden
 
 
 def test_gating_topk_default(monkeypatch):

@@ -63,21 +63,22 @@ def _settings() -> ModelSettings:
 
 def _non_template_names() -> set[str]:
     """The names in the DEFAULT declarable registry: the full TOOL_REGISTRY
-    MINUS every tier=template engine template.
+    MINUS every tier=template engine template AND every tier=internal seam.
 
     ENGINE-DOOR refactor: the gating-OFF / shadow / fail-open paths no longer
     hand the RAW TOOL_REGISTRY (templates included) to build_tool_declarations
-    -- templates surface ONLY via their door's gate expansion. So the object
-    passed to build_tool_declarations in these paths is a template-filtered
-    NEW dict (server._default_declarable_registry), not the live registry
-    identity. Pre-door these tests asserted ``regs[0] is TOOL_REGISTRY``;
-    that contract is superseded."""
+    -- templates surface ONLY via their door's gate expansion. wave-11 (ADR
+    0059): tier=internal (an absorbed seam, fetch_copernicus_dem) is excluded
+    identically. So the object passed to build_tool_declarations in these paths is
+    a template/internal-filtered NEW dict (server._default_declarable_registry),
+    not the live registry identity. Pre-door these tests asserted
+    ``regs[0] is TOOL_REGISTRY``; that contract is superseded."""
     from trid3nt_server.agent.tools import TOOL_REGISTRY
 
     return {
         name
         for name, entry in TOOL_REGISTRY.items()
-        if getattr(entry.metadata, "tier", "general") != "template"
+        if getattr(entry.metadata, "tier", "general") not in ("template", "internal")
     }
 
 

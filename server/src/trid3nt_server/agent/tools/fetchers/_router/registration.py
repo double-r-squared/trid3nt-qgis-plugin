@@ -220,11 +220,18 @@ def register_spec(spec: SourceSpec) -> str:
     _promoted.__signature__ = sig  # type: ignore[attr-defined]
     _promoted.__annotations__ = dict(annotations)
 
-    # Catalog-surfacing experiment: under an arm flag the spec-served sources
-    # register tier="catalog" (excluded from the default declarable pool, kept in
-    # the search index) instead of the default tier="general". Unset -> "general",
-    # so the DEFAULT daemon surface is unchanged.
-    tier = "catalog" if catalog_arm() else "general"
+    # An ``internal_only`` spec (an absorbed seam resolved in-process, e.g.
+    # fetch_copernicus_dem <- fetch_dem) registers tier="internal": registry-
+    # resolvable but off BOTH the declarable pool and the search index, regardless
+    # of any catalog arm. Otherwise the catalog-surfacing experiment tier applies:
+    # under an arm flag the spec-served sources register tier="catalog" (excluded
+    # from the default declarable pool, kept in the search index) instead of the
+    # default tier="general". Unset -> "general", so the DEFAULT daemon surface is
+    # unchanged.
+    if spec.internal_only:
+        tier = "internal"
+    else:
+        tier = "catalog" if catalog_arm() else "general"
     metadata = AtomicToolMetadata(
         name=name,
         ttl_class=spec.cache.ttl_class,

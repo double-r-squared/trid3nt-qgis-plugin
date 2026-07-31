@@ -612,7 +612,10 @@ def _build_index(
         # index.tool_names, hence out of retrieve_ranked_tools /
         # retrieve_visible_tools (the sole default-pool producer). tier=door is
         # NOT skipped: doors compete in per-turn retrieval alongside general.
-        if getattr(entry.metadata, "tier", "general") == "template":
+        # tier=internal (an absorbed in-process seam, e.g. fetch_copernicus_dem)
+        # is skipped identically -- registry-resolvable but not searchable.
+        # tier=catalog is NOT skipped: it stays indexed (arm-flagged discovery).
+        if getattr(entry.metadata, "tier", "general") in ("template", "internal"):
             continue
         doc = getattr(entry.fn, "__doc__", "") or ""
         snippet = _short_description(doc)

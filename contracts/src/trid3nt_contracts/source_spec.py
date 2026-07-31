@@ -327,6 +327,15 @@ class SourceSpec(GraceModel):
     shape: SourceShape
     supports_global_query: bool = False
 
+    #: Register this spec at ``tier="internal"`` (tool_registry.EngineTier): the
+    #: promoted tool stays registry-resolvable for in-process callers
+    #: (``TOOL_REGISTRY[name].fn``) but is EXCLUDED from both the default declarable
+    #: pool and the retrieval search index -- no model-facing surface. Set for an
+    #: absorbed seam a public tool resolves internally (fetch_copernicus_dem, folded
+    #: into fetch_dem's source="copernicus" mode). Default False = the ordinary
+    #: tier="general" (or arm-flagged tier="catalog") registration.
+    internal_only: bool = False
+
     #: Explicit error-code prefix token (contract sec 0 / VERDICT finding #1).
     #: ``source_class`` doubles as the cache prefix and MUST equal the twin's for
     #: cache indistinguishability, but three twins stamp their A.6 ``error_code``

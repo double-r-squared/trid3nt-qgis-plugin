@@ -91,7 +91,12 @@ TTL_CLASSES: tuple[str, ...] = (
 #: from the default declarable pool (like ``template``) BUT KEPT in the search index
 #: so a discovery hit can rank + gate-expand it (Design 2) or a card projection can
 #: surface it (Design 1). It diverges from ``template`` precisely in staying indexed.
-EngineTier = Literal["general", "door", "template", "catalog"]
+#: ``internal`` is a registry-resolvable tool with NO model-facing surface at all:
+#: excluded from the default declarable pool AND from the search index (like
+#: ``template``, but with no door to gate-expand it), so it is reachable ONLY by an
+#: in-process ``TOOL_REGISTRY[name].fn`` call from another tool. Used for an absorbed
+#: seam that a public tool resolves internally (fetch_copernicus_dem <- fetch_dem).
+EngineTier = Literal["general", "door", "template", "catalog", "internal"]
 
 
 class AtomicToolMetadata(GraceModel):

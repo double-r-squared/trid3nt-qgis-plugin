@@ -101,15 +101,17 @@ def test_every_registered_tool_has_a_primary_category() -> None:
     # engine-door refactor: tier=template tools are pool-excluded and surfaced
     # only by their door's gate expansion, so they are INTENTIONALLY not in
     # PRIMARY_CATEGORY (categorizing one would re-leak it into the retrieval pool).
+    # tier=internal (an absorbed in-process seam, e.g. fetch_copernicus_dem) is
+    # excluded identically -- pool-hidden, so no category membership.
     from trid3nt_server.agent.tools import TOOL_REGISTRY as _reg
-    _templates = {
+    _pool_excluded = {
         n for n, e in _reg.items()
-        if getattr(e.metadata, "tier", "general") == "template"
+        if getattr(e.metadata, "tier", "general") in ("template", "internal")
     }
     mapped = (
         set(PRIMARY_CATEGORY.keys())
         | {"list_categories", "list_tools_in_category"}
-        | _templates
+        | _pool_excluded
     )
     missing = registered - mapped
     assert missing == set(), (

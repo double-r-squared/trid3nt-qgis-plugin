@@ -1,9 +1,10 @@
 # Router source spec (fetcher-fold wave-8, stac_float continuous-float mode, ADR 0054).
-# Twin: fetch_copernicus_dem.py -- Copernicus GLO-30 global 30 m DEM via PC STAC
-# (first-wins intersect_all mosaic, meters, -9999 nodata, per-href PC signing).
-# Re-points the 5 canonical DEM legs (fetch_dem source=copernicus + fallback,
-# _hydrology_common, model_debris_flow, compute_sediment_yield) onto the registry
-# seam; the stac_float mode was proven ready by ADR 0053 point 3.
+# INTERNAL SEAM (wave-11, ADR 0059): the Copernicus GLO-30 global 30 m DEM via PC STAC
+# (first-wins intersect_all mosaic, meters, -9999 nodata, per-href PC signing). It is
+# tier="internal" -- registry-resolvable but off the model-facing surface. The public
+# fetch_dem source="copernicus" mode (plus _hydrology_common, model_debris_flow,
+# compute_sediment_yield) resolves it in-process via TOOL_REGISTRY. The corpus
+# phrasings now re-home onto fetch_dem so copernicus-intent asks route to fetch_dem.
 schema_version: v1
 
 name: fetch_copernicus_dem
@@ -13,6 +14,7 @@ input_error_suffix: BBOX_INVALID
 empty_error_suffix: NO_COVERAGE
 shape: raster-cog
 supports_global_query: false
+internal_only: true
 
 endpoints:
   data:
@@ -63,18 +65,18 @@ caveats:
   - "AOI-scoped (<= 4 deg^2); elevations are meters (EGM2008-referenced); US AOIs prefer the finer 10 m 3DEP via fetch_dem"
 fallback: []
 
-# corpus lifted from sibling corpus.yaml.
+# corpus re-homed onto fetch_dem (wave-11): this internal seam carries none.
 
 docstring: |-
-  DEPRECATED alias of ``fetch_dem`` with ``source="copernicus"``.
+  Internal seam -- NOT a model-facing tool (tier="internal").
 
-  Retained as a thin registered delegate for backward compatibility (existing
-  cases + the routing bench). New callers should use ``fetch_dem`` with
-  ``source="copernicus"`` -- the GLOBAL Copernicus GLO-30 30 m elevation model
-  is now a source mode of the one DEM tool, not a separate sibling.
+  The Copernicus GLO-30 global 30 m DEM implementation, resolved in-process by
+  ``fetch_dem`` (its ``source="copernicus"`` mode + the automatic 3DEP-outage
+  fallback) and by ``_hydrology_common`` / ``model_debris_flow`` /
+  ``compute_sediment_yield`` via ``TOOL_REGISTRY["fetch_copernicus_dem"].fn``.
+  It is registry-resolvable but excluded from the declarable pool and the search
+  index; callers reach global terrain through ``fetch_dem(source="copernicus")``.
 
   Fetches a GLOBAL 30 m elevation model (Copernicus GLO-30) for ``bbox`` via the
   Microsoft Planetary Computer STAC and returns a single-band float32 (meters)
-  Cloud-Optimized GeoTIFF (``style_preset="continuous_dem"``). Use it (or
-  ``fetch_dem(source="copernicus")``) for terrain OUTSIDE the US, where the
-  default 3DEP source has no coverage.
+  Cloud-Optimized GeoTIFF (``style_preset="continuous_dem"``).

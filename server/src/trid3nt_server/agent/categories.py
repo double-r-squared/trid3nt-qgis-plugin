@@ -599,7 +599,11 @@ PRIMARY_CATEGORY: dict[str, str] = {
     "fetch_hifld_transmission_lines": "flood_infrastructure",
     "fetch_lehd_jobs": "damage_assessment",
     "fetch_nws_river_forecast": "hydrology",
-    "fetch_copernicus_dem": "terrain_elevation",
+    # fetch_copernicus_dem is tier="internal" (absorbed into fetch_dem's
+    # source="copernicus" mode, wave-11) -- pool-EXCLUDED, so NO category
+    # membership (categorizing it would re-leak it into the retrieval pool via
+    # open_category, exactly like a tier=template engine template). fetch_dem
+    # carries the terrain_elevation membership for global DEM asks.
     "fetch_chirps_precipitation": "weather_atmosphere",
     "fetch_ghsl_population": "land_cover_development",
     "fetch_jrc_global_surface_water": "hydrology",
@@ -736,7 +740,7 @@ SECONDARY_CATEGORIES: dict[str, tuple[str, ...]] = {
     "fetch_hifld_transmission_lines": ('damage_assessment', 'geographic_primitives',),
     "fetch_lehd_jobs": ('geographic_primitives',),
     "fetch_nws_river_forecast": ('flood_infrastructure', 'weather_atmosphere',),
-    "fetch_copernicus_dem": ('hydrology', 'coastal', 'hazard_modeling',),
+    # fetch_copernicus_dem tier="internal" (wave-11) -> no cross-listing either.
     "fetch_chirps_precipitation": ('hydrology', 'conservation_ecology',),
     "fetch_ghsl_population": ('damage_assessment', 'geographic_primitives',),
     "fetch_jrc_global_surface_water": ('coastal', 'conservation_ecology', 'terrain_elevation',),

@@ -113,8 +113,11 @@ def test_arm2_specs_leave_pool_but_stay_indexed():
     assert r["arm"] == "2"
     assert r["registry_size"] == 190  # registry does NOT shrink; only the pool does
     assert r["gridmet_tier"] == "catalog"
-    assert r["any_spec_in_declarable"] is False  # -27 from the ambient pool
-    assert r["declarable_size"] == _run_arm(None)["declarable_size"] - 27
+    assert r["any_spec_in_declarable"] is False  # every spec leaves the ambient pool
+    # -26, not -27: fetch_copernicus_dem is tier="internal" (wave-11 absorption into
+    # fetch_dem), so it is ALREADY out of the ambient pool in the None baseline; the
+    # arm moves the remaining 26 general->catalog.
+    assert r["declarable_size"] == _run_arm(None)["declarable_size"] - 26
     # Still searchable + rankable so a search hit can gate-expand it.
     assert r["gridmet_in_index"] is True
     assert r["gridmet_ranked_top25"] is True
@@ -219,8 +222,9 @@ def test_arm3_specs_leave_pool_and_source_param():
     assert r["arm"] == "3"
     assert r["registry_size"] == 190  # registry does NOT shrink; only the pool does
     assert r["gridmet_tier"] == "catalog"
-    assert r["any_spec_in_declarable"] is False  # -27 from the ambient pool
-    assert r["declarable_size"] == _run_arm(None)["declarable_size"] - 27
+    assert r["any_spec_in_declarable"] is False  # every spec leaves the ambient pool
+    # -26, not -27: fetch_copernicus_dem is tier="internal" (already out of the pool).
+    assert r["declarable_size"] == _run_arm(None)["declarable_size"] - 26
     assert r["gridmet_in_index"] is True
     # fetch_from_catalog exposes the source branch under Arm 3 (like Arm 1).
     assert r["ffc_params"] == ["entry_id", "params", "source", "_extra_ignored"]
@@ -237,12 +241,19 @@ def _stratum(_registry_loaded):
 
 
 def test_stratum_index_is_source_scoped(_stratum):
-    """Stratum split: the pool index ranks over ONLY the 27 spec-served sources."""
+    """Stratum split: the pool index ranks over the spec-served sources, MINUS any
+    tier="internal" seam (fetch_copernicus_dem is absorbed into fetch_dem and never
+    faces the model, so the search index -- and thus the stratum -- excludes it)."""
     from trid3nt_server.agent.tools.fetchers._router import registration as reg
+    from trid3nt_server.agent.tools import TOOL_REGISTRY
 
     idx = _stratum.source_stratum_index()
-    assert set(idx.tool_names) == reg.registered_spec_names()
-    assert len(idx.tool_names) == 27  # sharpened per-pool IDF is expected, not a bug
+    model_facing = {
+        n for n in reg.registered_spec_names()
+        if getattr(TOOL_REGISTRY[n].metadata, "tier", "general") != "internal"
+    }
+    assert set(idx.tool_names) == model_facing
+    assert len(idx.tool_names) == 26  # 27 specs minus the internal copernicus seam
 
 
 def test_stratum_activates_on_data_ask_enum_rank_order(_stratum):

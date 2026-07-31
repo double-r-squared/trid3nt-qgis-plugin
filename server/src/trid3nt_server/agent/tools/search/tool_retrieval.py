@@ -268,10 +268,13 @@ def _full_registry_floor(floor: set[str]) -> set[str]:
     # alongside templates so a fail-open dump never re-leaks the pool-excluded
     # spec-served sources; any already surfaced live in ``floor``. No tool carries
     # tier="catalog" in the DEFAULT config, so this is a no-op unless an arm is set.
+    # tier="internal" (an absorbed in-process seam, e.g. fetch_copernicus_dem) is
+    # dropped identically: registry-resolvable but never model-facing.
     non_template = {
         name
         for name, entry in TOOL_REGISTRY.items()
-        if getattr(entry.metadata, "tier", "general") not in ("template", "catalog")
+        if getattr(entry.metadata, "tier", "general")
+        not in ("template", "catalog", "internal")
     }
     return non_template | floor
 

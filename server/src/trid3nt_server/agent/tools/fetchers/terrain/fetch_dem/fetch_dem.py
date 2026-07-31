@@ -398,8 +398,8 @@ def fetch_dem(
     returned layer name and ``fallback_note`` say so honestly (GLO-30 data is
     never presented as 3DEP). Prefer omitting ``source`` (or passing "auto");
     pass ``source="copernicus"`` for terrain OUTSIDE the US (the Alps, Andes,
-    Himalaya, Africa, ...) -- that ABSORBS the former ``fetch_copernicus_dem``
-    (keyless global GLO-30 30 m). Pass ``source="3dep"`` ONLY to pin 3DEP: a
+    Himalaya, Africa, ...) -- the keyless global GLO-30 30 m model is a built-in
+    mode of this tool. Pass ``source="3dep"`` ONLY to pin 3DEP: a
     pinned source never silently switches (a 3DEP outage then surfaces a typed
     error suggesting Copernicus).
 
@@ -444,8 +444,7 @@ def fetch_dem(
       automatic Copernicus GLO-30 fallback on a 3DEP service failure/timeout --
       honestly labeled); ``"3dep"`` (PIN USGS 3DEP, US-only, honors
       ``resolution_m``, no cross-source fallback); or ``"copernicus"`` (PIN
-      Copernicus GLO-30, global 30 m, keyless -- delegates to the folded-in
-      ``fetch_copernicus_dem``).
+      Copernicus GLO-30, global 30 m, keyless -- the built-in global mode).
 
     **Returns:**
     A ``LayerURI`` pointing at a Cloud-Optimized GeoTIFF in the cache bucket
@@ -465,9 +464,9 @@ def fetch_dem(
     - Typically called after: ``geocode_location`` supplies the bbox.
     - Sibling source: ``source="copernicus"`` for non-US / global terrain.
     """
-    # SOURCE consolidation: the global Copernicus GLO-30 path is folded in as a
-    # source mode (the former fetch_copernicus_dem). Same LayerURI raster
-    # contract + continuous_dem ramp; the impl lives in the copernicus module.
+    # SOURCE consolidation: the global Copernicus GLO-30 path is a built-in mode.
+    # Same LayerURI raster contract + continuous_dem ramp; the spec-driven impl is
+    # resolved in-process via the tier="internal" fetch_copernicus_dem registry seam.
     src = source.strip().lower() if isinstance(source, str) else "auto"
     if src in _DEM_SOURCE_COPERNICUS_ALIASES:
         from trid3nt_server.agent.tools import TOOL_REGISTRY

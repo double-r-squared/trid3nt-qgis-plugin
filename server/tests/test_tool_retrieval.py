@@ -160,12 +160,15 @@ _STARTUP_ONLY = {
 
 
 def _template_names() -> set[str]:
-    """Registered engine-TEMPLATE names (tier=template).
+    """Registered pool-HIDDEN names: tier=template AND tier=internal.
 
     engine-door refactor: templates are EXCLUDED from the default retrieval pool
-    (and the fail-open floor) and surfaced only by their door's gate expansion,
-    so they must NOT be expected in retrieve_visible_tools / the fail-open dump /
-    the MAIN corpus (their corpus is co-located under workflows/<engine>/)."""
+    (and the fail-open floor) and surfaced only by their door's gate expansion.
+    wave-11 (ADR 0059): tier=internal (an absorbed in-process seam,
+    fetch_copernicus_dem) is EXCLUDED identically -- never model-facing, so it must
+    NOT be expected in retrieve_visible_tools / the fail-open dump / the MAIN corpus
+    (an internal seam carries no corpus; templates' corpus is co-located under
+    workflows/<engine>/)."""
     import trid3nt_server.main as _m
 
     _m._import_tools_registry()
@@ -173,19 +176,19 @@ def _template_names() -> set[str]:
 
     return {
         n for n, e in _full.items()
-        if getattr(e.metadata, "tier", "general") == "template"
+        if getattr(e.metadata, "tier", "general") in ("template", "internal")
     }
 
 
 def _assert_full_failopen(res):
-    # engine-door refactor: the fail-open floor filters tier=template (a cold
-    # index must not leak the pool-excluded templates), so expect the full
-    # registry MINUS the templates.
+    # engine-door refactor + wave-11: the fail-open floor filters tier=template AND
+    # tier=internal (a cold index must not leak the pool-excluded templates or the
+    # internal seam), so expect the full registry MINUS those.
     full = _full_registry_names() - _template_names()
     assert full <= res, f"fail-open dropped: {sorted(full - res)}"
     assert _STARTUP_ONLY <= res, "fail-open omitted the startup-only tools"
     assert not (_template_names() & res), (
-        f"fail-open leaked pool-excluded templates: {sorted(_template_names() & res)}"
+        f"fail-open leaked pool-excluded template/internal tools: {sorted(_template_names() & res)}"
     )
 
 
