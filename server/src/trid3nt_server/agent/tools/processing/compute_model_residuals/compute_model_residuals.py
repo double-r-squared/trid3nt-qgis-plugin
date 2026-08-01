@@ -9,9 +9,9 @@ per point) plus fit statistics -- the standard model-calibration diagnostic
 Observations come from EITHER an existing vector layer (``observations_layer_uri``
 -- e.g. the point layer ``fetch_usgs_groundwater_levels`` produces) OR, when
 ``observations_layer_uri`` is omitted and a ``bbox`` is given, this tool fetches
-USGS groundwater readings itself by calling ``fetch_usgs_groundwater_levels``'s
-SHARED CORE (``_fetch_usgs_groundwater_levels_bytes``), not the LLM-facing tool
-wrapper -- so no extra round-trip / duplicate tool call is needed.
+USGS groundwater readings itself via the ``fetch_usgs_groundwater_levels`` router
+seam (get_spec + validate_params + executor -- raw FGB bytes, no cache/publish
+round trip), not the LLM-facing tool wrapper -- so no extra round-trip is needed.
 
 HONEST UNITS/SEMANTICS (the load-bearing design constraint): USGS groundwater
 readings come in two families that are NOT interchangeable --
@@ -277,42 +277,38 @@ def _load_observations_from_uri(observations_layer_uri: str, tmpdir: str) -> Any
 def _fetch_observations_from_bbox(
     bbox: tuple[float, float, float, float], tmpdir: str, notes: list[str]
 ) -> Any:
-    """Fetch USGS groundwater readings over ``bbox`` via the SHARED CORE.
+    """Fetch USGS groundwater readings over ``bbox`` via the router seam.
 
-    Calls ``fetch_usgs_groundwater_levels._fetch_usgs_groundwater_levels_bytes``
-    directly -- the internal function, not the LLM-facing tool wrapper -- so
-    this composer does not need a separate tool round-trip. Lazy import
-    mirrors ``compute_flood_depth_damage``'s ``fetch_usace_nsi`` pattern.
+    Resolves ``fetch_usgs_groundwater_levels``'s FGB bytes through the in-process
+    router (get_spec + validate_params + executor) -- not the LLM-facing tool
+    wrapper -- so this composer does not need a separate tool round-trip. Lazy
+    import mirrors ``compute_flood_depth_damage``'s ``fetch_usace_nsi`` pattern.
     """
     import geopandas as gpd
 
-    from trid3nt_server.agent.tools.fetchers.hydrology.fetch_usgs_groundwater_levels.fetch_usgs_groundwater_levels import (
-        GwInputError,
-        GwNoWellsError,
-        GwUpstreamError,
-        _fetch_usgs_groundwater_levels_bytes,
-        _round_bbox_to_6dp,
-        _validate_bbox,
-    )
+    # fetch_usgs_groundwater_levels is spec-driven (ADR 0071); resolve its raw FGB
+    # bytes via the in-process router seam (get_spec + validate_params + executor,
+    # no cache/publish round trip) -- the admin_boundaries re-point precedent.
+    from trid3nt_server.agent.tools.fetchers._router import router
+    from trid3nt_server.agent.tools.fetchers._router.errors import RouterError
+    from trid3nt_server.agent.tools.fetchers._router.registration import get_spec
 
-    try:
-        bbox_t: tuple[float, float, float, float] = tuple(
-            float(v) for v in bbox
-        )  # type: ignore[assignment]
-        _validate_bbox(bbox_t)
-        rounded = _round_bbox_to_6dp(bbox_t)
-        fgb_bytes, _extent = _fetch_usgs_groundwater_levels_bytes(
-            state_fips=None,
-            bbox=rounded,
-            scope_label=f"bbox={rounded!r}",
+    spec = get_spec("fetch_usgs_groundwater_levels")
+    if spec is None:
+        raise ResidualsUpstreamError(
+            "fetch_usgs_groundwater_levels spec is not registered; cannot fetch observations"
         )
-    except GwNoWellsError as exc:
-        raise ResidualsNoObservationsError(
-            f"no USGS groundwater observations available for bbox={bbox!r}: {exc}"
-        ) from exc
-    except GwInputError as exc:
-        raise ResidualsInputError(str(exc)) from exc
-    except GwUpstreamError as exc:
+    try:
+        params = router.validate_params(spec, {"bbox": list(bbox)})
+        fgb_bytes = router.select_executor(spec)(spec, params)
+    except RouterError as exc:
+        ec = getattr(exc, "error_code", "") or ""
+        if ec.endswith("NO_WELLS"):
+            raise ResidualsNoObservationsError(
+                f"no USGS groundwater observations available for bbox={bbox!r}: {exc}"
+            ) from exc
+        if not getattr(exc, "retryable", True):
+            raise ResidualsInputError(str(exc)) from exc
         raise ResidualsUpstreamError(str(exc)) from exc
 
     local = os.path.join(tmpdir, "usgs_groundwater_levels.fgb")

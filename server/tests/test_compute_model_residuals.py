@@ -389,16 +389,18 @@ def test_bbox_fetch_path(tmp_path, monkeypatch) -> None:
     with open(fgb_path, "rb") as f:
         fgb_bytes = f.read()
 
-    import trid3nt_server.agent.tools.fetchers.hydrology.fetch_usgs_groundwater_levels.fetch_usgs_groundwater_levels as gw_mod
+    # fetch_usgs_groundwater_levels is spec-driven (ADR 0071); the composer resolves
+    # its FGB bytes via the router seam (get_spec + validate_params + executor), so
+    # mock the executor the re-point calls.
+    from trid3nt_server.agent.tools.fetchers._router import router as gw_router
 
     captured: dict = {}
 
-    def _fake_fetch(*, state_fips, bbox, scope_label):
-        captured["state_fips"] = state_fips
-        captured["bbox"] = bbox
-        return fgb_bytes, (lon - 0.01, lat - 0.01, lon + 0.01, lat + 0.01)
+    def _fake_exec(spec, params):
+        captured["bbox"] = tuple(params["bbox"])
+        return fgb_bytes
 
-    monkeypatch.setattr(gw_mod, "_fetch_usgs_groundwater_levels_bytes", _fake_fetch)
+    monkeypatch.setattr(gw_router, "select_executor", lambda spec: _fake_exec)
 
     bbox = (-120.0, 34.0, -119.0, 35.0)
     result = compute_model_residuals(
@@ -406,7 +408,6 @@ def test_bbox_fetch_path(tmp_path, monkeypatch) -> None:
     )
     assert result.n_points == 1
     assert result.mean_error == pytest.approx(4.0, abs=1e-3)
-    assert captured["state_fips"] is None
     assert captured["bbox"] == pytest.approx(bbox, abs=1e-5)
     assert any("fetch_usgs_groundwater_levels" in n for n in result.notes)
 

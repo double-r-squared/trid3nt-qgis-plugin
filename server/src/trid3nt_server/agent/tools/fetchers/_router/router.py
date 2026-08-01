@@ -120,6 +120,9 @@ def _quantize_bbox(bbox: tuple[float, ...], directive: str | None) -> tuple[floa
         return tuple(round(v, 6) for v in bbox)
     if directive == "round_6dp":
         return tuple(round(v, 6) for v in bbox)
+    if directive == "round_4dp":
+        # climate_normals keys + filters on a 4dp bbox; byte-identical to the twin.
+        return tuple(round(v, 4) for v in bbox)
     if directive.startswith("res_"):
         try:
             res_m = int(directive.split("_", 1)[1])

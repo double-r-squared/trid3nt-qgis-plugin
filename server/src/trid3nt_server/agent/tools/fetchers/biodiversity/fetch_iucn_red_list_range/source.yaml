@@ -1,0 +1,148 @@
+# Router source spec (keyed/misc-leftovers wave, keyed http_json single-GET, ADR 0071).
+# Twin: fetch_iucn_red_list_range.py -- IUCN Red List species assessment, keyed.
+# Region-select GET (build_request), one DD-placeholder-or-real feature on a
+# placeholder polygon (parse_response), 401/403->AUTH 4xx->INPUT_INVALID (classify_status).
+schema_version: v1
+
+name: fetch_iucn_red_list_range
+source_class: iucn_red_list
+error_prefix: IUCN
+input_error_suffix: INPUT_INVALID
+shape: vector-fgb
+# Queried by species name, not bbox -- a no-bbox query is the natural (global) use;
+# byte-identical to the twin's supports_global_query=True (scope audit OQ-0102).
+supports_global_query: true
+
+endpoints:
+  data:
+    url: "https://apiv3.iucnredlist.org/api/v3"
+auth:
+  mode: api_key_env
+  api_key_env:
+    var: TRID3NT_IUCN_RED_LIST_API_KEY
+    required: true
+  user_agent: "trid3nt/0.1 (Hazard Modeling Agent; https://github.com/double-r-squared/trid3nt-qgis-plugin; agent@trid3nt.dev)"
+
+params:
+  species_name: {type: str, required: true}
+  region: {type: str, default: "global"}
+  api_key: {type: str, schema_optional: true}
+  secret_ref: {type: str, schema_optional: true}
+
+hooks:
+  build_request: iucn_red_list_range.build_request
+  parse_response: iucn_red_list_range.parse_response
+  classify_status: iucn_red_list_range.classify_status
+
+ingest:
+  properties:
+    - taxonid
+    - scientific_name
+    - common_name
+    - kingdom
+    - phylum
+    - class_name
+    - order_name
+    - family
+    - category
+    - criteria
+    - population_trend
+    - marine_system
+    - freshwater_system
+    - terrestrial_system
+    - elevation_lower
+    - elevation_upper
+    - depth_lower
+    - depth_upper
+    - published_year
+    - assessment_date
+    - region
+    - is_placeholder_geometry
+
+normalize:
+  crs: "EPSG:4326"
+
+output:
+  layer_type: vector
+  ext: fgb
+  role: context
+  style_preset: "iucn_red_list_range"
+  emit_bbox: false
+
+cache:
+  ttl_class: static-30d
+payload_estimate:
+  model: bbox_area
+  mb_per_sq_deg: 0.0001
+  floor_mb: 0.5
+
+caveats:
+  - "IUCN Red List v3 species assessment (threat category, criteria, population trend, habitat systems, elevation/depth bounds) as ONE feature on a PLACEHOLDER square polygon (is_placeholder_geometry=True; not a real range polygon). Keyed (api_key -> secret_ref -> TRID3NT_IUCN_RED_LIST_API_KEY env). No/rejected key -> a credential-shaped IUCN_AUTH_ERROR; an unknown species -> a category='DD' data-deficient feature (never an error)."
+
+docstring: |-
+  IUCN Red List species range info Tier-2 fetcher.
+
+  Use this when: the agent needs an authoritative species threat-status +
+  range overlay for a Case 1 conservation analysis -- e.g. cross-referencing
+  a flood model footprint with the IUCN Red List range of a vulnerable
+  mammal, or building a "species of concern within X km" overlay layer.
+  Returns a single-feature FlatGeobuf carrying the IUCN assessment payload
+  (category, criteria, population trend, habitat systems, elevation bounds)
+  keyed on a placeholder square polygon.
+
+  Do NOT use this for: GBIF/iNaturalist OCCURRENCE POINTS (use
+  ``fetch_gbif_occurrences`` or ``fetch_inaturalist_observations``),
+  actual range POLYGONS pre-v0.2 (the geometry here is a placeholder
+  square -- read ``is_placeholder_geometry``), live tracking data
+  (Movebank -- different tool), national checklist queries (IUCN's
+  ``species/country`` endpoint is out of scope for v0.1), or
+  bulk-corpus pulls (the Red List API is per-species; for bulk use the
+  IUCN Red List Spatial Data zips out-of-band).
+
+  Wraps the IUCN Red List API v3
+  (``https://apiv3.iucnredlist.org/api/v3``). Tier-2 keyed -- requires an
+  IUCN Red List API key (free for research, sign up at
+  ``https://apiv3.iucnredlist.org/api/v3/token``). The key resolves via
+  one of three paths (waterfall):
+
+  1. ``api_key="<str>"`` -- explicit (CLI / direct invocation).
+  2. ``secret_ref=<SecretRecord>`` -- looked up via
+     ``Persistence.get_secret_value(secret_ref)`` (per-Case keyed path).
+  3. ``TRID3NT_IUCN_RED_LIST_API_KEY`` env var -- local dev fallback.
+
+  If none of the three resolve a non-empty key, ``IUCNAuthError`` is
+  raised BEFORE any network call.
+
+  Params:
+      species_name: scientific binomial (e.g. ``"Puma concolor"``,
+          ``"Panthera tigris"``). Case-insensitive; whitespace is
+          normalized. Required.
+      region: IUCN region key. Defaults to ``"global"`` (uses the global
+          assessment endpoint). Other documented values include
+          ``"europe"``, ``"mediterranean"``, ``"pan-africa"``, etc.
+          See ``https://apiv3.iucnredlist.org/api/v3/region/list``.
+      api_key: explicit IUCN API token (path 1).
+      secret_ref: ``SecretRecord`` with ``provider="iucn_red_list"``
+          (path 2).
+
+  Returns:
+      A ``LayerURI`` pointing at a FlatGeobuf in the cache bucket:
+      ``s3://trid3nt-cache/cache/static-30d/iucn_red_list/<key>.fgb``
+      carrying the species assessment. ``layer_type="vector"``,
+      ``role="context"``, ``units=None``. The single feature carries the
+      ``is_placeholder_geometry=True`` property; downstream consumers
+      should treat the geometry as a sentinel until the Spatial Data
+      ingest lands.
+
+  Raises:
+      ``IUCNInputError``: bad species name or region.
+      ``IUCNAuthError``: no key resolved, or IUCN rejected the key.
+      ``IUCNNotFoundError``: never raised at v0.1 -- unknown species
+          instead returns an FGB carrying ``category="DD"`` with the
+          data-deficient sentinel populated. Reserved for v0.2 hardening.
+      ``IUCNUpstreamError``: network / 5xx / parse failure (retryable).
+
+  FR-CE-8: routed through ``read_through`` so identical
+  ``(species_name_lower, region)`` calls within the 30-day window reuse
+  the cached FlatGeobuf. The api_key value itself is NEVER part of the
+  cache key.

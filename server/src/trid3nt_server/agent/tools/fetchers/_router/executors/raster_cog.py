@@ -1244,8 +1244,15 @@ def _stac_float_to_array(spec: SourceSpec, params: dict[str, Any]) -> tuple[Any,
     else:
         collection = stac.get("collection")
 
+    abp1 = stac.get("asset_by_param")
     abp = stac.get("asset_by_params")
-    if abp:
+    if abp1:
+        # Single-param asset map (mobi ``layer`` -> asset key): the param is an
+        # already-validated enum (router rejects an unknown value pre-network with
+        # the param's LAYER_INVALID suffix), so a direct map lookup -- no alias
+        # normalization. No-op for every prior spec (none set asset_by_param).
+        asset_key = abp1["map"][params.get(abp1["param"])]
+    elif abp:
         dn_norm = _normalize_via_aliases(
             spec, params.get(abp["params"][1]), stac.get("daynight_aliases", {}),
             ["day", "night"], stac.get("param_error_suffix", "PARAM_INVALID"))
@@ -1340,6 +1347,12 @@ def _stac_float_to_array(spec: SourceSpec, params: dict[str, Any]) -> tuple[Any,
         out = out.astype("float32")
     else:
         out = raw.astype("float32")
+
+    # positive_only (mobi): the importance products (species richness / RSR) are
+    # strictly positive where mapped; <=0 (and non-finite) is nodata -- the twin's
+    # ``valid = isfinite(dst) & (dst > 0)`` gate. No-op for every prior spec.
+    if tf.get("positive_only"):
+        out = np.where(np.isfinite(out) & (out > 0.0), out, np.nan).astype("float32")
 
     if not bool(np.isfinite(out).any()):
         raise router_empty_error(

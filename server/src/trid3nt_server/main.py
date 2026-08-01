@@ -156,9 +156,7 @@ def _import_tools_registry() -> int:
     # registered by register_specs_from_tree() via agent.tools import (no eager
     # module import here).
     # register fetch_ebird_observations (Cornell Lab eBird Tier-2 recent sightings; per-Case secret_ref).
-    from .agent.tools.fetchers.biodiversity.fetch_ebird_observations import fetch_ebird_observations  # noqa: F401
     # register fetch_iucn_red_list_range (IUCN Red List Tier-2 species range info fetcher; per-Case secret_ref).
-    from .agent.tools.fetchers.biodiversity.fetch_iucn_red_list_range import fetch_iucn_red_list_range  # noqa: F401
     # register fetch_movebank_tracks (Movebank Tier-2 animal-tracking trajectories; per-Case secret_ref).
     from .agent.tools.fetchers.biodiversity.fetch_movebank_tracks import fetch_movebank_tracks  # noqa: F401
     # register fetch_era5_reanalysis (Copernicus ERA5 reanalysis Tier-2 fetcher; compound-flood global substrate).

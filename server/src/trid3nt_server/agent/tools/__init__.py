@@ -255,7 +255,6 @@ from .fetchers.hydrology.fetch_noaa_nwm_streamflow import fetch_noaa_nwm_streamf
 # DELETED, now spec-driven (source.yaml + nws_river_forecast hooks: gauges-by-bbox / single
 # detail + bounded per-gauge threshold/stageflow enrichment), registered below.
 from .fetchers.hydrology.fetch_river_geometry import fetch_river_geometry  # noqa: E402,F401
-from .fetchers.hydrology.fetch_usgs_groundwater_levels import fetch_usgs_groundwater_levels  # noqa: E402,F401
 from .fetchers.hydrology.fetch_usgs_nwis_gauges import fetch_usgs_nwis_gauges  # noqa: E402,F401
 # fetch_usgs_water_quality: data-router fold phase-2 wave-3 (ADR 0040) -- twin
 # DELETED, now spec-driven (source.yaml + dataretrieval-delegating router),
@@ -301,7 +300,6 @@ from .fetchers.imagery.fetch_viirs_day_fire import fetch_viirs_day_fire  # noqa:
 # -- fetchers/climate --
 # fetch_chirps_precipitation: data-router fold phase-2 wave-9 (ADR 0055) -- twin
 # DELETED, now spec-driven (source.yaml + gzip_object), auto-registered.
-from .fetchers.climate.fetch_climate_normals import fetch_climate_normals  # noqa: E402,F401
 from .fetchers.climate.fetch_era5_reanalysis import fetch_era5_reanalysis  # noqa: E402,F401
 # fetch_gridmet: data-router fold pilot -- twin DELETED, now spec-driven
 # (source.yaml + router), registered by _register_router_specs() below.
@@ -313,13 +311,10 @@ from .fetchers.climate.fetch_era5_reanalysis import fetch_era5_reanalysis  # noq
 from .fetchers.climate.lookup_precip_return_period import lookup_precip_return_period  # noqa: E402,F401
 
 # -- fetchers/biodiversity --
-from .fetchers.biodiversity.fetch_ebird_observations import fetch_ebird_observations  # noqa: E402,F401
 # fetch_gbif_occurrences / fetch_inaturalist_observations: data-router fold chained-
 # resolution mode (ADR 0063) -- twins DELETED, now spec-driven (source.yaml + the
 # resolve-then-fetch hooks: name->id species/match | /v1/taxa GET, then the offset-paged
 # occurrence / observation search), registered by _register_router_specs() below.
-from .fetchers.biodiversity.fetch_iucn_red_list_range import fetch_iucn_red_list_range  # noqa: E402,F401
-from .fetchers.biodiversity.fetch_mobi import fetch_mobi  # noqa: E402,F401
 from .fetchers.biodiversity.fetch_movebank_tracks import fetch_movebank_tracks  # noqa: E402,F401
 
 # -- fetchers/socioeconomic --

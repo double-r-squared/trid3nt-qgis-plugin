@@ -367,6 +367,18 @@ class HookSpec(GraceModel):
     #: enrichment join.
     enrich_merge: str | None = None
 
+    #: TRANSPORT-STATUS classification (keyed/misc wave, ADR 0071).
+    #: ``(spec, status: int | None, body: str | None) -> RouterError | None``. The
+    #: http_json transport collapses every non-2xx to a retryable UPSTREAM error;
+    #: a keyed source that must split the HTTP status into the twin's distinct typed
+    #: errors (401/403 -> a credential-shaped ``*_AUTH_ERROR``, 404 -> a
+    #: non-retryable ``*_INPUT_ERROR`` for a bad path selector, else the default
+    #: retryable upstream) names this PURE hook. ``_get`` consults it on a transport
+    #: failure BEFORE its default upstream fallback; returning ``None`` keeps the
+    #: default. No I/O (the status/body are already fetched). No prior spec declares
+    #: it (strict no-op: the default upstream mapping is unchanged).
+    classify_status: str | None = None
+
 
 # --------------------------------------------------------------------------- #
 # Top-level SourceSpec

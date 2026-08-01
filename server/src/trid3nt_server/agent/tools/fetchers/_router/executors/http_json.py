@@ -48,10 +48,22 @@ def _get_raw(plan: RequestPlan) -> bytes:
 
 
 def _get(spec: SourceSpec, plan: RequestPlan) -> bytes:
-    """Execute one plan, mapping a ``TransportError`` to the source-stamped router error."""
+    """Execute one plan, mapping a ``TransportError`` to the source-stamped router error.
+
+    A spec that declares ``hooks.classify_status`` (a keyed source that splits the
+    HTTP status into the twin's distinct typed errors -- 401/403 -> credential-shaped
+    ``*_AUTH_ERROR``, 404 -> ``*_INPUT_ERROR``) is consulted FIRST; it returns a
+    typed RouterError to raise, or None to keep the default retryable upstream mapping.
+    No prior spec declares it (strict no-op).
+    """
     try:
         return _get_raw(plan)
     except TransportError as exc:
+        if spec.hooks is not None and spec.hooks.classify_status:
+            classify = resolve_hook(spec.hooks.classify_status)
+            typed = classify(spec, exc.status, exc.body)
+            if typed is not None:
+                raise typed
         raise router_upstream_error(spec.error_code_prefix, f"{type(exc).__name__}: {exc}")
 
 

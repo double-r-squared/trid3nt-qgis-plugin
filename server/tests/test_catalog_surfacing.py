@@ -94,7 +94,7 @@ def test_default_config_identity():
     r = _run_arm(None)
     assert r["arm"] is None
     assert r["registry_size"] == 190
-    assert r["n_specs"] == 52
+    assert r["n_specs"] == 57
     # They stay ambient (tier=general) and IN the declarable pool.
     assert r["gridmet_tier"] == "general"
     assert r["any_spec_in_declarable"] is True
@@ -114,13 +114,14 @@ def test_arm2_specs_leave_pool_but_stay_indexed():
     assert r["registry_size"] == 190  # registry does NOT shrink; only the pool does
     assert r["gridmet_tier"] == "catalog"
     assert r["any_spec_in_declarable"] is False  # every spec leaves the ambient pool
-    # -51, not -52: fetch_copernicus_dem is tier="internal" (wave-11 absorption into
+    # -56, not -57: fetch_copernicus_dem is tier="internal" (wave-11 absorption into
     # fetch_dem), so it is ALREADY out of the ambient pool in the None baseline; the
     # arm moves the remaining general->catalog (incl. the 4 chained-resolution folds
     # ADR 0063, the 2 ADR 0064 folds openfema / storm_events, the 5 ADR 0065
-    # station-sibling folds, the 2 ADR 0068 SLR-raster mapserver_export folds, and
-    # the 2 ADR 0070 Overpass folds roads / pois).
-    assert r["declarable_size"] == _run_arm(None)["declarable_size"] - 51
+    # station-sibling folds, the 2 ADR 0068 SLR-raster mapserver_export folds, the
+    # 2 ADR 0070 Overpass folds roads / pois, and the 5 ADR 0071 keyed/misc folds
+    # mobi / climate_normals / ebird / iucn / usgs_groundwater_levels).
+    assert r["declarable_size"] == _run_arm(None)["declarable_size"] - 56
     # Still searchable + rankable so a search hit can gate-expand it.
     assert r["gridmet_in_index"] is True
     assert r["gridmet_ranked_top25"] is True
@@ -226,8 +227,8 @@ def test_arm3_specs_leave_pool_and_source_param():
     assert r["registry_size"] == 190  # registry does NOT shrink; only the pool does
     assert r["gridmet_tier"] == "catalog"
     assert r["any_spec_in_declarable"] is False  # every spec leaves the ambient pool
-    # -51, not -52: fetch_copernicus_dem is tier="internal" (already out of the pool).
-    assert r["declarable_size"] == _run_arm(None)["declarable_size"] - 51
+    # -56, not -57: fetch_copernicus_dem is tier="internal" (already out of the pool).
+    assert r["declarable_size"] == _run_arm(None)["declarable_size"] - 56
     assert r["gridmet_in_index"] is True
     # fetch_from_catalog exposes the source branch under Arm 3 (like Arm 1).
     assert r["ffc_params"] == ["entry_id", "params", "source", "_extra_ignored"]
@@ -256,7 +257,7 @@ def test_stratum_index_is_source_scoped(_stratum):
         if getattr(TOOL_REGISTRY[n].metadata, "tier", "general") != "internal"
     }
     assert set(idx.tool_names) == model_facing
-    assert len(idx.tool_names) == 51  # 52 specs minus the internal copernicus seam
+    assert len(idx.tool_names) == 56  # 57 specs minus the internal copernicus seam
 
 
 def test_stratum_activates_on_data_ask_enum_rank_order(_stratum):

@@ -155,3 +155,10 @@ from . import mrms_qpe  # noqa: E402,F401
 # Overpass-family wave (ADR 0070): OSM QL build_request + JSON->geometry
 # parse_response over the 3-mirror endpoint_fallback chain (roads + pois).
 from . import overpass  # noqa: E402,F401
+# keyed/misc-leftovers wave (ADR 0071): NCEI Climate Normals inventory-resolve +
+# per-station access-CSV enrich; keyed http_json (ebird/iucn) via classify_status;
+# USGS groundwater OGC measurements + best-effort monitoring-location enrich.
+from . import climate_normals  # noqa: E402,F401
+from . import ebird_observations  # noqa: E402,F401
+from . import iucn_red_list_range  # noqa: E402,F401
+from . import usgs_groundwater_levels  # noqa: E402,F401
