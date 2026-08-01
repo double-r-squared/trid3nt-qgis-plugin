@@ -1,0 +1,131 @@
+# Router source spec (data-router fold, chained-resolution mode, ADR 0064).
+# Twin: fetch_openfema_disasters.py -- FOLDED via chained-resolution hooks
+# (offset paging + attribute<-boundary FIPS enrich).
+schema_version: v1
+name: fetch_openfema_disasters
+source_class: openfema_disasters
+shape: vector-fgb
+supports_global_query: false
+error_prefix: OPENFEMA
+input_error_suffix: INPUT_ERROR
+endpoints:
+  data:
+    url: https://www.fema.gov/api/open/v2/DisasterDeclarationsSummaries
+auth:
+  mode: none
+  user_agent: trid3nt/0.1 (Hazard Modeling Agent; https://github.com/double-r-squared/trid3nt-qgis-plugin;
+    agent@trid3nt.dev)
+params:
+  state_code:
+    type: str
+    required: false
+    schema_optional: true
+  bbox:
+    type: bbox
+    required: false
+    schema_optional: true
+    quantize: round_6dp
+  incident_type:
+    type: str
+    required: false
+    schema_optional: true
+  start_year:
+    type: int
+    required: false
+    schema_optional: true
+hooks:
+  build_request: openfema_disasters.build_request
+  next_page: openfema_disasters.next_page
+  parse_response: openfema_disasters.parse_response
+  enrich_plan: openfema_disasters.enrich_plan
+  enrich_merge: openfema_disasters.enrich_merge
+ingest:
+  chained: {}
+  properties:
+  - county_fips
+  - county_name
+  - state_fips
+  - n_declarations
+  - disaster_numbers
+  - incident_types
+  - declaration_types
+  - latest_declaration
+  - ia_program
+  - pa_program
+normalize:
+  crs: EPSG:4326
+  units: declaration count
+output:
+  layer_type: vector
+  ext: fgb
+  role: primary
+  style_preset: fema_disaster_declarations
+  bbox_from_features:
+    pad: 0.1
+cache:
+  ttl_class: semi-static-7d
+payload_estimate:
+  model: per_feature
+  features_per_sq_deg: 4.0
+  kb_per_feature: 50.0
+  floor_mb: 0.01
+  ceil_mb: 5.0
+caveats:
+- FEMA OpenFEMA DisasterDeclarationsSummaries aggregated to one record per affected county and joined
+  to Census TIGERweb county polygons; DR/EM/FM declarations 1953-present. Statewide (fipsCountyCode 000)
+  declarations are excluded from the county overlay. No county-level match -> OPENFEMA_NO_DECLARATIONS,
+  never an empty success layer. US states + territories only.
+docstring: "Fetch FEMA disaster declarations as a county-polygon FlatGeobuf overlay.\n\nRetrieves real\
+  \ US federal disaster declarations (Major Disaster ``DR``,\nEmergency ``EM``, Fire-Management ``FM``)\
+  \ from the FEMA OpenFEMA API,\naggregates them to ONE record per affected county, and joins each county\
+  \ to\nits Census TIGERweb polygon. The result is a county overlay carrying the\ndeclaration count, the\
+  \ distinct incident types, the disaster numbers, the\nlatest declaration date, and the Individual /\
+  \ Public Assistance flags -- the\ncanonical **historical hazard-declaration context** layer.\n\nWhen\
+  \ to use:\n    - The user asks where disasters have been federally declared\n      (\"which counties\
+  \ in Florida have had a disaster declared\", \"show me\n      the FEMA hurricane declarations in Texas\
+  \ since 2017\", \"where have\n      flood disasters been declared near here\").\n    - You want the\
+  \ historical record of FEMA declarations as a map overlay\n      to frame a hazard study, or to count\
+  \ how many times a county has been\n      declared.\n\nWhen NOT to use:\n    - LIVE / active hazards\
+  \ right now -- use the live feeds: NWS active\n      warnings, FIRMS / GOES active fire, MRMS precip.\
+  \ Declarations are the\n      AFTER-THE-FACT federal record, not a real-time hazard.\n    - MODELED\
+  \ hazard footprints (flood depth, plume, surge) -- use the engine\n      tools (SFINCS / MODFLOW / etc.).\
+  \ This is a declaration record, not a\n      physical hazard extent.\n    - Flood-zone regulatory boundaries\
+  \ -- use ``fetch_fema_nfhl_zones`` (the\n      NFHL flood-insurance-rate-map zones). That is a different\
+  \ FEMA product.\n    - Non-US disasters -- this tool is US states + territories only\n      (supports_global_query=False).\n\
+  \nSpatial selector (pass EXACTLY ONE):\n    state_code: Optional 2-letter USPS state/territory code\
+  \ (e.g. ``\"FL\"``,\n        ``\"TX\"``). PREFERRED for state-level asks -- one OpenFEMA query plus\n\
+  \        one TIGERweb county fetch for that state, all counties joined.\n    bbox: Optional ``(west,\
+  \ south, east, north)`` in EPSG:4326. The tool\n        derives every state whose envelope intersects\
+  \ the bbox, queries\n        OpenFEMA per state, joins all counties, and CLIPS the overlay to the\n\
+  \        counties whose polygon intersects the bbox (a metro bbox yields a\n        handful of counties).\
+  \ When both are given, ``state_code`` wins; when\n        neither, ``OpenFemaInputError`` is raised.\n\
+  \nOptional filters:\n    incident_type: Optional OpenFEMA incident type (e.g. ``\"Hurricane\"``,\n \
+  \       ``\"Flood\"``, ``\"Severe Storm\"``, ``\"Tornado\"``, ``\"Fire\"``,\n        ``\"Tropical Storm\"\
+  ``, ``\"Earthquake\"``, ``\"Drought\"``). Validated\n        against the documented OpenFEMA enumeration;\
+  \ an unrecognized value\n        raises ``OpenFemaInputError`` rather than silently returning empty.\n\
+  \    start_year: Optional lower-bound federal fiscal year (``fyDeclared``).\n        E.g. ``start_year=2017``\
+  \ restricts to declarations from FY2017 on.\n        Omit for the full declaration history (FEMA records\
+  \ begin 1953).\n\nReturns:\n    ``LayerURI`` pointing at a FlatGeobuf in the cache bucket\n    (``s3://.../cache/semi-static-7d/openfema_disasters/<key>.fgb``):\n\
+  \    - ``layer_type=\"vector\"``, ``role=\"primary\"``,\n      ``style_preset=\"fema_disaster_declarations\"\
+  ``.\n    - Geometry: one county Polygon per affected county, EPSG:4326.\n    - ``bbox`` is the joined\
+  \ counties' extent so the camera auto-zooms.\n    - Properties per county: ``county_fips`` (5-digit),\
+  \ ``county_name``,\n      ``state_fips``, ``n_declarations``, ``disaster_numbers`` (comma-list),\n \
+  \     ``incident_types`` (comma-list), ``declaration_types`` (DR/EM/FM\n      comma-list), ``latest_declaration``\
+  \ (ISO-Z date), ``ia_program`` /\n      ``pa_program`` (Individual / Public Assistance ever declared).\n\
+  \nFallback behaviour (data-source fallback norm): OpenFEMA is the sole\ndeclaration source. If no county-level\
+  \ declarations are found in scope, or\nnone join to a county polygon, ``OpenFemaNoDeclarationsError``\
+  \ is raised -- never an empty success-shaped layer. Statewide / non-county-specific\ndeclarations (``fipsCountyCode\
+  \ == \"000\"``) are excluded from the county\noverlay and reported in the error message when nothing\
+  \ else joins.\n\nCache: ``ttl_class=\"semi-static-7d\"``, ``source_class=\"openfema_disasters\"``.\n\
+  Cache key is SHA-256 of the resolved selector (states + incident_type +\nstart_year + clip bbox), so\
+  \ identical-scope calls within the week reuse it.\n\nCross-tool dependencies:\n    - Composes WITH:\
+  \ ``publish_layer`` (map overlay), ``geocode_location``\n      (place name -> bbox / state before this\
+  \ call),\n      ``fetch_administrative_boundaries`` (county framing),\n      ``spatial_query`` (declaration\
+  \ count as a county attribute).\n    - Distinct from: ``fetch_fema_nfhl_zones`` (NFHL flood zones --\
+  \ a\n      regulatory boundary, not a declaration record); the live-hazard feeds\n      (NWS warnings,\
+  \ FIRMS / GOES fire, MRMS) -- declarations are historical.\n    - Upstream sources: FEMA OpenFEMA DisasterDeclarationsSummaries\
+  \ +\n      Census TIGERweb State_County county polygons.\n\nErrors:\n    - ``OpenFemaInputError``: no\
+  \ selector / bad bbox / bad state code / bad\n      incident type / bad year (retryable=False).\n  \
+  \  - ``OpenFemaUpstreamError``: OpenFEMA or TIGERweb network / HTTP 5xx /\n      bad body (retryable=True).\n\
+  \    - ``OpenFemaNoDeclarationsError``: no county-level declarations in scope\n      (retryable=False).\n\
+  \n\nTier-1 free. No API key. ``supports_global_query=False`` (US + territories)."

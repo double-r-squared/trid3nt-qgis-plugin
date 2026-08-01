@@ -113,8 +113,8 @@ def _import_tools_registry() -> int:
     # fetch_inaturalist_observations + fetch_gbif_occurrences: data-router fold
     # chained-resolution mode (ADR 0063) -- twins DELETED, spec-driven (resolve-then-fetch
     # hooks), registered via register_specs_from_tree.
-    # register fetch_storm_events_db (NOAA Storm Events DB Tier-1 fetcher).
-    from .agent.tools.fetchers.weather.fetch_storm_events_db import fetch_storm_events_db  # noqa: F401
+    # fetch_storm_events_db: data-router fold (ADR 0064) -- twin DELETED, now spec-driven
+    # (directory-index resolve -> bulk gzip-CSV point decode), registered via register_specs_from_tree.
     # fetch_nws_event: data-router fold tier-3 hooks (ADR 0061) -- twin DELETED, now
     # spec-driven (source.yaml + nws_event hooks), registered via register_specs_from_tree.
     # fetch_nws_alerts_conus: data-router fold chained-resolution mode (ADR 0063) --

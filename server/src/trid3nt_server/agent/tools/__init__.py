@@ -237,7 +237,9 @@ from .fetchers.weather.fetch_nexrad_reflectivity import fetch_nexrad_reflectivit
 # NWS /alerts/active GeoJSON), registered by _register_router_specs() below.
 from .fetchers.weather.fetch_openaq_measurements import fetch_openaq_measurements  # noqa: E402,F401
 from .fetchers.weather.fetch_raws_weather import fetch_raws_weather  # noqa: E402,F401
-from .fetchers.weather.fetch_storm_events_db import fetch_storm_events_db  # noqa: E402,F401
+# fetch_storm_events_db: data-router fold (ADR 0064) -- twin DELETED, now spec-driven
+# (source.yaml + storm_events_db hooks: directory-index resolve -> newest bulk-CSV URL,
+# then bulk gzip-CSV point decode), registered by _register_router_specs() below.
 from .fetchers.weather.fetch_storm_tracks import fetch_storm_tracks  # noqa: E402,F401
 
 # -- fetchers/hydrology --
@@ -362,7 +364,9 @@ from .fetchers.hazard.fetch_firms_active_fire import fetch_firms_active_fire  # 
 # fetch_mtbs_burn_severity + fetch_nifc_fire_perimeters: data-router fold phase-2
 # wave-2 -- twins DELETED, now spec-driven (source.yaml + router), registered by
 # _register_router_specs() below.
-from .fetchers.hazard.fetch_openfema_disasters import fetch_openfema_disasters  # noqa: E402,F401
+# fetch_openfema_disasters: data-router fold (ADR 0064) -- twin DELETED, now spec-driven
+# (source.yaml + openfema_disasters hooks: offset paging + per-county aggregate joined to
+# TIGERweb county polygons by FIPS), registered by _register_router_specs() below.
 # fetch_tsunami_events: data-router fold phase-2 wave-10 (ADR 0056, tier-3 hooks) --
 # twin DELETED, now spec-driven (source.yaml + ncei_tsunami build_request/parse_response
 # hooks + paging), registered by _register_router_specs() below.

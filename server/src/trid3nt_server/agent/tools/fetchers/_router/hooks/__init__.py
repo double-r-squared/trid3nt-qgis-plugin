@@ -124,3 +124,7 @@ from . import gbif_occurrences  # noqa: E402,F401
 from . import inaturalist_observations  # noqa: E402,F401
 from . import nws_alerts_conus  # noqa: E402,F401
 from . import nws_river_forecast  # noqa: E402,F401
+# offset paging + boundary-service FIPS enrich (ADR 0064).
+from . import openfema_disasters  # noqa: E402,F401
+# directory-index resolve -> bulk gzip-CSV point decode (ADR 0064).
+from . import storm_events_db  # noqa: E402,F401

@@ -2047,13 +2047,13 @@ def publish_layer(
     # old persisted cases (and pre-swap composer registrations) carry TiTiler
     # tile-TEMPLATE display URLs. A re-publish of one is NOT an error - UNWRAP
     # the embedded ``url=`` s3 COG (the same trick
-    # ``hydrate_case_layers._unwrap_tile_template`` uses) and flow it through
+    # ``_uri_util._unwrap_tile_template`` uses) and flow it through
     # the normal raster path below, so the envelope comes out in the NEW raw
     # ``s3://`` shape with a fresh legend stash. A template with no
     # recoverable COG is returned verbatim (degraded legacy behavior; the
     # plugin unwraps templates it rehydrates on its own).
     if layer_uri.startswith(("http://", "https://")) and "/cog/tiles/" in layer_uri:
-        from trid3nt_server.cases.hydrate_case_layers import _unwrap_tile_template
+        from trid3nt_server.agent.tools._uri_util import _unwrap_tile_template
 
         unwrapped = _unwrap_tile_template(layer_uri)
         if unwrapped != layer_uri and unwrapped.startswith("s3://"):

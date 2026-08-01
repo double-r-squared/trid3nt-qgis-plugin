@@ -1740,7 +1740,7 @@ def _probe_point_route_enabled() -> bool:
 def _probe_point_fn():
     """Lazy-import seam for the probe core (heavy geo deps load on first
     call, not at listener start; monkeypatchable in tests)."""
-    from .agent.tools.meta.probe_point import probe_point_at
+    from .cases.probe_point import probe_point_at
 
     return probe_point_at
 
@@ -2323,7 +2323,7 @@ async def _handle_http(
                 )
             except (asyncio.TimeoutError, asyncio.IncompleteReadError):
                 raw_body = b""
-        from .agent.tools.meta.probe_point import ProbePointCaseNotFoundError, ProbePointInputError
+        from .cases.probe_point import ProbePointCaseNotFoundError, ProbePointInputError
 
         try:
             body = await _handle_probe_point_post(raw_body)

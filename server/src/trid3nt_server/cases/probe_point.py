@@ -8,7 +8,8 @@ This is a DETERMINISTIC read -- no LLM in the loop, no turn, no pipeline
 event -- so it is a plain function, NOT a ``@register_tool`` (an LLM-visible
 tool would be dispatched by the model; this is driven directly by a map
 click over cold HTTP, the same posture as ``/api/ingest-layer`` and
-``/api/case-list``).
+``/api/case-list``). Lives in ``cases/`` (platform layer), not
+``agent/tools/`` -- it is not a registered LLM tool.
 
 Reuses two existing seams rather than re-deriving them:
 
@@ -62,7 +63,7 @@ __all__ = [
     "MAX_PROBE_LAYERS",
 ]
 
-logger = logging.getLogger("trid3nt_server.agent.tools.meta.probe_point")
+logger = logging.getLogger("trid3nt_server.cases.probe_point")
 
 #: Max raster layers opened per probe click (honest cap, not a silent drop --
 #: the response carries ``truncated: true`` when the case has more).

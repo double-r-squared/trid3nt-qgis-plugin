@@ -321,3 +321,234 @@ def test_river_gauge_id_detail_mode():
                {"nwps/v1/gauges/CIDI4": detail})
     assert len(gdf) == 1
     assert gdf.iloc[0]["lid"] == "CIDI4" and gdf.iloc[0]["action_stage_ft"] == 2.5
+
+
+# --------------------------------------------------------------------------- #
+# openfema_disasters (ADR 0064): offset paging + attribute<-boundary FIPS enrich.
+# --------------------------------------------------------------------------- #
+
+from trid3nt_server.agent.tools.fetchers._router.executors import http_json as _HJ
+from trid3nt_server.agent.tools.fetchers._router.hooks import openfema_disasters as _OF
+from trid3nt_server.agent.tools.fetchers._router.hooks import storm_events_db as _SE
+
+
+def _decl(fips_state, fips_county, dnum, itype, dtype="DR", date="2020-06-01T00:00:00.000Z",
+          area="Area", ia=True, pa=False):
+    return {"fipsStateCode": fips_state, "fipsCountyCode": fips_county, "disasterNumber": dnum,
+            "incidentType": itype, "declarationType": dtype, "declarationDate": date,
+            "designatedArea": area, "iaProgramDeclared": ia, "paProgramDeclared": pa}
+
+
+def _fema_page(records):
+    return {"DisasterDeclarationsSummaries": records}
+
+
+def _tiger(features):
+    return {"type": "FeatureCollection", "features": features}
+
+
+def _county_poly(geoid, name, ring):
+    return {"type": "Feature", "properties": {"GEOID": geoid, "NAME": name, "STATE": geoid[:2],
+            "COUNTY": geoid[2:]}, "geometry": {"type": "Polygon", "coordinates": [ring]}}
+
+
+_RI_RING = [[-71.4, 41.6], [-71.3, 41.6], [-71.3, 41.7], [-71.4, 41.7], [-71.4, 41.6]]
+_RI2_RING = [[-71.6, 41.8], [-71.5, 41.8], [-71.5, 41.9], [-71.6, 41.9], [-71.6, 41.8]]
+
+
+def test_openfema_aggregate_and_fips_join():
+    """Two declarations for one county aggregate; each county joins its TIGER polygon."""
+    fema = _fema_page([
+        _decl("44", "001", 4001, "Flood", date="2019-01-01T00:00:00.000Z"),
+        _decl("44", "001", 4002, "Hurricane", date="2021-05-01T00:00:00.000Z", pa=True),
+        _decl("44", "003", 4003, "Severe Storm"),
+    ])
+    tiger = _tiger([_county_poly("44001", "Bristol", _RI_RING),
+                    _county_poly("44003", "Kent", _RI2_RING)])
+    gdf = _run("fetch_openfema_disasters", {"state_code": "RI"},
+               {"fema.gov": fema, "tigerweb": tiger})
+    rows = {r["county_fips"]: r for _, r in gdf.iterrows()}
+    assert set(rows) == {"44001", "44003"}
+    assert rows["44001"]["n_declarations"] == 2
+    assert rows["44001"]["disaster_numbers"] == "4001,4002"
+    assert rows["44001"]["incident_types"] == "Flood,Hurricane"
+    assert rows["44001"]["latest_declaration"] == "2021-05-01T00:00:00.000Z"
+    assert bool(rows["44001"]["pa_program"]) is True
+    assert rows["44001"]["county_name"] == "Bristol"
+
+
+def test_openfema_statewide_excluded_and_no_declarations():
+    """fipsCountyCode 000 (statewide) rows never join; nothing left -> NO_DECLARATIONS."""
+    fema = _fema_page([_decl("44", "000", 5000, "Drought")])
+    exc = _err("fetch_openfema_disasters", {"state_code": "RI"},
+               {"fema.gov": fema, "tigerweb": _tiger([])})
+    assert exc.error_code == "OPENFEMA_NO_DECLARATIONS"
+    assert exc.retryable is False
+
+
+def test_openfema_bbox_clip_drops_outside_county():
+    """A county whose polygon falls outside the bbox is dropped (selector clip path)."""
+    fema = _fema_page([_decl("44", "001", 4001, "Flood"), _decl("44", "003", 4003, "Fire")])
+    tiger = _tiger([_county_poly("44001", "Bristol", _RI_RING),
+                    _county_poly("44003", "Kent", _RI2_RING)])
+    # bbox covers only the 44001 ring (~ -71.4..-71.3), not 44003 (~ -71.6..-71.5).
+    gdf = _run("fetch_openfema_disasters", {"bbox": [-71.45, 41.55, -71.28, 41.72]},
+               {"fema.gov": fema, "tigerweb": tiger})
+    assert set(gdf["county_fips"]) == {"44001"}
+
+
+def test_openfema_next_page_offset_stops_on_short_page():
+    """The reused offset-paging primitive: a full page continues, a short page stops."""
+    spec = _spec("fetch_openfema_disasters")
+    full = json.dumps(_fema_page([_decl("44", "001", i, "Flood") for i in range(_OF._PAGE_SIZE)])).encode()
+    short = json.dumps(_fema_page([_decl("44", "001", 1, "Flood")])).encode()
+    raw = R.validate_params(spec, {"state_code": "RI"})
+    nxt_full = _OF.next_page(spec, raw, [full])
+    assert nxt_full is not None and "$skip" in str(nxt_full.params) and nxt_full.params["$skip"] == "1000"
+    assert _OF.next_page(spec, raw, [full, short]) is None      # short page -> stop
+    assert _OF.next_page(spec, raw, [short]) is None            # first page short -> stop
+
+
+def test_openfema_input_errors():
+    spec = _spec("fetch_openfema_disasters")
+    for raw in ({}, {"state_code": "ZZ"}, {"state_code": "RI", "incident_type": "Frogs"},
+                {"state_code": "RI", "start_year": 1800}):
+        with pytest.raises(RouterInputError) as ei:
+            _OF.build_request(spec, R.validate_params(spec, raw))
+        assert ei.value.error_code == "OPENFEMA_INPUT_ERROR"
+
+
+# --------------------------------------------------------------------------- #
+# storm_events_db (ADR 0064): directory-index resolve -> bulk gzip-CSV decode.
+# --------------------------------------------------------------------------- #
+
+import gzip as _gzip
+
+
+def _run_http(name: str, raw: dict, url_map) -> gpd.GeoDataFrame:
+    """Route an http_json + resolve-phase spec, serving canned bytes by URL substring."""
+    spec = _spec(name)
+
+    def fake_get(_spec, plan):
+        for key, body in url_map.items():
+            if key in plan.url:
+                if isinstance(body, Exception):
+                    raise body
+                return body if isinstance(body, bytes) else json.dumps(body).encode()
+        raise AssertionError(f"no canned body for {plan.url}")
+
+    o1, o2 = C._get, _HJ._get
+    C._get = fake_get
+    _HJ._get = fake_get
+    try:
+        params = R.validate_params(spec, dict(raw))
+        params = C.pre_resolve(spec, params)
+        data = _HJ.execute(spec, params)
+    finally:
+        C._get = o1
+        _HJ._get = o2
+    with tempfile.NamedTemporaryFile(suffix=".fgb", delete=False) as f:
+        f.write(data)
+        p = f.name
+    try:
+        return gpd.read_file(p)
+    finally:
+        os.unlink(p)
+
+
+_INDEX_HTML = (
+    '<a href="StormEvents_details-ftp_v1.0_d2022_c20230101.csv.gz">f</a>'
+    '<a href="StormEvents_details-ftp_v1.0_d2022_c20240517.csv.gz">f</a>'
+    '<a href="StormEvents_details-ftp_v1.0_d2021_c20230101.csv.gz">f</a>'
+).encode()
+
+_CSV = (
+    "EVENT_ID,EVENT_TYPE,STATE,BEGIN_LAT,BEGIN_LON,BEGIN_DATE_TIME,END_DATE_TIME,"
+    "INJURIES_DIRECT,DEATHS_DIRECT,DEATHS_INDIRECT,DAMAGE_PROPERTY,MAGNITUDE,EPISODE_NARRATIVE\n"
+    "1,Tornado,OKLAHOMA,35.5,-97.5,28-SEP-22 14:00:00,28-SEP-22 14:30:00,0,0,0,10.00K,,narr1\n"
+    "2,Flood,FLORIDA,27.5,-81.5,29-SEP-22 06:00:00,29-SEP-22 12:00:00,1,0,0,5.00K,,narr2\n"
+    "3,Hail,OKLAHOMA,36.1,-95.9,01-MAY-22 20:00:00,01-MAY-22 20:15:00,0,0,0,1.00K,1.75,narr3\n"
+)
+
+
+def _csv_gz(text=_CSV):
+    return _gzip.compress(text.encode())
+
+
+def test_storm_resolve_picks_newest_processed_date():
+    spec = _spec("fetch_storm_events_db")
+
+    def fake_get(_spec, plan):
+        return _INDEX_HTML
+
+    o = C._get
+    C._get = fake_get
+    try:
+        merged = C.pre_resolve(spec, R.validate_params(spec, {"year": 2022}))
+    finally:
+        C._get = o
+    urls = merged["_csv_urls"]
+    assert len(urls) == 1 and urls[0].endswith("d2022_c20240517.csv.gz")  # newest c-date wins
+
+
+def test_storm_resolve_missing_year_upstream():
+    spec = _spec("fetch_storm_events_db")
+
+    def fake_get(_spec, plan):
+        return _INDEX_HTML
+
+    o = C._get
+    C._get = fake_get
+    try:
+        params = R.validate_params(spec, {"year": 1999})
+        with pytest.raises(RouterUpstreamError) as ei:
+            C.pre_resolve(spec, params)
+    finally:
+        C._get = o
+    assert ei.value.error_code == "STORM_EVENTS_UPSTREAM_ERROR"
+
+
+def test_storm_state_and_event_filter():
+    gdf = _run_http("fetch_storm_events_db", {"year": 2022, "state": "OK", "event_types": ["Tornado"]},
+                    {"d2022_c20240517": _csv_gz(), "csvfiles/": _INDEX_HTML})
+    assert set(gdf["EVENT_ID"].astype(str)) == {"1"}
+    assert gdf.iloc[0]["EVENT_TYPE"] == "Tornado"
+
+
+def test_storm_bbox_filter():
+    gdf = _run_http("fetch_storm_events_db", {"year": 2022, "bbox": [-98.0, 34.0, -95.0, 37.0]},
+                    {"d2022_c20240517": _csv_gz(), "csvfiles/": _INDEX_HTML})
+    # OK points (35.5,-97.5) + (36.1,-95.9) fall in bbox; FL point does not.
+    assert set(gdf["EVENT_ID"].astype(str)) == {"1", "3"}
+
+
+def test_storm_empty_after_filter():
+    exc = _err_http("fetch_storm_events_db", {"year": 2022, "state": "RI"},
+                    {"d2022_c20240517": _csv_gz(), "csvfiles/": _INDEX_HTML})
+    assert exc.error_code == "STORM_EVENTS_EMPTY" and exc.retryable is False
+
+
+def test_storm_corrupt_gzip_upstream():
+    exc = _err_http("fetch_storm_events_db", {"year": 2022, "state": "OK"},
+                    {"d2022_c20240517": b"not-a-gzip", "csvfiles/": _INDEX_HTML})
+    assert exc.error_code == "STORM_EVENTS_UPSTREAM_ERROR"
+
+
+def test_storm_input_errors():
+    spec = _spec("fetch_storm_events_db")
+    # year out of range -> declarative ARG_INVALID.
+    with pytest.raises(RouterInputError) as ei:
+        R.validate_params(spec, {"year": 1800})
+    assert ei.value.error_code == "STORM_EVENTS_ARG_INVALID"
+    # bad state / bad window -> resolve_build validation.
+    for raw in ({"year": 2022, "state": "Atlantis"},
+                {"year": 2022, "begin_date": "2022-05-05", "end_date": "2022-01-01"}):
+        with pytest.raises(RouterInputError) as ei:
+            _SE.resolve_build(spec, R.validate_params(spec, raw))
+        assert ei.value.error_code == "STORM_EVENTS_ARG_INVALID"
+
+
+def _err_http(name, raw, url_map):
+    with pytest.raises(Exception) as ei:
+        _run_http(name, raw, url_map)
+    return ei.value

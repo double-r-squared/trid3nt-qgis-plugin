@@ -96,12 +96,12 @@ _WORKER_SUBMITTER: Any | None = None
 
 
 def set_worker_submitter(submitter: Any) -> None:
-    """Bind the Cloud Run Jobs submitter used by ``qgis_process`` at call time.
+    """Bind the on-box qgis_process submitter used by ``qgis_process`` at call time.
 
-    The submitter is a callable matching the worker-side API established by
-    the worker; binding it here keeps Cloud Run Jobs SDK imports out of this
-    module's import graph (so tests can exercise the registry without GCP
-    libs installed).
+    The submitter is the local docker/subprocess runner (main.py binds
+    ``_default_qgis_process_submitter`` at startup, read by qgis_discovery);
+    injecting it here keeps the submitter's imports out of this module's import
+    graph (so tests can exercise the registry with a stub submitter).
     """
     global _WORKER_SUBMITTER
     _WORKER_SUBMITTER = submitter
