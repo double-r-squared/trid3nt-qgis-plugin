@@ -30,24 +30,61 @@ logger = logging.getLogger(
 __all__ = ["execute", "fetch_bodies"]
 
 
-def _get(spec: SourceSpec, plan: RequestPlan) -> bytes:
-    """Execute one plan through the shared transport, mapping transport -> router errors.
+def _get_raw(plan: RequestPlan) -> bytes:
+    """Execute one plan through the shared transport; let ``TransportError`` propagate.
 
     GET by default; ``plan.method == "POST"`` sends ``plan.json_body`` as a JSON
-    body (the write-method REST shape, NSI). The transport owns the retry
-    authority either way.
+    body or ``plan.data`` as a form-encoded body (the Overpass QL ``data`` field).
+    The transport owns the retry authority either way.
     """
+    if plan.method == "POST":
+        body, _ct, _url = post_bytes(
+            get_client(), plan.url, headers=plan.headers, params=plan.params,
+            json_body=plan.json_body, data=plan.data,
+        )
+    else:
+        body, _ct, _url = get_bytes(get_client(), plan.url, headers=plan.headers, params=plan.params)
+    return body
+
+
+def _get(spec: SourceSpec, plan: RequestPlan) -> bytes:
+    """Execute one plan, mapping a ``TransportError`` to the source-stamped router error."""
     try:
-        if plan.method == "POST":
-            body, _ct, _url = post_bytes(
-                get_client(), plan.url, headers=plan.headers, params=plan.params,
-                json_body=plan.json_body,
-            )
-        else:
-            body, _ct, _url = get_bytes(get_client(), plan.url, headers=plan.headers, params=plan.params)
+        return _get_raw(plan)
     except TransportError as exc:
         raise router_upstream_error(spec.error_code_prefix, f"{type(exc).__name__}: {exc}")
-    return body
+
+
+def _fetch_endpoint_fallback(spec: SourceSpec, plans: list[RequestPlan]) -> list[bytes]:
+    """Try ``plans`` as a data-source fallback CHAIN; the first success wins.
+
+    The build hook returns one plan per mirror (the primary + its siblings, the
+    spec fallback-chain). Each is tried in order through the shared transport;
+    the first success returns a single-body list. A non-429 4xx short-circuits the
+    chain (the request itself is bad -- another mirror will not help); a 5xx / 429 /
+    timeout / connection error advances to the next mirror. If every mirror fails a
+    source-stamped upstream error is raised (retryable), naming the count.
+    """
+    sc = spec.error_code_prefix
+    last_exc: Exception | None = None
+    for i, plan in enumerate(plans):
+        try:
+            return [_get_raw(plan)]
+        except TransportError as exc:
+            status = getattr(exc, "status", None)
+            # A non-429 4xx (bad query) will not succeed on another mirror -- fail
+            # fast rather than hammer every sibling.
+            if status is not None and 400 <= status < 500 and status != 429:
+                raise router_upstream_error(sc, f"{type(exc).__name__}: {exc}")
+            last_exc = exc
+            if i < len(plans) - 1:
+                logger.warning(
+                    "router.http_json: mirror %d/%d failed (%s); trying next",
+                    i + 1, len(plans), exc,
+                )
+    raise router_upstream_error(
+        sc, f"all {len(plans)} mirrors failed; last error: {last_exc}"
+    )
 
 
 def _fetch_paged(spec: SourceSpec, params: dict[str, Any], build: Any, paging: dict[str, Any]) -> list[bytes]:
@@ -103,12 +140,21 @@ def _fetch_paged(spec: SourceSpec, params: dict[str, Any], build: Any, paging: d
 
 
 def fetch_bodies(spec: SourceSpec, params: dict[str, Any]) -> list[bytes]:
-    """Resolve the request plan(s) via the build hook and GET every response body."""
+    """Resolve the request plan(s) via the build hook and GET the response body/bodies.
+
+    Three modes, by declared ``ingest.http_source``: ``paging`` walks pages;
+    ``endpoint_fallback`` treats the plans as a first-success-wins mirror chain
+    (the Overpass 3-mirror fallback, the spec fallback-chain); the default fetches
+    every plan and joins them at parse (a static multi-endpoint set).
+    """
     build = resolve_hook(spec.hooks.build_request)  # type: ignore[union-attr]
-    paging = ((spec.ingest or {}).get("http_source") or {}).get("paging")
+    http_source = (spec.ingest or {}).get("http_source") or {}
+    paging = http_source.get("paging")
     if paging:
         return _fetch_paged(spec, params, build, paging)
     plans = build(spec, params)
+    if http_source.get("endpoint_fallback"):
+        return _fetch_endpoint_fallback(spec, plans)
     return [_get(spec, plan) for plan in plans]
 
 

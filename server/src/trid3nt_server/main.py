@@ -128,8 +128,9 @@ def _import_tools_registry() -> int:
     from .agent.tools.processing.extract_landcover_class import extract_landcover_class  # noqa: F401
     # register compute_building_density (MS Global ML Building Footprints density raster).
     from .agent.tools.processing.compute_building_density import compute_building_density  # noqa: F401
-    # register fetch_roads_osm (OSM Overpass road LineStrings; major+arterial default).
-    from .agent.tools.fetchers.socioeconomic.fetch_roads_osm import fetch_roads_osm  # noqa: F401
+    # fetch_roads_osm + fetch_overpass_pois: Overpass-family fold (ADR 0070) -- twins
+    # DELETED, now spec-driven (source.yaml + overpass hooks), auto-registered by the
+    # router spec tree walk; no eager twin import here.
     # -> engine-door refactor (PELICUN slice): the pelicun_damage_assessment
     # TEMPLATE (was run_pelicun_damage_assessment) now lives under
     # workflows/pelicun/damage_assessment/; import it so it registers at daemon startup.

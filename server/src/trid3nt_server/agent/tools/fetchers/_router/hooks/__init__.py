@@ -62,8 +62,10 @@ class RequestPlan:
 
     ``method`` defaults to ``"GET"`` (every prior hook). ``"POST"`` sends
     ``json_body`` as a JSON request body -- the write-method REST shape whose
-    query is a body, not a query string (USACE NSI's structures POST). No I/O
-    still happens in the hook: it only DESCRIBES the request.
+    query is a body, not a query string (USACE NSI's structures POST) -- or, when
+    ``data`` is set instead, a form-encoded body (the Overpass interpreter reads
+    its QL from the ``data`` form field). No I/O still happens in the hook: it
+    only DESCRIBES the request.
     """
 
     url: str
@@ -71,6 +73,7 @@ class RequestPlan:
     headers: dict[str, str] = field(default_factory=dict)
     method: str = "GET"
     json_body: Any = None
+    data: dict[str, Any] | None = None
 
 
 class HookResolutionError(ValueError):
@@ -149,3 +152,6 @@ from . import admin_boundaries  # noqa: E402,F401
 # weather/GRIB wave (ADR 0069): S3-listed key resolve (latest / targeted walkback)
 # feeding the grib_object raster access mode (whole-object .grib2.gz -> COG).
 from . import mrms_qpe  # noqa: E402,F401
+# Overpass-family wave (ADR 0070): OSM QL build_request + JSON->geometry
+# parse_response over the 3-mirror endpoint_fallback chain (roads + pois).
+from . import overpass  # noqa: E402,F401

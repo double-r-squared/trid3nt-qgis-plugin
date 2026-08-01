@@ -1,0 +1,94 @@
+schema_version: v1
+name: fetch_roads_osm
+source_class: osm_roads
+input_error_suffix: INPUT_INVALID
+shape: vector-fgb
+supports_global_query: false
+endpoints:
+  data:
+    url: https://overpass-api.de/api/interpreter
+  kumi:
+    url: https://overpass.kumi.systems/api/interpreter
+  coffee:
+    url: https://overpass.private.coffee/api/interpreter
+auth:
+  mode: none
+  user_agent: trid3nt/0.1 (Hazard Modeling Agent; https://github.com/double-r-squared/trid3nt-qgis-plugin;
+    agent@trid3nt.dev)
+params:
+  bbox:
+    type: bbox
+    required: true
+    quantize: round_6dp
+  road_classes:
+    type: str_list
+    default:
+    - motorway
+    - motorway_link
+    - primary
+    - primary_link
+    - secondary
+    - tertiary
+    - trunk
+    - trunk_link
+hooks:
+  build_request: overpass_roads.build_request
+  parse_response: overpass_roads.parse_response
+ingest:
+  http_source:
+    endpoint_fallback: true
+  properties:
+  - osm_id
+  - name
+  - highway
+  - lanes
+  - maxspeed
+normalize:
+  crs: EPSG:4326
+output:
+  layer_type: vector
+  ext: fgb
+  role: context
+  style_preset: osm_roads
+cache:
+  ttl_class: static-30d
+payload_estimate:
+  model: per_feature
+  features_per_sq_deg: 5000.0
+  kb_per_feature: 1.0
+  floor_mb: 0.01
+caveats:
+- OpenStreetMap highway ways via the Overpass API (3-mirror fallback), clipped to the exact bbox. Global,
+  keyless. An area with no OSM roads returns a valid 0-feature layer, not an error.
+docstring: "OpenStreetMap road LineStrings via Overpass API.\n\n**What it does:** Queries the OpenStreetMap\
+  \ Overpass API for\n``highway``-tagged way features inside the requested bbox, clips the\nmatching road\
+  \ LineStrings to the EXACT requested bbox so no road spills\noutside the AOI, serializes them to FlatGeobuf,\
+  \ and caches the result for\n30 days. Returns one LineString per in-AOI road segment with attributes\n\
+  ``osm_id``, ``name``, ``highway``, ``lanes``, and ``maxspeed`` (a road\nthat crosses the bbox boundary\
+  \ several times yields several segments that\nshare the source way's attributes). The resulting vector\
+  \ renders inline\non the map automatically -- do NOT call ``publish_layer`` on it.\n\n**When to use:**\n\
+  - User asks to \"show roads\" or \"overlay the road network\" for any area.\n- Flood-impact map needs\
+  \ road context to communicate which streets are\n  inundated (\"which roads are under water?\").\n-\
+  \ Evacuation-routing or accessibility analysis needs a carriageway\n  network as a context or input\
+  \ layer.\n- Any workflow step that needs named road-centreline vectors for CONUS\n  or international\
+  \ areas (OSM is global).\n\n**When NOT to use:**\n- DO NOT use for parcel or lot boundaries -- use\n\
+  \  ``fetch_administrative_boundaries`` (TIGER/Line) for those.\n- DO NOT use for pedestrian paths, bicycle\
+  \ routes, or rail lines -- those OSM tags (``footway``, ``cycleway``, ``railway``) are excluded\n  from\
+  \ this tool's valid ``road_classes`` set by design.\n- DO NOT use when turn-by-turn routing, signal\
+  \ phasing, or lane-level\n  topology is needed; Overpass returns simplified LineStrings, not a\n  routable\
+  \ graph with all OSM topology tags.\n- DO NOT use for highly dynamic road changes -- the 30-day cache\
+  \ means\n  road geometry is refreshed at most once per month.\n\n**Parameters:**\n- ``bbox`` (tuple[float,\
+  \ float, float, float]): ``(min_lon, min_lat,\n  max_lon, max_lat)`` in EPSG:4326. Required. Example\
+  \ for Fort Myers:\n  ``(-82.0, 26.4, -81.7, 26.7)``.\n- ``road_classes`` (list[str] | None, default\
+  \ None): OSM ``highway``\n  tag values to include. ``None`` returns the default major-plus-arterial\n\
+  \  set: ``motorway``, ``trunk``, ``primary``, ``secondary``, ``tertiary``,\n  plus ``_link`` ramp variants.\
+  \ Pass a narrower list (e.g.\n  ``[\"motorway\", \"trunk\"]``) for interstates-only, or add\n  ``[\"\
+  residential\"]`` for local streets.\n\n**Returns:** A ``LayerURI`` pointing at a FlatGeobuf in the cache\
+  \ bucket\n(``s3://trid3nt-cache/cache/static-30d/osm_roads/<key>.fgb``).\n``layer_type=\"vector\"``,\
+  \ ``role=\"context\"``, ``units=None``. Properties\nper feature: ``osm_id`` (int), ``name`` (str | None),\
+  \ ``highway``\n(str), ``lanes`` (str | None), ``maxspeed`` (str | None).\n\n**Cross-tool dependencies:**\n\
+  - Typically layered over ``fetch_dem`` or flood-output rasters as a\n  context overlay.\n- Pairs with\
+  \ ``spatial_query`` or intersection tools to\n  quantify road-length under flood inundation.\n- Overpass\
+  \ inserts a 1 s polite delay before each network request to\n  respect rate limits; cache hits skip\
+  \ this delay.\n\nFR-CE-8: ``read_through`` with ``ttl_class=\"static-30d\"``; cache key\nis SHA-256\
+  \ over ``(bbox-6dp, road_classes_sorted)`` so caller-supplied\nordering does not affect the key."

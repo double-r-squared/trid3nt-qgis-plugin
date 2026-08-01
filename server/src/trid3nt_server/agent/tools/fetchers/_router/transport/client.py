@@ -156,21 +156,23 @@ def get_bytes(
 def post_bytes(
     client: httpx.Client, url: str, *, headers: dict[str, str] | None = None,
     params: dict[str, Any] | None = None, json_body: Any = None,
+    data: dict[str, Any] | None = None,
 ) -> tuple[bytes, str, str]:
-    """POST a JSON body and return ``(body, content_type, final_url)`` with the retry authority.
+    """POST a body and return ``(body, content_type, final_url)`` with the retry authority.
 
     The write-method counterpart to :func:`get_bytes` for REST endpoints whose
-    query is a JSON request body rather than a query string (USACE NSI's
-    structures POST). Shares the ONE retry authority (429/5xx/timeout backoff +
-    ``Retry-After``); a 4xx classifies to a typed transport error immediately. A
-    POST is retried on the same idempotency assumption the whole router makes for
-    its cacheable read-through fetchers (the endpoint is a pure query, no side
-    effect), so the retry set is unchanged.
+    query is a request body rather than a query string: ``json_body`` sends a JSON
+    body (USACE NSI's structures POST), ``data`` sends a form-encoded body (the
+    Overpass interpreter reads its QL from the ``data`` form field). Shares the ONE
+    retry authority (429/5xx/timeout backoff + ``Retry-After``); a 4xx classifies to
+    a typed transport error immediately. A POST is retried on the same idempotency
+    assumption the whole router makes for its cacheable read-through fetchers (the
+    endpoint is a pure query, no side effect), so the retry set is unchanged.
     """
     last_exc: Exception | None = None
     for attempt in range(MAX_RETRIES + 1):
         try:
-            resp = client.post(url, headers=headers, params=params, json=json_body)
+            resp = client.post(url, headers=headers, params=params, json=json_body, data=data)
         except (httpx.TimeoutException, httpx.TransportError) as exc:
             last_exc = exc
             logger.warning("transport.post_bytes network error url=%s attempt=%d: %s",

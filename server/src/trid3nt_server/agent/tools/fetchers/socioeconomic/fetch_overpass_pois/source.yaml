@@ -1,0 +1,115 @@
+schema_version: v1
+name: fetch_overpass_pois
+source_class: overpass_pois
+input_error_suffix: INPUT_INVALID
+empty_error_suffix: NO_FEATURES
+shape: vector-fgb
+supports_global_query: false
+endpoints:
+  data:
+    url: https://overpass-api.de/api/interpreter
+  kumi:
+    url: https://overpass.kumi.systems/api/interpreter
+  coffee:
+    url: https://overpass.private.coffee/api/interpreter
+auth:
+  mode: none
+  user_agent: trid3nt/0.1 (Hazard Modeling Agent; https://github.com/double-r-squared/trid3nt-qgis-plugin;
+    agent@trid3nt.dev)
+params:
+  bbox:
+    type: bbox
+    required: true
+    quantize: round_6dp
+  tag:
+    type: str
+    schema_optional: true
+  amenity:
+    type: str
+    schema_optional: true
+  category:
+    type: str
+    schema_optional: true
+  value:
+    type: str
+    schema_optional: true
+hooks:
+  build_request: overpass_pois.build_request
+  parse_response: overpass_pois.parse_response
+ingest:
+  http_source:
+    endpoint_fallback: true
+  properties:
+  - osm_id
+  - osm_type
+  - name
+  - key
+  - value
+  - tags_json
+normalize:
+  crs: EPSG:4326
+output:
+  layer_type: vector
+  ext: fgb
+  role: primary
+  style_preset: overpass_pois
+  bbox_from_features:
+    pad: 0.02
+cache:
+  ttl_class: static-30d
+payload_estimate:
+  model: per_feature
+  features_per_sq_deg: 80.0
+  kb_per_feature: 0.3
+  floor_mb: 0.001
+caveats:
+- Generic OpenStreetMap key=value POIs (node/way/relation centroid) via the Overpass API (3-mirror fallback).
+  Global, keyless. Zero matches -> a typed OVERPASS_POIS_NO_FEATURES error, never an empty-success layer.
+docstring: "Fetch OpenStreetMap POIs / tagged features as a point FlatGeobuf overlay.\n\n**What it does:**\
+  \ Queries the OpenStreetMap Overpass API for any\n``key=value``-tagged feature (``node``, ``way``, or\
+  \ ``relation``) inside the\nrequested bbox, reduces every match to a single Point (way/relation matches\n\
+  use their centroid), and serializes the points to FlatGeobuf cached for 30\ndays. Each feature carries\
+  \ ``osm_id``, ``osm_type``, ``name``, the matched\n``key`` / ``value``, and the full OSM tag dictionary\
+  \ as ``tags_json``. The\nresulting vector renders inline on the map automatically -- do NOT call\n``publish_layer``\
+  \ on it. This is the FLEXIBLE, global exposure-layer\ncomplement to the FIXED, US-only ``fetch_hifld_critical_infrastructure``\n\
+  tool: same uniform point shape, but the full OSM tag vocabulary worldwide.\n\n**When to use:**\n- User\
+  \ asks to show / overlay a class of facilities or features by name:\n  \"show the hospitals\", \"where\
+  \ are the fire stations\", \"schools in this\n  area\", \"pharmacies near the flood zone\", \"gas stations\"\
+  , \"places of\n  worship\", \"supermarkets\".\n- You need an EXPOSURE layer for a hazard footprint (which\
+  \ hospitals /\n  schools / shelters fall inside an inundation or smoke plume?) anywhere in\n  the world,\
+  \ including outside the US where HIFLD has no coverage.\n- Any ad-hoc OSM tag the user names that is\
+  \ not a curated HIFLD category\n  (``emergency=fire_hydrant``, ``man_made=water_tower``, ``power=substation``,\n\
+  \  ``shop=supermarket``, ``tourism=hotel``, ...).\n\n**When NOT to use:**\n- For US critical-infrastructure\
+  \ categories where an authoritative federal\n  dataset is preferable, ``fetch_hifld_critical_infrastructure``\
+  \ is the\n  curated source (schools, hospitals, fire/police, power plants) -- use that\n  when the user\
+  \ wants the official US layer; use THIS tool for global\n  coverage, niche tags, or when HIFLD lacks\
+  \ the category.\n- For ROAD / street centrelines use ``fetch_roads_osm`` (LineStrings).\n- For administrative\
+  \ / parcel boundaries use\n  ``fetch_administrative_boundaries``.\n- For building FOOTPRINT polygons\
+  \ use the building-footprint fetcher (this\n  tool returns building CENTROIDS only when ``building=*``\
+  \ is queried).\n\n**Parameters:**\n- ``bbox`` (tuple[float, float, float, float]): ``(min_lon, min_lat,\n\
+  \  max_lon, max_lat)`` in EPSG:4326. Required. Example San Francisco core:\n  ``(-122.45, 37.74, -122.38,\
+  \ 37.80)``. A bbox is REQUIRED -- there is no\n  global sweep (``supports_global_query=False``); a global\
+  \ POI query would\n  time out and return an unbounded payload.\n- Tag selector (pass ONE; checked in\
+  \ this priority order):\n    - ``amenity`` (str): an ``amenity`` key value, e.g. ``\"hospital\"``,\n\
+  \      ``\"school\"``, ``\"fire_station\"`` -- the most common shortcut.\n    - ``tag`` (str): an explicit\
+  \ ``\"key=value\"`` OSM tag, e.g.\n      ``\"emergency=fire_hydrant\"``, ``\"shop=supermarket\"``,\n\
+  \      ``\"power=substation\"``. A bare value (``\"hospital\"``) is also accepted\n      and its key\
+  \ inferred for common classes.\n    - ``category`` (str): alias for ``tag`` -- a ``\"key=value\"`` or\
+  \ a known\n      bare value.\n    - ``value`` (str): a bare value resolved to its key for common classes.\n\
+  \n**Returns:** A ``LayerURI`` pointing at a FlatGeobuf in the cache bucket\n(``.../cache/static-30d/overpass_pois/<key>.fgb``).\n\
+  ``layer_type=\"vector\"``, ``role=\"primary\"``,\n``style_preset=\"overpass_pois\"``, ``units=None``.\
+  \ ``bbox`` is set to the\nfeatures' extent so the camera auto-zooms. Properties per feature:\n``osm_id``\
+  \ (int), ``osm_type`` (str), ``name`` (str | None), ``key`` (str),\n``value`` (str), ``tags_json`` (str\
+  \ -- full OSM tag dict).\n\n**Fallback behaviour (data-source fallback norm -- primary -> fallback ->\n\
+  honest typed error):** the request is tried across several independent\npublic Overpass mirrors in turn;\
+  \ if every mirror fails a retryable\n``OverpassUpstreamError`` is raised. When the query succeeds but\
+  \ matches\nZERO features, a non-retryable ``OverpassNoFeaturesError`` is raised -- never\nan empty success-shaped\
+  \ layer.\n\n**Cross-tool dependencies:**\n- Composes WITH: ``geocode_location`` (derive a bbox from\
+  \ a place name\n  BEFORE this call), ``spatial_query`` /\n  intersection tools (count POIs inside a\
+  \ hazard footprint),\n  ``fetch_hifld_critical_infrastructure`` (the US-curated companion).\n- Upstream\
+  \ data source: OpenStreetMap via the Overpass API.\n\n**Errors:**\n- ``OverpassInputError``: bad bbox\
+  \ / missing or garbled tag / Overpass\n  rejected the query (retryable=False).\n- ``OverpassUpstreamError``:\
+  \ every Overpass mirror failed (retryable=True).\n- ``OverpassNoFeaturesError``: zero features matched\
+  \ in scope\n  (retryable=False).\n\nFR-CE-8: ``read_through`` with ``ttl_class=\"static-30d\"``; cache\
+  \ key is\nSHA-256 over ``(bbox-6dp, key, value)``. Tier-1 free, no API key. OSM is\nglobal, but a bbox\
+  \ is required (``supports_global_query=False``)."

@@ -342,9 +342,11 @@ from .fetchers.socioeconomic.fetch_field_boundaries import fetch_field_boundarie
 # fetch_hrsl_population: data-router fold phase-2 wave-9 (ADR 0055) -- twin
 # DELETED, now spec-driven (source.yaml + multi_url VRT fan-out), auto-registered.
 from .fetchers.socioeconomic.fetch_lehd_jobs import fetch_lehd_jobs  # noqa: E402,F401
-from .fetchers.socioeconomic.fetch_overpass_pois import fetch_overpass_pois  # noqa: E402,F401
+# fetch_overpass_pois + fetch_roads_osm: Overpass-family fold (ADR 0070) -- twins
+# DELETED, now spec-driven (source.yaml + overpass build_request/parse_response
+# hooks over the http_json endpoint_fallback mirror chain), auto-registered by
+# _register_router_specs() below.
 from .fetchers.socioeconomic.fetch_population import fetch_population  # noqa: E402,F401
-from .fetchers.socioeconomic.fetch_roads_osm import fetch_roads_osm  # noqa: E402,F401
 # fetch_usace_nsi: data-router fold tier-3 hooks (ADR 0061) -- twin DELETED, now
 # spec-driven (source.yaml + usace_nsi build_request/parse_response hooks + the
 # RequestPlan POST transport extension), registered by _register_router_specs() below.
