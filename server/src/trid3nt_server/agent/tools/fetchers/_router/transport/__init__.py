@@ -20,6 +20,7 @@ from .errors import (
 )
 from .opener import open_windowed_cog, preflight
 from .range_file import BLOCK, MAX_PARALLEL, CoalescedRangeFile, TransportOpener
+from .zip_object import get_zip
 
 __all__ = [
     "get_client",
@@ -27,6 +28,7 @@ __all__ = [
     "range_get",
     "get_bytes",
     "post_bytes",
+    "get_zip",
     "preflight",
     "open_windowed_cog",
     "CoalescedRangeFile",

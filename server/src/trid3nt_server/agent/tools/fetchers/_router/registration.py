@@ -281,6 +281,16 @@ def registered_spec_names() -> set[str]:
     return set(_SPEC_REGISTRY)
 
 
+def get_spec(name: str) -> SourceSpec | None:
+    """The promoted ``SourceSpec`` for ``name`` (None if not spec-served).
+
+    The in-process seam for a consumer that needs a source's raw fetched bytes
+    without the cache/publish round trip (region_choice's admin-boundary candidate
+    build): resolve the spec, then run ``router.validate_params`` + the executor.
+    """
+    return _SPEC_REGISTRY.get(name)
+
+
 def _param_schema_entry(pspec: Any) -> dict[str, Any]:
     """The typed param schema for one spec param (card projection, Design 1)."""
     entry: dict[str, Any] = {"type": pspec.type, "required": bool(pspec.required)}

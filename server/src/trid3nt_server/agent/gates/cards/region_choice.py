@@ -56,6 +56,25 @@ def _region_admin_level_for(state_code: str, query: str) -> str:
     return _DEFAULT_REGION_ADMIN_LEVEL
 
 
+def _admin_boundaries_fgb_bytes(
+    level: str, bbox: tuple[float, float, float, float]
+) -> bytes:
+    """Fetch TIGER admin-boundary FGB bytes in-process (no cache / no publish).
+
+    Runs the promoted ``fetch_administrative_boundaries`` router source's executor
+    directly (ADR 0067: zip_vector whole-object extract-read-filter) -- the
+    in-process counterpart to the published tool the twin's ``_fetch_admin_boundaries_bytes``
+    used to be. Validates + quantizes the params exactly as the tool does.
+    """
+    from ...tools.fetchers._router import registration, router
+
+    spec = registration.get_spec("fetch_administrative_boundaries")
+    if spec is None:
+        raise RuntimeError("fetch_administrative_boundaries spec not registered")
+    params = router.validate_params(spec, {"level": level, "bbox": list(bbox)})
+    return router.select_executor(spec)(spec, params)
+
+
 def _build_region_candidates(
     state_bbox: tuple[float, float, float, float],
     admin_level: str,
@@ -73,26 +92,22 @@ def _build_region_candidates(
     clip) returns an EMPTY list — the caller then offers only the whole-state
     default (honest degrade, fallback norm). Never raises.
 
-    Calls ``_fetch_admin_boundaries_bytes`` directly (rather than the
-    cache-wrapped ``fetch_administrative_boundaries``) so the candidate build
-    is decoupled from the layer-publish path: we only need the geometry +
-    attributes in-process, not a published LayerURI. The TIGER download is
-    itself cached for the published-boundary path, so this does not add a new
+    Calls ``_admin_boundaries_fgb_bytes`` (the in-process router executor seam)
+    rather than the cache-wrapped ``fetch_administrative_boundaries`` so the
+    candidate build is decoupled from the layer-publish path: we only need the
+    geometry + attributes in-process, not a published LayerURI. The TIGER download
+    is itself cached for the published-boundary path, so this does not add a new
     uncached fetch in practice.
     """
     try:
         import geopandas as gpd  # type: ignore[import-not-found]
         from io import BytesIO
-
-        from ...tools.fetchers.socioeconomic.fetch_administrative_boundaries.fetch_administrative_boundaries import (
-            _fetch_admin_boundaries_bytes,
-        )
     except ImportError:
         logger.debug("region-choice: geopandas unavailable", exc_info=True)
         return []
 
     try:
-        fgb_bytes = _fetch_admin_boundaries_bytes(admin_level, tuple(state_bbox))
+        fgb_bytes = _admin_boundaries_fgb_bytes(admin_level, tuple(state_bbox))
     except Exception:  # noqa: BLE001 — boundary fetch is best-effort
         logger.warning(
             "region-choice: fetch_admin_boundaries failed level=%s bbox=%s; "

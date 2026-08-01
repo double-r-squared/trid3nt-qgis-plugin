@@ -140,6 +140,8 @@ def fetch_source_array(spec: SourceSpec, params: dict[str, Any]) -> tuple[Any, A
         return _multi_url_to_array(spec, params)
     if access == "gzip_object":
         return _gzip_object_to_array(spec, params)
+    if access == "fixed_tile_grid":
+        return _fixed_tile_grid_to_array(spec, params)
     if access == "stac_search":
         return _stac_to_array(spec, params)
     if access == "stac_float":
@@ -629,6 +631,165 @@ def _gzip_object_to_array(spec: SourceSpec, params: dict[str, Any]) -> tuple[Any
             f"bbox={bbox} clipped to all-nodata (ocean / outside land coverage); no valid pixels",
             spec.empty_error_suffix)
     return arr, out_transform, src_crs
+
+
+# --------------------------------------------------------------------------- #
+# fixed_tile_grid: a global raster cut into a REGULAR degree grid of per-tile
+# ZIP objects, each wrapping ONE DEFLATE-compressed .tif member (GHS-POP tiles).
+# A DEFLATE member is not windowable by a byte range (decoding forces a near-whole
+# member transfer), so the honest shape is a WHOLE-OBJECT GET of each intersecting
+# tile's ZIP (the shared ``get_zip`` step, ADR 0067), an in-memory member read, a
+# per-tile window, and a NaN-nodata merge -- value-identical to the twin's
+# ``/vsizip//vsicurl/`` windowed read (same member bytes, same window math). ADR 0067.
+# --------------------------------------------------------------------------- #
+
+
+def _tile_grid_tiles(
+    bbox: tuple[float, float, float, float], g: dict[str, Any]
+) -> list[tuple[int, int]]:
+    """Map a bbox to the (row, col) tiles of a regular degree grid (GHSL parity).
+
+    Grid origin is offset from the integer-degree lattice by ``lon_offset`` /
+    ``top_offset`` (the global raster does not start exactly at -180/+90). The
+    row/col math reproduces the twin's ``_tiles_for_bbox`` exactly.
+    """
+    import math
+
+    tile_deg = float(g.get("tile_deg", 10.0))
+    lon_off = float(g.get("lon_offset", 0.0))
+    top_off = float(g.get("top_offset", 0.0))
+    min_lon, min_lat, max_lon, max_lat = bbox
+    c0 = math.floor((min_lon - lon_off + 180.0) / tile_deg) + 1
+    c1 = math.floor((max_lon - lon_off + 180.0) / tile_deg) + 1
+    r0 = math.floor((90.0 + top_off - max_lat) / tile_deg) + 1
+    r1 = math.floor((90.0 + top_off - min_lat) / tile_deg) + 1
+    tiles: list[tuple[int, int]] = []
+    for r in range(min(r0, r1), max(r0, r1) + 1):
+        for c in range(min(c0, c1), max(c0, c1) + 1):
+            if r >= 1 and c >= 1:
+                tiles.append((r, c))
+    return tiles
+
+
+def _fixed_tile_grid_to_array(spec: SourceSpec, params: dict[str, Any]) -> tuple[Any, Any, Any]:
+    """Whole-object per-tile ZIP GET + in-memory member window + NaN merge (ADR 0067).
+
+    For each intersecting grid tile: ``get_zip`` the tile's ZIP object through the
+    shared transport, read the named DEFLATE ``.tif`` member into a MemoryFile, and
+    window it to ``bbox`` (the twin's floor-offset / ceil-length / clip window math).
+    A missing tile (the archive omits ocean-only R/C -> 404) is a coverage gap, not
+    a failure (skip). Negative source fill -> NaN; the tiles are NaN-merged; an
+    all-NaN / no-tile window -> typed EMPTY; a per-tile read failure -> typed UPSTREAM.
+    A window exceeding ``max_pixels`` -> typed INPUT error (the twin's refusal).
+    """
+    import numpy as np
+    import rasterio
+    import rasterio.io
+    from rasterio.merge import merge
+    from rasterio.windows import Window, from_bounds
+
+    from ..transport import (
+        TransportError,
+        TransportNotFound,
+        get_client,
+        get_zip,
+    )
+
+    ingest = spec.ingest or {}
+    g = ingest.get("fixed_tile_grid", {})
+    bbox = tuple(params["bbox"])
+
+    cov = g.get("coverage_bbox")
+    if cov and not (
+        bbox[0] <= cov[2] and bbox[2] >= cov[0] and bbox[1] <= cov[3] and bbox[3] >= cov[1]
+    ):
+        raise router_empty_error(
+            spec.error_code_prefix, f"bbox={bbox} falls outside coverage {tuple(cov)}",
+            spec.empty_error_suffix)
+
+    tiles = _tile_grid_tiles(bbox, g)
+    if not tiles:
+        raise router_empty_error(
+            spec.error_code_prefix, f"bbox={bbox} maps to no tiles (outside coverage)",
+            spec.empty_error_suffix)
+
+    url_tmpl = g.get("url_template", "")
+    member_tmpl = g.get("member_template", "")
+    max_pixels = int(g.get("max_pixels", 60_000_000))
+    negative_nodata = bool(g.get("negative_is_nodata", True))
+    ua = spec.auth.user_agent if spec.auth else "trid3nt_default"
+
+    datasets: list[Any] = []
+    try:
+        for (r, c) in tiles:
+            url = url_tmpl.format(r=r, c=c)
+            member = member_tmpl.format(r=r, c=c)
+            try:
+                zf = get_zip(get_client(), url, headers={"User-Agent": ua})
+                tif_bytes = zf.read(member)
+            except TransportNotFound:
+                # A missing tile (ocean-only R/C the archive omits) is a coverage
+                # gap, not a hard failure when other tiles exist (twin: continue).
+                logger.info("router.fixed_tile_grid: tile R%d_C%d absent (404); skipping", r, c)
+                continue
+            except Exception as exc:  # noqa: BLE001 -- any fetch/extract failure: no-coverage
+                logger.info(
+                    "router.fixed_tile_grid: tile R%d_C%d open failed (%s); treating as "
+                    "no-coverage for this tile", r, c, exc)
+                continue
+            try:
+                with rasterio.io.MemoryFile(tif_bytes) as mf, mf.open() as src:
+                    win = from_bounds(*bbox, transform=src.transform)
+                    win = win.round_offsets(op="floor").round_lengths(op="ceil")
+                    win = win.intersection(Window(0, 0, src.width, src.height))
+                    if win.width <= 0 or win.height <= 0:
+                        continue
+                    if int(win.width) * int(win.height) > max_pixels:
+                        raise router_input_error(
+                            spec.error_code_prefix,
+                            f"bbox={bbox} would request {int(win.width) * int(win.height):,} "
+                            f"pixels in tile R{r}_C{c} -- refuse to materialize > "
+                            f"{max_pixels:,}; narrow the bbox.", spec.input_error_suffix)
+                    arr = src.read(1, window=win).astype(np.float32)
+                    if negative_nodata:
+                        arr[arr < 0] = np.nan
+                    out_transform = src.window_transform(win)
+                    dst_mem = rasterio.io.MemoryFile()
+                    dst = dst_mem.open(
+                        driver="GTiff", height=int(win.height), width=int(win.width),
+                        count=1, dtype="float32", crs=spec.normalize.crs,
+                        transform=out_transform, nodata=float("nan"))
+                    dst.write(arr, 1)
+                    datasets.append(dst)
+            except RouterError:
+                raise
+            except Exception as exc:  # noqa: BLE001
+                raise router_upstream_error(
+                    spec.error_code_prefix, f"tile R{r}_C{c} window read failed: {exc}")
+
+        if not datasets:
+            raise router_empty_error(
+                spec.error_code_prefix,
+                f"bbox={bbox} produced no pixels (over open water or outside coverage)",
+                spec.empty_error_suffix)
+        if len(datasets) == 1:
+            mosaic = datasets[0].read(1)
+            mtransform = datasets[0].transform
+        else:
+            merged, mtransform = merge(datasets, nodata=float("nan"))
+            mosaic = merged[0]
+        if not np.isfinite(mosaic).any():
+            raise router_empty_error(
+                spec.error_code_prefix,
+                f"bbox={bbox} produced no valid pixels (all-NaN window -- likely over water)",
+                spec.empty_error_suffix)
+        return np.asarray(mosaic, dtype="float32"), mtransform, spec.normalize.crs
+    finally:
+        for d in datasets:
+            try:
+                d.close()
+            except Exception:  # noqa: BLE001
+                pass
 
 
 def _imageserver_size(bbox: tuple[float, float, float, float], ingest: dict[str, Any]) -> tuple[int, int]:

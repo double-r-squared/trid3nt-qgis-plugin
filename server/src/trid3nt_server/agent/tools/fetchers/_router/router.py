@@ -435,6 +435,13 @@ def select_executor(spec: SourceSpec) -> Callable[[SourceSpec, dict[str, Any]], 
     if (spec.ingest or {}).get("delegate"):
         from .executors import dataretrieval_delegate
         return dataretrieval_delegate.execute
+    # zip_vector path (ADR 0067): a source publishing a ZIP-wrapped multi-file vector
+    # member (TIGER shapefile-ZIP) routes to the whole-object extract-read-filter
+    # executor. Its build_request hook is the PURE URL planner, so this MUST win over
+    # the http_json hooks.build_request branch below. No-op for every prior spec.
+    if (spec.ingest or {}).get("zip_vector"):
+        from .executors import zip_vector
+        return zip_vector.execute
     # Chained-resolution path (ADR 0063): a spec that declares an offset-paging
     # (next_page) or per-item detail-enrichment (enrich_plan) hook routes to the
     # chained_resolution executor (resolve-then-fetch + bounded enrichment over the

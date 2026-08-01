@@ -321,7 +321,10 @@ from .fetchers.biodiversity.fetch_mobi import fetch_mobi  # noqa: E402,F401
 from .fetchers.biodiversity.fetch_movebank_tracks import fetch_movebank_tracks  # noqa: E402,F401
 
 # -- fetchers/socioeconomic --
-from .fetchers.socioeconomic.fetch_administrative_boundaries import fetch_administrative_boundaries  # noqa: E402,F401
+# fetch_administrative_boundaries: data-router fold zip/multi-file wave (ADR 0067) --
+# twin DELETED, now spec-driven (source.yaml + admin_boundaries.build_request FIPS
+# planner + the zip_vector whole-object extract executor), registered by
+# _register_router_specs() below.
 from .fetchers.socioeconomic.fetch_buildings import fetch_buildings  # noqa: E402,F401
 # fetch_cdc_svi: data-router fold phase-2 wave-2 -- twin DELETED, now spec-driven
 # (source.yaml + router), registered by _register_router_specs() below.
@@ -331,7 +334,9 @@ from .fetchers.socioeconomic.fetch_buildings import fetch_buildings  # noqa: E40
 # now spec-driven (source.yaml + the esri_json ingest mode + percentile/fraction/
 # raw column kinds + from_param routing), registered by _register_router_specs().
 from .fetchers.socioeconomic.fetch_field_boundaries import fetch_field_boundaries  # noqa: E402,F401
-from .fetchers.socioeconomic.fetch_ghsl_population import fetch_ghsl_population  # noqa: E402,F401
+# fetch_ghsl_population: data-router fold zip/multi-file wave (ADR 0067) -- twin
+# DELETED, now spec-driven (source.yaml + the raster fixed_tile_grid whole-object
+# per-tile ZIP extract mode), registered by _register_router_specs() below.
 # fetch_hrsl_population: data-router fold phase-2 wave-9 (ADR 0055) -- twin
 # DELETED, now spec-driven (source.yaml + multi_url VRT fan-out), auto-registered.
 from .fetchers.socioeconomic.fetch_lehd_jobs import fetch_lehd_jobs  # noqa: E402,F401

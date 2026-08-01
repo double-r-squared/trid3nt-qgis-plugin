@@ -102,8 +102,9 @@ def _import_tools_registry() -> int:
     # in clip_raster_to_bbox). compute_zonal_statistics demoted to the code_exec
     # playground (docs/playbooks/zonal-statistics-recipe.md).
     from .agent.tools.processing.clip_raster_to_polygon import clip_raster_to_polygon  # noqa: F401
-    # register fetch_administrative_boundaries (TIGER/Line 2024; state/county/place/zcta).
-    from .agent.tools.fetchers.socioeconomic.fetch_administrative_boundaries import fetch_administrative_boundaries  # noqa: F401
+    # fetch_administrative_boundaries: data-router fold zip/multi-file wave (ADR 0067)
+    # -- twin DELETED, now spec-driven (zip_vector extract executor + FIPS planner),
+    # registered via register_specs_from_tree (agent.tools import above).
     # register compute_hillshade (gdaldem hillshade; 5 style presets; swiss_double multiply-blend).
     from .agent.tools.processing.compute_hillshade import compute_hillshade  # noqa: F401
     # register web_fetch (generic web-page ingest with 4 extraction modes).
