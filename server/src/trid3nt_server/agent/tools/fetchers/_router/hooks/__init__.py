@@ -135,3 +135,11 @@ from . import raws_weather  # noqa: E402,F401
 from . import snotel_snow  # noqa: E402,F401
 from . import airnow_air_quality  # noqa: E402,F401
 from . import openaq_measurements  # noqa: E402,F401
+# arcgis-odd wave (ADR 0066): OBJECTID-cursor paging, WAF headers, prefix-strip,
+# raise-on-unknown alias + fail-loud, keyed dual-endpoint, multi-layer union -- all
+# via the EXISTING build_request/next_page/parse_response hooks (zero new machinery).
+from . import fema_nfhl_zones  # noqa: E402,F401
+from . import nwi_wetlands  # noqa: E402,F401
+from . import wdpa_protected_areas  # noqa: E402,F401
+from . import usace_dams  # noqa: E402,F401
+from . import epa_frs_facilities  # noqa: E402,F401

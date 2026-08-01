@@ -1,0 +1,80 @@
+schema_version: v1
+name: fetch_wdpa_protected_areas
+source_class: wdpa
+shape: vector-fgb
+supports_global_query: false
+endpoints:
+  data:
+    url: https://services5.arcgis.com/Mj0hjvkNtV7NRhA7/ArcGIS/rest/services/WDPA_v0/FeatureServer/1/query
+auth:
+  mode: none
+  user_agent: trid3nt/0.1 (Hazard Modeling Agent; https://github.com/double-r-squared/trid3nt-qgis-plugin;
+    agent@trid3nt.dev)
+params:
+  bbox:
+    type: bbox
+    required: true
+    quantize: round_6dp
+    error_suffix: BBOX_INVALID
+  designation_filter:
+    type: str_list
+    required: false
+    schema_optional: true
+hooks:
+  build_request: wdpa_protected_areas.build_request
+  next_page: wdpa_protected_areas.next_page
+  parse_response: wdpa_protected_areas.parse_response
+ingest:
+  properties:
+  - name_eng
+  - desig_eng
+  - iucn_cat
+  - status
+  - status_yr
+  - site_id
+normalize:
+  crs: EPSG:4326
+output:
+  layer_type: vector
+  ext: fgb
+  role: context
+  style_preset: wdpa_protected_areas
+  emit_bbox: false
+cache:
+  ttl_class: static-30d
+payload_estimate:
+  model: per_feature
+  features_per_sq_deg: 200.0
+  kb_per_feature: 2.0
+  floor_mb: 0.05
+  ceil_mb: 50.0
+caveats:
+- UNEP-WCMC World Database on Protected Areas polygons (global, monthly). designation_filter normalizes
+  case/plural/abbreviation and RAISES on unknown; a filter that empties a non-empty bbox fails LOUD (silent-mismatch
+  guard). Conservation designations only, NOT parcels.
+docstring: "Fetch World Database on Protected Areas (WDPA) polygons clipped to a bbox.\n\n**What it does:**\
+  \ Queries the UNEP-WCMC WDPA ArcGIS REST FeatureServer\n(``services5.arcgis.com/Mj0hjvkNtV7NRhA7``)\
+  \ with a spatial envelope filter,\npaginates all matching protected-area polygons into a FlatGeobuf,\
+  \ and\noptionally filters by designation type client-side. Global coverage,\nmonthly WDPA releases,\
+  \ cached ``static-30d``. No API key required.\n\n**When to use:**\n- Agent needs protected-area boundaries\
+  \ for a study area -- e.g. overlay\n  National Parks or National Wildlife Refuges on a flood risk surface.\n\
+  - Workflow must compute the fraction of a hazard footprint that intersects\n  protected lands (conservation-impact\
+  \ analysis).\n- User asks about biodiversity context inside vs outside protected status.\n- Filtering\
+  \ ``fetch_gbif_occurrences`` or ``fetch_inaturalist_observations``\n  results by protected/unprotected\
+  \ designation.\n\n**When NOT to use:**\n- Parcel-level land ownership or cadastral boundaries (WDPA\
+  \ covers\n  conservation designations only; use county assessor data for parcels).\n- Private conservation\
+  \ easements not registered with UNEP-WCMC.\n- Tribal lands (use TIGER AIANNH or a BIA dataset).\n- Single-point\
+  \ inside/outside test (fetch the bbox once, test locally).\n\n**Parameters:**\n- ``bbox`` (tuple): ``(min_lon,\
+  \ min_lat, max_lon, max_lat)`` in EPSG:4326.\n  Example: ``(-82.0, 25.0, -80.0, 26.5)`` for Everglades\
+  \ region.\n- ``designation_filter`` (list[str] or None): list of designations to\n  retain, e.g. ``[\"\
+  National Park\", \"National Wildlife Refuge\"]``. Each\n  entry is NORMALIZED to the exact live ``desig_eng``\
+  \ token, so case\n  variants (\"national park\"), plurals (\"National Parks\"), and common\n  abbreviations\
+  \ (\"NP\", \"NWR\") all resolve. An unknown designation raises\n  ``WDPADesignationError`` (non-retryable)\
+  \ listing the accepted forms\n  rather than silently filtering everything out. ``None`` returns all\n\
+  \  designations. Filter is applied client-side after the spatial fetch.\n\n**Returns:**\n``LayerURI(layer_type=\"\
+  vector\", role=\"context\", units=None)`` pointing at a\nFlatGeobuf with fields: ``name_eng``, ``desig_eng``,\
+  \ ``iucn_cat``,\n``status``, ``status_yr``, ``site_id``. Empty bbox over open water returns\na valid\
+  \ 0-feature FlatGeobuf (not an error).\n\n**Cross-tool dependencies:**\n- Pairs with: ``fetch_gbif_occurrences``,\
+  \ ``fetch_inaturalist_observations``\n  (conservation layer context).\n- Upstream of: ``spatial_query``\
+  \ for inside/outside protected\n  area summaries.\n- Complemented by: ``fetch_administrative_boundaries``\
+  \ for jurisdictional\n  boundary overlay."

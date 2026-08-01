@@ -250,7 +250,6 @@ from .fetchers.hydrology.fetch_jrc_global_surface_water import fetch_jrc_global_
 # DELETED, now spec-driven (source.yaml + dataretrieval-delegating router),
 # registered by _register_router_specs() below.
 from .fetchers.hydrology.fetch_noaa_nwm_streamflow import fetch_noaa_nwm_streamflow  # noqa: E402,F401
-from .fetchers.hydrology.fetch_nwi_wetlands import fetch_nwi_wetlands  # noqa: E402,F401
 # fetch_nws_river_forecast: data-router fold chained-resolution mode (ADR 0063) -- twin
 # DELETED, now spec-driven (source.yaml + nws_river_forecast hooks: gauges-by-bbox / single
 # detail + bounded per-gauge threshold/stageflow enrichment), registered below.
@@ -320,7 +319,6 @@ from .fetchers.biodiversity.fetch_ebird_observations import fetch_ebird_observat
 from .fetchers.biodiversity.fetch_iucn_red_list_range import fetch_iucn_red_list_range  # noqa: E402,F401
 from .fetchers.biodiversity.fetch_mobi import fetch_mobi  # noqa: E402,F401
 from .fetchers.biodiversity.fetch_movebank_tracks import fetch_movebank_tracks  # noqa: E402,F401
-from .fetchers.biodiversity.fetch_wdpa_protected_areas import fetch_wdpa_protected_areas  # noqa: E402,F401
 
 # -- fetchers/socioeconomic --
 from .fetchers.socioeconomic.fetch_administrative_boundaries import fetch_administrative_boundaries  # noqa: E402,F401
@@ -346,9 +344,7 @@ from .fetchers.socioeconomic.fetch_roads_osm import fetch_roads_osm  # noqa: E40
 from .fetchers.socioeconomic.geocode_location import geocode_location  # noqa: E402,F401
 
 # -- fetchers/hazard --
-from .fetchers.hazard.fetch_epa_frs_facilities import fetch_epa_frs_facilities  # noqa: E402,F401
 from .fetchers.hazard.fetch_fault_sources import fetch_fault_sources  # noqa: E402,F401
-from .fetchers.hazard.fetch_fema_nfhl_zones import fetch_fema_nfhl_zones  # noqa: E402,F401
 from .fetchers.hazard.fetch_firms_active_fire import fetch_firms_active_fire  # noqa: E402,F401
 # fetch_hifld_critical_infrastructure: data-router fold pilot -- twin DELETED, now
 # spec-driven (source.yaml + router), registered by _register_router_specs() below.
@@ -366,7 +362,6 @@ from .fetchers.hazard.fetch_firms_active_fire import fetch_firms_active_fire  # 
 # fetch_tsunami_events: data-router fold phase-2 wave-10 (ADR 0056, tier-3 hooks) --
 # twin DELETED, now spec-driven (source.yaml + ncei_tsunami build_request/parse_response
 # hooks + paging), registered by _register_router_specs() below.
-from .fetchers.hazard.fetch_usace_dams import fetch_usace_dams  # noqa: E402,F401
 # fetch_usace_levees: data-router fold phase-2 wave-6 (ADR 0052) -- twin DELETED,
 # now spec-driven (source.yaml + endpoint_by_param sub-layer routing +
 # properties_by_param), registered by _register_router_specs() below.

@@ -1,0 +1,75 @@
+schema_version: v1
+name: fetch_nwi_wetlands
+source_class: nwi_wetlands
+error_prefix: NWI_WETLANDS
+input_error_suffix: INPUT_INVALID
+shape: vector-fgb
+supports_global_query: false
+endpoints:
+  data:
+    url: https://fwspublicservices.wim.usgs.gov/wetlandsmapservice/rest/services/Wetlands/MapServer/0/query
+auth:
+  mode: none
+  user_agent: trid3nt/0.1 (Hazard Modeling Agent; https://github.com/double-r-squared/trid3nt-qgis-plugin;
+    agent@trid3nt.dev)
+params:
+  bbox:
+    type: bbox
+    required: true
+    quantize: round_6dp
+hooks:
+  build_request: nwi_wetlands.build_request
+  next_page: nwi_wetlands.next_page
+  parse_response: nwi_wetlands.parse_response
+ingest:
+  properties:
+  - attribute
+  - wetland_type
+  - acres
+normalize:
+  crs: EPSG:4326
+output:
+  layer_type: vector
+  ext: fgb
+  role: context
+  style_preset: nwi_wetlands
+  emit_bbox: false
+cache:
+  ttl_class: static-30d
+payload_estimate:
+  model: per_feature
+  features_per_sq_deg: 1024.0
+  kb_per_feature: 1.0
+  floor_mb: 0.05
+  ceil_mb: 50.0
+caveats:
+- USFWS National Wetlands Inventory polygons via the public MapServer (layer 0), geojson with WAF headers,
+  prefix-strip normalizer. US + territories; bbox required. Vegetated/classified wetlands, NOT open water
+  (use fetch_nhd_waterbodies).
+docstring: "USFWS National Wetlands Inventory (NWI) wetland polygons as a vector layer.\n\nROUTING --\
+  \ use this when the user wants WETLAND EXTENT / boundaries: \"show\nthe wetlands here\", \"map the marshes\
+  \ / swamps / bogs\", \"NWI wetlands\",\n\"Cowardin wetland classes\", \"freshwater emergent / forested\
+  \ wetlands\",\n\"estuarine wetlands\", or needs wetland polygons to overlay on / intersect\nwith a hazard\
+  \ footprint. KEY-FREE, US + territories, authoritative USFWS\nsource.\n\nPrefer THIS over:\n- ``fetch_nhd_waterbodies``\
+  \ -- that returns OPEN-WATER polygons (lakes,\n  ponds, reservoirs); this returns VEGETATED / classified\
+  \ WETLANDS. Fetch\n  both when the user wants \"all water + wetland habitat\".\n- ``fetch_jrc_global_surface_water``\
+  \ -- that is a global surface-water RASTER\n  (occurrence %), not classified wetland polygons.\n- ``digitize_water_body``\
+  \ -- that CV-vectorizes one water body from imagery;\n  NWI is the pre-mapped national inventory.\n\
+  Do NOT use for: FEMA regulatory flood zones (``fetch_fema_nfhl_zones``),\nprotected-area boundaries\
+  \ (``fetch_wdpa_protected_areas``), or soil types\n(``fetch_soilgrids`` / ``fetch_statsgo_soils``).\n\
+  \nParameters:\n    bbox: ``(min_lon, min_lat, max_lon, max_lat)`` in EPSG:4326. REQUIRED -- NWI does\
+  \ not support a global query (national-scale polygon corpus).\n        Recommended <= ~1 deg on a side;\
+  \ larger envelopes risk the\n        100k-feature pagination ceiling. Example (Naples, FL):\n      \
+  \  ``(-81.5, 26.0, -81.3, 26.2)``.\n\nReturns:\n    ``LayerURI`` (``layer_type=\"vector\"``, ``role=\"\
+  context\"``,\n    ``style_preset=\"nwi_wetlands\"``, ``units=None``) pointing at a\n    FlatGeobuf in\
+  \ the cache bucket with per-polygon columns:\n        attribute     (str) -- NWI code (e.g. \"L1UBHx\"\
+  , \"PFO1A\")\n        wetland_type  (str) -- Cowardin type (e.g. \"Lake\", \"Freshwater\n          \
+  \                      Forested/Shrub Wetland\", \"Estuarine and\n                                Marine\
+  \ Wetland\")\n        acres         (float) -- polygon area in acres (from the source)\n    An empty\
+  \ bbox over open ocean / an unmapped area returns a valid\n    0-feature FlatGeobuf (NOT an error).\n\
+  \nCross-tool dependencies:\n    - Composed by ``analyze_affected_habitats`` (the wetland channel of\
+  \ the\n      habitat-impact assessment).\n    - Feeds ``spatial_query`` (wetland area by type inside\
+  \ a footprint, or\n      wetlands within a place / protected area).\n\nResilience (feedback_data_source_fallback_norm):\
+  \ PRIMARY geojson request ->\nFALLBACK Esri-JSON parse -> honest ``NWIWetlandsUpstreamError(retryable=True)``\n\
+  if both fail. Never fabricates a non-empty layer. Cache: ``static-30d``,\nkeyed on ``bbox-rounded-6dp``\
+  \ + month vintage."

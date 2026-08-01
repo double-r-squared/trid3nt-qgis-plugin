@@ -108,6 +108,12 @@ def _fetch_main(spec: SourceSpec, params: dict[str, Any]) -> list[bytes]:
     if not (spec.hooks and spec.hooks.next_page):
         return bodies
     nxt = resolve_hook(spec.hooks.next_page)
+    # tolerate_page_error (ADR 0066): a cursor-paged source over a flaky ArcGIS
+    # cluster (fema_nfhl 500s unpredictably on later cursor pages) opts in to
+    # treating a NON-first-page upstream failure as "cursor exhausted -> partial",
+    # matching the twin's documented resilience. The first page always propagates
+    # (no partial from a total upstream outage). No-op for every prior spec.
+    tolerate = bool(_chained_block(spec).get("tolerate_page_error"))
     page = 1
     while True:
         if page > _MAX_PAGES:
@@ -119,7 +125,16 @@ def _fetch_main(spec: SourceSpec, params: dict[str, Any]) -> list[bytes]:
         plan = nxt(spec, params, bodies)
         if plan is None:
             break
-        bodies.append(_get(spec, plan))
+        try:
+            bodies.append(_get(spec, plan))
+        except RouterError:
+            if tolerate and bodies:
+                logger.warning(
+                    "router.chained: page %d upstream failure tolerated for source=%s; "
+                    "returning partial (%d page(s))", page, spec.source_class, len(bodies),
+                )
+                break
+            raise
         page += 1
     return bodies
 

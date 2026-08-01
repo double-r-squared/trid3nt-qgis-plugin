@@ -106,8 +106,6 @@ def _import_tools_registry() -> int:
     from .agent.tools.fetchers.socioeconomic.fetch_administrative_boundaries import fetch_administrative_boundaries  # noqa: F401
     # register compute_hillshade (gdaldem hillshade; 5 style presets; swiss_double multiply-blend).
     from .agent.tools.processing.compute_hillshade import compute_hillshade  # noqa: F401
-    # register fetch_wdpa_protected_areas (WDPA ArcGIS REST; designation_filter; FlatGeobuf).
-    from .agent.tools.fetchers.biodiversity.fetch_wdpa_protected_areas import fetch_wdpa_protected_areas  # noqa: F401
     # register web_fetch (generic web-page ingest with 4 extraction modes).
     from .agent.tools.search.web_fetch import web_fetch  # noqa: F401
     # fetch_inaturalist_observations + fetch_gbif_occurrences: data-router fold
