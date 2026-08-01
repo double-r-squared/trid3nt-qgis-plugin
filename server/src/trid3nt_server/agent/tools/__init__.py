@@ -222,8 +222,6 @@ def clear_registry_for_tests() -> None:
 # ---------------------------------------------------------------------------
 
 # -- fetchers/weather --
-from .fetchers.weather.fetch_airnow_air_quality import fetch_airnow_air_quality  # noqa: E402,F401
-from .fetchers.weather.fetch_asos_metar import fetch_asos_metar  # noqa: E402,F401
 from .fetchers.weather.fetch_glm_lightning import fetch_glm_lightning  # noqa: E402,F401
 from .fetchers.weather.fetch_hrrr_forecast import fetch_hrrr_forecast  # noqa: E402,F401
 from .fetchers.weather.fetch_hrrr_smoke import fetch_hrrr_smoke  # noqa: E402,F401
@@ -235,8 +233,6 @@ from .fetchers.weather.fetch_nexrad_reflectivity import fetch_nexrad_reflectivit
 # fetch_nws_event: data-router fold tier-3 hooks (ADR 0061) -- twin DELETED, now
 # spec-driven (source.yaml + nws_event build_request/parse_response hooks, single-GET
 # NWS /alerts/active GeoJSON), registered by _register_router_specs() below.
-from .fetchers.weather.fetch_openaq_measurements import fetch_openaq_measurements  # noqa: E402,F401
-from .fetchers.weather.fetch_raws_weather import fetch_raws_weather  # noqa: E402,F401
 # fetch_storm_events_db: data-router fold (ADR 0064) -- twin DELETED, now spec-driven
 # (source.yaml + storm_events_db hooks: directory-index resolve -> newest bulk-CSV URL,
 # then bulk gzip-CSV point decode), registered by _register_router_specs() below.
@@ -388,7 +384,6 @@ from .fetchers.hazard.fetch_wfigs_incident import fetch_wfigs_incident  # noqa: 
 # -- fetchers/soil --
 # fetch_gcn250_curve_numbers: fetcher-fold wave-8 -- twin DELETED, now spec-driven
 # (source.yaml + router direct_window), registered by _register_router_specs() below.
-from .fetchers.soil.fetch_snotel_snow import fetch_snotel_snow  # noqa: E402,F401
 from .fetchers.soil.fetch_soilgrids import fetch_soilgrids  # noqa: E402,F401
 from .fetchers.soil.fetch_statsgo_soils import fetch_statsgo_soils  # noqa: E402,F401
 

@@ -128,3 +128,10 @@ from . import nws_river_forecast  # noqa: E402,F401
 from . import openfema_disasters  # noqa: E402,F401
 # directory-index resolve -> bulk gzip-CSV point decode (ADR 0064).
 from . import storm_events_db  # noqa: E402,F401
+# station-siblings wave (ADR 0065): multi-state discovery + station-observations +
+# batched-snapshot + keyed missing-key parity, all via the existing phases.
+from . import asos_metar  # noqa: E402,F401
+from . import raws_weather  # noqa: E402,F401
+from . import snotel_snow  # noqa: E402,F401
+from . import airnow_air_quality  # noqa: E402,F401
+from . import openaq_measurements  # noqa: E402,F401

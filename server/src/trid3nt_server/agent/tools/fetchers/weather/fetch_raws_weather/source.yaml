@@ -1,0 +1,130 @@
+# Router source spec (station-observations fold, ADR 0065).
+# Twin: fetch_raws_weather.py -- FOLDED via the resolve phase (multi-state RAWS
+# discovery) + PHASE E enrich (per-station-per-day obhistory; one point per obs row).
+schema_version: v1
+name: fetch_raws_weather
+source_class: raws_weather
+error_prefix: RAWS_WEATHER
+shape: vector-fgb
+supports_global_query: false
+endpoints:
+  data:
+    url: https://mesonet.agron.iastate.edu/api/1/obhistory.json
+auth:
+  mode: none
+  user_agent: trid3nt/0.1 (Hazard Modeling Agent; https://github.com/double-r-squared/trid3nt-qgis-plugin;
+    agent@trid3nt.dev)
+params:
+  bbox:
+    type: bbox
+    required: true
+    quantize: round_6dp
+  start_time:
+    type: str
+    required: false
+    schema_optional: true
+  end_time:
+    type: str
+    required: false
+    schema_optional: true
+hooks:
+  resolve_build: raws_weather.resolve_build
+  resolve_parse: raws_weather.resolve_parse
+  build_request: raws_weather.build_request
+  parse_response: raws_weather.parse_response
+  enrich_plan: raws_weather.enrich_plan
+  enrich_merge: raws_weather.enrich_merge
+ingest:
+  properties:
+  - station
+  - station_name
+  - state
+  - utc_valid
+  - lon
+  - lat
+  - elevation
+  - tmpf
+  - dwpf
+  - relh
+  - sknt
+  - drct
+  - gust
+  - solar_rad
+  - precip_in
+  chained:
+    max_detail_fetches: 700
+normalize:
+  crs: EPSG:4326
+  units: mixed
+output:
+  layer_type: vector
+  ext: fgb
+  role: context
+  style_preset: raws_weather
+  emit_bbox: true
+cache:
+  ttl_class: dynamic-1h
+payload_estimate:
+  model: per_feature
+  features_per_sq_deg: 24.0
+  kb_per_feature: 0.175
+  floor_mb: 0.001
+caveats:
+- Iowa Mesonet RAWS fire-weather stations; multi-state per-state DCP-GeoJSON RAWS discovery (states overlapping
+  the bbox) then per-station-per-day obhistory (best-effort); one point per observation row. US fire belt.
+  No RAWS in bbox / no obs -> RAWS_WEATHER_EMPTY.
+docstring: "Fetch RAWS fire-weather station observations as a point FlatGeobuf.\n\n**What it does:** Retrieves\
+  \ sub-hourly observations from Remote Automated\nWeather Stations (RAWS) -- fire-weather monitoring\
+  \ stations operated by the\nUS Forest Service, BLM, NPS, BIA, and state forestry agencies -- sourced\n\
+  from the Iowa State University Iowa Environmental Mesonet (IEM) DCP network\narchive. RAWS are sited\
+  \ specifically at fire-prone ridges, canyons, and\nforest margins and report the fire-weather parameters\
+  \ most relevant to\nfire behavior: temperature, relative humidity, wind speed/direction, solar\nradiation,\
+  \ and precipitation. Returns a FlatGeobuf point layer with one\nfeature per observation per station.\
+  \ Tier-1 free, no API key.\n\n**When to use:**\n  - User asks about fire-weather conditions at or near\
+  \ a wildfire, fire\n    perimeter, or fire-prone area (e.g., \"what were the wind and RH\n    conditions\
+  \ near the Caldor Fire on Aug 18?\", \"show me fire-weather\n    stations in the Angeles National Forest\"\
+  ).\n  - Providing fire-weather forcing (wind, RH, temp) for fire-behavior\n    model inputs (FARSITE,\
+  \ BEHAVE+, WindNinja wind fields).\n  - Wildfire risk context: overlaying current or historical RAWS\n\
+  \    observations on active fire perimeters or MTBS burn severity maps.\n  - Computing fire-weather\
+  \ indices (FFMC, DMC, DC, ISI, FWI, BUI) from\n    observed temp, RH, wind, and rain inputs.\n  - User\
+  \ asks for fire-weather station data, RAWS observations, or\n    NFDRS/NWS fire-weather products at\
+  \ a specific location.\n\n**When NOT to use:**\n  - Surface weather at airports -- use ``fetch_asos_metar``\
+  \ (ASOS/METAR\n    network, broader coverage, available for non-fire-weather use cases).\n  - Gridded\
+  \ weather analysis or reanalysis -- use ``fetch_era5_reanalysis``\n    (global) or ``fetch_gridmet``\
+  \ (CONUS daily 4 km; includes fire-weather\n    variables like ERC and BI derived from NFDRS).\n  -\
+  \ Active fire detections / fire radiative power -- use\n    ``fetch_firms_active_fire`` (NASA VIIRS/MODIS\
+  \ thermal anomalies).\n  - Fire perimeter polygons -- use ``fetch_nifc_fire_perimeters`` (NIFC\n   \
+  \ current perimeters) or ``fetch_mtbs_burn_severity`` (historical).\n  - Locations outside the western/southern\
+  \ US fire belt -- RAWS coverage\n    is sparse east of the Mississippi and non-existent outside the\
+  \ US.\n    Use ``fetch_asos_metar`` or ``fetch_era5_reanalysis`` instead.\n\n**Parameters:**\n\n   \
+  \ bbox: ``(min_lon, min_lat, max_lon, max_lat)`` in EPSG:4326. Required.\n        All IEM-archived RAWS\
+  \ stations within this bbox are queried.\n        Maximum ``_MAX_STATIONS`` (50) stations; tool warns\
+  \ and truncates\n        if the bbox contains more.\n        Example for the Caldor Fire area (Sierra\
+  \ Nevada, CA):\n        ``(-121.0, 38.5, -119.5, 39.5)``.\n    start_time: Start date as ISO-8601 string\
+  \ (``\"YYYY-MM-DD\"`` or\n        ``\"YYYY-MM-DDTHH:MM:SSZ\"`` -- time component is ignored; the tool\n\
+  \        requests full calendar days). Defaults to 1 day before ``end_time``\n        (or 1 day before\
+  \ today when both are omitted). RAWS data at IEM\n        extends back to the early 2000s for most western\
+  \ US stations.\n    end_time: End date as ISO-8601 string. Defaults to today (UTC).\n        Maximum\
+  \ window is ``_MAX_DATE_RANGE_DAYS`` (14 days) per call.\n        Wider historical windows should be\
+  \ requested in separate calls\n        to avoid large per-station fan-out.\n\n**Returns:**\n\n    ``LayerURI``\
+  \ pointing at a FlatGeobuf in the cache bucket:\n    ``s3://trid3nt-cache/cache/dynamic-1h/raws_weather/<key>.fgb``\n\
+  \    - ``layer_type=\"vector\"``, ``role=\"context\"``, ``units=\"mixed\"``\n      (temperature in °F,\
+  \ wind in knots, RH in %, solar in W/m²,\n      precip in inches -- standard RAWS/NFDRS units).\n  \
+  \  - Geometry: Point at each RAWS station's coordinates, EPSG:4326.\n    - Properties per observation:\
+  \ ``station`` (NWSLI/IEM ID),\n      ``station_name``, ``state``, ``utc_valid`` (ISO-8601),\n      ``lon``,\
+  \ ``lat``, ``elevation`` (m), ``tmpf`` (°F), ``dwpf`` (°F),\n      ``relh`` (RH %), ``sknt`` (wind speed\
+  \ kt), ``drct`` (wind dir °),\n      ``gust`` (wind resultant kt), ``solar_rad`` (W/m²),\n      ``precip_in``\
+  \ (in). Missing values are ``null``.\n\nCache: ``dynamic-1h`` -- identical ``(bbox-4dp, start_date,\
+  \ end_date)``\ncalls within the same UTC hour reuse the cached FlatGeobuf.\n\n**Cross-tool dependencies:**\n\
+  \n    - Composes WITH: ``publish_layer`` (map overlay), ``geocode_location``\n      (bbox from place\
+  \ name), ``fetch_nifc_fire_perimeters``\n      (co-overlay fire perimeter + weather), ``fetch_firms_active_fire``\n\
+  \      (co-overlay thermal anomalies + RAWS obs).\n    - Feeds INTO: the code_exec playground (wind/RH\
+  \ claims for\n      FR-HEP wildfire event consensus), fire-weather index computation\n      (NFDRS/FWI\
+  \ pipeline -- future tool).\n    - Complements: ``fetch_asos_metar`` (airport weather, no fire-weather\n\
+  \      specialization), ``fetch_gridmet`` (gridded daily fire-weather),\n      ``fetch_landfire_fuels``\
+  \ (fuel moisture context).\n    - Upstream: IEM DCP network GeoJSON + obhistory API\n      (mesonet.agron.iastate.edu).\n\
+  \nErrors:\n    - ``RAWSWeatherInputError``: bad bbox or dates (retryable=False).\n    - ``RAWSWeatherUpstreamError``:\
+  \ IEM network or parse failure\n      (retryable=True).\n    - ``RAWSWeatherEmptyError``: no RAWS stations\
+  \ in bbox or no\n      observations for the period (retryable=False).\n\n\nsupports_global_query=False\
+  \ -- IEM RAWS archive covers US + territories\nonly; coverage is concentrated in the western US fire\
+  \ belt."

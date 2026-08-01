@@ -1,0 +1,120 @@
+# Router source spec (station-observations fold, ADR 0065).
+# Twin: fetch_asos_metar.py -- FOLDED via the resolve phase (multi-state
+# station discovery) + main fetch (one bulk IEM CGI CSV; one point per obs row).
+schema_version: v1
+name: fetch_asos_metar
+source_class: asos_metar
+error_prefix: ASOS_METAR
+shape: vector-fgb
+supports_global_query: false
+endpoints:
+  data:
+    url: https://mesonet.agron.iastate.edu/cgi-bin/request/asos.py
+auth:
+  mode: none
+  user_agent: trid3nt/0.1 (Hazard Modeling Agent; https://github.com/double-r-squared/trid3nt-qgis-plugin;
+    agent@trid3nt.dev)
+params:
+  bbox:
+    type: bbox
+    required: true
+    quantize: round_6dp
+  start_time:
+    type: str
+    required: false
+    schema_optional: true
+  end_time:
+    type: str
+    required: false
+    schema_optional: true
+hooks:
+  resolve_build: asos_metar.resolve_build
+  resolve_parse: asos_metar.resolve_parse
+  build_request: asos_metar.build_request
+  parse_response: asos_metar.parse_response
+ingest:
+  properties:
+  - station
+  - valid
+  - lon
+  - lat
+  - elevation
+  - tmpf
+  - dwpf
+  - sknt
+  - drct
+  - gust
+  - alti
+  - mslp
+  - vsby
+  - wxcodes
+  - skyc1
+  - skyl1
+normalize:
+  crs: EPSG:4326
+  units: mixed
+output:
+  layer_type: vector
+  ext: fgb
+  role: context
+  style_preset: asos_metar
+  emit_bbox: true
+cache:
+  ttl_class: dynamic-1h
+payload_estimate:
+  model: per_feature
+  features_per_sq_deg: 36.0
+  kb_per_feature: 0.2
+  floor_mb: 0.001
+caveats:
+- Iowa State IEM ASOS/METAR hourly surface observations; multi-state per-state-GeoJSON discovery (states
+  overlapping the bbox) then ONE bulk IEM CGI CSV request; one point per observation row. US + territories
+  only. No stations in bbox / no rows -> ASOS_METAR_EMPTY.
+docstring: "Fetch ASOS/METAR surface weather observations as a point FlatGeobuf.\n\nRetrieves hourly surface\
+  \ weather observations from all Automated Surface\nObserving System (ASOS) stations within the requested\
+  \ bbox, sourced from\nthe Iowa State University Iowa Environmental Mesonet (IEM) CGI archive.\nObservations\
+  \ include temperature, dewpoint, wind speed/direction/gust,\naltimeter setting, MSLP, visibility, sky\
+  \ cover, and present-weather codes.\n\nWhen to use:\n  - User asks for current or historical surface\
+  \ weather at an airport or\n    weather station (e.g., \"what was the wind at Fort Myers yesterday?\"\
+  ,\n    \"show me temperature readings near Naples, FL\").\n  - Hazard-event context: surface met conditions\
+  \ before/during a flood,\n    hurricane, or wildfire event (\"what were wind speeds when Ian made\n\
+  \    landfall?\").\n  - Multi-station spatial overlay of surface weather for a region.\n  - Providing\
+  \ boundary-layer meteorology input for hazard models that need\n    observed wind, humidity, or temperature\
+  \ fields.\n\nWhen NOT to use:\n  - Forecasts or future weather -- ASOS is an observational archive;\
+  \ use\n    ``fetch_nws_event`` or ``fetch_nws_alerts_conus`` for current NWS\n    products, or ``fetch_hrrr_forecast``\
+  \ for model forecasts.\n  - Gridded analysis or reanalysis over large areas -- use ``fetch_era5_reanalysis``\n\
+  \    (global, hourly ERA5) or ``fetch_mrms_qpe`` (radar QPE for precipitation).\n  - Fire-weather station\
+  \ observations outside IEM ASOS coverage -- use\n    ``fetch_raws_weather`` for RAWS (remote automated\
+  \ weather stations\n    used by fire agencies, often in non-airport locations).\n  - Tide gauge / coastal\
+  \ water-level observations -- use\n    ``fetch_noaa_coops_tides`` for NOAA CO-OPS.\n  - Non-US regions\
+  \ -- IEM ASOS archive covers US + territories only.\n\nParameters:\n    bbox: ``(min_lon, min_lat, max_lon,\
+  \ max_lat)`` in EPSG:4326. Required.\n        All IEM-archived ASOS stations whose coordinates fall\
+  \ inside this\n        bbox are queried. Maximum ``_MAX_STATIONS`` (100) stations.\n        Example\
+  \ for Fort Myers / Naples area:\n        ``(-82.5, 25.8, -81.0, 27.5)``.\n    start_time: Start of observation\
+  \ window as ISO-8601 date or datetime\n        (e.g. ``\"2024-09-26\"`` or ``\"2024-09-26T00:00:00Z\"\
+  ``).\n        Defaults to 24 hours before ``end_time`` (or 24 hours before now\n        when both are\
+  \ omitted). IEM archive extends back to the 1920s for\n        many CONUS stations; typical recent data\
+  \ available with ~1-hour lag.\n    end_time: End of observation window as ISO-8601 date or datetime\n\
+  \        (e.g. ``\"2024-09-28\"``). Defaults to current UTC time when omitted.\n        Wide windows\
+  \ (> 30 days × many stations) may produce large payloads\n        (> 25 MB); the payload-warning system\
+  \ will surface a confirmation\n        prompt before fetching.\n\nReturns:\n    ``LayerURI`` pointing\
+  \ at a FlatGeobuf in the cache bucket:\n    ``s3://trid3nt-cache/cache/dynamic-1h/asos_metar/<key>.fgb``\n\
+  \    - ``layer_type=\"vector\"``, ``role=\"context\"``, ``units=\"mixed\"``\n      (temperature in °F,\
+  \ wind in knots, pressure in inHg/hPa,\n      visibility in miles -- standard ASOS/METAR units).\n \
+  \   - Geometry: Point at each ASOS station's coordinates, EPSG:4326.\n    - Properties per observation:\
+  \ ``station`` (ICAO/FAA id),\n      ``valid`` (UTC observation time ISO-8601), ``lon``, ``lat``,\n \
+  \     ``elevation`` (ft), ``tmpf`` (°F), ``dwpf`` (°F), ``sknt``\n      (wind kt), ``drct`` (wind dir\
+  \ °), ``gust`` (gust kt), ``alti``\n      (altimeter inHg), ``mslp`` (MSLP hPa), ``vsby`` (visibility\
+  \ mi),\n      ``wxcodes`` (present weather), ``skyc1`` (sky cover), ``skyl1``\n      (sky layer height\
+  \ ft). Missing values are ``null``.\n\nCache: ``dynamic-1h`` -- identical ``(bbox-4dp, start_time, end_time)``\
+  \ calls\nwithin the same UTC hour reuse the cached FlatGeobuf.\n\nCross-tool dependencies:\n    - Composes\
+  \ WITH: ``publish_layer`` (map overlay), ``geocode_location``\n      (bbox derivation from place name),\
+  \ the code_exec playground\n      (wind/pressure claims from ASOS for FR-HEP consensus).\n    - Complements:\
+  \ ``fetch_era5_reanalysis`` (gridded global reanalysis),\n      ``fetch_mrms_qpe`` (radar precipitation),\
+  \ ``fetch_goes_satellite``\n      (satellite imagery), ``fetch_raws_weather`` (fire-weather stations).\n\
+  \    - Superseded for current NWS alerts: ``fetch_nws_alerts_conus``,\n      ``fetch_nws_event``.\n\
+  \    - Upstream: IEM ASOS CGI + per-state ASOS network GeoJSON\n      (mesonet.agron.iastate.edu).\n\
+  \nErrors:\n    - ``ASASMETARInputError``: invalid bbox or date strings (retryable=False).\n    - ``ASASMETARUpstreamError``:\
+  \ IEM network failure or malformed CSV\n      (retryable=True).\n    - ``ASASMETAREmptyError``: no ASOS\
+  \ stations in bbox or all observations\n      missing coordinates (retryable=False).\n\n\nsupports_global_query=False\
+  \ -- IEM ASOS archive covers US + territories only."
