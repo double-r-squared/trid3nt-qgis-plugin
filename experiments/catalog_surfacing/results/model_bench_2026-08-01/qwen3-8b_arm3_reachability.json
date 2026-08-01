@@ -1,0 +1,120 @@
+{
+  "arm": 3,
+  "n_sources": 14,
+  "reached": 14,
+  "recall": 1.0,
+  "per_record": [
+    {
+      "id": "fetch_cdc_svi#0",
+      "group": "fetch_cdc_svi",
+      "target": "fetch_cdc_svi",
+      "reached": true,
+      "is_source": true
+    },
+    {
+      "id": "fetch_census_acs#0",
+      "group": "fetch_census_acs",
+      "target": "fetch_census_acs",
+      "reached": true,
+      "is_source": true
+    },
+    {
+      "id": "fetch_esri_landcover_10m#0",
+      "group": "fetch_esri_landcover_10m",
+      "target": "fetch_esri_landcover_10m",
+      "reached": true,
+      "is_source": true
+    },
+    {
+      "id": "fetch_gridmet#0",
+      "group": "fetch_gridmet",
+      "target": "fetch_gridmet",
+      "reached": true,
+      "is_source": true
+    },
+    {
+      "id": "fetch_hifld_critical_infrastructure#0",
+      "group": "fetch_hifld_critical_infrastructure",
+      "target": "fetch_hifld_critical_infrastructure",
+      "reached": true,
+      "is_source": true
+    },
+    {
+      "id": "fetch_hifld_transmission_lines#0",
+      "group": "fetch_hifld_transmission_lines",
+      "target": "fetch_hifld_transmission_lines",
+      "reached": true,
+      "is_source": true
+    },
+    {
+      "id": "fetch_mtbs_burn_severity#0",
+      "group": "fetch_mtbs_burn_severity",
+      "target": "fetch_mtbs_burn_severity",
+      "reached": true,
+      "is_source": true
+    },
+    {
+      "id": "fetch_nhd_waterbodies#0",
+      "group": "fetch_nhd_waterbodies",
+      "target": "fetch_nhd_waterbodies",
+      "reached": true,
+      "is_source": true
+    },
+    {
+      "id": "fetch_nhdplus_nldi_navigate#0",
+      "group": "fetch_nhdplus_nldi_navigate",
+      "target": "fetch_nhdplus_nldi_navigate",
+      "reached": true,
+      "is_source": true
+    },
+    {
+      "id": "fetch_nifc_fire_perimeters#0",
+      "group": "fetch_nifc_fire_perimeters",
+      "target": "fetch_nifc_fire_perimeters",
+      "reached": true,
+      "is_source": true
+    },
+    {
+      "id": "fetch_noaa_coops_currents#0",
+      "group": "fetch_noaa_coops_currents",
+      "target": "fetch_noaa_coops_currents",
+      "reached": true,
+      "is_source": true
+    },
+    {
+      "id": "fetch_noaa_coops_tides#0",
+      "group": "fetch_noaa_coops_tides",
+      "target": "fetch_noaa_coops_tides",
+      "reached": true,
+      "is_source": true
+    },
+    {
+      "id": "fetch_us_drought_monitor#0",
+      "group": "fetch_us_drought_monitor",
+      "target": "fetch_us_drought_monitor",
+      "reached": true,
+      "is_source": true
+    },
+    {
+      "id": "fetch_usgs_water_quality#0",
+      "group": "fetch_usgs_water_quality",
+      "target": "fetch_usgs_water_quality",
+      "reached": true,
+      "is_source": true
+    },
+    {
+      "id": "control#0",
+      "group": "control",
+      "target": "fetch_nws_alerts_conus",
+      "reached": true,
+      "is_source": false
+    },
+    {
+      "id": "control#1",
+      "group": "control",
+      "target": "fetch_fema_nfhl_zones",
+      "reached": true,
+      "is_source": false
+    }
+  ]
+}

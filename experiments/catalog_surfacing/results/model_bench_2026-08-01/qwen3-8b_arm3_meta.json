@@ -1,0 +1,12 @@
+{
+  "arm": 3, "tag": "qwen3-8b",
+  "model_provider": "openai",
+  "openai_model": "qwen3:8b-24k",
+  "openai_base_url": "http://localhost:11434/v1",
+  "temperature": "0", "max_tokens": "4096(default)", "num_ctx": 24576,
+  "extra_system": "/no_think", "n_trials": 1,
+  "reachability_recall": 1.0,
+  "sample": "STRATIFIED PARTIAL (first 1 phrasing per source, all 14 sources)",
+  "n_records_complete": 6,
+  "note": "PARTIAL: 6 records before the ollama request hung under long hard-source reasoning (keep-alive eviction) and was stopped. 8GB VRAM, 9GB model ~69% CPU-offloaded, minutes/call."
+}
