@@ -267,8 +267,9 @@ from .fetchers.ocean.fetch_gtsm_tide_surge import fetch_gtsm_tide_surge  # noqa:
 # registered by _register_router_specs() below.
 # fetch_noaa_coops_tides: data-router fold pilot -- twin DELETED, now spec-driven
 # (source.yaml + router), registered by _register_router_specs() below.
-from .fetchers.ocean.fetch_noaa_slr_confidence import fetch_noaa_slr_confidence  # noqa: E402,F401
-from .fetchers.ocean.fetch_noaa_slr_marsh import fetch_noaa_slr_marsh  # noqa: E402,F401
+# fetch_noaa_slr_confidence + fetch_noaa_slr_marsh: raster-stragglers wave (ADR
+# 0068) -- twins DELETED, now spec-driven (source.yaml + the router mapserver_export
+# RGBA mode), registered by _register_router_specs() below.
 # fetch_noaa_slr_scenarios: data-router fold phase-2 wave-6 (ADR 0052) -- twin
 # DELETED, now spec-driven (source.yaml + the declarative fan-out router mode),
 # registered by _register_router_specs() below.

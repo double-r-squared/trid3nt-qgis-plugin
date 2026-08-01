@@ -108,7 +108,7 @@ def example_bbox_area(
 
     **Returns:** a plain dict ``{"area_km2", "width_km", "height_km", "bbox",
     "label", "method"}``. A tool that produces a MAP LAYER instead returns a
-    ``trid3nt_contracts.execution.LayerURI`` (see ``fetch_noaa_slr_confidence`` for
+    ``trid3nt_contracts.execution.LayerURI`` (see ``fetch_dem`` for
     the canonical raster example).
 
     **Cross-tool dependencies:** none -- this is a self-contained primitive.

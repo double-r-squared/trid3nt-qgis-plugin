@@ -41,11 +41,12 @@ def array_to_cog_bytes(
     transform: Any,
     crs: Any,
     *,
-    nodata: float = float("nan"),
+    nodata: float | None = float("nan"),
     dtype: str = "float32",
     colormap: dict | None = None,
+    colorinterp: str | None = None,
 ) -> bytes:
-    """Serialize a 2D (or single-band 3D) array to COG bytes (pure, offline).
+    """Serialize a 2D (or multi-band 3D) array to COG bytes (pure, offline).
 
     North-up is the caller's responsibility (the transform already carries a
     negative y-step). CRS is re-asserted on the profile after the astype so the
@@ -55,6 +56,13 @@ def array_to_cog_bytes(
     palette into band 1 with ``ColorInterp.palette`` -- byte-identical to the
     esri_landcover twin's ``_write_palette_cog`` so ``publish_layer`` colorizes
     from the embedded table (categorical passthrough, no rescale).
+
+    ``colorinterp="rgba"`` tags a 4-band uint8 array as red/green/blue/alpha so
+    ``publish_layer`` renders a server-symbolized overlay's baked palette directly
+    (the mapserver_export siblings' transparent RGBA raster). ``nodata=None`` omits
+    the nodata tag from the profile (an RGBA overlay carries transparency in the
+    alpha band, not a nodata sentinel). Both default to the single-band float32
+    behaviour -- strictly no-op for every prior caller.
     """
     import numpy as np
     import rasterio
@@ -63,18 +71,21 @@ def array_to_cog_bytes(
     if arr.ndim == 2:
         arr = arr[np.newaxis, :, :]
     if arr.ndim != 3:
-        raise ValueError(f"array must be 2D or single-band 3D; got shape {arr.shape}")
+        raise ValueError(f"array must be 2D or multi-band 3D; got shape {arr.shape}")
     count, height, width = arr.shape
 
     def _write_palette(dst: Any) -> None:
-        if colormap is None:
-            return
-        dst.write_colormap(1, colormap)
+        if colormap is not None:
+            dst.write_colormap(1, colormap)
         try:
             from rasterio.enums import ColorInterp
 
             interp = list(dst.colorinterp)
-            interp[0] = ColorInterp.palette
+            if colormap is not None:
+                interp[0] = ColorInterp.palette
+            if colorinterp == "rgba" and count == 4:
+                interp[:4] = [ColorInterp.red, ColorInterp.green,
+                              ColorInterp.blue, ColorInterp.alpha]
             dst.colorinterp = tuple(interp)
         except Exception:  # noqa: BLE001 -- colorinterp set is best-effort
             pass
@@ -89,9 +100,10 @@ def array_to_cog_bytes(
             "width": width,
             "crs": crs,
             "transform": transform,
-            "nodata": nodata,
             "compress": "DEFLATE",
         }
+        if nodata is not None:
+            base_profile["nodata"] = nodata
         try:
             with rasterio.open(
                 out_path, "w", driver="COG", blocksize=256, **base_profile
@@ -905,6 +917,112 @@ def _imageserver_export_bytes(spec: SourceSpec, params: dict[str, Any]) -> bytes
     return body
 
 
+# --------------------------------------------------------------------------- #
+# mapserver_export: an ArcGIS MapServer ``/export`` returning a SERVER-SYMBOLIZED
+# PNG32 (a baked color scheme, not raw values), georeferenced client-side into a
+# 4-band RGBA COG so publish_layer renders the baked symbology directly (no
+# colormap, no style-registry row). The transport owns the socket (ADR-0044);
+# PIL/GDAL only decode the returned image. A fully-transparent export (a bbox with
+# no coverage at that level) is a VALID transparent overlay, never a fabricated
+# layer AND never a typed EMPTY (the twin's honesty floor: the layer appears and
+# renders nothing). NOAA OCM SLR Viewer conf_* / marsh_* siblings (ADR 0059/0068).
+# --------------------------------------------------------------------------- #
+
+
+def _mapserver_export_grid(
+    bbox: tuple[float, float, float, float], res_deg: float, img: dict[str, Any]
+) -> tuple[int, int]:
+    """MapServer/export ``size`` (width_px, height_px) from a res_deg cell size.
+
+    Reproduces the twin's ``grid_size``: ceil the bbox span over ``res_deg``, clamp
+    per axis to ``[px_min, px_max]`` (NOAA rejects very large export requests).
+    """
+    import math
+
+    px_min = int(img.get("px_min", 16))
+    px_max = int(img.get("px_max", 2048))
+    min_lon, min_lat, max_lon, max_lat = bbox
+    w = max(px_min, min(px_max, int(math.ceil((max_lon - min_lon) / res_deg))))
+    h = max(px_min, min(px_max, int(math.ceil((max_lat - min_lat) / res_deg))))
+    return w, h
+
+
+def _mapserver_export_rgba_bytes(spec: SourceSpec, params: dict[str, Any]) -> bytes:
+    """MapServer ``/export`` PNG32 -> georeferenced 4-band RGBA COG bytes (ADR 0068).
+
+    Resolves the service name from a request param (the SLR level -> conf_*/marsh_*
+    service), fetches the server-rendered PNG over the bbox through the shared
+    transport, decodes it to RGBA, georeferences it with the request-bbox transform,
+    and serializes a 4-band RGBA COG. A missing service (an out-of-set level) is a
+    typed INPUT error (the twin's ``NOAA_SLR_RASTER_INPUT_INVALID``); an undecodable
+    body / HTTP failure is a typed UPSTREAM error. No nodata coverage gate -- a
+    transparent export is a valid empty overlay.
+    """
+    import io
+
+    import numpy as np
+    from PIL import Image
+    from rasterio.transform import from_bounds
+
+    from ..transport import TransportError, get_bytes, get_client
+
+    ingest = spec.ingest or {}
+    img = ingest.get("mapserver", {})
+    bbox = tuple(params["bbox"])
+
+    # service name resolved from a request param (the level -> service map).
+    svc_cfg = img.get("service_by_param", {})
+    svc_param = svc_cfg.get("param")
+    svc_map = svc_cfg.get("map", {})
+    service = svc_map.get(params.get(svc_param))
+    if service is None:
+        # An out-of-set level is an input defect (the twin's per-level validation
+        # raised NOAA_SLR_RASTER_INPUT_INVALID before any network call).
+        raise router_input_error(
+            spec.error_code_prefix,
+            f"{svc_param}={params.get(svc_param)!r} is not a valid level (no service in the map)",
+            spec.input_error_suffix)
+
+    endpoint = spec.endpoints.get("data") or next(iter(spec.endpoints.values()))
+    base = (endpoint.url or endpoint.url_template or "").rstrip("/")
+    url = f"{base}/{service}/MapServer/export"
+
+    # res_deg is a request param (model-overridable); fall back to the static
+    # default. A non-positive / non-finite value is a typed INPUT error (the twin's
+    # resolve_res_deg guard), reproduced before any network call.
+    import math as _math
+
+    res_deg = params.get("res_deg")
+    res_deg = float(res_deg) if res_deg is not None else float(img.get("res_deg", 0.0005))
+    if not (_math.isfinite(res_deg) and res_deg > 0):
+        raise router_input_error(
+            spec.error_code_prefix, f"res_deg must be a positive number; got {res_deg!r}",
+            spec.input_error_suffix)
+    width_px, height_px = _mapserver_export_grid(bbox, res_deg, img)
+    query = dict(img.get("export_query", {}))
+    query["bbox"] = f"{bbox[0]},{bbox[1]},{bbox[2]},{bbox[3]}"
+    query["size"] = f"{width_px},{height_px}"
+
+    ua = spec.auth.user_agent if spec.auth else "trid3nt_default"
+    try:
+        body, _ct, _u = get_bytes(get_client(), url, headers={"User-Agent": ua}, params=query)
+    except TransportError as exc:
+        raise router_upstream_error(
+            spec.error_code_prefix, f"MapServer export failed url={url}: {exc}")
+    try:
+        im = Image.open(io.BytesIO(body)).convert("RGBA")
+    except Exception as exc:  # noqa: BLE001 -- undecodable upstream payload (JSON error / HTML)
+        raise router_upstream_error(
+            spec.error_code_prefix, f"MapServer export returned an undecodable image url={url}: {exc}")
+
+    arr = np.asarray(im, dtype=np.uint8)  # (H, W, 4)
+    out_h, out_w = arr.shape[0], arr.shape[1]
+    chw = np.transpose(arr, (2, 0, 1))  # (4, H, W)
+    transform = from_bounds(bbox[0], bbox[1], bbox[2], bbox[3], out_w, out_h)
+    return array_to_cog_bytes(
+        chw, transform, spec.normalize.crs, nodata=None, dtype="uint8", colorinterp="rgba")
+
+
 def _pc_sign_two_tier(spec: SourceSpec, href: str, collection: str) -> str:
     """Sign a PC asset href: per-href sign endpoint PRIMARY, token path FALLBACK.
 
@@ -1266,6 +1384,10 @@ def execute(spec: SourceSpec, params: dict[str, Any]) -> bytes:
         # The ImageServer exportImage response IS the artifact (no reserialize) --
         # value-identical to the twin's raw GeoTIFF body.
         return _imageserver_export_bytes(spec, params)
+    if access == "mapserver_export":
+        # A MapServer/export server-symbolized PNG32 georeferenced client-side into
+        # a 4-band RGBA COG (noaa_slr conf_*/marsh_* overlays).
+        return _mapserver_export_rgba_bytes(spec, params)
     if access == "stac_search":
         ingest = spec.ingest or {}
         arr, transform, crs, colormap = stac_to_mosaic(spec, params)
