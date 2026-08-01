@@ -1,0 +1,115 @@
+# Router source spec (data-router fold, chained-resolution mode, ADR 0063).
+# Twin: fetch_nws_river_forecast.py -- FOLDED via chained-resolution hooks.
+schema_version: v1
+name: fetch_nws_river_forecast
+source_class: nws_nwps_river_forecast
+shape: vector-fgb
+supports_global_query: false
+error_prefix: NWS_RIVER_FORECAST
+input_error_suffix: INPUT_ERROR
+endpoints:
+  data:
+    url: https://api.water.noaa.gov/nwps/v1/gauges
+auth:
+  mode: none
+  user_agent: trid3nt/0.1 (Hazard Modeling Agent; https://github.com/double-r-squared/trid3nt-qgis-plugin;
+    agent@trid3nt.dev)
+params:
+  bbox:
+    type: bbox
+    required: false
+    schema_optional: true
+    quantize: round_6dp
+  include_thresholds:
+    type: bool
+    required: false
+    default: false
+  gauge_id:
+    type: str
+    required: false
+    schema_optional: true
+  include_series:
+    type: bool
+    required: false
+    default: false
+hooks:
+  build_request: nws_river_forecast.build_request
+  parse_response: nws_river_forecast.parse_response
+  enrich_plan: nws_river_forecast.enrich_plan
+  enrich_merge: nws_river_forecast.enrich_merge
+ingest:
+  chained:
+    max_detail_fetches: 100
+  properties:
+  - lid
+  - usgs_id
+  - name
+  - rfc
+  - wfo
+  - state
+  - flood_category
+  - fcst_flood_category
+  - obs_valid_time
+  - fcst_valid_time
+  - fcst_crest_time
+  - obs_series_json
+  - fcst_series_json
+  - obs_stage_ft
+  - obs_flow_kcfs
+  - fcst_stage_ft
+  - fcst_flow_kcfs
+  - action_stage_ft
+  - minor_stage_ft
+  - moderate_stage_ft
+  - major_stage_ft
+  - fcst_crest_stage_ft
+normalize:
+  crs: EPSG:4326
+  units: ft (river stage) + flood category
+output:
+  layer_type: vector
+  ext: fgb
+  role: primary
+  style_preset: nws_river_gauges
+  emit_bbox: true
+  bbox_from_features:
+    pad: 0.05
+cache:
+  ttl_class: dynamic-1h
+payload_estimate:
+  model: per_feature
+  features_per_sq_deg: 15.0
+  kb_per_feature: 0.4096
+  floor_mb: 0.001
+caveats:
+- NWS/NWPS (AHPS) river-forecast gauges with observed + forecast stage and flood category; US + territories
+  only. Optional per-gauge threshold + stageflow-series enrichment (bounded, best-effort). A bbox with
+  no forecast gauge -> a typed NO_GAUGES error (not empty). No API key.
+docstring: "Fetch NWS river-forecast gauges + flood categories as a Point FlatGeobuf.\n\nRetrieves the\
+  \ NWS / National Water Prediction Service (AHPS/NWPS) river\nforecast points inside ``bbox`` and returns\
+  \ one Point feature per gauge,\neach carrying:\n\n  - the OBSERVED river stage (``obs_stage_ft``) and\
+  \ flow (``obs_flow_kcfs``),\n  - the FORECAST river stage (``fcst_stage_ft``) and flow (``fcst_flow_kcfs``),\n\
+  \  - the NWS **flood category** for both observed (``flood_category``) and\n    forecast (``fcst_flood_category``):\
+  \ one of ``no_flood`` / ``action`` /\n    ``minor`` / ``moderate`` / ``major`` (or an operational state\
+  \ such as\n    ``not_defined`` / ``out_of_service`` when the gauge has no category),\n  - the gauge\
+  \ identity (``lid``, ``usgs_id``, ``name``, ``rfc``, ``wfo``,\n    ``state``) and the observed/forecast\
+  \ valid times.\n\nThis is the flood-warning surface: USGS NWIS (``fetch_usgs_nwis_gauges``) is\nthe\
+  \ raw instrument record and NWM (``fetch_noaa_nwm_streamflow``) is modeled\nreach flow; this tool is\
+  \ the NWS forecast + flood-category source.\n\nArgs:\n    bbox: ``(west, south, east, north)`` in EPSG:4326.\
+  \ REQUIRED unless\n        ``gauge_id`` is given.\n    include_thresholds: when True, fetch each gauge's\
+  \ flood-category\n        threshold stages (``action_stage_ft`` / ``minor_stage_ft`` /\n        ``moderate_stage_ft``\
+  \ / ``major_stage_ft``, ft) via a per-gauge\n        detail call (bounded to the first ~60 gauges).\
+  \ OFF by default to\n        keep the tool a single HTTP request. Always ON in ``gauge_id``\n      \
+  \  mode (the detail body carries the thresholds for free).\n    gauge_id: Optional NWS location id (lid,\
+  \ e.g. ``\"CIDI4\"`` - NOT a\n        USGS site number) selecting a SINGLE gauge via the NWPS detail\n\
+  \        endpoint; ``bbox`` is then optional/ignored. Use a bbox query\n        first to discover lids.\n\
+  \    include_series: when True, fetch each gauge's ``/stageflow`` observed\n        + forecast time\
+  \ series (bounded to the first ~12 gauges) and add:\n        ``fcst_crest_stage_ft`` / ``fcst_crest_time``\
+  \ (the forecast CREST\n        - the max forecast stage and when it occurs) plus\n        ``obs_series_json``\
+  \ (most-recent ~96 observed points) and\n        ``fcst_series_json`` (full forecast series) as compact\n\
+  \        column-oriented JSON strings ``{\"t\": [...], \"stage_ft\": [...],\n        \"flow_kcfs\":\
+  \ [...]}`` for charting. OFF by default.\n\nReturns:\n    A vector ``LayerURI`` (FlatGeobuf, Point,\
+  \ EPSG:4326).\n\nRaises:\n    NwsRiverForecastInputError: bbox and gauge_id both missing / malformed.\n\
+  \    NwsRiverForecastBboxTooLargeError: bbox implausibly large.\n    NwsRiverForecastNoGaugesError:\
+  \ zero forecast gauges in the bbox, or\n        an unknown gauge_id.\n    NwsRiverForecastUpstreamError:\
+  \ NWPS API / network failure.\n\nTier-1 free. No API key. ``supports_global_query=False`` (US + territories)."

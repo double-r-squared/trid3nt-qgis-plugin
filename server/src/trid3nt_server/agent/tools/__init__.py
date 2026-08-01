@@ -229,7 +229,9 @@ from .fetchers.weather.fetch_hrrr_forecast import fetch_hrrr_forecast  # noqa: E
 from .fetchers.weather.fetch_hrrr_smoke import fetch_hrrr_smoke  # noqa: E402,F401
 from .fetchers.weather.fetch_mrms_qpe import fetch_mrms_qpe  # noqa: E402,F401
 from .fetchers.weather.fetch_nexrad_reflectivity import fetch_nexrad_reflectivity  # noqa: E402,F401
-from .fetchers.weather.fetch_nws_alerts_conus import fetch_nws_alerts_conus  # noqa: E402,F401
+# fetch_nws_alerts_conus: data-router fold chained-resolution mode (ADR 0063) -- twin
+# DELETED, now spec-driven (source.yaml + nws_alerts_conus hooks: single /alerts/active
+# GET + per-alert zone-polygon enrichment), registered by _register_router_specs() below.
 # fetch_nws_event: data-router fold tier-3 hooks (ADR 0061) -- twin DELETED, now
 # spec-driven (source.yaml + nws_event build_request/parse_response hooks, single-GET
 # NWS /alerts/active GeoJSON), registered by _register_router_specs() below.
@@ -251,7 +253,9 @@ from .fetchers.hydrology.fetch_jrc_global_surface_water import fetch_jrc_global_
 # registered by _register_router_specs() below.
 from .fetchers.hydrology.fetch_noaa_nwm_streamflow import fetch_noaa_nwm_streamflow  # noqa: E402,F401
 from .fetchers.hydrology.fetch_nwi_wetlands import fetch_nwi_wetlands  # noqa: E402,F401
-from .fetchers.hydrology.fetch_nws_river_forecast import fetch_nws_river_forecast  # noqa: E402,F401
+# fetch_nws_river_forecast: data-router fold chained-resolution mode (ADR 0063) -- twin
+# DELETED, now spec-driven (source.yaml + nws_river_forecast hooks: gauges-by-bbox / single
+# detail + bounded per-gauge threshold/stageflow enrichment), registered below.
 from .fetchers.hydrology.fetch_river_geometry import fetch_river_geometry  # noqa: E402,F401
 from .fetchers.hydrology.fetch_usgs_groundwater_levels import fetch_usgs_groundwater_levels  # noqa: E402,F401
 from .fetchers.hydrology.fetch_usgs_nwis_gauges import fetch_usgs_nwis_gauges  # noqa: E402,F401
@@ -311,8 +315,10 @@ from .fetchers.climate.lookup_precip_return_period import lookup_precip_return_p
 
 # -- fetchers/biodiversity --
 from .fetchers.biodiversity.fetch_ebird_observations import fetch_ebird_observations  # noqa: E402,F401
-from .fetchers.biodiversity.fetch_gbif_occurrences import fetch_gbif_occurrences  # noqa: E402,F401
-from .fetchers.biodiversity.fetch_inaturalist_observations import fetch_inaturalist_observations  # noqa: E402,F401
+# fetch_gbif_occurrences / fetch_inaturalist_observations: data-router fold chained-
+# resolution mode (ADR 0063) -- twins DELETED, now spec-driven (source.yaml + the
+# resolve-then-fetch hooks: name->id species/match | /v1/taxa GET, then the offset-paged
+# occurrence / observation search), registered by _register_router_specs() below.
 from .fetchers.biodiversity.fetch_iucn_red_list_range import fetch_iucn_red_list_range  # noqa: E402,F401
 from .fetchers.biodiversity.fetch_mobi import fetch_mobi  # noqa: E402,F401
 from .fetchers.biodiversity.fetch_movebank_tracks import fetch_movebank_tracks  # noqa: E402,F401

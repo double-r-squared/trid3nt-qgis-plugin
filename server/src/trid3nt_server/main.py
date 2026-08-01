@@ -110,16 +110,16 @@ def _import_tools_registry() -> int:
     from .agent.tools.fetchers.biodiversity.fetch_wdpa_protected_areas import fetch_wdpa_protected_areas  # noqa: F401
     # register web_fetch (generic web-page ingest with 4 extraction modes).
     from .agent.tools.search.web_fetch import web_fetch  # noqa: F401
-    # register fetch_inaturalist_observations (iNat API v1; vetted citizen-science points).
-    from .agent.tools.fetchers.biodiversity.fetch_inaturalist_observations import fetch_inaturalist_observations  # noqa: F401
-    # register fetch_gbif_occurrences (GBIF Tier-1 species occurrence point fetcher).
-    from .agent.tools.fetchers.biodiversity.fetch_gbif_occurrences import fetch_gbif_occurrences  # noqa: F401
+    # fetch_inaturalist_observations + fetch_gbif_occurrences: data-router fold
+    # chained-resolution mode (ADR 0063) -- twins DELETED, spec-driven (resolve-then-fetch
+    # hooks), registered via register_specs_from_tree.
     # register fetch_storm_events_db (NOAA Storm Events DB Tier-1 fetcher).
     from .agent.tools.fetchers.weather.fetch_storm_events_db import fetch_storm_events_db  # noqa: F401
     # fetch_nws_event: data-router fold tier-3 hooks (ADR 0061) -- twin DELETED, now
     # spec-driven (source.yaml + nws_event hooks), registered via register_specs_from_tree.
-    # register fetch_nws_alerts_conus (CONUS-wide companion to fetch_nws_event).
-    from .agent.tools.fetchers.weather.fetch_nws_alerts_conus import fetch_nws_alerts_conus  # noqa: F401
+    # fetch_nws_alerts_conus: data-router fold chained-resolution mode (ADR 0063) --
+    # twin DELETED, spec-driven (single /alerts/active GET + zone-polygon enrichment),
+    # registered via register_specs_from_tree.
     # aggregate_claims_across_sources DEMOTED to an importable library (no longer
     # an LLM-facing tool); model_groundwater imports its private extractors. News
     # ingest re-homes onto web_fetch / fetch_nws_event / fetch_storm_events_db.

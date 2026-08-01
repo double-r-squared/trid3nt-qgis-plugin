@@ -28,13 +28,13 @@ it never raises, so the agent surface narrates honestly ("there are no active
 flood warnings right now; the active alerts are …") instead of fabricating a
 flood layer.
 
-Polygon-source note: the registered ``fetch_nws_alerts_conus`` tool returns a
-published FlatGeobuf ``LayerURI`` (the warning-polygon layer the UI renders),
-but the FGB is opaque to in-process geometry inspection without a read-back.
-For the selection + bbox-extraction step we call the tool module's
-``_fetch_nws_conus_geojson`` + ``_filter_features_by_event_types`` helpers
-directly to obtain the raw GeoJSON features (geometry + severity + properties)
--- a single shared CONUS sweep feeds both the published layer and the selection.
+Polygon-source note: the registered ``fetch_nws_alerts_conus`` tool (folded to a
+spec-driven chained-resolution tool, ADR 0063; resolved here through the registry
+seam) returns a published FlatGeobuf ``LayerURI`` (the warning-polygon layer the UI
+renders), but the FGB is opaque to in-process geometry inspection without a read-back.
+For the selection + bbox-extraction step this module owns a small raw-GeoJSON read
+(``_fetch_nws_conus_geojson``) to obtain the un-rendered features (geometry + severity
++ properties) -- a distinct need from the tool's render, kept workflow-local.
 
 Cross-cutting principles in force:
 - **Invariant 1 (Determinism boundary): preserves.** All return fields are
@@ -67,14 +67,56 @@ from typing import Any
 from trid3nt_contracts.execution import LayerURI
 from trid3nt_contracts.tool_registry import AtomicToolMetadata
 
+import httpx
+
 from trid3nt_server.agent.tools import register_tool
 from trid3nt_server.agent.tools.fetchers.weather.fetch_mrms_qpe.fetch_mrms_qpe import fetch_mrms_qpe
-from trid3nt_server.agent.tools.fetchers.weather.fetch_nws_alerts_conus.fetch_nws_alerts_conus import (
-    _fetch_nws_conus_geojson,
-    _filter_features_by_event_types,
-    fetch_nws_alerts_conus,
-)
 from trid3nt_server.agent.workflows.sfincs.flood.flood import model_flood_scenario
+
+
+# fetch_nws_alerts_conus folded to a spec-driven chained-resolution tool (ADR 0063);
+# resolve it through the registry seam (the twin module is gone). The raw-GeoJSON read
+# below stays workflow-owned -- Case 3 needs the un-rendered features (geometry +
+# severity) to SELECT a warning polygon, a distinct need from the tool's FGB render.
+_NWS_ALERTS_USER_AGENT = (
+    "trid3nt-server/0.1 (Hazard Modeling Agent; contact: trid3nt-ops@local)"
+)
+_NWS_ALERTS_HTTP_TIMEOUT_S = 30.0
+
+
+def fetch_nws_alerts_conus(**kwargs: Any) -> LayerURI:
+    """Resolve the promoted ``fetch_nws_alerts_conus`` tool via the registry seam."""
+    from trid3nt_server.agent.tools import TOOL_REGISTRY
+
+    return TOOL_REGISTRY["fetch_nws_alerts_conus"].fn(**kwargs)
+
+
+def _fetch_nws_conus_geojson(url: str) -> dict[str, Any]:
+    """GET the NWS active-alerts URL and return the parsed FeatureCollection dict.
+
+    Workflow-owned raw read for the Case 3 warning-polygon SELECTION (geometry +
+    severity), separate from the render-oriented FGB the tool produces. Raises a
+    ``Case3Error`` (carrying an ``error_code``) on network / non-JSON / non-FC bodies;
+    the caller degrades gracefully on it.
+    """
+    headers = {"User-Agent": _NWS_ALERTS_USER_AGENT, "Accept": "application/geo+json"}
+    try:
+        with httpx.Client(timeout=_NWS_ALERTS_HTTP_TIMEOUT_S, follow_redirects=True) as client:
+            resp = client.get(url, headers=headers)
+    except httpx.HTTPError as exc:
+        raise Case3Error("NWS_CONUS_UPSTREAM_ERROR", f"NWS CONUS request failed url={url}: {exc}") from exc
+    if resp.status_code >= 400:
+        raise Case3Error("NWS_CONUS_UPSTREAM_ERROR", f"NWS returned HTTP {resp.status_code} url={url}: {resp.text[:500]!r}")
+    try:
+        body = resp.json()
+    except ValueError as exc:
+        raise Case3Error("NWS_CONUS_UPSTREAM_ERROR", f"NWS returned non-JSON url={url}: {exc}") from exc
+    if not isinstance(body, dict) or body.get("type") != "FeatureCollection":
+        raise Case3Error(
+            "NWS_CONUS_UPSTREAM_ERROR",
+            f"NWS response is not a GeoJSON FeatureCollection url={url}",
+        )
+    return body
 
 __all__ = [
     "model_nws_flood_event_scenario",

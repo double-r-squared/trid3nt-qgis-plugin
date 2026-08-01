@@ -397,18 +397,44 @@ def features_to_fgb_bytes(
     features = apply_ingest_transforms(features, spec, params)
 
     crs = spec.normalize.crs
-    valid = [
-        f for f in features
-        if isinstance(f, dict) and f.get("geometry") is not None
-    ]
+    # keep_null_geometry (ADR 0063): preserve attribute-only rows (nws_alerts_conus
+    # unresolvable-zone alerts) instead of dropping NULL-geometry features. Default
+    # off = the byte-identical drop-null path for every prior spec.
+    keep_null = bool(getattr(spec.output, "keep_null_geometry", False))
+    if keep_null:
+        rows = [f for f in features if isinstance(f, dict)]
+    else:
+        rows = [
+            f for f in features
+            if isinstance(f, dict) and f.get("geometry") is not None
+        ]
+    valid = [f for f in rows if f.get("geometry") is not None]
     cols = _out_columns(spec, features, params)
 
-    if not valid:
+    if not rows:
         empty_df = pd.DataFrame(columns=cols)
         gdf = gpd.GeoDataFrame(empty_df, geometry=[], crs=crs)
+    elif keep_null:
+        # Materialize every row (NULL geometry preserved); column order pinned to
+        # the declared schema so the property table is stable.
+        gdf = gpd.GeoDataFrame.from_features(
+            [
+                {
+                    "type": "Feature",
+                    "properties": {c: (f.get("properties") or {}).get(c) for c in cols},
+                    "geometry": f.get("geometry"),
+                }
+                for f in rows
+            ],
+            crs=crs,
+        )
     else:
-        gdf = gpd.GeoDataFrame.from_features(valid, crs=crs)
+        gdf = gpd.GeoDataFrame.from_features(rows, crs=crs)
         gdf = gdf.dropna(subset=["geometry"]).copy()
+
+    # pyogrio rejects a spatial index over any NULL geometry; disable it when a
+    # kept-null source emits (or could emit) attribute-only rows.
+    has_null_geom = keep_null and bool(len(gdf)) and (len(valid) < len(rows))
 
     tmp_fgb: str | None = None
     try:
@@ -417,7 +443,10 @@ def features_to_fgb_bytes(
         ) as f:
             tmp_fgb = f.name
         try:
-            gdf.to_file(tmp_fgb, driver="FlatGeobuf", engine="pyogrio")
+            if has_null_geom or (keep_null and len(gdf) == 0):
+                gdf.to_file(tmp_fgb, driver="FlatGeobuf", engine="pyogrio", SPATIAL_INDEX="NO")
+            else:
+                gdf.to_file(tmp_fgb, driver="FlatGeobuf", engine="pyogrio")
         except Exception as exc:  # noqa: BLE001
             raise router_upstream_error(
                 spec.error_code_prefix, f"FlatGeobuf write failed for {len(gdf)} feature(s): {exc}"

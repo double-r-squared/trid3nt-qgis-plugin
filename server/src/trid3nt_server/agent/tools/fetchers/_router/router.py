@@ -289,6 +289,12 @@ def validate_params(spec: SourceSpec, raw: dict[str, Any]) -> dict[str, Any]:
                 raise router_input_error(sc, f"{pname} must be a string or list[str]; got {type(value).__name__}", sfx)
             out[pname] = sorted({s.strip() for s in raw_items if s.strip()})
 
+        elif pspec.type == "bool":
+            # A truthy flag (nws_river_forecast include_thresholds / include_series).
+            # Coerced with bool(value) -- the twin's `bool(flag)` contract; a JSON
+            # false/true, 0/1, or a python bool all normalize the same way.
+            out[pname] = bool(value)
+
         elif pspec.type == "date_compact":
             # Accept 'YYYY-MM-DD' or 'YYYYMMDD'; normalize to the 8-digit compact
             # form and validate it is a real calendar date (us_drought_monitor).
@@ -429,6 +435,15 @@ def select_executor(spec: SourceSpec) -> Callable[[SourceSpec, dict[str, Any]], 
     if (spec.ingest or {}).get("delegate"):
         from .executors import dataretrieval_delegate
         return dataretrieval_delegate.execute
+    # Chained-resolution path (ADR 0063): a spec that declares an offset-paging
+    # (next_page) or per-item detail-enrichment (enrich_plan) hook routes to the
+    # chained_resolution executor (resolve-then-fetch + bounded enrichment over the
+    # shared transport). The pure name->id resolve phase (resolve_build only) still
+    # uses the http_json main-fetch body, so it is NOT a trigger here -- pre_resolve
+    # runs it in route(). No-op for every prior spec (none declare these hooks).
+    if spec.hooks is not None and (spec.hooks.next_page or spec.hooks.enrich_plan):
+        from .executors import chained_resolution
+        return chained_resolution.execute
     # Tier-3 hook-driven path (ADR 0056): a spec that names a build_request hook
     # routes to the http_json executor (source-specific request + parse via named
     # pure hooks). No-op for every prior spec (none declare hooks).
@@ -533,6 +548,12 @@ def route(spec: SourceSpec, raw_params: dict[str, Any]) -> LayerURI:
     if (spec.ingest or {}).get("delegate"):
         from .executors import dataretrieval_delegate
         dataretrieval_delegate.pre_validate(spec, params)
+    # Chained-resolution PHASE R (ADR 0063): resolve a name -> id BEFORE read_through
+    # so the resolved id enters the cache key (a name query and its id query collapse
+    # to one entry). Does the round-1 I/O; no-op unless the spec declares resolve_build.
+    if spec.hooks is not None and spec.hooks.resolve_build:
+        from .executors import chained_resolution
+        params = chained_resolution.pre_resolve(spec, params)
     executor = select_executor(spec)
 
     result = read_through(

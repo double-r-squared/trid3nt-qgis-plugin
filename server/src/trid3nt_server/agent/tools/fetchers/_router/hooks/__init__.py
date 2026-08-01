@@ -21,6 +21,17 @@ Hook signatures:
 - ``parse_response(spec, params, bodies: list[bytes]) -> list[dict]`` -- decode
   the source payload(s) into GeoJSON-ish point features; raise the honest-empty /
   too-large / bad-body typed errors.
+
+Chained-resolution mode (ADR 0063) adds five PURE points for the resolve-then-fetch
+/ bounded per-item enrichment shape; the router owns every round trip + the loops:
+- ``resolve_build(spec, params) -> list[RequestPlan]`` -- round-1 name->id request(s)
+  (or ``[]`` to skip); ``resolve_parse(spec, params, bodies) -> dict`` -- the resolved
+  id as a params-merge (runs pre-cache-key so name+id collapse).
+- ``next_page(spec, params, bodies) -> RequestPlan | None`` -- offset-paging loop
+  control (next page or stop).
+- ``enrich_plan(spec, params, features) -> list[(ref_key, RequestPlan)]`` -- per-item
+  detail requests; ``enrich_merge(spec, params, features, results) -> list[dict]`` --
+  fold the deduped/bounded/best-effort detail back in (every feature survives).
 """
 
 from __future__ import annotations
@@ -108,3 +119,8 @@ from . import ncei_tsunami  # noqa: E402,F401
 from . import usgs_volcano  # noqa: E402,F401
 from . import nws_event  # noqa: E402,F401
 from . import usace_nsi  # noqa: E402,F401
+# chained-resolution mode hooks (ADR 0063).
+from . import gbif_occurrences  # noqa: E402,F401
+from . import inaturalist_observations  # noqa: E402,F401
+from . import nws_alerts_conus  # noqa: E402,F401
+from . import nws_river_forecast  # noqa: E402,F401

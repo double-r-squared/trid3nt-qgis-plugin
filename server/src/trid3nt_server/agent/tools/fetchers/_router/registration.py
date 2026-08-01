@@ -94,6 +94,8 @@ def _annotation_for(ptype: str) -> Any:
         return list[float]
     if ptype == "str_list":
         return list[str]
+    if ptype == "bool":
+        return bool
     if ptype == "int":
         return int
     if ptype == "float":
@@ -185,7 +187,10 @@ def _validate_hooks(spec: SourceSpec) -> None:
         return
     from .hooks import HookResolutionError, has_hook
 
-    for point in ("build_request", "parse_response"):
+    for point in (
+        "build_request", "parse_response",
+        "resolve_build", "resolve_parse", "next_page", "enrich_plan", "enrich_merge",
+    ):
         name = getattr(spec.hooks, point)
         if name and not has_hook(name):
             raise HookResolutionError(

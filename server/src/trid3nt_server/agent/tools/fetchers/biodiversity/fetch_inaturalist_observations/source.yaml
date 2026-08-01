@@ -1,0 +1,104 @@
+# Router source spec (data-router fold, chained-resolution mode, ADR 0063).
+# Twin: fetch_inaturalist_observations.py -- FOLDED via chained-resolution hooks.
+schema_version: v1
+name: fetch_inaturalist_observations
+source_class: inaturalist
+shape: vector-fgb
+supports_global_query: false
+error_prefix: INAT
+input_error_suffix: INPUT_INVALID
+endpoints:
+  data:
+    url: https://api.inaturalist.org/v1/observations
+auth:
+  mode: none
+  user_agent: trid3nt/0.1 (Hazard Modeling Agent; https://github.com/double-r-squared/trid3nt-qgis-plugin;
+    agent@trid3nt.dev)
+params:
+  taxon_id:
+    type: str
+    required: true
+  bbox:
+    type: bbox
+    required: true
+    quantize: round_6dp
+  quality_grade:
+    type: enum
+    required: false
+    default: research
+    values:
+    - research
+    - needs_id
+    - casual
+    - any
+  days_back:
+    type: int
+    required: false
+    schema_optional: true
+    min: 1
+  max_records:
+    type: int
+    required: false
+    default: 5000
+    min: 1
+hooks:
+  resolve_build: inaturalist_observations.resolve_build
+  resolve_parse: inaturalist_observations.resolve_parse
+  build_request: inaturalist_observations.build_request
+  next_page: inaturalist_observations.next_page
+  parse_response: inaturalist_observations.parse_response
+ingest:
+  chained: {}
+  properties:
+  - id
+  - observed_on
+  - user_login
+  - photo_url
+  - species_guess
+  - place_guess
+normalize:
+  crs: EPSG:4326
+output:
+  layer_type: vector
+  ext: fgb
+  role: context
+  style_preset: inaturalist_observations
+  emit_bbox: true
+cache:
+  ttl_class: static-30d
+payload_estimate:
+  model: per_feature
+  features_per_sq_deg: 50.0
+  kb_per_feature: 0.2
+  floor_mb: 0.01
+caveats:
+- iNaturalist citizen-science observations; a taxon name is resolved via /v1/taxa (top hit) then paged.
+  Research-grade default. Threatened taxa may carry obfuscated coordinates. No API key. An area with no
+  observations -> a header-only FlatGeobuf, never an error.
+docstring: "Fetch iNaturalist citizen-science observation points for a taxon over a bbox.\n\n**What it\
+  \ does:** Pages through ``api.inaturalist.org/v1/observations`` for\na given taxon and bounding box,\
+  \ optionally restricted by quality grade and\nobservation-date lookback window. Returns a FlatGeobuf\
+  \ Point layer with\nspecies name, observation date, observer login, and photo URL per feature.\nAccepts\
+  \ taxon as an integer ID or a scientific/common name (resolved via\n``/v1/taxa``). No API key required.\
+  \ Cached ``static-30d``.\n\n**When to use:**\n- Agent needs recent, community-vetted species sightings\
+  \ for a study area\n  (e.g. manatee distribution in coastal Florida over the last 30 days).\n- Conservation\
+  \ analysis requires observations with photo evidence and\n  observer metadata (iNat provides more detail\
+  \ than GBIF for recent sightings).\n- ``days_back`` filter enables near-real-time species-response monitoring\n\
+  \  after a disturbance event (e.g. \"bird sightings in the week after the fire\").\n\n**When NOT to\
+  \ use:**\n- Complete species distribution modeling requiring museum specimens or eDNA\n  records (use\
+  \ ``fetch_gbif_occurrences`` for broader source pool).\n- Threatened-species taxa with location-obfuscated\
+  \ coordinates (iNat policy\n  randomly offsets exact locations; returned points may not match field\
+  \ truth).\n- Species status assessments (use IUCN Red List).\n- Protected-area boundaries (use ``fetch_wdpa_protected_areas``).\n\
+  \n**Parameters:**\n- ``taxon_id`` (int or str): integer iNat taxon ID (e.g. ``43616`` for West\n  Indian\
+  \ manatee) OR scientific/common name string resolved via ``/v1/taxa``.\n- ``bbox`` (tuple): ``(min_lon,\
+  \ min_lat, max_lon, max_lat)`` in EPSG:4326.\n  Example: ``(-87.5, 24.5, -80.0, 27.5)`` for Florida\
+  \ coastal waters.\n- ``quality_grade`` (str): ``\"research\"`` (default; community-vetted),\n  ``\"\
+  needs_id\"``, ``\"casual\"``, or ``\"any\"``.\n- ``days_back`` (int or None): restrict to last N days\
+  \ from today. ``None``\n  returns all-time observations. Valid positive integers only.\n- ``max_records``\
+  \ (int): per-call cap; default 5000.\n\n**Returns:**\n``LayerURI(layer_type=\"vector\", role=\"context\"\
+  , units=None)`` pointing at a\nFlatGeobuf with fields: ``id`` (int), ``observed_on`` (str), ``user_login``\n\
+  (str), ``photo_url`` (str), ``species_guess`` (str), ``place_guess`` (str).\n\n**Cross-tool dependencies:**\n\
+  - Related: ``fetch_gbif_occurrences`` (broader multi-source occurrence data).\n- Pairs with: ``fetch_wdpa_protected_areas``\
+  \ (inside/outside protected area),\n  ``fetch_mtbs_burn_severity`` (post-fire species presence).\n-\
+  \ Name resolution uses ``/v1/taxa`` internally; same taxon_id integer and\n  name string collapse to\
+  \ the same cache entry."

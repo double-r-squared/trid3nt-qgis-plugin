@@ -86,9 +86,13 @@ AuthMode = Literal["none", "api_key_env", "cds", "vault", "token"]
 #: each entry stripped, empties dropped, sorted + deduped for cache-key
 #: stability -- the string sibling of ``float_list`` with no allowed-set gate
 #: (tier-3 hook wave). A scalar string is coerced to a 1-element list.
+#: ``bool`` = a truthy flag param (nws_river_forecast include_thresholds /
+#: include_series). Coerced with ``bool(value)`` (the twin's ``bool(flag)``
+#: contract); the promoted signature annotates it ``bool`` (chained-resolution
+#: mode, ADR 0063). No prior spec declares it (strict no-op).
 ParamType = Literal[
     "bbox", "iso_date", "enum", "int", "float", "str", "int_range", "date_compact",
-    "point", "float_list", "str_list",
+    "point", "float_list", "str_list", "bool",
 ]
 
 #: Payload-estimate models (contract sec 1.1 ``payload_estimate.model``).
@@ -232,6 +236,14 @@ class OutputSpec(GraceModel):
     #: consistent regardless of the cache path. Default (None) = no override
     #: (strict no-op for every prior spec; ``emit_bbox`` governs the bbox).
     bbox_from_features: dict[str, Any] | None = None
+    #: Keep attribute-only (NULL-geometry) features in the emitted FGB instead of
+    #: dropping them (chained-resolution mode, ADR 0063). The nws_alerts_conus twin
+    #: preserves alerts whose zone references could not be resolved as NULL-geometry
+    #: rows (property table survives, no map footprint) and writes with
+    #: ``SPATIAL_INDEX=NO`` (pyogrio rejects a spatial index over NULL geometry).
+    #: Default False = the byte-identical drop-null behaviour for every prior vector
+    #: spec (which never emits a NULL-geometry feature).
+    keep_null_geometry: bool = False
 
 
 class CacheSpec(GraceModel):
@@ -307,6 +319,53 @@ class HookSpec(GraceModel):
     #: factories) on the honest-empty / cap / bad-body paths -- the twin's
     #: no-events / too-large gate lives here, the one irreducible decode step.
     parse_response: str | None = None
+
+    # --- chained-resolution mode (ADR 0063): resolve-then-fetch / bounded ---
+    # --- per-item detail enrichment. Two composable phases; a source declares ---
+    # --- only the phase(s) it needs. The router owns the orchestration + the ---
+    # --- transport + the bounded/deduped/best-effort detail loop; these hooks ---
+    # --- are the source-specific PURE compute at each edge. -------------------- #
+
+    #: PHASE R (resolve, PRE-cache-key). ``(spec, params) -> list[RequestPlan]``.
+    #: Build the round-1 resolution request(s) (name -> id: a ``species/match`` /
+    #: ``/v1/taxa`` GET). Returns ``[]`` to signal "params already carry the
+    #: canonical id, skip the round trip" (gbif int taxonKey, inat digit string).
+    #: Runs in ``route()`` BEFORE ``read_through`` so the resolved id enters the
+    #: cache key (a name query and its id query collapse to one cache entry, the
+    #: twin's contract).
+    resolve_build: str | None = None
+
+    #: PHASE R. ``(spec, params, bodies: list[bytes]) -> dict[str, Any]``. Decode
+    #: the resolution body/bodies into a params-MERGE dict (``{"taxon_key": 12345}``)
+    #: the router folds into ``params`` before the main fetch. Raises the typed
+    #: INPUT (unknown / ambiguous name) / UPSTREAM (bad body) errors -- the twin's
+    #: matchType / no-results gate is this one irreducible step.
+    resolve_parse: str | None = None
+
+    #: MAIN-FETCH offset paging. ``(spec, params, bodies: list[bytes]) -> RequestPlan
+    #: | None``. Given every page fetched so far (``bodies``), return the NEXT page's
+    #: request or ``None`` to STOP -- the pure offset/endOfRecords/total_results loop
+    #: control the ``totalPages`` declarative pager cannot express (gbif offset+=300
+    #: to ``endOfRecords``; inat page+=1 to ``total_results``). ``build_request``
+    #: still builds page 1; the router owns the loop + a hard ``max_pages`` ceiling.
+    next_page: str | None = None
+
+    #: PHASE E (enrich). ``(spec, params, features: list[dict]) -> list[tuple[str,
+    #: RequestPlan]]``. From the round-1 features, emit the ORDERED ``(ref_key,
+    #: RequestPlan)`` detail-request set (per-item detail URLs derived from the
+    #: parsed fields: alert zone polygons, gauge threshold/stageflow detail). The
+    #: hook applies the source's per-pass cap by only emitting that many refs; the
+    #: router dedupes by ``ref_key``, bounds by ``ingest.chained.max_detail_fetches``,
+    #: and fetches each best-effort (a failed ref is recorded, never silently dropped).
+    enrich_plan: str | None = None
+
+    #: PHASE E. ``(spec, params, features: list[dict], results: dict[str, DetailResult])
+    #: -> list[dict]``. Fold the fetched detail (keyed by ``ref_key``; each carries a
+    #: body OR a typed error) back into the features and return the final feature
+    #: list. EVERY input feature survives (a feature whose refs failed keeps its row
+    #: with null/None detail -- the never-silent-drop rule), the twin's best-effort
+    #: enrichment join.
+    enrich_merge: str | None = None
 
 
 # --------------------------------------------------------------------------- #

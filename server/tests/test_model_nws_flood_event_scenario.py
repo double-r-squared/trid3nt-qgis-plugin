@@ -629,13 +629,15 @@ async def test_no_alerts_at_all_degrades_quiet() -> None:
 
 @pytest.mark.asyncio
 async def test_nws_fetch_failure_degrades() -> None:
-    from trid3nt_server.agent.tools.fetchers.weather.fetch_nws_alerts_conus.fetch_nws_alerts_conus import NWSConusUpstreamError
+    # fetch_nws_alerts_conus folded to spec-driven (ADR 0063); the workflow-owned raw
+    # read raises Case3Error(error_code=...) which the degrade path reads for reason_code.
+    from trid3nt_server.agent.workflows.sfincs.model_nws_flood_event_scenario.model_nws_flood_event_scenario import Case3Error
 
     geojson_calls = {"count": 0}
 
     def _raise(*_a: Any, **_k: Any) -> Any:
         geojson_calls["count"] += 1
-        raise NWSConusUpstreamError("NWS returned HTTP 503")
+        raise Case3Error("NWS_CONUS_UPSTREAM_ERROR", "NWS returned HTTP 503")
 
     with (
         patch(f"{_MOD}.fetch_nws_alerts_conus", return_value=_mock_alerts_layer()),
