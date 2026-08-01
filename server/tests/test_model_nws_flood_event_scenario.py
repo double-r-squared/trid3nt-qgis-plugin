@@ -662,14 +662,16 @@ async def test_nws_fetch_failure_degrades() -> None:
 
 @pytest.mark.asyncio
 async def test_mrms_failure_degrades_with_selected_warning() -> None:
-    from trid3nt_server.agent.tools.fetchers.weather.fetch_mrms_qpe.fetch_mrms_qpe import MRMSQPEUpstreamError
+    # fetch_mrms_qpe folded to the spec-driven router surface (ADR 0069); its typed
+    # upstream error is now the shared router error (the twin's MRMSQPEUpstreamError died).
+    from trid3nt_server.agent.tools.fetchers._router.errors import router_upstream_error
 
     features = [_feature("Flood Warning", severity="Severe", alert_id="picked")]
 
     with (
         patch(f"{_MOD}.fetch_nws_alerts_conus", return_value=_mock_alerts_layer()),
         patch(f"{_MOD}._fetch_nws_conus_geojson", return_value=_geojson(features)),
-        patch(f"{_MOD}.fetch_mrms_qpe", side_effect=MRMSQPEUpstreamError("S3 down")),
+        patch(f"{_MOD}.fetch_mrms_qpe", side_effect=router_upstream_error("MRMS_QPE", "S3 down")),
         patch(f"{_MOD}.model_flood_scenario") as mock_flood,
     ):
         result = await model_nws_flood_event_scenario()

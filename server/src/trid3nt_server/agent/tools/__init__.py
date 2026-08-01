@@ -225,7 +225,8 @@ def clear_registry_for_tests() -> None:
 from .fetchers.weather.fetch_glm_lightning import fetch_glm_lightning  # noqa: E402,F401
 from .fetchers.weather.fetch_hrrr_forecast import fetch_hrrr_forecast  # noqa: E402,F401
 from .fetchers.weather.fetch_hrrr_smoke import fetch_hrrr_smoke  # noqa: E402,F401
-from .fetchers.weather.fetch_mrms_qpe import fetch_mrms_qpe  # noqa: E402,F401
+# fetch_mrms_qpe: weather/GRIB fold (ADR 0069) -- twin DELETED, now spec-driven
+# (source.yaml + mrms_qpe hooks: S3-listed key resolve -> grib_object whole-object COG).
 from .fetchers.weather.fetch_nexrad_reflectivity import fetch_nexrad_reflectivity  # noqa: E402,F401
 # fetch_nws_alerts_conus: data-router fold chained-resolution mode (ADR 0063) -- twin
 # DELETED, now spec-driven (source.yaml + nws_alerts_conus hooks: single /alerts/active

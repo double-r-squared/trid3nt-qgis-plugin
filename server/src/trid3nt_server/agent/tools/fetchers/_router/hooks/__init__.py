@@ -146,3 +146,6 @@ from . import epa_frs_facilities  # noqa: E402,F401
 # zip/multi-file wave (ADR 0067): TIGER shapefile-ZIP URL planner (FIPS place fan-out)
 # for the zip_vector executor (whole-object GET + extract + read + filter + merge).
 from . import admin_boundaries  # noqa: E402,F401
+# weather/GRIB wave (ADR 0069): S3-listed key resolve (latest / targeted walkback)
+# feeding the grib_object raster access mode (whole-object .grib2.gz -> COG).
+from . import mrms_qpe  # noqa: E402,F401

@@ -138,8 +138,8 @@ def _import_tools_registry() -> int:
     from .agent.tools.fetchers.weather.fetch_nexrad_reflectivity import fetch_nexrad_reflectivity  # noqa: F401
     # register fetch_goes_satellite (GOES-16/17/18/19 satellite imagery via NOAA Big-Data S3).
     from .agent.tools.fetchers.imagery.fetch_goes_satellite import fetch_goes_satellite  # noqa: F401
-    # register fetch_mrms_qpe (NOAA MRMS gauge-corrected QPE precipitation; SFINCS Harvey reference).
-    from .agent.tools.fetchers.weather.fetch_mrms_qpe import fetch_mrms_qpe  # noqa: F401
+    # fetch_mrms_qpe: weather/GRIB fold (ADR 0069) -- twin DELETED, now spec-driven
+    # (S3-listed key resolve -> grib_object whole-object COG), via register_specs_from_tree.
     # fetch_hrsl_population: data-router fold phase-2 wave-9 (ADR 0055) -- twin
     # DELETED, now spec-driven (source.yaml + multi_url VRT fan-out), registered
     # by register_specs_from_tree() via the agent.tools import above.

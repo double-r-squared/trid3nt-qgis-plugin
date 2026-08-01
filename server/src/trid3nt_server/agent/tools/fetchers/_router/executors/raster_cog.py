@@ -152,6 +152,8 @@ def fetch_source_array(spec: SourceSpec, params: dict[str, Any]) -> tuple[Any, A
         return _multi_url_to_array(spec, params)
     if access == "gzip_object":
         return _gzip_object_to_array(spec, params)
+    if access == "grib_object":
+        return _grib_object_to_array(spec, params)
     if access == "fixed_tile_grid":
         return _fixed_tile_grid_to_array(spec, params)
     if access == "stac_search":
@@ -643,6 +645,151 @@ def _gzip_object_to_array(spec: SourceSpec, params: dict[str, Any]) -> tuple[Any
             f"bbox={bbox} clipped to all-nodata (ocean / outside land coverage); no valid pixels",
             spec.empty_error_suffix)
     return arr, out_transform, src_crs
+
+
+# --------------------------------------------------------------------------- #
+# grib_object: a whole-object GET of a resolved ``.grib2(.gz)`` key, gunzip, GRIB
+# decode (the GRIB driver needs a real path -- a MemoryFile cannot host its
+# tabular index -- so the bytes land in a tempfile), a source-grid bbox window,
+# a sentinel->nodata collapse, and a conditional reproject to EPSG:4326. The
+# gzip_object precedent (ADR 0055) at GRIB scale: GRIB is whole-object by nature
+# (no byte-range windowing), so the whole-object cost is accepted + payload-gated,
+# and the decode receiving whole bytes is pure. The S3-listed key is resolved
+# pre-cache-key by the resolve phase (mrms_qpe hooks, ADR 0069) and merged into
+# params, so this mode only reads params[key_param] and never lists. NOAA MRMS QPE.
+# --------------------------------------------------------------------------- #
+
+
+def _grib_object_to_array(spec: SourceSpec, params: dict[str, Any]) -> tuple[Any, Any, Any]:
+    """Whole-object GRIB GET + gunzip + windowed decode + sentinel-nodata (ADR 0069).
+
+    Reproduces the MRMS twin ``_grib2_to_geotiff`` value-for-value: read band 1 as
+    float32, collapse the source sentinels (``sentinel_equals`` list + ``sentinel_below``
+    floor) to the ``nodata`` value, clip to ``bbox`` on the SOURCE grid (floor-offset
+    / ceil-length / clip-to-extent -- cheaper + integrity-safe since the source CRS
+    is also geographic), then reproject to EPSG:4326 ONLY when the decoded CRS is not
+    already 4326 (calculate_default_transform + nearest, nodata-preserving). ``bbox=None``
+    reads the full grid (supports_global_query). A window off the source extent -> typed
+    EMPTY; a 404 (the key vanished between resolve + fetch) -> typed NOT_AVAILABLE; any
+    other fetch / gunzip / decode failure -> typed UPSTREAM. The returned array carries
+    the ``nodata`` sentinel in-band; ``execute``'s ``serialize`` block (nodata=<same>)
+    writes it through unchanged (every pixel is finite, so the fill is a no-op).
+    """
+    import gzip
+    import math
+
+    import numpy as np
+    import rasterio
+    from rasterio.crs import CRS
+    from rasterio.transform import Affine
+    from rasterio.warp import Resampling, calculate_default_transform, reproject
+    from rasterio.windows import from_bounds as window_from_bounds
+
+    from ..transport import (
+        TransportError,
+        TransportNotFound,
+        get_bytes,
+        get_client,
+    )
+
+    ingest = spec.ingest or {}
+    go = ingest.get("grib_object", {})
+    bbox = params.get("bbox")
+    nodata = float(go.get("nodata", -9999.0))
+    sentinel_equals = [float(v) for v in go.get("sentinel_equals", [])]
+    sentinel_below = go.get("sentinel_below")
+
+    key = params.get(go.get("key_param", "_grib_key"))
+    if not isinstance(key, str) or not key:
+        raise router_upstream_error(
+            spec.error_code_prefix, "grib_object: no resolved object key (resolve phase produced none)")
+    endpoint = spec.endpoints.get("data") or next(iter(spec.endpoints.values()))
+    base = (endpoint.url or endpoint.url_template or "").rstrip("/")
+    url = f"{base}/{key.lstrip('/')}"
+    ua = spec.auth.user_agent if spec.auth else "trid3nt_default"
+
+    try:
+        blob, _ct, _u = get_bytes(get_client(), url, headers={"User-Agent": ua})
+    except TransportNotFound as exc:
+        raise router_not_available_error(
+            spec.error_code_prefix,
+            f"no GRIB object at {url} (HTTP 404) -- the resolved key may have rolled out of the bucket: {exc}")
+    except TransportError as exc:
+        raise router_upstream_error(spec.error_code_prefix, f"GRIB object fetch failed url={url}: {exc}")
+    if not blob:
+        raise router_upstream_error(spec.error_code_prefix, f"empty response from {url}")
+    if bool(go.get("gzip", True)):
+        try:
+            grib_bytes = gzip.decompress(blob)
+        except (OSError, gzip.BadGzipFile) as exc:
+            raise router_upstream_error(spec.error_code_prefix, f"gzip decompression failed for {url}: {exc}")
+    else:
+        grib_bytes = blob
+
+    tmp_grib = None
+    try:
+        fd, tmp_grib = tempfile.mkstemp(suffix=".grib2", prefix="trid3nt_router_grib_")
+        os.close(fd)
+        with open(tmp_grib, "wb") as gf:
+            gf.write(grib_bytes)
+        with rasterio.open(tmp_grib) as src:
+            src_crs = src.crs
+            src_transform = src.transform
+            src_height, src_width = src.shape
+            arr = src.read(1).astype("float32")
+    except RouterError:
+        raise
+    except Exception as exc:  # noqa: BLE001 -- GRIB decode failure is an upstream defect
+        raise router_upstream_error(spec.error_code_prefix, f"GRIB decode failed url={url}: {exc}")
+    finally:
+        if tmp_grib is not None:
+            try:
+                os.unlink(tmp_grib)
+            except OSError:
+                pass
+
+    # Sentinel collapse -> nodata (MRMS: -3 no-precip, -1 missing, plus a floor).
+    mask = np.zeros(arr.shape, dtype=bool)
+    for sv in sentinel_equals:
+        mask |= (arr == sv)
+    if sentinel_below is not None:
+        mask |= (arr < float(sentinel_below))
+    arr = np.where(mask, nodata, arr).astype("float32")
+
+    # Clip on the source grid BEFORE reproject (twin: cheaper + integrity-safe).
+    if bbox is not None:
+        window = window_from_bounds(bbox[0], bbox[1], bbox[2], bbox[3], transform=src_transform)
+        row_off = max(0, int(math.floor(window.row_off)))
+        col_off = max(0, int(math.floor(window.col_off)))
+        row_end = min(src_height, int(math.ceil(window.row_off + window.height)))
+        col_end = min(src_width, int(math.ceil(window.col_off + window.width)))
+        if row_end <= row_off or col_end <= col_off:
+            raise router_empty_error(
+                spec.error_code_prefix, f"bbox={tuple(bbox)} does not intersect the source grid",
+                spec.empty_error_suffix)
+        arr = arr[row_off:row_end, col_off:col_end]
+        src_transform = Affine(
+            src_transform.a, src_transform.b, src_transform.c + col_off * src_transform.a,
+            src_transform.d, src_transform.e, src_transform.f + row_off * src_transform.e)
+        src_height, src_width = arr.shape
+
+    dst_crs = CRS.from_epsg(4326)
+    if src_crs is not None and src_crs != dst_crs:
+        dst_transform, dst_width, dst_height = calculate_default_transform(
+            src_crs, dst_crs, src_width, src_height,
+            left=src_transform.c, bottom=src_transform.f + src_height * src_transform.e,
+            right=src_transform.c + src_width * src_transform.a, top=src_transform.f)
+        dst_arr = np.full((dst_height, dst_width), nodata, dtype="float32")
+        reproject(
+            source=arr, destination=dst_arr,
+            src_transform=src_transform, src_crs=src_crs,
+            dst_transform=dst_transform, dst_crs=dst_crs,
+            resampling=Resampling.nearest, src_nodata=nodata, dst_nodata=nodata)
+        arr = dst_arr
+        out_transform = dst_transform
+    else:
+        out_transform = src_transform
+    return np.asarray(arr, dtype="float32"), out_transform, dst_crs
 
 
 # --------------------------------------------------------------------------- #

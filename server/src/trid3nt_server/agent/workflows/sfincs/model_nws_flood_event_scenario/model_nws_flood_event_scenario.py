@@ -70,7 +70,16 @@ from trid3nt_contracts.tool_registry import AtomicToolMetadata
 import httpx
 
 from trid3nt_server.agent.tools import register_tool
-from trid3nt_server.agent.tools.fetchers.weather.fetch_mrms_qpe.fetch_mrms_qpe import fetch_mrms_qpe
+def fetch_mrms_qpe(**kwargs):
+    """Resolve fetch_mrms_qpe via the registry (spec-driven router surface, ADR 0069).
+
+    The hand-written twin died when MRMS folded onto the ``grib_object`` raster
+    access mode; the promoted spec closure is registered under the same name and
+    returns the identical ``LayerURI``, so this composer resolves it by name.
+    """
+    from trid3nt_server.agent.tools import TOOL_REGISTRY
+
+    return TOOL_REGISTRY["fetch_mrms_qpe"].fn(**kwargs)
 from trid3nt_server.agent.workflows.sfincs.flood.flood import model_flood_scenario
 
 
