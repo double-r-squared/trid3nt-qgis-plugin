@@ -243,7 +243,8 @@ from .fetchers.weather.fetch_storm_tracks import fetch_storm_tracks  # noqa: E40
 from .fetchers.hydrology.fetch_cama_flood_discharge import fetch_cama_flood_discharge  # noqa: E402,F401
 # V&V wave (ADR 0021, lane C): observed flood-validation data fetchers.
 from .fetchers.hydrology.fetch_flood_extent_observation import fetch_flood_extent_observation  # noqa: E402,F401
-from .fetchers.hydrology.fetch_high_water_marks import fetch_high_water_marks  # noqa: E402,F401
+# fetch_high_water_marks FOLDED to a spec-driven surface (ADR 0073): its source.yaml
+# + usgs_stn_hwm hooks register at import via register_specs_from_tree (envelope hook).
 from .fetchers.hydrology.fetch_jrc_global_surface_water import fetch_jrc_global_surface_water  # noqa: E402,F401
 # fetch_nhd_waterbodies: data-router fold phase-2 wave-2 -- twin DELETED, now
 # spec-driven (source.yaml + router), registered by _register_router_specs() below.

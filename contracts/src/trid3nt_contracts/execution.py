@@ -35,6 +35,8 @@ __all__ = [
     "LegendClass",
     "LegendKey",
     "LayerURI",
+    "HighWaterMarksLayerURI",
+    "LAYER_RESULT_MODELS",
 ]
 
 
@@ -260,6 +262,55 @@ class LayerURI(GraceModel):
     # (honesty floor). ``None`` => the layer is exactly the requested source.
     # Additive + optional per the GraceModel forward-compat rule.
     fallback_note: str | None = None
+
+
+# --------------------------------------------------------------------------- #
+# LayerURI SUBCLASS result models (the router's envelope-hook seam, ADR 0073).
+#
+# A source whose result is a ``LayerURI`` SUBCLASS carrying business fields
+# computed POST-serialize from the produced bytes declares the subclass by name
+# (``output.result_model``) in its ``source.yaml``; the router constructs it from
+# the base ``LayerURI`` plus the pure ``hooks.envelope`` field dict. The subclass
+# lives HERE (not in a fetcher module) so the spec-driven surface has no coded
+# twin. ``LAYER_RESULT_MODELS`` is the name -> class table the router resolves.
+# --------------------------------------------------------------------------- #
+
+
+class HighWaterMarksLayerURI(LayerURI):
+    """The USGS STN HWM point ``LayerURI`` plus the survey-quality envelope.
+
+    Extra fields beyond ``LayerURI`` (the ``fetch_high_water_marks`` envelope,
+    computed post-serialize from the FGB by ``hooks.usgs_stn_hwm.envelope``):
+
+    - ``n_marks`` -- HWM count in the AOI.
+    - ``event`` -- resolved flood-event name (or None for a state-scoped fetch).
+    - ``quality_breakdown`` -- ``{quality_label: count}`` (surveyor accuracy).
+    - ``type_breakdown`` -- ``{hwm_type: count}`` (seed/debris/stain/mud line).
+    - ``datum_summary`` -- ``{vertical_datum: count}``.
+    - ``observed_quantity`` -- the physical quantity ``elev_ft`` carries:
+      ``"water_surface_elevation"`` (a WSE above the stated vertical datum, NOT a
+      depth-above-ground), so ``extract_model_at_observations`` never silently
+      pairs this WSE against a model DEPTH raster.
+    - ``caveats`` -- honest usage caveats (quality spread, datum, point-peak).
+    - ``notes`` -- provenance detail.
+    """
+
+    n_marks: int = 0
+    event: str | None = None
+    quality_breakdown: dict[str, int] = {}
+    type_breakdown: dict[str, int] = {}
+    datum_summary: dict[str, int] = {}
+    observed_quantity: str = "water_surface_elevation"
+    caveats: list[str] = []
+    notes: list[str] = []
+
+
+#: name -> LayerURI-subclass. A spec's ``output.result_model`` string resolves
+#: here; the router builds the named subclass from the base LayerURI + the
+#: envelope hook's field dict. Empty of a name -> the plain LayerURI (no-op).
+LAYER_RESULT_MODELS: dict[str, type[LayerURI]] = {
+    "HighWaterMarksLayerURI": HighWaterMarksLayerURI,
+}
 
 
 # --------------------------------------------------------------------------- #

@@ -90,9 +90,16 @@ AuthMode = Literal["none", "api_key_env", "cds", "vault", "token"]
 #: include_series). Coerced with ``bool(value)`` (the twin's ``bool(flag)``
 #: contract); the promoted signature annotates it ``bool`` (chained-resolution
 #: mode, ADR 0063). No prior spec declares it (strict no-op).
+#: ``datetime_range`` = a 2-element ``[start, end]`` ISO datetime-pair list
+#: (movebank ``time_range``). Each entry parses as an ISO date OR datetime; the
+#: router coerces to a ``(datetime, datetime)`` tuple with ``start <= end`` and
+#: echoes ``[start.isoformat(), end.isoformat()]`` for cache-key stability -- the
+#: datetime sibling of ``int_range`` no ``iso_date`` pair carries (a raw
+#: datetime-pair kwarg, LayerURI-envelope wave, ADR 0073). No prior spec declares
+#: it (strict no-op).
 ParamType = Literal[
     "bbox", "iso_date", "enum", "int", "float", "str", "int_range", "date_compact",
-    "point", "float_list", "str_list", "bool",
+    "point", "float_list", "str_list", "bool", "datetime_range",
 ]
 
 #: Payload-estimate models (contract sec 1.1 ``payload_estimate.model``).
@@ -236,6 +243,15 @@ class OutputSpec(GraceModel):
     #: consistent regardless of the cache path. Default (None) = no override
     #: (strict no-op for every prior spec; ``emit_bbox`` governs the bbox).
     bbox_from_features: dict[str, Any] | None = None
+    #: Name a ``LayerURI`` SUBCLASS result model (LayerURI-envelope wave, ADR
+    #: 0073). A string key into ``trid3nt_contracts.execution.LAYER_RESULT_MODELS``
+    #: (e.g. ``HighWaterMarksLayerURI``): the router builds this subclass from the
+    #: base LayerURI + the ``hooks.envelope`` field dict, so a source that returns a
+    #: business-field-carrying subclass folds without a coded twin. Declared TOGETHER
+    #: with ``hooks.envelope`` (registration validates both the name resolves and the
+    #: pairing). Default (None) = the plain LayerURI (strict no-op for every prior
+    #: spec).
+    result_model: str | None = None
     #: Keep attribute-only (NULL-geometry) features in the emitted FGB instead of
     #: dropping them (chained-resolution mode, ADR 0063). The nws_alerts_conus twin
     #: preserves alerts whose zone references could not be resolved as NULL-geometry
@@ -366,6 +382,21 @@ class HookSpec(GraceModel):
     #: with null/None detail -- the never-silent-drop rule), the twin's best-effort
     #: enrichment join.
     enrich_merge: str | None = None
+
+    #: POST-EMIT ENVELOPE (LayerURI-envelope wave, ADR 0073).
+    #: ``(spec, params, layer: LayerURI, data: bytes) -> dict[str, Any]``. The
+    #: last hook the router calls: it receives the ASSEMBLED base ``LayerURI`` +
+    #: the produced bytes (FGB/COG, available on cache hit + miss) and returns the
+    #: EXTRA business fields for the spec's ``output.result_model`` subclass (HWM
+    #: quality/type/datum breakdown + caveats/notes; a flood-extent
+    #: class_breakdown/flood_area; a fault kinematic list) plus any base-field
+    #: overrides (``name`` / ``units``). PURE: it only computes over already-fetched
+    #: bytes (no transport). The router drops the honesty-floor-owned keys (``uri`` /
+    #: ``layer_type``) from the returned dict so a hook can ADD fields but NEVER flip
+    #: an error to success or re-point the layer. Pairs with ``output.result_model``
+    #: (declared together); no prior spec declares it (strict no-op: the router
+    #: emits the plain LayerURI unchanged).
+    envelope: str | None = None
 
     #: TRANSPORT-STATUS classification (keyed/misc wave, ADR 0071).
     #: ``(spec, status: int | None, body: str | None) -> RouterError | None``. The

@@ -90,6 +90,8 @@ def _annotation_for(ptype: str) -> Any:
         return list[float]
     if ptype == "int_range":
         return list[int]
+    if ptype == "datetime_range":
+        return list[str]
     if ptype == "float_list":
         return list[float]
     if ptype == "str_list":
@@ -183,20 +185,37 @@ def _validate_hooks(spec: SourceSpec) -> None:
     fail LOUDLY at registration, not silently at first call. Importing
     ``_router.hooks`` populates ``HOOK_REGISTRY`` via the hook modules' decorators.
     """
-    if spec.hooks is None:
-        return
     from .hooks import HookResolutionError, has_hook
 
-    for point in (
-        "build_request", "parse_response",
-        "resolve_build", "resolve_parse", "next_page", "enrich_plan", "enrich_merge",
-        "classify_status",
-    ):
-        name = getattr(spec.hooks, point)
-        if name and not has_hook(name):
-            raise HookResolutionError(
-                f"spec {spec.name!r} references unknown hook {point}={name!r}"
-            )
+    if spec.hooks is not None:
+        for point in (
+            "build_request", "parse_response",
+            "resolve_build", "resolve_parse", "next_page", "enrich_plan", "enrich_merge",
+            "classify_status", "envelope",
+        ):
+            name = getattr(spec.hooks, point)
+            if name and not has_hook(name):
+                raise HookResolutionError(
+                    f"spec {spec.name!r} references unknown hook {point}={name!r}"
+                )
+
+    # result_model (ADR 0073): if the spec names a LayerURI-subclass result model
+    # it must resolve, and it pairs with an envelope hook (each is meaningless
+    # without the other). Fail LOUD per-spec at load, never silently at first call.
+    from trid3nt_contracts.execution import LAYER_RESULT_MODELS
+
+    result_model = spec.output.result_model
+    envelope = spec.hooks.envelope if spec.hooks is not None else None
+    if result_model and result_model not in LAYER_RESULT_MODELS:
+        raise HookResolutionError(
+            f"spec {spec.name!r} names unknown result_model {result_model!r}; "
+            f"known: {sorted(LAYER_RESULT_MODELS)}"
+        )
+    if bool(result_model) != bool(envelope):
+        raise HookResolutionError(
+            f"spec {spec.name!r}: output.result_model and hooks.envelope must be "
+            f"declared together (got result_model={result_model!r}, envelope={envelope!r})"
+        )
 
 
 def register_spec(spec: SourceSpec) -> str:

@@ -1,0 +1,113 @@
+# Router source spec (LayerURI-envelope wave, ADR 0073).
+# Twin: fetch_high_water_marks.py -- FOLDED via resolve/build/parse + the
+# post-emit envelope hook (HighWaterMarksLayerURI quality/type/datum breakdown).
+schema_version: v1
+name: fetch_high_water_marks
+source_class: usgs_stn_hwm
+error_prefix: HWM
+shape: vector-fgb
+supports_global_query: false
+endpoints:
+  data:
+    url: https://stn.wim.usgs.gov/STNServices/HWMs/FilteredHWMs.json
+  events:
+    url: https://stn.wim.usgs.gov/STNServices/Events.json
+auth:
+  mode: none
+  user_agent: trid3nt/0.1 (Hazard Modeling Agent; https://github.com/double-r-squared/trid3nt-qgis-plugin;
+    agent@trid3nt.dev)
+params:
+  bbox:
+    type: bbox
+    required: true
+    quantize: round_6dp
+  event:
+    type: str
+    required: false
+    schema_optional: true
+hooks:
+  resolve_build: usgs_stn_hwm.resolve_build
+  resolve_parse: usgs_stn_hwm.resolve_parse
+  build_request: usgs_stn_hwm.build_request
+  parse_response: usgs_stn_hwm.parse_response
+  envelope: usgs_stn_hwm.envelope
+ingest:
+  chained: {}
+  properties:
+  - hwm_id
+  - site_no
+  - quantity
+  - elev_ft
+  - height_above_gnd
+  - vertical_datum
+  - horizontal_datum
+  - quality
+  - quality_id
+  - hwm_type
+  - hwm_type_id
+  - hwm_environment
+  - event
+  - event_id
+  - state
+  - county
+  - waterbody
+  - survey_date
+  - stillwater
+  - hwm_label
+normalize:
+  crs: EPSG:4326
+  units: ft (peak elevation; see vertical_datum)
+output:
+  layer_type: vector
+  ext: fgb
+  role: primary
+  style_preset: usgs_high_water_marks
+  bbox_from_features:
+    pad: 0.02
+  result_model: HighWaterMarksLayerURI
+cache:
+  ttl_class: semi-static-7d
+payload_estimate:
+  model: per_feature
+  features_per_sq_deg: 200.0
+  kb_per_feature: 0.25
+  floor_mb: 0.001
+caveats:
+- HWM elevation accuracy varies by surveyor QUALITY rating (Excellent +/-0.05 ft, Good +/-0.10 ft, Fair
+  +/-0.20 ft, Poor +/-0.40 ft, VP > 0.40 ft). Filter by quality before treating a mark as calibration
+  truth.
+- Marks rated 'Unknown/Historical' carry NO stated accuracy -- do not use them as an absolute peak-elevation
+  reference.
+- 'VERTICAL DATUM: each mark states its vdatum (usually NAVD88). Confirm it matches your model''s vertical
+  datum before differencing.'
+- An HWM is POINT evidence of the flood's PEAK stage, not a continuous water surface; peak marks across
+  a reach need not be simultaneous.
+docstring: "Fetch surveyed USGS STN flood high-water marks (observed PEAK stage) as points.\n\nRetrieves\
+  \ post-flood HIGH-WATER MARKS from the USGS Short-Term Network\n(STN) Flood Event Data Portal: surveyed\
+  \ debris/seed/stain/mud lines marking\na flood's PEAK water-surface elevation. This is the canonical\
+  \ OBSERVED\npeak-stage truth for validating a modeled max-flood-depth / max-WSE\nsurface. Each mark\
+  \ carries its peak ``elev_ft``, VERTICAL DATUM (usually\nNAVD88), a surveyor QUALITY rating, and the\
+  \ mark TYPE.\n\n**When to use:**\n- Validate a modeled peak flood surface: pair these marks with the\
+  \ model\n  via ``extract_model_at_observations`` then ``compute_skill_metrics``.\n- \"high water marks\
+  \ for Hurricane Michael near Panama City\", \"surveyed\n  flood peak elevations here\", \"USGS HWMs\
+  \ for this flood\".\n\n**When NOT to use:**\n- Real-time / continuous gauge stage or discharge ->\n\
+  \  ``fetch_usgs_nwis_gauges`` (this is post-event point survey, not a\n  time-series).\n- Regulatory\
+  \ flood ZONES -> ``fetch_fema_nfhl_zones``; modeled flood DEPTH\n  -> the SFINCS / SWMM engines.\n-\
+  \ A satellite-derived flood EXTENT polygon/raster ->\n  ``fetch_flood_extent_observation``.\n- Non-US\
+  \ floods -> unsupported (STN is US + territories only).\n\n**Parameters:**\n- ``bbox``: REQUIRED ``(west,\
+  \ south, east, north)`` in EPSG:4326 (the AOI;\n  marks are clipped to it client-side).\n- ``event``:\
+  \ OPTIONAL flood-event name (e.g. ``\"2018 Michael\"``,\n  ``\"2017 Harvey\"``). When given it scopes\
+  \ the fetch to that event; when\n  omitted the fetch covers all events over the AOI's state(s).\n\n\
+  **Returns:** ``HighWaterMarksLayerURI`` -- a FlatGeobuf point layer\n(EPSG:4326) named ``\"USGS high-water\
+  \ marks (<n>)\"``. Per-mark properties:\n``hwm_id``, ``site_no``, ``elev_ft`` (peak elevation; null\
+  \ if unreported),\n``vertical_datum``, ``quality`` (surveyor rating), ``hwm_type``,\n``hwm_environment``,\
+  \ ``event``, ``state``/``county``, ``waterbody``,\n``survey_date``. Envelope: ``n_marks``, ``event``,\
+  \ ``quality_breakdown``,\n``type_breakdown``, ``datum_summary``, ``caveats``, ``notes``.\n\n**Fallback\
+  \ (data-source fallback norm):** an event-scoped query is the\nprimary; if it yields zero marks in the\
+  \ AOI (or no event was named) the\ntool fetches by the overlapping US state(s) and clips. If BOTH yield\
+  \ zero,\n``HwmNoMarksError`` is raised -- never an empty success layer.\n\n**Errors (FR-AS-11):** ``HwmInputError``\
+  \ (missing/bad bbox, AOI outside the\nUS); ``HwmEventNotFoundError`` (named event unresolvable/ambiguous);\n\
+  ``HwmUpstreamError`` (STN network/HTTP/parse failure);\n``HwmNoMarksError`` (no marks in the AOI).\n\
+  \nCross-tool dependencies:\n    - Downstream: ``extract_model_at_observations`` (pairs these marks with\n\
+  \      a model raster) -> ``compute_skill_metrics``.\n    - Upstream: ``geocode_location`` / ``fetch_administrative_boundaries``\n\
+  \      (derive the AOI bbox).\n    - Source: USGS STN (stn.wim.usgs.gov/STNServices)."

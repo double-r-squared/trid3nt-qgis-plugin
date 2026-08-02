@@ -32,6 +32,13 @@ Chained-resolution mode (ADR 0063) adds five PURE points for the resolve-then-fe
 - ``enrich_plan(spec, params, features) -> list[(ref_key, RequestPlan)]`` -- per-item
   detail requests; ``enrich_merge(spec, params, features, results) -> list[dict]`` --
   fold the deduped/bounded/best-effort detail back in (every feature survives).
+
+Envelope mode (ADR 0073) adds the POST-EMIT point for a LayerURI-SUBCLASS result:
+- ``envelope(spec, params, layer, data: bytes) -> dict`` -- the last hook the router
+  calls; over the assembled ``LayerURI`` + the produced bytes it computes the extra
+  business fields (breakdowns / caveats / notes) for the spec's
+  ``output.result_model`` subclass. PURE (no transport); the router drops the
+  honesty-floor-owned ``uri`` / ``layer_type`` keys so a hook can only enrich.
 """
 
 from __future__ import annotations
@@ -162,3 +169,7 @@ from . import climate_normals  # noqa: E402,F401
 from . import ebird_observations  # noqa: E402,F401
 from . import iucn_red_list_range  # noqa: E402,F401
 from . import usgs_groundwater_levels  # noqa: E402,F401
+# LayerURI-envelope wave (ADR 0073): USGS STN high-water marks -- event name->id
+# resolve + states-overlap build_request + bbox-clip/NO_MARKS parse + the
+# post-emit envelope hook (quality/type/datum breakdown -> HighWaterMarksLayerURI).
+from . import usgs_stn_hwm  # noqa: E402,F401

@@ -230,6 +230,28 @@ def validate_params(spec: SourceSpec, raw: dict[str, Any]) -> dict[str, Any]:
                 raise router_input_error(sc, f"{pname} start {a} must be <= end {b}", sfx)
             out[pname] = [a, b]
 
+        elif pspec.type == "datetime_range":
+            # A 2-element [start, end] ISO datetime-pair (movebank time_range).
+            # Each entry parses as an ISO date OR datetime; start must be <= end.
+            # Echoed as [start.isoformat(), end.isoformat()] for cache stability;
+            # a build hook re-parses to the source's wire format.
+            if isinstance(value, bool) or not isinstance(value, (list, tuple)) or len(value) != 2:
+                raise router_input_error(sc, f"{pname} must be a 2-element [start, end] list; got {value!r}", sfx)
+            def _parse_dt(v: Any) -> _dt.datetime:
+                raw = str(v).strip()
+                try:
+                    d = _dt.datetime.fromisoformat(raw.replace("Z", "+00:00"))
+                except ValueError:
+                    try:
+                        d = _dt.datetime.combine(_dt.date.fromisoformat(raw), _dt.time(0, 0, 0))
+                    except ValueError:
+                        raise router_input_error(sc, f"{pname} entry {v!r} is not an ISO date/datetime", sfx)
+                return d
+            a, b = _parse_dt(value[0]), _parse_dt(value[1])
+            if a > b:
+                raise router_input_error(sc, f"{pname} start {a.isoformat()} must be <= end {b.isoformat()}", sfx)
+            out[pname] = [a.isoformat(), b.isoformat()]
+
         elif pspec.type == "point":
             # A 2-element [lon, lat] float list (nldi seed_point). Coerce +
             # finite/range check; the CONUS + seed/comid mutual-exclusion gate is
@@ -583,7 +605,51 @@ def route(spec: SourceSpec, raw_params: dict[str, Any]) -> LayerURI:
         extent = _extent_from_fgb(result.data, float(bff.get("pad", 0.1)))
         if extent is not None:
             layer = layer.model_copy(update={"bbox": extent})
+    # envelope hook (ADR 0073): a source returning a LayerURI SUBCLASS with
+    # business fields computed POST-serialize names a pure envelope hook +
+    # output.result_model. The hook receives the assembled layer + produced bytes
+    # and returns the extra fields; the router builds the named subclass. The
+    # honesty floor still owns status/error semantics -- a hook may ADD fields but
+    # the router drops uri/layer_type from its return so it can never flip an error
+    # to success or re-point the layer. No-op when unset.
+    if spec.hooks is not None and spec.hooks.envelope:
+        layer = _apply_envelope(spec, params, layer, result.data)
     return layer
+
+
+#: Honesty-floor-owned fields an envelope hook must never re-write (the layer
+#: already points at real, successfully-produced bytes; a hook only adds fields).
+_ENVELOPE_PROTECTED_KEYS = ("uri", "layer_type")
+
+
+def _apply_envelope(
+    spec: SourceSpec, params: dict[str, Any], layer: LayerURI, data: bytes | None
+) -> LayerURI:
+    """Build the spec's ``output.result_model`` subclass via the pure envelope hook.
+
+    The hook computes the extra business fields over the already-produced bytes
+    (no I/O). Protected identity keys (``uri`` / ``layer_type``) are stripped from
+    the hook's return so it can only enrich, never flip the honesty floor.
+    """
+    from trid3nt_contracts.execution import LAYER_RESULT_MODELS
+
+    from .hooks import resolve_hook
+
+    hook = resolve_hook(spec.hooks.envelope)  # type: ignore[union-attr]
+    extra = hook(spec, params, layer, data)
+    if not isinstance(extra, dict):
+        extra = {}
+    extra = {k: v for k, v in extra.items() if k not in _ENVELOPE_PROTECTED_KEYS}
+    model_name = spec.output.result_model
+    cls = LAYER_RESULT_MODELS.get(model_name) if model_name else None
+    if cls is None:
+        # No declared subclass: overlay the (non-protected) extra onto the base
+        # LayerURI so a name/units override still lands (defensive; a spec that
+        # declares envelope also declares result_model, validated at load).
+        base_fields = set(type(layer).model_fields)
+        safe = {k: v for k, v in extra.items() if k in base_fields}
+        return layer.model_copy(update=safe) if safe else layer
+    return cls(**{**layer.model_dump(), **extra})
 
 
 def _extent_from_fgb(data: bytes, pad: float) -> tuple[float, float, float, float] | None:
