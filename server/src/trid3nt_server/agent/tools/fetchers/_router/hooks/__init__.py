@@ -185,3 +185,6 @@ from . import wfigs_incident  # noqa: E402,F401
 # creds (username+password via the resolver blob path) -> per-geometry_type feature
 # parse; classify_status splits 401->AUTH / 403->LICENSE / 4xx->INPUT.
 from . import movebank_tracks  # noqa: E402,F401
+# satellite family (ADR 0078): the SLIDER availability index folds onto the record
+# shape as a live-no-cache source (the record shape's first uncacheable fold).
+from . import slider_timestamps  # noqa: E402,F401

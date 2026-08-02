@@ -278,7 +278,9 @@ def register_spec(spec: SourceSpec) -> str:
         name=name,
         ttl_class=spec.cache.ttl_class,
         source_class=spec.source_class,
-        cacheable=True,
+        # live-no-cache specs register uncacheable (the validator forbids
+        # cacheable=True with ttl_class=live-no-cache); no-op for every cacheable spec.
+        cacheable=spec.cache.ttl_class != "live-no-cache",
         supports_global_query=spec.supports_global_query,
         payload_mb_estimator_name="estimate_payload_mb",
         open_world_hint=True,

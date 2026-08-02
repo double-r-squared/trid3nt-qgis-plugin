@@ -8,7 +8,7 @@ name: fetch_movebank_tracks
 source_class: movebank
 error_prefix: MOVEBANK
 shape: vector-fgb
-supports_global_query: true
+supports_global_query: false
 endpoints:
   data:
     url: https://www.movebank.org/movebank/service/direct-read

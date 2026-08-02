@@ -54,7 +54,7 @@ def test_spec_identity(spec):
     assert spec.name == "fetch_movebank_tracks"
     assert spec.shape == "vector-fgb"
     assert spec.error_code_prefix == "MOVEBANK"
-    assert spec.supports_global_query is True
+    assert spec.supports_global_query is False
 
 
 def test_missing_credentials_is_input_error_pre_network(spec):

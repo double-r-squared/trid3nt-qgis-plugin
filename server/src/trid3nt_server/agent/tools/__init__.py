@@ -299,7 +299,8 @@ from .fetchers.imagery.fetch_goes_archive_animation import fetch_goes_archive_an
 from .fetchers.imagery.fetch_goes_satellite import fetch_goes_satellite  # noqa: E402,F401
 from .fetchers.imagery.fetch_landsat_imagery import fetch_landsat_imagery  # noqa: E402,F401
 from .fetchers.imagery.fetch_naip import fetch_naip  # noqa: E402,F401
-from .fetchers.imagery.fetch_slider_timestamps.fetch_slider_timestamps import fetch_slider_timestamps  # noqa: E402,F401  -- P1: SLIDER availability + cadence index (frame-animation playground primitive)
+# fetch_slider_timestamps folded to a record-shape spec (ADR 0078); the promoted
+# tool auto-registers via register_specs_from_tree (SLIDER availability + cadence index).
 from .fetchers.imagery.fetch_sentinel1_sar import fetch_sentinel1_sar  # noqa: E402,F401
 from .fetchers.imagery.fetch_sentinel2_truecolor import fetch_sentinel2_truecolor  # noqa: E402,F401
 from .fetchers.imagery.fetch_viirs_day_fire import fetch_viirs_day_fire  # noqa: E402,F401
