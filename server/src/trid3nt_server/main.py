@@ -145,8 +145,8 @@ def _import_tools_registry() -> int:
     # fetch_hrsl_population: data-router fold phase-2 wave-9 (ADR 0055) -- twin
     # DELETED, now spec-driven (source.yaml + multi_url VRT fan-out), registered
     # by register_specs_from_tree() via the agent.tools import above.
-    # register fetch_firms_active_fire (NASA FIRMS VIIRS/MODIS active-fire detections; Wave 1.5).
-    from .agent.tools.fetchers.hazard.fetch_firms_active_fire import fetch_firms_active_fire  # noqa: F401
+    # fetch_firms_active_fire: quick-folds wave (ADR 0079) -- twin DELETED, now spec-driven
+    # (source.yaml + firms_active_fire hooks), auto-registered via register_specs_from_tree().
     # fetch_landfire_fuels: data-router fold phase-2 wave-7 (ADR 0053) -- twin
     # DELETED, now spec-driven (source.yaml + imageserver_export), auto-registered.
     # fetch_gcn250_curve_numbers: data-router fold phase-2 wave-8 (ADR 0054) --

@@ -277,7 +277,8 @@ from .fetchers.ocean.fetch_gtsm_tide_surge import fetch_gtsm_tide_surge  # noqa:
 # fetch_noaa_slr_scenarios: data-router fold phase-2 wave-6 (ADR 0052) -- twin
 # DELETED, now spec-driven (source.yaml + the declarative fan-out router mode),
 # registered by _register_router_specs() below.
-from .fetchers.ocean.fetch_noaa_sst import fetch_noaa_sst  # noqa: E402,F401
+# fetch_noaa_sst: quick-folds wave (ADR 0079) -- twin DELETED, now spec-driven
+# (source.yaml + the raster_cog griddap access mode), registered by _register_router_specs().
 from .fetchers.ocean.fetch_topobathy import fetch_topobathy  # noqa: E402,F401
 
 # -- fetchers/terrain --
@@ -301,7 +302,8 @@ from .fetchers.imagery.fetch_landsat_imagery import fetch_landsat_imagery  # noq
 from .fetchers.imagery.fetch_naip import fetch_naip  # noqa: E402,F401
 # fetch_slider_timestamps folded to a record-shape spec (ADR 0078); the promoted
 # tool auto-registers via register_specs_from_tree (SLIDER availability + cadence index).
-from .fetchers.imagery.fetch_sentinel1_sar import fetch_sentinel1_sar  # noqa: E402,F401
+# fetch_sentinel1_sar: quick-folds wave (ADR 0079) -- twin DELETED, now spec-driven
+# (source.yaml + raster_cog stac_float + coverage-select + log10_db), auto-registered.
 from .fetchers.imagery.fetch_sentinel2_truecolor import fetch_sentinel2_truecolor  # noqa: E402,F401
 from .fetchers.imagery.fetch_viirs_day_fire import fetch_viirs_day_fire  # noqa: E402,F401
 
@@ -360,7 +362,8 @@ from .fetchers.socioeconomic.geocode_location import geocode_location  # noqa: E
 
 # -- fetchers/hazard --
 from .fetchers.hazard.fetch_fault_sources import fetch_fault_sources  # noqa: E402,F401
-from .fetchers.hazard.fetch_firms_active_fire import fetch_firms_active_fire  # noqa: E402,F401
+# fetch_firms_active_fire: quick-folds wave (ADR 0079) -- twin DELETED, now spec-driven
+# (source.yaml + firms_active_fire keyed CSV http_json hooks), auto-registered.
 # fetch_hifld_critical_infrastructure: data-router fold pilot -- twin DELETED, now
 # spec-driven (source.yaml + router), registered by _register_router_specs() below.
 # fetch_hifld_transmission_lines: data-router fold phase-2 wave-2 -- twin DELETED,

@@ -1,0 +1,145 @@
+# Router source spec (quick-folds wave, keyed CSV http_json, ADR 0079).
+# Twin: fetch_firms_active_fire.py -- NASA FIRMS active-fire / thermal-anomaly, keyed.
+# build_request resolves the MAP_KEY (kwarg -> secret_ref -> env) INTO the URL path
+# (raising FIRMS_MISSING_KEY pre-network when absent); parse_response decodes the CSV
+# into Point features + the 200-with-error-body auth check (FIRMS_AUTH_ERROR);
+# classify_status re-applies the same body markers on a non-2xx TransportError.
+schema_version: v1
+name: fetch_firms_active_fire
+source_class: firms_active_fire
+error_prefix: FIRMS
+input_error_suffix: ARG_INVALID
+shape: vector-fgb
+supports_global_query: false
+endpoints:
+  data:
+    url: https://firms.modaps.eosdis.nasa.gov/api/area/csv
+auth:
+  mode: none
+  user_agent: trid3nt/0.1 (Hazard Modeling Agent; https://github.com/double-r-squared/trid3nt-qgis-plugin;
+    agent@trid3nt.dev)
+params:
+  bbox:
+    type: bbox
+    required: true
+    quantize: round_4dp
+  days_back:
+    type: int
+    default: 1
+    min: 1
+    max: 10
+  source:
+    type: enum
+    values:
+    - VIIRS_SNPP_NRT
+    - VIIRS_NOAA20_NRT
+    - MODIS_NRT
+    default: VIIRS_SNPP_NRT
+  date:
+    type: iso_date
+    schema_optional: true
+  map_key:
+    type: str
+    schema_optional: true
+  secret_ref:
+    type: str
+    schema_optional: true
+hooks:
+  build_request: firms_active_fire.build_request
+  parse_response: firms_active_fire.parse_response
+  classify_status: firms_active_fire.classify_status
+ingest:
+  properties:
+  - brightness
+  - scan
+  - track
+  - acq_date
+  - acq_time
+  - satellite
+  - instrument
+  - confidence
+  - version
+  - bright_t31
+  - frp
+  - daynight
+normalize:
+  crs: EPSG:4326
+output:
+  layer_type: vector
+  ext: fgb
+  role: primary
+  style_preset: firms_active_fire
+  emit_bbox: true
+cache:
+  ttl_class: dynamic-1h
+payload_estimate:
+  model: per_feature
+  features_per_sq_deg: 50.0
+  kb_per_feature: 0.3
+  floor_mb: 0.001
+caveats:
+- NASA FIRMS Tier-2 satellite active-fire / thermal-anomaly detections as points, keyed
+  (map_key -> secret_ref -> TRID3NT_FIRMS_MAP_KEY env, key carried IN the URL path). No key
+  -> a credential-shaped FIRMS_MISSING_KEY pre-network; a rejected / rate-limited key -> a
+  FIRMS_AUTH_ERROR from the 200-with-error-body check; empty window -> an honest 0-feature FGB.
+  VIIRS names its brightness bands bright_ti4/ti5 (not brightness/bright_t31), so those columns
+  read null for a VIIRS source.
+docstring: |-
+  Fetch NASA FIRMS satellite active-fire detections for a bbox and recent day window.
+
+  **What it does:** Calls the NASA FIRMS Web Service AREA API
+  (``firms.modaps.eosdis.nasa.gov/api/area/csv``) to retrieve satellite
+  thermal-anomaly / active-fire pixel detections for the last 1-10 days over
+  a bounded geographic region. Parses the CSV response into a FlatGeobuf
+  Point layer with brightness, FRP (Fire Radiative Power), scan, track,
+  acquisition time, satellite, instrument, confidence, and day/night fields.
+  Cached ``dynamic-1h``. Requires a free NASA FIRMS MAP_KEY
+  (``TRID3NT_FIRMS_MAP_KEY`` env var). Does not support global queries
+  (``supports_global_query=False``).
+
+  **When to use:**
+  - Wildfire situational-awareness: "show active fires in California right now".
+  - Near-real-time fire forcing discovery for a wildfire workflow setup.
+  - Smoke-source identification overlaid on an air-quality or population layer.
+  - Multi-sensor comparison (VIIRS vs MODIS detection density) over a study
+    area.
+
+  **When NOT to use:**
+  - Historical fire perimeters or burned-area polygons (use
+    ``fetch_nifc_fire_perimeters`` for current season or
+    ``fetch_mtbs_burn_severity`` for 1984-present archives).
+  - Fuel-load / fuel-moisture inputs (LANDFIRE -- separate tool, not yet in
+    catalog).
+  - Fire spread or behavior forecasts (FIRMS is detection-only, not forecast).
+  - Global queries without a bbox (FIRMS AREA API requires a bbox).
+
+  **Parameters:**
+  - ``bbox`` (tuple): ``(min_lon, min_lat, max_lon, max_lat)`` in EPSG:4326.
+    Required; global queries rejected. Example: ``(-124.0, 32.5, -114.0, 42.0)``
+    for California.
+  - ``days_back`` (int): 1-10 days back from FIRMS "today". Default 1. Higher
+    values accumulate more detections; note FIRMS upstream rejects >5
+    (surfaces as ``FirmsUpstreamError``).
+  - ``source`` (str): ``"VIIRS_SNPP_NRT"`` (default; Suomi NPP, 375m),
+    ``"VIIRS_NOAA20_NRT"`` (NOAA-20, 375m), or ``"MODIS_NRT"``
+    (Terra/Aqua, 1km).
+  - ``date`` (str, optional): a historical acquisition day ``"YYYY-MM-DD"``.
+    When given, the tool queries EXACTLY that one day (the FIRMS trailing
+    start-date segment, ``day_range`` forced to 1) -- use this to overlay the
+    hot pixels for a SPECIFIC PAST date (e.g. recreating a past animation
+    window) rather than the rolling ``days_back`` from FIRMS "today". Default
+    ``None`` keeps the rolling-window behaviour.
+
+  **Returns:**
+  ``LayerURI(layer_type="vector", role="primary", units=None)`` pointing at a
+  FlatGeobuf with fields: ``brightness``, ``scan``, ``track``, ``acq_date``,
+  ``acq_time``, ``satellite``, ``instrument``, ``confidence``, ``version``,
+  ``bright_t31``, ``frp``, ``daynight``. Cached ``dynamic-1h``.
+
+  **Cross-tool dependencies:**
+  - Upstream of: wildfire spread-model workflow setups, smoke/population
+    impact overlays.
+  - Pairs with: ``fetch_nifc_fire_perimeters`` (current perimeters around FIRMS
+    detections), ``fetch_mtbs_burn_severity`` (historical context).
+  - Auth dependency: set ``TRID3NT_FIRMS_MAP_KEY`` env var (register free at
+    ``firms.modaps.eosdis.nasa.gov/api/map_key/``).

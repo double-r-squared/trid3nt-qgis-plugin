@@ -1,0 +1,128 @@
+# Router source spec (quick-folds wave, raster-cog griddap access mode, ADR 0079).
+# Twin: fetch_noaa_sst.py -- NOAA Coral Reef Watch daily 5 km SST via ERDDAP griddap.
+# The griddap bracket-selector .nc REST endpoint (server-side bbox+day subset) folds
+# onto the new raster_cog `griddap` access mode: one GET -> in-memory xarray subset ->
+# north-up float32 array -> the executor's NaN-nodata COG serialize. A 404 with the
+# ERDDAP no-matching / axis-range markers -> honest NOAA_SST_NO_DATA (twin's
+# SSTNoDataError); an all-NaN (fully-land) window -> the same honest empty.
+schema_version: v1
+name: fetch_noaa_sst
+source_class: noaa_sst
+shape: raster-cog
+supports_global_query: false
+empty_error_suffix: NO_DATA
+endpoints:
+  data:
+    url: https://coastwatch.pfeg.noaa.gov/erddap
+auth:
+  mode: none
+  user_agent: trid3nt/0.1 (Hazard Modeling Agent; https://github.com/double-r-squared/trid3nt-qgis-plugin;
+    agent@trid3nt.dev)
+params:
+  bbox:
+    type: bbox
+    required: true
+    quantize: round_4dp
+  date:
+    type: iso_date
+    schema_optional: true
+  variable:
+    type: enum
+    values:
+    - sst
+    - anomaly
+    default: sst
+    lowercase: true
+gates:
+  max_bbox_deg2: 25.0
+ingest:
+  access: griddap
+  griddap:
+    dataset: NOAA_DHW
+    time_of_day: "12:00:00Z"
+    lat_descending: true
+    var_by_param:
+      param: variable
+      map:
+        sst: CRW_SST
+        anomaly: CRW_SSTANOMALY
+    nodata_body_markers:
+    - no matching results
+    - axis maximum
+    - axis minimum
+normalize:
+  crs: EPSG:4326
+  units: degrees Celsius
+output:
+  layer_type: raster
+  ext: tif
+  role: primary
+  style_preset: sst_celsius
+  style_preset_by_param:
+    param: variable
+    map:
+      sst: sst_celsius
+      anomaly: sst_anomaly
+  emit_bbox: true
+cache:
+  ttl_class: static-30d
+payload_estimate:
+  model: bbox_area
+  mb_per_sq_deg: 0.001
+  floor_mb: 0.01
+caveats:
+- NOAA Coral Reef Watch operational daily 5 km SST (NOAA_DHW; CRW_SST / CRW_SSTANOMALY) via
+  the keyless NOAA CoastWatch ERDDAP griddap endpoint, AOI-scoped (<= 25 deg^2), single day.
+  Ocean-only -- a fully-land AOI returns an honest NOAA_SST_NO_DATA (CRW masks land). An
+  out-of-coverage date (pre-1985 / future) surfaces as NOAA_SST_NO_DATA from ERDDAP's own
+  axis-range 404 rather than a pre-network input error. Default date = the most recent likely
+  day (today-1 UTC), which does not enter the cache key.
+docstring: |-
+  Fetch a daily NOAA sea-surface-temperature (SST) COG for a bbox.
+
+  **What it does:** Subsets the NOAA Coral Reef Watch operational daily 5 km
+  global SST product (via the keyless NOAA CoastWatch ERDDAP griddap endpoint)
+  to a single day + the requested ocean ``bbox``, and returns a single-band
+  float32 COG in degrees Celsius (``style_preset="sst_celsius"``). Pass
+  ``variable="anomaly"`` for the SST ANOMALY (observed minus climatology,
+  degrees C, diverging blue-red ramp ``sst_anomaly``).
+
+  The CRW product is global, gap-filled (no cloud holes), updated daily with
+  ~1 day latency, and covers 1985-present  --  the go-to "how warm is the ocean
+  here" / marine-heatwave / coral-bleaching-stress / hurricane-fuel layer.
+
+  **When to use:**
+  - User wants ocean / sea-surface temperature for an area or a date
+    ("show SST in the Gulf", "how warm is the water off Florida").
+  - SST ANOMALY / marine-heatwave context (``variable="anomaly"``): how far
+    above or below normal today's water is.
+  - Hurricane-intensification context (warm SST = storm fuel), coral-bleaching
+    heat stress, fisheries / ecosystem temperature context.
+
+  **When NOT to use:**
+  - LAND-surface temperature  --  this is OCEAN ONLY; a land bbox returns an
+    honest no-data error (CRW masks land).
+  - Air / 2 m temperature  --  use ``fetch_era5_reanalysis`` /
+    ``fetch_gridmet`` (those are atmospheric, not sea-surface).
+  - Sub-5 km coastal detail  --  CRW is 5 km; for finer SST a higher-res
+    product (e.g. MUR 1 km) would be a separate fetcher.
+
+  **Parameters:**
+  - ``bbox`` (tuple): ``(min_lon, min_lat, max_lon, max_lat)`` EPSG:4326.
+    Required. AOI-scoped (<= 25 deg^2). Must cover ocean.
+  - ``date`` (str, optional): ``"YYYY-MM-DD"`` UTC day. Default: the most
+    recent likely-published day (today-1); 1985-present.
+  - ``variable`` (str, default ``"sst"``): ``"sst"`` for sea-surface
+    temperature, ``"anomaly"`` for the SST anomaly vs climatology (both C).
+
+  **Returns:** A ``LayerURI`` (``layer_type="raster"``, ``role="primary"``,
+  ``units="degrees Celsius"``) pointing at a single-band float32 COG in the
+  ``static-30d``/``noaa_sst`` cache prefix.
+  ``style_preset="sst_celsius"`` (or ``"sst_anomaly"`` for the anomaly).
+
+  **Data source:** NOAA Coral Reef Watch Operational Daily 5 km
+  (``NOAA_DHW``; ``CRW_SST`` / ``CRW_SSTANOMALY``) via the NOAA CoastWatch
+  ERDDAP griddap endpoint. Tier-1 free (no API key).
+
+  FR-CE-8: routed through ``read_through`` so identical ``(bbox, date,
+  variable)`` calls reuse the cached SST COG.

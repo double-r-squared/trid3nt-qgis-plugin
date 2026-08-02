@@ -154,6 +154,8 @@ def fetch_source_array(spec: SourceSpec, params: dict[str, Any]) -> tuple[Any, A
         return _gzip_object_to_array(spec, params)
     if access == "grib_object":
         return _grib_object_to_array(spec, params)
+    if access == "griddap":
+        return _griddap_to_array(spec, params)
     if access == "fixed_tile_grid":
         return _fixed_tile_grid_to_array(spec, params)
     if access == "stac_search":
@@ -800,6 +802,167 @@ def _grib_object_to_array(spec: SourceSpec, params: dict[str, Any]) -> tuple[Any
 
 
 # --------------------------------------------------------------------------- #
+# griddap: an ERDDAP griddap bracket-selector REST endpoint that returns a
+# PRE-SUBSET NetCDF (``.nc?<var>[(<time>)][(<lat_hi>):(<lat_lo>)][(<lon_lo>):
+# (<lon_hi>)]``) -- the server does the bbox+day subset, so the whole (small)
+# object is a windowed read by construction. A single GET through the shared
+# transport, an in-memory xarray open + squeeze, and a north-up (array, transform,
+# crs). A 404 whose body carries the ERDDAP no-matching / axis-range markers is
+# honest no-data (typed EMPTY, the twin's SSTNoDataError); an all-NaN window
+# (fully-land AOI, masked ocean product) is also EMPTY. NOAA CoastWatch CRW SST.
+# --------------------------------------------------------------------------- #
+
+
+def _griddap_to_array(spec: SourceSpec, params: dict[str, Any]) -> tuple[Any, Any, Any]:
+    """ERDDAP griddap bracket-selector ``.nc`` GET + xarray subset -> float32 array.
+
+    Builds the griddap bracket-selector URL (lat written high:low when the grid
+    descends), GETs the pre-subset NetCDF, opens it in-memory, squeezes the
+    singleton time, and returns the north-up ``(array, transform, "EPSG:4326")``.
+    ``date`` defaults to the most-recent likely-published day (today-1 UTC) when
+    absent -- consistent with the stac_float ``latest`` default (that default day
+    does NOT enter the cache key, an explicit date does). A 404 with the no-data
+    body markers -> typed EMPTY; any other non-2xx / parse failure -> typed UPSTREAM.
+    """
+    import datetime as _dt
+
+    import numpy as np
+    import rasterio.transform as rtransform
+
+    from ..transport import TransportError, TransportNotFound, get_bytes, get_client
+
+    ingest = spec.ingest or {}
+    gd = ingest.get("griddap", {})
+    bbox = params["bbox"]
+    west, south, east, north = (float(v) for v in bbox)
+
+    # variable -> ERDDAP grid variable (already a validated enum).
+    vbp = gd.get("var_by_param", {})
+    var = (vbp.get("map") or {}).get(params.get(vbp.get("param")))
+    if var is None:
+        raise router_upstream_error(
+            spec.error_code_prefix,
+            f"no griddap variable for {vbp.get('param')}={params.get(vbp.get('param'))!r}",
+        )
+
+    # date: explicit request param else the default (today-1 UTC).
+    date = params.get("date")
+    if not date:
+        date = (_dt.datetime.now(_dt.timezone.utc).date() - _dt.timedelta(days=1)).isoformat()
+    ts = f"{date}T{gd.get('time_of_day', '12:00:00Z')}"
+
+    if gd.get("lat_descending", True):
+        sel = f"{var}[({ts})][({north}):({south})][({west}):({east})]"
+    else:
+        sel = f"{var}[({ts})][({south}):({north})][({west}):({east})]"
+    endpoint = spec.endpoints.get("data") or next(iter(spec.endpoints.values()))
+    base = (endpoint.url or endpoint.url_template or "").rstrip("/")
+    dataset = gd.get("dataset", "")
+    url = f"{base}/griddap/{dataset}.nc?{sel}"
+
+    ua = spec.auth.user_agent if spec.auth else "trid3nt_default"
+    markers = [str(m).lower() for m in gd.get("nodata_body_markers", [])]
+
+    def _is_nodata_body(body: str | None) -> bool:
+        low = (body or "").lower()
+        return any(m in low for m in markers)
+
+    try:
+        nc_bytes, _ct, _u = get_bytes(get_client(), url, headers={"User-Agent": ua})
+    except TransportNotFound as exc:
+        if _is_nodata_body(exc.body):
+            raise router_empty_error(
+                spec.error_code_prefix,
+                f"no {dataset} data for date={date} (ERDDAP: {(exc.body or '')[:200]})",
+                spec.empty_error_suffix,
+            )
+        raise router_upstream_error(spec.error_code_prefix, f"griddap 404 url={url}: {exc}")
+    except TransportError as exc:
+        if _is_nodata_body(getattr(exc, "body", None)):
+            raise router_empty_error(
+                spec.error_code_prefix,
+                f"no {dataset} data for date={date} (ERDDAP: {(exc.body or '')[:200]})",
+                spec.empty_error_suffix,
+            )
+        raise router_upstream_error(spec.error_code_prefix, f"griddap request failed url={url}: {exc}")
+    if not nc_bytes:
+        raise router_upstream_error(spec.error_code_prefix, f"empty response from {url}")
+
+    try:
+        import xarray as xr  # noqa: F401
+    except ImportError as exc:  # pragma: no cover
+        raise router_upstream_error(spec.error_code_prefix, f"xarray unavailable: {exc}")
+
+    tmp_nc: str | None = None
+    ds = None
+    try:
+        fd, tmp_nc = tempfile.mkstemp(suffix=".nc", prefix="trid3nt_router_griddap_")
+        with os.fdopen(fd, "wb") as f:
+            f.write(nc_bytes)
+        try:
+            ds = xr.open_dataset(tmp_nc, engine="netcdf4")
+        except Exception as exc:  # noqa: BLE001
+            raise router_upstream_error(spec.error_code_prefix, f"could not parse griddap NetCDF: {exc}")
+        if var not in ds.variables:
+            raise router_upstream_error(
+                spec.error_code_prefix,
+                f"griddap subset missing variable {var!r} (have {list(ds.data_vars)})",
+            )
+        da = ds[var]
+        for tdim in ("time",):
+            if tdim in da.dims:
+                da = da.squeeze(tdim, drop=True)
+        lat_dim = next((d for d in da.dims if d in ("latitude", "lat", "y")), None)
+        lon_dim = next((d for d in da.dims if d in ("longitude", "lon", "x")), None)
+        if lat_dim is None or lon_dim is None:
+            raise router_upstream_error(
+                spec.error_code_prefix, f"griddap DataArray missing lat/lon dims; dims={da.dims}")
+        if da.size == 0 or any(s == 0 for s in da.shape):
+            raise router_empty_error(
+                spec.error_code_prefix,
+                f"griddap returned an empty window for bbox={tuple(bbox)} on {date} "
+                "(no grid cells intersect the AOI)",
+                spec.empty_error_suffix,
+            )
+        arr = np.asarray(da.values, dtype="float32")
+        lat_vals = np.asarray(da[lat_dim].values, dtype="float64")
+        lon_vals = np.asarray(da[lon_dim].values, dtype="float64")
+        # North-up: row 0 must be the northernmost lat. Flip if the coord ascends
+        # (NOAA_DHW descends, so this is a no-op there; defensive for other grids).
+        if lat_vals.size >= 2 and lat_vals[0] < lat_vals[-1]:
+            arr = arr[::-1, :]
+        if not np.isfinite(arr).any():
+            raise router_empty_error(
+                spec.error_code_prefix,
+                f"griddap window is all-NaN over bbox={tuple(bbox)} on {date} "
+                "(the AOI is land / outside the ocean mask)",
+                spec.empty_error_suffix,
+            )
+        transform = rtransform.from_bounds(
+            float(lon_vals.min()), float(lat_vals.min()),
+            float(lon_vals.max()), float(lat_vals.max()),
+            arr.shape[1], arr.shape[0],
+        )
+        return arr, transform, spec.normalize.crs
+    except RouterError:
+        raise
+    except Exception as exc:  # noqa: BLE001
+        raise router_upstream_error(
+            spec.error_code_prefix, f"griddap NetCDF -> array failed for bbox={tuple(bbox)}: {exc}")
+    finally:
+        if ds is not None:
+            try:
+                ds.close()
+            except Exception:  # noqa: BLE001
+                pass
+        if tmp_nc is not None:
+            try:
+                os.unlink(tmp_nc)
+            except OSError:
+                pass
+
+
+# --------------------------------------------------------------------------- #
 # fixed_tile_grid: a global raster cut into a REGULAR degree grid of per-tile
 # ZIP objects, each wrapping ONE DEFLATE-compressed .tif member (GHS-POP tiles).
 # A DEFLATE member is not windowable by a byte range (decoding forces a near-whole
@@ -1333,12 +1496,38 @@ def _stac_float_to_array(spec: SourceSpec, params: dict[str, Any]) -> tuple[Any,
             raise router_upstream_error(spec.error_code_prefix, f"asset read failed: {exc}")
         return dst
 
+    def _dt_key(it: Any) -> str:
+        p = getattr(it, "properties", {}) or {}
+        return p.get("datetime") or p.get("end_datetime") or p.get("start_datetime") or ""
+
     if select == "latest":
-        def _dt_key(it: Any) -> str:
-            p = getattr(it, "properties", {}) or {}
-            return p.get("datetime") or p.get("end_datetime") or p.get("start_datetime") or ""
         items.sort(key=_dt_key, reverse=True)
         raw = _read_item(items[0])
+    elif select == "coverage":
+        # coverage-fraction-then-recency select with an asset-presence pre-filter
+        # (sentinel1_sar): only scenes carrying the requested asset are ranked; a
+        # swath edge can clip a corner, so AOI coverage is the primary key and
+        # recency breaks ties. No candidate carrying the asset -> typed EMPTY.
+        from shapely.geometry import box, shape
+
+        aoi = box(*bbox)
+        cand = [it for it in items if asset_key in (getattr(it, "assets", {}) or {})]
+        if not cand:
+            raise router_empty_error(
+                spec.error_code_prefix,
+                f"no {collection!r} scene carrying asset {asset_key!r} intersects bbox={bbox}",
+                spec.empty_error_suffix,
+            )
+
+        def _coverage(it: Any) -> float:
+            try:
+                inter = shape(it.geometry).intersection(aoi).area
+                return inter / aoi.area if aoi.area > 0 else 0.0
+            except Exception:  # noqa: BLE001 -- bad geometry: treat as no coverage
+                return 0.0
+
+        cand.sort(key=lambda it: (_coverage(it), _dt_key(it)), reverse=True)
+        raw = _read_item(cand[0])
     else:  # intersect_all: first-valid mosaic
         raw = np.full((height_px, width_px), np.nan, dtype="float32")
         for item in items:
@@ -1360,6 +1549,17 @@ def _stac_float_to_array(spec: SourceSpec, params: dict[str, Any]) -> tuple[Any,
     # ``valid = isfinite(dst) & (dst > 0)`` gate. No-op for every prior spec.
     if tf.get("positive_only"):
         out = np.where(np.isfinite(out) & (out > 0.0), out, np.nan).astype("float32")
+
+    # log10_db (sentinel1_sar): linear gamma0 power -> decibels (10*log10(power)).
+    # Non-positive / non-finite power is not renderable backscatter -> NaN (the
+    # serialize directive fills it with the source's dB nodata sentinel); an
+    # all-invalid window -> the typed EMPTY below (the twin's NO_IMAGERY). No-op for
+    # every prior spec (none set log10_db).
+    if tf.get("log10_db"):
+        valid = np.isfinite(out) & (out > 0.0)
+        db = np.full(out.shape, np.nan, dtype="float32")
+        db[valid] = (10.0 * np.log10(out[valid])).astype("float32")
+        out = db
 
     if not bool(np.isfinite(out).any()):
         raise router_empty_error(

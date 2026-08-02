@@ -44,14 +44,29 @@ from trid3nt_server.agent.tools import (
     RegisteredTool,
     clear_registry_for_tests,
 )
-from trid3nt_server.agent.tools.fetchers.hazard.fetch_firms_active_fire import fetch_firms_active_fire as firms_mod
-from trid3nt_server.agent.tools.fetchers.hazard.fetch_firms_active_fire.fetch_firms_active_fire import (
-    FirmsArgError,
-    FirmsAuthError,
-    FirmsMissingKeyError,
-    _resolve_map_key,
-    set_persistence_for_secrets,
-)
+# fetch_firms_active_fire folded to a spec-driven tool (ADR 0079); its bespoke
+# FirmsArgError/FirmsAuthError/FirmsMissingKeyError classes + the vault-first
+# ``_resolve_map_key`` / ``set_persistence_for_secrets`` machinery were removed (the
+# fold resolves the key in the firms_active_fire hook: kwarg -> str secret_ref -> env
+# -> a pre-network FIRMS_MISSING_KEY, the ebird/movebank precedent). The credential
+# pipeline consumes only the typed ``error_code`` (FIRMS_AUTH_ERROR / FIRMS_MISSING_KEY
+# / FIRMS_ARG_INVALID), so these lightweight stubs drive the classifier + server flow
+# byte-identically to the deleted twin's exceptions.
+class FirmsArgError(RuntimeError):
+    error_code = "FIRMS_ARG_INVALID"
+    retryable = False
+
+
+class FirmsAuthError(RuntimeError):
+    error_code = "FIRMS_AUTH_ERROR"
+    retryable = False
+
+
+class FirmsMissingKeyError(RuntimeError):
+    error_code = "FIRMS_MISSING_KEY"
+    retryable = False
+
+
 from trid3nt_contracts.common import new_ulid
 from trid3nt_contracts.execution import LayerURI
 from trid3nt_contracts.secrets import CredentialProvidedEnvelopePayload
@@ -77,103 +92,17 @@ class MockWebSocket:
 
 
 # =========================================================================== #
-# 1. FIRMS vault-read
+# 1. FIRMS key resolution -- REMOVED with the twin (ADR 0079).
+#
+# The twin's vault-first ``_resolve_map_key`` (Persistence.get_secret_value ->
+# ``set_persistence_for_secrets`` binding + a ``demo`` literal fallback + a key_fp
+# cache fingerprint) folded into the ``firms_active_fire.build_request`` hook, which
+# resolves kwarg -> str secret_ref -> ``TRID3NT_FIRMS_MAP_KEY`` env -> a pre-network
+# FIRMS_MISSING_KEY (the ebird/movebank keyed-fold precedent; no Persistence binding,
+# no demo fallback, no key_fp). That hook resolution is covered offline by
+# test_router_firms.py; the removed twin-internal resolver tests are dropped here
+# rather than disabled (clean-as-you-go).
 # =========================================================================== #
-
-
-def test_firms_resolve_vault_key_beats_env():
-    """secret_ref (vault) resolves BEFORE the env var (vault-first)."""
-
-    class FakePersistence:
-        async def get_secret_value(self, secret_ref):
-            return "vault-firms-key"
-
-    class FakeRecord:
-        secret_id = "S01"
-        provider = "firms"
-        is_active = True
-        vault_ref = "projects/p/secrets/s/versions/latest"
-
-    set_persistence_for_secrets(FakePersistence())
-    try:
-        with patch.dict(
-            os.environ, {"TRID3NT_FIRMS_MAP_KEY": "env-firms-key"}, clear=False
-        ):
-            out = _resolve_map_key(secret_ref=FakeRecord())
-        assert out == "vault-firms-key"
-    finally:
-        set_persistence_for_secrets(None)
-
-
-def test_firms_resolve_str_shortcut():
-    """A bare-str secret_ref is the resolved key (test-mock shortcut)."""
-    with patch.dict(os.environ, {}, clear=True):
-        assert _resolve_map_key(secret_ref="direct-vault-value") == "direct-vault-value"
-
-
-def test_firms_resolve_explicit_map_key_wins():
-    """An explicit map_key kwarg wins over both vault and env."""
-    with patch.dict(os.environ, {"TRID3NT_FIRMS_MAP_KEY": "env"}, clear=False):
-        assert _resolve_map_key(map_key="explicit", secret_ref="vault") == "explicit"
-
-
-def test_firms_resolve_env_fallback_then_demo():
-    """No kwarg / no secret_ref → env var; no env → 'demo' literal."""
-    with patch.dict(os.environ, {"TRID3NT_FIRMS_MAP_KEY": "env-only"}, clear=False):
-        assert _resolve_map_key() == "env-only"
-    env = dict(os.environ)
-    env.pop("TRID3NT_FIRMS_MAP_KEY", None)
-    with patch.dict(os.environ, env, clear=True):
-        assert _resolve_map_key() == "demo"
-
-
-def test_firms_vault_failure_falls_back_not_crash():
-    """A vault lookup failure logs + falls back to env/demo (no crash)."""
-
-    class FailingPersistence:
-        async def get_secret_value(self, secret_ref):
-            raise RuntimeError("vault unreachable")
-
-    class FakeRecord:
-        is_active = True
-        provider = "firms"
-
-    set_persistence_for_secrets(FailingPersistence())
-    try:
-        env = dict(os.environ)
-        env.pop("TRID3NT_FIRMS_MAP_KEY", None)
-        with patch.dict(os.environ, env, clear=True):
-            assert _resolve_map_key(secret_ref=FakeRecord()) == "demo"
-    finally:
-        set_persistence_for_secrets(None)
-
-
-def test_firms_cache_key_omits_raw_key():
-    """The FIRMS cache params carry a key fingerprint, never the raw key."""
-    captured: dict[str, Any] = {}
-
-    def _fake_read_through(*, metadata, params, ext, fetch_fn):  # noqa: ANN001
-        captured["params"] = params
-        from trid3nt_server.agent.tools.cache import ReadThroughResult
-
-        return ReadThroughResult(
-            uri="gs://bucket/cache/dynamic-1h/firms_active_fire/x.fgb",
-            data=b"",
-            hit=False,
-        )
-
-    with patch.object(firms_mod, "read_through", _fake_read_through):
-        firms_mod.fetch_firms_active_fire(
-            bbox=(-124.0, 32.5, -114.0, 42.0),
-            days_back=1,
-            map_key="super-secret-raw-key",
-        )
-    params = captured["params"]
-    assert "super-secret-raw-key" not in json.dumps(params)
-    assert "key_fp" in params
-    # The fingerprint is a short hex prefix, not the raw key.
-    assert params["key_fp"] != "super-secret-raw-key"
-    assert len(params["key_fp"]) == 8
 
 
 # =========================================================================== #

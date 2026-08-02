@@ -188,3 +188,6 @@ from . import movebank_tracks  # noqa: E402,F401
 # satellite family (ADR 0078): the SLIDER availability index folds onto the record
 # shape as a live-no-cache source (the record shape's first uncacheable fold).
 from . import slider_timestamps  # noqa: E402,F401
+# quick-folds wave (ADR 0079): FIRMS active-fire keyed CSV http_json -- key in the
+# URL path, 200-with-error-body auth split in parse_response + classify_status.
+from . import firms_active_fire  # noqa: E402,F401
