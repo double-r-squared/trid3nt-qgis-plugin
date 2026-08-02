@@ -1,0 +1,17 @@
+fetch_dem:
+- show me elevation data for the Grand Canyon
+- I need a DEM around Yellowstone National Park
+- give me topography raster for the Rocky Mountains
+- what does the terrain look like near Fort Myers, Florida
+- fetch elevation around the Houston Ship Channel for flood modeling
+- I need a digital elevation model clipped to Lee County, FL
+- pull the terrain grid for this watershed before I run the solver
+- show me the ground elevation surface over New Orleans
+- global elevation model for the Alps
+- DEM for a non-US area like the Andes or Himalaya
+- Copernicus GLO-30 30m elevation for a bounding box
+- terrain elevation outside the United States
+- digital elevation model for a watershed in Europe
+- ground surface heights for slope and hillshade over a foreign region
+- 30 meter global DEM raster for a mountain range
+- elevation data where USGS 3DEP does not cover

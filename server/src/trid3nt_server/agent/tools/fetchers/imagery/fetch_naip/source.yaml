@@ -1,0 +1,107 @@
+# Router source spec (STAC-composite wave, raster-cog stac_multi_asset_rgb, ADR 0080).
+# Twin: fetch_naip.py -- NAIP high-res aerial imagery (RGB) via PC STAC.
+# Folds onto stac_multi_asset_rgb with the SMALLEST directive: render=passthrough reads
+# bands 1..3 of the ONE multi-band `image` asset straight to uint8 (no scale/mask/stretch),
+# most-recent-intersecting item (empty rank). US-only; an all-black window -> NAIP_NO_COVERAGE.
+schema_version: v1
+name: fetch_naip
+source_class: naip
+error_prefix: NAIP
+shape: raster-cog
+supports_global_query: false
+empty_error_suffix: NO_COVERAGE
+endpoints:
+  data:
+    url: https://planetarycomputer.microsoft.com/api/stac/v1
+auth:
+  mode: none
+  user_agent: trid3nt/0.1 (Hazard Modeling Agent; https://github.com/double-r-squared/trid3nt-qgis-plugin;
+    agent@trid3nt.dev)
+params:
+  bbox:
+    type: bbox
+    required: true
+    quantize: round_6dp
+    error_suffix: BBOX_INVALID
+gates:
+  max_bbox_deg2: 0.06
+ingest:
+  access: stac_multi_asset_rgb
+  native_cell_m: 1.0
+  stac:
+    root: https://planetarycomputer.microsoft.com/api/stac/v1
+    collection: naip
+    select: {}
+  composite:
+    px_max: 8192
+    default_combo: default
+    combos:
+      default:
+        assets:
+        - image
+        bands:
+        - 1
+        - 2
+        - 3
+        render:
+          kind: passthrough
+normalize:
+  crs: EPSG:4326
+output:
+  layer_type: raster
+  ext: tif
+  role: context
+  style_preset: naip_rgb
+  emit_bbox: false
+cache:
+  ttl_class: static-30d
+payload_estimate:
+  model: bbox_area
+  mb_per_sq_deg: 250.0
+  floor_mb: 1.0
+caveats:
+- USDA NAIP high-resolution aerial imagery (RGB) via the Microsoft Planetary Computer STAC
+  (naip; the `image` asset). Leaf-on, ~0.6-1 m, the canonical free US aerial basemap. Reads
+  bands R/G/B straight to a 3-band uint8 COG (multiband passthrough, no rescale). US-only
+  (CONUS + HI + PR + USVI); a bbox with no coverage / an all-black window -> an honest
+  NAIP_NO_COVERAGE error, never a fabricated layer. AOI-scoped (<= 0.06 deg^2).
+docstring: |-
+  Fetch NAIP high-resolution aerial imagery (RGB) for a US bbox.
+
+  **What it does:** Searches the Microsoft Planetary Computer for a NAIP
+  aerial-imagery item intersecting ``bbox``, reads the R/G/B bands clipped to
+  the bbox at ~1 m, and returns a 3-band uint8 RGB COG that renders directly
+  as the aerial BASE layer (no rescale / colormap  --  the baked colors paint
+  as-is via the multiband passthrough in ``publish_layer``).
+
+  NAIP is leaf-on, ~0.6-1 m, refreshed on a multi-year state cycle  --  the
+  canonical free US aerial basemap for site-level context.
+
+  **When to use:**
+  - User wants a high-res aerial / true-color basemap for a US area.
+  - As the aerial BASE layer under a conservation-priority stack composed in
+    the code_exec playground (``geocode_location`` + ``fetch_naip`` +
+    ``fetch_mobi``), under species points + NDVI + MoBI.
+
+  **When NOT to use:**
+  - Outside the US (NAIP is CONUS + HI + PR + USVI only)  --  a no-coverage
+    result is an honest typed error, not a fabricated layer.
+  - Vegetation index (use ``compute_ndvi``) or land-cover classes (use
+    ``fetch_landcover``).
+  - Very large AOIs  --  NAIP is sub-meter; the tool caps the bbox to a small
+    neighborhood / preserve (~0.06 deg^2).
+
+  **Parameters:**
+  - ``bbox`` (tuple): ``(min_lon, min_lat, max_lon, max_lat)`` EPSG:4326.
+    Required. US-only, AOI-scoped.
+
+  **Returns:** A ``LayerURI`` (``layer_type="raster"``, ``role="context"``  --
+  it is a basemap, not the analytical primary) pointing at a 3-band RGB COG in
+  the ``static-30d``/``naip`` cache prefix. ``style_preset="naip_rgb"`` (a
+  multiband passthrough token  --  no single-band rescale).
+
+  **Data source:** USDA NAIP via the Microsoft Planetary Computer STAC
+  (``naip`` collection; ``image`` asset).
+
+  FR-CE-8: routed through ``read_through`` so identical bbox calls reuse the
+  cached RGB COG.

@@ -34,4 +34,16 @@ fi
 mkdir -p "$DST"
 rsync -a --delete "$SRC" "$DST"
 echo "synced: $SRC -> $DST"
+
+# Version stamp (install-script provenance): write the source commit this sync
+# came from into the INSTALLED copy so a human can eyeball what's actually
+# installed vs. the repo. (The in-plugin Update button was removed; QGIS Plugin
+# Manager owns updates now -- this stamp is now just informational provenance.)
+# Two lines: short sha, branch. Honest "unknown" fallback if this checkout is
+# not a git repo (e.g. an extracted zip) rather than failing the sync.
+GIT_SHA="$(git -C "$REPO_ROOT" rev-parse --short HEAD 2>/dev/null || echo unknown)"
+GIT_BRANCH="$(git -C "$REPO_ROOT" rev-parse --abbrev-ref HEAD 2>/dev/null || echo unknown)"
+printf '%s\n%s\n' "$GIT_SHA" "$GIT_BRANCH" > "$DST/installed_version.txt"
+echo "stamped: installed_version.txt ($GIT_SHA $GIT_BRANCH)"
+
 echo "reload required: QGIS > Plugins > Plugin Reloader (or restart QGIS)"

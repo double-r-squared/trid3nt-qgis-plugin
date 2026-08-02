@@ -1,4 +1,4 @@
-"""Allow ``python -m trid3nt_server`` invocation (job-0032 startup verification).
+"""Allow ``python -m trid3nt_server`` invocation (startup verification).
 
 Delegates to ``trid3nt_server.main.run``, which supports ``--startup-only`` for
 the M4 substrate acceptance criterion.

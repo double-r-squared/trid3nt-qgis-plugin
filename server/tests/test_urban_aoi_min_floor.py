@@ -14,7 +14,7 @@ from __future__ import annotations
 
 import math
 
-from trid3nt_server.workflows.model_urban_flood_swmm import (
+from trid3nt_server.agent.workflows.swmm.model_urban_flood_swmm.model_urban_flood_swmm import (
     _MIN_URBAN_AOI_SIDE_M,
     _enforce_min_urban_aoi,
 )

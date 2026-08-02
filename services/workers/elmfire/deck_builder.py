@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
-"""ELMFIRE input deck builder (FIRE-2).
+"""ELMFIRE input deck builder.
 
 Turns a declarative deck spec (AOI bbox + ignition point(s) + scenario
 weather + paths/URIs to the fuels/topography rasters) into a run-ready
-ELMFIRE case directory that the FIRE-1 proven container
+ELMFIRE case directory that the proven container
 (``trid3nt/elmfire:dev``, release 2025.0526) consumes as-is:
 
     <deck_dir>/
@@ -45,7 +45,7 @@ NAMELIST
 ========
 ``render_namelist`` mirrors the EXACT key set of
 ``third_party/elmfire/tutorials/01-constant-wind/elmfire.data.in`` — the deck the
-FIRE-1 container proof ran — with only the values templated (&INPUTS,
+container proof ran — with only the values templated (&INPUTS,
 &OUTPUTS, &COMPUTATIONAL_DOMAIN, &TIME_CONTROL, &SIMULATOR, &MISCELLANEOUS).
 
 UNITS TRAP (design doc section 6): ELMFIRE wind is **mph at 20 ft**, not
@@ -75,7 +75,7 @@ LOG = logging.getLogger("trid3nt.worker.elmfire.deck_builder")
 
 #: Target grid defaults — EPSG:5070 (NAD83 / Conus Albers) at the LANDFIRE
 #: native 30 m. Overridable per-spec (``grid.target_epsg`` / ``grid.cellsize_m``)
-#: for tests and for UTM-zone runs, but 5070/30 is the FIRE-track canon.
+#: for tests and for UTM-zone runs, but 5070/30 is the canon.
 DEFAULT_TARGET_EPSG = 5070
 DEFAULT_CELLSIZE_M = 30.0
 
@@ -564,7 +564,7 @@ def render_namelist(
     dt_s: float = 30.0,
     dtdump_s: float = 3600.0,
 ) -> str:
-    """Render ``elmfire.data`` with the tutorial-01 key set (FIRE-1 proven).
+    """Render ``elmfire.data`` with the tutorial-01 key set (proven).
 
     Every key below appears in
     ``third_party/elmfire/tutorials/01-constant-wind/elmfire.data.in`` — the deck
@@ -573,7 +573,7 @@ def render_namelist(
     ./inputs/elmfire.data``), mirroring ``01-run.sh``.
 
     ONE ADDITIVE flag beyond the tutorial set: ``DUMP_FLAME_LENGTH = .TRUE.``
-    (FIRE-3). Tutorial 01 simply does not enable it; the flag is a first-class
+. Tutorial 01 simply does not enable it; the flag is a first-class
     ``&OUTPUTS`` dump documented at https://elmfire.io/user_guide/io.html and
     the composer publishes the flame-length raster as its own COG.
     """
@@ -669,7 +669,7 @@ def compose_manifest(
     """Compose ``deck_manifest.json``: grid, inputs, per-file sha256 checksums.
 
     The ``files`` map covers every file under ``inputs/`` (rasters + the
-    rendered namelist) so a byte-level deck diff (the FIRE-2 golden-deck
+    rendered namelist) so a byte-level deck diff (the golden-deck
     acceptance pattern) is a manifest diff.
     """
     inputs_dir = deck_dir / "inputs"

@@ -1,0 +1,9 @@
+set_sfincs_parameters:
+- increase the overland Manning's roughness on this SFINCS model by 50% before rerunning
+- set the land roughness coefficient to 0.08 in the flood model
+- turn on 5 mm per hour infiltration for this SFINCS deck
+- calibrate the SFINCS model by raising its infiltration rate
+- lower the sea roughness value for the coastal flood setup
+- adjust Manning's n on the staged SFINCS model before running it again
+- scale up the infiltration losses in this flood scenario deck
+- make the land surface rougher in this SFINCS run before I resolve it

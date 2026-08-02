@@ -37,8 +37,8 @@ import json
 import pytest
 
 from trid3nt_server import server
-from trid3nt_server import tools as agent_tools
-from trid3nt_server.tools import RegisteredTool
+from trid3nt_server.agent import tools as agent_tools
+from trid3nt_server.agent.tools import RegisteredTool
 from trid3nt_contracts.common import new_ulid
 from trid3nt_contracts.execution import LayerURI
 from trid3nt_contracts.tool_registry import AtomicToolMetadata
@@ -273,7 +273,7 @@ def test_terminal_raster_products_default_auto_publish_true() -> None:
         "compute_slope",
         "compute_aspect",
         "compute_colored_relief",
-        "clip_raster_to_bbox",
+        "clip_raster_to_polygon",
     ):
         entry = agent_tools.TOOL_REGISTRY.get(name)
         if entry is None:

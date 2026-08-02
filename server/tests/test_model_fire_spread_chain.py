@@ -20,7 +20,7 @@ test_run_geoclaw_chain.py).
      run_solver/wait_for_completion mocked, synthetic solver outputs, REAL
      postprocess (upload stubbed) -> the primary FireSpreadLayerURI + frame +
      aux COGs, no AWS, no docker.
-  7. **Confirm gate** — model_fire_spread in SOLVER_CONFIRM_TOOLS and the
+  7. **Confirm gate** — elmfire_fire_spread in SOLVER_CONFIRM_TOOLS and the
      fire confirm card carries cell count + runtime estimate.
 """
 
@@ -119,7 +119,7 @@ def test_fire_layer_uri_round_trip():
 # (2) Deck-spec assembly.
 # ===========================================================================
 def test_build_elmfire_deck_spec_maps_args():
-    from trid3nt_server.workflows.run_elmfire import build_elmfire_deck_spec
+    from trid3nt_server.agent.workflows.elmfire.run_elmfire import build_elmfire_deck_spec
 
     args = ElmfireRunArgs(
         bbox=_AOI,
@@ -154,11 +154,11 @@ def test_build_elmfire_deck_spec_maps_args():
 # (3) Solver registration + local docker spec.
 # ===========================================================================
 def test_elmfire_registered_in_solver_registries():
-    from trid3nt_server.tools.simulation.solver import (
+    from trid3nt_server.agent.tools.simulation.solver.solver import (
         LOCAL_SOLVER_SPEC_REGISTRY,
         SOLVER_WORKFLOW_REGISTRY,
     )
-    from trid3nt_server.workflows.run_elmfire import (
+    from trid3nt_server.agent.workflows.elmfire.run_elmfire import (
         ELMFIRE_SOLVER_NAME,
         register_elmfire_local_spec,
         register_elmfire_solver,
@@ -171,7 +171,7 @@ def test_elmfire_registered_in_solver_registries():
 
 
 def test_elmfire_local_spec_docker_argv(monkeypatch, tmp_path):
-    from trid3nt_server.workflows.run_elmfire import elmfire_local_spec
+    from trid3nt_server.agent.workflows.elmfire.run_elmfire import elmfire_local_spec
 
     monkeypatch.setenv("TRID3NT_ELMFIRE_CPUS", "3")
     monkeypatch.setenv(
@@ -197,12 +197,6 @@ def test_elmfire_local_spec_docker_argv(monkeypatch, tmp_path):
     assert "elmfire_2025.0526 ./inputs/elmfire.data" in inner
 
 
-def test_batch_job_def_seam_constant():
-    # FIRE-4 seam: the job-def NAME constant exists; nothing seeds the Batch
-    # registry (the lane stays inert until TRID3NT_AWS_BATCH_JOB_DEF_ELMFIRE).
-    from trid3nt_server.workflows.run_elmfire import ELMFIRE_BATCH_JOB_DEF_NAME
-
-    assert ELMFIRE_BATCH_JOB_DEF_NAME == "grace2-elmfire"
 
 
 # ===========================================================================
@@ -215,10 +209,10 @@ def test_tool_typed_error_on_missing_bbox():
     test env - any non-params error proves validation passed)."""
     import asyncio
 
-    from trid3nt_server.tools.simulation.model_fire_spread import model_fire_spread
+    from trid3nt_server.agent.workflows.elmfire.fire_spread.fire_spread import elmfire_fire_spread
 
     out = asyncio.run(
-        model_fire_spread(
+        elmfire_fire_spread(
             bbox=None,
             ignition_lonlat=(-120.85, 39.02),
             duration_hours=1,
@@ -233,25 +227,25 @@ def test_tool_typed_error_on_missing_bbox():
 
 
 def test_tool_typed_error_on_missing_ignition():
-    from trid3nt_server.tools.simulation.model_fire_spread import model_fire_spread
+    from trid3nt_server.agent.workflows.elmfire.fire_spread.fire_spread import elmfire_fire_spread
 
-    out = asyncio.run(model_fire_spread(bbox=list(_AOI), ignition_lonlat=None))
+    out = asyncio.run(elmfire_fire_spread(bbox=list(_AOI), ignition_lonlat=None))
     assert out["status"] == "error"
     assert out["error_code"] == "FIRE_IGNITION_REQUIRED"
     # The message points the LLM at the spatial-input pick machinery.
     assert "request_spatial_input" in out["error_message"]
 
     out2 = asyncio.run(
-        model_fire_spread(bbox=list(_AOI), ignition_lonlat="not-a-point")
+        elmfire_fire_spread(bbox=list(_AOI), ignition_lonlat="not-a-point")
     )
     assert out2["error_code"] == "FIRE_PARAMS_INVALID"
 
 
 def test_tool_typed_error_on_bad_preset():
-    from trid3nt_server.tools.simulation.model_fire_spread import model_fire_spread
+    from trid3nt_server.agent.workflows.elmfire.fire_spread.fire_spread import elmfire_fire_spread
 
     out = asyncio.run(
-        model_fire_spread(
+        elmfire_fire_spread(
             bbox=list(_AOI), ignition_lonlat=list(_IGN), fuel_moisture="soggy"
         )
     )
@@ -319,7 +313,7 @@ def test_read_fire_raster_stamps_missing_crs(tmp_path: Path):
     """The CRS stamp: a CRS-less BIL read carries the deck EPSG (the in-code
     equivalent of FIRE-1's gdal_translate -a_srs); a CRS-carrying file keeps
     its own CRS (never silently overridden)."""
-    from trid3nt_server.workflows.postprocess_elmfire import read_fire_raster
+    from trid3nt_server.agent.workflows.elmfire.postprocess_elmfire import read_fire_raster
 
     bare = _write_bil(tmp_path / "time_of_arrival_1.bil", _toa_array())
     arr, _t, crs, cellsize = read_fire_raster(bare, epsg=5070)
@@ -336,7 +330,7 @@ def test_read_fire_raster_stamps_missing_crs(tmp_path: Path):
 
 
 def test_toa_frame_grids_threshold_per_hour():
-    from trid3nt_server.workflows.postprocess_elmfire import toa_frame_grids
+    from trid3nt_server.agent.workflows.elmfire.postprocess_elmfire import toa_frame_grids
 
     duration_s = 6 * 3600.0
     toa = _toa_array(duration_s)
@@ -360,7 +354,7 @@ def test_postprocess_elmfire_end_to_end_shape(tmp_path: Path):
     """Synthetic ToA + flame-length + spread-rate BILs -> the (layers, metrics)
     shape: primary ToA COG + contiguous 'Burned area step N' frames + aux COGs
     with the ft->m conversions applied exactly once."""
-    from trid3nt_server.workflows import postprocess_elmfire as pe
+    from trid3nt_server.agent.workflows.elmfire import postprocess_elmfire as pe
 
     out = tmp_path / "outputs"
     out.mkdir()
@@ -426,7 +420,7 @@ def test_postprocess_elmfire_end_to_end_shape(tmp_path: Path):
 
 
 def test_postprocess_elmfire_empty_output_raises(tmp_path: Path):
-    from trid3nt_server.workflows.postprocess_elmfire import (
+    from trid3nt_server.agent.workflows.elmfire.postprocess_elmfire import (
         PostprocessElmfireError,
         postprocess_elmfire,
     )
@@ -441,7 +435,7 @@ def test_postprocess_elmfire_empty_output_raises(tmp_path: Path):
 def test_postprocess_elmfire_zero_spread_is_typed(tmp_path: Path):
     """All-nodata ToA (nothing burned) -> the typed ELMFIRE_NO_SPREAD result,
     never a blank 'modeled ok' with empty layers (honesty floor)."""
-    from trid3nt_server.workflows.postprocess_elmfire import (
+    from trid3nt_server.agent.workflows.elmfire.postprocess_elmfire import (
         PostprocessElmfireError,
         postprocess_elmfire,
     )
@@ -525,10 +519,10 @@ def test_composer_mocked_end_to_end(tmp_path: Path, monkeypatch):
     """Fetches mocked (synthetic rasters), docker/solver mocked, synthetic
     solver outputs -> REAL deck build + REAL postprocess -> the primary
     FireSpreadLayerURI + frames + aux COGs as LayerURIs. No AWS, no docker."""
-    from trid3nt_server.tools.simulation import solver as solver_mod
-    from trid3nt_server.workflows import model_fire_spread_scenario as comp
-    from trid3nt_server.workflows import postprocess_elmfire as pe
-    from trid3nt_server.workflows.run_elmfire import load_deck_builder
+    from trid3nt_server.agent.tools.simulation.solver import solver as solver_mod
+    from trid3nt_server.agent.workflows.elmfire.model_fire_spread_scenario import model_fire_spread_scenario as comp
+    from trid3nt_server.agent.workflows.elmfire import postprocess_elmfire as pe
+    from trid3nt_server.agent.workflows.elmfire.run_elmfire import load_deck_builder
 
     # Local backend so staging stays on the filesystem (file:// manifest).
     monkeypatch.setenv("TRID3NT_SOLVER_BACKEND", "local-docker")
@@ -668,14 +662,14 @@ def test_composer_mocked_end_to_end(tmp_path: Path, monkeypatch):
 # ===========================================================================
 # (7) Confirm gate: the tool is gated + the card carries cells + runtime.
 # ===========================================================================
-def test_model_fire_spread_in_solver_confirm_tools():
+def test_elmfire_fire_spread_in_solver_confirm_tools():
     from trid3nt_server.server import SOLVER_CONFIRM_TOOLS
 
-    assert "model_fire_spread" in SOLVER_CONFIRM_TOOLS
+    assert "elmfire_fire_spread" in SOLVER_CONFIRM_TOOLS
 
 
 def test_fire_confirm_envelope_carries_cells_and_runtime():
-    from trid3nt_server.server import _build_fire_confirm_envelope
+    from trid3nt_server.agent.gates.cards.solver_confirm import _build_fire_confirm_envelope
 
     env = _build_fire_confirm_envelope(
         {
@@ -687,7 +681,7 @@ def test_fire_confirm_envelope_carries_cells_and_runtime():
             "duration_hours": 6.0,
         }
     )
-    assert env.tool_name == "model_fire_spread"
+    assert env.tool_name == "elmfire_fire_spread"
     assert env.options == ["proceed", "cancel"]
     assert env.tool_args["estimated_cells"] > 0
     assert env.tool_args["estimated_runtime_s"] >= 15
@@ -805,10 +799,10 @@ class TestArgShapeCoercion:
         test env) - the only forbidden outcomes are the params errors."""
         import asyncio
 
-        from trid3nt_server.tools.simulation.model_fire_spread import model_fire_spread
+        from trid3nt_server.agent.workflows.elmfire.fire_spread.fire_spread import elmfire_fire_spread
 
         result = asyncio.run(
-            model_fire_spread(
+            elmfire_fire_spread(
                 bbox="-120.85,39.02",
                 ignition_lonlat="-120.85,39.02",
                 duration_hours=1,

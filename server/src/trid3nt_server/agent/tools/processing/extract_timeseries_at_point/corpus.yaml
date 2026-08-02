@@ -1,0 +1,8 @@
+extract_timeseries_at_point:
+- how does the flood depth at this location change over time
+- plot water level at the pier over the simulation
+- extract a time series of depth at my house from the flood run
+- show me how surge height evolves at this point over the 48 hours
+- graph the water depth over time at this coordinate
+- what is the hydrograph at the outfall from the SWMM run
+- track how the contaminant concentration changes over the animation frames

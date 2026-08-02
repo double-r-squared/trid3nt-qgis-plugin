@@ -10,12 +10,11 @@ envelope hung the turn forever (the exact bug class the code-exec gate was):
   * spatial-input-request  (the agent needs a picked geometry; reply
     spatial-input-response) -- CRITICAL gate-WAIT.
 
-The lighter six are fire-and-forget side effects the dock now renders:
+The lighter five are fire-and-forget side effects the dock now renders:
 
   * code-exec-result  (the run outcome after an approved code-exec-request).
   * secrets-list      (the per-user/per-Case secret roster).
   * impact-envelope   (Pelicun portfolio damage/loss aggregates).
-  * lesson-added      (the LESSONS LOOP ack).
   * (chart-emission + solve-progress were already classified/rendered by a
     prior lane -- covered in test_charts / the SimCard harness -- so this file
     does not re-cover them.)
@@ -47,7 +46,6 @@ from trid3nt.net import trid3nt_client as tc  # noqa: E402
 from trid3nt.ui import gate  # noqa: E402
 from stub_server import (  # noqa: E402
     IMPACT_ENVELOPE_ROW,
-    LESSON_ADDED_ROW,
     REGION_CHOICE_REQUEST_ROW,
     SPATIAL_INPUT_BBOX_ROW,
     SPATIAL_INPUT_POINT_ROW,
@@ -272,23 +270,6 @@ class TestImpactEnvelopeParsing(unittest.TestCase):
 
 
 # =========================================================================== #
-# lesson-added -- pure logic
-# =========================================================================== #
-
-
-class TestLessonAddedParsing(unittest.TestCase):
-    def test_parse_fields(self):
-        added = gate.parse_lesson_added(LESSON_ADDED_ROW)
-        self.assertEqual(added.lesson_id, LESSON_ADDED_ROW["lesson_id"])
-        self.assertIn("OSM Overpass", gate.lesson_added_line(added))
-
-    def test_parse_malformed_is_none(self):
-        self.assertIsNone(gate.parse_lesson_added({}))
-        self.assertIsNone(gate.parse_lesson_added({"lesson": "   "}))
-        self.assertIsNone(gate.parse_lesson_added(None))
-
-
-# =========================================================================== #
 # Wire round trips against the stub
 # =========================================================================== #
 
@@ -447,15 +428,6 @@ class TestImpactEnvelopeRoundTrip(_RoundTripBase):
         ev = self._await_kind("impact-envelope")
         s = gate.parse_impact_envelope(ev.data)
         self.assertEqual(s.n_structures_total, 1840)
-        self._await_kind("turn-complete")
-
-
-class TestLessonAddedRoundTrip(_RoundTripBase):
-    def test_classified_not_raw(self):
-        self.client.send_chat("save that lesson for next time")
-        ev = self._await_kind("lesson-added")
-        added = gate.parse_lesson_added(ev.data)
-        self.assertIn("OSM Overpass", gate.lesson_added_line(added))
         self._await_kind("turn-complete")
 
 

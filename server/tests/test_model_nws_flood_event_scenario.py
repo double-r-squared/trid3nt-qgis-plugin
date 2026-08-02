@@ -45,14 +45,14 @@ from unittest.mock import patch
 
 import pytest
 
-from trid3nt_server.workflows.model_nws_flood_event_scenario import (
+from trid3nt_server.agent.workflows.sfincs.model_nws_flood_event_scenario.model_nws_flood_event_scenario import (
     Case3Error,
     FLOOD_WARNING_EVENT_TYPES,
     extract_polygon_bbox,
     model_nws_flood_event_scenario,
     select_flood_warning,
 )
-from trid3nt_server.workflows.model_nws_flood_event_scenario import (
+from trid3nt_server.agent.workflows.sfincs.model_nws_flood_event_scenario.model_nws_flood_event_scenario import (
     _narrow_candidates,
     _accumulation_hours,
 )
@@ -418,7 +418,7 @@ def _failed_envelope(bbox: tuple[float, float, float, float], code: str) -> Asse
     )
 
 
-_MOD = "trid3nt_server.workflows.model_nws_flood_event_scenario"
+_MOD = "trid3nt_server.agent.workflows.sfincs.model_nws_flood_event_scenario.model_nws_flood_event_scenario"
 
 
 # --------------------------------------------------------------------------- #
@@ -629,13 +629,15 @@ async def test_no_alerts_at_all_degrades_quiet() -> None:
 
 @pytest.mark.asyncio
 async def test_nws_fetch_failure_degrades() -> None:
-    from trid3nt_server.tools.fetchers.weather.fetch_nws_alerts_conus import NWSConusUpstreamError
+    # fetch_nws_alerts_conus folded to spec-driven (ADR 0063); the workflow-owned raw
+    # read raises Case3Error(error_code=...) which the degrade path reads for reason_code.
+    from trid3nt_server.agent.workflows.sfincs.model_nws_flood_event_scenario.model_nws_flood_event_scenario import Case3Error
 
     geojson_calls = {"count": 0}
 
     def _raise(*_a: Any, **_k: Any) -> Any:
         geojson_calls["count"] += 1
-        raise NWSConusUpstreamError("NWS returned HTTP 503")
+        raise Case3Error("NWS_CONUS_UPSTREAM_ERROR", "NWS returned HTTP 503")
 
     with (
         patch(f"{_MOD}.fetch_nws_alerts_conus", return_value=_mock_alerts_layer()),
@@ -660,14 +662,16 @@ async def test_nws_fetch_failure_degrades() -> None:
 
 @pytest.mark.asyncio
 async def test_mrms_failure_degrades_with_selected_warning() -> None:
-    from trid3nt_server.tools.fetchers.weather.fetch_mrms_qpe import MRMSQPEUpstreamError
+    # fetch_mrms_qpe folded to the spec-driven router surface (ADR 0069); its typed
+    # upstream error is now the shared router error (the twin's MRMSQPEUpstreamError died).
+    from trid3nt_server.agent.tools.fetchers._router.errors import router_upstream_error
 
     features = [_feature("Flood Warning", severity="Severe", alert_id="picked")]
 
     with (
         patch(f"{_MOD}.fetch_nws_alerts_conus", return_value=_mock_alerts_layer()),
         patch(f"{_MOD}._fetch_nws_conus_geojson", return_value=_geojson(features)),
-        patch(f"{_MOD}.fetch_mrms_qpe", side_effect=MRMSQPEUpstreamError("S3 down")),
+        patch(f"{_MOD}.fetch_mrms_qpe", side_effect=router_upstream_error("MRMS_QPE", "S3 down")),
         patch(f"{_MOD}.model_flood_scenario") as mock_flood,
     ):
         result = await model_nws_flood_event_scenario()
@@ -689,8 +693,8 @@ async def test_mrms_failure_degrades_with_selected_warning() -> None:
 
 def test_wrapper_registered_workflow_dispatch() -> None:
     # Importing the workflows package fires the @register_tool decorators.
-    import trid3nt_server.workflows  # noqa: F401
-    from trid3nt_server.tools import TOOL_REGISTRY
+    import trid3nt_server.agent.workflows  # noqa: F401
+    from trid3nt_server.agent.tools import TOOL_REGISTRY
 
     assert "run_model_nws_flood_event_scenario" in TOOL_REGISTRY
     meta = TOOL_REGISTRY["run_model_nws_flood_event_scenario"].metadata
@@ -702,7 +706,7 @@ def test_wrapper_registered_workflow_dispatch() -> None:
 @pytest.mark.asyncio
 async def test_wrapper_forwards_to_composer() -> None:
     """The registered wrapper forwards verbatim to the composer body."""
-    from trid3nt_server.workflows.model_nws_flood_event_scenario import (
+    from trid3nt_server.agent.workflows.sfincs.model_nws_flood_event_scenario.model_nws_flood_event_scenario import (
         run_model_nws_flood_event_scenario,
     )
 

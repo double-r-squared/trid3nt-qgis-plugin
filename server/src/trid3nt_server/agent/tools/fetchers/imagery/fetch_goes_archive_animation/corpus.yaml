@@ -1,0 +1,11 @@
+fetch_goes_archive_animation:
+- animate the GOES Fire Temperature loop for a fire on a past date
+- recreate the GOES-18 fire-temperature animation for 2026-06-22 from the archive
+- make a historical GOES satellite timelapse of the fire from the raw S3 archive
+- build a Fire Temperature scrubber over a window on an old date, not just recent frames
+- the SLIDER animation only has recent frames -- pull the historical GOES archive instead
+- composite GOES Fire Temperature from the raw C07 C06 C05 bands for this past fire
+- animate the GOES true color daytime imagery loop over this fire from the archive
+- make a natural-color GOES timelapse at the finest native visible resolution for this AOI
+- animate the GOES true color satellite base to play a lightning overlay over this storm
+- moving GOES imagery loop under the GLM lightning overlay for this AOI and window

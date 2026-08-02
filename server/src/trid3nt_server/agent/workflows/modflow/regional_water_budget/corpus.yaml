@@ -1,0 +1,10 @@
+# TEMPLATE tier (engine-door refactor): phrasings for modflow_regional_water_budget. NOT merged
+# into the main retrieval index (templates are excluded from the default
+# pool); the run_modflow door surfaces this template via gate expansion.
+# Carried verbatim from the migrated run_model_regional_water_budget_scenario corpus entries.
+modflow_regional_water_budget:
+- water budget for this aquifer
+- zonal groundwater budget for the region
+- where does the recharge go in this basin
+- inflows and outflows of the regional aquifer
+- groundwater balance partition for this area

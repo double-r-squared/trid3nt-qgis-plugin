@@ -25,7 +25,7 @@ import asyncio
 import json
 
 from trid3nt_server import tool_catalog_http
-from trid3nt_server import context_budget
+from trid3nt_server.agent.gates import context_budget
 
 
 # ---------------------------------------------------------------------------

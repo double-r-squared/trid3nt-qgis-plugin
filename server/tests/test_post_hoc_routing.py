@@ -25,8 +25,8 @@ from __future__ import annotations
 
 import pytest
 
-from trid3nt_server.adapter import summarize_tool_result
-from trid3nt_server.categories import (
+from trid3nt_server.agent.adapters.adapter import summarize_tool_result
+from trid3nt_server.agent.categories import (
     AllowedToolSet,
     OutOfAllowedSetError,
     list_tools_in_category,
@@ -142,7 +142,7 @@ def test_unknown_category_routes_to_typed_envelope() -> None:
     UnknownCategoryError propagates as a structured envelope so Gemini can
     retry with a valid id (after re-reading list_categories)."""
     # Simulate: Gemini called list_tools_in_category with a typo.
-    from trid3nt_server.categories import (
+    from trid3nt_server.agent.categories import (
         UnknownCategoryError,
         list_tools_in_category as _impl,
     )
@@ -162,9 +162,9 @@ def test_dispatched_tool_stays_allowed_on_subsequent_turns() -> None:
     stays in the allowed set for later turns (monotonic growth)."""
     allowed = AllowedToolSet()
     # job-0270: the first call auto-widens (real registry tool)...
-    assert validate_function_call("compute_zonal_statistics", allowed) is None
+    assert validate_function_call("compute_hillshade", allowed) is None
     # ...and the server records the dispatch on success.
-    allowed.record_dispatch("compute_zonal_statistics")
+    allowed.record_dispatch("compute_hillshade")
     # Subsequent turns keep passing; the set never shrinks.
-    assert validate_function_call("compute_zonal_statistics", allowed) is None
-    assert "compute_zonal_statistics" in allowed.as_frozenset()
+    assert validate_function_call("compute_hillshade", allowed) is None
+    assert "compute_hillshade" in allowed.as_frozenset()

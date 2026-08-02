@@ -18,22 +18,22 @@ from __future__ import annotations
 import asyncio
 import json
 from dataclasses import dataclass, field
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 
 import pytest
 
 import trid3nt_server.main as agent_main
 from trid3nt_server import server as agent_server
-from trid3nt_server.adapter import GeminiSettings, TextDeltaEvent
-from trid3nt_server.categories import HOT_SET_TOOLS
-from trid3nt_server.tool_gating import (
+from trid3nt_server.agent.adapters.adapter import ModelSettings, TextDeltaEvent
+from trid3nt_server.agent.categories import HOT_SET_TOOLS
+from trid3nt_server.agent.gates.tool_gating import (
     META_TOOL_FLOOR,
     TOOL_GATING_TOPK_DEFAULT,
     gate_tool_registry,
     gating_topk,
     named_tools_in_text,
 )
-from trid3nt_server.tools import TOOL_REGISTRY
+from trid3nt_server.agent.tools import TOOL_REGISTRY
 from trid3nt_contracts import new_ulid
 
 # The gating tests rank/keep REAL registry names -- make sure the full
@@ -45,6 +45,30 @@ agent_main._import_tools_registry()
 # ---------------------------------------------------------------------------
 # Unit: env resolution
 # ---------------------------------------------------------------------------
+
+
+def _full_registry_size() -> int:
+    """The DEFAULT declarable-registry size handed to ``build_tool_declarations``
+    in the gating-OFF / fail-open paths -- membership-derived as
+    ``len(TOOL_REGISTRY) - count(tier in {template, internal})``.
+
+    ENGINE-DOOR invariant (refactor/engine-doors): ``tier=template`` engine
+    templates are EXCLUDED from DEFAULT declarations -- they reach the model
+    ONLY via their door's gate expansion. wave-11 (ADR 0059): ``tier=internal``
+    (an absorbed seam, fetch_copernicus_dem) is EXCLUDED identically -- never
+    model-facing. So the disabled-by-env path, the scripted/bedrock/vertex
+    byte-unchanged path, and the stage-3 gate's own cold-index fail-open all
+    declare the full registry MINUS templates MINUS internal seams. A prior pass
+    flipped this helper to the raw ``len(TOOL_REGISTRY)`` (templates included),
+    which re-baselined AROUND the very leak the door architecture forbids; this
+    restores the pool-filtered invariant that
+    ``server._default_declarable_registry`` now enforces on the product side."""
+    n_hidden = sum(
+        1
+        for entry in TOOL_REGISTRY.values()
+        if getattr(entry.metadata, "tier", "general") in ("template", "internal")
+    )
+    return len(TOOL_REGISTRY) - n_hidden
 
 
 def test_gating_topk_default(monkeypatch):
@@ -120,7 +144,10 @@ def test_gate_keeps_topk_plus_meta_floor():
 
 def test_gate_always_includes_used_tools():
     ranked = _ranked(24)
-    used = {"fetch_usgs_earthquakes", "compute_ndvi"}
+    # Pick used tools alphabetically far beyond the _ranked window (sorted
+    # names [:24] are compute_*-range), so registry adds/culls that shift the
+    # window never re-break the not-in-top-k precondition below.
+    used = {"fetch_usgs_earthquakes", "publish_layer"}
     assert used <= set(TOOL_REGISTRY)
     assert not (used & {n for n, _ in ranked[:24]})  # not already in top-k
     gated = gate_tool_registry(
@@ -153,7 +180,7 @@ def test_gate_disabled_at_k_zero():
 
 
 # ---------------------------------------------------------------------------
-# Integration: provider scoping through _stream_gemini_reply
+# Integration: provider scoping through _stream_model_reply
 # ---------------------------------------------------------------------------
 
 
@@ -168,8 +195,8 @@ class _FakeSocket:
             self.sent.append(msg)
 
 
-def _settings() -> GeminiSettings:
-    return GeminiSettings(
+def _settings() -> ModelSettings:
+    return ModelSettings(
         model="gemini-2.5-pro", project="t", location="us-central1", use_vertex=True
     )
 
@@ -181,7 +208,7 @@ async def _fake_stream(*_a, **_k):
 async def _drive_turn_and_capture_registry(monkeypatch) -> dict:
     """Run one no-tool turn and capture the registry handed to
     build_tool_declarations."""
-    from trid3nt_server.tools.discovery import tool_retrieval as tr
+    from trid3nt_server.agent.tools.search import tool_retrieval as tr
 
     monkeypatch.setattr(
         tr, "retrieve_ranked_tools", lambda text, k=25: _ranked(30)[: max(k, 2)]
@@ -195,10 +222,9 @@ async def _drive_turn_and_capture_registry(monkeypatch) -> dict:
 
     sock = _FakeSocket()
     state = agent_server.SessionState(session_id=new_ulid())
-    with patch.object(agent_server, "build_client", return_value=MagicMock()), \
-         patch.object(agent_server, "build_tool_declarations", _capture_decls), \
+    with patch.object(agent_server, "build_tool_declarations", _capture_decls), \
          patch.object(agent_server, "stream_events_with_contents", _fake_stream):
-        await agent_server._stream_gemini_reply(
+        await agent_server._stream_model_reply(
             sock, state, _settings(), "fetch something for Boulder", "research"
         )
     return captured
@@ -223,28 +249,28 @@ async def test_openai_provider_gate_disabled_by_env(monkeypatch):
     monkeypatch.setenv("MODEL_PROVIDER", "openai")
     monkeypatch.setenv("TRID3NT_TOOL_GATING_TOPK", "0")
     captured = await _drive_turn_and_capture_registry(monkeypatch)
-    assert len(captured["registry"]) == len(TOOL_REGISTRY)
+    assert len(captured["registry"]) == _full_registry_size()
 
 
 @pytest.mark.asyncio
 async def test_scripted_provider_turn_is_never_gated(monkeypatch):
     # bedrock/scripted/vertex paths byte-unchanged: full registry always.
     monkeypatch.setenv("MODEL_PROVIDER", "scripted")
-    from trid3nt_server.scripted_adapter import set_script
+    from trid3nt_server.agent.adapters.scripted_adapter import set_script
 
     set_script([{"text": "ok"}])
     try:
         captured = await _drive_turn_and_capture_registry(monkeypatch)
     finally:
         set_script(None)
-    assert len(captured["registry"]) == len(TOOL_REGISTRY)
+    assert len(captured["registry"]) == _full_registry_size()
 
 
 @pytest.mark.asyncio
 async def test_openai_gate_fails_open_on_cold_index(monkeypatch):
     monkeypatch.setenv("MODEL_PROVIDER", "openai")
     monkeypatch.delenv("TRID3NT_TOOL_GATING_TOPK", raising=False)
-    from trid3nt_server.tools.discovery import tool_retrieval as tr
+    from trid3nt_server.agent.tools.search import tool_retrieval as tr
 
     monkeypatch.setattr(tr, "retrieve_ranked_tools", lambda text, k=25: [])
 
@@ -256,10 +282,63 @@ async def test_openai_gate_fails_open_on_cold_index(monkeypatch):
 
     sock = _FakeSocket()
     state = agent_server.SessionState(session_id=new_ulid())
-    with patch.object(agent_server, "build_client", return_value=MagicMock()), \
-         patch.object(agent_server, "build_tool_declarations", _capture_decls), \
+    with patch.object(agent_server, "build_tool_declarations", _capture_decls), \
          patch.object(agent_server, "stream_events_with_contents", _fake_stream):
-        await agent_server._stream_gemini_reply(
+        await agent_server._stream_model_reply(
             sock, state, _settings(), "fetch something", "research"
         )
-    assert len(captured["registry"]) == len(TOOL_REGISTRY)
+    assert len(captured["registry"]) == _full_registry_size()
+
+
+# ---------------------------------------------------------------------------
+# ENGINE-DOOR: templates excluded from DEFAULT declarations, declarable after
+# a door expansion adds them to the turn's visible registry (refactor/engine-doors)
+# ---------------------------------------------------------------------------
+
+
+def _template_names() -> set[str]:
+    return {
+        name
+        for name, entry in TOOL_REGISTRY.items()
+        if getattr(entry.metadata, "tier", "general") == "template"
+    }
+
+
+def test_default_declarations_exclude_templates_but_door_expansion_declares():
+    """DEFAULT declarations exclude every tier=template engine template; a
+    simulated door expansion (adding a template back into the per-turn
+    registry, exactly as the door-expand block does) makes it declarable."""
+    from trid3nt_server.agent.adapters.adapter import build_tool_declarations
+
+    templates = _template_names()
+    assert templates, "expected registered tier=template engine templates"
+
+    # DEFAULT declarable registry (the gating-off / fail-open base) excludes
+    # every template -- both as registry membership and as built declarations.
+    default_reg = agent_server._default_declarable_registry()
+    assert not (templates & set(default_reg)), (
+        "engine templates leaked into the DEFAULT declarable registry"
+    )
+    default_decls = {d.name for d in build_tool_declarations(default_reg)}
+    assert not (templates & default_decls), (
+        f"engine templates were DECLARED by default: {templates & default_decls}"
+    )
+    # ...but the engine DOORS themselves stay declared (the only surface the
+    # model has to reach a template).
+    door_names = {
+        name
+        for name, entry in TOOL_REGISTRY.items()
+        if getattr(entry.metadata, "tier", "general") == "door"
+    }
+    assert door_names <= set(default_reg), "engine doors dropped from defaults"
+
+    # A door expansion unions its curated templates into _retrieval_registry
+    # (server.py door-expand block); simulate that and confirm the template is
+    # now declared.
+    a_template = sorted(templates)[0]
+    expanded_reg = dict(default_reg)
+    expanded_reg[a_template] = TOOL_REGISTRY[a_template]
+    expanded_decls = {d.name for d in build_tool_declarations(expanded_reg)}
+    assert a_template in expanded_decls, (
+        f"door-expanded template {a_template!r} was NOT declared"
+    )

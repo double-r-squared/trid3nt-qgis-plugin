@@ -21,13 +21,13 @@ from typing import Any
 
 import pytest
 
-from trid3nt_server.tools import TOOL_REGISTRY
-from trid3nt_server.tools.discovery import catalog_common as catalog_mod
-from trid3nt_server.tools.discovery import ogc_adapter as ogc_mod
-from trid3nt_server.tools.discovery.catalog_common import CatalogNotFoundError, load_catalog
-from trid3nt_server.tools.discovery.fetch_from_catalog import fetch_from_catalog
-from trid3nt_server.tools.discovery.search_data_catalog import search_data_catalog
-from trid3nt_server.tools.discovery.ogc_adapter import (
+from trid3nt_server.agent.tools import TOOL_REGISTRY
+from trid3nt_server.agent.tools.search import catalog_common as catalog_mod
+from trid3nt_server.agent.tools.search import ogc_adapter as ogc_mod
+from trid3nt_server.agent.tools.search.catalog_common import CatalogNotFoundError, load_catalog
+from trid3nt_server.agent.tools.search.fetch_from_catalog.fetch_from_catalog import fetch_from_catalog
+from trid3nt_server.agent.tools.search.search_data_catalog.search_data_catalog import search_data_catalog
+from trid3nt_server.agent.tools.search.ogc_adapter import (
     OGCAdapterError,
     OGCResponse,
     fetch_ogc_layer,
@@ -93,7 +93,7 @@ def fake_storage_patched(monkeypatch):
     ``s3://`` URIs and reads/writes ``fake.store`` (keyed by object KEY), so the
     cache hit/miss/write assertions hold without touching the network.
     """
-    from trid3nt_server.tools.cache import (
+    from trid3nt_server.agent.tools.cache import (
         CACHE_BUCKET,
         cache_path,
         compute_cache_key,
@@ -120,8 +120,8 @@ def fake_storage_patched(monkeypatch):
 
     # ``read_through`` is bound per-module at import time, so patch it in BOTH
     # split tool modules (catalog_common itself never calls it).
-    from trid3nt_server.tools.discovery import fetch_from_catalog as _cf_mod
-    from trid3nt_server.tools.discovery import search_data_catalog as _cs_mod
+    from trid3nt_server.agent.tools.search.fetch_from_catalog import fetch_from_catalog as _cf_mod
+    from trid3nt_server.agent.tools.search.search_data_catalog import search_data_catalog as _cs_mod
 
     monkeypatch.setattr(_cs_mod, "read_through", _patched)
     monkeypatch.setattr(_cf_mod, "read_through", _patched)
@@ -377,7 +377,7 @@ def test_fetch_from_catalog_tier3_https_dispatch(fake_storage_patched, monkeypat
             content_type="text/plain",
         )
 
-    from trid3nt_server.tools.discovery import fetch_from_catalog as _cf_mod
+    from trid3nt_server.agent.tools.search.fetch_from_catalog import fetch_from_catalog as _cf_mod
 
     monkeypatch.setattr(_cf_mod, "_tier3_https_fetch",
                         lambda entry, params: (
@@ -738,31 +738,44 @@ def test_fetch_landcover_routes_through_generic_ogc_adapter(monkeypatch):
     a future refactor can't accidentally fork the WCS implementation
     without this test catching it.
     """
-    from trid3nt_server.tools.fetchers.terrain import fetch_landcover as data_fetch
+    # fetch_landcover is spec-driven (ADR 0082): the WCS GetCoverage GET lives in the
+    # router's wcs_getcoverage access mode, still the shared ogc adapter (Tier-2 SoT).
+    import numpy as np
+    import rasterio
+    from rasterio.io import MemoryFile
 
+    from trid3nt_server.agent.tools.fetchers._router import router as _router
+    from trid3nt_server.agent.tools.fetchers._router.spec import compose_specs_from_tree
+
+    spec = compose_specs_from_tree()["fetch_landcover"]
     captured: dict = {}
 
-    def _fake_fetch_ogc_layer(
-        url, layer_name, bbox, **kwargs
-    ):
-        captured["url"] = url
-        captured["layer_name"] = layer_name
-        captured["bbox"] = bbox
-        captured["service_type"] = kwargs.get("service_type")
-        captured["version"] = kwargs.get("version")
-        captured["image_format"] = kwargs.get("image_format")
-        return OGCResponse(
-            content=b"\x49\x49\x2a\x00" + b"\x00" * 256,
-            content_type="image/tiff",
-            service_type=kwargs.get("service_type"),
-            url=url,
-            status_code=200,
-        )
+    def _synth_nlcd(bbox):
+        arr = np.full((16, 16), 41, dtype="uint8")
+        tr = rasterio.transform.from_bounds(*bbox, 16, 16)
+        with MemoryFile() as mem:
+            with mem.open(driver="GTiff", height=16, width=16, count=1, dtype="uint8",
+                          crs="EPSG:4326", transform=tr, nodata=255) as dst:
+                dst.write(arr, 1)
+            return mem.read()
+
+    def _fake_fetch_ogc_layer(url, layer_name, bbox, **kwargs):
+        captured.update(url=url, layer_name=layer_name, bbox=bbox,
+                        service_type=kwargs.get("service_type"),
+                        version=kwargs.get("version"),
+                        image_format=kwargs.get("image_format"))
+        return OGCResponse(content=_synth_nlcd(bbox), content_type="image/tiff",
+                           service_type=kwargs.get("service_type"), url=url, status_code=200)
 
     monkeypatch.setattr(ogc_mod, "fetch_ogc_layer", _fake_fetch_ogc_layer)
 
-    out = data_fetch._fetch_nlcd_landcover_bytes(FORT_MYERS_BBOX, 2021)
-    assert isinstance(out, bytes) and len(out) > 4
+    from trid3nt_server.agent.tools.cache import ReadThroughResult
+    monkeypatch.setattr(_router, "read_through",
+                        lambda metadata, params, ext, fetch_fn, **kw: ReadThroughResult(
+                            uri="s3://fake/landcover.tif", data=fetch_fn(), hit=False))
+
+    out = _router.route(spec, {"bbox": list(FORT_MYERS_BBOX), "dataset": "nlcd_2021", "resolution_m": 30})
+    assert out.uri.startswith("s3://")
     assert captured["service_type"] == "WCS"
     assert captured["version"] == "1.0.0"
     assert captured["image_format"] == "GeoTIFF"

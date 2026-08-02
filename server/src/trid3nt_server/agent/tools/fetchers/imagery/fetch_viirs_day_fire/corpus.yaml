@@ -1,0 +1,9 @@
+fetch_viirs_day_fire:
+- recreate the JPSS VIIRS Day Fire animation over a four-day window
+- animate the VIIRS Day Fire passes over the Channel Islands day by day
+- make a polar satellite timelapse of the fire from Suomi-NPP and NOAA-20
+- show every daytime VIIRS overpass of the fire as a scrubbable frame
+- build the multi-day VIIRS Day Fire loop over this offshore AOI
+- I want the JPSS day fire imagery animation labelled with real pass times
+- recreate the JPSS VIIRS Day Fire animation of the Santa Rosa Island fire by name
+- look the fire up by name, draw an AOI, and animate the VIIRS Day Fire imagery

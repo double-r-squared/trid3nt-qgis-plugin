@@ -21,7 +21,7 @@ Two layers of coverage, mirroring the existing siblings:
 
   PART 2 (full dispatch-loop integration, mirrors
     test_context_window_abort_persistence.py): drives the REAL
-    ``_stream_gemini_reply`` / ``_dispatch_gemini_and_persist`` seam with a
+    ``_stream_model_reply`` / ``_dispatch_gemini_and_persist`` seam with a
     mocked ``stream_events_with_contents`` that yields the typed compaction
     events -- proves server.py's wiring end-to-end, and that NO card (and no
     stray narration note) appears when compaction never fires.
@@ -32,14 +32,14 @@ from __future__ import annotations
 import pytest
 
 from trid3nt_server import server
-from trid3nt_server.adapter import (
+from trid3nt_server.agent.adapters.adapter import (
     CompactionCompleteEvent,
     CompactionStartEvent,
-    GeminiSettings,
+    ModelSettings,
     TextDeltaEvent,
 )
-from trid3nt_server.context_budget import COMPACTING_LABEL, compaction_complete_label
-from trid3nt_server.pipeline_emitter import complete_compaction_card, mint_compaction_card
+from trid3nt_server.agent.gates.context_budget import COMPACTING_LABEL, compaction_complete_label
+from trid3nt_server.emission.pipeline_emitter import complete_compaction_card, mint_compaction_card
 from trid3nt_server.persistence import make_file_persistence
 from trid3nt_contracts.case import CaseCommandEnvelopePayload
 from trid3nt_contracts.common import new_ulid
@@ -165,23 +165,22 @@ async def test_mint_with_no_emitter_is_a_noop() -> None:
 
 
 # --------------------------------------------------------------------------- #
-# PART 2 -- full dispatch-loop integration (server._stream_gemini_reply /
+# PART 2 -- full dispatch-loop integration (server._stream_model_reply /
 # _dispatch_gemini_and_persist against a mocked stream_events_with_contents)
 # --------------------------------------------------------------------------- #
 
 
 async def _drive_real_stream(ws, state, fake_stream):
-    """Drive REAL ``_stream_gemini_reply`` via ``_dispatch_gemini_and_persist``
+    """Drive REAL ``_stream_model_reply`` via ``_dispatch_gemini_and_persist``
     with a mocked ``stream_events_with_contents`` (``fake_stream``)."""
     from unittest.mock import patch
 
     from trid3nt_server import server as agent_server
 
-    settings = GeminiSettings(
+    settings = ModelSettings(
         model="m", project="p", location="us-central1", use_vertex=True
     )
-    with patch.object(agent_server, "build_client", return_value=object()), \
-         patch.object(agent_server, "build_tool_declarations", return_value=[]), \
+    with patch.object(agent_server, "build_tool_declarations", return_value=[]), \
          patch.object(agent_server, "stream_events_with_contents", fake_stream):
         await agent_server._dispatch_gemini_and_persist(
             ws, state, settings, "do the thing", "research"

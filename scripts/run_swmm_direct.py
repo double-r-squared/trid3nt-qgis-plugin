@@ -102,7 +102,7 @@ log.info("pre-run MinIO run prefixes: %s", sorted(pre_prefixes))
 # ---------------------------------------------------------------------------
 
 try:
-    from trid3nt_server.workflows.model_urban_flood_swmm import model_urban_flood_swmm
+    from trid3nt_server.agent.workflows.swmm.model_urban_flood_swmm.model_urban_flood_swmm import model_urban_flood_swmm
     from trid3nt_contracts.swmm_contracts import SWMMRunArgs
 except ImportError as exc:
     log.error("import failed -- is PYTHONPATH set? %s", exc)

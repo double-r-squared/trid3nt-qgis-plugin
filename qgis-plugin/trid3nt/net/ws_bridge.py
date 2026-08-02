@@ -100,6 +100,15 @@ class AgentWorker(QObject):
             token=self._token,
             anonymous_user_id=self._anonymous_user_id,
         )
+        # QgsAuthManager credential broker: connect-time push of stored keys +
+        # prompt-store. Best-effort -- a locked / unprovisioned auth DB is a
+        # silent no-op (the daemon's env fallback covers it).
+        try:
+            from .auth_broker import AuthBroker
+
+            self.client.credential_broker = AuthBroker()
+        except Exception:  # noqa: BLE001 -- broker is optional, never fatal
+            pass
         # First connect: fail-fast (see module docstring).
         try:
             user_id = self.client.connect()

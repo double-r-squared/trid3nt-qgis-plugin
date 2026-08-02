@@ -94,7 +94,7 @@ logging.basicConfig(
     format="%(asctime)s %(levelname)s %(name)s -- %(message)s",
 )
 
-SCRATCH = Path(os.environ.get("TRID3NT_CANOPY_SCRATCH", "/opt/grace2/work"))
+SCRATCH = Path(os.environ.get("TRID3NT_CANOPY_SCRATCH", "/opt/trid3nt/work"))
 GCP_PROJECT = os.environ.get("GCP_PROJECT", "legacy-cloud-project")
 RUNS_BUCKET = os.environ.get("TRID3NT_RUNS_BUCKET", "trid3nt-runs")
 
@@ -105,7 +105,7 @@ DEFAULT_MODEL_VARIANT = os.environ.get(
 
 #: The dir the baked Meta weights live in (geoai reads from here -- no runtime
 #: download). Mirrors the spike's "bake weights into the image" decision.
-GEOAI_CANOPY_CACHE = os.environ.get("GEOAI_CANOPY_CACHE", "/opt/grace2/weights/canopy")
+GEOAI_CANOPY_CACHE = os.environ.get("GEOAI_CANOPY_CACHE", "/opt/trid3nt/weights/canopy")
 
 #: Default output globs (the canopy COG + the run stdout/stderr).
 _DEFAULT_OUTPUT_GLOBS: tuple[str, ...] = (

@@ -8,7 +8,7 @@ Coverage:
   subset of the fetch_* / web_fetch / catalog_* group; compute_* /
   clip_* / intra-GCP tools are not open-world.
 - Specific spot-checks for known high-stakes tools (publish_layer,
-  run_solver, wait_for_completion, run_pelicun_damage_assessment).
+  run_solver, wait_for_completion, pelicun_damage_assessment).
 - Verify the four new fields land on AtomicToolMetadata with correct
   default values.
 """
@@ -18,19 +18,19 @@ from __future__ import annotations
 import pytest
 
 from trid3nt_contracts.tool_registry import AtomicToolMetadata
-from trid3nt_server import tools as agent_tools
-from trid3nt_server.tools import get_registered_tools
+from trid3nt_server.agent import tools as agent_tools
+from trid3nt_server.agent.tools import get_registered_tools
 
 # Force-import modules that are NOT in the __init__.py eager-import list but
 # whose tools are in scope for annotation coverage. These are loaded by the
 # agent service at startup via server.py / main.py but not by the package
 # __init__.py. Import them here so the live registry is fully populated.
-import trid3nt_server.tools.discovery.fetch_from_catalog  # noqa: F401 — registers fetch_from_catalog
-import trid3nt_server.tools.discovery.search_data_catalog  # noqa: F401 — registers search_data_catalog
-import trid3nt_server.tools  # noqa: F401 — eager-registers the full tool surface (fetch_dem, fetch_buildings, etc.)
-import trid3nt_server.tools.publish_layer  # noqa: F401 — registers publish_layer
-import trid3nt_server.tools.simulation.solver  # noqa: F401 — registers run_solver + wait_for_completion
-import trid3nt_server.tools.discovery.qgis_discovery  # noqa: F401 — registers list_qgis_algorithms + describe_qgis_algorithm
+import trid3nt_server.agent.tools.search.fetch_from_catalog.fetch_from_catalog  # noqa: F401 — registers fetch_from_catalog
+import trid3nt_server.agent.tools.search.search_data_catalog.search_data_catalog  # noqa: F401 — registers search_data_catalog
+import trid3nt_server.agent.tools  # noqa: F401 — eager-registers the full tool surface (fetch_dem, fetch_buildings, etc.)
+import trid3nt_server.agent.tools.publish_layer.publish_layer  # noqa: F401 — registers publish_layer
+import trid3nt_server.agent.tools.simulation.solver.solver  # noqa: F401 — registers run_solver + wait_for_completion
+import trid3nt_server.agent.tools.search.qgis_discovery.qgis_discovery  # noqa: F401 — registers list_qgis_algorithms + describe_qgis_algorithm
 
 
 # ---------------------------------------------------------------------------
@@ -97,7 +97,7 @@ def test_write_tools_are_not_read_only():
     assert write_tools, (
         "No tools have read_only_hint=False — check that publish_layer, "
         "run_solver, wait_for_completion, qgis_process, "
-        "run_pelicun_damage_assessment were all annotated."
+        "pelicun_damage_assessment were all annotated."
     )
     # All tools with read_only_hint=False must not have destructive_hint implied
     # to be True when the tool is actually not destructive.
@@ -173,7 +173,7 @@ def test_non_idempotent_write_tools_exist():
     assert non_idempotent, (
         "No tools have idempotent_hint=False — check run_solver, "
         "wait_for_completion, publish_layer, qgis_process, "
-        "run_pelicun_damage_assessment."
+        "pelicun_damage_assessment."
     )
 
 
@@ -216,12 +216,12 @@ def test_wait_for_completion_annotations():
 
 
 def test_run_pelicun_annotations():
-    """run_pelicun_damage_assessment: write + not idempotent (MC sampling)."""
+    """pelicun_damage_assessment: write + not idempotent (MC sampling)."""
     snapshot = _registry_snapshot()
-    assert "run_pelicun_damage_assessment" in snapshot, (
-        "run_pelicun_damage_assessment not registered"
+    assert "pelicun_damage_assessment" in snapshot, (
+        "pelicun_damage_assessment not registered"
     )
-    meta = snapshot["run_pelicun_damage_assessment"]
+    meta = snapshot["pelicun_damage_assessment"]
     assert meta.read_only_hint is False, "pelicun writes output FlatGeobuf → not read-only"
     assert meta.open_world_hint is False, "pelicun is local compute"
     assert meta.destructive_hint is False, "pelicun writes to new path → not destructive"
@@ -295,7 +295,7 @@ def test_atomic_tool_metadata_annotation_defaults():
 
 def test_register_tool_annotation_kwargs_override_defaults(empty_registry):
     """Annotation kwargs passed at decorator time override schema defaults."""
-    from trid3nt_server.tools import register_tool
+    from trid3nt_server.agent.tools import register_tool
 
     md = AtomicToolMetadata(
         name="test_write_tool",

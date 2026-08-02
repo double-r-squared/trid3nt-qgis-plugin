@@ -17,8 +17,8 @@ from unittest.mock import patch
 
 import pytest
 
-from trid3nt_server.workflows import postprocess_landlab as pl
-from trid3nt_server.workflows.run_landlab import (
+from trid3nt_server.agent.workflows.landlab import postprocess_landlab as pl
+from trid3nt_server.agent.workflows.landlab.run_landlab import (
     LandlabWorkflowError,
     build_landlab_build_spec,
 )
@@ -86,11 +86,11 @@ def test_publish_landlab_quantities_emits_one_layer_per_token() -> None:
     with (
         patch.object(pl, "_read_cog_grid_and_georef",
                      return_value=(grid, "EPSG:32610", "T")),
-        patch("trid3nt_server.workflows.publish_quantities.cog_io.write_cog_4326_from_grid",
+        patch("trid3nt_server.agent.workflows.shared.publish_quantities.cog_io.write_cog_4326_from_grid",
               return_value=Path("/tmp/fake.tif")),
-        patch("trid3nt_server.workflows.publish_quantities.cog_io.cog_bbox_4326",
+        patch("trid3nt_server.agent.workflows.shared.publish_quantities.cog_io.cog_bbox_4326",
               return_value=(-1.0, 2.0, 3.0, 4.0)),
-        patch("trid3nt_server.workflows.publish_quantities.cog_io.safe_unlink",
+        patch("trid3nt_server.agent.workflows.shared.publish_quantities.cog_io.safe_unlink",
               return_value=None),
         patch.object(pl, "_upload_cog_to_runs_bucket",
                      side_effect=lambda c, r, b=None, *, dest_filename: f"s3://runs/{r}/{dest_filename}"),
@@ -114,7 +114,7 @@ def test_publish_landlab_quantities_empty_returns_none() -> None:
 
 
 def test_landlab_step3_style_presets_resolve() -> None:
-    from trid3nt_server.tools.publish_layer import _TITILER_STYLE_REGISTRY
+    from trid3nt_server.agent.tools.publish_layer.publish_layer import _TITILER_STYLE_REGISTRY
     from trid3nt_contracts.output_quantities import get_output_registry
 
     for spec in get_output_registry("landlab"):

@@ -39,9 +39,9 @@ import json
 import pytest
 
 from trid3nt_server import server
-from trid3nt_server import tools as agent_tools
+from trid3nt_server.agent import tools as agent_tools
 from trid3nt_server.persistence import make_file_persistence
-from trid3nt_server.tools import RegisteredTool
+from trid3nt_server.agent.tools import RegisteredTool
 from trid3nt_contracts.case import CaseCommandEnvelopePayload, CaseSummary
 from trid3nt_contracts.common import new_ulid, now_utc
 from trid3nt_contracts.tool_registry import AtomicToolMetadata
@@ -140,19 +140,19 @@ async def test_agent_narration_persists_and_replays(file_persistence) -> None:
     await server._persist_chat_turn(state, role="user", content="hi agent")
 
     async def fake_stream(websocket, st, settings, user_text, research_mode, bedrock_model=None, **_kwargs):
-        # Mirrors _stream_gemini_reply: reset, accumulate deltas across
+        # Mirrors _stream_model_reply: reset, accumulate deltas across
         # iterations, terminal chat_history append on clean completion.
         st.current_turn_narration = []
         st.current_turn_narration.append("I fetched the DEM ")
         st.current_turn_narration.append("and added it to the map.")
         st.chat_history.append({"role": "user", "text": user_text})
 
-    orig = server._stream_gemini_reply
-    server._stream_gemini_reply = fake_stream
+    orig = server._stream_model_reply
+    server._stream_model_reply = fake_stream
     try:
         await server._dispatch_gemini_and_persist(ws, state, None, "hi agent", "off")
     finally:
-        server._stream_gemini_reply = orig
+        server._stream_model_reply = orig
 
     session_state = await file_persistence.get_session_state(case_id)
     roles = [m.role for m in session_state.chat_history]
@@ -177,13 +177,13 @@ async def test_agent_narration_persists_even_when_stream_dies(
         st.current_turn_narration.append("Partial narration before the crash")
         raise RuntimeError("LLM_UNAVAILABLE")
 
-    orig = server._stream_gemini_reply
-    server._stream_gemini_reply = dying_stream
+    orig = server._stream_model_reply
+    server._stream_model_reply = dying_stream
     try:
         with pytest.raises(RuntimeError):
             await server._dispatch_gemini_and_persist(ws, state, None, "x", "off")
     finally:
-        server._stream_gemini_reply = orig
+        server._stream_model_reply = orig
 
     session_state = await file_persistence.get_session_state(case_id)
     assert [m.role for m in session_state.chat_history] == ["agent"]
@@ -206,13 +206,13 @@ async def test_no_agent_row_when_stream_dies_with_nothing_said(
         st.current_turn_narration = []
         raise RuntimeError("died before the first token")
 
-    orig = server._stream_gemini_reply
-    server._stream_gemini_reply = instant_death
+    orig = server._stream_model_reply
+    server._stream_model_reply = instant_death
     try:
         with pytest.raises(RuntimeError):
             await server._dispatch_gemini_and_persist(ws, state, None, "x", "off")
     finally:
-        server._stream_gemini_reply = orig
+        server._stream_model_reply = orig
 
     session_state = await file_persistence.get_session_state(case_id)
     assert session_state.chat_history == []
@@ -268,7 +268,7 @@ async def test_early_input_only_tool_io_frame_at_dispatch_start(
     frame at dispatch START — SAME ToolIoPayload wire shape, raw_args populated,
     function_response empty (the 'Running…' placeholder), is_error False —
     keyed on THIS dispatch's running card. (The completion-time emit that fills
-    function_response lives in the outer _stream_gemini_reply loop and re-keys
+    function_response lives in the outer _stream_model_reply loop and re-keys
     the SAME step_id; it is not driven by this lower-level seam, so exactly the
     early frame rides the wire here.)"""
     ws = FakeWS()
@@ -587,14 +587,14 @@ async def test_e2e_full_turn_replays_complete_stream(
     directive = await server._prepare_user_turn(ws, state, "fetch the data")
     assert directive is None  # Gemini path
 
-    orig = server._stream_gemini_reply
-    server._stream_gemini_reply = fake_stream
+    orig = server._stream_model_reply
+    server._stream_model_reply = fake_stream
     try:
         await server._dispatch_gemini_and_persist(
             ws, state, None, "fetch the data", "off"
         )
     finally:
-        server._stream_gemini_reply = orig
+        server._stream_model_reply = orig
 
     # Fresh "browser": reopen the Case and replay the full stream.
     session_state = await file_persistence.get_session_state(case_id)
@@ -616,15 +616,15 @@ async def test_e2e_full_turn_replays_complete_stream(
 # --------------------------------------------------------------------------- #
 
 
-from trid3nt_server.adapter import (  # noqa: E402 — grouped with the job-0315 test
+from trid3nt_server.agent.adapters.adapter import (  # noqa: E402 — grouped with the job-0315 test
     FunctionCallEvent,
-    GeminiSettings,
+    ModelSettings,
     TextDeltaEvent,
 )
 
 
 async def _drive_real_stream(ws, state, turn_events):
-    """Drive the REAL _stream_gemini_reply (via _dispatch_gemini_and_persist)
+    """Drive the REAL _stream_model_reply (via _dispatch_gemini_and_persist)
     with a mocked ``stream_events_with_contents`` yielding ``turn_events`` —
     a list of per-turn event lists. Uses the REAL ``_invoke_tool_via_emitter``
     so tool-card rows persist mid-turn (the whole point of the interleave)."""
@@ -638,11 +638,10 @@ async def _drive_real_stream(ws, state, turn_events):
         for evt in next(turns):
             yield evt
 
-    settings = GeminiSettings(
+    settings = ModelSettings(
         model="m", project="p", location="us-central1", use_vertex=True
     )
-    with patch.object(agent_server, "build_client", return_value=object()), \
-         patch.object(agent_server, "build_tool_declarations", return_value=[]), \
+    with patch.object(agent_server, "build_tool_declarations", return_value=[]), \
          patch.object(agent_server, "stream_events_with_contents", _fake_stream):
         await agent_server._dispatch_gemini_and_persist(
             ws, state, settings, "two segments two tools", "research"

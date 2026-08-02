@@ -33,9 +33,9 @@ from unittest.mock import patch
 import numpy as np
 import pytest
 
-from trid3nt_server.tools import TOOL_REGISTRY
-from trid3nt_server.tools.fetchers.hydrology import fetch_jrc_global_surface_water as gsw_mod
-from trid3nt_server.tools.fetchers.hydrology.fetch_jrc_global_surface_water import (
+from trid3nt_server.agent.tools import TOOL_REGISTRY
+from trid3nt_server.agent.tools.fetchers.hydrology.fetch_jrc_global_surface_water import fetch_jrc_global_surface_water as gsw_mod
+from trid3nt_server.agent.tools.fetchers.hydrology.fetch_jrc_global_surface_water.fetch_jrc_global_surface_water import (
     JrcSurfaceWaterBandError,
     JrcSurfaceWaterBboxError,
     JrcSurfaceWaterNoCoverageError,
@@ -53,7 +53,7 @@ class _FakeStore:
 
 
 def _make_read_through_injector(fake):
-    from trid3nt_server.tools.cache import (
+    from trid3nt_server.agent.tools.cache import (
         CACHE_BUCKET,
         ReadThroughResult,
         cache_path,
@@ -389,7 +389,7 @@ def test_all_nodata_mosaic_raises_typed_error() -> None:
 
 
 def test_distinct_bands_have_distinct_cache_keys() -> None:
-    from trid3nt_server.tools.cache import compute_cache_key
+    from trid3nt_server.agent.tools.cache import compute_cache_key
 
     base = {"bbox": list(_BBOX), "collection": gsw_mod._COLLECTION}
     k_occ = compute_cache_key(

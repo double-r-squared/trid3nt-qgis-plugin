@@ -24,10 +24,10 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 
 from trid3nt_server import server as agent_server
-from trid3nt_server.adapter import (
+from trid3nt_server.agent.adapters.adapter import (
     NEVER_REHYDRATE_FIELDS,
     FunctionCallEvent,
-    GeminiSettings,
+    ModelSettings,
     TextDeltaEvent,
     ThinkingDeltaEvent,
     build_contents_from_history,
@@ -40,7 +40,7 @@ _SECRET = "NEVER-IN-LLM-CONTENTS-8f3a"
 
 
 # ---------------------------------------------------------------------------
-# Harness: drive _stream_gemini_reply against a canned StreamEvent script
+# Harness: drive _stream_model_reply against a canned StreamEvent script
 # ---------------------------------------------------------------------------
 
 
@@ -55,8 +55,8 @@ class _FakeSocket:
             self.sent.append(msg)
 
 
-def _settings() -> GeminiSettings:
-    return GeminiSettings(
+def _settings() -> ModelSettings:
+    return ModelSettings(
         model="gemini-2.5-pro", project="t", location="us-central1", use_vertex=True
     )
 
@@ -99,7 +99,7 @@ async def _drive_events(
     ), patch.object(
         agent_server, "_persist_chat_turn", side_effect=_capture_persist
     ):
-        await agent_server._stream_gemini_reply(
+        await agent_server._stream_model_reply(
             sock,
             state,
             _settings(),

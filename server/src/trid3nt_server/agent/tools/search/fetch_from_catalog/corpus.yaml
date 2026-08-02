@@ -1,0 +1,6 @@
+fetch_from_catalog:
+- fetch that USFS Wildfire Hazard Potential dataset from the catalog
+- download the FEMA National Risk Index layer I found in the catalog
+- pull the NOAA Sea Level Rise Viewer entry we discovered
+- retrieve the USGS National Seismic Hazard Map from the catalog
+- get the NOAA SLOSH storm surge layer I found in the catalog search

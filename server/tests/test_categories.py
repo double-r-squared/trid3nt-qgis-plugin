@@ -18,8 +18,8 @@ from __future__ import annotations
 
 import pytest
 
-from trid3nt_server import categories
-from trid3nt_server.categories import (
+from trid3nt_server.agent import categories
+from trid3nt_server.agent.categories import (
     CATEGORIES,
     HOT_SET_TOOLS,
     PRIMARY_CATEGORY,
@@ -35,7 +35,7 @@ def _ensure_full_registry() -> set[str]:
     """Run the full startup import path so workflow/solver/catalog tools
     appear in ``TOOL_REGISTRY``. Returns the set of registered names."""
     from trid3nt_server.main import _import_tools_registry
-    from trid3nt_server import tools
+    from trid3nt_server.agent import tools
 
     _import_tools_registry()
     return set(tools.TOOL_REGISTRY.keys())
@@ -98,7 +98,21 @@ def test_every_registered_tool_has_a_primary_category() -> None:
     excludes them.
     """
     registered = _ensure_full_registry()
-    mapped = set(PRIMARY_CATEGORY.keys()) | {"list_categories", "list_tools_in_category"}
+    # engine-door refactor: tier=template tools are pool-excluded and surfaced
+    # only by their door's gate expansion, so they are INTENTIONALLY not in
+    # PRIMARY_CATEGORY (categorizing one would re-leak it into the retrieval pool).
+    # tier=internal (an absorbed in-process seam, e.g. fetch_copernicus_dem) is
+    # excluded identically -- pool-hidden, so no category membership.
+    from trid3nt_server.agent.tools import TOOL_REGISTRY as _reg
+    _pool_excluded = {
+        n for n, e in _reg.items()
+        if getattr(e.metadata, "tier", "general") in ("template", "internal")
+    }
+    mapped = (
+        set(PRIMARY_CATEGORY.keys())
+        | {"list_categories", "list_tools_in_category"}
+        | _pool_excluded
+    )
     missing = registered - mapped
     assert missing == set(), (
         f"the following registered tools have no primary category: {sorted(missing)}"
@@ -137,14 +151,18 @@ def test_cross_listing_known_tools_appear_in_both_categories() -> None:
     """Pelicun and USACE NSI cross-list into damage_assessment."""
     _ensure_full_registry()
     damage_members = set(tools_for_category("damage_assessment"))
+    # engine-door refactor (PELICUN slice): the run_pelicun DOOR carries the
+    # category membership; its pelicun_* templates are pool-EXCLUDED (no membership).
     assert {
-        "run_pelicun_damage_assessment",
-        "run_pelicun_with_buildings",
+        "run_pelicun",
         "fetch_usace_nsi",
     }.issubset(damage_members)
+    assert "pelicun_damage_assessment" not in damage_members, (
+        "pelicun templates must NOT carry category membership (door-surfaced only)"
+    )
     # Their primary categories still claim them too.
     hazard_members = set(tools_for_category("hazard_modeling"))
-    assert "run_pelicun_damage_assessment" in hazard_members
+    assert "run_pelicun" in hazard_members
     landuse_members = set(tools_for_category("land_cover_development"))
     assert "fetch_usace_nsi" in landuse_members
 
@@ -169,7 +187,7 @@ def test_list_categories_returns_twelve_shaped_entries() -> None:
 
 def test_list_categories_is_registered_in_tool_registry() -> None:
     """Meta-tool registration fires at import time."""
-    from trid3nt_server import tools
+    from trid3nt_server.agent import tools
 
     assert "list_categories" in tools.TOOL_REGISTRY
     entry = tools.TOOL_REGISTRY["list_categories"]
@@ -216,7 +234,7 @@ def test_list_tools_in_category_unknown_category_raises() -> None:
 
 def test_list_tools_in_category_is_registered() -> None:
     """The second meta-tool registers too."""
-    from trid3nt_server import tools
+    from trid3nt_server.agent import tools
 
     assert "list_tools_in_category" in tools.TOOL_REGISTRY
 
@@ -226,7 +244,7 @@ def test_list_tools_in_category_is_registered() -> None:
 # ---------------------------------------------------------------------------
 
 
-def test_hot_set_has_seventeen_tools() -> None:
+def test_hot_set_has_sixteen_tools() -> None:
     """Hot set: the original 8 (Wave 4.10 kickoff) + code_exec_request
     (job-0247 — cross-cutting capability, see OQ-0247-CODE-EXEC-NOT-IN-HOT-SET)
     + fetch_nws_event (job-0261 — validator rejected Gemini's correct
@@ -240,11 +258,17 @@ def test_hot_set_has_seventeen_tools() -> None:
     allowed-set validator)
     + the tool-retrieval STEP 0 floor (NATE 2026-06-23): publish_layer (survives
     today ONLY via validate_function_call's auto-widen — a latent gap once the
-    catalog is trimmed) + the core analysis surface compute_zonal_statistics /
-    generate_histogram / generate_time_series / spatial_query (the DuckDB
-    spatial-query fold's SQL surface, holding the floor slot the folded
-    summarize_layer_statistics held)."""
-    assert len(HOT_SET_TOOLS) == 17
+    catalog is trimmed) + the core analysis surface generate_chart (the ONE
+    interactive-chart primitive) / spatial_query (the DuckDB spatial-query fold's
+    SQL surface, holding the floor slot the folded summarize_layer_statistics
+    held).
+
+    processing-wave cull (2026-07-29): compute_zonal_statistics demoted to the
+    code_exec playground (its floor slot retired -> spatial_query +
+    code_exec_request), and the fixed-shape generate_histogram / generate_time_series
+    floor slots collapsed into ONE generate_chart slot, dropping the hot set from
+    16 to 14."""
+    assert len(HOT_SET_TOOLS) == 14
 
 
 def test_hot_set_contains_required_anchors() -> None:
@@ -269,17 +293,16 @@ def test_hot_set_contains_required_anchors() -> None:
         "fetch_dem",
         "fetch_nws_alerts_conus",
         "fetch_nws_event",
-        "run_model_flood_scenario",
-        "run_model_flood_habitat_scenario",
+        "run_sfincs",
         "code_exec_request",
         "compute_layer_bounds",
         "request_spatial_input",
         # tool-retrieval STEP 0 floor (NATE 2026-06-23; spatial_query holds
         # the slot summarize_layer_statistics held before the Phase-B fold).
+        # generate_chart is the ONE interactive-chart floor slot (processing-wave
+        # cull, 2026-07-29); compute_zonal_statistics was demoted to code_exec.
         "publish_layer",
-        "compute_zonal_statistics",
-        "generate_histogram",
-        "generate_time_series",
+        "generate_chart",
         "spatial_query",
     }
     assert required == HOT_SET_TOOLS
@@ -290,7 +313,7 @@ def test_hot_set_dispatch_of_state_scoped_nws_call_is_allowed() -> None:
     pass on a FRESH session (no categories opened, nothing dispatched) —
     exactly the live-demo first turn that previously raised
     OutOfAllowedSetError and pushed Gemini to the unscoped CONUS sweep."""
-    from trid3nt_server.categories import AllowedToolSet, validate_function_call
+    from trid3nt_server.agent.categories import AllowedToolSet, validate_function_call
 
     fresh = AllowedToolSet()
     # Must not raise.

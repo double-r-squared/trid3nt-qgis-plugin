@@ -1,0 +1,11 @@
+# TEMPLATE tier (engine-door refactor): phrasings for openquake_psha. NOT
+# merged into the main retrieval index; the run_openquake door surfaces this
+# template via gate expansion (select-then-call). Carried from the migrated
+# run_seismic_hazard_psha corpus entries.
+openquake_psha:
+- run the OpenQuake classical PSHA over this bbox with the Boore-Atkinson GMPE
+- probabilistic seismic hazard map - PGA with 10% exceedance in 50 years here
+- map the 475-year return-period earthquake ground motion for this region
+- generate a spectral acceleration SA(1.0) hazard map over this area
+- classical hazard with a Gutenberg-Richter area source for this footprint
+- compute the PGA ground-motion input for a Pelicun building damage assessment

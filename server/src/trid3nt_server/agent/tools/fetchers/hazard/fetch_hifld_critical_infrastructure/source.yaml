@@ -1,0 +1,134 @@
+# Router source spec (data-router fold, pilot 2/5) -- HIFLD critical infra points.
+# Twin: fetch_hifld_critical_infrastructure.py (SPEC-EXPRESSIBLE, vector-API-FGB / ArcGIS).
+# The canonical ~25-fetcher ArcGIS resultOffset pattern.
+schema_version: v1
+
+name: fetch_hifld_critical_infrastructure
+source_class: hifld_critical_infrastructure   # cache prefix == twin source_class
+error_prefix: HIFLD_INFRA                      # twin A.6 token (HIFLDInfra*Error) != cache prefix
+input_error_suffix: INPUT_INVALID              # twin HIFLDInfraInputError -> *_INPUT_INVALID
+shape: vector-fgb
+supports_global_query: false                  # HIFLD is US-only
+
+# --- endpoints ------------------------------------------------------------
+# The twin routes facility_type -> a per-service FeatureServer URL (routing dict
+# below). The current router vector-fgb executor reads ONE `data` endpoint URL
+# and does NOT consult a routing dict (see VERDICT.md: facility routing is a
+# router-executor gap). `data` is pinned to the Hospitals service (the pilot's
+# facility_type); the full routing table is retained in ingest.routing.
+endpoints:
+  data:
+    url: "https://services2.arcgis.com/C8EMgrsFcRFL6LrL/arcgis/rest/services/Hospitals/FeatureServer/0/query"
+auth:
+  mode: none
+  user_agent: trid3nt_default
+
+# --- request-param schema -------------------------------------------------
+params:
+  facility_type: {type: enum, required: true,
+                  values: [hospitals, schools, fire_stations, police, power_plants]}
+  bbox:          {type: bbox, required: true, quantize: round_6dp}
+gates:
+  max_features: 30000          # paging cap (twin _MAX_TOTAL_FEATURES)
+
+# --- ingestion (vector-API-FGB / ArcGIS FeatureServer query) -------------
+ingest:
+  query_template: {out_fields: "*", f: geojson, order_by: "OBJECTID ASC"}
+  pagination: {mode: result_offset, page_size: 2000}
+  # Twin _features_to_flatgeobuf parity (declarative, not hardcoded):
+  #  - keep only Point features with finite coords (drops null/non-Point rows)
+  #  - coerce nested (dict/list) HIFLD props to JSON strings (FGB-safe)
+  #  - add derived facility_type (== the request) + facility_label (routing label)
+  geometry_filter: {geom_types: [Point], require_finite: true}
+  json_coerce_nested: true
+  derived_columns:
+    facility_type:  {source: param,   param: facility_type}
+    facility_label: {source: routing, key_param: facility_type, field: label}
+  routing:                     # facility_type -> {service, label} (twin FACILITY_TYPES)
+    hospitals:     {service: Hospitals, label: Hospital}
+    schools:       {service: Public_Schools, label: Public School}
+    fire_stations: {service: Fire_Stations, label: Fire Station}
+    police:        {service: Local_Law_Enforcement_Locations, label: Law Enforcement}
+    power_plants:  {service: Power_Plants, label: Power Plant}
+  org_base: "https://services2.arcgis.com/C8EMgrsFcRFL6LrL/arcgis/rest/services"
+
+# --- normalization stamps -------------------------------------------------
+normalize:
+  crs: "EPSG:4326"
+  units: null
+
+# --- output surface -------------------------------------------------------
+output:
+  layer_type: vector
+  ext: fgb
+  role: primary
+  style_preset: "hifld_critical_infrastructure"
+
+# --- cache + payload gate -------------------------------------------------
+cache:
+  ttl_class: static-30d
+payload_estimate:              # twin: est_features(=area*density)*1200/(1024^2); hospitals density=30
+  model: per_feature
+  features_per_sq_deg: 30.0
+  kb_per_feature: 1.171875     # 1200 bytes / 1024
+  floor_mb: 0.02
+
+# --- honesty: caveats + fallback -----------------------------------------
+caveats:
+  - "US-only HIFLD; empty bbox (e.g. open water) -> header-only FGB (honest-empty, never a fabricated error)"
+  - "facility_type in {hospitals,schools,fire_stations,police,power_plants} (aliases accepted upstream)"
+fallback: []
+
+# corpus lifted from sibling corpus.yaml.
+
+# --- LLM docstring (carried VERBATIM from the twin via inspect.getdoc;
+# the sole source of the promoted FunctionDeclaration description + the
+# retrieval-index document text -> indistinguishable from the twin). ---
+docstring: |
+  HIFLD critical-infrastructure points by facility type as a FlatGeobuf layer.
+
+  Fetches national Homeland Infrastructure Foundation-Level Data (HIFLD) point
+  facilities of one ``facility_type`` intersecting a bbox, from a public,
+  unauthenticated ArcGIS REST FeatureService mirror. Returns a FlatGeobuf of
+  ``Point`` features in EPSG:4326 with the HIFLD attribute payload plus
+  ``facility_type`` / ``facility_label`` columns.
+
+  **When to use:**
+  - "Where are the hospitals / schools / fire stations / police stations near
+    [place]?"; "show critical infrastructure in this area".
+  - A hazard / exposure workflow needs life-safety facility locations inside a
+    flood / fire / surge footprint (intersect with ``spatial_query``).
+  - Evacuation / shelter / damage-assessment context overlays.
+
+  **When NOT to use:**
+  - Dams -> ``fetch_usace_dams``. Buildings -> ``fetch_usace_nsi``.
+  - Non-US facilities (HIFLD is US-only). Real-time status (HIFLD is static).
+  - An amenity not in the supported set -> use an OSM Overpass fetcher.
+
+  **Parameters:**
+      facility_type: One of ``"hospitals"``, ``"schools"``, ``"fire_stations"``,
+          ``"police"``, ``"power_plants"`` (aliases accepted: ``"hospital"``,
+          ``"public_schools"``, ``"fire"``, ``"ems"``, ``"law_enforcement"``,
+          ``"power_plant"``, etc.).
+      bbox: ``(min_lon, min_lat, max_lon, max_lat)`` in EPSG:4326. Required -- ``supports_global_query=False``. Example Houston metro:
+          ``(-95.8, 29.5, -95.0, 30.1)``.
+
+  **Returns:**
+      ``LayerURI`` -> FlatGeobuf of ``Point`` features in EPSG:4326. Properties
+      carry the HIFLD source columns (NAME, ADDRESS, CITY, STATE, ZIP, and
+      type-specific fields) plus ``facility_type`` and ``facility_label``.
+      ``layer_type="vector"``, ``role="primary"``,
+      ``style_preset="hifld_critical_infrastructure"``, ``units=None``.
+
+  **Error types:**
+      - ``HIFLDInfraInputError``: unknown facility_type or bad bbox
+        (retryable=False).
+      - ``HIFLDInfraUpstreamError``: HTTP/network failure, ArcGIS error
+        envelope, or FlatGeobuf serialization failure (retryable=True).
+      - ``HIFLDInfraEmptyError``: no features in bbox (retryable=False; not
+        raised by default -- empty FGB is returned).
+
+  Cache: ``ttl_class="static-30d"``, ``source_class="hifld_critical_infrastructure"``.
+  Cache key is SHA-256 of ``(facility_key, bbox-rounded-6dp)``.
+
+  ``supports_global_query=False``. No API key required.

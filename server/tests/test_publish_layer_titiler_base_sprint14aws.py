@@ -16,7 +16,7 @@ previously pinned the tile-base derivation) now pins the swapped contract:
     NO separate display face (the raw COG IS the envelope uri);
   - LEGACY republish: an old persisted case's ``/cog/tiles/...?url=<cog>``
     template handed back to publish_layer is UNWRAPPED to its embedded s3
-    COG (the ``export_case_to_qgis._unwrap_tile_template`` trick) and flows
+    COG (the ``open_case_in_qgis._unwrap_tile_template`` trick) and flows
     through the normal raster path -> the NEW raw-s3 envelope shape; a
     template with no recoverable COG is returned verbatim (degraded);
   - a non-s3 raster URI still raises the typed LAYER_URI_NOT_FOUND error.
@@ -31,8 +31,8 @@ from urllib.parse import quote
 
 import pytest
 
-from trid3nt_server.tools import publish_layer as pl
-from trid3nt_server.tools.publish_layer import (
+from trid3nt_server.agent.tools.publish_layer import publish_layer as pl
+from trid3nt_server.agent.tools.publish_layer.publish_layer import (
     PublishLayerError,
     pop_legend_for_uri,
     publish_layer,
@@ -107,7 +107,7 @@ def test_observe_registers_data_uri_without_display_face(
     separate wms/display face any more (the raw COG IS the envelope uri)."""
     calls: list[tuple] = []
     monkeypatch.setattr(
-        "trid3nt_server.tools.publish_layer.observe_published_layer",
+        "trid3nt_server.agent.tools.publish_layer.publish_layer.observe_published_layer",
         lambda *a, **k: calls.append((a, k)),
     )
     publish_layer(layer_uri=S3_URI, layer_id="flood-demo")

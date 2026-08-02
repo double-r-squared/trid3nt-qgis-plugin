@@ -1,0 +1,164 @@
+# Router source spec (quick-folds wave, raster-cog stac_float, ADR 0079).
+# Twin: fetch_sentinel1_sar.py -- Sentinel-1 C-band SAR backscatter (dB) via PC STAC.
+# Folds onto stac_float with the EXISTING asset_by_param (vv/vh) + collection_by_param
+# (rtc/grd) plus two precise additions: a `coverage` scene-select (coverage-fraction-
+# then-recency with an asset-presence pre-filter) and a `log10_db` transform directive
+# (10*log10(power)); the -9999 dB nodata is the existing serialize directive.
+schema_version: v1
+name: fetch_sentinel1_sar
+source_class: sentinel1_sar
+error_prefix: SENTINEL1
+shape: raster-cog
+supports_global_query: false
+empty_error_suffix: NO_IMAGERY
+endpoints:
+  data:
+    url: https://planetarycomputer.microsoft.com/api/stac/v1
+auth:
+  mode: none
+  user_agent: trid3nt/0.1 (Hazard Modeling Agent; https://github.com/double-r-squared/trid3nt-qgis-plugin;
+    agent@trid3nt.dev)
+params:
+  bbox:
+    type: bbox
+    required: true
+    quantize: round_6dp
+    error_suffix: BBOX_INVALID
+  start_date:
+    type: iso_date
+    schema_optional: true
+  end_date:
+    type: iso_date
+    schema_optional: true
+  polarization:
+    type: enum
+    values:
+    - vv
+    - vh
+    default: vv
+    lowercase: true
+    error_suffix: POLARIZATION_INVALID
+  collection:
+    type: str
+    default: sentinel-1-rtc
+gates:
+  max_bbox_deg2: 0.5
+ingest:
+  access: stac_float
+  native_cell_m: 10.0
+  stac:
+    root: https://planetarycomputer.microsoft.com/api/stac/v1
+    datetime_window: true
+    default_window_days: 90
+    select: coverage
+    param_error_suffix: COLLECTION_INVALID
+    collection_by_param:
+      param: collection
+      map:
+        sentinel-1-rtc: sentinel-1-rtc
+        sentinel-1-grd: sentinel-1-grd
+    product_aliases:
+      sentinel-1-rtc: sentinel-1-rtc
+      sentinel-1-grd: sentinel-1-grd
+      rtc: sentinel-1-rtc
+      grd: sentinel-1-grd
+      sentinel1-rtc: sentinel-1-rtc
+      sentinel1-grd: sentinel-1-grd
+      s1-rtc: sentinel-1-rtc
+      s1-grd: sentinel-1-grd
+    asset_by_param:
+      param: polarization
+      map:
+        vv: vv
+        vh: vh
+  transform:
+    log10_db: true
+  serialize:
+    nodata: -9999.0
+    dtype: float32
+normalize:
+  crs: EPSG:4326
+  units_by_param:
+    param: polarization
+    map:
+      vv: VV gamma0 backscatter (dB)
+      vh: VH gamma0 backscatter (dB)
+output:
+  layer_type: raster
+  ext: tif
+  role: primary
+  style_preset: sar_backscatter_db
+  emit_bbox: false
+cache:
+  ttl_class: static-30d
+payload_estimate:
+  model: bbox_area
+  mb_per_sq_deg: 40.0
+  floor_mb: 0.25
+caveats:
+- Sentinel-1 C-band SAR backscatter (dB) via the Microsoft Planetary Computer STAC
+  (sentinel-1-rtc default / sentinel-1-grd fallback; vv / vh gamma0). Sees THROUGH clouds,
+  smoke and darkness; the canonical keyless flood layer (calm water = specular = dark, low
+  backscatter). AOI-scoped (<= 0.5 deg^2). The scene BEST covering the bbox (then most recent)
+  is chosen among scenes carrying the polarization asset; no such scene -> an honest
+  SENTINEL1_NO_IMAGERY. Single-band float32 dB COG, -9999 nodata, auto-rescaled by band
+  percentile for the dark-water / bright-urban contrast.
+docstring: |-
+  Fetch a Sentinel-1 C-band SAR backscatter (dB) image for a bbox.
+
+  **What it does:** Searches the Microsoft Planetary Computer for the
+  Sentinel-1 scene that best COVERS ``bbox`` inside the time window (then the
+  most recent), reads the requested polarization band (``vv`` or ``vh``)
+  clipped to the bbox at ~10 m, converts the linear gamma0 power to decibels
+  (``10*log10(power)``), and returns a single-band float32 dB COG that paints
+  as a grayscale radar image.
+
+  Sentinel-1 SAR is its own illumination source and C-band sees THROUGH
+  clouds, smoke and darkness, so it images the ground in ALL WEATHER, DAY OR
+  NIGHT  --  exactly when optical Sentinel-2 / Landsat go blind (hurricane
+  landfall, wildfire smoke, polar night). It is the canonical keyless FLOOD
+  layer: calm open water is specular and reflects radar away from the sensor,
+  so flooded ground reads as anomalously LOW backscatter (dark) against the
+  rougher, brighter dry land; urban / rough surfaces read BRIGHT.
+
+  **When to use:**
+  - Flood-extent mapping when the sky is clouded (the SAR flood-water signature
+    is low/dark backscatter); compare a pre-event and an event-window scene.
+  - Any "see the ground despite cloud / smoke / night" need (storm, fire).
+  - Surface-roughness / structure context (urban vs water vs bare; ``vh`` adds
+    vegetation-volume sensitivity).
+
+  **When NOT to use:**
+  - A natural-color "what does it look like" picture  --  use
+    ``fetch_sentinel2_truecolor`` (10 m optical) or ``fetch_landsat_imagery``.
+  - A vegetation index  --  use ``compute_ndvi``.
+  - Areas / windows with no Sentinel-1 pass (widen the window); a no-imagery
+    result is an honest typed error, never a fabricated layer.
+
+  **Parameters:**
+  - ``bbox`` (tuple): ``(min_lon, min_lat, max_lon, max_lat)`` EPSG:4326.
+    Required. AOI-scoped (<= 0.5 deg^2).
+  - ``start_date`` / ``end_date`` (str, optional): ``"YYYY-MM-DD"`` window
+    bounds. Default: a trailing ~90-day recent window ending today. For a
+    flood pair, call once with the pre-event window and once with the event
+    window.
+  - ``polarization`` (str, default ``"vv"``): ``"vv"`` (co-pol; the
+    all-purpose flood / roughness channel) or ``"vh"`` (cross-pol; vegetation
+    structure).
+  - ``collection`` (str, default ``"sentinel-1-rtc"``): ``"sentinel-1-rtc"``
+    (Radiometric Terrain Corrected, analysis-ready, terrain-flattened) or
+    ``"sentinel-1-grd"`` (Ground Range Detected; un-terrain-corrected fallback
+    where RTC has no coverage).
+
+  **Returns:** A ``LayerURI`` (``layer_type="raster"``, ``role="primary"``  --
+  the backscatter IS the analytical product) pointing at a single-band float32
+  dB COG in the ``static-30d``/``sentinel1_sar`` cache prefix.
+  ``style_preset="sar_backscatter_db"`` (single-band; auto-rescaled by band
+  percentile so the dark-water / bright-urban contrast renders). ``units`` is
+  ``"VV/VH gamma0 backscatter (dB)"``.
+
+  **Data source:** Sentinel-1 RTC / GRD via the Microsoft Planetary Computer
+  STAC (``sentinel-1-rtc`` / ``sentinel-1-grd``; vv / vh gamma0 assets).
+
+  FR-CE-8: routed through ``read_through`` so identical ``(bbox, window,
+  polarization, collection)`` calls reuse the cached dB COG.

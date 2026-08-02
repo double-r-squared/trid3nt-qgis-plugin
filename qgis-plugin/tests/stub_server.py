@@ -473,17 +473,6 @@ IMPACT_ENVELOPE_ROW: dict[str, Any] = {
     "impact_area_km2": 8.3,
 }
 
-STUB_LESSON_ID = "01STUBLESSONAAAAAAAAAAAAAA"
-
-# A lesson-added ack payload -- the server _handle_lesson_add raw-JSON shape.
-# Emitted fire-and-forget on the "lesson" trigger (the client lesson-add verb
-# is web-thumbs-down scope; this exercises classification + the subtle note).
-LESSON_ADDED_ROW: dict[str, Any] = {
-    "envelope_type": "lesson-added",
-    "lesson_id": STUB_LESSON_ID,
-    "lesson": "Prefer OSM Overpass for building footprints over the MS parquet.",
-}
-
 # Persisted chat_history rows the select rehydration replays (CaseChatMessage
 # subset). LANE PLUGIN (2026-07-22): the second agent row carries the
 # persisted "thinking" field (Lane CORE row-model addition -- the reasoning
@@ -814,22 +803,6 @@ class StubAgentServer:
                         {
                             "message_id": "m-impact",
                             "delta": "Assessed 1,840 structures.",
-                            "done": True,
-                        },
-                        case_id=case_id,
-                    )
-                    await send("turn-complete", {}, case_id=case_id)
-                    continue
-                if "lesson" in text:
-                    # lesson-added side effect (LANE A): a fire-and-forget ack.
-                    await send(
-                        "lesson-added", LESSON_ADDED_ROW, case_id=case_id
-                    )
-                    await send(
-                        "agent-message-chunk",
-                        {
-                            "message_id": "m-lesson",
-                            "delta": "Noted -- I'll remember that.",
                             "done": True,
                         },
                         case_id=case_id,

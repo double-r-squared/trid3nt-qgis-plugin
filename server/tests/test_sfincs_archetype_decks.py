@@ -48,8 +48,8 @@ pytest.importorskip("rasterio")
 
 import rasterio  # noqa: E402
 
-import trid3nt_server.workflows.sfincs_builder as _builder  # noqa: E402
-from trid3nt_server.workflows.sfincs_builder import (  # noqa: E402
+import trid3nt_server.agent.workflows.sfincs.sfincs_builder as _builder  # noqa: E402
+from trid3nt_server.agent.workflows.sfincs.sfincs_builder import (  # noqa: E402
     BuildOptions,
     DischargeForcing,
     ForcingSpec,
@@ -58,7 +58,7 @@ from trid3nt_server.workflows.sfincs_builder import (  # noqa: E402
     WindForcing,
     build_sfincs_model,
 )
-from trid3nt_server.workflows.sfincs_forcing_adapter import (  # noqa: E402
+from trid3nt_server.agent.workflows.sfincs.sfincs_forcing_adapter import (  # noqa: E402
     SFINCS_TREF,
     StationHydrograph,
     reanchor_to_tref,

@@ -1,0 +1,105 @@
+# Router source spec (data-router fold, phase-2 wave-2 ArcGIS family).
+# Twin: fetch_nifc_fire_perimeters.py (SPEC-EXPRESSIBLE, vector-API-FGB / ArcGIS).
+# CLEAN: single FeatureServer, geojson, single-shot, where=1=1, bbox-optional
+# (supports_global_query), out_fields projection + json-coerce, honest-empty FGB.
+schema_version: v1
+
+name: fetch_nifc_fire_perimeters
+source_class: nifc_perimeters              # cache prefix == twin source_class
+error_prefix: NIFC_FIRE                     # twin A.6 token (NIFCFire*Error) != cache prefix
+input_error_suffix: INPUT_INVALID          # NIFCFireInputError -> *_INPUT_INVALID
+shape: vector-fgb
+supports_global_query: true                # bbox=None -> CONUS+AK+HI sweep
+
+endpoints:
+  data:
+    url: "https://services3.arcgis.com/T4QMspbfLg3qTGWY/arcgis/rest/services/WFIGS_Interagency_Perimeters_Current/FeatureServer/0/query"
+auth:
+  mode: none
+  user_agent: trid3nt_default
+
+params:
+  bbox:   {type: bbox, required: false, quantize: round_6dp}
+  status: {type: enum, required: false, default: active,
+           values: [active, controlled, out, all]}
+
+ingest:
+  # Single-shot: page_size >> active-perimeter count -> one page, loop stops.
+  query_template:
+    out_fields: "OBJECTID,poly_IncidentName,poly_FeatureCategory,poly_DateCurrent,poly_GISAcres,attr_IncidentSize,attr_PercentContained,attr_IncidentName,attr_FireCauseGeneral,attr_FireCause,attr_POOState,attr_IrwinID,attr_UniqueFireIdentifier"
+    f: geojson
+    order_by: "OBJECTID ASC"
+  pagination: {mode: result_offset, page_size: 4000}
+  json_coerce_nested: true
+
+normalize:
+  crs: "EPSG:4326"
+  units: null
+
+output:
+  layer_type: vector
+  ext: fgb
+  role: primary
+  style_preset: "nifc_fire_perimeters"
+  emit_bbox: false                          # twin LayerURI omits bbox
+
+cache:
+  ttl_class: dynamic-1h
+payload_estimate:                           # twin has no estimator; a bbox-area heuristic is additive-honest
+  model: bbox_area
+  mb_per_sq_deg: 1.0
+  floor_mb: 0.02
+
+caveats:
+  - "current active NIFC WFIGS perimeters only (historic fires -> fetch_mtbs_burn_severity)"
+  - "US-only; empty bbox (e.g. no active fires) -> header-only FGB (honest-empty, never a fabricated error)"
+fallback: []
+
+docstring: |-
+  Fetch current NIFC WFIGS wildland fire perimeter polygons for the US.
+
+  **What it does:** Queries the National Interagency Fire Center (NIFC) WFIGS
+  Interagency Perimeters Current ArcGIS FeatureService, paginates all active
+  wildfire perimeter polygons (federal + state + tribal agency data fused),
+  and returns a FlatGeobuf vector layer. Supports both CONUS-wide sweeps
+  (``bbox=None``, ``supports_global_query=True``) and spatially filtered
+  queries. Cached ``dynamic-1h`` (active fires update frequently).
+  No API key required. FR-HEP-2 Tier 1 source.
+
+  **When to use:**
+  - "Show me every active wildfire in California right now."
+  - Wildfire hazard-context overlay on a population or air-quality layer.
+  - Discovery step before fetching FIRMS detections — identify which fires
+    have established perimeters vs. new hotspot clusters.
+  - "What is the biggest active megafire and how contained is it?"
+
+  **When NOT to use:**
+  - Historical wildfire perimeters (NIFC "Current" only carries active
+    incidents; for past fires use ``fetch_mtbs_burn_severity``).
+  - Fire-danger or fire-weather forecasts (use NWS fire-weather products).
+  - Smoke plume or air-quality data (NOAA HRRR-Smoke; different tool).
+  - Satellite thermal anomaly / hotspot detections (use
+    ``fetch_firms_active_fire``).
+
+  **Parameters:**
+  - ``bbox`` (tuple or None): ``(min_lon, min_lat, max_lon, max_lat)`` in
+    EPSG:4326 for a spatially filtered query. ``None`` (default) returns all
+    currently active perimeters CONUS+AK+HI (typically 20–200 features,
+    ~1 MB payload). Example: ``(-122.5, 37.0, -120.0, 39.0)`` for Northern
+    California.
+  - ``status`` (str): ``"active"`` (default). Accepted: ``active``,
+    ``controlled``, ``out``, ``all``. Note: v0.1 always queries the NIFC
+    "Current" service regardless of value.
+
+  **Returns:**
+  ``LayerURI(layer_type="vector", role="primary", units=None)`` pointing at a
+  FlatGeobuf with fields: incident name, GIS acres, percent contained,
+  ignition date, ignition cause, POO state, and fire type. EPSG:4326.
+
+  **Cross-tool dependencies:**
+  - Pairs with: ``fetch_firms_active_fire`` (satellite detections inside/near
+    perimeters), ``fetch_nws_alerts_conus`` (co-occurring fire-weather watches
+    + red-flag warnings).
+  - Upstream of: smoke/population-impact overlays, evacuation zone analysis.
+  - Historical complement: ``fetch_mtbs_burn_severity`` for 1984-present
+    burned-area polygons.

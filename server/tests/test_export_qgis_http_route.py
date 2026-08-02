@@ -1,10 +1,10 @@
-"""HTTP-route wiring tests for /api/export-qgis on the catalog listener.
+"""HTTP-route wiring tests for /api/export-qgis.
 
-User-driven QGIS export (NATE 2026-07-06): the web's per-case "Export to
-QGIS" kebab item POSTs a case_id here; the route awaits the
-``export_case_to_qgis`` tool and returns its result dict. A sibling GET
-serves the produced .qgz/.gpkg bytes, path-traversal guarded to the export
-root (TRID3NT_EXPORT_DIR, default ~/trid3nt-exports).
+POST /api/export-qgis awaits ``hydrate_case_layers`` (the REMOTE-mode
+materialize fallback) and returns its result dict. A sibling GET serves the
+produced .qgz/.gpkg bytes, path-traversal guarded to the export root
+(TRID3NT_EXPORT_DIR, default ~/trid3nt-exports). On the local stack a case's
+layers are restored over the WS case-open replay, not an HTTP manifest fetch.
 
 Exercises ``tool_catalog_http._handle_http`` dispatch:
   - POST happy path (monkeypatched export fn) -> 200 with the result dict;
@@ -23,7 +23,7 @@ import asyncio
 import json
 
 from trid3nt_server import tool_catalog_http
-from trid3nt_server.tools.meta.export_case_to_qgis import (
+from trid3nt_server.cases.hydrate_case_layers import (
     CaseNotFoundError,
     NoExportableLayersError,
 )
@@ -178,10 +178,10 @@ def test_export_qgis_post_case_not_found_404(monkeypatch):
 
 
 def test_export_qgis_post_typed_tool_error_400(monkeypatch):
-    """Other typed ExportCaseError subclasses map to an honest 400."""
+    """Other typed HydrateCaseError subclasses map to an honest 400."""
 
     async def _fake_export(**kwargs):
-        raise NoExportableLayersError("case '01EMPTY' has no layers to export.")
+        raise NoExportableLayersError("case '01EMPTY' has no layers to materialize.")
 
     monkeypatch.setattr(tool_catalog_http, "_export_qgis_fn", lambda: _fake_export)
 

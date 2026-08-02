@@ -20,12 +20,12 @@ from __future__ import annotations
 import asyncio
 import json
 from dataclasses import dataclass, field
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 
 import pytest
 
-from trid3nt_server.adapter import (
-    GeminiSettings,
+from trid3nt_server.agent.adapters.adapter import (
+    ModelSettings,
     MAX_TURN_ITERATIONS,
 )
 from trid3nt_server.server import _send_loop_exhausted, SessionState
@@ -151,21 +151,8 @@ async def test_send_loop_exhausted_best_effort_on_broken_socket():
 
 
 def _make_fake_chunk_with_function_call(name: str, args: dict, call_id: str):
-    fn_call = MagicMock()
-    fn_call.name = name
-    fn_call.id = call_id
-    fn_call.args = args
-    fake_part = MagicMock()
-    fake_part.function_call = fn_call
-    fake_part.text = None
-    fake_content = MagicMock()
-    fake_content.parts = [fake_part]
-    fake_candidate = MagicMock()
-    fake_candidate.content = fake_content
-    fake_chunk = MagicMock()
-    fake_chunk.candidates = [fake_candidate]
-    fake_chunk.text = None
-    return fake_chunk
+    """A fake turn (scripted-provider dict) emitting ONE function call."""
+    return {"tool_call": {"name": name, "args": args, "call_id": call_id}}
 
 
 # ---------------------------------------------------------------------------
@@ -174,7 +161,7 @@ def _make_fake_chunk_with_function_call(name: str, args: dict, call_id: str):
 
 
 @pytest.mark.asyncio
-async def test_stream_gemini_reply_emits_loop_exhausted_on_cap():
+async def test_stream_model_reply_emits_loop_exhausted_on_cap(fake_llm):
     """A loop that always requests tool calls hits the cap and emits loop_exhausted.
 
     Gemini is mocked to always emit one function_call per turn; the tool is
@@ -183,19 +170,14 @@ async def test_stream_gemini_reply_emits_loop_exhausted_on_cap():
     """
     from trid3nt_server import server as agent_server
 
-    # Always-looping generator: each call → another function_call chunk.
-    def _always_loop(**kwargs):
-        i = kwargs.get("_iter", 0)  # not a real kwarg, just documentation
-        # Infinite supply: return a function_call every turn.
-        return iter([
-            _make_fake_chunk_with_function_call(
-                "fetch_dem", {"bbox": [0, 0, 1, 1]}, f"call-{id(kwargs)}"
-            )
-        ])
+    # Always-looping source: each round -> another function_call turn.
+    fake_llm.on_call(
+        lambda i, _c: _make_fake_chunk_with_function_call(
+            "fetch_dem", {"bbox": [0, 0, 1, 1]}, f"call-{i}"
+        )
+    )
 
     call_count = {"n": 0}
-    fake_client = MagicMock()
-    fake_client.models.generate_content_stream.side_effect = lambda **kw: _always_loop(**kw)
 
     async def _always_succeed(_ws, _state, name, args):
         call_count["n"] += 1
@@ -203,14 +185,13 @@ async def test_stream_gemini_reply_emits_loop_exhausted_on_cap():
 
     sock = _FakeSocket()
     state = SessionState(session_id=new_ulid())
-    settings = GeminiSettings(
+    settings = ModelSettings(
         model="gemini-2.5-pro", project="t", location="us-central1", use_vertex=True
     )
 
-    with patch.object(agent_server, "build_client", return_value=fake_client), \
-         patch.object(agent_server, "_invoke_tool_via_emitter", side_effect=_always_succeed), \
+    with patch.object(agent_server, "_invoke_tool_via_emitter", side_effect=_always_succeed), \
          patch.object(agent_server, "build_tool_declarations", return_value=[]):
-        await agent_server._stream_gemini_reply(
+        await agent_server._stream_model_reply(
             sock, state, settings, "never terminates", "research"
         )
 
@@ -238,7 +219,7 @@ async def test_stream_gemini_reply_emits_loop_exhausted_on_cap():
 
 
 @pytest.mark.asyncio
-async def test_stream_gemini_reply_terminal_chunk_after_loop_exhausted():
+async def test_stream_model_reply_terminal_chunk_after_loop_exhausted(fake_llm):
     """After loop_exhausted, the terminal agent-message-chunk (done=True) is emitted.
 
     The client waits for done=True to close the stream. If the loop exits via
@@ -246,24 +227,24 @@ async def test_stream_gemini_reply_terminal_chunk_after_loop_exhausted():
     """
     from trid3nt_server import server as agent_server
 
-    fake_client = MagicMock()
-    fake_client.models.generate_content_stream.side_effect = lambda **kw: iter([
-        _make_fake_chunk_with_function_call("fetch_dem", {"bbox": [0, 0, 1, 1]}, "c1")
-    ])
+    fake_llm.on_call(
+        lambda i, _c: _make_fake_chunk_with_function_call(
+            "fetch_dem", {"bbox": [0, 0, 1, 1]}, "c1"
+        )
+    )
 
     async def _succeed(_ws, _state, name, args):
         return {"wms_url": "http://example.com", "layer_id": "x"}
 
     sock = _FakeSocket()
     state = SessionState(session_id=new_ulid())
-    settings = GeminiSettings(
+    settings = ModelSettings(
         model="gemini-2.5-pro", project="t", location="us-central1", use_vertex=True
     )
 
-    with patch.object(agent_server, "build_client", return_value=fake_client), \
-         patch.object(agent_server, "_invoke_tool_via_emitter", side_effect=_succeed), \
+    with patch.object(agent_server, "_invoke_tool_via_emitter", side_effect=_succeed), \
          patch.object(agent_server, "build_tool_declarations", return_value=[]):
-        await agent_server._stream_gemini_reply(
+        await agent_server._stream_model_reply(
             sock, state, settings, "x", "research"
         )
 

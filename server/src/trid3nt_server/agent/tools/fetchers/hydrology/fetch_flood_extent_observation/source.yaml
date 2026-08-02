@@ -1,0 +1,115 @@
+# Router source spec (landcover + flood-extent wave, ADR 0082).
+# Twin: fetch_flood_extent_observation.py -- FOLDED via the categorical_tile_grid
+# access mode (per-10-deg-tile direct GET + first-valid uint8 mosaic + palette COG),
+# the pre_resolve LANCE dir-walk (date/None -> year/doy into the cache key), and the
+# post-emit envelope (class_breakdown/flood_area/legend -> FloodExtentObservationResult).
+schema_version: v1
+name: fetch_flood_extent_observation
+source_class: mcdwd_flood_extent
+error_prefix: FLOOD_EXTENT
+empty_error_suffix: NO_COVERAGE
+shape: raster-cog
+supports_global_query: false
+endpoints:
+  data:
+    url: https://nrt3.modaps.eosdis.nasa.gov/archive/allData/61/MCDWD_L3_F3_NRT
+auth:
+  mode: none
+  user_agent: trid3nt/0.1 (Hazard Modeling Agent; https://github.com/double-r-squared/trid3nt-qgis-plugin; agent@trid3nt.dev)
+params:
+  bbox:
+    type: bbox
+    required: true
+    quantize: round_6dp
+    schema_optional: true
+  date:
+    type: iso_date
+    required: false
+    schema_optional: true
+gates:
+  max_bbox_deg2: 50.0
+ingest:
+  access: categorical_tile_grid
+  categorical_tile_grid:
+    tile_deg: 10.0
+    h_max: 35
+    v_max: 17
+    cell_deg: 0.0020833333333333333
+    archive_url: https://nrt3.modaps.eosdis.nasa.gov/archive/allData/61/MCDWD_L3_F3_NRT
+    product: MCDWD_L3_F3_NRT
+    fname_template: '{product}.A{year}{doy:03d}.h{h:02d}v{v:02d}.061.tif'
+    nodata: 255
+    colors:
+      0:
+      - 0
+      - 0
+      - 0
+      - 0
+      1:
+      - 146
+      - 197
+      - 222
+      - 255
+      2:
+      - 244
+      - 165
+      - 130
+      - 255
+      3:
+      - 202
+      - 0
+      - 32
+      - 255
+      255:
+      - 0
+      - 0
+      - 0
+      - 0
+hooks:
+  pre_resolve: flood_extent_observation.pre_resolve
+  envelope: flood_extent_observation.envelope
+normalize:
+  crs: EPSG:4326
+  units: MCDWD flood class
+output:
+  layer_type: raster
+  ext: tif
+  role: primary
+  style_preset: flood_extent_observed
+  result_model: FloodExtentObservationResult
+cache:
+  ttl_class: semi-static-7d
+payload_estimate:
+  model: bbox_area
+  mb_per_sq_deg: 0.035
+  floor_mb: 0.01
+corpus:
+- satellite observed flood extent for this area
+- where was actually flooded according to satellite
+- observed inundation footprint to compare against my model
+- MODIS flood map for the recent flooding
+- benchmark flood extent raster to compute CSI against the model
+- get the observed flood extent so I can score my simulation
+docstring: "Fetch an OBSERVED (satellite-derived) flood extent for a bbox as a categorical COG.\n\nReturns NASA's\
+  \ MODIS Global Flood Product (MCDWD, 250 m, 3-day) classified\ninto no-water / surface-water / recurring-flood\
+  \ / flood -- the benchmark\nOBSERVED extent ``compute_flood_extent_skill`` scores a modeled flood\nsurface against\
+  \ (Hit rate / False Alarm / CSI).\n\n**When to use:**\n- You need an observed flood footprint to validate a model:\n\
+  \  ``compute_flood_extent_skill(model_extent, this)``.\n- \"satellite flood extent here\", \"where was actually\
+  \ flooded\", \"observed\n  inundation for this AOI\".\n\n**When NOT to use:**\n- Raw SAR backscatter (you want\
+  \ to threshold it yourself) ->\n  ``fetch_sentinel1_sar``.\n- The long-term where-water-ever-was baseline ->\n\
+  \  ``fetch_jrc_global_surface_water``.\n- Surveyed peak-STAGE point marks -> ``fetch_high_water_marks``.\n- Regulatory\
+  \ flood ZONES -> ``fetch_fema_nfhl_zones``; MODELED depth -> the\n  SFINCS / SWMM engines.\n\n**Parameters:**\n\
+  - ``bbox``: REQUIRED ``(west, south, east, north)`` in EPSG:4326.\n- ``date``: OPTIONAL ISO ``YYYY-MM-DD``. Omitted\
+  \ -> the latest available\n  3-day composite. NEAR-REAL-TIME only (a rolling recent window); a specific\n  historical\
+  \ date may be unavailable (honest ``FloodExtentNoCoverageError``).\n\n**Returns:** ``FloodExtentLayerURI`` --\
+  \ a single-band uint8 categorical COG\n(EPSG:4326, nodata=255) with an embedded palette + a categorical\n``LegendKey``\
+  \ (1 surface water, 2 recurring flood, 3 flood). Envelope:\n``product``, ``observation_date``, ``class_breakdown``,\n\
+  ``flood_pixel_count``, ``flood_area_km2``, ``caveats`` (satellite\ndetection-limit + resolution + NRT-provisional),\
+  \ ``notes``.\n\n**Honest limits (caveats + report open_issues):** optical/SAR flood\nmapping under-detects flooding\
+  \ under vegetation + in dense urban areas;\n250 m misses narrow/sub-pixel flooding; cloud gaps show as nodata;\
+  \ this is\nthe provisional NRT product, not the QA'd archive. Anonymous HISTORICAL\nevent extents (reprocessed\
+  \ MCDWD_L3 archive, Copernicus GFM/EMS SAR) need\ncredentials -- a documented follow-up, not offered here.\n\n\
+  **Errors (FR-AS-11):** ``FloodExtentInputError`` (missing/bad/too-large\nbbox, bad date); ``FloodExtentNoCoverageError``\
+  \ (no tile/date, all-nodata\nmosaic); ``FloodExtentUpstreamError`` (LANCE listing/download/read/write).\n\nCross-tool\
+  \ dependencies:\n    - Downstream: ``compute_flood_extent_skill`` (benchmark extent).\n    - Source: NASA LANCE\
+  \ MCDWD_L3_F3_NRT (nrt3.modaps.eosdis.nasa.gov)."

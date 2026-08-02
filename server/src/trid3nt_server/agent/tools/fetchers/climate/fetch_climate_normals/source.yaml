@@ -1,0 +1,132 @@
+# Router source spec (keyed/misc-leftovers wave, chained_resolution enrich, ADR 0071).
+# Twin: fetch_climate_normals.py -- NCEI 1991-2020 U.S. Climate Normals. Inventory
+# resolve (build_request/parse_response) + per-station access-CSV enrich (PHASE E),
+# dropping stations without a usable annual normal (the twin's skip). Keyless.
+schema_version: v1
+
+name: fetch_climate_normals
+source_class: climate_normals
+shape: vector-fgb
+supports_global_query: false
+
+endpoints:
+  data:
+    url: "https://www.ncei.noaa.gov/data/normals-annualseasonal/1991-2020/doc/inventory_30yr.txt"
+auth:
+  mode: none
+  user_agent: "trid3nt/0.1 (Hazard Modeling Agent; https://github.com/double-r-squared/trid3nt-qgis-plugin; agent@trid3nt.dev)"
+
+params:
+  bbox: {type: bbox, required: true, quantize: round_4dp}
+gates:
+  max_stations: 120
+
+hooks:
+  build_request: climate_normals.build_request
+  parse_response: climate_normals.parse_response
+  enrich_plan: climate_normals.enrich_plan
+  enrich_merge: climate_normals.enrich_merge
+
+ingest:
+  properties:
+    - station_id
+    - name
+    - elevation_m
+    - normal_temp_f
+    - normal_tmin_f
+    - normal_tmax_f
+    - normal_precip_in
+
+normalize:
+  crs: "EPSG:4326"
+  units: mixed
+
+output:
+  layer_type: vector
+  ext: fgb
+  role: context
+  style_preset: "climate_normals"
+
+cache:
+  ttl_class: static-30d
+payload_estimate:
+  model: per_station
+  stations_per_sq_deg: 6.0
+  kb_per_station_per_day: 0.1465
+  floor_mb: 0.001
+
+caveats:
+  - "NOAA NCEI 1991-2020 U.S. Climate Normals (annual avg temperature deg F + total precipitation inches) as station points; U.S. + territories only. No station in the bbox / none with a usable annual normal -> a typed CLIMATE_NORMALS_EMPTY error, never a fabricated layer."
+
+docstring: |-
+  Fetch NOAA NCEI 1991-2020 U.S. Climate Normals as a point FlatGeobuf.
+
+  Retrieves the official 30-year (1991-2020) Climate Normals from the NOAA
+  National Centers for Environmental Information (NCEI) for every Normals
+  station inside the requested bbox. The Climate Normals are the canonical
+  U.S. climate baseline: long-term average annual temperature (deg F) and
+  annual total precipitation (inches), computed from GHCN-Daily station
+  records. They answer "what is climatologically normal here?" and are the
+  reference against which an observed event is judged anomalous.
+
+  When to use:
+    - User asks for the climate baseline / normal / average conditions of a
+      place ("what's the average annual temperature in Tampa?", "normal
+      yearly rainfall around Phoenix", "climate normals for this county").
+    - Anomaly framing: establishing the long-term baseline so an observed
+      heat wave, cold snap, drought, or wet year can be compared against
+      "normal" (pair with fetch_asos_metar / fetch_era5_reanalysis for the
+      observed side).
+    - Multi-station spatial overlay of average temperature or precipitation
+      across a region.
+
+  When NOT to use:
+    - Current or historical *observed* weather -- use fetch_asos_metar (ASOS
+      station observations) or fetch_era5_reanalysis (gridded reanalysis).
+    - Forecasts -- use fetch_nws_alerts_conus / fetch_hrrr_forecast.
+    - Gridded precipitation climatology over large or non-US areas -- use
+      fetch_chirps_precipitation (global CHIRPS).
+    - Non-US regions -- the NCEI Normals footprint is the U.S. + territories
+      only (supports_global_query=False).
+
+  Parameters:
+      bbox: ``(min_lon, min_lat, max_lon, max_lat)`` in EPSG:4326. Required.
+          Every NCEI Normals station whose coordinates fall inside this bbox
+          is selected (capped at 120 stations). Example for the Tampa Bay
+          area: ``(-82.7, 27.7, -82.2, 28.2)``.
+
+  Returns:
+      ``LayerURI`` pointing at a FlatGeobuf in the cache bucket:
+      ``s3://<cache-bucket>/cache/static-30d/climate_normals/<key>.fgb``
+      - ``layer_type="vector"``, ``role="context"``, ``units="mixed"``
+        (temperature in deg F, precipitation in inches).
+      - Geometry: Point at each station's coordinates, EPSG:4326.
+      - Properties per station: ``station_id`` (GHCN id), ``name``,
+        ``elevation_m``, ``normal_temp_f`` (annual average temperature,
+        deg F), ``normal_tmin_f`` (annual avg daily minimum, deg F),
+        ``normal_tmax_f`` (annual avg daily maximum, deg F),
+        ``normal_precip_in`` (annual total precipitation, inches). A station
+        that is precipitation-only (e.g. CoCoRaHS) reports
+        ``normal_temp_f=None``; missing values are ``null``.
+
+  Cache: ``static-30d`` -- the 1991-2020 Normals are a fixed published
+  product; identical ``bbox`` (rounded to 4 dp) reuses the cached FlatGeobuf.
+
+  Cross-tool dependencies:
+      - Composes WITH: ``publish_layer`` (map overlay), ``geocode_location``
+        (bbox derivation from a place name),
+        the code_exec playground (baseline-vs-observed framing).
+      - Complements: ``fetch_asos_metar`` (observed surface weather),
+        ``fetch_era5_reanalysis`` (gridded reanalysis),
+        ``fetch_chirps_precipitation`` (global precipitation climatology).
+      - Upstream: NCEI Climate Normals annual/seasonal access files +
+        inventory (www.ncei.noaa.gov/data/normals-annualseasonal/1991-2020).
+
+  Errors:
+      - ``ClimateNormalsInputError``: invalid bbox (retryable=False).
+      - ``ClimateNormalsUpstreamError``: NCEI network failure or malformed
+        inventory/CSV (retryable=True).
+      - ``ClimateNormalsEmptyError``: no Normals stations in bbox / none with
+        usable annual normals (retryable=False).
+
+  supports_global_query=False -- NCEI Normals cover the U.S. + territories.

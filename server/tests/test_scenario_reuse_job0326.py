@@ -18,7 +18,7 @@ tests cover the deterministic backstop:
 
 from __future__ import annotations
 
-from trid3nt_server.adapter import build_layers_present_note
+from trid3nt_server.agent.adapters.adapter import build_layers_present_note
 from trid3nt_server.scenario_reuse import (
     ScenarioResultIndex,
     layer_id_scenario_type,
@@ -37,7 +37,7 @@ NEW_ORLEANS_BBOX = [-90.2, 29.8, -89.9, 30.1]
 
 def test_flood_signature_keys_on_bbox_and_physics_params() -> None:
     sig = scenario_signature(
-        "run_model_flood_scenario",
+        "sfincs_flood",
         {"bbox": FORT_MYERS_BBOX, "return_period_yr": 100, "duration_hr": 24},
     )
     assert sig is not None
@@ -51,11 +51,11 @@ def test_flood_signature_accepts_years_hours_aliases() -> None:
     # Defensive: even if normalize_args hasn't canonicalized, both alias spellings
     # land on the same key.
     a = scenario_signature(
-        "run_model_flood_scenario",
+        "sfincs_flood",
         {"bbox": FORT_MYERS_BBOX, "return_period_years": 100, "duration_hours": 24},
     )
     b = scenario_signature(
-        "run_model_flood_scenario",
+        "sfincs_flood",
         {"bbox": FORT_MYERS_BBOX, "return_period_yr": 100, "duration_hr": 24},
     )
     assert a is not None and b is not None
@@ -67,7 +67,7 @@ def test_flood_signature_none_without_aoi() -> None:
     # conservative: no signature -> caller RUNS.
     assert (
         scenario_signature(
-            "run_model_flood_scenario", {"return_period_yr": 100}
+            "sfincs_flood", {"return_period_yr": 100}
         )
         is None
     )
@@ -80,7 +80,7 @@ def test_non_scenario_tool_has_no_signature() -> None:
 
 def test_plume_signature_keys_on_spill_point_and_params() -> None:
     sig = scenario_signature(
-        "run_modflow_job",
+        "modflow_contaminant_plume",
         {
             "spill_location_latlon": [40.81, -96.71],
             "contaminant": "benzene",
@@ -98,7 +98,7 @@ def test_plume_signature_keys_on_spill_point_and_params() -> None:
 def test_plume_signature_none_without_spill_point() -> None:
     assert (
         scenario_signature(
-            "run_modflow_job", {"contaminant": "benzene"}
+            "modflow_contaminant_plume", {"contaminant": "benzene"}
         )
         is None
     )
@@ -111,7 +111,7 @@ def test_plume_signature_none_without_spill_point() -> None:
 
 def _record_flood(idx: ScenarioResultIndex, *, bbox, rp=100, dur=24, layer_id="flood-depth-peak-r1"):
     sig = scenario_signature(
-        "run_model_flood_scenario",
+        "sfincs_flood",
         {"bbox": bbox, "return_period_yr": rp, "duration_hr": dur},
     )
     idx.record_result(
@@ -129,7 +129,7 @@ def test_repeat_flood_request_reuses_existing_result() -> None:
     idx = ScenarioResultIndex(session_id="s1")
     _record_flood(idx, bbox=FORT_MYERS_BBOX)
     repeat = scenario_signature(
-        "run_model_flood_scenario",
+        "sfincs_flood",
         {"bbox": FORT_MYERS_BBOX, "return_period_yr": 100, "duration_hr": 24},
     )
     reuse = idx.find_reuse(repeat)
@@ -145,7 +145,7 @@ def test_near_equal_bbox_still_reuses_within_tolerance() -> None:
     _record_flood(idx, bbox=FORT_MYERS_BBOX)
     jittered = [-82.001, 26.001, -80.999, 27.001]
     repeat = scenario_signature(
-        "run_model_flood_scenario",
+        "sfincs_flood",
         {"bbox": jittered, "return_period_yr": 100, "duration_hr": 24},
     )
     assert idx.find_reuse(repeat) is not None
@@ -155,7 +155,7 @@ def test_changed_return_period_runs_again() -> None:
     idx = ScenarioResultIndex(session_id="s1")
     _record_flood(idx, bbox=FORT_MYERS_BBOX, rp=100)
     changed = scenario_signature(
-        "run_model_flood_scenario",
+        "sfincs_flood",
         {"bbox": FORT_MYERS_BBOX, "return_period_yr": 500, "duration_hr": 24},
     )
     assert idx.find_reuse(changed) is None
@@ -165,7 +165,7 @@ def test_different_aoi_runs_again() -> None:
     idx = ScenarioResultIndex(session_id="s1")
     _record_flood(idx, bbox=FORT_MYERS_BBOX)
     other = scenario_signature(
-        "run_model_flood_scenario",
+        "sfincs_flood",
         {"bbox": NEW_ORLEANS_BBOX, "return_period_yr": 100, "duration_hr": 24},
     )
     assert idx.find_reuse(other) is None
@@ -174,7 +174,7 @@ def test_different_aoi_runs_again() -> None:
 def test_plume_repeat_reuses_and_change_runs() -> None:
     idx = ScenarioResultIndex(session_id="s1")
     sig = scenario_signature(
-        "run_modflow_job",
+        "modflow_contaminant_plume",
         {
             "spill_location_latlon": [40.81, -96.71],
             "contaminant": "benzene",
@@ -191,7 +191,7 @@ def test_plume_repeat_reuses_and_change_runs() -> None:
         bbox=[-96.8, 40.7, -96.6, 40.9],  # plume FOOTPRINT, not the spill point
     )
     repeat = scenario_signature(
-        "run_modflow_job",
+        "modflow_contaminant_plume",
         {
             "spill_location_latlon": [40.81, -96.71],
             "contaminant": "benzene",
@@ -201,7 +201,7 @@ def test_plume_repeat_reuses_and_change_runs() -> None:
     )
     assert idx.find_reuse(repeat) is not None
     diff_contaminant = scenario_signature(
-        "run_modflow_job",
+        "modflow_contaminant_plume",
         {
             "spill_location_latlon": [40.81, -96.71],
             "contaminant": "TCE",
@@ -229,7 +229,7 @@ def test_seed_from_loaded_layers_enables_bare_rerun_short_circuit() -> None:
         ]
     )
     bare = scenario_signature(
-        "run_model_flood_scenario", {"bbox": FORT_MYERS_BBOX}
+        "sfincs_flood", {"bbox": FORT_MYERS_BBOX}
     )
     reuse = idx.find_reuse(bare, case_bbox=FORT_MYERS_BBOX)
     assert reuse is not None
@@ -237,7 +237,7 @@ def test_seed_from_loaded_layers_enables_bare_rerun_short_circuit() -> None:
     # A bbox-keyed request that does NOT match the Case AOI does not reuse the
     # bbox-less persisted result.
     bare_other = scenario_signature(
-        "run_model_flood_scenario", {"bbox": NEW_ORLEANS_BBOX}
+        "sfincs_flood", {"bbox": NEW_ORLEANS_BBOX}
     )
     assert idx.find_reuse(bare_other, case_bbox=FORT_MYERS_BBOX) is None
 

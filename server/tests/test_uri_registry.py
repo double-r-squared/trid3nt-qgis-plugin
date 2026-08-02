@@ -32,7 +32,7 @@ from typing import Any
 
 import pytest
 
-from trid3nt_server.uri_registry import (
+from trid3nt_server.emission.uri_registry import (
     RESOLVABLE_URI_PARAMS,
     SessionUriRegistry,
     UriResolutionError,
@@ -142,7 +142,7 @@ class TestRegistration:
             ],
             "provenance": {"data_sources": [REAL_FLOOD_COG_0255]},
         }
-        reg.register_tool_result("run_model_flood_scenario", envelope)
+        reg.register_tool_result("sfincs_flood", envelope)
         handles = reg.known_handles()
         assert FLOOD_LAYER_ID_0255 in handles
         # The bare COG string registered too (fuzzy-match inventory).
@@ -159,7 +159,7 @@ class TestRegistration:
         # Composer envelope re-registers the handle with the WMS display URL.
         reg.record(FLOOD_LAYER_ID_0255, uri=WMS_URL_0255, tool_name="composer")
         resolved = reg.resolve_params(
-            "run_pelicun_damage_assessment",
+            "pelicun_damage_assessment",
             {"hazard_raster_uri": FLOOD_LAYER_ID_0255},
         )
         assert resolved["hazard_raster_uri"] == REAL_FLOOD_COG_0255
@@ -229,9 +229,9 @@ class TestResolutionBranches:
     def test_branch3_close_match_substituted_with_warning(self, caplog) -> None:
         reg = make_registry()
         reg.record(NSI_LAYER_ID, uri=REAL_NSI_FGB, tool_name="fetch_usace_nsi")
-        with caplog.at_level("WARNING", logger="trid3nt_server.uri_registry"):
+        with caplog.at_level("WARNING", logger="trid3nt_server.emission.uri_registry"):
             out = reg.resolve_params(
-                "run_pelicun_damage_assessment",
+                "pelicun_damage_assessment",
                 {"assets_uri": MANGLED_NSI_LAYERID_BASENAME_0253},
             )
         assert out["assets_uri"] == REAL_NSI_FGB
@@ -257,7 +257,7 @@ class TestResolutionBranches:
         reg = make_registry()
         with pytest.raises(UriResolutionError) as exc_info:
             reg.resolve_params(
-                "run_pelicun_damage_assessment",
+                "pelicun_damage_assessment",
                 {"hazard_raster_uri": "https://tiles.example.com/wms?LAYERS=never-produced"},
             )
         assert "producing tool" in str(exc_info.value)
@@ -304,7 +304,7 @@ class TestResolutionBranches:
         reg.record(FLOOD_LAYER_ID_0255, wms_url=WMS_URL_0255)
         with pytest.raises(UriResolutionError):
             reg.resolve_params(
-                "run_pelicun_damage_assessment",
+                "pelicun_damage_assessment",
                 {"hazard_raster_uri": FLOOD_LAYER_ID_0255},
             )
 
@@ -436,7 +436,7 @@ class TestHistoricalIncidents:
             tool_name="publish_layer",
         )
         out = reg.resolve_params(
-            "run_pelicun_damage_assessment",
+            "pelicun_damage_assessment",
             {"hazard_raster_uri": MANGLED_RUNS_PREFIX_0253},
         )
         assert out["hazard_raster_uri"] == REAL_FLOOD_COG_0253
@@ -455,7 +455,7 @@ class TestHistoricalIncidents:
             ),
         )
         out = reg.resolve_params(
-            "run_pelicun_damage_assessment",
+            "pelicun_damage_assessment",
             {"assets_uri": MANGLED_NSI_LAYERID_BASENAME_0253},
         )
         assert out["assets_uri"] == REAL_NSI_FGB
@@ -512,7 +512,7 @@ class TestHistoricalIncidents:
             deactivate_registry(token)
         # ...then the composer's envelope re-registered the WMS URL face.
         reg.register_tool_result(
-            "run_model_flood_scenario",
+            "sfincs_flood",
             {
                 "layers": [
                     {
@@ -527,7 +527,7 @@ class TestHistoricalIncidents:
         # in the logged call) — register it as the session did.
         reg.record(NSI_LAYER_ID, uri=REAL_NSI_FGB, tool_name="fetch_usace_nsi")
         out = reg.resolve_params(
-            "run_pelicun_damage_assessment",
+            "pelicun_damage_assessment",
             {
                 "hazard_raster_uri": WMS_URL_0255,  # exact value from the log
                 "assets_uri": REAL_NSI_FGB,
@@ -549,7 +549,7 @@ class TestHistoricalIncidents:
             ),
         )
         out = reg.resolve_params(
-            "run_pelicun_damage_assessment",
+            "pelicun_damage_assessment",
             {"assets_uri": MANGLED_NSI_INVENTED_HASH_0255},
         )
         assert out["assets_uri"] == REAL_NSI_FGB
@@ -570,7 +570,7 @@ class TestHistoricalIncidents:
         )
         with pytest.raises(UriResolutionError) as exc_info:
             reg.resolve_params(
-                "run_pelicun_damage_assessment",
+                "pelicun_damage_assessment",
                 {"assets_uri": MANGLED_NSI_INVENTED_HASH_0255},
             )
         msg = str(exc_info.value)
@@ -596,7 +596,7 @@ class MockWebSocket:
 def _dummy_uri_tool():
     """Register two dummy tools: a producer (returns LayerURI) + a consumer."""
     from trid3nt_contracts.tool_registry import AtomicToolMetadata
-    from trid3nt_server.tools import TOOL_REGISTRY, RegisteredTool
+    from trid3nt_server.agent.tools import TOOL_REGISTRY, RegisteredTool
 
     captured: dict[str, Any] = {}
 
@@ -659,7 +659,7 @@ def test_invoke_seam_registers_then_resolves(_dummy_uri_tool) -> None:
 def test_invoke_seam_unresolved_raises_typed_error(_dummy_uri_tool) -> None:
     """The remaining branch-4 raise (display-face URL, no recoverable data
     URI) propagates as a typed retryable error the loop summarizes."""
-    from trid3nt_server.adapter import summarize_tool_result
+    from trid3nt_server.agent.adapters.adapter import summarize_tool_result
     from trid3nt_server.server import SessionState, _invoke_tool_via_emitter
 
     from trid3nt_contracts.common import new_ulid
@@ -757,7 +757,7 @@ class TestPlaceholderResolution:
 
     def test_placeholder_resolution_logs_info_telemetry(self, caplog) -> None:
         reg = self._registry_with_dem()
-        with caplog.at_level("INFO", logger="trid3nt_server.uri_registry"):
+        with caplog.at_level("INFO", logger="trid3nt_server.emission.uri_registry"):
             reg.resolve_params(
                 "publish_layer", {"layer_uri": "LayerURI_from_fetch_dem"}
             )
@@ -954,7 +954,7 @@ class TestDemHintInventoryText:
             "compute_slope",
             "compute_aspect",
             "compute_contours",
-            "compute_terrain_profile",
+            "compute_cross_section",
         ):
             with pytest.raises(UriResolutionError) as exc_info:
                 reg.resolve_params(
@@ -963,17 +963,17 @@ class TestDemHintInventoryText:
                 )
             msg = str(exc_info.value)
             assert "fetch_dem" in msg
-            assert "run_model_flood_scenario" not in msg
+            assert "sfincs_flood" not in msg
 
     def test_non_dem_tool_keeps_generic_hint(self) -> None:
         reg = make_registry("sess-generic-hint")
         with pytest.raises(UriResolutionError) as exc_info:
             reg.resolve_params(
-                "run_pelicun_damage_assessment",
+                "pelicun_damage_assessment",
                 {"hazard_raster_uri": "https://tiles.example.com/wms?LAYERS=never-produced"},
             )
         msg = str(exc_info.value)
-        assert "run_model_flood_scenario" in msg
+        assert "sfincs_flood" in msg
 
     def test_non_empty_registry_lists_up_to_ten_handles(self) -> None:
         reg = make_registry("sess-ten-handles")
@@ -1040,7 +1040,7 @@ class TestReconnectSeedsRegistryFromCase:
             # resolves, matching the note's own loaded_layers.
             reg = get_uri_registry(state.session_id)
             assert NSI_LAYER_ID in reg.known_handles()
-            out = reg.resolve_params("run_pelicun_damage_assessment",
+            out = reg.resolve_params("pelicun_damage_assessment",
                                       {"assets_uri": NSI_LAYER_ID})
             assert out["assets_uri"] == REAL_NSI_FGB
         finally:

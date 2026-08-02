@@ -31,12 +31,12 @@ import asyncio
 import json
 from dataclasses import dataclass, field
 from typing import Any
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 
 import pytest
 
-from trid3nt_server.adapter import (
-    GeminiSettings,
+from trid3nt_server.agent.adapters.adapter import (
+    ModelSettings,
     summarize_tool_result,
     _classify_error,
 )
@@ -207,39 +207,17 @@ def test_summarize_tool_result_no_result_still_works_for_genuine_none():
 
 
 def _make_fake_chunk_with_function_call(name: str, args: dict, call_id: str = "c1"):
-    fn_call = MagicMock()
-    fn_call.name = name
-    fn_call.id = call_id
-    fn_call.args = args
-    fake_part = MagicMock()
-    fake_part.function_call = fn_call
-    fake_part.text = None
-    fake_content = MagicMock()
-    fake_content.parts = [fake_part]
-    fake_candidate = MagicMock()
-    fake_candidate.content = fake_content
-    fake_chunk = MagicMock()
-    fake_chunk.candidates = [fake_candidate]
-    fake_chunk.text = None
-    return fake_chunk
+    """A fake turn (scripted-provider dict) emitting ONE function call."""
+    return {"tool_call": {"name": name, "args": args, "call_id": call_id}}
 
 
 def _make_fake_chunk_with_text(text: str):
-    fake_part = MagicMock()
-    fake_part.function_call = None
-    fake_part.text = text
-    fake_content = MagicMock()
-    fake_content.parts = [fake_part]
-    fake_candidate = MagicMock()
-    fake_candidate.content = fake_content
-    fake_chunk = MagicMock()
-    fake_chunk.candidates = [fake_candidate]
-    fake_chunk.text = None
-    return fake_chunk
+    """A fake turn (scripted-provider dict) emitting one narration delta."""
+    return {"text": text}
 
 
 @pytest.mark.asyncio
-async def test_multi_turn_loop_tool_not_found_feeds_error_to_gemini():
+async def test_multi_turn_loop_tool_not_found_feeds_error_to_gemini(fake_llm):
     """Unknown-tool call → ToolNotFoundError → function_response carries error.
 
     The multi-turn loop must NOT propagate ToolNotFoundError out of the loop
@@ -262,17 +240,28 @@ async def test_multi_turn_loop_tool_not_found_feeds_error_to_gemini():
     turn2_chunk = _make_fake_chunk_with_text(
         "I don't have a volcanic lava flow tool; I cannot model that."
     )
-    turn_iter = iter([
-        iter([turn1_chunk]),
-        iter([turn2_chunk]),
-    ])
+    fake_llm.script([turn1_chunk, turn2_chunk])
 
-    # Capture the function_response payload that Gemini sees on turn 2.
+    # Let _invoke_tool_via_emitter run for real — it will raise ToolNotFoundError
+    # because "fetch_volcano_lava_flow" is not in TOOL_REGISTRY.
+    sock = _FakeSocket()
+    state = _make_session()
+    settings = ModelSettings(
+        model="gemini-2.5-pro", project="t", location="us-central1", use_vertex=True
+    )
+
+    with patch.object(agent_server, "build_tool_declarations", return_value=[]):
+        await agent_server._stream_model_reply(
+            sock, state, settings, "Show me lava flows in Hawaii", "research"
+        )
+
+    # Capture the function_response payload that Gemini sees on turn 2, rebuilt
+    # from the recorded scripted-provider calls (replaces the retired
+    # ``_capture_and_stream`` kwargs snapshot).
     contents_per_turn: list[list[Any]] = []
-
-    def _capture_and_stream(**kwargs):
+    for call in fake_llm.calls:
         snapshot = []
-        for c in kwargs["contents"]:
+        for c in call["contents"]:
             parts_repr = []
             for p in c.parts:
                 if p.text:
@@ -291,26 +280,6 @@ async def test_multi_turn_loop_tool_not_found_feeds_error_to_gemini():
                     parts_repr.append(("unknown", None))
             snapshot.append((c.role, parts_repr))
         contents_per_turn.append(snapshot)
-        return next(turn_iter)
-
-    fake_client = MagicMock()
-    fake_client.models.generate_content_stream.side_effect = _capture_and_stream
-
-    # Let _invoke_tool_via_emitter run for real — it will raise ToolNotFoundError
-    # because "fetch_volcano_lava_flow" is not in TOOL_REGISTRY.
-    sock = _FakeSocket()
-    state = _make_session()
-    settings = GeminiSettings(
-        model="gemini-2.5-pro", project="t", location="us-central1", use_vertex=True
-    )
-
-    with (
-        patch.object(agent_server, "build_client", return_value=fake_client),
-        patch.object(agent_server, "build_tool_declarations", return_value=[]),
-    ):
-        await agent_server._stream_gemini_reply(
-            sock, state, settings, "Show me lava flows in Hawaii", "research"
-        )
 
     # Turn 2 must have received a function_response with the structured error.
     assert len(contents_per_turn) >= 2, (

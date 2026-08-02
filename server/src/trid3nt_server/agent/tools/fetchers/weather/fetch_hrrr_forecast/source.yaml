@@ -1,0 +1,153 @@
+schema_version: v1
+name: fetch_hrrr_forecast
+source_class: hrrr
+error_prefix: HRRR_FORECAST
+shape: raster-cog
+supports_global_query: false
+endpoints:
+  data:
+    url: s3://hrrrzarr/
+auth:
+  mode: none
+  user_agent: trid3nt/0.1 (Hazard Modeling Agent; agent@trid3nt.dev)
+params:
+  bbox:
+    type: bbox
+    required: true
+    quantize: round_6dp
+  variable:
+    type: enum
+    values:
+    - 2m_temperature
+    - 10m_u_wind
+    - 10m_v_wind
+    - surface_precip_1hr
+    - 10m_wind_speed
+    default: 2m_temperature
+  forecast_hour:
+    type: int
+    default: 1
+    min: 0
+    schema_optional: true
+  cycle:
+    type: str
+    schema_optional: true
+    default: null
+ingest:
+  access: library_delegate
+  delegate:
+    library: hrrr_zarr
+    timeout_s: 90.0
+  hrrr:
+    variables:
+      2m_temperature:
+        level: 2m_above_ground
+        s3_var: TMP
+      10m_u_wind:
+        level: 10m_above_ground
+        s3_var: UGRD
+      10m_v_wind:
+        level: 10m_above_ground
+        s3_var: VGRD
+      surface_precip_1hr:
+        level: surface
+        s3_var: APCP_1hr_acc_fcst
+    derived:
+      10m_wind_speed:
+        op: hypot
+        components:
+        - 10m_u_wind
+        - 10m_v_wind
+        probe: 10m_u_wind
+hooks:
+  delegate: hrrr.read
+  delegate_validate: hrrr.validate
+  delegate_resolve: hrrr.resolve_cycle
+normalize:
+  crs: EPSG:4326
+  units_by_param:
+    param: variable
+    map:
+      2m_temperature: K
+      10m_u_wind: m s-1
+      10m_v_wind: m s-1
+      surface_precip_1hr: kg m-2
+      10m_wind_speed: m s-1
+output:
+  layer_type: raster
+  ext: tif
+  role: primary
+  style_preset: hrrr_2m_temperature
+  style_preset_by_param:
+    param: variable
+    map:
+      2m_temperature: hrrr_2m_temperature
+      10m_u_wind: hrrr_10m_u_wind
+      10m_v_wind: hrrr_10m_v_wind
+      surface_precip_1hr: hrrr_surface_precip_1hr
+      10m_wind_speed: wind_speed
+cache:
+  ttl_class: dynamic-1h
+payload_estimate:
+  model: bbox_area
+  mb_per_sq_deg: 0.0021114864864864866
+  floor_mb: 0.05
+  ceil_mb: 5.0
+docstring: "NOAA HRRR 3 km short-term weather forecast -- Tier-1 CONUS fetcher.\n\nWhat it does: returns\
+  \ a CRS-tagged GeoTIFF (EPSG:4326) of a single HRRR\nforecast field at a single forecast lead time,\
+  \ reprojected from the\nnative Lambert Conformal Conic grid and clipped to the requested CONUS\nbbox.\
+  \ Wraps the University of Utah CHPC HRRR-Zarr mirror on AWS S3\n(anonymous, Tier-1 free, no API key).\
+  \ Resolves the most-recently\npublished HRRR cycle whose forecast at the requested lead time is on\n\
+  S3, walking up to 6 h backward if the in-progress cycle has not yet\nposted (the NOAA Big Data Program\
+  \ mirror lags the cycle hour by\n~1.0 - 1.5 h).\n\nWhen to use:\n- User asks for \"the forecast for\
+  \ the next few hours\" anywhere in CONUS\n  (\"what's the wind looking like in Tampa tomorrow morning?\"\
+  , \"is rain\n  coming through Denver this afternoon?\", \"show me HRRR temperature\n  forecast for Chicago\"\
+  ).\n- A GENERIC wind request (\"wind forecast\", \"how windy will it be\",\n  \"show me the wind\",\
+  \ \"wind speed over Houston\") → use\n  ``variable=\"10m_wind_speed\"``. This returns a SINGLE positive\
+  \ wind-speed\n  magnitude field (``sqrt(u^2 + v^2)``, m s-1) -- the natural answer to \"how\n  windy\"\
+  . Only reach for the lone signed ``10m_u_wind`` / ``10m_v_wind``\n  components when the user explicitly\
+  \ needs wind DIRECTION or a vector\n  component (e.g. onshore/offshore decomposition).\n- Driving a\
+  \ hazard model with near-real-time meteorological forcing on\n  a US-side bbox: wind input to SFINCS\
+  \ or HEC-RAS storm surge, precip\n  input to SFINCS pluvial, temperature for snow/fire-weather context.\n\
+  - \"Observed vs forecast\" comparisons against ASOS/METAR (or RAWS for\n  fire weather).\n- Any short-term\
+  \ (≤ 18 h, or ≤ 48 h on 00/06/12/18z cycles) US weather\n  decision-support overlay.\n\nWhen NOT to\
+  \ use:\n- Historical / reanalysis weather -- use ``fetch_era5_reanalysis``\n  (global, 0.25°, 1940 -\
+  \ present) instead. HRRR-Zarr archives ~2016+\n  cycles but the tool exposes only the current operational\
+  \ forecast.\n- Outside CONUS (Mexico interior, Caribbean except direct CONUS spillover,\n  Alaska, Hawaii,\
+  \ the open Pacific or Atlantic) -- HRRR is CONUS-only;\n  bbox outside the coverage envelope raises\
+  \ ``HRRRForecastInputError``.\n  Use ``fetch_era5_reanalysis`` for global, ECMWF AIFS/IFS for global\n\
+  \  forecast.\n- Observed precipitation accumulation -- use ``fetch_mrms_qpe``\n  (1 km gauge-corrected).\
+  \ HRRR's APCP is model-predicted; MRMS is the\n  observation.\n- Observed radar reflectivity -- use\
+  \ ``fetch_nexrad_reflectivity``.\n- Watches / warnings -- use ``fetch_nws_alerts_conus`` or\n  ``fetch_nws_event``\
+  \ instead. Those carry the official advisory text;\n  HRRR carries raw model output.\n- Hourly forecast\
+  \ horizons beyond 18 h on non-extended cycles, or\n  beyond 48 h on extended cycles -- those leads are\
+  \ not in HRRR.\n\nParameters:\n    bbox: ``(west, south, east, north)`` in EPSG:4326 (WGS84 decimal\n\
+  \        degrees). Must intersect CONUS coverage (~lon -134..-60,\n        lat 21..53). Example: ``(-82.4,\
+  \ 26.3, -81.6, 26.9)`` for the\n        Fort Myers / Lee County area.\n    variable: one of ``\"2m_temperature\"\
+  `` (K), ``\"10m_wind_speed\"``\n        (m s-1, DERIVED wind-speed magnitude ``sqrt(u^2 + v^2)`` --\
+  \ the\n        answer to a generic \"wind\" request), ``\"10m_u_wind\"`` (m s-1,\n        east component),\
+  \ ``\"10m_v_wind\"`` (m s-1, north component),\n        ``\"surface_precip_1hr\"`` (kg m-2 = mm liquid-water\
+  \ equivalent,\n        1-h accumulation). Default ``\"2m_temperature\"``. For any\n        non-directional\
+  \ wind question pass ``\"10m_wind_speed\"``.\n    forecast_hour: integer forecast lead time in hours\
+  \ (1 = +1 h from\n        cycle start). Range 1 - 18 for standard cycles, 1 - 48 for the\n        extended\
+  \ 00/06/12/18z cycles. ``0`` is accepted and aliased to\n        the +1 h slice (HRRR analysis-time\
+  \ slices live in a separate\n        ``_anl.zarr`` not exposed here). Default ``1``.\n    cycle: optional\
+  \ ISO-8601 cycle timestamp like ``\"2026-06-09T00:00:00Z\"``\n        to pin a specific cycle. Default\
+  \ ``None`` → use the most recent\n        published cycle (walks backward up to 6 h from current UTC).\n\
+  \nReturns:\n    A ``LayerURI`` pointing at a COG in the cache bucket\n    ``s3://trid3nt-cache/cache/dynamic-1h/hrrr/<key>.tif``\n\
+  \    carrying the requested variable's forecast slice, EPSG:4326,\n    float32, NaN nodata. ``layer_type=\"\
+  raster\"``, ``role=\"primary\"``,\n    ``units`` per the variable (``\"K\"``, ``\"m s-1\"``, ``\"kg\
+  \ m-2\"``).\n    Downstream consumers (``publish_layer``, the code_exec playground,\n    SFINCS forcing\
+  \ composers) read the COG and treat it as a single-band\n    scalar field.\n\nCross-tool dependencies:\n\
+  \    - Consumes nothing (Tier-1 substrate fetcher; no upstream tool).\n    - Feeds: ``publish_layer``\
+  \ (visualization on the web map),\n      AOI zonal stats in the code_exec playground (aggregate to admin\n\
+  \      boundaries), ``run_sfincs`` and downstream SFINCS composers (precip\n      / wind forcing), ``clip_raster_to_polygon``\
+  \ (further sub-clip),\n      the code_exec playground (combine with MRMS, ERA5,\n      NWS alerts for\
+  \ compound claims).\n\nRaises:\n    ``HRRRForecastInputError``: bad bbox / variable / forecast_hour\n\
+  \        (retryable=False).\n    ``HRRRForecastEmptyError``: bbox falls outside HRRR coverage or\n \
+  \       yields all-NaN after clip (retryable=False).\n    ``HRRRForecastNotAvailableError``: requested\
+  \ cycle is not yet on\n        S3 within the 6 h backstop (retryable=True).\n    ``HRRRForecastUpstreamError``:\
+  \ S3 / zarr / reprojection failure\n        (retryable=True).\n\nFR-CE-8: routed through ``read_through``\
+  \ with ``ttl_class=\"dynamic-1h\"``\nso identical ``(bbox, variable, cycle, forecast_hour)`` calls reuse\n\
+  the cached COG within the hourly window. The cache key includes the\ncycle identifier so distinct cycles\
+  \ predicting the same valid time\nmap to distinct cache entries."

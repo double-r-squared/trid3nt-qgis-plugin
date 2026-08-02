@@ -25,7 +25,7 @@ USGS binary explicitly:
 
 - **Base:** `python:3.11-slim` (Bookworm). Python is first-class here (FloPy +
   rasterio back the agent-side postprocess and the build-verification step).
-- **Python deps:** installed into a venv at `/opt/grace2/.venv` to sidestep
+- **Python deps:** installed into a venv at `/opt/trid3nt/.venv` to sidestep
   PEP 668 on Bookworm — `flopy>=3.7,<4`, `google-cloud-storage>=2.18,<4`,
   `numpy>=1.26,<3`, `rasterio>=1.3,<2`.
 - **mf6 binary:** MODFLOW **6.5.0** from the USGS GitHub release zip

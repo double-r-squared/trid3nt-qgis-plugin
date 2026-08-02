@@ -1,0 +1,10 @@
+enhance_satellite_image:
+- polish this satellite image so it looks more like CIRA GeoColor
+- de-haze the true-color image, it looks washed out and blue
+- enhance and sharpen this GOES true-color frame for presentation
+- clean up the satellite imagery, remove the haze and make the land pop
+- white-balance and sharpen this RGB image so it reads more natural
+- upscale and enhance the satellite picture to a higher resolution
+- make this true-color composite look crisper and less hazy like GeoColor
+- apply a polish pass to the NAIP true-color image before publishing it
+- remove the atmospheric haze from this RGB satellite COG

@@ -1,0 +1,223 @@
+"""Tier-3 hook contract (ADR 0056): the named, registered, PURE extension points.
+
+A source whose bespoke-ness is a single clean irreducible step the declarative
+param/ingest surface cannot express references a registered pure function by name
+in its ``source.yaml`` (``hooks.build_request`` / ``hooks.parse_response``). This
+package is that function set: a name -> callable table (:data:`HOOK_REGISTRY`), the
+:func:`register_hook` decorator that fills it, and :func:`resolve_hook` /
+:func:`has_hook` the router + registration read.
+
+DOCTRINE (data-router-fold.md, tier-3): hooks are PURE, MINIMAL, REGISTERED,
+TESTED. Pure = no I/O (transport, caching, gates, stamps, and the typed-error
+FACTORY machinery stay router-owned; a hook only computes and MAY call a shared
+``router_*_error`` factory to raise a source-stamped typed error). Minimal = a
+hook point exists only because a real source needs it. Registered = referenced by
+a name string a spec load validates. Tested = each hook module carries its own
+unit tests.
+
+Hook signatures:
+- ``build_request(spec, params) -> list[RequestPlan]`` -- source-specific
+  request construction + bespoke pre-fetch input validation. 1..N plans.
+- ``parse_response(spec, params, bodies: list[bytes]) -> list[dict]`` -- decode
+  the source payload(s) into GeoJSON-ish point features; raise the honest-empty /
+  too-large / bad-body typed errors.
+
+Chained-resolution mode (ADR 0063) adds five PURE points for the resolve-then-fetch
+/ bounded per-item enrichment shape; the router owns every round trip + the loops:
+- ``resolve_build(spec, params) -> list[RequestPlan]`` -- round-1 name->id request(s)
+  (or ``[]`` to skip); ``resolve_parse(spec, params, bodies) -> dict`` -- the resolved
+  id as a params-merge (runs pre-cache-key so name+id collapse).
+- ``next_page(spec, params, bodies) -> RequestPlan | None`` -- offset-paging loop
+  control (next page or stop).
+- ``enrich_plan(spec, params, features) -> list[(ref_key, RequestPlan)]`` -- per-item
+  detail requests; ``enrich_merge(spec, params, features, results) -> list[dict]`` --
+  fold the deduped/bounded/best-effort detail back in (every feature survives).
+
+Envelope mode (ADR 0073) adds the POST-EMIT point for a LayerURI-SUBCLASS result:
+- ``envelope(spec, params, layer, data: bytes) -> dict`` -- the last hook the router
+  calls; over the assembled ``LayerURI`` + the produced bytes it computes the extra
+  business fields (breakdowns / caveats / notes) for the spec's
+  ``output.result_model`` subclass. PURE (no transport); the router drops the
+  honesty-floor-owned ``uri`` / ``layer_type`` keys so a hook can only enrich.
+"""
+
+from __future__ import annotations
+
+import logging
+from dataclasses import dataclass, field
+from typing import Any, Callable
+
+logger = logging.getLogger("trid3nt_server.agent.tools.fetchers._router.hooks")
+
+__all__ = [
+    "RequestPlan",
+    "HOOK_REGISTRY",
+    "register_hook",
+    "resolve_hook",
+    "has_hook",
+    "HookResolutionError",
+]
+
+
+@dataclass(frozen=True)
+class RequestPlan:
+    """One request the router transport executes on a ``build_request`` hook's behalf.
+
+    PURE data (no socket): the hook decides the URL / query params / headers /
+    method / JSON body; the router owns the actual GET or POST, its retry
+    authority, and typed transport errors.
+
+    ``method`` defaults to ``"GET"`` (every prior hook). ``"POST"`` sends
+    ``json_body`` as a JSON request body -- the write-method REST shape whose
+    query is a body, not a query string (USACE NSI's structures POST) -- or, when
+    ``data`` is set instead, a form-encoded body (the Overpass interpreter reads
+    its QL from the ``data`` form field). No I/O still happens in the hook: it
+    only DESCRIBES the request.
+    """
+
+    url: str
+    params: dict[str, Any] | None = None
+    headers: dict[str, str] = field(default_factory=dict)
+    method: str = "GET"
+    json_body: Any = None
+    data: dict[str, Any] | None = None
+
+
+class HookResolutionError(ValueError):
+    """A spec referenced a ``hooks.*`` name absent from :data:`HOOK_REGISTRY`."""
+
+
+#: name -> pure callable. Filled by :func:`register_hook` at hook-module import.
+HOOK_REGISTRY: dict[str, Callable[..., Any]] = {}
+
+
+def register_hook(name: str) -> Callable[[Callable[..., Any]], Callable[..., Any]]:
+    """Register a pure hook under ``name`` (``<source_key>.<point>``).
+
+    A duplicate name is a defect (two hooks would answer one spec reference), so
+    it raises rather than silently last-wins.
+    """
+
+    def _wrap(fn: Callable[..., Any]) -> Callable[..., Any]:
+        if name in HOOK_REGISTRY and HOOK_REGISTRY[name] is not fn:
+            raise HookResolutionError(f"duplicate hook name {name!r}")
+        HOOK_REGISTRY[name] = fn
+        return fn
+
+    return _wrap
+
+
+def resolve_hook(name: str) -> Callable[..., Any]:
+    """Return the registered hook for ``name`` or raise :class:`HookResolutionError`."""
+    fn = HOOK_REGISTRY.get(name)
+    if fn is None:
+        raise HookResolutionError(
+            f"no hook registered under {name!r}; known: {sorted(HOOK_REGISTRY)}"
+        )
+    return fn
+
+
+def has_hook(name: str) -> bool:
+    """True iff ``name`` resolves in :data:`HOOK_REGISTRY`."""
+    return name in HOOK_REGISTRY
+
+
+# Import the hook modules so their ``@register_hook`` decorators populate the
+# registry at package import (registration validates names against it at load).
+from . import usgs_earthquakes  # noqa: E402,F401
+from . import ncei_tsunami  # noqa: E402,F401
+from . import usgs_volcano  # noqa: E402,F401
+from . import nws_event  # noqa: E402,F401
+from . import usace_nsi  # noqa: E402,F401
+# chained-resolution mode hooks (ADR 0063).
+from . import gbif_occurrences  # noqa: E402,F401
+from . import inaturalist_observations  # noqa: E402,F401
+from . import nws_alerts_conus  # noqa: E402,F401
+from . import nws_river_forecast  # noqa: E402,F401
+# offset paging + boundary-service FIPS enrich (ADR 0064).
+from . import openfema_disasters  # noqa: E402,F401
+# directory-index resolve -> bulk gzip-CSV point decode (ADR 0064).
+from . import storm_events_db  # noqa: E402,F401
+# station-siblings wave (ADR 0065): multi-state discovery + station-observations +
+# batched-snapshot + keyed missing-key parity, all via the existing phases.
+from . import asos_metar  # noqa: E402,F401
+from . import raws_weather  # noqa: E402,F401
+from . import snotel_snow  # noqa: E402,F401
+from . import airnow_air_quality  # noqa: E402,F401
+from . import openaq_measurements  # noqa: E402,F401
+# arcgis-odd wave (ADR 0066): OBJECTID-cursor paging, WAF headers, prefix-strip,
+# raise-on-unknown alias + fail-loud, keyed dual-endpoint, multi-layer union -- all
+# via the EXISTING build_request/next_page/parse_response hooks (zero new machinery).
+from . import fema_nfhl_zones  # noqa: E402,F401
+from . import nwi_wetlands  # noqa: E402,F401
+from . import wdpa_protected_areas  # noqa: E402,F401
+from . import usace_dams  # noqa: E402,F401
+from . import epa_frs_facilities  # noqa: E402,F401
+# zip/multi-file wave (ADR 0067): TIGER shapefile-ZIP URL planner (FIPS place fan-out)
+# for the zip_vector executor (whole-object GET + extract + read + filter + merge).
+from . import admin_boundaries  # noqa: E402,F401
+# weather/GRIB wave (ADR 0069): S3-listed key resolve (latest / targeted walkback)
+# feeding the grib_object raster access mode (whole-object .grib2.gz -> COG).
+from . import mrms_qpe  # noqa: E402,F401
+# Overpass-family wave (ADR 0070): OSM QL build_request + JSON->geometry
+# parse_response over the 3-mirror endpoint_fallback chain (roads + pois).
+from . import overpass  # noqa: E402,F401
+# keyed/misc-leftovers wave (ADR 0071): NCEI Climate Normals inventory-resolve +
+# per-station access-CSV enrich; keyed http_json (ebird/iucn) via classify_status;
+# USGS groundwater OGC measurements + best-effort monitoring-location enrich.
+from . import climate_normals  # noqa: E402,F401
+from . import ebird_observations  # noqa: E402,F401
+from . import iucn_red_list_range  # noqa: E402,F401
+from . import usgs_groundwater_levels  # noqa: E402,F401
+# LayerURI-envelope wave (ADR 0073): USGS STN high-water marks -- event name->id
+# resolve + states-overlap build_request + bbox-clip/NO_MARKS parse + the
+# post-emit envelope hook (quality/type/datum breakdown -> HighWaterMarksLayerURI).
+from . import usgs_stn_hwm  # noqa: E402,F401
+# Library-delegate raster hooks (ADR 0074): pfdf USGS readers (STATSGO soils; 3DEP
+# terrain) whose maintained library owns discovery + the socket -- the delegate hook
+# calls the library and returns (array, transform, crs) for the shared COG writer.
+from . import pfdf_raster  # noqa: E402,F401
+# Record-return output shape (ADR 0076): WFIGS named-incident lookup -- the 2-endpoint
+# best-feature short-circuit + bbox-from-point + epoch->ISO discovery record (dict, not
+# a LayerURI), the proof-by-migration for shape=record.
+from . import wfigs_incident  # noqa: E402,F401
+# movebank finish wave (ADR 0077): keyed direct-read CSV with COMPOSITE Basic-Auth
+# creds (username+password via the resolver blob path) -> per-geometry_type feature
+# parse; classify_status splits 401->AUTH / 403->LICENSE / 4xx->INPUT.
+from . import movebank_tracks  # noqa: E402,F401
+# satellite family (ADR 0078): the SLIDER availability index folds onto the record
+# shape as a live-no-cache source (the record shape's first uncacheable fold).
+from . import slider_timestamps  # noqa: E402,F401
+# quick-folds wave (ADR 0079): FIRMS active-fire keyed CSV http_json -- key in the
+# URL path, 200-with-error-body auth split in parse_response + classify_status.
+from . import firms_active_fire  # noqa: E402,F401
+# finisher-mechanisms wave (ADR 0081): GEM active faults -- the constant_cache
+# two-tier cache (whole-world 10.6 MB GeoJSON downloaded once, AOI-filtered in the
+# parse hook) + the variant_by_emptiness output switch (zero-fault AOI -> record
+# dict, non-empty -> FaultSourcesResult via the envelope hook).
+from . import fault_sources  # noqa: E402,F401
+
+# landcover + flood-extent wave (ADR 0082): fetch_flood_extent_observation (the
+# LANCE dir-walk pre_resolve + the categorical-COG envelope) and fetch_landcover
+# (the WCS GetCoverage build_request + the NLCD sidecar envelope).
+from . import flood_extent_observation  # noqa: E402,F401
+from . import landcover  # noqa: E402,F401
+# endgame HRRR-Zarr wave (ADR 0083): fetch_hrrr_forecast + fetch_hrrr_smoke -- the
+# library_delegate raster fold whose delegate_resolve walks the s3fs mirror for the
+# newest cycle (pre-cache-key) and whose delegate opens the Zarr slice(s), reprojects
+# LCC->EPSG:4326, clips, and (forecast) synthesizes hypot(u,v) wind speed. One shared
+# module; the per-source variable table + derived/fill_value live in ingest.hrrr.
+from . import hrrr  # noqa: E402,F401
+# endgame field-boundaries wave (ADR 0083): fetch_field_boundaries -- the FTW/fiboa
+# GeoParquet row-group bbox pushdown (owned by geopandas.read_parquet over an fsspec
+# HTTPS handle) folds onto the VECTOR library_delegate mode (the ADR 0070 new-transport
+# STOP refuted; the pushdown is library-owned, not a router transport). Pure pre_resolve
+# dataset-selection + a delegate read hook returning WGS84 polygon features.
+from . import field_boundaries  # noqa: E402,F401
+# trigger wave (ADR 0084): fetch_lehd_jobs -- the join VALUES-hook seam (the per-state
+# LODES bulk gzip-CSV values leg the census Data-API join.values leg cannot express).
+# Two PURE hooks (values_plan / values_parse); the join transform owns the I/O.
+from . import lehd_jobs  # noqa: E402,F401
+# trigger wave (ADR 0084): fetch_buildings -- Overpass build_request + a (features,
+# tags) parse for the overpass_sidecar executor's constrained tags-sidecar side write.
+from . import buildings  # noqa: E402,F401

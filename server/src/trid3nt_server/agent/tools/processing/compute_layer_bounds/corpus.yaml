@@ -1,0 +1,9 @@
+compute_layer_bounds:
+- resize the bounding box to encompass all the features in this layer
+- fit the map to this layer so I can see everything
+- zoom to all the points in this dataset
+- what is the geographic extent of this layer
+- show me the whole extent of the flood layer on the map
+- frame the view around all of these buildings
+- give me the bounding box of this raster in lat lon
+- pan and zoom so the entire layer is in view

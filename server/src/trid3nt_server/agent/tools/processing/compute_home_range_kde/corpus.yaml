@@ -1,0 +1,9 @@
+compute_home_range_kde:
+- home range of this animal from its GPS tracks
+- compute the 50% and 95% utilization distribution isopleths
+- kernel density estimate KDE home range from telemetry fixes
+- core use area for the tracked individual
+- where does this animal spend most of its time
+- draw the home range polygon from Movebank track points
+- 95% KDE range boundary for the tagged animal
+- utilization distribution core area vs full range from movement data

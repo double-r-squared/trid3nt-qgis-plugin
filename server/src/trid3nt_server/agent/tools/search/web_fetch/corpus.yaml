@@ -1,0 +1,11 @@
+web_fetch:
+- read the content of this USGS report page
+- fetch the news article at this URL about the flood event
+- pull the metadata from this research paper abstract page
+- check what's on this government flood-zone data portal page
+- read the text body of this NWS forecast discussion page
+- i fetched several news articles about the same chemical spill, read them so we can derive the event details
+- read these wire stories about this incident and pull the location, date, and what leaked
+- ingest these news article urls about the flood so we can derive the event parameters for review
+- cross-check these agency pages and reconcile how many gallons were spilled before any modeling
+- read this news coverage and extract the spill town, amount, and contaminant with provenance

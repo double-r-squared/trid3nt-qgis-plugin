@@ -1,4 +1,4 @@
-"""ELMFIRE AWS Batch worker entrypoint - wildfire spread (FIRE-4).
+"""ELMFIRE AWS Batch worker entrypoint - wildfire spread.
 
 The ELMFIRE analogue of ``services/workers/geoclaw/entrypoint.py`` /
 ``services/workers/swan/entrypoint.py``. Same OBJECT-STORE-IN -> RUN ->
@@ -10,7 +10,7 @@ is copied verbatim from the GeoClaw worker; only the SOLVER step differs.
 The ELMFIRE-specific differences from the GeoClaw shim:
 
   1. NO DECK AUTHORING. Unlike GeoClaw/SWAN, the ELMFIRE deck is built
-     AGENT-SIDE by the FIRE-2 deck builder (``deck_builder.py`` next to this
+     AGENT-SIDE by the deck builder (``deck_builder.py`` next to this
      file, driven through ``run_elmfire.build_elmfire_deck``): the agent
      stages a READY deck (``inputs/*.tif`` + ``inputs/elmfire.data``) to the
      cache bucket and the manifest lists every deck file. This worker only
@@ -20,7 +20,7 @@ The ELMFIRE-specific differences from the GeoClaw shim:
   2. THE SOLVE. ``elmfire_<VER> ./inputs/elmfire.data`` run from the scratch
      root, after recreating the deck's (empty, unstaged) ``outputs/`` +
      ``scratch/`` dirs - mirroring ``run_elmfire.elmfire_local_spec``'s
-     ``mkdir -p outputs scratch`` byte-for-byte. The FIRE-2 namelist pins
+     ``mkdir -p outputs scratch`` byte-for-byte. The namelist pins
      ``CONVERT_TO_GEOTIFF=.FALSE.`` so the solver writes ESRI BIL rasters
      (+ .hdr sidecars) into ``outputs/``. NOTE the solver DOES shell out to
      ``gdal_translate`` (PATH_TO_GDAL, default /usr/bin) to convert GeoTIFF
@@ -83,7 +83,7 @@ logging.basicConfig(
     format="%(asctime)s %(levelname)s %(name)s - %(message)s",
 )
 
-SCRATCH = Path(os.environ.get("TRID3NT_ELMFIRE_SCRATCH", "/opt/grace2/work"))
+SCRATCH = Path(os.environ.get("TRID3NT_ELMFIRE_SCRATCH", "/opt/trid3nt/work"))
 GCP_PROJECT = os.environ.get("GCP_PROJECT", "legacy-cloud-project")
 RUNS_BUCKET = os.environ.get("TRID3NT_RUNS_BUCKET", "trid3nt-runs")
 

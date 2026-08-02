@@ -26,20 +26,20 @@ from __future__ import annotations
 import json
 from dataclasses import dataclass, field
 from typing import Literal
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 
 import pytest
 
 from trid3nt_server import server as agent_server
-from trid3nt_server import tools as agent_tools
-from trid3nt_server.adapter import GeminiSettings
+from trid3nt_server.agent import tools as agent_tools
+from trid3nt_server.agent.adapters.adapter import ModelSettings
 from trid3nt_server.scenario_reuse import reset_scenario_indexes_for_tests
-from trid3nt_server.tool_arg_normalizer import (
+from trid3nt_server.agent.tool_arg_normalizer import (
     fuzzy_correct_enum_args,
     normalize_args,
 )
-from trid3nt_server.tools import RegisteredTool
-from trid3nt_server.uri_registry import reset_uri_registries_for_tests
+from trid3nt_server.agent.tools import RegisteredTool
+from trid3nt_server.emission.uri_registry import reset_uri_registries_for_tests
 from trid3nt_contracts import new_ulid
 from trid3nt_contracts.execution import LayerURI
 from trid3nt_contracts.tool_registry import AtomicToolMetadata
@@ -156,72 +156,34 @@ class _FakeSocket:
 
 
 def _make_fake_chunk_with_function_call(name: str, args: dict, call_id: str):
-    fn_call = MagicMock()
-    fn_call.name = name
-    fn_call.id = call_id
-    fn_call.args = args
-    fake_part = MagicMock()
-    fake_part.function_call = fn_call
-    fake_part.text = None
-    fake_content = MagicMock()
-    fake_content.parts = [fake_part]
-    fake_candidate = MagicMock()
-    fake_candidate.content = fake_content
-    fake_chunk = MagicMock()
-    fake_chunk.candidates = [fake_candidate]
-    fake_chunk.text = None
-    return fake_chunk
+    return {"tool_call": {"name": name, "args": args, "call_id": call_id}}
 
 
 def _make_fake_chunk_with_text(text: str):
-    fake_part = MagicMock()
-    fake_part.function_call = None
-    fake_part.text = text
-    fake_content = MagicMock()
-    fake_content.parts = [fake_part]
-    fake_candidate = MagicMock()
-    fake_candidate.content = fake_content
-    fake_chunk = MagicMock()
-    fake_chunk.candidates = [fake_candidate]
-    fake_chunk.text = text
-    return fake_chunk
+    return {"text": text}
 
 
-def _settings() -> GeminiSettings:
-    return GeminiSettings(
+def _settings() -> ModelSettings:
+    return ModelSettings(
         model="gemini-2.5-pro", project="t", location="us-central1", use_vertex=True
     )
 
 
-async def _drive_geocode_then_fetch(fetch_bbox: list) -> list:
+async def _drive_geocode_then_fetch(fake_llm, fetch_bbox: list) -> list:
     """Round 1 geocodes, round 2 fetches with ``fetch_bbox``, round 3 narrates.
 
     Returns the contents list handed to the model so the fetch's
     function_response can be inspected for the drift warning.
     """
-    rounds = {"n": 0}
-    captured_contents: list = []
-
-    def _script(**kwargs):
-        rounds["n"] += 1
-        captured_contents.append(kwargs.get("contents"))
-        if rounds["n"] == 1:
-            return iter(
-                [
-                    _make_fake_chunk_with_function_call(
-                        "geocode_location", {"query": "Tampa"}, "c1"
-                    )
-                ]
-            )
-        if rounds["n"] == 2:
-            return iter(
-                [
-                    _make_fake_chunk_with_function_call(
-                        "fetch_dem", {"bbox": fetch_bbox}, "c2"
-                    )
-                ]
-            )
-        return iter([_make_fake_chunk_with_text("Done.")])
+    fake_llm.script([
+        _make_fake_chunk_with_function_call(
+            "geocode_location", {"query": "Tampa"}, "c1"
+        ),
+        _make_fake_chunk_with_function_call(
+            "fetch_dem", {"bbox": fetch_bbox}, "c2"
+        ),
+        _make_fake_chunk_with_text("Done."),
+    ])
 
     async def _dispatch(_ws, _state, name, _args):
         if name == "geocode_location":
@@ -230,18 +192,14 @@ async def _drive_geocode_then_fetch(fetch_bbox: list) -> list:
 
     sock = _FakeSocket()
     state = agent_server.SessionState(session_id=new_ulid())
-    with patch.object(agent_server, "build_client", return_value=MagicMock()), \
-         patch.object(
+    with patch.object(
              agent_server, "_invoke_tool_via_emitter", side_effect=_dispatch
          ), \
          patch.object(agent_server, "build_tool_declarations", return_value=[]):
-        agent_server.build_client.return_value.models.generate_content_stream.side_effect = (
-            lambda **kw: _script(**kw)
-        )
-        await agent_server._stream_gemini_reply(
+        await agent_server._stream_model_reply(
             sock, state, _settings(), "show elevation data for Tampa", "research"
         )
-    return captured_contents
+    return [call["contents"] for call in fake_llm.calls]
 
 
 def _fetch_response_payload(captured_contents) -> dict:
@@ -256,26 +214,26 @@ def _fetch_response_payload(captured_contents) -> dict:
 
 
 @pytest.mark.asyncio
-async def test_drift_warning_fires_in_loop(monkeypatch):
+async def test_drift_warning_fires_in_loop(monkeypatch, fake_llm):
     monkeypatch.delenv("TRID3NT_GEOCODE_DRIFT_WARN", raising=False)
-    contents = await _drive_geocode_then_fetch([10.0, 45.0, 11.0, 46.0])
+    contents = await _drive_geocode_then_fetch(fake_llm, [10.0, 45.0, 11.0, 46.0])
     resp = _fetch_response_payload(contents)
     assert "aoi_drift_warning" in resp, sorted(resp)
     assert "WARNING" in resp["aoi_drift_warning"]
 
 
 @pytest.mark.asyncio
-async def test_drift_warning_no_fire_when_bbox_matches(monkeypatch):
+async def test_drift_warning_no_fire_when_bbox_matches(monkeypatch, fake_llm):
     monkeypatch.delenv("TRID3NT_GEOCODE_DRIFT_WARN", raising=False)
-    contents = await _drive_geocode_then_fetch([-82.5, 27.95, -82.4, 28.05])
+    contents = await _drive_geocode_then_fetch(fake_llm, [-82.5, 27.95, -82.4, 28.05])
     resp = _fetch_response_payload(contents)
     assert "aoi_drift_warning" not in resp, sorted(resp)
 
 
 @pytest.mark.asyncio
-async def test_drift_warning_kill_switch(monkeypatch):
+async def test_drift_warning_kill_switch(monkeypatch, fake_llm):
     monkeypatch.setenv("TRID3NT_GEOCODE_DRIFT_WARN", "0")
-    contents = await _drive_geocode_then_fetch([10.0, 45.0, 11.0, 46.0])
+    contents = await _drive_geocode_then_fetch(fake_llm, [10.0, 45.0, 11.0, 46.0])
     resp = _fetch_response_payload(contents)
     assert "aoi_drift_warning" not in resp, sorted(resp)
 
@@ -289,8 +247,8 @@ _SIM_LAUNCHES: list[dict] = []
 
 @pytest.fixture()
 def _stub_expensive_tool():
-    """Shadow run_modflow_job with a launch-counting stub (job-0326 pattern)."""
-    name = "run_modflow_job"
+    """Shadow modflow_contaminant_plume with a launch-counting stub (job-0326 pattern)."""
+    name = "modflow_contaminant_plume"
     original = agent_tools.TOOL_REGISTRY.get(name)
     _SIM_LAUNCHES.clear()
     reset_scenario_indexes_for_tests()
@@ -337,10 +295,10 @@ async def test_scenario_reuse_kill_switch_disables_short_circuit(
     ws = _FakeSocket()
     state = agent_server.SessionState(session_id=new_ulid())
     await agent_server._invoke_tool_via_emitter(
-        ws, state, "run_modflow_job", dict(_SIM_PARAMS)
+        ws, state, "modflow_contaminant_plume", dict(_SIM_PARAMS)
     )
     await agent_server._invoke_tool_via_emitter(
-        ws, state, "run_modflow_job", dict(_SIM_PARAMS)
+        ws, state, "modflow_contaminant_plume", dict(_SIM_PARAMS)
     )
     assert len(_SIM_LAUNCHES) == 2, (
         "TRID3NT_SCENARIO_REUSE=0 must disable the reuse short-circuit"
@@ -356,10 +314,10 @@ async def test_scenario_reuse_default_still_fires(
     ws = _FakeSocket()
     state = agent_server.SessionState(session_id=new_ulid())
     await agent_server._invoke_tool_via_emitter(
-        ws, state, "run_modflow_job", dict(_SIM_PARAMS)
+        ws, state, "modflow_contaminant_plume", dict(_SIM_PARAMS)
     )
     await agent_server._invoke_tool_via_emitter(
-        ws, state, "run_modflow_job", dict(_SIM_PARAMS)
+        ws, state, "modflow_contaminant_plume", dict(_SIM_PARAMS)
     )
     assert len(_SIM_LAUNCHES) == 1
 

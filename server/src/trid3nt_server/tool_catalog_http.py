@@ -1,17 +1,17 @@
-"""HTTP catalog endpoint (Wave 4.10 Stage 3 — job C1).
+"""HTTP catalog endpoint.
 
 Exposes two read-only JSON endpoints:
 
-- ``GET /api/tool-catalog`` — the agent's atomic-tool surface (Wave 4.10 C1).
-- ``GET /api/telemetry/summary`` — aggregated routing-quality stats over the
-  most recent 30 sessions, backing the Wave 4.11 M7 routing-quality
-  dashboard (this module is the only HTTP seam — adding a second endpoint
-  keeps the listener as a single asyncio TCP server).
+- ``GET /api/tool-catalog`` -- the agent's atomic-tool surface.
+- ``GET /api/telemetry/summary`` -- aggregated routing-quality stats over the
+  most recent 30 sessions, backing the routing-quality dashboard (this
+  module is the only HTTP seam -- adding a second endpoint keeps the
+  listener as a single asyncio TCP server).
 
 Why a dedicated HTTP endpoint when the rest of the agent talks WebSockets?
 
 - The catalog is a **discovery surface** for human users browsing what the
-  agent can do. It is not part of the chat envelope contract (Appendix A) —
+  agent can do. It is not part of the chat envelope contract (Appendix A) --
   it does not stream, does not maintain session state, and does not require
   an authenticated user. A plain HTTP GET is the right shape.
 - The catalog payload is small (~71 tools × ~1.5 KB each ≈ 100 KB) and
@@ -20,18 +20,18 @@ Why a dedicated HTTP endpoint when the rest of the agent talks WebSockets?
 
 The endpoint runs on its own asyncio TCP listener (default port 8766;
 override via ``TRID3NT_AGENT_HTTP_PORT``). It is mounted as a sibling of the
-WebSocket server in ``server.run_server``, NOT in its own process — single
+WebSocket server in ``server.run_server``, NOT in its own process -- single
 process, single asyncio loop, no thread sharing.
 
 Backed entirely by:
-- ``trid3nt_server.categories.CATEGORIES`` / ``PRIMARY_CATEGORY`` /
-  ``SECONDARY_CATEGORIES`` — the 12 categories landed by job-B5.
-- ``trid3nt_server.tools.TOOL_REGISTRY`` — every registered tool's
+- ``trid3nt_server.agent.categories.CATEGORIES`` / ``PRIMARY_CATEGORY`` /
+  ``SECONDARY_CATEGORIES`` -- the 12 tool categories.
+- ``trid3nt_server.agent.tools.TOOL_REGISTRY`` -- every registered tool's
   ``AtomicToolMetadata`` carries the MCP annotation hints
   (``read_only_hint``, ``open_world_hint``, ``destructive_hint``,
   ``idempotent_hint``) + ``supports_global_query`` +
   ``payload_mb_estimator_name``.
-- ``data/tool_query_corpus.yaml`` — example sample-queries keyed by tool name.
+- ``data/tool_query_corpus.yaml`` -- example sample-queries keyed by tool name.
 
 CORS: ``Access-Control-Allow-Origin: *`` so the Vite dev server (5173) and
 production builds on any origin can hit the endpoint without preflight
@@ -73,74 +73,84 @@ _PAYLOAD_CACHE: dict[str, Any] | None = None
 
 
 def _default_corpus_path() -> Path:
-    """Resolve ``data/tool_query_corpus.yaml`` under the package's ``data/`` dir.
+    """Resolve the residual ``data/tool_query_corpus.yaml`` under the package.
 
-    Mirrors the resolution logic in ``search_tools._default_corpus_path``
-    so both consumers read the same file by default. Honours the
+    Post engine-door restructure this is the RESIDUAL corpus (tools registered
+    outside the ``tools/`` tree). The composed corpus is assembled by
+    ``_compose_corpus_from_tree``. Mirrors ``search_tools._default_corpus_path``
+    so both consumers read the same residual by default. Honours the
     ``TRID3NT_TOOL_CORPUS_YAML`` env override for test/dev pinning.
     """
     env_path = os.environ.get("TRID3NT_TOOL_CORPUS_YAML")
     if env_path:
         return Path(env_path).expanduser().resolve()
     here = Path(__file__).resolve()
-    return here.parent / "data" / "tool_query_corpus.yaml"
+    return here.parent / "agent" / "data" / "tool_query_corpus.yaml"
+
+
+def _read_corpus_yaml(p: Path) -> dict[str, list[str]]:
+    """Load a single corpus YAML into ``{tool: [queries]}`` (best-effort)."""
+    if not p.exists():
+        return {}
+    try:
+        with p.open() as fh:
+            data = yaml.safe_load(fh) or {}
+    except Exception:  # noqa: BLE001 -- best-effort
+        logger.exception("tool_catalog_http: failed to parse corpus YAML at %s", p)
+        return {}
+    if not isinstance(data, dict):
+        return {}
+    parsed: dict[str, list[str]] = {}
+    for k, v in data.items():
+        if isinstance(k, str) and isinstance(v, list):
+            parsed[k] = [str(q) for q in v if isinstance(q, str)]
+    return parsed
+
+
+def _compose_corpus_from_tree() -> dict[str, list[str]]:
+    """Compose the flat corpus: every ``tools/**/corpus.yaml`` merged with the
+    residual ``data/tool_query_corpus.yaml``. Same shape/content as the
+    pre-restructure monolith (flat composition, no tiers).
+    """
+    here = Path(__file__).resolve()
+    tools_dir = here.parent / "agent" / "tools"
+    composed: dict[str, list[str]] = {}
+    for cpath in sorted(tools_dir.rglob("corpus.yaml")):
+        composed.update(_read_corpus_yaml(cpath))
+    composed.update(_read_corpus_yaml(here.parent / "agent" / "data" / "tool_query_corpus.yaml"))
+    return composed
 
 
 def load_query_corpus(path: Path | None = None) -> dict[str, list[str]]:
-    """Load + cache the synthetic example-query corpus YAML.
+    """Load + cache the synthetic example-query corpus.
 
     Returns a mapping ``tool_name -> [sample_query, ...]``. Cached for the
     lifetime of the process; the cache reset is implicit on agent restart
     (process-level state, no persistence).
 
-    Missing files / parse errors return an empty dict — the catalog still
-    renders, just without sample queries. Failure to load the corpus must
-    not block the discovery surface.
+    Default: compose the co-located per-tool ``corpus.yaml`` files with the
+    residual monolith. An explicit ``path`` or the ``TRID3NT_TOOL_CORPUS_YAML``
+    env override reads a single monolithic file instead (legacy pin).
+
+    Missing files / parse errors degrade to fewer/no sample queries -- the
+    catalog still renders. Failure to load the corpus must not block the
+    discovery surface.
     """
     global _CORPUS_CACHE
     if _CORPUS_CACHE is not None:
         return _CORPUS_CACHE
-    p = path if path is not None else _default_corpus_path()
-    if not p.exists():
-        logger.warning(
-            "tool_catalog_http: corpus YAML missing at %s — catalog will "
-            "render without sample queries",
-            p,
-        )
-        _CORPUS_CACHE = {}
-        return _CORPUS_CACHE
-    try:
-        with p.open() as fh:
-            data = yaml.safe_load(fh) or {}
-    except Exception:  # noqa: BLE001 — best-effort
-        logger.exception(
-            "tool_catalog_http: failed to parse corpus YAML at %s", p
-        )
-        _CORPUS_CACHE = {}
-        return _CORPUS_CACHE
-    if not isinstance(data, dict):
-        _CORPUS_CACHE = {}
-        return _CORPUS_CACHE
-    parsed: dict[str, list[str]] = {}
-    for k, v in data.items():
-        if not isinstance(k, str):
-            continue
-        if isinstance(v, list):
-            parsed[k] = [str(q) for q in v if isinstance(q, str)]
-    _CORPUS_CACHE = parsed
+    if path is not None:
+        _CORPUS_CACHE = _read_corpus_yaml(path)
+    else:
+        env_path = os.environ.get("TRID3NT_TOOL_CORPUS_YAML")
+        if env_path:
+            _CORPUS_CACHE = _read_corpus_yaml(Path(env_path).expanduser().resolve())
+        else:
+            _CORPUS_CACHE = _compose_corpus_from_tree()
     logger.info(
-        "tool_catalog_http: loaded %d tool query entries from %s",
-        len(parsed),
-        p,
+        "tool_catalog_http: loaded %d tool query entries", len(_CORPUS_CACHE)
     )
     return _CORPUS_CACHE
-
-
-def _reset_caches_for_tests() -> None:
-    """Drop module-level caches. ONLY for tests."""
-    global _CORPUS_CACHE, _PAYLOAD_CACHE
-    _CORPUS_CACHE = None
-    _PAYLOAD_CACHE = None
 
 
 def build_catalog_payload(
@@ -192,12 +202,12 @@ def build_catalog_payload(
     # Importing categories at module load time is fine, but we want the
     # payload to reflect whatever the registry holds AT BUILD TIME, so we
     # snapshot here.
-    from .categories import (
+    from .agent.categories import (
         CATEGORIES,
         PRIMARY_CATEGORY,
         SECONDARY_CATEGORIES,
     )
-    from .tools import TOOL_REGISTRY
+    from .agent.tools import TOOL_REGISTRY
 
     global _PAYLOAD_CACHE
     if use_cache and _PAYLOAD_CACHE is not None:
@@ -215,7 +225,7 @@ def build_catalog_payload(
         primary_cat = PRIMARY_CATEGORY.get(name, "geographic_primitives")
         secondaries = list(SECONDARY_CATEGORIES.get(name, ()))
         sample_queries = list(corpus_map.get(name, []))
-        # Cap to 3 sample queries in the payload — the UI shows 2-3; sending
+        # Cap to 3 sample queries in the payload -- the UI shows 2-3; sending
         # all 5-10 wastes bandwidth on a discovery surface.
         sample_queries = sample_queries[:3]
         tools_out.append(
@@ -243,7 +253,7 @@ def build_catalog_payload(
     # Second pass: count tools per category. Counted from PRIMARY_CATEGORY +
     # SECONDARY_CATEGORIES so a cross-listed tool shows up in both. Tools
     # without an explicit primary category fall through to
-    # ``geographic_primitives`` — match the per-tool fallback above.
+    # ``geographic_primitives`` -- match the per-tool fallback above.
     category_counts: dict[str, int] = {c.id: 0 for c in CATEGORIES}
     for name in TOOL_REGISTRY:
         primary = PRIMARY_CATEGORY.get(name, "geographic_primitives")
@@ -299,18 +309,24 @@ def _first_paragraph(doc: str, *, max_chars: int = 400) -> str:
 
 
 # ---------------------------------------------------------------------------
-# Telemetry summary (Wave 4.11 M7 — routing-quality dashboard backend).
+# Telemetry summary (Wave 4.11 M7 -- routing-quality dashboard backend).
 # ---------------------------------------------------------------------------
 
 
-_DEFAULT_TELEMETRY_PATH = "/tmp/trid3nt_tool_call_telemetry.jsonl"
-
-
 def _get_telemetry_path() -> Path:
-    """Resolve the JSONL fallback path (env override + default)."""
-    return Path(
-        os.environ.get("TRID3NT_TELEMETRY_PATH", _DEFAULT_TELEMETRY_PATH)
-    )
+    """Resolve the JSONL fallback path (delegates to ``telemetry``'s canonical,
+
+    session/boot-segmented resolver -- item 2 of the observability/retention
+    batch: this used to duplicate ``telemetry._get_telemetry_path``'s
+    env-var + default logic; now it reads the SAME current-segment path that
+    module owns, so a dashboard read and a live write agree on where the
+    sink lives. Kept as its own callable (rather than inlining the import at
+    each call site) because tests monkeypatch THIS name directly to pin a
+    hermetic tmp file.
+    """
+    from trid3nt_server import telemetry as _telemetry
+
+    return Path(_telemetry._get_telemetry_path())
 
 
 # tool-retrieval SHADOW recall@k (tool-retrieval kickoff). The shadow-selection
@@ -321,10 +337,17 @@ _SHADOW_RECORD_TYPE = "tool_retrieval_shadow"
 #: attributed to a flow when it dispatched one of these (the recall@k per-flow
 #: breakdown the kickoff asks for: SWMM / SFINCS / MODFLOW).
 _FLOW_BY_SOLVER_TOOL: dict[str, str] = {
-    "run_swmm_urban_flood": "SWMM",
-    "run_model_flood_scenario": "SFINCS",
-    "run_model_flood_habitat_scenario": "SFINCS",
-    "run_modflow_job": "MODFLOW",
+    # engine-door refactor (SWMM slice): the urban family is now door + template.
+    "run_swmm": "SWMM",
+    "swmm_urban_flood": "SWMM",
+    # engine-door refactor (SFINCS slice): the flood family is now door + template.
+    "run_sfincs": "SFINCS",
+    "sfincs_flood": "SFINCS",
+    # engine-door refactor: the MODFLOW family is now door + templates. The door
+    # and the contaminant-plume template are the MODFLOW-flow anchors; the news
+    # composer stays cross-listed.
+    "run_modflow": "MODFLOW",
+    "modflow_contaminant_plume": "MODFLOW",
     "run_model_groundwater_contamination_scenario": "MODFLOW",
 }
 
@@ -332,10 +355,9 @@ _FLOW_BY_SOLVER_TOOL: dict[str, str] = {
 def _normalize_record(rec: dict[str, Any]) -> dict[str, Any]:
     """Coerce a single telemetry record into the summary's canonical shape.
 
-    The local-file (Wave 4.10) writer uses ``success`` + ``ts``; the MCP
-    writer (Wave 4.11 M3) uses ``result_ok`` + ``called_at_utc``. We accept
-    either form so the summary builder doesn't care which substrate
-    produced the data.
+    The local-file writer uses ``success`` + ``ts``; the MCP writer uses
+    ``result_ok`` + ``called_at_utc``. We accept either form so the summary
+    builder doesn't care which substrate produced the data.
     """
     out: dict[str, Any] = {}
     out["session_id"] = rec.get("session_id") or ""
@@ -350,7 +372,7 @@ def _normalize_record(rec: dict[str, Any]) -> dict[str, Any]:
     out["error_code"] = rec.get("error_code")
     out["retry_attempt"] = int(rec.get("retry_attempt") or 0)
     out["cached_content_token_count"] = rec.get("cached_content_token_count")
-    # Tool-accuracy panel (NATE 2026-06-17). ``result_usable`` is bool|None
+    # Tool-accuracy panel. ``result_usable`` is bool|None
     # (None = the notion doesn't apply, e.g. a meta tool); ``routed_ok`` is
     # bool|None and is the per-record carrier of the routing-quality heuristic.
     # Both substrates use the same key names, so a plain get suffices.
@@ -358,7 +380,7 @@ def _normalize_record(rec: dict[str, Any]) -> dict[str, Any]:
     out["routed_ok"] = rec.get("routed_ok")
     # Timestamp: prefer the Mongo field name; fall back to the file form.
     out["called_at_utc"] = rec.get("called_at_utc") or rec.get("ts") or ""
-    # In-chat model selector dimension (NATE 2026-06-17). None when the record
+    # In-chat model selector dimension. None when the record
     # predates the feature; _aggregate_records buckets it as "unknown".
     out["model_id"] = rec.get("model_id")
     # turn_id (the per-user-message dispatch / pipeline id) -- the recall@k join
@@ -389,7 +411,7 @@ def _empty_summary() -> dict[str, Any]:
         "error_rate_overall": 0.0,
         "cache_hit_rate": 0.0,
         "average_latency_ms": 0.0,
-        # Tool-accuracy panel additions (WIRE CONTRACT, NATE 2026-06-17).
+        # Tool-accuracy panel additions (WIRE CONTRACT).
         "success_rate": 0.0,
         "result_usability_rate": None,
         "routing_accuracy_rate": None,
@@ -412,7 +434,7 @@ def _percentile(values: list[float], q: float) -> float:
 
     Empty input yields ``0.0``. Uses the same "linear" method numpy defaults to
     so the p50/p95 line up with any external numpy-based recompute. Pure-stdlib
-    (no numpy import — telemetry must stay light + always importable).
+    (no numpy import -- telemetry must stay light + always importable).
     """
     if not values:
         return 0.0
@@ -431,7 +453,7 @@ def _rate_over_bools(values: list[bool | None]) -> float | None:
     """Fraction of ``True`` among the non-``None`` entries.
 
     Returns ``None`` when EVERY entry is ``None`` (the notion does not apply to
-    any record — e.g. result_usable for an all-meta-tool slice), so the wire
+    any record -- e.g. result_usable for an all-meta-tool slice), so the wire
     field is an honest null rather than a misleading ``0.0``. This is the
     contract for ``result_usability_rate`` / ``routing_accuracy_rate``.
     """
@@ -448,7 +470,7 @@ def _derive_routed_ok(records: list[dict[str, Any]]) -> dict[int, bool]:
     DEFENSIBLE HEURISTIC, NOT GROUND TRUTH (clearly labelled on the wire as
     ``routing_accuracy_rate``): a tool call is "mis-routed" when it FAILED
     (result_ok=False) and the SAME session's NEXT call (by timestamp) is a
-    DIFFERENT tool — i.e. the model abandoned this tool and reached for another
+    DIFFERENT tool -- i.e. the model abandoned this tool and reached for another
     one for the same logical step. Such a call gets ``routed_ok=False``. Any
     other completed call gets ``routed_ok=True``. We leverage ``retry_attempt``
     too: a call with retry_attempt>0 that itself failed and was followed by a
@@ -456,7 +478,7 @@ def _derive_routed_ok(records: list[dict[str, Any]]) -> dict[int, bool]:
     rule already captures it.
 
     A per-record value the writer ALREADY supplied (``routed_ok`` not None) wins
-    — this only fills the gap for records whose writer left it None (the current
+    -- this only fills the gap for records whose writer left it None (the current
     emit path, where supersession is not yet observable). Keyed by ``id(rec)``
     so two records with identical contents are scored independently.
     """
@@ -465,7 +487,7 @@ def _derive_routed_ok(records: list[dict[str, Any]]) -> dict[int, bool]:
     for r in records:
         sid = r.get("session_id") or ""
         if not sid:
-            # No session context — cannot judge supersession; routed_ok stays
+            # No session context -- cannot judge supersession; routed_ok stays
             # absent (treated as None/unavailable downstream).
             continue
         sess_buckets.setdefault(sid, []).append(r)
@@ -541,7 +563,7 @@ def _aggregate_records(records: list[dict[str, Any]]) -> dict[str, Any]:
             total_errors += 1
         total_latency += lat
         all_latencies.append(lat)
-        # result_usable (bool|None — meta tools contribute None).
+        # result_usable (bool|None -- meta tools contribute None).
         usable = r.get("result_usable")
         by_tool_usable.setdefault(tool, []).append(usable)
         all_usable.append(usable)
@@ -638,7 +660,7 @@ def _aggregate_records(records: list[dict[str, Any]]) -> dict[str, Any]:
     usability_rate_overall = _rate_over_bools(all_usable)
     routing_rate_overall = _rate_over_bools(all_routed)
 
-    # Per-model breakdown (in-chat model selector, NATE 2026-06-17).
+    # Per-model breakdown (in-chat model selector).
     # Shape: list of {model_id, count, success_rate, result_usability_rate,
     #                 routing_accuracy_rate, latency_p50_ms, latency_p95_ms}
     # Sorted descending by count; "unknown" last.
@@ -674,7 +696,7 @@ def _aggregate_records(records: list[dict[str, Any]]) -> dict[str, Any]:
         "error_rate_overall": round(error_rate_overall, 4),
         "cache_hit_rate": round(cache_hit_rate, 4),
         "average_latency_ms": round(avg_latency_ms, 2),
-        # Tool-accuracy panel additions (WIRE CONTRACT, NATE 2026-06-17).
+        # Tool-accuracy panel additions (WIRE CONTRACT).
         "success_rate": round(success_rate, 4),
         "result_usability_rate": (
             round(usability_rate_overall, 4)
@@ -692,7 +714,7 @@ def _aggregate_records(records: list[dict[str, Any]]) -> dict[str, Any]:
         "dispatches_by_source": by_source_count,
         "error_rate_by_tool": error_rate_by_tool,
         "top_routing_chains": chains_out,
-        # Model dimension (in-chat model selector, NATE 2026-06-17).
+        # Model dimension (in-chat model selector).
         # The accuracy panel UI can compare success_rate / usability / routing
         # across model choices without a UI redesign in this job.
         "by_model": by_model_sorted,
@@ -708,7 +730,7 @@ def _aggregate_records(records: list[dict[str, Any]]) -> dict[str, Any]:
 
 
 # ---------------------------------------------------------------------------
-# solve_telemetry section (live big-sim panel — NATE 2026-06-17).
+# solve_telemetry section (live big-sim panel).
 #
 # The solve-telemetry record is written to the SAME file+structured-log dual
 # sink as before (telemetry.emit_solve_telemetry); we read its JSONL here to
@@ -808,39 +830,43 @@ def _aggregate_solve_telemetry(
 
 
 def _load_recent_records_from_file(
-    path: Path,
+    path: Path | list[Path],
     *,
     last_n_sessions: int = 30,
 ) -> list[dict[str, Any]]:
-    """Read the JSONL fallback file and return records from the most-recent
+    """Read the JSONL fallback file(s) and return records from the most-recent
     ``last_n_sessions`` distinct sessions (newest first).
 
-    Returns an empty list when the file is missing or unreadable — the
-    dashboard renders an empty state in that case.
+    ``path`` is a single ``Path`` (the default -- unchanged behavior) or a
+    list of ``Path`` (the retained-telemetry-segments case, oldest-first).
+    A missing/unreadable file is skipped, not fatal -- the dashboard renders
+    an empty state only if EVERY target is missing/unreadable.
     """
-    if not path.exists():
-        return []
+    targets = [path] if isinstance(path, Path) else list(path)
     out: list[dict[str, Any]] = []
-    try:
-        with path.open("r", encoding="utf-8") as fh:
-            for line in fh:
-                line = line.strip()
-                if not line:
-                    continue
-                try:
-                    rec = json.loads(line)
-                except json.JSONDecodeError:
-                    continue
-                if not isinstance(rec, dict):
-                    continue
-                # tool-retrieval SHADOW rows share this JSONL sink but are NOT
-                # tool-call dispatches -- skip them here (the recall@k path reads
-                # them separately via _load_shadow_records_from_file).
-                if rec.get("record_type") == _SHADOW_RECORD_TYPE:
-                    continue
-                out.append(_normalize_record(rec))
-    except OSError:
-        return []
+    for target in targets:
+        if not target.exists():
+            continue
+        try:
+            with target.open("r", encoding="utf-8") as fh:
+                for line in fh:
+                    line = line.strip()
+                    if not line:
+                        continue
+                    try:
+                        rec = json.loads(line)
+                    except json.JSONDecodeError:
+                        continue
+                    if not isinstance(rec, dict):
+                        continue
+                    # tool-retrieval SHADOW rows share this JSONL sink but are NOT
+                    # tool-call dispatches -- skip them here (the recall@k path reads
+                    # them separately via _load_shadow_records_from_file).
+                    if rec.get("record_type") == _SHADOW_RECORD_TYPE:
+                        continue
+                    out.append(_normalize_record(rec))
+        except OSError:
+            continue
     if not out:
         return out
     # Newest-first, then keep only records belonging to the last N sessions.
@@ -857,31 +883,33 @@ def _load_recent_records_from_file(
     return keep
 
 
-def _load_shadow_records_from_file(path: Path) -> list[dict[str, Any]]:
-    """Read the tool-retrieval SHADOW rows from the JSONL sink.
+def _load_shadow_records_from_file(path: Path | list[Path]) -> list[dict[str, Any]]:
+    """Read the tool-retrieval SHADOW rows from the JSONL sink(s).
 
     Shadow rows carry ``record_type == _SHADOW_RECORD_TYPE`` and a
     ``visible_tools`` array (the would-be-visible set for that turn). Keyed for
-    recall@k by ``(session_id, turn_id)``. Returns an empty list when the file is
-    missing / unreadable.
+    recall@k by ``(session_id, turn_id)``. ``path`` is a single ``Path`` or a
+    list (retained-segments case); a missing/unreadable target is skipped.
     """
-    if not path.exists():
-        return []
+    targets = [path] if isinstance(path, Path) else list(path)
     out: list[dict[str, Any]] = []
-    try:
-        with path.open("r", encoding="utf-8") as fh:
-            for line in fh:
-                line = line.strip()
-                if not line:
-                    continue
-                try:
-                    rec = json.loads(line)
-                except json.JSONDecodeError:
-                    continue
-                if isinstance(rec, dict) and rec.get("record_type") == _SHADOW_RECORD_TYPE:
-                    out.append(rec)
-    except OSError:
-        return []
+    for target in targets:
+        if not target.exists():
+            continue
+        try:
+            with target.open("r", encoding="utf-8") as fh:
+                for line in fh:
+                    line = line.strip()
+                    if not line:
+                        continue
+                    try:
+                        rec = json.loads(line)
+                    except json.JSONDecodeError:
+                        continue
+                    if isinstance(rec, dict) and rec.get("record_type") == _SHADOW_RECORD_TYPE:
+                        out.append(rec)
+        except OSError:
+            continue
     return out
 
 
@@ -894,7 +922,7 @@ def _normalize_shadow_record(rec: dict[str, Any]) -> dict[str, Any]:
     vis = rec.get("visible_tools") or []
     try:
         visible = {str(t) for t in vis}
-    except Exception:  # noqa: BLE001 — a malformed row contributes an empty set
+    except Exception:  # noqa: BLE001 -- a malformed row contributes an empty set
         visible = set()
     return {
         "session_id": rec.get("session_id") or "",
@@ -1088,193 +1116,64 @@ def _empty_recall_at_k() -> dict[str, Any]:
     }
 
 
-async def _load_shadow_records_from_mongo(
-    persistence: Any,
-) -> list[dict[str, Any]]:
-    """Query the ``tool_call_telemetry`` collection for SHADOW rows via MCP.
-
-    Best-effort: any failure returns an empty list (recall@k then degrades to
-    the empty section / the file-backed shadow rows).
-    """
-    try:
-        from trid3nt_contracts.mongo_collections import TELEMETRY_COLLECTION
-        from .persistence import DEFAULT_DATABASE
-    except Exception:  # noqa: BLE001
-        return []
-    try:
-        raw = await persistence._mcp.call_tool(
-            "find",
-            {
-                "database": DEFAULT_DATABASE,
-                "collection": TELEMETRY_COLLECTION,
-                "filter": {"record_type": _SHADOW_RECORD_TYPE},
-                "sort": {"called_at_utc": -1},
-                "limit": 2000,
-            },
-        )
-    except Exception:  # noqa: BLE001 — never break the dashboard on MCP error
-        logger.warning("recall@k: shadow mongo find failed", exc_info=True)
-        return []
-    docs: Any = raw
-    if isinstance(raw, dict):
-        if "documents" in raw:
-            docs = raw["documents"]
-        elif "content" in raw and isinstance(raw["content"], list) and raw["content"]:
-            first = raw["content"][0]
-            if isinstance(first, dict) and isinstance(first.get("text"), str):
-                try:
-                    docs = json.loads(first["text"])
-                except json.JSONDecodeError:
-                    docs = []
-    if isinstance(docs, dict):
-        docs = [docs]
-    if not isinstance(docs, list):
-        return []
-    return [d for d in docs if isinstance(d, dict)]
-
-
-async def _load_recent_records_from_mongo(
-    persistence: Any,
-    *,
-    last_n_sessions: int = 30,
-) -> list[dict[str, Any]]:
-    """Query the ``tool_call_telemetry`` collection via the MCP client.
-
-    Best-effort: any failure falls back to an empty list so the dashboard
-    can still render the file-backed path or an empty state.
-    """
-    try:
-        from trid3nt_contracts.mongo_collections import TELEMETRY_COLLECTION
-        from .persistence import DEFAULT_DATABASE
-    except Exception:  # noqa: BLE001
-        return []
-    try:
-        # Fetch newest 2000 records, then narrow to the last N sessions.
-        # The cap keeps a runaway collection from stalling the dashboard.
-        raw = await persistence._mcp.call_tool(
-            "find",
-            {
-                "database": DEFAULT_DATABASE,
-                "collection": TELEMETRY_COLLECTION,
-                # Exclude tool-retrieval SHADOW rows -- they share this
-                # collection but are not tool-call dispatches (recall@k reads
-                # them via _load_shadow_records_from_mongo).
-                "filter": {"record_type": {"$ne": _SHADOW_RECORD_TYPE}},
-                "sort": {"called_at_utc": -1},
-                "limit": 2000,
-            },
-        )
-    except Exception:  # noqa: BLE001 — never break the dashboard on MCP error
-        logger.warning("telemetry summary: mongo find failed", exc_info=True)
-        return []
-    # Unwrap the MCP result envelope (mirrors Persistence._unwrap_mcp_result).
-    docs: Any = raw
-    if isinstance(raw, dict):
-        if "documents" in raw:
-            docs = raw["documents"]
-        elif "content" in raw and isinstance(raw["content"], list) and raw["content"]:
-            first = raw["content"][0]
-            if isinstance(first, dict) and isinstance(first.get("text"), str):
-                try:
-                    docs = json.loads(first["text"])
-                except json.JSONDecodeError:
-                    docs = []
-    if isinstance(docs, dict):
-        docs = [docs]
-    if not isinstance(docs, list):
-        return []
-    # Defensive: even if the $ne filter was a no-op on this MCP backend, never
-    # let a SHADOW row leak into the per-tool aggregation.
-    normalized = [
-        _normalize_record(d)
-        for d in docs
-        if isinstance(d, dict) and d.get("record_type") != _SHADOW_RECORD_TYPE
-    ]
-    # Constrain to last N sessions.
-    normalized.sort(key=lambda r: str(r.get("called_at_utc") or ""), reverse=True)
-    seen_sessions: list[str] = []
-    keep: list[dict[str, Any]] = []
-    for r in normalized:
-        sid = r.get("session_id") or ""
-        if sid and sid not in seen_sessions:
-            if len(seen_sessions) >= last_n_sessions:
-                break
-            seen_sessions.append(sid)
-        keep.append(r)
-    return keep
-
-
 async def build_telemetry_summary(
     *,
     last_n_sessions: int = 30,
+    all_segments: bool = False,
 ) -> dict[str, Any]:
     """Build the routing-quality summary served by /api/telemetry/summary.
 
-    Routing order:
-
-    1. If the Persistence singleton is bound, query the MongoDB
-       ``tool_call_telemetry`` collection via MCP. If that returns records,
-       we aggregate against them.
-    2. Otherwise (or on MCP failure / empty), fall back to the
-       ``/tmp/trid3nt_tool_call_telemetry.jsonl`` file written by the M3
-       file-backed path.
+    Telemetry is JSONL-only (the ``tool_call_telemetry`` Persistence-collection
+    route was cut). Reads the per-tool-call rows from the deliberately-retained,
+    session/boot-segmented sink (``telemetry.py`` item 2) and aggregates
+    against them: the CURRENT boot segment by default (``_get_telemetry_path``,
+    monkeypatchable for tests), or every retained segment when
+    ``all_segments=True`` (``telemetry.telemetry_read_paths``).
 
     Returns the empty-summary shape (all-zero counts) if nothing is found.
     """
-    persistence = None
-    try:
-        from .server import get_persistence as _server_get_persistence
-        persistence = _server_get_persistence()
-    except Exception:  # noqa: BLE001 — early-startup ImportError tolerated
-        persistence = None
+    if all_segments:
+        from trid3nt_server import telemetry as _telemetry
 
-    records: list[dict[str, Any]] = []
-    used_source = "empty"
-    if persistence is not None:
-        records = await _load_recent_records_from_mongo(
-            persistence, last_n_sessions=last_n_sessions
-        )
-        if records:
-            used_source = "mongo"
-    if not records:
-        records = _load_recent_records_from_file(
-            _get_telemetry_path(), last_n_sessions=last_n_sessions
-        )
-        if records:
-            used_source = "file"
+        read_targets: Path | list[Path] = [
+            Path(p) for p in _telemetry.telemetry_read_paths(all_segments=True)
+        ]
+    else:
+        read_targets = _get_telemetry_path()
+
+    records: list[dict[str, Any]] = _load_recent_records_from_file(
+        read_targets, last_n_sessions=last_n_sessions
+    )
+    used_source = "file" if records else "empty"
 
     summary = _aggregate_records(records)
     summary["source"] = used_source
 
     # Fold in the tool-retrieval SHADOW recall@k section (tool-retrieval kickoff).
-    # Load the would-be-visible shadow rows (mongo when bound, else the JSONL
-    # sink) and join them against the dispatched llm tools above by turn_id.
-    # Best-effort: a read/compute fault leaves the zero-state section seeded by
-    # _aggregate_records (never breaks the dashboard).
+    # The would-be-visible shadow rows share the SAME JSONL sink (tagged by
+    # record_type); load them and join against the dispatched llm tools above by
+    # turn_id. Best-effort: a read/compute fault leaves the zero-state section
+    # seeded by _aggregate_records (never breaks the dashboard).
     try:
-        shadow_records: list[dict[str, Any]] = []
-        if persistence is not None:
-            shadow_records = await _load_shadow_records_from_mongo(persistence)
-        if not shadow_records:
-            shadow_records = _load_shadow_records_from_file(_get_telemetry_path())
+        shadow_records = _load_shadow_records_from_file(read_targets)
         summary["recall_at_k"] = compute_recall_at_k(records, shadow_records)
-    except Exception:  # noqa: BLE001 — never break the dashboard on recall read
+    except Exception:  # noqa: BLE001 -- never break the dashboard on recall read
         logger.warning("telemetry summary: recall@k read failed", exc_info=True)
         summary["recall_at_k"] = _empty_recall_at_k()
 
-    # Fold in the live big-sim solve_telemetry section (NATE 2026-06-17). Read
+    # Fold in the live big-sim solve_telemetry section. Read
     # from the solve-telemetry JSONL the solve writer maintains; best-effort so
     # a missing/unreadable sink leaves the zero-state section _aggregate_records
-    # already seeded. Independent of the tool-call source above — solves are
+    # already seeded. Independent of the tool-call source above -- solves are
     # logged on their own sink.
     try:
         solve_records = _load_solve_records_from_file(_get_solve_telemetry_path())
         summary["solve_telemetry"] = _aggregate_solve_telemetry(solve_records)
-    except Exception:  # noqa: BLE001 — never break the dashboard on solve read
+    except Exception:  # noqa: BLE001 -- never break the dashboard on solve read
         logger.warning("telemetry summary: solve telemetry read failed", exc_info=True)
         summary["solve_telemetry"] = _empty_solve_telemetry()
 
-    # Fold in the PER-TURN per-model aggregates (LANE CORE 2026-07-22): turns,
+    # Fold in the PER-TURN per-model aggregates: turns,
     # mean token counts, mean wall ms, upstream_error_count per model_id. Read
     # from the turn-telemetry JSONL sink the server's turn loop writes
     # (telemetry.emit_turn_telemetry -- its own sink, like solve telemetry);
@@ -1285,7 +1184,7 @@ async def build_telemetry_summary(
         from .telemetry import build_turn_summary, load_turn_records
 
         summary["turns_by_model"] = build_turn_summary(load_turn_records())
-    except Exception:  # noqa: BLE001 — never break the dashboard on turn read
+    except Exception:  # noqa: BLE001 -- never break the dashboard on turn read
         logger.warning("telemetry summary: turn telemetry read failed", exc_info=True)
         from .telemetry import empty_turn_summary
 
@@ -1294,7 +1193,7 @@ async def build_telemetry_summary(
 
 
 # ---------------------------------------------------------------------------
-# Building click-to-enrich detail endpoint (NATE 2026-06-27).
+# Building click-to-enrich detail endpoint.
 #
 # The building footprint inline GeoJSON now carries ID-only props (osm_id /
 # osm_type / a composite fid). The full tag bag (building / height / levels /
@@ -1355,20 +1254,29 @@ def _read_tags_from_sidecars(fid: str) -> dict[str, Any] | None:
     try:
         import boto3
 
-        from .tools.cache import CACHE_BUCKET, cache_path
-        from .tools.fetchers.socioeconomic.fetch_buildings import BUILDINGS_TAGS_SIDECAR_EXT, _FETCH_BUILDINGS_METADATA
+        from .agent.tools.cache import CACHE_BUCKET, cache_path
+        # fetch_buildings folded to the router (ADR 0084): the sidecar identity
+        # (source_class / ttl / .tags.json ext) now lives in the promoted spec, not a
+        # coded twin. Read it from the spec, falling back to the load-bearing literals
+        # so a cold spec registry never breaks the enrich read.
+        from .agent.tools.fetchers._router.registration import get_spec
     except Exception:  # noqa: BLE001 -- import wiring fault -> live fallback
         logger.warning("building-detail: sidecar import wiring failed", exc_info=True)
         return None
 
+    _spec = get_spec("fetch_buildings")
+    if _spec is not None:
+        source_class = _spec.source_class
+        ttl_class = _spec.cache.ttl_class
+        sidecar_ext = str(((_spec.ingest or {}).get("sidecar_write") or {}).get("ext", "tags.json"))
+    else:
+        source_class, ttl_class, sidecar_ext = "buildings", "static-30d", "tags.json"
+
     bucket = os.environ.get("TRID3NT_CACHE_BUCKET") or CACHE_BUCKET
-    meta = _FETCH_BUILDINGS_METADATA
     # Derive the buildings/<...> prefix from cache_path with a placeholder key.
-    sentinel = cache_path(
-        meta.source_class, meta.ttl_class, "KEY", BUILDINGS_TAGS_SIDECAR_EXT
-    )
+    sentinel = cache_path(source_class, ttl_class, "KEY", sidecar_ext)
     prefix = sentinel.rsplit("KEY", 1)[0]  # cache/static-30d/buildings/
-    suffix = f".{BUILDINGS_TAGS_SIDECAR_EXT}"
+    suffix = f".{sidecar_ext}"
     try:
         s3 = boto3.client(
             "s3", region_name=os.environ.get("AWS_REGION", "us-west-2")
@@ -1456,13 +1364,15 @@ async def _handle_building_detail(query_string: str) -> bytes:
 
 
 # ---------------------------------------------------------------------------
-# /api/export-qgis -- user-driven QGIS case export (NATE 2026-07-06)
+# /api/export-qgis -- user-driven QGIS case export
 # ---------------------------------------------------------------------------
 #
 # Two routes back the web's per-case "Export to QGIS" kebab item:
-#   POST /api/export-qgis {"case_id": "..."}  -> run the export_case_to_qgis
-#     tool in-process; 200 with its result dict, typed tool errors -> 4xx
-#     with {"error": <honest message>} (never a traceback).
+#   POST /api/export-qgis {"case_id": "..."}  -> run hydrate_case_layers (the
+#     REMOTE-mode materialize fallback) in-process; 200 with its result dict,
+#     typed errors -> 4xx with {"error": <honest message>} (never a traceback).
+#     Wire-compatible with the installed field plugin; the local plugin restores
+#     a case's layers over the WS case-open replay, not an HTTP manifest fetch.
 #   GET  /api/export-qgis/file?path=<abs>     -> serve the produced .qgz/.gpkg
 #     bytes, ONLY when the resolved real path lives inside the export root
 #     (TRID3NT_EXPORT_DIR, default ~/trid3nt-exports) -- anything else is a
@@ -1482,20 +1392,21 @@ class _ExportQgisNotFound(Exception):
 
 
 def _export_qgis_fn():
-    """Lazy-import seam for the export tool (heavy geo deps load on first
-    call, not at listener start; monkeypatchable in tests)."""
-    from .tools.meta.export_case_to_qgis import export_case_to_qgis
+    """Lazy-import seam for the case-layer materializer (heavy geo deps load on
+    first call, not at listener start; monkeypatchable in tests)."""
+    from .cases.hydrate_case_layers import hydrate_case_layers
 
-    return export_case_to_qgis
+    return hydrate_case_layers
 
 
 async def _handle_export_qgis_post(raw_body: bytes) -> bytes:
     """Resolve the JSON body for ``POST /api/export-qgis``.
 
-    Validates ``{"case_id": "..."}``, awaits the ``export_case_to_qgis`` tool,
-    and returns its encoded result dict. Raises ``_ExportQgisBadRequest``
-    (-> 400) on malformed input; the tool's own typed ``ExportCaseError``
-    subclasses propagate for the dispatcher to map to honest 4xx bodies.
+    Validates ``{"case_id": "..."}``, awaits ``hydrate_case_layers`` (the
+    REMOTE-mode materialize fallback), and returns its encoded result dict.
+    Raises ``_ExportQgisBadRequest`` (-> 400) on malformed input; the
+    materializer's own typed ``HydrateCaseError`` subclasses propagate for the
+    dispatcher to map to honest 4xx bodies.
     """
     try:
         payload = json.loads(raw_body.decode("utf-8")) if raw_body.strip() else None
@@ -1513,6 +1424,7 @@ async def _handle_export_qgis_post(raw_body: bytes) -> bytes:
     return json.dumps(result, separators=(",", ":")).encode("utf-8")
 
 
+# ---------------------------------------------------------------------------
 class _ProviderConfigBadRequest(Exception):
     """POST /api/provider-config body was malformed. SECURITY: the message
     NEVER echoes the request body or the api_key -- only field-shape complaints
@@ -1560,7 +1472,7 @@ def _apply_provider_config(raw_body: bytes) -> bytes:
     # A same-name model must re-discover its num_ctx (the provider/num_ctx
     # switch invalidates the process-lifetime cache).
     try:
-        from .context_budget import reset_num_ctx_cache
+        from .agent.gates.context_budget import reset_num_ctx_cache
 
         reset_num_ctx_cache()
     except Exception:  # noqa: BLE001 -- cache reset is best-effort, never fatal
@@ -1576,7 +1488,7 @@ def _apply_provider_config(raw_body: bytes) -> bytes:
 
 def _export_qgis_root() -> Path:
     """The only directory the file route may serve from: the export tool's
-    output root (same default as ``export_case_to_qgis``)."""
+    output root (same default as ``hydrate_case_layers``)."""
     raw = os.environ.get("TRID3NT_EXPORT_DIR") or str(Path.home() / "trid3nt-exports")
     return Path(raw).expanduser().resolve()
 
@@ -1619,15 +1531,13 @@ def _resolve_export_qgis_file(query_string: str) -> tuple[Path, str]:
 
 
 # ---------------------------------------------------------------------------
-# /api/case-list -- cold (no WS session) case list for the QGIS local dock
-# (live-feedback 2026-07-09).
+# /api/case-list -- cold (no WS session) case list for the QGIS local dock.
 #
-# The QGIS plugin's Cases dialog previously could not show ANY cases until
-# the user pressed Connect, because the case-list envelope only ever arrives
-# over the WS session (``_emit_case_list`` in ``server.py``, sent on connect
-# + after every case mutation). This route mirrors that envelope's data +
-# user-scoping over plain HTTP so the dock can populate the dialog BEFORE a
-# WS connection exists.
+# The case-list envelope otherwise only arrives over the WS session
+# (``_emit_case_list`` in ``server.py``, sent on connect + after every case
+# mutation). This route mirrors that envelope's data + user-scoping over
+# plain HTTP so the dock can populate the dialog BEFORE a WS connection
+# exists.
 #
 # User scoping mirrors ``_emit_case_list``: the WS path resolves
 # ``state.authenticated_user_id or state.session_id`` from the live
@@ -1650,7 +1560,7 @@ class _CaseListPersistenceUnavailable(Exception):
 def _case_list_route_enabled() -> bool:
     """The route exists only under the local single-user seam (see above)."""
     try:
-        from .auth_handshake import _is_local_single_user_mode
+        from .credentials.auth_handshake import _is_local_single_user_mode
 
         return _is_local_single_user_mode()
     except Exception:  # noqa: BLE001 -- import fault -> route absent
@@ -1684,7 +1594,7 @@ async def build_case_list_payload() -> dict[str, Any]:
     (the dispatcher maps that to an honest 503) -- never a fabricated empty
     list.
     """
-    from .auth_handshake import LOCAL_SINGLE_USER_ID
+    from .credentials.auth_handshake import LOCAL_SINGLE_USER_ID
     from .server import get_persistence
 
     persistence = get_persistence()
@@ -1715,7 +1625,7 @@ async def build_case_list_payload() -> dict[str, Any]:
 #   POST /api/ingest-layer {"case_id", "name", "kind", "s3_uri",
 #     "crs_authid"?, "make_aoi"?}  -- registers an ALREADY-uploaded object
 #     (normally the s3_uri from the call above) onto the case. Runs the
-#     ingest_user_layer core (import_user_layer.py): validates the object
+#     ingest_user_layer core (cases/ingest_user_layer.py): validates the object
 #     exists + is within the size cap, converts/validates the artifact,
 #     merges it into the case's durable loaded_layer_summaries, and
 #     best-effort-pins the AOI when make_aoi is true.
@@ -1733,7 +1643,7 @@ def _ingest_layer_route_enabled() -> bool:
     """The routes exist only under the local single-user seam (mirrors
     ``_case_list_route_enabled``)."""
     try:
-        from .auth_handshake import _is_local_single_user_mode
+        from .credentials.auth_handshake import _is_local_single_user_mode
 
         return _is_local_single_user_mode()
     except Exception:  # noqa: BLE001 -- import fault -> route absent
@@ -1743,14 +1653,14 @@ def _ingest_layer_route_enabled() -> bool:
 def _ingest_layer_fn():
     """Lazy-import seam for the ingest core (heavy geo deps load on first
     call, not at listener start; monkeypatchable in tests)."""
-    from .tools.meta.import_user_layer import ingest_user_layer
+    from .cases.ingest_user_layer import ingest_user_layer
 
     return ingest_user_layer
 
 
 def _upload_layer_file_fn():
     """Lazy-import seam for the staging-upload helper (monkeypatchable)."""
-    from .tools.meta.import_user_layer import upload_layer_file
+    from .cases.ingest_user_layer import upload_layer_file
 
     return upload_layer_file
 
@@ -1829,7 +1739,7 @@ def _probe_point_route_enabled() -> bool:
     """The route exists only under the local single-user seam (mirrors
     ``_ingest_layer_route_enabled`` / ``_case_list_route_enabled``)."""
     try:
-        from .auth_handshake import _is_local_single_user_mode
+        from .credentials.auth_handshake import _is_local_single_user_mode
 
         return _is_local_single_user_mode()
     except Exception:  # noqa: BLE001 -- import fault -> route absent
@@ -1839,7 +1749,7 @@ def _probe_point_route_enabled() -> bool:
 def _probe_point_fn():
     """Lazy-import seam for the probe core (heavy geo deps load on first
     call, not at listener start; monkeypatchable in tests)."""
-    from .tools.meta.probe_point import probe_point_at
+    from .cases.probe_point import probe_point_at
 
     return probe_point_at
 
@@ -1898,7 +1808,7 @@ async def _handle_probe_point_post(raw_body: bytes) -> bytes:
 def _local_models_route_enabled() -> bool:
     """The route exists only for the OpenAI-compatible (local) provider."""
     try:
-        from .bedrock_adapter import model_provider
+        from .agent.adapters.bedrock_adapter import model_provider
 
         return model_provider() == "openai"
     except Exception:  # noqa: BLE001 -- import fault -> route absent
@@ -1997,7 +1907,7 @@ def _fetch_openrouter_models(base_url: str) -> bytes:
 
     import httpx
 
-    from .openai_adapter import openai_api_key
+    from .agent.adapters.openai_adapter import openai_api_key
 
     now = time.monotonic()
     cached = _OPENROUTER_MODELS_CACHE.get(base_url)
@@ -2117,7 +2027,7 @@ def _format_response(
     headers = {
         "Content-Type": content_type,
         "Content-Length": str(len(body)),
-        # CORS — see module docstring. POST is scoped to /api/export-qgis.
+        # CORS -- see module docstring. POST is scoped to /api/export-qgis.
         "Access-Control-Allow-Origin": "*",
         "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
         "Access-Control-Allow-Headers": "Content-Type",
@@ -2145,7 +2055,7 @@ async def _handle_http(
 ) -> None:
     """Handle one HTTP request.
 
-    The wire-protocol implementation is intentionally minimal — we only need
+    The wire-protocol implementation is intentionally minimal -- we only need
     to serve GET ``/api/tool-catalog`` and respond to CORS preflights. Any
     other path returns 404; any other method returns 405. Body is read until
     Content-Length OR end-of-stream so a stray POST doesn't hang.
@@ -2167,10 +2077,14 @@ async def _handle_http(
         writer.close()
         return
 
-    # Drain headers; the only one we consume is Content-Length (so the
-    # export-qgis POST body can be read), but the socket must be advanced past
-    # them before we close so the client sees our response cleanly.
+    # Drain headers; the ones we consume are Content-Length (so a POST body
+    # can be read) and Host (so /plugins/plugins.xml can build a download_url
+    # that matches the host:port the client actually dialed -- e.g. a
+    # tailnet client's daemon-host address, not a hardcoded 127.0.0.1). The
+    # socket must be advanced past the rest before we close so the client
+    # sees our response cleanly.
     content_length = 0
+    host_header = ""
     while True:
         try:
             line = await asyncio.wait_for(reader.readline(), timeout=5.0)
@@ -2179,11 +2093,14 @@ async def _handle_http(
         if not line or line == b"\r\n" or line == b"\n":
             break
         name, _, value = line.decode("latin-1", "replace").partition(":")
-        if name.strip().lower() == "content-length":
+        header_name = name.strip().lower()
+        if header_name == "content-length":
             try:
                 content_length = int(value.strip())
             except ValueError:
                 content_length = 0
+        elif header_name == "host":
+            host_header = value.strip()
 
     if method == "OPTIONS":
         # CORS preflight.
@@ -2195,8 +2112,8 @@ async def _handle_http(
     proxy_path, _, proxy_qs = path.partition("?")
 
     if method == "POST" and proxy_path == "/api/export-qgis":
-        # User-driven QGIS export (NATE 2026-07-06): run the
-        # export_case_to_qgis tool for a case_id. Typed tool errors map to
+        # User-driven QGIS export: run the
+        # hydrate_case_layers materialize for a case_id. Typed errors map to
         # honest 4xx {"error": message} bodies -- never a traceback.
         raw_body = b""
         if content_length > 0:
@@ -2206,7 +2123,7 @@ async def _handle_http(
                 )
             except (asyncio.TimeoutError, asyncio.IncompleteReadError):
                 raw_body = b""
-        from .tools.meta.export_case_to_qgis import CaseNotFoundError, ExportCaseError
+        from .cases.hydrate_case_layers import CaseNotFoundError, HydrateCaseError
 
         try:
             body = await _handle_export_qgis_post(raw_body)
@@ -2229,10 +2146,10 @@ async def _handle_http(
                     ),
                 )
             )
-        except ExportCaseError as exc:
-            # INVALID_INPUT / NO_EXPORTABLE_LAYERS / EXPORT_FAILED -- the
-            # tool's honest message, as a client error (the request was
-            # well-formed HTTP but the export cannot succeed).
+        except HydrateCaseError as exc:
+            # INVALID_INPUT / NO_EXPORTABLE_LAYERS / HYDRATE_FAILED -- the
+            # materializer's honest message, as a client error (the request was
+            # well-formed HTTP but the materialization cannot succeed).
             writer.write(
                 _format_response(
                     400,
@@ -2257,7 +2174,7 @@ async def _handle_http(
             await writer.drain()
             writer.close()
             return
-        from .tools.meta.import_user_layer import MAX_INGEST_BYTES
+        from .cases.ingest_user_layer import MAX_INGEST_BYTES
 
         if content_length <= 0:
             writer.write(
@@ -2283,7 +2200,7 @@ async def _handle_http(
             await writer.drain()
             writer.close()
             return
-        from .tools.meta.import_user_layer import ImportLayerError, ObjectTooLargeError
+        from .cases.ingest_user_layer import ImportLayerError, ObjectTooLargeError
 
         try:
             filename = _parse_ingest_layer_filename(proxy_qs)
@@ -2356,7 +2273,7 @@ async def _handle_http(
                 )
             except (asyncio.TimeoutError, asyncio.IncompleteReadError):
                 raw_body = b""
-        from .tools.meta.import_user_layer import CaseNotFoundError, ImportLayerError, ObjectNotFoundError
+        from .cases.ingest_user_layer import CaseNotFoundError, ImportLayerError, ObjectNotFoundError
 
         try:
             body = await _handle_ingest_layer_post(raw_body)
@@ -2415,7 +2332,7 @@ async def _handle_http(
                 )
             except (asyncio.TimeoutError, asyncio.IncompleteReadError):
                 raw_body = b""
-        from .tools.meta.probe_point import ProbePointCaseNotFoundError, ProbePointInputError
+        from .cases.probe_point import ProbePointCaseNotFoundError, ProbePointInputError
 
         try:
             body = await _handle_probe_point_post(raw_body)
@@ -2579,7 +2496,7 @@ async def _handle_http(
                     _format_response(500, b'{"error":"local models failed"}')
                 )
     elif proxy_path == "/api/building-detail":
-        # Click-to-enrich (NATE 2026-06-27): the building footprint inline
+        # Click-to-enrich: the building footprint inline
         # GeoJSON is now SLIM (id-only props). The popup fetches the full tag
         # bag on demand by (osm_type, osm_id) here. Cold/box-off friendly + off
         # the event loop (S3 + Overpass run via asyncio.to_thread).
@@ -2665,6 +2582,82 @@ async def _handle_http(
             writer.write(
                 _format_response(500, b'{"error":"export file serve failed"}')
             )
+    elif path == "/api/version":
+        # Daemon git sha + active model provider -- the version indicator the
+        # removed plugin-settings Update section wanted (see plugin_repo.py's
+        # module docstring). Cheap: one `git rev-parse` subprocess, off the
+        # event loop.
+        try:
+            from . import plugin_repo
+
+            payload = await asyncio.to_thread(plugin_repo.build_version_payload)
+            body = json.dumps(payload, separators=(",", ":")).encode("utf-8")
+            writer.write(_format_response(200, body))
+        except Exception:  # noqa: BLE001
+            logger.exception("version payload build failed")
+            writer.write(_format_response(500, b'{"error":"version lookup failed"}'))
+    elif proxy_path == "/plugins/plugins.xml":
+        # QGIS custom plugin repository index -- see plugin_repo.py for the
+        # zip-build + version-stamping story. download_url is built from the
+        # REQUEST's own Host header so a tailnet client's "Add repository"
+        # URL (http://<daemon-host>:8766/plugins/plugins.xml) round-trips to
+        # a reachable zip URL without a hardcoded host.
+        from . import plugin_repo
+
+        try:
+            host = host_header or (
+                f"127.0.0.1:{os.environ.get('TRID3NT_AGENT_HTTP_PORT', DEFAULT_HTTP_PORT)}"
+            )
+            download_url = f"http://{host}/plugins/{plugin_repo.PLUGIN_NAME}.zip"
+            body = await asyncio.to_thread(
+                plugin_repo.build_plugins_repo_xml, download_url
+            )
+            writer.write(
+                _format_response(200, body, content_type="text/xml; charset=utf-8")
+            )
+        except plugin_repo.PluginRepoBuildError as exc:
+            writer.write(
+                _format_response(
+                    503,
+                    json.dumps({"error": str(exc)}, separators=(",", ":")).encode(
+                        "utf-8"
+                    ),
+                )
+            )
+        except Exception:  # noqa: BLE001
+            logger.exception("plugins.xml build failed")
+            writer.write(
+                _format_response(500, b'{"error":"plugin repo index failed"}')
+            )
+    elif proxy_path == "/plugins/trid3nt.zip":
+        # The installable zip Plugin Manager downloads on install/update.
+        from . import plugin_repo
+
+        try:
+            info = await asyncio.to_thread(plugin_repo.ensure_plugin_zip)
+            data = await asyncio.to_thread(info["zip_path"].read_bytes)
+            writer.write(
+                _format_response(
+                    200,
+                    data,
+                    content_type="application/zip",
+                    extra_headers={
+                        "Content-Disposition": 'attachment; filename="trid3nt.zip"'
+                    },
+                )
+            )
+        except plugin_repo.PluginRepoBuildError as exc:
+            writer.write(
+                _format_response(
+                    503,
+                    json.dumps({"error": str(exc)}, separators=(",", ":")).encode(
+                        "utf-8"
+                    ),
+                )
+            )
+        except Exception:  # noqa: BLE001
+            logger.exception("plugin zip build/serve failed")
+            writer.write(_format_response(500, b'{"error":"plugin zip failed"}'))
     else:
         writer.write(_format_response(404, b'{"error":"not found"}'))
     await writer.drain()
@@ -2678,7 +2671,7 @@ async def serve_catalog_http(
     """Start the catalog HTTP listener and return the server handle.
 
     Designed to be mounted alongside the WebSocket server in
-    ``server.run_server`` — same asyncio loop, single process, no threads.
+    ``server.run_server`` -- same asyncio loop, single process, no threads.
 
     Reads ``TRID3NT_AGENT_HTTP_PORT`` if ``port`` is not passed (default
     ``DEFAULT_HTTP_PORT``).

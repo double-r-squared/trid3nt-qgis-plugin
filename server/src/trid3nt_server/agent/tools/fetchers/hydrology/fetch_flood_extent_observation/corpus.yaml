@@ -1,0 +1,7 @@
+fetch_flood_extent_observation:
+- satellite observed flood extent for this area
+- where was actually flooded according to satellite
+- observed inundation footprint to compare against my model
+- MODIS flood map for the recent flooding
+- benchmark flood extent raster to compute CSI against the model
+- get the observed flood extent so I can score my simulation

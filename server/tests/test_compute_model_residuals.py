@@ -53,8 +53,8 @@ from shapely.geometry import Point
 
 from trid3nt_contracts.execution import LayerURI
 
-from trid3nt_server.tools import TOOL_REGISTRY
-from trid3nt_server.tools.processing.compute_model_residuals import (
+from trid3nt_server.agent.tools import TOOL_REGISTRY
+from trid3nt_server.agent.tools.processing.compute_model_residuals.compute_model_residuals import (
     ModelResidualsLayerURI,
     ResidualsAllNodataError,
     ResidualsInputError,
@@ -389,16 +389,18 @@ def test_bbox_fetch_path(tmp_path, monkeypatch) -> None:
     with open(fgb_path, "rb") as f:
         fgb_bytes = f.read()
 
-    import trid3nt_server.tools.fetchers.hydrology.fetch_usgs_groundwater_levels as gw_mod
+    # fetch_usgs_groundwater_levels is spec-driven (ADR 0071); the composer resolves
+    # its FGB bytes via the router seam (get_spec + validate_params + executor), so
+    # mock the executor the re-point calls.
+    from trid3nt_server.agent.tools.fetchers._router import router as gw_router
 
     captured: dict = {}
 
-    def _fake_fetch(*, state_fips, bbox, scope_label):
-        captured["state_fips"] = state_fips
-        captured["bbox"] = bbox
-        return fgb_bytes, (lon - 0.01, lat - 0.01, lon + 0.01, lat + 0.01)
+    def _fake_exec(spec, params):
+        captured["bbox"] = tuple(params["bbox"])
+        return fgb_bytes
 
-    monkeypatch.setattr(gw_mod, "_fetch_usgs_groundwater_levels_bytes", _fake_fetch)
+    monkeypatch.setattr(gw_router, "select_executor", lambda spec: _fake_exec)
 
     bbox = (-120.0, 34.0, -119.0, 35.0)
     result = compute_model_residuals(
@@ -406,7 +408,6 @@ def test_bbox_fetch_path(tmp_path, monkeypatch) -> None:
     )
     assert result.n_points == 1
     assert result.mean_error == pytest.approx(4.0, abs=1e-3)
-    assert captured["state_fips"] is None
     assert captured["bbox"] == pytest.approx(bbox, abs=1e-5)
     assert any("fetch_usgs_groundwater_levels" in n for n in result.notes)
 
@@ -427,8 +428,8 @@ def test_bad_model_uri_raises(tmp_path) -> None:
 def test_category_and_corpus() -> None:
     import yaml
 
-    from trid3nt_server import categories
-    from trid3nt_server.tools.discovery import search_tools as dd
+    from trid3nt_server.agent import categories
+    from trid3nt_server.agent.tools.search.search_tools import search_tools as dd
 
     assert (
         categories.PRIMARY_CATEGORY["compute_model_residuals"]
@@ -437,13 +438,12 @@ def test_category_and_corpus() -> None:
     assert "hazard_modeling" in categories.SECONDARY_CATEGORIES.get(
         "compute_model_residuals", ()
     )
-    corpus_path = pathlib.Path(dd._default_corpus_path())
-    corpus = yaml.safe_load(corpus_path.read_text())
+    corpus = dd._load_corpus()
     assert len(corpus.get("compute_model_residuals", [])) >= 5
 
 
 def test_uri_registry_resolvable_params() -> None:
-    from trid3nt_server.uri_registry import RESOLVABLE_URI_PARAMS
+    from trid3nt_server.emission.uri_registry import RESOLVABLE_URI_PARAMS
 
     assert "model_layer_uri" in RESOLVABLE_URI_PARAMS
     assert "observations_layer_uri" in RESOLVABLE_URI_PARAMS

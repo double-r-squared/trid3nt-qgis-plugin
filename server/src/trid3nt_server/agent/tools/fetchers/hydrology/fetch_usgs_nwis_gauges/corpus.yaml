@@ -1,0 +1,9 @@
+fetch_usgs_nwis_gauges:
+- show me the USGS stream gauges in washington state
+- where are the river gauges near boise and what are they reading
+- give me the real observed discharge at the stream gages upstream of this town
+- map the active USGS water gauges in this bbox with their latest gage height
+- i need the actual instrument readings not the modeled flow, plot the NWIS gauging stations
+- pull the full discharge hydrograph at the gauges for the hurricane michael week as a river forcing
+- current cfs and stage at every active gage in florida from waterdata.usgs.gov
+- give me the last 7 days of streamflow time series at the gauges in this watershed

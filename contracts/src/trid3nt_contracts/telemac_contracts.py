@@ -24,8 +24,10 @@ from .execution import LayerURI
 __all__ = [
     "TELEMAC_DYE_STYLE_PRESET",
     "TELEMAC_BED_EVOLUTION_STYLE_PRESET",
+    "TELEMAC_WSE_STYLE_PRESET",
     "TelemacDyeLayerURI",
     "TelemacSedimentLayerURI",
+    "TelemacWseLayerURI",
 ]
 
 #: Style preset for the dye-concentration raster. A DISTINCT key (not the flood
@@ -45,6 +47,66 @@ TELEMAC_DYE_STYLE_PRESET: str = "continuous_dye_concentration"
 #: layer carries a data-driven ``legend`` so the mm-scale range renders (a fixed
 #: registry range would wash out mm deposition), additive/legend-drives-render.
 TELEMAC_BED_EVOLUTION_STYLE_PRESET: str = "diverging_bed_evolution"
+
+#: Style preset for the MAX FREE-SURFACE ELEVATION (WSE) raster -- the validation
+#: deliverable for the dam-break / river archetype (Malpasset). A DISTINCT
+#: continuous key so it renders on a sequential ramp (WSE decreases down-valley)
+#: and never collides with the dye/sediment presets in
+#: ``export_case_to_qgis._MESH_SIBLING_BY_STYLE_PRESET``. The layer carries a
+#: data-driven ``legend`` so the real WSE range renders (additive /
+#: legend-drives-render, same as the other TELEMAC layers).
+TELEMAC_WSE_STYLE_PRESET: str = "continuous_water_surface_elevation"
+
+
+class TelemacWseLayerURI(LayerURI):
+    """A ``LayerURI`` for a TELEMAC-2D peak (max-over-time) FREE-SURFACE raster.
+
+    The validation-case analogue of ``TelemacDyeLayerURI``: for a dam-break /
+    river solve, the deliverable that pairs against surveyed high-water marks is
+    the MAX water-surface ELEVATION reached at each wet node over the run (the
+    ``FREE SURFACE`` variable, masked to cells that were ever wet so dry terrain
+    is never mistaken for a water surface). Extends ``LayerURI`` field-for-field
+    (so it still maps onto ``map-command load-layer``) and adds the WSE scalars +
+    the honesty metadata a like-for-like WSE-vs-HWM pairing needs (Invariant 1 /
+    FR-AS-7):
+
+        wse_max_m: peak free-surface elevation anywhere/anytime over the run
+            (metres in the mesh's vertical datum, ``ge`` unconstrained since an
+            elevation may be negative for a below-datum bed) -- the headline
+            crest.
+        wse_peak_time_s: OPTIONAL simulated time (s from t0) of that peak
+            (``>= 0``). ``None`` when unavailable.
+        n_frames: OPTIONAL number of output frames the peak was taken over --
+            surfaced because a coarse-cadence result (e.g. the 2-frame TELEMAC
+            reference solution) can UNDER-estimate the transient crest; the agent
+            cites this so a low-cadence run is never read as a full peak envelope.
+        quantity: the physical quantity the raster carries -- always
+            ``"water_surface_elevation"`` (an ELEVATION above the vertical datum,
+            NOT a depth above ground). Also stamped as a raster TAG so
+            ``extract_model_at_observations`` resolves the model quantity from the
+            tag and pairs it like-for-like against a WSE observation.
+        vertical_datum: OPTIONAL vertical datum label for ``wse``/the raster (e.g.
+            ``"NGF"`` for Malpasset, ``"EGM2008"`` for a Copernicus-bed river
+            solve). Carried explicitly because ``LayerURI`` has no datum field and
+            NOTHING auto-derives it; a WSE-vs-HWM pairing needs the caller to know
+            it (else the pairing tool silently assumes a matching datum).
+        mesh_epsg: OPTIONAL EPSG the raster is written in (the mesh CRS). For a
+            bundled local-frame validation mesh this is a PLACEHOLDER projected
+            EPSG the coordinates are stamped with so both this raster and the
+            observation layer share one identical CRS (pairing is then an exact
+            identity, no reprojection distortion); ``fallback_note`` records the
+            local-frame caveat.
+
+    ``layer_type`` is ``"raster"`` (the peak-WSE COG). The raster uses the
+    ``continuous_water_surface_elevation`` style preset + a data-driven ``legend``.
+    """
+
+    wse_max_m: float
+    wse_peak_time_s: float | None = Field(default=None, ge=0.0)
+    n_frames: int | None = Field(default=None, ge=0)
+    quantity: str = "water_surface_elevation"
+    vertical_datum: str | None = Field(default=None)
+    mesh_epsg: int | None = Field(default=None, gt=0)
 
 
 class TelemacDyeLayerURI(LayerURI):

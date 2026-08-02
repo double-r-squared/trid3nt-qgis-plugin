@@ -29,9 +29,10 @@ import pytest
 
 from trid3nt_contracts.modflow_contracts import CaptureZoneLayerURI
 
-from trid3nt_server.tools import TOOL_REGISTRY
-from trid3nt_server.workflows import model_capture_zone_scenario as cz_mod
-from trid3nt_server.workflows.model_capture_zone_scenario import (
+from trid3nt_server.agent.tools import TOOL_REGISTRY
+from trid3nt_server.agent.workflows.modflow.capture_zone import capture_zone as cz_mod
+from trid3nt_server.agent.workflows.modflow.wellhead_protection import wellhead_protection as whpa_mod
+from trid3nt_server.agent.workflows.modflow.capture_zone.capture_zone import (
     CAPTURE_ZONE_DEFAULT_TIERS,
     WELLHEAD_PROTECTION_DEFAULT_TIERS,
     CaptureZoneInputError,
@@ -121,7 +122,7 @@ async def test_composer_full_chain_capture_zone(monkeypatch: pytest.MonkeyPatch)
         captured["run_args"] = run_args
         return fake_layer
 
-    import trid3nt_server.tools.simulation.run_modflow_archetype_tool as _tool
+    import trid3nt_server.agent.tools.simulation.modflow.run_modflow_archetype_tool as _tool
 
     monkeypatch.setattr(_tool, "run_modflow_archetype_job", _fake_run)
 
@@ -161,7 +162,7 @@ async def test_composer_full_chain_wellhead_protection(monkeypatch: pytest.Monke
         captured["run_args"] = run_args
         return fake_layer
 
-    import trid3nt_server.tools.simulation.run_modflow_archetype_tool as _tool
+    import trid3nt_server.agent.tools.simulation.modflow.run_modflow_archetype_tool as _tool
 
     monkeypatch.setattr(_tool, "run_modflow_archetype_job", _fake_run)
 
@@ -189,7 +190,7 @@ async def test_composer_surfaces_run_error_dict(monkeypatch: pytest.MonkeyPatch)
             "error_message": "PRT backward tracking produced no pathlines",
         }
 
-    import trid3nt_server.tools.simulation.run_modflow_archetype_tool as _tool
+    import trid3nt_server.agent.tools.simulation.modflow.run_modflow_archetype_tool as _tool
 
     monkeypatch.setattr(_tool, "run_modflow_archetype_job", _err_run)
 
@@ -221,7 +222,7 @@ async def test_composer_rejects_invalid_archetype() -> None:
 async def test_wrapper_missing_well_returns_user_input_required() -> None:
     """The LLM-facing wrapper maps a missing well to USER_INPUT_REQUIRED
     (Invariant 9: the tool never fabricates a well location)."""
-    out = await cz_mod.run_model_capture_zone_scenario(
+    out = await cz_mod.modflow_capture_zone(
         aoi_latlon=[26.64, -81.87],
         well_location_latlon=None,
     )
@@ -234,7 +235,7 @@ async def test_wrapper_missing_well_returns_user_input_required() -> None:
 async def test_whpa_wrapper_missing_well_returns_user_input_required() -> None:
     """The wellhead_protection LLM wrapper also maps a missing well to
     USER_INPUT_REQUIRED."""
-    out = await cz_mod.run_model_wellhead_protection_scenario(
+    out = await whpa_mod.modflow_wellhead_protection(
         aoi_latlon=[26.64, -81.87],
         well_location_latlon=None,
     )
@@ -248,20 +249,20 @@ async def test_whpa_wrapper_missing_well_returns_user_input_required() -> None:
 
 
 def test_capture_zone_registered_uncacheable() -> None:
-    import trid3nt_server.tools  # noqa: F401 - fires registration side-effects
+    import trid3nt_server.agent.tools  # noqa: F401 - fires registration side-effects
 
-    entry = TOOL_REGISTRY.get("run_model_capture_zone_scenario")
-    assert entry is not None, "run_model_capture_zone_scenario not in TOOL_REGISTRY"
+    entry = TOOL_REGISTRY.get("modflow_capture_zone")
+    assert entry is not None, "modflow_capture_zone not in TOOL_REGISTRY"
     assert entry.metadata.cacheable is False
     assert entry.metadata.ttl_class == "live-no-cache"
     assert entry.metadata.source_class == "workflow_dispatch"
 
 
 def test_wellhead_protection_registered_uncacheable() -> None:
-    import trid3nt_server.tools  # noqa: F401
+    import trid3nt_server.agent.tools  # noqa: F401
 
-    entry = TOOL_REGISTRY.get("run_model_wellhead_protection_scenario")
-    assert entry is not None, "run_model_wellhead_protection_scenario not in TOOL_REGISTRY"
+    entry = TOOL_REGISTRY.get("modflow_wellhead_protection")
+    assert entry is not None, "modflow_wellhead_protection not in TOOL_REGISTRY"
     assert entry.metadata.cacheable is False
     assert entry.metadata.ttl_class == "live-no-cache"
     assert entry.metadata.source_class == "workflow_dispatch"

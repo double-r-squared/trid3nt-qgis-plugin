@@ -21,8 +21,8 @@ import rasterio  # noqa: E402
 from rasterio.transform import from_bounds  # noqa: E402
 from rasterio.warp import Resampling  # noqa: E402
 
-from trid3nt_server.workflows import cog_io  # noqa: E402
-from trid3nt_server.workflows.cog_io import CogIoError  # noqa: E402
+from trid3nt_server.agent.workflows.shared import cog_io  # noqa: E402
+from trid3nt_server.agent.workflows.shared.cog_io import CogIoError  # noqa: E402
 
 
 # --------------------------------------------------------------------------- #
@@ -186,8 +186,8 @@ def test_upload_s3_uses_content_type_when_set(tmp_path: Path) -> None:
     cog.write_bytes(b"tiff")
     fake_client = MagicMock()
     with (
-        patch("trid3nt_server.tools.cache.storage_scheme", return_value="s3"),
-        patch("trid3nt_server.tools.simulation.solver._get_s3_client", return_value=fake_client),
+        patch("trid3nt_server.agent.tools.cache.storage_scheme", return_value="s3"),
+        patch("trid3nt_server.agent.tools.simulation.solver.solver._get_s3_client", return_value=fake_client),
     ):
         uri = cog_io.upload_cog(
             cog, "run1", "bkt", dest_filename="d.tif", content_type="image/tiff"
@@ -203,8 +203,8 @@ def test_upload_s3_omits_content_type_when_none(tmp_path: Path) -> None:
     cog.write_bytes(b"tiff")
     fake_client = MagicMock()
     with (
-        patch("trid3nt_server.tools.cache.storage_scheme", return_value="s3"),
-        patch("trid3nt_server.tools.simulation.solver._get_s3_client", return_value=fake_client),
+        patch("trid3nt_server.agent.tools.cache.storage_scheme", return_value="s3"),
+        patch("trid3nt_server.agent.tools.simulation.solver.solver._get_s3_client", return_value=fake_client),
     ):
         cog_io.upload_cog(
             cog, "run1", "bkt", dest_filename="d.tif", content_type=None
@@ -217,7 +217,7 @@ def test_upload_s3_missing_bucket_raises_upload(tmp_path: Path) -> None:
     cog = tmp_path / "x.tif"
     cog.write_bytes(b"tiff")
     with (
-        patch("trid3nt_server.tools.cache.storage_scheme", return_value="s3"),
+        patch("trid3nt_server.agent.tools.cache.storage_scheme", return_value="s3"),
         patch.dict("os.environ", {}, clear=False),
     ):
         # ensure no env bucket leaks in
@@ -233,8 +233,8 @@ def test_upload_s3_put_failure_raises_upload(tmp_path: Path) -> None:
     fake_client = MagicMock()
     fake_client.put_object.side_effect = RuntimeError("boom")
     with (
-        patch("trid3nt_server.tools.cache.storage_scheme", return_value="s3"),
-        patch("trid3nt_server.tools.simulation.solver._get_s3_client", return_value=fake_client),
+        patch("trid3nt_server.agent.tools.cache.storage_scheme", return_value="s3"),
+        patch("trid3nt_server.agent.tools.simulation.solver.solver._get_s3_client", return_value=fake_client),
     ):
         with pytest.raises(CogIoError) as ei:
             cog_io.upload_cog(cog, "r", "bkt", dest_filename="d.tif")
@@ -245,7 +245,7 @@ def test_upload_gs_no_bucket_with_fallback_returns_file_uri(tmp_path: Path) -> N
     cog = tmp_path / "x.tif"
     cog.write_bytes(b"tiff")
     with (
-        patch("trid3nt_server.tools.cache.storage_scheme", return_value="gs"),
+        patch("trid3nt_server.agent.tools.cache.storage_scheme", return_value="gs"),
         patch.dict("os.environ", {"TRID3NT_RUNS_BUCKET": ""}, clear=False),
     ):
         uri = cog_io.upload_cog(
@@ -263,7 +263,7 @@ def test_upload_non_s3_scheme_no_fallback_raises_typed(tmp_path: Path) -> None:
     path)."""
     cog = tmp_path / "x.tif"
     cog.write_bytes(b"tiff")
-    with patch("trid3nt_server.tools.cache.storage_scheme", return_value="gs"):
+    with patch("trid3nt_server.agent.tools.cache.storage_scheme", return_value="gs"):
         with pytest.raises(CogIoError) as ei:
             cog_io.upload_cog(
                 cog, "r", "bkt", dest_filename="d.tif",
@@ -277,7 +277,7 @@ def test_upload_non_s3_scheme_with_fallback_returns_file(tmp_path: Path) -> None
     no gs client is ever constructed, no failure needs to be simulated."""
     cog = tmp_path / "x.tif"
     cog.write_bytes(b"tiff")
-    with patch("trid3nt_server.tools.cache.storage_scheme", return_value="gs"):
+    with patch("trid3nt_server.agent.tools.cache.storage_scheme", return_value="gs"):
         uri = cog_io.upload_cog(
             cog, "r", "bkt", dest_filename="d.tif",
             gs_backend="fsspec", gs_fallback_to_file=True,

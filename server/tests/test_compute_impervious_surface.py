@@ -44,8 +44,8 @@ import rasterio
 from rasterio.io import MemoryFile
 from rasterio.transform import from_bounds
 
-from trid3nt_server.tools import TOOL_REGISTRY
-from trid3nt_server.tools.processing.compute_impervious_surface import (
+from trid3nt_server.agent.tools import TOOL_REGISTRY
+from trid3nt_server.agent.tools.processing.compute_impervious_surface.compute_impervious_surface import (
     DEVELOPED_CLASS_TO_IMPERVIOUS,
     ImperviousSurfaceError,
     _compute_impervious_bytes,
@@ -451,8 +451,8 @@ def test_compute_impervious_cache_miss_writes():
 
 def test_compute_impervious_cache_hit_skips_compute():
     """Second call hits the cache; source download is NOT invoked."""
-    from trid3nt_server.tools.cache import cache_path as make_cache_path
-    from trid3nt_server.tools.cache import compute_cache_key
+    from trid3nt_server.agent.tools.cache import cache_path as make_cache_path
+    from trid3nt_server.agent.tools.cache import compute_cache_key
 
     # Pre-seed cache with a known impervious bytes.
     array = np.full((2, 2), 22, dtype=np.uint8)
@@ -646,12 +646,13 @@ def test_live_compute_impervious_against_fort_myers_landcover():
         developed classes);
       - mean impervious fraction is < 1.0 (sanity: not all-developed).
     """
-    from trid3nt_server.tools.fetchers.terrain.fetch_landcover import fetch_landcover
+    # fetch_landcover is spec-driven (ADR 0082): resolve off the registry seam; it
+    # returns a LandcoverResult (a LayerURI subclass -- the layer IS the result).
+    from trid3nt_server.agent.tools import TOOL_REGISTRY
 
     # Small Fort Myers AOI (~few hundred km²).
     bbox = (-82.10, 26.55, -81.80, 26.80)
-    lc_result = fetch_landcover(bbox=bbox, dataset="nlcd_2021")
-    landcover_layer = lc_result["layer"]
+    landcover_layer = TOOL_REGISTRY["fetch_landcover"].fn(bbox=bbox, dataset="nlcd_2021")
     assert landcover_layer.uri.startswith("gs://")
 
     # Run the impervious tool against the cached landcover URI.

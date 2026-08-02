@@ -1,0 +1,8 @@
+compute_flood_depth_damage:
+- how much building damage does this flood cause
+- estimate dollar losses from the flood depth layer
+- which structures are damaged by the inundation and how badly
+- quick depth damage screening for the simulated flood
+- apply a HAZUS depth damage curve to the buildings here
+- total estimated flood damage in dollars for this scenario
+- rank buildings by flood damage fraction from this depth raster

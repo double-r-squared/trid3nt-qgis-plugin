@@ -30,10 +30,10 @@ from __future__ import annotations
 import pytest
 
 from trid3nt_server import server
-from trid3nt_server import tools as agent_tools
+from trid3nt_server.agent import tools as agent_tools
 from trid3nt_server.persistence import make_file_persistence
-from trid3nt_server.pipeline_emitter import current_emitter, substep, begin_substeps
-from trid3nt_server.tools import RegisteredTool
+from trid3nt_server.emission.pipeline_emitter import current_emitter, substep, begin_substeps
+from trid3nt_server.agent.tools import RegisteredTool
 from trid3nt_contracts.case import (
     CaseChatMessage,
     CaseCommandEnvelopePayload,

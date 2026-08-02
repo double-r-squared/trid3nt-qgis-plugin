@@ -1,0 +1,114 @@
+schema_version: v1
+name: fetch_3dep_extra
+source_class: 3dep_extra
+error_prefix: THREE_DEP_EXTRA
+input_error_suffix: INPUT_INVALID
+shape: raster-cog
+supports_global_query: false
+endpoints:
+  data:
+    url: https://tnmaccess.nationalmap.gov/
+auth:
+  mode: none
+  user_agent: trid3nt/0.1 (Hazard Modeling Agent; agent@trid3nt.dev)
+params:
+  bbox:
+    type: bbox
+    required: true
+    quantize: round_6dp
+  resolution:
+    type: enum
+    values:
+    - 1 arc-second
+    - 1/9 arc-second
+    - 1 meter
+    - 2 arc-second
+    - 5 meter
+    default: 1 arc-second
+  max_tiles:
+    type: int
+    default: 10
+    min: 1
+    max: 500
+ingest:
+  access: library_delegate
+  delegate:
+    library: pfdf
+    timeout_s: 120.0
+hooks:
+  delegate: pfdf_3dep.read
+  delegate_validate: pfdf_3dep.validate
+normalize:
+  crs: EPSG:4326
+  units: meters
+output:
+  layer_type: raster
+  ext: tif
+  role: input
+  style_preset: continuous_dem
+  auto_publish: false
+cache:
+  ttl_class: static-30d
+payload_estimate:
+  model: bbox_area
+  floor_mb: 0.05
+  mb_per_sq_deg_by_param:
+    param: resolution
+    map:
+      1 arc-second: 5.0
+      1/9 arc-second: 500.0
+      1 meter: 5000.0
+      2 arc-second: 1.0
+      5 meter: 200.0
+    default: 50.0
+caveats:
+- USGS 3DEP non-default DEM resolutions (1 arc-second, 1/9 arc-second, 1 m, 2 arc-second AK, 5 m AK) via
+  pfdf.data.usgs.tnm.dem (library-delegate; the library owns TNM discovery + the socket). US-only. A resolution
+  with no TNM products covering the bbox returns a typed empty error, never an empty raster.
+docstring: "Fetch a non-default 3DEP DEM resolution for a US bbox.\n\nWhat it does:\n    Pulls a USGS\
+  \ 3DEP elevation tile mosaic at one of five non-default\n    resolutions -- 1 arc-second (~30 m), 1/9\
+  \ arc-second (~3 m), 1 m,\n    2 arc-second (~60 m, AK only), or 5 m (AK only) -- through pfdf's\n \
+  \   ``tnm.dem.read`` wrapper, mosaics intersecting tiles, and saves\n    a single-band Cloud-Optimized\
+  \ GeoTIFF to the shared cache.\n\nWhen to use:\n    - User asks for elevation at a resolution that ``fetch_dem``\
+  \ does\n      NOT serve -- anything other than the 10 m / 30 m default. Common\n      patterns: \"I\
+  \ want 3-meter elevation\", \"give me the 1 m LiDAR DEM\",\n      \"elevation in Alaska at 5 m\".\n\
+  \    - Post-fire debris-flow workflow asks for the 1/9 arc-second\n      channel-scale DEM (pfdf's recommended\
+  \ path for stream\n      delineation in burn perimeters).\n    - High-resolution slope / aspect / hillshade\
+  \ derivatives over a\n      small bbox where the 1 m LiDAR mosaic is available.\n    - Alaska work where\
+  \ the standard 1/3 arc-second tile tree is\n      sparse -- fall back to 2 arc-second or 5 m.\n\nWhen\
+  \ NOT to use:\n    - DO NOT use for the default 10 m / 30 m DEM -- use ``fetch_dem``\n      (the canonical\
+  \ ``fetch_dem`` covers 1/3 arc-second and an\n      aliased 30 m via ``py3dep`` and is the right default).\n\
+  \    - DO NOT use outside the US -- 3DEP coverage is US-only; the\n      input validator raises ``ThreeDEPExtraInputError``\
+  \ for\n      out-of-US bboxes. Use ``fetch_dem`` with ``source=\"copernicus\"``\n      (or ``fetch_copernicus_dem``\
+  \ directly) for global coverage.\n    - DO NOT use for bathymetry -- 3DEP is a land-surface DEM.\n \
+  \   - DO NOT request 1 meter or 1/9 arc-second over a > ~10 km × 10 km\n      bbox without raising ``max_tiles``\
+  \ -- pfdf will refuse with a\n      ``ThreeDEPExtraInputError`` covering the tile-count limit.\n\nParameters:\n\
+  \    bbox: ``(min_lon, min_lat, max_lon, max_lat)`` in EPSG:4326.\n        4-float tuple, lon/lat ordered\
+  \ min-then-max. Must intersect\n        the US envelope ``(-180, 13, -65, 72)``. For 1 m / 1/9\n   \
+  \     arc-second keep the bbox small (≤0.05° on a side typical) -- larger bboxes hit ``max_tiles`` quickly.\
+  \ Example for Fort\n        Myers at 1 arc-second: ``(-82.0, 26.4, -81.7, 26.7)``.\n    resolution:\
+  \ One of:\n        - ``\"1 arc-second\"`` (default, ~30 m, CONUS+OUS)\n        - ``\"1/9 arc-second\"\
+  `` (~3 m, sparse CONUS LiDAR coverage)\n        - ``\"1 meter\"`` (UTM-zoned LiDAR; small bbox required)\n\
+  \        - ``\"2 arc-second\"`` (~60 m, Alaska only)\n        - ``\"5 meter\"`` (Alaska LiDAR mosaic).\n\
+  \    max_tiles: Maximum number of TNM tiles allowed to intersect\n        the bbox. Default 10 (pfdf's\
+  \ default). Range [1, 500] -- raise for larger 1 m / 1/9-arc-second mosaics; pfdf raises\n        if\
+  \ the live count exceeds this.\n    timeout_s: ScienceBase / TNM connect-and-read timeout in seconds.\n\
+  \        Defaults to 120. Multi-tile mosaics can take a while at high\n        resolution.\n\nReturns:\n\
+  \    ``LayerURI`` pointing at a single-band COG in the cache bucket\n    ``s3://trid3nt-cache/cache/static-30d/3dep_extra/<key>.tif``.\n\
+  \    ``layer_type=\"raster\"``, ``role=\"input\"``,\n    ``style_preset=\"continuous_dem\"``, ``units=\"\
+  meters\"`` (NAVD88 or\n    local vertical datum depending on the resolution path; for v0.1\n    we report\
+  \ ``meters`` and surface CRS-level metadata in the COG\n    header rather than the LayerURI). Downstream\
+  \ tools consume the\n    COG as elevation input for slope / aspect / hillshade / pfdf\n    debris-flow\
+  \ watershed delineation.\n\nCross-tool dependencies:\n    - Composes WITH: ``compute_slope`` / ``compute_aspect``\
+  \ /\n      ``compute_hillshade`` / ``compute_colored_relief`` (terrain\n      derivatives); ``clip_raster_to_polygon``\
+  \ (clip to a watershed\n      / burn perimeter); pfdf debris-flow workflows that depend on\n      the\
+  \ 1/9 arc-second channel DEM; ``publish_layer`` (render via\n      the ``continuous_dem`` QML).\n  \
+  \  - Sibling: ``fetch_dem`` -- the canonical 10 m / 30 m path. Use\n      fetch_dem unless you specifically\
+  \ need one of the five\n      resolutions in ``SUPPORTED_RESOLUTIONS``.\n    - Upstream source: USGS\
+  \ 3DEP TNM tile tree via\n      ``pfdf.data.usgs.tnm.dem``.\n\nCache: ``ttl_class=\"static-30d\"``,\
+  \ ``source_class=\"3dep_extra\"``.\n3DEP tiles are archival; the 30-day bucket amortizes well.\n\nErrors:\n\
+  \    - ``ThreeDEPExtraInputError``: bad bbox / unsupported resolution\n      / out-of-US bbox / too\
+  \ many tiles (retryable=False).\n    - ``ThreeDEPExtraUpstreamError``: TNM 5xx / network error / COG\n\
+  \      materialization failure (retryable=True).\n    - ``ThreeDEPExtraEmptyError``: resolution has\
+  \ no coverage in the\n      bbox (1 m / 1/9 arc-second outside LiDAR project footprints,\n      2 arc-second\
+  \ / 5 m outside Alaska) (retryable=False).\n\nTier-1 free. No API key. ``supports_global_query=False``."

@@ -1,0 +1,7 @@
+set_telemac_parameters:
+- change the bottom friction coefficient in the telemac model
+- adjust the Strickler coefficient for the river hydraulic model
+- set the telemac friction law to Manning
+- calibrate the roughness of the 2D hydraulic model deck
+- lower the friction in the telemac simulation and prepare a re-run
+- tune the telemac deck friction before rerunning the dam break

@@ -1,0 +1,7 @@
+fetch_goes_active_fire:
+- where is the active fire in this AOI right now from GOES
+- detect the active-fire hot pixels with the GOES split-window discriminator
+- run the Matson-Dozier C07-vs-C13 active-fire detector over this bbox
+- give me a transparent GOES hotspot overlay of genuine active fire, not warm land
+- flag the burning pixels in this scene from raw GOES ABI brightness temperatures
+- show GOES active fire detections as a hot-pixel raster I can lay over a basemap

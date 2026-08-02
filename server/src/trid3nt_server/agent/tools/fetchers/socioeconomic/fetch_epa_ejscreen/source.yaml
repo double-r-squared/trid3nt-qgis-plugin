@@ -1,0 +1,167 @@
+# Router source spec (data-router fold, phase-2 wave-6 VECTOR/ZIP family, ADR 0052).
+# Twin: fetch_epa_ejscreen.py (was SPEC-EXPRESSIBLE; wave-2 deferred it for lack of
+# an esri-json ingest mode). Uses the NEW esri_json mode (f=json + JSON-envelope
+# geometry + in-process ring decode) + declarative percentile/fraction/raw column
+# kinds + from_param value-field routing + a case-insensitive (lowercase) enum.
+schema_version: v1
+
+name: fetch_epa_ejscreen
+source_class: epa_ejscreen                  # cache prefix == error prefix
+input_error_suffix: INPUT_INVALID           # EPA_EJScreenInputError -> EPA_EJSCREEN_INPUT_INVALID
+shape: vector-fgb
+supports_global_query: false                # county-or-smaller extent, bbox required
+
+endpoints:
+  data:
+    url: "https://services2.arcgis.com/FiaPA4ga0iQKduv3/arcgis/rest/services/EPA_EJ_Screen/FeatureServer/0/query"
+auth:
+  mode: none
+  user_agent: "trid3nt/0.1 (Hazard Modeling Agent; https://github.com/double-r-squared/trid3nt-qgis-plugin; agent@trid3nt.dev)"
+
+params:
+  bbox: {type: bbox, required: true, quantize: round_6dp}
+  indicator:
+    type: enum
+    required: false
+    default: pm25
+    lowercase: true                         # case-insensitive; echoes the normalized key
+    values: [pm25, ozone, diesel, dslpm, cancer, resp, respiratory, traffic, ptraf,
+             lead_paint, lead, ldpnt, pre1960, superfund_proximity, superfund, npl, pnpl,
+             rmp_proximity, rmp, prmp, tsdf_proximity, tsdf, ptsdf, wastewater, water, pwdis,
+             demographic_index, demographic, minority, p_minorpct,
+             ej_pm25, ej_ozone, ej_diesel, ej_resp, ej_traffic, ej_lead_paint, ej_superfund,
+             ej_rmp, ej_tsdf, ej_wastewater]
+gates:
+  max_features: 30000
+
+ingest:
+  esri_json: true                            # f=json layer; decode esri rings in-process
+  geometry_envelope: json                    # JSON envelope object (hosted service rejects comma form)
+  query_template:
+    out_fields: "*"
+    f: json
+  pagination: {mode: result_offset, page_size: 2000}
+  column_map:                                # projected in twin _OUTPUT_COLS order
+    bg_id:             {from: ID}
+    state_name:        {from: STATE_NAME}
+    total_pop:         {from: ACSTOTPOP, kind: int, null_below: -999.0}
+    indicator:         {kind: param, param: indicator}
+    value:             {kind: percentile, from_param: {param: indicator, map: {
+                          pm25: P_PM25, ozone: P_OZONE, diesel: P_DSLPM, dslpm: P_DSLPM,
+                          cancer: P_CANCER, resp: P_RESP, respiratory: P_RESP, traffic: P_PTRAF,
+                          ptraf: P_PTRAF, lead_paint: P_LDPNT, lead: P_LDPNT, ldpnt: P_LDPNT,
+                          pre1960: P_LDPNT, superfund_proximity: P_PNPL, superfund: P_PNPL,
+                          npl: P_PNPL, pnpl: P_PNPL, rmp_proximity: P_PRMP, rmp: P_PRMP,
+                          prmp: P_PRMP, tsdf_proximity: P_PTSDF, tsdf: P_PTSDF, ptsdf: P_PTSDF,
+                          wastewater: P_PWDIS, water: P_PWDIS, pwdis: P_PWDIS,
+                          demographic_index: P_MINORPCT, demographic: P_MINORPCT,
+                          minority: P_MINORPCT, p_minorpct: P_MINORPCT,
+                          ej_pm25: P_PM25_D2, ej_ozone: P_OZONE_D2, ej_diesel: P_DSLPM_D2,
+                          ej_resp: P_RESP_D2, ej_traffic: P_PTRAF_D2, ej_lead_paint: P_LDPNT_D2,
+                          ej_superfund: P_PNPL_D2, ej_rmp: P_PRMP_D2, ej_tsdf: P_PTSDF_D2,
+                          ej_wastewater: P_PWDIS_D2}}}
+    p_pm25:            {from: P_PM25, kind: percentile}
+    p_ozone:           {from: P_OZONE, kind: percentile}
+    p_diesel:          {from: P_DSLPM, kind: percentile}
+    p_resp:            {from: P_RESP, kind: percentile}
+    p_traffic:         {from: P_PTRAF, kind: percentile}
+    p_lead_paint:      {from: P_LDPNT, kind: percentile}
+    p_superfund:       {from: P_PNPL, kind: percentile}
+    p_rmp:             {from: P_PRMP, kind: percentile}
+    p_tsdf:            {from: P_PTSDF, kind: percentile}
+    p_wastewater:      {from: P_PWDIS, kind: percentile}
+    p_minority:        {from: P_MINORPCT, kind: percentile}
+    minority_pct:      {from: MINORPCT, kind: fraction}
+    lowincome_pct:     {from: LOWINCPCT, kind: fraction}
+    demographic_index: {from: VULEOPCT, kind: fraction}
+    pm25_raw:          {from: PM25, kind: raw}
+    ozone_raw:         {from: OZONE, kind: raw}
+
+normalize:
+  crs: "EPSG:4326"
+  units: percentile
+
+output:
+  layer_type: vector
+  ext: fgb
+  role: primary
+  style_preset: "epa_ejscreen"
+  emit_bbox: true
+
+cache:
+  ttl_class: static-30d
+payload_estimate:                            # twin: area*4.0 clamp[0.02,90]
+  model: bbox_area
+  mb_per_sq_deg: 4.0
+  floor_mb: 0.02
+
+caveats:
+  - "EPA EJScreen 2.x block-group environmental-justice percentiles; US-only, county-or-smaller bbox"
+  - "empty bbox (ocean / outside US) -> header-only FGB (honest-empty), never EPA_EJSCREEN_EMPTY by default"
+fallback: []
+
+docstring: |-
+  EPA EJScreen environmental-justice indices by census block group.
+
+  Fetches U.S. census-block-group polygons intersecting a bbox from the
+  preserved national EJScreen 2.x FeatureServer and returns a FlatGeobuf
+  choropleth. The ``indicator`` parameter selects which EJScreen percentile
+  fills the primary ``value`` column (PM2.5, ozone, diesel PM, respiratory
+  hazard, traffic proximity, lead-paint, Superfund/RMP/TSDF proximity, water
+  dischargers, or a demographic / EJ-index rollup). Every feature also carries
+  the full percentile panel + demographic context, so one fetch supports
+  re-styling and cumulative-exposure narration without a re-fetch.
+
+  **When to use:**
+  - User asks for EJScreen, environmental justice, cumulative environmental
+    burden / exposure, or "which block groups have the worst PM2.5 / ozone /
+    traffic / Superfund proximity".
+  - Agent needs an environmental-burden surface to pair with ``fetch_cdc_svi``
+    (social vulnerability) + ``fetch_epa_frs_facilities`` (the facilities).
+
+  **When NOT to use:**
+  - For the 16-factor social-vulnerability index -> ``fetch_cdc_svi``.
+  - For the regulated-facility POINTS -> ``fetch_epa_frs_facilities``.
+  - For raw ACS demographic counts -> ``fetch_census_acs``.
+  - For areas outside the United States -> EJScreen is U.S.-only; an empty FGB
+    is returned for non-U.S. bboxes.
+
+  **Parameters:**
+      bbox: ``(min_lon, min_lat, max_lon, max_lat)`` in EPSG:4326. Required.
+          ``supports_global_query=False`` -- use a county-or-smaller extent.
+          Example urban Houston Ship Channel: ``(-95.30, 29.68, -95.05, 29.80)``.
+      indicator: which EJScreen index drives the ``value`` choropleth column.
+          Default ``"pm25"``. Aliases accepted (case-insensitive): ``ozone``,
+          ``diesel``, ``resp``, ``traffic``, ``lead_paint``,
+          ``superfund_proximity``, ``rmp_proximity``, ``tsdf_proximity``,
+          ``wastewater``, ``demographic_index``, or an ``ej_*`` rollup.
+
+  **Returns:**
+      ``LayerURI`` -> FlatGeobuf in the cache bucket. Each feature is a Polygon
+      (block group) in EPSG:4326. Properties: ``bg_id`` (str, 12-digit GEOID),
+      ``state_name`` (str), ``total_pop`` (int|null), ``indicator`` (str),
+      ``value`` (float|null, selected percentile [0,100]), the percentile panel
+      ``p_pm25``/``p_ozone``/``p_diesel``/``p_resp``/``p_traffic``/
+      ``p_lead_paint``/``p_superfund``/``p_rmp``/``p_tsdf``/``p_wastewater``/
+      ``p_minority`` (float|null [0,100]), ``minority_pct``/``lowincome_pct``/
+      ``demographic_index`` (float|null [0,1]), ``pm25_raw``/``ozone_raw``
+      (float|null). ``layer_type="vector"``, ``role="primary"``,
+      ``style_preset="epa_ejscreen"``, ``units="percentile"``.
+
+  **Cross-tool dependencies:**
+      - Combine WITH ``fetch_cdc_svi`` + ``fetch_epa_frs_facilities`` for
+        cumulative environmental-justice exposure.
+      - Feeds ``spatial_query`` to find the most-burdened block groups
+        inside a hazard footprint.
+
+  **Error types:**
+      - ``EPA_EJScreenInputError``: bad bbox or unknown indicator
+        (retryable=False).
+      - ``EPA_EJScreenUpstreamError``: HTTP/network failure, ArcGIS error
+        envelope, or FlatGeobuf serialization failure (retryable=True).
+      - ``EPA_EJScreenEmptyError``: no block groups in bbox (retryable=False;
+        not raised by default -- an empty FGB is returned instead).
+
+  Cache: ``ttl_class="static-30d"``, ``source_class="epa_ejscreen"``. Cache key
+  is SHA-256 of the bbox (6 dp) + indicator. ``supports_global_query=False``.
+  No API key required.

@@ -190,7 +190,7 @@ Two more tools are key-gated but surface it as a sweep `FAIL` further downstream
 | `run_model_conservation_priority` | PASS | 2 |  |
 | `run_model_contamination_affected_fields` | FAIL | 0 | ContaminationAffectedFieldsConfirmationDeniedError: MODFLOW run not started: the parameter |
 | `run_model_flood_habitat_scenario` | PASS | 50 |  |
-| `run_model_flood_scenario` | PASS | 42 |  |
+| `sfincs_flood` (was `run_model_flood_scenario`; SFINCS engine template, door `run_sfincs`) | PASS | 42 |  |
 | `run_model_glm_lightning_animation` | PASS | 702 |  |
 | `run_model_goes_fire_animation` | FAIL | 191 | GOESFireAnimEmptyError: GOES SLIDER frames were available for goes-18/conus over 2026-07-0 |
 | `run_model_groundwater_contamination_scenario` | FAIL | 1 | ConfirmationDeniedError: MODFLOW run not started: the parameter-confirmation gate was not |
@@ -207,12 +207,12 @@ Two more tools are key-gated but surface it as a sweep `FAIL` further downstream
 | `run_model_wellhead_protection_scenario` | PASS | 0 |  |
 | `run_model_wetland_hydroperiod_scenario` | PASS | 0 |  |
 | `run_modflow_job` | PASS | 0 |  |
-| `run_pelicun_damage_assessment` | FAIL | 33 | PelicunNoAssetsError: No assets intersect the hazard raster footprint. Check that the asse |
-| `run_pelicun_with_buildings` | FAIL | 0 | PelicunWithBuildingsError: pelicun_damage_with_buildings: density->points conversion failed |
+| `pelicun_damage_assessment` (was `run_pelicun_damage_assessment`; Pelicun engine template, door `run_pelicun`) | FAIL | 33 | PelicunNoAssetsError: No assets intersect the hazard raster footprint. Check that the asse |
+| `pelicun_damage_with_buildings` (was `run_pelicun_with_buildings`; Pelicun engine template, door `run_pelicun`) | FAIL | 0 | PelicunWithBuildingsError: pelicun_damage_with_buildings: density->points conversion failed |
 | `run_river_seepage_job` | PASS | 0 |  |
-| `run_seismic_hazard_psha` | PASS | 41 |  |
+| `openquake_psha` (was `run_seismic_hazard_psha`; OpenQuake engine template, door `run_openquake`) | PASS | 41 |  |
 | `run_solver` | SKIP-ARGS | 0 | required params not fabricatable: ['solver', 'model_setup_uri'] |
-| `run_swan_waves` | PASS | 41 |  |
+| `swan_wave_field` (was `run_swan_waves`; SWAN engine template, door `run_swan`) | PASS | 41 |  |
 | `run_swmm_urban_flood` | FAIL | 1500 |  |
 | `summarize_layer_statistics` | PASS | 1 |  |
 | `wait_for_completion` | SKIP-ARGS | 0 | required params not fabricatable: ['handle'] |

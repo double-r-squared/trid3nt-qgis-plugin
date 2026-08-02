@@ -1,0 +1,192 @@
+# Router source spec (movebank finish wave, keyed http_json CSV + composite Basic-Auth, ADR 0077).
+# Twin: fetch_movebank_tracks.py -- Movebank direct-read animal tracking, keyed.
+# build_request resolves (user,pass) -> Authorization: Basic header (resolver blob path);
+# parse_response parses the direct-read CSV into per-geometry_type features (conservative
+# bbox clip); classify_status splits 401->AUTH / 403->LICENSE / 4xx->INPUT.
+schema_version: v1
+name: fetch_movebank_tracks
+source_class: movebank
+error_prefix: MOVEBANK
+shape: vector-fgb
+supports_global_query: false
+endpoints:
+  data:
+    url: https://www.movebank.org/movebank/service/direct-read
+auth:
+  mode: none
+  user_agent: trid3nt/0.1 (Hazard Modeling Agent; https://github.com/double-r-squared/trid3nt-qgis-plugin;
+    agent@trid3nt.dev)
+params:
+  study_id:
+    type: int
+    required: true
+    min: 1
+  bbox:
+    type: bbox
+    schema_optional: true
+    quantize: round_6dp
+  username:
+    type: str
+    schema_optional: true
+  password:
+    type: str
+    schema_optional: true
+  secret_ref:
+    type: str
+    schema_optional: true
+  sensor_type_id:
+    type: int
+    schema_optional: true
+    min: 1
+  time_range:
+    type: datetime_range
+    schema_optional: true
+  max_records:
+    type: int
+    default: 500000
+    min: 1
+    max: 1000000
+  geometry_type:
+    type: enum
+    values:
+    - linestring
+    - point
+    default: linestring
+hooks:
+  build_request: movebank_tracks.build_request
+  parse_response: movebank_tracks.parse_response
+  classify_status: movebank_tracks.classify_status
+ingest:
+  properties_by_param:
+    param: geometry_type
+    map:
+      linestring:
+      - individual_id
+      - n_points
+      - first_timestamp
+      - last_timestamp
+      - study_id
+      point:
+      - individual_id
+      - timestamp
+      - sensor_type_id
+      - study_id
+normalize:
+  crs: EPSG:4326
+output:
+  layer_type: vector
+  ext: fgb
+  role: context
+  style_preset: movebank_tracks
+  emit_bbox: false
+cache:
+  ttl_class: static-30d
+payload_estimate:
+  model: per_feature
+  features_per_sq_deg: 200.0
+  kb_per_feature: 0.5
+  floor_mb: 0.01
+caveats:
+- Movebank Tier-2 animal-tracking (linestring per individual or point per fix), keyed with COMPOSITE Basic-Auth
+  creds (username+password -> 'user:pass' secret_ref -> TRID3NT_MOVEBANK_USER + TRID3NT_MOVEBANK_PASSWORD
+  env). No creds -> a credential-shaped MOVEBANK_INPUT_ERROR pre-network; 401 -> MOVEBANK_AUTH_ERROR;
+  403 / HTML licence page -> MOVEBANK_LICENSE_ERROR. bbox clip is client-side + conservative for linestrings
+  (whole track must be in-bbox).
+corpus:
+- show me migration tracks for sandhill cranes over this wildfire area
+- give me sea turtle telemetry paths near this storm surge zone
+- I need animal movement trajectories for this wildlife corridor analysis
+- show me Movebank tracks for whooping cranes crossing this region
+- fetch GPS tracks for this mammal species over the flood footprint
+- I want elephant movement paths layered over this flood-risk surface
+- show me bird migration corridors through this proposed wind-farm area
+docstring: |-
+  Movebank Tier-2 animal-tracking trajectory fetcher.
+
+  Use this when: the agent needs animal-tracking telemetry (bird migration,
+  mammal movement, marine megafauna) for ecological or hazard overlay -- e.g.
+  overlaying sandhill crane migration corridors on a wildfire footprint,
+  plotting elephant movement against flood-risk surfaces, or visualizing
+  sea turtle tracks against coastal storm surge. Returns either FlatGeobuf
+  LineStrings (one per individual, vertices ordered by timestamp; default)
+  or Points (one per telemetry fix).
+
+  Do NOT use this for: occurrence points without tracking continuity (use
+  ``fetch_gbif_occurrences`` or ``fetch_inaturalist_observations`` -- Movebank tracks are temporally ordered movement traces, not static
+  sighting points), live-streaming telemetry (Movebank's API is
+  near-real-time but caches batches; for sub-minute live feeds use the
+  publisher's own SCADA), or species-range polygons (use IUCN Red List
+  range maps instead).
+
+  Wraps the Movebank REST API (https://www.movebank.org/movebank/service/direct-read).
+  Authentication is **always required** -- Movebank rejects unauthenticated
+  requests. Most studies further require accepting per-study Data Use
+  Statements on movebank.org BEFORE the API serves data; on first access
+  of a new study the tool surfaces ``MovebankLicenseError`` with the
+  licence-acceptance hint.
+
+  Credentials are resolved in priority order:
+  1. Explicit ``username`` + ``password`` kwargs.
+  2. ``secret_ref`` (a ``SecretRecord``) -- vault payload may be
+     ``"user:pass"`` (colon-separated) OR a JSON ``{"username": "...",
+     "password": "..."}``.
+  3. ``TRID3NT_MOVEBANK_USER`` + ``TRID3NT_MOVEBANK_PASSWORD`` env vars
+     (local dev / CI live-test gate).
+
+  Bbox filtering happens **client-side** after the fetch -- Movebank does not
+  reliably bbox-filter server-side, so the full study record set is pulled
+  then trimmed. For linestrings the filter is conservative: ALL vertices of
+  an individual's track must lie within the bbox or the individual is
+  dropped (avoids truncated/broken tracks).
+
+  Params:
+      study_id: Movebank ``study_id`` (int). Example: ``1259686571`` is the
+          "Sandhill Crane: Bismarck-Hettinger-Mandan" public study.
+      bbox: optional ``(west, south, east, north)`` in EPSG:4326. ``None``
+          returns the entire study record set.
+      username: explicit Movebank account username. See credential
+          resolution priority above.
+      password: explicit Movebank account password.
+      secret_ref: a ``SecretRecord`` whose vault payload carries the
+          credentials. Looked up via ``Persistence.get_secret_value``.
+      sensor_type_id: optional Movebank ``sensor_type_id`` int (e.g.
+          653 = "GPS"). ``None`` returns every sensor type.
+      time_range: optional ``(start, end)`` ``datetime`` pair filtering on
+          the event timestamp. Inclusive on both ends. Timezone-aware
+          datetimes are converted to UTC; naive datetimes assumed UTC.
+      max_records: cap on records pulled from Movebank before serialization
+          (default 500_000, hard cap 1_000_000). Beyond this the result
+          FlatGeobuf is truncated, NOT an error.
+      geometry_type: ``"linestring"`` (default -- one feature per individual)
+          or ``"point"`` (one feature per telemetry fix).
+
+  Returns:
+      A ``LayerURI`` pointing at a FlatGeobuf in the cache bucket:
+      ``s3://trid3nt-cache/cache/static-30d/movebank/<key>.fgb``
+      containing the tracks/points clipped to the requested bbox (if any),
+      in EPSG:4326. ``layer_type="vector"``, ``role="context"``,
+      ``units=None``, ``style_preset="movebank_tracks"``.
+
+  Output schema:
+      geometry_type="linestring":
+          individual_id    (str)
+          n_points         (int)
+          first_timestamp  (str ISO-8601)
+          last_timestamp   (str ISO-8601)
+          study_id         (int)
+      geometry_type="point":
+          individual_id    (str)
+          timestamp        (str ISO-8601)
+          sensor_type_id   (int | null)
+          study_id         (int)
+
+  FR-CE-8: Routed through ``read_through`` so identical
+  ``(study_id, bbox, username, sensor_type_id, time_range, max_records,
+  geometry_type)`` calls reuse the cached FlatGeobuf. Cache key includes the
+  username because Movebank access varies per account licence acceptance.
+
+  Errors:
+      MovebankInputError -- bad bbox, missing credentials, bad params (retryable=False)
+      MovebankAuthError -- Movebank rejected credentials (401, retryable=False)
+      MovebankLicenseError -- account has not accepted study's Data Use Statement (403, retryable=False)
+      MovebankUpstreamError -- 5xx / network / malformed response (retryable=True)

@@ -1,0 +1,10 @@
+# TEMPLATE tier (engine-door refactor): phrasings for modflow_saltwater_intrusion. NOT merged
+# into the main retrieval index (templates are excluded from the default
+# pool); the run_modflow door surfaces this template via gate expansion.
+# Carried verbatim from the migrated run_model_saltwater_intrusion_scenario corpus entries.
+modflow_saltwater_intrusion:
+- saltwater intrusion under coastal pumping
+- how far inland does the salt wedge move
+- sea level rise saltwater wedge simulation
+- coastal aquifer salinity intrusion scenario
+- will the supply well turn salty if we keep pumping

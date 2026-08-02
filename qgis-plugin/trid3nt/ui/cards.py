@@ -186,7 +186,7 @@ _CODE_PREVIEW_STYLE = (
 
 def _html_escape(text: str) -> str:
     """Minimal HTML escape for server-sourced strings interpolated into a
-    Qt.RichText label (the credential card's signup link)."""
+    Qt.TextFormat.RichText label (the credential card's signup link)."""
     return (
         text.replace("&", "&amp;")
         .replace("<", "&lt;")
@@ -286,7 +286,7 @@ class _WrapLabel(QLabel):
     scroll-area combination even where height-for-width does not.
 
     Feature 2026-07-13 (markdown answers): finalized assistant labels
-    switch to Qt.RichText HTML -- heightForWidth then routes through the
+    switch to Qt.TextFormat.RichText HTML -- heightForWidth then routes through the
     rich-text document layout instead of plain-text metrics, but the same
     min-height re-assert covers it (verified by the markdown-height case
     in tests/qt_dock_ui_harness.py at 320px and 640px dock widths).
@@ -338,9 +338,9 @@ class _ChatInput(QPlainTextEdit):
     def __init__(self, send_callback, parent=None):
         super().__init__(parent)
         self._send_callback = send_callback
-        self.setLineWrapMode(QPlainTextEdit.WidgetWidth)
-        self.setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
-        self.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        self.setLineWrapMode(QPlainTextEdit.LineWrapMode.WidgetWidth)
+        self.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        self.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
         # C2 (NATE 2026-07-20): grow RELIABLY one row per new line / wrap. Drive
         # off the document LAYOUT's documentSizeChanged -- it fires AFTER the
         # relayout resolves the new document height, so the box never lags a row
@@ -354,12 +354,12 @@ class _ChatInput(QPlainTextEdit):
 
     def keyPressEvent(self, event) -> None:  # noqa: N802 -- Qt-mandated name
         key = event.key()
-        if key in (Qt.Key_Return, Qt.Key_Enter):
+        if key in (Qt.Key.Key_Return, Qt.Key.Key_Enter):
             # SHIFT+ENTER inserts a newline; a bare ENTER sends. Ctrl/Meta are
             # treated like Shift (never send) so a stray chord never fires an
             # accidental send mid-edit.
             if event.modifiers() & (
-                Qt.ShiftModifier | Qt.ControlModifier | Qt.MetaModifier
+                Qt.KeyboardModifier.ShiftModifier | Qt.KeyboardModifier.ControlModifier | Qt.KeyboardModifier.MetaModifier
             ):
                 super().keyPressEvent(event)
                 return
@@ -402,7 +402,7 @@ def _markdown_to_display_html(text: str, palette) -> str:
     """Render assistant markdown to Qt rich-text HTML (feature 2026-07-13).
 
     Why md->HTML (QTextDocument.setMarkdown + toHtml) instead of the
-    lighter QLabel.setTextFormat(Qt.MarkdownText): the label route parses
+    lighter QLabel.setTextFormat(Qt.TextFormat.MarkdownText): the label route parses
     the same GitHub dialect but offers ZERO styling hooks -- measured on
     this Qt build (5.15.15), fenced code blocks come out in the default
     PROPORTIONAL font with no background (the importer stamps a
@@ -411,7 +411,7 @@ def _markdown_to_display_html(text: str, palette) -> str:
     lets us style the model before serializing: code blocks get a
     palette-derived background + a real monospace font, inline code spans
     get the same treatment, tables get solid borders + cell padding. The
-    HTML then renders in a Qt.RichText label -- same QTextDocument engine,
+    HTML then renders in a Qt.TextFormat.RichText label -- same QTextDocument engine,
     so wrapping/heightForWidth behave like any rich-text label.
 
     Colors come from ``palette`` (Base for the code background, Mid for
@@ -431,8 +431,8 @@ def _markdown_to_display_html(text: str, palette) -> str:
         QTextTable,
     )
 
-    code_bg = palette.color(QPalette.Base)
-    border = palette.color(QPalette.Mid)
+    code_bg = palette.color(QPalette.ColorRole.Base)
+    border = palette.color(QPalette.ColorRole.Mid)
 
     doc = QTextDocument()
     doc.setMarkdown(text)  # default features = GitHub dialect (tables, fences)
@@ -476,7 +476,7 @@ def _markdown_to_display_html(text: str, palette) -> str:
     for pos, length, in_code_block in code_spans:
         cur = QTextCursor(doc)
         cur.setPosition(pos)
-        cur.setPosition(pos + length, QTextCursor.KeepAnchor)
+        cur.setPosition(pos + length, QTextCursor.MoveMode.KeepAnchor)
         mono = QTextCharFormat()
         mono.setFontFamily("monospace")
         mono.setFontFixedPitch(True)
@@ -601,7 +601,7 @@ class _ErrorFold(QWidget):
         break-anywhere text + the E1 min-width cap, so a long URL reflows
         with the dock instead of forcing its width)."""
         lbl = _WrapLabel(_breakable_display_text(text))
-        lbl.setTextFormat(Qt.PlainText)
+        lbl.setTextFormat(Qt.TextFormat.PlainText)
         lbl.setStyleSheet(_ERROR_LINE_STYLE)
         lbl.setMinimumWidth(1)  # E1: wrap, never a horizontal scrollbar
         self._body_lay.addWidget(lbl)
@@ -649,9 +649,9 @@ class _ToolCard(QFrame):
         super().__init__(parent)
         self.setObjectName("toolcard")
         self.setStyleSheet(_TOOLCARD_FRAME_STYLE)
-        self.setFrameShape(QFrame.NoFrame)
+        self.setFrameShape(QFrame.Shape.NoFrame)
         # T2: fill the chat width, adapt on resize -- no fixed/min width.
-        self.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Preferred)
+        self.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Preferred)
 
         outer = QVBoxLayout(self)
         outer.setContentsMargins(8, 4, 8, 4)
@@ -665,12 +665,12 @@ class _ToolCard(QFrame):
         hl.setSpacing(4)
         self._chevron = QToolButton()
         self._chevron.setAutoRaise(True)
-        self._chevron.setArrowType(Qt.DownArrow)  # expanded by default
+        self._chevron.setArrowType(Qt.ArrowType.DownArrow)  # expanded by default
         self._chevron.setStyleSheet("QToolButton { border: none; }")
         self._chevron.clicked.connect(self._toggle)
         hl.addWidget(self._chevron)
         self._title = QLabel("Tools")
-        self._title.setTextFormat(Qt.PlainText)
+        self._title.setTextFormat(Qt.TextFormat.PlainText)
         self._title.setStyleSheet(_TOOLCARD_HEADER_STYLE)
         hl.addWidget(self._title)
         hl.addStretch(1)
@@ -702,7 +702,7 @@ class _ToolCard(QFrame):
     def _apply_expanded(self) -> None:
         self._body.setVisible(self._expanded)
         self._chevron.setArrowType(
-            Qt.DownArrow if self._expanded else Qt.RightArrow
+            Qt.ArrowType.DownArrow if self._expanded else Qt.ArrowType.RightArrow
         )
 
     def _toggle(self) -> None:
@@ -763,13 +763,13 @@ class _ToolCard(QFrame):
             rl.setContentsMargins(4 + (12 if nested else 0), 0, 0, 0)
             rl.setSpacing(6)
             prefix = QLabel(">")
-            prefix.setTextFormat(Qt.PlainText)
+            prefix.setTextFormat(Qt.TextFormat.PlainText)
             prefix.setStyleSheet(_TOOLCARD_PREFIX_STYLE)
             rl.addWidget(prefix)
             # T4: the label keeps the EXACT state-driven text colour + plain
             # non-wrapping behaviour of the old chip (only the frame is gone).
             name_lbl = QLabel(label)
-            name_lbl.setTextFormat(Qt.PlainText)
+            name_lbl.setTextFormat(Qt.TextFormat.PlainText)
             name_lbl.setStyleSheet(_tool_row_text_style(state))
             rl.addWidget(name_lbl)
             rl.addStretch(1)
@@ -778,7 +778,7 @@ class _ToolCard(QFrame):
             # block, T7). Running -> animated spinner; complete -> check;
             # failed/cancelled -> x.
             status = QLabel()
-            status.setTextFormat(Qt.PlainText)
+            status.setTextFormat(Qt.TextFormat.PlainText)
             status.setStyleSheet(_tool_status_style(state))
             if running:
                 status.setText(_SPINNER_FRAMES[self._spinner_frame])
@@ -803,8 +803,8 @@ class _ToolCard(QFrame):
                 toggle.setChecked(False)
                 toggle.setStyleSheet(_THINKING_TOGGLE_STYLE)
                 body = _WrapLabel(result)
-                body.setTextFormat(Qt.PlainText)
-                body.setTextInteractionFlags(Qt.TextSelectableByMouse)
+                body.setTextFormat(Qt.TextFormat.PlainText)
+                body.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
                 body.setStyleSheet(
                     _PROBE_ERROR_BLOCK_STYLE if is_error else _THINKING_BLOCK_STYLE
                 )
@@ -821,7 +821,7 @@ class _ToolCard(QFrame):
         clean_meta = [m for m in meta_lines if m]
         if clean_meta:
             meta = _WrapLabel("\n".join(clean_meta))
-            meta.setTextFormat(Qt.PlainText)
+            meta.setTextFormat(Qt.TextFormat.PlainText)
             meta.setStyleSheet(_TOOLCARD_META_STYLE)
             meta.setMinimumWidth(1)  # E1: wrap, never a horizontal scrollbar
             self._body_lay.addWidget(meta)
@@ -878,8 +878,8 @@ class _AssistantEntry:
         thinking_lay.addWidget(self._thinking_toggle)
 
         self._thinking_label = _WrapLabel("")
-        self._thinking_label.setTextFormat(Qt.PlainText)
-        self._thinking_label.setTextInteractionFlags(Qt.TextSelectableByMouse)
+        self._thinking_label.setTextFormat(Qt.TextFormat.PlainText)
+        self._thinking_label.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
         self._thinking_label.setStyleSheet(_THINKING_BLOCK_STYLE)
         thinking_lay.addWidget(self._thinking_label)
         # LANE PLUGIN (2026-07-22): wire the fold WIDGET-to-WIDGET (toggled ->
@@ -895,8 +895,8 @@ class _AssistantEntry:
         self._thinking_text = ""
 
         self.label = _WrapLabel("")
-        self.label.setTextFormat(Qt.PlainText)
-        self.label.setTextInteractionFlags(Qt.TextSelectableByMouse)
+        self.label.setTextFormat(Qt.TextFormat.PlainText)
+        self.label.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
         # Feature 2026-07-13 (markdown answers) link policy: markdown links
         # render styled but are NOT clickable -- interaction flags stay
         # TextSelectableByMouse only (no LinksAccessibleByMouse), and
@@ -988,7 +988,7 @@ class _AssistantEntry:
             # terminal seams) drops back to plain-text streaming so raw
             # text is never fed through a RichText label.
             self._finalized = False
-            self.label.setTextFormat(Qt.PlainText)
+            self.label.setTextFormat(Qt.TextFormat.PlainText)
         if not self._answer_started:
             self._answer_started = True
             if self._thinking_text:
@@ -1004,7 +1004,7 @@ class _AssistantEntry:
         """Feature 2026-07-13 (markdown answers): the turn is FINAL --
         re-render the accumulated answer text as markdown.
 
-        While STREAMING the label stays Qt.PlainText (``append_delta``
+        While STREAMING the label stays Qt.TextFormat.PlainText (``append_delta``
         re-sets it token by token) so a half-open ``` fence never flickers
         through a markdown parser mid-stream; this converts exactly once,
         at the terminal seams (turn-complete, gate-card closeout, chat
@@ -1029,7 +1029,7 @@ class _AssistantEntry:
             html = _markdown_to_display_html(stripped, self.container.palette())
         except Exception:  # noqa: BLE001 -- plain text stays, never crash
             return
-        self.label.setTextFormat(Qt.RichText)
+        self.label.setTextFormat(Qt.TextFormat.RichText)
         self.label.setText(html)
         # Rich-text QLabels misreport widths two ways (both measured):
         # minimumSizeHint = the document's ideal UNWRAPPED width (553px for
@@ -1047,7 +1047,7 @@ class _AssistantEntry:
         self.label.setMinimumWidth(1)
         layout = self.container.layout()
         if layout is not None:
-            layout.setAlignment(self.label, Qt.Alignment())
+            layout.setAlignment(self.label, Qt.AlignmentFlag(0))
         self.label.setVisible(True)
 
     def render_tool_card(
@@ -1103,7 +1103,7 @@ class _AssistantEntry:
         # long unbroken tokens so the label's own sizeHint stays narrow too
         # (the wide PREFERRED width was what dragged the dock wider).
         lbl = _WrapLabel(_breakable_display_text(text))
-        lbl.setTextFormat(Qt.PlainText)
+        lbl.setTextFormat(Qt.TextFormat.PlainText)
         lbl.setStyleSheet(_STATUS_LINE_STYLE)
         lbl.setMinimumWidth(1)
         self.notes_area.addWidget(lbl)
@@ -1158,7 +1158,7 @@ class GateCard(QFrame):
         self.rp_status = None
         self.setObjectName("gatecard")  # STYLE-1: scope the fill, no text highlight
         self.setStyleSheet(_GATE_CARD_STYLE)
-        self.setFrameShape(QFrame.StyledPanel)
+        self.setFrameShape(QFrame.Shape.StyledPanel)
 
         outer = QVBoxLayout(self)
         outer.setContentsMargins(8, 6, 8, 6)
@@ -1171,7 +1171,7 @@ class GateCard(QFrame):
         summary_row = QHBoxLayout()
         self.summary_lbl = QLabel("")
         self.summary_lbl.setWordWrap(True)
-        self.summary_lbl.setTextFormat(Qt.PlainText)
+        self.summary_lbl.setTextFormat(Qt.TextFormat.PlainText)
         self.summary_lbl.setStyleSheet(_GATE_TITLE_STYLE)
         summary_row.addWidget(self.summary_lbl, 1)
         self.details_toggle = QPushButton("show details")
@@ -1201,7 +1201,7 @@ class GateCard(QFrame):
         for line in gate.summary_lines(warning):
             lbl = QLabel(line)
             lbl.setWordWrap(True)
-            lbl.setTextFormat(Qt.PlainText)
+            lbl.setTextFormat(Qt.TextFormat.PlainText)
             lbl.setStyleSheet(_GATE_BODY_STYLE)
             lay.addWidget(lbl)
 
@@ -1390,7 +1390,7 @@ class GateCard(QFrame):
             if self._rp_marker is None:
                 self._rp_marker = QgsVertexMarker(canvas)
                 self._rp_marker.setIconType(QgsVertexMarker.ICON_CROSS)
-                self._rp_marker.setColor(Qt.red)
+                self._rp_marker.setColor(Qt.GlobalColor.red)
                 self._rp_marker.setPenWidth(3)
                 self._rp_marker.setIconSize(14)
             self._rp_marker.setCenter(point)
@@ -1502,7 +1502,7 @@ class CodeExecCard(QFrame):
         self._decided: Optional[str] = None
         self.setObjectName("codeexeccard")  # STYLE-1: scope the fill to the frame
         self.setStyleSheet(_CODE_CARD_STYLE)
-        self.setFrameShape(QFrame.StyledPanel)
+        self.setFrameShape(QFrame.Shape.StyledPanel)
 
         outer = QVBoxLayout(self)
         outer.setContentsMargins(8, 6, 8, 6)
@@ -1513,7 +1513,7 @@ class CodeExecCard(QFrame):
         summary_row = QHBoxLayout()
         self.summary_lbl = QLabel("")
         self.summary_lbl.setWordWrap(True)
-        self.summary_lbl.setTextFormat(Qt.PlainText)
+        self.summary_lbl.setTextFormat(Qt.TextFormat.PlainText)
         self.summary_lbl.setStyleSheet(_CODE_TITLE_STYLE)
         summary_row.addWidget(self.summary_lbl, 1)
         self.details_toggle = QPushButton("show details")
@@ -1542,7 +1542,7 @@ class CodeExecCard(QFrame):
         if request.rationale:
             rationale_lbl = QLabel(request.rationale)
             rationale_lbl.setWordWrap(True)
-            rationale_lbl.setTextFormat(Qt.PlainText)
+            rationale_lbl.setTextFormat(Qt.TextFormat.PlainText)
             rationale_lbl.setStyleSheet(_GATE_BODY_STYLE)
             lay.addWidget(rationale_lbl)
 
@@ -1550,7 +1550,7 @@ class CodeExecCard(QFrame):
         for line in gate.code_exec_layer_lines(request):
             layer_lbl = QLabel(line)
             layer_lbl.setWordWrap(True)
-            layer_lbl.setTextFormat(Qt.PlainText)
+            layer_lbl.setTextFormat(Qt.TextFormat.PlainText)
             layer_lbl.setStyleSheet(_GATE_NOTE_STYLE)
             lay.addWidget(layer_lbl)
 
@@ -1569,10 +1569,10 @@ class CodeExecCard(QFrame):
         self.code_view.setStyleSheet(_CODE_PREVIEW_STYLE)
         # E1 discipline: the preview scrolls INSIDE its own box -- it never
         # pins the chat host wide or tall (long snippets get scrollbars).
-        self.code_view.setLineWrapMode(QPlainTextEdit.NoWrap)
+        self.code_view.setLineWrapMode(QPlainTextEdit.LineWrapMode.NoWrap)
         self.code_view.setMinimumWidth(1)
         self.code_view.setMaximumHeight(180)
-        self.code_view.setFocusPolicy(Qt.ClickFocus)
+        self.code_view.setFocusPolicy(Qt.FocusPolicy.ClickFocus)
         self.code_view.setVisible(False)
         lay.addWidget(self.code_view)
 
@@ -1657,7 +1657,7 @@ class CodeExecCard(QFrame):
         for line in gate.code_exec_result_lines(result):
             lbl = QLabel(line)
             lbl.setWordWrap(True)
-            lbl.setTextFormat(Qt.PlainText)
+            lbl.setTextFormat(Qt.TextFormat.PlainText)
             lbl.setStyleSheet(
                 _ERROR_LINE_STYLE if not result.ok and "stderr" in line
                 else _GATE_NOTE_STYLE
@@ -1701,7 +1701,7 @@ class CredentialCard(QFrame):
         self._decided: Optional[str] = None
         self.setObjectName("credentialcard")  # STYLE-1: scope the fill to the frame
         self.setStyleSheet(_CRED_CARD_STYLE)
-        self.setFrameShape(QFrame.StyledPanel)
+        self.setFrameShape(QFrame.Shape.StyledPanel)
 
         outer = QVBoxLayout(self)
         outer.setContentsMargins(8, 6, 8, 6)
@@ -1712,7 +1712,7 @@ class CredentialCard(QFrame):
         summary_row = QHBoxLayout()
         self.summary_lbl = QLabel("")
         self.summary_lbl.setWordWrap(True)
-        self.summary_lbl.setTextFormat(Qt.PlainText)
+        self.summary_lbl.setTextFormat(Qt.TextFormat.PlainText)
         self.summary_lbl.setStyleSheet(_CRED_TITLE_STYLE)
         summary_row.addWidget(self.summary_lbl, 1)
         self.details_toggle = QPushButton("show details")
@@ -1736,7 +1736,7 @@ class CredentialCard(QFrame):
 
         title_lbl = QLabel(f"API key needed: {request.display_label}")
         title_lbl.setWordWrap(True)
-        title_lbl.setTextFormat(Qt.PlainText)
+        title_lbl.setTextFormat(Qt.TextFormat.PlainText)
         title_lbl.setStyleSheet(_CRED_TITLE_STYLE)
         lay.addWidget(title_lbl)
 
@@ -1745,14 +1745,14 @@ class CredentialCard(QFrame):
             # never paraphrased client-side).
             message_lbl = QLabel(request.message)
             message_lbl.setWordWrap(True)
-            message_lbl.setTextFormat(Qt.PlainText)
+            message_lbl.setTextFormat(Qt.TextFormat.PlainText)
             message_lbl.setStyleSheet(_GATE_BODY_STYLE)
             lay.addWidget(message_lbl)
 
         for line in gate.credential_note_lines(request):
             note_lbl = QLabel(line)
             note_lbl.setWordWrap(True)
-            note_lbl.setTextFormat(Qt.PlainText)
+            note_lbl.setTextFormat(Qt.TextFormat.PlainText)
             note_lbl.setStyleSheet(_GATE_NOTE_STYLE)
             lay.addWidget(note_lbl)
 
@@ -1762,7 +1762,7 @@ class CredentialCard(QFrame):
             # the client never fabricates a URL).
             href = _html_escape(request.signup_url)
             link_lbl = QLabel(f'<a href="{href}">Get a key: {href}</a>')
-            link_lbl.setTextFormat(Qt.RichText)
+            link_lbl.setTextFormat(Qt.TextFormat.RichText)
             link_lbl.setOpenExternalLinks(True)
             link_lbl.setWordWrap(True)
             link_lbl.setStyleSheet(_GATE_NOTE_STYLE)
@@ -1772,7 +1772,7 @@ class CredentialCard(QFrame):
         # on screen, and nothing in this class ever reads it except the one
         # Submit commit (which clears it immediately).
         self.key_edit = QLineEdit()
-        self.key_edit.setEchoMode(QLineEdit.Password)
+        self.key_edit.setEchoMode(QLineEdit.EchoMode.Password)
         placeholder = request.secret_key_name or "API key"
         self.key_edit.setPlaceholderText(f"Paste your {placeholder}")
         self.key_edit.returnPressed.connect(self._submit)
@@ -1790,7 +1790,7 @@ class CredentialCard(QFrame):
 
         self.result_lbl = QLabel("")
         self.result_lbl.setWordWrap(True)
-        self.result_lbl.setTextFormat(Qt.PlainText)
+        self.result_lbl.setTextFormat(Qt.TextFormat.PlainText)
         self.result_lbl.setStyleSheet(_GATE_NOTE_STYLE)
         self.result_lbl.setVisible(False)
         lay.addWidget(self.result_lbl)
@@ -1912,7 +1912,7 @@ class ToolCandidatesCard(QFrame):
         self._step_index = step_index
         self.setObjectName("toolpickercard")  # STYLE-1: scope the fill to the frame
         self.setStyleSheet(_PICKER_CARD_STYLE)
-        self.setFrameShape(QFrame.StyledPanel)
+        self.setFrameShape(QFrame.Shape.StyledPanel)
 
         outer = QVBoxLayout(self)
         outer.setContentsMargins(8, 6, 8, 6)
@@ -1923,7 +1923,7 @@ class ToolCandidatesCard(QFrame):
         summary_row = QHBoxLayout()
         self.summary_lbl = QLabel("")
         self.summary_lbl.setWordWrap(True)
-        self.summary_lbl.setTextFormat(Qt.PlainText)
+        self.summary_lbl.setTextFormat(Qt.TextFormat.PlainText)
         self.summary_lbl.setStyleSheet(_PICKER_TITLE_STYLE)
         summary_row.addWidget(self.summary_lbl, 1)
         self.details_toggle = QPushButton("show details")
@@ -1953,7 +1953,7 @@ class ToolCandidatesCard(QFrame):
         prefix = f"Step {self._step_index} - " if self._step_index else ""
         title_lbl = QLabel(f"{prefix}{title}: pick a tool")
         title_lbl.setWordWrap(True)
-        title_lbl.setTextFormat(Qt.PlainText)
+        title_lbl.setTextFormat(Qt.TextFormat.PlainText)
         title_lbl.setStyleSheet(_PICKER_TITLE_STYLE)
         lay.addWidget(title_lbl)
 
@@ -1961,7 +1961,7 @@ class ToolCandidatesCard(QFrame):
         if note:
             note_lbl = QLabel(note)
             note_lbl.setWordWrap(True)
-            note_lbl.setTextFormat(Qt.PlainText)
+            note_lbl.setTextFormat(Qt.TextFormat.PlainText)
             note_lbl.setStyleSheet(_GATE_NOTE_STYLE)
             lay.addWidget(note_lbl)
 
@@ -1978,7 +1978,7 @@ class ToolCandidatesCard(QFrame):
             if cand.summary:
                 summary_lbl = QLabel(cand.summary)
                 summary_lbl.setWordWrap(True)
-                summary_lbl.setTextFormat(Qt.PlainText)
+                summary_lbl.setTextFormat(Qt.TextFormat.PlainText)
                 summary_lbl.setStyleSheet(_PICKER_SUMMARY_STYLE)
                 lay.addWidget(summary_lbl)
 
@@ -2007,7 +2007,7 @@ class ToolCandidatesCard(QFrame):
 
         self.result_lbl = QLabel("")
         self.result_lbl.setWordWrap(True)
-        self.result_lbl.setTextFormat(Qt.PlainText)
+        self.result_lbl.setTextFormat(Qt.TextFormat.PlainText)
         self.result_lbl.setStyleSheet(_GATE_NOTE_STYLE)
         self.result_lbl.setVisible(False)
         lay.addWidget(self.result_lbl)
@@ -2159,7 +2159,7 @@ class Mode2CandidateCard(QFrame):
         self._decided: Optional[str] = None
         self.setObjectName("mode2card")  # STYLE-1: scope the fill to the frame
         self.setStyleSheet(_MODE2_CARD_STYLE)
-        self.setFrameShape(QFrame.StyledPanel)
+        self.setFrameShape(QFrame.Shape.StyledPanel)
 
         outer = QVBoxLayout(self)
         outer.setContentsMargins(8, 6, 8, 6)
@@ -2170,7 +2170,7 @@ class Mode2CandidateCard(QFrame):
         summary_row = QHBoxLayout()
         self.summary_lbl = QLabel("")
         self.summary_lbl.setWordWrap(True)
-        self.summary_lbl.setTextFormat(Qt.PlainText)
+        self.summary_lbl.setTextFormat(Qt.TextFormat.PlainText)
         self.summary_lbl.setStyleSheet(_MODE2_TITLE_STYLE)
         summary_row.addWidget(self.summary_lbl, 1)
         self.details_toggle = QPushButton("show details")
@@ -2200,7 +2200,7 @@ class Mode2CandidateCard(QFrame):
         )
         title_lbl = QLabel(f"Add {host} to the catalog?")
         title_lbl.setWordWrap(True)
-        title_lbl.setTextFormat(Qt.PlainText)
+        title_lbl.setTextFormat(Qt.TextFormat.PlainText)
         title_lbl.setStyleSheet(_MODE2_TITLE_STYLE)
         lay.addWidget(title_lbl)
 
@@ -2209,20 +2209,20 @@ class Mode2CandidateCard(QFrame):
             # name), verbatim -- never paraphrased client-side.
             page_title_lbl = QLabel(request.title)
             page_title_lbl.setWordWrap(True)
-            page_title_lbl.setTextFormat(Qt.PlainText)
+            page_title_lbl.setTextFormat(Qt.TextFormat.PlainText)
             page_title_lbl.setStyleSheet(_GATE_BODY_STYLE)
             lay.addWidget(page_title_lbl)
 
         note_lbl = QLabel(kind_note)
         note_lbl.setWordWrap(True)
-        note_lbl.setTextFormat(Qt.PlainText)
+        note_lbl.setTextFormat(Qt.TextFormat.PlainText)
         note_lbl.setStyleSheet(_GATE_NOTE_STYLE)
         lay.addWidget(note_lbl)
 
         # The URL as a REAL clickable link (never re-hosted/paraphrased).
         href = _html_escape(request.url)
         link_lbl = QLabel(f'<a href="{href}">{href}</a>')
-        link_lbl.setTextFormat(Qt.RichText)
+        link_lbl.setTextFormat(Qt.TextFormat.RichText)
         link_lbl.setOpenExternalLinks(True)
         link_lbl.setWordWrap(True)
         link_lbl.setStyleSheet(_MODE2_LINK_STYLE)
@@ -2233,7 +2233,7 @@ class Mode2CandidateCard(QFrame):
         for line in gate.mode2_reason_lines(request):
             reason_lbl = QLabel(f"- {line}")
             reason_lbl.setWordWrap(True)
-            reason_lbl.setTextFormat(Qt.PlainText)
+            reason_lbl.setTextFormat(Qt.TextFormat.PlainText)
             reason_lbl.setStyleSheet(_GATE_NOTE_STYLE)
             lay.addWidget(reason_lbl)
 
@@ -2249,7 +2249,7 @@ class Mode2CandidateCard(QFrame):
 
         self.result_lbl = QLabel("")
         self.result_lbl.setWordWrap(True)
-        self.result_lbl.setTextFormat(Qt.PlainText)
+        self.result_lbl.setTextFormat(Qt.TextFormat.PlainText)
         self.result_lbl.setStyleSheet(_GATE_NOTE_STYLE)
         self.result_lbl.setVisible(False)
         lay.addWidget(self.result_lbl)
@@ -2357,7 +2357,7 @@ class SimCard(QFrame):
         self._phase: str = ""
         self.setObjectName("simcard")  # STYLE-1: scope the fill, no text highlight
         self.setStyleSheet(_SIM_CARD_STYLE)
-        self.setFrameShape(QFrame.StyledPanel)
+        self.setFrameShape(QFrame.Shape.StyledPanel)
 
         outer = QVBoxLayout(self)
         outer.setContentsMargins(8, 6, 8, 6)
@@ -2374,11 +2374,11 @@ class SimCard(QFrame):
         summary_row = QHBoxLayout()
         self.summary_lbl = QLabel(f"Simulation running - {engine_label}")
         self.summary_lbl.setWordWrap(True)
-        self.summary_lbl.setTextFormat(Qt.PlainText)
+        self.summary_lbl.setTextFormat(Qt.TextFormat.PlainText)
         self.summary_lbl.setStyleSheet(_SIM_TITLE_STYLE)
         summary_row.addWidget(self.summary_lbl, 1)
         self.progress_lbl = QLabel("")
-        self.progress_lbl.setTextFormat(Qt.PlainText)
+        self.progress_lbl.setTextFormat(Qt.TextFormat.PlainText)
         self.progress_lbl.setStyleSheet(_GATE_NOTE_STYLE)
         summary_row.addWidget(self.progress_lbl)
         self.details_toggle = QPushButton("hide details")
@@ -2405,8 +2405,8 @@ class SimCard(QFrame):
             key_lbl = QLabel(label)
             key_lbl.setStyleSheet(_GATE_NOTE_STYLE)
             val_lbl = QLabel("-")
-            val_lbl.setTextFormat(Qt.PlainText)
-            val_lbl.setTextInteractionFlags(Qt.TextSelectableByMouse)
+            val_lbl.setTextFormat(Qt.TextFormat.PlainText)
+            val_lbl.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
             val_lbl.setStyleSheet(_GATE_BODY_STYLE)
             grid.addWidget(key_lbl, i, 0)
             grid.addWidget(val_lbl, i, 1)
@@ -2417,7 +2417,7 @@ class SimCard(QFrame):
 
         self.error_lbl = QLabel("")
         self.error_lbl.setWordWrap(True)
-        self.error_lbl.setTextFormat(Qt.PlainText)
+        self.error_lbl.setTextFormat(Qt.TextFormat.PlainText)
         self.error_lbl.setStyleSheet(_ERROR_LINE_STYLE)
         self.error_lbl.setVisible(False)
         body_lay.addWidget(self.error_lbl)
@@ -2578,7 +2578,7 @@ class RegionChoiceCard(QFrame):
         self._selected_region_id: Optional[str] = None
         self.setObjectName("regionchoicecard")  # STYLE-1: scope the fill
         self.setStyleSheet(_REGION_CARD_STYLE)
-        self.setFrameShape(QFrame.StyledPanel)
+        self.setFrameShape(QFrame.Shape.StyledPanel)
 
         outer = QVBoxLayout(self)
         outer.setContentsMargins(8, 6, 8, 6)
@@ -2588,7 +2588,7 @@ class RegionChoiceCard(QFrame):
         summary_row = QHBoxLayout()
         self.summary_lbl = QLabel("")
         self.summary_lbl.setWordWrap(True)
-        self.summary_lbl.setTextFormat(Qt.PlainText)
+        self.summary_lbl.setTextFormat(Qt.TextFormat.PlainText)
         self.summary_lbl.setStyleSheet(_REGION_TITLE_STYLE)
         summary_row.addWidget(self.summary_lbl, 1)
         self.details_toggle = QPushButton("show details")
@@ -2617,7 +2617,7 @@ class RegionChoiceCard(QFrame):
             # narrower pick" prompt, verbatim (Invariant 1).
             msg_lbl = QLabel(request.message)
             msg_lbl.setWordWrap(True)
-            msg_lbl.setTextFormat(Qt.PlainText)
+            msg_lbl.setTextFormat(Qt.TextFormat.PlainText)
             msg_lbl.setStyleSheet(_GATE_BODY_STYLE)
             lay.addWidget(msg_lbl)
 
@@ -2750,7 +2750,7 @@ class SpatialInputCard(QFrame):
         self._marker = None
         self.setObjectName("spatialinputcard")  # STYLE-1: scope the fill
         self.setStyleSheet(_SPATIAL_CARD_STYLE)
-        self.setFrameShape(QFrame.StyledPanel)
+        self.setFrameShape(QFrame.Shape.StyledPanel)
 
         outer = QVBoxLayout(self)
         outer.setContentsMargins(8, 6, 8, 6)
@@ -2760,7 +2760,7 @@ class SpatialInputCard(QFrame):
         summary_row = QHBoxLayout()
         self.summary_lbl = QLabel("")
         self.summary_lbl.setWordWrap(True)
-        self.summary_lbl.setTextFormat(Qt.PlainText)
+        self.summary_lbl.setTextFormat(Qt.TextFormat.PlainText)
         self.summary_lbl.setStyleSheet(_SPATIAL_TITLE_STYLE)
         summary_row.addWidget(self.summary_lbl, 1)
         self.details_toggle = QPushButton("show details")
@@ -2782,14 +2782,14 @@ class SpatialInputCard(QFrame):
 
         title_lbl = QLabel(request.title or "Pick a location on the map")
         title_lbl.setWordWrap(True)
-        title_lbl.setTextFormat(Qt.PlainText)
+        title_lbl.setTextFormat(Qt.TextFormat.PlainText)
         title_lbl.setStyleSheet(_SPATIAL_TITLE_STYLE)
         lay.addWidget(title_lbl)
 
         if request.description:
             desc_lbl = QLabel(request.description)
             desc_lbl.setWordWrap(True)
-            desc_lbl.setTextFormat(Qt.PlainText)
+            desc_lbl.setTextFormat(Qt.TextFormat.PlainText)
             desc_lbl.setStyleSheet(_GATE_BODY_STYLE)
             lay.addWidget(desc_lbl)
 
@@ -2885,7 +2885,7 @@ class SpatialInputCard(QFrame):
             if self._marker is None:
                 self._marker = QgsVertexMarker(self._iface.mapCanvas())
                 self._marker.setIconType(QgsVertexMarker.ICON_CROSS)
-                self._marker.setColor(Qt.red)
+                self._marker.setColor(Qt.GlobalColor.red)
                 self._marker.setPenWidth(3)
                 self._marker.setIconSize(14)
             self._marker.setCenter(point)

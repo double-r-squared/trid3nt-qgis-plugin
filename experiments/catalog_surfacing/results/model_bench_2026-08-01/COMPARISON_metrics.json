@@ -1,0 +1,639 @@
+{
+  "nemotron_arm0": {
+    "tag": "nemotron",
+    "arm": 0,
+    "n_source": 104,
+    "n_graded": 104,
+    "n_upstream_excl": 0,
+    "selection_accuracy": 66.35,
+    "selected_correct": 69,
+    "first_attempt_validity": 79.71,
+    "one_retry_validity": 98.55,
+    "param_denominator": 69,
+    "n_nocall": 17,
+    "nocall_rate": 16.35,
+    "n_wrong_source": 18,
+    "nocall_classes": {
+      "model_declined": 16,
+      "empty_200_completion": 1
+    },
+    "silent_empty": 0,
+    "reasoned_empty": 1,
+    "nocall_detail": [
+      {
+        "id": "fetch_gridmet#2",
+        "class": "model_declined",
+        "finish_reason": "stop",
+        "content_len": 251,
+        "reasoning_len": 3199,
+        "completion_tokens": 828,
+        "http_status": 200,
+        "error_class": null
+      },
+      {
+        "id": "fetch_gridmet#3",
+        "class": "model_declined",
+        "finish_reason": "stop",
+        "content_len": 309,
+        "reasoning_len": 2046,
+        "completion_tokens": 601,
+        "http_status": 200,
+        "error_class": null
+      },
+      {
+        "id": "fetch_gridmet#5",
+        "class": "model_declined",
+        "finish_reason": "stop",
+        "content_len": 259,
+        "reasoning_len": 2153,
+        "completion_tokens": 644,
+        "http_status": 200,
+        "error_class": null
+      },
+      {
+        "id": "fetch_gridmet#7",
+        "class": "model_declined",
+        "finish_reason": "stop",
+        "content_len": 314,
+        "reasoning_len": 5028,
+        "completion_tokens": 1361,
+        "http_status": 200,
+        "error_class": null
+      },
+      {
+        "id": "fetch_gridmet#8",
+        "class": "model_declined",
+        "finish_reason": "stop",
+        "content_len": 305,
+        "reasoning_len": 3169,
+        "completion_tokens": 779,
+        "http_status": 200,
+        "error_class": null
+      },
+      {
+        "id": "fetch_gridmet#10",
+        "class": "model_declined",
+        "finish_reason": "stop",
+        "content_len": 388,
+        "reasoning_len": 5209,
+        "completion_tokens": 1402,
+        "http_status": 200,
+        "error_class": null
+      },
+      {
+        "id": "fetch_hifld_critical_infrastructure#4",
+        "class": "model_declined",
+        "finish_reason": "stop",
+        "content_len": 350,
+        "reasoning_len": 2644,
+        "completion_tokens": 660,
+        "http_status": 200,
+        "error_class": null
+      },
+      {
+        "id": "fetch_hifld_critical_infrastructure#10",
+        "class": "model_declined",
+        "finish_reason": "stop",
+        "content_len": 272,
+        "reasoning_len": 14020,
+        "completion_tokens": 3265,
+        "http_status": 200,
+        "error_class": null
+      },
+      {
+        "id": "fetch_noaa_coops_tides#1",
+        "class": "model_declined",
+        "finish_reason": "stop",
+        "content_len": 451,
+        "reasoning_len": 2413,
+        "completion_tokens": 706,
+        "http_status": 200,
+        "error_class": null
+      },
+      {
+        "id": "fetch_noaa_coops_tides#2",
+        "class": "model_declined",
+        "finish_reason": "stop",
+        "content_len": 299,
+        "reasoning_len": 4352,
+        "completion_tokens": 1051,
+        "http_status": 200,
+        "error_class": null
+      },
+      {
+        "id": "fetch_noaa_coops_tides#3",
+        "class": "model_declined",
+        "finish_reason": "stop",
+        "content_len": 173,
+        "reasoning_len": 2280,
+        "completion_tokens": 598,
+        "http_status": 200,
+        "error_class": null
+      },
+      {
+        "id": "fetch_noaa_coops_tides#5",
+        "class": "model_declined",
+        "finish_reason": "stop",
+        "content_len": 212,
+        "reasoning_len": 1191,
+        "completion_tokens": 363,
+        "http_status": 200,
+        "error_class": null
+      },
+      {
+        "id": "fetch_noaa_coops_tides#10",
+        "class": "model_declined",
+        "finish_reason": "stop",
+        "content_len": 249,
+        "reasoning_len": 4886,
+        "completion_tokens": 1265,
+        "http_status": 200,
+        "error_class": null
+      },
+      {
+        "id": "fetch_esri_landcover_10m#3",
+        "class": "model_declined",
+        "finish_reason": "stop",
+        "content_len": 254,
+        "reasoning_len": 1560,
+        "completion_tokens": 493,
+        "http_status": 200,
+        "error_class": null
+      },
+      {
+        "id": "fetch_esri_landcover_10m#7",
+        "class": "model_declined",
+        "finish_reason": "stop",
+        "content_len": 324,
+        "reasoning_len": 2454,
+        "completion_tokens": 642,
+        "http_status": 200,
+        "error_class": null
+      },
+      {
+        "id": "fetch_us_drought_monitor#4",
+        "class": "empty_200_completion",
+        "finish_reason": "stop",
+        "content_len": 0,
+        "reasoning_len": 698,
+        "completion_tokens": 224,
+        "http_status": 200,
+        "error_class": null
+      },
+      {
+        "id": "fetch_usgs_water_quality#4",
+        "class": "model_declined",
+        "finish_reason": "stop",
+        "content_len": 101,
+        "reasoning_len": 5753,
+        "completion_tokens": 1270,
+        "http_status": 200,
+        "error_class": null
+      }
+    ],
+    "n_controls": 11
+  },
+  "nemotron_arm3": {
+    "tag": "nemotron",
+    "arm": 3,
+    "n_source": 104,
+    "n_graded": 104,
+    "n_upstream_excl": 0,
+    "selection_accuracy": 56.73,
+    "selected_correct": 59,
+    "first_attempt_validity": 100.0,
+    "one_retry_validity": 100.0,
+    "param_denominator": 59,
+    "n_nocall": 31,
+    "nocall_rate": 29.81,
+    "n_wrong_source": 14,
+    "nocall_classes": {
+      "empty_200_completion": 12,
+      "model_declined": 11,
+      "reasoning_truncated": 8
+    },
+    "silent_empty": 0,
+    "reasoned_empty": 12,
+    "nocall_detail": [
+      {
+        "id": "fetch_gridmet#1",
+        "class": "empty_200_completion",
+        "finish_reason": "stop",
+        "content_len": 0,
+        "reasoning_len": 2890,
+        "completion_tokens": 996,
+        "http_status": 200,
+        "error_class": null
+      },
+      {
+        "id": "fetch_gridmet#2",
+        "class": "model_declined",
+        "finish_reason": "stop",
+        "content_len": 406,
+        "reasoning_len": 10860,
+        "completion_tokens": 2822,
+        "http_status": 200,
+        "error_class": null
+      },
+      {
+        "id": "fetch_gridmet#3",
+        "class": "model_declined",
+        "finish_reason": "stop",
+        "content_len": 284,
+        "reasoning_len": 4732,
+        "completion_tokens": 1309,
+        "http_status": 200,
+        "error_class": null
+      },
+      {
+        "id": "fetch_gridmet#5",
+        "class": "model_declined",
+        "finish_reason": "stop",
+        "content_len": 294,
+        "reasoning_len": 3039,
+        "completion_tokens": 782,
+        "http_status": 200,
+        "error_class": null
+      },
+      {
+        "id": "fetch_gridmet#6",
+        "class": "model_declined",
+        "finish_reason": "stop",
+        "content_len": 656,
+        "reasoning_len": 14785,
+        "completion_tokens": 3879,
+        "http_status": 200,
+        "error_class": null
+      },
+      {
+        "id": "fetch_gridmet#7",
+        "class": "empty_200_completion",
+        "finish_reason": "stop",
+        "content_len": 0,
+        "reasoning_len": 1085,
+        "completion_tokens": 456,
+        "http_status": 200,
+        "error_class": null
+      },
+      {
+        "id": "fetch_gridmet#9",
+        "class": "empty_200_completion",
+        "finish_reason": "stop",
+        "content_len": 0,
+        "reasoning_len": 4324,
+        "completion_tokens": 1342,
+        "http_status": 200,
+        "error_class": null
+      },
+      {
+        "id": "fetch_gridmet#11",
+        "class": "model_declined",
+        "finish_reason": "stop",
+        "content_len": 278,
+        "reasoning_len": 1872,
+        "completion_tokens": 531,
+        "http_status": 200,
+        "error_class": null
+      },
+      {
+        "id": "fetch_hifld_critical_infrastructure#2",
+        "class": "empty_200_completion",
+        "finish_reason": "stop",
+        "content_len": 0,
+        "reasoning_len": 3067,
+        "completion_tokens": 775,
+        "http_status": 200,
+        "error_class": null
+      },
+      {
+        "id": "fetch_hifld_critical_infrastructure#4",
+        "class": "empty_200_completion",
+        "finish_reason": "stop",
+        "content_len": 0,
+        "reasoning_len": 2361,
+        "completion_tokens": 614,
+        "http_status": 200,
+        "error_class": null
+      },
+      {
+        "id": "fetch_hifld_critical_infrastructure#8",
+        "class": "empty_200_completion",
+        "finish_reason": "stop",
+        "content_len": 0,
+        "reasoning_len": 852,
+        "completion_tokens": 324,
+        "http_status": 200,
+        "error_class": null
+      },
+      {
+        "id": "fetch_noaa_coops_tides#1",
+        "class": "model_declined",
+        "finish_reason": "stop",
+        "content_len": 404,
+        "reasoning_len": 5987,
+        "completion_tokens": 1547,
+        "http_status": 200,
+        "error_class": null
+      },
+      {
+        "id": "fetch_noaa_coops_tides#2",
+        "class": "model_declined",
+        "finish_reason": "stop",
+        "content_len": 339,
+        "reasoning_len": 1189,
+        "completion_tokens": 400,
+        "http_status": 200,
+        "error_class": null
+      },
+      {
+        "id": "fetch_noaa_coops_tides#5",
+        "class": "model_declined",
+        "finish_reason": "stop",
+        "content_len": 230,
+        "reasoning_len": 1313,
+        "completion_tokens": 422,
+        "http_status": 200,
+        "error_class": null
+      },
+      {
+        "id": "fetch_noaa_coops_tides#6",
+        "class": "reasoning_truncated",
+        "finish_reason": "length",
+        "content_len": 16635,
+        "reasoning_len": 16635,
+        "completion_tokens": 4096,
+        "http_status": 200,
+        "error_class": null
+      },
+      {
+        "id": "fetch_noaa_coops_tides#10",
+        "class": "model_declined",
+        "finish_reason": "stop",
+        "content_len": 563,
+        "reasoning_len": 766,
+        "completion_tokens": 326,
+        "http_status": 200,
+        "error_class": null
+      },
+      {
+        "id": "fetch_esri_landcover_10m#4",
+        "class": "empty_200_completion",
+        "finish_reason": "stop",
+        "content_len": 0,
+        "reasoning_len": 2380,
+        "completion_tokens": 723,
+        "http_status": 200,
+        "error_class": null
+      },
+      {
+        "id": "fetch_esri_landcover_10m#6",
+        "class": "model_declined",
+        "finish_reason": "stop",
+        "content_len": 548,
+        "reasoning_len": 10648,
+        "completion_tokens": 2707,
+        "http_status": 200,
+        "error_class": null
+      },
+      {
+        "id": "fetch_esri_landcover_10m#11",
+        "class": "reasoning_truncated",
+        "finish_reason": "length",
+        "content_len": 15046,
+        "reasoning_len": 15046,
+        "completion_tokens": 4096,
+        "http_status": 200,
+        "error_class": null
+      },
+      {
+        "id": "fetch_census_acs#1",
+        "class": "reasoning_truncated",
+        "finish_reason": "length",
+        "content_len": 17138,
+        "reasoning_len": 17138,
+        "completion_tokens": 4096,
+        "http_status": 200,
+        "error_class": null
+      },
+      {
+        "id": "fetch_census_acs#8",
+        "class": "reasoning_truncated",
+        "finish_reason": "length",
+        "content_len": 14967,
+        "reasoning_len": 14967,
+        "completion_tokens": 4096,
+        "http_status": 200,
+        "error_class": null
+      },
+      {
+        "id": "fetch_census_acs#10",
+        "class": "model_declined",
+        "finish_reason": "stop",
+        "content_len": 98,
+        "reasoning_len": 7049,
+        "completion_tokens": 1672,
+        "http_status": 200,
+        "error_class": null
+      },
+      {
+        "id": "fetch_us_drought_monitor#1",
+        "class": "reasoning_truncated",
+        "finish_reason": "length",
+        "content_len": 17370,
+        "reasoning_len": 17370,
+        "completion_tokens": 4096,
+        "http_status": 200,
+        "error_class": null
+      },
+      {
+        "id": "fetch_mtbs_burn_severity#2",
+        "class": "empty_200_completion",
+        "finish_reason": "stop",
+        "content_len": 0,
+        "reasoning_len": 1780,
+        "completion_tokens": 569,
+        "http_status": 200,
+        "error_class": null
+      },
+      {
+        "id": "fetch_mtbs_burn_severity#4",
+        "class": "reasoning_truncated",
+        "finish_reason": "length",
+        "content_len": 15485,
+        "reasoning_len": 15485,
+        "completion_tokens": 4096,
+        "http_status": 200,
+        "error_class": null
+      },
+      {
+        "id": "fetch_nifc_fire_perimeters#0",
+        "class": "reasoning_truncated",
+        "finish_reason": "length",
+        "content_len": 16502,
+        "reasoning_len": 16502,
+        "completion_tokens": 4096,
+        "http_status": 200,
+        "error_class": null
+      },
+      {
+        "id": "fetch_nhdplus_nldi_navigate#2",
+        "class": "empty_200_completion",
+        "finish_reason": "stop",
+        "content_len": 0,
+        "reasoning_len": 3729,
+        "completion_tokens": 1087,
+        "http_status": 200,
+        "error_class": null
+      },
+      {
+        "id": "fetch_nhd_waterbodies#2",
+        "class": "reasoning_truncated",
+        "finish_reason": "length",
+        "content_len": 16031,
+        "reasoning_len": 16031,
+        "completion_tokens": 4096,
+        "http_status": 200,
+        "error_class": null
+      },
+      {
+        "id": "fetch_noaa_coops_currents#1",
+        "class": "empty_200_completion",
+        "finish_reason": "stop",
+        "content_len": 0,
+        "reasoning_len": 1583,
+        "completion_tokens": 529,
+        "http_status": 200,
+        "error_class": null
+      },
+      {
+        "id": "fetch_noaa_coops_currents#3",
+        "class": "empty_200_completion",
+        "finish_reason": "stop",
+        "content_len": 0,
+        "reasoning_len": 763,
+        "completion_tokens": 275,
+        "http_status": 200,
+        "error_class": null
+      },
+      {
+        "id": "fetch_cdc_svi#2",
+        "class": "empty_200_completion",
+        "finish_reason": "stop",
+        "content_len": 0,
+        "reasoning_len": 735,
+        "completion_tokens": 268,
+        "http_status": 200,
+        "error_class": null
+      }
+    ],
+    "n_controls": 19
+  },
+  "qwen3-8b_arm3": {
+    "tag": "qwen3-8b",
+    "arm": 3,
+    "n_source": 6,
+    "n_graded": 6,
+    "n_upstream_excl": 0,
+    "selection_accuracy": 0.0,
+    "selected_correct": 0,
+    "first_attempt_validity": 0.0,
+    "one_retry_validity": 0.0,
+    "param_denominator": 0,
+    "n_nocall": 3,
+    "nocall_rate": 50.0,
+    "n_wrong_source": 3,
+    "nocall_classes": {
+      "empty_200_completion": 2,
+      "model_declined": 1
+    },
+    "silent_empty": 0,
+    "reasoned_empty": 2,
+    "nocall_detail": [
+      {
+        "id": "fetch_gridmet#0",
+        "class": "empty_200_completion",
+        "finish_reason": "stop",
+        "content_len": 0,
+        "reasoning_len": 897,
+        "completion_tokens": 270,
+        "http_status": 200,
+        "error_class": null
+      },
+      {
+        "id": "fetch_cdc_svi#0",
+        "class": "empty_200_completion",
+        "finish_reason": "stop",
+        "content_len": 0,
+        "reasoning_len": 497,
+        "completion_tokens": 148,
+        "http_status": 200,
+        "error_class": null
+      },
+      {
+        "id": "fetch_census_acs#0",
+        "class": "model_declined",
+        "finish_reason": "stop",
+        "content_len": 474,
+        "reasoning_len": 1758,
+        "completion_tokens": 439,
+        "http_status": 200,
+        "error_class": null
+      }
+    ],
+    "n_controls": 0
+  },
+  "qwen35-lowvram-9b_arm3": {
+    "tag": "qwen35-lowvram-9b",
+    "arm": 3,
+    "n_source": 14,
+    "n_graded": 12,
+    "n_upstream_excl": 2,
+    "selection_accuracy": 8.33,
+    "selected_correct": 1,
+    "first_attempt_validity": 0.0,
+    "one_retry_validity": 0.0,
+    "param_denominator": 1,
+    "n_nocall": 3,
+    "nocall_rate": 21.43,
+    "n_wrong_source": 8,
+    "nocall_classes": {
+      "provider_error": 1,
+      "model_declined": 2
+    },
+    "silent_empty": 0,
+    "reasoned_empty": 0,
+    "nocall_detail": [
+      {
+        "id": "fetch_esri_landcover_10m#0",
+        "class": "provider_error",
+        "finish_reason": "stop",
+        "content_len": 283,
+        "reasoning_len": 1752,
+        "completion_tokens": 481,
+        "http_status": 200,
+        "error_class": "upstream_provider"
+      },
+      {
+        "id": "fetch_mtbs_burn_severity#0",
+        "class": "model_declined",
+        "finish_reason": "stop",
+        "content_len": 114,
+        "reasoning_len": 1758,
+        "completion_tokens": 514,
+        "http_status": 200,
+        "error_class": null
+      },
+      {
+        "id": "fetch_us_drought_monitor#0",
+        "class": "model_declined",
+        "finish_reason": "stop",
+        "content_len": 630,
+        "reasoning_len": 907,
+        "completion_tokens": 360,
+        "http_status": 200,
+        "error_class": null
+      }
+    ],
+    "n_controls": 2
+  }
+}

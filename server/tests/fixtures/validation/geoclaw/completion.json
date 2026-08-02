@@ -1,0 +1,33 @@
+{
+  "run_id": "01KWT8BJ7QET79PTENW5XC8WAT",
+  "status": "ok",
+  "exit_code": 0,
+  "geoclaw_stdout_uri": "s3://trid3nt-runs/01KWT8BJ7QET79PTENW5XC8WAT/geoclaw.stdout",
+  "geoclaw_stderr_uri": "s3://trid3nt-runs/01KWT8BJ7QET79PTENW5XC8WAT/geoclaw.stderr",
+  "scenario": "tsunami",
+  "output_uris": [
+    "s3://trid3nt-runs/01KWT8BJ7QET79PTENW5XC8WAT/_output/fgmax0001.txt",
+    "s3://trid3nt-runs/01KWT8BJ7QET79PTENW5XC8WAT/_output/fgmax_grids.data",
+    "s3://trid3nt-runs/01KWT8BJ7QET79PTENW5XC8WAT/_output/fort.q0000",
+    "s3://trid3nt-runs/01KWT8BJ7QET79PTENW5XC8WAT/_output/fort.q0001",
+    "s3://trid3nt-runs/01KWT8BJ7QET79PTENW5XC8WAT/_output/fort.q0002",
+    "s3://trid3nt-runs/01KWT8BJ7QET79PTENW5XC8WAT/_output/fort.q0003",
+    "s3://trid3nt-runs/01KWT8BJ7QET79PTENW5XC8WAT/_output/fort.q0004",
+    "s3://trid3nt-runs/01KWT8BJ7QET79PTENW5XC8WAT/_output/fort.q0005",
+    "s3://trid3nt-runs/01KWT8BJ7QET79PTENW5XC8WAT/_output/fort.q0006",
+    "s3://trid3nt-runs/01KWT8BJ7QET79PTENW5XC8WAT/_output/fort.t0000",
+    "s3://trid3nt-runs/01KWT8BJ7QET79PTENW5XC8WAT/_output/fort.t0001",
+    "s3://trid3nt-runs/01KWT8BJ7QET79PTENW5XC8WAT/_output/fort.t0002",
+    "s3://trid3nt-runs/01KWT8BJ7QET79PTENW5XC8WAT/_output/fort.t0003",
+    "s3://trid3nt-runs/01KWT8BJ7QET79PTENW5XC8WAT/_output/fort.t0004",
+    "s3://trid3nt-runs/01KWT8BJ7QET79PTENW5XC8WAT/_output/fort.t0005",
+    "s3://trid3nt-runs/01KWT8BJ7QET79PTENW5XC8WAT/_output/fort.t0006",
+    "s3://trid3nt-runs/01KWT8BJ7QET79PTENW5XC8WAT/_output/gauge00001.txt",
+    "s3://trid3nt-runs/01KWT8BJ7QET79PTENW5XC8WAT/deck_manifest.json"
+  ],
+  "started_at": "2026-07-05T23:03:31Z",
+  "finished_at": "2026-07-05T23:04:01Z",
+  "error": null,
+  "publish_manifest_uri": null,
+  "error_code": null
+}

@@ -44,8 +44,8 @@ from unittest.mock import MagicMock, patch
 import pytest
 from botocore.exceptions import ClientError
 
-import trid3nt_server.tools.simulation.solver as solver_mod
-from trid3nt_server.tools.simulation.solver import (
+import trid3nt_server.agent.tools.simulation.solver.solver as solver_mod
+from trid3nt_server.agent.tools.simulation.solver.solver import (
     LOCAL_DOCKER_WORKFLOW_NAME,
     SOLVER_BACKEND_LOCAL_DOCKER,
     SolverDispatchError,
@@ -393,11 +393,15 @@ def test_local_manifest_dest_traversal_rejected(
 # 3+4. Supervisor completion.json (entrypoint schema) + wait_for_completion
 # --------------------------------------------------------------------------- #
 
-#: The EXACT key set services/workers/sfincs/entrypoint.py writes.
+#: The EXACT key set the local supervisor writes. Mirrors
+#: services/workers/sfincs/entrypoint.py PLUS the ``solver`` engine-identity
+#: field the V&V wave added (ADR 0021) so read_run_diagnostics can recover the
+#: engine directly instead of inferring it from the stdout field name.
 _ENTRYPOINT_COMPLETION_KEYS = {
     "run_id",
     "status",
     "exit_code",
+    "solver",
     "sfincs_stdout_uri",
     "sfincs_stderr_uri",
     "output_uris",
@@ -592,7 +596,7 @@ async def test_local_wait_emits_progress_via_emitter_binding(
 
 
 def test_default_setup_uri_is_scheme_aware(monkeypatch: pytest.MonkeyPatch) -> None:
-    from trid3nt_server.workflows.sfincs_builder import _default_setup_uri
+    from trid3nt_server.agent.workflows.sfincs.sfincs_builder import _default_setup_uri
 
     # GCP is decommissioned: the setup URI is always s3:// regardless of any
     # TRID3NT_STORAGE_BACKEND override (the gs legacy seam is gone).
@@ -619,7 +623,7 @@ def test_build_sfincs_model_uploads_deck_via_boto3_under_s3(
     boto3 (NOT fsspec/s3fs) and the manifest's legacy-named ``gs_uri``
     fields carry ``s3://.../deck/...`` values the local-docker staging can
     resolve by scheme."""
-    from trid3nt_server.workflows.sfincs_builder import (
+    from trid3nt_server.agent.workflows.sfincs.sfincs_builder import (
         BuildOptions,
         ForcingSpec,
         build_sfincs_model,
@@ -673,15 +677,15 @@ def test_build_sfincs_model_uploads_deck_via_boto3_under_s3(
             clear=False,
         ),
         patch(
-            "trid3nt_server.workflows.sfincs_builder._extract_unique_nlcd_classes",
+            "trid3nt_server.agent.workflows.sfincs.sfincs_builder._extract_unique_nlcd_classes",
             return_value={11},
         ),
         patch(
-            "trid3nt_server.workflows.sfincs_builder._stage_gcs_local",
+            "trid3nt_server.agent.workflows.sfincs.sfincs_builder._stage_gcs_local",
             side_effect=lambda uri: uri,
         ),
         patch(
-            "trid3nt_server.workflows.sfincs_builder._default_setup_uri",
+            "trid3nt_server.agent.workflows.sfincs.sfincs_builder._default_setup_uri",
             return_value=fixed_manifest_uri,
         ),
     ):
@@ -717,7 +721,7 @@ def test_stage_gcs_local_handles_s3_uri(reset_seams) -> None:
     """HydroMT catalog staging resolves s3:// via the boto3 seam (job-0291)."""
     import uuid
 
-    from trid3nt_server.workflows.sfincs_builder import _stage_gcs_local
+    from trid3nt_server.agent.workflows.sfincs.sfincs_builder import _stage_gcs_local
 
     s3 = FakeS3Client()
     set_s3_client(s3)
@@ -732,7 +736,7 @@ def test_stage_gcs_local_handles_s3_uri(reset_seams) -> None:
 
 
 def test_to_vsigs_maps_s3_to_vsis3() -> None:
-    from trid3nt_server.workflows.sfincs_builder import _to_vsigs
+    from trid3nt_server.agent.workflows.sfincs.sfincs_builder import _to_vsigs
 
     assert _to_vsigs("s3://bkt/key.tif") == "/vsis3/bkt/key.tif"
     assert _to_vsigs("/vsis3/bkt/key.tif") == "/vsis3/bkt/key.tif"
@@ -747,7 +751,7 @@ def test_to_vsigs_maps_s3_to_vsis3() -> None:
 
 
 def test_postprocess_resolves_s3_run_output_via_boto3(reset_seams) -> None:
-    from trid3nt_server.workflows.postprocess_flood import _resolve_run_output_to_local
+    from trid3nt_server.agent.workflows.sfincs.postprocess_sfincs import _resolve_run_output_to_local
 
     s3 = FakeS3Client()
     set_s3_client(s3)
@@ -761,7 +765,7 @@ def test_postprocess_resolves_s3_run_output_via_boto3(reset_seams) -> None:
 
 
 def test_postprocess_s3_read_failure_is_typed(reset_seams) -> None:
-    from trid3nt_server.workflows.postprocess_flood import (
+    from trid3nt_server.agent.workflows.sfincs.postprocess_sfincs import (
         PostprocessError,
         _resolve_run_output_to_local,
     )
@@ -775,7 +779,7 @@ def test_postprocess_s3_read_failure_is_typed(reset_seams) -> None:
 def test_postprocess_cog_upload_scheme_aware(
     reset_seams, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    from trid3nt_server.workflows.postprocess_flood import (
+    from trid3nt_server.agent.workflows.sfincs.postprocess_sfincs import (
         PostprocessError,
         _upload_cog_to_runs_bucket,
     )
@@ -802,7 +806,7 @@ def test_postprocess_cog_upload_scheme_aware(
 def test_composer_default_runs_prefix_scheme_aware(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    from trid3nt_server.workflows.model_flood_scenario import _default_runs_prefix
+    from trid3nt_server.agent.workflows.sfincs.flood.flood import _default_runs_prefix
 
     # Local-only slim: the fallback always mints the honest s3:// shape the
     # local-docker solver writes under -- never a fabricated gs:// URI.

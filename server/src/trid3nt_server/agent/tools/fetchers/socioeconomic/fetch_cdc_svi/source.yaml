@@ -1,0 +1,124 @@
+# Router source spec (data-router fold, phase-2 wave-2 ArcGIS family).
+# Twin: fetch_cdc_svi.py (SPEC-EXPRESSIBLE, vector-API-FGB / ArcGIS).
+# Uses the new declarative column_map (rename + -999 null-sentinel normalization).
+schema_version: v1
+
+name: fetch_cdc_svi
+source_class: cdc_svi                       # cache prefix; error prefix == source_class.upper()
+input_error_suffix: INPUT_INVALID          # CDC_SVIInputError -> CDC_SVI_INPUT_INVALID
+shape: vector-fgb
+supports_global_query: false               # US tract polygons, bbox required
+
+endpoints:
+  data:
+    url: "https://onemap.cdc.gov/onemapservices/rest/services/SVI/CDC_ATSDR_Social_Vulnerability_Index_2022_USA/FeatureServer/2/query"
+auth:
+  mode: none
+  user_agent: trid3nt_default
+
+params:
+  bbox: {type: bbox, required: true, quantize: round_6dp}
+gates:
+  max_features: 20000                        # twin _MAX_FEATURES
+
+ingest:
+  query_template:
+    # CDC onemap rejects an unsupported orderByFields -> omit order_by (twin parity).
+    out_fields: "FIPS,COUNTY,ST_ABBR,LOCATION,E_TOTPOP,RPL_THEMES,RPL_THEME1,RPL_THEME2,RPL_THEME3,RPL_THEME4,STATE"
+    f: geojson
+  pagination: {mode: result_offset, page_size: 2000}
+  # Rename source props to output cols + normalize CDC's -999 null sentinel.
+  column_map:
+    fips:       {from: FIPS}
+    county:     {from: COUNTY}
+    state_abbr: {from: ST_ABBR}
+    location:   {from: LOCATION}
+    total_pop:  {from: E_TOTPOP,   kind: int,   null_below: -999.0}
+    rpl_themes: {from: RPL_THEMES, kind: float, null_below: -999.0}
+    rpl_theme1: {from: RPL_THEME1, kind: float, null_below: -999.0}
+    rpl_theme2: {from: RPL_THEME2, kind: float, null_below: -999.0}
+    rpl_theme3: {from: RPL_THEME3, kind: float, null_below: -999.0}
+    rpl_theme4: {from: RPL_THEME4, kind: float, null_below: -999.0}
+
+normalize:
+  crs: "EPSG:4326"
+  units: "percentile"
+
+output:
+  layer_type: vector
+  ext: fgb
+  role: primary
+  style_preset: "cdc_svi"
+  emit_bbox: true                            # twin LayerURI carries bbox
+
+cache:
+  ttl_class: static-30d
+payload_estimate:                            # twin: area*3.0 clamp[0.02,80]
+  model: bbox_area
+  mb_per_sq_deg: 3.0
+  floor_mb: 0.02
+
+caveats:
+  - "CDC/ATSDR SVI 2022 tract percentiles; -999 null sentinel normalized to null"
+  - "US-only (50 states + DC); non-US bbox -> header-only FGB (honest-empty, never a fabricated error)"
+fallback: []
+
+docstring: |-
+  CDC/ATSDR Social Vulnerability Index (SVI 2022) census-tract choropleth.
+
+  Use this (not fetch_census_acs or fetch_epa_ejscreen) when you specifically want the CDC/ATSDR Social Vulnerability Index (SVI).
+
+  Fetches U.S. census-tract polygons intersecting a bbox from CDC/ATSDR's
+  public ArcGIS REST FeatureServer and returns a FlatGeobuf choropleth with
+  the overall SVI percentile ranking (``rpl_themes``) plus the four theme
+  rankings (socioeconomic status, household characteristics, racial/ethnic
+  minority status, housing type & transportation). Higher percentile = more
+  socially vulnerable. CDC's ``-999`` null sentinel is normalized to ``null``.
+
+  **When to use:**
+  - User asks for the CDC SVI, social vulnerability, equity / environmental-
+    justice overlay, or "which neighborhoods are most vulnerable".
+  - Agent needs a vulnerability surface to intersect with a hazard footprint
+    (flood, wildfire, heat, plume) to find the most vulnerable exposed
+    population.
+
+  **When NOT to use:**
+  - For raw demographic counts (population, income, race) -> use a Census/ACS
+    fetcher (SVI publishes percentile rankings, not estimates).
+  - For areas outside the United States -> SVI is U.S.-only (50 states + DC);
+    an empty FGB is returned for non-U.S. bboxes.
+  - For a non-2022 vintage -> this tool pins SVI 2022 (latest published).
+
+  **Parameters:**
+      bbox: ``(min_lon, min_lat, max_lon, max_lat)`` in EPSG:4326. Required.
+          ``supports_global_query=False`` -- U.S. tract polygon source; use a
+          county-or-smaller extent. Example for urban Houston / Harris County
+          TX: ``(-95.45, 29.65, -95.25, 29.85)``.
+
+  **Returns:**
+      ``LayerURI`` pointing at a FlatGeobuf in the cache bucket. Each feature
+      is a Polygon (census tract) in EPSG:4326. Properties: ``fips`` (str,
+      11-digit tract FIPS), ``county`` (str), ``state_abbr`` (str),
+      ``location`` (str), ``total_pop`` (int|null), ``rpl_themes``
+      (float|null, overall percentile [0,1]), ``rpl_theme1..rpl_theme4``
+      (float|null, per-theme percentiles). ``layer_type="vector"``,
+      ``role="primary"``, ``style_preset="cdc_svi"``, ``units="percentile"``.
+
+  **Cross-tool dependencies:**
+      - Feeds INTO: ``spatial_query`` (vulnerable population inside a hazard
+        footprint; admin-bounded SVI).
+      - Combine WITH: ``sfincs_flood`` / ``fetch_noaa_slr_scenarios``
+        / ``fetch_firms_active_fire`` (hazard footprints) for vulnerability-
+        weighted exposure; ``fetch_administrative_boundaries`` (county scope).
+
+  **Error types:**
+      - ``CDC_SVIInputError``: bad bbox (retryable=False).
+      - ``CDC_SVIUpstreamError``: HTTP/network failure, ArcGIS error envelope,
+        or FlatGeobuf serialization failure (retryable=True).
+      - ``CDC_SVIEmptyError``: no tracts in bbox (retryable=False; not raised
+        by default -- an empty FGB is returned instead).
+
+  Cache: ``ttl_class="static-30d"``, ``source_class="cdc_svi"``. Cache key is
+  SHA-256 of the bbox rounded to 6 dp.
+
+  ``supports_global_query=False``. No API key required.

@@ -35,8 +35,8 @@ import json
 import pytest
 
 from trid3nt_server import server
-from trid3nt_server import tools as agent_tools
-from trid3nt_server.adapter import build_layers_present_note
+from trid3nt_server.agent import tools as agent_tools
+from trid3nt_server.agent.adapters.adapter import build_layers_present_note
 from trid3nt_server.persistence import Persistence
 from trid3nt_server.scenario_reuse import reset_scenario_indexes_for_tests
 from trid3nt_server.server import (
@@ -46,8 +46,8 @@ from trid3nt_server.server import (
     get_persistence,
     set_persistence,
 )
-from trid3nt_server.tools import RegisteredTool
-from trid3nt_server.uri_registry import reset_uri_registries_for_tests
+from trid3nt_server.agent.tools import RegisteredTool
+from trid3nt_server.emission.uri_registry import reset_uri_registries_for_tests
 from trid3nt_contracts.case import CaseCommandEnvelopePayload
 from trid3nt_contracts.common import new_ulid
 from trid3nt_contracts.execution import LayerURI
@@ -234,7 +234,7 @@ def test_layers_present_note_none_when_empty() -> None:
 def test_per_turn_injection_shape_appends_case_state_user_turn() -> None:
     """The dispatch-side injection appends ONE synthetic [Case state] user turn.
 
-    Mirrors the ``_stream_gemini_reply`` wiring: build the note from the live
+    Mirrors the ``_stream_model_reply`` wiring: build the note from the live
     emitter dicts + the cached AOI, then append it as the last history turn
     (before the user message) WITHOUT mutating the entry-captured history list.
     """

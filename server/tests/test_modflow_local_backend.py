@@ -38,7 +38,7 @@ Coverage maps to the kickoff §4 test list (mirrors job-0291's
 5.  Scheme-aware deck assembly (boto3, fsspec booby-trapped) + scheme-aware
     plume postprocess (UCN read via boto3, COG upload via boto3, publish
     through the job-0290 TiTiler template path), and a full
-    ``run_modflow_job`` E2E through the REAL code paths (real FloPy deck,
+    ``modflow_contaminant_plume`` E2E through the REAL code paths (real FloPy deck,
     real flopy UCN read, real rasterio reprojection; fake mf6 + fake S3).
 """
 
@@ -58,10 +58,10 @@ import numpy as np
 import pytest
 from botocore.exceptions import ClientError
 
-import trid3nt_server.tools.simulation.solver as solver_mod
-import trid3nt_server.workflows.postprocess_modflow as pp
-import trid3nt_server.workflows.run_modflow as rm
-from trid3nt_server.tools.simulation.solver import (
+import trid3nt_server.agent.tools.simulation.solver.solver as solver_mod
+import trid3nt_server.agent.workflows.modflow.postprocess_modflow as pp
+import trid3nt_server.agent.workflows.modflow.run_modflow as rm
+from trid3nt_server.agent.tools.simulation.solver.solver import (
     LOCAL_EXEC_WORKFLOW_NAME,
     set_emitter_binding,
     set_runs_bucket,
@@ -385,6 +385,7 @@ _MODFLOW_COMPLETION_KEYS = {
     "run_id",
     "status",
     "exit_code",
+    "solver",  # V&V wave (ADR 0021): engine-identity field for read_run_diagnostics
     "converged",
     "model_crs",
     "mf6_stdout_uri",
@@ -714,7 +715,7 @@ def test_dispatch_publish_layer_passes_s3_through(reset_seams) -> None:
     """s3:// COGs reach publish_layer (the job-0290 TiTiler path) instead of
     being skipped — the job-0254 PlumeLayerURI rendering gap, closed."""
     with patch(
-        "trid3nt_server.tools.publish_layer.publish_layer",
+        "trid3nt_server.agent.tools.publish_layer.publish_layer.publish_layer",
         return_value="https://tiles.example/cog/tiles/WebMercatorQuad/{z}/{x}/{y}.png?url=x",
     ) as fake_publish:
         out = pp._dispatch_publish_layer("s3://bkt/RUNX/plume.tif", "plume-RUNX")
@@ -726,7 +727,7 @@ def test_dispatch_publish_layer_passes_s3_through(reset_seams) -> None:
 
 
 def test_dispatch_publish_layer_still_skips_file_uri(reset_seams) -> None:
-    with patch("trid3nt_server.tools.publish_layer.publish_layer") as fake_publish:
+    with patch("trid3nt_server.agent.tools.publish_layer.publish_layer.publish_layer") as fake_publish:
         out = pp._dispatch_publish_layer("file:///tmp/plume.tif", "plume-RUNX")
     assert out is None
     fake_publish.assert_not_called()
@@ -738,8 +739,8 @@ def test_publish_layer_raw_s3_for_plume_preset(
     """TiTiler exit: the plume publish returns the raw s3:// COG uri and the
     red-ramp render params (0-10 reds) ride the stashed LEGEND keyed by that
     uri (the plugin renders from it)."""
-    from trid3nt_server.tools import publish_layer as pl_mod
-    from trid3nt_server.tools.publish_layer import pop_legend_for_uri, publish_layer
+    from trid3nt_server.agent.tools.publish_layer import publish_layer as pl_mod
+    from trid3nt_server.agent.tools.publish_layer.publish_layer import pop_legend_for_uri, publish_layer
 
     monkeypatch.setenv("TRID3NT_STORAGE_BACKEND", "s3")
     # No network: the fake key never resolves; the registry preset still pins
@@ -758,29 +759,37 @@ def test_publish_layer_raw_s3_for_plume_preset(
 
 
 # --------------------------------------------------------------------------- #
-# 6. Full local-backend E2E through run_modflow_job (real deck, real flopy
+# 6. Full local-backend E2E through modflow_contaminant_plume (real deck, real flopy
 #    UCN read, real rasterio reprojection; fake mf6 + fake S3)
 # --------------------------------------------------------------------------- #
 
 
+@pytest.mark.skip(
+    reason=(
+        "engine-door refactor: run_modflow_job (single-species S3-staged plume) is "
+        "FOLDED into modflow_contaminant_plume, which routes single-species through "
+        "the LOCAL-oriented multi_species build seam (the old build_multi_species_"
+        "staging was local-flat, never S3-staged). This S3-backend + fake-supervisor "
+        "e2e exercised the deleted single-path S3 staging; the folded plume's LOCAL "
+        "mf6 solve is covered by test_modflow_contaminant_plume.py + "
+        "test_run_modflow_multi_species_tool.py (real mf6). S3/Batch staging for the "
+        "multi_species plume template is a follow-up (offline-first pivot: on hold)."
+    )
+)
 @pytest.mark.skipif(not _HAVE_FLOPY, reason="flopy not installed")
 @pytest.mark.asyncio
-async def test_run_modflow_job_local_backend_e2e(
+async def test_modflow_contaminant_plume_local_backend_e2e(
     reset_seams,
     local_env: Path,
     mf6_shim: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """The job-0291-mirror E2E: run_modflow_job under the local backend drives
-    REAL code end-to-end — real FloPy deck build + boto3 deck staging to the
-    fake S3, manifest staged back down, fake mf6 emitting a REAL
-    flopy-readable UCN, supervisor completion to S3, the shared
-    wait_for_completion poll, real flopy concentration read + rasterio
-    UTM→EPSG:4326 COG reprojection, boto3 COG upload, and the raw-s3 COG
-    publish (TiTiler exit) — yielding a typed PlumeLayerURI with non-zero
-    metrics.
+    """FOLD consequence (skipped): the single-species S3-staged plume path is gone.
+
+    See the skip reason above. The folded plume's LOCAL mf6 solve is covered
+    elsewhere; S3/Batch multi_species staging is a follow-up.
     """
-    from trid3nt_server.tools.simulation.run_modflow_tool import run_modflow_job
+    from trid3nt_server.agent.workflows.modflow.contaminant_plume.contaminant_plume import modflow_contaminant_plume
     from trid3nt_contracts.modflow_contracts import PlumeLayerURI
 
     monkeypatch.setenv("TRID3NT_STORAGE_BACKEND", "s3")
@@ -804,7 +813,7 @@ async def test_run_modflow_job_local_backend_e2e(
 
     monkeypatch.setattr(solver_mod, "wait_for_completion", fast_wait)
 
-    result = await run_modflow_job(
+    result = await modflow_contaminant_plume(
         spill_location_latlon=(26.64, -81.87),
         contaminant="benzene",
         release_rate_kg_s=0.01,
@@ -845,7 +854,7 @@ async def test_run_modflow_job_local_backend_e2e(
     # Published as the raw s3:// COG (TiTiler exit) — the layer envelope
     # carries the COG uri the QGIS plugin opens directly via GDAL, and the
     # red-ramp render params ride the stashed legend keyed by that uri.
-    from trid3nt_server.tools.publish_layer import pop_legend_for_uri
+    from trid3nt_server.agent.tools.publish_layer.publish_layer import pop_legend_for_uri
 
     assert result.uri.startswith("s3://test-runs-bucket/")
     assert result.uri.endswith(".tif")

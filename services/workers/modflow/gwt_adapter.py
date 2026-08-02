@@ -1,12 +1,13 @@
 """MODFLOW 6 GWF + GWT deck construction for groundwater solute-transport.
 
-Sprint-13 Stage 1 (MOD), job-0221. Owner: engine.
+Sprint-13 Stage 1 (MOD), Owner: engine.
 
 This module assembles a *complete* MODFLOW 6 simulation deck for a
 groundwater-contamination ("spill") scenario via FloPy. A single MF6 binary
-(`mf6`, version-pinned 6.5.0 in the solver container - see
-`reports/inflight/sprint-13-mod-1-modflow-container-design-20260609/design.md`
-section 2) executes *both* model types from one simulation namefile:
+(`mf6`, version-pinned 6.7.0 - bumped from 6.5.0 so the PRT capture-zone path's
+flopy 3.10 PRP options EXTEND_TRACKING / COORDINATE_CHECK_METHOD are recognised;
+fetched by `scripts/fetch_binaries.sh`) executes *both* model types from one
+simulation namefile:
 
   * **GWF** (Groundwater Flow) - steady-state saturated flow. A west→east
     constant-head gradient drives a uniform regional flow field that advects
@@ -30,7 +31,7 @@ whose fields carry every number a downstream tool would narrate.
 
 Contract note: `build_modflow_deck` takes plain keyword arguments whose names
 match the `MODFLOWRunArgs` Pydantic contract (authored in parallel by
-job-0222 and bound in Stage 2 / job-0227). This module deliberately does NOT
+and bound in Stage 2). This module deliberately does NOT
 import from `trid3nt_contracts` - the binding happens upstream.
 """
 
@@ -93,12 +94,12 @@ TIME_UNITS = "DAYS"
 LENGTH_UNITS = "METERS"
 
 # ---------------------------------------------------------------------------
-# River-coupling demo defaults (sprint-17 J9 river-seepage). The RIV package is
+# River-coupling demo defaults (J9 river-seepage). The RIV package is
 # the simplest head-dependent river<->aquifer flux boundary: per reach cell
 # (cellid, stage, cond, rbot) with leakage Q = cond*(stage - h) capped at
 # cond*(stage - rbot) once the aquifer head drops below the streambed bottom.
 # These are v0.1 demo simplifications, narrated as demo values exactly like the
-# OQ-3 aquifer K / porosity. A real model samples stage + streambed elevation
+# aquifer K / porosity. A real model samples stage + streambed elevation
 # from a DEM and derives conductance from streambed K, length and width.
 # ---------------------------------------------------------------------------
 
@@ -122,7 +123,7 @@ DEFAULT_RIVER_RBOT_ABOVE_TOP_M = 0.5
 # archetype). SFR6 upgrades the fixed-stage RIV boundary to a routed stream
 # network (per-reach stage + Manning discharge + the GWF<->stream exchange), so
 # the model answers "how does pumping this well affect the river". These are
-# v0.1 demo simplifications narrated as demo values exactly like the OQ-3
+# v0.1 demo simplifications narrated as demo values exactly like the
 # aquifer K / porosity and the J9 RIV streambed defaults. A real run reads
 # width/inflow from NHDPlus VAA / NWM / NWIS. All units are METERS + DAYS (the
 # deck's TDIS units); the SFR length_conversion=1.0 + time_conversion=86400.0
@@ -214,11 +215,11 @@ CSUB_STO_SS_FLOOR = 0.0
 
 
 # ---------------------------------------------------------------------------
-# Archetype demo defaults (sprint-18 Wave-1). The three new MODFLOW archetypes
+# Archetype demo defaults. The three new MODFLOW archetypes
 # (sustainable_yield / mine_dewatering / regional_water_budget) reuse the same
 # 40x40x50 m UTM grid + west->east REGIONAL_GRADIENT CHD as the spill/seepage
 # deck; only the stress packages + temporal mode differ. Each default is a v0.1
-# demo simplification, narrated as a demo value exactly like the OQ-3 aquifer K /
+# demo simplification, narrated as a demo value exactly like the aquifer K /
 # porosity and the J9 RIV streambed defaults. A real model supplies these.
 # ---------------------------------------------------------------------------
 
@@ -253,12 +254,12 @@ DEFAULT_DRAIN_DEPTH_BELOW_TOP_M = 10.0
 
 
 # ---------------------------------------------------------------------------
-# Wave-2 archetype demo defaults (sprint-18 Wave-2). The three new MODFLOW
+# archetype demo defaults. The three new MODFLOW
 # archetypes (MAR / ASR / wetland_hydroperiod) reuse the SAME 40x40x50 m UTM grid
-# + west->east REGIONAL_GRADIENT CHD as the Wave-1 decks; only the stress packages
+# + west->east REGIONAL_GRADIENT CHD as the decks; only the stress packages
 # (RCH / seasonal WEL / RCH+EVT) + temporal cycling differ. Each default is a v0.1
-# demo simplification, narrated as a demo value exactly like the OQ-3 aquifer K /
-# porosity and the Wave-1 STO/DRN defaults. A real model supplies these.
+# demo simplification, narrated as a demo value exactly like the aquifer K /
+# porosity and the STO/DRN defaults. A real model supplies these.
 # ---------------------------------------------------------------------------
 
 #: Days per "month" for the MAR/ASR seasonal cadence (``recharge_months`` /
@@ -314,7 +315,7 @@ DEFAULT_WETLAND_RECHARGE_DRY_M_DAY = 0.0005
 
 
 # ---------------------------------------------------------------------------
-# Wave-4 PRT capture-zone defaults (sprint-18 Wave-4). Both capture_zone and
+# PRT capture-zone defaults. Both capture_zone and
 # wellhead_protection archetypes run a steady GWF at LOCAL (0,0) origin, then a
 # separate PRT sim reading the REVERSED GWF output (the canonical MF6 example
 # ex-prt-mp7-p02 backward-tracking approach). The grid is the SAME 40x40x50 m
@@ -366,7 +367,7 @@ DEFAULT_PRT_MAX_TRACKING_YEARS = 75.0
 
 
 # ---------------------------------------------------------------------------
-# Wave-5 saltwater_intrusion defaults (sprint-18 Wave-5). The Henry-style
+# saltwater_intrusion defaults. The Henry-style
 # FIELD-SCALE coastal transect uses a vertical nrow=1 slice: ~1 km transect
 # length (ncol * delr), ~50 m saturated aquifer depth (nlay * delv). Salinity
 # is transported in PPT (0 = fresh, 35 = seawater). Density EOS via BUY:
@@ -446,8 +447,8 @@ class DeckManifest:
     """Typed description of a written MODFLOW 6 deck.
 
     Every field carries a number a downstream tool (postprocess /
-    `run_modflow_job`, job-0227) reads - never prose. `model_crs` (an EPSG
-    code, e.g. "EPSG:32617") is the key OQ-MOD-3 field the postprocess step
+    `run_modflow_job`) reads - never prose. `model_crs` (an EPSG
+    code, e.g. "EPSG:32617") is the key field the postprocess step
     needs to reproject the concentration COG back to EPSG:4326.
     """
 
@@ -479,13 +480,13 @@ class DeckManifest:
     contaminant: str
     aquifer_k_ms: float
     porosity: float
-    # River-coupling (sprint-17 J9; all default to the no-river spill deck):
+    # River-coupling (J9; all default to the no-river spill deck):
     river_coupled: bool = False  # True iff a RIV package was written
     river_cell_count: int = 0  # number of RIV reach cells draped onto the grid
     river_reach_len_m: float = 0.0  # cumulative reach length over the in-grid cells
     river_conductance_m2_day: float = 0.0  # per-cell RIV conductance written
     along_river_source: bool = False  # True iff the SRC was placed along the reach
-    # --- Archetype branch (sprint-18 Wave-1; ADDITIVE, default = spill/seepage) -
+    # --- Archetype branch (ADDITIVE, default = spill/seepage) -
     # ``archetype is None`` is the EXISTING spill/seepage GWF+GWT deck; the three
     # new archetypes are GWF-only (no GWT block, no GWFGWT exchange). Every field
     # below stays at its default for the spill/seepage path (byte-identical deck).
@@ -512,7 +513,7 @@ class DeckManifest:
     # regional_water_budget (zonal CBC partition):
     zone_partition: str | None = None  # zone-split scheme written (None = whole-domain)
     n_zones: int = 0  # number of zones in the written ZONE array (0 = none)
-    # --- Wave-2 archetypes (sprint-18 Wave-2; ADDITIVE) --------------------------
+    # --- archetypes (ADDITIVE) --------------------------
     # MAR (RCH groundwater mounding) -- recharge basin draped over the grid.
     recharge_cell_count: int = 0  # number of RCH cells (basin footprint cells)
     infiltration_rate_m_day: float = 0.0  # POSITIVE recharge flux written (m/day)
@@ -529,7 +530,7 @@ class DeckManifest:
     et_max_rate_m_day: float = 0.0  # EVT max ET rate written (m/day)
     et_extinction_depth_m: float = 0.0  # EVT extinction depth written (m)
     newton_under_relaxation: bool = False  # True iff IMS used NEWTON + BICGSTAB
-    # --- multi_species transport (sprint-18 Wave-3; ADDITIVE) -------------------- #
+    # --- multi_species transport (ADDITIVE) -------------------- #
     # ``archetype == "multi_species"``: ONE shared GWF + N ModflowGwt models (one per
     # solute species) + N ModflowGwfgwt flow<->transport exchanges, all in ONE
     # simulation / ONE mf6 run. Every field below stays at its default for the
@@ -542,7 +543,7 @@ class DeckManifest:
     n_gwtgwt_exchanges: int = 0  # number of ModflowGwtGwt species-coupling exchanges (decay chain)
     species_with_parent: list[str] = field(default_factory=list)  # daughter species (parent set)
     decay_chain_coupled: bool = False  # True iff any parent->daughter GwtGwt exchange was written
-    # --- Wave-4 PRT capture-zone (sprint-18 Wave-4; ADDITIVE) -------------------- #
+    # --- PRT capture-zone (ADDITIVE) -------------------- #
     # ``archetype in ('capture_zone', 'wellhead_protection')``: TWO separate sims --
     # a steady GWF built at LOCAL (0,0) origin + a PRT sim that reads the REVERSED
     # GWF output and forward-tracks a ring of particles released at the well
@@ -559,7 +560,7 @@ class DeckManifest:
     # Well easting/northing/lat/lon are the REAL coordinates (NOT local-origin).
     n_particles: int = 0       # number of particles in the PRT release ring
     capture_zone_travel_time_years: list[float] = field(default_factory=list)
-    # --- Wave-5 saltwater_intrusion (sprint-18 Wave-5; ADDITIVE) -------------------- #
+    # --- saltwater_intrusion (ADDITIVE) -------------------- #
     # ``archetype == "saltwater_intrusion"``: GWF (BUY variable-density) + GWT in ONE
     # sim, using a vertical nrow=1 slice (Henry geometry) with seaward GHB+AUX (salt)
     # and inland WEL+AUX (fresh). Salinity transported in PPT (0..csalt). Density EOS
@@ -1261,7 +1262,7 @@ def _build_gwf_only_archetype_deck(
 ) -> DeckManifest:
     """Assemble a GWF-ONLY archetype deck (no GWT block, no GWFGWT exchange).
 
-    Shared GWF scaffold for the three sprint-18 Wave-1 archetypes. The grid,
+    Shared GWF scaffold for the three archetypes. The grid,
     west->east REGIONAL_GRADIENT CHD, IC and OC (HEAD + BUDGET, ALL) are identical
     across them; only the temporal mode + the stress packages differ:
 
@@ -1494,7 +1495,7 @@ def _build_gwf_only_archetype_deck(
     drain_cond_written = 0.0
     zone_partition_written: str | None = None
     n_zones = 0
-    # Wave-2 accumulators (default to the no-package value for every archetype).
+    # accumulators (default to the no-package value for every archetype).
     recharge_cell_count = 0
     infiltration_rate_written = 0.0
     recharge_active_periods = 0
@@ -2085,7 +2086,7 @@ def _build_gwf_only_archetype_deck(
         npf_icelltype=npf_icelltype,
         zone_partition=zone_partition_written,
         n_zones=n_zones,
-        # --- Wave-2 archetypes ---------------------------------------------- #
+        # --- archetypes ---------------------------------------------- #
         recharge_cell_count=recharge_cell_count,
         infiltration_rate_m_day=infiltration_rate_written,
         recharge_active_periods=recharge_active_periods,
@@ -2213,7 +2214,7 @@ def _build_zone_array(
 
 
 # ---------------------------------------------------------------------------
-# multi_species transport (sprint-18 Wave-3). One shared GWF flow field drives N
+# multi_species transport. One shared GWF flow field drives N
 # independent ModflowGwt transport models (one per solute species), each coupled
 # to the SHARED GWF by its own ModflowGwfgwt exchange. All N transport models +
 # the GWF + every exchange live in ONE mfsim.nam and run in ONE mf6 invocation.
@@ -2389,7 +2390,7 @@ def _build_multi_species_deck(
     first-order decay removes mass; the daughter is sourced only by its own SRC).
     ``decay_chain_coupled`` stays False until a real ingrowth coupling lands;
     ``n_gwtgwt_exchanges`` is 0. This is the honest "independent species first"
-    path the Wave-3 kickoff sanctions.
+    path the kickoff sanctions.
     """
     specs = _normalize_species(species)
 
@@ -2548,7 +2549,7 @@ def _build_multi_species_deck(
 
         # Per-species MST: porosity (shared aquifer) + optional per-species linear
         # sorption (Kd) and first-order decay. decay_sorbed is required by MF6 when
-        # BOTH decay AND sorption are active (the Wave-1 DECAY_SORBED bugfix), and
+        # BOTH decay AND sorption are active (the DECAY_SORBED bugfix), and
         # defaults to the aqueous decay rate.
         mst_kwargs: dict = {"porosity": porosity, "filename": f"{gwt_name}.mst"}
         kd = spec["sorption_kd"]
@@ -2946,7 +2947,7 @@ def _build_prt_capture_zone_deck(
         well_lat=well_lat,
         well_lon=well_lon_val,
         pumping_rate_m3_day=pump_rate,
-        # PRT-specific fields (Wave-4).
+        # PRT-specific fields.
         prt_present=True,
         xoffset_m=xoffset_m,
         yoffset_m=yoffset_m,
@@ -3185,7 +3186,7 @@ def _build_saltwater_intrusion_deck(
     gwf_name: str,
     write: bool,
 ) -> DeckManifest:
-    """Build a Henry-style variable-density saltwater-intrusion deck (Wave-5).
+    """Build a Henry-style variable-density saltwater-intrusion deck.
 
     Constructs ONE ``MFSimulation`` containing:
 
@@ -3249,7 +3250,7 @@ def _build_saltwater_intrusion_deck(
         write:      If ``True``, write the deck to disk.
 
     Returns:
-        ``DeckManifest`` with all saltwater-intrusion Wave-5 fields populated.
+        ``DeckManifest`` with all saltwater-intrusion fields populated.
 
     Raises:
         ValueError: if ``n_vertical_layers`` is outside [4, 80].
@@ -3511,7 +3512,7 @@ def _build_saltwater_intrusion_deck(
         transient=True,
         n_stress_periods=1,
         n_transient_periods=1,
-        # Wave-5 saltwater_intrusion fields.
+        # saltwater_intrusion fields.
         saltwater_intrusion=True,
         si_nlay=nlay,
         si_ncol=ncol,
@@ -3545,7 +3546,7 @@ def build_modflow_deck(
     *,
     sim_name: str = "mfsim",
     write: bool = True,
-    # --- River-coupling (sprint-17 J9; ADDITIVE, all optional) ------------- #
+    # --- River-coupling (J9; ADDITIVE, all optional) ------------- #
     river_polyline_lonlat: list[tuple[float, float]] | None = None,
     river_stage_m: float | None = None,
     river_stage_depth_m: float | None = None,
@@ -3569,7 +3570,7 @@ def build_modflow_deck(
     csub_sse_elastic_m: float | None = None,
     csub_interbed_thick_frac: float | None = None,
     csub_cg_ske_m: float | None = None,
-    # --- Archetype switch (sprint-18 Wave-1; ADDITIVE, all optional) -------- #
+    # --- Archetype switch (ADDITIVE, all optional) -------- #
     # archetype is None -> the EXISTING spill/seepage GWF+GWT deck (byte-identical).
     # The three new archetypes are GWF-only and dispatch to
     # ``_build_gwf_only_archetype_deck``; the spill-only kwargs above are ignored.
@@ -3585,7 +3586,7 @@ def build_modflow_deck(
     drain_conductance_m2_day: float | None = None,
     well_pumping_rate_m3_day: float | None = None,
     zone_partition: str | None = None,
-    # --- Wave-2 archetypes (sprint-18 Wave-2; ADDITIVE, all optional) ------- #
+    # --- archetypes (ADDITIVE, all optional) ------- #
     # MAR (managed aquifer recharge -> RCH/RCHA mounding)
     basin_footprint_lonlat: list[tuple[float, float]] | None = None,
     infiltration_rate_m_day: float | None = None,
@@ -3603,7 +3604,7 @@ def build_modflow_deck(
     et_max_rate_m_day: float | None = None,
     et_extinction_depth_m: float | None = None,
     specific_yield: float | None = None,
-    # --- multi_species transport (sprint-18 Wave-3; ADDITIVE, optional) ----- #
+    # --- multi_species transport (ADDITIVE, optional) ----- #
     # When ``archetype == "multi_species"`` the adapter builds ONE shared GWF +
     # one ModflowGwt per species + one ModflowGwfgwt per species. ``species`` is
     # an ordered list of per-species specs: either ``SpeciesSpec``-like objects
@@ -3611,7 +3612,7 @@ def build_modflow_deck(
     # .parent attributes) OR plain dicts with those keys. ``species is None`` =>
     # the byte-identical single-contaminant spill deck.
     species: list | None = None,
-    # --- Wave-4 PRT capture-zone / wellhead_protection (ADDITIVE, optional) - #
+    # --- PRT capture-zone / wellhead_protection (ADDITIVE, optional) - #
     # ``archetype in ('capture_zone', 'wellhead_protection')``: build ONLY the
     # GWF deck here (the caller runs mf6 on it, then calls
     # ``build_and_run_prt_from_gwf`` to reverse + run the PRT sim).
@@ -3620,7 +3621,7 @@ def build_modflow_deck(
     n_particles: int = 16,
     capture_zone_travel_time_years: list[float] | None = None,
     prt_max_tracking_years: float | None = None,
-    # --- Wave-5 saltwater_intrusion (sprint-18 Wave-5; ADDITIVE, optional) -- #
+    # --- saltwater_intrusion (ADDITIVE, optional) -- #
     # ``archetype == "saltwater_intrusion"``: Henry-style field-scale coastal
     # transect; GWF (BUY variable-density) + GWT in ONE sim. All three args are
     # optional and fall back to the Henry field-scale demo defaults when None.
@@ -3645,7 +3646,7 @@ def build_modflow_deck(
         rate, duration, aquifer hydraulic conductivity, porosity) into a
         runnable MODFLOW 6 input deck for the groundwater-contamination engine
         (Case 2). The caller uploads the resulting files to the cache bucket
-        and submits the solver Cloud Run Job (job-0227).
+        and submits the solver Cloud Run Job.
 
     Do NOT use this for:
         surface-water / inundation flooding (use `build_sfincs_model`);
@@ -3679,7 +3680,7 @@ def build_modflow_deck(
             (used by unit tests that only assert the in-memory deck shape).
         river_polyline_lonlat: an optional river polyline as ``(lon, lat)``
             vertices (EPSG:4326) to drape onto the structured grid as a RIV
-            head-dependent river<->aquifer flux boundary (sprint-17 J9). When
+            head-dependent river<->aquifer flux boundary (J9). When
             None the deck is the original spill-only deck (no RIV, no along-
             river source) and every river field on the manifest stays at its
             no-river default. The vertices are projected to the deck's UTM grid
@@ -3704,7 +3705,7 @@ def build_modflow_deck(
             leaks into the aquifer) instead of the single spill cell. Requires a
             ``river_polyline_lonlat``; ignored (with the SRC staying at the spill
             cell) when no river is supplied.
-        species: multi_species transport (sprint-18 Wave-3 - ADDITIVE). When
+        species: multi_species transport (- ADDITIVE). When
             ``archetype == "multi_species"`` this is an ordered list of per-species
             specs (``SpeciesSpec``-like objects OR plain dicts with ``name`` /
             ``release_rate_kg_s`` / ``sorption_kd`` / ``decay_per_day`` /
@@ -3798,7 +3799,7 @@ def build_modflow_deck(
     k_m_per_day = aquifer_k_ms * SECONDS_PER_DAY
     mass_rate_g_per_day = release_rate_kg_s * KG_TO_G * SECONDS_PER_DAY
 
-    # --- Archetype switch (sprint-18 Wave-1) ---------------------------------
+    # --- Archetype switch ---------------------------------
     # A non-None archetype is one of the three NEW GWF-only MODFLOW questions
     # (sustainable_yield / mine_dewatering / regional_water_budget). They reuse
     # the SAME georegistration computed above (UTM zone, grid origin, 40x40x50 m
@@ -3822,7 +3823,7 @@ def build_modflow_deck(
             "land_subsidence",
         ):
             raise ValueError(f"unknown MODFLOW archetype: {archetype!r}")
-        # Wave-5 saltwater_intrusion: GWF (BUY variable-density) + GWT in ONE sim,
+        # saltwater_intrusion: GWF (BUY variable-density) + GWT in ONE sim,
         # vertical nrow=1 Henry-style slice with seaward GHB+AUX and inland WEL+AUX.
         # Bypasses the plan-view UTM georegistration used by other archetypes.
         if archetype == "saltwater_intrusion":
@@ -3839,7 +3840,7 @@ def build_modflow_deck(
                 gwf_name=gwf_name,
                 write=write,
             )
-        # Wave-4 PRT archetypes: a two-sim workflow (GWF built here; the caller
+        # PRT archetypes: a two-sim workflow (GWF built here; the caller
         # runs mf6 on it then calls build_and_run_prt_from_gwf for the PRT phase).
         # The GWF grid is built at LOCAL (0,0) origin inside the helper (the true
         # UTM offset is stored on the manifest as xoffset_m / yoffset_m).
@@ -4062,7 +4063,7 @@ def build_modflow_deck(
         filename=f"{gwf_name}.chd",
     )
 
-    # --- RIV package: drape the river polyline onto the grid (sprint-17 J9) --
+    # --- RIV package: drape the river polyline onto the grid (J9) --
     # The RIV head-dependent boundary couples the river to the aquifer: per
     # reach cell leakage Q = cond*(stage - h), capped at cond*(stage - rbot)
     # once the aquifer head drops below the streambed bottom. The set of reach
@@ -4210,7 +4211,7 @@ def build_modflow_deck(
     if decay_active:
         mst_kwargs["first_order_decay"] = True
         mst_kwargs["decay"] = float(decay)
-        # LIVE BUG FIX (sprint-18 Wave-1): MF6 REQUIRES decay_sorbed in the
+        # LIVE BUG FIX: MF6 REQUIRES decay_sorbed in the
         # GRIDDATA block whenever BOTH first-order decay AND sorption are active
         # ("DECAY_SORBED not provided in GRIDDATA block but decay and sorption are
         # active"). Default the sorbed-phase decay coefficient to the aqueous
@@ -4230,7 +4231,7 @@ def build_modflow_deck(
     # yardstick exact: total injected = mass_rate x duration, not mass_rate x
     # (1 spin-up day + duration). Empty list in period 0 deactivates it there.
     #
-    # sprint-17 J9: when along_river_source is True AND a river was draped, the
+    # J9: when along_river_source is True AND a river was draped, the
     # source is distributed ALONG the RIV reach cells (the contaminant enters
     # where the river leaks into the aquifer - the river-seepage plume), with
     # the SAME total mass rate (split evenly across the reach cells) so the

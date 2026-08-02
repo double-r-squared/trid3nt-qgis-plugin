@@ -12,15 +12,15 @@ from __future__ import annotations
 
 import pytest
 
-import trid3nt_server.tools.discovery.search_tools as dd
-from trid3nt_server.tools import TOOL_REGISTRY
-from trid3nt_server.tools.discovery import tool_retrieval as trmod
-from trid3nt_server.tools.discovery.tool_retrieval import (
+import trid3nt_server.agent.tools.search.search_tools.search_tools as dd
+from trid3nt_server.agent.tools import TOOL_REGISTRY
+from trid3nt_server.agent.tools.search import tool_retrieval as trmod
+from trid3nt_server.agent.tools.search.tool_retrieval import (
     DEFAULT_K,
     MAX_K,
     retrieve_visible_tools,
 )
-from trid3nt_server.categories import (
+from trid3nt_server.agent.categories import (
     HOT_SET_TOOLS,
     AllowedToolSet,
     tools_for_category,
@@ -51,9 +51,10 @@ def _allowed(opened=None, dispatched=None, explicit=None) -> AllowedToolSet:
 def test_step0_hot_set_floor_extended():
     for name in (
         "publish_layer",
-        "compute_zonal_statistics",
-        "generate_histogram",
-        "generate_time_series",
+        # processing-wave cull (2026-07-29): generate_chart is the ONE
+        # interactive-chart floor slot (replaced generate_histogram /
+        # generate_time_series); compute_zonal_statistics demoted to code_exec.
+        "generate_chart",
         # DuckDB spatial-query fold (Phase B): spatial_query holds the
         # layer-analysis floor slot summarize_layer_statistics held.
         "spatial_query",
@@ -80,13 +81,13 @@ def test_core_floor_always_subset(warm_index, query, allowed):
 def test_never_hide_mid_task(warm_index):
     a = _allowed(
         opened={"hydrology"},
-        dispatched={"run_swmm_urban_flood"},
+        dispatched={"swmm_urban_flood"},
         explicit={"compute_contours"},
     )
     # a query about something UNRELATED to the accumulated tools.
     res = retrieve_visible_tools("show me the lightning over the storm", a, DEFAULT_K)
     assert set(a.as_frozenset()) <= res
-    assert "run_swmm_urban_flood" in res  # dispatched stays
+    assert "swmm_urban_flood" in res  # dispatched stays
     assert "compute_contours" in res      # explicit stays
     assert set(tools_for_category("hydrology")) <= res  # opened-category tools stay
 
@@ -110,11 +111,11 @@ def test_never_hide_survives_invalid_opened_category():
     a = AllowedToolSet()
     a.open_category("hydrology")          # valid
     a.open_category("no_such_category")   # invalid (e.g. removed/renamed across a deploy)
-    a.record_dispatch("run_swmm_urban_flood")
+    a.record_dispatch("swmm_urban_flood")
     a.add_tools({"compute_contours"})
     for query in ("", "fetch radar reflectivity nexrad"):
         res = retrieve_visible_tools(query, a, DEFAULT_K)
-        assert "run_swmm_urban_flood" in res, query  # dispatched stays
+        assert "swmm_urban_flood" in res, query  # dispatched stays
         assert "compute_contours" in res, query      # explicit stays
         assert set(tools_for_category("hydrology")) <= res, query  # valid cat stays
         assert HOT_SET_TOOLS <= res
@@ -158,10 +159,37 @@ _STARTUP_ONLY = {
 }
 
 
+def _template_names() -> set[str]:
+    """Registered pool-HIDDEN names: tier=template AND tier=internal.
+
+    engine-door refactor: templates are EXCLUDED from the default retrieval pool
+    (and the fail-open floor) and surfaced only by their door's gate expansion.
+    wave-11 (ADR 0059): tier=internal (an absorbed in-process seam,
+    fetch_copernicus_dem) is EXCLUDED identically -- never model-facing, so it must
+    NOT be expected in retrieve_visible_tools / the fail-open dump / the MAIN corpus
+    (an internal seam carries no corpus; templates' corpus is co-located under
+    workflows/<engine>/)."""
+    import trid3nt_server.main as _m
+
+    _m._import_tools_registry()
+    from trid3nt_server.agent.tools import TOOL_REGISTRY as _full
+
+    return {
+        n for n, e in _full.items()
+        if getattr(e.metadata, "tier", "general") in ("template", "internal")
+    }
+
+
 def _assert_full_failopen(res):
-    full = _full_registry_names()
+    # engine-door refactor + wave-11: the fail-open floor filters tier=template AND
+    # tier=internal (a cold index must not leak the pool-excluded templates or the
+    # internal seam), so expect the full registry MINUS those.
+    full = _full_registry_names() - _template_names()
     assert full <= res, f"fail-open dropped: {sorted(full - res)}"
     assert _STARTUP_ONLY <= res, "fail-open omitted the startup-only tools"
+    assert not (_template_names() & res), (
+        f"fail-open leaked pool-excluded template/internal tools: {sorted(_template_names() & res)}"
+    )
 
 
 def test_fail_open_on_discovery_error(warm_index, monkeypatch):
@@ -226,11 +254,11 @@ _RECALL_FIXTURE = [
     ("geocode this city to a bounding box", "geocode_location"),
     ("fetch NEXRAD radar reflectivity", "fetch_nexrad_reflectivity"),
     # newly-backfilled (STEP 7) tools -- prove the backfill lifts recall.
-    ("how deep will the water get from this hurricane flood", "run_model_flood_scenario"),
-    ("simulate urban street flooding from heavy rain in this city", "run_swmm_urban_flood"),
+    ("how deep will the water get from this hurricane flood", "run_sfincs"),
+    ("simulate urban street flooding from heavy rain in this city", "run_swmm"),
     ("fetch high resolution aerial imagery for this area", "fetch_naip"),
     ("model the groundwater contamination plume from this chemical spill", "run_model_groundwater_contamination_scenario"),
-    ("run a probabilistic seismic hazard calculation for this region", "run_seismic_hazard_psha"),
+    ("run a probabilistic seismic hazard calculation for this region", "run_openquake"),
     ("draw the topographic contour lines from the elevation", "compute_contours"),
 ]
 
@@ -249,10 +277,9 @@ def _load_corpus():
 
     import yaml
 
-    # Resolve through the module's own seam so the test never hardcodes the
-    # package depth (tools/discovery/ post-reorg).
-    path = pathlib.Path(dd._default_corpus_path())
-    return yaml.safe_load(path.read_text())
+    # Compose through the module's own loader (per-tool corpus.yaml tree +
+    # residual) so the test never hardcodes the package depth or the split.
+    return dd._load_corpus()
 
 
 def _full_registry_names() -> set[str]:
@@ -263,14 +290,18 @@ def _full_registry_names() -> set[str]:
     import trid3nt_server.main as _m
 
     _m._import_tools_registry()
-    from trid3nt_server.tools import TOOL_REGISTRY as _full
+    from trid3nt_server.agent.tools import TOOL_REGISTRY as _full
 
     return set(_full)
 
 
 def test_every_registered_tool_has_corpus_queries():
     corpus = _load_corpus()
-    missing = sorted(_full_registry_names() - set(corpus))
+    # engine-door refactor: tier=template tools are EXCLUDED from the default pool
+    # and surfaced only by their door's gate expansion, so their routing phrasings
+    # live in a CO-LOCATED workflows/<engine>/<template>/corpus.yaml (NOT walked
+    # into the main index). They are not required in the main corpus.
+    missing = sorted(_full_registry_names() - _template_names() - set(corpus))
     assert not missing, (
         "these registered tools have NO tool_query_corpus.yaml entry -- add 5-8 "
         f"routing queries each so retrieve_visible_tools can recall them: {missing}"

@@ -1,0 +1,9 @@
+fetch_cdc_svi:
+- CDC social vulnerability index for this area
+- show SVI social vulnerability by census tract
+- which neighborhoods are most socially vulnerable
+- social vulnerability overlay for the flood zone
+- CDC ATSDR SVI overall and theme scores
+- map equity and environmental justice vulnerability
+- rank census tracts by social vulnerability percentile
+- most vulnerable population exposed to the hazard

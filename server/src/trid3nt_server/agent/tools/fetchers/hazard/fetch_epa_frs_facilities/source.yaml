@@ -1,0 +1,90 @@
+schema_version: v1
+name: fetch_epa_frs_facilities
+source_class: epa_frs_facilities
+error_prefix: EPA_FRS
+input_error_suffix: INPUT_INVALID
+shape: vector-fgb
+supports_global_query: false
+endpoints:
+  data:
+    url: https://geopub.epa.gov/arcgis/rest/services/NEPAssist/NEPAVELayersPublic_fgdb/MapServer/15/query
+auth:
+  mode: none
+  user_agent: trid3nt/0.1 (Hazard Modeling Agent; https://github.com/double-r-squared/trid3nt-qgis-plugin;
+    agent@trid3nt.dev)
+params:
+  bbox:
+    type: bbox
+    required: true
+    quantize: round_6dp
+  facility_program:
+    type: str
+    required: false
+    default: frs
+hooks:
+  build_request: epa_frs_facilities.build_request
+  parse_response: epa_frs_facilities.parse_response
+ingest:
+  properties:
+  - registry_id
+  - program
+  - program_label
+  - program_acronym
+  - program_id
+  - facility_name
+  - address
+  - city
+  - county
+  - state
+  - postal_code
+  - epa_region
+  - facility_url
+  - npl_status
+normalize:
+  crs: EPSG:4326
+output:
+  layer_type: vector
+  ext: fgb
+  role: primary
+  style_preset: epa_frs_facilities
+  emit_bbox: true
+cache:
+  ttl_class: static-30d
+payload_estimate:
+  model: per_feature
+  features_per_sq_deg: 9000.0
+  kb_per_feature: 0.41
+  floor_mb: 0.02
+  ceil_mb: 50.0
+caveats:
+- EPA Facility Registry Service program-interest points via the public NEPAssist MapServer. facility_program='frs'
+  unions 5 point layers (TRI/water/hazwaste/air/brownfields); 'superfund' synthesizes points from LAT/LON.
+  US-only; bbox required. Single-page per layer (2000-feature cap/layer).
+docstring: "EPA regulated-facility points by program as a FlatGeobuf layer.\n\nFetches EPA Facility Registry\
+  \ Service (FRS) program-interest point facilities\nof one ``facility_program`` intersecting a bbox,\
+  \ from a public, unauthenticated\nEPA ArcGIS REST MapServer (the EPA NEPAssist public layers). Returns\
+  \ a\nFlatGeobuf of ``Point`` features in EPSG:4326 with a common FRS attribute\nschema (``registry_id``,\
+  \ ``program``, ``program_id``, ``facility_name``,\naddress columns, ``facility_url``).\n\n**When to\
+  \ use:**\n- \"Show EPA regulated facilities / TRI sites / Superfund sites near [place]\".\n- The MODFLOW\
+  \ contamination-plume demo: locate a candidate chemical-source\n  facility, or determine which regulated\
+  \ facilities a modeled plume reaches\n  (intersect with ``spatial_query``).\n- Any hazard / exposure\
+  \ workflow needing regulated industrial / waste facility\n  locations inside a flood / fire / surge\
+  \ / plume footprint.\n\n**When NOT to use:**\n- Life-safety facilities (hospitals / schools / fire /\
+  \ police / power) ->\n  ``fetch_hifld_critical_infrastructure``.\n- Dams -> ``fetch_usace_dams``. Buildings\
+  \ -> ``fetch_usace_nsi``.\n- Non-US facilities (FRS is US-only). Real-time emission / discharge readings\n\
+  \  (FRS is a static inventory).\n\n**Parameters:**\n    bbox: ``(min_lon, min_lat, max_lon, max_lat)``\
+  \ in EPSG:4326. Required -- ``supports_global_query=False``. Example Houston Ship Channel:\n       \
+  \ ``(-95.30, 29.68, -95.05, 29.80)``.\n    facility_program: One of ``\"frs\"`` (default -- union of\
+  \ TRI + water +\n        hazardous-waste + air + brownfields point layers), ``\"tri\"``,\n        ``\"\
+  superfund\"``, ``\"air\"``, ``\"water\"``, ``\"hazwaste\"``,\n        ``\"brownfields\"`` (aliases accepted:\
+  \ ``\"all\"``, ``\"toxic_release\"``,\n        ``\"npl\"``, ``\"npdes\"``, ``\"rcra\"``, etc.).\n\n\
+  **Returns:**\n    ``LayerURI`` -> FlatGeobuf of ``Point`` features in EPSG:4326. Properties\n    carry\
+  \ ``registry_id``, ``program``, ``program_label``, ``program_acronym``,\n    ``program_id``, ``facility_name``,\
+  \ ``address``, ``city``, ``county``,\n    ``state``, ``postal_code``, ``epa_region``, ``facility_url``\
+  \ (and\n    ``npl_status`` for Superfund). ``layer_type=\"vector\"``, ``role=\"primary\"``,\n    ``style_preset=\"\
+  epa_frs_facilities\"``, ``units=None``.\n\n**Error types:**\n    - ``EpaFrsInputError``: unknown facility_program\
+  \ or bad bbox\n      (retryable=False).\n    - ``EpaFrsUpstreamError``: HTTP/network failure, ArcGIS\
+  \ error envelope,\n      or FlatGeobuf serialization failure (retryable=True).\n    - ``EpaFrsEmptyError``:\
+  \ no features in bbox (retryable=False; not raised\n      by default -- empty FGB is returned).\n\n\
+  Cache: ``ttl_class=\"static-30d\"``, ``source_class=\"epa_frs_facilities\"``.\nCache key is SHA-256\
+  \ of ``(program_key, bbox-rounded-6dp)``.\n\n``supports_global_query=False``. No API key required."

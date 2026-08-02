@@ -1,0 +1,13 @@
+clip_raster_to_polygon:
+- clip this flood-depth raster to the state of Florida polygon
+- I need the DEM clipped to the watershed boundary, not a rectangle
+- mask the precipitation raster to Lee County's exact boundary
+- clip the population grid inside the FEMA flood zone polygon
+- I want LANDFIRE fuels data clipped to this fire management unit boundary
+- clip the NLCD raster to the national park boundary polygon
+- clip this DEM to the bounding box of the county I fetched
+- I need to trim this national-scale precipitation raster to my study-area bbox
+- crop the population raster to this rectangular flood inundation extent
+- clip the landcover grid down to just this bounding box
+- trim this large-area DEM to the Fort Myers case extent and reproject it
+- cut this HRRR wind raster to my storm-domain bbox

@@ -1,0 +1,166 @@
+# Router source spec (data-router fold, phase-2 wave-6 VECTOR/ZIP family, ADR 0052).
+# Twin: fetch_noaa_slr_scenarios.py (was SPEC-EXPRESSIBLE; wave-2 deferred it for
+# lack of a fan-out mode). Uses the NEW declarative fan-out: one query PER
+# scenario_ft level against a per-level MapServer (value_map -> service name),
+# per-level slr_ft + scenario_label stamped, dissolved polygons merged.
+schema_version: v1
+
+name: fetch_noaa_slr_scenarios
+source_class: noaa_slr_scenarios           # cache prefix
+error_prefix: NOAA_SLR_SCENARIOS            # twin A.6 token (NOAA_SLR_SCENARIOS_*)
+input_error_suffix: INPUT_INVALID          # NOAA_SLR_SCENARIOSInputError -> *_INPUT_INVALID
+shape: vector-fgb
+supports_global_query: false               # CONUS coastal polygon source, bbox required
+
+endpoints:
+  data:                                     # url_template: {service} substituted per fan-out value
+    url_template: "https://coast.noaa.gov/arcgis/rest/services/dc_slr/{service}/MapServer/0/query"
+auth:
+  mode: none
+  user_agent: "trid3nt/0.1 (Hazard Modeling Agent; https://github.com/double-r-squared/trid3nt-qgis-plugin; agent@trid3nt.dev)"
+
+params:
+  bbox: {type: bbox, required: true, quantize: round_6dp}
+  scenario_ft:
+    type: float_list
+    required: false
+    default: [1.0, 2.0, 3.0]                # twin DEFAULT_SCENARIOS_FT
+    values: [0.0, 0.5, 1.0, 1.5, 2.0, 2.5, 3.0, 3.5, 4.0, 4.5, 5.0, 5.5,
+             6.0, 6.5, 7.0, 7.5, 8.0, 8.5, 9.0, 9.5, 10.0]
+
+ingest:
+  query_template:
+    out_fields: "OBJECTID,Dissolve"          # twin _OUT_FIELDS
+    f: geojson
+  pagination: {mode: exceeded_transfer_limit, page_size: 1000}
+  properties: [slr_ft, scenario_label, dissolve]   # honest-empty header schema (twin empty FGB)
+  fan_out:
+    param: scenario_ft
+    endpoint: data
+    value_map:                               # scenario level -> NOAA OCM service name
+      "0.0": slr_0ft
+      "0.5": slr_0_5ft
+      "1.0": slr_1ft
+      "1.5": slr_1_5ft
+      "2.0": slr_2ft
+      "2.5": slr_2_5ft
+      "3.0": slr_3ft
+      "3.5": slr_3_5ft
+      "4.0": slr_4ft
+      "4.5": slr_4_5ft
+      "5.0": slr_5ft
+      "5.5": slr_5_5ft
+      "6.0": slr_6ft
+      "6.5": slr_6_5ft
+      "7.0": slr_7ft
+      "7.5": slr_7_5ft
+      "8.0": slr_8ft
+      "8.5": slr_8_5ft
+      "9.0": slr_9ft
+      "9.5": slr_9_5ft
+      "10.0": slr_10ft
+    stamp:                                   # per-feature output props, in order
+      slr_ft:         {source: value}
+      scenario_label: {source: value_template, template: "{value:.1f} ft SLR"}
+      dissolve:       {source: prop, from: Dissolve, kind: int, default: 1}
+
+normalize:
+  crs: "EPSG:4326"
+  units: feet
+
+output:
+  layer_type: vector
+  ext: fgb
+  role: primary
+  style_preset: "noaa_slr_scenarios"
+  emit_bbox: true
+
+cache:
+  ttl_class: static-30d
+payload_estimate:                            # twin: n_scenarios * area * 0.3 clamp[0.02,50]
+  model: bbox_area
+  mb_per_sq_deg: 0.9                          # ~0.3/scenario * 3 default scenarios
+  floor_mb: 0.02
+
+caveats:
+  - "NOAA OCM SLR Viewer dissolved bathtub-inundation polygons above MHHW; 0-10 ft in 0.5-ft steps, CONUS-only"
+  - "one query per scenario level, merged; interior non-coastal bbox -> header-only FGB (honest-empty), never NOAA_SLR_SCENARIOS_EMPTY by default"
+fallback: []
+
+docstring: |-
+  NOAA Sea Level Rise scenario inundation polygons as a FlatGeobuf vector layer.
+
+  Fetches dissolved inundation-area polygons from NOAA's Office for Coastal
+  Management (OCM) SLR Viewer for one or more scenario levels (0 - 10 ft in
+  0.5-ft increments). Returns a FlatGeobuf with one polygon feature per
+  scenario level intersecting the bbox, annotated with ``slr_ft`` and
+  ``scenario_label`` attributes for map display and downstream analysis.
+
+  **When to use:**
+  - User asks for the NOAA sea-level-rise map, SLR inundation scenarios,
+    coastal flooding under X feet of sea-level rise, or "what areas flood if
+    sea level rises by 2 feet?"
+  - Agent needs the static SLR inundation footprint for a planning-level
+    overlay (intersect with building inventory, habitat polygons, roads, etc.).
+  - User wants to compare FEMA 100-year floodplain with future SLR scenarios.
+  - User asks for "1 ft SLR", "2 ft SLR", "3 ft SLR" or any combination
+    simultaneously (pass a list to ``scenario_ft``).
+
+  **When NOT to use:**
+  - For real-time / event-driven storm-surge inundation → use
+    ``sfincs_flood`` (SFINCS) or ``fetch_gtsm_tide_surge``.
+  - For probabilistic SLR projections with uncertainty ranges → the Sweet et
+    al. (2022) NOAA Technical Report scenarios (Intermediate, High, etc.) are
+    a separate dataset not in the OCM Viewer.
+  - For inland / non-coastal flooding → use ``fetch_fema_nfhl_zones`` or
+    ``sfincs_flood``.
+  - For areas outside CONUS → use ``fetch_gtsm_tide_surge`` (global coastal
+    water-level reanalysis); SLR Viewer data is CONUS-only.
+  - For marsh migration / habitat-transition projections → a separate
+    ``fetch_noaa_slr_marsh`` tool (not yet implemented) covers the
+    ``marsh_*`` MapServer services in the same folder.
+
+  **Parameters:**
+      bbox: ``(min_lon, min_lat, max_lon, max_lat)`` in EPSG:4326. Required.
+          ``supports_global_query=False`` -- CONUS coastal polygon source.
+          Recommended ≤ ~2° per side for tractable response times. Example
+          for coastal Lee County FL (Fort Myers / Naples area):
+          ``(-82.2, 26.2, -81.5, 26.9)``.
+      scenario_ft: SLR scenario level(s) in feet. Valid values: ``0, 0.5, 1,
+          1.5, 2, 2.5, 3, 3.5, 4, 4.5, 5, 5.5, 6, 6.5, 7, 7.5, 8, 8.5, 9,
+          9.5, 10``. Pass a single float (e.g. ``2.0``) or a list (e.g.
+          ``[1.0, 2.0, 3.0]``) to fetch multiple scenarios at once. Defaults
+          to ``[1.0, 2.0, 3.0]`` when not specified.
+
+  **Returns:**
+      ``LayerURI`` pointing at a FlatGeobuf in the cache bucket. Each feature
+      is a Polygon in EPSG:4326. Properties: ``slr_ft`` (float, scenario level
+      in feet), ``scenario_label`` (str, e.g. "1.0 ft SLR"), ``dissolve``
+      (int, always 1 -- source is fully dissolved per scenario). ``layer_type``
+      is ``"vector"``, ``role`` is ``"primary"``, ``style_preset`` is
+      ``"noaa_slr_scenarios"``, ``units`` is ``"feet"``.
+
+  **Cross-tool dependencies:**
+      - Feeds INTO: ``spatial_query`` (structure count / population inside
+        SLR footprint; admin-bounded SLR exposure report),
+        ``pelicun_damage_assessment`` (SLR exposure footprint x NSI
+        building stock).
+      - Compare WITH: ``fetch_fema_nfhl_zones`` (regulatory floodplain
+        vs. projected SLR inundation side-by-side), ``fetch_usace_nsi``
+        (structure-level asset inventory for exposure counting).
+      - Sibling tools: ``fetch_noaa_coops_tides`` (observed tide levels for
+        validating SLR baseline), ``fetch_gtsm_tide_surge`` (global coastal
+        water-level for non-CONUS).
+
+  **Error types:**
+      - ``NOAA_SLR_SCENARIOSInputError``: bad bbox or unknown scenario_ft
+        (retryable=False).
+      - ``NOAA_SLR_SCENARIOSUpstreamError``: HTTP/network failure, ArcGIS
+        error envelope, or FlatGeobuf serialization failure (retryable=True).
+      - ``NOAA_SLR_SCENARIOSEmptyError``: no features in bbox for any scenario
+        (retryable=False; not raised by default -- empty FGB is returned).
+
+  Cache: ``ttl_class="static-30d"``, ``source_class="noaa_slr_scenarios"``.
+  Cache key is SHA-256 of ``(bbox-rounded-6dp, sorted(scenario_ft_list))``.
+
+  ``supports_global_query=False``. No API key required.

@@ -1,0 +1,8 @@
+fetch_gbif_occurrences:
+- show me Florida panther sightings in this area
+- give me species occurrence records for biodiversity analysis in this bbox
+- I need GBIF observation points to overlay on the flood risk surface
+- where have Florida manatees been reported near Fort Myers?
+- show me bird species occurrence records in this national park
+- fetch GBIF data for endemic plant species in this fire-affected region
+- I want species observation points for this conservation baseline

@@ -24,8 +24,6 @@ Three lenses:
 
 from __future__ import annotations
 
-from unittest.mock import patch
-
 import pytest
 
 from trid3nt_contracts.openquake_contracts import (
@@ -34,13 +32,13 @@ from trid3nt_contracts.openquake_contracts import (
     SeismicHazardLayerURI,
 )
 
-import trid3nt_server.workflows.model_seismic_hazard_scenario as comp
-from trid3nt_server.workflows.model_seismic_hazard_scenario import (
+import trid3nt_server.agent.workflows.openquake.model_seismic_hazard_scenario.model_seismic_hazard_scenario as comp
+from trid3nt_server.agent.workflows.openquake.model_seismic_hazard_scenario.model_seismic_hazard_scenario import (
     REAL_FAULT_SITE_GRID_SPACING_KM,
     assemble_build_spec,
     resolve_fault_sources,
 )
-from trid3nt_server.workflows.postprocess_openquake import (
+from trid3nt_server.agent.workflows.openquake.postprocess_openquake import (
     SEISMIC_HAZARD_STYLE_PRESET,
 )
 
@@ -71,6 +69,33 @@ def _fault_result(faults, note=None):
         "note": note,
         "source": "GEM Global Active Faults (harmonized)",
     }
+
+
+def _patch_fetch(*, return_value=None, side_effect=None):
+    """Swap the ``fetch_fault_sources`` REGISTRY SEAM the consumer resolves.
+
+    fetch_fault_sources folded to a spec-driven surface (ADR 0081): the consumer
+    resolves it via ``TOOL_REGISTRY["fetch_fault_sources"].fn``. RegisteredTool is
+    a frozen dataclass, so swap the whole entry for one carrying a MagicMock fn;
+    returns ``(context_manager, mock)``.
+    """
+    import dataclasses
+
+    from unittest.mock import MagicMock, patch
+
+    from trid3nt_server.agent.tools import TOOL_REGISTRY
+
+    mock = MagicMock(return_value=return_value, side_effect=side_effect)
+    entry = dataclasses.replace(TOOL_REGISTRY["fetch_fault_sources"], fn=mock)
+    return patch.dict(TOOL_REGISTRY, {"fetch_fault_sources": entry}), mock
+
+
+def _fault_upstream_error(msg="boom"):
+    """A router FetchError the consumer catches (the twin's FaultSourcesUpstreamError
+    A.6 surface, now stamped by the shared router factory)."""
+    from trid3nt_server.agent.tools.fetchers._router.errors import router_upstream_error
+
+    return router_upstream_error("FAULT_SOURCES", msg)
 
 
 # ===========================================================================
@@ -119,16 +144,13 @@ def test_assemble_build_spec_explicit_grid_is_honored_over_refine():
 def test_resolve_fault_sources_real_path_calls_fetcher():
     """resolve_fault_sources CALLS fetch_fault_sources and, on a hit, returns the
     records + a 'real GEM active-fault' narration line."""
-    import trid3nt_server.tools.fetchers.hazard.fetch_fault_sources as ff
-
-    with patch.object(
-        ff, "fetch_fault_sources", return_value=_fault_result([_FAULT_REC])
-    ) as mock_fetch:
+    cm, mock_fetch = _patch_fetch(return_value=_fault_result([_FAULT_REC]))
+    with cm:
         recs, note = resolve_fault_sources(list(_BBOX))
 
     mock_fetch.assert_called_once()
-    # The fetcher was called with the AOI bbox.
-    assert list(mock_fetch.call_args.args[0]) == list(_BBOX)
+    # The fetcher was called with the AOI bbox (keyword, via the registry seam).
+    assert list(mock_fetch.call_args.kwargs["bbox"]) == list(_BBOX)
     assert len(recs) == 1
     assert "real" in note.lower() and "fault" in note.lower()
     assert _FAULT_REC["name"] in note
@@ -137,12 +159,9 @@ def test_resolve_fault_sources_real_path_calls_fetcher():
 def test_resolve_fault_sources_empty_falls_back_honestly():
     """No faults in the AOI => empty records + the fetcher's typed honest note
     (NEVER fabricates a fault, NEVER raises)."""
-    import trid3nt_server.tools.fetchers.hazard.fetch_fault_sources as ff
-
     fetch_note = "No GEM active faults intersect this AOI."
-    with patch.object(
-        ff, "fetch_fault_sources", return_value=_fault_result([], note=fetch_note)
-    ):
+    cm, _ = _patch_fetch(return_value=_fault_result([], note=fetch_note))
+    with cm:
         recs, note = resolve_fault_sources(list(_BBOX))
 
     assert recs == []
@@ -152,12 +171,8 @@ def test_resolve_fault_sources_empty_falls_back_honestly():
 def test_resolve_fault_sources_fetch_error_degrades_to_synthetic():
     """A genuine upstream fetch error degrades to the synthetic path (empty
     records + an honest note) rather than failing the hazard run."""
-    import trid3nt_server.tools.fetchers.hazard.fetch_fault_sources as ff
-    from trid3nt_server.tools.fetchers.hazard.fetch_fault_sources import FaultSourcesUpstreamError
-
-    with patch.object(
-        ff, "fetch_fault_sources", side_effect=FaultSourcesUpstreamError("boom")
-    ):
+    cm, _ = _patch_fetch(side_effect=_fault_upstream_error("boom"))
+    with cm:
         recs, note = resolve_fault_sources(list(_BBOX))
 
     assert recs == []
@@ -215,7 +230,7 @@ def _wire_common_mocks(monkeypatch, staged_capture):
     def _fake_run_solver(*, solver, model_setup_uri, compute_class):
         return _Handle()
 
-    import trid3nt_server.tools.simulation.solver as solver_mod
+    import trid3nt_server.agent.tools.simulation.solver.solver as solver_mod
 
     monkeypatch.setattr(solver_mod, "run_solver", _fake_run_solver, raising=False)
     monkeypatch.setattr(solver_mod, "wait_for_completion", _fake_wait, raising=False)
@@ -243,15 +258,11 @@ async def test_composer_uses_real_faults_when_present(monkeypatch):
       - stages the build_spec WITH the fault source model (+ refined grid),
       - returns a layer narrating source_model_kind == 'real-fault'.
     """
-    import trid3nt_server.tools.fetchers.hazard.fetch_fault_sources as ff
-
-    fetch_mock = patch.object(
-        ff, "fetch_fault_sources", return_value=_fault_result([_FAULT_REC])
-    )
+    fetch_mock, mock_fetch = _patch_fetch(return_value=_fault_result([_FAULT_REC]))
     staged: dict = {}
     _wire_common_mocks(monkeypatch, staged)
 
-    with fetch_mock as mock_fetch:
+    with fetch_mock:
         layer = await comp.model_seismic_hazard_scenario(
             OpenQuakeRunArgs(bbox=_BBOX), compute_class="standard"
         )
@@ -279,16 +290,12 @@ async def test_composer_falls_back_and_narrates_honestly_when_no_faults(monkeypa
       - returns a layer narrating source_model_kind == 'synthetic-area' and
         NEVER claims real faults.
     """
-    import trid3nt_server.tools.fetchers.hazard.fetch_fault_sources as ff
-
     fetch_note = "No GEM active faults intersect this AOI."
-    fetch_mock = patch.object(
-        ff, "fetch_fault_sources", return_value=_fault_result([], note=fetch_note)
-    )
+    fetch_mock, mock_fetch = _patch_fetch(return_value=_fault_result([], note=fetch_note))
     staged: dict = {}
     _wire_common_mocks(monkeypatch, staged)
 
-    with fetch_mock as mock_fetch:
+    with fetch_mock:
         layer = await comp.model_seismic_hazard_scenario(
             OpenQuakeRunArgs(bbox=_BBOX), compute_class="standard"
         )
@@ -310,12 +317,7 @@ async def test_composer_falls_back_and_narrates_honestly_when_no_faults(monkeypa
 async def test_composer_degrades_to_synthetic_on_fetch_error(monkeypatch):
     """A fault-fetch UPSTREAM error must NOT fail the hazard run: the composer
     degrades to the synthetic area source and narrates honestly."""
-    import trid3nt_server.tools.fetchers.hazard.fetch_fault_sources as ff
-    from trid3nt_server.tools.fetchers.hazard.fetch_fault_sources import FaultSourcesUpstreamError
-
-    fetch_mock = patch.object(
-        ff, "fetch_fault_sources", side_effect=FaultSourcesUpstreamError("down")
-    )
+    fetch_mock, _ = _patch_fetch(side_effect=_fault_upstream_error("down"))
     staged: dict = {}
     _wire_common_mocks(monkeypatch, staged)
 

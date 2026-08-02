@@ -35,13 +35,13 @@ if str(_SRC) not in sys.path:
 
 from google.genai import types as genai_types  # noqa: E402
 
-from trid3nt_server.adapter import (  # noqa: E402
+from trid3nt_server.agent.adapters.adapter import (  # noqa: E402
     _normalize_callable_for_gemini,
     _simplify_annotation,
     _strip_private_params,
     build_tool_declarations,
 )
-from trid3nt_server.tools import TOOL_REGISTRY  # noqa: E402,F401 — populated on import
+from trid3nt_server.agent.tools import TOOL_REGISTRY  # noqa: E402,F401 — populated on import
 
 
 # ---------------------------------------------------------------------------
@@ -322,9 +322,8 @@ def test_build_tool_declarations_covers_all_registry_tools() -> None:
 # ---------------------------------------------------------------------------
 
 _KNOWN_PROBLEMATIC_TOOLS = [
-    "compute_zonal_statistics",   # job-0163: _storage_client typeless schema
-    "compute_hillshade",          # job-0163: same class
-    "clip_raster_to_bbox",        # B11: tuple[float,4] + -> LayerURI return
+    "compute_hillshade",          # job-0163: _storage_client typeless schema
+    "clip_raster_to_polygon",     # B11: tuple[float,4] bbox + -> LayerURI return
     "fetch_mrms_qpe",             # B11: bbox: tuple[float,4] | None
     "fetch_nws_event",            # B11: area: str | tuple[...]
     "fetch_gbif_occurrences",     # B11: year_range: tuple[int,int] | None

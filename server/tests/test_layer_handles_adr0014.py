@@ -21,7 +21,7 @@ Covers the four server-side mechanisms:
    as a storage-only ``layer_handles`` field on the cases doc that
    ``upsert_case`` never clobbers and ``CaseSummary`` never carries.
 
-Plus one end-to-end drive of ``_stream_gemini_reply`` (fake Gemini, real
+Plus one end-to-end drive of ``_stream_model_reply`` (fake Gemini, real
 emit seam) proving the function_response the model reads carries ``L<n>``
 while the raw uri never reaches it.
 """
@@ -38,8 +38,8 @@ import pytest
 
 from trid3nt_contracts import new_ulid
 from trid3nt_contracts.execution import LayerURI
-from trid3nt_server.layer_uri_emit import emit_layer_uri
-from trid3nt_server.uri_registry import (
+from trid3nt_server.emission.layer_uri_emit import emit_layer_uri
+from trid3nt_server.emission.uri_registry import (
     SHORT_HANDLE_RE,
     SessionUriRegistry,
     UriResolutionError,
@@ -86,7 +86,7 @@ def _layer(layer_id: str, uri: str, layer_type: str = "raster") -> LayerURI:
 class TestHandleMint:
     def test_mint_is_monotonic_per_registration_order(self) -> None:
         reg = make_registry()
-        reg.register_tool_result("run_model_flood_scenario", _layer("flood-a", COG_A))
+        reg.register_tool_result("sfincs_flood", _layer("flood-a", COG_A))
         reg.register_tool_result("compute_hillshade", _layer("hill-b", COG_B))
         assert reg.short_for_uri(COG_A) == "L1"
         assert reg.short_for_uri(COG_B) == "L2"
@@ -121,7 +121,7 @@ class TestHandleMint:
         """The persist round-trip: reopen restores the SAME L<n> numbers and
         the counter resumes PAST the persisted maximum."""
         reg = make_registry("sess-old")
-        reg.register_tool_result("run_model_flood_scenario", _layer("flood-a", COG_A))
+        reg.register_tool_result("sfincs_flood", _layer("flood-a", COG_A))
         reg.register_tool_result("compute_hillshade", _layer("hill-b", COG_B))
         exported = reg.export_short_handles()
         assert exported == {"L1": COG_A, "L2": COG_B}
@@ -170,9 +170,9 @@ class TestHandleMint:
 class TestEmitRewrite:
     def test_exact_uri_values_become_short_handles(self) -> None:
         reg = make_registry()
-        reg.register_tool_result("run_model_flood_scenario", _layer("flood-a", COG_A))
+        reg.register_tool_result("sfincs_flood", _layer("flood-a", COG_A))
         summary = {
-            "tool": "run_model_flood_scenario",
+            "tool": "sfincs_flood",
             "status": "ok",
             "layer": {"layer_id": "flood-a", "uri": COG_A, "name": "Flood depth"},
         }
@@ -210,7 +210,7 @@ class TestEmitRewrite:
         plugin renders from (the emit_layer_uri seam) keeps the raw uri."""
         reg = make_registry()
         layer = _layer("flood-a", COG_A)
-        reg.register_tool_result("run_model_flood_scenario", layer)
+        reg.register_tool_result("sfincs_flood", layer)
         # LLM face:
         assert reg.rewrite_result_for_llm({"uri": COG_A})["uri"] == "L1"
         # Plugin face (raster + s3:// passes the guardrail untouched):
@@ -235,7 +235,7 @@ class TestEmitRewrite:
 class TestDispatchResolve:
     def _reg(self) -> SessionUriRegistry:
         reg = make_registry()
-        reg.register_tool_result("run_model_flood_scenario", _layer("flood-a", COG_A))
+        reg.register_tool_result("sfincs_flood", _layer("flood-a", COG_A))
         return reg
 
     def test_short_handle_resolves(self) -> None:
@@ -380,7 +380,7 @@ async def test_server_persist_and_seed_helpers_round_trip(tmp_path) -> None:
         state = SessionState(session_id=new_ulid())
         reg = get_uri_registry(state.session_id)
         reg.register_tool_result(
-            "run_model_flood_scenario", _layer("flood-a", COG_A)
+            "sfincs_flood", _layer("flood-a", COG_A)
         )
         assert reg.shorts_dirty is True
         await agent_server._persist_case_layer_handles(state, case_id=case_id)
@@ -401,40 +401,18 @@ async def test_server_persist_and_seed_helpers_round_trip(tmp_path) -> None:
 
 # --------------------------------------------------------------------------- #
 # 5. End-to-end: the function_response the model reads shows L<n>, never the
-#    raw uri (fake Gemini, REAL emit seam in _stream_gemini_reply).
+#    raw uri (fake Gemini, REAL emit seam in _stream_model_reply).
 # --------------------------------------------------------------------------- #
 
 
 def _make_fake_chunk_with_function_call(name: str, args: dict, call_id: str = "c1"):
-    fn_call = MagicMock()
-    fn_call.name = name
-    fn_call.id = call_id
-    fn_call.args = args
-    fake_part = MagicMock()
-    fake_part.function_call = fn_call
-    fake_part.text = None
-    fake_content = MagicMock()
-    fake_content.parts = [fake_part]
-    fake_candidate = MagicMock()
-    fake_candidate.content = fake_content
-    fake_chunk = MagicMock()
-    fake_chunk.candidates = [fake_candidate]
-    fake_chunk.text = None
-    return fake_chunk
+    """A fake turn (scripted-provider dict) emitting ONE function call."""
+    return {"tool_call": {"name": name, "args": args, "call_id": call_id}}
 
 
 def _make_fake_chunk_with_text(text: str):
-    fake_part = MagicMock()
-    fake_part.function_call = None
-    fake_part.text = text
-    fake_content = MagicMock()
-    fake_content.parts = [fake_part]
-    fake_candidate = MagicMock()
-    fake_candidate.content = fake_content
-    fake_chunk = MagicMock()
-    fake_chunk.candidates = [fake_candidate]
-    fake_chunk.text = None
-    return fake_chunk
+    """A fake turn (scripted-provider dict) emitting one narration delta."""
+    return {"text": text}
 
 
 @dataclass
@@ -457,9 +435,9 @@ def _function_response_payloads(contents_per_turn):
 
 
 @pytest.mark.asyncio
-async def test_emit_seam_llm_sees_handle_not_uri() -> None:
+async def test_emit_seam_llm_sees_handle_not_uri(fake_llm) -> None:
     from trid3nt_server import server as agent_server
-    from trid3nt_server.adapter import GeminiSettings
+    from trid3nt_server.agent.adapters.adapter import ModelSettings
     from trid3nt_server.main import _import_tools_registry
     from trid3nt_server.server import SessionState
 
@@ -472,39 +450,27 @@ async def test_emit_seam_llm_sees_handle_not_uri() -> None:
         )
         return result
 
-    turn_chunks = [
-        [
-            _make_fake_chunk_with_function_call(
-                "run_model_flood_scenario",
-                {"location_query": "Cedar Rapids, Iowa"},
-                "call-flood",
-            )
-        ],
-        [_make_fake_chunk_with_text("Done.")],
-    ]
-    turn_responses = iter([iter(chunks) for chunks in turn_chunks])
-    contents_per_turn: list[list[Any]] = []
-
-    def _capture_and_stream(**kwargs):
-        contents_per_turn.append(list(kwargs["contents"]))
-        return next(turn_responses)
-
-    fake_client = MagicMock()
-    fake_client.models.generate_content_stream.side_effect = _capture_and_stream
+    turn1_chunk = _make_fake_chunk_with_function_call(
+        "sfincs_flood",
+        {"location_query": "Cedar Rapids, Iowa"},
+        "call-flood",
+    )
+    turn2_chunk = _make_fake_chunk_with_text("Done.")
+    fake_llm.script([turn1_chunk, turn2_chunk])
 
     sock = _FakeSocket()
     state = SessionState(session_id=new_ulid())
-    settings = GeminiSettings(
+    settings = ModelSettings(
         model="gemini-2.5-pro", project="test", location="us-central1",
         use_vertex=True,
     )
-    with patch.object(agent_server, "build_client", return_value=fake_client), \
-         patch.object(agent_server, "_invoke_tool_via_emitter", side_effect=_fake_invoke), \
+    with patch.object(agent_server, "_invoke_tool_via_emitter", side_effect=_fake_invoke), \
          patch.object(agent_server, "build_tool_declarations", return_value=[]):
-        await agent_server._stream_gemini_reply(
+        await agent_server._stream_model_reply(
             sock, state, settings, "Model a flood for Cedar Rapids", "research",
         )
 
+    contents_per_turn = [call["contents"] for call in fake_llm.calls]
     payloads = _function_response_payloads(contents_per_turn)
     assert payloads, "no function_response reached the second turn"
     _name, payload = payloads[0]

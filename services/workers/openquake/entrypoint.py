@@ -1,4 +1,4 @@
-"""OpenQuake Engine PSHA AWS Batch worker entrypoint (sprint-17).
+"""OpenQuake Engine PSHA AWS Batch worker entrypoint.
 
 Near-verbatim copy of ``services/workers/swmm/entrypoint.py`` (the worker
 contract is solver-agnostic): accept ``--run-id`` / ``--manifest-uri`` (env
@@ -6,7 +6,7 @@ fallback), read the build_spec by URI SCHEME, render a classical-PSHA OpenQuake
 deck (``job.ini`` + source-model / GMPE logic-tree XML) into a scratch dir, run
 ``oq engine --run job.ini`` headless, glob + upload the exported hazard
 curves/map CSVs, and ALWAYS write ``completion.json`` in the SAME schema so the
-agent's ``wait_for_completion`` (job-0041) reuses its S3 completion poll verbatim.
+agent's ``wait_for_completion`` reuses its S3 completion poll verbatim.
 
 This is the OpenQuake CLOUD LANE (a NEW engine — OpenQuake is RAM-hungry,
 ~2 GB/thread, so it never runs in-process in the agent venv like SWMM; it is a
@@ -101,7 +101,7 @@ logging.basicConfig(
     format="%(asctime)s %(levelname)s %(name)s — %(message)s",
 )
 
-SCRATCH = Path(os.environ.get("TRID3NT_OQ_SCRATCH", "/opt/grace2/work"))
+SCRATCH = Path(os.environ.get("TRID3NT_OQ_SCRATCH", "/opt/trid3nt/work"))
 GCP_PROJECT = os.environ.get("GCP_PROJECT", "legacy-cloud-project")
 RUNS_BUCKET = os.environ.get("TRID3NT_RUNS_BUCKET", "trid3nt-runs")
 

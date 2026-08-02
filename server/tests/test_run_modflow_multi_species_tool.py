@@ -27,7 +27,7 @@ from trid3nt_contracts.modflow_contracts import (
     PlumeLayerURI,
 )
 
-from trid3nt_server.tools.simulation import run_modflow_multi_species_tool as tool
+from trid3nt_server.agent.tools.simulation.modflow import run_modflow_multi_species_tool as tool
 
 
 _REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -115,7 +115,7 @@ async def test_empty_result_honesty_floor(monkeypatch: pytest.MonkeyPatch) -> No
     # Stub build + run so no mf6 is needed; postprocess returns all-empty plumes.
     monkeypatch.setattr(
         tool,
-        "build_multi_species_staging",
+        "build_and_stage_modflow_deck",
         lambda run_args, **k: _FakeStaging(),
     )
     monkeypatch.setattr(tool, "is_local_mode", lambda: True)
@@ -137,7 +137,7 @@ async def test_non_empty_result_returns_plumes(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.setattr(
-        tool, "build_multi_species_staging", lambda run_args, **k: _FakeStaging()
+        tool, "build_and_stage_modflow_deck", lambda run_args, **k: _FakeStaging()
     )
     monkeypatch.setattr(tool, "is_local_mode", lambda: True)
     monkeypatch.setattr(tool, "run_modflow_local", lambda staging: "file:///tmp/run")
@@ -169,7 +169,7 @@ async def test_build_staging_threads_species_and_real_run(
     monkeypatch.setenv("TRID3NT_MODFLOW_LOCAL", "1")
     monkeypatch.setenv("TRID3NT_MF6_BIN", _MF6_BIN or "mf6")
     # Stub only COG write / upload / publish so we exercise the REAL deck + mf6 + UCN.
-    from trid3nt_server.workflows import postprocess_modflow as pp
+    from trid3nt_server.agent.workflows.modflow import postprocess_modflow as pp
 
     monkeypatch.setattr(pp, "_write_reprojected_cog", lambda *a, **k: tmp_path / "x.tif")
     monkeypatch.setattr(pp, "_cog_bbox_4326", lambda _p: (-81.9, 26.6, -81.8, 26.7))
@@ -179,7 +179,7 @@ async def test_build_staging_threads_species_and_real_run(
     monkeypatch.setattr(pp, "_dispatch_publish_layer", lambda *a, **k: None)
 
     # build the deck under tmp_path so the 2-GWT proof is inspectable.
-    staging = tool.build_multi_species_staging(
+    staging = tool.build_and_stage_modflow_deck(
         _run_args([
             {"name": "TCE", "release_rate_kg_s": 0.01, "decay_per_day": 0.01},
             {"name": "cis-DCE", "release_rate_kg_s": 0.002, "parent": "TCE"},

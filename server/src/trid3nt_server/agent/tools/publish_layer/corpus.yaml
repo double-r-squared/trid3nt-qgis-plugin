@@ -1,0 +1,6 @@
+publish_layer:
+- publish this flood depth raster so I can see it on the map
+- add this COG layer to QGIS Server so MapLibre can render it
+- make this flood output visible on the map
+- I need to register this raster with the WMS server
+- publish the postprocessed flood layer to the project

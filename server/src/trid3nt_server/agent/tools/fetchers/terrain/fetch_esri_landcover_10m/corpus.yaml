@@ -1,0 +1,9 @@
+fetch_esri_landcover_10m:
+- land cover land use map for a location outside the US
+- what land cover is here forest crops urban built area global
+- 10m Esri Impact Observatory annual land cover for Africa Asia South America
+- global land use classification raster for a bbox by year
+- show me trees vs crops vs built-up area for this region
+- non-US land cover layer like NLCD but worldwide
+- Sentinel-2 derived 9-class land cover for a country
+- annual land cover change comparison between two years

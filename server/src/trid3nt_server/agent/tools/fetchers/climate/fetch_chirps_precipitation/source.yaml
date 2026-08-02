@@ -1,0 +1,136 @@
+# Router source spec (fetcher-fold wave-9, gzip_object whole-object mode, ADR 0055).
+# Twin: fetch_chirps_precipitation.py -- UCSB CHIRPS-2.0 quasi-global rainfall.
+# Date-templated .tif.gz (monthly/daily path patterns); a gzip stream is not a
+# windowed COG, so the whole object is fetched + gunzipped + windowed in memory.
+schema_version: v1
+
+name: fetch_chirps_precipitation
+source_class: chirps_precipitation
+error_prefix: CHIRPS
+shape: raster-cog
+supports_global_query: true
+
+endpoints:
+  data:
+    url: "https://data.chc.ucsb.edu/products/CHIRPS-2.0"
+auth:
+  mode: none
+  user_agent: "trid3nt/0.1 (Hazard Modeling Agent; https://github.com/double-r-squared/trid3nt-qgis-plugin; agent@trid3nt.dev)"
+
+params:
+  bbox: {type: bbox, required: false, schema_optional: true, quantize: round_6dp}
+  date: {type: str, required: true}
+  period: {type: enum, default: monthly, values: [monthly, daily]}
+
+ingest:
+  access: gzip_object
+  gzip_object:
+    date_param: date
+    period_param: period
+    min_year: 1981
+    nodata_sentinel: -9000.0
+    url_templates:
+      monthly: "{base}/global_monthly/tifs/chirps-v2.0.{year:04d}.{month:02d}.tif.gz"
+      daily: "{base}/global_daily/tifs/p05/{year:04d}/chirps-v2.0.{year:04d}.{month:02d}.{day:02d}.tif.gz"
+  serialize:
+    nodata: -9999.0
+    dtype: float32
+
+normalize:
+  crs: "EPSG:4326"
+  orientation: north_up
+  units: mm
+  quantity: precipitation
+
+output:
+  layer_type: raster
+  ext: tif
+  role: primary
+  emit_bbox: true
+  style_preset: "precip_mm"
+
+cache:
+  ttl_class: static-30d
+payload_estimate:
+  model: bbox_area
+  mb_per_sq_deg: 0.01
+  floor_mb: 0.02
+
+caveats:
+  - "quasi-global 0.05 deg (~5 km) CHIRPS-2.0 rainfall in mm (50S-50N); the CHIRPS ocean/no-data sentinel (<= -9000) collapses to nodata -9999; an all-nodata window -> CHIRPS_EMPTY (never a fabricated layer)"
+  - "CONUS gauge-corrected radar precip at ~1 km/sub-daily -> fetch_mrms_qpe; global hourly reanalysis -> fetch_era5_reanalysis"
+fallback: []
+
+# corpus lifted from sibling corpus.yaml.
+
+docstring: |-
+  Fetch UCSB CHIRPS quasi-global rainfall as a single-band mm COG.
+
+  **What it does:** Downloads a CHIRPS-2.0 monthly or daily precipitation
+  GeoTIFF from the keyless UC Santa Barbara Climate Hazards Center public
+  archive (``data.chc.ucsb.edu``), gunzips it, windows to ``bbox``, collapses
+  the CHIRPS ocean / no-data sentinel to GeoTIFF nodata, and writes a
+  deflate-compressed single-band float32 Cloud-Optimized GeoTIFF in mm.
+  CHIRPS is 0.05 deg (~5 km) and quasi-global (50 S - 50 N). Tier-1 free, no
+  API key, no login.
+
+  **When to use:**
+
+  - Quasi-global rainfall baseline for drought, agriculture, and pluvial-flood
+    context OUTSIDE CONUS / outside radar coverage -- Africa, South Asia, Latin
+    America, the tropics. CHIRPS is the community standard for data-sparse
+    regions.
+  - Monsoon / wet-season precipitation totals: ``period="monthly"`` returns
+    mm/month; e.g. peak-monsoon Western Ghats:
+    ``fetch_chirps_precipitation(bbox=(72,15,78,21), date="2023-07")``.
+  - Event-scale daily rainfall: ``period="daily"`` returns mm/day for a single
+    date, e.g. ``date="2022-08-25"``.
+  - Drought analysis (anomaly vs climatology), seasonal ag water-balance, and
+    flood antecedent-rainfall context where MRMS / gridMET do not reach.
+
+  **When NOT to use:**
+
+  - CONUS gauge-corrected radar precipitation at ~1 km / sub-daily -- use
+    ``fetch_mrms_qpe`` (NOAA MRMS QPE, CONUS only).
+  - CONUS gridded daily meteorology (precip + temp + wind + humidity) at
+    ~4 km -- use ``fetch_gridmet``.
+  - Hourly / forecast precipitation -- use ``fetch_hrrr_forecast`` (CONUS) or
+    ``fetch_era5_reanalysis`` (global hourly, needs a Copernicus CDS key).
+  - Areas poleward of 50 deg latitude -- CHIRPS coverage stops at 50 S / 50 N;
+    a bbox entirely outside that band raises ``CHIRPSEmptyError``.
+
+  **Parameters:**
+
+  - ``bbox``: ``(min_lon, min_lat, max_lon, max_lat)`` EPSG:4326. When
+    ``None``, returns the full quasi-global CHIRPS grid (~7200 x 2000 px;
+    ``supports_global_query=True``). Must intersect ``(-180, -50, 180, 50)``
+    or ``CHIRPSEmptyError`` is raised.
+  - ``date``: for ``period="monthly"`` a ``"YYYY-MM"`` (or ``"YYYY-MM-DD"``,
+    day ignored) string; for ``period="daily"`` a full ``"YYYY-MM-DD"``.
+    Required. Must be within the CHIRPS record (1981-present, past dates only).
+  - ``period``: ``"monthly"`` (default, mm/month) or ``"daily"`` (mm/day).
+
+  **Returns:**
+
+  ``LayerURI`` pointing at the cached COG
+  (``s3://<cache-bucket>/cache/static-30d/chirps_precipitation/<key>.tif``).
+  COG: float32, EPSG:4326, deflate-compressed, nodata=-9999, band 1
+  ``"precipitation_mm"``. ``layer_type="raster"``, ``role="primary"``,
+  ``units="mm"``, ``style_preset="precip_mm"``.
+
+  Raises: ``CHIRPSInputError`` (bad bbox / date / period),
+  ``CHIRPSNotAvailableError`` (no published raster for that date, HTTP 404),
+  ``CHIRPSUpstreamError`` (network / gzip / decode failure, retryable),
+  ``CHIRPSEmptyError`` (bbox outside the CHIRPS 50S-50N extent or all-ocean).
+
+  **Cross-tool dependencies:**
+
+  - Pair with ``fetch_us_drought_monitor`` (CONUS drought) for a global vs
+    CONUS drought view, or summarize per-admin-unit or per-field rainfall
+    totals in the code_exec playground (zonal stats over a polygon).
+  - Alternative for CONUS radar precip: ``fetch_mrms_qpe``. Alternative for
+    global hourly reanalysis precip: ``fetch_era5_reanalysis`` (CDS key).
+
+  Cache: ``ttl_class="static-30d"`` (published rasters are immutable); key =
+  SHA-256 of ``(bbox-6dp, period, date)``. Payload estimate:
+  ``estimate_payload_mb(bbox, period)``.

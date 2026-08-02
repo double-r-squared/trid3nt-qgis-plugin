@@ -1,6 +1,6 @@
 """BUG 3 + BUG 4b — terminal closing narration + terminal-failure replay card.
 
-Two server-side fixes, both driving the REAL ``_stream_gemini_reply`` /
+Two server-side fixes, both driving the REAL ``_stream_model_reply`` /
 ``_dispatch_gemini_and_persist`` seams (no Gemini, no Playwright) against
 file-backed persistence:
 
@@ -29,14 +29,14 @@ import json
 import pytest
 
 from trid3nt_server import server
-from trid3nt_server.adapter import (
+from trid3nt_server.agent.adapters.adapter import (
     FunctionCallEvent,
-    GeminiSettings,
+    ModelSettings,
     TextDeltaEvent,
 )
-from trid3nt_server import tools as agent_tools
+from trid3nt_server.agent import tools as agent_tools
 from trid3nt_server.persistence import make_file_persistence
-from trid3nt_server.tools import RegisteredTool
+from trid3nt_server.agent.tools import RegisteredTool
 from trid3nt_contracts.case import CaseCommandEnvelopePayload
 from trid3nt_contracts.common import new_ulid
 from trid3nt_contracts.tool_registry import AtomicToolMetadata
@@ -88,17 +88,16 @@ def _agent_chunks(ws):
 
 
 async def _drive_real_stream(ws, state, fake_stream):
-    """Drive REAL ``_stream_gemini_reply`` via ``_dispatch_gemini_and_persist``
+    """Drive REAL ``_stream_model_reply`` via ``_dispatch_gemini_and_persist``
     with a mocked ``stream_events_with_contents`` (``fake_stream``)."""
     from unittest.mock import patch
 
     from trid3nt_server import server as agent_server
 
-    settings = GeminiSettings(
+    settings = ModelSettings(
         model="m", project="p", location="us-central1", use_vertex=True
     )
-    with patch.object(agent_server, "build_client", return_value=object()), \
-         patch.object(agent_server, "build_tool_declarations", return_value=[]), \
+    with patch.object(agent_server, "build_tool_declarations", return_value=[]), \
          patch.object(agent_server, "stream_events_with_contents", fake_stream):
         await agent_server._dispatch_gemini_and_persist(
             ws, state, settings, "do the thing", "research"
@@ -281,7 +280,7 @@ async def test_terminal_model_failure_persists_failed_tool_card(
 
     ws.sent.clear()
     # The model-stream exception is caught + surfaced as an error envelope (no
-    # re-raise) inside _stream_gemini_reply.
+    # re-raise) inside _stream_model_reply.
     await _drive_real_stream(ws, state, exploding_stream)
 
     # An error envelope was emitted live (existing behavior).

@@ -1,4 +1,20 @@
-# V&V primitive tool list (THINKING - for NATE review, nothing built)
+# V&V primitive tool list (WAVE LOCKED 2026-07-24 - build in flight)
+
+## STATUS (NATE review complete; ADR 0021)
+
+- Group A: FOLDED to ONE read_run_diagnostics(run) dispatcher; the 5 per-engine
+  readers below become internal parser modules. BUILDING.
+- Group B: FOLDED to 2 tools; head calibration stats (#8) becomes the
+  variable="head" preset of compute_skill_metrics (adds SRMS). BUILDING.
+- Group C: as listed, 3 tools (processor + 2 fetchers, no fold). BUILDING.
+- Group D: as listed, 3 tools (disjoint knob schemas; unified result
+  envelope). BUILDING.
+- Group E: FROZEN (embodies loops).
+- Group F: BACK-BURNER (NATE 2026-07-24). Fold design recorded for the thaw:
+  check_run_plausibility (checks 1-3) + check_model_setup (4-5) suites.
+
+Wave = 9 registered tools. Build contract: docs/validation/build-contract.md
+(pinned by the contracts agent at build start).
 
 Atomic primitives that VERIFY and CALIBRATE. Loop/orchestration/subagents are
 FROZEN - these are the building blocks the loop would later compose. Build

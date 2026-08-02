@@ -12,14 +12,14 @@ Purpose:
 
 What this test does:
   1. Imports every tool in TOOL_REGISTRY (via the same eager-import path that
-     ``trid3nt_server.tools`` uses at startup, so no tool is missed).
+     ``trid3nt_server.agent.tools`` uses at startup, so no tool is missed).
   2. For each tool, iterates 20 invented Gemini kwarg patterns drawn from the
      real-world set that caused failures (run_name, scenario_id, description,
      durationHours, rainfall_event, etc.) plus realistic valid minimal params
      for that tool's required parameters.
   3. Calls each (valid_params | invented_kwargs) combination through the
      normalizer path:
-       - If ``trid3nt_server.tool_arg_normalizer.normalize_args`` is available
+       - If ``trid3nt_server.agent.tool_arg_normalizer.normalize_args`` is available
          (job-0164 landed): use it, assert no TypeError on the normalised call.
        - Otherwise (job-0164 not yet merged): fall back to
          ``_inspect_strip_unknown`` which uses ``inspect.signature`` to filter
@@ -55,19 +55,19 @@ from typing import Any
 
 import pytest
 
-from trid3nt_server.tools import TOOL_REGISTRY
+from trid3nt_server.agent.tools import TOOL_REGISTRY
 
 # ---------------------------------------------------------------------------
 # Eager-import all workflow modules that add to TOOL_REGISTRY at import time.
 # Mirrors the startup-time import order; any module that calls @register_tool
 # at module level must appear here so the registry is fully populated.
 # ---------------------------------------------------------------------------
-import trid3nt_server.workflows.model_flood_scenario  # noqa: F401 — side-effect import
-import trid3nt_server.workflows.model_flood_habitat_scenario  # noqa: F401
-import trid3nt_server.workflows.model_news_event_ingest  # noqa: F401
-import trid3nt_server.workflows.pelicun_damage_with_buildings  # noqa: F401
-import trid3nt_server.workflows.postprocess_flood  # noqa: F401
-import trid3nt_server.workflows.sfincs_builder  # noqa: F401
+import trid3nt_server.agent.workflows.sfincs.flood.flood  # noqa: F401 — side-effect import
+# PELICUN fold: pelicun_damage_with_buildings folded into the
+# pelicun_damage_assessment template's bbox AUTO-FETCH input mode.
+import trid3nt_server.agent.workflows.pelicun.damage_assessment.damage_assessment  # noqa: F401
+import trid3nt_server.agent.workflows.sfincs.postprocess_sfincs  # noqa: F401
+import trid3nt_server.agent.workflows.sfincs.sfincs_builder  # noqa: F401
 
 logger = logging.getLogger(__name__)
 
@@ -79,7 +79,7 @@ logger = logging.getLogger(__name__)
 def _get_normalizer():
     """Return a (tool_name, raw_args, fn) -> dict callable.
 
-    If ``trid3nt_server.tool_arg_normalizer.normalize_args`` is available
+    If ``trid3nt_server.agent.tool_arg_normalizer.normalize_args`` is available
     (job-0164 landed), return it directly.  Otherwise return
     ``_inspect_strip_unknown`` which uses inspect.signature to achieve the
     same effect.
@@ -89,7 +89,7 @@ def _get_normalizer():
         when the production normalizer is in use.
     """
     try:
-        from trid3nt_server.tool_arg_normalizer import normalize_args  # type: ignore[import]
+        from trid3nt_server.agent.tool_arg_normalizer import normalize_args  # type: ignore[import]
         return normalize_args, True
     except ImportError:
         return _inspect_strip_unknown, False
@@ -156,20 +156,8 @@ _SAMPLE_GCS_URI = "gs://legacy-cloud-cog/cache/static-30d/sample.tif"
 # These are plausible real-world values, NOT magic that would make the tool
 # succeed (network/GCS access is expected to fail — only TypeError is forbidden).
 _MINIMAL_VALID_PARAMS: dict[str, dict[str, Any]] = {
-    "aggregate_claims_across_sources": {
-        "sources": [{"text": "floodwater", "type": "news"}],
-        "claim_targets": ["depth_m"],
-    },
-    "clip_raster_to_bbox": {
-        "raster_uri": _SAMPLE_RASTER_URI,
-        "bbox": _SAMPLE_BBOX,
-    },
     "clip_raster_to_polygon": {
         "raster_uri": _SAMPLE_RASTER_URI,
-        "polygon_uri": _SAMPLE_VECTOR_URI,
-    },
-    "clip_vector_to_polygon": {
-        "vector_uri": _SAMPLE_VECTOR_URI,
         "polygon_uri": _SAMPLE_VECTOR_URI,
     },
     "compute_aspect": {"dem_uri": _SAMPLE_DEM_URI},
@@ -178,9 +166,10 @@ _MINIMAL_VALID_PARAMS: dict[str, dict[str, Any]] = {
     "compute_hillshade": {"dem_uri": _SAMPLE_DEM_URI},
     "compute_impervious_surface": {"landcover_uri": _SAMPLE_LANDCOVER_URI},
     "compute_slope": {"dem_uri": _SAMPLE_DEM_URI},
-    "compute_zonal_statistics": {
-        "value_raster_uri": _SAMPLE_RASTER_URI,
-        "zone_input_uri": _SAMPLE_VECTOR_URI,
+    "generate_chart": {
+        "vega_lite_spec": {"mark": "bar", "encoding": {}},
+        "title": "t",
+        "records": [{"label": "a", "count": 1}],
     },
     "extract_landcover_class": {
         "landcover_uri": _SAMPLE_LANDCOVER_URI,
@@ -253,19 +242,13 @@ _MINIMAL_VALID_PARAMS: dict[str, dict[str, Any]] = {
         "algorithm": "native:buffer",
         "params": {"DISTANCE": 1000},
     },
-    "run_model_flood_habitat_scenario": {"bbox": _SAMPLE_BBOX},
-    "run_model_flood_scenario": {},
-    "run_model_news_event_ingest": {
-        "sources": [{"url": "https://example.com/flood", "type": "news"}]
-    },
-    "run_pelicun_damage_assessment": {
+    "sfincs_flood": {},
+    "pelicun_damage_assessment": {
         "hazard_raster_uri": _SAMPLE_RASTER_URI,
         "assets_uri": _SAMPLE_VECTOR_URI,
     },
-    "run_pelicun_with_buildings": {
-        "hazard_raster_uri": _SAMPLE_RASTER_URI,
-        "bbox": _SAMPLE_BBOX,
-    },
+    # PELICUN fold: pelicun_damage_with_buildings folded into
+    # pelicun_damage_assessment's bbox AUTO-FETCH input mode (no separate tool).
     "run_solver": {
         "solver": "sfincs",
         "model_setup_uri": "s3://trid3nt-runs/test/setup/",
@@ -434,7 +417,7 @@ def test_tool_survives_invented_kwargs(tool_name: str, pattern_idx: int) -> None
     reason=(
         "job-0164 (engine sweep) is not yet merged. "
         "This test will turn green once all @register_tool functions gain "
-        "**_extra_ignored. Until then, only run_model_flood_scenario passes."
+        "**_extra_ignored. Until then, only sfincs_flood passes."
     ),
     strict=False,
 )
@@ -442,7 +425,7 @@ def test_all_tools_have_native_extra_ignored() -> None:
     """All @register_tool functions must have a VAR_KEYWORD (**_extra_ignored) param.
 
     This is the acceptance criterion for job-0164's harness sweep.  Before
-    that job merges, only ``run_model_flood_scenario`` passes; the test is
+    that job merges, only ``sfincs_flood`` passes; the test is
     marked xfail so it shows as an expected failure rather than a blocking
     red until job-0164 lands.
 
@@ -507,7 +490,7 @@ def test_normalizer_presence_logged() -> None:
     if is_real:
         logger.info(
             "OQ-0168-NORMALIZER-DEPENDENCY resolved: "
-            "trid3nt_server.tool_arg_normalizer.normalize_args is in use (job-0164 merged)."
+            "trid3nt_server.agent.tool_arg_normalizer.normalize_args is in use (job-0164 merged)."
         )
     else:
         logger.warning(

@@ -1,0 +1,38 @@
+code_exec_request:
+- compute the 95th percentile flood depth over the city polygon from the actual pixels
+- cross-tabulate the damage by land-cover class for the layers on the map
+- run a custom calculation on this layer that none of the standard tools can do
+- write a short python snippet to derive a statistic from this raster and show me the result
+- i need an ad-hoc aggregation across these two layers, can you script it and let me approve the code
+- calculate a weird derived metric from the features in this vector layer programmatically
+- do some custom number-crunching on the on-map layers in a sandbox
+- compute the correlation between elevation and damage for the pixels in this AOI with python
+# processing-wave cull (2026-07-29): zonal-statistics phrasings re-homed from the
+# DEMOTED compute_zonal_statistics (raster-values-within-zones reproduces exactly
+# in the playground; docs/playbooks/zonal-statistics-recipe.md).
+- compute the mean flood depth within each census tract from the actual pixels
+- how much forest area burned in each county in this fire
+- I need the average wind speed within the damage footprint polygon
+- what fraction of developed land is in the flood zone
+- which farm fields does the contamination plume reach
+- tell me which agricultural fields the groundwater plume affects and how badly
+- rank the affected farm fields by peak concentration in this contaminant plume
+- intersect the plume with the field boundaries and show the worst-hit fields
+- how many fields does the contaminant reach above the detection threshold
+- aggregate this raster's values within each zone polygon and summarize per zone
+# cull pass 2 (2026-07-27): coastal-wave nomograph + overtopping phrasings re-homed
+# from compute_wave_nomograph / compute_overtopping (cut on live replication proof;
+# the SPM-1984 fetch-growth and EurOtop-2018 overtopping equations reproduce exactly
+# in the sandbox playground, which is the surviving carrier).
+- what wave height would a 20 m/s wind build over 50 km of open water?
+- estimate the significant wave height and peak period from wind speed and fetch
+- quick sanity check on the wave height for this wind and fetch before I run SWAN
+- is a 3 meter offshore wave height reasonable for a 25 knot wind and 80 km fetch?
+- fetch-limited wave growth estimate for this wind over the lake
+- what is the fully developed sea state for a 30 m/s wind?
+- how much water overtops this seawall given the wave height and crest freeboard?
+- compute the EurOtop mean wave overtopping discharge over the levee
+- what is the overtopping rate for a 2 m wave on a 1:2 dike slope with 3 m freeboard?
+- estimate overtopping discharge in litres per second per metre for this coastal structure
+- take the SWAN wave height and period and compute overtopping over the breakwater
+- how much overtopping for these waves over a dike with roughness reduction

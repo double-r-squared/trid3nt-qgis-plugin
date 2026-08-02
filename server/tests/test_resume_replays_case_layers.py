@@ -34,7 +34,7 @@ import json
 import pytest
 
 from trid3nt_server import server
-from trid3nt_server.pipeline_emitter import PipelineEmitter
+from trid3nt_server.emission.pipeline_emitter import PipelineEmitter
 from trid3nt_contracts.case import CaseChatMessage, CaseSessionState, CaseSummary
 from trid3nt_contracts.common import new_ulid, now_utc
 

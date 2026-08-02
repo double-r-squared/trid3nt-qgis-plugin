@@ -1,0 +1,9 @@
+fetch_usgs_volcano_alerts:
+- current volcano alert levels
+- which volcanoes are at watch or warning
+- volcano aviation color code map
+- is Kilauea erupting alert status
+- show Alaska Aleutian volcanoes on alert
+- Cascade Range volcano alert levels
+- USGS volcano hazards current activity
+- map volcanoes by alert level normal advisory watch warning

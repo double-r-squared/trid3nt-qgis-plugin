@@ -1,0 +1,8 @@
+fetch_usace_dams:
+- what dams are upstream of this flood-vulnerable community?
+- show me all high-hazard dams in California
+- give me the National Inventory of Dams for this watershed
+- I need dam height, storage, and hazard classification for this region
+- which dams in this state have a poor condition assessment?
+- show me dams with deficient emergency action plans in this basin
+- fetch NID dam inventory for the Oroville area

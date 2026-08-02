@@ -33,12 +33,12 @@ import pytest
 from trid3nt_contracts import new_ulid
 from trid3nt_contracts.execution import LayerURI
 
-from trid3nt_server.adapter import (
+from trid3nt_server.agent.adapters.adapter import (
     _layer_uri_is_published,
     _published_scenario_tool_names,
     summarize_tool_result,
 )
-from trid3nt_server.pipeline_emitter import PipelineEmitter, _layer_identity_key
+from trid3nt_server.emission.pipeline_emitter import PipelineEmitter, _layer_identity_key
 from trid3nt_server.server import _resolve_publish_wrap_style_preset
 
 
@@ -80,7 +80,7 @@ def _published_flood_layer_uri(run_id: str) -> LayerURI:
 class TestScenarioPublishedSignal:
     def test_flood_scenario_summary_signals_already_published(self) -> None:
         result = _published_flood_layer_uri("RUN123")
-        summary = summarize_tool_result("run_model_flood_scenario", result)
+        summary = summarize_tool_result("sfincs_flood", result)
 
         assert summary["status"] == "ok"
         # The explicit already-published signals the LLM keys on.
@@ -101,11 +101,10 @@ class TestScenarioPublishedSignal:
     def test_every_scenario_wrapper_is_recognized(self) -> None:
         # All flood + plume scenario wrappers carry the published signal.
         for tool in (
-            "run_model_flood_scenario",
+            "sfincs_flood",
             "run_model_nws_flood_event_scenario",
-            "run_model_flood_habitat_scenario",
             "run_model_groundwater_contamination_scenario",
-            "run_modflow_job",
+            "modflow_contaminant_plume",
         ):
             assert tool in _published_scenario_tool_names(), tool
             summary = summarize_tool_result(tool, _published_flood_layer_uri("R"))
@@ -132,7 +131,7 @@ class TestScenarioPublishedSignal:
             role="primary",
         )
         assert _layer_uri_is_published(raw) is False
-        summary = summarize_tool_result("run_model_flood_scenario", raw)
+        summary = summarize_tool_result("sfincs_flood", raw)
         assert "published" not in summary
 
     def test_failed_scenario_envelope_unaffected(self) -> None:
@@ -143,7 +142,7 @@ class TestScenarioPublishedSignal:
             "layers": [],
             "workflow_name": "model_flood_scenario:FAILED:SOLVER_TIMEOUT",
         }
-        summary = summarize_tool_result("run_model_flood_scenario", failed)
+        summary = summarize_tool_result("sfincs_flood", failed)
         assert summary["status"] == "error"
         assert "published" not in summary
 

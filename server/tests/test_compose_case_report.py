@@ -1,6 +1,6 @@
 """Tests for ``compose_case_report`` (markdown case situation report).
 
-No network / no DynamoDB: fake persistence (the export_case_to_qgis seam),
+No network / no DynamoDB: fake persistence (the open_case_in_qgis seam),
 tiny local raster/vector artifacts, report written into ``tmp_path``. The
 exposure section is fed through ``compute_exposure_summary``'s session store
 directly (no fetches).
@@ -14,8 +14,8 @@ from types import SimpleNamespace
 import numpy as np
 import pytest
 
-from trid3nt_server.tools.processing import compute_exposure_summary as exposure_mod
-from trid3nt_server.tools.meta.compose_case_report import (
+from trid3nt_server.agent.tools.processing.compute_exposure_summary import compute_exposure_summary as exposure_mod
+from trid3nt_server.agent.tools.meta.compose_case_report.compose_case_report import (
     CaseReportInputError,
     CaseReportNotFoundError,
     compose_case_report,
@@ -286,7 +286,7 @@ async def test_no_case_typed_error(monkeypatch, case_layers) -> None:
 
 
 def test_registered_in_tool_registry() -> None:
-    from trid3nt_server.tools import TOOL_REGISTRY
+    from trid3nt_server.agent.tools import TOOL_REGISTRY
 
     entry = TOOL_REGISTRY.get("compose_case_report")
     assert entry is not None

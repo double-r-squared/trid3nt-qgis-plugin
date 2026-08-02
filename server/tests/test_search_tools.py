@@ -9,7 +9,7 @@ Coverage:
    - "show flood zones" → ``fetch_fema_nfhl_zones``
    - "national parks polygons" → ``fetch_wdpa_protected_areas``
    - "elevation Grand Canyon" → ``fetch_dem``
-   - "model flooding" → ``run_model_flood_scenario``
+   - "model flooding" → ``run_sfincs``
 3. ``top_k`` is honored (returns at most ``top_k`` results).
 4. Empty / whitespace query does not crash and returns ``{"results": []}``.
 5. Tokenizer round-trip (whitespace + lowercase + underscore preservation).
@@ -31,22 +31,22 @@ from typing import Any
 import pytest
 
 # Force the full tool + workflow surface to register before the index builds.
-from trid3nt_server.tools import (  # noqa: F401 — registration side-effect
-    TOOL_REGISTRY,
-    publish_layer,
-)
-from trid3nt_server.tools.discovery import (  # noqa: F401 — registration side-effect
-    fetch_from_catalog,
-    search_data_catalog,
-    qgis_discovery,
-)
-from trid3nt_server.tools.discovery import search_tools as discover_module
-from trid3nt_server.tools.simulation import solver  # noqa: F401 — registration side-effect
-from trid3nt_server.workflows import model_flood_scenario  # noqa: F401 — registration side-effect
+from trid3nt_server.agent.tools import TOOL_REGISTRY  # noqa: F401
+from trid3nt_server.agent.tools.publish_layer import publish_layer  # noqa: F401 — registration side-effect
+from trid3nt_server.agent.tools.search.fetch_from_catalog import fetch_from_catalog  # noqa: F401 — registration side-effect
+from trid3nt_server.agent.tools.search.search_data_catalog import search_data_catalog  # noqa: F401 — registration side-effect
+from trid3nt_server.agent.tools.search.qgis_discovery import qgis_discovery  # noqa: F401 — registration side-effect
+from trid3nt_server.agent.tools.search.search_tools import search_tools as discover_module
+from trid3nt_server.agent.tools.simulation.solver import solver  # noqa: F401 — registration side-effect
+from trid3nt_server.agent.workflows.sfincs.flood import flood  # noqa: F401 — registration side-effect
 
-from trid3nt_server.tools.discovery.search_tools import (
+from trid3nt_server.agent.tools.search.search_tools.search_tools import (
+    _LEX_REINFORCE_GATE_DOOR,
+    _LEX_REINFORCE_GATE_GENERAL,
     _close_vocab_matches,
     _default_corpus_path,
+    _lexical_reinforcement,
+    _load_corpus,
     _expand_query_tokens,
     _reciprocal_rank_fusion,
     _reset_index_for_tests,
@@ -107,7 +107,7 @@ def _run_top_k(query: str, k: int = 5) -> list[str]:
         ("show flood zones", "fetch_fema_nfhl_zones"),
         ("national parks polygons", "fetch_wdpa_protected_areas"),
         ("elevation Grand Canyon", "fetch_dem"),
-        ("model flooding", "run_model_flood_scenario"),
+        ("model flooding", "run_sfincs"),
     ],
 )
 def test_search_tools_routes_canonical_queries(query: str, expected_tool: str):
@@ -230,6 +230,49 @@ def test_rrf_single_ranking_preserves_order():
 
 
 # ---------------------------------------------------------------------------
+# 6b. Lexical-champion reinforcement (DOOR RRF BOOST, docs/IDEAS.md 2026-07-27).
+# ---------------------------------------------------------------------------
+
+
+def test_lexical_reinforcement_lifts_bm25_champion_door():
+    """A door that BM25 ranks #1 but the fused list buries (dense drowning) is
+    lifted back above a general tool that only ranks mid on both channels.
+    The bonus is one RRF term (+1/(60+1)=~0.0164), so doc 0's 0.028 -> ~0.0444
+    overtakes the 0.040 leader."""
+    fused = [(1, 0.040), (0, 0.028), (2, 0.027)]  # door doc 0 buried at rank 2
+    bm25_ranking = [0, 1, 2]  # door (doc 0) is the BM25 champion
+    tiers = ["door", "general", "general"]
+    boosted = _lexical_reinforcement(fused, bm25_ranking, tiers, k=60)
+    order = [d for d, _ in boosted]
+    assert order[0] == 0, f"BM25-champion door must lift to the top: {order}"
+
+
+def test_lexical_reinforcement_gates_general_to_champion_only():
+    """A GENERAL tool at BM25 rank 2 gets NO bonus (gate = champion only); the
+    SAME tool as a DOOR at BM25 rank 2 DOES (wider door gate). Locks the
+    tier-aware asymmetry. doc 1 is buried below doc 0; doc 2 is the BM25
+    champion (absent from the fused window, so it only anchors the rank axis)."""
+    assert _LEX_REINFORCE_GATE_GENERAL == 1 and _LEX_REINFORCE_GATE_DOOR >= 2
+    fused = [(0, 0.030), (1, 0.028)]  # doc 1 is buried just under doc 0
+    bm25_ranking = [2, 1]  # doc 1 is BM25 rank 2 (NOT the champion)
+    # As a general at rank 2 -> no reinforcement -> doc 1 stays below doc 0.
+    out_general = _lexical_reinforcement(fused, bm25_ranking, ["general", "general", "general"], k=60)
+    assert [d for d, _ in out_general] == [0, 1]
+    # As a door at rank 2 -> +1/(60+2)=~0.0161 -> 0.028+0.0161=0.0441 > 0.030.
+    out_door = _lexical_reinforcement(fused, bm25_ranking, ["general", "door", "general"], k=60)
+    assert [d for d, _ in out_door] == [1, 0]
+
+
+def test_lexical_reinforcement_noop_without_bm25():
+    """No BM25 channel -> the fused order is returned unchanged (deterministic)."""
+    fused = [(1, 0.05), (2, 0.04)]
+    assert _lexical_reinforcement(fused, [], ["general", "general"], k=60) == fused
+    # Missing/short tiers must not raise; champion still reinforced as general.
+    out = _lexical_reinforcement(fused, [2, 1], None, k=60)
+    assert [d for d, _ in out][0] == 2
+
+
+# ---------------------------------------------------------------------------
 # 7. Description snippets present and bounded.
 # ---------------------------------------------------------------------------
 
@@ -311,7 +354,7 @@ def test_typo_gradinet_relief_routes_without_exact_corpus_queries(
     """
     import yaml as _yaml
 
-    corpus = _yaml.safe_load(_default_corpus_path().read_text())
+    corpus = _load_corpus()
     stripped = [
         q
         for q in corpus.get("compute_colored_relief", [])

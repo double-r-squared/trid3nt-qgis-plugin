@@ -1,0 +1,8 @@
+fetch_noaa_slr_scenarios:
+- show me areas that will flood if sea level rises 2 feet
+- I want the NOAA sea-level-rise inundation map for this coastal city
+- give me the 1m and 3m SLR scenario polygons for South Florida
+- what neighborhoods flood under a 6-foot sea-level-rise scenario?
+- show me coastal inundation at 1, 2, 4, and 6 feet of SLR near Miami
+- I need the NOAA SLR viewer data for planning-level analysis in Charleston
+- compare 0.5-foot and 3-foot sea-level-rise footprints for this coastline

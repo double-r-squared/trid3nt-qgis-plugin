@@ -28,8 +28,8 @@ from pathlib import Path
 
 import pytest
 
-from trid3nt_server.workflows import postprocess_modflow as pp
-from trid3nt_server.workflows.postprocess_modflow import (
+from trid3nt_server.agent.workflows.modflow import postprocess_modflow as pp
+from trid3nt_server.agent.workflows.modflow.postprocess_modflow import (
     PostprocessMODFLOWError,
     postprocess_capture_zone,
 )

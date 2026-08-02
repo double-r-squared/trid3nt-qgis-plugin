@@ -1,0 +1,9 @@
+fetch_airnow_air_quality:
+- what is the current air quality near the wildfire
+- show PM2.5 AQI monitors around Los Angeles
+- current ozone and particulate air quality observations in a bbox
+- EPA AirNow air quality index points for smoke exposure
+- which air quality monitors are affected by the smoke plume
+- show me current AQI category at EPA monitors near this fire
+- real-time PM10 PM2.5 ozone NO2 SO2 readings for a region
+- air quality monitoring stations and their AQI in this area

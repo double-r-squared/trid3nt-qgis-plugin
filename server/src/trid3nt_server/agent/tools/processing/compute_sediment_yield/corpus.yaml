@@ -1,0 +1,9 @@
+compute_sediment_yield:
+- map annual soil loss over this watershed
+- RUSLE erosion model for these fields
+- where is soil erosion worst in this area
+- sediment yield map upstream of the reservoir
+- soil loss in tons per hectare per year for this AOI
+- erosion risk after this land use change
+- which slopes are eroding the fastest here
+- estimate hillslope erosion from rainfall soil and land cover

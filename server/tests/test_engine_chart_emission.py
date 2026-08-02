@@ -32,11 +32,11 @@ from typing import Any
 import pytest
 from trid3nt_contracts import new_ulid
 
-from trid3nt_server.pipeline_emitter import (
+from trid3nt_server.emission.pipeline_emitter import (
     PipelineEmitter,
     emit_chart_payloads,
 )
-from trid3nt_server.tools.processing.charts_common import build_budget_partition_chart, build_hazard_curve_chart, build_head_decline_chart, build_uhs_chart, is_chart_emission_result
+from trid3nt_server.agent.tools.processing.charts_common import build_budget_partition_chart, build_hazard_curve_chart, build_head_decline_chart, build_uhs_chart, is_chart_emission_result
 
 
 # --------------------------------------------------------------------------- #
@@ -320,7 +320,7 @@ async def test_emit_chart_payloads_emits_each_via_current_emitter() -> None:
 
     await emitter.emit_tool_call(
         name="Model sustainable yield",
-        tool_name="run_model_sustainable_yield_scenario",
+        tool_name="modflow_sustainable_yield",
         invoke=workflow,
     )
 
@@ -339,7 +339,7 @@ async def test_emit_chart_payloads_emits_each_via_current_emitter() -> None:
 
 def _patch_archetype_run(monkeypatch: Any, layer: Any) -> None:
     """Stub the archetype run-tool the MODFLOW composers dispatch to (no solver)."""
-    import trid3nt_server.tools.simulation.run_modflow_archetype_tool as run_tool
+    import trid3nt_server.agent.tools.simulation.modflow.run_modflow_archetype_tool as run_tool
 
     async def _fake_run(run_args, *, compute_class="standard"):  # noqa: ANN001
         return layer
@@ -351,8 +351,8 @@ def _patch_archetype_run(monkeypatch: Any, layer: Any) -> None:
 async def test_regional_water_budget_composer_emits_budget_bar(monkeypatch) -> None:
     from trid3nt_contracts.modflow_contracts import BudgetPartitionLayerURI
 
-    from trid3nt_server.workflows import (
-        model_regional_water_budget_scenario as mod,
+    from trid3nt_server.agent.workflows.modflow.regional_water_budget import (
+        regional_water_budget as mod,
     )
 
     layer = BudgetPartitionLayerURI(
@@ -378,7 +378,7 @@ async def test_regional_water_budget_composer_emits_budget_bar(monkeypatch) -> N
     # emit_tool_call binds current_emitter() so the composer's side-emit fires.
     await emitter.emit_tool_call(
         name="Model regional water budget",
-        tool_name="run_model_regional_water_budget_scenario",
+        tool_name="modflow_regional_water_budget",
         invoke=run,
     )
 
@@ -397,7 +397,7 @@ async def test_regional_water_budget_composer_emits_budget_bar(monkeypatch) -> N
 async def test_sustainable_yield_composer_emits_head_decline(monkeypatch) -> None:
     from trid3nt_contracts.modflow_contracts import DrawdownLayerURI
 
-    from trid3nt_server.workflows import model_sustainable_yield_scenario as mod
+    from trid3nt_server.agent.workflows.modflow.sustainable_yield import sustainable_yield as mod
 
     layer = DrawdownLayerURI(
         layer_id="drawdown-RUN9",
@@ -426,7 +426,7 @@ async def test_sustainable_yield_composer_emits_head_decline(monkeypatch) -> Non
 
     await emitter.emit_tool_call(
         name="Model sustainable yield",
-        tool_name="run_model_sustainable_yield_scenario",
+        tool_name="modflow_sustainable_yield",
         invoke=run,
     )
 
@@ -444,7 +444,7 @@ async def test_sustainable_yield_no_series_emits_no_chart(monkeypatch) -> None:
     """The honesty floor end-to-end: a None head-decline series emits NO chart."""
     from trid3nt_contracts.modflow_contracts import DrawdownLayerURI
 
-    from trid3nt_server.workflows import model_sustainable_yield_scenario as mod
+    from trid3nt_server.agent.workflows.modflow.sustainable_yield import sustainable_yield as mod
 
     layer = DrawdownLayerURI(
         layer_id="drawdown-RUN0",
@@ -471,7 +471,7 @@ async def test_sustainable_yield_no_series_emits_no_chart(monkeypatch) -> None:
 
     await emitter.emit_tool_call(
         name="Model sustainable yield",
-        tool_name="run_model_sustainable_yield_scenario",
+        tool_name="modflow_sustainable_yield",
         invoke=run,
     )
 
@@ -483,7 +483,7 @@ async def test_sustainable_yield_no_series_emits_no_chart(monkeypatch) -> None:
 async def test_seismic_composer_emits_curve_and_uhs(monkeypatch) -> None:
     """The OpenQuake follow-up: _emit_oq_curve_charts parses the REAL curve /
     UHS CSV text and side-emits both line charts through the bound emitter."""
-    from trid3nt_server.workflows import model_seismic_hazard_scenario as mod
+    from trid3nt_server.agent.workflows.openquake.model_seismic_hazard_scenario import model_seismic_hazard_scenario as mod
 
     # Real-shaped OpenQuake CSV exports (the leading '#' banner + poe-/SA columns).
     curve_csv = (
@@ -518,7 +518,7 @@ async def test_seismic_composer_emits_curve_and_uhs(monkeypatch) -> None:
 
     await emitter.emit_tool_call(
         name="Model seismic hazard",
-        tool_name="run_seismic_hazard_psha",
+        tool_name="openquake_psha",
         invoke=run,
     )
 
@@ -540,7 +540,7 @@ async def test_seismic_composer_emits_curve_and_uhs(monkeypatch) -> None:
 @pytest.mark.asyncio
 async def test_seismic_composer_classical_only_emits_curve_only(monkeypatch) -> None:
     """A classical-only run (no UHS export) emits ONLY the curve chart."""
-    from trid3nt_server.workflows import model_seismic_hazard_scenario as mod
+    from trid3nt_server.agent.workflows.openquake.model_seismic_hazard_scenario import model_seismic_hazard_scenario as mod
 
     curve_csv = (
         "# generated by OpenQuake\n"
@@ -566,7 +566,7 @@ async def test_seismic_composer_classical_only_emits_curve_only(monkeypatch) -> 
         )
 
     await emitter.emit_tool_call(
-        name="Model seismic hazard", tool_name="run_seismic_hazard_psha", invoke=run
+        name="Model seismic hazard", tool_name="openquake_psha", invoke=run
     )
 
     chart_frames = [f for f in sink.frames if f["type"] == "chart-emission"]
@@ -577,7 +577,7 @@ async def test_seismic_composer_classical_only_emits_curve_only(monkeypatch) -> 
 @pytest.mark.asyncio
 async def test_seismic_composer_no_curve_csv_emits_nothing(monkeypatch) -> None:
     """No curve / UHS CSV exported (or download failed) -> NO chart (honesty)."""
-    from trid3nt_server.workflows import model_seismic_hazard_scenario as mod
+    from trid3nt_server.agent.workflows.openquake.model_seismic_hazard_scenario import model_seismic_hazard_scenario as mod
 
     def _fake_download(_run_id):  # noqa: ANN001
         return None, None
@@ -597,7 +597,7 @@ async def test_seismic_composer_no_curve_csv_emits_nothing(monkeypatch) -> None:
         )
 
     await emitter.emit_tool_call(
-        name="Model seismic hazard", tool_name="run_seismic_hazard_psha", invoke=run
+        name="Model seismic hazard", tool_name="openquake_psha", invoke=run
     )
 
     assert [f for f in sink.frames if f["type"] == "chart-emission"] == []

@@ -21,7 +21,7 @@ from typing import Any
 
 import pytest
 
-from trid3nt_server.auth_handshake import LOCAL_SINGLE_USER_ID, authenticate_token
+from trid3nt_server.credentials.auth_handshake import LOCAL_SINGLE_USER_ID, authenticate_token
 from trid3nt_server.persistence import Persistence
 from trid3nt_contracts.auth import AuthTokenEnvelope
 from trid3nt_contracts.common import new_ulid, now_utc

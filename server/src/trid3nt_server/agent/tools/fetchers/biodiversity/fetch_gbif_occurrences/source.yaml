@@ -1,0 +1,92 @@
+# Router source spec (data-router fold, chained-resolution mode, ADR 0063).
+# Twin: fetch_gbif_occurrences.py -- FOLDED via chained-resolution hooks.
+schema_version: v1
+name: fetch_gbif_occurrences
+source_class: gbif
+shape: vector-fgb
+supports_global_query: false
+endpoints:
+  data:
+    url: https://api.gbif.org/v1/occurrence/search
+auth:
+  mode: none
+  user_agent: trid3nt/0.1 (Hazard Modeling Agent; https://github.com/double-r-squared/trid3nt-qgis-plugin;
+    agent@trid3nt.dev)
+params:
+  species_key:
+    type: str
+    required: true
+  bbox:
+    type: bbox
+    required: true
+    quantize: round_6dp
+  year_range:
+    type: int_range
+    required: false
+    schema_optional: true
+    min: 1500
+    max: 2100
+  max_records:
+    type: int
+    required: false
+    default: 5000
+    min: 1
+    max: 100000
+hooks:
+  resolve_build: gbif_occurrences.resolve_build
+  resolve_parse: gbif_occurrences.resolve_parse
+  build_request: gbif_occurrences.build_request
+  next_page: gbif_occurrences.next_page
+  parse_response: gbif_occurrences.parse_response
+ingest:
+  chained: {}
+  properties:
+  - gbifID
+  - species
+  - eventDate
+  - coordinateUncertaintyInMeters
+  - basisOfRecord
+normalize:
+  crs: EPSG:4326
+output:
+  layer_type: vector
+  ext: fgb
+  role: context
+  style_preset: gbif_occurrences
+  emit_bbox: false
+cache:
+  ttl_class: static-30d
+payload_estimate:
+  model: per_feature
+  features_per_sq_deg: 50.0
+  kb_per_feature: 0.2
+  floor_mb: 0.01
+caveats:
+- GBIF aggregates museum + citizen-science + eDNA occurrences globally; a species name is resolved via
+  species/match (EXACT only) then paged; points are coordinate-validated and hard-clipped to the requested
+  bbox. No API key. An area with no occurrences -> a header-only FlatGeobuf, never an error.
+docstring: "Fetch GBIF species occurrence points for a taxon over a bbox.\n\n**What it does:** Queries\
+  \ the GBIF Occurrence Search API\n(``api.gbif.org/v1/occurrence/search``) for all georeferenced occurrences\
+  \ of\na species (or higher taxon) within the requested bbox, paginates up to\n``max_records``, and serializes\
+  \ the result as a FlatGeobuf Point layer.\nAccepts either a numeric GBIF ``taxonKey`` (fast path) or\
+  \ a scientific name\nstring (resolved via ``species/match`` before cache-key computation). No API\n\
+  key required. Cached ``static-30d``.\n\n**When to use:**\n- Agent needs species occurrence points for\
+  \ ecological or biodiversity\n  analysis -- e.g. mapping Florida panther sightings over a flood risk\
+  \ layer.\n- Workflow requires a broad multi-source occurrence dataset (GBIF aggregates\n  museum specimens,\
+  \ citizen science, eDNA, and research datasets globally).\n- Year-range filter needed to study pre/post-disturbance\
+  \ species presence.\n\n**When NOT to use:**\n- Protected-area polygon boundaries (use ``fetch_wdpa_protected_areas``).\n\
+  - iNaturalist-only research-grade observations with photo/observer detail\n  (use ``fetch_inaturalist_observations``;\
+  \ GBIF includes iNat data but\n  cannot be filtered to that source cleanly here).\n- Historical species\
+  \ range polygons or SDM outputs (use Maxent or a\n  published raster SDM).\n- Live animal tracking (Movebank/Argos\
+  \ telemetry -- different tool).\n\n**Parameters:**\n- ``species_key`` (int or str): GBIF ``taxonKey``\
+  \ integer (e.g. ``7193927``\n  for Florida panther *Puma concolor coryi*) OR a scientific name string\n\
+  \  resolved via ``species/match``.\n- ``bbox`` (tuple): ``(west, south, east, north)`` in EPSG:4326.\
+  \ Example:\n  ``(-82.5, 25.0, -80.0, 27.0)`` for South Florida.\n- ``year_range`` (tuple or None): ``(start_year,\
+  \ end_year)`` inclusive; valid\n  range 1500-2100. ``None`` returns all years.\n- ``max_records`` (int):\
+  \ cap on returned features; default 5000, hard cap\n  100 000.\n\n**Returns:**\n``LayerURI(layer_type=\"\
+  vector\", role=\"context\", units=None)`` pointing at a\nFlatGeobuf with fields: ``gbifID`` (int), ``species``\
+  \ (str), ``eventDate``\n(str), ``coordinateUncertaintyInMeters`` (float), ``basisOfRecord`` (str).\n\
+  Points are coordinate-validated and hard-clipped to the requested bbox.\n\n**Cross-tool dependencies:**\n\
+  - Pairs with: ``fetch_wdpa_protected_areas`` (inside/outside protected area\n  analysis), ``fetch_nifc_fire_perimeters``\
+  \ or ``fetch_mtbs_burn_severity``\n  (post-fire species presence).\n- Related: ``fetch_inaturalist_observations``\
+  \ for citizen-science-only subset\n  with photo/observer metadata."

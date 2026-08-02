@@ -14,7 +14,7 @@ computed the relief, but the chain to visible pixels broke two ways:
    stayed invisible (a layer is not on the map until publish_layer adds it
    to the QGIS Server project).
 
-These tests drive ``_stream_gemini_reply`` end-to-end (fake Gemini, fake
+These tests drive ``_stream_model_reply`` end-to-end (fake Gemini, fake
 tool dispatch — no live calls) and prove:
 
 - FIX A: a registry-valid, non-hot-set tool dispatches on the FIRST call
@@ -34,7 +34,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from trid3nt_server.adapter import GeminiSettings
+from trid3nt_server.agent.adapters.adapter import ModelSettings
 from trid3nt_contracts import new_ulid
 
 
@@ -52,35 +52,13 @@ def _populate_registry() -> None:
 
 
 def _make_fake_chunk_with_function_call(name: str, args: dict, call_id: str = "c1"):
-    fn_call = MagicMock()
-    fn_call.name = name
-    fn_call.id = call_id
-    fn_call.args = args
-    fake_part = MagicMock()
-    fake_part.function_call = fn_call
-    fake_part.text = None
-    fake_content = MagicMock()
-    fake_content.parts = [fake_part]
-    fake_candidate = MagicMock()
-    fake_candidate.content = fake_content
-    fake_chunk = MagicMock()
-    fake_chunk.candidates = [fake_candidate]
-    fake_chunk.text = None
-    return fake_chunk
+    """A fake turn (scripted-provider dict) emitting ONE function call."""
+    return {"tool_call": {"name": name, "args": args, "call_id": call_id}}
 
 
 def _make_fake_chunk_with_text(text: str):
-    fake_part = MagicMock()
-    fake_part.function_call = None
-    fake_part.text = text
-    fake_content = MagicMock()
-    fake_content.parts = [fake_part]
-    fake_candidate = MagicMock()
-    fake_candidate.content = fake_content
-    fake_chunk = MagicMock()
-    fake_chunk.candidates = [fake_candidate]
-    fake_chunk.text = None
-    return fake_chunk
+    """A fake turn (scripted-provider dict) emitting one narration delta."""
+    return {"text": text}
 
 
 @dataclass
@@ -105,40 +83,32 @@ def _function_response_payloads(contents_per_turn: list[list[Any]]) -> list[tupl
     return out
 
 
-async def _drive_loop(turn_chunks: list[list[Any]], fake_invoke) -> tuple[list[list[Any]], "_FakeSocket", Any]:
-    """Run ``_stream_gemini_reply`` against pre-canned Gemini turns.
+async def _drive_loop(fake_llm, turns: list[dict], fake_invoke) -> tuple[list[list[Any]], "_FakeSocket", Any]:
+    """Run ``_stream_model_reply`` against pre-canned scripted-provider turns.
 
-    Returns (contents captured per Gemini call, fake socket, session state).
+    Returns (contents captured per model call, fake socket, session state).
     """
     from trid3nt_server import server as agent_server
     from trid3nt_server.server import SessionState
 
-    turn_responses = iter([iter(chunks) for chunks in turn_chunks])
-    contents_per_turn: list[list[Any]] = []
-
-    def _capture_and_stream(**kwargs):
-        contents_per_turn.append(list(kwargs["contents"]))
-        return next(turn_responses)
-
-    fake_client = MagicMock()
-    fake_client.models.generate_content_stream.side_effect = _capture_and_stream
+    fake_llm.script(turns)
 
     sock = _FakeSocket()
     state = SessionState(session_id=new_ulid())
-    settings = GeminiSettings(
+    settings = ModelSettings(
         model="gemini-2.5-pro",
         project="test",
         location="us-central1",
         use_vertex=True,
     )
 
-    with patch.object(agent_server, "build_client", return_value=fake_client), \
-         patch.object(agent_server, "_invoke_tool_via_emitter", side_effect=fake_invoke), \
+    with patch.object(agent_server, "_invoke_tool_via_emitter", side_effect=fake_invoke), \
          patch.object(agent_server, "build_tool_declarations", return_value=[]):
-        await agent_server._stream_gemini_reply(
+        await agent_server._stream_model_reply(
             sock, state, settings,
             "Compute a colored relief map for Boulder, Colorado", "research",
         )
+    contents_per_turn = [call["contents"] for call in fake_llm.calls]
     return contents_per_turn, sock, state
 
 
@@ -148,7 +118,7 @@ async def _drive_loop(turn_chunks: list[list[Any]], fake_invoke) -> tuple[list[l
 
 
 @pytest.mark.asyncio
-async def test_first_call_to_real_non_hot_set_tool_dispatches() -> None:
+async def test_first_call_to_real_non_hot_set_tool_dispatches(fake_llm) -> None:
     """Gemini's FIRST call to compute_colored_relief (real tool, outside the
     hot set) must dispatch — no OUT_OF_ALLOWED_SET bounce, no detour turns.
     This is the demo7/demo8 failure mode, inverted."""
@@ -171,13 +141,14 @@ async def test_first_call_to_real_non_hot_set_tool_dispatches() -> None:
         return result
 
     contents_per_turn, _sock, state = await _drive_loop(
+        fake_llm,
         [
-            [_make_fake_chunk_with_function_call(
+            _make_fake_chunk_with_function_call(
                 "compute_colored_relief",
                 {"dem_uri": "gs://grace2-tool-cache/dem/boulder.tif", "ramp": "terrain"},
                 "call-relief",
-            )],
-            [_make_fake_chunk_with_text("Computed the colored relief for Boulder.")],
+            ),
+            _make_fake_chunk_with_text("Computed the colored relief for Boulder."),
         ],
         _fake_invoke,
     )
@@ -198,7 +169,7 @@ async def test_first_call_to_real_non_hot_set_tool_dispatches() -> None:
 
 
 @pytest.mark.asyncio
-async def test_hallucinated_tool_still_bounces_at_server_level() -> None:
+async def test_hallucinated_tool_still_bounces_at_server_level(fake_llm) -> None:
     """The hallucination guard is unweakened: a name that exists nowhere in
     the registry never dispatches and surfaces the structured
     OUT_OF_ALLOWED_SET envelope to Gemini."""
@@ -209,11 +180,12 @@ async def test_hallucinated_tool_still_bounces_at_server_level() -> None:
         return {"status": "ok"}
 
     contents_per_turn, _sock, state = await _drive_loop(
+        fake_llm,
         [
-            [_make_fake_chunk_with_function_call(
+            _make_fake_chunk_with_function_call(
                 "compute_terrain_relief_v2", {"dem_uri": "gs://x/y.tif"}, "call-fake",
-            )],
-            [_make_fake_chunk_with_text("That tool does not exist; let me check the catalog.")],
+            ),
+            _make_fake_chunk_with_text("That tool does not exist; let me check the catalog."),
         ],
         _fake_invoke,
     )
@@ -236,7 +208,7 @@ async def test_hallucinated_tool_still_bounces_at_server_level() -> None:
 
 
 @pytest.mark.asyncio
-async def test_layer_producing_tool_response_carries_publish_instruction() -> None:
+async def test_layer_producing_tool_response_carries_publish_instruction(fake_llm) -> None:
     """The function_response for a layer-producing tool must tell Gemini the
     layer is NOT on the map yet and to call publish_layer with the handle —
     the demo8 publish-omission fix."""
@@ -254,13 +226,14 @@ async def test_layer_producing_tool_response_carries_publish_instruction() -> No
         return result
 
     contents_per_turn, _sock, _state = await _drive_loop(
+        fake_llm,
         [
-            [_make_fake_chunk_with_function_call(
+            _make_fake_chunk_with_function_call(
                 "compute_colored_relief",
                 {"dem_uri": "gs://grace2-tool-cache/dem/boulder.tif", "ramp": "terrain"},
                 "call-relief",
-            )],
-            [_make_fake_chunk_with_text("Done.")],
+            ),
+            _make_fake_chunk_with_text("Done."),
         ],
         _fake_invoke,
     )

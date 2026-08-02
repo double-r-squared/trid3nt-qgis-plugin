@@ -1,56 +1,53 @@
-"""Wave 4.11 M5 — search_tools Mongo-backed co-occurrence + hot-set tests.
+"""search_tools co-occurrence (JSONL-backed) tests.
+
+Telemetry is JSONL-only now (the ``tool_call_telemetry`` Persistence-collection
+route was cut). The co-occurrence channel reads the JSONL sink via
+``telemetry.load_tool_call_records``; these tests feed a temp
+``TRID3NT_TELEMETRY_PATH`` file.
+
+The per-user dynamic hot-set path (``get_dynamic_hot_set``, Mongo-backed,
+gated behind ``TRID3NT_DYNAMIC_HOT_SET`` and unset in all live configs) was
+cut as feature-creep; its dedicated tests were removed along with the
+function.
 
 Coverage:
-    1. ``test_co_occurrence_boost_when_mongo_bound`` — with synthetic telemetry
-       wired into a mock Persistence, a frequently-co-called tool gets ranked
-       higher than it would under the 3-channel baseline.
-    2. ``test_falls_back_to_3_channel_when_mongo_unavailable`` — when
-       Persistence is unbound, ``search_tools`` produces results without
-       crashing and the co-occurrence channel silently drops out.
-    3. ``test_index_refresh_within_5min_window`` — a second call within the
-       refresh window reuses the cached co-occurrence index (no second Mongo
-       round-trip); past the window the cache is rebuilt.
-    4. ``test_get_dynamic_hot_set_returns_top_k`` — with mocked telemetry,
-       ``get_dynamic_hot_set`` returns the top-K by dispatch frequency.
-    5. ``test_get_dynamic_hot_set_falls_back_to_static`` — when Persistence
-       is unbound the static ``HOT_SET_TOOLS`` is returned.
-    6. ``test_existing_unit_tests_still_pass_smoke`` — guards against
-       accidental regression of the 17 Wave 4.10 B7 tests by importing and
-       sanity-checking a few key shapes.  The full suite continues to live in
-       ``test_search_tools.py``; this smoke just verifies the import path
-       still works alongside the new module-level state.
+    1. ``test_co_occurrence_boost_when_jsonl_populated`` — with a populated JSONL
+       sink, a frequently-co-called tool ranks no worse than the empty-sink
+       3-channel baseline.
+    2. ``test_falls_back_to_3_channel_when_no_telemetry`` /
+       ``test_malformed_jsonl_does_not_crash`` — an empty/missing/malformed sink
+       leaves the co-occurrence channel out; discover still returns results.
+    3. ``test_cooccurrence_index_cached_within_5min_window`` — a second call
+       within the refresh window reuses the cached index (no second JSONL read);
+       past the window the cache is rebuilt.
+    4. ``test_existing_unit_tests_still_pass_smoke`` — guards against accidental
+       regression of the canonical 3-channel routing answers.
+    5. ``test_build_cooccurrence_from_docs_*`` — pure algorithmic correctness.
 """
 
 from __future__ import annotations
 
 import asyncio
 from typing import Any
-from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
 # Trigger full tool surface registration so the index includes a realistic
 # universe of candidates (mirrors test_search_tools.py setup).
-from trid3nt_server.tools import (  # noqa: F401 — registration side-effect
-    TOOL_REGISTRY,
-    publish_layer,
-)
-from trid3nt_server.tools.discovery import (  # noqa: F401 — registration side-effect
-    fetch_from_catalog,
-    search_data_catalog,
-    qgis_discovery,
-)
-from trid3nt_server.tools.discovery import search_tools as discover_module
-from trid3nt_server.tools.simulation import solver  # noqa: F401 — registration side-effect
-from trid3nt_server.workflows import model_flood_scenario  # noqa: F401
+from trid3nt_server.agent.tools import TOOL_REGISTRY  # noqa: F401
+from trid3nt_server.agent.tools.publish_layer import publish_layer  # noqa: F401 — registration side-effect
+from trid3nt_server.agent.tools.search.fetch_from_catalog import fetch_from_catalog  # noqa: F401 — registration side-effect
+from trid3nt_server.agent.tools.search.search_data_catalog import search_data_catalog  # noqa: F401 — registration side-effect
+from trid3nt_server.agent.tools.search.qgis_discovery import qgis_discovery  # noqa: F401 — registration side-effect
+from trid3nt_server.agent.tools.search.search_tools import search_tools as discover_module
+from trid3nt_server.agent.tools.simulation.solver import solver  # noqa: F401 — registration side-effect
+from trid3nt_server.agent.workflows.sfincs.flood import flood  # noqa: F401
 
-from trid3nt_server.tools.discovery.search_tools import (
+from trid3nt_server.agent.tools.search.search_tools.search_tools import (
     _build_cooccurrence_from_docs,
     _reset_cooccurrence_cache_for_tests,
-    _reset_hot_set_cache_for_tests,
     _reset_index_for_tests,
     search_tools,
-    get_dynamic_hot_set,
 )
 
 
@@ -64,11 +61,9 @@ def _fresh_caches():
     """Reset all module-level caches before/after each test."""
     _reset_index_for_tests()
     _reset_cooccurrence_cache_for_tests()
-    _reset_hot_set_cache_for_tests()
     yield
     _reset_index_for_tests()
     _reset_cooccurrence_cache_for_tests()
-    _reset_hot_set_cache_for_tests()
 
 
 def _make_telemetry_docs(
@@ -99,44 +94,52 @@ def _make_telemetry_docs(
     return list(reversed(docs))  # newest-first
 
 
-def _make_mock_persistence(
-    find_result_docs: list[dict[str, Any]] | None = None,
-) -> MagicMock:
-    """Mock Persistence whose _mcp.call_tool returns ``{"documents": [...]}``."""
-    persistence = MagicMock()
-    persistence._mcp = MagicMock()
-    docs = find_result_docs or []
-    persistence._mcp.call_tool = AsyncMock(return_value={"documents": docs})
-    return persistence
+def _write_telemetry_jsonl(path, pairs: list[tuple[str, str]]) -> None:
+    """Write synthetic per-tool-call rows to a JSONL telemetry sink.
+
+    ``pairs`` is ``[(session_id, tool_name), ...]`` in CHRONOLOGICAL order
+    (oldest first, as the append-ordered live sink stores them);
+    ``telemetry.load_tool_call_records`` reverses to newest-first. Rows carry no
+    ``record_type`` so they read as per-tool-call rows (not SHADOW rows).
+    """
+    import json
+
+    with open(path, "w", encoding="utf-8") as fh:
+        for i, (sid, tool) in enumerate(pairs):
+            fh.write(
+                json.dumps(
+                    {
+                        "session_id": sid,
+                        "ts": f"2026-06-09T00:00:{i % 60:02d}Z",
+                        "tool_name": tool,
+                        "source": "llm",
+                        "args_hash": "0" * 64,
+                        "success": True,
+                        "latency_ms": 10.0,
+                    }
+                )
+                + "\n"
+            )
 
 
 # ---------------------------------------------------------------------------
-# 1. test_co_occurrence_boost_when_mongo_bound
+# 1. test_co_occurrence_boost_when_jsonl_populated
 # ---------------------------------------------------------------------------
 
 
-def test_co_occurrence_boost_when_mongo_bound() -> None:
+def test_co_occurrence_boost_when_jsonl_populated(tmp_path, monkeypatch) -> None:
     """A tool that frequently co-occurs with a query-named tool is boosted.
 
-    Synthetic telemetry: in many sessions, ``fetch_dem`` was followed by
-    ``compute_hillshade``.  When the user queries "fetch_dem terrain", the
-    co-occurrence channel surfaces ``compute_hillshade`` higher than the
-    3-channel baseline (which would rank it on docstring overlap alone).
+    Telemetry is JSONL-only now (the Persistence-collection read was cut). With
+    a populated sink where ``fetch_dem`` co-occurs with ``compute_hillshade`` in
+    5 sessions, the query "fetch_dem terrain" surfaces ``compute_hillshade`` no
+    worse than the empty-sink 3-channel baseline.
     """
-    # Build telemetry where compute_hillshade co-occurs with fetch_dem in 5
-    # sessions and compute_colored_relief co-occurs in only 1 session.
-    pairs: list[tuple[str, str]] = []
-    for i in range(5):
-        sid = f"01SESS{i:020d}"
-        pairs.append((sid, "fetch_dem"))
-        pairs.append((sid, "compute_hillshade"))
-    # One session that pairs fetch_dem with a different tool.
-    pairs.append(("01SESS9999999999999999999", "fetch_dem"))
-    pairs.append(("01SESS9999999999999999999", "compute_colored_relief"))
-
-    docs = _make_telemetry_docs(pairs)
-
-    # Baseline: no telemetry → rank under the 3-channel path.
+    # Baseline: empty telemetry sink -> co-occurrence channel drops out.
+    empty = tmp_path / "empty.jsonl"
+    empty.write_text("", encoding="utf-8")
+    monkeypatch.setenv("TRID3NT_TELEMETRY_PATH", str(empty))
+    _reset_cooccurrence_cache_for_tests()
     baseline_result = asyncio.run(
         search_tools("fetch_dem terrain analysis", top_k=15)
     )
@@ -147,19 +150,23 @@ def test_co_occurrence_boost_when_mongo_bound() -> None:
         else None
     )
 
-    # Reset between runs so the index rebuilds (the dense matrix is OK to
-    # reuse, but the co-occurrence cache must be fresh).
+    # Boosted: populate the sink so compute_hillshade co-occurs with fetch_dem in
+    # 5 sessions and compute_colored_relief in only 1.
+    pairs: list[tuple[str, str]] = []
+    for i in range(5):
+        sid = f"01SESS{i:020d}"
+        pairs.append((sid, "fetch_dem"))
+        pairs.append((sid, "compute_hillshade"))
+    pairs.append(("01SESS9999999999999999999", "fetch_dem"))
+    pairs.append(("01SESS9999999999999999999", "compute_colored_relief"))
+    populated = tmp_path / "populated.jsonl"
+    _write_telemetry_jsonl(populated, pairs)
+    monkeypatch.setenv("TRID3NT_TELEMETRY_PATH", str(populated))
     _reset_cooccurrence_cache_for_tests()
 
-    persistence = _make_mock_persistence(docs)
-    with patch(
-        "trid3nt_server.tools.discovery.search_tools._get_persistence_safe",
-        return_value=persistence,
-    ):
-        boosted_result = asyncio.run(
-            search_tools("fetch_dem terrain analysis", top_k=15)
-        )
-
+    boosted_result = asyncio.run(
+        search_tools("fetch_dem terrain analysis", top_k=15)
+    )
     boosted_order = [r["tool_name"] for r in boosted_result["results"]]
     assert (
         "compute_hillshade" in boosted_order
@@ -173,41 +180,31 @@ def test_co_occurrence_boost_when_mongo_bound() -> None:
             f"co-occurrence boost expected to improve compute_hillshade rank; "
             f"baseline={baseline_hillshade_rank} boosted={boosted_hillshade_rank}"
         )
-    # Verify the MCP find call was issued with the right shape.
-    persistence._mcp.call_tool.assert_awaited()
-    name, args = persistence._mcp.call_tool.call_args[0]
-    assert name == "find"
-    assert args["collection"] == "tool_call_telemetry"
 
 
 # ---------------------------------------------------------------------------
-# 2. test_falls_back_to_3_channel_when_mongo_unavailable
+# 2. test_falls_back_to_3_channel_when_no_telemetry
 # ---------------------------------------------------------------------------
 
 
-def test_falls_back_to_3_channel_when_mongo_unavailable() -> None:
-    """No Persistence → search_tools returns 3-channel results, no crash."""
-    with patch(
-        "trid3nt_server.tools.discovery.search_tools._get_persistence_safe",
-        return_value=None,
-    ):
-        result = asyncio.run(search_tools("show me flood zones", top_k=5))
+def test_falls_back_to_3_channel_when_no_telemetry(tmp_path, monkeypatch) -> None:
+    """Empty/missing JSONL sink → search_tools returns 3-channel results, no crash."""
+    monkeypatch.setenv("TRID3NT_TELEMETRY_PATH", str(tmp_path / "does-not-exist.jsonl"))
+    _reset_cooccurrence_cache_for_tests()
+    result = asyncio.run(search_tools("show me flood zones", top_k=5))
     assert "results" in result
     names = [r["tool_name"] for r in result["results"]]
     # Canonical 3-channel expectation from Wave 4.10 B7.
     assert "fetch_fema_nfhl_zones" in names[:3]
 
 
-def test_falls_back_when_persistence_mcp_raises() -> None:
-    """A Persistence whose _mcp.call_tool raises must not crash discover."""
-    persistence = MagicMock()
-    persistence._mcp = MagicMock()
-    persistence._mcp.call_tool = AsyncMock(side_effect=RuntimeError("conn refused"))
-    with patch(
-        "trid3nt_server.tools.discovery.search_tools._get_persistence_safe",
-        return_value=persistence,
-    ):
-        result = asyncio.run(search_tools("flood zones", top_k=3))
+def test_malformed_jsonl_does_not_crash(tmp_path, monkeypatch) -> None:
+    """Malformed telemetry lines are skipped; discover still returns results."""
+    bad = tmp_path / "bad.jsonl"
+    bad.write_text("not json at all\n{ partial json\n\n", encoding="utf-8")
+    monkeypatch.setenv("TRID3NT_TELEMETRY_PATH", str(bad))
+    _reset_cooccurrence_cache_for_tests()
+    result = asyncio.run(search_tools("flood zones", top_k=3))
     assert "results" in result
     # 3-channel path still surfaces the canonical answer.
     names = [r["tool_name"] for r in result["results"]]
@@ -215,198 +212,80 @@ def test_falls_back_when_persistence_mcp_raises() -> None:
 
 
 # ---------------------------------------------------------------------------
-# 3. test_index_refresh_within_5min_window
+# 3. test_cooccurrence_index_cached_within_5min_window
 # ---------------------------------------------------------------------------
 
 
-def test_index_refresh_within_5min_window() -> None:
-    """Two search_tools calls within 5 min reuse the cached cooc index."""
-    docs = _make_telemetry_docs(
-        [
-            ("01SESS00000000000000000001", "fetch_dem"),
-            ("01SESS00000000000000000001", "compute_hillshade"),
-        ]
-    )
-    persistence = _make_mock_persistence(docs)
+def test_cooccurrence_index_cached_within_5min_window(tmp_path, monkeypatch) -> None:
+    """Two search_tools calls within 5 min reuse the cached cooc index (one read)."""
+    pairs = [
+        ("01SESS00000000000000000001", "fetch_dem"),
+        ("01SESS00000000000000000001", "compute_hillshade"),
+    ]
+    populated = tmp_path / "populated.jsonl"
+    _write_telemetry_jsonl(populated, pairs)
+    monkeypatch.setenv("TRID3NT_TELEMETRY_PATH", str(populated))
+    _reset_cooccurrence_cache_for_tests()
 
-    with patch(
-        "trid3nt_server.tools.discovery.search_tools._get_persistence_safe",
-        return_value=persistence,
-    ):
-        asyncio.run(search_tools("fetch_dem terrain", top_k=5))
-        find_calls_after_first = sum(
-            1
-            for c in persistence._mcp.call_tool.call_args_list
-            if c[0][0] == "find"
-        )
-        asyncio.run(search_tools("fetch_dem terrain", top_k=5))
-        find_calls_after_second = sum(
-            1
-            for c in persistence._mcp.call_tool.call_args_list
-            if c[0][0] == "find"
-        )
+    # Spy on the JSONL reader (imported lazily inside _fetch_recent_telemetry_docs).
+    import trid3nt_server.telemetry as _tel
 
-    # Second call within window should NOT trigger another Mongo find.
-    assert find_calls_after_second == find_calls_after_first, (
+    reads = {"n": 0}
+    _real = _tel.load_tool_call_records
+
+    def _counting(*a, **k):
+        reads["n"] += 1
+        return _real(*a, **k)
+
+    monkeypatch.setattr(_tel, "load_tool_call_records", _counting)
+
+    asyncio.run(search_tools("fetch_dem terrain", top_k=5))
+    reads_after_first = reads["n"]
+    asyncio.run(search_tools("fetch_dem terrain", top_k=5))
+    reads_after_second = reads["n"]
+
+    # Second call within window should NOT re-read the sink.
+    assert reads_after_second == reads_after_first, (
         f"expected cached index reuse within 5-min window; "
-        f"calls after first={find_calls_after_first}, after second={find_calls_after_second}"
+        f"reads after first={reads_after_first}, after second={reads_after_second}"
     )
 
-    # Past the window: simulate by manually setting the cache's built_at far
-    # in the past, then verify a third call DOES refresh.
-    from trid3nt_server.tools.discovery import search_tools as discover_mod
+    # Past the window: backdate the cached index, then verify a third call refreshes.
+    from trid3nt_server.agent.tools.search.search_tools import search_tools as discover_mod
 
     with discover_mod._COOCCURRENCE_LOCK:
         cached = discover_mod._COOCCURRENCE_INDEX
     assert cached is not None
-    # Backdate the cached index by 10 minutes.
     cached.built_at -= 10 * 60
 
-    with patch(
-        "trid3nt_server.tools.discovery.search_tools._get_persistence_safe",
-        return_value=persistence,
-    ):
-        asyncio.run(search_tools("fetch_dem terrain", top_k=5))
-        find_calls_after_third = sum(
-            1
-            for c in persistence._mcp.call_tool.call_args_list
-            if c[0][0] == "find"
-        )
-    assert find_calls_after_third > find_calls_after_second, (
-        "expected refresh past 5-min window to re-hit Mongo"
+    asyncio.run(search_tools("fetch_dem terrain", top_k=5))
+    reads_after_third = reads["n"]
+    assert reads_after_third > reads_after_second, (
+        "expected refresh past 5-min window to re-read the JSONL sink"
     )
 
 
 # ---------------------------------------------------------------------------
-# 4. test_get_dynamic_hot_set_returns_top_k
+# 4. test_existing_unit_tests_still_pass — smoke
 # ---------------------------------------------------------------------------
 
 
-def test_get_dynamic_hot_set_returns_top_k() -> None:
-    """With mocked telemetry, ``get_dynamic_hot_set`` returns the top-K by count."""
-    pairs: list[tuple[str, str]] = []
-    # fetch_dem dispatched 10 times across various sessions.
-    for i in range(10):
-        pairs.append((f"01SES{i:021d}", "fetch_dem"))
-    # compute_hillshade 5 times.
-    for i in range(5):
-        pairs.append((f"01SES{i:021d}", "compute_hillshade"))
-    # geocode_location 3 times.
-    for i in range(3):
-        pairs.append((f"01SES{i:021d}", "geocode_location"))
-    # Various single-call tools.
-    for i, tool in enumerate(
-        [
-            "fetch_nws_alerts_conus",
-            "compute_slope",
-            "compute_aspect",
-            "clip_raster_to_bbox",
-            "fetch_fema_nfhl_zones",
-            "fetch_wdpa_protected_areas",
-        ]
-    ):
-        pairs.append((f"01XSES{i:020d}", tool))
-
-    docs = _make_telemetry_docs(pairs)
-    persistence = _make_mock_persistence(docs)
-
-    with patch(
-        "trid3nt_server.tools.discovery.search_tools._get_persistence_safe",
-        return_value=persistence,
-    ):
-        hot_set = asyncio.run(get_dynamic_hot_set(top_k=3))
-
-    assert isinstance(hot_set, frozenset)
-    assert hot_set == frozenset({"fetch_dem", "compute_hillshade", "geocode_location"})
-
-
-def test_get_dynamic_hot_set_filters_by_user_id() -> None:
-    """``user_id`` is passed through to the find filter."""
-    docs = _make_telemetry_docs(
-        [("01SESS00000000000000000001", "fetch_dem")]
-    )
-    persistence = _make_mock_persistence(docs)
-
-    with patch(
-        "trid3nt_server.tools.discovery.search_tools._get_persistence_safe",
-        return_value=persistence,
-    ):
-        asyncio.run(get_dynamic_hot_set(user_id="01USR0000000000000000000XX", top_k=5))
-
-    # First call should be the find.
-    name, args = persistence._mcp.call_tool.call_args_list[0][0]
-    assert name == "find"
-    assert args["filter"].get("user_id") == "01USR0000000000000000000XX"
-
-
-# ---------------------------------------------------------------------------
-# 5. test_get_dynamic_hot_set_falls_back_to_static
-# ---------------------------------------------------------------------------
-
-
-def test_get_dynamic_hot_set_falls_back_to_static() -> None:
-    """Persistence unbound → static HOT_SET_TOOLS is returned verbatim."""
-    from trid3nt_server.categories import HOT_SET_TOOLS as STATIC
-
-    with patch(
-        "trid3nt_server.tools.discovery.search_tools._get_persistence_safe",
-        return_value=None,
-    ):
-        result = asyncio.run(get_dynamic_hot_set())
-    assert result == STATIC
-
-
-def test_get_dynamic_hot_set_falls_back_when_mcp_raises() -> None:
-    """An MCP find error falls through to the static set, not an exception."""
-    from trid3nt_server.categories import HOT_SET_TOOLS as STATIC
-
-    persistence = MagicMock()
-    persistence._mcp = MagicMock()
-    persistence._mcp.call_tool = AsyncMock(side_effect=RuntimeError("boom"))
-
-    with patch(
-        "trid3nt_server.tools.discovery.search_tools._get_persistence_safe",
-        return_value=persistence,
-    ):
-        result = asyncio.run(get_dynamic_hot_set())
-    assert result == STATIC
-
-
-def test_get_dynamic_hot_set_falls_back_when_no_telemetry_rows() -> None:
-    """Persistence bound but the find returns no rows → static fallback."""
-    from trid3nt_server.categories import HOT_SET_TOOLS as STATIC
-
-    persistence = _make_mock_persistence([])  # empty docs
-    with patch(
-        "trid3nt_server.tools.discovery.search_tools._get_persistence_safe",
-        return_value=persistence,
-    ):
-        result = asyncio.run(get_dynamic_hot_set())
-    assert result == STATIC
-
-
-# ---------------------------------------------------------------------------
-# 6. test_existing_unit_tests_still_pass — smoke
-# ---------------------------------------------------------------------------
-
-
-def test_existing_unit_tests_still_pass_smoke() -> None:
+def test_existing_unit_tests_still_pass_smoke(tmp_path, monkeypatch) -> None:
     """Spot-check that the 3-channel shape from Wave 4.10 B7 still holds.
 
     The full 17-test suite lives in ``test_search_tools.py``; this is a
-    smoke that the new co-occurrence module-level state doesn't break the
-    canonical routing answers when no Persistence is bound.
+    smoke that the co-occurrence module-level state doesn't break the
+    canonical routing answers with an empty telemetry sink.
     """
+    monkeypatch.setenv("TRID3NT_TELEMETRY_PATH", str(tmp_path / "empty.jsonl"))
+    _reset_cooccurrence_cache_for_tests()
+
     # Empty / non-string query handling.
     assert asyncio.run(search_tools("", top_k=5)) == {"results": []}
     assert asyncio.run(search_tools(None, top_k=5)) == {"results": []}  # type: ignore[arg-type]
 
-    # Canonical routing answer (no Persistence; pure 3-channel path).
-    with patch(
-        "trid3nt_server.tools.discovery.search_tools._get_persistence_safe",
-        return_value=None,
-    ):
-        out = asyncio.run(search_tools("show me flood zones", top_k=5))
+    # Canonical routing answer (empty sink; pure 3-channel path).
+    out = asyncio.run(search_tools("show me flood zones", top_k=5))
     names = [r["tool_name"] for r in out["results"]]
     assert "fetch_fema_nfhl_zones" in names[:3]
 
@@ -419,7 +298,7 @@ def test_existing_unit_tests_still_pass_smoke() -> None:
 
 
 # ---------------------------------------------------------------------------
-# 7. Build-cooccurrence-from-docs algorithmic correctness
+# 5. Build-cooccurrence-from-docs algorithmic correctness
 # ---------------------------------------------------------------------------
 
 

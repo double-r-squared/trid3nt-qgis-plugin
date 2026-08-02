@@ -1,0 +1,67 @@
+compute_impact_envelope:
+- how much damage will the 100-year flood cause in Fort Myers
+- estimate the expected dollar losses for this inundation scenario
+- how many structures are impacted by the flood we just modeled
+- summarize the flood impact for this case, structures damaged and population at risk
+- give me the displaced population for the Hurricane Ian flooding
+- run a damage and loss assessment on this flood depth layer using the building inventory
+- what are the total expected damages and the 95th percentile loss for this scenario
+- tally up the affected buildings and economic loss from the flood raster
+list_categories:
+- what kinds of tools do you have, list the categories
+- i'm not sure where to start, show me the top-level tool groups
+- what domains can you work in, give me the category list
+- show me all the available tool categories with descriptions
+- which buckets do the tools fall into, list them
+- help me narrow down what's available across the whole catalog
+- what areas of analysis can this workbench cover
+- give me an overview of the tool families you support
+list_tools_in_category:
+- show me all the tools in the hazard modeling category
+- what tools are inside the weather and atmosphere group
+- list the members of the coastal category
+- open the conservation ecology category and show its tools
+- which tools live under terrain and elevation
+- give me the tools in the damage assessment bucket
+- what's available in the geographic primitives category
+- expand the fire category and show every tool in it
+# engine-door refactor (SFINCS slice): the run_model_flood_scenario corpus block
+# migrated OUT of this main index. Hazard-common flood phrasings now live in the
+# run_sfincs door corpus (tools/simulation/sfincs/run_sfincs/corpus.yaml, DOOR
+# tier - walked into this index); template-specific phrasings live in
+# workflows/sfincs/flood/corpus.yaml (TEMPLATE tier - NOT indexed).
+run_model_groundwater_contamination_scenario:
+- here is a news article about a tce spill in twin falls, model the contaminant plume in the groundwater
+- a tanker leaked solvent near this town, how far will it spread through the aquifer
+- i pasted a story about a chemical release, simulate the groundwater contamination plume from it
+- model the spill in this article and tell me the peak concentration and plume footprint
+- this link describes a pce leak at a factory, build the contaminant plume for it
+- an industrial solvent spilled into the ground here, how concentrated will the groundwater get downstream
+- turn this spill report into a modeled groundwater plume layer with how big the plume is
+- news says benzene leaked over six hours, run the aquifer contamination model on it
+run_model_nws_flood_event_scenario:
+- model the flood that's actually happening right now from the active flood warning in idaho
+- there is a flash flood warning over this area, run an inundation model on the warned region
+- show the current nws flood warnings and model the flood with the observed radar rainfall
+- take the live flood warning polygon and simulate how deep the water gets using mrms precip
+- model the real-time flooding under the highest-severity flood warning right now
+- tie the active flash flood warning here to a depth map using observed precipitation, not a design storm
+- what does the flooding look like for the warning that's in effect, using actual measured rain
+- run the inundation for the second flood warning in the list over its warned area
+# engine-door refactor (PELICUN slice) + PELICUN fold: the Pelicun damage
+# phrasings migrated out of this central index. Door-common damage phrasings ->
+# tools/simulation/pelicun/run_pelicun/corpus.yaml (DOOR tier, walked into the
+# index); template-specific phrasings (both the explicit-inventory and the
+# folded bbox auto-fetch input modes) ->
+# workflows/pelicun/damage_assessment/corpus.yaml (TEMPLATE tier, NOT merged).
+read_run_diagnostics:
+- did my flood simulation actually converge or is the result garbage
+- check the mass balance of the last SFINCS run
+- is this MODFLOW run healthy, what is the volume budget percent discrepancy
+- show the SWMM continuity error and flow instability for my run
+- was mass conserved in the GeoClaw tsunami run
+- did the TELEMAC run reach correct end of run
+- read the engine diagnostics for run 01KWRSECZGJEYBD44X6T0GRTT9
+- how healthy is this simulation result before I trust it downstream
+- what is the numerical stability and continuity of my hydraulic model run
+- did the groundwater model have any dry cells or nonconverged steps

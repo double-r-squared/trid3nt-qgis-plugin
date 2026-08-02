@@ -35,9 +35,9 @@ import pytest
 import rasterio
 from rasterio.transform import from_origin
 
-from trid3nt_server.tools import TOOL_REGISTRY
-from trid3nt_server.tools.fetchers.ocean import fetch_topobathy as ftb
-from trid3nt_server.tools.fetchers.ocean.fetch_topobathy import (
+from trid3nt_server.agent.tools import TOOL_REGISTRY
+from trid3nt_server.agent.tools.fetchers.ocean.fetch_topobathy import fetch_topobathy as ftb
+from trid3nt_server.agent.tools.fetchers.ocean.fetch_topobathy.fetch_topobathy import (
     ETOPO_GLOBAL_ROOT,
     TARGET_CRS,
     TopobathyDatumError,
@@ -129,7 +129,7 @@ def test_topobathy_registered_with_expected_metadata() -> None:
 
 
 def test_topobathy_in_coastal_category() -> None:
-    from trid3nt_server.categories import PRIMARY_CATEGORY, tools_for_category
+    from trid3nt_server.agent.categories import PRIMARY_CATEGORY, tools_for_category
 
     assert PRIMARY_CATEGORY.get("fetch_topobathy") == "coastal"
     assert "fetch_topobathy" in tools_for_category("coastal")
@@ -689,7 +689,7 @@ def _patch_pipeline(
     monkeypatch.setattr(ftb, "_build_merged_topobathy", _merge_local)
     # read_through -> write bytes to a temp file + return a local file:// URI so
     # no GCS/S3 is touched and the LayerURI assertion (uri not None) holds.
-    from trid3nt_server.tools.cache import ReadThroughResult
+    from trid3nt_server.agent.tools.cache import ReadThroughResult
 
     def _fake_read_through(metadata, params, ext, fetch_fn, **_kw):  # type: ignore[no-untyped-def]
         data = fetch_fn()
@@ -877,7 +877,7 @@ def test_fetch_topobathy_manifest_unreachable_degrades(
     monkeypatch.setattr(ftb, "_select_etopo_tiles", lambda *_a, **_k: [])
     monkeypatch.setattr(ftb, "_assert_navd88", lambda *_a, **_k: 0.0)
     monkeypatch.setattr(ftb, "_fetch_3dep_land_to_file", lambda *_a, **_k: land_path)
-    from trid3nt_server.tools.cache import ReadThroughResult
+    from trid3nt_server.agent.tools.cache import ReadThroughResult
 
     def _fake_rt(metadata, params, ext, fetch_fn, **_kw):  # type: ignore[no-untyped-def]
         data = fetch_fn()
@@ -910,7 +910,7 @@ def test_fetch_topobathy_datum_mismatch_propagates(
         raise TopobathyDatumError("tile is MHW, no offset")
 
     monkeypatch.setattr(ftb, "_assert_navd88", _datum_raise)
-    from trid3nt_server.tools.cache import ReadThroughResult
+    from trid3nt_server.agent.tools.cache import ReadThroughResult
 
     monkeypatch.setattr(
         ftb, "read_through",
@@ -970,16 +970,12 @@ _MEXICO_BEACH_BBOX = (-85.47, 29.89, -85.36, 29.98)
 @pytest.mark.skipif(not _LIVE, reason="set TRID3NT_TEST_LIVE_TOPOBATHY=1 to run")
 def test_live_mexico_beach_merge_no_cli(monkeypatch: pytest.MonkeyPatch) -> None:
     """LIVE end-to-end: pull the REAL NOAA NCEI CUDEM tiles + the REAL 3DEP land
-    DEM for the Mexico-Beach demo AOI and run the FULL merge -> COG with the
-    GDAL CLI forced absent (``_gdal_bin`` -> None), exercising EXACTLY the prod
-    (no-CLI) path that crashed with the upside-down ``MergeError``.
+    DEM for the Mexico-Beach demo AOI and run the FULL in-process (rasterio.merge)
+    merge -> COG that once crashed with the upside-down ``MergeError``.
 
     Asserts a valid single-band float32 EPSG:32616 COG with bathymetry present.
     Takes a minute or two (real multi-source downloads).
     """
-    # Force the prod path: NO GDAL CLI available anywhere.
-    monkeypatch.setattr(ftb, "_gdal_bin", lambda *_a, **_k: None)
-
     cog_bytes, bathy_present, fallback_warning, cudem_count = (
         _fetch_topobathy_bytes_and_flags(
             bbox=_MEXICO_BEACH_BBOX,

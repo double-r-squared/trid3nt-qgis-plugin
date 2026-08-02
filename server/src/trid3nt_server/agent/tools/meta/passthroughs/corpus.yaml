@@ -1,0 +1,6 @@
+qgis_process:
+- run the QGIS watershed delineation algorithm on this DEM
+- submit a GRASS hydrology process on the worker
+- execute the QGIS fill sinks algorithm for hydrological conditioning
+- run a SAGA terrain analysis on this elevation raster
+- use the QGIS buffer algorithm to create a 500m zone around these points

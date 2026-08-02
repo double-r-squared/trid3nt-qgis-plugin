@@ -1,0 +1,116 @@
+# Router source spec (data-router fold, phase-2 wave-2 ArcGIS family).
+# Twin: fetch_hifld_transmission_lines.py (SPEC-EXPRESSIBLE, vector-API-FGB / ArcGIS).
+# Uses the new declarative WHERE builder (VOLTAGE floor) + const derived columns.
+schema_version: v1
+
+name: fetch_hifld_transmission_lines
+source_class: hifld_transmission_lines     # cache prefix == twin source_class
+error_prefix: HIFLD_TRANSMISSION           # twin A.6 token (HIFLDTransmission*Error) != cache prefix
+input_error_suffix: INPUT_INVALID          # HIFLDTransmissionInputError -> *_INPUT_INVALID
+shape: vector-fgb
+supports_global_query: false               # HIFLD is US-only, bbox required
+
+endpoints:
+  data:
+    url: "https://services1.arcgis.com/Hp6G80Pky0om7QvQ/arcgis/rest/services/Electric_Power_Transmission_Lines/FeatureServer/0/query"
+auth:
+  mode: none
+  user_agent: trid3nt_default
+
+params:
+  bbox:           {type: bbox, required: true, quantize: round_6dp}
+  min_voltage_kv: {type: float, required: false, default: null, min: 0.0}
+gates:
+  max_features: 30000                        # twin _MAX_TOTAL_FEATURES
+
+ingest:
+  query_template: {out_fields: "*", f: geojson, order_by: "OBJECTID ASC"}
+  pagination: {mode: result_offset, page_size: 2000}
+  # VOLTAGE floor only when the caller pins one (twin: VOLTAGE >= {v:g}).
+  where_clauses:
+    - {template: "VOLTAGE >= {min_voltage_kv:g}", require: [min_voltage_kv]}
+  # LineString / MultiLineString only (twin drops non-line geoms defensively).
+  geometry_filter: {geom_types: [LineString, MultiLineString]}
+  json_coerce_nested: true
+  derived_columns:
+    infra_type:  {source: const, value: transmission_line}
+    infra_label: {source: const, value: "Electric Power Transmission Line"}
+
+normalize:
+  crs: "EPSG:4326"
+  units: "kV"
+
+output:
+  layer_type: vector
+  ext: fgb
+  role: primary
+  style_preset: "hifld_transmission_lines"
+  emit_bbox: true                            # twin LayerURI carries bbox
+
+cache:
+  ttl_class: static-30d
+payload_estimate:                            # twin: est_features(=area*1200)*700/(1024^2)
+  model: per_feature
+  features_per_sq_deg: 1200.0
+  kb_per_feature: 0.68359375                 # 700 bytes / 1024
+  floor_mb: 0.02
+
+caveats:
+  - "US-only HIFLD bulk transmission; empty bbox -> header-only FGB (honest-empty, never a fabricated error)"
+  - "min_voltage_kv is an optional nominal-voltage floor (kV); negative HIFLD sentinels are excluded by the >= filter"
+fallback: []
+
+docstring: |-
+  HIFLD electric power transmission lines within a bbox as a FlatGeobuf layer.
+
+  Fetches national Homeland Infrastructure Foundation-Level Data (HIFLD)
+  ``Electric Power Transmission Lines`` polyline segments intersecting a bbox,
+  from a public, unauthenticated ArcGIS REST FeatureService. Returns a
+  FlatGeobuf of ``LineString`` / ``MultiLineString`` features in EPSG:4326 with
+  the HIFLD attribute payload (ID, TYPE, STATUS, OWNER, VOLTAGE, VOLT_CLASS,
+  connected substations SUB_1 / SUB_2) plus ``infra_type`` / ``infra_label``.
+
+  This is the LINE (power-grid backbone) complement to the POINT lifeline
+  inventory in ``fetch_hifld_critical_infrastructure`` -- pair the two
+  (power_plants points + transmission lines) for full electric-power exposure.
+
+  **When to use:**
+  - "Where are the power transmission lines near [place]?"; "show the electric
+    grid in this area"; "what high-voltage lines cross this footprint?".
+  - A hazard / exposure workflow needs the transmission network inside a flood
+    / fire / surge / earthquake footprint (intersect with ``spatial_query``).
+  - Lifeline resilience: which corridors / voltage classes are hazard-exposed.
+
+  **When NOT to use:**
+  - Power PLANTS / hospitals / schools / fire / police POINTS ->
+    ``fetch_hifld_critical_infrastructure``. Dams -> ``fetch_usace_dams``.
+  - Non-US areas (HIFLD is US-only). Real-time grid load / outage status
+    (HIFLD is static). Last-mile distribution lines (HIFLD is bulk transmission).
+
+  **Parameters:**
+      bbox: ``(min_lon, min_lat, max_lon, max_lat)`` in EPSG:4326. Required -- ``supports_global_query=False``. Example Houston metro:
+          ``(-95.8, 29.5, -95.0, 30.1)``.
+      min_voltage_kv: Optional nominal-voltage floor in kV. When set, only
+          segments with ``VOLTAGE >= min_voltage_kv`` are returned (e.g.
+          ``230`` or ``345`` to isolate the high-voltage backbone). Default
+          ``None`` returns all voltage classes.
+
+  **Returns:**
+      ``LayerURI`` -> FlatGeobuf of ``LineString`` / ``MultiLineString``
+      features in EPSG:4326. Properties carry the HIFLD source columns plus
+      ``infra_type`` (always ``"transmission_line"``) and ``infra_label``.
+      ``layer_type="vector"``, ``role="primary"``,
+      ``style_preset="hifld_transmission_lines"``, ``units="kV"``.
+
+  **Error types:**
+      - ``HIFLDTransmissionInputError``: bad bbox or min_voltage_kv
+        (retryable=False).
+      - ``HIFLDTransmissionUpstreamError``: HTTP/network failure, ArcGIS error
+        envelope, or FlatGeobuf serialization failure (retryable=True).
+      - ``HIFLDTransmissionEmptyError``: no segments in bbox (retryable=False;
+        not raised by default -- empty FGB is returned).
+
+  Cache: ``ttl_class="static-30d"``, ``source_class="hifld_transmission_lines"``.
+  Cache key is SHA-256 of ``(bbox-rounded-6dp, min_voltage_kv)``.
+
+  ``supports_global_query=False``. No API key required.

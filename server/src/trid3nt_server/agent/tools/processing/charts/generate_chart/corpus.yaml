@@ -1,0 +1,27 @@
+generate_chart:
+- show me a histogram of the flood depths in this layer
+- what does the damage-ratio distribution look like, chart it
+- histogram the population density raster
+- give me the distribution of cell values for this elevation grid
+- plot a frequency distribution of the discharge attribute on these features
+- bin the values of this raster and show me the counts as bars
+- i want to see the spread of the water-depth values across the AOI
+- chart the distribution of a numeric column on this vector layer
+- plot how the discharge changes over time for this gauge layer
+- show me the precipitation time series for this AOI
+- chart the trend of water levels across the timesteps
+- give me a line chart of value vs time for this multiband raster
+- make a line graph of this temporal layer's value through time
+- show the time series of stage from this observed-gauge layer
+- show me the damage-state distribution after the pelicun run
+- chart how many structures are in each damage state DS0 through DS4
+- give me a bar chart of slight versus moderate versus complete damage counts
+- plot the per-asset damage states from the pelicun ds_mean results
+- visualize the distribution of building damage levels from the damage layer
+- summarize the choropleth classes behind this styled layer
+- how many features fall in each quantile class of this map
+- give me a class-break breakdown of the values driving the color ramp
+- what value ranges hold how much of the data in this choropleth
+- draw an interactive chart from this vega-lite spec
+- plot these computed rows as an interactive bar chart
+- make a scatter chart of these two attributes with tooltips

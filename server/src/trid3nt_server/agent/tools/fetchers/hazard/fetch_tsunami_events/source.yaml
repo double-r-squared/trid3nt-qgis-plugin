@@ -1,0 +1,138 @@
+# Router source spec (data-router fold, phase-2 wave-10 tier-3 hooks, ADR 0056).
+# Twin: fetch_tsunami_events.py -- FOLDED via hooks (PAGED NCEI JSON point API).
+# ingest.http_source.paging drives the totalPages loop; ncei_tsunami.build_request builds
+# one page's request, ncei_tsunami.parse_response decodes concatenated items per mode.
+schema_version: v1
+name: fetch_tsunami_events
+source_class: ncei_tsunami
+error_prefix: TSUNAMI_EVENTS
+shape: vector-fgb
+supports_global_query: true
+empty_error_suffix: NO_EVENTS
+endpoints:
+  data:
+    url: https://www.ngdc.noaa.gov/hazel/hazard-service/api/v1/tsunamis
+auth:
+  mode: none
+  user_agent: trid3nt/0.1 (Hazard Modeling Agent; https://github.com/double-r-squared/trid3nt-qgis-plugin;
+    agent@trid3nt.dev)
+params:
+  bbox:
+    type: bbox
+    required: false
+    schema_optional: true
+    quantize: round_6dp
+  min_year:
+    type: int
+    required: false
+    schema_optional: true
+  max_year:
+    type: int
+    required: false
+    schema_optional: true
+  observation_type:
+    type: str
+    required: false
+    default: events
+hooks:
+  build_request: ncei_tsunami.build_request
+  parse_response: ncei_tsunami.parse_response
+ingest:
+  http_source:
+    paging:
+      page_param: page
+      total_pages_key: totalPages
+      total_items_key: totalItems
+      max_pages: 25
+  properties:
+  - id
+  - year
+  - cause_code
+  - cause
+  - location_name
+  - country
+  - eq_magnitude
+  - max_water_height
+  - deaths
+  - num_runups
+  - dist_from_source_km
+  - observation_type
+  - source
+normalize:
+  crs: EPSG:4326
+  units: m water height
+output:
+  layer_type: vector
+  ext: fgb
+  role: primary
+  style_preset: tsunami_events
+  bbox_from_features:
+    pad: 0.1
+cache:
+  ttl_class: semi-static-7d
+payload_estimate:
+  model: bbox_area
+  mb_per_sq_deg: 0.002
+  floor_mb: 0.001
+  ceil_mb: 5.0
+caveats:
+- OBSERVED NCEI/WDS Global Historical Tsunami Database (not a probabilistic inundation-hazard model);
+  a scope with no recorded tsunami -> honest TSUNAMI_EVENTS_NO_EVENTS, never an empty layer.
+docstring: "Fetch REAL historical tsunamis as a point FlatGeobuf.\n\nRetrieves recorded tsunami SOURCE\
+  \ EVENTS (or coastal RUNUP observations)\nfrom the NOAA NCEI / World Data Service **Global Historical\
+  \ Tsunami\nDatabase** (the authoritative catalog from 2100 BC to the present, the same\nrecord behind\
+  \ the NCEI Natural Hazards viewer) inside a bbox and year\nwindow. Returns one Point feature per record\
+  \ carrying the year, the cause\n(earthquake / volcano / landslide / meteorological / ...), the maximum\n\
+  observed water height (m), the death toll, the source earthquake magnitude,\nand the NCEI source attribution.\
+  \ This is the canonical OBSERVED\nhistorical-tsunami record - what actually happened - NOT a probabilistic\n\
+  tsunami-inundation hazard model.\n\nWhen to use:\n    - The user asks for historical / past tsunamis,\
+  \ \"tsunami events\",\n      \"tidal waves\", \"where have tsunamis happened\", a tsunami history, or\n\
+  \      tsunami deaths / run-up heights for an area (e.g. \"show tsunamis near\n      Japan\", \"historical\
+  \ tsunamis in the Pacific\", \"what tsunamis hit\n      Indonesia\", \"biggest tsunamis in Chile\",\
+  \ \"the 2011 Tohoku tsunami\").\n    - You need the actual recorded source epicenters, water heights,\
+  \ causes,\n      and death tolls - the real event catalog - to map, count, or annotate\n      a coastal-hazard\
+  \ / SLR / surge discussion.\n\nWhen NOT to use:\n    - PROBABILISTIC tsunami INUNDATION / run-up HAZARD\
+  \ with a return period,\n      or a modeled inundation extent for a hypothetical event - this tool\n\
+  \      returns the OBSERVED historical record, not a modeled hazard surface.\n    - Live tsunami WARNINGS\
+  \ / advisories (use a warning feed; this is a\n      historical catalog).\n    - Earthquakes themselves\
+  \ (use ``fetch_usgs_earthquakes`` - this tool\n      returns the tsunamis those quakes generated, with\
+  \ ``eq_magnitude`` as\n      a property).\n    - Coastal sea-level-rise scenarios (use the NOAA SLR\
+  \ tools).\n\nParameters:\n    bbox: Optional ``(west, south, east, north)`` in EPSG:4326 to restrict\n\
+  \        to a coastline / region / ocean basin. When omitted the query is\n        GLOBAL (``supports_global_query=True``)\
+  \ - bounded by the year window\n        and the page cap. Derive a bbox from a place name with\n   \
+  \     ``geocode_location`` or ``fetch_administrative_boundaries`` first for\n        area-scoped asks.\n\
+  \    min_year / max_year: Optional integer year bounds (inclusive). When both\n        omitted the window\
+  \ is ``1900`` .. the current year. Pass an older\n        ``min_year`` (the catalog reaches 2100 BC)\
+  \ for the ancient record.\n        Example: ``min_year=2011, max_year=2011`` for the Tohoku year.\n\
+  \    observation_type: ``\"events\"`` (default) for one Point per tsunami at\n        its SOURCE (sparse;\
+  \ carries cause / max_water_height / deaths /\n        num_runups) - the right default for \"tsunamis\
+  \ near X\". ``\"runups\"``\n        for the dense per-shore RUNUP observations (the measured water\n\
+  \        height at each coastline); use only with a TIGHT bbox + short year\n        window, as a wide\
+  \ runups scope hits the result cap.\n\nReturns:\n    ``LayerURI`` pointing at a FlatGeobuf in the cache\
+  \ bucket. Geometry:\n    Point per record, EPSG:4326. ``layer_type=\"vector\"``, ``role=\"primary\"\
+  ``,\n    ``style_preset=\"tsunami_events\"`` (the client sizes the marker by\n    ``max_water_height``\
+  \ and colors by ``cause``),\n    ``units=\"m water height\"``. ``bbox`` is set to the records' extent\
+  \ so\n    the camera auto-zooms. Properties per record:\n        - ``id`` (NCEI record id),\n      \
+  \  - ``year`` (event year; negative = BC),\n        - ``cause_code`` (NCEI integer cause) + ``cause``\
+  \ (human label:\n          \"Earthquake\", \"Volcano\", \"Landslide\", \"Meteorological\", ...),\n \
+  \       - ``location_name`` / ``country`` (source or shore location),\n        - ``eq_magnitude`` (source\
+  \ earthquake magnitude; null if non-seismic),\n        - ``max_water_height`` (max observed water/run-up\
+  \ height, m),\n        - ``deaths`` (death toll; total incl. secondary effects when known),\n      \
+  \  - ``num_runups`` (count of run-up observations; events mode only),\n        - ``dist_from_source_km``\
+  \ (great-circle km from source; runups only),\n        - ``observation_type`` (\"event\" | \"runup\"\
+  ),\n        - ``source`` (NCEI/WDS attribution string).\n\nHonest-empty path (data-source fallback norm\
+  \ - primary -> honest typed\nerror): the NCEI service returns HTTP 200 with ``totalItems = 0`` for a\n\
+  bbox/window with no recorded tsunamis. That is a legitimate \"no tsunamis\"\nanswer, not a success -\
+  \ so ``TsunamiNoEventsError`` is raised (never an\nempty success-shaped layer).\n\nCache: ``ttl_class=\"\
+  semi-static-7d\"``, ``source_class=\"ncei_tsunami\"``.\nCache key is SHA-256 of ``(mode, bbox-rounded-6dp,\
+  \ min_year, max_year)``, so\nidentical-scope calls within the week reuse the FGB.\n\nCross-tool dependencies:\n\
+  \    - Composes WITH: ``publish_layer`` (map overlay), ``geocode_location``\n      (derive a bbox from\
+  \ a place name BEFORE this call),\n      ``fetch_administrative_boundaries`` (country/region framing),\n\
+  \      ``fetch_usgs_earthquakes`` (the quakes that generated these tsunamis),\n      ``fetch_noaa_slr_scenarios``\
+  \ (coastal-hazard context),\n      ``spatial_query`` (count events inside a polygon).\n \
+  \   - Upstream data source: NOAA NCEI Hazel hazard-service\n      (ngdc.noaa.gov/hazel/hazard-service/api/v1/tsunamis).\n\
+  \nErrors:\n    - ``TsunamiInputError``: bad bbox / bad year / reversed window / bad\n      observation_type\
+  \ (retryable=False).\n    - ``TsunamiResultTooLargeError``: the scope exceeds the page cap -\n     \
+  \ narrow bbox / shorten window / use observation_type='events'\n      (retryable=False).\n    - ``TsunamiUpstreamError``:\
+  \ NCEI network failure / HTTP error / bad body\n      (retryable=True).\n    - ``TsunamiNoEventsError``:\
+  \ no tsunamis matched the scope\n      (retryable=False).\n\n\nTier-1 free. No API key. ``supports_global_query=True``."

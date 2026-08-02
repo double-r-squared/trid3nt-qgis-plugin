@@ -1,0 +1,147 @@
+# Router source spec (STAC-composite wave, raster-cog stac_multi_asset_rgb, ADR 0080).
+# Twin: fetch_sentinel2_truecolor.py -- Sentinel-2 L2A true-color RGB via PC STAC.
+# Folds onto stac_multi_asset_rgb: reads B04/B03/B02 (raw uint16) + the SCL scene-
+# classification band, masks cloud/shadow/nodata via SCL classes, joint-2/98-stretch to
+# a baked RGB. Scene rank = least-cloudy (eo:cloud_cover query). nodata_rule=all_bands_zero
+# reproduces the twin's (r==0 & g==0 & b==0) nodata; span_floor 1.0 reproduces max(1, hi-lo).
+schema_version: v1
+name: fetch_sentinel2_truecolor
+source_class: s2_truecolor
+error_prefix: S2_TRUECOLOR
+shape: raster-cog
+supports_global_query: false
+empty_error_suffix: NO_IMAGERY
+endpoints:
+  data:
+    url: https://planetarycomputer.microsoft.com/api/stac/v1
+auth:
+  mode: none
+  user_agent: trid3nt/0.1 (Hazard Modeling Agent; https://github.com/double-r-squared/trid3nt-qgis-plugin;
+    agent@trid3nt.dev)
+params:
+  bbox:
+    type: bbox
+    required: true
+    quantize: round_6dp
+    error_suffix: BBOX_INVALID
+  start_date:
+    type: iso_date
+    schema_optional: true
+  end_date:
+    type: iso_date
+    schema_optional: true
+  max_cloud_cover:
+    type: float
+    default: 30.0
+gates:
+  max_bbox_deg2: 0.5
+ingest:
+  access: stac_multi_asset_rgb
+  native_cell_m: 10.0
+  stac:
+    root: https://planetarycomputer.microsoft.com/api/stac/v1
+    collection: sentinel-2-l2a
+    datetime_window: true
+    default_window_days: 90
+    select:
+      cloud_query: true
+      rank:
+      - by: cloud_cover
+  composite:
+    default_combo: truecolor
+    combos:
+      truecolor:
+        assets:
+        - B04
+        - B03
+        - B02
+        mask_asset: SCL
+        mask:
+          kind: classes
+          bad_classes:
+          - 0
+          - 1
+          - 3
+          - 8
+          - 9
+          - 10
+        transform:
+          kind: none
+        render:
+          kind: joint_stretch
+          lo_pct: 2.0
+          hi_pct: 98.0
+          span_floor: 1.0
+          nodata_rule: all_bands_zero
+normalize:
+  crs: EPSG:4326
+output:
+  layer_type: raster
+  ext: tif
+  role: context
+  style_preset: s2_truecolor
+  emit_bbox: false
+cache:
+  ttl_class: static-30d
+payload_estimate:
+  model: bbox_area
+  mb_per_sq_deg: 120.0
+  floor_mb: 0.5
+caveats:
+- Sentinel-2 Level-2A true-color RGB via the Microsoft Planetary Computer STAC
+  (sentinel-2-l2a; B04/B03/B02 + SCL). The least-cloudy intersecting scene is chosen;
+  cloud/shadow/nodata is masked via the SCL scene-classification band; a 3-band RGB COG
+  paints directly (multiband passthrough, no rescale). GLOBAL, ~5-day revisit, 10 m.
+  AOI-scoped (<= 0.5 deg^2). A fully-clouded window -> an honest S2_TRUECOLOR_NO_IMAGERY,
+  never a fabricated layer.
+docstring: |-
+  Fetch a recent Sentinel-2 true-color (natural-color) RGB image for a bbox.
+
+  **What it does:** Searches the Microsoft Planetary Computer for the
+  least-cloudy Sentinel-2 L2A scene intersecting ``bbox`` inside the time
+  window, reads the visible bands (B04 Red / B03 Green / B02 Blue) plus the
+  SCL scene-classification band clipped to the bbox at 10 m, masks cloud /
+  shadow / nodata pixels via SCL, joint-percentile-stretches the uint16
+  reflectance to uint8, and returns a 3-band RGB COG that paints directly as a
+  recent satellite basemap (no rescale / colormap  --  the baked natural colors
+  render as-is via the multiband passthrough in ``publish_layer``).
+
+  Sentinel-2 is GLOBAL and refreshes every ~5 days, so this is the go-to
+  "what does this area look like right now from space" layer anywhere on
+  Earth  --  the worldwide complement to the US-only ``fetch_naip``.
+
+  **When to use:**
+  - User wants a recent true-color / natural-color satellite image of an area
+    ("show me what X looks like from space", a post-event before/after look,
+    a current basemap for context).
+  - Anywhere outside the US, or where NAIP is stale, or where a specific
+    recent date matters (call twice with different windows to compare).
+
+  **When NOT to use:**
+  - US sub-meter aerial detail  --  use ``fetch_naip`` (~1 m vs 10 m).
+  - Vegetation vigor index  --  use ``compute_ndvi`` (continuous greenness, not
+    a picture).
+  - Land-cover CLASSES (forest / crop / urban)  --  use ``fetch_landcover`` /
+    ``extract_landcover_class``.
+  - Areas with persistent cloud cover in the window (raise the window or the
+    ``max_cloud_cover`` ceiling); a no-imagery result is an honest typed error.
+
+  **Parameters:**
+  - ``bbox`` (tuple): ``(min_lon, min_lat, max_lon, max_lat)`` EPSG:4326.
+    Required. AOI-scoped (<= 0.5 deg^2).
+  - ``start_date`` / ``end_date`` (str, optional): ``"YYYY-MM-DD"`` window
+    bounds. Default: a trailing ~90-day recent window ending today.
+  - ``max_cloud_cover`` (float, default 30.0): only scenes below this
+    ``eo:cloud_cover`` percent are considered; the least-cloudy is chosen.
+
+  **Returns:** A ``LayerURI`` (``layer_type="raster"``, ``role="context"``  --
+  it is a basemap, not the analytical primary) pointing at a 3-band RGB COG in
+  the ``static-30d``/``s2_truecolor`` cache prefix.
+  ``style_preset="s2_truecolor"`` (a multiband-passthrough token  --  no
+  single-band rescale).
+
+  **Data source:** Sentinel-2 Level-2A via the Microsoft Planetary Computer
+  STAC (``sentinel-2-l2a`` collection; bands B04/B03/B02 + SCL).
+
+  FR-CE-8: routed through ``read_through`` so identical ``(bbox, window,
+  cloud)`` calls reuse the cached RGB COG.

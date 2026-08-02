@@ -1,7 +1,7 @@
-# grace2-qgis — headless QGIS Processing worker + QGIS Server base.
+# trid3nt-qgis — headless QGIS Processing worker + QGIS Server base.
 # job-0308 / sprint-16 / SRS M12 + Decision Q (QGIS Processing as the primary
 # agentic compute substrate). Built on the EC2 agent box:
-#   docker build -t grace2-qgis:ltr services/workers/qgis
+#   docker build -t trid3nt-qgis:ltr services/workers/qgis
 #
 # Provides `qgis_process` (695 algorithms incl. the GRASS hydrology suite —
 # r.watershed / r.water.outlet / r.stream.extract / r.fill.dir for HEC-HMS

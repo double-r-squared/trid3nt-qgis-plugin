@@ -1,7 +1,7 @@
 """job-0308: qgis_process RUN — param translation (stage-then-mount) unit tests."""
 from unittest.mock import patch
 
-from trid3nt_server.tools.meta.passthroughs import (
+from trid3nt_server.agent.tools.meta.passthroughs.passthroughs import (
     QGIS_OFFLOADED_ERROR_CODE,
     _build_qgis_run_args,
     _qgis_onbox_docker_enabled,
@@ -66,10 +66,10 @@ def test_qgis_process_disabled_returns_honest_no_run(monkeypatch):
     monkeypatch.delenv("TRID3NT_QGIS_ONBOX_DOCKER", raising=False)
     # A docker image IS configured -- proving the gate short-circuits BEFORE
     # the docker path would otherwise engage.
-    monkeypatch.setenv("TRID3NT_QGIS_DOCKER_IMAGE", "grace2-qgis:ltr")
+    monkeypatch.setenv("TRID3NT_QGIS_DOCKER_IMAGE", "trid3nt-qgis:ltr")
 
     with patch(
-        "trid3nt_server.tools.meta.passthroughs._run_qgis_process_docker"
+        "trid3nt_server.agent.tools.meta.passthroughs.passthroughs._run_qgis_process_docker"
     ) as run_docker, patch("subprocess.run") as subproc:
         result = qgis_process(
             algorithm="native:slope", params={"INPUT": "s3://b/dem.tif"}
@@ -90,11 +90,11 @@ def test_qgis_process_disabled_returns_honest_no_run(monkeypatch):
 def test_qgis_process_enabled_runs_docker_path(monkeypatch):
     """With the gate ON, the existing docker RUN path engages (kept intact)."""
     monkeypatch.setenv("TRID3NT_QGIS_ONBOX_DOCKER", "on")
-    monkeypatch.setenv("TRID3NT_QGIS_DOCKER_IMAGE", "grace2-qgis:ltr")
+    monkeypatch.setenv("TRID3NT_QGIS_DOCKER_IMAGE", "trid3nt-qgis:ltr")
 
     sentinel = {"status": "succeeded", "tool": "qgis_process"}
     with patch(
-        "trid3nt_server.tools.meta.passthroughs._run_qgis_process_docker",
+        "trid3nt_server.agent.tools.meta.passthroughs.passthroughs._run_qgis_process_docker",
         return_value=sentinel,
     ) as run_docker:
         result = qgis_process(algorithm="native:slope", params={"INPUT": "x"})

@@ -7,7 +7,9 @@ Live stack (post GCP->AWS migration; offline-pivot cleanup):
   deltas.  The dormant raw google-genai/Vertex Gemini generate path and the ADK
   seam are decommissioned; ``google.genai.types`` is retained ONLY as the shared
   Content/Part containment layer the live Bedrock/OpenAI adapters reuse.
-- MongoDB/DynamoDB persistence; all wire serialization through trid3nt_contracts.
+- File-backed persistence (``FileMCPClient`` behind the ``MCPClientProtocol``
+  seam; a cloud MCP client drops in unchanged); all wire serialization through
+  trid3nt_contracts.
 """
 
 from __future__ import annotations

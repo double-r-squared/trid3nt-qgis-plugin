@@ -1,0 +1,23 @@
+# Engine-door corpus (DOOR tier - walked into the main index; the door competes
+# in per-turn retrieval alongside general tools). Hazard-common flood phrasings
+# route to the run_sfincs door, whose gate expansion then surfaces the specific
+# sfincs_* template (select-then-call). Template-specific phrasings live in each
+# workflows/sfincs/<template>/corpus.yaml (TEMPLATE tier - NOT merged into this
+# index). Carried from the migrated run_model_flood_scenario corpus entries.
+run_sfincs:
+- model flooding
+- model the flood in this area and show me the inundation depth
+- simulate flooding here and map how deep the water gets
+- model the flood from a 100-year storm and show me the inundation depth
+- how deep will the water get in this area during a 25-year design storm
+- simulate flood extent for a 500-year return period, 48 hour duration
+- run a coastal surge inundation near the shoreline including the sea floor bathymetry
+- estimate peak flood depth for this AOI from a hurricane rainfall event
+- model the compound flood here with storm surge plus river discharge plus rain
+- animate the storm surge rolling in over the coast with waves
+- run a SFINCS flood simulation routing water around the buildings
+- riverine fluvial flooding along this reach
+- watershed inundation from a design storm
+- levee breach flood over this AOI
+- what flood models can you run
+- which SFINCS scenario fits my question

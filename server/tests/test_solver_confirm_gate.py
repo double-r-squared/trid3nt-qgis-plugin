@@ -81,7 +81,7 @@ def _patch_extraction(monkeypatch):
         "clamps_applied": [],
         "extraction_notes": [],
     }
-    import trid3nt_server.workflows.model_groundwater_contamination_scenario as m
+    import trid3nt_server.agent.workflows.modflow.model_groundwater_contamination_scenario.model_groundwater_contamination_scenario as m
 
     monkeypatch.setattr(m, "extract_spill_parameters", lambda text, geocode=True: derived)
     return derived
@@ -175,7 +175,7 @@ async def test_gate_timeout_fails_closed(monkeypatch) -> None:
 async def test_extraction_failure_falls_through_to_composer(monkeypatch) -> None:
     """The gate must not mask parameter problems — composer raises its own error."""
     from trid3nt_server import server
-    import trid3nt_server.workflows.model_groundwater_contamination_scenario as m
+    import trid3nt_server.agent.workflows.modflow.model_groundwater_contamination_scenario.model_groundwater_contamination_scenario as m
 
     def _boom(text, geocode=True):
         raise ValueError("no spill scale found")
@@ -201,7 +201,7 @@ def test_solver_tool_registered_in_confirm_set() -> None:
 
 def test_wrapper_defaults_fail_closed() -> None:
     """The registered wrapper must NOT hardcode confirmed=True (the job-0235 bug)."""
-    from trid3nt_server.workflows.model_groundwater_contamination_scenario import (
+    from trid3nt_server.agent.workflows.modflow.model_groundwater_contamination_scenario.model_groundwater_contamination_scenario import (
         run_model_groundwater_contamination_scenario as wrapper,
     )
 
@@ -266,14 +266,14 @@ def test_code_exec_request_in_hot_set() -> None:
     """job-0247 (OQ-0247-CODE-EXEC-NOT-IN-HOT-SET): code_exec_request must be
     hot-set-reachable — round-4 live showed the validator rejecting Gemini's
     CORRECT first-turn call, producing a false 'cannot run Python' narration."""
-    from trid3nt_server.categories import HOT_SET_TOOLS
+    from trid3nt_server.agent.categories import HOT_SET_TOOLS
 
     assert "code_exec_request" in HOT_SET_TOOLS
 
 
 @pytest.mark.asyncio
 async def test_flood_gate_emits_args_card_and_approve(monkeypatch) -> None:
-    """job-0256: run_model_flood_scenario is gated; the card carries the call
+    """job-0256: sfincs_flood is gated; the card carries the call
     args (no extraction) and approve injects confirmed=True."""
     from trid3nt_server import server
 
@@ -293,7 +293,7 @@ async def test_flood_gate_emits_args_card_and_approve(monkeypatch) -> None:
 
     approver = asyncio.create_task(_approve_soon())
     should_run, effective = await server._gate_on_solver_confirm(  # type: ignore[arg-type]
-        ws, state, "run_model_flood_scenario", params
+        ws, state, "sfincs_flood", params
     )
     await approver
     assert should_run is True and effective["confirmed"] is True
@@ -305,14 +305,13 @@ async def test_flood_gate_emits_args_card_and_approve(monkeypatch) -> None:
 def test_flood_solvers_in_confirm_set() -> None:
     from trid3nt_server import server
 
-    assert "run_model_flood_scenario" in server.SOLVER_CONFIRM_TOOLS
-    assert "run_model_flood_habitat_scenario" in server.SOLVER_CONFIRM_TOOLS
+    assert "sfincs_flood" in server.SOLVER_CONFIRM_TOOLS
 
 
 # NATE 2026-06-26: the OpenQuake classical-PSHA solver is gated like the others.
 @pytest.mark.asyncio
 async def test_psha_gate_emits_card_and_approve(monkeypatch) -> None:
-    """run_seismic_hazard_psha is gated; the card is a simple proceed/cancel
+    """openquake_psha is gated; the card is a simple proceed/cancel
     confirm summarizing the PSHA (AOI area, IMT, PoE -> return period) and
     approve injects confirmed=True (no granularity picker)."""
     from trid3nt_server import server
@@ -339,12 +338,12 @@ async def test_psha_gate_emits_card_and_approve(monkeypatch) -> None:
 
     approver = asyncio.create_task(_approve_soon())
     should_run, effective = await server._gate_on_solver_confirm(  # type: ignore[arg-type]
-        ws, state, "run_seismic_hazard_psha", params
+        ws, state, "openquake_psha", params
     )
     await approver
     assert should_run is True and effective["confirmed"] is True
     card = next(e for e in ws.sent if e.get("type") == "tool-payload-warning")
-    assert card["payload"]["tool_name"] == "run_seismic_hazard_psha"
+    assert card["payload"]["tool_name"] == "openquake_psha"
     assert card["payload"]["options"] == ["proceed", "cancel"]
     assert card["payload"]["tool_args"]["imt"] == "PGA"
     # 10% in 50 yr -> ~475-year return period (rounded).
@@ -373,7 +372,7 @@ async def test_psha_gate_cancel_fails_closed() -> None:
 
     canceller = asyncio.create_task(_cancel_soon())
     should_run, _ = await server._gate_on_solver_confirm(  # type: ignore[arg-type]
-        ws, state, "run_seismic_hazard_psha", params
+        ws, state, "openquake_psha", params
     )
     await canceller
     assert should_run is False
@@ -382,7 +381,89 @@ async def test_psha_gate_cancel_fails_closed() -> None:
 def test_psha_solver_in_confirm_set() -> None:
     from trid3nt_server import server
 
-    assert "run_seismic_hazard_psha" in server.SOLVER_CONFIRM_TOOLS
+    assert "openquake_psha" in server.SOLVER_CONFIRM_TOOLS
+
+
+# NATE 2026-07-27: the GeoClaw shallow-water inundation solver is gated like the
+# other consequential solvers (Invariant 9 gap the panel flagged). Simple
+# proceed/cancel card built inline from the call args (AOI area + scenario + sim
+# window + AMR levels); mirrors the psha/fire wiring + the TRID3NT_GATE_WAIT_CAP_S
+# test seam.
+@pytest.mark.asyncio
+async def test_geoclaw_gate_emits_card_and_approve() -> None:
+    """geoclaw_inundation is gated; the card is a simple proceed/cancel confirm
+    summarizing the run (scenario, sim window, AMR levels, AOI area) and approve
+    injects confirmed=True (no granularity picker)."""
+    from trid3nt_server import server
+
+    ws = _FakeWS()
+    state = _FakeState()
+    # A small coastal AOI (Tokyo Bay-ish); tsunami scenario, 30 min window.
+    params = {
+        "bbox": [139.6, 35.5, 139.9, 35.8],
+        "scenario": "tsunami",
+        "sim_duration_s": 1800.0,
+        "amr_levels": 3,
+    }
+
+    async def _approve_soon() -> None:
+        for _ in range(200):
+            if server._PENDING_CONFIRMATIONS:
+                break
+            await asyncio.sleep(0.005)
+        wid = next(iter(server._PENDING_CONFIRMATIONS))
+        server._PENDING_CONFIRMATIONS[wid][1].set_result(
+            PayloadConfirmationEnvelopePayload(warning_id=wid, decision="proceed")
+        )
+
+    approver = asyncio.create_task(_approve_soon())
+    should_run, effective = await server._gate_on_solver_confirm(  # type: ignore[arg-type]
+        ws, state, "geoclaw_inundation", params
+    )
+    await approver
+    assert should_run is True and effective["confirmed"] is True
+    card = next(e for e in ws.sent if e.get("type") == "tool-payload-warning")
+    assert card["payload"]["tool_name"] == "geoclaw_inundation"
+    assert card["payload"]["options"] == ["proceed", "cancel"]
+    assert card["payload"]["tool_args"]["scenario"] == "tsunami"
+    assert card["payload"]["tool_args"]["amr_levels"] == 3
+    assert "GeoClaw" in card["payload"]["recommendation"]
+
+
+@pytest.mark.asyncio
+async def test_geoclaw_gate_cancel_fails_closed() -> None:
+    """A cancel (denial) decision fails closed (no dispatch) with the honest
+    typed USER_INPUT_CANCELLED error envelope, like the other solvers."""
+    from trid3nt_server import server
+
+    ws = _FakeWS()
+    state = _FakeState()
+    params = {"bbox": [139.6, 35.5, 139.9, 35.8], "scenario": "dam_break"}
+
+    async def _cancel_soon() -> None:
+        for _ in range(200):
+            if server._PENDING_CONFIRMATIONS:
+                break
+            await asyncio.sleep(0.005)
+        wid = next(iter(server._PENDING_CONFIRMATIONS))
+        server._PENDING_CONFIRMATIONS[wid][1].set_result(
+            PayloadConfirmationEnvelopePayload(warning_id=wid, decision="cancel")
+        )
+
+    canceller = asyncio.create_task(_cancel_soon())
+    should_run, _ = await server._gate_on_solver_confirm(  # type: ignore[arg-type]
+        ws, state, "geoclaw_inundation", params
+    )
+    await canceller
+    assert should_run is False
+    err = next(e for e in ws.sent if e.get("type") == "error")
+    assert err["payload"]["error_code"] == "USER_INPUT_CANCELLED"
+
+
+def test_geoclaw_solver_in_confirm_set() -> None:
+    from trid3nt_server import server
+
+    assert "geoclaw_inundation" in server.SOLVER_CONFIRM_TOOLS
 
 
 # --------------------------------------------------------------------------- #
@@ -429,7 +510,7 @@ async def test_flood_gate_recommendation_deployment_aware(
 
     approver = asyncio.create_task(_approve_soon())
     should_run, _ = await server._gate_on_solver_confirm(  # type: ignore[arg-type]
-        ws, state, "run_model_flood_scenario", params
+        ws, state, "sfincs_flood", params
     )
     await approver
     assert should_run is True
@@ -491,7 +572,7 @@ async def test_psha_gate_recommendation_deployment_aware(
 
     approver = asyncio.create_task(_approve_soon())
     should_run, _ = await server._gate_on_solver_confirm(  # type: ignore[arg-type]
-        ws, state, "run_seismic_hazard_psha", params
+        ws, state, "openquake_psha", params
     )
     await approver
     assert should_run is True

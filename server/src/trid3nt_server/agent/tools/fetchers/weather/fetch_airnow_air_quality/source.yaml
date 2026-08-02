@@ -1,0 +1,130 @@
+# Router source spec (keyed http_json fold, ADR 0065).
+# Twin: fetch_airnow_air_quality.py -- FOLDED via http_json single-GET; the key
+# resolves in build_request (kwarg -> secret_ref -> env), MISSING_KEY pre-network.
+schema_version: v1
+name: fetch_airnow_air_quality
+source_class: airnow_air_quality
+error_prefix: AIRNOW
+shape: vector-fgb
+supports_global_query: false
+endpoints:
+  data:
+    url: https://www.airnowapi.org/aq/data/
+auth:
+  mode: api_key_env
+  api_key_env:
+    var: TRID3NT_AIRNOW_API_KEY
+    required: true
+  user_agent: trid3nt/0.1 (Hazard Modeling Agent; https://github.com/double-r-squared/trid3nt-qgis-plugin;
+    agent@trid3nt.dev)
+params:
+  bbox:
+    type: bbox
+    required: true
+    quantize: round_6dp
+  parameters:
+    type: str_list
+    required: false
+    schema_optional: true
+  monitor_type:
+    type: int
+    required: false
+    default: 0
+  api_key:
+    type: str
+    required: false
+    schema_optional: true
+  secret_ref:
+    type: str
+    required: false
+    schema_optional: true
+hooks:
+  build_request: airnow_air_quality.build_request
+  parse_response: airnow_air_quality.parse_response
+ingest:
+  properties:
+  - Latitude
+  - Longitude
+  - UTC
+  - Parameter
+  - Unit
+  - Value
+  - RawConcentration
+  - AQI
+  - Category
+  - SiteName
+  - AgencyName
+  - FullAQSCode
+  - IntlAQSCode
+  - ParameterName
+  - AQICategoryName
+normalize:
+  crs: EPSG:4326
+  units: AQI
+output:
+  layer_type: vector
+  ext: fgb
+  role: primary
+  style_preset: airnow_air_quality
+  emit_bbox: false
+cache:
+  ttl_class: dynamic-1h
+payload_estimate:
+  model: per_feature
+  features_per_sq_deg: 5.13
+  kb_per_feature: 0.41
+  floor_mb: 0.001
+caveats:
+- 'EPA AirNow current-hour AQI monitor observations (keyed: api_key -> secret_ref -> TRID3NT_AIRNOW_API_KEY
+  env). One point per monitor-parameter (latest in a 3h window). US/Canada/Mexico. No key -> credential-shaped
+  AIRNOW_MISSING_KEY (NAME-only card); empty bbox -> honest header-only FGB.'
+docstring: "EPA AirNow current-hour air-quality / AQI / PM2.5 monitor observations as points.\n\nUse this\
+  \ (not fetch_openaq_measurements) when the user names EPA AirNow or\nwants US/Canada/Mexico current-hour\
+  \ AQI. Call it even if no key is set: the\nkey is auto-requested via a credential card if missing (see\
+  \ below), so a\npossible key prompt is NOT a reason to route elsewhere.\n\nWhat it does:\n    Fetches\
+  \ the U.S. EPA AirNow current-hour air-quality observations for\n    every reporting monitor within\
+  \ ``bbox`` as point features. Each point\n    carries the reporting parameter (PM2.5 / Ozone / PM10\
+  \ / NO2 / SO2 /\n    CO), the AQI value + AQI category band, the raw concentration + unit,\n    and\
+  \ the monitor / reporting-agency identity. Key auto-requested if\n    missing: AirNow uses an API key\
+  \ (resolved kwarg -> per-Case\n    ``secret_ref`` -> ``TRID3NT_AIRNOW_API_KEY`` env). With NO key it\
+  \ raises a\n    credential-shaped ``AirNowMissingKeyError`` so the agent surfaces a\n    credential\
+  \ card and retries -- it NEVER fabricates a layer (AirNow has\n    no public mirror).\n\nWhen to use:\n\
+  \    - User asks about current air quality / AQI / smoke exposure in a\n      region (\"what's the air\
+  \ quality near the fire?\", \"show PM2.5\n      monitors around Los Angeles\").\n    - A fire / smoke-plume\
+  \ workflow (GOES/JPSS fire, FIRMS) needs the\n      ground-truth AQI monitors the plume is degrading\
+  \ -- overlay AirNow\n      points on the fire footprint.\n    - Damage / public-health context needs\
+  \ current pollutant levels at\n      permanent EPA monitors.\n\nWhen NOT to use:\n    - DO NOT use for\
+  \ FORECAST air quality -- this is current OBSERVED only;\n      AirNow has a separate forecast feed.\n\
+  \    - DO NOT use for HISTORICAL air-quality archives -- use EPA AQS\n      (aqs.epa.gov) for multi-year\
+  \ time series.\n    - DO NOT use for non-US/Canada/Mexico regions -- AirNow coverage is\n      North\
+  \ America.\n    - DO NOT use for a gridded/modeled smoke RASTER -- AirNow is point\n      monitors;\
+  \ use a satellite-derived smoke product for the plume.\n\nParameters:\n    bbox: REQUIRED ``(min_lon,\
+  \ min_lat, max_lon, max_lat)`` envelope in\n        EPSG:4326. Type: 4-float tuple, lon/lat ordered\
+  \ min-then-max on\n        each axis. Example: ``(-118.7, 33.7, -117.6, 34.3)`` for the Los\n      \
+  \  Angeles basin. AirNow's ``aq/data`` endpoint has NO global mode, so\n        a None bbox raises ``AirNowInputError``\
+  \ (not a global sweep).\n    parameters: Optional pollutant filter. A single value or list,\n      \
+  \  case-insensitive, each one of ``\"PM25\"`` / ``\"PM10\"`` /\n        ``\"OZONE\"`` / ``\"NO2\"``\
+  \ / ``\"SO2\"`` / ``\"CO\"`` (aliases ``\"PM2.5\"``\n        / ``\"O3\"`` accepted). Defaults to ``[\"\
+  PM25\",\"OZONE\",\"PM10\"]`` (the\n        primary criteria pollutants). Example: ``parameters=\"PM25\"\
+  `` for\n        wildfire-smoke focus.\n    monitor_type: AirNow ``monitorType``: ``0`` = permanent monitors\n\
+  \        (default), ``2`` = permanent + mobile. Other values are passed\n        through to AirNow.\n\
+  \    api_key: Optional explicit AirNow API key (highest-priority resolution\n        path; live-test\
+  \ / dev override).\n    secret_ref: Optional ``SecretRecord`` (from the per-Case secrets panel)\n  \
+  \      -> resolved to the key via ``Persistence.get_secret_value`` at\n        invocation time (the\
+  \ production path). A key that resolves but is\n        rejected by AirNow raises ``AirNowAuthError``\
+  \ (credential-card\n        path); no key on any path raises ``AirNowMissingKeyError``.\n\nReturns:\n\
+  \    A ``LayerURI`` pointing at a FlatGeobuf in the cache bucket\n    ``s3://<cache>/cache/dynamic-1h/airnow_air_quality/<key>.fgb``\n\
+  \    containing ``Point`` geometries (EPSG:4326), ONE per\n    monitor-parameter (latest reading in\
+  \ the window), with columns\n    ``Parameter`` / ``ParameterName``, ``AQI``, ``Category`` /\n    ``AQICategoryName``,\
+  \ ``Value`` / ``RawConcentration`` / ``Unit``,\n    ``SiteName`` / ``AgencyName`` / ``FullAQSCode``.\
+  \ ``layer_type=\"vector\"``,\n    ``role=\"primary\"``, ``units=\"AQI\"``.\n\nCross-tool dependencies:\n\
+  \    Consumes a bbox typically derived from ``geocode_location`` /\n    ``fetch_administrative_boundaries``\
+  \ or a fire footprint\n    (``fetch_firms_active_fire`` / ``fetch_goes_active_fire``). Pairs with\n\
+  \    those fire layers for the smoke-exposure overlay, and feeds\n    ``spatial_query`` for AOI-scoped\
+  \ AQI summaries.\n\nCache: ``dynamic-1h`` (AQI is a current-hour observation; the AirNow feed\nupdates\
+  \ hourly). Cache key includes the bbox (6dp), the parameter set, and\nthe current-hour window, so the\
+  \ next hour misses and re-fetches.\n\nExternal-API resilience (NFR-R-1): On network failure / non-2xx\
+  \ / malformed\nJSON / non-auth WebServiceError the tool raises\n``AirNowUpstreamError(retryable=True)``;\
+  \ an HTTP 401/403 or an\nauthentication WebServiceError raises ``AirNowAuthError`` (credential card);\n\
+  no key on any path raises ``AirNowMissingKeyError`` (credential card).\n\nSource-tier: FR-HEP-2 Tier\
+  \ 1 (EPA AirNow is the authoritative U.S.\nair-quality observation network)."

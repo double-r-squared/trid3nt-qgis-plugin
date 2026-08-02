@@ -81,24 +81,21 @@ LLM_STEP_NAMES = frozenset({
 # ---------------------------------------------------------------------------
 # SOLVER tools -- cancel once one of these appears in pipeline steps
 # ---------------------------------------------------------------------------
+# Re-baselined 2026-07-27 to the engine-door registry: the 10 run_<engine>
+# doors are now the canonical solver entrypoints (pre-refactor names like
+# run_model_flood_scenario / run_swmm_tool are GONE). Legacy anecdote harness --
+# never a gate.
 SOLVER_TOOLS = frozenset({
-    "run_model_flood_scenario",
-    "model_flood_scenario",
     "run_sfincs",
-    "run_model_sustainable_yield_scenario",
-    "run_modflow",
-    "run_modflow_tool",
-    "run_modflow_archetype",
     "run_swmm",
-    "run_swmm_tool",
-    "run_urban_flood_swmm",
-    "model_urban_flood_swmm",
+    "run_modflow",
     "run_geoclaw",
-    "run_geoclaw_tool",
-    "model_dambreak_geoclaw_scenario",
     "run_openquake",
-    "run_openquake_tool",
-    "model_seismic_hazard_scenario",
+    "run_pelicun",
+    "run_swan",
+    "run_telemac",
+    "run_landlab",
+    "run_elmfire",
     # Broad catch for any composer step with "solver" in name
 })
 
@@ -214,10 +211,9 @@ PROMPTS = [
             "Run a small pluvial flood simulation for a 4km box in Peoria, Illinois "
             "with a 50-year storm, coarsest resolution."
         ),
-        "expected": "run_model_flood_scenario",
+        "expected": "run_sfincs",
         "expected_set": {
-            "run_model_flood_scenario", "model_flood_scenario",
-            "run_sfincs", "run_flood",
+            "run_sfincs", "sfincs_flood",
         },
         "is_solver": True,
     },
@@ -229,11 +225,9 @@ PROMPTS = [
             "Bakersfield, California, aoi around lat 35.37 lon -119.02, "
             "one well pumping 500 m3/day at the center."
         ),
-        "expected": "run_model_sustainable_yield_scenario",
+        "expected": "run_modflow",
         "expected_set": {
-            "run_model_sustainable_yield_scenario",
-            "run_modflow", "run_modflow_tool",
-            "run_modflow_archetype", "model_sustainable_yield",
+            "run_modflow", "modflow_sustainable_yield",
         },
         "is_solver": True,
     },
@@ -244,11 +238,9 @@ PROMPTS = [
             "Run an urban stormwater SWMM simulation for a few blocks of "
             "Alexandria, Virginia."
         ),
-        "expected": "SWMM composer",
+        "expected": "run_swmm",
         "expected_set": {
-            "run_swmm_urban_flood",  # registered SWMM composer name
-            "run_swmm", "run_swmm_tool", "run_urban_flood_swmm",
-            "model_urban_flood_swmm", "run_model_urban_flood",
+            "run_swmm", "swmm_urban_flood",  # door + its SWMM engine template
         },
         "is_solver": True,
     },
@@ -256,12 +248,9 @@ PROMPTS = [
         "id": 13,
         "short": "Tsunami Crescent City",
         "prompt": "Simulate a tsunami hitting Crescent City, California.",
-        "expected": "GeoClaw composer",
+        "expected": "run_geoclaw",
         "expected_set": {
-            "run_geoclaw_inundation",  # registered GeoClaw composer name
-            "run_geoclaw", "run_geoclaw_tool",
-            "model_dambreak_geoclaw_scenario", "run_tsunami",
-            "run_model_tsunami", "geoclaw",
+            "run_geoclaw", "geoclaw_inundation",  # door + its GeoClaw template
         },
         "is_solver": True,
     },
@@ -269,12 +258,9 @@ PROMPTS = [
         "id": 14,
         "short": "Seismic hazard SF Bay",
         "prompt": "Run a probabilistic seismic hazard analysis for the San Francisco Bay Area.",
-        "expected": "OpenQuake composer",
+        "expected": "run_openquake",
         "expected_set": {
-            "run_seismic_hazard_psha",  # registered OpenQuake composer name
-            "run_openquake", "run_openquake_tool",
-            "model_seismic_hazard_scenario", "run_psha",
-            "run_model_seismic_hazard",
+            "run_openquake", "openquake_psha",  # door + its OpenQuake template
         },
         "is_solver": True,
     },

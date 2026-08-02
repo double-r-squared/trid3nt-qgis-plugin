@@ -15,7 +15,7 @@ Covered here (Lane S owns emission + consumption semantics):
     registry);
   * a free_text reply feeds back as a user clarification.
 
-Driven end-to-end through ``_stream_gemini_reply`` on the scripted provider;
+Driven end-to-end through ``_stream_model_reply`` on the scripted provider;
 the retrieval ranking is patched at its module seam so margins are exact.
 """
 
@@ -30,10 +30,10 @@ import pytest
 
 import trid3nt_server.main as agent_main
 from trid3nt_server import server as agent_server
-from trid3nt_server.adapter import GeminiSettings
-from trid3nt_server.scripted_adapter import set_script
-from trid3nt_server.tools import TOOL_REGISTRY
-from trid3nt_server.tools.discovery import tool_retrieval as tr
+from trid3nt_server.agent.adapters.adapter import ModelSettings
+from trid3nt_server.agent.adapters.scripted_adapter import set_script
+from trid3nt_server.agent.tools import TOOL_REGISTRY
+from trid3nt_server.agent.tools.search import tool_retrieval as tr
 from trid3nt_contracts import new_ulid
 
 # The pin test asserts against real registry names.
@@ -51,8 +51,8 @@ class _FakeSocket:
             self.sent.append(msg)
 
 
-def _settings() -> GeminiSettings:
-    return GeminiSettings(
+def _settings() -> ModelSettings:
+    return ModelSettings(
         model="gemini-2.5-pro", project="t", location="us-central1", use_vertex=True
     )
 
@@ -77,7 +77,7 @@ def _candidate_envelopes(sock: _FakeSocket) -> list[dict]:
 
 #: A clear near-tie (relative margin ~0.2% < the 1% default threshold).
 _NEAR_TIE = [
-    ("run_geoclaw_inundation", 0.0500),
+    ("run_geoclaw", 0.0500),
     ("fetch_tsunami_events", 0.0499),
     ("fetch_dem", 0.0300),
 ]
@@ -115,7 +115,7 @@ async def _start_turn(monkeypatch, ranked, user_text="map the coast"):
 
     async def _run():
         try:
-            await agent_server._stream_gemini_reply(
+            await agent_server._stream_model_reply(
                 sock, state, _settings(), user_text, "research"
             )
         finally:

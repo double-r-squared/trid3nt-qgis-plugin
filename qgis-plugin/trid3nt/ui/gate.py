@@ -43,7 +43,6 @@ __all__ = [
     "CredentialRequest",
     "GateDecision",
     "ImpactSummary",
-    "LessonAdded",
     "Mode2CandidateRequest",
     "PayloadWarning",
     "RegionCandidate",
@@ -57,7 +56,6 @@ __all__ = [
     "code_exec_result_lines",
     "credential_note_lines",
     "impact_summary_lines",
-    "lesson_added_line",
     "mode2_decision_chip",
     "mode2_reason_lines",
     "parse_code_exec_result",
@@ -67,7 +65,6 @@ __all__ = [
     "estimate_frames",
     "parse_code_exec_request",
     "parse_impact_envelope",
-    "parse_lesson_added",
     "parse_mode2_candidate",
     "parse_offer_catalog_addition",
     "parse_payload_warning",
@@ -1480,47 +1477,3 @@ def impact_summary_lines(summary: ImpactSummary) -> list:
     if summary.impact_area_km2 is not None:
         lines.append(f"Impact area: {summary.impact_area_km2:g} km2")
     return lines
-
-
-# --------------------------------------------------------------------------- #
-# lesson-added -- the LESSONS LOOP ack (subtle status note).
-# --------------------------------------------------------------------------- #
-#
-# Server source: ``server.py`` ``_handle_lesson_add`` emits a raw-JSON
-# envelope (no ``trid3nt_contracts`` model yet -- the payload has no extra-key
-# schema): ``{"envelope_type": "lesson-added", "lesson_id": ..., "lesson":
-# <normalized text>}``. The plugin surfaces a subtle status note.
-
-
-@dataclass
-class LessonAdded:
-    """Parsed ``lesson-added`` ack payload (defensive; raw kept)."""
-
-    lesson_id: str = ""
-    lesson: str = ""
-    raw: dict = field(default_factory=dict)
-
-
-def parse_lesson_added(payload: dict) -> Optional[LessonAdded]:
-    """Parse a raw ``lesson-added`` payload dict; None when the envelope is
-    unusable -- neither a ``lesson_id`` nor a ``lesson`` text is present
-    (nothing to acknowledge)."""
-    if not isinstance(payload, dict):
-        return None
-    lesson_id = payload.get("lesson_id")
-    lesson = payload.get("lesson")
-    lesson_id = lesson_id if isinstance(lesson_id, str) else ""
-    lesson = lesson if isinstance(lesson, str) else ""
-    if not lesson_id and not lesson.strip():
-        return None
-    return LessonAdded(lesson_id=lesson_id, lesson=lesson, raw=payload)
-
-
-def lesson_added_line(added: LessonAdded) -> str:
-    """The subtle status note the dock shows on a lesson ack."""
-    if added.lesson.strip():
-        snippet = added.lesson.strip()
-        if len(snippet) > 120:
-            snippet = snippet[:117] + "..."
-        return f"Lesson saved: {snippet}"
-    return "Lesson saved."

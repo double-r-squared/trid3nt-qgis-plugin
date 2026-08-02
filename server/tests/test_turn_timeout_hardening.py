@@ -42,8 +42,8 @@ from unittest.mock import patch
 import pytest
 from botocore.exceptions import ClientError, ReadTimeoutError
 
-from trid3nt_server import bedrock_adapter as ba
-from trid3nt_server.adapter import TextDeltaEvent, UpstreamProviderError
+from trid3nt_server.agent.adapters import bedrock_adapter as ba
+from trid3nt_server.agent.adapters.adapter import TextDeltaEvent, UpstreamProviderError
 
 
 # --------------------------------------------------------------------------- #
@@ -316,7 +316,12 @@ async def test_failed_model_call_clears_busy_and_surfaces_error(monkeypatch):
     from trid3nt_server.server import SessionState
     from trid3nt_contracts import new_ulid
 
-    settings = agent_server.GeminiSettings(
+    # This is the Bedrock-flavored server-level path (the live-down repro
+    # switched models under MODEL_PROVIDER=bedrock); the suite-wide autouse
+    # default otherwise pins the retired Vertex branch.
+    monkeypatch.setenv("MODEL_PROVIDER", "bedrock")
+
+    settings = agent_server.ModelSettings(
         model="bedrock", project="test", location="us-west-2", use_vertex=False
     )
     state = SessionState(session_id=new_ulid())
@@ -328,12 +333,11 @@ async def test_failed_model_call_clears_busy_and_surfaces_error(monkeypatch):
     assert agent_server.inflight_turn_count() == 0
 
     with patch.object(agent_server, "stream_events_with_contents", raising), \
-         patch.object(agent_server, "build_tool_declarations", return_value=[]), \
-         patch.object(agent_server, "build_client", return_value=None):
+         patch.object(agent_server, "build_tool_declarations", return_value=[]):
         # Launch the turn as a TASK and register it as a detached live turn --
         # this is the exact path that pins the registry if the turn never completes.
         task = asyncio.ensure_future(
-            agent_server._stream_gemini_reply(
+            agent_server._stream_model_reply(
                 sock, state, settings, "switch to Nova and run it", "research"
             )
         )
@@ -343,7 +347,7 @@ async def test_failed_model_call_clears_busy_and_surfaces_error(monkeypatch):
         # While running, the detached turn is in flight.
         assert agent_server.inflight_turn_count() >= 1
 
-        await task  # _stream_gemini_reply swallows the error internally
+        await task  # _stream_model_reply swallows the error internally
         # Let the task's done-callback (_drop) run so the registry empties.
         await asyncio.sleep(0)
 
@@ -375,7 +379,10 @@ async def test_normal_turn_path_unaffected(monkeypatch):
     from trid3nt_server.server import SessionState
     from trid3nt_contracts import new_ulid
 
-    settings = agent_server.GeminiSettings(
+    # Bedrock-flavored path; override the suite-wide autouse Vertex default.
+    monkeypatch.setenv("MODEL_PROVIDER", "bedrock")
+
+    settings = agent_server.ModelSettings(
         model="bedrock", project="test", location="us-west-2", use_vertex=False
     )
     state = SessionState(session_id=new_ulid())
@@ -384,10 +391,9 @@ async def test_normal_turn_path_unaffected(monkeypatch):
     ok_stream = _make_text_stream("All ", "set.")
 
     with patch.object(agent_server, "stream_events_with_contents", ok_stream), \
-         patch.object(agent_server, "build_tool_declarations", return_value=[]), \
-         patch.object(agent_server, "build_client", return_value=None):
+         patch.object(agent_server, "build_tool_declarations", return_value=[]):
         task = asyncio.ensure_future(
-            agent_server._stream_gemini_reply(
+            agent_server._stream_model_reply(
                 sock, state, settings, "hello", "research"
             )
         )
@@ -419,10 +425,13 @@ async def test_solve_tool_path_unaffected_by_model_bound(monkeypatch):
     terminal with the live-turn registry cleared."""
     from trid3nt_server import server as agent_server
     from trid3nt_server.server import SessionState
-    from trid3nt_server.adapter import FunctionCallEvent
+    from trid3nt_server.agent.adapters.adapter import FunctionCallEvent
     from trid3nt_contracts import new_ulid
 
-    settings = agent_server.GeminiSettings(
+    # Bedrock-flavored path; override the suite-wide autouse Vertex default.
+    monkeypatch.setenv("MODEL_PROVIDER", "bedrock")
+
+    settings = agent_server.ModelSettings(
         model="bedrock", project="test", location="us-west-2", use_vertex=False
     )
     state = SessionState(session_id=new_ulid())
@@ -448,10 +457,9 @@ async def test_solve_tool_path_unaffected_by_model_bound(monkeypatch):
 
     with patch.object(agent_server, "stream_events_with_contents", _fake_stream), \
          patch.object(agent_server, "_invoke_tool_via_emitter", side_effect=_fake_invoke), \
-         patch.object(agent_server, "build_tool_declarations", return_value=[]), \
-         patch.object(agent_server, "build_client", return_value=None):
+         patch.object(agent_server, "build_tool_declarations", return_value=[]):
         task = asyncio.ensure_future(
-            agent_server._stream_gemini_reply(
+            agent_server._stream_model_reply(
                 sock, state, settings, "where is X", "research"
             )
         )

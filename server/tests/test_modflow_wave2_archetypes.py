@@ -35,7 +35,7 @@ from trid3nt_contracts.modflow_contracts import (
     MoundingLayerURI,
 )
 
-from trid3nt_server.workflows import postprocess_modflow as pp
+from trid3nt_server.agent.workflows.modflow import postprocess_modflow as pp
 
 
 # --------------------------------------------------------------------------- #
@@ -157,7 +157,7 @@ def test_compute_recovery_efficiency_basic_and_clamp() -> None:
 
 def _patch_archetype_run(monkeypatch: Any, captured: dict[str, Any], layer: Any) -> None:
     """Patch the archetype run-tool the composers dispatch to (no solver)."""
-    import trid3nt_server.tools.simulation.run_modflow_archetype_tool as run_tool
+    import trid3nt_server.agent.tools.simulation.modflow.run_modflow_archetype_tool as run_tool
 
     async def _fake_run(run_args, *, compute_class="standard"):  # noqa: ANN001
         captured["run_args"] = run_args
@@ -169,7 +169,7 @@ def _patch_archetype_run(monkeypatch: Any, captured: dict[str, Any], layer: Any)
 
 def _patch_geocode(monkeypatch: Any, lat: float, lon: float) -> None:
     """Patch geocode on the SHARED composer module (all three reuse it)."""
-    from trid3nt_server.workflows import model_sustainable_yield_scenario as shared
+    from trid3nt_server.agent.workflows.modflow.sustainable_yield import sustainable_yield as shared
 
     def _fake_geocode(location):  # noqa: ANN001
         return {"latitude": lat, "longitude": lon}
@@ -185,7 +185,7 @@ def _patch_geocode(monkeypatch: Any, lat: float, lon: float) -> None:
 
 @pytest.mark.asyncio
 async def test_mar_assembles_args_and_threads_result(monkeypatch) -> None:
-    from trid3nt_server.workflows import model_mar_scenario as mod
+    from trid3nt_server.agent.workflows.modflow.managed_recharge import managed_recharge as mod
 
     captured: dict[str, Any] = {}
     layer = MoundingLayerURI(
@@ -221,7 +221,7 @@ async def test_mar_assembles_args_and_threads_result(monkeypatch) -> None:
 
 @pytest.mark.asyncio
 async def test_mar_accepts_geojson_polygon(monkeypatch) -> None:
-    from trid3nt_server.workflows import model_mar_scenario as mod
+    from trid3nt_server.agent.workflows.modflow.managed_recharge import managed_recharge as mod
 
     captured: dict[str, Any] = {}
     layer = MoundingLayerURI(
@@ -253,13 +253,13 @@ async def test_mar_accepts_geojson_polygon(monkeypatch) -> None:
 
 @pytest.mark.asyncio
 async def test_mar_no_basin_is_user_input_required() -> None:
-    from trid3nt_server.workflows import model_mar_scenario as mod
+    from trid3nt_server.agent.workflows.modflow.managed_recharge import managed_recharge as mod
 
     with pytest.raises(mod.MARInputError):
         await mod.model_mar_scenario(
             aoi_latlon=(40.0, -100.0), basin_footprint_lonlat=None
         )
-    out = await mod.run_model_mar_scenario(aoi_latlon=[40.0, -100.0])  # no basin
+    out = await mod.modflow_managed_recharge(aoi_latlon=[40.0, -100.0])  # no basin
     assert out["status"] == "error"
     assert out["error_code"] == "USER_INPUT_REQUIRED"
 
@@ -269,7 +269,7 @@ async def test_mar_no_basin_is_user_input_required() -> None:
 
 @pytest.mark.asyncio
 async def test_asr_assembles_args_and_threads_result(monkeypatch) -> None:
-    from trid3nt_server.workflows import model_asr_scenario as mod
+    from trid3nt_server.agent.workflows.modflow.asr import asr as mod
 
     _patch_geocode(monkeypatch, 40.0, -100.0)
     captured: dict[str, Any] = {}
@@ -309,7 +309,7 @@ async def test_asr_assembles_args_and_threads_result(monkeypatch) -> None:
 
 @pytest.mark.asyncio
 async def test_asr_negative_rate_normalized_to_magnitude(monkeypatch) -> None:
-    from trid3nt_server.workflows import model_asr_scenario as mod
+    from trid3nt_server.agent.workflows.modflow.asr import asr as mod
 
     captured: dict[str, Any] = {}
     layer = ASRLayerURI(
@@ -338,7 +338,7 @@ async def test_asr_negative_rate_normalized_to_magnitude(monkeypatch) -> None:
 
 @pytest.mark.asyncio
 async def test_asr_missing_well_or_rate_is_user_input_required() -> None:
-    from trid3nt_server.workflows import model_asr_scenario as mod
+    from trid3nt_server.agent.workflows.modflow.asr import asr as mod
 
     with pytest.raises(mod.ASRInputError):
         await mod.model_asr_scenario(
@@ -347,7 +347,7 @@ async def test_asr_missing_well_or_rate_is_user_input_required() -> None:
             injection_rate_m3_day=1000.0,
             recovery_rate_m3_day=900.0,
         )
-    out = await mod.run_model_asr_scenario(
+    out = await mod.modflow_asr(
         aoi_latlon=[40.0, -100.0],
         well_location_latlon=[40.0, -100.0],
         injection_rate_m3_day=1000.0,  # missing recovery rate
@@ -361,7 +361,7 @@ async def test_asr_missing_well_or_rate_is_user_input_required() -> None:
 
 @pytest.mark.asyncio
 async def test_wetland_assembles_args_and_threads_result(monkeypatch) -> None:
-    from trid3nt_server.workflows import model_wetland_hydroperiod_scenario as mod
+    from trid3nt_server.agent.workflows.modflow.wetland_hydroperiod import wetland_hydroperiod as mod
 
     captured: dict[str, Any] = {}
     layer = HydroperiodLayerURI(
@@ -396,7 +396,7 @@ async def test_wetland_assembles_args_and_threads_result(monkeypatch) -> None:
 
 @pytest.mark.asyncio
 async def test_wetland_specific_yield_override_threads(monkeypatch) -> None:
-    from trid3nt_server.workflows import model_wetland_hydroperiod_scenario as mod
+    from trid3nt_server.agent.workflows.modflow.wetland_hydroperiod import wetland_hydroperiod as mod
 
     captured: dict[str, Any] = {}
     layer = HydroperiodLayerURI(
@@ -424,13 +424,13 @@ async def test_wetland_specific_yield_override_threads(monkeypatch) -> None:
 
 @pytest.mark.asyncio
 async def test_wetland_no_footprint_is_user_input_required() -> None:
-    from trid3nt_server.workflows import model_wetland_hydroperiod_scenario as mod
+    from trid3nt_server.agent.workflows.modflow.wetland_hydroperiod import wetland_hydroperiod as mod
 
     with pytest.raises(mod.WetlandHydroperiodInputError):
         await mod.model_wetland_hydroperiod_scenario(
             aoi_latlon=(40.0, -100.0), wetland_footprint_lonlat=None
         )
-    out = await mod.run_model_wetland_hydroperiod_scenario(
+    out = await mod.modflow_wetland_hydroperiod(
         aoi_latlon=[40.0, -100.0]  # no footprint
     )
     assert out["status"] == "error"
@@ -445,7 +445,7 @@ async def test_wetland_no_footprint_is_user_input_required() -> None:
 @pytest.mark.asyncio
 async def test_archetype_run_tool_empty_mounding_is_honest_error(monkeypatch) -> None:
     """The shared run-tool refuses to read a zero-mounding result as success."""
-    import trid3nt_server.tools.simulation.run_modflow_archetype_tool as run_tool
+    import trid3nt_server.agent.tools.simulation.modflow.run_modflow_archetype_tool as run_tool
     from trid3nt_contracts.modflow_contracts import MODFLOWRunArgs
 
     class _Staging:
@@ -524,7 +524,7 @@ def test_postprocess_mounding_from_real_run(tmp_path, monkeypatch) -> None:
     import numpy as np
     import rasterio
 
-    from trid3nt_server.workflows.run_modflow import build_modflow_deck
+    from trid3nt_server.agent.workflows.modflow.run_modflow import build_modflow_deck
 
     basin = [
         (-100.003, 40.003),
@@ -575,7 +575,7 @@ def test_postprocess_mounding_from_real_run(tmp_path, monkeypatch) -> None:
 def test_postprocess_asr_from_real_run(tmp_path, monkeypatch) -> None:
     import rasterio
 
-    from trid3nt_server.workflows.run_modflow import build_modflow_deck
+    from trid3nt_server.agent.workflows.modflow.run_modflow import build_modflow_deck
 
     deck = build_modflow_deck(
         spill_location_latlon=(40.0, -100.0),
@@ -624,7 +624,7 @@ def test_postprocess_wetland_hydroperiod_from_real_run(tmp_path, monkeypatch) ->
     import numpy as np
     import rasterio
 
-    from trid3nt_server.workflows.run_modflow import build_modflow_deck
+    from trid3nt_server.agent.workflows.modflow.run_modflow import build_modflow_deck
 
     wetland = [
         (-100.003, 40.003),

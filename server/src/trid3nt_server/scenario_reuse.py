@@ -1,9 +1,9 @@
-"""Deterministic expensive-simulation reuse guard (job-0326, NATE 2026-06-16).
+"""Deterministic expensive-simulation reuse guard.
 
 PROBLEM (live): the agent REDUNDANTLY re-runs expensive simulations
-(``run_model_flood_scenario`` / ``run_modflow_job`` / Pelicun) and re-derives
+(``sfincs_flood`` / ``modflow_contaminant_plume`` / Pelicun) and re-derives
 layers that ALREADY exist in the Case — burning minutes and money on a SFINCS /
-MODFLOW solve whose output layer is already on the map. The F54 soft prompt
+MODFLOW solve whose output layer is already on the map. The soft prompt
 steer ("Reuse the existing handle/uri ... do NOT re-fetch or recompute") was
 being IGNORED by the live model. This module makes reuse ROBUST: a deterministic,
 CONSERVATIVE short-circuit that runs on the dispatch hot path BEFORE the solver
@@ -79,13 +79,19 @@ __all__ = [
 # (e.g. ``flood-depth-peak-<run_id>`` → ``flood-depth``). Keep these aligned with
 # the layer_id minted by the postprocess step of each workflow.
 EXPENSIVE_SCENARIO_TOOLS: dict[str, str] = {
-    "run_model_flood_scenario": "flood-depth",
+    # engine-door refactor (SFINCS slice): the SFINCS flood template that mints
+    # the flood-depth layer (the run_sfincs door executes no solve).
+    "sfincs_flood": "flood-depth",
     "run_model_nws_flood_event_scenario": "flood-depth",
-    "run_modflow_job": "plume",
+    # engine-door refactor: run_modflow_job folded into modflow_contaminant_plume.
+    "modflow_contaminant_plume": "plume",
     "run_model_groundwater_contamination_scenario": "plume",
-    # sprint-16 P4: the quasi-2D PySWMM urban-flood engine mints a peak depth
+    # P4: the quasi-2D PySWMM urban-flood engine mints a peak depth
     # layer id ``swmm-depth-peak-<run_id>`` (same depth family as SFINCS).
-    "run_swmm_urban_flood": "swmm-depth",
+    # engine-door refactor (SWMM slice): re-keyed run_swmm_urban_flood ->
+    # swmm_urban_flood (the template submits the solver; signature matcher reads
+    # params, unaffected by the rename).
+    "swmm_urban_flood": "swmm-depth",
 }
 
 #: ``layer_id`` prefixes that identify an existing RESULT layer of each family.
@@ -106,11 +112,11 @@ _BBOX_QUANT_DEG: float = 0.02
 
 
 # --------------------------------------------------------------------------- #
-# Fetched / context-layer kind (F96 — extend reuse to fetch_* tools)
+# Fetched / context-layer kind (— extend reuse to fetch_* tools)
 # --------------------------------------------------------------------------- #
 #
-# job-0333 covered REUSE for run_model_* (expensive SIMULATION) results. F96 (live,
-# NATE 2026-06-17, "South Florida protected areas" repeat): on a "resize the bbox
+# covered REUSE for run_model_* (expensive SIMULATION) results. (live,
+# "South Florida protected areas" repeat): on a "resize the bbox
 # to encompass all protected areas" follow-up the agent RE-FETCHED WDPA — already
 # loaded — producing TWO identical choropleth layers. A fit / zoom / resize / show
 # follow-up must REUSE the already-loaded fetched layer (call compute_layer_bounds
@@ -189,12 +195,12 @@ def layer_id_scenario_type(layer_id: str | None, name: str | None = None) -> str
 
 
 def fetched_kind_for_tool(tool_name: str) -> str | None:
-    """Return the produced-layer KIND for a fetch_* tool, else None (F96)."""
+    """Return the produced-layer KIND for a fetch_* tool, else None."""
     return _FETCH_TOOL_KIND.get(tool_name)
 
 
 def fetched_layer_kind(layer_id: str | None, name: str | None = None) -> str | None:
-    """Classify a loaded FETCHED / context layer (by id / name) into a kind (F96).
+    """Classify a loaded FETCHED / context layer (by id / name) into a kind.
 
     Returns the ``kind`` token (e.g. ``"wdpa"``, ``"landcover"``, ``"dem"``) when
     the layer looks like the OUTPUT of a fetch_* tool, else ``None``. A layer that
@@ -268,7 +274,7 @@ def bbox_encloses(
     inner: Any,
     quant: float = _BBOX_QUANT_DEG,
 ) -> bool:
-    """True iff ``outer`` covers ``inner`` (within quantization tolerance) (F96).
+    """True iff ``outer`` covers ``inner`` (within quantization tolerance).
 
     Used by fetched-layer reuse: a requested AOI that is the SAME as, or CONTAINED
     BY, an already-loaded layer's extent is answered by that existing layer — a
@@ -635,13 +641,13 @@ def _layer_to_dict(layer: Any) -> dict | None:
 
 
 # --------------------------------------------------------------------------- #
-# Fetched-layer reuse match (F96)
+# Fetched-layer reuse match
 # --------------------------------------------------------------------------- #
 
 
 @dataclass(frozen=True)
 class FetchedLayerMatch:
-    """An already-loaded FETCHED layer that answers a repeat fetch request (F96).
+    """An already-loaded FETCHED layer that answers a repeat fetch request.
 
     Carries the reusable identity (``layer_id`` IS the handle per the layer-handle
     indirection contract) so a fit / zoom / resize / re-show follow-up reuses it
@@ -664,7 +670,7 @@ def find_reusable_fetched_layer(
     *,
     case_bbox: Any = None,
 ) -> FetchedLayerMatch | None:
-    """Return an already-loaded fetched layer that ANSWERS a fetch request (F96).
+    """Return an already-loaded fetched layer that ANSWERS a fetch request.
 
     CONSERVATIVE, pure, side-effect-free — safe on the dispatch hot path and the
     note builder. Returns a match only on a CLEAR answer:

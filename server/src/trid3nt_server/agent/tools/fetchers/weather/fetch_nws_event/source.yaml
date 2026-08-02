@@ -1,0 +1,113 @@
+# Router source spec (data-router fold, tier-3 hooks, ADR 0061).
+# Twin: fetch_nws_event.py -- FOLDED via hooks (single-GET NWS /alerts/active GeoJSON).
+# Bespoke steps -> named PURE hooks: nws_event.build_request (area canonicalize + URL),
+# nws_event.parse_response (FeatureCollection decode, preserved-prop project, drop null geom).
+schema_version: v1
+name: fetch_nws_event
+source_class: nws_event
+shape: vector-fgb
+supports_global_query: false
+input_error_suffix: INPUT_INVALID
+endpoints:
+  data:
+    url: https://api.weather.gov/alerts/active
+auth:
+  mode: none
+  user_agent: trid3nt/0.1 (Hazard Modeling Agent; https://github.com/double-r-squared/trid3nt-qgis-plugin;
+    agent@trid3nt.dev)
+params:
+  area:
+    type: str
+    required: true
+  event_types:
+    type: str_list
+    required: false
+    schema_optional: true
+  status:
+    type: enum
+    required: false
+    default: actual
+    values:
+    - actual
+    - exercise
+    - system
+    - test
+    - draft
+  message_type:
+    type: enum
+    required: false
+    default: alert
+    values:
+    - alert
+    - update
+    - cancel
+hooks:
+  build_request: nws_event.build_request
+  parse_response: nws_event.parse_response
+ingest:
+  properties:
+  - event
+  - headline
+  - description
+  - severity
+  - urgency
+  - certainty
+  - effective
+  - onset
+  - ends
+  - expires
+  - senderName
+  - sender
+  - category
+  - messageType
+  - status
+  - areaDesc
+  - instruction
+  - response
+  - id
+normalize:
+  crs: EPSG:4326
+output:
+  layer_type: vector
+  ext: fgb
+  role: context
+  style_preset: nws_alerts
+  emit_bbox: false
+cache:
+  ttl_class: dynamic-1h
+payload_estimate:
+  model: bbox_area
+  mb_per_sq_deg: 0.002
+  floor_mb: 0.001
+  ceil_mb: 5.0
+caveats:
+- LIVE NWS active-alerts snapshot (current-only, 0-7 days); geometry-less zone-only alerts are dropped
+  (no map footprint). An area with no active alerts -> a header-only FlatGeobuf, never an error.
+docstring: "Fetch active National Weather Service alerts scoped to a US state, county, or bbox.\n\n**What\
+  \ it does:** Issues a call to ``api.weather.gov/alerts/active``\nfiltered to a specific US geographic\
+  \ scope — a 2-letter state code, a\n5-digit county FIPS, or a bbox (converted to a point center for\
+  \ the NWS\nforecast-zone lookup). Returns alert polygons with severity, headline,\nevent type, onset/ends\
+  \ timestamps, and instruction text as a FlatGeobuf\nvector layer. Cached ``dynamic-1h`` (FR-DC-2 active-state).\n\
+  \n**When to use:**\n- User asks about current weather hazards in a specific state or county\n  (e.g.\
+  \ \"are there any flood warnings in Lee County, FL?\").\n- Agent needs geographically scoped alerts\
+  \ to drive the Hazard Event\n  Pipeline for a bounded study area rather than the full CONUS sweep.\n\
+  - Workflow requires per-FIPS or per-state alert filtering before\n  intersecting with a hazard footprint.\n\
+  \n**When NOT to use:**\n- CONUS-wide alert sweeps — use ``fetch_nws_alerts_conus`` instead\n  (single\
+  \ call, no area argument required).\n- Historical alert lookups (NWS active-alerts is current-only,\
+  \ 0-7 days);\n  use ``fetch_storm_events_db`` for past events.\n- Rainfall return periods or river forecast\
+  \ data (different NWS surfaces).\n- International weather alerts (NWS is US/territory-only).\n\n**Parameters:**\n\
+  - ``area`` (str or tuple): 2-letter state code (``\"FL\"``) or full state\n  name (``\"Florida\"``,\
+  \ case-insensitive), 5-digit county FIPS\n  (``\"12071\"`` for Lee County FL), or bbox tuple\n  ``(min_lon,\
+  \ min_lat, max_lon, max_lat)`` in EPSG:4326 (converted to\n  point center for NWS zone lookup — use\
+  \ state/FIPS when the user names\n  one; for sub-state areas prefer clipping to the admin polygon via\n\
+  \  ``fetch_administrative_boundaries`` + ``spatial_query``\n  instead of trusting a rectangle).\n- ``event_types``\
+  \ (list[str] or None): NWS event-type filter strings, e.g.\n  ``[\"Hurricane Warning\", \"Flood Warning\"\
+  ]``. ``None`` returns all types.\n- ``status`` (str): one of ``\"actual\"`` (default), ``\"exercise\"\
+  ``,\n  ``\"system\"``, ``\"test\"``, ``\"draft\"``.\n- ``message_type`` (str): one of ``\"alert\"``\
+  \ (default), ``\"update\"``,\n  ``\"cancel\"``.\n\n**Returns:**\n``LayerURI(layer_type=\"vector\", role=\"\
+  context\", units=None)`` pointing at\na FlatGeobuf with fields: ``event``, ``headline``, ``description``,\n\
+  ``severity``, ``urgency``, ``certainty``, ``effective``, ``onset``,\n``ends``, ``expires``, ``senderName``,\
+  \ ``areaDesc``, ``instruction``,\n``response``, ``id``.\n\n**Cross-tool dependencies:**\n- Narrower-scope\
+  \ alternative to: ``fetch_nws_alerts_conus`` (CONUS sweep).\n- Upstream of: hazard-event-pipeline tools\
+  \ that consume NWS alert\n  geometry + severity metadata as forcing evidence (FR-HEP-2 Tier 1).\n- For\
+  \ historical context: pair with ``fetch_storm_events_db``."

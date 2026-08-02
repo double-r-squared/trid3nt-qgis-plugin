@@ -1,0 +1,9 @@
+request_spatial_input:
+- let me draw the flood walls and flap gates on the map
+- i want to outline the exact neighborhood block myself
+- pause and let me sketch the area of interest by hand
+- let me place barriers on the map before the urban flood run
+- i'll draw the AOI for the SWMM model, open the draw tool
+- let me click the precise spot on the map, i can't name it
+- ask me to drag a rectangle for the bbox i have in mind
+- let me digitize the dammed walls and one-way drains for the storm sim

@@ -1,0 +1,118 @@
+# Router source spec (raster-stragglers wave, mapserver_export mode, ADR 0068).
+# Twin: fetch_noaa_slr_confidence.py + shared _noaa_slr_raster.py -- NOAA OCM SLR
+# Viewer conf_* MapServer/export server-symbolized PNG32 -> 4-band RGBA COG.
+# A fully-transparent export (no coverage at this level) is a VALID transparent
+# overlay, never a typed EMPTY (the twin's honesty floor).
+schema_version: v1
+
+name: fetch_noaa_slr_confidence
+source_class: noaa_slr_confidence
+error_prefix: NOAA_SLR_RASTER
+input_error_suffix: INPUT_INVALID
+empty_error_suffix: EMPTY
+shape: raster-cog
+supports_global_query: false
+
+endpoints:
+  data:
+    url: "https://coast.noaa.gov/arcgis/rest/services/dc_slr"
+auth:
+  mode: none
+  user_agent: "trid3nt/0.1 (Hazard Modeling Agent; https://github.com/double-r-squared/trid3nt-qgis-plugin; agent@trid3nt.dev)"
+
+params:
+  bbox: {type: bbox, required: true, quantize: round_6dp}
+  slr_ft:
+    type: float
+    default: 3.0
+  res_deg:
+    type: float
+    default: 0.0005
+    schema_optional: true
+
+ingest:
+  access: mapserver_export
+  mapserver:
+    service_by_param:
+      param: slr_ft
+      map:
+        0.0: conf_0ft
+        1.0: conf_1ft
+        2.0: conf_2ft
+        3.0: conf_3ft
+        4.0: conf_4ft
+        5.0: conf_5ft
+        6.0: conf_6ft
+        7.0: conf_7ft
+        8.0: conf_8ft
+        9.0: conf_9ft
+        10.0: conf_10ft
+    res_deg: 0.0005
+    px_min: 16
+    px_max: 2048
+    export_query: {bboxSR: "4326", imageSR: "4326", format: png32, transparent: "true", f: image}
+
+normalize:
+  crs: "EPSG:4326"
+  orientation: north_up
+
+output:
+  layer_type: raster
+  ext: tif
+  role: context
+  emit_bbox: true
+  style_preset: "noaa_slr_confidence"
+
+cache:
+  ttl_class: static-30d
+payload_estimate:
+  model: bbox_area
+  mb_per_sq_deg: 8.0
+  floor_mb: 0.1
+  ceil_mb: 60.0
+
+caveats:
+  - "NOAA OCM SLR Viewer mapping-confidence overlay (conf_* MapServer/export PNG32 -> 4-band RGBA COG); blue = HIGH confidence inundated, orange = LOW, transparent = not inundated"
+  - "CONUS coastal product only; a bbox with no coverage at this level returns a valid transparent (empty) overlay, never fabricated content"
+  - "confidence is published at WHOLE-foot levels 0..10 only"
+fallback: []
+
+# corpus lifted from sibling corpus.yaml.
+
+docstring: |-
+  Fetch the NOAA Sea-Level-Rise mapping-CONFIDENCE raster for one SLR level.
+
+  **What it does:** Reads NOAA OCM's SLR Viewer confidence-of-mapping service for
+  one whole-foot SLR level and returns it as a transparent RGBA raster overlay
+  (the NOAA symbology baked in: blue = HIGH confidence the area is inundated at
+  this level, orange = LOW confidence, transparent = not inundated). This is the
+  mapping-uncertainty companion to ``fetch_noaa_slr_scenarios`` (which returns
+  the inundation-footprint polygons).
+
+  **When to use:**
+  - "How confident is the sea-level-rise inundation mapping at 3 ft here?"
+  - "Show the NOAA SLR mapping confidence / uncertainty for this coast."
+  - As an overlay on ``fetch_noaa_slr_scenarios`` to flag low-confidence
+    inundation areas before reporting exposure.
+
+  **When NOT to use:**
+  - For the inundation FOOTPRINT itself -> ``fetch_noaa_slr_scenarios``.
+  - For marsh-migration projections -> ``fetch_noaa_slr_marsh``.
+  - For event-driven storm surge -> ``sfincs_flood`` / ``fetch_gtsm_tide_surge``.
+  - Outside CONUS -> not covered (CONUS coastal product only).
+
+  **Parameters:**
+  - ``bbox`` (tuple): ``(min_lon, min_lat, max_lon, max_lat)`` EPSG:4326. Required.
+    Example coastal Lee County FL: ``(-82.2, 26.2, -81.5, 26.9)``.
+  - ``slr_ft`` (float, default ``3.0``): one WHOLE foot 0..10 (confidence is
+    published at whole-foot levels only).
+  - ``res_deg`` (float, optional): output cell size in degrees (finer = opt-in,
+    payload-warning-coupled). Defaults to ~50 m (the symbology is coarse).
+
+  **Returns:** a 4-band transparent RGBA COG ``LayerURI`` (``layer_type="raster"``,
+  ``role="context"``, ``style_preset="noaa_slr_confidence"``). A bbox with no SLR
+  coverage at this level returns a valid transparent (empty) overlay -- never
+  fabricated content.
+
+  **Cross-tool dependencies:** pairs with ``fetch_noaa_slr_scenarios`` (footprint)
+  and ``fetch_noaa_slr_marsh`` (marsh migration) -- the three NOAA OCM SLR Viewer products.

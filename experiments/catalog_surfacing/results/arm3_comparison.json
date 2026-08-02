@@ -1,0 +1,234 @@
+{
+  "arm3": {
+    "n_source_records": 104,
+    "n_graded": 104,
+    "n_upstream_excluded": 0,
+    "selection_accuracy": 57.69,
+    "selection_denominator": 104,
+    "selected_correct": 60,
+    "first_attempt_validity": 100.0,
+    "one_retry_validity": 100.0,
+    "param_denominator": 60,
+    "per_source": {
+      "fetch_cdc_svi": {
+        "n": 5,
+        "sel_acc": 60.0
+      },
+      "fetch_census_acs": {
+        "n": 12,
+        "sel_acc": 66.67
+      },
+      "fetch_esri_landcover_10m": {
+        "n": 12,
+        "sel_acc": 75.0
+      },
+      "fetch_gridmet": {
+        "n": 12,
+        "sel_acc": 25.0
+      },
+      "fetch_hifld_critical_infrastructure": {
+        "n": 12,
+        "sel_acc": 50.0
+      },
+      "fetch_hifld_transmission_lines": {
+        "n": 5,
+        "sel_acc": 80.0
+      },
+      "fetch_mtbs_burn_severity": {
+        "n": 5,
+        "sel_acc": 40.0
+      },
+      "fetch_nhd_waterbodies": {
+        "n": 5,
+        "sel_acc": 80.0
+      },
+      "fetch_nhdplus_nldi_navigate": {
+        "n": 5,
+        "sel_acc": 40.0
+      },
+      "fetch_nifc_fire_perimeters": {
+        "n": 5,
+        "sel_acc": 60.0
+      },
+      "fetch_noaa_coops_currents": {
+        "n": 5,
+        "sel_acc": 60.0
+      },
+      "fetch_noaa_coops_tides": {
+        "n": 11,
+        "sel_acc": 27.27
+      },
+      "fetch_us_drought_monitor": {
+        "n": 5,
+        "sel_acc": 100.0
+      },
+      "fetch_usgs_water_quality": {
+        "n": 5,
+        "sel_acc": 100.0
+      }
+    }
+  },
+  "arm0_baseline": {
+    "n_source_records": 104,
+    "n_graded": 104,
+    "n_upstream_excluded": 0,
+    "selection_accuracy": 60.58,
+    "selection_denominator": 104,
+    "selected_correct": 63,
+    "first_attempt_validity": 80.95,
+    "one_retry_validity": 100.0,
+    "param_denominator": 63,
+    "per_source": {
+      "fetch_cdc_svi": {
+        "n": 5,
+        "sel_acc": 80.0
+      },
+      "fetch_census_acs": {
+        "n": 12,
+        "sel_acc": 58.33
+      },
+      "fetch_esri_landcover_10m": {
+        "n": 12,
+        "sel_acc": 41.67
+      },
+      "fetch_gridmet": {
+        "n": 12,
+        "sel_acc": 25.0
+      },
+      "fetch_hifld_critical_infrastructure": {
+        "n": 12,
+        "sel_acc": 75.0
+      },
+      "fetch_hifld_transmission_lines": {
+        "n": 5,
+        "sel_acc": 100.0
+      },
+      "fetch_mtbs_burn_severity": {
+        "n": 5,
+        "sel_acc": 100.0
+      },
+      "fetch_nhd_waterbodies": {
+        "n": 5,
+        "sel_acc": 100.0
+      },
+      "fetch_nhdplus_nldi_navigate": {
+        "n": 5,
+        "sel_acc": 20.0
+      },
+      "fetch_nifc_fire_perimeters": {
+        "n": 5,
+        "sel_acc": 60.0
+      },
+      "fetch_noaa_coops_currents": {
+        "n": 5,
+        "sel_acc": 100.0
+      },
+      "fetch_noaa_coops_tides": {
+        "n": 11,
+        "sel_acc": 27.27
+      },
+      "fetch_us_drought_monitor": {
+        "n": 5,
+        "sel_acc": 80.0
+      },
+      "fetch_usgs_water_quality": {
+        "n": 5,
+        "sel_acc": 80.0
+      }
+    }
+  },
+  "controls": {
+    "n_controls": 19,
+    "identical_across_arms": 16,
+    "leakage": [],
+    "jitter_needs_rerun": [],
+    "jitter_resolved": [
+      {
+        "id": "control#0",
+        "acceptable": "fetch_nws_alerts_conus",
+        "arm0": "fetch_nws_event",
+        "arm3": null,
+        "majority": null,
+        "trials": [
+          null,
+          null,
+          null
+        ]
+      },
+      {
+        "id": "control#1",
+        "acceptable": "fetch_fema_nfhl_zones",
+        "arm0": "fetch_fema_nfhl_zones",
+        "arm3": null,
+        "majority": "fetch_fema_nfhl_zones",
+        "trials": [
+          "fetch_fema_nfhl_zones",
+          "fetch_fema_nfhl_zones",
+          "fetch_fema_nfhl_zones"
+        ]
+      },
+      {
+        "id": "control#4",
+        "acceptable": "run_sfincs",
+        "arm0": "run_sfincs",
+        "arm3": null,
+        "majority": "geocode_location",
+        "trials": [
+          "geocode_location",
+          null,
+          "fetch_gridmet"
+        ]
+      }
+    ],
+    "jitter_residual": [],
+    "passes": true,
+    "rerun_pending": false
+  },
+  "reachability_arm3": {
+    "recall": 1.0,
+    "reached": 104,
+    "n_sources": 104
+  },
+  "verdict": {
+    "winner": "NO_ADVANCE",
+    "block_reasons": [
+      "selection 57.69 < arm0 60.58"
+    ],
+    "bars": {
+      "selection": 60.58,
+      "first_attempt": 75.95,
+      "one_retry": 100.0
+    },
+    "beat_baseline_hypothesis": {
+      "arm0_selection": 60.58,
+      "arm3_selection": 57.69,
+      "beat": false
+    }
+  },
+  "diagnostics": {
+    "n_source_records": 104,
+    "activated": 97,
+    "escalated": 8,
+    "no_call": 28
+  },
+  "meta": {
+    "0": {
+      "catalog_arm": null,
+      "registry_size": 190,
+      "ambient_declarable_count": 170,
+      "model_provider": "openai",
+      "openai_model": "nvidia/nemotron-3-super-120b-a12b:free",
+      "temperature": "0",
+      "n_trials": 1
+    },
+    "3": {
+      "catalog_arm": "3",
+      "registry_size": 190,
+      "ambient_declarable_count": 156,
+      "model_provider": "openai",
+      "openai_model": "nvidia/nemotron-3-super-120b-a12b:free",
+      "temperature": "0",
+      "n_trials": 1
+    }
+  }
+}

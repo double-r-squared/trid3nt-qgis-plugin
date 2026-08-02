@@ -30,9 +30,9 @@ from unittest.mock import patch
 import numpy as np
 import pytest
 
-from trid3nt_server.tools import TOOL_REGISTRY
-from trid3nt_server.tools.processing import digitize_water_body as wb_mod
-from trid3nt_server.tools.processing.digitize_water_body import (
+from trid3nt_server.agent.tools import TOOL_REGISTRY
+from trid3nt_server.agent.tools.processing.digitize_water_body import digitize_water_body as wb_mod
+from trid3nt_server.agent.tools.processing.digitize_water_body.digitize_water_body import (
     _METADATA,
     _STYLE_PRESET,
     WaterBodyBboxError,
@@ -60,7 +60,7 @@ class _FakeStore:
 
 
 def _make_read_through_injector(fake):
-    from trid3nt_server.tools.cache import (
+    from trid3nt_server.agent.tools.cache import (
         CACHE_BUCKET,
         cache_path,
         compute_cache_key as ck,

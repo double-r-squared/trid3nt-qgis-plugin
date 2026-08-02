@@ -1,0 +1,9 @@
+fetch_nws_river_forecast:
+- NWS river forecast gauges and flood stage for a river near a city
+- which river gauges are forecast to reach flood stage (minor moderate major) in this area
+- AHPS NWPS river forecast points with observed and forecast stage in a bounding box
+- flood warning river gauge flood category no_flood action minor moderate major
+- show river flood forecast and flood thresholds for gauges along a flood-prone river
+- current and forecast river stage and flood status for stream gauges in an area
+- national water prediction service river gauge observed vs forecast crest
+- river flooding forecast stage feet for gauges in this bbox

@@ -31,10 +31,10 @@ FLOOD_DEPTH_STYLE_PRESET = "continuous_flood_depth"
 WAVE_HEIGHT_STYLE_PRESET = "continuous_wave_height"
 
 #: Upper bound on per-frame COGs (agent ``MAX_FLOOD_FRAMES`` parity). Driven per
-#: run from the WORKER Batch env so the #154 granularity gate still controls it.
+#: run from the WORKER Batch env so the granularity gate still controls it.
 MAX_FLOOD_FRAMES: int = int(os.environ.get("TRID3NT_MAX_FLOOD_FRAMES", "144"))
 
-#: SnapWave significant-wave-height variable selection order (agent parity).
+#: SnapWave significant-variable selection order (agent parity).
 WAVE_HEIGHT_VARIABLES: tuple[str, ...] = ("hm0", "hm0ig")
 
 
@@ -288,7 +288,7 @@ def extract_waves(
     bbox: tuple[float, float, float, float] | None = None,
     resolution_m: float = 30.0,
 ) -> ExtractResult | None:
-    """Extract the PEAK wave-height field + N per-step wave frames (picklable).
+    """Extract the PEAK field + N per-step wave frames (picklable).
 
     The SnapWave wave field (``hm0`` / fallback ``hm0ig``) is a per-face HEIGHT in
     metres on the quadtree path — rasterized identically to depth (NO zs-zb

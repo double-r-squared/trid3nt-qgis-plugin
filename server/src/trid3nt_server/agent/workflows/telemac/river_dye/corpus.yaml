@@ -1,0 +1,12 @@
+# TEMPLATE tier (engine-door refactor): phrasings for telemac_river_dye. NOT
+# merged into the main retrieval index; the run_telemac door surfaces this
+# template via gate expansion (select-then-call). Carried from the migrated
+# run_telemac corpus entries.
+telemac_river_dye:
+- run a TELEMAC-2D shallow-water solve with an advected dye tracer over a real river reach
+- a dye plume moving downstream through the river channel with the current, animated
+- watch a dye plume travel downstream and dilute as it moves down the river
+- an oil spill from a barge on the river, where does the oil slick go downstream
+- sewage / E.coli effluent released into the river, decaying as it travels downstream
+- a sediment / silt slurry spilled into the river, settling and depositing on the bed
+- surface-water contaminant transport down the river channel from a point-source spill

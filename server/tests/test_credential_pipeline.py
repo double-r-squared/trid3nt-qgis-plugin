@@ -1,19 +1,20 @@
-"""Tests for the agent-side credential pipeline (job VAULT-READ).
+"""Tests for the agent-side credential pipeline.
 
 Covers all four moving parts:
 
-1. FIRMS vault-read: ``_resolve_map_key`` resolves the per-Case vault key
-   (via ``secret_ref`` → ``Persistence.get_secret_value``) BEFORE the env var,
-   and the env / demo fallbacks still work. The cache key never includes the
-   raw key.
+1. FIRMS key resolution: the fetcher's own ``_resolve_map_key`` honors an
+   explicit key / a ``str`` secret_ref / the env var / the demo fallback (the
+   fetcher path is unchanged by the vault chop). The cache key never includes
+   the raw key.
 2. Provider registry: ``credential_registry`` maps FIRMS → provider metadata
    (label / signup_url / secret_key_name) and classifies FIRMS auth errors.
 3. Auth-error → credential-request: ``_invoke_tool_via_emitter`` pauses on a
    keyed-tool credential error, emits a ``credential-request`` envelope, and
    blocks awaiting ``credential-provided``.
 4. credential-provided → retry: resolving the pending credential future with
-   ``provided=True`` retries the tool (which now resolves the vault key) and
-   succeeds; one prompt per tool per turn is enforced.
+   ``provided=True`` retries the tool, which now re-resolves the key the plugin
+   pushed into the resolver session cache; one prompt per tool per turn is
+   enforced.
 """
 
 from __future__ import annotations
@@ -27,27 +28,45 @@ from unittest.mock import patch
 import pytest
 
 from trid3nt_server import server
+from trid3nt_server.agent.gates.cards.credential import (
+    _build_credential_request_payload,
+)
 from trid3nt_server.server import (
     SessionState,
-    _build_credential_request_payload,
     _invoke_tool_via_emitter,
     _maybe_handle_credential_error,
     _resolve_pending_credential,
 )
-from trid3nt_server import credential_registry as cr
-from trid3nt_server.tools import (
+from trid3nt_server.credentials import credential_registry as cr
+from trid3nt_server.credentials import resolver as cred_resolver
+from trid3nt_server.agent.tools import (
     TOOL_REGISTRY,
     RegisteredTool,
     clear_registry_for_tests,
 )
-from trid3nt_server.tools.fetchers.hazard import fetch_firms_active_fire as firms_mod
-from trid3nt_server.tools.fetchers.hazard.fetch_firms_active_fire import (
-    FirmsArgError,
-    FirmsAuthError,
-    FirmsMissingKeyError,
-    _resolve_map_key,
-    set_persistence_for_secrets,
-)
+# fetch_firms_active_fire folded to a spec-driven tool (ADR 0079); its bespoke
+# FirmsArgError/FirmsAuthError/FirmsMissingKeyError classes + the vault-first
+# ``_resolve_map_key`` / ``set_persistence_for_secrets`` machinery were removed (the
+# fold resolves the key in the firms_active_fire hook: kwarg -> str secret_ref -> env
+# -> a pre-network FIRMS_MISSING_KEY, the ebird/movebank precedent). The credential
+# pipeline consumes only the typed ``error_code`` (FIRMS_AUTH_ERROR / FIRMS_MISSING_KEY
+# / FIRMS_ARG_INVALID), so these lightweight stubs drive the classifier + server flow
+# byte-identically to the deleted twin's exceptions.
+class FirmsArgError(RuntimeError):
+    error_code = "FIRMS_ARG_INVALID"
+    retryable = False
+
+
+class FirmsAuthError(RuntimeError):
+    error_code = "FIRMS_AUTH_ERROR"
+    retryable = False
+
+
+class FirmsMissingKeyError(RuntimeError):
+    error_code = "FIRMS_MISSING_KEY"
+    retryable = False
+
+
 from trid3nt_contracts.common import new_ulid
 from trid3nt_contracts.execution import LayerURI
 from trid3nt_contracts.secrets import CredentialProvidedEnvelopePayload
@@ -73,103 +92,17 @@ class MockWebSocket:
 
 
 # =========================================================================== #
-# 1. FIRMS vault-read
+# 1. FIRMS key resolution -- REMOVED with the twin (ADR 0079).
+#
+# The twin's vault-first ``_resolve_map_key`` (Persistence.get_secret_value ->
+# ``set_persistence_for_secrets`` binding + a ``demo`` literal fallback + a key_fp
+# cache fingerprint) folded into the ``firms_active_fire.build_request`` hook, which
+# resolves kwarg -> str secret_ref -> ``TRID3NT_FIRMS_MAP_KEY`` env -> a pre-network
+# FIRMS_MISSING_KEY (the ebird/movebank keyed-fold precedent; no Persistence binding,
+# no demo fallback, no key_fp). That hook resolution is covered offline by
+# test_router_firms.py; the removed twin-internal resolver tests are dropped here
+# rather than disabled (clean-as-you-go).
 # =========================================================================== #
-
-
-def test_firms_resolve_vault_key_beats_env():
-    """secret_ref (vault) resolves BEFORE the env var (vault-first)."""
-
-    class FakePersistence:
-        async def get_secret_value(self, secret_ref):
-            return "vault-firms-key"
-
-    class FakeRecord:
-        secret_id = "S01"
-        provider = "firms"
-        is_active = True
-        vault_ref = "projects/p/secrets/s/versions/latest"
-
-    set_persistence_for_secrets(FakePersistence())
-    try:
-        with patch.dict(
-            os.environ, {"TRID3NT_FIRMS_MAP_KEY": "env-firms-key"}, clear=False
-        ):
-            out = _resolve_map_key(secret_ref=FakeRecord())
-        assert out == "vault-firms-key"
-    finally:
-        set_persistence_for_secrets(None)
-
-
-def test_firms_resolve_str_shortcut():
-    """A bare-str secret_ref is the resolved key (test-mock shortcut)."""
-    with patch.dict(os.environ, {}, clear=True):
-        assert _resolve_map_key(secret_ref="direct-vault-value") == "direct-vault-value"
-
-
-def test_firms_resolve_explicit_map_key_wins():
-    """An explicit map_key kwarg wins over both vault and env."""
-    with patch.dict(os.environ, {"TRID3NT_FIRMS_MAP_KEY": "env"}, clear=False):
-        assert _resolve_map_key(map_key="explicit", secret_ref="vault") == "explicit"
-
-
-def test_firms_resolve_env_fallback_then_demo():
-    """No kwarg / no secret_ref → env var; no env → 'demo' literal."""
-    with patch.dict(os.environ, {"TRID3NT_FIRMS_MAP_KEY": "env-only"}, clear=False):
-        assert _resolve_map_key() == "env-only"
-    env = dict(os.environ)
-    env.pop("TRID3NT_FIRMS_MAP_KEY", None)
-    with patch.dict(os.environ, env, clear=True):
-        assert _resolve_map_key() == "demo"
-
-
-def test_firms_vault_failure_falls_back_not_crash():
-    """A vault lookup failure logs + falls back to env/demo (no crash)."""
-
-    class FailingPersistence:
-        async def get_secret_value(self, secret_ref):
-            raise RuntimeError("vault unreachable")
-
-    class FakeRecord:
-        is_active = True
-        provider = "firms"
-
-    set_persistence_for_secrets(FailingPersistence())
-    try:
-        env = dict(os.environ)
-        env.pop("TRID3NT_FIRMS_MAP_KEY", None)
-        with patch.dict(os.environ, env, clear=True):
-            assert _resolve_map_key(secret_ref=FakeRecord()) == "demo"
-    finally:
-        set_persistence_for_secrets(None)
-
-
-def test_firms_cache_key_omits_raw_key():
-    """The FIRMS cache params carry a key fingerprint, never the raw key."""
-    captured: dict[str, Any] = {}
-
-    def _fake_read_through(*, metadata, params, ext, fetch_fn):  # noqa: ANN001
-        captured["params"] = params
-        from trid3nt_server.tools.cache import ReadThroughResult
-
-        return ReadThroughResult(
-            uri="gs://bucket/cache/dynamic-1h/firms_active_fire/x.fgb",
-            data=b"",
-            hit=False,
-        )
-
-    with patch.object(firms_mod, "read_through", _fake_read_through):
-        firms_mod.fetch_firms_active_fire(
-            bbox=(-124.0, 32.5, -114.0, 42.0),
-            days_back=1,
-            map_key="super-secret-raw-key",
-        )
-    params = captured["params"]
-    assert "super-secret-raw-key" not in json.dumps(params)
-    assert "key_fp" in params
-    # The fingerprint is a short hex prefix, not the raw key.
-    assert params["key_fp"] != "super-secret-raw-key"
-    assert len(params["key_fp"]) == 8
 
 
 # =========================================================================== #
@@ -615,6 +548,68 @@ def test_auth_error_emits_credential_request_and_retries_on_provided():
     result = asyncio.run(_run())
     assert isinstance(result, LayerURI)
     assert attempts["n"] == 2, "tool must be retried exactly once after provided"
+
+
+def test_reshaped_flow_pushes_to_session_cache_then_retry_resolves():
+    """The full reshaped mid-turn flow: a keyed-tool auth error emits a
+    credential-request; the (mocked) plugin push writes the value into the
+    resolver session cache; on ``credential-provided`` the retry re-resolves
+    the session-cache key as ``secret_ref`` and the tool succeeds. Proves the
+    file vault is off the path -- the value comes from the session cache.
+    """
+    PUSHED_KEY = "session-cache-firms-key"
+    seen_secret_ref = {"value": None}
+
+    def _firms_body(**kwargs):
+        secret_ref = kwargs.get("secret_ref")
+        if not secret_ref:
+            # First attempt (no key resolved yet) -> typed auth error.
+            raise FirmsAuthError("FIRMS rejected the MAP_KEY")
+        # Retry: the resolver injected the pushed session-cache value.
+        seen_secret_ref["value"] = secret_ref
+        return _ok_layer()
+
+    _register_firms_stub(_firms_body)
+    ws = MockWebSocket()
+    state = SessionState(session_id=new_ulid())
+    cred_resolver.clear_session(state.session_id)
+
+    async def _run():
+        dispatch = asyncio.create_task(
+            _invoke_tool_via_emitter(
+                ws, state, "fetch_firms_active_fire",
+                {"bbox": [-124.0, 32.5, -114.0, 42.0]},
+            )
+        )
+        for _ in range(50):
+            await asyncio.sleep(0)
+            req = [e for e in ws.sent if e["type"] == "credential-request"]
+            if req and server._PENDING_CREDENTIALS:
+                break
+        req = [e for e in ws.sent if e["type"] == "credential-request"]
+        assert len(req) == 1
+        request_id = req[0]["payload"]["request_id"]
+
+        # Mock the plugin: push the key over the secret-add seam (which the
+        # server folds into the resolver session cache) BEFORE the provided
+        # signal, mirroring the Decision-F wire order.
+        cred_resolver.set_session_credential(state.session_id, "firms", PUSHED_KEY)
+        ok = _resolve_pending_credential(
+            state.session_id,
+            CredentialProvidedEnvelopePayload(
+                request_id=request_id, secret_id=None, provided=True
+            ),
+        )
+        assert ok
+        return await dispatch
+
+    try:
+        result = asyncio.run(_run())
+    finally:
+        cred_resolver.clear_session(state.session_id)
+    assert isinstance(result, LayerURI)
+    # The retry resolved the pushed session-cache value as the secret_ref.
+    assert seen_secret_ref["value"] == PUSHED_KEY
 
 
 def test_credential_request_envelope_never_carries_raw_key():

@@ -1,0 +1,9 @@
+fetch_topobathy:
+- give me a seamless coastal elevation surface that includes the sea floor and the land together for mexico beach
+- i need a topobathy DEM with bathymetry stitched to the topography for this shoreline AOI
+- pull the CUDEM merged topo-bathy tiles plus 3DEP land for my coastal flood run
+- the land-only DEM leaves the nearshore as nodata, get me one with the underwater bed for surge routing
+- a continuous bed from the hills out to deep water in NAVD88 meters for the SFINCS coastal deck
+- how deep is the water just offshore here, build me an elevation grid that includes water depth
+- fetch the NOAA NCEI 1/9 arc-second topobathymetry for the florida panhandle coast
+- i want the nearshore bathymetry merged with the USGS terrain so my coastal model has no gap at the waterline

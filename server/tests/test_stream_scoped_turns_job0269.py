@@ -150,7 +150,7 @@ async def test_cross_case_turn_survives_new_root_prompt(
 
     release = asyncio.Event()
     monkeypatch.setattr(
-        server, "_stream_gemini_reply", _gated_stream(release, "solving A")
+        server, "_stream_model_reply", _gated_stream(release, "solving A")
     )
 
     await server._prepare_user_turn(ws, state, "model the flood in A")
@@ -190,7 +190,7 @@ async def test_same_case_reprompt_replaces_turn(file_persistence, monkeypatch) -
 
     release = asyncio.Event()
     monkeypatch.setattr(
-        server, "_stream_gemini_reply", _gated_stream(release, "first ask")
+        server, "_stream_model_reply", _gated_stream(release, "first ask")
     )
 
     await server._prepare_user_turn(ws, state, "first ask")
@@ -219,7 +219,7 @@ async def test_concurrent_turns_keep_narration_isolated(
     """Turn A's persisted narration must be A's own text even when turn B
     runs concurrently and re-points ``state.current_turn_narration``.
 
-    Uses the REAL ``_stream_gemini_reply`` registration seam: the per-task
+    Uses the REAL ``_stream_model_reply`` registration seam: the per-task
     registry is what isolates the wrapper's finally-join. Here we simulate
     it by having each fake register in the same way the real stream does.
     """
@@ -238,7 +238,7 @@ async def test_concurrent_turns_keep_narration_isolated(
         narr.append("narration A")
         await release_a.wait()
 
-    monkeypatch.setattr(server, "_stream_gemini_reply", stream_a)
+    monkeypatch.setattr(server, "_stream_model_reply", stream_a)
     await server._prepare_user_turn(ws, state, "turn A")
     task_a = asyncio.create_task(
         server._dispatch_gemini_and_persist(ws, state, None, "turn A", "off")
@@ -254,7 +254,7 @@ async def test_concurrent_turns_keep_narration_isolated(
         st.current_turn_narration = []
         st.current_turn_narration.append("narration B")
 
-    monkeypatch.setattr(server, "_stream_gemini_reply", stream_b)
+    monkeypatch.setattr(server, "_stream_model_reply", stream_b)
     await server._prepare_user_turn(ws, state, "turn B")
     await server._dispatch_gemini_and_persist(ws, state, None, "turn B", "off")
     case_b = state.active_case_id

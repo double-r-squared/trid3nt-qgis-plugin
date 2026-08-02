@@ -16,15 +16,15 @@ These tests cover:
    ``required`` (defensive; underscore params have defaults and never end up
    required in practice).
 4. The registry path — ``build_tool_declarations`` produces a declaration
-   for ``compute_zonal_statistics`` with NO underscore properties left.
+   for ``compute_hillshade`` with NO underscore properties left.
 """
 
 from __future__ import annotations
 
 import pytest
 
-from trid3nt_server.adapter import _strip_private_params, build_tool_declarations
-from trid3nt_server.tools import TOOL_REGISTRY  # noqa: F401 — populated on import
+from trid3nt_server.agent.adapters.adapter import _strip_private_params, build_tool_declarations
+from trid3nt_server.agent.tools import TOOL_REGISTRY  # noqa: F401 — populated on import
 from google.genai import types as genai_types
 
 
@@ -122,22 +122,19 @@ def test_build_tool_declarations_drops_storage_client_for_zonal_statistics() -> 
     underscore property to a registered tool without going through the
     stripping path, this test fails before Gemini does.
     """
-    from trid3nt_server.tools import TOOL_REGISTRY
+    from trid3nt_server.agent.tools import TOOL_REGISTRY
 
     decls = build_tool_declarations(TOOL_REGISTRY)
     by_name = {d.name: d for d in decls}
 
     # Tools known to expose _storage_client / _bucket in their public signature.
     sensitive = [
-        "compute_zonal_statistics",
         "compute_hillshade",
         "compute_slope",
         "compute_aspect",
         "compute_impervious_surface",
         "extract_landcover_class",
-        "clip_raster_to_bbox",
         "clip_raster_to_polygon",
-        "clip_vector_to_polygon",
     ]
     for tname in sensitive:
         if tname not in by_name:

@@ -25,9 +25,9 @@ import os
 
 import pytest
 
-from trid3nt_server import sandbox_hardening as H
-from trid3nt_server import sandbox_runner as sr
-from trid3nt_server.sandbox_runner import run_sandbox_local
+from trid3nt_server.sandbox import sandbox_hardening as H
+from trid3nt_server.sandbox import sandbox_runner as sr
+from trid3nt_server.sandbox.sandbox_runner import run_sandbox_local
 
 _HAS_BWRAP = H.jail_available()
 _requires_bwrap = pytest.mark.skipif(

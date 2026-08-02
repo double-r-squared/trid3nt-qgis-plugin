@@ -20,16 +20,16 @@ import json
 import time
 from dataclasses import dataclass, field
 from typing import Any
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import patch
 
 import pytest
 
-from trid3nt_server.adapter import (
-    GeminiSettings,
+from trid3nt_server.agent.adapters.adapter import (
+    ModelSettings,
     MAX_TURN_ITERATIONS,
     summarize_tool_result,
 )
-from trid3nt_server.circuit_breaker import CircuitBreakerError, ToolCircuitBreaker
+from trid3nt_server.agent.gates.circuit_breaker import CircuitBreakerError, ToolCircuitBreaker
 from trid3nt_server.server import SessionState
 from trid3nt_contracts import new_ulid
 
@@ -51,90 +51,24 @@ class _FakeSocket:
 
 
 def _make_fake_chunk_with_function_call(name: str, args: dict, call_id: str):
-    fn_call = MagicMock()
-    fn_call.name = name
-    fn_call.id = call_id
-    fn_call.args = args
-    fake_part = MagicMock()
-    fake_part.function_call = fn_call
-    fake_part.text = None
-    fake_content = MagicMock()
-    fake_content.parts = [fake_part]
-    fake_candidate = MagicMock()
-    fake_candidate.content = fake_content
-    fake_chunk = MagicMock()
-    fake_chunk.candidates = [fake_candidate]
-    fake_chunk.text = None
-    return fake_chunk
+    """A fake turn (scripted-provider dict) emitting ONE function call."""
+    return {"tool_call": {"name": name, "args": args, "call_id": call_id}}
 
 
 def _make_fake_chunk_with_text(text: str):
-    fake_part = MagicMock()
-    fake_part.function_call = None
-    fake_part.text = text
-    fake_content = MagicMock()
-    fake_content.parts = [fake_part]
-    fake_candidate = MagicMock()
-    fake_candidate.content = fake_content
-    fake_chunk = MagicMock()
-    fake_chunk.candidates = [fake_candidate]
-    fake_chunk.text = None
-    return fake_chunk
+    """A fake turn (scripted-provider dict) emitting one narration delta."""
+    return {"text": text}
 
 
-# ---------------------------------------------------------------------------
-# Test 1+2+3: 3 failures trip the breaker; 4th call is short-circuited
-# ---------------------------------------------------------------------------
-
-
-@pytest.mark.asyncio
-async def test_circuit_breaker_trips_on_third_failure_and_short_circuits_fourth():
-    """3 consecutive failures trip the breaker; the 4th call is short-circuited.
-
-    The test patches ``_invoke_tool_via_emitter`` to fail for the first 3
-    calls and checks that on the 4th turn Gemini would have been asked for
-    another function_call but the breaker intercepts it BEFORE the real
-    ``_invoke_tool_via_emitter`` runs.  The function_response Gemini gets on
-    the 4th call must carry CIRCUIT_BREAKER_TRIPPED + retryable=False.
+def _contents_snapshot(fake_llm):
+    """Rebuild the per-turn (role, parts) view the retired ``_capture_stream``
+    produced -- now from the recorded fake-provider calls. function_response
+    parts carry their full response dict so CIRCUIT_BREAKER_TRIPPED is visible.
     """
-    from trid3nt_server import server as agent_server
-
-    invoke_call_count = {"n": 0}
-
-    # 4 Gemini turns, each requesting fetch_dem.
-    def _gemini_stream(**kw):
-        turn = invoke_call_count["n"]  # approximate — close enough for ordering
-        return iter([
-            _make_fake_chunk_with_function_call(
-                "fetch_dem", {"bbox": [0, 0, 1, 1]}, f"call-{turn}"
-            )
-        ])
-
-    fake_client = MagicMock()
-    fake_client.models.generate_content_stream.side_effect = lambda **kw: _gemini_stream(**kw)
-
-    # The real _invoke_tool_via_emitter fails on the first 3 calls; would
-    # succeed on the 4th — but the breaker should prevent the 4th from ever
-    # reaching this mock.
-    async def _invoke_stub(_ws, _state, name, args):
-        invoke_call_count["n"] += 1
-        if invoke_call_count["n"] <= 3:
-            class UpstreamError(RuntimeError):
-                error_code = "DEM_UPSTREAM_ERROR"
-                retryable = True
-            raise UpstreamError("upstream 503")
-        # Should never reach here — breaker should have short-circuited.
-        return {"wms_url": "http://example.com", "layer_id": "dem-x"}
-
-    # Capture all function_response payloads fed back to Gemini so we can
-    # inspect the 4th one (the CIRCUIT_BREAKER_TRIPPED envelope).
-    contents_per_turn: list[list] = []
-
-    real_stream_side_effect = fake_client.models.generate_content_stream.side_effect
-
-    def _capture_stream(**kw):
+    snapshots: list[list] = []
+    for call in fake_llm.calls:
         snapshot = []
-        for c in kw.get("contents", []):
+        for c in call["contents"]:
             parts_repr = []
             for p in c.parts:
                 if p.text:
@@ -150,23 +84,61 @@ async def test_circuit_breaker_trips_on_third_failure_and_short_circuits_fourth(
                 else:
                     parts_repr.append(("unknown", None))
             snapshot.append((c.role, parts_repr))
-        contents_per_turn.append(snapshot)
-        return real_stream_side_effect(**kw)
+        snapshots.append(snapshot)
+    return snapshots
 
-    fake_client.models.generate_content_stream.side_effect = _capture_stream
+
+# ---------------------------------------------------------------------------
+# Test 1+2+3: 3 failures trip the breaker; 4th call is short-circuited
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_circuit_breaker_trips_on_third_failure_and_short_circuits_fourth(fake_llm):
+    """3 consecutive failures trip the breaker; the 4th call is short-circuited.
+
+    The test patches ``_invoke_tool_via_emitter`` to fail for the first 3
+    calls and checks that on the 4th turn Gemini would have been asked for
+    another function_call but the breaker intercepts it BEFORE the real
+    ``_invoke_tool_via_emitter`` runs.  The function_response Gemini gets on
+    the 4th call must carry CIRCUIT_BREAKER_TRIPPED + retryable=False.
+    """
+    from trid3nt_server import server as agent_server
+
+    invoke_call_count = {"n": 0}
+
+    # Every round requests fetch_dem (identical tool+args -> the loop watchdog
+    # eventually fail-stops the runaway after the breaker has tripped).
+    fake_llm.on_call(
+        lambda i, _c: _make_fake_chunk_with_function_call(
+            "fetch_dem", {"bbox": [0, 0, 1, 1]}, f"call-{i}"
+        )
+    )
+
+    # The real _invoke_tool_via_emitter fails on the first 3 calls; would
+    # succeed on the 4th — but the breaker should prevent the 4th from ever
+    # reaching this mock.
+    async def _invoke_stub(_ws, _state, name, args):
+        invoke_call_count["n"] += 1
+        if invoke_call_count["n"] <= 3:
+            class UpstreamError(RuntimeError):
+                error_code = "DEM_UPSTREAM_ERROR"
+                retryable = True
+            raise UpstreamError("upstream 503")
+        # Should never reach here — breaker should have short-circuited.
+        return {"wms_url": "http://example.com", "layer_id": "dem-x"}
 
     # Use threshold=3 (default) and a long cooldown so the breaker stays open.
     state = SessionState(session_id=new_ulid())
     state.circuit_breaker = ToolCircuitBreaker(threshold=3, cooldown_s=3600.0)
-    settings = GeminiSettings(
+    settings = ModelSettings(
         model="gemini-2.5-pro", project="t", location="us-central1", use_vertex=True
     )
     sock = _FakeSocket()
 
-    with patch.object(agent_server, "build_client", return_value=fake_client), \
-         patch.object(agent_server, "_invoke_tool_via_emitter", side_effect=_invoke_stub), \
+    with patch.object(agent_server, "_invoke_tool_via_emitter", side_effect=_invoke_stub), \
          patch.object(agent_server, "build_tool_declarations", return_value=[]):
-        await agent_server._stream_gemini_reply(
+        await agent_server._stream_model_reply(
             sock, state, settings, "Get me the DEM for Fort Myers", "research"
         )
 
@@ -176,7 +148,9 @@ async def test_circuit_breaker_trips_on_third_failure_and_short_circuits_fourth(
         f"got {invoke_call_count['n']}"
     )
 
-    # Find a function_response that carries CIRCUIT_BREAKER_TRIPPED.
+    # Inspect the function_responses fed back across turns for the
+    # CIRCUIT_BREAKER_TRIPPED envelope (the 4th call's short-circuit).
+    contents_per_turn = _contents_snapshot(fake_llm)
     cb_responses = []
     for turn_contents in contents_per_turn:
         for (_role, parts) in turn_contents:
@@ -270,7 +244,7 @@ def test_circuit_breaker_is_per_session():
 
 
 @pytest.mark.asyncio
-async def test_arg_errors_through_server_do_not_trip_breaker():
+async def test_arg_errors_through_server_do_not_trip_breaker(fake_llm):
     """Many CLIENT/arg failures via _invoke_tool_via_emitter leave the breaker CLOSED.
 
     Repro of the live bug: the model fired a burst of fetch_storm_events_db
@@ -291,20 +265,16 @@ async def test_arg_errors_through_server_do_not_trip_breaker():
     # would succeed (corrected args) — proving the breaker never blocked it.
     N_BAD = 6
 
-    def _gemini_stream(**kw):
-        invoke_count_so_far = invoke_count["n"]
-        if invoke_count_so_far < N_BAD + 1:
-            return iter([
-                _make_fake_chunk_with_function_call(
-                    "fetch_storm_events_db",
-                    {"year": 2013, "state": "Oklahoma"},
-                    f"call-{invoke_count_so_far}",
-                )
-            ])
-        return iter([_make_fake_chunk_with_text("Done — added the tornado layer.")])
+    def _next_turn(_i, _c):
+        if invoke_count["n"] < N_BAD + 1:
+            return _make_fake_chunk_with_function_call(
+                "fetch_storm_events_db",
+                {"year": 2013, "state": "Oklahoma"},
+                f"call-{invoke_count['n']}",
+            )
+        return _make_fake_chunk_with_text("Done — added the tornado layer.")
 
-    fake_client = MagicMock()
-    fake_client.models.generate_content_stream.side_effect = lambda **kw: _gemini_stream(**kw)
+    fake_llm.on_call(_next_turn)
 
     async def _invoke_stub(_ws, _state, name, args):
         invoke_count["n"] += 1
@@ -317,15 +287,14 @@ async def test_arg_errors_through_server_do_not_trip_breaker():
     # Default threshold (3) — well below N_BAD, so the OLD behaviour would have
     # tripped after 3 arg errors and blocked everything after.
     state.circuit_breaker = ToolCircuitBreaker(threshold=3, cooldown_s=3600.0)
-    settings = GeminiSettings(
+    settings = ModelSettings(
         model="gemini-2.5-pro", project="t", location="us-central1", use_vertex=True
     )
     sock = _FakeSocket()
 
-    with patch.object(agent_server, "build_client", return_value=fake_client), \
-         patch.object(agent_server, "_invoke_tool_via_emitter", side_effect=_invoke_stub), \
+    with patch.object(agent_server, "_invoke_tool_via_emitter", side_effect=_invoke_stub), \
          patch.object(agent_server, "build_tool_declarations", return_value=[]):
-        await agent_server._stream_gemini_reply(
+        await agent_server._stream_model_reply(
             sock, state, settings,
             "show me historical tornado touchdowns in Oklahoma since 2000",
             "research",
@@ -349,7 +318,7 @@ async def test_arg_errors_through_server_do_not_trip_breaker():
 
 
 @pytest.mark.asyncio
-async def test_circuit_breaker_error_not_counted_as_additional_failure():
+async def test_circuit_breaker_error_not_counted_as_additional_failure(fake_llm):
     """When the breaker fires (CircuitBreakerError raised), the failure counter
     must NOT increment again — record_failure is skipped for CircuitBreakerError.
 
@@ -371,35 +340,28 @@ async def test_circuit_breaker_error_not_counted_as_additional_failure():
 
     # Two more turns where Gemini keeps trying fetch_dem — both get short-circuited.
     invoked = {"n": 0}
-    call_turn = {"t": 0}
 
-    def _gemini_stream(**kw):
-        call_turn["t"] += 1
-        if call_turn["t"] <= 2:
-            return iter([
-                _make_fake_chunk_with_function_call(
-                    "fetch_dem", {"bbox": [0, 0, 1, 1]}, f"call-{call_turn['t']}"
-                )
-            ])
-        # 3rd turn: Gemini narrates it can't help.
-        return iter([_make_fake_chunk_with_text("The DEM service is unavailable.")])
-
-    fake_client = MagicMock()
-    fake_client.models.generate_content_stream.side_effect = lambda **kw: _gemini_stream(**kw)
+    # Rounds 0,1 request fetch_dem (short-circuited); round 2 narrates.
+    fake_llm.on_call(
+        lambda i, _c: _make_fake_chunk_with_function_call(
+            "fetch_dem", {"bbox": [0, 0, 1, 1]}, f"call-{i + 1}"
+        )
+        if i < 2
+        else _make_fake_chunk_with_text("The DEM service is unavailable.")
+    )
 
     async def _real_invoke(_ws, _state, name, args):
         invoked["n"] += 1
         return {"wms_url": "http://example.com"}
 
     sock = _FakeSocket()
-    settings = GeminiSettings(
+    settings = ModelSettings(
         model="gemini-2.5-pro", project="t", location="us-central1", use_vertex=True
     )
 
-    with patch.object(agent_server, "build_client", return_value=fake_client), \
-         patch.object(agent_server, "_invoke_tool_via_emitter", side_effect=_real_invoke), \
+    with patch.object(agent_server, "_invoke_tool_via_emitter", side_effect=_real_invoke), \
          patch.object(agent_server, "build_tool_declarations", return_value=[]):
-        await agent_server._stream_gemini_reply(
+        await agent_server._stream_model_reply(
             sock, state, settings, "Get DEM", "research"
         )
 

@@ -20,7 +20,7 @@ visible to reviewers.
 
 from __future__ import annotations
 
-from trid3nt_server.adapter import SYSTEM_PROMPT
+from trid3nt_server.agent.adapters.adapter import SYSTEM_PROMPT
 
 
 # ---------------------------------------------------------------------------
@@ -79,10 +79,12 @@ def test_system_prompt_has_geographic_clipping_section() -> None:
 
 
 def test_system_prompt_names_admin_polygon_clip_tools() -> None:
-    """A5 fix must reference the admin-boundary fetcher + both clip tools."""
+    """A5 fix must reference the admin-boundary fetcher + the raster clip tool +
+    the vector clip surface. cull pass 2 (2026-07-27): clip_vector_to_polygon was
+    CUT; vector clipping re-homes to spatial_query (ST_Within/ST_Intersects)."""
     assert "fetch_administrative_boundaries" in SYSTEM_PROMPT
     assert "clip_raster_to_polygon" in SYSTEM_PROMPT
-    assert "clip_vector_to_polygon" in SYSTEM_PROMPT
+    assert "spatial_query" in SYSTEM_PROMPT
 
 
 def test_system_prompt_lists_admin_region_kinds() -> None:
@@ -166,8 +168,8 @@ def test_system_prompt_keeps_always_narrate_section() -> None:
 
 
 def test_system_prompt_still_routes_flood_modeling() -> None:
-    """job-0154 routing instruction (flood → run_model_flood_scenario) survives."""
-    assert "run_model_flood_scenario" in SYSTEM_PROMPT
+    """job-0154 routing instruction (flood → run_sfincs) survives."""
+    assert "run_sfincs" in SYSTEM_PROMPT
 
 
 def test_system_prompt_still_forbids_fabricated_numbers() -> None:
@@ -233,15 +235,19 @@ def test_system_prompt_says_full_state_name_accepted() -> None:
 
 
 def test_system_prompt_has_groundwater_spill_routing_section() -> None:
-    """Prompt must carry the parameterized-vs-article groundwater routing."""
-    assert "Groundwater spill routing" in SYSTEM_PROMPT
+    """Prompt must carry the engine-door groundwater/MODFLOW routing (door-model)."""
+    assert "Groundwater / MODFLOW routing" in SYSTEM_PROMPT
+    # engine-door model: call the run_modflow door first, then select-then-call.
+    assert "run_modflow DOOR FIRST" in SYSTEM_PROMPT
+    assert "SELECT-THEN-CALL" in SYSTEM_PROMPT
 
 
-def test_system_prompt_routes_parameterized_spill_to_run_modflow_job() -> None:
-    """A parameterized spill (location + contaminant + rate + duration) goes
-    DIRECTLY to run_modflow_job."""
+def test_system_prompt_routes_parameterized_spill_to_modflow_contaminant_plume() -> None:
+    """A parameterized spill (location + contaminant + rate + duration) routes to
+    modflow_contaminant_plume (via the door), passing spill_location_latlon as a
+    2-element [lat, lon] array."""
     flat = " ".join(SYSTEM_PROMPT.split())
-    assert "call run_modflow_job DIRECTLY" in flat
+    assert "call modflow_contaminant_plume with" in flat
     # spill_location_latlon passed as a 2-element [lat, lon] array.
     assert "spill_location_latlon as a 2-element [lat, lon] array" in flat
 
@@ -255,8 +261,8 @@ def test_system_prompt_keeps_article_path_off_parameterized_spill() -> None:
 
 
 def test_system_prompt_still_routes_modflow_groundwater() -> None:
-    """run_modflow_job + the article-ingest tool both remain named in the prompt."""
-    assert "run_modflow_job" in SYSTEM_PROMPT
+    """modflow_contaminant_plume + the article-ingest tool both remain named in the prompt."""
+    assert "modflow_contaminant_plume" in SYSTEM_PROMPT
     assert "run_model_groundwater_contamination_scenario" in SYSTEM_PROMPT
 
 

@@ -11,7 +11,7 @@
       "prompt": "If a really big storm stalled over Peoria, Illinois, which parts of town would end up under water?",
       "execution": "block_at_invocation",
       "expected": {
-        "acceptable": ["run_model_flood_scenario", "run_swmm_urban_flood"],
+        "acceptable": ["run_sfincs", "sfincs_flood", "run_swmm", "swmm_urban_flood"],
         "no_tool": false
       }
     },
@@ -134,12 +134,13 @@
       "execution": "block_at_invocation",
       "expected": {
         "acceptable": [
-          "run_pelicun_damage_assessment",
-          "run_pelicun_with_buildings",
+          "run_pelicun",
+          "pelicun_damage_assessment",
+          "pelicun_damage_with_buildings",
           "compute_flood_depth_damage",
           "compute_impact_envelope",
           "fetch_usace_nsi",
-          "run_model_flood_scenario"
+          "run_sfincs", "sfincs_flood"
         ],
         "no_tool": false
       }
@@ -251,7 +252,7 @@
       "prompt": "If a big earthquake hit Memphis, how strong would the shaking be across town?",
       "execution": "block_at_invocation",
       "expected": {
-        "acceptable": ["run_seismic_hazard_psha"],
+        "acceptable": ["run_openquake", "openquake_psha"],
         "no_tool": false
       }
     },

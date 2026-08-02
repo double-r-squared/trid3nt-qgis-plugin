@@ -1,0 +1,9 @@
+fetch_chirps_precipitation:
+- CHIRPS rainfall precipitation for a region and month
+- quasi-global monthly precipitation raster outside CONUS
+- monsoon season rainfall totals in India / Africa / South Asia
+- drought baseline precipitation for a data-sparse region
+- daily rainfall mm for an event date in the tropics
+- satellite-gauge blended precipitation grid for agriculture water balance
+- antecedent rainfall context for a flood outside radar coverage
+- 5km gridded precipitation millimeters by bbox and date

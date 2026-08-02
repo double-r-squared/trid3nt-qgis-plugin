@@ -1,0 +1,9 @@
+compute_movement_trajectory:
+- compute movement metrics from animal tracking points
+- speed turning angle and step length along a GPS track
+- trajectory path length net displacement and straightness
+- annotate a movebank track with per-segment movement statistics
+- how fast and how far did the tracked animal move
+- turn the telemetry fixes into a movement trajectory layer
+- movement speed and bearing per segment from timestamped points
+- straightness index of an animal migration path

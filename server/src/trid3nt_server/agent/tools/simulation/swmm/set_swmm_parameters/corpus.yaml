@@ -1,0 +1,9 @@
+set_swmm_parameters:
+- raise percent impervious to 60% on these subcatchments
+- halve the Horton max infiltration rate for the whole SWMM model
+- set the pervious Manning's n to 0.15 in this stormwater model
+- increase imperviousness on this subcatchment before rerunning
+- calibrate the SWMM infiltration decay constant
+- adjust roughness coefficients on the staged SWMM deck
+- scale down infiltration capacity for this urban drainage model
+- make this catchment less permeable before the next SWMM run

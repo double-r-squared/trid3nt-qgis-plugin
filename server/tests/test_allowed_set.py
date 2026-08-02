@@ -14,7 +14,7 @@ from __future__ import annotations
 
 import pytest
 
-from trid3nt_server.categories import (
+from trid3nt_server.agent.categories import (
     HOT_SET_TOOLS,
     AllowedToolSet,
     tools_for_category,
@@ -42,7 +42,7 @@ def test_fresh_allowed_set_equals_hot_set() -> None:
 
 def test_hot_set_tools_pass_validation() -> None:
     """Every hot-set tool must validate against a fresh AllowedToolSet."""
-    from trid3nt_server.categories import validate_function_call
+    from trid3nt_server.agent.categories import validate_function_call
 
     allowed = AllowedToolSet()
     for name in HOT_SET_TOOLS:
@@ -69,9 +69,9 @@ def test_dispatch_is_cumulative() -> None:
     allowed = AllowedToolSet()
     allowed.record_dispatch("compute_hillshade")
     allowed.record_dispatch("fetch_landcover")
-    allowed.record_dispatch("compute_zonal_statistics")
+    allowed.record_dispatch("clip_raster_to_polygon")
     snapshot = allowed.as_frozenset()
-    assert {"compute_hillshade", "fetch_landcover", "compute_zonal_statistics"}.issubset(
+    assert {"compute_hillshade", "fetch_landcover", "clip_raster_to_polygon"}.issubset(
         snapshot
     )
     # Hot set still present.
@@ -139,8 +139,8 @@ def test_secondary_category_open_surfaces_cross_listed_tool() -> None:
     damage_assessment becomes available when EITHER category is opened."""
     a1 = AllowedToolSet()
     a1.open_category("damage_assessment")
-    assert "run_pelicun_damage_assessment" in a1.as_frozenset()
+    assert "run_pelicun" in a1.as_frozenset()
 
     a2 = AllowedToolSet()
     a2.open_category("hazard_modeling")
-    assert "run_pelicun_damage_assessment" in a2.as_frozenset()
+    assert "run_pelicun" in a2.as_frozenset()

@@ -6,7 +6,7 @@ layers:
 
   * unit tests for the small ``runaway_guard`` module (thresholds, cheap-model
     halving, the ``LoopWatchdog`` state machine, honest abort messages);
-  * integration tests that drive ``server._stream_gemini_reply`` and assert the
+  * integration tests that drive ``server._stream_model_reply`` and assert the
     WALL-CLOCK and STEP-CAP guards each fire a clean honest abort -- while a
     normal short turn is left untouched.
 
@@ -19,11 +19,11 @@ from __future__ import annotations
 import asyncio
 import json
 from dataclasses import dataclass, field
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 
 import pytest
 
-from trid3nt_server.runaway_guard import (
+from trid3nt_server.agent.gates.runaway_guard import (
     ABORT_LOOP_WATCHDOG,
     ABORT_STEP_CAP,
     ABORT_WALL_CLOCK,
@@ -120,21 +120,8 @@ class _FakeSocket:
 
 
 def _fake_call_chunk(name: str, args: dict, call_id: str):
-    fn_call = MagicMock()
-    fn_call.name = name
-    fn_call.id = call_id
-    fn_call.args = args
-    part = MagicMock()
-    part.function_call = fn_call
-    part.text = None
-    content = MagicMock()
-    content.parts = [part]
-    cand = MagicMock()
-    cand.content = content
-    chunk = MagicMock()
-    chunk.candidates = [cand]
-    chunk.text = None
-    return chunk
+    """A fake turn (scripted-provider dict) emitting ONE function call."""
+    return {"tool_call": {"name": name, "args": args, "call_id": call_id}}
 
 
 def _abort_codes(sock: _FakeSocket) -> list[str]:
@@ -152,15 +139,15 @@ def _abort_codes(sock: _FakeSocket) -> list[str]:
 
 
 def _settings():
-    from trid3nt_server.server import GeminiSettings
+    from trid3nt_server.server import ModelSettings
 
-    return GeminiSettings(
+    return ModelSettings(
         model="gemini-2.5-pro", project="t", location="us-central1", use_vertex=True
     )
 
 
 @pytest.mark.asyncio
-async def test_wall_clock_guard_aborts_a_slow_turn(monkeypatch):
+async def test_wall_clock_guard_aborts_a_slow_turn(monkeypatch, fake_llm):
     """A turn that overruns its wall-clock budget aborts with AGENT_TURN_TIMEOUT.
 
     Round 1 dispatches normally (proving the in-flight round is NOT killed
@@ -171,15 +158,9 @@ async def test_wall_clock_guard_aborts_a_slow_turn(monkeypatch):
     from trid3nt_server.server import SessionState
     from trid3nt_contracts import new_ulid
 
-    def _infinite_calls():
-        i = 0
-        while True:
-            i += 1
-            yield iter([_fake_call_chunk("fetch_dem", {"bbox": [0, 0, 1, 1]}, f"c{i}")])
-
-    chunks = _infinite_calls()
-    fake_client = MagicMock()
-    fake_client.models.generate_content_stream.side_effect = lambda **_: next(chunks)
+    fake_llm.on_call(
+        lambda i, _c: _fake_call_chunk("fetch_dem", {"bbox": [0, 0, 1, 1]}, f"c{i + 1}")
+    )
 
     dispatched = 0
 
@@ -195,11 +176,10 @@ async def test_wall_clock_guard_aborts_a_slow_turn(monkeypatch):
     sock = _FakeSocket()
     state = SessionState(session_id=new_ulid())
 
-    with patch.object(agent_server, "build_client", return_value=fake_client), \
-         patch.object(agent_server, "_invoke_tool_via_emitter", side_effect=_slow_invoke), \
+    with patch.object(agent_server, "_invoke_tool_via_emitter", side_effect=_slow_invoke), \
          patch.object(agent_server, "build_tool_declarations", return_value=[]), \
          patch.object(agent_server, "max_turn_seconds", return_value=0.05):
-        await agent_server._stream_gemini_reply(sock, state, _settings(), "x", "research")
+        await agent_server._stream_model_reply(sock, state, _settings(), "x", "research")
 
     # Round 1 fully ran (the in-flight await was not killed); the wall-clock then
     # aborted before a runaway could continue.
@@ -210,7 +190,7 @@ async def test_wall_clock_guard_aborts_a_slow_turn(monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_step_cap_guard_aborts_a_varied_runaway(monkeypatch):
+async def test_step_cap_guard_aborts_a_varied_runaway(monkeypatch, fake_llm):
     """A varied-tool runaway (watchdog never trips) is fail-stopped at the step cap.
 
     With the cap TIGHTENED below MAX_TURN_ITERATIONS (the cheap-tier shape) the
@@ -219,17 +199,11 @@ async def test_step_cap_guard_aborts_a_varied_runaway(monkeypatch):
     from trid3nt_server.server import SessionState
     from trid3nt_contracts import new_ulid
 
-    def _varied_calls():
-        i = 0
-        while True:
-            i += 1
-            # A different tool+args each round so the loop watchdog never trips
-            # -- only the STEP CAP can stop this runaway.
-            yield iter([_fake_call_chunk("fetch_dem", {"n": i}, f"c{i}")])
-
-    chunks = _varied_calls()
-    fake_client = MagicMock()
-    fake_client.models.generate_content_stream.side_effect = lambda **_: next(chunks)
+    # A different tool+args each round so the loop watchdog never trips --
+    # only the STEP CAP can stop this runaway.
+    fake_llm.on_call(
+        lambda i, _c: _fake_call_chunk("fetch_dem", {"n": i + 1}, f"c{i + 1}")
+    )
 
     dispatched = 0
 
@@ -241,11 +215,10 @@ async def test_step_cap_guard_aborts_a_varied_runaway(monkeypatch):
     sock = _FakeSocket()
     state = SessionState(session_id=new_ulid())
 
-    with patch.object(agent_server, "build_client", return_value=fake_client), \
-         patch.object(agent_server, "_invoke_tool_via_emitter", side_effect=_invoke), \
+    with patch.object(agent_server, "_invoke_tool_via_emitter", side_effect=_invoke), \
          patch.object(agent_server, "build_tool_declarations", return_value=[]), \
          patch.object(agent_server, "step_cap_for_model", return_value=3):
-        await agent_server._stream_gemini_reply(sock, state, _settings(), "x", "research")
+        await agent_server._stream_model_reply(sock, state, _settings(), "x", "research")
 
     # Stopped at the (tightened) step cap, not before, not infinitely.
     assert dispatched == 3
@@ -258,7 +231,7 @@ async def test_normal_turn_not_aborted_by_guards(monkeypatch):
     """A normal short turn (one tool, then narrate) is NOT touched by any guard."""
     from trid3nt_server import server as agent_server
     from trid3nt_server.server import SessionState
-    from trid3nt_server.adapter import FunctionCallEvent, TextDeltaEvent
+    from trid3nt_server.agent.adapters.adapter import FunctionCallEvent, TextDeltaEvent
     from trid3nt_contracts import new_ulid
 
     # Turn 1: one function call; turn 2: narrate + end.
@@ -279,9 +252,8 @@ async def test_normal_turn_not_aborted_by_guards(monkeypatch):
 
     with patch.object(agent_server, "stream_events_with_contents", _fake_stream), \
          patch.object(agent_server, "_invoke_tool_via_emitter", side_effect=_invoke), \
-         patch.object(agent_server, "build_tool_declarations", return_value=[]), \
-         patch.object(agent_server, "build_client", return_value=None):
-        await agent_server._stream_gemini_reply(sock, state, _settings(), "where is X", "research")
+         patch.object(agent_server, "build_tool_declarations", return_value=[]):
+        await agent_server._stream_model_reply(sock, state, _settings(), "where is X", "research")
 
     # No guard abort on the wire; the narration landed.
     assert _abort_codes(sock) == []

@@ -1,0 +1,9 @@
+fetch_ghsl_population:
+- how many people live in this area outside the US
+- global gridded population raster for a non-US city
+- GHSL GHS-POP residential population grid for a bbox
+- population at risk inside a flood or wildfire footprint anywhere on Earth
+- people per 100m cell for an international AOI
+- JRC global human settlement population persons per cell
+- exposure population density input for a non-US hazard footprint
+- cross-check population against HRSL or WorldPop with a different methodology

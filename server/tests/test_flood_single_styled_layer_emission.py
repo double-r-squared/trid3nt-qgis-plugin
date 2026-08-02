@@ -10,7 +10,7 @@ map layers of the same peak-depth data:
 The viridis one is a redundant / raw duplicate. These tests lock the workflow
 side of the fix: the ONE layer the workflow surfaces (postprocess_flood's
 ``LayerURI`` -> the published ``envelope.layers[0]`` -> the
-``run_model_flood_scenario`` wrapper return) must ALWAYS carry the canonical
+``sfincs_flood`` wrapper return) must ALWAYS carry the canonical
 ``continuous_flood_depth`` style preset and a clear human-readable name, and the
 workflow must never emit a second, styleless (viridis-defaulting) peak-depth
 layer of its own.
@@ -31,12 +31,13 @@ from unittest.mock import patch
 
 import pytest
 
-from trid3nt_server.tools.publish_layer import PublishLayerError
-from trid3nt_server.workflows.model_flood_scenario import (
+from trid3nt_server.agent.tools import TOOL_REGISTRY, RegisteredTool
+from trid3nt_server.agent.tools.publish_layer.publish_layer import PublishLayerError
+from trid3nt_server.agent.workflows.sfincs.flood.flood import (
     model_flood_scenario,
-    run_model_flood_scenario,
+    sfincs_flood,
 )
-from trid3nt_server.workflows.postprocess_flood import (
+from trid3nt_server.agent.workflows.sfincs.postprocess_sfincs import (
     FLOOD_DEPTH_STYLE_PRESET,
     postprocess_flood,
 )
@@ -76,6 +77,26 @@ def _mock_layer_uri(prefix: str) -> LayerURI:
         style_preset="continuous_dem",
         role="input",
         units="meters",
+    )
+
+
+def _river_geometry_patch(return_value: LayerURI | None = None):
+    """Patch the fetch_river_geometry registry seam (ADR 0074).
+
+    flood.py no longer imports the twin directly -- it resolves
+    ``TOOL_REGISTRY["fetch_river_geometry"].fn`` at call time. RegisteredTool
+    is frozen, so swap the whole entry for one carrying a stub fn (mirrors
+    ``_patch_copernicus_seam`` in test_data_fetch.py).
+    """
+    layer = return_value if return_value is not None else _mock_layer_uri("rivers")
+    orig = TOOL_REGISTRY["fetch_river_geometry"]
+    return patch.dict(
+        TOOL_REGISTRY,
+        {
+            "fetch_river_geometry": RegisteredTool(
+                metadata=orig.metadata, fn=lambda **_kw: layer, module=orig.module
+            )
+        },
     )
 
 
@@ -180,19 +201,19 @@ def _patch_chain(publish_side_effect):  # noqa: ANN001, ANN201
         return _run_result_ok(run_id, handle.handle_id)
 
     patches = [
-        patch("trid3nt_server.workflows.model_flood_scenario.fetch_dem", return_value=_mock_layer_uri("dem")),
-        patch("trid3nt_server.workflows.model_flood_scenario.fetch_landcover", return_value=_landcover_result()),
-        patch("trid3nt_server.workflows.model_flood_scenario.fetch_river_geometry", return_value=_mock_layer_uri("rivers")),
-        patch("trid3nt_server.workflows.model_flood_scenario.lookup_precip_return_period", return_value=_precip_result()),
-        patch("trid3nt_server.workflows.model_flood_scenario.build_sfincs_model", return_value=_model_setup()),
-        patch("trid3nt_server.workflows.model_flood_scenario.run_solver", return_value=handle),
-        patch("trid3nt_server.workflows.model_flood_scenario.wait_for_completion", side_effect=_wfc),
+        patch("trid3nt_server.agent.workflows.sfincs.flood.flood.fetch_dem", return_value=_mock_layer_uri("dem")),
+        patch("trid3nt_server.agent.workflows.sfincs.flood.flood.fetch_landcover", return_value=_landcover_result()),
+        _river_geometry_patch(),
+        patch("trid3nt_server.agent.workflows.sfincs.flood.flood.lookup_precip_return_period", return_value=_precip_result()),
+        patch("trid3nt_server.agent.workflows.sfincs.flood.flood.build_sfincs_model", return_value=_model_setup()),
+        patch("trid3nt_server.agent.workflows.sfincs.flood.flood.run_solver", return_value=handle),
+        patch("trid3nt_server.agent.workflows.sfincs.flood.flood.wait_for_completion", side_effect=_wfc),
         patch(
-            "trid3nt_server.workflows.model_flood_scenario.postprocess_flood",
+            "trid3nt_server.agent.workflows.sfincs.flood.flood.postprocess_flood",
             return_value=([_flood_layer(run_id)], _DEPTH_METRICS),
         ),
         patch(
-            "trid3nt_server.workflows.model_flood_scenario.publish_layer",
+            "trid3nt_server.agent.workflows.sfincs.flood.flood.publish_layer",
             side_effect=publish_side_effect,
         ),
     ]
@@ -212,7 +233,7 @@ def test_postprocess_flood_layer_is_styled_and_single() -> None:
 
     with (
         patch(
-            "trid3nt_server.workflows.postprocess_flood._resolve_run_output_to_local",
+            "trid3nt_server.agent.workflows.sfincs.postprocess_sfincs._resolve_run_output_to_local",
             return_value=Path("/tmp/fake.nc"),
         ),
         patch(
@@ -221,11 +242,11 @@ def test_postprocess_flood_layer_is_styled_and_single() -> None:
             # time-varying output (only hmax/zsmax) frame_cogs/labels are empty,
             # so postprocess_flood emits EXACTLY the single peak layer (the
             # styled-single-layer contract this test guards).
-            "trid3nt_server.workflows.postprocess_flood._extract_depth_frames",
+            "trid3nt_server.agent.workflows.sfincs.postprocess_sfincs._extract_depth_frames",
             return_value=(Path("/tmp/fake_cog.tif"), dict(_DEPTH_METRICS), [], []),
         ),
         patch(
-            "trid3nt_server.workflows.postprocess_flood._upload_cog_to_runs_bucket",
+            "trid3nt_server.agent.workflows.sfincs.postprocess_sfincs._upload_cog_to_runs_bucket",
             return_value=cog_uri,
         ),
         patch("pathlib.Path.unlink", return_value=None),
@@ -322,7 +343,7 @@ async def test_workflow_drops_raw_layer_when_publish_fails() -> None:
 
 @pytest.mark.asyncio
 async def test_wrapper_returns_single_styled_layer_uri() -> None:
-    """run_model_flood_scenario returns a single styled LayerURI on success — the
+    """sfincs_flood returns a single styled LayerURI on success — the
     one object emit_tool_call feeds to add_loaded_layer (one map layer, styled)."""
     run_id, patches = _patch_chain(
         publish_side_effect=lambda **kw: _published_wms_url(kw["layer_id"])
@@ -332,7 +353,7 @@ async def test_wrapper_returns_single_styled_layer_uri() -> None:
     with ExitStack() as stack:
         for p in patches:
             stack.enter_context(p)
-        result = await run_model_flood_scenario(
+        result = await sfincs_flood(
             bbox=_BBOX, return_period_yr=100, duration_hr=24
         )
 

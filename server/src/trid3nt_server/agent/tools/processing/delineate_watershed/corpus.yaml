@@ -1,0 +1,8 @@
+delineate_watershed:
+- delineate the watershed above this point
+- what area drains to this gauge / outfall
+- catchment boundary for this stream crossing
+- drainage basin polygon upstream of my pour point
+- show the contributing area for this dam site
+- watershed boundary from the DEM at this location
+- how big is the basin that drains to here

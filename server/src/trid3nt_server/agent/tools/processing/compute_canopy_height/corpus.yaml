@@ -1,0 +1,9 @@
+compute_canopy_height:
+- how tall are the trees in this small forest AOI
+- estimate the canopy height across this preserve and paint it on the map
+- show me a tree-canopy-top height raster for this neighborhood
+- run the canopy height model on the NAIP imagery for this bbox
+- give me per-pixel forest height in metres over this area so i can do zonal stats on it
+- what's the tree height distribution across this woodland patch
+- produce an estimated canopy height layer from sub-metre aerial imagery here
+- map the height of the tree cover for this small ag field

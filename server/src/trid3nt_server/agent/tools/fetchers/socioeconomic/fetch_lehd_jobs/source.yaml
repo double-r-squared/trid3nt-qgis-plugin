@@ -1,0 +1,213 @@
+# Router source spec (trigger wave, ADR 0084) -- LEHD LODES tract-jobs choropleth.
+# Twin: fetch_lehd_jobs.py (HYBRID vector-FGB + JOIN-on-GEOID). The values leg is
+# the per-state LODES bulk gzip-CSV whole-object download (join.values.values_hook),
+# NOT the census Data-API the built-in join.values leg speaks.
+schema_version: v1
+name: fetch_lehd_jobs
+source_class: lehd_lodes
+error_prefix: LEHD_JOBS
+input_error_suffix: INPUT_INVALID
+shape: vector-fgb
+supports_global_query: false
+endpoints:
+  geometry:
+    url: https://tigerweb.geo.census.gov/arcgis/rest/services/Generalized_ACS2023/Tracts_Blocks/MapServer/4/query
+auth:
+  mode: none
+  user_agent: trid3nt/0.1 (Hazard Modeling Agent; https://github.com/double-r-squared/trid3nt-qgis-plugin;
+    agent@trid3nt.dev)
+params:
+  bbox:
+    type: bbox
+    required: true
+    quantize: round_6dp
+  segment:
+    type: str
+    default: total
+  year:
+    type: int
+    default: 2022
+    min: 2002
+    max: 2030
+gates:
+  max_features: 20000
+ingest:
+  query_template:
+    out_fields: GEOID,NAME,STATE,COUNTY,TRACT
+    f: geojson
+    order_by: OBJECTID ASC
+  pagination:
+    mode: result_offset
+    page_size: 1000
+  properties:
+  - geoid
+  - name
+  - state
+  - county
+  - segment
+  - value
+  - units
+  - year
+join:
+  variable_param: segment
+  value_field: segment
+  allow_raw_code: false
+  extra_props:
+    year:
+      param: year
+  geometry:
+    endpoint: geometry
+    key_field: GEOID
+    keep:
+    - NAME
+    - STATE
+    - COUNTY
+  values:
+    scope_by:
+    - STATE
+    values_hook:
+      plan: lehd_jobs.values_plan
+      parse: lehd_jobs.values_parse
+    variables:
+      total:
+        cols:
+        - C000
+        code: value
+        kind: value
+        units: jobs
+        label: total jobs
+      low_wage:
+        cols:
+        - CE01
+        code: value
+        kind: value
+        units: jobs
+        label: jobs <= $1250/month
+      mid_wage:
+        cols:
+        - CE02
+        code: value
+        kind: value
+        units: jobs
+        label: jobs $1251-$3333/month
+      high_wage:
+        cols:
+        - CE03
+        code: value
+        kind: value
+        units: jobs
+        label: jobs > $3333/month
+      goods:
+        cols:
+        - CNS01
+        - CNS02
+        - CNS03
+        - CNS04
+        - CNS05
+        code: value
+        kind: value
+        units: jobs
+        label: goods-producing jobs (agri/mining/util/constr/mfg)
+      trade_transport:
+        cols:
+        - CNS06
+        - CNS07
+        - CNS08
+        - CNS09
+        code: value
+        kind: value
+        units: jobs
+        label: trade/transport/info jobs
+      services:
+        cols:
+        - CNS10
+        - CNS11
+        - CNS12
+        - CNS13
+        - CNS14
+        - CNS15
+        - CNS16
+        - CNS17
+        - CNS18
+        code: value
+        kind: value
+        units: jobs
+        label: service-sector jobs
+      public:
+        cols:
+        - CNS20
+        code: value
+        kind: value
+        units: jobs
+        label: public-administration jobs
+      retail:
+        cols:
+        - CNS07
+        code: value
+        kind: value
+        units: jobs
+        label: retail-trade jobs
+      manufacturing:
+        cols:
+        - CNS05
+        code: value
+        kind: value
+        units: jobs
+        label: manufacturing jobs
+      health:
+        cols:
+        - CNS15
+        code: value
+        kind: value
+        units: jobs
+        label: health-care/social-assistance jobs
+normalize:
+  crs: EPSG:4326
+  units: jobs
+  quantity: lehd_jobs
+output:
+  layer_type: vector
+  ext: fgb
+  role: primary
+  style_preset: lehd_jobs_choropleth
+  emit_bbox: true
+cache:
+  ttl_class: static-30d
+payload_estimate:
+  model: bbox_area
+  mb_per_sq_deg: 3.0
+  floor_mb: 0.02
+  ceil_mb: 80.0
+caveats:
+- US-only; a bbox over ocean / outside the US -> header-only FGB (honest-empty)
+- LODES8 workplace-area jobs aggregated block->tract; a state with no file for the year -> LEHD_JOBS_UPSTREAM_ERROR
+- keyless (TIGERweb tract geometry + LODES WAC bulk gzip-CSV); no API key required
+docstring: "Census LEHD LODES workplace employment as a tract choropleth FlatGeobuf.\n\nUse this (not\
+  \ fetch_census_acs, and go past geocode_location) when you want LEHD LODES workplace JOBS/employment\
+  \ counts.\n\nAggregates the Census Bureau's LODES Workplace Area Characteristics (WAC)\nblock-level\
+  \ job counts up to census tract and joins them to authoritative\ntract geometry (TIGERweb, keyless),\
+  \ returning a job-density choropleth\nclipped to ``bbox``. WAC counts jobs at the *workplace* -- \"\
+  where the jobs\nare\" -- the canonical economic-exposure / recovery surface to intersect with\na hazard\
+  \ footprint (\"how many jobs sit inside the inundation extent\"). The\n``segment`` param selects total\
+  \ jobs, a wage tier, or a sector grouping.\n\n**When to use:**\n- \"How many jobs are inside this flood\
+  \ / fire / plume footprint?\" (feed the\n  choropleth INTO ``spatial_query`` over a hazard polygon).\n\
+  - \"Show employment density by tract\" / daytime-population proxy for a metro.\n- Recovery planning:\
+  \ tracts concentrating jobs at risk, by wage or sector.\n\n**When NOT to use:**\n- For *residents* /\
+  \ who lives there -> ``fetch_census_acs`` or\n  ``fetch_hrsl_population``.\n- For a gridded population\
+  \ *raster* -> ``fetch_hrsl_population``.\n- For areas outside the U.S. -> LODES is U.S.-only; an empty\
+  \ FGB is returned.\n\n**Parameters:**\n    bbox: ``(min_lon, min_lat, max_lon, max_lat)`` in EPSG:4326.\
+  \ Required;\n        ``supports_global_query=False``. County-or-metro extent. Example\n        for downtown\
+  \ Houston TX: ``(-95.45, 29.65, -95.25, 29.85)``.\n    segment: friendly segment name -- ``total``,\
+  \ ``low_wage``, ``mid_wage``,\n        ``high_wage``, ``goods``, ``trade_transport``, ``services``,\n\
+  \        ``public``, ``retail``, ``manufacturing``, ``health``. Default\n        ``\"total\"``. Unknown\
+  \ -> ``LehdJobsInputError``.\n    year: LODES8 data year. Default ``2022``. A year with no file for\
+  \ a\n        state in the bbox -> ``LehdJobsUpstreamError``.\n\n**Returns:**\n    ``LayerURI`` -> FlatGeobuf.\
+  \ Each feature is a Polygon (census tract) in\n    EPSG:4326. Properties: ``geoid`` (str, 11-digit),\
+  \ ``name`` (str),\n    ``state`` (str FIPS), ``county`` (str FIPS), ``segment`` (str),\n    ``value``\
+  \ (float|null -- aggregated job count), ``units`` (``\"jobs\"``),\n    ``year`` (int). ``layer_type=\"\
+  vector\"``, ``role=\"primary\"``,\n    ``style_preset=\"lehd_jobs_choropleth\"``.\n\n**Error types:**\n\
+  \    - ``LehdJobsInputError``: bad bbox / unknown segment / bad year\n      (retryable=False).\n   \
+  \ - ``LehdJobsUpstreamError``: TIGERweb or LODES network / HTTP / parse\n      failure, or a year missing\
+  \ for a state (retryable=True).\n    - ``LehdJobsEmptyError``: no tracts in bbox (not raised by default\
+  \ -- an\n      empty FGB is returned instead).\n\nCache: ``static-30d``, ``source_class=\"lehd_lodes\"\
+  ``. Cache key is bbox\n(6 dp) + segment + year. No API key required."

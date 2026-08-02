@@ -1,0 +1,130 @@
+# Router source spec (keyed/misc-leftovers wave, keyed http_json multi-URL, ADR 0071).
+# Twin: fetch_ebird_observations.py -- Cornell Lab eBird recent observations, keyed.
+# bbox tiled into 50 km circles (build_request multi-GET), dedup-by-subId + bbox
+# re-clip (parse_response), 401/403->AUTH 4xx->INPUT split (classify_status).
+schema_version: v1
+
+name: fetch_ebird_observations
+source_class: ebird
+shape: vector-fgb
+supports_global_query: false
+
+endpoints:
+  data:
+    url: "https://api.ebird.org/v2/data/obs/geo/recent"
+auth:
+  mode: api_key_env
+  api_key_env:
+    var: TRID3NT_EBIRD_API_KEY
+    required: true
+  user_agent: "trid3nt/0.1 (Hazard Modeling Agent; https://github.com/double-r-squared/trid3nt-qgis-plugin; agent@trid3nt.dev)"
+
+params:
+  species_code: {type: str, required: true}
+  bbox: {type: bbox, required: true, quantize: round_6dp}
+  days_back: {type: int, default: 30, min: 1, max: 30}
+  api_key: {type: str, schema_optional: true}
+  secret_ref: {type: str, schema_optional: true}
+
+hooks:
+  build_request: ebird_observations.build_request
+  parse_response: ebird_observations.parse_response
+  classify_status: ebird_observations.classify_status
+
+ingest:
+  properties:
+    - subId
+    - obsDt
+    - locName
+    - howMany
+    - comName
+    - sciName
+    - speciesCode
+
+normalize:
+  crs: "EPSG:4326"
+
+output:
+  layer_type: vector
+  ext: fgb
+  role: context
+  style_preset: "ebird_observations"
+  emit_bbox: false
+
+cache:
+  ttl_class: dynamic-1h
+payload_estimate:
+  model: per_feature
+  features_per_sq_deg: 50.0
+  kb_per_feature: 0.3
+  floor_mb: 0.001
+
+caveats:
+  - "Cornell Lab eBird recent (<=30 day) bird sightings as points, keyed (api_key -> secret_ref -> TRID3NT_EBIRD_API_KEY env). bbox tiled into 50 km radius queries + deduped by subId + re-clipped to the bbox. No key -> a credential-shaped EBIRD_MISSING_KEY; a rejected key -> EBIRD_AUTH_ERROR; empty result -> an honest header-only FGB."
+
+docstring: |-
+  Cornell Lab eBird Tier-2 recent-observations fetcher.
+
+  Use this when: the agent needs recent bird sightings for ecological
+  analysis or display -- e.g. mapping Bewick's Wren observations over a
+  wildfire footprint, overlaying recent waterfowl sightings on a flooded
+  refuge, or summarizing avian biodiversity within a habitat-restoration
+  bbox. Returns one FlatGeobuf point feature per (eBird subId, speciesCode)
+  sighting reported in the last ``days_back`` days inside the requested
+  bbox. eBird is the world's largest citizen-science bird database
+  (>1B observations to date) -- the right tool for "what birds were seen
+  here recently".
+
+  Do NOT use this for: HISTORICAL (>30 days back) sightings -- eBird's API
+  caps at 30 days; use GBIF or eBird's bulk-download for longer windows.
+  Hot-spot checklists per location (different endpoint:
+  ``data/obs/{regionCode}/recent/hotspot``). Rare-bird alerts (eBird has a
+  different endpoint with sub-hour latency; we use the geo/recent endpoint
+  deliberately for the dynamic-1h cache). Tier-1 GBIF queries (use
+  ``fetch_gbif_occurrences`` for keyless species-occurrence fetch).
+  Protected-area POLYGONS (use ``fetch_wdpa_protected_areas``). Tracking
+  data (Movebank -- different tool).
+
+  eBird requires a free API key (registration at
+  ``https://ebird.org/api/keygen``). The tool resolves the key in this
+  order: (1) explicit ``api_key=`` kwarg, (2) ``secret_ref=`` per-Case
+  secret via ``Persistence.get_secret_value`` (production path),
+  (3) ``TRID3NT_EBIRD_API_KEY`` env var (dev convenience). If none of the
+  three resolve a key, raises ``EBirdMissingKeyError`` BEFORE any network
+  call -- the agent surface uses this to route a "needs a key" message
+  via the secrets panel.
+
+  eBird does NOT expose a bbox query -- only radius queries around a
+  ``(lat, lng)`` point. We tile the bbox into ~50 km circles (eBird's max
+  radius) and dedupe by ``subId``; the row/col grid intentionally
+  overlaps tiles so we don't miss slivers between rows/cols.
+
+  Params:
+      species_code: eBird 4-7 character species code (e.g. ``"bewwre"`` for
+          Bewick's Wren, ``"amrob"`` for American Robin, ``"laggul"`` for
+          Laughing Gull). Codes are at
+          ``https://ebird.org/science/use-ebird-data/ebird-taxonomy``.
+      bbox: ``(west, south, east, north)`` in EPSG:4326 (WGS84 decimal degrees).
+      days_back: how many days of recent observations to return (1-30;
+          default 30). eBird's API caps this at 30.
+      api_key: optional explicit API key -- highest-priority resolution path.
+      secret_ref: optional ``SecretRecord`` (from per-Case secrets panel)
+          -- resolved via ``Persistence.get_secret_value`` at invocation time.
+
+  Returns:
+      A ``LayerURI`` pointing at a FlatGeobuf in the cache bucket:
+      ``s3://trid3nt-cache/cache/dynamic-1h/ebird/<key>.fgb``
+      containing the observation points clipped to the requested bbox.
+      ``layer_type="vector"``, ``role="context"``, ``units=None``.
+
+  Raises:
+      ``EBirdMissingKeyError``: no API key resolved from any of the three paths.
+      ``EBirdAuthError``: API rejected the key (revoked / rate-limited).
+      ``EBirdInputError``: bad bbox, days_back, species_code, or unknown species.
+      ``EBirdUpstreamError``: eBird API 5xx / network failure (retryable).
+
+  FR-CE-8: Routed through ``read_through`` with ``ttl_class="dynamic-1h"``
+  so identical ``(species_code, bbox, days_back)`` calls inside the same
+  hour reuse the cached FlatGeobuf and a top-of-hour crossing forces a
+  refresh. The cache key intentionally does NOT include the api_key --
+  the underlying observations don't vary by caller.

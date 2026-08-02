@@ -1,0 +1,94 @@
+# Router source spec (finisher-mechanisms wave, ADR 0081).
+# Twin: fetch_fault_sources.py -- FOLDED via build_request/parse_response +
+# the constant_cache two-tier cache (10.6 MB GEM GAF downloaded once, AOI-
+# filtered in the parse hook) + variant_by_emptiness (zero-fault AOI -> record
+# dict) + the post-emit envelope hook (kinematic records -> FaultSourcesResult).
+schema_version: v1
+name: fetch_fault_sources
+source_class: gem_active_faults
+error_prefix: FAULT_SOURCES
+shape: vector-fgb
+supports_global_query: true
+endpoints:
+  data:
+    url: https://raw.githubusercontent.com/GEMScienceTools/gem-global-active-faults/master/geojson/gem_active_faults_harmonized.geojson
+auth:
+  mode: none
+  user_agent: trid3nt/0.1 (Hazard Modeling Agent; https://github.com/double-r-squared/trid3nt-qgis-plugin;
+    agent@trid3nt.dev)
+params:
+  bbox:
+    type: bbox
+    required: true
+    quantize: round_6dp
+  catalog:
+    type: enum
+    required: false
+    default: gem
+    values:
+    - gem
+    lowercase: true
+hooks:
+  build_request: fault_sources.build_request
+  parse_response: fault_sources.parse_response
+  envelope: fault_sources.envelope
+ingest:
+  http_source: {}
+  constant_cache:
+    file_id: gem_active_faults_harmonized
+    ext: geojson
+  properties:
+  - name
+  - net_slip_rate_mm_yr
+  - dip_deg
+  - rake_deg
+  - upper_seis_depth_km
+  - lower_seis_depth_km
+  - slip_type
+  - catalog_name
+normalize:
+  crs: EPSG:4326
+output:
+  layer_type: vector
+  ext: fgb
+  role: context
+  style_preset: fault_line
+  variant_by_emptiness: fault_sources.empty_record
+  result_model: FaultSourcesResult
+cache:
+  ttl_class: static-30d
+payload_estimate:
+  model: bbox_area
+  floor_mb: 0.2
+  ceil_mb: 0.2
+docstring: "Fetch REAL active-fault seismic sources (traces + slip rates) for an AOI.\n\nRetrieves harmonized\
+  \ active-fault traces from the GEM Global Active Faults\nDatabase and returns the kinematic source records\
+  \ the OpenQuake deck builder\nturns into physics-based ``simpleFaultSource`` seismic sources (each with\
+  \ a\nmoment-balanced truncated Gutenberg-Richter MFD derived from the fault's\nslip rate). This is the\
+  \ REAL-SOURCE path for PSHA -- hazard that peaks ON the\nactual fault trace, not a synthetic uniform-rate\
+  \ rectangle over the AOI.\n\nWhen to use:\n    - The user asks for seismic/earthquake hazard \"along\"\
+  \ a named fault or\n      in a tectonically active area (\"seismic hazard along the San Andreas\",\n\
+  \      \"earthquake PSHA for the SF Bay\", \"PGA map near the Hayward fault\").\n    - You are about\
+  \ to build an OpenQuake classical-PSHA deck and want REAL\n      fault sources instead of the synthetic\
+  \ AOI area source.\n    - The user wants to know which active faults pass through an area and\n    \
+  \  how fast they slip.\n\nWhen NOT to use:\n    - Historical earthquake CATALOGS / observed events --\
+  \ this is the fault\n      SOURCE model (where future ruptures nucleate), not a record of past\n   \
+  \   quakes.\n    - Ground-shaking outputs / hazard rasters -- those are produced by the\n      OpenQuake\
+  \ run that CONSUMES these sources, not by this fetcher.\n    - Tsunami / surge / flood hazard -- unrelated\
+  \ engines.\n\nParameters:\n    bbox: ``[min_lon, min_lat, max_lon, max_lat]`` in EPSG:4326. Required.\n\
+  \        Example (SF peninsula): ``[-122.55, 37.45, -122.15, 37.90]``.\n    catalog: source catalog.\
+  \ Only ``\"gem\"`` (GEM Global Active Faults) is\n        supported today.\n\nReturns:\n    On a NON-empty\
+  \ fetch: a ``FaultSourcesResult`` -- a renderable vector\n    ``LayerURI`` (the fault traces AUTO-RENDER\
+  \ on the map as red/orange lines;\n    do NOT call ``publish_layer`` on it) that ALSO carries the source-model\n\
+  \    records on its ``faults`` field (each ``{name, geometry (lon/lat trace),\n    net_slip_rate_mm_yr,\
+  \ dip_deg, rake_deg, upper_seis_depth_km,\n    lower_seis_depth_km, slip_type, catalog_name}``), plus\
+  \ ``catalog``,\n    ``fault_count``, and ``source``. Pass ``.faults`` straight to the worker's\n   \
+  \ ``render_fault_source_model_xml``.\n\n    On an EMPTY fetch: a plain ``dict`` with ``fault_count=0``,\
+  \ an empty\n    ``faults`` list, and a typed ``note`` -- and NO layer (see below).\n\nHonest degrade\
+  \ (data-source fallback norm):\n    An AOI with NO mapped active faults returns an EMPTY ``faults``\
+  \ list and\n    a typed ``note`` -- it is NOT an error, the tool NEVER fabricates a fault,\n    and\
+  \ (the honesty gate) NO map layer is produced, so a \"fault lines\n    displayed\" claim is never grounded\
+  \ when nothing was drawn. The caller can\n    honestly report \"no mapped active faults here\" (and\
+  \ fall back to the\n    synthetic area source if a run is still wanted).\n\nRaises:\n    FaultSourcesInputError:\
+  \ malformed bbox or unknown catalog (caller bug).\n    FaultSourcesUpstreamError: GEM GAF download failed\
+  \ and no cache exists."

@@ -1,0 +1,20 @@
+compute_cross_section:
+- draw a section view of the ground and water surface along this line
+- plot the flood depth along the road through this neighborhood
+- give me a cross-section profile of the head surface versus the land surface across the seepage zone
+- overlay the DEM and the bathymetry along this transect so I can see bank to channel
+- show me the freeboard along the levee, ground line versus water surface on one chart
+- how deep is the inundation at each point along this drawn line
+- sample the flood layer along this transect and chart distance versus depth
+- compare the pre-event and post-event surface along this section line
+# cull pass 2 (2026-07-27): terrain-profile phrasings re-homed from
+# compute_terrain_profile (cut on live replication proof; compute_cross_section
+# is the surviving generic sample-along-line tool).
+- show the elevation profile across this ridge
+- plot the terrain profile along the road I drew
+- what does the ground look like along this transect, height versus distance
+- give me a long profile of the valley floor from the DEM
+- draw an elevation cross-section of the hillside along this line
+- overlay the bare-earth DEM and the topo-bathy elevation along this section
+- sample the 3DEP elevation along this path and chart it
+- how does the ground rise and fall along this drawn line

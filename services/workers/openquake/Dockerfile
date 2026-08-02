@@ -17,7 +17,7 @@
 # memory). This is the single biggest difference from the SWMM/MODFLOW workers.
 #
 # MULTI-STAGE (container-hygiene norm): a `builder` stage installs the wheels
-# into a venv at /opt/grace2/.venv; the final stage copies ONLY that venv + the
+# into a venv at /opt/trid3nt/.venv; the final stage copies ONLY that venv + the
 # entrypoint onto a fresh python:slim. openquake-engine pulls a large scientific
 # stack (numpy/scipy/pandas/h5py/shapely/rtree) as manylinux wheels, so no
 # compiler is needed at runtime; the multi-stage split keeps pip's wheel/build
@@ -31,11 +31,11 @@
 
 # --------------------------------------------------------------------------- #
 # Stage 1 — builder: resolve + install openquake-engine into a self-contained
-# venv. Nothing from this stage except /opt/grace2/.venv reaches the final image.
+# venv. Nothing from this stage except /opt/trid3nt/.venv reaches the final image.
 # --------------------------------------------------------------------------- #
 FROM public.ecr.aws/docker/library/python:3.11-slim-bookworm AS builder
 
-ENV VENV=/opt/grace2/.venv \
+ENV VENV=/opt/trid3nt/.venv \
     PIP_NO_CACHE_DIR=1 \
     PIP_DISABLE_PIP_VERSION_CHECK=1
 
@@ -88,27 +88,27 @@ RUN apt-get update \
     && rm -rf /var/lib/apt/lists/*
 
 # Copy ONLY the resolved venv from the builder — the hygiene payoff.
-ENV VENV=/opt/grace2/.venv
-COPY --from=builder /opt/grace2/.venv /opt/grace2/.venv
+ENV VENV=/opt/trid3nt/.venv
+COPY --from=builder /opt/trid3nt/.venv /opt/trid3nt/.venv
 ENV PATH="$VENV/bin:$PATH"
 
 # COPY the entrypoint into a stable runtime path. Build context is the repo root
 # (mirrors the SWMM/SFINCS/MODFLOW context); paths below are relative to repo root.
-RUN mkdir -p /opt/grace2/services/workers/openquake
-COPY services/workers/openquake/ /opt/grace2/services/workers/openquake/
+RUN mkdir -p /opt/trid3nt/services/workers/openquake
+COPY services/workers/openquake/ /opt/trid3nt/services/workers/openquake/
 
 # WORKDIR controls where the engine writes its scratch deck + exports before the
-# entrypoint uploads them. /opt/grace2/work is a writable scratch dir the
+# entrypoint uploads them. /opt/trid3nt/work is a writable scratch dir the
 # entrypoint clears + re-creates per invocation.
-WORKDIR /opt/grace2
+WORKDIR /opt/trid3nt
 
-ENV PYTHONPATH=/opt/grace2 \
+ENV PYTHONPATH=/opt/trid3nt \
     PYTHONUNBUFFERED=1 \
-    TRID3NT_OQ_SCRATCH=/opt/grace2/work \
+    TRID3NT_OQ_SCRATCH=/opt/trid3nt/work \
     TRID3NT_OQ_BIN=oq \
     # OpenQuake runs out of an HDF5 datastore under $OQ_DATADIR; point it inside
     # the writable scratch tree so the read-only image layers stay clean.
-    OQ_DATADIR=/opt/grace2/work/oqdata \
+    OQ_DATADIR=/opt/trid3nt/work/oqdata \
     # RAM guard: cap the engine's worker cores so cores*~2GB stays under the
     # Batch job memory. The agent may raise this per-job via containerOverrides
     # when it sizes a larger box.

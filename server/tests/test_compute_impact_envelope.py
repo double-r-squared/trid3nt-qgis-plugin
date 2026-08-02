@@ -31,9 +31,10 @@ Plus two ancillary tests:
 
 9. ``test_input_error_when_neither_bbox_nor_location_query`` — both bbox
    and location_query omitted → ``ComputeImpactEnvelopeInputError``.
-10. ``test_ms_buildings_path_routes_through_run_pelicun_with_buildings`` —
+10. ``test_ms_buildings_path_routes_through_pelicun_autofetch`` —
     ``structure_inventory_source="MS_BUILDINGS"`` bypasses ``fetch_usace_nsi``
-    and uses ``run_pelicun_with_buildings`` directly.
+    and uses the ``pelicun_damage_assessment`` bbox AUTO-FETCH input mode
+    directly (PELICUN fold).
 11. ``test_nsi_fetch_failure_raises_typed_error`` — fetcher exception → typed
     ``ComputeImpactEnvelopeNSIFetchError`` with ``error_code="NSI_FETCH_FAILED"``.
 12. ``test_pelicun_failure_raises_typed_error`` — Pelicun exception → typed
@@ -49,11 +50,11 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from trid3nt_server.tools import TOOL_REGISTRY
-from trid3nt_server.tools.simulation.postprocess_pelicun import (
+from trid3nt_server.agent.tools import TOOL_REGISTRY
+from trid3nt_server.agent.tools.simulation.pelicun.postprocess_pelicun.postprocess_pelicun import (
     PelicunPostprocessEmptyError,
 )
-from trid3nt_server.workflows.compute_impact_envelope import (
+from trid3nt_server.agent.workflows.pelicun.compute_impact_envelope.compute_impact_envelope import (
     ComputeImpactEnvelopeError,
     ComputeImpactEnvelopeGeocodeError,
     ComputeImpactEnvelopeInputError,
@@ -220,7 +221,7 @@ async def test_chains_geocode_then_inventory_then_pelicun_then_postprocess() -> 
 
     # Tweak TOOL_REGISTRY entries' .fn for the duration of the test.
     nsi_orig = TOOL_REGISTRY["fetch_usace_nsi"]
-    pelicun_orig = TOOL_REGISTRY["run_pelicun_damage_assessment"]
+    pelicun_orig = TOOL_REGISTRY["pelicun_damage_assessment"]
 
     fake_nsi = type(nsi_orig)(metadata=nsi_orig.metadata, fn=nsi_mock, module=nsi_orig.module)
     fake_pelicun = type(pelicun_orig)(
@@ -232,15 +233,15 @@ async def test_chains_geocode_then_inventory_then_pelicun_then_postprocess() -> 
             TOOL_REGISTRY,
             {
                 "fetch_usace_nsi": fake_nsi,
-                "run_pelicun_damage_assessment": fake_pelicun,
+                "pelicun_damage_assessment": fake_pelicun,
             },
         ),
         patch(
-            "trid3nt_server.workflows.compute_impact_envelope.geocode_location",
+            "trid3nt_server.agent.workflows.pelicun.compute_impact_envelope.compute_impact_envelope.geocode_location",
             return_value=geocode_result,
         ) as geocode_mock,
         patch(
-            "trid3nt_server.workflows.compute_impact_envelope.postprocess_pelicun",
+            "trid3nt_server.agent.workflows.pelicun.compute_impact_envelope.compute_impact_envelope.postprocess_pelicun",
             new=postprocess_mock,
         ),
     ):
@@ -312,7 +313,7 @@ async def test_custom_fragility_set_threads_to_postprocess() -> None:
     postprocess_mock = AsyncMock(return_value=envelope_dict)
 
     nsi_orig = TOOL_REGISTRY["fetch_usace_nsi"]
-    pelicun_orig = TOOL_REGISTRY["run_pelicun_damage_assessment"]
+    pelicun_orig = TOOL_REGISTRY["pelicun_damage_assessment"]
     fake_nsi = type(nsi_orig)(metadata=nsi_orig.metadata, fn=nsi_mock, module=nsi_orig.module)
     fake_pelicun = type(pelicun_orig)(
         metadata=pelicun_orig.metadata, fn=pelicun_mock, module=pelicun_orig.module
@@ -323,11 +324,11 @@ async def test_custom_fragility_set_threads_to_postprocess() -> None:
             TOOL_REGISTRY,
             {
                 "fetch_usace_nsi": fake_nsi,
-                "run_pelicun_damage_assessment": fake_pelicun,
+                "pelicun_damage_assessment": fake_pelicun,
             },
         ),
         patch(
-            "trid3nt_server.workflows.compute_impact_envelope.postprocess_pelicun",
+            "trid3nt_server.agent.workflows.pelicun.compute_impact_envelope.compute_impact_envelope.postprocess_pelicun",
             new=postprocess_mock,
         ),
     ):
@@ -363,7 +364,7 @@ async def test_handles_postprocess_pelicun_error_propagates() -> None:
     postprocess_mock = AsyncMock(side_effect=pp_err)
 
     nsi_orig = TOOL_REGISTRY["fetch_usace_nsi"]
-    pelicun_orig = TOOL_REGISTRY["run_pelicun_damage_assessment"]
+    pelicun_orig = TOOL_REGISTRY["pelicun_damage_assessment"]
 
     fake_nsi = type(nsi_orig)(metadata=nsi_orig.metadata, fn=nsi_mock, module=nsi_orig.module)
     fake_pelicun = type(pelicun_orig)(
@@ -375,11 +376,11 @@ async def test_handles_postprocess_pelicun_error_propagates() -> None:
             TOOL_REGISTRY,
             {
                 "fetch_usace_nsi": fake_nsi,
-                "run_pelicun_damage_assessment": fake_pelicun,
+                "pelicun_damage_assessment": fake_pelicun,
             },
         ),
         patch(
-            "trid3nt_server.workflows.compute_impact_envelope.postprocess_pelicun",
+            "trid3nt_server.agent.workflows.pelicun.compute_impact_envelope.compute_impact_envelope.postprocess_pelicun",
             new=postprocess_mock,
         ),
     ):
@@ -415,7 +416,7 @@ async def test_narrative_string_contains_count_and_dollar() -> None:
     postprocess_mock = AsyncMock(return_value=envelope_dict)
 
     nsi_orig = TOOL_REGISTRY["fetch_usace_nsi"]
-    pelicun_orig = TOOL_REGISTRY["run_pelicun_damage_assessment"]
+    pelicun_orig = TOOL_REGISTRY["pelicun_damage_assessment"]
 
     fake_nsi = type(nsi_orig)(metadata=nsi_orig.metadata, fn=nsi_mock, module=nsi_orig.module)
     fake_pelicun = type(pelicun_orig)(
@@ -427,11 +428,11 @@ async def test_narrative_string_contains_count_and_dollar() -> None:
             TOOL_REGISTRY,
             {
                 "fetch_usace_nsi": fake_nsi,
-                "run_pelicun_damage_assessment": fake_pelicun,
+                "pelicun_damage_assessment": fake_pelicun,
             },
         ),
         patch(
-            "trid3nt_server.workflows.compute_impact_envelope.postprocess_pelicun",
+            "trid3nt_server.agent.workflows.pelicun.compute_impact_envelope.compute_impact_envelope.postprocess_pelicun",
             new=postprocess_mock,
         ),
     ):
@@ -462,16 +463,18 @@ async def test_narrative_omits_population_when_ms_buildings() -> None:
         inventory_source="MS_BUILDINGS",
     )
 
-    ms_mock = AsyncMock(return_value=damage_layer)
+    # PELICUN fold: the MS_BUILDINGS path calls the SYNC pelicun_damage_assessment
+    # in bbox AUTO-FETCH mode (was the async pelicun_damage_with_buildings composer).
+    ms_mock = MagicMock(return_value=damage_layer)
     postprocess_mock = AsyncMock(return_value=envelope_dict)
 
-    ms_orig = TOOL_REGISTRY["run_pelicun_with_buildings"]
+    ms_orig = TOOL_REGISTRY["pelicun_damage_assessment"]
     fake_ms = type(ms_orig)(metadata=ms_orig.metadata, fn=ms_mock, module=ms_orig.module)
 
     with (
-        patch.dict(TOOL_REGISTRY, {"run_pelicun_with_buildings": fake_ms}),
+        patch.dict(TOOL_REGISTRY, {"pelicun_damage_assessment": fake_ms}),
         patch(
-            "trid3nt_server.workflows.compute_impact_envelope.postprocess_pelicun",
+            "trid3nt_server.agent.workflows.pelicun.compute_impact_envelope.compute_impact_envelope.postprocess_pelicun",
             new=postprocess_mock,
         ),
     ):
@@ -529,7 +532,7 @@ async def test_extra_kwargs_swallowed() -> None:
     postprocess_mock = AsyncMock(return_value=envelope_dict)
 
     nsi_orig = TOOL_REGISTRY["fetch_usace_nsi"]
-    pelicun_orig = TOOL_REGISTRY["run_pelicun_damage_assessment"]
+    pelicun_orig = TOOL_REGISTRY["pelicun_damage_assessment"]
     fake_nsi = type(nsi_orig)(metadata=nsi_orig.metadata, fn=nsi_mock, module=nsi_orig.module)
     fake_pelicun = type(pelicun_orig)(
         metadata=pelicun_orig.metadata, fn=pelicun_mock, module=pelicun_orig.module
@@ -540,11 +543,11 @@ async def test_extra_kwargs_swallowed() -> None:
             TOOL_REGISTRY,
             {
                 "fetch_usace_nsi": fake_nsi,
-                "run_pelicun_damage_assessment": fake_pelicun,
+                "pelicun_damage_assessment": fake_pelicun,
             },
         ),
         patch(
-            "trid3nt_server.workflows.compute_impact_envelope.postprocess_pelicun",
+            "trid3nt_server.agent.workflows.pelicun.compute_impact_envelope.compute_impact_envelope.postprocess_pelicun",
             new=postprocess_mock,
         ),
     ):
@@ -604,13 +607,16 @@ async def test_input_error_when_neither_bbox_nor_location_query() -> None:
 
 
 # --------------------------------------------------------------------------- #
-# Test 10 — MS_BUILDINGS path routes through run_pelicun_with_buildings.
+# Test 10 — MS_BUILDINGS path routes through the pelicun_damage_assessment
+# bbox AUTO-FETCH input mode (PELICUN fold).
 # --------------------------------------------------------------------------- #
 
 
 @pytest.mark.asyncio
-async def test_ms_buildings_path_routes_through_run_pelicun_with_buildings() -> None:
-    """MS_BUILDINGS path uses the composer ``run_pelicun_with_buildings``."""
+async def test_ms_buildings_path_routes_through_pelicun_autofetch() -> None:
+    """MS_BUILDINGS path calls ``pelicun_damage_assessment`` in bbox AUTO-FETCH
+    mode (no assets_uri, a bbox) — the PELICUN fold of the former
+    ``pelicun_damage_with_buildings`` composer. It is a SYNC call now."""
     damage_layer = _mock_layer_uri(_DAMAGE_URI)
     envelope_dict = _mock_envelope_dict(
         inventory_source="MS_BUILDINGS",
@@ -619,16 +625,16 @@ async def test_ms_buildings_path_routes_through_run_pelicun_with_buildings() -> 
         pop_high_risk=None,
     )
 
-    ms_mock = AsyncMock(return_value=damage_layer)
+    ms_mock = MagicMock(return_value=damage_layer)
     postprocess_mock = AsyncMock(return_value=envelope_dict)
 
-    ms_orig = TOOL_REGISTRY["run_pelicun_with_buildings"]
+    ms_orig = TOOL_REGISTRY["pelicun_damage_assessment"]
     fake_ms = type(ms_orig)(metadata=ms_orig.metadata, fn=ms_mock, module=ms_orig.module)
 
     with (
-        patch.dict(TOOL_REGISTRY, {"run_pelicun_with_buildings": fake_ms}),
+        patch.dict(TOOL_REGISTRY, {"pelicun_damage_assessment": fake_ms}),
         patch(
-            "trid3nt_server.workflows.compute_impact_envelope.postprocess_pelicun",
+            "trid3nt_server.agent.workflows.pelicun.compute_impact_envelope.compute_impact_envelope.postprocess_pelicun",
             new=postprocess_mock,
         ),
     ):
@@ -638,10 +644,12 @@ async def test_ms_buildings_path_routes_through_run_pelicun_with_buildings() -> 
             structure_inventory_source="MS_BUILDINGS",
         )
 
-    ms_mock.assert_awaited_once()
-    ms_kwargs = ms_mock.await_args.kwargs
+    ms_mock.assert_called_once()
+    ms_kwargs = ms_mock.call_args.kwargs
     assert ms_kwargs["hazard_raster_uri"] == _FLOOD_URI
+    # AUTO-FETCH mode: a bbox, NO explicit assets_uri.
     assert ms_kwargs["bbox"] == _FT_MYERS_BBOX
+    assert "assets_uri" not in ms_kwargs
     assert ms_kwargs["fragility_set"] == "hazus_flood_v6"
 
     postprocess_mock.assert_awaited_once()
@@ -686,7 +694,7 @@ async def test_nsi_fetch_failure_raises_typed_error() -> None:
 
 @pytest.mark.asyncio
 async def test_pelicun_failure_raises_typed_error() -> None:
-    """run_pelicun_damage_assessment exception → PELICUN_UPSTREAM_FAILED."""
+    """pelicun_damage_assessment exception → PELICUN_UPSTREAM_FAILED."""
     nsi_layer = _mock_layer_uri(_NSI_URI)
     nsi_mock = MagicMock(return_value=nsi_layer)
 
@@ -696,7 +704,7 @@ async def test_pelicun_failure_raises_typed_error() -> None:
     pelicun_mock = MagicMock(side_effect=_raise_pelicun)
 
     nsi_orig = TOOL_REGISTRY["fetch_usace_nsi"]
-    pelicun_orig = TOOL_REGISTRY["run_pelicun_damage_assessment"]
+    pelicun_orig = TOOL_REGISTRY["pelicun_damage_assessment"]
     fake_nsi = type(nsi_orig)(metadata=nsi_orig.metadata, fn=nsi_mock, module=nsi_orig.module)
     fake_pelicun = type(pelicun_orig)(
         metadata=pelicun_orig.metadata, fn=pelicun_mock, module=pelicun_orig.module
@@ -706,7 +714,7 @@ async def test_pelicun_failure_raises_typed_error() -> None:
         TOOL_REGISTRY,
         {
             "fetch_usace_nsi": fake_nsi,
-            "run_pelicun_damage_assessment": fake_pelicun,
+            "pelicun_damage_assessment": fake_pelicun,
         },
     ):
         with pytest.raises(ComputeImpactEnvelopePelicunError) as excinfo:

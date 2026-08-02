@@ -215,7 +215,8 @@ ANCHOR_PROMPTS: list[dict] = [
         ),
         "expected_tool_first": [
             "geocode_location",
-            "run_model_flood_scenario",
+            "run_sfincs",
+            "sfincs_flood",
             "model_flood_scenario",
         ],
         "expected_chain_contains": [

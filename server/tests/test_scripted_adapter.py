@@ -15,13 +15,13 @@ import json
 
 import pytest
 
-from trid3nt_server.adapter import (
+from trid3nt_server.agent.adapters.adapter import (
     FunctionCallEvent,
     TextDeltaEvent,
     UsageMetadataEvent,
     stream_events_with_contents,
 )
-from trid3nt_server import scripted_adapter as sa
+from trid3nt_server.agent.adapters import scripted_adapter as sa
 
 
 @pytest.fixture(autouse=True)
@@ -154,7 +154,7 @@ def test_dispatch_routes_to_scripted_with_no_client(monkeypatch):
     tool call when MODEL_PROVIDER=scripted -- proving the adapter.py seam routes
     BEFORE the Vertex/Bedrock client path (zero cost, no GCP/AWS creds)."""
     monkeypatch.setenv("MODEL_PROVIDER", "scripted")
-    sa.set_script([{"text": "Running SWAN.", "tool_call": {"name": "run_swan_waves",
+    sa.set_script([{"text": "Running SWAN.", "tool_call": {"name": "swan_wave_field",
                                                             "args": {"bbox": [-85.55, 29.85, -85.3, 30.05]}}}])
     evs = _run(_collect(stream_events_with_contents(
         client=None,            # no model client exists on this path
@@ -162,5 +162,22 @@ def test_dispatch_routes_to_scripted_with_no_client(monkeypatch):
         contents=[{"role": "user"}],
     )))
     fc = next(e for e in evs if isinstance(e, FunctionCallEvent))
-    assert fc.name == "run_swan_waves"
+    assert fc.name == "swan_wave_field"
     assert fc.args["bbox"] == [-85.55, 29.85, -85.3, 30.05]
+
+
+# --------------------------------------------------------------------------- #
+# The decommissioned vertex/gemini google-genai generate path is REMOVED:
+# those providers (and any unknown value) now raise the typed error instead of
+# falling through to a genai client. ``bedrock`` (the unset default) is the
+# supported production path and is NOT raised here.
+# --------------------------------------------------------------------------- #
+@pytest.mark.parametrize("prov", ["vertex", "gemini", "GEMINI", "googlegenai", "gpt"])
+def test_removed_and_unknown_providers_raise_unsupported(monkeypatch, prov):
+    from trid3nt_server.agent.adapters.adapter import UnsupportedModelProviderError
+
+    monkeypatch.setenv("MODEL_PROVIDER", prov)
+    with pytest.raises(UnsupportedModelProviderError):
+        _run(_collect(stream_events_with_contents(
+            client=None, model="unused", contents=[{"role": "user"}],
+        )))

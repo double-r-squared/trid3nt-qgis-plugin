@@ -2,7 +2,7 @@
 
 Coverage:
 1. ``test_compute_impact_envelope_dispatch_emits_impact_envelope`` — when
-   ``_stream_gemini_reply`` dispatches ``compute_impact_envelope`` and the
+   ``_stream_model_reply`` dispatches ``compute_impact_envelope`` and the
    result carries a valid ``raw_envelope`` (with ``n_structures_total``), an
    extra ``impact-envelope`` envelope is sent on the wire IN ADDITION to the
    standard ``function_response``.
@@ -23,7 +23,7 @@ from __future__ import annotations
 import json
 from dataclasses import dataclass, field
 from typing import Any
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import patch
 
 import pytest
 
@@ -46,35 +46,13 @@ class _FakeSocket:
 
 
 def _make_fake_chunk_with_function_call(name: str, args: dict, call_id: str = "c1"):
-    fn_call = MagicMock()
-    fn_call.name = name
-    fn_call.id = call_id
-    fn_call.args = args
-    fake_part = MagicMock()
-    fake_part.function_call = fn_call
-    fake_part.text = None
-    fake_content = MagicMock()
-    fake_content.parts = [fake_part]
-    fake_candidate = MagicMock()
-    fake_candidate.content = fake_content
-    fake_chunk = MagicMock()
-    fake_chunk.candidates = [fake_candidate]
-    fake_chunk.text = None
-    return fake_chunk
+    """A fake turn (scripted-provider dict) emitting ONE function call."""
+    return {"tool_call": {"name": name, "args": args, "call_id": call_id}}
 
 
 def _make_fake_chunk_with_text(text: str):
-    fake_part = MagicMock()
-    fake_part.function_call = None
-    fake_part.text = text
-    fake_content = MagicMock()
-    fake_content.parts = [fake_part]
-    fake_candidate = MagicMock()
-    fake_candidate.content = fake_content
-    fake_chunk = MagicMock()
-    fake_chunk.candidates = [fake_candidate]
-    fake_chunk.text = None
-    return fake_chunk
+    """A fake turn (scripted-provider dict) emitting one narration delta."""
+    return {"text": text}
 
 
 # ---------------------------------------------------------------------------
@@ -118,11 +96,11 @@ _SAMPLE_IMPACT_TOOL_RESULT: dict[str, Any] = {
 
 
 @pytest.mark.asyncio
-async def test_compute_impact_envelope_dispatch_emits_impact_envelope():
+async def test_compute_impact_envelope_dispatch_emits_impact_envelope(fake_llm):
     """compute_impact_envelope with valid raw_envelope triggers extra WS send."""
     from trid3nt_server import server as agent_server
     from trid3nt_server.server import SessionState
-    from trid3nt_server.adapter import GeminiSettings
+    from trid3nt_server.agent.adapters.adapter import ModelSettings
 
     # Turn 1: Gemini calls compute_impact_envelope.
     turn1_chunk = _make_fake_chunk_with_function_call(
@@ -135,9 +113,7 @@ async def test_compute_impact_envelope_dispatch_emits_impact_envelope():
         "342 structures impacted with $7.8M in expected damages."
     )
 
-    turn_iter = iter([iter([turn1_chunk]), iter([turn2_chunk])])
-    fake_client = MagicMock()
-    fake_client.models.generate_content_stream.side_effect = lambda **_: next(turn_iter)
+    fake_llm.script([turn1_chunk, turn2_chunk])
 
     async def _fake_invoke(_ws, _state, name, args):
         if name == "compute_impact_envelope":
@@ -150,14 +126,13 @@ async def test_compute_impact_envelope_dispatch_emits_impact_envelope():
     # the allowed set (mirrors what happens when the LLM calls
     # list_tools_in_category("damage_assessment") before the composer).
     state.allowed_tool_set.add_tools(["compute_impact_envelope"])
-    settings = GeminiSettings(
+    settings = ModelSettings(
         model="gemini-2.5-pro", project="test", location="us-central1", use_vertex=True
     )
 
-    with patch.object(agent_server, "build_client", return_value=fake_client), \
-         patch.object(agent_server, "_invoke_tool_via_emitter", side_effect=_fake_invoke), \
+    with patch.object(agent_server, "_invoke_tool_via_emitter", side_effect=_fake_invoke), \
          patch.object(agent_server, "build_tool_declarations", return_value=[]):
-        await agent_server._stream_gemini_reply(
+        await agent_server._stream_model_reply(
             sock, state, settings, "Compute the impact envelope for Fort Myers flood.", "research"
         )
 
@@ -198,11 +173,11 @@ async def test_compute_impact_envelope_dispatch_emits_impact_envelope():
 
 
 @pytest.mark.asyncio
-async def test_non_impact_tool_does_not_emit_impact_envelope():
+async def test_non_impact_tool_does_not_emit_impact_envelope(fake_llm):
     """Dispatching fetch_dem (or any non-impact tool) emits no impact-envelope."""
     from trid3nt_server import server as agent_server
     from trid3nt_server.server import SessionState
-    from trid3nt_server.adapter import GeminiSettings
+    from trid3nt_server.agent.adapters.adapter import ModelSettings
 
     turn1_chunk = _make_fake_chunk_with_function_call(
         "fetch_dem",
@@ -211,23 +186,20 @@ async def test_non_impact_tool_does_not_emit_impact_envelope():
     )
     turn2_chunk = _make_fake_chunk_with_text("Here is the DEM layer.")
 
-    turn_iter = iter([iter([turn1_chunk]), iter([turn2_chunk])])
-    fake_client = MagicMock()
-    fake_client.models.generate_content_stream.side_effect = lambda **_: next(turn_iter)
+    fake_llm.script([turn1_chunk, turn2_chunk])
 
     async def _fake_invoke(_ws, _state, name, args):
         return {"layer_id": "dem-layer", "wms_url": "https://qgis.example.com/wms?LAYERS=dem"}
 
     sock = _FakeSocket()
     state = SessionState(session_id=new_ulid())
-    settings = GeminiSettings(
+    settings = ModelSettings(
         model="gemini-2.5-pro", project="test", location="us-central1", use_vertex=True
     )
 
-    with patch.object(agent_server, "build_client", return_value=fake_client), \
-         patch.object(agent_server, "_invoke_tool_via_emitter", side_effect=_fake_invoke), \
+    with patch.object(agent_server, "_invoke_tool_via_emitter", side_effect=_fake_invoke), \
          patch.object(agent_server, "build_tool_declarations", return_value=[]):
-        await agent_server._stream_gemini_reply(
+        await agent_server._stream_model_reply(
             sock, state, settings, "Show me a DEM for Fort Myers.", "research"
         )
 
@@ -244,11 +216,11 @@ async def test_non_impact_tool_does_not_emit_impact_envelope():
 
 
 @pytest.mark.asyncio
-async def test_impact_envelope_emission_without_raw_envelope():
+async def test_impact_envelope_emission_without_raw_envelope(fake_llm):
     """No impact-envelope when result lacks the raw_envelope key."""
     from trid3nt_server import server as agent_server
     from trid3nt_server.server import SessionState
-    from trid3nt_server.adapter import GeminiSettings
+    from trid3nt_server.agent.adapters.adapter import ModelSettings
 
     turn1_chunk = _make_fake_chunk_with_function_call(
         "compute_impact_envelope",
@@ -257,9 +229,7 @@ async def test_impact_envelope_emission_without_raw_envelope():
     )
     turn2_chunk = _make_fake_chunk_with_text("Impact assessed.")
 
-    turn_iter = iter([iter([turn1_chunk]), iter([turn2_chunk])])
-    fake_client = MagicMock()
-    fake_client.models.generate_content_stream.side_effect = lambda **_: next(turn_iter)
+    fake_llm.script([turn1_chunk, turn2_chunk])
 
     async def _fake_invoke(_ws, _state, name, args):
         # Malformed result — no raw_envelope key.
@@ -268,14 +238,13 @@ async def test_impact_envelope_emission_without_raw_envelope():
     sock = _FakeSocket()
     state = SessionState(session_id=new_ulid())
     state.allowed_tool_set.add_tools(["compute_impact_envelope"])
-    settings = GeminiSettings(
+    settings = ModelSettings(
         model="gemini-2.5-pro", project="test", location="us-central1", use_vertex=True
     )
 
-    with patch.object(agent_server, "build_client", return_value=fake_client), \
-         patch.object(agent_server, "_invoke_tool_via_emitter", side_effect=_fake_invoke), \
+    with patch.object(agent_server, "_invoke_tool_via_emitter", side_effect=_fake_invoke), \
          patch.object(agent_server, "build_tool_declarations", return_value=[]):
-        await agent_server._stream_gemini_reply(
+        await agent_server._stream_model_reply(
             sock, state, settings, "Compute impact.", "research"
         )
 
@@ -290,11 +259,11 @@ async def test_impact_envelope_emission_without_raw_envelope():
 
 
 @pytest.mark.asyncio
-async def test_impact_envelope_emission_raw_envelope_missing_n_structures_total():
+async def test_impact_envelope_emission_raw_envelope_missing_n_structures_total(fake_llm):
     """No impact-envelope when raw_envelope lacks n_structures_total."""
     from trid3nt_server import server as agent_server
     from trid3nt_server.server import SessionState
-    from trid3nt_server.adapter import GeminiSettings
+    from trid3nt_server.agent.adapters.adapter import ModelSettings
 
     turn1_chunk = _make_fake_chunk_with_function_call(
         "compute_impact_envelope",
@@ -303,9 +272,7 @@ async def test_impact_envelope_emission_raw_envelope_missing_n_structures_total(
     )
     turn2_chunk = _make_fake_chunk_with_text("Done.")
 
-    turn_iter = iter([iter([turn1_chunk]), iter([turn2_chunk])])
-    fake_client = MagicMock()
-    fake_client.models.generate_content_stream.side_effect = lambda **_: next(turn_iter)
+    fake_llm.script([turn1_chunk, turn2_chunk])
 
     async def _fake_invoke(_ws, _state, name, args):
         # raw_envelope present but missing the key signal field.
@@ -317,14 +284,13 @@ async def test_impact_envelope_emission_raw_envelope_missing_n_structures_total(
     sock = _FakeSocket()
     state = SessionState(session_id=new_ulid())
     state.allowed_tool_set.add_tools(["compute_impact_envelope"])
-    settings = GeminiSettings(
+    settings = ModelSettings(
         model="gemini-2.5-pro", project="test", location="us-central1", use_vertex=True
     )
 
-    with patch.object(agent_server, "build_client", return_value=fake_client), \
-         patch.object(agent_server, "_invoke_tool_via_emitter", side_effect=_fake_invoke), \
+    with patch.object(agent_server, "_invoke_tool_via_emitter", side_effect=_fake_invoke), \
          patch.object(agent_server, "build_tool_declarations", return_value=[]):
-        await agent_server._stream_gemini_reply(
+        await agent_server._stream_model_reply(
             sock, state, settings, "Compute impact.", "research"
         )
 

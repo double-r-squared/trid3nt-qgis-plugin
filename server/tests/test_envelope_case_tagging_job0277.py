@@ -15,7 +15,7 @@ import json
 import pytest
 
 from trid3nt_server import server
-from trid3nt_server.pipeline_emitter import (
+from trid3nt_server.emission.pipeline_emitter import (
     PipelineEmitter,
     bind_turn_case,
     current_turn_case,
@@ -108,7 +108,7 @@ async def test_dispatch_wrapper_binds_turn_case(monkeypatch) -> None:
     async def fake_stream(websocket, st, settings, user_text, research_mode, bedrock_model=None, **_kwargs):
         observed.append(current_turn_case())
 
-    monkeypatch.setattr(server, "_stream_gemini_reply", fake_stream)
+    monkeypatch.setattr(server, "_stream_model_reply", fake_stream)
     state = server.SessionState(session_id=new_ulid())
     case = new_ulid()
     state.active_case_id = case

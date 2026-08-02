@@ -15,16 +15,16 @@ from __future__ import annotations
 import json
 import logging
 from dataclasses import dataclass, field
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 
 import pytest
 
 from trid3nt_server import server as agent_server
-from trid3nt_server import tools as agent_tools
-from trid3nt_server.adapter import GeminiSettings
-from trid3nt_server.categories import HOT_SET_TOOLS
-from trid3nt_server.tools import RegisteredTool
-from trid3nt_server.uri_registry import reset_uri_registries_for_tests
+from trid3nt_server.agent import tools as agent_tools
+from trid3nt_server.agent.adapters.adapter import ModelSettings
+from trid3nt_server.agent.categories import HOT_SET_TOOLS
+from trid3nt_server.agent.tools import RegisteredTool
+from trid3nt_server.emission.uri_registry import reset_uri_registries_for_tests
 from trid3nt_contracts import new_ulid
 from trid3nt_contracts.tool_registry import AtomicToolMetadata
 
@@ -76,39 +76,15 @@ class _FakeSocket:
 
 
 def _fc_chunk(name: str, args: dict, call_id: str):
-    fn_call = MagicMock()
-    fn_call.name = name
-    fn_call.id = call_id
-    fn_call.args = args
-    part = MagicMock()
-    part.function_call = fn_call
-    part.text = None
-    content = MagicMock()
-    content.parts = [part]
-    cand = MagicMock()
-    cand.content = content
-    chunk = MagicMock()
-    chunk.candidates = [cand]
-    chunk.text = None
-    return chunk
+    return {"tool_call": {"name": name, "args": args, "call_id": call_id}}
 
 
 def _text_chunk(text: str):
-    part = MagicMock()
-    part.function_call = None
-    part.text = text
-    content = MagicMock()
-    content.parts = [part]
-    cand = MagicMock()
-    cand.content = content
-    chunk = MagicMock()
-    chunk.candidates = [cand]
-    chunk.text = text
-    return chunk
+    return {"text": text}
 
 
-def _settings() -> GeminiSettings:
-    return GeminiSettings(
+def _settings() -> ModelSettings:
+    return ModelSettings(
         model="gemini-2.5-pro", project="t", location="us-central1", use_vertex=True
     )
 
@@ -153,7 +129,7 @@ def _stub_search():
         reset_uri_registries_for_tests()
 
 
-async def _drive_with_trimmed_gate(state, monkeypatch, decl_registries):
+async def _drive_with_trimmed_gate(state, monkeypatch, decl_registries, fake_llm):
     """Drive: enforce mode trims the gate to {hot set + search_tools}; round 1
     calls search_tools; capture the registry keys passed to
     ``build_tool_declarations`` on each build so the rebuild is observable."""
@@ -162,42 +138,36 @@ async def _drive_with_trimmed_gate(state, monkeypatch, decl_registries):
     monkeypatch.setenv("TRID3NT_TOOL_RETRIEVAL", "enforce")
     visible = set(HOT_SET_TOOLS) | {"search_tools"}
     monkeypatch.setattr(
-        "trid3nt_server.tools.discovery.tool_retrieval.retrieve_visible_tools",
+        "trid3nt_server.agent.tools.search.tool_retrieval.retrieve_visible_tools",
         lambda *_a, **_k: set(visible),
     )
 
-    rounds = {"n": 0}
-
-    def _script(**kwargs):
-        rounds["n"] += 1
-        if rounds["n"] == 1:
-            return iter([_fc_chunk("search_tools", {"query": "flood"}, "c1")])
-        return iter([_text_chunk("Here are some options.")])
+    fake_llm.script([
+        _fc_chunk("search_tools", {"query": "flood"}, "c1"),
+        _text_chunk("Here are some options."),
+    ])
 
     def _capture_decls(registry):
         decl_registries.append(set(registry.keys()))
         return []
 
     sock = _FakeSocket()
-    with patch.object(agent_server, "build_client", return_value=MagicMock()), patch.object(
+    with patch.object(
         agent_server, "build_tool_declarations", side_effect=_capture_decls
     ):
-        agent_server.build_client.return_value.models.generate_content_stream.side_effect = (
-            lambda **kw: _script(**kw)
-        )
-        await agent_server._stream_gemini_reply(
+        await agent_server._stream_model_reply(
             sock, state, _settings(), "find me flood tools", "research"
         )
     return sock
 
 
 @pytest.mark.asyncio
-async def test_discovery_expand_fires_and_caps_at_8(_stub_search, monkeypatch, caplog):
+async def test_discovery_expand_fires_and_caps_at_8(_stub_search, monkeypatch, caplog, fake_llm):
     hits = _stub_search
     decl_registries: list[set] = []
     state = agent_server.SessionState(session_id=new_ulid())
     with caplog.at_level(logging.INFO, logger="trid3nt_server.server"):
-        await _drive_with_trimmed_gate(state, monkeypatch, decl_registries)
+        await _drive_with_trimmed_gate(state, monkeypatch, decl_registries, fake_llm)
 
     # First build (pre-loop) is the trimmed gate; a later build is the rebuild.
     assert len(decl_registries) >= 2, "expected a rebuild after the search round"
@@ -218,19 +188,16 @@ async def test_discovery_expand_fires_and_caps_at_8(_stub_search, monkeypatch, c
 
 
 @pytest.mark.asyncio
-async def test_discovery_expand_noop_when_gate_untrimmed(_stub_search, monkeypatch):
+async def test_discovery_expand_noop_when_gate_untrimmed(_stub_search, monkeypatch, fake_llm):
     """With the FULL registry visible (no enforce), the discovered tools are
     already present -> no rebuild, no cap consumed (a clean no-op)."""
     monkeypatch.delenv("TRID3NT_TOOL_RETRIEVAL", raising=False)
     decl_registries: list[set] = []
 
-    rounds = {"n": 0}
-
-    def _script(**kwargs):
-        rounds["n"] += 1
-        if rounds["n"] == 1:
-            return iter([_fc_chunk("search_tools", {"query": "flood"}, "c1")])
-        return iter([_text_chunk("done")])
+    fake_llm.script([
+        _fc_chunk("search_tools", {"query": "flood"}, "c1"),
+        _text_chunk("done"),
+    ])
 
     def _capture_decls(registry):
         decl_registries.append(set(registry.keys()))
@@ -238,13 +205,10 @@ async def test_discovery_expand_noop_when_gate_untrimmed(_stub_search, monkeypat
 
     state = agent_server.SessionState(session_id=new_ulid())
     sock = _FakeSocket()
-    with patch.object(agent_server, "build_client", return_value=MagicMock()), patch.object(
+    with patch.object(
         agent_server, "build_tool_declarations", side_effect=_capture_decls
     ):
-        agent_server.build_client.return_value.models.generate_content_stream.side_effect = (
-            lambda **kw: _script(**kw)
-        )
-        await agent_server._stream_gemini_reply(
+        await agent_server._stream_model_reply(
             sock, state, _settings(), "find me flood tools", "research"
         )
     # Full registry already contains the discovered tools -> the only build is

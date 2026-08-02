@@ -1,0 +1,158 @@
+# Router source spec (data-router fold, pilot 4/5) -- Esri/IO 10m land cover.
+# Twin: fetch_esri_landcover_10m.py (HYBRID, raster-COG STAC + tiled-mosaic).
+# STAC search + auto-tile grid + rasterio.merge (categorical, first-non-nodata).
+schema_version: v1
+
+name: fetch_esri_landcover_10m
+source_class: esri_landcover_10m   # cache prefix == twin source_class
+error_prefix: ESRI_LANDCOVER       # twin A.6 token (EsriLandcover*Error) != cache prefix
+empty_error_suffix: NO_COVERAGE    # twin EsriLandcoverNoCoverageError (not *_EMPTY)
+shape: raster-cog                  # base shape; ingest.mosaic wraps it (tiled-mosaic transform)
+supports_global_query: false
+
+# --- endpoints ------------------------------------------------------------
+endpoints:
+  data:
+    url: "https://planetarycomputer.microsoft.com/api/stac/v1"
+auth:
+  mode: none
+  user_agent: trid3nt_default
+
+# --- request-param schema -------------------------------------------------
+params:
+  # bbox-class failures (malformed + max_bbox ceiling) -> ESRI_LANDCOVER_BBOX_INVALID
+  bbox: {type: bbox, required: true, quantize: round_6dp, error_suffix: BBOX_INVALID}
+  # year out of [2017,2023] -> ESRI_LANDCOVER_YEAR_INVALID (twin EsriLandcoverYearError)
+  year: {type: int, default: 2023, min: 2017, max: 2023, error_suffix: YEAR_INVALID}
+gates:
+  max_bbox_deg2: 8.0                 # hard ceiling -> redirect to NLCD (fetch_landcover)
+
+# --- ingestion (raster-COG / STAC-search + tiled-mosaic transform) --------
+# The router raster-cog stac_search sub-mode reuses the _pc_stac primitives
+# (sas_sign_href + bbox_pixel_dims), reprojects each intersecting item to
+# EPSG:4326 nearest, first-non-nodata mosaics to uint8, and bakes the categorical
+# palette -- byte-for-byte the twin's _fetch_single_tile_mosaic + _write_palette_cog.
+ingest:
+  access: stac_search
+  stac:
+    root: "https://planetarycomputer.microsoft.com/api/stac/v1"
+    collection: io-lulc-annual-v02
+    data_asset: data
+    sign: sas
+  year: {min: 2017, max: 2023, default: 2023}
+  native_cell_m: 10
+  tile_deg2: 0.5                     # sub-tile cap -> tiled-mosaic transform
+  mosaic: {method: first, resampling: nearest, nodata: 0}
+  dtype: uint8                       # categorical class codes (twin _write_palette_cog)
+  palette: passthrough
+  class_labels:                      # PC file:values on the data asset
+    0: "No Data"
+    1: Water
+    2: Trees
+    4: "Flooded vegetation"
+    5: Crops
+    7: "Built area"
+    8: "Bare ground"
+    9: "Snow/Ice"
+    10: Clouds
+    11: Rangeland
+
+# --- normalization stamps -------------------------------------------------
+normalize:
+  crs: "EPSG:4326"
+  units: esri_io_lulc_class_code
+  quantity: land_cover_class
+  orientation: north_up
+
+# --- output surface -------------------------------------------------------
+output:
+  layer_type: raster
+  ext: tif
+  role: input
+  style_preset: "categorical_landcover"
+
+# --- cache + payload gate -------------------------------------------------
+cache:
+  ttl_class: static-30d
+payload_estimate:                    # twin: max(0.2, sq_deg * 5.0)
+  model: bbox_area
+  mb_per_sq_deg: 5.0
+  floor_mb: 0.2
+
+# --- honesty: caveats + fallback -----------------------------------------
+caveats:
+  - "global 10m (worldwide complement to US-only NLCD); no covering item or all-nodata mosaic -> ESRI_LANDCOVER_NO_COVERAGE (never a fabricated layer)"
+  - "hard ceiling 8 deg^2; larger extents -> fetch_landcover (NLCD, CONUS, ~30m, no ceiling)"
+  - "9-class categorical (1=Water 2=Trees 4=Flooded 5=Crops 7=Built 8=Bare 9=Snow/Ice 11=Rangeland; 0=NoData)"
+fallback: [fetch_landcover]
+
+# corpus lifted from sibling corpus.yaml.
+
+# --- LLM docstring (carried VERBATIM from the twin via inspect.getdoc;
+# the sole source of the promoted FunctionDeclaration description + the
+# retrieval-index document text -> indistinguishable from the twin). ---
+docstring: |
+  Global 10 m land cover (Esri / Impact Observatory land-use land-cover) for a bbox -- trees, crops, built area, water, worldwide.
+
+  Use this (not ``fetch_landcover``, which serves US-only NLCD as a dict) when
+  the AOI is OUTSIDE CONUS or you want a consistent 10 m land-cover schema
+  across borders. Returns a bare ``LayerURI`` (NOT the ``fetch_landcover`` dict).
+
+  **What it does:** Searches the Microsoft Planetary Computer for the Impact
+  Observatory ``io-lulc-annual-v02`` 10 m annual Land-Use Land-Cover items
+  covering ``bbox`` in ``year``, warps+window-reads each intersecting UTM-zone
+  tile to EPSG:4326 at 10 m (nearest, categorical), mosaics them, and returns a
+  single-band categorical COG with the official 9-class color table baked in.
+  ``publish_layer`` colorizes it directly from the embedded palette (no
+  rescale/colormap override), the same path NLCD ``fetch_landcover`` uses.
+
+  For bboxes larger than ~0.5 deg^2 the tool automatically tiles the bbox into
+  sub-requests and mosaicks the results, so single-county to multi-county AOIs
+  work without narrowing the bbox. The practical ceiling is 8 deg^2 (~a few
+  counties / small state chunk); above that use ``fetch_landcover`` (NLCD,
+  US-only, ~30 m, no area ceiling).
+
+  Classes: 1=Water, 2=Trees, 4=Flooded vegetation, 5=Crops, 7=Built area,
+  8=Bare ground, 9=Snow/Ice, 10=Clouds, 11=Rangeland (0=No Data).
+
+  This is GLOBAL  --  the worldwide complement to the US-only NLCD
+  ``fetch_landcover``. Use it for land cover anywhere outside CONUS (Africa,
+  Asia, South America, Europe) or when you want a consistent 10 m schema
+  across borders.
+
+  **When to use:**
+  - User asks "what land cover is here?" / "show forest vs crops vs urban" for
+    any area up to multi-county scale (<=8 deg^2).
+  - AOI is outside CONUS, or you want 10 m global resolution.
+  - A consistent 10 m global land-cover layer for exposure / context anywhere.
+  - Compare two years (call twice with different ``year``) to see change.
+
+  **When NOT to use:**
+  - AOI > 8 deg^2 (state-wide or larger)  --  use ``fetch_landcover`` (NLCD,
+    CONUS, ~30 m, no area ceiling).
+  - US analysis that must match the NLCD class schema / Manning's roughness
+    mapping  --  use ``fetch_landcover`` (NLCD, CONUS).
+  - A natural-color picture of the area  --  use ``fetch_sentinel2_truecolor``.
+  - Continuous greenness  --  use ``compute_ndvi``.
+  - A single-point class lookup  --  this returns a raster.
+
+  **Parameters:**
+  - ``bbox`` (tuple): ``(min_lon, min_lat, max_lon, max_lat)`` EPSG:4326.
+    Required. Up to 8 deg^2; larger areas should use ``fetch_landcover``.
+  - ``year`` (int, optional): vintage in ``[2017, 2023]``. Default: the latest
+    available (2023). An out-of-range year is an honest typed error.
+
+  **Returns:** A ``LayerURI`` (``layer_type="raster"``, ``role="input"``)
+  pointing at a single-band categorical COG in the ``static-30d`` /
+  ``esri_landcover_10m`` cache prefix. ``style_preset="categorical_landcover"``
+  (embedded-palette passthrough  --  no single-band rescale),
+  ``units="esri_io_lulc_class_code"``.
+
+  **Data source:** Esri / Impact Observatory 10m Annual LULC (9-class) V2 via
+  the Microsoft Planetary Computer STAC (``io-lulc-annual-v02``).
+
+  Honesty: no covering item (or an all-nodata mosaic) raises a typed
+  ``EsriLandcoverNoCoverageError``  --  never a fabricated layer.
+
+  FR-CE-8: routed through ``read_through`` so identical ``(bbox, year)`` calls
+  reuse the cached COG.

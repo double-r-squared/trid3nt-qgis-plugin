@@ -39,11 +39,20 @@ Milestone 2 chat surface on top of milestone 1's plain-text bubbles:
   * RECONNECT: the bridge's capped-jitter ladder drives the status dot
     (connecting amber / connected green / lost red); queued sends flush on
     resume.
-  * OPEN CASE IN QGIS: a Cases dialog listing the ``case-list`` envelope,
-    with per-case "Open in QGIS" -> POST /api/export-qgis on the local agent,
-    then the exported GeoPackage tables + GeoTIFFs are ADDED to the current
-    project (never ``QgsProject.read()`` -- that would replace the user's
-    open project; rationale in ``case_export``).
+  * CASE-OPEN RESTORES LAYERS (decision A, 2026-07-31): opening a case (the
+    Cases dialog row click / double-click, always ``select_case`` ->
+    ``_on_case_open_event``) restores its chat AND its persisted layers in
+    ONE gesture -- no separate "Open in QGIS"/"Export GeoTIFFs" action. The
+    layers ride the SAME ``case-open`` WS envelope the chat replay uses
+    (``session_state.loaded_layers``, LOCAL mode only -- ``MODE_LOCAL``
+    guard in ``_on_case_open_event``) and land via the SAME by-URI
+    materializer live-published layers use. REMOTE mode has no automatic
+    restore yet (it cannot stream the store directly); its old manual
+    export trigger is gone too (zero user-facing export -- native QGIS
+    covers any file export the user wants), so the remote
+    materialize+download fallback (``hydrate_case_layers``, ``_ExportTask``)
+    is currently unreached from the UI, condemned in DELETION_LEDGER pending
+    remote store access.
 
 All socket work lives on the AgentBridge worker thread; this widget only
 handles Qt signals. The export POST runs on a plain worker thread emitting
@@ -229,7 +238,7 @@ class Trid3ntDock(QDockWidget):
         self._session_case_title: str = ""
         self._cases: List[CaseInfo] = []
         self._cases_dialog: Optional[CasesDialog] = None
-        self._export_tasks: List[_ExportTask] = []  # keep-alive refs
+        self._export_tasks: List[_ExportTask] = []  # keep-alive refs (remote-mode only)
         self._case_list_tasks: List[_CaseListTask] = []  # keep-alive refs
         self._push_tasks: List[_PushLayerTask] = []  # keep-alive refs
         self._probe_tasks: List[_ProbePointTask] = []  # keep-alive refs
@@ -443,20 +452,20 @@ class Trid3ntDock(QDockWidget):
         # -> setWindowTitle), freeing this vertical space.
 
         line = QFrame()
-        line.setFrameShape(QFrame.HLine)
-        line.setFrameShadow(QFrame.Sunken)
+        line.setFrameShape(QFrame.Shape.HLine)
+        line.setFrameShadow(QFrame.Shadow.Sunken)
         outer.addWidget(line)
 
         # Message list
         self.scroll = QScrollArea()
         self.scroll.setWidgetResizable(True)
-        self.scroll.setFrameShape(QFrame.NoFrame)
+        self.scroll.setFrameShape(QFrame.Shape.NoFrame)
         # E1 (NATE 2026-07-20): the transcript NEVER grows a horizontal
         # scrollbar -- error text (and every other chat line) must reflow with
         # the resizable chat panel, not pin it wide. AlwaysOff (was the default
         # ScrollBarAsNeeded, which a long unbroken error token could trip);
         # wrapped labels cap their minimum width to 1 so content reflows.
-        self.scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        self.scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
         self.messages_host = QWidget()
         self.messages_layout = QVBoxLayout(self.messages_host)
         self.messages_layout.setContentsMargins(2, 2, 2, 2)
@@ -484,9 +493,9 @@ class Trid3ntDock(QDockWidget):
         self.probe_results_toggle.clicked.connect(self._toggle_probe_results)
         probe_lay.addWidget(self.probe_results_toggle)
         self.probe_result_label = _WrapLabel("")
-        self.probe_result_label.setTextFormat(Qt.PlainText)
+        self.probe_result_label.setTextFormat(Qt.TextFormat.PlainText)
         self.probe_result_label.setTextInteractionFlags(
-            Qt.TextSelectableByMouse
+            Qt.TextInteractionFlag.TextSelectableByMouse
         )
         self.probe_result_label.setStyleSheet(_THINKING_BLOCK_STYLE)
         probe_lay.addWidget(self.probe_result_label)
@@ -548,8 +557,8 @@ class Trid3ntDock(QDockWidget):
         lay = QHBoxLayout(container)
         lay.setContentsMargins(40, 2, 0, 2)
         lbl = _WrapLabel(text)
-        lbl.setTextFormat(Qt.PlainText)
-        lbl.setTextInteractionFlags(Qt.TextSelectableByMouse)
+        lbl.setTextFormat(Qt.TextFormat.PlainText)
+        lbl.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
         lbl.setStyleSheet(_USER_BUBBLE_STYLE)
         # BUG 1 (live-feedback 2026-07-12): the bare QSizePolicy(h, v) ctor
         # DROPS the height-for-width flag QLabel.setWordWrap had set, which
@@ -558,10 +567,10 @@ class Trid3ntDock(QDockWidget):
         # wrapped text is; _WrapLabel's min-height re-assert covers the
         # layout paths that still ignore height-for-width. Horizontal
         # Maximum + AlignRight keep the hug-the-text right-aligned look.
-        policy = QSizePolicy(QSizePolicy.Maximum, QSizePolicy.Preferred)
+        policy = QSizePolicy(QSizePolicy.Policy.Maximum, QSizePolicy.Policy.Preferred)
         policy.setHeightForWidth(True)
         lbl.setSizePolicy(policy)
-        lay.addWidget(lbl, 0, Qt.AlignRight)
+        lay.addWidget(lbl, 0, Qt.AlignmentFlag.AlignRight)
         self.messages_layout.insertWidget(self.messages_layout.count() - 1, container)
         self._scroll_to_bottom()
 
@@ -976,7 +985,7 @@ class Trid3ntDock(QDockWidget):
         so the ring is transformed 4326 -> canvas CRS via QgsCoordinateTransform
         exactly like ``layers.zoom_to_bbox4326`` (never hand-rolled). A single
         reused ``QgsRubberBand`` (built lazily -- it needs a live canvas) holds
-        the geometry; a subtle blue accent, Qt.DotLine pen, transparent fill so
+        the geometry; a subtle blue accent, Qt.PenStyle.DotLine pen, transparent fill so
         it reads as an EXTENT, not a filled feature. Headless-safe: no canvas
         (or any construction failure) is a silent no-op, never a crash -- the
         state (``_case_bbox``) is still authoritative for the agent.
@@ -1016,7 +1025,7 @@ class Trid3ntDock(QDockWidget):
                 # Outline-only: a fully transparent fill leaves just the ring.
                 self._aoi_rubber.setFillColor(QColor(0, 0, 0, 0))
                 try:
-                    self._aoi_rubber.setLineStyle(Qt.DotLine)
+                    self._aoi_rubber.setLineStyle(Qt.PenStyle.DotLine)
                 except Exception:  # noqa: BLE001 -- older builds lack it
                     pass
             self._aoi_rubber.setToGeometry(QgsGeometry.fromRect(rect), None)
@@ -1110,8 +1119,8 @@ class Trid3ntDock(QDockWidget):
         if (
             getattr(self, "_aoi_key_filter_on", False)
             and self.aoi_btn.isChecked()
-            and event.type() == QEvent.KeyPress
-            and event.key() in (Qt.Key_Backspace, Qt.Key_Delete)
+            and event.type() == QEvent.Type.KeyPress
+            and event.key() in (Qt.Key.Key_Backspace, Qt.Key.Key_Delete)
         ):
             self._clear_aoi()
             return True
@@ -1283,7 +1292,7 @@ class Trid3ntDock(QDockWidget):
             on_connect=self.connect_agent,
             connected=self.bridge.running,
         )
-        dlg.exec_() if hasattr(dlg, "exec_") else dlg.exec()
+        dlg.exec()
         # Item 4: the AOI toggles live only in Settings. Item R3 (2026-07-18):
         # no pinned status line to repaint anymore -- the next send recomputes
         # the AOI and notes any CHANGED notice inline in the transcript.
@@ -1307,7 +1316,7 @@ class Trid3ntDock(QDockWidget):
         if not self._cases or not self._connected:
             self._load_cold_case_list(dlg)
         try:
-            dlg.exec_() if hasattr(dlg, "exec_") else dlg.exec()
+            dlg.exec()
         finally:
             self._cases_dialog = None
 
@@ -1444,29 +1453,41 @@ class Trid3ntDock(QDockWidget):
             return "Refreshing case list ..."
         return "Not connected -- the list refreshes on the next connect"
 
-    # -- open case in QGIS ------------------------------------------------------ #
+    # -- remote-mode case-layer hydration (condemned; see DELETION_LEDGER) ------ #
 
-    def open_case_in_qgis(self, case_id: str, label: str) -> None:
-        """Export ``case_id`` via /api/export-qgis and add the produced layers
-        to the CURRENT project (see ``case_export`` for why we add layers
-        instead of opening the .qgz).
+    def hydrate_case_layers(self, case_id: str, label: str) -> None:
+        """REMOTE-mode-ONLY case-layer materialize+download fallback (renamed
+        from ``open_case_in_qgis``, matching the server's ``cases.
+        hydrate_case_layers``, ADR 0058).
 
-        Local mode talks to the local agent's HTTP listener and reads the
-        artifact paths directly. Remote mode (milestone 3) POSTs the same
-        route on the HTTP base derived from the remote WS URL, then downloads
-        the .gpkg/.qgz through GET /api/export-qgis/file into a temp dir.
+        LOCAL mode no longer calls this: ``_on_case_open_event`` already
+        restores a case's layers automatically, in the SAME gesture as the
+        chat replay, the instant the case becomes active (decision A,
+        NATE 2026-07-31) -- the by-URI manifest fetch this method used to
+        also perform for local mode was fully redundant with that (same
+        source data, same materializer) and has been deleted.
+
+        REMOTE mode: not currently wired to any UI action either (zero
+        user-facing export remains -- native QGIS covers any file export a
+        user wants). Kept callable, not deleted, so the remote
+        materialize+download machinery (``_ExportTask`` /
+        ``case_export.post_export_case`` / ``materializer.
+        materialize_export``) is not lost outright -- condemned in
+        DELETION_LEDGER pending remote store access, at which point this is
+        the natural fold-in point for an automatic remote restore too. A
+        LOCAL-mode call is a defensive no-op (should never happen -- nothing
+        in the dock calls this for local anymore).
         """
-        remote = self.settings.mode != MODE_LOCAL
+        if self.settings.mode == MODE_LOCAL:
+            return
         base_url = self._effective_http_base()
-        if remote:
-            self._note(
-                f"Exporting case '{label}' on the remote agent "
-                f"({base_url}) -- artifacts download to a local temp dir ..."
-            )
-        else:
-            self._note(f"Exporting case '{label}' via the local agent ...")
+        self._note(
+            f"Exporting case '{label}' on the remote agent "
+            f"({base_url}) -- artifacts download to a local temp dir ..."
+        )
         task = _ExportTask(
-            base_url, case_id, self, remote=remote, minio_endpoint=self._effective_data_base()
+            base_url, case_id, self, remote=True,
+            minio_endpoint=self._effective_data_base(),
         )
         task.finished.connect(self._on_export_finished)
         task.errored.connect(self._on_export_errored)
@@ -1535,12 +1556,12 @@ class Trid3ntDock(QDockWidget):
         box = QMessageBox(self)
         box.setWindowTitle("Push layer")
         box.setText(f"Send '{layer.name()}' to the current case?")
-        box.setStandardButtons(QMessageBox.Ok | QMessageBox.Cancel)
-        box.setDefaultButton(QMessageBox.Ok)
+        box.setStandardButtons(QMessageBox.StandardButton.Ok | QMessageBox.StandardButton.Cancel)
+        box.setDefaultButton(QMessageBox.StandardButton.Ok)
         aoi_checkbox = QCheckBox("Set as case AOI")
         aoi_checkbox.setChecked(False)
         box.setCheckBox(aoi_checkbox)
-        if box.exec_() != QMessageBox.Ok:
+        if box.exec() != QMessageBox.StandardButton.Ok:
             return
         make_aoi = aoi_checkbox.isChecked()
 
@@ -1947,12 +1968,6 @@ class Trid3ntDock(QDockWidget):
                 lines = gate.impact_summary_lines(summary)
                 self._ensure_pending().add_note("Impact summary:\n" + "\n".join(lines))
                 self._scroll_to_bottom()
-        elif kind == "lesson-added":
-            # LANE A (2026-07-23): the LESSONS LOOP ack -- a subtle status note.
-            added = gate.parse_lesson_added(data)
-            if added is not None:
-                self._ensure_pending().add_note(gate.lesson_added_line(added))
-                self._scroll_to_bottom()
         elif kind == "case-open":
             self._on_case_open_event(data)
         elif kind == "case-list":
@@ -2013,19 +2028,32 @@ class Trid3ntDock(QDockWidget):
         INITIAL connect's create_case still consumes its case-open inside
         the worker handshake, via ``_on_case_ready``).
 
+        THE fold chokepoint for decision A (NATE 2026-07-31): a case is
+        confirmed open here with its chat AND its persisted layers restored
+        together, in one gesture -- the redundant explicit "Open in
+        QGIS"/"Export GeoTIFFs" action is gone (see ``hydrate_case_layers``).
+        ``info.layers`` already carries the case's persisted
+        ``loaded_layer_summaries`` (the SAME source ``/api/case-layers``'s
+        manifest would have served -- no extra HTTP round trip needed, it
+        rides the case-open envelope for free), parsed by the client the
+        SAME way a manual manifest fetch would. LOCAL-mode-only: the by-URI
+        materializer needs the store directly reachable, which remote mode
+        cannot do yet (it "keeps its existing explicit flow" -- currently
+        none, until remote store access lands; see DELETION_LEDGER).
+
         Rebinds the dock: authoritative title in the header, a FRESH layer
         group named for the case (dedup reset), the persisted loaded_layers
-        replayed into it, an OpenStreetMap basemap (settings-gated, item 4),
-        and a canvas zoom to the case bbox -- or, absent one, the union of
-        the vector layers just materialized, or a further fallback bbox --
-        so the canvas is never silently left wherever it was (item 1,
-        live-feedback 2026-07-09; the fallback ladder + honest note for a
-        genuinely bbox-less raster-only case is item D, live-feedback
-        2026-07-10). Runs LAST, unconditionally, on every case-open path
-        that reaches this handler (select, New case, and the startup-reuse
-        select alike -- ``_bind_startup_case`` also resolves through a
-        ``case-command select`` whose reply lands here) -- nothing above
-        this call may skip or short-circuit past it.
+        replayed into it (LOCAL mode), an OpenStreetMap basemap
+        (settings-gated, item 4), and a canvas zoom to the case bbox -- or,
+        absent one, the union of the vector layers just materialized, or a
+        further fallback bbox -- so the canvas is never silently left
+        wherever it was (item 1, live-feedback 2026-07-09; the fallback
+        ladder + honest note for a genuinely bbox-less raster-only case is
+        item D, live-feedback 2026-07-10). Runs LAST, unconditionally, on
+        every case-open path that reaches this handler (select, New case,
+        and the startup-reuse select alike -- ``_bind_startup_case`` also
+        resolves through a ``case-command select`` whose reply lands here)
+        -- nothing above this call may skip or short-circuit past it.
         """
         info = parse_case_open(payload)
         if info is None:
@@ -2046,7 +2074,13 @@ class Trid3ntDock(QDockWidget):
         self._refresh_model_label()  # status text = active model, not case-id
         self._replay_chat_history(info.chat_messages)
         self._note(f"Case '{info.title}' active")
-        if info.layers:
+        # Decision A (NATE 2026-07-31): layer restore rides the SAME gesture
+        # as the chat replay above, LOCAL mode only -- the by-URI
+        # materializer needs the store directly reachable (MinIO), which
+        # remote mode cannot do yet. Remote mode still gets its chat back;
+        # it just has no automatic (or, currently, any UI) layer restore
+        # until remote store access lands.
+        if self.settings.mode == MODE_LOCAL and info.layers:
             notes = self.materializer.materialize(info.layers)
             if notes:
                 # BUG 3a (live-feedback 2026-07-12): the case-open replay

@@ -3,7 +3,7 @@ listener (bidirectional layer push -- the reverse seam of /api/export-qgis).
 
 Exercises ``tool_catalog_http._handle_http`` dispatch only -- the ingestion
 LOGIC (geopandas/rasterio round trips, Persistence merge, AOI pin) is covered
-by ``test_import_user_layer.py``. Mirrors
+by ``test_register_case_layer.py``. Mirrors
 ``test_export_qgis_http_route.py`` / ``test_case_list_http_route.py``:
 
   - both routes served UNCONDITIONALLY (the local build hardwires
@@ -29,7 +29,7 @@ import json
 import pytest
 
 from trid3nt_server import tool_catalog_http
-from trid3nt_server.tools.meta.import_user_layer import (
+from trid3nt_server.cases.ingest_user_layer import (
     CaseNotFoundError,
     ImportLayerInputError,
     ObjectNotFoundError,
@@ -361,7 +361,7 @@ def test_ingest_layer_file_oversized_413_before_read(monkeypatch):
         raise AssertionError("upload fn must not run on an oversized body")
 
     monkeypatch.setattr(tool_catalog_http, "_upload_layer_file_fn", lambda: _never)
-    from trid3nt_server.tools.meta.import_user_layer import MAX_INGEST_BYTES
+    from trid3nt_server.cases.ingest_user_layer import MAX_INGEST_BYTES
 
     out = _drive(
         _post_no_length(

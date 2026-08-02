@@ -28,11 +28,11 @@ from types import SimpleNamespace
 
 import pytest
 
-from trid3nt_server.tools import TOOL_REGISTRY
-from trid3nt_server.tools.processing import compute_idf_curve as idf_mod
-from trid3nt_server.tools.fetchers.climate import lookup_precip_return_period as df_mod
-from trid3nt_server.tools.processing.charts_common import is_chart_emission_result
-from trid3nt_server.tools.processing.compute_idf_curve import (
+from trid3nt_server.agent.tools import TOOL_REGISTRY
+from trid3nt_server.agent.tools.processing.compute_idf_curve import compute_idf_curve as idf_mod
+from trid3nt_server.agent.tools.fetchers.climate.lookup_precip_return_period import lookup_precip_return_period as df_mod
+from trid3nt_server.agent.tools.processing.charts_common import is_chart_emission_result
+from trid3nt_server.agent.tools.processing.compute_idf_curve.compute_idf_curve import (
     IdfCurveInputError,
     IdfCurveNoCoverageError,
     IdfCurveUpstreamError,
@@ -215,10 +215,9 @@ def test_bad_y_axis_raises(offline_pfds) -> None:
 def test_category_and_corpus() -> None:
     import yaml
 
-    from trid3nt_server import categories
-    from trid3nt_server.tools.discovery import search_tools as dd
+    from trid3nt_server.agent import categories
+    from trid3nt_server.agent.tools.search.search_tools import search_tools as dd
 
     assert categories.PRIMARY_CATEGORY["compute_idf_curve"] == "hydrology"
-    corpus_path = pathlib.Path(dd._default_corpus_path())
-    corpus = yaml.safe_load(corpus_path.read_text())
+    corpus = dd._load_corpus()
     assert len(corpus.get("compute_idf_curve", [])) >= 5

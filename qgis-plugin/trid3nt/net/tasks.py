@@ -286,3 +286,4 @@ class _ProbePointTask(QObject):
             self.errored.emit(self._lon, self._lat, f"{type(exc).__name__}: {exc}")
             return
         self.finished.emit(self._lon, self._lat, result)
+

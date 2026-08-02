@@ -368,3 +368,119 @@ def test_atomic_tool_metadata_advertises_global_policy_to_llm_catalog() -> None:
     )
     dumped_global_ok = meta_global_ok.model_dump(mode="json")
     assert dumped_global_ok["supports_global_query"] is True
+
+
+# ============================================================================ #
+# Engine-door refactor additions (docs/specs/engine-door-refactor.md):
+#   engine: str | None = None + tier: Literal["general","door","template"]
+# ============================================================================ #
+
+
+def test_engine_tier_default_none_general() -> None:
+    """A bare construction yields the zero-impact defaults: engine is None and
+    tier == "general" (registration is unchanged for every existing tool)."""
+    # Cacheable path.
+    meta_cacheable = AtomicToolMetadata(
+        name="fetch_dem",
+        ttl_class="static-30d",
+        source_class="dem",
+    )
+    assert meta_cacheable.engine is None
+    assert meta_cacheable.tier == "general"
+
+    # Uncacheable path (FR-DC-6) also defaults the two new fields.
+    meta_uncacheable = AtomicToolMetadata(
+        name="request_spatial_input",
+        ttl_class="live-no-cache",
+        cacheable=False,
+    )
+    assert meta_uncacheable.engine is None
+    assert meta_uncacheable.tier == "general"
+
+
+def test_tier_accepts_three_literals() -> None:
+    """tier accepts general / door / template; an unknown tier is rejected."""
+    for value in ("general", "door", "template"):
+        meta = AtomicToolMetadata(
+            name="run_modflow",
+            ttl_class="live-no-cache",
+            cacheable=False,
+            engine="modflow",
+            tier=value,  # type: ignore[arg-type]
+        )
+        assert meta.tier == value
+
+    # An unknown tier is a closed 3-member Literal -> ValidationError.
+    with pytest.raises(ValidationError):
+        AtomicToolMetadata.model_validate(
+            {
+                "name": "run_modflow",
+                "ttl_class": "live-no-cache",
+                "cacheable": False,
+                "engine": "modflow",
+                "tier": "engine",  # not one of the three
+            }
+        )
+
+
+def test_engine_slug_roundtrips() -> None:
+    """The engine slug (str | None) round-trips through model_dump / re-construct."""
+    meta = AtomicToolMetadata(
+        name="modflow_capture_zone",
+        ttl_class="live-no-cache",
+        cacheable=False,
+        engine="modflow",
+        tier="template",
+    )
+    dumped = meta.model_dump()
+    assert dumped["engine"] == "modflow"
+    assert dumped["tier"] == "template"
+    reconstructed = AtomicToolMetadata(**dumped)
+    assert reconstructed.engine == "modflow"
+    assert reconstructed.tier == "template"
+
+    # engine=None round-trips too (the default for non-engine tools).
+    meta_none = AtomicToolMetadata(
+        name="fetch_dem",
+        ttl_class="static-30d",
+        source_class="dem",
+    )
+    dumped_none = meta_none.model_dump()
+    assert dumped_none["engine"] is None
+    assert AtomicToolMetadata(**dumped_none).engine is None
+
+
+def test_engine_tier_json_roundtrip_idempotent_and_extra_forbid() -> None:
+    """JSON serialize -> deserialize -> re-serialize is stable with engine/tier
+    set, and extra='forbid' still rejects an unknown key."""
+    meta = AtomicToolMetadata(
+        name="modflow_contaminant_plume",
+        ttl_class="live-no-cache",
+        cacheable=False,
+        engine="modflow",
+        tier="template",
+    )
+    dumped_a = meta.model_dump(mode="json")
+    assert dumped_a["engine"] == "modflow"
+    assert dumped_a["tier"] == "template"
+
+    text_a = json.dumps(dumped_a, sort_keys=True)
+    meta_b = AtomicToolMetadata.model_validate(json.loads(text_a))
+    dumped_b = meta_b.model_dump(mode="json")
+    text_b = json.dumps(dumped_b, sort_keys=True)
+    assert text_a == text_b
+    assert meta_b.engine == "modflow"
+    assert meta_b.tier == "template"
+
+    # extra="forbid" (via GraceModel) is unaffected by the two new fields.
+    with pytest.raises(ValidationError):
+        AtomicToolMetadata.model_validate(
+            {
+                "name": "modflow_contaminant_plume",
+                "ttl_class": "live-no-cache",
+                "cacheable": False,
+                "engine": "modflow",
+                "tier": "template",
+                "unknown_key": "boom",  # extra field rejected
+            }
+        )

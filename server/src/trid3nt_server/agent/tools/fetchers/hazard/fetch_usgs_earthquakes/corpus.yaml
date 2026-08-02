@@ -1,0 +1,9 @@
+fetch_usgs_earthquakes:
+- show me the earthquakes in California this month
+- map recent quakes near Anchorage with their magnitude and depth
+- where did earthquakes happen in the last 30 days in this bbox
+- give me magnitude 5 and above earthquakes worldwide over the past year
+- did anything shake near Ridgecrest last week, plot the epicenters
+- plot the USGS recorded seismic events with marker sized by magnitude
+- list the felt earthquakes above M4 in southern California recently
+- show observed earthquake epicenters and depths around the San Andreas fault

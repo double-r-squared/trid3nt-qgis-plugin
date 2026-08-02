@@ -2,7 +2,7 @@
 
 Proves the FULL agent-side wire for the urban vector-draw flow:
 
-1. PURE PARSE (``trid3nt_server.spatial_input``): a role-tagged drawn
+1. PURE PARSE (``trid3nt_server.agent.gates.spatial_input``): a role-tagged drawn
    ``FeatureCollection`` (aoi polygon + barrier polylines tagged wall/flap_gate
    + points) splits into engine-ready inputs — the clean ``barriers``
    FeatureCollection, the AOI bbox, the point list — and EVERY malformed shape
@@ -43,13 +43,15 @@ import numpy as np
 import pytest
 
 from trid3nt_server import server
+from trid3nt_server.agent.gates.cards.spatial_input import (
+    _spatial_response_to_result,
+)
 from trid3nt_server.server import (
     SessionState,
     _emit_spatial_input_and_wait,
     _resolve_pending_spatial_input,
-    _spatial_response_to_result,
 )
-from trid3nt_server.spatial_input import (
+from trid3nt_server.agent.gates.spatial_input import (
     ParsedSpatialInput,
     SpatialInputParseError,
     barriers_feature_collection,
@@ -535,7 +537,7 @@ def test_emit_and_wait_timeout_returns_none(monkeypatch):
 
 
 def test_request_spatial_input_tool_returns_sentinel():
-    from trid3nt_server.tools.meta.spatial_input_tool import (
+    from trid3nt_server.agent.tools.meta.spatial_input_tool.spatial_input_tool import (
         SPATIAL_INPUT_SENTINEL_KEY,
         request_spatial_input,
     )
@@ -552,7 +554,7 @@ def test_request_spatial_input_tool_returns_sentinel():
 
 
 def test_request_spatial_input_tool_rejects_bad_mode():
-    from trid3nt_server.tools.meta.spatial_input_tool import (
+    from trid3nt_server.agent.tools.meta.spatial_input_tool.spatial_input_tool import (
         SPATIAL_INPUT_SENTINEL_KEY,
         request_spatial_input,
     )
@@ -572,8 +574,8 @@ def test_request_spatial_input_tool_rejects_bad_mode():
 swmm_api = pytest.importorskip("swmm_api")
 pyswmm = pytest.importorskip("pyswmm")
 
-from trid3nt_server.workflows import swmm_mesh_builder as mb  # noqa: E402
-from trid3nt_server.workflows.swmm_mesh_builder import build_swmm_mesh  # noqa: E402
+from trid3nt_server.agent.workflows.swmm import swmm_mesh_builder as mb  # noqa: E402
+from trid3nt_server.agent.workflows.swmm.swmm_mesh_builder import build_swmm_mesh  # noqa: E402
 
 _N = 20
 _CELL = 10.0

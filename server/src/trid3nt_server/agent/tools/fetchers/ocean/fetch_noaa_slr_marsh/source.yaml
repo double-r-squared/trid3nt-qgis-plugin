@@ -1,0 +1,127 @@
+# Router source spec (raster-stragglers wave, mapserver_export mode, ADR 0068).
+# Twin: fetch_noaa_slr_marsh.py + shared _noaa_slr_raster.py -- NOAA OCM SLR
+# Viewer marsh_* MapServer/export server-symbolized PNG32 -> 4-band RGBA COG.
+# A fully-transparent export (no coverage at this level) is a VALID transparent
+# overlay, never a typed EMPTY (the twin's honesty floor).
+schema_version: v1
+
+name: fetch_noaa_slr_marsh
+source_class: noaa_slr_marsh
+error_prefix: NOAA_SLR_RASTER
+input_error_suffix: INPUT_INVALID
+empty_error_suffix: EMPTY
+shape: raster-cog
+supports_global_query: false
+
+endpoints:
+  data:
+    url: "https://coast.noaa.gov/arcgis/rest/services/dc_slr"
+auth:
+  mode: none
+  user_agent: "trid3nt/0.1 (Hazard Modeling Agent; https://github.com/double-r-squared/trid3nt-qgis-plugin; agent@trid3nt.dev)"
+
+params:
+  bbox: {type: bbox, required: true, quantize: round_6dp}
+  slr_ft:
+    type: float
+    default: 3.0
+  res_deg:
+    type: float
+    default: 0.0005
+    schema_optional: true
+
+ingest:
+  access: mapserver_export
+  mapserver:
+    service_by_param:
+      param: slr_ft
+      map:
+        0.0: marsh_000
+        0.5: marsh_050
+        1.0: marsh_100
+        1.5: marsh_150
+        2.0: marsh_200
+        2.5: marsh_250
+        3.0: marsh_300
+        3.5: marsh_350
+        4.0: marsh_400
+        4.5: marsh_450
+        5.0: marsh_500
+        5.5: marsh_550
+        6.0: marsh_600
+        6.5: marsh_650
+        7.0: marsh_700
+        7.5: marsh_750
+        8.0: marsh_800
+        8.5: marsh_850
+        9.0: marsh_900
+        9.5: marsh_950
+        10.0: marsh_1000
+    res_deg: 0.0005
+    px_min: 16
+    px_max: 2048
+    export_query: {bboxSR: "4326", imageSR: "4326", format: png32, transparent: "true", f: image}
+
+normalize:
+  crs: "EPSG:4326"
+  orientation: north_up
+
+output:
+  layer_type: raster
+  ext: tif
+  role: context
+  emit_bbox: true
+  style_preset: "noaa_slr_marsh"
+
+cache:
+  ttl_class: static-30d
+payload_estimate:
+  model: bbox_area
+  mb_per_sq_deg: 8.0
+  floor_mb: 0.1
+  ceil_mb: 60.0
+
+caveats:
+  - "NOAA OCM SLR Viewer marsh-migration overlay (marsh_* MapServer/export PNG32 -> 4-band RGBA COG); existing marsh / migrated marsh / open water symbology baked in"
+  - "CONUS coastal product only; a bbox with no coverage at this level returns a valid transparent (empty) overlay, never fabricated content"
+  - "marsh migration is published at 0..10 ft in 0.5-ft steps"
+fallback: []
+
+# corpus lifted from sibling corpus.yaml.
+
+docstring: |-
+  Fetch the NOAA Sea-Level-Rise MARSH-MIGRATION raster for one SLR level.
+
+  **What it does:** Reads NOAA OCM's SLR Viewer marsh-migration projection for one
+  SLR level (0..10 ft, 0.5-ft steps) and returns it as a transparent RGBA raster
+  overlay (the NOAA marsh-class symbology baked in: existing marsh, migrated marsh,
+  open water / drowned, etc.). Shows how coastal wetlands shift under sea-level rise
+  -- the habitat-transition companion to ``fetch_noaa_slr_scenarios`` (footprint)
+  and ``fetch_noaa_slr_confidence`` (mapping confidence).
+
+  **When to use:**
+  - "How does the marsh / coastal wetland migrate under 3 ft of sea-level rise?"
+  - "Show the NOAA marsh-migration projection for this estuary."
+  - As a habitat-transition overlay for conservation / wetland exposure analysis.
+
+  **When NOT to use:**
+  - For the inundation FOOTPRINT -> ``fetch_noaa_slr_scenarios``.
+  - For mapping CONFIDENCE -> ``fetch_noaa_slr_confidence``.
+  - For event-driven storm surge -> ``sfincs_flood`` / ``fetch_gtsm_tide_surge``.
+  - Outside CONUS -> not covered (CONUS coastal product only).
+
+  **Parameters:**
+  - ``bbox`` (tuple): ``(min_lon, min_lat, max_lon, max_lat)`` EPSG:4326. Required.
+    Example coastal Lee County FL: ``(-82.2, 26.2, -81.5, 26.9)``.
+  - ``slr_ft`` (float, default ``3.0``): 0..10 ft in 0.5-ft steps.
+  - ``res_deg`` (float, optional): output cell size in degrees (finer = opt-in,
+    payload-warning-coupled). Defaults to ~50 m.
+
+  **Returns:** a 4-band transparent RGBA COG ``LayerURI`` (``layer_type="raster"``,
+  ``role="context"``, ``style_preset="noaa_slr_marsh"``). A bbox with no marsh
+  coverage at this level returns a valid transparent (empty) overlay -- never
+  fabricated content.
+
+  **Cross-tool dependencies:** pairs with ``fetch_noaa_slr_scenarios`` +
+  ``fetch_noaa_slr_confidence`` (the three NOAA OCM SLR Viewer products); feeds
+  conservation / wetland overlays with ``fetch_wdpa_protected_areas``.

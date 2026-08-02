@@ -1,0 +1,9 @@
+fetch_slider_timestamps:
+- which GOES satellite frames are available over this window
+- list the available SLIDER imagery timestamps for this product
+- what is the frame cadence for the GOES fire-temperature imagery
+- check which VIIRS day-fire frames exist before I animate
+- snap my animation window to the nearest available GOES frames
+- how often does the geostationary imagery update for this sector
+- give me the availability index of GOES-18 conus geocolor frames
+- what time steps can I animate for this satellite product

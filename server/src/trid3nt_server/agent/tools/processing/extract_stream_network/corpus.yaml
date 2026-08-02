@@ -1,0 +1,8 @@
+extract_stream_network:
+- extract the stream network from the DEM
+- where are the drainage lines / channels in this area
+- trace the streams for this bounding box
+- DEM-derived river network with a flow accumulation threshold
+- show headwater channels not on the NHD map
+- map the natural drainage paths across this terrain
+- flow accumulation stream lines for this AOI

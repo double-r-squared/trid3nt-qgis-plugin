@@ -23,8 +23,8 @@ from pathlib import Path
 import pytest
 import yaml
 
-from trid3nt_server.tools.discovery import catalog_common as cc
-from trid3nt_server.tools.discovery.catalog_common import (
+from trid3nt_server.agent.tools.search import catalog_common as cc
+from trid3nt_server.agent.tools.search.catalog_common import (
     append_user_catalog_entry,
     load_catalog,
     reset_catalog_cache,

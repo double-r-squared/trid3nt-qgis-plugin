@@ -32,9 +32,9 @@ import pytest
 from trid3nt_contracts import new_ulid
 from trid3nt_contracts.execution import LayerURI
 
-from trid3nt_server.pipeline_emitter import PipelineEmitter
-from trid3nt_server.tools import vector_tiles
-from trid3nt_server.tools.vector_tiles import (
+from trid3nt_server.emission.pipeline_emitter import PipelineEmitter
+from trid3nt_server.agent.tools import vector_tiles
+from trid3nt_server.agent.tools.vector_tiles import (
     DENSE_VECTOR_THRESHOLD,
     MAX_INLINE_FEATURES,
     DensifyMeta,
@@ -296,11 +296,11 @@ async def test_dense_vector_emits_simplified_inline_plus_density_tag(
 
     # Stub the object-store read so the choke point gets our dense FC. The
     # densify transform runs AFTER this stub inside _read_vector_uri_as_geojson.
-    import trid3nt_server.pipeline_emitter as pe
+    import trid3nt_server.emission.pipeline_emitter as pe
 
     async def _fake_read(uri: str) -> dict[str, Any]:
         # Mirror the real function: read raw, then densify at the choke point.
-        from trid3nt_server.tools.vector_tiles import densify_if_needed as _dn
+        from trid3nt_server.agent.tools.vector_tiles import densify_if_needed as _dn
 
         obj, meta = _dn(dense, layer_id=uri)
         if meta is not None:
@@ -339,10 +339,10 @@ async def test_small_vector_stays_inline_with_no_density_tag(
     """A sub-threshold vector keeps the current inline path: full FC, no tag."""
     small = _point_fc(50)
 
-    import trid3nt_server.pipeline_emitter as pe
+    import trid3nt_server.emission.pipeline_emitter as pe
 
     async def _fake_read(uri: str) -> dict[str, Any]:
-        from trid3nt_server.tools.vector_tiles import densify_if_needed as _dn
+        from trid3nt_server.agent.tools.vector_tiles import densify_if_needed as _dn
 
         obj, meta = _dn(small, layer_id=uri)
         if meta is not None:

@@ -38,7 +38,7 @@ def _split_object_uri(uri: str) -> tuple[str, str, str]:
 
 
 def _s3_client() -> Any:
-    """Lazily build the worker-local boto3 S3 client (Batch task-role chain)."""
+    """Lazily build the worker-local boto3 S3 client (Batch chain)."""
     global _S3_CLIENT
     if _S3_CLIENT is None:
         import boto3  # type: ignore

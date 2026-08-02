@@ -207,6 +207,19 @@ dependencies = [
     # INSTALL and are cached under ~/.duckdb/extensions afterwards; a cold
     # offline box degrades with a typed EXTENSION_UNAVAILABLE error.
     "duckdb>=1",
+    # V&V wave (ADR 0021) group B: spotpy.objectivefunctions is the pinned
+    # source of NSE/KGE/PBIAS/RSR/RMSE/R2 for compute_skill_metrics -- no
+    # bespoke reimplementation of any metric spotpy already provides. Pure
+    # numpy+scipy dependency (no native/compiled extensions), so it installs
+    # cleanly on the offline box.
+    "spotpy>=1.6,<2",
+    # Fetcher-fold phase-2 wave-3 (ADR 0040): the official USGS `dataretrieval`
+    # client backs the router's dataretrieval-delegating executor for the USGS
+    # water-data family (WQP water-quality + NLDI navigation), absorbing the
+    # NWIS -> Water Data OGC API migration churn instead of our hand-rolled
+    # RDB/GeoJSON parsers. Pinned exactly: the OGC-API surface + tabular schemas
+    # evolve, so a floating pin risks silent column/endpoint drift.
+    "dataretrieval==1.2.0",
     # Consumed verbatim from contracts/ in this repo (editable install).
     "trid3nt-contracts>=0.1,<0.2",
 ]
@@ -238,7 +251,7 @@ where = ["src"]
 # loaded via Path(__file__).parent (2026-06-30).
 [tool.setuptools.package-data]
 trid3nt_server = [
-    "workflows/manning_mapping.csv",
-    "data/tool_query_corpus.yaml",
-    "tools/README.md",
+    "agent/workflows/sfincs/manning_mapping.csv",
+    "agent/data/tool_query_corpus.yaml",
+    "agent/tools/README.md",
 ]

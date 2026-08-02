@@ -24,12 +24,12 @@ from __future__ import annotations
 
 import pytest
 
-from trid3nt_server.adapter import (
+from trid3nt_server.agent.adapters.adapter import (
     _failed_modeled_envelope_error_code,
     summarize_tool_result,
 )
-from trid3nt_server.tools.fetchers.climate.lookup_precip_return_period import PrecipForcingUnavailableError, _ATLAS14_ARI_YEARS, _fetch_atlas2_precip_bytes, _parse_atlas14_csv
-from trid3nt_server.workflows.model_flood_scenario import _build_failed_envelope
+from trid3nt_server.agent.tools.fetchers.climate.lookup_precip_return_period.lookup_precip_return_period import PrecipForcingUnavailableError, _ATLAS14_ARI_YEARS, _fetch_atlas2_precip_bytes, _parse_atlas14_csv
+from trid3nt_server.agent.workflows.sfincs.flood.flood import _build_failed_envelope
 from trid3nt_contracts import new_ulid
 
 
@@ -41,8 +41,8 @@ def _patch_read_through_passthrough(monkeypatch):
     that just runs ``fetch_fn`` and wraps the bytes in a ReadThroughResult.
     Exceptions from ``fetch_fn`` propagate unchanged (the real shim re-raises).
     """
-    import trid3nt_server.tools.cache as cache_mod
-    import trid3nt_server.tools.fetchers.climate.lookup_precip_return_period as df
+    import trid3nt_server.agent.tools.cache as cache_mod
+    import trid3nt_server.agent.tools.fetchers.climate.lookup_precip_return_period.lookup_precip_return_period as df
 
     def _passthrough(*, metadata, params, ext, fetch_fn, **_kw):  # noqa: ANN001
         return cache_mod.ReadThroughResult(uri=None, data=fetch_fn(), hit=False)
@@ -82,7 +82,7 @@ def test_failed_flood_envelope_summarizes_as_error_not_ok():
     job-0327 B1 it returns ``status="error"`` carrying the threaded code.
     """
     dumped = _toutle_failed_envelope("FETCHER_FAILED")
-    summary = summarize_tool_result("run_model_flood_scenario", dumped)
+    summary = summarize_tool_result("sfincs_flood", dumped)
 
     assert summary["status"] == "error", (
         "failed flood envelope (no layers, no solver run) must surface as "
@@ -105,7 +105,7 @@ def test_failed_envelope_error_code_threaded_through_all_exit_codes():
         "POSTPROCESS_FAILED",
     ):
         dumped = _toutle_failed_envelope(code)
-        summary = summarize_tool_result("run_model_flood_scenario", dumped)
+        summary = summarize_tool_result("sfincs_flood", dumped)
         assert summary["status"] == "error"
         assert summary["error_code"] == code, (
             f"threaded code {code!r} lost; got {summary['error_code']!r}"
@@ -175,7 +175,7 @@ def test_honesty_floor_root_cause_agnostic_minimal_dict():
 def test_honesty_floor_does_not_fire_on_successful_modeled_envelope():
     """A modeled envelope WITH a layer is a real success — must stay status=ok."""
     summary = summarize_tool_result(
-        "run_model_flood_scenario",
+        "sfincs_flood",
         {
             "envelope_type": "modeled",
             "layers": [{"layer_id": "flood-depth-peak-x", "uri": "s3://b/x.tif"}],
@@ -223,7 +223,7 @@ def test_dispatched_then_failed_tagged_with_run_id_surfaces_error():
             "solver_run_ids": ["run_dispatched_before_failure"],
             "flood": {"metrics": {"solver_version": f"failed:{code}"}},
         }
-        summary = summarize_tool_result("run_model_flood_scenario", dumped)
+        summary = summarize_tool_result("sfincs_flood", dumped)
         assert summary["status"] == "error", (
             f"dispatched-then-failed {code} with a run_id must be error, got "
             f"{summary['status']!r}"
@@ -243,7 +243,7 @@ def test_dispatched_then_failed_solver_version_only_with_run_id():
         "solver_run_ids": ["run_abc"],
         "flood": {"metrics": {"solver_version": "failed:SOLVER_FAILED"}},
     }
-    summary = summarize_tool_result("run_model_flood_scenario", dumped)
+    summary = summarize_tool_result("sfincs_flood", dumped)
     assert summary["status"] == "error"
     assert summary["error_code"] == "SOLVER_FAILED"
     assert summary["error_type"] == "FailedModelEnvelope"
@@ -270,7 +270,7 @@ def test_publish_drop_success_form_surfaces_no_renderable_layer_with_metrics():
             }
         },
     }
-    summary = summarize_tool_result("run_model_flood_scenario", dumped)
+    summary = summarize_tool_result("sfincs_flood", dumped)
     assert summary["status"] == "error"
     assert summary["error_code"] == "NO_RENDERABLE_LAYER"
     assert summary["error_type"] == "NoRenderableLayer"
@@ -290,7 +290,7 @@ def test_publish_drop_with_no_metrics_degrades_gracefully():
         "layers": [],
         "solver_run_ids": ["run_x"],
     }
-    summary = summarize_tool_result("run_model_flood_scenario", dumped)
+    summary = summarize_tool_result("sfincs_flood", dumped)
     assert summary["status"] == "error"
     assert summary["error_code"] == "NO_RENDERABLE_LAYER"
     assert "no renderable layer" in summary["message"].lower()
@@ -300,7 +300,7 @@ def test_modeled_with_nonempty_layers_stays_ok_success_path_unregressed():
     """MUST-FIX 2 guard: a modeled envelope WITH a non-empty layers list reads
     as status=ok — even with a non-empty solver_run_ids list (success path)."""
     summary = summarize_tool_result(
-        "run_model_flood_scenario",
+        "sfincs_flood",
         {
             "envelope_type": "modeled",
             "workflow_name": "model_flood_scenario",
@@ -321,7 +321,7 @@ def test_telemetry_flag_derives_failure_from_returned_error_summary():
     carries status=error) without standing up the full WS loop.
     """
     dumped = _toutle_failed_envelope("SOLVER_FAILED")
-    summary = summarize_tool_result("run_model_flood_scenario", dumped)
+    summary = summarize_tool_result("sfincs_flood", dumped)
 
     # Replicate the server.py derivation (server.py ~:1531-1547).
     dispatch_error = None
@@ -339,7 +339,7 @@ def test_telemetry_flag_derives_failure_from_returned_error_summary():
 
     # And the success path: a real modeled success records success=True, code=None.
     ok_summary = summarize_tool_result(
-        "run_model_flood_scenario",
+        "sfincs_flood",
         {
             "envelope_type": "modeled",
             "layers": [{"layer_id": "x", "uri": "wms://q/x"}],
@@ -433,7 +433,7 @@ def test_lookup_precip_falls_back_to_atlas2_for_toutle(monkeypatch):
     (the live Toutle behavior) and asserts lookup_precip_return_period returns a
     real depth tagged source="noaa-atlas2" instead of dying.
     """
-    import trid3nt_server.tools.fetchers.climate.lookup_precip_return_period as df
+    import trid3nt_server.agent.tools.fetchers.climate.lookup_precip_return_period.lookup_precip_return_period as df
 
     def _fake_atlas14(lat, lon):  # noqa: ANN001 — test double
         raise df.UpstreamAPIError(
@@ -458,7 +458,7 @@ def test_lookup_precip_falls_back_to_atlas2_for_toutle(monkeypatch):
 def test_lookup_precip_raises_unavailable_when_both_atlases_miss(monkeypatch):
     """Both atlases miss (out-of-coverage point) -> typed, NOT-retryable error
     with the actionable observed-precip remediation in the message."""
-    import trid3nt_server.tools.fetchers.climate.lookup_precip_return_period as df
+    import trid3nt_server.agent.tools.fetchers.climate.lookup_precip_return_period.lookup_precip_return_period as df
 
     def _fake_atlas14(lat, lon):  # noqa: ANN001
         raise df.UpstreamAPIError("not within a project area")
@@ -482,7 +482,7 @@ def test_lookup_precip_raises_unavailable_when_both_atlases_miss(monkeypatch):
 def test_lookup_precip_atlas14_path_unregressed(monkeypatch):
     """REGRESSION GUARD: an Atlas-14-covered point still uses Atlas 14 (the
     fallback try/except did not break the primary design-storm path)."""
-    import trid3nt_server.tools.fetchers.climate.lookup_precip_return_period as df
+    import trid3nt_server.agent.tools.fetchers.climate.lookup_precip_return_period.lookup_precip_return_period as df
 
     # A minimal valid Atlas-14 CSV body for the 24-hr row across all 10 ARIs.
     depths = ",".join(str(round(2.0 + i * 0.5, 3)) for i in range(len(_ATLAS14_ARI_YEARS)))

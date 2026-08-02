@@ -1,0 +1,166 @@
+# Router source spec (fetcher fold phase-2 wave-3, ADR 0040) -- NHDPlus NLDI
+# network navigation (flowline traversal from a seed).
+# Twin: fetch_nhdplus_nldi_navigate.py (HYBRID, vector-FGB LineString navigate).
+# DELEGATES to the official USGS `dataretrieval` client (nldi.get_features snap
+# + nldi.get_flowlines navigate) instead of raw HTTP (ingest.delegate).
+
+schema_version: v1
+name: fetch_nhdplus_nldi_navigate
+source_class: nhdplus_nldi
+error_prefix: NHDPLUS_NLDI
+input_error_suffix: INPUT_INVALID
+empty_error_suffix: EMPTY
+shape: vector-fgb
+supports_global_query: false
+endpoints:
+  nldi:
+    url: https://api.water.usgs.gov/nldi/linked-data
+auth:
+  mode: none
+  user_agent: trid3nt_default
+params:
+  seed_point:
+    type: point
+    schema_optional: true
+  comid:
+    type: int
+    schema_optional: true
+  direction:
+    type: enum
+    values:
+    - UM
+    - UT
+    - DM
+    - DD
+    default: DM
+  distance_km:
+    type: float
+    default: 50.0
+    min: 0.0
+    max: 1000.0
+ingest:
+  delegate:
+    library: dataretrieval
+    service: nldi_navigate
+  properties:
+  - nhdplus_comid
+normalize:
+  crs: EPSG:4326
+output:
+  layer_type: vector
+  ext: fgb
+  role: context
+  style_preset: nhdplus_flowlines
+cache:
+  ttl_class: static-30d
+payload_estimate:
+  model: bbox_area
+  mb_per_sq_deg: 0.0004
+  floor_mb: 0.05
+caveats:
+- CONUS only (NHDPlus v2.1); a seed outside (-130,20,-60,55) -> NHDPLUS_NLDI_INPUT_INVALID
+- exactly one of seed_point / comid (mutual exclusion) -> NHDPLUS_NLDI_INPUT_INVALID
+- a seed at a network terminus / stub reach -> zero flowlines -> NHDPLUS_NLDI_EMPTY (retryable=false)
+- flowline count capped at 5000 (UT traversals truncate)
+docstring: |-
+  Walk the NHDPlus stream network from a seed in the requested direction.
+
+  What it does:
+      Snaps the seed (a point lon/lat OR a known NHDPlus COMID) to the
+      NHDPlus v2.1 channel network, then asks USGS NLDI to enumerate
+      the connected flowlines in one of four directions -- upstream
+      main stem, upstream tributaries, downstream main stem, or
+      downstream with diversions -- out to the requested distance.
+      Returns the connected flowlines as a FlatGeobuf of LineString
+      geometries tagged with ``nhdplus_comid``.
+
+  When to use:
+      - User asks to "trace water downstream from here" / "find every
+        tributary above this gauge" / "show me the river network from
+        this confluence to the sea".
+      - Post-fire debris-flow / contaminant-plume / dam-break workflow
+        needs the downstream reach catalog from a seed point so it can
+        score each reach for impact.
+      - Watershed scoping: pair this tool's downstream-main-stem (DM)
+        output with ``fetch_administrative_boundaries`` /
+        ``fetch_noaa_nwm_streamflow`` to bound a reach-level routing
+        model.
+      - Visualization-only: emit the upstream tributary network (UT)
+        as a context layer for narrative answers about a watershed.
+
+  When NOT to use:
+      - DO NOT use for raw, unfiltered NHDPlus reach geometry by
+        HUC4 -- use ``fetch_river_geometry`` (the bulk NHDPlus HR
+        fetcher) instead; NLDI navigate is a *traversal* primitive,
+        not a bbox-scoped reach dump.
+      - DO NOT use for streamflow / discharge values -- pair with
+        ``fetch_noaa_nwm_streamflow`` (NWM model output keyed on the
+        same COMID) or ``fetch_usgs_nwis_gauges`` (NWIS gauge observations).
+      - DO NOT use for global / non-CONUS hydrography -- NLDI / NHDPlus
+        v2.1 covers CONUS only. For OUS use a future
+        ``fetch_hydrosheds_rivers`` or similar.
+      - DO NOT use for catchment / basin polygons -- that is the
+        NLDI ``/basin`` endpoint, surfaced separately when needed.
+
+  Parameters:
+      seed_point: optional ``(lon, lat)`` in EPSG:4326 to snap to the
+          nearest NHDPlus COMID via NLDI's ``/comid/position`` endpoint.
+          Mutually exclusive with ``comid``. Must fall inside the CONUS
+          envelope ``(-130, 20, -60, 55)``. Example for Caloosahatchee
+          at Fort Myers: ``(-81.85, 26.55)``.
+      comid: optional NHDPlus v2.1 COMID (positive integer) to start
+          navigation from directly, skipping the snap step. Use this
+          when chaining off another tool that already produced a
+          ``nhdplus_comid`` (``fetch_noaa_nwm_streamflow``, NWIS gauge
+          resolution, etc.). Example: ``15334434``.
+      direction: One of:
+          - ``"UM"`` -- upstream main stem (trunk only, single branch)
+          - ``"UT"`` -- upstream tributaries (full upstream subnetwork)
+          - ``"DM"`` (default) -- downstream main stem (trunk only)
+          - ``"DD"`` -- downstream including diversions (anastomosing
+            splits, distributaries).
+      distance_km: traversal cutoff in km along the network from the
+          seed. Range ``[0, 1000]``; default ``50.0``. Larger values
+          risk hitting the ``_MAX_FLOWLINES=5000`` cap on the response
+          (especially with UT) -- the payload estimator gates this via
+          the chat warning.
+
+  Returns:
+      ``LayerURI`` pointing at a FlatGeobuf in the cache bucket
+      ``s3://trid3nt-cache/cache/static-30d/nhdplus_nldi/<key>.fgb``.
+      ``layer_type="vector"``, ``role="context"``,
+      ``style_preset="nhdplus_flowlines"``, ``units=None``. Geometry
+      is LineString in EPSG:4326. Single property per feature:
+      ``nhdplus_comid`` (int) -- the join key downstream tools (NWM,
+      NWIS, NHDPlus VAA tables) consume.
+
+  Rendering: the returned flowlines are a VECTOR layer that renders
+  INLINE on the map automatically (the agent surface streams the FlatGeobuf
+  as GeoJSON). Do NOT call ``publish_layer`` on this layer -- ``publish_layer``
+  is raster-only and publishing a vector trips the vector guard. Simply
+  return / surface the ``LayerURI`` and it paints on its own.
+
+  Cross-tool dependencies:
+      - Composes WITH: ``fetch_noaa_nwm_streamflow`` (join NWM discharge
+        values to navigated reaches by COMID); ``fetch_usgs_nwis_gauges``
+        (point NWIS gauges along the traversal).
+      - Composes ALONGSIDE: ``fetch_river_geometry`` (bulk NHDPlus
+        HR fetch when bbox scope is wanted rather than network
+        traversal); ``fetch_fema_nfhl_zones`` (intersect downstream
+        flowlines with regulatory flood zones for impact analysis).
+      - Upstream data source: USGS NLDI
+        (https://api.water.usgs.gov/nldi).
+
+  Cache: ``ttl_class="static-30d"``, ``source_class="nhdplus_nldi"``.
+  The NHDPlus topology is multi-year-stable, so a static-30d bucket is
+  well amortized.
+
+  Errors:
+      - ``NHDPlusNLDIInputError``: missing/both seeds, unknown direction,
+        out-of-range distance, seed outside CONUS (retryable=False).
+      - ``NHDPlusNLDIUpstreamError``: NLDI 5xx / network error / malformed
+        response (retryable=True).
+      - ``NHDPlusNLDIEmptyError``: seed valid but no flowlines returned
+        (network terminus, stub reach, distance too short) (retryable=False).
+
+  Tier-1 free. No API key. ``supports_global_query=False``.

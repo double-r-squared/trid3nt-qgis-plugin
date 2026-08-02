@@ -9,9 +9,16 @@ natural-language turn (NO bbox coordinates in the prompt):
     show how it travels downstream.
 
 Any solver-confirm / granularity gate is auto-confirmed PROMPTLY. After the turn
-completes, it triggers the plugin's own case export (``dock.open_case_in_qgis``)
--- the REAL path that discovers the SELAFIN mesh sibling and materializes it --
-then ASSERTS the animated DYE mesh:
+completes, it triggers the plugin's remote-mode-only mesh fallback
+(``dock.hydrate_case_layers``, formerly ``open_case_in_qgis`` -- decision A,
+NATE 2026-07-31, made the by-URI case-open replay LOCAL-mode automatic and
+mesh-less; native MDAL mesh materialization is REMOTE-mode-only now, a
+pre-existing gap from ADR 0058, not fixed by decision A) -- the REAL path that
+discovers the SELAFIN mesh sibling and materializes it -- then ASSERTS the
+animated DYE mesh. NOTE: this requires ``trid3nt/mode=remote`` in QSettings
+(unset here -- defaults to local, where ``hydrate_case_layers`` now no-ops);
+see the open_issues note in job "restore-case-layers-on-open" before relying
+on this script unmodified:
 
   - a QgsMeshLayer materialized (MDAL opened the .slf),
   - it carries a DYE dataset group that is TIME-VARYING (> 1 dataset),
@@ -241,10 +248,13 @@ session_id = getattr(_client, "session_id", None)
 print(f"[drive] session_id={session_id}", flush=True)
 print(f"[drive] FRESH_CASE_ID={demo_case}", flush=True)
 
-# --- Trigger the plugin's OWN case export to materialize the SELAFIN mesh. --- #
+# --- Trigger the plugin's remote-mode-only mesh fallback. ------------------- #
+# (Raster/vector layers already restored automatically when the case opened --
+# decision A, NATE 2026-07-31 -- this call is now ONLY for the native MDAL
+# mesh, which stays a remote-mode-only path; see the module docstring.)
 print("[drive] exporting the case to QGIS (materializes the dye mesh) ...", flush=True)
 n_before = len(QgsProject.instance().mapLayers())
-dock.open_case_in_qgis(demo_case, demo_title or demo_case)
+dock.hydrate_case_layers(demo_case, demo_title or demo_case)
 
 
 def _mesh_layers():

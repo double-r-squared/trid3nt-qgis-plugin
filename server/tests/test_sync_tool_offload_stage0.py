@@ -20,8 +20,8 @@ from __future__ import annotations
 import pytest
 
 from trid3nt_server import server
-from trid3nt_server import tools as agent_tools
-from trid3nt_server.tools import RegisteredTool
+from trid3nt_server.agent import tools as agent_tools
+from trid3nt_server.agent.tools import RegisteredTool
 from trid3nt_contracts.tool_registry import AtomicToolMetadata
 
 
@@ -40,9 +40,9 @@ def test_should_offload_modes(monkeypatch: pytest.MonkeyPatch) -> None:
     # Subset -> the compute_*/clip_* families (plus the always-set).
     monkeypatch.setattr(server, "_SYNC_OFFLOAD_MODE", "subset")
     assert server._should_offload_sync_tool("compute_slope") is True
-    assert server._should_offload_sync_tool("clip_raster_to_bbox") is True
+    assert server._should_offload_sync_tool("clip_raster_to_polygon") is True
     assert server._should_offload_sync_tool("geocode_location") is False
-    assert server._should_offload_sync_tool("run_model_flood_scenario") is False
+    assert server._should_offload_sync_tool("sfincs_flood") is False
 
     # Global aliases -> every tool.
     for glob in ("global", "all", "on", "1", "true", "yes"):

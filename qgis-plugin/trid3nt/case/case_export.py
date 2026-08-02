@@ -1,7 +1,18 @@
-"""Open-case-in-QGIS support -- PURE PYTHON (no PyQGIS / PyQt imports).
+"""REMOTE-mode-ONLY case-layer materialize+download fallback -- PURE PYTHON
+(no PyQGIS / PyQt imports).
 
-Milestone 2 item 4: list the user's cases and open one in QGIS via the local
-agent's export API (``tool_catalog_http.py``, default ``http://127.0.0.1:8766``):
+Decision A (NATE 2026-07-31): LOCAL mode no longer calls anything in this
+module -- opening a case restores its layers automatically (by URI, straight
+from the store) in the same gesture as its chat, via
+``Trid3ntDock._on_case_open_event``; the manifest-fetch helper this module
+used to also expose for local mode (``fetch_case_layers_manifest``, the
+``/api/case-layers`` client) was fully redundant with that and has been
+deleted. What remains here is condemned in DELETION_LEDGER pending remote
+store access -- kept because REMOTE mode still cannot stream the store
+directly and has no other path to a case's layers yet.
+
+Talks to the local agent's export API (``tool_catalog_http.py``, default
+``http://127.0.0.1:8766``):
 
     POST /api/export-qgis {"case_id": "..."}
       -> 200 {"status": "ok"|"partial", "qgz_path": str,

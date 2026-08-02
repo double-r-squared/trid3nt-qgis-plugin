@@ -1,0 +1,9 @@
+compute_ndvi:
+- show me the vegetation greenness for this area from Sentinel-2
+- map where the healthy vegetation is across this bbox
+- compute the NDVI vegetation index over this AOI
+- give me a canopy vigor map from the least-cloudy recent satellite scene
+- where is the dense green biomass versus the bare soil in this region
+- make me a vegetation condition layer for this watershed from Sentinel L2A
+- overlay a green-to-red vegetation vigor raster for the conservation stack here
+- how green is the vegetation in this AOI right now from satellite imagery

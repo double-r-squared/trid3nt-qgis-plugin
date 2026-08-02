@@ -5,7 +5,7 @@ ZERO tool calls AND ZERO non-whitespace text -- the empty-completion shape (log:
 "gemini loop terminal ... text_chunks=0"). Before this fix the loop logged
 terminal and BROKE, so the user's request (e.g. compute_hillshade) silently died.
 
-The fix (server.py, ``_stream_gemini_reply`` loop): on the LOCAL path only, an
+The fix (server.py, ``_stream_model_reply`` loop): on the LOCAL path only, an
 empty round RETRIES with a corrective user-role nudge appended to ``contents``,
 BOUNDED by ``_EMPTY_COMPLETION_RETRY_CAP`` so an always-empty model can never
 loop forever. Bedrock / vertex (production narration) is byte-unchanged.
@@ -29,11 +29,11 @@ import asyncio
 from dataclasses import dataclass, field
 
 import pytest
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 
-from trid3nt_server.adapter import (
+from trid3nt_server.agent.adapters.adapter import (
     FunctionCallEvent,
-    GeminiSettings,
+    ModelSettings,
     TextDeltaEvent,
 )
 from trid3nt_contracts import new_ulid
@@ -104,7 +104,7 @@ def _install_scripted_stream(agent_server, rounds):
 
 
 def _drive(provider: str, rounds, monkeypatch, dispatch_side_effect=None):
-    """Run one ``_stream_gemini_reply`` turn under ``provider`` with ``rounds``.
+    """Run one ``_stream_model_reply`` turn under ``provider`` with ``rounds``.
 
     Returns ``(user_texts_per_call, model_calls, dispatch_log, sock)``.
     """
@@ -127,18 +127,17 @@ def _drive(provider: str, rounds, monkeypatch, dispatch_side_effect=None):
 
     sock = _FakeSocket()
     state = SessionState(session_id=new_ulid())
-    settings = GeminiSettings(
+    settings = ModelSettings(
         model="gpt-oss", project="t", location="us-central1", use_vertex=True
     )
 
     async def _run():
-        with patch.object(agent_server, "build_client", return_value=MagicMock()), \
-             patch.object(
+        with patch.object(
                  agent_server, "_invoke_tool_via_emitter", side_effect=_fake_invoke
              ), \
              patch.object(agent_server, "build_tool_declarations", return_value=[]), \
              stream_patch:
-            await agent_server._stream_gemini_reply(
+            await agent_server._stream_model_reply(
                 sock, state, settings, "compute a hillshade here", "research"
             )
 
@@ -224,14 +223,14 @@ def test_normal_text_answer_no_spurious_retry(monkeypatch):
 # (d) the non-openai provider path NEVER retries an empty round.
 # --------------------------------------------------------------------------- #
 def test_non_openai_provider_never_retries(monkeypatch):
-    # Two empty rounds queued, but the vertex path must break on the FIRST one.
+    # Two empty rounds queued, but the bedrock path must break on the FIRST one.
     rounds = [_empty_round(), _empty_round()]
     user_texts, model_calls, dispatch_log, _sock = _drive(
-        "vertex", rounds, monkeypatch
+        "bedrock", rounds, monkeypatch
     )
 
     assert len(model_calls) == 1, (
-        "vertex (production narration) must break on an empty round, not retry"
+        "bedrock (production narration) must break on an empty round, not retry"
     )
     assert _nudge_seen(user_texts) == 0
     assert dispatch_log == []

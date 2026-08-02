@@ -103,13 +103,11 @@ OVERRIDES: dict[str, dict] = {
     "fetch_inaturalist_observations": {"taxon_id": 6930},
     "fetch_iucn_red_list_range": {"species_name": "Puma concolor"},
     "fetch_wfigs_incident": {"incident_name": "Park Fire"},
-    "run_model_satellite_fire_animation": {"incident_name": "Park Fire"},
     # satellite animation: explicit small window yesterday + a bbox that sees data
     "fetch_goes_archive_animation": {"bbox": (-121.5, 39.5, -121.0, 40.0), "start_utc": f"{YDAY}T18:00", "end_utc": f"{YDAY}T18:30"},
     "fetch_goes_blend_animation": {"start_utc": f"{YDAY}T18:00", "end_utc": f"{YDAY}T18:30"},
     "fetch_goes_active_fire": {"bbox": (-121.5, 39.5, -121.0, 40.0)},
     "fetch_glm_lightning": {"bbox": (-90.0, 25.0, -85.0, 30.0), "start_utc": f"{YDAY}T18:00", "end_utc": f"{YDAY}T18:20"},
-    "run_model_glm_lightning_animation": {"bbox": (-90.0, 25.0, -85.0, 30.0)},
     "run_model_groundwater_contamination_scenario": {
         "article_text": "A tanker spill released benzene near Tampa, Florida on 2026-06-01, "
                         "contaminating shallow groundwater around 27.955N 82.455W per county officials."
@@ -117,7 +115,7 @@ OVERRIDES: dict[str, dict] = {
 }
 
 OVERRIDES.update({
-    "run_swmm_urban_flood": {"bbox": (-82.460, 27.945, -82.450, 27.955)},
+    "swmm_urban_flood": {"bbox": (-82.460, 27.945, -82.450, 27.955)},
     # vector-oriented tools whose generic param is the ambiguous layer_uri --
     # the chain map's default (DEM raster) is wrong for these
     "merge_features": {"layer_uri": "__CHAIN_COUNTIES__"},
@@ -202,7 +200,7 @@ def prefetch_chain(tools) -> None:
 
 
 TIMEOUT_OVERRIDES = {
-    "run_swmm_urban_flood": 1500,
+    "swmm_urban_flood": 1500,
     "fetch_storm_events_db": 420,
     "fetch_climate_normals": 420,
     "fetch_population": 420,
@@ -319,15 +317,15 @@ def main() -> None:
     ap.add_argument("--retry", action="store_true", help="re-run non-PASS tools too")
     args = ap.parse_args()
 
-    import trid3nt_server.tools as pkg
-    from trid3nt_server.tools import get_registered_tools
+    import trid3nt_server.agent.tools as pkg
+    from trid3nt_server.agent.tools import get_registered_tools
     for m in pkgutil.iter_modules(pkg.__path__):
-        importlib.import_module(f"trid3nt_server.tools.{m.name}")
+        importlib.import_module(f"trid3nt_server.agent.tools.{m.name}")
     try:
-        import trid3nt_server.workflows as wpkg
+        import trid3nt_server.agent.workflows as wpkg
         for m in pkgutil.iter_modules(wpkg.__path__):
             try:
-                importlib.import_module(f"trid3nt_server.workflows.{m.name}")
+                importlib.import_module(f"trid3nt_server.agent.workflows.{m.name}")
             except Exception:
                 pass
     except ImportError:

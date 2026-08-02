@@ -1,0 +1,9 @@
+fetch_nhd_waterbodies:
+- show me the lakes and ponds in this area
+- map the NHD waterbodies for this bbox
+- give me the reservoirs and lakes near here
+- which water bodies are inside this hazard footprint?
+- I need lake and pond polygons for this habitat overlay
+- fetch the open-water bodies for this watershed
+- show me the named lakes in this county
+- how many waterbodies does this plume footprint touch?

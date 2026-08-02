@@ -33,7 +33,7 @@ from __future__ import annotations
 import yaml
 
 from trid3nt_server.server import _maybe_default_solver_bbox_to_pinned_aoi
-from trid3nt_server.workflows.sfincs_builder import (
+from trid3nt_server.agent.workflows.sfincs.sfincs_builder import (
     BuildOptions,
     ForcingSpec,
     WaterlevelForcing,
@@ -168,7 +168,7 @@ def test_solver_bare_bbox_defaults_to_active_aoi() -> None:
     """A follow-up solve with NO bbox runs on the active AOI."""
     pin = list(_SOLVE_DOMAIN)
     out = _maybe_default_solver_bbox_to_pinned_aoi(
-        "run_model_flood_scenario", {}, pin
+        "sfincs_flood", {}, pin
     )
     assert out["bbox"] == pin
 
@@ -187,7 +187,7 @@ def test_solver_wider_same_area_box_snaps_to_active_aoi() -> None:
     # it -> the snap fires (this is the #183 compute-outside-AOI case).
     drifted_same_area = {"bbox": [-97.74, 30.27, -97.70, 30.30]}
     out = _maybe_default_solver_bbox_to_pinned_aoi(
-        "run_model_flood_scenario", drifted_same_area, pin
+        "sfincs_flood", drifted_same_area, pin
     )
     assert out["bbox"] == pin, "solve domain must be snapped to the active AOI"
 
@@ -199,7 +199,7 @@ def test_solver_explicit_widen_is_honored() -> None:
     pin = list(_SOLVE_DOMAIN)
     widen = {"bbox": [-97.80, 30.20, -97.68, 30.34]}  # encloses the pin
     out = _maybe_default_solver_bbox_to_pinned_aoi(
-        "run_model_flood_scenario", widen, pin
+        "sfincs_flood", widen, pin
     )
     assert out == widen, "an explicit enclosing widen must be honored"
 
@@ -209,7 +209,7 @@ def test_solver_different_place_is_honored() -> None:
     pin = list(_SOLVE_DOMAIN)
     elsewhere = {"bbox": [-100.0, 40.0, -99.9, 40.1]}
     out = _maybe_default_solver_bbox_to_pinned_aoi(
-        "run_model_flood_scenario", elsewhere, pin
+        "sfincs_flood", elsewhere, pin
     )
     assert out == elsewhere
 
@@ -218,7 +218,7 @@ def test_solver_first_solve_no_pin_is_noop() -> None:
     """The FIRST solve (no AOI pinned yet) DEFINES the domain -> untouched."""
     supplied = {"bbox": [-97.80, 30.20, -97.68, 30.34]}
     out = _maybe_default_solver_bbox_to_pinned_aoi(
-        "run_model_flood_scenario", supplied, None
+        "sfincs_flood", supplied, None
     )
     assert out == supplied
 
@@ -238,7 +238,7 @@ def test_solver_equivalent_box_is_passthrough() -> None:
     pin = list(_SOLVE_DOMAIN)
     same = {"bbox": list(_SOLVE_DOMAIN)}
     out = _maybe_default_solver_bbox_to_pinned_aoi(
-        "run_swmm_urban_flood", same, pin
+        "swmm_urban_flood", same, pin
     )
     assert out == same
 
@@ -249,7 +249,7 @@ def test_solver_guard_never_injects_bbox_into_point_driven_modflow() -> None:
     well / source point, not a rectangle; injecting a flood-AOI bbox would be a
     spurious key today and latent wrong-extent debt tomorrow."""
     pin = list(_SOLVE_DOMAIN)
-    for tool in ("run_modflow_job", "run_model_groundwater_contamination_scenario"):
+    for tool in ("modflow_contaminant_plume", "run_model_groundwater_contamination_scenario"):
         params = {"upgradient_offset_km": 1.0, "duration_days": 30}
         out = _maybe_default_solver_bbox_to_pinned_aoi(tool, params, pin)
         # Same object, no bbox injected -- byte-for-byte passthrough.

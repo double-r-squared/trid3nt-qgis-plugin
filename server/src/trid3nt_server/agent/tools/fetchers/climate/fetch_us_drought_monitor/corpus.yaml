@@ -1,0 +1,9 @@
+fetch_us_drought_monitor:
+- show me the US Drought Monitor map for this area
+- how bad is the drought in Arizona right now
+- give me current drought conditions and categories near here
+- which areas are in severe or extreme drought
+- drought intensity polygons D0 through D4 for the Southwest
+- what was the drought severity here in August 2021
+- map exceptional drought across the region for wildfire risk context
+- show drought categories over my agricultural fields

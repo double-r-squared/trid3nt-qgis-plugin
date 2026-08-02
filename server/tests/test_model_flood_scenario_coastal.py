@@ -18,7 +18,7 @@ These tests prove (all mocked — no network, no GDAL, no solver):
 5. A bathymetry-ABSENT topobathy fallback still completes (degrade, not abort).
 6. A hard ``TopobathyError`` surfaces as a typed failed envelope (error_code
    threaded), never raises.
-7. The LLM-facing ``run_model_flood_scenario`` forwards ``coastal`` through.
+7. The LLM-facing ``sfincs_flood`` forwards ``coastal`` through.
 """
 
 from __future__ import annotations
@@ -28,13 +28,13 @@ from unittest.mock import patch
 
 import pytest
 
-from trid3nt_server.tools.fetchers.ocean.fetch_topobathy import (
+from trid3nt_server.agent.tools.fetchers.ocean.fetch_topobathy.fetch_topobathy import (
     TopobathyResult,
     TopobathyUpstreamError,
 )
-from trid3nt_server.workflows.model_flood_scenario import (
+from trid3nt_server.agent.workflows.sfincs.flood.flood import (
     model_flood_scenario,
-    run_model_flood_scenario,
+    sfincs_flood,
 )
 from trid3nt_contracts import new_ulid
 from trid3nt_contracts.envelope import (
@@ -237,56 +237,76 @@ def _patched_chain(
     async def _wfc(_h):  # noqa: ANN001
         return _run_result_ok(run_id, handle.handle_id)
 
-    from trid3nt_server.tools.publish_layer import PublishLayerError
+    from trid3nt_server.agent.tools.publish_layer.publish_layer import PublishLayerError
+
+    # data-router fold: fetch_noaa_coops_tides is a promoted spec-driven tool
+    # resolved by the auto-wire via TOOL_REGISTRY[name].fn (not a twin module
+    # import). Stub it OFFLINE by swapping the registry entry for a raising one.
+    from trid3nt_server.agent.tools import RegisteredTool, TOOL_REGISTRY as _TR
+
+    def _coops_offline(**_kw):  # noqa: ANN003
+        raise RuntimeError("offline test - no live CO-OPS")
+
+    _coops_stub = RegisteredTool(
+        metadata=_TR["fetch_noaa_coops_tides"].metadata,
+        fn=_coops_offline,
+        module="test_offline_stub",
+    )
+
+    # data-router fold (ADR 0074): fetch_river_geometry is likewise a promoted
+    # spec-driven tool resolved via TOOL_REGISTRY[name].fn, not a twin module
+    # import -- stub it the same way as the CO-OPS seam above.
+    def _river_stub(**_kw):  # noqa: ANN003
+        return _mock_layer_uri("rivers")
+
+    _river_geometry_stub = RegisteredTool(
+        metadata=_TR["fetch_river_geometry"].metadata,
+        fn=_river_stub,
+        module="test_offline_stub",
+    )
 
     return (
-        patch("trid3nt_server.workflows.model_flood_scenario.fetch_dem", dem_mock),
+        patch("trid3nt_server.agent.workflows.sfincs.flood.flood.fetch_dem", dem_mock),
         patch(
-            "trid3nt_server.workflows.model_flood_scenario.fetch_topobathy",
+            "trid3nt_server.agent.workflows.sfincs.flood.flood.fetch_topobathy",
             topobathy_mock,
         ),
         patch(
-            "trid3nt_server.workflows.model_flood_scenario.fetch_landcover",
+            "trid3nt_server.agent.workflows.sfincs.flood.flood.fetch_landcover",
             return_value=_landcover_result(),
         ),
+        patch.dict(_TR, {"fetch_river_geometry": _river_geometry_stub}),
         patch(
-            "trid3nt_server.workflows.model_flood_scenario.fetch_river_geometry",
-            return_value=_mock_layer_uri("rivers"),
-        ),
-        patch(
-            "trid3nt_server.workflows.model_flood_scenario.lookup_precip_return_period",
+            "trid3nt_server.agent.workflows.sfincs.flood.flood.lookup_precip_return_period",
             return_value=_precip_result(),
         ),
         patch(
-            "trid3nt_server.workflows.model_flood_scenario.build_sfincs_model",
+            "trid3nt_server.agent.workflows.sfincs.flood.flood.build_sfincs_model",
             side_effect=_capture_build,
         ),
         patch(
-            "trid3nt_server.workflows.model_flood_scenario.run_solver",
+            "trid3nt_server.agent.workflows.sfincs.flood.flood.run_solver",
             return_value=handle,
         ),
         patch(
-            "trid3nt_server.workflows.model_flood_scenario.wait_for_completion",
+            "trid3nt_server.agent.workflows.sfincs.flood.flood.wait_for_completion",
             side_effect=_wfc,
         ),
         patch(
-            "trid3nt_server.workflows.model_flood_scenario.postprocess_flood",
+            "trid3nt_server.agent.workflows.sfincs.flood.flood.postprocess_flood",
             return_value=([_flood_layer(run_id)], _DEPTH_METRICS),
         ),
         patch(
-            "trid3nt_server.workflows.model_flood_scenario.publish_layer",
+            "trid3nt_server.agent.workflows.sfincs.flood.flood.publish_layer",
             side_effect=PublishLayerError("JOBS_CLIENT_UNAVAILABLE", "no qgis in test"),
         ),
         # OFFLINE: the coastal auto-wire's live surge fetchers (CO-OPS/GTSM)
         # must never hit the network or ambient object storage from a unit
         # test - stub both so the ladder degrades to the parametric
         # design-storm surge (rung 3, key-free and fully offline).
+        patch.dict(_TR, {"fetch_noaa_coops_tides": _coops_stub}),
         patch(
-            "trid3nt_server.tools.fetchers.ocean.fetch_noaa_coops_tides.fetch_noaa_coops_tides",
-            side_effect=RuntimeError("offline test - no live CO-OPS"),
-        ),
-        patch(
-            "trid3nt_server.tools.fetchers.ocean.fetch_gtsm_tide_surge.fetch_gtsm_tide_surge",
+            "trid3nt_server.agent.tools.fetchers.ocean.fetch_gtsm_tide_surge.fetch_gtsm_tide_surge.fetch_gtsm_tide_surge",
             side_effect=RuntimeError("offline test - no live GTSM"),
         ),
     )
@@ -568,7 +588,7 @@ async def test_coastal_topobathy_hard_error_threads_into_failed_envelope() -> No
 
 @pytest.mark.asyncio
 async def test_run_wrapper_forwards_coastal_flag() -> None:
-    """``run_model_flood_scenario(coastal=True)`` forwards the flag into the
+    """``sfincs_flood(coastal=True)`` forwards the flag into the
     inner workflow (so the LLM can request a coastal run)."""
 
     captured_kwargs: dict = {}
@@ -578,17 +598,17 @@ async def test_run_wrapper_forwards_coastal_flag() -> None:
         return _empty_envelope(_COASTAL_BBOX)
 
     with patch(
-        "trid3nt_server.workflows.model_flood_scenario.model_flood_scenario",
+        "trid3nt_server.agent.workflows.sfincs.flood.flood.model_flood_scenario",
         side_effect=_fake_inner,
     ):
-        await run_model_flood_scenario(bbox=_COASTAL_BBOX, coastal=True)
+        await sfincs_flood(bbox=_COASTAL_BBOX, coastal=True)
 
     assert captured_kwargs.get("coastal") is True
 
 
 @pytest.mark.asyncio
 async def test_run_wrapper_coastal_defaults_false() -> None:
-    """``run_model_flood_scenario`` defaults coastal=False (land path)."""
+    """``sfincs_flood`` defaults coastal=False (land path)."""
 
     captured_kwargs: dict = {}
 
@@ -597,9 +617,9 @@ async def test_run_wrapper_coastal_defaults_false() -> None:
         return _empty_envelope(_INLAND_BBOX)
 
     with patch(
-        "trid3nt_server.workflows.model_flood_scenario.model_flood_scenario",
+        "trid3nt_server.agent.workflows.sfincs.flood.flood.model_flood_scenario",
         side_effect=_fake_inner,
     ):
-        await run_model_flood_scenario(bbox=_INLAND_BBOX)
+        await sfincs_flood(bbox=_INLAND_BBOX)
 
     assert captured_kwargs.get("coastal") is False

@@ -1,0 +1,121 @@
+# Router source spec (data-router fold, chained-resolution mode, ADR 0063).
+# Twin: fetch_nws_alerts_conus.py -- FOLDED via chained-resolution hooks.
+schema_version: v1
+name: fetch_nws_alerts_conus
+source_class: nws_alerts_conus
+shape: vector-fgb
+supports_global_query: true
+error_prefix: NWS_CONUS
+input_error_suffix: INPUT_INVALID
+endpoints:
+  data:
+    url: https://api.weather.gov/alerts/active
+auth:
+  mode: none
+  user_agent: 'trid3nt-server/0.1 (Hazard Modeling Agent; contact: trid3nt-ops@local)'
+params:
+  event_types:
+    type: str_list
+    required: false
+    schema_optional: true
+  status:
+    type: enum
+    required: false
+    default: actual
+    values:
+    - actual
+    - exercise
+    - system
+    - test
+    - draft
+  area:
+    type: str
+    required: false
+    schema_optional: true
+hooks:
+  build_request: nws_alerts_conus.build_request
+  parse_response: nws_alerts_conus.parse_response
+  enrich_plan: nws_alerts_conus.enrich_plan
+  enrich_merge: nws_alerts_conus.enrich_merge
+ingest:
+  chained:
+    max_detail_fetches: 2500
+  properties:
+  - event
+  - headline
+  - description
+  - severity
+  - urgency
+  - certainty
+  - effective
+  - onset
+  - ends
+  - expires
+  - senderName
+  - sender
+  - category
+  - messageType
+  - status
+  - areaDesc
+  - instruction
+  - response
+  - id
+normalize:
+  crs: EPSG:4326
+output:
+  layer_type: vector
+  ext: fgb
+  role: primary
+  style_preset: nws_alerts
+  emit_bbox: false
+  keep_null_geometry: true
+cache:
+  ttl_class: dynamic-1h
+payload_estimate:
+  model: per_feature
+  features_per_sq_deg: 4.0
+  kb_per_feature: 8.0
+  floor_mb: 0.05
+  ceil_mb: 20.0
+caveats:
+- LIVE NWS active-alerts snapshot (current-only, 0-7 days); nationwide by default or ?area=<state>. Alerts
+  carrying only zone/county references have their affected zones resolved to polygons (deduped, capped,
+  best-effort); an unresolvable alert keeps its row with NULL geometry. No API key.
+docstring: "Fetch active National Weather Service alerts — nationwide, or precisely scoped to one US state.\n\
+  \n**What it does:** Calls ``api.weather.gov/alerts/active`` and returns the\nactive NWS alert polygons\
+  \ as a FlatGeobuf vector layer. Alerts that carry\nonly zone/county references (NULL inline geometry)\
+  \ have their affected zones\nresolved to real polygons (F88) so they actually draw on the map. With\n\
+  ``area`` omitted it sweeps the entire US (typically ~500 features; the\nnationwide sweep resolves ~1700\
+  \ zones and runs larger/slower, ~18 MB FGB at\npeak, paid once per cache hour). With ``area`` set to\
+  \ a US state (\"TX\" or\n\"Texas\") it applies NWS's precise server-side state filter (``?area=TX``)\
+  \ so\nONLY that state's alerts are returned — never the surrounding states, and\nthe zone resolution\
+  \ stays small and fast. Optional client-side event-type\nfiltering narrows the result without issuing\
+  \ a new upstream call.\n\n**When to use:**\n- User asks for weather alerts in a SPECIFIC STATE (\"weather\
+  \ alerts for\n  Texas\") — ALWAYS pass ``area=\"TX\"`` (2-letter code) or ``area=\"Texas\"``\n  (full\
+  \ name). Without ``area`` the result is nationwide and will render\n  alerts far outside the state the\
+  \ user asked about.\n- User asks \"show me every hurricane warning in America right now\" or\n  \"summarize\
+  \ today's severe weather nationwide\" — omit ``area`` for the\n  single CONUS sweep (far cheaper than\
+  \ 50 state-level calls).\n- The Hazard Event Pipeline needs all active alerts matching a hazard\n  type\
+  \ (e.g. all Flash Flood Watches) without a known state.\n- Situational-awareness overlay for a multi-state\
+  \ or national dashboard.\n\n**When NOT to use:**\n- County- or bbox-scoped queries — use ``fetch_nws_event``\
+  \ with a 5-digit\n  county FIPS or a bbox; for sub-state areas of interest, clip the result\n  to the\
+  \ admin polygon (``fetch_administrative_boundaries`` +\n  ``spatial_query``) rather than trusting a\
+  \ rectangle.\n- Historical weather events — NWS active-alerts is current-only (0–7 day\n  horizon);\
+  \ use ``fetch_storm_events_db`` for historical data.\n- International alerts — NWS covers US states,\
+  \ territories, and marine\n  zones only.\n\n**Parameters:**\n- ``event_types`` (list[str] | None, default\
+  \ None): Optional NWS event-type\n  filter. Examples: ``[\"Hurricane Warning\"]``, ``[\"Flood Warning\"\
+  ,\n  \"Flash Flood Watch\"]``. Filtering is case-sensitive Title Case (NWS\n  convention). None means\
+  \ return all active alert types.\n- ``status`` (str, default ``\"actual\"``): NWS alert status. Valid\
+  \ values:\n  ``\"actual\"``, ``\"exercise\"``, ``\"system\"``, ``\"test\"``, ``\"draft\"``.\n  Always\
+  \ use ``\"actual\"`` for production use.\n- ``area`` (str | None, default None): US state/territory\
+  \ scope. Accepts\n  a 2-letter code (``\"TX\"``) or full name (``\"Texas\"``, case-insensitive).\n \
+  \ None means nationwide. Unrecognized values raise a non-retryable input\n  error (cities/counties are\
+  \ NOT valid — geocode or use\n  ``fetch_nws_event`` for those).\n\n**Returns:**\nA ``LayerURI`` pointing\
+  \ at a FlatGeobuf in the cache bucket:\n``s3://trid3nt-cache/cache/dynamic-1h/nws_alerts_conus/<key>.fgb``\n\
+  containing the alert polygons. Properties: ``event``, ``headline``,\n``description``, ``severity``,\
+  \ ``urgency``, ``certainty``, ``effective``,\n``onset``, ``ends``, ``expires``, ``senderName``, ``areaDesc``,\n\
+  ``instruction``. ``layer_type=\"vector\"``, ``role=\"primary\"``.\nCached for 1 hour (``dynamic-1h``),\
+  \ keyed per (status, area, event_types).\nSource-tier FR-HEP-2 Tier 1.\n\n**Cross-tool dependencies:**\n\
+  - No upstream tool required (no bbox needed; state scoping is built in).\n- Sibling to: ``fetch_nws_event``\
+  \ (county-FIPS/bbox-scoped variant).\n- Feeds: Hazard Event Pipeline claim aggregation; map overlay\
+  \ display."

@@ -20,14 +20,14 @@ from __future__ import annotations
 
 import json
 from dataclasses import dataclass, field
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 
 import pytest
 
 from trid3nt_server import server as agent_server
-from trid3nt_server import tools as agent_tools
-from trid3nt_server.adapter import GeminiSettings
-from trid3nt_server.tool_gating import (
+from trid3nt_server.agent import tools as agent_tools
+from trid3nt_server.agent.adapters.adapter import ModelSettings
+from trid3nt_server.agent.gates.tool_gating import (
     BENCH_BLOCKED_CORRECT,
     BENCH_BLOCKED_WRONG_PICK,
     BenchBlockConfig,
@@ -35,8 +35,8 @@ from trid3nt_server.tool_gating import (
     bench_block_decision,
     parse_bench_block_config,
 )
-from trid3nt_server.tools import RegisteredTool
-from trid3nt_server.uri_registry import reset_uri_registries_for_tests
+from trid3nt_server.agent.tools import RegisteredTool
+from trid3nt_server.emission.uri_registry import reset_uri_registries_for_tests
 from trid3nt_contracts import new_ulid
 from trid3nt_contracts.tool_registry import AtomicToolMetadata
 
@@ -146,39 +146,15 @@ class _FakeSocket:
 
 
 def _fc_chunk(name: str, args: dict, call_id: str):
-    fn_call = MagicMock()
-    fn_call.name = name
-    fn_call.id = call_id
-    fn_call.args = args
-    part = MagicMock()
-    part.function_call = fn_call
-    part.text = None
-    content = MagicMock()
-    content.parts = [part]
-    cand = MagicMock()
-    cand.content = content
-    chunk = MagicMock()
-    chunk.candidates = [cand]
-    chunk.text = None
-    return chunk
+    return {"tool_call": {"name": name, "args": args, "call_id": call_id}}
 
 
 def _text_chunk(text: str):
-    part = MagicMock()
-    part.function_call = None
-    part.text = text
-    content = MagicMock()
-    content.parts = [part]
-    cand = MagicMock()
-    cand.content = content
-    chunk = MagicMock()
-    chunk.candidates = [cand]
-    chunk.text = text
-    return chunk
+    return {"text": text}
 
 
-def _settings() -> GeminiSettings:
-    return GeminiSettings(
+def _settings() -> ModelSettings:
+    return ModelSettings(
         model="gemini-2.5-pro", project="t", location="us-central1", use_vertex=True
     )
 
@@ -214,31 +190,24 @@ def _stub_tool():
         reset_uri_registries_for_tests()
 
 
-async def _drive_two_rounds(state) -> _FakeSocket:
+async def _drive_two_rounds(state, fake_llm) -> _FakeSocket:
     """Round 1 calls the stub tool; round 2 (if reached) calls it AGAIN.
 
     Two rounds let a test distinguish "turn ended after the block" (round 2
     never streams; the stub is never called) from "turn continued".
     """
-    rounds = {"n": 0}
-
-    def _script(**kwargs):
-        rounds["n"] += 1
-        if rounds["n"] <= 2:
-            return iter([_fc_chunk(_STUB_NAME, {"query": "x"}, f"c{rounds['n']}")])
-        return iter([_text_chunk("Done.")])
+    fake_llm.script([
+        _fc_chunk(_STUB_NAME, {"query": "x"}, "c1"),
+        _fc_chunk(_STUB_NAME, {"query": "x"}, "c2"),
+        _text_chunk("Done."),
+    ])
 
     sock = _FakeSocket()
-    with patch.object(agent_server, "build_client", return_value=MagicMock()), patch.object(
-        agent_server, "build_tool_declarations", return_value=[]
-    ):
-        agent_server.build_client.return_value.models.generate_content_stream.side_effect = (
-            lambda **kw: _script(**kw)
-        )
-        await agent_server._stream_gemini_reply(
+    with patch.object(agent_server, "build_tool_declarations", return_value=[]):
+        await agent_server._stream_model_reply(
             sock, state, _settings(), "please do the thing", "research"
         )
-    state._rounds = rounds["n"]  # type: ignore[attr-defined]
+    state._rounds = len(fake_llm.calls)  # type: ignore[attr-defined]
     return sock
 
 
@@ -254,16 +223,16 @@ def _tool_io_responses(sock: _FakeSocket) -> list[str]:
 
 
 @pytest.mark.asyncio
-async def test_unarmed_executes_the_tool(_stub_tool):
+async def test_unarmed_executes_the_tool(_stub_tool, fake_llm):
     """UNARMED (config None) -> byte-identical: the fn runs (twice, both rounds)."""
     state = agent_server.SessionState(session_id=new_ulid())
     assert state.bench_block_config is None
-    await _drive_two_rounds(state)
+    await _drive_two_rounds(state, fake_llm)
     assert len(_CALLS) == 2, "unarmed dispatch must invoke the tool every round"
 
 
 @pytest.mark.asyncio
-async def test_armed_wrong_pick_blocks_and_ends_turn(_stub_tool):
+async def test_armed_wrong_pick_blocks_and_ends_turn(_stub_tool, fake_llm):
     """A non-member pick -> BENCH_BLOCKED_WRONG_PICK, fn never runs, turn ends."""
     state = agent_server.SessionState(session_id=new_ulid())
     state.bench_block_config = BenchBlockConfig(
@@ -271,7 +240,7 @@ async def test_armed_wrong_pick_blocks_and_ends_turn(_stub_tool):
         always_allowed=frozenset({"search_tools"}),
         block_at_invocation=frozenset(),
     )
-    sock = await _drive_two_rounds(state)
+    sock = await _drive_two_rounds(state, fake_llm)
     assert _CALLS == [], "wrong-pick must NOT execute the tool fn"
     responses = _tool_io_responses(sock)
     assert any(BENCH_BLOCKED_WRONG_PICK in r for r in responses), responses
@@ -280,7 +249,7 @@ async def test_armed_wrong_pick_blocks_and_ends_turn(_stub_tool):
 
 
 @pytest.mark.asyncio
-async def test_armed_correct_blocked_validates_but_does_not_run(_stub_tool):
+async def test_armed_correct_blocked_validates_but_does_not_run(_stub_tool, fake_llm):
     """A block-tier member pick -> BENCH_BLOCKED_CORRECT, fn never runs."""
     state = agent_server.SessionState(session_id=new_ulid())
     state.bench_block_config = BenchBlockConfig(
@@ -288,14 +257,14 @@ async def test_armed_correct_blocked_validates_but_does_not_run(_stub_tool):
         always_allowed=frozenset({"search_tools"}),
         block_at_invocation=frozenset({_STUB_NAME}),
     )
-    sock = await _drive_two_rounds(state)
+    sock = await _drive_two_rounds(state, fake_llm)
     assert _CALLS == [], "correct-blocked must NOT execute the tool fn"
     responses = _tool_io_responses(sock)
     assert any(BENCH_BLOCKED_CORRECT in r for r in responses), responses
 
 
 @pytest.mark.asyncio
-async def test_armed_always_allowed_executes(_stub_tool):
+async def test_armed_always_allowed_executes(_stub_tool, fake_llm):
     """A tool in always_allowed rides through and executes normally."""
     state = agent_server.SessionState(session_id=new_ulid())
     state.bench_block_config = BenchBlockConfig(
@@ -303,5 +272,5 @@ async def test_armed_always_allowed_executes(_stub_tool):
         always_allowed=frozenset({_STUB_NAME}),
         block_at_invocation=frozenset(),
     )
-    await _drive_two_rounds(state)
+    await _drive_two_rounds(state, fake_llm)
     assert len(_CALLS) == 2, "always-allowed tool must execute every round"

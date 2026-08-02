@@ -40,6 +40,7 @@ from .common import GraceModel
 __all__ = [
     "TTLClass",
     "TTL_CLASSES",
+    "EngineTier",
     "AtomicToolMetadata",
 ]
 
@@ -78,6 +79,24 @@ TTL_CLASSES: tuple[str, ...] = (
     "dynamic-1h",
     "live-no-cache",
 )
+
+
+#: Retrieval tier for the engine-door refactor (docs/specs/engine-door-refactor.md).
+#: ``general`` (default) is the ordinary per-turn retrieval pool; ``door`` is a
+#: read-only engine concierge that ALSO competes in the per-turn pool; ``template``
+#: is a registered engine template EXCLUDED from the default pool and surfaced only
+#: by its door's gate expansion (select-then-call). Registration is thereby
+#: decoupled from retrieval visibility.
+#: ``catalog`` (catalog-surfacing experiment) is a spec-served data source EXCLUDED
+#: from the default declarable pool (like ``template``) BUT KEPT in the search index
+#: so a discovery hit can rank + gate-expand it (Design 2) or a card projection can
+#: surface it (Design 1). It diverges from ``template`` precisely in staying indexed.
+#: ``internal`` is a registry-resolvable tool with NO model-facing surface at all:
+#: excluded from the default declarable pool AND from the search index (like
+#: ``template``, but with no door to gate-expand it), so it is reachable ONLY by an
+#: in-process ``TOOL_REGISTRY[name].fn`` call from another tool. Used for an absorbed
+#: seam that a public tool resolves internally (fetch_copernicus_dem <- fetch_dem).
+EngineTier = Literal["general", "door", "template", "catalog", "internal"]
 
 
 class AtomicToolMetadata(GraceModel):
@@ -169,7 +188,7 @@ class AtomicToolMetadata(GraceModel):
             "effects and does not mutate any external state (GCS, QGIS project, "
             "MongoDB, Cloud Run). Defaults to True — the safe assumption for "
             "fetchers and compute tools. Set to False for publish_layer, "
-            "run_solver, qgis_process, run_pelicun_damage_assessment, and any "
+            "run_solver, qgis_process, pelicun_damage_assessment, and any "
             "other tool that writes."
         ),
     )
@@ -207,7 +226,7 @@ class AtomicToolMetadata(GraceModel):
             "additional side effects. Defaults to True — fetchers with the cache "
             "shim satisfy this property. Set to False for tools that emit pipeline "
             "state (wait_for_completion), dispatch Cloud Run jobs (run_solver, "
-            "qgis_process), write GCS artifacts (run_pelicun_damage_assessment, "
+            "qgis_process), write GCS artifacts (pelicun_damage_assessment, "
             "publish_layer), or interact with stateful systems in non-idempotent ways."
         ),
     )
@@ -240,6 +259,39 @@ class AtomicToolMetadata(GraceModel):
             "intermediate rasters (e.g. fetch_dem's raw DEM) whose raw output the "
             "user should not auto-see. Has no effect on vector layers, on layers "
             "that already carry an http(s) uri, or on publish_layer itself."
+        ),
+    )
+
+    # --- Engine-door refactor additions (docs/specs/engine-door-refactor.md) --- #
+    #
+    # Two OPTIONAL fields for the engine-door family. Both default to the
+    # zero-impact value so all existing ``AtomicToolMetadata(...)`` call sites
+    # keep working untouched (additive, same pattern as the Wave 1.5 / 4.10
+    # additions above). They are ORTHOGONAL to the cacheable/ttl_class rule -
+    # no new cross-field validator. The soft convention "tier in {door,
+    # template} SHOULD carry a non-null engine" is enforced server/audit-side,
+    # NOT here, to keep the contract a pure shape.
+
+    engine: str | None = Field(
+        default=None,
+        description=(
+            "Owning engine slug for an engine-door family member (e.g. "
+            "'modflow', 'sfincs'). None (default) for every non-engine tool - "
+            "zero impact on existing registrations. A door lists / gate-expands "
+            "over its engine's tier=template members filtered by this slug."
+        ),
+    )
+
+    tier: EngineTier = Field(
+        default="general",
+        description=(
+            "Retrieval tier. 'general' (default) - the ordinary per-turn "
+            "retrieval pool (today's behaviour). 'door' - a read-only engine "
+            "concierge; ALSO retrievable in the per-turn pool (doors compete "
+            "with general). 'template' - a registered engine template EXCLUDED "
+            "from the default pool, surfaced only by its door's gate expansion "
+            "(select-then-call). Excluding tier=template decouples registration "
+            "from retrieval visibility."
         ),
     )
 

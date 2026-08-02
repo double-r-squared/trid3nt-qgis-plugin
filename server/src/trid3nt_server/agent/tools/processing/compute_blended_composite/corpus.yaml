@@ -1,0 +1,9 @@
+compute_blended_composite:
+- drape the hillshade over the land cover and bake it into one shaded layer
+- make a shaded relief by multiplying the colored relief with the hillshade
+- combine the NLCD land cover and the hillshade into a single shaded-terrain raster
+- shade the land cover with the terrain so it looks like a cartographic basemap
+- blend these two rasters into one composite with a multiply mode
+- give me a shaded land-cover map keeping the real NLCD class colors but draped over relief
+- overlay the hillshade as a shaded base under the land-cover layer baked together
+- produce a draped terrain composite from the colored DEM and the hillshade at half opacity

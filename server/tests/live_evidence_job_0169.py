@@ -1,6 +1,6 @@
 """Live-evidence harness for job-0169 (multi-turn function_call loop).
 
-Runs the real ``_stream_gemini_reply`` against a fake WebSocket sink and a
+Runs the real ``_stream_model_reply`` against a fake WebSocket sink and a
 mocked Gemini that emits a sequence of ``function_call`` chunks followed by a
 final narrative.  Prints the verbatim send-transcript to stdout so the audit
 can compare against the kickoff acceptance:
@@ -21,12 +21,14 @@ from __future__ import annotations
 
 import asyncio
 import json
+import os
 import textwrap
 from dataclasses import dataclass, field
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 
 from trid3nt_server import server as agent_server
-from trid3nt_server.adapter import GeminiSettings
+from trid3nt_server.agent.adapters import scripted_adapter as sa
+from trid3nt_server.agent.adapters.adapter import ModelSettings
 from trid3nt_server.server import SessionState
 from trid3nt_contracts import new_ulid
 
@@ -45,35 +47,13 @@ class _FakeSocket:
 
 
 def _make_chunk_with_function_call(name: str, args: dict, call_id: str = "c"):
-    fn_call = MagicMock()
-    fn_call.name = name
-    fn_call.id = call_id
-    fn_call.args = args
-    part = MagicMock()
-    part.function_call = fn_call
-    part.text = None
-    content = MagicMock()
-    content.parts = [part]
-    cand = MagicMock()
-    cand.content = content
-    chunk = MagicMock()
-    chunk.candidates = [cand]
-    chunk.text = None
-    return chunk
+    """A fake turn (scripted-provider dict) emitting ONE function call."""
+    return {"tool_call": {"name": name, "args": args, "call_id": call_id}}
 
 
 def _make_chunk_with_text(text: str):
-    part = MagicMock()
-    part.function_call = None
-    part.text = text
-    content = MagicMock()
-    content.parts = [part]
-    cand = MagicMock()
-    cand.content = content
-    chunk = MagicMock()
-    chunk.candidates = [cand]
-    chunk.text = None
-    return chunk
+    """A fake turn (scripted-provider dict) emitting one narration delta."""
+    return {"text": text}
 
 
 # --------------------------------------------------------------------------- #
@@ -102,30 +82,15 @@ async def run() -> None:
         "Found 2 protected areas inside the Fort Myers bbox (J.N. \"Ding\" "
         "Darling NWR + Estero Bay Aquatic Preserve). Layer is now on the map."
     )
-    turns = iter([iter([turn1]), iter([turn2]), iter([turn3])])
 
-    # Track the contents Gemini sees each turn so we can prove the
-    # function_response is being fed back.
-    contents_log: list[list] = []
-
-    def _stream(**kwargs):
-        snapshot = []
-        for c in kwargs["contents"]:
-            for p in c.parts:
-                if getattr(p, "function_call", None) is not None and p.function_call.name:
-                    snapshot.append((c.role, "function_call", p.function_call.name,
-                                     dict(p.function_call.args or {})))
-                elif getattr(p, "function_response", None) is not None:
-                    snapshot.append((c.role, "function_response",
-                                     p.function_response.name,
-                                     dict(p.function_response.response or {})))
-                elif p.text:
-                    snapshot.append((c.role, "text", None, p.text[:60]))
-        contents_log.append(snapshot)
-        return next(turns)
-
-    fake_client = MagicMock()
-    fake_client.models.generate_content_stream.side_effect = _stream
+    # Scripted-provider harness: pins MODEL_PROVIDER=scripted so the REAL
+    # server dispatch (stream_events_with_contents) routes to the scripted
+    # adapter, and installs the fixed 3-turn transcript above. This is the
+    # standalone-script equivalent of the ``fake_llm`` conftest fixture (this
+    # file is not pytest-collected, so the fixture itself is unavailable).
+    os.environ["MODEL_PROVIDER"] = "scripted"
+    sa.reset_harness()
+    sa.install_harness([turn1, turn2, turn3])
 
     # Stub tool dispatch so we don't need GCS / Nominatim / WDPA live.
     dispatch_log: list[tuple[str, dict]] = []
@@ -149,23 +114,40 @@ async def run() -> None:
 
     sock = _FakeSocket()
     state = SessionState(session_id=new_ulid())
-    settings = GeminiSettings(
+    settings = ModelSettings(
         model="gemini-2.5-pro",
         project="legacy-cloud-project",
         location="us-central1",
         use_vertex=True,
     )
 
-    with patch.object(agent_server, "build_client", return_value=fake_client), \
-         patch.object(agent_server, "_invoke_tool_via_emitter", side_effect=_fake_invoke), \
+    with patch.object(agent_server, "_invoke_tool_via_emitter", side_effect=_fake_invoke), \
          patch.object(agent_server, "build_tool_declarations", return_value=[]):
-        await agent_server._stream_gemini_reply(
+        await agent_server._stream_model_reply(
             sock,
             state,
             settings,
             "Show me protected areas in Fort Myers",
             "research",
         )
+
+    # Rebuild the contents Gemini saw each turn from the recorded scripted-
+    # provider calls (replaces the retired inline ``_stream`` capture closure).
+    contents_log: list[list] = []
+    for call in sa.harness_calls():
+        snapshot = []
+        for c in call["contents"]:
+            for p in c.parts:
+                if getattr(p, "function_call", None) is not None and p.function_call.name:
+                    snapshot.append((c.role, "function_call", p.function_call.name,
+                                     dict(p.function_call.args or {})))
+                elif getattr(p, "function_response", None) is not None:
+                    snapshot.append((c.role, "function_response",
+                                     p.function_response.name,
+                                     dict(p.function_response.response or {})))
+                elif p.text:
+                    snapshot.append((c.role, "text", None, p.text[:60]))
+        contents_log.append(snapshot)
 
     # ------------------------------------------------------------------ #
     # Print: contents Gemini saw on each turn

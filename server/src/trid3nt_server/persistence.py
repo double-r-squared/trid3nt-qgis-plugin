@@ -1,47 +1,40 @@
-"""Thin typed wrapper around MongoDB Atlas MCP server CRUD operations (FR-AS-4).
+"""Thin typed wrapper over the persistence MCP surface (FR-AS-4).
 
-Pattern: agent code calls ``Persistence.upsert_case(case_dataclass)`` — this
-module calls the MongoDB MCP server's ``insert-one`` / ``update-one`` /
-``find-one`` / ``find`` tools and serializes/deserializes through the
-``trid3nt_contracts`` ``GraceModel`` types (NEVER raw dicts at the call site).
+Agent code calls ``Persistence.upsert_case(case_dataclass)``; this module
+issues logical ``insert-one`` / ``update-one`` / ``find-one`` / ``find`` calls
+through an ``MCPClientProtocol`` client and serializes/deserializes through
+``trid3nt_contracts`` ``GraceModel`` types (never raw dicts at the call site).
 
-This is the **LLM-facing DB path** per FR-AS-4 and Decision F. Worker-side
-direct-driver writes (``engine``'s solver result inserts, see FR-MP-3) are a
-separate seam that does NOT route through this module.
+Live backend (local-first build): the file-backed twin ``FileMCPClient`` --
+a small JSON-document store that implements the same logical MCP surface with
+Mongo-faithful filter/update semantics. It is bound by
+``main._maybe_bind_dev_persistence`` / ``server.init_persistence_from_env``.
+A cloud MCP-backed client (the original MongoDB Atlas path) implements the
+same ``MCPClientProtocol`` and drops in unchanged, but is dormant on this
+stack (``mcp.py`` and the DynamoDB backend were removed in the local-only
+slim; both are preserved in git history for a future cloud re-weave).
 
-Job-0115 scope (sprint-12-mega Wave 1.5):
-- ``CaseSummary`` round-trip: get / upsert / list / archive / delete
-- ``CaseChatMessage`` append + ``CaseSessionState`` hydration
-- ``User`` round-trip: ``get_user_by_firebase_uid`` / ``upsert_user``
-- ``SecretRecord`` round-trip (vault-ref-only — Decision F): list / upsert /
-  revoke
-- ``append_audit`` — fire-and-forget audit log line
+Supports ``CaseSummary`` round-trip (get/upsert/list/archive/delete),
+``CaseChatMessage`` append + ``CaseSessionState`` hydration, ``User``
+round-trip (``get_user_by_firebase_uid``/``upsert_user``), and
+``append_audit`` (fire-and-forget audit log line). API-key credentials no
+longer persist here: the plugin brokers key values over the ``secret-add`` WS
+seam into the in-memory ``credentials.resolver`` session cache, with env vars
+the headless / dev floor.
 
-Containment discipline (per agent.md):
-- This module does NOT open a direct PyMongo driver. Every storage call goes
-  through ``mcp_client.call_tool("<mcp-method>", args)`` so the agent has a
-  single LLM-facing DB seam.
-- The MCP server is consumed verbatim (``mongodb-mcp-server`` npm package);
-  we don't wrap it, we delegate to it. The agent code that calls this module
-  passes typed ``GraceModel`` instances in and gets typed instances out — the
-  ``dict``-shape MCP transport is contained here.
-- The session-record write carveout (Appendix D.6, FR-AS-8) is implemented at
-  the confirmation-hook layer (``server.CONFIRMATION_TRIGGERS``), not here.
-  Persistence is the I/O substrate; the hook policy is per-call.
+Containment: every storage call goes through
+``mcp_client.call_tool("<mcp-method>", args)``, a single seam; callers pass
+typed ``GraceModel`` instances in and get typed instances out, and the
+``dict``-shape MCP transport is contained here. The session-record write
+carveout (Appendix D.6, FR-AS-8) is enforced at the confirmation-hook layer
+(``server.CONFIRMATION_TRIGGERS``), not here; persistence is the I/O
+substrate, the hook policy is per-call.
 
-Invariants this module is responsible for:
-- **Decision F (wire isolation).** ``SecretRecord`` serialization NEVER carries
-  a raw key value. ``key_value`` only ever appears on the ``secret-add``
-  *envelope* (cleared at the server boundary before persistence); the
-  ``SecretRecord`` shape itself is vault-ref-only and is what this module
-  upserts. The redaction back-stop is at the schema layer (``__repr_args__``
-  on ``SecretAddEnvelopePayload``); persistence simply never receives a
-  ``SecretAddEnvelopePayload`` — only ``SecretRecord``s.
-- **9. No cost theater.** No quota / cost / spend fields on any record.
-- **session-record carveout.** A ``sessions``-collection update (the agent's
-  own session record) is NOT a confirmable write; a ``runs``-collection
-  insert IS (Decision F + FR-AS-8). This module exposes both seams; the
-  caller (``server.py``) is responsible for confirmation routing.
+Invariants: no quota/cost/spend fields on any record. A
+``sessions``-collection update (the
+agent's own session record) is not a confirmable write; a
+``runs``-collection insert is (Decision F + FR-AS-8); this module exposes
+both seams, ``server.py`` is responsible for confirmation routing.
 """
 
 from __future__ import annotations
@@ -58,19 +51,18 @@ from trid3nt_contracts.case import (
     CaseSessionState,
     CaseSummary,
 )
-from trid3nt_contracts.secrets import SecretRecord
 from trid3nt_contracts.user import User
 
 logger = logging.getLogger("trid3nt_server.persistence")
 
-# MongoDB Atlas database used for all Case/User/Secret persistence at v0.1.
-# Override via env var ``TRID3NT_MONGO_DB`` for staging / test isolation; the
-# production deploy pins the database name via Secret Manager.
+# Logical database name for all Case/User/Secret persistence. The file backend
+# uses it as a namespace prefix; a cloud MCP client would use it as the DB name.
+# Override via env var ``TRID3NT_MONGO_DB`` for staging / test isolation.
 import os
 
 DEFAULT_DATABASE = os.environ.get("TRID3NT_MONGO_DB", "trid3nt_dev")
 
-# Lane A1 (pen=agent / paper=case): the durable runs bucket holds the
+# The durable runs bucket holds the
 # materialized case-view SNAPSHOT (``case-views/{case_id}.json``) that the
 # view-without-agent path serves via a pre-signed S3 GET (the agent box may be
 # asleep). The bucket already holds solver decks/results and the agent already
@@ -82,7 +74,7 @@ CASE_VIEWS_BUCKET = os.environ.get(
 #: Object-key prefix for materialized case-view snapshots (PRIVATE objects).
 CASE_VIEWS_PREFIX = "case-views"
 
-#: Object-key prefix for THIN per-case manifests (#165 data-island index).
+#: Object-key prefix for THIN per-case manifests (data-island index).
 #: Written ALONGSIDE the fat snapshot (dual-write) in the SAME durable runs
 #: bucket so a future cold path can list cases + their layers from S3 with the
 #: agent box asleep, WITHOUT downloading the fat snapshot per Case. Mirrors the
@@ -110,7 +102,7 @@ def case_view_snapshot_key(case_id: str) -> str:
 
 
 def case_manifest_key(case_id: str) -> str:
-    """Return the S3 object key for a Case's thin manifest (#165 data-island).
+    """Return the S3 object key for a Case's thin manifest (data-island).
 
     Single seam so the writer (here) and the future cold-serve reader name the
     object identically: ``case-manifests/{case_id}.json``. Mirrors
@@ -118,20 +110,19 @@ def case_manifest_key(case_id: str) -> str:
     """
     return f"{CASE_MANIFESTS_PREFIX}/{case_id}.json"
 
-# Collection names — pinned by Appendix D nomenclature (D.2 ``projects`` for
+# Collection names -- pinned by Appendix D nomenclature (D.2 ``projects`` for
 # Cases, D.6 ``sessions`` for chat history, D.13 ``users`` for the
 # forward-looking Auth track stub, D.14 ``secrets`` for §F.3 per-Case keys,
 # D.15 ``audit_log`` for the fire-and-forget audit stream).
 CASES_COLLECTION = "projects"  # FR-MP-5/-6: Case <-> projects 1:1
 CHAT_COLLECTION = "case_chat_messages"  # per-turn message log (FR-MP-6)
-SESSIONS_COLLECTION = "sessions"  # D.6 — agent's own session records
+SESSIONS_COLLECTION = "sessions"  # D.6 -- agent's own session records
 USERS_COLLECTION = "users"  # D.13 (Auth/Users track stub)
-SECRETS_COLLECTION = "secrets"  # §F.3 per-Case secrets
 AUDIT_COLLECTION = "audit_log"  # fire-and-forget audit stream
 
 
 # --------------------------------------------------------------------------- #
-# MCP client protocol — duck-typed so tests can pass a mock
+# MCP client protocol -- duck-typed so tests can pass a mock
 # --------------------------------------------------------------------------- #
 
 
@@ -150,192 +141,6 @@ class MCPClientProtocol(Protocol):
 
 
 # --------------------------------------------------------------------------- #
-# Live-server surface translation (job-0203 / Wave 4.11 M4)
-# --------------------------------------------------------------------------- #
-#
-# FINDING (2026-06-09, live protocol smoke against mongodb-mcp-server@latest):
-# the real npm server does NOT expose ``find-one`` / ``insert-one`` /
-# ``update-one`` at all. Its actual document surface is ``find`` /
-# ``insert-many`` / ``update-many`` (+ ``delete-many``, ``count``, ...), and
-# ``find`` results come back as EJSON wrapped in
-# ``<untrusted-user-data-{uuid}>`` tags in the SECOND content entry — the
-# first is a human-readable "Found N documents" banner. Every Persistence
-# call written against the logical surface would have failed on first
-# contact with production.
-#
-# Resolution: the logical surface (``find-one``/``insert-one``/
-# ``update-one``/``find``) is OUR seam contract (``MCPClientProtocol``) —
-# ``FileMCPClient``, every test mock, and every call site speak it. This
-# translator is the single boundary that adapts the logical surface to the
-# real server's tool names and response shape. When MongoDB renames tools
-# again, this class is the only thing that changes.
-#
-# ``server.init_persistence_from_env`` wraps the live ``MCPClient`` in this
-# translator before handing it to ``Persistence``.
-
-
-def _ejson_normalize(value: Any) -> Any:
-    """Collapse the EJSON extended-type wrappers we can encounter.
-
-    Our documents store string ULIDs and ISO-8601 strings, so most
-    round-trips are plain JSON. Mongo may still emit ``{"$date": ...}`` /
-    ``{"$oid": ...}`` / ``{"$numberLong": ...}`` for fields written by
-    other paths — collapse them to their plain value so Pydantic
-    validation sees normal scalars.
-    """
-    if isinstance(value, dict):
-        if len(value) == 1:
-            ((k, v),) = value.items()
-            if k == "$oid":
-                return v
-            if k == "$numberLong" or k == "$numberInt" or k == "$numberDouble":
-                try:
-                    return float(v) if "." in str(v) else int(v)
-                except (TypeError, ValueError):
-                    return v
-            if k == "$date":
-                # {"$date": "ISO"} or {"$date": {"$numberLong": "ms"}}
-                if isinstance(v, dict) and "$numberLong" in v:
-                    return v["$numberLong"]
-                return v
-        return {k: _ejson_normalize(v) for k, v in value.items()}
-    if isinstance(value, list):
-        return [_ejson_normalize(v) for v in value]
-    return value
-
-
-import re as _re
-
-# The warning prose MENTIONS both tags inline ("between the <tag> and
-# </tag> tags may lead to...") BEFORE the actual payload block — a lazy
-# match from the first mention captures the prose word "and" instead of
-# the payload. The real block is newline-delimited (``<tag>\npayload\n</tag>``
-# per formatUntrustedData), so the mandatory ``\n`` on both sides skips the
-# prose mentions. Verified against a live mongod round-trip (evidence/).
-_UNTRUSTED_RE = _re.compile(
-    r"<untrusted-user-data-([0-9a-fA-F-]+)>\n(.*?)\n</untrusted-user-data-\1>",
-    _re.DOTALL,
-)
-
-
-def _extract_untrusted_payload(raw: dict[str, Any]) -> Any | None:
-    """Pull the EJSON document payload out of a real-server tool result.
-
-    Returns the parsed (and EJSON-normalized) payload, or ``None`` when no
-    untrusted-data block is present (e.g. "Found 0 documents" responses).
-    """
-    content = raw.get("content")
-    if not isinstance(content, list):
-        return None
-    for entry in content:
-        if not isinstance(entry, dict):
-            continue
-        text = entry.get("text")
-        if not isinstance(text, str):
-            continue
-        m = _UNTRUSTED_RE.search(text)
-        if not m:
-            continue
-        import json as _json
-
-        try:
-            return _ejson_normalize(_json.loads(m.group(2)))
-        except _json.JSONDecodeError:
-            logger.warning("untrusted-data block was not valid EJSON")
-            return None
-    return None
-
-
-class MCPSurfaceTranslator:
-    """Adapt the logical MCP surface to the real ``mongodb-mcp-server``.
-
-    Implements :class:`MCPClientProtocol`. Wraps a raw client (the live
-    stdio :class:`trid3nt_server.mcp.MCPClient`) whose tool names are the
-    REAL server surface, and translates:
-
-    - ``find-one``   → ``find`` with ``limit=1`` → ``{"document": doc|None}``
-    - ``find``       → ``find`` with an explicit generous limit (the real
-      server DEFAULTS TO limit=10 — unbounded logical reads like chat
-      history would silently truncate) → ``{"documents": [...]}``
-    - ``insert-one`` → ``insert-many`` with ``documents=[doc]``
-    - ``update-one`` → ``update-many`` (every update in this codebase filters on a
-      unique key, so the semantics coincide)
-
-    Any other tool name passes through untouched.
-    """
-
-    #: Explicit limit injected when the logical ``find`` has none. The
-    #: real server also caps responses at ``responseBytesLimit`` (1 MiB
-    #: default) — we raise it for chat-history reads; documents beyond
-    #: either cap surface as OQ-0203-FIND-PAGINATION.
-    DEFAULT_FIND_LIMIT = 1000
-    RESPONSE_BYTES_LIMIT = 8 * 1024 * 1024
-
-    def __init__(self, raw_client: MCPClientProtocol) -> None:
-        self._raw = raw_client
-
-    async def call_tool(
-        self, name: str, arguments: dict[str, Any] | None = None
-    ) -> dict[str, Any]:
-        args = dict(arguments or {})
-
-        if name == "find-one":
-            real = {
-                "database": args["database"],
-                "collection": args["collection"],
-                "filter": args.get("filter", {}),
-                "limit": 1,
-            }
-            raw = await self._raw.call_tool("find", real)
-            docs = _extract_untrusted_payload(raw)
-            doc = docs[0] if isinstance(docs, list) and docs else None
-            return {"document": doc}
-
-        if name == "find":
-            real = {
-                "database": args["database"],
-                "collection": args["collection"],
-                "filter": args.get("filter", {}),
-                "limit": args.get("limit", self.DEFAULT_FIND_LIMIT),
-                "responseBytesLimit": self.RESPONSE_BYTES_LIMIT,
-            }
-            if args.get("sort"):
-                real["sort"] = args["sort"]
-            raw = await self._raw.call_tool("find", real)
-            docs = _extract_untrusted_payload(raw)
-            if docs is None:
-                docs = []
-            if isinstance(docs, dict):
-                docs = [docs]
-            return {"documents": docs}
-
-        if name == "insert-one":
-            raw = await self._raw.call_tool(
-                "insert-many",
-                {
-                    "database": args["database"],
-                    "collection": args["collection"],
-                    "documents": [args["document"]],
-                },
-            )
-            return raw if isinstance(raw, dict) else {}
-
-        if name == "update-one":
-            real = {
-                "database": args["database"],
-                "collection": args["collection"],
-                "filter": args.get("filter", {}),
-                "update": args.get("update", {}),
-            }
-            if args.get("upsert"):
-                real["upsert"] = True
-            raw = await self._raw.call_tool("update-many", real)
-            return raw if isinstance(raw, dict) else {}
-
-        return await self._raw.call_tool(name, args)
-
-
-# --------------------------------------------------------------------------- #
 # Persistence wrapper
 # --------------------------------------------------------------------------- #
 
@@ -350,7 +155,7 @@ def _unwrap_mcp_result(raw: dict[str, Any]) -> Any:
     """
     if not isinstance(raw, dict):
         return raw
-    # Direct dict already — e.g., when the mock test client returns a dict.
+    # Direct dict already -- e.g., when the mock test client returns a dict.
     if "content" not in raw and "document" not in raw and "documents" not in raw:
         return raw
     # mongodb-mcp-server: content[0].text is a JSON string
@@ -373,11 +178,12 @@ def _unwrap_mcp_result(raw: dict[str, Any]) -> Any:
 
 
 class Persistence:
-    """Typed wrapper around the MongoDB Atlas MCP server.
+    """Typed wrapper over the persistence MCP surface (``MCPClientProtocol``).
 
-    Construct with a live ``MCPClient`` (or any object implementing the
-    ``MCPClientProtocol``). All methods are ``async`` — the underlying MCP
-    transport is async stdio.
+    Construct with any object implementing ``MCPClientProtocol`` -- on this
+    stack that is the file-backed ``FileMCPClient``; a cloud MCP client drops
+    in unchanged. All methods are ``async`` (the file backend off-loads its
+    blocking I/O; a cloud client's transport is async).
     """
 
     def __init__(
@@ -397,7 +203,7 @@ class Persistence:
         Forward-compat: drops any field the ``ProjectDocument`` schema (D.2)
         carries that ``CaseSummary`` doesn't denormalize (e.g. ``deleted_at``,
         ``owner_user_id``, etc.). The Case envelope is a UI denormalization
-        of the storage shape — extra storage fields are expected and ignored.
+        of the storage shape -- extra storage fields are expected and ignored.
         """
         raw = await self._mcp.call_tool(
             "find-one",
@@ -418,7 +224,7 @@ class Persistence:
 
         Strips ``_id`` (rewires to ``case_id``), drops user-link fields the
         schema doesn't know, and drops any other storage-only fields the
-        denormalized envelope doesn't carry — including the #147 ephemeral-case
+        denormalized envelope doesn't carry -- including the ephemeral-case
         ``expires_at`` TTL stamp, which is storage-only and must NEVER reach the
         wire ``CaseSummary`` (the ``k not in allowed`` filter below already
         drops it, since ``expires_at`` is not a ``CaseSummary`` field).
@@ -431,7 +237,7 @@ class Persistence:
             if k in {"user_id", "owner_user_id"}:
                 continue
             if k not in allowed:
-                # storage-only field (e.g. user_id, expires_at TTL stamp) —
+                # storage-only field (e.g. user_id, expires_at TTL stamp) --
                 # never surfaced to the wire CaseSummary.
                 continue
             normalized[k] = v
@@ -451,15 +257,15 @@ class Persistence:
         Uses MCP ``update-one`` with ``upsert=True`` so a fresh Case lands and
         an existing one is overwritten in a single round-trip.
 
-        job-0252 (sprint-13.5, OQ-0115-CASE-USER-LINK): when ``owner_user_id``
+        when ``owner_user_id``
         is provided, it is stamped onto the document's ``user_id`` field so the
         Case belongs to its creator. ``CaseSummary`` itself carries no owner
         field (it is a UI denormalization), so ownership lives only at the
-        storage layer — the read path (``_doc_to_case_summary``) deliberately
+        storage layer -- the read path (``_doc_to_case_summary``) deliberately
         drops it. Without this, every newly-created Case would lack a
         ``user_id`` and become invisible to ``list_cases_for_user`` now that
         the ``$exists:false`` leak clause is gone. ``owner_user_id=None``
-        (the legacy / dev call shape) writes no owner — those Cases are then
+        (the legacy / dev call shape) writes no owner -- those Cases are then
         swept by the one-time ``migrate_preauth_cases`` startup step.
 
         The owner is written under ``$set``, so re-upserting an existing Case
@@ -467,29 +273,32 @@ class Persistence:
         clears an already-stamped owner (the ``user_id`` key is simply absent
         from the ``$set``).
 
-        #147 ephemeral-cases track: ``ephemeral=True`` (only ever passed for
+        ephemeral-cases track: ``ephemeral=True`` (only ever passed for
         ANONYMOUS / pre-Auth Cases) stamps a NUMERIC epoch-seconds
-        ``expires_at`` (``int(now + CASES_ANON_TTL_SECONDS)``) so DynamoDB-native
-        TTL can reap the Case after the window. This is intentionally a Number
-        attribute, NOT the ISO ``expires_at`` string the sessions collection
-        uses — DynamoDB TTL only honours a numeric epoch. ``expires_at`` is a
-        storage-only field; ``_doc_to_case_summary`` drops it so it NEVER
-        reaches the wire ``CaseSummary``.
+        ``expires_at`` (``int(now + CASES_ANON_TTL_SECONDS)``) -- a RESERVED TTL
+        marker a TTL-capable backend can reap the Case with after the window.
+        The file backend does not reap; the field is written for forward
+        compat. Intentionally a Number attribute, NOT the ISO ``expires_at``
+        string the sessions collection uses (a numeric-epoch TTL index only
+        honours a number). ``expires_at`` is a storage-only field;
+        ``_doc_to_case_summary`` drops it so it NEVER reaches the wire
+        ``CaseSummary``.
 
         ``ephemeral=False`` (the DEFAULT, and the only shape authed call-sites
-        ever use) writes NO ``expires_at`` at all — authed Cases are durable
+        ever use) writes NO ``expires_at`` at all -- authed Cases are durable
         forever. This default is exactly byte-compatible with the prior
         behaviour, so the new kwarg is dormant until a call-site opts in.
         """
         body = case.model_dump(mode="json")
-        body["_id"] = case.case_id  # MongoDB primary key (FR-MP-5)
+        body["_id"] = case.case_id  # the ``_id`` primary key (FR-MP-5)
         if owner_user_id:
             body["user_id"] = owner_user_id
         if ephemeral:
             from trid3nt_contracts.collections import CASES_ANON_TTL_SECONDS
 
-            # DynamoDB-native TTL requires a NUMBER epoch-seconds attribute
-            # (not the ISO string sessions use). Authed Cases never reach here.
+            # RESERVED numeric-epoch TTL marker (a TTL-capable backend requires
+            # a NUMBER, not the ISO string sessions use); the file backend does
+            # not reap. Authed Cases never reach here.
             body["expires_at"] = int(now_utc().timestamp()) + CASES_ANON_TTL_SECONDS
         await self._mcp.call_tool(
             "update-one",
@@ -512,13 +321,13 @@ class Persistence:
     ) -> None:
         """Persist a Case's ``{L<n>: uri}`` short-handle map (ADR 0014).
 
-        Storage-only ``layer_handles`` field on the cases doc — the
+        Storage-only ``layer_handles`` field on the cases doc -- the
         ``last_active_case_id`` pattern: ``CaseSummary`` deliberately does
         NOT carry it (``_doc_to_case_summary`` drops unknown keys), so the
         wire contract stays narrow while the storage doc accretes. The
         ``upsert_case`` full-body ``$set`` never removes it (named-field
         semantics). ``upsert=False``: a deleted / never-created Case is not
-        resurrected by this side-channel — the write is simply a no-op.
+        resurrected by this side-channel -- the write is simply a no-op.
         Callers treat this as best-effort (wrap + log, never raise).
         """
         await self._mcp.call_tool(
@@ -565,7 +374,7 @@ class Persistence:
     async def migrate_preauth_cases(self, anon_uid: str) -> int:
         """One-time, idempotent: stamp pre-Auth Cases with ``anon_uid``.
 
-        OQ-0115-CASE-USER-LINK (job-0252, sprint-13.5): Cases written before
+        Cases written before
         the Auth track carry no ``user_id`` field. The old
         ``{"user_id": {"$exists": False}}`` clause in ``list_cases_for_user``
         leaked every such Case to every signed-in user. This migration
@@ -578,15 +387,13 @@ class Persistence:
         (every Case now has a ``user_id``). Re-running is a safe no-op.
 
         **Non-corrupting**: a single ``$set`` of one field via the logical
-        ``update-one`` surface (translated to ``update-many`` by the
-        :class:`MCPSurfaceTranslator` so ALL matching orphans are stamped in
-        one round-trip — ``update-one`` semantics would only touch one doc).
+        ``update-one`` (upsert=False) surface stamps the matching orphan Cases.
         No other field is read, written, or removed; sessions and chat
         histories are untouched (this method only ever writes the ``projects``
         collection).
 
         Returns the modified count when the backend reports one, else ``0``.
-        Best-effort on count parsing — the migration's success is the absence
+        Best-effort on count parsing -- the migration's success is the absence
         of orphans on the next run, not the returned integer.
         """
         raw = await self._mcp.call_tool(
@@ -656,27 +463,21 @@ class Persistence:
     async def list_cases_for_user(self, user_id: str) -> list[CaseSummary]:
         """List the user's LIVE Cases (``status="active"`` only).
 
-        v0.1 Auth-stub note: the ``projects`` collection schema does not
-        currently carry a ``user_id`` field (FR-MP-5 was specified pre-Auth).
-        We pass the filter anyway — once the Auth/Users track adds the field
-        the query starts narrowing; until then it returns the full Case list
-        for the deployment. Surfaced as OQ-0115-CASE-USER-LINK.
+        The ``projects`` collection schema does not yet carry a ``user_id``
+        field (FR-MP-5 was specified pre-Auth); we pass the filter anyway --
+        once the Auth/Users track adds the field the query starts narrowing,
+        until then it returns the full Case list for the deployment.
 
-        job-0267 (server-side case-list hardening): soft-deleted and archived
-        Cases are excluded HERE, in the query AND a post-validation guard —
-        the user saw a deleted ghost in the left rail because exclusion was
-        previously a client-side concern. The ``$nin`` filter still matches
-        docs with no ``status`` field at all (pre-status records are live by
-        definition: ``CaseSummary.status`` defaults to ``"active"``); the
-        Python guard is the belt-and-suspenders for MCP backends whose filter
-        dialect quietly ignores the operator.
+        Soft-deleted and archived Cases are excluded both in the query and
+        by a post-validation guard (belt-and-suspenders for MCP backends
+        whose filter dialect quietly ignores the operator); the ``$nin``
+        filter still matches docs with no ``status`` field at all (pre-status
+        records are live by definition: ``CaseSummary.status`` defaults to
+        ``"active"``).
 
-        job-0252 (sprint-13.5, OQ-0115-CASE-USER-LINK): the
-        ``{"user_id": {"$exists": False}}`` backward-compat clause is GONE.
-        It used to leak every pre-Auth Case (no ``user_id``) to every
-        signed-in user. The one-time startup migration
-        (``migrate_preauth_cases``) now stamps those orphan Cases with
-        ``MIGRATION_ANON_UID``, so a Case is visible only to its owner.
+        Orphan pre-Auth Cases (no ``user_id``) are stamped with the
+        ``MIGRATION_ANON_UID`` sentinel by the one-time startup migration
+        (``migrate_preauth_cases``), so a Case is visible only to its owner.
         """
         raw = await self._mcp.call_tool(
             "find",
@@ -688,7 +489,7 @@ class Persistence:
                         {"user_id": user_id},
                         {"owner_user_id": user_id},
                     ],
-                    # job-0267: tombstones never reach the wire.
+                    # tombstones never reach the wire.
                     "status": {"$nin": ["deleted", "archived"]},
                 },
             },
@@ -706,11 +507,11 @@ class Persistence:
                 continue
             try:
                 case = self._doc_to_case_summary(d)
-            except Exception:  # noqa: BLE001 — skip malformed docs
+            except Exception:  # noqa: BLE001 -- skip malformed docs
                 logger.warning("skipping malformed Case doc: %s", d)
                 continue
             if case.status in ("deleted", "archived"):
-                # job-0267 guard: backend ignored/mangled the $nin filter.
+                # guard: backend ignored/mangled the $nin filter.
                 continue
             cases.append(case)
         return cases
@@ -726,9 +527,9 @@ class Persistence:
         (``_run_coldview_backfill``) re-materializes a fresh snapshot+manifest
         for every live Case so a box-off owned Case serves a CURRENT cold
         face without a live agent connection. That sweep needs the FULL live
-        Case set, NOT one user's — hence this owner-agnostic enumerator.
+        Case set, NOT one user's -- hence this owner-agnostic enumerator.
 
-        Returns only the ``_id`` (case_id) strings — the snapshot/manifest
+        Returns only the ``_id`` (case_id) strings -- the snapshot/manifest
         writers re-source the full doc per Case, so the sweep needs nothing
         more. Tombstones (``deleted`` / ``archived``) are excluded in the
         query AND the Python guard (same belt-and-suspenders as
@@ -811,7 +612,7 @@ class Persistence:
 
         Per FR-AS-8 the chat-message collection is the agent's own session
         record (it is per-turn replay material, not a solver result), so this
-        write is NOT a confirmation trigger — the caller does not need to
+        write is NOT a confirmation trigger -- the caller does not need to
         gate it. The carveout is enforced at the confirmation-hook layer.
         """
         body = msg.model_dump(mode="json")
@@ -832,7 +633,7 @@ class Persistence:
         is persisted ``running`` at mint and UPDATED IN PLACE to its terminal
         state. Unlike ``append_chat_message`` (always a fresh row), this upserts
         by the stable ``_id`` so the running -> terminal transition rewrites the
-        SAME row — never a duplicate. ``created_at`` is pinned on first insert
+        SAME row -- never a duplicate. ``created_at`` is pinned on first insert
         via ``$setOnInsert`` so the row KEEPS its position in the
         ``created_at``-sorted replay across the transition (the terminal update
         must not reorder the card). Every other field is ``$set`` so the terminal
@@ -840,10 +641,10 @@ class Persistence:
 
         Routes through the SAME ``update-one`` (upsert) surface every backend
         implements. The filter carries BOTH key shapes so it targets the natural
-        key on each: ``_id`` for the file/Mongo backends (chat ``_id`` ==
-        ``message_id``) AND the composite ``case_id`` + ``message_id`` the live
-        DynamoDB chat table is keyed by — so the get/apply/put upsert lands on
-        exactly one row everywhere. Best-effort at the call sites
+        key on each: ``_id`` for the file backend (chat ``_id`` ==
+        ``message_id``), plus the composite ``case_id`` + ``message_id`` shape a
+        keyed cloud backend would use -- so the get/apply/put upsert lands on
+        exactly one row on either. Best-effort at the call sites
         (``_persist_chat_turn`` swallows write failures), matching
         ``append_chat_message``.
         """
@@ -873,7 +674,7 @@ class Persistence:
 
         Joins the Case header (``CaseSummary``) with its ordered chat history
         from ``CHAT_COLLECTION``. ``loaded_layers`` / ``pipeline_history`` /
-        ``current_pipeline`` are passed through as dicts — collections.py
+        ``current_pipeline`` are passed through as dicts -- collections.py
         owns the concrete shapes (matches the ``SessionStatePayload`` pattern
         already in ws.py).
         """
@@ -913,21 +714,21 @@ class Persistence:
             except Exception:  # noqa: BLE001
                 logger.warning("skipping malformed CaseChatMessage doc: %s", d)
                 continue
-        # job-0267: deterministic replay order regardless of backend sort
-        # support — the full stream (user turns, tool cards, agent narration)
+        # deterministic replay order regardless of backend sort
+        # support -- the full stream (user turns, tool cards, agent narration)
         # interleaves by ``created_at``; ULID ``message_id`` breaks ties in
         # write order. Python's sort is stable, so backends that already
         # honored the ``created_at`` sort are untouched.
         chat.sort(key=lambda m: (m.created_at, m.message_id))
-        # job-0172 Part B: hydrate ``loaded_layers`` from the persisted
+        # Part B: hydrate ``loaded_layers`` from the persisted
         # ``Case.loaded_layer_summaries`` so a Case re-open repopulates the
         # LayerPanel deterministically. The PipelineEmitter holds these in
         # memory per-connection; without this hydration step a browser
         # refresh (new WS, new emitter) shows an empty LayerPanel even
         # though the layers are still published on the per-Case ``.qgs``.
         loaded_layers = list(case.loaded_layer_summaries)
-        # job-0294b (sprint-14-aws): hydrate persisted charts so a Case re-open
-        # replays them WITHOUT a re-run. job-0230 ``$push``es SessionChartRecords
+        # hydrate persisted charts so a Case re-open
+        # replays them WITHOUT a re-run. ``$push``es SessionChartRecords
         # onto the ``sessions`` doc (keyed by case_id == sessions._id) but the
         # read side was never wired. Pull the array, unwrap each record's
         # ``payload`` (the ChartEmissionPayload the client rehydrates), in
@@ -950,13 +751,13 @@ class Persistence:
                     payload = r.get("payload")
                     if isinstance(payload, dict):
                         charts.append(payload)
-        except Exception:  # noqa: BLE001 — chart replay is best-effort
+        except Exception:  # noqa: BLE001 -- chart replay is best-effort
             logger.warning("get_session_state: chart hydration failed case=%s", case_id)
         return CaseSessionState(
             case=case, chat_history=chat, loaded_layers=loaded_layers, charts=charts,
         )
 
-    # ----- Materialized case-view snapshot (Lane A1: view-without-agent) ---- #
+    # ----- Materialized case-view snapshot (view-without-agent) ---- #
 
     async def build_case_view_snapshot(
         self,
@@ -968,8 +769,8 @@ class Persistence:
         """Assemble the materialized case-view snapshot dict (no I/O).
 
         The snapshot is the EXACT payload ``server._emit_case_open`` ships on the
-        wire — ``CaseOpenEnvelopePayload(session_state=get_session_state(...))``
-        serialized with ``model_dump(mode="json")`` — so the web's existing
+        wire -- ``CaseOpenEnvelopePayload(session_state=get_session_state(...))``
+        serialized with ``model_dump(mode="json")`` -- so the web's existing
         ``useCases.onCaseOpen`` + ``App.tsx`` synthesize path renders it
         verbatim from S3 with the agent box OFF.
 
@@ -978,10 +779,10 @@ class Persistence:
         emitter; ``server.reinline_vector_layers`` repopulates it only for an
         OPEN socket). For a true cold view we MERGE that GeoJSON (and any
         dense-vector ``vector_density`` tag) onto the matching ``loaded_layers``
-        entries here — byte-for-byte the same merge ``emit_session_state``
+        entries here -- byte-for-byte the same merge ``emit_session_state``
         performs on the live wire (additive ``inline_geojson`` / density fields).
 
-        Cross-case inline (job-0372 FIX B): the explicit
+        Cross-case inline (FIX B): the explicit
         ``inline_geojson_by_layer_id`` is only ever populated by the OPEN-case
         emitter, so a snapshot for a NON-open case (a cross-case mutation - e.g.
         rename Case B while Case A is open) would otherwise strand its vectors as
@@ -1060,7 +861,7 @@ class Persistence:
         # one-way edge (no circular import), but keep it local so importing
         # persistence stays cheap and the emitter's heavy deps load only when a
         # cross-case vector actually needs resolving.
-        from .pipeline_emitter import _read_vector_uri_as_geojson
+        from .emission.pipeline_emitter import _read_vector_uri_as_geojson
 
         count = 0
         for layer in layers:
@@ -1135,8 +936,8 @@ class Persistence:
         """Resolve a Case's owner from the RAW ``projects`` doc (best-effort).
 
         Reads ``owner_user_id`` (preferred) or ``user_id`` straight off the
-        stored document — the same owner-link fields ``list_cases_for_user``
-        filters on — BEFORE the owner-stripping ``_doc_to_case_summary`` runs.
+        stored document -- the same owner-link fields ``list_cases_for_user``
+        filters on -- BEFORE the owner-stripping ``_doc_to_case_summary`` runs.
         Those fields are deliberately dropped from the ``CaseSummary`` envelope
         (and therefore from the snapshot BODY), so the snapshot writer must read
         them from the raw doc here to carry the owner in S3 OBJECT METADATA.
@@ -1159,7 +960,7 @@ class Persistence:
                 return None
             owner = doc.get("owner_user_id") or doc.get("user_id")
             return owner if isinstance(owner, str) and owner else None
-        except Exception:  # noqa: BLE001 — owner probe is best-effort
+        except Exception:  # noqa: BLE001 -- owner probe is best-effort
             logger.warning(
                 "case-view-snapshot owner probe failed case=%s", case_id
             )
@@ -1179,13 +980,13 @@ class Persistence:
         ``content-type: application/json``) so the signer Lambda (infra lane) can
         hand out a pre-signed GET and a user can VIEW a Case with the agent box
         asleep. Called on every Case MUTATION (layer publish, per-turn persist,
-        case create/rename) — idempotent, last-write-wins.
+        case create/rename) -- idempotent, last-write-wins.
 
         Owner-gate carrier (adversarial-review fix): the snapshot BODY strips the
         owner-link fields (``_doc_to_case_summary`` drops ``user_id`` /
         ``owner_user_id``), so the signer could never owner-match off the body.
         We resolve the owner from the RAW ``projects`` doc and carry it in S3
-        OBJECT METADATA (``owner-user-id``) — NEVER in the JSON body. The signer
+        OBJECT METADATA (``owner-user-id``) -- NEVER in the JSON body. The signer
         reads it cheaply via ``head_object`` (no full download). The metadata key
         is set ONLY when the Case has an owner; the BODY is byte-identical with
         or without an owner.
@@ -1213,7 +1014,7 @@ class Persistence:
             body = json.dumps(snapshot, separators=(",", ":")).encode("utf-8")
             key = case_view_snapshot_key(case_id)
             # Owner lives ONLY in object metadata, never in the body. S3
-            # lowercases metadata keys — use the lowercase key directly so the
+            # lowercases metadata keys -- use the lowercase key directly so the
             # signer's ``resp["Metadata"].get("owner-user-id")`` matches.
             owner = await self._resolve_case_owner(case_id)
             metadata: dict[str, str] = (
@@ -1234,7 +1035,7 @@ class Persistence:
                 owner or "(none)",
             )
             return True
-        except Exception:  # noqa: BLE001 — never break a turn
+        except Exception:  # noqa: BLE001 -- never break a turn
             logger.warning(
                 "case-view-snapshot write failed case=%s bucket=%s",
                 case_id,
@@ -1249,9 +1050,9 @@ class Persistence:
         """Production S3 put for the case-view snapshot.
 
         Runs the synchronous boto3 ``put_object`` in a worker thread so the
-        async turn loop is never blocked (the same off-thread discipline the
-        DynamoDB backend uses). boto3 resolves creds + region from the standard
-        chain (env / ~/.aws / EC2 instance role — job-0289 lesson).
+        async turn loop is never blocked (the same off-thread discipline every
+        blocking storage call here uses). boto3 resolves creds + region from the
+        standard chain (env / ~/.aws / instance role).
 
         ``metadata`` is the S3 OBJECT METADATA dict (the owner-gate carrier:
         ``{"owner-user-id": <owner>}`` or ``{}`` / ``None`` when the Case has no
@@ -1281,7 +1082,7 @@ class Persistence:
 
         await asyncio.to_thread(_put)
 
-    # ----- Thin per-case manifest (#165 data-island cold-serve index) ------ #
+    # ----- Thin per-case manifest (data-island cold-serve index) ------ #
     #
     # SIBLINGS of the case-view snapshot writers above. Written ALONGSIDE the
     # fat snapshot (dual-write) at the SAME Case mutation call-sites; the
@@ -1294,8 +1095,8 @@ class Persistence:
         """Project ONE persisted ``ProjectLayerSummary`` dict into a manifest row.
 
         The layer list is sourced from the Case doc's
-        ``loaded_layer_summaries`` — the SAME data ``list_cases`` / the live
-        ``case-list`` marshals — so the manifest never diverges from the rail.
+        ``loaded_layer_summaries`` -- the SAME data ``list_cases`` / the live
+        ``case-list`` marshals -- so the manifest never diverges from the rail.
 
         ``asset_url`` is the DISPLAY face the cold path serves: every
         ``observe_published_layer`` registration routes the renderable face
@@ -1321,10 +1122,10 @@ class Persistence:
         asset_url = display or uri
         if not asset_url:
             return None
-        # Only carry wms_url separately when it is a genuine WMS GetMap face —
+        # Only carry wms_url separately when it is a genuine WMS GetMap face --
         # ``_looks_like_wms`` is the same predicate ``observe_published_layer``
         # uses to route a display URL into the wms slot.
-        from .uri_registry import _looks_like_wms
+        from .emission.uri_registry import _looks_like_wms
 
         wms_url = display if (display and _looks_like_wms(display)) else None
         try:
@@ -1336,7 +1137,7 @@ class Persistence:
                 asset_url=str(asset_url),
                 wms_url=wms_url,
             )
-        except Exception:  # noqa: BLE001 — skip a row that won't validate
+        except Exception:  # noqa: BLE001 -- skip a row that won't validate
             logger.warning(
                 "case-manifest: skipping malformed layer row layer_id=%s",
                 layer_id,
@@ -1374,14 +1175,14 @@ class Persistence:
     async def write_case_manifest(
         self, case_id: str, *, s3_put: Any = None
     ) -> bool:
-        """Materialize the thin Case manifest to S3 (#165 data-island index).
+        """Materialize the thin Case manifest to S3 (data-island index).
 
         Writes ``s3://{CASE_VIEWS_BUCKET}/case-manifests/{case_id}.json``
         (PRIVATE; ``content-type: application/json``) ALONGSIDE the fat
-        case-view snapshot — a dual-write at the SAME Case mutation call-sites.
+        case-view snapshot -- a dual-write at the SAME Case mutation call-sites.
         Idempotent, last-write-wins.
 
-        Owner-gate carrier: identical to the snapshot — the owner is resolved
+        Owner-gate carrier: identical to the snapshot -- the owner is resolved
         from the RAW ``projects`` doc and carried in S3 OBJECT METADATA
         (``owner-user-id``), NEVER in the JSON body, so the signer can owner-gate
         off a cheap ``head_object``. The metadata key is set ONLY when the Case
@@ -1389,7 +1190,7 @@ class Persistence:
 
         Best-effort by contract: wrapped in ``try/except`` and returns ``False``
         on ANY failure (a missing Case, a build error, an S3 error) so a manifest
-        hiccup NEVER breaks the snapshot path or the user's turn — the SAME
+        hiccup NEVER breaks the snapshot path or the user's turn -- the SAME
         discipline as ``write_case_view_snapshot``. Returns ``True`` on a
         successful put.
 
@@ -1425,7 +1226,7 @@ class Persistence:
                 owner or "(none)",
             )
             return True
-        except Exception:  # noqa: BLE001 — never break the snapshot/turn path
+        except Exception:  # noqa: BLE001 -- never break the snapshot/turn path
             logger.warning(
                 "case-manifest write failed case=%s bucket=%s",
                 case_id,
@@ -1468,19 +1269,17 @@ class Persistence:
         await asyncio.to_thread(_put)
 
     # ----- Session records (D.6 ``sessions`` collection) ------------------- #
-    #
-    # job-0203 (Wave 4.11 M4): the agent's own session record goes live. The
-    # ``sessions`` document is the TTL-cleaned activity header (D.6 +
-    # ``SESSIONS_TTL``): who/when, which Cases were touched, and — since
-    # job-0230 — the append-only ``charts`` array that chart-emission
-    # ``$push``es onto. Chat content canonically lives in
-    # ``case_chat_messages`` (FR-MP-6); ``SessionDocument.chat_history``
-    # stays empty at v0.1 so the two stores never diverge.
+    # The ``sessions`` document is the TTL-cleaned activity header (D.6 +
+    # ``SESSIONS_TTL``): who/when, which Cases were touched, and the
+    # append-only ``charts`` array that chart-emission ``$push``es onto. Chat
+    # content canonically lives in ``case_chat_messages`` (FR-MP-6);
+    # ``SessionDocument.chat_history`` stays empty at v0.1 so the two stores
+    # never diverge.
 
     async def upsert_session_record(self, doc: "SessionDocument") -> None:
         """Insert or fully overwrite a session record.
 
-        ``$set`` of the full document body — storage-only extras a previous
+        ``$set`` of the full document body -- storage-only extras a previous
         ``$push`` added (e.g. ``charts``) survive because ``$set`` of named
         fields does not remove unnamed ones.
         """
@@ -1505,18 +1304,18 @@ class Persistence:
         case_id: str | None = None,
         ttl_seconds: int | None = None,
     ) -> None:
-        """Activity heartbeat for a session — one upsert round-trip.
+        """Activity heartbeat for a session -- one upsert round-trip.
 
         - ``$set`` ``last_active_at`` + ``expires_at`` (TTL driver, D.6) so
           every interaction pushes cleanup 30 days out (``SESSIONS_TTL``).
         - ``$setOnInsert`` the immutable header (``schema_version``,
           ``created_at``) so the first touch creates a well-formed record
           and later touches never rewrite history.
-        - ``$addToSet`` the active Case into ``project_ids`` when given —
+        - ``$addToSet`` the active Case into ``project_ids`` when given --
           deduped, so per-turn touches stay idempotent.
 
         Fire-and-forget discipline at call sites (same as telemetry M3 and
-        chart persistence job-0230): callers wrap in ``try/except`` or a
+        chart persistence): callers wrap in ``try/except`` or a
         task; a persistence hiccup never takes down the user's turn.
         """
         from trid3nt_contracts.collections import SESSIONS_TTL
@@ -1553,7 +1352,7 @@ class Persistence:
             },
         )
         # Header repair: a session doc created by an earlier bare ``$push``
-        # (chart-emission upserts before any touch — job-0230 ordering) has
+        # (chart-emission upserts before any touch -- ordering) has
         # no ``created_at``/``schema_version``, and ``$setOnInsert`` above
         # can never backfill an EXISTING doc (real Mongo semantics too).
         # Detect and repair once; ``created_at=now`` is the best available
@@ -1591,21 +1390,22 @@ class Persistence:
         *,
         ttl_seconds: int | None = None,
     ) -> None:
-        """Slide the TTL window on an EPHEMERAL (anonymous) Case (#147).
+        """Slide the TTL window on an EPHEMERAL (anonymous) Case.
 
         Activity heartbeat for an anonymous Case: ``$set`` a fresh NUMERIC
         epoch-seconds ``expires_at`` (``int(now) + ttl``) on the case doc so a
         Case the user is actively working in is not reaped mid-session. Mirrors
-        :meth:`touch_session`, but stamps a Number epoch (DynamoDB-native TTL),
-        NOT the ISO string the sessions TTL index uses.
+        :meth:`touch_session`, but stamps a Number epoch (a RESERVED TTL marker
+        for a TTL-capable backend), NOT the ISO string the sessions TTL index
+        uses.
 
         Only ever called for anonymous Cases. Authed Cases carry no
-        ``expires_at`` and must stay durable forever — server.py simply never
+        ``expires_at`` and must stay durable forever -- server.py simply never
         invokes ``touch_case`` for them (the kwarg defaults keep this dormant
         until the call-site is wired).
 
         ``ttl_seconds`` defaults to ``CASES_ANON_TTL_SECONDS``. Unlike
-        ``upsert_case``, this is a bare ``$set`` with NO ``upsert`` — it only
+        ``upsert_case``, this is a bare ``$set`` with NO ``upsert`` -- it only
         slides an existing Case's window and never resurrects a reaped one.
 
         Fire-and-forget discipline (same as ``touch_session`` / telemetry M3):
@@ -1632,13 +1432,13 @@ class Persistence:
     async def set_session_active_case(
         self, session_id: str, case_id: str | None
     ) -> None:
-        """Persist the session's active-Case pointer (job-CASE-AUTHORITY).
+        """Persist the session's active-Case pointer.
 
         Writes a storage-only ``last_active_case_id`` field onto the session
         record so the active-Case pointer survives an EC2 auto-stop/restart
         (the in-memory ``_SESSION_ACTIVE_CASE`` dict in server.py is wiped on
         process death). ``SessionDocument`` deliberately does NOT carry this
-        field — it is storage-only, exactly like the job-0230 ``charts`` array;
+        field -- it is storage-only, exactly like the ``charts`` array;
         ``get_session_record`` drops unknown fields before validation, so the
         contract model stays narrow while the storage doc accretes.
 
@@ -1675,7 +1475,7 @@ class Persistence:
         )
 
     async def get_session_active_case(self, session_id: str) -> str | None:
-        """Read back the persisted active-Case pointer (job-CASE-AUTHORITY).
+        """Read back the persisted active-Case pointer.
 
         Returns the ``last_active_case_id`` written by
         ``set_session_active_case``, or ``None`` when the session has no
@@ -1703,7 +1503,7 @@ class Persistence:
         """Read one session record back as a typed ``SessionDocument``.
 
         Tolerant normalization (same discipline as ``_doc_to_case_summary``):
-        storage-only extras — notably the job-0230 ``charts`` array — are
+        storage-only extras -- notably the ``charts`` array -- are
         dropped before validation so the contract model stays narrow while
         the storage document accretes.
         """
@@ -1721,7 +1521,7 @@ class Persistence:
         if not doc or not isinstance(doc, dict):
             return None
         allowed = set(SessionDocument.model_fields.keys())
-        # ``id`` is aliased to ``_id`` — keep the alias key, drop the rest.
+        # ``id`` is aliased to ``_id`` -- keep the alias key, drop the rest.
         normalized = {
             k: v for k, v in doc.items() if k in allowed or k == "_id"
         }
@@ -1774,7 +1574,7 @@ class Persistence:
     async def get_user_by_id(self, user_id: str) -> User | None:
         """Find a user by ULID. Returns ``None`` if not found.
 
-        job-0172 Part C: the anonymous-fallback path needs an id-based lookup
+        Part C: the anonymous-fallback path needs an id-based lookup
         so a reconnecting browser can re-bind to the same ephemeral User via
         the ``AuthTokenEnvelope.anonymous_user_id`` hint. Mirrors the shape
         of ``get_user_by_firebase_uid`` so the call site stays symmetric.
@@ -1803,162 +1603,6 @@ class Persistence:
             logger.warning("malformed user doc for user_id=%s", user_id)
             return None
 
-    # ----- Per-Case secrets (§F.3) ----------------------------------------- #
-
-    async def list_secrets_refs(
-        self,
-        user_id: str,
-        case_id: str | None = None,
-    ) -> list[SecretRecord]:
-        """List active secret records.
-
-        Filters on ``is_active=True`` (revoked records are still in the
-        collection for audit but excluded from the listing). If ``case_id`` is
-        provided the filter narrows to per-Case records; otherwise returns
-        every active record for the user.
-
-        Decision F: the result NEVER includes the raw key value — only the
-        ``vault_ref``. The schema enforces this at construct time.
-        """
-        filt: dict[str, Any] = {"is_active": True}
-        if case_id is not None:
-            filt["case_id"] = case_id
-        # user_id linking is enforced once Auth lands. job-0252
-        # (sprint-13.5): the ``{"user_id": {"$exists": False}}`` backward-
-        # compat clause is GONE — it leaked pre-Auth secret records to every
-        # user. A secret record belongs only to its owner.
-        if user_id:
-            filt["$or"] = [
-                {"user_id": user_id},
-                {"owner_user_id": user_id},
-            ]
-        raw = await self._mcp.call_tool(
-            "find",
-            {
-                "database": self._db,
-                "collection": SECRETS_COLLECTION,
-                "filter": filt,
-            },
-        )
-        docs = _unwrap_mcp_result(raw) or []
-        if isinstance(docs, dict):
-            docs = [docs]
-        out: list[SecretRecord] = []
-        for d in docs:
-            if not isinstance(d, dict):
-                continue
-            normalized = {k: v for k, v in d.items() if k != "_id"}
-            if "secret_id" not in normalized and "_id" in d:
-                normalized["secret_id"] = d["_id"]
-            normalized.pop("user_id", None)
-            normalized.pop("owner_user_id", None)
-            # Defensive: even though the schema rejects key_value, scrub
-            # anything that looks like one before validation. This is the
-            # "fail closed" backstop if a malformed write ever leaked.
-            for k in list(normalized):
-                if "key" in k and "value" in k.lower():
-                    normalized.pop(k)
-            try:
-                out.append(SecretRecord.model_validate(normalized))
-            except Exception:  # noqa: BLE001
-                logger.warning("skipping malformed SecretRecord doc")
-                continue
-        return out
-
-    async def upsert_secret_ref(self, sec: SecretRecord) -> SecretRecord:
-        """Insert or update a vault-ref-only secret record.
-
-        Decision F backstop: this method takes a ``SecretRecord`` (which has
-        no ``key_value`` field at all). The agent service is responsible for
-        writing the raw key value to the vault BEFORE calling this method
-        and clearing the value from the in-memory envelope. The schema-side
-        contract ensures the persistence layer cannot accidentally accept a
-        raw key value.
-        """
-        body = sec.model_dump(mode="json")
-        body["_id"] = sec.secret_id
-        # Belt-and-braces: assert no key_value sneaked in via aliasing.
-        for k in list(body):
-            if "key" in k and "value" in k.lower():
-                raise ValueError(
-                    f"persistence refuses to write a key_value-shaped field "
-                    f"({k!r}) — vault-ref only (Decision F)"
-                )
-        await self._mcp.call_tool(
-            "update-one",
-            {
-                "database": self._db,
-                "collection": SECRETS_COLLECTION,
-                "filter": {"_id": sec.secret_id},
-                "update": {"$set": body},
-                "upsert": True,
-            },
-        )
-        return sec
-
-    async def revoke_secret(self, secret_id: str) -> None:
-        """Soft-revoke a secret (sets ``is_active=False``).
-
-        The vault entry is NOT deleted — preserves audit trail and lets the
-        user un-revoke without re-entering the key. Mirrors §F.3 discipline.
-        """
-        await self._mcp.call_tool(
-            "update-one",
-            {
-                "database": self._db,
-                "collection": SECRETS_COLLECTION,
-                "filter": {"_id": secret_id},
-                "update": {"$set": {"is_active": False}},
-            },
-        )
-
-    async def get_secret_value(self, secret_ref: "SecretRecord") -> str:
-        """Read the live key value from the local file vault (job-0124).
-
-        Called by Tier-2 fetchers (FIRMS / eBird / ERA5 / etc.) at
-        tool-invocation time to materialize the raw key for the outbound
-        HTTP request — including the credential-card RETRY path. The caller
-        never logs the returned value.
-
-        TRID3NT is the local product: there is exactly ONE vault backend
-        (the local file vault, ``file-vault://…``). Legacy cloud refs
-        (``aws-ssm://…``, ``gcp-sm://…``, bare GCP resource names, the
-        interim ``local-file://…`` JSON store) can no longer resolve —
-        ``secrets_handler.read_secret_value`` raises the typed
-        ``SecretNotFoundError`` for them (never a crash, never a silent
-        empty value); the credential-request card re-prompts the user.
-
-        Fail-closed semantics:
-
-        - If the record's ``is_active`` flag is ``False`` (soft-revoked),
-          we raise ``SecretRevokedError`` BEFORE touching the vault so a
-          revoked secret never resurrects via stale cache.
-        - Otherwise resolution delegates to
-          ``secrets_handler.read_secret_value`` (the single read seam).
-
-        Args:
-            secret_ref: the persisted ``SecretRecord`` (vault-ref only).
-
-        Returns:
-            The raw key value as a string. **Caller MUST NOT log this.**
-
-        Raises:
-            SecretRevokedError: when ``secret_ref.is_active is False``.
-            SecretNotFoundError: when the vault_ref cannot be resolved
-                (missing, malformed, or a legacy cloud scheme).
-        """
-        # Local import — avoids a circular dependency between persistence
-        # and secrets_handler (which imports Persistence).
-        from .secrets_handler import SecretRevokedError, read_secret_value
-
-        if not secret_ref.is_active:
-            raise SecretRevokedError(
-                f"secret {secret_ref.secret_id!r} has been revoked "
-                f"(provider={secret_ref.provider})"
-            )
-
-        return read_secret_value(secret_ref.vault_ref)
-
     # ----- Audit log -------------------------------------------------------- #
 
     async def append_audit(self, event_type: str, payload: dict) -> None:
@@ -1966,7 +1610,7 @@ class Persistence:
 
         Used by Decision M (claim provenance) and §F.3 catalog-amendment
         audit. Best-effort: callers should NOT block their happy path on
-        this — wrap in ``try/except`` at the call site if the audit write
+        this -- wrap in ``try/except`` at the call site if the audit write
         failing would otherwise abort the user's action.
         """
         body = {
@@ -1986,34 +1630,21 @@ class Persistence:
 
 
 # --------------------------------------------------------------------------- #
-# Local-dev file-backed MCP client (job-0161, Wave 4.6)
+# Local-dev file-backed MCP client
 # --------------------------------------------------------------------------- #
+# The file-backed shim is the LIVE persistence substrate on this stack. It
+# satisfies the same ``MCPClientProtocol`` surface a cloud MCP client would, so
+# ``Persistence`` doesn't need to know which substrate it is talking to, and
+# can be bound at startup either way (FR-AS-4).
 #
-# The MongoDB Atlas MCP server is the production LLM-facing DB seam (FR-AS-4).
-# For LOCAL DEV without Atlas/MCP, this file-backed shim satisfies the same
-# ``MCPClientProtocol`` surface so the ``Persistence`` class above doesn't
-# need to know which substrate it is talking to. The Persistence singleton
-# can therefore be bound at startup regardless of whether MCP is provisioned,
-# so the Case-create / select / archive / delete UI surface works on a fresh
-# clone without Atlas credentials.
-#
-# Storage layout:
-#   ``~/.trid3nt/dev_persistence/<database>/<collection>.json``
-#   one JSON file per collection — a dict mapping ``_id`` → document
-#
-# Atomicity:
-#   - per-collection ``asyncio.Lock`` serializes concurrent calls
-#   - writes go to a sibling ``<collection>.json.tmp`` then ``os.replace``
-#     (POSIX-atomic rename on the same filesystem)
-#
-# Scope (matches the subset of MCP tools Persistence actually invokes):
-#   ``insert-one`` / ``update-one`` (with ``$set`` + optional ``upsert``) /
-#   ``find-one`` / ``find`` (with optional sort by single key, ±1 direction).
-#
-# This is NOT a Mongo emulator — it's just enough query semantics to round-trip
-# the Persistence layer's calls. When real MCP lands the Persistence singleton
-# is constructed with the live ``MCPClient`` instead, and this file-backed
-# shim is never instantiated.
+# Storage: ``~/.trid3nt/dev_persistence/<database>/<collection>.json``, one
+# JSON file per collection (dict mapping ``_id`` -> document). Atomicity: a
+# per-collection ``asyncio.Lock`` serializes concurrent calls; writes go to a
+# sibling ``<collection>.json.tmp`` then ``os.replace`` (POSIX-atomic
+# rename). Scope matches the MCP tool subset Persistence actually invokes:
+# ``insert-one``/``update-one`` (``$set`` + optional ``upsert``)/``find-one``
+# /``find`` (optional single-key sort). Not a Mongo emulator -- just enough
+# query semantics to round-trip Persistence's calls.
 
 import asyncio as _asyncio
 import json as _json_for_file
@@ -2028,8 +1659,8 @@ def _default_dev_persistence_dir() -> _Path:
     """Resolve the on-disk directory for the file-backed dev substrate.
 
     Override via ``TRID3NT_DEV_PERSISTENCE_DIR`` (used by tests + CI to point
-    at a tmpdir). Default is ``~/.trid3nt/dev_persistence/`` per the job-0161
-    kickoff so a fresh clone gets a stable, user-scoped location.
+    at a tmpdir). Default is ``~/.trid3nt/dev_persistence/`` so a fresh
+    clone gets a stable, user-scoped location.
     """
     override = _os_for_file.environ.get(DEV_PERSISTENCE_DIR_ENV)
     if override:
@@ -2055,7 +1686,7 @@ class FileMCPClient:
     The return shape mirrors what ``Persistence._unwrap_mcp_result`` expects:
     we return a plain dict for single-document operations and a
     ``{"documents": [...]}`` envelope for list operations. This keeps the
-    Persistence layer agnostic of substrate — the same code paths that
+    Persistence layer agnostic of substrate -- the same code paths that
     deserialize MCP-server JSON responses deserialize our file payloads.
     """
 
@@ -2099,8 +1730,7 @@ class FileMCPClient:
     @staticmethod
     def _read_store(path: _Path) -> dict[str, dict]:
         # OFF-LOOP CONTRACT: this is a BLOCKING body. Callers in ``call_tool``
-        # run it via ``await _asyncio.to_thread(self._read_store, path)`` (the
-        # file-backend twin of the DynamoMCPClient boto3 off-loop fix) so the
+        # run it via ``await _asyncio.to_thread(self._read_store, path)`` so the
         # blocking read never stalls the asyncio WS loop. The per-collection
         # async lock is still held across the await, preserving serialization.
         if not path.exists():
@@ -2124,7 +1754,7 @@ class FileMCPClient:
         """Atomic JSON write: tmp file + os.replace (POSIX-atomic rename)."""
         tmp = path.with_suffix(path.suffix + ".tmp")
         with tmp.open("w", encoding="utf-8") as fh:
-            # OPEN-28: default=str so a raw datetime in any document (e.g. the
+            # default=str so a raw datetime in any document (e.g. the
             # shadow-telemetry ``called_at_utc``) serializes instead of raising
             # ``TypeError: Object of type datetime is not JSON serializable`` -
             # which was silently dropping the model-tagged shadow rows on the
@@ -2140,7 +1770,7 @@ class FileMCPClient:
         _os_for_file.replace(tmp, path)
 
     # ------------------------------------------------------------------ #
-    # Query matcher — same subset MockMCPClient supports in tests
+    # Query matcher -- same subset MockMCPClient supports in tests
     # ------------------------------------------------------------------ #
 
     @staticmethod
@@ -2161,7 +1791,7 @@ class FileMCPClient:
             if isinstance(v, dict) and "$nin" in v:
                 # Mongo-faithful: a MISSING field matches $nin (the doc's
                 # value, None, is "not in" the exclusion list unless None is
-                # listed). job-0267 uses this for the case-list status filter
+                # listed). uses this for the case-list status filter
                 # so pre-status Case docs stay listed.
                 if doc.get(k) in v["$nin"]:
                     return False
@@ -2171,7 +1801,7 @@ class FileMCPClient:
         return True
 
     # ------------------------------------------------------------------ #
-    # Update-operator application (job-0203 / M4)
+    # Update-operator application (M4)
     # ------------------------------------------------------------------ #
 
     @staticmethod
@@ -2181,10 +1811,10 @@ class FileMCPClient:
         Supported operators (the set Persistence + chart-emission actually
         send): ``$set``, ``$setOnInsert`` (applied ONLY when ``inserting``),
         ``$push`` (appends; creates the array if missing), ``$addToSet``
-        (appends iff not already present — dict values compared by equality).
+        (appends iff not already present -- dict values compared by equality).
 
-        Before job-0203 only ``$set`` was honored, which silently DROPPED the
-        job-0230 chart ``$push`` on the dev substrate (the upsert created a
+        Before only ``$set`` was honored, which silently DROPPED the
+        chart ``$push`` on the dev substrate (the upsert created a
         bare ``{_id}`` doc and the chart vanished). Unknown operators now
         raise so the next gap fails loudly instead.
         """
@@ -2277,7 +1907,7 @@ class FileMCPClient:
                 return {"matchedCount": matched, "modifiedCount": modified}
 
         if name == "update-many":
-            # job-0252 (sprint-13.5): the pre-Auth case migration uses the
+            # the pre-Auth case migration uses the
             # real-server ``update-many`` surface directly (the translator
             # passes it through). On the dev/file substrate there is no
             # translator, so we honor it here: apply the update to EVERY
@@ -2354,7 +1984,7 @@ def is_dev_persistence_enabled() -> bool:
 def make_file_persistence(base_dir: _Path | None = None) -> Persistence:
     """Construct a ``Persistence`` backed by the file-backed MCP shim.
 
-    Convenience for ``server.init_persistence_from_env`` and tests — wraps
+    Convenience for ``server.init_persistence_from_env`` and tests -- wraps
     the substrate selection so the call site stays a one-liner.
     """
     return Persistence(FileMCPClient(base_dir=base_dir))
@@ -2371,7 +2001,7 @@ def make_file_persistence(base_dir: _Path | None = None) -> Persistence:
 # ``make_persistence_for_backend`` now returns ``make_file_persistence``
 # unconditionally; the selection CALL lives in
 # ``main._maybe_bind_dev_persistence`` / ``server.init_persistence_from_env``
-# (NOT this file — see the job's crossTrackChanges).
+# (NOT this file -- see the job's crossTrackChanges).
 
 #: Env that selects the persistence backend. Re-exported from dynamo_backend so
 #: there is a single name; mirrored here for callers that only import
@@ -2384,7 +2014,7 @@ def resolve_persistence_backend() -> str:
     """Resolve the configured persistence backend name.
 
     TRID3NT local-only build: persistence is file-backed, always. The cloud
-    DynamoDB backend was removed (preserved in git history) — this now returns
+    DynamoDB backend was removed (preserved in git history) -- this now returns
     ``"file"`` unconditionally. Retained as a function so the existing call
     sites (``main._maybe_bind_dev_persistence`` logging) stay unchanged.
     """
@@ -2407,7 +2037,6 @@ def make_persistence_for_backend(
 __all__ = [
     "Persistence",
     "MCPClientProtocol",
-    "MCPSurfaceTranslator",
     "FileMCPClient",
     "make_file_persistence",
     "make_persistence_for_backend",
@@ -2422,7 +2051,6 @@ __all__ = [
     "CHAT_COLLECTION",
     "SESSIONS_COLLECTION",
     "USERS_COLLECTION",
-    "SECRETS_COLLECTION",
     "AUDIT_COLLECTION",
     "CASE_VIEWS_BUCKET",
     "CASE_VIEWS_PREFIX",

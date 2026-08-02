@@ -5,13 +5,13 @@ a rough urban-flood estimate. They are OPT-IN and default OFF. The workflow body
 (``model_flood_scenario``) already resolves + threads ``building_obstacles`` on
 the SHARED regular-grid build (coastal AND inland), and ``sfincs_builder`` already
 emits the ``exclude_mask`` on the plain regular grid (no subgrid required). The
-real gap closed here is the LLM-facing wrapper ``run_model_flood_scenario``: it
+real gap closed here is the LLM-facing wrapper ``sfincs_flood``: it
 now EXPOSES ``building_obstacles`` + ``building_obstacle_mode`` and threads them
 into the inner workflow call.
 
 These tests PROVE, with NO live solve:
 
-1. Wrapper passthrough — ``run_model_flood_scenario(building_obstacles=...)``
+1. Wrapper passthrough — ``sfincs_flood(building_obstacles=...)``
    forwards ``building_obstacles`` + ``building_obstacle_mode`` into the inner
    ``model_flood_scenario`` call.
 2. Inland honors buildings — an INLAND (``coastal=False, quadtree=False``) run
@@ -36,15 +36,28 @@ These tests PROVE, with NO live solve:
 from __future__ import annotations
 
 from datetime import datetime, timezone
+import dataclasses
 from unittest.mock import AsyncMock, MagicMock, patch
+
+
+def _registry_fetch_buildings_patch(mock):
+    """fetch_buildings folded to the router (ADR 0084): the consumer resolves it via
+    ``TOOL_REGISTRY['fetch_buildings'].fn``, so swap that entry's ``fn`` with ``mock``."""
+    from trid3nt_server.agent.tools import TOOL_REGISTRY
+
+    entry = TOOL_REGISTRY["fetch_buildings"]
+    return patch.dict(
+        TOOL_REGISTRY, {"fetch_buildings": dataclasses.replace(entry, fn=mock)}
+    )
 
 import pytest
 
-from trid3nt_server.workflows.model_flood_scenario import (
+from trid3nt_server.agent.tools import TOOL_REGISTRY, RegisteredTool
+from trid3nt_server.agent.workflows.sfincs.flood.flood import (
     model_flood_scenario,
-    run_model_flood_scenario,
+    sfincs_flood,
 )
-from trid3nt_server.workflows.sfincs_builder import (
+from trid3nt_server.agent.workflows.sfincs.sfincs_builder import (
     BuildOptions,
     ForcingSpec,
     ModelSetup,
@@ -75,6 +88,26 @@ def _mock_layer_uri(prefix: str) -> LayerURI:
         style_preset="continuous_dem",
         role="input",
         units="meters",
+    )
+
+
+def _river_geometry_patch(return_value: LayerURI | None = None):
+    """Patch the fetch_river_geometry registry seam (ADR 0074).
+
+    flood.py no longer imports the twin directly -- it resolves
+    ``TOOL_REGISTRY["fetch_river_geometry"].fn`` at call time. RegisteredTool
+    is frozen, so swap the whole entry for one carrying a stub fn (mirrors
+    ``_patch_copernicus_seam`` in test_data_fetch.py).
+    """
+    layer = return_value if return_value is not None else _mock_layer_uri("rivers")
+    orig = TOOL_REGISTRY["fetch_river_geometry"]
+    return patch.dict(
+        TOOL_REGISTRY,
+        {
+            "fetch_river_geometry": RegisteredTool(
+                metadata=orig.metadata, fn=lambda **_kw: layer, module=orig.module
+            )
+        },
     )
 
 
@@ -125,13 +158,13 @@ def _empty_envelope_stub() -> MagicMock:
 
 @pytest.mark.asyncio
 async def test_wrapper_forwards_building_obstacles_to_workflow() -> None:
-    """run_model_flood_scenario(building_obstacles=True) forwards into the call."""
+    """sfincs_flood(building_obstacles=True) forwards into the call."""
     fake_envelope = _empty_envelope_stub()
     with patch(
-        "trid3nt_server.workflows.model_flood_scenario.model_flood_scenario",
+        "trid3nt_server.agent.workflows.sfincs.flood.flood.model_flood_scenario",
         new=AsyncMock(return_value=fake_envelope),
     ) as mock_wf:
-        await run_model_flood_scenario(
+        await sfincs_flood(
             bbox=_INLAND_BBOX,
             return_period_yr=100,
             duration_hr=24,
@@ -152,10 +185,10 @@ async def test_wrapper_default_off_forwards_false() -> None:
     """Default (no building_obstacles kwarg) forwards building_obstacles=False."""
     fake_envelope = _empty_envelope_stub()
     with patch(
-        "trid3nt_server.workflows.model_flood_scenario.model_flood_scenario",
+        "trid3nt_server.agent.workflows.sfincs.flood.flood.model_flood_scenario",
         new=AsyncMock(return_value=fake_envelope),
     ) as mock_wf:
-        await run_model_flood_scenario(bbox=_INLAND_BBOX)
+        await sfincs_flood(bbox=_INLAND_BBOX)
     kwargs = mock_wf.await_args.kwargs
     assert kwargs["building_obstacles"] is False
     assert kwargs["building_obstacle_mode"] == "exclude"
@@ -167,10 +200,10 @@ async def test_wrapper_forwards_string_obstacle_uri() -> None:
     fake_envelope = _empty_envelope_stub()
     uri = "gs://my-bucket/prior_buildings.fgb"
     with patch(
-        "trid3nt_server.workflows.model_flood_scenario.model_flood_scenario",
+        "trid3nt_server.agent.workflows.sfincs.flood.flood.model_flood_scenario",
         new=AsyncMock(return_value=fake_envelope),
     ) as mock_wf:
-        await run_model_flood_scenario(bbox=_INLAND_BBOX, building_obstacles=uri)
+        await sfincs_flood(bbox=_INLAND_BBOX, building_obstacles=uri)
     assert mock_wf.await_args.kwargs["building_obstacles"] == uri
 
 
@@ -242,11 +275,11 @@ def _inland_chain_patches(build_sfincs_mock):  # noqa: ANN001, ANN201 — test h
     async def _wfc(_handle):  # noqa: ANN001
         return run_result_ok
 
-    mod = "trid3nt_server.workflows.model_flood_scenario"
+    mod = "trid3nt_server.agent.workflows.sfincs.flood.flood"
     return [
         patch(f"{mod}.fetch_dem", return_value=_mock_layer_uri("dem")),
         patch(f"{mod}.fetch_landcover", return_value=landcover_result),
-        patch(f"{mod}.fetch_river_geometry", return_value=_mock_layer_uri("rivers")),
+        _river_geometry_patch(),
         patch(f"{mod}.lookup_precip_return_period", return_value=precip_result),
         patch(f"{mod}.build_sfincs_model", side_effect=build_sfincs_mock),
         patch(f"{mod}.run_solver", return_value=handle),
@@ -280,10 +313,7 @@ async def test_inland_with_buildings_passes_uri_and_subgrid() -> None:
         # fetch_buildings is a LOCAL import inside _resolve_building_obstacle_uri,
         # so patch it at its source module.
         stack.enter_context(
-            patch(
-                "trid3nt_server.tools.fetchers.socioeconomic.fetch_buildings.fetch_buildings",
-                return_value=_buildings_layer(),
-            )
+            _registry_fetch_buildings_patch(MagicMock(return_value=_buildings_layer()))
         )
         envelope = await model_flood_scenario(
             bbox=_INLAND_BBOX,
@@ -324,12 +354,8 @@ async def test_inland_default_off_no_buildings_no_subgrid() -> None:
     with contextlib.ExitStack() as stack:
         for p in patches:
             stack.enter_context(p)
-        fb = stack.enter_context(
-            patch(
-                "trid3nt_server.tools.fetchers.socioeconomic.fetch_buildings.fetch_buildings",
-                return_value=_buildings_layer(),
-            )
-        )
+        fb = MagicMock(return_value=_buildings_layer())
+        stack.enter_context(_registry_fetch_buildings_patch(fb))
         await model_flood_scenario(
             bbox=_INLAND_BBOX,
             return_period_yr=100,
@@ -369,9 +395,8 @@ async def test_inland_buildings_fetch_failure_degrades_to_no_obstacles() -> None
         for p in patches:
             stack.enter_context(p)
         stack.enter_context(
-            patch(
-                "trid3nt_server.tools.fetchers.socioeconomic.fetch_buildings.fetch_buildings",
-                side_effect=RuntimeError("Overpass 504 gateway timeout"),
+            _registry_fetch_buildings_patch(
+                MagicMock(side_effect=RuntimeError("Overpass 504 gateway timeout"))
             )
         )
         envelope = await model_flood_scenario(

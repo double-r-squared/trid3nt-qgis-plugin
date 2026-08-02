@@ -42,13 +42,13 @@ import asyncio
 import json
 from dataclasses import dataclass, field
 from typing import Any
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 
 import pytest
 
-from trid3nt_server.adapter import (
+from trid3nt_server.agent.adapters.adapter import (
     FunctionCallEvent,
-    GeminiSettings,
+    ModelSettings,
     MAX_TURN_ITERATIONS,
     TextDeltaEvent,
     _classify_error,
@@ -187,35 +187,13 @@ def test_error_summary_is_json_serializable():
 
 
 def _make_fake_chunk_with_function_call(name: str, args: dict, call_id: str = "c1"):
-    fn_call = MagicMock()
-    fn_call.name = name
-    fn_call.id = call_id
-    fn_call.args = args
-    fake_part = MagicMock()
-    fake_part.function_call = fn_call
-    fake_part.text = None
-    fake_content = MagicMock()
-    fake_content.parts = [fake_part]
-    fake_candidate = MagicMock()
-    fake_candidate.content = fake_content
-    fake_chunk = MagicMock()
-    fake_chunk.candidates = [fake_candidate]
-    fake_chunk.text = None
-    return fake_chunk
+    """A fake turn (scripted-provider dict) emitting ONE function call."""
+    return {"tool_call": {"name": name, "args": args, "call_id": call_id}}
 
 
 def _make_fake_chunk_with_text(text: str):
-    fake_part = MagicMock()
-    fake_part.function_call = None
-    fake_part.text = text
-    fake_content = MagicMock()
-    fake_content.parts = [fake_part]
-    fake_candidate = MagicMock()
-    fake_candidate.content = fake_content
-    fake_chunk = MagicMock()
-    fake_chunk.candidates = [fake_candidate]
-    fake_chunk.text = None
-    return fake_chunk
+    """A fake turn (scripted-provider dict) emitting one narration delta."""
+    return {"text": text}
 
 
 @dataclass
@@ -227,7 +205,7 @@ class _FakeSocket:
 
 
 @pytest.mark.asyncio
-async def test_stream_gemini_reply_retry_after_recoverable_failure():
+async def test_stream_model_reply_retry_after_recoverable_failure(fake_llm):
     """First dispatch fails (retryable=True) → second dispatch succeeds.
 
     Gemini reads the structured error_code + retryable=True in the
@@ -250,37 +228,7 @@ async def test_stream_gemini_reply_retry_after_recoverable_failure():
     turn3_chunk = _make_fake_chunk_with_text(
         "Retrieved the DEM on the second attempt; max elevation 12 m."
     )
-    turn_iter = iter([
-        iter([turn1_chunk]),
-        iter([turn2_chunk]),
-        iter([turn3_chunk]),
-    ])
-
-    # Capture the function_response payload appended after the failing
-    # dispatch — this is the structured-error shape Gemini must see.
-    contents_per_turn: list[list[Any]] = []
-
-    def _capture_and_stream(**kwargs):
-        snapshot = []
-        for c in kwargs["contents"]:
-            parts_repr = []
-            for p in c.parts:
-                if p.text:
-                    parts_repr.append(("text", p.text))
-                elif getattr(p, "function_call", None):
-                    parts_repr.append(("function_call", p.function_call.name))
-                elif getattr(p, "function_response", None):
-                    parts_repr.append(
-                        ("function_response", p.function_response.name, p.function_response.response)
-                    )
-                else:
-                    parts_repr.append(("unknown", None))
-            snapshot.append((c.role, parts_repr))
-        contents_per_turn.append(snapshot)
-        return next(turn_iter)
-
-    fake_client = MagicMock()
-    fake_client.models.generate_content_stream.side_effect = _capture_and_stream
+    fake_llm.script([turn1_chunk, turn2_chunk, turn3_chunk])
 
     dispatch_log: list[tuple[str, dict]] = []
     attempt_counter = {"n": 0}
@@ -304,16 +252,36 @@ async def test_stream_gemini_reply_retry_after_recoverable_failure():
 
     sock = _FakeSocket()
     state = SessionState(session_id=new_ulid())
-    settings = GeminiSettings(
+    settings = ModelSettings(
         model="gemini-2.5-pro", project="t", location="us-central1", use_vertex=True
     )
 
-    with patch.object(agent_server, "build_client", return_value=fake_client), \
-         patch.object(agent_server, "_invoke_tool_via_emitter", side_effect=_flaky_invoke), \
+    with patch.object(agent_server, "_invoke_tool_via_emitter", side_effect=_flaky_invoke), \
          patch.object(agent_server, "build_tool_declarations", return_value=[]):
-        await agent_server._stream_gemini_reply(
+        await agent_server._stream_model_reply(
             sock, state, settings, "Get me the DEM for Fort Myers", "research"
         )
+
+    # The function_response appended after the failing dispatch -- the
+    # structured-error shape the model must see -- rebuilt from the recorded
+    # per-turn contents.
+    contents_per_turn: list[list[Any]] = [
+        [
+            (
+                c.role,
+                [
+                    ("text", p.text) if p.text
+                    else ("function_call", p.function_call.name) if getattr(p, "function_call", None)
+                    else ("function_response", p.function_response.name, p.function_response.response)
+                    if getattr(p, "function_response", None)
+                    else ("unknown", None)
+                    for p in c.parts
+                ],
+            )
+            for c in call["contents"]
+        ]
+        for call in fake_llm.calls
+    ]
 
     # Both dispatches happened — the retry actually ran.
     assert len(dispatch_log) == 2
@@ -351,7 +319,7 @@ async def test_stream_gemini_reply_retry_after_recoverable_failure():
 
 
 @pytest.mark.asyncio
-async def test_stream_gemini_reply_failed_retry_caps_at_max_iterations():
+async def test_stream_model_reply_failed_retry_caps_at_max_iterations(fake_llm):
     """A tool that always raises + a Gemini that always retries → loop stops.
 
     With the circuit breaker (job-B8, Wave 4.10) wired into the loop, the
@@ -366,19 +334,16 @@ async def test_stream_gemini_reply_failed_retry_caps_at_max_iterations():
     """
     from trid3nt_server import server as agent_server
     from trid3nt_server.server import SessionState
-    from trid3nt_server.circuit_breaker import ToolCircuitBreaker
+    from trid3nt_server.agent.gates.circuit_breaker import ToolCircuitBreaker
 
-    def _always_retry():
-        i = 0
-        while True:
-            i += 1
-            yield iter([_make_fake_chunk_with_function_call(
-                "fetch_dem", {"bbox": [0, 0, 1, 1], "attempt": i}, f"call-{i}"
-            )])
-
-    chunks = _always_retry()
-    fake_client = MagicMock()
-    fake_client.models.generate_content_stream.side_effect = lambda **_: next(chunks)
+    # Every round retries fetch_dem with a slightly different arg (so the
+    # loop-repeat watchdog does not short-circuit before MAX_TURN_ITERATIONS
+    # / the breaker threshold caps it).
+    fake_llm.on_call(
+        lambda i, _c: _make_fake_chunk_with_function_call(
+            "fetch_dem", {"bbox": [0, 0, 1, 1], "attempt": i + 1}, f"call-{i + 1}"
+        )
+    )
 
     dispatch_count = {"n": 0}
 
@@ -388,14 +353,13 @@ async def test_stream_gemini_reply_failed_retry_caps_at_max_iterations():
 
     sock = _FakeSocket()
     state = SessionState(session_id=new_ulid())
-    settings = GeminiSettings(
+    settings = ModelSettings(
         model="gemini-2.5-pro", project="t", location="us-central1", use_vertex=True
     )
 
-    with patch.object(agent_server, "build_client", return_value=fake_client), \
-         patch.object(agent_server, "_invoke_tool_via_emitter", side_effect=_always_fail), \
+    with patch.object(agent_server, "_invoke_tool_via_emitter", side_effect=_always_fail), \
          patch.object(agent_server, "build_tool_declarations", return_value=[]):
-        await agent_server._stream_gemini_reply(
+        await agent_server._stream_model_reply(
             sock, state, settings, "x", "research"
         )
 

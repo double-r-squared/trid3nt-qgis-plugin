@@ -1,0 +1,7 @@
+compute_aspect:
+- which direction do the slopes face in this study area?
+- compute terrain aspect over the wildfire perimeter
+- show me north-facing vs south-facing slopes in the burn area
+- what aspect is most exposed to the wind in this canyon?
+- I need slope face direction for a solar irradiance analysis
+- calculate terrain aspect so I can see where snow will accumulate

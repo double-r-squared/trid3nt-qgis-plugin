@@ -13,7 +13,9 @@ from qgis.PyQt.QtWidgets import (
     QDialogButtonBox,
     QFormLayout,
     QHBoxLayout,
+    QLabel,
     QLineEdit,
+    QPlainTextEdit,
     QPushButton,
     QWidget,
 )
@@ -154,7 +156,7 @@ class SettingsDialog(QDialog):
         form.addRow("Remote agent URL", self.remote_url_edit)
 
         self.token_edit = QLineEdit(settings.token)
-        self.token_edit.setEchoMode(QLineEdit.Password)
+        self.token_edit.setEchoMode(QLineEdit.EchoMode.Password)
         self.token_edit.setPlaceholderText(
             "optional shared token (tailnet) / bearer token (remote)"
         )
@@ -206,7 +208,7 @@ class SettingsDialog(QDialog):
         # never sent over the WS (no per-message carrier, and a live key must
         # not leak onto the wire).
         self.provider_key_edit = QLineEdit(settings.openrouter_api_key)
-        self.provider_key_edit.setEchoMode(QLineEdit.Password)
+        self.provider_key_edit.setEchoMode(QLineEdit.EchoMode.Password)
         self.provider_key_edit.setPlaceholderText(
             "provider API key (OpenRouter / OpenAI / Groq)"
         )
@@ -285,7 +287,11 @@ class SettingsDialog(QDialog):
         )
         self._apply_mode_field_visibility(self.mode_combo.currentText())
 
-        buttons = QDialogButtonBox(QDialogButtonBox.Save | QDialogButtonBox.Cancel)
+        # (Plugin self-update removed 2026-07: QGIS Plugin Manager -- the custom
+        # repository / plugins.xml path -- is the update mechanism now, so the
+        # in-dialog Update button / version indicator / repo-path field are gone.)
+
+        buttons = QDialogButtonBox(QDialogButtonBox.StandardButton.Save | QDialogButtonBox.StandardButton.Cancel)
         buttons.accepted.connect(self.accept)
         buttons.rejected.connect(self.reject)
         form.addRow(buttons)

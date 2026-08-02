@@ -10,7 +10,7 @@
       "register": "specific",
       "prompt": "run a SFINCS coastal flood simulation for Mexico Beach, Florida",
       "execution": "run",
-      "expected": { "acceptable": ["run_model_flood_scenario"], "no_tool": false }
+      "expected": { "acceptable": ["run_sfincs", "sfincs_flood"], "no_tool": false }
     },
     {
       "id": "rp-spec-02-weather_atmosphere",
@@ -75,7 +75,7 @@
       "prompt": "Pelicun flood damage assessment with fragility curves",
       "execution": "run",
       "expected": {
-        "acceptable": ["run_pelicun_damage_assessment", "run_pelicun_with_buildings"],
+        "acceptable": ["run_pelicun", "pelicun_damage_assessment", "pelicun_damage_with_buildings"],
         "no_tool": false
       }
     },

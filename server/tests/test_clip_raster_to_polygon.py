@@ -33,8 +33,8 @@ import rasterio
 from rasterio.crs import CRS
 from rasterio.transform import from_bounds
 
-from trid3nt_server.tools import TOOL_REGISTRY
-from trid3nt_server.tools.processing.clip_raster_to_polygon import (
+from trid3nt_server.agent.tools import TOOL_REGISTRY
+from trid3nt_server.agent.tools.processing.clip_raster_to_polygon.clip_raster_to_polygon import (
     ClipRasterPolygonError,
     clip_raster_to_polygon,
 )
@@ -110,7 +110,7 @@ def _write_polygon_fgb_multi(
 
 
 # ---------------------------------------------------------------------------
-# Fake cache shim (mirrors clip_raster_to_bbox tests)
+# Fake cache shim (in-memory S3 double)
 # ---------------------------------------------------------------------------
 
 
@@ -454,7 +454,7 @@ def test_cache_miss_then_hit_skips_mask(tmp_path):
     fake_sc = FakeStorageClient()
     mask_call_count = [0]
     original_mask = __import__(
-        "trid3nt_server.tools.processing.clip_raster_to_polygon", fromlist=["_mask_and_write"]
+        "trid3nt_server.agent.tools.processing.clip_raster_to_polygon.clip_raster_to_polygon", fromlist=["_mask_and_write"]
     )._mask_and_write
 
     def _counting_mask(*args, **kwargs):
@@ -462,7 +462,7 @@ def test_cache_miss_then_hit_skips_mask(tmp_path):
         return original_mask(*args, **kwargs)
 
     with patch(
-        "trid3nt_server.tools.processing.clip_raster_to_polygon._mask_and_write",
+        "trid3nt_server.agent.tools.processing.clip_raster_to_polygon.clip_raster_to_polygon._mask_and_write",
         side_effect=_counting_mask,
     ):
         r1 = clip_raster_to_polygon(
@@ -519,7 +519,7 @@ def test_empty_filter_raises_typed_error(tmp_path):
 
 def test_unknown_raster_uri_raises_typed_error():
     """Non-gs:// non-file raster URI raises UNKNOWN_RASTER_URI."""
-    from trid3nt_server.tools.processing.clip_raster_to_polygon import _get_source_crs
+    from trid3nt_server.agent.tools.processing.clip_raster_to_polygon.clip_raster_to_polygon import _get_source_crs
 
     with pytest.raises(ClipRasterPolygonError) as exc_info:
         _get_source_crs("/nonexistent/path/missing.tif")
@@ -671,3 +671,80 @@ def test_live_clip_fortmyers_dem_to_lee_county_shape(tmp_path):
         f"({100*valid.size/out_data.size:.1f}%), "
         f"sample_inside={inside_count}/{len(sample_idx)}"
     )
+
+
+# ---------------------------------------------------------------------------
+# BBox path (folded clip_raster_to_bbox) -- rasterio.mask on a rectangle
+# ---------------------------------------------------------------------------
+
+
+def test_clip_with_bbox_yields_correct_extent(tmp_path):
+    """A ``bbox`` (aligned to the pixel grid) clips to the exact rectangular
+    extent -- the folded clip_raster_to_bbox path via rasterio.mask."""
+    src_path = tmp_path / "src.tif"
+    _write_synthetic_raster(
+        str(src_path), width=256, height=256, crs="EPSG:4326",
+        west=-82.0, south=26.0, east=-80.0, north=28.0,
+    )
+    bbox = (-81.5, 26.5, -80.5, 27.5)  # 1x1 deg centered, grid-aligned
+
+    fake_sc = FakeStorageClient()
+    result = clip_raster_to_polygon(
+        raster_uri=str(src_path), bbox=bbox, bbox_crs="EPSG:4326", _bucket="test-bucket"
+    )
+
+    assert len(fake_sc.store) == 1
+    out_path = tmp_path / "out.tif"
+    out_path.write_bytes(list(fake_sc.store.values())[0])
+    with rasterio.open(out_path) as ds:
+        b = ds.bounds
+        assert ds.crs.to_epsg() == 4326
+    pixel_lon = 2.0 / 256
+    assert abs(b.left - bbox[0]) <= pixel_lon
+    assert abs(b.bottom - bbox[1]) <= pixel_lon
+    assert abs(b.right - bbox[2]) <= pixel_lon
+    assert abs(b.top - bbox[3]) <= pixel_lon
+    assert result.layer_type == "raster"
+    assert result.uri.startswith("s3://")
+
+
+def test_bbox_target_crs_reprojects(tmp_path):
+    """``bbox`` + ``target_crs`` clips then reprojects the output in-process
+    (the folded gdalwarp ``-t_srs`` path, subprocess-free)."""
+    src_path = tmp_path / "src.tif"
+    _write_synthetic_raster(
+        str(src_path), width=256, height=256, crs="EPSG:4326",
+        west=-82.0, south=26.0, east=-80.0, north=28.0,
+    )
+    fake_sc = FakeStorageClient()
+    result = clip_raster_to_polygon(
+        raster_uri=str(src_path), bbox=(-81.5, 26.5, -80.5, 27.5),
+        bbox_crs="EPSG:4326", target_crs="EPSG:3857", _bucket="test-bucket",
+    )
+    out_path = tmp_path / "out.tif"
+    out_path.write_bytes(list(fake_sc.store.values())[0])
+    with rasterio.open(out_path) as ds:
+        assert ds.crs.to_epsg() == 3857
+        valid = ds.read(1)[ds.read(1) != ds.nodata]
+        assert valid.size > 0
+    # target_crs stamped into the layer id.
+    assert "3857" in result.layer_id
+
+
+def test_requires_exactly_one_of_polygon_or_bbox(tmp_path):
+    """Neither / both of polygon_uri, bbox -> INVALID_CLIP_INPUT."""
+    src_path = tmp_path / "src.tif"
+    _write_synthetic_raster(str(src_path))
+    poly_path = tmp_path / "poly.fgb"
+    _write_polygon_fgb(str(poly_path), (-81.5, 26.5, -80.5, 27.5))
+
+    with pytest.raises(ClipRasterPolygonError) as neither:
+        clip_raster_to_polygon(raster_uri=str(src_path), _bucket="test-bucket")
+    assert neither.value.error_code == "INVALID_CLIP_INPUT"
+
+    with pytest.raises(ClipRasterPolygonError) as both:
+        clip_raster_to_polygon(
+            raster_uri=str(src_path), polygon_uri=str(poly_path),
+            bbox=(-81.5, 26.5, -80.5, 27.5), _bucket="test-bucket",
+        )
+    assert both.value.error_code == "INVALID_CLIP_INPUT"

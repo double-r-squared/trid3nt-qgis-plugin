@@ -11,7 +11,7 @@ turn that ended after geocode_location only. ROOT CAUSE (logs/agent.log
 2026-07-22 14:15-14:20, session 01KY5TY0XV67RGS6HR5JFSKT1Q): NOT a heuristic
 miss -- the live turn geocoded, then parked 180s on the code-exec approval
 gate (the headless bench never answers approval cards), then called
-run_swmm_urban_flood and parked again on the solver-confirm gate (24h in the
+swmm_urban_flood and parked again on the solver-confirm gate (24h in the
 local lane) after the bench client had already disconnected -- so the turn
 NEVER REACHED the terminal round where the backstop runs. These tests pin
 that for the true geocode-only shape the backstop DOES rescue the P10 prompt
@@ -32,8 +32,8 @@ from unittest.mock import patch
 import pytest
 
 from trid3nt_server import server as agent_server
-from trid3nt_server.adapter import GeminiSettings
-from trid3nt_server.scripted_adapter import set_script
+from trid3nt_server.agent.adapters.adapter import ModelSettings
+from trid3nt_server.agent.adapters.scripted_adapter import set_script
 from trid3nt_contracts import new_ulid
 
 #: The P10 bench prompt (logs/agent.log 2026-07-22 14:15:33, bench-p10).
@@ -59,8 +59,8 @@ class _FakeSocket:
             self.sent.append(msg)
 
 
-def _settings() -> GeminiSettings:
-    return GeminiSettings(
+def _settings() -> ModelSettings:
+    return ModelSettings(
         model="gemini-2.5-pro", project="t", location="us-central1", use_vertex=True
     )
 
@@ -106,7 +106,7 @@ async def _drive(script, dispatch_results, user_text):
     with patch.object(agent_server, "stream_events_with_contents", _wrap), \
          patch.object(agent_server, "_invoke_tool_via_emitter", side_effect=_dispatch), \
          patch.object(agent_server, "build_tool_declarations", return_value=[]):
-        await agent_server._stream_gemini_reply(
+        await agent_server._stream_model_reply(
             sock, state, _settings(), user_text, "research"
         )
     return sock, captured["contents"], captured["rounds"]

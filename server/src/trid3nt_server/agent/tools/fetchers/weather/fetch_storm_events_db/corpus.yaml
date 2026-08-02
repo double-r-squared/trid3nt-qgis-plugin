@@ -1,0 +1,9 @@
+fetch_storm_events_db:
+- what storms hit Florida in 2017?
+- show me historical tornado touchdowns in Oklahoma since 2000
+- give me NOAA Storm Events records for Hurricane Ian
+- what flooding events occurred in Harris County, TX over the last 10 years?
+- I need historical hail events for this insurance analysis
+- show me past hurricane landfalls in North Carolina
+- what is the historical storm event record for this watershed?
+- pull the storm-events entries for this event so we can reconcile its date, location, and scale

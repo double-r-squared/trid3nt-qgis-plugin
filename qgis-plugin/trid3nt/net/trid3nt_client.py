@@ -1329,6 +1329,11 @@ class AgentClient:
         self.advertised_data_base: Optional[str] = None
         #: True between a completed handshake and the next transport loss.
         self.connected = False
+        #: Optional QgsAuthManager credential broker (``net.auth_broker``). When
+        #: set, connect pushes every stored credential over ``secret-add`` and a
+        #: prompt-answered key is stored back for the next connect. Left None in
+        #: headless drivers with no auth home (env fallback covers them).
+        self.credential_broker = None
         self._ws: Optional[WebSocketConnection] = None
         # Outbound intent queue (web sendOrQueue): pre-serialized frames
         # buffered while disconnected, flushed FIFO after the resume
@@ -1412,7 +1417,23 @@ class AgentClient:
             self.case_id = resumed
         self.connected = True
         self._flush_outbound_queue()
+        self._broker_push_on_connect()
         return user_id
+
+    def _broker_push_on_connect(self) -> None:
+        """Push every QgsAuthManager-stored credential over ``secret-add``.
+
+        Best-effort: no broker, an empty store, or a locked auth DB is a
+        silent no-op -- the daemon's env fallback covers the headless case and
+        connect must never block on the credential home.
+        """
+        broker = self.credential_broker
+        if broker is None:
+            return
+        try:
+            broker.push_all(self.push_secret)
+        except Exception:  # noqa: BLE001 -- connect-time push must not fail connect
+            pass
 
     def reconnect(self) -> str:
         """Re-dial after a transport loss (same session + case; see
@@ -1604,28 +1625,54 @@ class AgentClient:
             queue_if_closed=True,
         )
 
+    def push_secret(self, provider_id: str, key_value: str) -> None:
+        """Push one credential VALUE over ``secret-add`` (no reply signal).
+
+        The connect-time broker path: the daemon writes the value to its
+        in-memory resolver session cache keyed by ``provider``. Carries no
+        ``credential-provided`` (there is no paused tool to resume). KEY
+        HYGIENE: ``key_value`` rides only this envelope, never logged.
+        """
+        self._send(
+            "secret-add",
+            {
+                "provider": provider_id,
+                "case_id": self.case_id,
+                "key_value": key_value,
+            },
+            queue_if_closed=True,
+        )
+
     def submit_credential(
         self, request_id: str, provider_id: str, key_value: str
     ) -> None:
         """Answer a ``credential-request`` with the user's key (LANE K).
 
         Contract (``contracts .../secrets.py``, Decision F): the raw key rides
-        ONLY the ``secret-add`` envelope -- the server vault-writes it (file
-        vault, 0600) on receipt -- and the ``credential-provided`` retry
-        signal that follows carries NO key material, just the echoed
-        ``request_id`` + ``provided=True``. Order matters and is safe on one
-        socket: the server consumes envelopes sequentially per connection, so
-        the vault write completes before the paused tool's future resolves
-        and the retry re-resolves the freshly-saved key.
+        ONLY the ``secret-add`` envelope -- the daemon writes it to the
+        in-memory resolver session cache on receipt -- and the
+        ``credential-provided`` retry signal that follows carries NO key
+        material, just the echoed ``request_id`` + ``provided=True``. Order
+        matters and is safe on one socket: the server consumes envelopes
+        sequentially per connection, so the cache write completes before the
+        paused tool's future resolves and the retry re-resolves the key.
 
-        ``secret_id`` is sent as None (contract-Optional): the server's
-        resume path re-resolves the vault record itself
-        (``_resolve_active_secret_ref``); this synchronous client never
-        blocks waiting for the ``secrets-list`` reply to learn the ULID.
+        The key is ALSO stored to QgsAuthManager via the broker (best-effort)
+        so the NEXT connect re-pushes it without re-prompting.
+
+        ``secret_id`` is sent as None (contract-Optional): the server's resume
+        path re-resolves the credential itself; this synchronous client never
+        blocks waiting for a reply to learn a ULID.
 
         KEY HYGIENE: ``key_value`` is serialized straight onto the wire and
         never logged, stored on ``self``, or echoed back by the server.
         """
+        broker = self.credential_broker
+        if broker is not None:
+            try:
+                broker.remember(provider_id, key_value)
+            except Exception:  # noqa: BLE001 -- store is best-effort; push still runs
+                pass
         self._send(
             "secret-add",
             {
@@ -1979,11 +2026,6 @@ class AgentClient:
             # function_response. The dock renders a compact summary note in
             # chat. Previously fell through to "raw" and was dropped.
             return AgentEvent("impact-envelope", payload)
-        if etype == "lesson-added":
-            # The LESSONS LOOP ack (server _handle_lesson_add raw-JSON
-            # envelope): lesson_id + normalized lesson text. The dock shows a
-            # subtle status note. Previously fell through to "raw".
-            return AgentEvent("lesson-added", payload)
         if etype == "case-list":
             cases = parse_case_list(payload)
             # Mirror of the last_session_state stash above: the startup

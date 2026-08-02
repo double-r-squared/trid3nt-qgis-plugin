@@ -1,6 +1,6 @@
 """Tests for the Python sandbox host-side runner (job-0232, sprint-13 Stage 2).
 
-Drives ``trid3nt_server.sandbox_runner`` in local-subprocess fallback mode
+Drives ``trid3nt_server.sandbox.sandbox_runner`` in local-subprocess fallback mode
 (``TRID3NT_SANDBOX_LOCAL=1``), which runs the SAME ``infra/python-sandbox/
 executor.py`` harness baked into the Cloud Run Job image. These are the
 environment-adjusted acceptance for the harness (the real VPC egress-deny is
@@ -25,7 +25,7 @@ import time
 
 import pytest
 
-from trid3nt_server.sandbox_runner import (
+from trid3nt_server.sandbox.sandbox_runner import (
     SandboxExecutionHandle,
     run_sandbox_local,
     submit_sandbox_job,
@@ -436,7 +436,7 @@ def test_prefetch_rewrites_s3_uri_to_local_path(monkeypatch, tmp_path) -> None:
     """``stage_layer_refs_locally`` downloads every s3:// URI (single OR list) into
     the workdir and rewrites the refs to LOCAL paths; the executor only ever sees
     local files (the jail is network-denied)."""
-    from trid3nt_server import sandbox_runner as sr
+    from trid3nt_server.sandbox import sandbox_runner as sr
 
     fetched: list[str] = []
 
@@ -445,7 +445,7 @@ def test_prefetch_rewrites_s3_uri_to_local_path(monkeypatch, tmp_path) -> None:
         return b"COG-BYTES-FOR-" + uri.encode()
 
     # Patch the shared boto3 reader the staging path imports.
-    monkeypatch.setattr("trid3nt_server.tools.cache.read_object_bytes_s3", _fake_read)
+    monkeypatch.setattr("trid3nt_server.agent.tools.cache.read_object_bytes_s3", _fake_read)
 
     workdir = str(tmp_path / "wd")
     os.makedirs(workdir, exist_ok=True)
@@ -503,7 +503,7 @@ def test_staged_frames_open_under_jail_end_to_end(tmp_path, monkeypatch) -> None
     def _fake_read(uri: str) -> bytes:
         return _tif_bytes(fills[uri])
 
-    monkeypatch.setattr("trid3nt_server.tools.cache.read_object_bytes_s3", _fake_read)
+    monkeypatch.setattr("trid3nt_server.agent.tools.cache.read_object_bytes_s3", _fake_read)
 
     code = (
         "import rasterio\n"
@@ -520,7 +520,7 @@ def test_staged_frames_open_under_jail_end_to_end(tmp_path, monkeypatch) -> None
 def test_prefetch_no_staging_when_no_s3(tmp_path) -> None:
     """When NO ref is an s3:// URI, staging is a no-op: refs are returned unchanged
     and ``staged_dir`` is None (the caller skips the extra ro-bind)."""
-    from trid3nt_server import sandbox_runner as sr
+    from trid3nt_server.sandbox import sandbox_runner as sr
 
     workdir = str(tmp_path / "wd")
     os.makedirs(workdir, exist_ok=True)
@@ -533,12 +533,12 @@ def test_prefetch_no_staging_when_no_s3(tmp_path) -> None:
 def test_prefetch_degrades_on_fetch_failure(monkeypatch, tmp_path) -> None:
     """A single failed s3 fetch degrades to the raw URI string (never crashes) so
     the executor's _open_layer falls back + records a _layer_errors entry."""
-    from trid3nt_server import sandbox_runner as sr
+    from trid3nt_server.sandbox import sandbox_runner as sr
 
     def _boom(uri: str) -> bytes:
         raise RuntimeError("simulated S3 outage")
 
-    monkeypatch.setattr("trid3nt_server.tools.cache.read_object_bytes_s3", _boom)
+    monkeypatch.setattr("trid3nt_server.agent.tools.cache.read_object_bytes_s3", _boom)
 
     workdir = str(tmp_path / "wd")
     os.makedirs(workdir, exist_ok=True)
@@ -570,7 +570,7 @@ def test_executor_path_honors_env_override_first(monkeypatch, tmp_path) -> None:
     exist yet -- proves the seam closes the FileNotFoundError-fails-closed gap
     deterministically.
     """
-    from trid3nt_server import sandbox_runner as sr
+    from trid3nt_server.sandbox import sandbox_runner as sr
 
     override = tmp_path / "python-sandbox" / "sandbox_executor.py"
     monkeypatch.setenv("TRID3NT_SANDBOX_EXECUTOR", str(override))
@@ -581,7 +581,7 @@ def test_executor_path_honors_env_override_first(monkeypatch, tmp_path) -> None:
     monkeypatch.setenv("TRID3NT_SANDBOX_EXECUTOR", "   ")
     resolved = sr._executor_path()
     assert resolved.name == "sandbox_executor.py"
-    assert resolved.parent.name == "trid3nt_server"
+    assert resolved.parent.name == "sandbox"
 
 
 def test_executor_path_default_walkup_resolves_in_repo() -> None:
@@ -590,13 +590,13 @@ def test_executor_path_default_walkup_resolves_in_repo() -> None:
     exists on disk."""
     import os as _os
 
-    from trid3nt_server import sandbox_runner as sr
+    from trid3nt_server.sandbox import sandbox_runner as sr
 
     prior = _os.environ.pop("TRID3NT_SANDBOX_EXECUTOR", None)
     try:
         p = sr._executor_path()
         assert p.exists(), f"executor not found at {p}"
-        assert p.parts[-2:] == ("trid3nt_server", "sandbox_executor.py")
+        assert p.parts[-2:] == ("sandbox", "sandbox_executor.py")
     finally:
         if prior is not None:
             _os.environ["TRID3NT_SANDBOX_EXECUTOR"] = prior

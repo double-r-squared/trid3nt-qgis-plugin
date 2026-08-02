@@ -1,0 +1,115 @@
+# Router source spec (data-router fold, chained-resolution resolve phase, ADR 0064).
+# Twin: fetch_storm_events_db.py -- FOLDED via the directory-index resolve phase
+# (index scrape -> newest bulk-CSV URL) + bulk gzip-CSV point decode.
+schema_version: v1
+name: fetch_storm_events_db
+source_class: storm_events
+shape: vector-fgb
+supports_global_query: true
+input_error_suffix: ARG_INVALID
+endpoints:
+  data:
+    url: https://www.ncei.noaa.gov/pub/data/swdi/stormevents/csvfiles/
+auth:
+  mode: none
+  user_agent: trid3nt/0.1 (Hazard Modeling Agent; https://github.com/double-r-squared/trid3nt-qgis-plugin;
+    agent@trid3nt.dev)
+params:
+  year:
+    type: int
+    required: true
+    min: 1950
+    max: 2100
+  state:
+    type: str
+    required: false
+    schema_optional: true
+  event_types:
+    type: str_list
+    required: false
+    schema_optional: true
+  bbox:
+    type: bbox
+    required: false
+    schema_optional: true
+    quantize: round_6dp
+  begin_date:
+    type: str
+    required: false
+    schema_optional: true
+  end_date:
+    type: str
+    required: false
+    schema_optional: true
+hooks:
+  resolve_build: storm_events_db.resolve_build
+  resolve_parse: storm_events_db.resolve_parse
+  build_request: storm_events_db.build_request
+  parse_response: storm_events_db.parse_response
+ingest:
+  properties:
+  - EVENT_ID
+  - EVENT_TYPE
+  - STATE
+  - BEGIN_DATE_TIME
+  - END_DATE_TIME
+  - INJURIES_DIRECT
+  - DEATHS_DIRECT
+  - DEATHS_INDIRECT
+  - DAMAGE_PROPERTY
+  - MAGNITUDE
+  - EPISODE_NARRATIVE
+normalize:
+  crs: EPSG:4326
+output:
+  layer_type: vector
+  ext: fgb
+  role: context
+  style_preset: storm_events
+  emit_bbox: false
+cache:
+  ttl_class: static-30d
+payload_estimate:
+  model: per_feature
+  features_per_sq_deg: 49.0
+  kb_per_feature: 0.6
+  floor_mb: 0.001
+caveats:
+- NOAA Storm Events DB annual bulk gzip CSV from NCEI, resolved via the directory-index newest-processed-date
+  scrape; one point per event at BEGIN_LAT/BEGIN_LON, filtered by state/event_types/bbox/date-window client-side.
+  US + territories, 1950-present (sparse pre-1996). No match after filtering -> STORM_EVENTS_EMPTY.
+docstring: "Fetch historical NOAA Storm Events Database records as a FlatGeobuf point layer.\n\n**What\
+  \ it does:** Downloads the annual NOAA Storm Events DB gzip CSV for a\ngiven year from NCEI (``ncei.noaa.gov``),\
+  \ filters by state, event type, an\noptional spatial ``bbox``, and an optional ``begin_date``/``end_date``\n\
+  window, geocodes each row at ``BEGIN_LAT``/``BEGIN_LON``, and writes a\nFlatGeobuf Point layer. The\
+  \ DB is the authoritative US storm-event catalog\ncovering 40+ categories (tornado, hurricane, hail,\
+  \ flood, winter storm, …)\nfrom 1950 to present. Tier-1 free, no API key. Cached ``static-30d``.\n\n\
+  **When to use:**\n- Agent needs historical storm-event locations for spatial context -- e.g.\n  \"what\
+  \ flood events affected Lee County FL in 2022?\"\n- User asks for storm events inside a specific map\
+  \ view / AOI (pass ``bbox``)\n  or within a date range (pass ``begin_date``/``end_date``).\n- Workflow\
+  \ requires comparing past event locations against a modeled hazard\n  footprint or a current NWS alert.\n\
+  - User asks for storm frequency, damage summaries, or narrative context for\n  a specific year and region.\n\
+  - Providing historical baseline to accompany a real-time ``fetch_nws_event``\n  or ``fetch_nws_alerts_conus``\
+  \ result.\n\n**When NOT to use:**\n- Real-time or current storm tracking (use ``fetch_nws_event`` for\
+  \ active\n  NWS alerts; NHC ATCF tracks are not in scope for v0.1).\n- Parcel-level damage loss data\
+  \ (the DB carries summary strings only; use\n  Pelicun post-processor for modeled loss).\n- Non-US meteorology\
+  \ (Storm Events is US + territories only).\n- Sub-annual temporal resolution (the DB records are per-event,\
+  \ not\n  gridded time series; use MRMS or NWP output for gridded precipitation).\n\n**Parameters:**\n\
+  - ``year`` (int): calendar year in range [1950, 2100]. Coverage is sparse\n  before ~1996 and comprehensive\
+  \ from that year onward. Acts as the anchor\n  when no window is given. Example: ``2022``.\n- ``state``\
+  \ (str or None): US state -- either a full name (``\"Oklahoma\"``,\n  ``\"Florida\"``) OR an ISO 2-letter\
+  \ code (``\"OK\"``, ``\"FL\"``).\n  Case-insensitive; ``None`` returns all states/territories.\n- ``event_types``\
+  \ (list[str] or None): list of NOAA event-type name strings,\n  case-insensitive (e.g. ``[\"Hurricane\"\
+  , \"Flash Flood\"]``, ``[\"Tornado\"]``).\n  ``None`` returns all categories.\n- ``bbox`` (tuple or\
+  \ None): optional spatial filter ``(west, south, east,\n  north)`` in WGS84 degrees; keeps only events\
+  \ whose begin point lies inside\n  the box. A bbox spans state lines (it is spatial, not administrative).\n\
+  - ``begin_date`` / ``end_date`` (str or None): optional inclusive temporal\n  window in ISO ``YYYY-MM-DD``\
+  \ (or ``YYYY-MM-DDTHH:MM:SS``) form. The window\n  may cross a year boundary - every annual CSV it touches\
+  \ is fetched.\n\n**Returns:**\n``LayerURI(layer_type=\"vector\", role=\"context\", units=None)`` pointing\
+  \ at a\nFlatGeobuf with fields: ``EVENT_ID``, ``EVENT_TYPE``, ``STATE``,\n``BEGIN_DATE_TIME``, ``END_DATE_TIME``,\
+  \ ``INJURIES_DIRECT``,\n``DEATHS_DIRECT``, ``DEATHS_INDIRECT``, ``DAMAGE_PROPERTY``, ``MAGNITUDE``,\n\
+  ``EPISODE_NARRATIVE``. One point per event at ``BEGIN_LAT``/``BEGIN_LON``,\nEPSG:4326.\n\n**Cross-tool\
+  \ dependencies:**\n- Pairs with: ``fetch_nws_event`` / ``fetch_nws_alerts_conus`` (historical\n  baseline\
+  \ alongside current active alerts).\n- Upstream of: ``spatial_query`` (count events inside a polygon),\n\
+  \  narrative hazard-impact summaries.\n- Complements: ``fetch_dem``, ``fetch_river_geometry`` for flood\
+  \ context."

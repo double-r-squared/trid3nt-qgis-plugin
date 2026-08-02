@@ -1,0 +1,8 @@
+fetch_wfigs_incident:
+- look up the Iron Fire near Eureka Utah in the NIFC incident data
+- find the exact location and discovery date of the Santa Rosa Island fire
+- resolve this named wildfire incident to a point and a bounding box
+- where exactly is the Hastings Fire and when did it start?
+- get the WFIGS incident point and AOI for the Grapevine fire in Nevada
+- look the fire up by name and give me an AOI box around it
+- what are the coordinates and size of this named active fire incident?

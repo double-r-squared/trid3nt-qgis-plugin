@@ -16,7 +16,7 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
-from trid3nt_server.workflows.postprocess_modflow import (
+from trid3nt_server.agent.workflows.modflow.postprocess_modflow import (
     compute_saltwater_intrusion_metrics,
 )
 

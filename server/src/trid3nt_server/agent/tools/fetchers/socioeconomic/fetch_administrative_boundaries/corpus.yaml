@@ -1,0 +1,8 @@
+fetch_administrative_boundaries:
+- show me county boundaries for South Florida
+- I need state outline polygons for this regional overview
+- give me Census TIGER county lines for the Houston area
+- show me city boundaries for the Tampa–St. Petersburg metro
+- I want ZIP code tabulation area polygons for demographic aggregation
+- fetch the state boundary so I can clip this flood layer to Florida
+- give me US Census tract boundaries for this urban area

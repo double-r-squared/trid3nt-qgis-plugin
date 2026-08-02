@@ -1,0 +1,8 @@
+fetch_hrrr_smoke:
+- show me smoke forecast for Northern California wildfires
+- where is the wildfire smoke traveling over the next 12 hours?
+- I need HRRR-Smoke aerosol optical depth for this region
+- fetch smoke column mass density forecast for the Pacific Northwest
+- show me air quality forecast for the Sacramento Valley during fire season
+- I need PM2.5 smoke forecast for this wildfire event
+- give me near-surface smoke concentration over this evacuated area

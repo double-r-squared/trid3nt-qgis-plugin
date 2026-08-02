@@ -24,8 +24,8 @@ import pytest
 
 from trid3nt_server import server as agent_server
 from trid3nt_server import telemetry as tel
-from trid3nt_server.adapter import GeminiSettings
-from trid3nt_server.scripted_adapter import set_script
+from trid3nt_server.agent.adapters.adapter import ModelSettings
+from trid3nt_server.agent.adapters.scripted_adapter import set_script
 from trid3nt_contracts import new_ulid
 
 
@@ -267,8 +267,8 @@ async def test_openai_usage_carries_reasoning_tokens_when_reported():
     fabricated)."""
     from unittest.mock import AsyncMock, MagicMock
 
-    from trid3nt_server.adapter import UsageMetadataEvent
-    from trid3nt_server.openai_adapter import _stream_one_round
+    from trid3nt_server.agent.adapters.adapter import UsageMetadataEvent
+    from trid3nt_server.agent.adapters.openai_adapter import _stream_one_round
 
     def _usage_chunk(details):
         return _Namespace(
@@ -319,8 +319,8 @@ class _FakeSocket:
             self.sent.append(msg)
 
 
-def _settings() -> GeminiSettings:
-    return GeminiSettings(
+def _settings() -> ModelSettings:
+    return ModelSettings(
         model="gemini-2.5-pro", project="t", location="us-central1", use_vertex=True
     )
 
@@ -356,7 +356,7 @@ async def test_turn_loop_emits_one_turn_record(_scripted, monkeypatch):
     with patch.object(agent_server, "emit_turn_telemetry", _capture), \
          patch.object(agent_server, "_invoke_tool_via_emitter", side_effect=_dispatch), \
          patch.object(agent_server, "build_tool_declarations", return_value=[]):
-        await agent_server._stream_gemini_reply(
+        await agent_server._stream_model_reply(
             sock, state, _settings(), "get a DEM", "research"
         )
     assert len(captured) == 1, "exactly one turn record per turn"
@@ -391,7 +391,7 @@ async def test_turn_loop_record_on_stream_failure_is_internal(
          patch.object(agent_server, "build_tool_declarations", return_value=[]), \
          patch.object(agent_server, "_persist_terminal_failure_card"), \
          patch.object(agent_server, "_send_error"):
-        await agent_server._stream_gemini_reply(
+        await agent_server._stream_model_reply(
             sock, state, _settings(), "hello", "research"
         )
     assert len(captured) == 1

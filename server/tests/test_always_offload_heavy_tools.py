@@ -32,15 +32,15 @@ import pathlib
 import pytest
 
 from trid3nt_server import server
-from trid3nt_server import tools as agent_tools
-from trid3nt_server.tools import RegisteredTool
+from trid3nt_server.agent import tools as agent_tools
+from trid3nt_server.agent.tools import RegisteredTool
 from trid3nt_contracts.tool_registry import AtomicToolMetadata
 
 _SRC = pathlib.Path(server.__file__).resolve().parent
-_WORKFLOWS = _SRC / "workflows"
-_FLOOD = _WORKFLOWS / "model_flood_scenario.py"
-_GEOCLAW = _WORKFLOWS / "model_dambreak_geoclaw_scenario.py"
-_GLM_ANIM = _WORKFLOWS / "model_glm_lightning_animation.py"
+_WORKFLOWS = _SRC / "agent" / "workflows"
+_FLOOD = _WORKFLOWS / "sfincs" / "flood" / "flood.py"  # engine-door rollout renamed/moved
+# model_flood_scenario -> sfincs_flood (tier=template) under workflows/sfincs/flood/.
+_GEOCLAW = _WORKFLOWS / "geoclaw" / "model_dambreak_geoclaw_scenario" / "model_dambreak_geoclaw_scenario.py"
 
 
 def test_fetch_topobathy_in_always_set() -> None:
@@ -170,27 +170,4 @@ def test_geoclaw_topobathy_runs_off_loop() -> None:
     assert _calls_to_thread_with(src, "_fetch_topo_for_geoclaw"), (
         "model_dambreak_geoclaw_scenario must run its topo helper (which calls "
         "fetch_topobathy) via asyncio.to_thread"
-    )
-
-
-def test_glm_lightning_per_frame_bake_runs_off_loop() -> None:
-    """The GLM lightning composer's heavy per-frame work -- the ~54 MB GLM-granule
-    + visible-base netCDF download + GED bin + raster bake + COG write inside the
-    sync ``_emit_baked_frame`` helper -- must be dispatched via
-    ``asyncio.to_thread(_emit_baked_frame, ...)`` so the per-frame loop yields to
-    the asyncio loop between frames and the WS heartbeat can fire (the fire/lightning
-    connecting-loop blocker, LIVE 2026-06-25)."""
-    src = _GLM_ANIM.read_text()
-    # The sync per-frame bake helper exists + does the heavy work...
-    assert "def _emit_baked_frame(" in src
-    # ...and the composer dispatches it off the loop, once per frame.
-    assert _calls_to_thread_with(src, "_emit_baked_frame"), (
-        "model_glm_lightning_animation must run each frame's _emit_baked_frame "
-        "(the ~54 MB download + reproject + COG bake) via asyncio.to_thread so "
-        "the loop yields between frames and the WS heartbeat stays live"
-    )
-    # The standalone GED overlay fetch is also off-loop (the fetcher is sync).
-    assert _calls_to_thread_with(src, "fetcher"), (
-        "model_glm_lightning_animation must dispatch fetch_glm_lightning "
-        "(standalone GED overlay) via asyncio.to_thread"
     )

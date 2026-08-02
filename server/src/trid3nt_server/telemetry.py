@@ -1,21 +1,30 @@
-"""Tool-call telemetry writer (B-tel / Wave 4.10 + Wave 4.11 M3).
+"""Tool-call telemetry writer.
 
-Wave 4.10: emits one JSON-line per LLM-initiated or workflow-initiated tool
-call to a local JSONL file.
-
-Wave 4.11 M3: swaps the backend for MongoDB MCP when the Persistence singleton
-is bound (``TRID3NT_MONGO_MCP_STDIO=1``).  Falls back to the local-file path
-when Persistence is unbound (dev / CI without Atlas).
+Emits one JSON-line per LLM-initiated or workflow-initiated tool call to a
+local JSONL file -- the single tool-call telemetry sink. This is the product
+sink benches and routing scouts read; it is written UNCONDITIONALLY, regardless
+of whether the app-level ``Persistence`` singleton is bound. (A former variant
+mirrored these rows into a MongoDB ``tool_call_telemetry`` collection when
+Persistence was bound; that route was cut -- telemetry is JSONL-only now.)
 
 Write path is fire-and-forget: ``emit_tool_call_event`` schedules an async
 write task and returns immediately.  A write failure is logged at WARNING level
-but never raised — telemetry must never break the tool-dispatch loop.
+but never raised -- telemetry must never break the tool-dispatch loop.
 
-Configuration:
-    ``TRID3NT_TELEMETRY_PATH`` env var overrides the default output path for the
-    local-file fallback.  Default: ``/tmp/trid3nt_tool_call_telemetry.jsonl``
+Configuration (deliberate retention -- session/boot-segmented, NATE decision
+2026-07-30; ephemerality is POLICY, daemon-enforced, not accident):
+    ``TRID3NT_TELEMETRY_PATH`` unset, or set to a DIRECTORY, selects
+    directory-mode: one JSONL segment per daemon boot,
+    ``<dir>/tool_calls.<boot_id>.jsonl``. Default dir: ``/tmp/trid3nt_telemetry``.
+    ``main.run()`` prunes segments beyond the last ``TRID3NT_TELEMETRY_KEEP``
+    (default 3) at every daemon boot (``cleanup_telemetry_segments``).
+    ``TRID3NT_TELEMETRY_PATH`` set to an EXACT ``*.jsonl`` file is the legacy
+    unsegmented override (back-compat for pinned test/ops paths) -- reads and
+    writes go to exactly that one file, no segmentation, no cleanup.
+    Readers (``load_tool_call_records``) default to the CURRENT segment;
+    pass ``all_segments=True`` to read every retained segment.
 
-Record shape (one JSON object per line, newline-terminated — local-file path):
+Record shape (one JSON object per line, newline-terminated):
     {
         "session_id":                  str,
         "ts":                          str  (ISO-8601 UTC, e.g. "2026-06-09T...Z"),
@@ -27,23 +36,21 @@ Record shape (one JSON object per line, newline-terminated — local-file path):
         "error_code":                  str | null,
         "retry_attempt":               int   (0 for first call),
         "cached_content_token_count":  int | null,
+        "result_usable":               bool | null,
+        "routed_ok":                   bool | null,
+        "model_id":                    str | null,
+        "turn_id":                     str | null   (omitted, not null, when absent),
     }
 
-MongoDB record shape (tool_call_telemetry collection — MCP-backed path):
-    Maps 1:1 to ``ToolCallTelemetryDocument`` from
-    ``trid3nt_contracts.mongo_collections``.  Key differences from the local
-    file path:
-    - ``_id`` is a ULID (time-sortable; generated on write).
-    - ``called_at_utc`` is a UTC datetime (the TTL index field; 90-day expiry).
-    - ``result_ok`` replaces ``success`` (BSON-friendlier naming).
-    - ``session_id`` / ``tool_name`` / ``source`` / ``args_hash`` /
-      ``result_ok`` / ``latency_ms`` / ``error_code`` / ``retry_attempt`` /
-      ``cached_content_token_count`` map directly from the call args.
+Tool-retrieval SHADOW rows (``record_type="tool_retrieval_shadow"``) share this
+same JSONL sink; readers split the two by ``record_type`` (its ABSENCE marks a
+per-tool-call row -- see ``load_tool_call_records``).
 """
 
 from __future__ import annotations
 
 import asyncio
+import glob
 import hashlib
 import json
 import logging
@@ -57,6 +64,77 @@ if TYPE_CHECKING:
 logger = logging.getLogger("trid3nt_server.telemetry")
 
 _DEFAULT_TELEMETRY_PATH = "/tmp/trid3nt_tool_call_telemetry.jsonl"
+
+# --------------------------------------------------------------------------- #
+# Deliberate telemetry retention (session/boot-segmented sink; NATE decision
+# 2026-07-30). Ephemerality is POLICY, daemon-enforced at boot
+# (``cleanup_telemetry_segments``), not a platform accident.
+#
+# Back-compat: an explicit ``TRID3NT_TELEMETRY_PATH`` ending in ``.jsonl`` is
+# an EXACT single-file override -- unsegmented, byte-identical to the prior
+# behavior (every existing test pins this env var to one tmp file and reads it
+# directly; that contract does not change). Unset, or set to a directory (no
+# ``.jsonl`` suffix), the sink is DIRECTORY-mode: one JSONL segment per daemon
+# boot, named ``tool_calls.<boot_id>.jsonl``, so a crash-looped or long-lived
+# daemon never re-grows one unbounded file. Default directory stays /tmp-class.
+# --------------------------------------------------------------------------- #
+
+_DEFAULT_TELEMETRY_DIR = "/tmp/trid3nt_telemetry"
+_TELEMETRY_BASENAME = "tool_calls"
+_DEFAULT_TELEMETRY_KEEP = 3
+
+#: Process-lifetime boot id (lazily generated once, cached). Override via
+#: ``TRID3NT_TELEMETRY_SESSION_ID`` for deterministic test/ops control.
+_BOOT_ID: str | None = None
+
+
+def _is_explicit_file_override(raw: str) -> bool:
+    """True when ``raw`` names an exact file (legacy unsegmented override)."""
+    return raw.endswith(".jsonl")
+
+
+def _telemetry_boot_id() -> str:
+    override = os.environ.get("TRID3NT_TELEMETRY_SESSION_ID")
+    if override:
+        return override
+    global _BOOT_ID
+    if _BOOT_ID is None:
+        _BOOT_ID = f"{datetime.now(timezone.utc):%Y%m%dT%H%M%S}Z-{os.getpid()}"
+    return _BOOT_ID
+
+
+def _telemetry_dir() -> str:
+    raw = os.environ.get("TRID3NT_TELEMETRY_PATH")
+    if raw and not _is_explicit_file_override(raw):
+        return raw
+    return _DEFAULT_TELEMETRY_DIR
+
+
+def _telemetry_keep() -> int:
+    raw = os.environ.get("TRID3NT_TELEMETRY_KEEP")
+    if raw is None:
+        return _DEFAULT_TELEMETRY_KEEP
+    try:
+        val = int(raw)
+        return val if val >= 1 else _DEFAULT_TELEMETRY_KEEP
+    except ValueError:
+        logger.warning(
+            "TRID3NT_TELEMETRY_KEEP=%r is not a valid positive integer; "
+            "using default %d",
+            raw,
+            _DEFAULT_TELEMETRY_KEEP,
+        )
+        return _DEFAULT_TELEMETRY_KEEP
+
+
+def _list_telemetry_segments() -> list[str]:
+    """Every retained segment file in directory mode, oldest-first (name-sorted;
+
+    the boot-id prefix is a UTC timestamp so lexical order == chronological
+    order). Empty when the directory does not exist yet.
+    """
+    pattern = os.path.join(_telemetry_dir(), f"{_TELEMETRY_BASENAME}.*.jsonl")
+    return sorted(glob.glob(pattern))
 
 
 def get_persistence() -> "Persistence | None":
@@ -78,8 +156,71 @@ def get_persistence() -> "Persistence | None":
 
 
 def _get_telemetry_path() -> str:
-    """Return the JSONL output path from env, falling back to the default."""
-    return os.environ.get("TRID3NT_TELEMETRY_PATH", _DEFAULT_TELEMETRY_PATH)
+    """Return the JSONL WRITE path: the legacy exact-file override, or the
+
+    current boot's segment inside the (env-overridable) telemetry directory.
+    """
+    raw = os.environ.get("TRID3NT_TELEMETRY_PATH")
+    if raw and _is_explicit_file_override(raw):
+        return raw
+    return os.path.join(
+        _telemetry_dir(), f"{_TELEMETRY_BASENAME}.{_telemetry_boot_id()}.jsonl"
+    )
+
+
+def telemetry_read_paths(*, all_segments: bool = False) -> list[str]:
+    """Resolve the JSONL file(s) a READER should consult.
+
+    Legacy explicit-file override: always exactly that one path (a single
+    file has no segments; ``all_segments`` is a no-op). Directory mode:
+    the CURRENT boot's segment by default, or every retained segment
+    (oldest-first) when ``all_segments=True``.
+    """
+    raw = os.environ.get("TRID3NT_TELEMETRY_PATH")
+    if raw and _is_explicit_file_override(raw):
+        return [raw]
+    if not all_segments:
+        return [_get_telemetry_path()]
+    segments = _list_telemetry_segments()
+    return segments if segments else [_get_telemetry_path()]
+
+
+def cleanup_telemetry_segments(keep: int | None = None) -> list[str]:
+    """Daemon-boot retention pass: delete segments beyond the last ``keep``.
+
+    Ephemerality is POLICY, enforced HERE (call this once at daemon boot --
+    ``main.run()`` does), not a platform accident. No-op (returns ``[]``) in
+    legacy explicit-file mode (nothing to prune) or when fewer than ``keep``
+    segments exist yet. ``keep`` defaults to ``TRID3NT_TELEMETRY_KEEP`` (3).
+    Best-effort: a failure removing one segment is logged and skipped --
+    retention must never raise or block boot.
+    """
+    raw = os.environ.get("TRID3NT_TELEMETRY_PATH")
+    if raw and _is_explicit_file_override(raw):
+        return []
+    if keep is None:
+        keep = _telemetry_keep()
+    segments = _list_telemetry_segments()
+    if len(segments) <= keep:
+        return []
+    stale = segments[: len(segments) - keep]
+    removed: list[str] = []
+    for seg in stale:
+        try:
+            os.remove(seg)
+            removed.append(seg)
+        except OSError:
+            logger.warning(
+                "telemetry retention: failed to remove segment=%s", seg, exc_info=True
+            )
+    if removed:
+        logger.info(
+            "telemetry retention: removed %d stale segment(s) (keep=%d): %s",
+            len(removed),
+            keep,
+            removed,
+        )
+    return removed
 
 
 def _hash_args(args: dict | None) -> str:
@@ -102,10 +243,13 @@ async def _write_line(path: str, record: dict) -> None:
     if ``aiofiles`` is not installed (it is NOT in the pyproject deps; the
     executor path is the safe default until it is added).
 
-    Never raises — any I/O error is logged at WARNING.
+    Never raises -- any I/O error is logged at WARNING.
     """
     line = json.dumps(record, default=str) + "\n"
     try:
+        parent = os.path.dirname(path)
+        if parent:
+            os.makedirs(parent, exist_ok=True)
         aiofiles = None
         try:
             import aiofiles as _aiofiles  # type: ignore[import-not-found]
@@ -123,7 +267,7 @@ async def _write_line(path: str, record: dict) -> None:
             await loop.run_in_executor(
                 None, _blocking_append, path, line
             )
-    except Exception:  # noqa: BLE001 — telemetry must never break the call loop
+    except Exception:  # noqa: BLE001 -- telemetry must never break the call loop
         logger.warning(
             "telemetry write failed path=%s tool=%s",
             path,
@@ -133,98 +277,9 @@ async def _write_line(path: str, record: dict) -> None:
 
 
 def _blocking_append(path: str, line: str) -> None:
-    """Blocking file append — called from an executor thread only."""
+    """Blocking file append -- called from an executor thread only."""
     with open(path, mode="a", encoding="utf-8") as fh:
         fh.write(line)
-
-
-async def _write_to_mongo(
-    persistence: "Persistence",
-    session_id: str,
-    ts: str,
-    tool_name: str,
-    source: Literal["llm", "workflow", "manual"],
-    args_hash: str,
-    success: bool,
-    latency_ms: float,
-    error_code: str | None,
-    retry_attempt: int,
-    cached_content_token_count: int | None,
-    result_usable: bool | None = None,
-    routed_ok: bool | None = None,
-    model_id: str | None = None,
-    turn_id: str | None = None,
-) -> None:
-    """Emit one tool-call telemetry record to MongoDB via the MCP Persistence.
-
-    Constructs a ``ToolCallTelemetryDocument``, validates it against the schema,
-    and calls ``insert-one`` via the Persistence singleton's underlying MCP
-    client.  Telemetry insert is done directly on the MCP client (bypassing the
-    typed Persistence methods, which own Case/User/Secret shapes) using the
-    ``tool_call_telemetry`` collection name from the contracts constant.
-
-    Never raises — any Persistence failure is logged at WARNING.
-    """
-    try:
-        from trid3nt_contracts import new_ulid
-        from trid3nt_contracts.mongo_collections import (
-            TELEMETRY_COLLECTION,
-            ToolCallTelemetryDocument,
-        )
-        from .persistence import DEFAULT_DATABASE
-
-        # Parse ts string to datetime for called_at_utc.  Accepts ISO-8601 with
-        # trailing Z (e.g. "2026-06-09T12:34:56.789Z") or offset-aware strings.
-        called_at: datetime
-        if isinstance(ts, str):
-            normalized = ts.replace("Z", "+00:00")
-            called_at = datetime.fromisoformat(normalized)
-        else:
-            called_at = ts  # type: ignore[assignment]
-        if called_at.tzinfo is None:
-            called_at = called_at.replace(tzinfo=timezone.utc)
-
-        doc = ToolCallTelemetryDocument(
-            _id=new_ulid(),
-            session_id=session_id,
-            tool_name=tool_name,
-            called_at_utc=called_at,
-            source=source,
-            args_hash=args_hash,
-            result_ok=success,
-            latency_ms=latency_ms,
-            error_code=error_code,
-            retry_attempt=retry_attempt,
-            cached_content_token_count=cached_content_token_count,
-            result_usable=result_usable,
-            routed_ok=routed_ok,
-            model_id=model_id,
-        )
-
-        body = doc.model_dump(mode="json", by_alias=True)
-        # ``turn_id`` (the per-user-message dispatch / pipeline id) is the recall@k
-        # join key (tool-retrieval shadow). The typed ToolCallTelemetryDocument is
-        # ``extra="forbid"`` so it is NOT a model field; inject it onto the wire
-        # body AFTER the validated dump so a recall@k reader can join a dispatched
-        # llm tool to ITS turn's shadow-selection row without a contract change.
-        if turn_id is not None:
-            body["turn_id"] = turn_id
-
-        await persistence._mcp.call_tool(
-            "insert-one",
-            {
-                "database": DEFAULT_DATABASE,
-                "collection": TELEMETRY_COLLECTION,
-                "document": body,
-            },
-        )
-    except Exception:  # noqa: BLE001 — telemetry must never break the call loop
-        logger.warning(
-            "telemetry mongo write failed tool=%s session=%s",
-            tool_name,
-            session_id,
-            exc_info=True,
-        )
 
 
 async def emit_tool_call_event(
@@ -246,17 +301,15 @@ async def emit_tool_call_event(
     """Emit one tool-call telemetry record (non-blocking).
 
     The write is scheduled as a fire-and-forget asyncio task.  The caller
-    does NOT await completion — latency impact on the tool-dispatch loop is
+    does NOT await completion -- latency impact on the tool-dispatch loop is
     bounded by the time to enqueue the task (microseconds), not the actual
     I/O.
 
-    Backend selection:
-    - When the app-level ``Persistence`` singleton (from ``server.get_persistence``)
-      is bound (i.e. ``TRID3NT_MONGO_MCP_STDIO=1`` or dev-file mode), the record
-      is written to the ``tool_call_telemetry`` MongoDB collection via MCP.
-    - When ``Persistence`` is unbound (M1 in-memory / CI without Atlas), the
-      record falls back to the local-file JSONL path (``TRID3NT_TELEMETRY_PATH``
-      or the default ``/tmp/trid3nt_tool_call_telemetry.jsonl``).
+    Sink: the record is ALWAYS written to the local-file JSONL path
+    (``TRID3NT_TELEMETRY_PATH`` or the default
+    ``/tmp/trid3nt_tool_call_telemetry.jsonl``), regardless of whether the
+    app-level ``Persistence`` singleton is bound. The former MongoDB-mirror
+    route was cut -- telemetry is JSONL-only.
 
     Args:
         session_id: WebSocket session identifier (ULID string).
@@ -265,11 +318,11 @@ async def emit_tool_call_event(
             ``trid3nt_contracts.now_utc().isoformat()`` or equivalent.
         tool_name: Registered tool name (e.g. ``"fetch_dem"``).
         source: Where the call originated.
-            - ``"llm"`` — Gemini-initiated ``function_call`` in the multi-turn
-              loop (``_stream_gemini_reply``).
-            - ``"workflow"`` — inside-composer dispatch (future; reserved for
-              Wave 4.11+ workflow orchestration paths).
-            - ``"manual"`` — ``/invoke`` directive from the debug harness or
+            - ``"llm"`` -- Gemini-initiated ``function_call`` in the multi-turn
+              loop (``_stream_model_reply``).
+            - ``"workflow"`` -- inside-composer dispatch (reserved for future
+              workflow orchestration paths).
+            - ``"manual"`` -- ``/invoke`` directive from the debug harness or
               a test fixture.
         args_hash: Hex digest of SHA-256 over the JSON-serialized args dict.
             Use ``telemetry.compute_args_hash(args)`` to build this.
@@ -286,7 +339,7 @@ async def emit_tool_call_event(
             this call.  ``None`` when the field is absent or the stream did
             not report usage metadata (e.g. mid-stream chunks).
         result_usable: Whether the call produced a USABLE result, distinct
-            from ``success`` (tool-accuracy panel, NATE 2026-06-17). ``False``
+            from ``success`` (tool-accuracy panel). ``False``
             for a layer-producing tool whose result carried no renderable
             layer (the honesty-floor NO_RENDERABLE_LAYER case) even when
             ``success=True``; ``True`` for a real renderable / non-empty data
@@ -299,42 +352,9 @@ async def emit_tool_call_event(
             model corrected); ``True`` when not superseded; ``None`` when the
             signal is unavailable.
     """
-    # Resolve the Persistence singleton via the module-level lazy wrapper.
-    # That wrapper defers the import of server.py to avoid a circular import
-    # at module load time.  Tests can patch ``trid3nt_server.telemetry.
-    # get_persistence`` to inject a mock without touching the server module.
-    # We defensively catch any exception from get_persistence() itself so that
-    # failures during early startup (e.g. ImportError) always fall through
-    # to the local-file path rather than propagating.
-    try:
-        persistence: "Persistence | None" = get_persistence()
-    except Exception:  # noqa: BLE001
-        persistence = None
-
-    if persistence is not None:
-        # MCP-backed path: fire-and-forget to Mongo.
-        asyncio.ensure_future(
-            _write_to_mongo(
-                persistence=persistence,
-                session_id=session_id,
-                ts=ts,
-                tool_name=tool_name,
-                source=source,
-                args_hash=args_hash,
-                success=success,
-                latency_ms=latency_ms,
-                error_code=error_code,
-                retry_attempt=retry_attempt,
-                cached_content_token_count=cached_content_token_count,
-                result_usable=result_usable,
-                routed_ok=routed_ok,
-                model_id=model_id,
-                turn_id=turn_id,
-            )
-        )
-        return
-
-    # Local-file fallback (v0 path — preserved for backward compat).
+    # JSONL-only sink: written unconditionally (the Persistence-mirror route
+    # was cut). Fire-and-forget -- the event loop schedules the write; we do
+    # not await it.
     record: dict = {
         "session_id": session_id,
         "ts": ts,
@@ -349,7 +369,7 @@ async def emit_tool_call_event(
         "result_usable": result_usable,
         "routed_ok": routed_ok,
         "model_id": model_id,
-        # turn_id (pipeline id) — recall@k join key (tool-retrieval shadow).
+        # turn_id (pipeline id) -- recall@k join key (tool-retrieval shadow).
         # Omitted (absent, not null) when the caller did not supply it so old
         # readers + records stay byte-compatible.
         **({"turn_id": turn_id} if turn_id is not None else {}),
@@ -360,7 +380,7 @@ async def emit_tool_call_event(
 
 
 def compute_args_hash(args: dict | None) -> str:
-    """Public helper — compute the SHA-256 hex digest for a tool's args dict.
+    """Public helper -- compute the SHA-256 hex digest for a tool's args dict.
 
     Callers in ``server.py`` should use this rather than re-implementing the
     digest logic.  Safe to call from sync contexts (no I/O).
@@ -368,8 +388,66 @@ def compute_args_hash(args: dict | None) -> str:
     return _hash_args(args)
 
 
+def load_tool_call_records(
+    path: str | None = None,
+    *,
+    limit: int | None = None,
+    newest_first: bool = True,
+    all_segments: bool = False,
+) -> list[dict]:
+    """Read per-tool-call rows from the JSONL sink (the product telemetry file).
+
+    The shared reader for consumers that used to query the ``tool_call_telemetry``
+    Persistence collection (search-tool co-occurrence / hot-set ranking): now that
+    telemetry is JSONL-only, they read this file instead.
+
+    Tolerant reader: a missing / unreadable file or a malformed line yields what
+    could be read (never raises -- a missing/unreadable target is skipped, not
+    fatal). Tool-retrieval SHADOW rows (``record_type == SHADOW_RECORD_TYPE``)
+    share this sink and are EXCLUDED -- only per-tool-call rows (which carry no
+    ``record_type``) are returned.
+
+    ``path`` (explicit) wins over everything -- read exactly that one file
+    (unchanged legacy behavior). Otherwise reads the CURRENT session/boot
+    segment by default (``all_segments=False``); pass ``all_segments=True`` to
+    read every retained segment (deliberate retention -- item 2). Segment
+    files are read oldest-first so the overall row order (pre-sort) matches
+    the single-file append order.
+
+    With ``limit`` set, only the last ``limit`` tool-call rows are kept; with
+    ``newest_first`` (default) the result is returned newest-first so a
+    session-cap consumer sees recent sessions first (mirrors the old
+    ``find ... sort {_id: -1}`` query the Mongo path issued).
+    """
+    targets = [path] if path is not None else telemetry_read_paths(all_segments=all_segments)
+    out: list[dict] = []
+    for target in targets:
+        try:
+            with open(target, "r", encoding="utf-8") as fh:
+                for line in fh:
+                    line = line.strip()
+                    if not line:
+                        continue
+                    try:
+                        rec = json.loads(line)
+                    except json.JSONDecodeError:
+                        continue
+                    if not isinstance(rec, dict):
+                        continue
+                    if rec.get("record_type") == SHADOW_RECORD_TYPE:
+                        continue
+                    out.append(rec)
+        except OSError:
+            continue
+    if limit is not None and len(out) > limit:
+        out = out[-limit:]
+    if newest_first:
+        out.reverse()
+    return out
+
+
 # --------------------------------------------------------------------------- #
-# Tool-retrieval SHADOW telemetry (tool-retrieval kickoff — orchestrator half).
+# Tool-retrieval SHADOW telemetry (tool-retrieval kickoff -- orchestrator half).
 #
 # Shadow mode computes the WOULD-BE-visible tool set per turn via
 # ``retrieve_visible_tools`` WITHOUT changing the catalog the model actually
@@ -379,11 +457,10 @@ def compute_args_hash(args: dict | None) -> str:
 # flow. recall = |dispatched-llm-tools that WERE in the retrieved set| /
 # |dispatched-llm-tools|.
 #
-# Same dual-sink discipline as ``emit_tool_call_event``: written to the SAME
-# ``tool_call_telemetry`` MongoDB collection when Persistence is bound (carrying
-# a ``record_type="tool_retrieval_shadow"`` discriminator so a reader can split
-# these rows from the per-tool ``tool_call`` rows), PLUS the /tmp JSONL fallback
-# when Persistence is unbound. Fire-and-forget; NEVER raises — telemetry must
+# Same JSONL-only sink as ``emit_tool_call_event``: written to the SAME
+# ``tool_calls.jsonl`` file, carrying a ``record_type="tool_retrieval_shadow"``
+# discriminator so a reader can split these rows from the per-tool ``tool_call``
+# rows that share the file. Fire-and-forget; NEVER raises -- telemetry must
 # never break the dispatch loop (mirrors ``emit_tool_call_event``).
 # --------------------------------------------------------------------------- #
 
@@ -404,7 +481,7 @@ def build_shadow_selection_record(
     ts: str | None = None,
     model_id: str | None = None,
 ) -> dict:
-    """Build the per-turn shadow-selection record (pure — no I/O).
+    """Build the per-turn shadow-selection record (pure -- no I/O).
 
     Split out so tests can assert the record SHAPE without touching the sink.
     ``visible_tools`` is the would-be-visible set ``retrieve_visible_tools``
@@ -416,7 +493,7 @@ def build_shadow_selection_record(
     """
     try:
         visible_sorted = sorted({str(t) for t in (visible_tools or [])})
-    except Exception:  # noqa: BLE001 — defensive; never break the dispatch loop
+    except Exception:  # noqa: BLE001 -- defensive; never break the dispatch loop
         visible_sorted = []
     text = user_text if isinstance(user_text, str) else ""
     return {
@@ -448,10 +525,10 @@ def emit_shadow_selection_event(
     """Emit one tool-retrieval shadow-selection record (non-blocking).
 
     Fire-and-forget + NEVER raises (mirrors ``emit_tool_call_event``): the write
-    is scheduled as an asyncio task and the caller does not await it. Backend
-    selection mirrors the per-tool path — the bound MongoDB ``tool_call_telemetry``
-    collection (with the ``record_type`` discriminator) when Persistence is bound,
-    else the local-file JSONL fallback.
+    is scheduled as an asyncio task and the caller does not await it. JSONL-only
+    sink -- the SAME ``tool_calls.jsonl`` file as the per-tool path, carrying the
+    ``record_type`` discriminator so a reader can split shadow rows from tool-call
+    rows. (The former MongoDB-mirror route was cut.)
     """
     try:
         record = build_shadow_selection_record(
@@ -464,80 +541,17 @@ def emit_shadow_selection_event(
             full_registry_size=full_registry_size,
             model_id=model_id,
         )
-    except Exception:  # noqa: BLE001 — telemetry must never break the dispatch loop
+    except Exception:  # noqa: BLE001 -- telemetry must never break the dispatch loop
         logger.warning("shadow telemetry: record build failed", exc_info=True)
         return
 
-    try:
-        persistence: "Persistence | None" = get_persistence()
-    except Exception:  # noqa: BLE001
-        persistence = None
-
-    if persistence is not None:
-        try:
-            asyncio.ensure_future(
-                _write_shadow_to_mongo(persistence, record)
-            )
-        except Exception:  # noqa: BLE001 — fall through to the file path
-            logger.warning(
-                "shadow telemetry: mongo schedule failed; falling to file",
-                exc_info=True,
-            )
-        else:
-            return
-
-    # Local-file fallback (same JSONL sink as the per-tool path).
+    # JSONL-only sink (same file as the per-tool path; the record_type
+    # discriminator separates shadow rows from tool-call rows).
     path = _get_telemetry_path()
     try:
         asyncio.ensure_future(_write_line(path, record))
-    except Exception:  # noqa: BLE001 — telemetry must never break the dispatch loop
+    except Exception:  # noqa: BLE001 -- telemetry must never break the dispatch loop
         logger.warning("shadow telemetry: file schedule failed", exc_info=True)
-
-
-async def _write_shadow_to_mongo(
-    persistence: "Persistence", record: dict
-) -> None:
-    """Insert one shadow-selection record into the ``tool_call_telemetry``
-    collection via the MCP client. Never raises (logged at WARNING).
-
-    The shadow record carries a ``record_type`` discriminator + a ``visible_tools``
-    array that the per-tool ``ToolCallTelemetryDocument`` schema does not model, so
-    it is inserted as a raw document (the summary reader keys off ``record_type``).
-    """
-    try:
-        from trid3nt_contracts import new_ulid
-        from trid3nt_contracts.mongo_collections import TELEMETRY_COLLECTION
-        from .persistence import DEFAULT_DATABASE
-
-        body = dict(record)
-        body["_id"] = new_ulid()
-        # The TTL index keys off ``called_at_utc`` on the per-tool rows; mirror it
-        # so a shadow row expires on the same 90-day schedule.
-        ts = record.get("ts")
-        if isinstance(ts, str):
-            normalized = ts.replace("Z", "+00:00")
-            try:
-                body["called_at_utc"] = datetime.fromisoformat(normalized)
-            except ValueError:
-                body["called_at_utc"] = datetime.now(timezone.utc)
-        else:
-            body["called_at_utc"] = datetime.now(timezone.utc)
-
-        await persistence._mcp.call_tool(
-            "insert-one",
-            {
-                "database": DEFAULT_DATABASE,
-                "collection": TELEMETRY_COLLECTION,
-                "document": body,
-            },
-        )
-    except Exception:  # noqa: BLE001 — telemetry must never break the dispatch loop
-        logger.warning(
-            "shadow telemetry mongo write failed turn=%s session=%s",
-            record.get("turn_id"),
-            record.get("session_id"),
-            exc_info=True,
-        )
 
 
 def now_iso_utc() -> str:
@@ -546,17 +560,16 @@ def now_iso_utc() -> str:
 
 
 # --------------------------------------------------------------------------- #
-# Solve-time telemetry (sprint-16 — SFINCS per-job autoscale)
+# Solve-time telemetry (SFINCS per-job autoscale)
 #
 # At solve completion we accumulate real (active_cells, vCPU, wall_clock) data
 # so the adaptive-grid cell cap can be re-tuned from logged measurements
-# (MEASURE-then-tune). Emitted to the SAME sink discipline as tool_call
+# (measure-then-tune). Emitted to the SAME sink discipline as tool_call
 # telemetry: a structured logger line ALWAYS (so it lands in the agent log /
 # routing dashboard scrape even when the JSONL sink is unwritable) PLUS the
-# JSONL record. The record is intentionally NOT MCP-routed (no Mongo collection
-# contract exists for it yet; the local JSONL + structured log line is the
-# minimum the kickoff names — a Mongo collection can be added later without
-# changing call sites).
+# JSONL record. Not MCP-routed (no Mongo collection contract exists for it
+# yet); the local JSONL + structured log line is the minimum needed -- a
+# Mongo collection can be added later without changing call sites.
 # --------------------------------------------------------------------------- #
 
 _DEFAULT_SOLVE_TELEMETRY_PATH = "/tmp/trid3nt_solve_telemetry.jsonl"
@@ -588,7 +601,7 @@ def build_solve_telemetry_record(
     coarsened: bool | None = None,
     ts: str | None = None,
 ) -> dict:
-    """Build the structured solve-telemetry record (pure — no I/O).
+    """Build the structured solve-telemetry record (pure -- no I/O).
 
     Split out so tests can assert the record SHAPE without touching the sink.
     The required fields the kickoff names: ``active_cell_count``,
@@ -631,7 +644,7 @@ def emit_solve_telemetry(
     JSONL append is wrapped so a sink failure never propagates into the solve
     path. Returns the record (so the workflow can also fold it into provenance /
     a test can assert it). Mirrors ``emit_tool_call_event``'s never-raise
-    contract — telemetry must never break the solve loop.
+    contract -- telemetry must never break the solve loop.
     """
     record = build_solve_telemetry_record(
         run_id=run_id,
@@ -666,7 +679,7 @@ def emit_solve_telemetry(
         path = _get_solve_telemetry_path()
         with open(path, mode="a", encoding="utf-8") as fh:
             fh.write(json.dumps(record, default=str) + "\n")
-    except Exception:  # noqa: BLE001 — telemetry must never break the solve loop
+    except Exception:  # noqa: BLE001 -- telemetry must never break the solve loop
         solve_logger.warning(
             "solve_telemetry JSONL write failed run_id=%s", run_id, exc_info=True
         )
@@ -674,24 +687,25 @@ def emit_solve_telemetry(
 
 
 # --------------------------------------------------------------------------- #
-# SOLVE completion telemetry — Batch instance + problem size + timing (task-153)
+# SOLVE completion telemetry -- Batch instance + problem size + timing
 #
-# A richer sibling to ``emit_solve_telemetry`` (above). Where that record carries
-# the autoscale provenance for re-tuning the adaptive cell cap, THIS record folds
-# in the REAL AWS Batch compute the solve landed on — the Spot instance type +
-# lifecycle + AZ + the queue-provision / compute / total timing breakdown
-# (captured by ``solver._capture_batch_compute_meta``) MERGED with the mesh size
-# descriptor (active_cell_count + resolution_m) — so a perf model can later infer
-# completion time from real (instance, problem-size, wall-clock) measurements.
+# A richer sibling to ``emit_solve_telemetry`` (above): where that record
+# carries the autoscale provenance for re-tuning the adaptive cell cap, this
+# one folds in the real AWS Batch compute the solve ran on -- the Spot
+# instance type + lifecycle + AZ + the queue-provision / compute / total
+# timing breakdown (``solver._capture_batch_compute_meta``) merged with the
+# mesh size descriptor (active_cell_count + resolution_m) -- so a perf model
+# can later infer completion time from real (instance, problem-size,
+# wall-clock) measurements.
 #
-# Same sink discipline as the per-tool + autoscale telemetry: a structured INFO
-# line ALWAYS (scrape-able out of the agent log even when the JSONL path is
-# unwritable) PLUS a JSONL append, both wrapped so a sink failure never breaks
-# the solve. Carries a ``record_type="solve"`` discriminator so a reader can
-# distinguish these rows from the per-tool ``tool_call`` rows that share the
-# accumulation sink. NOT MCP-routed yet (no Mongo collection contract for it);
-# the JSONL + structured log is the minimum — a Mongo collection can be folded
-# in later without changing call sites (mirrors ``emit_solve_telemetry``).
+# Same sink discipline as the per-tool + autoscale telemetry: a structured
+# INFO line ALWAYS (scrape-able out of the agent log even when the JSONL
+# path is unwritable) PLUS a JSONL append, both wrapped so a sink failure
+# never breaks the solve. Carries a ``record_type="solve"`` discriminator so
+# a reader can distinguish these rows from the per-tool ``tool_call`` rows
+# that share the accumulation sink. Not MCP-routed yet (no Mongo collection
+# contract for it); the JSONL + structured log is the minimum, mirroring
+# ``emit_solve_telemetry``.
 # --------------------------------------------------------------------------- #
 
 #: Dedicated structured logger so a log scrape can grep these rows out of the
@@ -704,14 +718,14 @@ def record_solve_telemetry(record: dict) -> dict:
 
     The record is built by the composer (see
     ``model_flood_scenario`` / ``model_urban_flood_swmm``) by MERGING the Batch
-    compute meta (``solver._capture_batch_compute_meta`` — instance + timing) with
+    compute meta (``solver._capture_batch_compute_meta`` -- instance + timing) with
     the mesh size descriptor + solver + terminal status + run/case/session ids.
     This writer stamps a ``record_type="solve"`` discriminator and a ``ts`` when
     absent, then emits to the SAME accumulation sink (JSONL at
     ``TRID3NT_SOLVE_TELEMETRY_PATH`` / the default) the autoscale solve telemetry
     uses, plus an ALWAYS-on structured INFO line.
 
-    Record shape (the keys a complete row carries — every field is optional so a
+    Record shape (the keys a complete row carries -- every field is optional so a
     partial capture still records what it has)::
 
         {
@@ -741,12 +755,12 @@ def record_solve_telemetry(record: dict) -> dict:
         }
 
     Best-effort + synchronous: mirrors ``emit_solve_telemetry``'s never-raise
-    contract — telemetry must NEVER break the solve path. Returns the stamped
+    contract -- telemetry must NEVER break the solve path. Returns the stamped
     record (so the composer can fold it into provenance / a test can assert it).
     """
     try:
         rec = dict(record or {})
-    except Exception:  # noqa: BLE001 — defensive; never break the solve
+    except Exception:  # noqa: BLE001 -- defensive; never break the solve
         rec = {}
     rec.setdefault("record_type", "solve")
     rec.setdefault(
@@ -779,7 +793,7 @@ def record_solve_telemetry(record: dict) -> dict:
         path = _get_solve_telemetry_path()
         with open(path, mode="a", encoding="utf-8") as fh:
             fh.write(json.dumps(rec, default=str) + "\n")
-    except Exception:  # noqa: BLE001 — telemetry must never break the solve loop
+    except Exception:  # noqa: BLE001 -- telemetry must never break the solve loop
         solve_meta_logger.warning(
             "solve_record JSONL write failed run_id=%s",
             rec.get("run_id"),
@@ -789,7 +803,7 @@ def record_solve_telemetry(record: dict) -> dict:
 
 
 # --------------------------------------------------------------------------- #
-# PER-TURN telemetry (LANE CORE, 2026-07-22).
+# PER-TURN telemetry.
 #
 # One record per user-message turn, persisted BESIDE the tool-call telemetry
 # (its own JSONL sink -- follows ``record_solve_telemetry``'s own-sink pattern)
@@ -1075,7 +1089,7 @@ def build_live_solve_progress(
 ) -> dict:
     """Build the LIVE big-sim progress payload (server -> web; pure, no I/O).
 
-    Shape (the SHARED WIRE CONTRACT, tool-accuracy panel NATE 2026-06-17)::
+    Shape (the SHARED WIRE CONTRACT, tool-accuracy panel)::
 
         {run_id, solver, grid_resolution_m, active_cell_count, vcpus,
          elapsed_seconds, eta_seconds|null}
@@ -1084,7 +1098,7 @@ def build_live_solve_progress(
     grid resolution / active-cell count / vCPU / elapsed / ETA tick on the live
     card (rather than a silent multi-minute spinner). ``eta_seconds`` comes from
     the perf model (the autoscale ``estimated_solve_seconds``) when available,
-    else ``None``. Reuses the job-0359 solve-telemetry field names so the live
+    else ``None``. Reuses the solve-telemetry field names so the live
     envelope and the at-completion record speak the same vocabulary.
 
     Split out (like ``build_solve_telemetry_record``) so the wire shape can be
@@ -1108,11 +1122,14 @@ def build_live_solve_progress(
 __all__ = [
     "emit_tool_call_event",
     "compute_args_hash",
+    "load_tool_call_records",
+    "telemetry_read_paths",
+    "cleanup_telemetry_segments",
     "emit_solve_telemetry",
     "build_solve_telemetry_record",
     "record_solve_telemetry",
     "build_live_solve_progress",
-    # per-turn telemetry (LANE CORE 2026-07-22)
+    # per-turn telemetry
     "TURN_RECORD_TYPE",
     "build_turn_telemetry_record",
     "emit_turn_telemetry",

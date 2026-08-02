@@ -1,0 +1,172 @@
+schema_version: v1
+name: fetch_usace_dams
+source_class: usace_nid_dams
+error_prefix: USACE_DAMS
+input_error_suffix: INPUT_INVALID
+shape: vector-fgb
+supports_global_query: true
+endpoints:
+  data:
+    url: https://services2.arcgis.com/FiaPA4ga0iQKduv3/arcgis/rest/services/NID_v1/FeatureServer/0/query
+auth:
+  mode: api_key_env
+  api_key_env:
+    var: TRID3NT_USACE_NID_TOKEN
+    required: false
+  user_agent: trid3nt/0.1 (Hazard Modeling Agent; https://github.com/double-r-squared/trid3nt-qgis-plugin;
+    agent@trid3nt.dev)
+params:
+  bbox:
+    type: bbox
+    required: false
+    quantize: round_6dp
+    schema_optional: true
+  hazard_potential:
+    type: str_list
+    required: false
+    schema_optional: true
+  state:
+    type: str_list
+    required: false
+    schema_optional: true
+  min_height_ft:
+    type: float
+    required: false
+    schema_optional: true
+  token:
+    type: str
+    required: false
+    schema_optional: true
+hooks:
+  build_request: usace_dams.build_request
+  next_page: usace_dams.next_page
+  parse_response: usace_dams.parse_response
+ingest:
+  properties:
+  - OBJECTID
+  - NIDID
+  - FEDERAL_ID
+  - NAME
+  - OTHER_NAMES
+  - STATE
+  - COUNTYSTATE
+  - CITY
+  - LATITUDE
+  - LONGITUDE
+  - RIVER_OR_STREAM
+  - CONGDIST
+  - OWNER_TYPES
+  - PRIMARY_OWNER_TYPE
+  - STATE_REGULATED
+  - STATE_JURISDICTION
+  - STATE_REGULATORY_AGENCY
+  - PRIMARY_SOURCE_AGENCY
+  - PRIMARY_PURPOSE
+  - PURPOSES
+  - PRIMARY_DAM_TYPE
+  - DAM_TYPES
+  - DAM_HEIGHT
+  - HYDRAULIC_HEIGHT
+  - STRUCTURAL_HEIGHT
+  - NID_HEIGHT
+  - DAM_LENGTH
+  - DAM_VOLUME
+  - YEAR_COMPLETED
+  - NID_STORAGE
+  - MAX_STORAGE
+  - NORMAL_STORAGE
+  - SURFACE_AREA
+  - DRAINAGE_AREA
+  - MAX_DISCHARGE
+  - SPILLWAY_TYPE
+  - SPILLWAY_WIDTH
+  - HAZARD_POTENTIAL
+  - CONDITION_ASSESSMENT
+  - CONDITION_ASSESS_DATE
+  - EAP_PREPARED
+  - EAP_LAST_REV_DATE
+  - LAST_INSPECTION_DATE
+  - INSPECTION_FREQUENCY
+  - OPERATIONAL_STATUS
+  - OPERATIONAL_STATUS_DATE
+  - DATA_UPDATED
+normalize:
+  crs: EPSG:4326
+output:
+  layer_type: vector
+  ext: fgb
+  role: primary
+  style_preset: usace_nid_dams
+  emit_bbox: false
+cache:
+  ttl_class: static-30d
+payload_estimate:
+  model: per_feature
+  features_per_sq_deg: 25.0
+  kb_per_feature: 1.0
+  floor_mb: 0.01
+  ceil_mb: 50.0
+caveats:
+- USACE National Inventory of Dams points. Keyless -> public ESRI Living Atlas mirror; an authoritative
+  token (env/kwarg) queries geospatial.sec.usace.army.mil first. hazard_potential/state/min_height_ft
+  applied server-side (IN / DAM_HEIGHT>=). US-only; bbox optional (CONUS+AK+HI sweep). Static inventory,
+  not live reservoir ops.
+docstring: "USACE National Inventory of Dams (NID) as a FlatGeobuf point layer.\n\nWhat it does:\n   \
+  \ Fetches U.S. Army Corps of Engineers National Inventory of Dams\n    records as point features with\
+  \ full NID attribute payload --\n    identification, ownership, physical structure (height, length,\n\
+  \    storage, drainage area), hazard potential classification,\n    condition assessment, and emergency-action-plan\
+  \ status.\n    Resolves AUTHORITATIVE-first: when a USACE NID token is available\n    (kwarg / per-Case\
+  \ ``secret_ref`` / ``TRID3NT_USACE_NID_TOKEN`` env) it\n    queries the regulatory source-of-truth at\n\
+  \    ``geospatial.sec.usace.army.mil``; otherwise (and on any non-auth\n    authoritative failure) it\
+  \ degrades to the public ESRI Living Atlas\n    mirror of the NID FeatureService. A supplied-but-rejected\
+  \ token\n    raises a credential-shaped error so the agent surfaces a credential\n    card to re-enter\
+  \ a valid token.\n\nWhen to use:\n    - User asks about dams in a region (\"what dams are upstream of\
+  \ X?\",\n      \"show me every high-hazard dam in California\").\n    - Flood-modeling workflow needs\
+  \ upstream dam locations / spillway\n      capacity / storage volume to gauge dam-break or controlled-release\n\
+  \      scenarios.\n    - Damage / risk assessment needs to overlay critical infrastructure\n      (high-hazard-potential\
+  \ dams) on hazard footprints.\n    - Pelicun building / asset analysis needs dam infrastructure context.\n\
+  \nWhen NOT to use:\n    - DO NOT use for levees -- use a future ``fetch_usace_nld_levees``\n      tool\
+  \ (National Levee Database is a sibling but separate inventory).\n    - DO NOT use for building structures\
+  \ -- use ``fetch_usace_nsi``\n      (National Structure Inventory) for Pelicun assets.\n    - DO NOT\
+  \ use for downstream hydrologic routing -- query NHD via\n      ``fetch_river_geometry`` or NWM streamflow\
+  \ forecasts separately.\n    - DO NOT use for non-US dams -- NID is US-only.\n    - DO NOT use for live\
+  \ reservoir operations data -- NID is a static\n      inventory; CWMS / USGS NWIS handle real-time reservoir\
+  \ levels.\n\nParameters:\n    bbox: Optional ``(min_lon, min_lat, max_lon, max_lat)`` envelope in\n\
+  \        EPSG:4326. Type: 4-float tuple, lon/lat ordered min-then-max\n        on each axis. Example:\
+  \ ``(-82.5, 26.0, -81.0, 27.0)`` for the\n        Fort Myers / Cape Coral area returns ~10-20 dam features.\n\
+  \        When None, the tool sweeps the full CONUS+AK+HI dam population\n        (capped at 50k features);\
+  \ the chat-warning gate uses\n        ``estimate_payload_mb`` to warn the user before a global sweep\n\
+  \        commits.\n    hazard_potential: Optional NID hazard-potential filter. A single value\n    \
+  \    or a list, case-insensitive, each one of ``\"High\"`` /\n        ``\"Significant\"`` / ``\"Low\"\
+  `` / ``\"Undetermined\"``. Applied\n        server-side as ``HAZARD_POTENTIAL IN (...)`` so \"show every\n\
+  \        high-hazard dam in X\" pulls only matching dams. Example:\n        ``hazard_potential=\"High\"\
+  `` or\n        ``hazard_potential=[\"High\", \"Significant\"]``.\n    state: Optional NID state filter.\
+  \ A single value or list; full state\n        NAMES (``\"Nevada\"``, ``\"North Carolina\"``) or 2-letter\
+  \ USPS\n        abbreviations (``\"NV\"``) are both accepted and normalized to the\n        NID ``STATE``\
+  \ column form. Applied server-side as\n        ``STATE IN (...)``.\n    min_height_ft: Optional minimum\
+  \ dam height in FEET (the NID\n        ``DAM_HEIGHT`` unit). A single non-negative number; applied\n\
+  \        server-side as ``DAM_HEIGHT >= {value}`` so \"show dams taller\n        than 100 ft\" pulls\
+  \ only matching dams. Example:\n        ``min_height_ft=100``. Composable with ``hazard_potential``\
+  \ /\n        ``state`` (clauses are ANDed).\n    token: Optional explicit USACE NID authoritative-endpoint\
+  \ token\n        (highest-priority resolution path). When set, the authoritative\n        ``geospatial.sec.usace.army.mil``\
+  \ endpoint is queried first.\n    secret_ref: Optional ``SecretRecord`` (from the per-Case secrets\n\
+  \        panel) -> resolved to the token via ``Persistence.get_secret_value``\n        at invocation\
+  \ time (the production path). A token that resolves\n        but is rejected by the server raises ``USACEDAMSAuthError``\
+  \ (the\n        credential-card path); a token that does NOT resolve degrades to\n        the public\
+  \ mirror.\n\nReturns:\n    A ``LayerURI`` pointing at a FlatGeobuf in the cache bucket\n    ``s3://trid3nt-cache/cache/static-30d/usace_nid_dams/<key>.fgb``\n\
+  \    containing point geometries (``Point`` in EPSG:4326) and the\n    canonical NID attribute schema\
+  \ -- ``NIDID``, ``NAME``, ``STATE``,\n    ``DAM_HEIGHT``, ``NID_STORAGE``, ``HAZARD_POTENTIAL``,\n \
+  \   ``CONDITION_ASSESSMENT``, ``EAP_PREPARED``, ``YEAR_COMPLETED``,\n    ``PRIMARY_DAM_TYPE``, ``PRIMARY_PURPOSE``,\
+  \ etc. Downstream tools\n    consume ``NIDID`` (join key), ``HAZARD_POTENTIAL`` (filter), and\n    ``NID_STORAGE``\
+  \ / ``DAM_HEIGHT`` (sizing). ``layer_type=\"vector\"``,\n    ``role=\"primary\"``, ``units=None``.\n\
+  \nCross-tool dependencies:\n    Consumes optional bbox from ``fetch_administrative_boundaries`` /\n\
+  \    ``geocode_location`` (typical agent workflow: geocode \"Lake Mead\" →\n    derive bbox → call this\
+  \ tool). Feeds into ``spatial_query``\n    (clip dams to watershed / county / Case AOI), and into\n\
+  \    Pelicun composers that pair dam location with hazard footprints\n    from ``sfincs_flood``.\n\n\
+  Cache: ``static-30d`` (NID is updated quarterly at fastest; a 30-day\nbucket gives ~12x amortization).\
+  \ Cache key: SHA-256 of bbox-rounded-6dp\nor \"global\" sentinel.\n\nExternal-API resilience (NFR-R-1):\
+  \ The ESRI Living Atlas cluster\noccasionally returns 5xx during ESRI maintenance windows. On network\n\
+  failure / non-2xx / malformed JSON / ArcGIS error envelope the tool\nraises ``USACEDAMSUpstreamError(retryable=True)``\
+  \ so the agent's\nFR-AS-11 surface decides whether to retry, clarify, or fall back.\n\nSource-tier:\
+  \ FR-HEP-2 Tier 1 (USACE is the regulatory authority for\nthe NID). Claims derived from this tool should\
+  \ be marked\n``source_authority_tier=1`` in any ``ClaimSet`` aggregation."

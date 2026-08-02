@@ -42,8 +42,8 @@ from rasterio.transform import from_bounds
 
 from trid3nt_contracts.execution import LayerURI
 
-from trid3nt_server.tools import TOOL_REGISTRY
-from trid3nt_server.tools.processing.compute_sediment_yield import (
+from trid3nt_server.agent.tools import TOOL_REGISTRY
+from trid3nt_server.agent.tools.processing.compute_sediment_yield.compute_sediment_yield import (
     C_BY_IO_LULC_CLASS,
     SEDIMENT_YIELD_LOG_CLASSES,
     SedimentYieldAoiTooLargeError,
@@ -200,12 +200,21 @@ def test_k_fallback_constant_with_note(
     out_dir.mkdir()
 
     # No k_uri + STATSGO down -> documented constant 0.2 fallback with a note.
-    import trid3nt_server.tools.fetchers.soil.fetch_statsgo_soils as statsgo_mod
+    # fetch_statsgo_soils is now a spec-driven library-delegate router tool (ADR
+    # 0074); compute_sediment_yield resolves it via TOOL_REGISTRY, so patch the
+    # registry entry's fn to simulate STATSGO being offline.
+    import dataclasses
+
+    from trid3nt_server.agent.tools import TOOL_REGISTRY
 
     def _boom(**_kw):
         raise RuntimeError("STATSGO offline (test)")
 
-    monkeypatch.setattr(statsgo_mod, "fetch_statsgo_soils", _boom)
+    monkeypatch.setitem(
+        TOOL_REGISTRY,
+        "fetch_statsgo_soils",
+        dataclasses.replace(TOOL_REGISTRY["fetch_statsgo_soils"], fn=_boom),
+    )
 
     result = compute_sediment_yield(
         bbox=BBOX,
@@ -287,7 +296,7 @@ def test_bad_erosivity_raises(synthetic_inputs) -> None:
 
 def test_style_preset_resolves_log_colormap() -> None:
     """The publish seam turns the preset into a log-spaced interval colormap."""
-    from trid3nt_server.tools.publish_layer import _registry_style_params
+    from trid3nt_server.agent.tools.publish_layer.publish_layer import _registry_style_params
 
     params = _registry_style_params("sediment_yield_t_ha_yr")
     assert params is not None and params.startswith("&colormap=")

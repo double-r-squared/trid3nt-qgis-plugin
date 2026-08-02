@@ -1,0 +1,124 @@
+# Router source spec (keyed chained paging+enrich fold, ADR 0065).
+# Twin: fetch_openaq_measurements.py -- FOLDED via offset paging (locations) +
+# PHASE E enrich (per-location latest + sensor->parameter join, expanding).
+schema_version: v1
+name: fetch_openaq_measurements
+source_class: openaq
+error_prefix: OPENAQ
+input_error_suffix: INPUT_INVALID
+shape: vector-fgb
+supports_global_query: false
+endpoints:
+  data:
+    url: https://api.openaq.org/v3/locations
+auth:
+  mode: api_key_env
+  api_key_env:
+    var: TRID3NT_OPENAQ_API_KEY
+    required: true
+  user_agent: trid3nt/0.1 (Hazard Modeling Agent; https://github.com/double-r-squared/trid3nt-qgis-plugin;
+    agent@trid3nt.dev)
+params:
+  bbox:
+    type: bbox
+    required: true
+    quantize: round_6dp
+  parameters:
+    type: str_list
+    required: false
+    schema_optional: true
+  api_key:
+    type: str
+    required: false
+    schema_optional: true
+  secret_ref:
+    type: str
+    required: false
+    schema_optional: true
+hooks:
+  build_request: openaq_measurements.build_request
+  next_page: openaq_measurements.next_page
+  parse_response: openaq_measurements.parse_response
+  enrich_plan: openaq_measurements.enrich_plan
+  enrich_merge: openaq_measurements.enrich_merge
+ingest:
+  properties:
+  - location_id
+  - location_name
+  - country
+  - parameter
+  - display_name
+  - value
+  - unit
+  - datetime_utc
+  - datetime_local
+  - sensor_id
+  chained:
+    max_detail_fetches: 2000
+normalize:
+  crs: EPSG:4326
+output:
+  layer_type: vector
+  ext: fgb
+  role: primary
+  style_preset: openaq_measurements
+  emit_bbox: true
+cache:
+  ttl_class: dynamic-1h
+payload_estimate:
+  model: per_feature
+  features_per_sq_deg: 12.0
+  kb_per_feature: 0.3125
+  floor_mb: 0.001
+caveats:
+- 'OpenAQ v3 global air-quality LATEST measurements (keyed: api_key -> secret_ref -> TRID3NT_OPENAQ_API_KEY
+  env). Paginated /v3/locations sweep + per-location /latest fan-out + sensor->parameter join; one point
+  per (station, parameter). Worldwide. No key -> credential-shaped OPENAQ_KEY_REQUIRED (NAME-only card);
+  empty bbox -> honest header-only FGB.'
+docstring: "OpenAQ global air-quality latest measurements as a FlatGeobuf point layer.\n\nWhat it does:\n\
+  \    Fetches the most recent ground-station air-quality measurements\n    (PM2.5, PM10, NO2, O3, SO2,\
+  \ CO, and other pollutants) from the OpenAQ\n    v3 API for every monitoring station inside ``bbox``,\
+  \ returning one\n    FlatGeobuf POINT feature per (station, parameter) latest reading with\n    ``parameter``\
+  \ / ``value`` / ``unit`` / ``datetime`` properties. OpenAQ\n    aggregates reference monitors and low-cost\
+  \ sensors from national\n    networks WORLDWIDE -- this is the GLOBAL complement to the US-only\n  \
+  \  AirNow / EPA AQS surface.\n\nWhen to use:\n    - User asks about air quality / pollution anywhere\
+  \ outside the US, or\n      wants a global-coverage source (\"what's the PM2.5 in Delhi right\n    \
+  \  now?\", \"show NO2 monitoring stations around London\").\n    - Overlaying current pollutant concentrations\
+  \ on a wildfire-smoke,\n      dust-storm, or industrial-hazard footprint.\n    - Pairing observed ground-station\
+  \ air quality with modeled smoke\n      (HRRR-Smoke) or satellite aerosol layers.\n\nWhen NOT to use:\n\
+  \    - DO NOT use for US-only regulatory AQI when a US source is preferred -- AirNow / EPA AQS give\
+  \ the official US AQI; OpenAQ ingests US data too\n      but is not the US regulatory authority.\n \
+  \   - DO NOT use for HISTORICAL time-series -- this returns LATEST values\n      only; use the OpenAQ\
+  \ ``/sensors/{id}/measurements|hours|days``\n      aggregate endpoints (a future tool) for time-series.\n\
+  \    - DO NOT use for modeled / forecast air quality -- OpenAQ is\n      ground-truth observations;\
+  \ use HRRR-Smoke / CAMS for forecasts.\n    - DO NOT use for satellite column densities (NO2/aerosol\
+  \ from\n      TROPOMI/Sentinel-5P) -- those are a different (raster) source.\n\nParameters:\n    bbox:\
+  \ REQUIRED ``(min_lon, min_lat, max_lon, max_lat)`` envelope in\n        EPSG:4326 (= ``(west, south,\
+  \ east, north)``). This is the SAME\n        axis order OpenAQ v3 expects, so no flip. Example:\n  \
+  \      ``(76.8, 28.4, 77.4, 28.9)`` for the Delhi NCR returns the city's\n        monitoring stations.\
+  \ Narrow the bbox to a city/metro: a\n        country-sized sweep is capped at 2000 stations.\n    parameters:\
+  \ Optional pollutant filter -- a single name or a list,\n        case-insensitive, each one of ``pm25``\
+  \ / ``pm10`` / ``pm1`` /\n        ``no2`` / ``no`` / ``nox`` / ``o3`` / ``so2`` / ``co`` / ``co2`` /\n\
+  \        ``bc`` / ``ch4`` / ``nh3``. Defaults to the six core pollutants\n        (``pm25, pm10, no2,\
+  \ o3, so2, co``). Applied client-side after the\n        sensor->parameter join.\n    api_key: Optional\
+  \ explicit OpenAQ API key (highest-priority resolution\n        path). When set, used directly.\n  \
+  \  secret_ref: Optional ``SecretRecord`` (from the per-Case secrets panel)\n        -> resolved to the\
+  \ key via ``Persistence.get_secret_value`` at\n        invocation time (the production path).\n\nReturns:\n\
+  \    A ``LayerURI`` pointing at a FlatGeobuf in the cache bucket\n    ``s3://<cache>/cache/dynamic-1h/openaq/<key>.fgb``\
+  \ containing point\n    geometries (``Point`` in EPSG:4326) and the schema ``location_id``,\n    ``location_name``,\
+  \ ``country``, ``parameter``, ``display_name``,\n    ``value``, ``unit``, ``datetime_utc``, ``datetime_local``,\n\
+  \    ``sensor_id``. ``layer_type=\"vector\"``, ``role=\"primary\"``,\n    ``units=None`` (the per-feature\
+  \ ``unit`` column carries the pollutant\n    unit, which varies by parameter).\n\nRaises:\n    ``OpenAQMissingKeyError``\
+  \ (``OPENAQ_KEY_REQUIRED``): no API key resolved\n        from any of the three paths -- raised BEFORE\
+  \ any network call. The\n        agent surfaces a credential-request card (OpenAQ has no public\n  \
+  \      mirror, so this honest typed error IS the degrade).\n    ``OpenAQAuthError`` (``OPENAQ_AUTH_ERROR``):\
+  \ the API rejected the key\n        (401/403; revoked / invalid) -- the agent surfaces a re-enter card.\n\
+  \    ``OpenAQInputError``: bad bbox or unknown parameter name.\n    ``OpenAQUpstreamError``: OpenAQ\
+  \ 5xx / 422 / non-JSON / network failure\n        (retryable).\n\nCross-tool dependencies:\n    Consumes\
+  \ optional bbox from ``fetch_administrative_boundaries`` /\n    ``geocode_location`` (geocode \"Delhi\"\
+  \ -> derive bbox -> call this tool).\n    Pairs with ``fetch_hrrr_smoke`` / satellite aerosol layers\
+  \ for\n    observed-vs-modeled air-quality comparison, and feeds\n    ``spatial_query`` for population-weighted\
+  \ exposure.\n\nCache: ``dynamic-1h`` (OpenAQ latest values refresh as new readings land;\nan hourly\
+  \ window balances freshness against the API rate budget). Cache\nkey: SHA-256 of (bbox rounded-6dp,\
+  \ parameters) + the top-of-hour vintage.\nThe key intentionally omits the api_key -- the underlying\
+  \ measurements do\nnot vary by caller."
