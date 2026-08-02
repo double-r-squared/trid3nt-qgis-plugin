@@ -200,9 +200,9 @@ def _patch_chain(monkeypatch, *, captured: dict, naip_uri="s3://cache/naip-rgb.t
                  cog_uri="s3://runs/BATCHRID/canopy_height.tif", run_result=None):
     """Patch the chain seams at their SOURCE modules (the tool imports them
     inside the function body, so patch the source, not the tool module)."""
+    from trid3nt_server.agent.tools import TOOL_REGISTRY
     from trid3nt_server.agent.tools.publish_layer import publish_layer as publish_mod
     from trid3nt_server.agent.tools.simulation.solver import solver as solver_mod
-    from trid3nt_server.agent.tools.fetchers.imagery.fetch_naip import fetch_naip as naip_mod
 
     rr = run_result if run_result is not None else _FakeRunResult()
 
@@ -242,7 +242,14 @@ def _patch_chain(monkeypatch, *, captured: dict, naip_uri="s3://cache/naip-rgb.t
     monkeypatch.setattr(cch, "stage_canopy_build_spec", _fake_stage)
     monkeypatch.setattr(cch, "_resolve_cog_from_result", _fake_resolve)
     monkeypatch.setattr(publish_mod, "publish_layer", _fake_publish)
-    monkeypatch.setattr(naip_mod, "fetch_naip", _fake_fetch_naip)
+    # fetch_naip folded to a spec-driven surface (ADR 0080): the consumer resolves it
+    # via the registry seam (TOOL_REGISTRY["fetch_naip"].fn). RegisteredTool is a frozen
+    # dataclass, so swap the whole entry for one carrying the fake fn.
+    import dataclasses
+
+    monkeypatch.setitem(
+        TOOL_REGISTRY, "fetch_naip",
+        dataclasses.replace(TOOL_REGISTRY["fetch_naip"], fn=_fake_fetch_naip))
 
 
 def test_full_chain_fetches_naip_stages_dispatches_publishes(monkeypatch):

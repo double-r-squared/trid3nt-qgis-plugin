@@ -1366,6 +1366,21 @@ def _pc_sign_two_tier(spec: SourceSpec, href: str, collection: str) -> str:
     return _pc_stac.sas_sign_href(href, collection)
 
 
+def _aoi_coverage(item: Any, aoi: Any) -> float:
+    """Fraction of ``aoi`` covered by ``item.geometry`` (0.0 on bad geometry).
+
+    The coverage-fraction leg shared by the ``coverage`` scene-select (sentinel1_sar,
+    ADR 0079) and the multi-asset RGB composite rank (ADR 0080).
+    """
+    from shapely.geometry import shape
+
+    try:
+        inter = shape(item.geometry).intersection(aoi).area
+        return inter / aoi.area if aoi.area > 0 else 0.0
+    except Exception:  # noqa: BLE001 -- bad geometry: treat as no coverage
+        return 0.0
+
+
 def _normalize_via_aliases(spec: SourceSpec, value: Any, aliases: dict, allowed: list,
                            suffix: str) -> str:
     """Alias-normalize a param (lower->table, else upper) + validate membership.
@@ -1508,7 +1523,7 @@ def _stac_float_to_array(spec: SourceSpec, params: dict[str, Any]) -> tuple[Any,
         # (sentinel1_sar): only scenes carrying the requested asset are ranked; a
         # swath edge can clip a corner, so AOI coverage is the primary key and
         # recency breaks ties. No candidate carrying the asset -> typed EMPTY.
-        from shapely.geometry import box, shape
+        from shapely.geometry import box
 
         aoi = box(*bbox)
         cand = [it for it in items if asset_key in (getattr(it, "assets", {}) or {})]
@@ -1519,14 +1534,7 @@ def _stac_float_to_array(spec: SourceSpec, params: dict[str, Any]) -> tuple[Any,
                 spec.empty_error_suffix,
             )
 
-        def _coverage(it: Any) -> float:
-            try:
-                inter = shape(it.geometry).intersection(aoi).area
-                return inter / aoi.area if aoi.area > 0 else 0.0
-            except Exception:  # noqa: BLE001 -- bad geometry: treat as no coverage
-                return 0.0
-
-        cand.sort(key=lambda it: (_coverage(it), _dt_key(it)), reverse=True)
+        cand.sort(key=lambda it: (_aoi_coverage(it, aoi), _dt_key(it)), reverse=True)
         raw = _read_item(cand[0])
     else:  # intersect_all: first-valid mosaic
         raw = np.full((height_px, width_px), np.nan, dtype="float32")
@@ -1566,6 +1574,369 @@ def _stac_float_to_array(spec: SourceSpec, params: dict[str, Any]) -> tuple[Any,
             spec.error_code_prefix, f"all-fill (no valid pixel) window over bbox={bbox}",
             spec.empty_error_suffix)
     return out, dst_transform, "EPSG:4326"
+
+
+# --------------------------------------------------------------------------- #
+# stac_multi_asset_rgb: a baked RGB composite from PC STAC (ADR 0080). ONE mode
+# serving fetch_landsat_imagery (true/false-color + thermal LST), fetch_sentinel2_
+# truecolor and fetch_naip. Per item it reads N single-band RGB assets (or N bands
+# of ONE multi-band asset) + an optional QA/SCL mask asset, scales to physical
+# reflectance / land-surface-temperature (or reads raw), masks cloud/shadow/fill,
+# and bakes either a joint-2/98-percentile RGB, an inferno-ramped single-band LST,
+# or a raw-uint8 passthrough into a 3-band photometric-RGB uint8 COG (publish_layer
+# multiband passthrough). Scene selection is a declarative cloud-cover query +
+# platform filter + a coverage/cloud rank. STRICT no-op for the stac_float specs (a
+# distinct access mode). ADR 0080.
+# --------------------------------------------------------------------------- #
+
+
+def _rgb_resolve_window(stac: dict, params: dict[str, Any]) -> str | None:
+    """The STAC datetime window: both bounds -> that window; else a trailing N-day
+    window (``default_window_days``). None when the source is time-static (naip)."""
+    if not stac.get("datetime_window"):
+        return None
+    d0, d1 = params.get("start_date"), params.get("end_date")
+    if d0 and d1:
+        return f"{d0}/{d1}"
+    from datetime import datetime, timedelta, timezone
+
+    days = int(stac.get("default_window_days", 120))
+    end = datetime.now(timezone.utc).date()
+    return f"{(end - timedelta(days=days)).isoformat()}/{end.isoformat()}"
+
+
+def _rgb_search_items(spec: SourceSpec, stac: dict, sel: dict, collection: str,
+                      bbox: tuple, dt_range: str | None, params: dict[str, Any]) -> list[Any]:
+    """PC STAC search with an optional ``eo:cloud_cover`` query + platform filter."""
+    from ...imagery import _pc_stac
+
+    try:
+        from pystac_client import Client
+    except ImportError as exc:  # pragma: no cover
+        raise router_upstream_error(spec.error_code_prefix, f"pystac-client unavailable: {exc}")
+    query: dict[str, Any] = {}
+    if sel.get("cloud_query"):
+        mc = params.get("max_cloud_cover")
+        if mc is not None:
+            query["eo:cloud_cover"] = {"lt": float(mc)}
+    pq = sel.get("platform_query")
+    if pq:
+        plats = list(pq.get("base", []))
+        if params.get(pq.get("param")):
+            plats = plats + list(pq.get("extra", []))
+        query["platform"] = {"in": plats}
+    try:
+        client = Client.open(stac.get("root", _pc_stac.PC_STAC_ROOT))
+        search = client.search(collections=[collection], bbox=list(bbox),
+                               datetime=dt_range, query=query or None, limit=100)
+        items = list(search.items())
+    except Exception as exc:  # noqa: BLE001
+        raise router_upstream_error(
+            spec.error_code_prefix,
+            f"STAC search failed (collection={collection!r}, bbox={bbox}, window={dt_range}): {exc}")
+    if not items:
+        raise router_empty_error(
+            spec.error_code_prefix,
+            f"no {collection!r} imagery intersects bbox={bbox}"
+            + (f" in {dt_range}" if dt_range else "")
+            + (f" under {params.get('max_cloud_cover')}% cloud cover" if sel.get("cloud_query") else ""),
+            spec.empty_error_suffix)
+    return items
+
+
+def _rgb_rank_item(sel: dict, items: list[Any], bbox: tuple) -> Any:
+    """Return the best item per the declarative ``select.rank`` keys.
+
+    Each directive: ``{by: coverage_bucket, min_frac}`` (full-coverage scenes
+    first), ``{by: cloud_cover}`` (least-cloudy), or ``{by: coverage}`` (most AOI
+    overlap). An empty rank returns ``items[0]`` (naip: most-recent intersecting).
+    Landsat ranks coverage_bucket -> cloud_cover -> coverage; sentinel2 cloud_cover.
+    """
+    rank = sel.get("rank") or []
+    if not rank:
+        return items[0]
+    from shapely.geometry import box
+
+    aoi = box(*bbox)
+
+    def _key(it: Any) -> tuple:
+        parts: list[float] = []
+        for d in rank:
+            by = d.get("by")
+            if by == "coverage_bucket":
+                cov = _aoi_coverage(it, aoi)
+                parts.append(-(1 if cov >= float(d.get("min_frac", 0.99)) else 0))
+            elif by == "cloud_cover":
+                parts.append((getattr(it, "properties", {}) or {}).get("eo:cloud_cover", 100.0))
+            elif by == "coverage":
+                parts.append(-_aoi_coverage(it, aoi))
+        return tuple(parts)
+
+    return sorted(items, key=_key)[0]
+
+
+def _rgb_read_float(spec: SourceSpec, signed: str, band: int, bbox: tuple,
+                    w: int, h: int, dst_transform: Any, *, nearest: bool) -> Any:
+    """Warp+window-read one band to EPSG:4326 as float32 (nodata reads back 0.0)."""
+    import numpy as np
+    import rasterio
+    from rasterio.warp import Resampling, reproject
+
+    from ..transport import TransportError, open_windowed_cog
+
+    dst = np.zeros((h, w), dtype="float32")
+    try:
+        with open_windowed_cog(signed) as src:
+            reproject(
+                source=rasterio.band(src, band), destination=dst,
+                src_transform=src.transform, src_crs=src.crs,
+                dst_transform=dst_transform, dst_crs="EPSG:4326",
+                resampling=Resampling.nearest if nearest else Resampling.bilinear,
+                src_nodata=(src.nodata if src.nodata is not None else 0), dst_nodata=0)
+    except TransportError as exc:
+        raise router_upstream_error(spec.error_code_prefix, f"asset read failed: {exc}")
+    except Exception as exc:  # noqa: BLE001
+        raise router_upstream_error(spec.error_code_prefix, f"asset read failed: {exc}")
+    return dst
+
+
+def _rgb_read_passthrough(spec: SourceSpec, signed: str, bands: list[int], bbox: tuple,
+                          w: int, h: int, dst_transform: Any) -> Any:
+    """Warp+window-read up to 3 bands of ONE asset directly into a uint8 RGB array
+    (naip: no scale/mask; a missing high band stays 0 -- the twin's min(3,count))."""
+    import numpy as np
+    import rasterio
+    from rasterio.warp import Resampling, reproject
+
+    from ..transport import TransportError, open_windowed_cog
+
+    rgb = np.zeros((3, h, w), dtype="uint8")
+    try:
+        with open_windowed_cog(signed) as src:
+            for i in range(min(len(bands), int(src.count))):
+                reproject(
+                    source=rasterio.band(src, bands[i]), destination=rgb[i],
+                    src_transform=src.transform, src_crs=src.crs,
+                    dst_transform=dst_transform, dst_crs="EPSG:4326",
+                    resampling=Resampling.bilinear)
+    except TransportError as exc:
+        raise router_upstream_error(spec.error_code_prefix, f"asset read failed: {exc}")
+    except Exception as exc:  # noqa: BLE001
+        raise router_upstream_error(spec.error_code_prefix, f"asset read failed: {exc}")
+    return rgb
+
+
+def _rgb_apply_transform(dn: Any, tf: dict) -> Any:
+    """DN -> physical scalar per ``transform.kind`` (reflectance / lst_celsius /
+    none); the fill DN reads back as NaN so the render's nodata rule masks it."""
+    import numpy as np
+
+    kind = tf.get("kind", "none")
+    if kind == "reflectance":
+        ref = dn * float(tf["scale"]) + float(tf.get("offset", 0.0))
+        return np.where(dn == float(tf.get("fill_dn", 0)), np.nan, ref).astype("float32")
+    if kind == "lst_celsius":
+        c = dn * float(tf["scale"]) + float(tf.get("offset", 0.0)) - float(tf.get("kelvin_offset", 273.15))
+        return np.where(dn == float(tf.get("fill_dn", 0)), np.nan, c).astype("float32")
+    return dn.astype("float32")
+
+
+def _rgb_bad_mask(mask_arr: Any, mask: dict) -> Any:
+    """Boolean bad (cloud/shadow/fill) mask from a QA bitmask or an SCL class set."""
+    import numpy as np
+
+    kind = mask.get("kind")
+    if kind == "bitmask":
+        qa = mask_arr.astype("uint16")
+        bits = 0
+        for b in mask.get("bad_bits", []):
+            bits |= (1 << int(b))
+        return np.asarray((qa & bits) != 0)
+    if kind == "classes":
+        return np.isin(mask_arr.astype("int16"), np.asarray(mask.get("bad_classes", [])))
+    return np.zeros(mask_arr.shape, dtype=bool)
+
+
+def _rgb_render_joint_stretch(spec: SourceSpec, bands: list[Any], bad: Any, render: dict) -> Any:
+    """Joint 2..98 percentile-stretch N float bands to a uint8 RGB (nodata+bad -> 0).
+
+    ``nodata_rule=all_bands_zero`` (sentinel2 raw uint16) else the non-finite fill
+    from the reflectance transform (landsat). Raises a typed EMPTY when no clear
+    pixel remains. Returns a ``(N, H, W)`` uint8 array."""
+    import numpy as np
+
+    stack = np.stack(bands)  # (N, H, W) float32
+    finite = np.all(np.isfinite(stack), axis=0)
+    if render.get("nodata_rule") == "all_bands_zero":
+        nodata = np.all(stack == 0, axis=0)
+    else:
+        nodata = ~finite
+    if bad is None:
+        bad = np.zeros(finite.shape, dtype=bool)
+    clear = finite & (~bad) & (~nodata)
+    clear_vals = stack[:, clear]
+    if clear_vals.size == 0:
+        raise router_empty_error(
+            spec.error_code_prefix,
+            "scene produced an all-cloud / all-nodata window over the AOI (no clear pixels to render)",
+            spec.empty_error_suffix)
+    lo = float(np.nanpercentile(clear_vals, float(render.get("lo_pct", 2.0))))
+    hi = float(np.nanpercentile(clear_vals, float(render.get("hi_pct", 98.0))))
+    span = max(float(render.get("span_floor", 1e-6)), hi - lo)
+    scaled = np.clip((stack - lo) / span * 255.0, 0.0, 255.0)
+    rgb = np.nan_to_num(scaled, nan=0.0).astype("uint8")
+    zero = nodata | bad
+    for bi in range(rgb.shape[0]):
+        rgb[bi][zero] = 0
+    return rgb
+
+
+def _rgb_render_colormap(spec: SourceSpec, band: Any, bad: Any, render: dict) -> Any:
+    """Percentile-stretch one float band through a baked matplotlib ramp (landsat
+    thermal LST -> inferno), zeroing nodata/clouded pixels. ``(3, H, W)`` uint8."""
+    import numpy as np
+
+    if bad is None:
+        bad = np.zeros(band.shape, dtype=bool)
+    valid = np.isfinite(band) & (~bad)
+    vals = band[valid]
+    if vals.size == 0:
+        raise router_empty_error(
+            spec.error_code_prefix,
+            "thermal band produced an all-cloud / all-nodata window over the AOI "
+            "(no valid surface-temperature pixels to render)",
+            spec.empty_error_suffix)
+    lo = float(np.nanpercentile(vals, float(render.get("lo_pct", 2.0))))
+    hi = float(np.nanpercentile(vals, float(render.get("hi_pct", 98.0))))
+    span = max(float(render.get("span_floor", 1e-6)), hi - lo)
+    norm = np.nan_to_num(np.clip((band - lo) / span, 0.0, 1.0), nan=0.0)
+    try:
+        import matplotlib
+
+        cmap = matplotlib.colormaps[render.get("cmap", "inferno")]
+        rgba = (cmap(norm) * 255.0).astype("uint8")  # (H, W, 4)
+        rgb = np.transpose(rgba[..., :3], (2, 0, 1))  # (3, H, W)
+    except Exception:  # noqa: BLE001 -- no matplotlib: manual black->red->yellow ramp
+        r = np.clip(norm * 2.0, 0.0, 1.0)
+        g = np.clip(norm * 2.0 - 1.0, 0.0, 1.0)
+        b = np.zeros_like(norm)
+        rgb = (np.stack([r, g, b]) * 255.0).astype("uint8")
+    nod = ~valid
+    for bi in range(3):
+        rgb[bi][nod] = 0
+    return rgb
+
+
+def _rgb_cog_bytes(rgb: Any, transform: Any, crs: Any) -> bytes:
+    """Serialize a 3-band uint8 array to a photometric-RGB DEFLATE COG (multiband
+    passthrough; byte-identical to the twins' ``_write_rgb_cog``)."""
+    import rasterio
+
+    count, height, width = rgb.shape
+    out_fd, out_path = tempfile.mkstemp(suffix=".tif", prefix="trid3nt_router_rgb_")
+    os.close(out_fd)
+    try:
+        profile = dict(
+            driver="COG", dtype="uint8", count=count, height=height, width=width,
+            crs=crs, transform=transform, compress="DEFLATE", photometric="RGB")
+        with rasterio.open(out_path, "w", **profile) as dst:
+            dst.write(rgb)
+            dst.colorinterp = [
+                rasterio.enums.ColorInterp.red,
+                rasterio.enums.ColorInterp.green,
+                rasterio.enums.ColorInterp.blue,
+            ]
+        with open(out_path, "rb") as f:
+            return f.read()
+    finally:
+        try:
+            os.unlink(out_path)
+        except OSError:
+            pass
+
+
+def _stac_multi_asset_rgb_to_array(spec: SourceSpec, params: dict[str, Any]) -> tuple[Any, Any, Any]:
+    """Search -> rank -> read RGB (+mask) assets -> scale/mask/render -> 3-band uint8
+    RGB ``(array, transform, "EPSG:4326")`` (ADR 0080). ``execute`` serializes it via
+    :func:`_rgb_cog_bytes` (photometric-RGB passthrough), NOT the float COG path."""
+    import rasterio
+
+    from ...imagery import _pc_stac
+
+    ingest = spec.ingest or {}
+    stac = ingest.get("stac", {})
+    comp = ingest.get("composite", {})
+    sel = stac.get("select", {})
+    bbox = tuple(params["bbox"])
+    collection = stac.get("collection")
+
+    combo_param = comp.get("combo_param")
+    combo = (params.get(combo_param) if combo_param else None) or comp.get("default_combo")
+    recipe = (comp.get("combos") or {}).get(combo)
+    if recipe is None:
+        raise router_upstream_error(spec.error_code_prefix, f"no composite recipe for combo {combo!r}")
+
+    dt_range = _rgb_resolve_window(stac, params)
+    items = _rgb_search_items(spec, stac, sel, collection, bbox, dt_range, params)
+    item = _rgb_rank_item(sel, items, bbox)
+    assets = getattr(item, "assets", {}) or {}
+
+    native_cell_m = float(ingest.get("native_cell_m", 10.0))
+    px_max = int(comp.get("px_max", 4096))
+    w, h = _pc_stac.bbox_pixel_dims(bbox, native_cell_m, px_max=px_max)
+    dst_transform = rasterio.transform.from_bounds(bbox[0], bbox[1], bbox[2], bbox[3], w, h)
+
+    def _sign(asset_key: str) -> str:
+        return _pc_sign_two_tier(spec, assets[asset_key].href, collection)
+
+    channels = recipe.get("assets", [])
+    render = recipe.get("render", {})
+    render_kind = render.get("kind", "joint_stretch")
+
+    if render_kind == "passthrough":
+        # naip: N bands of ONE asset, read straight to uint8 (no scale/mask/stretch).
+        image_asset = channels[0]
+        if image_asset not in assets:
+            raise router_upstream_error(
+                spec.error_code_prefix,
+                f"item {getattr(item, 'id', '?')} missing asset {image_asset!r} "
+                f"(have {sorted(assets)})")
+        rgb = _rgb_read_passthrough(
+            spec, _sign(image_asset), recipe.get("bands", [1, 2, 3]), bbox, w, h, dst_transform)
+        if not rgb.any():
+            raise router_empty_error(
+                spec.error_code_prefix,
+                f"item {getattr(item, 'id', '?')} produced an all-black window over "
+                f"bbox={bbox} (item does not actually cover the AOI)",
+                spec.empty_error_suffix)
+        return rgb, dst_transform, "EPSG:4326"
+
+    # float path (joint_stretch / colormap): separate single-band assets + a mask.
+    mask_asset = recipe.get("mask_asset")
+    needed = list(dict.fromkeys([*channels, *([mask_asset] if mask_asset else [])]))
+    missing = [a for a in needed if a not in assets]
+    if missing:
+        raise router_upstream_error(
+            spec.error_code_prefix,
+            f"item {getattr(item, 'id', '?')} missing assets {missing} for combo={combo!r} "
+            f"(have {sorted(assets)[:12]})")
+
+    tf = recipe.get("transform", {})
+    bands = [
+        _rgb_apply_transform(
+            _rgb_read_float(spec, _sign(a), 1, bbox, w, h, dst_transform, nearest=False), tf)
+        for a in channels
+    ]
+    bad = None
+    if mask_asset:
+        mask_arr = _rgb_read_float(spec, _sign(mask_asset), 1, bbox, w, h, dst_transform, nearest=True)
+        bad = _rgb_bad_mask(mask_arr, recipe.get("mask", {}))
+
+    if render_kind == "colormap":
+        rgb = _rgb_render_colormap(spec, bands[0], bad, render)
+    else:
+        rgb = _rgb_render_joint_stretch(spec, bands, bad, render)
+    return rgb, dst_transform, "EPSG:4326"
 
 
 def _bbox_intersects(item_bbox: Any, bbox: tuple[float, float, float, float]) -> bool:
@@ -1755,6 +2126,16 @@ def execute(spec: SourceSpec, params: dict[str, Any]) -> bytes:
         # A MapServer/export server-symbolized PNG32 georeferenced client-side into
         # a 4-band RGBA COG (noaa_slr conf_*/marsh_* overlays).
         return _mapserver_export_rgba_bytes(spec, params)
+    if access == "stac_multi_asset_rgb":
+        # ADR 0080: a baked 3-band uint8 photometric-RGB COG (the imagery trio); the
+        # RGB serializer is distinct from the float NaN-nodata path below.
+        rgb, transform, crs = _stac_multi_asset_rgb_to_array(spec, params)
+        try:
+            return _rgb_cog_bytes(rgb, transform, crs)
+        except RouterError:
+            raise
+        except Exception as exc:  # noqa: BLE001
+            raise router_upstream_error(spec.error_code_prefix, f"RGB COG write failed: {exc}")
     if access == "stac_search":
         ingest = spec.ingest or {}
         arr, transform, crs, colormap = stac_to_mosaic(spec, params)

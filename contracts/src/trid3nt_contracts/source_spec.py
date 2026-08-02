@@ -245,6 +245,13 @@ class OutputSpec(GraceModel):
     #: static ``style_preset``. Default (None) = the static preset for every prior
     #: spec (strict no-op).
     style_preset_by_param: dict[str, Any] | None = None
+    #: Per-param MAPPED role (multi-asset RGB composite wave, ADR 0080). ``{"param":
+    #: "band_combo", "map": {"thermal": "primary"}}`` selects the LayerURI ``role`` by
+    #: a param value; a value absent from the map falls back to the static ``role``.
+    #: The landsat thermal LST product is the analytical ``primary`` while the RGB
+    #: true/false-color composites are ``context`` basemaps -- one style_preset, split
+    #: role. Default (None) = the static ``role`` for every prior spec (strict no-op).
+    role_by_param: dict[str, Any] | None = None
     #: Whether the emitted ``LayerURI`` carries the request bbox. Default True
     #: (census/coops/hifld/esri set it); gridmet's twin omits it, so its spec
     #: sets ``emit_bbox: false`` to stay byte-identical (VERDICT round-2 tell).

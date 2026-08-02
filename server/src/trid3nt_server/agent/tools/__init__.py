@@ -298,13 +298,14 @@ from .fetchers.imagery.fetch_goes_active_fire import fetch_goes_active_fire  # n
 from .fetchers.imagery.fetch_goes_animation import fetch_goes_animation  # noqa: E402,F401
 from .fetchers.imagery.fetch_goes_archive_animation import fetch_goes_archive_animation  # noqa: E402,F401
 from .fetchers.imagery.fetch_goes_satellite import fetch_goes_satellite  # noqa: E402,F401
-from .fetchers.imagery.fetch_landsat_imagery import fetch_landsat_imagery  # noqa: E402,F401
-from .fetchers.imagery.fetch_naip import fetch_naip  # noqa: E402,F401
+# fetch_landsat_imagery / fetch_naip / fetch_sentinel2_truecolor: STAC-composite wave
+# (ADR 0080) -- twins DELETED, now spec-driven (source.yaml + raster_cog
+# stac_multi_asset_rgb: N reflectance assets + QA/SCL mask + joint 2/98 stretch /
+# inferno LST / raw uint8 passthrough), auto-registered by _register_router_specs().
 # fetch_slider_timestamps folded to a record-shape spec (ADR 0078); the promoted
 # tool auto-registers via register_specs_from_tree (SLIDER availability + cadence index).
 # fetch_sentinel1_sar: quick-folds wave (ADR 0079) -- twin DELETED, now spec-driven
 # (source.yaml + raster_cog stac_float + coverage-select + log10_db), auto-registered.
-from .fetchers.imagery.fetch_sentinel2_truecolor import fetch_sentinel2_truecolor  # noqa: E402,F401
 from .fetchers.imagery.fetch_viirs_day_fire import fetch_viirs_day_fire  # noqa: E402,F401
 
 # -- fetchers/climate --

@@ -1,0 +1,263 @@
+# Router source spec (STAC-composite wave, raster-cog stac_multi_asset_rgb, ADR 0080).
+# Twin: fetch_landsat_imagery.py -- Landsat Collection-2 Level-2 imagery via PC STAC.
+# Folds onto the NEW stac_multi_asset_rgb mode: per-band_combo recipes read up to 3
+# single-band reflectance assets (+ the qa_pixel CFMask bitmask), joint-2/98-stretch
+# to a baked RGB; the thermal combo reads lwir11, scales to deg C, and inferno-ramps a
+# single band. Scene rank = coverage-bucket -> least-cloudy -> most-coverage with a
+# platform + eo:cloud_cover query filter.
+schema_version: v1
+name: fetch_landsat_imagery
+source_class: landsat_imagery
+error_prefix: LANDSAT
+shape: raster-cog
+supports_global_query: false
+empty_error_suffix: NO_IMAGERY
+endpoints:
+  data:
+    url: https://planetarycomputer.microsoft.com/api/stac/v1
+auth:
+  mode: none
+  user_agent: trid3nt/0.1 (Hazard Modeling Agent; https://github.com/double-r-squared/trid3nt-qgis-plugin;
+    agent@trid3nt.dev)
+params:
+  bbox:
+    type: bbox
+    required: true
+    quantize: round_6dp
+    error_suffix: BBOX_INVALID
+  start_date:
+    type: iso_date
+    schema_optional: true
+  end_date:
+    type: iso_date
+    schema_optional: true
+  band_combo:
+    type: enum
+    values:
+    - true_color
+    - false_color_nir
+    - thermal
+    default: true_color
+    lowercase: true
+    error_suffix: BAND_COMBO_INVALID
+    aliases:
+      rgb: true_color
+      natural: true_color
+      natural_color: true_color
+      truecolor: true_color
+      color_infrared: false_color_nir
+      cir: false_color_nir
+      false_color: false_color_nir
+      nir: false_color_nir
+      lst: thermal
+      temperature: thermal
+      thermal_lst: thermal
+      thermal-lst: thermal
+      surface_temperature: thermal
+  max_cloud_cover:
+    type: float
+    default: 30.0
+  include_legacy_landsat:
+    type: bool
+    default: false
+gates:
+  max_bbox_deg2: 0.5
+ingest:
+  access: stac_multi_asset_rgb
+  native_cell_m: 30.0
+  stac:
+    root: https://planetarycomputer.microsoft.com/api/stac/v1
+    collection: landsat-c2-l2
+    datetime_window: true
+    default_window_days: 425
+    select:
+      cloud_query: true
+      platform_query:
+        param: include_legacy_landsat
+        base:
+        - landsat-8
+        - landsat-9
+        extra:
+        - landsat-4
+        - landsat-5
+        - landsat-7
+      rank:
+      - by: coverage_bucket
+        min_frac: 0.99
+      - by: cloud_cover
+      - by: coverage
+  composite:
+    combo_param: band_combo
+    default_combo: true_color
+    combos:
+      true_color:
+        assets:
+        - red
+        - green
+        - blue
+        mask_asset: qa_pixel
+        mask:
+          kind: bitmask
+          bad_bits:
+          - 0
+          - 1
+          - 2
+          - 3
+          - 4
+        transform:
+          kind: reflectance
+          scale: 2.75e-05
+          offset: -0.2
+          fill_dn: 0
+        render:
+          kind: joint_stretch
+          lo_pct: 2.0
+          hi_pct: 98.0
+          span_floor: 1.0e-06
+      false_color_nir:
+        assets:
+        - nir08
+        - red
+        - green
+        mask_asset: qa_pixel
+        mask:
+          kind: bitmask
+          bad_bits:
+          - 0
+          - 1
+          - 2
+          - 3
+          - 4
+        transform:
+          kind: reflectance
+          scale: 2.75e-05
+          offset: -0.2
+          fill_dn: 0
+        render:
+          kind: joint_stretch
+          lo_pct: 2.0
+          hi_pct: 98.0
+          span_floor: 1.0e-06
+      thermal:
+        assets:
+        - lwir11
+        mask_asset: qa_pixel
+        mask:
+          kind: bitmask
+          bad_bits:
+          - 0
+          - 1
+          - 2
+          - 3
+          - 4
+        transform:
+          kind: lst_celsius
+          scale: 0.00341802
+          offset: 149.0
+          kelvin_offset: 273.15
+          fill_dn: 0
+        render:
+          kind: colormap
+          cmap: inferno
+          lo_pct: 2.0
+          hi_pct: 98.0
+          span_floor: 1.0e-06
+normalize:
+  crs: EPSG:4326
+  units_by_param:
+    param: band_combo
+    map:
+      thermal: Land-surface temperature (deg C)
+output:
+  layer_type: raster
+  ext: tif
+  role: context
+  role_by_param:
+    param: band_combo
+    map:
+      thermal: primary
+  style_preset: landsat_rgb
+  emit_bbox: false
+cache:
+  ttl_class: static-30d
+payload_estimate:
+  model: bbox_area
+  mb_per_sq_deg: 14.0
+  floor_mb: 0.25
+caveats:
+- Landsat Collection-2 Level-2 imagery via the Microsoft Planetary Computer STAC
+  (landsat-c2-l2; red/green/blue/nir08/lwir11 + qa_pixel). The scene best COVERING the
+  bbox (then least-cloudy) is chosen; cloud/shadow/fill is masked via the qa_pixel CFMask
+  bitmask; a 3-band RGB (or an inferno-ramped land-surface-temperature) COG paints
+  directly (multiband passthrough, no rescale). AOI-scoped (<= 0.5 deg^2). A fully-clouded
+  window -> an honest LANDSAT_NO_IMAGERY, never a fabricated layer. The only keyless THERMAL
+  source and the deepest archive (1980s+) for decadal before/after change.
+docstring: |-
+  Fetch a Landsat Collection-2 Level-2 image (true / false-color / thermal).
+
+  **What it does:** Searches the Microsoft Planetary Computer for the Landsat
+  C2 L2 scene that best COVERS ``bbox`` inside the time window (then the
+  least-cloudy), reads the requested 30 m bands clipped to the bbox, masks
+  cloud / shadow / fill via the ``qa_pixel`` CFMask bitmask, and returns a
+  3-band RGB COG that paints directly as a satellite image (multiband
+  passthrough in ``publish_layer``  --  no rescale / colormap; the baked colors
+  render as-is).
+
+  Three ``band_combo`` outputs:
+
+  - ``true_color`` (default): Red/Green/Blue surface reflectance  --  natural
+    color, "what does this area look like from space".
+  - ``false_color_nir``: NIR/Red/Green  --  the color-infrared composite;
+    healthy vegetation glows bright red, water is near-black. Good for
+    vegetation extent / burn scars / water bodies.
+  - ``thermal``: land-surface temperature from the thermal band (``lwir11``),
+    converted to deg C and baked through an inferno heat ramp  --  the keyless
+    path to urban-heat-island / surface-temperature maps.
+
+  Landsat's archive reaches back to the 1980s, so this is the source for LONG
+  before/after change detection (decadal urban growth, reservoir drawdown,
+  deforestation, post-fire recovery) and the only keyless THERMAL imagery
+  here. For finer / more-frequent recent natural color use
+  ``fetch_sentinel2_truecolor`` (10 m, ~5 d, but no thermal and only ~2015+).
+
+  **When to use:**
+  - A historical "what did this area look like in year YYYY" picture (set the
+    window to that year), or a decadal before/after pair (two calls).
+  - Land-surface temperature / urban-heat-island maps (``band_combo="thermal"``).
+  - A vegetation / water / burn-scar composite (``band_combo="false_color_nir"``).
+
+  **When NOT to use:**
+  - US sub-meter aerial detail  --  use ``fetch_naip`` (~1 m vs 30 m).
+  - Recent fine-grained natural color  --  ``fetch_sentinel2_truecolor`` (10 m).
+  - A continuous vegetation INDEX  --  ``compute_ndvi`` (Sentinel-2 NDVI).
+  - Areas fully clouded in the window (raise the window / ``max_cloud_cover``);
+    a no-imagery result is an honest typed error, never a fabricated layer.
+
+  **Parameters:**
+  - ``bbox`` (tuple): ``(min_lon, min_lat, max_lon, max_lat)`` EPSG:4326.
+    Required. AOI-scoped (<= 0.5 deg^2).
+  - ``start_date`` / ``end_date`` (str, optional): ``"YYYY-MM-DD"`` window
+    bounds. Default: a trailing ~14-month window ending today. For a historical
+    look, set both to the target year (e.g. ``"1995-06-01"`` / ``"1995-09-30"``
+    with ``include_legacy_landsat=True``).
+  - ``band_combo`` (str, default ``"true_color"``): ``true_color`` /
+    ``false_color_nir`` / ``thermal``.
+  - ``max_cloud_cover`` (float, default 30.0): only scenes below this
+    ``eo:cloud_cover`` percent are considered.
+  - ``include_legacy_landsat`` (bool, default False): when True, widen the
+    platform set to Landsat 4/5/7 for deep-history windows (note: Landsat 7
+    post-2003 has SLC-off scan-line gaps, and Landsat 4/5/7 thermal uses a
+    different band  --  thermal is most reliable on the default 8/9).
+
+  **Returns:** A ``LayerURI`` (``layer_type="raster"``) pointing at a 3-band
+  RGB COG in the ``static-30d``/``landsat_imagery`` cache prefix.
+  ``role="primary"`` for thermal LST (the analytical product) else ``"context"``
+  (a basemap). ``style_preset="landsat_rgb"`` (a multiband-passthrough token  --
+  no single-band rescale).
+
+  **Data source:** Landsat Collection-2 Level-2 via the Microsoft Planetary
+  Computer STAC (``landsat-c2-l2``; assets red/green/blue/nir08/lwir11 +
+  qa_pixel).
+
+  FR-CE-8: routed through ``read_through`` so identical ``(bbox, window,
+  band_combo, cloud, legacy)`` calls reuse the cached RGB COG.

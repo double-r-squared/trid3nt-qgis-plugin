@@ -211,6 +211,12 @@ def validate_params(spec: SourceSpec, raw: dict[str, Any]) -> dict[str, Any]:
             # allowed-set check, echoing the normalized key (no-op when unset).
             if getattr(pspec, "lowercase", False) and isinstance(value, str):
                 value = value.strip().lower()
+            # enum alias table (ADR 0080): a known alias maps to the canonical value
+            # BEFORE the allowed-set check, echoing the canonical key (landsat
+            # band_combo accepts rgb/natural/cir/lst/... aliases). No-op when unset
+            # (no prior enum param declares aliases).
+            if getattr(pspec, "aliases", None) and isinstance(value, str):
+                value = pspec.aliases.get(value.strip().lower(), value)
             if value not in allowed:
                 raise router_input_error(sc, f"{pname}={value!r} not in {allowed}", sfx)
             out[pname] = value
@@ -604,13 +610,20 @@ def build_layer_uri(spec: SourceSpec, params: dict[str, Any], uri: str) -> Layer
         style_preset = (sbp.get("map") or {}).get(
             params.get(sbp.get("param")), style_preset
         )
+    # role_by_param (ADR 0080): MAP a param value to the LayerURI role (landsat
+    # thermal LST -> primary, RGB composites -> context); a value absent from the
+    # map falls back to the static role. No-op when unset.
+    role = spec.output.role
+    rbp = spec.output.role_by_param
+    if rbp:
+        role = (rbp.get("map") or {}).get(params.get(rbp.get("param")), role)
     return LayerURI(
         layer_id=layer_id,
         name=f"{spec.source_class} {variable}",
         layer_type=spec.output.layer_type,
         uri=uri,
         style_preset=style_preset,
-        role=spec.output.role,
+        role=role,
         units=units,
         bbox=bbox,
     )
