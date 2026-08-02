@@ -223,8 +223,10 @@ def clear_registry_for_tests() -> None:
 
 # -- fetchers/weather --
 from .fetchers.weather.fetch_glm_lightning import fetch_glm_lightning  # noqa: E402,F401
-from .fetchers.weather.fetch_hrrr_forecast import fetch_hrrr_forecast  # noqa: E402,F401
-from .fetchers.weather.fetch_hrrr_smoke import fetch_hrrr_smoke  # noqa: E402,F401
+# fetch_hrrr_forecast + fetch_hrrr_smoke: HRRR-Zarr library-delegate fold (ADR 0083)
+# -- twins DELETED, now spec-driven (source.yaml + hrrr.resolve_cycle/read/validate
+# delegate hooks: s3fs cycle-walk delegate_resolve + Zarr open -> LCC->4326 reproject
+# + clip + forecast hypot(u,v)); auto-registered by _register_router_specs() below.
 # fetch_mrms_qpe: weather/GRIB fold (ADR 0069) -- twin DELETED, now spec-driven
 # (source.yaml + mrms_qpe hooks: S3-listed key resolve -> grib_object whole-object COG).
 from .fetchers.weather.fetch_nexrad_reflectivity import fetch_nexrad_reflectivity  # noqa: E402,F401
@@ -346,7 +348,11 @@ from .fetchers.socioeconomic.fetch_buildings import fetch_buildings  # noqa: E40
 # fetch_epa_ejscreen: data-router fold phase-2 wave-6 (ADR 0052) -- twin DELETED,
 # now spec-driven (source.yaml + the esri_json ingest mode + percentile/fraction/
 # raw column kinds + from_param routing), registered by _register_router_specs().
-from .fetchers.socioeconomic.fetch_field_boundaries import fetch_field_boundaries  # noqa: E402,F401
+# fetch_field_boundaries: FTW/fiboa GeoParquet-pushdown fold (ADR 0083) -- twin DELETED,
+# now spec-driven (source.yaml + field_boundaries.select pre_resolve + field_boundaries.read
+# VECTOR library_delegate hook; the GeoParquet 1.1 row-group bbox pushdown is owned by
+# geopandas.read_parquet over an fsspec HTTPS handle, not a router transport -- the ADR 0070
+# new-transport STOP refuted). Auto-registered by _register_router_specs() below.
 # fetch_ghsl_population: data-router fold zip/multi-file wave (ADR 0067) -- twin
 # DELETED, now spec-driven (source.yaml + the raster fixed_tile_grid whole-object
 # per-tile ZIP extract mode), registered by _register_router_specs() below.

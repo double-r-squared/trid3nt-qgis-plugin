@@ -1,0 +1,109 @@
+schema_version: v1
+name: fetch_field_boundaries
+source_class: ftw_field_boundaries
+error_prefix: FIELDS
+input_error_suffix: INPUT_INVALID
+shape: vector-fgb
+supports_global_query: false
+endpoints:
+  data:
+    url: https://data.source.coop/
+auth:
+  mode: none
+  user_agent: trid3nt/0.1 (Hazard Modeling Agent; agent@trid3nt.dev)
+params:
+  bbox:
+    type: bbox
+    required: true
+    quantize: round_6dp
+  dataset:
+    type: str
+    schema_optional: true
+    default: null
+ingest:
+  delegate:
+    library: geopandas_geoparquet
+    timeout_s: 180.0
+  field_boundaries:
+    datasets:
+    - key: us_usda_cropland
+      label: US Cropland Field Boundaries (USDA CSB)
+      url: https://data.source.coop/fiboa/us-usda-cropland/us_usda_cropland.parquet
+      coverage:
+      - -124.736342
+      - 24.521208
+      - -66.945392
+      - 49.382808
+      pushdown: true
+      crop_field: crop:name
+    - key: japan
+      label: Japan Field Boundaries (fiboa)
+      url: https://data.source.coop/fiboa/japan/japan.parquet
+      coverage:
+      - 122.946031194
+      - 24.046770215
+      - 145.802669174
+      - 45.520014956
+      pushdown: true
+      crop_field: land_type_en
+    - key: denmark
+      label: Denmark Field Boundaries (fiboa)
+      url: https://data.source.coop/fiboa/denmark/denmark.parquet
+      coverage:
+      - 8.02765145891927
+      - 54.44421901416275
+      - 15.573199436854463
+      - 57.75163614760113
+      pushdown: false
+      crop_field: crop_name
+  properties:
+  - crop_name
+hooks:
+  delegate: field_boundaries.read
+  pre_resolve: field_boundaries.select
+normalize:
+  crs: EPSG:4326
+output:
+  layer_type: vector
+  ext: fgb
+  role: context
+  style_preset: field_boundaries
+cache:
+  ttl_class: static-30d
+payload_estimate:
+  model: per_feature
+  floor_mb: 0.01
+  kb_per_feature: 0.5
+  features_per_sq_deg: 20000.0
+docstring: "Agricultural FIELD BOUNDARIES (Fields of The World / fiboa) for an AOI.\n\n**What it does:**\
+  \ Fetches published agricultural field-boundary polygons -- individual farm parcels / fields -- for\
+  \ the requested bbox from the Fields of\nThe World (FTW) / fiboa open datasets on Source Cooperative,\
+  \ clips them to\nthe exact AOI, and returns them as a vector layer that renders inline on the\nmap automatically\
+  \ (like roads / protected areas). NO API key required. The\nresulting vector renders inline -- do NOT\
+  \ call ``publish_layer`` on it.\n\n**Coverage (IMPORTANT -- regional, not global yet):** This serves\
+  \ the\nPUBLISHED FTW/fiboa benchmark, which covers specific regions, currently:\nthe contiguous United\
+  \ States (USDA Crop Sequence Boundaries), Japan, and\nDenmark. A bbox outside every covered region returns\
+  \ a structured\n``FIELDS_NO_COVERAGE`` error -- there are simply no published boundaries\nthere. On-demand\
+  \ field-boundary INFERENCE from satellite imagery for an\narbitrary AOI (running an FTW model anywhere\
+  \ on Earth) is a SEPARATE future\ntool and is not available through this one.\n\n**When to use:**\n\
+  - User wants to see farm fields / agricultural parcels / field boundaries\n  over an AOI in the US,\
+  \ Japan, or Denmark.\n- A hazard analysis needs cropland parcel geometry as context (e.g. which\n  fields\
+  \ a flood footprint covers, agricultural exposure mapping).\n- Pairs with flood / drought / fire layers\
+  \ to quantify agricultural impact.\n\n**When NOT to use:**\n- Land-cover CLASSIFICATION rasters (use\
+  \ ``fetch_landcover`` / NLCD) -- this\n  returns vector PARCEL boundaries, not a per-pixel crop-type\
+  \ raster.\n- Cadastral / legal property parcels -- these are agricultural FIELD units,\n  not legal\
+  \ land-ownership parcels (use a county assessor source for those).\n- Areas outside the covered regions\
+  \ -- the tool will honestly report no\n  coverage rather than guess; do not retry the same out-of-coverage\
+  \ bbox.\n- Administrative boundaries (use ``fetch_administrative_boundaries``).\n\n**Parameters:**\n\
+  - ``bbox`` (tuple): ``(min_lon, min_lat, max_lon, max_lat)`` in EPSG:4326.\n  Keep it small (a county\
+  \ or smaller); a continent-sized bbox returns far\n  too many parcels. Example (Ames, Iowa cropland):\n\
+  \  ``(-93.70, 42.00, -93.60, 42.08)``.\n- ``dataset`` (str | None): force a specific source key\n  (``\"\
+  us_usda_cropland\"``, ``\"japan\"``, ``\"denmark\"``). Default ``None``\n  auto-selects the dataset\
+  \ whose coverage contains the bbox.\n\n**Returns:** A ``LayerURI`` (``layer_type=\"vector\"``, ``role=\"\
+  context\"``,\n``units=None``) pointing at a FlatGeobuf of field polygons. Each feature\ncarries a ``crop_name``\
+  \ property (the source crop / land-type label where\nthe dataset provides one). An AOI with coverage\
+  \ but no fields (e.g. urban /\nwater) returns a valid 0-feature layer, not an error.\n\n**Cross-tool\
+  \ dependencies:**\n- Typically layered over flood / fire / drought hazard rasters as context.\n- Pairs\
+  \ with ``spatial_query`` to summarize a hazard over fields.\n- Use ``fetch_administrative_boundaries``\
+  \ first if you need a county/AOI\n  bbox to query within.\n\nFR-CE-8: ``read_through`` with ``ttl_class=\"\
+  static-30d\"``; cache key is\nSHA-256 over ``(bbox-6dp, dataset_key)``."

@@ -202,3 +202,15 @@ from . import fault_sources  # noqa: E402,F401
 # (the WCS GetCoverage build_request + the NLCD sidecar envelope).
 from . import flood_extent_observation  # noqa: E402,F401
 from . import landcover  # noqa: E402,F401
+# endgame HRRR-Zarr wave (ADR 0083): fetch_hrrr_forecast + fetch_hrrr_smoke -- the
+# library_delegate raster fold whose delegate_resolve walks the s3fs mirror for the
+# newest cycle (pre-cache-key) and whose delegate opens the Zarr slice(s), reprojects
+# LCC->EPSG:4326, clips, and (forecast) synthesizes hypot(u,v) wind speed. One shared
+# module; the per-source variable table + derived/fill_value live in ingest.hrrr.
+from . import hrrr  # noqa: E402,F401
+# endgame field-boundaries wave (ADR 0083): fetch_field_boundaries -- the FTW/fiboa
+# GeoParquet row-group bbox pushdown (owned by geopandas.read_parquet over an fsspec
+# HTTPS handle) folds onto the VECTOR library_delegate mode (the ADR 0070 new-transport
+# STOP refuted; the pushdown is library-owned, not a router transport). Pure pre_resolve
+# dataset-selection + a delegate read hook returning WGS84 polygon features.
+from . import field_boundaries  # noqa: E402,F401
