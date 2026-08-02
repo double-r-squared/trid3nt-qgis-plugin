@@ -258,6 +258,14 @@ class OutputSpec(GraceModel):
     #: pairing). Default (None) = the plain LayerURI (strict no-op for every prior
     #: spec).
     result_model: str | None = None
+    #: Auto-publish the returned raster LayerURI server-side (ADR 0075). Propagated
+    #: into ``AtomicToolMetadata.auto_publish`` at registration so the server dispatch
+    #: wrapper renders (or suppresses) the raster exactly as it did for the twin's
+    #: metadata flag. Default True = the terminal-product behaviour every prior fetcher
+    #: has; set False for a pure INTERMEDIATE raster (role=input) that feeds terrain /
+    #: solver setup and should not auto-render (fetch_3dep_extra / fetch_dem opt out).
+    #: No effect on vector output. Strict no-op for every prior spec (none set it).
+    auto_publish: bool = True
     #: Keep attribute-only (NULL-geometry) features in the emitted FGB instead of
     #: dropping them (chained-resolution mode, ADR 0063). The nws_alerts_conus twin
     #: preserves alerts whose zone references could not be resolved as NULL-geometry
@@ -291,6 +299,15 @@ class PayloadEstimateSpec(GraceModel):
     ceil_mb: float | None = None
     # bbox_area / tiled
     mb_per_sq_deg: float | None = None
+    #: Per-param MB/deg^2 coefficient table for the ``bbox_area`` model (ADR 0075).
+    #: ``{"param": "resolution", "map": {"1 arc-second": 5.0, "1 meter": 5000.0, ...},
+    #: "default": 50.0}`` -- fetch_3dep_extra's estimate scales the SAME bbox area by a
+    #: per-resolution coefficient (5 / 500 / 5000 / 1 / 200 MB/deg^2) the single
+    #: ``mb_per_sq_deg`` scalar cannot hold. When set it overrides ``mb_per_sq_deg``
+    #: for the resolved param value (a value absent from the map uses ``default`` else
+    #: ``mb_per_sq_deg`` else 0.01). Default (None) = the scalar coefficient (strict
+    #: no-op for every prior bbox_area spec).
+    mb_per_sq_deg_by_param: dict[str, Any] | None = None
     # per_station
     kb_per_station_per_day: float | None = None
     overhead_kb: float | None = None

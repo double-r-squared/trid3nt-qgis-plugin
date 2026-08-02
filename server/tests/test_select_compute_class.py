@@ -169,6 +169,7 @@ def _flood_mocks(monkeypatch):
     """Patch the flood workflow's fetcher chain + downstream so only the
     run_solver compute_class hand-off is under test. Returns the captured
     run_solver kwargs holder."""
+    from trid3nt_server.agent.tools import TOOL_REGISTRY, RegisteredTool
     from trid3nt_server.agent.workflows.sfincs.flood import flood as mod
     from trid3nt_contracts import new_ulid
     from trid3nt_contracts.execution import ExecutionHandle, LayerURI, RunResult
@@ -244,10 +245,20 @@ def _flood_mocks(monkeypatch):
         "source": "mrlc-wms",
     }
 
+    # data-router fold (ADR 0074): fetch_river_geometry is a promoted
+    # spec-driven tool resolved via TOOL_REGISTRY[name].fn, not a twin module
+    # import -- RegisteredTool is frozen, so swap the whole registry entry.
+    _river_orig = TOOL_REGISTRY["fetch_river_geometry"]
+    _river_stub = RegisteredTool(
+        metadata=_river_orig.metadata,
+        fn=lambda **_kw: _layer("rivers"),
+        module=_river_orig.module,
+    )
+
     patches = [
         patch.object(mod, "fetch_dem", return_value=_layer("dem")),
         patch.object(mod, "fetch_landcover", return_value=landcover_result),
-        patch.object(mod, "fetch_river_geometry", return_value=_layer("rivers")),
+        patch.dict(TOOL_REGISTRY, {"fetch_river_geometry": _river_stub}),
         patch.object(mod, "lookup_precip_return_period", return_value=precip_result),
         patch.object(mod, "run_solver", side_effect=_fake_run_solver),
         patch.object(mod, "wait_for_completion", side_effect=_fake_wait),

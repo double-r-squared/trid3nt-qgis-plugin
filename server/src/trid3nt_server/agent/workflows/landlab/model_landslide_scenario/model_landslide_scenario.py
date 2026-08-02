@@ -168,8 +168,12 @@ def _fetch_dem_for_landslide(
     10 m fallback (the data-source fallback norm). Returns ``(local_dem_path,
     source_label)``; raises ``LandslideWorkflowError("LANDLAB_DEM_FETCH_FAILED")``
     only when BOTH fail."""
+    from trid3nt_server.agent.tools import TOOL_REGISTRY
     from trid3nt_server.agent.tools.fetchers.terrain.fetch_dem.fetch_dem import fetch_dem
-    from trid3nt_server.agent.tools.fetchers.terrain.fetch_3dep_extra.fetch_3dep_extra import fetch_3dep_extra
+
+    # fetch_3dep_extra folded to a spec-driven tool (ADR 0075): resolve through the
+    # registry seam rather than the deleted twin module.
+    fetch_3dep_extra = TOOL_REGISTRY["fetch_3dep_extra"].fn
 
     try:
         layer = fetch_3dep_extra(bbox, resolution="1 meter")

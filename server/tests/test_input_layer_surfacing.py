@@ -436,6 +436,28 @@ def _flood_input_layer(kind: str) -> LayerURI:
     )
 
 
+def _river_geometry_patch(return_value: LayerURI | None = None):
+    """Patch the fetch_river_geometry registry seam (ADR 0074).
+
+    flood.py no longer imports the twin directly -- it resolves
+    ``TOOL_REGISTRY["fetch_river_geometry"].fn`` at call time. RegisteredTool
+    is frozen, so swap the whole entry for one carrying a stub fn (mirrors
+    ``_patch_copernicus_seam`` in test_data_fetch.py).
+    """
+    from trid3nt_server.agent.tools import TOOL_REGISTRY, RegisteredTool
+
+    layer = return_value if return_value is not None else _flood_input_layer("rivers")
+    orig = TOOL_REGISTRY["fetch_river_geometry"]
+    return patch.dict(
+        TOOL_REGISTRY,
+        {
+            "fetch_river_geometry": RegisteredTool(
+                metadata=orig.metadata, fn=lambda **_kw: layer, module=orig.module
+            )
+        },
+    )
+
+
 @pytest.mark.asyncio
 async def test_sfincs_surfaces_dem_landcover_river_as_inputs(monkeypatch):
     """The flood composer surfaces the river VECTOR (no publish round-trip) and
@@ -498,7 +520,7 @@ async def test_sfincs_surfaces_dem_landcover_river_as_inputs(monkeypatch):
         with (
             patch.object(flood, "fetch_dem", return_value=_flood_input_layer("dem")),
             patch.object(flood, "fetch_landcover", return_value=landcover_result),
-            patch.object(flood, "fetch_river_geometry", return_value=_flood_input_layer("rivers")),
+            _river_geometry_patch(),
             patch.object(flood, "lookup_precip_return_period", return_value=precip_result),
             patch.object(flood, "build_sfincs_model", return_value=_ModelSetup()),
             patch.object(flood, "run_solver", return_value=handle),

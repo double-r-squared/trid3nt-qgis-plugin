@@ -253,6 +253,18 @@ def _patched_chain(
         module="test_offline_stub",
     )
 
+    # data-router fold (ADR 0074): fetch_river_geometry is likewise a promoted
+    # spec-driven tool resolved via TOOL_REGISTRY[name].fn, not a twin module
+    # import -- stub it the same way as the CO-OPS seam above.
+    def _river_stub(**_kw):  # noqa: ANN003
+        return _mock_layer_uri("rivers")
+
+    _river_geometry_stub = RegisteredTool(
+        metadata=_TR["fetch_river_geometry"].metadata,
+        fn=_river_stub,
+        module="test_offline_stub",
+    )
+
     return (
         patch("trid3nt_server.agent.workflows.sfincs.flood.flood.fetch_dem", dem_mock),
         patch(
@@ -263,10 +275,7 @@ def _patched_chain(
             "trid3nt_server.agent.workflows.sfincs.flood.flood.fetch_landcover",
             return_value=_landcover_result(),
         ),
-        patch(
-            "trid3nt_server.agent.workflows.sfincs.flood.flood.fetch_river_geometry",
-            return_value=_mock_layer_uri("rivers"),
-        ),
+        patch.dict(_TR, {"fetch_river_geometry": _river_geometry_stub}),
         patch(
             "trid3nt_server.agent.workflows.sfincs.flood.flood.lookup_precip_return_period",
             return_value=_precip_result(),

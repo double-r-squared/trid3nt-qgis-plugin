@@ -281,7 +281,10 @@ from .fetchers.ocean.fetch_noaa_sst import fetch_noaa_sst  # noqa: E402,F401
 from .fetchers.ocean.fetch_topobathy import fetch_topobathy  # noqa: E402,F401
 
 # -- fetchers/terrain --
-from .fetchers.terrain.fetch_3dep_extra import fetch_3dep_extra  # noqa: E402,F401
+# fetch_3dep_extra: library-delegate raster fold (ADR 0075) -- twin DELETED, now
+# spec-driven (source.yaml + pfdf_3dep delegate/validate hooks over the generic
+# library_delegate mode; output.auto_publish=False + per-resolution payload table);
+# auto-registered by _register_router_specs() below.
 # fetch_copernicus_dem: fetcher-fold wave-8 -- twin DELETED, now spec-driven
 # (source.yaml + router stac_float), registered by _register_router_specs() below.
 from .fetchers.terrain.fetch_dem import fetch_dem  # noqa: E402,F401

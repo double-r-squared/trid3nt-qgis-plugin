@@ -88,11 +88,27 @@ def synthesize_payload_estimator(spec: SourceSpec) -> Callable[..., float]:
         # ceil_mb (wave-7) reproduces the usfs [floor, ceil] clip; None = no cap.
         return v if pe.ceil_mb is None else min(v, pe.ceil_mb)
 
+    def _bbox_area_coeff(kw: dict[str, Any]) -> float:
+        # mb_per_sq_deg_by_param (ADR 0075): a per-param coefficient table for the
+        # bbox_area model (fetch_3dep_extra per-resolution 5/500/5000/1/200). The
+        # resolved param value keys the map; absent -> default -> scalar -> 0.01.
+        # No-op when unset (returns the scalar coefficient).
+        table = pe.mb_per_sq_deg_by_param
+        if not table:
+            return pe.mb_per_sq_deg or 0.01
+        pval = kw.get(table.get("param"))
+        m = table.get("map") or {}
+        if pval in m:
+            return float(m[pval])
+        if "default" in table:
+            return float(table["default"])
+        return pe.mb_per_sq_deg or 0.01
+
     def estimate_payload_mb(bbox: Any = None, **kw: Any) -> float:
         sq = _sq_deg(bbox)
         floor = pe.floor_mb
         if pe.model == "bbox_area":
-            return _clip(max(floor, (pe.mb_per_sq_deg or 0.01) * sq))
+            return _clip(max(floor, _bbox_area_coeff(kw) * sq))
         if pe.model == "per_feature":
             feats = (pe.features_per_sq_deg or 100.0) * sq
             return _clip(max(floor, feats * (pe.kb_per_feature or 1.0) / 1024.0))

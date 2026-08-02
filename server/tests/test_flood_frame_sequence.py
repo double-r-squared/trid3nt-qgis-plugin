@@ -36,6 +36,7 @@ from trid3nt_server.emission.pipeline_emitter import (
     _CURRENT_EMITTER,
     _layer_identity_key,
 )
+from trid3nt_server.agent.tools import TOOL_REGISTRY, RegisteredTool
 from trid3nt_server.agent.workflows.sfincs.flood.flood import model_flood_scenario
 from trid3nt_contracts import new_ulid
 from trid3nt_contracts.execution import ExecutionHandle, LayerURI, ModelSetup, RunResult
@@ -76,6 +77,26 @@ def _mock_layer_uri(prefix: str) -> LayerURI:
         style_preset="continuous_dem",
         role="input",
         units="meters",
+    )
+
+
+def _river_geometry_patch(return_value: LayerURI | None = None):
+    """Patch the fetch_river_geometry registry seam (ADR 0074).
+
+    flood.py no longer imports the twin directly -- it resolves
+    ``TOOL_REGISTRY["fetch_river_geometry"].fn`` at call time. RegisteredTool
+    is frozen, so swap the whole entry for one carrying a stub fn (mirrors
+    ``_patch_copernicus_seam`` in test_data_fetch.py).
+    """
+    layer = return_value if return_value is not None else _mock_layer_uri("rivers")
+    orig = TOOL_REGISTRY["fetch_river_geometry"]
+    return patch.dict(
+        TOOL_REGISTRY,
+        {
+            "fetch_river_geometry": RegisteredTool(
+                metadata=orig.metadata, fn=lambda **_kw: layer, module=orig.module
+            )
+        },
     )
 
 
@@ -205,7 +226,7 @@ async def test_frames_emitted_as_distinct_loaded_layers_via_emitter() -> None:
         with (
             patch("trid3nt_server.agent.workflows.sfincs.flood.flood.fetch_dem", return_value=_mock_layer_uri("dem")),
             patch("trid3nt_server.agent.workflows.sfincs.flood.flood.fetch_landcover", return_value=landcover_result),
-            patch("trid3nt_server.agent.workflows.sfincs.flood.flood.fetch_river_geometry", return_value=_mock_layer_uri("rivers")),
+            _river_geometry_patch(),
             patch("trid3nt_server.agent.workflows.sfincs.flood.flood.lookup_precip_return_period", return_value=precip_result),
             patch("trid3nt_server.agent.workflows.sfincs.flood.flood.build_sfincs_model", return_value=model_setup),
             patch("trid3nt_server.agent.workflows.sfincs.flood.flood.run_solver", return_value=handle),
@@ -318,7 +339,7 @@ async def test_no_emitter_does_not_publish_frames() -> None:
     with (
         patch("trid3nt_server.agent.workflows.sfincs.flood.flood.fetch_dem", return_value=_mock_layer_uri("dem")),
         patch("trid3nt_server.agent.workflows.sfincs.flood.flood.fetch_landcover", return_value=landcover_result),
-        patch("trid3nt_server.agent.workflows.sfincs.flood.flood.fetch_river_geometry", return_value=_mock_layer_uri("rivers")),
+        _river_geometry_patch(),
         patch("trid3nt_server.agent.workflows.sfincs.flood.flood.lookup_precip_return_period", return_value=precip_result),
         patch("trid3nt_server.agent.workflows.sfincs.flood.flood.build_sfincs_model", return_value=model_setup),
         patch("trid3nt_server.agent.workflows.sfincs.flood.flood.run_solver", return_value=handle),

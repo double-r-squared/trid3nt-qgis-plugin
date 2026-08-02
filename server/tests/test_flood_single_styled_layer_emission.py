@@ -31,6 +31,7 @@ from unittest.mock import patch
 
 import pytest
 
+from trid3nt_server.agent.tools import TOOL_REGISTRY, RegisteredTool
 from trid3nt_server.agent.tools.publish_layer.publish_layer import PublishLayerError
 from trid3nt_server.agent.workflows.sfincs.flood.flood import (
     model_flood_scenario,
@@ -76,6 +77,26 @@ def _mock_layer_uri(prefix: str) -> LayerURI:
         style_preset="continuous_dem",
         role="input",
         units="meters",
+    )
+
+
+def _river_geometry_patch(return_value: LayerURI | None = None):
+    """Patch the fetch_river_geometry registry seam (ADR 0074).
+
+    flood.py no longer imports the twin directly -- it resolves
+    ``TOOL_REGISTRY["fetch_river_geometry"].fn`` at call time. RegisteredTool
+    is frozen, so swap the whole entry for one carrying a stub fn (mirrors
+    ``_patch_copernicus_seam`` in test_data_fetch.py).
+    """
+    layer = return_value if return_value is not None else _mock_layer_uri("rivers")
+    orig = TOOL_REGISTRY["fetch_river_geometry"]
+    return patch.dict(
+        TOOL_REGISTRY,
+        {
+            "fetch_river_geometry": RegisteredTool(
+                metadata=orig.metadata, fn=lambda **_kw: layer, module=orig.module
+            )
+        },
     )
 
 
@@ -182,7 +203,7 @@ def _patch_chain(publish_side_effect):  # noqa: ANN001, ANN201
     patches = [
         patch("trid3nt_server.agent.workflows.sfincs.flood.flood.fetch_dem", return_value=_mock_layer_uri("dem")),
         patch("trid3nt_server.agent.workflows.sfincs.flood.flood.fetch_landcover", return_value=_landcover_result()),
-        patch("trid3nt_server.agent.workflows.sfincs.flood.flood.fetch_river_geometry", return_value=_mock_layer_uri("rivers")),
+        _river_geometry_patch(),
         patch("trid3nt_server.agent.workflows.sfincs.flood.flood.lookup_precip_return_period", return_value=_precip_result()),
         patch("trid3nt_server.agent.workflows.sfincs.flood.flood.build_sfincs_model", return_value=_model_setup()),
         patch("trid3nt_server.agent.workflows.sfincs.flood.flood.run_solver", return_value=handle),
