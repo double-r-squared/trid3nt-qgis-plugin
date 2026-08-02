@@ -444,6 +444,15 @@ def _apply_gates(spec: SourceSpec, params: dict[str, Any]) -> None:
                 f"bbox area {area_deg2:.2f} deg^2 exceeds max_bbox_deg2={g.max_bbox_deg2}",
                 bsfx,
             )
+    if g.max_bbox_km2 is not None:
+        from .._fetch_common import _bbox_area_km2
+        area_km2 = _bbox_area_km2(tuple(bbox))  # type: ignore[arg-type]
+        if area_km2 > g.max_bbox_km2:
+            raise router_input_error(
+                spec.error_code_prefix,
+                f"bbox area {area_km2:.1f} km^2 exceeds max_bbox_km2={g.max_bbox_km2}",
+                bsfx,
+            )
 
 
 # --------------------------------------------------------------------------- #
@@ -453,10 +462,20 @@ def _apply_gates(spec: SourceSpec, params: dict[str, Any]) -> None:
 
 def select_executor(spec: SourceSpec) -> Callable[[SourceSpec, dict[str, Any]], bytes]:
     """Return the ``(spec, params) -> bytes`` closure for the spec's shape/transform."""
-    # A spec-declared library delegation wins over the shape dispatch (ADR 0040:
-    # the USGS water-data family delegates to the official `dataretrieval` client
-    # instead of raw HTTP + bespoke parsing). No-op for every prior spec (none
-    # declare ingest.delegate).
+    # A spec-declared library delegation wins over the shape dispatch. Two forms:
+    #  - GENERIC library_delegate (ADR 0074): a spec names ``hooks.delegate`` (a
+    #    registered hook that calls a maintained library owning discovery+socket and
+    #    returns arrays/frames). A raster spec routes through raster_cog (its
+    #    fetch_source_array calls the delegate for the array); a vector spec routes
+    #    through the generic library_delegate.execute (features -> FGB).
+    #  - LEGACY dataretrieval (ADR 0040): ``ingest.delegate.library == 'dataretrieval'``
+    #    with a service dispatch, kept on its own module.
+    # No-op for every prior spec (none declare hooks.delegate or ingest.delegate).
+    if spec.hooks is not None and spec.hooks.delegate:
+        if spec.shape == "raster-cog":
+            return raster_cog.execute
+        from .executors import library_delegate
+        return library_delegate.execute
     if (spec.ingest or {}).get("delegate"):
         from .executors import dataretrieval_delegate
         return dataretrieval_delegate.execute
@@ -577,7 +596,12 @@ def route(spec: SourceSpec, raw_params: dict[str, Any]) -> LayerURI:
     # seed/comid mutual-exclusion + CONUS + comid gate) runs BEFORE read_through so
     # a bad request raises pre-cache / pre-network -- indistinguishable from the
     # twin (which validates in its body before read_through). No-op otherwise.
-    if (spec.ingest or {}).get("delegate"):
+    if spec.hooks is not None and spec.hooks.delegate:
+        # ADR 0074 generic library delegate: run the source-specific pre-cache
+        # input gate (hooks.delegate_validate) before read_through. No-op when unset.
+        from .executors import library_delegate
+        library_delegate.pre_validate(spec, params)
+    elif (spec.ingest or {}).get("delegate"):
         from .executors import dataretrieval_delegate
         dataretrieval_delegate.pre_validate(spec, params)
     # Chained-resolution PHASE R (ADR 0063): resolve a name -> id BEFORE read_through

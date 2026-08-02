@@ -36,12 +36,10 @@ from trid3nt_server.agent.tools.fetchers.terrain.fetch_3dep_extra.fetch_3dep_ext
     estimate_payload_mb as _est_3dep,
     fetch_3dep_extra,
 )
-from trid3nt_server.agent.tools.fetchers.soil.fetch_statsgo_soils.fetch_statsgo_soils import (
-    STATSGOSoilsError,
-    STATSGOSoilsInputError,
-    estimate_payload_mb as _est_statsgo,
-    fetch_statsgo_soils,
-)
+# fetch_statsgo_soils was FOLDED to the generic library-delegate router (ADR 0074):
+# its twin module is deleted, so its unit coverage (payload, CONUS/field validation,
+# empty, units/style-by-field) moved to test_router_statsgo.py. Its registration is
+# still asserted below (TOOL_REGISTRY) since the spec-served tool keeps the name.
 
 
 _LIVE = os.environ.get("TRID3NT_TEST_LIVE_PFDF_A11") == "1"
@@ -103,8 +101,6 @@ def test_a11_tools_registered(
 @pytest.mark.parametrize(
     "cls, code, retryable",
     [
-        (STATSGOSoilsError, "STATSGO_SOILS_ERROR", True),
-        (STATSGOSoilsInputError, "STATSGO_SOILS_INPUT_INVALID", False),
         (ThreeDEPExtraError, "THREE_DEP_EXTRA_ERROR", True),
         (ThreeDEPExtraInputError, "THREE_DEP_EXTRA_INPUT_INVALID", False),
     ],
@@ -123,15 +119,6 @@ def test_typed_error_envelope(cls: type, code: str, retryable: bool) -> None:
 # ---------------------------------------------------------------------------
 
 
-def test_estimate_payload_mb_statsgo_scales_with_bbox() -> None:
-    """fetch_statsgo_soils estimator scales linearly with bbox area."""
-    small = _est_statsgo(bbox=(-82.0, 26.4, -81.7, 26.7), field="KFFACT")
-    big = _est_statsgo(bbox=(-83.0, 26.0, -81.0, 28.0), field="KFFACT")
-    assert 0.0 < small < big
-    # None bbox returns a safe default.
-    assert _est_statsgo(bbox=None) > 0.0
-
-
 def test_estimate_payload_mb_3dep_scales_with_resolution() -> None:
     """fetch_3dep_extra estimator: finer resolutions estimate larger MB."""
     bbox = (-82.0, 26.4, -81.7, 26.7)
@@ -139,51 +126,6 @@ def test_estimate_payload_mb_3dep_scales_with_resolution() -> None:
     fine = _est_3dep(bbox=bbox, resolution="1/9 arc-second")
     lidar = _est_3dep(bbox=bbox, resolution="1 meter")
     assert 0.0 < coarse < fine < lidar
-
-
-# ---------------------------------------------------------------------------
-# Input validation — STATSGO.
-# ---------------------------------------------------------------------------
-
-
-def test_statsgo_rejects_bad_bbox_shape() -> None:
-    with pytest.raises(STATSGOSoilsInputError):
-        fetch_statsgo_soils(bbox=(1.0, 2.0))  # type: ignore[arg-type]
-
-
-def test_statsgo_rejects_non_finite_bbox() -> None:
-    with pytest.raises(STATSGOSoilsInputError):
-        fetch_statsgo_soils(bbox=(float("nan"), 26.4, -81.7, 26.7))
-
-
-def test_statsgo_rejects_degenerate_bbox() -> None:
-    with pytest.raises(STATSGOSoilsInputError):
-        fetch_statsgo_soils(bbox=(-82.0, 27.0, -82.0, 27.0))
-
-
-def test_statsgo_rejects_outside_conus_bbox() -> None:
-    """STATSGO is CONUS-only; an Alaska bbox raises STATSGOSoilsInputError."""
-    with pytest.raises(STATSGOSoilsInputError):
-        fetch_statsgo_soils(bbox=(-150.0, 60.0, -149.0, 61.0))
-
-
-def test_statsgo_rejects_unknown_field() -> None:
-    with pytest.raises(STATSGOSoilsInputError):
-        fetch_statsgo_soils(bbox=_FORT_MYERS_BBOX, field="NOPE")  # type: ignore[arg-type]
-
-
-def test_statsgo_absorbs_invented_kwargs() -> None:
-    """Per project convention: tools must absorb LLM-invented kwargs."""
-    # We only check that the **_extra_ignored mechanism does NOT
-    # reject the call before validation runs. Unknown kwargs raised at
-    # the cache layer would propagate before reaching the validator —
-    # but a malformed bbox is caught first.
-    with pytest.raises(STATSGOSoilsInputError):
-        fetch_statsgo_soils(
-            bbox=(0.0, 0.0, 0.0, 0.0),
-            invented_kwarg="ignored",
-            another_invented=42,
-        )
 
 
 # ---------------------------------------------------------------------------
@@ -245,17 +187,6 @@ def test_3dep_absorbs_invented_kwargs() -> None:
 
 
 @pytest.mark.skipif(not _LIVE, reason="set TRID3NT_TEST_LIVE_PFDF_A11=1 to run")
-def test_live_statsgo_fetch_kffact_fort_myers() -> None:
-    """Real STATSGO KFFACT fetch over a small CONUS bbox returns a COG URI."""
-    layer = fetch_statsgo_soils(bbox=_FORT_MYERS_BBOX, field="KFFACT")
-    assert layer.layer_type == "raster"
-    assert layer.uri.startswith("gs://")
-    assert layer.uri.endswith(".tif")
-    assert layer.units is None  # KFFACT is dimensionless
-    assert "KFFACT" in layer.name
-
-
-@pytest.mark.skipif(not _LIVE, reason="set TRID3NT_TEST_LIVE_PFDF_A11=1 to run")
 def test_live_3dep_extra_one_arc_second_fort_myers() -> None:
     """Real 3DEP 1-arc-second fetch over Fort Myers returns a COG URI."""
     layer = fetch_3dep_extra(
@@ -273,20 +204,5 @@ def test_live_3dep_extra_one_arc_second_fort_myers() -> None:
 # Direct end-to-end smoke (no cache): exercises the pfdf / NLDI plumbing
 # without touching GCS. Gated by env.
 # ---------------------------------------------------------------------------
-
-
-@pytest.mark.skipif(not _LIVE, reason="set TRID3NT_TEST_LIVE_PFDF_A11=1 to run")
-def test_live_statsgo_direct_pfdf_call() -> None:
-    """Direct pfdf.statsgo.read works for the same bbox — substrate health."""
-    pfdf = pytest.importorskip("pfdf")
-    from pfdf.data.usgs import statsgo
-    from pfdf.projection import BoundingBox
-
-    bb = BoundingBox(*_FORT_MYERS_BBOX, crs=4326)
-    raster = statsgo.read("KFFACT", bb, timeout=60)
-    assert raster is not None
-    # pfdf rasters expose ``.values`` via .raster or .values, depending on
-    # the version; just confirm the object loaded.
-    assert hasattr(raster, "save")
 
 

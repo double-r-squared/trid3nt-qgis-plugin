@@ -200,12 +200,21 @@ def test_k_fallback_constant_with_note(
     out_dir.mkdir()
 
     # No k_uri + STATSGO down -> documented constant 0.2 fallback with a note.
-    import trid3nt_server.agent.tools.fetchers.soil.fetch_statsgo_soils.fetch_statsgo_soils as statsgo_mod
+    # fetch_statsgo_soils is now a spec-driven library-delegate router tool (ADR
+    # 0074); compute_sediment_yield resolves it via TOOL_REGISTRY, so patch the
+    # registry entry's fn to simulate STATSGO being offline.
+    import dataclasses
+
+    from trid3nt_server.agent.tools import TOOL_REGISTRY
 
     def _boom(**_kw):
         raise RuntimeError("STATSGO offline (test)")
 
-    monkeypatch.setattr(statsgo_mod, "fetch_statsgo_soils", _boom)
+    monkeypatch.setitem(
+        TOOL_REGISTRY,
+        "fetch_statsgo_soils",
+        dataclasses.replace(TOOL_REGISTRY["fetch_statsgo_soils"], fn=_boom),
+    )
 
     result = compute_sediment_yield(
         bbox=BBOX,

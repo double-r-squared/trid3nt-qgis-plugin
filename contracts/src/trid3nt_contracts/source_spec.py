@@ -191,6 +191,12 @@ class GateSpec(GraceModel):
 
     conus_only: bool = False                 # bbox-intersects-CONUS (gridmet)
     max_bbox_deg2: float | None = None       # hard ceiling (esri_landcover: 8.0)
+    #: Hard ceiling on the bbox area in APPROXIMATE km^2 (WGS84, cos-lat scaled --
+    #: the ``_fetch_common._bbox_area_km2`` model). Distinct from ``max_bbox_deg2``
+    #: (raw degree^2): fetch_river_geometry's twin enforced a 5000 km^2 guardrail
+    #: on the quantized bbox, which a degree^2 ceiling cannot express identically at
+    #: varying latitude. Default (None) = no km^2 ceiling (strict no-op for priors).
+    max_bbox_km2: float | None = None
     max_stations: int | None = None          # station-timeseries only
     max_features: int | None = None          # vector only (paging cap)
 
@@ -397,6 +403,30 @@ class HookSpec(GraceModel):
     #: (declared together); no prior spec declares it (strict no-op: the router
     #: emits the plain LayerURI unchanged).
     envelope: str | None = None
+
+    #: LIBRARY-DELEGATE call (ADR 0074, generalizing the dataretrieval precedent).
+    #: ``(spec, params, *, timeout_s: float) -> features | (array, transform, crs)``.
+    #: The ONE sanctioned impurity: a source whose maintained LIBRARY owns discovery
+    #: + the socket (pfdf, HRRR-Zarr) names a registered hook that CALLS the library
+    #: and returns arrays/frames; the router keeps params/gates/stamps/cache/publish/
+    #: typed-errors. Constrained by the router: a declared timeout
+    #: (``ingest.delegate.timeout_s``) is passed in, the wrapper marks the call
+    #: library-owned in telemetry, and any library exception the hook did not itself
+    #: map to a typed router error is caught as a retryable upstream error. A vector
+    #: spec returns GeoJSON features (serialized by the shared ``vector_fgb`` writer);
+    #: a raster spec (``ingest.access: library_delegate``) returns ``(array,
+    #: transform, crs)`` (serialized by the shared COG writer). No prior spec declares
+    #: it (strict no-op).
+    delegate: str | None = None
+
+    #: LIBRARY-DELEGATE pre-cache input validation (ADR 0074). ``(spec, params) ->
+    #: None``. Runs in ``route()`` AFTER type/gate validation and BEFORE
+    #: ``read_through`` -- the source-specific input gate the declarative param/gate
+    #: surface cannot express (pfdf statsgo's exact CONUS envelope, 3dep's US bounds)
+    #: raised pre-cache / pre-network, byte-identical to the twin (which validates in
+    #: its body before read_through) and offline-testable. Generalizes the
+    #: dataretrieval ``pre_validate`` step. No prior spec declares it (strict no-op).
+    delegate_validate: str | None = None
 
     #: TRANSPORT-STATUS classification (keyed/misc wave, ADR 0071).
     #: ``(spec, status: int | None, body: str | None) -> RouterError | None``. The

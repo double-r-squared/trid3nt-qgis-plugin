@@ -255,7 +255,10 @@ from .fetchers.hydrology.fetch_noaa_nwm_streamflow import fetch_noaa_nwm_streamf
 # fetch_nws_river_forecast: data-router fold chained-resolution mode (ADR 0063) -- twin
 # DELETED, now spec-driven (source.yaml + nws_river_forecast hooks: gauges-by-bbox / single
 # detail + bounded per-gauge threshold/stageflow enrichment), registered below.
-from .fetchers.hydrology.fetch_river_geometry import fetch_river_geometry  # noqa: E402,F401
+# fetch_river_geometry: Overpass-family river fold (ADR 0074) -- twin DELETED, now
+# spec-driven (source.yaml + overpass_river build_request/parse_response hooks over the
+# http_json endpoint_fallback mirror chain); the vestigial NHDPlus HR HUC4 leg was
+# dropped (NATE-decided). Auto-registered by _register_router_specs() below.
 from .fetchers.hydrology.fetch_usgs_nwis_gauges import fetch_usgs_nwis_gauges  # noqa: E402,F401
 # fetch_usgs_water_quality: data-router fold phase-2 wave-3 (ADR 0040) -- twin
 # DELETED, now spec-driven (source.yaml + dataretrieval-delegating router),
@@ -385,7 +388,9 @@ from .fetchers.hazard.fetch_wfigs_incident import fetch_wfigs_incident  # noqa: 
 # fetch_gcn250_curve_numbers: fetcher-fold wave-8 -- twin DELETED, now spec-driven
 # (source.yaml + router direct_window), registered by _register_router_specs() below.
 from .fetchers.soil.fetch_soilgrids import fetch_soilgrids  # noqa: E402,F401
-from .fetchers.soil.fetch_statsgo_soils import fetch_statsgo_soils  # noqa: E402,F401
+# fetch_statsgo_soils: library-delegate raster fold (ADR 0074) -- twin DELETED, now
+# spec-driven (source.yaml + pfdf_statsgo delegate/validate hooks over the generic
+# library_delegate mode); auto-registered by _register_router_specs() below.
 
 # -- fetchers/_router: PROMOTED spec-driven sources (data-router fold, phase-2
 # wave 1 -- the fold's first real cut). The 5 pilots (fetch_gridmet,

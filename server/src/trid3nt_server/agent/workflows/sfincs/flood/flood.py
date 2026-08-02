@@ -92,7 +92,6 @@ from trid3nt_server.emission.pipeline_emitter import (
 from trid3nt_server.agent.tools import register_tool
 from trid3nt_server.agent.workflows.sfincs._template_card import TemplateCard
 from trid3nt_server.agent.tools.fetchers.climate.lookup_precip_return_period.lookup_precip_return_period import lookup_precip_return_period
-from trid3nt_server.agent.tools.fetchers.hydrology.fetch_river_geometry.fetch_river_geometry import fetch_river_geometry
 from trid3nt_server.agent.tools.fetchers.socioeconomic.geocode_location.geocode_location import geocode_location
 from trid3nt_server.agent.tools.fetchers.terrain.fetch_dem.fetch_dem import fetch_dem
 from trid3nt_server.agent.tools.fetchers.terrain.fetch_landcover.fetch_landcover import fetch_landcover
@@ -748,10 +747,16 @@ async def model_flood_scenario(
         # the hard dependency when v0.2 river-inflow (real ATCF surge) lands.
         river_layer: LayerURI | None
         try:
-            river_layer = fetch_river_geometry(resolved_bbox, source="nhdplus_hr")
+            # Registry seam (ADR 0074): fetch_river_geometry is now a spec-driven
+            # router tool (OSM Overpass waterways), resolved by name rather than a
+            # direct twin import (the twin was deleted with the NHDPlus HR leg).
+            from trid3nt_server.agent.tools import TOOL_REGISTRY as _TR
+
+            _river_fn = _TR["fetch_river_geometry"].fn
+            river_layer = _river_fn(bbox=resolved_bbox, source="nhdplus_hr")
             data_sources.append(
                 DataSource(
-                    name="NHDPlus HR (USGS)",
+                    name="OSM Overpass waterways",
                     uri=river_layer.uri,
                     accessed_at=datetime.now(timezone.utc),
                 )

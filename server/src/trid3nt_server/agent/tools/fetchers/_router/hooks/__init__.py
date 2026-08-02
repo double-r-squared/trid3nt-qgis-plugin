@@ -173,3 +173,7 @@ from . import usgs_groundwater_levels  # noqa: E402,F401
 # resolve + states-overlap build_request + bbox-clip/NO_MARKS parse + the
 # post-emit envelope hook (quality/type/datum breakdown -> HighWaterMarksLayerURI).
 from . import usgs_stn_hwm  # noqa: E402,F401
+# Library-delegate raster hooks (ADR 0074): pfdf USGS readers (STATSGO soils; 3DEP
+# terrain) whose maintained library owns discovery + the socket -- the delegate hook
+# calls the library and returns (array, transform, crs) for the shared COG writer.
+from . import pfdf_raster  # noqa: E402,F401

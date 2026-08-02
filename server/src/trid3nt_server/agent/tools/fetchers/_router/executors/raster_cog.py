@@ -160,6 +160,13 @@ def fetch_source_array(spec: SourceSpec, params: dict[str, Any]) -> tuple[Any, A
         return _stac_to_array(spec, params)
     if access == "stac_float":
         return _stac_float_to_array(spec, params)
+    if access == "library_delegate":
+        # ADR 0074: the delegate hook owns the library socket and returns
+        # (array, transform, crs); the constrained invoke wrapper (declared
+        # timeout + telemetry + upstream-error backstop) is the impurity boundary.
+        from . import library_delegate
+
+        return library_delegate.invoke(spec, params)
     raise router_upstream_error(
         spec.error_code_prefix, f"unknown raster access mode {access!r}"
     )

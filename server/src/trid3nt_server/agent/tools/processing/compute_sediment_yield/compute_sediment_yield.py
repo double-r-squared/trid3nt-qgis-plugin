@@ -477,7 +477,10 @@ def _load_k(
         notes.append(f"K-factor from caller-supplied k_uri ({k_uri}).")
         return k
     try:
-        from trid3nt_server.agent.tools.fetchers.soil.fetch_statsgo_soils.fetch_statsgo_soils import fetch_statsgo_soils
+        # Registry seam (ADR 0074): fetch_statsgo_soils is now a spec-driven
+        # library-delegate router tool (pfdf), resolved by name (twin deleted).
+        from trid3nt_server.agent.tools import TOOL_REGISTRY
+        fetch_statsgo_soils = TOOL_REGISTRY["fetch_statsgo_soils"].fn
 
         layer = fetch_statsgo_soils(bbox=bbox, field="KFFACT")
         local = _stage_uri_local(layer.uri, tmpdir, "k")

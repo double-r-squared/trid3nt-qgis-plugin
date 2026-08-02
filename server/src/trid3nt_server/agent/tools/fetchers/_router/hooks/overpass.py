@@ -18,6 +18,7 @@ from __future__ import annotations
 
 import json
 import math
+import re
 from typing import Any
 
 from trid3nt_contracts.source_spec import SourceSpec
@@ -30,6 +31,8 @@ __all__ = [
     "parse_response_roads",
     "build_request_pois",
     "parse_response_pois",
+    "build_request_river",
+    "parse_response_river",
 ]
 
 #: Overpass-side internal-query timeout (the ``[timeout:N]`` QL directive).
@@ -399,4 +402,159 @@ def parse_response_pois(
             f"or the tag is misspelled. Widen the area or try a different tag.",
             spec.empty_error_suffix,
         )
+    return out
+
+
+# --------------------------------------------------------------------------- #
+# fetch_river_geometry -- waterway ways -> bbox-clipped LineStrings (ADR 0074).
+#
+# The river fold's PRIMARY (and, post-0074, ONLY) source: an OSM Overpass
+# waterway query. The vestigial NHDPlus HR HUC4 FileGDB-zip fallback leg was
+# DELETED per NATE's 2026-08-01 decision (ADR 0074): its 8-envelope bbox->HUC4
+# heuristic + ~144 MB region download was effectively never reached (OSM is the
+# reliable global primary). Same textbook build_request + parse_response pair as
+# the roads member, but a ``waterway`` regex with a selectable class vocabulary.
+# --------------------------------------------------------------------------- #
+
+#: Default waterway-tag set (channel-carrying network comparable to NHDFlowline)
+#: when waterway_type resolves to empty / None. ``ditch``/``drain`` are excluded
+#: by default -- they explode feature counts in drained-agriculture / urban areas.
+_WATERWAY_CLASSES: tuple[str, ...] = ("river", "stream", "canal")
+
+#: Convenience aliases -> a class set (the twin's ``waterway_type`` vocabulary).
+_WATERWAY_TYPE_ALIASES: dict[str, tuple[str, ...]] = {
+    "default": ("river", "stream", "canal"),
+    "rivers": ("river", "stream", "canal"),
+    "channels": ("river", "stream", "canal"),
+    "drainage": ("ditch", "drain"),
+    "ditches": ("ditch", "drain"),
+    "all": ("river", "stream", "canal", "ditch", "drain"),
+}
+
+#: Closed vocabulary of individual OSM ``waterway`` values a caller may name.
+#: Anything outside this set is rejected so an LLM-invented value cannot inject
+#: arbitrary text into the Overpass ``~"^(...)$"`` regex.
+_WATERWAY_ALLOWED_VALUES: tuple[str, ...] = ("river", "stream", "canal", "ditch", "drain")
+
+#: Accepted ``source`` labels (kept for signature back-compat; both resolve to
+#: the Overpass path now the NHDPlus leg is gone). Aliases nhdplus/nhd fold in
+#: at str-param validation (spec ``params.source.aliases``).
+_RIVER_SOURCES: frozenset[str] = frozenset({"nhdplus_hr", "osm"})
+
+
+def _resolve_waterway_classes(sc: str, sfx: str, waterway_type: Any) -> tuple[str, ...]:
+    """Resolve a caller ``waterway_type`` to a validated tuple of OSM classes.
+
+    Accepts None (-> default), a convenience alias, a single value, a
+    comma/plus/space-joined string, or a list of values. De-dupes preserving
+    order; an unknown token is a typed non-retryable input error. Empty -> default.
+    """
+    if waterway_type is None:
+        return _WATERWAY_CLASSES
+    raw_tokens: list[str] = []
+    if isinstance(waterway_type, str):
+        text = waterway_type.strip().lower()
+        if not text:
+            return _WATERWAY_CLASSES
+        if text in _WATERWAY_TYPE_ALIASES:
+            return _WATERWAY_TYPE_ALIASES[text]
+        for chunk in re.split(r"[,+\s]+", text):
+            if chunk:
+                raw_tokens.append(chunk)
+    elif isinstance(waterway_type, (list, tuple)):
+        for item in waterway_type:
+            if not isinstance(item, str):
+                raise router_input_error(
+                    sc, f"waterway_type list entries must be strings; got "
+                    f"{type(item).__name__}", sfx,
+                )
+            tok = item.strip().lower()
+            if tok:
+                raw_tokens.append(tok)
+    else:
+        raise router_input_error(
+            sc, f"waterway_type must be a str or list of str; got "
+            f"{type(waterway_type).__name__}", sfx,
+        )
+    resolved: list[str] = []
+    for tok in raw_tokens:
+        if tok not in _WATERWAY_ALLOWED_VALUES:
+            raise router_input_error(
+                sc, f"unsupported waterway_type token {tok!r}; allowed OSM waterway "
+                f"values: {', '.join(_WATERWAY_ALLOWED_VALUES)} (or an alias: "
+                f"{', '.join(sorted(_WATERWAY_TYPE_ALIASES))}).", sfx,
+            )
+        if tok not in resolved:
+            resolved.append(tok)
+    return tuple(resolved) if resolved else _WATERWAY_CLASSES
+
+
+def _build_river_ql(bbox: tuple[float, float, float, float], classes: tuple[str, ...]) -> str:
+    """Overpass QL for waterway ways in ``bbox`` (corners as south,west,north,east)."""
+    min_lon, min_lat, max_lon, max_lat = bbox
+    s, w, n, e = min_lat, min_lon, max_lat, max_lon
+    classes_pipe = "|".join(classes)
+    return (
+        f"[out:json][timeout:{_OVERPASS_QL_TIMEOUT}];"
+        f"(way[\"waterway\"~\"^({classes_pipe})$\"]({s},{w},{n},{e}););"
+        f"out geom;"
+    )
+
+
+@_hooks.register_hook("overpass_river.build_request")
+def build_request_river(spec: SourceSpec, params: dict[str, Any]) -> list["_hooks.RequestPlan"]:
+    """Validate the source label + waterway class set, build the QL, one POST per mirror."""
+    sc = spec.error_code_prefix
+    sfx = spec.input_error_suffix
+    source = params.get("source")
+    if source is not None and str(source) not in _RIVER_SOURCES:
+        raise router_input_error(
+            sc, f"unsupported source={source!r}; allowed: 'nhdplus_hr' or 'osm' "
+            "(both resolve to the OSM Overpass waterway path; the NHDPlus HR leg was "
+            "removed in ADR 0074).", sfx,
+        )
+    classes = _resolve_waterway_classes(sc, sfx, params.get("waterway_type"))
+    bbox = tuple(float(v) for v in params["bbox"])
+    return _mirror_plans(spec, _build_river_ql(bbox, classes))
+
+
+@_hooks.register_hook("overpass_river.parse_response")
+def parse_response_river(
+    spec: SourceSpec, params: dict[str, Any], bodies: list[bytes]
+) -> list[dict[str, Any]]:
+    """Project waterway ways to LineStrings CLIPPED to the exact bbox (no spill).
+
+    Fills the WHOLE bbox (true per-bbox query, not a seed-connected sub-network).
+    Empty -> ``[]`` (the executor writes an honest header-only FGB; no rivers in
+    the bbox is a legitimate answer, not an error -- the twin's empty-but-valid
+    contract).
+    """
+    from shapely import clip_by_rect
+    from shapely.geometry import LineString
+
+    bbox = tuple(float(v) for v in params["bbox"])
+    min_lon, min_lat, max_lon, max_lat = bbox
+    out: list[dict[str, Any]] = []
+    for el in _elements(spec, bodies):
+        if not isinstance(el, dict) or el.get("type") != "way":
+            continue
+        coords = _way_coords(el.get("geometry"))
+        if len(coords) < 2:
+            continue
+        tags = el.get("tags") if isinstance(el.get("tags"), dict) else {}
+        try:
+            clipped = clip_by_rect(LineString(coords), min_lon, min_lat, max_lon, max_lat)
+        except Exception:  # noqa: BLE001 -- degenerate geometry drops the way
+            continue
+        props = {
+            "osm_id": el.get("id"),
+            "name": tags.get("name"),
+            "waterway": tags.get("waterway"),
+        }
+        for seg in _clip_linestring_parts(clipped):
+            out.append({
+                "type": "Feature",
+                "geometry": {"type": "LineString", "coordinates": seg},
+                "properties": dict(props),
+            })
     return out

@@ -1,0 +1,130 @@
+schema_version: v1
+name: fetch_river_geometry
+source_class: river_geometry
+input_error_suffix: INPUT_INVALID
+shape: vector-fgb
+supports_global_query: false
+endpoints:
+  data:
+    url: https://overpass-api.de/api/interpreter
+  kumi:
+    url: https://overpass.kumi.systems/api/interpreter
+  coffee:
+    url: https://overpass.private.coffee/api/interpreter
+auth:
+  mode: none
+  user_agent: trid3nt/0.1 (Hazard Modeling Agent; https://github.com/double-r-squared/trid3nt-qgis-plugin;
+    agent@trid3nt.dev)
+params:
+  bbox:
+    type: bbox
+    required: true
+    quantize: res_10
+  source:
+    type: str
+    default: nhdplus_hr
+    aliases:
+      nhdplus: nhdplus_hr
+      nhd: nhdplus_hr
+  waterway_type:
+    type: str
+    schema_optional: true
+gates:
+  max_bbox_km2: 5000.0
+hooks:
+  build_request: overpass_river.build_request
+  parse_response: overpass_river.parse_response
+ingest:
+  http_source:
+    endpoint_fallback: true
+  properties:
+  - osm_id
+  - name
+  - waterway
+normalize:
+  crs: EPSG:4326
+output:
+  layer_type: vector
+  ext: fgb
+  role: input
+  style_preset: osm_waterways
+cache:
+  ttl_class: static-30d
+payload_estimate:
+  model: per_feature
+  features_per_sq_deg: 5000.0
+  kb_per_feature: 1.0
+  floor_mb: 0.01
+caveats:
+- OpenStreetMap waterway ways (river/stream/canal by default) via the Overpass API (3-mirror fallback),
+  clipped to the exact bbox. Global, keyless. An area with no OSM waterways returns a valid 0-feature layer,
+  not an error.
+- The vestigial NHDPlus HR HUC4 FileGDB fallback leg was removed (ADR 0074, NATE-decided 2026-08-01); all
+  requests now use the OSM Overpass waterway path regardless of the source label.
+docstring: |-
+  Fetch river and stream flowline geometry for a bbox (OSM Overpass waterways).
+
+  **What it does:** Returns river/stream/canal LineStrings that fill the
+  requested bbox, as a FlatGeobuf that renders inline on the map (vector
+  path). Access pattern: a Tier-2 per-bbox OSM Overpass ``waterway`` query
+  (global, keyless), clipped to the requested bbox and cached for 30 days.
+
+  1. OSM Overpass ``waterway`` query over the bbox (river/stream/canal by
+     default). Global, true per-bbox: fills the WHOLE bbox, not just a
+     seed-connected sub-network. The request is tried across several
+     independent public Overpass mirrors in turn (data-source fallback norm).
+  2. Typed honest error if every mirror fails -- never a silent dead-end or a
+     hallucinated success.
+
+  (The NHDPlus HR HUC4 region-download fallback leg was removed in ADR 0074 --
+  its 8-envelope bbox->HUC4 heuristic + ~144 MB download was effectively never
+  reached, since OSM is the reliable global primary.)
+
+  **When to use:**
+  - SFINCS setup (``set_sfincs_parameters`` + ``run_sfincs``) needs river
+    flowlines for DEM hydro-conditioning (HydroMT's ``setup_rivers_from_dem``
+    step burns channel geometry).
+  - Fluvial flood workflow requires channel network for boundary-condition
+    placement (upstream inflow nodes, downstream outlets).
+  - User asks to visualize stream networks or watershed drainage patterns.
+  - Watershed delineation: ``delineate_watershed`` tool consumes the flowline
+    outlet point to route upstream.
+
+  **When NOT to use:**
+  - Real-time streamflow measurements -- use ``fetch_usgs_nwis_gauges``
+    (NWIS USGS gauges) for discharge time series.
+  - Flow-direction / accumulation grids -- derive from the DEM inside HydroMT.
+  - Areas larger than 5,000 km2 -- the tool enforces a guardrail to keep a
+    single fetch tractable (use a smaller bbox or a future tiled workflow).
+
+  **Parameters:**
+  - ``bbox`` (tuple[float,float,float,float]): ``(min_lon, min_lat, max_lon,
+    max_lat)`` in EPSG:4326. Max area 5,000 km2.
+  - ``source`` (str, default ``"nhdplus_hr"``): accepted for backward
+    compatibility; ``"nhdplus_hr"`` and ``"osm"`` both resolve to the OSM
+    Overpass waterway path (the NHDPlus HR leg was removed in ADR 0074).
+    Unsupported labels (e.g. ``"merit_hydro"``) raise a typed input error.
+  - ``waterway_type`` (str | list[str] | None, default ``None``): widens or
+    narrows the OSM ``waterway`` tag set. ``None`` keeps the default channel
+    network (``river``/``stream``/``canal``). Pass individual OSM values
+    (``"river"``, ``"stream"``, ``"canal"``, ``"ditch"``, ``"drain"``) singly,
+    comma/plus-joined (``"ditch,drain"``), or as a list (``["ditch", "drain"]``);
+    or a convenience alias: ``"all"`` (every class incl. ditch+drain),
+    ``"drainage"`` / ``"ditches"`` (ditch+drain only -- the artificial drainage
+    channels that dominate drained-agriculture / tiled-field landscapes), or
+    ``"default"`` / ``"rivers"`` / ``"channels"`` (river+stream+canal).
+    ``ditch``/``drain`` are opt-in because they explode feature counts in
+    agricultural/urban areas. Unknown tokens raise a typed input error.
+
+  **Returns:**
+  A ``LayerURI`` pointing at a FlatGeobuf of river/stream LineStrings in the
+  cache bucket (``s3://trid3nt-cache/cache/static-30d/river_geometry/<key>.fgb``).
+  ``layer_type="vector"``, ``role="input"``. The FlatGeobuf renders inline on
+  the map via the GeoJSON path (``add_loaded_layer``) -- it is NOT published
+  through ``publish_layer`` (that path is raster-only). Properties per feature:
+  ``osm_id`` (int), ``name`` (str | None), ``waterway`` (str).
+
+  **Cross-tool dependencies:**
+  - Upstream: ``geocode_location`` for bbox derivation.
+  - Downstream: ``set_sfincs_parameters`` / ``run_sfincs`` (river-burning DEM
+    step), ``delineate_watershed``, stream-network display in map panel.
