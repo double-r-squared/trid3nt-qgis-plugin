@@ -196,3 +196,9 @@ from . import firms_active_fire  # noqa: E402,F401
 # parse hook) + the variant_by_emptiness output switch (zero-fault AOI -> record
 # dict, non-empty -> FaultSourcesResult via the envelope hook).
 from . import fault_sources  # noqa: E402,F401
+
+# landcover + flood-extent wave (ADR 0082): fetch_flood_extent_observation (the
+# LANCE dir-walk pre_resolve + the categorical-COG envelope) and fetch_landcover
+# (the WCS GetCoverage build_request + the NLCD sidecar envelope).
+from . import flood_extent_observation  # noqa: E402,F401
+from . import landcover  # noqa: E402,F401

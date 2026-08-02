@@ -193,7 +193,7 @@ def _validate_hooks(spec: SourceSpec) -> None:
             "resolve_build", "resolve_parse", "next_page", "enrich_plan", "enrich_merge",
             "classify_status", "envelope",
             "delegate", "delegate_validate", "delegate_resolve",
-            "record",
+            "record", "pre_resolve",
         ):
             name = getattr(spec.hooks, point)
             if name and not has_hook(name):

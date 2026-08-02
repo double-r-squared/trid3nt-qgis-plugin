@@ -94,7 +94,17 @@ from trid3nt_server.agent.workflows.sfincs._template_card import TemplateCard
 from trid3nt_server.agent.tools.fetchers.climate.lookup_precip_return_period.lookup_precip_return_period import lookup_precip_return_period
 from trid3nt_server.agent.tools.fetchers.socioeconomic.geocode_location.geocode_location import geocode_location
 from trid3nt_server.agent.tools.fetchers.terrain.fetch_dem.fetch_dem import fetch_dem
-from trid3nt_server.agent.tools.fetchers.terrain.fetch_landcover.fetch_landcover import fetch_landcover
+
+
+def fetch_landcover(*args: Any, **kwargs: Any):
+    """fetch_landcover is spec-driven (ADR 0082): the twin was deleted, so this thin
+    module-level indirection resolves the promoted router closure off the registry by
+    name. Kept as a patchable module symbol for the flood-scenario consumer tests. It
+    returns a LandcoverResult (a LayerURI subclass carrying the nlcd_vintage_year
+    sidecar) -- the call site tolerates that object OR the twin's legacy dict shape."""
+    from trid3nt_server.agent.tools import TOOL_REGISTRY
+
+    return TOOL_REGISTRY["fetch_landcover"].fn(*args, **kwargs)
 from trid3nt_server.agent.tools.fetchers.ocean.fetch_topobathy.fetch_topobathy import TopobathyError, fetch_topobathy
 from trid3nt_server.agent.tools.publish_layer.publish_layer import PublishLayerError, publish_layer
 from trid3nt_server.agent.tools.simulation.solver.solver import (
@@ -726,9 +736,19 @@ async def model_flood_scenario(
                     accessed_at=datetime.now(timezone.utc),
                 )
             )
-        landcover_result = fetch_landcover(resolved_bbox, dataset="nlcd_2021")
-        landcover_layer: LayerURI = landcover_result["layer"]
-        nlcd_vintage_year = int(landcover_result.get("nlcd_vintage_year"))
+        # The promoted router closure is keyword-only (_promoted(**kwargs)); pass bbox
+        # by keyword (the twin accepted it positionally).
+        landcover_result = fetch_landcover(bbox=resolved_bbox, dataset="nlcd_2021")
+        # LandcoverResult is a LayerURI subclass: the layer IS the result, and the
+        # vintage-year sidecar is an attribute -- tolerate the twin's legacy dict too.
+        landcover_layer: LayerURI = (
+            landcover_result["layer"] if isinstance(landcover_result, dict) else landcover_result
+        )
+        _vintage = (
+            landcover_result.get("nlcd_vintage_year") if isinstance(landcover_result, dict)
+            else landcover_result.nlcd_vintage_year
+        )
+        nlcd_vintage_year = int(_vintage)
         data_sources.append(
             DataSource(
                 name=f"NLCD {nlcd_vintage_year} (MRLC WMS)",

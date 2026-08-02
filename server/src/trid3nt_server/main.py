@@ -81,7 +81,8 @@ def _import_tools_registry() -> int:
     from .agent.tools.fetchers.socioeconomic.fetch_population import fetch_population  # noqa: F401
     from .agent.tools.fetchers.socioeconomic.geocode_location import geocode_location  # noqa: F401
     from .agent.tools.fetchers.terrain.fetch_dem import fetch_dem  # noqa: F401
-    from .agent.tools.fetchers.terrain.fetch_landcover import fetch_landcover  # noqa: F401
+    # fetch_landcover is spec-driven (ADR 0082): promoted by register_specs_from_tree
+    # at agent.tools import; no eager twin import.
     # register the 2 QGIS discovery atomic tools.
     from .agent.tools.search.qgis_discovery import qgis_discovery  # noqa: F401
     # register run_solver + wait_for_completion (M5 substrate).

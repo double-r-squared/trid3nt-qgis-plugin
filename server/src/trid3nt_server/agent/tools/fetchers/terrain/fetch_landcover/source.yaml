@@ -1,0 +1,113 @@
+# Router source spec (landcover + flood-extent wave, ADR 0082).
+# Twin: fetch_landcover.py -- FOLDED via the wcs_getcoverage access mode (WCS 1.0.0
+# GetCoverage -> NLCD background(0)->nodata remap -> palette COG), the pre_resolve
+# auto-coarsen (dataset alias + vintage parse + effective-resolution + quantized bbox
+# into the cache key), and the post-emit envelope (the SFINCS Manning's sidecar ->
+# LandcoverResult). flood.py re-pointed to read .uri + .nlcd_vintage_year off the subclass.
+schema_version: v1
+name: fetch_landcover
+source_class: landcover
+error_prefix: LANDCOVER
+shape: raster-cog
+supports_global_query: false
+endpoints:
+  data:
+    url: https://www.mrlc.gov/geoserver/mrlc_display/wcs
+auth:
+  mode: none
+  user_agent: trid3nt/0.1 (Hazard Modeling Agent; https://github.com/double-r-squared/trid3nt-qgis-plugin; agent@trid3nt.dev)
+params:
+  bbox:
+    type: bbox
+    required: true
+    quantize: round_6dp
+    schema_optional: true
+  dataset:
+    type: str
+    required: false
+    default: nlcd_2021
+  resolution_m:
+    type: int
+    required: false
+    default: 30
+gates:
+  max_bbox_km2: 5000000.0
+ingest:
+  access: wcs_getcoverage
+  wcs:
+    coverage_by_year:
+      2001: mrlc_display:NLCD_2001_Land_Cover_L48
+      2004: mrlc_display:NLCD_2004_Land_Cover_L48
+      2006: mrlc_display:NLCD_2006_Land_Cover_L48
+      2008: mrlc_display:NLCD_2008_Land_Cover_L48
+      2011: mrlc_display:NLCD_2011_Land_Cover_L48
+      2013: mrlc_display:NLCD_2013_Land_Cover_L48
+      2016: mrlc_display:NLCD_2016_Land_Cover_L48
+      2019: mrlc_display:NLCD_2019_Land_Cover_L48
+      2021: mrlc_display:NLCD_2021_Land_Cover_L48
+    background_class: 0
+    image_format: GeoTIFF
+    max_px: 4000
+    timeout_s: 120.0
+hooks:
+  pre_resolve: landcover.pre_resolve
+  envelope: landcover.envelope
+normalize:
+  crs: EPSG:4326
+  units: nlcd_class_code
+output:
+  layer_type: raster
+  ext: tif
+  role: input
+  style_preset: categorical_landcover
+  result_model: LandcoverResult
+  auto_publish: false
+cache:
+  ttl_class: static-30d
+payload_estimate:
+  model: bbox_area
+  mb_per_sq_deg: 2.0
+  floor_mb: 0.1
+corpus:
+- show me land use data for South Florida
+- I need NLCD landcover for the Houston area
+- fetch land classification raster for this watershed before SFINCS setup
+- what is the land cover around the Everglades?
+- give me land-use categories for the Sacramento Valley
+- I want a landcover map for the wildland-urban interface near Chico, CA
+- show me the vegetation map for this Texas coastal plain
+- I need landcover to compute Manning's roughness for the SFINCS model
+docstring: "Fetch landcover classification raster (NLCD or ESA WorldCover) for a bbox.\n\nAccess pattern: Tier 2\
+  \ (OGC service -- MRLC WCS/WMS endpoint per §F.1.1; live\nverification found NLCD is Tier 2).\n\n**What it does:**\
+  \ Downloads an NLCD or ESA WorldCover landcover GeoTIFF\nclipped to the requested bbox via the MRLC WCS 1.0.0\
+  \ GeoServer endpoint.\nReturns a dict containing a ``LayerURI`` plus a ``nlcd_vintage_year``\nsidecar field that\
+  \ downstream SFINCS setup uses to validate Manning's\nroughness mappings before HydroMT invocation (Invariant\
+  \ 7 -- no silent\nwrong answers).\n\n**When to use:**\n- SFINCS setup (``set_sfincs_parameters`` + ``run_sfincs``)\
+  \ requires\n  landcover for Manning's roughness assignment -- this is the canonical\n  supply tool.\n- User asks\
+  \ \"what land cover exists in this area?\" for a CONUS location.\n- Exposure analysis: intersect a hazard footprint\
+  \ with impervious-surface\n  or developed-land classes.\n- Visualization using the ``categorical_landcover`` QML\
+  \ style preset.\n\n**When NOT to use:**\n- Coverage outside CONUS L48 -- NLCD covers only the 48 contiguous US\n\
+  \  states; Alaska, Hawaii, and Puerto Rico have separate MRLC layers not\n  in the v0.1 substrate.\n- Global landcover\
+  \ -- pass ``dataset=\"esa_worldcover_2021\"`` to opt into\n  the ESA WorldCover branch, but that branch currently\
+  \ raises\n  ``UpstreamAPIError`` (forward-looking).\n- Single-point landcover classification -- this tool returns\
+  \ a raster;\n  use ``extract_landcover_class`` for point lookups once it lands.\n- Continent-scale bboxes (> 5,000,000\
+  \ km^2) -- the tool raises\n  ``BboxInvalidError`` at that hard ceiling. State-scale and\n  multi-state-scale\
+  \ bboxes are served by auto-coarsening the resolution\n  (the fetch-resolution gate asks the user to confirm the\
+  \ coarsened rung\n  before the MRLC WCS GetCoverage is issued).\n\n**Parameters:**\n- ``bbox`` (tuple[float,float,float,float]):\
+  \ ``(min_lon, min_lat, max_lon,\n  max_lat)`` in EPSG:4326. Continent-scale bboxes (> 5e6 km^2) are\n  rejected;\
+  \ all other sizes are served at auto-coarsened resolution.\n- ``dataset`` (str, default ``\"nlcd_2021\"``): ``\"\
+  nlcd\"`` (default vintage)\n  or ``\"nlcd_YYYY\"`` (e.g. ``\"nlcd_2021\"``, ``\"nlcd_2019\"``,\n  ``\"nlcd_2016\"\
+  ``) or ``\"esa_worldcover_2021\"`` (forward-looking). Bare\n  ``\"nlcd\"`` and ``\"nlcd_\"`` are accepted as aliases\
+  \ for the default\n  vintage. Valid NLCD years: 2001, 2004, 2006, 2008, 2011, 2013, 2016,\n  2019, 2021.\n- ``resolution_m``\
+  \ (int, default 30): pixel grid spacing in meters.\n  The fetch-resolution gate auto-coarsens this for large bboxes\
+  \ and\n  asks the user to confirm before downloading. The native NLCD grid\n  is 30 m; coarser values (60, 120,\
+  \ 300, 600 m) are used for\n  state-scale or multi-state-scale AOIs.\n\n**Returns:**\nA dict with keys:\n- ``layer``\
+  \ (LayerURI): COG at\n  ``s3://trid3nt-cache/cache/static-30d/landcover/<key>.tif``;\n  ``style_preset=\"categorical_landcover\"\
+  ``, ``units=\"nlcd_class_code\"``.\n- ``nlcd_vintage_year`` (int): vintage year consumed by SFINCS setup\n  (``set_sfincs_parameters``)\
+  \ to validate the Manning's mapping CSV.\n- ``dataset`` (str): echo of the input dataset string for provenance.\n\
+  - ``source`` (str): ``\"mrlc-wcs\"`` for NLCD.\n- ``effective_resolution_m`` (int): actual pixel spacing used\
+  \ (equals\n  ``resolution_m`` when at native 30 m; coarser when the bbox was large).\n- ``native_resolution_m``\
+  \ (int): NLCD native resolution (30 m).\n- ``downsampled`` (bool): True when ``effective_resolution_m > native_resolution_m``.\n\
+  \n**Cross-tool dependencies:**\n- Upstream: ``geocode_location`` for bbox derivation.\n- Downstream: ``set_sfincs_parameters``\
+  \ / ``run_sfincs`` (Manning's\n  roughness), the QGIS plugin's native rendering, ``extract_landcover_class``,\n\
+  \  ``compute_impervious_surface``."

@@ -646,12 +646,13 @@ def test_live_compute_impervious_against_fort_myers_landcover():
         developed classes);
       - mean impervious fraction is < 1.0 (sanity: not all-developed).
     """
-    from trid3nt_server.agent.tools.fetchers.terrain.fetch_landcover.fetch_landcover import fetch_landcover
+    # fetch_landcover is spec-driven (ADR 0082): resolve off the registry seam; it
+    # returns a LandcoverResult (a LayerURI subclass -- the layer IS the result).
+    from trid3nt_server.agent.tools import TOOL_REGISTRY
 
     # Small Fort Myers AOI (~few hundred km²).
     bbox = (-82.10, 26.55, -81.80, 26.80)
-    lc_result = fetch_landcover(bbox=bbox, dataset="nlcd_2021")
-    landcover_layer = lc_result["layer"]
+    landcover_layer = TOOL_REGISTRY["fetch_landcover"].fn(bbox=bbox, dataset="nlcd_2021")
     assert landcover_layer.uri.startswith("gs://")
 
     # Run the impervious tool against the cached landcover URI.

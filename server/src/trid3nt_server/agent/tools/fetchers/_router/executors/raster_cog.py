@@ -158,6 +158,8 @@ def fetch_source_array(spec: SourceSpec, params: dict[str, Any]) -> tuple[Any, A
         return _griddap_to_array(spec, params)
     if access == "fixed_tile_grid":
         return _fixed_tile_grid_to_array(spec, params)
+    if access == "categorical_tile_grid":
+        return _categorical_tile_grid_to_array(spec, params)
     if access == "stac_search":
         return _stac_to_array(spec, params)
     if access == "stac_float":
@@ -1119,6 +1121,239 @@ def _fixed_tile_grid_to_array(spec: SourceSpec, params: dict[str, Any]) -> tuple
                 d.close()
             except Exception:  # noqa: BLE001
                 pass
+
+
+# --------------------------------------------------------------------------- #
+# wcs_getcoverage: a WCS 1.0.0 GetCoverage templated GET of a CATEGORICAL coverage
+# (NLCD via the MRLC GeoServer) returning the canonical class integers in the band
+# (NOT palette indices) -> a NLCD background(0)->nodata pixel remap -> a palette COG
+# (embedded band-1 color table preserved). The coverage id resolves from the vintage
+# year (declarative map); the effective resolution + quantized bbox are the pre_resolve
+# auto-coarsen (merged into params before the cache key). The GET runs through the
+# shared ogc adapter (the twin's Tier-2 WCS seam), the ONE sanctioned socket for this
+# mode. ``execute`` bakes the source's embedded palette into the serialized COG. MRLC
+# NLCD (ADR 0082).
+# --------------------------------------------------------------------------- #
+
+
+def _wcs_getcoverage_to_array(spec: SourceSpec, params: dict[str, Any]) -> tuple[Any, Any, Any, dict | None, float | None]:
+    """WCS 1.0.0 GetCoverage GET + NLCD background(0)->nodata remap (ADR 0082).
+
+    Returns ``(array uint8, transform, crs, colormap|None, nodata)``. The MRLC WCS
+    embedded color table maps class 0 (Background / no-coverage: open ocean,
+    international waters) to opaque black rather than transparent, and 0 is NEVER a
+    legitimate NLCD code (real codes are 11-95), so every 0-valued pixel is folded
+    into the raster's declared nodata sentinel (already-transparent) -- the twin's
+    ``_fix_nlcd_background_transparency`` at the pixel level. A missing coverage /
+    non-TIFF body -> typed UPSTREAM.
+    """
+    import math
+
+    import numpy as np
+    import rasterio
+    from rasterio.io import MemoryFile
+
+    from trid3nt_server.agent.tools.search.ogc_adapter import OGCAdapterError, fetch_ogc_layer
+
+    ingest = spec.ingest or {}
+    w = ingest.get("wcs", {})
+    bbox = tuple(float(v) for v in params["bbox"])
+    vintage_year = int(params["vintage_year"])
+    res_m = max(1, int(params["resolution_m"]))
+    background_class = int(w.get("background_class", 0))
+
+    coverage_by_year = {int(k): v for k, v in (w.get("coverage_by_year") or {}).items()}
+    coverage = coverage_by_year.get(vintage_year)
+    if coverage is None:
+        raise router_upstream_error(
+            spec.error_code_prefix,
+            f"NLCD vintage year {vintage_year} not in the WCS catalog "
+            f"(available: {sorted(coverage_by_year)}).",
+        )
+
+    # WCS 1.0.0 GetCoverage requires explicit WIDTH/HEIGHT; size the pixel grid to
+    # the bbox at the effective resolution, clamped to the MRLC ~4000 px/axis cap.
+    min_lon, min_lat, max_lon, max_lat = bbox
+    mid_lat = 0.5 * (min_lat + max_lat)
+    m_per_deg_lon = 111_320.0 * math.cos(math.radians(mid_lat))
+    max_px = int(w.get("max_px", 4000))
+    width_px = max(16, min(max_px, int(round((max_lon - min_lon) * m_per_deg_lon / res_m))))
+    height_px = max(16, min(max_px, int(round((max_lat - min_lat) * 111_320.0 / res_m))))
+
+    endpoint = spec.endpoints.get("data") or next(iter(spec.endpoints.values()))
+    wcs_url = endpoint.url or endpoint.url_template or ""
+    ua = spec.auth.user_agent if spec.auth else "trid3nt_default"
+    try:
+        resp = fetch_ogc_layer(
+            url=wcs_url, layer_name=coverage, bbox=bbox, crs="EPSG:4326",
+            service_type="WCS", image_format=str(w.get("image_format", "GeoTIFF")),
+            version="1.0.0", width_px=width_px, height_px=height_px,
+            timeout_s=float(w.get("timeout_s", 120.0)), user_agent=ua,
+        )
+    except OGCAdapterError as exc:
+        raise router_upstream_error(
+            spec.error_code_prefix, f"MRLC WCS GetCoverage failed for coverage={coverage} bbox={bbox}: {exc}"
+        )
+    ct = (resp.content_type or "").lower()
+    if "tiff" not in ct and "geotiff" not in ct:
+        raise router_upstream_error(
+            spec.error_code_prefix,
+            f"MRLC WCS returned unexpected content-type={resp.content_type!r} for coverage={coverage} "
+            f"bbox={bbox}; body preview: {resp.content[:200]!r}",
+        )
+
+    with MemoryFile(resp.content) as mem, mem.open() as src:
+        arr = src.read(1)
+        transform = src.transform
+        crs = src.crs
+        try:
+            colormap = src.colormap(1)
+        except (ValueError, KeyError):
+            colormap = None
+        src_nodata = src.nodata
+
+    target_nodata = float(background_class) if src_nodata is None else float(src_nodata)
+    if int(target_nodata) != background_class:
+        arr = arr.copy()
+        arr[arr == background_class] = int(target_nodata)
+    return np.asarray(arr, dtype="uint8"), transform, crs, colormap, target_nodata
+
+
+# --------------------------------------------------------------------------- #
+# categorical_tile_grid: a global CATEGORICAL raster cut into a fixed h/v degree
+# grid of per-tile direct-GET GeoTIFFs (NASA LANCE MCDWD flood tiles), each a
+# uint8 class raster (NOT zip-wrapped, NOT continuous). The first-valid-wins uint8
+# mosaic + embedded palette variant of ``fixed_tile_grid`` (continuous NaN-merge)
+# ADR 0077 named: per-10-deg-tile GeoTIFF -> nearest-window -> FIRST-VALID uint8
+# mosaic. The (year, doy) drive the per-tile URL and are resolved pre-cache-key by
+# the ``pre_resolve`` dir-walk hook (merged into params). ``execute`` serializes
+# the returned uint8 array with the declarative palette (nodata transparent). A
+# missing tile (404) is a coverage gap (skip); an all-nodata mosaic -> typed EMPTY.
+# NASA LANCE MCDWD_L3_F3_NRT (ADR 0082).
+# --------------------------------------------------------------------------- #
+
+
+def _ctg_tile_bounds(h: int, v: int, tile_deg: float) -> tuple[float, float, float, float]:
+    """(west, south, east, north) of an h{hh}v{vv} tile (twin ``_tile_bounds``)."""
+    west = -180.0 + tile_deg * h
+    north = 90.0 - tile_deg * v
+    return (west, north - tile_deg, west + tile_deg, north)
+
+
+def _ctg_tiles_for_bbox(
+    bbox: tuple[float, float, float, float], g: dict[str, Any]
+) -> list[tuple[int, int]]:
+    """The (h, v) tiles overlapping ``bbox`` clamped to the grid (twin ``_tiles_for_bbox``)."""
+    import math
+
+    tile_deg = float(g.get("tile_deg", 10.0))
+    h_max = int(g.get("h_max", 35))
+    v_max = int(g.get("v_max", 17))
+    west, south, east, north = bbox
+    h0 = max(0, int(math.floor((west + 180.0) / tile_deg)))
+    h1 = min(h_max, int(math.floor((east + 180.0) / tile_deg)))
+    v0 = max(0, int(math.floor((90.0 - north) / tile_deg)))
+    v1 = min(v_max, int(math.floor((90.0 - south) / tile_deg)))
+    return [(h, v) for v in range(v0, v1 + 1) for h in range(h0, h1 + 1)]
+
+
+def _ctg_read_tile_window(
+    tile_bytes: bytes, bbox: tuple[float, float, float, float],
+    width_px: int, height_px: int, nodata: int,
+) -> Any:
+    """Reproject+window a tile's band-1 to EPSG:4326 at ``bbox`` nearest -> uint8
+    (H, W), ``nodata`` filling no-data pixels (twin ``_read_tile_window``)."""
+    import numpy as np
+    import rasterio
+    from rasterio.io import MemoryFile
+    from rasterio.warp import Resampling, reproject
+
+    with MemoryFile(tile_bytes) as mem, mem.open() as src:
+        dst_transform = rasterio.transform.from_bounds(
+            bbox[0], bbox[1], bbox[2], bbox[3], width_px, height_px
+        )
+        dst = np.full((height_px, width_px), nodata, dtype="uint8")
+        src_nodata = src.nodata if src.nodata is not None else nodata
+        reproject(
+            source=rasterio.band(src, 1), destination=dst,
+            src_transform=src.transform, src_crs=src.crs,
+            dst_transform=dst_transform, dst_crs="EPSG:4326",
+            resampling=Resampling.nearest, src_nodata=src_nodata, dst_nodata=nodata,
+        )
+    return dst
+
+
+def _categorical_tile_grid_to_array(spec: SourceSpec, params: dict[str, Any]) -> tuple[Any, Any, Any]:
+    """Direct-GET per-tile categorical GeoTIFF + first-valid uint8 mosaic (ADR 0082).
+
+    For each covering h/v tile: GET the ``{archive}/{year}/{doy}/{fname}`` object
+    through the shared transport (404 -> skip, a coverage gap), reproject-window its
+    band-1 to ``bbox`` nearest (uint8), and paste its non-nodata pixels where the
+    mosaic is still nodata (FIRST-VALID wins -- the twin's tile order). An all-nodata
+    / no-tile mosaic -> typed EMPTY (honest no-coverage). Any non-404 tile fetch or
+    read failure -> typed UPSTREAM. Returns ``(mosaic uint8, transform, "EPSG:4326")``;
+    ``execute`` bakes the declarative palette into the serialized COG.
+    """
+    import numpy as np
+    import rasterio
+
+    from ..transport import (
+        TransportError,
+        TransportNotFound,
+        get_bytes,
+        get_client,
+    )
+
+    ingest = spec.ingest or {}
+    g = ingest.get("categorical_tile_grid", {})
+    bbox = tuple(float(v) for v in params["bbox"])
+    nodata = int(g.get("nodata", 255))
+    cell_deg = float(g.get("cell_deg", 10.0 / 4800.0))
+    year = int(params["year"])
+    doy = int(params["doy"])
+
+    archive = str(g.get("archive_url", "")).rstrip("/")
+    product = str(g.get("product", ""))
+    fname_tmpl = str(g.get("fname_template", "{product}.A{year}{doy:03d}.h{h:02d}v{v:02d}.061.tif"))
+    ua = spec.auth.user_agent if spec.auth else "trid3nt_default"
+
+    width_px = max(1, round((bbox[2] - bbox[0]) / cell_deg))
+    height_px = max(1, round((bbox[3] - bbox[1]) / cell_deg))
+    dst_transform = rasterio.transform.from_bounds(
+        bbox[0], bbox[1], bbox[2], bbox[3], width_px, height_px
+    )
+
+    mosaic = np.full((height_px, width_px), nodata, dtype="uint8")
+    filled = np.zeros((height_px, width_px), dtype=bool)
+    for h, v in _ctg_tiles_for_bbox(bbox, g):
+        fname = fname_tmpl.format(product=product, year=year, doy=doy, h=h, v=v)
+        url = f"{archive}/{year}/{doy:03d}/{fname}"
+        try:
+            tile_bytes, _ct, _u = get_bytes(get_client(), url, headers={"User-Agent": ua})
+        except TransportNotFound:
+            continue  # a missing tile is a coverage gap (twin: b"" -> skip)
+        except TransportError as exc:
+            raise router_upstream_error(spec.error_code_prefix, f"MCDWD tile fetch failed url={url}: {exc}")
+        if not tile_bytes:
+            continue
+        try:
+            arr = _ctg_read_tile_window(tile_bytes, bbox, width_px, height_px, nodata)
+        except Exception as exc:  # noqa: BLE001
+            raise router_upstream_error(spec.error_code_prefix, f"MCDWD tile read failed: {exc}")
+        valid = (arr != nodata) & (~filled)
+        if bool(valid.any()):
+            mosaic[valid] = arr[valid]
+            filled |= valid
+
+    if not bool(filled.any()):
+        raise router_empty_error(
+            spec.error_code_prefix,
+            f"no coverage over bbox={tuple(round(x, 3) for x in bbox)} for {year}-{doy:03d} "
+            "(no tile downloaded, or every pixel is insufficient-data/cloud). Try a nearby "
+            "date or a different AOI.",
+            spec.empty_error_suffix,
+        )
+    return mosaic, dst_transform, "EPSG:4326"
 
 
 def _imageserver_size(bbox: tuple[float, float, float, float], ingest: dict[str, Any]) -> tuple[int, int]:
@@ -2143,6 +2378,26 @@ def execute(spec: SourceSpec, params: dict[str, Any]) -> bytes:
         dtype = str(ingest.get("dtype", "uint8"))
         return array_to_cog_bytes(
             arr, transform, crs, nodata=nodata, dtype=dtype, colormap=colormap
+        )
+    if access == "categorical_tile_grid":
+        # ADR 0082: a uint8 categorical first-valid mosaic + the declarative palette
+        # baked into a 256-entry band-1 color table (nodata index transparent) --
+        # value-identical to the twin's ``_fetch_flood_extent_cog_bytes`` COG.
+        g = (spec.ingest or {}).get("categorical_tile_grid", {})
+        nodata = int(g.get("nodata", 255))
+        arr, transform, crs = _categorical_tile_grid_to_array(spec, params)
+        colors = {int(k): tuple(int(c) for c in v) for k, v in (g.get("colors") or {}).items()}
+        colormap = {i: colors.get(i, (0, 0, 0, 0)) for i in range(256)}
+        return array_to_cog_bytes(
+            arr, transform, crs, nodata=nodata, dtype="uint8", colormap=colormap
+        )
+    if access == "wcs_getcoverage":
+        # ADR 0082: WCS 1.0.0 GetCoverage categorical NLCD -> background(0)->nodata
+        # remap -> palette COG (the source's embedded band-1 color table preserved,
+        # nodata transparent) -- the twin's paletted, overview-carrying landcover COG.
+        arr, transform, crs, colormap, nodata = _wcs_getcoverage_to_array(spec, params)
+        return array_to_cog_bytes(
+            arr, transform, crs, nodata=nodata, dtype="uint8", colormap=colormap
         )
     arr, transform, crs = fetch_source_array(spec, params)
     # serialize directive (wave-8): a float source that writes a NON-NaN nodata

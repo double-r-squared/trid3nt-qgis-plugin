@@ -37,6 +37,8 @@ __all__ = [
     "LayerURI",
     "HighWaterMarksLayerURI",
     "FaultSourcesResult",
+    "FloodExtentObservationResult",
+    "LandcoverResult",
     "LAYER_RESULT_MODELS",
 ]
 
@@ -330,12 +332,67 @@ class FaultSourcesResult(LayerURI):
     note: str | None = None
 
 
+class FloodExtentObservationResult(LayerURI):
+    """The observed (MODIS MCDWD) flood-extent ``LayerURI`` plus the observation envelope.
+
+    Extra fields beyond ``LayerURI`` (the ``fetch_flood_extent_observation``
+    envelope, computed post-serialize from the produced categorical COG by
+    ``hooks.flood_extent_observation.envelope``):
+
+    - ``product`` -- the LANCE product id (``MCDWD_L3_F3_NRT``).
+    - ``observation_date`` -- the resolved 3-day-composite date (ISO).
+    - ``class_breakdown`` -- ``{class_label: pixel_count}`` (nodata excluded).
+    - ``flood_pixel_count`` / ``flood_area_km2`` -- classes 2 + 3.
+    - ``caveats`` -- SAR/optical detection-limit + 250 m resolution + NRT-provisional.
+    - ``notes`` -- provenance detail.
+    """
+
+    product: str = "MCDWD_L3_F3_NRT"
+    observation_date: str | None = None
+    class_breakdown: dict[str, int] = {}
+    flood_pixel_count: int = 0
+    flood_area_km2: float | None = None
+    caveats: list[str] = []
+    notes: list[str] = []
+
+
+class LandcoverResult(LayerURI):
+    """The NLCD landcover ``LayerURI`` plus the Manning's-validation sidecar.
+
+    Extra fields beyond ``LayerURI`` (the ``fetch_landcover`` sidecar, computed by
+    ``hooks.landcover.envelope``). ``LayerURI`` is a FROZEN ``extra="forbid"``
+    contract, so the NLCD vintage year cannot live on it -- the twin returned a
+    ``{"layer": LayerURI, "nlcd_vintage_year": ...}`` dict for exactly this reason;
+    the subclass carries the sidecar directly instead, and the SFINCS builder reads
+    ``.uri`` + ``.nlcd_vintage_year`` off it (Invariant 7: no silent wrong answers).
+
+    - ``nlcd_vintage_year`` -- the vintage year the SFINCS setup validates the
+      Manning's-roughness mapping CSV against (None for ESA WorldCover).
+    - ``dataset`` -- echo of the resolved dataset string ("nlcd_2021").
+    - ``source`` -- provenance ("mrlc-wcs").
+    - ``effective_resolution_m`` -- the pixel spacing actually delivered.
+    - ``native_resolution_m`` -- NLCD native (30 m).
+    - ``downsampled`` -- True when coarsened above native for a large AOI.
+    - ``downsampling_note`` -- honest coarsening caveat (None at native res).
+    """
+
+    nlcd_vintage_year: int | None = None
+    dataset: str = "nlcd_2021"
+    source: str = "mrlc-wcs"
+    effective_resolution_m: int = 30
+    native_resolution_m: int = 30
+    downsampled: bool = False
+    downsampling_note: str | None = None
+
+
 #: name -> LayerURI-subclass. A spec's ``output.result_model`` string resolves
 #: here; the router builds the named subclass from the base LayerURI + the
 #: envelope hook's field dict. Empty of a name -> the plain LayerURI (no-op).
 LAYER_RESULT_MODELS: dict[str, type[LayerURI]] = {
     "HighWaterMarksLayerURI": HighWaterMarksLayerURI,
     "FaultSourcesResult": FaultSourcesResult,
+    "FloodExtentObservationResult": FloodExtentObservationResult,
+    "LandcoverResult": LandcoverResult,
 }
 
 

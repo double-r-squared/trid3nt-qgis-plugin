@@ -242,7 +242,8 @@ from .fetchers.weather.fetch_storm_tracks import fetch_storm_tracks  # noqa: E40
 # -- fetchers/hydrology --
 from .fetchers.hydrology.fetch_cama_flood_discharge import fetch_cama_flood_discharge  # noqa: E402,F401
 # V&V wave (ADR 0021, lane C): observed flood-validation data fetchers.
-from .fetchers.hydrology.fetch_flood_extent_observation import fetch_flood_extent_observation  # noqa: E402,F401
+# fetch_flood_extent_observation FOLDED to a spec-driven surface (ADR 0082): its
+# source.yaml + categorical_tile_grid mode is promoted by register_specs_from_tree.
 # fetch_high_water_marks FOLDED to a spec-driven surface (ADR 0073): its source.yaml
 # + usgs_stn_hwm hooks register at import via register_specs_from_tree (envelope hook).
 from .fetchers.hydrology.fetch_jrc_global_surface_water import fetch_jrc_global_surface_water  # noqa: E402,F401
@@ -291,7 +292,8 @@ from .fetchers.ocean.fetch_topobathy import fetch_topobathy  # noqa: E402,F401
 from .fetchers.terrain.fetch_dem import fetch_dem  # noqa: E402,F401
 # fetch_esri_landcover_10m: data-router fold pilot -- twin DELETED, now spec-driven
 # (source.yaml + router), registered by _register_router_specs() below.
-from .fetchers.terrain.fetch_landcover import fetch_landcover  # noqa: E402,F401
+# fetch_landcover FOLDED to a spec-driven surface (ADR 0082): its source.yaml +
+# wcs_getcoverage mode + sidecar envelope is promoted by register_specs_from_tree.
 
 # -- fetchers/imagery --
 from .fetchers.imagery.fetch_goes_active_fire import fetch_goes_active_fire  # noqa: E402,F401

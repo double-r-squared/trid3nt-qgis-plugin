@@ -659,6 +659,14 @@ def route(spec: SourceSpec, raw_params: dict[str, Any]) -> LayerURI | dict[str, 
     if spec.hooks is not None and spec.hooks.resolve_build:
         from .executors import chained_resolution
         params = chained_resolution.pre_resolve(spec, params)
+    # Generic pre-cache-key resolve (ADR 0082): a source whose cache key depends on a
+    # value resolved over the shared HTTP transport (the LANCE MCDWD year->doy dir-walk
+    # for a date=None latest request) names a pure-ish pre_resolve hook. Runs BEFORE
+    # read_through so the resolved value enters the cache key (a non-deterministic key
+    # otherwise forever serves the first-cached day). No-op unless the spec declares it.
+    if spec.hooks is not None and spec.hooks.pre_resolve:
+        from .hooks import resolve_hook
+        params = {**params, **resolve_hook(spec.hooks.pre_resolve)(spec, params)}
     executor = select_executor(spec)
 
     # Record-return path (ADR 0076): a ``shape: record`` source caches its JSON dict

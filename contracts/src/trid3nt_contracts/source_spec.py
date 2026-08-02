@@ -500,6 +500,20 @@ class HookSpec(GraceModel):
     #: prior spec declares it (strict no-op).
     delegate_resolve: str | None = None
 
+    #: GENERIC PRE-CACHE-KEY resolve (landcover + flood-extent wave, ADR 0082).
+    #: ``(spec, params) -> dict``. A source whose cache key depends on a value that
+    #: must be resolved from the network BEFORE ``read_through`` -- but over the
+    #: shared HTTP transport, NOT a library socket (the ``delegate_resolve`` sibling
+    #: for keyless HTTP) -- names this hook. It runs in ``route()`` AFTER type/gate
+    #: validation and BEFORE ``read_through``; its returned dict MERGES into
+    #: ``params`` so the resolved value enters the cache key (a ``date=None``
+    #: latest-available request would otherwise compute a non-deterministic key and
+    #: forever serve the first-cached day). Two resolvers exist as socket delegates
+    #: (``delegate_resolve``) and single-round HTTP (``resolve_build``/``_parse``);
+    #: this is the multi-step HTTP dir-walk case (the LANCE MCDWD year->doy listing
+    #: walk) neither expresses. No prior spec declares it (strict no-op).
+    pre_resolve: str | None = None
+
     #: TRANSPORT-STATUS classification (keyed/misc wave, ADR 0071).
     #: ``(spec, status: int | None, body: str | None) -> RouterError | None``. The
     #: http_json transport collapses every non-2xx to a retryable UPSTREAM error;

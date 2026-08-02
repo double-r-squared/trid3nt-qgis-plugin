@@ -738,31 +738,44 @@ def test_fetch_landcover_routes_through_generic_ogc_adapter(monkeypatch):
     a future refactor can't accidentally fork the WCS implementation
     without this test catching it.
     """
-    from trid3nt_server.agent.tools.fetchers.terrain.fetch_landcover import fetch_landcover as data_fetch
+    # fetch_landcover is spec-driven (ADR 0082): the WCS GetCoverage GET lives in the
+    # router's wcs_getcoverage access mode, still the shared ogc adapter (Tier-2 SoT).
+    import numpy as np
+    import rasterio
+    from rasterio.io import MemoryFile
 
+    from trid3nt_server.agent.tools.fetchers._router import router as _router
+    from trid3nt_server.agent.tools.fetchers._router.spec import compose_specs_from_tree
+
+    spec = compose_specs_from_tree()["fetch_landcover"]
     captured: dict = {}
 
-    def _fake_fetch_ogc_layer(
-        url, layer_name, bbox, **kwargs
-    ):
-        captured["url"] = url
-        captured["layer_name"] = layer_name
-        captured["bbox"] = bbox
-        captured["service_type"] = kwargs.get("service_type")
-        captured["version"] = kwargs.get("version")
-        captured["image_format"] = kwargs.get("image_format")
-        return OGCResponse(
-            content=b"\x49\x49\x2a\x00" + b"\x00" * 256,
-            content_type="image/tiff",
-            service_type=kwargs.get("service_type"),
-            url=url,
-            status_code=200,
-        )
+    def _synth_nlcd(bbox):
+        arr = np.full((16, 16), 41, dtype="uint8")
+        tr = rasterio.transform.from_bounds(*bbox, 16, 16)
+        with MemoryFile() as mem:
+            with mem.open(driver="GTiff", height=16, width=16, count=1, dtype="uint8",
+                          crs="EPSG:4326", transform=tr, nodata=255) as dst:
+                dst.write(arr, 1)
+            return mem.read()
+
+    def _fake_fetch_ogc_layer(url, layer_name, bbox, **kwargs):
+        captured.update(url=url, layer_name=layer_name, bbox=bbox,
+                        service_type=kwargs.get("service_type"),
+                        version=kwargs.get("version"),
+                        image_format=kwargs.get("image_format"))
+        return OGCResponse(content=_synth_nlcd(bbox), content_type="image/tiff",
+                           service_type=kwargs.get("service_type"), url=url, status_code=200)
 
     monkeypatch.setattr(ogc_mod, "fetch_ogc_layer", _fake_fetch_ogc_layer)
 
-    out = data_fetch._fetch_nlcd_landcover_bytes(FORT_MYERS_BBOX, 2021)
-    assert isinstance(out, bytes) and len(out) > 4
+    from trid3nt_server.agent.tools.cache import ReadThroughResult
+    monkeypatch.setattr(_router, "read_through",
+                        lambda metadata, params, ext, fetch_fn, **kw: ReadThroughResult(
+                            uri="s3://fake/landcover.tif", data=fetch_fn(), hit=False))
+
+    out = _router.route(spec, {"bbox": list(FORT_MYERS_BBOX), "dataset": "nlcd_2021", "resolution_m": 30})
+    assert out.uri.startswith("s3://")
     assert captured["service_type"] == "WCS"
     assert captured["version"] == "1.0.0"
     assert captured["image_format"] == "GeoTIFF"
