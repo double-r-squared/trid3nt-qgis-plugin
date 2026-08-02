@@ -171,8 +171,9 @@ def _fetch_population_layer(
 
 def _fetch_buildings_layer(bbox: tuple[float, float, float, float]) -> Any:
     """Building-footprint vector ``LayerURI`` (the fetch_buildings seam)."""
-    from trid3nt_server.agent.tools.fetchers.socioeconomic.fetch_buildings.fetch_buildings import fetch_buildings
+    from trid3nt_server.agent.tools import TOOL_REGISTRY
 
+    fetch_buildings = TOOL_REGISTRY["fetch_buildings"].fn
     return fetch_buildings(bbox=bbox)
 
 

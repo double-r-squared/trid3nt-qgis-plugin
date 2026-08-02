@@ -112,12 +112,19 @@ def test_resolve_building_obstacle_true_degrades_on_fetch_failure(monkeypatch) -
     Same degrade policy as river geometry (job-0307): a footprint-fetch failure
     must NOT kill the flood — the deck just omits obstacles.
     """
-    import trid3nt_server.agent.tools.fetchers.socioeconomic.fetch_buildings.fetch_buildings as data_fetch
+    # fetch_buildings folded to the router (ADR 0084): the consumer resolves it via
+    # TOOL_REGISTRY["fetch_buildings"].fn, so swap that entry's fn.
+    import dataclasses
+
+    from trid3nt_server.agent.tools import TOOL_REGISTRY
 
     def _boom(*_a, **_k):
         raise RuntimeError("overpass down")
 
-    monkeypatch.setattr(data_fetch, "fetch_buildings", _boom)
+    monkeypatch.setitem(
+        TOOL_REGISTRY, "fetch_buildings",
+        dataclasses.replace(TOOL_REGISTRY["fetch_buildings"], fn=_boom),
+    )
     ds: list = []
     assert _resolve_building_obstacle_uri(True, (-85.4, 29.9, -85.3, 30.0), ds) is None
     assert ds == []  # nothing recorded on failure
@@ -125,12 +132,17 @@ def test_resolve_building_obstacle_true_degrades_on_fetch_failure(monkeypatch) -
 
 def test_resolve_building_obstacle_true_records_source_on_success(monkeypatch) -> None:
     """A successful OSM footprint fetch returns its URI + records a DataSource."""
-    import trid3nt_server.agent.tools.fetchers.socioeconomic.fetch_buildings.fetch_buildings as data_fetch
+    import dataclasses
+
+    from trid3nt_server.agent.tools import TOOL_REGISTRY
 
     class _Layer:
         uri = "s3://cache/buildings.fgb"
 
-    monkeypatch.setattr(data_fetch, "fetch_buildings", lambda *_a, **_k: _Layer())
+    monkeypatch.setitem(
+        TOOL_REGISTRY, "fetch_buildings",
+        dataclasses.replace(TOOL_REGISTRY["fetch_buildings"], fn=lambda *_a, **_k: _Layer()),
+    )
     ds: list = []
     uri = _resolve_building_obstacle_uri(True, (-85.4, 29.9, -85.3, 30.0), ds)
     assert uri == "s3://cache/buildings.fgb"

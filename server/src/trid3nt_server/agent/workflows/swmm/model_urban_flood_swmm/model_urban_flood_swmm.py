@@ -242,8 +242,9 @@ def _fetch_buildings_for_urban(
     per memory project_building_footprints_source). Returns the GeoJSON
     FeatureCollection dict, or ``None`` on failure (footprints are an enhancement,
     not a hard gate - the mesh still builds without obstructions)."""
-    from trid3nt_server.agent.tools.fetchers.socioeconomic.fetch_buildings.fetch_buildings import fetch_buildings
+    from trid3nt_server.agent.tools import TOOL_REGISTRY
 
+    fetch_buildings = TOOL_REGISTRY["fetch_buildings"].fn
     try:
         layer = fetch_buildings(bbox, source="osm")
     except Exception as exc:  # noqa: BLE001 - buildings are optional

@@ -936,8 +936,9 @@ def _resolve_building_obstacle_uri(
         return building_obstacles
     # building_obstacles is True → fetch OSM footprints (best-effort).
     try:
-        from trid3nt_server.agent.tools.fetchers.socioeconomic.fetch_buildings.fetch_buildings import fetch_buildings  # local: keep top imports lean
+        from trid3nt_server.agent.tools import TOOL_REGISTRY  # local: keep top imports lean
 
+        fetch_buildings = TOOL_REGISTRY["fetch_buildings"].fn
         layer = fetch_buildings(bbox, source="osm")
         uri = getattr(layer, "uri", None)
         if uri:

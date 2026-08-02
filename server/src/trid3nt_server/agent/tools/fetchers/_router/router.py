@@ -529,6 +529,14 @@ def select_executor(spec: SourceSpec) -> Callable[[SourceSpec, dict[str, Any]], 
     if spec.hooks is not None and (spec.hooks.next_page or spec.hooks.enrich_plan):
         from .executors import chained_resolution
         return chained_resolution.execute
+    # Sidecar-write path (trigger wave, ADR 0084): an overpass source that ALSO writes
+    # ONE declared sidecar object next to the .fgb (fetch_buildings' tags.json). Routes
+    # to the overpass_sidecar executor (build_request QL + a (features, tags) parse +
+    # the constrained side write). MUST win over the http_json build_request branch
+    # below (it also declares build_request). No-op for every prior spec.
+    if (spec.ingest or {}).get("sidecar_write"):
+        from .executors import overpass_sidecar
+        return overpass_sidecar.execute
     # Tier-3 hook-driven path (ADR 0056): a spec that names a build_request hook
     # routes to the http_json executor (source-specific request + parse via named
     # pure hooks). No-op for every prior spec (none declare hooks).

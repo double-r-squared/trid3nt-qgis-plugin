@@ -56,19 +56,24 @@ def select_variable(spec: SourceSpec, params: dict[str, Any]) -> tuple[str, dict
     """
     join_block = spec.join or {}
     variables = (join_block.get("values") or {}).get("variables") or {}
-    requested = params.get("variable")
+    # variable_param (ADR 0084): the request param carrying the variable/segment name
+    # (default "variable"; lehd_jobs names it "segment"). No-op for census (default).
+    variable_param = join_block.get("variable_param", "variable")
+    requested = params.get(variable_param)
     if not isinstance(requested, str) or not requested.strip():
         raise router_input_error(
             spec.error_code_prefix,
-            f"variable must be a non-empty string; got {requested!r}",
+            f"{variable_param} must be a non-empty string; got {requested!r}",
             spec.input_error_suffix,
         )
     key = requested.strip()
     low = key.lower()
     if low in variables:
         return low, dict(variables[low])
-    # Raw ACS estimate-code passthrough (full fidelity, NATE-chosen).
-    if is_raw_passthrough_code(key):
+    # Raw ACS estimate-code passthrough (full fidelity, NATE-chosen). allow_raw_code
+    # (ADR 0084) gates it OFF for a closed-vocabulary source (lehd segments), whose
+    # unknown value must raise the twin's plain enum error. Default True = census.
+    if join_block.get("allow_raw_code", True) and is_raw_passthrough_code(key):
         code = key.upper()
         table = code.split("_", 1)[0]
         return code, {"table": table, "code": code, "kind": "value", "units": "count"}
@@ -127,6 +132,7 @@ def join_on_key(
     var_spec: dict[str, Any],
     *,
     null_floor: float | None = None,
+    params: dict[str, Any] | None = None,
 ) -> list[dict[str, Any]]:
     """Left-join ``values_by_key`` onto ``geom_features`` by the join key (pure).
 
@@ -137,6 +143,12 @@ def join_on_key(
     key_field = geom_cfg.get("key_field", "GEOID")
     keep = geom_cfg.get("keep", [])
     units = var_spec.get("units")
+    # value_field (ADR 0084): the property carrying the variable/segment label
+    # (default "variable"; lehd_jobs -> "segment"). extra_props: static param-echo
+    # columns ({prop: {param: <name>}}) the twin stamps beyond the join (lehd year).
+    # Both default to census's exact schema (no-op).
+    value_field = join_block.get("value_field", "variable")
+    extra_props = join_block.get("extra_props") or {}
 
     out: list[dict[str, Any]] = []
     for feat in geom_features:
@@ -150,12 +162,15 @@ def join_on_key(
         rec = values_by_key.get(key) if key is not None else None
         out_props: dict[str, Any] = {
             "geoid": key,
-            "variable": var_name,
+            value_field: var_name,
             "value": compute_value(var_spec, rec, null_floor=null_floor),
             "units": units,
         }
         for k in keep:
             out_props[str(k).lower()] = props.get(k)
+        for prop_name, src in extra_props.items():
+            if isinstance(src, dict) and "param" in src:
+                out_props[str(prop_name)] = (params or {}).get(src["param"])
         out.append({"type": "Feature", "geometry": geom, "properties": out_props})
     return out
 
@@ -193,6 +208,13 @@ def fetch_values(
 
     join_block = spec.join or {}
     values_cfg = join_block.get("values") or {}
+    # values_hook (ADR 0084): a source whose values leg is NOT the census Data-API
+    # (lehd's per-state bulk gzip-CSV) declares a pure plan+parse hook pair. The
+    # transport (the plan GETs) + honesty stay router-owned here; the hooks only
+    # build the requests and decode the bytes. No-op for census (no values_hook).
+    vhook = values_cfg.get("values_hook")
+    if vhook:
+        return _fetch_values_via_hook(spec, scope_keys, var_spec, params, vhook)
     endpoint = spec.endpoints.get(values_cfg.get("endpoint", "values"))
     if endpoint is None:
         raise router_upstream_error(spec.error_code_prefix, "missing values endpoint")
@@ -220,6 +242,32 @@ def fetch_values(
             continue
         _accumulate_values(out, rows, codes, values_cfg, null_floor)
     return out
+
+
+def _fetch_values_via_hook(
+    spec: SourceSpec,
+    scope_keys: list[tuple[str, ...]],
+    var_spec: dict[str, Any],
+    params: dict[str, Any],
+    vhook: dict[str, Any],
+) -> dict[str, dict[str, float | None]]:
+    """Values leg via the declared plan+parse hooks; router owns the I/O (ADR 0084).
+
+    ``plan(spec, scope_keys, var_spec, params) -> [(scope_key, RequestPlan)]`` is pure;
+    the transport GETs each plan (a whole-object gzip, best-effort skipped on failure so
+    one bad state never fabricates or aborts the whole join); ``parse(spec,
+    {scope_key: bytes}, var_spec, params) -> {join_key: {code: value}}`` decodes.
+    """
+    from ..executors.http_json import _get
+    from ..hooks import resolve_hook
+
+    plan_hook = resolve_hook(vhook["plan"])
+    parse_hook = resolve_hook(vhook["parse"])
+    plans = plan_hook(spec, scope_keys, var_spec, params)
+    bodies: dict[str, bytes] = {}
+    for scope_key, plan in plans:
+        bodies[scope_key] = _get(spec, plan)
+    return parse_hook(spec, bodies, var_spec, params)
 
 
 def _build_values_query(spec, endpoint, codes, scope, params) -> dict[str, str]:
@@ -279,6 +327,6 @@ def execute(spec: SourceSpec, params: dict[str, Any]) -> bytes:
     values_by_key = fetch_values(spec, sorted(scopes), var_spec, params)
     joined = join_on_key(
         geom_features, values_by_key, join_block, var_name, var_spec,
-        null_floor=null_floor,
+        null_floor=null_floor, params=params,
     )
-    return vector_fgb.features_to_fgb_bytes(joined, spec)
+    return vector_fgb.features_to_fgb_bytes(joined, spec, params)

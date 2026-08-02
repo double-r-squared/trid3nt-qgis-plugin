@@ -77,7 +77,8 @@ def _import_tools_registry() -> int:
     from .agent.tools.fetchers.climate.lookup_precip_return_period import lookup_precip_return_period  # noqa: F401
     # fetch_river_geometry: Overpass-family river fold (ADR 0074) -- twin DELETED, now
     # spec-driven; auto-registered by the router spec tree walk, no eager twin import.
-    from .agent.tools.fetchers.socioeconomic.fetch_buildings import fetch_buildings  # noqa: F401
+    # fetch_buildings: sidecar-write fold (ADR 0084) -- twin DELETED, now spec-driven
+    # (promoted by register_specs_from_tree at agent.tools import); no eager twin import.
     from .agent.tools.fetchers.socioeconomic.fetch_population import fetch_population  # noqa: F401
     from .agent.tools.fetchers.socioeconomic.geocode_location import geocode_location  # noqa: F401
     from .agent.tools.fetchers.terrain.fetch_dem import fetch_dem  # noqa: F401

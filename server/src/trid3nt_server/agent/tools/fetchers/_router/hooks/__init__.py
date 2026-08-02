@@ -214,3 +214,10 @@ from . import hrrr  # noqa: E402,F401
 # STOP refuted; the pushdown is library-owned, not a router transport). Pure pre_resolve
 # dataset-selection + a delegate read hook returning WGS84 polygon features.
 from . import field_boundaries  # noqa: E402,F401
+# trigger wave (ADR 0084): fetch_lehd_jobs -- the join VALUES-hook seam (the per-state
+# LODES bulk gzip-CSV values leg the census Data-API join.values leg cannot express).
+# Two PURE hooks (values_plan / values_parse); the join transform owns the I/O.
+from . import lehd_jobs  # noqa: E402,F401
+# trigger wave (ADR 0084): fetch_buildings -- Overpass build_request + a (features,
+# tags) parse for the overpass_sidecar executor's constrained tags-sidecar side write.
+from . import buildings  # noqa: E402,F401

@@ -36,7 +36,19 @@ These tests PROVE, with NO live solve:
 from __future__ import annotations
 
 from datetime import datetime, timezone
+import dataclasses
 from unittest.mock import AsyncMock, MagicMock, patch
+
+
+def _registry_fetch_buildings_patch(mock):
+    """fetch_buildings folded to the router (ADR 0084): the consumer resolves it via
+    ``TOOL_REGISTRY['fetch_buildings'].fn``, so swap that entry's ``fn`` with ``mock``."""
+    from trid3nt_server.agent.tools import TOOL_REGISTRY
+
+    entry = TOOL_REGISTRY["fetch_buildings"]
+    return patch.dict(
+        TOOL_REGISTRY, {"fetch_buildings": dataclasses.replace(entry, fn=mock)}
+    )
 
 import pytest
 
@@ -301,10 +313,7 @@ async def test_inland_with_buildings_passes_uri_and_subgrid() -> None:
         # fetch_buildings is a LOCAL import inside _resolve_building_obstacle_uri,
         # so patch it at its source module.
         stack.enter_context(
-            patch(
-                "trid3nt_server.agent.tools.fetchers.socioeconomic.fetch_buildings.fetch_buildings.fetch_buildings",
-                return_value=_buildings_layer(),
-            )
+            _registry_fetch_buildings_patch(MagicMock(return_value=_buildings_layer()))
         )
         envelope = await model_flood_scenario(
             bbox=_INLAND_BBOX,
@@ -345,12 +354,8 @@ async def test_inland_default_off_no_buildings_no_subgrid() -> None:
     with contextlib.ExitStack() as stack:
         for p in patches:
             stack.enter_context(p)
-        fb = stack.enter_context(
-            patch(
-                "trid3nt_server.agent.tools.fetchers.socioeconomic.fetch_buildings.fetch_buildings.fetch_buildings",
-                return_value=_buildings_layer(),
-            )
-        )
+        fb = MagicMock(return_value=_buildings_layer())
+        stack.enter_context(_registry_fetch_buildings_patch(fb))
         await model_flood_scenario(
             bbox=_INLAND_BBOX,
             return_period_yr=100,
@@ -390,9 +395,8 @@ async def test_inland_buildings_fetch_failure_degrades_to_no_obstacles() -> None
         for p in patches:
             stack.enter_context(p)
         stack.enter_context(
-            patch(
-                "trid3nt_server.agent.tools.fetchers.socioeconomic.fetch_buildings.fetch_buildings.fetch_buildings",
-                side_effect=RuntimeError("Overpass 504 gateway timeout"),
+            _registry_fetch_buildings_patch(
+                MagicMock(side_effect=RuntimeError("Overpass 504 gateway timeout"))
             )
         )
         envelope = await model_flood_scenario(

@@ -1255,19 +1255,28 @@ def _read_tags_from_sidecars(fid: str) -> dict[str, Any] | None:
         import boto3
 
         from .agent.tools.cache import CACHE_BUCKET, cache_path
-        from .agent.tools.fetchers.socioeconomic.fetch_buildings.fetch_buildings import BUILDINGS_TAGS_SIDECAR_EXT, _FETCH_BUILDINGS_METADATA
+        # fetch_buildings folded to the router (ADR 0084): the sidecar identity
+        # (source_class / ttl / .tags.json ext) now lives in the promoted spec, not a
+        # coded twin. Read it from the spec, falling back to the load-bearing literals
+        # so a cold spec registry never breaks the enrich read.
+        from .agent.tools.fetchers._router.registration import get_spec
     except Exception:  # noqa: BLE001 -- import wiring fault -> live fallback
         logger.warning("building-detail: sidecar import wiring failed", exc_info=True)
         return None
 
+    _spec = get_spec("fetch_buildings")
+    if _spec is not None:
+        source_class = _spec.source_class
+        ttl_class = _spec.cache.ttl_class
+        sidecar_ext = str(((_spec.ingest or {}).get("sidecar_write") or {}).get("ext", "tags.json"))
+    else:
+        source_class, ttl_class, sidecar_ext = "buildings", "static-30d", "tags.json"
+
     bucket = os.environ.get("TRID3NT_CACHE_BUCKET") or CACHE_BUCKET
-    meta = _FETCH_BUILDINGS_METADATA
     # Derive the buildings/<...> prefix from cache_path with a placeholder key.
-    sentinel = cache_path(
-        meta.source_class, meta.ttl_class, "KEY", BUILDINGS_TAGS_SIDECAR_EXT
-    )
+    sentinel = cache_path(source_class, ttl_class, "KEY", sidecar_ext)
     prefix = sentinel.rsplit("KEY", 1)[0]  # cache/static-30d/buildings/
-    suffix = f".{BUILDINGS_TAGS_SIDECAR_EXT}"
+    suffix = f".{sidecar_ext}"
     try:
         s3 = boto3.client(
             "s3", region_name=os.environ.get("AWS_REGION", "us-west-2")

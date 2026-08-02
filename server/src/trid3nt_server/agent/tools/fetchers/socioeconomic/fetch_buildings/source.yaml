@@ -1,0 +1,90 @@
+# Router source spec (trigger wave, ADR 0084) -- OSM building footprints + tags sidecar.
+# Twin: fetch_buildings.py (Overpass polygon fetch + a click-to-enrich .tags.json S3
+# side write). Folds onto the overpass_sidecar executor: build_request QL + a
+# (features, tags) parse + the constrained sibling-of-the-.fgb sidecar write.
+schema_version: v1
+name: fetch_buildings
+source_class: buildings
+error_prefix: BUILDINGS
+input_error_suffix: INPUT_ERROR
+empty_error_suffix: EMPTY
+shape: vector-fgb
+supports_global_query: false
+endpoints:
+  overpass:
+    url: https://overpass-api.de/api/interpreter
+auth:
+  mode: none
+  user_agent: trid3nt/0.1 (Hazard Modeling Agent; https://github.com/double-r-squared/trid3nt-qgis-plugin;
+    agent@trid3nt.dev)
+params:
+  bbox:
+    type: bbox
+    required: true
+    quantize: res_10
+  source:
+    type: enum
+    default: osm
+    values:
+    - osm
+    - msft
+gates:
+  max_bbox_km2: 5000.0
+hooks:
+  build_request: buildings.build_request
+ingest:
+  sidecar_write:
+    ext: tags.json
+    parse: buildings.parse
+  properties:
+  - osm_id
+  - osm_type
+  - fid
+normalize:
+  crs: EPSG:4326
+  quantity: building_footprints
+output:
+  layer_type: vector
+  ext: fgb
+  role: input
+  style_preset: affected_buildings
+  emit_bbox: false
+cache:
+  ttl_class: static-30d
+payload_estimate:
+  model: bbox_area
+  mb_per_sq_deg: 30.0
+  floor_mb: 0.01
+caveats:
+- OSM Overpass building footprints (ways + multipolygon relations) intersecting the bbox, kept whole (never
+  clipped)
+- the dead msft/abfs GeoParquet leg is flag-not-copy; source='msft' resolves to the OSM Overpass path
+  (Overpass is the reliable source)
+- the full OSM tag bag per footprint is written to a sibling .tags.json sidecar consumed by /api/building-detail;
+  the inline FGB is slim (osm_id/osm_type/fid)
+- an AOI with no OSM building footprints -> BUILDINGS_EMPTY (honest typed empty)
+docstring: "Fetch building footprints (polygons) for a bbox.\n\nUse this when: the agent needs building\
+  \ polygons for damage / exposure\nestimation, risk scoring, or display of the built environment.\n\n\
+  Sources (data-source fallback norm -- primary → fallback, never a silent\ndead-end):\n    - ``\"osm\"\
+  `` (DEFAULT, RELIABLE PRIMARY): OpenStreetMap building\n      footprints via the Overpass API. Global,\
+  \ free, no API key. Returns\n      building ``Polygon``s (closed ways) and ``MultiPolygon``s\n     \
+  \ (multipolygon relations with holes), clipped to the exact bbox.\n      This is the dependable path\
+  \ -- use it unless you have a specific\n      reason to prefer MS.\n    - ``\"msft\"`` (BEST-EFFORT\
+  \ FALLBACK): Microsoft Open Maps ML-derived\n      footprints via the Planetary Computer STAC catalog.\
+  \ Wider rural\n      coverage in some areas, but the public catalog often exposes only\n      ``abfs://``\
+  \ GeoParquet stores that cannot be downloaded by-asset, so\n      this path frequently fails -- treat\
+  \ it as best-effort only.\n\nRobustness: whichever ``source`` you request is tried FIRST; if it raises\n\
+  an ``UpstreamAPIError`` (upstream failure, no coverage, empty result), the\ntool automatically FALLS\
+  \ BACK to the other source. If BOTH fail, an honest\n``UpstreamAPIError`` naming both attempts is raised\
+  \ -- the agent never\nreceives a fabricated success. The cache key reflects the source actually\nused,\
+  \ so the two sources never collide and a fallback result is cached\nunder its real source.\n\nDo NOT\
+  \ use this for: live address/parcel lookups (those need a different\ncadastral source); per-structure\
+  \ replacement cost / occupancy / HAZUS\nattributes for loss modeling (use ``fetch_usace_nsi`` -- the\
+  \ National\nStructure Inventory point tool -- instead); 3D building heights (heights\nare a separate\
+  \ dataset); querying buildings by name or use class (filter\npost-fetch).\n\nParams:\n    bbox: ``(min_lon,\
+  \ min_lat, max_lon, max_lat)`` in EPSG:4326.\n    source: ``\"osm\"`` (default, reliable primary) or\
+  \ ``\"msft\"``\n        (best-effort fallback). The requested source is tried first; the\n        tool\
+  \ falls back to the other on ``UpstreamAPIError``.\n\nReturns:\n    A ``LayerURI`` (``layer_type=\"\
+  vector\"``) pointing at a FlatGeobuf in\n    the cache bucket:\n    ``s3://trid3nt-cache/cache/static-30d/buildings/<key>.fgb``.\n\
+  \    The ``name`` and ``layer_id`` reflect the source actually used.\n\nFR-CE-8: The fetch is routed\
+  \ through ``read_through`` so identical\nquantized-bbox + source calls reuse the cached artifact."

@@ -340,7 +340,9 @@ from .fetchers.climate.lookup_precip_return_period import lookup_precip_return_p
 # twin DELETED, now spec-driven (source.yaml + admin_boundaries.build_request FIPS
 # planner + the zip_vector whole-object extract executor), registered by
 # _register_router_specs() below.
-from .fetchers.socioeconomic.fetch_buildings import fetch_buildings  # noqa: E402,F401
+# fetch_buildings: sidecar-write fold (trigger wave, ADR 0084) -- twin DELETED, now
+# spec-driven (source.yaml + buildings.build_request/parse hooks + the overpass_sidecar
+# executor's constrained tags.json side write), promoted by _register_router_specs().
 # fetch_cdc_svi: data-router fold phase-2 wave-2 -- twin DELETED, now spec-driven
 # (source.yaml + router), registered by _register_router_specs() below.
 # fetch_census_acs: data-router fold pilot -- twin DELETED, now spec-driven
@@ -358,7 +360,9 @@ from .fetchers.socioeconomic.fetch_buildings import fetch_buildings  # noqa: E40
 # per-tile ZIP extract mode), registered by _register_router_specs() below.
 # fetch_hrsl_population: data-router fold phase-2 wave-9 (ADR 0055) -- twin
 # DELETED, now spec-driven (source.yaml + multi_url VRT fan-out), auto-registered.
-from .fetchers.socioeconomic.fetch_lehd_jobs import fetch_lehd_jobs  # noqa: E402,F401
+# fetch_lehd_jobs: join VALUES-hook fold (trigger wave, ADR 0084) -- twin DELETED,
+# now spec-driven (source.yaml + join transform + lehd_jobs.values_plan/values_parse
+# for the per-state LODES bulk gzip-CSV values leg), promoted by _register_router_specs().
 # fetch_overpass_pois + fetch_roads_osm: Overpass-family fold (ADR 0070) -- twins
 # DELETED, now spec-driven (source.yaml + overpass build_request/parse_response
 # hooks over the http_json endpoint_fallback mirror chain), auto-registered by
