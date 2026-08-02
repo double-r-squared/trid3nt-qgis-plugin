@@ -36,6 +36,7 @@ __all__ = [
     "LegendKey",
     "LayerURI",
     "HighWaterMarksLayerURI",
+    "FaultSourcesResult",
     "LAYER_RESULT_MODELS",
 ]
 
@@ -305,11 +306,36 @@ class HighWaterMarksLayerURI(LayerURI):
     notes: list[str] = []
 
 
+class FaultSourcesResult(LayerURI):
+    """The GEM active-fault trace ``LayerURI`` plus the kinematic source records.
+
+    Extra fields beyond ``LayerURI`` (the ``fetch_fault_sources`` envelope,
+    computed post-serialize from the produced FGB by ``hooks.fault_sources.envelope``):
+
+    - ``catalog`` -- the source catalog ("gem").
+    - ``fault_count`` -- number of fault-source records (== ``len(faults)``).
+    - ``faults`` -- the kinematic source records (geometry trace + slip rate +
+      dip / rake / seismogenic-depth band) the OpenQuake deck builder turns into
+      ``simpleFaultSource`` sources.
+    - ``source`` -- provenance string.
+    - ``note`` -- always ``None`` on this (non-empty, rendered) path; the empty
+      AOI degrade returns a plain dict with a populated ``note`` instead (the
+      ``output.variant_by_emptiness`` switch).
+    """
+
+    catalog: str = "gem"
+    fault_count: int = 0
+    faults: list[dict] = []
+    source: str = "GEM Global Active Faults (harmonized)"
+    note: str | None = None
+
+
 #: name -> LayerURI-subclass. A spec's ``output.result_model`` string resolves
 #: here; the router builds the named subclass from the base LayerURI + the
 #: envelope hook's field dict. Empty of a name -> the plain LayerURI (no-op).
 LAYER_RESULT_MODELS: dict[str, type[LayerURI]] = {
     "HighWaterMarksLayerURI": HighWaterMarksLayerURI,
+    "FaultSourcesResult": FaultSourcesResult,
 }
 
 

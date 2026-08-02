@@ -362,7 +362,10 @@ from .fetchers.socioeconomic.fetch_population import fetch_population  # noqa: E
 from .fetchers.socioeconomic.geocode_location import geocode_location  # noqa: E402,F401
 
 # -- fetchers/hazard --
-from .fetchers.hazard.fetch_fault_sources import fetch_fault_sources  # noqa: E402,F401
+# fetch_fault_sources: finisher-mechanisms wave (ADR 0081) -- twin DELETED, now
+# spec-driven (source.yaml + fault_sources build_request/parse_response/envelope
+# hooks + the constant_cache two-tier cache + the variant_by_emptiness output
+# switch), auto-registered by _register_router_specs() below.
 # fetch_firms_active_fire: quick-folds wave (ADR 0079) -- twin DELETED, now spec-driven
 # (source.yaml + firms_active_fire keyed CSV http_json hooks), auto-registered.
 # fetch_hifld_critical_infrastructure: data-router fold pilot -- twin DELETED, now

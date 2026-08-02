@@ -291,6 +291,20 @@ def _fault_result(faults, note=None):
     }
 
 
+def _patch_fetch(*, return_value=None):
+    """Swap the fetch_fault_sources REGISTRY SEAM (folded, ADR 0081) -- the consumer
+    resolves TOOL_REGISTRY["fetch_fault_sources"].fn (a frozen RegisteredTool)."""
+    import dataclasses
+
+    from unittest.mock import MagicMock, patch
+
+    from trid3nt_server.agent.tools import TOOL_REGISTRY
+
+    mock = MagicMock(return_value=return_value)
+    entry = dataclasses.replace(TOOL_REGISTRY["fetch_fault_sources"], fn=mock)
+    return patch.dict(TOOL_REGISTRY, {"fetch_fault_sources": entry}), mock
+
+
 def _seismic_layer(run_id="BATCHRID"):
     return SeismicHazardLayerURI(
         layer_id=f"seismic-hazard-{run_id}",
@@ -357,15 +371,12 @@ def _wire_seismic_mocks(monkeypatch):
 async def test_composer_emits_fault_input_when_real_faults(monkeypatch):
     """When real faults are used, the composer surfaces a role="input" fault
     VECTOR layer (the fault_sources.geojson) on the emitter."""
-    import trid3nt_server.agent.tools.fetchers.hazard.fetch_fault_sources.fetch_fault_sources as ff
-
     _wire_seismic_mocks(monkeypatch)
     emitter = _emitter()
     token = _CURRENT_EMITTER.set(emitter)
+    fetch_cm, _ = _patch_fetch(return_value=_fault_result([_FAULT_REC]))
     try:
-        with patch.object(
-            ff, "fetch_fault_sources", return_value=_fault_result([_FAULT_REC])
-        ), patch(
+        with fetch_cm, patch(
             "trid3nt_server.emission.pipeline_emitter._read_vector_uri_as_geojson",
             return_value=fault_records_to_feature_collection([_FAULT_REC]),
         ):
@@ -390,16 +401,12 @@ async def test_composer_emits_fault_input_when_real_faults(monkeypatch):
 async def test_composer_emits_no_fault_input_when_no_real_faults(monkeypatch):
     """When NO real fault intersects the AOI, the composer emits NO fault input
     layer (nothing extra surfaced)."""
-    import trid3nt_server.agent.tools.fetchers.hazard.fetch_fault_sources.fetch_fault_sources as ff
-
     _wire_seismic_mocks(monkeypatch)
     emitter = _emitter()
     token = _CURRENT_EMITTER.set(emitter)
+    fetch_cm, _ = _patch_fetch(return_value=_fault_result([], note="No GEM faults in this AOI."))
     try:
-        with patch.object(
-            ff, "fetch_fault_sources",
-            return_value=_fault_result([], note="No GEM faults in this AOI."),
-        ):
+        with fetch_cm:
             await seismic.model_seismic_hazard_scenario(
                 OpenQuakeRunArgs(bbox=_BBOX), compute_class="standard"
             )

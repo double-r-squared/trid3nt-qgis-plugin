@@ -191,3 +191,8 @@ from . import slider_timestamps  # noqa: E402,F401
 # quick-folds wave (ADR 0079): FIRMS active-fire keyed CSV http_json -- key in the
 # URL path, 200-with-error-body auth split in parse_response + classify_status.
 from . import firms_active_fire  # noqa: E402,F401
+# finisher-mechanisms wave (ADR 0081): GEM active faults -- the constant_cache
+# two-tier cache (whole-world 10.6 MB GeoJSON downloaded once, AOI-filtered in the
+# parse hook) + the variant_by_emptiness output switch (zero-fault AOI -> record
+# dict, non-empty -> FaultSourcesResult via the envelope hook).
+from . import fault_sources  # noqa: E402,F401

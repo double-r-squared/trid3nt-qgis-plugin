@@ -201,6 +201,13 @@ def _validate_hooks(spec: SourceSpec) -> None:
                     f"spec {spec.name!r} references unknown hook {point}={name!r}"
                 )
 
+    # variant_by_emptiness (ADR 0081): the emptiness-switch hook name must resolve.
+    vbe = spec.output.variant_by_emptiness
+    if vbe and not has_hook(vbe):
+        raise HookResolutionError(
+            f"spec {spec.name!r} references unknown variant_by_emptiness hook {vbe!r}"
+        )
+
     # record shape (ADR 0076): a record source MUST declare hooks.record (the router
     # has nothing else to shape the dict); a delegate_resolve pairs with a delegate.
     if spec.output.layer_type == "record":

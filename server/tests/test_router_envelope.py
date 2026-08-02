@@ -91,12 +91,13 @@ def test_hwm_spec_declares_envelope_and_result_model():
 
 
 def test_envelope_is_strict_no_op_for_priors():
-    """Exactly one spec declares an envelope hook (the HWM fold); every other
-    spec leaves envelope + result_model unset (strict no-op)."""
-    with_env = [s.name for s in _SPECS.values() if s.hooks is not None and s.hooks.envelope]
-    with_rm = [s.name for s in _SPECS.values() if s.output.result_model]
-    assert with_env == ["fetch_high_water_marks"]
-    assert with_rm == ["fetch_high_water_marks"]
+    """Only the envelope folds declare an envelope hook + result_model (HWM, ADR
+    0073; fault_sources, ADR 0081); every other spec leaves both unset (no-op)."""
+    envelope_folds = {"fetch_high_water_marks", "fetch_fault_sources"}
+    with_env = {s.name for s in _SPECS.values() if s.hooks is not None and s.hooks.envelope}
+    with_rm = {s.name for s in _SPECS.values() if s.output.result_model}
+    assert with_env == envelope_folds
+    assert with_rm == envelope_folds
 
 
 def test_validate_rejects_unknown_result_model():

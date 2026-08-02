@@ -217,19 +217,23 @@ async def test_model_seismic_hazard_scenario_mocked_dispatch(monkeypatch):
     # (no network). The synthetic-fallback path is the default here; the
     # real-fault wiring has its own dedicated suite
     # (test_seismic_real_fault_wiring.py).
-    import trid3nt_server.agent.tools.fetchers.hazard.fetch_fault_sources.fetch_fault_sources as ff
+    # fetch_fault_sources folded to the registry seam (ADR 0081): swap the frozen
+    # RegisteredTool for one carrying the synthetic-fallback stub fn.
+    import dataclasses
 
-    monkeypatch.setattr(
-        ff,
-        "fetch_fault_sources",
-        lambda bbox, **_k: {
-            "catalog": "gem",
-            "bbox": list(bbox),
-            "fault_count": 0,
-            "faults": [],
-            "note": "No GEM active faults intersect this AOI.",
-            "source": "GEM Global Active Faults (harmonized)",
-        },
+    from trid3nt_server.agent.tools import TOOL_REGISTRY
+
+    _stub = lambda bbox=None, **_k: {
+        "catalog": "gem",
+        "bbox": list(bbox),
+        "fault_count": 0,
+        "faults": [],
+        "note": "No GEM active faults intersect this AOI.",
+        "source": "GEM Global Active Faults (harmonized)",
+    }
+    monkeypatch.setitem(
+        TOOL_REGISTRY, "fetch_fault_sources",
+        dataclasses.replace(TOOL_REGISTRY["fetch_fault_sources"], fn=_stub),
     )
 
     # Stub run_solver -> a fake handle; wait_for_completion -> a complete result.

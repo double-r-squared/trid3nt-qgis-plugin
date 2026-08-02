@@ -239,14 +239,17 @@ def resolve_fault_sources(
     Only the caller's malformed bbox would surface upstream (already validated by
     ``OpenQuakeRunArgs``), so in practice this always returns cleanly.
     """
-    from trid3nt_server.agent.tools.fetchers.hazard.fetch_fault_sources.fetch_fault_sources import (
-        FaultSourcesError,
-        fetch_fault_sources,
-    )
+    # fetch_fault_sources is now spec-driven (ADR 0081): resolve the router closure
+    # off the registry seam (TOOL_REGISTRY[name].fn) and catch the router's typed
+    # FetchError base -- byte-identical A.6 codes (FAULT_SOURCES_*), zero twin import.
+    from trid3nt_server.agent.tools import TOOL_REGISTRY
+    from trid3nt_server.agent.tools.fetchers._fetch_common import FetchError
+
+    fetch_fault_sources = TOOL_REGISTRY["fetch_fault_sources"].fn
 
     try:
-        result = fetch_fault_sources(list(bbox))
-    except FaultSourcesError as exc:
+        result = fetch_fault_sources(bbox=list(bbox))
+    except FetchError as exc:
         logger.warning(
             "resolve_fault_sources: fault fetch failed bbox=%s (%s); "
             "falling back to the synthetic area source",

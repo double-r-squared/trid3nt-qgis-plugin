@@ -683,6 +683,16 @@ def route(spec: SourceSpec, raw_params: dict[str, Any]) -> LayerURI | dict[str, 
         fetch_fn=lambda: executor(spec, params),
     )
     assert result.uri is not None, "router source is cacheable; uri must be set"
+    # variant_by_emptiness (ADR 0081): a source whose non-empty path is a
+    # renderable LayerURI but whose empty-AOI degrade is a bare record dict + typed
+    # note (fetch_fault_sources' honesty gate: a zero-fault AOI is NEVER given a
+    # layer). When the produced vector FGB is feature-empty the named hook returns
+    # the record dict, which route() returns INSTEAD of the LayerURI. No-op unless
+    # the spec declares it (a non-empty fetch always takes the LayerURI path below).
+    vbe = spec.output.variant_by_emptiness
+    if vbe is not None and result.data is not None and _fgb_feature_count(result.data) == 0:
+        from .hooks import resolve_hook
+        return resolve_hook(vbe)(spec, params)
     layer = build_layer_uri(spec, params, result.uri)
     # bbox_from_features (ADR 0056): stamp the camera bbox from the emitted vector
     # features' extent (point-event fetchers auto-zoom to the events). Read from
@@ -738,6 +748,35 @@ def _apply_envelope(
         safe = {k: v for k, v in extra.items() if k in base_fields}
         return layer.model_copy(update=safe) if safe else layer
     return cls(**{**layer.model_dump(), **extra})
+
+
+def _fgb_feature_count(data: bytes) -> int:
+    """The number of features in an FGB (0 for a header-only honest-empty FGB).
+
+    Used by the ``output.variant_by_emptiness`` switch to decide whether the
+    fetch was empty (return the record dict) or non-empty (return the LayerURI).
+    An unreadable FGB counts as non-empty (-> the LayerURI path) so a read hiccup
+    never silently swallows a real fetch into the empty-record degrade.
+    """
+    import os
+    import tempfile
+
+    import geopandas as gpd
+
+    tmp: str | None = None
+    try:
+        with tempfile.NamedTemporaryFile(suffix=".fgb", delete=False, prefix="trid3nt_router_cnt_") as f:
+            tmp = f.name
+            f.write(data)
+        return int(len(gpd.read_file(tmp)))
+    except Exception:  # noqa: BLE001 -- an unreadable FGB is treated as non-empty
+        return 1
+    finally:
+        if tmp is not None:
+            try:
+                os.unlink(tmp)
+            except OSError:
+                pass
 
 
 def _extent_from_fgb(data: bytes, pad: float) -> tuple[float, float, float, float] | None:

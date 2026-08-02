@@ -151,13 +151,48 @@ def _fetch_paged(spec: SourceSpec, params: dict[str, Any], build: Any, paging: d
     return bodies
 
 
+def _fetch_constant_cache(spec: SourceSpec, plans: list[RequestPlan], cc: dict[str, Any]) -> list[bytes]:
+    """Fetch each plan through an INNER constant-key ``read_through`` (ADR 0081).
+
+    The two-tier cache: a source whose bespoke body is "download ONE big
+    whole-world file once, then filter it per-AOI in the parse hook" (the GEM GAF
+    10.6 MB harmonized GeoJSON) declares ``ingest.constant_cache``. The plan bytes
+    are cached under a CONSTANT key (``{"file": cc.file_id}``, independent of the
+    AOI), so distinct AOIs share one cached download -- the naive-fold per-AOI
+    re-download regression (ADR 0077) is impossible. The OUTER ``read_through`` in
+    ``route()`` still caches the small AOI-filtered FGB per AOI. No-op unless the
+    spec declares ``constant_cache``.
+    """
+    from ....cache import read_through
+    from ..router import synthesize_metadata
+
+    metadata = synthesize_metadata(spec)
+    ext = str(cc.get("ext", "bin"))
+    file_id = str(cc.get("file_id") or spec.source_class)
+    bodies: list[bytes] = []
+    for plan in plans:
+        res = read_through(
+            metadata=metadata,
+            params={"file": file_id},
+            ext=ext,
+            fetch_fn=lambda p=plan: _get(spec, p),
+        )
+        assert res.data is not None, "constant_cache source is cacheable; data must be set"
+        bodies.append(res.data)
+    return bodies
+
+
 def fetch_bodies(spec: SourceSpec, params: dict[str, Any]) -> list[bytes]:
     """Resolve the request plan(s) via the build hook and GET the response body/bodies.
 
-    Three modes, by declared ``ingest.http_source``: ``paging`` walks pages;
+    Modes by declared ``ingest.http_source``: ``paging`` walks pages;
     ``endpoint_fallback`` treats the plans as a first-success-wins mirror chain
     (the Overpass 3-mirror fallback, the spec fallback-chain); the default fetches
     every plan and joins them at parse (a static multi-endpoint set).
+
+    ``ingest.constant_cache`` (ADR 0081) wraps the plan fetch in an INNER
+    constant-key ``read_through`` so a whole-world source file is downloaded once
+    and re-filtered per AOI (the two-tier cache) instead of re-downloaded per AOI.
     """
     build = resolve_hook(spec.hooks.build_request)  # type: ignore[union-attr]
     http_source = (spec.ingest or {}).get("http_source") or {}
@@ -165,6 +200,9 @@ def fetch_bodies(spec: SourceSpec, params: dict[str, Any]) -> list[bytes]:
     if paging:
         return _fetch_paged(spec, params, build, paging)
     plans = build(spec, params)
+    cc = (spec.ingest or {}).get("constant_cache")
+    if cc:
+        return _fetch_constant_cache(spec, plans, cc)
     if http_source.get("endpoint_fallback"):
         return _fetch_endpoint_fallback(spec, plans)
     return [_get(spec, plan) for plan in plans]

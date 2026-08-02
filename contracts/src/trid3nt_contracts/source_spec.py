@@ -282,6 +282,16 @@ class OutputSpec(GraceModel):
     #: solver setup and should not auto-render (fetch_3dep_extra / fetch_dem opt out).
     #: No effect on vector output. Strict no-op for every prior spec (none set it).
     auto_publish: bool = True
+    #: EMPTINESS-DRIVEN output switch (finisher-mechanisms wave, ADR 0081). A
+    #: hook name ``<source>.<point>`` called with ``(spec, params)`` when the
+    #: produced vector FGB is FEATURE-EMPTY: its returned dict is what ``route()``
+    #: returns INSTEAD of the LayerURI, reproducing a twin whose non-empty path is
+    #: a renderable ``LayerURI`` (subclass) but whose empty-AOI degrade is a bare
+    #: record dict + typed note (fetch_fault_sources: a zero-fault AOI is NOT given
+    #: a layer -- the honesty gate). A non-empty fetch is unaffected (the LayerURI /
+    #: envelope path). Validated as a resolvable hook at load. Default (None) = the
+    #: LayerURI is always returned (strict no-op for every prior spec).
+    variant_by_emptiness: str | None = None
     #: Keep attribute-only (NULL-geometry) features in the emitted FGB instead of
     #: dropping them (chained-resolution mode, ADR 0063). The nws_alerts_conus twin
     #: preserves alerts whose zone references could not be resolved as NULL-geometry
