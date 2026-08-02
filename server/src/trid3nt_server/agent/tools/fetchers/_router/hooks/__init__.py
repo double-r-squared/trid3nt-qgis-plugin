@@ -181,3 +181,7 @@ from . import pfdf_raster  # noqa: E402,F401
 # best-feature short-circuit + bbox-from-point + epoch->ISO discovery record (dict, not
 # a LayerURI), the proof-by-migration for shape=record.
 from . import wfigs_incident  # noqa: E402,F401
+# movebank finish wave (ADR 0077): keyed direct-read CSV with COMPOSITE Basic-Auth
+# creds (username+password via the resolver blob path) -> per-geometry_type feature
+# parse; classify_status splits 401->AUTH / 403->LICENSE / 4xx->INPUT.
+from . import movebank_tracks  # noqa: E402,F401

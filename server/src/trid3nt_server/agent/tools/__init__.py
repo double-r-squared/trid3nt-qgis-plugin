@@ -322,7 +322,10 @@ from .fetchers.climate.lookup_precip_return_period import lookup_precip_return_p
 # resolution mode (ADR 0063) -- twins DELETED, now spec-driven (source.yaml + the
 # resolve-then-fetch hooks: name->id species/match | /v1/taxa GET, then the offset-paged
 # occurrence / observation search), registered by _register_router_specs() below.
-from .fetchers.biodiversity.fetch_movebank_tracks import fetch_movebank_tracks  # noqa: E402,F401
+# fetch_movebank_tracks: keyed CSV http_json fold (ADR 0077) -- twin DELETED, now
+# spec-driven (source.yaml + movebank_tracks build_request/parse_response/classify_status
+# hooks; composite Basic-Auth via the resolver blob path), auto-registered by
+# _register_router_specs() below.
 
 # -- fetchers/socioeconomic --
 # fetch_administrative_boundaries: data-router fold zip/multi-file wave (ADR 0067) --
