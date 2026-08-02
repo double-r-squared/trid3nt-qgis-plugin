@@ -41,7 +41,7 @@ logger = logging.getLogger(
     "trid3nt_server.agent.tools.fetchers._router.executors.library_delegate"
 )
 
-__all__ = ["invoke", "pre_validate", "execute"]
+__all__ = ["invoke", "pre_validate", "resolve", "execute"]
 
 #: Default declared timeout (seconds) when a spec omits ``ingest.delegate.timeout_s``.
 _DEFAULT_TIMEOUT_S = 60.0
@@ -60,6 +60,47 @@ def pre_validate(spec: SourceSpec, params: dict[str, Any]) -> None:
     name = spec.hooks.delegate_validate if spec.hooks is not None else None
     if name:
         resolve_hook(name)(spec, params)
+
+
+def resolve(spec: SourceSpec, params: dict[str, Any]) -> dict[str, Any]:
+    """Run the socketed pre-cache-key resolve (``hooks.delegate_resolve``, ADR 0076).
+
+    The delegate sibling of the chained-resolution resolve phase, for a source whose
+    cycle/key resolution walks a LIBRARY socket (HRRR-Zarr's s3fs cycle walk). Runs
+    under the SAME constraints as :func:`invoke` (declared timeout, telemetry marks it
+    library-owned, an unmapped library exception -> retryable upstream). Returns the
+    dict the caller MERGES into params before ``read_through`` so the resolved cycle
+    enters the cache key. No-op (returns ``{}``) when the spec declares no resolve hook.
+    """
+    name = spec.hooks.delegate_resolve if spec.hooks is not None else None
+    if not name:
+        return {}
+    cfg = _delegate_cfg(spec)
+    library = str(cfg.get("library", "unknown"))
+    try:
+        timeout_s = float(cfg.get("timeout_s", _DEFAULT_TIMEOUT_S))
+    except (TypeError, ValueError):
+        timeout_s = _DEFAULT_TIMEOUT_S
+    hook = resolve_hook(name)
+    logger.info(
+        "library_delegate: LIBRARY-OWNED resolve library=%s source=%s timeout=%ss",
+        library, spec.name, timeout_s,
+    )
+    try:
+        merged = hook(spec, params, timeout_s=timeout_s)
+    except RouterError:
+        raise
+    except Exception as exc:  # noqa: BLE001 -- backstop: never leak a raw library error
+        raise router_upstream_error(
+            spec.error_code_prefix,
+            f"{library} delegate resolve failed: {type(exc).__name__}: {exc}",
+        )
+    if not isinstance(merged, dict):
+        raise router_upstream_error(
+            spec.error_code_prefix,
+            f"{library} delegate resolve returned {type(merged).__name__}, expected dict",
+        )
+    return merged
 
 
 def invoke(spec: SourceSpec, params: dict[str, Any]) -> Any:

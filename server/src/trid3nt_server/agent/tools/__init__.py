@@ -385,7 +385,10 @@ from .fetchers.hazard.fetch_firms_active_fire import fetch_firms_active_fire  # 
 # fetch_usgs_volcano_alerts: data-router fold phase-2 wave-10 (ADR 0056, tier-3 hooks) --
 # twin DELETED, now spec-driven (source.yaml + usgs_volcano build_request/parse_response
 # hooks, multi-GET HANS join), registered by _register_router_specs() below.
-from .fetchers.hazard.fetch_wfigs_incident import fetch_wfigs_incident  # noqa: E402,F401
+# fetch_wfigs_incident: record-return output-shape fold (ADR 0076) -- twin DELETED,
+# now spec-driven (source.yaml + wfigs_incident build_request/record hooks over the
+# shape=record executor; a bare discovery dict, not a LayerURI), auto-registered by
+# _register_router_specs() below.
 
 # -- fetchers/soil --
 # fetch_gcn250_curve_numbers: fetcher-fold wave-8 -- twin DELETED, now spec-driven

@@ -1,0 +1,103 @@
+schema_version: v1
+name: fetch_wfigs_incident
+source_class: wfigs_incident
+shape: record
+error_prefix: WFIGS_INCIDENT
+input_error_suffix: INPUT_INVALID
+empty_error_suffix: NOT_FOUND
+
+docstring: |
+  Resolve a NAMED wildfire incident (NIFC/WFIGS) -> authoritative point + bbox + discovery time.
+
+  **What it does:** Looks a named wildland-fire incident up in the NIFC WFIGS
+  Incident Locations Current ArcGIS FeatureService and returns its authoritative
+  point of origin (lat/lon), the FireDiscoveryDateTime (ISO UTC), the incident
+  size (acres) + percent contained, the point-of-origin state/county, the IRWIN
+  id, AND a padded AOI bbox built around the point. Resolves BY NAME (a case-
+  insensitive LIKE), so it works for incidents a county geocode would miss
+  (e.g. Santa Rosa Island, an offshore island in Channel Islands National Park).
+
+  **When to use:**
+  - The user names a specific active wildfire ("the Iron Fire near Eureka Utah",
+    "the Santa Rosa Island fire") and you need its exact location + when it
+    started before fetching imagery / drawing an AOI.
+  - The upstream step of a satellite fire-animation workflow: resolve the
+    incident -> bbox + a discovery-time sanity floor for the animation window.
+  - Disambiguating a fire by name when a free-text geocode is too coarse.
+
+  **When NOT to use:**
+  - Active-fire pixel detections (use ``fetch_firms_active_fire``).
+  - Fire perimeter polygons (use ``fetch_nifc_fire_perimeters``).
+  - A generic place name with no named incident (use ``geocode_location``).
+  - Historical / contained fires (WFIGS "Current" carries only active
+    incidents; for past fires use ``fetch_mtbs_burn_severity``).
+
+  **Parameters:**
+  - ``incident_name`` (str): the incident name token, e.g. ``"Iron"`` or
+    ``"Santa Rosa Island"``. A trailing " Fire" is stripped automatically and
+    matching is case-insensitive, so ``"Iron Fire"`` also matches.
+  - ``state`` (str, optional): a US state filter, ``"UT"`` or ``"US-UT"``
+    (either form). Narrows a common name to the right region.
+  - ``bbox_pad_deg`` (float, default 0.25): half-width in degrees of the AOI
+    bbox built around the incident point (E-W widened by 1/cos(lat) so the AOI
+    is roughly square on the ground).
+
+  **Returns:** a JSON-compatible dict with ``incident_name``, ``lat``, ``lon``,
+  ``bbox`` (``[min_lon, min_lat, max_lon, max_lat]`` EPSG:4326),
+  ``fire_discovery_datetime`` (ISO-8601 UTC or null), ``incident_size_acres``,
+  ``percent_contained``, ``poo_state``, ``poo_county``, ``irwin_id``,
+  ``unique_fire_identifier``. Cached ``dynamic-1h``.
+
+  **Cross-tool dependencies:**
+  - Upstream of: ``fetch_goes_animation`` / ``fetch_viirs_day_fire`` (the AOI
+    bbox + the discovery-time floor for the animation window; see the
+    frame-animation playground recipe, docs/playbooks/frame-animation-recipe.md).
+  - Pairs with: ``fetch_firms_active_fire`` + ``fetch_nifc_fire_perimeters``
+    (co-registered hot-pixel + perimeter overlays around the resolved point).
+
+endpoints:
+  current:
+    url: https://services3.arcgis.com/T4QMspbfLg3qTGWY/arcgis/rest/services/WFIGS_Incident_Locations_Current/FeatureServer/0/query
+  year_to_date:
+    url: https://services3.arcgis.com/T4QMspbfLg3qTGWY/arcgis/rest/services/WFIGS_Incident_Locations_YearToDate/FeatureServer/0/query
+
+params:
+  incident_name:
+    type: str
+    required: true
+  state:
+    type: str
+    schema_optional: true
+  bbox_pad_deg:
+    type: float
+    default: 0.25
+
+hooks:
+  build_request: wfigs_incident.build_request
+  record: wfigs_incident.record
+
+normalize:
+  crs: EPSG:4326
+
+output:
+  layer_type: record
+  ext: json
+  style_preset: none
+  emit_bbox: false
+
+cache:
+  ttl_class: dynamic-1h
+
+# The record is a small structured JSON dict (a point + bbox + discovery fields),
+# not a bulk payload; the twin registered no estimator. A tiny clipped estimate
+# (never warns) reproduces that no-warning behaviour under the router's mandatory
+# payload seam.
+payload_estimate:
+  model: bbox_area
+  floor_mb: 0.02
+  ceil_mb: 0.2
+  mb_per_sq_deg: 0.01
+
+caveats:
+  - WFIGS "Current" carries only active incidents; a recently-contained fire resolves via the YearToDate sibling feed.
+  - Matching is a case-insensitive name LIKE; disambiguation prefers the largest IncidentSize.

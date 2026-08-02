@@ -192,13 +192,27 @@ def _validate_hooks(spec: SourceSpec) -> None:
             "build_request", "parse_response",
             "resolve_build", "resolve_parse", "next_page", "enrich_plan", "enrich_merge",
             "classify_status", "envelope",
-            "delegate", "delegate_validate",
+            "delegate", "delegate_validate", "delegate_resolve",
+            "record",
         ):
             name = getattr(spec.hooks, point)
             if name and not has_hook(name):
                 raise HookResolutionError(
                     f"spec {spec.name!r} references unknown hook {point}={name!r}"
                 )
+
+    # record shape (ADR 0076): a record source MUST declare hooks.record (the router
+    # has nothing else to shape the dict); a delegate_resolve pairs with a delegate.
+    if spec.output.layer_type == "record":
+        record_hook = spec.hooks.record if spec.hooks is not None else None
+        if not record_hook:
+            raise HookResolutionError(
+                f"spec {spec.name!r}: output.layer_type=record requires hooks.record"
+            )
+    if spec.hooks is not None and spec.hooks.delegate_resolve and not spec.hooks.delegate:
+        raise HookResolutionError(
+            f"spec {spec.name!r}: hooks.delegate_resolve requires hooks.delegate"
+        )
 
     # result_model (ADR 0073): if the spec names a LayerURI-subclass result model
     # it must resolve, and it pairs with an envelope hook (each is meaningless

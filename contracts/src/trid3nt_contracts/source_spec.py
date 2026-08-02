@@ -64,6 +64,7 @@ SourceShape = Literal[
     "raster-cog",
     "vector-fgb",
     "station-timeseries-fgb",
+    "record",
 ]
 
 #: Auth mode (contract sec 1.1 ``auth.mode``). ``none`` = keyless public;
@@ -226,7 +227,15 @@ class NormalizeSpec(GraceModel):
 class OutputSpec(GraceModel):
     """Output surface (contract sec 1.1 ``output``)."""
 
-    layer_type: Literal["raster", "vector"]
+    #: ``record`` (ADR 0076): the source returns a bare JSON dict, NOT a renderable
+    #: LayerURI. ``route()`` runs the ``hooks.record`` dict builder, caches its JSON
+    #: bytes via ``read_through``, and returns the parsed dict envelope (honesty floor
+    #: intact: the hook raises typed input/empty/upstream errors; no fabricated
+    #: success). Pairs with ``shape: record`` + ``ext: json``. The wfigs/fault/
+    #: population/lehd record fetchers whose result is a structured lookup (a point +
+    #: bbox discovery, a jobs summary) rather than a map layer. Default raster/vector
+    #: (strict no-op for every prior spec).
+    layer_type: Literal["raster", "vector", "record"]
     ext: Literal["tif", "fgb", "json"]
     role: Literal["primary", "context", "input"] = "primary"
     style_preset: str                        # may template on a param
@@ -445,6 +454,35 @@ class HookSpec(GraceModel):
     #: dataretrieval ``pre_validate`` step. No prior spec declares it (strict no-op).
     delegate_validate: str | None = None
 
+    #: RECORD-RETURN dict builder (ADR 0076). ``(spec, params, bodies: list[bytes])
+    #: -> dict | None``. For a ``shape: record`` / ``output.layer_type: record``
+    #: source whose result is a bare structured JSON dict (a discovery record, a
+    #: summary), NOT a renderable LayerURI. The router owns the transport (fetches the
+    #: ``hooks.build_request`` plan(s)) and the cache; this PURE hook shapes the fetched
+    #: bodies into the result dict. Returning ``None`` for a given (ordered) plan's body
+    #: signals "no usable record in this response, try the next plan" -- the router's
+    #: record executor walks the build plans in order and stops at the first non-None
+    #: dict (the wfigs Current->YearToDate best-feature short-circuit); if EVERY plan
+    #: yields None the router raises the source's typed empty/not-found error (honesty
+    #: floor: the hook never fabricates a success dict, and a bad body still raises a
+    #: typed upstream error via the shared factories). No prior spec declares it (strict
+    #: no-op).
+    record: str | None = None
+
+    #: SOCKETED PRE-CACHE-KEY delegate resolve (ADR 0076). ``(spec, params, *,
+    #: timeout_s: float) -> dict``. The delegate sibling of the chained-resolution
+    #: ``resolve_build``/``resolve_parse`` (which resolve over the router's http
+    #: transport): a source whose cycle/key resolution walks a LIBRARY socket (HRRR-
+    #: Zarr's s3fs ``fs.exists`` backward cycle walk) names this hook. It runs in
+    #: ``route()`` AFTER type/gate + ``delegate_validate`` and BEFORE ``read_through``,
+    #: under the SAME ``library_delegate`` constraints as ``delegate`` (declared
+    #: ``ingest.delegate.timeout_s``, telemetry marks it library-owned, an unmapped
+    #: library exception -> retryable upstream). Its dict return MERGES into ``params``
+    #: so the resolved cycle enters the cache key (a ``cycle=None`` request would
+    #: otherwise compute a non-deterministic key). Pairs with ``hooks.delegate``. No
+    #: prior spec declares it (strict no-op).
+    delegate_resolve: str | None = None
+
     #: TRANSPORT-STATUS classification (keyed/misc wave, ADR 0071).
     #: ``(spec, status: int | None, body: str | None) -> RouterError | None``. The
     #: http_json transport collapses every non-2xx to a retryable UPSTREAM error;
@@ -577,6 +615,16 @@ class SourceSpec(GraceModel):
             raise ValueError(
                 f"shape={self.shape} requires output.layer_type=vector; "
                 f"got {self.output.layer_type!r}"
+            )
+        # record shape (ADR 0076) <-> record layer_type + json ext + a record hook.
+        if self.shape == "record" and self.output.layer_type != "record":
+            raise ValueError(
+                f"shape=record requires output.layer_type=record; "
+                f"got {self.output.layer_type!r}"
+            )
+        if self.output.layer_type == "record" and self.shape != "record":
+            raise ValueError(
+                f"output.layer_type=record requires shape=record; got {self.shape!r}"
             )
         # A join transform only makes sense over a vector base shape.
         if self.join is not None and self.shape != "vector-fgb":

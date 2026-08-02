@@ -177,3 +177,7 @@ from . import usgs_stn_hwm  # noqa: E402,F401
 # terrain) whose maintained library owns discovery + the socket -- the delegate hook
 # calls the library and returns (array, transform, crs) for the shared COG writer.
 from . import pfdf_raster  # noqa: E402,F401
+# Record-return output shape (ADR 0076): WFIGS named-incident lookup -- the 2-endpoint
+# best-feature short-circuit + bbox-from-point + epoch->ISO discovery record (dict, not
+# a LayerURI), the proof-by-migration for shape=record.
+from . import wfigs_incident  # noqa: E402,F401

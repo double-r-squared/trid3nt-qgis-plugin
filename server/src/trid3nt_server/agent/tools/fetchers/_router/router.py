@@ -11,6 +11,7 @@ spec-driven source is INDISTINGUISHABLE from a hand-written twin.
 from __future__ import annotations
 
 import datetime as _dt
+import json
 import logging
 import math as _math
 from typing import Any, Callable
@@ -487,6 +488,13 @@ def select_executor(spec: SourceSpec) -> Callable[[SourceSpec, dict[str, Any]], 
     #  - LEGACY dataretrieval (ADR 0040): ``ingest.delegate.library == 'dataretrieval'``
     #    with a service dispatch, kept on its own module.
     # No-op for every prior spec (none declare hooks.delegate or ingest.delegate).
+    # Record-return path (ADR 0076): a ``shape: record`` source produces a bare
+    # JSON dict, not a LayerURI. It wins over every layer executor below (its
+    # build_request hook is the PURE plan builder feeding the record dict-shaper,
+    # NOT the http_json vector path). No-op for every prior spec (none are record).
+    if spec.shape == "record":
+        from .executors import record as record_executor
+        return record_executor.execute
     if spec.hooks is not None and spec.hooks.delegate:
         if spec.shape == "raster-cog":
             return raster_cog.execute
@@ -604,8 +612,9 @@ def build_layer_uri(spec: SourceSpec, params: dict[str, Any], uri: str) -> Layer
     )
 
 
-def route(spec: SourceSpec, raw_params: dict[str, Any]) -> LayerURI:
-    """The engine: validate -> gate -> dispatch -> cache -> emit LayerURI."""
+def route(spec: SourceSpec, raw_params: dict[str, Any]) -> LayerURI | dict[str, Any]:
+    """The engine: validate -> gate -> dispatch -> cache -> emit LayerURI (or a
+    record dict for a ``shape: record`` source, ADR 0076)."""
     metadata = synthesize_metadata(spec)
     params = validate_params(spec, raw_params)
     # A delegated spec's source-specific INPUT validation (wqp bbox-required, nldi
@@ -620,6 +629,13 @@ def route(spec: SourceSpec, raw_params: dict[str, Any]) -> LayerURI:
     elif (spec.ingest or {}).get("delegate"):
         from .executors import dataretrieval_delegate
         dataretrieval_delegate.pre_validate(spec, params)
+    # Socketed pre-cache-key delegate resolve (ADR 0076): the HRRR-Zarr s3fs cycle
+    # walk resolves the published cycle BEFORE read_through so the resolved cycle
+    # merges into params and enters the cache key (a cycle=None request would else
+    # compute a non-deterministic key). No-op unless the spec declares it.
+    if spec.hooks is not None and spec.hooks.delegate_resolve:
+        from .executors import library_delegate
+        params = {**params, **library_delegate.resolve(spec, params)}
     # Chained-resolution PHASE R (ADR 0063): resolve a name -> id BEFORE read_through
     # so the resolved id enters the cache key (a name query and its id query collapse
     # to one entry). Does the round-1 I/O; no-op unless the spec declares resolve_build.
@@ -627,6 +643,21 @@ def route(spec: SourceSpec, raw_params: dict[str, Any]) -> LayerURI:
         from .executors import chained_resolution
         params = chained_resolution.pre_resolve(spec, params)
     executor = select_executor(spec)
+
+    # Record-return path (ADR 0076): a ``shape: record`` source caches its JSON dict
+    # bytes and returns the parsed dict envelope -- no LayerURI. The honesty floor is
+    # intact: the record executor raises the source's typed empty/upstream errors (so
+    # read_through never writes a fabricated-success sentinel), and the returned dict
+    # is exactly what the twin returned. No-op for every prior (LayerURI) spec.
+    if spec.output.layer_type == "record":
+        result = read_through(
+            metadata=metadata,
+            params=params,
+            ext=spec.output.ext,
+            fetch_fn=lambda: executor(spec, params),
+        )
+        assert result.data is not None, "record source is cacheable; data must be set"
+        return json.loads(result.data.decode("utf-8"))
 
     result = read_through(
         metadata=metadata,
