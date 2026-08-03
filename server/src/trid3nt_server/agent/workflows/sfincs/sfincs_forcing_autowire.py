@@ -314,8 +314,8 @@ def _resolve_surge_forcing_from_fetchers(
     - ``waterlevel.fetch_uri`` (or ``fgb_uri``) -- a GTSM / CO-OPS FlatGeobuf to
       adapt into bzs files. Optional ``offset`` / ``buffer_m`` pass through.
     - ``discharge.fetch_uri`` (or ``fgb_uri``) -- an NWM FlatGeobuf to adapt into
-      dis files. Optional ``cama_cog_uri`` instead → sample the CaMa COG.
-      ``rivers_uri`` / ``hydrography_uri`` / ``river_upa_km2`` pass through.
+      dis files. ``rivers_uri`` / ``hydrography_uri`` / ``river_upa_km2`` pass
+      through.
 
     A sub-dict that ALREADY carries ``timeseries_uri`` / ``geodataset_uri`` is
     left untouched (the pre-materialised path -- backward compatible). Returns the
@@ -331,7 +331,6 @@ def _resolve_surge_forcing_from_fetchers(
     if not surge_forcing:
         return surge_forcing
     from trid3nt_server.agent.workflows.sfincs.sfincs_forcing_adapter import (
-        discharge_forcing_from_cama_cog,
         discharge_forcing_from_fgb,
         waterlevel_forcing_from_fgb,
     )
@@ -362,7 +361,6 @@ def _resolve_surge_forcing_from_fetchers(
     dq = surge_forcing.get("discharge")
     if isinstance(dq, dict):
         dq_fetch = dq.get("fetch_uri") or dq.get("fgb_uri")
-        cama_uri = dq.get("cama_cog_uri")
         already = dq.get("timeseries_uri") or dq.get("geodataset_uri")
         if dq_fetch and not already:
             # UNIT WIRING (Invariant-7 silent-wrong-physics guard): SFINCS dis is
@@ -388,20 +386,6 @@ def _resolve_surge_forcing_from_fetchers(
                     DataSource(
                         name="River-discharge forcing (USGS/NWM → SFINCS dis)",
                         uri=str(dq_fetch),
-                        accessed_at=datetime.now(timezone.utc),
-                    )
-                )
-        elif cama_uri and not already:
-            out["discharge"] = discharge_forcing_from_cama_cog(
-                cama_uri,
-                bbox,
-                window_hours=window_hours,
-            )
-            if data_sources is not None:
-                data_sources.append(
-                    DataSource(
-                        name="River-discharge forcing (CaMa-Flood → SFINCS dis)",
-                        uri=str(cama_uri),
                         accessed_at=datetime.now(timezone.utc),
                     )
                 )

@@ -353,6 +353,54 @@ DEFAULT_CAPTURE_ZONE_TRAVEL_TIME_YEARS: list[float] = [1.0, 5.0, 10.0]
 DEFAULT_WELLHEAD_PROTECTION_TRAVEL_TIME_YEARS: list[float] = [2.0, 5.0, 10.0]
 
 
+def _build_gwf_dis(
+    gwf,
+    *,
+    gwf_name: str,
+    nlay: int,
+    nrow: int,
+    ncol: int,
+    delr,
+    delc,
+    top,
+    botm,
+    xorigin=None,
+    yorigin=None,
+    crs=None,
+):
+    """Construct the GWF structured-grid DIS package (the one DIS constructor).
+
+    Every archetype deck builds its DIS through here. ``xorigin``/``yorigin`` are
+    OMITTED when None so a local-(0,0)-origin deck (PRT capture zone, saltwater
+    cross-section) writes a .dis byte-identical to a bare call; when an origin AND
+    a ``crs`` are supplied the FloPy model grid is tagged (georeferencing only --
+    no effect on the .dis bytes). Returns the DIS package (callers that reference
+    it downstream capture the return).
+    """
+    kwargs = dict(
+        length_units=LENGTH_UNITS,
+        nlay=nlay,
+        nrow=nrow,
+        ncol=ncol,
+        delr=delr,
+        delc=delc,
+        top=top,
+        botm=botm,
+        filename=f"{gwf_name}.dis",
+    )
+    if xorigin is not None:
+        kwargs["xorigin"] = xorigin
+    if yorigin is not None:
+        kwargs["yorigin"] = yorigin
+    dis = flopy.mf6.ModflowGwfdis(gwf, **kwargs)
+    if xorigin is not None and yorigin is not None and crs is not None:
+        try:
+            gwf.modelgrid.set_coord_info(xoff=xorigin, yoff=yorigin, crs=crs.to_epsg())
+        except Exception:  # pragma: no cover - older flopy signature fallback
+            pass
+    return dis
+
+
 def _default_travel_time_years(archetype: str) -> list[float]:
     """Archetype-specific default isochrone tiers (years) when none supplied."""
     if archetype == "wellhead_protection":
@@ -1411,9 +1459,9 @@ def _build_gwf_only_archetype_deck(
         n_transient_periods = 0
 
     # --- DIS ----------------------------------------------------------------- #
-    flopy.mf6.ModflowGwfdis(
+    _build_gwf_dis(
         gwf,
-        length_units=LENGTH_UNITS,
+        gwf_name=gwf_name,
         nlay=N_LAYERS,
         nrow=nrow,
         ncol=ncol,
@@ -1423,12 +1471,8 @@ def _build_gwf_only_archetype_deck(
         botm=AQUIFER_BOTTOM_M,
         xorigin=xorigin,
         yorigin=yorigin,
-        filename=f"{gwf_name}.dis",
+        crs=crs,
     )
-    try:
-        gwf.modelgrid.set_coord_info(xoff=xorigin, yoff=yorigin, crs=crs.to_epsg())
-    except Exception:  # pragma: no cover - older flopy signature fallback
-        pass
 
     # --- IC + NPF ------------------------------------------------------------ #
     # regional_gradient: CONSTITUTIVE lever. Default EQUALS REGIONAL_GRADIENT so
@@ -2433,9 +2477,9 @@ def _build_multi_species_deck(
     )
     sim.register_ims_package(ims_gwf, [gwf_name])
 
-    flopy.mf6.ModflowGwfdis(
+    _build_gwf_dis(
         gwf,
-        length_units=LENGTH_UNITS,
+        gwf_name=gwf_name,
         nlay=N_LAYERS,
         nrow=nrow,
         ncol=ncol,
@@ -2445,12 +2489,8 @@ def _build_multi_species_deck(
         botm=AQUIFER_BOTTOM_M,
         xorigin=xorigin,
         yorigin=yorigin,
-        filename=f"{gwf_name}.dis",
+        crs=crs,
     )
-    try:
-        gwf.modelgrid.set_coord_info(xoff=xorigin, yoff=yorigin, crs=crs.to_epsg())
-    except Exception:  # pragma: no cover - older flopy signature fallback
-        pass
 
     # regional_gradient: CONSTITUTIVE lever (default EQUALS REGIONAL_GRADIENT ->
     # byte-identical when unset; same phys.get seam as the spill deck).
@@ -2836,9 +2876,9 @@ def _build_prt_capture_zone_deck(
     sim.register_ims_package(ims, [gwf_name])
 
     # DIS: local (0,0) origin -- do NOT pass xorigin/yorigin.
-    flopy.mf6.ModflowGwfdis(
+    _build_gwf_dis(
         gwf,
-        length_units=LENGTH_UNITS,
+        gwf_name=gwf_name,
         nlay=N_LAYERS,
         nrow=nrow,
         ncol=ncol,
@@ -2846,7 +2886,6 @@ def _build_prt_capture_zone_deck(
         delc=delc,
         top=PRT_AQUIFER_TOP_M,
         botm=PRT_AQUIFER_BOTTOM_M,
-        filename=f"{gwf_name}.dis",
     )
 
     # IC: initial head = aquifer top (hydrostatic start, overridden by CHD).
@@ -3338,9 +3377,9 @@ def _build_saltwater_intrusion_deck(
     # Register GWF IMS first (BUY requirement).
     sim.register_ims_package(ims_gwf, [gwf_name])
 
-    flopy.mf6.ModflowGwfdis(
+    _build_gwf_dis(
         gwf,
-        length_units=LENGTH_UNITS,
+        gwf_name=gwf_name,
         nlay=nlay,
         nrow=1,
         ncol=ncol,
@@ -3348,7 +3387,6 @@ def _build_saltwater_intrusion_deck(
         delc=delc,
         top=top,
         botm=botm,
-        filename=f"{gwf_name}.dis",
     )
     # IC: start at sea level (head = top; overridden quickly by GHB).
     flopy.mf6.ModflowGwfic(gwf, strt=top, filename=f"{gwf_name}.ic")
@@ -4013,9 +4051,9 @@ def build_modflow_deck(
     )
     sim.register_ims_package(ims_gwf, [gwf_name])
 
-    dis = flopy.mf6.ModflowGwfdis(
+    dis = _build_gwf_dis(
         gwf,
-        length_units=LENGTH_UNITS,
+        gwf_name=gwf_name,
         nlay=N_LAYERS,
         nrow=nrow,
         ncol=ncol,
@@ -4025,15 +4063,8 @@ def build_modflow_deck(
         botm=AQUIFER_BOTTOM_M,
         xorigin=xorigin,
         yorigin=yorigin,
-        filename=f"{gwf_name}.dis",
+        crs=crs,
     )
-    # Tag the model grid CRS so any FloPy-side georeferencing is correct.
-    try:
-        gwf.modelgrid.set_coord_info(
-            xoff=xorigin, yoff=yorigin, crs=crs.to_epsg()
-        )
-    except Exception:  # pragma: no cover - older flopy signature fallback
-        pass
 
     # Constant-head gradient: west column high, east column low -> west->east
     # flow. Head drop = gradient x domain width. regional_gradient: CONSTITUTIVE

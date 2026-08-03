@@ -13,7 +13,7 @@ from dataclasses import dataclass
 
 import pytest
 
-from trid3nt_server.agent.workflows.shared.mesh_layer import (
+from trid3nt_server.agent.mesh.mesh_preview import (
     make_sfincs_mesh_layer_uri,
     make_swmm_mesh_layer_uri,
     mesh_cells_to_feature_collection,
@@ -150,7 +150,7 @@ def test_make_layer_uri_uploads_to_s3_durable(monkeypatch) -> None:
     )
     # Patch the deck reader at the seam used by swmm_mesh_to_geojson.
     monkeypatch.setattr(
-        "trid3nt_server.agent.workflows.swmm.swmm_mesh_builder._active_cells_from_deck",
+        "trid3nt_server.agent.mesh.raster_cell_mesh._active_cells_from_deck",
         lambda b: [(0, 0), (0, 1), (1, 0), (1, 1)],
     )
 
@@ -195,7 +195,7 @@ def test_make_layer_uri_runs_bucket_override(monkeypatch) -> None:
         transform=UTM_TRANSFORM, crs=UTM_CRS, resolution_m=10.0, grid_shape=(2, 2)
     )
     monkeypatch.setattr(
-        "trid3nt_server.agent.workflows.swmm.swmm_mesh_builder._active_cells_from_deck",
+        "trid3nt_server.agent.mesh.raster_cell_mesh._active_cells_from_deck",
         lambda b: [(0, 0), (0, 1), (1, 0), (1, 1)],
     )
     fake_s3 = _FakeS3()
@@ -221,7 +221,7 @@ def test_make_layer_uri_returns_none_on_upload_failure(monkeypatch) -> None:
         transform=UTM_TRANSFORM, crs=UTM_CRS, resolution_m=10.0, grid_shape=(2, 2)
     )
     monkeypatch.setattr(
-        "trid3nt_server.agent.workflows.swmm.swmm_mesh_builder._active_cells_from_deck",
+        "trid3nt_server.agent.mesh.raster_cell_mesh._active_cells_from_deck",
         lambda b: [(0, 0), (0, 1), (1, 0), (1, 1)],
     )
 
@@ -250,7 +250,7 @@ def test_make_layer_uri_zero_features_returns_none(monkeypatch) -> None:
         grid_shape=(2, 2),
     )
     monkeypatch.setattr(
-        "trid3nt_server.agent.workflows.swmm.swmm_mesh_builder._active_cells_from_deck",
+        "trid3nt_server.agent.mesh.raster_cell_mesh._active_cells_from_deck",
         lambda b: [],
     )
 

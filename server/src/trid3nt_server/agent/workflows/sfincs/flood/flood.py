@@ -1081,7 +1081,7 @@ async def model_flood_scenario(
         # accepted: (a) PRE-MATERIALISED -- sub-dicts already carry
         # ``timeseries_uri`` / ``locations_uri`` / ``geodataset_uri`` (consumed
         # verbatim); (b) RAW FETCHER -- sub-dicts carry ``fetch_uri`` (a GTSM /
-        # CO-OPS / NWM FlatGeobuf) or ``cama_cog_uri``, which the forcing ADAPTER
+        # CO-OPS / NWM FlatGeobuf), which the forcing ADAPTER
         # (sfincs_forcing_adapter) converts into the bzs/dis CSV + locations files
         # the deck-emission seam expects. The resolver materialises (b) in place;
         # an adapter failure for an EXPLICIT surge request raises (caught below as
