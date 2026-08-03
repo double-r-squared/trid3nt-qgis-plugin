@@ -155,3 +155,16 @@ field (ADR 0089). Blast radius: 8 nested terrain consumers (flood, topobathy,
 contours, elmfire, geoclaw, swmm, landslide) would pause-and-ask mid-scenario
 instead of silently degrading - lands as its own gated wave with the flood
 canary, not a rider.
+
+## 2026-08-03 - Charts window: TUFLOW Viewer pattern + template output accounting (NATE)
+Charts never surface inline in chat. They get their own window: a
+TUFLOW-Viewer-like dock - horizontal, at the BOTTOM of the app window,
+interactive maps/displays linked to the canvas (click a feature -> its
+plot; scrubber/time integration). The charts button STAYS in chat and
+clicking it SHOWS/raises the window (entry point, not container).
+Plugin work item: replace the collapsible "Charts (N)" panel under the
+message list (ui/charts.py) with a bottom-area QDockWidget the chat
+button toggles. Paired template rule: every template accounts for its
+output shape (map raster / graph / both) and its graphs are more-or-less
+COPIED from the cited published example (modflow6-examples is chart-rich)
+- a template wave without its example's charts is incomplete.
