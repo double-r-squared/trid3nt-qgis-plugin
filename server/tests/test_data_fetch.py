@@ -484,8 +484,11 @@ def _patch_copernicus_seam(monkeypatch, **mock_kw):
     return spy
 
 
-def test_fetch_dem_service_down_falls_back_to_copernicus(monkeypatch):
-    """(a) 3DEP service-unavailable -> Copernicus fallback + honest labeling."""
+def test_fetch_dem_service_down_raises_gated_error_naming_copernicus(monkeypatch):
+    """(a) GATED norm (2026-08-03): a 3DEP outage on the AUTO path does NOT
+    silently swap to Copernicus. It raises DemAutoFallbackGateError naming
+    source="copernicus" + the tradeoff, and NEVER touches the copernicus seam
+    (the swap is a user decision, relayed through the tool-retry loop)."""
     fake_storage = FakeStorageClient()
     _patch_dem_read_through(monkeypatch, fake_storage)
 
@@ -496,23 +499,30 @@ def test_fetch_dem_service_down_falls_back_to_copernicus(monkeypatch):
 
     monkeypatch.setattr(dem_mod, "_fetch_3dep_dem_bytes", boom)
     spy = _patch_copernicus_seam(monkeypatch, side_effect=_fake_copernicus_layer)
-    layer = fetch_dem(FORT_MYERS_BBOX, resolution_m=10)
+    with pytest.raises(dem_mod.DemAutoFallbackGateError) as exc_info:
+        fetch_dem(FORT_MYERS_BBOX, resolution_m=10)
 
-    spy.assert_called_once_with(bbox=FORT_MYERS_BBOX)
-    assert "Copernicus GLO-30" in layer.name
-    assert "3DEP unavailable" in layer.name
-    assert layer.fallback_note is not None
-    assert "USGS 3DEP" in layer.fallback_note
-    assert "Copernicus GLO-30" in layer.fallback_note
-    # requested 10 m != GLO-30's fixed 30 m -> the note says so honestly.
-    assert "30 m" in layer.fallback_note
-    # No 3DEP sentinel was written for the failed primary (the mocked
-    # copernicus impl bypasses the cache entirely, so the store stays empty).
+    # NO silent cross-dataset substitution: the copernicus seam is never called.
+    spy.assert_not_called()
+    err = exc_info.value
+    assert err.error_code == "DEM_FALLBACK_GATE"
+    assert err.retryable is True
+    msg = str(err)
+    # (a) states 3DEP failed, (b) names the explicit copernicus retry arg,
+    # (c) states the cross-dataset tradeoff (lidar vs radar, coarser).
+    assert "3DEP" in msg
+    assert 'source="copernicus"' in msg
+    assert "lidar" in msg.lower() and "radar" in msg.lower()
+    # Structured recovery options ride the .suggestions envelope.
+    suggestions = getattr(err, "suggestions", None)
+    assert suggestions and any("copernicus" in s for s in suggestions)
+    # No sentinel written for the failed primary.
     assert fake_storage.store == {}
 
 
-def test_fetch_dem_hang_times_out_within_budget_then_falls_back(monkeypatch):
-    """(b) a hung py3dep grind is cut at the wall-clock budget -> fallback."""
+def test_fetch_dem_hang_times_out_within_budget_then_gates(monkeypatch):
+    """(b) a hung py3dep grind is cut at the wall-clock budget -> gated error,
+    still bounded, still no silent copernicus swap."""
     import time as _time
 
     fake_storage = FakeStorageClient()
@@ -524,41 +534,78 @@ def test_fetch_dem_hang_times_out_within_budget_then_falls_back(monkeypatch):
         return b"TOO_LATE"
 
     monkeypatch.setattr(dem_mod, "_fetch_3dep_dem_bytes", hang)
-    _patch_copernicus_seam(monkeypatch, side_effect=_fake_copernicus_layer)
+    spy = _patch_copernicus_seam(monkeypatch, side_effect=_fake_copernicus_layer)
     start = _time.monotonic()
-    layer = fetch_dem(FORT_MYERS_BBOX, resolution_m=30)
+    with pytest.raises(dem_mod.DemAutoFallbackGateError):
+        fetch_dem(FORT_MYERS_BBOX, resolution_m=30)
     elapsed = _time.monotonic() - start
 
     assert elapsed < 5.0, f"timeout did not bound the attempt (took {elapsed:.1f}s)"
-    assert layer.fallback_note is not None
-    # The abandoned attempt's result is DISCARDED: nothing from the timed-out
-    # 3DEP thread reached the cache (only the mocked copernicus path may have).
+    spy.assert_not_called()
+    # The abandoned attempt's result is DISCARDED: nothing reached the cache.
     assert b"TOO_LATE" not in fake_storage.store.values()
 
 
 def test_fetch_dem_timeout_error_is_typed_service_failure():
-    """DemPrimaryTimeoutError is an UpstreamAPIError (feeds the ladder)."""
+    """DemPrimaryTimeoutError is an UpstreamAPIError (drives the auto gate)."""
     assert issubclass(dem_mod.DemPrimaryTimeoutError, UpstreamAPIError)
     assert dem_mod.DemPrimaryTimeoutError.error_code == "DEM_PRIMARY_TIMEOUT"
 
 
-def test_fetch_dem_both_sources_fail_raises_typed_error_naming_both(monkeypatch):
-    """(c) 3DEP AND Copernicus fail -> one UpstreamAPIError naming both."""
-    fake_storage = FakeStorageClient()
-    _patch_dem_read_through(monkeypatch, fake_storage)
+def test_fetch_dem_out_of_coverage_distinct_from_outage(monkeypatch):
+    """(c) a clearly NON-US AOI on the auto path fails FAST with a DISTINCT typed
+    DemOutOfCoverageError (naming copernicus) -- no 3DEP attempt is even made, and
+    the message differs from the outage-worded gate."""
+    # Spy that MUST NOT be called: out-of-coverage short-circuits before 3DEP.
+    called = {"n": 0}
 
-    def boom(_bbox, _res):
-        raise UpstreamAPIError("3DEP: Service is currently not available")
+    def spy_3dep(_bbox, _res):
+        called["n"] += 1
+        return b"UNREACHABLE"
 
-    monkeypatch.setattr(dem_mod, "_fetch_3dep_dem_bytes", boom)
-    _patch_copernicus_seam(monkeypatch, side_effect=RuntimeError("PC STAC search failed"))
-    with pytest.raises(UpstreamAPIError, match="BOTH sources") as exc_info:
-        fetch_dem(FORT_MYERS_BBOX, resolution_m=10)
+    monkeypatch.setattr(dem_mod, "_fetch_3dep_dem_bytes", spy_3dep)
+    cop_spy = _patch_copernicus_seam(monkeypatch, side_effect=_fake_copernicus_layer)
 
-    msg = str(exc_info.value)
-    assert "USGS 3DEP" in msg
-    assert "Copernicus GLO-30" in msg
-    assert fake_storage.store == {}
+    alps_bbox = (7.0, 45.0, 8.0, 46.0)  # Swiss Alps -- outside 3DEP
+    with pytest.raises(dem_mod.DemOutOfCoverageError) as exc_info:
+        fetch_dem(alps_bbox, resolution_m=10)
+
+    assert called["n"] == 0, "3DEP must not be attempted for a non-US AOI"
+    cop_spy.assert_not_called()
+    err = exc_info.value
+    assert err.error_code == "DEM_OUT_OF_COVERAGE"
+    msg = str(err)
+    assert "no coverage" in msg.lower()
+    assert 'source="copernicus"' in msg
+    # DISTINCT wording: out-of-coverage says "no coverage" / US-only, NOT the
+    # outage gate's "DEM fetch failed ... 3DEP is back" phrasing.
+    assert "is back" not in msg
+
+
+def test_fetch_dem_us_bbox_not_flagged_out_of_coverage(monkeypatch):
+    """A genuine US (Fort Myers) bbox is NEVER classified out-of-coverage: the
+    generous envelope lets the real 3DEP attempt proceed."""
+    monkeypatch.setattr(
+        dem_mod, "_fetch_3dep_dem_bytes", lambda bbox, res: b"FAKE_COG_BYTES"
+    )
+    _patch_dem_read_through(monkeypatch, FakeStorageClient())
+    layer = fetch_dem(FORT_MYERS_BBOX, resolution_m=10)
+    assert layer.name.startswith("USGS 3DEP DEM")
+
+
+def test_fetch_dem_pinned_copernicus_unchanged(monkeypatch):
+    """source="copernicus" is unchanged: it resolves the copernicus seam directly,
+    never attempts 3DEP, and is not gated."""
+    called = {"n": 0}
+    monkeypatch.setattr(
+        dem_mod, "_fetch_3dep_dem_bytes",
+        lambda b, r: called.__setitem__("n", called["n"] + 1) or b"X",
+    )
+    spy = _patch_copernicus_seam(monkeypatch, side_effect=_fake_copernicus_layer)
+    layer = fetch_dem(FORT_MYERS_BBOX, resolution_m=10, source="copernicus")
+    assert called["n"] == 0
+    spy.assert_called_once_with(bbox=FORT_MYERS_BBOX)
+    assert "Copernicus GLO-30" in layer.name
 
 
 def test_fetch_dem_pinned_3dep_no_fallback_suggests_copernicus(monkeypatch):

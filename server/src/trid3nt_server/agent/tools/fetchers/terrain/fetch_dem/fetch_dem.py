@@ -34,6 +34,8 @@ __all__ = [
     "fetch_dem",
     "DemPartialCoverageError",
     "DemPrimaryTimeoutError",
+    "DemAutoFallbackGateError",
+    "DemOutOfCoverageError",
 ]
 
 logger = logging.getLogger("trid3nt_server.agent.tools.fetchers.terrain.fetch_dem.fetch_dem")
@@ -73,6 +75,45 @@ class DemPrimaryTimeoutError(UpstreamAPIError):
     """
 
     error_code = "DEM_PRIMARY_TIMEOUT"
+    retryable = True
+
+class DemAutoFallbackGateError(UpstreamAPIError):
+    """3DEP failed on the default/auto path; a Copernicus swap needs USER approval.
+
+    NORM (2026-08-03, IDEAS.md "Loud, user-gated cross-dataset fallbacks"): a
+    CROSS-DATASET substitution -- 3DEP (US, 1-10 m LIDAR) -> Copernicus GLO-30
+    (global, 30 m RADAR) -- is a DIFFERENT measurement method at a COARSER
+    resolution. Swapping it silently degrades map integrity while looking like
+    success, so the ``source="auto"`` path no longer substitutes on its own: on a
+    3DEP SERVICE failure (outage / 5xx / timeout budget blow) it raises THIS typed,
+    retryable error, which (a) states 3DEP failed and why, (b) NAMES the substitute
+    as an explicit retry ``source="copernicus"``, and (c) states the tradeoff
+    plainly. It rides the tool-retry loop -- ``summarize_tool_result`` surfaces the
+    ``suggestions`` list -- so the agent narrates the tradeoff and the USER approves
+    the substitution conversationally. Distinct from ``DemOutOfCoverageError`` (3DEP
+    has no coverage here at all) and from the pinned ``source="3dep"`` error (the
+    user already chose 3DEP). SAME-data mirrors (identical dataset, different host)
+    may still fail over silently; only this cross-DATASET swap is gated.
+    """
+
+    error_code = "DEM_FALLBACK_GATE"
+    retryable = True
+
+class DemOutOfCoverageError(UpstreamAPIError):
+    """The requested bbox lies outside USGS 3DEP's coverage (US) entirely.
+
+    A pre-flight envelope check catches a clearly NON-US AOI (the Alps, Andes,
+    Himalaya, Africa, ...) BEFORE the 3DEP attempt, so the user gets an immediate,
+    DISTINCT "3DEP has no coverage there" error naming ``source="copernicus"`` (the
+    global GLO-30 30 m model) rather than waiting out a guaranteed-miss 3DEP attempt
+    or reading the outage-worded gate error. Kept distinct from
+    ``DemAutoFallbackGateError`` (3DEP covers the AOI but the SERVICE failed). The
+    coverage envelope is deliberately GENEROUS (see ``_US_3DEP_COVERAGE_ENVELOPES``)
+    so a border-straddling bbox falls through to a real 3DEP attempt, never a false
+    out-of-coverage error.
+    """
+
+    error_code = "DEM_OUT_OF_COVERAGE"
     retryable = True
 
 # ---------------------------------------------------------------------------
@@ -375,6 +416,49 @@ def _short_exc(exc: BaseException, limit: int = 220) -> str:
     text = " ".join(str(exc).split())
     return text if len(text) <= limit else text[: limit - 3] + "..."
 
+# ---------------------------------------------------------------------------
+# GATED cross-dataset fallback (2026-08-03, IDEAS.md norm). The auto path no
+# longer silently swaps 3DEP -> Copernicus; the swap is LOUD + USER-GATED via a
+# typed retryable error carrying the tradeoff + the copernicus retry arg.
+# ---------------------------------------------------------------------------
+
+#: The 3DEP -> Copernicus tradeoff, stated plainly. Shared by the outage-gate and
+#: out-of-coverage errors so the wording is identical wherever the user is asked.
+_DEM_COPERNICUS_TRADEOFF = (
+    "The substitute would be Copernicus GLO-30: a keyless GLOBAL 30 m DEM derived "
+    "from RADAR (TanDEM-X). That is a DIFFERENT measurement method at a COARSER "
+    "resolution than 3DEP's 1-10 m LIDAR-derived terrain -- coarser detail and a "
+    "radar-vs-lidar surface, fine for a hillshade / overview but not for site-scale "
+    "terrain analysis."
+)
+
+#: Generous US super-envelopes (min_lon, min_lat, max_lon, max_lat), WGS84, that
+#: USGS 3DEP plausibly covers: CONUS, Alaska (incl. the antimeridian Aleutian tail
+#: as a second box), Hawaii, and PR/USVI. DELIBERATELY generous -- a bbox that
+#: INTERSECTS any box is treated as in-coverage and the 3DEP attempt proceeds (a
+#: genuine outage then surfaces DemAutoFallbackGateError). Only a bbox intersecting
+#: NONE is classified out-of-coverage. So a border-straddling / slightly-off
+#: envelope can only ever DOWNGRADE the distinct out-of-coverage message to the
+#: outage gate (which still names copernicus) -- it can NEVER turn a foreign miss
+#: into a false success.
+_US_3DEP_COVERAGE_ENVELOPES: tuple[tuple[float, float, float, float], ...] = (
+    (-125.0, 24.0, -66.5, 49.5),   # CONUS
+    (-170.0, 51.0, -129.0, 72.0),  # mainland + southeast Alaska
+    (172.0, 51.0, 180.0, 54.0),    # Aleutian tail across the antimeridian
+    (-161.0, 18.0, -154.0, 23.0),  # Hawaii
+    (-68.0, 17.0, -64.0, 19.0),    # Puerto Rico / USVI
+)
+
+def _bbox_intersects(
+    a: tuple[float, float, float, float], b: tuple[float, float, float, float]
+) -> bool:
+    """True iff two ``(min_lon, min_lat, max_lon, max_lat)`` boxes overlap."""
+    return not (a[2] < b[0] or a[0] > b[2] or a[3] < b[1] or a[1] > b[3])
+
+def _bbox_in_us_coverage(bbox: tuple[float, float, float, float]) -> bool:
+    """True iff ``bbox`` intersects any US 3DEP super-envelope (generous check)."""
+    return any(_bbox_intersects(bbox, env) for env in _US_3DEP_COVERAGE_ENVELOPES)
+
 @register_tool(
     _FETCH_DEM_METADATA,
     # Annotations: readOnlyHint=True, openWorldHint=True (USGS 3DEP py3dep),
@@ -389,18 +473,20 @@ def fetch_dem(
     # tool_arg_normalizer, but kept as belt-and-suspenders).
     **_extra_ignored: Any,
 ) -> LayerURI:
-    """Fetch a digital elevation model (DEM) / terrain elevation for a bounding box (USGS 3DEP first with automatic Copernicus GLO-30 fallback; either source pinnable).
+    """Fetch a digital elevation model (DEM) / terrain elevation for a bounding box (USGS 3DEP US lidar; on a 3DEP outage the default path STOPS and asks before any Copernicus GLO-30 swap; either source pinnable).
 
     Use this (not ``fetch_topobathy``, which is coastal land+seafloor) for a plain
-    ground-elevation DEM. The default ``source="auto"`` tries USGS 3DEP (US, 10 m)
-    first and, if the 3DEP SERVICE is unavailable / times out, automatically falls
-    back to Copernicus GLO-30 (keyless GLOBAL 30 m) for the same bbox -- the
-    returned layer name and ``fallback_note`` say so honestly (GLO-30 data is
-    never presented as 3DEP). Prefer omitting ``source`` (or passing "auto");
-    pass ``source="copernicus"`` for terrain OUTSIDE the US (the Alps, Andes,
-    Himalaya, Africa, ...) -- the keyless global GLO-30 30 m model is a built-in
-    mode of this tool. Pass ``source="3dep"`` ONLY to pin 3DEP: a
-    pinned source never silently switches (a 3DEP outage then surfaces a typed
+    ground-elevation DEM. The default ``source="auto"`` tries USGS 3DEP (US, 1-10 m
+    lidar). If the 3DEP SERVICE is unavailable / times out it does NOT silently
+    substitute a different dataset: it raises a typed error that names
+    ``source="copernicus"`` (keyless GLOBAL 30 m radar) as the retry and states the
+    tradeoff, so YOU relay it and the USER approves the coarser cross-dataset swap
+    before it happens (a silent swap would degrade map integrity while looking like
+    success). Pass ``source="copernicus"`` DIRECTLY for terrain OUTSIDE the US (the
+    Alps, Andes, Himalaya, Africa, ...) -- the keyless global GLO-30 30 m model is a
+    built-in mode of this tool; a clearly non-US bbox on the auto path returns a
+    distinct out-of-coverage error naming copernicus. Pass ``source="3dep"`` ONLY to
+    pin 3DEP: a pinned source never switches (a 3DEP outage then surfaces a typed
     error suggesting Copernicus).
 
     **What it does:** Downloads a Cloud-Optimized GeoTIFF of ground elevation
@@ -440,11 +526,13 @@ def fetch_dem(
       10 m or 30 m are fastest on 3DEP's tile tree. A large bbox may deliver a
       coarser grid than requested (a pixel-budget auto-coarsen); the delivered
       spacing is stamped into the result.
-    - ``source`` (str, default ``"auto"``): ``"auto"`` (USGS 3DEP first,
-      automatic Copernicus GLO-30 fallback on a 3DEP service failure/timeout --
-      honestly labeled); ``"3dep"`` (PIN USGS 3DEP, US-only, honors
-      ``resolution_m``, no cross-source fallback); or ``"copernicus"`` (PIN
-      Copernicus GLO-30, global 30 m, keyless -- the built-in global mode).
+    - ``source`` (str, default ``"auto"``): ``"auto"`` (USGS 3DEP first; on a 3DEP
+      service failure/timeout it raises a GATED typed error naming
+      ``source="copernicus"`` for the user to approve -- NO silent cross-dataset
+      swap; a clearly non-US bbox raises a distinct out-of-coverage error);
+      ``"3dep"`` (PIN USGS 3DEP, US-only, honors ``resolution_m``, no fallback); or
+      ``"copernicus"`` (PIN Copernicus GLO-30, global 30 m radar, keyless -- the
+      built-in global mode, the user-approved retry target).
 
     **Returns:**
     A ``LayerURI`` pointing at a Cloud-Optimized GeoTIFF in the cache bucket
@@ -475,7 +563,7 @@ def fetch_dem(
 
     # Pin semantics (2026-07-13 fallback ladder): an EXPLICIT source="3dep" is
     # honored with no silent cross-source fallback; anything else ("auto", the
-    # default, or an unrecognized spelling) is the 3DEP-primary auto-ladder.
+    # default, or an unrecognized spelling) is the 3DEP-primary auto path.
     pinned_3dep = src in _DEM_SOURCE_3DEP_PIN_ALIASES
 
     # Continent ceiling: mirrors fetch_landcover's
@@ -489,6 +577,28 @@ def fetch_dem(
             f"{_DEM_CONTINENT_CEILING_KM2:,.0f} km^2 hard ceiling for fetch_dem "
             "(continent-scale; split into sub-regions)."
         )
+
+    # OUT-OF-COVERAGE gate (2026-08-03 norm): a clearly non-US AOI cannot be
+    # served by 3DEP at all, so on the AUTO path fail FAST with a DISTINCT typed
+    # error naming source="copernicus" -- rather than burning the 90 s 3DEP budget
+    # on a guaranteed miss and then surfacing the outage-worded gate. Kept off the
+    # pinned source="3dep" path (the user explicitly chose 3DEP; its own outage
+    # error already suggests copernicus, and the coverage envelope is generous
+    # enough that a genuine US request never trips this). See
+    # ``_US_3DEP_COVERAGE_ENVELOPES`` for why a border-straddling bbox never trips.
+    if not pinned_3dep and not _bbox_in_us_coverage(bbox):
+        oob_err = DemOutOfCoverageError(
+            f"USGS 3DEP has no coverage for bbox={bbox}: 3DEP is US-only (CONUS, "
+            "Alaska, Hawaii, PR/USVI) and this AOI falls outside it. No 3DEP "
+            'attempt was made. Retry with source="copernicus" for the global '
+            f"GLO-30 30 m DEM. {_DEM_COPERNICUS_TRADEOFF}"
+        )
+        # Structured recovery option (summarize_tool_result surfaces .suggestions).
+        oob_err.suggestions = [  # type: ignore[attr-defined]
+            'Retry with source="copernicus" (global GLO-30 30 m) for this '
+            "non-US AOI.",
+        ]
+        raise oob_err
 
     # Pixel-budget auto-coarsen: if the requested resolution would put more
     # than _DEM_PIXEL_BUDGET_PX pixels on the bbox's long axis, coarsen to
@@ -547,47 +657,39 @@ def fetch_dem(
                 "Retry with source='auto' to allow the automatic fallback.",
             ]
             raise pinned_err from primary_exc
+        # GATED cross-dataset fallback (2026-08-03 norm, IDEAS.md). The auto path
+        # NO LONGER silently swaps 3DEP -> Copernicus: that is a cross-DATASET swap
+        # (1-10 m lidar -> 30 m radar) whose silent substitution degrades map
+        # integrity while looking like success. Instead raise a typed, retryable
+        # error that (a) states 3DEP failed and why, (b) names source="copernicus"
+        # as the explicit retry, (c) states the tradeoff -- and rides the tool-retry
+        # loop (summarize_tool_result surfaces .suggestions) so the agent narrates
+        # it and the USER approves the swap conversationally. Nested scenario
+        # consumers (flood/topobathy/contours/elmfire/geoclaw/swmm/landslide)
+        # PROPAGATE this honestly (pause-and-ask) rather than silently degrading.
         logger.warning(
-            "fetch_dem: 3DEP primary failed (%s); attempting Copernicus "
-            "GLO-30 fallback for bbox=%s",
+            "fetch_dem: 3DEP primary failed (%s) for bbox=%s -- raising the "
+            "user-gated Copernicus-fallback error (no silent cross-dataset swap)",
             _short_exc(primary_exc),
             bbox,
         )
-        from trid3nt_server.agent.tools import TOOL_REGISTRY
-
-        try:
-            cop_layer = TOOL_REGISTRY["fetch_copernicus_dem"].fn(bbox=bbox)
-        except Exception as cop_exc:  # noqa: BLE001 -- typed both-failed error
-            both_err = UpstreamAPIError(
-                f"DEM fetch failed on BOTH sources for bbox={bbox} -- "
-                f"USGS 3DEP (primary): {_short_exc(primary_exc)}; "
-                f"Copernicus GLO-30 (fallback): {_short_exc(cop_exc)}. "
-                "No elevation data was fetched."
-            )
-            raise both_err from cop_exc
-        # HONESTY FLOOR: never present GLO-30 data as 3DEP. The name suffix
-        # reaches the layer list + the LLM's repr summary; fallback_note is the
-        # structured field (LayerURI additive contract, 2026-07-13).
-        res_note = (
-            ""
-            if requested_res == 30
-            else (
-                f" GLO-30 is fixed 30 m, so the requested {requested_res} m "
-                "3DEP resolution does not apply."
-            )
+        gate_err = DemAutoFallbackGateError(
+            f"USGS 3DEP DEM fetch failed for bbox={quantized} "
+            f"resolution={effective_res}m: {_short_exc(primary_exc)}. No dataset "
+            "was substituted automatically -- switching to a different dataset is a "
+            'user decision. Retry with source="copernicus" to use the global '
+            f"GLO-30 30 m DEM instead, or retry with source=\"3dep\" once USGS 3DEP "
+            f"is back. {_DEM_COPERNICUS_TRADEOFF}"
         )
-        return cop_layer.model_copy(
-            update={
-                "name": cop_layer.name + " (Copernicus GLO-30 -- 3DEP unavailable)",
-                "fallback_note": (
-                    "Automatic source fallback: USGS 3DEP (primary) was "
-                    f"unavailable ({_short_exc(primary_exc)}), so this DEM is "
-                    "Copernicus GLO-30 30 m data for the same bbox."
-                    + res_note
-                    + " Do not present this layer as 3DEP."
-                ),
-            }
-        )
+        # Structured recovery options: summarize_tool_result surfaces a
+        # ``suggestions`` list so the model relays the real, named options.
+        gate_err.suggestions = [  # type: ignore[attr-defined]
+            'Retry with source="copernicus" to substitute the global GLO-30 30 m '
+            "DEM (coarser 30 m radar, not 1-10 m lidar).",
+            'Retry with source="3dep" once USGS 3DEP recovers to keep 1-10 m '
+            "lidar terrain.",
+        ]
+        raise gate_err from primary_exc
     assert result.uri is not None, "fetch_dem is cacheable; uri must be set"
     name = f"USGS 3DEP DEM ({effective_res}m)"
     if downsampled:
