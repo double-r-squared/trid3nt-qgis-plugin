@@ -1,4 +1,16 @@
-# Mesh layer extraction (FOR NATE REVIEW - not yet signed)
+# Mesh layer extraction (SIGNED - NATE 2026-08-03)
+
+Sign-off decisions (NATE, decision picker 2026-08-03):
+1. M4 = BUILD the SFINCS quadtree leg for real atop the mesh layer
+   (cht_sfincs/hydromt quadtree, GPL-isolated worker) - the North Star
+   keeps its variable-resolution promise; the inert stub dies when the
+   real leg replaces it.
+2. Mesh preview/approve gate: ON by default for tin paradigms (TELEMAC
+   precedent), per-run-mode (USER-GATED) elsewhere; wireframe layer
+   always published.
+3. MODFLOW DISV/gridgen goes INTO the M-waves: M2 gains a disv generator
+   component alongside the folds - refinement-capable groundwater grids
+   from day one.
 
 NATE doctrine 2026-08-03: data + MESH + compute engine = the big 3
 ingredients of solid models. Data has its universal layer (source.yaml
