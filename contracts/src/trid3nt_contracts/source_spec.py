@@ -514,6 +514,19 @@ class HookSpec(GraceModel):
     #: walk) neither expresses. No prior spec declares it (strict no-op).
     pre_resolve: str | None = None
 
+    #: POST-ARRAY PER-BAND COLORMAP (raster-modes wave, ADR 0086). ``(spec, params)
+    #: -> dict[int, tuple[int, int, int, int]]``. A ``raster-cog`` source whose
+    #: rendered palette is a PURE function of a request param (the jrc-gsw per-band
+    #: occurrence/recurrence/seasonality/change ramp, computed from ``band`` alone --
+    #: never reads the fetched array, does no I/O) names this hook. The
+    #: ``stac_continuous_mosaic`` serializer bakes the returned GDAL ``{value:(r,g,b,
+    #: a)}`` table into the emitted uint8 COG's band-1 palette via the existing
+    #: ``array_to_cog_bytes(colormap=...)`` seam -- NOT a declarative colormap DSL
+    #: (the ramp is computed math, one consumer). PURE: it only computes over the
+    #: params. No prior spec declares it (strict no-op: the serializer bakes no
+    #: palette unless the spec names the hook).
+    colormap: str | None = None
+
     #: TRANSPORT-STATUS classification (keyed/misc wave, ADR 0071).
     #: ``(spec, status: int | None, body: str | None) -> RouterError | None``. The
     #: http_json transport collapses every non-2xx to a retryable UPSTREAM error;

@@ -1,0 +1,150 @@
+# Router source spec (raster-modes wave, stac_continuous_mosaic mode, ADR 0086).
+# Twin: fetch_jrc_global_surface_water.py -- JRC Global Surface Water 30 m long-term
+# statistics via PC STAC (continuous uint8 mosaic, bilinear + per-band nodata 0/253 +
+# two-tier PC REST /sign) with a pure per-band colormap baked into the band-1 palette.
+schema_version: v1
+
+name: fetch_jrc_global_surface_water
+source_class: jrc_global_surface_water
+error_prefix: JRC_GSW
+empty_error_suffix: NO_COVERAGE
+shape: raster-cog
+supports_global_query: false
+
+endpoints:
+  data:
+    url: "https://planetarycomputer.microsoft.com/api/stac/v1"
+auth:
+  mode: none
+
+params:
+  bbox: {type: bbox, required: true, quantize: round_6dp, error_suffix: BBOX_INVALID}
+  band:
+    type: enum
+    default: occurrence
+    lowercase: true
+    error_suffix: BAND_INVALID
+    values: [occurrence, recurrence, seasonality, change]
+gates:
+  max_bbox_deg2: 2.0
+
+ingest:
+  access: stac_continuous_mosaic
+  native_cell_m: 30.0
+  stac:
+    root: "https://planetarycomputer.microsoft.com/api/stac/v1"
+    collection: jrc-gsw
+    asset_by_param:
+      param: band
+      map:
+        occurrence: occurrence
+        recurrence: recurrence
+        seasonality: seasonality
+        change: change
+  mosaic:
+    nodata_by_param:
+      param: band
+      map: {occurrence: 0, recurrence: 0, seasonality: 0, change: 253}
+
+hooks:
+  colormap: jrc_global_surface_water.colormap
+
+normalize:
+  crs: "EPSG:4326"
+  units_by_param:
+    param: band
+    map:
+      occurrence: percent_of_time_water_1984_2021
+      recurrence: percent_interannual_recurrence
+      seasonality: months_water_present_per_year
+      change: change_intensity_100_is_no_change
+
+output:
+  layer_type: raster
+  ext: tif
+  role: input
+  style_preset: water_occurrence_pct
+  style_preset_by_param:
+    param: band
+    map:
+      occurrence: water_occurrence_pct
+      recurrence: water_recurrence_pct
+      seasonality: water_seasonality_months
+      change: water_change_intensity
+
+cache:
+  ttl_class: static-30d
+payload_estimate:
+  model: bbox_area
+  mb_per_sq_deg: 3.0
+  floor_mb: 0.2
+
+caveats:
+  - "JRC 38-year (1984-2021) Landsat surface-water statistics at 30 m; no covering item / all-nodata mosaic (ocean / fully-dry AOI) -> JRC_GSW_NO_COVERAGE (never a fabricated layer)"
+  - "AOI-scoped (<= 2.0 deg^2); the embedded per-band palette renders directly (occurrence/recurrence white->blue, seasonality 12-step blue, change red->white->blue diverging)"
+fallback: []
+
+# corpus lifted from sibling corpus.yaml.
+
+docstring: |-
+  Fetch JRC Global Surface Water long-term statistics for a bbox.
+
+  **What it does:** Searches the Microsoft Planetary Computer for the JRC
+  Global Surface Water ``jrc-gsw`` 30 m items covering ``bbox``, warps+window-
+  reads the requested ``band`` of each intersecting 10-degree tile to EPSG:4326
+  at 30 m, mosaics them, and returns a single-band uint8 COG with a
+  band-appropriate color ramp baked in. ``publish_layer`` colorizes it directly
+  from the embedded palette (no rescale/colormap override).
+
+  GSW is the European Commission JRC's 38-year (1984-2021) Landsat-derived
+  surface-water record reduced to per-pixel statistics  --  the long-term
+  BASELINE that answers "is this water permanent or seasonal?", "where has
+  water EVER been (the flood envelope)?", and "is this lake growing or
+  shrinking?".
+
+  **Bands** (``band`` parameter):
+  - ``occurrence`` (default): 0..100 % of the time water was present over the
+    whole record. The flood-frequency / where-water-ever-was layer.
+  - ``recurrence``: 0..100 % inter-annual recurrence (permanent water ~ 100 %,
+    seasonal lakes lower).
+  - ``seasonality``: 0..12 months of water per year (12 = permanent).
+  - ``change``: 0..200 intensity of change in occurrence between the
+    1984-1999 and 2000-2021 epochs (100 = no change, < 100 = loss, > 100 =
+    gain).
+
+  **When to use:**
+  - "Show permanent vs seasonal water" / "where is water all year?" -> default
+    ``occurrence`` (or ``seasonality`` for the month count).
+  - "Where has the river EVER flooded?" (the long-term flood envelope) ->
+    ``occurrence``.
+  - "Is this reservoir / lake shrinking?" -> ``change``.
+  - A long-term water BASELINE to compare against a current NDWI snapshot from
+    ``digitize_water_body``.
+
+  **When NOT to use:**
+  - Outlining water in ONE recent scene -> ``digitize_water_body`` (NDWI) or
+    ``fetch_sentinel2_truecolor``.
+  - A modeled flood DEPTH surface -> the SFINCS / SWMM engines.
+  - FEMA regulatory flood ZONES -> ``fetch_fema_nfhl_zones``.
+
+  **Parameters:**
+  - ``bbox`` (tuple): ``(min_lon, min_lat, max_lon, max_lat)`` EPSG:4326.
+    Required. AOI-scoped (<= 2.0 deg^2).
+  - ``band`` (str, optional): one of ``occurrence`` / ``recurrence`` /
+    ``seasonality`` / ``change``. Default ``occurrence``.
+
+  **Returns:** A ``LayerURI`` (``layer_type="raster"``, ``role="input"``)
+  pointing at a single-band paletted COG in the ``static-30d`` /
+  ``jrc_global_surface_water`` cache prefix. The embedded palette renders the
+  band's ramp directly (occurrence/recurrence white->blue, seasonality 12-step
+  blue, change red->white->blue diverging).
+
+  **Data source:** JRC Global Surface Water (European Commission Joint Research
+  Centre) via the Microsoft Planetary Computer STAC (``jrc-gsw``).
+
+  Honesty: no covering item, or an all-nodata mosaic (ocean / fully-dry AOI),
+  raises a typed ``JrcSurfaceWaterNoCoverageError``  --  never a fabricated
+  layer.
+
+  FR-CE-8: routed through ``read_through`` so identical ``(bbox, band)`` calls
+  reuse the cached COG.

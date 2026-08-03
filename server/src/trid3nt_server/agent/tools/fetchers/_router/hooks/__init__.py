@@ -232,3 +232,8 @@ from . import cds  # noqa: E402,F401
 # NO_STATIONS on all-empty) + a window-mode pre_resolve that switches the output schema
 # (instantaneous 5-col vs hydrograph 12-col) + style/units by the derived _mode.
 from . import usgs_nwis_gauges  # noqa: E402,F401
+# raster-modes wave (ADR 0086): fetch_jrc_global_surface_water -- the pure per-band
+# colormap hook (occurrence/recurrence/seasonality/change ramp, a function of the
+# band param alone) the stac_continuous_mosaic serializer bakes into the band-1
+# palette. The fetch side is the declarative stac_continuous_mosaic access mode.
+from . import jrc_global_surface_water  # noqa: E402,F401

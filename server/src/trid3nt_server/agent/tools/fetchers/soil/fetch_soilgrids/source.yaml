@@ -1,0 +1,174 @@
+# Router source spec (raster-modes wave, projected_vrt_window mode, ADR 0086).
+# Twin: fetch_soilgrids.py -- ISRIC SoilGrids 2.0 global 250 m soil properties. The
+# Homolosine VRT is windowed in the SOURCE projection (transform_bounds 4326->
+# Homolosine, densified + the twin's floor/ceil + 2 px pad), the intersecting members
+# read through the coalescing transport, reprojected native->4326 (bilinear, ~250 m),
+# and the fixed-point Int16 scaled to physical units per property.
+schema_version: v1
+
+name: fetch_soilgrids
+source_class: soilgrids
+input_error_suffix: INPUT_INVALID
+empty_error_suffix: EMPTY
+shape: raster-cog
+supports_global_query: false
+
+endpoints:
+  data:
+    url_template: "https://files.isric.org/soilgrids/latest/data/{soil_property}/{soil_property}_{depth}_mean.vrt"
+auth:
+  mode: none
+  user_agent: "trid3nt/0.1 (Hazard Modeling Agent; https://github.com/double-r-squared/trid3nt-qgis-plugin; agent@trid3nt.dev)"
+
+params:
+  bbox: {type: bbox, required: true, quantize: round_6dp}
+  soil_property:
+    type: enum
+    default: clay
+    lowercase: true
+    values: [clay, sand, silt, soc, bdod, phh2o]
+    aliases:
+      ph: phh2o
+      soil_ph: phh2o
+      organic_carbon: soc
+      soil_organic_carbon: soc
+      bulk_density: bdod
+      clay_content: clay
+      sand_content: sand
+      silt_content: silt
+  depth:
+    type: enum
+    default: "0-5cm"
+    lowercase: true
+    values: ["0-5cm", "5-15cm", "15-30cm", "30-60cm", "60-100cm", "100-200cm"]
+    aliases:
+      "0-5": "0-5cm"
+      "0-5 cm": "0-5cm"
+      "5-15": "5-15cm"
+      "5-15 cm": "5-15cm"
+      "15-30": "15-30cm"
+      "15-30 cm": "15-30cm"
+      "30-60": "30-60cm"
+      "30-60 cm": "30-60cm"
+      "60-100": "60-100cm"
+      "60-100 cm": "60-100cm"
+      "100-200": "100-200cm"
+      "100-200 cm": "100-200cm"
+gates:
+  max_bbox_deg2: 0.5
+
+ingest:
+  access: projected_vrt_window
+  serialize:
+    nodata: -9999.0
+    dtype: float32
+  projected_window:
+    coverage_bbox: [-180.0, -62.0, 180.0, 84.0]
+    src_nodata: -32768
+    densify_pts: 21
+    pad_px: 2
+    target_res_deg: 0.0025
+    max_window_pixels: 400000000
+    scale_by_param:
+      param: soil_property
+      map: {clay: 10.0, sand: 10.0, silt: 10.0, soc: 10.0, bdod: 100.0, phh2o: 10.0}
+
+normalize:
+  crs: "EPSG:4326"
+  units_by_param:
+    param: soil_property
+    map: {clay: percent, sand: percent, silt: percent, soc: "g/kg", bdod: "kg/dm3", phh2o: pH}
+
+output:
+  layer_type: raster
+  ext: tif
+  role: input
+  style_preset: soil_clay_pct
+  style_preset_by_param:
+    param: soil_property
+    map:
+      clay: soil_clay_pct
+      sand: soil_sand_pct
+      silt: soil_silt_pct
+      soc: soil_soc
+      bdod: soil_bdod
+      phh2o: soil_phh2o
+
+cache:
+  ttl_class: static-30d
+payload_estimate:
+  model: bbox_area
+  mb_per_sq_deg: 1.5
+  floor_mb: 0.1
+
+caveats:
+  - "ISRIC SoilGrids 2.0 global 250 m ML soil-property prediction; an all-NoData window (ocean / off the soil land surface) -> SOILGRIDS_EMPTY (never a fabricated layer)"
+  - "AOI-scoped (<= 0.5 deg^2); a 250 m ML prediction, NOT a surveyed NRCS map unit -- for US work use fetch_statsgo_soils"
+fallback: []
+
+# corpus lifted from sibling corpus.yaml.
+
+docstring: |-
+  ISRIC SoilGrids 2.0 global soil-property raster (clay/sand/silt/soc/bdod/pH).
+
+  **What it does:** Fetches the ISRIC SoilGrids 2.0 global ~250 m prediction of
+  a soil property at a standard depth for the requested bbox. Opens the global
+  SoilGrids VRT mosaic via GDAL ``/vsicurl/`` byte-range HTTP, window-reads only
+  the overlapping native (Interrupted Goode Homolosine) pixels, reprojects them
+  to EPSG:4326 at ~250 m, applies the property scaling to recover physical
+  units, and writes a single-band float32 COG to the 30-day cache.
+
+  This is GLOBAL -- the worldwide complement to the US-only STATSGO/SSURGO
+  chain (``fetch_statsgo_soils``). Use it for soil texture, organic carbon,
+  bulk density, or pH anywhere on Earth at a consistent 250 m schema.
+
+  **Properties (``soil_property``):**
+  - ``"clay"`` / ``"sand"`` / ``"silt"`` -- texture fraction, percent.
+  - ``"soc"`` -- soil organic carbon, g/kg.
+  - ``"bdod"`` -- bulk density of the fine earth fraction, kg/dm3.
+  - ``"phh2o"`` -- pH measured in water.
+
+  **Depths (``depth``):** GlobalSoilMap standard intervals
+  ``"0-5cm"``, ``"5-15cm"``, ``"15-30cm"``, ``"30-60cm"``, ``"60-100cm"``,
+  ``"100-200cm"`` (default ``"0-5cm"`` -- the surface layer that drives
+  infiltration and ag rooting).
+
+  **When to use:**
+  - Soil texture / organic carbon / pH / bulk density for any NON-US (or
+    cross-border) area -- agriculture, hydrology, infiltration substrate.
+  - A consistent 250 m global soil layer where US STATSGO/SSURGO does not
+    reach (Africa, Asia, South America, Europe).
+  - Pair with ``fetch_gcn250_curve_numbers`` (infiltration CN) and
+    ``fetch_dem`` (terrain) for a global hydrologic forcing stack.
+
+  **When NOT to use:**
+  - US work needing the NRCS map-unit soil survey (SSURGO ~30 m or STATSGO) --
+    use ``fetch_statsgo_soils``; SoilGrids is a 250 m machine-learned
+    prediction, not a surveyed map unit.
+  - SCS curve numbers for runoff -- use ``fetch_gcn250_curve_numbers``.
+  - Antarctica / far Arctic (SoilGrids excludes them).
+
+  **Parameters:**
+  - ``bbox`` (tuple): ``(min_lon, min_lat, max_lon, max_lat)`` EPSG:4326.
+    Required (``supports_global_query=False`` -- each global mosaic is ~5 GB).
+    AOI-scoped (<= 0.5 deg^2).
+  - ``soil_property`` (str, default ``"clay"``): one of clay/sand/silt/soc/
+    bdod/phh2o (synonyms like ``"ph"``, ``"organic_carbon"``,
+    ``"bulk_density"`` are accepted).
+  - ``depth`` (str, default ``"0-5cm"``): one of the six standard depths.
+
+  **Returns:** A ``LayerURI`` (``layer_type="raster"``, ``role="input"``)
+  pointing at a single-band float32 COG in the ``static-30d`` / ``soilgrids``
+  cache prefix. ``units`` is the physical unit (percent / g/kg / kg/dm3 / pH),
+  NoData ``-9999``, ~250 m, EPSG:4326. ``style_preset`` is a per-property
+  continuous token (e.g. ``"soil_clay_pct"``).
+
+  **Data source:** ISRIC SoilGrids 2.0 (CC-BY 4.0, no API key) --
+  ``https://files.isric.org/soilgrids/latest/data``.
+
+  Honesty: an all-NoData window (ocean / off the soil surface) raises a typed
+  ``SoilGridsEmptyError``; an unknown property/depth raises
+  ``SoilGridsInputError`` -- never a fabricated layer.
+
+  FR-CE-8: routed through ``read_through`` so identical
+  ``(bbox, property, depth)`` calls reuse the cached COG.

@@ -94,7 +94,7 @@ def test_default_config_identity():
     r = _run_arm(None)
     assert r["arm"] is None
     assert r["registry_size"] == 190
-    assert r["n_specs"] == 81  # ADR 0085: +fetch_era5_reanalysis +fetch_gtsm_tide_surge +fetch_usgs_nwis_gauges
+    assert r["n_specs"] == 83  # ADR 0086: +fetch_jrc_global_surface_water +fetch_soilgrids
     # They stay ambient (tier=general) and IN the declarable pool.
     assert r["gridmet_tier"] == "general"
     assert r["any_spec_in_declarable"] is True
@@ -125,7 +125,7 @@ def test_arm2_specs_leave_pool_but_stay_indexed():
     # + ADR 0076 wfigs record fold; + ADR 0077 movebank keyed-CSV fold; + ADR 0079
     # quick-folds firms / noaa_sst / sentinel1; + ADR 0080 STAC-composite trio
     # landsat / sentinel2 / naip; + ADR 0081 fault_sources constant-cache fold).
-    assert r["declarable_size"] == _run_arm(None)["declarable_size"] - 80  # ADR 0085: +era5 +gtsm +nwis leave pool
+    assert r["declarable_size"] == _run_arm(None)["declarable_size"] - 82  # ADR 0086: +jrc +soilgrids also leave the arm-ON pool
     # Still searchable + rankable so a search hit can gate-expand it.
     assert r["gridmet_in_index"] is True
     assert r["gridmet_ranked_top25"] is True
@@ -232,7 +232,7 @@ def test_arm3_specs_leave_pool_and_source_param():
     assert r["gridmet_tier"] == "catalog"
     assert r["any_spec_in_declarable"] is False  # every spec leaves the ambient pool
     # -70, not -71: fetch_copernicus_dem is tier="internal" (already out of the pool).
-    assert r["declarable_size"] == _run_arm(None)["declarable_size"] - 80  # ADR 0085: +era5 +gtsm +nwis leave pool
+    assert r["declarable_size"] == _run_arm(None)["declarable_size"] - 82  # ADR 0086: +jrc +soilgrids also leave the arm-ON pool
     assert r["gridmet_in_index"] is True
     # fetch_from_catalog exposes the source branch under Arm 3 (like Arm 1).
     assert r["ffc_params"] == ["entry_id", "params", "source", "_extra_ignored"]
@@ -261,7 +261,7 @@ def test_stratum_index_is_source_scoped(_stratum):
         if getattr(TOOL_REGISTRY[n].metadata, "tier", "general") != "internal"
     }
     assert set(idx.tool_names) == model_facing
-    assert len(idx.tool_names) == 80  # 81 specs minus the internal copernicus seam (ADR 0085)
+    assert len(idx.tool_names) == 82  # 83 specs minus the internal copernicus seam (ADR 0086)
 
 
 def test_stratum_activates_on_data_ask_enum_rank_order(_stratum):

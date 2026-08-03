@@ -427,10 +427,6 @@ def is_credential_shaped_error(tool_name: str, error: BaseException) -> bool:
             "FirmsMissingKeyError",
             "EBirdAuthError",
             "EBirdMissingKeyError",
-            "ERA5AuthError",
-            "ERA5MissingKeyError",
-            "GTSMAuthError",
-            "GTSMMissingKeyError",
             "MovebankAuthError",
             "IUCNAuthError",
         )

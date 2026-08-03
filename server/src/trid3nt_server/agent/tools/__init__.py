@@ -248,7 +248,9 @@ from .fetchers.hydrology.fetch_cama_flood_discharge import fetch_cama_flood_disc
 # source.yaml + categorical_tile_grid mode is promoted by register_specs_from_tree.
 # fetch_high_water_marks FOLDED to a spec-driven surface (ADR 0073): its source.yaml
 # + usgs_stn_hwm hooks register at import via register_specs_from_tree (envelope hook).
-from .fetchers.hydrology.fetch_jrc_global_surface_water import fetch_jrc_global_surface_water  # noqa: E402,F401
+# fetch_jrc_global_surface_water FOLDED to a spec-driven surface (ADR 0086): its
+# source.yaml + the stac_continuous_mosaic access mode + the jrc_global_surface_water
+# colormap hook register at import via register_specs_from_tree (twin DELETED).
 # fetch_nhd_waterbodies: data-router fold phase-2 wave-2 -- twin DELETED, now
 # spec-driven (source.yaml + router), registered by _register_router_specs() below.
 # fetch_nhdplus_nldi_navigate: data-router fold phase-2 wave-3 (ADR 0040) -- twin
@@ -419,7 +421,10 @@ from .fetchers.socioeconomic.geocode_location import geocode_location  # noqa: E
 # -- fetchers/soil --
 # fetch_gcn250_curve_numbers: fetcher-fold wave-8 -- twin DELETED, now spec-driven
 # (source.yaml + router direct_window), registered by _register_router_specs() below.
-from .fetchers.soil.fetch_soilgrids import fetch_soilgrids  # noqa: E402,F401
+# fetch_soilgrids FOLDED to a spec-driven surface (ADR 0086): its source.yaml + the
+# projected_vrt_window access mode (Homolosine VRT windowed in the source projection +
+# native->4326 bilinear reproject + per-property Int16 scale) register at import via
+# register_specs_from_tree (twin DELETED).
 # fetch_statsgo_soils: library-delegate raster fold (ADR 0074) -- twin DELETED, now
 # spec-driven (source.yaml + pfdf_statsgo delegate/validate hooks over the generic
 # library_delegate mode); auto-registered by _register_router_specs() below.
