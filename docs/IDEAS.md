@@ -168,3 +168,19 @@ button toggles. Paired template rule: every template accounts for its
 output shape (map raster / graph / both) and its graphs are more-or-less
 COPIED from the cited published example (modflow6-examples is chart-rich)
 - a template wave without its example's charts is incomplete.
+
+## 2026-08-03 - USER TOOL BUILDER (NATE, tabbed for later integration)
+A tool-builder feature: create custom tools on the side to fill gaps in
+the tool surface. The feature captures EVERYTHING a regular tool needs
+(registration metadata, docstring w/ front-loaded routing block, corpus
+queries, typed errors, payload estimate, cache class) so a user-authored
+tool is a first-class citizen. Authoring shapes: ask the AI to build it,
+or import one. Custom tools live in separate "user" subfolders under the
+tools/workflows trees. They REUSE existing components: call fetchers
+(TOOL_REGISTRY / route()), trigger popup cards for user input (the
+INPUT_REQUIRED gate seam), emit charts/layers via the standard envelopes.
+STATUS: idea only - do NOT build the feature yet. IMMEDIATE deliverable:
+custom-authoring documentation living at the tool/workflow dirs (a
+docs/authoring/custom-user-tools.md + README pointers in the trees)
+describing the full tool contract + reusable seams, written AFTER the
+door dissolution (it must document the post-dissolve structure).
