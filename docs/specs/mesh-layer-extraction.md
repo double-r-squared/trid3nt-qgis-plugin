@@ -30,8 +30,9 @@ the session transcript; key facts restated inline with file:line cites).
   resolution ladder).
 - TRUTH CORRECTION: the SFINCS "quadtree+SnapWave" path is an INERT STUB -
   the flag falls through to the regular grid; build_sfincs_quadtree_deck
-  exists nowhere; only the read-side probe was built. The North Star's
-  mesh leg is 0% implemented and fails honestly when triggered.
+  exists nowhere; only the read-side probe was built. The flagship SFINCS
+  validation case's mesh leg is 0% implemented and fails honestly when
+  triggered.
 - oceanmesh: ZERO footprint (no code, no dep, prose only). Purely queued.
 - SFINCS/SWAN/MODFLOW/GeoClaw: regular grids or patch-AMR our deck
   builders emit directly; resolution is the only lever.
@@ -121,10 +122,10 @@ Cross-cutting, promoted from existing code to pipeline features:
 - M3 HECRAS WRITER: hecras_geometry writer + RasGeomPreprocess in the
   HEC-RAS worker; Muncie replication = the acceptance gate (feeds the
   HEC-RAS engine landing).
-- M4 QUADTREE TRUTH: either build the SFINCS quadtree leg for real atop
-  stage 2 (cht_sfincs/hydromt quadtree, GPL-isolated) or re-scope the
-  North Star to subgrid-regular and DELETE the inert stub - NATE call,
-  ledger row either way. oceanmesh adoption rides this decision.
+- M4 QUADTREE TRUTH: SIGNED as BUILD (decision 1 above) - the SFINCS
+  quadtree leg gets built for real atop stage 2 (cht_sfincs/hydromt
+  quadtree, GPL-isolated); the inert stub dies when the real leg
+  replaces it. oceanmesh adoption rides this wave.
 
 ## Open questions for NATE at sign-off
 
