@@ -114,6 +114,13 @@ Cross-cutting, promoted from existing code to pipeline features:
   mesher behind it. Zero behavior change (byte/value-identical decks on
   golden fixtures = the gate). Composers' private mesh code deleted as
   it relocates (ledger rows).
+  SPOT-CHECK DELIVERABLE (NATE 2026-08-04): every relocated/folded mesh
+  path publishes its mesh AS A LAYER on a real AOI - SWMM cell polygons,
+  TELEMAC triangle wireframe, and a NEW regular-grid outline preview for
+  the folded grid_geometry component (SFINCS/SWAN/MODFLOW today have no
+  preview at all) - through the normal layer pipeline so NATE can load
+  and spot-check them in QGIS, with honest screenshots attached to the
+  wave report (screenshot-proof norm).
 - M2 GENERALIZE: drawn-geometry roles (breakline/breach/refine_region/
   aoi-clip) wired for ALL engines; the dead aoi_features path either
   wired or deleted; mesh preview/approve gate shared; SWMM+TELEMAC
