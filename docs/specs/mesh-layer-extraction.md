@@ -2,7 +2,7 @@
 
 Sign-off decisions (NATE, decision picker 2026-08-03):
 1. M4 = BUILD the SFINCS quadtree leg for real atop the mesh layer
-   (cht_sfincs/hydromt quadtree, GPL-isolated worker) - the North Star
+   (cht_sfincs/hydromt quadtree, GPL-isolated worker) - the SFINCS validation case
    keeps its variable-resolution promise; the inert stub dies when the
    real leg replaces it.
 2. Mesh preview/approve gate: ON by default for tin paradigms (TELEMAC
