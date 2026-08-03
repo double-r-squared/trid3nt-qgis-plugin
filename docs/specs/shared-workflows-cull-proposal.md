@@ -1,6 +1,6 @@
 # Shared-Workflows Cull Proposal (FOR NATE REVIEW)
 
-Scope: five `agent/workflows/shared/model_*` composers suspected of being North-Star
+Scope: five `agent/workflows/shared/model_*` composers suspected of being reference-scenario
 wrappers. Read-only audit (readers + cross-check + spot-verify). Nothing deleted here.
 CULL STANDARD: a tool dies ONLY after a live replication of its process using
 existing/remaining tools; a MISSING primitive => verdict is extract-first, never

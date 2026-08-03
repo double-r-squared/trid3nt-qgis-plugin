@@ -200,11 +200,11 @@ def _build_surge_forcing_members(
 ]:
     """Translate the workflow ``surge_forcing`` dict into typed ``ForcingSpec`` members.
 
-    The COASTAL SFINCS North Star couples surge / tide / discharge / wind /
+    Coastal SFINCS couples surge / tide / discharge / wind /
     pressure forcing into the SFINCS deck. The workflow caller (or a future
     fetcher-plumbing step that materialises ``fetch_gtsm_tide_surge`` /
-    ``fetch_noaa_coops_tides`` / ``fetch_noaa_nwm_streamflow`` /
-    ``fetch_cama_flood_discharge`` hydrographs to CSV + locations) supplies a
+    ``fetch_noaa_coops_tides`` / ``fetch_noaa_nwm_streamflow``
+    hydrographs to CSV + locations) supplies a
     nested dict::
 
         {

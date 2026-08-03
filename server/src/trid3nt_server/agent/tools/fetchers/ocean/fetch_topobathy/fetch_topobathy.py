@@ -1,4 +1,4 @@
-"""``fetch_topobathy`` atomic tool -- coastal merged topo-bathymetry DEM (SFINCS North Star P1).
+"""``fetch_topobathy`` atomic tool -- coastal merged topo-bathymetry DEM (coastal SFINCS).
 """
 
 from __future__ import annotations
@@ -168,7 +168,7 @@ NCEI_REGIONAL_COASTAL_DEMS: tuple[dict[str, Any], ...] = (
     },
 )
 
-#: Target output CRS -- UTM 16N (covers the SFINCS North Star demo AOI, the
+#: Target output CRS -- UTM 16N (covers the coastal SFINCS reference AOI, the
 #: Florida panhandle / Mexico Beach). NAVD88 vertical is preserved (the merge
 #: + reproject only touches the horizontal grid).
 TARGET_CRS = "EPSG:32616"
@@ -1363,7 +1363,7 @@ def fetch_topobathy(
     **When to use:**
         - A COASTAL flood / surge / run-up workflow (SFINCS coastal) that needs
           a continuous bed from the hills to the deep water -- the canonical
-          North Star entry point. ``fetch_dem`` alone is LAND-ONLY and leaves
+          coastal-bathymetry entry point. ``fetch_dem`` alone is LAND-ONLY and leaves
           the nearshore as nodata.
         - User asks for "topobathy", "bathymetry + topography", "the sea floor
           and the land together", or "a DEM that includes the water depth".

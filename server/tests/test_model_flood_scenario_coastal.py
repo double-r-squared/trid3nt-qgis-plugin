@@ -1,5 +1,5 @@
-"""Unit tests for the COASTAL-AOI branch in ``model_flood_scenario`` (SFINCS
-North Star P1 — fetch_topobathy wire seam).
+"""Unit tests for the COASTAL-AOI branch in ``model_flood_scenario`` (coastal
+SFINCS -- fetch_topobathy wire seam).
 
 The workflow routes the terrain fetch through ``fetch_topobathy`` (a SEAMLESS
 land-plus-seafloor DEM merging USGS 3DEP land with NOAA NCEI CUDEM bathymetry)
@@ -50,7 +50,7 @@ from trid3nt_contracts.execution import ExecutionHandle, LayerURI, ModelSetup, R
 # Test domains
 # --------------------------------------------------------------------------- #
 
-# Coastal AOI — Florida panhandle / Mexico Beach (the SFINCS North Star demo).
+# Coastal AOI -- Florida panhandle / Mexico Beach (the coastal SFINCS reference).
 _COASTAL_BBOX = (-85.75, 29.55, -85.25, 30.20)
 # Inland AOI — Idaho (Case 3; no coast, pure pluvial).
 _INLAND_BBOX = (-116.30, 43.55, -116.10, 43.70)

@@ -44,7 +44,7 @@ def test_warning_envelope_round_trips_through_json() -> None:
     wid = new_ulid()
     env = PayloadWarningEnvelopePayload(
         warning_id=wid,
-        tool_name="fetch_nexrad_reflectivity",
+        tool_name="show_nexrad_radar",
         tool_args={"bbox": [-82.5, 26.5, -82.0, 27.0], "bands": ["reflectivity"]},
         estimated_mb=87.3,
         threshold_mb=WARNING_THRESHOLD_MB_DEFAULT,
@@ -155,7 +155,7 @@ def test_warning_hard_cap_shape_omits_proceed() -> None:
     remain."""
     env = PayloadWarningEnvelopePayload(
         warning_id=new_ulid(),
-        tool_name="fetch_nexrad_reflectivity",
+        tool_name="show_nexrad_radar",
         tool_args={"bbox": [-100, 30, -90, 40]},
         estimated_mb=HARD_CAP_MB_DEFAULT + 1.0,
         threshold_mb=HARD_CAP_MB_DEFAULT,

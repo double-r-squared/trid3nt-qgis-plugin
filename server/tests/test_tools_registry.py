@@ -155,7 +155,7 @@ def test_global_query_scope_audit():
     Two tools flipped to True in this audit:
     - ``fetch_nws_alerts_conus`` — the unscoped ``/alerts/active`` CONUS sweep
       (~200KB) is its primary use; resolves OQ-0105-GLOBAL-QUERY-FIELD.
-    - ``fetch_nexrad_reflectivity`` — returns only a CONUS-wide WMS service URL
+    - ``show_nexrad_radar`` — returns only a CONUS-wide WMS service URL
       (~0.1MB, no pixel transfer); the intent had been parked in dead code
       (``_INTENDED_METADATA_EXTENSIONS``) and never reached the live metadata.
       Resolves OQ-0102-METADATA-FIELDS for the global-query flag.
@@ -167,7 +167,7 @@ def test_global_query_scope_audit():
         "fetch_nws_alerts_conus",       # /alerts/active CONUS sweep (this job)
         "fetch_era5_reanalysis",        # ERA5 is a global reanalysis grid
         "fetch_mrms_qpe",               # CONUS radar QPE mosaic
-        "fetch_nexrad_reflectivity",    # WMS service URL; bbox=None => CONUS
+        "show_nexrad_radar",    # WMS service URL; bbox=None => CONUS
         "fetch_nifc_fire_perimeters",   # active national fire perimeters
         "fetch_usace_dams",             # NID CONUS sweep (ArcGIS query)
         "fetch_usace_levees",           # NLD CONUS sweep (ArcGIS query)

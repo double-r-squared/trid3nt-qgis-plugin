@@ -1,7 +1,7 @@
 """``model_river_seepage_scenario`` - MODFLOW river-seepage composer.
 
 The end-to-end higher-order workflow for the MODFLOW river-seepage
-North Star: it turns a place + a contaminant + a release into a rendered
+Reference scenario: it turns a place + a contaminant + a release into a rendered
 gaining/losing river-seepage layer (where the river leaks into the aquifer vs
 draws baseflow out of it) plus the contaminant plume that entered with the
 seepage. It is the river-coupled analogue of

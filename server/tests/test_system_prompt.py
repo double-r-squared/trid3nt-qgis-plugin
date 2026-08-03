@@ -61,7 +61,7 @@ def test_system_prompt_forbids_ending_at_precursor() -> None:
 def test_system_prompt_carries_named_tool_example() -> None:
     """A2 prompt must include at least one geocode → fetch_* → narrate example."""
     # NEXRAD + Florida is the canonical worked example.
-    assert "fetch_nexrad_reflectivity" in SYSTEM_PROMPT
+    assert "show_nexrad_radar" in SYSTEM_PROMPT
     assert "geocode_location" in SYSTEM_PROMPT
     # And the WDPA Big Cypress example that anchored the baseline finding.
     assert "fetch_wdpa_protected_areas" in SYSTEM_PROMPT

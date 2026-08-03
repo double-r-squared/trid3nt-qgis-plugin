@@ -41,7 +41,7 @@ from trid3nt_server.agent.workflows.sfincs.postprocess_sfincs import (  # noqa: 
 )
 
 
-# Mexico Beach UTM zone 16N (matches the coastal North Star deck CRS).
+# Mexico Beach UTM zone 16N (matches the coastal SFINCS deck CRS).
 _UTM16N = "EPSG:32616"
 # A bbox over the Mexico Beach panhandle (EPSG:4326).
 _BBOX = (-85.45, 29.93, -85.38, 29.98)

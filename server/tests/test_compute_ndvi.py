@@ -1,4 +1,4 @@
-"""Unit tests for the ``compute_ndvi`` atomic tool (conservation micro-North-Star).
+"""Unit tests for the ``compute_ndvi`` atomic tool (conservation reference scenario).
 
 Coverage:
 - Registration in TOOL_REGISTRY with expected metadata (+ payload estimator).

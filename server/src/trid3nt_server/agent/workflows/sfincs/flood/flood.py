@@ -322,7 +322,7 @@ async def model_flood_scenario(
             (timeseries CSV + locations geofile, or a geodataset / grid netCDF)
             materialised from the forcing fetchers (``fetch_gtsm_tide_surge`` /
             ``fetch_noaa_coops_tides`` / ``fetch_noaa_nwm_streamflow`` /
-            ``fetch_cama_flood_discharge`` / ERA5). See
+            ERA5). See
             ``_build_surge_forcing_members``. ``None`` (default) → pure-pluvial
             deck (NO surge blocks emitted; byte-identical to the v0.1 deck).
         enable_subgrid: emit a SFINCS ``setup_subgrid`` block so the solve runs
@@ -337,7 +337,7 @@ async def model_flood_scenario(
         building_obstacle_mode: ``"exclude"`` (default) makes footprint cells
             INACTIVE no-flow holes; ``"raise"`` keeps them active but lifts their
             bed elevation via the subgrid (requires subgrid; auto-enabled).
-        coastal: COASTAL-AOI flag (SFINCS North Star P1). When ``True`` -- OR
+        coastal: COASTAL-AOI flag (coastal SFINCS). When ``True`` -- OR
             implicitly when ``surge_forcing`` is supplied (a water-level / surge
             boundary is physically incoherent without a nearshore bed) -- the DEM
             fetch is routed through ``fetch_topobathy`` instead of ``fetch_dem``.
@@ -363,7 +363,7 @@ async def model_flood_scenario(
             from the sea, instead of the old silent rainfall-only degrade. ALL
             gated on ``is_coastal``  -  the
             inland/pluvial path is byte-identical (no boundary, quadtree unchanged).
-        quadtree: COASTAL SFINCS North Star -- build the deck with a multi-level
+        quadtree: coastal SFINCS -- build the deck with a multi-level
             REFINED QUADTREE grid + SnapWave wave coupling (incident + infragravity
             waves) instead of a regular grid. This authoring requires cht_sfincs
             (GPL-3.0), so it runs in a DEDICATED GPL-isolated Batch worker the
@@ -459,7 +459,7 @@ async def model_flood_scenario(
         forcing_raster_uri,
     )
 
-    # --- Coastal-AOI detection (SFINCS North Star P1) ---
+    # --- Coastal-AOI detection (coastal SFINCS) ---
     # Signal = explicit ``coastal`` flag OR ``surge_forcing`` present. A surge /
     # water-level boundary is physically incoherent on a land-only DEM (there is
     # no nearshore bed to route run-up over), so a surge request implies a
@@ -467,7 +467,7 @@ async def model_flood_scenario(
     # testable signal off the existing workflow inputs -- no geometry/coastline
     # lookup needed. When False, the DEM fetch stays on ``fetch_dem`` exactly as
     # the v0.1 land/pluvial path (regression-critical).
-    # ``quadtree`` (the cht_sfincs quadtree+SnapWave deck-build North Star) is a
+    # ``quadtree`` (the cht_sfincs quadtree+SnapWave deck-build) is a
     # coastal-only path -- a wave-coupled run needs the merged topo-bathymetry
     # surface -- so it implies coastal regardless of the explicit flag.
     # scenario-coverage couplings. A ``compound`` run is BOTH a
@@ -651,7 +651,7 @@ async def model_flood_scenario(
     # live breadcrumb can show "k/total" while it runs. The fused fetcher phase
     # counts as ONE substep (it runs as a single off-loop ``_fetcher_chain`` under
     # one timeout budget -- see below), then build + solve + postprocess + publish.
-    # The quadtree (coastal North Star) path swaps the regular run_solver for the
+    # The quadtree (coastal) path swaps the regular run_solver for the
     # combined deck-build+solve substep and adds a wave-postprocess substep. The
     # plan is best-effort + re-declarable; ``begin_substeps`` no-ops when no
     # emitter is bound (the verify/CI direct-call path) and degrades to label-only
@@ -1866,7 +1866,7 @@ async def model_flood_scenario(
         # published/on_map summary source + the habitat/Pelicun hazard raster -- it
         # takes the existing publish-or-honest-drop path UNCHANGED. The FRAME layers
         # (role="context", names "Flood depth step N") are the time-stepped animation
-        # (flood North Star Phase 1): each is published + emitted OUT-OF-BAND via the
+        # (flood animation Phase 1): each is published + emitted OUT-OF-BAND via the
         # emitter so the web SequenceScrubber group forms, WITHOUT changing the tool's
         # single-LayerURI return shape (no re-publish trip in summarize_tool_result).
         primary_layers = [lyr for lyr in layers if lyr.role == "primary"]
@@ -2246,7 +2246,7 @@ async def sfincs_flood(
             "pressure": {"grid_uri": ..., "fill_value": ...}}``. The forcing-file
             URIs come from the forcing fetchers (``fetch_gtsm_tide_surge`` /
             ``fetch_noaa_coops_tides`` / ``fetch_noaa_nwm_streamflow`` /
-            ``fetch_cama_flood_discharge`` / ERA5). Supplying a water-level
+            ERA5). Supplying a water-level
             boundary IMPLIES ``coastal=True`` (the surge needs a nearshore bed),
             so the DEM fetch auto-routes through ``fetch_topobathy``. ``None``
             (the default) → pure-pluvial deck, BYTE-IDENTICAL to today (no surge /

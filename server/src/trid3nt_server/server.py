@@ -9172,7 +9172,7 @@ _SYNC_OFFLOAD_SUBSET_PREFIXES = ("compute_", "clip_")
 #: added here). This is NOT "off-load everything": ~8 light vector/scalar fetchers
 #: (fetch_buildings, fetch_river_geometry, lookup_precip_return_period,
 #: fetch_landfire_fuels, fetch_usfs_canopy_fuels, fetch_mtbs_burn_severity,
-#: fetch_nexrad_reflectivity, fetch_field_boundaries) and all non-fetch sync tools
+#: show_nexrad_radar, fetch_field_boundaries) and all non-fetch sync tools
 #: stay on the loop. Justification per tool:
 #:   fetch_topobathy        -> CUDEM+3DEP tile merge + reproject + 189 MB COG (~61 s; ROOT-CAUSE of the 1005 turn-death)
 #:   fetch_dem              -> py3dep 3DEP tile mosaic + COG materialize
@@ -9189,7 +9189,6 @@ _SYNC_OFFLOAD_SUBSET_PREFIXES = ("compute_", "clip_")
 #:   fetch_hrrr_smoke       -> xr.open_zarr + merge + rio.reproject + compute + COG write
 #:   fetch_mrms_qpe         -> S3 grib2 download + rasterio GRIB read + warp.reproject + GeoTIFF write
 #:   fetch_goes_satellite   -> ~50 MB netCDF stream + warp.reproject + COG write
-#:   fetch_cama_flood_discharge -> NetCDF stream + xarray open + mean + COG write
 #:   fetch_gtsm_tide_surge  -> blocking CDS ZIP download + xr.open_mfdataset + per-gauge compute
 _ALWAYS_OFFLOAD_SYNC_TOOLS = frozenset(
     {
@@ -9234,9 +9233,8 @@ _ALWAYS_OFFLOAD_SYNC_TOOLS = frozenset(
         # download + reproject core (_fetch_archive_frame_cog_bytes).
         "fetch_goes_archive_animation",
         "fetch_goes_active_fire",
-        "fetch_cama_flood_discharge",
         "fetch_gtsm_tide_surge",
-        # conservation micro-North-Star: PC STAC raster fetchers that do
+        # conservation reference scenario: PC STAC raster fetchers that do
         # multi-second sync work (SAS sign + windowed /vsicurl warp-read +
         # COG-write). Bodies are emit-free (the surrounding emit_tool_call
         # wrapper does the emit), so off-load so they never stall the WS

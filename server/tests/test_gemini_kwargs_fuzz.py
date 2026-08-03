@@ -180,11 +180,6 @@ _MINIMAL_VALID_PARAMS: dict[str, dict[str, Any]] = {
         "bbox": _SAMPLE_BBOX,
     },
     "fetch_buildings": {"bbox": _SAMPLE_BBOX},
-    "fetch_cama_flood_discharge": {
-        "bbox": _SAMPLE_BBOX,
-        "start_date": "2022-09-28",
-        "end_date": "2022-09-30",
-    },
     "fetch_dem": {"bbox": _SAMPLE_BBOX},
     "fetch_ebird_observations": {
         "species_code": "norcar",
@@ -219,7 +214,7 @@ _MINIMAL_VALID_PARAMS: dict[str, dict[str, Any]] = {
     "fetch_movebank_tracks": {"study_id": 2911040},
     "fetch_mrms_qpe": {},
     "fetch_mtbs_burn_severity": {"bbox": _SAMPLE_BBOX},
-    "fetch_nexrad_reflectivity": {},
+    "show_nexrad_radar": {},
     "fetch_nifc_fire_perimeters": {},
     "fetch_nws_alerts_conus": {},
     "fetch_nws_event": {"area": "FLZ055"},

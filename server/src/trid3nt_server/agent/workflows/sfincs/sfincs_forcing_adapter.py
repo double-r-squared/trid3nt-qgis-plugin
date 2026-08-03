@@ -1,6 +1,6 @@
 """SFINCS forcing adapter — hydrographs → bzs/dis timeseries + bnd/src locations.
 
-THE GAP THIS FILLS (COASTAL SFINCS North Star, Mexico Beach / Hurricane Michael):
+THE GAP THIS FILLS (coastal SFINCS, Mexico Beach / Hurricane Michael):
 
 The forcing FETCHERS produce per-station / per-reach hydrographs:
 
@@ -10,8 +10,9 @@ The forcing FETCHERS produce per-station / per-reach hydrographs:
   * ``fetch_noaa_nwm_streamflow`` → a FlatGeobuf with one Point feature per
     NHDPlus reach carrying ``feature_id`` + ``streamflow_cms`` (a SINGLE
     instantaneous discharge value per reach, plus ``valid_time``).
-  * ``fetch_cama_flood_discharge`` → a COG (time-mean discharge raster,
-    m^3/s, EPSG:4326) — NOT a per-point hydrograph; sampled at points.
+  * an external CaMa-Flood time-mean discharge COG (m^3/s, EPSG:4326) — NOT a
+    per-point hydrograph; sampled at points. No registered fetcher emits this
+    today; the sampler is retained as a generic single-band-discharge-COG hook.
 
 The DECK-EMISSION seam (``sfincs_builder._emit_surge_forcing_blocks``) consumes
 FILE URIs:
@@ -975,7 +976,7 @@ def discharge_forcing_from_cama_cog(
 ) -> dict[str, Any]:
     """CaMa-Flood time-mean discharge COG → sampled ``src`` points → ``dis`` files.
 
-    Unlike NWM (point FGB), ``fetch_cama_flood_discharge`` emits a single-band
+    Unlike NWM (point FGB), a CaMa-Flood discharge COG is a single-band
     time-mean discharge RASTER (m^3/s, EPSG:4326). We sample the cell(s) of
     LARGEST discharge inside ``bbox`` (the main-stem river entering the domain),
     materialise each as a constant-discharge src point (flat 2-point series over

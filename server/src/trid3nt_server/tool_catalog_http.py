@@ -333,7 +333,7 @@ def _get_telemetry_path() -> Path:
 # rows share the tool_call_telemetry sink, tagged with this discriminator.
 _SHADOW_RECORD_TYPE = "tool_retrieval_shadow"
 
-#: Terminal North-Star solver tools -> the flow they identify. A turn is
+#: Terminal solver tools -> the flow they identify. A turn is
 #: attributed to a flow when it dispatched one of these (the recall@k per-flow
 #: breakdown the kickoff asks for: SWMM / SFINCS / MODFLOW).
 _FLOW_BY_SOLVER_TOOL: dict[str, str] = {
@@ -997,7 +997,7 @@ def compute_recall_at_k(
             continue
         dispatches_by_turn.setdefault((sid, tid), []).append(tool)
 
-    # Determine each turn's North-Star flow from the terminal solver tool it
+    # Determine each turn's solver flow from the terminal solver tool it
     # dispatched (if any). A turn maps to at most one flow.
     def _turn_flow(tools: list[str]) -> str | None:
         for t in tools:

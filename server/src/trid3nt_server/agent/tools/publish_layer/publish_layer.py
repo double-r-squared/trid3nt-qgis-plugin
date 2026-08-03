@@ -324,7 +324,7 @@ _TITILER_STYLE_REGISTRY: dict[str, tuple[str, str]] = {
     # SnapWave significant wave height (m) - wave animation. A
     # CYAN/BLUE ramp (gnbu) over 0..6 m, visibly DISTINCT from depth's ylgnbu so
     # the wave layer group never looks identical to the flood-depth group on the
-    # Mexico Beach North Star. ADDITIVE - depth/plume stay byte-identical.
+    # Mexico Beach coastal case. ADDITIVE - depth/plume stay byte-identical.
     "continuous_wave_height": ("0,6", "gnbu"),
     # Precipitation (mm).
     "precipitation_mm": ("0,100", "blues"),
@@ -375,7 +375,7 @@ _TITILER_STYLE_REGISTRY: dict[str, tuple[str, str]] = {
     # its OWN data range (viridis ramp). Do not re-add a fixed rescale here.
     "continuous_seismic_pga": ("0,1", "magma"),
     "continuous_landslide_susceptibility": ("0,1", "rdylgn_r"),
-    # conservation micro-North-Star -- ADDITIVE. NDVI is the canonical
+    # conservation reference scenario -- ADDITIVE. NDVI is the canonical
     # vegetation index in [-1, 1]; bare/water near 0, healthy canopy ~0.6-0.9 ->
     # a green-up rdylgn ramp rescaled to the full physical range. MoBI
     # imperiled-species importance is strictly positive (low->high); a ylgn ramp

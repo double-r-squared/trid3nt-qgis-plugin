@@ -49,11 +49,6 @@ KEY_EARMARKS = {
         "`TRID3NT_AIRNOW_API_KEY`",
         "free key from docs.airnowapi.org; also accepted per-call as `api_key`/`secret_ref`",
     ),
-    "fetch_cama_flood_discharge": (
-        "`TRID3NT_CAMA_FLOOD_BASE_URL`",
-        "upstream became registration-gated (U-Tokyo Google Form issues a password); "
-        "point this at the credentialed mirror URL",
-    ),
     "fetch_ebird_observations": (
         "`TRID3NT_EBIRD_API_KEY`",
         "free key from ebird.org/api/keygen",

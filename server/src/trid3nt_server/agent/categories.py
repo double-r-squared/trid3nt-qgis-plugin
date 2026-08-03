@@ -130,7 +130,7 @@ CATEGORIES: tuple[CategorySpec, ...] = (
         description=(
             "Surface-water datasets: USGS NWIS gauge stations (real observed "
             "discharge/stage), NOAA NWM modeled streamflow, NHDPlus/NLDI "
-            "navigation, river geometry, CaMa-Flood discharge, GCN250 curve "
+            "navigation, river geometry, GCN250 curve "
             "numbers, STATSGO soils, precipitation return-period lookups."
         ),
     ),
@@ -319,7 +319,7 @@ PRIMARY_CATEGORY: dict[str, str] = {
     # ---- 2. weather_atmosphere --------------------------------------------
     "fetch_nws_alerts_conus": "weather_atmosphere",
     "fetch_nws_event": "weather_atmosphere",
-    "fetch_nexrad_reflectivity": "weather_atmosphere",
+    "show_nexrad_radar": "weather_atmosphere",
     "fetch_mrms_qpe": "weather_atmosphere",
     "fetch_hrrr_forecast": "weather_atmosphere",
     "fetch_hrrr_smoke": "weather_atmosphere",
@@ -356,7 +356,6 @@ PRIMARY_CATEGORY: dict[str, str] = {
     "fetch_noaa_nwm_streamflow": "hydrology",
     "fetch_nhdplus_nldi_navigate": "hydrology",
     "fetch_river_geometry": "hydrology",
-    "fetch_cama_flood_discharge": "hydrology",
     "lookup_precip_return_period": "hydrology",
     "fetch_gcn250_curve_numbers": "hydrology",
     "fetch_statsgo_soils": "hydrology",
@@ -445,7 +444,7 @@ PRIMARY_CATEGORY: dict[str, str] = {
     "fetch_noaa_slr_scenarios": "coastal",
     "fetch_noaa_slr_confidence": "coastal",
     "fetch_noaa_slr_marsh": "coastal",
-    # SFINCS North Star P1: merged coastal topo-bathymetry DEM (NOAA NCEI CUDEM
+    # Coastal SFINCS: merged coastal topo-bathymetry DEM (NOAA NCEI CUDEM
     # 1/9 arc-sec + USGS 3DEP land) - the bathymetric input the coastal SFINCS
     # bed needs (fetch_dem alone is land-only). EPSG:32616 NAVD88 positive-up.
     "fetch_topobathy": "coastal",

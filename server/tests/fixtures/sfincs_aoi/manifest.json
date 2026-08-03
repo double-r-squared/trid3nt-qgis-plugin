@@ -8,7 +8,7 @@
   "dem_resolution_m": 30,
   "dem_source": "USGS 3DEP (py3dep)",
   "landcover_source": "MRLC NLCD 2021 (WCS)",
-  "aoi": "Mexico Beach FL (coastal North Star)",
+  "aoi": "Mexico Beach FL (coastal validation case)",
   "fetched": "2026-06-26",
   "purpose": "reusable real-world fixture for SFINCS archetype local build proofs"
 }

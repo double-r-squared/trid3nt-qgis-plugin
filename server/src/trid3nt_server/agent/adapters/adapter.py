@@ -443,7 +443,7 @@ exists to feed the named tool.
 
 Example: user asks "show me NEXRAD radar in Florida"
   1. Call geocode_location for "Florida" (precursor) →
-  2. THEN call fetch_nexrad_reflectivity with the geocoded bbox →
+  2. THEN call show_nexrad_radar with the geocoded bbox →
   3. THEN narrate the result.
 
 Example: user asks "show me protected areas in Big Cypress"
@@ -594,7 +594,7 @@ that it must extract and convert. Use it ONLY when the user pastes or links a
 news article about a spill. Parameterized spill -> modflow_contaminant_plume;
 spill news article -> run_model_groundwater_contamination_scenario.
 
-Flood-engine routing -- urban PySWMM vs SFINCS (CRITICAL, North Star B3):
+Flood-engine routing -- urban PySWMM vs SFINCS (CRITICAL):
 TRID3NT has TWO flood solvers. Route to the right one from the prompt; do NOT
 default every flood to SFINCS. Call the chosen template DIRECTLY -- sfincs_flood
 for the coastal / riverine / watershed engine, swmm_urban_flood for the urban
@@ -1789,7 +1789,7 @@ def _classify_error(error: BaseException) -> tuple[str, bool]:
     (``WDPAError``, ``HRSLError``, ``MTBSError``, ``MRMSError``,
     ``INatError``, ``IUCNError``, ``FIRMSError``, ``GTSMError``,
     ``LANDFIREError``, ``OSMRoadsError``, ``GBIFError``,
-    ``CAMaFloodError``, ``GOESError``, ``CompFireError``,
+    ``GOESError``, ``CompFireError``,
     ``ColoredReliefError``, ``NIFCError``, ``NWSAlertsError``, etc.).
     Harvest those directly so the function_response the multi-turn loop
     feeds back to Gemini carries the retry signal the tool already knew.

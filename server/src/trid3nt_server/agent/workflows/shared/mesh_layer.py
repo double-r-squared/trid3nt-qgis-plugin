@@ -307,7 +307,7 @@ def make_sfincs_mesh_layer_uri(
 ) -> LayerURI | None:
     """THIN constructor over an ALREADY-BUILT SFINCS quadtree ``mesh.geojson``.
 
-    NATE (coastal North Star): the cht_sfincs worker authors the
+    NATE (coastal SFINCS): the cht_sfincs worker authors the
     VARIABLE-SIZE quadtree mesh and writes an ALREADY-EPSG:4326
     ``mesh.geojson`` to ``s3://<runs_bucket>/<run_id>/mesh.geojson``. Unlike the
     SWMM helper above, this function builds NO geometry, does NO reproject, and

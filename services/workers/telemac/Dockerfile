@@ -1,4 +1,4 @@
-# TRID3NT TELEMAC-2D river-dye LOCAL worker (PHASE 2 / river-dye North Star).
+# TRID3NT TELEMAC-2D river-dye LOCAL worker (PHASE 2 / river-dye reference scenario).
 #
 # Runtime image for the ``telemac_river_dye`` archetype under the local-docker
 # solve backend (the SFINCS/GeoClaw analogue). The agent-side launcher

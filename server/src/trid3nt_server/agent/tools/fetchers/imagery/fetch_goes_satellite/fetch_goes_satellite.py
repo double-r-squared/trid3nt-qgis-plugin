@@ -751,7 +751,7 @@ def fetch_goes_satellite(
       always fetches the most-recent observation; a future ``valid_time``
       param is in scope for v0.2.
     - DO NOT use for precipitation-radar products — use
-      ``fetch_nexrad_reflectivity`` for that.
+      ``show_nexrad_radar`` for that.
 
     **Parameters:**
     - ``bbox`` (tuple[float, float, float, float]): ``(min_lon, min_lat,
@@ -778,7 +778,7 @@ def fetch_goes_satellite(
     visible, ``"K"`` for IR/WV. EPSG:4326, ~0.02 degree (~2 km) resolution.
 
     **Cross-tool dependencies:**
-    - Pairs with ``fetch_nexrad_reflectivity`` for combined radar + satellite
+    - Pairs with ``show_nexrad_radar`` for combined radar + satellite
       overlays during storm narrations.
     - Typically requested alongside ``fetch_nws_alerts_conus`` for real-time
       storm context.

@@ -179,7 +179,7 @@ os.environ.setdefault("CPL_VSIL_CURL_CHUNK_SIZE", "1048576")  # 1 MiB
 # On the agent venv (pandas 2.2.3) these still exist but emit FutureWarning; on
 # any pandas>=3.0 they raise ``AttributeError: 'RangeIndex' object has no
 # attribute 'is_integer'`` deep inside the surge/river forcing path -- exactly
-# the forcing path the COASTAL SFINCS North Star needs. The kickoff forbids
+# the forcing path the coastal SFINCS surge run needs. The kickoff forbids
 # editing the installed package and a hard ``pandas<2.0`` pin would fight the
 # rest of the stack, so we GUARD in OUR code: re-attach the removed methods to
 # ``pandas.Index`` (idempotent; a no-op where they already exist) delegating to
@@ -294,7 +294,7 @@ class SFINCSSetupError(RuntimeError):
 class WaterlevelForcing:
     """Surge / tide water-level boundary forcing (SFINCS ``bzs``).
 
-    COASTAL SFINCS North Star: the surge / tide hydrograph the boundary cells
+    Coastal SFINCS: the surge / tide hydrograph the boundary cells
     are driven with. Two ways the deck can ingest it, mirroring
     ``SfincsModel.setup_waterlevel_forcing(timeseries=..., locations=...)`` /
     ``geodataset=...``:
@@ -328,7 +328,7 @@ class DischargeForcing:
     """River-inflow discharge boundary forcing (SFINCS ``dis``).
 
     Fluvial / compound-flood coupling: the river-discharge hydrograph
-    (``fetch_noaa_nwm_streamflow`` / ``fetch_cama_flood_discharge``) injected at
+    (``fetch_noaa_nwm_streamflow``) injected at
     the points where rivers enter the domain.
 
     ORDER MATTERS (hydromt-sfincs contract): ``setup_river_inflow`` must run
@@ -468,7 +468,7 @@ class ForcingSpec:
     Star extends it with the surge / tide / discharge / wind / pressure members
     below, populated from the forcing fetchers
     (``fetch_gtsm_tide_surge`` / ``fetch_noaa_coops_tides`` /
-    ``fetch_noaa_nwm_streamflow`` / ``fetch_cama_flood_discharge`` / ERA5); the
+    ``fetch_noaa_nwm_streamflow`` / ERA5); the
     shape is intentionally open enough to grow.
 
     Surge / compound-flood members (all optional; ``None`` → that forcing block
@@ -583,7 +583,7 @@ class BuildOptions:
     - ``enable_subgrid`` -- emit a ``setup_subgrid`` block. Subgrid tables let
       SFINCS run on a COARSE computational grid while still resolving local
       topography + roughness at sub-pixel resolution -- the standard way to get
-      an urban-flood-around-buildings estimate cheaply (the COASTAL North Star's
+      an urban-flood-around-buildings estimate cheaply (the coastal case's
       "rough urban flood" ask). Default ``False`` (v0.1 pluvial decks stay on
       the plain ``setup_dep`` + ``setup_manning_roughness`` path).
     - ``subgrid_nr_subgrid_pixels`` -- sub-pixels per computational cell in the

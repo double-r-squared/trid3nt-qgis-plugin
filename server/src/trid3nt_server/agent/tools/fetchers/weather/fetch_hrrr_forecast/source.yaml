@@ -118,7 +118,7 @@ docstring: "NOAA HRRR 3 km short-term weather forecast -- Tier-1 CONUS fetcher.\
   \ ``HRRRForecastInputError``.\n  Use ``fetch_era5_reanalysis`` for global, ECMWF AIFS/IFS for global\n\
   \  forecast.\n- Observed precipitation accumulation -- use ``fetch_mrms_qpe``\n  (1 km gauge-corrected).\
   \ HRRR's APCP is model-predicted; MRMS is the\n  observation.\n- Observed radar reflectivity -- use\
-  \ ``fetch_nexrad_reflectivity``.\n- Watches / warnings -- use ``fetch_nws_alerts_conus`` or\n  ``fetch_nws_event``\
+  \ ``show_nexrad_radar``.\n- Watches / warnings -- use ``fetch_nws_alerts_conus`` or\n  ``fetch_nws_event``\
   \ instead. Those carry the official advisory text;\n  HRRR carries raw model output.\n- Hourly forecast\
   \ horizons beyond 18 h on non-extended cycles, or\n  beyond 48 h on extended cycles -- those leads are\
   \ not in HRRR.\n\nParameters:\n    bbox: ``(west, south, east, north)`` in EPSG:4326 (WGS84 decimal\n\

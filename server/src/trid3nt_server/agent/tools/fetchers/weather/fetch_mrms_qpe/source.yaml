@@ -72,7 +72,7 @@ caveats:
 - NOAA MRMS MultiSensor QPE Pass2 (gauge-corrected, ~2 h delayed) whole-object .grib2.gz at CONUS 0.01
   deg (~1 km); the S3 key is resolved by an S3 list-objects walk (latest file / nearest-earlier hour within
   a 24 h walkback); MRMS sentinels (-3 no-precip, -1 missing) collapse to nodata -9999.
-- CONUS-only; a bbox outside (-130,20,-60,55) -> MRMS_QPE_EMPTY. Live radar reflectivity -> fetch_nexrad_reflectivity;
+- CONUS-only; a bbox outside (-130,20,-60,55) -> MRMS_QPE_EMPTY. Live radar reflectivity -> show_nexrad_radar;
   global precip -> fetch_era5_reanalysis; design-storm return periods -> lookup_precip_return_period.
 docstring: "Fetch NOAA MRMS accumulated QPE (gauge-corrected precipitation) as a COG.\n\n**What it does:**\
   \ Downloads a NOAA MRMS MultiSensor QPE Pass2 grib2.gz from\nthe public ``noaa-mrms-pds`` S3 bucket\
@@ -88,7 +88,7 @@ docstring: "Fetch NOAA MRMS accumulated QPE (gauge-corrected precipitation) as a
   \ watershed?\").\n- Near-real-time precipitation context: omit ``valid_time`` to fetch the\n  most recently\
   \ published file (~2 h behind current).\n- Feeding ``run_sfincs`` (via ``set_sfincs_parameters``) as\
   \ the real-\n  precip forcing branch for Case 3 (composers).\n\n**When NOT to use:**\n\n- Live radar\
-  \ reflectivity -- use ``fetch_nexrad_reflectivity`` (Iowa Mesonet\n  WMS; dBZ products n0r/n0q/vil).\n\
+  \ reflectivity -- use ``show_nexrad_radar`` (Iowa Mesonet\n  WMS; dBZ products n0r/n0q/vil).\n\
   - Historical return-period precipitation (design storms) -- use\n  ``lookup_precip_return_period`` (NOAA\
   \ Atlas 14 PFDS).\n- Global precipitation outside CONUS -- MRMS is CONUS-only; for global\n  use ``fetch_era5_reanalysis``\
   \ (27 km, daily/hourly ERA5 precip).\n- Sub-hourly accumulations -- MRMS publishes ``1h`` (01H) as the\
@@ -109,7 +109,7 @@ docstring: "Fetch NOAA MRMS accumulated QPE (gauge-corrected precipitation) as a
   \ embeds ``valid_time=<ISO-timestamp>`` (\nprovenance requirement) since LayerURI has no freeform metadata\
   \ dict\n(schema extra=\"forbid\").\n\nRaises: ``MRMSQPEInputError`` (bad params), ``MRMSQPEUpstreamError``\n\
   (S3 / grib2 failure, retryable), ``MRMSQPENotAvailableError`` (no published\nfile in walkback window),\
-  \ ``MRMSQPEEmptyError`` (bbox outside CONUS).\n\n**Cross-tool dependencies:**\n\n- Pair with: ``fetch_nexrad_reflectivity``\
+  \ ``MRMSQPEEmptyError`` (bbox outside CONUS).\n\n**Cross-tool dependencies:**\n\n- Pair with: ``show_nexrad_radar``\
   \ (live radar reflectivity overlay\n  for the same storm event) and ``fetch_nws_alerts_conus`` (NWS\
   \ watches/\n  warnings) for a complete storm-situation display.\n- Consumed by: ``run_sfincs`` (via\
   \ ``set_sfincs_parameters``) as pluvial\n  precipitation forcing (Case 3 composer); per-watershed accumulation\n\

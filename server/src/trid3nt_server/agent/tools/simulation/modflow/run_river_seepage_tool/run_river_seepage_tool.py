@@ -22,7 +22,7 @@ Chain (mirrors ``modflow_contaminant_plume`` with the river extension):
   3. Postprocess TWO layers:
        * ``postprocess_river_seepage`` reads the GWF ``gwf_model.cbc`` RIV
          leakage budget into a DIVERGING gaining/losing-stream COG (the
-         river-seepage North Star layer) -> a ``SeepageLayerURI`` carrying the
+         primary river-seepage layer) -> a ``SeepageLayerURI`` carrying the
          leakage narration scalars (total / gaining / losing / cell-count).
        * ``postprocess_modflow`` reads the GWT UCN into the contaminant plume
          COG -> a ``PlumeLayerURI`` (the solute that entered with the seepage).

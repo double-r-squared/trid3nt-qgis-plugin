@@ -2,7 +2,7 @@
 subgrid tables, building-obstacle masks, and the pandas>=2.0 ``set_forcing_1d``
 guard (AGENT A — forcing + obstacles).
 
-TARGET (NATE 2026-06-17): the COASTAL SFINCS North Star — Deltares Hurricane
+TARGET (NATE 2026-06-17): the coastal SFINCS case -- Deltares Hurricane
 Michael / Mexico Beach — needs the SFINCS deck to carry SURGE / TIDE / RIVER
 DISCHARGE / WIND / PRESSURE boundary forcing (today's ``sfincs_builder`` is
 PLUVIAL-only) plus BUILDING OBSTACLES (subgrid + footprint mask) for a rough
@@ -48,7 +48,7 @@ from trid3nt_server.agent.workflows.sfincs.sfincs_builder import (
     _install_pandas_set_forcing_1d_guard,
 )
 
-# A coastal AOI near Mexico Beach, FL (the North Star geography).
+# A coastal AOI near Mexico Beach, FL (the coastal SFINCS geography).
 _MEXICO_BEACH_BBOX = (-85.45, 29.92, -85.38, 29.98)
 
 # Local paths so ``_stage_gcs_local`` is a no-op (no GCS/S3 in unit tests).
@@ -304,8 +304,8 @@ def test_pandas_set_forcing_1d_guard_installed() -> None:
 
     hydromt-sfincs 1.2.2 ``set_forcing_1d`` (the shared surge/discharge sink)
     calls ``Index.is_integer`` / ``Index.is_numeric`` — pandas removed both in
-    3.0. The guard re-attaches them so the surge/river forcing path the COASTAL
-    North Star needs does not raise on pandas>=3.0.
+    3.0. The guard re-attaches them so the surge/river forcing path the coastal
+    SFINCS run needs does not raise on pandas>=3.0.
     """
     import warnings
 

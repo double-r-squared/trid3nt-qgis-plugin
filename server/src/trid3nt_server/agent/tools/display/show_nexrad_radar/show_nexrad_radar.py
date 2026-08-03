@@ -1,4 +1,12 @@
-"""``fetch_nexrad_reflectivity`` atomic tool -- NEXRAD composite radar via Iowa State Mesonet WMS.
+"""``show_nexrad_radar`` atomic tool -- live NEXRAD radar overlay (Iowa Mesonet WMS URL).
+
+This is a DISPLAY tool, not a fetcher: it composes a live WMS GetMap service URL
+for the Iowa State University Mesonet NEXRAD radar mosaic and returns it as a
+``LayerURI`` the client renders directly. It downloads nothing, caches nothing,
+and touches no data bytes -- the radar refreshes every ~5 minutes, so a static
+pixel snapshot would misrepresent the live storm state. It lives under
+``tools/display/`` (alongside other map-overlay tools) rather than
+``tools/fetchers/`` precisely because it transfers a service URL, not a dataset.
 """
 
 from __future__ import annotations
@@ -13,9 +21,9 @@ from trid3nt_contracts.tool_registry import AtomicToolMetadata
 
 from trid3nt_server.agent.tools import register_tool
 
-__all__ = ["fetch_nexrad_reflectivity"]
+__all__ = ["show_nexrad_radar"]
 
-logger = logging.getLogger("trid3nt_server.agent.tools.fetchers.weather.fetch_nexrad_reflectivity.fetch_nexrad_reflectivity")
+logger = logging.getLogger("trid3nt_server.agent.tools.display.show_nexrad_radar.show_nexrad_radar")
 
 
 # ---------------------------------------------------------------------------
@@ -24,7 +32,7 @@ logger = logging.getLogger("trid3nt_server.agent.tools.fetchers.weather.fetch_ne
 
 
 class NexradError(RuntimeError):
-    """Base class for fetch_nexrad_reflectivity failures."""
+    """Base class for show_nexrad_radar failures."""
 
     error_code: str = "NEXRAD_ERROR"
     retryable: bool = False
@@ -79,20 +87,17 @@ _PRODUCT_WMS_LAYER: dict[str, str] = {
 # ---------------------------------------------------------------------------
 # AtomicToolMetadata -- registered once at import time.
 #
-# See module docstring for the kickoff
-# vs validator reconciliation. Body-text intent is "does NOT cache pixels",
-# so cacheable=False.
+# Composes only a service URL ("does NOT cache pixels"), so cacheable=False and
+# ttl_class="live-no-cache".
 # ---------------------------------------------------------------------------
 
 _METADATA = AtomicToolMetadata(
-    name="fetch_nexrad_reflectivity",
+    name="show_nexrad_radar",
     ttl_class="live-no-cache",
     source_class=None,
     cacheable=False,
-    # resolved: the schema model now exposes this flag,
-    # so the long-parked intent is folded into the live metadata. bbox=None
-    # returns the CONUS-wide WMS GetMap URL; this tool transfers only a service
-    # URL (~0.1MB), never pixels, so a no-bbox global query is bounded + safe.
+    # bbox=None returns the CONUS-wide WMS GetMap URL; this tool transfers only a
+    # service URL (~0.1MB), never pixels, so a no-bbox global query is bounded + safe.
     supports_global_query=True,
 )
 
@@ -169,33 +174,34 @@ def _build_wms_url(
 @register_tool(
     _METADATA,
     # Annotations: readOnlyHint=True (read-only; no state mutation),
-    # openWorldHint=True (calls external public API endpoint),
-    # destructiveHint=False, idempotentHint=True (cache shim deduplicates).
+    # openWorldHint=True (composes an external public WMS endpoint URL),
+    # destructiveHint=False, idempotentHint=True.
     open_world_hint=True,
 )
-def fetch_nexrad_reflectivity(
+def show_nexrad_radar(
     bbox: tuple[float, float, float, float] | None = None,
     product: Literal["n0r", "n0q", "vil"] = "n0r",
     # absorb LLM-invented kwargs (centralized at server.py via
     # tool_arg_normalizer, but kept as belt-and-suspenders).
     **_extra_ignored: Any,
 ) -> LayerURI:
-    """Compose a LayerURI for NEXRAD composite radar reflectivity (live WMS).
+    """Show live NEXRAD radar reflectivity on the map (composes a WMS URL; fetches nothing).
 
-    **What it does:** Composes and returns a WMS service URL for the Iowa State
-    University Mesonet NEXRAD radar mosaic. This is a **WMS-URL passthrough**:
-    the tool emits a ``LayerURI`` the client renders against directly -- it does
-    NOT download or cache pixels. Radar reflectivity refreshes every ~5 minutes;
-    caching a static PNG would misrepresent the live storm state. Tier-1 free,
-    no API key. CONUS coverage only (NEXRAD network).
+    **What it does:** Composes and returns a live WMS GetMap service URL for the
+    Iowa State University Mesonet NEXRAD radar mosaic. This is a **display /
+    URL-passthrough** tool: it emits a ``LayerURI`` the client renders against
+    directly -- it does NOT download, sample, or cache any pixels. Radar
+    reflectivity refreshes every ~5 minutes, so caching a static PNG would
+    misrepresent the live storm state. Tier-1 free, no API key. CONUS coverage
+    only (the NEXRAD network).
 
     **When to use:**
 
     - Storm-context display during a hurricane, squall-line, or convective-storm
-      narrative -- "show me the current radar near Tampa", "overlay radar on the
-      flood map for Harvey". Example: ``bbox=(-98.0, 27.0, -93.0, 31.0)`` for
+      narrative -- "show me the current radar near Tampa", "put NEXRAD radar on
+      the flood map for Harvey". Example: ``bbox=(-98.0, 27.0, -93.0, 31.0)`` for
       the Houston area, ``product="n0r"``.
-    - Situational awareness overlays alongside ``fetch_nws_alerts_conus`` or
+    - Situational-awareness overlays alongside ``fetch_nws_alerts_conus`` or
       ``fetch_nifc_fire_perimeters`` for multi-hazard dashboards.
     - Vertically integrated liquid (``product="vil"``) for hail / heavy-precip
       risk assessment co-located with an active SFINCS pluvial run.
@@ -206,15 +212,15 @@ def fetch_nexrad_reflectivity(
       only; archival radar retrieval is a separate path.
     - Quantitative precipitation estimation -- use ``fetch_mrms_qpe`` (gauge-
       corrected accumulation, mm); raw reflectivity is dBZ, not precipitation.
-    - Downloading pixel arrays for analysis -- use the MRMS archive pipeline;
-      this tool emits a WMS URL, not a raster file.
+    - Downloading pixel arrays for analysis -- this tool emits a WMS URL, not a
+      raster file.
     - Non-CONUS coverage -- NEXRAD is the US national radar network; for
       international radar overlays a different WMS source is needed.
 
     **Parameters:**
 
     - ``bbox``: optional ``(min_lon, min_lat, max_lon, max_lat)`` EPSG:4326.
-      When ``None``, returns CONUS-wide WMS URL (``supports_global_query=True``).
+      When ``None``, returns the CONUS-wide WMS URL (``supports_global_query=True``).
       When supplied, the BBOX hint is encoded into the URL query string.
     - ``product``: ``"n0r"`` -- composite reflectivity, all-tilt max in dBZ
       (default; best for storm-context narratives); ``"n0q"`` -- base reflectivity,
@@ -242,8 +248,8 @@ def fetch_nexrad_reflectivity(
       rendered by the QGIS plugin (added as a WMS layer) or a direct WMS
       GetMap request.
     """
-    # Defensive validations on the registered surface (kickoff acceptance
-    # criteria call for typed errors on unknown product / bad bbox).
+    # Defensive validations on the registered surface (typed errors on unknown
+    # product / bad bbox).
     if product not in _VALID_PRODUCTS:
         raise NexradProductError(
             f"unknown product={product!r}; allowed: {sorted(_VALID_PRODUCTS)}"
@@ -253,7 +259,7 @@ def fetch_nexrad_reflectivity(
 
     url = _build_wms_url(product, bbox)
     logger.info(
-        "fetch_nexrad_reflectivity: product=%s bbox=%s url=%s",
+        "show_nexrad_radar: product=%s bbox=%s url=%s",
         product,
         bbox,
         url,

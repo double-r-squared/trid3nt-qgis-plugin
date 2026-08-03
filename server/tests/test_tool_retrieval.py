@@ -250,7 +250,7 @@ _RECALL_FIXTURE = [
     ("detect the active fire hot pixels from GOES", "fetch_goes_active_fire"),
     ("get the elevation DEM for this area", "fetch_dem"),
     ("geocode this city to a bounding box", "geocode_location"),
-    ("fetch NEXRAD radar reflectivity", "fetch_nexrad_reflectivity"),
+    ("show NEXRAD radar reflectivity on the map", "show_nexrad_radar"),
     # door dissolution (ADR 0094): engine templates recall directly now.
     ("how deep will the water get from this hurricane flood", "sfincs_flood"),
     ("simulate urban street flooding from heavy rain in this city", "swmm_urban_flood"),

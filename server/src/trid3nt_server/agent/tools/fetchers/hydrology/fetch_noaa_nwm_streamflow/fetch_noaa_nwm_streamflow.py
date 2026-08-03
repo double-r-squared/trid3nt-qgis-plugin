@@ -721,9 +721,8 @@ def fetch_noaa_nwm_streamflow(
 
     Do NOT use this for: gauge-based observed point streamflow at a USGS
     station (use ``fetch_usgs_nwis_gauges`` -- NWIS, the actual instrument
-    record); global / non-CONUS river discharge (use
-    ``fetch_cama_flood_discharge`` for the CaMa-Flood global product);
-    river-reach polylines without flow values (use ``fetch_river_geometry`` -- NHDPlus HR); precipitation forcing (use ``fetch_mrms_qpe`` for
+    record); river-reach polylines without flow values (use
+    ``fetch_river_geometry`` -- NHDPlus HR); precipitation forcing (use ``fetch_mrms_qpe`` for
     radar/gauge QPE or ``lookup_precip_return_period`` for Atlas 14 design
     storms); flood-extent rasters (NWM does not publish inundation directly -- use ``run_sfincs`` with NWM forcing).
 
@@ -776,8 +775,6 @@ def fetch_noaa_nwm_streamflow(
         - Composes ALONGSIDE: ``fetch_mrms_qpe`` (precip forcing),
           ``fetch_usgs_nwis_gauges`` (NWIS point gauge cross-check),
           ``fetch_administrative_boundaries`` (watershed framing).
-        - Sibling for non-CONUS coverage: ``fetch_cama_flood_discharge``
-          (global, Tier-2, reanalysis-only).
         - Upstream data sources: NOAA NWM (s3://noaa-nwm-pds) + USGS NLDI
           (api.water.usgs.gov/nldi) for the geometry join.
 

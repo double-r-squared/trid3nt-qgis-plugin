@@ -80,7 +80,7 @@ payload_estimate:
 
 caveats:
   - "US + territories only (supports_global_query=False); pass EXACTLY ONE of state_code (no area limit) or bbox (<= ~25 deg^2)"
-  - "OBSERVED gauge network; for MODELED reach flow use fetch_noaa_nwm_streamflow; global -> fetch_cama_flood_discharge"
+  - "OBSERVED gauge network; for MODELED reach flow use fetch_noaa_nwm_streamflow (US + territories only)"
   - "primary IV real-time -> Site-service location fallback -> honest NWIS_GAUGES_NO_STATIONS (never an empty-success layer)"
 fallback: [fetch_noaa_nwm_streamflow]
 
@@ -126,8 +126,8 @@ docstring: |
         "NWM" / "the whole river network" → ``fetch_noaa_nwm_streamflow``.
       - River-reach POLYLINES without gauges — use ``fetch_river_geometry``
         (NHDPlus HR) or ``fetch_nhdplus_nldi_navigate``.
-      - Global / non-US discharge — use ``fetch_cama_flood_discharge`` (this
-        tool is US + territories only; supports_global_query=False).
+      - This tool is US + territories only (supports_global_query=False);
+        there is no global river-discharge fetcher.
       - Precipitation / design-storm forcing — use ``fetch_mrms_qpe`` or
         ``lookup_precip_return_period``.
       - Coastal tide-station water levels — use ``fetch_noaa_coops_tides``.

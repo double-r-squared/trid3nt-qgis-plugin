@@ -1,4 +1,4 @@
-"""Unit + (gated) live tests for the SFINCS North Star P1 ``fetch_topobathy``
+"""Unit + (gated) live tests for the coastal SFINCS ``fetch_topobathy``
 coastal topo-bathymetry fetcher.
 
 Proves (all with SYNTHETIC small rasters — the remote CUDEM/3DEP fetch is
@@ -62,7 +62,7 @@ from trid3nt_server.agent.tools.fetchers.ocean.fetch_topobathy.fetch_topobathy i
 
 _LIVE = os.environ.get("TRID3NT_TEST_LIVE_TOPOBATHY") == "1"
 
-# SFINCS North Star demo + CI smoke bboxes.
+# Coastal SFINCS reference + CI smoke bboxes.
 _DEMO_BBOX = (-85.75, 29.55, -85.25, 30.20)
 _SMOKE_BBOX = (-85.45, 29.92, -85.38, 29.98)
 # Crescent City, CA — the live GeoClaw tsunami AOI that found 0/930 CUDEM tiles

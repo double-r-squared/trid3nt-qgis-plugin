@@ -1,4 +1,4 @@
-"""TELEMAC-2D river-dye release composer (river-dye North Star, PHASE 4).
+"""TELEMAC-2D river-dye release composer (river-dye reference scenario, PHASE 4).
 
 The TELEMAC analogue of ``model_wave_scenario`` (SWAN) /
 ``model_dambreak_geoclaw_scenario`` (GeoClaw): a deterministic orchestrator-style

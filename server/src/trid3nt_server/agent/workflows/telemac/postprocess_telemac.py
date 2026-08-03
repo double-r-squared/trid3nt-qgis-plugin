@@ -1,4 +1,4 @@
-"""TELEMAC-2D river-dye run-output postprocessing (river-dye North Star).
+"""TELEMAC-2D river-dye run-output postprocessing (river-dye reference scenario).
 
 ``postprocess_telemac(slf_path, *, run_id, utm_epsg, ...) -> (layers, metrics)``
 reads a solved TELEMAC-2D result SELAFIN (``r2d_river.slf``), extracts the DYE

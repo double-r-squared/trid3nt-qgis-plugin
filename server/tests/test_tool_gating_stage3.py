@@ -87,19 +87,19 @@ def test_gating_topk_env_override_and_zero_disables(monkeypatch):
 
 
 def test_named_tools_exact_name():
-    names = {"fetch_dem", "fetch_nexrad_reflectivity", "publish_layer"}
+    names = {"fetch_dem", "show_nexrad_radar", "publish_layer"}
     got = named_tools_in_text(
-        "please use fetch_nexrad_reflectivity over Kansas", names
+        "please use show_nexrad_radar over Kansas", names
     )
-    assert got == {"fetch_nexrad_reflectivity"}
+    assert got == {"show_nexrad_radar"}
 
 
 def test_named_tools_spaced_form():
-    names = {"fetch_dem", "fetch_nexrad_reflectivity"}
+    names = {"fetch_dem", "show_nexrad_radar"}
     got = named_tools_in_text(
-        "use the fetch nexrad reflectivity tool over Kansas", names
+        "use the show nexrad radar tool over Kansas", names
     )
-    assert got == {"fetch_nexrad_reflectivity"}
+    assert got == {"show_nexrad_radar"}
 
 
 def test_named_tools_no_false_positive_on_substring():
@@ -154,7 +154,7 @@ def test_gate_always_includes_used_tools():
 
 def test_gate_always_includes_named_tool():
     ranked = _ranked(24)
-    target = "fetch_nexrad_reflectivity"
+    target = "show_nexrad_radar"
     assert target in TOOL_REGISTRY
     assert target not in {n for n, _ in ranked[:24]}
     gated = gate_tool_registry(

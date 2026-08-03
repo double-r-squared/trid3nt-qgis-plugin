@@ -1,4 +1,4 @@
-"""Unit tests for the ``fetch_nexrad_reflectivity`` atomic tool (job-0102).
+"""Unit tests for the ``show_nexrad_radar`` display tool (job-0102).
 
 Coverage (≥4 unit + 1 live, env-guarded):
 
@@ -27,11 +27,11 @@ from urllib.parse import parse_qs, urlparse
 import pytest
 
 from trid3nt_server.agent.tools import TOOL_REGISTRY
-from trid3nt_server.agent.tools.fetchers.weather.fetch_nexrad_reflectivity.fetch_nexrad_reflectivity import (
+from trid3nt_server.agent.tools.display.show_nexrad_radar.show_nexrad_radar import (
     NexradBboxError,
     NexradProductError,
     _build_wms_url,
-    fetch_nexrad_reflectivity,
+    show_nexrad_radar,
 )
 
 # ---------------------------------------------------------------------------
@@ -53,15 +53,15 @@ _IOWA_MESONET_HOST = "mesonet.agron.iastate.edu"
 
 
 def test_tool_registered() -> None:
-    """Importing the tools package registered fetch_nexrad_reflectivity."""
-    assert "fetch_nexrad_reflectivity" in TOOL_REGISTRY
-    entry = TOOL_REGISTRY["fetch_nexrad_reflectivity"]
+    """Importing the tools package registered show_nexrad_radar."""
+    assert "show_nexrad_radar" in TOOL_REGISTRY
+    entry = TOOL_REGISTRY["show_nexrad_radar"]
     # Uncacheable-by-construction: WMS URL passthrough; live radar pixels are
     # dynamic. See module docstring OQ-0102-CACHEABLE-FLAG-CONTRADICTION.
     assert entry.metadata.cacheable is False
     assert entry.metadata.ttl_class == "live-no-cache"
     assert entry.metadata.source_class is None
-    assert entry.metadata.name == "fetch_nexrad_reflectivity"
+    assert entry.metadata.name == "show_nexrad_radar"
 
 
 # ---------------------------------------------------------------------------
@@ -71,7 +71,7 @@ def test_tool_registered() -> None:
 
 def test_default_product_n0r_returns_layeruri() -> None:
     """Default product (n0r) returns a LayerURI with the right shape + WMS URL."""
-    layer = fetch_nexrad_reflectivity()  # bbox=None, product='n0r'
+    layer = show_nexrad_radar()  # bbox=None, product='n0r'
     assert layer.layer_type == "raster"
     assert layer.role == "context"
     assert layer.units == "dBZ"
@@ -85,8 +85,8 @@ def test_default_product_n0r_returns_layeruri() -> None:
 
 def test_product_n0q_produces_distinct_layeruri() -> None:
     """product='n0q' (base reflectivity) → different URL + name + units."""
-    n0r = fetch_nexrad_reflectivity(product="n0r")
-    n0q = fetch_nexrad_reflectivity(product="n0q")
+    n0r = show_nexrad_radar(product="n0r")
+    n0q = show_nexrad_radar(product="n0q")
     assert n0r.uri != n0q.uri
     assert "n0q.cgi" in n0q.uri
     assert "Base Reflectivity" in n0q.name
@@ -97,7 +97,7 @@ def test_product_n0q_produces_distinct_layeruri() -> None:
 
 def test_product_vil_produces_distinct_layeruri() -> None:
     """product='vil' (VIL) → distinct URL + kg/m² units."""
-    vil = fetch_nexrad_reflectivity(product="vil")
+    vil = show_nexrad_radar(product="vil")
     assert "vil.cgi" in vil.uri
     assert "Vertically Integrated Liquid" in vil.name
     assert vil.units == "kg/m^2"
@@ -112,7 +112,7 @@ def test_product_vil_produces_distinct_layeruri() -> None:
 
 def test_bbox_none_returns_conus_layeruri() -> None:
     """bbox=None: LayerURI carries no bbox; URL has no BBOX query."""
-    layer = fetch_nexrad_reflectivity(bbox=None, product="n0r")
+    layer = show_nexrad_radar(bbox=None, product="n0r")
     assert layer.bbox is None
     parsed = urlparse(layer.uri)
     qs = parse_qs(parsed.query)
@@ -127,7 +127,7 @@ def test_bbox_supplied_returns_scoped_layeruri() -> None:
     sign-flip / axis-swap would scope the radar overlay to the wrong place.
     """
     bbox = _FORT_MYERS_BBOX
-    layer = fetch_nexrad_reflectivity(bbox=bbox, product="n0r")
+    layer = show_nexrad_radar(bbox=bbox, product="n0r")
     assert layer.bbox == bbox
 
     parsed = urlparse(layer.uri)
@@ -153,37 +153,37 @@ def test_bbox_supplied_returns_scoped_layeruri() -> None:
 def test_unknown_product_raises_typed_error() -> None:
     """Unknown product raises NexradProductError with retryable=False."""
     with pytest.raises(NexradProductError) as excinfo:
-        fetch_nexrad_reflectivity(product="bogus")  # type: ignore[arg-type]
+        show_nexrad_radar(product="bogus")  # type: ignore[arg-type]
     assert excinfo.value.error_code == "NEXRAD_PRODUCT_INVALID"
     assert excinfo.value.retryable is False
 
 
 def test_bbox_wrong_arity_raises_typed_error() -> None:
     with pytest.raises(NexradBboxError) as excinfo:
-        fetch_nexrad_reflectivity(bbox=(-82.0, 26.0, -81.0))  # type: ignore[arg-type]
+        show_nexrad_radar(bbox=(-82.0, 26.0, -81.0))  # type: ignore[arg-type]
     assert excinfo.value.error_code == "NEXRAD_BBOX_INVALID"
 
 
 def test_bbox_non_finite_raises_typed_error() -> None:
     with pytest.raises(NexradBboxError):
-        fetch_nexrad_reflectivity(bbox=(float("nan"), 26.0, -81.0, 27.0))
+        show_nexrad_radar(bbox=(float("nan"), 26.0, -81.0, 27.0))
 
 
 def test_bbox_lon_out_of_range_raises_typed_error() -> None:
     with pytest.raises(NexradBboxError):
-        fetch_nexrad_reflectivity(bbox=(-181.0, 26.0, -81.0, 27.0))
+        show_nexrad_radar(bbox=(-181.0, 26.0, -81.0, 27.0))
 
 
 def test_bbox_degenerate_raises_typed_error() -> None:
     with pytest.raises(NexradBboxError):
         # min equals max on the longitude axis
-        fetch_nexrad_reflectivity(bbox=(-82.0, 26.0, -82.0, 27.0))
+        show_nexrad_radar(bbox=(-82.0, 26.0, -82.0, 27.0))
 
 
 def test_bbox_inverted_raises_typed_error() -> None:
     with pytest.raises(NexradBboxError):
         # min > max on the latitude axis
-        fetch_nexrad_reflectivity(bbox=(-82.0, 27.0, -81.0, 26.0))
+        show_nexrad_radar(bbox=(-82.0, 27.0, -81.0, 26.0))
 
 
 # ---------------------------------------------------------------------------
@@ -224,14 +224,14 @@ def test_live_nexrad_endpoint_reachable() -> None:
     """
     import urllib.request
 
-    layer = fetch_nexrad_reflectivity(product="n0r")
+    layer = show_nexrad_radar(product="n0r")
     base_url = layer.uri.split("?")[0]
     # Ask for GetCapabilities — every conformant WMS responds, and the response
     # is small enough for a fast live check.
     cap_url = f"{base_url}?SERVICE=WMS&REQUEST=GetCapabilities"
     req = urllib.request.Request(
         cap_url,
-        headers={"User-Agent": "trid3nt/0.1 (live test fetch_nexrad_reflectivity)"},
+        headers={"User-Agent": "trid3nt/0.1 (live test show_nexrad_radar)"},
     )
     with urllib.request.urlopen(req, timeout=30) as resp:  # noqa: S310 — trusted URL
         status = resp.status

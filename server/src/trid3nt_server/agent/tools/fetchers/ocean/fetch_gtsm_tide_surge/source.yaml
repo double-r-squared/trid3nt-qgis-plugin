@@ -128,7 +128,7 @@ docstring: |
     ``time_series_csv`` to populate ``bnd.bzs`` coastal boundary);
     compound-flood composition happens in the code_exec playground.
   - Pair with: ``fetch_era5_reanalysis`` (atmospheric + wave forcing for
-    the same event window); ``fetch_cama_flood_discharge`` (fluvial inflow
+    the same event window); ``fetch_noaa_nwm_streamflow`` (fluvial inflow
     boundary); ``fetch_mrms_qpe`` / ERA5 precip (rainfall forcing).
   - Auth path shares ``Persistence.get_secret_value`` with
     ``fetch_era5_reanalysis`` (both use the Copernicus CDS key).

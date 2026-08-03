@@ -67,7 +67,7 @@ from trid3nt_server.agent.workflows.sfincs.sfincs_forcing_adapter import (  # no
     write_locations_fgb,
 )
 
-# The REAL fixture (Mexico Beach FL, the coastal North Star geography). The DEM
+# The REAL fixture (Mexico Beach FL, the coastal SFINCS geography). The DEM
 # is EPSG:5070 USGS 3DEP (-0.36..6.95 m -- a true seaward-to-land gradient so
 # setup_mask_bounds finds msk==2 seaward cells); the landcover is EPSG:4326 MRLC
 # NLCD 2021 carrying classes {11,21,22,23,24,31,42,52,71,90,95}.

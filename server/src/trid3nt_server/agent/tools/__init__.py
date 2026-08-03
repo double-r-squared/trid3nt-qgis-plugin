@@ -231,7 +231,8 @@ def clear_registry_for_tests() -> None:
 # + clip + forecast hypot(u,v)); auto-registered by _register_router_specs() below.
 # fetch_mrms_qpe: weather/GRIB fold (ADR 0069) -- twin DELETED, now spec-driven
 # (source.yaml + mrms_qpe hooks: S3-listed key resolve -> grib_object whole-object COG).
-from .fetchers.weather.fetch_nexrad_reflectivity import fetch_nexrad_reflectivity  # noqa: E402,F401
+# show_nexrad_radar (a DISPLAY tool, NOT a fetcher: composes a live WMS GetMap URL,
+# transfers no bytes) is imported from the -- display -- group below.
 # fetch_nws_alerts_conus: data-router fold chained-resolution mode (ADR 0063) -- twin
 # DELETED, now spec-driven (source.yaml + nws_alerts_conus hooks: single /alerts/active
 # GET + per-alert zone-polygon enrichment), registered by _register_router_specs() below.
@@ -244,7 +245,6 @@ from .fetchers.weather.fetch_nexrad_reflectivity import fetch_nexrad_reflectivit
 from .fetchers.weather.fetch_storm_tracks import fetch_storm_tracks  # noqa: E402,F401
 
 # -- fetchers/hydrology --
-from .fetchers.hydrology.fetch_cama_flood_discharge import fetch_cama_flood_discharge  # noqa: E402,F401
 # V&V wave (ADR 0021, lane C): observed flood-validation data fetchers.
 # fetch_flood_extent_observation FOLDED to a spec-driven surface (ADR 0082): its
 # source.yaml + categorical_tile_grid mode is promoted by register_specs_from_tree.
@@ -449,6 +449,10 @@ from .fetchers.socioeconomic.geocode_location import geocode_location  # noqa: E
 from .fetchers._router.registration import register_specs_from_tree as _register_router_specs  # noqa: E402,F401
 
 _register_router_specs()
+
+# -- display (live map overlays that compose a service URL, transferring no data
+# bytes -- NOT fetchers) --
+from .display.show_nexrad_radar.show_nexrad_radar import show_nexrad_radar  # noqa: E402,F401
 
 # -- processing (compute / clip / extract / vector-edit / charts) --
 from .processing.clip_raster_to_polygon import clip_raster_to_polygon  # noqa: E402,F401
