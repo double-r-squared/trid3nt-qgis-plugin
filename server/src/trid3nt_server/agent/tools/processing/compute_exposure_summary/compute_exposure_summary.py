@@ -163,9 +163,15 @@ _METADATA = AtomicToolMetadata(
 def _fetch_population_layer(
     bbox: tuple[float, float, float, float], dataset: str
 ) -> Any:
-    """WorldPop raster ``LayerURI`` for ``bbox`` (the fetch_population seam)."""
-    from trid3nt_server.agent.tools.fetchers.socioeconomic.fetch_population.fetch_population import fetch_population
+    """WorldPop raster ``LayerURI`` for ``bbox`` (the fetch_population seam).
 
+    Resolves via the registry so the WorldPop leg's spec-driven fold (ADR 0092)
+    is called through its promoted closure -- the same repoint the buildings seam
+    uses. It reads only ``.uri`` as a raster (WorldPop is a single-band COG).
+    """
+    from trid3nt_server.agent.tools import TOOL_REGISTRY
+
+    fetch_population = TOOL_REGISTRY["fetch_population"].fn
     return fetch_population(bbox=bbox, dataset=dataset)
 
 

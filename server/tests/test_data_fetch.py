@@ -36,8 +36,9 @@ from trid3nt_server.agent.tools import TOOL_REGISTRY
 from trid3nt_server.agent.tools.fetchers.terrain.fetch_dem import fetch_dem as dem_mod
 # fetch_buildings twin DELETED (ADR 0084 buildings sidecar-write fold); its value-bearing
 # tests migrated to test_router_buildings.py.
-from trid3nt_server.agent.tools.fetchers.socioeconomic.fetch_population import fetch_population as pop_mod
 from trid3nt_server.agent.tools.fetchers.socioeconomic.geocode_location import geocode_location as geo_mod
+# fetch_population twin DELETED (ADR 0092 WorldPop library_delegate fold; the half-built
+# ACS leg dropped); its value-bearing WorldPop tests migrated to test_router_population.py.
 # fetch_river_geometry twin DELETED (ADR 0074 river fold); its value-bearing tests
 # migrated to test_router_river.py.
 from trid3nt_server.agent.tools.fetchers.climate.lookup_precip_return_period import lookup_precip_return_period as pfd_mod
@@ -46,7 +47,6 @@ from trid3nt_server.agent.tools.fetchers._fetch_common import (
     UpstreamAPIError,
     round_bbox_to_resolution,
 )
-from trid3nt_server.agent.tools.fetchers.socioeconomic.fetch_population.fetch_population import fetch_population
 from trid3nt_server.agent.tools.fetchers.socioeconomic.geocode_location.geocode_location import (
     GeocodeNoMatchError,
     geocode_location,
@@ -57,7 +57,7 @@ from trid3nt_server.agent.tools.fetchers.terrain.fetch_dem.fetch_dem import fetc
 
 #: Every data_fetch descendant module; ``read_through`` is bound per-module at
 #: import time, so cache-shim patches must hit all of them.
-_ALL_FETCH_MODS = (dem_mod, pop_mod, geo_mod, pfd_mod)
+_ALL_FETCH_MODS = (dem_mod, geo_mod, pfd_mod)
 
 
 def _setattr_all_fetch(monkeypatch, name, value):
@@ -749,274 +749,6 @@ def test_bbox_covers_flags_material_shortfall():
     )
 
 
-
-# ---------------------------------------------------------------------------
-# fetch_population — mocked Census REST.
-# ---------------------------------------------------------------------------
-
-
-def test_fetch_population_acs_opt_in_routes_to_acs_branch(monkeypatch):
-    """Tier-2 opt-in: explicit ``dataset="acs_2022"`` still routes to ACS.
-
-    Appendix F.1 makes WorldPop the Tier-1 default (see the no-dataset-arg
-    test below), but the existing ACS path stays callable for tract-level
-    precision queries — that's the Tier-2 routing rule.
-    """
-    fake_storage = FakeStorageClient()
-    from trid3nt_server.agent.tools import cache as cache_mod
-
-    monkeypatch.setattr(
-        pop_mod,
-        "_fetch_acs_population_bytes",
-        lambda bbox, dataset: b'{"type":"FeatureCollection","features":[]}',
-    )
-    # Guard: WorldPop branch must not be touched on this code path.
-    def _worldpop_should_not_be_called(_bbox, _dataset):  # pragma: no cover
-        raise AssertionError(
-            "WorldPop branch should not be invoked when dataset='acs_2022' is passed"
-        )
-
-    monkeypatch.setattr(
-        pop_mod, "_fetch_worldpop_population_bytes", _worldpop_should_not_be_called
-    )
-    _setattr_all_fetch(monkeypatch, "read_through",
-        lambda *a, **kw: cache_mod.read_through(
-            *a, storage_client=fake_storage, now=PINNED_NOW, **kw
-        ),
-    )
-
-    layer = fetch_population(FORT_MYERS_BBOX, dataset="acs_2022")
-    assert layer.layer_type == "vector"
-    assert layer.units == "people"
-    assert layer.uri.startswith(
-        "s3://trid3nt-cache/cache/static-30d/population/"
-    )
-    assert layer.uri.endswith(".json")
-
-
-def test_fetch_population_default_routes_to_worldpop_not_acs(monkeypatch):
-    """Appendix F.1 (v0.3.16): ``fetch_population(bbox)`` defaults to WorldPop.
-
-    The default-arg path MUST hit the WorldPop branch and MUST NOT hit the
-    ACS branch (a Tier-2 source that requires a Census API key for non-
-    trivial volume — Tier-1 preference rule says no-key defaults).
-    """
-    fake_storage = FakeStorageClient()
-    from trid3nt_server.agent.tools import cache as cache_mod
-
-    worldpop_calls: list[tuple[Any, str]] = []
-
-    def _capturing_worldpop(bbox, dataset, target_resolution_m=1000):
-        worldpop_calls.append((bbox, dataset))
-        return b"FAKE_WORLDPOP_COG_BYTES"
-
-    monkeypatch.setattr(
-        pop_mod, "_fetch_worldpop_population_bytes", _capturing_worldpop
-    )
-    # Guard: ACS branch must not be touched on the default path.
-    def _acs_should_not_be_called(_bbox, _dataset):  # pragma: no cover
-        raise AssertionError(
-            "ACS branch (Tier-2, key-required) must not be invoked by the default "
-            "fetch_population(bbox) call — Appendix F.1 says Tier-1 (WorldPop) is "
-            "the default."
-        )
-
-    monkeypatch.setattr(
-        pop_mod, "_fetch_acs_population_bytes", _acs_should_not_be_called
-    )
-    _setattr_all_fetch(monkeypatch, "read_through",
-        lambda *a, **kw: cache_mod.read_through(
-            *a, storage_client=fake_storage, now=PINNED_NOW, **kw
-        ),
-    )
-
-    layer = fetch_population(FORT_MYERS_BBOX)  # no dataset= arg
-    assert worldpop_calls, "WorldPop fetcher should have been called for default path"
-    assert worldpop_calls[0][1].startswith("worldpop_"), worldpop_calls
-    assert layer.layer_type == "raster"  # WorldPop is a raster COG, not a GeoJSON FC
-    assert layer.units == "people"
-    assert layer.uri.startswith(
-        "s3://trid3nt-cache/cache/static-30d/population/"
-    )
-    assert layer.uri.endswith(".tif")
-
-
-def test_fetch_population_worldpop_writes_tif_cog_to_cache(monkeypatch):
-    """The WorldPop default branch writes a ``.tif`` COG to the population cache prefix."""
-    fake_storage = FakeStorageClient()
-    from trid3nt_server.agent.tools import cache as cache_mod
-
-    monkeypatch.setattr(
-        pop_mod,
-        "_fetch_worldpop_population_bytes",
-        lambda bbox, dataset, target_resolution_m=1000: b"FAKE_WORLDPOP_COG_BYTES",
-    )
-    _setattr_all_fetch(monkeypatch, "read_through",
-        lambda *a, **kw: cache_mod.read_through(
-            *a, storage_client=fake_storage, now=PINNED_NOW, **kw
-        ),
-    )
-
-    layer = fetch_population(FORT_MYERS_BBOX, dataset="worldpop_2020")
-    # Cache landed at .tif under the population prefix.
-    paths = list(fake_storage.store.keys())
-    assert len(paths) == 1
-    assert paths[0].startswith("cache/static-30d/population/")
-    assert paths[0].endswith(".tif")
-    assert fake_storage.store[paths[0]] == b"FAKE_WORLDPOP_COG_BYTES"
-    # GCP decommissioned: TTL eviction is an S3 bucket-lifecycle rule (no
-    # per-object customTime); assert the boto3 put landed instead.
-    assert fake_storage.last_put is not None
-    # LayerURI return shape is raster + meters/people.
-    assert layer.layer_type == "raster"
-    assert layer.uri.endswith(".tif")
-
-
-def test_fetch_population_rejects_unknown_dataset():
-    """A dataset that's neither WorldPop nor ACS is rejected as BboxInvalidError."""
-    with pytest.raises(BboxInvalidError):
-        fetch_population(FORT_MYERS_BBOX, dataset="landscan")
-
-
-# ---------------------------------------------------------------------------
-# Phase-2 WorldPop 100m opt-in (resolution lever).
-# ---------------------------------------------------------------------------
-
-
-def test_worldpop_url_for_100m_returns_unadj_native_url():
-    """resolution_m<=100 -> base Global_2000_2020 tree + _UNadj suffix (NO _1km)."""
-    url = pop_mod._worldpop_url_for("USA", 2020, resolution_m=100)
-    assert "Global_2000_2020/" in url
-    assert "Global_2000_2020_1km" not in url
-    assert url.endswith("usa_ppp_2020_UNadj.tif"), url
-    assert "_1km_Aggregated" not in url
-
-
-def test_worldpop_url_for_default_returns_1km_url():
-    """The 1km default URL is byte-identical to the prior fixed behavior."""
-    default_url = pop_mod._worldpop_url_for("USA", 2020)
-    explicit_1km = pop_mod._worldpop_url_for("USA", 2020, resolution_m=1000)
-    assert default_url == explicit_1km
-    assert default_url == (
-        "https://data.worldpop.org/GIS/Population/Global_2000_2020_1km/2020/"
-        "USA/usa_ppp_2020_1km_Aggregated.tif"
-    )
-
-
-# ---------------------------------------------------------------------------
-# WorldPop vintage-year normalize-then-validate (the 'goes18 vs goes-18'
-# identifier-format class): a year outside the published Global_2000_2020
-# product window MUST fail LOUD with a clear typed error at parse time, NOT
-# build a well-formed URL into a non-existent path that 404s downstream.
-# ---------------------------------------------------------------------------
-
-
-@pytest.mark.parametrize("year", [2000, 2005, 2010, 2015, 2020])
-def test_worldpop_year_from_dataset_accepts_in_range_vintages(year):
-    """Every vintage in [2000,2020] parses to the exact int year."""
-    assert pop_mod._worldpop_year_from_dataset(f"worldpop_{year}") == year
-
-
-@pytest.mark.parametrize(
-    "year",
-    [1999, 1850, 2021, 2024, 2030],
-)
-def test_worldpop_year_from_dataset_rejects_out_of_range_year(year):
-    """An out-of-range vintage (e.g. the docstring-advertised 2024) fails LOUD.
-
-    Regression for the 'goes18 vs goes-18' identifier-format hazard: previously
-    ``worldpop_2024`` composed a well-formed URL into a non-existent path and
-    only surfaced as a bare HTTP 404 after a network round-trip. The typed
-    error must name the dataset, the offending year, and the supported window.
-    """
-    dataset = f"worldpop_{year}"
-    with pytest.raises(UpstreamAPIError) as excinfo:
-        pop_mod._worldpop_year_from_dataset(dataset)
-    msg = str(excinfo.value)
-    assert dataset in msg, msg
-    assert str(year) in msg, msg
-    assert "[2000,2020]" in msg, msg
-
-
-def test_worldpop_year_from_dataset_rejects_non_numeric_suffix():
-    """A non-numeric vintage suffix fails with the 'worldpop_YYYY' guidance."""
-    with pytest.raises(UpstreamAPIError) as excinfo:
-        pop_mod._worldpop_year_from_dataset("worldpop_latest")
-    assert "worldpop_YYYY" in str(excinfo.value)
-
-
-def test_worldpop_year_from_dataset_rejects_non_worldpop_prefix():
-    """A dataset that is not a worldpop_ token is rejected before parsing."""
-    with pytest.raises(UpstreamAPIError) as excinfo:
-        pop_mod._worldpop_year_from_dataset("acs_2022")
-    assert "WorldPop branch" in str(excinfo.value)
-
-
-def test_fetch_worldpop_population_bytes_rejects_2024_before_network(monkeypatch):
-    """fetch_population(worldpop_2024) raises a typed error WITHOUT any HTTP call.
-
-    The validation must fire at parse time (before requests.get / rasterio),
-    so the malformed identifier never reaches the network as a bare 404. We
-    fail the test if any HTTP request is attempted.
-    """
-
-    def _no_network(*_a, **_kw):  # pragma: no cover - must not be reached
-        raise AssertionError("requests.get must NOT be called for an out-of-range year")
-
-    monkeypatch.setattr(requests, "get", _no_network)
-
-    with pytest.raises(UpstreamAPIError) as excinfo:
-        pop_mod._fetch_worldpop_population_bytes(FORT_MYERS_BBOX, "worldpop_2024")
-    assert "2024" in str(excinfo.value)
-    assert "[2000,2020]" in str(excinfo.value)
-
-
-def test_worldpop_url_built_only_for_validated_year_matches_real_format():
-    """A validated in-range year composes the EXACT published bucket path."""
-    year = pop_mod._worldpop_year_from_dataset("worldpop_2020")
-    url = pop_mod._worldpop_url_for("USA", year)
-    assert url == (
-        "https://data.worldpop.org/GIS/Population/Global_2000_2020_1km/2020/"
-        "USA/usa_ppp_2020_1km_Aggregated.tif"
-    )
-
-
-def _patch_population_cache(monkeypatch, fake_storage):
-    """Route fetch_population's read_through through a fake storage client."""
-    from trid3nt_server.agent.tools import cache as cache_mod
-
-    _setattr_all_fetch(monkeypatch, "read_through",
-        lambda *a, **kw: cache_mod.read_through(
-            *a, storage_client=fake_storage, now=PINNED_NOW, **kw
-        ),
-    )
-
-
-def test_fetch_population_cache_key_includes_target_resolution_m(monkeypatch):
-    """100m vs 1km fetches get DISTINCT cache keys (different upstream products)."""
-    captured: list[int] = []
-
-    def _capturing_worldpop(bbox, dataset, target_resolution_m=1000):
-        captured.append(target_resolution_m)
-        return f"FAKE_WORLDPOP_{target_resolution_m}".encode()
-
-    monkeypatch.setattr(
-        pop_mod, "_fetch_worldpop_population_bytes", _capturing_worldpop
-    )
-
-    fake_storage = FakeStorageClient()
-    _patch_population_cache(monkeypatch, fake_storage)
-
-    # Default 1km then opt-in 100m on the SAME bbox -> two distinct cache keys.
-    fetch_population(FORT_MYERS_BBOX, dataset="worldpop_2020")
-    fetch_population(
-        FORT_MYERS_BBOX, dataset="worldpop_2020", target_resolution_m=100
-    )
-
-    assert captured == [1000, 100], captured
-    keys = list(fake_storage.store.keys())
-    assert len(keys) == 2, keys  # distinct keys -> both fetches landed separately
-    assert keys[0] != keys[1], keys
 
 
 # ---------------------------------------------------------------------------

@@ -1,0 +1,117 @@
+# Router source spec (fetcher-fold, ADR 0092): WorldPop whole-object-window raster.
+# Twin: fetch_population.py -- WorldPop 100m/1km gridded population. The half-built
+# ACS (Census B01003) leg is DROPPED at this fold (NATE flag-not-copy); Census tract
+# population is served by fetch_census_acs. WorldPop serves HTTP 200 to range
+# requests, so /vsicurl cannot window it -> the library_delegate whole-object-
+# download-then-window mode (worldpop.read owns the socket, worldpop.validate is the
+# pre-cache vintage gate).
+schema_version: v1
+
+name: fetch_population
+source_class: population
+error_prefix: POPULATION
+input_error_suffix: INPUT_INVALID
+empty_error_suffix: EMPTY
+shape: raster-cog
+supports_global_query: false
+
+endpoints:
+  data:
+    url: "https://data.worldpop.org/GIS/Population/"
+auth:
+  mode: none
+  user_agent: "trid3nt/0.1 (Hazard Modeling Agent; https://github.com/double-r-squared/trid3nt-qgis-plugin; agent@trid3nt.dev)"
+
+params:
+  bbox:
+    type: bbox
+    required: true
+    quantize: res_100
+  dataset:
+    type: str
+    default: worldpop_2020
+  target_resolution_m:
+    type: int
+    default: 1000
+
+ingest:
+  access: library_delegate
+  delegate:
+    library: worldpop
+    timeout_s: 180.0
+
+hooks:
+  delegate: worldpop.read
+  delegate_validate: worldpop.validate
+
+normalize:
+  crs: "EPSG:4326"
+  units: people
+  quantity: population
+
+output:
+  layer_type: raster
+  ext: tif
+  role: input
+  style_preset: "population_density"
+  emit_bbox: true
+
+cache:
+  ttl_class: static-30d
+
+payload_estimate:
+  model: bbox_area
+  floor_mb: 0.05
+  mb_per_sq_deg: 4.0
+
+caveats:
+  - "WorldPop gridded population persons/cell (Global_2000_2020 tree; vintage year MUST be in 2000..2020, e.g. 'worldpop_2020'). Default 1km-aggregated product (~50 MB/country download per cache miss); target_resolution_m<=100 opts into the native 100m UN-adjusted product (~4 GB/country, opt-in cost). WorldPop does not support HTTP range requests, so the whole country GeoTIFF is downloaded once then windowed."
+  - "gridded residential estimate, NOT per-building occupancy or real-time/daytime population; combine fetch_buildings footprints for building-level counts. For US Census tract population use fetch_census_acs."
+
+fallback: []
+
+# corpus lifted from sibling corpus.yaml.
+
+docstring: |-
+  Fetch WorldPop gridded population for a bbox as a raster COG.
+
+  Use this when: the agent needs population counts for exposure analysis, risk
+  scoring, or display alongside hazard layers. Global coverage, no API key, at
+  WorldPop's native grid (100m opt-in / 1km default) -- the Tier-1 population
+  raster.
+
+  Do NOT use this for: US Census tract-level tabulation (use ``fetch_census_acs``
+  for authoritative B01003 tract population); real-time / daytime population
+  (WorldPop is a residential count estimate); per-individual data (gridded
+  aggregate); per-building occupancy (combine ``fetch_buildings`` footprints with
+  this raster).
+
+  Params:
+      bbox: ``(min_lon, min_lat, max_lon, max_lat)`` in EPSG:4326. Required.
+          Example (Fort Myers FL): ``(-82.0, 26.4, -81.7, 26.7)``.
+      dataset: WorldPop vintage token ``"worldpop_YYYY"`` (default
+          ``"worldpop_2020"``). The WorldPop tree only publishes the
+          Global_2000_2020 vintages, so YEAR MUST be in 2000..2020 inclusive; a
+          year outside that window raises a typed input error at parse time
+          (before any network call) rather than 404ing on a non-existent path.
+      target_resolution_m: ground cell size. Default ``1000`` (the 1km-aggregated
+          product, ~50 MB per country). Pass ``100`` (or any value ``<= 100``) to
+          opt into the native 100m UN-adjusted product. WARNING: the 100m path is a
+          ~4 GB upstream whole-country download per cache miss (WorldPop does not
+          support HTTP range requests), so 100m is opt-in for its cost. Distinct
+          cache keys per resolution (100m vs 1km do not collide).
+
+  Returns:
+      A ``LayerURI`` (``layer_type="raster"``, ``role="input"``,
+      ``units="people"``, ``style_preset="population_density"``) pointing at a
+      single-band Cloud-Optimized GeoTIFF in the cache bucket
+      ``s3://trid3nt-cache/cache/static-30d/population/<key>.tif`` (units = people
+      per cell at the selected resolution).
+
+  Cross-tool dependencies:
+      - Downstream of: ``geocode_location`` (provides the bbox).
+      - Upstream of: ``compute_exposure_summary`` (population-in-footprint sum),
+        Pelicun exposure, any population-at-risk workflow step.
+      - Pairs with: ``fetch_buildings`` (occupancy-weighted analyses),
+        ``fetch_hrsl_population`` (finer ~30 m open population raster),
+        ``fetch_census_acs`` (US tract-level authoritative population).

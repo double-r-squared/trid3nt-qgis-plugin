@@ -1,0 +1,130 @@
+# Router source spec (fetcher-fold, ADR 0092): GOES GLM group-energy-density frames.
+# Twin: fetch_glm_lightning.py -- point-gridding of GLM-L2-LCFA group energy onto the
+# ABI-co-registered EPSG:4326 grid. The DEFAULT output is now an ORDERED
+# list[LayerURI] of GED frames (the single-accumulation case = a ONE-frame list); the
+# ADR 0088 single-vs-list STOP dissolves because the frames-list shape carries the
+# variant for free. glm.frames_plan splits the window into buckets, glm.frame_bytes
+# builds one bucket's purple-RGBA COG (numpy.add.at binning over the shared substrate).
+schema_version: v1
+
+name: fetch_glm_lightning
+source_class: goes_glm
+error_prefix: GLM
+input_error_suffix: INPUT_INVALID
+empty_error_suffix: EMPTY
+shape: animation_frames
+supports_global_query: false
+
+# The anonymous public NOAA GLM archive the frame_bytes hook lists + reads per bucket;
+# documentary (the executor does not fetch this -- frame_bytes owns the per-bucket I/O).
+endpoints:
+  archive_s3:
+    url: https://noaa-goes19.s3.amazonaws.com/
+auth:
+  mode: none
+  user_agent: "trid3nt/0.1 (Hazard Modeling Agent; agent@trid3nt.dev)"
+
+params:
+  bbox:
+    type: bbox
+    required: true
+    quantize: round_6dp
+  satellite:
+    type: str
+    default: goes-19
+  start_utc:
+    type: str
+    schema_optional: true
+  end_utc:
+    type: str
+    schema_optional: true
+  accumulation_window_s:
+    type: int
+    schema_optional: true
+
+hooks:
+  frames_plan: glm.frames_plan
+  frame_bytes: glm.frame_bytes
+
+normalize:
+  crs: EPSG:4326
+
+output:
+  layer_type: raster
+  ext: tif
+  role: context
+  style_preset: glm_lightning
+  emit_bbox: true
+
+cache:
+  ttl_class: dynamic-1h
+
+# The twin's estimator returned a small per-AOI MB (mostly-transparent RGBA overlay);
+# the router's mandatory bbox_area seam gives an equivalent small estimate that never
+# trips the chat-warn threshold on a normal storm AOI.
+payload_estimate:
+  model: bbox_area
+  floor_mb: 0.5
+  mb_per_sq_deg: 0.02
+
+caveats:
+  - Reads GLM-L2-LCFA optical-lightning groups from the anonymous public noaa-goesNN S3 archive and bins GROUP energy onto a ~2 km EPSG:4326 grid (GLM lat/lon carry parallax -> binned directly, never warped); baked transparent purple RGBA (only lit cells opaque).
+  - Default output is a frames list (single accumulation = a one-frame list); accumulation_window_s fans the window into scrubber-steppable step-N frames. A bucket with no granules OR no in-AOI groups is skipped; a window where EVERY bucket is empty raises a typed GLM_EMPTY error (honesty floor, never a blank overlay).
+  - bbox is required (a GLM full-disk bin is enormous); the single-frame window is capped at 20 min (use accumulation_window_s for longer spans).
+
+fallback: []
+
+# corpus lifted from sibling corpus.yaml.
+
+docstring: |-
+  Fetch GOES GLM optical-lightning GROUP-ENERGY-DENSITY as transparent purple raster frames.
+
+  **What it does:** Reads the GOES **GLM** (Geostationary Lightning Mapper)
+  ``GLM-L2-LCFA`` product from the public ``noaa-goesNN`` S3 archive (anonymous / no
+  key), bins the optical-lightning GROUP energy (Joules) onto a ~2 km EPSG:4326 grid
+  -- the SAME grid the GOES ABI products use, so it co-registers pixel-for-pixel with
+  a GOES satellite / fire base -- and returns the group-energy-density (GED) as an
+  ORDERED ``list`` of TRANSPARENT purple RGBA raster ``LayerURI`` frames. Only cells
+  with detected lightning are opaque (deep-violet -> magenta -> white-pink with
+  energy); everything else is transparent so it overlays a basemap directly.
+
+  **Why GED (not raw strike counts):** GLM reports discrete ``group`` detections,
+  each carrying a real ``group_energy``. Summing that energy per cell over an
+  accumulation window is the stable, physically meaningful "how electrically active
+  is this cell" field shown in CIRA GLM density imagery -- bright over the convective
+  cores, faint at the edges.
+
+  **When to use:**
+  - "Show me the lightning / lightning activity over this storm right now."
+  - "Animate the GLM lightning activity over this storm minute by minute."
+  - Where is the most electrically active part of this convective cluster.
+  - As a lightning-intensity overlay on top of a GOES true-color / IR base.
+
+  **When NOT to use:**
+  - Ground-based cloud-to-ground strike points (use a CG-network tool, not GLM).
+  - A scrubbable ABI imagery loop (use ``fetch_goes_archive_animation``).
+
+  **Parameters:**
+  - ``bbox`` (tuple): ``(min_lon, min_lat, max_lon, max_lat)`` EPSG:4326. Required.
+    Example (Florida convective cluster): ``(-83.5, 25.5, -79.5, 31.5)``.
+  - ``satellite`` (str, default ``"goes-19"``): ``"goes-19"`` (East, current),
+    ``"goes-18"`` (West, current), ``"goes-16"`` / ``"goes-17"`` (historical).
+  - ``start_utc`` / ``end_utc`` (str): ISO-8601 UTC window bounds. When omitted, the
+    most-recent ~5 min ending now is accumulated.
+  - ``accumulation_window_s`` (int, optional): when set (e.g. ``60``), the window is
+    split into per-bucket frames and an ORDERED animation is returned (``step <N>``
+    names the web scrubber animates); when omitted (default), the ENTIRE window is
+    accumulated into a SINGLE frame -- returned as a one-frame list.
+
+  **Returns:** an ORDERED ``list[LayerURI]`` of 4-band transparent RGBA GED COG
+  frames (``layer_type="raster"``, ``role="context"``, ``style_preset="glm_lightning"``,
+  identical preset + bbox across frames, ascending UTC, ``step <N>`` scrubber names).
+  The single-accumulation case is a one-frame list. A window where no bucket has any
+  lightning group inside the AOI raises a typed EMPTY error (honesty floor) -- it
+  never emits a blank overlay.
+
+  **Cross-tool dependencies:**
+  - Pairs with: ``fetch_goes_archive_animation`` band ``true_color`` /
+    ``fire_temperature`` (the GOES base this lightning density overlays, identical grid).
+  - Sibling fetchers: ``fetch_goes_satellite`` (single ABI frame),
+    ``fetch_goes_active_fire`` (split-window hot pixels).

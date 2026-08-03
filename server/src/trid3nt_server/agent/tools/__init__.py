@@ -222,7 +222,9 @@ def clear_registry_for_tests() -> None:
 # ---------------------------------------------------------------------------
 
 # -- fetchers/weather --
-from .fetchers.weather.fetch_glm_lightning import fetch_glm_lightning  # noqa: E402,F401
+# fetch_glm_lightning: animation_frames fold (ADR 0092) -- twin DELETED, now spec-driven
+# (source.yaml + glm.frames_plan/frame_bytes hooks; default output = a frames list), auto-
+# registered by _register_router_specs() below; no eager twin import.
 # fetch_hrrr_forecast + fetch_hrrr_smoke: HRRR-Zarr library-delegate fold (ADR 0083)
 # -- twins DELETED, now spec-driven (source.yaml + hrrr.resolve_cycle/read/validate
 # delegate hooks: s3fs cycle-walk delegate_resolve + Zarr open -> LCC->4326 reproject
@@ -377,7 +379,9 @@ from .fetchers.climate.lookup_precip_return_period import lookup_precip_return_p
 # DELETED, now spec-driven (source.yaml + overpass build_request/parse_response
 # hooks over the http_json endpoint_fallback mirror chain), auto-registered by
 # _register_router_specs() below.
-from .fetchers.socioeconomic.fetch_population import fetch_population  # noqa: E402,F401
+# fetch_population: WorldPop library_delegate raster fold (ADR 0092) -- twin DELETED, now
+# spec-driven (source.yaml + worldpop.validate/read hooks); the half-built ACS leg dropped
+# (fetch_census_acs serves tract population), auto-registered below; no eager twin import.
 # fetch_usace_nsi: data-router fold tier-3 hooks (ADR 0061) -- twin DELETED, now
 # spec-driven (source.yaml + usace_nsi build_request/parse_response hooks + the
 # RequestPlan POST transport extension), registered by _register_router_specs() below.

@@ -298,3 +298,13 @@ from . import viirs_day_fire  # noqa: E402,F401
 # hotspots) fold onto shape: animation_frames -- ONE frames_plan/frame_bytes pair over the shared
 # _goes_archive_core substrate (S3 window list + CF-scaled MCMIPC netCDF band read + composite).
 from . import goes_archive  # noqa: E402,F401
+# approved-folds wave (ADR 0092): fetch_glm_lightning folds onto shape: animation_frames
+# (default output becomes a frames list; single accumulation = a one-frame list). glm.frames_plan
+# splits the window into buckets, glm.frame_bytes bins GLM-L2-LCFA GROUP energy (numpy.add.at) and
+# bakes the purple-log-ramp RGBA COG over the shared imagery._goes_archive_core grid + writer.
+from . import glm  # noqa: E402,F401
+# approved-folds wave (ADR 0092): fetch_population's WorldPop raster leg folds onto the
+# library_delegate raster mode (whole-object-download-then-window; WorldPop serves HTTP 200 to
+# range requests so /vsicurl cannot window it). worldpop.validate is the pre-cache vintage gate,
+# worldpop.read owns the download+window socket. The half-built ACS leg is DROPPED (fetch_census_acs).
+from . import worldpop  # noqa: E402,F401
