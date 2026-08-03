@@ -140,3 +140,18 @@ been written yet but I don't want you to forget it.")
   outcomes over WS (HTTP status + provider messages). Closes the
   render-failure blind spot (layer-poison class); strengthens the honesty
   floor at the client edge. Standalone, no pool dependency.
+
+## 2026-08-03 - Loud, user-gated cross-dataset fallbacks (NATE)
+Split fallback classes: same-data mirrors (identical dataset, different host)
+may fail over silently; CROSS-DATASET substitution (different resolution or
+measurement method, e.g. fetch_dem 3DEP 1-10m lidar -> Copernicus GLO-30 30m
+radar) must be loud and user-gated - silent substitution degrades map integrity
+while looking like success. Mechanism: honest typed error naming the substitute
+as the suggested retry arg (source enum), through the tool-retry loop so the
+agent narrates the tradeoff (the #154 granularity-gate pattern). Consequence:
+gating fetch_dem's auto-ladder dissolves its biggest fold blocker (ADR 0090
+cross-tool provenance restamp) and simplifies topobathy's fallback_warning
+field (ADR 0089). Blast radius: 8 nested terrain consumers (flood, topobathy,
+contours, elmfire, geoclaw, swmm, landslide) would pause-and-ask mid-scenario
+instead of silently degrading - lands as its own gated wave with the flood
+canary, not a rider.
