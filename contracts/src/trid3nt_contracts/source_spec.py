@@ -65,6 +65,7 @@ SourceShape = Literal[
     "vector-fgb",
     "station-timeseries-fgb",
     "record",
+    "animation_frames",
 ]
 
 #: Auth mode (contract sec 1.1 ``auth.mode``). ``none`` = keyless public;
@@ -527,6 +528,32 @@ class HookSpec(GraceModel):
     #: palette unless the spec names the hook).
     colormap: str | None = None
 
+    #: FRAMES-LIST pre-loop RESOLVE (animation wave 1, ADR 0087). ``(spec, params)
+    #: -> list[FramePlan]``. A ``shape: animation_frames`` source (an ordered
+    #: per-timestamp animation that returns ``list[LayerURI]``, not one layer) names
+    #: this hook: it does the pre-loop timestamp-index fetch + window + subsample +
+    #: (optional) filter and returns the ORDERED list of per-frame plans -- each a
+    #: :class:`FramePlan` carrying the frame's ``cache_params`` (the read_through
+    #: cache key, byte-identical to the twin's per-frame params), the scrubber
+    #: NAME-TOKEN (the monotonic ``step <N>`` / ISO the plugin ``group_frame_layers``
+    #: keys on), the ``layer_id``, and the AOI ``bbox``. Raises the source's typed
+    #: EMPTY error when the window matches no frames (honesty floor). No prior spec
+    #: declares it (strict no-op).
+    frames_plan: str | None = None
+
+    #: FRAMES-LIST per-frame COG BUILDER (animation wave 1, ADR 0087). ``(spec,
+    #: params, frame: FramePlan) -> bytes``. The ``shape: animation_frames``
+    #: executor's per-frame ``read_through`` fetch_fn: builds ONE frame's raster
+    #: bytes (the CIRA SLIDER tile-stitch mosaic -> EPSG:4326 COG, or a post-stitch
+    #: blend). It may perform the frame's own tile I/O (the ``_satellite_slider``
+    #: substrate owns the stitch socket, the sanctioned per-frame impurity, like the
+    #: library_delegate). Raises :class:`FrameDegraded` to signal a graceful per-frame
+    #: skip (a transparent / off-swath / upstream-failed frame the executor records
+    #: and drops, never a silent gap); the executor's honesty floor raises the typed
+    #: EMPTY error only when EVERY frame degrades. Pairs with ``frames_plan``. No
+    #: prior spec declares it (strict no-op).
+    frame_bytes: str | None = None
+
     #: TRANSPORT-STATUS classification (keyed/misc wave, ADR 0071).
     #: ``(spec, status: int | None, body: str | None) -> RouterError | None``. The
     #: http_json transport collapses every non-2xx to a retryable UPSTREAM error;
@@ -670,6 +697,23 @@ class SourceSpec(GraceModel):
             raise ValueError(
                 f"output.layer_type=record requires shape=record; got {self.shape!r}"
             )
+        # animation_frames shape (ADR 0087) <-> raster frames + the two frames hooks.
+        # It returns list[LayerURI] (ordered per-timestamp), so it emits raster tif
+        # frames and MUST declare both the pre-loop frames_plan and the per-frame
+        # frame_bytes builder (the router has nothing else to resolve the frame set /
+        # build a frame).
+        if self.shape == "animation_frames":
+            if self.output.layer_type != "raster":
+                raise ValueError(
+                    f"shape=animation_frames requires output.layer_type=raster; "
+                    f"got {self.output.layer_type!r}"
+                )
+            fp = self.hooks.frames_plan if self.hooks is not None else None
+            fb = self.hooks.frame_bytes if self.hooks is not None else None
+            if not (fp and fb):
+                raise ValueError(
+                    "shape=animation_frames requires hooks.frames_plan + hooks.frame_bytes"
+                )
         # A join transform only makes sense over a vector base shape.
         if self.join is not None and self.shape != "vector-fgb":
             raise ValueError(

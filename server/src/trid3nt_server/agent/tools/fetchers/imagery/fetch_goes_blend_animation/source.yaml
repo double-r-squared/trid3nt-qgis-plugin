@@ -1,0 +1,74 @@
+schema_version: v1
+name: fetch_goes_blend_animation
+source_class: goes_animation
+shape: animation_frames
+error_prefix: GOES_ANIM
+input_error_suffix: INPUT_INVALID
+empty_error_suffix: EMPTY
+
+docstring: |
+  DEPRECATED alias of ``fetch_goes_animation`` with ``band="blend"``.
+
+  Retained as a thin registered delegate for backward compatibility (existing
+  cases + the routing bench). New callers should use ``fetch_goes_animation``
+  with ``band="blend"`` -- the blended GeoColor + Fire Temperature composite is
+  now a band mode of the one GOES-animation tool, not a separate sibling.
+
+  Builds the BLENDED GeoColor + Fire Temperature animation (ONE composite
+  scrubber group): for each SLIDER scan time it pulls BOTH products at the same
+  valid-time and composites them (GeoColor base + active-fire glow), returning
+  an ORDERED ``list[LayerURI]`` -- one blended frame per scan time.
+
+# The SLIDER tile substrate the frames hooks build URLs against; documentary.
+endpoints:
+  slider:
+    url: https://rammb-slider.cira.colostate.edu/data/imagery/
+
+# No ``band`` param: the delegate always builds the blend (frames_plan defaults
+# a band-less spec to the composite path).
+params:
+  bbox:
+    type: bbox
+    required: true
+    quantize: round_6dp
+  satellite:
+    type: str
+    default: goes-18
+  sector:
+    type: str
+    default: conus
+  start_utc:
+    type: str
+    schema_optional: true
+  end_utc:
+    type: str
+    schema_optional: true
+  step_minutes:
+    type: int
+    default: 5
+
+hooks:
+  frames_plan: goes_animation.frames_plan
+  frame_bytes: goes_animation.frame_bytes
+
+normalize:
+  crs: EPSG:4326
+
+output:
+  layer_type: raster
+  ext: tif
+  role: context
+  style_preset: goes_rgb_animation
+  emit_bbox: true
+
+cache:
+  ttl_class: dynamic-1h
+
+payload_estimate:
+  model: bbox_area
+  floor_mb: 0.05
+  mb_per_sq_deg: 4.0
+
+caveats:
+  - Georeferencing is the approximate SLIDER sector-extent mapping; the two products share it so they co-register exactly.
+  - An AOI / window with no blendable frames raises a typed GOES_ANIM_EMPTY error (honesty floor).

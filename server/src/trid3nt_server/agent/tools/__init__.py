@@ -303,7 +303,10 @@ from .fetchers.terrain.fetch_dem import fetch_dem  # noqa: E402,F401
 
 # -- fetchers/imagery --
 from .fetchers.imagery.fetch_goes_active_fire import fetch_goes_active_fire  # noqa: E402,F401
-from .fetchers.imagery.fetch_goes_animation import fetch_goes_animation  # noqa: E402,F401
+# fetch_goes_animation + fetch_goes_blend_animation FOLDED to spec-driven surfaces
+# (ADR 0087): source.yaml + shape: animation_frames + goes_animation.frames_plan /
+# frame_bytes (SLIDER stitch-mosaic; band="blend" -> the composite), auto-registered
+# by register_specs_from_tree.
 from .fetchers.imagery.fetch_goes_archive_animation import fetch_goes_archive_animation  # noqa: E402,F401
 from .fetchers.imagery.fetch_goes_satellite import fetch_goes_satellite  # noqa: E402,F401
 # fetch_landsat_imagery / fetch_naip / fetch_sentinel2_truecolor: STAC-composite wave
@@ -314,7 +317,9 @@ from .fetchers.imagery.fetch_goes_satellite import fetch_goes_satellite  # noqa:
 # tool auto-registers via register_specs_from_tree (SLIDER availability + cadence index).
 # fetch_sentinel1_sar: quick-folds wave (ADR 0079) -- twin DELETED, now spec-driven
 # (source.yaml + raster_cog stac_float + coverage-select + log10_db), auto-registered.
-from .fetchers.imagery.fetch_viirs_day_fire import fetch_viirs_day_fire  # noqa: E402,F401
+# fetch_viirs_day_fire FOLDED to a spec-driven surface (ADR 0087): source.yaml +
+# shape: animation_frames + viirs_day_fire.frames_plan / frame_bytes (JPSS polar
+# day-pass SLIDER stitch), auto-registered by register_specs_from_tree.
 
 # -- fetchers/climate --
 # fetch_chirps_precipitation: data-router fold phase-2 wave-9 (ADR 0055) -- twin

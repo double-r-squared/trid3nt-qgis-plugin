@@ -641,11 +641,22 @@ def build_layer_uri(spec: SourceSpec, params: dict[str, Any], uri: str) -> Layer
     )
 
 
-def route(spec: SourceSpec, raw_params: dict[str, Any]) -> LayerURI | dict[str, Any]:
+def route(
+    spec: SourceSpec, raw_params: dict[str, Any]
+) -> LayerURI | dict[str, Any] | list[LayerURI]:
     """The engine: validate -> gate -> dispatch -> cache -> emit LayerURI (or a
-    record dict for a ``shape: record`` source, ADR 0076)."""
+    record dict for a ``shape: record`` source, ADR 0076, or an ordered
+    ``list[LayerURI]`` for a ``shape: animation_frames`` source, ADR 0087)."""
     metadata = synthesize_metadata(spec)
     params = validate_params(spec, raw_params)
+    # Frames-list output shape (ADR 0087): an animation source returns an ORDERED
+    # list[LayerURI] (one cache entry + one layer per timestamp), so the executor
+    # owns the per-frame read_through loop -- there is no single top-level
+    # read_through / LayerURI. It wins over every layer executor below. No-op for
+    # every prior spec (none are animation_frames).
+    if spec.shape == "animation_frames":
+        from .executors import animation_frames
+        return animation_frames.execute(spec, params, metadata)
     # A delegated spec's source-specific INPUT validation (wqp bbox-required, nldi
     # seed/comid mutual-exclusion + CONUS + comid gate) runs BEFORE read_through so
     # a bad request raises pre-cache / pre-network -- indistinguishable from the

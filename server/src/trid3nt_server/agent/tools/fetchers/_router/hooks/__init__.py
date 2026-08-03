@@ -51,6 +51,8 @@ logger = logging.getLogger("trid3nt_server.agent.tools.fetchers._router.hooks")
 
 __all__ = [
     "RequestPlan",
+    "FramePlan",
+    "FrameDegraded",
     "HOOK_REGISTRY",
     "register_hook",
     "resolve_hook",
@@ -81,6 +83,40 @@ class RequestPlan:
     method: str = "GET"
     json_body: Any = None
     data: dict[str, Any] | None = None
+
+
+@dataclass(frozen=True)
+class FramePlan:
+    """One frame of a ``shape: animation_frames`` sequence (ADR 0087).
+
+    PURE data: the ``frames_plan`` hook produces the ORDERED list of these (the
+    pre-loop window/subsample already applied), and the ``animation_frames``
+    executor drives one ``read_through`` per frame + emits a ``LayerURI`` per frame.
+
+    - ``cache_params`` -- the per-frame read_through cache key (byte-identical to
+      the hand-written twin's per-frame params so the fold reuses cached frames).
+    - ``name`` -- the emitted ``LayerURI.name``, which MUST carry the monotonic
+      scrubber NAME-TOKEN (``step <N>`` + the ISO valid-time) the plugin
+      ``render/temporal.py group_frame_layers`` groups on.
+    - ``layer_id`` -- the emitted ``LayerURI.layer_id`` (a per-product stem keeps
+      sibling products in separate scrubber groups).
+    - ``bbox`` -- the AOI bbox stamped on every frame's ``LayerURI.bbox``.
+    """
+
+    cache_params: dict[str, Any]
+    name: str
+    layer_id: str
+    bbox: tuple[float, float, float, float]
+
+
+class FrameDegraded(Exception):
+    """A ``frame_bytes`` hook raises this to skip ONE degraded frame (ADR 0087).
+
+    A transparent / off-swath / upstream-failed single frame is a RECORDED
+    degradation the executor drops (never a silent gap); the executor's honesty
+    floor raises the source's typed EMPTY error only when EVERY frame degrades.
+    ``message`` is preserved for the all-frames-failed error text.
+    """
 
 
 class HookResolutionError(ValueError):
@@ -237,3 +273,11 @@ from . import usgs_nwis_gauges  # noqa: E402,F401
 # band param alone) the stac_continuous_mosaic serializer bakes into the band-1
 # palette. The fetch side is the declarative stac_continuous_mosaic access mode.
 from . import jrc_global_surface_water  # noqa: E402,F401
+# animation wave 1 (ADR 0087): the frames-list output shape + the SLIDER-stitch
+# per-frame mode. fetch_goes_animation / fetch_goes_blend_animation (goes_animation
+# hooks, single + blend) + fetch_viirs_day_fire (viirs_day_fire hooks, polar day
+# passes) fold onto shape: animation_frames -- the router owns the per-frame
+# read_through loop + honesty floor + LayerURI emission; frames_plan resolves the
+# windowed frame set, frame_bytes builds one frame's COG.
+from . import goes_animation  # noqa: E402,F401
+from . import viirs_day_fire  # noqa: E402,F401

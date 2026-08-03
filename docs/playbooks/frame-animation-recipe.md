@@ -25,7 +25,12 @@ The three retained primitives that unblock the frame-animation pattern:
 - `fetch_goes_animation` / `fetch_goes_blend_animation` / `fetch_viirs_day_fire`
   -- the per-frame imagery fetchers; each returns an ORDERED `list[LayerURI]`
   whose names already carry the scrubber NAME-TOKEN
-  (`"GOES <Product> step <N> <ISO> (<SAT>)"`).
+  (`"GOES <Product> step <N> <ISO> (<SAT>)"`). As of ADR 0087 these three are
+  spec-driven (`shape: animation_frames` + the SLIDER-stitch `frames_plan` /
+  `frame_bytes` hooks) rather than coded twins -- the names, the list return, and
+  the scrubber token are unchanged, so this recipe is unaffected. (`band="blend"`
+  on `fetch_goes_animation` is the combined CIRA GeoColor + Fire Temperature
+  composite; `fetch_goes_blend_animation` is its deprecated alias.)
 - `fetch_firms_active_fire` -- FIRMS hot pixels for the data-driven fire AOI.
 
 ## Recipe A -- GOES/VIIRS frame animation (replaces run_model_goes_fire_animation)
