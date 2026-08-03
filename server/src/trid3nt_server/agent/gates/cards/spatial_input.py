@@ -168,6 +168,38 @@ def _spatial_response_to_result(
         }
         if parsed.aoi_bbox is not None:
             result["aoi_bbox"] = list(parsed.aoi_bbox)
+        # Generalized drawn roles (ADR 0099) -- surfaced so the LLM can pass them
+        # to whichever engine composer accepts them (SFINCS/GeoClaw breach_point,
+        # the MODFLOW DISV / TELEMAC refine_region sizing, breaklines, boundaries).
+        if parsed.breach_points:
+            # Interior levee/dam-breach source(s): pass the FIRST straight to
+            # sfincs_flood(breach_point=...) / a GeoClaw breach point (drawn value
+            # PREFERRED over a plain tuple arg when a breach was drawn).
+            result["breach_points"] = [list(p) for p in parsed.breach_points]
+            result["breach_point"] = list(parsed.breach_points[0])
+        if parsed.refine_regions:
+            # Per-region mesh sizing polygons: {polygon, target_size_m, bbox}.
+            result["refine_regions"] = [
+                {
+                    "polygon": r["polygon"],
+                    "target_size_m": r["target_size_m"],
+                    "bbox": list(r["bbox"]),
+                }
+                for r in parsed.refine_regions
+            ]
+            result["n_refine_regions"] = len(parsed.refine_regions)
+        if parsed.breaklines:
+            result["breaklines"] = [
+                [list(pt) for pt in ln] for ln in parsed.breaklines
+            ]
+        if parsed.boundary_lines:
+            result["boundary_lines"] = [
+                {
+                    "coords": [list(pt) for pt in b["coords"]],
+                    "boundary_type": b["boundary_type"],
+                }
+                for b in parsed.boundary_lines
+            ]
         if parsed.barriers is not None:
             # The clean, engine-ready barriers FeatureCollection — pass straight
             # to swmm_urban_flood(barriers=...). It validates field-for-field

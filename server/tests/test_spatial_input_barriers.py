@@ -574,8 +574,8 @@ def test_request_spatial_input_tool_rejects_bad_mode():
 swmm_api = pytest.importorskip("swmm_api")
 pyswmm = pytest.importorskip("pyswmm")
 
-from trid3nt_server.agent.workflows.swmm import swmm_mesh_builder as mb  # noqa: E402
-from trid3nt_server.agent.workflows.swmm.swmm_mesh_builder import build_swmm_mesh  # noqa: E402
+from trid3nt_server.agent.mesh import raster_cell_mesh as mb  # noqa: E402
+from trid3nt_server.agent.mesh.raster_cell_mesh import build_swmm_mesh  # noqa: E402
 
 _N = 20
 _CELL = 10.0

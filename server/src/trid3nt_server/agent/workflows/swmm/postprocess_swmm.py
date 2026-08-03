@@ -1203,7 +1203,7 @@ def postprocess_swmm_pollutants(
 
     from trid3nt_contracts.swmm_contracts import SWMMPollutantLayerURI
 
-    from trid3nt_server.agent.workflows.swmm.swmm_mesh_builder import read_quality_routing_continuity
+    from trid3nt_server.agent.mesh.raster_cell_mesh import read_quality_routing_continuity
 
     out_path = str(getattr(run, "out_path"))
     rpt_path = str(getattr(run, "rpt_path", "")) or str(Path(out_path).with_suffix(".rpt"))

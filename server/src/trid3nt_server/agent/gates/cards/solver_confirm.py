@@ -954,7 +954,7 @@ async def _build_swmm_granularity_envelope(params: dict) -> tuple[Any, Any, str]
         _fetch_dem_for_urban,
     )
     from ...workflows.swmm.run_swmm import is_local_mode
-    from ...workflows.swmm.swmm_mesh_builder import (
+    from ...mesh.raster_cell_mesh import (
         SWMM_RES_LADDER,
         estimate_swmm_solve_seconds,
         suggest_swmm_resolution,

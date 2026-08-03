@@ -71,8 +71,8 @@ from trid3nt_server.agent.workflows.swmm.run_swmm import (
     stage_swmm_manifest,
 )
 from trid3nt_server.agent.workflows.shared.solve_progress import drive_live_solve_progress
-from trid3nt_server.agent.workflows.swmm.swmm_mesh_builder import estimate_swmm_solve_seconds
-from trid3nt_server.agent.workflows.shared.mesh_layer import make_swmm_mesh_layer_uri
+from trid3nt_server.agent.mesh.raster_cell_mesh import estimate_swmm_solve_seconds
+from trid3nt_server.agent.mesh.mesh_preview import make_swmm_mesh_layer_uri
 from trid3nt_server.emission.layer_uri_emit import emit_layer_uri, publish_input_layer
 
 logger = logging.getLogger("trid3nt_server.agent.workflows.swmm.model_urban_flood_swmm.model_urban_flood_swmm")
@@ -1508,7 +1508,7 @@ def _download_batch_swmm_outputs(run_result: Any, run_id: str) -> tuple[Any, str
         _split_object_uri,
         _try_get_completion_s3,
     )
-    from trid3nt_server.agent.workflows.swmm.swmm_mesh_builder import read_flow_routing_continuity
+    from trid3nt_server.agent.mesh.raster_cell_mesh import read_flow_routing_continuity
 
     runs_bucket = _get_runs_bucket()
     s3 = _get_s3_client()

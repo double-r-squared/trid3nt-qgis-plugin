@@ -35,6 +35,22 @@ from trid3nt_server.agent.mesh.mesh_preview import (
     regular_grid_outline_feature_collection,
     swmm_mesh_to_geojson,
 )
+from trid3nt_server.agent.mesh.preview_gate import (
+    MeshGateStats,
+    build_mesh_gate_envelope,
+    default_gate_mode,
+    mesh_gate_should_fire,
+)
+from trid3nt_server.agent.mesh.refine_regions import (
+    MeshSizingSpec,
+    mesh_sizing_from_refine_regions,
+    refine_level_for,
+)
+from trid3nt_server.agent.mesh.spatial_roles import (
+    DrawnRoles,
+    SpatialRoleError,
+    parse_drawn_roles,
+)
 
 __all__ = [
     "RegularGrid",
@@ -45,4 +61,15 @@ __all__ = [
     "make_sfincs_mesh_layer_uri",
     "regular_grid_outline_feature_collection",
     "make_grid_outline_layer_uri",
+    # M2 GENERALIZE (ADR 0099)
+    "DrawnRoles",
+    "SpatialRoleError",
+    "parse_drawn_roles",
+    "MeshSizingSpec",
+    "mesh_sizing_from_refine_regions",
+    "refine_level_for",
+    "MeshGateStats",
+    "build_mesh_gate_envelope",
+    "default_gate_mode",
+    "mesh_gate_should_fire",
 ]

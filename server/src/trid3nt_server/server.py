@@ -8310,7 +8310,7 @@ async def _gate_on_solver_confirm(
         used_real_clamp = False
         if swmm_dem_path:
             try:
-                from .agent.workflows.swmm.swmm_mesh_builder import (
+                from .agent.mesh.raster_cell_mesh import (
                     clamp_swmm_resolution_to_real_cap,
                 )
 

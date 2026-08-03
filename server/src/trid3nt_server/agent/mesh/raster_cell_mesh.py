@@ -81,9 +81,18 @@ import math
 import os
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
-from trid3nt_server.agent.workflows.swmm.swmm_hyetograph import HyetographResult, build_nested_hyetograph
+if TYPE_CHECKING:  # annotation-only; the runtime import is lazy (see below).
+    from trid3nt_server.agent.workflows.swmm.swmm_hyetograph import HyetographResult
+
+# NOTE: swmm_hyetograph lives in agent/workflows/swmm/ while this module lives in
+# agent/mesh/, and agent/workflows/swmm/ imports back from agent/mesh/ -- a
+# package-level import cycle (ADR 0098). The hyetograph symbol is therefore
+# imported LAZILY inside build_swmm_mesh rather than at module top, so importing
+# either package first cannot dead-lock on a half-initialised sibling. The
+# ``HyetographResult`` annotation stays a string (from __future__ annotations),
+# resolved only by type-checkers via the TYPE_CHECKING import above.
 
 try:  # numpy/rasterio are agent-venv deps (SFINCS chain) -- but stay defensive.
     import numpy as np
@@ -111,12 +120,13 @@ __all__ = [
     "SWMMAutoscaleResult",
     "clamp_swmm_resolution_to_real_cap",
     "SWMMRealCapClampResult",
-    # Manning loader re-export (the SFINCS substrate table)
-    "load_manning_mapping",
 ]
 
-# Re-use the SFINCS substrate Manning loader (version-pinned NLCD -> n table).
-from trid3nt_server.agent.workflows.shared.manning import load_manning_mapping  # noqa: E402
+# NOTE: this module no longer re-exports ``load_manning_mapping``. It was a dead
+# re-export (real consumers import it from ``workflows.shared.manning`` directly),
+# and importing ``workflows.shared.manning`` at module top forced the heavy
+# ``workflows`` package __init__ -- the agent/mesh <-> agent/workflows import
+# cycle (ADR 0098) that broke direct imports of this relocated module. Removed.
 
 # Default overland Manning n when no NLCD raster is supplied (matches the spike
 # / the contracts default). Used for the synthetic-AOI proof and as a fallback.
@@ -1086,6 +1096,12 @@ def build_swmm_mesh(
     rough_cells = (active & building_mask) if building_representation == "roughness" else None
 
     # --- nested design-storm hyetograph (P1 builder) ---
+    # Lazy import: breaks the agent/mesh <-> agent/workflows/swmm package cycle
+    # (ADR 0098) -- resolved at call time, never at module import.
+    from trid3nt_server.agent.workflows.swmm.swmm_hyetograph import (
+        build_nested_hyetograph,
+    )
+
     hyet = build_nested_hyetograph(
         total_depth_mm=total_rain_depth_mm,
         storm_duration_hr=storm_duration_hr,

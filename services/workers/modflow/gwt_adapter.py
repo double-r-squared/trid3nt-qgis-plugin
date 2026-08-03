@@ -401,6 +401,156 @@ def _build_gwf_dis(
     return dis
 
 
+# ---------------------------------------------------------------------------
+# DISV / gridgen generator (ADR 0099, mesh wave M2). A refinement-capable
+# groundwater grid: flopy Gridgen refines a base structured grid around drawn
+# refine_region polygons (and the well) into a DISV vertex grid. Lives IN this
+# module -- NOT a sibling -- for the same dual-import reason _build_gwf_dis does
+# (gwt_adapter is imported FLAT server-side + PACKAGE worker-side, so a sibling
+# import resolves in neither; ADR 0098 decision 3).
+#
+# IMAGE DEPENDENCY (STOP condition): flopy Gridgen shells out to the USGS
+# ``gridgen`` binary at build() time. That binary is NOT in the modflow worker
+# image (services/workers/modflow/Dockerfile installs only mf6 + flopy). The
+# component builds + tests offline (availability probe + refinement-feature
+# construction + typed STOP); the LIVE DISV grid build is gated on adding the
+# gridgen binary to the image -- the named image-rebuild condition (ADR 0099).
+# ---------------------------------------------------------------------------
+
+#: The USGS gridgen executable name flopy's Gridgen wrapper resolves.
+GRIDGEN_EXE = "gridgen"
+
+
+class GridgenUnavailableError(RuntimeError):
+    """The ``gridgen`` binary is absent from the runtime image (DISV blocked).
+
+    Raised BEFORE any partial deck is built so a DISV request fails honestly
+    rather than silently degrading to a uniform DIS grid the user did not ask
+    for. The message names the image-rebuild condition (ADR 0099).
+    """
+
+    def __init__(self, exe_name: str = GRIDGEN_EXE) -> None:
+        super().__init__(
+            f"DISV grid requested but the {exe_name!r} binary is not installed "
+            "in the modflow worker image. Add the USGS gridgen executable to "
+            "services/workers/modflow/Dockerfile (the named image-rebuild "
+            "condition, ADR 0099) before the DISV/refinement leg can run live."
+        )
+        self.exe_name = exe_name
+        self.error_code = "MODFLOW_GRIDGEN_UNAVAILABLE"
+
+
+def gridgen_available(exe_name: str = GRIDGEN_EXE) -> bool:
+    """True iff the gridgen binary is resolvable on PATH (flopy build() needs it)."""
+    import shutil
+
+    return shutil.which(exe_name) is not None
+
+
+def _refine_level_for(base_size_m: float, target_size_m: float, *, max_level: int = 5) -> int:
+    """Quadtree depth taking a base cell to ``target_size_m`` or finer (worker copy).
+
+    ``target ~= base / 2**L`` -> ``L = ceil(log2(base/target))`` clamped
+    ``[0, max_level]``. Duplicated worker-side (the server surface lives in
+    ``agent/mesh/refine_regions.py`` but the Docker image COPYs only
+    ``services/workers/*``; fold-by-duplication, ADR 0098/0099).
+    """
+    import math as _math
+
+    if not (target_size_m > 0) or target_size_m >= base_size_m:
+        return 0
+    return max(0, min(int(max_level), int(_math.ceil(_math.log2(base_size_m / target_size_m)))))
+
+
+def _disv_refinement_features(
+    refine_regions: list[dict], base_size_m: float, to_local_xy, *, max_level: int = 5
+) -> list[tuple[list[list[list[float]]], int]]:
+    """Translate drawn refine_region dicts -> gridgen ``(polygon_rings, level)`` pairs.
+
+    Pure geometry (no gridgen binary): for each ``{polygon, target_size_m, bbox}``
+    entry, compute its quadtree refine level from ``target_size_m`` vs the base
+    cell, reproject the polygon's lon/lat ring into the grid's LOCAL (metre)
+    space via ``to_local_xy`` (a ``(lon, lat) -> (x, y)`` callable), and pair the
+    rings with the level. Regions at level 0 (target coarser than base, or no
+    finer size) are dropped. Unit-testable without the binary.
+    """
+    out: list[tuple[list[list[list[float]]], int]] = []
+    for region in refine_regions:
+        target = region.get("target_size_m")
+        target_size_m = float(target) if target is not None else base_size_m / 2.0
+        level = _refine_level_for(base_size_m, target_size_m, max_level=max_level)
+        if level <= 0:
+            continue
+        geom = (region.get("polygon") or {}).get("geometry") or {}
+        gtype = geom.get("type")
+        coords = geom.get("coordinates") or []
+        polys = coords if gtype == "MultiPolygon" else [coords]
+        for poly in polys:
+            rings = [
+                [list(to_local_xy(pt[0], pt[1])) for pt in ring] for ring in poly
+            ]
+            out.append((rings, int(level)))
+    return out
+
+
+def _build_disv_gridprops(
+    *,
+    nlay: int,
+    nrow: int,
+    ncol: int,
+    delr: float,
+    delc: float,
+    top: float,
+    botm,
+    refinement_features: list[tuple[list[list[list[float]]], int]],
+    model_ws,
+    exe_name: str = GRIDGEN_EXE,
+):
+    """Build DISV gridprops by refining a base structured grid with gridgen.
+
+    Raises :class:`GridgenUnavailableError` (honest STOP) if the gridgen binary
+    is missing -- BEFORE constructing any partial artifact. When available it
+    builds a :class:`flopy.discretization.StructuredGrid`, refines it around each
+    ``(polygon_rings, level)`` feature, runs gridgen, and returns the
+    ``get_gridprops_disv()`` dict ready for :func:`_build_gwf_disv`.
+    """
+    if not gridgen_available(exe_name):
+        raise GridgenUnavailableError(exe_name)
+
+    import numpy as _np
+    from flopy.discretization import StructuredGrid
+    from flopy.utils.gridgen import Gridgen
+
+    # Base structured grid at LOCAL (0,0) origin (matches the DIS deck).
+    sg = StructuredGrid(
+        delc=_np.full(nrow, float(delc)),
+        delr=_np.full(ncol, float(delr)),
+        top=_np.full((nrow, ncol), float(top)),
+        botm=_np.stack([_np.full((nrow, ncol), float(b)) for b in (
+            botm if isinstance(botm, (list, tuple)) else [botm] * nlay
+        )]),
+        nlay=nlay,
+    )
+    gridgen = Gridgen(sg, model_ws=str(model_ws), exe_name=exe_name)
+    for rings, level in refinement_features:
+        gridgen.add_refinement_features([rings], "polygon", level, range(nlay))
+    gridgen.build(verbose=False)
+    return gridgen.get_gridprops_disv()
+
+
+def _build_gwf_disv(gwf, *, gwf_name: str, gridprops: dict):
+    """Construct the GWF DISV package from gridgen gridprops (the DISV analogue
+    of :func:`_build_gwf_dis`). ``gridprops`` is a
+    :meth:`flopy.utils.gridgen.Gridgen.get_gridprops_disv` dict.
+    """
+    return flopy.mf6.ModflowGwfdisv(
+        gwf,
+        length_units=LENGTH_UNITS,
+        filename=f"{gwf_name}.disv",
+        **gridprops,
+    )
+
+
 def _default_travel_time_years(archetype: str) -> list[float]:
     """Archetype-specific default isochrone tiers (years) when none supplied."""
     if archetype == "wellhead_protection":
@@ -2721,6 +2871,12 @@ def _build_prt_capture_zone_deck(
     # constitutive advanced-physics (levers STEP 3): resolved dict; regional_gradient
     # is the only lever this GWF-only PRT archetype reads. None/{} => byte-identical.
     advanced_physics: dict | None = None,
+    # Drawn refine_region polygons (ADR 0099 mesh M2): {polygon, target_size_m,
+    # bbox} entries. When provided the grid is built as a gridgen-refined DISV
+    # vertex grid around the regions/well; None (default) keeps the uniform DIS
+    # grid byte-identical. NOTE: the live DISV leg is gated on the gridgen binary
+    # (GridgenUnavailableError names the image-rebuild condition, ADR 0099).
+    refine_regions: list[dict] | None = None,
 ) -> DeckManifest:
     """Assemble the STEADY GWF deck for a PRT capture-zone or wellhead-protection run.
 
@@ -2875,18 +3031,46 @@ def _build_prt_capture_zone_deck(
     )
     sim.register_ims_package(ims, [gwf_name])
 
-    # DIS: local (0,0) origin -- do NOT pass xorigin/yorigin.
-    _build_gwf_dis(
-        gwf,
-        gwf_name=gwf_name,
-        nlay=N_LAYERS,
-        nrow=nrow,
-        ncol=ncol,
-        delr=delr,
-        delc=delc,
-        top=PRT_AQUIFER_TOP_M,
-        botm=PRT_AQUIFER_BOTTOM_M,
-    )
+    # Grid: uniform DIS (default, byte-identical) OR a gridgen-refined DISV
+    # vertex grid when drawn refine_region polygons are supplied (ADR 0099 M2).
+    if refine_regions:
+        # Reproject the drawn lon/lat polygons into the grid's LOCAL (metre)
+        # space, compute per-region quadtree levels, and attempt the DISV build.
+        # gridgen is absent from the image today, so this raises
+        # GridgenUnavailableError (honest STOP naming the image condition) BEFORE
+        # any partial deck is written. The downstream WEL/CHD/PRT packages assume
+        # a structured cellid and are NOT yet ported to DISV vertex nodes -- that
+        # port is the named follow-on the STOP gates (ADR 0099).
+        def _to_local_xy(lon_v: float, lat_v: float) -> tuple[float, float]:
+            e, n = to_utm.transform(lon_v, lat_v)
+            return (e - xoffset_m, n - yoffset_m)
+
+        feats = _disv_refinement_features(refine_regions, float(delr), _to_local_xy)
+        gridprops = _build_disv_gridprops(
+            nlay=N_LAYERS,
+            nrow=nrow,
+            ncol=ncol,
+            delr=delr,
+            delc=delc,
+            top=PRT_AQUIFER_TOP_M,
+            botm=PRT_AQUIFER_BOTTOM_M,
+            refinement_features=feats,
+            model_ws=sim_dir,
+        )
+        _build_gwf_disv(gwf, gwf_name=gwf_name, gridprops=gridprops)
+    else:
+        # DIS: local (0,0) origin -- do NOT pass xorigin/yorigin.
+        _build_gwf_dis(
+            gwf,
+            gwf_name=gwf_name,
+            nlay=N_LAYERS,
+            nrow=nrow,
+            ncol=ncol,
+            delr=delr,
+            delc=delc,
+            top=PRT_AQUIFER_TOP_M,
+            botm=PRT_AQUIFER_BOTTOM_M,
+        )
 
     # IC: initial head = aquifer top (hydrostatic start, overridden by CHD).
     flopy.mf6.ModflowGwfic(gwf, strt=PRT_AQUIFER_TOP_M, filename=f"{gwf_name}.ic")
@@ -3670,6 +3854,11 @@ def build_modflow_deck(
     # --- advanced-physics overrides (levers STEP 3; ADDITIVE, optional) ----- #
     advanced_physics: dict | None = None,
     save_concentration_all_steps: bool = True,
+    # Drawn refine_region polygons (ADR 0099 M2): forwarded to the capture_zone /
+    # wellhead_protection PRT archetype to build a gridgen-refined DISV grid.
+    # None (default) => uniform DIS, byte-identical. LIVE DISV gated on the
+    # gridgen binary (GridgenUnavailableError names the image condition).
+    refine_regions: list[dict] | None = None,
 ) -> DeckManifest:
     """Assemble a complete MF6 GWF+GWT spill deck and (optionally) write it.
 
@@ -3901,6 +4090,7 @@ def build_modflow_deck(
                 n_particles=n_particles,
                 capture_zone_travel_time_years=capture_zone_travel_time_years,
                 advanced_physics=advanced_physics,
+                refine_regions=refine_regions,
             )
         # multi_species is a GWF+GWT deck (ONE shared GWF + N transport models),
         # NOT a GWF-only archetype, so it dispatches to its own builder.
