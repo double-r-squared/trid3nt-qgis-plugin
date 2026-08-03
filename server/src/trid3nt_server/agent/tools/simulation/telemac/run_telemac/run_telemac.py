@@ -234,10 +234,6 @@ def run_telemac() -> dict[str, Any]:
     NOT for groundwater plumes / seepage (run_modflow), inundation / flooding
     depth (run_sfincs riverine-coastal, run_swmm urban), or dam-break / tsunami
     run-up (run_geoclaw) - see ``mismatch_redirect``.
-
-    Returns a read-only concierge envelope: ``engine``, ``kind``, ``templates``
-    (each ``tool_name`` / ``question`` / ``required_inputs`` / ``knobs``),
-    ``fidelity_brief``, ``mismatch_redirect``, ``next_action``.
     """
     return {
         "engine": _ENGINE,

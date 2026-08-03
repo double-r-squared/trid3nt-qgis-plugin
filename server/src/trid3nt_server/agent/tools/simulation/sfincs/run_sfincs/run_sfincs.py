@@ -233,10 +233,6 @@ def run_sfincs() -> dict[str, Any]:
     NOT for urban storm sewers (run_swmm), groundwater plumes (run_modflow),
     dam-break / tsunami run-up (run_geoclaw), spectral wave fields (run_swan),
     or river tracer transport (run_telemac) - see ``mismatch_redirect``.
-
-    Returns a read-only concierge envelope: ``engine``, ``kind``, ``templates``
-    (each ``tool_name`` / ``question`` / ``required_inputs`` / ``knobs``),
-    ``fidelity_brief``, ``mismatch_redirect``, ``next_action``.
     """
     return {
         "engine": _ENGINE,

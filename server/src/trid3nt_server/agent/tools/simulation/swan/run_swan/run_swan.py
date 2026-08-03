@@ -234,10 +234,6 @@ def run_swan() -> dict[str, Any]:
     NOT for compound-flood / surge / pluvial inundation depth (run_sfincs),
     tsunami / dam-break run-up (run_geoclaw), or urban storm sewers (run_swmm) -
     see ``mismatch_redirect``.
-
-    Returns a read-only concierge envelope: ``engine``, ``kind``, ``templates``
-    (each ``tool_name`` / ``question`` / ``required_inputs`` / ``knobs``),
-    ``fidelity_brief``, ``mismatch_redirect``, ``next_action``.
     """
     return {
         "engine": _ENGINE,

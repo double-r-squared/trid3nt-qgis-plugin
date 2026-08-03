@@ -229,10 +229,6 @@ def run_geoclaw() -> dict[str, Any]:
     NOT for pluvial / riverine / coastal compound flooding (run_sfincs), urban
     storm sewers (run_swmm), or spectral wave fields (run_swan) - see
     ``mismatch_redirect``.
-
-    Returns a read-only concierge envelope: ``engine``, ``kind``, ``templates``
-    (each ``tool_name`` / ``question`` / ``required_inputs`` / ``knobs``),
-    ``fidelity_brief``, ``mismatch_redirect``, ``next_action``.
     """
     return {
         "engine": _ENGINE,

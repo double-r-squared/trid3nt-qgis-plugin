@@ -228,10 +228,6 @@ def run_swmm() -> dict[str, Any]:
 
     NOT for coastal / riverine / watershed inundation (run_sfincs) or groundwater
     plumes (run_modflow) - see ``mismatch_redirect``.
-
-    Returns a read-only concierge envelope: ``engine``, ``kind``, ``templates``
-    (each ``tool_name`` / ``question`` / ``required_inputs`` / ``knobs``),
-    ``fidelity_brief``, ``mismatch_redirect``, ``next_action``.
     """
     return {
         "engine": _ENGINE,

@@ -231,10 +231,6 @@ def run_landlab() -> dict[str, Any]:
     NOT for channel / riverine / coastal flooding (run_sfincs), post-fire
     debris-flow hazard (model_debris_flow), or seismic hazard (run_openquake) -
     see ``mismatch_redirect``.
-
-    Returns a read-only concierge envelope: ``engine``, ``kind``, ``templates``
-    (each ``tool_name`` / ``question`` / ``required_inputs`` / ``knobs``),
-    ``fidelity_brief``, ``mismatch_redirect``, ``next_action``.
     """
     return {
         "engine": _ENGINE,

@@ -229,10 +229,6 @@ def run_openquake() -> dict[str, Any]:
     NOT for landslide / ground-failure susceptibility (run_landlab) or
     structural damage / loss from a hazard (run_pelicun) - see
     ``mismatch_redirect``.
-
-    Returns a read-only concierge envelope: ``engine``, ``kind``, ``templates``
-    (each ``tool_name`` / ``question`` / ``required_inputs`` / ``knobs``),
-    ``fidelity_brief``, ``mismatch_redirect``, ``next_action``.
     """
     return {
         "engine": _ENGINE,
