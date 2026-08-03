@@ -503,8 +503,10 @@ def _fetch_ground_dem(
     silent mismatched pairing). Patched in offline tests -- the committed suite
     never calls the live 3DEP/GLO-30 fetch.
     """
-    from trid3nt_server.agent.tools.fetchers.terrain.fetch_dem.fetch_dem import fetch_dem
+    # ADR 0097: fetch_dem is spec-driven -- resolve the promoted closure (keyword-only).
+    from trid3nt_server.agent.tools import TOOL_REGISTRY
 
+    fetch_dem = TOOL_REGISTRY["fetch_dem"].fn
     layer = fetch_dem(bbox=tuple(bbox_4326))
     local = _stage_local(layer.uri, tmpdir, "ground_dem")
     label = f"3DEP/GLO-30 ground DEM via fetch_dem ({layer.uri}; meters above NAVD88)"

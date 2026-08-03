@@ -93,7 +93,19 @@ from trid3nt_server.agent.tools import register_tool
 from trid3nt_server.agent.workflows.sfincs._template_card import TemplateCard
 from trid3nt_server.agent.tools.fetchers.climate.lookup_precip_return_period.lookup_precip_return_period import lookup_precip_return_period
 from trid3nt_server.agent.tools.fetchers.socioeconomic.geocode_location.geocode_location import geocode_location
-from trid3nt_server.agent.tools.fetchers.terrain.fetch_dem.fetch_dem import fetch_dem
+
+
+def fetch_dem(**kwargs):
+    """Registry-closure indirection for the folded ``fetch_dem`` (ADR 0097).
+
+    ``fetch_dem`` is now a spec-driven router tool (no coded module); this
+    module-level shim resolves it through ``TOOL_REGISTRY`` at call time and
+    preserves the ``flood.fetch_dem`` module-attribute patch seam the flood tests
+    monkeypatch. Keyword-only -- the promoted router closure takes ``**kwargs``.
+    """
+    from trid3nt_server.agent.tools import TOOL_REGISTRY
+
+    return TOOL_REGISTRY["fetch_dem"].fn(**kwargs)
 
 
 def fetch_landcover(*args: Any, **kwargs: Any):
@@ -728,7 +740,7 @@ async def model_flood_scenario(
                     or "bathymetry absent; coastal inundation under-represented",
                 )
         else:
-            dem_layer = fetch_dem(resolved_bbox, resolution_m=int(grid_resolution_m))
+            dem_layer = fetch_dem(bbox=resolved_bbox, resolution_m=int(grid_resolution_m))
             data_sources.append(
                 DataSource(
                     name="USGS 3DEP",

@@ -239,12 +239,12 @@ def fetch_elmfire_inputs(
     """
     from trid3nt_server.agent.tools.processing.compute_aspect.compute_aspect import compute_aspect
     from trid3nt_server.agent.tools.processing.compute_slope.compute_slope import compute_slope
-    from trid3nt_server.agent.tools.fetchers.terrain.fetch_dem.fetch_dem import fetch_dem
-    # fetch_landfire_fuels is now the spec-driven promoted tool (fold wave-7, ADR
-    # 0053): resolve it through the registry seam, not a direct twin import.
+    # fetch_landfire_fuels + fetch_dem (ADR 0097) are spec-driven promoted tools:
+    # resolve them through the registry seam (keyword-only), not direct twin imports.
     from trid3nt_server.agent.tools import TOOL_REGISTRY
 
     fetch_landfire_fuels = TOOL_REGISTRY["fetch_landfire_fuels"].fn
+    fetch_dem = TOOL_REGISTRY["fetch_dem"].fn
 
     inputs: dict[str, str] = {}
 
@@ -271,7 +271,7 @@ def fetch_elmfire_inputs(
             ) from exc
 
     try:
-        dem_layer = fetch_dem(bbox, resolution_m=dem_resolution_m)
+        dem_layer = fetch_dem(bbox=bbox, resolution_m=dem_resolution_m)
         dem_uri = _uri_of(dem_layer)
         inputs["dem"] = _uri_to_deck_input("dem", dem_uri)
     except ElmfireWorkflowError:

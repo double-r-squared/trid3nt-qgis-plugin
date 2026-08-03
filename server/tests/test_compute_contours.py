@@ -478,7 +478,7 @@ def test_compute_contours_bbox_fetches_dem(fake_storage):
         )
 
     with patch(
-        "trid3nt_server.agent.tools.fetchers.terrain.fetch_dem.fetch_dem.fetch_dem",
+        "trid3nt_server.agent.tools.processing.compute_contours.compute_contours.fetch_dem",
         side_effect=_fake_fetch_dem,
     ), patch(
         "trid3nt_server.agent.tools.processing.compute_contours.compute_contours._download_dem_bytes",

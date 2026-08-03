@@ -49,6 +49,7 @@ __all__ = [
     "CacheSpec",
     "PayloadEstimateSpec",
     "HookSpec",
+    "DispatchSpec",
     "SourceSpec",
 ]
 
@@ -567,6 +568,49 @@ class HookSpec(GraceModel):
     classify_status: str | None = None
 
 
+class DispatchSpec(GraceModel):
+    """A spec-declared, SINGLE-TARGET pre-flight cross-sibling dispatch (ADR 0097).
+
+    The FIRST tool-composes-tool seam: for ONE declared param value the router
+    SHORT-CIRCUITS ``route()`` and serves the request from a NAMED sibling
+    registered tool, returning THAT tool's result VERBATIM (its own
+    ``source_class`` cache prefix, its own ``layer_id`` / ``name`` -- NO re-cache
+    under this spec, NO double-fetch). The motivating case is
+    ``fetch_dem(source="copernicus")`` returning ``fetch_copernicus_dem``'s layer
+    byte-for-byte (the twin's ``TOOL_REGISTRY["fetch_copernicus_dem"].fn(bbox=...)``).
+
+    The seam is DELIBERATELY NARROW (the atomic-tools doctrine avoids
+    tool-composes-tool; this is the one sanctioned exception, gated to NATE):
+
+    - ONE target per condition (``to`` is a single string, not a list).
+    - SPEC-DECLARED only: ``to`` / ``equals_any`` are literals -- never a
+      hook-computed target.
+    - NO CHAINS: a dispatched target must not itself declare a ``dispatch`` block
+      (the router refuses a chain at dispatch time, so the returned result is
+      always exactly one sibling's verbatim output).
+    - PRE-FLIGHT ONLY: evaluated on the RAW request params BEFORE validation /
+      gates / cache / fetch (byte-identical to the twin, which dispatched first
+      thing on the raw ``source`` arg with zero prior validation).
+    """
+
+    #: The request param whose value triggers the dispatch (``source``).
+    param: str = Field(min_length=1)
+    #: The param values (post-normalize) that MATCH this condition. The twin's
+    #: copernicus alias set: ``[copernicus, cop-dem-glo-30, glo-30, glo30,
+    #: copernicus_glo30]``.
+    equals_any: list[str] = Field(min_length=1)
+    #: How to normalize the raw param value before the ``equals_any`` membership
+    #: check. ``lower_strip`` reproduces the twin's ``source.strip().lower()``;
+    #: ``none`` compares verbatim.
+    normalize: Literal["lower_strip", "none"] = "lower_strip"
+    #: The SINGLE sibling registered-tool name to dispatch to (``fetch_copernicus_dem``).
+    to: str = Field(min_length=1)
+    #: ``target_arg -> this-spec raw param name`` map for the dispatched call. The
+    #: twin passes only ``bbox=bbox`` -> ``{bbox: bbox}``. The RAW (unvalidated)
+    #: value is forwarded; the target validates it under its own contract.
+    pass_args: dict[str, str] = Field(default_factory=dict)
+
+
 # --------------------------------------------------------------------------- #
 # Top-level SourceSpec
 # --------------------------------------------------------------------------- #
@@ -642,6 +686,10 @@ class SourceSpec(GraceModel):
 
     # --- tier-3 hooks: named pure fns for the ONE irreducible step (ADR 0056) ---
     hooks: HookSpec | None = None
+
+    # --- cross-sibling pre-flight dispatch (ADR 0097): one param value -> serve
+    # --- a named sibling tool's result verbatim (fetch_dem source="copernicus"). --
+    dispatch: list[DispatchSpec] = Field(default_factory=list)
 
     # --- named transform: two-source JOIN-on-key (census, sec 2.5) ---
     join: dict[str, Any] | None = None

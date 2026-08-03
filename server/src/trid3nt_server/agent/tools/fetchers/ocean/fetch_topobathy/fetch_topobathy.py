@@ -677,13 +677,17 @@ def _fetch_3dep_land_to_file(
     We reuse ``fetch_dem`` (NOT a fresh py3dep call) so the 3DEP land path,
     its CRS/units, and its cache key are identical to the canonical tool.
     """
+    # ADR 0097: fetch_dem is spec-driven -- resolve the promoted closure through the
+    # registry (keyword-only), not the deleted twin module.
     try:
-        from trid3nt_server.agent.tools.fetchers.terrain.fetch_dem.fetch_dem import fetch_dem
+        from trid3nt_server.agent.tools import TOOL_REGISTRY
+
+        fetch_dem = TOOL_REGISTRY["fetch_dem"].fn
     except Exception as exc:  # noqa: BLE001
-        logger.warning("fetch_topobathy: could not import fetch_dem: %s", exc)
+        logger.warning("fetch_topobathy: could not resolve fetch_dem: %s", exc)
         return None
     try:
-        land_layer = fetch_dem(bbox, resolution_m=resolution_m)
+        land_layer = fetch_dem(bbox=bbox, resolution_m=resolution_m)
     except Exception as exc:  # noqa: BLE001 -- land DEM is best-effort here
         logger.warning(
             "fetch_topobathy: 3DEP land fetch_dem failed for bbox=%s: %s",

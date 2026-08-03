@@ -82,7 +82,8 @@ def _import_tools_registry() -> int:
     # fetch_population: WorldPop library_delegate raster fold (ADR 0092) -- twin DELETED,
     # now spec-driven; auto-registered by register_specs_from_tree at agent.tools import.
     from .agent.tools.fetchers.socioeconomic.geocode_location import geocode_location  # noqa: F401
-    from .agent.tools.fetchers.terrain.fetch_dem import fetch_dem  # noqa: F401
+    # fetch_dem is spec-driven (ADR 0097): promoted by register_specs_from_tree at
+    # agent.tools import; no eager twin import.
     # fetch_landcover is spec-driven (ADR 0082): promoted by register_specs_from_tree
     # at agent.tools import; no eager twin import.
     # register the 2 QGIS discovery atomic tools.

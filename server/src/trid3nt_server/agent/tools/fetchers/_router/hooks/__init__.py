@@ -308,3 +308,10 @@ from . import glm  # noqa: E402,F401
 # range requests so /vsicurl cannot window it). worldpop.validate is the pre-cache vintage gate,
 # worldpop.read owns the download+window socket. The half-built ACS leg is DROPPED (fetch_census_acs).
 from . import worldpop  # noqa: E402,F401
+
+# fetch_dem fold (ADR 0097): the 3DEP DEM library-delegate hooks -- validate
+# (continent ceiling + auto-path out-of-coverage), coarsen (pixel-budget
+# pre_resolve), read (py3dep + bounded watchdog + source-conditional gating),
+# and envelope (the dem-{lon}-{lat}-{Nm} naming override). The Dem*Error twins'
+# stable home. The source="copernicus" leg is the spec's cross-sibling dispatch.
+from . import dem_3dep  # noqa: E402,F401

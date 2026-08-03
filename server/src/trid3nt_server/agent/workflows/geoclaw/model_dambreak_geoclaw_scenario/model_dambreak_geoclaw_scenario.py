@@ -141,8 +141,11 @@ def _fetch_topo_for_geoclaw(
     Returns the DEM cache/runs ``s3://`` URI (staged BY REFERENCE - the worker
     downloads it directly). Raises ``GeoClawComposerError`` only when BOTH fail.
     """
-    from trid3nt_server.agent.tools.fetchers.terrain.fetch_dem.fetch_dem import fetch_dem
+    # ADR 0097: fetch_dem is spec-driven -- resolve the promoted closure (keyword-only).
+    from trid3nt_server.agent.tools import TOOL_REGISTRY
     from trid3nt_server.agent.tools.fetchers.ocean.fetch_topobathy.fetch_topobathy import fetch_topobathy
+
+    fetch_dem = TOOL_REGISTRY["fetch_dem"].fn
 
     try:
         layer = fetch_topobathy(bbox, force_bathy_base=force_bathy_base)
@@ -157,7 +160,7 @@ def _fetch_topo_for_geoclaw(
         )
 
     try:
-        layer = fetch_dem(bbox, resolution_m=10)
+        layer = fetch_dem(bbox=bbox, resolution_m=10)
         uri = getattr(layer, "uri", None) or (
             layer.get("uri") if isinstance(layer, dict) else None
         )

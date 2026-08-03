@@ -39,6 +39,7 @@ __all__ = [
     "FaultSourcesResult",
     "FloodExtentObservationResult",
     "LandcoverResult",
+    "DemLayerURI",
     "LAYER_RESULT_MODELS",
 ]
 
@@ -385,6 +386,23 @@ class LandcoverResult(LayerURI):
     downsampling_note: str | None = None
 
 
+class DemLayerURI(LayerURI):
+    """A NO-FIELD ``LayerURI`` subclass for the ``fetch_dem`` fold (ADR 0097).
+
+    ``fetch_dem`` carries NO business fields beyond the base ``LayerURI`` -- the
+    twin returned a plain ``LayerURI``. But the router's ONLY seam to override the
+    emitted ``layer_id`` / ``name`` (the twin's ``dem-{lon}-{lat}-{Nm}`` id and
+    ``USGS 3DEP DEM (Nm)`` name with the pixel-budget auto-coarsen stamp) is the
+    ``hooks.envelope`` post-emit hook, which ``registration._validate_hooks``
+    REQUIRES be declared TOGETHER with ``output.result_model`` (a name in this
+    table). This zero-field subclass satisfies that pairing with the LEAST
+    invasive change (no relaxation of the shared envelope/result_model validator,
+    which every other envelope spec depends on): it serializes field-for-field
+    like the base ``LayerURI``, so a consumer that expects a ``LayerURI`` sees an
+    identical shape (``isinstance`` holds).
+    """
+
+
 #: name -> LayerURI-subclass. A spec's ``output.result_model`` string resolves
 #: here; the router builds the named subclass from the base LayerURI + the
 #: envelope hook's field dict. Empty of a name -> the plain LayerURI (no-op).
@@ -393,6 +411,7 @@ LAYER_RESULT_MODELS: dict[str, type[LayerURI]] = {
     "FaultSourcesResult": FaultSourcesResult,
     "FloodExtentObservationResult": FloodExtentObservationResult,
     "LandcoverResult": LandcoverResult,
+    "DemLayerURI": DemLayerURI,
 }
 
 

@@ -297,7 +297,9 @@ from .fetchers.ocean.fetch_topobathy import fetch_topobathy  # noqa: E402,F401
 # auto-registered by _register_router_specs() below.
 # fetch_copernicus_dem: fetcher-fold wave-8 -- twin DELETED, now spec-driven
 # (source.yaml + router stac_float), registered by _register_router_specs() below.
-from .fetchers.terrain.fetch_dem import fetch_dem  # noqa: E402,F401
+# fetch_dem FOLDED to a spec-driven surface (ADR 0097): its source.yaml +
+# library_delegate py3dep hooks + the source="copernicus" cross-sibling dispatch
+# is promoted by register_specs_from_tree; no eager twin import.
 # fetch_esri_landcover_10m: data-router fold pilot -- twin DELETED, now spec-driven
 # (source.yaml + router), registered by _register_router_specs() below.
 # fetch_landcover FOLDED to a spec-driven surface (ADR 0082): its source.yaml +

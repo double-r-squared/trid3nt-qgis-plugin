@@ -22,7 +22,12 @@ from trid3nt_contracts.tool_registry import AtomicToolMetadata
 
 from .._fetch_common import _validate_bbox, round_bbox_to_resolution
 from ...cache import read_through
-from .errors import bbox_error_suffix, router_input_error, router_not_available_error
+from .errors import (
+    bbox_error_suffix,
+    router_input_error,
+    router_not_available_error,
+    router_upstream_error,
+)
 from .executors import raster_cog, station_timeseries, vector_fgb
 from .transforms import join as join_transform
 from .transforms import tiled_mosaic
@@ -34,8 +39,14 @@ __all__ = [
     "synthesize_payload_estimator",
     "validate_params",
     "select_executor",
+    "try_dispatch",
     "route",
 ]
+
+#: Sentinel: no ``spec.dispatch`` condition matched (distinct from a dispatch that
+#: legitimately returns ``None``, though none does today). ``route()`` proceeds to
+#: its own pipeline only on this sentinel.
+_NO_DISPATCH = object()
 
 #: CONUS domain for the conus_only gate (gridmet native bounds).
 _CONUS_BBOX: tuple[float, float, float, float] = (-124.77, 25.05, -67.06, 49.40)
@@ -641,12 +652,71 @@ def build_layer_uri(spec: SourceSpec, params: dict[str, Any], uri: str) -> Layer
     )
 
 
+def try_dispatch(spec: SourceSpec, raw_params: dict[str, Any]) -> Any:
+    """Cross-sibling PRE-FLIGHT dispatch (ADR 0097). Returns the sibling tool's
+    result verbatim on a match, else the ``_NO_DISPATCH`` sentinel.
+
+    For ONE declared ``spec.dispatch`` condition whose ``param`` value matches, the
+    router SHORT-CIRCUITS before any validation / gate / cache / fetch and serves
+    the request from the named sibling registered tool -- returning THAT tool's
+    result byte-for-byte (its own ``source_class`` cache prefix, its own
+    ``layer_id`` / ``name``). Byte-identical to the twin's
+    ``TOOL_REGISTRY["fetch_copernicus_dem"].fn(bbox=bbox)`` leg: it forwards only
+    the ``pass_args``-mapped RAW params and re-caches NOTHING under this spec.
+
+    Constraints enforced (the seam is deliberately narrow, ADR 0097):
+      * ONE target per condition (``d.to`` is a single name);
+      * SPEC-DECLARED (``d.to`` / ``d.equals_any`` are literals);
+      * NO CHAINS -- a target that itself declares ``dispatch`` is refused here, so
+        the returned result is always exactly one sibling's verbatim output;
+      * PRE-FLIGHT -- evaluated on RAW params before validate/gate/cache/fetch.
+    """
+    if not spec.dispatch:
+        return _NO_DISPATCH
+    from trid3nt_server.agent.tools import TOOL_REGISTRY
+
+    from .registration import get_spec
+
+    for d in spec.dispatch:
+        raw = raw_params.get(d.param)
+        if d.normalize == "lower_strip" and isinstance(raw, str):
+            val = raw.strip().lower()
+        else:
+            val = raw
+        if val not in d.equals_any:
+            continue
+        # NO-CHAIN guard: the dispatched target must not itself dispatch.
+        target_spec = get_spec(d.to)
+        if target_spec is not None and target_spec.dispatch:
+            raise router_upstream_error(
+                spec.error_code_prefix,
+                f"dispatch target {d.to!r} itself declares a dispatch block; "
+                "cross-sibling dispatch chains are forbidden (ADR 0097)",
+            )
+        entry = TOOL_REGISTRY.get(d.to)
+        if entry is None:
+            raise router_upstream_error(
+                spec.error_code_prefix,
+                f"dispatch target {d.to!r} is not registered",
+            )
+        kwargs = {targ: raw_params.get(src) for targ, src in d.pass_args.items()}
+        return entry.fn(**kwargs)
+    return _NO_DISPATCH
+
+
 def route(
     spec: SourceSpec, raw_params: dict[str, Any]
 ) -> LayerURI | dict[str, Any] | list[LayerURI]:
     """The engine: validate -> gate -> dispatch -> cache -> emit LayerURI (or a
     record dict for a ``shape: record`` source, ADR 0076, or an ordered
     ``list[LayerURI]`` for a ``shape: animation_frames`` source, ADR 0087)."""
+    # Cross-sibling PRE-FLIGHT dispatch (ADR 0097): before ANY validation / gate /
+    # cache / fetch, a declared ``source``-value condition may serve the request
+    # from a named sibling tool and return its result verbatim (fetch_dem
+    # source="copernicus" -> fetch_copernicus_dem's layer, byte-identical).
+    dispatched = try_dispatch(spec, raw_params)
+    if dispatched is not _NO_DISPATCH:
+        return dispatched
     metadata = synthesize_metadata(spec)
     params = validate_params(spec, raw_params)
     # Frames-list output shape (ADR 0087): an animation source returns an ORDERED
