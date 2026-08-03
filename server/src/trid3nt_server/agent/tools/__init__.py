@@ -302,12 +302,12 @@ from .fetchers.terrain.fetch_dem import fetch_dem  # noqa: E402,F401
 # wcs_getcoverage mode + sidecar envelope is promoted by register_specs_from_tree.
 
 # -- fetchers/imagery --
-from .fetchers.imagery.fetch_goes_active_fire import fetch_goes_active_fire  # noqa: E402,F401
 # fetch_goes_animation + fetch_goes_blend_animation FOLDED to spec-driven surfaces
-# (ADR 0087): source.yaml + shape: animation_frames + goes_animation.frames_plan /
-# frame_bytes (SLIDER stitch-mosaic; band="blend" -> the composite), auto-registered
-# by register_specs_from_tree.
-from .fetchers.imagery.fetch_goes_archive_animation import fetch_goes_archive_animation  # noqa: E402,F401
+# (ADR 0087); fetch_goes_archive_animation + fetch_goes_active_fire FOLDED (ADR 0088):
+# source.yaml + shape: animation_frames + goes_archive.frames_plan / frame_bytes over
+# the shared imagery._goes_archive_core substrate (netcdf_cf_object per-frame mode),
+# auto-registered by register_specs_from_tree. The substrate lives on in
+# imagery/_goes_archive_core.py (no registered tool).
 from .fetchers.imagery.fetch_goes_satellite import fetch_goes_satellite  # noqa: E402,F401
 # fetch_landsat_imagery / fetch_naip / fetch_sentinel2_truecolor: STAC-composite wave
 # (ADR 0080) -- twins DELETED, now spec-driven (source.yaml + raster_cog

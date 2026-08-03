@@ -101,12 +101,24 @@ class FramePlan:
     - ``layer_id`` -- the emitted ``LayerURI.layer_id`` (a per-product stem keeps
       sibling products in separate scrubber groups).
     - ``bbox`` -- the AOI bbox stamped on every frame's ``LayerURI.bbox``.
+    - ``fetch_context`` -- OPTIONAL out-of-cache-key fetch inputs the frame_bytes
+      hook needs but that must NOT enter the read_through key (ADR 0088): the raw
+      MCMIPC S3 object key + the raw (unrounded) fetch args for an archive frame,
+      which is addressed by an opaque per-scan key the ts-addressed SLIDER frames
+      never carried. Defaulted empty -> a strict no-op for the wave-1 SLIDER frames.
     """
 
     cache_params: dict[str, Any]
     name: str
     layer_id: str
     bbox: tuple[float, float, float, float]
+    fetch_context: dict[str, Any] = field(default_factory=dict)
+    #: OPTIONAL per-frame style_preset override (ADR 0088). The archive source emits
+    #: distinct bands with distinct presets (goes_rgb_animation for the RGB composites,
+    #: goes_fire_hotspots_rgba for the transparent hotspot RGBA) that a single
+    #: spec.output.style_preset cannot carry; None -> the executor falls back to
+    #: spec.output.style_preset (a strict no-op for the wave-1 single-preset SLIDER frames).
+    style_preset: str | None = None
 
 
 class FrameDegraded(Exception):
@@ -281,3 +293,8 @@ from . import jrc_global_surface_water  # noqa: E402,F401
 # windowed frame set, frame_bytes builds one frame's COG.
 from . import goes_animation  # noqa: E402,F401
 from . import viirs_day_fire  # noqa: E402,F401
+# animation wave 2 (ADR 0088): the netcdf_cf_object per-frame mode. fetch_goes_archive_animation
+# (band-selectable Fire-Temp/true-color/hotspot/baked) + fetch_goes_active_fire (split-window
+# hotspots) fold onto shape: animation_frames -- ONE frames_plan/frame_bytes pair over the shared
+# _goes_archive_core substrate (S3 window list + CF-scaled MCMIPC netCDF band read + composite).
+from . import goes_archive  # noqa: E402,F401

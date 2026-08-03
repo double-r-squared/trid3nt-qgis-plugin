@@ -13,7 +13,11 @@ from trid3nt_contracts.tool_registry import AtomicToolMetadata
 
 from trid3nt_server.agent.tools import register_tool
 from trid3nt_server.agent.tools.cache import read_through
-from trid3nt_server.agent.tools.fetchers.imagery.fetch_goes_archive_animation.fetch_goes_archive_animation import (
+# The shared GOES raw-MCMIPC substrate (ADR 0088): the archive tool folded to a
+# spec-driven surface and its reusable helpers moved to imagery/_goes_archive_core.py
+# (grid builder, RGBA COG writer, ISO/UTC + bbox helpers). GLM reuses that grid +
+# writer so its GED overlay co-registers pixel-for-pixel with the GOES ABI products.
+from trid3nt_server.agent.tools.fetchers.imagery._goes_archive_core import (
     _OUT_RES_DEG,
     _grid_for_bbox,
     _iso_z,

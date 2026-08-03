@@ -1,0 +1,123 @@
+schema_version: v1
+name: fetch_goes_active_fire
+source_class: goes_animation
+shape: animation_frames
+error_prefix: GOES_ARCHIVE
+input_error_suffix: INPUT_INVALID
+empty_error_suffix: EMPTY
+
+docstring: |
+  Detect ACTIVE FIRE in an AOI from raw GOES ABI via the Matson-Dozier split-window discriminator.
+
+  **What it does:** Fetches the raw ``ABI-L2-MCMIPC`` GOES frame(s) for the AOI
+  + time window from the public ``noaa-goes18`` S3 archive (anonymous / no key),
+  runs the Matson-Dozier C07(3.9um)-vs-C13(10.3um) split-window active-fire
+  discriminator on each, and returns the flagged active-fire hotspots as
+  TRANSPARENT RGBA hotspot raster ``LayerURI``(s) -- only the hot pixels are
+  opaque (bright orange-red), everything else is transparent so it overlays a
+  basemap / true-color frame directly.
+
+  **The discriminator (Matson & Dozier 1981; MODIS MOD14 / VIIRS heritage):** a
+  pixel is flagged active-fire when BOTH (a) its 3.9um brightness temperature
+  (C07) is hot AND (b) the 3.9um - 10.3um brightness-temperature difference
+  (C07 - C13) is large. The 3.9um channel saturates over a sub-pixel fire far
+  more than the 10.3um window channel, so a big positive split-window difference
+  separates combustion from uniformly warm bare land (which is hot in BOTH bands
+  and so has a SMALL difference).
+
+  **When to use:**
+  - "Where is the active fire in this AOI right now / on this date?" -- a single
+    hot-pixel overlay, no full animation pipeline needed.
+  - As the hot-pixel detection step feeding a fire-perimeter / spread analysis.
+
+  **When NOT to use:**
+  - A scrubbable Fire Temperature / true-color loop (use
+    ``fetch_goes_archive_animation`` with the matching ``band``).
+  - NASA FIRMS / VIIRS point detections (use ``fetch_firms_active_fire``).
+
+  **Parameters:**
+  - ``bbox`` (tuple): ``(min_lon, min_lat, max_lon, max_lat)`` EPSG:4326.
+    Required. Example (Utah fire cluster): ``(-114.05, 37.0, -109.04, 42.0)``.
+  - ``satellite`` (str, default ``"goes-18"``): ``"goes-18"`` (West),
+    ``"goes-19"`` (East), or ``"goes-16"`` (historical East).
+  - ``start_utc`` / ``end_utc`` (str): ISO-8601 UTC window bounds. When omitted,
+    the most-recent ~20 min is used (one or two recent frames).
+  - ``bt_c07_min_k`` (float, default 320 K): the 3.9um brightness-temperature
+    floor a pixel must exceed to be a fire candidate.
+  - ``bt_diff_min_k`` (float, default 10 K): the minimum 3.9um - 10.3um split-
+    window difference a fire pixel must exceed (the bare-warm-land discriminator;
+    the MODIS Collection-5 delta-T* heritage value).
+
+  **Returns:** an ORDERED ``list[LayerURI]`` (ascending UTC), each a 4-band
+  transparent RGBA hotspot COG (``layer_type="raster"``, ``role="context"``,
+  ``style_preset="goes_fire_hotspots_rgba"``, same ``bbox``) named
+  ``"GOES Active Fire step <N> <ISO> (<SAT>)"``. A window with no archived frames
+  OR no detected hot pixels raises a typed error (honesty floor) -- it never
+  emits a blank overlay.
+
+  **Cross-tool dependencies:**
+  - Upstream: ``fetch_wfigs_incident`` (the AOI bbox + the window floor).
+  - Pairs with: ``fetch_goes_archive_animation`` band=``"true_color"`` (the
+    base the hotspots overlay) + ``fetch_nifc_fire_perimeters``.
+
+# The raw ABI-L2-MCMIPC netCDF archive the frames hooks list + read via the shared
+# imagery._goes_archive_core substrate (anonymous public S3); documentary.
+endpoints:
+  archive_s3:
+    url: https://noaa-goes18.s3.amazonaws.com/
+
+params:
+  bbox:
+    type: bbox
+    required: true
+    quantize: round_6dp
+  satellite:
+    type: str
+    default: goes-18
+  start_utc:
+    type: str
+    schema_optional: true
+  end_utc:
+    type: str
+    schema_optional: true
+  bt_c07_min_k:
+    type: float
+    schema_optional: true
+  bt_diff_min_k:
+    type: float
+    schema_optional: true
+
+# netcdf_cf_object per-frame mode config (ADR 0088): the split-window active-fire
+# hotspot surface (fixed fire_hotspots band, 24-frame cap, most-recent ~20min window).
+ingest:
+  archive:
+    mode: hotspots
+    max_frames: 24
+    default_window_minutes: 20
+
+hooks:
+  frames_plan: goes_archive.frames_plan
+  frame_bytes: goes_archive.frame_bytes
+
+normalize:
+  crs: EPSG:4326
+
+output:
+  layer_type: raster
+  ext: tif
+  role: context
+  style_preset: goes_fire_hotspots_rgba
+  emit_bbox: true
+
+cache:
+  ttl_class: dynamic-1h
+
+payload_estimate:
+  model: bbox_area
+  floor_mb: 0.05
+  mb_per_sq_deg: 2.0
+
+caveats:
+  - Runs the Matson-Dozier C07(3.9um)-vs-C13(10.3um) split-window active-fire discriminator on raw ABI-L2-MCMIPC frames (anonymous public S3); genuine active fire, not warm daytime land.
+  - A window with no archived frames OR no detected hot pixels raises a typed GOES_ARCHIVE_EMPTY error (honesty floor); a single no-fire / off-disk / upstream-failed frame is recorded and skipped.
+  - bbox is required; a missing bbox raises a typed input error.

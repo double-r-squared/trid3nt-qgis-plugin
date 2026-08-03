@@ -1,4 +1,9 @@
-"""``fetch_goes_archive_animation`` -- GOES Fire Temperature animation from the RAW noaa-goes18 S3 ARCHIVE (PATH B).
+"""GOES raw-MCMIPC archive SUBSTRATE (ADR 0088): the netcdf_cf_object per-frame
+core shared by the folded fetch_goes_archive_animation + fetch_goes_active_fire
+specs (via hooks/goes_archive.py) and by fetch_glm_lightning. Holds the S3 window
+listing, the CF scale/offset netCDF band read + reproject, the Fire-Temperature /
+true-color / hotspot composite math, and the per-frame COG builder. Pure helpers +
+typed errors ONLY -- no registered tool (the two tools are spec-driven). ASCII only.
 """
 
 from __future__ import annotations
@@ -9,10 +14,7 @@ import os
 from datetime import datetime, timedelta, timezone
 from typing import Any
 
-from trid3nt_contracts.execution import LayerURI
-from trid3nt_contracts.tool_registry import AtomicToolMetadata
 
-from trid3nt_server.agent.tools import register_tool
 from trid3nt_server.agent.tools.cache import read_through
 from trid3nt_server.agent.tools.fetchers.imagery.fetch_goes_satellite.fetch_goes_satellite import (
     _KEY_START_TIME_RE,
@@ -26,7 +28,6 @@ from trid3nt_server.agent.tools.fetchers.imagery.fetch_goes_satellite.fetch_goes
 from trid3nt_server.agent.tools.fetchers.imagery._satellite_slider import rgb_array_to_cog_bytes
 
 __all__ = [
-    "fetch_goes_archive_animation",
     "GOESArchiveError",
     "GOESArchiveInputError",
     "GOESArchiveBboxRequiredError",
@@ -60,7 +61,7 @@ __all__ = [
     "_bake_fire_over_base",
 ]
 
-logger = logging.getLogger("trid3nt_server.agent.tools.fetchers.imagery.fetch_goes_archive_animation.fetch_goes_archive_animation")
+logger = logging.getLogger("trid3nt_server.agent.tools.fetchers.imagery._goes_archive_core")
 
 
 # ---------------------------------------------------------------------------
@@ -317,20 +318,6 @@ def _resolve_res_deg(band: str, true_color_res_deg: float | None) -> float:
 # ---------------------------------------------------------------------------
 
 
-def _build_metadata() -> AtomicToolMetadata:
-    common = dict(
-        name="fetch_goes_archive_animation",
-        ttl_class="dynamic-1h",
-        source_class="goes_animation",
-        cacheable=True,
-    )
-    try:
-        return AtomicToolMetadata(**common, supports_global_query=False)  # type: ignore[call-arg]
-    except Exception:
-        return AtomicToolMetadata(**common)
-
-
-_METADATA = _build_metadata()
 
 
 # ---------------------------------------------------------------------------
@@ -1348,298 +1335,3 @@ def _round_bbox(bbox: tuple[float, float, float, float]) -> tuple[float, float, 
     return tuple(round(v, _BBOX_QUANTIZE_DP) for v in bbox)  # type: ignore[return-value]
 
 
-# ---------------------------------------------------------------------------
-# Registered atomic tool.
-# ---------------------------------------------------------------------------
-
-
-@register_tool(
-    _METADATA,
-    # readOnlyHint=True, openWorldHint=True (anonymous NOAA S3),
-    # destructiveHint=False, idempotentHint=True (per-frame cache dedupes).
-    open_world_hint=True,
-)
-def fetch_goes_archive_animation(
-    bbox: tuple[float, float, float, float],
-    satellite: str = "goes-18",
-    start_utc: str | None = None,
-    end_utc: str | None = None,
-    step_minutes: int = 5,
-    band: str = "fire_temperature",
-    bt_c07_min_k: float = FIRE_BT_C07_MIN_K,
-    bt_diff_min_k: float = FIRE_BT_DIFF_MIN_K,
-    true_color_res_deg: float | None = None,
-    # absorb LLM-invented kwargs.
-    **_extra_ignored: Any,
-) -> list[LayerURI]:
-    """Build a HISTORICAL GOES Fire Temperature animation from the RAW noaa-goes18 S3 archive (any past date).
-
-    **What it does:** Reads the RAW ``ABI-L2-MCMIPC`` netCDFs from the public
-    ``noaa-goes18`` S3 bucket (a FULL historical archive, anonymous / no key)
-    across a UTC time window for ANY date -- including the distant past -- and
-    composites the NOAA-NESDIS / CIRA **Fire Temperature** RGB per frame (R = ABI
-    C07 3.9um brightness-temp 0-60 C, G = C06 2.2um reflectance 0-100 %, B = C05
-    1.6um reflectance 0-75 %, gamma 1). Returns an ORDERED list of per-frame
-    EPSG:4326 RGB COGs over the AOI -- one frame per CONUS 5-minute scan -- in the
-    SAME shape ``fetch_goes_animation`` returns, so the workflow composer and the
-    web scrubber animate them UNCHANGED.
-
-    This is the HISTORICAL companion to ``fetch_goes_animation``: the SLIDER tiles
-    that tool uses only serve ~100 RECENT frames (no archive), and their pre-
-    rendered Fire Temperature had a zoom-coverage gap. This tool composites Fire
-    Temperature from the raw bands and reaches any archived date.
-
-    **When to use:**
-    - "Animate the GOES Fire Temperature loop for a fire on a PAST date" (e.g.
-      "recreate the Iron Fire GOES animation for 2026-06-22"); any historical
-      intra-day GOES Fire Temperature timelapse.
-    - When ``fetch_goes_animation`` returns no frames because the requested window
-      is older than the SLIDER recent-frame horizon.
-
-    **When NOT to use:**
-    - A single most-recent frame (use ``fetch_goes_satellite``).
-    - A GeoColor loop or a near-real-time recent loop (use
-      ``fetch_goes_animation`` / ``fetch_goes_blend_animation`` -- GeoColor is a
-      proprietary CIRA product not reconstructable from raw bands here).
-    - A multi-day polar VIIRS timelapse (use ``fetch_viirs_day_fire``).
-
-    **Parameters:**
-    - ``bbox`` (tuple): ``(min_lon, min_lat, max_lon, max_lat)`` EPSG:4326.
-      Required. Example (Utah fire cluster): ``(-114.05, 37.0, -109.04, 42.0)``.
-    - ``satellite`` (str, default ``"goes-18"``): ``"goes-18"`` (West / Utah-
-      Nevada fires), ``"goes-19"`` (East), or ``"goes-16"`` (historical East).
-    - ``start_utc`` / ``end_utc`` (str): ISO-8601 UTC window bounds (e.g.
-      ``"2026-06-22T13:30:00Z"`` .. ``"2026-06-22T20:00:00Z"``). When omitted, the
-      most-recent ~6.5h is used. Works for ANY past date in the archive.
-    - ``step_minutes`` (int, default 5): informational; the CONUS archive is
-      natively 5-minute. Frames are taken at the archived scan times in the
-      window, then even-subsampled to the frame cap.
-    - ``band`` (str, default ``"fire_temperature"``): which product to emit --
-      one of:
-        * ``"fire_temperature"`` -- the full Fire Temperature RGB (every warm
-          pixel reds; the original product, unchanged).
-        * ``"true_color"`` (aka ``"natural_color"`` / ``"geocolor_raw"``) -- the
-          daytime TRUE COLOR RGB composited from the visible bands (R=C02 red,
-          B=C01 blue, synthetic CIMSS green from C02/C03/C01) at the finer ~0.5 km
-          native visible resolution. A natural-looking daytime base; goes black at
-          night (no visible reflectance).
-        * ``"fire_hotspots"`` -- the ISOLATED active-fire layer: a TRANSPARENT
-          RGBA COG where ONLY pixels the active-fire discriminator flags are
-          colored on an orange->yellow->white hot ramp (by C07 intensity) and
-          every non-fire pixel is fully transparent (alpha 0). Overlays / "bakes"
-          cleanly onto ANY base. Genuine active fire, NOT warm daytime land.
-        * ``"fire_baked"`` -- the fire-only RGBA alpha-composited OVER the Fire
-          Temperature base into ONE opaque RGB COG ("fire baked onto the
-          satellite image").
-    - ``bt_c07_min_k`` (float, default 320.0): the active-fire ABSOLUTE 3.9um
-      (C07) brightness-temperature floor (K) used by the ``fire_hotspots`` /
-      ``fire_baked`` discriminator. Tunable; lower to catch cooler/smaller fires.
-    - ``bt_diff_min_k`` (float, default 10.0): the active-fire C07-minus-C13
-      (3.9um - 10.3um) brightness-temperature DIFFERENCE floor (K). The
-      shortwave-vs-longwave split that separates genuine fire from warm land.
-      Tunable up (15-20 K) to demand a stronger fire signal.
-    - ``true_color_res_deg`` (float | None, default None): output cell size in
-      degrees for the ``true_color`` band ONLY. None -> the native ~0.5 km
-      ``_TRUE_COLOR_RES_DEG`` (0.005 deg). Ignored for the thermal/fire bands,
-      which always stay at the 2 km ``_OUT_RES_DEG`` (0.02 deg). A finer value
-      gets its own cache namespace.
-
-    **Active-fire detection (the ``fire_hotspots`` / ``fire_baked`` products):**
-    A pixel is flagged active fire only when BOTH (C07 BT >= ``bt_c07_min_k``) AND
-    (C07 - C13 BT >= ``bt_diff_min_k``). This is the standard GOES/MODIS-heritage
-    shortwave-vs-longwave discriminator: a sub-pixel flame is intensely hot in the
-    3.9um shortwave while the 10.3um longwave stays near ambient, so a large split
-    uniquely separates real fire from uniformly warm land/cloud. C07 and C13 are
-    both CMI bands in the SAME netCDF the Fire-Temp composite already downloads --
-    NO extra fetch. The detection is self-contained (FIRMS is a separate VECTOR
-    cross-reference, not needed for this raster product).
-
-    **Returns:** an ORDERED ``list[LayerURI]`` (ascending UTC). For
-    ``fire_temperature`` / ``fire_baked`` each is a 3-band uint8 RGB COG; for
-    ``fire_hotspots`` each is a 4-band uint8 RGBA COG (alpha 0 off-fire).
-    ``layer_type="raster"``, ``role="context"``, same ``bbox``; the RGB(A)
-    passthrough in publish_layer renders the baked colors (and alpha) directly --
-    no new style preset. The ``name`` is
-    ``"GOES <product label> step <N> <ISO> (<SAT>)"`` -- the SAME scrubber-group
-    contract ``fetch_goes_animation`` emits: the ``step <N>`` token is the
-    monotonic frame value the web ``detectSequentialGroups`` parser keys on, the
-    per-product label keeps each product in its own group, and the ISO valid-time
-    is the per-frame display label.
-
-    NOTE: an AOI / window with no archived frames raises a typed error (honesty
-    floor) -- it never emits a blank animation.
-
-    **Cross-tool dependencies:**
-    - Upstream: ``fetch_wfigs_incident`` (the AOI bbox + the window floor).
-    - Pairs with: ``fetch_firms_active_fire`` (historical-date hot-pixel overlay)
-      + ``fetch_nifc_fire_perimeters`` (perimeter overlay).
-    - Driven by: the frame-animation playground recipe
-      (docs/playbooks/frame-animation-recipe.md, the historical GOES path).
-    """
-    q_bbox = _round_bbox(_validate_bbox(bbox))
-    # Normalize any human/LLM spelling (GOES-18 / goes18 / G18 / "GOES West" / 18)
-    # to the canonical "goes-NN" token BEFORE the allow-list check + before the
-    # token is used to build any bucket/path/cache key. A truly-unknown bird raises
-    # the shared loud typed error; a recognized-but-this-tool-doesn't-serve bird
-    # still fails on the tool's OWN allow-list with the tool's OWN error type.
-    satellite = _normalize_satellite(satellite)
-    if satellite not in GOES_ARCHIVE_SATELLITES:
-        raise GOESArchiveInputError(
-            f"unknown satellite={satellite!r}; allowed: "
-            f"{list(GOES_ARCHIVE_SATELLITES)}"
-        )
-    # Normalize LLM-invented aliases (natural_color / geocolor_raw -> true_color)
-    # before the band check so a natural request still routes.
-    if isinstance(band, str):
-        band = _BAND_ALIASES.get(band, band)
-    if band not in ARCHIVE_BANDS:
-        raise GOESArchiveInputError(
-            f"unknown band/product={band!r}; the raw-archive path supports "
-            f"{list(ARCHIVE_BANDS)} (proprietary CIRA GeoColor -- use "
-            "fetch_goes_animation for the recent GeoColor loop)"
-        )
-    if true_color_res_deg is not None:
-        try:
-            true_color_res_deg = float(true_color_res_deg)
-        except (TypeError, ValueError):
-            raise GOESArchiveInputError(
-                f"true_color_res_deg must be numeric; got {true_color_res_deg!r}"
-            )
-        if not math.isfinite(true_color_res_deg) or true_color_res_deg <= 0.0:
-            raise GOESArchiveInputError(
-                "true_color_res_deg must be a positive finite degree value"
-            )
-    # Resolution is a USER lever: thermal/fire bands stay pinned to _OUT_RES_DEG
-    # (byte-identical to today); true_color uses the override or _TRUE_COLOR_RES_DEG.
-    res_deg = _resolve_res_deg(band, true_color_res_deg)
-    try:
-        bt_c07_min_k = float(bt_c07_min_k)
-        bt_diff_min_k = float(bt_diff_min_k)
-    except (TypeError, ValueError):
-        raise GOESArchiveInputError(
-            f"bt_c07_min_k / bt_diff_min_k must be numeric; got "
-            f"{bt_c07_min_k!r} / {bt_diff_min_k!r}"
-        )
-    if not (math.isfinite(bt_c07_min_k) and math.isfinite(bt_diff_min_k)):
-        raise GOESArchiveInputError(
-            "bt_c07_min_k / bt_diff_min_k must be finite"
-        )
-
-    # Resolve the window. Default: most-recent ~6.5h ending now (UTC).
-    now = datetime.now(timezone.utc)
-    end_dt = _parse_utc(end_utc) if end_utc else now
-    start_dt = _parse_utc(start_utc) if start_utc else (end_dt - timedelta(hours=6, minutes=30))
-    if start_dt >= end_dt:
-        raise GOESArchiveInputError(
-            f"start_utc ({start_dt.isoformat()}) must be before end_utc "
-            f"({end_dt.isoformat()})"
-        )
-
-    # 1. List the in-window MCMIPC keys + even-subsample to the frame cap.
-    pairs = _list_archive_keys_in_window(satellite, start_dt, end_dt)
-    if not pairs:
-        raise GOESArchiveEmptyError(
-            f"no MCMIPC frames in the noaa-{satellite.replace('-', '')} archive for "
-            f"window {_iso_z(start_dt)}..{_iso_z(end_dt)} -- the date may pre-date "
-            f"the {satellite} operational record or fall in an ingest gap"
-        )
-    keys_only = [k for _, k in pairs]
-    kept_keys = set(_select_window_keys(keys_only, cap=MAX_ARCHIVE_FRAMES))
-    frames = [(t, k) for (t, k) in pairs if k in kept_keys]
-
-    sat_label = satellite.upper()
-    product_label = _PRODUCT_LABELS[band]
-    product_preset = _PRODUCT_STYLE_PRESETS[band]
-    product_slug = _PRODUCT_ID_SLUGS[band]
-    # The hotspots / baked products are threshold-dependent, so the detection
-    # thresholds enter the cache key (a different threshold yields a different
-    # COG). Fire-Temp ignores the thresholds, so its cache key is unaffected;
-    # 'product' carries the band, so band/thresholds are additive cache-key
-    # entries with no collision across products.
-
-    # 2. Per-frame fetch (one read_through each -> independent cache key).
-    layers: list[LayerURI] = []
-    n_empty = 0
-    last_err: Exception | None = None
-    for frame_no, (t, key) in enumerate(frames, start=1):
-        iso = _iso_z(t)
-        ts_tag = t.strftime("%Y%m%d%H%M%S")
-        params = {
-            "bbox": list(q_bbox),
-            "product": band,
-            "satellite": satellite,
-            "ts_start": ts_tag,
-            "gamma": 1,
-            # Resolution is part of the cache key so finer frames get a distinct
-            # namespace. The thermal/fire bands resolve to _OUT_RES_DEG (0.02) so
-            # their key is the SAME value those bands always carried implicitly --
-            # the round(res_deg,6) entry is constant 0.02 for them, byte-stable.
-            "res_deg": round(res_deg, 6),
-        }
-        if band in ("fire_hotspots", "fire_baked"):
-            params["bt_c07_min_k"] = round(bt_c07_min_k, 3)
-            params["bt_diff_min_k"] = round(bt_diff_min_k, 3)
-        try:
-            result = read_through(
-                metadata=_METADATA,
-                params=params,
-                ext="tif",
-                fetch_fn=lambda s=satellite, k=key: _fetch_archive_frame_cog_bytes(
-                    s, k, q_bbox, band, bt_c07_min_k, bt_diff_min_k, res_deg
-                ),
-            )
-        except GOESArchiveEmptyError as exc:
-            n_empty += 1
-            last_err = exc
-            logger.warning(
-                "fetch_goes_archive_animation: empty frame ts=%s skipped (%s)",
-                iso,
-                exc,
-            )
-            continue
-        except GOESArchiveUpstreamError as exc:
-            n_empty += 1
-            last_err = exc
-            logger.warning(
-                "fetch_goes_archive_animation: frame ts=%s upstream-failed (%s)",
-                iso,
-                exc,
-            )
-            continue
-        assert result.uri is not None
-        # NAME token = "GOES <product label> step <N> <ISO> (<SAT>)".
-        # The "step <N>" token is the MONOTONIC frame value the web
-        # detectSequentialGroups parser keys on; the per-product "(Archive)"
-        # label keeps each product in its OWN scrubber group; the ISO valid-time
-        # is the per-frame display label.
-        layers.append(
-            LayerURI(
-                layer_id=f"goes-arch-{product_slug}-{ts_tag}-{q_bbox[0]:.3f}-{q_bbox[1]:.3f}",
-                name=f"GOES {product_label} step {frame_no} {iso} ({sat_label})",
-                layer_type="raster",
-                uri=result.uri,
-                style_preset=product_preset,
-                role="context",
-                units=None,
-                bbox=q_bbox,
-            )
-        )
-
-    # Honesty floor: a run that produced NO frames is not success.
-    if not layers:
-        raise GOESArchiveEmptyError(
-            f"every one of {len(frames)} archive {product_label} frames was "
-            f"empty/failed for {satellite} over the AOI"
-            + (f": {last_err}" if last_err else "")
-        )
-    logger.info(
-        "fetch_goes_archive_animation: %d %s frames (%d empty skipped) for %s "
-        "archive window %s..%s",
-        len(layers),
-        product_label,
-        n_empty,
-        satellite,
-        _iso_z(start_dt),
-        _iso_z(end_dt),
-    )
-    return layers
