@@ -1,0 +1,138 @@
+# Router source spec (ADR 0085) -- Deltares GTSM v3.0 global tide + surge.
+# Twin: fetch_gtsm_tide_surge.py (library_delegate vector; cdsapi owns the socket).
+# CDS retrieve -> ZIP -> NetCDF(s) -> bbox-subset -> one Point per gauge w/ inline
+# time_series_csv. delegate: cds.gtsm_read returns GeoJSON features for the FGB writer.
+schema_version: v1
+
+name: fetch_gtsm_tide_surge
+source_class: gtsm
+error_prefix: GTSM
+shape: vector-fgb
+supports_global_query: false
+
+endpoints:
+  data:
+    url: "https://cds.climate.copernicus.eu/api"
+auth:
+  mode: cds
+  api_key_env: {var: TRID3NT_COPERNICUS_CDS_API_KEY, required: false}
+  user_agent: trid3nt_default
+
+params:
+  bbox:       {type: bbox, required: true, quantize: round_6dp}
+  start_date: {type: str, required: true}
+  end_date:   {type: str, required: true}
+  output:     {type: enum, values: [water_level, surge_only], default: water_level}
+  api_key:    {type: str, schema_optional: true}
+  secret_ref: {type: str, schema_optional: true}
+
+ingest:
+  delegate:
+    library: cdsapi
+    timeout_s: 300.0
+hooks:
+  delegate: gtsm.read
+  delegate_validate: gtsm.validate
+
+normalize:
+  crs: "EPSG:4326"
+  units: "m"
+  quantity: water_level
+
+output:
+  layer_type: vector
+  ext: fgb
+  role: primary
+  style_preset: "gtsm_{output}"
+
+cache:
+  ttl_class: static-30d
+# ~0.1 MB / day / coastal bbox (twin estimator); GTSM output is always a tiny
+# sparse gauge FGB -- never trips the 25 MB warn / 250 MB block gate. The twin's
+# coastal-factor clamp is not reproduced (non-gating).
+payload_estimate:
+  model: bbox_area
+  mb_per_sq_deg: 0.001
+  floor_mb: 0.01
+
+caveats:
+  - "GTSM v3.0 reanalysis is HISTORICAL only (1950 -> ~2024); a MODEL, not a gauge -- for CONUS use fetch_noaa_coops_tides"
+  - "keyed: free Copernicus CDS key auto-requested via credential card on GTSM_MISSING_KEY; empty bbox -> GTSM_EMPTY (no gauges)"
+  - "sparse global gauge network; composers interpolate to the SFINCS grid via bnd.bzs"
+fallback: [fetch_noaa_coops_tides]
+
+# corpus lifted from sibling corpus.yaml.
+
+docstring: |
+  Global Tide and Surge Model v3.0 Tier-2 coastal water-level fetcher.
+
+  **What it does:** Retrieves hourly tide + storm-surge time series from
+  the Deltares GTSM v3.0 reanalysis via the Copernicus Climate Data Store
+  (CDS) ``sis-water-level-change-timeseries-cmip6`` dataset. Downloads the
+  CDS-returned ZIP archive containing monthly NetCDF files, subsets to the
+  requested bbox and date range, and serialises one Point feature per gauge
+  to a FlatGeobuf with the per-station time series embedded inline as a
+  ``time_series_csv`` attribute. Requires a free Copernicus CDS API key.
+
+  **When to use:**
+
+  - SFINCS compound-flood coastal boundary forcing for a non-CONUS basin
+    where NOAA CO-OPS has no tide gauge (e.g. Bay of Bengal, West Africa,
+    Caribbean island arcs). Example: bbox ``(-70.0, 10.0, -60.0, 20.0)``
+    for a Lesser Antilles hurricane scenario, ``start_date="2017-09-05"``,
+    ``end_date="2017-09-11"``.
+  - Post-event surge attribution along arbitrary coastlines to separate
+    tide and meteorological surge components (use ``output="surge_only"``).
+  - Globally-consistent storm-surge climatology for multi-hazard compound
+    flood studies (Eilander et al. 2023; Muis et al. 2020/2023).
+
+  **When NOT to use:**
+
+  - CONUS with operating CO-OPS tide gauges -- use ``fetch_noaa_coops_tides``
+    for real observational records; GTSM is a model, not a gauge measurement.
+  - Forecasted tide/surge -- GTSM v3.0 reanalysis is historical only (1950 to
+    ~2024); use ECMWF/NHC tools for future surge forecasts.
+  - Sub-hourly boundary timesteps -- output is pinned to hourly; the GTSM CDS
+    dataset supports 10-min aggregation but SFINCS rarely needs finer steps.
+  - Gridded water-level fields -- output is a sparse gauge network; composers
+    interpolate to the SFINCS grid via ``bnd.bzs`` boundary handler.
+
+  **Parameters:**
+
+  - ``bbox``: ``(west, south, east, north)`` in EPSG:4326. Required;
+    ``supports_global_query=False`` -- global time-series is GB-scale.
+  - ``start_date``: ISO YYYY-MM-DD inclusive. GTSM coverage: 1950 → ~2024.
+  - ``end_date``: ISO YYYY-MM-DD inclusive. Hard cap 366 days from start.
+  - ``output``: ``"water_level"`` (default, tide + surge; canonical SFINCS
+    input) or ``"surge_only"`` (meteorological residual only).
+  - ``api_key``: optional explicit CDS API key (overrides all other paths).
+  - ``secret_ref``: optional ``SecretRecord`` resolved via
+    ``Persistence.get_secret_value`` (per-Case production path).
+
+  **Returns:**
+
+  ``LayerURI`` pointing at ``s3://trid3nt-cache/cache/static-30d/gtsm/<key>.fgb``.
+  FlatGeobuf, Point geometry (EPSG:4326), one feature per GTSM gauge.
+  Feature attributes: ``gauge_id``, ``lon``, ``lat``, ``time_start``,
+  ``time_end``, ``n_timesteps``, ``wl_min_m`` / ``wl_max_m`` / ``wl_mean_m``
+  (m), ``output``, ``time_series_csv`` (``"iso,value"`` CSV lines).
+  ``layer_type="vector"``, ``role="primary"``, ``units="m"``.
+
+  Raises: ``GTSMMissingKeyError`` (no key), ``GTSMAuthError`` (bad key),
+  ``GTSMInputError`` (bad params), ``GTSMEmptyError`` (no gauges in bbox),
+  ``GTSMUpstreamError`` (CDS queue timeout / network failure, retryable).
+
+  **Cross-tool dependencies:**
+
+  - Consumed by: ``set_sfincs_parameters`` + ``run_sfincs`` (parses
+    ``time_series_csv`` to populate ``bnd.bzs`` coastal boundary);
+    compound-flood composition happens in the code_exec playground.
+  - Pair with: ``fetch_era5_reanalysis`` (atmospheric + wave forcing for
+    the same event window); ``fetch_cama_flood_discharge`` (fluvial inflow
+    boundary); ``fetch_mrms_qpe`` / ERA5 precip (rainfall forcing).
+  - Auth path shares ``Persistence.get_secret_value`` with
+    ``fetch_era5_reanalysis`` (both use the Copernicus CDS key).
+
+  FR-CE-8: ``read_through`` with ``ttl_class="static-30d"``; cache key =
+  SHA-256 of ``(bbox-6dp, start_date, end_date, output)`` -- api_key
+  excluded (FR-DC-4 dedup).

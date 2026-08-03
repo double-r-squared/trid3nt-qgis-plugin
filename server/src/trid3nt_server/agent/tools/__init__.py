@@ -262,13 +262,15 @@ from .fetchers.hydrology.fetch_noaa_nwm_streamflow import fetch_noaa_nwm_streamf
 # spec-driven (source.yaml + overpass_river build_request/parse_response hooks over the
 # http_json endpoint_fallback mirror chain); the vestigial NHDPlus HR HUC4 leg was
 # dropped (NATE-decided). Auto-registered by _register_router_specs() below.
-from .fetchers.hydrology.fetch_usgs_nwis_gauges import fetch_usgs_nwis_gauges  # noqa: E402,F401
+# fetch_usgs_nwis_gauges: CDS-era flood-seam fold (ADR 0085) -- twin DELETED, now
+# spec-driven (source.yaml + parse_fallback IV->Site + usgs_nwis hooks), auto-registered.
 # fetch_usgs_water_quality: data-router fold phase-2 wave-3 (ADR 0040) -- twin
 # DELETED, now spec-driven (source.yaml + dataretrieval-delegating router),
 # registered by _register_router_specs() below.
 
 # -- fetchers/ocean --
-from .fetchers.ocean.fetch_gtsm_tide_surge import fetch_gtsm_tide_surge  # noqa: E402,F401
+# fetch_gtsm_tide_surge: CDS library_delegate fold (ADR 0085) -- twin DELETED, now
+# spec-driven (source.yaml + cds.gtsm_read), auto-registered via _register_router_specs().
 # fetch_noaa_coops_currents: data-router fold phase-2 wave-4 (ADR 0045) -- twin
 # DELETED, now spec-driven (source.yaml + the station snapshot router mode),
 # registered by _register_router_specs() below.
@@ -315,7 +317,8 @@ from .fetchers.imagery.fetch_viirs_day_fire import fetch_viirs_day_fire  # noqa:
 # -- fetchers/climate --
 # fetch_chirps_precipitation: data-router fold phase-2 wave-9 (ADR 0055) -- twin
 # DELETED, now spec-driven (source.yaml + gzip_object), auto-registered.
-from .fetchers.climate.fetch_era5_reanalysis import fetch_era5_reanalysis  # noqa: E402,F401
+# fetch_era5_reanalysis: CDS library_delegate fold (ADR 0085) -- twin DELETED, now
+# spec-driven (source.yaml + cds.era5_read), auto-registered via _register_router_specs().
 # fetch_gridmet: data-router fold pilot -- twin DELETED, now spec-driven
 # (source.yaml + router), registered by _register_router_specs() below.
 # fetch_modis_lst: data-router fold phase-2 wave-7 (ADR 0053) -- twin DELETED, now

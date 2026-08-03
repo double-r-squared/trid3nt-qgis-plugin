@@ -687,8 +687,9 @@ def _autowire_coastal_surge_forcing(
 
     # --- 2) FALLBACK: GTSM tide+surge (global, needs a CDS key) ------------- #
     try:
-        from trid3nt_server.agent.tools.fetchers.ocean.fetch_gtsm_tide_surge.fetch_gtsm_tide_surge import fetch_gtsm_tide_surge
+        from trid3nt_server.agent.tools import TOOL_REGISTRY  # local: keep top imports lean
 
+        fetch_gtsm_tide_surge = TOOL_REGISTRY["fetch_gtsm_tide_surge"].fn  # spec-driven (ADR 0085)
         layer = fetch_gtsm_tide_surge(
             bbox, start_date=start_date, end_date=end_date
         )
@@ -1049,8 +1050,9 @@ def _autowire_river_discharge_forcing(
     try:
         import math as _math
 
-        from trid3nt_server.agent.tools.fetchers.hydrology.fetch_usgs_nwis_gauges.fetch_usgs_nwis_gauges import fetch_usgs_nwis_gauges
+        from trid3nt_server.agent.tools import TOOL_REGISTRY  # local: keep top imports lean
 
+        fetch_usgs_nwis_gauges = TOOL_REGISTRY["fetch_usgs_nwis_gauges"].fn  # spec-driven (ADR 0085)
         period_days = max(1, int(_math.ceil(win_hr / 24.0)))
         layer = fetch_usgs_nwis_gauges(bbox=bbox, period=f"P{period_days}D")
         uri = getattr(layer, "uri", None)

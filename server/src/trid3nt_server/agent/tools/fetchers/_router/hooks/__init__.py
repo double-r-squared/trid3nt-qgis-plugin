@@ -221,3 +221,14 @@ from . import lehd_jobs  # noqa: E402,F401
 # trigger wave (ADR 0084): fetch_buildings -- Overpass build_request + a (features,
 # tags) parse for the overpass_sidecar executor's constrained tags-sidecar side write.
 from . import buildings  # noqa: E402,F401
+# post-merge wave (ADR 0085): fetch_era5_reanalysis + fetch_gtsm_tide_surge -- the CDS
+# library_delegate pair (cdsapi owns the request-poll-download socket). One shared
+# module: era5.read (raster) / gtsm.read (vector features) + per-source *.validate
+# pre-cache gates; the missing-key/auth classifier maps the cdsapi failure to the
+# source's typed *_MISSING_KEY / *_AUTH_ERROR (the credential-card surface).
+from . import cds  # noqa: E402,F401
+# post-merge wave (ADR 0085): fetch_usgs_nwis_gauges -- the last flood-seam twin. The
+# parse_fallback http_source mode (IV WaterML-JSON primary -> Site-RDB fallback, honest
+# NO_STATIONS on all-empty) + a window-mode pre_resolve that switches the output schema
+# (instantaneous 5-col vs hydrograph 12-col) + style/units by the derived _mode.
+from . import usgs_nwis_gauges  # noqa: E402,F401

@@ -162,10 +162,9 @@ def _import_tools_registry() -> int:
     # register fetch_iucn_red_list_range (IUCN Red List Tier-2 species range info fetcher; per-Case secret_ref).
     # fetch_movebank_tracks: keyed CSV http_json fold (ADR 0077) -- twin DELETED, now
     # spec-driven (source.yaml + movebank_tracks hooks), auto-registered via register_specs_from_tree().
-    # register fetch_era5_reanalysis (Copernicus ERA5 reanalysis Tier-2 fetcher; compound-flood global substrate).
-    from .agent.tools.fetchers.climate.fetch_era5_reanalysis import fetch_era5_reanalysis  # noqa: F401
-    # register fetch_gtsm_tide_surge (GTSM v3.0 Tier-2 coastal water-level via CDS; compound-flood coastal boundary).
-    from .agent.tools.fetchers.ocean.fetch_gtsm_tide_surge import fetch_gtsm_tide_surge  # noqa: F401
+    # fetch_era5_reanalysis + fetch_gtsm_tide_surge: CDS library_delegate fold (ADR 0085)
+    # -- twins DELETED, now spec-driven (source.yaml + cds hooks), auto-registered via
+    # register_specs_from_tree().
     # register fetch_cama_flood_discharge (CaMa-Flood global river discharge Tier-2 fetcher; compound-flood fluvial forcing).
     from .agent.tools.fetchers.hydrology.fetch_cama_flood_discharge import fetch_cama_flood_discharge  # noqa: F401
 

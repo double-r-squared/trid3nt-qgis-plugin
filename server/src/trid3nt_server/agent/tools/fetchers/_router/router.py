@@ -576,7 +576,11 @@ def build_layer_uri(spec: SourceSpec, params: dict[str, Any], uri: str) -> Layer
     """Emit the ``LayerURI`` from ``spec.output`` (the shared emission seam)."""
     bbox = None
     for pname, pspec in spec.params.items():
-        if pspec.type == "bbox" and pname in params:
+        # A bbox param present-but-None (a pre_resolve that nulls bbox when an
+        # alternate selector wins the cache key -- nwis state_code) yields no bbox
+        # stamp; bbox_from_features / the requested bbox governs. No-op for priors
+        # (which never carry a None bbox value).
+        if pspec.type == "bbox" and params.get(pname) is not None:
             b = params[pname]
             bbox = (float(b[0]), float(b[1]), float(b[2]), float(b[3]))
             break
