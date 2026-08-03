@@ -129,6 +129,11 @@ async def swmm_urban_flood(
 ) -> SWMMDepthLayerURI | dict[str, Any]:
     """Run a quasi-2D PySWMM urban (pluvial) flood simulation over an AOI.
 
+    Fidelity: SWMM 1D / quasi-2D urban drainage SCREENING model; planning-grade,
+    not a calibrated regulatory drainage model. Off-scope: coastal / riverine /
+    large-watershed inundation -> sfincs_flood; groundwater plume ->
+    modflow_contaminant_plume.
+
     Builds a quasi-2D SWMM deck from the AOI DEM + OSM building footprints (one
     storage node per overland cell, 4-connectivity conduits, per-cell rainfall
     subcatchments fed by an Atlas-14 nested design-storm hyetograph, a single
@@ -138,7 +143,7 @@ async def swmm_urban_flood(
     scalars. Per-timestep depth frames are emitted as a temporal animation
     group the LayerPanel scrubber plays.
 
-    Use this when (call the ``run_swmm`` door first, then this template):
+    Use this when:
         - The user asks to model urban/pluvial/drainage/stormwater flooding,
           street-level inundation from a design storm, flooding AROUND
           buildings, or a SWMM/PCSWMM-style urban flood over a city
@@ -153,12 +158,12 @@ async def swmm_urban_flood(
           load + peak washoff-concentration layer alongside the depth result.
 
     Do NOT use this for:
-        - Riverine/coastal/large-watershed flooding (``run_sfincs`` door ->
-          ``sfincs_flood``).
-        - A river-reach dye/sediment slug or in-stream transport
-          (``run_telemac`` — river hydrodynamics + GAIA sediment/WAQTEL decay).
-        - A groundwater contamination plume in an aquifer (``run_modflow`` door
-          -> ``modflow_contaminant_plume`` — MODFLOW-GWT subsurface transport).
+        - Riverine/coastal/large-watershed flooding -> ``sfincs_flood``.
+        - A river-reach dye/sediment slug or in-stream transport ->
+          ``telemac_river_dye`` (river hydrodynamics + GAIA sediment/WAQTEL
+          decay).
+        - A groundwater contamination plume in an aquifer ->
+          ``modflow_contaminant_plume`` (MODFLOW-GWT subsurface transport).
         - Cancelling a running sim (use the WS ``cancel`` envelope).
 
     Params:

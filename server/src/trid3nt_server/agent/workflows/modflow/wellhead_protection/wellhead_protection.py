@@ -72,6 +72,12 @@ async def modflow_wellhead_protection(
 ) -> dict[str, Any]:
     """Delineate an EPA-style wellhead protection area (WHPA) for a pumping well.
 
+    Fidelity: MODFLOW 6 local planning-grade groundwater envelope (aquifer
+    K/porosity default to narrated demo values unless supplied), not a
+    calibrated regulatory delineation. Off-scope: surface-water inundation
+    flooding -> sfincs_flood; urban storm-sewer / pipe-network flooding ->
+    swmm_urban_flood.
+
     Identical machinery to ``modflow_capture_zone`` but uses EPA WHPA
     fixed-travel-time framing and default tiers of [2, 5, 10] years (the EPA
     wellhead protection program under SDWA Section 1428; fixed-travel-time

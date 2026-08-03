@@ -131,13 +131,17 @@ async def geoclaw_inundation(
 ) -> GeoClawDepthLayerURI | dict[str, Any]:
     """Run a GeoClaw (Clawpack) shallow-water inundation simulation over an AOI (TSUNAMI/DAM-BREAK/SURGE run-up).
 
-    Use this when (call the ``run_geoclaw`` door first, then this template): the
-    user wants a TSUNAMI, DAM BREAK/levee failure, or shallow-water storm-SURGE
-    RUN-UP inundation depth + animation -- solves 2D nonlinear shallow-water
-    equations with adaptive mesh refinement. Do NOT use for: rain-driven
-    riverine/coastal compound flooding (``run_sfincs`` door -> ``sfincs_flood``);
-    urban/pluvial flooding (``run_swmm`` door -> ``swmm_urban_flood``);
-    groundwater plumes (``run_modflow`` door -> ``modflow_contaminant_plume``).
+    Fidelity: GeoClaw adaptive-mesh finite-volume run-up (tsunami / dam-break /
+    surge); planning-grade run-up envelope, not a calibrated regulatory model.
+    Off-scope: pluvial / riverine / coastal compound flooding -> sfincs_flood;
+    urban storm-sewer -> swmm_urban_flood; spectral wave field -> swan_wave_field.
+
+    Use this when: the user wants a TSUNAMI, DAM BREAK/levee failure, or
+    shallow-water storm-SURGE RUN-UP inundation depth + animation -- solves 2D
+    nonlinear shallow-water equations with adaptive mesh refinement. Do NOT use
+    for: rain-driven riverine/coastal compound flooding (``sfincs_flood``);
+    urban/pluvial flooding (``swmm_urban_flood``); groundwater plumes
+    (``modflow_contaminant_plume``).
 
     Params:
         bbox: computational-domain AOI, EPSG:4326.

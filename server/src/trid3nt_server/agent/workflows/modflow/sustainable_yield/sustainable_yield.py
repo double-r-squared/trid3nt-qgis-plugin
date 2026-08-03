@@ -856,6 +856,12 @@ async def modflow_sustainable_yield(
 ) -> dict[str, Any]:
     """Model a pumping well's drawdown cone, OR its impact on a river, OR the land subsidence it causes.
 
+    Fidelity: MODFLOW 6 local planning-grade groundwater envelope (aquifer
+    K/porosity default to narrated demo values unless supplied), not a
+    calibrated regulatory delineation. Off-scope: surface-water inundation
+    flooding -> sfincs_flood; urban storm-sewer / pipe-network flooding ->
+    swmm_urban_flood.
+
     Builds a MODFLOW 6 transient groundwater-flow model with a sustained
     extraction well at the user-supplied location + rate, runs it, and produces a
     DRAWDOWN layer (the cone of depression  -  how far the water table is drawn

@@ -1,7 +1,5 @@
-# TEMPLATE tier (engine-door refactor): phrasings for openquake_psha. NOT
-# merged into the main retrieval index; the run_openquake door surfaces this
-# template via gate expansion (select-then-call). Carried from the migrated
-# run_seismic_hazard_psha corpus entries.
+# Template routing phrasings (door dissolution, ADR 0094): walked into the main
+# retrieval index directly -- the engine templates are ordinary retrieval-pool tools.
 openquake_psha:
 - run the OpenQuake classical PSHA over this bbox with the Boore-Atkinson GMPE
 - probabilistic seismic hazard map - PGA with 10% exceedance in 50 years here

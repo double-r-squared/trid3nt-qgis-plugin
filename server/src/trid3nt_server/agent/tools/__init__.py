@@ -536,20 +536,13 @@ from .simulation.sfincs.set_sfincs_parameters import set_sfincs_parameters  # no
 from .simulation.swmm.set_swmm_parameters import set_swmm_parameters  # noqa: E402,F401
 from .simulation.telemac.set_telemac_parameters import set_telemac_parameters  # noqa: E402,F401 - relocated beside the run_telemac door (engine-door refactor, TELEMAC slice); stays tier=general
 from .simulation.solver import solver  # noqa: E402,F401
-# -- engine doors (engine-door refactor: read-only concierge that lists +
-# gate-expands its engine's tier=template members; executes nothing). MODFLOW
-# pilot. Registry-driven: adding a template folder tagged engine+tier=template
-# makes it appear in the door's listing with zero door changes.
-from .simulation.modflow.run_modflow.run_modflow import run_modflow  # noqa: E402,F401
-from .simulation.geoclaw.run_geoclaw.run_geoclaw import run_geoclaw  # noqa: E402,F401 - GeoClaw run-up door (engine-door refactor, GEOCLAW slice)
-from .simulation.sfincs.run_sfincs.run_sfincs import run_sfincs  # noqa: E402,F401 - SFINCS flood door (engine-door refactor, SFINCS slice)
-from .simulation.swmm.run_swmm.run_swmm import run_swmm  # noqa: E402,F401 - SWMM urban-drainage door (engine-door refactor, SWMM slice)
-from .simulation.telemac.run_telemac.run_telemac import run_telemac  # noqa: E402,F401 - TELEMAC river-transport door (engine-door refactor, TELEMAC slice; reuses the freed run_telemac name)
-from .simulation.swan.run_swan.run_swan import run_swan  # noqa: E402,F401 - SWAN nearshore-wave door (engine-door refactor, SWAN slice)
-from .simulation.landlab.run_landlab.run_landlab import run_landlab  # noqa: E402,F401 - Landlab surface-process door (engine-door refactor, LANDLAB slice)
-from .simulation.openquake.run_openquake.run_openquake import run_openquake  # noqa: E402,F401 - OpenQuake seismic-hazard door (engine-door refactor, OPENQUAKE slice)
-from .simulation.elmfire.run_elmfire.run_elmfire import run_elmfire  # noqa: E402,F401 - ELMFIRE wildfire-spread door (engine-door refactor, ELMFIRE slice)
-from .simulation.pelicun.run_pelicun.run_pelicun import run_pelicun  # noqa: E402,F401 - Pelicun damage/loss door (engine-door refactor, PELICUN slice)
+# -- engine templates (door dissolution, ADR 0094): the 10 engine "door"
+# concierge tools were DELETED. Each engine's tier=template members are ordinary
+# retrieval-pool tools now, registered by their own @register_tool below (the
+# workflow-composer block). Templates are callable DIRECTLY -- no concierge, no
+# gate expansion. The solver-seam modules under workflows/<engine>/run_<engine>.py
+# (WorkflowError classes, solver specs) are UNRELATED to the deleted doors and
+# stay; the templates import them.
 
 # -- discovery (dataset/tool retrieval) --
 # NOTE: search_data_catalog / fetch_from_catalog / qgis_discovery register at

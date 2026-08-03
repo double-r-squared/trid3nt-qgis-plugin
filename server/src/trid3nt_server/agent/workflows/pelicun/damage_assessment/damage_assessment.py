@@ -1426,6 +1426,13 @@ def pelicun_damage_assessment(
 ) -> LayerURI | dict[str, Any]:
     """Fragility-curve-driven damage assessment via Pelicun (HAZUS v6.1 flood loss functions).
 
+    Fidelity: Pelicun HAZUS v6.1 damage / loss (Monte-Carlo per-asset loss ratios
+    binned into DS0..DS4 + repair costs; consumes a hazard raster + a structure
+    inventory); planning-grade screening losses, not a calibrated insurance /
+    regulatory study. Off-scope (run the HAZARD first, its raster feeds Pelicun):
+    flood hazard -> sfincs_flood; seismic hazard -> openquake_psha; wildfire hazard
+    -> elmfire_fire_spread; plain exposure counts without fragility -> spatial_query.
+
     Use this when: you have a hazard raster (flood depth COG, earthquake
     intensity) and want quantitative damage/loss estimates -- "how much damage",
     "expected losses", "which buildings are most exposed". Give the assets ONE

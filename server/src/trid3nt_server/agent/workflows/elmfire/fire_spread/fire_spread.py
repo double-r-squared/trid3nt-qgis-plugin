@@ -106,6 +106,13 @@ async def elmfire_fire_spread(
 ) -> FireSpreadLayerURI | dict[str, Any]:
     """Run an ELMFIRE wildfire-spread simulation from a point ignition.
 
+    Fidelity: ELMFIRE level-set wildfire-spread over LANDFIRE 30 m fuels;
+    CONUS-only, county-scale; the ignition point must come from the user;
+    planning-grade perimeter-growth envelope, not an operational fire forecast.
+    Off-scope: post-fire debris-flow hazard -> model_debris_flow; observed
+    satellite fire animation (not a spread solve) -> fetch_goes_animation /
+    fetch_viirs_day_fire.
+
     Use this when: the user wants to MODEL/SIMULATE/FORECAST wildfire
     spread from a specific ignition ("if a fire started here, where does
     it spread in 6 hours?") or explore wind/fuel-moisture what-ifs over

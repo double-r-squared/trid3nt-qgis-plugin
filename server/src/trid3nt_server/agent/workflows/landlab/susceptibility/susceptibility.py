@@ -129,15 +129,21 @@ async def landlab_susceptibility(
 ) -> LandlabSusceptibilityLayerURI | dict[str, Any]:
     """Run a Landlab surface-process simulation over an AOI (landslide susceptibility or overland flow).
 
-    Use this when (call the ``run_landlab`` door first, then this template): the
-    user wants LANDSLIDE susceptibility/slope stability/factor of safety over a
-    hillslope or catchment (default ``analysis="landslide_probability"``,
-    infinite-slope Monte-Carlo FoS), or rainfall OVERLAND FLOW/surface runoff
-    (``analysis="overland_flow"``, de Almeida shallow-water). Do NOT use for:
-    riverine/coastal flooding (``run_sfincs`` door -> ``sfincs_flood``);
-    urban/pluvial (``run_swmm`` door -> ``swmm_urban_flood``); post-fire
+    Fidelity: Landlab infinite-slope Monte-Carlo landslide susceptibility (soil /
+    rainfall properties default to narrated demo values unless supplied);
+    planning-grade hillslope envelope, not a site-calibrated geotechnical model.
+    Off-scope: channel / riverine / coastal inundation -> sfincs_flood; post-fire
+    debris-flow over a burn scar -> model_debris_flow; probabilistic seismic
+    hazard -> openquake_psha.
+
+    Use this when: the user wants LANDSLIDE susceptibility/slope stability/factor
+    of safety over a hillslope or catchment (default
+    ``analysis="landslide_probability"``, infinite-slope Monte-Carlo FoS), or
+    rainfall OVERLAND FLOW/surface runoff (``analysis="overland_flow"``, de
+    Almeida shallow-water). Do NOT use for: riverine/coastal flooding
+    (``sfincs_flood``); urban/pluvial (``swmm_urban_flood``); post-fire
     debris-flow hazard (``model_debris_flow``); groundwater plumes
-    (``run_modflow`` door -> ``modflow_contaminant_plume``).
+    (``modflow_contaminant_plume``).
 
     Params:
         bbox: hillslope/small-catchment AOI, EPSG:4326.

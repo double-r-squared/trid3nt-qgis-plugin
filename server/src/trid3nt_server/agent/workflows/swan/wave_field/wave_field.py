@@ -182,11 +182,16 @@ async def swan_wave_field(
 ) -> WaveFieldLayerURI | dict[str, Any]:
     """Run a STANDALONE SWAN nearshore spectral wave-field simulation over an AOI.
 
-    Use this when (call the ``run_swan`` door first, then this template): the
-    user wants the DEFENSIBLE nearshore wave field itself -- significant wave
-    heights/periods/direction, engineering-grade wave climate, overtopping
-    inputs, buoy validation -- or wants to COMPARE SWAN against the existing
-    SFINCS+SnapWave output on the same case. Solves the 3rd-gen spectral
+    Fidelity: SWAN phase-averaged spectral wave field (Hs / Tp / Dir over real
+    nearshore bathymetry; requires real below-datum bathymetry); engineering /
+    planning-grade wave field, not an inundation solver. Off-scope: compound-flood
+    / surge / pluvial / riverine inundation depth -> sfincs_flood; tsunami /
+    dam-break run-up -> geoclaw_inundation; urban storm-sewer -> swmm_urban_flood.
+
+    Use this when: the user wants the DEFENSIBLE nearshore wave field itself --
+    significant wave heights/periods/direction, engineering-grade wave climate,
+    overtopping inputs, buoy validation -- or wants to COMPARE SWAN against the
+    existing SFINCS+SnapWave output on the same case. Solves the 3rd-gen spectral
     action-balance equation over real bathymetry. Do NOT use for: compound-flood
     /surge inundation depth (``sfincs_flood`` -- SFINCS's fast in-model SnapWave
     path; SWAN is not a cheaper compound-flood solver); tsunami/dam-break

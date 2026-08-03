@@ -1,7 +1,5 @@
-# TEMPLATE tier (engine-door refactor): phrasings for elmfire_fire_spread. NOT
-# merged into the main retrieval index; the run_elmfire door surfaces this
-# template via gate expansion (select-then-call). Carried from the migrated
-# model_fire_spread corpus entries.
+# Template routing phrasings (door dissolution, ADR 0094): walked into the main
+# retrieval index directly -- the engine templates are ordinary retrieval-pool tools.
 elmfire_fire_spread:
 - simulate wildfire spread from this ignition point
 - if a fire started here, where would it burn

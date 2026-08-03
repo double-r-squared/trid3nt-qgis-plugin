@@ -1,7 +1,5 @@
-# TEMPLATE tier (engine-door refactor): phrasings for geoclaw_inundation. NOT
-# merged into the main retrieval index; the run_geoclaw door surfaces this
-# template via gate expansion (select-then-call). Carried from the migrated
-# run_geoclaw_inundation corpus entries.
+# Template routing phrasings (door dissolution, ADR 0094): walked into the main
+# retrieval index directly -- the engine templates are ordinary retrieval-pool tools.
 geoclaw_inundation:
 - run the GeoClaw adaptive-mesh shallow-water inundation solve for this AOI
 - tsunami run-up depth + arrival animation along this stretch of coast

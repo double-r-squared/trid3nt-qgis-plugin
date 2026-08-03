@@ -98,15 +98,14 @@ def test_every_registered_tool_has_a_primary_category() -> None:
     excludes them.
     """
     registered = _ensure_full_registry()
-    # engine-door refactor: tier=template tools are pool-excluded and surfaced
-    # only by their door's gate expansion, so they are INTENTIONALLY not in
-    # PRIMARY_CATEGORY (categorizing one would re-leak it into the retrieval pool).
-    # tier=internal (an absorbed in-process seam, e.g. fetch_copernicus_dem) is
-    # excluded identically -- pool-hidden, so no category membership.
+    # Door dissolution (ADR 0094): tier=template tools ARE categorized now (they
+    # are ordinary retrieval-pool members), so they must appear in PRIMARY_CATEGORY
+    # like any tool. Only tier=internal (an absorbed in-process seam, e.g.
+    # fetch_copernicus_dem) is pool-hidden and carries no category membership.
     from trid3nt_server.agent.tools import TOOL_REGISTRY as _reg
     _pool_excluded = {
         n for n, e in _reg.items()
-        if getattr(e.metadata, "tier", "general") in ("template", "internal")
+        if getattr(e.metadata, "tier", "general") in ("internal",)
     }
     mapped = (
         set(PRIMARY_CATEGORY.keys())
@@ -151,18 +150,18 @@ def test_cross_listing_known_tools_appear_in_both_categories() -> None:
     """Pelicun and USACE NSI cross-list into damage_assessment."""
     _ensure_full_registry()
     damage_members = set(tools_for_category("damage_assessment"))
-    # engine-door refactor (PELICUN slice): the run_pelicun DOOR carries the
-    # category membership; its pelicun_* templates are pool-EXCLUDED (no membership).
+    # Door dissolution (ADR 0094): the pelicun_damage_assessment template carries
+    # the category membership directly (its deleted door carried it before).
     assert {
-        "run_pelicun",
+        "pelicun_damage_assessment",
         "fetch_usace_nsi",
     }.issubset(damage_members)
-    assert "pelicun_damage_assessment" not in damage_members, (
-        "pelicun templates must NOT carry category membership (door-surfaced only)"
+    assert "run_pelicun" not in damage_members, (
+        "the run_pelicun door was dissolved (ADR 0094)"
     )
     # Their primary categories still claim them too.
     hazard_members = set(tools_for_category("hazard_modeling"))
-    assert "run_pelicun" in hazard_members
+    assert "pelicun_damage_assessment" in hazard_members
     landuse_members = set(tools_for_category("land_cover_development"))
     assert "fetch_usace_nsi" in landuse_members
 
@@ -293,7 +292,7 @@ def test_hot_set_contains_required_anchors() -> None:
         "fetch_dem",
         "fetch_nws_alerts_conus",
         "fetch_nws_event",
-        "run_sfincs",
+        "sfincs_flood",
         "code_exec_request",
         "compute_layer_bounds",
         "request_spatial_input",

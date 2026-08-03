@@ -151,6 +151,13 @@ async def telemac_river_dye(
 ) -> TelemacDyeLayerURI | dict[str, Any]:
     """A DYE / TRACER / CONTAMINANT / POLLUTANT PLUME that TRAVELS DOWNSTREAM in a RIVER (surface water).
 
+    Fidelity: TELEMAC-2D full-physics shallow-water surface-water tracer
+    transport on an idealized planar bed (no site-bathymetry fetcher);
+    planning-grade demo, not a calibrated transport model. Off-scope: groundwater
+    plume / river-aquifer seepage -> modflow_contaminant_plume /
+    modflow_river_seepage; inundation depth -> sfincs_flood; tsunami / dam-break
+    run-up -> geoclaw_inundation.
+
     THE tool for "simulate a dye plume travels downstream", "how far does the
     dye/contaminant travel down the river", "a dye spill in the river", "a
     contaminant/pollutant spilled into the river/stream and how it travels/
@@ -164,8 +171,7 @@ async def telemac_river_dye(
     Controller scrubber).
 
     Use this for any "spill in the river ... downstream" surface-water
-    transport request (call the ``run_telemac`` door first, then this
-    template).
+    transport request.
 
     Do NOT use this for:
         - GROUNDWATER/AQUIFER contamination, river<->aquifer SEEPAGE, or a

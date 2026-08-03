@@ -436,6 +436,12 @@ async def modflow_river_seepage(
 ) -> dict[str, Any]:
     """GROUNDWATER <-> river seepage EXCHANGE: is a reach gaining or losing, how much leaks between aquifer and river.
 
+    Fidelity: MODFLOW 6 local planning-grade groundwater envelope (aquifer
+    K/porosity default to narrated demo values unless supplied), not a
+    calibrated regulatory delineation. Off-scope: surface-water inundation
+    flooding -> sfincs_flood; urban storm-sewer / pipe-network flooding ->
+    swmm_urban_flood.
+
     NOT for surface-water transport down the channel: "a dye plume travels
     downstream", "how far does the dye/contaminant travel down the river", "a
     spill moving down the river" is ``run_telemac`` (surface flow IN the river),

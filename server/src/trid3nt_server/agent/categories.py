@@ -242,68 +242,44 @@ CATEGORIES: tuple[CategorySpec, ...] = (
 
 PRIMARY_CATEGORY: dict[str, str] = {
     # ---- 1. hazard_modeling ------------------------------------------------
-    # engine-door refactor (SFINCS slice): run_model_flood_scenario is now the
-    # sfincs_flood template (tier=template, pool-EXCLUDED, NO category membership -
-    # surfaced only by the run_sfincs door's gate expansion). The DOOR carries the
-    # category membership so hazard_modeling widening surfaces the flood entry.
-    "run_sfincs": "hazard_modeling",
+    # Door dissolution (ADR 0094): the 10 engine "door" concierge tools were
+    # DELETED. Each engine's tier=template members are ordinary retrieval-pool
+    # tools now and carry their OWN category membership (categorizing a template
+    # no longer re-leaks anything -- there is no pool exclusion). The templates
+    # file under hazard_modeling; pelicun/swan/elmfire also cross-list via
+    # SECONDARY_CATEGORIES (damage_assessment / coastal / fire).
+    "sfincs_flood": "hazard_modeling",
     "run_model_nws_flood_event_scenario": "hazard_modeling",
     "run_model_groundwater_contamination_scenario": "hazard_modeling",
-    # engine-door refactor: run_model_contamination_affected_fields is CUT;
-    # run_modflow_job folded into the modflow_contaminant_plume template. The 11
-    # MODFLOW templates are tier=template -> NOT categorized (categorizing one
-    # would re-leak it into the retrieval pool). Only the door is categorized.
-    # engine-door refactor: the read-only MODFLOW concierge door. Categorized
-    # (every registered tool needs a primary) but its tier=template members are
-    # NOT categorized - they are excluded from the pool and surfaced only by the
-    # door's gate expansion (adding a template to a category would re-leak it).
-    "run_modflow": "hazard_modeling",
-    # engine-door refactor (SWMM slice): run_swmm_urban_flood is now the
-    # swmm_urban_flood template (tier=template, pool-EXCLUDED, NO category
-    # membership - surfaced only by the run_swmm door's gate expansion). The
-    # DOOR carries the hazard_modeling membership.
-    "run_swmm": "hazard_modeling",
-    # engine-door refactor (PELICUN slice) + PELICUN fold: run_pelicun_damage_assessment
-    # + run_pelicun_with_buildings are now ONE pelicun_damage_assessment template
-    # (tier=template, pool-EXCLUDED, NO category membership - surfaced only by the
-    # run_pelicun door's gate expansion; the with-buildings composer folded into its
-    # bbox auto-fetch input mode). The DOOR carries the hazard_modeling membership.
-    "run_pelicun": "hazard_modeling",
-    # NEW engines (parallel lanes) - all are run_* hazard solvers /
-    # composers, filed alongside the other engines above.
-    # engine-door refactor: run_river_seepage_job + run_model_river_seepage_scenario
-    # folded into the modflow_river_seepage template (tier=template, not categorized).
-    # engine-door refactor (GEOCLAW slice): run_geoclaw_inundation is now the
-    # geoclaw_inundation template (tier=template, pool-EXCLUDED, NO category
-    # membership - surfaced only by the run_geoclaw door's gate expansion). The
-    # DOOR carries the hazard_modeling membership.
-    "run_geoclaw": "hazard_modeling",
-    # engine-door refactor (OPENQUAKE slice): run_seismic_hazard_psha is now the
-    # openquake_psha template (tier=template, pool-EXCLUDED, NO category
-    # membership - surfaced only by the run_openquake door's gate expansion). The
-    # DOOR carries the hazard_modeling membership.
-    "run_openquake": "hazard_modeling",
+    "modflow_asr": "hazard_modeling",
+    "modflow_capture_zone": "hazard_modeling",
+    "modflow_contaminant_plume": "hazard_modeling",
+    "modflow_managed_recharge": "hazard_modeling",
+    "modflow_mine_dewatering": "hazard_modeling",
+    "modflow_regional_water_budget": "hazard_modeling",
+    "modflow_river_seepage": "hazard_modeling",
+    "modflow_saltwater_intrusion": "hazard_modeling",
+    "modflow_sustainable_yield": "hazard_modeling",
+    "modflow_wellhead_protection": "hazard_modeling",
+    "modflow_wetland_hydroperiod": "hazard_modeling",
+    "swmm_urban_flood": "hazard_modeling",
+    "pelicun_damage_assessment": "hazard_modeling",
+    "geoclaw_inundation": "hazard_modeling",
+    "openquake_psha": "hazard_modeling",
     # real-fault seismic-source fetcher: the OpenQuake PSHA input data fetcher
     # (USGS / GEM fault sources -> source-model XML). Filed alongside its consumer
-    # door run_openquake (there is no dedicated geophysics data category).
+    # openquake_psha (there is no dedicated geophysics data category).
     "fetch_fault_sources": "hazard_modeling",
-    # engine-door refactor (LANDLAB slice): run_landlab_susceptibility is now the
-    # landlab_susceptibility template (tier=template, pool-EXCLUDED, NO category
-    # membership - surfaced only by the run_landlab door's gate expansion). The
-    # DOOR carries the hazard_modeling membership.
-    "run_landlab": "hazard_modeling",
+    "landlab_susceptibility": "hazard_modeling",
     # USGS post-fire debris-flow hazard composer (pfdf: Staley 2017 M1
     # likelihood + Gartner 2014 emergency volume + Cannon 2010 combined class
     # over a delineated stream-segment network). Filed as a hazard engine;
     # cross-listed to fire below (reached from the wildfire lane next to
     # MTBS / NIFC / FIRMS).
     "model_debris_flow": "hazard_modeling",
-    # engine-door refactor (ELMFIRE slice): model_fire_spread is now the
-    # elmfire_fire_spread template (tier=template, pool-EXCLUDED, NO category
-    # membership - surfaced only by the run_elmfire door's gate expansion). The
-    # DOOR carries the hazard_modeling membership; cross-listed to fire below
-    # (reached from the wildfire lane next to LANDFIRE / NIFC / FIRMS).
-    "run_elmfire": "hazard_modeling",
+    "elmfire_fire_spread": "hazard_modeling",
+    "swan_wave_field": "hazard_modeling",
+    "telemac_river_dye": "hazard_modeling",
     # The case-layer serving seams (hydrate_case_layers in cases/, and
     # register_case_layer / ingest_user_layer) are DEREGISTERED
     # (their functions serve the /api/export-qgis +
@@ -318,21 +294,6 @@ PRIMARY_CATEGORY: dict[str, str] = {
     "query_point_hazard": "geographic_primitives",
     "extract_timeseries_at_point": "geographic_primitives",
     "compose_case_report": "geographic_primitives",
-    # engine-door refactor: the MODFLOW GWF-only archetype composers +
-    # Waves 4-5 (PRT capture-zone / WHPA + BUY saltwater) are now engine TEMPLATES
-    # (tier=template, engine=modflow) under workflows/modflow/<template>/. They are
-    # deliberately NOT categorized: templates are excluded from the retrieval pool
-    # and surfaced only by the run_modflow door's gate expansion; adding one to a
-    # category (or opened-category widening) would re-leak it into the pool.
-    # SWAN Phase 1: standalone spectral nearshore wave-field engine (the additive
-    # comparison engine vs SFINCS+SnapWave). Filed as a hazard engine; also
-    # cross-listed under coastal (SECONDARY_CATEGORIES) since it is a coastal/wave
-    # tool a user reaches from the coastal lane.
-    # engine-door refactor (SWAN slice): run_swan_waves is now the swan_wave_field
-    # template (tier=template, pool-EXCLUDED, NO category membership - surfaced
-    # only by the run_swan door's gate expansion). The DOOR carries the
-    # hazard_modeling membership.
-    "run_swan": "hazard_modeling",
     # canopy-height ML-inference tool (Meta HighResCanopyHeight on CPU Batch).
     # It is a compute-heavy run_* model that dispatches the canopy Batch worker
     # and publishes a canopy-height (m) raster -- filed alongside the other
@@ -340,9 +301,6 @@ PRIMARY_CATEGORY: dict[str, str] = {
     "compute_canopy_height": "hazard_modeling",
     "run_solver": "hazard_modeling",
     "wait_for_completion": "hazard_modeling",
-    # TELEMAC hydrodynamic/contaminant-transport dye-spill engine dispatcher --
-    # filed alongside the other run_* solver/engine composers.
-    "run_telemac": "hazard_modeling",
     # V&V wave (ADR 0021, lane A): the per-engine run-diagnostics dispatcher
     # operates directly ON a run (mass balance / convergence / instability),
     # so it sits beside run_solver / wait_for_completion.
@@ -647,9 +605,9 @@ SECONDARY_CATEGORIES: dict[str, tuple[str, ...]] = {
     # belongs to news_events too: it is a canonical "what event is happening"
     # ingest source the demoted aggregate_claims news role re-homes onto.
     "fetch_nws_event": ("news_events",),
-    # engine-door refactor (PELICUN slice): the DOOR carries the secondary
-    # damage_assessment membership; its templates are pool-EXCLUDED (no membership).
-    "run_pelicun": ("damage_assessment",),
+    # Door dissolution (ADR 0094): the pelicun_damage_assessment template carries
+    # the secondary damage_assessment membership directly (its deleted door did before).
+    "pelicun_damage_assessment": ("damage_assessment",),
     "fetch_usace_nsi": ("damage_assessment",),
     # habitat-impact batch (2026-07-20): the affected-habitats analysis is PRIMARY
     # conservation_ecology (the ecology impact readout) and materially belongs to
@@ -670,9 +628,9 @@ SECONDARY_CATEGORIES: dict[str, tuple[str, ...]] = {
     # SWAN spans hazard_modeling (it runs the SWAN spectral solver) AND coastal
     # (it is THE defensible nearshore wave-field tool -- a user reaches it from the
     # coastal lane to compare against SFINCS+SnapWave on the same case).
-    # engine-door refactor (SWAN slice): the DOOR run_swan carries the coastal
-    # cross-listing; the swan_wave_field template is pool-excluded (no membership).
-    "run_swan": ("coastal",),
+    # Door dissolution (ADR 0094): the swan_wave_field template carries the
+    # coastal cross-listing directly (its deleted door did before).
+    "swan_wave_field": ("coastal",),
     # The canopy-height ML-inference tool spans hazard_modeling (it dispatches a
     # CPU Batch worker like the other engines) AND conservation_ecology + land
     # cover (a canopy-height surface is a vegetation/ecology product a user
@@ -707,12 +665,10 @@ SECONDARY_CATEGORIES: dict[str, tuple[str, ...]] = {
     # engine) and materially belongs to fire (post-wildfire hazard, reached from
     # the MTBS / NIFC / FIRMS lane).
     "model_debris_flow": ("fire",),
-    # engine-door refactor (ELMFIRE slice): the run_elmfire DOOR is PRIMARY
-    # hazard_modeling (its templates run the modeling engine) and materially
-    # belongs to fire (fire-behavior modeling, reached from the LANDFIRE / NIFC
-    # / FIRMS wildfire lane). The elmfire_fire_spread template gets NO category
-    # membership (pool-excluded, door-surfaced).
-    "run_elmfire": ("fire",),
+    # Door dissolution (ADR 0094): the elmfire_fire_spread template is PRIMARY
+    # hazard_modeling and cross-lists to fire (fire-behavior modeling, reached
+    # from the LANDFIRE / NIFC / FIRMS wildfire lane).
+    "elmfire_fire_spread": ("fire",),
     # a+b+c batch (2026-06-27)
     "digitize_water_body": ('hydrology', 'terrain_elevation',),
     "fetch_usgs_earthquakes": ('news_events', 'geographic_primitives',),
@@ -797,10 +753,10 @@ SECONDARY_CATEGORIES: dict[str, tuple[str, ...]] = {
 # Hot set - always-on tools surfaced before any category has been opened.
 # Picked to span the most-common entry points to a session:
 #
-# - run_sfincs (SFINCS flood door) - the top-level flood entry point a user is
-#   likely to invoke first (engine-door refactor: the door replaces
-#   run_model_flood_scenario as the always-on flood hot-path so the
-#   pool-excluded sfincs_flood template stays reachable).
+# - sfincs_flood (SFINCS flood template) - the top-level flood entry point a
+#   user is likely to invoke first (door dissolution, ADR 0094: the template is
+#   the always-on flood hot-path directly; the deleted run_sfincs door held this
+#   slot before).
 # - geocode_location, fetch_dem, fetch_nws_alerts_conus, fetch_nws_event -
 #   the most commonly cited "before you can do anything else" tools
 # (fetch_nws_event added - see inline comment).
@@ -813,7 +769,7 @@ SECONDARY_CATEGORIES: dict[str, tuple[str, ...]] = {
 
 HOT_SET_TOOLS: frozenset[str] = frozenset(
     {
-        "run_sfincs",
+        "sfincs_flood",
         "geocode_location",
         "fetch_dem",
         "fetch_nws_alerts_conus",

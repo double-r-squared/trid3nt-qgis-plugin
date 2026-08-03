@@ -266,6 +266,12 @@ async def modflow_regional_water_budget(
 ) -> dict[str, Any]:
     """Model a regional groundwater water-budget partition (where the water goes).
 
+    Fidelity: MODFLOW 6 local planning-grade groundwater envelope (aquifer
+    K/porosity default to narrated demo values unless supplied), not a
+    calibrated regulatory delineation. Off-scope: surface-water inundation
+    flooding -> sfincs_flood; urban storm-sewer / pipe-network flooding ->
+    swmm_urban_flood.
+
     Builds a steady MODFLOW 6 regional groundwater-flow model (a west->east
     regional gradient over the demo grid), runs it, reads the cell-by-cell flow
     budget, and partitions it by term (CHD inflow / outflow across the gradient,

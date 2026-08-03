@@ -358,6 +358,12 @@ async def modflow_saltwater_intrusion(
 ) -> dict[str, Any]:
     """Model a coastal saltwater intrusion wedge (Henry-style variable-density BUY).
 
+    Fidelity: MODFLOW 6 local planning-grade groundwater envelope (aquifer
+    K/porosity default to narrated demo values unless supplied), not a
+    calibrated regulatory delineation. Off-scope: surface-water inundation
+    flooding -> sfincs_flood; urban storm-sewer / pipe-network flooding ->
+    swmm_urban_flood.
+
     Builds a MODFLOW 6 GWF+GWT BUY (variable-density) vertical cross-section
     model along a user-supplied coastal transect, runs it, and produces:
 

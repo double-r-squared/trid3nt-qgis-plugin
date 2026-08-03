@@ -1097,25 +1097,19 @@ class SolverConfirmationCancelledError(RuntimeError):
 # and injects confirmed=True only after the user approves.
 SOLVER_CONFIRM_TOOLS: set[str] = {
     "run_model_groundwater_contamination_scenario",
-    # engine-door refactor: run_model_contamination_affected_fields is CUT
-    # (its zonal field-analysis half re-homed to a playground recipe). The
-    # MODFLOW plume templates were NOT confirm-gated before the fold, so
+    # The MODFLOW plume templates were NOT confirm-gated before the fold, so
     # gating parity is preserved by NOT adding them here.
     # Flood solvers are gated too: an unrequested SFINCS solve must not run
     # without confirmation. The card is built from the call args
-    # (location/return period/duration).
-    # engine-door refactor (SFINCS slice): run_model_flood_scenario is now
-    # the sfincs_flood template (the door run_sfincs executes no solve; the
-    # TEMPLATE submits the solver, so the gate keys on the template).
+    # (location/return period/duration). Keyed on the sfincs_flood template
+    # (the tool that submits the solver).
     "sfincs_flood",
     # The granularity gate: the SWMM urban-flood solver joins the confirm
     # set with an ENRICHED card carrying a GranularitySuggestion (the
     # autoscaler's pre-run resolution ladder + estimated cells / solve time /
     # compute class). The user can override the rung before the heavy solve
-    # via the existing tool-payload-confirmation ``narrow_scope`` path.
-    # engine-door refactor (SWMM slice): run_swmm_urban_flood is now the
-    # swmm_urban_flood template (the door run_swmm executes no solve; the
-    # TEMPLATE submits the solver, so the gate keys on the template).
+    # via the existing tool-payload-confirmation ``narrow_scope`` path. Keyed on
+    # the swmm_urban_flood template (the tool that submits the solver).
     "swmm_urban_flood",
     # The OpenQuake classical-PSHA solver joins the confirm set (Invariant 9
     # -- a consequential long Batch run must be user-confirmed). It dispatches
@@ -1123,10 +1117,8 @@ SOLVER_CONFIRM_TOOLS: set[str] = {
     # so it is a solve like SFINCS/SWMM/MODFLOW, not a fetch. The gate emits
     # a simple proceed/cancel card (no granularity picker): the area source
     # spans the whole AOI, so no rupture/incident-area user input is needed
-    # for classical PSHA (that is scenario mode, which is not built).
-    # engine-door refactor (OPENQUAKE slice): re-keyed run_seismic_hazard_psha
-    # -> openquake_psha (the template that submits the solver; the
-    # run_openquake door runs no solve).
+    # for classical PSHA (that is scenario mode, which is not built). Keyed on
+    # the openquake_psha template (the tool that submits the solver).
     "openquake_psha",
     # The TELEMAC river-dye solver joins the confirm set with the richest
     # card yet: the builder runs the fast mesh-only worker (gmsh, no DEM, no
@@ -1135,9 +1127,8 @@ SOLVER_CONFIRM_TOOLS: set[str] = {
     # GranularitySuggestion (mesh_resolution_m ladder + real node/element
     # counts + CFL-coupled dt + conservative solve estimate). The user sees
     # the mesh before approving the expensive solve; narrow_scope re-runs
-    # with a different edge length. Keyed on the TEMPLATE that submits the
-    # solver (the run_telemac name is now the read-only door, which runs no
-    # solve; telemac_river_dye is the tool the gate must intercept).
+    # with a different edge length. Keyed on the telemac_river_dye template
+    # (the tool that submits the solver).
     "telemac_river_dye",
     # The ELMFIRE wildfire-spread solver joins the confirm set (Invariant 9
     # -- a consequential solver run: LANDFIRE fetches + a containerized
@@ -1145,10 +1136,8 @@ SOLVER_CONFIRM_TOOLS: set[str] = {
     # from the call args: approximate grid cell count + a calibrated runtime
     # estimate + the scenario weather, so the user confirms the actual run
     # about to dispatch. Simple proceed/cancel (no granularity picker at v1
-    # -- cellsize_m is an explicit tool arg the LLM can restate).
-    # engine-door refactor (ELMFIRE slice): re-keyed model_fire_spread ->
-    # elmfire_fire_spread (the template that submits the solver; the
-    # run_elmfire door runs no solve).
+    # -- cellsize_m is an explicit tool arg the LLM can restate). Keyed on the
+    # elmfire_fire_spread template (the tool that submits the solver).
     "elmfire_fire_spread",
     # The GeoClaw shallow-water inundation solver joins the confirm set
     # (Invariant 9 -- a consequential solver run: DEM/topobathy fetch + a
@@ -1156,8 +1145,8 @@ SOLVER_CONFIRM_TOOLS: set[str] = {
     # proceed/cancel card built inline by _build_geoclaw_confirm_envelope
     # from the call args (AOI area + scenario + sim window + AMR levels). No
     # granularity picker at v1 (amr_levels / sim_duration_s are explicit
-    # tool args the LLM can restate). Keyed on the geoclaw_inundation
-    # TEMPLATE that submits the solver; the run_geoclaw door runs no solve.
+    # tool args the LLM can restate). Keyed on the geoclaw_inundation template
+    # (the tool that submits the solver).
     "geoclaw_inundation",
 }
 
@@ -1331,15 +1320,6 @@ _EMPTY_COMPLETION_NUDGE: str = (
 #: gate back toward the full catalog it was meant to trim.
 _DISCOVERY_EXPAND_CAP: int = 8
 
-#: ENGINE-DOOR gate expansion: an engine door lists a CLOSED, CURATED set - its
-#: own engine's registered tier=template members (11 for MODFLOW). The open-ended
-#: ``_DISCOVERY_EXPAND_CAP`` was calibrated to bound an UNBOUNDED ranked tail from
-#: dataset discovery; capping a door's curated listing at 8 would hide templates
-#: and silently break select-then-call. Doors get this separate, larger cap
-#: (>= the largest engine's template count, with headroom) applied ONLY on the
-#: door branch; the open-ended search_tools branch keeps _DISCOVERY_EXPAND_CAP.
-_DOOR_EXPAND_CAP: int = 24
-
 
 def _tool_search_tool_names() -> frozenset[str]:
     """The registered name(s) of the tool-search (data-discovery) tool.
@@ -1365,91 +1345,53 @@ def _tool_search_tool_names() -> frozenset[str]:
     return frozenset(names)
 
 
-def _engine_door_tool_names() -> frozenset[str]:
-    """Every registered engine-door name (``metadata.tier == "door"``).
-
-    Resolved by REGISTRY LOOKUP (never a hardcoded literal) so a new engine
-    door is picked up automatically the moment it registers. A door is a
-    gate-expander by construction: its result carries the ``templates`` list the
-    server unions into the turn's visible set. Never raises: a lookup fault
-    yields the empty set (the door simply does not expand).
-    """
-    names: set[str] = set()
-    try:
-        for _name, _entry in TOOL_REGISTRY.items():
-            if getattr(_entry.metadata, "tier", "general") == "door":
-                names.add(_name)
-    except Exception:  # noqa: BLE001 -- registry shape drift must not break dispatch
-        logger.debug("engine-door: registry lookup failed", exc_info=True)
-    return frozenset(names)
-
-
 def _default_declarable_registry() -> dict[str, Any]:
-    """The DEFAULT per-turn declarable tool set: the full ``TOOL_REGISTRY``
-    MINUS every ``tier="template"`` engine template.
+    """The DEFAULT per-turn declarable tool set.
 
-    ENGINE-DOOR invariant: engine templates (``sfincs_flood``, ``modflow_*``,
-    ``openquake_psha``, ...) surface to the model ONLY via their door's gate
-    expansion (see ``_gate_expander_tool_names`` and the door-expand block in
-    ``_stream_model_reply``). Declaring them by default -- which the raw
-    ``TOOL_REGISTRY`` default did in the gating-off / retrieval-off / fail-open
-    paths -- defeats the door architecture. This is the SINGLE default-registry
-    seam: the door expand re-adds the specific templates it lists back into the
-    per-turn ``_retrieval_registry`` (and the Case allowed-set), so an expanded
-    template stays declarable while the un-expanded rest never leak.
+    Door dissolution (ADR 0094): engine templates (``sfincs_flood``,
+    ``modflow_*``, ``openquake_psha``, ...) are ordinary retrieval-pool members
+    and are declarable by default like any tool -- the deleted engine doors no
+    longer gate them. Only ``catalog`` (catalog-surfacing experiment, arm-flagged;
+    no tool carries it in the DEFAULT config) and ``internal`` (an absorbed
+    in-process seam, e.g. fetch_copernicus_dem folded into fetch_dem --
+    registry-resolvable but never declared to the model) are withheld.
 
-    Resolved by REGISTRY LOOKUP (never a literal) so a new template is excluded
-    the moment it registers with ``tier="template"``. Mirrors the pool-side
-    filter in ``tools.discovery.tool_retrieval`` (fail-open dump) so the
-    default-declaration path and the retrieval pool exclude templates
-    identically.
+    Resolved by REGISTRY LOOKUP (never a literal). Mirrors the pool-side filter
+    in ``tools.search.tool_retrieval`` (fail-open dump) so the
+    default-declaration path and the retrieval pool stay identical.
     """
-    # The data-router fold's 5 promoted spec-driven tools are registered as
-    # ordinary tier="general" entries (registration.register_specs_from_tree at
-    # import), so they flow through this filter identically to any hand-written
-    # tool -- no special-casing (the env-gated experiment substitution retired
-    # once promotion became the default).
-    # ``catalog`` (catalog-surfacing experiment, arm-flagged) is excluded here
-    # for the same reason as ``template`` -- it leaves the ambient pool and is
-    # reached only by discovery expansion (Design 2) / card projection (Design 1).
-    # No tool carries tier="catalog" in the DEFAULT config, so this is a no-op
-    # unless an arm flag is set.
-    # ``internal`` (an absorbed in-process seam, e.g. fetch_copernicus_dem folded
-    # into fetch_dem) is excluded identically: registry-resolvable but never
-    # declared to the model.
     _reg = {
         name: entry
         for name, entry in TOOL_REGISTRY.items()
         if getattr(entry.metadata, "tier", "general")
-        not in ("template", "catalog", "internal")
+        not in ("catalog", "internal")
     }
     return _reg
 
 
 def _gate_expander_tool_names() -> frozenset[str]:
-    """The union of gate-expanders: the tool-search tool(s) AND every engine door.
+    """The gate-expanders: the tool-search (data-discovery) tool(s).
 
-    A call to any of these expands the turn's visible gate with the tool names
-    its result names (search_tools -> ``results[].tool_name``; an engine door ->
-    ``templates[].tool_name``). See ``_tool_names_from_search_result`` for the
-    extraction and the dispatch post-processing for the union + cap.
+    A call to one of these expands the turn's visible gate with the tool names
+    its result names (``results[].tool_name``). See
+    ``_tool_names_from_search_result`` for the extraction and the dispatch
+    post-processing for the union + cap. Door dissolution (ADR 0094) removed the
+    engine-door gate-expanders; templates are ordinary retrieval-pool tools now.
     """
-    return _tool_search_tool_names() | _engine_door_tool_names()
+    return _tool_search_tool_names()
 
 
 def _tool_names_from_search_result(result: Any) -> list[str]:
     """Extract the ranked tool names from a gate-expander result payload.
 
-    ``search_tools`` returns ``{"results": [{"tool_name": <name>, ...}, ...]}``;
-    an engine door returns ``{"templates": [{"tool_name": <name>, ...}, ...]}``.
-    Reads ``results`` first, falling back to ``templates`` when ``results`` is
-    absent/empty. Returns the names in listing order (best first), de-duplicated.
-    Tolerant of a malformed / partial shape -- a non-conforming entry is
-    skipped, never raised on.
+    ``search_tools`` returns ``{"results": [{"tool_name": <name>, ...}, ...]}``.
+    Returns the names in listing order (best first), de-duplicated. Tolerant of a
+    malformed / partial shape -- a non-conforming entry is skipped, never raised
+    on.
     """
     if not isinstance(result, dict):
         return []
-    rows = result.get("results") or result.get("templates")
+    rows = result.get("results")
     if not isinstance(rows, list):
         return []
     out: list[str] = []
@@ -3389,14 +3331,10 @@ async def _stream_model_reply(
     # registry, logged. The cachePoint TAIL is inserted downstream by
     # bedrock_adapter (after tools), so subsetting the dict here preserves it.
     #
-    # ENGINE-DOOR default: the DEFAULT declarable set is the full registry
-    # MINUS tier=template engine templates -- NOT the raw TOOL_REGISTRY.
-    # Templates surface to the model ONLY via their door's gate expansion
-    # (which re-adds the specific templates it lists back into
-    # _retrieval_registry). Using the raw registry here would re-leak every
-    # template into DEFAULT declarations in the gating-off / retrieval-off /
-    # fail-open paths, defeating the door architecture. See
-    # _default_declarable_registry.
+    # DEFAULT declarable set: the full registry MINUS tier=catalog/internal
+    # (never the raw TOOL_REGISTRY). Door dissolution (ADR 0094): engine
+    # templates are ordinary members of this default set now -- callable
+    # directly, no concierge. See _default_declarable_registry.
     _retrieval_registry = _default_declarable_registry()
     _retrieval_mode = _tool_retrieval_mode()
     if _retrieval_mode in ("shadow", "enforce"):
@@ -3472,10 +3410,10 @@ async def _stream_model_reply(
                 _retrieval_mode,
                 exc_info=True,
             )
-            # FAIL-OPEN to the template-filtered default (NOT raw TOOL_REGISTRY):
-            # a faulted retrieval must never re-leak engine templates into the
-            # default declarations. Templates still reach the turn via door
-            # expansion. See _default_declarable_registry.
+            # FAIL-OPEN to the tier-filtered default (NOT raw TOOL_REGISTRY):
+            # drops only tier=catalog/internal. Engine templates are ordinary
+            # members here (door dissolution, ADR 0094). See
+            # _default_declarable_registry.
             _retrieval_registry = _default_declarable_registry()
 
     # TOP-K TOOL GATING: the openai adapter path was sending ALL ~190 tool
@@ -4306,25 +4244,18 @@ async def _stream_model_reply(
                         cat_id = result.get("category_id")
                         if isinstance(cat_id, str) and cat_id:
                             state.allowed_tool_set.open_category(cat_id)
-                    # DISCOVERY-EXPANDS-GATE + ENGINE-DOOR expansion: when the tool-search
-                    # tool OR an engine door returns candidate tool names, UNION them into
-                    # this turn's visible gate (and the Case allowed-set, so validation
-                    # lets the model actually call them) for SUBSEQUENT rounds. Search
-                    # results are capped at _DISCOVERY_EXPAND_CAP (bounds an unbounded
-                    # ranked tail); an engine door lists a CLOSED, curated set of its own
-                    # templates and uses the larger _DOOR_EXPAND_CAP so select-then-call is
-                    # never truncated. Only names that are real, registered, and not
-                    # already visible count toward the cap; the rebuild of tool_decls is
-                    # deferred to once-per-round below.
+                    # DISCOVERY-EXPANDS-GATE: when the tool-search tool returns
+                    # candidate tool names, UNION them into this turn's visible gate
+                    # (and the Case allowed-set, so validation lets the model actually
+                    # call them) for SUBSEQUENT rounds, capped at _DISCOVERY_EXPAND_CAP
+                    # (bounds an unbounded ranked tail). Only names that are real,
+                    # registered, and not already visible count toward the cap; the
+                    # rebuild of tool_decls is deferred to once-per-round below.
                     elif call.name in _gate_expander_tool_names():
                         _hits = _tool_names_from_search_result(result)
-                        _is_door = call.name in _engine_door_tool_names()
-                        _expand_cap = (
-                            _DOOR_EXPAND_CAP if _is_door else _DISCOVERY_EXPAND_CAP
-                        )
                         _added_now: list[str] = []
                         for _cand in _hits:
-                            if len(_discovery_expanded) >= _expand_cap:
+                            if len(_discovery_expanded) >= _DISCOVERY_EXPAND_CAP:
                                 break
                             if (
                                 _cand in TOOL_REGISTRY
@@ -4340,12 +4271,11 @@ async def _stream_model_reply(
                             state.allowed_tool_set.add_tools(set(_added_now))
                             _tool_decls_dirty = True
                             logger.info(
-                                "%s-expand: +%d tool(s) into the gate "
+                                "discovery-expand: +%d tool(s) into the gate "
                                 "(turn total=%d/%d) via %s session=%s: %s",
-                                "door" if _is_door else "discovery",
                                 len(_added_now),
                                 len(_discovery_expanded),
-                                _expand_cap,
+                                _DISCOVERY_EXPAND_CAP,
                                 call.name,
                                 state.session_id,
                                 _added_now,

@@ -175,9 +175,10 @@ class _DiscoverIndex:
       ``dense_matrix``.
     - ``backend_name``: identifier for the dense backend
       (``"sentence_transformers"`` / ``"vertex"`` / ``"hashed"`` / ``None``).
-    - ``tiers``: per-tool routing tier (``"general"`` / ``"door"``), parallel to
-      ``tool_names``. Read by ``_lexical_reinforcement`` so doors get a wider
-      lexical-champion gate than general tools (tier=template is never indexed).
+    - ``tiers``: per-tool routing tier (``"general"`` / ``"template"``), parallel
+      to ``tool_names``. Read by ``_lexical_reinforcement``. Post door dissolution
+      (ADR 0094) engine templates index as ordinary pool members; tier=internal
+      is the only tier still withheld from the index.
     """
 
     def __init__(
@@ -406,19 +407,23 @@ def _read_corpus_yaml(p: Path) -> dict[str, list[str]]:
 def _compose_corpus_from_tree() -> dict[str, list[str]]:
     """Compose the flat ``{tool: [queries]}`` corpus.
 
-    Walks every co-located ``tools/**/corpus.yaml`` (one per atomic tool
-    folder) and merges the residual ``data/tool_query_corpus.yaml`` (tools
-    registered outside the ``tools/`` tree). Flat composition -- no tier
-    semantics (that is the engine-door pilot's job). The result is the same
-    shape and content as the pre-restructure monolith.
+    Walks every co-located ``tools/**/corpus.yaml`` (one per atomic tool folder)
+    AND every ``workflows/**/corpus.yaml`` (one per engine template -- door
+    dissolution, ADR 0094: templates are ordinary retrieval-pool members now, so
+    their phrasings must reach the index just like any tool's), then merges the
+    residual ``data/tool_query_corpus.yaml`` (tools registered outside either
+    tree). Flat composition -- no tier semantics.
     """
     here = Path(__file__).resolve()
-    tools_dir = here.parents[2]  # .../trid3nt_server/agent/tools
+    agent_dir = here.parents[3]  # .../trid3nt_server/agent
+    tools_dir = agent_dir / "tools"
+    workflows_dir = agent_dir / "workflows"
     composed: dict[str, list[str]] = {}
-    for cpath in sorted(tools_dir.rglob("corpus.yaml")):
-        composed.update(_read_corpus_yaml(cpath))
-    # Merge the residual (support/workflow/category-registered tools).
-    residual = here.parents[4] / "agent" / "data" / "tool_query_corpus.yaml"
+    for base in (tools_dir, workflows_dir):
+        for cpath in sorted(base.rglob("corpus.yaml")):
+            composed.update(_read_corpus_yaml(cpath))
+    # Merge the residual (support/category-registered tools).
+    residual = agent_dir / "data" / "tool_query_corpus.yaml"
     composed.update(_read_corpus_yaml(residual))
     return composed
 
@@ -427,7 +432,8 @@ def _load_corpus(path: Path | None = None) -> dict[str, list[str]]:
     """Load the synthetic example-query corpus, keyed by tool name.
 
     Default: compose the co-located per-tool ``corpus.yaml`` files (walked
-    under ``tools/``) with the residual ``data/tool_query_corpus.yaml``. An
+    under ``tools/`` AND ``workflows/`` -- the engine templates) with the
+    residual ``data/tool_query_corpus.yaml``. An
     explicit ``path`` argument or the ``TRID3NT_TOOL_CORPUS_YAML`` env override
     reads a single monolithic file instead (test / experiment pinning) -- the
     legacy single-file behaviour is preserved for those callers.
@@ -606,16 +612,13 @@ def _build_index(
 
     for name in sorted(snapshot.keys()):
         entry = snapshot[name]
-        # Engine-door refactor: templates (tier=template) are EXCLUDED from the
-        # default retrieval pool - they are surfaced only by their door's gate
-        # expansion (select-then-call). Skipping them here keeps them out of
-        # index.tool_names, hence out of retrieve_ranked_tools /
-        # retrieve_visible_tools (the sole default-pool producer). tier=door is
-        # NOT skipped: doors compete in per-turn retrieval alongside general.
-        # tier=internal (an absorbed in-process seam, e.g. fetch_copernicus_dem)
-        # is skipped identically -- registry-resolvable but not searchable.
-        # tier=catalog is NOT skipped: it stays indexed (arm-flagged discovery).
-        if getattr(entry.metadata, "tier", "general") in ("template", "internal"):
+        # Door dissolution (ADR 0094): engine templates (tier=template) join the
+        # default retrieval pool and index HERE alongside general tools -- their
+        # natural practitioner phrasings (workflows/**/corpus.yaml) do the routing
+        # the deleted engine doors used to. tier=internal (an absorbed in-process
+        # seam, e.g. fetch_copernicus_dem) is STILL skipped -- registry-resolvable
+        # but not searchable. tier=catalog is NOT skipped (arm-flagged discovery).
+        if getattr(entry.metadata, "tier", "general") in ("internal",):
             continue
         doc = getattr(entry.fn, "__doc__", "") or ""
         snippet = _short_description(doc)

@@ -168,8 +168,10 @@ def test_system_prompt_keeps_always_narrate_section() -> None:
 
 
 def test_system_prompt_still_routes_flood_modeling() -> None:
-    """job-0154 routing instruction (flood → run_sfincs) survives."""
-    assert "run_sfincs" in SYSTEM_PROMPT
+    """Flood routing survives door dissolution (ADR 0094): the prompt now names
+    the sfincs_flood template directly, not a run_sfincs door."""
+    assert "sfincs_flood" in SYSTEM_PROMPT
+    assert "run_sfincs" not in SYSTEM_PROMPT
 
 
 def test_system_prompt_still_forbids_fabricated_numbers() -> None:
@@ -235,16 +237,18 @@ def test_system_prompt_says_full_state_name_accepted() -> None:
 
 
 def test_system_prompt_has_groundwater_spill_routing_section() -> None:
-    """Prompt must carry the engine-door groundwater/MODFLOW routing (door-model)."""
+    """Prompt must carry the groundwater/MODFLOW routing. Door dissolution
+    (ADR 0094): templates are called DIRECTLY, no run_modflow door / concierge."""
     assert "Groundwater / MODFLOW routing" in SYSTEM_PROMPT
-    # engine-door model: call the run_modflow door first, then select-then-call.
-    assert "run_modflow DOOR FIRST" in SYSTEM_PROMPT
-    assert "SELECT-THEN-CALL" in SYSTEM_PROMPT
+    assert "modflow_contaminant_plume" in SYSTEM_PROMPT
+    # the door concierge is gone -- no run_modflow door, no SELECT-THEN-CALL step.
+    assert "run_modflow DOOR" not in SYSTEM_PROMPT
+    assert "SELECT-THEN-CALL" not in SYSTEM_PROMPT
 
 
 def test_system_prompt_routes_parameterized_spill_to_modflow_contaminant_plume() -> None:
     """A parameterized spill (location + contaminant + rate + duration) routes to
-    modflow_contaminant_plume (via the door), passing spill_location_latlon as a
+    modflow_contaminant_plume directly, passing spill_location_latlon as a
     2-element [lat, lon] array."""
     flat = " ".join(SYSTEM_PROMPT.split())
     assert "call modflow_contaminant_plume with" in flat

@@ -309,6 +309,12 @@ async def modflow_mine_dewatering(
 ) -> dict[str, Any]:
     """Model an open-pit mine's dewatering rate (groundwater inflow to the pit).
 
+    Fidelity: MODFLOW 6 local planning-grade groundwater envelope (aquifer
+    K/porosity default to narrated demo values unless supplied), not a
+    calibrated regulatory delineation. Off-scope: surface-water inundation
+    flooding -> sfincs_flood; urban storm-sewer / pipe-network flooding ->
+    swmm_urban_flood.
+
     Builds a steady MODFLOW 6 groundwater-flow model with an unconfined water
     table and a DRN drain over the user-supplied pit footprint, runs it, and
     produces a DEWATERING-RATE layer: the per-cell drain outflow over the pit and

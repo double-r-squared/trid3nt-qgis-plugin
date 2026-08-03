@@ -83,9 +83,9 @@ def test_telemac_river_dye_registered_as_engine_template():
     assert entry.metadata.tier == "template"
     assert entry.metadata.cacheable is False
     assert entry.metadata.ttl_class == "live-no-cache"
-    # the door owns the run_telemac name and executes nothing.
-    door = TOOL_REGISTRY.get("run_telemac")
-    assert door is not None and door.metadata.tier == "door"
+    # Door dissolution (ADR 0094): the run_telemac door is DELETED; telemac_river_dye
+    # is a standalone retrieval-pool template.
+    assert TOOL_REGISTRY.get("run_telemac") is None
 
 
 # ===========================================================================

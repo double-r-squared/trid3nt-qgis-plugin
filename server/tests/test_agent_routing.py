@@ -36,35 +36,38 @@ from trid3nt_server.agent.adapters.adapter import (
 # ---------------------------------------------------------------------------
 
 
-def test_sfincs_door_and_template_in_registry():
-    """run_sfincs (door) + sfincs_flood (template) must be registered; the old
-    run_model_flood_scenario name is GONE (engine-door refactor, no alias)."""
+def test_sfincs_flood_template_in_registry():
+    """sfincs_flood (template) must be registered; the old run_sfincs door and
+    the older run_model_flood_scenario name are GONE (door dissolution, ADR 0094,
+    no alias)."""
     # The workflow module is imported eagerly by main._import_tools_registry();
     # in tests we trigger the same import chain via the inflight job-0042 path.
     from trid3nt_server.agent.workflows.sfincs.flood import flood  # noqa: F401
-    import trid3nt_server.agent.tools  # noqa: F401 -- door registration side-effect
-    assert "run_sfincs" in agent_tools.TOOL_REGISTRY, "the SFINCS flood door must be registered"
+    import trid3nt_server.agent.tools  # noqa: F401 -- template registration side-effect
     assert "sfincs_flood" in agent_tools.TOOL_REGISTRY, "the sfincs_flood template must be registered"
+    assert "run_sfincs" not in agent_tools.TOOL_REGISTRY, (
+        "the run_sfincs door was dissolved (ADR 0094); the template stands alone"
+    )
     assert "run_model_flood_scenario" not in agent_tools.TOOL_REGISTRY, (
-        "the old name must be REPLACED by the door + template (no alias)"
+        "the old name is GONE (no alias)"
     )
 
 
 # ---------------------------------------------------------------------------
-# Test 2: build_tool_declarations includes the run_sfincs door
+# Test 2: build_tool_declarations includes the sfincs_flood template
 # ---------------------------------------------------------------------------
 
 
-def test_build_tool_declarations_includes_flood_door():
-    """Tool declaration list must include the run_sfincs door (the retrievable
-    flood entry; the sfincs_flood template is pool-excluded, door-surfaced)."""
+def test_build_tool_declarations_includes_flood_template():
+    """Tool declaration list must include the sfincs_flood template (the
+    retrievable flood entry; door dissolution, ADR 0094 -- no concierge)."""
     from trid3nt_server.agent.workflows.sfincs.flood import flood  # noqa: F401
-    import trid3nt_server.agent.tools  # noqa: F401 -- door registration side-effect
+    import trid3nt_server.agent.tools  # noqa: F401 -- template registration side-effect
 
     decls = build_tool_declarations(agent_tools.TOOL_REGISTRY)
     names = [d.name for d in decls]
-    assert "run_sfincs" in names, (
-        f"run_sfincs door missing from declarations; got: {sorted(names)}"
+    assert "sfincs_flood" in names, (
+        f"sfincs_flood template missing from declarations; got: {sorted(names)}"
     )
 
 
@@ -137,8 +140,8 @@ async def test_stream_events_yields_text_delta_event(fake_llm):
 
 
 def test_system_prompt_mentions_flood_routing():
-    """System prompt must instruct Gemini to call the run_sfincs flood door."""
-    assert "run_sfincs" in SYSTEM_PROMPT
+    """System prompt must instruct the model to call the sfincs_flood template."""
+    assert "sfincs_flood" in SYSTEM_PROMPT
     assert "100-year" in SYSTEM_PROMPT or "flood" in SYSTEM_PROMPT.lower()
 
 

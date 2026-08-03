@@ -335,6 +335,12 @@ async def modflow_managed_recharge(
 ) -> dict[str, Any]:
     """Model a managed-aquifer-recharge (MAR) groundwater mound under a basin.
 
+    Fidelity: MODFLOW 6 local planning-grade groundwater envelope (aquifer
+    K/porosity default to narrated demo values unless supplied), not a
+    calibrated regulatory delineation. Off-scope: surface-water inundation
+    flooding -> sfincs_flood; urban storm-sewer / pipe-network flooding ->
+    swmm_urban_flood.
+
     Builds a transient MODFLOW 6 groundwater-flow model with an unconfined water
     table and an RCH recharge package over the user-supplied infiltration-basin
     footprint, runs it, and produces a MOUNDING layer: how high the water table

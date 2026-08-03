@@ -148,12 +148,12 @@ def test_swan_wave_field_registered_in_tool_registry():
     import trid3nt_server.agent.tools  # noqa: F401 -- fire eager imports
     from trid3nt_server.agent.tools import TOOL_REGISTRY
 
-    # engine-door refactor (SWAN slice): run_swan_waves was RENAMED to the
-    # swan_wave_field template (engine=swan, tier=template); the old name is GONE
-    # (renames replace old names, no aliases) and the run_swan door lists it.
+    # swan_wave_field is the registered SWAN template. Door dissolution
+    # (ADR 0094): the run_swan door is DELETED and the older run_swan_waves name
+    # is GONE (renames replace old names, no aliases).
     assert "swan_wave_field" in TOOL_REGISTRY
     assert "run_swan_waves" not in TOOL_REGISTRY
-    assert "run_swan" in TOOL_REGISTRY
+    assert "run_swan" not in TOOL_REGISTRY
 
 
 def test_swan_wave_field_typed_error_on_missing_bbox():

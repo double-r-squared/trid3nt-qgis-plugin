@@ -1,7 +1,5 @@
-# TEMPLATE tier (engine-door refactor): phrasings for modflow_sustainable_yield. NOT merged
-# into the main retrieval index (templates are excluded from the default
-# pool); the run_modflow door surfaces this template via gate expansion.
-# Carried verbatim from the migrated run_model_sustainable_yield_scenario corpus entries.
+# Template routing phrasings (door dissolution, ADR 0094): walked into the main
+# retrieval index directly -- the engine templates are ordinary retrieval-pool tools.
 modflow_sustainable_yield:
 - how much can this well field pump sustainably
 - drawdown after ten years of pumping

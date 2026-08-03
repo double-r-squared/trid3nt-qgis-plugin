@@ -1,9 +1,5 @@
-# TEMPLATE tier (engine-door refactor): phrasings for pelicun_damage_assessment.
-# NOT merged into the main retrieval index; the run_pelicun door surfaces this
-# template via gate expansion (select-then-call). Carried from the migrated
-# run_pelicun_damage_assessment corpus entries; the PELICUN fold appended the
-# former pelicun_damage_with_buildings phrasings verbatim (that composer folded
-# into this template's bbox AUTO-FETCH input mode).
+# Template routing phrasings (door dissolution, ADR 0094): walked into the main
+# retrieval index directly -- the engine templates are ordinary retrieval-pool tools.
 pelicun_damage_assessment:
 # --- explicit-inventory mode (assets_uri) ---
 - run a damage assessment for buildings in this flood zone

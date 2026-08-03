@@ -341,6 +341,12 @@ async def modflow_wetland_hydroperiod(
 ) -> dict[str, Any]:
     """Model a wetland's seasonal water-table range (hydroperiod).
 
+    Fidelity: MODFLOW 6 local planning-grade groundwater envelope (aquifer
+    K/porosity default to narrated demo values unless supplied), not a
+    calibrated regulatory delineation. Off-scope: surface-water inundation
+    flooding -> sfincs_flood; urban storm-sewer / pipe-network flooding ->
+    swmm_urban_flood.
+
     Builds a transient MODFLOW 6 groundwater-flow model with an unconfined water
     table, an RCH recharge schedule (seasonal wet/dry), and an EVT
     evapotranspiration sink over the user-supplied wetland footprint, runs it, and

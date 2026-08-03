@@ -125,21 +125,27 @@ async def openquake_psha(
 ) -> SeismicHazardLayerURI | dict[str, Any]:
     """Run a probabilistic seismic-hazard (PSHA) calculation over an AOI.
 
-    Use this when (call the ``run_openquake`` door first, then this template):
-    the user asks for seismic/earthquake HAZARD, a probabilistic seismic-hazard
-    map, PGA/spectral-acceleration map, or "10% in 50 years" (475-yr) ground
-    motion -- also the canonical ground-motion INPUT to a Pelicun earthquake
-    damage assessment. Builds a classical-PSHA OpenQuake deck over a site grid;
-    when a REAL active fault (GEM Global Active Faults) intersects the AOI it
-    builds a physics-based fault source (hazard peaks on the trace), else falls
-    back to a synthetic Gutenberg-Richter area source -- the returned
-    ``source_model_kind`` ("real-fault"/"synthetic-area") must be narrated
-    HONESTLY, never claim real faults on a synthetic fallback. Do NOT use
-    for: surface-water/riverine/coastal flooding (``run_sfincs`` door ->
-    ``sfincs_flood``); urban/pluvial (``run_swmm`` door -> ``swmm_urban_flood``);
-    groundwater (``run_modflow`` door -> ``modflow_contaminant_plume``);
-    estimating building damage itself (``run_pelicun`` door -- this produces the
-    Pelicun hazard INPUT, not the damage tool).
+    Fidelity: OpenQuake classical PSHA (a real active-fault source when GEM faults
+    intersect the AOI, else a synthetic Gutenberg-Richter area source -- the
+    returned source_model_kind must be narrated honestly; G-R recurrence + GMPE
+    default to narrated demo values); planning-grade envelope, not a site-specific
+    hazard study. Off-scope: landslide / ground-failure susceptibility ->
+    landlab_susceptibility; structural damage / loss -> pelicun_damage_assessment.
+
+    Use this when: the user asks for seismic/earthquake HAZARD, a probabilistic
+    seismic-hazard map, PGA/spectral-acceleration map, or "10% in 50 years"
+    (475-yr) ground motion -- also the canonical ground-motion INPUT to a
+    Pelicun earthquake damage assessment. Builds a classical-PSHA OpenQuake deck
+    over a site grid; when a REAL active fault (GEM Global Active Faults)
+    intersects the AOI it builds a physics-based fault source (hazard peaks on
+    the trace), else falls back to a synthetic Gutenberg-Richter area source --
+    the returned ``source_model_kind`` ("real-fault"/"synthetic-area") must be
+    narrated HONESTLY, never claim real faults on a synthetic fallback. Do NOT
+    use for: surface-water/riverine/coastal flooding (``sfincs_flood``);
+    urban/pluvial (``swmm_urban_flood``); groundwater
+    (``modflow_contaminant_plume``); estimating building damage itself
+    (``pelicun_damage_assessment`` -- this produces the Pelicun hazard INPUT,
+    not the damage tool).
 
     Params:
         bbox: AOI, EPSG:4326; a regular site grid is laid over it.

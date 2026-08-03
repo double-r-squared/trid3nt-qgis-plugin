@@ -139,8 +139,8 @@ def test_secondary_category_open_surfaces_cross_listed_tool() -> None:
     damage_assessment becomes available when EITHER category is opened."""
     a1 = AllowedToolSet()
     a1.open_category("damage_assessment")
-    assert "run_pelicun" in a1.as_frozenset()
+    assert "pelicun_damage_assessment" in a1.as_frozenset()
 
     a2 = AllowedToolSet()
     a2.open_category("hazard_modeling")
-    assert "run_pelicun" in a2.as_frozenset()
+    assert "pelicun_damage_assessment" in a2.as_frozenset()

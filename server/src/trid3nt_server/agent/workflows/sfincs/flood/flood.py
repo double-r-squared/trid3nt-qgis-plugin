@@ -2158,6 +2158,13 @@ async def sfincs_flood(
 ) -> LayerURI | dict[str, Any]:
     """Run the full deterministic SFINCS flood-modeling workflow end-to-end.
 
+    Fidelity: SFINCS reduced-physics SCREENING-grade flood engine (subgrid +
+    quadtree); planning-grade peak-depth, not a calibrated regulatory model.
+    Off-scope: urban storm-sewer / pipe-network flooding -> swmm_urban_flood;
+    groundwater plume -> modflow_contaminant_plume; tsunami / dam-break run-up
+    -> geoclaw_inundation; spectral wave field -> swan_wave_field; river dye /
+    tracer transport -> telemac_river_dye.
+
     Nine-step composition chain (all deterministic Python, zero LLM calls):
     1. ``geocode_location(location_query)`` -- optional; derives bbox from
        a free-text place name when ``bbox`` is not provided.

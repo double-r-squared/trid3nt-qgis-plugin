@@ -1,7 +1,5 @@
-# TEMPLATE tier (engine-door refactor): phrasings for landlab_susceptibility. NOT
-# merged into the main retrieval index; the run_landlab door surfaces this
-# template via gate expansion (select-then-call). Carried from the migrated
-# run_landlab_susceptibility corpus entries.
+# Template routing phrasings (door dissolution, ADR 0094): walked into the main
+# retrieval index directly -- the engine templates are ordinary retrieval-pool tools.
 landlab_susceptibility:
 - run the Landlab infinite-slope landslide susceptibility solve over this AOI
 - factor-of-safety / probability-of-failure raster across this hillslope
