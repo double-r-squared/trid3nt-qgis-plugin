@@ -165,3 +165,14 @@ them for ad-hoc mesh authoring - the sandbox shares the server env, so
 agent/mesh imports there today). Rationale (NATE): separating costs the
 workflows nothing and expands functionality without breaking out of the
 sandbox.
+
+## Oceanmesh-wave leg 1 (NATE 2026-08-04): explicit TELEMAC bank fallback
+
+The constant-width ribbon is no longer an implicit fallback. bank_source
+param (nhd_area default | constant_ribbon explicit); missing NHDArea on
+the default path -> typed TELEMAC_BANKS_UNAVAILABLE gate error naming
+bank_source="constant_ribbon" + the width assumption as the explicit
+retry (the DEM_FALLBACK_GATE pattern); bank provenance rides the tin
+preview-gate stats + envelope (feeds structured provenance). The
+fallback norm now covers mesh-geometry sources generally: any silent
+substitution of banks/terrain/shoreline inputs is outlawed.
