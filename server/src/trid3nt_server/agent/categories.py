@@ -271,6 +271,9 @@ PRIMARY_CATEGORY: dict[str, str] = {
     "fetch_fault_sources": "hazard_modeling",
     "landlab_susceptibility": "hazard_modeling",
     "landlab_flow_accumulation": "hazard_modeling",
+    "landlab_green_ampt_overland_flow": "hazard_modeling",
+    "elmfire_verification_elliptical_replication": "hazard_modeling",
+    "geoclaw_tsunami_gauge_timeseries": "hazard_modeling",
     # USGS post-fire debris-flow hazard composer (pfdf: Staley 2017 M1
     # likelihood + Gartner 2014 emergency volume + Cannon 2010 combined class
     # over a delineated stream-segment network). Filed as a hazard engine;

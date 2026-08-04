@@ -80,6 +80,8 @@ __all__ = [
     "NODATA_DEPTH_M",
     "MAX_FLOOD_FRAMES",
     "RUNS_BUCKET_DEFAULT",
+    "parse_geoclaw_gauge_series",
+    "build_gauge_timeseries_chart_spec",
 ]
 
 #: Target GROUND resolution (metres/pixel) for the adaptive GeoClaw output
@@ -1103,3 +1105,124 @@ def _emit_frame_layers(
             _safe_unlink(p)
         return []
     return frame_layers
+
+
+# --------------------------------------------------------------------------- #
+# Coastal gauge time series (GAP4) -- the tsunami gauge-timeseries template.
+#
+# The GeoClaw worker always writes one coastal gauge (gaugeNNNNN.txt) under
+# _output/. The standard GeoClaw gauge file has a "#"-commented header then
+# numeric rows [level, t, q[0]=h, q[1]=hu, q[2]=hv, eta] (eta = water-surface
+# elevation, the last column). We parse the surface-elevation time series so the
+# composer can chart the wave (and any co-seismic subsidence, visible as the
+# initial post-quake surface offset at the gauge).
+# --------------------------------------------------------------------------- #
+def parse_geoclaw_gauge_series(
+    output_dir: str | Path,
+) -> tuple[dict[str, Any] | None, dict[str, float]]:
+    """Parse the coastal gauge time series from a solved run's ``_output/``.
+
+    Finds the first ``gauge*.txt`` under ``output_dir`` (recursively -- the
+    composer downloads it to ``<tmp>/_output/gauge00001.txt``), skips the
+    ``#``-commented header, and reads the numeric rows. Columns follow the
+    standard GeoClaw layout ``[level, t, h, hu, hv, eta]``; the surface elevation
+    ``eta`` is the LAST column and the depth ``h`` is column index 2. Degrades
+    honestly: a 3-column ``[level, t, eta]`` file uses eta=last, h=None.
+
+    Returns ``(series, scalars)`` where ``series`` is
+    ``{"t": [...], "eta": [...], "depth": [...]}`` (or ``None`` when no gauge
+    file / no rows), and ``scalars`` carries the typed narration numbers:
+    ``gauge_max_surface_elevation_m`` / ``gauge_min_surface_elevation_m`` /
+    ``gauge_max_amplitude_m`` / ``gauge_coseismic_offset_m`` / ``gauge_max_depth_m``.
+    Pure (unit-testable on a fixture gauge file)."""
+    root = Path(output_dir)
+    candidates = sorted(root.rglob("gauge*.txt"))
+    if not candidates:
+        return None, {}
+    gauge_path = candidates[0]
+
+    times: list[float] = []
+    etas: list[float] = []
+    depths: list[float] = []
+    try:
+        with gauge_path.open("r", encoding="utf-8", errors="replace") as fh:
+            for line in fh:
+                s = line.strip()
+                if not s or s.startswith("#"):
+                    continue
+                parts = s.split()
+                if len(parts) < 3:
+                    continue
+                try:
+                    t = float(parts[1])
+                    eta = float(parts[-1])
+                except (ValueError, IndexError):
+                    continue
+                h = None
+                if len(parts) >= 4:
+                    try:
+                        h = float(parts[2])
+                    except ValueError:
+                        h = None
+                times.append(t)
+                etas.append(eta)
+                depths.append(h if h is not None else float("nan"))
+    except OSError:
+        return None, {}
+
+    if not times:
+        return None, {}
+
+    import math
+
+    finite_depths = [d for d in depths if math.isfinite(d)]
+    eta0 = etas[0]
+    max_eta = max(etas)
+    min_eta = min(etas)
+    scalars: dict[str, float] = {
+        "gauge_max_surface_elevation_m": float(max_eta),
+        "gauge_min_surface_elevation_m": float(min_eta),
+        "gauge_max_amplitude_m": float(max_eta - min_eta),
+        "gauge_coseismic_offset_m": float(eta0),
+        "gauge_max_depth_m": float(max(finite_depths)) if finite_depths else 0.0,
+    }
+    series = {"t": times, "eta": etas, "depth": depths}
+    return series, scalars
+
+
+def build_gauge_timeseries_chart_spec(
+    series: dict[str, Any] | None,
+) -> dict[str, Any] | None:
+    """Build the Vega-Lite gauge surface-elevation time-series chart.
+
+    A line of water-surface elevation (m) vs time (s) at the coastal gauge -- the
+    tsunami waveform (leading depression / run-up peaks) and any co-seismic
+    subsidence (the initial post-quake surface offset). Returns ``None`` when the
+    series is empty. Pure (unit-testable on a synthetic series)."""
+    if not series or not series.get("t"):
+        return None
+    values = [
+        {"t_s": float(t), "eta_m": float(e)}
+        for t, e in zip(series["t"], series["eta"])
+    ]
+    return {
+        "$schema": "https://vega.github.io/schema/vega-lite/v5.json",
+        "data": {"values": values},
+        "mark": {"type": "line", "color": "#1f5fbf"},
+        "encoding": {
+            "x": {
+                "field": "t_s",
+                "type": "quantitative",
+                "title": "time (s)",
+            },
+            "y": {
+                "field": "eta_m",
+                "type": "quantitative",
+                "title": "surface elevation (m)",
+            },
+            "tooltip": [
+                {"field": "t_s", "type": "quantitative", "format": ".0f"},
+                {"field": "eta_m", "type": "quantitative", "format": ".3f"},
+            ],
+        },
+    }

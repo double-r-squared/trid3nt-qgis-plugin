@@ -63,6 +63,9 @@ __all__ = [
     "fetch_elmfire_inputs",
     "build_elmfire_deck_spec",
     "build_elmfire_deck",
+    "build_constant_verification_deck",
+    "VERIFICATION_FUEL_MODEL_GR2",
+    "VERIFICATION_FLAT_ELEVATION_M",
     "stage_elmfire_manifest",
     "estimate_elmfire_grid",
     "estimate_elmfire_runtime_s",
@@ -362,6 +365,127 @@ def build_elmfire_deck(
         raise ElmfireWorkflowError(
             getattr(exc, "error_code", "ELMFIRE_DECK_ERROR"), str(exc)
         ) from exc
+
+
+#: Fuel model for the elliptical-verification deck: GR2 (FBFM code 102), a
+#: low-load dry-climate grass fuel bed -- the canonical uniform-fuel bed for the
+#: constant-wind flat-terrain elliptical spread verification (Verification 01).
+VERIFICATION_FUEL_MODEL_GR2: int = 102
+
+#: Flat-terrain elevation (m) for every verification-deck DEM cell (slope 0,
+#: aspect 0). The absolute value is immaterial on a flat grid; a mid-CONUS value.
+VERIFICATION_FLAT_ELEVATION_M: int = 1000
+
+
+def build_constant_verification_deck(
+    run_args: ElmfireRunArgs,
+    deck_dir: str | Path,
+    *,
+    fuel_model: int = VERIFICATION_FUEL_MODEL_GR2,
+    flat_elevation_m: int = VERIFICATION_FLAT_ELEVATION_M,
+) -> dict[str, Any]:
+    """Author an ALL-CONSTANT flat-grid ELMFIRE deck agent-side (no fetch).
+
+    The elliptical-verification override (ADR 0123): every fuels/topography raster
+    is a CONSTANT over the target grid -- a single uniform fuel model
+    (``fuel_model``, GR2/102 by default), zero canopy, flat terrain (constant
+    elevation, slope 0, aspect 0) -- and the weather is the uniform constant wind
+    + fuel moisture from ``run_args``. Under these conditions Rothermel's spread
+    rate is constant and the fire perimeter from a point ignition is a closed-form
+    ellipse (Richards 1990), so the ToA raster can be verified against it.
+
+    NO LANDFIRE / DEM fetch, NO warp: the deck is written directly on the grid
+    (a live drop-in over the same ``services/workers/elmfire/deck_builder`` seam
+    ``build_elmfire_deck`` uses, so the namelist / grid-identity assert /
+    ignition projection / manifest are byte-identical). Returns the SAME manifest
+    shape ``build_elmfire_deck`` returns (grid, aoi_bbox_4326, duration_s,
+    weather, ignitions_lonlat) so ``stage_elmfire_manifest`` consumes it unchanged.
+    """
+    import json as _json
+
+    db = load_deck_builder()
+    deck_dir = Path(deck_dir)
+    inputs_dir = deck_dir / "inputs"
+    for d in (inputs_dir, deck_dir / "outputs", deck_dir / "scratch"):
+        d.mkdir(parents=True, exist_ok=True)
+
+    grid = db.compute_target_grid(
+        [float(v) for v in run_args.bbox],
+        target_epsg=5070,
+        cellsize_m=float(run_args.cellsize_m),
+    )
+
+    # Constant fuels + topography (Int16). GR2 fuel bed, zero canopy, flat terrain.
+    int_constants: dict[str, int] = {
+        "fbfm40": int(fuel_model),
+        "dem": int(flat_elevation_m),
+        "slp": 0,
+        "asp": 0,
+        "cbh": 0,
+        "cbd": 0,
+        "cc": 0,
+        "ch": 0,
+    }
+    provenance: dict[str, dict] = {}
+    for name, value in int_constants.items():
+        db.write_constant_raster_typed(
+            value, grid, inputs_dir / f"{name}.tif", dtype="int16"
+        )
+        provenance[name] = {"source": f"constant:{value}", "nodata_fraction": 0.0}
+
+    # Constant weather + adj/phi (Float32) from the scenario dial.
+    moisture = run_args.fuel_moisture_values()
+    weather = {
+        "ws_mph_20ft": float(run_args.wind_speed_mph),
+        "wd_deg": float(run_args.wind_dir_deg),
+        **moisture,
+    }
+    float_constants = {
+        "ws": weather["ws_mph_20ft"],
+        "wd": weather["wd_deg"],
+        "m1": weather["m1_pct"],
+        "m10": weather["m10_pct"],
+        "m100": weather["m100_pct"],
+        "adj": db.ADJ_VALUE,
+        "phi": db.PHI_VALUE,
+    }
+    for name, value in float_constants.items():
+        db.write_constant_raster_typed(
+            value, grid, inputs_dir / f"{name}.tif", dtype="float32"
+        )
+        provenance[name] = {"source": f"constant:{value}", "nodata_fraction": 0.0}
+
+    # HARD ASSERT the grid identity across all rasters (same guard as build_deck).
+    db.verify_deck_grid(inputs_dir, grid)
+
+    # Ignition at the AOI centre -> domain coords -> namelist.
+    ign = {
+        "lon": float(run_args.ignition_lonlat[0]),
+        "lat": float(run_args.ignition_lonlat[1]),
+        "t_ign_s": 0.0,
+    }
+    ignitions_xy = db.project_ignitions([ign], grid)
+    duration_s = float(run_args.duration_hours) * 3600.0
+    namelist = db.render_namelist(
+        grid, ignitions_xy, weather, duration_s=duration_s, dt_s=30.0, dtdump_s=3600.0
+    )
+    (inputs_dir / "elmfire.data").write_text(namelist)
+
+    spec_echo = {
+        "aoi": {"bbox": [float(v) for v in run_args.bbox]},
+        "ignitions": [ign],
+        "weather": weather,
+        "duration_s": duration_s,
+    }
+    manifest = db.compose_manifest(deck_dir, grid, spec_echo, ignitions_xy, provenance)
+    (deck_dir / "deck_manifest.json").write_text(_json.dumps(manifest, indent=2))
+    logger.info(
+        "build_constant_verification_deck: fuel=%d flat-terrain %dx%d @%sm "
+        "wind=%.1fmph@%.0fdeg duration=%.0fs -> %s",
+        fuel_model, grid["nx"], grid["ny"], grid["cellsize_m"],
+        weather["ws_mph_20ft"], weather["wd_deg"], duration_s, deck_dir,
+    )
+    return manifest
 
 
 # --------------------------------------------------------------------------- #

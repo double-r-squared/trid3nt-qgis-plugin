@@ -20,7 +20,9 @@ swmm_urban_flood(pollutants); the remaining 4 (landlab flow-accum folding
 priorityflood, landlab green-ampt, elmfire ellipse, geoclaw gauge) are contained
 server-side / exec-mode FEATURE builds with no image rebuild -- the recommended
 next-build subset. See ADR 0121 for the per-row verdicts, blockers, and the
-cheapest-first build order. 0 landed this wave.
+cheapest-first build order. ALL 4 NOW LANDED: landlab_flow_accumulation (ADR 0122),
+then landlab_green_ampt_overland_flow + elmfire_verification_elliptical_replication
++ geoclaw_tsunami_gauge_timeseries (ADR 0123).
 
 citations live-verified; roster gaps recorded honestly per engine.
 
@@ -504,7 +506,7 @@ Aspects: Output format/precision selection (ascii/binary32/binary64); Uniform-re
 
 ### gauges (Eulerian + Lagrangian)
 Purpose: Time-series recording at fixed points (standard Eulerian gauges, h/hu/hv/eta) or moving with the flow (Lagrangian particle gauges advected by depth-averaged velocity).
-Today: TRID3NT surfaces gauge timeseries, signed, per the roster note - this reads as standard Eulerian gauges only; Lagrangian particle gauges (v5.7.0+) are not confirmed as present and are a distinct capability.
+Today: LANDED as the `geoclaw_tsunami_gauge_timeseries` template (ADR 0123): a capability-named tsunami run recording a coastal Eulerian gauge -> the surface-elevation time series (waveform + co-seismic subsidence, the initial post-quake offset) + typed gauge scalars on the peak-inundation layer, riding the existing inundation deck (the composer's fort.*-only download filter was widened to include gaugeNNNNN.txt). Live docker smoke (Crescent City AOI): real tsunami solve -> gauge parsed -> scalars (max_surface_elevation 3.64 m, amplitude 0.43 m, coseismic_offset 3.64 m). Lagrangian particle gauges (v5.7.0+) remain a distinct unsurfaced capability.
 Aspects: Standard fixed-point Eulerian gauge time series; Lagrangian (particle-tracking) gauges advected by Forward-Euler integration of depth-averaged velocity; Gauge update-frequency control (min_time_increment); Coupled visualization via clawpack.visclaw.particle_tools
 - [CAND-S] `lagrangian_particle_gauges_wake_tracking` [S] [non-US] - How do I switch a gauge from fixed-point to Lagrangian mode so it is advected by the flow (e.g. to trace a vortex/wake behind an island or structure)?
   src: https://github.com/clawpack/geoclaw/tree/master/examples/tsunami/island-particles (geoclaw_island_particles)
@@ -571,10 +573,10 @@ Roster gaps (geoclaw): All cited source_urls returned live 200 content via WebFe
 Purpose: Propagate the fire front as independent elliptical Huygens wavelets whose surface spread rate comes from the Rothermel (1972) model, tracked numerically via an Eulerian level-set (phi) field.
 Today: Point-ignition spread implemented; elliptical verification (Verification Case 01) signed per roster note. Transient-wind, real-fuel-ingestion, and landscape-potential (MODE=2) capabilities not confirmed as surfaced.
 Aspects: constant/uniform wind point-ignition spread (Rothermel + Richards ellipse math); transient/time-varying wind field ingestion; real-world heterogeneous fuel/terrain ingestion (LANDFIRE); landscape-scale head-fire potential mode (no ignition/time, FlamMap-style per-pixel scan); length-to-width ratio ceiling under extreme wind
-- [CAND-S] `constant_wind_elliptical_spread_regression_gate` [S] [US] - Does ELMFIRE's numerical fire perimeter under constant wind/flat terrain match the exact elliptical solution (Rothermel spread rate + Richards ellipse geometry, cross-checked against BehavePlus) to within the published <0.5% tolerance, as an automated regression gate?
+- [LANDED] `elmfire_verification_elliptical_replication` [S] [US] - Does ELMFIRE's numerical fire perimeter under constant wind/flat terrain match the closed-form elliptical solution (Richards ellipse geometry) within tolerance, as an automated verification? (ADR 0123)
   src: https://elmfire.io/verification/verification_01.html (elmfire-verification-01)
-  knobs: fuel model GR2/102, 1-hr FM=3%, live herb FM=30%, 20-ft wind=10mph, slope=0%; assert hourly_isochrones.shp vs exact_ellipses/*.shp within 0.5%
-  notes: TRID3NT already signs this per roster note; formalize as a repeatable knob-sweep regression rather than a one-off run.
+  knobs: fuel_model GR2/102 (constant), wind_speed_mph, wind_dir_deg, duration_hours, domain_km, cellsize_m
+  notes: LANDED as the elliptical-verification template: an ALL-CONSTANT flat-grid deck authored agent-side (GR2 fuel, flat terrain, uniform wind -- no LANDFIRE/DEM fetch), ToA perimeter compared to the Richards ellipse from the observed head/back/flank rates -> verification triple (rmse/err/corr-class) + ellipse-overlay chart. Live docker smoke (10 km domain, 15 mph, 1.5 h): err_fraction 0.0375 (< 0.08 coarse tolerance), correlation 0.986 (good), LW 3.41, passed. NAMED RESIDUAL: the fine-grid <0.5% published gate (Rothermel-rate cross-check).
 - [CAND-M] `transient_wind_schedule_spread` [M] [US] - How does the fire perimeter shape respond to a scripted multi-hour wind direction/speed shift delivered via a multi-band wind raster with linear time interpolation?
   src: https://elmfire.io/tutorials/tutorial_02.html (elmfire-tutorial-02)
   knobs: NUM_METEOROLOGY_TIMES=8, DT_METEOROLOGY=3600, multi-band wind speed/direction rasters (e.g. N at 15kt hrs 0-2, shifting to NE by hr 4), NUM_IGNITIONS/X_IGN/Y_IGN/T_IGN
@@ -692,9 +694,9 @@ Aspects: randomized ignition locations (uniform vs density-weighted, ignition-ma
 Purpose: ELMFIRE's own published regression/accuracy gates: exact-solution verification cases (idealized physics) and real-fire hindcast validation cases (field accuracy).
 Today: Elliptical verification (Verification Case 01) signed per roster note. Crown-fire verification (02) and both validation cases not confirmed as signed.
 Aspects: elliptical exact-solution regression (idealized surface fire); crown-fire exact-solution regression (Cruz correlation + ellipse); single historical-fire hindcast validation (real US fire, ensemble fitness metric); multiple-fires validation (unpublished/in-progress)
-- [CAND-S] `elliptical_exact_solution_regression_gate` [S] [US] - As an automated CI-style gate: does every point-ignition spread build reproduce the exact elliptical solution to <0.5% before being accepted?
+- [LANDED] `elmfire_verification_elliptical_replication` [S] [US] - Reproduce the elliptical solution as a verification (FOLDED with the Core Spread row -- one template). (ADR 0123)
   src: https://elmfire.io/verification/verification_01.html (elmfire-verification-01)
-  knobs: same as Core Spread candidate #1 (fuel GR2/102, 1-hr FM 3%, 20-ft wind 10mph)
+  knobs: same as Core Spread candidate #1 (fuel GR2/102, uniform wind, flat terrain)
   notes: Already signed per roster; this candidate formalizes it as a standing regression gate rather than a one-time proof, e.g. re-run on every solver-build change.
 - [CAND-M] `crown_fire_exact_solution_regression_gate` [M] [US] - As a companion CI-style gate to the elliptical check: does every crown-fire-enabled build reproduce the Cruz (2005) active-crown exact ellipse from Verification Case 02?
   src: https://elmfire.io/verification/verification_02.html (elmfire-verification-02)
@@ -1656,10 +1658,10 @@ Aspects: full de Almeida shallow-water routing (signed, explicit local inertial)
   src: https://landlab.readthedocs.io/en/latest/tutorials/overland_flow/kinwave_implicit/kinwave_implicit_overland_flow.html (landlab_kinwave_implicit_tutorial)
   knobs: rainfall_mm_hr time series (incl. recession), roughness (Manning's n), outlet node selection
   notes: Implicit timestepping tolerates much larger dt than the signed explicit de Almeida chain - cheaper for long/multi-day storms.
-- [CAND-M] `infiltration_coupled_runoff_generation` [M] [US] - How much of this storm infiltrates vs runs off, and where does runoff actually initiate (partial-area vs saturation-excess)?
+- [LANDED] `landlab_green_ampt_overland_flow` [M->S] [US] - How much of this storm infiltrates vs runs off, and where does runoff actually initiate (partial-area vs saturation-excess)? (ADR 0123)
   src: https://landlab.readthedocs.io/en/latest/tutorials/overland_flow/soil_infiltration_green_ampt/infilt_green_ampt_with_overland_flow.html (landlab_green_ampt_tutorial)
-  knobs: saturated hydraulic conductivity K, capillary pressure head, porosity, initial soil moisture, storm intensity/duration
-  notes: New 2-component chain (InfiltrateGreenAmpt + KinwaveImplicitOverlandFlow), not a swap on the signed component; published case uses a 5-min, 90 mm/hr storm.
+  knobs: soil_hydraulic_conductivity_m_s K, initial_soil_moisture_content, green_ampt_soil_type, rainfall_return_period_yr/storm_duration_hr (Atlas-14 design storm), target_resolution_m
+  notes: LANDED as the exec-mode SoilInfiltrationGreenAmpt + de Almeida OverlandFlow partition chain: PRIMARY infiltration-depth raster + a runoff-depth (rainfall-excess) raster + the infiltration-vs-runoff partition chart, over a real AOI DEM; triggering rainfall from the real NOAA Atlas-14 design storm (0102 seam), soil block demo-labeled. Live exec smoke (synthetic UTM DEM, 45 mm storm, K=1e-5): infiltrated_fraction 0.79, runoff_fraction 0.21; K-monotonicity + determinism verified.
 - [CAND-S] `overland_flow_depth_timeseries_output` [S] [US] - Instead of only the peak surface-water depth, show me how inundation grows and recedes frame by frame during the storm.
   src: https://landlab.readthedocs.io/en/latest/tutorials/overland_flow/overland_flow_driver.html (landlab_overland_flow_driver_tutorial)
   knobs: output_interval_s, storm/simulation duration

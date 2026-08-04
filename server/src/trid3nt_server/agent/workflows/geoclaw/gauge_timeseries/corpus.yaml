@@ -1,0 +1,10 @@
+# Template routing phrasings (ADR 0123, hazard-easy-four continuation #3):
+# engine templates are ordinary retrieval-pool tools walked into the main index.
+geoclaw_tsunami_gauge_timeseries:
+- water-level time series from a tsunami at a coastal gauge
+- tsunami waveform and arrival at a gauge point
+- coastal mareogram showing the tsunami wave and co-seismic subsidence
+- record the sea-surface elevation over time at a coastal tide gauge during a tsunami
+- gauge time series of a tsunami run-up including the leading depression
+- how big is the tsunami wave amplitude at this coastal point over time
+- co-seismic subsidence signal at a coastal gauge from an earthquake tsunami

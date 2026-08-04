@@ -650,6 +650,11 @@ from ..workflows.schism.tidal_hydro.tidal_hydro import schism_tidal_hydro as _sc
 # pool, surfaced only by the run_geoclaw door's gate expansion. The composer
 # chain (model_geoclaw_inundation) is inlined in the template module.
 from ..workflows.geoclaw.inundation.inundation import geoclaw_inundation as _geoclaw_inundation  # noqa: E402,F401 - RENAME of run_geoclaw_inundation (engine=geoclaw, tier=template)
+# geoclaw_tsunami_gauge_timeseries TEMPLATE (engine="geoclaw", tier="template"), a
+# DISTINCT capability (coastal gauge water-level time series), one folder under
+# workflows/geoclaw/gauge_timeseries/; surfaced by the run_geoclaw door's gate
+# expansion. Rides the inundation composer (model_geoclaw_inundation, emit_gauge_series).
+from ..workflows.geoclaw.gauge_timeseries.gauge_timeseries import geoclaw_tsunami_gauge_timeseries as _geoclaw_tsunami_gauge_timeseries  # noqa: E402,F401 - NEW capability (ADR 0123, hazard-easy-four continuation #3) (engine=geoclaw, tier=template)
 # swan_wave_field TEMPLATE (engine="swan", tier="template"), one folder under
 # workflows/swan/wave_field/; EXCLUDED from the default retrieval pool,
 # surfaced only by the run_swan door's gate expansion. The composer chain
@@ -667,6 +672,11 @@ from ..workflows.landlab.susceptibility.susceptibility import landlab_susceptibi
 # folder under workflows/landlab/flow_accumulation/; surfaced by the run_landlab
 # door's gate expansion. The composer (model_landlab_flow_accumulation) is inlined.
 from ..workflows.landlab.flow_accumulation.flow_accumulation import landlab_flow_accumulation as _landlab_flow_accumulation  # noqa: E402,F401 - NEW capability (ADR 0122, hazard-easy-four #1) (engine=landlab, tier=template)
+# landlab_green_ampt_overland_flow TEMPLATE (engine="landlab", tier="template"), a
+# DISTINCT capability (infiltration-vs-runoff storm partition), one folder under
+# workflows/landlab/green_ampt/; surfaced by the run_landlab door's gate
+# expansion. The composer (model_landlab_green_ampt_overland_flow) is inlined.
+from ..workflows.landlab.green_ampt.green_ampt import landlab_green_ampt_overland_flow as _landlab_green_ampt_overland_flow  # noqa: E402,F401 - NEW capability (ADR 0123, hazard-easy-four continuation #1) (engine=landlab, tier=template)
 # openquake_psha TEMPLATE (engine="openquake", tier="template"), one folder
 # under workflows/openquake/psha/; EXCLUDED from the default retrieval pool,
 # surfaced only by the run_openquake door's gate expansion. The composer chain
@@ -679,6 +689,11 @@ from ..workflows.openquake.psha.psha import openquake_psha as _openquake_psha  #
 # module; workflows/elmfire/run_elmfire.py is the distinct solver build/stage
 # seam.
 from ..workflows.elmfire.fire_spread.fire_spread import elmfire_fire_spread as _elmfire_fire_spread  # noqa: E402,F401 - RENAME of model_fire_spread (engine=elmfire, tier=template)
+# elmfire_verification_elliptical_replication TEMPLATE (engine="elmfire",
+# tier="template"), a DISTINCT capability (the constant-wind flat-terrain
+# elliptical-spread verification / calibration anchor), one folder under
+# workflows/elmfire/verification/; surfaced by the run_elmfire door's gate expansion.
+from ..workflows.elmfire.verification.verification import elmfire_verification_elliptical_replication as _elmfire_verification_elliptical_replication  # noqa: E402,F401 - NEW capability (ADR 0123, hazard-easy-four continuation #2) (engine=elmfire, tier=template)
 # pelicun_damage_assessment TEMPLATE (engine="pelicun", tier="template")
 # under workflows/pelicun/damage_assessment/; EXCLUDED from the default
 # retrieval pool, surfaced only by the run_pelicun door's gate expansion. Its

@@ -1,0 +1,10 @@
+# Template routing phrasings (ADR 0123, hazard-easy-four continuation #1):
+# engine templates are ordinary retrieval-pool tools walked into the main index.
+landlab_green_ampt_overland_flow:
+- how much of this storm infiltrates versus runs off across the watershed
+- partition rainfall into infiltration and runoff with Green-Ampt over this DEM
+- where does runoff initiate during a design storm on this terrain
+- infiltration excess and runoff generation map for a short intense storm
+- Green-Ampt infiltration coupled to overland flow over a catchment DEM
+- rainfall partition: infiltration depth and runoff depth rasters
+- what fraction of the design storm soaks in vs becomes surface runoff

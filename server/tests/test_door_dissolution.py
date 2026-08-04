@@ -25,7 +25,7 @@ import trid3nt_server.main as _main
 from trid3nt_server.agent.tools.search.search_tools import search_tools as dd
 from trid3nt_server.agent.tools.search.tool_retrieval import retrieve_visible_tools
 
-# The 23 registered engine templates (12 engines; MODFLOW ships 11, HEC-RAS #11, SCHISM #12).
+# The 27 registered engine templates (12 engines; MODFLOW ships 11, HEC-RAS #11, SCHISM #12).
 EXPECTED_TEMPLATES = {
     "sfincs_flood",
     "sfincs_advanced_numerical_physics_knobs",  # S-tier wave 1: SFINCS numerical solver-settings knob template
@@ -38,6 +38,9 @@ EXPECTED_TEMPLATES = {
     "elmfire_fire_spread",
     "landlab_susceptibility",
     "landlab_flow_accumulation",  # ADR 0122 hazard-easy-four #1: Landlab flow-accumulation / drainage-area + channel-network template
+    "landlab_green_ampt_overland_flow",  # ADR 0123 hazard-easy-four continuation #1: Green-Ampt infiltration/runoff partition
+    "elmfire_verification_elliptical_replication",  # ADR 0123 continuation #2: constant-wind elliptical-spread verification
+    "geoclaw_tsunami_gauge_timeseries",  # ADR 0123 continuation #3: coastal gauge water-level time series
     "openquake_psha",
     "pelicun_damage_assessment",
     "modflow_asr",

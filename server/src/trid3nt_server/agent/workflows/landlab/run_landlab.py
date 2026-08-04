@@ -153,6 +153,16 @@ def build_landlab_build_spec(run_args: LandlabRunArgs) -> dict[str, Any]:
         "channel_threshold_cells": int(
             getattr(run_args, "channel_threshold_cells", 100)
         ),
+        # green_ampt_overland_flow parameters
+        "soil_hydraulic_conductivity_m_s": float(
+            getattr(run_args, "soil_hydraulic_conductivity_m_s", 1.0e-5)
+        ),
+        "initial_soil_moisture_content": float(
+            getattr(run_args, "initial_soil_moisture_content", 0.15)
+        ),
+        "green_ampt_soil_type": str(
+            getattr(run_args, "green_ampt_soil_type", "sandy loam")
+        ),
     }
     # Merge the validated physics overrides (the chain reads flow_director /
     # overland_alpha / mannings_n). Absent => byte-identical.

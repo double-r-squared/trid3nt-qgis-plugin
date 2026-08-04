@@ -1,0 +1,10 @@
+# Template routing phrasings (ADR 0123, hazard-easy-four continuation #2):
+# engine templates are ordinary retrieval-pool tools walked into the main index.
+elmfire_verification_elliptical_replication:
+- verify the fire spread solver against the closed-form elliptical solution
+- does the numerical fire perimeter match the analytical ellipse under constant wind
+- run the elliptical spread verification case on flat terrain with uniform fuel
+- ELMFIRE calibration check: constant wind flat terrain elliptical fire growth
+- regression gate comparing the fire front to the Richards ellipse within tolerance
+- validate wildfire spread rate and perimeter shape against the exact ellipse
+- constant fuel uniform wind verification of the level-set fire model

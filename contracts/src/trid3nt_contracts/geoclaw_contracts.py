@@ -308,6 +308,22 @@ class GeoClawDepthLayerURI(LayerURI):
 
     scenario: GeoClawScenario = "dam_break"
 
+    # Coastal-gauge time-series scalars (the tsunami gauge-timeseries template).
+    # Populated only when the run recorded + parsed a coastal gauge; None on the
+    # plain inundation path. Additive: absence preserves prior behaviour.
+    #   gauge_max_surface_elevation_m: peak water-surface elevation at the gauge, m.
+    #   gauge_min_surface_elevation_m: trough water-surface elevation, m (leading
+    #       depression / drawdown).
+    #   gauge_max_amplitude_m: peak-to-trough surface amplitude, m (>= 0).
+    #   gauge_coseismic_offset_m: initial (t0, post-quake) surface elevation at the
+    #       gauge, m -- the co-seismic subsidence/uplift offset where present.
+    #   gauge_max_depth_m: peak water depth at the gauge, m (>= 0).
+    gauge_max_surface_elevation_m: float | None = Field(default=None)
+    gauge_min_surface_elevation_m: float | None = Field(default=None)
+    gauge_max_amplitude_m: float | None = Field(default=None, ge=0.0)
+    gauge_coseismic_offset_m: float | None = Field(default=None)
+    gauge_max_depth_m: float | None = Field(default=None, ge=0.0)
+
     # Provenance of the driver source (dam-break: real NID dam vs user-supplied
     # location/height). Set by the composer/tool so the agent narrates WHERE the
     # dam geometry came from instead of presenting an invented centroid/height as

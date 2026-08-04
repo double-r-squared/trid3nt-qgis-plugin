@@ -60,6 +60,20 @@ FOS_FAILURE_THRESHOLD: float = 1.0
 #: unstable/inundated fraction (matches the flood NODATA_DEPTH_M wet floor).
 OVERLAND_WET_DEPTH_M: float = 0.05
 
+#: Green-Ampt demo soil parameters (labeled demo values, not SSURGO-calibrated).
+#: Saturated hydraulic conductivity (m/s) driving the infiltration rate; a
+#: sandy-loam K. Initial soil moisture content (volumetric fraction) sets the
+#: moisture deficit. soil_type selects Landlab's tabulated capillary-head +
+#: porosity for the class.
+DEFAULT_GREEN_AMPT_K_M_S: float = 1.0e-5
+DEFAULT_INITIAL_SOIL_MOISTURE: float = 0.15
+DEFAULT_GREEN_AMPT_SOIL_TYPE: str = "sandy loam"
+
+#: The Green-Ampt chain caps the OverlandFlow timestep to storm_duration /
+#: this many steps so the infiltration dynamics are resolved (the CFL step for
+#: a thin sheet is huge and would infiltrate the whole storm in one leap).
+GREEN_AMPT_MIN_STEPS: int = 40
+
 #: Default channel-head drainage-area threshold, expressed as a MULTIPLE of the
 #: grid CELL AREA (a channel head is conventionally reached once the contributing
 #: area exceeds a few hundred cells). Cells whose drainage_area meets this are the
@@ -155,9 +169,12 @@ def run_component_chain(
         return _run_overland_flow(dem, resolution_m, build_spec)
     if analysis == "flow_accumulation":
         return _run_flow_accumulation(dem, resolution_m, build_spec)
+    if analysis == "green_ampt_overland_flow":
+        return _run_green_ampt_overland_flow(dem, resolution_m, build_spec)
     raise ValueError(
         f"unknown Landlab analysis {analysis!r} (expected "
-        f"'landslide_probability', 'overland_flow' or 'flow_accumulation')"
+        f"'landslide_probability', 'overland_flow', 'flow_accumulation' or "
+        f"'green_ampt_overland_flow')"
     )
 
 
@@ -773,6 +790,140 @@ def _run_flow_accumulation(
             "flow_director": director_token,
             "depression_handler_note": notes.get("depression_handler", ""),
             "routing_comparison": routing_comparison,
+        },
+        secondary_fields=secondary,
+    )
+
+
+def _run_green_ampt_overland_flow(
+    dem: Any, resolution_m: float, spec: dict[str, Any]
+) -> ChainResult:
+    """The Green-Ampt infiltration + de Almeida overland-flow partition chain.
+
+    Mirrors the canonical Landlab
+    ``infilt_green_ampt_with_overland_flow`` tutorial: step ``OverlandFlow``
+    over a design storm while ``SoilInfiltrationGreenAmpt`` removes infiltrated
+    water from the surface sheet each step. Reports where the storm PARTITIONS
+    into infiltration vs runoff:
+
+      * PRIMARY field = ``soil_water_infiltration__depth`` (m): cumulative
+        infiltrated depth per cell.
+      * SECONDARY field ``runoff_depth`` (m): the rainfall EXCESS per cell
+        (total rainfall depth - infiltration depth, clamped >= 0) -- the depth
+        that became runoff (where runoff initiates).
+
+    The narration scalars (domain infiltrated/runoff fraction + means) travel in
+    ``extra`` (folded into the worker result block ``green_ampt``).
+
+    build_spec keys consumed: ``rainfall_intensity_mm_hr``, ``storm_duration_hr``,
+    ``soil_hydraulic_conductivity_m_s``, ``initial_soil_moisture_content``,
+    ``green_ampt_soil_type``.
+    """
+    import numpy as np
+    from landlab.components import OverlandFlow, SoilInfiltrationGreenAmpt  # type: ignore
+
+    grid, nodata_mask, _z = _build_grid(dem, resolution_m)
+    nrows, ncols = np.asarray(dem).shape
+
+    # Green-Ampt requires strictly-positive surface + infiltration depth fields
+    # to seed the wetting-front math (a zero sheet has no water to infiltrate);
+    # a 1e-8 m floor is the tutorial's convention.
+    grid.add_zeros("surface_water__depth", at="node", clobber=True)
+    grid.at_node["surface_water__depth"] += 1e-8
+    grid.add_zeros("soil_water_infiltration__depth", at="node", clobber=True)
+    grid.at_node["soil_water_infiltration__depth"] += 1e-8
+
+    intensity_mm_hr = float(spec.get("rainfall_intensity_mm_hr", 90.0))
+    duration_hr = float(spec.get("storm_duration_hr", 0.5))
+    k_m_s = float(spec.get("soil_hydraulic_conductivity_m_s", DEFAULT_GREEN_AMPT_K_M_S))
+    theta_i = float(
+        spec.get("initial_soil_moisture_content", DEFAULT_INITIAL_SOIL_MOISTURE)
+    )
+    soil_type = str(spec.get("green_ampt_soil_type", DEFAULT_GREEN_AMPT_SOIL_TYPE))
+
+    rain_ms = intensity_mm_hr / 1000.0 / 3600.0  # mm/hr -> m/s
+    duration_s = duration_hr * 3600.0
+
+    of = OverlandFlow(grid, steep_slopes=True)
+    si = SoilInfiltrationGreenAmpt(
+        grid,
+        hydraulic_conductivity=k_m_s,
+        initial_soil_moisture_content=theta_i,
+        soil_type=soil_type,
+    )
+
+    # Cap the OverlandFlow step so the storm is resolved over >= GREEN_AMPT_MIN_STEPS
+    # substeps (the thin-sheet CFL step is otherwise huge).
+    dt_cap = duration_s / float(GREEN_AMPT_MIN_STEPS)
+    elapsed = 0.0
+    steps = 0
+    max_steps = int(spec.get("max_overland_steps", 2000))
+    while elapsed < duration_s and steps < max_steps:
+        dt = min(of.calc_time_step(), dt_cap, max(duration_s - elapsed, 1e-3))
+        of.dt = dt
+        grid.at_node["surface_water__depth"][grid.core_nodes] += rain_ms * dt
+        of.overland_flow()
+        si.run_one_step(dt)
+        elapsed += dt
+        steps += 1
+
+    infil = np.asarray(
+        grid.at_node["soil_water_infiltration__depth"], dtype="float64"
+    ).reshape(nrows, ncols)
+    infil[nodata_mask] = np.nan
+
+    rain_total_m = rain_ms * duration_s
+    # Rainfall excess = the depth that ran off (total rainfall - infiltration),
+    # clamped at 0 (a cell that infiltrated more than it received got run-on).
+    runoff = np.clip(rain_total_m - infil, 0.0, None)
+    runoff[nodata_mask] = np.nan
+
+    secondary: dict[str, Any] = {"runoff_depth": runoff}
+
+    active = np.isfinite(infil)
+    n_active = int(active.sum())
+    if n_active == 0 or rain_total_m <= 0.0:
+        mean_infil_m = 0.0
+        mean_runoff_m = 0.0
+        infiltrated_frac = 0.0
+        runoff_frac = 0.0
+    else:
+        mean_infil_m = float(np.mean(infil[active]))
+        mean_runoff_m = float(np.mean(runoff[active]))
+        infiltrated_frac = min(1.0, mean_infil_m / rain_total_m)
+        runoff_frac = min(1.0, mean_runoff_m / rain_total_m)
+
+    LOG.info(
+        "landlab green_ampt chain: steps=%d rain=%.1f mm infil_frac=%.3f "
+        "runoff_frac=%.3f mean_infil=%.4f m",
+        steps,
+        rain_total_m * 1000.0,
+        infiltrated_frac,
+        runoff_frac,
+        mean_infil_m,
+    )
+    # Contract carrier reuse: unstable_area_fraction := runoff fraction (the
+    # runoff-generating share of the storm); min_factor_of_safety := mean
+    # infiltration depth (m, units disambiguate); mean_probability_of_failure
+    # unused (0.0). The typed partition scalars travel in ``extra``.
+    return ChainResult(
+        field=infil,
+        analysis="green_ampt_overland_flow",
+        unstable_area_fraction=runoff_frac,
+        min_factor_of_safety=mean_infil_m,
+        mean_probability_of_failure=0.0,
+        output_field_name="soil_water_infiltration__depth",
+        extra={
+            "total_rainfall_mm": rain_total_m * 1000.0,
+            "mean_infiltration_mm": mean_infil_m * 1000.0,
+            "mean_runoff_mm": mean_runoff_m * 1000.0,
+            "infiltrated_fraction": infiltrated_frac,
+            "runoff_fraction": runoff_frac,
+            "rainfall_intensity_mm_hr": intensity_mm_hr,
+            "storm_duration_hr": duration_hr,
+            "soil_hydraulic_conductivity_m_s": k_m_s,
+            "green_ampt_soil_type": soil_type,
+            "n_steps": steps,
         },
         secondary_fields=secondary,
     )

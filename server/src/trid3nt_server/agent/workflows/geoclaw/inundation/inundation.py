@@ -54,7 +54,9 @@ from trid3nt_server.agent.workflows.geoclaw._template_card import TemplateCard
 from trid3nt_server.agent.workflows.geoclaw.postprocess_geoclaw import (
     GEOCLAW_TARGET_GROUND_RES_M,
     PostprocessGeoClawError,
+    build_gauge_timeseries_chart_spec,
     compute_geoclaw_grid_shape,
+    parse_geoclaw_gauge_series,
     postprocess_geoclaw,
 )
 from trid3nt_server.agent.workflows.geoclaw.run_geoclaw import (
@@ -776,6 +778,7 @@ async def model_geoclaw_inundation(
     cleanup_outputs: bool = True,
     dam_source_note: str | None = None,
     synthetic_inputs: list[SyntheticInput] | None = None,
+    emit_gauge_series: bool = False,
 ) -> GeoClawDepthLayerURI:
     """Compose the full GeoClaw shallow-water inundation chain end-to-end (Batch).
 
@@ -1262,6 +1265,21 @@ async def model_geoclaw_inundation(
                 mask_ocean=mask_ocean,
                 fgmax_arrival_tol_m=run_args.fgmax_arrival_tol_m,
             )
+
+        # --- Coastal gauge time series (the gauge-timeseries template) -------
+        # Parse BEFORE the out_dir cleanup below. Non-fatal: a missing/unparseable
+        # gauge leaves the scalars empty (the peak layer still narrates).
+        gauge_series: dict[str, Any] | None = None
+        gauge_scalars: dict[str, float] = {}
+        if emit_gauge_series:
+            try:
+                gauge_series, gauge_scalars = await asyncio.to_thread(
+                    parse_geoclaw_gauge_series, out_dir
+                )
+            except Exception as exc:  # noqa: BLE001 - never sink the solve
+                logger.warning(
+                    "model_geoclaw_inundation: gauge parse failed (non-fatal): %s", exc
+                )
     finally:
         if cleanup_outputs:
             _cleanup_dir(out_dir)
@@ -1283,11 +1301,17 @@ async def model_geoclaw_inundation(
         _peak_update["source_note"] = dam_source_note
     if synthetic_inputs:
         _peak_update["synthetic_inputs"] = list(synthetic_inputs)
+    if gauge_scalars:
+        _peak_update.update(gauge_scalars)
     if _peak_update:
         peak = peak.model_copy(update=_peak_update)
 
     # --- Step 6b: publish + emit the per-frame animation layers OUT-OF-BAND --
     emitted_frames = await _emit_frame_layers(emitter, frame_layers, staging.run_id)
+
+    # --- Coastal gauge surface-elevation chart (the gauge-timeseries template) ---
+    if emit_gauge_series and gauge_series is not None:
+        await _maybe_emit_gauge_chart(emitter, gauge_series, peak.uri)
 
     logger.info(
         "model_geoclaw_inundation complete run_id=%s scenario=%s "
@@ -1365,6 +1389,33 @@ def _publish_peak_layer(
         arrival_time_s=raw_peak.arrival_time_s,
         scenario=raw_peak.scenario,
     )
+
+
+async def _maybe_emit_gauge_chart(
+    emitter: Any, gauge_series: dict[str, Any] | None, source_uri: str
+) -> None:
+    """Emit the coastal-gauge surface-elevation chart to the charts window."""
+    if emitter is None or not hasattr(emitter, "emit_chart"):
+        return
+    spec = build_gauge_timeseries_chart_spec(gauge_series)
+    if spec is None:
+        return
+    from trid3nt_server.agent.tools.processing.charts_common import build_chart_payload
+
+    payload = build_chart_payload(
+        vega_lite_spec=spec,
+        title="Coastal gauge surface elevation",
+        caption=(
+            "Water-surface elevation at the coastal gauge over time -- the tsunami "
+            "waveform (leading depression + run-up peaks) and any co-seismic "
+            "subsidence (the initial post-quake surface offset)."
+        ),
+        source_layer_uri=source_uri,
+    )
+    try:
+        await emitter.emit_chart(payload)
+    except Exception as exc:  # noqa: BLE001 - non-fatal
+        logger.warning("gauge time-series chart emit failed: %s", exc)
 
 
 async def _emit_frame_layers(
@@ -1452,8 +1503,17 @@ def _cleanup_dir(d: str | Path) -> None:
         pass
 
 
+def _is_geoclaw_output_key(base: str) -> bool:
+    """A GeoClaw output object the composer downloads: the ``fort.*`` AMR frames
+    (rasterized to depth) AND the coastal ``gaugeNNNNN.txt`` time series (the
+    gauge-timeseries template reads it; the plain inundation path ignores it)."""
+    return base.startswith("fort.") or (
+        base.startswith("gauge") and base.endswith(".txt")
+    )
+
+
 def _download_batch_geoclaw_outputs(run_id: str) -> str:
-    """Download the Batch fort.q outputs to a tmp ``_output/`` dir for postprocess.
+    """Download the Batch fort.q + gauge outputs to a tmp ``_output/`` dir.
 
     The GeoClaw Batch worker uploads its fort.q frames under
     ``s3://<runs_bucket>/<run_id>/_output/`` and records their URIs in
@@ -1487,17 +1547,17 @@ def _download_batch_geoclaw_outputs(run_id: str) -> str:
             except Exception:  # noqa: BLE001
                 continue
             base = key.rsplit("/", 1)[-1]
-            if base.startswith("fort."):
+            if _is_geoclaw_output_key(base):
                 keys.append(key)
     if not keys:
-        # Defensive fallback: list the runs prefix for fort.* objects.
+        # Defensive fallback: list the runs prefix for fort.* / gauge*.txt objects.
         try:
             resp = s3.list_objects_v2(
                 Bucket=runs_bucket, Prefix=f"{run_id}/_output/"
             )
             for obj in resp.get("Contents", []) or []:
                 k = obj.get("Key", "")
-                if k.rsplit("/", 1)[-1].startswith("fort."):
+                if _is_geoclaw_output_key(k.rsplit("/", 1)[-1]):
                     keys.append(k)
         except Exception as exc:  # noqa: BLE001
             logger.warning("GeoClaw output list fallback failed: %s", exc)

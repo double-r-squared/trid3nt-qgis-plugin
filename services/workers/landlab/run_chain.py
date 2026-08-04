@@ -180,6 +180,12 @@ def run_chain(manifest_path: str) -> int:
         )
 
         result_block["flow_accumulation"] = _flow_accumulation_extra(chain.extra or {})
+    if chain.analysis == "green_ampt_overland_flow":
+        from services.workers.landlab.entrypoint import (  # type: ignore[import]
+            _green_ampt_extra,
+        )
+
+        result_block["green_ampt"] = _green_ampt_extra(chain.extra or {})
     try:
         (cwd / RESULT_JSON_NAME).write_text(
             json.dumps(result_block, indent=2), encoding="utf-8"

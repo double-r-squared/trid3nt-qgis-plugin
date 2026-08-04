@@ -34,6 +34,7 @@ from typing import Any
 from trid3nt_contracts.execution import LayerURI
 from trid3nt_contracts.landlab_contracts import (
     LandlabFlowAccumulationLayerURI,
+    LandlabGreenAmptLayerURI,
     LandlabSusceptibilityLayerURI,
 )
 
@@ -44,12 +45,16 @@ __all__ = [
     "PostprocessLandlabError",
     "postprocess_landlab",
     "postprocess_landlab_flow_accumulation",
+    "postprocess_landlab_green_ampt",
     "build_routing_comparison_chart_spec",
+    "build_infiltration_partition_chart_spec",
     "publish_landlab_quantities",
     "compute_landlab_metrics",
     "LANDSLIDE_STYLE_PRESET",
     "OVERLAND_STYLE_PRESET",
     "DRAINAGE_AREA_STYLE_PRESET",
+    "INFILTRATION_STYLE_PRESET",
+    "RUNOFF_STYLE_PRESET",
     "UNSTABLE_PROBABILITY_THRESHOLD",
     "SECONDARY_QUANTITY_BY_TOKEN",
 ]
@@ -83,6 +88,13 @@ OVERLAND_STYLE_PRESET: str = "continuous_flood_depth"
 #: log-DOMAIN TiTiler expression (drainage area spans several orders of magnitude)
 #: is a NAMED RESIDUAL -- the existing preset is the reused styling, not a new one.
 DRAINAGE_AREA_STYLE_PRESET: str = "continuous_drainage_area"
+
+#: The Green-Ampt infiltration-depth + runoff-depth rasters are both DEPTH fields
+#: (m), so they reuse the existing flood-depth preset (``continuous_flood_depth``).
+#: A dedicated infiltration (browns) / runoff ramp is a NAMED RESIDUAL -- the
+#: existing depth preset is the reused styling, not a new one.
+INFILTRATION_STYLE_PRESET: str = "continuous_flood_depth"
+RUNOFF_STYLE_PRESET: str = "continuous_flood_depth"
 
 #: Mirror of the worker threshold for recomputing the unstable fraction when the
 #: completion result block is absent (kept in sync with
@@ -784,6 +796,180 @@ def postprocess_landlab_flow_accumulation(
         max_da,
         mean_da,
         chan_frac,
+        len(layers) > 1,
+        uri,
+    )
+    return layers, metrics
+
+
+# --------------------------------------------------------------------------- #
+# green_ampt_overland_flow postprocess: infiltration-depth raster + runoff-depth
+# raster + the storm-partition chart. Mirrors the canonical
+# infilt_green_ampt_with_overland_flow tutorial outputs (where the storm splits
+# into infiltration vs runoff).
+# --------------------------------------------------------------------------- #
+def build_infiltration_partition_chart_spec(
+    infiltrated_fraction: float,
+    runoff_fraction: float,
+) -> dict[str, Any] | None:
+    """Build the Vega-Lite storm-partition chart (infiltration vs runoff).
+
+    A two-bar split of the design storm into the infiltrated share vs the runoff
+    (rainfall-excess) share -- the tutorial's central question (how much of this
+    storm infiltrates vs runs off). Returns ``None`` when both shares are zero
+    (an empty solve). Pure (unit-testable on scalars)."""
+    inf = max(0.0, float(infiltrated_fraction))
+    run = max(0.0, float(runoff_fraction))
+    if inf <= 0.0 and run <= 0.0:
+        return None
+    values = [
+        {"partition": "infiltration", "fraction": inf},
+        {"partition": "runoff", "fraction": run},
+    ]
+    return {
+        "$schema": "https://vega.github.io/schema/vega-lite/v5.json",
+        "data": {"values": values},
+        "mark": {"type": "bar"},
+        "encoding": {
+            "x": {
+                "field": "partition",
+                "type": "nominal",
+                "title": "storm partition",
+                "sort": ["infiltration", "runoff"],
+            },
+            "y": {
+                "field": "fraction",
+                "type": "quantitative",
+                "title": "fraction of storm rainfall",
+            },
+            "color": {
+                "field": "partition",
+                "type": "nominal",
+                "scale": {
+                    "domain": ["infiltration", "runoff"],
+                    "range": ["#8c6d3f", "#1f5fbf"],
+                },
+                "legend": None,
+            },
+            "tooltip": [
+                {"field": "partition", "type": "nominal"},
+                {"field": "fraction", "type": "quantitative", "format": ".3f"},
+            ],
+        },
+    }
+
+
+def postprocess_landlab_green_ampt(
+    field_cog_path: str | Path,
+    *,
+    run_id: str,
+    result: dict[str, Any] | None = None,
+    runoff_cog_path: str | Path | None = None,
+    runs_bucket: str | None = None,
+) -> tuple[list[LayerURI], dict[str, Any]]:
+    """Reproject the infiltration-depth COG + emit the infiltration + runoff layers.
+
+    Reads the worker's ``soil_water_infiltration__depth`` field COG, reprojects
+    to EPSG:4326 (CRS round-trip guard), uploads it, and returns the primary
+    infiltration-depth ``LandlabGreenAmptLayerURI`` plus (when a runoff COG is
+    supplied) the runoff-depth (rainfall-excess) context raster. The typed
+    partition scalars come from the worker's authoritative ``result["green_ampt"]``
+    block (recomputed from the field only as a fallback).
+
+    Returns ``(layers, metrics)`` where ``layers[0]`` is the infiltration raster
+    (role ``"primary"``), ``layers[1:]`` the runoff raster if present, and
+    ``metrics`` carries the partition scalars (the composer turns them into the
+    partition chart).
+    """
+    import numpy as np
+
+    src = Path(field_cog_path)
+    field = _read_field_array(src)
+    ga = (result or {}).get("green_ampt") if isinstance(result, dict) else None
+    ga = ga if isinstance(ga, dict) else {}
+
+    active = np.isfinite(field)
+    infil_active = field[active]
+    recomputed_mean_mm = (
+        float(np.mean(infil_active)) * 1000.0 if infil_active.size else 0.0
+    )
+
+    def _pick(key: str, fallback: float) -> float:
+        v = ga.get(key)
+        try:
+            return float(v) if v is not None else float(fallback)
+        except (TypeError, ValueError):
+            return float(fallback)
+
+    total_rain_mm = max(0.0, _pick("total_rainfall_mm", 0.0))
+    mean_infil_mm = max(0.0, _pick("mean_infiltration_mm", recomputed_mean_mm))
+    mean_runoff_mm = max(0.0, _pick("mean_runoff_mm", 0.0))
+    infil_frac = max(0.0, min(1.0, _pick("infiltrated_fraction", 0.0)))
+    runoff_frac = max(0.0, min(1.0, _pick("runoff_fraction", 0.0)))
+
+    dst_cog, bbox = _reproject_field_cog_4326(src)
+    try:
+        uri = _upload_cog_to_runs_bucket(
+            dst_cog, run_id, runs_bucket, dest_filename="landlab_infiltration_depth.tif"
+        )
+    finally:
+        _safe_unlink(dst_cog)
+
+    primary = LandlabGreenAmptLayerURI(
+        layer_id=f"landlab-infiltration-depth-{run_id}",
+        name="Infiltration depth",
+        layer_type="raster",
+        uri=uri,
+        style_preset=INFILTRATION_STYLE_PRESET,
+        role="primary",
+        units="meters",
+        bbox=bbox,
+        infiltrated_fraction=infil_frac,
+        runoff_fraction=runoff_frac,
+        mean_infiltration_mm=mean_infil_mm,
+        mean_runoff_mm=mean_runoff_mm,
+        total_rainfall_mm=total_rain_mm,
+    )
+    layers: list[LayerURI] = [primary]
+
+    # --- Runoff-depth (rainfall-excess) context raster ---
+    if runoff_cog_path is not None and Path(runoff_cog_path).exists():
+        dst_runoff, _rb = _reproject_field_cog_4326(Path(runoff_cog_path))
+        try:
+            runoff_uri = _upload_cog_to_runs_bucket(
+                dst_runoff, run_id, runs_bucket, dest_filename="landlab_runoff_depth.tif"
+            )
+        finally:
+            _safe_unlink(dst_runoff)
+        layers.append(
+            LayerURI(
+                layer_id=f"landlab-runoff-depth-{run_id}",
+                name="Runoff depth (rainfall excess)",
+                layer_type="raster",
+                uri=runoff_uri,
+                style_preset=RUNOFF_STYLE_PRESET,
+                role="context",
+                units="meters",
+                bbox=bbox,
+            )
+        )
+
+    metrics = {
+        "analysis": "green_ampt_overland_flow",
+        "crs": "EPSG:4326",
+        "infiltrated_fraction": infil_frac,
+        "runoff_fraction": runoff_frac,
+        "mean_infiltration_mm": mean_infil_mm,
+        "mean_runoff_mm": mean_runoff_mm,
+        "total_rainfall_mm": total_rain_mm,
+    }
+    logger.info(
+        "postprocess_landlab_green_ampt run_id=%s rain=%.1f mm infil_frac=%.3f "
+        "runoff_frac=%.3f runoff_raster=%s uri=%s",
+        run_id,
+        total_rain_mm,
+        infil_frac,
+        runoff_frac,
         len(layers) > 1,
         uri,
     )

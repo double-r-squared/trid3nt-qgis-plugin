@@ -1147,6 +1147,11 @@ SOLVER_CONFIRM_TOOLS: set[str] = {
     # tool args the LLM can restate). Keyed on the geoclaw_inundation template
     # (the tool that submits the solver).
     "geoclaw_inundation",
+    # The GeoClaw tsunami gauge-timeseries template also submits a GeoClaw solve
+    # (a tsunami run recording a coastal gauge), so it is confirm-gated with the
+    # SAME inline card as geoclaw_inundation. Keyed on the template that submits
+    # the solver.
+    "geoclaw_tsunami_gauge_timeseries",
 }
 
 
@@ -7969,13 +7974,13 @@ async def _gate_on_solver_confirm(
             # rasterio). A missing ignition point deliberately falls through
             # to the tool's typed FIRE_IGNITION_REQUIRED error after approval.
             envelope = _build_fire_confirm_envelope(params)
-        elif tool_name == "geoclaw_inundation":
+        elif tool_name in ("geoclaw_inundation", "geoclaw_tsunami_gauge_timeseries"):
             # GeoClaw shallow-water inundation solver-confirm card: simple
             # proceed/cancel with the approximate AOI area + scenario +
             # simulated window + AMR levels, built inline (pure arithmetic,
             # no fetch/rasterio). A missing bbox deliberately falls through
             # to the tool's typed GEOCLAW_PARAMS_INCOMPLETE error after
-            # approval.
+            # approval. The gauge-timeseries template reuses the same card.
             envelope = _build_geoclaw_confirm_envelope(params)
         else:  # unknown gated tool: fail open to the tool's own validation
             return True, params

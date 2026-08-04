@@ -385,7 +385,27 @@ def _run_landlab(
     # the postprocess emits the drainage-area layer metrics + comparison chart.
     if chain.analysis == "flow_accumulation":
         result_block["flow_accumulation"] = _flow_accumulation_extra(chain.extra)
+    if chain.analysis == "green_ampt_overland_flow":
+        result_block["green_ampt"] = _green_ampt_extra(chain.extra)
     return result_block, field_cog
+
+
+def _green_ampt_extra(extra: dict[str, Any]) -> dict[str, Any]:
+    """Pick the JSON-safe Green-Ampt partition scalars from a ChainResult
+    ``extra`` (all scalars/strings, no numpy arrays)."""
+    keys = (
+        "total_rainfall_mm",
+        "mean_infiltration_mm",
+        "mean_runoff_mm",
+        "infiltrated_fraction",
+        "runoff_fraction",
+        "rainfall_intensity_mm_hr",
+        "storm_duration_hr",
+        "soil_hydraulic_conductivity_m_s",
+        "green_ampt_soil_type",
+        "n_steps",
+    )
+    return {k: extra[k] for k in keys if k in extra}
 
 
 def _flow_accumulation_extra(extra: dict[str, Any]) -> dict[str, Any]:

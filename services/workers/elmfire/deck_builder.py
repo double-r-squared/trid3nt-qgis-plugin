@@ -466,11 +466,23 @@ def warp_to_grid(name: str, src_path: Path, grid: dict, dest: Path) -> dict:
 
 def write_constant_raster(value: float, grid: dict, dest: Path) -> None:
     """Write a constant Float32 raster on the target grid (weather/adj/phi)."""
+    write_constant_raster_typed(value, grid, dest, dtype="float32")
+
+
+def write_constant_raster_typed(
+    value: float, grid: dict, dest: Path, *, dtype: str = "float32"
+) -> None:
+    """Write a constant raster on the target grid at the requested dtype.
+
+    Generalizes ``write_constant_raster`` so the verification deck can force a
+    constant INT16 fuel-model raster (e.g. GR2 = FBFM code 102 -- a uniform
+    grass fuel bed) and constant Int16 flat-topography rasters, alongside the
+    Float32 weather constants."""
     import numpy as np
     import rasterio
 
-    profile = _grid_profile(grid, "float32")
-    arr = np.full((grid["ny"], grid["nx"]), np.float32(value), dtype="float32")
+    profile = _grid_profile(grid, dtype)
+    arr = np.full((grid["ny"], grid["nx"]), value, dtype=dtype)
     with rasterio.open(dest, "w", **profile) as ds:
         ds.write(arr, 1)
 

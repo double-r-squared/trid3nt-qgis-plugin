@@ -370,3 +370,69 @@ def test_flow_accumulation_priority_flood_and_determinism():
     f2 = np.nan_to_num(np.asarray(r2.field), nan=-1.0)
     assert np.array_equal(f1, f2)
     assert r1.extra["flow_director"] == "MFD"
+
+
+# ===========================================================================
+# (4) green_ampt_overland_flow chain -- REAL landlab chain (gated on the dep).
+# ADR 0123 hazard-easy-four continuation #1: infiltration-vs-runoff partition.
+# ===========================================================================
+@_REQUIRES_LANDLAB
+def test_green_ampt_partition_and_conservation():
+    """The REAL Green-Ampt + OverlandFlow chain: infiltration-depth field +
+    runoff-depth secondary + a partition that respects the storm total."""
+    dem = _tilted_dem(n=24)
+    res = run_component_chain(
+        dem,
+        resolution_m=30.0,
+        build_spec={
+            "analysis": "green_ampt_overland_flow",
+            "rainfall_intensity_mm_hr": 90.0,
+            "storm_duration_hr": 0.5,
+            "soil_hydraulic_conductivity_m_s": 1e-5,
+            "initial_soil_moisture_content": 0.15,
+            "green_ampt_soil_type": "sandy loam",
+        },
+    )
+    assert res.analysis == "green_ampt_overland_flow"
+    assert res.output_field_name == "soil_water_infiltration__depth"
+    infil = np.asarray(res.field)
+    assert infil.shape == dem.shape
+    assert "runoff_depth" in res.secondary_fields
+    e = res.extra
+    # storm total is the 90 mm/hr x 0.5 h = 45 mm design storm.
+    assert abs(e["total_rainfall_mm"] - 45.0) < 1e-6
+    # partition fractions are in [0, 1] and sum to <= 1 (some water may pond).
+    assert 0.0 <= e["infiltrated_fraction"] <= 1.0
+    assert 0.0 <= e["runoff_fraction"] <= 1.0
+    assert e["infiltrated_fraction"] + e["runoff_fraction"] <= 1.0 + 1e-6
+    # mean infiltration + runoff never exceed the storm total (conservation).
+    assert e["mean_infiltration_mm"] <= 45.0 + 1e-6
+    assert e["n_steps"] >= 1
+
+
+@_REQUIRES_LANDLAB
+def test_green_ampt_conductivity_monotonicity_and_determinism():
+    """A HIGHER saturated conductivity infiltrates MORE (less runoff); two
+    identical runs produce a byte-identical infiltration field (Invariant 1)."""
+    dem = _tilted_dem(n=20)
+
+    def _run(k):
+        return run_component_chain(
+            dem,
+            resolution_m=30.0,
+            build_spec={
+                "analysis": "green_ampt_overland_flow",
+                "rainfall_intensity_mm_hr": 90.0,
+                "storm_duration_hr": 0.5,
+                "soil_hydraulic_conductivity_m_s": k,
+            },
+        )
+
+    lo = _run(1e-6)
+    hi = _run(3e-5)
+    assert hi.extra["infiltrated_fraction"] > lo.extra["infiltrated_fraction"]
+    # determinism: re-run of the low-K case is byte-identical.
+    lo2 = _run(1e-6)
+    f1 = np.nan_to_num(np.asarray(lo.field), nan=-1.0)
+    f2 = np.nan_to_num(np.asarray(lo2.field), nan=-1.0)
+    assert np.array_equal(f1, f2)

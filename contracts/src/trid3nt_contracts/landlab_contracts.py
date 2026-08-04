@@ -73,9 +73,13 @@ __all__ = [
     "DEFAULT_STORM_DURATION_HR",
     "DEFAULT_N_MONTE_CARLO",
     "DEFAULT_CHANNEL_THRESHOLD_CELLS",
+    "DEFAULT_GREEN_AMPT_K_M_S",
+    "DEFAULT_INITIAL_SOIL_MOISTURE",
+    "DEFAULT_GREEN_AMPT_SOIL_TYPE",
     "LandlabRunArgs",
     "LandlabSusceptibilityLayerURI",
     "LandlabFlowAccumulationLayerURI",
+    "LandlabGreenAmptLayerURI",
 ]
 
 
@@ -89,8 +93,15 @@ __all__ = [
 #       extraction (the canonical the_FlowAccumulator tutorial chain): route flow
 #       over the DEM, accumulate contributing drainage area, extract the channel
 #       network by a drainage-area threshold, and compare routing directors.
+#   "green_ampt_overland_flow" - SoilInfiltrationGreenAmpt coupled to the
+#       OverlandFlow chain: partition a design storm into infiltration-depth vs
+#       runoff-depth (rainfall excess) rasters (the canonical
+#       infilt_green_ampt_with_overland_flow tutorial chain).
 LandlabAnalysis = Literal[
-    "landslide_probability", "overland_flow", "flow_accumulation"
+    "landslide_probability",
+    "overland_flow",
+    "flow_accumulation",
+    "green_ampt_overland_flow",
 ]
 
 # How the flow-accumulation chain handles closed depressions before routing:
@@ -104,6 +115,13 @@ LandlabDepressionHandler = Literal["fill", "priority_flood"]
 #: area (contributing cells). Mirrors the worker
 #: ``component_chain.DEFAULT_CHANNEL_THRESHOLD_CELLS``.
 DEFAULT_CHANNEL_THRESHOLD_CELLS: int = 100
+
+#: Green-Ampt infiltration demo defaults (labeled demo values, not
+#: SSURGO-calibrated - no soil fetcher yet). Mirrors the worker
+#: ``component_chain`` Green-Ampt constants.
+DEFAULT_GREEN_AMPT_K_M_S: float = 1.0e-5
+DEFAULT_INITIAL_SOIL_MOISTURE: float = 0.15
+DEFAULT_GREEN_AMPT_SOIL_TYPE: str = "sandy loam"
 
 
 # TENTATIVE demo defaults (sprint-17). Narrated as demo values, NOT
@@ -216,6 +234,21 @@ class LandlabRunArgs(EngineRunArgsMixin):
         default=DEFAULT_CHANNEL_THRESHOLD_CELLS, ge=1
     )
 
+    # --- green_ampt_overland_flow chain parameters ---
+    #: Green-Ampt saturated hydraulic conductivity, m/s (> 0). Demo default
+    #: (sandy-loam K); not SSURGO-calibrated.
+    soil_hydraulic_conductivity_m_s: float = Field(
+        default=DEFAULT_GREEN_AMPT_K_M_S, gt=0.0
+    )
+    #: Green-Ampt initial soil moisture content, volumetric fraction in [0, 1)
+    #: (sets the moisture deficit). Demo default.
+    initial_soil_moisture_content: float = Field(
+        default=DEFAULT_INITIAL_SOIL_MOISTURE, ge=0.0, lt=1.0
+    )
+    #: Green-Ampt soil texture class (selects Landlab's tabulated capillary-head
+    #: + porosity). Demo default "sandy loam".
+    green_ampt_soil_type: str = Field(default=DEFAULT_GREEN_AMPT_SOIL_TYPE)
+
     @field_validator("depression_handler", mode="before")
     @classmethod
     def _normalize_depression_handler(cls, value: Any) -> Any:
@@ -276,6 +309,15 @@ class LandlabRunArgs(EngineRunArgsMixin):
             "channel_network": "flow_accumulation",
             "channel_extraction": "flow_accumulation",
             "accumulation": "flow_accumulation",
+            # green_ampt_overland_flow
+            "green_ampt": "green_ampt_overland_flow",
+            "green_ampt_overland_flow": "green_ampt_overland_flow",
+            "greenampt": "green_ampt_overland_flow",
+            "infiltration": "green_ampt_overland_flow",
+            "infiltration_runoff": "green_ampt_overland_flow",
+            "runoff_partition": "green_ampt_overland_flow",
+            "rainfall_partition": "green_ampt_overland_flow",
+            "infiltration_excess": "green_ampt_overland_flow",
         }
         return aliases.get(key, key)
 
@@ -346,4 +388,37 @@ class LandlabFlowAccumulationLayerURI(LayerURI):
     #: Input-provenance prose (DEM source; the routing/depression/threshold knobs
     #: are deterministic engine settings, not synthetic data). None preserves the
     #: prior behaviour.
+    source_note: str | None = Field(default=None)
+
+
+class LandlabGreenAmptLayerURI(LayerURI):
+    """A ``LayerURI`` for a Landlab Green-Ampt infiltration-depth layer, plus the
+    storm-partition narration scalars.
+
+    Extends ``LayerURI`` field-for-field so it still maps onto
+    ``map-command load-layer`` with no translation. The primary raster is the
+    per-cell cumulative infiltration depth (m); a companion runoff-depth
+    (rainfall-excess) raster is emitted alongside. Adds the structured numbers
+    the agent narrates (invariant 1, FR-AS-7 -- typed fields, never invented):
+
+        infiltrated_fraction: domain-mean share of the storm rainfall that
+            infiltrated, dimensionless in [0, 1].
+        runoff_fraction: domain-mean share that became runoff (rainfall excess),
+            dimensionless in [0, 1].
+        mean_infiltration_mm: domain-mean cumulative infiltration depth (mm).
+        mean_runoff_mm: domain-mean runoff (rainfall-excess) depth (mm).
+        total_rainfall_mm: the design-storm total depth (mm) the partition is of.
+
+    ``layer_type`` for the infiltration-depth field is ``"raster"`` (a
+    single-band COG); the base contract's vocabulary is inherited unchanged.
+    """
+
+    infiltrated_fraction: float = Field(ge=0.0, le=1.0)
+    runoff_fraction: float = Field(ge=0.0, le=1.0)
+    mean_infiltration_mm: float = Field(ge=0.0)
+    mean_runoff_mm: float = Field(ge=0.0)
+    total_rainfall_mm: float = Field(ge=0.0)
+
+    #: Input-provenance prose (triggering rainfall = NOAA Atlas-14 design storm;
+    #: the soil hydraulic block is demo-defaulted). None preserves prior behaviour.
     source_note: str | None = Field(default=None)

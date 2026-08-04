@@ -68,6 +68,7 @@ __all__ = [
     "ELMFIRE_SPREAD_RATE_STYLE_PRESET",
     "ElmfireRunArgs",
     "FireSpreadLayerURI",
+    "ElmfireEllipseVerificationLayerURI",
 ]
 
 #: The three-value dead/live fuel-moisture scenario dial (see module docstring
@@ -312,3 +313,32 @@ class FireSpreadLayerURI(LayerURI):
     max_spread_rate_m_min: float | None = Field(default=None, ge=0.0)
     duration_hours: float = Field(gt=0.0)
     ignition_lonlat: tuple[float, float] | None = None
+
+
+class ElmfireEllipseVerificationLayerURI(FireSpreadLayerURI):
+    """The ELMFIRE constant-wind flat-terrain elliptical-VERIFICATION result.
+
+    Extends ``FireSpreadLayerURI`` (the time-of-arrival raster is the primary
+    layer) with the verification triple + Richards-ellipse geometry the agent
+    narrates about the calibration check (Invariant 1 -- typed fields, never
+    free-generated). Under constant fuel + uniform wind + flat terrain the fire
+    perimeter from a point ignition is a closed-form ellipse; these fields report
+    how well the numerical level-set perimeter matches it:
+
+        rmse_m: RMSE of the numerical perimeter from the Richards ellipse, m.
+        err_fraction: RMSE / ellipse semi-major axis, dimensionless (>= 0).
+        correlation: perimeter-vs-ellipse radial correlation, in [-1, 1].
+        corr_class: the graded quality ("excellent"/"good"/"fair"/"poor").
+        length_to_width_ratio: the observed ellipse length:width ratio (>= 1).
+        tolerance: the fractional pass tolerance err_fraction was gated on.
+        passed: err_fraction <= tolerance AND the perimeter did not touch the
+            domain edge.
+    """
+
+    rmse_m: float = Field(ge=0.0)
+    err_fraction: float = Field(ge=0.0)
+    correlation: float = Field(ge=-1.0, le=1.0)
+    corr_class: str
+    length_to_width_ratio: float = Field(ge=0.0)
+    tolerance: float = Field(ge=0.0)
+    passed: bool
