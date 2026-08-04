@@ -21,10 +21,11 @@ NO persisted bbox and NO vector layers, and asserts:
           subgroup, not 7 flat sibling layers (proves the case-open REPLAY
           path -- not just a fresh live stream -- also groups).
   ITEM D  case A (has a persisted bbox) auto-focuses the canvas (extent
-          changes, "Zoomed to case area" noted); case B (no bbox, no vector
-          layers -- a raster-only case) leaves the canvas exactly where it
-          was and says so honestly ("Case has no stored map area - keeping
-          current view") instead of silently doing nothing.
+          changes -- the zoom is silent since the "Zoomed to case area" note
+          was removed); case B (no bbox, no vector layers -- a raster-only
+          case) leaves the canvas exactly where it was and says so honestly
+          ("Case has no stored map area - keeping current view") instead of
+          silently doing nothing.
 
 Uses two cases already sitting in the local dev persistence store (see
 ``data/persistence/trid3nt_dev/projects.json``) that belong to the same
@@ -280,10 +281,8 @@ check(
     "item D: canvas auto-focused when opening case A (bbox present)",
     extent_after_a.toString() != initial_extent.toString(),
 )
-check(
-    "item D: 'Zoomed to case area' noted for case A",
-    "zoomed to case area" in blob_a.lower(),
-)
+# NATE de-noise 2026-08-04: the "Zoomed to case area" chat note was removed;
+# the zoom BEHAVIOR (canvas auto-focus, checked above) stays, silently.
 
 # --------------------------------------------------------------------------- #
 # Open case B (a DIFFERENT case) -- A's group/layers/chat must vanish

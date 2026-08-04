@@ -794,12 +794,12 @@ def parse_case_open(payload: dict) -> Optional[CaseOpenInfo]:
 
 
 def is_auth_failure(text: str) -> bool:
-    """Classify a connection failure as an AUTH failure (dead/expired token)
-    vs a transport failure.
+    """Classify a connection failure as an AUTH failure (rejected shared
+    token) vs a transport failure.
 
-    The remote broker validates the ``?st=`` token BEFORE the WebSocket
-    upgrade, so a dead token surfaces as ``HandshakeFailed("upgrade rejected:
-    HTTP/1.1 401/403 ...")``. An in-band rejection surfaces as an ``error``
+    The broker validates the ``?st=`` shared token BEFORE the WebSocket
+    upgrade, so a rejected token surfaces as ``HandshakeFailed("upgrade
+    rejected: HTTP/1.1 401/403 ...")``. An in-band rejection surfaces as an ``error``
     envelope with ``error_code=AUTH_REQUIRED`` followed by a policy-violation
     close (1008). Transport failures (connection refused, read timeout, a
     mid-stream drop) must NOT classify as auth -- those drive the reconnect

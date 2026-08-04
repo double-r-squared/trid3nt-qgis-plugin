@@ -4,7 +4,7 @@ SCRIPTS   := $(REPO_ROOT)/scripts
 RUN_DIR   := $(REPO_ROOT)/run
 LOG_DIR   := $(REPO_ROOT)/logs
 
-.PHONY: binaries minio agent venv status stop setup up down plugin env help plugin-zip
+.PHONY: binaries minio agent venv status stop setup up down plugin env help plugin-zip plugin-repo
 
 # ---- orchestration (the clone -> run flow) ----------------------------------
 help:
@@ -70,7 +70,14 @@ minio:
 	@bash $(SCRIPTS)/start_minio.sh
 	@bash $(SCRIPTS)/init_minio.sh
 
-agent:
+# Refresh the daemon-served QGIS custom plugin repository (versioned zip +
+# plugins.xml + manifest under run/plugin-repo/). Runs before the agent starts
+# so every deploy serves the current plugin tree; the version stays
+# metadata.txt-driven (warns, never auto-bumps, on an unbumped code change).
+plugin-repo:
+	@bash $(SCRIPTS)/package_plugin.sh
+
+agent: plugin-repo
 	@mkdir -p $(LOG_DIR) $(RUN_DIR)
 	@bash $(SCRIPTS)/start_agent.sh
 

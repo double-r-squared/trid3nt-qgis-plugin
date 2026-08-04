@@ -27,12 +27,12 @@ Milestone 2 reconnect policy (mirrors the web client, ws.ts):
 * ``stop()`` exits the ladder immediately (the backoff sleep polls the stop
   flag).
 
-Milestone 3 token-expiry policy: a failure that classifies as AUTH
+Token-rejection policy: a failure that classifies as AUTH
 (``trid3nt_client.is_auth_failure`` -- the broker's pre-upgrade 401/403 on a
-dead ``?st=`` token, or an in-band AUTH_REQUIRED error) emits
+rejected ``?st=`` shared token, or an in-band AUTH_REQUIRED error) emits
 ``auth_expired`` and STOPS -- first connect and reconnect ladder alike.
-Retrying a dead token forever is exactly the silent-reconnect-loop UX this
-kills; the dock tells the user to paste a fresh token instead.
+Retrying a rejected token forever is exactly the silent-reconnect-loop UX this
+kills; the dock tells the user to fix the shared token in Settings instead.
 """
 
 from __future__ import annotations
@@ -176,12 +176,11 @@ class AgentWorker(QObject):
     def _bind_startup_case(self) -> str:
         """Bind the fresh connection to a case; returns its case_id.
 
-        ``reuse_case=False`` (remote mode): milestone 1 behavior, unchanged
-        -- create a fresh case.
+        ``reuse_case=False``: always create a fresh case.
 
-        ``reuse_case=True`` (local mode, live-feedback 2026-07-09): never
-        mint a fresh case while the user already has one -- the old always-
-        create regrew case clutter on every dock-show. Decision ladder
+        ``reuse_case=True`` (the dock's default, live-feedback 2026-07-09):
+        never mint a fresh case while the user already has one -- the old
+        always-create regrew case clutter on every dock-show. Decision ladder
         (``choose_startup_case``, pure + unit-tested):
 
           1. the resume handshake rebound a persisted active case -> keep it;

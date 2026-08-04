@@ -2072,7 +2072,7 @@ async def _handle_http(
         return
 
     # Drain headers; the ones we consume are Content-Length (so a POST body
-    # can be read) and Host (so /plugins/plugins.xml can build a download_url
+    # can be read) and Host (so /plugin-repo/plugins.xml can build a download_url
     # that matches the host:port the client actually dialed -- e.g. a
     # tailnet client's daemon-host address, not a hardcoded 127.0.0.1). The
     # socket must be advanced past the rest before we close so the client
@@ -2590,22 +2590,19 @@ async def _handle_http(
         except Exception:  # noqa: BLE001
             logger.exception("version payload build failed")
             writer.write(_format_response(500, b'{"error":"version lookup failed"}'))
-    elif proxy_path == "/plugins/plugins.xml":
-        # QGIS custom plugin repository index -- see plugin_repo.py for the
-        # zip-build + version-stamping story. download_url is built from the
-        # REQUEST's own Host header so a tailnet client's "Add repository"
-        # URL (http://<daemon-host>:8766/plugins/plugins.xml) round-trips to
-        # a reachable zip URL without a hardcoded host.
+    elif proxy_path == "/plugin-repo/plugins.xml":
+        # QGIS custom plugin repository index -- see plugin_repo.py. The
+        # packaged plugins.xml carries a HOST_SENTINEL; the download_url host
+        # is filled from the REQUEST's own Host header so a tailnet client's
+        # "Add repository" URL (http://<daemon-host>:8766/plugin-repo/plugins.xml)
+        # round-trips to a reachable zip URL without a hardcoded host.
         from . import plugin_repo
 
         try:
             host = host_header or (
                 f"127.0.0.1:{os.environ.get('TRID3NT_AGENT_HTTP_PORT', DEFAULT_HTTP_PORT)}"
             )
-            download_url = f"http://{host}/plugins/{plugin_repo.PLUGIN_NAME}.zip"
-            body = await asyncio.to_thread(
-                plugin_repo.build_plugins_repo_xml, download_url
-            )
+            body = await asyncio.to_thread(plugin_repo.render_plugins_xml, host)
             writer.write(
                 _format_response(200, body, content_type="text/xml; charset=utf-8")
             )
@@ -2619,38 +2616,33 @@ async def _handle_http(
                 )
             )
         except Exception:  # noqa: BLE001
-            logger.exception("plugins.xml build failed")
+            logger.exception("plugins.xml serve failed")
             writer.write(
                 _format_response(500, b'{"error":"plugin repo index failed"}')
             )
-    elif proxy_path == "/plugins/trid3nt.zip":
-        # The installable zip Plugin Manager downloads on install/update.
+    elif proxy_path.startswith("/plugin-repo/") and proxy_path.endswith(".zip"):
+        # The installable zip Plugin Manager downloads on install/update --
+        # served straight from the packaged directory (deploy-time artifact).
         from . import plugin_repo
 
+        filename = proxy_path[len("/plugin-repo/") :]
         try:
-            info = await asyncio.to_thread(plugin_repo.ensure_plugin_zip)
-            data = await asyncio.to_thread(info["zip_path"].read_bytes)
+            zip_path = await asyncio.to_thread(plugin_repo.served_zip_path, filename)
+            data = await asyncio.to_thread(zip_path.read_bytes)
             writer.write(
                 _format_response(
                     200,
                     data,
                     content_type="application/zip",
                     extra_headers={
-                        "Content-Disposition": 'attachment; filename="trid3nt.zip"'
+                        "Content-Disposition": f'attachment; filename="{zip_path.name}"'
                     },
                 )
             )
-        except plugin_repo.PluginRepoBuildError as exc:
-            writer.write(
-                _format_response(
-                    503,
-                    json.dumps({"error": str(exc)}, separators=(",", ":")).encode(
-                        "utf-8"
-                    ),
-                )
-            )
+        except FileNotFoundError:
+            writer.write(_format_response(404, b'{"error":"not found"}'))
         except Exception:  # noqa: BLE001
-            logger.exception("plugin zip build/serve failed")
+            logger.exception("plugin zip serve failed")
             writer.write(_format_response(500, b'{"error":"plugin zip failed"}'))
     else:
         writer.write(_format_response(404, b'{"error":"not found"}'))

@@ -20,12 +20,16 @@ GROUP = "trid3nt"
 _ULID_RE = re.compile(r"^[0-9A-HJKMNP-TV-Z]{26}$")
 
 DEFAULT_LOCAL_URL = "ws://127.0.0.1:8765/ws"
-DEFAULT_REMOTE_URL = "wss://"
 DEFAULT_MINIO_ENDPOINT = "http://127.0.0.1:9000"
 DEFAULT_EXPORT_API = "http://127.0.0.1:8766"
 
+#: The product is LOCAL-only: the agent runs on this box or a tailnet peer,
+#: reached over ws:// (the tailnet itself is the trust boundary). The cloud /
+#: Cognito REMOTE mode was removed. ``MODE_LOCAL`` and the read-only ``mode``
+#: property survive ONLY as a migration seam so a config persisted with
+#: ``mode=remote`` by an older build loads without a crash and degrades to the
+#: sole local behavior.
 MODE_LOCAL = "local"
-MODE_REMOTE = "remote"
 
 
 class PluginSettings:
@@ -46,12 +50,10 @@ class PluginSettings:
 
     @property
     def mode(self) -> str:
-        mode = self._get("mode", MODE_LOCAL)
-        return mode if mode in (MODE_LOCAL, MODE_REMOTE) else MODE_LOCAL
-
-    @mode.setter
-    def mode(self, value: str) -> None:
-        self._set("mode", value if value in (MODE_LOCAL, MODE_REMOTE) else MODE_LOCAL)
+        """Always ``MODE_LOCAL``. Read-only migration seam: a config persisted
+        with ``mode=remote`` by an older (cloud) build reads as local rather
+        than crashing -- the stored key is otherwise inert."""
+        return MODE_LOCAL
 
     @property
     def local_url(self) -> str:
@@ -62,22 +64,12 @@ class PluginSettings:
         self._set("local_url", value.strip() or DEFAULT_LOCAL_URL)
 
     @property
-    def remote_url(self) -> str:
-        return self._get("remote_url", DEFAULT_REMOTE_URL)
-
-    @remote_url.setter
-    def remote_url(self, value: str) -> None:
-        self._set("remote_url", value.strip())
-
-    @property
     def token(self) -> str:
-        """The pasted token: a Cognito bearer token in REMOTE (cloud) mode,
-        or the optional shared tailnet token in LOCAL mode (remote-daemon
-        design -- OFF by default; the tailnet itself is the trust boundary,
-        no TLS). ``effective_token()`` rides this verbatim in BOTH modes now
-        -- the field is the same "Server token (optional)" UI row either
-        way. Auth ACQUISITION (Cognito sign-in flow) is out of scope for
-        milestone 1 -- paste-only."""
+        """The optional shared tailnet token. OFF (empty) by default: the
+        tailnet itself is the trust boundary, so a token is only needed when
+        the daemon opts into the ``TRID3NT_ACCESS_TOKEN`` gate. Pasted verbatim
+        into the connect handshake; never expires (a static shared secret --
+        it is either accepted or rejected)."""
         return self._get("token", "")
 
     @token.setter
@@ -244,11 +236,8 @@ class PluginSettings:
     # -- derived --------------------------------------------------------------- #
 
     def effective_url(self) -> str:
-        return self.local_url if self.mode == MODE_LOCAL else self.remote_url
+        return self.local_url
 
     def effective_token(self) -> str:
-        """Remote-daemon design: the token rides in BOTH modes now -- LOCAL
-        mode's optional shared tailnet token defaults to "" (OFF), so this is
-        a no-op change for every existing local setup; REMOTE mode is
-        unchanged (the Cognito bearer token it always sent)."""
+        """The optional shared tailnet token (``""`` = OFF, the default)."""
         return self.token

@@ -88,7 +88,7 @@ from qgis.PyQt.QtCore import QDateTime, Qt
 from qgis.PyQt.QtGui import QColor
 
 from . import ramps, temporal
-from ..plugin_settings import MODE_LOCAL, PluginSettings
+from ..plugin_settings import PluginSettings
 from ..net.trid3nt_client import LayerEvent, qgis_xyz_uri, s3_to_http
 
 _SAFE_NAME = re.compile(r"[^A-Za-z0-9_.-]+")
@@ -921,11 +921,6 @@ class LayerMaterializer:
                 f"raster '{event.name}': tile template wraps a non-s3 uri "
                 f"({cog_uri}) -- skipped"
             )
-        if self._settings is not None and self._settings.mode != MODE_LOCAL:
-            return (
-                f"raster '{event.name}': s3 uri in remote mode -- skipped "
-                "(no presigned fetch yet)"
-            )
         http = s3_to_http(cog_uri, self._effective_data_base())
         if not http:
             return f"raster '{event.name}': unparseable s3 uri ({cog_uri}) -- skipped"
@@ -971,11 +966,6 @@ class LayerMaterializer:
             return self._add_to_group(layer, event, f"vector '{event.name}' added (inline GeoJSON)")
 
         if event.uri.startswith("s3://"):
-            if self._settings.mode != MODE_LOCAL:
-                return (
-                    f"vector '{event.name}': s3 uri in remote mode -- skipped "
-                    "(no presigned fetch yet)"
-                )
             http = s3_to_http(event.uri, self._effective_data_base())
             if not http:
                 return f"vector '{event.name}': unparseable s3 uri -- skipped"

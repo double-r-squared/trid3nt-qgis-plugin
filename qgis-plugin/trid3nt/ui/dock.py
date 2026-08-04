@@ -16,9 +16,9 @@ Milestone 3 additions on top of milestone 2:
   * SELECTED-POLYGON AOI: retired by A2 (NATE 2026-07-20) -- the AOI model is
     explicit-only (the drawn Set-AOI rectangle / rehydrated case bbox); the
     selection + canvas toggles are gone.
-  * TOKEN UX: Settings explains where a token comes from (?st= carrier); an
-    auth-classified failure STOPS the reconnect ladder and paints an honest
-    "token expired -- paste a fresh one" status instead of silently looping.
+  * TOKEN UX: the optional shared tailnet token lives in Settings; an
+    auth-classified failure (the daemon rejected the token) STOPS the reconnect
+    ladder and paints an honest "token rejected" status instead of looping.
 
 Milestone 2 chat surface on top of milestone 1's plain-text bubbles:
 
@@ -44,15 +44,11 @@ Milestone 2 chat surface on top of milestone 1's plain-text bubbles:
     ``_on_case_open_event``) restores its chat AND its persisted layers in
     ONE gesture -- no separate "Open in QGIS"/"Export GeoTIFFs" action. The
     layers ride the SAME ``case-open`` WS envelope the chat replay uses
-    (``session_state.loaded_layers``, LOCAL mode only -- ``MODE_LOCAL``
-    guard in ``_on_case_open_event``) and land via the SAME by-URI
-    materializer live-published layers use. REMOTE mode has no automatic
-    restore yet (it cannot stream the store directly); its old manual
-    export trigger is gone too (zero user-facing export -- native QGIS
-    covers any file export the user wants), so the remote
+    (``session_state.loaded_layers``) and land via the SAME by-URI
+    materializer live-published layers use. There is zero user-facing export
+    (native QGIS covers any file export the user wants), so the
     materialize+download fallback (``hydrate_case_layers``, ``_ExportTask``)
-    is currently unreached from the UI, condemned in DELETION_LEDGER pending
-    remote store access.
+    is currently unreached from the UI -- condemned in DELETION_LEDGER.
 
 All socket work lives on the AgentBridge worker thread; this widget only
 handles Qt signals. The export POST runs on a plain worker thread emitting
@@ -127,7 +123,7 @@ from ..net.trid3nt_client import (
     resolve_http_base,
 )
 from ..net.ws_bridge import AgentBridge
-from ..plugin_settings import MODE_LOCAL, PluginSettings
+from ..plugin_settings import PluginSettings
 from ..render import probe
 from ..render.layers import (
     LayerMaterializer,
@@ -332,17 +328,14 @@ class Trid3ntDock(QDockWidget):
     def _auto_connect_local_once(self) -> None:
         """AUTO-CONNECT (live-feedback 2026-07-09): cases must be visible
         WITHOUT the user pressing Connect, and the dock should not require a
-        manual connect at all in local mode. Fires once per dock show (reset
-        on hide, so re-opening the dock tries again); never retries on
-        failure within one show -- a failed attempt just paints the existing
-        honest status line via ``connect_agent``'s own failure path, exactly
-        like a manual click would. Remote mode is unaffected (manual connect
-        only, a pasted token is required)."""
+        manual connect at all. Fires once per dock show (reset on hide, so
+        re-opening the dock tries again); never retries on failure within one
+        show -- a failed attempt just paints the existing honest status line
+        via ``connect_agent``'s own failure path, exactly like a manual click
+        would."""
         if self._auto_connect_done_this_show:
             return
         self._auto_connect_done_this_show = True
-        if self.settings.mode != MODE_LOCAL:
-            return
         if self.bridge.running:
             return
         self.connect_agent()
@@ -1205,11 +1198,7 @@ class Trid3ntDock(QDockWidget):
         handshake; when absent (older daemon, or not connected yet -- e.g.
         the cold pre-connect case-list fetch) it derives ``:8766`` from the
         ONE "Server URL" setting's host, so pointing that URL at a tailnet
-        peer just works with no second field to configure. REMOTE (cloud)
-        mode is untouched -- CloudFront routes ``/api/*`` off the SAME
-        host/port as the WS, not a fixed :8766."""
-        if self.settings.mode != MODE_LOCAL:
-            return case_export.ws_url_to_http_base(self.settings.remote_url)
+        peer just works with no second field to configure."""
         return resolve_http_base(self._advertised_http_base, self.settings.local_url)
 
     def _effective_data_base(self) -> str:
@@ -1223,7 +1212,7 @@ class Trid3ntDock(QDockWidget):
         if self.bridge.running:
             return
         url = self.settings.effective_url()
-        if not url or url == "wss://":
+        if not url:
             self.status_label.setText("Set the agent URL in Settings first")
             self._set_dot("error")
             return
@@ -1241,15 +1230,14 @@ class Trid3ntDock(QDockWidget):
         self.bridge.start(
             url,
             token=self.settings.effective_token(),
-            anonymous_user_id=anon if self.settings.mode == MODE_LOCAL else None,
+            anonymous_user_id=anon,
             case_title=title,
             case_bbox=None,
-            # Live-feedback 2026-07-09: in local mode REUSE the resumed /
-            # newest existing case instead of minting a fresh "QGIS session
-            # ..." case on every connect (with auto-connect that regrew case
-            # clutter per dock-show); create only when zero cases exist.
-            # Remote keeps the milestone 1 always-create behavior.
-            reuse_case=self.settings.mode == MODE_LOCAL,
+            # Live-feedback 2026-07-09: REUSE the resumed / newest existing
+            # case instead of minting a fresh "QGIS session ..." case on every
+            # connect (with auto-connect that regrew case clutter per
+            # dock-show); create only when zero cases exist.
+            reuse_case=True,
         )
 
     def disconnect_agent(self) -> None:
@@ -1453,36 +1441,27 @@ class Trid3ntDock(QDockWidget):
             return "Refreshing case list ..."
         return "Not connected -- the list refreshes on the next connect"
 
-    # -- remote-mode case-layer hydration (condemned; see DELETION_LEDGER) ------ #
+    # -- case-layer materialize+download fallback (condemned; see DELETION_LEDGER) - #
 
     def hydrate_case_layers(self, case_id: str, label: str) -> None:
-        """REMOTE-mode-ONLY case-layer materialize+download fallback (renamed
-        from ``open_case_in_qgis``, matching the server's ``cases.
+        """Case-layer materialize+download fallback (renamed from
+        ``open_case_in_qgis``, matching the server's ``cases.
         hydrate_case_layers``, ADR 0058).
 
-        LOCAL mode no longer calls this: ``_on_case_open_event`` already
-        restores a case's layers automatically, in the SAME gesture as the
-        chat replay, the instant the case becomes active (decision A,
-        NATE 2026-07-31) -- the by-URI manifest fetch this method used to
-        also perform for local mode was fully redundant with that (same
-        source data, same materializer) and has been deleted.
-
-        REMOTE mode: not currently wired to any UI action either (zero
-        user-facing export remains -- native QGIS covers any file export a
-        user wants). Kept callable, not deleted, so the remote
-        materialize+download machinery (``_ExportTask`` /
-        ``case_export.post_export_case`` / ``materializer.
-        materialize_export``) is not lost outright -- condemned in
-        DELETION_LEDGER pending remote store access, at which point this is
-        the natural fold-in point for an automatic remote restore too. A
-        LOCAL-mode call is a defensive no-op (should never happen -- nothing
-        in the dock calls this for local anymore).
+        Unreached from the UI: ``_on_case_open_event`` already restores a
+        case's layers automatically, in the SAME gesture as the chat replay,
+        the instant the case becomes active (decision A, NATE 2026-07-31); the
+        by-URI manifest fetch this method used to perform was fully redundant
+        with that (same source data, same materializer). There is no
+        user-facing export action either (native QGIS covers any file export).
+        Kept callable, not deleted, so the materialize+download machinery
+        (``_ExportTask`` / ``case_export.post_export_case`` /
+        ``materializer.materialize_export``) is not lost outright -- condemned
+        in DELETION_LEDGER.
         """
-        if self.settings.mode == MODE_LOCAL:
-            return
         base_url = self._effective_http_base()
         self._note(
-            f"Exporting case '{label}' on the remote agent "
+            f"Exporting case '{label}' on the agent "
             f"({base_url}) -- artifacts download to a local temp dir ..."
         )
         task = _ExportTask(
@@ -1714,7 +1693,7 @@ class Trid3ntDock(QDockWidget):
         data_base: str = "",
     ) -> None:
         self._connected = True
-        if is_anonymous and self.settings.mode == MODE_LOCAL:
+        if is_anonymous:
             self.settings.anonymous_user_id = user_id
         # Remote-daemon (tailnet) endpoint derivation: stash whatever this
         # handshake advertised BEFORE any :8766 call or layer materialize
@@ -1752,14 +1731,14 @@ class Trid3ntDock(QDockWidget):
         self.status_label.setText(f"Connection failed: {message}")
 
     def _on_auth_expired(self, message: str) -> None:
-        """The token was rejected (broker 401/403 or in-band AUTH_REQUIRED):
-        the worker has STOPPED -- no silent reconnect loop. Say exactly what
-        to do next."""
+        """The shared tailnet token was rejected (broker 401/403 or in-band
+        AUTH_REQUIRED): the worker has STOPPED -- no silent reconnect loop. Say
+        exactly what to do next."""
         self._connected = False
         self._pending_open_case = None  # the connect this was riding died
         self._set_dot("error")
         self.status_label.setText(
-            "Token expired or rejected -- paste a fresh one in Settings"
+            "Token rejected -- check the shared token in Settings"
         )
         self._note(f"Authentication failed: {message}", error=True)
 
@@ -2073,14 +2052,10 @@ class Trid3ntDock(QDockWidget):
         self._set_dot("connected")
         self._refresh_model_label()  # status text = active model, not case-id
         self._replay_chat_history(info.chat_messages)
-        self._note(f"Case '{info.title}' active")
         # Decision A (NATE 2026-07-31): layer restore rides the SAME gesture
-        # as the chat replay above, LOCAL mode only -- the by-URI
-        # materializer needs the store directly reachable (MinIO), which
-        # remote mode cannot do yet. Remote mode still gets its chat back;
-        # it just has no automatic (or, currently, any UI) layer restore
-        # until remote store access lands.
-        if self.settings.mode == MODE_LOCAL and info.layers:
+        # as the chat replay above -- the by-URI materializer reads the store
+        # directly (MinIO on this box or the tailnet peer).
+        if info.layers:
             notes = self.materializer.materialize(info.layers)
             if notes:
                 # BUG 3a (live-feedback 2026-07-12): the case-open replay
@@ -2109,9 +2084,9 @@ class Trid3ntDock(QDockWidget):
 
     def _zoom_after_case_open(self, info) -> None:
         """ITEM D (live-feedback 2026-07-10, auto-focus on every case
-        switch): zoom the canvas to the just-opened case's area, and say
-        so. Fallback ladder, each rung tried only when the previous one is
-        absent or its transform fails:
+        switch): zoom the canvas to the just-opened case's area. Fallback
+        ladder, each rung tried only when the previous one is absent or its
+        transform fails:
 
           1. ``info.bbox`` -- the case-open's own ``session_state.case.bbox``
              (EPSG:4326).
@@ -2126,19 +2101,17 @@ class Trid3ntDock(QDockWidget):
              rehydration) -- can carry a bbox even when (1)-(3) come up
              empty.
 
-        A successful zoom appends "Zoomed to case area" so the behavior is
-        visible. A genuinely bbox-less, vector-less case (an OLD raster-only
-        case predating bbox seeding) says so honestly instead of silently
-        leaving the view wherever it was. Headless-safe: no canvas (no
-        ``iface``) is a silent no-op, never a crash (there would be no one
-        to show the note to in that environment either).
+        The zoom is silent (NATE de-noise 2026-08-04: the "Zoomed to case
+        area" subtext is gone). A genuinely bbox-less, vector-less case (an
+        OLD raster-only case predating bbox seeding) still says so honestly
+        instead of silently leaving the view wherever it was. Headless-safe:
+        no canvas (no ``iface``) is a silent no-op, never a crash.
         """
         try:
             canvas = self.iface.mapCanvas()
         except Exception:  # noqa: BLE001 -- no canvas (headless), nothing to zoom
             return
         if info.bbox is not None and zoom_to_bbox4326(canvas, info.bbox):
-            self._note("Zoomed to case area")
             return
         try:
             dest_crs = canvas.mapSettings().destinationCrs()
@@ -2146,11 +2119,9 @@ class Trid3ntDock(QDockWidget):
             return
         extent = self.materializer.last_added_vector_extent(dest_crs)
         if zoom_to_extent(canvas, extent):
-            self._note("Zoomed to case area")
             return
         fallback = self._fallback_case_bbox(info)
         if fallback is not None and zoom_to_bbox4326(canvas, fallback):
-            self._note("Zoomed to case area")
             return
         self._note("Case has no stored map area - keeping current view")
 
