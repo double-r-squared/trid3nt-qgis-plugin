@@ -1,0 +1,9 @@
+fetch_living_atlas_layer:
+  - fetch this ESRI Living Atlas layer
+  - download a Living Atlas image service for my area
+  - pull the Living Atlas feature service into the map
+  - get the bytes for a Living Atlas dataset
+  - fetch an ArcGIS Living Atlas map service by id
+  - load an authoritative ESRI layer for this bbox
+  - fetch a Living Atlas layer from its service url
+  - retrieve the discovered Living Atlas layer

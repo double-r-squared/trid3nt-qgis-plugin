@@ -573,6 +573,12 @@ from .simulation.solver import solver  # noqa: E402,F401
 # 191 after ADR 0019 added search_spatial_functions here).
 from .search.search_tools import search_tools  # noqa: E402,F401
 from .search.search_spatial_functions import search_spatial_functions  # noqa: E402,F401
+# ESRI Living Atlas (ADR 0117): a scoped search over the harvested catalog + a
+# generic fetch bridge. Registered here (in-process) so both surface in the tool
+# retrieval index for their corpus queries (unlike the daemon-startup catalog
+# tools). The two harvested YAML catalogs are DATA, not code.
+from .search.search_living_atlas import search_living_atlas  # noqa: E402,F401
+from .search.fetch_living_atlas_layer import fetch_living_atlas_layer  # noqa: E402,F401
 
 # -- meta (web fetch, code exec, passthroughs, case utilities) --
 from .meta.code_exec_tool import code_exec_tool  # noqa: E402,F401

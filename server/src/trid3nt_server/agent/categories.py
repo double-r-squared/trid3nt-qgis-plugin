@@ -515,6 +515,8 @@ PRIMARY_CATEGORY: dict[str, str] = {
     "search_tools": "geographic_primitives",
     "search_data_catalog": "geographic_primitives",
     "fetch_from_catalog": "geographic_primitives",
+    "search_living_atlas": "geographic_primitives",
+    "fetch_living_atlas_layer": "geographic_primitives",
     "list_qgis_algorithms": "geographic_primitives",
     "describe_qgis_algorithm": "geographic_primitives",
     "qgis_process": "geographic_primitives",

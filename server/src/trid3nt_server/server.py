@@ -9115,6 +9115,10 @@ _SYNC_OFFLOAD_SUBSET_PREFIXES = ("compute_", "clip_")
 #:   fetch_gtsm_tide_surge  -> blocking CDS ZIP download + xr.open_mfdataset + per-gauge compute
 _ALWAYS_OFFLOAD_SYNC_TOOLS = frozenset(
     {
+        # first call builds the ~6.7k-doc dense index synchronously
+        # (sentence-transformers encode) - must never run on the WS loop
+        "search_living_atlas",
+        "fetch_living_atlas_layer",
         "fetch_topobathy",
         "fetch_dem",
         "fetch_3dep_extra",

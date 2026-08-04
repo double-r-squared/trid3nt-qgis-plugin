@@ -20,7 +20,7 @@ Invariants this module is responsible for:
 
 from __future__ import annotations
 
-from typing import Literal
+from typing import Any, Literal
 
 from pydantic import Field
 
@@ -44,6 +44,7 @@ __all__ = [
     "StormTracksLayerURI",
     "GOESSatelliteLayerURI",
     "NWMStreamflowLayerURI",
+    "LivingAtlasLayerURI",
     "LAYER_RESULT_MODELS",
 ]
 
@@ -522,6 +523,27 @@ class NWMStreamflowLayerURI(LayerURI):
     nldi_comids_discovered: int = 0
 
 
+class LivingAtlasLayerURI(LayerURI):
+    """A discovered ESRI Living Atlas layer ``LayerURI`` plus its curation envelope.
+
+    Built by ``fetch_living_atlas_layer`` (not a spec envelope hook -- the tool is
+    hand-written) around the router's produced ``LayerURI``. Carries NATE's
+    two-pool curation label so the agent/user can never mistake community-curated
+    content for authoritative ESRI content.
+
+    Extra fields beyond ``LayerURI``:
+    - ``curation`` -- "authoritative" (ESRI ``contentStatus`` badge) or "community".
+    - ``item_id`` -- the Living Atlas ArcGIS item id.
+    - ``service_type`` -- "Image Service" | "Feature Service" | "Map Service".
+    - ``provenance`` -- item id, curation, service type/url, owner, source string.
+    """
+
+    curation: Literal["authoritative", "community"] = "community"
+    item_id: str = ""
+    service_type: str = ""
+    provenance: dict[str, Any] = Field(default_factory=dict)
+
+
 #: name -> LayerURI-subclass. A spec's ``output.result_model`` string resolves
 #: here; the router builds the named subclass from the base LayerURI + the
 #: envelope hook's field dict. Empty of a name -> the plain LayerURI (no-op).
@@ -535,6 +557,7 @@ LAYER_RESULT_MODELS: dict[str, type[LayerURI]] = {
     "StormTracksLayerURI": StormTracksLayerURI,
     "GOESSatelliteLayerURI": GOESSatelliteLayerURI,
     "NWMStreamflowLayerURI": NWMStreamflowLayerURI,
+    "LivingAtlasLayerURI": LivingAtlasLayerURI,
 }
 
 
