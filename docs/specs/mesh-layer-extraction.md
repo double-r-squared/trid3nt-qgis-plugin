@@ -141,3 +141,17 @@ Cross-cutting, promoted from existing code to pipeline features:
    (TELEMAC already gates) or only in USER-GATED mode?
 3. DISV/gridgen for MODFLOW: queue into M-waves or leave with the
    MODFLOW coverage track?
+
+## Post-M4 addition (NATE-approved 2026-08-04): the build_mesh primitive
+
+After M3/M4 mature the paradigms, register ONE standalone tool -
+build_mesh: AOI/terrain + paradigm + resolution + drawn roles in ->
+published mesh preview layer + stats out, NO solver run. Qualifies as an
+irreducible input-authoring primitive under the atomic-tool rules (not a
+composed analysis). Standard acceptance: corpus queries + model-free
+retrieval proof + preview-gate integration. Until then the components
+stay internal (workflows insert them; the code playground can compose
+them for ad-hoc mesh authoring - the sandbox shares the server env, so
+agent/mesh imports there today). Rationale (NATE): separating costs the
+workflows nothing and expands functionality without breaking out of the
+sandbox.
