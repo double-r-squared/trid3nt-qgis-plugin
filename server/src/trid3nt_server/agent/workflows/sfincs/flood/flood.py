@@ -394,21 +394,29 @@ async def model_flood_scenario(
             from the sea, instead of the old silent rainfall-only degrade. ALL
             gated on ``is_coastal``  -  the
             inland/pluvial path is byte-identical (no boundary, quadtree unchanged).
-        quadtree: coastal SFINCS -- build the deck with a multi-level
-            REFINED QUADTREE grid + SnapWave wave coupling (incident + infragravity
-            waves) instead of a regular grid. This authoring requires cht_sfincs
-            (GPL-3.0), so it runs in a DEDICATED GPL-isolated Batch worker the
-            agent only SUBMITS: the workflow composes a build_spec from the
-            already-fetched topobathy + forcing, submits the deck-build Batch job
-            (``build_sfincs_quadtree_deck``), and feeds the resulting deck
-            manifest URI into the SAME ``run_solver('sfincs', ...)`` solve -- the
-            solve half is unchanged. INERT until NATE provisions + flips
-            ``TRID3NT_SOLVER_BACKEND=aws-batch`` + the deck-builder job-def
-            (``TRID3NT_AWS_BATCH_JOB_DEF_SFINCS_DECKBUILDER``); when unset the
-            quadtree request surfaces as a typed ``DECK_BUILD_FAILED`` failed
-            envelope (honest degrade, never silent). Implies ``coastal=True``.
-            ``False`` (default) → the regular-grid build_sfincs_model path,
-            byte-identical to today. The agent NEVER imports cht_sfincs.
+        quadtree: coastal SFINCS -- build the deck as a VARIABLE-RESOLUTION
+            QUADTREE grid (coarse offshore -> fine at the coast + any drawn
+            ``refine_region`` polygons) instead of a uniform regular grid, then
+            solve + postprocess it (M4 / ADR 0113). hydromt_sfincs CANNOT author a
+            quadtree from scratch (its ``setup_grid`` carries a ``# TODO
+            gdf_refinement`` and ``setup_dep`` raises ``NotImplementedError`` for
+            quadtree in every released version), so the authoring uses Deltares'
+            ``cht_sfincs`` (GPL-3.0). Because the regular path builds the deck
+            AGENT-SIDE via hydromt, and the agent NEVER imports cht_sfincs (GPL
+            isolation), the quadtree deck is built inside the ``grace2-sfincs``
+            WORKER image (which carries cht_sfincs + the SFINCS binary) run in its
+            ``--build-spec-uri`` build+solve mode: the workflow composes a
+            ``sfincs_build_spec`` (topobathy dem_uri + serialized surge forcing +
+            ``options.quadtree`` = {base_resolution_m, coast_refine_level,
+            refine_regions}), the worker runs ``build_sfincs_quadtree_deck`` ->
+            SFINCS solve -> the SAME face-aware postprocess, and writes the SAME
+            ``completion.json`` + ``publish_manifest.json`` the regular path emits.
+            The granularity lever stays the user's (base resolution + refinement
+            levels). Implies ``coastal=True`` (needs the merged topo-bathymetry
+            surface). ``False`` (default) → the regular-grid build_sfincs_model
+            path, byte-identical to today. The agent process NEVER imports
+            cht_sfincs; the SnapWave wave coupling is a documented follow-up (the
+            quadtree grid already carries the snapwave_mask).
         output_interval_min: animation map-output cadence in MINUTES (the SFINCS
             ``dtout``/``dtmaxout`` stride). Drives how often the solve writes a
             depth snapshot, hence how fast the animation reads. Resolved BY SIM
@@ -498,9 +506,10 @@ async def model_flood_scenario(
     # testable signal off the existing workflow inputs -- no geometry/coastline
     # lookup needed. When False, the DEM fetch stays on ``fetch_dem`` exactly as
     # the v0.1 land/pluvial path (regression-critical).
-    # ``quadtree`` (the cht_sfincs quadtree+SnapWave deck-build) is a
-    # coastal-only path -- a wave-coupled run needs the merged topo-bathymetry
-    # surface -- so it implies coastal regardless of the explicit flag.
+    # ``quadtree`` (the cht_sfincs variable-resolution coastal deck-build, M4 /
+    # ADR 0113) is a coastal-only path -- it needs the merged topo-bathymetry
+    # surface for the nearshore bed -- so it implies coastal regardless of the
+    # explicit flag.
     # scenario-coverage couplings. A ``compound`` run is BOTH a
     # coastal-surge AND a fluvial-discharge driver (plus the always-present
     # precip), so it lifts both ``coastal`` and ``river``. A ``tsunami`` run needs
@@ -682,9 +691,10 @@ async def model_flood_scenario(
     # live breadcrumb can show "k/total" while it runs. The fused fetcher phase
     # counts as ONE substep (it runs as a single off-loop ``_fetcher_chain`` under
     # one timeout budget -- see below), then build + solve + postprocess + publish.
-    # The quadtree (coastal) path swaps the regular run_solver for the
-    # combined deck-build+solve substep and adds a wave-postprocess substep. The
-    # plan is best-effort + re-declarable; ``begin_substeps`` no-ops when no
+    # The quadtree (coastal) path builds the variable-resolution deck inside the
+    # worker image (cht_sfincs, ADR 0113) and solves it in the same build+solve
+    # container substep. The plan is best-effort + re-declarable; ``begin_substeps``
+    # no-ops when no
     # emitter is bound (the verify/CI direct-call path) and degrades to label-only
     # if the real count diverges. Surfacing fewer is fine -- the breadcrumb just
     # shows the running index.
@@ -1608,13 +1618,14 @@ async def model_flood_scenario(
             # slow/throttled Batch API call can never stall the 12 s WS
             # heartbeat. ``run_solver`` is EMIT-FREE (it returns an
             # ``ExecutionHandle``; this workflow does all the emitting), so a
-            # worker thread is safe -- it mirrors the awaited async
-            # ``run_sfincs_quadtree`` on the coastal (quadtree) path.
+            # worker thread is safe (it returns an ExecutionHandle; this
+            # workflow does all the emitting). The quadtree path builds + solves
+            # in the worker image build+solve mode (ADR 0113), not here.
             handle = await asyncio.to_thread(
                 run_solver,
                 solver="sfincs",
-                # The regular-grid model_setup.setup_uri (the quadtree path no
-                # longer reaches here -- it solved inside the combined job).
+                # The regular-grid model_setup.setup_uri (the quadtree path
+                # builds + solves inside the worker build+solve container).
                 model_setup_uri=solve_model_setup_uri,
                 compute_class=effective_compute_class,
             )
@@ -2299,8 +2310,10 @@ async def sfincs_flood(
             sea floor / bathymetry".
             ``coastal=True`` also auto-wires a sea water-level boundary + waves
             (no ``surge_forcing`` needed); set it only when the sea is involved.
-        quadtree: set ``True`` for storm waves / wave run-up (implies
-            ``coastal=True``; auto-enabled for any coastal run). Default ``False``.
+        quadtree: set ``True`` for a VARIABLE-RESOLUTION coastal mesh -- coarse
+            offshore, fine at the shoreline (and inside any drawn refine region) --
+            authored by cht_sfincs in the GPL-isolated worker (M4 / ADR 0113).
+            Implies ``coastal=True``. Default ``False`` (uniform regular grid).
         output_interval_min: optional animation frame spacing in minutes (coastal
             runs default fine; pluvial stays hourly). Leave unset unless asked.
         building_obstacles: OPTIONAL, default ``False`` (OFF). When truthy, the

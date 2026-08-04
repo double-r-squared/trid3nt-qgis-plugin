@@ -64,8 +64,13 @@ def validate_job_spec(spec: Any) -> dict[str, Any]:
     inputs = spec.get("inputs")
     if not isinstance(inputs, dict):
         raise ValueError("job_spec.inputs must be an object")
-    if not inputs.get("dem_uri") or not inputs.get("landcover_uri"):
-        raise ValueError("job_spec.inputs must carry dem_uri + landcover_uri")
+    # The QUADTREE path (options.quadtree) uses Manning CONSTANTS (not a landcover
+    # raster), so it needs only the topobathy dem_uri. The regular grid needs both.
+    _is_quadtree = bool((spec.get("options") or {}).get("quadtree"))
+    if not inputs.get("dem_uri"):
+        raise ValueError("job_spec.inputs must carry dem_uri")
+    if not _is_quadtree and not inputs.get("landcover_uri"):
+        raise ValueError("job_spec.inputs must carry landcover_uri (regular grid)")
 
     out = dict(spec)
     out["bbox"] = bbox_f

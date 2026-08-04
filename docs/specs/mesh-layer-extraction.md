@@ -133,6 +133,17 @@ Cross-cutting, promoted from existing code to pipeline features:
   quadtree leg gets built for real atop stage 2 (cht_sfincs/hydromt
   quadtree, GPL-isolated); the inert stub dies when the real leg
   replaces it.
+  DELIVERED (2026-08-04, ADR 0113): built for real with cht_sfincs==1.0.0
+  (GPL-3, worker-isolated) -- hydromt_sfincs CANNOT author a quadtree from
+  scratch at any version (setup_grid TODO + setup_dep NotImplementedError).
+  services/workers/_sfincs_build/deck_quadtree.py builds a variable-resolution
+  coastal quadtree (coarse offshore -> fine at the shore + drawn refine_regions),
+  per-face bed from our topobathy (no cht_bathymetry), auto seaward boundary,
+  surge forcing, mesh.geojson preview. Offline canary: production module ->
+  SFINCS v2.3.3 solve -> face-indexed output (5610 faces, 3 levels 200/100/50 m,
+  peak 8.0 m over 2740 faces); the read-side probe (_is_quadtree_output/
+  _read_face_coords) verified REAL (not bit-rotted). The phantom DECK_BUILD_FAILED
+  narrative deleted (ledger). SnapWave coupling + quadtree subgrid deferred.
 - OCEANMESH WAVE (NATE pull-forward 2026-08-04, runs right after M3,
   before M4): oceanmesh in an isolated worker (GPL-3) backing a
   coastal_tin generator component in the generation stage - inherits

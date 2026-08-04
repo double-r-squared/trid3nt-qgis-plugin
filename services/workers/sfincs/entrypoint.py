@@ -536,13 +536,23 @@ def main(argv: list[str] | None = None) -> int:
             # agent reproduces the SAME failed AssessmentEnvelope.
             from services.workers._sfincs_build import (
                 build_sfincs_deck,
+                build_sfincs_quadtree_deck,
                 validate_job_spec,
             )
             from services.workers._sfincs_build.deck import SFINCSSetupError
 
             spec = validate_job_spec(_read_manifest(build_spec_uri))
+            # QUADTREE (M4): a variable-resolution coastal quadtree deck authored
+            # by cht_sfincs (hydromt cannot build quadtree from scratch; ADR 0113).
+            # The solve + postprocess tail below is IDENTICAL to the regular grid
+            # (SFINCS consumes qtrfile natively; the read-side probe is face-aware).
+            _is_quadtree = bool((spec.get("options") or {}).get("quadtree"))
             try:
-                deck_provenance = build_sfincs_deck(spec, scratch, _download)
+                deck_provenance = (
+                    build_sfincs_quadtree_deck(spec, scratch, _download)
+                    if _is_quadtree
+                    else build_sfincs_deck(spec, scratch, _download)
+                )
             except SFINCSSetupError as exc:
                 LOG.warning("worker build failed: %s (%s)", exc.error_code, exc)
                 result.update(
