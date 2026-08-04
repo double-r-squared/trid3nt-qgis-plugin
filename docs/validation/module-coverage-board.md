@@ -9,6 +9,19 @@ template landing (standing close-out rule). Mined by 13 research agents,
 
 **TOTALS: 126 modules mined, 334 candidate template rows, of which 102 are unsigned CAND-S (pre-authorized easy tier).**
 
+WAVE-2 TRIAGE RE-SCOPE (ADR 0121, 2026-08-04): the hazard-cluster wave-2 rows
+(openquake scenario + logic-tree, pelicun FEMA-P58 / HAZUS-EQ / loss-aggregation,
+swmm wq_buildup_washoff, geoclaw gauge-timeseries, landlab flow-accumulator /
+priorityflood / green-ampt, elmfire elliptical-verification, swan windsea-swell /
+regression) were ground-truthed against the actual worker/deck/library surfaces
+and NONE survived as a pure-knob drop-in. 7 are M/L needing new worker/library
+deck-authoring or an image rebuild; swmm wq is already-covered by
+swmm_urban_flood(pollutants); the remaining 4 (landlab flow-accum folding
+priorityflood, landlab green-ampt, elmfire ellipse, geoclaw gauge) are contained
+server-side / exec-mode FEATURE builds with no image rebuild -- the recommended
+next-build subset. See ADR 0121 for the per-row verdicts, blockers, and the
+cheapest-first build order. 0 landed this wave.
+
 citations live-verified; roster gaps recorded honestly per engine.
 
 
