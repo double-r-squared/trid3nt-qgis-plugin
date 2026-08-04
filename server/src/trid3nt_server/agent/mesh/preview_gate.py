@@ -69,13 +69,22 @@ def default_gate_mode(paradigm: str) -> GateMode:
 def mesh_gate_should_fire(paradigm: str, mode: GateMode | None = None) -> bool:
     """Whether the preview/approve gate fires for ``paradigm`` under ``mode``.
 
-    ``mode=None`` resolves to :func:`default_gate_mode` (tin=ON / regular=OFF).
-    The gate fires iff the resolved mode is ``user_gated``. This is the ONE
-    decision every engine shares: a tin run always gates (its default mode is
-    ``user_gated``); a regular-grid run gates only when the caller passes
-    ``mode="user_gated"`` (the later run-mode lever), else runs AUTO.
+    ``mode`` is the SAME run-mode lever as the ADR 0107 input-review gate: an
+    explicit ``"user_gated"`` (a per-run ``input_mode`` threaded here) fires the
+    gate for EVERY paradigm, including regular grids. ``mode=None`` resolves to
+    :func:`default_gate_mode` (tin=ON / regular=OFF); a regular grid then ALSO
+    consults the session-level lever (``TRID3NT_INPUT_GATE_MODE``), so a session
+    that opted into user_gated flips regular-grid meshes ON too. A tin run always
+    gates (its own signed ON default).
     """
-    resolved = mode or default_gate_mode(paradigm)
+    if mode is not None:
+        return mode == "user_gated"
+    resolved = default_gate_mode(paradigm)
+    if resolved != "user_gated":
+        # Regular / raster / amr: the shared session lever can turn the gate ON.
+        from trid3nt_server.agent.gates.input_review import resolve_input_gate_mode
+
+        resolved = resolve_input_gate_mode(None)
     return resolved == "user_gated"
 
 

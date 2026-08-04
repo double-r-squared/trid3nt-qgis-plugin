@@ -47,6 +47,7 @@ from trid3nt_contracts.landlab_contracts import (
 from trid3nt_contracts.tool_registry import AtomicToolMetadata
 
 from trid3nt_server.agent.tools import register_tool
+from trid3nt_server.agent.gates.input_review import gate_input_review
 from trid3nt_server.agent.tool_arg_normalizer import coerce_bbox_value
 from trid3nt_server.agent.tools.publish_layer.publish_layer import PublishLayerError, publish_layer
 from trid3nt_server.agent.workflows.landlab._template_card import TemplateCard
@@ -191,6 +192,7 @@ async def landlab_susceptibility(
     storm_duration_hr: float | None = None,
     rainfall_return_period_yr: int = 100,
     compute_class: str = "standard",
+    input_mode: str | None = None,
     # absorb LLM-invented kwargs (centralized at server.py via
     # tool_arg_normalizer, but kept as belt-and-suspenders).
     **_extra_ignored: Any,
@@ -241,6 +243,9 @@ async def landlab_susceptibility(
         rainfall_return_period_yr: design-storm return period (years) for
             the Atlas-14 triggering-rainfall lookup (default 100).
         compute_class: compute class (default "standard").
+        input_mode: run-mode lever (ADR 0107). ``"user_gated"`` presents the
+            resolved triggering rainfall + demo soil block for review before
+            the solve; ``"auto"`` (default) proceeds with them labeled.
 
     Returns:
         On success: ``LandlabSusceptibilityLayerURI`` -- susceptibility/
@@ -370,6 +375,30 @@ async def landlab_susceptibility(
             basis="default_demo",
             note="no SSURGO/POLARIS soil fetcher yet; not site-calibrated",
         ))
+
+    # --- ADR 0107 two-mode input gate: review-before-run -----------------------
+    # The triggering forcing (Atlas-14 rainfall/recharge) + demo soil block are
+    # resolved; user_gated mode presents them for review/adjust before the solve.
+    _review = await gate_input_review(
+        tool_name="landlab_susceptibility",
+        mode=input_mode,
+        entries=provenance,
+        params={
+            "rainfall_intensity_mm_hr": rainfall_intensity_mm_hr,
+            "recharge_mm_day": recharge_mm_day,
+        },
+    )
+    if _review.cancelled:
+        return {
+            "status": "error",
+            "error_code": "USER_INPUT_CANCELLED",
+            "error_message": f"landlab_susceptibility {_review.cancel_reason}",
+        }
+    provenance = _review.entries
+    _rv_rain = _review.params.get("rainfall_intensity_mm_hr", rainfall_intensity_mm_hr)
+    _rv_rech = _review.params.get("recharge_mm_day", recharge_mm_day)
+    rainfall_intensity_mm_hr = float(_rv_rain) if _rv_rain is not None else None
+    recharge_mm_day = float(_rv_rech) if _rv_rech is not None else None
 
     try:
         kwargs: dict[str, Any] = dict(

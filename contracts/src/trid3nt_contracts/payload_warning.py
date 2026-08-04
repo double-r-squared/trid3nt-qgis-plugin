@@ -49,7 +49,7 @@ from typing import Any, ClassVar, Literal
 
 from pydantic import Field, field_validator, model_validator
 
-from .common import GraceModel, ULIDStr
+from .common import GraceModel, SyntheticInput, ULIDStr
 
 __all__ = [
     "PayloadWarningOption",
@@ -434,6 +434,16 @@ class PayloadWarningEnvelopePayload(GraceModel):
     ttl_seconds: int = Field(default=300, ge=1)
     granularity: GranularitySuggestion | None = None
     time_scale: TimeScaleSuggestion | None = None
+    #: OPTIONAL resolved input-provenance table (ADR 0107, two-mode INPUT_REQUIRED
+    #: gate). When present the envelope is a USER-GATED input REVIEW card: the
+    #: client renders one row per resolved physical input (param = value [basis,
+    #: source]) so the user reviews what was fetched / interpreted / defaulted
+    #: BEFORE the solver launches, and adjusts a value via ``narrow_scope`` +
+    #: ``revised_args`` (the "provide values" action) or approves via ``proceed``.
+    #: On ``proceed`` the run stamps exactly these entries into its result so
+    #: what-was-approved == what-ran. None on ordinary payload / cost / mesh
+    #: gates -- fully back-compatible.
+    synthetic_inputs: list[SyntheticInput] | None = None
 
     @model_validator(mode="after")
     def _validate_options_unique(self) -> "PayloadWarningEnvelopePayload":

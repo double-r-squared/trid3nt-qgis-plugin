@@ -160,6 +160,12 @@ class OpenQuakeRunArgs(EngineRunArgsMixin):
 
     gmpe: str = Field(default=DEFAULT_GMPE, min_length=1)
 
+    # Reference site condition (Vs30, m/s) for the [site_params] deck block. The
+    # 760 m/s default is the generic NEHRP B/C rock boundary -- a DEMO default,
+    # NOT a site-specific measurement (there is no Vs30 fetcher yet, ADR 0107).
+    # ADDITIVE: default reproduces the prior hardcoded 760.0 byte-for-byte.
+    reference_vs30_ms: float = Field(default=760.0, gt=0.0)
+
     # Gutenberg-Richter recurrence + magnitude range of the demo area source.
     # TENTATIVE demo seismicity (narrated as demo values by the composer).
     a_value: float = Field(default=4.0)

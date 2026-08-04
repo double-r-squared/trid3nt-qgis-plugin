@@ -51,7 +51,10 @@ from trid3nt_contracts.openquake_contracts import (
 )
 from trid3nt_contracts.tool_registry import AtomicToolMetadata
 
+from trid3nt_contracts.common import SyntheticInput
+
 from trid3nt_server.agent.tools import register_tool
+from trid3nt_server.agent.gates.input_review import gate_input_review
 from trid3nt_server.agent.tool_arg_normalizer import coerce_bbox_value
 from trid3nt_server.agent.workflows.openquake._template_card import TemplateCard
 from trid3nt_server.agent.workflows.openquake.postprocess_openquake import (
@@ -149,7 +152,9 @@ async def openquake_psha(
     b_value: float = 1.0,
     min_magnitude: float = 5.0,
     max_magnitude: float = 7.5,
+    vs30: float | None = None,
     compute_class: str = "standard",
+    input_mode: str | None = None,
     # absorb LLM-invented kwargs (centralized at server.py via
     # tool_arg_normalizer, but kept as belt-and-suspenders).
     **_extra_ignored: Any,
@@ -190,7 +195,12 @@ async def openquake_psha(
             "BooreAtkinson2008".
         a_value/b_value: demo Gutenberg-Richter recurrence, default 4.0/1.0.
         min_magnitude/max_magnitude: demo source range, default 5.0/7.5.
+        vs30: reference site Vs30 (m/s). Unset -> the generic 760 rock demo
+            default (labeled, not site-specific; no Vs30 fetcher yet).
         compute_class: default "standard".
+        input_mode: run-mode lever (ADR 0107). ``"user_gated"`` presents the
+            reference Vs30 for review before the solve; ``"auto"`` (default)
+            proceeds with it labeled.
 
     Returns:
         On success: ``SeismicHazardLayerURI`` with ``max_hazard_value``,
@@ -234,6 +244,7 @@ async def openquake_psha(
             b_value=float(b_value),
             min_magnitude=float(min_magnitude),
             max_magnitude=float(max_magnitude),
+            reference_vs30_ms=(float(vs30) if vs30 is not None else 760.0),
         )
     except Exception as exc:  # noqa: BLE001 -- pydantic ValidationError or coercion
         return {
@@ -241,6 +252,35 @@ async def openquake_psha(
             "error_code": "OQ_PARAMS_INVALID",
             "error_message": f"invalid OpenQuake run arguments: {exc}",
         }
+
+    # --- ADR 0107 two-mode input gate: the reference Vs30 is a physically
+    # dominant site condition with no fetcher yet -- label the 760 rock default
+    # (or a user value) and, in user_gated mode, present it for review before the
+    # (consequential Batch) PSHA solve. auto (session default) + headless proceed.
+    _vs30_user = vs30 is not None
+    _vs30_prov = [SyntheticInput(
+        param="vs30", value=round(float(run_args.reference_vs30_ms), 1),
+        units="m/s", basis="user" if _vs30_user else "default_demo",
+        note=(None if _vs30_user
+              else "generic NEHRP B/C rock default; no Vs30 fetcher yet (not site-specific)"),
+    )]
+    _review = await gate_input_review(
+        tool_name="openquake_psha", mode=input_mode,
+        entries=_vs30_prov, params={"vs30": float(run_args.reference_vs30_ms)},
+    )
+    if _review.cancelled:
+        return {
+            "status": "error",
+            "error_code": "USER_INPUT_CANCELLED",
+            "error_message": f"openquake_psha {_review.cancel_reason}",
+        }
+    _vs30_prov = _review.entries
+    _rv_vs30 = _review.params.get("vs30")
+    if _rv_vs30 is not None and float(_rv_vs30) != float(run_args.reference_vs30_ms):
+        run_args = run_args.model_copy(update={"reference_vs30_ms": float(_rv_vs30)})
+        _vs30_prov = [SyntheticInput(
+            param="vs30", value=round(float(_rv_vs30), 1), units="m/s",
+            basis="user", note="user-revised at review")]
 
     logger.info(
         "openquake_psha bbox=%s imt=%s poe=%.4g inv_time=%.0fyr "
@@ -258,6 +298,7 @@ async def openquake_psha(
             run_args,
             compute_class=compute_class,
         )
+        layer = layer.model_copy(update={"synthetic_inputs": _vs30_prov})
         logger.info(
             "openquake_psha complete layer_id=%s max_hazard=%.4g "
             "hazard_area_km2=%.6g return_period=%.0fyr uri=%s",
@@ -396,6 +437,9 @@ def assemble_build_spec(
         "site_grid_spacing_km": grid_km,
         "max_distance_km": float(run_args.max_distance_km),
         "gmpe": run_args.gmpe,
+        # ADR 0107: the reference Vs30 (default 760 rock) rides to the worker
+        # deck; a user-supplied value overrides the demo default byte-for-byte.
+        "reference_vs30_value": float(getattr(run_args, "reference_vs30_ms", 760.0)),
         "a_value": float(run_args.a_value),
         "b_value": float(run_args.b_value),
         "min_magnitude": float(run_args.min_magnitude),

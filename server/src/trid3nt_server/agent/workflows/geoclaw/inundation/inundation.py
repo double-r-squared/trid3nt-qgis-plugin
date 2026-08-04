@@ -47,6 +47,7 @@ from trid3nt_contracts.geoclaw_contracts import (
 from trid3nt_contracts.tool_registry import AtomicToolMetadata
 
 from trid3nt_server.agent.tools import register_tool
+from trid3nt_server.agent.gates.input_review import gate_input_review
 from trid3nt_server.agent.tool_arg_normalizer import coerce_bbox_value
 from trid3nt_server.agent.tools.publish_layer.publish_layer import PublishLayerError, publish_layer
 from trid3nt_server.agent.workflows.geoclaw._template_card import TemplateCard
@@ -158,6 +159,7 @@ async def geoclaw_inundation(
     coastal_gauge_lonlat: tuple[float, float] | list[float] | None = None,
     fgmax_arrival_tol_m: float | None = None,
     compute_class: str = "standard",
+    input_mode: str | None = None,
     # absorb LLM-invented kwargs (centralized at server.py via
     # tool_arg_normalizer, but kept as belt-and-suspenders).
     **_extra_ignored: Any,
@@ -215,6 +217,10 @@ async def geoclaw_inundation(
         fgmax_arrival_tol_m: optional wet-cell threshold for arrival time
             (default 0.01m when unset).
         compute_class: compute class (default "standard").
+        input_mode: run-mode lever (ADR 0107). ``"user_gated"`` presents the
+            resolved inputs (dam height/location, magnitude, window) for review
+            before the solver launches; ``"auto"`` (default, or the session
+            default) proceeds with the inputs labeled.
 
     Returns:
         On success: ``GeoClawDepthLayerURI`` -- peak-depth COG plus
@@ -360,6 +366,39 @@ async def geoclaw_inundation(
     if effective_dam_depth is None:
         # tsunami / surge ignore dam_break_depth_m; give the contract its default.
         effective_dam_depth = 10.0
+
+    # --- ADR 0107 two-mode input gate: review-before-run -----------------------
+    # Inputs are RESOLVED (NID dam or user values / tsunami source); in
+    # user_gated mode present them for review/adjust BEFORE the consequential
+    # solver dispatch, and stamp exactly the reviewed entries so what-was-approved
+    # == what-ran. auto mode (the session default) proceeds with them labeled;
+    # a headless direct-call (no live session) also proceeds (fail-open).
+    _review = await gate_input_review(
+        tool_name="geoclaw_inundation",
+        mode=input_mode,
+        entries=provenance,
+        params={
+            "dam_break_depth_m": float(effective_dam_depth),
+            "source_magnitude": float(source_magnitude),
+            "sim_duration_s": float(sim_duration_s),
+            "amr_levels": int(amr_levels),
+        },
+    )
+    if _review.cancelled:
+        return {
+            "status": "error",
+            "error_code": "USER_INPUT_CANCELLED",
+            "error_message": f"geoclaw_inundation {_review.cancel_reason}",
+        }
+    provenance = _review.entries
+    effective_dam_depth = float(
+        _review.params.get("dam_break_depth_m", effective_dam_depth)
+    )
+    source_magnitude = float(
+        _review.params.get("source_magnitude", source_magnitude)
+    )
+    sim_duration_s = float(_review.params.get("sim_duration_s", sim_duration_s))
+    amr_levels = int(_review.params.get("amr_levels", amr_levels))
 
     try:
         kwargs: dict[str, Any] = dict(

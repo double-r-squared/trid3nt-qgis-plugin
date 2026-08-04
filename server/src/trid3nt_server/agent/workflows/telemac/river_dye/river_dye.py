@@ -44,6 +44,7 @@ from trid3nt_contracts.telemac_contracts import TelemacDyeLayerURI
 from trid3nt_contracts.tool_registry import AtomicToolMetadata
 
 from trid3nt_server.agent.tools import register_tool
+from trid3nt_server.agent.gates.input_review import gate_input_review
 from trid3nt_server.agent.tool_arg_normalizer import coerce_bbox_value
 from trid3nt_server.agent.workflows.telemac._template_card import TemplateCard
 from trid3nt_server.agent.workflows.telemac.postprocess_telemac import PostprocessTelemacError
@@ -137,6 +138,7 @@ async def telemac_river_dye(
     compute_class: str = "medium",
     bank_source: str = "nhd_area",
     discharge_m3s: float | None = None,
+    input_mode: str | None = None,
     # 2026-07-18 release-seeding tri-state, set ONLY by the approve-mesh
     # decision tail (underscore prefix -> stripped from the LLM schema by
     # _strip_private_params): True = the release coords came on the CALL and
@@ -268,6 +270,9 @@ async def telemac_river_dye(
             ``"constant_ribbon"`` to mesh the assumed ``channel_width_m`` ribbon
             directly (labeled as an assumption in the result). Do NOT default to
             constant_ribbon to dodge the gate: real banks are more faithful.
+        input_mode: run-mode lever (ADR 0107). ``"user_gated"`` presents the
+            resolved carrier discharge + bank source for review before the solve;
+            ``"auto"`` (default) proceeds with them labeled.
 
     Returns:
         On success: ``TelemacDyeLayerURI`` (``LayerURI`` subtype) - emitter
@@ -556,6 +561,7 @@ async def telemac_river_dye(
             compute_class=compute_class,
             bank_source=bank_source,
             discharge_m3s=(float(discharge_m3s) if discharge_m3s is not None else None),
+            input_mode=input_mode,
         )
         logger.info(
             "telemac_river_dye complete layer_id=%s dye_cmax_mgl=%.4g plume_reach_m=%s "
@@ -1548,6 +1554,7 @@ async def model_telemac_river_dye(
     compute_class: str = "medium",
     bank_source: str = "nhd_area",
     discharge_m3s: float | None = None,
+    input_mode: str | None = None,
     pipeline_emitter: Any | None = None,
 ) -> TelemacDyeLayerURI:
     """Compose place/AOI -> river reach -> TELEMAC-2D dye pulse -> animated layer.
@@ -1661,6 +1668,40 @@ async def model_telemac_river_dye(
         "model_telemac_river_dye: %s (seed=%.5f,%.5f)",
         discharge_note, seed_lon, seed_lat,
     )
+
+    # --- ADR 0107 two-mode input gate: review-before-run -----------------------
+    # The carrier discharge (real NWM or user) governs dilution and is the
+    # physically-dominant reviewable input; present it (with the bank source) for
+    # review/adjust before the expensive TELEMAC solve in user_gated mode. auto
+    # (session default) + headless proceed labeled. (The mesh preview gate at the
+    # server pre-dispatch seam is complementary -- it shows the meshed geometry.)
+    _q_user = discharge_m3s is not None
+    _review_entries = [
+        SyntheticInput(
+            param="discharge_m3s", value=round(float(inflow_q_m3s), 2),
+            units="m^3/s", basis="user" if _q_user else "fetched",
+            real_source_if_any=(None if _q_user else "NOAA National Water Model streamflow"),
+            note="carrier discharge governing dilution",
+        ),
+        SyntheticInput(
+            param="bank_source",
+            value=_normalize_bank_source(bank_source),
+            basis="fetched" if _normalize_bank_source(bank_source) == "nhd_area"
+            else "default_demo",
+            note=("real NHDArea banks" if _normalize_bank_source(bank_source) == "nhd_area"
+                  else "assumed constant-width ribbon"),
+        ),
+    ]
+    _review = await gate_input_review(
+        tool_name="telemac_river_dye", mode=input_mode,
+        entries=_review_entries, params={"discharge_m3s": float(inflow_q_m3s)},
+    )
+    if _review.cancelled:
+        raise TelemacDyeScenarioError(
+            "USER_INPUT_CANCELLED",
+            f"telemac_river_dye {_review.cancel_reason}",
+        )
+    inflow_q_m3s = float(_review.params.get("discharge_m3s", inflow_q_m3s))
 
     # --- Stage 3: stage the worker manifest (ReachConfig overrides) ----------- #
     # mesh resolution is derived from the reach geometry + the chosen lever

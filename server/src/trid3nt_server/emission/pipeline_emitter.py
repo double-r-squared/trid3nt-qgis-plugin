@@ -2558,6 +2558,17 @@ class PipelineEmitter:
                 self._pipeline_id,
             )
 
+    async def send_envelope(self, message_type: str, payload: Any) -> None:
+        """Emit ONE arbitrary typed envelope on this session's sink.
+
+        Public seam for gates that ride the pause/resume spine from OUTSIDE the
+        emitter's pipeline-step vocabulary (ADR 0107's in-tool input-review gate
+        sends a ``tool-payload-warning`` this way). Same framing as ``_send``:
+        stamps the session + owning Case so the web routes it to the right
+        stream.
+        """
+        await self._send(message_type, payload)
+
     async def _send(self, message_type: str, payload: Any) -> None:
         env = Envelope(
             type=message_type,

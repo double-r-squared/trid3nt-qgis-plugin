@@ -490,6 +490,7 @@ def render_job_ini(
     width_of_mfd_bin: float = 0.2,
     area_source_discretization_km: float = 10.0,
     uniform_hazard_spectra: bool = False,
+    reference_vs30_value: float = 760.0,
 ) -> str:
     """Render the classical-PSHA ``job.ini`` config text.
 
@@ -558,7 +559,7 @@ area_source_discretization = {area_source_discretization_km}
 
 [site_params]
 reference_vs30_type = measured
-reference_vs30_value = 760.0
+reference_vs30_value = {reference_vs30_value}
 reference_depth_to_2pt5km_per_sec = 1.0
 reference_depth_to_1pt0km_per_sec = 50.0
 
@@ -666,6 +667,7 @@ def render_openquake_deck(build_spec: dict[str, Any]) -> OpenQuakeDeck:
         area_source_discretization_km=float(
             build_spec.get("area_source_discretization_km", 10.0)
         ),
+        reference_vs30_value=float(build_spec.get("reference_vs30_value", 760.0)),
         uniform_hazard_spectra=bool(
             build_spec.get("uniform_hazard_spectra", False)
         ),

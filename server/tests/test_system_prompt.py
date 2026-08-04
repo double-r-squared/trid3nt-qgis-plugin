@@ -189,6 +189,18 @@ def test_system_prompt_forbids_inventing_physical_inputs() -> None:
     assert "demo defaults versus site-derived" in SYSTEM_PROMPT
 
 
+def test_system_prompt_has_input_review_instruction() -> None:
+    """Two-mode input gate (ADR 0107): the prompt must instruct the agent how to
+    handle a user-gated INPUT REVIEW card -- present the resolved input table,
+    collect edits, confirm before running."""
+    assert "INPUT REVIEW card" in SYSTEM_PROMPT
+    assert "param = value [basis, source]" in SYSTEM_PROMPT
+    # "Do not run the solver until the user has approved" -- fragment avoids the
+    # source line-wrap between "has" and "approved".
+    flat = " ".join(SYSTEM_PROMPT.split())
+    assert "Do not run the solver until the user has approved" in flat
+
+
 # ---------------------------------------------------------------------------
 # Wave 4.9 — vector layers must NOT be published via publish_layer
 # ---------------------------------------------------------------------------

@@ -40,6 +40,7 @@ from trid3nt_contracts.swmm_contracts import SWMMDepthLayerURI, SWMMRunArgs
 from trid3nt_contracts.tool_registry import AtomicToolMetadata
 
 from trid3nt_server.agent.tools import register_tool
+from trid3nt_server.agent.gates.input_review import gate_input_review
 from trid3nt_server.agent.tool_arg_normalizer import coerce_bbox_value
 from trid3nt_server.agent.workflows.swmm._template_card import TemplateCard
 from trid3nt_server.agent.workflows.swmm.postprocess_swmm import PostprocessSWMMError
@@ -125,6 +126,7 @@ async def swmm_urban_flood(
     washoff_model: str = "exp",
     compute_class: str = "standard",
     enable_autoscale: bool = True,
+    input_mode: str | None = None,
     # absorb LLM-invented kwargs (centralized at server.py via
     # tool_arg_normalizer, but kept as belt-and-suspenders).
     **_extra_ignored: Any,
@@ -221,6 +223,9 @@ async def swmm_urban_flood(
             cap. False honours ``target_resolution_m`` exactly — set only
             by the server-side granularity gate; LLMs should leave
             unset.
+        input_mode: run-mode lever (ADR 0107). ``"user_gated"`` presents the
+            resolved rainfall forcing + demo drainage/Manning for review before
+            the solve; ``"auto"`` (default) proceeds with them labeled.
 
     Returns:
         On success: ``SWMMDepthLayerURI`` (``LayerURI`` subtype) — emitter
@@ -304,6 +309,7 @@ async def swmm_urban_flood(
             run_args,
             compute_class=compute_class,
             enable_autoscale=bool(enable_autoscale),
+            input_mode=input_mode,
         )
         logger.info(
             "swmm_urban_flood complete layer_id=%s max_depth_m=%.4g "
@@ -841,6 +847,7 @@ async def model_swmm_urban_flood(
     compute_class: str = "standard",
     cleanup_deck: bool = True,
     enable_autoscale: bool = True,
+    input_mode: str | None = None,
 ) -> SWMMDepthLayerURI:
     """Compose the full quasi-2D PySWMM urban-flood chain end-to-end (LOCAL lane).
 
@@ -992,6 +999,56 @@ async def model_swmm_urban_flood(
                     f"that Atlas-14 publishes for a CONUS / PR / USVI AOI."
                 ),
             )
+
+    # --- ADR 0107 two-mode input gate: review-before-run -----------------------
+    # Rainfall forcing is resolved (Atlas-14 or user); present it (+ the demo
+    # drainage-network + flat Manning) for review/adjust before the heavy deck
+    # build + solve in user_gated mode. auto (session default) + headless proceed
+    # labeled. (The server pre-dispatch granularity gate is complementary -- it
+    # gates mesh resolution.)
+    _rain_user = run_args.total_rain_depth_mm is not None
+    _review = await gate_input_review(
+        tool_name="swmm_urban_flood", mode=input_mode,
+        entries=[
+            SyntheticInput(
+                param="total_rain_depth_mm",
+                value=(round(float(effective_args.total_rain_depth_mm), 1)
+                       if effective_args.total_rain_depth_mm is not None else None),
+                units="mm", basis="user" if _rain_user else "fetched",
+                real_source_if_any=(None if _rain_user
+                                    else "lookup_precip_return_period (NOAA Atlas-14)"),
+                note=(None if _rain_user
+                      else f"{run_args.return_period_yr}-yr/"
+                           f"{run_args.storm_duration_hr:.0f}-hr design storm"),
+            ),
+            SyntheticInput(
+                param="drainage_network", value="synthesized", basis="default_demo",
+                note="quasi-2D overland grid from DEM cells; NOT a surveyed sewer network",
+            ),
+            SyntheticInput(
+                param="overland_manning_n",
+                value=float(effective_args.manning_overland), basis="default_demo",
+                note="flat overland roughness; landcover-derived n not wired",
+            ),
+        ],
+        params={"total_rain_depth_mm": (
+            float(effective_args.total_rain_depth_mm)
+            if effective_args.total_rain_depth_mm is not None else None
+        )},
+    )
+    if _review.cancelled:
+        raise UrbanFloodWorkflowError(
+            "USER_INPUT_CANCELLED",
+            f"swmm_urban_flood {_review.cancel_reason}",
+        )
+    _rv_depth = _review.params.get("total_rain_depth_mm")
+    if _rv_depth is not None and (
+        effective_args.total_rain_depth_mm is None
+        or float(_rv_depth) != float(effective_args.total_rain_depth_mm)
+    ):
+        effective_args = effective_args.model_copy(
+            update={"total_rain_depth_mm": float(_rv_depth)}
+        )
 
     try:
         # --- Step 4: build the quasi-2D SWMM deck (build_swmm_mesh) ----------

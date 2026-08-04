@@ -1441,50 +1441,16 @@ def _is_terminal_composer(tool_name: str) -> bool:
 # ``tool-payload-confirmation`` handler can resolve a pending gate as long as
 # the session matches, since the client can open multiple WebSocket
 # connections per browser session. Shared by every confirmation gate --
-# payload warning, code-exec, solver.
-
-_PENDING_CONFIRMATIONS: dict[str, tuple[str, asyncio.Future]] = {}
-
-
-def _register_pending_confirmation(
-    session_id: str, warning_id: str, fut: "asyncio.Future"
-) -> None:
-    _PENDING_CONFIRMATIONS[warning_id] = (session_id, fut)
-
-
-def _pop_pending_confirmation(warning_id: str) -> None:
-    _PENDING_CONFIRMATIONS.pop(warning_id, None)
-
-
-def _resolve_pending_confirmation(
-    session_id: str, conf: "PayloadConfirmationEnvelopePayload"
-) -> bool:
-    """Complete the pending gate future for ``conf.warning_id``.
-
-    Returns True when a live future was resolved. False when the warning_id is
-    unknown/already-resolved, or when the confirming session is not the owner
-    (cross-session confirmation is refused loudly -- the warning_id is an
-    unguessable ULID, but defense-in-depth costs one string compare).
-    """
-    entry = _PENDING_CONFIRMATIONS.get(conf.warning_id)
-    if entry is None:
-        return False
-    owner_session, fut = entry
-    if owner_session != session_id:
-        logger.warning(
-            "tool-payload-confirmation REFUSED: session=%s is not the owner "
-            "(owner=%s) for warning_id=%s",
-            session_id,
-            owner_session,
-            conf.warning_id,
-        )
-        return False
-    if fut.done():
-        _PENDING_CONFIRMATIONS.pop(conf.warning_id, None)
-        return False
-    fut.set_result(conf)
-    _PENDING_CONFIRMATIONS.pop(conf.warning_id, None)
-    return True
+# payload warning, code-exec, solver-confirm, and the in-tool input-review gate
+# (ADR 0107). The registry + its accessors live in ``agent.gates.pending`` so
+# an in-tool gate (which cannot import ``server`` at module load) rides the SAME
+# spine; re-imported here so ``server._PENDING_CONFIRMATIONS`` stays that dict.
+from .agent.gates.pending import (  # noqa: E402
+    _PENDING_CONFIRMATIONS,
+    _pop_pending_confirmation,
+    _register_pending_confirmation,
+    _resolve_pending_confirmation,
+)
 
 
 # --------------------------------------------------------------------------- #
