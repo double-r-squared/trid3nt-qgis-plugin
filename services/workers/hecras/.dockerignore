@@ -8,3 +8,6 @@ test_*.py
 # Muncie run outputs (the fixture ships only wrk_source/ inputs; any local run
 # dir or results-bearing plan HDF is regenerated, never shipped).
 fixtures/muncie_smoke/run/
+# The compact solved-HDF fixture is a server-side offline TEST fixture only
+# (postprocess unit tests); the image never needs it.
+fixtures/muncie_flood_solved/

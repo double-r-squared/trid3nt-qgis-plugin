@@ -612,6 +612,12 @@ from ..workflows.swmm.urban_flood.urban_flood import swmm_urban_flood as _swmm_u
 # workflows/telemac/run_telemac.py is the local solve seam
 # (the door holds the run_telemac name; the template submits the solver).
 from ..workflows.telemac.river_dye.river_dye import telemac_river_dye as _telemac_river_dye  # noqa: E402,F401 - NAME FLIP of run_telemac (engine=telemac, tier=template)
+# hecras_muncie_flood TEMPLATE (engine="hecras", tier="template"), engine #11,
+# one folder under workflows/hecras/muncie_flood/. TEMPLATE-FIRST: reparameterizes
+# HEC's shipped Muncie White River (IN) demonstration deck (frozen geometry, scaled
+# unsteady flow forcing). The composer chain (model_hecras_muncie_flood) is inlined
+# in the template module; workflows/hecras/run_hecras.py is the local solve seam.
+from ..workflows.hecras.muncie_flood.muncie_flood import hecras_muncie_flood as _hecras_muncie_flood  # noqa: E402,F401 - engine #11 (engine=hecras, tier=template)
 # geoclaw_inundation TEMPLATE (engine="geoclaw", tier="template"), one folder
 # under workflows/geoclaw/inundation/; EXCLUDED from the default retrieval
 # pool, surfaced only by the run_geoclaw door's gate expansion. The composer

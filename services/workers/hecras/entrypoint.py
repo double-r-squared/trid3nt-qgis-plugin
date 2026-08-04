@@ -29,12 +29,35 @@ from __future__ import annotations
 
 import json
 import os
+import shutil
 import subprocess
 import sys
 from pathlib import Path
 
 import h5py
 import numpy as np
+
+try:  # flat-import (worker-dir) AND package-import (image PYTHONPATH) both work.
+    from deck_edit import DeckEditError, scale_flow_hydrograph
+except ImportError:  # pragma: no cover - image runs from the worker dir
+    from services.workers.hecras.deck_edit import (  # type: ignore[no-redef]
+        DeckEditError,
+        scale_flow_hydrograph,
+    )
+
+#: Baked shipped-geometry decks (engine-landing wave). ``archetype`` in the
+#: manifest names one; the entrypoint copies its ``wrk_source`` into the rundir
+#: when the deck is not already staged there. The geometry is FROZEN (ADR 0100);
+#: only the unsteady flow forcing is reparameterized.
+_HERE = Path(__file__).resolve().parent
+_BAKED_DECKS: dict[str, dict[str, str]] = {
+    "muncie_riverine_flood": {
+        "wrk_source": str(_HERE / "fixtures" / "muncie_smoke" / "wrk_source"),
+        "plan_hdf": "Muncie.p04.tmp.hdf",
+        "geom_suffix": "x04",
+        "boundary_file": "Muncie.b04",
+    },
+}
 
 # HEC's run scripts set LD_LIBRARY_PATH to libs : libs/mkl : libs/rhel_8 and put
 # the engines on PATH; the Dockerfile bakes both env vars, so a bare engine name
@@ -141,15 +164,112 @@ def _extract_metrics(plan_hdf: Path) -> dict:
     return metrics
 
 
+def _stage_baked_deck(archetype: str, data_dir: Path) -> dict[str, str]:
+    """Copy a baked shipped-geometry deck into the rundir; return its deck spec.
+
+    Engine-landing wave: the Muncie deck is baked in the image, so an
+    engine-landing manifest carries only the ``archetype`` + flow knobs (no 4 MB
+    HDF staged as an input). The geometry/terrain/mesh are FROZEN -- we copy them
+    verbatim and only the ``.bNN`` flow forcing is edited downstream.
+    """
+    spec = _BAKED_DECKS.get(archetype)
+    if spec is None:
+        raise HecrasError(
+            f"unknown archetype {archetype!r}; baked decks: {sorted(_BAKED_DECKS)}"
+        )
+    src = Path(spec["wrk_source"])
+    if not src.is_dir():
+        raise HecrasError(f"baked deck source not found: {src}")
+    for fn in sorted(os.listdir(src)):
+        s = src / fn
+        if s.is_file():
+            shutil.copy2(s, data_dir / fn)
+    print(f"[hecras] staged baked deck {archetype!r} from {src}", flush=True)
+    return spec
+
+
+def _apply_flow_scale(
+    data_dir: Path, boundary_file: str, manifest: dict
+) -> dict:
+    """Reparameterize the unsteady inflow hydrograph in the ``.bNN`` boundary file.
+
+    The plain multiplier (``flow_scale``) is the user/default path; an optional
+    ``target_peak_cfs`` derives the multiplier from the baseline peak (the seam-1
+    fetcher path -- pin the forcing to a real gauge/NWM peak). A no-op edit
+    (scale 1.0) still rewrites the block byte-equivalently. Returns the forcing
+    provenance folded into the metrics.
+    """
+    bpath = data_dir / boundary_file
+    if not bpath.is_file():
+        raise HecrasError(f"boundary file {boundary_file} not found in {data_dir}")
+
+    flow_scale = float(manifest.get("flow_scale", 1.0) or 1.0)
+    target_peak = manifest.get("target_peak_cfs")
+
+    text = bpath.read_text()
+    # First pass with scale 1.0 recovers the true baseline peak so target_peak can
+    # derive the multiplier deterministically.
+    try:
+        _, base_peak, _ = scale_flow_hydrograph(text, 1.0)
+    except DeckEditError as exc:
+        raise HecrasError(f"could not parse the inflow hydrograph: {exc}") from exc
+
+    if target_peak is not None and base_peak > 0:
+        flow_scale = float(target_peak) / base_peak
+        print(
+            f"[hecras] target_peak_cfs={target_peak} / baseline {base_peak:.0f} "
+            f"-> flow_scale={flow_scale:.4f}",
+            flush=True,
+        )
+    # Clamp to the modelable band (mirrors the contract; a frozen demo geometry is
+    # only faithful within it).
+    flow_scale = min(max(flow_scale, 0.25), 4.0)
+
+    try:
+        new_text, base_peak, scaled_peak = scale_flow_hydrograph(text, flow_scale)
+    except DeckEditError as exc:
+        raise HecrasError(f"flow-scale deck edit failed: {exc}") from exc
+    bpath.write_text(new_text)
+    print(
+        f"[hecras] flow_scale={flow_scale:.4f} peak {base_peak:.0f} -> "
+        f"{scaled_peak:.0f} cfs (boundary {boundary_file})",
+        flush=True,
+    )
+    return {
+        "flow_scale": round(flow_scale, 6),
+        "baseline_peak_cfs": round(base_peak, 3),
+        "peak_inflow_cfs": round(scaled_peak, 3),
+    }
+
+
 def run(data_dir: Path) -> dict:
-    """Execute the manifest's HEC-RAS legs and return the metrics dict."""
+    """Execute the manifest's HEC-RAS legs and return the metrics dict.
+
+    Two manifest shapes are supported:
+
+    - **M3 gate** (deck already staged into the rundir): ``plan_hdf`` +
+      ``geom_suffix`` name files present in ``data_dir`` (the Muncie smoke driver).
+    - **Engine landing** (``archetype`` names a baked deck): the entrypoint copies
+      the baked shipped-geometry deck into ``data_dir`` and applies the unsteady
+      flow-forcing reparameterization (``flow_scale`` / ``target_peak_cfs``) before
+      solving. The geometry is FROZEN (ADR 0100).
+    """
     manifest_path = data_dir / "manifest.json"
     if not manifest_path.is_file():
         raise HecrasError(f"no manifest.json in {data_dir}")
     manifest = json.loads(manifest_path.read_text())
 
-    plan_hdf = manifest["plan_hdf"]  # e.g. "Muncie.p04.tmp.hdf"
-    geom_suffix = manifest["geom_suffix"]  # e.g. "x04"
+    archetype = manifest.get("archetype")
+    forcing: dict = {}
+    if archetype:
+        spec = _stage_baked_deck(str(archetype), data_dir)
+        plan_hdf = manifest.get("plan_hdf") or spec["plan_hdf"]
+        geom_suffix = manifest.get("geom_suffix") or spec["geom_suffix"]
+        forcing = _apply_flow_scale(data_dir, spec["boundary_file"], manifest)
+    else:
+        plan_hdf = manifest["plan_hdf"]  # e.g. "Muncie.p04.tmp.hdf"
+        geom_suffix = manifest["geom_suffix"]  # e.g. "x04"
+
     run_geompre = bool(manifest.get("run_geompre", True))
 
     if not (data_dir / plan_hdf).is_file():
@@ -162,6 +282,13 @@ def run(data_dir: Path) -> dict:
     metrics = _extract_metrics(data_dir / plan_hdf)
     metrics["plan_hdf"] = plan_hdf
     metrics["ran_geompre"] = run_geompre
+    metrics.update(forcing)
+    if archetype:
+        metrics["archetype"] = str(archetype)
+    # Physics-level truth for the classify_exit hook (mirrors telemac's
+    # correct_end): both honesty gates (Finished sentinel + a Results group)
+    # passed if we reached here without raising.
+    metrics["correct_end"] = True
     (data_dir / "hecras_metrics.json").write_text(json.dumps(metrics, indent=2))
     print(f"[hecras] wrote hecras_metrics.json", flush=True)
     return metrics

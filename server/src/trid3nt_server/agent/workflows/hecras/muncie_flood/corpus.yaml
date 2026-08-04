@@ -1,0 +1,11 @@
+# Template routing phrasings: the HEC-RAS Muncie riverine-flood demonstration
+# archetype (engine #11). Walked into the main retrieval index directly.
+hecras_muncie_flood:
+- run the HEC-RAS Muncie flood model
+- hec-ras flood model
+- 1d 2d river hydraulics simulation
+- unsteady flow white river
+- refinement-grade riverine flood
+- what does the White River at Muncie flood look like at a higher flow
+- scale up the Muncie inflow hydrograph and show the deeper wider 2D inundation
+- HEC-RAS refinement-grade 1D/2D riverine flood on a demonstration reach

@@ -25,11 +25,12 @@ import trid3nt_server.main as _main
 from trid3nt_server.agent.tools.search.search_tools import search_tools as dd
 from trid3nt_server.agent.tools.search.tool_retrieval import retrieve_visible_tools
 
-# The 20 registered engine templates (10 engines; MODFLOW ships 11).
+# The 21 registered engine templates (11 engines; MODFLOW ships 11, HEC-RAS engine #11).
 EXPECTED_TEMPLATES = {
     "sfincs_flood",
     "swmm_urban_flood",
     "telemac_river_dye",
+    "hecras_muncie_flood",  # engine #11 (ADR 0109): HEC-RAS Muncie riverine-flood template
     "swan_wave_field",
     "geoclaw_inundation",
     "elmfire_fire_spread",
@@ -91,7 +92,7 @@ def test_all_templates_registered_and_callable():
         n for n, e in reg.items() if getattr(e.metadata, "tier", "general") == "template"
     }
     assert registered_templates == EXPECTED_TEMPLATES, (
-        "registered tier=template set drifted from the expected 20: "
+        "registered tier=template set drifted from the expected 21: "
         f"missing={sorted(EXPECTED_TEMPLATES - registered_templates)} "
         f"unexpected={sorted(registered_templates - EXPECTED_TEMPLATES)}"
     )
@@ -124,7 +125,7 @@ def _template_corpus() -> dict[str, list[str]]:
 
 
 def test_every_template_surfaces_in_top8(warm_index):
-    """Model-free retrieve_visible_tools(query, None, 8): for EACH of the 20
+    """Model-free retrieve_visible_tools(query, None, 8): for EACH of the 21
     engine templates, at least one of its natural corpus queries surfaces it in
     the top-8. This is the discovery guarantee that lets the doors die."""
     corpus = _template_corpus()

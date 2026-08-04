@@ -278,6 +278,7 @@ PRIMARY_CATEGORY: dict[str, str] = {
     "elmfire_fire_spread": "hazard_modeling",
     "swan_wave_field": "hazard_modeling",
     "telemac_river_dye": "hazard_modeling",
+    "hecras_muncie_flood": "hazard_modeling",
     # The case-layer serving seams (hydrate_case_layers in cases/, and
     # register_case_layer / ingest_user_layer) are DEREGISTERED
     # (their functions serve the /api/export-qgis +
