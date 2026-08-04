@@ -245,6 +245,85 @@ def _named_flowline_seed(
     return best
 
 
+def _mainstem_flowline_seed(
+    lon: float,
+    lat: float,
+    search_deg: float = 0.05,
+    max_reseed_km: float = 6.0,
+) -> tuple[float, float] | None:
+    """Re-seed a NAME-FREE reach onto the dominant nearby mainstem, or None.
+
+    When no ``river_name`` disambiguates the reach, the bare position-snap
+    (``_snap_comid``) lands on whatever NHDFlowline is geometrically nearest;
+    at a confluence that is often a short low-order tributary stub (live:
+    Longview = Columbia x Cowlitz snapped a 292 m order-3 stub). This queries
+    NHDPlus_HR layer 3 within ``search_deg`` of the seed and prefers the
+    highest ``streamorde`` channel, tie-broken by ``totdasqkm`` (total upstream
+    drainage) then proximity -- but ONLY when that mainstem STRICTLY outranks
+    the nearest flowline and its nearest vertex is within ``max_reseed_km``
+    (bounded so a genuine small-creek study is never yanked onto a distant
+    river). Fail-OPEN: any error / no improvement returns None and the caller
+    keeps the raw position-snap (honest degrade).
+    """
+    env = json.dumps({
+        "xmin": lon - search_deg, "ymin": lat - search_deg,
+        "xmax": lon + search_deg, "ymax": lat + search_deg,
+        "spatialReference": {"wkid": 4326},
+    })
+    q = urllib.parse.urlencode({
+        "f": "geojson", "where": "1=1",
+        "geometry": env, "geometryType": "esriGeometryEnvelope",
+        "inSR": 4326, "outSR": 4326,
+        "spatialRel": "esriSpatialRelIntersects",
+        "outFields": "gnis_name,streamorde,totdasqkm",
+        "returnGeometry": "true",
+        "maxAllowableOffset": 0.0005, "resultRecordCount": 500,
+    })
+    try:
+        fc = json.loads(_http_get(f"{_NHDPLUS_HR}/3/query?{q}", timeout=45.0))
+    except Exception as exc:  # noqa: BLE001 -- network fail-open to raw seed
+        LOG.warning("mainstem-seed query failed (%s) - raw seed kept", exc)
+        return None
+    # (streamorde, totdasqkm, dist_deg, (vx, vy)) per flowline.
+    cands: list[tuple[int, float, float, tuple[float, float]]] = []
+    for feat in fc.get("features") or []:
+        p = feat.get("properties") or {}
+        geom = feat.get("geometry") or {}
+        lines = (
+            [geom.get("coordinates")]
+            if geom.get("type") == "LineString"
+            else geom.get("coordinates") or []
+        )
+        best_d2 = float("inf")
+        best_v: tuple[float, float] | None = None
+        for line in lines:
+            for v in line or []:
+                d2 = (v[0] - lon) ** 2 + (v[1] - lat) ** 2
+                if d2 < best_d2:
+                    best_d2, best_v = d2, (float(v[0]), float(v[1]))
+        if best_v is None:
+            continue
+        order = int(p.get("streamorde") or 0)
+        drainage = float(p.get("totdasqkm") or 0.0)
+        cands.append((order, drainage, best_d2 ** 0.5, best_v))
+    if not cands:
+        return None
+    nearest = min(cands, key=lambda c: c[2])
+    # Mainstem = highest order, then most drainage, then nearest.
+    mainstem = max(cands, key=lambda c: (c[0], c[1], -c[2]))
+    reseed_km = mainstem[2] * 111.0
+    if mainstem[0] <= nearest[0] or reseed_km > max_reseed_km:
+        # The nearest flowline is already the (equal-)dominant channel, or the
+        # only mainstem lies beyond the re-seed radius -- keep the raw seed.
+        return None
+    LOG.info(
+        "mainstem re-seed: nearest order %d vs mainstem order %d "
+        "(drainage %.0f km2) at %.2f km -> re-seeding",
+        nearest[0], mainstem[0], mainstem[1], reseed_km,
+    )
+    return mainstem[3]
+
+
 def _stitch_flowlines(features) -> list[tuple[float, float]]:
     """Order flowline segments head-to-tail into one upstream->downstream path."""
     import shapely.geometry as sg
@@ -357,6 +436,19 @@ def fetch_river_centerline(cfg: ReachConfig):
                 "named-flowline re-seed %r found nothing - raw seed kept",
                 cfg.river_name,
             )
+    else:
+        # No river_name to disambiguate: prefer the dominant nearby mainstem
+        # over the bare nearest-flowline snap, so a seed near a confluence does
+        # not land on a short low-order tributary stub (ADR 0104 Bug-1
+        # reach-selection residual; ADR 0108). Fail-open to the raw seed.
+        main = _mainstem_flowline_seed(seed_lon, seed_lat)
+        if main is not None:
+            LOG.info(
+                "mainstem re-seed (no river_name): (%.5f,%.5f) -> (%.5f,%.5f)",
+                seed_lon, seed_lat, main[0], main[1],
+            )
+            seed_lon, seed_lat = main
+            seed_kind = f"{seed_kind}-mainstem"
     comid = _snap_comid(seed_lon, seed_lat)
     url = f"{_NLDI}/comid/{comid}/navigation/{cfg.nav_direction}/flowlines?distance={cfg.distance_km}"
     fc = json.loads(_http_get(url))
