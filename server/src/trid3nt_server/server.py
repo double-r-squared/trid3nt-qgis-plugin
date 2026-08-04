@@ -1096,7 +1096,6 @@ class SolverConfirmationCancelledError(RuntimeError):
 # same pending_payload_warnings future seam as payload-warning/code-exec,
 # and injects confirmed=True only after the user approves.
 SOLVER_CONFIRM_TOOLS: set[str] = {
-    "run_model_groundwater_contamination_scenario",
     # The MODFLOW plume templates were NOT confirm-gated before the fold, so
     # gating parity is preserved by NOT adding them here.
     # Flood solvers are gated too: an unrequested SFINCS solve must not run
@@ -4113,18 +4112,6 @@ async def _stream_model_reply(
                         result = await _handle_request_spatial_input(
                             websocket, state, call.args or {}
                         )
-                    # Emit an impact-envelope WS envelope whenever compute_impact_envelope
-                    # returns a result carrying a valid ImpactEnvelope (key signal:
-                    # raw_envelope dict with n_structures_total inside). Fires IN ADDITION
-                    # to the standard function_response -- the client gets both: replay for
-                    # the Gemini loop, and impact-envelope for ImpactPanel state.
-                    if (
-                        call.name == "compute_impact_envelope"
-                        and isinstance(result, dict)
-                        and isinstance(result.get("raw_envelope"), dict)
-                        and "n_structures_total" in result["raw_envelope"]
-                    ):
-                        await _maybe_emit_impact_envelope(websocket, state, result["raw_envelope"])
                     # Region-disambiguation picker: when geocode_location came back as a
                     # state-bbox-fallback snap, offer the user a narrower sub-region
                     # (default: counties) on top of the whole-state default. PAUSES the
@@ -6984,9 +6971,9 @@ def _maybe_default_fetch_bbox_to_pinned_aoi(
 
 
 #: Expensive-solver scenario types whose domain IS an AOI bbox (areal solvers).
-#: ``scenario_type_for_tool`` also recognizes the POINT-driven groundwater solvers
-#: (``modflow_contaminant_plume`` / ``run_model_groundwater_contamination_scenario`` ->
-#: ``"plume"``) which take NO bbox param -- their domain is a well / source point,
+#: ``scenario_type_for_tool`` also recognizes the POINT-driven groundwater solver
+#: (``modflow_contaminant_plume`` -> ``"plume"``) which takes NO bbox param --
+#: its domain is a well / source point,
 #: not a rectangle. The AOI-snap below must NOT inject a bbox into those (it would
 #: be a spurious, ignored key today and latent wrong-extent debt tomorrow), so the
 #: guard is restricted to these bbox-driven scenario types.
@@ -7941,37 +7928,7 @@ async def _gate_on_solver_confirm(
     # narrow_scope reply to it stays fail-closed (the card never offered it).
     flood_override_offered: bool = False
     try:
-        if tool_name == "run_model_groundwater_contamination_scenario":
-            from .agent.workflows.modflow.model_groundwater_contamination_scenario.model_groundwater_contamination_scenario import (
-                _build_confirmation_envelope,
-                extract_spill_parameters,
-            )
-            from trid3nt_contracts.modflow_contracts import MODFLOWRunArgs
-
-            article_text = params.get("article_text")
-            if not isinstance(article_text, str) or not article_text.strip():
-                # source_url path or missing text: let the composer surface
-                # its own typed error (v0.1 live path supplies article_text).
-                return True, params
-            # extract_spill_parameters is synchronous (pure extraction +
-            # cached geocode); off the event loop so the WS heartbeat lives.
-            derived = await asyncio.to_thread(
-                extract_spill_parameters, article_text, geocode=True
-            )
-            kwargs: dict[str, Any] = dict(
-                spill_location_latlon=derived["spill_location_latlon"],
-                contaminant=derived["contaminant"],
-                release_rate_kg_s=derived["release_rate_kg_s"],
-                duration_days=derived["duration_days"],
-            )
-            if params.get("aquifer_k_ms") is not None:
-                kwargs["aquifer_k_ms"] = float(params["aquifer_k_ms"])
-            if params.get("porosity") is not None:
-                kwargs["porosity"] = float(params["porosity"])
-            envelope = _build_confirmation_envelope(
-                derived, MODFLOWRunArgs(**kwargs)
-            )
-        elif tool_name == "sfincs_flood":
+        if tool_name == "sfincs_flood":
             # A SFINCS solve can take ~10-20 min -- show the user what is
             # about to run before dispatch. The card carries BOTH a
             # GranularitySuggestion (grid resolution) and a
@@ -10924,58 +10881,6 @@ async def _persist_case_manifest(
         await p.write_case_manifest(target_case)
     except Exception:  # noqa: BLE001 -- manifest is a side-effect, never a gate
         logger.warning("case-manifest: persist failed case=%s", target_case)
-
-
-async def _maybe_emit_impact_envelope(
-    websocket: ServerConnection,
-    state: SessionState,
-    raw_envelope: dict,
-) -> None:
-    """Emit an ``impact-envelope`` WS envelope for the ImpactPanel.
-
-    Called when ``compute_impact_envelope`` returns a result containing a
-    valid ``raw_envelope`` dict (ImpactEnvelope shape, key signal:
-    ``n_structures_total`` present at the top level).
-
-    Emitted IN ADDITION to the standard ``function_response`` so the client
-    gets both:
-
-    - ``function_response`` -> Gemini-loop replay (Gemini reads the summary).
-    - ``impact-envelope``   -> ImpactPanel state update.
-
-    Wire shape::
-
-        {
-          "type": "impact-envelope",
-          "session_id": str,
-          "payload": { ...full ImpactEnvelope dict... }
-        }
-
-    Best-effort: a serialization / wire failure is logged but never raised --
-    the ``function_response`` path must not be interrupted by a side-channel
-    emission failure.
-    """
-    import json as _json
-
-    try:
-        await websocket.send(
-            _json.dumps(
-                {
-                    "type": "impact-envelope",
-                    "session_id": state.session_id,
-                    "payload": raw_envelope,
-                }
-            )
-        )
-        logger.info(
-            "impact-envelope emitted session=%s n_structures_total=%s",
-            state.session_id,
-            raw_envelope.get("n_structures_total"),
-        )
-    except Exception:  # noqa: BLE001 -- side effect, never bubble up
-        logger.exception(
-            "impact-envelope emission failed session=%s", state.session_id
-        )
 
 
 async def _maybe_emit_code_exec_result(

@@ -26,7 +26,7 @@ from trid3nt_contracts.swmm_contracts import SWMMDepthLayerURI, SWMMRunArgs
 import trid3nt_server.agent.tools.simulation.solver.solver as solver_mod
 from trid3nt_server.emission import pipeline_emitter as pe
 from trid3nt_server.emission.pipeline_emitter import PipelineEmitter
-from trid3nt_server.agent.workflows.swmm.model_urban_flood_swmm import model_urban_flood_swmm as M
+from trid3nt_server.agent.workflows.swmm.urban_flood import urban_flood as M
 
 
 # --------------------------------------------------------------------------- #
@@ -162,7 +162,7 @@ def test_swmm_offbox_emits_dispatch_and_compute_cards(monkeypatch):
     try:
         run_args = SWMMRunArgs(bbox=(-88.0, 36.0, -87.99, 36.01))
         peak = asyncio.run(
-            M.model_urban_flood_swmm(
+            M.model_swmm_urban_flood(
                 run_args,
                 dem_path="/tmp/synthetic.tif",  # skip the DEM fetch
                 building_footprints=None,
@@ -210,7 +210,7 @@ def test_swmm_offbox_routes_terminal_failed_to_sim_card(monkeypatch):
         run_args = SWMMRunArgs(bbox=(-88.0, 36.0, -87.99, 36.01))
         with pytest.raises(Exception):  # noqa: B017 — SWMMWorkflowError on non-complete
             asyncio.run(
-                M.model_urban_flood_swmm(
+                M.model_swmm_urban_flood(
                     run_args,
                     dem_path="/tmp/synthetic.tif",
                     building_footprints=None,

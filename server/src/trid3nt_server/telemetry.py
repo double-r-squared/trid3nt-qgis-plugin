@@ -717,7 +717,7 @@ def record_solve_telemetry(record: dict) -> dict:
     """Write ONE SOLVE-completion telemetry record (structured log + JSONL).
 
     The record is built by the composer (see
-    ``model_flood_scenario`` / ``model_urban_flood_swmm``) by MERGING the Batch
+    ``model_flood_scenario`` / ``model_swmm_urban_flood``) by MERGING the Batch
     compute meta (``solver._capture_batch_compute_meta`` -- instance + timing) with
     the mesh size descriptor + solver + terminal status + run/case/session ids.
     This writer stamps a ``record_type="solve"`` discriminator and a ``ts`` when

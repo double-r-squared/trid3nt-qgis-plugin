@@ -33,7 +33,7 @@ Layering:
   * ``role="context"`` - the mesh is a default-visible backdrop, not the primary
     result (that is the flood-depth raster).
   * ``bbox=None`` - the mesh must NOT emit a competing ``zoom-to`` (the AOI
-    camera owns the view; see ``model_urban_flood_swmm`` zoom-on-area-first).
+    camera owns the view; see ``model_swmm_urban_flood`` zoom-on-area-first).
 
 Decimation (NO silent caps): a fine large-AOI mesh can exceed the inline-GeoJSON
 ceiling. When the active-cell count exceeds ``cap`` we aggregate into uniform

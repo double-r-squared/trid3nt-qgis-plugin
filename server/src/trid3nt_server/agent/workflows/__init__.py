@@ -42,11 +42,15 @@ from __future__ import annotations
 # Import the workflow modules so their @register_tool decorators fire at
 # package import time and the LLM-facing wrappers land in TOOL_REGISTRY.
 from .sfincs.flood.flood import sfincs_flood as _sfincs_flood  # noqa: F401  -- engine-door refactor (SFINCS slice): the run_model_flood_scenario wrapper is now the sfincs_flood template (engine=sfincs, tier=template); the run_sfincs door is imported in tools/__init__.py
-from .modflow.model_groundwater_contamination_scenario import model_groundwater_contamination_scenario as _model_groundwater_contamination_scenario  # noqa: F401 - Case 2 composer (news → MODFLOW → plume)
+# COMPOSER DISSOLUTION (ADR 0105): the standalone news-ingest MODFLOW composer
+# (run_model_groundwater_contamination_scenario) and the live-alert SFINCS
+# composer (run_model_nws_flood_event_scenario) are DELETED - the model composes
+# the fetch -> extract -> engine-template chain itself (aggregation is the user's
+# + the model's common sense). Their judgment survives in the system prompt +
+# the modflow_contaminant_plume / sfincs_flood / fetch_nws_alerts_conus docstrings.
 # engine-door refactor: run_model_contamination_affected_fields is CUT (composer
 # removed). Its plume half IS modflow_contaminant_plume; the zonal field-scoring
 # half re-homes to a playground recipe (docs/playbooks/modflow-affected-fields-recipe.md).
-from .sfincs.model_nws_flood_event_scenario import model_nws_flood_event_scenario as _model_nws_flood_event_scenario  # noqa: F401 - Case 3 composer
 # PELICUN fold: the former pelicun_damage_with_buildings composer folded into the
 # pelicun_damage_assessment template's bbox AUTO-FETCH input mode; the template is
 # registered via tools/__init__.py's import of

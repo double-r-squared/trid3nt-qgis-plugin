@@ -82,7 +82,7 @@ def _stub_swmm_solver(monkeypatch):
 
     The stub stands in for the real (pyswmm) workflow: the production workflow
     stamps the floored domain onto the returned peak ``bbox`` (see
-    model_urban_flood_swmm.py ~815), so the stub returning ``_SOLVE_DOMAIN`` as the
+    model_swmm_urban_flood.py ~815), so the stub returning ``_SOLVE_DOMAIN`` as the
     LayerURI bbox faithfully exercises the dispatch-site pin path.
     """
     name = "swmm_urban_flood"

@@ -256,18 +256,22 @@ def test_system_prompt_routes_parameterized_spill_to_modflow_contaminant_plume()
     assert "spill_location_latlon as a 2-element [lat, lon] array" in flat
 
 
-def test_system_prompt_keeps_article_path_off_parameterized_spill() -> None:
-    """The news-article path must NOT be used for parameterized spills; it needs
-    a volume in gallons/liters/barrels/tons."""
-    assert "Do NOT use\nrun_model_groundwater_contamination_scenario" in SYSTEM_PROMPT
+def test_system_prompt_never_invents_contamination_forcing() -> None:
+    """Composer dissolution (ADR 0105): the standalone news-ingest composer is
+    gone; the prompt must keep the Invariant-9 never-invent rule so the model
+    extracts (never fabricates) the spill forcing from the article/user."""
     flat = " ".join(SYSTEM_PROMPT.split())
+    assert "NEVER INVENT a contamination parameter" in flat
+    assert "Invariant 9" in SYSTEM_PROMPT
     assert "gallons / liters / barrels / tons" in flat
 
 
 def test_system_prompt_still_routes_modflow_groundwater() -> None:
-    """modflow_contaminant_plume + the article-ingest tool both remain named in the prompt."""
+    """modflow_contaminant_plume stays named; the news-article path is now a
+    model-composed chain (web_fetch -> extract -> modflow_contaminant_plume)."""
     assert "modflow_contaminant_plume" in SYSTEM_PROMPT
-    assert "run_model_groundwater_contamination_scenario" in SYSTEM_PROMPT
+    assert "web_fetch" in SYSTEM_PROMPT
+    assert "NEWS ARTICLE" in SYSTEM_PROMPT
 
 
 # ---------------------------------------------------------------------------

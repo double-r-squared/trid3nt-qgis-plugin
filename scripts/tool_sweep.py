@@ -108,10 +108,6 @@ OVERRIDES: dict[str, dict] = {
     "fetch_goes_blend_animation": {"start_utc": f"{YDAY}T18:00", "end_utc": f"{YDAY}T18:30"},
     "fetch_goes_active_fire": {"bbox": (-121.5, 39.5, -121.0, 40.0)},
     "fetch_glm_lightning": {"bbox": (-90.0, 25.0, -85.0, 30.0), "start_utc": f"{YDAY}T18:00", "end_utc": f"{YDAY}T18:20"},
-    "run_model_groundwater_contamination_scenario": {
-        "article_text": "A tanker spill released benzene near Tampa, Florida on 2026-06-01, "
-                        "contaminating shallow groundwater around 27.955N 82.455W per county officials."
-    },
 }
 
 OVERRIDES.update({
@@ -128,11 +124,6 @@ OVERRIDES.update({
     "fetch_gridmet": {"variable": "pr", "bbox": (-82.7, 27.8, -82.2, 28.2)},
     "fetch_climate_normals": {"bbox": (-82.9, 27.6, -82.1, 28.3)},
     "digitize_water_body": {"bbox": (-82.78, 28.07, -82.71, 28.16), "start_date": (END - dt.timedelta(days=90)).isoformat()},
-    "run_model_groundwater_contamination_scenario": {
-        "article_text": "A tanker spill released approximately 5,000 gallons of benzene over a period "
-                        "of two days near Tampa, Florida starting 2026-06-01, contaminating shallow "
-                        "groundwater around 27.955N 82.455W per county officials."
-    },
 })
 
 # Pass 2: chain REAL layer URIs (prefetched once, cache-warm) into the

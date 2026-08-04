@@ -1,12 +1,3 @@
-compute_impact_envelope:
-- how much damage will the 100-year flood cause in Fort Myers
-- estimate the expected dollar losses for this inundation scenario
-- how many structures are impacted by the flood we just modeled
-- summarize the flood impact for this case, structures damaged and population at risk
-- give me the displaced population for the Hurricane Ian flooding
-- run a damage and loss assessment on this flood depth layer using the building inventory
-- what are the total expected damages and the 95th percentile loss for this scenario
-- tally up the affected buildings and economic loss from the flood raster
 list_categories:
 - what kinds of tools do you have, list the categories
 - i'm not sure where to start, show me the top-level tool groups
@@ -28,24 +19,13 @@ list_tools_in_category:
 # Door dissolution (ADR 0094): the SFINCS flood phrasings live in the
 # sfincs_flood template corpus (workflows/sfincs/flood/corpus.yaml), now walked
 # into this index directly -- there is no separate door.
-run_model_groundwater_contamination_scenario:
-- here is a news article about a tce spill in twin falls, model the contaminant plume in the groundwater
-- a tanker leaked solvent near this town, how far will it spread through the aquifer
-- i pasted a story about a chemical release, simulate the groundwater contamination plume from it
-- model the spill in this article and tell me the peak concentration and plume footprint
-- this link describes a pce leak at a factory, build the contaminant plume for it
-- an industrial solvent spilled into the ground here, how concentrated will the groundwater get downstream
-- turn this spill report into a modeled groundwater plume layer with how big the plume is
-- news says benzene leaked over six hours, run the aquifer contamination model on it
-run_model_nws_flood_event_scenario:
-- model the flood that's actually happening right now from the active flood warning in idaho
-- there is a flash flood warning over this area, run an inundation model on the warned region
-- show the current nws flood warnings and model the flood with the observed radar rainfall
-- take the live flood warning polygon and simulate how deep the water gets using mrms precip
-- model the real-time flooding under the highest-severity flood warning right now
-- tie the active flash flood warning here to a depth map using observed precipitation, not a design storm
-- what does the flooding look like for the warning that's in effect, using actual measured rain
-- run the inundation for the second flood warning in the list over its warned area
+# Composer dissolution (ADR 0105): the standalone news-ingest groundwater
+# composer and the live-alert flood composer are DELETED. Their query archetypes
+# (a spill news article -> plume; a live NWS flood warning -> observed-precip
+# flood) are now COMPOSED by the model from the surviving templates
+# (modflow_contaminant_plume, sfincs_flood) + the fetchers (web_fetch,
+# fetch_nws_alerts_conus, fetch_mrms_qpe), so there is no standalone tool corpus
+# to seed here.
 # Door dissolution (ADR 0094): the Pelicun damage phrasings (both the
 # explicit-inventory and the folded bbox auto-fetch input modes) live in the
 # pelicun_damage_assessment template corpus

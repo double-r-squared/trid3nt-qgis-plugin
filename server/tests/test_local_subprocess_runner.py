@@ -158,7 +158,7 @@ def test_landlab_registered_in_local_spec_registry() -> None:
 
 
 def test_openquake_registered_in_local_spec_registry() -> None:
-    import trid3nt_server.agent.workflows.openquake.model_seismic_hazard_scenario.model_seismic_hazard_scenario as _oq_mod
+    import trid3nt_server.agent.workflows.openquake.psha.psha as _oq_mod
     del _oq_mod
 
     assert "openquake" in LOCAL_SOLVER_SPEC_REGISTRY, (
@@ -201,7 +201,7 @@ def test_landlab_build_argv_calls_run_chain_py() -> None:
 
 
 def test_openquake_build_argv_calls_run_oq_py() -> None:
-    from trid3nt_server.agent.workflows.openquake.model_seismic_hazard_scenario.model_seismic_hazard_scenario import openquake_local_spec
+    from trid3nt_server.agent.workflows.openquake.psha.psha import openquake_local_spec
 
     spec = openquake_local_spec()
     run_id = "TEST-003"
@@ -242,7 +242,7 @@ def test_landlab_spec_has_pythonpath_override() -> None:
 
 
 def test_openquake_spec_has_pythonpath_override() -> None:
-    from trid3nt_server.agent.workflows.openquake.model_seismic_hazard_scenario.model_seismic_hazard_scenario import openquake_local_spec
+    from trid3nt_server.agent.workflows.openquake.psha.psha import openquake_local_spec
 
     spec = openquake_local_spec()
     assert spec.env_overrides is not None

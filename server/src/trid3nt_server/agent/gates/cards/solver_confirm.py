@@ -806,7 +806,7 @@ async def _build_telemac_mesh_envelope(
         GranularitySuggestion,
         PayloadWarningEnvelopePayload,
     )
-    from ...workflows.telemac.model_river_dye_release_scenario.model_river_dye_release_scenario import (
+    from ...workflows.telemac.river_dye.river_dye import (
         MESH_H_FLOOR_M,
         MESH_NODE_CAP,
         plausible_release_coords,
@@ -958,7 +958,7 @@ async def _build_swmm_granularity_envelope(params: dict) -> tuple[Any, Any, str]
         AWS_BATCH_COMPUTE_CLASS_SIZING,
         select_compute_class,
     )
-    from ...workflows.swmm.model_urban_flood_swmm.model_urban_flood_swmm import (
+    from ...workflows.swmm.urban_flood.urban_flood import (
         _enforce_min_urban_aoi,
         _fetch_dem_for_urban,
     )

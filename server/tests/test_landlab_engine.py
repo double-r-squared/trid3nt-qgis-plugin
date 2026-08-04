@@ -356,7 +356,7 @@ def test_model_landslide_scenario_chain_mocked(tmp_path, monkeypatch):
     postprocess -> publish with ALL external calls mocked and returns a
     LandlabSusceptibilityLayerURI carrying the narration scalars."""
     from trid3nt_server.agent.tools.simulation.solver import solver as _solver
-    from trid3nt_server.agent.workflows.landlab.model_landslide_scenario import model_landslide_scenario as M
+    from trid3nt_server.agent.workflows.landlab.susceptibility import susceptibility as M
     from trid3nt_server.agent.workflows.landlab.run_landlab import LandlabStaging
 
     # A synthetic DEM so the DEM fetch is skipped (dem_path supplied).
@@ -434,7 +434,7 @@ def test_model_landslide_scenario_chain_mocked(tmp_path, monkeypatch):
     )
 
     primary = asyncio.run(
-        M.model_landslide_scenario(
+        M.model_landlab_susceptibility(
             LandlabRunArgs(
                 bbox=(-122.5, 45.4, -122.4, 45.5), analysis="landslide_probability"
             ),
@@ -455,7 +455,7 @@ def test_model_landslide_scenario_chain_mocked(tmp_path, monkeypatch):
 def test_model_landslide_scenario_run_failure_raises_typed(tmp_path, monkeypatch):
     """A non-complete Batch solve surfaces a typed LANDLAB_RUN_FAILED."""
     from trid3nt_server.agent.tools.simulation.solver import solver as _solver
-    from trid3nt_server.agent.workflows.landlab.model_landslide_scenario import model_landslide_scenario as M
+    from trid3nt_server.agent.workflows.landlab.susceptibility import susceptibility as M
     from trid3nt_server.agent.workflows.landlab.run_landlab import LandlabStaging, LandlabWorkflowError
 
     dem = tmp_path / "dem.tif"
@@ -492,7 +492,7 @@ def test_model_landslide_scenario_run_failure_raises_typed(tmp_path, monkeypatch
 
     with pytest.raises(LandlabWorkflowError) as exc:
         asyncio.run(
-            M.model_landslide_scenario(
+            M.model_landlab_susceptibility(
                 LandlabRunArgs(bbox=(-122.5, 45.4, -122.4, 45.5)),
                 dem_path=str(dem),
             )
@@ -514,7 +514,7 @@ def test_download_batch_landlab_outputs_picks_field_cog_not_dem(tmp_path, monkey
     outputs); _download_batch_landlab_outputs must still download
     landlab_field.tif, not whichever .tif key happens to sort/list first."""
     from trid3nt_server.agent.tools.simulation.solver import solver as _solver
-    from trid3nt_server.agent.workflows.landlab.model_landslide_scenario import model_landslide_scenario as M
+    from trid3nt_server.agent.workflows.landlab.susceptibility import susceptibility as M
 
     run_id = "field-select-rid"
     runs_bucket = "trid3nt-runs"

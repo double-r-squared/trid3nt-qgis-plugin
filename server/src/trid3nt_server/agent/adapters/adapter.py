@@ -528,8 +528,7 @@ Example: user asks "fetch population in Miami-Dade County"
 REUSE BEFORE RE-RUN — HARD RULE (CRITICAL, NON-NEGOTIABLE — job-0326,
 NATE 2026-06-16, supersedes every softer reuse clause below):
 Before you call ANY expensive simulation (sfincs_flood,
-run_model_nws_flood_event_scenario, modflow_contaminant_plume,
-run_model_groundwater_contamination_scenario, pelicun_*), ANY fetch_*,
+modflow_contaminant_plume, swmm_urban_flood, pelicun_*), ANY fetch_*,
 or ANY compute_*, you MUST FIRST check the "[Case state]" note for the
 layers ALREADY produced and on the map for this Case. If a layer or result
 that ALREADY ANSWERS the user's request is present, you MUST REUSE it — pass
@@ -586,13 +585,19 @@ user gives the spill parameters DIRECTLY (a location + contaminant +
 release rate/amount + duration), call modflow_contaminant_plume with
 spill_location_latlon as a 2-element [lat, lon] array (latitude first), the
 contaminant name, release_rate_kg_s, and duration_days (or a species=[...] list
-for several co-released contaminants). Do NOT use
-run_model_groundwater_contamination_scenario for a parameterized spill —
-that tool is the news-ARTICLE ingest path; it expects an article_text or
-source_url and a release amount stated in gallons / liters / barrels / tons
-that it must extract and convert. Use it ONLY when the user pastes or links a
-news article about a spill. Parameterized spill -> modflow_contaminant_plume;
-spill news article -> run_model_groundwater_contamination_scenario.
+for several co-released contaminants).
+
+When the user instead pastes or links a NEWS ARTICLE about a spill, COMPOSE the
+chain yourself: read the article (web_fetch on a source_url, or the pasted
+text), EXTRACT the location, contaminant, released amount (gallons / liters /
+barrels / tons / kg), and duration, DERIVE the forcing (convert the amount to
+mass via the contaminant density, then release_rate_kg_s = mass / duration_s),
+and call modflow_contaminant_plume with those. NEVER INVENT a contamination
+parameter you cannot ground in the article or the user (Invariant 9): if the
+amount, duration, contaminant, or location is not stated, ASK the user for it
+(or state the single documented assumption you are making) BEFORE running -- a
+fabricated release rate produces a confidently-wrong plume. Confirm the derived
+forcing with the user before the solve.
 
 Flood-engine routing -- urban PySWMM vs SFINCS (CRITICAL):
 TRID3NT has TWO flood solvers. Route to the right one from the prompt; do NOT
@@ -644,6 +649,24 @@ or watershed / coastal / riverine inundation (SFINCS)? -- before launching a
 multi-minute solve. This is consistent with the SFINCS ASK-WHEN-URBAN building
 opt-in: when the urban intent is clear, call swmm_urban_flood directly; when
 only the AOI is developed but the driver is unstated, confirm first.
+
+LIVE NWS FLOOD WARNING -- model the flood that is HAPPENING NOW (compose it):
+When the user asks to model a flood that is actively happening / real-time /
+"under the current warning" (not a hypothetical design storm), COMPOSE the chain
+yourself -- there is no single tool for it:
+  1. fetch_nws_alerts_conus to pull the active CONUS alerts; FILTER to the
+     flood family (Flood Warning / Flash Flood Warning) and pick the
+     highest-severity warning (or the specific one the user named), and read its
+     warning polygon.
+  2. Derive the AOI from that warning polygon's extent (do NOT invent a bbox).
+  3. fetch_mrms_qpe over that AOI for the OBSERVED accumulated precipitation
+     (measured radar rainfall) -- the live event is driven by what actually
+     fell, NOT a return-period design storm.
+  4. Run sfincs_flood over the warning AOI forced by the observed precip.
+If there is NO active Flood Warning / Flash Flood Warning for the area, say so
+honestly and list what IS active -- never fabricate a flood over an arbitrary
+bbox (Invariant 7). This is the observed-event path; the plain return-period
+design-storm path stays the default when no live warning is in play.
 
 Cross-engine fidelity ladder (CRITICAL honesty rule -- applies to EVERY
 simulation template, never weaken it): the built-in solvers are SCREENING /

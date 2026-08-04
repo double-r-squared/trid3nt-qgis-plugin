@@ -249,8 +249,6 @@ PRIMARY_CATEGORY: dict[str, str] = {
     # file under hazard_modeling; pelicun/swan/elmfire also cross-list via
     # SECONDARY_CATEGORIES (damage_assessment / coastal / fire).
     "sfincs_flood": "hazard_modeling",
-    "run_model_nws_flood_event_scenario": "hazard_modeling",
-    "run_model_groundwater_contamination_scenario": "hazard_modeling",
     "modflow_asr": "hazard_modeling",
     "modflow_capture_zone": "hazard_modeling",
     "modflow_contaminant_plume": "hazard_modeling",
@@ -289,7 +287,7 @@ PRIMARY_CATEGORY: dict[str, str] = {
     # case-analysis batch: point/series sampling + the case situation report are
     # general-purpose case utilities (the conversational-analysis surface);
     # exposure-in-footprint is an impact/exposure product, so it files under
-    # damage_assessment alongside compute_impact_envelope.
+    # damage_assessment alongside pelicun_damage_assessment.
     "compute_exposure_summary": "damage_assessment",
     "query_point_hazard": "geographic_primitives",
     "extract_timeseries_at_point": "geographic_primitives",
@@ -449,7 +447,6 @@ PRIMARY_CATEGORY: dict[str, str] = {
     # bed needs (fetch_dem alone is land-only). EPSG:32616 NAVD88 positive-up.
     "fetch_topobathy": "coastal",
     # ---- 9. damage_assessment ---------------------------------------------
-    "compute_impact_envelope": "damage_assessment",
     "postprocess_pelicun": "damage_assessment",
     # ---- 10. flood_infrastructure -----------------------------------------
     "fetch_fema_nfhl_zones": "flood_infrastructure",
@@ -612,18 +609,14 @@ SECONDARY_CATEGORIES: dict[str, tuple[str, ...]] = {
     # conservation_ecology (the ecology impact readout) and materially belongs to
     # hazard_modeling (it scores a hazard/flood/plume footprint) AND
     # damage_assessment (it IS an impact/exposure assessment, the ecology analogue
-    # of compute_impact_envelope / analyze_affected_fields).
+    # of analyze_affected_fields).
     # engine-door refactor: run_model_contamination_affected_fields is CUT (the
     # zonal field-analysis half re-homed to a playground recipe); its secondary
     # cross-listing is removed with it.
-    # Case 2 groundwater composer spans hazard_modeling (it runs MODFLOW) AND
-    # news_events (it's driven by a spill news article - the canonical "model
-    # the spill from this article" entry point).
-    "run_model_groundwater_contamination_scenario": ("news_events",),
-    # Case 3 composer spans hazard_modeling (it runs SFINCS) AND
-    # weather_atmosphere (it's driven by an active NWS flood warning + MRMS
-    # observed precip - the canonical "model the live flood" entry point).
-    "run_model_nws_flood_event_scenario": ("weather_atmosphere",),
+    # composer dissolution (ADR 0105): the Case 2 groundwater news-ingest composer
+    # and the Case 3 live-alert flood composer are DELETED - the model composes the
+    # fetch -> engine-template chain itself, so there is no standalone tool to
+    # cross-list here.
     # SWAN spans hazard_modeling (it runs the SWAN spectral solver) AND coastal
     # (it is THE defensible nearshore wave-field tool -- a user reaches it from the
     # coastal lane to compare against SFINCS+SnapWave on the same case).

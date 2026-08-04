@@ -1,7 +1,7 @@
 """Direct OpenQuake PSHA invocation for trid3nt-local proof.
 
 Bypasses the LLM/agent chat layer -- calls the deterministic seismic-hazard
-workflow (``model_seismic_hazard_scenario``) directly. The workflow runs:
+workflow (``model_openquake_psha``) directly. The workflow runs:
   resolve_fault_sources -> stage_openquake_build_spec (build_spec -> MinIO)
   -> run_solver('openquake') with TRID3NT_SOLVER_BACKEND=local-docker
      (LocalSolverSpec: subprocess run_oq.py shim, exec_kind='exec')
@@ -109,7 +109,7 @@ log.info("pre-run MinIO run prefixes: %s", sorted(pre_prefixes))
 # ---------------------------------------------------------------------------
 
 try:
-    from trid3nt_server.agent.workflows.openquake.model_seismic_hazard_scenario.model_seismic_hazard_scenario import model_seismic_hazard_scenario
+    from trid3nt_server.agent.workflows.openquake.psha.psha import model_openquake_psha
     from trid3nt_contracts.openquake_contracts import OpenQuakeRunArgs
 except ImportError as exc:
     log.error("import failed -- is PYTHONPATH set? %s", exc)
@@ -118,7 +118,7 @@ except ImportError as exc:
 
 async def _run():
     log.info(
-        "invoking model_seismic_hazard_scenario bbox=%s imt=%s poe=%.2f grid=%.1fkm",
+        "invoking model_openquake_psha bbox=%s imt=%s poe=%.2f grid=%.1fkm",
         BBOX, IMT, POE, SITE_GRID_SPACING_KM,
     )
     run_args = OpenQuakeRunArgs(
@@ -129,7 +129,7 @@ async def _run():
         site_grid_spacing_km=SITE_GRID_SPACING_KM,
         max_distance_km=MAX_DISTANCE_KM,
     )
-    result = await model_seismic_hazard_scenario(run_args, compute_class="small")
+    result = await model_openquake_psha(run_args, compute_class="small")
     return result
 
 

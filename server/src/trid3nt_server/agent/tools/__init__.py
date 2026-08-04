@@ -527,7 +527,7 @@ from .simulation.pelicun.postprocess_pelicun import postprocess_pelicun  # noqa:
 # workflows/pelicun/damage_assessment/ (imported below), with a bbox AUTO-FETCH
 # input mode (assets_uri absent + bbox -> auto-fetch a building-density
 # inventory). The run_pelicun door lists + gate-expands it. postprocess_pelicun
-# (above) + compute_impact_envelope (below) STAY general.
+# (above) STAYS general.
 # SWAN: swan_wave_field is the TEMPLATE (engine="swan", tier="template")
 # registered in workflows/swan/wave_field/wave_field.py (imported below); the
 # run_swan door lists + gate-expands it.
@@ -583,7 +583,6 @@ from .publish_layer import publish_layer as _publish_layer_reg  # noqa: E402,F40
 # the 12-category registry meta-tools. Comments preserved from the original
 # registration list.
 # ---------------------------------------------------------------------------
-from ..workflows.pelicun.compute_impact_envelope import compute_impact_envelope as _compute_impact_envelope_workflow  # noqa: E402,F401 - P3: registers compute_impact_envelope (composes NSI/MS → Pelicun → postprocess into one envelope tool)
 # MODFLOW templates (engine="modflow", tier="template"), one folder per
 # template under workflows/modflow/<template>/<template>.py; EXCLUDED from the
 # default retrieval pool, surfaced only by the run_modflow door's gate
@@ -603,53 +602,50 @@ from ..workflows.modflow.wellhead_protection.wellhead_protection import modflow_
 from ..workflows.modflow.saltwater_intrusion.saltwater_intrusion import modflow_saltwater_intrusion as _modflow_saltwater_intrusion  # noqa: E402,F401 - BUY variable-density Henry-style wedge
 # swmm_urban_flood TEMPLATE (engine="swmm", tier="template"), one folder under
 # workflows/swmm/urban_flood/; EXCLUDED from the default retrieval pool,
-# surfaced only by the run_swmm door's gate expansion. model_urban_flood_swmm
-# stays the internal engine surface the template calls.
+# surfaced only by the run_swmm door's gate expansion. The composer chain
+# (model_swmm_urban_flood) is inlined in the template module.
 from ..workflows.swmm.urban_flood.urban_flood import swmm_urban_flood as _swmm_urban_flood  # noqa: E402,F401 - RENAME of run_swmm_urban_flood (engine=swmm, tier=template)
 # telemac_river_dye TEMPLATE (engine="telemac", tier="template"), one folder
 # under workflows/telemac/river_dye/; EXCLUDED from the default retrieval
-# pool, surfaced only by the run_telemac door's gate expansion.
-# model_river_dye_release_scenario stays the internal engine surface the
-# template calls; workflows/telemac/run_telemac.py is the local solve seam
+# pool, surfaced only by the run_telemac door's gate expansion. The composer
+# chain (model_telemac_river_dye) is inlined in the template module;
+# workflows/telemac/run_telemac.py is the local solve seam
 # (the door holds the run_telemac name; the template submits the solver).
 from ..workflows.telemac.river_dye.river_dye import telemac_river_dye as _telemac_river_dye  # noqa: E402,F401 - NAME FLIP of run_telemac (engine=telemac, tier=template)
 # geoclaw_inundation TEMPLATE (engine="geoclaw", tier="template"), one folder
 # under workflows/geoclaw/inundation/; EXCLUDED from the default retrieval
-# pool, surfaced only by the run_geoclaw door's gate expansion.
-# model_dambreak_geoclaw_scenario stays the internal engine surface the
-# template calls.
+# pool, surfaced only by the run_geoclaw door's gate expansion. The composer
+# chain (model_geoclaw_inundation) is inlined in the template module.
 from ..workflows.geoclaw.inundation.inundation import geoclaw_inundation as _geoclaw_inundation  # noqa: E402,F401 - RENAME of run_geoclaw_inundation (engine=geoclaw, tier=template)
 # swan_wave_field TEMPLATE (engine="swan", tier="template"), one folder under
 # workflows/swan/wave_field/; EXCLUDED from the default retrieval pool,
-# surfaced only by the run_swan door's gate expansion. model_wave_scenario
-# stays the internal engine surface the template calls.
+# surfaced only by the run_swan door's gate expansion. The composer chain
+# (model_swan_wave_field) is inlined in the template module.
 from ..workflows.swan.wave_field.wave_field import swan_wave_field as _swan_wave_field  # noqa: E402,F401 - RENAME of run_swan_waves (engine=swan, tier=template)
 # landlab_susceptibility TEMPLATE (engine="landlab", tier="template"), one
 # folder under workflows/landlab/susceptibility/; EXCLUDED from the default
-# retrieval pool, surfaced only by the run_landlab door's gate expansion.
-# model_landslide_scenario stays the internal engine surface the template
-# calls; workflows/landlab/run_landlab.py is the distinct solver build/stage
+# retrieval pool, surfaced only by the run_landlab door's gate expansion. The
+# composer chain (model_landlab_susceptibility) is inlined in the template
+# module; workflows/landlab/run_landlab.py is the distinct solver build/stage
 # seam.
 from ..workflows.landlab.susceptibility.susceptibility import landlab_susceptibility as _landlab_susceptibility  # noqa: E402,F401 - RENAME of run_landlab_susceptibility (engine=landlab, tier=template)
 # openquake_psha TEMPLATE (engine="openquake", tier="template"), one folder
 # under workflows/openquake/psha/; EXCLUDED from the default retrieval pool,
-# surfaced only by the run_openquake door's gate expansion.
-# model_seismic_hazard_scenario stays the internal engine surface the
-# template calls.
+# surfaced only by the run_openquake door's gate expansion. The composer chain
+# (model_openquake_psha) is inlined in the template module.
 from ..workflows.openquake.psha.psha import openquake_psha as _openquake_psha  # noqa: E402,F401 - RENAME of run_seismic_hazard_psha (engine=openquake, tier=template)
 # elmfire_fire_spread TEMPLATE (engine="elmfire", tier="template"), one
 # folder under workflows/elmfire/fire_spread/; EXCLUDED from the default
-# retrieval pool, surfaced only by the run_elmfire door's gate expansion.
-# model_fire_spread_scenario stays the internal engine surface the template
-# calls; workflows/elmfire/run_elmfire.py is the distinct solver build/stage
+# retrieval pool, surfaced only by the run_elmfire door's gate expansion. The
+# composer chain (model_elmfire_fire_spread) is inlined in the template
+# module; workflows/elmfire/run_elmfire.py is the distinct solver build/stage
 # seam.
 from ..workflows.elmfire.fire_spread.fire_spread import elmfire_fire_spread as _elmfire_fire_spread  # noqa: E402,F401 - RENAME of model_fire_spread (engine=elmfire, tier=template)
 # pelicun_damage_assessment TEMPLATE (engine="pelicun", tier="template")
 # under workflows/pelicun/damage_assessment/; EXCLUDED from the default
 # retrieval pool, surfaced only by the run_pelicun door's gate expansion. Its
 # bbox AUTO-FETCH input mode covers the buildings-composer path (one tool,
-# two input modes). compute_impact_envelope (a compute_* composer) and
-# postprocess_pelicun STAY general, NOT templates.
+# two input modes). postprocess_pelicun STAYS general, NOT a template.
 from ..workflows.pelicun.damage_assessment.damage_assessment import pelicun_damage_assessment as _pelicun_damage_assessment  # noqa: E402,F401 - FOLD of run_pelicun_damage_assessment + run_pelicun_with_buildings (engine=pelicun, tier=template; explicit assets_uri OR bbox auto-fetch)
 
 

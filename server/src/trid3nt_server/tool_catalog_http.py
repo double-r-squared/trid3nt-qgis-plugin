@@ -342,7 +342,6 @@ _FLOW_BY_SOLVER_TOOL: dict[str, str] = {
     "swmm_urban_flood": "SWMM",
     "sfincs_flood": "SFINCS",
     "modflow_contaminant_plume": "MODFLOW",
-    "run_model_groundwater_contamination_scenario": "MODFLOW",
 }
 
 

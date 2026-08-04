@@ -1222,7 +1222,7 @@ def test_composer_arg_assembly_and_dispatch(tmp_path: Path):
     run_solver call carries solver='geoclaw' + the staged manifest_uri."""
     import asyncio
 
-    from trid3nt_server.agent.workflows.geoclaw.model_dambreak_geoclaw_scenario import model_dambreak_geoclaw_scenario as comp
+    from trid3nt_server.agent.workflows.geoclaw.inundation import inundation as comp
     from trid3nt_server.agent.workflows.geoclaw.run_geoclaw import GeoClawStaging
 
     run_args = GeoClawRunArgs(bbox=_AOI, scenario="dam_break", output_frames=4)
@@ -1300,7 +1300,7 @@ def test_composer_arg_assembly_and_dispatch(tmp_path: Path):
          patch.object(comp, "_publish_peak_layer", _fake_publish), \
          patch.object(comp, "current_emitter", lambda: None), \
          patch.object(comp, "drive_live_solve_progress", _amock(None)):
-        peak = asyncio.run(comp.model_dambreak_geoclaw_scenario(run_args))
+        peak = asyncio.run(comp.model_geoclaw_inundation(run_args))
 
     assert isinstance(peak, GeoClawDepthLayerURI)
     assert peak.uri == "https://tiles/peak.png"

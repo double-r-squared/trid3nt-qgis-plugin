@@ -4,9 +4,8 @@ The end-to-end higher-order workflow for the MODFLOW river-seepage
 Reference scenario: it turns a place + a contaminant + a release into a rendered
 gaining/losing river-seepage layer (where the river leaks into the aquifer vs
 draws baseflow out of it) plus the contaminant plume that entered with the
-seepage. It is the river-coupled analogue of
-``model_groundwater_contamination_scenario`` (the point-spill composer)
-and mirrors its chain shape.
+seepage. It is the river-coupled analogue of ``modflow_contaminant_plume``
+(the point-spill engine template) and mirrors its chain shape.
 
 Canonical real-world pipeline mirrored here (MODFLOW 6 RIV + GWT, from the
 USGS modflow6-examples ex-gwf-sfr-p01 / Prudic stream-aquifer tradition,
@@ -361,7 +360,7 @@ async def model_river_seepage_scenario(
 
 
 # --------------------------------------------------------------------------- #
-# Pipeline-emitter helper (mirror model_groundwater_contamination_scenario)
+# Pipeline-emitter helper (mirror modflow_contaminant_plume)
 # --------------------------------------------------------------------------- #
 
 
@@ -466,8 +465,7 @@ async def modflow_river_seepage(
 
     Do NOT use this for (see the routing block above):
         - Surface-water dye / tracer transport down the channel - ``run_telemac``.
-        - A point spill with NO river (use ``modflow_contaminant_plume`` /
-          ``run_model_groundwater_contamination_scenario``).
+        - A point spill with NO river (use ``modflow_contaminant_plume``).
         - Surface-water flooding (use ``sfincs_flood`` - SFINCS).
 
     Params:

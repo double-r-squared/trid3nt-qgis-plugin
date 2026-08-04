@@ -1,7 +1,7 @@
 """Direct GeoClaw tsunami inundation invocation for trid3nt-local proof.
 
 Bypasses the LLM/agent chat layer -- calls the deterministic GeoClaw workflow
-(model_dambreak_geoclaw_scenario) directly via the tool wrapper. The workflow runs:
+(model_geoclaw_inundation) directly via the tool wrapper. The workflow runs:
   fetch_dem (USGS 3DEP / ETOPO topobathy) + reproject to EPSG:4326
   -> stage_geoclaw_manifest (build_spec + DEM reference to MinIO)
   -> run_solver('geoclaw', local-docker: trid3nt-local/geoclaw:latest)
@@ -112,8 +112,8 @@ log.info("pre-run MinIO run prefixes: %s", sorted(pre_prefixes))
 # ---------------------------------------------------------------------------
 
 try:
-    from trid3nt_server.agent.workflows.geoclaw.model_dambreak_geoclaw_scenario.model_dambreak_geoclaw_scenario import (
-        model_dambreak_geoclaw_scenario,
+    from trid3nt_server.agent.workflows.geoclaw.inundation.inundation import (
+        model_geoclaw_inundation,
     )
     from trid3nt_contracts.geoclaw_contracts import GeoClawRunArgs
 except ImportError as exc:
@@ -123,7 +123,7 @@ except ImportError as exc:
 
 async def _run():
     log.info(
-        "invoking model_dambreak_geoclaw_scenario bbox=%s scenario=%s "
+        "invoking model_geoclaw_inundation bbox=%s scenario=%s "
         "duration=%ds amr_levels=%d frames=%d",
         BBOX, SCENARIO, SIM_DURATION_S, AMR_LEVELS, OUTPUT_FRAMES,
     )
@@ -134,7 +134,7 @@ async def _run():
         amr_levels=AMR_LEVELS,
         output_frames=OUTPUT_FRAMES,
     )
-    result = await model_dambreak_geoclaw_scenario(run_args)
+    result = await model_geoclaw_inundation(run_args)
     return result
 
 

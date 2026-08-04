@@ -1,7 +1,7 @@
 """``compute_flood_depth_damage`` composer tool -- HAZUS-curve flood damage screening.
 
 Lightweight depth-damage estimator: the quick screening cousin of the Pelicun
-chain (``pelicun_damage_assessment`` / ``compute_impact_envelope``). Takes
+chain (``pelicun_damage_assessment``). Takes
 ANY flood-depth raster (a SFINCS / GeoClaw / SWMM depth COG, s3:// or local),
 samples the depth at each structure point, applies the FEMA HAZUS-style
 residential depth-damage curve below, multiplies by the structure replacement
@@ -36,9 +36,8 @@ sampled ground-referenced depth is reduced by it before entering the curve
 HONESTY: this is a SCREENING estimate -- one aggregate claims-based curve
 applied to every occupancy class, structure value only (no contents, no
 inventory, no downtime), no uncertainty treatment. It is NOT a Pelicun
-component-level assessment; use ``pelicun_damage_assessment`` /
-``compute_impact_envelope`` for defensible per-asset loss work. Every result
-carries that note.
+component-level assessment; use ``pelicun_damage_assessment`` for defensible
+per-asset loss work. Every result carries that note.
 
 ``cacheable=False`` (``live-no-cache``): modeling composer; the artifact goes
 to the runs bucket (or ``_output_dir`` for offline tests).
@@ -396,7 +395,7 @@ def compute_flood_depth_damage(
     a Pelicun run. HONEST SCOPE: a SCREENING estimate (one aggregate curve,
     structure value only, no contents/uncertainty) -- NOT a Pelicun
     component-level assessment. Do NOT use for: defensible per-asset loss
-    (``pelicun_damage_assessment`` / ``compute_impact_envelope``);
+    (``pelicun_damage_assessment``);
     non-flood hazards; areas outside NSI coverage (CONUS+AK/HI/territories)
     without a caller ``assets_uri``.
 
@@ -446,7 +445,7 @@ def compute_flood_depth_damage(
         "FEMA HAZUS-MH flood default RES1 family) applied to every structure; "
         "structure value only, no contents/inventory/downtime, no uncertainty. "
         "NOT a Pelicun component-level assessment -- use "
-        "pelicun_damage_assessment / compute_impact_envelope for "
+        "pelicun_damage_assessment for "
         "defensible per-asset loss."
     ]
 

@@ -164,8 +164,8 @@ async def test_publish_input_layer_swallows_add_loaded_layer_failure():
 # ===========================================================================
 # (2) OpenQuake fault serialization + composer wiring.
 # ===========================================================================
-import trid3nt_server.agent.workflows.openquake.model_seismic_hazard_scenario.model_seismic_hazard_scenario as seismic  # noqa: E402
-from trid3nt_server.agent.workflows.openquake.model_seismic_hazard_scenario.model_seismic_hazard_scenario import (  # noqa: E402
+import trid3nt_server.agent.workflows.openquake.psha.psha as seismic  # noqa: E402
+from trid3nt_server.agent.workflows.openquake.psha.psha import (  # noqa: E402
     FAULT_LINE_STYLE_PRESET,
     fault_records_to_feature_collection,
     make_fault_sources_layer_uri,
@@ -277,7 +277,7 @@ from trid3nt_contracts.openquake_contracts import SeismicHazardLayerURI  # noqa:
 from trid3nt_server.agent.workflows.openquake.postprocess_openquake import (  # noqa: E402
     SEISMIC_HAZARD_STYLE_PRESET,
 )
-from trid3nt_server.agent.workflows.openquake.model_seismic_hazard_scenario.model_seismic_hazard_scenario import (  # noqa: E402
+from trid3nt_server.agent.workflows.openquake.psha.psha import (  # noqa: E402
     assemble_build_spec,
 )
 
@@ -380,7 +380,7 @@ async def test_composer_emits_fault_input_when_real_faults(monkeypatch):
             "trid3nt_server.emission.pipeline_emitter._read_vector_uri_as_geojson",
             return_value=fault_records_to_feature_collection([_FAULT_REC]),
         ):
-            await seismic.model_seismic_hazard_scenario(
+            await seismic.model_openquake_psha(
                 OpenQuakeRunArgs(bbox=_BBOX), compute_class="standard"
             )
     finally:
@@ -407,7 +407,7 @@ async def test_composer_emits_no_fault_input_when_no_real_faults(monkeypatch):
     fetch_cm, _ = _patch_fetch(return_value=_fault_result([], note="No GEM faults in this AOI."))
     try:
         with fetch_cm:
-            await seismic.model_seismic_hazard_scenario(
+            await seismic.model_openquake_psha(
                 OpenQuakeRunArgs(bbox=_BBOX), compute_class="standard"
             )
     finally:
@@ -570,7 +570,7 @@ async def test_sfincs_surfaces_dem_landcover_river_as_inputs(monkeypatch):
 # ===========================================================================
 # (4 bonus) SWMM building footprints surfaced as a role="input" vector.
 # ===========================================================================
-from trid3nt_server.agent.workflows.swmm.model_urban_flood_swmm.model_urban_flood_swmm import (  # noqa: E402
+from trid3nt_server.agent.workflows.swmm.urban_flood.urban_flood import (  # noqa: E402
     make_buildings_input_layer_uri,
 )
 

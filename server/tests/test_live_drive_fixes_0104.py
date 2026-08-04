@@ -70,7 +70,7 @@ def test_guarded_build_fast_fails_degenerate_without_forking():
 def test_server_maps_reach_degenerate_metrics_to_typed_gate():
     """The worker's TELEMAC_REACH_DEGENERATE metrics surface as the typed,
     retryable server error with .suggestions."""
-    from trid3nt_server.agent.workflows.telemac.model_river_dye_release_scenario.model_river_dye_release_scenario import (  # noqa: E501
+    from trid3nt_server.agent.workflows.telemac.river_dye.river_dye import (  # noqa: E501
         TelemacReachDegenerateError,
         _raise_if_reach_degenerate,
     )
@@ -122,7 +122,7 @@ def test_swmm_solve_subprocess_times_out_and_kills():
 # Bug 4 -- stale positional signatures + LOUD fallback labels
 # ===================================================================== #
 def test_urban_envelope_suffix_labels():
-    from trid3nt_server.agent.workflows.swmm.model_urban_flood_swmm.model_urban_flood_swmm import (  # noqa: E501
+    from trid3nt_server.agent.workflows.swmm.urban_flood.urban_flood import (  # noqa: E501
         _urban_envelope_suffix,
     )
 
@@ -144,7 +144,7 @@ def test_fetch_buildings_uses_keyword_bbox(monkeypatch):
     bbox (the post-fold closure is keyword-only; a positional arg TypeErrored and
     was swallowed -> zero footprints)."""
     import trid3nt_server.agent.tools as T
-    from trid3nt_server.agent.workflows.swmm.model_urban_flood_swmm.model_urban_flood_swmm import (  # noqa: E501
+    from trid3nt_server.agent.workflows.swmm.urban_flood.urban_flood import (  # noqa: E501
         _fetch_buildings_for_urban,
     )
 
@@ -169,7 +169,7 @@ def test_fetch_buildings_uses_keyword_bbox(monkeypatch):
 # Bug 6 -- oil-slick upload-before-register (no dangling handle)
 # ===================================================================== #
 def test_s3_object_exists_guard():
-    from trid3nt_server.agent.workflows.telemac.model_river_dye_release_scenario.model_river_dye_release_scenario import (  # noqa: E501
+    from trid3nt_server.agent.workflows.telemac.river_dye.river_dye import (  # noqa: E501
         _s3_object_exists,
     )
 

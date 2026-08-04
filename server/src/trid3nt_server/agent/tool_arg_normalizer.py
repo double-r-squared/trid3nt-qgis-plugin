@@ -526,10 +526,10 @@ def coerce_bbox_value(value: Any) -> list[float] | None:
     Gemini frequently stuffs the bbox into a STRING -- ``"[-81.9, 26.5, -81.7,
     26.6]"``, ``"-81.9,26.5,-81.7,26.6"``, ``"(-81.9 26.5 -81.7 26.6)"`` -- even
     when the tool's Python signature wants a list of 4 floats. Several tools
-    (``compute_impact_envelope``, ``compute_building_density``, …) then reject
+    (``compute_building_density``, ``compute_flood_depth_damage``, …) then reject
     it with ``len(bbox) != 4`` (a string's char length) or a ``not a tuple/list``
-    type error. Live 2026-06-16: ``compute_impact_envelope`` failed 3× on a
-    string bbox, tripping the circuit breaker and blocking the ImpactPanel.
+    type error. Live 2026-06-16: a compute_* tool failed 3× on a
+    string bbox, tripping the circuit breaker and blocking the downstream panel.
 
     Accepts: a 4-element list/tuple (coerced to floats), or a string holding 4
     comma/space-separated numbers with optional surrounding brackets/parens.

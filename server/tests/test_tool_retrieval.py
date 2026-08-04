@@ -255,7 +255,7 @@ _RECALL_FIXTURE = [
     ("how deep will the water get from this hurricane flood", "sfincs_flood"),
     ("simulate urban street flooding from heavy rain in this city", "swmm_urban_flood"),
     ("fetch high resolution aerial imagery for this area", "fetch_naip"),
-    ("model the groundwater contamination plume from this chemical spill", "run_model_groundwater_contamination_scenario"),
+    ("model the groundwater contamination plume from this chemical spill", "modflow_contaminant_plume"),
     ("run a probabilistic seismic hazard calculation for this region", "openquake_psha"),
     ("draw the topographic contour lines from the elevation", "compute_contours"),
 ]

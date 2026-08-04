@@ -315,7 +315,7 @@ def landlab_local_spec() -> Any:
         # Fold run_chain.py's typed result-block sidecar (landlab_result.json)
         # into completion.json's top-level "result" key -- mirrors the AWS
         # Batch entrypoint's completion.json shape exactly, so
-        # model_landslide_scenario._download_batch_landlab_outputs gets the
+        # model_landlab_susceptibility._download_batch_landlab_outputs gets the
         # worker's AUTHORITATIVE narration scalars (min_factor_of_safety in
         # particular is not recoverable from the probability field alone)
         # instead of silently falling back to a recomputed 0.0. A missing /

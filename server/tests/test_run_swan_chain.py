@@ -180,7 +180,7 @@ def test_swan_wave_field_typed_error_on_missing_bbox():
 # (empty solve). The old fetch only checked ``.uri`` and SILENTLY fed that DEM. We
 # now reject a bathymetry-absent result with a typed SWAN_NO_BATHYMETRY error.
 def test_fetch_bathy_rejects_land_only_dem():
-    from trid3nt_server.agent.workflows.swan.model_wave_scenario.model_wave_scenario import (
+    from trid3nt_server.agent.workflows.swan.wave_field.wave_field import (
         SwanComposerError,
         _fetch_bathy_for_swan,
     )
@@ -203,7 +203,7 @@ def test_fetch_bathy_rejects_land_only_dem():
 
 
 def test_fetch_bathy_accepts_real_bathymetry():
-    from trid3nt_server.agent.workflows.swan.model_wave_scenario.model_wave_scenario import _fetch_bathy_for_swan
+    from trid3nt_server.agent.workflows.swan.wave_field.wave_field import _fetch_bathy_for_swan
 
     bbox = (-85.55, 29.8, -85.25, 30.05)
 
@@ -221,7 +221,7 @@ def test_fetch_bathy_accepts_real_bathymetry():
 
 
 def test_fetch_bathy_typed_error_when_topobathy_fails():
-    from trid3nt_server.agent.workflows.swan.model_wave_scenario.model_wave_scenario import (
+    from trid3nt_server.agent.workflows.swan.wave_field.wave_field import (
         SwanComposerError,
         _fetch_bathy_for_swan,
     )
@@ -509,7 +509,7 @@ def test_composer_arg_assembly_and_dispatch(tmp_path: Path):
     call carries solver='swan' + the staged manifest_uri."""
     import asyncio
 
-    from trid3nt_server.agent.workflows.swan.model_wave_scenario import model_wave_scenario as comp
+    from trid3nt_server.agent.workflows.swan.wave_field import wave_field as comp
     from trid3nt_server.agent.workflows.swan.run_swan import SwanStaging
 
     run_args = SwanRunArgs(bbox=_AOI, mode="nonstationary", output_frames=4)
@@ -577,7 +577,7 @@ def test_composer_arg_assembly_and_dispatch(tmp_path: Path):
          patch.object(comp, "_publish_peak_layer", _fake_publish), \
          patch.object(comp, "current_emitter", lambda: None), \
          patch.object(comp, "drive_live_solve_progress", _amock(None)):
-        peak = asyncio.run(comp.model_wave_scenario(run_args))
+        peak = asyncio.run(comp.model_swan_wave_field(run_args))
 
     assert isinstance(peak, WaveFieldLayerURI)
     assert peak.uri == "https://tiles/peak.png"

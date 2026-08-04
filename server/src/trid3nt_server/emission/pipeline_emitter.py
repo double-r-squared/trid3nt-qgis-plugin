@@ -2582,7 +2582,7 @@ class PipelineEmitter:
 # Two-card sim observability composer helpers
 # --------------------------------------------------------------------------- #
 #
-# Shared by BOTH off-box-solver composers (model_urban_flood_swmm /
+# Shared by BOTH off-box-solver composers (model_swmm_urban_flood /
 # model_flood_scenario) so the SWMM and SFINCS Batch dispatches mint the same
 # two cards: a "Dispatch" tool card recording the submit (lands complete
 # immediately) + a "Sim" compute card bound to the Batch jobId whose live

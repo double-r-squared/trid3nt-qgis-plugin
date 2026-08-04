@@ -158,10 +158,10 @@ def test_suggest_empty_dem_raises(tmp_path: Path) -> None:
 # --------------------------------------------------------------------------- #
 # Gate helpers: patch the DEM-fetch so the gate reads our synthetic GeoTIFF and
 # does no network. We patch _fetch_dem_for_urban at its import site (the gate
-# imports it from model_urban_flood_swmm inside the helper).
+# imports it from model_swmm_urban_flood inside the helper).
 # --------------------------------------------------------------------------- #
 def _patch_dem_fetch(monkeypatch, dem_path: str) -> None:
-    import trid3nt_server.agent.workflows.swmm.model_urban_flood_swmm.model_urban_flood_swmm as mu
+    import trid3nt_server.agent.workflows.swmm.urban_flood.urban_flood as mu
 
     monkeypatch.setattr(
         mu, "_fetch_dem_for_urban", lambda bbox: (dem_path, "synthetic")
@@ -363,7 +363,7 @@ async def test_timeout_fails_closed(monkeypatch, dem_path: str) -> None:
 @pytest.mark.asyncio
 async def test_suggestion_exception_fails_open(monkeypatch) -> None:
     from trid3nt_server import server
-    import trid3nt_server.agent.workflows.swmm.model_urban_flood_swmm.model_urban_flood_swmm as mu
+    import trid3nt_server.agent.workflows.swmm.urban_flood.urban_flood as mu
 
     def _boom(bbox):
         raise RuntimeError("DEM fetch exploded")

@@ -1,6 +1,6 @@
 """P4 tests for the TELEMAC river-dye LLM surface: the ``telemac_river_dye``
 template (engine-door refactor, TELEMAC slice - was ``run_telemac``, now the
-door owns that name) + the ``model_river_dye_release_scenario`` composer.
+door owns that name) + the ``model_telemac_river_dye`` composer.
 
 Exercised in ISOLATION with geocode / fetch_river_geometry / run_solver / boto3 /
 postprocess / publish all MOCKED (no network, no docker, no TELEMAC). These pin:
@@ -119,16 +119,16 @@ def test_tool_rejects_both_location_and_bbox():
 # (3) Composer input validation.
 # ===========================================================================
 def test_composer_requires_exactly_one_of_location_or_bbox():
-    from trid3nt_server.agent.workflows.telemac.model_river_dye_release_scenario.model_river_dye_release_scenario import (
+    from trid3nt_server.agent.workflows.telemac.river_dye.river_dye import (
         TelemacDyeScenarioInputError,
-        model_river_dye_release_scenario,
+        model_telemac_river_dye,
     )
 
     with pytest.raises(TelemacDyeScenarioInputError):
-        asyncio.run(model_river_dye_release_scenario())  # neither
+        asyncio.run(model_telemac_river_dye())  # neither
     with pytest.raises(TelemacDyeScenarioInputError):
         asyncio.run(
-            model_river_dye_release_scenario(location="X", bbox=_AOI)  # both
+            model_telemac_river_dye(location="X", bbox=_AOI)  # both
         )
 
 
@@ -217,7 +217,7 @@ def _install_composer_mocks(comp, solver_mod, captured: dict):
 def test_composer_geocode_dispatch_and_manifest_overrides():
     from unittest.mock import patch  # noqa: F401 (used via _install)
 
-    from trid3nt_server.agent.workflows.telemac.model_river_dye_release_scenario import model_river_dye_release_scenario as comp
+    from trid3nt_server.agent.workflows.telemac.river_dye import river_dye as comp
     from trid3nt_server.agent.tools.simulation.solver import solver as solver_mod
 
     captured: dict = {}
@@ -226,7 +226,7 @@ def test_composer_geocode_dispatch_and_manifest_overrides():
     )
     with cm_multi, cm_solver, cm_wait, cm_bind:
         peak = asyncio.run(
-            comp.model_river_dye_release_scenario(
+            comp.model_telemac_river_dye(
                 location="Twin Falls, Idaho",
                 spill_fraction=0.4,
                 spill_duration_s=600.0,
@@ -270,7 +270,7 @@ def test_composer_geocode_dispatch_and_manifest_overrides():
 def test_composer_reuses_prefetched_river_geometry_uri():
     """When a river_geometry_uri is supplied the composer reuses it for the seed
     and does NOT call fetch_river_geometry (the live post-fetch routing path)."""
-    from trid3nt_server.agent.workflows.telemac.model_river_dye_release_scenario import model_river_dye_release_scenario as comp
+    from trid3nt_server.agent.workflows.telemac.river_dye import river_dye as comp
     from trid3nt_server.agent.tools.simulation.solver import solver as solver_mod
 
     captured: dict = {}
@@ -280,7 +280,7 @@ def test_composer_reuses_prefetched_river_geometry_uri():
     provided = "s3://trid3nt-cache/cache/static-30d/river_geometry/prefetched.fgb"
     with cm_multi, cm_solver, cm_wait, cm_bind:
         peak = asyncio.run(
-            comp.model_river_dye_release_scenario(
+            comp.model_telemac_river_dye(
                 location="Twin Falls, Idaho",
                 river_geometry_uri=provided,
             )
@@ -294,7 +294,7 @@ def test_composer_reuses_prefetched_river_geometry_uri():
 def test_composer_falls_back_to_centroid_when_no_river_seed():
     """When river-seed extraction returns None the composer seeds the geocoded
     centroid (the worker NLDI-snaps it) -- honest degrade, never a dead-end."""
-    from trid3nt_server.agent.workflows.telemac.model_river_dye_release_scenario import model_river_dye_release_scenario as comp
+    from trid3nt_server.agent.workflows.telemac.river_dye import river_dye as comp
     from trid3nt_server.agent.tools.simulation.solver import solver as solver_mod
 
     captured: dict = {}
@@ -308,7 +308,7 @@ def test_composer_falls_back_to_centroid_when_no_river_seed():
         comp, "_river_seed_from_geometry", lambda uri: None
     ):
         peak = asyncio.run(
-            comp.model_river_dye_release_scenario(location="Twin Falls, Idaho")
+            comp.model_telemac_river_dye(location="Twin Falls, Idaho")
         )
     assert isinstance(peak, TelemacDyeLayerURI)
     # Seed fell back to the geocoded centroid.
@@ -331,7 +331,7 @@ def test_tool_happy_path_returns_layer():
 
     from unittest.mock import patch
 
-    with patch.object(tool_mod, "model_river_dye_release_scenario", _fake_composer):
+    with patch.object(tool_mod, "model_telemac_river_dye", _fake_composer):
         out = asyncio.run(tool_mod.telemac_river_dye(location="Twin Falls, Idaho"))
     assert isinstance(out, TelemacDyeLayerURI)
     assert out.dye_cmax_mgl == pytest.approx(97.3)
@@ -339,7 +339,7 @@ def test_tool_happy_path_returns_layer():
 
 def test_tool_maps_composer_error_to_typed_dict():
     from trid3nt_server.agent.workflows.telemac.river_dye import river_dye as tool_mod
-    from trid3nt_server.agent.workflows.telemac.model_river_dye_release_scenario.model_river_dye_release_scenario import (
+    from trid3nt_server.agent.workflows.telemac.river_dye.river_dye import (
         TelemacDyeScenarioError,
     )
 
@@ -348,7 +348,7 @@ def test_tool_maps_composer_error_to_typed_dict():
 
     from unittest.mock import patch
 
-    with patch.object(tool_mod, "model_river_dye_release_scenario", _boom):
+    with patch.object(tool_mod, "model_telemac_river_dye", _boom):
         out = asyncio.run(tool_mod.telemac_river_dye(location="Twin Falls, Idaho"))
     assert out["status"] == "error"
     assert out["error_code"] == "TELEMAC_DYE_RUN_FAILED"

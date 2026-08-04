@@ -1,5 +1,5 @@
 """BREAK A (layer publish/persist) + BREAK B (event-loop off-loading) coverage
-for the PySWMM urban-flood composer (model_urban_flood_swmm.py).
+for the PySWMM urban-flood composer (model_swmm_urban_flood.py).
 
 These tests are DELIBERATELY pyswmm-free: the heavy in-process solve
 (build_and_stage_swmm_deck -> run_swmm_local -> postprocess_swmm) is stubbed at
@@ -30,7 +30,7 @@ from contextlib import asynccontextmanager
 
 from trid3nt_contracts.swmm_contracts import SWMMDepthLayerURI, SWMMRunArgs
 from trid3nt_server.agent.tools.publish_layer.publish_layer import PublishLayerError
-from trid3nt_server.agent.workflows.swmm.model_urban_flood_swmm import model_urban_flood_swmm as M
+from trid3nt_server.agent.workflows.swmm.urban_flood import urban_flood as M
 
 
 # --------------------------------------------------------------------------- #
@@ -290,7 +290,7 @@ def test_full_composer_publishes_peak_and_frames(monkeypatch):
     try:
         run_args = SWMMRunArgs(bbox=(-88.0, 36.0, -87.99, 36.01))
         peak = asyncio.run(
-            M.model_urban_flood_swmm(
+            M.model_swmm_urban_flood(
                 run_args,
                 dem_path="/tmp/synthetic.tif",  # skip the DEM fetch
                 building_footprints=None,
@@ -337,11 +337,11 @@ def test_completion_log_surfaces_n_buildings_dropped(monkeypatch, caplog):
 
     fake = _FakeEmitter()
     token = pe._CURRENT_EMITTER.set(fake)
-    caplog.set_level(logging.INFO, logger="trid3nt_server.agent.workflows.swmm.model_urban_flood_swmm.model_urban_flood_swmm")
+    caplog.set_level(logging.INFO, logger="trid3nt_server.agent.workflows.swmm.urban_flood.urban_flood")
     try:
         run_args = SWMMRunArgs(bbox=(-88.0, 36.0, -87.99, 36.01))
         asyncio.run(
-            M.model_urban_flood_swmm(
+            M.model_swmm_urban_flood(
                 run_args,
                 dem_path="/tmp/synthetic.tif",
                 building_footprints=None,
@@ -353,7 +353,7 @@ def test_completion_log_surfaces_n_buildings_dropped(monkeypatch, caplog):
 
     completion = [
         r.getMessage() for r in caplog.records
-        if "model_urban_flood_swmm complete" in r.getMessage()
+        if "model_swmm_urban_flood complete" in r.getMessage()
     ]
     assert completion, "no completion telemetry log emitted"
     msg = completion[-1]
@@ -374,7 +374,7 @@ def test_returned_peak_name_surfaces_obstacles(monkeypatch):
     try:
         run_args = SWMMRunArgs(bbox=(-88.0, 36.0, -87.99, 36.01))
         peak = asyncio.run(
-            M.model_urban_flood_swmm(
+            M.model_swmm_urban_flood(
                 run_args,
                 dem_path="/tmp/synthetic.tif",
                 building_footprints=None,
@@ -407,7 +407,7 @@ def test_returned_peak_name_unchanged_when_no_obstacles(monkeypatch):
         def emit(self, record):  # noqa: ANN001
             caplog_msgs.append(record.getMessage())
 
-    lg = logging.getLogger("trid3nt_server.agent.workflows.swmm.model_urban_flood_swmm.model_urban_flood_swmm")
+    lg = logging.getLogger("trid3nt_server.agent.workflows.swmm.urban_flood.urban_flood")
     handler = _H()
     lg.addHandler(handler)
     prev_level = lg.level
@@ -415,7 +415,7 @@ def test_returned_peak_name_unchanged_when_no_obstacles(monkeypatch):
     try:
         run_args = SWMMRunArgs(bbox=(-88.0, 36.0, -87.99, 36.01))
         peak = asyncio.run(
-            M.model_urban_flood_swmm(
+            M.model_swmm_urban_flood(
                 run_args,
                 dem_path="/tmp/synthetic.tif",
                 building_footprints=None,
@@ -428,7 +428,7 @@ def test_returned_peak_name_unchanged_when_no_obstacles(monkeypatch):
         lg.setLevel(prev_level)
 
     assert peak.name == "Peak flood depth", peak.name
-    completion = [m for m in caplog_msgs if "model_urban_flood_swmm complete" in m]
+    completion = [m for m in caplog_msgs if "model_swmm_urban_flood complete" in m]
     assert completion and "n_buildings_dropped=0" in completion[-1]
 
 
@@ -474,7 +474,7 @@ def test_emitted_zoom_to_and_peak_bbox_use_the_floored_aoi(monkeypatch):
     try:
         run_args = SWMMRunArgs(bbox=tiny)
         peak = asyncio.run(
-            M.model_urban_flood_swmm(
+            M.model_swmm_urban_flood(
                 run_args,
                 dem_path="/tmp/synthetic.tif",  # skip the DEM fetch
                 building_footprints=None,
@@ -517,7 +517,7 @@ def test_full_composer_peak_drop_keeps_metrics(monkeypatch):
     try:
         run_args = SWMMRunArgs(bbox=(-88.0, 36.0, -87.99, 36.01))
         peak = asyncio.run(
-            M.model_urban_flood_swmm(
+            M.model_swmm_urban_flood(
                 run_args, dem_path="/tmp/synthetic.tif",
                 building_footprints=None, run_id="RID",
             )
@@ -566,7 +566,7 @@ def test_solve_runs_off_the_event_loop(monkeypatch):
         ka = asyncio.create_task(_keepalive(stop))
         try:
             run_args = SWMMRunArgs(bbox=(-88.0, 36.0, -87.99, 36.01))
-            peak = await M.model_urban_flood_swmm(
+            peak = await M.model_swmm_urban_flood(
                 run_args, dem_path="/tmp/synthetic.tif",
                 building_footprints=None, run_id="RID",
             )

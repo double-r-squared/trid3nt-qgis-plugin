@@ -5,7 +5,7 @@ backend so ``run_solver(solver='telemac_river_dye', ...)`` under
 ``TRID3NT_SOLVER_BACKEND=local-docker`` dispatches to the
 ``trid3nt-local/telemac:latest`` worker image -- exactly like the
 SFINCS/GeoClaw/SWAN local specs. This module carries ONLY the seam (P2); the
-LLM-facing ``run_telemac`` tool + the ``model_river_dye_release_scenario``
+LLM-facing ``run_telemac`` tool + the ``model_telemac_river_dye``
 composer are P4.
 
 Structural clone of ``run_geoclaw.geoclaw_local_spec`` /
