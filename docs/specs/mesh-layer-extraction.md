@@ -132,7 +132,17 @@ Cross-cutting, promoted from existing code to pipeline features:
 - M4 QUADTREE TRUTH: SIGNED as BUILD (decision 1 above) - the SFINCS
   quadtree leg gets built for real atop stage 2 (cht_sfincs/hydromt
   quadtree, GPL-isolated); the inert stub dies when the real leg
-  replaces it. oceanmesh adoption rides this wave.
+  replaces it.
+- OCEANMESH WAVE (NATE pull-forward 2026-08-04, runs right after M3,
+  before M4): oceanmesh in an isolated worker (GPL-3) backing a
+  coastal_tin generator component in the generation stage - inherits
+  drawn roles + preview gate; validated by replicating a published
+  oceanmesh gallery case (paper-first); spot-check layer to NATE.
+  Value = tried-and-true graded sizing functions (closes the census's
+  no-graded-sizing gap) instead of hand-built grading. gmsh KEEPS the
+  TELEMAC river-ribbon case initially (boundary tagging is load-bearing);
+  the channel sizing-function swap is a measured follow-up comparison,
+  never a blind replacement.
 
 ## Open questions for NATE at sign-off
 
