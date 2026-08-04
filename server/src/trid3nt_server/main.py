@@ -142,8 +142,8 @@ def _import_tools_registry() -> int:
     from .agent.workflows.pelicun.damage_assessment.damage_assessment import pelicun_damage_assessment  # noqa: F401
     # register show_nexrad_radar (display tool: composes an Iowa Mesonet NEXRAD WMS URL).
     from .agent.tools.display.show_nexrad_radar.show_nexrad_radar import show_nexrad_radar  # noqa: F401
-    # register fetch_goes_satellite (GOES-16/17/18/19 satellite imagery via NOAA Big-Data S3).
-    from .agent.tools.fetchers.imagery.fetch_goes_satellite import fetch_goes_satellite  # noqa: F401
+    # fetch_goes_satellite FOLDED to a spec-driven surface (ADR 0111): auto-registered by
+    # register_specs_from_tree (goes_satellite library-delegate raster hooks); no eager import.
     # fetch_mrms_qpe: weather/GRIB fold (ADR 0069) -- twin DELETED, now spec-driven
     # (S3-listed key resolve -> grib_object whole-object COG), via register_specs_from_tree.
     # fetch_hrsl_population: data-router fold phase-2 wave-9 (ADR 0055) -- twin

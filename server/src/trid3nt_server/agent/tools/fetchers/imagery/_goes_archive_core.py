@@ -16,7 +16,7 @@ from typing import Any
 
 
 from trid3nt_server.agent.tools.cache import read_through
-from trid3nt_server.agent.tools.fetchers.imagery.fetch_goes_satellite.fetch_goes_satellite import (
+from trid3nt_server.agent.tools.fetchers.imagery._goes_common import (
     _KEY_START_TIME_RE,
     _PRODUCT_PREFIX,
     _SATELLITE_BUCKETS,

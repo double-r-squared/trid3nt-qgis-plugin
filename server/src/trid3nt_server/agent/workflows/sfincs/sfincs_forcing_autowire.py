@@ -819,7 +819,11 @@ def _resolve_spiderweb_forcing(
     """
     import os as _os
 
-    from trid3nt_server.agent.tools.fetchers.weather.fetch_storm_tracks.fetch_storm_tracks import fetch_storm_tracks
+    # fetch_storm_tracks FOLDED to a spec-driven surface (ADR 0111): resolve the promoted
+    # router closure from the registry (keyword-only), the standard fold re-point.
+    from trid3nt_server.agent.tools import TOOL_REGISTRY
+
+    fetch_storm_tracks = TOOL_REGISTRY["fetch_storm_tracks"].fn
     from trid3nt_server.agent.workflows.sfincs.sfincs_builder import _stage_gcs_local
     from trid3nt_server.agent.workflows.sfincs import sfincs_spiderweb as _spw
 

@@ -1,0 +1,200 @@
+# Router source spec (FETCHER FINALE WAVE 2, ADR 0111): the fetch_storm_tracks fold.
+# Twin: fetch_storm_tracks.py -- hurricane / tropical-cyclone tracks, TWO modes under
+# one name. Folds onto a library_delegate VECTOR source: the delegate (storm_tracks.read)
+# owns BOTH network rounds (historical IBTrACS CSV; active NHC JSON + the BINARY
+# forecast-track zip-shapefile secondary-enrichment round) so the binary second round is
+# just delegate socket I/O, not a new executor phase (ADR 0090 -> 0111). Mode provenance
+# rides the fetch-time provenance channel (ADR 0110).
+schema_version: v1
+name: fetch_storm_tracks
+source_class: storm_tracks
+error_prefix: STORM_TRACKS
+shape: vector-fgb
+supports_global_query: false
+endpoints:
+  # Documentary (the delegate owns the socket): NCEI IBTrACS (historical) + NHC
+  # CurrentStorms (active). The executor never fetches these; storm_tracks.read does.
+  ibtracs:
+    url: https://www.ncei.noaa.gov/data/international-best-track-archive-for-climate-stewardship-ibtracs/v04r01/access/csv/
+  nhc_current:
+    url: https://www.nhc.noaa.gov/CurrentStorms.json
+auth:
+  mode: none
+  user_agent: trid3nt/0.1 (Hazard Modeling Agent; https://github.com/double-r-squared/trid3nt-qgis-plugin;
+    agent@trid3nt.dev)
+params:
+  bbox:
+    type: bbox
+    schema_optional: true
+    quantize: round_6dp
+  start_year:
+    type: int
+    schema_optional: true
+  end_year:
+    type: int
+    schema_optional: true
+  storm_name:
+    type: str
+    schema_optional: true
+  active_only:
+    type: bool
+    default: false
+  geometry:
+    type: enum
+    values:
+    - lines
+    - points
+    default: lines
+ingest:
+  access: library_delegate
+  delegate:
+    library: storm_tracks_composite
+    timeout_s: 600.0
+hooks:
+  delegate: storm_tracks.read
+  delegate_validate: storm_tracks.validate
+  pre_resolve: storm_tracks.resolve
+  envelope: storm_tracks.envelope
+normalize:
+  crs: EPSG:4326
+  units: kt / mb
+output:
+  layer_type: vector
+  ext: fgb
+  role: primary
+  style_preset: storm_tracks
+  emit_bbox: true
+  bbox_from_features:
+    pad: 0.5
+  result_model: StormTracksLayerURI
+  provenance: true
+cache:
+  ttl_class: dynamic-1h
+payload_estimate:
+  model: per_feature
+  features_per_sq_deg: 2.0
+  kb_per_feature: 0.5
+  floor_mb: 0.01
+caveats:
+- IBTrACS v04r01 best tracks (historical, NOAA NCEI, every TC since 1842) OR the NHC
+  CurrentStorms.json live feed (active_only=True). Selection is storm-wise (a storm whose
+  track touches the bbox is returned with its FULL track). Lines = one LineString per
+  storm; points = one Point per fix. Active mode is always points, each storm best-effort
+  enriched with its 5-day forecast-track GIS product (a binary zip-shapefile).
+- 'Honest empty (never a fabricated layer): STORM_TRACKS_NO_STORMS (no archived track
+  matches the scope) / STORM_TRACKS_NO_ACTIVE_STORMS (NHC is advising on zero storms --
+  the common out-of-season state).'
+- A bbox spanning more than 2 tropical-cyclone basins is rejected with guidance rather
+  than pulling the 330 MB global IBTrACS file (STORM_TRACKS_INPUT_ERROR).
+corpus:
+- show me the track of Hurricane Michael
+- where did Hurricane Katrina travel
+- fetch all historical hurricane paths that crossed Florida
+- pull the IBTrACS best track for Tropical Storm Alberto
+- what cyclones have passed within 100 km of Tampa Bay
+- get tropical cyclone tracks in the Gulf of Mexico from 2005
+- show me Category 5 hurricane tracks in the Atlantic
+docstring: |-
+  Fetch REAL hurricane / tropical-cyclone tracks as a vector FlatGeobuf.
+
+  HISTORICAL mode (default): subsets the IBTrACS v04r01 best-track archive
+  (NOAA NCEI - every tropical cyclone since 1842, all basins) by bbox +
+  season (year) range + optional storm name. Selection is storm-wise: any
+  storm whose track touches the bbox is returned with its FULL track, so a
+  landfalling hurricane keeps its open-ocean history. Emits one LineString
+  per storm (default) or one Point per 3/6-hourly fix, with wind speed (kt),
+  central pressure (mb), and Saffir-Simpson category attributes.
+
+  ACTIVE mode (``active_only=True``): the NHC CurrentStorms.json feed - the
+  storms under advisory RIGHT NOW - each enriched best-effort with its
+  official 5-day forecast-track points (``tau`` = forecast hour,
+  ``intensity_kt`` per position). Always emits Points. If the forecast-track
+  GIS product cannot be fetched, the layer degrades to current-position
+  points only (logged, never fabricated).
+
+  When to use:
+      - "show hurricane tracks near Florida since 2004", "storms that hit
+        Puerto Rico", "Hurricane Michael's track", "typhoon tracks in the
+        West Pacific 2015-2020".
+      - "is there a hurricane right now / where is it heading" ->
+        ``active_only=True``.
+      - Providing storm-track context for a coastal-flood / surge / wind
+        discussion (composes with SFINCS coastal scenarios).
+
+  When NOT to use:
+      - Severe LOCAL storm reports (tornado / hail / wind damage points) ->
+        ``fetch_storm_events_db``.
+      - Active WATCHES / WARNINGS polygons -> ``fetch_nws_event`` /
+        ``fetch_nws_alerts_conus``.
+      - Modeled surge / inundation -> the flood-scenario tools; this is the
+        track record, not a hazard footprint.
+
+  Parameters:
+      bbox: ``(west, south, east, north)`` EPSG:4326. REQUIRED for
+          historical mode (it bounds the archive subset). Optional in active
+          mode (filters storms by CURRENT position).
+      start_year / end_year: Season (calendar-year) range, inclusive.
+          Default = the most recent 3 seasons. Southern-hemisphere seasons
+          follow the IBTrACS SEASON convention. Ranges reaching further back
+          than the last 3 seasons trigger a per-basin archive download
+          (~5-60 MB, slower); a bbox spanning more than 2 basins is
+          rejected with guidance rather than pulling the 330 MB global file.
+      storm_name: Optional exact name filter, case-insensitive (e.g.
+          ``"MICHAEL"``, ``"KATRINA"``). Note: names are reused across
+          years - combine with a year range for a specific storm. Unnamed
+          systems carry the IBTrACS name ``NOT_NAMED``.
+      active_only: When True, use the live NHC feed (see ACTIVE mode above).
+          ``start_year`` / ``end_year`` are ignored.
+      geometry: ``"lines"`` (default; one LineString per storm with
+          per-storm peak intensity attrs) or ``"points"`` (one Point per
+          best-track fix with per-fix wind/pressure/category). Active mode
+          is always points.
+
+  Returns:
+      ``LayerURI`` pointing at a FlatGeobuf in the cache bucket.
+      ``layer_type="vector"``, ``role="primary"``,
+      ``style_preset="storm_tracks"``, ``units="kt / mb"``. ``bbox`` is the
+      extent of the returned tracks (which can exceed the query bbox because
+      full tracks are kept).
+      Line props: ``sid``, ``name``, ``season``, ``basin``,
+      ``max_wind_kt``, ``min_pres_mb``, ``max_category`` (-5..5 USA_SSHS),
+      ``max_category_label``, ``start_time``, ``end_time``, ``n_fixes``.
+      Historical point props: ``sid``, ``name``, ``season``, ``basin``,
+      ``iso_time``, ``nature``, ``wind_kt``, ``pres_mb``, ``category``,
+      ``category_label``, ``status``, plus the wind-structure columns
+      (blank-tolerant): ``rmw_nmi`` (USA_RMW), ``poci_mb`` (USA_POCI),
+      ``roci_nmi`` (USA_ROCI), ``r34_ne_nmi`` / ``r34_se_nmi`` /
+      ``r34_sw_nmi`` / ``r34_nw_nmi`` (USA_R34_*) -- consumed by the
+      hurricane-spiderweb parametric (the ``run_sfincs`` storm branch, via
+      ``set_sfincs_parameters``).
+      Active point props: ``id``, ``name``, ``classification``,
+      ``intensity_kt``, ``pressure_mb``, ``movement_dir_deg``,
+      ``movement_speed_kt``, ``last_update``, ``tau_h`` (0 = current
+      position), ``is_forecast`` (0/1).
+
+  Honest-empty paths (data-source fallback norm):
+      - ``StormTracksNoStormsError``: no archived track matches the scope.
+      - ``StormTracksNoActiveStormsError``: NHC is advising on zero storms
+        (the common out-of-season state) or none match the filter.
+      Never an empty success-shaped layer.
+
+  Errors:
+      - ``StormTracksInputError``: bad bbox / years / geometry, bbox spans
+        too many basins, or a points-mode result over the 50000-fix cap
+        (retryable=False).
+      - ``StormTracksUpstreamError``: NCEI / NHC network failure, HTTP 5xx,
+        or malformed body (retryable=True).
+
+  Cache: ``ttl_class="dynamic-1h"``, ``source_class="storm_tracks"``. The
+  hourly bucket keeps active storms fresh; identical historical queries
+  within the hour reuse the FGB.
+
+  Cross-tool dependencies:
+      - Composes WITH: ``publish_layer`` (map overlay), ``geocode_location``
+        (derive a bbox from a place name first),
+        ``fetch_nws_event`` (live warnings for an approaching storm),
+        ``fetch_noaa_coops_tides`` (observed surge at landfall).
+      - Upstream sources: NOAA NCEI IBTrACS v04r01 (historical), NOAA NHC
+        CurrentStorms.json + forecast-track GIS (active).
+
+  Source-tier: FR-HEP-2 Tier 1 (NOAA NCEI / NHC). Tier-1 free, no API key.

@@ -322,3 +322,16 @@ from . import dem_3dep  # noqa: E402,F401
 # provenance fields replayed from the channel). The TopobathyError twins' stable
 # home; consumer #1 of the fetch-time provenance channel.
 from . import topobathy  # noqa: E402,F401
+# fetch_storm_tracks fold (ADR 0111): the hurricane/TC-track library-delegate hooks --
+# validate (historical bbox-required + shape), resolve (storm_name canon + season
+# window pre-cache-key), read (IBTrACS historical OR NHC active + the binary
+# forecast-zip secondary-enrichment round, returning GeoJSON features + a mode
+# provenance RECORD), envelope (twin storm-tracks-{seed} id/name + the mode
+# provenance replayed from the channel). The StormTracks*Error twins' stable home.
+from . import storm_tracks  # noqa: E402,F401
+# fetch_goes_satellite fold (ADR 0111): the single-band float32 GOES ABI imagery
+# library-delegate hooks -- validate (bbox-required + band/satellite + CONUS pre-gate),
+# resolve (15-min valid_time cache rounding pre-key), read (list most-recent MCMIPC key
+# -> netCDF -> CF-scale physical-units reproject returning (array, transform, crs) + a
+# scan-time provenance RECORD), envelope (twin em-dash name + scan provenance replay).
+from . import goes_satellite  # noqa: E402,F401

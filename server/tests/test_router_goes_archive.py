@@ -32,7 +32,7 @@ from trid3nt_server.agent.tools.fetchers._router.executors import animation_fram
 from trid3nt_server.agent.tools.fetchers._router.hooks import FrameDegraded
 from trid3nt_server.agent.tools.fetchers._router.hooks import goes_archive as GA
 from trid3nt_server.agent.tools.fetchers.imagery import _goes_archive_core as core
-from trid3nt_server.agent.tools.fetchers.imagery.fetch_goes_satellite.fetch_goes_satellite import (
+from trid3nt_server.agent.tools.fetchers.imagery._goes_common import (
     GOESInputError,
 )
 

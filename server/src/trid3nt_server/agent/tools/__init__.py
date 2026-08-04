@@ -242,7 +242,10 @@ def clear_registry_for_tests() -> None:
 # fetch_storm_events_db: data-router fold (ADR 0064) -- twin DELETED, now spec-driven
 # (source.yaml + storm_events_db hooks: directory-index resolve -> newest bulk-CSV URL,
 # then bulk gzip-CSV point decode), registered by _register_router_specs() below.
-from .fetchers.weather.fetch_storm_tracks import fetch_storm_tracks  # noqa: E402,F401
+# fetch_storm_tracks FOLDED to a spec-driven surface (ADR 0111): its source.yaml +
+# storm_tracks library-delegate hooks (historical IBTrACS + active NHC incl. the binary
+# forecast-zip secondary-enrichment round) are promoted by register_specs_from_tree;
+# the StormTracks*Error twins live in _router/hooks/storm_tracks.py. No eager twin import.
 
 # -- fetchers/hydrology --
 # V&V wave (ADR 0021, lane C): observed flood-validation data fetchers.
@@ -315,7 +318,11 @@ from .fetchers.hydrology.fetch_noaa_nwm_streamflow import fetch_noaa_nwm_streamf
 # the shared imagery._goes_archive_core substrate (netcdf_cf_object per-frame mode),
 # auto-registered by register_specs_from_tree. The substrate lives on in
 # imagery/_goes_archive_core.py (no registered tool).
-from .fetchers.imagery.fetch_goes_satellite import fetch_goes_satellite  # noqa: E402,F401
+# fetch_goes_satellite FOLDED to a spec-driven surface (ADR 0111): its source.yaml +
+# goes_satellite library-delegate raster hooks (most-recent MCMIPC read + 15-min
+# valid_time cache rounding) are promoted by register_specs_from_tree; the shared
+# satellite-identifier / S3 substrate lives on in imagery/_goes_common.py (no registered
+# tool). No eager twin import.
 # fetch_landsat_imagery / fetch_naip / fetch_sentinel2_truecolor: STAC-composite wave
 # (ADR 0080) -- twins DELETED, now spec-driven (source.yaml + raster_cog
 # stac_multi_asset_rgb: N reflectance assets + QA/SCL mask + joint 2/98 stretch /

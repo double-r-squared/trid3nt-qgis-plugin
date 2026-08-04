@@ -33,7 +33,7 @@ from typing import Any
 from trid3nt_contracts.source_spec import SourceSpec
 
 from ...imagery import _goes_archive_core as core
-from ...imagery.fetch_goes_satellite.fetch_goes_satellite import _normalize_satellite
+from ...imagery._goes_common import _normalize_satellite
 from ..errors import router_empty_error, router_input_error, router_upstream_error
 from . import FrameDegraded, FramePlan, register_hook
 

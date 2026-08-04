@@ -38,7 +38,7 @@ from trid3nt_server.agent.tools.fetchers.imagery._satellite_slider import (
     ts_int_to_datetime,
     ts_int_to_iso,
 )
-from trid3nt_server.agent.tools.fetchers.imagery.fetch_goes_satellite.fetch_goes_satellite import (
+from trid3nt_server.agent.tools.fetchers.imagery._goes_common import (
     GOESInputError,
 )
 

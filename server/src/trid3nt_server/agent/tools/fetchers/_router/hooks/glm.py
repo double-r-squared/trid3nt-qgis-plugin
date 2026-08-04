@@ -45,7 +45,7 @@ from ...imagery._goes_archive_core import (
     _rgba_array_to_cog_bytes,
     _round_bbox,
 )
-from ...imagery.fetch_goes_satellite.fetch_goes_satellite import (
+from ...imagery._goes_common import (
     GOESInputError,
     _normalize_satellite,
 )

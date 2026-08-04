@@ -43,7 +43,7 @@ from ...imagery._satellite_slider import (
     ts_int_to_datetime,
     ts_int_to_iso,
 )
-from ...imagery.fetch_goes_satellite.fetch_goes_satellite import _normalize_satellite
+from ...imagery._goes_common import _normalize_satellite
 from ..errors import router_empty_error, router_input_error, router_upstream_error
 from . import FrameDegraded, FramePlan, register_hook
 

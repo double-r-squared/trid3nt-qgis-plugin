@@ -41,6 +41,8 @@ __all__ = [
     "LandcoverResult",
     "DemLayerURI",
     "TopobathyResult",
+    "StormTracksLayerURI",
+    "GOESSatelliteLayerURI",
     "LAYER_RESULT_MODELS",
 ]
 
@@ -442,6 +444,52 @@ class TopobathyResult(LayerURI):
     regional_tile_count: int = 0
 
 
+class StormTracksLayerURI(LayerURI):
+    """The hurricane / tropical-cyclone track ``LayerURI`` plus its fetch-time mode provenance.
+
+    The ``fetch_storm_tracks`` fold's result model (ADR 0111). The twin returned a
+    plain ``LayerURI``; the router's only seam to override the emitted ``layer_id`` /
+    ``name`` (the twin's ``storm-tracks-{seed}`` id + ``Storm tracks - <mode> (<scope>)``
+    name) is the ``hooks.envelope`` post-emit hook, which pairs with a result model.
+    The extra fields are FETCH-TIME PROVENANCE (which mode served + which storms were
+    attributed) -- carried from the delegate to here by the provenance channel
+    (``storm_tracks.read`` records them; ``storm_tracks.envelope`` reads them back), so
+    they survive a cache hit that never re-runs the fetch. A pre-channel cache object
+    (no sidecar) yields ``None`` provenance and these declared DEFAULTS hold.
+
+    - ``mode`` -- ``"active"`` (NHC live) or ``"historical"`` (IBTrACS archive).
+    - ``storm_count`` -- number of distinct storms in the returned layer.
+    - ``storm_names`` -- the attributed storm names (or SIDs) in the layer.
+    """
+
+    mode: str = "historical"
+    storm_count: int = 0
+    storm_names: list[str] = []
+
+
+class GOESSatelliteLayerURI(LayerURI):
+    """The single-band GOES ABI imagery ``LayerURI`` plus its fetch-time scan provenance.
+
+    The ``fetch_goes_satellite`` fold's result model (ADR 0111). The twin returned a
+    plain ``LayerURI`` with an em-dash in its ``name``; the router's only seam to
+    reproduce that exact ``name`` is the ``hooks.envelope`` post-emit hook, which pairs
+    with a result model. The extra fields are FETCH-TIME PROVENANCE (which bird + which
+    scan actually served) carried by the provenance channel (``goes_satellite.read``
+    records them; ``goes_satellite.envelope`` reads them back) -- the ``scan_time`` in
+    particular is UNRECOVERABLE from the produced COG on a cache hit (the twin's own
+    cache hit lost which scan served), so the channel is what makes it durable.
+
+    - ``satellite`` -- the canonical bird token that served (``"goes-19"``).
+    - ``band`` -- the ABI band emitted (``"visible"`` / ``"ir_window"`` / ``"water_vapor"``).
+    - ``scan_time`` -- the ISO start-time of the chosen MCMIPC scan (``None`` on a
+      pre-channel cache object).
+    """
+
+    satellite: str = "goes-19"
+    band: str = "visible"
+    scan_time: str | None = None
+
+
 #: name -> LayerURI-subclass. A spec's ``output.result_model`` string resolves
 #: here; the router builds the named subclass from the base LayerURI + the
 #: envelope hook's field dict. Empty of a name -> the plain LayerURI (no-op).
@@ -452,6 +500,8 @@ LAYER_RESULT_MODELS: dict[str, type[LayerURI]] = {
     "LandcoverResult": LandcoverResult,
     "DemLayerURI": DemLayerURI,
     "TopobathyResult": TopobathyResult,
+    "StormTracksLayerURI": StormTracksLayerURI,
+    "GOESSatelliteLayerURI": GOESSatelliteLayerURI,
 }
 
 

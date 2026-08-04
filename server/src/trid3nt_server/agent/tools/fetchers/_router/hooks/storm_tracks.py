@@ -1,4 +1,38 @@
-"""``fetch_storm_tracks`` atomic tool - hurricane / tropical-cyclone tracks.
+"""Hurricane / tropical-cyclone track delegate hooks (ADR 0111): the ``fetch_storm_tracks`` fold.
+
+``fetch_storm_tracks`` folds onto the router as a ``library_delegate`` VECTOR source
+carrying BOTH of its modes under one name. The decisive blocker ADR 0090 named was the
+ACTIVE mode's second fetch round: a BINARY zip-shapefile (the NHC forecast-track GIS
+product) that must be extracted + read via geopandas + reprojected -- I/O inside what
+would be a PURE enrich hook, which no chained-resolution phase carries. The fold
+expresses that binary-secondary-enrichment as the SANCTIONED delegate socket impurity
+(the topobathy precedent): the delegate hook owns BOTH network rounds, so the second
+round's zip read is just more delegate I/O, not a new executor phase. The whole tool's
+bespoke body lives here as the delegate:
+
+  * ``storm_tracks.validate`` (delegate_validate) -- the historical-mode bbox-required
+    gate + geometry / storm_name shape checks the declarative param surface cannot
+    express (bbox is required for historical, OPTIONAL for active), raised pre-cache /
+    pre-network as a ``StormTracksInputError``.
+  * ``storm_tracks.resolve`` (pre_resolve) -- canonicalize ``storm_name`` (upper) and
+    resolve the historical season window (default = the last 3 seasons) BEFORE
+    read_through so the resolved years enter the cache key (a default-year request is
+    deterministic per day and refreshes yearly, the twin's contract).
+  * ``storm_tracks.read`` (delegate) -- branch on ``active_only``: HISTORICAL subsets
+    the IBTrACS v04r01 archive (basin CSV -> storm-wise full-track selection -> line /
+    point features); ACTIVE resolves NHC CurrentStorms.json then, per storm, fetches
+    the ``forecastTrack.zipFile`` binary, extracts ``*_pts.shp`` to a tempdir, reads it
+    via geopandas, and reprojects to EPSG:4326. Returns GeoJSON features for the shared
+    ``vector_fgb`` serializer, and RECORDS the fetch-time mode provenance (ADR 0110).
+  * ``storm_tracks.envelope`` -- the twin's exact ``storm-tracks-{seed}`` layer_id +
+    ``Storm tracks - <mode> (<scope>)`` name, plus the mode / storm-attribution
+    provenance read back from the channel (declared defaults on a pre-channel cache
+    object).
+
+The ``StormTracks*Error`` classes live HERE (their stable importable home now that the
+coded twin is deleted). Their base is ``FetchError`` so ``library_delegate.invoke``
+passes them through unchanged (its ``except FetchError: raise`` passthrough, ADR 0097),
+preserving the pinned ``error_code`` through the delegate wrapper.
 """
 
 from __future__ import annotations
@@ -13,102 +47,78 @@ import math
 import os
 import tempfile
 import urllib.error
-import urllib.parse
 import urllib.request
 import zipfile
 from typing import Any
 
-from trid3nt_contracts.execution import LayerURI
-from trid3nt_contracts.tool_registry import AtomicToolMetadata
+from trid3nt_server.agent.tools.cache import record_provenance
 
-from trid3nt_server.agent.tools import register_tool
-from trid3nt_server.agent.tools.cache import read_through
+from ..._fetch_common import FetchError
+from . import register_hook
+
+logger = logging.getLogger(
+    "trid3nt_server.agent.tools.fetchers._router.hooks.storm_tracks"
+)
 
 __all__ = [
-    "fetch_storm_tracks",
-    "estimate_payload_mb",
     "StormTracksError",
     "StormTracksInputError",
     "StormTracksUpstreamError",
     "StormTracksNoStormsError",
     "StormTracksNoActiveStormsError",
+    "estimate_payload_mb",
+    "validate_storm_tracks",
+    "resolve_storm_tracks",
+    "read_storm_tracks",
+    "envelope_storm_tracks",
     "IBTRACS_CSV_BASE",
     "NHC_CURRENT_STORMS_URL",
-    "_validate_bbox",
-    "_resolve_years",
-    "_select_ibtracs_files",
-    "_parse_ibtracs_csv",
-    "_select_storms_in_bbox",
-    "_saffir_label",
-    "_parse_current_storms",
-    "_records_bbox",
-    "_build_line_flatgeobuf",
-    "_build_point_flatgeobuf",
 ]
 
-logger = logging.getLogger("trid3nt_server.agent.tools.fetchers.weather.fetch_storm_tracks.fetch_storm_tracks")
-
 
 # ---------------------------------------------------------------------------
-# Error types (FR-AS-11 typed-error surface).
+# Error types (FR-AS-11 typed-error surface). Base = FetchError so the pinned
+# error_code survives library_delegate.invoke's passthrough (ADR 0097).
 # ---------------------------------------------------------------------------
 
 
-class StormTracksError(RuntimeError):
-    """Base class for fetch_storm_tracks failures.
-
-    ``error_code`` maps to the WebSocket A.6 error frame emitted by the agent
-    surface. ``retryable`` guides FR-AS-11 retry/clarify/fallback logic.
-    """
+class StormTracksError(FetchError):
+    """Base class for fetch_storm_tracks failures."""
 
     error_code: str = "STORM_TRACKS_ERROR"
     retryable: bool = True
 
 
 class StormTracksInputError(StormTracksError):
-    """Invalid inputs - bad bbox, bad year range, bad geometry mode.
-
-    Not retryable: the caller must fix the argument.
-    """
+    """Invalid inputs - bad bbox, bad year range, bad geometry mode."""
 
     error_code = "STORM_TRACKS_INPUT_ERROR"
     retryable = False
 
 
 class StormTracksUpstreamError(StormTracksError):
-    """NCEI / NHC request failed (network error, HTTP 5xx, bad body).
-
-    Retryable - transient upstream outages recover on retry.
-    """
+    """NCEI / NHC request failed (network error, HTTP 5xx, bad body)."""
 
     error_code = "STORM_TRACKS_UPSTREAM_ERROR"
     retryable = True
 
 
 class StormTracksNoStormsError(StormTracksError):
-    """No historical storm track touched the bbox / year range / name filter.
-
-    Not retryable - the archive genuinely has no matching track. Widen the
-    bbox, extend the year range, or drop the name filter.
-    """
+    """No historical storm track touched the bbox / year range / name filter."""
 
     error_code = "STORM_TRACKS_NO_STORMS"
     retryable = False
 
 
 class StormTracksNoActiveStormsError(StormTracksError):
-    """NHC is advising on zero active storms (or none match the filter).
-
-    Not retryable - a quiet basin is the common steady state outside peak
-    season. Use the historical mode (``active_only=False``) for past storms.
-    """
+    """NHC is advising on zero active storms (or none match the filter)."""
 
     error_code = "STORM_TRACKS_NO_ACTIVE_STORMS"
     retryable = False
 
 
 # ---------------------------------------------------------------------------
-# Constants.
+# Constants (twin-identical).
 # ---------------------------------------------------------------------------
 
 #: IBTrACS v04r01 points-CSV base URL (NOAA NCEI).
@@ -134,9 +144,6 @@ _LAST3YEARS_FILE = "ibtracs.last3years.list.v04r01.csv"
 #: envelopes.
 _BASIN_ENVELOPES: dict[str, list[tuple[float, float, float, float]]] = {
     "NA": [(-103.0, 0.0, 10.0, 70.0)],
-    # EP stops at the Central-American divide: open Pacific west of -92, plus
-    # the lower-latitude Pacific coast strip down to Panama (never the Gulf of
-    # Mexico / Caribbean, which are NA).
     "EP": [(-180.0, 0.0, -92.0, 60.0), (-92.0, 0.0, -77.0, 15.0)],
     "WP": [(95.0, 0.0, 180.0, 65.0)],
     "NI": [(30.0, 0.0, 100.0, 35.0)],
@@ -145,11 +152,10 @@ _BASIN_ENVELOPES: dict[str, list[tuple[float, float, float, float]]] = {
     "SA": [(-70.0, -55.0, 20.0, 0.0)],
 }
 
-#: Never download more than this many per-basin CSVs in one call (each is
-#: ~5-60 MB); the 330 MB ALL file is never used.
+#: Never download more than this many per-basin CSVs in one call.
 _MAX_BASIN_FILES = 2
 
-#: User-Agent per NOAA usage guidance (a descriptive UA is recommended).
+#: User-Agent per NOAA usage guidance.
 _USER_AGENT = (
     "trid3nt/0.1 (Hazard Modeling Agent; "
     "https://github.com/double-r-squared/trid3nt-qgis-plugin; agent@trid3nt.dev)"
@@ -158,43 +164,13 @@ _USER_AGENT = (
 #: HTTP timeout (seconds). Per-basin IBTrACS CSVs are up to ~60 MB.
 _HTTP_TIMEOUT = 300.0
 
-#: Cap on emitted point features (points mode) so a dense multi-decade basin
-#: query stays a bounded payload.
+#: Cap on emitted point features (points mode).
 _MAX_POINT_FEATURES = 50000
 
 
 # ---------------------------------------------------------------------------
-# AtomicToolMetadata - registered once at import time.
-# ---------------------------------------------------------------------------
-
-
-def _build_metadata() -> AtomicToolMetadata:
-    """Construct AtomicToolMetadata defensively against schema flag variants."""
-    common: dict[str, Any] = dict(
-        name="fetch_storm_tracks",
-        ttl_class="dynamic-1h",
-        source_class="storm_tracks",
-        cacheable=True,
-    )
-    try:
-        return AtomicToolMetadata(  # type: ignore[call-arg]
-            **common,
-            supports_global_query=False,
-            payload_mb_estimator_name="estimate_payload_mb",
-        )
-    except Exception:
-        logger.debug(
-            "AtomicToolMetadata does not support all Wave-1.5 flags; "
-            "registering fetch_storm_tracks without them"
-        )
-        return AtomicToolMetadata(**common)
-
-
-_METADATA = _build_metadata()
-
-
-# ---------------------------------------------------------------------------
-# Payload-MB estimator (chat-warning system).
+# Payload estimator (kept importable for tests; the router synthesizes its own
+# from source.yaml's payload_estimate block for the promoted tool).
 # ---------------------------------------------------------------------------
 
 
@@ -206,13 +182,7 @@ def estimate_payload_mb(
     geometry: str = "lines",
     **_kw: Any,
 ) -> float:
-    """Estimate the output FlatGeobuf size in MB.
-
-    Active mode is tiny (a handful of storms x ~20 forecast points). Historical
-    output scales with bbox area and year-range length; a per-storm line is
-    ~2 KB, a per-fix point ~300 bytes. Estimates are conservative - track
-    layers are small next to rasters.
-    """
+    """Estimate the output FlatGeobuf size in MB."""
     if active_only:
         return 0.01
     try:
@@ -227,7 +197,6 @@ def estimate_payload_mb(
             area_sq_deg = max(1.0, (east - west) * (north - south))
         except (TypeError, ValueError):
             pass
-    # ~0.005 bbox-touching storms per sq-deg per season in an active basin.
     n_storms = max(1.0, area_sq_deg * n_years * 0.005)
     if geometry == "points":
         return max(0.001, n_storms * 80 * 300 / 1_000_000.0)
@@ -235,12 +204,11 @@ def estimate_payload_mb(
 
 
 # ---------------------------------------------------------------------------
-# Input validation.
+# Input validation + year resolution.
 # ---------------------------------------------------------------------------
 
 
 def _validate_bbox(bbox: tuple[float, float, float, float]) -> None:
-    """Raise ``StormTracksInputError`` if the bbox is malformed / out of range."""
     if not isinstance(bbox, (tuple, list)) or len(bbox) != 4:
         raise StormTracksInputError(
             f"bbox must be (west, south, east, north); got {bbox!r}"
@@ -258,21 +226,11 @@ def _validate_bbox(bbox: tuple[float, float, float, float]) -> None:
         )
 
 
-def _round_bbox_to_6dp(
-    bbox: tuple[float, float, float, float],
-) -> tuple[float, float, float, float]:
-    return tuple(round(float(v), 6) for v in bbox)  # type: ignore[return-value]
-
-
 def _resolve_years(
     start_year: int | None,
     end_year: int | None,
 ) -> tuple[int, int]:
-    """Resolve the (start, end) season range. Default = the last 3 seasons.
-
-    Raises ``StormTracksInputError`` on a non-integer year, a year before the
-    IBTrACS record starts (1842), a future year, or a reversed range.
-    """
+    """Resolve the (start, end) season range. Default = the last 3 seasons."""
     current = _dt.datetime.now(_dt.timezone.utc).year
 
     def _coerce(v: Any, label: str) -> int:
@@ -327,16 +285,7 @@ def _select_ibtracs_files(
     y0: int,
     y1: int,
 ) -> list[str]:
-    """Pick the smallest adequate IBTrACS CSV file set for bbox + year range.
-
-    - Recent-only ranges (start within the last 3 seasons) -> the single
-      ~9 MB ``last3years`` file.
-    - Older ranges -> the per-basin file(s) whose envelope intersects the
-      bbox. More than ``_MAX_BASIN_FILES`` intersecting basins raises a typed
-      input error (we never fall back to the 330 MB ALL file).
-    - A bbox intersecting NO basin envelope (e.g. polar) raises the honest
-      no-storms error immediately - no download needed.
-    """
+    """Pick the smallest adequate IBTrACS CSV file set for bbox + year range."""
     current = _dt.datetime.now(_dt.timezone.utc).year
     if y0 >= current - 2:
         return [_LAST3YEARS_FILE]
@@ -361,7 +310,7 @@ def _select_ibtracs_files(
 
 
 # ---------------------------------------------------------------------------
-# HTTP helper.
+# HTTP helper (the delegate owns its own socket, the sanctioned impurity).
 # ---------------------------------------------------------------------------
 
 
@@ -391,7 +340,6 @@ def _http_get(url: str, timeout: float = _HTTP_TIMEOUT) -> bytes:
 
 
 def _blank_to_none_float(v: Any) -> float | None:
-    """IBTrACS encodes missing numerics as blank/whitespace strings."""
     if v is None:
         return None
     s = str(v).strip()
@@ -413,9 +361,6 @@ def _blank_to_none_int(v: Any) -> int | None:
     return int(f)
 
 
-#: USA_SSHS -> human label. -5 = unknown, -4 = post-tropical, -3 = misc
-#: disturbance, -2 = subtropical, -1 = tropical depression, 0 = tropical
-#: storm, 1..5 = Saffir-Simpson hurricane category.
 _SSHS_LABELS = {
     -5: "unknown",
     -4: "post-tropical",
@@ -432,7 +377,6 @@ _SSHS_LABELS = {
 
 
 def _saffir_label(cat: int | None) -> str:
-    """Human label for a USA_SSHS integer category (-5..5)."""
     if cat is None:
         return "unknown"
     return _SSHS_LABELS.get(int(cat), "unknown")
@@ -445,17 +389,10 @@ def _parse_ibtracs_csv(
     y1: int,
     storm_name: str | None,
 ) -> dict[str, list[dict[str, Any]]]:
-    """Parse an IBTrACS points CSV -> {sid: [fix, ...]} filtered by season + name.
-
-    Row 0 is the column-name header, row 1 is a units row (skipped). ``spur``
-    TRACK_TYPE rows (alternate-agency duplicates) are dropped; ``main`` and
-    ``PROVISIONAL*`` (current-season) rows are kept. Fixes with an unparseable
-    lat/lon are dropped. Wind prefers USA_WIND, falling back to WMO_WIND;
-    pressure prefers USA_PRES falling back to WMO_PRES.
-    """
+    """Parse an IBTrACS points CSV -> {sid: [fix, ...]} filtered by season + name."""
     try:
         text = raw.decode("utf-8", errors="replace")
-    except Exception as exc:  # pragma: no cover - decode(errors=replace) is total
+    except Exception as exc:  # pragma: no cover
         raise StormTracksUpstreamError(f"IBTrACS CSV decode failed: {exc}") from exc
 
     reader = csv.reader(io.StringIO(text))
@@ -485,7 +422,6 @@ def _parse_ibtracs_csv(
     for row in reader:
         if not row:
             continue
-        # Row 1 is the units row ("' ', 'Year', ...'"); skip it once.
         if first_data:
             first_data = False
             if _col(row, "SEASON").strip().lower() == "year":
@@ -513,12 +449,6 @@ def _parse_ibtracs_csv(
         if pres is None:
             pres = _blank_to_none_float(_col(row, "WMO_PRES"))
         cat = _blank_to_none_int(_col(row, "USA_SSHS"))
-        # SPIDERWEB (2026-07-19): carry the ATCF wind-structure columns per fix so
-        # the Holland parametric (workflows/sfincs_spiderweb) can size the RMW +
-        # outer pressure + wind-radii. All blank-tolerant (frequently empty for
-        # older/weaker fixes -> the spiderweb builder falls back to Knaff-Zehr /
-        # standard atmosphere and SURFACES the fallback, never fabricates radii).
-        # USA_RMW / USA_ROCI / USA_R34_* are nautical miles; USA_POCI is mb.
         rmw_nmi = _blank_to_none_float(_col(row, "USA_RMW"))
         poci_mb = _blank_to_none_float(_col(row, "USA_POCI"))
         roci_nmi = _blank_to_none_float(_col(row, "USA_ROCI"))
@@ -540,7 +470,6 @@ def _parse_ibtracs_csv(
                 "pres_mb": pres,
                 "category": cat,
                 "status": _col(row, "USA_STATUS").strip() or None,
-                # Wind-structure (spiderweb) columns -- blank-tolerant.
                 "rmw_nmi": rmw_nmi,
                 "poci_mb": poci_mb,
                 "roci_nmi": roci_nmi,
@@ -557,11 +486,7 @@ def _select_storms_in_bbox(
     storms: dict[str, list[dict[str, Any]]],
     bbox: tuple[float, float, float, float],
 ) -> dict[str, list[dict[str, Any]]]:
-    """Keep storms whose track has at least one fix inside the bbox.
-
-    Selection is storm-wise: a selected storm keeps its FULL track (not
-    clipped to the bbox) so landfall context is preserved.
-    """
+    """Keep storms whose track has at least one fix inside the bbox (FULL track kept)."""
     west, south, east, north = bbox
     out: dict[str, list[dict[str, Any]]] = {}
     for sid, fixes in storms.items():
@@ -579,7 +504,6 @@ def _select_storms_in_bbox(
 
 
 def _parse_signed_coord(v: Any) -> float | None:
-    """Parse ``14.8N`` / ``52.9W`` hemisphere-suffixed coordinate strings."""
     if v is None:
         return None
     s = str(v).strip().upper()
@@ -598,12 +522,7 @@ def _parse_signed_coord(v: Any) -> float | None:
 
 
 def _parse_current_storms(raw: bytes) -> list[dict[str, Any]]:
-    """Parse NHC CurrentStorms.json -> one record per active storm.
-
-    Prefers the ``latitudeNumeric`` / ``longitudeNumeric`` fields, falling back
-    to parsing the hemisphere-suffixed ``latitude`` / ``longitude`` strings.
-    Storms with no parseable position are dropped (logged).
-    """
+    """Parse NHC CurrentStorms.json -> one record per active storm."""
     try:
         obj = json.loads(raw.decode("utf-8"))
     except (json.JSONDecodeError, UnicodeDecodeError) as exc:
@@ -671,12 +590,10 @@ def _fetch_forecast_track_points(
 ) -> list[dict[str, Any]]:
     """Best-effort: NHC 5-day forecast-track zipped shapefile -> point records.
 
-    Downloads the ``forecastTrack`` zip, extracts the ``*_pts.shp`` layer, and
-    emits one record per forecast position carrying ``tau`` (forecast hour)
-    and ``max_wind_kt`` where the shapefile provides them (field names vary
-    across NHC product generations, so lookups are case-insensitive and each
-    field is optional). Any failure returns ``[]`` - the caller degrades to
-    current-position-only and logs; we never fabricate a forecast.
+    This is the BINARY-SECONDARY-ENRICHMENT round (ADR 0090/0111): the delegate
+    fetches the ``forecastTrack`` zip, extracts ``*_pts.shp`` to a tempdir, and reads
+    it via geopandas + reproject -- I/O the delegate socket sanctions. Any failure
+    returns ``[]`` (the caller degrades to current-position-only, never fabricates).
     """
     try:
         import geopandas as gpd  # type: ignore[import-not-found]
@@ -768,77 +685,15 @@ def _fetch_forecast_track_points(
 
 
 # ---------------------------------------------------------------------------
-# Extent + FlatGeobuf builders.
+# GeoJSON feature builders (delegate returns features; vector_fgb serializes).
 # ---------------------------------------------------------------------------
 
 
-def _records_bbox(
-    records: list[dict[str, Any]],
-) -> tuple[float, float, float, float] | None:
-    """(west, south, east, north) extent of point records; pads degenerate."""
-    if not records:
-        return None
-    lons = [r["lon"] for r in records]
-    lats = [r["lat"] for r in records]
-    west, east = min(lons), max(lons)
-    south, north = min(lats), max(lats)
-    if west == east:
-        west -= 0.5
-        east += 0.5
-    if south == north:
-        south -= 0.5
-        north += 0.5
-    return (west, south, east, north)
-
-
-def _import_gpd() -> Any:
-    try:
-        import geopandas as gpd  # type: ignore[import-not-found]
-
-        return gpd
-    except ImportError as exc:
-        raise StormTracksUpstreamError(
-            f"geopandas not available for FlatGeobuf conversion: {exc}"
-        ) from exc
-
-
-def _write_fgb(gdf: Any, n_label: str) -> bytes:
-    tmp_fgb: str | None = None
-    try:
-        with tempfile.NamedTemporaryFile(
-            suffix=".fgb", delete=False, prefix="trid3nt_storm_"
-        ) as f:
-            tmp_fgb = f.name
-        gdf.to_file(tmp_fgb, driver="FlatGeobuf", engine="pyogrio")
-        with open(tmp_fgb, "rb") as f:
-            return f.read()
-    except Exception as exc:
-        raise StormTracksUpstreamError(
-            f"FlatGeobuf write failed for {n_label}: {exc}"
-        ) from exc
-    finally:
-        if tmp_fgb is not None:
-            try:
-                os.unlink(tmp_fgb)
-            except OSError:
-                pass
-
-
-def _build_line_flatgeobuf(
+def _line_features(
     storms: dict[str, list[dict[str, Any]]],
-) -> bytes:
-    """One LineString per storm (fixes in time order) -> FlatGeobuf bytes.
-
-    Single-fix storms cannot form a line and are dropped (logged); the caller
-    raises the honest no-storms error if nothing remains. Per-line props:
-    sid, name, season, basin, max_wind_kt, min_pres_mb, max_category,
-    max_category_label, start_time, end_time, n_fixes.
-    """
-    gpd = _import_gpd()
-    from shapely.geometry import LineString  # type: ignore[import-not-found]
-
-    geoms = []
-    rows: list[dict[str, Any]] = []
+) -> list[dict[str, Any]]:
+    """One LineString feature per storm (fixes in time order)."""
+    feats: list[dict[str, Any]] = []
     n_dropped = 0
     for sid, fixes in sorted(storms.items()):
         if len(fixes) < 2:
@@ -848,20 +703,26 @@ def _build_line_flatgeobuf(
         press = [f["pres_mb"] for f in fixes if f["pres_mb"] is not None]
         cats = [f["category"] for f in fixes if f["category"] is not None]
         max_cat = max(cats) if cats else None
-        geoms.append(LineString([(f["lon"], f["lat"]) for f in fixes]))
-        rows.append(
+        feats.append(
             {
-                "sid": sid,
-                "name": fixes[0]["name"],
-                "season": fixes[0]["season"],
-                "basin": fixes[0]["basin"],
-                "max_wind_kt": max(winds) if winds else None,
-                "min_pres_mb": min(press) if press else None,
-                "max_category": max_cat,
-                "max_category_label": _saffir_label(max_cat),
-                "start_time": fixes[0]["iso_time"],
-                "end_time": fixes[-1]["iso_time"],
-                "n_fixes": len(fixes),
+                "type": "Feature",
+                "geometry": {
+                    "type": "LineString",
+                    "coordinates": [[f["lon"], f["lat"]] for f in fixes],
+                },
+                "properties": {
+                    "sid": sid,
+                    "name": fixes[0]["name"],
+                    "season": fixes[0]["season"],
+                    "basin": fixes[0]["basin"],
+                    "max_wind_kt": max(winds) if winds else None,
+                    "min_pres_mb": min(press) if press else None,
+                    "max_category": max_cat,
+                    "max_category_label": _saffir_label(max_cat),
+                    "start_time": fixes[0]["iso_time"],
+                    "end_time": fixes[-1]["iso_time"],
+                    "n_fixes": len(fixes),
+                },
             }
         )
     if n_dropped:
@@ -869,57 +730,47 @@ def _build_line_flatgeobuf(
             "fetch_storm_tracks: dropped %d single-fix storm(s) in lines mode",
             n_dropped,
         )
-    if not rows:
+    if not feats:
         raise StormTracksNoStormsError(
             "Every matching storm has a single best-track fix - too short to "
             "draw as a line. Re-issue with geometry='points'."
         )
-    gdf = gpd.GeoDataFrame(
-        {k: [r[k] for r in rows] for k in rows[0]},
-        geometry=geoms,
-        crs="EPSG:4326",
-    )
-    return _write_fgb(gdf, f"{len(rows)} storm track line(s)")
+    return feats
 
 
-def _build_point_flatgeobuf(records: list[dict[str, Any]]) -> bytes:
-    """One Point per record -> FlatGeobuf bytes (EPSG:4326).
-
-    Used for historical per-fix points AND active-storm current/forecast
-    positions; the property set is the union of both record shapes (absent
-    keys become None columns).
-    """
-    gpd = _import_gpd()
-    from shapely.geometry import Point  # type: ignore[import-not-found]
-
-    keys: list[str] = []
+def _point_features(records: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """One Point feature per record (EPSG:4326)."""
+    feats: list[dict[str, Any]] = []
     for r in records:
-        for k in r:
-            if k not in ("lat", "lon", "forecast_track_zip") and k not in keys:
-                keys.append(k)
-    geoms = [Point(r["lon"], r["lat"]) for r in records]
-    gdf = gpd.GeoDataFrame(
-        {k: [r.get(k) for r in records] for k in keys},
-        geometry=geoms,
-        crs="EPSG:4326",
-    )
-    return _write_fgb(gdf, f"{len(records)} storm point(s)")
+        props = {
+            k: v
+            for k, v in r.items()
+            if k not in ("lat", "lon", "forecast_track_zip")
+        }
+        feats.append(
+            {
+                "type": "Feature",
+                "geometry": {"type": "Point", "coordinates": [r["lon"], r["lat"]]},
+                "properties": props,
+            }
+        )
+    return feats
 
 
 # ---------------------------------------------------------------------------
-# Top-level fetchers (passed to read_through via closures).
+# The two fetch modes (delegate body).
 # ---------------------------------------------------------------------------
 
 
-def _fetch_historical_bytes(
+def _fetch_historical(
     *,
     bbox: tuple[float, float, float, float],
     y0: int,
     y1: int,
     storm_name: str | None,
     geometry: str,
-) -> tuple[bytes, tuple[float, float, float, float], int]:
-    """Historical IBTrACS path -> (fgb_bytes, extent, n_storms)."""
+) -> tuple[list[dict[str, Any]], list[str]]:
+    """Historical IBTrACS path -> (features, storm_names)."""
     files = _select_ibtracs_files(bbox, y0, y1)
     storms: dict[str, list[dict[str, Any]]] = {}
     for fn in files:
@@ -927,8 +778,6 @@ def _fetch_historical_bytes(
         logger.info("fetch_storm_tracks: GET %s", url)
         raw = _http_get(url)
         parsed = _parse_ibtracs_csv(raw, y0=y0, y1=y1, storm_name=storm_name)
-        # Later files never overwrite earlier SIDs (SIDs are globally unique
-        # across basin files anyway).
         for sid, fixes in parsed.items():
             storms.setdefault(sid, []).extend(fixes)
 
@@ -946,11 +795,12 @@ def _fetch_historical_bytes(
         "fetch_storm_tracks: %d storm(s) matched %s", len(selected), scope
     )
 
-    all_fixes = [f for fixes in selected.values() for f in fixes]
-    extent = _records_bbox(all_fixes)
-    assert extent is not None  # selected is non-empty here
+    names = sorted(
+        {(fixes[0].get("name") or sid) for sid, fixes in selected.items()}
+    )
 
     if geometry == "points":
+        all_fixes = [f for fixes in selected.values() for f in fixes]
         if len(all_fixes) > _MAX_POINT_FEATURES:
             raise StormTracksInputError(
                 f"{len(all_fixes)} best-track fixes exceed the "
@@ -961,16 +811,16 @@ def _fetch_historical_bytes(
             dict(f, category_label=_saffir_label(f["category"]))
             for f in all_fixes
         ]
-        return _build_point_flatgeobuf(rows), extent, len(selected)
-    return _build_line_flatgeobuf(selected), extent, len(selected)
+        return _point_features(rows), names
+    return _line_features(selected), names
 
 
-def _fetch_active_bytes(
+def _fetch_active(
     *,
     bbox: tuple[float, float, float, float] | None,
     storm_name: str | None,
-) -> tuple[bytes, tuple[float, float, float, float], int]:
-    """Active NHC path -> (fgb_bytes, extent, n_storms). Always points."""
+) -> tuple[list[dict[str, Any]], list[str]]:
+    """Active NHC path -> (features, storm_names). Always points."""
     logger.info("fetch_storm_tracks: GET %s", NHC_CURRENT_STORMS_URL)
     raw = _http_get(NHC_CURRENT_STORMS_URL)
     storms = _parse_current_storms(raw)
@@ -1006,246 +856,151 @@ def _fetch_active_bytes(
                 p["is_forecast"] = 1
                 records.append(p)
 
-    extent = _records_bbox(records)
-    assert extent is not None  # storms is non-empty here
-    return _build_point_flatgeobuf(records), extent, len(storms)
+    names = sorted({(s.get("name") or s.get("id") or "storm") for s in storms})
+    return _point_features(records), names
 
 
 # ---------------------------------------------------------------------------
-# Registered atomic tool.
+# HOOK: delegate_validate -- historical bbox-required + shape gate (pre-cache).
 # ---------------------------------------------------------------------------
 
 
-@register_tool(
-    _METADATA,
-    supports_global_query=False,
-    payload_mb_estimator_name="estimate_payload_mb",
-    # Annotations: readOnlyHint=True (read-only; no state mutation),
-    # openWorldHint=True (calls external public API endpoints),
-    # destructiveHint=False, idempotentHint=True (cache shim deduplicates).
-    open_world_hint=True,
-)
-def fetch_storm_tracks(
-    bbox: tuple[float, float, float, float] | None = None,
-    start_year: int | None = None,
-    end_year: int | None = None,
-    storm_name: str | None = None,
-    active_only: bool = False,
-    geometry: str = "lines",
-    # Absorb LLM-invented kwargs (centralized at server.py via
-    # tool_arg_normalizer, but kept as belt-and-suspenders).
-    **_extra_ignored: Any,
-) -> LayerURI:
-    """Fetch REAL hurricane / tropical-cyclone tracks as a vector FlatGeobuf.
-
-    HISTORICAL mode (default): subsets the IBTrACS v04r01 best-track archive
-    (NOAA NCEI - every tropical cyclone since 1842, all basins) by bbox +
-    season (year) range + optional storm name. Selection is storm-wise: any
-    storm whose track touches the bbox is returned with its FULL track, so a
-    landfalling hurricane keeps its open-ocean history. Emits one LineString
-    per storm (default) or one Point per 3/6-hourly fix, with wind speed (kt),
-    central pressure (mb), and Saffir-Simpson category attributes.
-
-    ACTIVE mode (``active_only=True``): the NHC CurrentStorms.json feed - the
-    storms under advisory RIGHT NOW - each enriched best-effort with its
-    official 5-day forecast-track points (``tau`` = forecast hour,
-    ``intensity_kt`` per position). Always emits Points. If the forecast-track
-    GIS product cannot be fetched, the layer degrades to current-position
-    points only (logged, never fabricated).
-
-    When to use:
-        - "show hurricane tracks near Florida since 2004", "storms that hit
-          Puerto Rico", "Hurricane Michael's track", "typhoon tracks in the
-          West Pacific 2015-2020".
-        - "is there a hurricane right now / where is it heading" ->
-          ``active_only=True``.
-        - Providing storm-track context for a coastal-flood / surge / wind
-          discussion (composes with SFINCS coastal scenarios).
-
-    When NOT to use:
-        - Severe LOCAL storm reports (tornado / hail / wind damage points) ->
-          ``fetch_storm_events_db``.
-        - Active WATCHES / WARNINGS polygons -> ``fetch_nws_event`` /
-          ``fetch_nws_alerts_conus``.
-        - Modeled surge / inundation -> the flood-scenario tools; this is the
-          track record, not a hazard footprint.
-
-    Parameters:
-        bbox: ``(west, south, east, north)`` EPSG:4326. REQUIRED for
-            historical mode (it bounds the archive subset). Optional in active
-            mode (filters storms by CURRENT position).
-        start_year / end_year: Season (calendar-year) range, inclusive.
-            Default = the most recent 3 seasons. Southern-hemisphere seasons
-            follow the IBTrACS SEASON convention. Ranges reaching further back
-            than the last 3 seasons trigger a per-basin archive download
-            (~5-60 MB, slower); a bbox spanning more than 2 basins is
-            rejected with guidance rather than pulling the 330 MB global file.
-        storm_name: Optional exact name filter, case-insensitive (e.g.
-            ``"MICHAEL"``, ``"KATRINA"``). Note: names are reused across
-            years - combine with a year range for a specific storm. Unnamed
-            systems carry the IBTrACS name ``NOT_NAMED``.
-        active_only: When True, use the live NHC feed (see ACTIVE mode above).
-            ``start_year`` / ``end_year`` are ignored.
-        geometry: ``"lines"`` (default; one LineString per storm with
-            per-storm peak intensity attrs) or ``"points"`` (one Point per
-            best-track fix with per-fix wind/pressure/category). Active mode
-            is always points.
-
-    Returns:
-        ``LayerURI`` pointing at a FlatGeobuf in the cache bucket.
-        ``layer_type="vector"``, ``role="primary"``,
-        ``style_preset="storm_tracks"``, ``units="kt / mb"``. ``bbox`` is the
-        extent of the returned tracks (which can exceed the query bbox because
-        full tracks are kept).
-        Line props: ``sid``, ``name``, ``season``, ``basin``,
-        ``max_wind_kt``, ``min_pres_mb``, ``max_category`` (-5..5 USA_SSHS),
-        ``max_category_label``, ``start_time``, ``end_time``, ``n_fixes``.
-        Historical point props: ``sid``, ``name``, ``season``, ``basin``,
-        ``iso_time``, ``nature``, ``wind_kt``, ``pres_mb``, ``category``,
-        ``category_label``, ``status``, plus the wind-structure columns
-        (blank-tolerant): ``rmw_nmi`` (USA_RMW), ``poci_mb`` (USA_POCI),
-        ``roci_nmi`` (USA_ROCI), ``r34_ne_nmi`` / ``r34_se_nmi`` /
-        ``r34_sw_nmi`` / ``r34_nw_nmi`` (USA_R34_*) -- consumed by the
-        hurricane-spiderweb parametric (the ``run_sfincs`` storm branch, via
-        ``set_sfincs_parameters``).
-        Active point props: ``id``, ``name``, ``classification``,
-        ``intensity_kt``, ``pressure_mb``, ``movement_dir_deg``,
-        ``movement_speed_kt``, ``last_update``, ``tau_h`` (0 = current
-        position), ``is_forecast`` (0/1).
-
-    Honest-empty paths (data-source fallback norm):
-        - ``StormTracksNoStormsError``: no archived track matches the scope.
-        - ``StormTracksNoActiveStormsError``: NHC is advising on zero storms
-          (the common out-of-season state) or none match the filter.
-        Never an empty success-shaped layer.
-
-    Errors:
-        - ``StormTracksInputError``: bad bbox / years / geometry, bbox spans
-          too many basins, or a points-mode result over the 50000-fix cap
-          (retryable=False).
-        - ``StormTracksUpstreamError``: NCEI / NHC network failure, HTTP 5xx,
-          or malformed body (retryable=True).
-
-    Cache: ``ttl_class="dynamic-1h"``, ``source_class="storm_tracks"``. The
-    hourly bucket keeps active storms fresh; identical historical queries
-    within the hour reuse the FGB.
-
-    Cross-tool dependencies:
-        - Composes WITH: ``publish_layer`` (map overlay), ``geocode_location``
-          (derive a bbox from a place name first),
-          ``fetch_nws_event`` (live warnings for an approaching storm),
-          ``fetch_noaa_coops_tides`` (observed surge at landfall).
-        - Upstream sources: NOAA NCEI IBTrACS v04r01 (historical), NOAA NHC
-          CurrentStorms.json + forecast-track GIS (active).
-
-    Source-tier: FR-HEP-2 Tier 1 (NOAA NCEI / NHC). Tier-1 free, no API key.
-    """
+@register_hook("storm_tracks.validate")
+def validate_storm_tracks(spec: Any, params: dict[str, Any]) -> None:
+    """Pre-cache input gate: historical requires bbox; geometry/storm_name shape."""
+    geometry = params.get("geometry", "lines")
     if geometry not in ("lines", "points"):
         raise StormTracksInputError(
             f"geometry must be 'lines' or 'points'; got {geometry!r}"
         )
+    storm_name = params.get("storm_name")
     if storm_name is not None and not isinstance(storm_name, str):
         raise StormTracksInputError(
             f"storm_name must be a string; got {type(storm_name).__name__}"
         )
-
-    resolved_bbox: tuple[float, float, float, float] | None = None
+    bbox = params.get("bbox")
     if bbox is not None:
-        if not isinstance(bbox, (tuple, list)):
-            raise StormTracksInputError(
-                f"bbox must be a 4-tuple/list; got {type(bbox).__name__}"
-            )
-        bbox_t: tuple[float, float, float, float] = tuple(
-            float(v) for v in bbox
-        )  # type: ignore[assignment]
-        _validate_bbox(bbox_t)
-        resolved_bbox = _round_bbox_to_6dp(bbox_t)
+        _validate_bbox(tuple(float(v) for v in bbox))
+    if not bool(params.get("active_only", False)) and bbox is None:
+        raise StormTracksInputError(
+            "fetch_storm_tracks historical mode requires "
+            "bbox=(west, south, east, north) in EPSG:4326 - it bounds the "
+            "IBTrACS archive subset. (Only active_only=True may omit it.)"
+        )
 
-    name_canon = storm_name.strip().upper() if storm_name else None
 
-    captured: dict[str, Any] = {}
+# ---------------------------------------------------------------------------
+# HOOK: pre_resolve -- storm_name canon + historical year resolution (pre-key).
+# ---------------------------------------------------------------------------
 
-    if bool(active_only):
-        params: dict[str, Any] = {
+
+@register_hook("storm_tracks.resolve")
+def resolve_storm_tracks(spec: Any, params: dict[str, Any]) -> dict[str, Any]:
+    """Merge the canonical storm_name + resolved season window before read_through."""
+    out: dict[str, Any] = {}
+    name = params.get("storm_name")
+    if isinstance(name, str) and name.strip():
+        out["storm_name"] = name.strip().upper()
+    if not bool(params.get("active_only", False)):
+        y0, y1 = _resolve_years(params.get("start_year"), params.get("end_year"))
+        out["start_year"] = y0
+        out["end_year"] = y1
+    return out
+
+
+# ---------------------------------------------------------------------------
+# HOOK: delegate -- branch on active_only; fetch; record provenance; features.
+# ---------------------------------------------------------------------------
+
+
+@register_hook("storm_tracks.read")
+def read_storm_tracks(
+    spec: Any, params: dict[str, Any], *, timeout_s: float
+) -> list[dict[str, Any]]:
+    """Fetch storm tracks (both modes); RECORD mode provenance (ADR 0110); return features."""
+    bbox = params.get("bbox")
+    resolved_bbox = tuple(float(v) for v in bbox) if bbox is not None else None
+    name_canon = params.get("storm_name")
+    if isinstance(name_canon, str):
+        name_canon = name_canon.strip().upper() or None
+    else:
+        name_canon = None
+
+    if bool(params.get("active_only", False)):
+        feats, names = _fetch_active(bbox=resolved_bbox, storm_name=name_canon)
+        mode = "active"
+    else:
+        y0, y1 = _resolve_years(params.get("start_year"), params.get("end_year"))
+        feats, names = _fetch_historical(
+            bbox=resolved_bbox,  # type: ignore[arg-type]
+            y0=y0,
+            y1=y1,
+            storm_name=name_canon,
+            geometry=str(params.get("geometry", "lines")),
+        )
+        mode = "historical"
+
+    record_provenance(
+        {"mode": mode, "storm_count": len(names), "storm_names": names}
+    )
+    return feats
+
+
+# ---------------------------------------------------------------------------
+# HOOK: envelope -- twin layer_id/name + mode provenance (channel replay).
+# ---------------------------------------------------------------------------
+
+
+@register_hook("storm_tracks.envelope")
+def envelope_storm_tracks(
+    spec: Any,
+    params: dict[str, Any],
+    layer: Any,
+    data: bytes | None,
+    provenance: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    """Build the twin's exact layer_id / name + the mode-provenance fields (ADR 0110)."""
+    active_only = bool(params.get("active_only", False))
+    name_canon = params.get("storm_name")
+    if isinstance(name_canon, str):
+        name_canon = name_canon.strip().upper() or None
+    else:
+        name_canon = None
+
+    # Reconstruct the twin's params-hash seed (deterministic from validated params).
+    if active_only:
+        seed_params: dict[str, Any] = {
             "mode": "active",
-            "bbox": list(resolved_bbox) if resolved_bbox is not None else None,
+            "bbox": list(params["bbox"]) if params.get("bbox") is not None else None,
             "storm_name": name_canon,
         }
-
-        def _fetch_bytes() -> bytes:
-            fgb, extent, n = _fetch_active_bytes(
-                bbox=resolved_bbox, storm_name=name_canon
-            )
-            captured["extent"] = extent
-            captured["n"] = n
-            return fgb
-
         scope_tag = "active (NHC)"
+        mode_tag = "NHC active storms"
     else:
-        if resolved_bbox is None:
-            raise StormTracksInputError(
-                "fetch_storm_tracks historical mode requires "
-                "bbox=(west, south, east, north) in EPSG:4326 - it bounds the "
-                "IBTrACS archive subset. (Only active_only=True may omit it.)"
-            )
-        y0, y1 = _resolve_years(start_year, end_year)
-        params = {
+        y0, y1 = _resolve_years(params.get("start_year"), params.get("end_year"))
+        seed_params = {
             "mode": "historical",
-            "bbox": list(resolved_bbox),
+            "bbox": list(params["bbox"]),
             "start_year": y0,
             "end_year": y1,
             "storm_name": name_canon,
-            "geometry": geometry,
+            "geometry": str(params.get("geometry", "lines")),
         }
-        hist_bbox = resolved_bbox
-
-        def _fetch_bytes() -> bytes:
-            fgb, extent, n = _fetch_historical_bytes(
-                bbox=hist_bbox,
-                y0=y0,
-                y1=y1,
-                storm_name=name_canon,
-                geometry=geometry,
-            )
-            captured["extent"] = extent
-            captured["n"] = n
-            return fgb
-
         scope_tag = f"{y0}..{y1}"
-
-    result = read_through(
-        metadata=_METADATA,
-        params=params,
-        ext="fgb",
-        fetch_fn=_fetch_bytes,
-    )
-    assert result.uri is not None, (
-        "fetch_storm_tracks is cacheable; uri must be set by read_through"
-    )
-
-    # On a cache HIT the fetch_fn never ran - fall back to the requested bbox
-    # (active mode with no bbox leaves it None; the inline vector path fits
-    # the map to the rendered features).
-    extent_bbox: tuple[float, float, float, float] | None = captured.get("extent")
-    if extent_bbox is None:
-        extent_bbox = resolved_bbox
+        mode_tag = "IBTrACS tracks"
 
     seed = hashlib.sha256(
-        json.dumps(params, sort_keys=True, separators=(",", ":")).encode("utf-8")
+        json.dumps(seed_params, sort_keys=True, separators=(",", ":")).encode("utf-8")
     ).hexdigest()[:8]
-
     if name_canon:
         scope_tag = f"{name_canon} {scope_tag}"
-    mode_tag = "NHC active storms" if active_only else "IBTrACS tracks"
     name = f"Storm tracks - {mode_tag} ({scope_tag})"
 
-    return LayerURI(
-        layer_id=f"storm-tracks-{seed}",
-        name=name,
-        layer_type="vector",
-        uri=result.uri,
-        style_preset="storm_tracks",
-        role="primary",
-        units="kt / mb",
-        bbox=extent_bbox,
-    )
+    prov = provenance or {}
+    return {
+        "layer_id": f"storm-tracks-{seed}",
+        "name": name,
+        "mode": str(prov.get("mode", "active" if active_only else "historical")),
+        "storm_count": int(prov.get("storm_count", 0)),
+        "storm_names": list(prov.get("storm_names", []) or []),
+    }
