@@ -279,6 +279,7 @@ PRIMARY_CATEGORY: dict[str, str] = {
     "swan_wave_field": "hazard_modeling",
     "telemac_river_dye": "hazard_modeling",
     "hecras_muncie_flood": "hazard_modeling",
+    "schism_tidal_hydro": "hazard_modeling",
     # The case-layer ingest seams (register_case_layer / ingest_user_layer)
     # are DEREGISTERED (their functions serve the /api/ingest-layer HTTP route
     # directly, not the LLM catalog), so they carry

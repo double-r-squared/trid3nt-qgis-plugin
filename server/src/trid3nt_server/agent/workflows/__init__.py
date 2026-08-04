@@ -57,5 +57,6 @@ from .sfincs.flood.flood import sfincs_flood as _sfincs_flood  # noqa: F401  -- 
 # workflows/pelicun/damage_assessment/damage_assessment.py (no separate import here).
 from .telemac import run_telemac as _run_telemac  # noqa: F401  -- P2: registers the telemac_river_dye local-docker solve spec (SOLVER_WORKFLOW_REGISTRY + LOCAL_SOLVER_SPEC_REGISTRY); no LLM tool yet (P4)
 from .hecras import run_hecras as _run_hecras  # noqa: F401  -- engine #11: registers the hecras_muncie_flood local-docker solve spec (SOLVER_WORKFLOW_REGISTRY + LOCAL_SOLVER_SPEC_REGISTRY); the LLM template is imported by tools/__init__.py
+from .schism import run_schism as _run_schism  # noqa: F401  -- engine #12 (ADR 0118): registers the schism_tidal_hydro local-docker solve spec (SOLVER_WORKFLOW_REGISTRY + LOCAL_SOLVER_SPEC_REGISTRY); the LLM template is imported by tools/__init__.py
 
 __all__: list[str] = []

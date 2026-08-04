@@ -1945,6 +1945,11 @@ class PipelineEmitter:
             role=layer.role,
             temporal=layer.temporal is not None,
             legend=_legend,
+            # Mesh CRS (ADR 0118): carry the LayerURI's crs_authid onto the WS
+            # row so the plugin's _add_mesh can setCrs() an MDAL mesh whose
+            # native crs() is empty. None for raster/vector (byte-for-byte
+            # unchanged).
+            crs_authid=getattr(layer, "crs_authid", None),
         )
         # Dedup by underlying-COG identity -- in-place replace if present, else
         # append. ``_layer_identity_key`` collapses two display URLs of the same

@@ -123,7 +123,10 @@ class ProjectLayerSummary(GraceModel):
 
     layer_id: str
     name: str
-    layer_type: Literal["raster", "vector"]
+    # ``mesh`` (ADR 0118): a UGRID/unstructured solver mesh the plugin opens via
+    # MDAL (``QgsMeshLayer``); it STAGES rather than streams (ADR 0116). Mirrors
+    # ``LayerURI.layer_type``.
+    layer_type: Literal["raster", "vector", "mesh"]
     uri: str
     style_preset: str
     visible: bool
@@ -134,6 +137,13 @@ class ProjectLayerSummary(GraceModel):
     wms_url: str | None = None       # QGIS Server WMS URL for MapLibre tile registration
     opacity: float | None = None     # 0.0–1.0; client falls back to 1.0 if absent
     z_index: int | None = None       # MapLibre layer-order arbitration; lower draws first
+
+    # --- Mesh CRS (ADR 0118); mirrored from LayerURI.crs_authid --- #
+    # Explicit CRS for a ``layer_type="mesh"`` row -- MDAL reports an empty crs()
+    # for a SCHISM out2d UGRID / SFINCS quadtree grid, so the plugin's _add_mesh
+    # applies this string. Serializes into the WS layer row (event.raw) the
+    # plugin reads. ``None`` for raster/vector.
+    crs_authid: str | None = None
 
     # --- Data-driven render key (additive; None => legacy style_preset path) --- #
     legend: LegendKey | None = None  # mirrored from LayerURI.legend; see execution.LegendKey

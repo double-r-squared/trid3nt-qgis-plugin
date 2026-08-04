@@ -639,6 +639,12 @@ from ..workflows.telemac.river_dye.river_dye import telemac_river_dye as _telema
 # unsteady flow forcing). The composer chain (model_hecras_muncie_flood) is inlined
 # in the template module; workflows/hecras/run_hecras.py is the local solve seam.
 from ..workflows.hecras.muncie_flood.muncie_flood import hecras_muncie_flood as _hecras_muncie_flood  # noqa: E402,F401 - engine #11 (engine=hecras, tier=template)
+# schism_tidal_hydro TEMPLATE (engine="schism", tier="template"), engine #12,
+# one folder under workflows/schism/tidal_hydro/. Barotropic tidal hydrodynamics
+# on an unstructured coastal mesh (ADR 0118): the QuarterAnnulus verification case
+# OR an oceanmesh coastal_tin. The composer chain (model_schism_tidal_hydro) is
+# inlined in the template module; workflows/schism/run_schism.py is the local solve seam.
+from ..workflows.schism.tidal_hydro.tidal_hydro import schism_tidal_hydro as _schism_tidal_hydro  # noqa: E402,F401 - engine #12 (engine=schism, tier=template)
 # geoclaw_inundation TEMPLATE (engine="geoclaw", tier="template"), one folder
 # under workflows/geoclaw/inundation/; EXCLUDED from the default retrieval
 # pool, surfaced only by the run_geoclaw door's gate expansion. The composer

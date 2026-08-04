@@ -255,8 +255,12 @@ class LayerURI(GraceModel):
 
     layer_id: str  # stable id; flows into map-command load-layer args
     name: str
-    layer_type: Literal["raster", "vector"]
-    uri: str  # gs://... COG / FlatGeobuf / GeoParquet
+    # ``mesh`` (ADR 0118, SCHISM landing): an unstructured/UGRID solver mesh the
+    # plugin opens via MDAL (``QgsMeshLayer``) -- the ONE format the live
+    # materializer STAGES rather than streams (ADR 0116). SCHISM's out2d UGRID +
+    # (retroactively) the SFINCS quadtree map are the mesh producers.
+    layer_type: Literal["raster", "vector", "mesh"]
+    uri: str  # gs://... COG / FlatGeobuf / GeoParquet / UGRID netCDF (mesh)
     style_preset: str  # references the QML preset library
     temporal: TemporalConfig | None = None  # present iff time-varying
     role: Literal["primary", "context", "input"] = "primary"
@@ -280,6 +284,13 @@ class LayerURI(GraceModel):
     # assumptions line so the agent narrates which quantities are demo defaults
     # vs site-derived, and never mistakes a baked constant for measured data.
     synthetic_inputs: list[SyntheticInput] = Field(default_factory=list)
+    # Explicit CRS authority id for a ``layer_type="mesh"`` row (ADR 0118).
+    # MDAL reports an EMPTY crs() for a SCHISM out2d UGRID / a SFINCS quadtree
+    # grid, so the plugin's ``_add_mesh`` applies this string via
+    # ``QgsMeshLayer.setCrs(QgsCoordinateReferenceSystem(crs_authid))`` (0116).
+    # ``None`` for a raster/vector row (their CRS rides in the object bytes).
+    # Additive + optional per the GraceModel forward-compat rule.
+    crs_authid: str | None = None
 
 
 # --------------------------------------------------------------------------- #

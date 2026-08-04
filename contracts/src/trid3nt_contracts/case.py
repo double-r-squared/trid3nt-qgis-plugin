@@ -426,11 +426,12 @@ class CaseManifestLayer(GraceModel):
 
     layer_id: str
     name: str
-    layer_type: Literal["raster", "vector"]
+    layer_type: Literal["raster", "vector", "mesh"]  # ADR 0118: mesh = MDAL row
     style_preset: str
     asset_url: str  # display face the cold path serves (wms_url, else uri)
     bbox: BBox | None = None  # per-layer extent when known; AOI fallback at Case
     wms_url: str | None = None  # optional QGIS WMS GetMap face (display branch)
+    crs_authid: str | None = None  # ADR 0118: explicit CRS for an MDAL mesh row
 
 
 class CaseManifest(GraceModel):
