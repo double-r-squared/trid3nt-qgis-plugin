@@ -375,7 +375,12 @@ class AgentBridge(QObject):
 
     # ``agent_event``, NOT ``event`` -- see the AgentWorker signal block for
     # the QObject.event() shadowing crash this name avoids.
-    connected = pyqtSignal(str, bool)
+    # ``connected`` carries (user_id, is_anonymous, http_base, data_base) --
+    # the signature MUST match the worker's 4-arg signal it forwards at
+    # start(); a narrower signature here silently DROPS the advertised
+    # endpoints and every remote (tailnet) client falls back to localhost
+    # layer fetches.
+    connected = pyqtSignal(str, bool, str, str)
     case_ready = pyqtSignal(str)
     agent_event = pyqtSignal(str, object)
     failed = pyqtSignal(str)
