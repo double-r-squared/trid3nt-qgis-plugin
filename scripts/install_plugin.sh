@@ -25,6 +25,15 @@ if [[ ! -d "$SRC" ]]; then
     exit 1
 fi
 
+# Dev-symlink mode: when the profile plugin dir IS a symlink to the checkout,
+# QGIS already runs the repo code directly - a sync is a no-op and rsync
+# --delete would write THROUGH the link into the repo. Reload is all you need.
+if [[ -L "${DST%/}" ]]; then
+    echo "dev symlink active: ${DST%/} -> $(readlink "${DST%/}")"
+    echo "no sync needed; reload via QGIS > Plugins > Plugin Reloader"
+    exit 0
+fi
+
 if [[ "${1:-}" == "--check" ]]; then
     echo "diff-check (what a sync WOULD change; empty output = in sync):"
     rsync -a --delete --dry-run --itemize-changes "$SRC" "$DST"
