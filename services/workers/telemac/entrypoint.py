@@ -301,7 +301,7 @@ def run_pipeline(
             raise B.BanksUnavailableError(float(cfg.channel_width_m))
 
     # 3. Gmsh mesh (tagged boundary)
-    mesh = B.build_channel_mesh(cl, cfg)
+    mesh = B.build_channel_mesh_guarded(cl, cfg)
     LOG.info("mesh: npoin=%d nelem=%d nptfr=%d in=%d out=%d banks_ok=%s smooth_tries=%d",
              mesh["npoin"], len(mesh["ikle"]), mesh["nptfr"], mesh["n_in"],
              mesh["n_out"], mesh["banks_ok"], mesh["smooth_tries"])
@@ -777,6 +777,23 @@ def main(argv: list[str] | None = None) -> int:
             "assumed_channel_width_m": float(exc.assumed_channel_width_m),
         })
         return 3
+    except (B.ReachDegenerateError, B.MeshBuildTimeout) as exc:
+        # Degenerate reach geometry (channel wider than the reach is long) gated
+        # BEFORE meshing, or a hard-watchdog kill of a runaway build -> a typed,
+        # retryable TELEMAC_REACH_DEGENERATE gate naming the corrective args.
+        LOG.warning("telemac reach-degenerate gate: %s", exc)
+        _payload = {
+            "status": "error",
+            "correct_end": False,
+            "error_code": "TELEMAC_REACH_DEGENERATE",
+            "error": str(exc),
+        }
+        if isinstance(exc, B.ReachDegenerateError):
+            _payload["reach_length_m"] = float(exc.reach_length_m)
+            _payload["degenerate_channel_width_m"] = float(exc.channel_width_m)
+            _payload["aspect_ratio"] = float(exc.aspect_ratio)
+        _write_metrics(data_dir, _payload)
+        return 4
     except Exception as exc:  # noqa: BLE001 -- any pipeline failure is a typed metrics error
         LOG.exception("telemac pipeline failed")
         _write_metrics(data_dir, {

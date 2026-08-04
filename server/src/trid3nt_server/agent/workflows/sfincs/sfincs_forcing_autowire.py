@@ -924,7 +924,11 @@ def _resolve_building_obstacle_uri(
         from trid3nt_server.agent.tools import TOOL_REGISTRY  # local: keep top imports lean
 
         fetch_buildings = TOOL_REGISTRY["fetch_buildings"].fn
-        layer = fetch_buildings(bbox, source="osm")
+        # Keyword-only: the post-fold registry closure takes ZERO positional
+        # args, so a positional bbox raised TypeError this except swallowed ->
+        # SFINCS silently ran with no building obstacles (same defect class as
+        # the SWMM composer's fetch calls).
+        layer = fetch_buildings(bbox=bbox, source="osm")
         uri = getattr(layer, "uri", None)
         if uri:
             data_sources.append(

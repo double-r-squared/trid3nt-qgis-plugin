@@ -48,6 +48,7 @@ from trid3nt_server.agent.workflows.telemac._template_card import TemplateCard
 from trid3nt_server.agent.workflows.telemac.model_river_dye_release_scenario.model_river_dye_release_scenario import (
     TelemacBanksUnavailableError,
     TelemacDyeScenarioError,
+    TelemacReachDegenerateError,
     model_river_dye_release_scenario,
     plausible_release_coords,
 )
@@ -567,11 +568,12 @@ async def telemac_river_dye(
         return peak
     except asyncio.CancelledError:
         raise
-    except TelemacBanksUnavailableError:
-        # No inexplicit mesh-source fallback (leg 1): RE-RAISE so the adapter's
-        # summarize_tool_result surfaces the typed retryable gate + .suggestions
-        # (naming bank_source="constant_ribbon") and it rides the tool-retry loop,
-        # rather than being swallowed into a flat error dict below.
+    except (TelemacBanksUnavailableError, TelemacReachDegenerateError):
+        # No inexplicit mesh-source fallback (leg 1) / degenerate-reach gate:
+        # RE-RAISE so the adapter's summarize_tool_result surfaces the typed
+        # retryable gate + .suggestions (bank_source="constant_ribbon" /
+        # longer reach_length_km / explicit river_name) and it rides the
+        # tool-retry loop, rather than being swallowed into a flat error dict.
         raise
     except (TelemacDyeScenarioError, PostprocessTelemacError) as exc:
         logger.warning("telemac_river_dye failed: %s (%s)", getattr(exc, "error_code", "?"), exc)

@@ -448,6 +448,86 @@ class BanksUnavailableError(RuntimeError):
         )
 
 
+class ReachDegenerateError(RuntimeError):
+    """The reach geometry is degenerate: the channel is wider than the reach is
+    long (or nearly so), so the offset bank curves fold and gmsh's mesh
+    generator busy-loops (live: Longview WA snapped to a 292 m NHDFlowline stub
+    with the 500 m default width -> generate(2) ran 32+ min in C).
+
+    Gated BEFORE meshing (the 0091 gate pattern, never a hang, never a silent
+    bad mesh): a typed, retryable error naming the corrective args - a longer
+    ``reach_length_km``, an explicit ``river_name`` (re-seeds onto the named
+    mainstem instead of a short tributary stub), or
+    ``bank_source="constant_ribbon"`` with a smaller ``channel_width_m``.
+    """
+
+    def __init__(
+        self,
+        reach_length_m: float,
+        channel_width_m: float,
+    ) -> None:
+        self.reach_length_m = float(reach_length_m)
+        self.channel_width_m = float(channel_width_m)
+        aspect = (self.reach_length_m / self.channel_width_m
+                  if self.channel_width_m > 0 else 0.0)
+        self.aspect_ratio = round(aspect, 3)
+        super().__init__(
+            f"reach geometry is degenerate: a {self.reach_length_m:.0f} m reach "
+            f"with a {self.channel_width_m:.0f} m channel width (length/width "
+            f"aspect {aspect:.2f} < {_MIN_REACH_ASPECT:g}) - the banks fold and "
+            "the mesh generator cannot converge. Retry with a longer "
+            "reach_length_km, an explicit river_name (re-seeds onto the named "
+            'mainstem, not a short stub), or bank_source="constant_ribbon" with '
+            "a smaller channel_width_m."
+        )
+
+
+#: Minimum reach length / channel width. Below this the offset banks fold and
+#: gmsh busy-loops; gate it as ReachDegenerateError before meshing.
+_MIN_REACH_ASPECT: float = 2.0
+
+#: Hard wall-clock deadline (s) for the whole channel-mesh build in its killable
+#: child process. ``TELEMAC_MESH_TIMEOUT_S`` (env) overrides. A C busy-loop in
+#: gmsh cannot swallow the SIGKILL the parent delivers at this deadline (the old
+#: in-process SIGALRM demonstrably could not preempt it).
+_MESH_WALLCLOCK_TIMEOUT_S: float = 300.0
+
+
+def _centerline_length_m(cl: "np.ndarray") -> float:
+    """Arc length (metres) of the projected centerline polyline."""
+    if cl is None or len(cl) < 2:
+        return 0.0
+    seg = np.diff(np.asarray(cl, dtype=float)[:, :2], axis=0)
+    return float(np.hypot(seg[:, 0], seg[:, 1]).sum())
+
+
+def _effective_channel_width_m(cfg: "ReachConfig") -> float:
+    """The width the mesh will actually offset the banks by (metres).
+
+    On the nhd_area path with sampled ``bank_offsets`` the effective width is the
+    mean left+right offset; otherwise the assumed ``channel_width_m``."""
+    offsets = getattr(cfg, "bank_offsets", None)
+    if offsets is not None:
+        try:
+            left_off, right_off = offsets
+            w = float(np.mean(left_off)) + float(np.mean(right_off))
+            if w > 0:
+                return w
+        except Exception:  # noqa: BLE001 -- fall back to the assumed width
+            pass
+    return float(getattr(cfg, "channel_width_m", 0.0))
+
+
+def validate_reach_geometry(cl: "np.ndarray", cfg: "ReachConfig") -> None:
+    """Raise :class:`ReachDegenerateError` when the channel is wider than the
+    reach is long (aspect < ``_MIN_REACH_ASPECT``) - the pre-mesh sanity gate
+    that turns the live gmsh hang into a fast typed error."""
+    reach_len = _centerline_length_m(cl)
+    width = _effective_channel_width_m(cfg)
+    if width > 0 and reach_len > 0 and (reach_len / width) < _MIN_REACH_ASPECT:
+        raise ReachDegenerateError(reach_len, width)
+
+
 _NHDAREA_URL = (
     "https://hydro.nationalmap.gov/arcgis/rest/services/NHDPlus_HR/"
     "MapServer/8/query"
@@ -808,25 +888,24 @@ def build_channel_mesh(cl: np.ndarray, cfg: ReachConfig):
     inflow/outflow node sets (P0 gotchas 1-3, 7).
     """
     import gmsh
-    import signal
+
+    # PRE-MESH GATE: refuse a degenerate reach (channel wider than the reach is
+    # long) before gmsh can busy-loop on folded banks - a fast typed error, not
+    # a 32-min hang (the guarded caller also validates in-parent before forking).
+    validate_reach_geometry(cl, cfg)
 
     offsets = getattr(cfg, "bank_offsets", None)
     left, right = _offset_banks(cl, cfg.channel_width_m, offsets)
-    # gmsh-hang hardening (live: wide-river banks hung generate(2) for 18+ min
-    # silently; a 50 km reach did the same earlier). Bound the WHOLE build with
-    # SIGALRM (single-threaded worker) -> honest MESH_BUILD_TIMEOUT. Also dump
-    # the exact geometry first so a failing case is reproducible offline.
+    # The WHOLE build runs inside a killable child process (build_channel_mesh_
+    # guarded) with a hard wall-clock SIGKILL - the real watchdog, since a gmsh
+    # C busy-loop cannot be preempted by an in-process signal. Dump the exact
+    # geometry first so a failing case is reproducible offline.
     try:
         np.savez(str(Path(cfg.workdir) / "banks_debug.npz"),
                  cl=cl, left=left, right=right)
     except Exception:  # noqa: BLE001 -- debug dump is best-effort
         pass
 
-    def _gmsh_timeout(_sig, _frm):
-        raise TimeoutError("MESH_BUILD_TIMEOUT: gmsh exceeded 240 s")
-
-    signal.signal(signal.SIGALRM, _gmsh_timeout)
-    signal.alarm(240)
     # gotcha 7: if banks self-intersect at a bend, smooth harder until simple
     tries = 0
     while not _banks_valid(left, right) and tries < 6:
@@ -840,7 +919,6 @@ def build_channel_mesh(cl: np.ndarray, cfg: ReachConfig):
         left, right = _offset_banks(cl, cfg.channel_width_m, offsets)
         tries += 1
     if not _banks_valid(left, right):
-        signal.alarm(0)
         raise RuntimeError(
             "MESH_BANKS_INVALID: bank offset curves still self-intersect "
             "after smoothing retries - refusing to mesh a folded channel"
@@ -980,7 +1058,6 @@ def build_channel_mesh(cl: np.ndarray, cfg: ReachConfig):
             tri_tags = en.reshape(-1, 3).astype(np.int64)
     if tri_tags is None or len(tri_tags) == 0:
         gmsh.finalize()
-        signal.alarm(0)
         raise RuntimeError(
             "MESH_BUILD_EMPTY: gmsh generated no triangles (bad hole/boundary "
             f"geometry? islands={len(island_rings)})"
@@ -999,7 +1076,6 @@ def build_channel_mesh(cl: np.ndarray, cfg: ReachConfig):
     in_nodes = pg_nodes(g_in)
     out_nodes = pg_nodes(g_out)
     gmsh.finalize()
-    signal.alarm(0)
 
     # coincident-node guard
     from scipy.spatial import cKDTree
@@ -1070,6 +1146,116 @@ def build_channel_mesh(cl: np.ndarray, cfg: ReachConfig):
                 water_coverage_frac=(round(float(water_coverage), 4)
                                      if domain is not None else None),
                 banks_ok=banks_ok, smooth_tries=tries, centerline=cl)
+
+
+class MeshBuildTimeout(RuntimeError):
+    """The channel-mesh build exceeded its wall-clock deadline and was killed.
+
+    The hard watchdog (a gmsh C busy-loop cannot be preempted by an in-process
+    signal, so the whole build runs in a killable child process that the parent
+    SIGKILLs at the deadline). Names the same corrective retries as the
+    degenerate-reach gate so the user has a path forward, never a silent hang."""
+
+    def __init__(self, timeout_s: float) -> None:
+        self.timeout_s = float(timeout_s)
+        super().__init__(
+            f"channel-mesh build exceeded the {self.timeout_s:.0f}s wall-clock "
+            "deadline and was terminated. This usually means a near-degenerate "
+            "reach geometry. Retry with a longer reach_length_km, an explicit "
+            'river_name, or bank_source="constant_ribbon" with a smaller '
+            "channel_width_m."
+        )
+
+
+def _mesh_build_child(cl: np.ndarray, cfg: "ReachConfig", result_path: str) -> None:
+    """Child-process target: run build_channel_mesh, pickle the result/exception.
+
+    gmsh state stays in this short-lived process so a fresh import per build has
+    no stale global state, and the parent can SIGKILL a C busy-loop cleanly."""
+    import pickle
+
+    try:
+        mesh = build_channel_mesh(cl, cfg)
+        payload = {"status": "ok", "mesh": mesh}
+    except ReachDegenerateError as exc:
+        payload = {"status": "degenerate",
+                   "reach_length_m": exc.reach_length_m,
+                   "channel_width_m": exc.channel_width_m}
+    except BaseException as exc:  # noqa: BLE001 -- serialize ANY failure honestly
+        payload = {"status": "error", "message": f"{type(exc).__name__}: {exc}"}
+    with open(result_path, "wb") as fh:
+        pickle.dump(payload, fh)
+
+
+def build_channel_mesh_guarded(
+    cl: np.ndarray,
+    cfg: "ReachConfig",
+    *,
+    timeout_s: float | None = None,
+):
+    """build_channel_mesh under a HARD wall-clock watchdog (Bug 1b).
+
+    Validates the reach geometry in-parent (fast typed ReachDegenerateError, no
+    fork), then runs the gmsh build in a killable child process. On the deadline
+    the child's whole process group is SIGKILLed - preempting a gmsh C busy-loop
+    the old in-process SIGALRM could not - and MeshBuildTimeout is raised."""
+    import multiprocessing as mp
+    import os as _os
+    import pickle
+    import signal as _signal
+    import tempfile
+
+    if timeout_s is None:
+        env = os.environ.get("TELEMAC_MESH_TIMEOUT_S")
+        timeout_s = float(env) if env else _MESH_WALLCLOCK_TIMEOUT_S
+
+    # Fast fail without forking / importing gmsh.
+    validate_reach_geometry(cl, cfg)
+
+    ctx = mp.get_context("fork")
+    fd, result_path = tempfile.mkstemp(prefix="mesh_result_", suffix=".pkl",
+                                       dir=str(cfg.workdir))
+    _os.close(fd)
+    proc = ctx.Process(target=_mesh_build_child, args=(cl, cfg, result_path))
+    proc.start()
+    proc.join(timeout_s)
+    if proc.is_alive():
+        # SIGKILL the whole group (C busy-loop ignores SIGTERM); then reap.
+        try:
+            _os.killpg(_os.getpgid(proc.pid), _signal.SIGKILL)
+        except (ProcessLookupError, PermissionError, OSError):
+            proc.kill()
+        proc.join(10)
+        try:
+            _os.unlink(result_path)
+        except OSError:
+            pass
+        raise MeshBuildTimeout(timeout_s)
+
+    try:
+        with open(result_path, "rb") as fh:
+            payload = pickle.load(fh)
+    except Exception as exc:  # noqa: BLE001 -- no/partial result == child crash
+        raise RuntimeError(
+            f"MESH_BUILD_FAILED: mesh child exited {proc.exitcode} without a "
+            f"result ({type(exc).__name__}: {exc})"
+        ) from exc
+    finally:
+        try:
+            _os.unlink(result_path)
+        except OSError:
+            pass
+
+    status = payload.get("status")
+    if status == "ok":
+        return payload["mesh"]
+    if status == "degenerate":
+        raise ReachDegenerateError(
+            payload["reach_length_m"], payload["channel_width_m"]
+        )
+    raise RuntimeError(
+        f"MESH_BUILD_FAILED: {payload.get('message', 'mesh child failed')}"
+    )
 
 
 # ---------------------------------------------------------------------------

@@ -1117,7 +1117,16 @@ def build_swmm_mesh(
     inp = SwmmInput()
 
     # --- OPTIONS (DYNWAVE overland; P0-proven settings) ---
-    end_hh = int(storm_duration_hr) + 1  # +1 h drain-down tail
+    # END clock is DATE+TIME: hours beyond 24 (a long storm + drain-down tail)
+    # MUST roll into END_DATE - a bare "25:00:00" is not a valid clock and
+    # swmm-api's TIME parser (strptime %H:%M:%S) rejects it, crashing the deck
+    # round-trip. Derive the end datetime and split it so END_TIME stays 00-24 h.
+    import datetime as _dt
+
+    _sim_start = _dt.datetime(2024, 1, 1, 0, 0, 0)
+    _sim_end = _sim_start + _dt.timedelta(
+        hours=int(storm_duration_hr) + 1  # +1 h drain-down tail
+    )
     inp[OPTIONS] = {
         "FLOW_UNITS": "CMS",
         "INFILTRATION": _infiltration_option(infiltration_method),
@@ -1126,12 +1135,12 @@ def build_swmm_mesh(
         "MIN_SLOPE": 0,
         "ALLOW_PONDING": "YES",
         "SKIP_STEADY_STATE": "NO",
-        "START_DATE": "01/01/2024",
-        "START_TIME": "00:00:00",
-        "REPORT_START_DATE": "01/01/2024",
-        "REPORT_START_TIME": "00:00:00",
-        "END_DATE": "01/01/2024",
-        "END_TIME": f"{end_hh:02d}:00:00",
+        "START_DATE": _sim_start.strftime("%m/%d/%Y"),
+        "START_TIME": _sim_start.strftime("%H:%M:%S"),
+        "REPORT_START_DATE": _sim_start.strftime("%m/%d/%Y"),
+        "REPORT_START_TIME": _sim_start.strftime("%H:%M:%S"),
+        "END_DATE": _sim_end.strftime("%m/%d/%Y"),
+        "END_TIME": _sim_end.strftime("%H:%M:%S"),
         "SWEEP_START": "01/01",
         "SWEEP_END": "12/31",
         "DRY_DAYS": 0,
@@ -1679,66 +1688,23 @@ def run_swmm_deck(
     if the Flow Routing Continuity error exceeds the tolerance -- the honesty gate
     that turns a silently-wrong layer into a typed failure.
     """
-    import time
-
-    try:
-        from pyswmm import Simulation, Nodes
-    except Exception as exc:
-        raise SWMMMeshError(
-            "SWMM_DEPENDENCY_MISSING",
-            message=f"pyswmm unavailable for run: {exc}",
-        ) from exc
-
     nrows, ncols = build.grid_shape
     inp_path = build.inp_path
     rpt_path = str(Path(inp_path).with_suffix(".rpt"))
     out_path = str(Path(inp_path).with_suffix(".out"))
 
-    # Active-cell coordinate list (storage node names exist only for these).
-    active_cells = _active_cells_from_deck(build)
-
-    peak_grid = np.full((nrows, ncols), np.nan)
-    peak_sum = -1.0
-    n_steps = 0
-    last_dt = None
-    t0 = time.time()
-    try:
-        with Simulation(inp_path) as sim:
-            node_objs = Nodes(sim)
-            prev = None
-            k = 0
-            for _ in sim:
-                n_steps += 1
-                k += 1
-                now = sim.current_time
-                if prev is not None:
-                    last_dt = (now - prev).total_seconds()
-                prev = now
-                if k % sample_every_steps == 0:
-                    g = np.full((nrows, ncols), np.nan)
-                    s = 0.0
-                    for (i, j) in active_cells:
-                        d = float(node_objs[_cell_node(i, j)].depth)
-                        g[i, j] = d
-                        s += d
-                    if s > peak_sum:
-                        peak_sum = s
-                        peak_grid = g
-            # final snapshot if we never sampled (very short run)
-            if peak_sum < 0:
-                g = np.full((nrows, ncols), np.nan)
-                for (i, j) in active_cells:
-                    g[i, j] = float(node_objs[_cell_node(i, j)].depth)
-                peak_grid = g
-    except SWMMMeshError:
-        raise
-    except Exception as exc:
-        raise SWMMMeshError(
-            "SWMM_RUN_FAILED",
-            message=f"pyswmm raised during the headless solve: {exc}",
-            details={"inp_path": inp_path},
-        ) from exc
-    wall = time.time() - t0
+    # PROCESS ISOLATION (live bug: a 588k-cell solve ran 47+ min unkillable, and
+    # a stuck/completed pyswmm Simulation poisons the interpreter so every later
+    # SWMM run fails until a daemon restart -- the pyswmm single-instance limit).
+    # The solve runs in a KILLABLE child process with a hard wall-clock deadline:
+    # each solve is a FRESH interpreter (no cross-solve lock), and a runaway is
+    # SIGKILLed at the deadline (a C busy-loop cannot swallow SIGKILL the way it
+    # swallowed the old in-process SIGALRM). Seam is thin: inp path in -> the
+    # .out/.rpt on disk + peak_grid.npy + meta out.
+    timeout_s = _swmm_solve_timeout_s(int(getattr(build, "n_active_cells", 0) or 0))
+    peak_grid, n_steps, last_dt, wall = _solve_swmm_in_subprocess(
+        inp_path, nrows, ncols, sample_every_steps, timeout_s=timeout_s
+    )
 
     cont = read_flow_routing_continuity(rpt_path)
     if cont is None:
@@ -1779,7 +1745,7 @@ def run_swmm_deck(
     )
 
 
-def _active_cells_from_deck(build: BuildResult) -> list[tuple[int, int]]:
+def _active_cells_from_inp(inp_path: str) -> list[tuple[int, int]]:
     """Recover the active-cell (row, col) list by re-reading the deck's STORAGE.
 
     The storage node names encode the cell index (``S_<i>_<j>``); recovering them
@@ -1790,7 +1756,7 @@ def _active_cells_from_deck(build: BuildResult) -> list[tuple[int, int]]:
     from swmm_api.input_file.section_labels import STORAGE
 
     cells: list[tuple[int, int]] = []
-    inp = SwmmInput.read_file(build.inp_path)
+    inp = SwmmInput.read_file(inp_path)
     # Index (not .get) so swmm-api lazily parses the section into an InpSection
     # of objects; a missing section indexes to an empty InpSection.
     storages = inp[STORAGE]
@@ -1804,3 +1770,210 @@ def _active_cells_from_deck(build: BuildResult) -> list[tuple[int, int]]:
             except ValueError:
                 continue
     return cells
+
+
+def _active_cells_from_deck(build: BuildResult) -> list[tuple[int, int]]:
+    """``_active_cells_from_inp`` keyed off the build's staged ``.inp``."""
+    return _active_cells_from_inp(build.inp_path)
+
+
+#: Wall-clock deadline knobs for the isolated SWMM solve (Bug 2/3). Env override
+#: ``SWMM_SOLVE_TIMEOUT_S`` wins outright; otherwise the granularity-gate perf
+#: estimate is scaled by a safety margin and clamped to a sane [floor, cap].
+_SWMM_SOLVE_TIMEOUT_MARGIN: float = 4.0
+_SWMM_SOLVE_TIMEOUT_FLOOR_S: float = 300.0
+_SWMM_SOLVE_TIMEOUT_CAP_S: float = 3600.0
+
+
+def _swmm_solve_timeout_s(n_active_cells: int) -> float:
+    """Hard wall-clock deadline (seconds) for the isolated SWMM solve.
+
+    ``SWMM_SOLVE_TIMEOUT_S`` (env) overrides. Otherwise scale the granularity
+    gate's own solve estimate by a safety margin and clamp to [floor, cap] so a
+    runaway (the live 47-min 588k-cell solve) is SIGKILLed rather than wedging
+    the daemon, while a legitimately long solve is not cut short."""
+    override = os.environ.get("SWMM_SOLVE_TIMEOUT_S")
+    if override:
+        try:
+            return max(1.0, float(override))
+        except ValueError:
+            LOG.warning("ignoring non-numeric SWMM_SOLVE_TIMEOUT_S=%r", override)
+    est = estimate_swmm_solve_seconds(max(0, int(n_active_cells)))
+    return float(
+        min(
+            max(est * _SWMM_SOLVE_TIMEOUT_MARGIN, _SWMM_SOLVE_TIMEOUT_FLOOR_S),
+            _SWMM_SOLVE_TIMEOUT_CAP_S,
+        )
+    )
+
+
+def run_swmm_simulation(
+    inp_path: str,
+    nrows: int,
+    ncols: int,
+    active_cells: list[tuple[int, int]],
+    sample_every_steps: int,
+) -> tuple["np.ndarray", int, float | None, float]:
+    """Step a SWMM deck headless via pyswmm, tracking the PEAK-volume depth grid.
+
+    The single pyswmm-touching solve loop (isolated in a child process by
+    ``_solve_swmm_in_subprocess``). Writes ``.out``/``.rpt`` beside ``inp_path``.
+    Returns ``(peak_grid, n_steps, last_dt_s, wall_seconds)``. Raises
+    ``SWMMMeshError`` on a missing pyswmm or a solver failure."""
+    import time
+
+    try:
+        from pyswmm import Simulation, Nodes
+    except Exception as exc:
+        raise SWMMMeshError(
+            "SWMM_DEPENDENCY_MISSING",
+            message=f"pyswmm unavailable for run: {exc}",
+        ) from exc
+
+    peak_grid = np.full((nrows, ncols), np.nan)
+    peak_sum = -1.0
+    n_steps = 0
+    last_dt: float | None = None
+    t0 = time.time()
+    try:
+        with Simulation(inp_path) as sim:
+            node_objs = Nodes(sim)
+            prev = None
+            k = 0
+            for _ in sim:
+                n_steps += 1
+                k += 1
+                now = sim.current_time
+                if prev is not None:
+                    last_dt = (now - prev).total_seconds()
+                prev = now
+                if k % sample_every_steps == 0:
+                    g = np.full((nrows, ncols), np.nan)
+                    s = 0.0
+                    for (i, j) in active_cells:
+                        d = float(node_objs[_cell_node(i, j)].depth)
+                        g[i, j] = d
+                        s += d
+                    if s > peak_sum:
+                        peak_sum = s
+                        peak_grid = g
+            # final snapshot if we never sampled (very short run)
+            if peak_sum < 0:
+                g = np.full((nrows, ncols), np.nan)
+                for (i, j) in active_cells:
+                    g[i, j] = float(node_objs[_cell_node(i, j)].depth)
+                peak_grid = g
+    except SWMMMeshError:
+        raise
+    except Exception as exc:
+        raise SWMMMeshError(
+            "SWMM_RUN_FAILED",
+            message=f"pyswmm raised during the headless solve: {exc}",
+            details={"inp_path": inp_path},
+        ) from exc
+    return peak_grid, n_steps, last_dt, time.time() - t0
+
+
+def _solve_swmm_in_subprocess(
+    inp_path: str,
+    nrows: int,
+    ncols: int,
+    sample_every_steps: int,
+    *,
+    timeout_s: float,
+) -> tuple["np.ndarray", int, float | None, float]:
+    """Run ``run_swmm_simulation`` in a KILLABLE child process (Bug 2/3).
+
+    A fresh interpreter per solve dissolves the pyswmm single-instance lock, and
+    a hard wall-clock deadline SIGKILLs a runaway (a C busy-loop cannot swallow
+    SIGKILL). Returns the same tuple as ``run_swmm_simulation``. Raises
+    ``SWMMMeshError("SWMM_SOLVE_TIMEOUT")`` on deadline (naming a coarser
+    resolution / smaller AOI) and ``SWMM_RUN_FAILED`` on a child crash."""
+    import json
+    import signal
+    import subprocess
+    import sys
+    import tempfile
+
+    workdir = Path(inp_path).parent
+    with tempfile.TemporaryDirectory(prefix="swmm_solve_", dir=str(workdir)) as td:
+        peak_npy = str(Path(td) / "peak.npy")
+        meta_json = str(Path(td) / "meta.json")
+        job = {
+            "inp_path": inp_path,
+            "nrows": int(nrows),
+            "ncols": int(ncols),
+            "sample_every_steps": int(sample_every_steps),
+            "peak_npy": peak_npy,
+            "meta_json": meta_json,
+        }
+        job_path = str(Path(td) / "job.json")
+        with open(job_path, "w", encoding="utf-8") as fh:
+            json.dump(job, fh)
+
+        # start_new_session -> the child leads its own process group so a
+        # deadline kill reaps any grandchildren too (killpg), not just the shim.
+        proc = subprocess.Popen(
+            [sys.executable, "-m",
+             "trid3nt_server.agent.mesh._swmm_solve_subprocess", job_path],
+            start_new_session=True,
+        )
+        try:
+            proc.wait(timeout=timeout_s)
+        except subprocess.TimeoutExpired:
+            _kill_process_group(proc, signal.SIGKILL)
+            raise SWMMMeshError(
+                "SWMM_SOLVE_TIMEOUT",
+                message=(
+                    f"SWMM solve exceeded the {timeout_s:.0f}s wall-clock deadline "
+                    f"and was terminated. Retry at a COARSER target_resolution_m "
+                    f"or over a SMALLER AOI (fewer active cells) - or raise "
+                    f"SWMM_SOLVE_TIMEOUT_S for a deliberately long solve."
+                ),
+                details={"inp_path": inp_path, "timeout_s": timeout_s},
+            )
+
+        meta: dict[str, Any] = {}
+        if Path(meta_json).exists():
+            try:
+                with open(meta_json, encoding="utf-8") as fh:
+                    meta = json.load(fh)
+            except Exception:  # noqa: BLE001 -- treat unreadable meta as a crash
+                meta = {}
+        if proc.returncode != 0 or meta.get("error_code"):
+            raise SWMMMeshError(
+                meta.get("error_code") or "SWMM_RUN_FAILED",
+                message=(
+                    meta.get("error")
+                    or f"SWMM solve child exited {proc.returncode} without a result"
+                ),
+                details={"inp_path": inp_path},
+            )
+        peak_grid = np.load(peak_npy)
+        return (
+            peak_grid,
+            int(meta.get("n_steps", 0)),
+            meta.get("last_dt_s"),
+            float(meta.get("wall_seconds", 0.0)),
+        )
+
+
+def _kill_process_group(proc: Any, sig: int) -> None:
+    """SIGKILL the child's whole process group (best-effort), then reap it."""
+    import os as _os
+    import signal as _signal
+
+    try:
+        _os.killpg(_os.getpgid(proc.pid), sig)
+    except (ProcessLookupError, PermissionError, OSError):
+        try:
+            proc.kill()
+        except Exception:  # noqa: BLE001
+            pass
+    try:
+        proc.wait(timeout=10)
+    except Exception:  # noqa: BLE001 -- last resort, do not block the caller
+        try:
+            proc.send_signal(_signal.SIGKILL)
+        except Exception:  # noqa: BLE001
+            pass

@@ -216,12 +216,17 @@ def _fetch_dem_for_urban(
     fetch_dem = TOOL_REGISTRY["fetch_dem"].fn
 
     # Primary: 1 m LiDAR (building-scale resolution the screenshot path wants).
+    # Keyword-only: the post-fold registry closure (``_promoted(**kwargs)``)
+    # takes ZERO positional args, so a positional ``bbox`` raises TypeError that
+    # this except would swallow -> silent permanent 10 m degrade (the live bug).
     try:
-        layer = fetch_3dep_extra(bbox, resolution="1 meter")
+        layer = fetch_3dep_extra(bbox=bbox, resolution="1 meter")
         return _localize_to_dem_path(layer.uri), "USGS 3DEP 1m LiDAR"
     except Exception as exc:  # noqa: BLE001 - fall through to the 10 m fallback
-        logger.info(
-            "fetch_3dep_extra(1m) failed (%s); falling back to fetch_dem(10m)", exc
+        logger.warning(
+            "fetch_3dep_extra(1m) unavailable (%s); LABELED FALLBACK to "
+            "fetch_dem(10m) - the mesh resolves at 10 m, not building-scale 1 m",
+            exc,
         )
 
     # Fallback: 10 m 3DEP (the canonical default).
@@ -245,18 +250,90 @@ def _fetch_buildings_for_urban(
     from trid3nt_server.agent.tools import TOOL_REGISTRY
 
     fetch_buildings = TOOL_REGISTRY["fetch_buildings"].fn
+    # Keyword-only: the post-fold registry closure takes ZERO positional args, so
+    # a positional ``bbox`` raised TypeError that this except swallowed -> the
+    # mesh silently dropped ALL building obstructions (the live integrity leak).
     try:
-        layer = fetch_buildings(bbox, source="osm")
+        layer = fetch_buildings(bbox=bbox, source="osm")
     except Exception as exc:  # noqa: BLE001 - buildings are optional
-        logger.info("fetch_buildings(osm) failed (%s); proceeding without footprints", exc)
+        logger.warning(
+            "fetch_buildings(osm) failed (%s); proceeding WITHOUT building "
+            "obstructions - the mesh has no wall/obstruction footprints", exc)
         return None
-    # The footprints come back as an inline GeoJSON FeatureCollection on the
-    # LayerURI (inline-GeoJSON convention) or as a cache URI; the mesh
-    # builder accepts the FeatureCollection dict directly.
+    # The footprints come back EITHER inline (inline-GeoJSON convention) OR --
+    # the post-fold fetch_buildings default -- as a FlatGeobuf CACHE URI on
+    # ``layer.uri``. Materialize both into the FeatureCollection dict the mesh
+    # builder consumes; reading only the inline field silently dropped every
+    # obstruction whenever the fetcher returned a cache URI (the live mesh had
+    # 966 fetched footprints but ZERO obstacles for exactly this reason).
     fc = getattr(layer, "inline_geojson", None) or getattr(layer, "geojson", None)
     if isinstance(fc, dict) and fc.get("type") == "FeatureCollection":
         return fc
+    uri = getattr(layer, "uri", None)
+    if isinstance(uri, str) and uri:
+        return _buildings_uri_to_feature_collection(uri)
     return None
+
+
+def _buildings_uri_to_feature_collection(uri: str) -> Any:
+    """Download the fetch_buildings vector (FlatGeobuf cache URI) + read it into a
+    GeoJSON FeatureCollection dict (WGS84) for the mesh obstruction rasterizer.
+
+    Returns ``None`` on any download/read miss (buildings are an enhancement) -
+    the labeled proceed-without-buildings path then names the absence honestly."""
+    import tempfile
+
+    try:
+        from trid3nt_server.agent.tools.cache import read_object_bytes_s3
+
+        if uri.startswith("s3://"):
+            data = read_object_bytes_s3(uri)
+        else:
+            with open(uri.split("?", 1)[0], "rb") as fh:
+                data = fh.read()
+        import geopandas as gpd
+
+        suffix = Path(uri.split("?", 1)[0]).suffix or ".fgb"
+        with tempfile.NamedTemporaryFile(suffix=suffix) as tf:
+            tf.write(data)
+            tf.flush()
+            gdf = gpd.read_file(tf.name)
+        if gdf.empty:
+            return None
+        if gdf.crs is not None and str(gdf.crs).upper() not in ("EPSG:4326", "OGC:CRS84"):
+            gdf = gdf.to_crs("EPSG:4326")
+        fc = gdf.__geo_interface__  # {"type": "FeatureCollection", "features": [...]}
+        n = len(fc.get("features", []))
+        logger.info(
+            "materialized %d building footprints from %s for the mesh", n, uri)
+        return fc if n else None
+    except Exception as exc:  # noqa: BLE001 - buildings are optional
+        logger.warning(
+            "could not read building footprints from %s (%s); proceeding "
+            "WITHOUT building obstructions", uri, exc)
+        return None
+
+
+def _urban_envelope_suffix(
+    n_buildings_dropped: int,
+    buildings_absent: bool,
+    dem_source: str,
+) -> str:
+    """Build the LABELED envelope name suffix for the peak depth layer.
+
+    Names the obstruction state (obstacles applied vs. an honest labeled
+    absence) and any DEM fallback so a silently-degraded mesh cannot masquerade
+    as a full-fidelity one (fallback norm + audit doctrine). Empty string when
+    there is nothing noteworthy to label."""
+    parts: list[str] = []
+    if n_buildings_dropped > 0:
+        plural = "building" if n_buildings_dropped == 1 else "buildings"
+        parts.append(f"{n_buildings_dropped} {plural} as obstacles")
+    elif buildings_absent:
+        parts.append("no building obstructions - OSM footprints unavailable")
+    if "10m" in (dem_source or ""):
+        parts.append("10 m DEM fallback")
+    return f"({'; '.join(parts)})" if parts else ""
 
 
 def make_buildings_input_layer_uri(
@@ -515,11 +592,23 @@ async def model_urban_flood_swmm(
     # BREAK B, pre-solve: _fetch_buildings_for_urban is a SYNCHRONOUS HTTP fetch
     # (OSM Overpass). Offload it off the loop too - it is emitter-free (logs +
     # returns a FeatureCollection dict / None), so a plain to_thread wrap is safe.
-    if building_footprints is None and dem_path is None:
+    # Track whether we ATTEMPTED an OSM buildings fetch, so a zero result reads
+    # as a LABELED absence (fallback norm) in the envelope + gate stats rather
+    # than silently vanishing - a mesh whose obstruction layer disappeared is
+    # exactly the integrity leak the audit doctrine outlaws.
+    _buildings_attempted = building_footprints is None and dem_path is None
+    if _buildings_attempted:
         async with substep(emitter, "fetch_buildings"):
             building_footprints = await asyncio.to_thread(
                 _fetch_buildings_for_urban, bbox
             )
+    _buildings_absent = _buildings_attempted and not building_footprints
+    if _buildings_absent:
+        logger.warning(
+            "model_urban_flood_swmm: NO building obstructions applied - OSM "
+            "footprints unavailable for this AOI; the mesh proceeds without "
+            "wall/obstruction footprints (labeled in the envelope)"
+        )
 
     # --- Step 3: Atlas-14 design-storm depth (populate run_args if unset) ----
     effective_args = run_args
@@ -867,13 +956,11 @@ async def model_urban_flood_swmm(
                 _peak_upd: dict[str, Any] = {}
                 if tuple(peak.bbox or ()) != tuple(bbox):
                     _peak_upd["bbox"] = tuple(bbox)
-                if _n_bldg_dropped > 0 and "(" not in (peak.name or ""):
-                    _plural = (
-                        "building" if _n_bldg_dropped == 1 else "buildings"
-                    )
-                    _peak_upd["name"] = (
-                        f"{peak.name} ({_n_bldg_dropped} {_plural} as obstacles)"
-                    )
+                _suffix = _urban_envelope_suffix(
+                    _n_bldg_dropped, _buildings_absent, dem_source
+                )
+                if _suffix and "(" not in (peak.name or ""):
+                    _peak_upd["name"] = f"{peak.name} {_suffix}"
                 if _peak_upd:
                     peak = peak.model_copy(update=_peak_upd)
                 # Emit frame animation layers (already TiTiler URLs; no
@@ -1089,11 +1176,11 @@ async def model_urban_flood_swmm(
     peak_updates: dict[str, Any] = {}
     if tuple(peak.bbox or ()) != tuple(bbox):
         peak_updates["bbox"] = tuple(bbox)
-    if n_buildings_dropped > 0 and "(" not in (peak.name or ""):
-        plural = "building" if n_buildings_dropped == 1 else "buildings"
-        peak_updates["name"] = (
-            f"{peak.name} ({n_buildings_dropped} {plural} as obstacles)"
-        )
+    _name_suffix = _urban_envelope_suffix(
+        n_buildings_dropped, _buildings_absent, dem_source
+    )
+    if _name_suffix and "(" not in (peak.name or ""):
+        peak_updates["name"] = f"{peak.name} {_name_suffix}"
     if peak_updates:
         peak = peak.model_copy(update=peak_updates)
 

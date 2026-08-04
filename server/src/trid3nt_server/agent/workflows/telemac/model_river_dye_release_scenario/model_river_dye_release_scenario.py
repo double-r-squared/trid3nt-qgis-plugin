@@ -425,9 +425,66 @@ class TelemacBanksUnavailableError(TelemacDyeScenarioError):
         ]
 
 
+class TelemacReachDegenerateError(TelemacDyeScenarioError):
+    """The reach geometry is degenerate: the channel is wider than the reach is
+    long, so the mesh generator would busy-loop (the live Longview-WA hang: a
+    292 m NHDFlowline stub with the 500 m default width). The worker gates this
+    BEFORE meshing (never a hang); this typed, RETRYABLE gate names the
+    corrective args and rides the tool-retry loop."""
+
+    retryable = True
+
+    def __init__(
+        self,
+        reach_length_m: float | None = None,
+        channel_width_m: float | None = None,
+    ) -> None:
+        self.reach_length_m = (
+            float(reach_length_m) if reach_length_m is not None else None
+        )
+        self.channel_width_m = (
+            float(channel_width_m) if channel_width_m is not None else None
+        )
+        geom_txt = (
+            f" (a {self.reach_length_m:.0f} m reach with a "
+            f"{self.channel_width_m:.0f} m channel width)"
+            if self.reach_length_m is not None
+            and self.channel_width_m is not None
+            else ""
+        )
+        super().__init__(
+            "TELEMAC_REACH_DEGENERATE",
+            "The reach geometry is degenerate: the channel is wider than the "
+            f"reach is long{geom_txt}, so the mesh could not be built. Retry "
+            "with a longer reach_length_km, an explicit river_name (re-seeds "
+            "onto the named mainstem instead of a short tributary stub), or "
+            'bank_source="constant_ribbon" with a smaller channel_width_m.',
+        )
+        self.suggestions = [  # type: ignore[attr-defined]
+            "Retry with a longer reach_length_km (mesh more of the river).",
+            "Name the river explicitly (river_name) to re-seed onto the "
+            "mainstem rather than a short tributary stub.",
+            'Retry with bank_source="constant_ribbon" and a smaller '
+            "channel_width_m.",
+        ]
+
+
 # --------------------------------------------------------------------------- #
 # Registry / geometry helpers
 # --------------------------------------------------------------------------- #
+def _s3_object_exists(s3: Any, bucket: str, key: str) -> bool:
+    """True when ``s3://bucket/key`` physically exists (HEAD 200).
+
+    The upload-before-register guard for vector layers: a fabricated URI is only
+    safe to register once the object is confirmed present. Any client/HEAD error
+    (NoSuchKey, 404, transport) reads as absent - never register on doubt."""
+    try:
+        s3.head_object(Bucket=bucket, Key=key)
+        return True
+    except Exception:  # noqa: BLE001 -- absent / unreachable == do not register
+        return False
+
+
 async def _call_registry_tool(fn: Any, /, *args: Any, **kwargs: Any) -> Any:
     """Invoke a registry tool fn that may be sync (returns the value) or async
     (returns an awaitable) - normalize both (what _maybe_emit does internally)."""
@@ -758,6 +815,16 @@ def _raise_if_banks_unavailable(metrics: dict[str, Any]) -> None:
     with ``.suggestions``). No-op when the worker did not raise the banks gate."""
     if str(metrics.get("error_code") or "") == "TELEMAC_BANKS_UNAVAILABLE":
         raise TelemacBanksUnavailableError(metrics.get("assumed_channel_width_m"))
+
+
+def _raise_if_reach_degenerate(metrics: dict[str, Any]) -> None:
+    """Surface the worker's ``TELEMAC_REACH_DEGENERATE`` gate as the typed,
+    retryable :class:`TelemacReachDegenerateError`. No-op otherwise."""
+    if str(metrics.get("error_code") or "") == "TELEMAC_REACH_DEGENERATE":
+        raise TelemacReachDegenerateError(
+            metrics.get("reach_length_m"),
+            metrics.get("degenerate_channel_width_m"),
+        )
 
 
 #: Half-width (deg) of the tiny NWM query box centred on the reach seed. NWM is a
@@ -1305,11 +1372,11 @@ async def model_river_dye_release_scenario(
         # A worker that aborted on the nhd_area banks gate surfaces the typed,
         # retryable TELEMAC_BANKS_UNAVAILABLE (naming the constant_ribbon retry)
         # rather than a generic run-failed error (no inexplicit fallback).
-        _raise_if_banks_unavailable(
-            await asyncio.to_thread(
-                _read_run_metrics, getattr(run_result, "run_id", None) or run_id
-            )
+        _degraded_metrics = await asyncio.to_thread(
+            _read_run_metrics, getattr(run_result, "run_id", None) or run_id
         )
+        _raise_if_banks_unavailable(_degraded_metrics)
+        _raise_if_reach_degenerate(_degraded_metrics)
         raise TelemacDyeScenarioError(
             "TELEMAC_DYE_RUN_FAILED",
             "TELEMAC dye solve did not complete "
@@ -1433,25 +1500,45 @@ async def model_river_dye_release_scenario(
     # --- M3 oil class: publish the floating-slick track as a vector layer ---- #
     # (mesh-preview pattern: the worker wrote slick.geojson next to the result;
     # best-effort - a missing slick never voids the concentration layer)
+    #
+    # UPLOAD-BEFORE-REGISTER (live bug: a run registered
+    # s3://.../slick.geojson but the worker's fail-open drogues parse never wrote
+    # the object -> a dangling layer handle). Never register a fabricated URI:
+    # HEAD the object first and only publish when it physically exists. A missing
+    # slick reads as an honest skip, not a broken layer.
     if substance_class == "oil" and emitter is not None:
         try:
             from trid3nt_contracts.execution import LayerURI  # noqa: WPS433
 
             from trid3nt_server.emission.layer_uri_emit import publish_input_layer  # noqa: WPS433
-            from trid3nt_server.agent.tools.simulation.solver.solver import _get_runs_bucket  # noqa: WPS433
-
-            slick_layer = LayerURI(
-                layer_id=f"telemac-oil-slick-{batch_run_id}",
-                name=f"Oil slick track ({oil_preset}, {reach_name})",
-                layer_type="vector",
-                uri=f"s3://{_get_runs_bucket()}/{batch_run_id}/slick.geojson",
-                style_preset="nhdplus_flowlines",
-                role="primary",
-                bbox=peak.bbox,
+            from trid3nt_server.agent.tools.simulation.solver.solver import (  # noqa: WPS433
+                _get_runs_bucket,
+                _get_s3_client,
             )
-            emitted = await publish_input_layer(emitter, slick_layer)
-            logger.info("oil slick layer emitted=%s id=%s", emitted,
-                        slick_layer.layer_id)
+
+            _slick_bucket = _get_runs_bucket()
+            _slick_key = f"{batch_run_id}/slick.geojson"
+            _slick_exists = await asyncio.to_thread(
+                _s3_object_exists, _get_s3_client(), _slick_bucket, _slick_key
+            )
+            if not _slick_exists:
+                logger.warning(
+                    "oil slick object absent (s3://%s/%s not written by the "
+                    "worker) - slick layer skipped, no dangling handle emitted",
+                    _slick_bucket, _slick_key)
+            else:
+                slick_layer = LayerURI(
+                    layer_id=f"telemac-oil-slick-{batch_run_id}",
+                    name=f"Oil slick track ({oil_preset}, {reach_name})",
+                    layer_type="vector",
+                    uri=f"s3://{_slick_bucket}/{_slick_key}",
+                    style_preset="nhdplus_flowlines",
+                    role="primary",
+                    bbox=peak.bbox,
+                )
+                emitted = await publish_input_layer(emitter, slick_layer)
+                logger.info("oil slick layer emitted=%s id=%s", emitted,
+                            slick_layer.layer_id)
         except Exception as exc:  # noqa: BLE001
             logger.warning("oil slick layer skipped: %s", exc)
 
@@ -1749,9 +1836,11 @@ async def preview_telemac_mesh(
             # retryable banks gate (naming the constant_ribbon retry) instead of
             # the generic mesh-build failure -- so the gate text appears at the
             # approve-mesh surface too, not only after the (fail-open) solve.
-            _raise_if_banks_unavailable(
-                await asyncio.to_thread(_read_run_metrics, mesh_run_id)
+            _mesh_metrics = await asyncio.to_thread(
+                _read_run_metrics, mesh_run_id
             )
+            _raise_if_banks_unavailable(_mesh_metrics)
+            _raise_if_reach_degenerate(_mesh_metrics)
             raise TelemacDyeScenarioError(
                 "TELEMAC_MESH_BUILD_FAILED",
                 "mesh-only preview run did not complete "
