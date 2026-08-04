@@ -1,7 +1,7 @@
 """HEC-RAS 6.x local-docker solve seam (engine #11 landing).
 
-Wires the ``hecras_muncie_flood`` archetype into the shared local-docker solve
-backend so ``run_solver(solver='hecras_muncie_flood', ...)`` dispatches to the
+Wires the ``hecras_riverine_flood`` archetype into the shared local-docker solve
+backend so ``run_solver(solver='hecras_riverine_flood', ...)`` dispatches to the
 ``trid3nt-local/hecras:latest`` worker image (the M3 image carrying HEC's official
 public-domain 6.6 Linux computation engines). Structural clone of
 ``run_telemac.telemac_local_spec`` / ``register_telemac_local_spec``:
@@ -37,7 +37,7 @@ logger = logging.getLogger("trid3nt.workflows.run_hecras")
 
 #: The solver identifier (== the template/archetype tool name). Keyed in both
 #: ``SOLVER_WORKFLOW_REGISTRY`` (presence gate) and ``LOCAL_SOLVER_SPEC_REGISTRY``.
-HECRAS_SOLVER_NAME: str = "hecras_muncie_flood"
+HECRAS_SOLVER_NAME: str = "hecras_riverine_flood"
 
 #: Default worker image (override via env TRID3NT_HECRAS_IMAGE, mirroring
 #: TRID3NT_TELEMAC_IMAGE / TRID3NT_SFINCS_IMAGE).
@@ -59,7 +59,7 @@ _COMPLETION_METRIC_KEYS: tuple[str, ...] = (
 
 
 def register_hecras_solver() -> None:
-    """Register ``'hecras_muncie_flood'`` in ``SOLVER_WORKFLOW_REGISTRY``.
+    """Register ``'hecras_riverine_flood'`` in ``SOLVER_WORKFLOW_REGISTRY``.
 
     The registry value is a PRESENCE GATE for ``run_solver``; the live routing
     comes from the backend sentinel. HEC-RAS is local-docker only, so it maps to
@@ -109,7 +109,7 @@ def _classify_exit(
         status = "error"
         error: str | None = (
             metrics.get("error")
-            or f"hecras_muncie_flood exited with non-zero code {exit_code}"
+            or f"hecras_riverine_flood exited with non-zero code {exit_code}"
         )
     elif metrics and not correct_end:
         status, exit_code = "error", 2

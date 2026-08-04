@@ -1,17 +1,17 @@
-"""model_flood_scenario workflow (M5 capstone).
+"""the composer workflow (M5 capstone).
 
 This module implements the **M5 capstone composition**:
 
     geocode_location (if location_query)
-      → fetch_dem
-      → fetch_landcover (with NLCD vintage_year sidecar per §4)
-      → fetch_river_geometry
-      → lookup_precip_return_period
-      → build_sfincs_model ← §4 NLCD validation gate fires here
-      → run_solver(sfincs, model_setup_uri)
-      → wait_for_completion(handle)
-      → postprocess_flood
-      → AssessmentEnvelope (Flood subtype, Appendix B.4)
+      -> fetch_dem
+      -> fetch_landcover (with NLCD vintage_year sidecar per sec 4)
+      -> fetch_river_geometry
+      -> lookup_precip_return_period
+      -> build_sfincs_model <- sec 4 NLCD validation gate fires here
+      -> run_solver(sfincs, model_setup_uri)
+      -> wait_for_completion(handle)
+      -> postprocess_flood
+      -> AssessmentEnvelope (Flood subtype, Appendix B.4)
 
 Per Decision G + FR-TA-1, this workflow is **deterministic Python composition**
 -- there is no LLM in the chain. The workflow returns a typed
@@ -28,7 +28,7 @@ LLM exposure (workflow-as-atomic-tool-wrapper pattern):
                                        tier="template"))
     def sfincs_flood(bbox?, location_query?, ...) -> dict: ...
 
-The wrapper forwards verbatim to ``model_flood_scenario`` and returns the
+The wrapper forwards verbatim to the composer and returns the
 envelope's ``model_dump(mode="json")`` (a dict -- the LLM tool surface doesn't
 need the pydantic instance). The wrapper carries the FR-DC-6 ``cacheable=False``
 flag because workflows are uncacheable (the whole point is the dispatch +
@@ -41,7 +41,7 @@ Partial-failure envelope shape (TENTATIVE per kickoff Open Questions):
     ``envelope_type="modeled"``, an empty layers list, and a
     ``FloodPayload`` carrying zero-valued metrics + the error code threaded
     into the ``solver_version`` field (a documented seam). The agent surface narrates the
-    envelope honestly ("scenario could not be modeled because …") rather than
+    envelope honestly ("scenario could not be modeled because ...") rather than
     fabricating depth values.
 
 Cross-cutting principles in force:
@@ -216,7 +216,7 @@ _BUILD_PHASE_TIMEOUT_S = float(
 # --- Engine-support seams (engine-door conformance split) -------------------
 # The solve/progress/telemetry/envelope layer moved to ``run_sfincs.py`` and the
 # forcing synthesis/autowire library to ``sfincs_forcing_autowire.py``. They are
-# re-imported here so ``model_flood_scenario`` (below) calls them as before and
+# re-imported here so the composer (below) calls them as before and
 # ``flood.flood``'s public surface is unchanged.
 from trid3nt_server.agent.workflows.sfincs.run_sfincs import (  # noqa: E402,F401
     WorkflowError,
@@ -311,7 +311,7 @@ async def model_flood_scenario(
     Resolves the location (geocode if ``bbox`` not given), fetches DEM (3DEP)
     + landcover (NLCD) + river geometry (NHDPlus HR) + design-storm
     precipitation depth (NOAA Atlas 14), builds an SFINCS model via HydroMT
-    (the §4 NLCD validation gate fires here - raises
+    (the sec 4 NLCD validation gate fires here - raises
     ``SFINCSSetupError("LULC_MAPPING_MISMATCH")`` on vintage mismatch),
     dispatches ``run_solver(sfincs, ...)``, awaits ``wait_for_completion``,
     postprocesses the run's NetCDF to a flood-depth COG, and returns a
@@ -343,7 +343,7 @@ async def model_flood_scenario(
             uniform SFINCS ``netamt`` rate (mm/hr) - the area-mean
             fallback (spw spatial upgrade path documented in
             ``sfincs_builder``). ``duration_hr`` is reused as the precip
-            accumulation window for the depth→rate conversion. When ``None``
+            accumulation window for the depth->rate conversion. When ``None``
             (the default) the Atlas 14 design-storm path runs unchanged --
             behavior is **identical** to the v1 workflow (regression-critical).
         surge_forcing: optional nested dict wiring the COASTAL SFINCS surge /
@@ -354,7 +354,7 @@ async def model_flood_scenario(
             materialised from the forcing fetchers (``fetch_gtsm_tide_surge`` /
             ``fetch_noaa_coops_tides`` / ``fetch_noaa_nwm_streamflow`` /
             ERA5). See
-            ``_build_surge_forcing_members``. ``None`` (default) → pure-pluvial
+            ``_build_surge_forcing_members``. ``None`` (default) -> pure-pluvial
             deck (NO surge blocks emitted; byte-identical to the v0.1 deck).
         enable_subgrid: emit a SFINCS ``setup_subgrid`` block so the solve runs
             on a coarse grid while resolving sub-cell topography + roughness (the
@@ -362,9 +362,9 @@ async def model_flood_scenario(
             is set. Default ``False``.
         building_obstacles: burn building footprints into the deck so the rough
             2D flood routes around buildings (the COASTAL "urban flood" ask).
-            ``True`` → BEST-EFFORT OSM-footprint fetch (a fetch failure degrades
+            ``True`` -> BEST-EFFORT OSM-footprint fetch (a fetch failure degrades
             to no obstacles, never aborts the flood); a ``str`` is used verbatim
-            as the footprint geofile URI; ``False`` (default) → no obstacles.
+            as the footprint geofile URI; ``False`` (default) -> no obstacles.
         building_obstacle_mode: ``"exclude"`` (default) makes footprint cells
             INACTIVE no-flow holes; ``"raise"`` keeps them active but lifts their
             bed elevation via the subgrid (requires subgrid; auto-enabled).
@@ -377,7 +377,7 @@ async def model_flood_scenario(
             coast) in the SAME contract as ``fetch_dem`` (single-band float32
             NAVD88-metres COG, positive-up, EPSG:32616), so ``build_sfincs_model``
             / ``setup_dep`` consume it UNCHANGED -- the coastal DEM is a drop-in.
-            ``False`` (default) AND no ``surge_forcing`` → the LAND/pluvial path
+            ``False`` (default) AND no ``surge_forcing`` -> the LAND/pluvial path
             is byte-identical to the v0.1 workflow (``fetch_dem``,
             regression-critical). If ``fetch_topobathy`` cannot find CUDEM
             bathymetry for the AOI it degrades INTERNALLY to a 3DEP-land-only
@@ -413,7 +413,7 @@ async def model_flood_scenario(
             ``completion.json`` + ``publish_manifest.json`` the regular path emits.
             The granularity lever stays the user's (base resolution + refinement
             levels). Implies ``coastal=True`` (needs the merged topo-bathymetry
-            surface). ``False`` (default) → the regular-grid build_sfincs_model
+            surface). ``False`` (default) -> the regular-grid build_sfincs_model
             path, byte-identical to today. The agent process NEVER imports
             cht_sfincs; the SnapWave wave coupling is a documented follow-up (the
             quadtree grid already carries the snapwave_mask).
@@ -471,7 +471,7 @@ async def model_flood_scenario(
 
     Returns:
         ``AssessmentEnvelope`` with ``envelope_type="modeled"``,
-        ``hazard_type="flood"``, ``workflow_name="model_flood_scenario"``,
+        ``hazard_type="flood"``, ``workflow_name="the composer"``,
         and a populated ``flood: FloodPayload``. On success, ``layers``
         contains the flood-depth COG ``ResultLayer``; on failure the layer
         list is empty and ``FloodMetrics.solver_version`` carries the
@@ -483,7 +483,7 @@ async def model_flood_scenario(
     sess_id = session_id or new_ulid()
     data_sources: list[DataSource] = []
     solver_run_ids: list[str] = []
-    grid_resolution_m = 30.0  # NFR-P-4 default; §4 immediate
+    grid_resolution_m = 30.0  # NFR-P-4 default; sec 4 immediate
 
     logger.info(
         "model_flood_scenario start bbox=%s location_query=%r event_id=%r "
@@ -802,7 +802,7 @@ async def model_flood_scenario(
         # pluvial - ``river_geometry_uri`` is accepted but unused, and
         # documented as ``may be None``. So a river-fetch failure must NOT kill an
         # otherwise-valid pluvial flood. Live Case 3 (2026-06-16): Victoria, TX
-        # failed with "could not route bbox … to a HUC4 region" (the v0.1
+        # failed with "could not route bbox ... to a HUC4 region" (the v0.1
         # HUC4 heuristic only covers a few demo areas), needlessly aborting a
         # flood that needs no river inflow. Degrade to None + narrate; re-enable
         # the hard dependency when v0.2 river-inflow (real ATCF surge) lands.
@@ -867,7 +867,7 @@ async def model_flood_scenario(
                 source=(
                     f"Observed precip raster {forcing_raster_uri} -- "
                     f"area-mean {area_mean_mm:.2f} mm over {duration_hr}-hr "
-                    "accumulation → uniform netamt (OQ-6 area-mean fallback)"
+                    "accumulation -> uniform netamt (OQ-6 area-mean fallback)"
                 ),
                 parameters={
                     "forcing_raster_uri": forcing_raster_uri,
@@ -1115,7 +1115,7 @@ async def model_flood_scenario(
         # the deck-emission seam expects. The resolver materialises (b) in place;
         # an adapter failure for an EXPLICIT surge request raises (caught below as
         # a typed failed envelope -- never a silent pluvial degrade). Empty/absent
-        # → pure-pluvial deck (no surge blocks emitted).
+        # -> pure-pluvial deck (no surge blocks emitted).
         # NO-SYNC-BLOCKING-ON-LOOP: the forcing adapter does heavy synchronous
         # geopandas/rasterio/pandas work (reads the GTSM/CO-OPS/NWM FlatGeobuf,
         # samples the CaMa COG, writes the bzs/dis CSV + locations files). Run it
@@ -1514,7 +1514,7 @@ async def model_flood_scenario(
             grid_resolution_m=grid_resolution_m,
         )
     except SFINCSForcingAdapterError as exc:
-        # COASTAL SFINCS -- the surge/discharge FETCHER → ADAPTER bridge failed
+        # COASTAL SFINCS -- the surge/discharge FETCHER -> ADAPTER bridge failed
         # (unreadable fetcher FGB/COG, no usable stations, all-NaN hydrographs).
         # Invariant 7: an EXPLICIT surge request that cannot be materialised
         # surfaces as a typed failed envelope carrying the adapter error code --
@@ -1585,7 +1585,7 @@ async def model_flood_scenario(
         effective_compute_class = select_compute_class(_estimated_elements)
         logger.info(
             "model_flood_scenario: auto vertical scaling "
-            "estimated_active_cells=%s → compute_class=%s (caller requested %s)",
+            "estimated_active_cells=%s -> compute_class=%s (caller requested %s)",
             _estimated_elements,
             effective_compute_class,
             compute_class,
@@ -1888,7 +1888,7 @@ async def model_flood_scenario(
     # (the worker already produced display-ready COGs; the manifest branch
     # above did the registration + frame/wave emission).
     if not register_only:
-        # --- Step 9: publish_layer (COG → QGIS Server WMS bridge) ---
+        # --- Step 9: publish_layer (COG -> QGIS Server WMS bridge) ---
         # For the primary flood-depth layer, invoke the PyQGIS worker to add the COG
         # to the canonical .qgs project so QGIS Server can serve it as WMS.
         # The returned WMS URL replaces the gs:// uri in the LayerURI/ResultLayer so
@@ -1896,7 +1896,7 @@ async def model_flood_scenario(
         #
         # Non-fatal: if publish_layer fails (e.g.
         # is not yet landed), we DROP the primary raster layer from the emitted set
-        # rather than fall back to the raw gs:// uri (§1, Decision 11). A
+        # rather than fall back to the raw gs:// uri (sec 1, Decision 11). A
         # gs:// uri never renders -- MapLibre cannot fetch it; emitting it only paints
         # a dead, broken layer row in the LayerPanel. Dropping it keeps the map
         # honest while the rest of the envelope (metrics, provenance, narration)
@@ -1918,7 +1918,7 @@ async def model_flood_scenario(
         for lyr in primary_layers:
             # s3:// COGs (AWS local-docker backend) take the same
             # publish-or-honest-drop gate as gs:// -- a raw object-store URI never
-            # renders in MapLibre (§1), so it must never reach the map.
+            # renders in MapLibre (sec 1), so it must never reach the map.
             # On AWS publish_layer fails until lands QGIS-on-AWS; the
             # layer is dropped and the metrics/narration stay honest.
             if (
@@ -1940,7 +1940,7 @@ async def model_flood_scenario(
                     # A PublishLayerError raises INSIDE the substep -> the child reads
                     # red (honesty floor) and re-raises to the existing except handler
                     # below, which DROPS the layer (publish-or-honest-drop,
-                    # §1) unchanged. No-op when no emitter is bound.
+                    # sec 1) unchanged. No-op when no emitter is bound.
                     async with substep(emitter, "publish_layer"):
                         wms_url = await asyncio.to_thread(
                             publish_layer,
@@ -1982,7 +1982,7 @@ async def model_flood_scenario(
                     logger.warning(
                         "publish_layer failed for layer_id=%s error_code=%s (%s) -- "
                         "DROPPING the primary flood-depth layer from the emitted set "
-                        "(job-0254 §1): a raw gs:// uri never renders in MapLibre, so "
+                        "(job-0254 sec 1): a raw gs:// uri never renders in MapLibre, so "
                         "we do NOT fall back to it. The envelope's metrics/provenance "
                         "remain intact and the failure is narrated honestly; the "
                         "retry-on-failure loop (job-0177) can re-attempt publish.",
@@ -1997,8 +1997,8 @@ async def model_flood_scenario(
                 published_layers.append(lyr)
 
         # --- Step 9b: publish + emit the time-step animation frames (Phase 1) ---
-        # Each frame is a DISTINCT COG (distinct runs-bucket key → distinct TiTiler
-        # url= → distinct pipeline_emitter._layer_identity_key → no dedup collapse).
+        # Each frame is a DISTINCT COG (distinct runs-bucket key -> distinct TiTiler
+        # url= -> distinct pipeline_emitter._layer_identity_key -> no dedup collapse).
         # We publish in ASCENDING step order and call emitter.add_loaded_layer for
         # each so all N frames arrive as one contiguous sequential group; the final
         # session-state snapshot carries peak + N frames. Frames are emitted ONLY
@@ -2224,7 +2224,7 @@ async def sfincs_flood(
        local Docker solver backend.
     8. ``wait_for_completion(run_id)`` -- polls until SUCCEEDED or FAILED;
        emits progress events per FR-WC-12.
-    9. ``postprocess_flood(run_outputs_uri)`` → ``publish_layer(flood_depth_cog)``
+    9. ``postprocess_flood(run_outputs_uri)`` -> ``publish_layer(flood_depth_cog)``
        -- extracts peak depth COG, uploads to the runs bucket, and publishes
        it as an ``s3://`` COG the QGIS plugin renders natively.
 
@@ -2245,13 +2245,13 @@ async def sfincs_flood(
 
     Examples:
         - "model the flood from a 100-year storm in Fort Myers, FL"
-          → location_query: Fort Myers, FL ; return_period_years: 100
+          -> location_query: Fort Myers, FL ; return_period_years: 100
         - "peak flood depth from a 25-year design storm in Houston"
-          → location_query: Houston ; return_period_years: 25
+          -> location_query: Houston ; return_period_years: 25
         - "simulate flood inundation for Hurricane Ian near Fort Myers"
-          → location_query: Fort Myers ; return_period_years: 100 (default)
+          -> location_query: Fort Myers ; return_period_years: 100 (default)
         - "500-year flood for New Orleans, 48-hour duration"
-          → location_query: New Orleans ; return_period_years: 500 ; duration_hours: 48
+          -> location_query: New Orleans ; return_period_years: 500 ; duration_hours: 48
 
     Params:
         bbox: ``(min_lon, min_lat, max_lon, max_lat)`` in EPSG:4326. When
@@ -2280,7 +2280,7 @@ async def sfincs_flood(
             fluvial river-discharge boundary (plus optional wind / pressure)
             into the SFINCS deck, so the run combines coastal surge + river
             discharge + the pluvial design storm. Shape (each sub-dict optional;
-            mirror the internal ``model_flood_scenario`` contract exactly):
+            mirror the internal the composer contract exactly):
             ``{"waterlevel": {"timeseries_uri": ..., "locations_uri": ...,
             "offset": ..., "buffer_m": ...} | {"geodataset_uri": ...},
             "discharge": {"timeseries_uri": ..., "rivers_uri": ...,
@@ -2291,7 +2291,7 @@ async def sfincs_flood(
             ERA5). Supplying a water-level
             boundary IMPLIES ``coastal=True`` (the surge needs a nearshore bed),
             so the DEM fetch auto-routes through ``fetch_topobathy``. ``None``
-            (the default) → pure-pluvial deck, BYTE-IDENTICAL to today (no surge /
+            (the default) -> pure-pluvial deck, BYTE-IDENTICAL to today (no surge /
             discharge blocks emitted; regression-critical).
         enable_subgrid: emit a SFINCS ``setup_subgrid`` block so the solve runs on
             a coarse grid while resolving sub-cell topography + roughness (the
@@ -2320,14 +2320,14 @@ async def sfincs_flood(
             workflow burns building footprints into the SFINCS grid so the flood
             routes AROUND buildings -- a more realistic (but slightly slower)
             urban-flood estimate. Three forms:
-              * ``True`` → best-effort fetch of OSM building footprints (OSM
+              * ``True`` -> best-effort fetch of OSM building footprints (OSM
                 Overpass) for the AOI; burned as no-flow ``exclude_mask`` cells.
                 A footprint-fetch failure NEVER aborts the flood -- it logs a
                 warning and proceeds WITHOUT obstacles (honest degrade, same
                 policy as river geometry).
-              * a ``str`` → used verbatim as a footprint geofile URI (e.g. a
+              * a ``str`` -> used verbatim as a footprint geofile URI (e.g. a
                 prior ``fetch_buildings`` output FlatGeobuf / GeoJSON).
-              * ``False`` → no obstacles (terrain-only; the default, unchanged
+              * ``False`` -> no obstacles (terrain-only; the default, unchanged
                 plain DEM + Manning deck).
             ASK-WHEN-URBAN: for an URBAN / developed AOI (a named city core,
             downtown / midtown, a dense built-up bbox), if the user has NOT said
@@ -2335,7 +2335,7 @@ async def sfincs_flood(
             buildings as obstacles so water routes around them -- more realistic
             but a bit slower -- or just terrain?" -- and set ``building_obstacles``
             from the answer. If the user PRE-specified ("include buildings" /
-            "route around buildings" → ``True``; "terrain only" → ``False``),
+            "route around buildings" -> ``True``; "terrain only" -> ``False``),
             honor it without asking. RURAL / non-urban AOIs default to no
             buildings WITHOUT asking. Obstacles are OFF by default everywhere.
         building_obstacle_mode: how footprints are burned, default ``"exclude"``.
@@ -2410,10 +2410,10 @@ async def sfincs_flood(
 
     Cross-tool dependencies:
         Upstream (consumes) -- the 9-step fetch + solve chain above:
-        - ``geocode_location`` (optional) → ``fetch_dem`` → ``fetch_landcover``
-          → ``fetch_river_geometry`` → ``lookup_precip_return_period``
-          → ``build_sfincs_model`` → ``run_solver`` → ``wait_for_completion``
-          → ``postprocess_flood`` → ``publish_layer``
+        - ``geocode_location`` (optional) -> ``fetch_dem`` -> ``fetch_landcover``
+          -> ``fetch_river_geometry`` -> ``lookup_precip_return_period``
+          -> ``build_sfincs_model`` -> ``run_solver`` -> ``wait_for_completion``
+          -> ``postprocess_flood`` -> ``publish_layer``
         Downstream (feeds):
         - ``pelicun_damage_assessment`` (explicit ``assets_uri`` OR bbox
           auto-fetch mode) -- consumes the returned flood-depth COG
@@ -2458,7 +2458,7 @@ async def sfincs_flood(
     # --- Layer-emission contract pin (docs/decisions/layer-emission-contract.md, 2026-06-07) ---
     # Return the primary flood-depth COG as a LayerURI so PipelineEmitter's
     # isinstance(result, LayerURI) gate at pipeline_emitter.py:517 fires
-    # add_loaded_layer → session-state.loaded_layers (declarative, A.7
+    # add_loaded_layer -> session-state.loaded_layers (declarative, A.7
     # replace-not-reconcile).  On failure the envelope has no layers; fall
     # back to the dict so the LLM can narrate the error honestly.
     #
@@ -2466,7 +2466,7 @@ async def sfincs_flood(
     # ``PipelineEmitter.add_loaded_layer`` fires the post-publish
     # ``emit_map_command("zoom-to")`` (pipeline_emitter.py:443-447). Prior to
     # this fix the wrapper dropped bbox (``envelope.layers[0]`` is a
-    # ``ResultLayer`` with no bbox field) → silent no-zoom after layer landed.
+    # ``ResultLayer`` with no bbox field) -> silent no-zoom after layer landed.
     if envelope.layers:
         primary = envelope.layers[0]
         return LayerURI(

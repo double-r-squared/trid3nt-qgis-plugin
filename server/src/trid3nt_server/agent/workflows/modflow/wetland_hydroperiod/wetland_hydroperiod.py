@@ -1,10 +1,10 @@
-"""``model_wetland_hydroperiod_scenario``  -  MODFLOW wetland-hydroperiod composer.
+"""the composer  -  MODFLOW wetland-hydroperiod composer.
 
 The end-to-end higher-order workflow for the MODFLOW
 ``wetland_hydroperiod`` archetype: it turns a place (or AOI point) + a wetland
 footprint into a rendered seasonal-water-table-range layer  -  how much the wetland
 water table swings across the recharge / evapotranspiration seasons (the
-hydroperiod). It mirrors the chain shape of ``model_mine_dewatering_scenario``
+hydroperiod). It mirrors the chain shape of the composer
 (sibling footprint-driven archetype): the wetland footprint is draped as RCH
 recharge (a per-period wet/dry schedule) + an EVT head-dependent ET sink over an
 unconfined transient water table, and the seasonal head RANGE IS the deliverable.
@@ -19,7 +19,7 @@ water-table-fluctuation analysis):
         -> run_modflow_archetype_job (GWF transient RCH+EVT deck -> mf6 -> range)
         -> HydroperiodLayerURI (seasonal_head_range_m + head_timeseries)
 
-Invariants (same set as model_mine_dewatering_scenario):
+Invariants (same set as the composer):
 - **1 / 2 / 8: preserve** (typed numbers, deterministic composition, cancellable).
 - **9. No fabricated model inputs.** A ``wetland_hydroperiod`` run with no wetland
   footprint returns a typed ``USER_INPUT_REQUIRED`` failed envelope rather than
@@ -74,7 +74,7 @@ __all__ = [
 
 
 class WetlandHydroperiodResult(GraceModel):
-    """Return type for ``model_wetland_hydroperiod_scenario``.
+    """Return type for the composer.
 
     Bundles the hydroperiod layer + the derived args + a narration summary dict.
     Invariant 1: every narrated number is a typed field  -  ``hydroperiod_layer``
@@ -94,7 +94,7 @@ class WetlandHydroperiodResult(GraceModel):
 
 
 class WetlandHydroperiodScenarioError(RuntimeError):
-    """Base class for ``model_wetland_hydroperiod_scenario`` failures."""
+    """Base class for the composer failures."""
 
     error_code: str = "WETLAND_HYDROPERIOD_SCENARIO_ERROR"
     retryable: bool = False

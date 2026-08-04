@@ -3,7 +3,7 @@
 A separate template from ``modflow_capture_zone`` because capture_zone and
 wellhead_protection answer DIFFERENT questions - general zone-of-contribution
 vs EPA fixed-travel-time WHPA tiers - even though they share the
-``model_capture_zone_scenario`` composer + ``CaptureZoneLayerURI`` carrier.
+the composer composer + ``CaptureZoneLayerURI`` carrier.
 
 This template reuses the ``modflow_capture_zone`` composer with
 ``archetype="wellhead_protection"`` (EPA WHPA framing + default [2, 5, 10] yr

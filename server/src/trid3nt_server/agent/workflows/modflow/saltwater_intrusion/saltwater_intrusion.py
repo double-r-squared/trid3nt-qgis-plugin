@@ -1,4 +1,4 @@
-"""``model_saltwater_intrusion_scenario`` - MODFLOW BUY saltwater-intrusion
+"""the composer - MODFLOW BUY saltwater-intrusion
 composer.
 
 The end-to-end higher-order workflow for the MODFLOW
@@ -95,7 +95,7 @@ __all__ = [
 
 
 class SaltwaterIntrusionResult(GraceModel):
-    """Return type for ``model_saltwater_intrusion_scenario``.
+    """Return type for the composer.
 
     Bundles the saltwater-wedge vector layer + the derived args + a narration
     summary dict. Invariant 1: every narrated number is a typed field --
@@ -116,7 +116,7 @@ class SaltwaterIntrusionResult(GraceModel):
 
 
 class SaltwaterIntrusionScenarioError(RuntimeError):
-    """Base class for ``model_saltwater_intrusion_scenario`` failures."""
+    """Base class for the composer failures."""
 
     error_code: str = "SALTWATER_INTRUSION_SCENARIO_ERROR"
     retryable: bool = False

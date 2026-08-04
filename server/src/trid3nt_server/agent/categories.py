@@ -249,6 +249,7 @@ PRIMARY_CATEGORY: dict[str, str] = {
     # file under hazard_modeling; pelicun/swan/elmfire also cross-list via
     # SECONDARY_CATEGORIES (damage_assessment / coastal / fire).
     "sfincs_flood": "hazard_modeling",
+    "sfincs_advanced_numerical_physics_knobs": "hazard_modeling",
     "modflow_asr": "hazard_modeling",
     "modflow_capture_zone": "hazard_modeling",
     "modflow_contaminant_plume": "hazard_modeling",
@@ -278,7 +279,7 @@ PRIMARY_CATEGORY: dict[str, str] = {
     "elmfire_fire_spread": "hazard_modeling",
     "swan_wave_field": "hazard_modeling",
     "telemac_river_dye": "hazard_modeling",
-    "hecras_muncie_flood": "hazard_modeling",
+    "hecras_riverine_flood": "hazard_modeling",
     "schism_tidal_hydro": "hazard_modeling",
     # The case-layer ingest seams (register_case_layer / ingest_user_layer)
     # are DEREGISTERED (their functions serve the /api/ingest-layer HTTP route

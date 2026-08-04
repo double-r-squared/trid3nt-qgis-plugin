@@ -42,6 +42,7 @@ from __future__ import annotations
 # Import the workflow modules so their @register_tool decorators fire at
 # package import time and the LLM-facing wrappers land in TOOL_REGISTRY.
 from .sfincs.flood.flood import sfincs_flood as _sfincs_flood  # noqa: F401  -- engine-door refactor (SFINCS slice): the run_model_flood_scenario wrapper is now the sfincs_flood template (engine=sfincs, tier=template); the run_sfincs door is imported in tools/__init__.py
+from .sfincs.numerical_physics.numerical_physics import sfincs_advanced_numerical_physics_knobs as _sfincs_advanced_numerical_physics_knobs  # noqa: F401  -- S-tier wave 1 (ADR 0120): opt-in SFINCS numerical solver-settings knob template over model_flood_scenario (engine=sfincs, tier=template)
 # COMPOSER DISSOLUTION (ADR 0105): the standalone news-ingest MODFLOW composer
 # (run_model_groundwater_contamination_scenario) and the live-alert SFINCS
 # composer (run_model_nws_flood_event_scenario) are DELETED - the model composes
@@ -56,7 +57,7 @@ from .sfincs.flood.flood import sfincs_flood as _sfincs_flood  # noqa: F401  -- 
 # registered via tools/__init__.py's import of
 # workflows/pelicun/damage_assessment/damage_assessment.py (no separate import here).
 from .telemac import run_telemac as _run_telemac  # noqa: F401  -- P2: registers the telemac_river_dye local-docker solve spec (SOLVER_WORKFLOW_REGISTRY + LOCAL_SOLVER_SPEC_REGISTRY); no LLM tool yet (P4)
-from .hecras import run_hecras as _run_hecras  # noqa: F401  -- engine #11: registers the hecras_muncie_flood local-docker solve spec (SOLVER_WORKFLOW_REGISTRY + LOCAL_SOLVER_SPEC_REGISTRY); the LLM template is imported by tools/__init__.py
+from .hecras import run_hecras as _run_hecras  # noqa: F401  -- engine #11: registers the hecras_riverine_flood local-docker solve spec (SOLVER_WORKFLOW_REGISTRY + LOCAL_SOLVER_SPEC_REGISTRY); the LLM template is imported by tools/__init__.py
 from .schism import run_schism as _run_schism  # noqa: F401  -- engine #12 (ADR 0118): registers the schism_tidal_hydro local-docker solve spec (SOLVER_WORKFLOW_REGISTRY + LOCAL_SOLVER_SPEC_REGISTRY); the LLM template is imported by tools/__init__.py
 
 __all__: list[str] = []

@@ -1,0 +1,12 @@
+# Template routing phrasings: the SFINCS numerical/physical solver-settings knob
+# template (S-tier wave 1, ADR 0120). Opt-in over the sfincs_flood deck surface;
+# a stability/runtime SENSITIVITY surface, not a scenario builder.
+sfincs_advanced_numerical_physics_knobs:
+- run SFINCS with different numerical solver settings
+- how sensitive is the SFINCS flood to the numerical scheme
+- SFINCS solver settings theta alpha huthresh advection
+- run SFINCS with advection off
+- tune the SFINCS wet dry threshold and CFL limiter
+- SFINCS numerical stability sensitivity study
+- change the SFINCS time integration weighting theta
+- SFINCS wind drag coefficient and Coriolis latitude knobs

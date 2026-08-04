@@ -1,4 +1,4 @@
-"""``model_capture_zone_scenario`` - MODFLOW PRT capture-zone composer.
+"""the composer - MODFLOW PRT capture-zone composer.
 
 The end-to-end higher-order workflow for the MODFLOW
 ``capture_zone`` and ``wellhead_protection`` archetypes: it turns a place (or
@@ -106,7 +106,7 @@ WELLHEAD_PROTECTION_DEFAULT_TIERS: list[float] = [2.0, 5.0, 10.0]
 
 
 class CaptureZoneResult(GraceModel):
-    """Return type for ``model_capture_zone_scenario``.
+    """Return type for the composer.
 
     Bundles the capture-zone vector layer + the derived args + a narration
     summary dict. Invariant 1: every narrated number is a typed field  -
@@ -127,7 +127,7 @@ class CaptureZoneResult(GraceModel):
 
 
 class CaptureZoneScenarioError(RuntimeError):
-    """Base class for ``model_capture_zone_scenario`` failures."""
+    """Base class for the composer failures."""
 
     error_code: str = "CAPTURE_ZONE_SCENARIO_ERROR"
     retryable: bool = False

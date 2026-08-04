@@ -1,18 +1,19 @@
-"""Engine template ``hecras_muncie_flood`` -- HEC-RAS 6.x 1D/2D riverine-flood
-engine, the Muncie-class demonstration archetype (engine #11 landing, ADR 0109).
+"""Engine template ``hecras_riverine_flood`` -- HEC-RAS 6.x 1D/2D riverine-flood
+engine.
 
-The LLM-facing exposure of the HEC-RAS refinement-grade riverine solver. TEMPLATE-
-FIRST (ADR 0100 / the ras-commander feasibility spike): headless 2D mesh authoring
-is the real frontier (RASMapper's terrain subgrid tables need Windows DLLs), so
-this archetype reparameterizes HEC's own shipped Muncie project (White River,
-Muncie IN) rather than building geometry for an arbitrary AOI. The GEOMETRY is
-FROZEN; only the unsteady FLOW forcing varies (the inflow hydrograph, scaled by a
-plain multiplier or to a target peak discharge).
+The LLM-facing exposure of the HEC-RAS refinement-grade riverine solver. The tool
+is named for the CAPABILITY (1D/2D riverine flood), not the place. Its V1 SHIPPED
+GEOMETRY is a labeled fact: HEC's own Muncie project (White River, Muncie IN).
+Headless 2D mesh authoring is the frontier (RASMapper's terrain subgrid tables need
+Windows DLLs), so v1 reparameterizes that shipped project rather than building
+geometry for an arbitrary AOI. The GEOMETRY is FROZEN; only the unsteady FLOW
+forcing varies (the inflow hydrograph, scaled by a plain multiplier or to a target
+peak discharge). Future geometry sources widen the same capability tool.
 
-``hecras_muncie_flood(...)`` takes flow knobs (all defaulted so a bare "run the
-Muncie HEC-RAS flood model" runs the published baseline), runs the deterministic
+``hecras_riverine_flood(...)`` takes flow knobs (all defaulted so a bare "run the
+HEC-RAS riverine flood model" runs the published Muncie-v1 baseline), runs the deterministic
 stage -> flow-scale -> RasGeomPreprocess -> RasUnsteady -> postprocess chain
-(``model_hecras_muncie_flood`` below), and returns a ``HecrasDepthLayerURI`` the
+(``model_hecras_riverine_flood`` below), and returns a ``HecrasDepthLayerURI`` the
 emitter loads onto the map (peak overland-depth COG) beside the 2D mesh preview.
 
 DEMONSTRATION-GEOMETRY honesty is LOUD (NATE no-hand-wave doctrine): this template
@@ -51,12 +52,12 @@ from trid3nt_server.agent.gates.input_review import gate_input_review
 from trid3nt_server.agent.workflows.hecras._template_card import TemplateCard
 
 logger = logging.getLogger(
-    "trid3nt_server.agent.workflows.hecras.muncie_flood.muncie_flood"
+    "trid3nt_server.agent.workflows.hecras.riverine_flood.riverine_flood"
 )
 
 __all__ = [
-    "hecras_muncie_flood",
-    "model_hecras_muncie_flood",
+    "hecras_riverine_flood",
+    "model_hecras_riverine_flood",
     "HecrasScenarioError",
     "TEMPLATE_CARD",
 ]
@@ -94,10 +95,10 @@ class HecrasScenarioError(RuntimeError):
 #: the demonstration deck is self-contained) + a knobs summary.
 TEMPLATE_CARD = TemplateCard(
     question=(
-        "peak 2D inundation depth + water surface for a WHAT-IF FLOW on the Muncie "
-        "White River (Indiana) HEC-RAS demonstration model (refinement-grade 1D/2D "
-        "riverine flood on a FROZEN demonstration geometry; scale the inflow "
-        "hydrograph up/down)"
+        "peak 2D inundation depth + water surface for a WHAT-IF FLOW on the HEC-RAS "
+        "1D/2D riverine model (refinement-grade riverine flood; scale the inflow "
+        "hydrograph up/down). V1 geometry: HEC's shipped Muncie White River (Indiana) "
+        "project, FROZEN demonstration geometry"
     ),
     required_inputs=[],  # self-contained demonstration deck
     knobs="flow_scale, target_peak_cfs, input_mode",
@@ -105,7 +106,7 @@ TEMPLATE_CARD = TemplateCard(
 
 
 _HECRAS_MUNCIE_METADATA = AtomicToolMetadata(
-    name="hecras_muncie_flood",
+    name="hecras_riverine_flood",
     ttl_class="live-no-cache",
     source_class="workflow_dispatch",
     cacheable=False,
@@ -121,7 +122,7 @@ _HECRAS_MUNCIE_METADATA = AtomicToolMetadata(
     destructive_hint=False,
     idempotent_hint=False,
 )
-async def hecras_muncie_flood(
+async def hecras_riverine_flood(
     flow_scale: float = 1.0,
     target_peak_cfs: float | None = None,
     input_mode: str | None = None,
@@ -129,18 +130,19 @@ async def hecras_muncie_flood(
     # tool_arg_normalizer, but kept as belt-and-suspenders).
     **_extra_ignored: Any,
 ) -> HecrasDepthLayerURI | dict[str, Any]:
-    """A REFINEMENT-GRADE 1D/2D RIVERINE FLOOD what-if on the Muncie White River HEC-RAS DEMONSTRATION model.
+    """A REFINEMENT-GRADE 1D/2D RIVERINE FLOOD what-if on the HEC-RAS solver (V1 geometry: Muncie White River).
 
     Fidelity: HEC-RAS 6.x full-physics 1D/2D unsteady hydraulics (the FEMA/USACE
-    refinement-grade riverine solver) on HEC's OWN shipped Muncie test project
-    (White River, Muncie IN), Linux-verified bit-identical to the GUI. The terrain
-    + 2D mesh are FROZEN (demonstration geometry -- RASMapper's subgrid tables are
-    prebuilt and cannot be rebuilt headless); this answers a WHAT-IF FLOW question
-    on THIS reach, NOT flooding at an arbitrary user AOI.
+    refinement-grade riverine solver), Linux-verified bit-identical to the GUI. The
+    V1 SHIPPED GEOMETRY is HEC's OWN Muncie test project (White River, Muncie IN):
+    terrain + 2D mesh are FROZEN (demonstration geometry -- RASMapper's subgrid
+    tables are prebuilt and cannot be rebuilt headless); this answers a WHAT-IF FLOW
+    question on THIS reach, NOT flooding at an arbitrary user AOI.
 
-    THE tool for "run the HEC-RAS Muncie flood model", "what does the White River
-    at Muncie flood look like at a higher flow / a bigger event", "scale up the
-    Muncie inflow and show the deeper/wider 2D inundation". Reparameterizes the
+    THE tool for "run the HEC-RAS riverine flood model", "run HEC-RAS 1D/2D unsteady
+    flow", "what does the White River at Muncie flood look like at a higher flow / a
+    bigger event", "scale up the inflow and show the deeper/wider 2D inundation".
+    Reparameterizes the
     unsteady inflow hydrograph (a plain multiplier OR a target peak discharge),
     runs RasGeomPreprocess + RasUnsteady headless, and returns a peak overland-DEPTH
     map layer (the max water surface minus the bed at each 2D cell) plus the 2D
@@ -194,7 +196,7 @@ async def hecras_muncie_flood(
             "error_message": f"flow_scale must be a positive finite number, got {flow_scale!r}",
         }
     if not (0.25 <= flow_scale <= 4.0):
-        logger.warning("hecras_muncie_flood: flow_scale %r outside [0.25, 4.0] - clamped", flow_scale)
+        logger.warning("hecras_riverine_flood: flow_scale %r outside [0.25, 4.0] - clamped", flow_scale)
         flow_scale = min(max(flow_scale, 0.25), 4.0)
 
     tp: float | None = None
@@ -208,12 +210,12 @@ async def hecras_muncie_flood(
                 tp = None
 
     logger.info(
-        "hecras_muncie_flood flow_scale=%.4g target_peak_cfs=%s input_mode=%s",
+        "hecras_riverine_flood flow_scale=%.4g target_peak_cfs=%s input_mode=%s",
         flow_scale, tp, input_mode,
     )
 
     try:
-        depth = await model_hecras_muncie_flood(
+        depth = await model_hecras_riverine_flood(
             flow_scale=flow_scale,
             target_peak_cfs=tp,
             input_mode=input_mode,
@@ -221,7 +223,7 @@ async def hecras_muncie_flood(
         if isinstance(depth, dict):  # a gate cancel returns a typed dict
             return depth
         logger.info(
-            "hecras_muncie_flood complete layer_id=%s depth_max_ft=%.3g wet_cells=%s "
+            "hecras_riverine_flood complete layer_id=%s depth_max_ft=%.3g wet_cells=%s "
             "peak_cfs=%s uri=%s",
             depth.layer_id, depth.depth_max_ft, depth.wet_cell_count,
             depth.peak_inflow_cfs, depth.uri,
@@ -230,14 +232,14 @@ async def hecras_muncie_flood(
     except asyncio.CancelledError:
         raise
     except HecrasScenarioError as exc:
-        logger.warning("hecras_muncie_flood failed: %s (%s)", exc.error_code, exc)
+        logger.warning("hecras_riverine_flood failed: %s (%s)", exc.error_code, exc)
         return {
             "status": "error",
             "error_code": exc.error_code,
             "error_message": str(exc),
         }
     except Exception as exc:  # noqa: BLE001 -- defensive catch-all
-        logger.exception("hecras_muncie_flood unexpected failure")
+        logger.exception("hecras_riverine_flood unexpected failure")
         return {
             "status": "error",
             "error_code": "HECRAS_INTERNAL_ERROR",
@@ -268,7 +270,7 @@ from trid3nt_server.agent.workflows.hecras.run_hecras import HECRAS_SOLVER_NAME
 
 
 def _stage_manifest(flow_scale: float, target_peak_cfs: float | None, run_tag: str) -> str:
-    """Write the ``hecras_muncie_flood`` worker manifest to the cache bucket and
+    """Write the ``hecras_riverine_flood`` worker manifest to the cache bucket and
     return its ``s3://`` URI (``run_solver`` downloads it to the rundir).
 
     The Muncie deck is BAKED in the worker image (frozen demonstration geometry),
@@ -356,7 +358,7 @@ def _download_plan_hdf(run_id: str) -> str:
     return local
 
 
-async def model_hecras_muncie_flood(
+async def model_hecras_riverine_flood(
     *,
     flow_scale: float = 1.0,
     target_peak_cfs: float | None = None,
@@ -395,7 +397,7 @@ async def model_hecras_muncie_flood(
         ),
     ]
     review = await gate_input_review(
-        tool_name="hecras_muncie_flood",
+        tool_name="hecras_riverine_flood",
         mode=input_mode,
         entries=review_entries,
         params={"flow_scale": flow_scale, "target_peak_cfs": target_peak_cfs},
@@ -415,7 +417,7 @@ async def model_hecras_muncie_flood(
     run_tag = new_ulid()
     manifest_uri = await asyncio.to_thread(_stage_manifest, flow_scale, target_peak_cfs, run_tag)
     logger.info(
-        "model_hecras_muncie_flood staged manifest run_tag=%s flow_scale=%.4g target_peak=%s uri=%s",
+        "model_hecras_riverine_flood staged manifest run_tag=%s flow_scale=%.4g target_peak=%s uri=%s",
         run_tag, flow_scale, target_peak_cfs, manifest_uri,
     )
 
@@ -516,7 +518,7 @@ async def model_hecras_muncie_flood(
             logger.warning("hecras zoom-to failed: %s", exc)
 
     logger.info(
-        "model_hecras_muncie_flood complete run_id=%s depth_max_ft=%.3g wet_cells=%s "
+        "model_hecras_riverine_flood complete run_id=%s depth_max_ft=%.3g wet_cells=%s "
         "flow_scale=%.3g peak_cfs=%s vol_err=%s uri=%s",
         batch_run_id, depth.depth_max_ft, depth.wet_cell_count, eff_scale,
         depth.peak_inflow_cfs, depth.volume_error_pct, depth.uri,
@@ -545,7 +547,7 @@ def _publish_depth_layer(
         return out.model_copy(update={"uri": published_uri})
     except PublishLayerError as exc:
         logger.warning(
-            "model_hecras_muncie_flood: publish_layer FAILED layer_id=%s (%s) - "
+            "model_hecras_riverine_flood: publish_layer FAILED layer_id=%s (%s) - "
             "returning the raw COG", out.layer_id, exc,
         )
         return out

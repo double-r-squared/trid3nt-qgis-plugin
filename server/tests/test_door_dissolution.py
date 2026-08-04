@@ -25,12 +25,13 @@ import trid3nt_server.main as _main
 from trid3nt_server.agent.tools.search.search_tools import search_tools as dd
 from trid3nt_server.agent.tools.search.tool_retrieval import retrieve_visible_tools
 
-# The 22 registered engine templates (12 engines; MODFLOW ships 11, HEC-RAS #11, SCHISM #12).
+# The 23 registered engine templates (12 engines; MODFLOW ships 11, HEC-RAS #11, SCHISM #12).
 EXPECTED_TEMPLATES = {
     "sfincs_flood",
+    "sfincs_advanced_numerical_physics_knobs",  # S-tier wave 1: SFINCS numerical solver-settings knob template
     "swmm_urban_flood",
     "telemac_river_dye",
-    "hecras_muncie_flood",  # engine #11 (ADR 0109): HEC-RAS Muncie riverine-flood template
+    "hecras_riverine_flood",  # engine #11 (ADR 0109; renamed ADR 0120): HEC-RAS riverine-flood template (v1 geometry: Muncie)
     "schism_tidal_hydro",  # engine #12 (ADR 0118): SCHISM barotropic tidal template
     "swan_wave_field",
     "geoclaw_inundation",
@@ -93,7 +94,7 @@ def test_all_templates_registered_and_callable():
         n for n, e in reg.items() if getattr(e.metadata, "tier", "general") == "template"
     }
     assert registered_templates == EXPECTED_TEMPLATES, (
-        "registered tier=template set drifted from the expected 22: "
+        "registered tier=template set drifted from the expected 23: "
         f"missing={sorted(EXPECTED_TEMPLATES - registered_templates)} "
         f"unexpected={sorted(registered_templates - EXPECTED_TEMPLATES)}"
     )
@@ -126,7 +127,7 @@ def _template_corpus() -> dict[str, list[str]]:
 
 
 def test_every_template_surfaces_in_top8(warm_index):
-    """Model-free retrieve_visible_tools(query, None, 8): for EACH of the 22
+    """Model-free retrieve_visible_tools(query, None, 8): for EACH of the 23
     engine templates, at least one of its natural corpus queries surfaces it in
     the top-8. This is the discovery guarantee that lets the doors die."""
     corpus = _template_corpus()

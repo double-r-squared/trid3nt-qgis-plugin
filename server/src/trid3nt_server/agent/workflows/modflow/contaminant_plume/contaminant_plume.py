@@ -352,7 +352,7 @@ async def _emit_plume_chart(plumes: list[PlumeLayerURI]) -> None:
         },
         "width": "container",
     }
-    caption = " · ".join(
+    caption = " * ".join(
         f"{_species_name_from_layer(p)}: peak {float(getattr(p, 'max_concentration_mgl', 0.0)):.3g} mg/L, "
         f"{float(getattr(p, 'plume_area_km2', 0.0)):.3g} km^2"
         for p in plumes

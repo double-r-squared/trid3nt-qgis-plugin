@@ -1,10 +1,10 @@
-"""``model_sustainable_yield_scenario``  -  MODFLOW pumping-drawdown composer.
+"""the composer  -  MODFLOW pumping-drawdown composer.
 
 The end-to-end higher-order workflow for the MODFLOW
 ``sustainable_yield`` archetype: it turns a place (or AOI point) + a pumping
 well (location + extraction rate) into a rendered drawdown-cone layer  -  the cone
 of depression a sustained extraction draws down around the well. It mirrors the
-chain shape of ``model_river_seepage_scenario`` and the point-spill
+chain shape of the composer and the point-spill
 groundwater-contamination composer, minus the contaminant: this is a GWF-only
 transient flow run, no solute transport.
 
@@ -85,7 +85,7 @@ __all__ = [
 
 
 class SustainableYieldResult(GraceModel):
-    """Return type for ``model_sustainable_yield_scenario``.
+    """Return type for the composer.
 
     Bundles the drawdown layer + the derived args + a narration summary dict.
     Invariant 1: every narrated number is a typed field  -  ``drawdown_layer``
@@ -138,7 +138,7 @@ class SubsidenceResult(GraceModel):
 
 
 class SustainableYieldScenarioError(RuntimeError):
-    """Base class for ``model_sustainable_yield_scenario`` failures."""
+    """Base class for the composer failures."""
 
     error_code: str = "SUSTAINABLE_YIELD_SCENARIO_ERROR"
     retryable: bool = False
@@ -151,7 +151,7 @@ class SustainableYieldInputError(SustainableYieldScenarioError):
 
 
 # --------------------------------------------------------------------------- #
-# Helpers (shared shape with model_river_seepage_scenario)
+# Helpers (shared shape with the composer)
 # --------------------------------------------------------------------------- #
 
 

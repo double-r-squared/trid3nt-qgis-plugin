@@ -1,4 +1,4 @@
-"""``model_river_seepage_scenario`` - MODFLOW river-seepage composer.
+"""the composer - MODFLOW river-seepage composer.
 
 The end-to-end higher-order workflow for the MODFLOW river-seepage
 Reference scenario: it turns a place + a contaminant + a release into a rendered
@@ -79,7 +79,7 @@ DEFAULT_AOI_HALF_DEG: float = 0.012
 
 
 class RiverSeepageResult(GraceModel):
-    """Return type for ``model_river_seepage_scenario``.
+    """Return type for the composer.
 
     Bundles the river-seepage composer output: the published seepage layer (the
     gaining/losing river<->aquifer exchange) + the contaminant plume + the
@@ -104,7 +104,7 @@ class RiverSeepageResult(GraceModel):
 
 
 class RiverSeepageScenarioError(RuntimeError):
-    """Base class for ``model_river_seepage_scenario`` failures."""
+    """Base class for the composer failures."""
 
     error_code: str = "RIVER_SEEPAGE_SCENARIO_ERROR"
     retryable: bool = False

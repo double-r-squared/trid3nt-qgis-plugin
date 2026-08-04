@@ -147,7 +147,7 @@ async def schism_tidal_hydro(
         - Storm SURGE, wind WAVES, or COMPOUND coastal flooding -- those need the
           forcing legs (atmosphere/ocean/waves) and are the coming SCHISM
           candidates, NOT this barotropic-tidal archetype.
-        - Riverine flood (``hecras_muncie_flood`` / ``sfincs_flood``), urban
+        - Riverine flood (``hecras_riverine_flood`` / ``sfincs_flood``), urban
           drainage (``swmm_urban_flood``), or tsunami (``geoclaw_inundation``).
 
     Params:

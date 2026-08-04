@@ -1,11 +1,11 @@
-"""``model_asr_scenario``  -  MODFLOW aquifer-storage-&-recovery (ASR) composer.
+"""the composer  -  MODFLOW aquifer-storage-&-recovery (ASR) composer.
 
 The end-to-end higher-order workflow for the MODFLOW ``ASR``
 archetype: it turns a place (or AOI point) + an ASR well (location + injection /
 recovery rates + cycle schedule) into a rendered ASR head layer  -  the cyclic
 inject-rise / recover-fall sawtooth at the well and the recovery efficiency (the
 fraction of injected water recovered). It mirrors the chain shape of
-``model_sustainable_yield_scenario`` (sibling well-driven archetype): a single
+the composer (sibling well-driven archetype): a single
 WEL well flips sign per the inject/recover schedule over a transient run, and the
 seasonal head series + the budget-split efficiency ARE the deliverable.
 
@@ -19,7 +19,7 @@ operational / recovery-efficiency analysis):
         -> run_modflow_archetype_job (GWF transient seasonal-WEL deck -> mf6 -> ASR)
         -> ASRLayerURI (recovery_efficiency + head_timeseries sawtooth)
 
-Invariants (same set as model_sustainable_yield_scenario):
+Invariants (same set as the composer):
 - **1 / 2 / 8: preserve** (typed numbers, deterministic composition, cancellable).
 - **9. No fabricated model inputs.** An ``ASR`` run with no well location OR no
   injection / recovery rate returns a typed ``USER_INPUT_REQUIRED`` failed
@@ -72,7 +72,7 @@ __all__ = [
 
 
 class ASRResult(GraceModel):
-    """Return type for ``model_asr_scenario``.
+    """Return type for the composer.
 
     Bundles the ASR layer + the derived args + a narration summary dict.
     Invariant 1: every narrated number is a typed field  -  ``asr_layer`` carries
@@ -92,7 +92,7 @@ class ASRResult(GraceModel):
 
 
 class ASRScenarioError(RuntimeError):
-    """Base class for ``model_asr_scenario`` failures."""
+    """Base class for the composer failures."""
 
     error_code: str = "ASR_SCENARIO_ERROR"
     retryable: bool = False

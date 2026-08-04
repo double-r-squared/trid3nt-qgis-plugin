@@ -1,10 +1,10 @@
-"""``model_mine_dewatering_scenario``  -  MODFLOW mine-pit-dewatering composer.
+"""the composer  -  MODFLOW mine-pit-dewatering composer.
 
 The end-to-end higher-order workflow for the MODFLOW
 ``mine_dewatering`` archetype: it turns a place (or AOI point) + a pit footprint
 polygon into a rendered dewatering-rate layer  -  the per-cell drain outflow over
 the pit and the total pump-to-dewater rate the pit needs to stay dry. It mirrors
-the chain shape of ``model_sustainable_yield_scenario`` (sibling GWF-only
+the chain shape of the composer (sibling GWF-only
 archetype): the pit footprint is draped as a DRN drain ring (steady GWF,
 unconfined water table), and the DRN budget term IS the dewatering rate.
 
@@ -18,7 +18,7 @@ estimate, the standard MODFLOW open-pit-dewatering analysis):
         -> run_modflow_archetype_job (GWF steady DRN deck -> mf6 -> dewatering)
         -> DewaterLayerURI (dewatering_rate_m3_day + drain_cell_count)
 
-Invariants (same set as model_sustainable_yield_scenario):
+Invariants (same set as the composer):
 - **1 / 2 / 8: preserve** (typed numbers, deterministic composition, cancellable).
 - **9. No fabricated model inputs.** A ``mine_dewatering`` run with no pit
   footprint returns a typed ``USER_INPUT_REQUIRED`` failed envelope rather than
@@ -74,7 +74,7 @@ __all__ = [
 
 
 class MineDewateringResult(GraceModel):
-    """Return type for ``model_mine_dewatering_scenario``.
+    """Return type for the composer.
 
     Bundles the dewatering layer + the derived args + a narration summary dict.
     Invariant 1: every narrated number is a typed field  -  ``dewater_layer``
@@ -94,7 +94,7 @@ class MineDewateringResult(GraceModel):
 
 
 class MineDewateringScenarioError(RuntimeError):
-    """Base class for ``model_mine_dewatering_scenario`` failures."""
+    """Base class for the composer failures."""
 
     error_code: str = "MINE_DEWATERING_SCENARIO_ERROR"
     retryable: bool = False

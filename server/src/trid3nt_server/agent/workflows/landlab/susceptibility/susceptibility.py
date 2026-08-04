@@ -616,7 +616,7 @@ def _fetch_dem_for_landslide(
     try:
         layer = fetch_3dep_extra(bbox, resolution="1 meter")
         return _localize_to_dem_path(layer.uri), "USGS 3DEP 1m LiDAR"
-    except Exception as exc:  # noqa: BLE001 — fall through to the 10 m fallback
+    except Exception as exc:  # noqa: BLE001 -- fall through to the 10 m fallback
         logger.info(
             "fetch_3dep_extra(1m) failed (%s); falling back to fetch_dem(10m)", exc
         )
@@ -691,7 +691,7 @@ def _download_batch_landlab_outputs(
             uri = str(raw)
             try:
                 _scheme, _bucket, key = _split_object_uri(uri)
-            except Exception:  # noqa: BLE001 — skip an unparseable entry
+            except Exception:  # noqa: BLE001 -- skip an unparseable entry
                 continue
             if Path(key).name == FIELD_COG_NAME:
                 field_keys.append(key)

@@ -1,10 +1,10 @@
-"""``model_regional_water_budget_scenario``  -  MODFLOW zonal-budget composer.
+"""the composer  -  MODFLOW zonal-budget composer.
 
 The end-to-end higher-order workflow for the MODFLOW
 ``regional_water_budget`` archetype: it turns a place (or AOI point) into a
 narrated regional water-budget partition  -  where the regional groundwater goes
 (CHD inflow / outflow across the gradient, storage, any wells). It mirrors the
-chain shape of ``model_sustainable_yield_scenario`` (sibling GWF-only archetype):
+chain shape of the composer (sibling GWF-only archetype):
 a steady GWF run with no new stress package; the deliverable is the cell-by-cell
 budget partition read agent-side, rendered over the water-table head.
 
@@ -21,7 +21,7 @@ Canonical real-world pipeline mirrored here (a regional groundwater water-budget
         -> run_modflow_archetype_job (GWF steady deck -> mf6 -> CBC partition)
         -> BudgetPartitionLayerURI (budget_partition_m3_day dict, real CBC terms)
 
-Invariants (same set as model_sustainable_yield_scenario):
+Invariants (same set as the composer):
 - **1 / 2 / 8: preserve** (typed numbers, deterministic composition, cancellable).
 - **9. No fabricated outputs.** The partition is built ONLY from real CBC budget
   terms the postprocess measured; a run with no non-trivial budget term returns
@@ -76,7 +76,7 @@ __all__ = [
 
 
 class RegionalWaterBudgetResult(GraceModel):
-    """Return type for ``model_regional_water_budget_scenario``.
+    """Return type for the composer.
 
     Bundles the budget-partition layer + the derived args + a narration summary.
     Invariant 1: the narrated budget is the typed ``budget_layer
@@ -96,7 +96,7 @@ class RegionalWaterBudgetResult(GraceModel):
 
 
 class RegionalWaterBudgetScenarioError(RuntimeError):
-    """Base class for ``model_regional_water_budget_scenario`` failures."""
+    """Base class for the composer failures."""
 
     error_code: str = "REGIONAL_WATER_BUDGET_SCENARIO_ERROR"
     retryable: bool = False

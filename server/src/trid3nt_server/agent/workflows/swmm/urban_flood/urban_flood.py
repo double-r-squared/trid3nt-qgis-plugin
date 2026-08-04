@@ -154,10 +154,10 @@ async def swmm_urban_flood(
           block/neighborhood AOI.
         - The scenario involves structural flood controls: a SOUND BARRIER/
           flood WALL (dams water) or a FLAP GATE/one-way drain (passes one
-          direction only) — pass these as ``barriers``.
+          direction only) -- pass these as ``barriers``.
         - The user asks how much POLLUTANT/TSS/SEDIMENT/E.coli/BACTERIA/
           fecal coliform/NUTRIENT (nitrogen/phosphorus) WASHES OFF streets to
-          the storm OUTFALL (buildup + washoff) — pass ``pollutants`` (e.g.
+          the storm OUTFALL (buildup + washoff) -- pass ``pollutants`` (e.g.
           ["tss", "e_coli"]) to add the outfall pollutograph + cumulative
           load + peak washoff-concentration layer alongside the depth result.
 
@@ -172,7 +172,7 @@ async def swmm_urban_flood(
 
     Params:
         bbox: AOI ``(min_lon, min_lat, max_lon, max_lat)`` EPSG:4326. Keep it
-            small — a city block/neighborhood, not a county (adaptive-mesh
+            small -- a city block/neighborhood, not a county (adaptive-mesh
             budget coarsens a large AOI).
         return_period_yr: design-storm return period, years (Atlas-14).
             Default 100; ignored when ``total_rain_depth_mm`` is given. The
@@ -194,7 +194,7 @@ async def swmm_urban_flood(
         target_resolution_m: requested overland cell size, m (> 0). Default
             10; subject to the adaptive-mesh budget for large AOIs.
         manning_overland: overland-flow Manning n (> 0). Default 0.03.
-        mass_balance_tolerance_pct: honesty gate — if SWMM Flow Routing
+        mass_balance_tolerance_pct: honesty gate -- if SWMM Flow Routing
             Continuity error EXCEEDS this (%), raises typed
             ``SWMM_MASS_BALANCE_EXCEEDED`` instead of publishing a
             silently-wrong depth layer. Default 5%.
@@ -203,13 +203,13 @@ async def swmm_urban_flood(
             {"wall", "flap_gate"}: RED ``wall`` omits the overland conduit
             (hard dam), GREEN ``flap_gate`` is a one-way SWMM orifice.
             ``None`` for a plain run.
-        pollutants: OPTIONAL list to model buildup/washoff for — any of
+        pollutants: OPTIONAL list to model buildup/washoff for -- any of
             ``"tss"`` (suspended solids), ``"e_coli"`` (bacteria/fecal
             coliform), ``"tn"`` (total nitrogen), ``"tp"`` (total
             phosphorus). ``None`` (default) = plain depth-only hydraulics.
             When set, result carries the outfall pollutograph + cumulative
             load + peak concentration layer. Buildup/washoff coefficients
-            are EPA-typical demo defaults (never site-calibrated — no
+            are EPA-typical demo defaults (never site-calibrated -- no
             per-site pollutant fetcher).
         dry_buildup_days: OPTIONAL antecedent dry days pollutant buildup
             accumulates before the storm (>= 0, default 0); only meaningful
@@ -220,7 +220,7 @@ async def swmm_urban_flood(
         compute_class: FR-CE-3 compute class. Default ``"standard"``.
         enable_autoscale: True (default) lets the adaptive-mesh budget
             COARSEN ``target_resolution_m`` so a large AOI fits the cell
-            cap. False honours ``target_resolution_m`` exactly — set only
+            cap. False honours ``target_resolution_m`` exactly -- set only
             by the server-side granularity gate; LLMs should leave
             unset.
         input_mode: run-mode lever (ADR 0107). ``"user_gated"`` presents the
@@ -228,17 +228,17 @@ async def swmm_urban_flood(
             the solve; ``"auto"`` (default) proceeds with them labeled.
 
     Returns:
-        On success: ``SWMMDepthLayerURI`` (``LayerURI`` subtype) — emitter
+        On success: ``SWMMDepthLayerURI`` (``LayerURI`` subtype) -- emitter
         loads the peak overland-depth COG onto the map. Carries
         ``max_depth_m`` / ``flooded_area_km2`` / ``n_buildings_affected``
-        (narrate these typed numbers only — invariant 1) and echoes
+        (narrate these typed numbers only -- invariant 1) and echoes
         ``barriers`` back so the client draws RED walls/GREEN flap gates.
         Per-timestep depth frames emitted out-of-band as a temporal group.
         On failure: dict with ``status="error"`` + ``error_code`` +
         ``error_message`` (no layer).
 
     FR-DC-6: ``cacheable=False``, ``ttl_class="live-no-cache"``,
-    ``source_class="workflow_dispatch"`` — cache shim not invoked.
+    ``source_class="workflow_dispatch"`` -- cache shim not invoked.
     """
     # --- Validate + coerce into the SWMMRunArgs contract --------------------
     if bbox is None:
@@ -285,7 +285,7 @@ async def swmm_urban_flood(
             kwargs["dry_buildup_days"] = int(dry_buildup_days)
             kwargs["washoff_model"] = str(washoff_model)
         run_args = SWMMRunArgs(**kwargs)
-    except Exception as exc:  # noqa: BLE001 — pydantic ValidationError or coercion
+    except Exception as exc:  # noqa: BLE001 -- pydantic ValidationError or coercion
         return {
             "status": "error",
             "error_code": "SWMM_PARAMS_INVALID",
@@ -330,7 +330,7 @@ async def swmm_urban_flood(
             "error_code": exc.error_code,
             "error_message": str(exc),
         }
-    except Exception as exc:  # noqa: BLE001 — defensive catch-all
+    except Exception as exc:  # noqa: BLE001 -- defensive catch-all
         logger.exception("swmm_urban_flood unexpected failure")
         return {
             "status": "error",
@@ -394,7 +394,7 @@ _INCH_TO_MM: float = 25.4
 #: own footprint bbox); an urban-flood scenario needs at least a block. Below
 #: this, the bbox is EXPANDED (centred) to this side length. A normal city-block
 #: / neighbourhood AOI is already far above this, so this is a no-op except on a
-#: collapsed (single-building) bbox. Floor only; never shrinks. (D2 — the live
+#: collapsed (single-building) bbox. Floor only; never shrinks. (D2 -- the live
 #: SWMM run that bounded a single building, case 01KVH4MZ9JF7GGHQ88D5PSWZVH.)
 _MIN_URBAN_AOI_SIDE_M: float = 300.0
 
@@ -1165,7 +1165,7 @@ async def model_swmm_urban_flood(
         # nothing for minutes (off-loop thread OR remote Batch job), so the
         # running card is a silent spinner. Drive the shared solve-progress
         # envelope ON the loop (the emitter is loop-bound) alongside the solve -
-        # identical to the proven SFINCS pattern in model_flood_scenario.
+        # identical to the proven SFINCS pattern in the composer.
         # Best-effort: emitter None -> no-op; cancelled + awaited in a finally
         # regardless of outcome. The heartbeat wraps BOTH lanes.
         # Deployment-aware CPU count (fingerprint audit A6): local-docker
@@ -1178,7 +1178,7 @@ async def model_swmm_urban_flood(
             # --- Out-of-process lane (TRID3NT_SWMM_LOCAL=0): GENERIC Batch seam.
             # Stage the built deck + a worker-contract manifest to S3, then
             # dispatch through run_solver / wait_for_completion (the SAME seam
-            # SFINCS uses in model_flood_scenario), PASSING the per-case computed
+            # SFINCS uses in the composer), PASSING the per-case computed
             # compute_class (auto vertical scaling). The SWMM Batch worker
             # (services/workers/swmm/entrypoint.py) solves the deck and writes
             # completion.json + the .out/.rpt to s3://<runs_bucket>/<run_id>/; we
@@ -1294,7 +1294,7 @@ async def model_swmm_urban_flood(
 
                 if run_result.status != "complete":
                     # SOLVER_FAILED / SOLVER_TIMEOUT / cancelled -> typed failure
-                    # (mirror model_flood_scenario's non-complete guard). The
+                    # (mirror the composer's non-complete guard). The
                     # SWMMWorkflowError below is caught by the except clause +
                     # turned into a typed error dict by the tool wrapper. Raising
                     # it INSIDE the substep marks the run_solver child red.
@@ -1427,7 +1427,7 @@ async def model_swmm_urban_flood(
             # never found and the branch raised SWMM_BATCH_OUTPUT_MISSING (or,
             # worse, the postprocess ran on an absent/empty out and the result
             # never populated the narration scalars) -- exactly the
-            # silent-no-narration symptom. Mirror model_flood_scenario's SFINCS
+            # silent-no-narration symptom. Mirror the composer's SFINCS
             # Batch path, which postprocesses from run_result.output_uri /
             # run_result.run_id (the worker's run_id), NEVER the staged deck's
             # id. Fall back to staging.run_id only if the RunResult carries no
@@ -1468,7 +1468,7 @@ async def model_swmm_urban_flood(
             # marshaling / progress-queue draining is required (there are no
             # emitter calls to marshal back). When mid-solve emitter progress IS
             # added later, switch to run_coroutine_threadsafe(loop) inside the
-            # worker. (Mirrors model_flood_scenario's asyncio.to_thread
+            # worker. (Mirrors the composer's asyncio.to_thread
             # off-loading of its blocking fetcher/solve stages.)
             # surface the in-process pyswmm solve as a "run_solver" child
             # row (engine-agnostic raw label the web humanizes to "Running the
@@ -1544,7 +1544,7 @@ async def model_swmm_urban_flood(
     # A raw object-store URI NEVER renders in MapLibre and the emission
     # guardrail (layer_uri_emit) DROPS a renderable raster carrying s3:// - so
     # without publishing, the peak silently vanishes from the map and persists no
-    # renderable loaded_layer (BREAK A). Mirror the SFINCS model_flood_scenario
+    # renderable loaded_layer (BREAK A). Mirror the SFINCS the composer
     # Step-9 publish-or-honest-drop path: route the peak COG through publish_layer
     # (the _resolve_titiler_style_params render chokepoint) so it carries a
     # published /tiles or WMS URL before it is returned. The returned LayerURI's
@@ -1599,7 +1599,7 @@ async def model_swmm_urban_flood(
         peak = peak.model_copy(update=peak_updates)
 
     # --- Step 7b / 9b: publish + emit the per-frame animation layers OUT-OF-BAND
-    # Mirrors model_flood_scenario Step-9b: each frame is a DISTINCT COG (distinct
+    # Mirrors the composer Step-9b: each frame is a DISTINCT COG (distinct
     # runs-bucket key -> distinct published url -> no dedup collapse). Each frame
     # COG is published through publish_layer (renderable URL) and emitted in
     # ascending step order via emitter.add_loaded_layer so all N frames arrive as
@@ -1733,7 +1733,7 @@ def _publish_peak_layer(
     wrapper requires a ``SWMMDepthLayerURI`` return, so we never drop the layer
     object itself - only its renderability degrades.
 
-    Mirrors the SFINCS ``model_flood_scenario`` Step-9 primary publish (a raster
+    Mirrors the SFINCS the composer Step-9 primary publish (a raster
     carrying a raw object-store URI takes the publish-or-honest-drop gate).
     """
     if raw_peak.layer_type != "raster" or not (
@@ -1876,7 +1876,7 @@ async def _publish_and_emit_wq(
     """Read + publish + emit the WATER-QUALITY additive context (sprint-WQ).
 
     Runs ``postprocess_swmm_pollutants`` off-loop (pyswmm Output read + COG
-    rasterize/upload — sync blocking work), publishes each per-cell peak washoff-
+    rasterize/upload -- sync blocking work), publishes each per-cell peak washoff-
     concentration COG through ``publish_layer`` (the render chokepoint) so it
     carries a renderable URL, emits it as a ``role="context"`` layer beside the
     depth headline, and emits the outfall pollutograph chart. Best-effort at every
@@ -2016,7 +2016,7 @@ def _download_batch_swmm_outputs(run_result: Any, run_id: str) -> tuple[Any, str
         run_id: the run id the outputs are keyed under.
 
     Returns:
-        ``(_BatchSWMMRun, tmp_dir)`` — feed the shim to ``postprocess_swmm`` and
+        ``(_BatchSWMMRun, tmp_dir)`` -- feed the shim to ``postprocess_swmm`` and
         pass ``tmp_dir`` to ``_cleanup_deck_dir`` afterward.
 
     Raises:
@@ -2045,7 +2045,7 @@ def _download_batch_swmm_outputs(run_result: Any, run_id: str) -> tuple[Any, str
             uri = str(raw)
             try:
                 _scheme, _bucket, key = _split_object_uri(uri)
-            except Exception:  # noqa: BLE001 — skip an unparseable entry
+            except Exception:  # noqa: BLE001 -- skip an unparseable entry
                 continue
             if key.endswith(".out"):
                 out_keys.append(key)
@@ -2094,7 +2094,7 @@ def _download_batch_swmm_outputs(run_result: Any, run_id: str) -> tuple[Any, str
             cont = read_flow_routing_continuity(local_rpt)
             if cont is not None:
                 continuity = float(cont)
-        except Exception as exc:  # noqa: BLE001 — provenance only; never fatal
+        except Exception as exc:  # noqa: BLE001 -- provenance only; never fatal
             logger.warning(
                 "SWMM Batch .rpt continuity read failed (%s): %s", local_rpt, exc
             )

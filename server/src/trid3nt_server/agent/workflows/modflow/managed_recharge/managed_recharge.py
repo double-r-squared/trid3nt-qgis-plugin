@@ -1,10 +1,10 @@
-"""``model_mar_scenario``  -  MODFLOW managed-aquifer-recharge (MAR) composer.
+"""the composer  -  MODFLOW managed-aquifer-recharge (MAR) composer.
 
 The end-to-end higher-order workflow for the MODFLOW ``MAR``
 archetype: it turns a place (or AOI point) + an infiltration-basin footprint into
 a rendered groundwater-mounding layer  -  how high the water table rises under a
 recharge basin and how much water is banked. It mirrors the chain shape of
-``model_mine_dewatering_scenario`` (sibling footprint-driven archetype): the basin
+the composer (sibling footprint-driven archetype): the basin
 footprint is draped as RCH recharge cells over an unconfined transient water
 table, and the head RISE (mounding) IS the deliverable.
 
@@ -18,7 +18,7 @@ analysis  -  the standard MODFLOW MAR / infiltration-basin water-banking study):
         -> run_modflow_archetype_job (GWF transient RCH deck -> mf6 -> mounding)
         -> MoundingLayerURI (max_mounding_m + recharged_volume_m3)
 
-Invariants (same set as model_mine_dewatering_scenario):
+Invariants (same set as the composer):
 - **1 / 2 / 8: preserve** (typed numbers, deterministic composition, cancellable).
 - **9. No fabricated model inputs.** A ``MAR`` run with no basin footprint returns
   a typed ``USER_INPUT_REQUIRED`` failed envelope rather than inventing a basin  -
@@ -73,7 +73,7 @@ __all__ = [
 
 
 class MARResult(GraceModel):
-    """Return type for ``model_mar_scenario``.
+    """Return type for the composer.
 
     Bundles the mounding layer + the derived args + a narration summary dict.
     Invariant 1: every narrated number is a typed field  -  ``mounding_layer``
@@ -93,7 +93,7 @@ class MARResult(GraceModel):
 
 
 class MARScenarioError(RuntimeError):
-    """Base class for ``model_mar_scenario`` failures."""
+    """Base class for the composer failures."""
 
     error_code: str = "MAR_SCENARIO_ERROR"
     retryable: bool = False
@@ -155,7 +155,7 @@ async def _emit_mounding_chart(layer: MoundingLayerURI) -> None:
     chart = build_chart_payload(
         vega_lite_spec=spec,
         title="MAR mounding summary",
-        caption=" · ".join(caption_parts) or "managed aquifer recharge result",
+        caption=" * ".join(caption_parts) or "managed aquifer recharge result",
         source_layer_uri=getattr(layer, "uri", None),
     )
     await emit_chart_payloads(chart)

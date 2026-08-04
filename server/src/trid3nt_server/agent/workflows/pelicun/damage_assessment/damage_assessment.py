@@ -23,10 +23,10 @@ For each asset feature in ``assets_uri``:
 2. Look up the HAZUS v6.1 loss function for the asset's
    ``component_type`` (occupancy class, default ``RES1``).
 3. Interpolate the deterministic mean loss ratio at the sampled inundation
-   depth (converting metres → feet for the HAZUS curves).
+   depth (converting metres -> feet for the HAZUS curves).
 4. Monte-Carlo sample ``realization_count`` loss-ratio realizations from a
    bounded lognormal aleatory model centred on the deterministic mean,
-   with HAZUS-standard ``σ_lnD = 0.4`` (truncated to ``[0, 0.6]`` per the
+   with HAZUS-standard ``sigma_lnD = 0.4`` (truncated to ``[0, 0.6]`` per the
    HAZUS depth-damage cap; outside [0,1] clipping).
 5. Bin each realization into HAZUS damage states ``DS0..DS4`` (none, slight,
    moderate, extensive, complete) by loss-ratio thresholds
@@ -46,8 +46,8 @@ data as piecewise-linear *loss functions* (loss-ratio vs. peak inundation
 height), not as classical fragility curves with damage-state probabilities.
 We compute damage states by binning realized loss ratios into the HAZUS DS
 ladder - the canonical convention used by HAZUS-MH itself when post-processing
-loss-function outputs. The aleatory dispersion ``σ_lnD = 0.4`` is the
-standard HAZUS depth-damage dispersion (see HAZUS Flood Technical Manual §3.3,
+loss-function outputs. The aleatory dispersion ``sigma_lnD = 0.4`` is the
+standard HAZUS depth-damage dispersion (see HAZUS Flood Technical Manual sec 3.3,
 also Tate et al. 2015, Wing et al. 2020).
 
 v0.1 ships only the bundled HAZUS curves. A FEMA P-58 swap (component-level
@@ -193,7 +193,7 @@ class PelicunWithBuildingsError(RuntimeError):
 
 
 # ---------------------------------------------------------------------------
-# AUTO-FETCH input mode (folded from pelicun_damage_with_buildings): a
+# AUTO-FETCH input mode: a
 # building-density COG -> point FlatGeobuf inventory. Used when the caller
 # supplies a ``bbox`` instead of an explicit ``assets_uri``.
 #
@@ -422,10 +422,10 @@ _DEFAULT_COMPONENT_TYPE = "RES1"
 # Standard HAZUS-MH convention: loss-ratio thresholds map a continuous
 # loss ratio to one of five damage states.
 # DS0 = None      : LR <  0.05
-# DS1 = Slight    : 0.05 ≤ LR < 0.20
-# DS2 = Moderate  : 0.20 ≤ LR < 0.50
-# DS3 = Extensive : 0.50 ≤ LR < 0.80
-# DS4 = Complete  : LR ≥  0.80
+# DS1 = Slight    : 0.05 <= LR < 0.20
+# DS2 = Moderate  : 0.20 <= LR < 0.50
+# DS3 = Extensive : 0.50 <= LR < 0.80
+# DS4 = Complete  : LR >=  0.80
 # ---------------------------------------------------------------------------
 
 _DS_LOSS_RATIO_BREAKS = np.array([0.05, 0.20, 0.50, 0.80])
@@ -479,8 +479,8 @@ def _build_damage_state_legend() -> LegendKey:
         label="Damage state",
     )
 
-# Standard HAZUS flood depth-damage aleatory dispersion (σ in ln-space).
-# Source: HAZUS Flood Technical Manual §3.3 + Tate et al. 2015.
+# Standard HAZUS flood depth-damage aleatory dispersion (sigma in ln-space).
+# Source: HAZUS Flood Technical Manual sec 3.3 + Tate et al. 2015.
 _HAZUS_FLOOD_SIGMA_LND = 0.4
 
 # Loss-ratio cap from the HAZUS v6.1 piecewise functions (curves saturate at
@@ -992,8 +992,8 @@ def _mc_loss_ratio_realizations(
     """Monte-Carlo loss-ratio realizations around ``mean_lr``.
 
     Uses a bounded lognormal aleatory model with the standard HAZUS dispersion
-    ``σ_lnD = 0.4``. The lognormal is centred so its **mean** equals ``mean_lr``
-    (μ_lnD = ln(mean_lr) − σ²/2). Realizations are clipped to ``[0, 0.6]``
+    ``sigma_lnD = 0.4``. The lognormal is centred so its **mean** equals ``mean_lr``
+    (u_lnD = ln(mean_lr) - sigma^2/2). Realizations are clipped to ``[0, 0.6]``
     (the HAZUS saturation cap).
 
     When ``mean_lr`` is 0 (asset is dry), all realizations are exactly 0 -- no
@@ -1032,7 +1032,7 @@ def _seed_for_asset(
     """
     salt = f"{asset_id}|{component_type}|{hazard_uri}|{realization_count}"
     digest = hashlib.sha256(salt.encode("utf-8")).digest()
-    # Take the first 8 bytes → 64-bit unsigned int.
+    # Take the first 8 bytes -> 64-bit unsigned int.
     return int.from_bytes(digest[:8], "big") & ((1 << 63) - 1)
 
 
@@ -1141,7 +1141,7 @@ def _assess_assets(
             mask = gdf["component_type"].isin(component_types_filter)
             gdf = gdf[mask].copy()
         else:
-            # No per-asset component_type column → only include if the default
+            # No per-asset component_type column -> only include if the default
             # is in the filter.
             if _DEFAULT_COMPONENT_TYPE not in component_types_filter:
                 gdf = gdf.iloc[0:0].copy()
@@ -1243,7 +1243,7 @@ def _assess_assets(
                     )
 
                 if math.isnan(depth):
-                    # Outside hazard footprint → record zero damage.
+                    # Outside hazard footprint -> record zero damage.
                     depth_samples.append(0.0)
                     ds_means.append(0.0)
                     ds_p05s.append(0.0)
