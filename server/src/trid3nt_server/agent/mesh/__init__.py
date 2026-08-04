@@ -27,6 +27,10 @@ from trid3nt_server.agent.mesh.grid_geometry import (
     RegularGrid,
     regular_grid_from_bbox,
 )
+from trid3nt_server.agent.mesh.hecras_geometry import (
+    HECRAS_2D_AREAS_GROUP,
+    read_2d_flow_area_cells,
+)
 from trid3nt_server.agent.mesh.mesh_preview import (
     make_grid_outline_layer_uri,
     make_sfincs_mesh_layer_uri,
@@ -55,6 +59,8 @@ from trid3nt_server.agent.mesh.spatial_roles import (
 __all__ = [
     "RegularGrid",
     "regular_grid_from_bbox",
+    "read_2d_flow_area_cells",
+    "HECRAS_2D_AREAS_GROUP",
     "mesh_cells_to_feature_collection",
     "swmm_mesh_to_geojson",
     "make_swmm_mesh_layer_uri",

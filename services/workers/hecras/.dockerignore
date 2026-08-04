@@ -1,0 +1,10 @@
+# Container-hygiene: keep the build context lean. The Muncie fixture IS baked
+# (the in-container gate needs it), but tests + pyc + the results-bearing HDF
+# outputs never belong in the image.
+__pycache__/
+*.pyc
+.pytest_cache/
+test_*.py
+# Muncie run outputs (the fixture ships only wrk_source/ inputs; any local run
+# dir or results-bearing plan HDF is regenerated, never shipped).
+fixtures/muncie_smoke/run/
