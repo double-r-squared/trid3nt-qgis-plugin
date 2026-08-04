@@ -760,6 +760,111 @@ def _raise_if_banks_unavailable(metrics: dict[str, Any]) -> None:
         raise TelemacBanksUnavailableError(metrics.get("assumed_channel_width_m"))
 
 
+#: Half-width (deg) of the tiny NWM query box centred on the reach seed. NWM is a
+#: ~2.7M-reach point layer; a small box keeps it to a handful of reaches so the
+#: nearest-to-seed pick lands on the carrier reach, not a distant tributary.
+_DISCHARGE_QUERY_HALF_DEG: float = 0.03
+
+
+def _resolve_reach_discharge(
+    seed_lon: float,
+    seed_lat: float,
+    explicit_discharge_m3s: float | None,
+) -> tuple[float, str] | None:
+    """Resolve the reach CARRIER discharge (m3/s) for the dye/spill run.
+
+    Replaces the worker's hardcoded 250 m3/s default (the dominant control on
+    dilution) with real streamflow. Seam-1: resolves ``fetch_noaa_nwm_streamflow``
+    via ``TOOL_REGISTRY`` (never a module internal). NWM returns a point
+    FlatGeobuf of NHDPlus reaches carrying ``streamflow_cms`` (m3/s); the reach
+    nearest the seed is the carrier.
+
+    - ``explicit_discharge_m3s`` (user-supplied) short-circuits the fetch.
+    - On a fetch/read miss returns ``None`` so the caller raises a typed
+      ``TELEMAC_DISCHARGE_INPUT_REQUIRED`` gate naming ``discharge_m3s`` - the
+      carrier discharge is NEVER silently reverted to the baked 250.
+
+    Returns ``(discharge_m3s, provenance_note)`` or ``None``. Blocking (network +
+    geopandas read); the caller wraps it in ``asyncio.to_thread``.
+    """
+    if explicit_discharge_m3s is not None:
+        return (
+            float(explicit_discharge_m3s),
+            f"carrier discharge {float(explicit_discharge_m3s):.0f} m3/s (user-supplied)",
+        )
+
+    from trid3nt_server.agent.tools import TOOL_REGISTRY
+
+    box = (
+        seed_lon - _DISCHARGE_QUERY_HALF_DEG,
+        seed_lat - _DISCHARGE_QUERY_HALF_DEG,
+        seed_lon + _DISCHARGE_QUERY_HALF_DEG,
+        seed_lat + _DISCHARGE_QUERY_HALF_DEG,
+    )
+    try:
+        layer = TOOL_REGISTRY["fetch_noaa_nwm_streamflow"].fn(bbox=box)
+    except Exception as exc:  # noqa: BLE001 - a fetch miss => typed gate upstream
+        logger.info("telemac: NWM streamflow fetch failed for seed %s (%s)", (seed_lon, seed_lat), exc)
+        return None
+    uri = getattr(layer, "uri", None) or (layer.get("uri") if isinstance(layer, dict) else None)
+    if not uri:
+        return None
+
+    local: str | None = None
+    try:
+        import geopandas as gpd  # lazy: never imported on the offline path
+
+        from trid3nt_server.agent.tools.simulation.solver.solver import (
+            _get_s3_client,
+            _split_object_uri,
+        )
+
+        _scheme, bucket, key = _split_object_uri(str(uri))
+        import os as _os
+
+        fd, local = tempfile.mkstemp(prefix="nwm-", suffix=_os.path.splitext(key)[1] or ".fgb")
+        _os.close(fd)
+        s3 = _get_s3_client()
+        resp = s3.get_object(Bucket=bucket, Key=key)
+        with open(local, "wb") as fh:
+            fh.write(resp["Body"].read())
+        gdf = gpd.read_file(local, engine="pyogrio")
+    except Exception as exc:  # noqa: BLE001 - a read miss => typed gate upstream
+        logger.info("telemac: could not read NWM streamflow layer %s (%s)", uri, exc)
+        return None
+    finally:
+        if local:
+            import os as _os
+
+            if _os.path.exists(local):
+                try:
+                    _os.unlink(local)
+                except OSError:
+                    pass
+
+    best_q: float | None = None
+    best_d = float("inf")
+    for _idx, row in gdf.iterrows():
+        try:
+            q = float(row["streamflow_cms"])
+        except (KeyError, TypeError, ValueError):
+            continue
+        geom = row.get("geometry")
+        try:
+            d = (float(geom.x) - seed_lon) ** 2 + (float(geom.y) - seed_lat) ** 2
+        except Exception:  # noqa: BLE001
+            d = 0.0
+        if d < best_d and q > 0.0:
+            best_d = d
+            best_q = q
+    if best_q is None:
+        return None
+    return (
+        round(best_q, 1),
+        f"carrier discharge {best_q:.0f} m3/s (NOAA National Water Model, nearest reach to the seed)",
+    )
+
+
 def _download_telemac_gaia(run_id: str) -> tuple[str | None, dict[str, Any]]:
     """Download ``gaia_river.slf`` + read the sediment metrics from
     ``telemac_metrics.json`` for a GAIA sediment run. Returns
@@ -827,6 +932,7 @@ async def model_river_dye_release_scenario(
     tracer_diffusivity: float | None = None,
     compute_class: str = "medium",
     bank_source: str = "nhd_area",
+    discharge_m3s: float | None = None,
     pipeline_emitter: Any | None = None,
 ) -> TelemacDyeLayerURI:
     """Compose place/AOI -> river reach -> TELEMAC-2D dye pulse -> animated layer.
@@ -912,6 +1018,34 @@ async def model_river_dye_release_scenario(
     else:
         seed_source = "mid-reach point on the largest fetched flowline"
     seed_lon, seed_lat = seed
+
+    # --- Carrier discharge: real NWM streamflow, or a typed input gate --------- #
+    # The carrier discharge governs dilution/transport; it was a hidden worker
+    # constant (250 m3/s). Resolve real NWM streamflow at the seed reach (or honor
+    # an explicit discharge_m3s). A miss STOPS with a typed gate naming
+    # discharge_m3s - never a silent revert to the baked constant. This sets
+    # reach["inflow_q_m3s"] as a boundary condition; it is INDEPENDENT of the
+    # bank_source work (the worker's width heuristic only fires on the 250 default,
+    # which a resolved value now supersedes).
+    _discharge = await asyncio.to_thread(
+        _resolve_reach_discharge, seed_lon, seed_lat, discharge_m3s
+    )
+    if _discharge is None:
+        raise TelemacDyeScenarioError(
+            "TELEMAC_DISCHARGE_INPUT_REQUIRED",
+            (
+                "The NOAA National Water Model streamflow lookup found no carrier "
+                "discharge for this river reach, so the discharge that governs "
+                "dilution is not fabricated. Retry with an explicit discharge_m3s "
+                "(steady upstream carrier discharge, m3/s) for the reach - or name a "
+                "reach with NWM (CONUS) coverage."
+            ),
+        )
+    inflow_q_m3s, discharge_note = _discharge
+    logger.info(
+        "model_river_dye_release_scenario: %s (seed=%.5f,%.5f)",
+        discharge_note, seed_lon, seed_lat,
+    )
 
     # --- Stage 3: stage the worker manifest (ReachConfig overrides) ----------- #
     # mesh resolution is derived from the reach geometry + the chosen lever
@@ -1082,6 +1216,9 @@ async def model_river_dye_release_scenario(
         "spill_frac": float(min(max(spill_fraction, 0.0), 1.0)),
         "pulse_window_s": float(spill_duration_s),
         "source_q_m3s": float(source_q_m3s),
+        # Real carrier discharge (NWM / user-supplied), NOT the worker's baked
+        # 250 m3/s. A non-250 value also supersedes the worker width heuristic.
+        "inflow_q_m3s": float(inflow_q_m3s),
         "duration_s": float(sim_duration_s),
     }
     run_tag = new_ulid()

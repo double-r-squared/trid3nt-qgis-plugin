@@ -134,6 +134,7 @@ async def telemac_river_dye(
     tracer_diffusivity: float | None = None,
     compute_class: str = "medium",
     bank_source: str = "nhd_area",
+    discharge_m3s: float | None = None,
     # 2026-07-18 release-seeding tri-state, set ONLY by the approve-mesh
     # decision tail (underscore prefix -> stripped from the LLM schema by
     # _strip_private_params): True = the release coords came on the CALL and
@@ -198,6 +199,12 @@ async def telemac_river_dye(
         sim_duration_s: simulated physical time, seconds. Default 3600.
         source_q_m3s: point-source discharge, m3/s (small vs river inflow).
             Default 8.
+        discharge_m3s: OPTIONAL steady upstream CARRIER discharge, m3/s (the
+            river flow that dilutes/transports the release). Unset -> resolved
+            from the NOAA National Water Model at the reach; if that lookup
+            finds no coverage the run STOPS with a typed
+            ``TELEMAC_DISCHARGE_INPUT_REQUIRED`` gate (the discharge is never a
+            baked 250 default). An explicit value overrides the NWM lookup.
         channel_width_m: modeled channel width, m. Default 60.
         river_geometry_uri: OPTIONAL. If already called
             ``fetch_river_geometry`` for this reach, pass its returned
@@ -549,6 +556,7 @@ async def telemac_river_dye(
             tracer_diffusivity=tracer_diffusivity,
             compute_class=compute_class,
             bank_source=bank_source,
+            discharge_m3s=(float(discharge_m3s) if discharge_m3s is not None else None),
         )
         logger.info(
             "telemac_river_dye complete layer_id=%s dye_cmax_mgl=%.4g plume_reach_m=%s "

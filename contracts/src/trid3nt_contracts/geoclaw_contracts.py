@@ -307,3 +307,10 @@ class GeoClawDepthLayerURI(LayerURI):
     arrival_time_s: float | None = Field(default=None, ge=0.0)
 
     scenario: GeoClawScenario = "dam_break"
+
+    # Provenance of the driver source (dam-break: real NID dam vs user-supplied
+    # location/height). Set by the composer/tool so the agent narrates WHERE the
+    # dam geometry came from instead of presenting an invented centroid/height as
+    # site-specific. None on paths that do not resolve a named source (e.g. a
+    # prescribed dtopo). Additive: absence preserves prior behaviour.
+    source_note: str | None = Field(default=None)

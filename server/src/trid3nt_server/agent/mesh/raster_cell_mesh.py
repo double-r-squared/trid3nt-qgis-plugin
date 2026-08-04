@@ -970,6 +970,11 @@ def build_swmm_mesh(
     dem_path: str,
     out_inp_path: str,
     bbox: tuple[float, float, float, float] | None = None,
+    # Mechanical last-resort ONLY for a DIRECT build_swmm_mesh call (tests /
+    # low-level callers). The urban-flood composer NEVER reaches this default:
+    # it sources total_rain_depth_mm from NOAA Atlas-14 and STOPS with a typed
+    # SWMM_PRECIP_LOOKUP_FAILED gate when the lookup fails (ADR 0091). Not a
+    # site-calibrated depth - a labeled fallback for the bare builder surface.
     total_rain_depth_mm: float = 120.0,
     storm_duration_hr: float = 6.0,
     rain_interval_min: int = 5,

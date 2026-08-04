@@ -317,6 +317,7 @@ async def model_landslide_scenario(
     dem_path: str | None = None,
     run_id: str | None = None,
     compute_class: str = "standard",
+    source_note: str | None = None,
 ) -> LandlabSusceptibilityLayerURI:
     """Compose the full Landlab surface-process chain end-to-end (OFF-BOX lane).
 
@@ -328,6 +329,9 @@ async def model_landslide_scenario(
             ``run_args.bbox``. Tests pass a synthetic GeoTIFF to skip the fetch.
         run_id: optional ULID; minted by ``new_ulid`` if absent.
         compute_class: FR-CE-3 compute class for the Batch dispatch.
+        source_note: optional input-provenance string (triggering rainfall =
+            Atlas-14 design storm; soil block = demo defaults) stamped onto the
+            returned layer's ``source_note`` for honest narration.
 
     Returns:
         The primary ``LandlabSusceptibilityLayerURI`` (role ``"primary"``)
@@ -477,6 +481,7 @@ async def model_landslide_scenario(
             unstable_area_fraction=float(_m.get("unstable_area_fraction", 0.0)),
             min_factor_of_safety=float(_m.get("min_factor_of_safety", 0.0)),
             mean_probability_of_failure=float(_m.get("mean_probability_of_failure", 0.0)),
+            source_note=source_note,
         )
         if emitter is not None:
             try:
@@ -560,6 +565,8 @@ async def model_landslide_scenario(
     # Stamp the returned layer's bbox to the floored AOI (the authoritative AOI).
     if tuple(primary.bbox or ()) != tuple(bbox):
         primary = primary.model_copy(update={"bbox": tuple(bbox)})
+    if source_note is not None:
+        primary = primary.model_copy(update={"source_note": source_note})
 
     logger.info(
         "model_landslide_scenario complete run_id=%s analysis=%s "

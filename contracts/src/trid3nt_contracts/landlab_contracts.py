@@ -243,3 +243,10 @@ class LandlabSusceptibilityLayerURI(LayerURI):
     unstable_area_fraction: float = Field(ge=0.0, le=1.0)
     min_factor_of_safety: float = Field(ge=0.0)
     mean_probability_of_failure: float = Field(ge=0.0, le=1.0)
+
+    # Input provenance for narration: which triggering-rainfall source was used
+    # (NOAA Atlas-14 design storm) and that the soil block is demo-defaulted (no
+    # SSURGO/POLARIS fetcher yet). Set by the composer/tool. None preserves prior
+    # behaviour. A fuller structured assumptions list is a wave-2 addition; this
+    # is the honest prose surface so nothing regresses meanwhile.
+    source_note: str | None = Field(default=None)

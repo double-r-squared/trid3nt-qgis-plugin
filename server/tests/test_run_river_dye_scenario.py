@@ -161,6 +161,14 @@ def _install_composer_mocks(comp, solver_mod, captured: dict):
         captured["seed_uri"] = uri
         return (-114.31, 42.58)  # a mid-reach point on the Snake
 
+    def _fake_discharge(seed_lon, seed_lat, explicit):
+        # Carrier discharge wiring (NWM) is mocked: return a real-looking value
+        # so the composer reaches staging exactly as before this leg.
+        captured["discharge_seed"] = (seed_lon, seed_lat)
+        if explicit is not None:
+            return (float(explicit), "user-supplied")
+        return (312.0, "NOAA NWM (mock)")
+
     def _fake_stage(reach, run_tag):
         captured["reach"] = reach
         captured["run_tag"] = run_tag
@@ -192,6 +200,7 @@ def _install_composer_mocks(comp, solver_mod, captured: dict):
         comp,
         _registry_fn=_fake_registry_fn,
         _river_seed_from_geometry=_fake_seed,
+        _resolve_reach_discharge=_fake_discharge,
         _stage_manifest=_fake_stage,
         mint_dispatch_and_sim_cards=_amock(None),
         route_sim_terminal=_amock(None),

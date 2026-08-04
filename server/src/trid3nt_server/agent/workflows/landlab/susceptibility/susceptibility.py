@@ -70,6 +70,50 @@ class RunLandlabError(RuntimeError):
         self.error_code = error_code
 
 
+#: Default design-storm return period (years) for the triggering rainfall when
+#: the caller does not pass one. A 100-yr storm is the canonical triggering
+#: scenario for a planning-grade rainfall-induced-landslide susceptibility map.
+_DEFAULT_RAINFALL_RETURN_PERIOD_YR: int = 100
+#: Default storm duration (hours) for the Atlas-14 lookup, matching the contract
+#: OverlandFlow default (``DEFAULT_STORM_DURATION_HR``).
+_DEFAULT_TRIGGER_DURATION_HR: float = 2.0
+_INCH_TO_MM: float = 25.4
+
+
+def _atlas14_design_storm_mm(
+    bbox: tuple[float, float, float, float],
+    return_period_yr: int,
+    duration_hr: float,
+) -> float | None:
+    """Look up the NOAA Atlas-14 design-storm depth (mm) at the AOI centroid.
+
+    Seam-1: resolves ``lookup_precip_return_period`` via ``TOOL_REGISTRY`` (never
+    a module internal). Returns the total storm depth in mm, or ``None`` on lookup
+    failure (the caller then raises a typed rainfall gate - never a silent baked
+    default)."""
+    from trid3nt_server.agent.tools import TOOL_REGISTRY
+
+    fn = TOOL_REGISTRY["lookup_precip_return_period"].fn
+    lat = 0.5 * (bbox[1] + bbox[3])
+    lon = 0.5 * (bbox[0] + bbox[2])
+    try:
+        result = fn(
+            location=(lat, lon),
+            return_period_years=int(return_period_yr),
+            duration_hours=float(duration_hr),
+        )
+    except Exception as exc:  # noqa: BLE001 - signalled up as a typed gate
+        logger.info(
+            "landlab: lookup_precip_return_period failed (%s); will gate on the "
+            "missing triggering rainfall", exc
+        )
+        return None
+    inches = result.get("precip_inches") if isinstance(result, dict) else None
+    if inches is None:
+        return None
+    return float(inches) * _INCH_TO_MM
+
+
 #: Curated door-listing card (the run_landlab door prefers this over signature
 #: derivation). One-line question + the real required input + a knobs summary.
 TEMPLATE_CARD = TemplateCard(
@@ -83,7 +127,7 @@ TEMPLATE_CARD = TemplateCard(
         "analysis (landslide_probability / overland_flow), target_resolution_m, "
         "soil_transmissivity_m2_day, soil_cohesion_pa, soil_internal_friction_deg, "
         "soil_density_kg_m3, soil_thickness_m, recharge_mm_day, n_monte_carlo, "
-        "rainfall_intensity_mm_hr, storm_duration_hr"
+        "rainfall_intensity_mm_hr, storm_duration_hr, rainfall_return_period_yr"
     ),
 )
 
@@ -122,6 +166,7 @@ async def landlab_susceptibility(
     n_monte_carlo: int | None = None,
     rainfall_intensity_mm_hr: float | None = None,
     storm_duration_hr: float | None = None,
+    rainfall_return_period_yr: int = 100,
     compute_class: str = "standard",
     # absorb LLM-invented kwargs (centralized at server.py via
     # tool_arg_normalizer, but kept as belt-and-suspenders).
@@ -129,9 +174,16 @@ async def landlab_susceptibility(
 ) -> LandlabSusceptibilityLayerURI | dict[str, Any]:
     """Run a Landlab surface-process simulation over an AOI (landslide susceptibility or overland flow).
 
-    Fidelity: Landlab infinite-slope Monte-Carlo landslide susceptibility (soil /
-    rainfall properties default to narrated demo values unless supplied);
+    Fidelity: Landlab infinite-slope Monte-Carlo landslide susceptibility;
     planning-grade hillslope envelope, not a site-calibrated geotechnical model.
+    Data: the TRIGGERING RAINFALL is sourced from the NOAA Atlas-14 design storm
+    for the AOI (``rainfall_return_period_yr`` / ``storm_duration_hr``) - the
+    landslide chain's ``recharge_mm_day`` and the overland-flow chain's
+    ``rainfall_intensity_mm_hr`` are DERIVED from it when unset; a failed lookup
+    STOPS with a typed ``LANDLAB_RAINFALL_INPUT_REQUIRED`` gate (never a baked
+    default). The SOIL block (cohesion / friction / density / thickness /
+    transmissivity) STAYS demo-defaulted - there is no SSURGO/POLARIS soil fetcher
+    yet - and is labeled as such in ``source_note``.
     Off-scope: channel / riverine / coastal inundation -> sfincs_flood; post-fire
     debris-flow over a burn scar -> model_debris_flow; probabilistic seismic
     hazard -> openquake_psha.
@@ -152,11 +204,19 @@ async def landlab_susceptibility(
         target_resolution_m: grid cell size (default 30).
         soil_transmissivity_m2_day/soil_cohesion_pa/
             soil_internal_friction_deg/soil_density_kg_m3/
-            soil_thickness_m/recharge_mm_day/n_monte_carlo: optional
-            LandslideProbability soil params; unset uses noted demo
-            defaults (not site-calibrated).
-        rainfall_intensity_mm_hr/storm_duration_hr: optional OverlandFlow
-            rainfall params; unset uses demo defaults.
+            soil_thickness_m/n_monte_carlo: optional LandslideProbability
+            SOIL params; unset uses demo defaults (not site-calibrated;
+            no SSURGO/POLARIS fetcher yet - labeled in source_note).
+        recharge_mm_day: LandslideProbability triggering recharge, mm/day.
+            Unset -> DERIVED from the Atlas-14 design storm (mean intensity
+            of the storm expressed as mm/day). Explicit value overrides.
+        rainfall_intensity_mm_hr: OverlandFlow rainfall intensity, mm/hr.
+            Unset -> DERIVED from the Atlas-14 design storm
+            (depth / storm_duration_hr). Explicit value overrides.
+        storm_duration_hr: design-storm / overland duration, hours
+            (default 2); also the Atlas-14 lookup duration.
+        rainfall_return_period_yr: design-storm return period (years) for
+            the Atlas-14 triggering-rainfall lookup (default 100).
         compute_class: compute class (default "standard").
 
     Returns:
@@ -188,6 +248,66 @@ async def landlab_susceptibility(
                 f"{bbox!r}"
             ),
         }
+
+    # --- Triggering rainfall: real NOAA Atlas-14 design storm, or a typed gate ---
+    # The overland-flow chain's rainfall_intensity and the landslide chain's
+    # groundwater recharge are the TRIGGERING forcing. Source them from the
+    # Atlas-14 design storm for the AOI when unset; a failed lookup STOPS with a
+    # typed gate naming the manual param (never a baked default). The SOIL block
+    # stays demo-defaulted (no SSURGO/POLARIS fetcher yet) and is labeled below.
+    _is_overland = "overland" in str(analysis).lower()
+    _dur_hr = float(storm_duration_hr) if storm_duration_hr is not None else _DEFAULT_TRIGGER_DURATION_HR
+    _need_rainfall = (
+        (_is_overland and rainfall_intensity_mm_hr is None)
+        or (not _is_overland and recharge_mm_day is None)
+    )
+    source_note: str | None = None
+    _rainfall_label = ""
+    if _need_rainfall:
+        _depth_mm = await asyncio.to_thread(
+            _atlas14_design_storm_mm, tuple(coerced), int(rainfall_return_period_yr), _dur_hr
+        )
+        if _depth_mm is None:
+            _param = "rainfall_intensity_mm_hr" if _is_overland else "recharge_mm_day"
+            return {
+                "status": "error",
+                "error_code": "LANDLAB_RAINFALL_INPUT_REQUIRED",
+                "error_message": (
+                    f"The NOAA Atlas-14 design-storm lookup failed for this AOI "
+                    f"({rainfall_return_period_yr}-yr / {_dur_hr:.0f}-hr), so the "
+                    f"triggering rainfall is not fabricated. Retry with an explicit "
+                    f"{_param} - or an AOI within Atlas-14 coverage (CONUS / PR / USVI)."
+                ),
+            }
+        if _is_overland:
+            # Mean design-storm intensity (mm/hr) drives the OverlandFlow forcing.
+            rainfall_intensity_mm_hr = round(_depth_mm / _dur_hr, 2)
+            _rainfall_label = (
+                f"overland rainfall intensity {rainfall_intensity_mm_hr:.1f} mm/hr "
+                f"(NOAA Atlas-14 {rainfall_return_period_yr}-yr/{_dur_hr:.0f}-hr design storm, "
+                f"{_depth_mm:.1f} mm total)"
+            )
+        else:
+            # The design-storm TOTAL depth as a single-day triggering recharge
+            # pulse (mm/day) - NOT a burst intensity (that would over-saturate the
+            # steady-state wetness index). A defensible triggering-scenario proxy;
+            # the fitted long-term / event recharge source (gridMET pr, SSURGO Ksat)
+            # is a future fetcher.
+            recharge_mm_day = round(_depth_mm, 1)
+            _rainfall_label = (
+                f"triggering recharge {recharge_mm_day:.0f} mm/day (NOAA Atlas-14 "
+                f"{rainfall_return_period_yr}-yr/{_dur_hr:.0f}-hr design-storm total "
+                f"{_depth_mm:.1f} mm as a 1-day pulse)"
+            )
+    else:
+        _rainfall_label = "triggering rainfall: user-supplied"
+    source_note = (
+        _rainfall_label
+        + "; SOIL properties (cohesion / friction / density / thickness / "
+        "transmissivity) are demo defaults - no SSURGO/POLARIS soil fetcher yet, "
+        "not site-calibrated."
+    )
+
     try:
         kwargs: dict[str, Any] = dict(
             bbox=tuple(coerced),  # type: ignore[arg-type]
@@ -231,6 +351,7 @@ async def landlab_susceptibility(
         primary = await model_landslide_scenario(
             run_args,
             compute_class=compute_class,
+            source_note=source_note,
         )
         logger.info(
             "landlab_susceptibility complete layer_id=%s unstable_frac=%.4g "

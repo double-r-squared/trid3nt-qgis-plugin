@@ -327,10 +327,16 @@ def _atlas14_total_depth_mm(
 ) -> float | None:
     """Look up the Atlas-14 design-storm depth (mm) for the AOI centroid.
 
-    Returns the total storm depth in mm, or ``None`` on lookup failure (the
-    builder then uses its sane hyetograph default - never a silent dead-end).
+    Returns the total storm depth in mm, or ``None`` on lookup failure. A ``None``
+    no longer silently falls through to a baked builder default - the caller
+    raises a typed ``SWMM_PRECIP_LOOKUP_FAILED`` gate naming ``total_rain_depth_mm``
+    as the explicit-param retry (ADR 0091 gated-fallback pattern).
     """
-    from trid3nt_server.agent.tools.fetchers.climate.lookup_precip_return_period.lookup_precip_return_period import lookup_precip_return_period
+    # Seam-1: resolve the registered fetcher via TOOL_REGISTRY, never a module
+    # internal (ADR 0069 spec-driven surface).
+    from trid3nt_server.agent.tools import TOOL_REGISTRY
+
+    lookup_precip_return_period = TOOL_REGISTRY["lookup_precip_return_period"].fn
 
     lat, lon = _bbox_centroid_latlon(bbox)
     try:
@@ -339,10 +345,10 @@ def _atlas14_total_depth_mm(
             return_period_years=int(return_period_yr),
             duration_hours=float(storm_duration_hr),
         )
-    except Exception as exc:  # noqa: BLE001 - fall back to the builder default
+    except Exception as exc:  # noqa: BLE001 - signalled up as a typed gate
         logger.info(
-            "lookup_precip_return_period failed (%s); using the builder's "
-            "hyetograph default depth", exc
+            "lookup_precip_return_period failed (%s); SWMM will gate on the "
+            "missing design-storm depth", exc
         )
         return None
     inches = result.get("precip_inches") if isinstance(result, dict) else None
@@ -531,6 +537,21 @@ async def model_urban_flood_swmm(
                 depth_mm,
                 run_args.return_period_yr,
                 run_args.storm_duration_hr,
+            )
+        else:
+            # ADR 0091 gated-fallback: the design-storm lookup failed and the
+            # user supplied no explicit depth. Do NOT silently revert to the
+            # builder's baked 120 mm - STOP and name total_rain_depth_mm (mm) as
+            # the explicit-param retry so the rainfall forcing is never fabricated.
+            raise UrbanFloodWorkflowError(
+                "SWMM_PRECIP_LOOKUP_FAILED",
+                (
+                    f"The NOAA Atlas-14 design-storm lookup failed for this AOI "
+                    f"({run_args.return_period_yr}-yr / {run_args.storm_duration_hr:.0f}-hr), "
+                    f"so the rainfall depth is not fabricated. Retry with an explicit "
+                    f"total_rain_depth_mm (total storm depth, mm) - or a return_period_yr "
+                    f"that Atlas-14 publishes for a CONUS / PR / USVI AOI."
+                ),
             )
 
     try:

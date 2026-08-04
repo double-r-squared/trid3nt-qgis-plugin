@@ -74,7 +74,7 @@ TEMPLATE_CARD = TemplateCard(
     ),
     required_inputs=["bbox"],
     knobs=(
-        "scenario (dam_break / tsunami / surge), sim_duration_s, "
+        "scenario (dam_break / tsunami / surge), sim_duration_s, dam_name, "
         "dam_break_depth_m, source_lonlat, source_magnitude, tsunami_dtopo_uri, "
         "surge_forcing_uri, output_frames, amr_levels, manning_n, sea_level_m, "
         "fault_strike_deg/dip/rake/depth_km, extra_topo_uris, "
@@ -108,7 +108,8 @@ async def geoclaw_inundation(
     bbox: tuple[float, float, float, float] | list[float] | str | None = None,
     scenario: str = "dam_break",
     sim_duration_s: float = 3600.0,
-    dam_break_depth_m: float = 10.0,
+    dam_name: str | None = None,
+    dam_break_depth_m: float | None = None,
     source_lonlat: tuple[float, float] | list[float] | None = None,
     source_magnitude: float = 8.0,
     tsunami_dtopo_uri: str | None = None,
@@ -133,6 +134,13 @@ async def geoclaw_inundation(
 
     Fidelity: GeoClaw adaptive-mesh finite-volume run-up (tsunami / dam-break /
     surge); planning-grade run-up envelope, not a calibrated regulatory model.
+    Data: for a DAM_BREAK the dam location + released-column height are resolved
+    from the real USACE National Inventory of Dams (NID, ``fetch_usace_dams``) -
+    by ``dam_name`` when given, else the NID dam nearest the AOI. When no NID dam
+    covers the AOI (or a named dam is not found) the run STOPS with a typed
+    ``GEOCLAW_DAM_INPUT_REQUIRED`` gate naming ``source_lonlat`` +
+    ``dam_break_depth_m`` (never an invented centroid/height). Explicit
+    ``source_lonlat`` + ``dam_break_depth_m`` bypass the NID lookup.
     Off-scope: pluvial / riverine / coastal compound flooding -> sfincs_flood;
     urban storm-sewer -> swmm_urban_flood; spectral wave field -> swan_wave_field.
 
@@ -149,10 +157,15 @@ async def geoclaw_inundation(
             ``"tsunami"`` (seafloor-displacement source), or ``"surge"``
             (raised sea surface).
         sim_duration_s: simulated time, seconds (default 3600).
-        dam_break_depth_m: dam_break only, released column height
-            (default 10).
-        source_lonlat: optional driver-source location; default AOI
-            centroid.
+        dam_name: dam_break only, OPTIONAL name of the NID dam to model;
+            when given the NID lookup filters to dams whose name contains
+            it (nearest match wins). Unset -> the NID dam nearest the AOI.
+        dam_break_depth_m: dam_break only, released column height (m).
+            Unset -> the real NID ``DAM_HEIGHT`` of the resolved dam
+            (feet -> m). An explicit value overrides the NID height.
+        source_lonlat: driver-source location. dam_break: unset -> the
+            resolved NID dam's coordinates (never the AOI centroid); an
+            explicit value overrides. tsunami/surge: unset -> AOI centroid.
         source_magnitude: tsunami synthetic-source Mw (default 8.0).
         tsunami_dtopo_uri: optional prescribed dtopo file (else synthetic
             Okada source).
@@ -201,20 +214,74 @@ async def geoclaw_inundation(
                 f"{bbox!r}"
             ),
         }
+
+    # --- Dam-break source provenance: real NID dam, or a typed input gate -------
+    # For a dam_break the location + released-column height are physically
+    # dominant; resolve them from the USACE National Inventory of Dams instead of
+    # inventing an AOI-centroid + a baked 10 m column. A user who supplies BOTH
+    # source_lonlat AND dam_break_depth_m bypasses the lookup (they chose). When
+    # the NID has no dam for the AOI and the user did not supply both, STOP with a
+    # typed gate naming the manual params - never a silent invented dam.
+    effective_source_lonlat = source_lonlat
+    effective_dam_depth = dam_break_depth_m
+    dam_source_note: str | None = None
+    if str(scenario).strip().lower() in ("dam_break", "dambreak", "dam-break"):
+        _has_loc = source_lonlat is not None
+        _has_height = dam_break_depth_m is not None
+        if not (_has_loc and _has_height):
+            from trid3nt_server.agent.workflows.geoclaw.nid_dams import resolve_nid_dam
+
+            dam = await asyncio.to_thread(
+                resolve_nid_dam, tuple(coerced), dam_name=dam_name
+            )
+            if dam is not None:
+                if not _has_loc:
+                    effective_source_lonlat = (dam.lon, dam.lat)
+                if not _has_height:
+                    effective_dam_depth = dam.height_m
+                dam_source_note = dam.note()
+                if _has_loc or _has_height:
+                    dam_source_note += (
+                        " (user-supplied "
+                        + " + ".join(
+                            n for n, ok in (("location", _has_loc), ("height", _has_height)) if ok
+                        )
+                        + " kept)."
+                    )
+            else:
+                named = f" named {dam_name!r}" if dam_name else ""
+                return {
+                    "status": "error",
+                    "error_code": "GEOCLAW_DAM_INPUT_REQUIRED",
+                    "error_message": (
+                        f"No USACE National Inventory of Dams (NID) dam{named} was "
+                        f"found for this AOI, so the dam location + height are not "
+                        f"fabricated. To run this dam-break, supply BOTH "
+                        f"source_lonlat=(lon, lat) of the dam AND dam_break_depth_m "
+                        f"(released-column height, m) - or pass a dam_name that "
+                        f"exists in NID within the AOI."
+                    ),
+                }
+        else:
+            dam_source_note = "Dam location + released-column height are user-supplied (not NID-sourced)."
+    if effective_dam_depth is None:
+        # tsunami / surge ignore dam_break_depth_m; give the contract its default.
+        effective_dam_depth = 10.0
+
     try:
         kwargs: dict[str, Any] = dict(
             bbox=tuple(coerced),  # type: ignore[arg-type]
             scenario=scenario,
             sim_duration_s=float(sim_duration_s),
-            dam_break_depth_m=float(dam_break_depth_m),
+            dam_break_depth_m=float(effective_dam_depth),
             source_magnitude=float(source_magnitude),
             output_frames=int(output_frames),
             amr_levels=int(amr_levels),
             manning_n=float(manning_n),
             sea_level_m=float(sea_level_m),
         )
-        if source_lonlat is not None:
-            sl = list(source_lonlat)
+        if effective_source_lonlat is not None:
+            sl = list(effective_source_lonlat)
             if len(sl) == 2:
                 kwargs["source_lonlat"] = (float(sl[0]), float(sl[1]))
         if tsunami_dtopo_uri:
@@ -262,6 +329,7 @@ async def geoclaw_inundation(
         peak = await model_dambreak_geoclaw_scenario(
             run_args,
             compute_class=compute_class,
+            dam_source_note=dam_source_note,
         )
         logger.info(
             "geoclaw_inundation complete layer_id=%s scenario=%s "

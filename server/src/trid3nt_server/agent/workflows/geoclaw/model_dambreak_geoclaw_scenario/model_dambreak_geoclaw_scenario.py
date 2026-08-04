@@ -346,6 +346,7 @@ async def model_dambreak_geoclaw_scenario(
     run_id: str | None = None,
     compute_class: str = "standard",
     cleanup_outputs: bool = True,
+    dam_source_note: str | None = None,
 ) -> GeoClawDepthLayerURI:
     """Compose the full GeoClaw shallow-water inundation chain end-to-end (Batch).
 
@@ -358,6 +359,9 @@ async def model_dambreak_geoclaw_scenario(
         compute_class: FR-CE-3 compute class for the Batch sizing.
         cleanup_outputs: when True, the downloaded fort.q output dir is removed
             after postprocess (the COGs were already uploaded).
+        dam_source_note: optional provenance string (dam-break: the resolved NID
+            dam name + height, or a user-supplied note) stamped onto the returned
+            layer's ``source_note`` so the agent narrates where the dam came from.
 
     Returns:
         The PEAK ``GeoClawDepthLayerURI`` (role ``"primary"``, name ``"Peak flood
@@ -735,6 +739,7 @@ async def model_dambreak_geoclaw_scenario(
                 else None
             ),
             scenario=run_args.scenario,
+            source_note=dam_source_note,
         )
         emitted_frames = await _emit_frame_layers(
             emitter,
@@ -843,6 +848,8 @@ async def model_dambreak_geoclaw_scenario(
     # --- Step 6: publish the PEAK COG through publish_layer (render chokepoint)
     async with substep(emitter, "publish_layer"):
         peak = await asyncio.to_thread(_publish_peak_layer, raw_peak, staging.run_id)
+    if dam_source_note is not None:
+        peak = peak.model_copy(update={"source_note": dam_source_note})
 
     # --- Step 6b: publish + emit the per-frame animation layers OUT-OF-BAND --
     emitted_frames = await _emit_frame_layers(emitter, frame_layers, staging.run_id)

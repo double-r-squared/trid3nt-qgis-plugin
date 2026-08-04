@@ -171,7 +171,11 @@ async def swmm_urban_flood(
             small — a city block/neighborhood, not a county (adaptive-mesh
             budget coarsens a large AOI).
         return_period_yr: design-storm return period, years (Atlas-14).
-            Default 100; ignored when ``total_rain_depth_mm`` is given.
+            Default 100; ignored when ``total_rain_depth_mm`` is given. The
+            depth is fetched from NOAA Atlas-14 for the AOI; if that lookup
+            fails and no explicit depth is given, the run STOPS with a typed
+            ``SWMM_PRECIP_LOOKUP_FAILED`` gate (the rainfall is never a baked
+            default) - retry with ``total_rain_depth_mm``.
         total_rain_depth_mm: OPTIONAL explicit total storm depth, mm (> 0);
             overrides the Atlas-14 lookup when set.
         storm_duration_hr: design-storm duration, hours (> 0). Default 6.
