@@ -358,7 +358,7 @@ class TestDualShapeUriResolution(unittest.TestCase):
             f"/vsicurl/{MINIO}/trid3nt-runs/dem/asheville.tif",
         )
         self.assertEqual(layer.provider, "gdal")
-        self.assertTrue(any("COG via GDAL" in n for n in notes), notes)
+        self.assertTrue(any("streamed via /vsicurl" in n for n in notes), notes)
         # opacity parity with the old tile layers (event.opacity -> setOpacity)
         self.assertEqual(layer.opacity, 1.0)
 
@@ -414,18 +414,6 @@ class TestDualShapeUriResolution(unittest.TestCase):
         )
         self.assertEqual(fakes.RasterLayer.instances, [])
         self.assertTrue(any("skipped" in n for n in notes), notes)
-
-    def test_remote_mode_is_honest_skip(self):
-        layers, fakes = _import_layers()
-
-        class _Remote(_Settings):
-            mode = "remote"
-
-        m = layers.LayerMaterializer(settings=_Remote())
-        notes = m.materialize([_event(layers, RASTER_LAYER_ROW)])
-        self.assertEqual(fakes.RasterLayer.instances, [])
-        self.assertTrue(any("remote mode" in n for n in notes), notes)
-
 
 # --------------------------------------------------------------------------- #
 # renderer class per legend kind
@@ -563,7 +551,7 @@ class TestRendererPerLegendKind(unittest.TestCase):
         )
         layer = fakes.RasterLayer.instances[0]
         self.assertIsNone(layer.renderer)
-        self.assertTrue(any("added (COG via GDAL)" in n for n in notes), notes)
+        self.assertTrue(any("streamed via /vsicurl" in n for n in notes), notes)
 
 
 # --------------------------------------------------------------------------- #

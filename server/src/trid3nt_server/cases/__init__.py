@@ -1,24 +1,21 @@
 """Platform-side ``cases/`` package: case-layer serving to the QGIS plugin.
 
 First tenant of the server-modularization plan's ``cases/`` target (the case
-lifecycle absorptions land in later waves). Two seams live here:
+lifecycle absorptions land in later waves). One seam lives here:
 
-- ``hydrate_case_layers`` (``cases.hydrate_case_layers``) -- the REMOTE-mode
-  fallback: materialize a case's layers into a self-contained local folder
-  (GeoPackage + GeoTIFF + ``.qml`` style sidecars + per-run MDAL mesh
-  references) for a client that cannot reach the object store directly. NO QGIS
-  project (.qgz/.qgs) is produced. On the local stack a case's layers are
-  restored over the WS case-open replay, not an HTTP manifest fetch.
 - ``ingest_user_layer`` / ``upload_layer_file`` / ``register_case_layer``
   (``cases.ingest_user_layer``) -- the reverse seam: bring a plugin-pushed
-  vector/raster INTO a case as a first-class input layer.
+  vector/raster INTO a case as a first-class input layer. (A case's layers are
+  RESTORED to the plugin over the WS case-open replay and STREAM in place from
+  the object store via GDAL ``/vsicurl/`` -- ADR 0116 -- so there is no
+  server-side materialize/download seam.)
 
 Only the callables whose names do NOT collide with a submodule name are
-re-exported here (``upload_layer_file``, ``register_case_layer``). The two
-module-named functions (``hydrate_case_layers``, ``ingest_user_layer``) and the
-typed error classes are imported from their specific submodule -- re-exporting
-them at the package root would rebind the same-named submodule attribute and
-shadow ``import cases.<module>``.
+re-exported here (``upload_layer_file``, ``register_case_layer``). The
+module-named function (``ingest_user_layer``) and the typed error classes are
+imported from their specific submodule -- re-exporting them at the package root
+would rebind the same-named submodule attribute and shadow
+``import cases.<module>``.
 """
 
 from __future__ import annotations

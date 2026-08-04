@@ -1,10 +1,10 @@
 """HTTP-route wiring tests for /api/ingest-layer(-file) on the catalog
-listener (bidirectional layer push -- the reverse seam of /api/export-qgis).
+listener (bidirectional layer push -- the reverse seam of layer materialization).
 
 Exercises ``tool_catalog_http._handle_http`` dispatch only -- the ingestion
 LOGIC (geopandas/rasterio round trips, Persistence merge, AOI pin) is covered
 by ``test_register_case_layer.py``. Mirrors
-``test_export_qgis_http_route.py`` / ``test_case_list_http_route.py``:
+``test_case_list_http_route.py``:
 
   - both routes served UNCONDITIONALLY (the local build hardwires
     ``solver_backend()`` to local-docker, so ``TRID3NT_SOLVER_BACKEND`` no

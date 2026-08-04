@@ -4,8 +4,7 @@
 ``cases/`` sits above ``agent/tools/``, not below it). ``_strip_query`` and
 ``_unwrap_tile_template`` are needed by several tools that resolve a case
 layer's ``uri`` to its underlying file, so they live here as the agent-side
-source; ``cases/hydrate_case_layers.py`` keeps its own copy rather than
-importing this module (same layering reason, opposite direction).
+source.
 """
 
 from __future__ import annotations

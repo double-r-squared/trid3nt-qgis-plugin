@@ -1356,65 +1356,6 @@ async def _handle_building_detail(query_string: str) -> bytes:
     ).encode("utf-8")
 
 
-# ---------------------------------------------------------------------------
-# /api/export-qgis -- user-driven QGIS case export
-# ---------------------------------------------------------------------------
-#
-# Two routes back the web's per-case "Export to QGIS" kebab item:
-#   POST /api/export-qgis {"case_id": "..."}  -> run hydrate_case_layers (the
-#     REMOTE-mode materialize fallback) in-process; 200 with its result dict,
-#     typed errors -> 4xx with {"error": <honest message>} (never a traceback).
-#     Wire-compatible with the installed field plugin; the local plugin restores
-#     a case's layers over the WS case-open replay, not an HTTP manifest fetch.
-#   GET  /api/export-qgis/file?path=<abs>     -> serve the produced .qgz/.gpkg
-#     bytes, ONLY when the resolved real path lives inside the export root
-#     (TRID3NT_EXPORT_DIR, default ~/trid3nt-exports) -- anything else is a
-#     403 (path-traversal guard).
-
-
-class _ExportQgisBadRequest(Exception):
-    """Malformed /api/export-qgis request (bad JSON / missing case_id / path)."""
-
-
-class _ExportQgisForbidden(Exception):
-    """File request outside the export root or a non-exported file type."""
-
-
-class _ExportQgisNotFound(Exception):
-    """The requested export file does not exist under the export root."""
-
-
-def _export_qgis_fn():
-    """Lazy-import seam for the case-layer materializer (heavy geo deps load on
-    first call, not at listener start; monkeypatchable in tests)."""
-    from .cases.hydrate_case_layers import hydrate_case_layers
-
-    return hydrate_case_layers
-
-
-async def _handle_export_qgis_post(raw_body: bytes) -> bytes:
-    """Resolve the JSON body for ``POST /api/export-qgis``.
-
-    Validates ``{"case_id": "..."}``, awaits ``hydrate_case_layers`` (the
-    REMOTE-mode materialize fallback), and returns its encoded result dict.
-    Raises ``_ExportQgisBadRequest`` (-> 400) on malformed input; the
-    materializer's own typed ``HydrateCaseError`` subclasses propagate for the
-    dispatcher to map to honest 4xx bodies.
-    """
-    try:
-        payload = json.loads(raw_body.decode("utf-8")) if raw_body.strip() else None
-    except (UnicodeDecodeError, json.JSONDecodeError) as exc:
-        raise _ExportQgisBadRequest(f"body must be JSON: {exc}") from exc
-    if not isinstance(payload, dict):
-        raise _ExportQgisBadRequest(
-            'body must be a JSON object like {"case_id": "..."}'
-        )
-    case_id = payload.get("case_id")
-    if not isinstance(case_id, str) or not case_id.strip():
-        raise _ExportQgisBadRequest("missing or empty `case_id`")
-
-    result = await _export_qgis_fn()(case_id=case_id.strip())
-    return json.dumps(result, separators=(",", ":")).encode("utf-8")
 
 
 # ---------------------------------------------------------------------------
@@ -1479,48 +1420,6 @@ def _apply_provider_config(raw_body: bytes) -> bytes:
     ).encode("utf-8")
 
 
-def _export_qgis_root() -> Path:
-    """The only directory the file route may serve from: the export tool's
-    output root (same default as ``hydrate_case_layers``)."""
-    raw = os.environ.get("TRID3NT_EXPORT_DIR") or str(Path.home() / "trid3nt-exports")
-    return Path(raw).expanduser().resolve()
-
-
-def _resolve_export_qgis_file(query_string: str) -> tuple[Path, str]:
-    """Validate ``GET /api/export-qgis/file?path=...`` -> ``(path, content_type)``.
-
-    SYNC (filesystem resolution); the caller wraps it in ``asyncio.to_thread``.
-    Guards, in order: a ``path`` param must be present (400); only the two
-    artifact types the export tool produces are served, ``.qgz`` (zip) and
-    ``.gpkg`` (403 otherwise); the REAL resolved path (symlinks + ``..``
-    collapsed) must live inside the export root (403 -- traversal guard); and
-    the file must exist (404).
-    """
-    from urllib.parse import parse_qs
-
-    params = parse_qs(query_string, keep_blank_values=False)
-    raw = (params.get("path") or [""])[0].strip()
-    if not raw:
-        raise _ExportQgisBadRequest("missing `path` query param")
-
-    content_type = {
-        ".qgz": "application/zip",
-        ".gpkg": "application/geopackage+sqlite3",
-    }.get(Path(raw).suffix.lower())
-    if content_type is None:
-        raise _ExportQgisForbidden(
-            "only .qgz and .gpkg export artifacts are served"
-        )
-
-    root = _export_qgis_root()
-    real = Path(raw).expanduser().resolve()
-    if real != root and root not in real.parents:
-        raise _ExportQgisForbidden(
-            f"path is outside the export root {root}"
-        )
-    if not real.is_file():
-        raise _ExportQgisNotFound(f"no such export file: {real}")
-    return real, content_type
 
 
 # ---------------------------------------------------------------------------
@@ -1603,7 +1502,7 @@ async def build_case_list_payload() -> dict[str, Any]:
 # ---------------------------------------------------------------------------
 # /api/ingest-layer(-file) -- bidirectional layer push (QGIS plugin -> case).
 #
-# The reverse seam of /api/export-qgis: the plugin's "Push layer" button
+# The reverse seam of layer materialization: the plugin's "Push layer" button
 # sends the user's ACTIVE QGIS layer (vector or raster) into the current
 # case as a first-class input layer. Two routes, ONE upload flow:
 #
@@ -2020,7 +1919,7 @@ def _format_response(
     headers = {
         "Content-Type": content_type,
         "Content-Length": str(len(body)),
-        # CORS -- see module docstring. POST is scoped to /api/export-qgis.
+        # CORS -- see module docstring. POST is scoped to the ingest/probe routes.
         "Access-Control-Allow-Origin": "*",
         "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
         "Access-Control-Allow-Headers": "Content-Type",
@@ -2104,60 +2003,7 @@ async def _handle_http(
 
     proxy_path, _, proxy_qs = path.partition("?")
 
-    if method == "POST" and proxy_path == "/api/export-qgis":
-        # User-driven QGIS export: run the
-        # hydrate_case_layers materialize for a case_id. Typed errors map to
-        # honest 4xx {"error": message} bodies -- never a traceback.
-        raw_body = b""
-        if content_length > 0:
-            try:
-                raw_body = await asyncio.wait_for(
-                    reader.readexactly(content_length), timeout=30.0
-                )
-            except (asyncio.TimeoutError, asyncio.IncompleteReadError):
-                raw_body = b""
-        from .cases.hydrate_case_layers import CaseNotFoundError, HydrateCaseError
-
-        try:
-            body = await _handle_export_qgis_post(raw_body)
-            writer.write(_format_response(200, body))
-        except _ExportQgisBadRequest as exc:
-            writer.write(
-                _format_response(
-                    400,
-                    json.dumps({"error": str(exc)}, separators=(",", ":")).encode(
-                        "utf-8"
-                    ),
-                )
-            )
-        except CaseNotFoundError as exc:
-            writer.write(
-                _format_response(
-                    404,
-                    json.dumps({"error": str(exc)}, separators=(",", ":")).encode(
-                        "utf-8"
-                    ),
-                )
-            )
-        except HydrateCaseError as exc:
-            # INVALID_INPUT / NO_EXPORTABLE_LAYERS / HYDRATE_FAILED -- the
-            # materializer's honest message, as a client error (the request was
-            # well-formed HTTP but the materialization cannot succeed).
-            writer.write(
-                _format_response(
-                    400,
-                    json.dumps({"error": str(exc)}, separators=(",", ":")).encode(
-                        "utf-8"
-                    ),
-                )
-            )
-        except Exception:  # noqa: BLE001
-            logger.exception("export-qgis run failed")
-            writer.write(_format_response(500, b'{"error":"qgis export failed"}'))
-        await writer.drain()
-        writer.close()
-        return
-
+    
     if method == "POST" and proxy_path == "/api/ingest-layer-file":
         # Bidirectional layer push, half 1: stage the plugin's raw upload
         # bytes to object storage. Local-mode gated -- see the module section
@@ -2520,60 +2366,6 @@ async def _handle_http(
             logger.exception("building-detail lookup failed")
             writer.write(
                 _format_response(500, b'{"error":"building detail failed"}')
-            )
-    elif proxy_path == "/api/export-qgis/file":
-        # Serve a produced export artifact (.qgz / .gpkg) so the browser can
-        # download it. Path-traversal guarded: the resolved REAL path must
-        # live inside the export root or the request is a 403. Filesystem
-        # work runs off the event loop.
-        try:
-            file_path, file_ctype = await asyncio.to_thread(
-                _resolve_export_qgis_file, proxy_qs
-            )
-            data = await asyncio.to_thread(file_path.read_bytes)
-            writer.write(
-                _format_response(
-                    200,
-                    data,
-                    content_type=file_ctype,
-                    extra_headers={
-                        "Content-Disposition": (
-                            f'attachment; filename="{file_path.name}"'
-                        )
-                    },
-                )
-            )
-        except _ExportQgisBadRequest as exc:
-            writer.write(
-                _format_response(
-                    400,
-                    json.dumps({"error": str(exc)}, separators=(",", ":")).encode(
-                        "utf-8"
-                    ),
-                )
-            )
-        except _ExportQgisForbidden as exc:
-            writer.write(
-                _format_response(
-                    403,
-                    json.dumps({"error": str(exc)}, separators=(",", ":")).encode(
-                        "utf-8"
-                    ),
-                )
-            )
-        except _ExportQgisNotFound as exc:
-            writer.write(
-                _format_response(
-                    404,
-                    json.dumps({"error": str(exc)}, separators=(",", ":")).encode(
-                        "utf-8"
-                    ),
-                )
-            )
-        except Exception:  # noqa: BLE001
-            logger.exception("export-qgis file serve failed")
-            writer.write(
-                _format_response(500, b'{"error":"export file serve failed"}')
             )
     elif path == "/api/version":
         # Daemon git sha + active model provider -- the version indicator the

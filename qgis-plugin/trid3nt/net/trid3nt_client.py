@@ -412,8 +412,8 @@ def fetch_case_list(base_url: str, timeout: float = 5.0) -> list:
     arrived as a WS envelope. The local agent's HTTP listener
     (``tool_catalog_http.py``) mirrors that same envelope's data over plain
     HTTP for the local single-user seam, so the dock's Cases dialog can
-    populate BEFORE a connection exists. Plain ``urllib`` (stdlib only, same
-    posture as ``case_export.py``'s HTTP calls) -- no WebSocket involved.
+    populate BEFORE a connection exists. Plain ``urllib`` (stdlib only) -- no
+    WebSocket involved.
 
     Returns ``[]`` (never raises) is NOT the contract here: a genuine failure
     (agent HTTP listener down, route absent, bad body) raises

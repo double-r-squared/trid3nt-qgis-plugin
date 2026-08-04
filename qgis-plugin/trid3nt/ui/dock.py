@@ -46,13 +46,12 @@ Milestone 2 chat surface on top of milestone 1's plain-text bubbles:
     layers ride the SAME ``case-open`` WS envelope the chat replay uses
     (``session_state.loaded_layers``) and land via the SAME by-URI
     materializer live-published layers use. There is zero user-facing export
-    (native QGIS covers any file export the user wants), so the
-    materialize+download fallback (``hydrate_case_layers``, ``_ExportTask``)
-    is currently unreached from the UI -- condemned in DELETION_LEDGER.
+    (native QGIS covers any file export the user wants). Layers STREAM in
+    place from the advertised MinIO/S3 endpoint via GDAL ``/vsicurl/`` (ADR
+    0116); the download/export machinery is gone.
 
 All socket work lives on the AgentBridge worker thread; this widget only
-handles Qt signals. The export POST runs on a plain worker thread emitting
-cross-thread signals (auto-queued by Qt).
+handles Qt signals.
 """
 
 from __future__ import annotations
@@ -104,11 +103,10 @@ from ._style import (
     _THINKING_BLOCK_STYLE,
     _THINKING_TOGGLE_STYLE,
 )
-from ..case import aoi, case_export, push_layer
+from ..case import aoi, push_layer
 from ..net.tasks import (
     _CaseListTask,
     _EffectiveModelTask,
-    _ExportTask,
     _ProbePointTask,
     _ProviderConfigTask,
     _PushLayerTask,
@@ -129,6 +127,7 @@ from ..render import probe
 from ..render.layers import (
     LayerMaterializer,
     ensure_basemap,
+    sweep_stale_session_dirs,
     zoom_to_bbox4326,
     zoom_to_extent,
 )
@@ -218,6 +217,10 @@ class Trid3ntDock(QDockWidget):
         self.iface = iface
         self.settings = PluginSettings()
         self.bridge = AgentBridge(self)
+        # Remote-streaming session TTL (ADR 0116): sweep crash-leftover staging
+        # dirs from prior sessions before this session opens its own. Only DEAD
+        # owners are swept -- a concurrent live QGIS instance keeps its dir.
+        sweep_stale_session_dirs()
         self.materializer = LayerMaterializer(self.settings)
         self._pending: Optional[_AssistantEntry] = None
         self._connected = False
@@ -235,7 +238,6 @@ class Trid3ntDock(QDockWidget):
         self._session_case_title: str = ""
         self._cases: List[CaseInfo] = []
         self._cases_dialog: Optional[CasesDialog] = None
-        self._export_tasks: List[_ExportTask] = []  # keep-alive refs (remote-mode only)
         self._case_list_tasks: List[_CaseListTask] = []  # keep-alive refs
         self._push_tasks: List[_PushLayerTask] = []  # keep-alive refs
         self._probe_tasks: List[_ProbePointTask] = []  # keep-alive refs
@@ -1245,6 +1247,10 @@ class Trid3ntDock(QDockWidget):
         self.bridge.stop()
         self._connected = False
         self._case_id = None
+        # Remote-streaming session TTL (ADR 0116): a disconnect ends the
+        # session, so sweep everything staged this session (the ONE fallback
+        # for non-streamable meshes) -- nothing outlives the session.
+        self.materializer.cleanup_session()
         # Per-case-bbox 2026-07-19: the case AOI is per-case state -- a
         # disconnect ends the case binding, so the overlay must go too.
         self._clear_aoi_overlay()
@@ -1441,72 +1447,6 @@ class Trid3ntDock(QDockWidget):
         if self.bridge.refresh_case_list():
             return "Refreshing case list ..."
         return "Not connected -- the list refreshes on the next connect"
-
-    # -- case-layer materialize+download fallback (condemned; see DELETION_LEDGER) - #
-
-    def hydrate_case_layers(self, case_id: str, label: str) -> None:
-        """Case-layer materialize+download fallback (renamed from
-        ``open_case_in_qgis``, matching the server's ``cases.
-        hydrate_case_layers``, ADR 0058).
-
-        Unreached from the UI: ``_on_case_open_event`` already restores a
-        case's layers automatically, in the SAME gesture as the chat replay,
-        the instant the case becomes active (decision A, NATE 2026-07-31); the
-        by-URI manifest fetch this method used to perform was fully redundant
-        with that (same source data, same materializer). There is no
-        user-facing export action either (native QGIS covers any file export).
-        Kept callable, not deleted, so the materialize+download machinery
-        (``_ExportTask`` / ``case_export.post_export_case`` /
-        ``materializer.materialize_export``) is not lost outright -- condemned
-        in DELETION_LEDGER.
-        """
-        base_url = self._effective_http_base()
-        self._note(
-            f"Exporting case '{label}' on the agent "
-            f"({base_url}) -- artifacts download to a local temp dir ..."
-        )
-        task = _ExportTask(
-            base_url, case_id, self, remote=True,
-            minio_endpoint=self._effective_data_base(),
-        )
-        task.finished.connect(self._on_export_finished)
-        task.errored.connect(self._on_export_errored)
-        self._export_tasks.append(task)
-        task.start()
-
-    def _on_export_finished(self, case_id: str, result: dict) -> None:
-        plan = case_export.plan_export_layers(result)
-        notes = self.materializer.materialize_export(plan, group_label=case_id[:8])
-        for note in notes:
-            self._note(note)
-        if plan.qgz_path:
-            self._note(f"Styled QGIS project also written: {plan.qgz_path}")
-        if self.settings.auto_basemap:
-            note = ensure_basemap(self.settings.basemap_preset)
-            if note:
-                self._note(note)
-        # Item 1: zoom to the union of the just-exported layers' REAL extents
-        # (GeoTIFF/gpkg layers carry true GDAL/OGR extents, unlike the live
-        # XYZ tile layers) so the canvas is never left white/stale.
-        try:
-            canvas = self.iface.mapCanvas()
-            dest_crs = canvas.mapSettings().destinationCrs()
-            extent = self.materializer.last_added_export_extent(dest_crs)
-            zoom_to_extent(canvas, extent)
-        except Exception:  # noqa: BLE001 -- headless/no canvas, skip the zoom
-            pass
-        self._scroll_to_bottom()
-
-    def _on_export_errored(self, case_id: str, message: str) -> None:
-        if "has no layers to export" in message:
-            # Friendly, not an error: an empty case is expected, not broken.
-            self._note(
-                "This case has no layers yet -- open it and run a prompt to "
-                "generate data.",
-                error=False,
-            )
-            return
-        self._note(f"Case export failed: {message}", error=True)
 
     # -- push active layer into the case -------------------------------------- #
 
@@ -2010,20 +1950,18 @@ class Trid3ntDock(QDockWidget):
 
         THE fold chokepoint for decision A (NATE 2026-07-31): a case is
         confirmed open here with its chat AND its persisted layers restored
-        together, in one gesture -- the redundant explicit "Open in
-        QGIS"/"Export GeoTIFFs" action is gone (see ``hydrate_case_layers``).
+        together, in one gesture -- there is no separate export action.
         ``info.layers`` already carries the case's persisted
-        ``loaded_layer_summaries`` (the SAME source ``/api/case-layers``'s
-        manifest would have served -- no extra HTTP round trip needed, it
-        rides the case-open envelope for free), parsed by the client the
-        SAME way a manual manifest fetch would. LOCAL-mode-only: the by-URI
-        materializer needs the store directly reachable, which remote mode
-        cannot do yet (it "keeps its existing explicit flow" -- currently
-        none, until remote store access lands; see DELETION_LEDGER).
+        ``loaded_layer_summaries`` -- no extra HTTP round trip needed, it
+        rides the case-open envelope for free, parsed by the client the
+        SAME way a live publish would. The by-URI materializer STREAMS each
+        layer in place from the advertised store via ``/vsicurl/`` (which the
+        tailnet endpoint makes directly reachable -- the remote client reads
+        the same objects ranged over the tailnet, no download (ADR 0116).
 
         Rebinds the dock: authoritative title in the header, a FRESH layer
         group named for the case (dedup reset), the persisted loaded_layers
-        replayed into it (LOCAL mode), an OpenStreetMap basemap
+        replayed into it (streamed in place), an OpenStreetMap basemap
         (settings-gated, item 4), and a canvas zoom to the case bbox -- or,
         absent one, the union of the vector layers just materialized, or a
         further fallback bbox -- so the canvas is never silently left
@@ -2628,3 +2566,6 @@ class Trid3ntDock(QDockWidget):
                 pass
         self._push_tree_actions = []
         self.bridge.stop()
+        # Remote-streaming session TTL (ADR 0116): dock close / plugin unload
+        # ends the session -- remove its staging dir so nothing survives it.
+        self.materializer.cleanup_session()
