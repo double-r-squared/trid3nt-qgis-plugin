@@ -212,12 +212,24 @@ def run_pipeline(
     tr = pmeta.pop("lonlat_transformer")
     LOG.info("centerline processed: %s", pmeta)
 
-    # 2b. real river banks from NHDArea polygons (honest fallback to the
-    # constant-width ribbon when the fetch/sampling cannot see water).
-    bank_source = "constant"
+    # 2b. river banks from an EXPLICIT source (NATE oceanmesh-wave leg 1 - no
+    # inexplicit mesh-source fallbacks). "nhd_area" (default) samples real NHDArea
+    # water polygons for per-station banks; "constant_ribbon" meshes the assumed
+    # constant channel width. On the nhd_area path with NO NHDArea coverage the
+    # worker raises BanksUnavailableError (typed TELEMAC_BANKS_UNAVAILABLE gate)
+    # instead of silently ribboning. bank_source below is the OUTPUT provenance
+    # label (constant_ribbon | nhd_area); it upgrades to nhd_area on a real-bank hit.
+    _raw_bank_source = str(getattr(cfg, "bank_source", "nhd_area")).lower()
+    _bank_mode = (
+        "constant_ribbon"
+        if _raw_bank_source in ("constant", "constant_ribbon", "ribbon")
+        else "nhd_area"  # "nhd_area" (default) / legacy "auto" / anything else
+    )
+    bank_source = "constant_ribbon"
     bank_stats = {}
-    if str(getattr(cfg, "bank_source", "auto")).lower() != "constant":
+    if _bank_mode == "nhd_area":
         _bank_t0 = time.time()
+        _banks_available = False
         try:
             lon0, lat0 = ll[:, 0].min(), ll[:, 1].min()
             lon1, lat1 = ll[:, 0].max(), ll[:, 1].max()
@@ -262,25 +274,31 @@ def run_pipeline(
                     # M3: the mesh builder carves ribbon-minus-water as island
                     # holes (walls), so slicks/dye route around real islands.
                     cfg.water_polys_utm = polys_utm
-                    bank_source = "nhdarea"
+                    bank_source = "nhd_area"
+                    _banks_available = True
                     bank_stats = {
                         "bank_valid_frac": frac,
                         "bank_width_min_m": round(float(2 * halfw.min()), 1),
                         "bank_width_mean_m": round(float(2 * halfw.mean()), 1),
                         "bank_width_max_m": round(float(2 * halfw.max()), 1),
                     }
-                    LOG.info("real banks: nhdarea frac=%.2f width min/mean/max="
+                    LOG.info("real banks: nhd_area frac=%.2f width min/mean/max="
                              "%.0f/%.0f/%.0f m", frac,
                              bank_stats["bank_width_min_m"],
                              bank_stats["bank_width_mean_m"],
                              bank_stats["bank_width_max_m"])
                 else:
-                    LOG.warning("bank sampling saw too little water; "
-                                "constant-width fallback")
+                    LOG.warning("bank sampling saw too little water on the "
+                                "nhd_area path")
             else:
-                LOG.warning("no NHDArea polygons; constant-width fallback")
-        except Exception:  # noqa: BLE001 -- banks are an enhancement, never fatal
-            LOG.exception("bank estimation failed; constant-width fallback")
+                LOG.warning("no NHDArea polygons on the nhd_area path")
+        except Exception:  # noqa: BLE001 -- on the nhd_area path this gates below
+            LOG.exception("NHDArea bank estimation failed on the nhd_area path")
+        if not _banks_available:
+            # No inexplicit mesh-source fallback: gate loudly with the assumed
+            # channel width as the explicit constant_ribbon retry (the server
+            # turns this into the TELEMAC_BANKS_UNAVAILABLE tool-retry gate).
+            raise B.BanksUnavailableError(float(cfg.channel_width_m))
 
     # 3. Gmsh mesh (tagged boundary)
     mesh = B.build_channel_mesh(cl, cfg)
@@ -744,8 +762,21 @@ def main(argv: list[str] | None = None) -> int:
         })
         return 2
 
+    import telemac_river_dye_build as B  # noqa: WPS433 -- for the typed banks gate
+
     try:
         metrics = run_pipeline(data_dir, reach_overrides, run_id, mesh_only=mesh_only)
+    except B.BanksUnavailableError as exc:  # nhd_area path, no NHDArea coverage
+        LOG.warning("telemac banks unavailable: %s", exc)
+        _write_metrics(data_dir, {
+            "status": "error",
+            "correct_end": False,
+            "error_code": "TELEMAC_BANKS_UNAVAILABLE",
+            "error": str(exc),
+            "bank_source_retry": "constant_ribbon",
+            "assumed_channel_width_m": float(exc.assumed_channel_width_m),
+        })
+        return 3
     except Exception as exc:  # noqa: BLE001 -- any pipeline failure is a typed metrics error
         LOG.exception("telemac pipeline failed")
         _write_metrics(data_dir, {

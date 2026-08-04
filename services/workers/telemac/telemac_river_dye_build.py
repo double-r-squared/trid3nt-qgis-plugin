@@ -104,10 +104,14 @@ class ReachConfig:
     # Absent (the common case) the release coords seed as before.
     seed_release_lon: float = None      # type: ignore[assignment]
     seed_release_lat: float = None      # type: ignore[assignment]
-    # real-bank meshing: "auto" samples USGS NHDArea river polygons for
+    # EXPLICIT bank source (NATE oceanmesh-wave leg 1 - no inexplicit mesh-source
+    # fallbacks): "nhd_area" (default) samples USGS NHDArea river polygons for
     # per-station left/right bank offsets (mesh follows the REAL river);
-    # "constant" keeps the legacy fixed-width ribbon.
-    bank_source: str = "auto"
+    # "constant_ribbon" uses the assumed constant channel width. On the nhd_area
+    # path with NO NHDArea coverage the worker raises BanksUnavailableError (a
+    # typed gate) rather than silently ribboning - the DEM_FALLBACK_GATE pattern.
+    # Legacy manifest spellings map: "auto" -> nhd_area, "constant" -> constant_ribbon.
+    bank_source: str = "nhd_area"
     # wrong-watercourse fix: when the prompt NAMES the river, re-seed
     # onto the NAMED GNIS mainstem before the NLDI position-snap. A raw
     # geocode-point snap near a confluence (Longview = Columbia x Cowlitz)
@@ -421,6 +425,29 @@ def process_centerline(ll: np.ndarray, cfg: ReachConfig):
 # ---------------------------------------------------------------------------
 # 2b. real river banks from USGS NHDArea polygons
 # ---------------------------------------------------------------------------
+class BanksUnavailableError(RuntimeError):
+    """The nhd_area bank source could not produce real banks for this reach.
+
+    NATE oceanmesh-wave leg 1 (no inexplicit mesh-source fallbacks): on the
+    default ``bank_source="nhd_area"`` path, when NO NHDArea water polygon covers
+    the reach (empty fetch / too little sampled water / fetch error) the worker
+    does NOT silently substitute the constant-width ribbon. It raises THIS typed
+    error so the server surfaces a ``TELEMAC_BANKS_UNAVAILABLE`` gate naming the
+    explicit retry ``bank_source="constant_ribbon"`` + the assumed channel width -
+    the DEM_FALLBACK_GATE pattern for a mesh-geometry source.
+    """
+
+    def __init__(self, assumed_channel_width_m: float) -> None:
+        self.assumed_channel_width_m = float(assumed_channel_width_m)
+        super().__init__(
+            "no USGS NHDArea water polygon covers this reach on the nhd_area bank "
+            "source, so real per-station banks could not be sampled. No bank "
+            "geometry was substituted automatically. Retry with "
+            f'bank_source="constant_ribbon" to mesh an assumed constant '
+            f"{self.assumed_channel_width_m:g} m channel-width ribbon instead."
+        )
+
+
 _NHDAREA_URL = (
     "https://hydro.nationalmap.gov/arcgis/rest/services/NHDPlus_HR/"
     "MapServer/8/query"
@@ -430,10 +457,19 @@ _NHDAREA_URL = (
 def fetch_bank_polygons(bbox4326, timeout=30.0):
     """NHDArea water polygons intersecting ``bbox4326`` (lonlat) as a list of
     (exterior_ring, [hole_rings]) lonlat arrays. None on ANY failure/empty -
-    the caller falls back to the constant-width ribbon (honest degrade)."""
+    on the nhd_area path the caller raises BanksUnavailableError (no inexplicit
+    ribbon fallback)."""
     import json as _json
+    import os as _os
     import urllib.parse
     import urllib.request
+
+    # Test seam (leg 1 forced-empty gate drive): force an empty NHDArea response
+    # so the nhd_area banks gate can be exercised on a reach that does have
+    # coverage. Env-gated only; the live path is untouched when unset.
+    if _os.environ.get("TRID3NT_TELEMAC_FORCE_BANKS_EMPTY"):
+        LOG.warning("fetch_bank_polygons: FORCED empty (TRID3NT_TELEMAC_FORCE_BANKS_EMPTY)")
+        return None
 
     params = urllib.parse.urlencode({
         "geometry": ",".join(f"{v:.6f}" for v in bbox4326),

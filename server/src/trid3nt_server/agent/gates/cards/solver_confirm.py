@@ -820,6 +820,14 @@ async def _build_telemac_mesh_envelope(
     dt = float(stats["time_step_s"])
     est_s = float(stats["est_solve_seconds"])
     where = stats.get("location_name") or params.get("location") or "?"
+    # bank-source provenance (leg 1) shown on the approve-mesh card so the user
+    # sees whether the previewed banks are real (nhd_area) or an assumed ribbon.
+    _bank_source = str(stats.get("bank_source") or "constant_ribbon")
+    _bank_note = (
+        " Banks: real NHDArea geometry."
+        if _bank_source == "nhd_area"
+        else " Banks: assumed constant-width ribbon."
+    )
 
     # Release-coverage guard: when the CALL carried plausible release coords
     # the preview seeds the reach from them, so the built mesh should
@@ -877,7 +885,7 @@ async def _build_telemac_mesh_envelope(
         coarsened="clamped" in str(stats.get("resolution_label") or ""),
         reason=(
             f"Mesh previewed on the map: {npoin:,} nodes / {nelem:,} triangles "
-            f"at {h:g} m edges; CFL-coupled timestep {dt:g} s."
+            f"at {h:g} m edges; CFL-coupled timestep {dt:g} s." + _bank_note
         )[:512],
         spot_label=None,
     )
@@ -896,6 +904,7 @@ async def _build_telemac_mesh_envelope(
             # a point exists; the point rides back in revised_args.
             "release_point_required": True,
             "mesh_bbox": list(stats.get("bbox") or []),
+            "bank_source": _bank_source,
         },
         estimated_mb=0.0,
         threshold_mb=0.0,

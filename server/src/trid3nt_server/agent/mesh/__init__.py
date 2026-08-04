@@ -23,6 +23,12 @@ They keep their paradigm-native derivation; this layer owns the SERVER surface.
 
 from __future__ import annotations
 
+from trid3nt_server.agent.mesh.coastal_tin import (
+    CoastalTinError,
+    CoastalTinSpec,
+    compose_coastal_tin_manifest,
+    run_coastal_tin_worker,
+)
 from trid3nt_server.agent.mesh.grid_geometry import (
     RegularGrid,
     regular_grid_from_bbox,
@@ -57,6 +63,10 @@ from trid3nt_server.agent.mesh.spatial_roles import (
 )
 
 __all__ = [
+    "CoastalTinSpec",
+    "CoastalTinError",
+    "compose_coastal_tin_manifest",
+    "run_coastal_tin_worker",
     "RegularGrid",
     "regular_grid_from_bbox",
     "read_2d_flow_area_cells",

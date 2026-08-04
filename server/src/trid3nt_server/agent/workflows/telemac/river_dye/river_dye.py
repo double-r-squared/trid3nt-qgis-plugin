@@ -46,6 +46,7 @@ from trid3nt_server.agent.tools import register_tool
 from trid3nt_server.agent.tool_arg_normalizer import coerce_bbox_value
 from trid3nt_server.agent.workflows.telemac._template_card import TemplateCard
 from trid3nt_server.agent.workflows.telemac.model_river_dye_release_scenario.model_river_dye_release_scenario import (
+    TelemacBanksUnavailableError,
     TelemacDyeScenarioError,
     model_river_dye_release_scenario,
     plausible_release_coords,
@@ -132,6 +133,7 @@ async def telemac_river_dye(
     velocity_diffusivity: float | None = None,
     tracer_diffusivity: float | None = None,
     compute_class: str = "medium",
+    bank_source: str = "nhd_area",
     # 2026-07-18 release-seeding tri-state, set ONLY by the approve-mesh
     # decision tail (underscore prefix -> stripped from the LLM schema by
     # _strip_private_params): True = the release coords came on the CALL and
@@ -248,6 +250,15 @@ async def telemac_river_dye(
             (m2/s), sets lateral plume spread. Default 0.1; clamped
             [1e-3, 10].
         compute_class: FR-CE-3 compute class. Default ``"medium"``.
+        bank_source: river-bank geometry source. ``"nhd_area"`` (default) meshes
+            REAL banks sampled from USGS NHDArea water polygons; when NO NHDArea
+            polygon covers the reach the tool RAISES the typed retryable
+            ``TELEMAC_BANKS_UNAVAILABLE`` gate naming the explicit
+            ``bank_source="constant_ribbon"`` retry (an assumed constant channel
+            width) -- it NEVER silently substitutes the ribbon. Set
+            ``"constant_ribbon"`` to mesh the assumed ``channel_width_m`` ribbon
+            directly (labeled as an assumption in the result). Do NOT default to
+            constant_ribbon to dodge the gate: real banks are more faithful.
 
     Returns:
         On success: ``TelemacDyeLayerURI`` (``LayerURI`` subtype) - emitter
@@ -537,6 +548,7 @@ async def telemac_river_dye(
             velocity_diffusivity=velocity_diffusivity,
             tracer_diffusivity=tracer_diffusivity,
             compute_class=compute_class,
+            bank_source=bank_source,
         )
         logger.info(
             "telemac_river_dye complete layer_id=%s dye_cmax_mgl=%.4g plume_reach_m=%s "
@@ -546,6 +558,12 @@ async def telemac_river_dye(
         )
         return peak
     except asyncio.CancelledError:
+        raise
+    except TelemacBanksUnavailableError:
+        # No inexplicit mesh-source fallback (leg 1): RE-RAISE so the adapter's
+        # summarize_tool_result surfaces the typed retryable gate + .suggestions
+        # (naming bank_source="constant_ribbon") and it rides the tool-retry loop,
+        # rather than being swallowed into a flat error dict below.
         raise
     except (TelemacDyeScenarioError, PostprocessTelemacError) as exc:
         logger.warning("telemac_river_dye failed: %s (%s)", getattr(exc, "error_code", "?"), exc)

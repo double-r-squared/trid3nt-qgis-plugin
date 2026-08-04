@@ -383,6 +383,48 @@ class TelemacDyeScenarioInputError(TelemacDyeScenarioError):
         super().__init__("TELEMAC_DYE_SCENARIO_INPUT_INVALID", message)
 
 
+class TelemacBanksUnavailableError(TelemacDyeScenarioError):
+    """The default ``bank_source="nhd_area"`` path found no NHDArea coverage.
+
+    NATE oceanmesh-wave leg 1 (no inexplicit mesh-source fallbacks): the worker
+    would not silently substitute the constant-width ribbon for missing real
+    banks. This typed, RETRYABLE gate (the DEM_FALLBACK_GATE pattern) names the
+    explicit retry ``bank_source="constant_ribbon"`` + the assumed channel width
+    and carries ``.suggestions`` so it rides the tool-retry loop and the user
+    approves the ribbon substitution conversationally.
+    """
+
+    retryable = True
+
+    def __init__(self, assumed_channel_width_m: float | None) -> None:
+        self.assumed_channel_width_m = (
+            float(assumed_channel_width_m)
+            if assumed_channel_width_m is not None
+            else None
+        )
+        width_txt = (
+            f"an assumed constant {self.assumed_channel_width_m:g} m channel-width "
+            "ribbon"
+            if self.assumed_channel_width_m is not None
+            else "an assumed constant channel-width ribbon"
+        )
+        super().__init__(
+            "TELEMAC_BANKS_UNAVAILABLE",
+            "No USGS NHDArea water polygon covers this river reach, so real "
+            'per-station banks could not be sampled for bank_source="nhd_area". '
+            "No bank geometry was substituted automatically -- switching to an "
+            "assumed channel width is a user decision. Retry with "
+            f'bank_source="constant_ribbon" to mesh {width_txt} instead, or name a '
+            "reach with mapped NHDArea coverage.",
+        )
+        self.suggestions = [  # type: ignore[attr-defined]
+            'Retry with bank_source="constant_ribbon" to mesh '
+            + width_txt
+            + " (an assumed width, not real surveyed banks).",
+            "Or name a larger/mapped river reach that has USGS NHDArea coverage.",
+        ]
+
+
 # --------------------------------------------------------------------------- #
 # Registry / geometry helpers
 # --------------------------------------------------------------------------- #
@@ -673,6 +715,51 @@ def _download_telemac_result(run_id: str) -> tuple[str, int]:
     return slf_path, utm_epsg
 
 
+def _read_run_metrics(run_id: str) -> dict[str, Any]:
+    """Best-effort read of ``<run_id>/telemac_metrics.json`` from the runs bucket.
+
+    Returns ``{}`` on any miss. The worker uploads this file even on a failed run
+    (the supervisor uploads outputs before writing completion.json), so it is the
+    channel through which a worker-side typed error_code (e.g.
+    ``TELEMAC_BANKS_UNAVAILABLE``) reaches the server."""
+    from trid3nt_server.agent.tools.simulation.solver.solver import (
+        _get_runs_bucket,
+        _get_s3_client,
+    )
+
+    try:
+        s3 = _get_s3_client()
+        obj = s3.get_object(
+            Bucket=_get_runs_bucket(), Key=f"{run_id}/telemac_metrics.json"
+        )
+        loaded = json.loads(obj["Body"].read().decode("utf-8"))
+        return loaded if isinstance(loaded, dict) else {}
+    except Exception as exc:  # noqa: BLE001 -- absence => no typed gate to surface
+        logger.info("telemac: run metrics read miss for %s: %s", run_id, exc)
+        return {}
+
+
+def _normalize_bank_source(value: Any) -> str:
+    """Coerce a bank_source arg to the closed set {nhd_area, constant_ribbon}.
+
+    Default + any unknown spelling -> ``nhd_area`` (the real-bank path with its
+    typed unavailable gate); legacy/synonym spellings for the ribbon collapse to
+    ``constant_ribbon``. Keeps the worker's own legacy-spelling map redundant but
+    means the manifest always carries a canonical value."""
+    v = str(value or "nhd_area").strip().lower().replace("-", "_")
+    if v in ("constant_ribbon", "constant", "ribbon", "constant_width"):
+        return "constant_ribbon"
+    return "nhd_area"
+
+
+def _raise_if_banks_unavailable(metrics: dict[str, Any]) -> None:
+    """Surface the worker's ``TELEMAC_BANKS_UNAVAILABLE`` gate as the typed,
+    retryable :class:`TelemacBanksUnavailableError` (rides the tool-retry loop
+    with ``.suggestions``). No-op when the worker did not raise the banks gate."""
+    if str(metrics.get("error_code") or "") == "TELEMAC_BANKS_UNAVAILABLE":
+        raise TelemacBanksUnavailableError(metrics.get("assumed_channel_width_m"))
+
+
 def _download_telemac_gaia(run_id: str) -> tuple[str | None, dict[str, Any]]:
     """Download ``gaia_river.slf`` + read the sediment metrics from
     ``telemac_metrics.json`` for a GAIA sediment run. Returns
@@ -739,6 +826,7 @@ async def model_river_dye_release_scenario(
     velocity_diffusivity: float | None = None,
     tracer_diffusivity: float | None = None,
     compute_class: str = "medium",
+    bank_source: str = "nhd_area",
     pipeline_emitter: Any | None = None,
 ) -> TelemacDyeLayerURI:
     """Compose place/AOI -> river reach -> TELEMAC-2D dye pulse -> animated layer.
@@ -975,6 +1063,9 @@ async def model_river_dye_release_scenario(
         "nav_direction": "DM",
         "distance_km": float(reach_length_km),
         "channel_width_m": float(channel_width_m),
+        # EXPLICIT bank source (leg 1): nhd_area (default, real banks or a typed
+        # TELEMAC_BANKS_UNAVAILABLE gate) | constant_ribbon (assumed width).
+        "bank_source": _normalize_bank_source(bank_source),
         "mesh_size_m": mesh_size_m,
         "time_step_s": time_step_s,
         "dye_conc_mgl": float(dye_concentration_mgl),
@@ -1074,6 +1165,14 @@ async def model_river_dye_release_scenario(
     await route_sim_terminal(emitter, _sim_step_id, run_result=run_result)
 
     if run_result is None or run_result.status != "complete":
+        # A worker that aborted on the nhd_area banks gate surfaces the typed,
+        # retryable TELEMAC_BANKS_UNAVAILABLE (naming the constant_ribbon retry)
+        # rather than a generic run-failed error (no inexplicit fallback).
+        _raise_if_banks_unavailable(
+            await asyncio.to_thread(
+                _read_run_metrics, getattr(run_result, "run_id", None) or run_id
+            )
+        )
         raise TelemacDyeScenarioError(
             "TELEMAC_DYE_RUN_FAILED",
             "TELEMAC dye solve did not complete "
@@ -1085,6 +1184,11 @@ async def model_river_dye_release_scenario(
     # --- Stage 5: download the SELAFIN result + postprocess to the dye COG ---- #
     batch_run_id = getattr(run_result, "run_id", None) or run_id
     slf_path, utm_epsg = await asyncio.to_thread(_download_telemac_result, batch_run_id)
+    # Bank-source PROVENANCE for the result envelope (leg 1): the worker records
+    # the OUTPUT provenance (nhd_area = real sampled banks | constant_ribbon =
+    # assumed width) in telemac_metrics.json; carry it onto the layer narration.
+    _run_metrics = await asyncio.to_thread(_read_run_metrics, batch_run_id)
+    _bank_provenance = str(_run_metrics.get("bank_source") or "constant_ribbon")
 
     try:
         async with substep(emitter, "postprocess_telemac"):
@@ -1115,6 +1219,7 @@ async def model_river_dye_release_scenario(
         peak = await asyncio.to_thread(
             _publish_peak_layer, raw_peak, batch_run_id, location_name, reach_name,
             mesh_size_m, mesh_node_estimate, mesh_resolution_label, substance,
+            _bank_provenance,
         )
 
     logger.info(
@@ -1248,6 +1353,7 @@ def _publish_peak_layer(
     mesh_node_estimate: int | None = None,
     mesh_resolution_label: str | None = None,
     substance: str = "dye",
+    bank_source: str = "constant_ribbon",
 ) -> TelemacDyeLayerURI:
     """Publish the peak dye COG through publish_layer (render chokepoint) and
     enrich the narration. On publish failure the raw peak is returned UNCHANGED
@@ -1264,6 +1370,13 @@ def _publish_peak_layer(
             f"tracer (transport + dilution only) - NOT slick physics "
             f"(no spreading/evaporation/weathering/beaching)."
         )
+    banks_note = (
+        " Banks: real USGS NHDArea water-polygon geometry (per-station sampled "
+        "widths)."
+        if bank_source == "nhd_area"
+        else " Banks: an ASSUMED constant channel-width ribbon (bank_source="
+        "constant_ribbon), not real surveyed banks."
+    )
     honesty = (
         f"Idealized demo: a FINITE mid-reach point-source {substance or 'dye'} "
         f"pulse released on "
@@ -1271,6 +1384,7 @@ def _publish_peak_layer(
         f"planar idealized channel bed with prescribed tracer dispersion. The "
         f"raster is the PEAK concentration envelope over the run; the animation "
         f"plays from the native SELAFIN mesh. Not a calibrated site study."
+        + banks_note
         + surrogate
     )
     # the chosen mesh granularity travels on every return branch so the
@@ -1459,6 +1573,10 @@ async def preview_telemac_mesh(
         "nav_direction": "DM",
         "distance_km": reach_length_km,
         "channel_width_m": channel_width_m,
+        # EXPLICIT bank source (leg 1) mirrored into the preview so the gate
+        # meshes with the SAME banks the approved solve will, and a nhd_area
+        # reach with no NHDArea coverage gates at the preview too.
+        "bank_source": _normalize_bank_source(params.get("bank_source")),
         "mesh_size_m": mesh_size_m,
         "time_step_s": time_step_s,
     }
@@ -1488,13 +1606,20 @@ async def preview_telemac_mesh(
         # A healthy mesh-only run is ~10-40 s; 240 s bounds a hung gmsh so a
         # broken preview cannot park the turn before the gate falls open.
         run_result = await wait_for_completion(handle, poll_interval_s=3, timeout_s=240)
+        mesh_run_id = getattr(run_result, "run_id", None) or handle.run_id
         if run_result is None or run_result.status != "complete":
+            # A nhd_area preview with no NHDArea coverage surfaces the typed,
+            # retryable banks gate (naming the constant_ribbon retry) instead of
+            # the generic mesh-build failure -- so the gate text appears at the
+            # approve-mesh surface too, not only after the (fail-open) solve.
+            _raise_if_banks_unavailable(
+                await asyncio.to_thread(_read_run_metrics, mesh_run_id)
+            )
             raise TelemacDyeScenarioError(
                 "TELEMAC_MESH_BUILD_FAILED",
                 "mesh-only preview run did not complete "
                 f"(status={getattr(run_result, 'status', None)}).",
             )
-        mesh_run_id = getattr(run_result, "run_id", None) or handle.run_id
 
         def _read_mesh_metrics() -> dict[str, Any]:
             s3 = _get_s3_client()
@@ -1585,6 +1710,10 @@ async def preview_telemac_mesh(
         "location_name": location_name,
         "bbox": bbox4326,
         "wireframe_capped": bool(m.get("wireframe_capped")),
+        # bank-source provenance for the mesh gate stats (leg 1): nhd_area (real
+        # sampled banks) | constant_ribbon (assumed width). The gate card reads it.
+        "bank_source": str(m.get("bank_source") or "constant_ribbon"),
+        "bank_width_mean_m": m.get("bank_width_mean_m"),
     }
 
 

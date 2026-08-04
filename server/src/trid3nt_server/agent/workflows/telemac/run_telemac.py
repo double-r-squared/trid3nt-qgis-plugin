@@ -83,6 +83,10 @@ _COMPLETION_METRIC_KEYS: tuple[str, ...] = (
     "preview_geojson",
     "bank_source",
     "bank_width_mean_m",
+    # leg 1 banks gate: fold the worker's typed banks-unavailable signal into the
+    # completion so run_result carries it (the composer also reads it directly).
+    "error_code",
+    "assumed_channel_width_m",
 )
 
 
