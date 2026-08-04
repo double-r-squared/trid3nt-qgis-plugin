@@ -1004,9 +1004,12 @@ def _autowire_river_discharge_forcing(
 
     # --- 1) PRIMARY: NOAA NWM streamflow (key-free, CONUS) ------------------ #
     try:
-        from trid3nt_server.agent.tools.fetchers.hydrology.fetch_noaa_nwm_streamflow.fetch_noaa_nwm_streamflow import fetch_noaa_nwm_streamflow
+        # Seam-1 registry closure (ADR 0112 fold): fetch_noaa_nwm_streamflow is now the
+        # spec-driven router tool under its twin name; resolve it via TOOL_REGISTRY (never
+        # a module internal, which no longer exists). Keyword-only, envelope unchanged.
+        from trid3nt_server.agent.tools import TOOL_REGISTRY
 
-        layer = fetch_noaa_nwm_streamflow(bbox)
+        layer = TOOL_REGISTRY["fetch_noaa_nwm_streamflow"].fn(bbox=bbox)
         uri = getattr(layer, "uri", None)
         if uri:
             if data_sources is not None:

@@ -96,12 +96,15 @@ def test_envelope_is_strict_no_op_for_priors():
     0097 -- the naming override via a no-field DemLayerURI; topobathy, ADR 0110 --
     the twin layer_id/name + the four provenance fields via the channel;
     storm_tracks + goes_satellite, ADR 0111 -- the twin layer_id/name + the mode /
-    scan provenance via the channel); every other spec leaves both unset (no-op)."""
+    scan provenance via the channel; nwm_streamflow, ADR 0112 -- the twin
+    layer_id/name + the reference-time / reach-count / NLDI-sample provenance via the
+    channel); every other spec leaves both unset (no-op)."""
     envelope_folds = {
         "fetch_high_water_marks", "fetch_fault_sources",
         "fetch_landcover", "fetch_flood_extent_observation",
         "fetch_dem", "fetch_topobathy",
         "fetch_storm_tracks", "fetch_goes_satellite",
+        "fetch_noaa_nwm_streamflow",
     }
     with_env = {s.name for s in _SPECS.values() if s.hooks is not None and s.hooks.envelope}
     with_rm = {s.name for s in _SPECS.values() if s.output.result_model}

@@ -261,7 +261,12 @@ def clear_registry_for_tests() -> None:
 # fetch_nhdplus_nldi_navigate: data-router fold phase-2 wave-3 (ADR 0040) -- twin
 # DELETED, now spec-driven (source.yaml + dataretrieval-delegating router),
 # registered by _register_router_specs() below.
-from .fetchers.hydrology.fetch_noaa_nwm_streamflow import fetch_noaa_nwm_streamflow  # noqa: E402,F401
+# fetch_noaa_nwm_streamflow FOLDED to a spec-driven surface (ADR 0112, THE FETCHER-FINALE
+# ENDGAME -- the LAST coded data-fetcher): its source.yaml + the nwm_streamflow.* library-
+# delegate hooks (the S3 channel_rt netCDF read -> {feature_id: streamflow} lookup + the NLDI
+# 5x5 spatial sample -> COMIDs + per-reach geometry + JOIN -> point FGB, over the fetch-time
+# provenance channel) register at import via register_specs_from_tree; the NWMStreamflow*Error
+# twins live in _router/hooks/nwm_streamflow.py. No eager twin import.
 # fetch_nws_river_forecast: data-router fold chained-resolution mode (ADR 0063) -- twin
 # DELETED, now spec-driven (source.yaml + nws_river_forecast hooks: gauges-by-bbox / single
 # detail + bounded per-gauge threshold/stageflow enrichment), registered below.

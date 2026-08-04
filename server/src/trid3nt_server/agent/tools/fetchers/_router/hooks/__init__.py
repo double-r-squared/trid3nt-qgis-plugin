@@ -335,3 +335,11 @@ from . import storm_tracks  # noqa: E402,F401
 # -> netCDF -> CF-scale physical-units reproject returning (array, transform, crs) + a
 # scan-time provenance RECORD), envelope (twin em-dash name + scan provenance replay).
 from . import goes_satellite  # noqa: E402,F401
+# fetch_noaa_nwm_streamflow fold (ADR 0112, THE FETCHER-FINALE ENDGAME -- the LAST coded
+# data-fetcher): the NOAA National Water Model multi-source composite library-delegate
+# hooks -- validate (CONUS-intersect + short_range fhour rule + valid_time parse), read
+# (own the S3 channel_rt netCDF read -> {feature_id: streamflow} lookup + the NLDI 5x5
+# spatial sample -> COMIDs + per-reach geometry + JOIN -> point features, and a
+# reference-time/reach-count/NLDI-sample provenance RECORD), envelope (twin
+# nwm-streamflow-{product}-{seed} layer_id + name + provenance replay).
+from . import nwm_streamflow  # noqa: E402,F401

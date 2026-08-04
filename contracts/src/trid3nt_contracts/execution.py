@@ -43,6 +43,7 @@ __all__ = [
     "TopobathyResult",
     "StormTracksLayerURI",
     "GOESSatelliteLayerURI",
+    "NWMStreamflowLayerURI",
     "LAYER_RESULT_MODELS",
 ]
 
@@ -490,6 +491,37 @@ class GOESSatelliteLayerURI(LayerURI):
     scan_time: str | None = None
 
 
+class NWMStreamflowLayerURI(LayerURI):
+    """The NOAA NWM point-streamflow ``LayerURI`` plus its fetch-time cycle provenance.
+
+    The ``fetch_noaa_nwm_streamflow`` fold's result model (ADR 0112, the fetcher-finale
+    endgame -- the LAST coded data-fetcher). The twin returned a plain ``LayerURI``; the
+    router's only seam to reproduce its exact ``layer_id`` /
+    ``name`` (``nwm-streamflow-{product}-{seed}`` + ``NWM streamflow -- <product>
+    (<latest|valid_time>[ +fNNN])``) is the ``hooks.envelope`` post-emit hook, which pairs
+    with a result model. The extra fields are FETCH-TIME PROVENANCE for a MULTI-SOURCE
+    COMPOSITE (which NWM cycle served + how many reaches joined + how many NLDI COMIDs the
+    5x5 bbox sample discovered) -- carried from the delegate to here by the provenance
+    channel (``nwm_streamflow.read`` records them; ``nwm_streamflow.envelope`` reads them
+    back), so they survive a cache hit that never re-runs the composite fetch. The
+    ``reference_time`` in particular is UNRECOVERABLE from the produced FGB's per-feature
+    ``valid_time`` attribute on a pre-channel cache object, so the channel is what makes it
+    durable. A pre-channel cache object (no sidecar) yields ``None`` provenance and these
+    declared DEFAULTS hold.
+
+    - ``product`` -- the NWM configuration that served (``"analysis_assim"`` / ``"short_range"``).
+    - ``reference_time`` -- the ISO valid/reference time of the resolved NWM cycle
+      (``None`` on a pre-channel cache object).
+    - ``reach_count`` -- number of joined NHDPlus reach points in the emitted layer.
+    - ``nldi_comids_discovered`` -- COMIDs the NLDI 5x5 bbox sample snapped (>= reach_count).
+    """
+
+    product: str = "analysis_assim"
+    reference_time: str | None = None
+    reach_count: int = 0
+    nldi_comids_discovered: int = 0
+
+
 #: name -> LayerURI-subclass. A spec's ``output.result_model`` string resolves
 #: here; the router builds the named subclass from the base LayerURI + the
 #: envelope hook's field dict. Empty of a name -> the plain LayerURI (no-op).
@@ -502,6 +534,7 @@ LAYER_RESULT_MODELS: dict[str, type[LayerURI]] = {
     "TopobathyResult": TopobathyResult,
     "StormTracksLayerURI": StormTracksLayerURI,
     "GOESSatelliteLayerURI": GOESSatelliteLayerURI,
+    "NWMStreamflowLayerURI": NWMStreamflowLayerURI,
 }
 
 
