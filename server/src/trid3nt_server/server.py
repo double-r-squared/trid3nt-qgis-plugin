@@ -11413,6 +11413,122 @@ async def _dispatch_tool_and_persist(
         )
 
 
+def _reconstruct_run_signature(name: str, args: dict) -> str:
+    """A human ``!run <name>(...)`` line for the persisted user row when the
+    client sent no ``raw_text`` (older client / programmatic driver). The exact
+    composer text is preferred (carries the user's literal syntax); this is the
+    honest fallback so a Case reopen still shows an attributable invocation."""
+    import json as _json
+
+    if not args:
+        return f"!run {name}"
+    try:
+        return f"!run {name} {_json.dumps(args, default=str)}"
+    except Exception:  # noqa: BLE001
+        return f"!run {name}"
+
+
+async def _handle_dev_tool_invoke(
+    websocket: ServerConnection,
+    state: SessionState,
+    payload_dict: dict,
+) -> None:
+    """Server handler for the ``!run`` direct tool invocation (ADR 0114).
+
+    The plugin parses ``!run <tool>(...)`` CLIENT-side and sends a structured
+    ``dev-tool-invoke {name, args, case_id, raw_text?}``. This runs the named
+    registry closure OUTSIDE the LLM loop through the SAME
+    ``_dispatch_tool_and_persist`` -> ``_invoke_tool_via_emitter`` seam a
+    ``/invoke`` directive uses -- so the payload-warning / code-exec / solver
+    gates, the ``_ALWAYS_OFFLOAD_SYNC_TOOLS`` thread offload, layer
+    materialization + Case persistence, the ``tool-io`` card sidecar, and the
+    end-of-turn ``turn-complete`` ALL ride the identical rendering path a
+    model-issued call does. An unknown tool routes through the same
+    ``ToolNotFoundError`` -> ``TOOL_NOT_FOUND`` envelope (raised inside
+    ``_invoke_tool_via_emitter`` and surfaced by ``_dispatch_tool_and_persist``).
+
+    Attribution: the ``raw_text`` composer line (or a reconstructed
+    ``!run name(args)``) is persisted as the turn's user row via
+    ``_prepare_user_turn`` -- a Case reopen replays the ``!run`` signature above
+    the tool card, distinguishing a manual call from a model call without a new
+    UI surface.
+
+    Wire-shape validation only (the plugin already validated syntax): ``name``
+    a non-empty str, ``args`` a dict.
+    """
+    name = payload_dict.get("name")
+    if not isinstance(name, str) or not name.strip():
+        await _send_error(
+            websocket,
+            state.session_id,
+            "TOOL_PARAMS_INVALID",
+            "dev-tool-invoke: 'name' must be a non-empty string",
+        )
+        return
+    name = name.strip()
+    args = payload_dict.get("args")
+    if args is None:
+        args = {}
+    if not isinstance(args, dict):
+        await _send_error(
+            websocket,
+            state.session_id,
+            "TOOL_PARAMS_INVALID",
+            "dev-tool-invoke: 'args' must be an object",
+        )
+        return
+    raw_text = payload_dict.get("raw_text")
+    if not isinstance(raw_text, str) or not raw_text.strip():
+        raw_text = _reconstruct_run_signature(name, args)
+    client_case_id = payload_dict.get("case_id")
+
+    # Reset the per-turn accumulators BEFORE the turn scaffolding, mirroring the
+    # user-message dispatch, so this manual turn's CaseChatMessage captures only
+    # its own layer/pipeline emissions.
+    state.current_turn_layer_ids = []
+    state.current_turn_pipeline_id = None
+    state.current_turn_map_commands = []
+
+    # Case rebind + sync + turn pin + user-row persist (the ``!run`` line lands
+    # as the user bubble so replay is attributable). ``_prepare_user_turn``
+    # parses ``/invoke`` (which ``!run`` text never matches) and auto-creates a
+    # Case when the session has none -- both correct here.
+    await _prepare_user_turn(
+        websocket, state, raw_text, client_case_id=client_case_id
+    )
+
+    # Bind the emitter + rebind any live turns onto this socket, exactly as the
+    # user-message path does before dispatching a turn task.
+    _ensure_emitter(websocket, state)
+    _rebind_live_turns(state.session_id, state.emitter)
+
+    # Stream-scoped supersede: a manual invocation in the SAME stream cancels
+    # that stream's in-flight turn (a running LLM turn or a prior ``!run``),
+    # mirroring a re-prompt. Turns in other Cases keep running.
+    turn_key = state.current_turn_case_id or _ROOT_STREAM_KEY
+    prior = state.inflight_tasks.get(turn_key)
+    if prior is None or prior.done():
+        prior = _find_live_turn(state.session_id, turn_key)
+    if prior is not None and not prior.done():
+        prior.cancel()
+    for _done_key in [
+        k for k, t in state.inflight_tasks.items() if t.done()
+    ]:
+        state.inflight_tasks.pop(_done_key, None)
+
+    logger.info(
+        "dev-tool-invoke dispatch session=%s tool=%s case=%s",
+        state.session_id,
+        name,
+        state.current_turn_case_id,
+    )
+    task = asyncio.create_task(
+        _dispatch_tool_and_persist(websocket, state, name, args, raw_text)
+    )
+    state.inflight_tasks[turn_key] = task
+    _register_live_turn(state.session_id, turn_key, task, state.emitter)
+
+
 # --------------------------------------------------------------------------- #
 # Secrets envelope handler (credential push over the WS seam)
 # --------------------------------------------------------------------------- #
@@ -11990,6 +12106,23 @@ def _make_handler(settings: ModelSettings):
                         # the recorded emitter's sink.
                         _register_live_turn(
                             state.session_id, turn_key, task, state.emitter
+                        )
+
+                    elif msg_type == "dev-tool-invoke":
+                        # !run direct tool invocation (ADR 0114): the plugin
+                        # parsed ``!run <tool>(...)`` client-side and sent
+                        # structured {name, args}. Runs the registry closure
+                        # OUTSIDE the LLM loop through the SAME emission +
+                        # gate + persistence seam as /invoke -- see
+                        # _handle_dev_tool_invoke. Read defensively off the raw
+                        # dict (no new contract model, mirroring turn-complete
+                        # / aoi_bbox); the handler validates the wire shape and
+                        # routes an unknown tool through the TOOL_NOT_FOUND
+                        # envelope. Always-on in local mode (the tailnet is the
+                        # trust boundary; the code-exec HARD gate still fires
+                        # for code_exec_request via the shared invoke seam).
+                        await _handle_dev_tool_invoke(
+                            websocket, state, payload_dict
                         )
 
                     elif msg_type == "case-command":
@@ -12652,6 +12785,7 @@ __all__ = [
     "_emit_case_list",
     "_emit_case_open",
     "_handle_case_command",
+    "_handle_dev_tool_invoke",
     "_persist_chat_turn",
     # Lane A1: view-without-agent -- materialize the full case view to S3.
     "_persist_case_view_snapshot",

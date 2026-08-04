@@ -382,6 +382,47 @@ class TestCaseAndChat(StubServerTestCase):
         self.assertEqual(sent[0]["payload"]["case_id"], STUB_CASE_ID)
         self.assertEqual(sent[0]["case_id"], STUB_CASE_ID)
 
+    def test_run_invocation_round_trip(self):
+        # ADR 0114: the ``!run`` direct tool invocation E2E over the WS -- the
+        # client sends the structured ``dev-tool-invoke`` and the result rides
+        # the SAME tool-io + pipeline + session-state + turn-complete frames a
+        # model call produces.
+        client = self._connect()
+        client.connect()
+        client.create_case("run test")
+        client.send_dev_tool_invoke(
+            "fetch_dem",
+            {"bbox": [-85.4, 29.9, -85.3, 30.0], "source": "3dep"},
+            raw_text='!run fetch_dem(bbox=[-85.4, 29.9, -85.3, 30.0], source="3dep")',
+        )
+        events = self._collect_until_turn_complete(client)
+        kinds = [e.kind for e in events]
+        self.assertIn("pipeline", kinds)
+        self.assertIn("tool-io", kinds)
+        self.assertIn("session-state", kinds)
+        self.assertEqual(kinds[-1], "turn-complete")
+
+        # The structured invocation reached the server verbatim.
+        inv = self.server.dev_tool_invokes[-1]
+        self.assertEqual(inv["name"], "fetch_dem")
+        self.assertEqual(inv["args"]["source"], "3dep")
+        self.assertIn("raw_text", inv)
+
+        io = [e for e in events if e.kind == "tool-io"]
+        self.assertTrue(io)
+        ss = [e for e in events if e.kind == "session-state"]
+        self.assertTrue(any(e.data["layers"] for e in ss))
+
+    def test_run_invocation_unknown_tool_typed_error(self):
+        client = self._connect()
+        client.connect()
+        client.create_case("run test")
+        client.send_dev_tool_invoke("nonsense_tool", {})
+        events = self._collect_until_turn_complete(client)
+        errors = [e for e in events if e.kind == "error"]
+        self.assertTrue(errors)
+        self.assertEqual(errors[0].data.get("error_code"), "TOOL_NOT_FOUND")
+
     def test_cancel_round_trip(self):
         client = self._connect()
         client.connect()

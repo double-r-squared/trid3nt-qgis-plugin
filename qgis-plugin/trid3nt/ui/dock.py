@@ -122,6 +122,7 @@ from ..net.trid3nt_client import (
     resolve_data_base,
     resolve_http_base,
 )
+from ..net.run_invocation import USAGE as _RUN_USAGE_HINT, parse_run_invocation
 from ..net.ws_bridge import AgentBridge
 from ..plugin_settings import PluginSettings
 from ..render import probe
@@ -2518,6 +2519,43 @@ class Trid3ntDock(QDockWidget):
 
     # -- sending ------------------------------------------------------------- #
 
+    def _send_run_invocation(self, text, run_inv) -> None:
+        """Handle a parsed ``!run`` invocation (ADR 0114).
+
+        ``help`` / a local parse ``error`` render an honest local bubble and
+        send NOTHING. A valid ``(name, args)`` echoes the ``!run`` signature as
+        the user bubble (the durable attribution -- the server persists the same
+        line above the tool card) and dispatches a ``dev-tool-invoke``; the tool
+        card + turn-complete then ride the SAME rendering path a model call
+        uses.
+        """
+        self.input_edit.clear()
+        self._add_user_bubble(text)
+        if run_inv.help:
+            self._ensure_pending().add_note(_RUN_USAGE_HINT)
+            self._scroll_to_bottom()
+            self._pending = None
+            return
+        if run_inv.error is not None:
+            entry = self._ensure_pending()
+            entry.add_note(run_inv.error, error=True)
+            self._scroll_to_bottom()
+            self._pending = None
+            return
+        # Mirror the chat path's pre-send turn bookkeeping so the tool card +
+        # turn-complete land on a fresh streaming entry.
+        self._tool_picker_turn_step = 0
+        if self._pending is not None:
+            self._pending.finalize_markdown()
+        self._pending = _AssistantEntry(self.messages_layout)
+        self._scroll_to_bottom()
+        try:
+            self.bridge.send_dev_tool_invoke(
+                run_inv.name, run_inv.args, raw_text=text
+            )
+        except Exception as exc:  # noqa: BLE001
+            self._pending.add_note(f"!run send failed: {exc}", error=True)
+
     def _send(self) -> None:
         # Item A (qgis-ux-batch 2026-07-19): multi-line composer -- read the
         # full document (toPlainText), not the one-line QLineEdit .text().
@@ -2526,6 +2564,15 @@ class Trid3ntDock(QDockWidget):
             return
         if not (self._case_id and self.bridge.running):
             self.status_label.setText("Not connected -- open Settings to connect")
+            return
+        # !run direct tool invocation (ADR 0114): PARSE-FIRST, before the chat
+        # path. A ``!run`` prefix routes straight to the server as a structured
+        # ``dev-tool-invoke``; anything else (including a message that merely
+        # MENTIONS !run mid-sentence) returns None and flows to chat below,
+        # byte-identically.
+        run_inv = parse_run_invocation(text)
+        if run_inv is not None:
+            self._send_run_invocation(text, run_inv)
             return
         self.input_edit.clear()
         self._add_user_bubble(text)

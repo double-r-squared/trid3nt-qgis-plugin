@@ -1597,6 +1597,32 @@ class AgentClient:
             queue_if_closed=True,
         )
 
+    def send_dev_tool_invoke(
+        self, name: str, args: dict, raw_text: str = ""
+    ) -> None:
+        """Send a ``!run`` direct tool invocation (ADR 0114).
+
+        The dock parses ``!run <tool>(...)`` CLIENT-side (``run_invocation``)
+        and calls this with the structured ``(name, args)``. The server runs
+        the named registry closure OUTSIDE the LLM loop through the SAME
+        emission pipeline a model-issued call uses (gates, sync-tool offload,
+        layer materialization, tool-card + turn-complete), so the result rides
+        the identical rendering path. ``raw_text`` carries the original
+        composer line so the server persists it as the turn's user row and a
+        Case reopen replays the ``!run`` signature above the tool card
+        (attribution durability). Buffered while disconnected like every
+        user-intent verb.
+        """
+        payload: dict = {"name": name, "args": args, "case_id": self.case_id}
+        if raw_text:
+            payload["raw_text"] = raw_text
+        self._send(
+            "dev-tool-invoke",
+            payload,
+            case_id=self.case_id,
+            queue_if_closed=True,
+        )
+
     def cancel(self, reason: str = "user-cancel") -> None:
         self._send(
             "cancel", {"reason": reason}, case_id=self.case_id, queue_if_closed=True

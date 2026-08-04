@@ -273,6 +273,15 @@ class AgentWorker(QObject):
                 tool_choice_mode=tool_choice_mode,
             )
 
+    def send_dev_tool_invoke(
+        self, name: str, args: dict, raw_text: str = ""
+    ) -> None:
+        # ADR 0114: the parsed ``!run`` direct tool invocation. One
+        # ``dev-tool-invoke`` envelope, buffered while disconnected like every
+        # user-intent verb.
+        if self.client is not None:
+            self.client.send_dev_tool_invoke(name, args, raw_text=raw_text)
+
     def cancel(self) -> None:
         if self.client is not None:
             self.client.cancel()
@@ -461,6 +470,14 @@ class AgentBridge(QObject):
                 aoi_bbox=aoi_bbox,
                 tool_choice_mode=tool_choice_mode,
             )
+
+    def send_dev_tool_invoke(
+        self, name: str, args: dict, raw_text: str = ""
+    ) -> None:
+        # ADR 0114 (!run) pass-through to the worker's client (mutex-guarded
+        # socket write; buffers while disconnected).
+        if self._worker is not None:
+            self._worker.send_dev_tool_invoke(name, args, raw_text=raw_text)
 
     def cancel(self) -> None:
         if self._worker is not None:
