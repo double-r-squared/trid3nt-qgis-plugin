@@ -81,7 +81,8 @@ from qgis.PyQt.QtWidgets import (
 # "Push layer to case" layer-tree context-menu action (vector + raster).
 from qgis.core import QgsMapLayer
 
-from . import charts, gate
+from . import gate
+from .charts_window import ChartsWindow
 from .cards import (
     CodeExecCard,
     CredentialCard,
@@ -310,6 +311,14 @@ class Trid3ntDock(QDockWidget):
         # the old ``_aoi_status_line`` / ``_last_aoi_note`` dedupe pair is
         # removed with it.
 
+        # Charts window (charts-window 2026-08-04): NATE's TUFLOW-Viewer
+        # directive -- charts get their OWN bottom-docked window, never an
+        # in-chat panel. Built LAZILY (first chart or first "Charts (N)" button
+        # click) so a chart-less session never spawns a bottom dock. The chat
+        # keeps only the count button; ``_charts_count`` drives its label.
+        self._charts_window: Optional[ChartsWindow] = None
+        self._charts_count = 0
+
         self._build_ui()
         self._wire_bridge()
         # Item R6 (live-feedback 2026-07-18): the persistent "Push layer"
@@ -425,6 +434,16 @@ class Trid3ntDock(QDockWidget):
         self.aoi_btn.toggled.connect(self._toggle_aoi_draw)
         button_row.addWidget(self.aoi_btn)
 
+        # Charts (charts-window 2026-08-04): the count button that SHOWS the
+        # bottom charts window. It stays in the chat dock; charts themselves
+        # never render inline here. Click raises (creates lazily) the window;
+        # a new chart increments the count + subtly flags the button.
+        self.charts_btn = QToolButton()
+        self.charts_btn.setText("Charts (0)")
+        self.charts_btn.setToolTip("Show the charts window (bottom of the app)")
+        self.charts_btn.clicked.connect(self._show_charts_window)
+        button_row.addWidget(self.charts_btn)
+
         # A1 (NATE 2026-07-20): the "Clear AOI" header button is REMOVED --
         # clearing is MULTIPLEXED into the Set-AOI tool: while Set-AOI is active
         # (aoi_btn checked), pressing BACKSPACE or DELETE clears the current AOI
@@ -498,18 +517,11 @@ class Trid3ntDock(QDockWidget):
         self._probe_panel.setVisible(False)
         outer.addWidget(self._probe_panel)
 
-        # OpenQuake result parity (live-feedback 2026-07-13): the Charts
-        # panel -- the QGIS twin of the web's chart cards (hazard curves,
-        # UHS, damage distributions, ...). Same pinned-collapsible pattern
-        # as the probe panel: charts render HERE, never in the chat message
-        # list (NATE's clutter rule). Populated from the case-open replay
-        # (``session_state.charts``) and live ``chart-emission`` frames;
-        # cleared on case switch. Hidden until the case has a chart.
-        self.charts_panel = charts.ChartsPanel(
-            toggle_style=_THINKING_TOGGLE_STYLE,
-            block_style=_THINKING_BLOCK_STYLE,
-        )
-        outer.addWidget(self.charts_panel)
+        # Charts (charts-window 2026-08-04): the charts surface is the
+        # bottom-docked ``ChartsWindow`` (built lazily), NOT an in-chat panel.
+        # The chat dock keeps only the "Charts (N)" count button in the action
+        # row above; ``set_charts`` / ``add_chart`` / ``clear`` are driven on
+        # the window through ``_ensure_charts_window``.
 
         # Item 4 (live-feedback 2026-07-09): the AOI toggles (canvas /
         # selected polygon) moved into Settings -- apply-on-Save there now,
@@ -609,9 +621,14 @@ class Trid3ntDock(QDockWidget):
         # switch. Hide it (its next click repopulates it).
         self._probe_panel.setVisible(False)
         self.probe_result_label.setText("")
-        # Charts are per-Case state too (live-feedback 2026-07-13): the
-        # case-open replay below repopulates the panel for the new case.
-        self.charts_panel.clear()
+        # Charts are per-Case state (charts-window 2026-08-04): the case-open
+        # replay below repopulates the charts window for the new case. The
+        # window survives the switch (bottom dock stays put); only its list is
+        # cleared + the count button reset.
+        if self._charts_window is not None:
+            self._charts_window.clear()
+        self._charts_count = 0
+        self._set_charts_button()
         while self.messages_layout.count() > 1:
             item = self.messages_layout.takeAt(0)
             widget = item.widget()
@@ -1797,14 +1814,17 @@ class Trid3ntDock(QDockWidget):
             self._ensure_pending().add_note(f"{code}: {message}", error=True)
             self._scroll_to_bottom()
         elif kind == "chart":
-            # OpenQuake result parity (live-feedback 2026-07-13): a live
-            # mid-turn chart. The Charts panel renders it (never a chat
-            # widget); one pointer note in the transcript so the turn's
-            # narrative says where the chart went.
-            if self.charts_panel.add_chart(data):
+            # Charts-window 2026-08-04: a live mid-turn chart lands in the
+            # bottom-docked ChartsWindow (never a chat widget). The chat gets
+            # only the incremented "Charts (N)" button + one pointer note so
+            # the turn's narrative says where the chart went.
+            window = self._ensure_charts_window()
+            if window.add_chart(data):
+                self._charts_count = window.count
+                self._set_charts_button(flag=True)
                 title = data.get("title") or "chart"
                 self._ensure_pending().add_note(
-                    f"Chart added below: {title}"
+                    f"Chart added to the charts window: {title}"
                 )
                 self._scroll_to_bottom()
         elif kind == "solve-progress":
@@ -2002,11 +2022,18 @@ class Trid3ntDock(QDockWidget):
                 # pushing the conversation far up -- fold the batch into the
                 # collapsed "Layers (N)" toggle (errors stay visible).
                 self._ensure_pending().add_layer_notes(notes)
-        # OpenQuake result parity (live-feedback 2026-07-13): replay the
-        # case's persisted charts into the Charts panel (the web shows the
-        # hazard-curve card on case open; the dock now matches). The panel
-        # stays hidden for chart-less cases -- no chat noise either way.
-        self.charts_panel.set_charts(info.charts)
+        # Charts-window 2026-08-04: rebuild the charts window's list from the
+        # case's persisted SessionChartRecords (per-case durability). A
+        # chart-less case leaves the (possibly-existing) window empty and the
+        # button at "Charts (0)"; a chart-carrying case builds the window
+        # lazily but does NOT force it visible (the button invites it open).
+        if info.charts or self._charts_window is not None:
+            window = self._ensure_charts_window()
+            window.set_charts(info.charts)
+            self._charts_count = window.count
+        else:
+            self._charts_count = 0
+        self._set_charts_button()
         if self.settings.auto_basemap:
             note = ensure_basemap(self.settings.basemap_preset)
             if note:
@@ -2084,6 +2111,124 @@ class Trid3ntDock(QDockWidget):
                     return (float(bbox[0]), float(bbox[1]), float(bbox[2]), float(bbox[3]))
             except (AttributeError, TypeError, ValueError):
                 continue
+        return None
+
+    # -- charts window (charts-window 2026-08-04) ------------------------------ #
+
+    def _ensure_charts_window(self) -> ChartsWindow:
+        """Lazily build the bottom-docked ChartsWindow (first chart / first
+        button click). Docked to ``Qt.BottomDockWidgetArea`` -- the TUFLOW
+        Viewer position. Headless-safe: no ``iface.addDockWidget`` (test
+        FakeIface) leaves the window a standalone widget, still fully driveable
+        for the chart-list / persistence logic."""
+        if self._charts_window is None:
+            self._charts_window = ChartsWindow(
+                locate_callback=self._locate_layer_on_map,
+                parent=self,
+            )
+            try:
+                self.iface.addDockWidget(
+                    Qt.DockWidgetArea.BottomDockWidgetArea, self._charts_window
+                )
+            except Exception:  # noqa: BLE001 -- headless / no main window
+                pass
+        return self._charts_window
+
+    def _show_charts_window(self) -> None:
+        """The chat "Charts (N)" button: create-if-needed + raise the bottom
+        window, clearing the new-chart flag (the count stays)."""
+        window = self._ensure_charts_window()
+        window.setVisible(True)
+        try:
+            window.raise_()
+        except Exception:  # noqa: BLE001 -- headless
+            pass
+        self._set_charts_button(flag=False)
+
+    def _set_charts_button(self, flag: bool = False) -> None:
+        """Repaint the "Charts (N)" button: the count, plus a subtle "*" flag
+        when a new chart arrived while the window was not being looked at
+        (cleared when the user opens/raises the window)."""
+        star = " *" if flag else ""
+        self.charts_btn.setText(f"Charts ({self._charts_count}){star}")
+
+    def _locate_layer_on_map(self, source_uri: str) -> None:
+        """ChartsWindow "Locate on map" (d): pan + flash the QGIS canvas to the
+        layer a chart was computed from. Matches ``source_uri`` to a loaded
+        layer stamped with it by the materializer (``trid3nt/source_uri``
+        custom property) or whose provider source contains it; zooms to that
+        layer's extent and flashes it. An unmatched uri is an HONEST note,
+        never a silent no-op or a crash. Headless (no canvas) is a no-op."""
+        try:
+            canvas = self.iface.mapCanvas()
+        except Exception:  # noqa: BLE001 -- no canvas (headless)
+            return
+        layer = self._find_layer_by_source_uri(source_uri)
+        if layer is None:
+            self._note(
+                "This chart's source layer is not loaded in QGIS - open it "
+                f"first (source: {source_uri})"
+            )
+            return
+        try:
+            from qgis.core import (
+                QgsCoordinateTransform,
+                QgsGeometry,
+                QgsProject,
+            )
+
+            extent = layer.extent()
+            dest_crs = canvas.mapSettings().destinationCrs()
+            src_crs = layer.crs()
+            if src_crs != dest_crs:
+                transform = QgsCoordinateTransform(
+                    src_crs, dest_crs, QgsProject.instance().transformContext()
+                )
+                extent = transform.transformBoundingBox(extent)
+            zoom_to_extent(canvas, extent)
+            # Best-effort flash so the eye catches the located layer.
+            try:
+                canvas.flashGeometries(
+                    [QgsGeometry.fromRect(extent)], dest_crs
+                )
+            except Exception:  # noqa: BLE001 -- flash is optional chrome
+                pass
+            self._note(f"Located '{layer.name()}' on the map")
+        except Exception as exc:  # noqa: BLE001
+            self._note(
+                f"Could not locate the source layer on the map "
+                f"({type(exc).__name__}: {exc})",
+                error=True,
+            )
+
+    def _find_layer_by_source_uri(self, source_uri: str):
+        """A loaded QgsMapLayer matching ``source_uri`` -- by the materializer's
+        ``trid3nt/source_uri`` stamp (exact), else a substring match either way
+        against the layer's provider source (the chart's ``gs://`` / ``s3://``
+        uri and the render uri can differ in scheme/host but share the object
+        key). Returns the first match or None. Never raises."""
+        try:
+            from qgis.core import QgsProject
+
+            layers = list(QgsProject.instance().mapLayers().values())
+        except Exception:  # noqa: BLE001 -- headless / no project
+            return None
+        # Pass 1: exact stamp match (the reliable path for our materialized
+        # layers).
+        for layer in layers:
+            try:
+                if layer.customProperty("trid3nt/source_uri") == source_uri:
+                    return layer
+            except Exception:  # noqa: BLE001
+                continue
+        # Pass 2: substring either direction against the provider source.
+        for layer in layers:
+            try:
+                src = layer.source() or ""
+            except Exception:  # noqa: BLE001
+                continue
+            if src and (src in source_uri or source_uri in src):
+                return layer
         return None
 
     # -- gate card -------------------------------------------------------------- #
@@ -2565,6 +2710,16 @@ class Trid3ntDock(QDockWidget):
             except Exception:  # noqa: BLE001
                 pass
         self._push_tree_actions = []
+        # Charts-window 2026-08-04: the bottom charts window is a sibling dock
+        # this dock owns -- tear it down with the dock so a plugin reload never
+        # leaves an orphaned bottom dock behind.
+        if self._charts_window is not None:
+            try:
+                self.iface.removeDockWidget(self._charts_window)
+            except Exception:  # noqa: BLE001 -- headless / never docked
+                pass
+            self._charts_window.deleteLater()
+            self._charts_window = None
         self.bridge.stop()
         # Remote-streaming session TTL (ADR 0116): dock close / plugin unload
         # ends the session -- remove its staging dir so nothing survives it.

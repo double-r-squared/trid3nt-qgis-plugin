@@ -1,7 +1,7 @@
-"""Offscreen harness for the Charts panel (OpenQuake result parity,
-live-feedback 2026-07-13).
+"""Offscreen harness for the ChartsWindow (charts-window 2026-08-04, NATE's
+TUFLOW-Viewer directive).
 
-Run as a SUBPROCESS by ``test_charts.TestChartsPanel`` -- it needs
+Run as a SUBPROCESS by ``test_charts.TestChartsWindow`` -- it needs
 ``qgis.PyQt`` (PyQt5) + matplotlib, which the pure-python test venv does not
 have; the wrapper probes the system interpreter and skips honestly when
 absent (the ``qt_dock_ui_harness.py`` convention).
@@ -13,19 +13,25 @@ Offscreen, no agent, no network. Checks:
      ``set_charts`` renders it -- 2 views, 1 line series, 19 vertices,
      1 rule, x_log + y_log, the rule's label in the legend, axis titles.
   2. DE-DUPE: ``add_chart`` with the SAME chart_id returns False and does
-     not grow the panel (a tool re-emit repaints, never duplicates).
-  3. PAGING: a second chart (damage-distribution bar shape with a color
-     field) pages to 2/2; prev steps back; the bar count is asserted.
-  4. CLEAR: ``clear()`` hides the panel (case-switch discipline).
+     not grow the window (a tool re-emit repaints, never duplicates).
+  3. PAGING + LIST STRIP: a second chart (damage-distribution bar shape with
+     a color field) pages to 2/2; the chart-list strip carries both titles;
+     prev steps back; the bar count is asserted.
+  4. CLEAR: ``clear()`` empties the window (case-switch discipline).
   5. DEFENSIVE: junk rows (no chart_id / non-dict spec) are skipped by
      ``set_charts``; a junk live payload returns False.
-  6. DOCK WIRING: ``Trid3ntDock._on_event("chart", payload)`` lands the
-     chart in the pinned panel and adds exactly ONE pointer note to the
-     chat -- charts never flood the message list (NATE's clutter rule).
+  6. INTERACTIVITY: (b) ``nearest_vertex`` snaps a display-space point to the
+     exact plotted vertex + carries its series label; (d) the "Locate on map"
+     button enables only for a chart carrying a ``source_layer_uri`` and its
+     click fires the locate callback with that uri.
+  7. DOCK WIRING: ``Trid3ntDock._on_event("chart", payload)`` lazily builds
+     the bottom window, lands the chart there, bumps the chat "Charts (N)"
+     button (with the new-chart flag), and adds exactly ONE pointer note to
+     the chat -- charts never flood the message list (NATE's clutter rule).
 
 Exits 0 and prints CHARTS-OK plus the render summaries; asserts (nonzero)
-otherwise. Also grabs docs/proof/97-qgis-charts-panel.png (offscreen
-QWidget grab -- a LAYOUT proof, not pixel-parity vs live QGIS rendering).
+otherwise. Also grabs docs/proof/97-qgis-charts-window.png (offscreen QWidget
+grab -- a LAYOUT proof, not pixel-parity vs live QGIS rendering).
 """
 
 from __future__ import annotations
@@ -46,6 +52,7 @@ QCoreApplication.setApplicationName("trid3nt-charts-harness")
 app = QApplication([])
 
 from trid3nt.ui import charts  # noqa: E402
+from trid3nt.ui.charts_window import ChartsWindow  # noqa: E402
 from trid3nt.ui.dock import Trid3ntDock  # noqa: E402
 
 PROOF_DIR = os.path.abspath(
@@ -86,6 +93,7 @@ HAZARD_CHART = {
     "title": "Seismic hazard curve - PGA",
     "caption": "Mean PGA hazard curve over 50yr; dashed line = 10% in 50yr "
                "design level - 19 IML points - 474 sites",
+    "source_layer_uri": "s3://trid3nt-data/cases/psha/hazard_sites.geojson",
     "vega_lite_spec": {
         "$schema": "https://vega.github.io/schema/vega-lite/v5.json",
         "title": "Seismic hazard curve - PGA",
@@ -117,7 +125,8 @@ HAZARD_CHART = {
     },
 }
 
-# damage-state shape: single-view bar + color field (generate_chart).
+# damage-state shape: single-view bar + color field (generate_chart). No
+# source_layer_uri -> its Locate-on-map button stays disabled.
 DAMAGE_CHART = {
     "envelope_type": "chart-emission",
     "chart_id": "01HARNESSDAMAGEAAAAAAAAAAA",
@@ -169,18 +178,18 @@ UHS_CHART = {
 # 1. Hazard curve renders with the full log-log + rule chrome
 # --------------------------------------------------------------------------- #
 
-panel = charts.ChartsPanel()
-panel.resize(420, 360)
-panel.show()
+_located = []
+window = ChartsWindow(locate_callback=lambda uri: _located.append(uri))
+window.resize(760, 300)
+window.show()
 pump()
-assert panel.count == 0
+assert window.count == 0
 
-n = panel.set_charts([HAZARD_CHART])
+n = window.set_charts([HAZARD_CHART])
 pump()
-assert n == 1 and panel.count == 1, f"set_charts -> {n}, count={panel.count}"
-assert panel.toggle.text() == "Charts (1)", panel.toggle.text()
-assert panel.isVisible(), "panel hidden with a chart loaded"
-s = panel.last_render_summary
+assert n == 1 and window.count == 1, f"set_charts -> {n}, count={window.count}"
+assert window.isVisible(), "window hidden with a chart loaded"
+s = window.last_render_summary
 print("hazard summary:", s)
 assert s["views"] == 2, s
 assert s["lines"] == 1 and s["series"] == 1, s
@@ -188,76 +197,113 @@ assert s["points"] == 19, s
 assert s["rules"] == 1, s
 assert s["x_log"] and s["y_log"], s
 assert "10% in 50yr" in s["legend_labels"], s
-assert panel.caption_label.isVisibleTo(panel), "caption not shown"
-assert "474 sites" in panel.caption_label.text()
+assert window.caption_label.isVisibleTo(window), "caption not shown"
+assert "474 sites" in window.caption_label.text()
+# The chart-list strip carries the title.
+assert window.chart_list.count() == 1
+assert window.chart_list.item(0).text() == "Seismic hazard curve - PGA"
 
 # Axis titles made it onto the axes.
-fig_axes = panel._card.figure.axes  # noqa: SLF001 -- harness introspection
+fig_axes = window._figure.axes  # noqa: SLF001 -- harness introspection
 assert fig_axes[0].get_xlabel() == "PGA (g)", fig_axes[0].get_xlabel()
 assert fig_axes[0].get_ylabel() == "Mean PoE in 50yr", fig_axes[0].get_ylabel()
+
+# --------------------------------------------------------------------------- #
+# 6a. Click-to-inspect (b): nearest_vertex snaps to the exact plotted vertex.
+# --------------------------------------------------------------------------- #
+
+ax = window._ax  # noqa: SLF001
+target = (_IMLS[9], _POES[9])  # a real vertex (iml=0.103, poe=0.994751)
+px, py = ax.transData.transform(target)
+hit = window.nearest_vertex(px, py)
+print("nearest_vertex:", hit)
+assert hit is not None, "nearest_vertex found nothing"
+assert abs(hit[0] - target[0]) < 1e-6 and abs(hit[1] - target[1]) < 1e-6, hit
+
+# --------------------------------------------------------------------------- #
+# 6b. Locate-on-map (d): enabled for a source-bearing chart; click fires the
+#     callback with that uri.
+# --------------------------------------------------------------------------- #
+
+assert window.locate_btn.isEnabled(), "Locate-on-map disabled for a source chart"
+window.locate_btn.click()
+pump()
+assert _located == [HAZARD_CHART["source_layer_uri"]], _located
 
 # --------------------------------------------------------------------------- #
 # 2. De-dupe on chart_id
 # --------------------------------------------------------------------------- #
 
-assert panel.add_chart(dict(HAZARD_CHART)) is False, "re-emit must not duplicate"
-assert panel.count == 1, panel.count
+assert window.add_chart(dict(HAZARD_CHART)) is False, "re-emit must not duplicate"
+assert window.count == 1, window.count
 
 # --------------------------------------------------------------------------- #
-# 3. Paging: a second chart (bar + color field), prev/next
+# 3. Paging + list strip: a second chart (bar + color field), prev/next
 # --------------------------------------------------------------------------- #
 
-assert panel.add_chart(DAMAGE_CHART) is True
+assert window.add_chart(DAMAGE_CHART) is True
 pump()
-assert panel.count == 2
-assert panel.pos_label.text() == "2/2", panel.pos_label.text()
-assert panel.current_chart_id() == DAMAGE_CHART["chart_id"]
-s = panel.last_render_summary
+assert window.count == 2
+assert window.pos_label.text() == "2/2", window.pos_label.text()
+assert window.current_chart_id() == DAMAGE_CHART["chart_id"]
+assert window.chart_list.count() == 2
+assert window.chart_list.currentRow() == 1
+s = window.last_render_summary
 print("damage summary:", s)
 assert s["bars"] == 4, s
 assert not s["x_log"] and not s["y_log"], s
+# The damage chart has no source layer -> Locate-on-map disabled.
+assert not window.locate_btn.isEnabled(), "Locate must disable without a source"
 
-panel.prev_btn.click()
-pump()
-assert panel.current_chart_id() == HAZARD_CHART["chart_id"]
-assert panel.pos_label.text() == "1/2", panel.pos_label.text()
-
-# Proof grab while both charts are loaded (hazard curve showing).
+# Proof grab while both charts are loaded (damage bar showing).
 os.makedirs(PROOF_DIR, exist_ok=True)
-panel.grab().save(os.path.join(PROOF_DIR, "97-qgis-charts-panel.png"))
+window.grab().save(os.path.join(PROOF_DIR, "97-qgis-charts-window.png"))
 
-# --------------------------------------------------------------------------- #
-# 4. Clear hides (case-switch discipline)
-# --------------------------------------------------------------------------- #
-
-panel.clear()
+window.prev_btn.click()
 pump()
-assert panel.count == 0
-assert not panel.isVisible(), "clear must hide the panel"
+assert window.current_chart_id() == HAZARD_CHART["chart_id"]
+assert window.pos_label.text() == "1/2", window.pos_label.text()
+assert window.chart_list.currentRow() == 0
+
+# The list strip drives selection too.
+window.chart_list.setCurrentRow(1)
+pump()
+assert window.current_chart_id() == DAMAGE_CHART["chart_id"], window.current_chart_id()
+
+# --------------------------------------------------------------------------- #
+# 4. Clear empties (case-switch discipline)
+# --------------------------------------------------------------------------- #
+
+window.clear()
+pump()
+assert window.count == 0
+assert window.chart_list.count() == 0
 
 # --------------------------------------------------------------------------- #
 # 5. Defensive parsing
 # --------------------------------------------------------------------------- #
 
-n = panel.set_charts([
+n = window.set_charts([
     "junk", {"chart_id": "", "vega_lite_spec": {"mark": "line"}},
     {"chart_id": "01OK", "vega_lite_spec": "not-a-dict"},
     UHS_CHART,
 ])
-assert n == 1 and panel.current_chart_id() == UHS_CHART["chart_id"], n
-s = panel.last_render_summary
+assert n == 1 and window.current_chart_id() == UHS_CHART["chart_id"], n
+s = window.last_render_summary
 print("uhs summary:", s)
 assert s["lines"] == 1 and s["points"] == 4 and not s["x_log"], s
-assert panel.add_chart({"nope": True}) is False
-panel.clear()
+assert window.add_chart({"nope": True}) is False
+window.clear()
 
 # --------------------------------------------------------------------------- #
-# 6. Dock wiring: _on_event("chart") -> panel + ONE pointer note, no flood
+# 7. Dock wiring: _on_event("chart") -> lazy window + button + ONE pointer note
 # --------------------------------------------------------------------------- #
 
 
 class FakeIface:
-    """Headless iface (qt_dock_ui_harness convention): no canvas."""
+    """Headless iface (qt_dock_ui_harness convention): no canvas, no main
+    window -- ``addDockWidget`` raises so the window stays a standalone
+    widget, still fully driveable for the logic assertions."""
 
     def mapCanvas(self):
         raise RuntimeError("headless harness has no canvas")
@@ -272,11 +318,18 @@ dock.resize(420, 700)
 dock.show()
 pump()
 
+# No window and no charts until the first chart arrives.
+assert dock._charts_window is None
+assert dock.charts_btn.text() == "Charts (0)"
+
 before = dock.messages_layout.count()
 dock._on_event("chart", HAZARD_CHART)
 pump()
-assert dock.charts_panel.count == 1
-assert dock.charts_panel.current_chart_id() == HAZARD_CHART["chart_id"]
+assert dock._charts_window is not None, "chart did not lazily build the window"
+assert dock._charts_window.count == 1
+assert dock._charts_window.current_chart_id() == HAZARD_CHART["chart_id"]
+# The chat button now shows the count + the new-chart flag.
+assert dock.charts_btn.text() == "Charts (1) *", dock.charts_btn.text()
 after = dock.messages_layout.count()
 # Exactly one new chat widget: the pending assistant entry carrying the
 # single pointer note -- never a chart widget in the message list.
@@ -284,22 +337,31 @@ assert after - before <= 1, (before, after)
 notes = [
     lbl.text()
     for lbl in dock.messages_host.findChildren(QLabel)
-    if "Chart added below" in lbl.text()
+    if "charts window" in lbl.text()
 ]
 assert len(notes) == 1, notes
-canvases = dock.messages_host.findChildren(type(dock.charts_panel._card))
+# No matplotlib canvas leaked into the chat message list.
+canvas_type = type(dock._charts_window._canvas)
+canvases = dock.messages_host.findChildren(canvas_type)
 assert not canvases, "a chart canvas leaked into the chat message list"
+
+# The "Charts (N)" button raises the window + clears the flag.
+dock._show_charts_window()
+pump()
+assert dock._charts_window.isVisible()
+assert dock.charts_btn.text() == "Charts (1)", dock.charts_btn.text()
 
 # A live RE-emit of the same chart adds no second note and no growth.
 before = dock.messages_layout.count()
 dock._on_event("chart", dict(HAZARD_CHART))
 pump()
-assert dock.charts_panel.count == 1
+assert dock._charts_window.count == 1
 assert dock.messages_layout.count() == before
 
-# Case-switch clear path (_clear_messages) empties the panel too.
+# Case-switch clear path (_clear_messages) empties the window + resets button.
 dock._clear_messages()
 pump()
-assert dock.charts_panel.count == 0
+assert dock._charts_window.count == 0
+assert dock.charts_btn.text() == "Charts (0)", dock.charts_btn.text()
 
 print("CHARTS-OK")

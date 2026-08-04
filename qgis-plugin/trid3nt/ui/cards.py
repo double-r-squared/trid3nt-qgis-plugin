@@ -590,9 +590,8 @@ class _ErrorFold(QWidget):
     Consecutive red error lines (e.g. the per-layer "MinIO fetch failed ...
     -- skipped" notes a case-open rehydrate emits) collapse into a single
     inline "ERRORS (N)" toggle row, collapsed by default, expanding IN PLACE
-    to the wrapped lines -- the exact ChartsPanel collapse affordance (a flat
-    checkable QPushButton header toggling a body widget, charts.py), kept in
-    the error red. The fold lives INLINE in the notes area, in chat scroll
+    to the wrapped lines -- a flat checkable QPushButton header toggling a body
+    widget, kept in the error red. The fold lives INLINE in the notes area, in chat scroll
     order -- never moved to a panel.
 
     N == 1 renders as the plain wrapped red line with NO toggle chrome

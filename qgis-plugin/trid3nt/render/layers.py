@@ -1170,6 +1170,15 @@ class LayerMaterializer:
             except (AttributeError, TypeError, ValueError):
                 pass
         QgsProject.instance().addMapLayer(layer, False)
+        # Charts-window 2026-08-04: stamp the source uri + layer id so the
+        # ChartsWindow "Locate on map" affordance can match a chart's
+        # ``source_layer_uri`` back to the loaded layer it was computed from.
+        try:
+            if event.uri:
+                layer.setCustomProperty("trid3nt/source_uri", event.uri)
+            layer.setCustomProperty("trid3nt/layer_id", event.layer_id)
+        except Exception:  # noqa: BLE001 -- stamping is best-effort metadata
+            pass
         target = group if group is not None else self._ensure_group()
         node = target.insertLayer(0, layer)
         if node is not None and not event.visible:

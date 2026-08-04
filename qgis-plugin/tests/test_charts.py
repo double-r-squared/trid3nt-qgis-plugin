@@ -8,9 +8,11 @@ Two halves, mirroring the repo convention:
   ``AgentEvent("chart", ...)`` dispatch.
 * QT SUBPROCESS: ``qt_charts_harness.py`` under the system interpreter (the
   one with ``qgis.PyQt`` + matplotlib -- the ``test_dock_ui`` convention),
-  covering the ChartsPanel rendering (log-log hazard curve, dashed rule,
-  bars, paging, de-dupe, clear) and the dock wiring (panel + one pointer
-  note, never a chart widget in the chat message list).
+  covering the ChartsWindow rendering (log-log hazard curve, dashed rule,
+  bars, paging, de-dupe, clear), its interactivity (nearest-vertex click
+  inspect, locate-on-map enablement + callback) and the dock wiring (lazy
+  bottom window + "Charts (N)" button + one pointer note, never a chart
+  widget in the chat message list).
 """
 
 from __future__ import annotations
@@ -135,7 +137,7 @@ def _qt_python() -> str | None:
     return None
 
 
-class TestChartsPanel(unittest.TestCase):
+class TestChartsWindow(unittest.TestCase):
     def test_charts_harness(self):
         py = _qt_python()
         if py is None:
