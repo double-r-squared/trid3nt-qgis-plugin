@@ -257,6 +257,15 @@ def _validate_hooks(spec: SourceSpec) -> None:
             f"declared together (got result_model={result_model!r}, envelope={envelope!r})"
         )
 
+    # provenance channel (ADR 0110): the fetch-time provenance is delivered to the
+    # envelope hook, so a spec that declares output.provenance MUST declare an
+    # envelope hook to consume it (else the recorded dict has nowhere to land).
+    if spec.output.provenance and not envelope:
+        raise HookResolutionError(
+            f"spec {spec.name!r}: output.provenance requires hooks.envelope "
+            "(the provenance dict is delivered to the envelope hook)"
+        )
+
 
 def register_spec(spec: SourceSpec) -> str:
     """Register the spec-driven surface as THE tool under ``spec.name`` (tier=general).

@@ -1,0 +1,141 @@
+schema_version: v1
+name: fetch_topobathy
+source_class: topobathy
+shape: raster-cog
+supports_global_query: false
+error_prefix: TOPOBATHY
+input_error_suffix: INPUT_INVALID
+empty_error_suffix: EMPTY
+endpoints:
+  data:
+    url: https://noaa-nos-coastal-lidar-pds.s3.amazonaws.com/
+auth:
+  mode: none
+params:
+  bbox:
+    type: bbox
+    required: true
+    quantize: round_6dp
+  resolution_m:
+    type: int
+    default: 10
+    min: 1
+    max: 1000
+  target_crs:
+    type: str
+    default: EPSG:32616
+  navd88_offset_m:
+    type: float
+    schema_optional: true
+  timeout_s:
+    type: float
+    default: 120.0
+  force_bathy_base:
+    type: bool
+    default: false
+  include_regional_fine:
+    type: bool
+    default: false
+  min_pixel_m:
+    type: float
+    schema_optional: true
+ingest:
+  access: library_delegate
+  delegate:
+    library: topobathy_composite
+    timeout_s: 600.0
+hooks:
+  delegate: topobathy.read
+  delegate_validate: topobathy.validate
+  envelope: topobathy.envelope
+normalize:
+  crs: EPSG:32616
+  units: meters
+  quantity: elevation
+output:
+  layer_type: raster
+  ext: tif
+  role: input
+  style_preset: continuous_dem
+  auto_publish: false
+  emit_bbox: true
+  result_model: TopobathyResult
+  provenance: true
+cache:
+  ttl_class: static-30d
+payload_estimate:
+  model: bbox_area
+  mb_per_sq_deg: 400.0
+  floor_mb: 0.5
+caveats:
+- Coastal merged topo-bathymetry (NOAA NCEI CUDEM 1/9" + USGS 3DEP land via the sibling fetch_dem, NAVD88
+  m, positive-up) built as one EPSG:32616 UTM composite -- CUDEM wins the nearshore, 3DEP fills the land.
+- 'CUDEM''s hosted 1/9" collection omits parts of the US coast (e.g. the Pacific): when no CUDEM tile
+  covers the AOI the tool degrades to the GLOBAL ETOPO 2022 15" fallback (real nearshore bed, ~450 m,
+  EGM2008/MSL not NAVD88) with an honest fallback_warning; only if bathy AND land are both unavailable
+  does it raise. A LABELED land_absent degrade names a failed 3DEP land leg rather than silently dropping
+  it.'
+- A CUDEM tile whose vertical datum is not NAVD88 (and no documented navd88_offset_m) raises TOPOBATHY_DATUM_MISMATCH
+  -- never a silent cross-datum merge (Invariant 7).
+docstring: "Fetch a SEAMLESS coastal topo-bathymetry DEM (land + sea floor) for a bbox.\n\n**What it does:**\n\
+  \    Builds ONE continuous elevation surface across the shoreline by merging\n    NOAA NCEI CUDEM 1/9\
+  \ arc-second topo-bathymetry tiles (the canonical US\n    coastal merged topo+bathy product -- only\
+  \ the 1/9 arc-second tiles\n    integrate BOTH bathymetry and topography) with the USGS 3DEP land DEM\n\
+  \    for the same area. CUDEM wins on the coast / nearshore; 3DEP fills the\n    land. Output is a single-band\
+  \ float32 Cloud-Optimized GeoTIFF in\n    EPSG:32616 (UTM 16N), NAVD88 metres, **positive-up** (land\
+  \ positive,\n    bathymetry NEGATIVE, NO sign flip) -- byte-format identical to\n    ``fetch_dem`` so\
+  \ SFINCS setup's ``setup_dep`` step (via\n    ``set_sfincs_parameters`` + ``run_sfincs``) consumes it\
+  \ unchanged.\n\n**When to use:**\n    - A COASTAL flood / surge / run-up workflow (SFINCS coastal) that\
+  \ needs\n      a continuous bed from the hills to the deep water -- the canonical\n      coastal-bathymetry\
+  \ entry point. ``fetch_dem`` alone is LAND-ONLY and leaves\n      the nearshore as nodata.\n    - User\
+  \ asks for \"topobathy\", \"bathymetry + topography\", \"the sea floor\n      and the land together\"\
+  , or \"a DEM that includes the water depth\".\n\n**When NOT to use:**\n    - A pure inland / pluvial\
+  \ flood with no coast -- use ``fetch_dem`` (no\n      bathymetry needed; CUDEM has no inland coverage\
+  \ anyway).\n    - Outside the US coast -- NOAA NCEI CUDEM is US-coast-only; the validator\n      raises\
+  \ ``TopobathyInputError`` for a bbox that misses the US coastal\n      envelope.\n\n**Parameters:**\n\
+  \    bbox: ``(min_lon, min_lat, max_lon, max_lat)`` in EPSG:4326. Must\n        intersect the US coastal\
+  \ envelope. Demo AOI (Florida panhandle /\n        Mexico Beach): ``(-85.75, 29.55, -85.25, 30.20)``.\n\
+  \    resolution_m: 3DEP land-DEM grid spacing in metres (default 10). The\n        CUDEM tiles are native\
+  \ ~3 m; the merge re-grids onto the warp output\n        grid.\n    target_crs: output CRS (default\
+  \ ``EPSG:32616`` / UTM 16N for the demo\n        AOI). NAVD88 vertical is preserved (only the horizontal\
+  \ grid is\n        reprojected).\n    navd88_offset_m: OPTIONAL documented vertical offset (metres)\
+  \ to ADD to\n        a CUDEM tile's elevations to bring a tidal-datum (MHW/MSL/LMSL) tile\n        onto\
+  \ NAVD88. Leave ``None`` for the normal NAVD88 path -- a\n        non-NAVD88 tile with no offset raises\
+  \ ``TopobathyDatumError`` rather\n        than silently merging (Invariant 7).\n    timeout_s: tile-index\
+  \ download timeout (seconds, default 120).\n    force_bathy_base: when True (the tsunami / coastal GeoClaw\
+  \ caller), lay\n        the seamless GLOBAL ETOPO 2022 topo-bathy down as the ALWAYS-ON base\n     \
+  \   over the FULL bbox even when CUDEM has coverage, with CUDEM / 3DEP\n        painted ON TOP. Guarantees\
+  \ the open-ocean portion of the bbox is\n        genuinely-negative bathymetry (not a land-DEM fill)\
+  \ -- the GeoClaw\n        flat-ocean root-cause fix. Default False keeps the original\n        CUDEM-first\
+  \ / ETOPO-only-as-fallback behaviour for SFINCS.\n    include_regional_fine: when True (the GeoClaw\
+  \ nested fine-SHORE caller),\n        ALSO pull the AOI-appropriate NCEI REGIONAL integrated topo-bathy\
+  \ DEM\n        (~1 m NAVD88; e.g. the CoNED Northern California collection that covers\n        Crescent\
+  \ City, which CUDEM omits) and lay it down as the FINEST source.\n        Yields a genuinely-fine nearshore\
+  \ bed for coasts CUDEM does not reach.\n        Default False (SFINCS / coarse-base callers unaffected).\n\
+  \    min_pixel_m: OPTIONAL output-resolution FLOOR (metres). When set, the\n        merged grid is no\
+  \ finer than this even if a source is finer -- so a\n        fine 1 m regional/CUDEM source over a small\
+  \ AOI produces a LIGHT ~10 m\n        nested-topo COG (still far finer than the tens-of-metres finest\
+  \ AMR\n        cell) instead of a hundreds-of-MB native-resolution grid. Default None\n        (native\
+  \ finest-source resolution, the historical behaviour).\n\n**Returns:**\n    A ``TopobathyResult`` (a\
+  \ ``LayerURI`` subclass) pointing at the merged\n    COG in the cache bucket\n    (``.../cache/static-30d/topobathy/<key>.tif``).\n\
+  \    ``layer_type=\"raster\"``, ``role=\"input\"``,\n    ``style_preset=\"continuous_dem\"``, ``units=\"\
+  meters\"``. Extra honesty\n    fields: ``bathymetry_present`` (False on the land-only fallback),\n \
+  \   ``fallback_warning`` (set when bathy is absent), ``cudem_tile_count``.\n\n**Fallback (data-source\
+  \ norm -- CUDEM -> ETOPO-global -> land-only):**\n    CUDEM's hosted 1/9\" collection only covers part\
+  \ of the US coast (it\n    omits, e.g., the entire US Pacific / West coast). When NO CUDEM tile\n  \
+  \  intersects the AOI the tool degrades to the GLOBAL NOAA ETOPO 2022 15\n    arc-second topo-bathy\
+  \ model so the AOI still gets a REAL nearshore bed\n    (so a coastal / tsunami run produces actual\
+  \ inundation). That ETOPO bed\n    is coarser (~450 m) and EGM2008/MSL-referenced (not NAVD88): the\
+  \ result\n    still reports ``bathymetry_present=True`` but carries an honest\n    ``fallback_warning``\
+  \ naming the source + datum -- never a silent relabel.\n    Only if CUDEM, ETOPO and 3DEP are ALL unavailable\
+  \ does the result\n    degrade to land-only (``bathymetry_present=False``, ``BATHYMETRY\n    ABSENT``\
+  \ warning); only if there is no elevation at all does it raise\n    ``TopobathyEmptyError``.\n\n**Errors:**\n\
+  \    - ``TopobathyInputError``: bad bbox / outside US coast (retryable=False).\n    - ``TopobathyDatumError``:\
+  \ a CUDEM tile is non-NAVD88 with no offset\n      (retryable=False) -- Invariant 7.\n    - ``TopobathyUpstreamError``:\
+  \ tile read / merge / COG failure\n      (retryable=True).\n    - ``TopobathyEmptyError``: no CUDEM\
+  \ AND no 3DEP for the AOI\n      (retryable=False).\n\n**Cross-tool dependencies:**\n    - REUSES ``fetch_dem``\
+  \ for the 3DEP land DEM (does NOT reimplement 3DEP).\n    - Composes INTO SFINCS setup (``set_sfincs_parameters``\
+  \ + ``run_sfincs``,\n      ``setup_dep`` elevtn) -- drop-in for ``fetch_dem`` on the coastal path.\n\
+  \    - Upstream sources: NOAA NCEI CUDEM 1/9 arc-second (public S3\n      ``noaa-nos-coastal-lidar-pds``)\
+  \ + USGS 3DEP (via ``fetch_dem``).\n\nCache: ``ttl_class=\"static-30d\"``, ``source_class=\"topobathy\"\
+  ``.\nTier-1 free. No API key. ``supports_global_query=False``."

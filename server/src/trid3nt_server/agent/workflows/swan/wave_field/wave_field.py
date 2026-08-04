@@ -69,6 +69,18 @@ from trid3nt_server.agent.workflows.swan.run_swan import (
 )
 from trid3nt_server.agent.workflows.shared.solve_progress import drive_live_solve_progress
 from trid3nt_server.emission.layer_uri_emit import emit_layer_uri
+def fetch_topobathy(bbox: Any = None, **kwargs: Any):
+    """Registry-closure indirection for the folded ``fetch_topobathy`` (ADR 0110):
+    a module-level, patchable shim (the swan-chain tests patch this attribute). The
+    promoted router closure is ``**kwargs``-only, so the positional ``bbox`` is
+    mapped to the keyword the closure expects."""
+    from trid3nt_server.agent.tools import TOOL_REGISTRY
+
+    if bbox is not None:
+        kwargs["bbox"] = bbox
+    return TOOL_REGISTRY["fetch_topobathy"].fn(**kwargs)
+
+
 from trid3nt_server.emission.pipeline_emitter import (
     begin_substeps,
     current_emitter,
@@ -437,8 +449,6 @@ def _fetch_bathy_for_swan(
     when the result carries no bathymetry (the data-source fallback norm: primary
     -> honest typed error, never a silent all-dry dead-end).
     """
-    from trid3nt_server.agent.tools.fetchers.ocean.fetch_topobathy.fetch_topobathy import fetch_topobathy
-
     def _attr(layer: Any, name: str) -> Any:
         if isinstance(layer, dict):
             return layer.get(name)

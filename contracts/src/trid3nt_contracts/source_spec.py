@@ -294,6 +294,17 @@ class OutputSpec(GraceModel):
     #: envelope path). Validated as a resolvable hook at load. Default (None) = the
     #: LayerURI is always returned (strict no-op for every prior spec).
     variant_by_emptiness: str | None = None
+    #: FETCH-TIME PROVENANCE CHANNEL (ADR 0110). When True, ``route()`` binds a
+    #: :class:`ProvenanceRecorder` around the fetch so the delegate/executor can
+    #: ``record_provenance({...})`` a small typed dict during a NON-cached fetch;
+    #: the cache persists it as a ``<key>.provenance.json`` sibling of the artifact
+    #: and REPLAYS it on a cache hit, and the router hands it to the ``hooks.envelope``
+    #: hook so a result-model field that is FETCH-TIME provenance (which of a
+    #: multi-source composite's legs painted the merge -- unrecoverable from the final
+    #: bytes) survives every cache path. Requires ``hooks.envelope`` (the consumer).
+    #: Default False = no recorder, no sidecar, byte-identical to before (strict
+    #: no-op for every prior spec).
+    provenance: bool = False
     #: Keep attribute-only (NULL-geometry) features in the emitted FGB instead of
     #: dropping them (chained-resolution mode, ADR 0063). The nws_alerts_conus twin
     #: preserves alerts whose zone references could not be resolved as NULL-geometry

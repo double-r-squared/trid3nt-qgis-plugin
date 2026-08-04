@@ -571,7 +571,7 @@ def _fetch_topo_for_geoclaw(
     """
     # ADR 0097: fetch_dem is spec-driven -- resolve the promoted closure (keyword-only).
     from trid3nt_server.agent.tools import TOOL_REGISTRY
-    from trid3nt_server.agent.tools.fetchers.ocean.fetch_topobathy.fetch_topobathy import fetch_topobathy
+    from trid3nt_server.agent.tools import TOOL_REGISTRY as _TR; fetch_topobathy = lambda bbox=None, **_kw: _TR["fetch_topobathy"].fn(bbox=bbox, **_kw)
 
     fetch_dem = TOOL_REGISTRY["fetch_dem"].fn
 
@@ -628,7 +628,7 @@ def _fetch_fine_nearshore_for_geoclaw(
     nothing. Best-effort: any fetch failure returns ``None`` (the run proceeds on
     the primary topo, exactly as before this fix).
     """
-    from trid3nt_server.agent.tools.fetchers.ocean.fetch_topobathy.fetch_topobathy import fetch_topobathy
+    from trid3nt_server.agent.tools import TOOL_REGISTRY as _TR; fetch_topobathy = lambda bbox=None, **_kw: _TR["fetch_topobathy"].fn(bbox=bbox, **_kw)
 
     try:
         layer = fetch_topobathy(

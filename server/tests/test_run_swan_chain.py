@@ -193,7 +193,7 @@ def test_fetch_bathy_rejects_land_only_dem():
         fallback_warning = "no CUDEM coverage; degraded to 3DEP land-only"
 
     with patch(
-        "trid3nt_server.agent.tools.fetchers.ocean.fetch_topobathy.fetch_topobathy.fetch_topobathy",
+        "trid3nt_server.agent.workflows.swan.wave_field.wave_field.fetch_topobathy",
         lambda b: _LandOnlyLayer(),
     ):
         with pytest.raises(SwanComposerError) as ei:
@@ -213,7 +213,7 @@ def test_fetch_bathy_accepts_real_bathymetry():
         fallback_warning = None
 
     with patch(
-        "trid3nt_server.agent.tools.fetchers.ocean.fetch_topobathy.fetch_topobathy.fetch_topobathy",
+        "trid3nt_server.agent.workflows.swan.wave_field.wave_field.fetch_topobathy",
         lambda b: _SeamlessLayer(),
     ):
         uri = _fetch_bathy_for_swan(bbox)
@@ -232,7 +232,7 @@ def test_fetch_bathy_typed_error_when_topobathy_fails():
         raise RuntimeError("CUDEM host unreachable")
 
     with patch(
-        "trid3nt_server.agent.tools.fetchers.ocean.fetch_topobathy.fetch_topobathy.fetch_topobathy", _boom
+        "trid3nt_server.agent.workflows.swan.wave_field.wave_field.fetch_topobathy", _boom
     ):
         with pytest.raises(SwanComposerError) as ei:
             _fetch_bathy_for_swan(bbox)

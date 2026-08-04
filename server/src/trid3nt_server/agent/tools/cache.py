@@ -43,11 +43,13 @@ via ``asyncio.CancelledError``. Do NOT introduce a separate cancel mechanism.
 
 from __future__ import annotations
 
+import contextlib
+import contextvars
 import hashlib
 import json
 import logging
 import os
-from collections.abc import Callable
+from collections.abc import Callable, Iterator
 from datetime import datetime, timezone
 from typing import Any
 
@@ -62,6 +64,8 @@ __all__ = [
     "is_cacheable",
     "read_through",
     "ReadThroughResult",
+    "ProvenanceRecorder",
+    "record_provenance",
 ]
 
 logger = logging.getLogger("trid3nt_server.agent.tools.cache")
@@ -190,6 +194,81 @@ def is_cacheable(metadata: AtomicToolMetadata) -> bool:
 
 
 # ---------------------------------------------------------------------------
+# Fetch-time provenance channel — a cache-replayable sidecar from fetch to
+# envelope.
+#
+# Some fetch-time facts are UNRECOVERABLE from the final cached bytes: which of
+# a multi-source composite's legs actually painted a merged COG, how many tiles
+# contributed, whether a leg silently degraded. The single-band float32 topobathy
+# COG carries no per-source attribution, and on a cache HIT ``read_through`` never
+# calls ``fetch_fn`` (the executor that would recompute those facts does not run).
+#
+# This is the general, MINIMAL channel that closes that gap (ADR 0110): during a
+# NON-cached fetch the executor/delegate records a small typed provenance dict via
+# :func:`record_provenance`; ``read_through`` persists it as a SIBLING object next
+# to the cached artifact (``<key>.provenance.json``); on EVERY return (fresh OR a
+# cache hit) the recorder carries the SAME provenance the original fetch recorded,
+# which the router hands to the envelope hook. Strictly ADDITIVE: a caller that
+# passes no recorder is byte-identical to before (no sidecar object, no extra I/O),
+# so every prior spec is unaffected. Size-bounded (a small dict) and NEVER
+# secret-bearing (source-attribution counts + honest warnings only).
+# ---------------------------------------------------------------------------
+
+
+class ProvenanceRecorder:
+    """A single-slot sink an executor writes fetch-time provenance into.
+
+    ``data`` is ``None`` until :func:`record_provenance` (called by the delegate
+    during a fresh fetch) fills it, OR ``read_through`` replays it from the
+    persisted sidecar on a cache hit. The router creates one per provenance-enabled
+    ``route()`` call and reads ``.data`` back for the envelope hook.
+    """
+
+    __slots__ = ("data",)
+
+    def __init__(self) -> None:
+        self.data: dict[str, Any] | None = None
+
+
+#: The recorder bound for the CURRENT fetch (contextvar so a nested delegate call
+#: reaches it without threading it through the ``fetch_fn`` byte-only signature).
+_ACTIVE_RECORDER: contextvars.ContextVar[ProvenanceRecorder | None] = (
+    contextvars.ContextVar("trid3nt_provenance_recorder", default=None)
+)
+
+
+def record_provenance(data: dict[str, Any]) -> None:
+    """Record a fetch-time provenance dict for the artifact being produced.
+
+    Called by an executor/delegate DURING a fresh fetch. A strict no-op when no
+    recorder is bound (an uninstrumented call path), so it is always safe to call.
+    The dict must be small, JSON-serializable, and carry NO secret values.
+    """
+    rec = _ACTIVE_RECORDER.get()
+    if rec is not None:
+        rec.data = dict(data)
+
+
+@contextlib.contextmanager
+def _bind_recorder(recorder: ProvenanceRecorder | None) -> Iterator[None]:
+    """Bind ``recorder`` as the active provenance sink for the enclosed fetch."""
+    if recorder is None:
+        yield
+        return
+    token = _ACTIVE_RECORDER.set(recorder)
+    try:
+        yield
+    finally:
+        _ACTIVE_RECORDER.reset(token)
+
+
+def _sidecar_key(obj_key: str) -> str:
+    """The provenance sidecar object key sitting next to ``<key>.<ext>``."""
+    stem = obj_key.rsplit(".", 1)[0]
+    return f"{stem}.provenance.json"
+
+
+# ---------------------------------------------------------------------------
 # read_through — the read-through / write-on-miss entry point.
 # ---------------------------------------------------------------------------
 
@@ -202,14 +281,24 @@ class ReadThroughResult:
             ``live-no-cache`` reads which deliberately do not persist.
         data: the artifact bytes (from the cache hit or freshly fetched).
         hit: True if the response came from the cache, False if fetched.
+        provenance: the fetch-time provenance dict (ADR 0110) when a
+            :class:`ProvenanceRecorder` was passed -- the SAME dict on a fresh
+            fetch or a cache-hit replay -- else ``None``.
     """
 
-    __slots__ = ("uri", "data", "hit")
+    __slots__ = ("uri", "data", "hit", "provenance")
 
-    def __init__(self, uri: str | None, data: bytes, hit: bool) -> None:
+    def __init__(
+        self,
+        uri: str | None,
+        data: bytes,
+        hit: bool,
+        provenance: dict[str, Any] | None = None,
+    ) -> None:
         self.uri = uri
         self.data = data
         self.hit = hit
+        self.provenance = provenance
 
     def __repr__(self) -> str:  # pragma: no cover — diagnostic
         return f"ReadThroughResult(uri={self.uri!r}, hit={self.hit}, bytes={len(self.data)})"
@@ -250,8 +339,45 @@ def read_object_bytes_s3(uri: str) -> bytes:
     return s3.get_object(Bucket=bucket, Key=obj_key)["Body"].read()
 
 
+def _read_sidecar_s3(s3: Any, bucket: str, obj_key: str) -> dict[str, Any] | None:
+    """Best-effort read of the provenance sidecar next to ``obj_key`` (ADR 0110).
+
+    Returns the parsed dict, or ``None`` when absent / unreadable -- an object
+    cached before the channel existed simply has no sidecar, so the envelope hook
+    falls back to its declared defaults (additive, no regression)."""
+    from botocore.exceptions import ClientError
+
+    try:
+        resp = s3.get_object(Bucket=bucket, Key=_sidecar_key(obj_key))
+        return json.loads(resp["Body"].read().decode("utf-8"))
+    except ClientError:
+        return None
+    except Exception as exc:  # noqa: BLE001 -- a malformed sidecar never blocks the read
+        logger.warning("read_through provenance sidecar read degraded: %s", exc)
+        return None
+
+
+def _write_sidecar_s3(s3: Any, bucket: str, obj_key: str, provenance: dict[str, Any]) -> None:
+    """Best-effort write of the provenance sidecar next to ``obj_key`` (ADR 0110)."""
+    try:
+        s3.put_object(
+            Bucket=bucket,
+            Key=_sidecar_key(obj_key),
+            Body=json.dumps(provenance, sort_keys=True, separators=(",", ":")).encode("utf-8"),
+            ContentType="application/json",
+        )
+    except Exception as exc:  # noqa: BLE001 -- write is best-effort (the layer still resolves)
+        logger.warning("read_through provenance sidecar write degraded: %s", exc)
+
+
 def _read_through_s3(
-    uri: str, fetch_fn: Any, force_refresh: bool, metadata: Any, key: str, ext: str
+    uri: str,
+    fetch_fn: Any,
+    force_refresh: bool,
+    metadata: Any,
+    key: str,
+    ext: str,
+    provenance: "ProvenanceRecorder | None" = None,
 ) -> "ReadThroughResult":
     """S3 read-through via **boto3**.
 
@@ -259,7 +385,13 @@ def _read_through_s3(
     aiobotocore fell back to anonymous here ("No AWSAccessKey was presented").
     Best-effort like the GCS path: any storage failure degrades to
     fetch-fresh-uncached. S3 TTL eviction is a bucket lifecycle rule, so no
-    per-object customTime is written."""
+    per-object customTime is written.
+
+    When a :class:`ProvenanceRecorder` is passed (ADR 0110) the fetch-time
+    provenance rides alongside the artifact: on a HIT it is replayed from the
+    ``<key>.provenance.json`` sidecar; on a MISS the recorder is bound around
+    ``fetch_fn`` (so the delegate's :func:`record_provenance` fills it) and the
+    result is persisted as the sidecar. Strictly no-op when ``provenance`` is None."""
     import boto3
     from botocore.exceptions import ClientError
 
@@ -270,7 +402,10 @@ def _read_through_s3(
             resp = s3.get_object(Bucket=bucket, Key=obj_key)
             data = resp["Body"].read()
             logger.info("read_through hit (s3) tool=%s key=%s bytes=%d", metadata.name, key, len(data))
-            return ReadThroughResult(uri=uri, data=data, hit=True)
+            prov = _read_sidecar_s3(s3, bucket, obj_key) if provenance is not None else None
+            if provenance is not None:
+                provenance.data = prov
+            return ReadThroughResult(uri=uri, data=data, hit=True, provenance=prov)
         except ClientError as exc:
             code = exc.response.get("Error", {}).get("Code", "")
             if code not in ("NoSuchKey", "404", "NoSuchBucket"):
@@ -278,7 +413,8 @@ def _read_through_s3(
         except Exception as exc:  # noqa: BLE001
             logger.warning("read_through s3 read degraded tool=%s: %s", metadata.name, exc)
 
-    data = fetch_fn()
+    with _bind_recorder(provenance):
+        data = fetch_fn()
     content_type = {
         "json": "application/json", "geojson": "application/json",
         "tif": "image/tiff", "fgb": "application/octet-stream",
@@ -287,9 +423,12 @@ def _read_through_s3(
     try:
         s3.put_object(Bucket=bucket, Key=obj_key, Body=data, ContentType=content_type)
         logger.info("read_through miss-write (s3) tool=%s key=%s bytes=%d", metadata.name, key, len(data))
+        if provenance is not None and provenance.data is not None:
+            _write_sidecar_s3(s3, bucket, obj_key, provenance.data)
     except Exception as exc:  # noqa: BLE001 — write is best-effort
         logger.warning("read_through s3 write degraded tool=%s: %s; returning uncached", metadata.name, exc)
-    return ReadThroughResult(uri=uri, data=data, hit=False)
+    prov = provenance.data if provenance is not None else None
+    return ReadThroughResult(uri=uri, data=data, hit=False, provenance=prov)
 
 
 def read_through(
@@ -303,6 +442,7 @@ def read_through(
     force_refresh: bool = False,
     storage_client: Any | None = None,
     now: datetime | None = None,
+    provenance: "ProvenanceRecorder | None" = None,
 ) -> ReadThroughResult:
     """Read-through / write-on-miss shim for one atomic-tool fetch.
 
@@ -355,13 +495,17 @@ def read_through(
     bucket = os.environ.get("TRID3NT_CACHE_BUCKET") or bucket or CACHE_BUCKET
     source_id = source_id or (metadata.source_class or metadata.name)
 
-    # FR-DC-6 short-circuit: uncacheable tools never touch the bucket.
+    # FR-DC-6 short-circuit: uncacheable tools never touch the bucket. The
+    # provenance recorder still binds around the fetch so an uncacheable source can
+    # populate result-model fields (no sidecar persisted -- nothing to replay).
     if not is_cacheable(metadata):
-        data = fetch_fn()
+        with _bind_recorder(provenance):
+            data = fetch_fn()
         logger.info(
             "read_through live-no-cache tool=%s bytes=%d", metadata.name, len(data)
         )
-        return ReadThroughResult(uri=None, data=data, hit=False)
+        prov = provenance.data if provenance is not None else None
+        return ReadThroughResult(uri=None, data=data, hit=False, provenance=prov)
 
     # source_class is guaranteed non-empty for cacheable tools by the
     # AtomicToolMetadata cross-field validator; assert defensively.
@@ -379,4 +523,4 @@ def read_through(
     # ``from google.cloud import storage`` default-client builder is GONE —
     # google-cloud-storage is no longer an agent dependency.
     uri = f"s3://{bucket}/{path}"
-    return _read_through_s3(uri, fetch_fn, force_refresh, metadata, key, ext)
+    return _read_through_s3(uri, fetch_fn, force_refresh, metadata, key, ext, provenance)

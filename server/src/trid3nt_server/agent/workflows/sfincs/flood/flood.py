@@ -117,7 +117,26 @@ def fetch_landcover(*args: Any, **kwargs: Any):
     from trid3nt_server.agent.tools import TOOL_REGISTRY
 
     return TOOL_REGISTRY["fetch_landcover"].fn(*args, **kwargs)
-from trid3nt_server.agent.tools.fetchers.ocean.fetch_topobathy.fetch_topobathy import TopobathyError, fetch_topobathy
+
+
+def fetch_topobathy(bbox: Any = None, **kwargs: Any):
+    """Registry-closure indirection for the folded ``fetch_topobathy`` (ADR 0110).
+
+    ``fetch_topobathy`` is now a spec-driven router tool (no coded module); this
+    module-level shim resolves it through ``TOOL_REGISTRY`` at call time and
+    preserves the ``flood.fetch_topobathy`` module-attribute patch seam the flood
+    tests monkeypatch. The promoted router closure is ``**kwargs``-only (rejects
+    positional args), so this shim maps the historical positional ``bbox`` back to
+    the keyword the closure expects.
+    """
+    from trid3nt_server.agent.tools import TOOL_REGISTRY
+
+    if bbox is not None:
+        kwargs["bbox"] = bbox
+    return TOOL_REGISTRY["fetch_topobathy"].fn(**kwargs)
+
+
+from trid3nt_server.agent.tools.fetchers._router.hooks.topobathy import TopobathyError
 from trid3nt_server.agent.tools.publish_layer.publish_layer import PublishLayerError, publish_layer
 from trid3nt_server.agent.tools.simulation.solver.solver import (
     run_solver,

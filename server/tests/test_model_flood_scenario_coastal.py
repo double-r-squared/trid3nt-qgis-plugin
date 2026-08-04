@@ -28,8 +28,8 @@ from unittest.mock import patch
 
 import pytest
 
-from trid3nt_server.agent.tools.fetchers.ocean.fetch_topobathy.fetch_topobathy import (
-    TopobathyResult,
+from trid3nt_contracts.execution import TopobathyResult
+from trid3nt_server.agent.tools.fetchers._router.hooks.topobathy import (
     TopobathyUpstreamError,
 )
 from trid3nt_server.agent.workflows.sfincs.flood.flood import (

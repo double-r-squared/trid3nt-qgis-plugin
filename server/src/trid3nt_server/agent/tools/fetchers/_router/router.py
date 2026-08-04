@@ -21,7 +21,7 @@ from trid3nt_contracts.source_spec import SourceSpec
 from trid3nt_contracts.tool_registry import AtomicToolMetadata
 
 from .._fetch_common import _validate_bbox, round_bbox_to_resolution
-from ...cache import read_through
+from ...cache import ProvenanceRecorder, read_through
 from .errors import (
     bbox_error_suffix,
     router_input_error,
@@ -777,11 +777,18 @@ def route(
         assert result.data is not None, "record source is cacheable; data must be set"
         return json.loads(result.data.decode("utf-8"))
 
+    # Fetch-time provenance channel (ADR 0110): a spec that declares
+    # output.provenance rides a recorder through read_through so the delegate's
+    # record_provenance() is persisted as a sidecar (fresh) and replayed from it
+    # (cache hit); the recorded dict reaches the envelope hook below. No-op
+    # (recorder=None -> byte-identical read_through) for every prior spec.
+    recorder = ProvenanceRecorder() if spec.output.provenance else None
     result = read_through(
         metadata=metadata,
         params=params,
         ext=spec.output.ext,
         fetch_fn=lambda: executor(spec, params),
+        provenance=recorder,
     )
     assert result.uri is not None, "router source is cacheable; uri must be set"
     # variant_by_emptiness (ADR 0081): a source whose non-empty path is a
@@ -812,7 +819,7 @@ def route(
     # the router drops uri/layer_type from its return so it can never flip an error
     # to success or re-point the layer. No-op when unset.
     if spec.hooks is not None and spec.hooks.envelope:
-        layer = _apply_envelope(spec, params, layer, result.data)
+        layer = _apply_envelope(spec, params, layer, result.data, result.provenance)
     return layer
 
 
@@ -822,20 +829,35 @@ _ENVELOPE_PROTECTED_KEYS = ("uri", "layer_type")
 
 
 def _apply_envelope(
-    spec: SourceSpec, params: dict[str, Any], layer: LayerURI, data: bytes | None
+    spec: SourceSpec,
+    params: dict[str, Any],
+    layer: LayerURI,
+    data: bytes | None,
+    provenance: dict[str, Any] | None = None,
 ) -> LayerURI:
     """Build the spec's ``output.result_model`` subclass via the pure envelope hook.
 
     The hook computes the extra business fields over the already-produced bytes
     (no I/O). Protected identity keys (``uri`` / ``layer_type``) are stripped from
     the hook's return so it can only enrich, never flip the honesty floor.
+
+    ``provenance`` (ADR 0110): the fetch-time provenance dict (fresh or cache-hit
+    replay) is passed to a hook that DECLARES a ``provenance`` parameter, so a
+    result model whose fields are fetch-time provenance survives every cache path.
+    A hook without that parameter (every ADR-0073 envelope hook) is called with the
+    original 4-arg signature -- strictly additive, no existing hook changes.
     """
+    import inspect
+
     from trid3nt_contracts.execution import LAYER_RESULT_MODELS
 
     from .hooks import resolve_hook
 
     hook = resolve_hook(spec.hooks.envelope)  # type: ignore[union-attr]
-    extra = hook(spec, params, layer, data)
+    if "provenance" in inspect.signature(hook).parameters:
+        extra = hook(spec, params, layer, data, provenance=provenance)
+    else:
+        extra = hook(spec, params, layer, data)
     if not isinstance(extra, dict):
         extra = {}
     extra = {k: v for k, v in extra.items() if k not in _ENVELOPE_PROTECTED_KEYS}

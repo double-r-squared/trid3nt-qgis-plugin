@@ -315,3 +315,10 @@ from . import worldpop  # noqa: E402,F401
 # and envelope (the dem-{lon}-{lat}-{Nm} naming override). The Dem*Error twins'
 # stable home. The source="copernicus" leg is the spec's cross-sibling dispatch.
 from . import dem_3dep  # noqa: E402,F401
+# fetch_topobathy fold (ADR 0110): the coastal topo-bathymetry 4-leg UTM-composite
+# library-delegate hooks -- validate (US-coastal + finiteness), read (the CUDEM ->
+# regional -> ETOPO -> 3DEP-land warp merge returning (array, transform, crs) +
+# the FETCH-TIME provenance RECORD), envelope (twin layer_id/name + the four
+# provenance fields replayed from the channel). The TopobathyError twins' stable
+# home; consumer #1 of the fetch-time provenance channel.
+from . import topobathy  # noqa: E402,F401

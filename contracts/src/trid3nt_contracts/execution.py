@@ -40,6 +40,7 @@ __all__ = [
     "FloodExtentObservationResult",
     "LandcoverResult",
     "DemLayerURI",
+    "TopobathyResult",
     "LAYER_RESULT_MODELS",
 ]
 
@@ -412,6 +413,35 @@ class DemLayerURI(LayerURI):
     """
 
 
+class TopobathyResult(LayerURI):
+    """A merged coastal topo-bathymetry ``LayerURI`` plus its fetch-time provenance.
+
+    The ``fetch_topobathy`` fold's result model (ADR 0110). The four extra fields
+    are FETCH-TIME PROVENANCE -- which of the composite's heterogeneous legs (CUDEM
+    1/9" tiles, NCEI regional 1 m tiles, the ETOPO 2022 global fallback, 3DEP land)
+    actually painted the merge -- and are NOT recoverable from the final single-band
+    COG. They are carried from the delegate to here by the provenance channel
+    (``topobathy.read`` records them; ``topobathy.envelope`` reads them back), so
+    they survive a cache hit that never re-runs the fetch. A cache object written
+    before the channel (no sidecar) yields ``None`` provenance, and these declared
+    DEFAULTS then hold -- byte-identical to the twin's own cache-hit behaviour.
+
+    - ``bathymetry_present`` -- True when CUDEM, the regional fine DEM, OR the ETOPO
+      global fallback contributed a real below-waterline bed; False on the
+      3DEP-land-only degrade.
+    - ``fallback_warning`` -- an honest human-readable warning when the surface
+      degraded (bathymetry absent; global ETOPO fallback bathy; the land leg was
+      absent). ``None`` on the clean CUDEM/regional path. NEVER a fabricated success.
+    - ``cudem_tile_count`` -- number of CUDEM 1/9" tiles merged (0 off the CUDEM path).
+    - ``regional_tile_count`` -- number of NCEI regional fine (~1 m) tiles merged.
+    """
+
+    bathymetry_present: bool = True
+    fallback_warning: str | None = None
+    cudem_tile_count: int = 0
+    regional_tile_count: int = 0
+
+
 #: name -> LayerURI-subclass. A spec's ``output.result_model`` string resolves
 #: here; the router builds the named subclass from the base LayerURI + the
 #: envelope hook's field dict. Empty of a name -> the plain LayerURI (no-op).
@@ -421,6 +451,7 @@ LAYER_RESULT_MODELS: dict[str, type[LayerURI]] = {
     "FloodExtentObservationResult": FloodExtentObservationResult,
     "LandcoverResult": LandcoverResult,
     "DemLayerURI": DemLayerURI,
+    "TopobathyResult": TopobathyResult,
 }
 
 

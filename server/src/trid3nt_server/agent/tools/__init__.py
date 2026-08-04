@@ -288,7 +288,10 @@ from .fetchers.hydrology.fetch_noaa_nwm_streamflow import fetch_noaa_nwm_streamf
 # registered by _register_router_specs() below.
 # fetch_noaa_sst: quick-folds wave (ADR 0079) -- twin DELETED, now spec-driven
 # (source.yaml + the raster_cog griddap access mode), registered by _register_router_specs().
-from .fetchers.ocean.fetch_topobathy import fetch_topobathy  # noqa: E402,F401
+# fetch_topobathy: coastal topo-bathymetry fold (ADR 0110) -- twin DELETED, now
+# spec-driven (source.yaml + the topobathy.* library-delegate hooks over the 4-leg
+# UTM composite + the fetch-time provenance channel), registered by
+# _register_router_specs() below.
 
 # -- fetchers/terrain --
 # fetch_3dep_extra: library-delegate raster fold (ADR 0075) -- twin DELETED, now
