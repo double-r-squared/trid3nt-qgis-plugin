@@ -59,6 +59,7 @@ from typing import Any
 
 import numpy as np
 
+from trid3nt_contracts.common import SyntheticInput
 from trid3nt_contracts.impact_envelope import (
     ImpactEnvelope,
     OccupancyClassImpact,
@@ -553,6 +554,24 @@ def _aggregate_gdf(
     else:
         n_default_rv = 0
 
+    # provenance-chain wave: structure the default-replacement-value transparency
+    # (audit seam (b)) so the narration seam renders it as a demo-default line
+    # instead of a bare int the LLM may ignore. Only when some loss rests on a
+    # HAZUS class-default replacement value.
+    synthetic_inputs: list[SyntheticInput] = []
+    if n_default_rv > 0:
+        synthetic_inputs.append(SyntheticInput(
+            param="replacement_value",
+            value=n_default_rv,
+            basis="default_demo",
+            real_source_if_any="HAZUS-MH class-default replacement-value table",
+            note=(
+                f"{n_default_rv} of {n_total} assessed structures use a HAZUS "
+                "class-default replacement value (no measured per-asset value); "
+                "expected_loss_usd is partly default-based"
+            ),
+        ))
+
     envelope = ImpactEnvelope(
         n_structures_total=n_total,
         n_structures_damaged=n_damaged,
@@ -575,6 +594,7 @@ def _aggregate_gdf(
         fragility_set=fragility_set,
         realization_count=realization_count,
         n_assets_default_replacement_value=n_default_rv,
+        synthetic_inputs=synthetic_inputs,
         generated_at=datetime.now(timezone.utc),
     )
     return envelope

@@ -24,7 +24,7 @@ from typing import Literal
 
 from pydantic import Field
 
-from .common import GraceModel, ULIDStr, UTCDatetime
+from .common import GraceModel, SyntheticInput, ULIDStr, UTCDatetime
 from .envelope import TemporalConfig
 
 __all__ = [
@@ -266,6 +266,15 @@ class LayerURI(GraceModel):
     # (honesty floor). ``None`` => the layer is exactly the requested source.
     # Additive + optional per the GraceModel forward-compat rule.
     fallback_note: str | None = None
+    # Structured input provenance (provenance-chain wave): the physical model
+    # inputs this layer was built from, each tagged with WHERE it came from
+    # (fetched / user / default_demo / derived / prompt_interpreted). ADDITIVE +
+    # default-empty -- a template populates it incrementally; ``[]`` means the
+    # template has not declared its input provenance yet, NOT "all real". The
+    # narration seam (``summarize_tool_result``) renders it into one compact
+    # assumptions line so the agent narrates which quantities are demo defaults
+    # vs site-derived, and never mistakes a baked constant for measured data.
+    synthetic_inputs: list[SyntheticInput] = Field(default_factory=list)
 
 
 # --------------------------------------------------------------------------- #

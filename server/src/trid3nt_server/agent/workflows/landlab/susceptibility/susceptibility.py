@@ -39,6 +39,7 @@ import tempfile
 from pathlib import Path
 from typing import Any
 
+from trid3nt_contracts.common import SyntheticInput
 from trid3nt_contracts.landlab_contracts import (
     LandlabRunArgs,
     LandlabSusceptibilityLayerURI,
@@ -330,6 +331,46 @@ async def landlab_susceptibility(
         "not site-calibrated."
     )
 
+    # provenance-chain wave: the same rainfall-vs-soil provenance as STRUCTURE, so
+    # the narration seam renders it uniformly (source_note kept as the human prose
+    # line; the structured list is now the machine-readable source of truth).
+    provenance: list[SyntheticInput] = []
+    if _need_rainfall:
+        if _is_overland:
+            provenance.append(SyntheticInput(
+                param="rainfall_intensity_mm_hr", value=rainfall_intensity_mm_hr,
+                units="mm/hr", basis="derived",
+                real_source_if_any="lookup_precip_return_period (NOAA Atlas-14)",
+                note=f"{rainfall_return_period_yr}-yr/{_dur_hr:.0f}-hr design storm",
+            ))
+        else:
+            provenance.append(SyntheticInput(
+                param="recharge_mm_day", value=recharge_mm_day, units="mm/day",
+                basis="derived",
+                real_source_if_any="lookup_precip_return_period (NOAA Atlas-14)",
+                note="design-storm total as a 1-day triggering pulse",
+            ))
+    else:
+        provenance.append(SyntheticInput(
+            param=("rainfall_intensity_mm_hr" if _is_overland else "recharge_mm_day"),
+            basis="user",
+        ))
+    _soil_defaulted = [
+        n for n, v in (
+            ("cohesion", soil_cohesion_pa),
+            ("friction", soil_internal_friction_deg),
+            ("density", soil_density_kg_m3),
+            ("thickness", soil_thickness_m),
+            ("transmissivity", soil_transmissivity_m2_day),
+        ) if v is None
+    ]
+    if _soil_defaulted:
+        provenance.append(SyntheticInput(
+            param="soil_properties", value="/".join(_soil_defaulted),
+            basis="default_demo",
+            note="no SSURGO/POLARIS soil fetcher yet; not site-calibrated",
+        ))
+
     try:
         kwargs: dict[str, Any] = dict(
             bbox=tuple(coerced),  # type: ignore[arg-type]
@@ -374,6 +415,7 @@ async def landlab_susceptibility(
             run_args,
             compute_class=compute_class,
             source_note=source_note,
+            synthetic_inputs=provenance,
         )
         logger.info(
             "landlab_susceptibility complete layer_id=%s unstable_frac=%.4g "
@@ -685,6 +727,7 @@ async def model_landlab_susceptibility(
     run_id: str | None = None,
     compute_class: str = "standard",
     source_note: str | None = None,
+    synthetic_inputs: list[SyntheticInput] | None = None,
 ) -> LandlabSusceptibilityLayerURI:
     """Compose the full Landlab surface-process chain end-to-end (OFF-BOX lane).
 
@@ -849,6 +892,7 @@ async def model_landlab_susceptibility(
             min_factor_of_safety=float(_m.get("min_factor_of_safety", 0.0)),
             mean_probability_of_failure=float(_m.get("mean_probability_of_failure", 0.0)),
             source_note=source_note,
+            synthetic_inputs=list(synthetic_inputs or []),
         )
         if emitter is not None:
             try:
@@ -932,8 +976,13 @@ async def model_landlab_susceptibility(
     # Stamp the returned layer's bbox to the floored AOI (the authoritative AOI).
     if tuple(primary.bbox or ()) != tuple(bbox):
         primary = primary.model_copy(update={"bbox": tuple(bbox)})
+    _prim_update: dict[str, Any] = {}
     if source_note is not None:
-        primary = primary.model_copy(update={"source_note": source_note})
+        _prim_update["source_note"] = source_note
+    if synthetic_inputs:
+        _prim_update["synthetic_inputs"] = list(synthetic_inputs)
+    if _prim_update:
+        primary = primary.model_copy(update=_prim_update)
 
     logger.info(
         "model_landlab_susceptibility complete run_id=%s analysis=%s "

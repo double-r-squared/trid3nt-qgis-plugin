@@ -36,7 +36,7 @@ from typing import Any
 
 from pydantic import Field
 
-from trid3nt_contracts.common import GraceModel
+from trid3nt_contracts.common import GraceModel, SyntheticInput
 from trid3nt_contracts.modflow_contracts import (
     ASRLayerURI,
     DEFAULT_AQUIFER_K_MS,
@@ -240,6 +240,34 @@ async def model_asr_scenario(
         error_code="ASR_RUN_FAILED",
         scenario_error=ASRScenarioError,
     )
+
+    # provenance-chain wave: structure the demo-aquifer caveat. Each aquifer knob
+    # the caller left unset fell to a demo default, NOT site hydrogeology; a knob
+    # the user supplied is user-provenance. Attach onto the layer so the narration
+    # seam renders it (replaces relying on the free-text caveat alone).
+    provenance: list[SyntheticInput] = []
+    for _pname, _val, _units in (
+        ("aquifer_k_ms", aquifer_k_ms, "m/s"),
+        ("porosity", porosity, None),
+        ("aquifer_sy", aquifer_sy, None),
+    ):
+        provenance.append(SyntheticInput(
+            param=_pname,
+            value=(round(float(_val), 6) if _val is not None else None),
+            units=_units,
+            basis="user" if _val is not None else "default_demo",
+            note=None if _val is not None else "demo aquifer default, not site hydrogeology",
+        ))
+    for _pname, _val in (
+        ("injection_months", injection_months),
+        ("recovery_months", recovery_months),
+        ("n_cycles", n_cycles),
+    ):
+        if _val is None:
+            provenance.append(SyntheticInput(
+                param=_pname, basis="default_demo", note="demo cycle-schedule default",
+            ))
+    layer = layer.model_copy(update={"synthetic_inputs": provenance})
 
     # Mirror the head-decline emit: side-emit the well-head sawtooth line chart
     # from the typed ASRLayerURI.head_timeseries (real solver output).

@@ -35,6 +35,7 @@ import asyncio
 import logging
 from typing import Any
 
+from trid3nt_contracts.common import SyntheticInput
 from trid3nt_contracts.swmm_contracts import SWMMDepthLayerURI, SWMMRunArgs
 from trid3nt_contracts.tool_registry import AtomicToolMetadata
 
@@ -631,6 +632,58 @@ def _urban_envelope_suffix(
     if "10m" in (dem_source or ""):
         parts.append("10 m DEM fallback")
     return f"({'; '.join(parts)})" if parts else ""
+
+
+def _build_swmm_provenance(
+    effective_args: SWMMRunArgs,
+    run_args: SWMMRunArgs,
+    dem_source: str,
+    buildings_absent: bool,
+    n_buildings_dropped: int,
+) -> list[SyntheticInput]:
+    """Structured input provenance for the urban-flood run (provenance-chain wave).
+
+    Makes machine-visible the SWMM assumptions the audit flagged: the rainfall
+    forcing (real Atlas-14 or user), the SYNTHESIZED quasi-2D drainage grid (there
+    is no surveyed storm-sewer network), the flat overland Manning n, the
+    buildings-obstruction state, and any coarse-DEM fallback."""
+    out: list[SyntheticInput] = []
+    _depth = effective_args.total_rain_depth_mm
+    _user_depth = run_args.total_rain_depth_mm is not None
+    out.append(SyntheticInput(
+        param="total_rain_depth_mm",
+        value=(round(float(_depth), 1) if _depth is not None else None),
+        units="mm",
+        basis="user" if _user_depth else "fetched",
+        real_source_if_any=(None if _user_depth else "lookup_precip_return_period (NOAA Atlas-14)"),
+        note=(None if _user_depth else f"{run_args.return_period_yr}-yr/{run_args.storm_duration_hr:.0f}-hr design storm"),
+    ))
+    out.append(SyntheticInput(
+        param="drainage_network", value="synthesized", basis="default_demo",
+        note=("quasi-2D overland grid from DEM cells (one storage node per cell, "
+              "single outfall); NOT a surveyed storm-sewer/pipe network"),
+    ))
+    out.append(SyntheticInput(
+        param="overland_manning_n", value=0.03, basis="default_demo",
+        note="flat overland roughness; landcover-derived n not wired",
+    ))
+    if n_buildings_dropped > 0:
+        out.append(SyntheticInput(
+            param="building_obstructions", value=n_buildings_dropped, basis="fetched",
+            real_source_if_any="fetch_buildings (OSM footprints)",
+        ))
+    elif buildings_absent:
+        out.append(SyntheticInput(
+            param="building_obstructions", value="none", basis="default_demo",
+            note="OSM footprints unavailable; modeled without obstructions",
+        ))
+    if "10m" in (dem_source or ""):
+        out.append(SyntheticInput(
+            param="dem", value="10 m", basis="fetched",
+            real_source_if_any="fetch_dem (10 m; 1 m 3DEP unavailable)",
+            note="coarser DEM fallback",
+        ))
+    return out
 
 
 def make_buildings_input_layer_uri(
@@ -1258,6 +1311,10 @@ async def model_swmm_urban_flood(
                 )
                 if _suffix and "(" not in (peak.name or ""):
                     _peak_upd["name"] = f"{peak.name} {_suffix}"
+                _peak_upd["synthetic_inputs"] = _build_swmm_provenance(
+                    effective_args, run_args, dem_source,
+                    _buildings_absent, _n_bldg_dropped,
+                )
                 if _peak_upd:
                     peak = peak.model_copy(update=_peak_upd)
                 # Emit frame animation layers (already TiTiler URLs; no
@@ -1478,6 +1535,9 @@ async def model_swmm_urban_flood(
     )
     if _name_suffix and "(" not in (peak.name or ""):
         peak_updates["name"] = f"{peak.name} {_name_suffix}"
+    peak_updates["synthetic_inputs"] = _build_swmm_provenance(
+        effective_args, run_args, dem_source, _buildings_absent, n_buildings_dropped,
+    )
     if peak_updates:
         peak = peak.model_copy(update=peak_updates)
 

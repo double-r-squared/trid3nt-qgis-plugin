@@ -39,6 +39,7 @@ import asyncio
 import logging
 from typing import Any
 
+from trid3nt_contracts.common import SyntheticInput
 from trid3nt_contracts.telemac_contracts import TelemacDyeLayerURI
 from trid3nt_contracts.tool_registry import AtomicToolMetadata
 
@@ -1965,12 +1966,37 @@ async def model_telemac_river_dye(
         )
     raw_peak = layers[0]
 
+    # provenance-chain wave: structured provenance for the two physically dominant,
+    # previously-buried TELEMAC inputs - the carrier discharge that governs dilution
+    # (real NWM streamflow or user-supplied, never the old hidden 250 m3/s) and the
+    # bank geometry (real NHDArea polygons vs an assumed constant-width ribbon).
+    _telemac_provenance: list[SyntheticInput] = [
+        SyntheticInput(
+            param="discharge_m3s", value=round(float(inflow_q_m3s), 1), units="m3/s",
+            basis="user" if discharge_m3s is not None else "fetched",
+            real_source_if_any=(
+                None if discharge_m3s is not None
+                else "fetch_noaa_nwm_streamflow (NOAA National Water Model)"
+            ),
+            note="carrier discharge governs dilution/transport",
+        ),
+        SyntheticInput(
+            param="bank_geometry", value=_bank_provenance,
+            basis="fetched" if _bank_provenance == "nhd_area" else "default_demo",
+            real_source_if_any="USGS NHDArea water polygons" if _bank_provenance == "nhd_area" else None,
+            note=(
+                None if _bank_provenance == "nhd_area"
+                else "assumed constant-width ribbon, not surveyed banks"
+            ),
+        ),
+    ]
+
     # --- Stage 6: publish the peak COG (render chokepoint) + honest narration - #
     async with substep(emitter, "publish_layer"):
         peak = await asyncio.to_thread(
             _publish_peak_layer, raw_peak, batch_run_id, location_name, reach_name,
             mesh_size_m, mesh_node_estimate, mesh_resolution_label, substance,
-            _bank_provenance,
+            _bank_provenance, _telemac_provenance,
         )
 
     logger.info(
@@ -2125,6 +2151,7 @@ def _publish_peak_layer(
     mesh_resolution_label: str | None = None,
     substance: str = "dye",
     bank_source: str = "constant_ribbon",
+    synthetic_inputs: list[SyntheticInput] | None = None,
 ) -> TelemacDyeLayerURI:
     """Publish the peak dye COG through publish_layer (render chokepoint) and
     enrich the narration. On publish failure the raw peak is returned UNCHANGED
@@ -2164,6 +2191,7 @@ def _publish_peak_layer(
         "mesh_size_m": mesh_size_m,
         "mesh_node_estimate": mesh_node_estimate,
         "mesh_resolution_label": mesh_resolution_label,
+        "synthetic_inputs": list(synthetic_inputs or []),
     }
     if raw_peak.layer_type != "raster" or not (
         raw_peak.uri.startswith("gs://") or raw_peak.uri.startswith("s3://")
@@ -2201,6 +2229,7 @@ def _publish_peak_layer(
         mesh_size_m=mesh_size_m,
         mesh_node_estimate=mesh_node_estimate,
         mesh_resolution_label=mesh_resolution_label,
+        synthetic_inputs=list(synthetic_inputs or []),
     )
 
 

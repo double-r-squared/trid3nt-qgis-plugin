@@ -37,6 +37,7 @@ import tempfile
 from pathlib import Path
 from typing import Any
 
+from trid3nt_contracts.common import SyntheticInput
 from trid3nt_contracts.execution import LayerURI
 from trid3nt_contracts.geoclaw_contracts import (
     GEOCLAW_DEPTH_STYLE_PRESET,
@@ -256,7 +257,12 @@ async def geoclaw_inundation(
     effective_source_lonlat = source_lonlat
     effective_dam_depth = dam_break_depth_m
     dam_source_note: str | None = None
-    if str(scenario).strip().lower() in ("dam_break", "dambreak", "dam-break"):
+    # provenance-chain wave: structured per-input provenance for the physically
+    # dominant source parameters. Built alongside the prose ``dam_source_note`` and
+    # threaded onto the returned layer so the agent narrates demo-vs-fetched.
+    provenance: list[SyntheticInput] = []
+    _scenario_l = str(scenario).strip().lower()
+    if _scenario_l in ("dam_break", "dambreak", "dam-break"):
         _has_loc = source_lonlat is not None
         _has_height = dam_break_depth_m is not None
         if not (_has_loc and _has_height):
@@ -279,6 +285,20 @@ async def geoclaw_inundation(
                         )
                         + " kept)."
                     )
+                provenance.append(SyntheticInput(
+                    param="dam_break_depth_m",
+                    value=round(float(effective_dam_depth), 2),
+                    units="m",
+                    basis="user" if _has_height else "fetched",
+                    real_source_if_any=None if _has_height else "fetch_usace_dams (USACE NID DAM_HEIGHT)",
+                    note=f"NID dam {dam.name!r}",
+                ))
+                provenance.append(SyntheticInput(
+                    param="source_lonlat",
+                    value=f"({effective_source_lonlat[0]:.5f}, {effective_source_lonlat[1]:.5f})",
+                    basis="user" if _has_loc else "fetched",
+                    real_source_if_any=None if _has_loc else "fetch_usace_dams (USACE NID location)",
+                ))
             else:
                 named = f" named {dam_name!r}" if dam_name else ""
                 return {
@@ -295,6 +315,48 @@ async def geoclaw_inundation(
                 }
         else:
             dam_source_note = "Dam location + released-column height are user-supplied (not NID-sourced)."
+            provenance.append(SyntheticInput(
+                param="dam_break_depth_m", value=round(float(dam_break_depth_m), 2),
+                units="m", basis="user",
+            ))
+            provenance.append(SyntheticInput(
+                param="source_lonlat",
+                value=f"({source_lonlat[0]:.5f}, {source_lonlat[1]:.5f})",
+                basis="user",
+            ))
+    elif _scenario_l == "tsunami":
+        # provenance-chain wave, item 2c: the tsunami synthetic-Okada honesty that
+        # the worker only PRINTED to geoclaw.stdout (setrun_builder.py banner) now
+        # rides the envelope as a structured entry -- the same fact, computed
+        # deterministically at the server from the tool params. A fault-geometry
+        # field the user did not supply is a generic synthetic default, NOT a
+        # site-specific seismic source.
+        _fault_defaulted = [
+            n for n, supplied in (
+                ("strike", fault_strike_deg is not None),
+                ("dip", fault_dip_deg is not None),
+                ("rake", fault_rake_deg is not None),
+                ("depth", fault_depth_km is not None),
+            ) if not supplied
+        ]
+        if _fault_defaulted:
+            provenance.append(SyntheticInput(
+                param="fault_geometry",
+                value="generic synthetic Okada",
+                basis="default_demo",
+                note=(
+                    "fault " + "/".join(_fault_defaulted) + " not user-supplied; "
+                    "illustrative, NOT a site-specific seismic source"
+                ),
+            ))
+        # Mw: the contract default (8.0) is a demo magnitude, not a catalog event.
+        provenance.append(SyntheticInput(
+            param="source_magnitude",
+            value=float(source_magnitude),
+            units="Mw",
+            basis="default_demo" if float(source_magnitude) == 8.0 else "user",
+            note=None if float(source_magnitude) == 8.0 else "user-supplied Mw",
+        ))
     if effective_dam_depth is None:
         # tsunami / surge ignore dam_break_depth_m; give the contract its default.
         effective_dam_depth = 10.0
@@ -361,6 +423,7 @@ async def geoclaw_inundation(
             run_args,
             compute_class=compute_class,
             dam_source_note=dam_source_note,
+            synthetic_inputs=provenance,
         )
         logger.info(
             "geoclaw_inundation complete layer_id=%s scenario=%s "
@@ -673,6 +736,7 @@ async def model_geoclaw_inundation(
     compute_class: str = "standard",
     cleanup_outputs: bool = True,
     dam_source_note: str | None = None,
+    synthetic_inputs: list[SyntheticInput] | None = None,
 ) -> GeoClawDepthLayerURI:
     """Compose the full GeoClaw shallow-water inundation chain end-to-end (Batch).
 
@@ -1066,6 +1130,7 @@ async def model_geoclaw_inundation(
             ),
             scenario=run_args.scenario,
             source_note=dam_source_note,
+            synthetic_inputs=list(synthetic_inputs or []),
         )
         emitted_frames = await _emit_frame_layers(
             emitter,
@@ -1174,8 +1239,13 @@ async def model_geoclaw_inundation(
     # --- Step 6: publish the PEAK COG through publish_layer (render chokepoint)
     async with substep(emitter, "publish_layer"):
         peak = await asyncio.to_thread(_publish_peak_layer, raw_peak, staging.run_id)
+    _peak_update: dict[str, Any] = {}
     if dam_source_note is not None:
-        peak = peak.model_copy(update={"source_note": dam_source_note})
+        _peak_update["source_note"] = dam_source_note
+    if synthetic_inputs:
+        _peak_update["synthetic_inputs"] = list(synthetic_inputs)
+    if _peak_update:
+        peak = peak.model_copy(update=_peak_update)
 
     # --- Step 6b: publish + emit the per-frame animation layers OUT-OF-BAND --
     emitted_frames = await _emit_frame_layers(emitter, frame_layers, staging.run_id)

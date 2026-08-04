@@ -395,6 +395,15 @@ Key behaviors:
   matching compute_* or clip_* tool.
 - Never fabricate numbers. All depth, area, and count values in your replies
   must come from the tool result, not from your own generation.
+- Never invent PHYSICAL MODEL INPUTS. Rates, magnitudes, material properties,
+  and forcing values (dam height, earthquake magnitude, soil strength, carrier
+  discharge, wind, Vs30, rainfall) are never guessed. If a required physical
+  parameter has no value and no fetcher can supply it, do NOT fill it in: the
+  tool returns a typed INPUT-required error naming the missing parameters -- relay
+  them to the user with their units and typical ranges and ASK, rather than
+  supplying a plausible number yourself. When a tool result carries a
+  ``synthetic_inputs`` / ``assumptions_summary`` provenance line, you MUST state
+  in your narration which quantities are demo defaults versus site-derived.
 - When a tool result contains a flood depth layer, describe the results from
   the returned metrics — do not invent values.
 - Keep responses concise and focused on the hazard modeling context.
@@ -2077,6 +2086,92 @@ def _layer_uri_is_published(result: Any) -> bool:
     return uri.startswith("http://") or uri.startswith("https://")
 
 
+def _extract_synthetic_inputs(result: Any) -> list[dict[str, Any]]:
+    """Pull the structured ``synthetic_inputs`` provenance list off a tool result,
+    wherever it rides (provenance-chain wave).
+
+    Checks, in order: a top-level attribute (a ``LayerURI`` / result model), a
+    dict ``"synthetic_inputs"`` key, the result's primary layer
+    (``.layers[0]`` / ``.asr_layer`` / ``.<x>_layer`` style single-layer field),
+    and a nested ``summary``/``derived_params`` dict. Returns a list of plain
+    dicts (``model_dump``-style) or ``[]`` when none is declared. Never raises --
+    a missing field on any shape degrades to ``[]``.
+    """
+
+    def _as_dicts(value: Any) -> list[dict[str, Any]]:
+        if not isinstance(value, (list, tuple)) or not value:
+            return []
+        out: list[dict[str, Any]] = []
+        for entry in value:
+            if isinstance(entry, dict):
+                out.append(entry)
+            elif hasattr(entry, "model_dump"):
+                try:
+                    out.append(entry.model_dump(mode="json"))
+                except Exception:  # noqa: BLE001
+                    continue
+        return out
+
+    # 1. top-level attribute (LayerURI subclass / result model)
+    direct = _as_dicts(getattr(result, "synthetic_inputs", None))
+    if direct:
+        return direct
+    # 2. dict key
+    if isinstance(result, dict):
+        found = _as_dicts(result.get("synthetic_inputs"))
+        if found:
+            return found
+        # nested summary / derived_params dicts
+        for key in ("summary", "derived_params"):
+            sub = result.get(key)
+            if isinstance(sub, dict):
+                found = _as_dicts(sub.get("synthetic_inputs"))
+                if found:
+                    return found
+        # a layers list of LayerURIs
+        for layer in result.get("layers") or []:
+            found = _as_dicts(getattr(layer, "synthetic_inputs", None))
+            if found:
+                return found
+        return []
+    # 3. result models that wrap a single primary layer
+    for attr in ("layers",):
+        seq = getattr(result, attr, None)
+        if isinstance(seq, (list, tuple)):
+            for layer in seq:
+                found = _as_dicts(getattr(layer, "synthetic_inputs", None))
+                if found:
+                    return found
+    for attr in ("asr_layer", "primary", "layer", "peak"):
+        layer = getattr(result, attr, None)
+        if layer is not None:
+            found = _as_dicts(getattr(layer, "synthetic_inputs", None))
+            if found:
+                return found
+    return []
+
+
+def _hoist_synthetic_inputs(payload: dict[str, Any], result: Any) -> None:
+    """When a tool result carries structured input provenance, hoist a compact
+    one-line ``assumptions_summary`` (+ the structured ``synthetic_inputs`` list)
+    to the TOP of the function_response so the LLM reliably narrates which inputs
+    are demo defaults vs site-derived (concise-chat: one line, never a table).
+
+    Mirrors the ``fallback_note`` hoist -- a no-op when the result declares no
+    provenance, so every existing result is byte-identical.
+    """
+    from trid3nt_contracts.common import render_assumptions_line
+
+    entries = _extract_synthetic_inputs(result)
+    if not entries:
+        return
+    line = render_assumptions_line(entries)
+    if line:
+        payload["assumptions_summary"] = line
+    # keep the structured list too (clipped) so a consumer can enumerate it.
+    payload["synthetic_inputs"] = entries[:12]
+
+
 def _summarize_published_scenario_layer(
     tool_name: str, result: Any
 ) -> dict[str, Any]:
@@ -2118,6 +2213,12 @@ def _summarize_published_scenario_layer(
     }
     if isinstance(bbox, (list, tuple)) and len(bbox) == 4:
         summary["bbox"] = list(bbox)
+    # provenance-chain wave: the bare-published-LayerURI path used to drop every
+    # field but the render metadata, losing any input-provenance the layer
+    # carried (sfincs_flood / swmm_urban_flood peak layers). Thread the structured
+    # ``synthetic_inputs`` + its rendered assumptions line through so the demo-vs-
+    # site-derived provenance reaches the narration on this path too.
+    _hoist_synthetic_inputs(summary, result)
     return summary
 
 
@@ -2357,6 +2458,12 @@ def summarize_tool_result(
         _fb_note = getattr(result, "fallback_note", None)
         if isinstance(_fb_note, str) and _fb_note:
             payload["fallback_note"] = _fb_note
+
+    # provenance-chain wave: whichever branch built the payload, hoist any
+    # structured input provenance the result carries (a demo default is buried in
+    # the coerced/repr'd result otherwise). Renders one compact assumptions line
+    # so the LLM narrates demo-vs-site-derived inputs. No-op when none declared.
+    _hoist_synthetic_inputs(payload, result)
 
     # Final char-budget clip: serialize, if oversized clip and re-wrap.
     try:

@@ -61,13 +61,16 @@ from .common import (
     BBox,
     EngineRunArgsMixin,
     GraceModel,
+    InputBasis,
     Lat,
     Lon,
+    SyntheticInput,
     TemporalMode,
     TimeRange,
     ULIDStr,
     new_ulid,
     now_utc,
+    render_assumptions_line,
 )
 from .geoclaw_contracts import GeoClawDepthLayerURI, GeoClawRunArgs
 from .modflow_contracts import (
@@ -186,6 +189,9 @@ __all__ = [
     "TimeRange",
     "TemporalMode",
     "EngineRunArgsMixin",
+    "InputBasis",
+    "SyntheticInput",
+    "render_assumptions_line",
     "new_ulid",
     "now_utc",
 ]

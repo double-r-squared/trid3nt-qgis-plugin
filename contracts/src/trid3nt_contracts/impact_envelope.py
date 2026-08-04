@@ -48,7 +48,7 @@ from typing import Literal
 
 from pydantic import Field
 
-from .common import BBox, GraceModel, ULIDStr, UTCDatetime
+from .common import BBox, GraceModel, SyntheticInput, ULIDStr, UTCDatetime
 
 __all__ = [
     "DamageStateKey",
@@ -356,6 +356,16 @@ class ImpactEnvelope(GraceModel):
             "measured value. Lets a consumer judge how much of expected_loss_usd "
             "is default-based. 0 means every loss used a measured replacement value "
             "(or the upstream layer predates this field)."
+        ),
+    )
+    synthetic_inputs: list[SyntheticInput] = Field(
+        default_factory=list,
+        description=(
+            "Structured input provenance (provenance-chain wave). Populated when "
+            "some of the aggregate rests on demo-default assumptions -- e.g. a "
+            "``replacement_value`` entry (basis=default_demo) when "
+            "n_assets_default_replacement_value > 0. ADDITIVE + default-empty; the "
+            "narration seam renders it into one compact assumptions line."
         ),
     )
     generated_at: UTCDatetime = Field(

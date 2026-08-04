@@ -179,6 +179,16 @@ def test_system_prompt_still_forbids_fabricated_numbers() -> None:
     assert "Never fabricate numbers" in SYSTEM_PROMPT
 
 
+def test_system_prompt_forbids_inventing_physical_inputs() -> None:
+    """Provenance-chain wave (ADR 0106): the general ask-dont-invent rule for
+    physical MODEL INPUTS (distinct from narrating result numbers) must be
+    present -- the model asks the user for a physical parameter it cannot fetch or
+    derive, and names demo-default vs site-derived provenance in its narration."""
+    assert "Never invent PHYSICAL MODEL INPUTS" in SYSTEM_PROMPT
+    assert "synthetic_inputs" in SYSTEM_PROMPT
+    assert "demo defaults versus site-derived" in SYSTEM_PROMPT
+
+
 # ---------------------------------------------------------------------------
 # Wave 4.9 — vector layers must NOT be published via publish_layer
 # ---------------------------------------------------------------------------
