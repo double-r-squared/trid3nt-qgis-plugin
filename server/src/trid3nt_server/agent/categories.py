@@ -270,6 +270,7 @@ PRIMARY_CATEGORY: dict[str, str] = {
     # openquake_psha (there is no dedicated geophysics data category).
     "fetch_fault_sources": "hazard_modeling",
     "landlab_susceptibility": "hazard_modeling",
+    "landlab_flow_accumulation": "hazard_modeling",
     # USGS post-fire debris-flow hazard composer (pfdf: Staley 2017 M1
     # likelihood + Gartner 2014 emergency volume + Cannon 2010 combined class
     # over a delineated stream-segment network). Filed as a hazard engine;

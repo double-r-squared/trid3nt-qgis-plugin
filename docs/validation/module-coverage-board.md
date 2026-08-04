@@ -1586,20 +1586,20 @@ Roster gaps (TELEMAC): opentelemac.org (the modules-list index and the v7p0 PDF 
 
 ### Flow Direction & Accumulation
 Purpose: Route water/sediment downslope across a grid and accumulate drainage area/discharge - the substrate every other surface-process chain reads (slope, contributing area).
-Today: FlowAccumulator(FlowDirectorSteepest, depression_finder=DepressionFinderAndRouter) is a hardcoded internal step inside the signed landslide_probability chain only (feeds topographic__slope + drainage_area into LandslideProbability); it is not a standalone-selectable analysis, its own publishable layer, or knob-exposed. D8/MFD/D-infinity directors, LossyFlowAccumulator, and PriorityFloodFlowRouter are unsurfaced.
+Today: LANDED as the `landlab_flow_accumulation` template (ADR 0122, hazard-easy-four #1): a standalone flow-accumulation analysis (`analysis="flow_accumulation"`) emitting the drainage-area raster + an extracted channel-network vector + a D8/Dinf/MFD routing-comparison chart, over a real AOI DEM (fetch_3dep_extra -> fetch_dem). flow_director (D8/Dinf/MFD) rides advanced_physics; depression_handler (fill DepressionFinderAndRouter | priority_flood PriorityFloodFlowRouter) + channel_threshold_cells are first-class knobs. Exec-mode (no image rebuild). LossyFlowAccumulator remains unsurfaced.
 Aspects: single-path steepest-descent routing (D4/D8); multi-flow-direction distribution (MFD/D-infinity); RichDEM-backed unified fill+route+accumulate for large/real DEMs (PriorityFlood); lossy/attenuated downstream accumulation
-- [CAND-S] `flow_accumulation_standalone_layer` [S] [US] - Can I get a drainage-area / flow-accumulation layer for this watershed on its own, without running a landslide analysis?
+- [LANDED] `landlab_flow_accumulation` [S] [US] - Drainage-area / flow-accumulation layer + channel network for this watershed on its own, without a landslide analysis. (ADR 0122)
   src: https://landlab.readthedocs.io/en/latest/tutorials/flow_direction_and_accumulation/the_FlowAccumulator.html (landlab_flowaccumulator_tutorial)
-  knobs: flow_director(Steepest default|D8|MFD|DINF), depression_finder on/off
-  notes: Surfaces the chain's already-wired FlowAccumulator call (drainage_area, surface_water__discharge) as its own analysis instead of discarding it after feeding LandslideProbability. Tutorial-verified: 10x10 raster case tops out at max drainage_area=64 (=core-node count) - a checkable sanity bound.
-- [CAND-M] `multi_flow_direction_routing` [M] [US] - Route flow with multiple downslope neighbors (MFD) instead of single steepest-path - how does the drainage pattern change for this AOI?
+  knobs: flow_director(D8 default|Dinf|MFD), depression_handler(fill|priority_flood), channel_threshold_cells, target_resolution_m
+  notes: Surfaces the FlowAccumulator drainage_area as the PRIMARY log-styled raster + a drainage-area-threshold channel-network vector; the routing-comparison chart answers how much the director moves the concentrated flow paths. Live exec smoke (synthetic UTM DEM): max drainage_area 4.176 km2, channelized fraction 0.011, 3-director comparison (D8 0.011 / Dinf 0.129 / MFD 0.123). Determinism verified.
+- [LANDED] `multi_flow_direction_routing` [M->S] [US] - Route flow with multiple downslope neighbors (MFD/Dinf) vs single steepest-path - how does the drainage pattern change? FOLDED into landlab_flow_accumulation.
   src: https://landlab.readthedocs.io/en/latest/tutorials/flow_direction_and_accumulation/the_FlowAccumulator.html (landlab_flowaccumulator_tutorial)
-  knobs: flow_director=MFD|D8|DINF, diagonals on/off
-  notes: Same worker, swap flow_director - diffuse fan/braided drainage vs single-thread channel.
-- [CAND-M] `priority_flood_large_aoi_routing` [M] [US] - This AOI's DEM is large or messy with real pits - route flow fast and robustly instead of the slower FlowAccumulator+DepressionFinderAndRouter combo.
+  knobs: flow_director=D8|Dinf|MFD
+  notes: Same landed template - swap flow_director; the built-in routing-comparison chart (all 3 directors) is exactly this question.
+- [LANDED] `priority_flood_large_aoi_routing` [M->S] [US] - Robust fill+route+accumulate for messy/real DEMs via PriorityFloodFlowRouter. FOLDED into landlab_flow_accumulation as depression_handler="priority_flood" (the folded ADR 0121 row 9).
   src: https://landlab.readthedocs.io/en/latest/tutorials/flow_direction_and_accumulation/the_Flow_Director_Accumulator_PriorityFlood.html (landlab_priorityflood_tutorial)
-  knobs: flow_metric(D8|D4|Rho8|Rho4|Quinn|Freeman|Holmgren|Dinf), depression handling(fill|breach|off)
-  notes: New dependency: requires the RichDEM package in the worker image (container-hygiene check before build).
+  knobs: depression_handler=priority_flood, flow_director->flow_metric(D8|Dinf|Quinn)
+  notes: richdem present in venvs/agent (PriorityFloodFlowRouter imports); no image rebuild (exec-mode). Live smoke exercised priority_flood across all 3 directors.
 
 ### Erosion & Stream Power (channel incision / landscape evolution)
 Purpose: Model long-term channel incision and hillslope-to-channel sediment routing driven by drainage area and slope - bedrock rivers, transport-limited gravel rivers, threshold-limited erosion.

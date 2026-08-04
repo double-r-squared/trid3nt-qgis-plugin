@@ -60,6 +60,37 @@ FOS_FAILURE_THRESHOLD: float = 1.0
 #: unstable/inundated fraction (matches the flood NODATA_DEPTH_M wet floor).
 OVERLAND_WET_DEPTH_M: float = 0.05
 
+#: Default channel-head drainage-area threshold, expressed as a MULTIPLE of the
+#: grid CELL AREA (a channel head is conventionally reached once the contributing
+#: area exceeds a few hundred cells). Cells whose drainage_area meets this are the
+#: extracted channel network. A pure multiple of cell area so the threshold scales
+#: with resolution (matches the Landlab FlowAccumulator tutorial's
+#: drainage-area-threshold channel extraction).
+DEFAULT_CHANNEL_THRESHOLD_CELLS: int = 100
+
+#: The flow-routing directors compared in the routing-comparison output (the
+#: FlowAccumulator tutorial's central question: how much does the routing choice
+#: change where concentrated flow ends up). Each is run through the
+#: PriorityFloodFlowRouter (uniform depression handling) with its mapped
+#: flow_metric so the comparison is fair across directors.
+_ROUTING_COMPARISON_DIRECTORS: tuple[str, ...] = ("D8", "Dinf", "MFD")
+
+#: Short registry director token -> Landlab FlowDirector class name (D8 default).
+_DIRECTOR_MAP: dict[str, str] = {
+    "D8": "FlowDirectorD8",
+    "Dinf": "FlowDirectorDINF",
+    "MFD": "FlowDirectorMFD",
+}
+
+#: Short registry director token -> PriorityFloodFlowRouter ``flow_metric`` name
+#: (the priority-flood router speaks flow_metric, not director class names; MFD
+#: maps onto its multiple-flow "Quinn" metric).
+_PF_METRIC_MAP: dict[str, str] = {
+    "D8": "D8",
+    "Dinf": "Dinf",
+    "MFD": "Quinn",
+}
+
 
 @dataclass
 class ChainResult:
@@ -122,9 +153,11 @@ def run_component_chain(
         return _run_landslide_probability(dem, resolution_m, build_spec)
     if analysis == "overland_flow":
         return _run_overland_flow(dem, resolution_m, build_spec)
+    if analysis == "flow_accumulation":
+        return _run_flow_accumulation(dem, resolution_m, build_spec)
     raise ValueError(
-        f"unknown Landlab analysis {analysis!r} "
-        f"(expected 'landslide_probability' or 'overland_flow')"
+        f"unknown Landlab analysis {analysis!r} (expected "
+        f"'landslide_probability', 'overland_flow' or 'flow_accumulation')"
     )
 
 
@@ -190,13 +223,8 @@ def _run_landslide_probability(
     # ``topographic__specific_contributing_area`` + the soil__ fields).
     # levers STEP 3: advanced_physics["flow_director"] selects the flow-routing
     # director (D8 default; Dinf / MFD per the registry). build_spec carries the
-    # ALREADY-VALIDATED resolved value (or the default). FlowDirectorD8/Dinf/MFD
-    # are the Landlab director names; map the short registry token onto them.
-    _DIRECTOR_MAP = {
-        "D8": "FlowDirectorD8",
-        "Dinf": "FlowDirectorDINF",
-        "MFD": "FlowDirectorMFD",
-    }
+    # ALREADY-VALIDATED resolved value (or the default). ``_DIRECTOR_MAP``
+    # (module-level) maps the short registry token onto the Landlab director name.
     director = _DIRECTOR_MAP.get(
         str(spec.get("flow_director", "D8")), "FlowDirectorD8"
     )
@@ -539,5 +567,212 @@ def _run_overland_flow(
         mean_probability_of_failure=0.0,
         output_field_name="surface_water__depth",
         extra={"max_depth_m": max_depth, "n_steps": steps},
+        secondary_fields=secondary,
+    )
+
+
+def _accumulate_drainage_area(
+    dem: Any,
+    resolution_m: float,
+    *,
+    director_token: str,
+    depression_handler: str,
+) -> tuple[Any, Any, Any, dict[str, Any]]:
+    """Run flow accumulation on a FRESH grid and return the drainage-area field.
+
+    Builds its own ``RasterModelGrid`` (so repeated calls for the routing
+    comparison never share accumulated state), routes flow with the requested
+    director + depression handling, and returns
+    ``(drainage_area_2d, slope_2d, nodata_mask, notes)``:
+
+      * ``depression_handler="priority_flood"`` (the folded row-9 component): the
+        Landlab ``PriorityFloodFlowRouter`` fills/breaches depressions and
+        accumulates in one pass, with ``flow_metric`` mapped from the director
+        token (D8 / Dinf / MFD->Quinn). The whole domain routes to the edge.
+      * ``depression_handler="fill"`` (default): ``FlowAccumulator`` with the
+        requested ``FlowDirector``; ``DepressionFinderAndRouter`` is added ONLY
+        for the D8 director (Landlab's depression router is single-flow-only),
+        and the note records when a multi-flow director ran without it.
+
+    All grids are ``(H, W)`` NaN-masked on the closed / no-data cells.
+    """
+    import numpy as np
+
+    grid, nodata_mask, _z = _build_grid(dem, resolution_m)
+    nrows, ncols = np.asarray(dem).shape
+    notes: dict[str, Any] = {}
+
+    if depression_handler == "priority_flood":
+        from landlab.components import PriorityFloodFlowRouter  # type: ignore
+
+        metric = _PF_METRIC_MAP.get(director_token, "D8")
+        pf = PriorityFloodFlowRouter(grid, flow_metric=metric)
+        pf.run_one_step()
+        notes["depression_handler"] = "priority_flood"
+        notes["flow_metric"] = metric
+    else:
+        from landlab.components import FlowAccumulator  # type: ignore
+
+        director = _DIRECTOR_MAP.get(director_token, "FlowDirectorD8")
+        fa_kwargs: dict[str, Any] = {"flow_director": director}
+        if director == "FlowDirectorD8":
+            fa_kwargs["depression_finder"] = "DepressionFinderAndRouter"
+            notes["depression_handler"] = "fill (DepressionFinderAndRouter)"
+        else:
+            # Landlab's DepressionFinderAndRouter is single-flow-only; a multi-flow
+            # director (Dinf / MFD) cannot use it. Run without it and say so.
+            notes["depression_handler"] = (
+                f"none ({director_token} is multi-flow; fill is D8-only)"
+            )
+        fa = FlowAccumulator(grid, **fa_kwargs)
+        fa.run_one_step()
+
+    def _grid2d(node_field: str) -> Any:
+        try:
+            a = np.asarray(grid.at_node[node_field], dtype="float64").reshape(
+                nrows, ncols
+            )
+        except Exception:  # noqa: BLE001 - a field the run did not populate
+            return None
+        a[nodata_mask] = np.nan
+        return a
+
+    drainage = _grid2d("drainage_area")
+    slope = _grid2d("topographic__steepest_slope")
+    return drainage, slope, nodata_mask, notes
+
+
+def _run_flow_accumulation(
+    dem: Any, resolution_m: float, spec: dict[str, Any]
+) -> ChainResult:
+    """The FlowAccumulator drainage-area + channel-network chain.
+
+    Mirrors the canonical Landlab ``the_FlowAccumulator`` tutorial: route flow
+    over the DEM, accumulate contributing drainage area, and extract the channel
+    network by a drainage-area threshold. The PRIMARY field is ``drainage_area``
+    (m^2, log-styled downstream); the channel network is a secondary boolean
+    mask (vectorized by the postprocess); and a routing-comparison summary
+    (D8 vs Dinf vs MFD, all through the priority-flood router) answers the
+    tutorial's central question -- how much the routing choice moves the
+    concentrated flow paths.
+
+    build_spec keys consumed: ``flow_director`` (D8 / Dinf / MFD),
+    ``depression_handler`` (fill / priority_flood), ``channel_threshold_cells``.
+    """
+    import numpy as np
+
+    cell_area = float(resolution_m) ** 2
+    director_token = str(spec.get("flow_director", "D8"))
+    if director_token not in _DIRECTOR_MAP:
+        director_token = "D8"
+    depression_handler = str(spec.get("depression_handler", "fill")).lower()
+    if depression_handler not in ("fill", "priority_flood"):
+        depression_handler = "fill"
+    threshold_cells = int(
+        spec.get("channel_threshold_cells", DEFAULT_CHANNEL_THRESHOLD_CELLS)
+    )
+    threshold_cells = max(threshold_cells, 1)
+    threshold_m2 = threshold_cells * cell_area
+
+    # --- Primary run (the user's director + depression handling) ---
+    drainage, slope, nodata_mask, notes = _accumulate_drainage_area(
+        dem,
+        resolution_m,
+        director_token=director_token,
+        depression_handler=depression_handler,
+    )
+    if drainage is None:
+        raise ValueError(
+            "flow_accumulation produced no drainage_area field "
+            f"(director={director_token}, depression_handler={depression_handler})"
+        )
+
+    # Channel network: cells whose contributing area meets the threshold.
+    channel_mask = np.where(drainage >= threshold_m2, 1.0, np.nan)
+    channel_mask[nodata_mask] = np.nan
+
+    secondary: dict[str, Any] = {"channel_network": channel_mask}
+    if slope is not None:
+        secondary["slope"] = slope
+
+    active = np.isfinite(drainage)
+    n_active = int(active.sum())
+    if n_active == 0:
+        max_da_km2 = 0.0
+        mean_da_km2 = 0.0
+        channelized_frac = 0.0
+    else:
+        da_active = drainage[active]
+        max_da_km2 = float(np.max(da_active)) / 1e6
+        mean_da_km2 = float(np.mean(da_active)) / 1e6
+        channelized_frac = float(
+            np.count_nonzero(da_active >= threshold_m2) / n_active
+        )
+
+    # --- Routing comparison: D8 vs Dinf vs MFD (all priority-flood routed) ---
+    # Cheap (flow accumulation is fast); each director run through the
+    # priority-flood router so depression handling is uniform and the ONLY
+    # difference is the routing metric -- exactly the tutorial's comparison.
+    routing_comparison: list[dict[str, Any]] = []
+    for tok in _ROUTING_COMPARISON_DIRECTORS:
+        try:
+            da_c, _slope_c, mask_c, _notes_c = _accumulate_drainage_area(
+                dem,
+                resolution_m,
+                director_token=tok,
+                depression_handler="priority_flood",
+            )
+        except Exception as exc:  # noqa: BLE001 - a director the venv cannot route
+            LOG.warning("routing-comparison director %s failed: %s", tok, exc)
+            continue
+        if da_c is None:
+            continue
+        act_c = np.isfinite(da_c)
+        na_c = int(act_c.sum())
+        if na_c == 0:
+            continue
+        dav = da_c[act_c]
+        routing_comparison.append(
+            {
+                "flow_director": tok,
+                "max_drainage_area_km2": float(np.max(dav)) / 1e6,
+                "channelized_area_fraction": float(
+                    np.count_nonzero(dav >= threshold_m2) / na_c
+                ),
+            }
+        )
+
+    LOG.info(
+        "landlab flow_accumulation chain: director=%s depression=%s "
+        "n_active=%d max_da=%.4g km2 channelized_frac=%.4f (%d comparison rows)",
+        director_token,
+        depression_handler,
+        n_active,
+        max_da_km2,
+        channelized_frac,
+        len(routing_comparison),
+    )
+    # Contract carrier reuse: unstable_area_fraction := channelized fraction;
+    # min_factor_of_safety := max drainage area (km2, units disambiguate);
+    # mean_probability_of_failure is unused for this chain (0.0). The typed
+    # flow-accumulation scalars travel in ``extra`` (folded into the worker
+    # result block) so the postprocess emits the drainage-area layer metrics.
+    return ChainResult(
+        field=drainage,
+        analysis="flow_accumulation",
+        unstable_area_fraction=channelized_frac,
+        min_factor_of_safety=max_da_km2,
+        mean_probability_of_failure=0.0,
+        output_field_name="drainage_area",
+        extra={
+            "max_drainage_area_km2": max_da_km2,
+            "mean_drainage_area_km2": mean_da_km2,
+            "channelized_area_fraction": channelized_frac,
+            "channel_threshold_cells": threshold_cells,
+            "channel_threshold_m2": threshold_m2,
+            "flow_director": director_token,
+            "depression_handler_note": notes.get("depression_handler", ""),
+            "routing_comparison": routing_comparison,
+        },
         secondary_fields=secondary,
     )

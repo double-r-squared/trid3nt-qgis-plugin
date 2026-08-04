@@ -145,6 +145,14 @@ def build_landlab_build_spec(run_args: LandlabRunArgs) -> dict[str, Any]:
         # OverlandFlow parameters
         "rainfall_intensity_mm_hr": float(run_args.rainfall_intensity_mm_hr),
         "storm_duration_hr": float(run_args.storm_duration_hr),
+        # flow_accumulation parameters (flow_director arrives via advanced_physics
+        # and is merged from ``resolved`` below).
+        "depression_handler": str(
+            getattr(run_args, "depression_handler", "fill")
+        ),
+        "channel_threshold_cells": int(
+            getattr(run_args, "channel_threshold_cells", 100)
+        ),
     }
     # Merge the validated physics overrides (the chain reads flow_director /
     # overland_alpha / mannings_n). Absent => byte-identical.

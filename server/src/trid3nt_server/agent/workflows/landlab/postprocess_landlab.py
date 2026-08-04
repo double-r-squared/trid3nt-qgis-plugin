@@ -31,7 +31,11 @@ import logging
 from pathlib import Path
 from typing import Any
 
-from trid3nt_contracts.landlab_contracts import LandlabSusceptibilityLayerURI
+from trid3nt_contracts.execution import LayerURI
+from trid3nt_contracts.landlab_contracts import (
+    LandlabFlowAccumulationLayerURI,
+    LandlabSusceptibilityLayerURI,
+)
 
 from trid3nt_server.agent.workflows.shared import cog_io
 from trid3nt_server.agent.workflows.shared.cog_io import CogIoError
@@ -39,10 +43,13 @@ from trid3nt_server.agent.workflows.shared.cog_io import CogIoError
 __all__ = [
     "PostprocessLandlabError",
     "postprocess_landlab",
+    "postprocess_landlab_flow_accumulation",
+    "build_routing_comparison_chart_spec",
     "publish_landlab_quantities",
     "compute_landlab_metrics",
     "LANDSLIDE_STYLE_PRESET",
     "OVERLAND_STYLE_PRESET",
+    "DRAINAGE_AREA_STYLE_PRESET",
     "UNSTABLE_PROBABILITY_THRESHOLD",
     "SECONDARY_QUANTITY_BY_TOKEN",
 ]
@@ -70,6 +77,12 @@ LANDSLIDE_STYLE_PRESET: str = "continuous_landslide_susceptibility"
 #: The overland-flow chain reuses the existing flood-depth preset (a depth field,
 #: same physical quantity as SFINCS/SWMM depth — additive reuse, no new preset).
 OVERLAND_STYLE_PRESET: str = "continuous_flood_depth"
+
+#: The flow-accumulation primary (drainage area, m^2) reuses the already-registered
+#: project drainage-area preset (``continuous_drainage_area``, viridis). A dedicated
+#: log-DOMAIN TiTiler expression (drainage area spans several orders of magnitude)
+#: is a NAMED RESIDUAL -- the existing preset is the reused styling, not a new one.
+DRAINAGE_AREA_STYLE_PRESET: str = "continuous_drainage_area"
 
 #: Mirror of the worker threshold for recomputing the unstable fraction when the
 #: completion result block is absent (kept in sync with
@@ -518,3 +531,260 @@ def publish_landlab_quantities(
         specs=specs,
         bbox=bbox,
     )
+
+
+# --------------------------------------------------------------------------- #
+# flow_accumulation postprocess: drainage-area raster + channel-network vector
+# + routing-comparison chart. Mirrors the canonical the_FlowAccumulator tutorial
+# outputs (drainage-area map, extracted channel network, routing comparison).
+# --------------------------------------------------------------------------- #
+def _vectorize_channel_mask(
+    channel_cog_path: Path,
+) -> dict[str, Any] | None:
+    """Vectorize a channel-network mask COG into a EPSG:4326 GeoJSON collection.
+
+    Reads the boolean channel mask (1.0 = channel cell, NaN elsewhere), extracts
+    the channel polygons with ``rasterio.features.shapes``, reprojects each to
+    EPSG:4326, and returns a GeoJSON ``FeatureCollection`` dict. Returns ``None``
+    when the mask has no channel cells (a flat / tiny AOI). The polygonized
+    channel footprint IS the extracted channel network (a drainage-area-threshold
+    network, same definition as the tutorial's channel extraction).
+    """
+    try:
+        import numpy as np
+        import rasterio
+        from rasterio.features import shapes as _shapes
+        from rasterio.warp import transform_geom as _transform_geom
+    except Exception as exc:  # noqa: BLE001
+        raise PostprocessLandlabError(
+            "LANDLAB_DEPENDENCY_MISSING",
+            message=f"rasterio/numpy unavailable for channel vectorization: {exc}",
+        ) from exc
+    if not Path(channel_cog_path).exists():
+        return None
+    with rasterio.open(channel_cog_path) as ds:
+        arr = ds.read(1).astype("float64")
+        nodata = ds.nodata
+        src_crs = ds.crs
+        transform = ds.transform
+    if nodata is not None and np.isfinite(nodata):
+        arr = np.where(arr == nodata, np.nan, arr)
+    mask = np.isfinite(arr) & (arr > 0.0)
+    if not mask.any():
+        return None
+    mask_u8 = mask.astype("uint8")
+    features: list[dict[str, Any]] = []
+    for geom, val in _shapes(mask_u8, mask=mask, transform=transform):
+        if int(val) != 1:
+            continue
+        if src_crs is not None and str(src_crs).upper() != "EPSG:4326":
+            geom = _transform_geom(src_crs, "EPSG:4326", geom, precision=6)
+        features.append({"type": "Feature", "properties": {"channel": 1}, "geometry": geom})
+    if not features:
+        return None
+    return {"type": "FeatureCollection", "features": features}
+
+
+def _upload_geojson_to_runs_bucket(
+    geojson: dict[str, Any],
+    run_id: str,
+    runs_bucket: str | None,
+    *,
+    dest_filename: str,
+) -> str:
+    """Upload a GeoJSON FeatureCollection to the runs bucket; return its URI.
+
+    Scheme-aware via ``cache.storage_scheme()`` (s3 via the solver boto3 client,
+    gs/file via fsspec/local), mirroring the COG upload. The client renders a
+    vector ``LayerURI`` inline from this GeoJSON URI (no TiTiler tiling)."""
+    import json as _json
+
+    from trid3nt_server.agent.tools.cache import storage_scheme
+
+    body = _json.dumps(geojson).encode("utf-8")
+    scheme = storage_scheme()
+    bucket = runs_bucket or __import__("os").environ.get(
+        "TRID3NT_RUNS_BUCKET"
+    ) or RUNS_BUCKET_DEFAULT
+    key = f"{run_id}/{dest_filename}"
+    uri = f"{scheme}://{bucket}/{key}"
+    try:
+        if scheme == "s3":
+            from trid3nt_server.agent.tools.simulation.solver.solver import _get_s3_client
+
+            _get_s3_client().put_object(
+                Bucket=bucket, Key=key, Body=body, ContentType="application/geo+json"
+            )
+        else:
+            import fsspec  # type: ignore
+
+            with fsspec.open(uri, "wb") as fh:
+                fh.write(body)
+    except Exception as exc:  # noqa: BLE001
+        raise PostprocessLandlabError(
+            "LANDLAB_COG_UPLOAD_FAILED",
+            message=f"failed to upload channel-network GeoJSON to {uri}: {exc}",
+            details={"run_id": run_id, "uri": uri},
+        ) from exc
+    return uri
+
+
+def build_routing_comparison_chart_spec(
+    routing_comparison: list[dict[str, Any]],
+) -> dict[str, Any] | None:
+    """Build the Vega-Lite routing-comparison chart (D8 vs Dinf vs MFD).
+
+    Grouped bars of the channelized-area fraction per routing director -- the
+    the_FlowAccumulator tutorial's central comparison (how much the routing
+    choice moves where concentrated flow ends up). Returns ``None`` when the
+    comparison is empty. Pure (unit-testable on a synthetic comparison list)."""
+    if not routing_comparison:
+        return None
+    values = [
+        {
+            "flow_director": str(row.get("flow_director", "?")),
+            "channelized_area_fraction": float(
+                row.get("channelized_area_fraction", 0.0)
+            ),
+            "max_drainage_area_km2": float(row.get("max_drainage_area_km2", 0.0)),
+        }
+        for row in routing_comparison
+    ]
+    return {
+        "$schema": "https://vega.github.io/schema/vega-lite/v5.json",
+        "data": {"values": values},
+        "mark": {"type": "bar", "color": "#1f5fbf"},
+        "encoding": {
+            "x": {
+                "field": "flow_director",
+                "type": "nominal",
+                "title": "flow-routing director",
+                "sort": ["D8", "Dinf", "MFD"],
+            },
+            "y": {
+                "field": "channelized_area_fraction",
+                "type": "quantitative",
+                "title": "channelized area fraction",
+            },
+            "tooltip": [
+                {"field": "flow_director", "type": "nominal"},
+                {"field": "channelized_area_fraction", "type": "quantitative", "format": ".3f"},
+                {"field": "max_drainage_area_km2", "type": "quantitative", "format": ".3g"},
+            ],
+        },
+    }
+
+
+def postprocess_landlab_flow_accumulation(
+    field_cog_path: str | Path,
+    *,
+    run_id: str,
+    result: dict[str, Any] | None = None,
+    channel_cog_path: str | Path | None = None,
+    runs_bucket: str | None = None,
+) -> tuple[list[LayerURI], dict[str, Any]]:
+    """Reproject the drainage-area COG + emit the drainage-area layer + channel vector.
+
+    Reads the worker's ``drainage_area`` field COG, reprojects to EPSG:4326
+    (CRS round-trip guard), uploads it, and returns the primary drainage-area
+    ``LandlabFlowAccumulationLayerURI`` plus (when a channel mask COG is supplied
+    and non-empty) the extracted channel-network vector ``LayerURI``. The typed
+    narration scalars come from the worker's authoritative
+    ``result["flow_accumulation"]`` block (recomputed from the field only as a
+    fallback).
+
+    Returns ``(layers, metrics)`` where ``layers[0]`` is the drainage-area raster
+    (role ``"primary"``), ``layers[1:]`` the channel-network vector if present,
+    and ``metrics`` carries the scalars + the ``routing_comparison`` list (the
+    composer turns it into the routing-comparison chart).
+    """
+    import numpy as np
+
+    src = Path(field_cog_path)
+    field = _read_field_array(src)
+    fa = (result or {}).get("flow_accumulation") if isinstance(result, dict) else None
+    fa = fa if isinstance(fa, dict) else {}
+
+    active = np.isfinite(field)
+    da_active = field[active]
+    if da_active.size:
+        recomputed_max = float(np.max(da_active)) / 1e6
+        recomputed_mean = float(np.mean(da_active)) / 1e6
+    else:
+        recomputed_max = recomputed_mean = 0.0
+
+    def _pick(key: str, fallback: float) -> float:
+        v = fa.get(key)
+        try:
+            return float(v) if v is not None else float(fallback)
+        except (TypeError, ValueError):
+            return float(fallback)
+
+    max_da = max(0.0, _pick("max_drainage_area_km2", recomputed_max))
+    mean_da = max(0.0, _pick("mean_drainage_area_km2", recomputed_mean))
+    chan_frac = max(0.0, min(1.0, _pick("channelized_area_fraction", 0.0)))
+    routing_comparison = fa.get("routing_comparison") or []
+
+    dst_cog, bbox = _reproject_field_cog_4326(src)
+    try:
+        uri = _upload_cog_to_runs_bucket(
+            dst_cog, run_id, runs_bucket, dest_filename="landlab_drainage_area.tif"
+        )
+    finally:
+        _safe_unlink(dst_cog)
+
+    primary = LandlabFlowAccumulationLayerURI(
+        layer_id=f"landlab-drainage-area-{run_id}",
+        name="Drainage area",
+        layer_type="raster",
+        uri=uri,
+        style_preset=DRAINAGE_AREA_STYLE_PRESET,
+        role="primary",
+        units="m^2",
+        bbox=bbox,
+        max_drainage_area_km2=max_da,
+        mean_drainage_area_km2=mean_da,
+        channelized_area_fraction=chan_frac,
+    )
+    layers: list[LayerURI] = [primary]
+
+    # --- Channel-network vector (drainage-area-threshold network) ---
+    if channel_cog_path is not None:
+        collection = _vectorize_channel_mask(Path(channel_cog_path))
+        if collection is not None:
+            geojson_uri = _upload_geojson_to_runs_bucket(
+                collection,
+                run_id,
+                runs_bucket,
+                dest_filename="landlab_channel_network.geojson",
+            )
+            layers.append(
+                LayerURI(
+                    layer_id=f"landlab-channel-network-{run_id}",
+                    name="Channel network",
+                    layer_type="vector",
+                    uri=geojson_uri,
+                    role="context",
+                    bbox=bbox,
+                )
+            )
+
+    metrics = {
+        "analysis": "flow_accumulation",
+        "crs": "EPSG:4326",
+        "max_drainage_area_km2": max_da,
+        "mean_drainage_area_km2": mean_da,
+        "channelized_area_fraction": chan_frac,
+        "routing_comparison": routing_comparison,
+    }
+    logger.info(
+        "postprocess_landlab_flow_accumulation run_id=%s max_da=%.4g km2 "
+        "mean_da=%.4g km2 chan_frac=%.4f channel_vector=%s uri=%s",
+        run_id,
+        max_da,
+        mean_da,
+        chan_frac,
+        len(layers) > 1,
+        uri,
+    )
+    return layers, metrics

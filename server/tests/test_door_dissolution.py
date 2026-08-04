@@ -37,6 +37,7 @@ EXPECTED_TEMPLATES = {
     "geoclaw_inundation",
     "elmfire_fire_spread",
     "landlab_susceptibility",
+    "landlab_flow_accumulation",  # ADR 0122 hazard-easy-four #1: Landlab flow-accumulation / drainage-area + channel-network template
     "openquake_psha",
     "pelicun_damage_assessment",
     "modflow_asr",
@@ -94,7 +95,7 @@ def test_all_templates_registered_and_callable():
         n for n, e in reg.items() if getattr(e.metadata, "tier", "general") == "template"
     }
     assert registered_templates == EXPECTED_TEMPLATES, (
-        "registered tier=template set drifted from the expected 23: "
+        "registered tier=template set drifted from the expected 24: "
         f"missing={sorted(EXPECTED_TEMPLATES - registered_templates)} "
         f"unexpected={sorted(registered_templates - EXPECTED_TEMPLATES)}"
     )

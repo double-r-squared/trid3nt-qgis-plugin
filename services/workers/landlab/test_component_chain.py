@@ -311,3 +311,62 @@ def test_landslide_chain_sets_documented_fields(monkeypatch):
     assert 0.0 <= res.mean_probability_of_failure <= 1.0
     # the deterministic FoS field came along.
     assert "factor_of_safety_field" in res.extra
+
+
+# ===========================================================================
+# (3) flow_accumulation chain — REAL landlab chain (gated on the dep).
+# ADR 0122 hazard-easy-four #1: drainage area + channel network + routing comp.
+# ===========================================================================
+@_REQUIRES_LANDLAB
+def test_flow_accumulation_chain_in_memory():
+    """The REAL FlowAccumulator chain: drainage-area field, channel-network
+    secondary, and a 3-director routing comparison in ``extra``."""
+    dem = _tilted_dem(n=24)
+    res = run_component_chain(
+        dem,
+        resolution_m=30.0,
+        build_spec={
+            "analysis": "flow_accumulation",
+            "flow_director": "D8",
+            "depression_handler": "fill",
+            "channel_threshold_cells": 30,
+        },
+    )
+    assert res.analysis == "flow_accumulation"
+    assert res.output_field_name == "drainage_area"
+    field = np.asarray(res.field)
+    assert field.shape == dem.shape
+    da = field[np.isfinite(field)]
+    assert da.size > 0
+    # the largest accumulated area is >= a single cell (900 m^2).
+    assert float(np.max(da)) >= 900.0
+    # channel-network secondary is present + boolean-ish.
+    assert "channel_network" in res.secondary_fields
+    # routing comparison ran all 3 directors.
+    rc = res.extra["routing_comparison"]
+    assert {r["flow_director"] for r in rc} == {"D8", "Dinf", "MFD"}
+    for r in rc:
+        assert 0.0 <= r["channelized_area_fraction"] <= 1.0
+        assert r["max_drainage_area_km2"] >= 0.0
+    # narration scalars carried in extra.
+    assert res.extra["max_drainage_area_km2"] >= 0.0
+    assert 0.0 <= res.extra["channelized_area_fraction"] <= 1.0
+
+
+@_REQUIRES_LANDLAB
+def test_flow_accumulation_priority_flood_and_determinism():
+    """priority_flood depression handling routes every director; two identical
+    runs produce a byte-identical drainage-area field (determinism, Invariant 1)."""
+    dem = _tilted_dem(n=20)
+    spec = {
+        "analysis": "flow_accumulation",
+        "flow_director": "MFD",
+        "depression_handler": "priority_flood",
+        "channel_threshold_cells": 25,
+    }
+    r1 = run_component_chain(dem, resolution_m=30.0, build_spec=dict(spec))
+    r2 = run_component_chain(dem, resolution_m=30.0, build_spec=dict(spec))
+    f1 = np.nan_to_num(np.asarray(r1.field), nan=-1.0)
+    f2 = np.nan_to_num(np.asarray(r2.field), nan=-1.0)
+    assert np.array_equal(f1, f2)
+    assert r1.extra["flow_director"] == "MFD"

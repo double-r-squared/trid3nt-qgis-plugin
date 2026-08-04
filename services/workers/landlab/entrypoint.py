@@ -380,7 +380,32 @@ def _run_landlab(
         "grid_crs": crs,
         "secondary_field_files": secondary_files,
     }
+    # flow_accumulation carries its typed drainage-area scalars + the routing
+    # comparison in ``extra`` (all JSON-safe); fold them into the result block so
+    # the postprocess emits the drainage-area layer metrics + comparison chart.
+    if chain.analysis == "flow_accumulation":
+        result_block["flow_accumulation"] = _flow_accumulation_extra(chain.extra)
     return result_block, field_cog
+
+
+def _flow_accumulation_extra(extra: dict[str, Any]) -> dict[str, Any]:
+    """Pick the JSON-safe flow-accumulation scalars from a ChainResult ``extra``.
+
+    The landslide chain's ``extra`` carries a numpy FoS grid (not JSON-safe); the
+    flow-accumulation chain's ``extra`` is all scalars/lists. This selector keeps
+    only the known flow-accumulation keys so the result block stays serializable.
+    """
+    keys = (
+        "max_drainage_area_km2",
+        "mean_drainage_area_km2",
+        "channelized_area_fraction",
+        "channel_threshold_cells",
+        "channel_threshold_m2",
+        "flow_director",
+        "depression_handler_note",
+        "routing_comparison",
+    )
+    return {k: extra[k] for k in keys if k in extra}
 
 
 def _expand_outputs(patterns: list[str], cwd: Path) -> list[Path]:

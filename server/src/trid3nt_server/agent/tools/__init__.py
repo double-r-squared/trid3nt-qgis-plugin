@@ -662,6 +662,11 @@ from ..workflows.swan.wave_field.wave_field import swan_wave_field as _swan_wave
 # module; workflows/landlab/run_landlab.py is the distinct solver build/stage
 # seam.
 from ..workflows.landlab.susceptibility.susceptibility import landlab_susceptibility as _landlab_susceptibility  # noqa: E402,F401 - RENAME of run_landlab_susceptibility (engine=landlab, tier=template)
+# landlab_flow_accumulation TEMPLATE (engine="landlab", tier="template"), a
+# DISTINCT capability (drainage area + channel network + routing comparison), one
+# folder under workflows/landlab/flow_accumulation/; surfaced by the run_landlab
+# door's gate expansion. The composer (model_landlab_flow_accumulation) is inlined.
+from ..workflows.landlab.flow_accumulation.flow_accumulation import landlab_flow_accumulation as _landlab_flow_accumulation  # noqa: E402,F401 - NEW capability (ADR 0122, hazard-easy-four #1) (engine=landlab, tier=template)
 # openquake_psha TEMPLATE (engine="openquake", tier="template"), one folder
 # under workflows/openquake/psha/; EXCLUDED from the default retrieval pool,
 # surfaced only by the run_openquake door's gate expansion. The composer chain

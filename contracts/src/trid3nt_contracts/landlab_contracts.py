@@ -62,6 +62,7 @@ from .execution import LayerURI
 
 __all__ = [
     "LandlabAnalysis",
+    "LandlabDepressionHandler",
     "DEFAULT_SOIL_TRANSMISSIVITY_M2_DAY",
     "DEFAULT_SOIL_COHESION_PA",
     "DEFAULT_SOIL_INTERNAL_FRICTION_DEG",
@@ -71,8 +72,10 @@ __all__ = [
     "DEFAULT_RAINFALL_INTENSITY_MM_HR",
     "DEFAULT_STORM_DURATION_HR",
     "DEFAULT_N_MONTE_CARLO",
+    "DEFAULT_CHANNEL_THRESHOLD_CELLS",
     "LandlabRunArgs",
     "LandlabSusceptibilityLayerURI",
+    "LandlabFlowAccumulationLayerURI",
 ]
 
 
@@ -82,7 +85,25 @@ __all__ = [
 #   "overland_flow"         — OverlandFlow (de Almeida shallow-water rainfall
 #       routing -> peak surface-water depth).
 # Open ``Literal`` so the engine may add component chains without a wire break.
-LandlabAnalysis = Literal["landslide_probability", "overland_flow"]
+#   "flow_accumulation"     — FlowAccumulator drainage-area + channel-network
+#       extraction (the canonical the_FlowAccumulator tutorial chain): route flow
+#       over the DEM, accumulate contributing drainage area, extract the channel
+#       network by a drainage-area threshold, and compare routing directors.
+LandlabAnalysis = Literal[
+    "landslide_probability", "overland_flow", "flow_accumulation"
+]
+
+# How the flow-accumulation chain handles closed depressions before routing:
+#   "fill"           — Landlab DepressionFinderAndRouter (D8 single-flow only;
+#       a multi-flow director runs without it — noted honestly).
+#   "priority_flood" — the PriorityFloodFlowRouter (fills/breaches + routes in one
+#       pass, valid for every director metric). The folded row-9 component.
+LandlabDepressionHandler = Literal["fill", "priority_flood"]
+
+#: Default channel-head drainage-area threshold as a MULTIPLE of the grid cell
+#: area (contributing cells). Mirrors the worker
+#: ``component_chain.DEFAULT_CHANNEL_THRESHOLD_CELLS``.
+DEFAULT_CHANNEL_THRESHOLD_CELLS: int = 100
 
 
 # TENTATIVE demo defaults (sprint-17). Narrated as demo values, NOT
@@ -185,6 +206,38 @@ class LandlabRunArgs(EngineRunArgsMixin):
     )
     storm_duration_hr: float = Field(default=DEFAULT_STORM_DURATION_HR, gt=0.0)
 
+    # --- flow_accumulation chain parameters ---
+    #: Depression handling before routing (``"fill"`` DepressionFinderAndRouter,
+    #: D8-only; ``"priority_flood"`` PriorityFloodFlowRouter, any director).
+    depression_handler: LandlabDepressionHandler = "fill"
+    #: Channel-head drainage-area threshold as a MULTIPLE of the grid cell area
+    #: (contributing cells) for channel-network extraction (>= 1).
+    channel_threshold_cells: int = Field(
+        default=DEFAULT_CHANNEL_THRESHOLD_CELLS, ge=1
+    )
+
+    @field_validator("depression_handler", mode="before")
+    @classmethod
+    def _normalize_depression_handler(cls, value: Any) -> Any:
+        """Map common synonyms onto the canonical depression handler BEFORE the
+        ``Literal`` check (no self-correcting retry). Unknown passes through."""
+        if not isinstance(value, str):
+            return value
+        key = value.strip().lower().replace("-", "_").replace(" ", "_")
+        aliases = {
+            "fill": "fill",
+            "filled": "fill",
+            "depression_finder": "fill",
+            "depressionfinderandrouter": "fill",
+            "sink_fill": "fill",
+            "priority_flood": "priority_flood",
+            "priorityflood": "priority_flood",
+            "priority": "priority_flood",
+            "breach": "priority_flood",
+            "pf": "priority_flood",
+        }
+        return aliases.get(key, key)
+
     @field_validator("analysis", mode="before")
     @classmethod
     def _normalize_analysis(cls, value: Any) -> Any:
@@ -212,6 +265,17 @@ class LandlabRunArgs(EngineRunArgsMixin):
             "runoff": "overland_flow",
             "surface_flow": "overland_flow",
             "shallow_water": "overland_flow",
+            # flow_accumulation
+            "flow_accumulation": "flow_accumulation",
+            "flowaccumulation": "flow_accumulation",
+            "flow_accumulator": "flow_accumulation",
+            "flowaccumulator": "flow_accumulation",
+            "drainage_area": "flow_accumulation",
+            "drainage": "flow_accumulation",
+            "flow_routing": "flow_accumulation",
+            "channel_network": "flow_accumulation",
+            "channel_extraction": "flow_accumulation",
+            "accumulation": "flow_accumulation",
         }
         return aliases.get(key, key)
 
@@ -249,4 +313,37 @@ class LandlabSusceptibilityLayerURI(LayerURI):
     # SSURGO/POLARIS fetcher yet). Set by the composer/tool. None preserves prior
     # behaviour. A fuller structured assumptions list is a wave-2 addition; this
     # is the honest prose surface so nothing regresses meanwhile.
+    source_note: str | None = Field(default=None)
+
+
+class LandlabFlowAccumulationLayerURI(LayerURI):
+    """A ``LayerURI`` for a Landlab flow-accumulation drainage-area layer, plus
+    the drainage-network narration scalars.
+
+    Extends ``LayerURI`` field-for-field so it still maps onto
+    ``map-command load-layer`` with no translation. The primary raster is the
+    log-styled ``drainage_area`` (m^2) field; the channel network is a companion
+    vector layer. Adds the structured numbers the agent narrates (invariant 1,
+    FR-AS-7 -- typed fields, never invented):
+
+        max_drainage_area_km2: the maximum contributing drainage area over the
+            AOI (km^2) -- the size of the largest accumulated flow path (the
+            basin outlet). > 0.
+        mean_drainage_area_km2: the mean contributing drainage area over the
+            active AOI cells (km^2). > 0.
+        channelized_area_fraction: fraction of active cells whose drainage area
+            meets the channel-head threshold (the extracted channel network),
+            dimensionless in [0, 1].
+
+    ``layer_type`` for the drainage-area field is ``"raster"`` (a single-band
+    COG); the base contract's vocabulary is inherited unchanged.
+    """
+
+    max_drainage_area_km2: float = Field(ge=0.0)
+    mean_drainage_area_km2: float = Field(ge=0.0)
+    channelized_area_fraction: float = Field(ge=0.0, le=1.0)
+
+    #: Input-provenance prose (DEM source; the routing/depression/threshold knobs
+    #: are deterministic engine settings, not synthetic data). None preserves the
+    #: prior behaviour.
     source_note: str | None = Field(default=None)
