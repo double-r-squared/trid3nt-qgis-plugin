@@ -290,6 +290,7 @@ async def model_flood_scenario(
     wind: dict[str, Any] | None = None,
     advanced_physics: dict[str, Any] | None = None,
     infiltration: bool | str = False,
+    infiltration_constant_mm_per_hr: float | None = None,
     breach_point: tuple[float, float] | None = None,
     breach_peak_discharge_m3s: float | None = None,
     breach_arrival_hr: float | None = None,
@@ -449,6 +450,11 @@ async def model_flood_scenario(
             auto-fetch GCN250; a ``str`` -> verbatim CN raster URI; ``False``
             (default) -> no infiltration loss. Best-effort (a fetch failure
             degrades to no loss, never aborts).
+        infiltration_constant_mm_per_hr: SPATIALLY-UNIFORM CONSTANT infiltration
+            loss (a single ``sfincs.inp:qinf`` scalar, mm/hr) -- the quick
+            screening loss instead of the gridded GCN250 method. Mutually
+            exclusive with ``infiltration`` (a typed ``INFILTRATION_METHOD_CONFLICT``
+            error if both are set). ``None`` (default) -> no constant loss.
         breach_point: ``(lon, lat)`` of a DRAWN levee-breach point. USER-GATED:
             if given WITHOUT ``breach_peak_discharge_m3s`` the run returns a typed
             ``USER_INPUT_REQUIRED`` failed envelope (the composer NEVER fabricates
@@ -1282,20 +1288,43 @@ async def model_flood_scenario(
         # rather than emitting wind with the deck default); validated via
         # physics_registry and threaded onto BuildOptions below.
         infiltration_member = None
-        _inf_uri = await asyncio.to_thread(
-            _resolve_infiltration_uri,
-            infiltration,
-            resolved_bbox,
-            data_sources,
-        )
-        if _inf_uri:
-            # Single-band GCN250 raster -> antecedent_moisture None (the deck
-            # emits YAML null; the default 'avg' ValueErrors on a bare band).
+        if infiltration_constant_mm_per_hr is not None:
+            # Spatially-uniform CONSTANT infiltration loss (a bare sfincs.inp:qinf
+            # scalar, mm/hr) -- the quick screening loss term. Mutually exclusive
+            # with the gridded GCN250 curve-number path (both would double-count
+            # the loss); a typed input error, never a silent drop (Invariant 7).
+            if infiltration:
+                raise SFINCSSetupError(
+                    "INFILTRATION_METHOD_CONFLICT",
+                    message=(
+                        "infiltration_constant_mm_per_hr (uniform qinf) is mutually "
+                        "exclusive with the gridded GCN250 infiltration path -- set "
+                        "exactly one."
+                    ),
+                    details={
+                        "infiltration_constant_mm_per_hr": infiltration_constant_mm_per_hr,
+                        "infiltration": infiltration,
+                    },
+                )
             infiltration_member = InfiltrationForcing(
-                cn_uri=_inf_uri,
-                antecedent_moisture=None,
-                provenance={"_prov_source": "gcn250"},
+                constant_mm_per_hr=float(infiltration_constant_mm_per_hr),
+                provenance={"_prov_source": "uniform_constant_qinf"},
             )
+        else:
+            _inf_uri = await asyncio.to_thread(
+                _resolve_infiltration_uri,
+                infiltration,
+                resolved_bbox,
+                data_sources,
+            )
+            if _inf_uri:
+                # Single-band GCN250 raster -> antecedent_moisture None (the deck
+                # emits YAML null; the default 'avg' ValueErrors on a bare band).
+                infiltration_member = InfiltrationForcing(
+                    cn_uri=_inf_uri,
+                    antecedent_moisture=None,
+                    provenance={"_prov_source": "gcn250"},
+                )
 
         resolved_advanced_physics = advanced_physics
         if resolved_advanced_physics is None and (wind or spiderweb_member is not None):
@@ -2180,6 +2209,7 @@ async def sfincs_flood(
     wind: dict[str, Any] | None = None,
     advanced_physics: dict[str, Any] | None = None,
     infiltration: bool | str = False,
+    infiltration_constant_mm_per_hr: float | None = None,
     breach_point: tuple[float, float] | None = None,
     breach_peak_discharge_m3s: float | None = None,
     breach_arrival_hr: float | None = None,
@@ -2442,6 +2472,7 @@ async def sfincs_flood(
         wind=wind,
         advanced_physics=advanced_physics,
         infiltration=infiltration,
+        infiltration_constant_mm_per_hr=infiltration_constant_mm_per_hr,
         breach_point=breach_point,
         breach_peak_discharge_m3s=breach_peak_discharge_m3s,
         breach_arrival_hr=breach_arrival_hr,

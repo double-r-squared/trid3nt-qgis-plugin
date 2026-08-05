@@ -19,3 +19,4 @@ sfincs_flood:
 - compound flood: surge plus river discharge plus rainfall
 - route the flood around building footprints (urban obstacles)
 - named-hurricane surge inundation via a parametric spiderweb wind field
+- run a SFINCS flood with a uniform constant infiltration loss rate qinf

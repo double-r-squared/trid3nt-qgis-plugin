@@ -238,3 +238,14 @@ registered knob templates ran as no-ops. A strict parse would have
 failed the very first live smoke with a loud unknown-field error.
 Sweep candidate: all worker parse_build_spec/parse_* entry points +
 a shared strict-parse helper.
+
+## 2026-08-06 - Offline-suite hermeticity: mock the Atlas-14 lookup
+NOAA PFDS went down (301 to /cgi-bin/new/ + 503) and 9 "offline" tests
+failed (test_urban_flood_publish_offloop x7 +
+test_swmm_two_card_sim_observability x2) because they exercise the
+LIVE lookup_precip_return_period path. Follow-on: monkeypatch the
+design-storm lookup in those tests (the honest-gate behavior itself
+already has dedicated coverage); sweep for other live-endpoint
+dependencies in the offline suite. Also: when NOAA settles, check
+whether the /cgi-bin/hdsc/new/ -> /cgi-bin/new/ redirect is permanent
+and update _ATLAS14_PFDS_URL at the source.

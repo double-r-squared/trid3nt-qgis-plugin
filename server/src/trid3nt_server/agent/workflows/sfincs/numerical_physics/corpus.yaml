@@ -10,3 +10,7 @@ sfincs_advanced_numerical_physics_knobs:
 - SFINCS numerical stability sensitivity study
 - change the SFINCS time integration weighting theta
 - SFINCS wind drag coefficient and Coriolis latitude knobs
+- enable SFINCS horizontal eddy viscosity smoothing
+- set the SFINCS viscosity and nuvisc coefficient
+- change the SFINCS land and sea Manning roughness zonation
+- run SFINCS with uniform Manning roughness instead of per-cell

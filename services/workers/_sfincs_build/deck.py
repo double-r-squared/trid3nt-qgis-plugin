@@ -1716,6 +1716,13 @@ def _emit_physics_config(
         for key in ("theta", "alpha", "huthresh"):
             if key in physics:
                 components.append(f"  {key}: {float(physics[key])}")
+        # Horizontal eddy viscosity: `viscosity` (0/1) toggles the momentum-
+        # diffusion term; `nuvisc` (m2/s) sets its coefficient (only meaningful
+        # with viscosity=1). Both ride the setup_config passthrough verbatim.
+        if "viscosity" in physics:
+            components.append(f"  viscosity: {int(physics['viscosity'])}")
+        if "nuvisc" in physics:
+            components.append(f"  nuvisc: {float(physics['nuvisc'])}")
         # Coriolis: a latitude float -> sfincs.inp:latitude (the constant-f plane).
         if "coriolis_latitude" in physics:
             components.append(f"  latitude: {float(physics['coriolis_latitude'])}")

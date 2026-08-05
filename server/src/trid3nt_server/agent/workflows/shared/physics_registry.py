@@ -102,6 +102,28 @@ PHYSICS_REGISTRY: dict[str, dict[str, dict[str, Any]]] = {
             "deck_target": "sfincs.inp:huthresh",
             "doc": "Wet/dry threshold water depth (m) for momentum (manual default 0.05).",
         },
+        # Horizontal eddy-viscosity smoothing (parameters.html). `viscosity`
+        # (0/1) enables the momentum-diffusion term; `nuvisc` sets its constant
+        # coefficient (m2/s). The deck omits both today, so the v2.3.3 binary's
+        # own default (off) applies -> default 0/0.01 documents that off-state
+        # and keeps an unset run byte-identical (the line is only emitted when
+        # `viscosity` is set). `nuvisc` rides the setup_config passthrough (it is
+        # not a hydromt_sfincs 1.2.2 SfincsInput attr, but `SfincsInput.from_dict`
+        # setattrs it verbatim into sfincs.inp; the binary reads it).
+        "viscosity": {
+            "type": int,
+            "range": (0, 1),
+            "default": 0,
+            "deck_target": "sfincs.inp:viscosity",
+            "doc": "Horizontal eddy-viscosity smoothing (0=off, 1=on) to stabilize flow around sharp topographic gradients.",
+        },
+        "nuvisc": {
+            "type": float,
+            "range": (0.0, 1.0),
+            "default": 0.01,
+            "deck_target": "sfincs.inp:nuvisc",
+            "doc": "Constant horizontal eddy-viscosity coefficient nuvisc (m2/s); only active with viscosity=1 (manual default 0.01).",
+        },
         # SFINCS DOES have a `coriolis` keyword (default True), but it is
         # INERT while `latitude`==0.0 on a projected CRS - so `latitude` is
         # the effective lever, not the bool (silent no-effect risk,

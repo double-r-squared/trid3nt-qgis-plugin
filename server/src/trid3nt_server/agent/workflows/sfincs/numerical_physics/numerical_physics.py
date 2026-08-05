@@ -64,18 +64,24 @@ _KNOB_KEYS: tuple[str, ...] = (
     "alpha",
     "advection",
     "huthresh",
+    "viscosity",
+    "nuvisc",
     "wind_drag",
     "coriolis_latitude",
+    "manning_land",
+    "manning_sea",
 )
 
 #: The LOUD tuning-surface honesty floor.
 _PHYSICS_NOTE: str = (
-    "SOLVER-SETTINGS TUNING SURFACE: theta/alpha/advection/huthresh/wind-drag are "
-    "numerical-stability / runtime / smoothness levers, NOT an accuracy-calibration "
+    "SOLVER-SETTINGS TUNING SURFACE: theta/alpha/advection/huthresh/viscosity/nuvisc/"
+    "wind-drag are numerical-stability / runtime / smoothness levers, and "
+    "manning_land/manning_sea are the constant land/sea roughness zonation fallback "
+    "(the per-cell NLCD reclass stays the default) -- NOT an accuracy-calibration "
     "surface. No published expected-output exists for these knobs (the SFINCS manual "
     "documents them without a reference figure), so no chart is emitted; the "
-    "deliverable is the flood-depth map + the labeled settings delta. viscosity and "
-    "the friction2d toggle are not yet plumbed and are omitted."
+    "deliverable is the flood-depth map + the labeled settings delta. The friction2d "
+    "toggle is not yet plumbed and is omitted."
 )
 
 
@@ -88,7 +94,7 @@ TEMPLATE_CARD = TemplateCard(
         "flood-depth map + the resolved solver-settings delta"
     ),
     required_inputs=["location_query (or bbox)"],
-    knobs="theta, alpha, advection, huthresh, wind_drag, coriolis_latitude, return_period_yr, duration_hr, input_mode",
+    knobs="theta, alpha, advection, huthresh, viscosity, nuvisc, wind_drag, coriolis_latitude, manning_land, manning_sea, return_period_yr, duration_hr, input_mode",
 )
 
 
@@ -116,8 +122,12 @@ async def sfincs_advanced_numerical_physics_knobs(
     alpha: float | None = None,
     advection: int | None = None,
     huthresh: float | None = None,
+    viscosity: int | None = None,
+    nuvisc: float | None = None,
     wind_drag: float | None = None,
     coriolis_latitude: float | None = None,
+    manning_land: float | None = None,
+    manning_sea: float | None = None,
     return_period_yr: int = 100,
     duration_hr: int = 24,
     compute_class: str = "medium",
@@ -137,8 +147,10 @@ async def sfincs_advanced_numerical_physics_knobs(
     THE tool for "how sensitive is the SFINCS flood to the numerical scheme", "run
     SFINCS with advection off / a different theta / a smaller CFL alpha", "tune the
     SFINCS solver settings (huthresh wet/dry threshold, wind drag, theta, alpha)",
-    "SFINCS numerical stability / solver-settings study". A run with NO knob set is
-    byte-identical to the ``sfincs_flood`` baseline.
+    "enable SFINCS horizontal viscosity smoothing (viscosity/nuvisc)", "change the
+    SFINCS land/sea Manning roughness zonation", "SFINCS numerical stability /
+    solver-settings study". A run with NO knob set is byte-identical to the
+    ``sfincs_flood`` baseline.
 
     Do NOT use this for:
         - The flood scenario itself (pluvial/coastal/riverine/compound forcing,
@@ -157,10 +169,19 @@ async def sfincs_advanced_numerical_physics_knobs(
             ``1`` = SFINCS-SSWE advection-on (default; recommended). No value 2.
         huthresh: wet/dry threshold water depth (m) for momentum (manual default
             0.05; range 0.001-0.1).
+        viscosity: horizontal eddy-viscosity smoothing toggle (``0`` = off
+            default, ``1`` = on) to damp flow around sharp topographic gradients.
+        nuvisc: constant horizontal eddy-viscosity coefficient (m2/s; manual
+            default 0.01). Only active with ``viscosity=1``.
         wind_drag: constant wind-drag coefficient override (range 0-0.01; 0 keeps
             the SFINCS default drag formula). Only meaningful with wind forcing.
         coriolis_latitude: constant-plane Coriolis latitude (deg; 0 = no Coriolis)
             for a large-domain surge run.
+        manning_land / manning_sea: the CONSTANT land / open-water Manning n
+            roughness fallback (HydroMT defaults 0.04 / 0.02) for cells the
+            per-cell NLCD reclass does not cover -- the roughness ZONATION lever
+            (set both equal for spatially-uniform; leave unset for the per-cell
+            NLCD-reclass default).
         return_period_yr / duration_hr: the design-storm forcing (as ``sfincs_flood``).
         input_mode: run-mode lever (ADR 0107). ``"user_gated"`` reviews the resolved
             solver settings before the solve; ``"auto"`` (default) proceeds labeled.
