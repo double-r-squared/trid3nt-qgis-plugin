@@ -59,6 +59,8 @@ EXPECTED_TEMPLATES = {
     "landlab_hand_wetness",  # Landlab CAND-S: Height Above Nearest Drainage wetness proxy
     "elmfire_verification_elliptical_replication",  # ADR 0123 continuation #2: constant-wind elliptical-spread verification
     "geoclaw_tsunami_gauge_timeseries",  # ADR 0123 continuation #3: coastal gauge water-level time series
+    "geoclaw_amr_refinement_regions",  # GeoClaw CAND-S: explicit lat/lon/time AMR region control
+    "geoclaw_regional_manning_friction",  # GeoClaw CAND-S: spatially-varying banded Manning friction
     "openquake_psha",
     "pelicun_damage_assessment",
     "modflow_asr",

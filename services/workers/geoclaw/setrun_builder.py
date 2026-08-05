@@ -137,6 +137,17 @@ class GeoClawBuildSpec:
     fgmax_arrival_tol_m: float = 0.01
     # Coastal gauge (lon, lat); deterministic seaward-edge fallback if None.
     coastal_gauge_lonlat: tuple[float, float] | None = None
+    # Explicit AMR refinement windows, each an 8-tuple in GeoClaw regiondata order
+    # (min_level, max_level, t_start_s, t_end_s, min_lon, max_lon, min_lat, max_lat)
+    # appended AFTER the engine default region tiers.
+    amr_regions: list[tuple[float, float, float, float, float, float, float, float]] = (
+        field(default_factory=list)
+    )
+    # Spatially-varying Manning bottom-friction. manning_coefficients is a list of n
+    # values for topography bands split by manning_break (ascending, length =
+    # len(coefficients) - 1). None -> the single global manning_n is used.
+    manning_coefficients: list[float] | None = None
+    manning_break: list[float] = field(default_factory=list)
 
 
 @dataclass
@@ -271,6 +282,99 @@ def parse_build_spec(raw: dict[str, Any]) -> GeoClawBuildSpec:
         v = raw.get(key)
         return float(v) if v is not None else None
 
+    # Explicit AMR refinement windows. Accept either the 8-tuple regiondata order
+    # or a dict with named keys; normalize to the 8-tuple the setrun emits.
+    amr_regions_raw = raw.get("amr_regions") or []
+    if not isinstance(amr_regions_raw, (list, tuple)):
+        raise GeoClawDeckError(
+            "GEOCLAW_SPEC_INVALID",
+            f"amr_regions must be a list of region windows, got {amr_regions_raw!r}",
+        )
+    amr_regions: list[
+        tuple[float, float, float, float, float, float, float, float]
+    ] = []
+    for r in amr_regions_raw:
+        if isinstance(r, dict):
+            try:
+                tup = (
+                    float(r["min_level"]),
+                    float(r["max_level"]),
+                    float(r["t_start_s"]),
+                    float(r["t_end_s"]),
+                    float(r["min_lon"]),
+                    float(r["max_lon"]),
+                    float(r["min_lat"]),
+                    float(r["max_lat"]),
+                )
+            except (KeyError, TypeError, ValueError) as exc:
+                raise GeoClawDeckError(
+                    "GEOCLAW_SPEC_INVALID",
+                    f"amr_regions window missing/invalid field: {r!r} ({exc})",
+                ) from exc
+        elif isinstance(r, (list, tuple)) and len(r) == 8:
+            try:
+                tup = tuple(float(v) for v in r)  # type: ignore[assignment]
+            except (TypeError, ValueError) as exc:
+                raise GeoClawDeckError(
+                    "GEOCLAW_SPEC_INVALID",
+                    f"amr_regions window values must be numeric: {r!r}",
+                ) from exc
+        else:
+            raise GeoClawDeckError(
+                "GEOCLAW_SPEC_INVALID",
+                f"amr_regions window must be an 8-tuple or dict, got {r!r}",
+            )
+        if tup[1] < tup[0]:
+            raise GeoClawDeckError(
+                "GEOCLAW_SPEC_INVALID",
+                f"amr_regions max_level < min_level: {tup}",
+            )
+        amr_regions.append(tup)  # type: ignore[arg-type]
+
+    # Spatially-varying Manning friction (coefficients + elevation breakpoints).
+    mc_raw = raw.get("manning_coefficients")
+    manning_coefficients: list[float] | None = None
+    manning_break: list[float] = []
+    if mc_raw is not None:
+        if not isinstance(mc_raw, (list, tuple)) or not mc_raw:
+            raise GeoClawDeckError(
+                "GEOCLAW_SPEC_INVALID",
+                f"manning_coefficients must be a non-empty list, got {mc_raw!r}",
+            )
+        try:
+            manning_coefficients = [float(v) for v in mc_raw]
+        except (TypeError, ValueError) as exc:
+            raise GeoClawDeckError(
+                "GEOCLAW_SPEC_INVALID",
+                f"manning_coefficients must be numeric: {mc_raw!r}",
+            ) from exc
+        if any(n <= 0.0 for n in manning_coefficients):
+            raise GeoClawDeckError(
+                "GEOCLAW_SPEC_INVALID",
+                f"manning coefficients must be > 0: {manning_coefficients}",
+            )
+        mb_raw = raw.get("manning_break") or []
+        try:
+            manning_break = [float(v) for v in mb_raw]
+        except (TypeError, ValueError) as exc:
+            raise GeoClawDeckError(
+                "GEOCLAW_SPEC_INVALID", f"manning_break must be numeric: {mb_raw!r}"
+            ) from exc
+        if len(manning_break) != len(manning_coefficients) - 1:
+            raise GeoClawDeckError(
+                "GEOCLAW_SPEC_INVALID",
+                f"manning_break length ({len(manning_break)}) must equal "
+                f"len(manning_coefficients) - 1 ({len(manning_coefficients) - 1})",
+            )
+        if any(
+            manning_break[i] >= manning_break[i + 1]
+            for i in range(len(manning_break) - 1)
+        ):
+            raise GeoClawDeckError(
+                "GEOCLAW_SPEC_INVALID",
+                f"manning_break must be strictly ascending: {manning_break}",
+            )
+
     sim_duration_s = _num("sim_duration_s", 3600.0)
     if sim_duration_s <= 0:
         raise GeoClawDeckError(
@@ -314,6 +418,9 @@ def parse_build_spec(raw: dict[str, Any]) -> GeoClawBuildSpec:
         extra_topo_files=extra_topo_files,
         fgmax_arrival_tol_m=_num("fgmax_arrival_tol_m", 0.01),
         coastal_gauge_lonlat=coastal_gauge_lonlat,
+        amr_regions=amr_regions,
+        manning_coefficients=manning_coefficients,
+        manning_break=manning_break,
     )
 
 
@@ -699,6 +806,17 @@ def render_setrun_py(spec: GeoClawBuildSpec) -> str:
         f"    rundata.regiondata.regions.append([{amr_levels!r}, {amr_levels!r}, "
         f"0., {tfinal!r}, {min_lon!r}, {max_lon!r}, {min_lat!r}, {max_lat!r}])\n"
     )
+    # Explicit user-supplied AMR windows (region-based flagging): each forces a
+    # lat/lon/time box to [min_level, max_level]. Appended AFTER the default tiers
+    # (GeoClaw combines overlapping regions by MAX of covering min/max levels).
+    for reg in spec.amr_regions:
+        ml, xl, t0r, t1r, x0r, x1r, y0r, y1r = reg
+        regions_block += (
+            "    # --- Region: explicit user AMR window ---\n"
+            f"    rundata.regiondata.regions.append([{int(ml)!r}, {int(xl)!r}, "
+            f"{float(t0r)!r}, {float(t1r)!r}, {float(x0r)!r}, {float(x1r)!r}, "
+            f"{float(y0r)!r}, {float(y1r)!r}])\n"
+        )
 
     # --- GAP4 gauges: one coastal gauge (explicit or seaward-edge fallback) ---
     gx, gy = _coastal_gauge(spec)
@@ -712,6 +830,23 @@ def render_setrun_py(spec: GeoClawBuildSpec) -> str:
     for f in spec.extra_topo_files:
         topo_lines.append(f"    topo_data.topofiles.append([3, {f!r}])\n")
     topo_block = "".join(topo_lines)
+
+    # --- Friction: single global n, or a spatially-varying (banded) Manning n ---
+    # GeoClaw selects the friction coefficient per cell from ``manning_coefficient``
+    # (a list) split by ``manning_break`` (topography breakpoints): band k applies
+    # where manning_break[k-1] <= B < manning_break[k]. A single-element list with
+    # an empty break list is the uniform case (byte-identical to the scalar path).
+    if spec.manning_coefficients is not None:
+        mc = ", ".join(repr(float(n)) for n in spec.manning_coefficients)
+        mb = ", ".join(repr(float(b)) for b in spec.manning_break)
+        friction_block = (
+            f"    geo_data.manning_coefficient = [{mc}]\n"
+            f"    geo_data.manning_break = [{mb}]\n"
+        )
+    else:
+        friction_block = (
+            f"    geo_data.manning_coefficient = {float(spec.manning_n)!r}\n"
+        )
 
     return f'''"""Auto-generated by the GeoClaw worker (setrun_builder).
 
@@ -807,8 +942,7 @@ def setgeo(rundata):
 
     geo_data.dry_tolerance = 1.0e-3
     geo_data.friction_forcing = True
-    geo_data.manning_coefficient = {float(spec.manning_n)!r}
-    geo_data.friction_depth = 1.0e6
+{friction_block}    geo_data.friction_depth = 1.0e6
 
     geo_data.sea_level = {float(spec.sea_level_m)!r}
 

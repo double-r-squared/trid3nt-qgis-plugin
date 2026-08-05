@@ -696,6 +696,14 @@ from ..workflows.geoclaw.inundation.inundation import geoclaw_inundation as _geo
 # workflows/geoclaw/gauge_timeseries/; surfaced by the run_geoclaw door's gate
 # expansion. Rides the inundation composer (model_geoclaw_inundation, emit_gauge_series).
 from ..workflows.geoclaw.gauge_timeseries.gauge_timeseries import geoclaw_tsunami_gauge_timeseries as _geoclaw_tsunami_gauge_timeseries  # noqa: E402,F401 - NEW capability (ADR 0123, hazard-easy-four continuation #3) (engine=geoclaw, tier=template)
+# geoclaw_amr_refinement_regions TEMPLATE (engine="geoclaw", tier="template"), one
+# folder under workflows/geoclaw/amr_regions/: explicit lat/lon/time AMR region
+# control (region-based flagging). Rides the inundation composer.
+from ..workflows.geoclaw.amr_regions.amr_regions import geoclaw_amr_refinement_regions as _geoclaw_amr_refinement_regions  # noqa: E402,F401 - GeoClaw CAND-S SWE+AMR knob (engine=geoclaw, tier=template)
+# geoclaw_regional_manning_friction TEMPLATE (engine="geoclaw", tier="template"), one
+# folder under workflows/geoclaw/regional_manning/: spatially-varying (banded)
+# Manning bottom-friction. Rides the inundation composer.
+from ..workflows.geoclaw.regional_manning.regional_manning import geoclaw_regional_manning_friction as _geoclaw_regional_manning_friction  # noqa: E402,F401 - GeoClaw CAND-S SWE+AMR knob (engine=geoclaw, tier=template)
 # swan_wave_field TEMPLATE (engine="swan", tier="template"), one folder under
 # workflows/swan/wave_field/; EXCLUDED from the default retrieval pool,
 # surfaced only by the run_swan door's gate expansion. The composer chain

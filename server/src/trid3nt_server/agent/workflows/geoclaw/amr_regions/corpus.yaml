@@ -1,0 +1,10 @@
+# Template routing phrasings: engine templates are ordinary retrieval-pool tools
+# walked into the main index (search_tools composes workflows/**/corpus.yaml).
+geoclaw_amr_refinement_regions:
+- control the GeoClaw AMR mesh with explicit lat/lon/time refinement regions
+- force a fine mesh over this harbour only while the tsunami wave is arriving
+- pin the adaptive mesh to a fixed level in a box for a chosen time window
+- refine the coast finely but cap the offshore ocean box coarse to save cost
+- use region-based AMR flagging instead of default error-estimation refinement
+- set explicit refinement windows by level, time span, and lat/lon bounds
+- how do I tell GeoClaw exactly where and when to refine the mesh

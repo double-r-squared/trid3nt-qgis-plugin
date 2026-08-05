@@ -581,3 +581,70 @@ def test_build_spec_additive_defaults_preserve_behaviour():
     assert spec.fault_dip_deg is None
     assert spec.fault_rake_deg is None
     assert spec.fault_depth_km is None
+
+
+# ===========================================================================
+# GeoClaw CAND-S knobs: explicit AMR regions + spatially-varying Manning.
+# ===========================================================================
+def test_amr_regions_appended_after_default_tiers():
+    """User AMR windows append to regiondata AFTER the engine default tiers and
+    the rendered setrun.py stays valid Python."""
+    win = {
+        "min_level": 3, "max_level": 3, "t_start_s": 0.0, "t_end_s": 1800.0,
+        "min_lon": -124.21, "max_lon": -124.18, "min_lat": 41.745, "max_lat": 41.77,
+    }
+    spec = parse_build_spec(
+        _spec(scenario="tsunami", amr_levels=3, amr_regions=[win],
+              domain_bbox=[-124.6, 41.6, -124.1, 41.85])
+    )
+    assert len(spec.amr_regions) == 1
+    txt = render_setrun_py(spec)
+    ast.parse(txt)
+    # 2 default tiers (propagation + AOI) + 1 explicit user window == 3 appends.
+    assert txt.count("regiondata.regions.append") == 3
+    assert "3, 3, 0.0, 1800.0, -124.21, -124.18, 41.745, 41.77" in txt
+
+
+def test_amr_regions_accepts_tuple_form_and_rejects_bad_level_order():
+    tup = [2, 4, 0.0, 600.0, -124.2, -124.18, 41.74, 41.76]
+    spec = parse_build_spec(_spec(amr_regions=[tup]))
+    assert spec.amr_regions[0][:2] == (2.0, 4.0)
+    with pytest.raises(GeoClawDeckError):
+        parse_build_spec(_spec(amr_regions=[[4, 2, 0.0, 600.0, -124.2, -124.18, 41.74, 41.76]]))
+    with pytest.raises(GeoClawDeckError):
+        parse_build_spec(_spec(amr_regions=[[3, 3, 0.0, 600.0]]))  # wrong arity
+
+
+def test_no_amr_regions_is_byte_identical_default():
+    """An empty amr_regions list keeps the 2 default region tiers (back-compat)."""
+    spec = parse_build_spec(_spec(scenario="tsunami", amr_levels=3,
+                                  domain_bbox=[-124.6, 41.6, -124.1, 41.85]))
+    txt = render_setrun_py(spec)
+    assert txt.count("regiondata.regions.append") == 2
+
+
+def test_banded_manning_emits_list_and_break():
+    spec = parse_build_spec(_spec(manning_coefficients=[0.015, 0.06], manning_break=[0.0]))
+    assert spec.manning_coefficients == [0.015, 0.06]
+    assert spec.manning_break == [0.0]
+    txt = render_setrun_py(spec)
+    ast.parse(txt)
+    assert "geo_data.manning_coefficient = [0.015, 0.06]" in txt
+    assert "geo_data.manning_break = [0.0]" in txt
+
+
+def test_scalar_manning_back_compat_unchanged():
+    """No manning_coefficients -> the single scalar coefficient path (no break)."""
+    spec = parse_build_spec(_spec(manning_n=0.033))
+    txt = render_setrun_py(spec)
+    assert "geo_data.manning_coefficient = 0.033" in txt
+    assert "manning_break" not in txt
+
+
+def test_banded_manning_rejects_bad_break_length_and_nonpositive():
+    with pytest.raises(GeoClawDeckError):
+        parse_build_spec(_spec(manning_coefficients=[0.02, 0.05], manning_break=[0.0, 1.0]))
+    with pytest.raises(GeoClawDeckError):
+        parse_build_spec(_spec(manning_coefficients=[0.02, -0.01], manning_break=[0.0]))
+    with pytest.raises(GeoClawDeckError):
+        parse_build_spec(_spec(manning_coefficients=[0.01, 0.02, 0.03], manning_break=[1.0, 0.0]))  # not ascending

@@ -1,0 +1,10 @@
+# Template routing phrasings: engine templates are ordinary retrieval-pool tools
+# walked into the main index (search_tools composes workflows/**/corpus.yaml).
+geoclaw_regional_manning_friction:
+- run GeoClaw with a different Manning friction onshore versus offshore
+- spatially-varying bottom roughness by land elevation band in the tsunami run
+- set a low offshore Manning n and a higher onshore vegetated n
+- how does the roughness split change the run-up depth and inland reach
+- use a list of Manning coefficients with topography breakpoints not one global n
+- rougher friction on land, smoother in the channel, for the flood solve
+- vary the shallow-water bottom friction by terrain across the domain

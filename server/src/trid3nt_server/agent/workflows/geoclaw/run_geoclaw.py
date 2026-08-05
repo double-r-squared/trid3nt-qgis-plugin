@@ -244,6 +244,27 @@ def build_geoclaw_build_spec(
         spec["dtopo_file"] = dtopo_dest
     if run_args.scenario == "surge" and surge_dest is not None:
         spec["surge_forcing_file"] = surge_dest
+    # Explicit AMR refinement windows (region-based flagging): thread ONLY when the
+    # user/template supplied them (empty list preserves the default-flagging deck).
+    if run_args.amr_regions:
+        spec["amr_regions"] = [
+            [
+                int(w.min_level),
+                int(w.max_level),
+                float(w.t_start_s),
+                float(w.t_end_s),
+                float(w.min_lon),
+                float(w.max_lon),
+                float(w.min_lat),
+                float(w.max_lat),
+            ]
+            for w in run_args.amr_regions
+        ]
+    # Spatially-varying Manning friction: thread the coefficient list + breakpoints
+    # ONLY when set (else the single global manning_n rides through unchanged).
+    if run_args.manning_coefficients is not None:
+        spec["manning_coefficients"] = [float(n) for n in run_args.manning_coefficients]
+        spec["manning_break"] = [float(b) for b in run_args.manning_break]
     return spec
 
 

@@ -440,18 +440,20 @@ Aspects: conterminous US model (incl. UCERF3 time-independent California branch)
 
 ### SWE + AMR core
 Purpose: Depth-averaged shallow-water equations solved on adaptively refined Cartesian AMR grids over bathymetry/topography, with wetting/drying Riemann solvers - the GeoClaw core solver used by every other module.
-Today: TRID3NT surfaces SWE+AMR core per the roster note; region-based/adjoint AMR control and explicit Manning-friction tuning are not confirmed as exposed knobs today.
+Today: TRID3NT surfaces SWE+AMR core per the roster note. LANDED (ADR 0143): explicit region-based AMR control (`geoclaw_amr_refinement_regions`) and spatially-varying Manning friction (`geoclaw_regional_manning_friction`) are now exposed knobs on the inundation deck. Adjoint-guided AMR remains a separate-solver gap.
 Aspects: AMR refinement control: explicit region-based flagging vs default flag2refine vs Richardson error estimation; Adjoint-guided AMR flagging targeted at a specific quantity of interest (e.g. a gauge); Manning bottom-friction, spatially-varying by region/topography; Wetting/drying shoreline Riemann solver and mass/momentum conservation; Analytic-solution validation (Thacker exact solutions: radial parabolic-bowl / sloshing)
-- [CAND-S] `region_based_amr_refinement_windows` [S] [US] - How do I control AMR refinement level and duration with explicit lat/lon/time regions instead of relying on default error flagging?
+- [LANDED] `region_based_amr_refinement_windows` [S] [US] - How do I control AMR refinement level and duration with explicit lat/lon/time regions instead of relying on default error flagging?
   src: https://github.com/clawpack/geoclaw/blob/master/examples/tsunami/chile2010/setrun.py (geoclaw_chile2010_setrun)
   knobs: amrdata.regions=[[level,level,t0,t1,x0,x1,y0,y1],...], refinement_ratios_x/y, flag2refine=True, flag_richardson=False
+  LANDED as `geoclaw_amr_refinement_regions` (ADR 0143): user-supplied AmrRegionWindow list appended to setrun regiondata AFTER the engine default tiers (GeoClaw combines by MAX of covering levels); flag_richardson stays False + flag2refine True (region-based over error flagging). Live smoke Crescent City CA: level-3 window over the harbour, real solve (initial water mass ~6.5e10 = genuine ocean, not dry ~1e5), max_depth 0.73 m. proof docs/proof/templates/amr_regions.png + _chart.png.
 - [CAND-L] `adjoint_guided_amr_flagging` [L] [US] - How do I flag AMR refinement using an adjoint (backward-in-time) sensitivity solve targeted at a specific gauge/QoI, instead of uniform/error-based refinement?
   src: https://github.com/clawpack/geoclaw/tree/master/examples/tsunami/chile2010_adjoint (geoclaw_chile2010_adjoint)
   knobs: adjointdata.use_adjoint, adjoint output time window, refinement tolerance (Davis & LeVeque method)
   notes: New solver capability - requires a separate backward adjoint run coupled to the forward run, not just a setrun toggle.
-- [CAND-S] `manning_friction_by_region` [S] [US] - How do I set a spatially-varying Manning's n bottom-friction coefficient (e.g. different value onshore vs offshore) instead of a single global n?
+- [LANDED] `manning_friction_by_region` [S] [US] - How do I set a spatially-varying Manning's n bottom-friction coefficient (e.g. different value onshore vs offshore) instead of a single global n?
   src: https://www.clawpack.org/manning.html (geoclaw_manning_doc)
   knobs: rundata.friction_data.manning_coefficient (list), manning_break (topography breakpoints); default n=0.025
+  LANDED as `geoclaw_regional_manning_friction` (ADR 0143): geo_data.manning_coefficient (list) + geo_data.manning_break (ascending elevation breaks, len = N-1). Verified against clawpack 5.14.0 (manning_coefficient already a list, manning_break present). Live smoke Crescent City CA: [0.015 offshore B<0, 0.06 onshore B>=0] break 0 m, real solve (initial mass ~6.5e10), max_depth 0.76 m. proof docs/proof/templates/regional_manning.png + _chart.png.
 - [CAND-M] `thacker_analytic_swe_validation` [M] [non-US] - How do I validate the SWE+AMR wetting-drying solver's mass/momentum conservation against Thacker's exact analytic solution (radially symmetric parabolic-bowl sloshing), checking gauges on the x-axis vs diagonal for symmetry?
   src: https://github.com/clawpack/geoclaw/tree/master/examples/tsunami/bowl-radial (geoclaw_bowl_radial)
   knobs: grid resolution, AMR restricted to one quadrant, gauge placement (x-axis vs diagonal) as a symmetry check against the published analytic solution
@@ -475,6 +477,7 @@ Aspects: Static Okada single/multi-subfault deformation from fault geometry + sl
   src: https://github.com/clawpack/geoclaw/tree/master/examples/1d_classic/okada_dtopo (geoclaw_1d_okada_dtopo)
   knobs: 1D fault params, mx grid resolution
   notes: Generic 1D regression case, not tied to a real site - useful only as a fast solver-build smoke test.
+  STOP (ADR 0143, triage): the TRID3NT GeoClaw worker is 2D-only - the Makefile includes geoclaw/src/2d/shallow/Makefile.geoclaw, the setrun authors num_dim=2, the entrypoint stages a 2D topo/dtopo. The 1d_classic Fortran IS present in the image source tree (/opt/clawpack-src/geoclaw/src/1d_classic) but a 1D run needs its OWN deck path: a distinct Makefile (EXE from the 1d_classic modules + rp1 solver), a num_dim=1 setrun (1D grid/gauge/qinit), a 1D topo + 1D dtopo, and an entrypoint branch. Recipe to land: add a `dim=1` build_spec branch in setrun_builder (render_setrun_1d + render_makefile_1d pointing at 1d_classic) + a 2D-vs-1D entrypoint switch; then a synthetic idealized 1D okada smoke. Disproportionate machinery for a smoke test; deferred until a genuine 1D question class appears.
 
 ### fgmax (fixed grid maximum monitoring)
 Purpose: Interpolates from the moving AMR grids onto a user-specified fixed grid/point-set to record maximum depth/speed/momentum-flux and first-arrival time over the full run.
@@ -484,9 +487,11 @@ Aspects: Point-style selection (arbitrary points / 1D transect / 2D Cartesian gr
   src: https://github.com/clawpack/geoclaw/tree/master/examples/tsunami/radial-ocean-island-fgmax (geoclaw_radial_ocean_island_fgmax)
   knobs: fgmax_tools.FGmaxGrid point_style, tstart_max/tend_max, dt_check, arrival_tol
   notes: Synthetic radial ocean+island domain; the point-style/arrival-time pattern transfers directly to any real US coastal AOI.
+  COVERED (ADR 0143, triage): the max-wave-height + first-arrival-time MECHANISM is ALREADY live - the inundation/gauge/AMR/Manning deck emits an fgmax grid (point_style=2, num_fgmax_val=2, arrival_tol) and postprocess.read_fgmax_output surfaces max_depth_m / max_inundation_m / arrival_time_s on every tsunami+surge run. The landed AMR/Manning smokes both wrote _output/fgmax0001.txt with real data. What is NOT yet a first-class knob: user-settable tstart_max/tend_max/dt_check as template args (currently deck-derived). Small follow-up: expose those on a dedicated fgmax template if a distinct question class is requested.
 - [CAND-S] `fgmax_dem_masked_grid` [S] [US] - How do I restrict an fgmax grid to only the wet/onshore cells of a real DEM (point_style=4) rather than a full rectangular grid, to cut output size for a real coastal AOI?
   src: https://www.clawpack.org/fgmax.html (geoclaw_fgmax_doc)
   knobs: point_style=4 (DEM-based masking), min_level_check, interp_method=0
+  DEFER (ADR 0143, triage): point_style=4 IS supported in clawpack 5.14.0 (FGmaxGrid.read reads xy_fname = a mask stored as a topo_type-3 file: "points are a subset of a uniform grid, as specified by a mask array"). Landable but needs NEW entrypoint machinery: derive a wet/onshore mask from the staged DEM, write it as a topo_type-3 file, and reference it via fg.xy_fname + fg.write_xy_fname. Recipe: add a `fgmax_point_style` build_spec knob (2|4) + an entrypoint mask-generation step (rasterio: onshore-or-near-shore cells from the topo band -> topotype-3 mask), then a US-AOI smoke comparing output-file cell count 4-vs-2. Deferred behind the already-live point_style=2 coverage (row above).
 - [CAND-M] `fgmax_plus_fgout_combined_run` [M] [non-US] - How do I run fgmax (max-value envelope + arrival time) and fgout (uniform-grid animation frames every N minutes) together in one case and post-process both?
   src: https://github.com/clawpack/geoclaw/tree/master/examples/tsunami/chile2010_fgmax-fgout (geoclaw_chile2010_fgmax_fgout)
   knobs: combined fgmax_tools + fgout_tools setup on a shared AOI, fgout output every 15 min
@@ -512,9 +517,7 @@ Aspects: Standard fixed-point Eulerian gauge time series; Lagrangian (particle-t
   src: https://github.com/clawpack/geoclaw/tree/master/examples/tsunami/island-particles (geoclaw_island_particles)
   knobs: rundata.gaugedata.gtype='lagrangian' (global or per-gauge dict), min_time_increment
   notes: Synthetic conical island case; the gtype toggle is a direct knob on the existing gauge system.
-- [CAND-S] `lagrangian_gauge_output_and_plotting` [S] [US] - How do I read/plot Lagrangian gauge output, where the standard hu/hv columns are replaced by tracked particle coordinates (xg, yg)?
-  src: https://www.clawpack.org/lagrangian_gauges.html (geoclaw_lagrangian_gauges_doc)
-  knobs: clawpack.visclaw.particle_tools plotting hooks, output column remapping
+  DEFER-LANDABLE (ADR 0143, triage): machinery VERIFIED PRESENT in clawpack 5.14.0 - GaugeData.gtype (default 'stationary') accepts 'lagrangian'; gauges_module.f90 + visclaw/particle_tools.py are compiled into the image. Not landed this batch (kept the batch to the two rock-solid deck knobs). Recipe to land (fold 6+7 into one template `geoclaw_lagrangian_particle_gauges`): (1) setrun_builder emit rundata.gaugedata.gtype='lagrangian' + seed gauges at lon/lat + min_time_increment; (2) postprocess NEW reader branch - a Lagrangian gaugeNNNNN.txt records the advected particle position (xg,yg) not h/hu/hv (fortran writes "# Lagrangian particle," header, cols xg,yg,ug,vg), so add parse_geoclaw_particle_track + a track chart spec (xg vs yg path); (3) new template + corpus + categories + pins; (4) live smoke on a synthetic conical-island (or US harbour) tsunami tracing the wake, own docker rebuild + proof.
 
 ### storm surge / wind module
 Purpose: Parametric or gridded tropical-cyclone wind+pressure forcing applied as a source term to the SWE solver for storm-surge simulation.
@@ -534,6 +537,7 @@ Aspects: Best-track data ingestion (ATCF/HURDAT/IBTrACS/JMA/tcvitals) converted 
 - [CAND-S] `wind_drag_law_selection` [S] [US] - How do I choose between no wind drag / Garratt / Powell(2006) drag laws for the wind-stress term, and how much does the choice change peak surge?
   src: https://www.clawpack.org/quick_surge.html (geoclaw_quick_surge_doc)
   knobs: rundata.surge_data.drag_law = 0 (none) / 1 (Garratt) / 2 (Powell 2006)
+  STOP (ADR 0143, triage): the whole storm-surge/wind MODULE is absent from the surfaced deck path, so drag_law is inert. rundata.surge_data EXISTS in the clawpack API (drag_law, wind_forcing, storm_specification_type, storm_file) and the surge Fortran is compiled in (geoclaw/src/2d/shallow/surge), BUT the TRID3NT "surge" scenario is a v0.1 sea-level-offset stub: NO surge_data setrun block, NO wind_forcing, NO storm file. drag_law scales the WIND-STRESS term - with wind_forcing=False and no storm it changes nothing (you cannot demonstrate a peak-surge delta without wind). Landing drag_law is inseparable from landing the wind module (this is really best_track_to_geoclaw_storm_file + parametric_holland_wind_surge_ike territory). Recipe: (1) ATCF/HURDAT best-track fetcher -> geoclaw storm file (clawpack.geoclaw.surge.storm.Storm.write); (2) setrun_builder emit surge_data (storm_specification_type='holland80', storm_file, wind_forcing=True, pressure_forcing=True, drag_law knob); (3) entrypoint stage the storm file; (4) validate against the committed Ike regression_data. Then drag_law becomes a real 0/1/2 sweep. Deferred as its own storm-surge wave.
 
 ### multilayer shallow water
 Purpose: Two-(or more)-layer shallow-water equations for density-stratified flows (e.g. internal/interfacial waves), a distinct solver build (Makefile.multilayer) extending the single-layer SWE core.

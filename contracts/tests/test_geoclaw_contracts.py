@@ -25,6 +25,7 @@ from pydantic import ValidationError
 
 from trid3nt_contracts.geoclaw_contracts import (
     GEOCLAW_DEFAULT_FGMAX_ARRIVAL_TOL_M,
+    AmrRegionWindow,
     GeoClawDepthLayerURI,
     GeoClawRunArgs,
 )
@@ -288,3 +289,48 @@ def test_depth_layer_roundtrip_arrival_time_none_default() -> None:
 def test_schema_version_is_v1() -> None:
     assert GeoClawRunArgs(bbox=BBOX).schema_version == "v1"
     assert GeoClawRunArgs.model_fields["schema_version"].default == "v1"
+
+
+# ---------------------------------------------------------------------------
+# GeoClaw CAND-S knobs: explicit AMR region windows + banded Manning friction.
+# ---------------------------------------------------------------------------
+def test_amr_region_window_validates_and_orders() -> None:
+    w = AmrRegionWindow(min_level=2, max_level=3, t_start_s=0.0, t_end_s=600.0,
+                        min_lon=-124.2, max_lon=-124.1, min_lat=41.7, max_lat=41.8)
+    assert w.max_level >= w.min_level
+    with pytest.raises(ValidationError):
+        AmrRegionWindow(min_level=4, max_level=2, t_start_s=0.0, t_end_s=600.0,
+                        min_lon=-124.2, max_lon=-124.1, min_lat=41.7, max_lat=41.8)
+    with pytest.raises(ValidationError):
+        AmrRegionWindow(min_level=1, max_level=2, t_start_s=0.0, t_end_s=600.0,
+                        min_lon=-124.1, max_lon=-124.2, min_lat=41.7, max_lat=41.8)  # lon order
+    with pytest.raises(ValidationError):
+        AmrRegionWindow(min_level=1, max_level=2, t_start_s=600.0, t_end_s=600.0,
+                        min_lon=-124.2, max_lon=-124.1, min_lat=41.7, max_lat=41.8)  # t order
+
+
+def test_run_args_accepts_amr_regions_as_dicts() -> None:
+    args = GeoClawRunArgs(bbox=BBOX, amr_regions=[
+        {"min_level": 3, "max_level": 3, "t_start_s": 0.0, "t_end_s": 600.0,
+         "min_lon": -85.31, "max_lon": -85.29, "min_lat": 35.03, "max_lat": 35.05}])
+    assert len(args.amr_regions) == 1
+    assert isinstance(args.amr_regions[0], AmrRegionWindow)
+
+
+def test_run_args_banded_manning_break_len_enforced() -> None:
+    args = GeoClawRunArgs(bbox=BBOX, manning_coefficients=[0.02, 0.05], manning_break=[0.0])
+    assert args.manning_coefficients == [0.02, 0.05]
+    assert args.manning_break == [0.0]
+    with pytest.raises(ValidationError):
+        GeoClawRunArgs(bbox=BBOX, manning_coefficients=[0.02, 0.05], manning_break=[0.0, 1.0])
+    with pytest.raises(ValidationError):
+        GeoClawRunArgs(bbox=BBOX, manning_coefficients=[0.02, -0.01], manning_break=[0.0])
+    with pytest.raises(ValidationError):
+        GeoClawRunArgs(bbox=BBOX, manning_coefficients=[0.01, 0.02, 0.03], manning_break=[1.0, 0.0])
+
+
+def test_run_args_defaults_leave_manning_scalar_path() -> None:
+    args = GeoClawRunArgs(bbox=BBOX)
+    assert args.manning_coefficients is None
+    assert args.manning_break == []
+    assert args.amr_regions == []

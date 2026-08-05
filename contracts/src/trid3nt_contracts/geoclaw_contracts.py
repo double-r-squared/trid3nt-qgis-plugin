@@ -61,10 +61,75 @@ __all__ = [
     "DEFAULT_OUTPUT_FRAMES",
     "DEFAULT_AMR_LEVELS",
     "GEOCLAW_DEFAULT_FGMAX_ARRIVAL_TOL_M",
+    "AmrRegionWindow",
     "GeoClawRunArgs",
     "GeoClawDepthLayerURI",
     "GEOCLAW_DEPTH_STYLE_PRESET",
 ]
+
+
+class AmrRegionWindow(GraceModel):
+    """One explicit AMR refinement window (a GeoClaw ``regiondata`` region).
+
+    GeoClaw's ``rundata.regiondata.regions`` list forces the adaptive mesh to at
+    least ``min_level`` and at most ``max_level`` inside a lat/lon box over a
+    time window ``[t_start_s, t_end_s]`` (overlapping regions combine by MAX of
+    covering min/max levels). This is the explicit region-based flagging path -
+    a deterministic alternative to leaving refinement to error estimation
+    (``flag2refine`` / Richardson) alone.
+
+    Fields:
+        min_level: the minimum AMR level FORCED inside the window (>= 1). The
+            mesh is refined to at least this level here for the whole window.
+        max_level: the maximum AMR level ALLOWED inside the window (>=
+            ``min_level``). Cap refinement here (e.g. keep a coarse offshore box
+            cheap, or hold a subregion at one fixed level).
+        t_start_s: window start time, seconds from t0 (>= 0).
+        t_end_s: window end time, seconds from t0 (> ``t_start_s``).
+        min_lon, max_lon: window longitude bounds, EPSG:4326 (min < max).
+        min_lat, max_lat: window latitude bounds, EPSG:4326 (min < max).
+    """
+
+    min_level: int = Field(ge=1, le=10)
+    max_level: int = Field(ge=1, le=10)
+    t_start_s: float = Field(ge=0.0)
+    t_end_s: float = Field(gt=0.0)
+    min_lon: float = Field(ge=-180.0, le=180.0)
+    max_lon: float = Field(ge=-180.0, le=180.0)
+    min_lat: float = Field(ge=-90.0, le=90.0)
+    max_lat: float = Field(ge=-90.0, le=90.0)
+
+    @field_validator("max_level")
+    @classmethod
+    def _max_ge_min(cls, v: int, info: Any) -> int:
+        lo = info.data.get("min_level")
+        if lo is not None and v < lo:
+            raise ValueError(f"max_level ({v}) must be >= min_level ({lo})")
+        return v
+
+    @field_validator("max_lon")
+    @classmethod
+    def _lon_ordered(cls, v: float, info: Any) -> float:
+        lo = info.data.get("min_lon")
+        if lo is not None and not (lo < v):
+            raise ValueError(f"max_lon ({v}) must be > min_lon ({lo})")
+        return v
+
+    @field_validator("max_lat")
+    @classmethod
+    def _lat_ordered(cls, v: float, info: Any) -> float:
+        lo = info.data.get("min_lat")
+        if lo is not None and not (lo < v):
+            raise ValueError(f"max_lat ({v}) must be > min_lat ({lo})")
+        return v
+
+    @field_validator("t_end_s")
+    @classmethod
+    def _t_ordered(cls, v: float, info: Any) -> float:
+        lo = info.data.get("t_start_s")
+        if lo is not None and not (lo < v):
+            raise ValueError(f"t_end_s ({v}) must be > t_start_s ({lo})")
+        return v
 
 #: The driver-scenario families GeoClaw can run. Open ``Literal`` so the engine
 #: may add scenarios (e.g. "landslide") without a wire break.
@@ -240,6 +305,22 @@ class GeoClawRunArgs(GraceModel):
     # Optional single coastal gauge (lon, lat) for a recorded water-level series.
     coastal_gauge_lonlat: tuple[float, float] | None = None
 
+    # Explicit AMR refinement windows (region-based flagging). Each window forces
+    # a lat/lon/time box to a min/max AMR level, appended AFTER the engine's
+    # default region tiers. Empty -> refinement follows the default flag2refine
+    # error estimation only. Additive: an empty list preserves prior behaviour.
+    amr_regions: list[AmrRegionWindow] = Field(default_factory=list)
+
+    # Spatially-varying Manning bottom-friction. When set, ``manning_coefficients``
+    # is a list of n values for topography bands split by ``manning_break`` (a list
+    # of elevation breakpoints, ascending, length = len(coefficients) - 1): a cell
+    # with topography B below break[0] uses coefficients[0], between break[k-1] and
+    # break[k] uses coefficients[k], and so on (e.g. an offshore n for B < 0 and an
+    # onshore n for B >= 0 with a single break at 0.0). When ``None`` the single
+    # global ``manning_n`` is used. Additive: None preserves prior behaviour.
+    manning_coefficients: list[float] | None = None
+    manning_break: list[float] = Field(default_factory=list)
+
     @field_validator("scenario", mode="before")
     @classmethod
     def _normalize_scenario(cls, value: Any) -> Any:
@@ -266,6 +347,48 @@ class GeoClawRunArgs(GraceModel):
         if not (-90.0 <= lat <= 90.0):
             raise ValueError(f"source_lonlat lat out of range [-90, 90]: {lat}")
         return (lon, lat)
+
+    @field_validator("manning_coefficients")
+    @classmethod
+    def _validate_manning_coefficients(
+        cls, value: list[float] | None
+    ) -> list[float] | None:
+        """Every Manning band coefficient must be strictly positive."""
+        if value is None:
+            return None
+        if not value:
+            raise ValueError("manning_coefficients, when set, must be non-empty")
+        for n in value:
+            if float(n) <= 0.0:
+                raise ValueError(f"manning coefficient must be > 0, got {n}")
+        return [float(n) for n in value]
+
+    @field_validator("manning_break")
+    @classmethod
+    def _validate_manning_break(cls, value: list[float], info: Any) -> list[float]:
+        """``manning_break`` must be ascending and exactly one shorter than
+        ``manning_coefficients`` (N coefficients need N-1 elevation breakpoints)."""
+        coeffs = info.data.get("manning_coefficients")
+        if not value:
+            if coeffs is not None and len(coeffs) > 1:
+                raise ValueError(
+                    f"manning_break must have {len(coeffs) - 1} breakpoint(s) for "
+                    f"{len(coeffs)} coefficients, got none"
+                )
+            return list(value)
+        brk = [float(b) for b in value]
+        if any(brk[i] >= brk[i + 1] for i in range(len(brk) - 1)):
+            raise ValueError(f"manning_break must be strictly ascending, got {brk}")
+        if coeffs is None:
+            raise ValueError(
+                "manning_break requires manning_coefficients to also be set"
+            )
+        if len(brk) != len(coeffs) - 1:
+            raise ValueError(
+                f"manning_break length ({len(brk)}) must equal "
+                f"len(manning_coefficients) - 1 ({len(coeffs) - 1})"
+            )
+        return brk
 
 
 class GeoClawDepthLayerURI(LayerURI):

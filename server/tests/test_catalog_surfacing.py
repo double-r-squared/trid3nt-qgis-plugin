@@ -3,7 +3,7 @@
 Covers the two arm prerequisites + the identity gate:
 
 - DEFAULT config (no arm flag): the 27 spec-served sources stay tier="general",
-  ambient-declarable; registry == 202 (+3 ELMFIRE CAND-S sensitivity templates:
+  ambient-declarable; registry == 204 (+2 GeoClaw CAND-S SWE+AMR knob templates: geoclaw_amr_refinement_regions + geoclaw_regional_manning_friction; +3 ELMFIRE CAND-S sensitivity templates:
   elmfire_length_to_width_ceiling_sensitivity + elmfire_wind_fluctuation_randomization
   + elmfire_live_fuel_moisture_sensitivity; +6 Landlab diagnostic templates:
   landlab_landslide_storm_ensemble + landlab_overland_flow_timeseries +
@@ -100,7 +100,7 @@ def _os_environ() -> dict:
 def test_default_config_identity():
     r = _run_arm(None)
     assert r["arm"] is None
-    assert r["registry_size"] == 202
+    assert r["registry_size"] == 204
     assert r["n_specs"] == 95  # ADR 0112: +fetch_noaa_nwm_streamflow (fetcher finale ENDGAME -- last coded data-fetcher)
     # They stay ambient (tier=general) and IN the declarable pool.
     assert r["gridmet_tier"] == "general"
@@ -118,7 +118,7 @@ def test_default_config_identity():
 def test_arm2_specs_leave_pool_but_stay_indexed():
     r = _run_arm("2")
     assert r["arm"] == "2"
-    assert r["registry_size"] == 202  # registry does NOT shrink; only the pool does
+    assert r["registry_size"] == 204  # registry does NOT shrink; only the pool does
     assert r["gridmet_tier"] == "catalog"
     assert r["any_spec_in_declarable"] is False  # every spec leaves the ambient pool
     # -57, not -58: fetch_copernicus_dem is tier="internal" (wave-11 absorption into
@@ -148,7 +148,7 @@ def test_arm2_specs_leave_pool_but_stay_indexed():
 def test_arm1_signature_and_pool():
     r = _run_arm("1")
     assert r["arm"] == "1"
-    assert r["registry_size"] == 202
+    assert r["registry_size"] == 204
     assert r["gridmet_tier"] == "catalog"
     assert r["any_spec_in_declarable"] is False
     assert r["gridmet_in_index"] is True
@@ -235,7 +235,7 @@ def test_arm3_specs_leave_pool_and_source_param():
     composed fetcher's real dispatch path)."""
     r = _run_arm("3")
     assert r["arm"] == "3"
-    assert r["registry_size"] == 202  # registry does NOT shrink; only the pool does
+    assert r["registry_size"] == 204  # registry does NOT shrink; only the pool does
     assert r["gridmet_tier"] == "catalog"
     assert r["any_spec_in_declarable"] is False  # every spec leaves the ambient pool
     # -70, not -71: fetch_copernicus_dem is tier="internal" (already out of the pool).
