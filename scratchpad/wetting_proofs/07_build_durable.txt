@@ -1,0 +1,1 @@
+[build] real=2068  ghost=171  faces=4247  perimeter_pts=171  bc_faces=14  bc_length_ft=731.2  flow_scale=1.0  deck=chippewa-clean-fake-reach  rundir=/tmp/claude-1000/-home-nate-Documents-GRACE-2/fd2df08a-a572-4b62-ba9a-e82d8a0a740e/scratchpad/run_durable

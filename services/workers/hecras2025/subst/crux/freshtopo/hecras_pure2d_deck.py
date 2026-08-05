@@ -29,11 +29,91 @@ _REF = Path(__file__).resolve().parents[1] / "pure2d_reference"
 _X09 = _REF / "BaldEagleDamBrk.x09"
 _B06 = _REF / "BaldEagleDamBrk.b06"
 
+_CHIP = Path(__file__).resolve().parents[1] / "chippewa_reference"
+_CHIP_X01 = _CHIP / "Chippewa_2D.x01"
+_CHIP_B02 = _CHIP / "Chippewa_2D.b02"
+
 
 def _fixed8(v: float) -> str:
     """HEC 8-char fixed field (matches the b06 ordinate formatting)."""
     s = f"{v:g}"
     return f"{s:>8}"[:8]
+
+
+def _i8(v: object) -> str:
+    return f"{v:>8}"
+
+
+def patch_chippewa_xnn(area_name: str, n_perimeter: int) -> str:
+    """Author a CLEAN pure-2D ``.xNN`` by patching the shipped Chippewa ``x01``.
+
+    ``chippewa_reference/Chippewa_2D.x01`` (HEC-RAS 6.4) is the DAM-FREE pure-2D
+    geometry preprocessor deck ADR 0136 said the distribution lacked: a single 2D
+    area declared as a Storage Area, an EMPTY Storage-Area-Connection section, and
+    a minimal ``Fake River``/``Fake Reach`` (2 dummy cross sections) satisfying the
+    engine's >=1-reach requirement -- with NONE of the ``x09`` Sayers-Dam
+    entanglement that made a dam-free reduction impossible.
+
+    We patch only the two mesh-tracking fields: the Storage-Area (2D area) NAME and
+    the perimeter-point COUNT. The Arrays-Sizes A/B rows encode the fake reach (2
+    XS), NOT the 2D cell/perimeter count (proven: byte-identical to Weise's despite
+    a different mesh), so they are carried verbatim and stay valid.
+
+    CRITICAL: the perimeter-count line is HEC 8-char fixed-width. A naive
+    ``str.replace("39", str(n))`` widens the field and desynchronises the parse
+    (``error reading header information for a storage area``); this rewrites the
+    whole line to proper 8-wide fields.
+
+    Proven: the deck this authors SOLVES end-to-end through the production 6.6
+    ``RasGeomPreprocess`` + ``RasUnsteady`` on a fresh carved mesh (ADR 0137, vol
+    err 0.0). The 2D area stays DRY -- routing the fake-reach inflow ONTO the 2D BC
+    line needs the plan-HDF 2D-BC ``/Event Conditions`` schema, which no shipped
+    reference in this distribution exposes (OI-FT1, the precise open item).
+    """
+    out: list[str] = []
+    for ln in _CHIP_X01.read_text().splitlines():
+        if ln.startswith("SA ") and "Perimeter 1" in ln:
+            ln = ln.replace("Perimeter 1     ", f"{area_name:<16}"[:16])
+        elif re.match(r"\s*0\s+0\s+0\s+39\s+T\s*$", ln):
+            ln = _i8(0) + _i8(0) + _i8(0) + _i8(int(n_perimeter)) + _i8("T")
+        out.append(ln)
+    return "\n".join(out) + "\n"
+
+
+def patch_chippewa_bnn(peak_cfs: float, *, hydrograph_node: int = 1,
+                       hydrograph_hours: float = 8760.0) -> str:
+    """Author a CLEAN pure-2D ``.bNN`` by patching the shipped Chippewa ``b02``.
+
+    The 6.6-correct 2D-BC-line inflow header is the SUFFIXED fake-reach form
+    ``Upstream Flow Hydrograph - River: Fake River  Reach: Fake Reach  RS: 100``
+    (NOT the bare ``b06`` form, which is 6.2-only and maps to the 1D reach in a 6.6
+    engine -- the ADR 0136 mis-map). We keep b02's exact header/section skeleton and
+    patch two fields: the inflow ordinates to a constant ``peak_cfs`` hold, and
+    ``HYDROGRAPH LOCATIONS`` from the shipped ``0`` (which divide-by-zeros in the 1D
+    output-block ``hdf_set_compression``) to one valid node.
+    """
+    b = _CHIP_B02.read_text().splitlines()
+    out: list[str] = []
+    i = 0
+    while i < len(b):
+        ln = b[i]
+        if ln.strip().startswith("Upstream Flow Hydrograph"):
+            out.append(ln)               # suffixed fake-reach header
+            out.append(b[i + 1])         # count "       2"
+            out.append(
+                f"{_fixed8(0.0)}{_fixed8(peak_cfs)}"
+                f"{_fixed8(hydrograph_hours)}{_fixed8(peak_cfs)}")
+            i += 3
+            continue
+        if ln.strip() == "HYDROGRAPH LOCATIONS":
+            out.append(ln)
+            out.append(" 1 ")
+            out.append(_i8(int(hydrograph_node)))
+            i += 2                        # skip the shipped " 0 "
+            continue
+        out.append(ln)
+        i += 1
+    return "\n".join(out) + "\n"
 
 
 def patch_xnn(area_name: str, n_perimeter: int) -> str:

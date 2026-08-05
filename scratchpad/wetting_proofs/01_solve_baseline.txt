@@ -1,0 +1,12 @@
+=== FRESH-TOPOLOGY SOLVE  rundir=/run ===
+[1] RasGeomPreprocess (fake-reach 1D; preserves the carved 2D tables)
+  $ RasGeomPreprocess -> exit=0 finished=True
+    Finished Processing Geometry
+[2] RasUnsteady (2D subgrid solve on the FRESH tessellation)
+  $ RasUnsteady -> exit=0 finished=True
+    Finished Unsteady Flow Simulation
+
+=== RESULT ===
+  maxWSE=946.935 ft  minWSE=0.000  maxDepth=0.00 ft  wet_cells=0
+  vol_err=0.002150%  flux in/out=36674.2/35305.1
+  wrote /run/freshtopo_result.json

@@ -1,0 +1,30 @@
+=== FRESH-TOPOLOGY SOLVE  rundir=/run ===
+[1] RasGeomPreprocess (fake-reach 1D; preserves the carved 2D tables)
+  $ RasGeomPreprocess -> exit=0 finished=True
+    Finished Processing Geometry
+[2] RasUnsteady (2D subgrid solve on the FRESH tessellation)
+---- STDERR tail ----
+HDF5-DIAG: Error detected in HDF5 (1.10.8) thread 0:
+  #000: H5G.c line 280 in H5Gcreate2(): not a location
+    major: Invalid arguments to routine
+    minor: Inappropriate type
+  #001: H5Gloc.c line 228 in H5G_loc(): invalid location ID
+    major: Invalid arguments to routine
+    minor: Bad value
+
+FAIL: RasUnsteady did not finish cleanly
+  $ RasUnsteady -> exit=0 finished=False
+---- STDOUT tail ----
+FONT= BOLD
+
+Performing Unsteady Flow Simulation  HEC-RAS 6.6 September 2024
+FONT= NORMAL
+HDF_ERROR trying to use HDF output file:
+Fresh2D.p04.tmp.hdf
+
+*** The output must not already exist ***
+
+Delete the unsteady output folder
+Or try re-running RAS
+HDF_ERROR trying to close HDF output file:
+
