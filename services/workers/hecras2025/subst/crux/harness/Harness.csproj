@@ -1,0 +1,21 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net9.0</TargetFramework>
+    <Nullable>disable</Nullable>
+    <ImplicitUsings>disable</ImplicitUsings>
+    <AssemblyName>harness</AssemblyName>
+    <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
+    <AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>
+    <GenerateAssemblyInfo>false</GenerateAssemblyInfo>
+  </PropertyGroup>
+  <ItemGroup>
+    <Compile Include="Harness.cs" />
+  </ItemGroup>
+  <ItemGroup>
+    <Reference Include="Ras.Core"><HintPath>/dll/Ras.Core.dll</HintPath><Private>false</Private></Reference>
+    <Reference Include="Geospatial.Core"><HintPath>/dll/Geospatial.Core.dll</HintPath><Private>false</Private></Reference>
+    <Reference Include="Geospatial.GDALAssist"><HintPath>/dll/Geospatial.GDALAssist.dll</HintPath><Private>false</Private></Reference>
+    <Reference Include="Utility.Core"><HintPath>/dll/Utility.Core.dll</HintPath><Private>false</Private></Reference>
+  </ItemGroup>
+</Project>
