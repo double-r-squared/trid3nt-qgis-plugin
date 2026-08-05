@@ -153,6 +153,9 @@ async def openquake_psha(
     min_magnitude: float = 5.0,
     max_magnitude: float = 7.5,
     vs30: float | None = None,
+    logic_tree: str = "single",
+    secondary_poe: float | None = None,
+    uniform_hazard_spectra: bool = False,
     compute_class: str = "standard",
     input_mode: str | None = None,
     # absorb LLM-invented kwargs (centralized at server.py via
@@ -197,6 +200,21 @@ async def openquake_psha(
         min_magnitude/max_magnitude: demo source range, default 5.0/7.5.
         vs30: reference site Vs30 (m/s). Unset -> the generic 760 rock demo
             default (labeled, not site-specific; no Vs30 fetcher yet).
+        logic_tree: epistemic uncertainty mode. ``"single"`` (default) = one
+            source model + one GMPE (a single hazard estimate). ``"source_models"``
+            = two competing weighted source-model interpretations + 2 GMPEs
+            (GEM LogicTreeCase1); ``"gr_uncertainty"`` = a Gutenberg-Richter
+            a/b + maximum-magnitude epistemic branch tree + 2 GMPEs per tectonic
+            region (GEM LogicTreeCase2, 324 realizations). The epistemic modes
+            use a synthetic demo source (they bypass the real-fault path) and add
+            the mean hazard curve + the 5/50/95 quantile spread across
+            realizations. Use them for "how uncertain / what is the quantile
+            spread / logic-tree / epistemic" questions.
+        secondary_poe: optional second probability of exceedance for the hazard
+            map (e.g. 0.02 == 2% in 50 years / 2475-yr) alongside the default
+            ``poe`` (0.10 == 10%/475-yr). None => a single-PoE map.
+        uniform_hazard_spectra: also export the Uniform Hazard Spectrum (spectral
+            acceleration vs period at the target PoE) alongside the map + curve.
         compute_class: default "standard".
         input_mode: run-mode lever (ADR 0107). ``"user_gated"`` presents the
             reference Vs30 for review before the solve; ``"auto"`` (default)
@@ -245,6 +263,9 @@ async def openquake_psha(
             min_magnitude=float(min_magnitude),
             max_magnitude=float(max_magnitude),
             reference_vs30_ms=(float(vs30) if vs30 is not None else 760.0),
+            logic_tree=str(logic_tree),
+            secondary_poe=(float(secondary_poe) if secondary_poe is not None else None),
+            uniform_hazard_spectra=bool(uniform_hazard_spectra),
         )
     except Exception as exc:  # noqa: BLE001 -- pydantic ValidationError or coercion
         return {
@@ -334,6 +355,30 @@ async def openquake_psha(
 # --------------------------------------------------------------------------- #
 #: The registry key + handle ``solver`` tag for the seismic-hazard engine.
 OPENQUAKE_SOLVER_NAME: str = "openquake"
+
+#: Logic-tree realization counts enumerated by each epistemic deck (deterministic
+#: from the fixed branch structure the worker renders): source_models = 2 source
+#: models x 2 GMPEs; gr_uncertainty = 3 a/b x 3 Mmax per source (2 sources) x 2
+#: GMPEs per tectonic region (2 TRTs) = 324 (the published LogicTreeCase2 count).
+_EPISTEMIC_N_REALIZATIONS: dict[str, int] = {
+    "single": 0,
+    "source_models": 4,
+    "gr_uncertainty": 324,
+}
+
+#: One-line narration of the epistemic source model per logic-tree mode.
+_EPISTEMIC_SOURCE_NOTE: dict[str, str] = {
+    "source_models": (
+        "Two competing weighted source-model interpretations + 2 GMPEs "
+        "(GEM LogicTreeCase1 mechanism); the 5/50/95 band is the epistemic "
+        "spread across 4 logic-tree realizations."
+    ),
+    "gr_uncertainty": (
+        "Gutenberg-Richter a/b + maximum-magnitude epistemic branches over a "
+        "two-source model x 2 GMPEs per tectonic region (GEM LogicTreeCase2 "
+        "mechanism); the 5/50/95 band is the spread across 324 realizations."
+    ),
+}
 
 #: a FINER default site-grid spacing for the real-fault case. The
 #: synthetic area-source default (``DEFAULT_SITE_GRID_SPACING_KM`` == 5 km) is a
@@ -452,6 +497,25 @@ def assemble_build_spec(
     # builds simpleFaultSources. Absent/empty => synthetic area source (default).
     if have_faults:
         spec["fault_sources"] = [dict(rec) for rec in fault_sources]  # type: ignore[union-attr]
+
+    # Epistemic logic-tree mode (GEM LogicTreeCase1/Case2): the worker deck
+    # renderer branches on this key to emit the competing-source-model /
+    # a-b-Mmax-uncertainty multi-branch trees + the 5/50/95 quantile spread. The
+    # default "single" leaves the classical single-branch deck byte-identical.
+    logic_tree = str(getattr(run_args, "logic_tree", "single"))
+    if logic_tree != "single":
+        spec["logic_tree"] = logic_tree
+
+    # row-3 multi-return-period: a second PoE (e.g. 0.02 == 2% in 50yr) exports
+    # the hazard map at BOTH PoEs; None => the single-PoE map (unchanged).
+    secondary_poe = getattr(run_args, "secondary_poe", None)
+    if secondary_poe is not None:
+        spec["poes"] = [float(run_args.poe), float(secondary_poe)]
+
+    # row-3 UHS: export the Uniform Hazard Spectrum alongside the map/curve.
+    if bool(getattr(run_args, "uniform_hazard_spectra", False)):
+        spec["uniform_hazard_spectra"] = True
+
     # Merge validated physics overrides (the worker render_job_ini reads them).
     spec.update(resolved)
     # levers STEP 3: request UHS export when the registry-quantities flag is on
@@ -887,6 +951,46 @@ def _download_batch_curve_csvs(
         return None, None
 
 
+def _download_batch_quantile_curve_csvs(
+    run_id: str,
+) -> dict[str, str]:
+    """Download the 5/50/95 quantile hazard-CURVE CSV TEXT (best-effort).
+
+    Epistemic logic-tree runs export ``quantile_curve-{0.05,0.5,0.95}-<IMT>_*.csv``
+    alongside the mean curve (same wide ``poe-<iml>`` format). Returns a dict
+    keyed ``"0.05"`` / ``"0.5"`` / ``"0.95"`` -> CSV text for whichever quantiles
+    exported. NEVER raises (charts are non-fatal): an empty dict yields no band."""
+    out: dict[str, str] = {}
+    try:
+        from trid3nt_server.agent.tools.simulation.solver.solver import (
+            _get_runs_bucket,
+            _get_s3_client,
+            _split_object_uri,
+            _try_get_completion_s3,
+        )
+
+        runs_bucket = _get_runs_bucket()
+        s3 = _get_s3_client()
+        manifest = _try_get_completion_s3(runs_bucket, run_id)
+        if not isinstance(manifest, dict):
+            return out
+        output_uris = [str(u) for u in (manifest.get("output_uris") or [])]
+        for q in ("0.05", "0.5", "0.95"):
+            uri = _pick_csv_by_token(output_uris, f"quantile_curve-{q}-")
+            if not uri:
+                continue
+            try:
+                _scheme, _bucket, key = _split_object_uri(uri)
+                resp = s3.get_object(Bucket=runs_bucket, Key=key)
+                out[q] = resp["Body"].read().decode("utf-8")
+            except Exception as exc:  # noqa: BLE001
+                logger.warning("quantile CSV download failed %s: %s", uri, exc)
+        return out
+    except Exception as exc:  # noqa: BLE001 - charts are non-fatal
+        logger.warning("quantile CSV resolution failed run_id=%s: %s", run_id, exc)
+        return out
+
+
 async def _emit_oq_curve_charts(
     run_id: str,
     *,
@@ -894,6 +998,7 @@ async def _emit_oq_curve_charts(
     poe: float,
     investigation_time_years: float,
     source_layer_uri: str | None,
+    logic_tree: str = "single",
 ) -> None:
     """Build + side-emit the hazard-curve (and UHS) charts (best-effort, no-op safe).
 
@@ -901,28 +1006,64 @@ async def _emit_oq_curve_charts(
     ``parse_hazard_curve_csv`` / ``parse_uhs_csv`` (real engine output, no LLM),
     builds Vega-Lite line charts via ``chart_tools``, and emits them through the
     live pipeline emitter. Each builder returns None (emits nothing) when its
-    series is absent - so a classical-only run (no UHS) emits only the curve."""
-    from trid3nt_server.agent.tools.processing.charts_common import build_hazard_curve_chart, build_uhs_chart
+    series is absent - so a classical-only run (no UHS) emits only the curve.
+
+    For an epistemic logic-tree run (``logic_tree`` != "single") the mean curve is
+    upgraded to a 5/50/95 quantile-BAND chart (the epistemic spread across
+    realizations) when the ``quantile_curve-*`` exports are present."""
+    from trid3nt_server.agent.tools.processing.charts_common import (
+        build_hazard_curve_chart,
+        build_hazard_quantile_band_chart,
+        build_uhs_chart,
+    )
 
     curve_text, uhs_text = await asyncio.to_thread(
         _download_batch_curve_csvs, run_id
     )
+    quantile_texts: dict[str, str] = {}
+    if logic_tree != "single":
+        quantile_texts = await asyncio.to_thread(
+            _download_batch_quantile_curve_csvs, run_id
+        )
 
     charts: list[dict[str, Any]] = []
     if curve_text:
         curve = parse_hazard_curve_csv(curve_text)
-        chart = build_hazard_curve_chart(
-            imls_g=curve.get("hazard_curve_imls_g") or [],
-            mean_poe=curve.get("hazard_curve_mean_poe") or [],
-            imt=imt,
-            investigation_time_years=investigation_time_years,
-            n_sites=curve.get("hazard_curve_n_sites"),
-            source_layer_uri=source_layer_uri,
-        )
-        if chart is not None:
-            charts.append(chart)
+        imls = curve.get("hazard_curve_imls_g") or []
+        mean_poe = curve.get("hazard_curve_mean_poe") or []
+        band_chart = None
+        if quantile_texts.get("0.05") and quantile_texts.get("0.95"):
+            q = {
+                k: (parse_hazard_curve_csv(v).get("hazard_curve_mean_poe") or [])
+                for k, v in quantile_texts.items()
+            }
+            band_chart = build_hazard_quantile_band_chart(
+                imls_g=imls,
+                mean_poe=mean_poe,
+                q05_poe=q.get("0.05") or [],
+                q50_poe=q.get("0.5") or mean_poe,
+                q95_poe=q.get("0.95") or [],
+                imt=imt,
+                investigation_time_years=investigation_time_years,
+                n_realizations=_EPISTEMIC_N_REALIZATIONS.get(logic_tree),
+                logic_tree_label=logic_tree,
+                source_layer_uri=source_layer_uri,
+            )
+        if band_chart is not None:
+            charts.append(band_chart)
+        else:
+            chart = build_hazard_curve_chart(
+                imls_g=imls,
+                mean_poe=mean_poe,
+                imt=imt,
+                investigation_time_years=investigation_time_years,
+                n_sites=curve.get("hazard_curve_n_sites"),
+                source_layer_uri=source_layer_uri,
+            )
+            if chart is not None:
+                charts.append(chart)
     if uhs_text:
-        uhs = parse_uhs_csv(uhs_text)
+        uhs = parse_uhs_csv(uhs_text, poe=poe)
         chart = build_uhs_chart(
             periods_s=uhs.get("uhs_periods_s") or [],
             mean_sa_g=uhs.get("uhs_mean_sa_g") or [],
@@ -989,10 +1130,20 @@ async def model_openquake_psha(
     #    the loop). Non-empty => build the fault source model + narrate
     #    "real-fault"; empty => honest synthetic-area fallback. NEVER fails the
     #    run (resolve_fault_sources degrades to [] on any fetch error).
+    # Epistemic logic-tree modes use a synthetic multi-branch demo source (the
+    # LogicTreeCase1/Case2 mechanism), so they SKIP the real-fault fetch -- the
+    # question is source-parameter epistemic uncertainty, not fault-trace hazard.
+    _logic_tree = str(getattr(run_args, "logic_tree", "single"))
     async with substep(current_emitter(), "resolve_fault_sources"):
-        fault_sources, source_model_note = await asyncio.to_thread(
-            resolve_fault_sources, list(run_args.bbox)
-        )
+        if _logic_tree == "single":
+            fault_sources, source_model_note = await asyncio.to_thread(
+                resolve_fault_sources, list(run_args.bbox)
+            )
+        else:
+            fault_sources = []
+            source_model_note = _EPISTEMIC_SOURCE_NOTE.get(
+                _logic_tree, "Epistemic logic-tree hazard over a synthetic demo source."
+            )
     used_real_faults = bool(fault_sources)
     source_model_kind = "real-fault" if used_real_faults else "synthetic-area"
     logger.info(
@@ -1119,6 +1270,14 @@ async def model_openquake_psha(
             n_sites=int(_oq_m.get("n_sites", 0)),
             source_model_kind=source_model_kind,
             source_model_note=source_model_note,
+            logic_tree=_logic_tree,
+            n_realizations=_EPISTEMIC_N_REALIZATIONS.get(_logic_tree, 0),
+        )
+        # epistemic 5/50/95 quantile-band + UHS charts (best-effort, non-fatal).
+        await _emit_oq_curve_charts(
+            batch_run_id, imt=run_args.imt, poe=float(run_args.poe),
+            investigation_time_years=float(run_args.investigation_time_years),
+            source_layer_uri=_oq_layer.uri, logic_tree=_logic_tree,
         )
         return _oq_layer
 
@@ -1157,6 +1316,8 @@ async def model_openquake_psha(
         update={
             "source_model_kind": source_model_kind,
             "source_model_note": source_model_note,
+            "logic_tree": _logic_tree,
+            "n_realizations": _EPISTEMIC_N_REALIZATIONS.get(_logic_tree, 0),
         }
     )
 
@@ -1170,6 +1331,7 @@ async def model_openquake_psha(
         poe=float(run_args.poe),
         investigation_time_years=float(run_args.investigation_time_years),
         source_layer_uri=layer.uri,
+        logic_tree=_logic_tree,
     )
 
     logger.info(

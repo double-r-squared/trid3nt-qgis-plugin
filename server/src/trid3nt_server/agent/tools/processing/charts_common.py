@@ -514,6 +514,85 @@ def build_uhs_chart(
         created_turn_id=created_turn_id,
     )
 
+def build_hazard_quantile_band_chart(
+    *,
+    imls_g: list[float],
+    mean_poe: list[float],
+    q05_poe: list[float],
+    q50_poe: list[float],
+    q95_poe: list[float],
+    imt: str,
+    investigation_time_years: float,
+    n_realizations: int | None = None,
+    logic_tree_label: str | None = None,
+    source_layer_uri: str | None = None,
+    created_turn_id: str | None = None,
+) -> dict[str, Any] | None:
+    """Log-log hazard curve with the 5/50/95 epistemic quantile band.
+
+    Renders the mean hazard curve (solid) plus a shaded 5th-95th percentile band
+    and the median (50th), the epistemic spread across the logic-tree
+    realizations. All arrays come from ``postprocess_openquake`` parsing of the
+    OpenQuake mean + ``quantile_curve-{0.05,0.5,0.95}`` CSV exports - no LLM. The
+    band is an ``area`` layer between ``q05_poe`` and ``q95_poe`` on the shared
+    IML ladder; log scales drop any non-positive point. Returns ``None`` when the
+    mean series is empty / mismatched."""
+    if not imls_g or not mean_poe or len(imls_g) != len(mean_poe):
+        return None
+
+    # Four line series (mean + 5/50/95 quantiles) grouped by a color field -- the
+    # 5th and 95th lines are the envelope of the epistemic spread across the
+    # logic-tree realizations. Lines (not an area band) so the chart-dock line
+    # interpreter renders every series natively with a legend.
+    series_arrays = (
+        ("q95", q95_poe),
+        ("mean", mean_poe),
+        ("q50 (median)", q50_poe),
+        ("q05", q05_poe),
+    )
+    rows: list[dict[str, Any]] = []
+    for series, arr in series_arrays:
+        if not arr or len(arr) != len(imls_g):
+            continue
+        for x, p in zip(imls_g, arr):
+            # log scales reject <= 0; keep only positive, plottable points.
+            if float(x) > 0.0 and float(p) > 0.0:
+                rows.append({"iml": float(x), "poe": float(p), "series": series})
+    if not rows:
+        return None
+
+    inv_label = (
+        f"{int(round(investigation_time_years))}yr"
+        if investigation_time_years and investigation_time_years > 0
+        else "the investigation time"
+    )
+    spec = {
+        "title": f"Seismic hazard curve with 5/50/95 logic-tree spread - {imt}",
+        "data": {"values": rows},
+        "mark": {"type": "line", "point": True, "tooltip": True},
+        "encoding": {
+            "x": {"field": "iml", "type": "quantitative",
+                  "scale": {"type": "log"}, "title": f"{imt} (g)"},
+            "y": {"field": "poe", "type": "quantitative",
+                  "scale": {"type": "log"}, "title": f"Mean PoE in {inv_label}"},
+            "color": {"field": "series", "type": "nominal", "title": "series"},
+        },
+        "width": "container",
+    }
+    rlz_txt = f" · {int(n_realizations):,} realizations" if n_realizations else ""
+    lt_txt = f" · {logic_tree_label}" if logic_tree_label else ""
+    caption = (
+        f"Mean {imt} hazard curve with the 5th/50th/95th percentile epistemic "
+        f"spread across logic-tree realizations over {inv_label}{rlz_txt}{lt_txt}"
+    )
+    return build_chart_payload(
+        vega_lite_spec=spec,
+        title=f"Hazard curve 5/50/95 spread - {imt}",
+        caption=caption,
+        source_layer_uri=source_layer_uri,
+        created_turn_id=created_turn_id,
+    )
+
 def build_budget_partition_chart(
     *,
     budget_partition_m3_day: dict[str, float],

@@ -173,6 +173,27 @@ class OpenQuakeRunArgs(EngineRunArgsMixin):
     min_magnitude: float = Field(default=5.0, ge=0.0)
     max_magnitude: float = Field(default=7.5, gt=0.0)
 
+    # --- epistemic logic-tree mode (GEM LogicTreeCase1/Case2 mechanism) -------- #
+    # "single" (default) = the classical single-branch deck (real-fault or
+    # synthetic area source), byte-identical to before. "source_models" = two
+    # competing weighted source-model interpretations + 2 GMPEs (LogicTreeCase1).
+    # "gr_uncertainty" = a Gutenberg-Richter a/b + Mmax epistemic branch tree over
+    # a two-source model + 2 GMPEs per tectonic region (LogicTreeCase2, 324
+    # realizations). Both epistemic modes bypass the real-fault fetch (they use a
+    # synthetic demo source), export the mean hazard curve + the 5/50/95 quantile
+    # spread across realizations, and are narrated as published-mechanism cases.
+    logic_tree: Literal["single", "source_models", "gr_uncertainty"] = "single"
+
+    # Optional second probability of exceedance for the hazard map / UHS (the
+    # 2%-in-50yr / 2475-yr companion to the default 10%/475-yr). None => a single
+    # PoE map (unchanged). When set, the deck exports the hazard map at BOTH PoEs.
+    secondary_poe: float | None = Field(default=None, gt=0.0, lt=1.0)
+
+    # Export the Uniform Hazard Spectrum (spectral acceleration vs period at the
+    # target PoE) alongside the hazard map + curve. Default off (byte-identical
+    # classical deck); on, the deck adds the SA-period IML ladder + UHS export.
+    uniform_hazard_spectra: bool = False
+
     @field_validator("imt", mode="before")
     @classmethod
     def _normalize_imt(cls, value: Any) -> Any:
@@ -262,3 +283,11 @@ class SeismicHazardLayerURI(LayerURI):
     # flips it to "real-fault" only when it actually built fault sources.
     source_model_kind: Literal["real-fault", "synthetic-area"] = "synthetic-area"
     source_model_note: str = ""
+
+    # epistemic logic-tree provenance: which logic-tree mode produced the hazard
+    # ("single" / "source_models" / "gr_uncertainty") and how many logic-tree
+    # realizations were enumerated (the substrate for the 5/50/95 quantile spread).
+    # Default "single"/0 so every existing construction stays valid unchanged; the
+    # composer stamps them from the run it actually executed.
+    logic_tree: Literal["single", "source_models", "gr_uncertainty"] = "single"
+    n_realizations: int = Field(default=0, ge=0)
