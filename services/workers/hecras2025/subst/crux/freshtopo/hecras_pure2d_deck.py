@@ -81,7 +81,8 @@ def patch_chippewa_xnn(area_name: str, n_perimeter: int) -> str:
 
 
 def patch_chippewa_bnn(peak_cfs: float, *, hydrograph_node: int = 1,
-                       hydrograph_hours: float = 8760.0) -> str:
+                       hydrograph_hours: float = 8760.0,
+                       initial_stage: float | None = None) -> str:
     """Author a CLEAN pure-2D ``.bNN`` by patching the shipped Chippewa ``b02``.
 
     The 6.6-correct 2D-BC-line inflow header is the SUFFIXED fake-reach form
@@ -91,6 +92,14 @@ def patch_chippewa_bnn(peak_cfs: float, *, hydrograph_node: int = 1,
     patch two fields: the inflow ordinates to a constant ``peak_cfs`` hold, and
     ``HYDROGRAPH LOCATIONS`` from the shipped ``0`` (which divide-by-zeros in the 1D
     output-block ``hdf_set_compression``) to one valid node.
+
+    ``initial_stage`` (ft) rewrites the shipped ``679`` Initial-Conditions profile
+    stage (Chippewa Creek's ~679 ft reference). That value seeds the 2D area's
+    INITIAL water surface, so a deck whose terrain sits BELOW 679 (any low-elevation
+    AOI) would start spuriously flooded to 679. Pass an initial stage a few ft BELOW
+    the AOI terrain minimum so the 2D area starts DRY and the inflow drives the
+    wetting. Left ``None`` the shipped 679 is kept (correct only for AOIs above it,
+    e.g. Muncie ~925 ft -- where 679 sits harmlessly below ground).
     """
     b = _CHIP_B02.read_text().splitlines()
     out: list[str] = []
@@ -110,6 +119,10 @@ def patch_chippewa_bnn(peak_cfs: float, *, hydrograph_node: int = 1,
             out.append(" 1 ")
             out.append(_i8(int(hydrograph_node)))
             i += 2                        # skip the shipped " 0 "
+            continue
+        if initial_stage is not None and ln.strip() == "679":
+            out.append(f"{initial_stage:>8.0f}")   # the fake-reach initial profile stage
+            i += 1
             continue
         out.append(ln)
         i += 1
