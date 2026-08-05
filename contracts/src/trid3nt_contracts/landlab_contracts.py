@@ -76,10 +76,21 @@ __all__ = [
     "DEFAULT_GREEN_AMPT_K_M_S",
     "DEFAULT_INITIAL_SOIL_MOISTURE",
     "DEFAULT_GREEN_AMPT_SOIL_TYPE",
+    "DEFAULT_MEAN_STORM_DURATION_HR",
+    "DEFAULT_MEAN_INTERSTORM_DURATION_HR",
+    "DEFAULT_MEAN_STORM_DEPTH_MM",
+    "DEFAULT_N_RECHARGE_SCENARIOS",
+    "DEFAULT_OUTPUT_INTERVAL_S",
     "LandlabRunArgs",
     "LandlabSusceptibilityLayerURI",
     "LandlabFlowAccumulationLayerURI",
     "LandlabGreenAmptLayerURI",
+    "LandlabStormEnsembleLayerURI",
+    "LandlabOverlandTimeseriesLayerURI",
+    "LandlabDemConditioningLayerURI",
+    "LandlabLakeMappingLayerURI",
+    "LandlabHacksLawLayerURI",
+    "LandlabHandLayerURI",
 ]
 
 
@@ -97,11 +108,32 @@ __all__ = [
 #       OverlandFlow chain: partition a design storm into infiltration-depth vs
 #       runoff-depth (rainfall excess) rasters (the canonical
 #       infilt_green_ampt_with_overland_flow tutorial chain).
+#   "landslide_storm_ensemble" - the infinite-slope LandslideProbability chain
+#       swept across a storm/recharge ENSEMBLE (recharge scenarios drawn from a
+#       landlab PrecipitationDistribution) instead of one fixed recharge: emits
+#       the ensemble-mean probability field + a susceptibility-vs-recharge series.
+#   "overland_flow_timeseries" - the de Almeida OverlandFlow chain sampled at N
+#       intervals (output_interval_s) so inundation depth is written frame by
+#       frame (the time-stepped animation output), plus the peak-depth field.
+#   "dem_pit_fill" - LakeMapperBarnes depression filling: the per-cell fill depth
+#       (where the DEM needed filling to be routable) as its own field.
+#   "lake_mapping" - the same LakeMapperBarnes plumbing with lake tracking on:
+#       lake extent (mask) + per-cell lake depth.
+#   "hacks_law" - a HackCalculator diagnostic: the longest-flow-path vs
+#       drainage-area scaling exponent per basin (chart-led + basin vector).
+#   "hand" - HeightAboveDrainageCalculator (Nobre et al. 2011): height above the
+#       nearest drainage channel (a wetness / relative-elevation proxy field).
 LandlabAnalysis = Literal[
     "landslide_probability",
     "overland_flow",
     "flow_accumulation",
     "green_ampt_overland_flow",
+    "landslide_storm_ensemble",
+    "overland_flow_timeseries",
+    "dem_pit_fill",
+    "lake_mapping",
+    "hacks_law",
+    "hand",
 ]
 
 # How the flow-accumulation chain handles closed depressions before routing:
@@ -138,6 +170,16 @@ DEFAULT_N_MONTE_CARLO: int = 250  # Monte-Carlo draws for probability of failure
 # OverlandFlow rainfall design-storm parameters:
 DEFAULT_RAINFALL_INTENSITY_MM_HR: float = 50.0  # rainfall intensity, mm/hr
 DEFAULT_STORM_DURATION_HR: float = 2.0  # storm duration, hours
+
+# Storm-ensemble (PrecipitationDistribution) draw parameters for the
+# landslide_storm_ensemble chain. Poisson storm generator means; each drawn
+# storm depth (mm) becomes one triggering-recharge scenario (mm/day pulse).
+DEFAULT_MEAN_STORM_DURATION_HR: float = 2.0  # mean storm duration, hours
+DEFAULT_MEAN_INTERSTORM_DURATION_HR: float = 48.0  # mean interstorm duration, hours
+DEFAULT_MEAN_STORM_DEPTH_MM: float = 15.0  # mean storm depth, mm
+DEFAULT_N_RECHARGE_SCENARIOS: int = 8  # recharge scenarios swept in the ensemble
+# Time-stepped OverlandFlow output cadence (seconds between depth snapshots).
+DEFAULT_OUTPUT_INTERVAL_S: float = 300.0  # depth snapshot interval, seconds
 
 
 class LandlabRunArgs(EngineRunArgsMixin):
@@ -249,6 +291,32 @@ class LandlabRunArgs(EngineRunArgsMixin):
     #: + porosity). Demo default "sandy loam".
     green_ampt_soil_type: str = Field(default=DEFAULT_GREEN_AMPT_SOIL_TYPE)
 
+    # --- landslide_storm_ensemble chain parameters ---
+    #: Mean storm duration (hours) for the PrecipitationDistribution recharge
+    #: draws (> 0).
+    mean_storm_duration_hr: float = Field(
+        default=DEFAULT_MEAN_STORM_DURATION_HR, gt=0.0
+    )
+    #: Mean interstorm duration (hours) for the storm generator (> 0).
+    mean_interstorm_duration_hr: float = Field(
+        default=DEFAULT_MEAN_INTERSTORM_DURATION_HR, gt=0.0
+    )
+    #: Mean storm depth (mm) for the storm generator; each drawn depth is a
+    #: triggering-recharge scenario (mm/day pulse) (> 0).
+    mean_storm_depth_mm: float = Field(default=DEFAULT_MEAN_STORM_DEPTH_MM, gt=0.0)
+    #: Number of recharge scenarios swept in the ensemble (>= 2).
+    n_recharge_scenarios: int = Field(default=DEFAULT_N_RECHARGE_SCENARIOS, ge=2, le=64)
+
+    # --- overland_flow_timeseries chain parameters ---
+    #: Seconds between surface-water-depth snapshots for the time-stepped output
+    #: (> 0). Snapshots are subsampled to the animation frame cap downstream.
+    output_interval_s: float = Field(default=DEFAULT_OUTPUT_INTERVAL_S, gt=0.0)
+
+    # --- dem_pit_fill / lake_mapping chain parameters ---
+    #: LakeMapperBarnes fill mode: True fills each depression to a flat surface;
+    #: False fills to a slight downslope incline (so flow routes over the lake).
+    fill_flat: bool = Field(default=True)
+
     @field_validator("depression_handler", mode="before")
     @classmethod
     def _normalize_depression_handler(cls, value: Any) -> Any:
@@ -318,6 +386,45 @@ class LandlabRunArgs(EngineRunArgsMixin):
             "runoff_partition": "green_ampt_overland_flow",
             "rainfall_partition": "green_ampt_overland_flow",
             "infiltration_excess": "green_ampt_overland_flow",
+            # landslide_storm_ensemble
+            "landslide_storm_ensemble": "landslide_storm_ensemble",
+            "storm_ensemble": "landslide_storm_ensemble",
+            "rainfall_ensemble": "landslide_storm_ensemble",
+            "landslide_sensitivity": "landslide_storm_ensemble",
+            "susceptibility_sensitivity": "landslide_storm_ensemble",
+            "recharge_sweep": "landslide_storm_ensemble",
+            # overland_flow_timeseries
+            "overland_flow_timeseries": "overland_flow_timeseries",
+            "overland_timeseries": "overland_flow_timeseries",
+            "depth_timeseries": "overland_flow_timeseries",
+            "flood_animation": "overland_flow_timeseries",
+            "inundation_animation": "overland_flow_timeseries",
+            "time_stepped_depth": "overland_flow_timeseries",
+            # dem_pit_fill
+            "dem_pit_fill": "dem_pit_fill",
+            "pit_fill": "dem_pit_fill",
+            "fill_depth": "dem_pit_fill",
+            "dem_conditioning": "dem_pit_fill",
+            "sink_fill_depth": "dem_pit_fill",
+            "depression_filling": "dem_pit_fill",
+            # lake_mapping
+            "lake_mapping": "lake_mapping",
+            "lake_extent": "lake_mapping",
+            "lake_depth": "lake_mapping",
+            "lakes": "lake_mapping",
+            "ponding": "lake_mapping",
+            # hacks_law
+            "hacks_law": "hacks_law",
+            "hack": "hacks_law",
+            "hacks": "hacks_law",
+            "basin_scaling": "hacks_law",
+            "length_area_scaling": "hacks_law",
+            # hand
+            "hand": "hand",
+            "height_above_drainage": "hand",
+            "height_above_nearest_drainage": "hand",
+            "hand_wetness": "hand",
+            "wetness_proxy": "hand",
         }
         return aliases.get(key, key)
 
@@ -421,4 +528,148 @@ class LandlabGreenAmptLayerURI(LayerURI):
 
     #: Input-provenance prose (triggering rainfall = NOAA Atlas-14 design storm;
     #: the soil hydraulic block is demo-defaulted). None preserves prior behaviour.
+    source_note: str | None = Field(default=None)
+
+
+class LandlabStormEnsembleLayerURI(LayerURI):
+    """A ``LayerURI`` for the storm-ensemble landslide-susceptibility field, plus
+    the ensemble-sensitivity narration scalars.
+
+    The primary raster is the ENSEMBLE-MEAN probability-of-failure field (m of the
+    per-scenario probability grids); the sensitivity of the unstable-area fraction
+    to the swept recharge scenarios is the companion chart. Adds the structured
+    numbers the agent narrates (typed fields, never invented):
+
+        unstable_area_fraction: ensemble-mean fraction of the AOI flagged
+            unstable, dimensionless in [0, 1].
+        mean_probability_of_failure: ensemble-mean probability of failure over
+            active cells, dimensionless in [0, 1].
+        min_recharge_mm_day / max_recharge_mm_day: the recharge span swept.
+        n_recharge_scenarios: number of storm/recharge scenarios in the sweep.
+        sensitivity_slope: change in unstable-area fraction per mm/day of
+            recharge (least-squares slope over the ensemble).
+    """
+
+    unstable_area_fraction: float = Field(ge=0.0, le=1.0)
+    mean_probability_of_failure: float = Field(ge=0.0, le=1.0)
+    min_recharge_mm_day: float = Field(ge=0.0)
+    max_recharge_mm_day: float = Field(ge=0.0)
+    n_recharge_scenarios: int = Field(ge=1)
+    sensitivity_slope: float = Field(default=0.0)
+
+    source_note: str | None = Field(default=None)
+
+
+class LandlabOverlandTimeseriesLayerURI(LayerURI):
+    """A ``LayerURI`` for the time-stepped overland-flow depth output, plus the
+    hydrograph narration scalars.
+
+    The primary raster is the PEAK surface-water-depth field; per-interval depth
+    frames are emitted as a time-stepped animation group, and the depth-vs-time
+    series at the maximum-depth cell is the companion chart. Adds the structured
+    numbers the agent narrates (typed fields, never invented):
+
+        wet_area_fraction: fraction of active cells at/above the wet-depth floor
+            at peak, dimensionless in [0, 1].
+        max_depth_m: peak surface-water depth over the AOI and the storm (m).
+        n_frames: number of emitted time-step depth frames.
+        time_to_peak_s: elapsed seconds to the maximum-depth-cell peak.
+    """
+
+    wet_area_fraction: float = Field(ge=0.0, le=1.0)
+    max_depth_m: float = Field(ge=0.0)
+    n_frames: int = Field(ge=0)
+    time_to_peak_s: float = Field(ge=0.0)
+
+    source_note: str | None = Field(default=None)
+
+
+class LandlabDemConditioningLayerURI(LayerURI):
+    """A ``LayerURI`` for the DEM pit-fill conditioning depth field, plus the
+    routability narration scalars.
+
+    The primary raster is the per-cell FILL DEPTH (metres the DEM had to rise to
+    become routable, via LakeMapperBarnes). Adds the structured numbers the agent
+    narrates (typed fields, never invented):
+
+        max_fill_depth_m: deepest fill applied anywhere in the AOI (m).
+        filled_area_fraction: fraction of active cells that required any fill,
+            dimensionless in [0, 1].
+        n_depressions: number of distinct filled depressions.
+    """
+
+    max_fill_depth_m: float = Field(ge=0.0)
+    filled_area_fraction: float = Field(ge=0.0, le=1.0)
+    n_depressions: int = Field(ge=0)
+
+    source_note: str | None = Field(default=None)
+
+
+class LandlabLakeMappingLayerURI(LayerURI):
+    """A ``LayerURI`` for the lake extent + depth field, plus the ponding
+    narration scalars.
+
+    The primary raster is the per-cell LAKE DEPTH within mapped lakes (via
+    LakeMapperBarnes with lake tracking); the lake extent is a companion vector.
+    Adds the structured numbers the agent narrates (typed fields, never invented):
+
+        n_lakes: number of distinct lakes mapped.
+        total_lake_area_km2: summed lake surface area (km^2).
+        total_lake_volume_m3: summed lake storage volume (m^3).
+        max_lake_depth_m: deepest lake depth in the AOI (m).
+    """
+
+    n_lakes: int = Field(ge=0)
+    total_lake_area_km2: float = Field(ge=0.0)
+    total_lake_volume_m3: float = Field(ge=0.0)
+    max_lake_depth_m: float = Field(ge=0.0)
+
+    source_note: str | None = Field(default=None)
+
+
+class LandlabHacksLawLayerURI(LayerURI):
+    """A ``LayerURI`` for the Hack's-law basin-scaling diagnostic, plus the fit
+    narration scalars.
+
+    The primary raster is the log-styled drainage-area backdrop; the fitted basin
+    footprint is a companion vector and the length-vs-area log-log scatter with
+    the fitted exponent is the companion chart. Adds the structured numbers the
+    agent narrates (typed fields, never invented):
+
+        hack_exponent: the fitted Hack exponent ``h`` in ``L = C * A**h`` for the
+            largest basin (the classic value is ~0.5-0.6).
+        hack_coefficient: the fitted coefficient ``C``.
+        largest_basin_area_km2: drainage area of the largest fitted basin (km^2).
+        n_basins: number of basins the diagnostic fitted.
+    """
+
+    hack_exponent: float = Field(ge=0.0)
+    hack_coefficient: float = Field(ge=0.0)
+    largest_basin_area_km2: float = Field(ge=0.0)
+    n_basins: int = Field(ge=0)
+
+    source_note: str | None = Field(default=None)
+
+
+class LandlabHandLayerURI(LayerURI):
+    """A ``LayerURI`` for the Height Above Nearest Drainage (HAND) field, plus the
+    narration scalars.
+
+    The primary raster is the per-cell height above the nearest drainage channel
+    (Nobre et al. 2011) - a relative-elevation / wetness proxy. Adds the
+    structured numbers the agent narrates (typed fields, never invented):
+
+        mean_hand_m: mean HAND over active cells (m).
+        max_hand_m: maximum HAND over the AOI (m).
+        channel_area_fraction: fraction of active cells classed as channel (HAND
+            ~ 0), dimensionless in [0, 1].
+        lowland_area_fraction: fraction of active cells with HAND below the
+            lowland threshold (near-drainage, flood-prone), in [0, 1].
+    """
+
+    mean_hand_m: float = Field(ge=0.0)
+    max_hand_m: float = Field(ge=0.0)
+    channel_area_fraction: float = Field(ge=0.0, le=1.0)
+    lowland_area_fraction: float = Field(ge=0.0, le=1.0)
+
     source_note: str | None = Field(default=None)

@@ -277,6 +277,12 @@ PRIMARY_CATEGORY: dict[str, str] = {
     "landlab_susceptibility": "hazard_modeling",
     "landlab_flow_accumulation": "hazard_modeling",
     "landlab_green_ampt_overland_flow": "hazard_modeling",
+    "landlab_landslide_storm_ensemble": "hazard_modeling",
+    "landlab_overland_flow_timeseries": "hazard_modeling",
+    "landlab_dem_conditioning": "hazard_modeling",
+    "landlab_lake_mapping": "hazard_modeling",
+    "landlab_hacks_law_scaling": "hazard_modeling",
+    "landlab_hand_wetness": "hazard_modeling",
     "elmfire_verification_elliptical_replication": "hazard_modeling",
     "geoclaw_tsunami_gauge_timeseries": "hazard_modeling",
     # USGS post-fire debris-flow hazard composer (pfdf: Staley 2017 M1

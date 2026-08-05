@@ -48,6 +48,12 @@ EXPECTED_TEMPLATES = {
     "landlab_susceptibility",
     "landlab_flow_accumulation",  # ADR 0122 hazard-easy-four #1: Landlab flow-accumulation / drainage-area + channel-network template
     "landlab_green_ampt_overland_flow",  # ADR 0123 hazard-easy-four continuation #1: Green-Ampt infiltration/runoff partition
+    "landlab_landslide_storm_ensemble",  # Landlab CAND-S: storm/recharge-ensemble landslide susceptibility sweep
+    "landlab_overland_flow_timeseries",  # Landlab CAND-S: time-stepped overland-flow depth animation
+    "landlab_dem_conditioning",  # Landlab CAND-S: DEM pit-fill conditioning depth
+    "landlab_lake_mapping",  # Landlab CAND-S: lake extent + depth mapping
+    "landlab_hacks_law_scaling",  # Landlab CAND-S: Hack's-law basin length-area scaling diagnostic
+    "landlab_hand_wetness",  # Landlab CAND-S: Height Above Nearest Drainage wetness proxy
     "elmfire_verification_elliptical_replication",  # ADR 0123 continuation #2: constant-wind elliptical-spread verification
     "geoclaw_tsunami_gauge_timeseries",  # ADR 0123 continuation #3: coastal gauge water-level time series
     "openquake_psha",

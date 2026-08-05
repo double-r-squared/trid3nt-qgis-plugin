@@ -718,6 +718,15 @@ from ..workflows.landlab.flow_accumulation.flow_accumulation import landlab_flow
 # workflows/landlab/green_ampt/; surfaced by the run_landlab door's gate
 # expansion. The composer (model_landlab_green_ampt_overland_flow) is inlined.
 from ..workflows.landlab.green_ampt.green_ampt import landlab_green_ampt_overland_flow as _landlab_green_ampt_overland_flow  # noqa: E402,F401 - NEW capability (ADR 0123, hazard-easy-four continuation #1) (engine=landlab, tier=template)
+# Landlab diagnostic TEMPLATES (engine="landlab", tier="template"), each a DISTINCT
+# capability, one folder under workflows/landlab/; walked into the main retrieval
+# index. Composers (model_landlab_*) are inlined in each template module.
+from ..workflows.landlab.landslide_storm_ensemble.storm_ensemble import landlab_landslide_storm_ensemble as _landlab_landslide_storm_ensemble  # noqa: E402,F401 - storm/recharge-ensemble landslide susceptibility sweep
+from ..workflows.landlab.overland_flow_timeseries.overland_timeseries import landlab_overland_flow_timeseries as _landlab_overland_flow_timeseries  # noqa: E402,F401 - time-stepped overland-flow depth animation
+from ..workflows.landlab.dem_conditioning.dem_conditioning import landlab_dem_conditioning as _landlab_dem_conditioning  # noqa: E402,F401 - DEM pit-fill conditioning depth
+from ..workflows.landlab.lake_mapping.lake_mapping import landlab_lake_mapping as _landlab_lake_mapping  # noqa: E402,F401 - lake extent + depth mapping
+from ..workflows.landlab.hacks_law.hacks_law import landlab_hacks_law_scaling as _landlab_hacks_law_scaling  # noqa: E402,F401 - Hack's-law basin length-area scaling diagnostic
+from ..workflows.landlab.hand_wetness.hand_wetness import landlab_hand_wetness as _landlab_hand_wetness  # noqa: E402,F401 - Height Above Nearest Drainage wetness proxy
 # openquake_psha TEMPLATE (engine="openquake", tier="template"), one folder
 # under workflows/openquake/psha/; EXCLUDED from the default retrieval pool,
 # surfaced only by the run_openquake door's gate expansion. The composer chain

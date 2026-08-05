@@ -1657,7 +1657,7 @@ Aspects: linear diffusion; nonlinear/critical-slope Taylor-series diffusion; dep
 
 ### Landslides & Mass Wasting
 Purpose: Hazard/susceptibility and event-scale mass-movement modeling - the sprint-17 North Star hazard class.
-Today: LandslideProbability is signed as the landslide_probability analysis (default chain, FlowAccumulator->LandslideProbability). BedrockLandslider and MassWastingRunout are unsurfaced - TRID3NT has no event-scale runout or landscape-evolution-coupled landslide-frequency capability.
+Today: LandslideProbability is signed as the landslide_probability analysis (default chain, FlowAccumulator->LandslideProbability). BedrockLandslider and MassWastingRunout are unsurfaced - TRID3NT has no event-scale runout or landscape-evolution-coupled landslide-frequency capability. Storm-ensemble recharge sensitivity is LANDED as `landlab_landslide_storm_ensemble` (ADR 0141): PrecipitationDistribution Monte-Carlo recharge draws -> susceptibility-vs-recharge sensitivity slope.
 Aspects: infinite-slope Monte-Carlo probability-of-failure susceptibility mapping (signed); episodic bedrock-landslide magnitude/frequency within a landscape-evolution run; event-scale runout of a specific mapped failure with a validated deposit extent
 - [CAND-L] `episodic_bedrock_landslide_magnitude_frequency` [L] [US] - Over decades of uplift and erosion, where and how large are the stochastic bedrock landslides this landscape produces, and what does their size-frequency distribution look like?
   src: https://landlab.readthedocs.io/en/latest/tutorials/landscape_evolution/hylands/HyLandsTutorial.html (landlab_hylands_tutorial)
@@ -1667,14 +1667,14 @@ Aspects: infinite-slope Monte-Carlo probability-of-failure susceptibility mappin
   src: https://landlab.readthedocs.io/en/latest/tutorials/mass_wasting_runout/landslide_runout_animation.html (landlab_masswastingrunout_tutorial)
   knobs: failure_depth, scar extent polygon, cellular-automata runout/friction coefficients
   notes: Tutorial itself replicates a REAL, documented 2021 Cascade Mountains (US) landslide-scar enlargement validated against a field-observed DEM-of-Difference - directly matches the paper-first, US-only replication doctrine.
-- [CAND-S] `landslide_probability_storm_ensemble_sensitivity` [S] [US] - Instead of one fixed daily recharge, run the failure-probability map across a realistic sequence of storm/recharge draws to see how susceptibility grows with rainfall variability.
+- [LANDED] `landslide_probability_storm_ensemble_sensitivity` [S] [US] (ADR 0141: `landlab_landslide_storm_ensemble`) - Instead of one fixed daily recharge, run the failure-probability map across a realistic sequence of storm/recharge draws to see how susceptibility grows with rainfall variability.
   src: https://landlab.readthedocs.io/en/latest/generated/api/landlab.components.uniform_precip.generate_uniform_precip.html (landlab_precipitationdistribution_api)
   knobs: mean_storm_duration, mean_interstorm_duration, mean_storm_depth -> recharge_mm_day per draw, n_monte_carlo
   notes: Knob/loop addition on the ALREADY-SIGNED LandslideProbability chain: sweep recharge scenarios via PrecipitationDistribution instead of the current single fixed DEFAULT_RECHARGE_MM_DAY.
 
 ### Overland Flow (routing-physics variants)
 Purpose: Route storm rainfall as shallow surface flow across a DEM to a hydrograph/inundation-depth field, at different physics/numerics tradeoffs.
-Today: OverlandFlow (de Almeida) is signed as the overland_flow analysis, reporting peak surface_water__depth over a fixed storm. Bates/Kinwave-explicit/KinwaveImplicit/LinearDiffusion/Rengers variants and the Green-Ampt infiltration coupling are unsurfaced; the signed chain also only ever emits the peak depth, discarding the time series.
+Today: OverlandFlow (de Almeida) is signed as the overland_flow analysis, reporting peak surface_water__depth over a fixed storm. Bates/Kinwave-explicit/KinwaveImplicit/LinearDiffusion/Rengers variants and the Green-Ampt infiltration coupling are unsurfaced; the signed chain also only ever emits the peak depth, discarding the time series. The time series is now surfaced: `landlab_overland_flow_timeseries` (ADR 0141) emits depth at output_interval_s frames (animation-ready) + the outlet hydrograph chart.
 Aspects: full de Almeida shallow-water routing (signed, explicit local inertial); implicit kinematic-wave routing (large stable timesteps for long storms); coupled Green-Ampt infiltration + kinematic-wave runoff generation; time-resolved inundation output vs single peak-depth output
 - [CAND-M] `implicit_kinematic_wave_runoff_hydrograph` [M] [US] - Give me the outlet hydrograph for a long storm-plus-recession without the tiny stable timesteps the signed de Almeida chain needs.
   src: https://landlab.readthedocs.io/en/latest/tutorials/overland_flow/kinwave_implicit/kinwave_implicit_overland_flow.html (landlab_kinwave_implicit_tutorial)
@@ -1684,7 +1684,7 @@ Aspects: full de Almeida shallow-water routing (signed, explicit local inertial)
   src: https://landlab.readthedocs.io/en/latest/tutorials/overland_flow/soil_infiltration_green_ampt/infilt_green_ampt_with_overland_flow.html (landlab_green_ampt_tutorial)
   knobs: soil_hydraulic_conductivity_m_s K, initial_soil_moisture_content, green_ampt_soil_type, rainfall_return_period_yr/storm_duration_hr (Atlas-14 design storm), target_resolution_m
   notes: LANDED as the exec-mode SoilInfiltrationGreenAmpt + de Almeida OverlandFlow partition chain: PRIMARY infiltration-depth raster + a runoff-depth (rainfall-excess) raster + the infiltration-vs-runoff partition chart, over a real AOI DEM; triggering rainfall from the real NOAA Atlas-14 design storm (0102 seam), soil block demo-labeled. Live exec smoke (synthetic UTM DEM, 45 mm storm, K=1e-5): infiltrated_fraction 0.79, runoff_fraction 0.21; K-monotonicity + determinism verified.
-- [CAND-S] `overland_flow_depth_timeseries_output` [S] [US] - Instead of only the peak surface-water depth, show me how inundation grows and recedes frame by frame during the storm.
+- [LANDED] `overland_flow_depth_timeseries_output` [S] [US] (ADR 0141: `landlab_overland_flow_timeseries`) - Instead of only the peak surface-water depth, show me how inundation grows and recedes frame by frame during the storm.
   src: https://landlab.readthedocs.io/en/latest/tutorials/overland_flow/overland_flow_driver.html (landlab_overland_flow_driver_tutorial)
   knobs: output_interval_s, storm/simulation duration
   notes: Output-shape change on the ALREADY-SIGNED OverlandFlow chain - write depth at N intervals (tutorial samples 10/50/100s) instead of discarding all but the max, enabling the animation UI norm.
@@ -1739,20 +1739,20 @@ Aspects: discrete normal-fault throw (constant or time-varying) as an uplift dri
 
 ### Depression & Lake Processing (DEM conditioning)
 Purpose: Precondition a DEM (fill/breach pits, map lakes) so downstream flow-routing components behave correctly - a prerequisite step, not itself a hazard product.
-Today: DepressionFinderAndRouter already runs INSIDE the signed landslide_probability chain's FlowAccumulator call (depression_finder="DepressionFinderAndRouter") but is not independently selectable/tunable, and the computed fill-depth is discarded rather than surfaced as its own layer. LakeMapperBarnes (the faster Barnes et al. algorithm) is unsurfaced.
+Today: DepressionFinderAndRouter already runs INSIDE the signed landslide_probability chain's FlowAccumulator call (depression_finder="DepressionFinderAndRouter") but is not independently selectable/tunable, and the computed fill-depth is discarded rather than surfaced as its own layer. LakeMapperBarnes (the faster Barnes et al. algorithm) is unsurfaced. BOTH now LANDED (ADR 0141): `landlab_dem_conditioning` (fill-depth COG via LakeMapperBarnes) + `landlab_lake_mapping` (lake extent/depth + vector), shared plumbing.
 Aspects: fill-based pit removal (mass-preserving, raises depression floor); breach-based pit removal (cuts an outlet channel, realistic for incised/engineered terrain); lake identification/tracking as its own output
-- [CAND-S] `dem_pit_fill_conditioning_layer` [S] [US] - Show me where and how much this DEM needed to be filled before routing flow across it - is my DEM actually routable?
+- [LANDED] `dem_pit_fill_conditioning_layer` [S] [US] (ADR 0141: `landlab_dem_conditioning`) - Show me where and how much this DEM needed to be filled before routing flow across it - is my DEM actually routable?
   src: https://landlab.readthedocs.io/en/latest/tutorials/overland_flow/how_to_d4_pitfill_a_dem.html (landlab_d4_pitfill_tutorial)
   knobs: fill vs breach, fill_flat, redirect_flow_steepest_descent
   notes: Surfaces the ALREADY-COMPUTED fill-depth (currently discarded) as its own COG. Tutorial explicitly uses FlowAccumulator(depression_finder="LakeMapperBarnes") - the faster alternative to today's DepressionFinderAndRouter.
-- [CAND-S] `lake_extent_and_depth_mapping` [S] [US] - Are there real lakes or ponds on this landscape (not just DEM noise-pits) - where are they and how deep?
+- [LANDED] `lake_extent_and_depth_mapping` [S] [US] (ADR 0141: `landlab_lake_mapping`) - Are there real lakes or ponds on this landscape (not just DEM noise-pits) - where are they and how deep?
   src: https://landlab.readthedocs.io/en/latest/tutorials/overland_flow/how_to_d4_pitfill_a_dem.html (landlab_d4_pitfill_tutorial)
   knobs: method(Steepest), track_lakes on, redirect_flow_steepest_descent
   notes: Same LakeMapperBarnes call as the pit-fill candidate above, with lake tracking enabled instead of discarded - reuses the same worker plumbing.
 
 ### Terrain / Drainage-Network Analysis (diagnostic metrics)
 Purpose: Extract quantitative drainage-network descriptors from an already-routed DEM - channel steepness, drainage density, basin scaling - diagnostic metrics rather than process models.
-Today: Unsurfaced.
+Today: Unsurfaced. Hack's Law is LANDED as `landlab_hacks_law_scaling` (ADR 0141): exponent fit + basin vector (Boulder foothills smoke: 0.566, in the classic range). ChiFinder/drainage-density remain CAND-M.
 Aspects: normalized channel steepness / chi-based concavity mapping; drainage density (channel-network extent per unit area); Hack's-law basin-shape scaling
 - [CAND-M] `channel_steepness_chi_map` [M] [US] - Which channel reaches in this watershed are anomalously steep for their drainage area (a common tectonic-activity / knickpoint proxy)?
   src: https://landlab.readthedocs.io/en/latest/tutorials/terrain_analysis/chi_finder/chi_finder.html (landlab_chi_finder_tutorial)
@@ -1762,7 +1762,7 @@ Aspects: normalized channel steepness / chi-based concavity mapping; drainage de
   src: https://landlab.readthedocs.io/en/latest/tutorials/terrain_analysis/drainage_density/drainage_density.html (landlab_drainage_density_tutorial)
   knobs: channel-definition method (area-slope threshold vs supplied channel mask), threshold value
   notes: Outputs a scalar drainage-density value + a surface_to_channel__minimum_distance field per node.
-- [CAND-S] `hacks_law_basin_scaling_diagnostic` [S] [US] - Does this basin's longest-flow-path-vs-drainage-area scaling match the classic Hack's Law exponent (~0.5-0.6), or is it anomalous?
+- [LANDED] `hacks_law_basin_scaling_diagnostic` [S] [US] (ADR 0141: `landlab_hacks_law_scaling`) - Does this basin's longest-flow-path-vs-drainage-area scaling match the classic Hack's Law exponent (~0.5-0.6), or is it anomalous?
   src: https://landlab.readthedocs.io/en/latest/tutorials/terrain_analysis/hack_calculator/hack_calculator.html (landlab_hack_calculator_tutorial)
   knobs: channel threshold, single-basin vs multi-basin batch
   notes: Pure diagnostic on top of the already-computed FlowAccumulator fields; same NASADEM/West Bijou Creek published case as ChiFinder.
@@ -1813,9 +1813,9 @@ Aspects: exponential bedrock-to-soil production law (Ahnert 1976 formulation)
 
 ### Terrain-relative wetness / HAND (minor, single-component)
 Purpose: Fast, hydrology-model-free elevation-above-nearest-drainage layer as a wetness/flood-susceptibility proxy.
-Today: Unsurfaced.
+Today: Unsurfaced. LANDED as `landlab_hand_wetness` (ADR 0141): HAND COG + channel vector via HeightAboveDrainageCalculator (API-doctest-verified).
 Aspects: height-above-nearest-drainage (HAND) calculation from an existing channel mask
-- [CAND-S] `hand_wetness_proxy_layer` [S] [US] - Give me a HAND (height-above-nearest-drainage) layer as a fast flood-susceptibility/wetness proxy for this AOI, without running a full hydraulic model.
+- [LANDED] `hand_wetness_proxy_layer` [S] [US] (ADR 0141: `landlab_hand_wetness`) - Give me a HAND (height-above-nearest-drainage) layer as a fast flood-susceptibility/wetness proxy for this AOI, without running a full hydraulic model.
   src: https://landlab.readthedocs.io/en/latest/generated/api/landlab.components.hand_calculator.hand_calculator.html (landlab_handcalculator_api)
   knobs: channel_mask source (from FlowAccumulator threshold or supplied)
   notes: No dedicated worked tutorial found this pass (API doctest only, verified: a 4x5 grid case reproduces the exact published HAND array via the Nobre et al. 2011 method) - cheap single-component add reusing the channel mask other terrain-analysis candidates already compute.

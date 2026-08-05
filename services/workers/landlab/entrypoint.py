@@ -387,7 +387,26 @@ def _run_landlab(
         result_block["flow_accumulation"] = _flow_accumulation_extra(chain.extra)
     if chain.analysis == "green_ampt_overland_flow":
         result_block["green_ampt"] = _green_ampt_extra(chain.extra)
+    # The added analyses carry a fully JSON-safe ``extra`` (scalars + lists of
+    # scalar dicts; every numpy grid rides ``secondary_fields``), so the whole
+    # block folds under the analysis key for the composer's typed scalars.
+    if chain.analysis in _JSON_SAFE_EXTRA_ANALYSES:
+        result_block[chain.analysis] = dict(chain.extra or {})
     return result_block, field_cog
+
+
+#: Analyses whose ``ChainResult.extra`` is fully JSON-safe and folds verbatim
+#: into the completion ``result`` block under the analysis key.
+_JSON_SAFE_EXTRA_ANALYSES: frozenset[str] = frozenset(
+    {
+        "landslide_storm_ensemble",
+        "overland_flow_timeseries",
+        "dem_pit_fill",
+        "lake_mapping",
+        "hacks_law",
+        "hand",
+    }
+)
 
 
 def _green_ampt_extra(extra: dict[str, Any]) -> dict[str, Any]:

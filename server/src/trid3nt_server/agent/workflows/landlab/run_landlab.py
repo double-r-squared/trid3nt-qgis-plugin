@@ -163,6 +163,19 @@ def build_landlab_build_spec(run_args: LandlabRunArgs) -> dict[str, Any]:
         "green_ampt_soil_type": str(
             getattr(run_args, "green_ampt_soil_type", "sandy loam")
         ),
+        # landslide_storm_ensemble parameters (PrecipitationDistribution draws).
+        "mean_storm_duration_hr": float(
+            getattr(run_args, "mean_storm_duration_hr", 2.0)
+        ),
+        "mean_interstorm_duration_hr": float(
+            getattr(run_args, "mean_interstorm_duration_hr", 48.0)
+        ),
+        "mean_storm_depth_mm": float(getattr(run_args, "mean_storm_depth_mm", 15.0)),
+        "n_recharge_scenarios": int(getattr(run_args, "n_recharge_scenarios", 8)),
+        # overland_flow_timeseries snapshot cadence (seconds).
+        "output_interval_s": float(getattr(run_args, "output_interval_s", 300.0)),
+        # dem_pit_fill / lake_mapping fill mode.
+        "fill_flat": bool(getattr(run_args, "fill_flat", True)),
     }
     # Merge the validated physics overrides (the chain reads flow_director /
     # overland_alpha / mannings_n). Absent => byte-identical.

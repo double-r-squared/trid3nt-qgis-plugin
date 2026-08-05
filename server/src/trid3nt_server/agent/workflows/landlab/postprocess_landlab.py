@@ -33,8 +33,14 @@ from typing import Any
 
 from trid3nt_contracts.execution import LayerURI
 from trid3nt_contracts.landlab_contracts import (
+    LandlabDemConditioningLayerURI,
     LandlabFlowAccumulationLayerURI,
     LandlabGreenAmptLayerURI,
+    LandlabHacksLawLayerURI,
+    LandlabHandLayerURI,
+    LandlabLakeMappingLayerURI,
+    LandlabOverlandTimeseriesLayerURI,
+    LandlabStormEnsembleLayerURI,
     LandlabSusceptibilityLayerURI,
 )
 
@@ -46,8 +52,17 @@ __all__ = [
     "postprocess_landlab",
     "postprocess_landlab_flow_accumulation",
     "postprocess_landlab_green_ampt",
+    "postprocess_landlab_storm_ensemble",
+    "postprocess_landlab_overland_timeseries",
+    "postprocess_landlab_dem_conditioning",
+    "postprocess_landlab_lake_mapping",
+    "postprocess_landlab_hacks_law",
+    "postprocess_landlab_hand",
     "build_routing_comparison_chart_spec",
     "build_infiltration_partition_chart_spec",
+    "build_storm_ensemble_chart_spec",
+    "build_overland_hydrograph_chart_spec",
+    "build_hacks_law_chart_spec",
     "publish_landlab_quantities",
     "compute_landlab_metrics",
     "LANDSLIDE_STYLE_PRESET",
@@ -55,6 +70,9 @@ __all__ = [
     "DRAINAGE_AREA_STYLE_PRESET",
     "INFILTRATION_STYLE_PRESET",
     "RUNOFF_STYLE_PRESET",
+    "FILL_DEPTH_STYLE_PRESET",
+    "LAKE_DEPTH_STYLE_PRESET",
+    "HAND_STYLE_PRESET",
     "UNSTABLE_PROBABILITY_THRESHOLD",
     "SECONDARY_QUANTITY_BY_TOKEN",
 ]
@@ -95,6 +113,14 @@ DRAINAGE_AREA_STYLE_PRESET: str = "continuous_drainage_area"
 #: existing depth preset is the reused styling, not a new one.
 INFILTRATION_STYLE_PRESET: str = "continuous_flood_depth"
 RUNOFF_STYLE_PRESET: str = "continuous_flood_depth"
+
+#: The DEM fill-depth, lake-depth, and HAND rasters are all metric-DEPTH/elevation
+#: fields (m), so they reuse the existing flood-depth preset. Dedicated fill /
+#: lake-bathymetry / HAND ramps are NAMED RESIDUALS -- the existing depth preset
+#: is the reused styling, not a new one.
+FILL_DEPTH_STYLE_PRESET: str = "continuous_flood_depth"
+LAKE_DEPTH_STYLE_PRESET: str = "continuous_flood_depth"
+HAND_STYLE_PRESET: str = "continuous_flood_depth"
 
 #: Mirror of the worker threshold for recomputing the unstable fraction when the
 #: completion result block is absent (kept in sync with
@@ -776,6 +802,7 @@ def postprocess_landlab_flow_accumulation(
                     name="Channel network",
                     layer_type="vector",
                     uri=geojson_uri,
+                    style_preset="mesh_grid",
                     role="context",
                     bbox=bbox,
                 )
@@ -972,5 +999,770 @@ def postprocess_landlab_green_ampt(
         runoff_frac,
         len(layers) > 1,
         uri,
+    )
+    return layers, metrics
+
+
+# --------------------------------------------------------------------------- #
+# Generic binary-mask vectorizer (lake extent, fitted basin footprint) + shared
+# helpers for the added Landlab diagnostic templates.
+# --------------------------------------------------------------------------- #
+def _vectorize_mask_cog(
+    mask_cog_path: Path, *, property_name: str
+) -> dict[str, Any] | None:
+    """Vectorize a boolean mask COG (1.0 = in, NaN elsewhere) to a 4326 GeoJSON.
+
+    Reads the mask, extracts polygons with ``rasterio.features.shapes``,
+    reprojects each to EPSG:4326, and returns a ``FeatureCollection`` (or ``None``
+    when the mask is empty). Each feature carries ``{property_name: 1}``.
+    """
+    try:
+        import numpy as np
+        import rasterio
+        from rasterio.features import shapes as _shapes
+        from rasterio.warp import transform_geom as _transform_geom
+    except Exception as exc:  # noqa: BLE001
+        raise PostprocessLandlabError(
+            "LANDLAB_DEPENDENCY_MISSING",
+            message=f"rasterio/numpy unavailable for mask vectorization: {exc}",
+        ) from exc
+    if not Path(mask_cog_path).exists():
+        return None
+    with rasterio.open(mask_cog_path) as ds:
+        arr = ds.read(1).astype("float64")
+        nodata = ds.nodata
+        src_crs = ds.crs
+        transform = ds.transform
+    if nodata is not None and np.isfinite(nodata):
+        arr = np.where(arr == nodata, np.nan, arr)
+    mask = np.isfinite(arr) & (arr > 0.0)
+    if not mask.any():
+        return None
+    features: list[dict[str, Any]] = []
+    for geom, val in _shapes(mask.astype("uint8"), mask=mask, transform=transform):
+        if int(val) != 1:
+            continue
+        if src_crs is not None and str(src_crs).upper() != "EPSG:4326":
+            geom = _transform_geom(src_crs, "EPSG:4326", geom, precision=6)
+        features.append(
+            {"type": "Feature", "properties": {property_name: 1}, "geometry": geom}
+        )
+    if not features:
+        return None
+    return {"type": "FeatureCollection", "features": features}
+
+
+def _pick_from_block(
+    block: dict[str, Any] | None, key: str, fallback: float
+) -> float:
+    """Prefer ``block[key]`` (the worker's authoritative scalar); else fallback."""
+    if isinstance(block, dict) and block.get(key) is not None:
+        try:
+            return float(block[key])
+        except (TypeError, ValueError):
+            pass
+    return float(fallback)
+
+
+# --------------------------------------------------------------------------- #
+# landslide_storm_ensemble postprocess + susceptibility-vs-recharge chart.
+# --------------------------------------------------------------------------- #
+def build_storm_ensemble_chart_spec(
+    recharge_scenarios: list[dict[str, Any]],
+) -> dict[str, Any] | None:
+    """Build the susceptibility-vs-recharge sensitivity chart (Vega-Lite).
+
+    A line+point of the unstable-area fraction against the swept recharge
+    scenarios -- how landslide susceptibility grows with rainfall/recharge
+    variability. Returns ``None`` when the ensemble is empty. Pure."""
+    if not recharge_scenarios:
+        return None
+    values = [
+        {
+            "recharge_mm_day": float(r.get("recharge_mm_day", 0.0)),
+            "unstable_area_fraction": float(r.get("unstable_area_fraction", 0.0)),
+            "mean_probability_of_failure": float(
+                r.get("mean_probability_of_failure", 0.0)
+            ),
+        }
+        for r in recharge_scenarios
+    ]
+    return {
+        "$schema": "https://vega.github.io/schema/vega-lite/v5.json",
+        "data": {"values": values},
+        "mark": {"type": "line", "point": True, "color": "#b5442f"},
+        "encoding": {
+            "x": {
+                "field": "recharge_mm_day",
+                "type": "quantitative",
+                "title": "triggering recharge (mm/day)",
+            },
+            "y": {
+                "field": "unstable_area_fraction",
+                "type": "quantitative",
+                "title": "unstable area fraction",
+            },
+            "tooltip": [
+                {"field": "recharge_mm_day", "type": "quantitative", "format": ".1f"},
+                {
+                    "field": "unstable_area_fraction",
+                    "type": "quantitative",
+                    "format": ".4f",
+                },
+                {
+                    "field": "mean_probability_of_failure",
+                    "type": "quantitative",
+                    "format": ".4f",
+                },
+            ],
+        },
+    }
+
+
+def postprocess_landlab_storm_ensemble(
+    field_cog_path: str | Path,
+    *,
+    run_id: str,
+    result: dict[str, Any] | None = None,
+    runs_bucket: str | None = None,
+) -> tuple[list[LayerURI], dict[str, Any]]:
+    """Reproject the ensemble-mean probability COG + emit the storm-ensemble layer.
+
+    Returns ``(layers, metrics)`` where ``layers[0]`` is the ensemble-mean
+    probability ``LandlabStormEnsembleLayerURI`` (role ``"primary"``) and
+    ``metrics`` carries the recharge-scenario table (the composer turns it into
+    the susceptibility-vs-recharge chart) + the typed scalars.
+    """
+    import numpy as np
+
+    src = Path(field_cog_path)
+    field = _read_field_array(src)
+    block = (result or {}).get("landslide_storm_ensemble") if isinstance(result, dict) else None
+    block = block if isinstance(block, dict) else {}
+
+    active = np.isfinite(field)
+    va = field[active]
+    recomputed_unstable = (
+        float(np.count_nonzero(va >= UNSTABLE_PROBABILITY_THRESHOLD) / va.size)
+        if va.size
+        else 0.0
+    )
+    recomputed_mean = float(np.mean(va)) if va.size else 0.0
+
+    unstable = max(0.0, min(1.0, _pick_from_block(block, "unstable_area_fraction", recomputed_unstable)))
+    mean_pof = max(0.0, min(1.0, _pick_from_block(block, "mean_probability_of_failure", recomputed_mean)))
+    min_rech = max(0.0, _pick_from_block(block, "min_recharge_mm_day", 0.0))
+    max_rech = max(0.0, _pick_from_block(block, "max_recharge_mm_day", 0.0))
+    n_scen = int(_pick_from_block(block, "n_recharge_scenarios", 0.0))
+    slope = _pick_from_block(block, "sensitivity_slope", 0.0)
+    scenarios = block.get("recharge_scenarios") or []
+
+    dst_cog, bbox = _reproject_field_cog_4326(src)
+    try:
+        uri = _upload_cog_to_runs_bucket(
+            dst_cog, run_id, runs_bucket, dest_filename="landlab_storm_ensemble.tif"
+        )
+    finally:
+        _safe_unlink(dst_cog)
+
+    primary = LandlabStormEnsembleLayerURI(
+        layer_id=f"landlab-storm-ensemble-{run_id}",
+        name="Ensemble-mean landslide susceptibility",
+        layer_type="raster",
+        uri=uri,
+        style_preset=LANDSLIDE_STYLE_PRESET,
+        role="primary",
+        units="probability",
+        bbox=bbox,
+        unstable_area_fraction=unstable,
+        mean_probability_of_failure=mean_pof,
+        min_recharge_mm_day=min_rech,
+        max_recharge_mm_day=max_rech,
+        n_recharge_scenarios=max(n_scen, 1),
+        sensitivity_slope=slope,
+    )
+    metrics = {
+        "analysis": "landslide_storm_ensemble",
+        "crs": "EPSG:4326",
+        "unstable_area_fraction": unstable,
+        "mean_probability_of_failure": mean_pof,
+        "min_recharge_mm_day": min_rech,
+        "max_recharge_mm_day": max_rech,
+        "sensitivity_slope": slope,
+        "recharge_scenarios": scenarios,
+    }
+    logger.info(
+        "postprocess_landlab_storm_ensemble run_id=%s n_scenarios=%d unstable=%.4f "
+        "recharge=[%.1f,%.1f] slope=%.5f uri=%s",
+        run_id, n_scen, unstable, min_rech, max_rech, slope, uri,
+    )
+    return [primary], metrics
+
+
+# --------------------------------------------------------------------------- #
+# overland_flow_timeseries postprocess: peak-depth primary + per-frame animation
+# layers + the max-depth-cell hydrograph chart.
+# --------------------------------------------------------------------------- #
+def build_overland_hydrograph_chart_spec(
+    series: list[dict[str, Any]],
+) -> dict[str, Any] | None:
+    """Build the depth-vs-time hydrograph chart at the max-depth cell (Vega-Lite).
+
+    A line of surface-water depth against elapsed seconds at the cell that reached
+    the peak depth. Returns ``None`` when the series is empty. Pure."""
+    if not series or len(series) < 2:
+        return None
+    values = [
+        {
+            "time_s": float(p.get("time_s", 0.0)),
+            "depth_m": float(p.get("depth_m", 0.0)),
+        }
+        for p in series
+    ]
+    return {
+        "$schema": "https://vega.github.io/schema/vega-lite/v5.json",
+        "data": {"values": values},
+        "mark": {"type": "line", "point": True, "color": "#1f5fbf"},
+        "encoding": {
+            "x": {"field": "time_s", "type": "quantitative", "title": "time (s)"},
+            "y": {
+                "field": "depth_m",
+                "type": "quantitative",
+                "title": "surface-water depth (m)",
+            },
+            "tooltip": [
+                {"field": "time_s", "type": "quantitative", "format": ".0f"},
+                {"field": "depth_m", "type": "quantitative", "format": ".4f"},
+            ],
+        },
+    }
+
+
+def postprocess_landlab_overland_timeseries(
+    field_cog_path: str | Path,
+    *,
+    run_id: str,
+    result: dict[str, Any] | None = None,
+    frame_cogs_by_token: dict[str, str] | None = None,
+    runs_bucket: str | None = None,
+) -> tuple[list[LayerURI], dict[str, Any]]:
+    """Reproject the peak-depth COG + emit the peak layer + per-frame animation layers.
+
+    ``frame_cogs_by_token`` maps ``depth_step_NN`` -> local COG path (the composer
+    downloads them alongside the peak field). Each frame is reprojected to 4326,
+    uploaded, and emitted as a time-stepped animation LayerURI carrying the web
+    scrubber ``step N`` naming. Returns ``(layers, metrics)`` where ``layers[0]``
+    is the peak-depth primary and ``layers[1:]`` the ordered frames.
+    """
+    import numpy as np
+
+    from trid3nt_server.agent.workflows.shared.frames import (
+        frame_dest_filename,
+        frame_layer_id,
+        frame_name,
+        peak_layer_id,
+        peak_layer_name,
+    )
+
+    src = Path(field_cog_path)
+    field = _read_field_array(src)
+    block = (result or {}).get("overland_flow_timeseries") if isinstance(result, dict) else None
+    block = block if isinstance(block, dict) else {}
+
+    active = np.isfinite(field)
+    va = field[active]
+    recomputed_wet = (
+        float(np.count_nonzero(va >= OVERLAND_WET_DEPTH_M) / va.size) if va.size else 0.0
+    )
+    recomputed_max = float(np.max(va)) if va.size else 0.0
+
+    wet_frac = max(0.0, min(1.0, _pick_from_block(block, "wet_area_fraction", recomputed_wet)))
+    max_depth = max(0.0, _pick_from_block(block, "max_depth_m", recomputed_max))
+    time_to_peak = max(0.0, _pick_from_block(block, "time_to_peak_s", 0.0))
+    series = block.get("max_cell_series") or []
+
+    dst_cog, bbox = _reproject_field_cog_4326(src)
+    try:
+        peak_uri = _upload_cog_to_runs_bucket(
+            dst_cog, run_id, runs_bucket, dest_filename="landlab_overland_peak.tif"
+        )
+    finally:
+        _safe_unlink(dst_cog)
+
+    stem = "landlab-overland-depth"
+    quantity_label = "Overland depth"
+
+    # --- Per-frame animation layers (ordered by the depth_step token index) ---
+    frame_layers: list[LayerURI] = []
+    tokens = sorted((frame_cogs_by_token or {}).keys())
+    frame_no = 0
+    for tok in tokens:
+        local = (frame_cogs_by_token or {}).get(tok)
+        if not local or not Path(local).exists():
+            continue
+        frame_no += 1
+        try:
+            dst_frame, _fb = _reproject_field_cog_4326(Path(local))
+        except PostprocessLandlabError as exc:
+            logger.warning("overland frame %s reproject failed: %s", tok, exc)
+            continue
+        try:
+            frame_uri = _upload_cog_to_runs_bucket(
+                dst_frame,
+                run_id,
+                runs_bucket,
+                dest_filename=frame_dest_filename(stem.replace("-", "_"), frame_no),
+            )
+        finally:
+            _safe_unlink(dst_frame)
+        frame_layers.append(
+            LayerURI(
+                layer_id=frame_layer_id(stem, frame_no, run_id),
+                name=frame_name(frame_no, quantity_label),
+                layer_type="raster",
+                uri=frame_uri,
+                style_preset=OVERLAND_STYLE_PRESET,
+                role="context",
+                units="meters",
+                bbox=bbox,
+            )
+        )
+
+    primary = LandlabOverlandTimeseriesLayerURI(
+        layer_id=peak_layer_id(stem, run_id),
+        name=peak_layer_name(quantity_label),
+        layer_type="raster",
+        uri=peak_uri,
+        style_preset=OVERLAND_STYLE_PRESET,
+        role="primary",
+        units="meters",
+        bbox=bbox,
+        wet_area_fraction=wet_frac,
+        max_depth_m=max_depth,
+        n_frames=len(frame_layers),
+        time_to_peak_s=time_to_peak,
+    )
+    # A single frame can never form a web scrubber group; drop a lone frame.
+    if len(frame_layers) < 2:
+        frame_layers = []
+        primary = primary.model_copy(update={"n_frames": 0})
+
+    layers: list[LayerURI] = [primary, *frame_layers]
+    metrics = {
+        "analysis": "overland_flow_timeseries",
+        "crs": "EPSG:4326",
+        "wet_area_fraction": wet_frac,
+        "max_depth_m": max_depth,
+        "time_to_peak_s": time_to_peak,
+        "n_frames": len(frame_layers),
+        "max_cell_series": series,
+    }
+    logger.info(
+        "postprocess_landlab_overland_timeseries run_id=%s max_depth=%.4f m "
+        "frames=%d uri=%s",
+        run_id, max_depth, len(frame_layers), peak_uri,
+    )
+    return layers, metrics
+
+
+# --------------------------------------------------------------------------- #
+# dem_pit_fill postprocess: fill-depth conditioning raster.
+# --------------------------------------------------------------------------- #
+def postprocess_landlab_dem_conditioning(
+    field_cog_path: str | Path,
+    *,
+    run_id: str,
+    result: dict[str, Any] | None = None,
+    runs_bucket: str | None = None,
+) -> tuple[list[LayerURI], dict[str, Any]]:
+    """Reproject the fill-depth COG + emit the DEM-conditioning layer.
+
+    Returns ``(layers, metrics)`` where ``layers[0]`` is the fill-depth
+    ``LandlabDemConditioningLayerURI`` (role ``"primary"``).
+    """
+    import numpy as np
+
+    src = Path(field_cog_path)
+    field = _read_field_array(src)
+    block = (result or {}).get("dem_pit_fill") if isinstance(result, dict) else None
+    block = block if isinstance(block, dict) else {}
+
+    active = np.isfinite(field)
+    va = field[active]
+    recomputed_max = float(np.max(va)) if va.size else 0.0
+    recomputed_filled = (
+        float(np.count_nonzero(va >= 1e-3) / va.size) if va.size else 0.0
+    )
+
+    max_fill = max(0.0, _pick_from_block(block, "max_fill_depth_m", recomputed_max))
+    filled_frac = max(0.0, min(1.0, _pick_from_block(block, "filled_area_fraction", recomputed_filled)))
+    n_dep = int(_pick_from_block(block, "n_depressions", 0.0))
+
+    dst_cog, bbox = _reproject_field_cog_4326(src)
+    try:
+        uri = _upload_cog_to_runs_bucket(
+            dst_cog, run_id, runs_bucket, dest_filename="landlab_fill_depth.tif"
+        )
+    finally:
+        _safe_unlink(dst_cog)
+
+    primary = LandlabDemConditioningLayerURI(
+        layer_id=f"landlab-fill-depth-{run_id}",
+        name="DEM fill depth",
+        layer_type="raster",
+        uri=uri,
+        style_preset=FILL_DEPTH_STYLE_PRESET,
+        role="primary",
+        units="meters",
+        bbox=bbox,
+        max_fill_depth_m=max_fill,
+        filled_area_fraction=filled_frac,
+        n_depressions=max(n_dep, 0),
+    )
+    metrics = {
+        "analysis": "dem_pit_fill",
+        "crs": "EPSG:4326",
+        "max_fill_depth_m": max_fill,
+        "filled_area_fraction": filled_frac,
+        "n_depressions": n_dep,
+    }
+    logger.info(
+        "postprocess_landlab_dem_conditioning run_id=%s max_fill=%.3f m "
+        "filled_frac=%.4f n_depressions=%d uri=%s",
+        run_id, max_fill, filled_frac, n_dep, uri,
+    )
+    return [primary], metrics
+
+
+# --------------------------------------------------------------------------- #
+# lake_mapping postprocess: lake-depth raster + lake-extent vector.
+# --------------------------------------------------------------------------- #
+def postprocess_landlab_lake_mapping(
+    field_cog_path: str | Path,
+    *,
+    run_id: str,
+    result: dict[str, Any] | None = None,
+    extent_cog_path: str | Path | None = None,
+    runs_bucket: str | None = None,
+) -> tuple[list[LayerURI], dict[str, Any]]:
+    """Reproject the lake-depth COG + emit the lake-depth layer + lake-extent vector.
+
+    Returns ``(layers, metrics)`` where ``layers[0]`` is the lake-depth
+    ``LandlabLakeMappingLayerURI`` (role ``"primary"``) and ``layers[1:]`` the
+    lake-extent vector when present.
+    """
+    import numpy as np
+
+    src = Path(field_cog_path)
+    field = _read_field_array(src)
+    block = (result or {}).get("lake_mapping") if isinstance(result, dict) else None
+    block = block if isinstance(block, dict) else {}
+
+    fin = field[np.isfinite(field)]
+    recomputed_max = float(np.max(fin)) if fin.size else 0.0
+
+    n_lakes = int(_pick_from_block(block, "n_lakes", 0.0))
+    total_area = max(0.0, _pick_from_block(block, "total_lake_area_km2", 0.0))
+    total_vol = max(0.0, _pick_from_block(block, "total_lake_volume_m3", 0.0))
+    max_depth = max(0.0, _pick_from_block(block, "max_lake_depth_m", recomputed_max))
+
+    dst_cog, bbox = _reproject_field_cog_4326(src)
+    try:
+        uri = _upload_cog_to_runs_bucket(
+            dst_cog, run_id, runs_bucket, dest_filename="landlab_lake_depth.tif"
+        )
+    finally:
+        _safe_unlink(dst_cog)
+
+    primary = LandlabLakeMappingLayerURI(
+        layer_id=f"landlab-lake-depth-{run_id}",
+        name="Lake depth",
+        layer_type="raster",
+        uri=uri,
+        style_preset=LAKE_DEPTH_STYLE_PRESET,
+        role="primary",
+        units="meters",
+        bbox=bbox,
+        n_lakes=max(n_lakes, 0),
+        total_lake_area_km2=total_area,
+        total_lake_volume_m3=total_vol,
+        max_lake_depth_m=max_depth,
+    )
+    layers: list[LayerURI] = [primary]
+
+    if extent_cog_path is not None:
+        collection = _vectorize_mask_cog(Path(extent_cog_path), property_name="lake")
+        if collection is not None:
+            geojson_uri = _upload_geojson_to_runs_bucket(
+                collection, run_id, runs_bucket, dest_filename="landlab_lake_extent.geojson"
+            )
+            layers.append(
+                LayerURI(
+                    layer_id=f"landlab-lake-extent-{run_id}",
+                    name="Lake extent",
+                    layer_type="vector",
+                    uri=geojson_uri,
+                    style_preset="mesh_grid",
+                    role="context",
+                    bbox=bbox,
+                )
+            )
+
+    metrics = {
+        "analysis": "lake_mapping",
+        "crs": "EPSG:4326",
+        "n_lakes": n_lakes,
+        "total_lake_area_km2": total_area,
+        "total_lake_volume_m3": total_vol,
+        "max_lake_depth_m": max_depth,
+    }
+    logger.info(
+        "postprocess_landlab_lake_mapping run_id=%s n_lakes=%d area=%.4g km2 "
+        "max_depth=%.3f m extent_vector=%s uri=%s",
+        run_id, n_lakes, total_area, max_depth, len(layers) > 1, uri,
+    )
+    return layers, metrics
+
+
+# --------------------------------------------------------------------------- #
+# hacks_law postprocess: drainage-area backdrop + basin vector + log-log chart.
+# --------------------------------------------------------------------------- #
+def build_hacks_law_chart_spec(
+    scatter: list[dict[str, Any]],
+    *,
+    exponent: float,
+    coefficient: float,
+) -> dict[str, Any] | None:
+    """Build the Hack's-law log-log scatter chart (Vega-Lite).
+
+    Channel-length vs drainage-area points on log-log axes plus the fitted
+    ``L = C * A**h`` line, so the fitted exponent is visible against the classic
+    ~0.5-0.6. Returns ``None`` when the scatter is empty. Pure."""
+    if not scatter or len(scatter) < 3:
+        return None
+    pts = [
+        {
+            "area_m2": float(p.get("area_m2", 0.0)),
+            "length_m": float(p.get("length_m", 0.0)),
+        }
+        for p in scatter
+        if float(p.get("area_m2", 0.0)) > 0.0 and float(p.get("length_m", 0.0)) > 0.0
+    ]
+    if len(pts) < 3:
+        return None
+    areas = [p["area_m2"] for p in pts]
+    a_min, a_max = min(areas), max(areas)
+    c = max(float(coefficient), 1e-12)
+    h = float(exponent)
+    fit = [
+        {"area_m2": a_min, "length_m": c * (a_min ** h)},
+        {"area_m2": a_max, "length_m": c * (a_max ** h)},
+    ]
+    return {
+        "$schema": "https://vega.github.io/schema/vega-lite/v5.json",
+        "layer": [
+            {
+                "data": {"values": pts},
+                "mark": {"type": "point", "filled": True, "color": "#1f5fbf", "opacity": 0.5},
+                "encoding": {
+                    "x": {
+                        "field": "area_m2",
+                        "type": "quantitative",
+                        "scale": {"type": "log"},
+                        "title": "drainage area A (m^2)",
+                    },
+                    "y": {
+                        "field": "length_m",
+                        "type": "quantitative",
+                        "scale": {"type": "log"},
+                        "title": "flow-path length L (m)",
+                    },
+                },
+            },
+            {
+                "data": {"values": fit},
+                "mark": {"type": "line", "color": "#b5442f"},
+                "encoding": {
+                    "x": {"field": "area_m2", "type": "quantitative", "scale": {"type": "log"}},
+                    "y": {"field": "length_m", "type": "quantitative", "scale": {"type": "log"}},
+                },
+            },
+        ],
+    }
+
+
+def postprocess_landlab_hacks_law(
+    field_cog_path: str | Path,
+    *,
+    run_id: str,
+    result: dict[str, Any] | None = None,
+    basin_cog_path: str | Path | None = None,
+    runs_bucket: str | None = None,
+) -> tuple[list[LayerURI], dict[str, Any]]:
+    """Reproject the drainage-area COG + emit the Hack's-law diagnostic layers.
+
+    Returns ``(layers, metrics)`` where ``layers[0]`` is the drainage-area
+    ``LandlabHacksLawLayerURI`` (role ``"primary"``), ``layers[1:]`` the fitted
+    basin vector when present, and ``metrics`` carries the scatter + exponent (the
+    composer turns them into the log-log chart).
+    """
+    src = Path(field_cog_path)
+    _field = _read_field_array(src)
+    block = (result or {}).get("hacks_law") if isinstance(result, dict) else None
+    block = block if isinstance(block, dict) else {}
+
+    exponent = max(0.0, _pick_from_block(block, "hack_exponent", 0.0))
+    coefficient = max(0.0, _pick_from_block(block, "hack_coefficient", 0.0))
+    largest_area = max(0.0, _pick_from_block(block, "largest_basin_area_km2", 0.0))
+    n_basins = int(_pick_from_block(block, "n_basins", 0.0))
+    scatter = block.get("scatter") or []
+
+    dst_cog, bbox = _reproject_field_cog_4326(src)
+    try:
+        uri = _upload_cog_to_runs_bucket(
+            dst_cog, run_id, runs_bucket, dest_filename="landlab_hacks_drainage_area.tif"
+        )
+    finally:
+        _safe_unlink(dst_cog)
+
+    primary = LandlabHacksLawLayerURI(
+        layer_id=f"landlab-hacks-law-{run_id}",
+        name="Drainage area (Hack diagnostic)",
+        layer_type="raster",
+        uri=uri,
+        style_preset=DRAINAGE_AREA_STYLE_PRESET,
+        role="primary",
+        units="m^2",
+        bbox=bbox,
+        hack_exponent=exponent,
+        hack_coefficient=coefficient,
+        largest_basin_area_km2=largest_area,
+        n_basins=max(n_basins, 0),
+    )
+    layers: list[LayerURI] = [primary]
+
+    if basin_cog_path is not None:
+        collection = _vectorize_mask_cog(Path(basin_cog_path), property_name="basin")
+        if collection is not None:
+            geojson_uri = _upload_geojson_to_runs_bucket(
+                collection, run_id, runs_bucket, dest_filename="landlab_hacks_basin.geojson"
+            )
+            layers.append(
+                LayerURI(
+                    layer_id=f"landlab-hacks-basin-{run_id}",
+                    name="Largest fitted basin",
+                    layer_type="vector",
+                    uri=geojson_uri,
+                    style_preset="mesh_grid",
+                    role="context",
+                    bbox=bbox,
+                )
+            )
+
+    metrics = {
+        "analysis": "hacks_law",
+        "crs": "EPSG:4326",
+        "hack_exponent": exponent,
+        "hack_coefficient": coefficient,
+        "largest_basin_area_km2": largest_area,
+        "n_basins": n_basins,
+        "scatter": scatter,
+    }
+    logger.info(
+        "postprocess_landlab_hacks_law run_id=%s exponent=%.4f n_basins=%d "
+        "basin_vector=%s uri=%s",
+        run_id, exponent, n_basins, len(layers) > 1, uri,
+    )
+    return layers, metrics
+
+
+# --------------------------------------------------------------------------- #
+# hand postprocess: HAND raster + channel-network vector.
+# --------------------------------------------------------------------------- #
+def postprocess_landlab_hand(
+    field_cog_path: str | Path,
+    *,
+    run_id: str,
+    result: dict[str, Any] | None = None,
+    channel_cog_path: str | Path | None = None,
+    runs_bucket: str | None = None,
+) -> tuple[list[LayerURI], dict[str, Any]]:
+    """Reproject the HAND COG + emit the HAND layer + channel-network vector.
+
+    Returns ``(layers, metrics)`` where ``layers[0]`` is the HAND
+    ``LandlabHandLayerURI`` (role ``"primary"``) and ``layers[1:]`` the channel
+    network vector when present.
+    """
+    import numpy as np
+
+    src = Path(field_cog_path)
+    field = _read_field_array(src)
+    block = (result or {}).get("hand") if isinstance(result, dict) else None
+    block = block if isinstance(block, dict) else {}
+
+    active = np.isfinite(field)
+    va = field[active]
+    recomputed_mean = float(np.mean(va)) if va.size else 0.0
+    recomputed_max = float(np.max(va)) if va.size else 0.0
+
+    mean_h = max(0.0, _pick_from_block(block, "mean_hand_m", recomputed_mean))
+    max_h = max(0.0, _pick_from_block(block, "max_hand_m", recomputed_max))
+    chan_frac = max(0.0, min(1.0, _pick_from_block(block, "channel_area_fraction", 0.0)))
+    lowland_frac = max(0.0, min(1.0, _pick_from_block(block, "lowland_area_fraction", 0.0)))
+
+    dst_cog, bbox = _reproject_field_cog_4326(src)
+    try:
+        uri = _upload_cog_to_runs_bucket(
+            dst_cog, run_id, runs_bucket, dest_filename="landlab_hand.tif"
+        )
+    finally:
+        _safe_unlink(dst_cog)
+
+    primary = LandlabHandLayerURI(
+        layer_id=f"landlab-hand-{run_id}",
+        name="Height above nearest drainage",
+        layer_type="raster",
+        uri=uri,
+        style_preset=HAND_STYLE_PRESET,
+        role="primary",
+        units="meters",
+        bbox=bbox,
+        mean_hand_m=mean_h,
+        max_hand_m=max_h,
+        channel_area_fraction=chan_frac,
+        lowland_area_fraction=lowland_frac,
+    )
+    layers: list[LayerURI] = [primary]
+
+    if channel_cog_path is not None:
+        collection = _vectorize_mask_cog(Path(channel_cog_path), property_name="channel")
+        if collection is not None:
+            geojson_uri = _upload_geojson_to_runs_bucket(
+                collection, run_id, runs_bucket, dest_filename="landlab_hand_channel.geojson"
+            )
+            layers.append(
+                LayerURI(
+                    layer_id=f"landlab-hand-channel-{run_id}",
+                    name="Channel network",
+                    layer_type="vector",
+                    uri=geojson_uri,
+                    style_preset="mesh_grid",
+                    role="context",
+                    bbox=bbox,
+                )
+            )
+
+    metrics = {
+        "analysis": "hand",
+        "crs": "EPSG:4326",
+        "mean_hand_m": mean_h,
+        "max_hand_m": max_h,
+        "channel_area_fraction": chan_frac,
+        "lowland_area_fraction": lowland_frac,
+    }
+    logger.info(
+        "postprocess_landlab_hand run_id=%s mean_hand=%.3f m max_hand=%.3f m "
+        "channel_frac=%.4f channel_vector=%s uri=%s",
+        run_id, mean_h, max_h, chan_frac, len(layers) > 1, uri,
     )
     return layers, metrics

@@ -1,0 +1,10 @@
+# Template routing phrasings: engine templates are ordinary retrieval-pool tools
+# walked into the main index.
+landlab_dem_conditioning:
+- is this DEM routable and where did it need pit filling
+- map the sink-fill depth applied to condition this DEM
+- where are the closed depressions in this terrain that block flow routing
+- DEM conditioning fill-depth raster over this AOI
+- how much did the DEM have to be filled to remove sinks
+- pit-fill depth map before hydrologic routing
+- find and quantify depressions filled in this elevation model

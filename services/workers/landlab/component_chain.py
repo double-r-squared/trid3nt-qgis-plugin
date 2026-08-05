@@ -74,6 +74,14 @@ DEFAULT_GREEN_AMPT_SOIL_TYPE: str = "sandy loam"
 #: a thin sheet is huge and would infiltrate the whole storm in one leap).
 GREEN_AMPT_MIN_STEPS: int = 40
 
+#: Default HAND lowland cutoff (m): cells within this height above the nearest
+#: drainage are the near-channel / flood-prone lowland fraction narration scalar.
+DEFAULT_HAND_LOWLAND_THRESHOLD_M: float = 5.0
+
+#: A fill depth (m) at/above this counts a cell as "filled" for the pit-fill
+#: conditioning fraction (below it is numerical noise from the fill incline).
+FILL_DEPTH_EPS_M: float = 1.0e-3
+
 #: Default channel-head drainage-area threshold, expressed as a MULTIPLE of the
 #: grid CELL AREA (a channel head is conventionally reached once the contributing
 #: area exceeds a few hundred cells). Cells whose drainage_area meets this are the
@@ -171,10 +179,24 @@ def run_component_chain(
         return _run_flow_accumulation(dem, resolution_m, build_spec)
     if analysis == "green_ampt_overland_flow":
         return _run_green_ampt_overland_flow(dem, resolution_m, build_spec)
+    if analysis == "landslide_storm_ensemble":
+        return _run_landslide_storm_ensemble(dem, resolution_m, build_spec)
+    if analysis == "overland_flow_timeseries":
+        return _run_overland_flow_timeseries(dem, resolution_m, build_spec)
+    if analysis == "dem_pit_fill":
+        return _run_dem_pit_fill(dem, resolution_m, build_spec)
+    if analysis == "lake_mapping":
+        return _run_lake_mapping(dem, resolution_m, build_spec)
+    if analysis == "hacks_law":
+        return _run_hacks_law(dem, resolution_m, build_spec)
+    if analysis == "hand":
+        return _run_hand(dem, resolution_m, build_spec)
     raise ValueError(
-        f"unknown Landlab analysis {analysis!r} (expected "
-        f"'landslide_probability', 'overland_flow', 'flow_accumulation' or "
-        f"'green_ampt_overland_flow')"
+        f"unknown Landlab analysis {analysis!r} (expected one of "
+        "'landslide_probability', 'overland_flow', 'flow_accumulation', "
+        "'green_ampt_overland_flow', 'landslide_storm_ensemble', "
+        "'overland_flow_timeseries', 'dem_pit_fill', 'lake_mapping', "
+        "'hacks_law', 'hand')"
     )
 
 
@@ -926,4 +948,667 @@ def _run_green_ampt_overland_flow(
             "n_steps": steps,
         },
         secondary_fields=secondary,
+    )
+
+
+# --------------------------------------------------------------------------- #
+# landslide_storm_ensemble: the infinite-slope LandslideProbability chain swept
+# across storm/recharge scenarios (PrecipitationDistribution draws).
+# --------------------------------------------------------------------------- #
+def _set_landslide_soil_fields(grid: Any, spec: dict[str, Any]) -> None:
+    """Broadcast the LandslideProbability soil input fields onto every node.
+
+    Sets the EXACT fields the component reads (transmissivity, saturated hydraulic
+    conductivity, density, internal-friction angle, thickness, and the triangular
+    cohesion triple), from the build_spec demo values.
+    """
+    import numpy as np
+
+    n_nodes = grid.number_of_nodes
+    transmissivity = float(spec.get("soil_transmissivity_m2_day", 20.0))
+    sat_hyd_cond = float(spec.get("soil_saturated_hydraulic_conductivity_m_day", 10.0))
+    cohesion_pa = float(spec.get("soil_cohesion_pa", 10_000.0))
+    cohesion_scatter_pa = float(spec.get("soil_cohesion_scatter_pa", 0.25 * cohesion_pa))
+    cohesion_min_pa = max(cohesion_pa - cohesion_scatter_pa, 0.0)
+    cohesion_max_pa = cohesion_pa + cohesion_scatter_pa
+    friction_deg = float(spec.get("soil_internal_friction_deg", 35.0))
+    density = float(spec.get("soil_density_kg_m3", 2000.0))
+    thickness = float(spec.get("soil_thickness_m", 1.0))
+    for name, values in (
+        ("soil__transmissivity", np.full(n_nodes, transmissivity)),
+        ("soil__saturated_hydraulic_conductivity", np.full(n_nodes, sat_hyd_cond)),
+        ("soil__mode_total_cohesion", np.full(n_nodes, cohesion_pa)),
+        ("soil__minimum_total_cohesion", np.full(n_nodes, cohesion_min_pa)),
+        ("soil__maximum_total_cohesion", np.full(n_nodes, cohesion_max_pa)),
+        ("soil__internal_friction_angle", np.full(n_nodes, friction_deg)),
+        ("soil__density", np.full(n_nodes, density)),
+        ("soil__thickness", np.full(n_nodes, thickness)),
+    ):
+        grid.add_field(name, values, at="node", clobber=True)
+
+
+def _draw_recharge_scenarios(spec: dict[str, Any]) -> list[float]:
+    """Draw ``n_recharge_scenarios`` positive storm depths (mm) from a Poisson
+    ``PrecipitationDistribution``; each is one triggering-recharge scenario
+    (mm/day pulse). Deterministic (fixed seed). Returns the sorted scenarios."""
+    from landlab.components import PrecipitationDistribution  # type: ignore
+
+    n = max(int(spec.get("n_recharge_scenarios", 8)), 2)
+    msd = float(spec.get("mean_storm_duration_hr", 2.0))
+    mid = float(spec.get("mean_interstorm_duration_hr", 48.0))
+    mdd = float(spec.get("mean_storm_depth_mm", 15.0))
+    seed = int(spec.get("random_seed", 1234))
+    pd = PrecipitationDistribution(
+        mean_storm_duration=msd,
+        mean_interstorm_duration=mid,
+        mean_storm_depth=mdd,
+        total_t=max(n, 2) * (msd + mid) * 8.0,
+        delta_t=1.0,
+        random_seed=seed,
+    )
+    # A physically meaningful triggering storm: drop degenerate near-zero draws
+    # (a Poisson depth ~ 0 mm/day recharge is not a scenario worth sweeping).
+    depth_floor = max(1.0, 0.05 * mdd)
+    depths: list[float] = []
+    guard = 0
+    while len(depths) < n and guard < n * 200:
+        pd.update()
+        d = float(pd.storm_depth)
+        if d >= depth_floor:
+            depths.append(d)
+        guard += 1
+    if not depths:
+        depths = [mdd]
+    return sorted(depths)
+
+
+def _run_landslide_storm_ensemble(
+    dem: Any, resolution_m: float, spec: dict[str, Any]
+) -> ChainResult:
+    """The infinite-slope landslide chain swept across a storm/recharge ensemble.
+
+    Builds the grid + FlowAccumulator slope/area + soil fields ONCE, then runs the
+    Monte-Carlo LandslideProbability component once per recharge scenario (drawn
+    from a PrecipitationDistribution). The primary field is the ENSEMBLE-MEAN
+    probability of failure; the per-scenario unstable-area fraction table drives
+    the susceptibility-vs-recharge sensitivity chart.
+    """
+    import numpy as np
+    from landlab.components import FlowAccumulator, LandslideProbability  # type: ignore
+
+    grid, nodata_mask, _z = _build_grid(dem, resolution_m)
+    nrows, ncols = np.asarray(dem).shape
+
+    director = _DIRECTOR_MAP.get(str(spec.get("flow_director", "D8")), "FlowDirectorD8")
+    fa = FlowAccumulator(
+        grid, flow_director=director, depression_finder="DepressionFinderAndRouter"
+    )
+    fa.run_one_step()
+    grid.add_field(
+        "topographic__slope",
+        np.asarray(grid.at_node["topographic__steepest_slope"], dtype="float64"),
+        at="node",
+        clobber=True,
+    )
+    cell_width = float(resolution_m)
+    grid.add_field(
+        "topographic__specific_contributing_area",
+        grid.at_node["drainage_area"] / max(cell_width, 1e-9),
+        at="node",
+        clobber=True,
+    )
+    _set_landslide_soil_fields(grid, spec)
+
+    n_mc = int(spec.get("n_monte_carlo", 250))
+    recharges = _draw_recharge_scenarios(spec)
+
+    prob_sum = np.zeros((nrows, ncols), dtype="float64")
+    table: list[dict[str, Any]] = []
+    for rech in recharges:
+        ls = LandslideProbability(
+            grid,
+            number_of_iterations=n_mc,
+            groundwater__recharge_distribution="uniform",
+            groundwater__recharge_min_value=max(rech * 0.5, 0.0),
+            groundwater__recharge_max_value=rech * 1.5,
+        )
+        ls.calculate_landslide_probability()
+        prob = np.asarray(
+            grid.at_node["landslide__probability_of_failure"], dtype="float64"
+        ).reshape(nrows, ncols)
+        prob_masked = prob.copy()
+        prob_masked[nodata_mask] = np.nan
+        active = np.isfinite(prob_masked)
+        va = prob_masked[active]
+        uf = (
+            float(np.count_nonzero(va >= UNSTABLE_PROBABILITY_THRESHOLD) / va.size)
+            if va.size
+            else 0.0
+        )
+        mp = float(np.mean(va)) if va.size else 0.0
+        table.append(
+            {
+                "recharge_mm_day": round(float(rech), 3),
+                "unstable_area_fraction": uf,
+                "mean_probability_of_failure": mp,
+            }
+        )
+        prob_sum += np.where(np.isfinite(prob_masked), prob_masked, 0.0)
+
+    mean_field = prob_sum / float(max(len(recharges), 1))
+    mean_field[nodata_mask] = np.nan
+    active = np.isfinite(mean_field)
+    va = mean_field[active]
+    unstable_frac = (
+        float(np.count_nonzero(va >= UNSTABLE_PROBABILITY_THRESHOLD) / va.size)
+        if va.size
+        else 0.0
+    )
+    mean_pof = float(np.mean(va)) if va.size else 0.0
+
+    rs = np.array([t["recharge_mm_day"] for t in table], dtype="float64")
+    us = np.array([t["unstable_area_fraction"] for t in table], dtype="float64")
+    slope = (
+        float(np.polyfit(rs, us, 1)[0])
+        if rs.size >= 2 and float(rs.max() - rs.min()) > 0.0
+        else 0.0
+    )
+
+    LOG.info(
+        "landlab storm-ensemble chain: n_scenarios=%d recharge=[%.1f,%.1f] mm/day "
+        "unstable_frac=%.4f slope=%.5f",
+        len(recharges),
+        float(min(recharges)),
+        float(max(recharges)),
+        unstable_frac,
+        slope,
+    )
+    return ChainResult(
+        field=mean_field,
+        analysis="landslide_storm_ensemble",
+        unstable_area_fraction=unstable_frac,
+        min_factor_of_safety=0.0,
+        mean_probability_of_failure=mean_pof,
+        output_field_name="landslide__probability_of_failure",
+        extra={
+            "recharge_scenarios": table,
+            "min_recharge_mm_day": float(min(recharges)),
+            "max_recharge_mm_day": float(max(recharges)),
+            "n_recharge_scenarios": len(recharges),
+            "sensitivity_slope": slope,
+        },
+    )
+
+
+# --------------------------------------------------------------------------- #
+# overland_flow_timeseries: the de Almeida OverlandFlow chain sampled at N
+# intervals so depth is written frame by frame (time-stepped animation output).
+# --------------------------------------------------------------------------- #
+#: Upper bound on time-step depth snapshots written by the worker (the composer
+#: subsamples again to the animation frame cap; this bounds worker COG count).
+_MAX_TIMESERIES_SNAPSHOTS: int = 48
+
+
+def _run_overland_flow_timeseries(
+    dem: Any, resolution_m: float, spec: dict[str, Any]
+) -> ChainResult:
+    """The de Almeida OverlandFlow chain writing depth at N intervals.
+
+    Steps OverlandFlow over the storm while snapshotting ``surface_water__depth``
+    every ``output_interval_s`` (subsampled to ``_MAX_TIMESERIES_SNAPSHOTS``). The
+    primary field is the PEAK depth; each snapshot is a secondary field
+    ``depth_step_NN`` the composer publishes as an animation frame; the
+    depth-vs-time series at the max-depth cell drives the hydrograph chart.
+    """
+    import numpy as np
+    from landlab.components import OverlandFlow  # type: ignore
+
+    grid, nodata_mask, _z = _build_grid(dem, resolution_m)
+    nrows, ncols = np.asarray(dem).shape
+    grid.add_zeros("surface_water__depth", at="node", clobber=True)
+
+    intensity_mm_hr = float(spec.get("rainfall_intensity_mm_hr", 50.0))
+    duration_hr = float(spec.get("storm_duration_hr", 2.0))
+    rain_ms = intensity_mm_hr / 1000.0 / 3600.0
+    duration_s = duration_hr * 3600.0
+    interval_s = float(spec.get("output_interval_s", 300.0))
+    # Bound the snapshot count: never finer than duration/_MAX so a long storm
+    # cannot balloon the frame count.
+    interval_s = max(interval_s, duration_s / float(_MAX_TIMESERIES_SNAPSHOTS))
+
+    of = OverlandFlow(grid, steep_slopes=True)
+
+    peak = np.zeros(grid.number_of_nodes, dtype="float64")
+    snapshots: list[tuple[float, Any]] = []
+    next_snap = interval_s
+    elapsed = 0.0
+    max_steps = int(spec.get("max_overland_steps", 4000))
+    steps = 0
+    while elapsed < duration_s and steps < max_steps:
+        # Cap the step to the snapshot interval so the animation resolves frame by
+        # frame (a near-dry sheet's stable CFL step is otherwise huge and would
+        # leap the whole storm in one step, collapsing the time series).
+        of.dt = min(
+            of.calc_time_step(), interval_s, max(duration_s - elapsed, 1e-3)
+        )
+        grid.at_node["surface_water__depth"][grid.core_nodes] += rain_ms * of.dt
+        of.overland_flow()
+        depth = np.asarray(grid.at_node["surface_water__depth"], dtype="float64")
+        peak = np.maximum(peak, depth)
+        elapsed += of.dt
+        steps += 1
+        if elapsed >= next_snap:
+            snap = depth.reshape(nrows, ncols).copy()
+            snap[nodata_mask] = np.nan
+            snapshots.append((elapsed, snap))
+            next_snap += interval_s
+    # Always keep a final snapshot at the storm end.
+    final = (
+        np.asarray(grid.at_node["surface_water__depth"], dtype="float64")
+        .reshape(nrows, ncols)
+        .copy()
+    )
+    final[nodata_mask] = np.nan
+    if not snapshots or snapshots[-1][0] < elapsed - 1e-6:
+        snapshots.append((elapsed, final))
+
+    peak_grid = peak.reshape(nrows, ncols)
+    peak_grid[nodata_mask] = np.nan
+
+    active = np.isfinite(peak_grid)
+    n_active = int(active.sum())
+    if n_active == 0:
+        wet_frac = 0.0
+        max_depth = 0.0
+        max_node_flat = 0
+    else:
+        wet_frac = float(
+            np.count_nonzero(peak_grid[active] >= OVERLAND_WET_DEPTH_M) / n_active
+        )
+        max_depth = float(np.nanmax(peak_grid))
+        max_node_flat = int(np.nanargmax(np.where(active, peak_grid, np.nan)))
+
+    # Depth at the max-depth cell over time + the frame time index.
+    series: list[dict[str, float]] = []
+    time_to_peak_s = 0.0
+    prev_v = -1.0
+    for t, snap in snapshots:
+        v = float(snap.flat[max_node_flat])
+        series.append({"time_s": round(float(t), 2), "depth_m": v})
+        if v > prev_v:
+            time_to_peak_s = float(t)
+            prev_v = v
+
+    secondary: dict[str, Any] = {}
+    for i, (_t, snap) in enumerate(snapshots, start=1):
+        secondary[f"depth_step_{i:02d}"] = snap
+
+    LOG.info(
+        "landlab overland-timeseries chain: steps=%d frames=%d max_depth=%.4f m "
+        "interval=%.1fs",
+        steps,
+        len(snapshots),
+        max_depth,
+        interval_s,
+    )
+    return ChainResult(
+        field=peak_grid,
+        analysis="overland_flow_timeseries",
+        unstable_area_fraction=wet_frac,
+        min_factor_of_safety=max_depth,
+        mean_probability_of_failure=0.0,
+        output_field_name="surface_water__depth",
+        extra={
+            "frame_times_s": [round(float(t), 2) for t, _s in snapshots],
+            "max_cell_series": series,
+            "max_depth_m": max_depth,
+            "time_to_peak_s": time_to_peak_s,
+            "n_frames": len(snapshots),
+            "output_interval_s": interval_s,
+        },
+        secondary_fields=secondary,
+    )
+
+
+# --------------------------------------------------------------------------- #
+# dem_pit_fill + lake_mapping: shared LakeMapperBarnes plumbing.
+# --------------------------------------------------------------------------- #
+def _run_lakemapper(
+    dem: Any, resolution_m: float, spec: dict[str, Any]
+) -> tuple[Any, Any, Any, Any]:
+    """Run FlowAccumulator + LakeMapperBarnes on a fresh grid.
+
+    Returns ``(grid, nodata_mask, lmb, fill_depth_2d)`` where ``fill_depth_2d`` is
+    the ``(H, W)`` per-cell fill depth (fill_surface - topographic elevation),
+    NaN-masked on closed cells. The LakeMapperBarnes carries the lake properties
+    (``lake_map`` / ``lake_depths`` / ``lake_areas`` / ``lake_volumes`` /
+    ``number_of_lakes``).
+    """
+    import numpy as np
+    from landlab.components import FlowAccumulator, LakeMapperBarnes  # type: ignore
+
+    grid, nodata_mask, _z = _build_grid(dem, resolution_m)
+    nrows, ncols = np.asarray(dem).shape
+    grid.add_zeros("water__fill_surface", at="node", clobber=True)
+    grid.at_node["water__fill_surface"][:] = grid.at_node["topographic__elevation"]
+    fa = FlowAccumulator(grid, flow_director="D8")
+    fa.run_one_step()
+    fill_flat = bool(spec.get("fill_flat", True))
+    lmb = LakeMapperBarnes(
+        grid,
+        method="D8",
+        fill_flat=fill_flat,
+        surface="topographic__elevation",
+        fill_surface="water__fill_surface",
+        redirect_flow_steepest_descent=True,
+        reaccumulate_flow=True,
+        track_lakes=True,
+    )
+    lmb.run_one_step()
+    fill_depth = (
+        grid.at_node["water__fill_surface"] - grid.at_node["topographic__elevation"]
+    ).reshape(nrows, ncols)
+    fill_depth = np.where(fill_depth > 0.0, fill_depth, 0.0)
+    fill_depth[nodata_mask] = np.nan
+    return grid, nodata_mask, lmb, fill_depth
+
+
+def _run_dem_pit_fill(
+    dem: Any, resolution_m: float, spec: dict[str, Any]
+) -> ChainResult:
+    """The DEM pit-fill conditioning chain (LakeMapperBarnes).
+
+    The primary field is the per-cell FILL DEPTH (metres the DEM had to rise to
+    become routable). Answers where a DEM needed filling before it can route flow.
+    """
+    import numpy as np
+
+    _grid, _nodata_mask, lmb, fill_depth = _run_lakemapper(dem, resolution_m, spec)
+
+    active = np.isfinite(fill_depth)
+    va = fill_depth[active]
+    max_fill = float(np.max(va)) if va.size else 0.0
+    filled_frac = (
+        float(np.count_nonzero(va >= FILL_DEPTH_EPS_M) / va.size) if va.size else 0.0
+    )
+    n_dep = int(lmb.number_of_lakes)
+
+    LOG.info(
+        "landlab dem-pit-fill chain: max_fill=%.3f m filled_frac=%.4f n_depressions=%d",
+        max_fill,
+        filled_frac,
+        n_dep,
+    )
+    return ChainResult(
+        field=fill_depth,
+        analysis="dem_pit_fill",
+        unstable_area_fraction=filled_frac,
+        min_factor_of_safety=max_fill,
+        mean_probability_of_failure=0.0,
+        output_field_name="dem_fill_depth",
+        extra={
+            "max_fill_depth_m": max_fill,
+            "filled_area_fraction": filled_frac,
+            "n_depressions": n_dep,
+        },
+    )
+
+
+def _run_lake_mapping(
+    dem: Any, resolution_m: float, spec: dict[str, Any]
+) -> ChainResult:
+    """The lake extent + depth mapping chain (LakeMapperBarnes, lake tracking on).
+
+    The primary field is the per-cell LAKE DEPTH within mapped lakes; the lake
+    extent mask is a secondary field the composer vectorizes.
+    """
+    import numpy as np
+
+    grid, nodata_mask, lmb, _fill = _run_lakemapper(dem, resolution_m, spec)
+    nrows, ncols = np.asarray(dem).shape
+
+    lake_map = np.asarray(lmb.lake_map, dtype="float64").reshape(nrows, ncols)
+    lake_depth = np.asarray(lmb.lake_depths, dtype="float64").reshape(nrows, ncols)
+    in_lake = lake_map >= 0.0
+    depth = np.where(in_lake, lake_depth, np.nan)
+    depth[nodata_mask] = np.nan
+    extent = np.where(in_lake, 1.0, np.nan)
+    extent[nodata_mask] = np.nan
+
+    n_lakes = int(lmb.number_of_lakes)
+    areas = np.asarray(lmb.lake_areas, dtype="float64") if n_lakes > 0 else np.array([])
+    vols = np.asarray(lmb.lake_volumes, dtype="float64") if n_lakes > 0 else np.array([])
+    total_area_km2 = float(np.sum(areas)) / 1e6 if areas.size else 0.0
+    total_vol_m3 = float(np.sum(vols)) if vols.size else 0.0
+    fin = depth[np.isfinite(depth)]
+    max_lake_depth = float(np.max(fin)) if fin.size else 0.0
+
+    n_active = int(np.count_nonzero(~nodata_mask))
+    lake_frac = (
+        float(np.count_nonzero(in_lake & ~nodata_mask) / n_active)
+        if n_active
+        else 0.0
+    )
+
+    LOG.info(
+        "landlab lake-mapping chain: n_lakes=%d area=%.4g km2 vol=%.4g m3 "
+        "max_depth=%.3f m",
+        n_lakes,
+        total_area_km2,
+        total_vol_m3,
+        max_lake_depth,
+    )
+    return ChainResult(
+        field=depth,
+        analysis="lake_mapping",
+        unstable_area_fraction=lake_frac,
+        min_factor_of_safety=max_lake_depth,
+        mean_probability_of_failure=0.0,
+        output_field_name="lake_depth",
+        extra={
+            "n_lakes": n_lakes,
+            "total_lake_area_km2": total_area_km2,
+            "total_lake_volume_m3": total_vol_m3,
+            "max_lake_depth_m": max_lake_depth,
+        },
+        secondary_fields={"lake_extent": extent},
+    )
+
+
+# --------------------------------------------------------------------------- #
+# hacks_law: HackCalculator basin length-area scaling diagnostic.
+# --------------------------------------------------------------------------- #
+def _run_hacks_law(
+    dem: Any, resolution_m: float, spec: dict[str, Any]
+) -> ChainResult:
+    """The Hack's-law basin-scaling diagnostic (HackCalculator).
+
+    Runs FlowAccumulator, fits ``L = C * A**h`` per basin via a ChannelProfiler
+    (HackCalculator), and reports the exponent ``h`` for the largest basin. The
+    primary field is the log-styled drainage-area backdrop; the largest basin's
+    footprint is a secondary mask; the length-vs-area scatter drives the log-log
+    chart.
+    """
+    import numpy as np
+    from landlab.components import FlowAccumulator, HackCalculator  # type: ignore
+
+    grid, nodata_mask, _z = _build_grid(dem, resolution_m)
+    nrows, ncols = np.asarray(dem).shape
+    fa = FlowAccumulator(
+        grid, flow_director="D8", depression_finder="DepressionFinderAndRouter"
+    )
+    fa.run_one_step()
+    drainage = np.asarray(grid.at_node["drainage_area"], dtype="float64").reshape(
+        nrows, ncols
+    )
+    drainage[nodata_mask] = np.nan
+
+    exponent = 0.0
+    coefficient = 0.0
+    largest_area_km2 = 0.0
+    n_basins = 0
+    scatter: list[dict[str, float]] = []
+    basin_outlet: int | None = None
+    try:
+        hc = HackCalculator(grid, save_full_df=True)
+        hc.calculate_hack_parameters()
+        df = hc.hack_coefficient_dataframe
+        n_basins = int(len(df))
+        if n_basins > 0:
+            ordered = df.sort_values("A_max")
+            row = ordered.iloc[-1]
+            exponent = float(row["h"])
+            coefficient = float(row["C"])
+            largest_area_km2 = float(row["A_max"]) / 1e6
+            basin_outlet = int(ordered.index[-1])
+            full = hc.full_hack_dataframe
+            if full is not None:
+                sub = full[full["basin_outlet_id"] == basin_outlet]
+                aa = sub["A"].to_numpy(dtype="float64")
+                ll = sub["L_obs"].to_numpy(dtype="float64")
+                keep = (aa > 0.0) & (ll > 0.0)
+                aa = aa[keep]
+                ll = ll[keep]
+                if aa.size > 400:
+                    idx = np.linspace(0, aa.size - 1, 400).round().astype(int)
+                    idx = np.unique(idx)
+                    aa = aa[idx]
+                    ll = ll[idx]
+                scatter = [
+                    {"area_m2": float(a), "length_m": float(l)}
+                    for a, l in zip(aa, ll)
+                ]
+    except Exception as exc:  # noqa: BLE001 - fit can fail on a channel-poor AOI
+        LOG.warning("landlab hacks_law fit failed: %s", exc)
+
+    secondary: dict[str, Any] = {}
+    if basin_outlet is not None:
+        try:
+            from landlab.utils.watershed import get_watershed_mask  # type: ignore
+
+            wmask = get_watershed_mask(grid, basin_outlet).reshape(nrows, ncols)
+            basin = np.where(wmask, 1.0, np.nan)
+            basin[nodata_mask] = np.nan
+            if np.any(np.isfinite(basin)):
+                secondary["basin"] = basin
+        except Exception as exc:  # noqa: BLE001 - watershed mask unavailable
+            LOG.warning("landlab hacks_law basin mask failed: %s", exc)
+
+    LOG.info(
+        "landlab hacks_law chain: n_basins=%d exponent=%.4f coefficient=%.4g "
+        "largest_area=%.4g km2 scatter_pts=%d",
+        n_basins,
+        exponent,
+        coefficient,
+        largest_area_km2,
+        len(scatter),
+    )
+    return ChainResult(
+        field=drainage,
+        analysis="hacks_law",
+        unstable_area_fraction=0.0,
+        min_factor_of_safety=largest_area_km2,
+        mean_probability_of_failure=0.0,
+        output_field_name="drainage_area",
+        extra={
+            "hack_exponent": exponent,
+            "hack_coefficient": coefficient,
+            "largest_basin_area_km2": largest_area_km2,
+            "n_basins": n_basins,
+            "scatter": scatter,
+        },
+        secondary_fields=secondary,
+    )
+
+
+# --------------------------------------------------------------------------- #
+# hand: Height Above Nearest Drainage (Nobre et al. 2011).
+# --------------------------------------------------------------------------- #
+def _run_hand(dem: Any, resolution_m: float, spec: dict[str, Any]) -> ChainResult:
+    """The Height Above Nearest Drainage chain (HeightAboveDrainageCalculator).
+
+    Routes flow (D8), extracts a channel mask by a drainage-area threshold, and
+    computes each cell's height above its nearest drainage channel (Nobre et al.
+    2011). The primary field is HAND; the channel mask is a secondary the composer
+    vectorizes.
+    """
+    import numpy as np
+    from landlab.components import (  # type: ignore
+        FlowAccumulator,
+        HeightAboveDrainageCalculator,
+    )
+
+    grid, nodata_mask, _z = _build_grid(dem, resolution_m)
+    nrows, ncols = np.asarray(dem).shape
+    fa = FlowAccumulator(
+        grid, flow_director="D8", depression_finder="DepressionFinderAndRouter"
+    )
+    fa.run_one_step()
+
+    cell_area = float(resolution_m) ** 2
+    thr_cells = max(
+        int(spec.get("channel_threshold_cells", DEFAULT_CHANNEL_THRESHOLD_CELLS)), 1
+    )
+    thr_m2 = thr_cells * cell_area
+    da = np.asarray(grid.at_node["drainage_area"], dtype="float64")
+    # HeightAboveDrainageCalculator requires the channel mask as uint8.
+    channel_mask = np.zeros(grid.number_of_nodes, dtype="uint8")
+    channel_mask[da >= thr_m2] = 1
+    if channel_mask.sum() == 0:
+        # No cell meets the threshold on a small/low-relief AOI: seed the single
+        # highest-accumulation node as the drainage anchor so HAND is defined.
+        channel_mask[int(np.argmax(da))] = 1
+    grid.add_field("channel__mask", channel_mask, at="node", clobber=True)
+
+    hand = HeightAboveDrainageCalculator(grid, channel_mask="channel__mask")
+    hand.run_one_step()
+    h = np.asarray(
+        grid.at_node["height_above_drainage__elevation"], dtype="float64"
+    ).reshape(nrows, ncols)
+    h[nodata_mask] = np.nan
+
+    active = np.isfinite(h)
+    va = h[active]
+    mean_h = float(np.mean(va)) if va.size else 0.0
+    max_h = float(np.max(va)) if va.size else 0.0
+    lowland_thr = float(
+        spec.get("hand_lowland_threshold_m", DEFAULT_HAND_LOWLAND_THRESHOLD_M)
+    )
+    lowland_frac = (
+        float(np.count_nonzero(va <= lowland_thr) / va.size) if va.size else 0.0
+    )
+    cm2 = channel_mask.reshape(nrows, ncols)
+    chan_frac = (
+        float(np.count_nonzero((cm2 > 0.0) & active) / int(active.sum()))
+        if active.sum()
+        else 0.0
+    )
+    channel_layer = np.where(cm2 > 0.0, 1.0, np.nan)
+    channel_layer[nodata_mask] = np.nan
+
+    LOG.info(
+        "landlab hand chain: thr_cells=%d mean_hand=%.3f m max_hand=%.3f m "
+        "channel_frac=%.4f lowland_frac=%.4f",
+        thr_cells,
+        mean_h,
+        max_h,
+        chan_frac,
+        lowland_frac,
+    )
+    return ChainResult(
+        field=h,
+        analysis="hand",
+        unstable_area_fraction=lowland_frac,
+        min_factor_of_safety=max_h,
+        mean_probability_of_failure=0.0,
+        output_field_name="height_above_drainage__elevation",
+        extra={
+            "mean_hand_m": mean_h,
+            "max_hand_m": max_h,
+            "channel_area_fraction": chan_frac,
+            "lowland_area_fraction": lowland_frac,
+            "channel_threshold_cells": thr_cells,
+            "hand_lowland_threshold_m": lowland_thr,
+        },
+        secondary_fields={"channel_network": channel_layer},
     )

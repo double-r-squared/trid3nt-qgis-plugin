@@ -186,6 +186,12 @@ def run_chain(manifest_path: str) -> int:
         )
 
         result_block["green_ampt"] = _green_ampt_extra(chain.extra or {})
+    from services.workers.landlab.entrypoint import (  # type: ignore[import]
+        _JSON_SAFE_EXTRA_ANALYSES,
+    )
+
+    if chain.analysis in _JSON_SAFE_EXTRA_ANALYSES:
+        result_block[chain.analysis] = dict(chain.extra or {})
     try:
         (cwd / RESULT_JSON_NAME).write_text(
             json.dumps(result_block, indent=2), encoding="utf-8"
