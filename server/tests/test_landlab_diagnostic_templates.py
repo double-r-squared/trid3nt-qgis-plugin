@@ -266,6 +266,89 @@ def test_overland_timeseries_chain_emits_frames():
     assert len(cr.extra["max_cell_series"]) == len(depth_tokens)
 
 
+def test_overland_conditioning_is_opt_in_and_removes_pit_ponding():
+    """condition_dem is OPT-IN (default off routes the raw DEM). When enabled it
+    depression-fills the DEM before routing, so a seeded sink pit no longer ponds
+    in the overland peak-depth field."""
+    pytest.importorskip("landlab")
+    from services.workers.landlab.component_chain import run_component_chain
+
+    ny, nx = 40, 40
+    _xg, yg = np.meshgrid(np.arange(nx), np.arange(ny))
+    # A plane draining toward larger y (each cell drains downslope) -- no natural
+    # depressions -- with ONE deep closed pit seeded mid-domain.
+    dem = 100.0 - 2.0 * yg.astype("float64")
+    piy, pix = 15, 20
+    dem[piy, pix] -= 25.0  # a deep sink well below all 8 neighbors
+
+    spec = {
+        "analysis": "overland_flow_timeseries",
+        "rainfall_intensity_mm_hr": 80.0,
+        "storm_duration_hr": 0.3,
+        "output_interval_s": 120.0,
+    }
+    # Default (no condition_dem key) routes the RAW DEM -- no modification.
+    default = run_component_chain(dem, resolution_m=30.0, build_spec=dict(spec))
+    assert default.extra["condition_dem"] is False
+    assert default.extra["n_depressions_filled"] == 0
+
+    conditioned = run_component_chain(
+        dem, resolution_m=30.0, build_spec={**spec, "condition_dem": True}
+    )
+    # Opt-in conditioning fills the pit so the pit cell no longer ponds as deep.
+    assert default.field[piy, pix] > conditioned.field[piy, pix]
+    # Conditioning is honest about the DEM modification it made.
+    assert conditioned.extra["condition_dem"] is True
+    assert conditioned.extra["n_depressions_filled"] >= 1
+    assert conditioned.extra["max_fill_depth_m"] > 0.0
+
+
+def test_lake_mapping_discrimination_drops_noise_pits():
+    """Depth + area floors keep the one real basin and drop shallow/tiny pits;
+    n_lakes_raw > n_lakes_kept."""
+    pytest.importorskip("landlab")
+    from services.workers.landlab.component_chain import run_component_chain
+
+    ny, nx = 40, 40
+    _xg, yg = np.meshgrid(np.arange(nx), np.arange(ny))
+    # A gently tilted plane (drains downslope -> no natural depressions) with
+    # seeded pits of controlled depth/area.
+    dem = 100.0 - 0.5 * yg.astype("float64")
+    # One large DEEP basin: 9x9 = 81 cells (72900 m2 at 30 m), ~5.5 m deep -> kept.
+    dem[10:19, 10:19] = dem[10:19, 10:19].min() - 6.0
+    # Three SHALLOW single-cell pits (~0.4 m deep) -> fail the depth floor.
+    for iy, ix in ((3, 30), (30, 5), (33, 33)):
+        dem[iy, ix] -= 0.9
+    # Two DEEP but TINY single-cell pits (~3 m deep, 900 m2) -> fail the area floor.
+    for iy, ix in ((5, 5), (35, 20)):
+        dem[iy, ix] -= 3.5
+
+    cr = run_component_chain(
+        dem, resolution_m=30.0, build_spec={"analysis": "lake_mapping"}
+    )
+    assert cr.analysis == "lake_mapping"
+    # LakeMapperBarnes mapped every seeded depression (6), the floors kept only
+    # the one real basin.
+    assert cr.extra["n_lakes_raw"] > cr.extra["n_lakes_kept"]
+    assert cr.extra["n_lakes_kept"] == 1
+    assert cr.extra["n_lakes"] == cr.extra["n_lakes_kept"]
+    # The surviving lake is the deep basin.
+    assert cr.extra["max_lake_depth_m"] >= 1.0
+    assert cr.extra["min_lake_depth_m"] == 1.0
+    assert cr.extra["min_lake_area_m2"] == 10000.0
+    # A permissive run keeps more lakes (the floors are the discriminator).
+    permissive = run_component_chain(
+        dem,
+        resolution_m=30.0,
+        build_spec={
+            "analysis": "lake_mapping",
+            "min_lake_depth_m": 0.0,
+            "min_lake_area_m2": 0.0,
+        },
+    )
+    assert permissive.extra["n_lakes_kept"] > cr.extra["n_lakes_kept"]
+
+
 def test_dem_pit_fill_and_lake_mapping_chains():
     pytest.importorskip("landlab")
     from services.workers.landlab.component_chain import run_component_chain
@@ -278,12 +361,22 @@ def test_dem_pit_fill_and_lake_mapping_chains():
     assert fill.extra["max_fill_depth_m"] > 0.0
     assert fill.extra["n_depressions"] >= 1
 
+    # Permissive floors so the synthetic DEM's small seeded pit is kept (the
+    # discrimination behavior itself is covered by
+    # test_lake_mapping_discrimination_drops_noise_pits).
     lake = run_component_chain(
-        dem, resolution_m=30.0, build_spec={"analysis": "lake_mapping"}
+        dem,
+        resolution_m=30.0,
+        build_spec={
+            "analysis": "lake_mapping",
+            "min_lake_depth_m": 0.0,
+            "min_lake_area_m2": 0.0,
+        },
     )
     assert lake.output_field_name == "lake_depth"
     assert "lake_extent" in lake.secondary_fields
     assert lake.extra["n_lakes"] >= 1
+    assert lake.extra["n_lakes_kept"] == lake.extra["n_lakes_raw"]  # floors off
     assert lake.extra["max_lake_depth_m"] > 0.0
 
 

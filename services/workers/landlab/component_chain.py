@@ -82,6 +82,14 @@ DEFAULT_HAND_LOWLAND_THRESHOLD_M: float = 5.0
 #: conditioning fraction (below it is numerical noise from the fill incline).
 FILL_DEPTH_EPS_M: float = 1.0e-3
 
+#: Lake-mapping discrimination floors: a mapped depression is a REAL lake only if
+#: its deepest point is at least this many metres deep AND its surface area is at
+#: least this many m^2. Below either floor the depression is DEM noise (a
+#: stair-step pit in a coarse DEM, an upland saddle micro-pit) and is dropped from
+#: every lake output. 10000 m^2 is ~11 cells at 30 m -- below a mappable lake.
+DEFAULT_MIN_LAKE_DEPTH_M: float = 1.0
+DEFAULT_MIN_LAKE_AREA_M2: float = 10_000.0
+
 #: Default channel-head drainage-area threshold, expressed as a MULTIPLE of the
 #: grid CELL AREA (a channel head is conventionally reached once the contributing
 #: area exceeds a few hundred cells). Cells whose drainage_area meets this are the
@@ -1159,9 +1167,23 @@ def _run_overland_flow_timeseries(
     primary field is the PEAK depth; each snapshot is a secondary field
     ``depth_step_NN`` the composer publishes as an animation frame; the
     depth-vs-time series at the max-depth cell drives the hydrograph chart.
+
+    ``condition_dem`` (OPT-IN, default False) depression-fills the DEM before
+    routing. The default routes the RAW DEM (the validated default response); when
+    enabled, the storm routes over a pit-filled surface so flow traces connected
+    valleys instead of ponding in the DEM's closed depressions. The conditioning
+    facts ride the result ``extra`` when enabled.
     """
     import numpy as np
     from landlab.components import OverlandFlow  # type: ignore
+
+    condition_dem = bool(spec.get("condition_dem", False))
+    n_depressions_filled = 0
+    max_fill_depth_m = 0.0
+    if condition_dem:
+        dem, n_depressions_filled, max_fill_depth_m = _condition_dem_fill(
+            dem, resolution_m, spec
+        )
 
     grid, nodata_mask, _z = _build_grid(dem, resolution_m)
     nrows, ncols = np.asarray(dem).shape
@@ -1245,11 +1267,14 @@ def _run_overland_flow_timeseries(
 
     LOG.info(
         "landlab overland-timeseries chain: steps=%d frames=%d max_depth=%.4f m "
-        "interval=%.1fs",
+        "interval=%.1fs condition_dem=%s n_filled=%d max_fill=%.3f m",
         steps,
         len(snapshots),
         max_depth,
         interval_s,
+        condition_dem,
+        n_depressions_filled,
+        max_fill_depth_m,
     )
     return ChainResult(
         field=peak_grid,
@@ -1265,6 +1290,9 @@ def _run_overland_flow_timeseries(
             "time_to_peak_s": time_to_peak_s,
             "n_frames": len(snapshots),
             "output_interval_s": interval_s,
+            "condition_dem": condition_dem,
+            "n_depressions_filled": n_depressions_filled,
+            "max_fill_depth_m": max_fill_depth_m,
         },
         secondary_fields=secondary,
     )
@@ -1311,6 +1339,30 @@ def _run_lakemapper(
     fill_depth = np.where(fill_depth > 0.0, fill_depth, 0.0)
     fill_depth[nodata_mask] = np.nan
     return grid, nodata_mask, lmb, fill_depth
+
+
+def _condition_dem_fill(
+    dem: Any, resolution_m: float, spec: dict[str, Any]
+) -> tuple[Any, int, float]:
+    """Depression-fill a DEM to the LakeMapperBarnes fill surface.
+
+    Returns ``(filled_dem_2d, n_depressions_filled, max_fill_depth_m)``. The
+    filled DEM raises every closed depression to a routable surface (the same
+    fill machinery ``dem_pit_fill`` / ``lake_mapping`` use) so a rainfall/routing
+    chain traces connected flow paths down valleys instead of ponding in the
+    DEM's sink pits. No-data cells stay no-data (NaN) so the caller re-closes
+    them. Reuses ``_run_lakemapper`` -- one fill implementation, not two.
+    """
+    import numpy as np
+
+    _grid, _nodata_mask, lmb, fill_depth = _run_lakemapper(dem, resolution_m, spec)
+    arr = np.asarray(dem, dtype="float64")
+    add = np.where(np.isfinite(fill_depth), fill_depth, 0.0)
+    filled = arr + add  # no-data cells are NaN + 0 -> stay NaN
+    finite_fill = fill_depth[np.isfinite(fill_depth)]
+    max_fill = float(np.max(finite_fill)) if finite_fill.size else 0.0
+    n_dep = int(lmb.number_of_lakes)
+    return filled, n_dep, max_fill
 
 
 def _run_dem_pit_fill(
@@ -1361,25 +1413,62 @@ def _run_lake_mapping(
 
     The primary field is the per-cell LAKE DEPTH within mapped lakes; the lake
     extent mask is a secondary field the composer vectorizes.
+
+    LakeMapperBarnes maps EVERY closed depression, so on a real DEM most mapped
+    "lakes" are noise pits (coarse-DEM stair-step artifacts, upland saddle
+    micro-pits) rather than real waterbodies. Two discrimination floors separate
+    real lakes from noise: a lake is kept only if its deepest point is at least
+    ``min_lake_depth_m`` deep AND its surface area is at least ``min_lake_area_m2``
+    -- a depression failing EITHER floor is dropped from the depth field, the
+    extent mask, the vector, and the counts. ``n_lakes_raw`` (mapped) vs
+    ``n_lakes_kept`` (after filtering) ride the result ``extra`` so the filtering
+    is loud.
     """
     import numpy as np
 
     grid, nodata_mask, lmb, _fill = _run_lakemapper(dem, resolution_m, spec)
     nrows, ncols = np.asarray(dem).shape
 
-    lake_map = np.asarray(lmb.lake_map, dtype="float64").reshape(nrows, ncols)
-    lake_depth = np.asarray(lmb.lake_depths, dtype="float64").reshape(nrows, ncols)
-    in_lake = lake_map >= 0.0
+    min_lake_depth_m = float(spec.get("min_lake_depth_m", DEFAULT_MIN_LAKE_DEPTH_M))
+    min_lake_area_m2 = float(spec.get("min_lake_area_m2", DEFAULT_MIN_LAKE_AREA_M2))
+    cell_area = float(resolution_m) ** 2
+
+    lake_map_flat = np.asarray(lmb.lake_map).ravel()  # outlet id per node, -1 if none
+    lake_depths_flat = np.asarray(lmb.lake_depths, dtype="float64").ravel()
+    outlets = list(lmb.lake_outlets)
+    areas = np.asarray(lmb.lake_areas, dtype="float64")
+    vols = np.asarray(lmb.lake_volumes, dtype="float64")
+    n_lakes_raw = int(lmb.number_of_lakes)
+
+    # Per-lake discrimination: keep a depression only if it clears BOTH floors.
+    kept_node_mask = np.zeros(lake_map_flat.shape[0], dtype=bool)
+    kept_area_m2 = 0.0
+    kept_vol_m3 = 0.0
+    n_lakes_kept = 0
+    for i, outlet in enumerate(outlets):
+        nodes = lake_map_flat == outlet
+        if not nodes.any():
+            continue
+        depths_i = lake_depths_flat[nodes]
+        max_depth_i = float(np.max(depths_i)) if depths_i.size else 0.0
+        area_i = (
+            float(areas[i]) if i < areas.size else float(int(nodes.sum())) * cell_area
+        )
+        if max_depth_i >= min_lake_depth_m and area_i >= min_lake_area_m2:
+            kept_node_mask |= nodes
+            n_lakes_kept += 1
+            kept_area_m2 += area_i
+            kept_vol_m3 += float(vols[i]) if i < vols.size else 0.0
+
+    in_lake = kept_node_mask.reshape(nrows, ncols)
+    lake_depth = lake_depths_flat.reshape(nrows, ncols)
     depth = np.where(in_lake, lake_depth, np.nan)
     depth[nodata_mask] = np.nan
     extent = np.where(in_lake, 1.0, np.nan)
     extent[nodata_mask] = np.nan
 
-    n_lakes = int(lmb.number_of_lakes)
-    areas = np.asarray(lmb.lake_areas, dtype="float64") if n_lakes > 0 else np.array([])
-    vols = np.asarray(lmb.lake_volumes, dtype="float64") if n_lakes > 0 else np.array([])
-    total_area_km2 = float(np.sum(areas)) / 1e6 if areas.size else 0.0
-    total_vol_m3 = float(np.sum(vols)) if vols.size else 0.0
+    total_area_km2 = kept_area_m2 / 1e6
+    total_vol_m3 = kept_vol_m3
     fin = depth[np.isfinite(depth)]
     max_lake_depth = float(np.max(fin)) if fin.size else 0.0
 
@@ -1391,9 +1480,13 @@ def _run_lake_mapping(
     )
 
     LOG.info(
-        "landlab lake-mapping chain: n_lakes=%d area=%.4g km2 vol=%.4g m3 "
+        "landlab lake-mapping chain: n_lakes_raw=%d n_lakes_kept=%d "
+        "(min_depth=%.2f m min_area=%.0f m2) area=%.4g km2 vol=%.4g m3 "
         "max_depth=%.3f m",
-        n_lakes,
+        n_lakes_raw,
+        n_lakes_kept,
+        min_lake_depth_m,
+        min_lake_area_m2,
         total_area_km2,
         total_vol_m3,
         max_lake_depth,
@@ -1406,7 +1499,11 @@ def _run_lake_mapping(
         mean_probability_of_failure=0.0,
         output_field_name="lake_depth",
         extra={
-            "n_lakes": n_lakes,
+            "n_lakes": n_lakes_kept,
+            "n_lakes_raw": n_lakes_raw,
+            "n_lakes_kept": n_lakes_kept,
+            "min_lake_depth_m": min_lake_depth_m,
+            "min_lake_area_m2": min_lake_area_m2,
             "total_lake_area_km2": total_area_km2,
             "total_lake_volume_m3": total_vol_m3,
             "max_lake_depth_m": max_lake_depth,

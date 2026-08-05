@@ -88,7 +88,7 @@ TEMPLATE_CARD = TemplateCard(
     required_inputs=["bbox"],
     knobs=(
         "output_interval_s, rainfall_return_period_yr, storm_duration_hr, "
-        "rainfall_intensity_mm_hr, target_resolution_m"
+        "rainfall_intensity_mm_hr, target_resolution_m, condition_dem"
     ),
 )
 
@@ -118,6 +118,7 @@ async def landlab_overland_flow_timeseries(
     rainfall_return_period_yr: int = _DEFAULT_RETURN_PERIOD_YR,
     output_interval_s: float = DEFAULT_OUTPUT_INTERVAL_S,
     target_resolution_m: float = 30.0,
+    condition_dem: bool = False,
     compute_class: str = "standard",
     input_mode: str | None = None,
     **_extra_ignored: Any,
@@ -147,6 +148,10 @@ async def landlab_overland_flow_timeseries(
         rainfall_return_period_yr: design-storm return period, years (default 100).
         output_interval_s: seconds between depth snapshots (default 300).
         target_resolution_m: grid cell size, m (default 30).
+        condition_dem: OPT-IN depression-fill of the DEM before routing (default
+            False -- the raw-DEM response is the default). Set True to route the
+            storm over a pit-filled surface so flow traces connected valleys
+            instead of ponding in the DEM's closed depressions.
         compute_class: compute class (default "standard").
         input_mode: run-mode lever. "user_gated" presents the resolved triggering
             rainfall for review before the solve; "auto" (default) proceeds
@@ -219,7 +224,12 @@ async def landlab_overland_flow_timeseries(
     else:
         _rainfall_label = "triggering rainfall: user-supplied"
         provenance.append(SyntheticInput(param="rainfall_intensity_mm_hr", basis="user"))
-    source_note = _rainfall_label
+    _conditioning_note = (
+        "DEM depression-filled before routing (connected valley flow)"
+        if condition_dem
+        else "raw DEM (unconditioned; flow may pond in sink pits)"
+    )
+    source_note = f"{_rainfall_label}. {_conditioning_note}"
 
     _review = await gate_input_review(
         tool_name="landlab_overland_flow_timeseries",
@@ -250,6 +260,7 @@ async def landlab_overland_flow_timeseries(
             rainfall_intensity_mm_hr=float(rainfall_intensity_mm_hr),
             storm_duration_hr=float(_dur_hr),
             output_interval_s=float(output_interval_s),
+            condition_dem=bool(condition_dem),
         )
     except Exception as exc:  # noqa: BLE001
         return {

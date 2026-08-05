@@ -1465,6 +1465,10 @@ def postprocess_landlab_lake_mapping(
     total_area = max(0.0, _pick_from_block(block, "total_lake_area_km2", 0.0))
     total_vol = max(0.0, _pick_from_block(block, "total_lake_volume_m3", 0.0))
     max_depth = max(0.0, _pick_from_block(block, "max_lake_depth_m", recomputed_max))
+    # Discrimination counts (real lakes kept vs closed depressions mapped). Absent
+    # on a legacy block -> fall back to the kept count so the fields stay honest.
+    n_lakes_kept = int(_pick_from_block(block, "n_lakes_kept", float(n_lakes)))
+    n_lakes_raw = int(_pick_from_block(block, "n_lakes_raw", float(n_lakes_kept)))
 
     dst_cog, bbox = _reproject_field_cog_4326(src)
     try:
@@ -1487,6 +1491,8 @@ def postprocess_landlab_lake_mapping(
         total_lake_area_km2=total_area,
         total_lake_volume_m3=total_vol,
         max_lake_depth_m=max_depth,
+        n_lakes_raw=max(n_lakes_raw, 0),
+        n_lakes_kept=max(n_lakes_kept, 0),
     )
     layers: list[LayerURI] = [primary]
 
@@ -1512,14 +1518,17 @@ def postprocess_landlab_lake_mapping(
         "analysis": "lake_mapping",
         "crs": "EPSG:4326",
         "n_lakes": n_lakes,
+        "n_lakes_raw": n_lakes_raw,
+        "n_lakes_kept": n_lakes_kept,
         "total_lake_area_km2": total_area,
         "total_lake_volume_m3": total_vol,
         "max_lake_depth_m": max_depth,
     }
     logger.info(
-        "postprocess_landlab_lake_mapping run_id=%s n_lakes=%d area=%.4g km2 "
-        "max_depth=%.3f m extent_vector=%s uri=%s",
-        run_id, n_lakes, total_area, max_depth, len(layers) > 1, uri,
+        "postprocess_landlab_lake_mapping run_id=%s n_lakes=%d (raw=%d kept=%d) "
+        "area=%.4g km2 max_depth=%.3f m extent_vector=%s uri=%s",
+        run_id, n_lakes, n_lakes_raw, n_lakes_kept, total_area, max_depth,
+        len(layers) > 1, uri,
     )
     return layers, metrics
 

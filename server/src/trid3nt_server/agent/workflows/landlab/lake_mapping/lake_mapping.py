@@ -26,6 +26,8 @@ from typing import Any
 
 from trid3nt_contracts.common import SyntheticInput
 from trid3nt_contracts.landlab_contracts import (
+    DEFAULT_MIN_LAKE_AREA_M2,
+    DEFAULT_MIN_LAKE_DEPTH_M,
     LandlabLakeMappingLayerURI,
     LandlabRunArgs,
 )
@@ -77,7 +79,7 @@ TEMPLATE_CARD = TemplateCard(
         "the lake extent + per-cell lake-depth layer (Landlab LakeMapperBarnes)"
     ),
     required_inputs=["bbox"],
-    knobs="fill_flat, target_resolution_m",
+    knobs="fill_flat, target_resolution_m, min_lake_depth_m, min_lake_area_m2",
 )
 
 _METADATA = AtomicToolMetadata(
@@ -101,36 +103,58 @@ async def landlab_lake_mapping(
     bbox: tuple[float, float, float, float] | list[float] | str | None = None,
     fill_flat: bool = True,
     target_resolution_m: float = 30.0,
+    min_lake_depth_m: float = DEFAULT_MIN_LAKE_DEPTH_M,
+    min_lake_area_m2: float = DEFAULT_MIN_LAKE_AREA_M2,
     compute_class: str = "standard",
     input_mode: str | None = None,
     **_extra_ignored: Any,
 ) -> LandlabLakeMappingLayerURI | dict[str, Any]:
-    """Map lake extent + depth from closed depressions in a DEM (LakeMapperBarnes).
+    """Map topographic closed basins / potential impoundments from a DEM
+    (LakeMapperBarnes fill-depth).
 
-    Fidelity: Landlab LakeMapperBarnes lake tracking on a real AOI DEM; a
-    terrain-ponding diagnostic, not a hydrologic reservoir model.
-    Data: the DEM is REAL (USGS 3DEP via seam-1). The fill mode (fill_flat) is a
-    deterministic engine setting - no synthetic data.
-    Off-scope: routability / fill-depth conditioning -> landlab_dem_conditioning;
-    drainage area / channel network -> landlab_flow_accumulation; overland-flow
-    inundation depth -> landlab_overland_flow_timeseries.
+    What this IS: a TERRAIN diagnostic - the closed basins in the bare-earth DEM
+    that WOULD impound water (their fill depth + extent), NOT a map of existing
+    waterbodies. An existing water surface (a reservoir at pool, a lake) is
+    recorded in the DEM as a FLAT surface, so its fill depth is ~0 and it is NOT
+    detected here; the DEM only reveals the basin below the water line where the
+    terrain is dry or the pool is drawn down. For EXISTING lakes/reservoirs use
+    fetch_nhd_waterbodies (the mapped-hydrography source), not this template.
+    Fidelity: Landlab LakeMapperBarnes on a real AOI DEM; a terrain-ponding
+    diagnostic, not a hydrologic reservoir model. LakeMapperBarnes maps EVERY
+    closed depression, so depth/area floors (min_lake_depth_m / min_lake_area_m2)
+    discriminate real basins from DEM noise pits; ``n_lakes_raw`` (mapped) vs
+    ``n_lakes_kept`` (after filtering) are reported.
+    Data: the DEM is REAL (USGS 3DEP via seam-1). The fill mode (fill_flat) and
+    discrimination floors are deterministic engine settings - no synthetic data.
+    Off-scope: existing waterbodies -> fetch_nhd_waterbodies; routability /
+    fill-depth conditioning -> landlab_dem_conditioning; drainage area / channel
+    network -> landlab_flow_accumulation; overland-flow inundation depth ->
+    landlab_overland_flow_timeseries.
 
-    Use this when: the user asks where terrain PONDS into lakes / closed
-    depressions, for a lake extent map, or lake depth / storage over an AOI.
+    Use this when: the user asks which terrain CLOSED BASINS would pond water /
+    where the DEM has potential impoundments, for a basin extent map, or basin
+    fill depth / storage over an AOI. NOT for locating existing lakes/reservoirs.
 
     Params:
         bbox: AOI, EPSG:4326.
         fill_flat: True fills each lake flat; False fills to a slight downslope
             incline (default True).
         target_resolution_m: grid cell size, m (default 30).
+        min_lake_depth_m: keep a depression as a real lake only if its deepest
+            point is at least this deep, m (default 1.0). Lower to catch shallow
+            ponds; raise to keep only deep lakes.
+        min_lake_area_m2: keep a depression as a real lake only if its surface
+            area is at least this large, m^2 (default 10000, ~11 cells at 30 m).
+            Lower to catch small ponds; raise to keep only large lakes.
         compute_class: compute class (default "standard").
         input_mode: run-mode lever. "user_gated" presents the fill setting for
             review; "auto" (default) proceeds labeled.
 
     Returns:
         On success: ``LandlabLakeMappingLayerURI`` - the lake-depth COG, with
-        ``n_lakes``, ``total_lake_area_km2``, ``total_lake_volume_m3``,
-        ``max_lake_depth_m``. A lake-extent vector is emitted alongside.
+        ``n_lakes`` (kept), ``n_lakes_raw``, ``n_lakes_kept``,
+        ``total_lake_area_km2``, ``total_lake_volume_m3``, ``max_lake_depth_m``.
+        A lake-extent vector is emitted alongside.
         On failure: ``{"status": "error", "error_code", "error_message"}``.
         Not cached (``cacheable=False``).
     """
@@ -152,8 +176,14 @@ async def landlab_lake_mapping(
         }
 
     source_note = (
-        f"DEM: USGS 3DEP (fetched). Fill mode: fill_flat={fill_flat} - a "
-        "deterministic engine setting, not synthetic data."
+        "Maps TOPOGRAPHIC closed basins / potential impoundments from the "
+        "bare-earth DEM (where terrain WOULD pond water), NOT existing "
+        "waterbodies: a reservoir/lake at pool is a FLAT surface in the DEM and "
+        "is NOT detected - use fetch_nhd_waterbodies for existing waterbodies. "
+        f"DEM: USGS 3DEP (fetched). Fill mode: fill_flat={fill_flat}. Basin "
+        f"discrimination floors: min_lake_depth_m={min_lake_depth_m}, "
+        f"min_lake_area_m2={min_lake_area_m2} - deterministic engine settings, "
+        "not synthetic data."
     )
     _review = await gate_input_review(
         tool_name="landlab_lake_mapping",
@@ -175,6 +205,8 @@ async def landlab_lake_mapping(
             analysis="lake_mapping",
             target_resolution_m=float(target_resolution_m),
             fill_flat=bool(fill_flat),
+            min_lake_depth_m=float(min_lake_depth_m),
+            min_lake_area_m2=float(min_lake_area_m2),
         )
     except Exception as exc:  # noqa: BLE001
         return {
@@ -195,10 +227,12 @@ async def landlab_lake_mapping(
             run_args, compute_class=compute_class, source_note=source_note
         )
         logger.info(
-            "landlab_lake_mapping complete layer_id=%s n_lakes=%d area=%.4g km2 "
-            "max_depth=%.3f m uri=%s",
+            "landlab_lake_mapping complete layer_id=%s n_lakes=%d (raw=%s kept=%s) "
+            "area=%.4g km2 max_depth=%.3f m uri=%s",
             primary.layer_id,
             primary.n_lakes,
+            primary.n_lakes_raw,
+            primary.n_lakes_kept,
             primary.total_lake_area_km2,
             primary.max_lake_depth_m,
             primary.uri,

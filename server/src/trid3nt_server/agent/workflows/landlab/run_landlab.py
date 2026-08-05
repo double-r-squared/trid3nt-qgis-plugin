@@ -172,10 +172,13 @@ def build_landlab_build_spec(run_args: LandlabRunArgs) -> dict[str, Any]:
         ),
         "mean_storm_depth_mm": float(getattr(run_args, "mean_storm_depth_mm", 15.0)),
         "n_recharge_scenarios": int(getattr(run_args, "n_recharge_scenarios", 8)),
-        # overland_flow_timeseries snapshot cadence (seconds).
+        # overland_flow_timeseries snapshot cadence (seconds) + DEM conditioning.
         "output_interval_s": float(getattr(run_args, "output_interval_s", 300.0)),
-        # dem_pit_fill / lake_mapping fill mode.
+        "condition_dem": bool(getattr(run_args, "condition_dem", True)),
+        # dem_pit_fill / lake_mapping fill mode + lake discrimination floors.
         "fill_flat": bool(getattr(run_args, "fill_flat", True)),
+        "min_lake_depth_m": float(getattr(run_args, "min_lake_depth_m", 1.0)),
+        "min_lake_area_m2": float(getattr(run_args, "min_lake_area_m2", 10000.0)),
     }
     # Merge the validated physics overrides (the chain reads flow_director /
     # overland_alpha / mannings_n). Absent => byte-identical.

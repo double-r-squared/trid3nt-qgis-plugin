@@ -81,6 +81,9 @@ __all__ = [
     "DEFAULT_MEAN_STORM_DEPTH_MM",
     "DEFAULT_N_RECHARGE_SCENARIOS",
     "DEFAULT_OUTPUT_INTERVAL_S",
+    "DEFAULT_CONDITION_DEM",
+    "DEFAULT_MIN_LAKE_DEPTH_M",
+    "DEFAULT_MIN_LAKE_AREA_M2",
     "LandlabRunArgs",
     "LandlabSusceptibilityLayerURI",
     "LandlabFlowAccumulationLayerURI",
@@ -180,6 +183,13 @@ DEFAULT_MEAN_STORM_DEPTH_MM: float = 15.0  # mean storm depth, mm
 DEFAULT_N_RECHARGE_SCENARIOS: int = 8  # recharge scenarios swept in the ensemble
 # Time-stepped OverlandFlow output cadence (seconds between depth snapshots).
 DEFAULT_OUTPUT_INTERVAL_S: float = 300.0  # depth snapshot interval, seconds
+# overland_flow_timeseries DEM conditioning: OPT-IN depression fill before
+# routing. Default off -- the raw-DEM overland response is the validated default;
+# conditioning is an opt-in lever for routing over a pit-filled surface.
+DEFAULT_CONDITION_DEM: bool = False
+# lake_mapping discrimination floors: separate real lakes from DEM noise pits.
+DEFAULT_MIN_LAKE_DEPTH_M: float = 1.0  # deepest point must clear this, m
+DEFAULT_MIN_LAKE_AREA_M2: float = 10_000.0  # surface area must clear this, m^2
 
 
 class LandlabRunArgs(EngineRunArgsMixin):
@@ -311,11 +321,25 @@ class LandlabRunArgs(EngineRunArgsMixin):
     #: Seconds between surface-water-depth snapshots for the time-stepped output
     #: (> 0). Snapshots are subsampled to the animation frame cap downstream.
     output_interval_s: float = Field(default=DEFAULT_OUTPUT_INTERVAL_S, gt=0.0)
+    #: OPT-IN: depression-fill the DEM before routing overland flow (default
+    #: False). The raw-DEM response is the default; set True to route the storm
+    #: over a pit-filled surface (flow traces connected valleys instead of ponding
+    #: in the DEM's closed depressions). The conditioning facts (n filled, max
+    #: fill) ride the result extra when enabled.
+    condition_dem: bool = Field(default=DEFAULT_CONDITION_DEM)
 
     # --- dem_pit_fill / lake_mapping chain parameters ---
     #: LakeMapperBarnes fill mode: True fills each depression to a flat surface;
     #: False fills to a slight downslope incline (so flow routes over the lake).
     fill_flat: bool = Field(default=True)
+    #: lake_mapping discrimination floor (m): a mapped depression is kept as a
+    #: real lake only if its deepest point is at least this deep (>= 0). Below it
+    #: the depression is DEM noise (a shallow pit), dropped from every lake output.
+    min_lake_depth_m: float = Field(default=DEFAULT_MIN_LAKE_DEPTH_M, ge=0.0)
+    #: lake_mapping discrimination floor (m^2): a mapped depression is kept as a
+    #: real lake only if its surface area is at least this large (>= 0). Below it
+    #: the depression is DEM noise (a few-cell pit), dropped from every lake output.
+    min_lake_area_m2: float = Field(default=DEFAULT_MIN_LAKE_AREA_M2, ge=0.0)
 
     @field_validator("depression_handler", mode="before")
     @classmethod
@@ -613,16 +637,24 @@ class LandlabLakeMappingLayerURI(LayerURI):
     LakeMapperBarnes with lake tracking); the lake extent is a companion vector.
     Adds the structured numbers the agent narrates (typed fields, never invented):
 
-        n_lakes: number of distinct lakes mapped.
-        total_lake_area_km2: summed lake surface area (km^2).
-        total_lake_volume_m3: summed lake storage volume (m^3).
-        max_lake_depth_m: deepest lake depth in the AOI (m).
+        n_lakes: number of REAL lakes kept after discrimination (== n_lakes_kept).
+        total_lake_area_km2: summed kept-lake surface area (km^2).
+        total_lake_volume_m3: summed kept-lake storage volume (m^3).
+        max_lake_depth_m: deepest kept-lake depth in the AOI (m).
+        n_lakes_raw: closed depressions LakeMapperBarnes mapped before the
+            depth/area discrimination floors (None on legacy blocks).
+        n_lakes_kept: depressions that cleared both floors and were kept as real
+            lakes (None on legacy blocks). n_lakes_raw - n_lakes_kept were dropped
+            as DEM noise pits.
     """
 
     n_lakes: int = Field(ge=0)
     total_lake_area_km2: float = Field(ge=0.0)
     total_lake_volume_m3: float = Field(ge=0.0)
     max_lake_depth_m: float = Field(ge=0.0)
+
+    n_lakes_raw: int | None = Field(default=None, ge=0)
+    n_lakes_kept: int | None = Field(default=None, ge=0)
 
     source_note: str | None = Field(default=None)
 
