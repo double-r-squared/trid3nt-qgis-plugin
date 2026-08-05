@@ -932,10 +932,21 @@ async def model_geoclaw_inundation(
         propagation_level,
         est_prop_domain_cells,
     ) = plan_geoclaw_grid(domain_bbox, bbox, run_args.amr_levels)
+    # Explicit AMR windows GOVERN refinement: the plan's cost-bounded finest is the
+    # whole-AOI ceiling, but when the user supplies windows the deck's finest FOLLOWS
+    # the finest window (so the user's requested window level is honored and the AOI
+    # ambient = finest-1 refines BELOW it -> a demonstrable in-window contrast). The
+    # window may push ONE level beyond the plan's whole-AOI ceiling because a window
+    # is a bounded sub-box (only its cells reach that finest level), floored at 2 so
+    # an ambient (finest-1) always exists. Absent windows -> the plan governs
+    # unchanged (every non-window run is identical).
+    if run_args.amr_regions:
+        _window_finest = max(int(w.max_level) for w in run_args.amr_regions)
+        planned_amr_levels = max(2, min(_window_finest, planned_amr_levels + 1))
     logger.info(
         "model_geoclaw_inundation: grid plan base=%s amr_levels=%s "
         "(requested=%s) est_finest_aoi_cells=%d propagation_level=%s "
-        "est_propagation_domain_cells=%d domain=%s aoi=%s",
+        "est_propagation_domain_cells=%d domain=%s aoi=%s windows=%d",
         base_num_cells,
         planned_amr_levels,
         run_args.amr_levels,
@@ -944,6 +955,7 @@ async def model_geoclaw_inundation(
         est_prop_domain_cells,
         domain_bbox,
         bbox,
+        len(run_args.amr_regions),
     )
 
     # Optional staged tsunami dtopo / surge forcing (already-staged URIs on args).

@@ -702,7 +702,20 @@ def render_setrun_py(spec: GeoClawBuildSpec) -> str:
     dom_min_lon, dom_min_lat, dom_max_lon, dom_max_lat = _domain(spec)
     nx, ny = spec.base_num_cells
     amr_levels = int(spec.amr_levels)
-    ratios = _refinement_ratios(amr_levels)
+    # Explicit AMR windows make the AOI a REGION-BASED refinement surface: the AOI
+    # is pinned to an AMBIENT level ONE BELOW the finest, and each window pins a
+    # finer level over its box -- so an in-AOI window is demonstrably finer than its
+    # surroundings (a window pinned at the AOI-wide finest would otherwise be
+    # subsumed by the default AOI region). ``aoi_level`` is the AOI ambient; the
+    # finest available level (``max_levels``) is raised to cover any window that asks
+    # for a level beyond ``amr_levels`` (a window is a bounded sub-box, so its
+    # extra-fine cells scale with the window area, not the whole AOI). With NO
+    # windows both collapse to ``amr_levels`` -- every non-window deck is unchanged.
+    has_amr_windows = bool(spec.amr_regions)
+    window_max_level = max((int(r[1]) for r in spec.amr_regions), default=0)
+    max_levels = max(amr_levels, window_max_level)
+    aoi_level = max(amr_levels - 1, 1) if has_amr_windows else amr_levels
+    ratios = _refinement_ratios(max_levels)
     amr_ratios = ", ".join(str(r) for r in ratios)
 
     # Evenly-spaced output frames including the final time (exclude t=0 dump:
@@ -711,16 +724,20 @@ def render_setrun_py(spec: GeoClawBuildSpec) -> str:
     num_output_times = int(spec.output_frames)
     tfinal = float(spec.sim_duration_s)
 
-    # Finest-level cell size (dx_fine): the base cell size divided by the product
-    # of the refinement ratios. The BASE grid spans the COMPUTATIONAL DOMAIN, so
-    # base_dx is measured across the domain (NOT the AOI) -- otherwise the fgmax
-    # sample points would be mis-aligned with the finest-level FV cell centers
-    # whenever the domain extends offshore beyond the AOI.
+    # fgmax sample spacing: the base cell size divided by the product of the
+    # refinement ratios up to the AOI AMBIENT level. The BASE grid spans the
+    # COMPUTATIONAL DOMAIN, so base_dx is measured across the domain (NOT the AOI)
+    # -- otherwise the fgmax sample points would be mis-aligned with the FV cell
+    # centers whenever the domain extends offshore beyond the AOI. fgmax samples at
+    # ``aoi_level`` (not the absolute finest) so the whole AOI depth field is
+    # captured regardless of the window/ambient split; a window's finer cells are
+    # picked up by interpolation. With no windows ``aoi_level == max_levels`` so the
+    # spacing is the finest-level cell size (the unchanged deck).
     base_dx = (dom_max_lon - dom_min_lon) / float(nx)
-    refine_product = 1
-    for r in ratios:
-        refine_product *= int(r)
-    dx_fine = base_dx / float(refine_product)
+    aoi_product = 1
+    for r in ratios[: aoi_level - 1]:
+        aoi_product *= int(r)
+    dx_fgmax = base_dx / float(aoi_product)
 
     # Scenario-specific source blocks.
     qinit_block = ""
@@ -759,10 +776,10 @@ def render_setrun_py(spec: GeoClawBuildSpec) -> str:
             "    # --- fgmax: max depth/speed/arrival monitored over the AOI ---\n"
             "    rundata.fgmax_data.num_fgmax_val = 2  # save max depth + speed\n"
             "    fgmax_grids = rundata.fgmax_data.fgmax_grids\n"
-            f"    dx_fine = {dx_fine!r}  # finest-level cell size over the AOI\n"
+            f"    dx_fine = {dx_fgmax!r}  # AOI ambient-level cell size (fgmax spacing)\n"
             "    fg = fgmax_tools.FGmaxGrid()\n"
             "    fg.point_style = 2  # uniform rectangular x-y grid\n"
-            "    # align sample pts with finest-level FV cell centers (half-cell inset):\n"
+            "    # align sample pts with AOI ambient-level FV cell centers (half-cell inset):\n"
             f"    fg.x1 = {min_lon!r} + dx_fine / 2.0\n"
             f"    fg.x2 = {max_lon!r} - dx_fine / 2.0\n"
             f"    fg.y1 = {min_lat!r} + dx_fine / 2.0\n"
@@ -771,7 +788,7 @@ def render_setrun_py(spec: GeoClawBuildSpec) -> str:
             "    fg.tstart_max = 0.0  # monitor max values from t0\n"
             "    fg.tend_max = 1.e10\n"
             f"    fg.dt_check = {dt_check!r}\n"
-            f"    fg.min_level_check = {amr_levels!r}  # monitor on the finest level\n"
+            f"    fg.min_level_check = {aoi_level!r}  # monitor at the AOI ambient level\n"
             f"    fg.arrival_tol = {arrival_tol!r}  # wet-cell threshold for arrival\n"
             "    fg.interp_method = 0  # 0 ==> pw const in cells, recommended\n"
             "    fgmax_grids.append(fg)\n"
@@ -802,8 +819,10 @@ def render_setrun_py(spec: GeoClawBuildSpec) -> str:
         "    #     the wave is resolved as it shoals; cap at one-below-finest) ---\n"
         f"    rundata.regiondata.regions.append([{prop_min!r}, {offshore_max!r}, "
         f"0., {tfinal!r}, {dom_min_lon!r}, {dom_max_lon!r}, {dom_min_lat!r}, {dom_max_lat!r}])\n"
-        "    # --- Regions: pin the finest AMR level over the AOI for the run ---\n"
-        f"    rundata.regiondata.regions.append([{amr_levels!r}, {amr_levels!r}, "
+        "    # --- Regions: pin the AOI ambient AMR level for the run (one below the\n"
+        "    #     finest when explicit windows are present, so a window refines above\n"
+        "    #     it; the requested finest when there are no windows) ---\n"
+        f"    rundata.regiondata.regions.append([{aoi_level!r}, {aoi_level!r}, "
         f"0., {tfinal!r}, {min_lon!r}, {max_lon!r}, {min_lat!r}, {max_lat!r}])\n"
     )
     # Explicit user-supplied AMR windows (region-based flagging): each forces a
@@ -916,7 +935,7 @@ def setrun(claw_pkg="geoclaw"):
 
     # --- AMR (adaptive mesh refinement) ---
     amrdata = rundata.amrdata
-    amrdata.amr_levels_max = {int(spec.amr_levels)!r}
+    amrdata.amr_levels_max = {max_levels!r}
     amrdata.refinement_ratios_x = [{amr_ratios}]
     amrdata.refinement_ratios_y = [{amr_ratios}]
     amrdata.refinement_ratios_t = [{amr_ratios}]

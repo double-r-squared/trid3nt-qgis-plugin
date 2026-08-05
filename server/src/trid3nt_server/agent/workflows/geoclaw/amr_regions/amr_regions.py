@@ -27,6 +27,7 @@ import asyncio
 import logging
 from typing import Any
 
+from trid3nt_contracts.common import SyntheticInput
 from trid3nt_contracts.geoclaw_contracts import (
     AmrRegionWindow,
     GeoClawDepthLayerURI,
@@ -34,6 +35,7 @@ from trid3nt_contracts.geoclaw_contracts import (
 )
 from trid3nt_contracts.tool_registry import AtomicToolMetadata
 
+from trid3nt_server.agent.gates.input_review import gate_input_review
 from trid3nt_server.agent.tool_arg_normalizer import coerce_bbox_value
 from trid3nt_server.agent.tools import register_tool
 from trid3nt_server.agent.workflows.geoclaw._template_card import TemplateCard
@@ -100,6 +102,8 @@ async def geoclaw_amr_refinement_regions(
     manning_n: float = 0.025,
     sea_level_m: float = 0.0,
     compute_class: str = "standard",
+    input_mode: str | None = None,
+    window_basis: str = "prompt_interpreted",
     # absorb LLM-invented kwargs + the server confirm gate's injected confirmed=True.
     **_extra_ignored: Any,
 ) -> GeoClawDepthLayerURI | dict[str, Any]:
@@ -137,6 +141,14 @@ async def geoclaw_amr_refinement_regions(
         manning_n: single global friction coefficient (default 0.025).
         sea_level_m: still-water datum (default 0.0).
         compute_class: compute class (default "standard").
+        input_mode: ADR 0107 review lever ("auto"|"user_gated"; None -> session
+            default). In "user_gated" the resolved windows are presented for review
+            BEFORE the solve; in "auto" they ride the assumptions block labeled.
+        window_basis: provenance class for the windows ("prompt_interpreted" when the
+            model derived the box from the prompt, "user" when explicit coordinates /
+            a drawn geometry were supplied). The plugin draw-a-rectangle supply path
+            (which would set "user") is a follow-on; the LLM-derived path defaults to
+            "prompt_interpreted" so an invented window is visible for review.
 
     Returns:
         On success: ``GeoClawDepthLayerURI`` - the peak-inundation COG + depth
@@ -189,6 +201,44 @@ async def geoclaw_amr_refinement_regions(
             "error_message": f"invalid amr_regions window: {exc}",
         }
 
+    # --- ADR 0107 input-review gate: the AMR windows are the consequential,
+    # model-invented input on this template (they place WHERE the mesh refines), so
+    # they must ride the review gate -- the LLM cannot silently invent window
+    # placement. Each resolved window is a provenance entry; ``window_basis`` marks
+    # whether the model derived it from the prompt ("prompt_interpreted") or it was
+    # an explicit/drawn geometry ("user"). In auto mode the entries ride the
+    # assumptions block labeled; in user_gated mode the run HOLDS for review before
+    # the solve. A headless direct-call has no live session -> the gate fails open.
+    _basis = "user" if str(window_basis).strip().lower() == "user" else "prompt_interpreted"
+    _window_entries = [
+        SyntheticInput(
+            param=f"amr_window_{i + 1}",
+            value=(
+                f"L{w.min_level}-{w.max_level} "
+                f"lon[{w.min_lon:.4f},{w.max_lon:.4f}] "
+                f"lat[{w.min_lat:.4f},{w.max_lat:.4f}] "
+                f"t[{w.t_start_s:.0f},{w.t_end_s:.0f}]s"
+            ),
+            basis=_basis,  # type: ignore[arg-type]
+            note="explicit AMR refinement window (forces the box to the level range)",
+        )
+        for i, w in enumerate(windows)
+    ]
+    _review = await gate_input_review(
+        tool_name="geoclaw_amr_refinement_regions",
+        mode=input_mode,
+        entries=_window_entries,
+        params={},
+    )
+    if _review.cancelled:
+        return {
+            "status": "error",
+            "error_code": "USER_INPUT_CANCELLED",
+            "error_message": (
+                f"geoclaw_amr_refinement_regions {_review.cancel_reason}"
+            ),
+        }
+
     try:
         run_args = GeoClawRunArgs(
             bbox=tuple(coerced),  # type: ignore[arg-type]
@@ -223,6 +273,13 @@ async def geoclaw_amr_refinement_regions(
             run_args,
             compute_class=compute_class,
         )
+        # Stamp the reviewed windows onto the result provenance so the assumptions
+        # block narrates WHERE the mesh was refined (and with what basis) -- what was
+        # reviewed == what ran.
+        if _review.entries:
+            primary.synthetic_inputs = list(primary.synthetic_inputs) + list(
+                _review.entries
+            )
         logger.info(
             "geoclaw_amr_refinement_regions complete layer_id=%s max_depth_m=%.4g "
             "arrival_s=%s uri=%s",

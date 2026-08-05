@@ -648,3 +648,94 @@ def test_banded_manning_rejects_bad_break_length_and_nonpositive():
         parse_build_spec(_spec(manning_coefficients=[0.02, -0.01], manning_break=[0.0]))
     with pytest.raises(GeoClawDeckError):
         parse_build_spec(_spec(manning_coefficients=[0.01, 0.02, 0.03], manning_break=[1.0, 0.0]))  # not ascending
+
+
+def test_banded_manning_form_matches_fortran_consumer_contract():
+    """The emitted geo_data.manning_coefficient list + manning_break must satisfy
+    EXACTLY what clawpack 5.14.0 consumes, so GeoClawData.write authors
+    ``geoclaw.data`` and the Fortran friction selector activate the banded form.
+
+    Fortran side (geoclaw/src/2d/shallow/geoclaw_module.f90 + src2.f90):
+      - GeoClawData.write raises unless len(manning_break) == len(coeffs) - 1, then
+        writes ``num_manning = len(coeffs)`` + the two lists.
+      - geoclaw_module allocates manning_break(num_manning), sets the TOP band to
+        +inf, reads the num_manning-1 breaks below it.
+      - src2 selects, per WET cell of topography B: ``do nman = num_manning,1,-1;
+        if (B < manning_break(nman)) coeff = manning_coefficient(nman)`` -- so a
+        single break at 0.0 gives coeff[0] offshore (B < 0) and coeff[1] onshore
+        (B >= 0). N coefficients therefore REQUIRE exactly N-1 breaks.
+
+    This test pins the RENDER form (clawpack-free) that makes that chain fire; the
+    live smoke (ADR 0147) confirms the banded run differs from the scalar run.
+    """
+    coeffs = [0.015, 0.06]  # [offshore B<0, onshore B>=0]
+    breaks = [0.0]          # split at the still-water datum
+    spec = parse_build_spec(
+        _spec(scenario="tsunami", manning_coefficients=coeffs, manning_break=breaks)
+    )
+    # parse keeps N coefficients + exactly N-1 breaks (the GeoClawData.write gate).
+    assert spec.manning_coefficients == coeffs
+    assert len(spec.manning_break) == len(spec.manning_coefficients) - 1
+    txt = render_setrun_py(spec)
+    ast.parse(txt)
+    # the deck assigns the LIST (not a scalar) -> num_manning = 2 in geoclaw.data.
+    assert "geo_data.manning_coefficient = [0.015, 0.06]" in txt
+    assert "geo_data.manning_break = [0.0]" in txt
+    # friction must be ON (else src2 never enters the selector) and unbounded in
+    # depth (friction applied to every wet cell).
+    assert "geo_data.friction_forcing = True" in txt
+    assert "geo_data.friction_depth = 1.0e6" in txt
+
+
+# ===========================================================================
+# AMR window governs refinement: the AOI ambient drops one level below a window
+# so an in-AOI window is demonstrably finer than its surroundings (ADR 0147).
+# ===========================================================================
+def test_amr_window_lowers_aoi_ambient_one_below_the_window():
+    """With an explicit window the AOI default region pins amr_levels-1 (ambient)
+    and the window pins its own (finer) level, so the window is NOT subsumed."""
+    win = {"min_level": 4, "max_level": 4, "t_start_s": 0.0, "t_end_s": 900.0,
+           "min_lon": -85.6, "max_lon": -85.5, "min_lat": 29.7, "max_lat": 29.8}
+    spec = parse_build_spec(
+        _spec(scenario="tsunami", amr_levels=4, amr_regions=[win],
+              domain_bbox=[-86.5, 28.9, -85.0, 30.5])
+    )
+    txt = render_setrun_py(spec)
+    ast.parse(txt)
+    # AOI default region pinned to the ambient level (amr_levels-1 == 3), NOT 4.
+    assert "rundata.regiondata.regions.append([3, 3, 0., 1800.0, -85.75, -85.25, 29.55, 30.2])" in txt
+    # the explicit window pins the finer level (4) over its box.
+    assert "4, 4, 0.0, 900.0, -85.6, -85.5, 29.7, 29.8" in txt
+    # amr_levels_max covers the finest window level.
+    assert "amrdata.amr_levels_max = 4" in txt
+    # fgmax monitors at the AOI ambient level (3) so the whole AOI is captured.
+    assert "fg.min_level_check = 3" in txt
+
+
+def test_amr_window_can_exceed_the_requested_finest_raising_max_levels():
+    """A window asking for a level BEYOND amr_levels raises amr_levels_max to cover
+    it (a bounded sub-box), while the AOI ambient stays amr_levels-1."""
+    win = {"min_level": 5, "max_level": 5, "t_start_s": 0.0, "t_end_s": 900.0,
+           "min_lon": -85.6, "max_lon": -85.5, "min_lat": 29.7, "max_lat": 29.8}
+    spec = parse_build_spec(
+        _spec(scenario="tsunami", amr_levels=3, amr_regions=[win],
+              domain_bbox=[-86.5, 28.9, -85.0, 30.5])
+    )
+    txt = render_setrun_py(spec)
+    ast.parse(txt)
+    # amr_levels_max raised to the window level (5); AOI ambient = amr_levels-1 (2).
+    assert "amrdata.amr_levels_max = 5" in txt
+    assert "rundata.regiondata.regions.append([2, 2, 0., 1800.0, -85.75, -85.25, 29.55, 30.2])" in txt
+    assert "5, 5, 0.0, 900.0, -85.6, -85.5, 29.7, 29.8" in txt
+
+
+def test_no_amr_window_keeps_aoi_at_the_requested_finest():
+    """No windows -> the AOI default region stays at amr_levels (byte-identical to
+    the pre-ADR-0147 deck) and amr_levels_max == amr_levels."""
+    spec = parse_build_spec(_spec(scenario="tsunami", amr_levels=3,
+                                  domain_bbox=[-86.5, 28.9, -85.0, 30.5]))
+    txt = render_setrun_py(spec)
+    ast.parse(txt)
+    assert "rundata.regiondata.regions.append([3, 3, 0., 1800.0, -85.75, -85.25, 29.55, 30.2])" in txt
+    assert "amrdata.amr_levels_max = 3" in txt
+    assert "fg.min_level_check = 3" in txt

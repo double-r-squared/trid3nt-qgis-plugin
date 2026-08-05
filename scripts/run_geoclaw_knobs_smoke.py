@@ -5,11 +5,15 @@ and reports, per run: the new MinIO run prefix, the depth-layer scalars, and the
 ``Total mass at initial time`` diagnostic parsed from the uploaded geoclaw.stdout
 (~1e5 == no wave, ~1e9+ == a real wave). Cheap: coarse grid, short sim window.
 
+The banded Manning + the explicit AMR window activate ONLY when the deployed
+image carries the current worker (ADR 0147: a stale baked setrun_builder silently
+dropped both). Rebuild before smoking a worker change:
+  docker build -f services/workers/geoclaw/Dockerfile -t trid3nt-local/geoclaw:latest .
+
 Run:
   cd /home/nate/Documents/trid3nt-local
   set -a; source .env.local; set +a
-  TRID3NT_GEOCLAW_IMAGE=trid3nt-local/geoclaw:knobs-test \
-    PYTHONPATH=server/src:contracts/src \
+  PYTHONPATH=server/src:contracts/src \
     venvs/agent/bin/python scripts/run_geoclaw_knobs_smoke.py
 """
 
@@ -142,8 +146,8 @@ async def _main() -> int:
                 bbox=BBOX,
                 amr_regions=[
                     {
-                        "min_level": 3,
-                        "max_level": 3,
+                        "min_level": 4,
+                        "max_level": 4,
                         "t_start_s": 0.0,
                         "t_end_s": SIM_DURATION_S,
                         "min_lon": -124.21,
@@ -156,9 +160,10 @@ async def _main() -> int:
                 source_magnitude=8.5,
                 sim_duration_s=SIM_DURATION_S,
                 output_frames=OUTPUT_FRAMES,
-                amr_levels=3,
+                amr_levels=4,
             ),
-            setrun_needles=["3, 3, 0.0, 900.0, -124.21, -124.18, 41.745, 41.77"],
+            # AOI ambient drops to L3 so the L4 window refines above it (ADR 0147).
+            setrun_needles=["4, 4, 0.0, 900.0, -124.21, -124.18, 41.745, 41.77"],
         )
     )
     out = Path("docs/proof/geoclaw_knobs_smoke.json")
