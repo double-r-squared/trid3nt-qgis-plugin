@@ -638,6 +638,17 @@ from ..workflows.swmm.network_import.network_import import swmm_network_import a
 # system (row #1's machinery) at inlets. The composer (model_swmm_dual_drainage)
 # is inlined.
 from ..workflows.swmm.dual_drainage.dual_drainage import swmm_dual_drainage_coupling as _swmm_dual_drainage_coupling  # noqa: E402,F401 - NEW capability (ADR 0124, SWMM network family #2) (engine=swmm, tier=template)
+# Published-deck runner family (ADR 0128): three THIN templates over the shared
+# deck-runner core (agent/mesh/swmm_deck_runner.py + workflows/swmm/deck_runner/).
+# Each ingests a CITED, PUBLISHED openswmm.org example .inp deck (fetched at
+# runtime from the pinned public source; NOT baked - author-posted, redistribution
+# unclear), runs it VERBATIM through the headless swmm5_run solver, and charts the
+# deck-relevant outputs. The decks are the cited examples' SCHEMATIC networks (no
+# georeferenced map); each carries a capability the mesh-builder/GIS-parser cannot
+# produce: LID controls, storage routing, and PID/RTC control rules.
+from ..workflows.swmm.deck_lid_wq.deck_lid_wq import swmm_lid_raingarden_wq as _swmm_lid_raingarden_wq  # noqa: E402,F401 - NEW capability (ADR 0128, published-deck runner: LID rain-garden WQ) (engine=swmm, tier=template)
+from ..workflows.swmm.deck_detention_ponds.deck_detention_ponds import swmm_wwtp_detention_ponds as _swmm_wwtp_detention_ponds  # noqa: E402,F401 - NEW capability (ADR 0128, published-deck runner: storage-routing detention ponds) (engine=swmm, tier=template)
+from ..workflows.swmm.deck_pid_pump.deck_pid_pump import swmm_pump_pid_rtc as _swmm_pump_pid_rtc  # noqa: E402,F401 - NEW capability (ADR 0128, published-deck runner: PID pump RTC) (engine=swmm, tier=template)
 # telemac_river_dye TEMPLATE (engine="telemac", tier="template"), one folder
 # under workflows/telemac/river_dye/; EXCLUDED from the default retrieval
 # pool, surfaced only by the run_telemac door's gate expansion. The composer
