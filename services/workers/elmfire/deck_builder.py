@@ -568,6 +568,19 @@ def project_ignitions(ignitions: list[dict], grid: dict) -> list[dict]:
 # --------------------------------------------------------------------------- #
 
 
+def _extra_lines(extra: dict[str, str] | None) -> str:
+    """Render ``KEY = VALUE`` namelist lines from a pre-formatted-string dict.
+
+    Values are injected VERBATIM (the caller formats floats / ``.TRUE.`` /
+    per-fuel ``(:)`` array syntax), so the extension surface stays a thin
+    string pass-through — the deck builder never re-interprets ELMFIRE units.
+    An empty / ``None`` dict renders nothing (byte-identical to the base deck).
+    """
+    if not extra:
+        return ""
+    return "".join(f"{k} = {v}\n" for k, v in extra.items())
+
+
 def render_namelist(
     grid: dict,
     ignitions_xy: list[dict],
@@ -575,10 +588,14 @@ def render_namelist(
     duration_s: float,
     dt_s: float = 30.0,
     dtdump_s: float = 3600.0,
+    *,
+    simulator_extra: dict[str, str] | None = None,
+    outputs_extra: dict[str, str] | None = None,
+    inputs_extra: dict[str, str] | None = None,
 ) -> str:
     """Render ``elmfire.data`` with the tutorial-01 key set (proven).
 
-    Every key below appears in
+    Every base key below appears in
     ``third_party/elmfire/tutorials/01-constant-wind/elmfire.data.in`` — the deck
     the proven container consumed; only the values are templated. Paths are
     relative to the case dir (``cd <deck_dir> && elmfire_<VER>
@@ -588,6 +605,13 @@ def render_namelist(
 . Tutorial 01 simply does not enable it; the flag is a first-class
     ``&OUTPUTS`` dump documented at https://elmfire.io/user_guide/io.html and
     the composer publishes the flame-length raster as its own COG.
+
+    KNOB-EXTENSION SURFACE (sensitivity templates): ``simulator_extra`` /
+    ``outputs_extra`` / ``inputs_extra`` append extra ``KEY = VALUE`` lines to
+    the respective groups (each value a pre-formatted string the caller owns —
+    e.g. ``{"MAX_LOW": "8.0000"}``, ``{"WIND_FLUCTUATIONS": ".TRUE."}``,
+    ``{"DUMP_CROWN_FIRE_AREA": ".TRUE."}``). Unset (the default) reproduces the
+    base deck byte-for-byte.
     """
 
     def _f(v: float) -> str:
@@ -599,6 +623,9 @@ def render_namelist(
         sim_lines.append(f"Y_IGN({i})      = {_f(ign['y'])}")
         sim_lines.append(f"T_IGN({i})      = {_f(ign['t_ign_s'])}")
     sim_block = "\n".join(sim_lines)
+    sim_extra_block = _extra_lines(simulator_extra)
+    outputs_extra_block = _extra_lines(outputs_extra)
+    inputs_extra_block = _extra_lines(inputs_extra)
 
     return f"""&INPUTS
 FUELS_AND_TOPOGRAPHY_DIRECTORY = './inputs'
@@ -621,7 +648,7 @@ M10_FILENAME                   = 'm10'
 M100_FILENAME                  = 'm100'
 LH_MOISTURE_CONTENT            = {_f(weather["lh_pct"])}
 LW_MOISTURE_CONTENT            = {_f(weather["lw_pct"])}
-/
+{inputs_extra_block}/
 
 &OUTPUTS
 OUTPUTS_DIRECTORY    = './outputs'
@@ -631,7 +658,7 @@ DUMP_FLIN            = .TRUE.
 DUMP_SPREAD_RATE     = .TRUE.
 DUMP_TIME_OF_ARRIVAL = .TRUE.
 CONVERT_TO_GEOTIFF   = .FALSE.
-/
+{outputs_extra_block}/
 
 &COMPUTATIONAL_DOMAIN
 A_SRS = 'EPSG: {grid["epsg"]}'
@@ -649,7 +676,7 @@ SIMULATION_TSTOP = {_f(duration_s)}
 {sim_block}
 WX_BILINEAR_INTERPOLATION=.TRUE.
 WSMFEFF_LOW_MULT = 0.011364
-/
+{sim_extra_block}/
 
 &MISCELLANEOUS
 PATH_TO_GDAL                   = '/usr/bin'

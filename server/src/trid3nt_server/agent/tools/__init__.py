@@ -744,6 +744,12 @@ from ..workflows.elmfire.fire_spread.fire_spread import elmfire_fire_spread as _
 # elliptical-spread verification / calibration anchor), one folder under
 # workflows/elmfire/verification/; surfaced by the run_elmfire door's gate expansion.
 from ..workflows.elmfire.verification.verification import elmfire_verification_elliptical_replication as _elmfire_verification_elliptical_replication  # noqa: E402,F401 - NEW capability (ADR 0123, hazard-easy-four continuation #2) (engine=elmfire, tier=template)
+# ELMFIRE CAND-S sensitivity sweep templates (constant flat deck, one knob each):
+# each sweeps a &SIMULATOR / &INPUTS knob across a small ladder and returns an
+# ElmfireSensitivityLayerURI. tier=template, engine=elmfire.
+from ..workflows.elmfire.sensitivity.ltw_ceiling.ltw_ceiling import elmfire_length_to_width_ceiling_sensitivity as _elmfire_length_to_width_ceiling_sensitivity  # noqa: E402,F401 - MAX_LOW length:width ceiling sweep
+from ..workflows.elmfire.sensitivity.wind_fluctuation.wind_fluctuation import elmfire_wind_fluctuation_randomization as _elmfire_wind_fluctuation_randomization  # noqa: E402,F401 - WIND_FLUCTUATIONS deterministic-vs-randomized sweep
+from ..workflows.elmfire.sensitivity.live_moisture.live_moisture import elmfire_live_fuel_moisture_sensitivity as _elmfire_live_fuel_moisture_sensitivity  # noqa: E402,F401 - live herbaceous/woody moisture override sweep
 # pelicun_damage_assessment TEMPLATE (engine="pelicun", tier="template")
 # under workflows/pelicun/damage_assessment/; EXCLUDED from the default
 # retrieval pool, surfaced only by the run_pelicun door's gate expansion. Its

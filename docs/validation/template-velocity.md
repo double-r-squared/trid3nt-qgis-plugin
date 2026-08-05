@@ -21,6 +21,7 @@ per NATE 2026-08-04.
 | SCHISM coupled_waves + GOTM leg (0131) | 1 (engine #12 second archetype; the GOTM build blocker resolved) | ~2.5 h (incl the GOTM cmake-shim de-risk + the faithful itur=3 Duck run + cross-shore V&V + image rebuild) | ~2.5 h - engine-class (a NEW build leg: GOTM 3.2.5 cmake shim -> pschism_WWM_GOTM_TVD-VL) + the template landing on the 0118 exemplar |
 | hecras_flood_2d promotion (0140) | 1 (fresh-AOI 2D flood; discharges the 0127-0139 beta arc into a registered template) | ~42 min builder (authoring image build + pipeline wiring + 2 live fresh-AOI acceptances + ~45 offline gates) | ~42 min promotion-of-proven-machinery; the 8-experiment arc itself (~2 days) was the real cost, amortized over every future authored-mesh row |
 | Landlab six-row wave (0141) | 6 (storm-ensemble, of-timeseries, dem-conditioning, lake-mapping, hacks-law, hand; first per-engine grind batch) | ~50 min builder (all exec-mode, shared composer boilerplate, 6 live Boulder-AOI smokes + 83 offline gates + 9 proof renders) | ~8 min/template - the true-S floor when recipes are board-scoped and no image builds are needed |
+| ELMFIRE sensitivity wave (0142) | 3 landed + 5 honest STOPs w/ recipes (5 of 8 S labels overturned + 1 board framing corrected in triage) | ~56 min builder + ~4 min categories fixup (11 live solver runs, shared sensitivity spine, 52 offline gates) | ~19 min/landed; the STOP recipes convert 5 mislabeled rows into scoped M work (crown pair, spotting pair, transient-weather leg) |
 
 ## Working rates (sequential, incl close-out share)
 

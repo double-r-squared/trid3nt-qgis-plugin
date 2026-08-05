@@ -589,7 +589,7 @@ Aspects: constant/uniform wind point-ignition spread (Rothermel + Richards ellip
   src: https://elmfire.io/tutorials/tutorial_04.html (elmfire-tutorial-04)
   knobs: MODE=2, METEOROLOGY_BAND_START/STOP/SKIP_INTERVAL (6 bands, 0-25mph in 5mph steps), LANDFIRE 2.2.0 fuel/terrain
   notes: New solver operating mode (per-pixel deterministic potential, not transient point-ignition spread) - not a knob on the existing spread path. Outputs head_fire_flame_length_NNN.tif / spread_rate per band.
-- [CAND-S] `length_to_width_ratio_ceiling_sensitivity` [S] [US] - How sensitive is fire-shape elongation to the MAX_LOW length-to-width cap under extreme wind, and at what wind speed does the cap start binding?
+- [LANDED] `length_to_width_ratio_ceiling_sensitivity` [S] [US] (ADR 0142: `elmfire_length_to_width_ceiling_sensitivity` - redesigned in triage: sweeps MAX_LOW at fixed wind, the faithful cap-binding demo; wind-sweep framing did not isolate the cap) - How sensitive is fire-shape elongation to the MAX_LOW length-to-width cap under extreme wind, and at what wind speed does the cap start binding?
   src: https://elmfire.io/user_guide/physics.html (elmfire-physics)
   knobs: MAX_LOW (default 8.0) in &SIMULATOR
   notes: Directly implicated in Verification Case 02 (crown fire triggers MAX_LOW at high spread rates), giving a documented cross-reference case.
@@ -602,10 +602,10 @@ Aspects: initiation threshold (critical canopy cover + fireline intensity); acti
   src: https://elmfire.io/verification/verification_02.html (elmfire-verification-02)
   knobs: 20-ft wind=12mph (10m=22.2km/h), 1-hr FM=4%, canopy bulk density=0.18kg/m3; expect CROSA=65.63 m/min (3938 m/hr), compare hourly_isochrones.shp vs exact_ellipses/ellipse_1.shp
   notes: Published worked numeric expected output (CROSA value); this is TRID3NT's most build-ready crown-fire template. Pass/fail tolerance not numerically quantified on the page.
-- [CAND-S] `crown_fire_initiation_threshold_sweep` [S] [US] - At what combination of canopy cover and fireline intensity does crown fire initiate, and how does adjusting CRITICAL_CANOPY_COVER shift that boundary?
+- [CAND-M] `crown_fire_initiation_threshold_sweep` [S->M, STOP ADR 0142] [US] - At what combination of canopy cover and fireline intensity does crown fire initiate, and how does adjusting CRITICAL_CANOPY_COVER shift that boundary?
   src: https://elmfire.io/user_guide/physics.html (elmfire-physics)
   knobs: CRITICAL_CANOPY_COVER (default 0.39), CROWN_FIRE_MODEL (0/1)
-- [CAND-S] `crown_fire_spread_rate_ceiling_calibration` [S] [US] - How does capping CROWN_FIRE_SPREAD_RATE_LIMIT change simulated crown-run extent relative to the uncapped Cruz rate (which can reach thousands of m/hr per Verification 02)?
+- [CAND-M] `crown_fire_spread_rate_ceiling_calibration` [S->M, STOP ADR 0142, fold w/ initiation row] [US] - How does capping CROWN_FIRE_SPREAD_RATE_LIMIT change simulated crown-run extent relative to the uncapped Cruz rate (which can reach thousands of m/hr per Verification 02)?
   src: https://elmfire.io/user_guide/physics.html (elmfire-physics)
   knobs: CROWN_FIRE_SPREAD_RATE_LIMIT (default 250 ft/min)
 - [CAND-M] `crown_fire_triggered_ember_spotting` [M] [US] - How does ember generation restricted to crown-fire pixels (vs all surface-fire pixels) change downwind spot-fire density and timing?
@@ -621,10 +621,10 @@ Aspects: lognormal spot-distance distribution as fn(wind speed, fireline intensi
   src: https://elmfire.io/user_guide/spotting.html (elmfire-spotting)
   knobs: MEAN_SPOTTING_DIST (default 5.0m), SPOT_FLIN_EXP (0.3), SPOT_WS_EXP (0.7), NORMALIZED_SPOTTING_DIST_VARIANCE (250.0), SPOTTING_DISTRIBUTION_TYPE=LOGNORMAL
   notes: Author's cited precursor paper (doi:10.1016/j.firesaf.2013.08.014) is explicitly noted as describing a different model than what's implemented - do not cite that DOI as the source, cite this page.
-- [CAND-S] `critical_spotting_intensity_threshold_gate` [S] [US] - Below what fireline intensity does ember generation stop, and how does raising CRITICAL_SPOTTING_FIRELINE_INTENSITY suppress nuisance spotting from low-intensity backing fire?
+- [CAND-M] `critical_spotting_intensity_threshold_gate` [S->M, STOP ADR 0142] [US] - Below what fireline intensity does ember generation stop, and how does raising CRITICAL_SPOTTING_FIRELINE_INTENSITY suppress nuisance spotting from low-intensity backing fire?
   src: https://elmfire.io/user_guide/spotting.html (elmfire-spotting)
   knobs: CRITICAL_SPOTTING_FIRELINE_INTENSITY (default 0.0 kW/m), SURFACE_FIRE_SPOTTING_PERCENT(:) per fuel model, ENABLE_SURFACE_FIRE_SPOTTING
-- [CAND-S] `ember_count_and_landing_ignition_probability` [S] [US] - How does the number of embers cast per torching event and their probability of igniting on landing change spot-fire proliferation rate?
+- [CAND-M] `ember_count_and_landing_ignition_probability` [S->M, STOP ADR 0142, fold w/ intensity-gate row] [US] - How does the number of embers cast per torching event and their probability of igniting on landing change spot-fire proliferation rate?
   src: https://elmfire.io/user_guide/spotting.html (elmfire-spotting)
   knobs: NEMBERS_MIN/NEMBERS_MAX (default 1,1), PIGN (default 100%)
 - [CAND-L] `stochastic_spotting_parameter_ensemble` [L] [US] - What is the spread of spot-fire outcomes when all spotting parameters are randomized within user-defined ranges for Monte Carlo calibration, versus a single deterministic parameter set?
@@ -652,10 +652,10 @@ Aspects: initial-attack containment probability (Hirsch POC formula, response-ti
 Purpose: Supply and temporally resolve dead and live fuel moisture content, which directly drives the Rothermel spread-rate calculation and crown-fire Cruz correlation.
 Today: Weather/moisture rasters are consumed implicitly by existing point-ignition spread runs (per Tutorial 01/03 inputs) but conditioning controls are not confirmed as their own exposed, independently-tunable capability.
 Aspects: dead fuel moisture (1/10/100-hr) raster ingestion + linear-interpolation frequency control; live fuel moisture (herbaceous/woody/foliar) spatially-uniform override; live fuel moisture raster ingestion (spatially-varying); real-world weather/moisture retrieval pipeline (Cloudfire fuel_wx_ign.py)
-- [CAND-S] `dead_fuel_moisture_interpolation_frequency_control` [S] [US] - How much does coarsening the 1/10/100-hr dead-fuel-moisture linear-interpolation interval degrade simulated spread-rate accuracy versus the runtime cost saved?
+- [CAND-M] `dead_fuel_moisture_interpolation_frequency_control` [S->M, STOP ADR 0142: no-op on constant decks; needs the multi-band transient-weather deck machinery shared with transient_wind_schedule_spread] [US] - How much does coarsening the 1/10/100-hr dead-fuel-moisture linear-interpolation interval degrade simulated spread-rate accuracy versus the runtime cost saved?
   src: https://elmfire.io/user_guide/io.html (elmfire-io)
   knobs: DT_INTERPOLATE_M1 (default 300s), DT_INTERPOLATE_M10, DT_INTERPOLATE_M100
-- [CAND-S] `live_fuel_moisture_uniform_override` [S] [US] - How does shifting spatially-uniform live herbaceous/woody/foliar moisture (a single scalar per run) change spread rate and crown-fire onset relative to raster defaults?
+- [LANDED] `live_fuel_moisture_uniform_override` [S] [US] (ADR 0142: `elmfire_live_fuel_moisture_sensitivity`) - How does shifting spatially-uniform live herbaceous/woody/foliar moisture (a single scalar per run) change spread rate and crown-fire onset relative to raster defaults?
   src: https://elmfire.io/user_guide/io.html (elmfire-io)
   knobs: LH_MOISTURE_CONTENT, LW_MOISTURE_CONTENT, FOLIAR_MOISTURE_CONTENT (all in &INPUTS, percent)
 - [CAND-M] `live_fuel_moisture_raster_ingestion` [M] [US] - What is gained in spread-pattern realism by switching live fuel moisture from a spatially-uniform scalar to a spatially-varying raster input?
@@ -685,7 +685,7 @@ Aspects: randomized ignition locations (uniform vs density-weighted, ignition-ma
 - [CAND-L] `raster_perturbation_uniform_pdf_ensemble` [L] [US] - Perturbing fuel-moisture/wind input rasters by a bounded uniform distribution (spatially and/or temporally varying) across ensemble members, how much does output burn-probability spread widen versus unperturbed inputs?
   src: https://elmfire.io/user_guide/monte_carlo.html (elmfire-monte-carlo)
   knobs: NUM_RASTERS_TO_PERTURB, RASTER_TO_PERTURB(:), PDF_TYPE (uniform only), PDF_LOWER_LIMIT/PDF_UPPER_LIMIT, SPATIAL_PERTURBATION (global/pixel), TEMPORAL_PERTURBATION (static/dynamic)
-- [CAND-S] `wind_fluctuation_intensity_randomization` [S] [US] - Randomizing wind-speed/direction fluctuation intensity within a range per ensemble member (rather than a single fixed fluctuation setting), how does the resulting fire-shape variability compare to the deterministic-fluctuation case?
+- [LANDED] `wind_fluctuation_intensity_randomization` [S] [US] (ADR 0142: `elmfire_wind_fluctuation_randomization` - single-run WIND_FLUCTUATIONS members; the 100-member ctl-driven burn-probability ensemble is a follow-on) - Randomizing wind-speed/direction fluctuation intensity within a range per ensemble member (rather than a single fixed fluctuation setting), how does the resulting fire-shape variability compare to the deterministic-fluctuation case?
   src: https://elmfire.io/user_guide/monte_carlo.html (elmfire-monte-carlo)
   knobs: WIND_SPEED_FLUCTUATION_INTENSITY_MIN/MAX, WIND_DIRECTION_FLUCTUATION_INTENSITY_MIN/MAX (randomizes the &SIMULATOR WIND_FLUCTUATIONS base values)
   notes: Builds on the deterministic Wind Fluctuations sub-feature documented in Physics and Numerics (WIND_FLUCTUATIONS, DT_WIND_FLUCTUATIONS) - S effort if that base capability already exists as a knob.

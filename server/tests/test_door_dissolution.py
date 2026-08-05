@@ -45,6 +45,9 @@ EXPECTED_TEMPLATES = {
     "swan_wave_field",
     "geoclaw_inundation",
     "elmfire_fire_spread",
+    "elmfire_length_to_width_ceiling_sensitivity",  # ELMFIRE CAND-S: MAX_LOW length:width ceiling sweep
+    "elmfire_wind_fluctuation_randomization",  # ELMFIRE CAND-S: deterministic-vs-randomized wind-fluctuation ensemble
+    "elmfire_live_fuel_moisture_sensitivity",  # ELMFIRE CAND-S: live herbaceous moisture override sweep
     "landlab_susceptibility",
     "landlab_flow_accumulation",  # ADR 0122 hazard-easy-four #1: Landlab flow-accumulation / drainage-area + channel-network template
     "landlab_green_ampt_overland_flow",  # ADR 0123 hazard-easy-four continuation #1: Green-Ampt infiltration/runoff partition

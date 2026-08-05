@@ -63,6 +63,7 @@ __all__ = [
     "fetch_elmfire_inputs",
     "build_elmfire_deck_spec",
     "build_elmfire_deck",
+    "build_constant_flat_deck",
     "build_constant_verification_deck",
     "VERIFICATION_FUEL_MODEL_GR2",
     "VERIFICATION_FLAT_ELEVATION_M",
@@ -377,29 +378,47 @@ VERIFICATION_FUEL_MODEL_GR2: int = 102
 VERIFICATION_FLAT_ELEVATION_M: int = 1000
 
 
-def build_constant_verification_deck(
+#: Default flat-deck canopy constants (Int16 rasters): ZERO canopy -- no
+#: crown-fire fuel. Sensitivity templates that need a canopy (crown-fire family)
+#: pass non-zero values in the ELMFIRE stored-unit convention (cc percent,
+#: ch = 10*m, cbh = 10*m, cbd = 100*kg/m3 -- the CC_IN_PERCENT / CH_TIMES_10 /
+#: CBH_TIMES_10 / CBD_TIMES_100 namelist defaults).
+_ZERO_CANOPY: dict[str, int] = {"cbh": 0, "cbd": 0, "cc": 0, "ch": 0}
+
+
+def build_constant_flat_deck(
     run_args: ElmfireRunArgs,
     deck_dir: str | Path,
     *,
     fuel_model: int = VERIFICATION_FUEL_MODEL_GR2,
     flat_elevation_m: int = VERIFICATION_FLAT_ELEVATION_M,
+    canopy: dict[str, int] | None = None,
+    moisture_override: dict[str, float] | None = None,
+    simulator_extra: dict[str, str] | None = None,
+    outputs_extra: dict[str, str] | None = None,
+    inputs_extra: dict[str, str] | None = None,
+    dt_s: float = 30.0,
+    dtdump_s: float = 3600.0,
 ) -> dict[str, Any]:
     """Author an ALL-CONSTANT flat-grid ELMFIRE deck agent-side (no fetch).
 
-    The elliptical-verification override (ADR 0123): every fuels/topography raster
-    is a CONSTANT over the target grid -- a single uniform fuel model
-    (``fuel_model``, GR2/102 by default), zero canopy, flat terrain (constant
+    Every fuels/topography raster is a CONSTANT over the target grid -- a single
+    uniform fuel model (``fuel_model``, GR2/102 by default), a uniform canopy
+    (``canopy``; zero by default -- no crown fuel), flat terrain (constant
     elevation, slope 0, aspect 0) -- and the weather is the uniform constant wind
-    + fuel moisture from ``run_args``. Under these conditions Rothermel's spread
-    rate is constant and the fire perimeter from a point ignition is a closed-form
-    ellipse (Richards 1990), so the ToA raster can be verified against it.
+    + fuel moisture from ``run_args``. Under a zero-canopy deck Rothermel's
+    surface spread rate is constant and the point-ignition perimeter is a
+    closed-form ellipse (Richards 1990), so the ToA raster is verifiable against
+    it; a non-zero canopy + crown-fire dumps drives the crown-fire family.
 
     NO LANDFIRE / DEM fetch, NO warp: the deck is written directly on the grid
-    (a live drop-in over the same ``services/workers/elmfire/deck_builder`` seam
-    ``build_elmfire_deck`` uses, so the namelist / grid-identity assert /
-    ignition projection / manifest are byte-identical). Returns the SAME manifest
-    shape ``build_elmfire_deck`` returns (grid, aoi_bbox_4326, duration_s,
-    weather, ignitions_lonlat) so ``stage_elmfire_manifest`` consumes it unchanged.
+    (the same ``services/workers/elmfire/deck_builder`` seam ``build_elmfire_deck``
+    uses, so the namelist / grid-identity assert / ignition projection / manifest
+    are byte-identical). ``simulator_extra`` / ``outputs_extra`` / ``inputs_extra``
+    inject extra namelist knobs (pre-formatted-string values the caller owns);
+    unset reproduces the canonical constant deck. Returns the SAME manifest shape
+    ``build_elmfire_deck`` returns so ``stage_elmfire_manifest`` consumes it
+    unchanged.
     """
     import json as _json
 
@@ -415,16 +434,17 @@ def build_constant_verification_deck(
         cellsize_m=float(run_args.cellsize_m),
     )
 
-    # Constant fuels + topography (Int16). GR2 fuel bed, zero canopy, flat terrain.
+    canopy_vals = {**_ZERO_CANOPY, **(canopy or {})}
+    # Constant fuels + topography (Int16): fuel bed, canopy, flat terrain.
     int_constants: dict[str, int] = {
         "fbfm40": int(fuel_model),
         "dem": int(flat_elevation_m),
         "slp": 0,
         "asp": 0,
-        "cbh": 0,
-        "cbd": 0,
-        "cc": 0,
-        "ch": 0,
+        "cbh": int(canopy_vals["cbh"]),
+        "cbd": int(canopy_vals["cbd"]),
+        "cc": int(canopy_vals["cc"]),
+        "ch": int(canopy_vals["ch"]),
     }
     provenance: dict[str, dict] = {}
     for name, value in int_constants.items():
@@ -433,8 +453,12 @@ def build_constant_verification_deck(
         )
         provenance[name] = {"source": f"constant:{value}", "nodata_fraction": 0.0}
 
-    # Constant weather + adj/phi (Float32) from the scenario dial.
+    # Constant weather + adj/phi (Float32) from the scenario dial. An explicit
+    # ``moisture_override`` (dead m1/m10/m100 or live lh/lw percent) replaces the
+    # preset values key-for-key -- the live/dead fuel-moisture override surface.
     moisture = run_args.fuel_moisture_values()
+    if moisture_override:
+        moisture = {**moisture, **{k: float(v) for k, v in moisture_override.items()}}
     weather = {
         "ws_mph_20ft": float(run_args.wind_speed_mph),
         "wd_deg": float(run_args.wind_dir_deg),
@@ -467,7 +491,11 @@ def build_constant_verification_deck(
     ignitions_xy = db.project_ignitions([ign], grid)
     duration_s = float(run_args.duration_hours) * 3600.0
     namelist = db.render_namelist(
-        grid, ignitions_xy, weather, duration_s=duration_s, dt_s=30.0, dtdump_s=3600.0
+        grid, ignitions_xy, weather, duration_s=duration_s,
+        dt_s=float(dt_s), dtdump_s=float(dtdump_s),
+        simulator_extra=simulator_extra,
+        outputs_extra=outputs_extra,
+        inputs_extra=inputs_extra,
     )
     (inputs_dir / "elmfire.data").write_text(namelist)
 
@@ -480,12 +508,30 @@ def build_constant_verification_deck(
     manifest = db.compose_manifest(deck_dir, grid, spec_echo, ignitions_xy, provenance)
     (deck_dir / "deck_manifest.json").write_text(_json.dumps(manifest, indent=2))
     logger.info(
-        "build_constant_verification_deck: fuel=%d flat-terrain %dx%d @%sm "
-        "wind=%.1fmph@%.0fdeg duration=%.0fs -> %s",
-        fuel_model, grid["nx"], grid["ny"], grid["cellsize_m"],
-        weather["ws_mph_20ft"], weather["wd_deg"], duration_s, deck_dir,
+        "build_constant_flat_deck: fuel=%d canopy=%s flat-terrain %dx%d @%sm "
+        "wind=%.1fmph@%.0fdeg duration=%.0fs extra=%s -> %s",
+        fuel_model, canopy_vals, grid["nx"], grid["ny"], grid["cellsize_m"],
+        weather["ws_mph_20ft"], weather["wd_deg"], duration_s,
+        sorted((simulator_extra or {}).keys()), deck_dir,
     )
     return manifest
+
+
+def build_constant_verification_deck(
+    run_args: ElmfireRunArgs,
+    deck_dir: str | Path,
+    *,
+    fuel_model: int = VERIFICATION_FUEL_MODEL_GR2,
+    flat_elevation_m: int = VERIFICATION_FLAT_ELEVATION_M,
+) -> dict[str, Any]:
+    """The elliptical-verification deck: a zero-canopy constant flat deck.
+
+    A thin specialization of :func:`build_constant_flat_deck` (zero canopy, no
+    namelist extras) kept as its own named seam for the verification composer.
+    """
+    return build_constant_flat_deck(
+        run_args, deck_dir, fuel_model=fuel_model, flat_elevation_m=flat_elevation_m
+    )
 
 
 # --------------------------------------------------------------------------- #

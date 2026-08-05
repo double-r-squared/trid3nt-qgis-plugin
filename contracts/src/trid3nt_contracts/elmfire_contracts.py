@@ -69,6 +69,7 @@ __all__ = [
     "ElmfireRunArgs",
     "FireSpreadLayerURI",
     "ElmfireEllipseVerificationLayerURI",
+    "ElmfireSensitivityLayerURI",
 ]
 
 #: The three-value dead/live fuel-moisture scenario dial (see module docstring
@@ -342,3 +343,34 @@ class ElmfireEllipseVerificationLayerURI(FireSpreadLayerURI):
     length_to_width_ratio: float = Field(ge=0.0)
     tolerance: float = Field(ge=0.0)
     passed: bool
+
+
+class ElmfireSensitivityLayerURI(FireSpreadLayerURI):
+    """A one-parameter ELMFIRE sensitivity SWEEP result (constant flat deck).
+
+    Extends ``FireSpreadLayerURI`` (the primary layer is the time-of-arrival
+    raster of the sweep's representative -- most-elongated / most-spread -- run)
+    with the swept response the agent narrates (Invariant 1 -- typed fields, never
+    free-generated). One knob is swept across ``sweep`` points on an otherwise
+    ALL-CONSTANT flat deck (no LANDFIRE/DEM fetch), isolating that knob's effect:
+
+        swept_param: the knob name swept (e.g. "wind_speed_mph",
+            "live_herbaceous_moisture_pct", "wind_fluctuation_member").
+        swept_units: the swept knob's units (e.g. "mph", "percent", "member").
+        response_metric: the measured response (e.g. "length_to_width_ratio",
+            "burned_area_km2").
+        response_units: the response units (e.g. "ratio", "km2", "m/min").
+        sweep: the per-point ``[{"x": <knob value>, "y": <response>, ...}, ...]``
+            list (ascending in ``x``) backing the sensitivity chart -- each point
+            is one solved constant-deck run.
+        summary: template-specific derived scalars (e.g. the binding wind of a
+            length:width ceiling, the ensemble mean/spread of a wind-fluctuation
+            sweep) -- each a plain float the agent may narrate.
+    """
+
+    swept_param: str
+    swept_units: str
+    response_metric: str
+    response_units: str
+    sweep: list[dict[str, float]] = Field(default_factory=list)
+    summary: dict[str, float] = Field(default_factory=dict)

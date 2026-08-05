@@ -284,6 +284,9 @@ PRIMARY_CATEGORY: dict[str, str] = {
     "landlab_hacks_law_scaling": "hazard_modeling",
     "landlab_hand_wetness": "hazard_modeling",
     "elmfire_verification_elliptical_replication": "hazard_modeling",
+    "elmfire_length_to_width_ceiling_sensitivity": "hazard_modeling",
+    "elmfire_wind_fluctuation_randomization": "hazard_modeling",
+    "elmfire_live_fuel_moisture_sensitivity": "hazard_modeling",
     "geoclaw_tsunami_gauge_timeseries": "hazard_modeling",
     # USGS post-fire debris-flow hazard composer (pfdf: Staley 2017 M1
     # likelihood + Gartner 2014 emergency volume + Cannon 2010 combined class

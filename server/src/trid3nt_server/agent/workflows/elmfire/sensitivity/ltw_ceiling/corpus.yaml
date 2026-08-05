@@ -1,0 +1,9 @@
+# Template routing phrasings: engine templates are ordinary retrieval-pool tools.
+elmfire_length_to_width_ceiling_sensitivity:
+- at what wind speed does the fire shape length to width cap start binding
+- how sensitive is fire elongation to the MAX_LOW length to width ceiling
+- sweep wind speed and measure the fire ellipse length to width ratio
+- where does ELMFIRE clamp the wind driven fire shape elongation
+- fire shape elongation ceiling sensitivity under extreme wind
+- how far does a wildfire elongate as wind rises before the length to width cap
+- MAX_LOW length to width ratio cap sensitivity on a constant grass deck
