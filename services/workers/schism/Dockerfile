@@ -19,6 +19,15 @@
 #     no modules, the STOFS-class default for a plain surge/tide run and the
 #     binary the in-image QuarterAnnulus verification gate exercises.
 #
+#   pschism_WWM_GOTM_TVD-VL (ADR 0126/0129)
+#     -- the targeted TWO-WAY WAVE-CURRENT COUPLED executable: the hydro core +
+#     WWM-III spectral waves + the GOTM k-epsilon turbulence closure (itur=3),
+#     and NOTHING else -- so a coupled-wave case (the Duck NC FRF validation deck)
+#     runs WITHOUT the full-monty's every-module-namelist demand. GOTM 3.2.5 is
+#     Makefile-only in-tree; a cmake shim (below) compiles its turbulence+util
+#     libraries so SCHISM's USE_GOTM add_subdirectory seam resolves. The
+#     schism_coupled_waves template selects it via the entrypoint "wwm" variant.
+#
 # TWO documented findings baked as source patches / exclusions (ADR 0115):
 #   * EcoSim (USE_ECO) is EXCLUDED -- its automatic-array declarations are
 #     illegal under the -finit-local-zero safety flag SCHISM's hydro core wants
@@ -73,7 +82,7 @@ RUN cd /src/schism \
 RUN cat > /src/COMPILERS.cmake <<'EOF'
 set(CMAKE_Fortran_COMPILER gfortran CACHE PATH "")
 set(CMAKE_C_COMPILER gcc CACHE PATH "")
-set(CMAKE_Fortran_FLAGS_RELEASE "-O2 -ffree-line-length-none -static-libgfortran -finit-local-zero -fallow-argument-mismatch" CACHE STRING "" FORCE)
+set(CMAKE_Fortran_FLAGS_RELEASE "-O2 -ffree-line-length-none -static-libgfortran -finit-local-zero -fallow-argument-mismatch -fallow-invalid-boz" CACHE STRING "" FORCE)
 set(CMAKE_BUILD_TYPE Release CACHE STRING "" FORCE)
 set(NO_PARMETIS OFF CACHE BOOLEAN "" FORCE)
 set(TVD_LIM VL CACHE STRING "" FORCE)
@@ -96,6 +105,39 @@ set(USE_ANALYSIS ON CACHE BOOLEAN "" FORCE)
 set(PREC_EVAP ON CACHE BOOLEAN "" FORCE)
 EOF
 
+# --- GOTM leg (ADR 0126/0129): a cmake shim over the in-tree GOTM 3.2.5 --------
+# SCHISM v5.11's cmake does `add_subdirectory(${GOTM_BASE}/src gotm)` and links the
+# hydro core against cmake targets `turbulence`+`util` (reading modules from
+# ${CMAKE_BINARY_DIR}/gotm/modules), but the in-tree src/GOTM3.2.5 ships
+# Makefile-only. This shim compiles the two libraries SCHISM's gotm glue actually
+# uses (init_turbulence/do_turbulence from `turbulence`; init_tridiagonal from
+# `mtridiagonal` in `util`) as cmake targets. REALTYPE resolves to double precision
+# (cppdefs.h: SINGLE is undef'd) -- matches SCHISM's rkind=8. This is the ONLY
+# missing leg for a faithful itur=3 (GOTM k-epsilon) coupled-wave build.
+RUN cat > /src/schism/src/GOTM3.2.5/src/CMakeLists.txt <<'EOF'
+cmake_minimum_required(VERSION 3.10)
+set(CMAKE_Fortran_MODULE_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/modules)
+include_directories(${CMAKE_CURRENT_SOURCE_DIR}/../netcdf_include)
+set(_GOTM_FFLAGS "-cpp -ffree-line-length-none -fallow-argument-mismatch -std=legacy -O2 -fPIC")
+file(GLOB _UTIL_SRC CONFIGURE_DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/util/*.F90)
+add_library(util STATIC ${_UTIL_SRC})
+set_target_properties(util PROPERTIES COMPILE_FLAGS "${_GOTM_FFLAGS}")
+file(GLOB _TURB_SRC CONFIGURE_DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/turbulence/*.F90)
+add_library(turbulence STATIC ${_TURB_SRC})
+set_target_properties(turbulence PROPERTIES COMPILE_FLAGS "${_GOTM_FFLAGS}")
+add_dependencies(turbulence util)
+target_link_libraries(turbulence util)
+EOF
+
+# targeted WWM + GOTM coupled-wave binary (USE_WWM + USE_GOTM only): the coupled
+# solver for schism_coupled_waves (ADR 0126/0129). SED intentionally OFF (the Duck
+# case ships no sediment.nml; itur=3 needs GOTM, NOT the SED-gated itur=5).
+RUN cat > /src/WWMGOTM.cmake <<'EOF'
+set(USE_WWM ON CACHE BOOLEAN "" FORCE)
+set(USE_GOTM ON CACHE BOOLEAN "" FORCE)
+set(GOTM_BASE /src/schism/src/GOTM3.2.5 CACHE PATH "" FORCE)
+EOF
+
 # Build full-monty then hydro-core (separate out-of-source trees).
 RUN mkdir -p /src/schism/build_full \
     && cd /src/schism/build_full \
@@ -109,9 +151,18 @@ RUN mkdir -p /src/schism/build_hydro \
     && make -j"$(nproc)" pschism 2>&1 | tail -3 \
     && ls bin/pschism_TVD-VL
 
+# targeted WWM+GOTM coupled-wave binary (ADR 0126/0129). cmake reports
+# "USE_GOTM OPTION IS ON" + names the exe pschism_WWM_GOTM_TVD-VL.
+RUN mkdir -p /src/schism/build_wwmgotm \
+    && cd /src/schism/build_wwmgotm \
+    && cmake -C /src/COMPILERS.cmake -C /src/WWMGOTM.cmake /src/schism/src > cfg.log 2>&1 \
+    && make -j"$(nproc)" pschism 2>&1 | tail -3 \
+    && ls bin/pschism_WWM_GOTM_TVD-VL
+
 RUN mkdir -p /opt/schism/bin \
-    && cp /src/schism/build_full/bin/pschism_* /opt/schism/bin/ \
+    && cp /src/schism/build_full/bin/pschism_WWM_COSINE_* /opt/schism/bin/ \
     && cp /src/schism/build_hydro/bin/pschism_TVD-VL /opt/schism/bin/ \
+    && cp /src/schism/build_wwmgotm/bin/pschism_WWM_GOTM_TVD-VL /opt/schism/bin/ \
     && strip /opt/schism/bin/pschism_* \
     && ls -la /opt/schism/bin/
 
@@ -160,6 +211,8 @@ WORKDIR /data
 # imports, and the QuarterAnnulus analytical gate passes with the baked binary.
 RUN /opt/schism/bin/pschism_TVD-VL -v \
     && /opt/schism/bin/pschism_WWM_COSINE_ICM_FIB_SED_ANALYSIS_PREC_EVAP_PAHM_HA_MARSH_GEN_AGE_TVD-VL -v \
+    && /opt/schism/bin/pschism_WWM_GOTM_TVD-VL -v \
+    && ! ( ldd /opt/schism/bin/pschism_WWM_GOTM_TVD-VL 2>&1 | grep -i "not found" ) \
     && ! ( ldd /opt/schism/bin/pschism_TVD-VL 2>&1 | grep -i "not found" ) \
     && python3 -c "import sys; sys.path.insert(0,'/opt/trid3nt/services/workers/schism'); import schism_gr3; print('gr3 bridge import OK')" \
     && python3 /opt/trid3nt/services/workers/schism/fixtures/quarterannulus/qa_gate.py

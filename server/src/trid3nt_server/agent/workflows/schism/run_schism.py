@@ -39,6 +39,12 @@ logger = logging.getLogger("trid3nt.workflows.run_schism")
 #: ``SOLVER_WORKFLOW_REGISTRY`` (presence gate) and ``LOCAL_SOLVER_SPEC_REGISTRY``.
 SCHISM_SOLVER_NAME: str = "schism_tidal_hydro"
 
+#: The coupled-waves solver identifier (ADR 0126/0129). Same worker image, the
+#: ``wwm`` executable variant (pschism_WWM_GOTM_TVD-VL). Registered alongside so
+#: ``run_solver(solver='schism_coupled_waves', ...)`` resolves the same local-docker
+#: spec.
+SCHISM_WAVE_SOLVER_NAME: str = "schism_coupled_waves"
+
 #: Default worker image (override via env TRID3NT_SCHISM_IMAGE, mirroring
 #: TRID3NT_TELEMAC_IMAGE / TRID3NT_HECRAS_IMAGE).
 DEFAULT_SCHISM_IMAGE: str = "trid3nt-local/schism:latest"
@@ -70,6 +76,7 @@ def register_schism_solver() -> None:
     )
 
     SOLVER_WORKFLOW_REGISTRY.setdefault(SCHISM_SOLVER_NAME, LOCAL_DOCKER_WORKFLOW_NAME)
+    SOLVER_WORKFLOW_REGISTRY.setdefault(SCHISM_WAVE_SOLVER_NAME, LOCAL_DOCKER_WORKFLOW_NAME)
 
 
 register_schism_solver()
@@ -110,8 +117,12 @@ def _classify_exit(
     return "error", (exit_code or 5), str(error), extra
 
 
-def schism_local_spec() -> "Any":
-    """Build the SCHISM ``LocalSolverSpec`` for the local-docker backend."""
+def schism_local_spec(solver_name: str = SCHISM_SOLVER_NAME) -> "Any":
+    """Build a SCHISM ``LocalSolverSpec`` for the local-docker backend.
+
+    Parametrized by ``solver_name`` so both the tidal-hydro and coupled-waves
+    solvers share the ONE worker image (they differ only by the manifest
+    ``variant`` the entrypoint selects, ADR 0126)."""
     from trid3nt_server.agent.tools.simulation.solver.solver import (
         LOCAL_DOCKER_WORKFLOW_NAME,
         LocalSolverSpec,
@@ -139,7 +150,7 @@ def schism_local_spec() -> "Any":
         ]
 
     return LocalSolverSpec(
-        solver=SCHISM_SOLVER_NAME,
+        solver=solver_name,
         workflow_name=LOCAL_DOCKER_WORKFLOW_NAME,
         args_key="schism_args",
         build_argv=build_argv,
@@ -153,10 +164,13 @@ def schism_local_spec() -> "Any":
 
 
 def register_schism_local_spec() -> None:
-    """Register the SCHISM LocalSolverSpec factory for the local-docker backend."""
+    """Register the SCHISM LocalSolverSpec factories for the local-docker backend."""
     from trid3nt_server.agent.tools.simulation.solver.solver import register_local_solver_spec
 
     register_local_solver_spec(SCHISM_SOLVER_NAME, schism_local_spec)
+    register_local_solver_spec(
+        SCHISM_WAVE_SOLVER_NAME, lambda: schism_local_spec(SCHISM_WAVE_SOLVER_NAME)
+    )
 
 
 register_schism_local_spec()

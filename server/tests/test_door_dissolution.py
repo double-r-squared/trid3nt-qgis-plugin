@@ -25,7 +25,8 @@ import trid3nt_server.main as _main
 from trid3nt_server.agent.tools.search.search_tools import search_tools as dd
 from trid3nt_server.agent.tools.search.tool_retrieval import retrieve_visible_tools
 
-# The 29 registered engine templates (12 engines; MODFLOW ships 11, HEC-RAS #11, SCHISM #12).
+# The registered engine templates (12 engines; MODFLOW ships 11, HEC-RAS #11 ships
+# 2, SCHISM #12 ships 2 -- tidal_hydro + coupled_waves).
 EXPECTED_TEMPLATES = {
     "sfincs_flood",
     "sfincs_advanced_numerical_physics_knobs",  # S-tier wave 1: SFINCS numerical solver-settings knob template
@@ -39,6 +40,7 @@ EXPECTED_TEMPLATES = {
     "hecras_riverine_flood",  # engine #11 (ADR 0109; renamed ADR 0120): HEC-RAS riverine-flood template (v1 geometry: Muncie)
     "hecras_levee_breach",  # engine #11 second archetype (ADR 0125): HEC-RAS levee-breach template (v1 geometry: Muncie leveed floodplain)
     "schism_tidal_hydro",  # engine #12 (ADR 0118): SCHISM barotropic tidal template
+    "schism_coupled_waves",  # engine #12 second archetype (ADR 0131): SCHISM+WWM+GOTM coupled-wave template (Duck FRF)
     "swan_wave_field",
     "geoclaw_inundation",
     "elmfire_fire_spread",
@@ -104,7 +106,7 @@ def test_all_templates_registered_and_callable():
         n for n, e in reg.items() if getattr(e.metadata, "tier", "general") == "template"
     }
     assert registered_templates == EXPECTED_TEMPLATES, (
-        "registered tier=template set drifted from the expected 30: "
+        "registered tier=template set drifted from the expected 31: "
         f"missing={sorted(EXPECTED_TEMPLATES - registered_templates)} "
         f"unexpected={sorted(registered_templates - EXPECTED_TEMPLATES)}"
     )

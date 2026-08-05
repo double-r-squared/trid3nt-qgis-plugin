@@ -39,6 +39,8 @@ __all__ = [
     "SchismDeckError",
     "quarterannulus_fixture_dir",
     "stage_quarterannulus_deck",
+    "wwm_duck_fixture_dir",
+    "stage_wwm_duck_deck",
     "load_gr3_bridge",
     "sample_bathymetry_on_nodes",
     "author_coastal_tin_deck",
@@ -117,6 +119,111 @@ def stage_quarterannulus_deck(dest_dir: str | Path) -> list[Path]:
         shutil.copy(s, d)
         out.append(d)
     return out
+
+
+#: The Test_WWM_Duck deck files staged for the coupled_waves archetype (the
+#: published V&V data under Data/ is NOT a worker deck file -- the composer reads
+#: it server-side for the cross-shore chart).
+_WWM_DUCK_DECK_FILES: tuple[str, ...] = (
+    "hgrid.gr3", "hgrid.ll", "vgrid.in", "param.nml", "bctides.in",
+    "wwminput.nml", "wwmbnd.gr3", "diffmax.gr3", "diffmin.gr3",
+    "elev.ic", "elev.th", "rough.gr3", "u_prof.dat",
+    "DUCK94_wave_spectra_8m_array.nc",
+)
+
+#: WWM output indices KEPT (all others zeroed at stage time -> a small scribe
+#: count): sig. height (1) + discrete peak period (9) -- the postprocess targets.
+_WWM_KEEP_IOF_WWM: frozenset[int] = frozenset({1, 9})
+#: Hydro output indices KEPT: elevation (1) only.
+_WWM_KEEP_IOF_HYDRO: frozenset[int] = frozenset({1})
+
+
+def wwm_duck_fixture_dir() -> Path:
+    """Resolve the repo's bundled Test_WWM_Duck fixture directory (ADR 0126/0129)."""
+    here = Path(__file__).resolve()
+    for parent in here.parents:
+        cand = parent / "services" / "workers" / "schism" / "fixtures" / "wwm_duck"
+        if cand.is_dir():
+            return cand
+    raise SchismDeckError(
+        "SCHISM_INPUT_INVALID",
+        "could not locate the bundled Test_WWM_Duck fixture under services/workers/schism/fixtures",
+    )
+
+
+def _transform_wwm_param(param_text: str, *, sim_hours: float) -> str:
+    """Apply the ADR 0126 1d staging transforms to the pristine Duck param.nml.
+
+    Deterministic + line-oriented (a test asserts idempotence): strip the three
+    master-only namelist vars the v5.11.0 binary does not declare
+    (``nbins_veg_vert`` / ``nmarsh_types`` / ``RADFLAG``), substitute ``rnday`` from
+    the requested window, and trim the output flags to elevation + Hs + Tp so a
+    small scribe count runs on a modest core budget. ``itur=3`` is KEPT (faithful).
+    """
+    import re
+
+    rnday = max(0.02, float(sim_hours) / 24.0)
+    out_lines: list[str] = []
+    for line in param_text.splitlines():
+        stripped = line.strip()
+        low = stripped.lower()
+        # 1. drop master-only vars (would abort the run: "Cannot match namelist object")
+        if re.match(r"(nbins_veg_vert|nmarsh_types|radflag)\s*=", low):
+            continue
+        # 2. rnday substitution (preserve any trailing comment)
+        m = re.match(r"(\s*rnday\s*=\s*)([0-9.eEdD+-]+)(.*)$", line)
+        if m:
+            out_lines.append(f"{m.group(1)}{rnday:.6f}{m.group(3)}")
+            continue
+        # 3. output trim: zero every iof_hydro/iof_wwm not in the keep sets
+        mh = re.match(r"(\s*iof_hydro\((\d+)\)\s*=\s*)1(\b.*)$", line)
+        if mh and int(mh.group(2)) not in _WWM_KEEP_IOF_HYDRO:
+            out_lines.append(f"{mh.group(1)}0{mh.group(3)}")
+            continue
+        mw = re.match(r"(\s*iof_wwm\((\d+)\)\s*=\s*)1(\b.*)$", line)
+        if mw and int(mw.group(2)) not in _WWM_KEEP_IOF_WWM:
+            out_lines.append(f"{mw.group(1)}0{mw.group(3)}")
+            continue
+        out_lines.append(line)
+    return "\n".join(out_lines) + ("\n" if param_text.endswith("\n") else "")
+
+
+def stage_wwm_duck_deck(
+    dest_dir: str | Path, *, sim_hours: float = 4.0
+) -> tuple[list[Path], int, int]:
+    """Stage the bundled Duck deck (transformed) into ``dest_dir`` for the coupled run.
+
+    Copies the pristine fixture verbatim, then applies the in-code ADR 0126
+    transforms (``_transform_wwm_param`` + the two file-name reconciliations GOTM/
+    WWM hardcode) so the deck runs on ``pschism_WWM_GOTM_TVD-VL``. Returns
+    ``(deck_files, ncompute, nscribe)`` -- 4 compute + 4 scribe (the proven spike
+    layout; >= the 3 trimmed output variables).
+    """
+    dest_dir = Path(dest_dir)
+    dest_dir.mkdir(parents=True, exist_ok=True)
+    src = wwm_duck_fixture_dir()
+    out: list[Path] = []
+    for name in _WWM_DUCK_DECK_FILES:
+        s = src / name
+        if not s.exists():
+            raise SchismDeckError("SCHISM_INPUT_INVALID", f"WWM_Duck fixture missing: {name}")
+        d = dest_dir / name
+        if name == "param.nml":
+            d.write_text(
+                _transform_wwm_param(s.read_text(encoding="utf-8"), sim_hours=sim_hours),
+                encoding="utf-8",
+            )
+        else:
+            shutil.copy(s, d)
+        out.append(d)
+    # GOTM's init_turbulence hardcodes 'gotmturb.nml'; WWM wants its own hgrid.
+    gotm_nml = dest_dir / "gotmturb.nml"
+    shutil.copy(src / "gotmturb.inp", gotm_nml)
+    out.append(gotm_nml)
+    hgrid_wwm = dest_dir / "hgrid_WWM.gr3"
+    shutil.copy(src / "hgrid.gr3", hgrid_wwm)
+    out.append(hgrid_wwm)
+    return out, 4, 4
 
 
 def load_gr3_bridge() -> Any:

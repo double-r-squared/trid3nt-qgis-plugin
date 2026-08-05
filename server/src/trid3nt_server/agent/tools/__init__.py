@@ -674,6 +674,12 @@ from ..workflows.hecras.levee_breach.levee_breach import hecras_levee_breach as 
 # OR an oceanmesh coastal_tin. The composer chain (model_schism_tidal_hydro) is
 # inlined in the template module; workflows/schism/run_schism.py is the local solve seam.
 from ..workflows.schism.tidal_hydro.tidal_hydro import schism_tidal_hydro as _schism_tidal_hydro  # noqa: E402,F401 - engine #12 (engine=schism, tier=template)
+# schism_coupled_waves TEMPLATE (engine="schism", tier="template"), engine #12
+# second archetype (ADR 0126/0129): SCHISM+WWM two-way wave-current coupling on the
+# bundled Duck NC FRF validation case, with the GOTM k-epsilon closure (the
+# pschism_WWM_GOTM_TVD-VL variant). The composer chain (model_schism_coupled_waves)
+# is inlined in the template module.
+from ..workflows.schism.coupled_waves.coupled_waves import schism_coupled_waves as _schism_coupled_waves  # noqa: E402,F401 - engine #12 second archetype (engine=schism, tier=template)
 # geoclaw_inundation TEMPLATE (engine="geoclaw", tier="template"), one folder
 # under workflows/geoclaw/inundation/; EXCLUDED from the default retrieval
 # pool, surfaced only by the run_geoclaw door's gate expansion. The composer

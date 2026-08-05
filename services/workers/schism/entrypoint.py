@@ -11,7 +11,11 @@ I/O here (a supervisor uploads /data); netCDF -> COG postprocess is the landing.
 manifest.json::
 
     {
-      "variant": "hydro" | "full",     # which baked executable (default hydro)
+      "variant": "hydro" | "full" | "wwm", # baked executable (default hydro):
+                                          #   hydro = pschism_TVD-VL (bare core)
+                                          #   full  = the full-monty WWM_COSINE_...
+                                          #   wwm   = pschism_WWM_GOTM_TVD-VL
+                                          #           (targeted WWM+GOTM coupled waves)
       "ncompute": 3,                     # compute ranks (default 3)
       "nscribe": 2,                      # scribe I/O ranks (default 2; >= # out vars)
       "timeout_s": 3600,
@@ -34,8 +38,15 @@ DATA = Path(os.environ.get("SCHISM_DATA_DIR", "/data"))
 
 
 def _resolve_exe(variant: str) -> Path:
-    if variant == "full":
-        cands = sorted(BIN_DIR.glob("pschism_WWM_*"))
+    # NOTE (ADR 0126): the "full" glob pschism_WWM_* sorts the COSINE full-monty
+    # binary FIRST, so the targeted WWM+GOTM coupled-wave binary needs its OWN,
+    # more-specific glob -- never the shared pschism_WWM_* prefix.
+    if variant == "wwm":
+        cands = sorted(BIN_DIR.glob("pschism_WWM_GOTM_*"))
+    elif variant == "full":
+        cands = sorted(BIN_DIR.glob("pschism_WWM_COSINE_*")) or sorted(
+            BIN_DIR.glob("pschism_WWM_*")
+        )
     else:
         cands = sorted(BIN_DIR.glob("pschism_TVD-*"))
     if not cands:

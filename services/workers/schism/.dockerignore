@@ -2,3 +2,7 @@ __pycache__/
 *.pyc
 .pytest_cache/
 *.log
+# The wwm_duck fixture (~14 MB) is staged SERVER-SIDE by the composer (uploaded to
+# the cache bucket, fed to the worker via manifest inputs[]); the image never reads
+# it (only quarterannulus/qa_gate.py runs at build time) -- keep it out of the image.
+fixtures/wwm_duck/

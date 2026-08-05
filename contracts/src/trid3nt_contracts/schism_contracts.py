@@ -42,8 +42,10 @@ from .execution import LayerURI
 
 __all__ = [
     "SCHISM_ELEV_STYLE_PRESET",
+    "SCHISM_WAVE_STYLE_PRESET",
     "SCHISMRunArgs",
     "SchismElevationLayerURI",
+    "SchismWaveLayerURI",
     "SCHISM_ARCHETYPES",
     "SCHISM_MESH_SOURCES",
     "SCHISM_CONSTITUENTS",
@@ -61,12 +63,19 @@ __all__ = [
 #: label render regardless of the QML preset library's coverage.
 SCHISM_ELEV_STYLE_PRESET: str = "continuous_flood_depth"
 
-#: The registered archetypes for this engine. v1 ships exactly ONE: the barotropic
-#: tidal-hydrodynamics archetype (no external forcing legs). CORIE (estuary),
-#: WWM_Duck (nearshore waves), and STOFS-class (surge + real forcing) are the
-#: queued sign-off candidates (ADR 0115 4b / ADR 0118), each needing its own
-#: forcing legs (FES2014/TPXO tides, sflux, G-RTOFS/HYCOM).
-SCHISM_ARCHETYPES: tuple[str, ...] = ("tidal_hydro",)
+#: Style preset for the max significant wave HEIGHT (Hs) raster. HONEST REUSE of
+#: the continuous flood-depth family ramp (an Hs field is an all-positive nearshore
+#: envelope, exactly the shape that ramp renders); the layer always carries a
+#: DATA-DRIVEN ``legend`` so the real Hs range + label render regardless of the QML
+#: preset library's coverage. Shared with the elevation raster by construction.
+SCHISM_WAVE_STYLE_PRESET: str = "continuous_flood_depth"
+
+#: The registered archetypes for this engine. v1 shipped the barotropic
+#: tidal-hydrodynamics archetype (``tidal_hydro``, no external forcing legs); the
+#: SCHISM+WWM two-way wave-current coupling archetype (``coupled_waves``, the Duck
+#: FRF validation, ADR 0126/0129) is the second. STOFS-class surge + CORIE estuary
+#: remain queued sign-off candidates (each needing its own forcing legs).
+SCHISM_ARCHETYPES: tuple[str, ...] = ("tidal_hydro", "coupled_waves")
 
 #: The mesh sources the ``tidal_hydro`` archetype accepts.
 SCHISM_MESH_SOURCES: tuple[str, ...] = ("bundled_quarterannulus", "coastal_tin")
@@ -226,3 +235,61 @@ class SchismElevationLayerURI(LayerURI):
     analytical_rmse_m: float | None = Field(default=None, ge=0.0)
     analytical_amp_err_m: float | None = Field(default=None, ge=0.0)
     analytical_correlation: float | None = None
+
+
+class SchismWaveLayerURI(LayerURI):
+    """A ``LayerURI`` for a SCHISM+WWM max significant-wave-HEIGHT raster + wave scalars.
+
+    The ``coupled_waves`` archetype's typed result (ADR 0126/0129): the two-way
+    wave-current coupled solve (SCHISM hydro core + WWM-III spectral waves + the
+    GOTM k-epsilon turbulence closure, ``itur=3``) writes ``sigWaveHeight`` (Hs) and
+    ``peakPeriod`` (Tp) per node per step into ``out2d``. The raster is the PEAK
+    (max-over-time) significant wave height at each mesh node, interpolated onto a
+    regular grid and (for the georeferenced Duck FRF mesh) CLIPPED to the mesh AOI +
+    COG-tiled (ADR 0116 -- never a raw netCDF layer). The scalars the agent CITES
+    rather than invents (invariant 1 / FR-AS-7):
+
+        hs_max_m: peak significant wave height anywhere/anytime (metres) -- the
+            headline nearshore wave crest.
+        hs_mean_m: mean Hs over the wet nodes (metres) -- the field-average energy.
+        tp_max_s: peak (discrete) wave period anywhere/anytime (seconds).
+        tp_at_hs_max_s: the Tp at the Hs-max node (seconds) -- the dominant swell.
+        offshore_hs_m: modeled Hs at the offshore (deepest) mesh boundary (metres)
+            -- the forcing anchor a cross-shore transect shoals down from.
+        n_nodes / n_elements: the SCHISM grid size (the modeled domain extent).
+        sim_hours: the coupled-run length (hours; the Duck case is 4 h).
+
+    Cross-shore VERIFICATION vs the bundled published gauge transect (the 8m-array /
+    pressure-transducer Hm0/Tp; ``None`` when the V&V data is absent):
+
+        vv_n_gauges: number of cross-shore gauges matched.
+        vv_hs_rmse_m: RMSE of modeled vs measured Hs across the gauges (metres).
+        vv_hs_bias_m: mean (modeled - measured) Hs bias across the gauges (metres).
+        vv_hs_corr: modeled-vs-measured cross-shore Hs correlation.
+        vv_offshore_hs_obs_m / vv_offshore_hs_mod_m: measured/modeled Hs at the
+            offshore reference gauge (the boundary-forcing anchor).
+        vv_tp_rmse_s: RMSE of modeled vs measured Tp across the gauges (seconds).
+
+    ``layer_type`` is ``"raster"`` (the max-Hs COG); the SEPARATE mesh preview rides
+    as a ``layer_type="mesh"`` LayerURI (ADR 0118). Uses the
+    ``continuous_flood_depth`` style preset + a data-driven ``legend``. The
+    ``fallback_note`` carries the coupled-wave fidelity / published-fixture honesty
+    floor.
+    """
+
+    hs_max_m: float
+    hs_mean_m: float | None = Field(default=None, ge=0.0)
+    tp_max_s: float | None = Field(default=None, ge=0.0)
+    tp_at_hs_max_s: float | None = Field(default=None, ge=0.0)
+    offshore_hs_m: float | None = Field(default=None, ge=0.0)
+    n_nodes: int | None = Field(default=None, ge=0)
+    n_elements: int | None = Field(default=None, ge=0)
+    sim_hours: float | None = Field(default=None, ge=0.0)
+    # cross-shore V&V vs the bundled published gauge transect
+    vv_n_gauges: int | None = Field(default=None, ge=0)
+    vv_hs_rmse_m: float | None = Field(default=None, ge=0.0)
+    vv_hs_bias_m: float | None = None
+    vv_hs_corr: float | None = None
+    vv_offshore_hs_obs_m: float | None = Field(default=None, ge=0.0)
+    vv_offshore_hs_mod_m: float | None = Field(default=None, ge=0.0)
+    vv_tp_rmse_s: float | None = Field(default=None, ge=0.0)
