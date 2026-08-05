@@ -184,3 +184,16 @@ custom-authoring documentation living at the tool/workflow dirs (a
 docs/authoring/custom-user-tools.md + README pointers in the trees)
 describing the full tool contract + reusable seams, written AFTER the
 door dissolution (it must document the post-dissolve structure).
+
+## 2026-08-05 - Real-lakes ensemble recipe (NATE + orchestrator discussion)
+"Where are the real lakes" is a data-composition question, not a Landlab
+question: reconcile (1) fetch_nhd_waterbodies polygons (authoritative),
+(2) satellite-observed water (NDWI / JRC Global Surface Water occurrence
+- a GSW source.yaml would be a cheap router addition), (3)
+landlab_lake_mapping closed basins (potential impoundments only; existing
+pools are flat in the DEM and invisible by construction). Ship as a
+documented playground recipe first; promote to a composed template with
+per-lake provenance (mapped / observed / potential) only if it earns it.
+Landlab chains themselves need NO change - fill-and-route treats real
+lakes and noise pits identically BY DESIGN and that is correct for
+routing; the discrepancy only ever mattered at the reporting boundary.

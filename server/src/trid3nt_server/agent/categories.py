@@ -268,6 +268,12 @@ PRIMARY_CATEGORY: dict[str, str] = {
     "swmm_wwtp_detention_ponds": "hazard_modeling",
     "swmm_pump_pid_rtc": "hazard_modeling",
     "pelicun_damage_assessment": "hazard_modeling",
+    # pelicun Assessment-API validation / sensitivity templates: idealized
+    # damage-and-loss methodology checks, primary damage_assessment.
+    "pelicun_closed_form_validation": "damage_assessment",
+    "pelicun_mixed_fragility_loss_assessment": "damage_assessment",
+    "pelicun_replacement_threshold_override_sweep": "damage_assessment",
+    "pelicun_flood_foundation_depth_damage_sweep": "damage_assessment",
     "geoclaw_inundation": "hazard_modeling",
     "openquake_psha": "hazard_modeling",
     # real-fault seismic-source fetcher: the OpenQuake PSHA input data fetcher

@@ -1,0 +1,10 @@
+pelicun_closed_form_validation:
+- does pelicun's monte carlo damage state sampling match the analytic closed form
+- validate pelicun damage state probabilities against the lognormal closed form
+- check the fragility damage state probability for a two limit state component
+- confirm a 1 to 1 loss function reproduces the input EDP distribution in pelicun
+- verify pelicun loss function output matches the input demand distribution
+- closed form validation of pelicun damage and loss sampling
+- analytic lognormal probability vs monte carlo for a sequential damage state component
+- sanity check pelicun's damage state and loss function machinery
+- does the loss distribution equal the EDP distribution for an identity loss function

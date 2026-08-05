@@ -63,6 +63,10 @@ EXPECTED_TEMPLATES = {
     "geoclaw_regional_manning_friction",  # GeoClaw CAND-S: spatially-varying banded Manning friction
     "openquake_psha",
     "pelicun_damage_assessment",
+    "pelicun_closed_form_validation",  # pelicun CAND-S: Monte-Carlo vs analytic closed form (damage-state prob + loss-function identity)
+    "pelicun_mixed_fragility_loss_assessment",  # pelicun CAND-S: mixed fragility+loss-function assessment + EDP correlation spread
+    "pelicun_replacement_threshold_override_sweep",  # pelicun CAND-S: RID-triggered irreparable/replacement threshold sweep (RID from PID)
+    "pelicun_flood_foundation_depth_damage_sweep",  # pelicun CAND-S: HAZUS flood depth-damage sensitivity to foundation type
     "modflow_asr",
     "modflow_capture_zone",
     "modflow_contaminant_plume",

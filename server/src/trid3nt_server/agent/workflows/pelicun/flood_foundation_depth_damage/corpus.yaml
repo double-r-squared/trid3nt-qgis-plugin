@@ -1,0 +1,10 @@
+pelicun_flood_foundation_depth_damage_sweep:
+- how sensitive is the HAZUS flood depth damage curve to foundation type
+- compare flood repair cost loss functions across foundation configurations
+- effect of basement and foundation type on HAZUS flood loss
+- flood depth damage curves for different building foundation types
+- how does foundation type change the flood building class and loss function
+- compare loss ratio versus inundation depth for no basement vs with basement
+- HAZUS flood foundation type sensitivity of the depth damage function
+- depth damage curve family by foundation configuration for a residential occupancy
+- flood loss ratio vs depth for split level and two story foundations

@@ -764,6 +764,14 @@ from ..workflows.elmfire.sensitivity.live_moisture.live_moisture import elmfire_
 # bbox AUTO-FETCH input mode covers the buildings-composer path (one tool,
 # two input modes). postprocess_pelicun STAYS general, NOT a template.
 from ..workflows.pelicun.damage_assessment.damage_assessment import pelicun_damage_assessment as _pelicun_damage_assessment  # noqa: E402,F401 - FOLD of run_pelicun_damage_assessment + run_pelicun_with_buildings (engine=pelicun, tier=template; explicit assets_uri OR bbox auto-fetch)
+# pelicun Assessment-API validation / sensitivity TEMPLATES (engine="pelicun",
+# tier="template"): idealized domain-free checks that drive pelicun's real
+# assessment.Assessment pipeline on synthetic inputs and emit distribution /
+# curve charts (no hazard raster, no map). Each is a distinct question class.
+from ..workflows.pelicun.closed_form_validation.closed_form_validation import pelicun_closed_form_validation as _pelicun_closed_form_validation  # noqa: E402,F401 - Monte-Carlo vs analytic closed form (damage-state probability + loss-function identity)
+from ..workflows.pelicun.mixed_fragility_loss.mixed_fragility_loss import pelicun_mixed_fragility_loss_assessment as _pelicun_mixed_fragility_loss_assessment  # noqa: E402,F401 - mixed fragility+loss-function assessment + EDP correlation spread
+from ..workflows.pelicun.replacement_threshold_sweep.replacement_threshold_sweep import pelicun_replacement_threshold_override_sweep as _pelicun_replacement_threshold_override_sweep  # noqa: E402,F401 - RID-triggered irreparable/replacement threshold sweep (RID inferred from PID)
+from ..workflows.pelicun.flood_foundation_depth_damage.flood_foundation_depth_damage import pelicun_flood_foundation_depth_damage_sweep as _pelicun_flood_foundation_depth_damage_sweep  # noqa: E402,F401 - HAZUS flood depth-damage curve sensitivity to foundation type
 
 
 # the 12-category registry + the two meta-tools
