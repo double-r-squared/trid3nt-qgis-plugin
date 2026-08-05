@@ -17,6 +17,7 @@ per NATE 2026-08-04.
 | Triage-only waves (0121) | 0 (13 ground-truthed) | ~35 min | scoping overhead, amortized |
 | SWMM network family (0124) | 2 (network import + dual drainage, live Houston municipal net) | ~66 min | ~33 min - triage bought 5 honest STOPs + the published-deck-runner unlock |
 | HEC-RAS archetypes (0125) | 1 (levee_breach; rain-on-grid honest STOP) | ~3.0 h (incl 21-min triage wave + an upstream API drop + image rebuild) | ~3 h - engine-adjacent archetype w/ in-container mechanics pinning |
+| SCHISM candidates (0126) | 0 (2 triaged: CORIE deferred, WWM_Duck STOP) | ~2.0 h (incl a WWM binary verification build + a live GOTM-free WWM+SCHISM coupling spike proving Hs) | triage + build-spike; both recipes ready, WWM coupling de-risked to a single GOTM blocker |
 
 ## Working rates (sequential, incl close-out share)
 

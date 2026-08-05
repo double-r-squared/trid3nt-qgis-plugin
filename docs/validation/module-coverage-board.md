@@ -40,7 +40,7 @@ Aspects: barotropic-only tidal mode (theta implicitness, no T/S); full baroclini
 - [CAND-L] `baroclinic_3d_circulation` [L] [US] - Given a shelf/estuary AOI with T/S boundary forcing (e.g. G-RTOFS), what is the density-driven 3D current, thermocline, and stratification structure?
   src: https://schism-dev.github.io/schism/master/schism/barotropic-solver.html (schism-docs-barotropic-solver)
   knobs: ibc=0 (baroclinic on), nws, T/S IC (ts.ic), vgrid.in.SZ layer count, TS boundary .th.nc
-  notes: Requires enabling the tracer transport of T/S and 3D vertical grid - new solver capability beyond current barotropic-only surface.
+  notes: Requires enabling the tracer transport of T/S and 3D vertical grid - new solver capability beyond current barotropic-only surface. [TRIAGED 2026-08-04, ADR 0126] as schism_estuary_circulation via Test_CORIE (Columbia R. estuary): deck + forcing SHIP (NARR sflux/hotstart/T-S nudging/river flux bundled), module=None -> runs on the EXISTING hydro-core binary, no new build. LANDABLE bake-and-parameterize; live acceptance DEFERRED (28-day 3D baroclinic nvrt=54 + ~600MB deck -> NATE-remote-drive class, coastal_tin acceptance-b posture). Recipe in ADR 0126 sec 2c.
 - [CAND-S] `transport_scheme_accuracy_comparison` [S] [US] - For a heat/tracer front, how much does upwind vs TVD^2 vs WENO change numerical mixing (heat conservation) at a given Courant number?
   src: https://raw.githubusercontent.com/schism-dev/schism/master/docs/getting-started/test_suite.md (schism-verification-Test_HeatConsv_TVD-Upwind)
   knobs: itr_met (transport scheme), TVD_lim, courant target
@@ -66,10 +66,10 @@ Aspects: wave generation from wind forcing; wave-current interaction (radiation 
   src: https://schism-dev.github.io/schism/master/modules/wwm.html (schism-docs-wwm)
   knobs: wwminput.nml.spectra, boundary spectrum shape (JONSWAP params)
   notes: wwminput.nml.spectra sample confirmed present in sample_inputs/.
-- [SIGNED] `published_wwm_verification_replication` [L] [US] - Do we reproduce the published Duck NC / L31-2A / VF-adiabatic WWM verification benchmarks (measured vs modeled Hs/Tp)?
+- [TRIAGED-STOP] `published_wwm_verification_replication` [L] [US] - Do we reproduce the published Duck NC / L31-2A / VF-adiabatic WWM verification benchmarks (measured vs modeled Hs/Tp)?
   src: https://raw.githubusercontent.com/schism-dev/schism/master/docs/getting-started/test_suite.md (schism-verification-Test_WWM_Duck)
   knobs: WWM test case configs (Test_WWM_Analytical, Test_WWM_Duck, Test_WWM_L31_2A, Test_WWM_VF_adiabatic_case, Test_WWM_limon_NODIF)
-  notes: 5 named published WWM cases confirmed in the official test_suite.md table (svn schism_verification_tests); Duck NC is a documented US field site - strong published-first, US-applicable candidate for V&V-doctrine replication.
+  notes: 5 named published WWM cases confirmed in the official test_suite.md table (svn schism_verification_tests); Duck NC is a documented US field site - strong published-first, US-applicable candidate for V&V-doctrine replication. [TRIAGED 2026-08-04, ADR 0126] as schism_coupled_waves via Test_WWM_Duck. STOP with build recipe: deck + spectral boundary SHIP (17MB, cheap 4-hr run); a targeted WWM-only binary builds cheaply; the two-way WWM+SCHISM coupling is PROVEN end-to-end (Hs max 2.24m / mean 1.04m, Tp 10.8s, correct cross-shore transform at Duck 12 Oct 1994 -- itur=0 GOTM-free spike). The ONE blocker: the case's itur=3 GOTM k-epsilon turbulence -- no module-free k-epsilon in v5.11.0 (itur=5 needs USE_SED, itur=3 needs USE_GOTM) and GOTM is not cmake-buildable in-tree (GOTM3.2.5 is Makefile-only). Cheapest next SCHISM template once the GOTM leg is resolved. Recipe in ADR 0126 sec 1e.
 
 ### SED3D / SED2D (sediment transport & morphology)
 Purpose: Multi-class non-cohesive (and cohesive, via bed layering) sediment transport adapted from the Community Sediment Transport Model, with an Exner-equation bed-evolution (morphology) option; SED2D is a simplified depth-averaged variant.
