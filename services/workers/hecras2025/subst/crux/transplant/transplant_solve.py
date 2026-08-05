@@ -14,6 +14,9 @@ rebuilds 1D cross-section conveyance), so whatever we write into the plan HDF's
 RasUnsteady solves with. That is the transplant lever.
 
 MODES (env TRANSPLANT_MODE):
+  prebuilt  -- the deck at TRANSPLANT_WRK is ALREADY authored (the faithful
+               2025-table transplant from build_faithful_transplant.py); skip the
+               h5py author step, just run the 6.x chain + report vs baseline.
   identity  -- h5py-rewrite the 2D tables with byte-identical values. If the
                solve reproduces the shipped baseline (maxWSE 951.93 ft, ~4881
                wet cells, vol err ~0.006%), the external-writer transplant path
@@ -136,12 +139,16 @@ def main():
     for f in WRK.glob("*.*"):
         shutil.copy2(f, rd / f.name)
     print(f"=== TRANSPLANT SOLVE  mode={MODE}  factor={FACTOR if MODE=='perturb' else '-'} ===")
-    author_tables(rd / PLAN)
+    if MODE != "prebuilt":
+        author_tables(rd / PLAN)
+    else:
+        print("  [author] prebuilt deck (faithful 2025-table transplant) -- solve as-is")
     print("[1] RasGeomPreprocess (preserves 2D tables; rebuilds 1D only)")
     _run("RasGeomPreprocess", rd)
-    tdiff = cmp_tables(WRK / PLAN, rd / PLAN)
-    print(f"  [tables vs pristine after geompre] max|diff|: " +
-          ", ".join(f"{k.split()[0]}={v:g}" for k, v in tdiff.items()))
+    if MODE != "prebuilt":
+        tdiff = cmp_tables(WRK / PLAN, rd / PLAN)
+        print(f"  [tables vs pristine after geompre] max|diff|: " +
+              ", ".join(f"{k.split()[0]}={v:g}" for k, v in tdiff.items()))
     print("[2] RasUnsteady (2D subgrid solve reads the transplanted tables)")
     _run("RasUnsteady", rd)
     m = metrics(rd / PLAN)
@@ -150,11 +157,12 @@ def main():
           f"vol_err={m['vol_err_pct']:.6f}%   flux in/out={m['flux_in']:.1f}/{m['flux_out']:.1f}")
     print(f"  baseline    maxWSE={BASE['wse_max_ft']} ft  wet~{BASE['wet_cells']}  "
           f"vol_err~{BASE['vol_err_pct']}%")
-    if MODE == "identity":
+    if MODE in ("identity", "prebuilt"):
         dwse = abs(m["wse_max_ft"] - BASE["wse_max_ft"])
         ok = dwse < 0.05 and m["vol_err_pct"] < 0.05
-        print(f"  VERDICT: identity round-trip {'REPRODUCES' if ok else 'DIVERGES from'} "
-              f"baseline (dWSE={dwse:.3f} ft)")
+        tag = "identity round-trip" if MODE == "identity" else "faithful 2025-table transplant"
+        print(f"  VERDICT: {tag} {'REPRODUCES' if ok else 'DIVERGES from'} "
+              f"baseline (dWSE={dwse:.3f} ft, wet={m['wet_cells']} vs ~{BASE['wet_cells']})")
     else:
         print(f"  VERDICT: perturbed tables -> solve moved (compare to identity run)")
     (Path(os.environ.get("TRANSPLANT_OUT", str(rd))) / "result.json").write_text(json.dumps(m, indent=2))
