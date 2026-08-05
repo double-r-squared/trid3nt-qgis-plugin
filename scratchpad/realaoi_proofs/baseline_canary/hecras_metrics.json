@@ -1,0 +1,26 @@
+{
+  "volume_accounting": {
+    "Error": -2.157428503036499,
+    "Error Percent": 0.005835877265781164,
+    "Total Boundary Flux of Water In": 36674.18359375,
+    "Total Boundary Flux of Water Out": 33467.45703125,
+    "Vol Accounting in": "Acre Feet",
+    "Volume Ending": 3498.7490234375,
+    "Volume Starting": 294.17852783203125
+  },
+  "max_water_surface_2d": {
+    "2D Interior Area": {
+      "cells": 5765,
+      "min_ft": 0.0,
+      "max_ft": 951.9265747070312
+    }
+  },
+  "max_water_surface_1d": {
+    "cross_sections": 61,
+    "min_ft": 938.7288818359375,
+    "max_ft": 955.4198608398438
+  },
+  "plan_hdf": "Muncie.p04.tmp.hdf",
+  "ran_geompre": true,
+  "correct_end": true
+}

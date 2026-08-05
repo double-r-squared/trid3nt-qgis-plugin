@@ -1,41 +1,40 @@
 """HEC-RAS 2D flow-area geometry: read a geometry HDF's mesh -> a preview layer.
 
 Mesh-layer wave M3 (SIGNED spec: docs/specs/mesh-layer-extraction.md; the write
-seam the spec named as ``hecras_geometry``). The spec's WRITE stage envisioned a
-"thin per-solver terminal writer -- cells + breaklines to the geometry HDF". M3
-proved, empirically and offline-first, that the WRITE direction is BLOCKED and
-the READ direction is the tractable, reusable half. This module delivers the
-read/preview half; the write blocker is characterized below (ADR 0100).
+seam the spec named as ``hecras_geometry``). This module delivers the READ/preview
+half. The WRITE half -- once STOPPED under the ADR 0100 premise -- is now UNLOCKED
+and lives in ``services/workers/hecras2025/hecras_geometry_writer.py`` (ADR 0132
+OI-2). See below for why the block was lifted.
 
-WHY THE WRITER IS STOPPED (empirical, host-proven 2026-08-03 on HEC's shipped
-Muncie test project, White River, Muncie IN, from the official Linux_RAS_v66.zip):
+WHY THE ADR-0100 WRITE-BLOCK NO LONGER HOLDS. The 2026-08-03 M3 finding was that a
+from-scratch 2D flow area is INSUFFICIENT because "nothing on the Linux stack
+computes the subgrid property tables" -- each cell carries a terrain-sampled
+volume<->elevation table and each face an area/WP<->elevation table, ``RasUnsteady``
+reads them in ``Subroutine READBathymetry`` and cannot run without them, and
+``RasGeomPreprocess`` does NOT rebuild the 2D subgrid tables (it rebuilds only the
+1D cross-section conveyance). At the time those tables were only authorable by the
+Windows RASMapperLib DLLs. Two later results removed exactly that premise:
 
-  * HEC-RAS 2D hydraulics are SUBGRID: each cell carries a terrain-sampled
-    volume<->elevation table ("Cells Volume Elevation Values") and each face an
-    area/wetted-perimeter<->elevation table ("Faces Area Elevation Values").
-    ``RasUnsteady`` READs these in ``Subroutine READBathymetry`` and CANNOT run
-    without them.
-  * ``RasGeomPreprocess`` does NOT build the 2D subgrid tables. Stripping them
-    from the Muncie HDF and re-running the preprocessor left them ABSENT (the
-    preprocessor only rebuilt the 1D cross-section conveyance tables); the
-    subsequent ``RasUnsteady`` then failed with
-    ``object 'Cells Volume Elevation Info' doesn't exist``. Those tables are
-    authored by RASMapper (the Windows RASMapperLib DLLs), exactly the
-    "headless 2D mesh authoring is the real frontier" caveat the ras-commander
-    feasibility report named (ras-commander's own ``GeomMesh`` needs those DLLs).
+  * ADR 0130 -- ``MeshPropertyTables.ComputeFrom`` (the HEC-RAS 2025 beta compute
+    path) computes the cell/face subgrid tables HEADLESS ON LINUX under substituted
+    open-source GDAL/HDF5. So the tables ARE now Linux-computable.
+  * ADR 0132 (Q3 + the validated addendum) -- the PRODUCTION 6.x solver CONSUMES 2D
+    subgrid tables written by an EXTERNAL (h5py) writer and reproduces the Muncie
+    baseline (dWSE 0.008 ft); the 2025-computed VALUES match the 6.x GUI ground
+    truth (cell-volume corr 0.99988). And ADR 0133 built the fresh-group geometry
+    writer and solved a WRITER-AUTHORED /Geometry/2D Flow Areas group to the
+    baseline bit-identically (dWSE 0.00000 ft, product path).
 
-  So a from-scratch 2D flow area carrying only perimeter + cell points + mesh
-  topology is INSUFFICIENT: nothing on the Linux stack computes the subgrid
-  property tables, so the deck never solves. Replicating RASMapper's terrain
-  subgrid sampling into HEC's undocumented internal table format is the genuine
-  blocker, and building a topology-only writer that no Linux engine can consume
-  would be dead code.
+  So a writer-authored 2D flow area (topology from the 2025 ``Mesh``, subgrid
+  tables from ``ComputeFrom``) is NO LONGER dead code -- the Linux stack computes
+  the tables and the 6.x solver consumes them.
 
-TEMPLATE-FIRST FALLBACK (the HEC-RAS engine-landing wave's path, already proven
-by the M3 Muncie gate): reuse a RASMapper-built 2D flow-area geometry HDF as a
-template and reparameterize terrain association + Manning's n + forcing/BCs
-(ras-commander ``RasGeo``/``RasUnsteady`` ASCII editors). The Muncie replication
-gate demonstrates the reparameterize-and-solve spine end to end.
+WHAT REMAINS GATED (ADR 0133 triage): a genuinely-NEW-AOI PURE-2D deck also needs
+the plan-skeleton / boundary forcing stanzas (``.pNN``/``.bNN``/``.xNN`` 2D-BC-line
+or precipitation blocks), which the in-repo combined-1D/2D Muncie reference does not
+carry; those await a pure-2D reference deck (ledgered). The reader/preview half
+(this module) + the writer discharge the geometry link; the deck skeleton is the
+next link.
 
 WHAT THIS MODULE DOES (the tractable half, reusable by the engine wave + proofs):
 read a HEC-RAS geometry/plan HDF's 2D flow-area cell mesh and emit it as a
