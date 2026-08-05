@@ -111,6 +111,24 @@ _VALID_OUTPUT_QUANTITIES: frozenset[str] = frozenset(
 
 _VALID_SIDES: frozenset[str] = frozenset({"N", "S", "E", "W"})
 
+#: Wind-input growth formulations (SWAN 41.51 GEN command). "westhuysen" (default),
+#: "komen", "janssen" are GEN3 sub-formulations; "gen1"/"gen2" select the first-/
+#: second-generation growth. Note: the GEN formulation only shapes WIND-INPUT
+#: growth, so on a boundary-forced-only run (no wind_file) the choice has little
+#: effect on the field -- it is exercised meaningfully with a wind grid.
+_VALID_GEN_FORMULATIONS: frozenset[str] = frozenset(
+    {"westhuysen", "komen", "janssen", "gen1", "gen2"}
+)
+#: Whitecapping deep-water dissipation schemes (WCAPPING command). None keeps the
+#: GEN3 built-in default pairing; "ab" = Alves-Banner (2003); "komen" = Komen (1984).
+_VALID_WHITECAP_SCHEMES: frozenset[str] = frozenset({"ab", "komen"})
+#: DIA quadruplet integration methods (QUADRUPL [iquad]); 3 = fully-explicit DIA
+#: per iteration, recommended with ambient currents; 2 = SWAN default.
+_VALID_IQUAD: frozenset[int] = frozenset({1, 2, 3, 8})
+#: Triad biphase parametrizations (TRIAD DCTA ... BIPHASE). "eldeberky" (default
+#: field value urcrit=0.63); "dewit" (lpar averaging).
+_VALID_TRIAD_BIPHASE: frozenset[str] = frozenset({"eldeberky", "dewit"})
+
 #: SWAN's exception (NaN / dry / no-data) value -- written via SET; the postprocess
 #: masks cells equal to it. A large sentinel SWAN uses for cells with no result.
 SWAN_EXCEPTION_VALUE: float = -999.0
@@ -167,6 +185,20 @@ class SwanBuildSpec:
     friction: bool = True
     breaking: bool = True
     triads: bool = True
+    # physics-scheme knobs (SWAN 41.51). Defaults reproduce the pre-knob deck
+    # byte-for-byte: gen_formulation="westhuysen" -> "GEN3 WESTHUYSEN",
+    # friction_cfjon=0.067 -> "FRICTION JONSWAP CONSTANT 0.067", breaking
+    # 1.0/0.73 -> "BREAKING CONSTANT 1.0 0.73", whitecapping/triad_biphase/
+    # quad_iquad unset -> the same implicit-default lines as before.
+    gen_formulation: str = "westhuysen"  # westhuysen|komen|janssen|gen1|gen2
+    whitecapping: str | None = None      # None|ab|komen (None = GEN3 built-in)
+    quad_iquad: int | None = None        # None|1|2|3|8 (None = SWAN default 2)
+    breaking_alpha: float = 1.0
+    breaking_gamma: float = 0.73
+    friction_cfjon: float = 0.067
+    triad_biphase: str | None = None     # None|eldeberky|dewit (None = bare TRIAD)
+    triad_urcrit: float = 0.63
+    triad_lpar: float = 0.0
     # nonstationary timing.
     sim_duration_s: float = 10800.0
     time_step_s: float = 600.0
@@ -340,6 +372,53 @@ def parse_build_spec(raw: dict[str, Any]) -> SwanBuildSpec:
     wind_file = raw.get("wind_file")
     wind_file = str(wind_file).strip() if wind_file else None
 
+    # --- Physics-scheme knobs (all optional; defaults reproduce the prior deck). --
+    gen_formulation = str(raw.get("gen_formulation") or "westhuysen").strip().lower()
+    if gen_formulation not in _VALID_GEN_FORMULATIONS:
+        raise SwanDeckError(
+            "SWAN_SPEC_INVALID",
+            f"gen_formulation must be one of {sorted(_VALID_GEN_FORMULATIONS)}, "
+            f"got {gen_formulation!r}",
+        )
+    whitecapping_raw = raw.get("whitecapping")
+    whitecapping = str(whitecapping_raw).strip().lower() if whitecapping_raw else None
+    if whitecapping is not None and whitecapping not in _VALID_WHITECAP_SCHEMES:
+        raise SwanDeckError(
+            "SWAN_SPEC_INVALID",
+            f"whitecapping must be one of {sorted(_VALID_WHITECAP_SCHEMES)} or null, "
+            f"got {whitecapping!r}",
+        )
+    quad_iquad_raw = raw.get("quad_iquad")
+    quad_iquad = int(quad_iquad_raw) if quad_iquad_raw is not None else None
+    if quad_iquad is not None and quad_iquad not in _VALID_IQUAD:
+        raise SwanDeckError(
+            "SWAN_SPEC_INVALID",
+            f"quad_iquad must be one of {sorted(_VALID_IQUAD)} or null, got {quad_iquad}",
+        )
+    breaking_alpha = _num("breaking_alpha", 1.0)
+    breaking_gamma = _num("breaking_gamma", 0.73)
+    if breaking_alpha <= 0.0 or not (0.0 < breaking_gamma < 2.0):
+        raise SwanDeckError(
+            "SWAN_SPEC_INVALID",
+            f"require breaking_alpha > 0 and 0 < breaking_gamma < 2, got "
+            f"({breaking_alpha}, {breaking_gamma})",
+        )
+    friction_cfjon = _num("friction_cfjon", 0.067)
+    if friction_cfjon <= 0.0:
+        raise SwanDeckError(
+            "SWAN_SPEC_INVALID", f"friction_cfjon must be > 0, got {friction_cfjon}"
+        )
+    triad_biphase_raw = raw.get("triad_biphase")
+    triad_biphase = str(triad_biphase_raw).strip().lower() if triad_biphase_raw else None
+    if triad_biphase is not None and triad_biphase not in _VALID_TRIAD_BIPHASE:
+        raise SwanDeckError(
+            "SWAN_SPEC_INVALID",
+            f"triad_biphase must be one of {sorted(_VALID_TRIAD_BIPHASE)} or null, "
+            f"got {triad_biphase!r}",
+        )
+    triad_urcrit = _num("triad_urcrit", 0.63)
+    triad_lpar = _num("triad_lpar", 0.0)
+
     return SwanBuildSpec(
         mode=mode,
         bbox=bbox,  # type: ignore[arg-type]
@@ -359,6 +438,15 @@ def parse_build_spec(raw: dict[str, Any]) -> SwanBuildSpec:
         friction=bool(raw.get("friction", True)),
         breaking=bool(raw.get("breaking", True)),
         triads=bool(raw.get("triads", True)),
+        gen_formulation=gen_formulation,
+        whitecapping=whitecapping,
+        quad_iquad=quad_iquad,
+        breaking_alpha=breaking_alpha,
+        breaking_gamma=breaking_gamma,
+        friction_cfjon=friction_cfjon,
+        triad_biphase=triad_biphase,
+        triad_urcrit=triad_urcrit,
+        triad_lpar=triad_lpar,
         sim_duration_s=sim_duration_s,
         time_step_s=time_step_s,
         output_frames=output_frames,
@@ -479,24 +567,62 @@ def render_swn_command_file(spec: SwanBuildSpec) -> str:
         )
         lines.append(f"READINP WIND 1.0 '{spec.wind_file}' 1 0 FREE")
 
-    # Physics. GEN3 = third-generation wind input + whitecapping (deep water).
-    lines.append("GEN3 WESTHUYSEN")
-    if not wind_enabled:
+    # Physics -- wind-input growth formulation. GEN3 (third-generation: wind input
+    # + whitecapping) is the operational default; "gen1"/"gen2" select the first-/
+    # second-generation growth. Only GEN3 carries whitecapping + quadruplets.
+    gf = spec.gen_formulation
+    is_gen3 = gf in ("westhuysen", "komen", "janssen")
+    if gf == "gen1":
+        lines.append("GEN1")
+    elif gf == "gen2":
+        lines.append("GEN2")
+    elif gf == "komen":
+        lines.append("GEN3 KOMEN")
+    elif gf == "janssen":
+        lines.append("GEN3 JANSSEN")
+    else:
+        lines.append("GEN3 WESTHUYSEN")
+    # Whitecapping deep-water dissipation scheme (GEN3 only). Unset keeps the GEN3
+    # built-in pairing; "ab" = Alves-Banner, "komen" = classical Komen.
+    if is_gen3 and spec.whitecapping == "ab":
+        lines.append("WCAPPING AB")
+    elif is_gen3 and spec.whitecapping == "komen":
+        lines.append("WCAPPING KOMEN")
+    if not wind_enabled and is_gen3:
         # SWAN ABORTS at error level 3 on quadruplets + ZERO wind ("not recommended
         # to use quadruplets in combination with zero wind conditions" -> "No start
         # of computation"). Quadruplet nonlinear interactions model wind-sea growth,
         # which is irrelevant for a pure boundary-forced swell with no wind forcing,
-        # so disable them when no ERA5 wind field is supplied (keep them when it is).
+        # so disable them when no wind field is supplied (keep them when it is).
         lines.append("OFF QUAD")
+    elif wind_enabled and is_gen3 and spec.quad_iquad is not None:
+        # DIA integration method for the quadruplets (iquad=3 = fully-explicit DIA
+        # per iteration, recommended under strong ambient currents).
+        lines.append(f"QUADRUPL {int(spec.quad_iquad)}")
     if spec.friction:
-        # JONSWAP bottom friction (depth-induced), default coefficient.
-        lines.append("FRICTION JONSWAP CONSTANT 0.067")
+        # JONSWAP semi-empirical bottom friction (depth-induced); cfjon is the
+        # regional calibration coefficient (0.067 swell / 0.038 wind-sea / 0.019
+        # smoother Gulf-of-Mexico-type beds per the SWAN manual).
+        lines.append(f"FRICTION JONSWAP CONSTANT {spec.friction_cfjon:.4f}")
     if spec.breaking:
-        # Depth-induced breaking (Battjes-Janssen), default gamma.
-        lines.append("BREAKING CONSTANT 1.0 0.73")
+        # Depth-induced breaking (Battjes-Janssen), constant breaker index gamma.
+        lines.append(
+            f"BREAKING CONSTANT {spec.breaking_alpha:.3f} {spec.breaking_gamma:.3f}"
+        )
     if spec.triads:
-        # Triad (three-wave) nonlinear interactions (shallow water).
-        lines.append("TRIAD")
+        # Triad (three-wave) nonlinear interactions (shallow water). Bare TRIAD
+        # keeps the DCTA default; an explicit biphase parametrization tunes the
+        # phase-coupling for the site's Ursell-number regime.
+        if spec.triad_biphase == "eldeberky":
+            lines.append(
+                f"TRIAD DCTA 4.4 0.66667 COLL BIPHASE ELDEBERKY {spec.triad_urcrit:.3f}"
+            )
+        elif spec.triad_biphase == "dewit":
+            lines.append(
+                f"TRIAD DCTA 4.4 0.66667 COLL BIPHASE DEWIT {spec.triad_lpar:.3f}"
+            )
+        else:
+            lines.append("TRIAD")
 
     # Parametric offshore boundary: JONSWAP shape + a CONSTANT PAR side spec.
     #   BOUND SHAPE JONSWAP PEAK DSPR DEGREES
@@ -644,10 +770,15 @@ def build_swan_deck(
     written.append(spec.bottom_file)
 
     wind_enabled = spec.wind_file is not None
+    _phys = f"gen={spec.gen_formulation} gamma={spec.breaking_gamma:.2f} cfjon={spec.friction_cfjon:.3f}"
+    if spec.whitecapping:
+        _phys += f" wcap={spec.whitecapping}"
+    if spec.triad_biphase:
+        _phys += f" biphase={spec.triad_biphase}"
     driver = (
         f"{spec.mode} wave field Hs={spec.boundary_hs_m:.1f} m "
         f"Tp={spec.boundary_tp_s:.1f} s dir={spec.boundary_dir_deg:.0f} deg "
-        f"side={spec.boundary_side}"
+        f"side={spec.boundary_side} [{_phys}]"
         + (" + ERA5 wind (GEN3)" if wind_enabled else " (boundary-forced only)")
     )
 

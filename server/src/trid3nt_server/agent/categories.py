@@ -304,6 +304,8 @@ PRIMARY_CATEGORY: dict[str, str] = {
     "model_debris_flow": "hazard_modeling",
     "elmfire_fire_spread": "hazard_modeling",
     "swan_wave_field": "hazard_modeling",
+    "swan_physics_sensitivity_sweep": "hazard_modeling",
+    "swan_stationary_snapshot_batch": "hazard_modeling",
     "telemac_river_dye": "hazard_modeling",
     "hecras_riverine_flood": "hazard_modeling",
     "hecras_levee_breach": "hazard_modeling",
@@ -656,6 +658,10 @@ SECONDARY_CATEGORIES: dict[str, tuple[str, ...]] = {
     # Door dissolution (ADR 0094): the swan_wave_field template carries the
     # coastal cross-listing directly (its deleted door did before).
     "swan_wave_field": ("coastal",),
+    # The SWAN sensitivity-sweep + snapshot-batch templates share the coastal
+    # cross-listing (both run the SWAN nearshore solver over a coastal AOI).
+    "swan_physics_sensitivity_sweep": ("coastal",),
+    "swan_stationary_snapshot_batch": ("coastal",),
     # The canopy-height ML-inference tool spans hazard_modeling (it dispatches a
     # CPU Batch worker like the other engines) AND conservation_ecology + land
     # cover (a canopy-height surface is a vegetation/ecology product a user

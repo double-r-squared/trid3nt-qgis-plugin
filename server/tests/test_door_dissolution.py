@@ -43,6 +43,8 @@ EXPECTED_TEMPLATES = {
     "schism_tidal_hydro",  # engine #12 (ADR 0118): SCHISM barotropic tidal template
     "schism_coupled_waves",  # engine #12 second archetype (ADR 0131): SCHISM+WWM+GOTM coupled-wave template (Duck FRF)
     "swan_wave_field",
+    "swan_physics_sensitivity_sweep",  # SWAN CAND-S: physics-scheme A-vs-B sensitivity sweep
+    "swan_stationary_snapshot_batch",  # SWAN CAND-S: batch of stationary snapshots sampling a storm event (MODE)
     "geoclaw_inundation",
     "elmfire_fire_spread",
     "elmfire_length_to_width_ceiling_sensitivity",  # ELMFIRE CAND-S: MAX_LOW length:width ceiling sweep

@@ -543,3 +543,80 @@ def test_all_dry_guard_excludes_exception_sentinel():
     assert wet == 1
     assert depth_min == pytest.approx(8.0, abs=1e-6)
     assert depth_max == pytest.approx(8.0, abs=1e-6)
+
+
+# ===========================================================================
+# Physics-scheme knobs (SWAN 41.51): explicit GEN / WCAPPING / QUADRUPL /
+# BREAKING / FRICTION / TRIAD selection. Defaults must reproduce the prior deck.
+# ===========================================================================
+def test_physics_knob_defaults_reproduce_prior_deck():
+    """Unset physics knobs render the exact pre-knob physics lines."""
+    text = render_swn_command_file(parse_build_spec(_spec()))
+    assert "GEN3 WESTHUYSEN" in text
+    assert "FRICTION JONSWAP CONSTANT 0.0670" in text
+    assert "BREAKING CONSTANT 1.000 0.730" in text
+    assert "\nTRIAD\n" in text  # bare DCTA default
+    assert "OFF QUAD" in text  # no wind -> quads off
+    assert "WCAPPING" not in text  # GEN3 built-in default
+
+
+def test_gen_formulation_selects_growth_command():
+    assert "GEN3 KOMEN" in render_swn_command_file(
+        parse_build_spec(_spec(gen_formulation="komen")))
+    assert "GEN3 JANSSEN" in render_swn_command_file(
+        parse_build_spec(_spec(gen_formulation="janssen")))
+    g1 = render_swn_command_file(parse_build_spec(_spec(gen_formulation="gen1")))
+    assert "\nGEN1\n" in g1 and "GEN3" not in g1
+    # GEN1/GEN2 carry neither whitecapping nor the no-wind OFF QUAD (not GEN3).
+    assert "WCAPPING" not in g1 and "OFF QUAD" not in g1
+
+
+def test_whitecapping_scheme_toggle_gen3_only():
+    ab = render_swn_command_file(parse_build_spec(_spec(whitecapping="ab")))
+    assert "WCAPPING AB" in ab
+    km = render_swn_command_file(parse_build_spec(_spec(whitecapping="komen")))
+    assert "WCAPPING KOMEN" in km
+    # Not emitted for GEN1 (whitecapping is a GEN3 concept).
+    g1 = render_swn_command_file(
+        parse_build_spec(_spec(gen_formulation="gen1", whitecapping="ab")))
+    assert "WCAPPING" not in g1
+
+
+def test_breaking_and_friction_coefficients_are_knobs():
+    text = render_swn_command_file(
+        parse_build_spec(_spec(breaking_gamma=0.55, breaking_alpha=1.0,
+                               friction_cfjon=0.019)))
+    assert "BREAKING CONSTANT 1.000 0.550" in text
+    assert "FRICTION JONSWAP CONSTANT 0.0190" in text
+
+
+def test_triad_biphase_parametrization_explicit():
+    eld = render_swn_command_file(
+        parse_build_spec(_spec(triad_biphase="eldeberky", triad_urcrit=0.63)))
+    assert "TRIAD DCTA 4.4 0.66667 COLL BIPHASE ELDEBERKY 0.630" in eld
+    dw = render_swn_command_file(
+        parse_build_spec(_spec(triad_biphase="dewit", triad_lpar=0.0)))
+    assert "BIPHASE DEWIT 0.000" in dw
+
+
+def test_quad_iquad_emitted_only_with_wind():
+    # No wind -> OFF QUAD regardless of iquad request.
+    no_wind = render_swn_command_file(parse_build_spec(_spec(quad_iquad=3)))
+    assert "OFF QUAD" in no_wind and "QUADRUPL" not in no_wind
+    # With a wind file -> QUADRUPL <iquad> and no OFF QUAD.
+    windy = render_swn_command_file(
+        parse_build_spec(_spec(wind_file="wind.dat", quad_iquad=3)))
+    assert "QUADRUPL 3" in windy and "OFF QUAD" not in windy
+
+
+def test_parse_rejects_bad_physics_knobs():
+    for bad in (
+        {"gen_formulation": "bogus"},
+        {"whitecapping": "bogus"},
+        {"quad_iquad": 7},
+        {"breaking_gamma": 5.0},
+        {"friction_cfjon": -1.0},
+        {"triad_biphase": "bogus"},
+    ):
+        with pytest.raises(SwanDeckError):
+            parse_build_spec(_spec(**bad))

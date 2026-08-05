@@ -709,6 +709,8 @@ from ..workflows.geoclaw.regional_manning.regional_manning import geoclaw_region
 # surfaced only by the run_swan door's gate expansion. The composer chain
 # (model_swan_wave_field) is inlined in the template module.
 from ..workflows.swan.wave_field.wave_field import swan_wave_field as _swan_wave_field  # noqa: E402,F401 - RENAME of run_swan_waves (engine=swan, tier=template)
+from ..workflows.swan.physics_sensitivity_sweep.physics_sensitivity_sweep import swan_physics_sensitivity_sweep as _swan_physics_sensitivity_sweep  # noqa: E402,F401 - SWAN CAND-S: physics-scheme A-vs-B sensitivity sweep (GEN/WCAPPING/QUADRUPL/BREAKING/FRICTION/TRIAD knobs)
+from ..workflows.swan.stationary_snapshot_batch.stationary_snapshot_batch import swan_stationary_snapshot_batch as _swan_stationary_snapshot_batch  # noqa: E402,F401 - SWAN CAND-S: batch of stationary snapshots sampling a storm event (MODE)
 # landlab_susceptibility TEMPLATE (engine="landlab", tier="template"), one
 # folder under workflows/landlab/susceptibility/; EXCLUDED from the default
 # retrieval pool, surfaced only by the run_landlab door's gate expansion. The

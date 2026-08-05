@@ -211,6 +211,15 @@ async def swan_wave_field(
     friction: bool = True,
     breaking: bool = True,
     triads: bool = True,
+    gen_formulation: str = "westhuysen",
+    whitecapping: str | None = None,
+    quad_iquad: int | None = None,
+    breaking_alpha: float = 1.0,
+    breaking_gamma: float = 0.73,
+    friction_cfjon: float = 0.067,
+    triad_biphase: str | None = None,
+    triad_urcrit: float = 0.63,
+    triad_lpar: float = 0.0,
     compute_class: str = "standard",
     # absorb LLM-invented kwargs (centralized at server.py via
     # tool_arg_normalizer, but kept as belt-and-suspenders).
@@ -246,6 +255,10 @@ async def swan_wave_field(
         sim_duration_s/time_step_s/output_frames: nonstationary run
             controls (defaults 10800/600/24).
         friction/breaking/triads: physics toggles (all default True).
+        gen_formulation/whitecapping/quad_iquad/breaking_gamma/friction_cfjon/
+            triad_biphase: explicit physics-scheme knobs (defaults reproduce the
+            operational deck). For an A-vs-B sensitivity comparison across a
+            physics axis use ``swan_physics_sensitivity_sweep`` instead.
         compute_class: default "standard".
 
     Returns:
@@ -321,6 +334,15 @@ async def swan_wave_field(
             friction=bool(friction),
             breaking=bool(breaking),
             triads=bool(triads),
+            gen_formulation=str(gen_formulation),
+            whitecapping=whitecapping,
+            quad_iquad=quad_iquad,
+            breaking_alpha=float(breaking_alpha),
+            breaking_gamma=float(breaking_gamma),
+            friction_cfjon=float(friction_cfjon),
+            triad_biphase=triad_biphase,
+            triad_urcrit=float(triad_urcrit),
+            triad_lpar=float(triad_lpar),
             compute_class=str(compute_class),
         )
         if boundary is not None:
@@ -849,6 +871,7 @@ def _publish_peak_layer(
         mean_tp_s=raw_peak.mean_tp_s,
         mean_dir_deg=raw_peak.mean_dir_deg,
         wave_area_km2=raw_peak.wave_area_km2,
+        mean_hs_m=raw_peak.mean_hs_m,
         mode=raw_peak.mode,
     )
 
@@ -906,6 +929,7 @@ async def _emit_frame_layers(
                 mean_tp_s=lyr.mean_tp_s,
                 mean_dir_deg=lyr.mean_dir_deg,
                 wave_area_km2=lyr.wave_area_km2,
+                mean_hs_m=lyr.mean_hs_m,
                 mode=lyr.mode,
             )
         try:

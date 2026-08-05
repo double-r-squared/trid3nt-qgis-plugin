@@ -1,0 +1,12 @@
+# Template routing phrasings (door dissolution): walked into the main retrieval
+# index directly -- an ordinary retrieval-pool tool.
+swan_physics_sensitivity_sweep:
+- how sensitive is significant wave height to the SWAN breaker index for this coast
+- compare SWAN wave fields across bottom friction coefficients
+- SWAN physics scheme sensitivity sweep of nearshore wave height
+- run several SWAN solves varying the depth induced breaking gamma and compare Hs
+- A vs B comparison of SWAN whitecapping schemes on the same coastal case
+- how does the wind growth formulation change the SWAN wave field
+- calibrate JONSWAP bottom friction for this shelf by sweeping cfjon in SWAN
+- uncertainty comparison of SWAN wave height across triad and quadruplet settings
+- which SWAN physics knob most affects the surf zone wave height here
