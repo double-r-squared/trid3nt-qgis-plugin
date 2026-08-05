@@ -77,6 +77,20 @@ class ReachConfig:
     friction_coefficient: float = None  # type: ignore[assignment]
     velocity_diffusivity: float = None  # type: ignore[assignment]
     tracer_diffusivity: float = None    # type: ignore[assignment]
+    # WIND-STRESS FORCING (TELEMAC-2D wind term). wind_speed_mps default 0.0
+    # leaves the deck byte-identical: author_deck emits NO wind block and WIND
+    # stays NO. A positive speed activates a spatially/temporally CONSTANT wind
+    # (OPTION FOR WIND = 1): the deck sets WIND = YES + WIND VELOCITY ALONG X/Y
+    # (resolved from speed + a meteorological FROM-direction into UTM x=east /
+    # y=north components) + COEFFICIENT OF WIND INFLUENCE (gaia/t2d dico default
+    # 1.55E-6 unless overridden) + THRESHOLD DEPTH FOR WIND = 1 m (wind not
+    # applied on drying margins). Sustained wind sets up a free-surface slope /
+    # drives circulation on a wide reach, embayment or lake. Keywords pinned
+    # against telemac2d.dico v9.0 (WIND/OPTION FOR WIND/WIND VELOCITY ALONG X,Y/
+    # COEFFICIENT OF WIND INFLUENCE/THRESHOLD DEPTH FOR WIND).
+    wind_speed_mps: float = 0.0         # sustained wind speed (0 -> no wind)
+    wind_dir_from_deg: float = 0.0      # meteorological: direction wind blows FROM
+    wind_drag_coef: float = None        # type: ignore[assignment]  # None -> dico default
     # FINITE SPILL PULSE (realism default): a mid-reach point source injects dye
     # for a short window then stops, so the slug TRAVELS downstream and dilutes
     # rather than the old continuous upstream-inflow injection saturating the
@@ -1948,6 +1962,32 @@ def author_deck(cfg, mesh, slf, cli, res, cas_path, lb_order, bed):
     _tracer_diff = "1.E-1" if cfg.tracer_diffusivity is None \
         else _cas_real(cfg.tracer_diffusivity)
 
+    # WIND-STRESS FORCING (constant OPTION FOR WIND = 1). Emitted ONLY when
+    # wind_speed_mps > 0; unset (0.0) leaves the deck byte-identical (no WIND
+    # lines). The meteorological FROM-direction is resolved into velocity
+    # components pointing in the direction the wind BLOWS TOWARD, in the mesh's
+    # UTM frame (x=easting, y=northing): wind FROM north (0 deg) drives water
+    # southward (wy<0), wind FROM west (270 deg) drives it eastward (wx>0).
+    import math as _math
+    _wind_speed = float(getattr(cfg, "wind_speed_mps", 0.0) or 0.0)
+    if _wind_speed > 0.0:
+        _th = _math.radians(float(getattr(cfg, "wind_dir_from_deg", 0.0) or 0.0))
+        _wx = -_wind_speed * _math.sin(_th)   # FROM-dir -> blows TOWARD
+        _wy = -_wind_speed * _math.cos(_th)
+        _cd = getattr(cfg, "wind_drag_coef", None)
+        _cd_line = "" if _cd is None else \
+            f"COEFFICIENT OF WIND INFLUENCE   = {_cas_real(_cd)}\n"
+        wind_block = (
+            "WIND                            = YES\n"
+            "OPTION FOR WIND                 = 1\n"
+            f"{_cd_line}"
+            f"WIND VELOCITY ALONG X           = {_cas_real(_wx)}\n"
+            f"WIND VELOCITY ALONG Y           = {_cas_real(_wy)}\n"
+            "THRESHOLD DEPTH FOR WIND        = 1.\n"
+        )
+    else:
+        wind_block = ""
+
     cas = f"""/-------------------------------------------------------------------/
 /  TELEMAC-2D  P1 REAL RIVER DYE  -  {cfg.name}
 /  Mesh from NHDPlus flowlines (Gmsh, tagged physical groups) -> rank IPOBO.
@@ -1985,7 +2025,7 @@ VALUES OF THE TRACERS AT THE SOURCES = 0.0
 LAW OF BOTTOM FRICTION          = {_fric_law}
 FRICTION COEFFICIENT            = {_fric_coef}
 VELOCITY DIFFUSIVITY            = {_vel_diff}
-/
+{wind_block}/
 EQUATIONS                       = 'SAINT-VENANT FE'
 TREATMENT OF THE LINEAR SYSTEM  = 2
 TYPE OF ADVECTION               = 1;5

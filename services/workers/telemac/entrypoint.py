@@ -620,6 +620,12 @@ def run_pipeline(
         "bank_source": bank_source,
         **oil_stats,
         "substance_class": str(getattr(cfg, "substance_class", "tracer")),
+        # WIND-STRESS FORCING honesty: echo the wind the deck was authored with
+        # (only when active; absent otherwise) so the run summary carries the
+        # forcing the LLM narrates.
+        **({"wind_speed_mps": float(getattr(cfg, "wind_speed_mps", 0.0)),
+            "wind_dir_from_deg": float(getattr(cfg, "wind_dir_from_deg", 0.0))}
+           if float(getattr(cfg, "wind_speed_mps", 0.0) or 0.0) > 0.0 else {}),
         # WAQTEL v1a decay honesty: record the degradation law + coefficient the
         # deck was authored with (only meaningful for the decay class; harmless
         # defaults otherwise) so the run summary carries the decay parameters.

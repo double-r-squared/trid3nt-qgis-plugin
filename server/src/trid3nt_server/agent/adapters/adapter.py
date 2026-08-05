@@ -701,6 +701,35 @@ hazard. When a template result carries a demo-default / synthetic-input caveat,
 state in your narration which quantities are demo defaults versus site-derived;
 never present a planning-grade screening result as a calibrated study.
 
+Cross-engine OVERLAP routing -- when two engines could answer, pick by scale /
+coupling / what is actually surfaced (grounded in what TRID3NT ships today):
+- WAVES (spectral): schism_coupled_waves is SCHISM+WWM -- tight two-way
+  wave-current feedback every timestep on an unstructured circulation mesh; use
+  it when the coupled current+wave field is the point. swan_wave_field is
+  standalone SWAN -- use it when the wave field itself is the deliverable, loosely
+  coupled. TRID3NT surfaces WWM only INSIDE SCHISM (there is no standalone WWM
+  tool); do not offer one.
+- SEDIMENT / morphodynamics: the GAIA sediment mode of telemac_river_dye
+  (substance = sediment/sand/silt/mud) is the surfaced morphodynamic path --
+  unstructured-mesh, multi-fraction, supply-limited bed evolution from a
+  prescribed upstream load through river-to-coastal transition, INCLUDING the
+  reservoir-inflow / upstream-sediment-supply question. SED3D (EPA) is
+  archived/defunct -- never offer it. HEC-RAS 2D sediment is a real US-standard
+  channel/reservoir tool but is NOT surfaced in TRID3NT (only HEC-RAS hydraulics
+  is); say so rather than implying a sediment run.
+- WATER QUALITY: SWMM water-quality (buildup/washoff -> pipe network -> outfall
+  load) is the URBAN-catchment scale; the WAQTEL decay mode of telemac_river_dye
+  (substance = sewage/effluent/E.coli) is the RECEIVING-water scale (what the
+  discharged load DOES in the river/lake -- decay, dilution, deposition). Chain
+  SWMM-WQ -> telemac decay for source-to-receiving-water. ICM (commercial
+  InfoWorks) spans both but is NOT in TRID3NT; use the SWMM + telemac combination.
+- RAIN-ON-GRID pluvial (three-tier fidelity ladder): sfincs_flood is the FAST
+  reduced-physics SCREENING tier (national-to-local pluvial); a full shallow-water
+  overland-flow refinement tier belongs to a native 2D solver (HEC-RAS 2D) on a
+  documented case; swmm_urban_flood is correct specifically when the drainage
+  NETWORK topology (pipes, inlets, weirs) is the object of the question rather
+  than the free-surface overland field.
+
 Satellite fire-animation routing (CIRA/GOES/JPSS fire timelapse):
 To "recreate a CIRA / GOES / JPSS fire animation" (cue words: "recreate the
 satellite animation", "GOES fire timelapse", "VIIRS Day Fire", "animate the fire

@@ -135,6 +135,8 @@ async def telemac_river_dye(
     friction_law: int | None = None,
     velocity_diffusivity: float | None = None,
     tracer_diffusivity: float | None = None,
+    wind_speed_mps: float = 0.0,
+    wind_direction_deg: float = 0.0,
     compute_class: str = "medium",
     bank_source: str = "nhd_area",
     discharge_m3s: float | None = None,
@@ -232,7 +234,11 @@ async def telemac_river_dye(
             persistence); sediment ("sediment"/"sand"/"silt"/"mud"/"slurry"/
             "tailings") activates the GAIA module (settles + deposits on the
             bed -> adds a bed-deposition map in mm beside the concentration
-            ribbon). Everything else is a plain conservative dye tracer.
+            ribbon). The GAIA path is SUPPLY-LIMITED: the deposition comes from a
+            PRESCRIBED UPSTREAM SEDIMENT SUPPLY (source concentration), not an
+            initial bed stock - i.e. THIS is the "reservoir-inflow sedimentation /
+            upstream sediment supply rate" question. Everything else is a plain
+            conservative dye tracer.
         decay_half_life_hours: OPTIONAL, decaying substance only - first-order
             half-life in HOURS (k = ln(2)/half_life). Default honest
             literature value ~2h (bacterial T90 in daylight freshwater).
@@ -260,6 +266,15 @@ async def telemac_river_dye(
         tracer_diffusivity: OPTIONAL ADVANCED lever - dye/tracer diffusivity
             (m2/s), sets lateral plume spread. Default 0.1; clamped
             [1e-3, 10].
+        wind_speed_mps: OPTIONAL sustained WIND SPEED (m/s) driving a
+            wind-stress term on the free surface - the "how does sustained wind
+            set up a surface slope / drive circulation on a wide reach,
+            embayment or lake" question. Default 0 = no wind (unchanged solve).
+            A positive value turns on a spatially-constant wind; clamped
+            [0, 60]. Pair with ``wind_direction_deg``.
+        wind_direction_deg: OPTIONAL meteorological wind direction in DEGREES,
+            the compass bearing the wind blows FROM (0=N, 90=E, 180=S, 270=W).
+            Default 0. Only meaningful when ``wind_speed_mps`` > 0.
         compute_class: FR-CE-3 compute class. Default ``"medium"``.
         bank_source: river-bank geometry source. ``"nhd_area"`` (default) meshes
             REAL banks sampled from USGS NHDArea water polygons; when NO NHDArea
@@ -510,6 +525,16 @@ async def telemac_river_dye(
     friction_coefficient = _pos_float(friction_coefficient, 10.0, 90.0)
     velocity_diffusivity = _pos_float(velocity_diffusivity, 1e-3, 10.0)
     tracer_diffusivity = _pos_float(tracer_diffusivity, 1e-3, 10.0)
+    # WIND-STRESS FORCING: clamp speed to a sane meteorological band [0, 60] m/s
+    # (0 -> no wind, unchanged solve); normalize the FROM-direction to [0, 360).
+    try:
+        wind_speed_mps = max(0.0, min(60.0, float(wind_speed_mps)))
+    except (TypeError, ValueError):
+        wind_speed_mps = 0.0
+    try:
+        wind_direction_deg = float(wind_direction_deg) % 360.0
+    except (TypeError, ValueError):
+        wind_direction_deg = 0.0
     if friction_law is not None:
         try:
             friction_law = int(friction_law)
@@ -558,6 +583,8 @@ async def telemac_river_dye(
             friction_law=friction_law,
             velocity_diffusivity=velocity_diffusivity,
             tracer_diffusivity=tracer_diffusivity,
+            wind_speed_mps=wind_speed_mps,
+            wind_direction_deg=wind_direction_deg,
             compute_class=compute_class,
             bank_source=bank_source,
             discharge_m3s=(float(discharge_m3s) if discharge_m3s is not None else None),
@@ -1551,6 +1578,8 @@ async def model_telemac_river_dye(
     friction_law: int | None = None,
     velocity_diffusivity: float | None = None,
     tracer_diffusivity: float | None = None,
+    wind_speed_mps: float = 0.0,
+    wind_direction_deg: float = 0.0,
     compute_class: str = "medium",
     bank_source: str = "nhd_area",
     discharge_m3s: float | None = None,
@@ -1850,6 +1879,12 @@ async def model_telemac_river_dye(
             "grain_size_um": sed_grain_um, "sediment_density": 2650.0,
             "erodible_bed": False}
            if substance_class == "sediment" else {}),
+        # WIND-STRESS FORCING: threaded onto the manifest ONLY when a positive
+        # speed was requested; absent otherwise, so the worker ReachConfig field
+        # stays 0.0 and author_deck emits NO wind block (byte-identical solve).
+        **({"wind_speed_mps": float(wind_speed_mps),
+            "wind_dir_from_deg": float(wind_direction_deg)}
+           if wind_speed_mps and float(wind_speed_mps) > 0.0 else {}),
         "nav_direction": "DM",
         "distance_km": float(reach_length_km),
         "channel_width_m": float(channel_width_m),

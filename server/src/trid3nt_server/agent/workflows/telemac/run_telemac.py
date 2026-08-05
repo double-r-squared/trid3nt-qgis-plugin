@@ -68,6 +68,9 @@ _COMPLETION_METRIC_KEYS: tuple[str, ...] = (
     "nptfr",
     "reach_name",
     "seed_comid",
+    # wind-stress forcing echo (present only when a wind run was requested).
+    "wind_speed_mps",
+    "wind_dir_from_deg",
     "utm_epsg",
     "centerline_length_m",
     "lb_order",
