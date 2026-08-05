@@ -1,0 +1,9 @@
+swmm_subcatchment_runoff_comparison:
+- compare Horton vs Green-Ampt vs Curve Number infiltration on the same storm
+- how much does the infiltration method change peak runoff and total volume
+- pre-development vs post-development runoff for the same parcel
+- how much faster and higher does post-development runoff arrive
+- effect of increased imperviousness on subcatchment runoff hydrograph
+- SWMM infiltration method sensitivity comparison on one subcatchment
+- pasture vs developed parcel runoff peak and timing shift
+- overlay runoff hydrographs for different SWMM loss methods

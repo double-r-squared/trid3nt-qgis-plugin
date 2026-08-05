@@ -1,0 +1,9 @@
+swmm_wetwell_pump_control_comparison:
+- lift station wet well pump curve depth and discharge over a storm
+- at what depths do the pumps turn on and off in the wet well
+- three pumps duty standby alternation versus a fixed setpoint
+- how does depth-staged pump control change run-time and cycling
+- multi-condition AND control rule for a pump regulator
+- compare pump control schemes wet-well depth and pump cycling
+- SWMM real-time control rules for lift station pumps
+- pump run-time and cycling frequency by control scheme

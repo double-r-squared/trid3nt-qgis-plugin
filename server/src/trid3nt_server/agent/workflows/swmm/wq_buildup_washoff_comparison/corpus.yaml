@@ -1,0 +1,9 @@
+swmm_wq_buildup_washoff_comparison:
+- curb length versus area normalized pollutant buildup TSS loads
+- how much does curb-length buildup normalization change predicted TSS
+- exponential washoff versus event mean concentration comparison
+- EMC versus exponential buildup washoff for the same storm
+- SWMM water quality buildup washoff method comparison
+- TSS pollutograph area versus curb length buildup normalization
+- compare washoff models exponential and event mean concentration
+- pollutant buildup normalizer effect on washoff load

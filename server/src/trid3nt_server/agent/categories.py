@@ -267,6 +267,11 @@ PRIMARY_CATEGORY: dict[str, str] = {
     "swmm_lid_raingarden_wq": "hazard_modeling",
     "swmm_wwtp_detention_ponds": "hazard_modeling",
     "swmm_pump_pid_rtc": "hazard_modeling",
+    "swmm_subcatchment_runoff_comparison": "hazard_modeling",
+    "swmm_node_hydraulics_comparison": "hazard_modeling",
+    "swmm_wetwell_pump_control_comparison": "hazard_modeling",
+    "swmm_lid_performance_comparison": "hazard_modeling",
+    "swmm_wq_buildup_washoff_comparison": "hazard_modeling",
     "pelicun_damage_assessment": "hazard_modeling",
     # pelicun Assessment-API validation / sensitivity templates: idealized
     # damage-and-loss methodology checks, primary damage_assessment.

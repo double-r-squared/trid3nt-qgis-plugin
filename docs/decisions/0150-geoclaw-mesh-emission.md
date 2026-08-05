@@ -75,9 +75,13 @@ self-evident because the grid gets DENSER in refined areas.
   black thin grid lines, ONE colour, visibly denser over the refined window; the
   ONLY overlay is the yellow dashed user window + white AOI box over Esri; caption
   strip states "yellow dashed = your AMR window; the mesh is the solver's response
-  to it"). `amr_regions.png` = the peak-inundation depth raster from the same run,
-  same visual family. No annotation boxes, no suptitle, captions in the strip.
-  This SUPERSEDES the ADR 0148 abstract patch-family mesh proof.
+  to it"). This SUPERSEDES the ADR 0148 abstract patch-family mesh proof.
+  `amr_regions.png` = the mid-run sea-surface anomaly (eta) snapshot (the approved
+  ADR 0148 raster style: a full-AOI wave field on the diverging blue-white-red
+  ramp; here the mid-run frame t=720 s, symmetric +-1.2 m, offshore drawdown ->
+  shoreline run-up; white AOI box + yellow window + red gauge dot).
+  `amr_regions_depth.png` = the peak-inundation depth product map. All from the
+  same re-smoke run; no annotation boxes, no suptitle, captions in the strip.
 
 - **Tests.** `test_geoclaw_postprocess_amr_flatten.py` gains a synthetic
   multi-patch structure test (per-level patches present, honest decimation flag +

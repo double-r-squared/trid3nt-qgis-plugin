@@ -36,6 +36,11 @@ EXPECTED_TEMPLATES = {
     "swmm_lid_raingarden_wq",  # ADR 0128 published-deck runner: cited rain-garden LID + WQ example
     "swmm_wwtp_detention_ponds",  # ADR 0128 published-deck runner: cited detention-pond storage-routing example
     "swmm_pump_pid_rtc",  # ADR 0128 published-deck runner: cited PID pump real-time-control example
+    "swmm_subcatchment_runoff_comparison",  # ADR 0151 SWMM CAND-S: infiltration-method + pre/post-development runoff knob
+    "swmm_node_hydraulics_comparison",  # ADR 0151 SWMM CAND-S: outlet-structure family / flow diversion / surcharge-ponding knob
+    "swmm_wetwell_pump_control_comparison",  # ADR 0151 SWMM CAND-S: wet-well pump curve + duty/standby + multi-condition RTC
+    "swmm_lid_performance_comparison",  # ADR 0151 SWMM CAND-S: green roof / rain barrel vs rooftop disconnect / vegetative swale
+    "swmm_wq_buildup_washoff_comparison",  # ADR 0151 SWMM CAND-S: curb-length vs area buildup + EMC vs exp washoff
     "telemac_river_dye",
     "hecras_riverine_flood",  # engine #11 (ADR 0109; renamed ADR 0120): HEC-RAS riverine-flood template (v1 geometry: Muncie)
     "hecras_levee_breach",  # engine #11 second archetype (ADR 0125): HEC-RAS levee-breach template (v1 geometry: Muncie leveed floodplain)

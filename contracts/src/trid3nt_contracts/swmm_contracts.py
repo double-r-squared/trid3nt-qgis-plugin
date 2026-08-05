@@ -71,6 +71,8 @@ __all__ = [
     "SWMMNetworkLayerURI",
     "SWMMDualDrainageLayerURI",
     "SWMMDeckRunResult",
+    "SWMMComparisonVariant",
+    "SWMMComparisonResult",
 ]
 
 
@@ -659,3 +661,81 @@ class SWMMDeckRunResult(GraceModel):
     schematic_only: bool = True
     synthetic_inputs: list[SyntheticInput] = Field(default_factory=list)
     rain_scale: float = 1.0
+
+
+class SWMMComparisonVariant(GraceModel):
+    """One knob-variant's parsed scalars in a SWMM mechanism-COMPARISON run.
+
+    Every field is a real parsed solver output (invariant 1) - the agent narrates
+    these, it never invents a peak or a load.
+
+    Fields:
+        label: the knob value this variant realizes (e.g. "Horton",
+            "post-development", "duty/standby staged", "green roof").
+        continuity_error_pct: this variant's Flow-Routing Continuity error (%).
+        peak_value: peak of the variant's primary charted series (runoff /
+            depth / flow / concentration), in ``SWMMComparisonResult.series_units``.
+        peak_time_min: minutes-from-start at which ``peak_value`` occurs (>= 0).
+        total_value: an integrated / summary quantity when meaningful (e.g. total
+            runoff volume, total washoff load); 0.0 when not computed.
+        max_node_depth: peak node depth over the run (>= 0).
+        n_flooded_nodes / n_surcharged_conduits: surcharge tallies (>= 0).
+        extra: family-specific scalars (e.g. per-pump run-fraction, per-outlet
+            split share) - all real parsed outputs.
+    """
+
+    label: str
+    continuity_error_pct: float = 0.0
+    peak_value: float = 0.0
+    peak_time_min: float = Field(default=0.0, ge=0.0)
+    total_value: float = 0.0
+    max_node_depth: float = Field(default=0.0, ge=0.0)
+    n_flooded_nodes: int = Field(default=0, ge=0)
+    n_surcharged_conduits: int = Field(default=0, ge=0)
+    extra: dict[str, Any] = Field(default_factory=dict)
+
+
+class SWMMComparisonResult(GraceModel):
+    """The typed result of a SWMM mechanism-COMPARISON template.
+
+    NOT a ``LayerURI``: the comparison runs SMALL SYNTHETIC decks (a single
+    subcatchment / a wet-well / a pond-outlet stub) whose coordinates are
+    SCHEMATIC (local model units, not lon/lat). The product is the OVERLAY CHART
+    that visually demonstrates the knob (method A vs B vs C in one figure) plus
+    the typed per-variant scalars the agent cites. There is NO georeferenced map
+    layer - the ``basis`` is an honestly-labeled synthetic mechanism demonstration.
+
+    Fields:
+        comparison_kind: the mechanism class compared (e.g.
+            "infiltration_method", "outlet_structure", "pump_control",
+            "lid_type", "wq_buildup_washoff").
+        knob_name: the varied knob's name (what the LLM would change).
+        knob_values: the ordered knob values compared (one per variant).
+        flow_units: the decks' FLOW_UNITS ("CFS" / "CMS") - the unit context.
+        series_units: the unit of ``variant.peak_value`` (e.g. "CFS", "ft",
+            "mg/L") so a runoff peak is never mislabeled a depth.
+        variants: the per-knob-value parsed scalars.
+        headline: a small dict of the comparison's headline facts the chart
+            visualizes (e.g. the peak-runoff spread across methods, the
+            LID runoff reduction) - all real parsed outputs.
+        chart_titles: the titles of the overlay chart(s) emitted.
+        demonstration_note: the LOUD honesty label - a synthetic mechanism
+            comparison on schematic decks, not a georeferenced site study.
+        schematic_only: always True (no georeferenced layer).
+        basis: "synthetic" - the decks are authored small mechanism networks.
+        synthetic_inputs: structured provenance (the synthetic-deck basis + the
+            published mechanism source each variant realizes).
+    """
+
+    comparison_kind: str
+    knob_name: str
+    knob_values: list[str] = Field(default_factory=list)
+    flow_units: str = ""
+    series_units: str = ""
+    variants: list[SWMMComparisonVariant] = Field(default_factory=list)
+    headline: dict[str, Any] = Field(default_factory=dict)
+    chart_titles: list[str] = Field(default_factory=list)
+    demonstration_note: str = ""
+    schematic_only: bool = True
+    basis: str = "synthetic"
+    synthetic_inputs: list[SyntheticInput] = Field(default_factory=list)

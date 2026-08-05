@@ -649,6 +649,14 @@ from ..workflows.swmm.dual_drainage.dual_drainage import swmm_dual_drainage_coup
 from ..workflows.swmm.deck_lid_wq.deck_lid_wq import swmm_lid_raingarden_wq as _swmm_lid_raingarden_wq  # noqa: E402,F401 - NEW capability (ADR 0128, published-deck runner: LID rain-garden WQ) (engine=swmm, tier=template)
 from ..workflows.swmm.deck_detention_ponds.deck_detention_ponds import swmm_wwtp_detention_ponds as _swmm_wwtp_detention_ponds  # noqa: E402,F401 - NEW capability (ADR 0128, published-deck runner: storage-routing detention ponds) (engine=swmm, tier=template)
 from ..workflows.swmm.deck_pid_pump.deck_pid_pump import swmm_pump_pid_rtc as _swmm_pump_pid_rtc  # noqa: E402,F401 - NEW capability (ADR 0128, published-deck runner: PID pump RTC) (engine=swmm, tier=template)
+# ADR 0151 SWMM mechanism-COMPARISON templates: small synthetic decks that vary
+# ONE knob across variants and overlay the compared series (CHARTS + typed scalars,
+# no georeferenced map). Cover the 12 SWMM CAND-S board rows as knobs.
+from ..workflows.swmm.subcatchment_runoff_comparison.subcatchment_runoff_comparison import swmm_subcatchment_runoff_comparison as _swmm_subcatchment_runoff_comparison  # noqa: E402,F401 - NEW capability (ADR 0151, infiltration-method + pre/post-development runoff) (engine=swmm, tier=template)
+from ..workflows.swmm.node_hydraulics_comparison.node_hydraulics_comparison import swmm_node_hydraulics_comparison as _swmm_node_hydraulics_comparison  # noqa: E402,F401 - NEW capability (ADR 0151, outlet-structure family / flow diversion / surcharge-ponding) (engine=swmm, tier=template)
+from ..workflows.swmm.wetwell_pump_control_comparison.wetwell_pump_control_comparison import swmm_wetwell_pump_control_comparison as _swmm_wetwell_pump_control_comparison  # noqa: E402,F401 - NEW capability (ADR 0151, wet-well pump curve + duty/standby + multi-condition RTC) (engine=swmm, tier=template)
+from ..workflows.swmm.lid_performance_comparison.lid_performance_comparison import swmm_lid_performance_comparison as _swmm_lid_performance_comparison  # noqa: E402,F401 - NEW capability (ADR 0151, green roof / rain barrel vs rooftop disconnect / vegetative swale) (engine=swmm, tier=template)
+from ..workflows.swmm.wq_buildup_washoff_comparison.wq_buildup_washoff_comparison import swmm_wq_buildup_washoff_comparison as _swmm_wq_buildup_washoff_comparison  # noqa: E402,F401 - NEW capability (ADR 0151, curb-length vs area buildup + EMC vs exp washoff) (engine=swmm, tier=template)
 # telemac_river_dye TEMPLATE (engine="telemac", tier="template"), one folder
 # under workflows/telemac/river_dye/; EXCLUDED from the default retrieval
 # pool, surfaced only by the run_telemac door's gate expansion. The composer
