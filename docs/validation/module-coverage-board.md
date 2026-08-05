@@ -1267,6 +1267,28 @@ Roster gaps (SFINCS): hydromt_sfincs docs are mid-migration between two API gene
 
 ## SWMM (11 modules)
 
+REAL-NETWORK FAMILY LANDED (ADR 0124, 2026-08-04): the practice-verification's
+#1-ranked gap (real municipal storm-sewer import as the START of a project, not
+the DEM-synthesized mesh) is CLOSED. Two new engine="swmm" tier="template" tools:
+- [LANDED] `swmm_network_import` [row #1] - build a runnable SWMM model from a REAL
+  municipal storm-drain GIS network (nodes + conduits, any schema), design-storm
+  loaded; where do the pipes surcharge/flood and how much reaches the outfall.
+  Multi-source input (upload / s3 / https GeoJSON / keyless ArcGIS FeatureServer).
+  LIVE smoke on a public Houston-area TX Storm_Sewer_System FeatureServer (185
+  manholes + 518 mains -> 484 junctions / 473 conduits / 47.3 km pipe -> peak
+  outfall 2.906 CMS, 464 flooded nodes, continuity +0.482%).
+- [LANDED] `swmm_dual_drainage_coupling` [row #2] - the DEFINING dual-drainage
+  feature: the overland MAJOR-system mesh EXCHANGES flow with the imported piped
+  MINOR system at inlets (surface -> pipe capture; surcharging pipe -> street).
+  LIVE smoke: overland depth raster + 27 inlets coupled to the real network, 34
+  pipe conduits surcharged.
+ROWS #3-#7 STOPPED (published-deck runner is a separate capability): the cited
+LID / green-grey / CSO-regulator / WWTP-detention / PID-pump decks are PRE-BUILT
+published .inp files carrying LID controls, storage curves, regulators, pumps, and
+RTC rules that NEITHER the DEM-mesh builder NOR the GIS-network parser produces -
+they do not consume the row-#1 machinery; queue a dedicated published-deck-runner
+wave. See ADR 0124 + the wave report for per-row blockers.
+
 ### Hydrology - Subcatchment Rainfall-Runoff & Infiltration
 Purpose: Convert rainfall on a subcatchment into a runoff hydrograph via the nonlinear-reservoir routing model plus a selectable infiltration method for the pervious fraction.
 Today: Base subcatchment hydrology already ships as the foundation of the signed 7-template quasi-2D network family (per-DEM-cell subcatchments, Horton infiltration default per the roughness/NLCD roster note); Green-Ampt and Curve-Number infiltration methods, and a named pre/post-development comparison deck, are not yet distinguished as separate templates.

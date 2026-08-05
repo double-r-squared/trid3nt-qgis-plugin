@@ -25,11 +25,13 @@ import trid3nt_server.main as _main
 from trid3nt_server.agent.tools.search.search_tools import search_tools as dd
 from trid3nt_server.agent.tools.search.tool_retrieval import retrieve_visible_tools
 
-# The 27 registered engine templates (12 engines; MODFLOW ships 11, HEC-RAS #11, SCHISM #12).
+# The 29 registered engine templates (12 engines; MODFLOW ships 11, HEC-RAS #11, SCHISM #12).
 EXPECTED_TEMPLATES = {
     "sfincs_flood",
     "sfincs_advanced_numerical_physics_knobs",  # S-tier wave 1: SFINCS numerical solver-settings knob template
     "swmm_urban_flood",
+    "swmm_network_import",  # ADR 0124 SWMM network family #1: import a real municipal storm-drain GIS network
+    "swmm_dual_drainage_coupling",  # ADR 0124 SWMM network family #2: overland mesh <-> imported pipe coupling
     "telemac_river_dye",
     "hecras_riverine_flood",  # engine #11 (ADR 0109; renamed ADR 0120): HEC-RAS riverine-flood template (v1 geometry: Muncie)
     "schism_tidal_hydro",  # engine #12 (ADR 0118): SCHISM barotropic tidal template
@@ -98,7 +100,7 @@ def test_all_templates_registered_and_callable():
         n for n, e in reg.items() if getattr(e.metadata, "tier", "general") == "template"
     }
     assert registered_templates == EXPECTED_TEMPLATES, (
-        "registered tier=template set drifted from the expected 24: "
+        "registered tier=template set drifted from the expected 29: "
         f"missing={sorted(EXPECTED_TEMPLATES - registered_templates)} "
         f"unexpected={sorted(registered_templates - EXPECTED_TEMPLATES)}"
     )

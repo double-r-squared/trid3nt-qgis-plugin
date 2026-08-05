@@ -68,6 +68,8 @@ __all__ = [
     "SWMMRunArgs",
     "SWMMDepthLayerURI",
     "SWMMPollutantLayerURI",
+    "SWMMNetworkLayerURI",
+    "SWMMDualDrainageLayerURI",
 ]
 
 
@@ -466,6 +468,87 @@ class SWMMDepthLayerURI(LayerURI):
         if value is None:
             return None
         return _validate_barrier_feature_collection(value)
+
+
+class SWMMNetworkLayerURI(LayerURI):
+    """A ``LayerURI`` for an IMPORTED municipal storm-drain network + its
+    hydraulic response to a design storm (the dual-drainage MINOR system).
+
+    Extends ``LayerURI`` field-for-field (so it maps onto ``map-command
+    load-layer`` with no translation, same as every other layer) and carries the
+    typed network + response scalars the agent narrates (invariant 1 / FR-AS-7 -
+    the LLM cites these fields, never invents a pipe count or a peak flow). The
+    layer itself is a VECTOR (nodes as points carrying max-HGL / flooded, conduits
+    as lines carrying surcharge) - a piped network's natural render.
+
+    Fields:
+        n_junctions: imported junction (manhole/inlet) node count (>= 0).
+        n_conduits: imported conduit (pipe) count (>= 0).
+        n_outfalls: imported / inferred outfall node count (>= 1).
+        total_pipe_length_m: summed conduit length, m (>= 0).
+        peak_outfall_flow_cms: peak discharge summed across outfalls, m^3/s (>= 0).
+        total_outfall_volume_m3: cumulative volume delivered to outfalls, m^3 (>= 0).
+        n_flooded_nodes: nodes that surcharged above their rim (flooded), count.
+        n_surcharged_conduits: conduits that ran full/surcharged, count.
+        max_node_hgl_m: peak hydraulic-grade-line elevation across nodes, m.
+        continuity_error_pct: the .rpt Flow Routing Continuity error (%), the
+            mass-balance honesty readout.
+        n_inverts_filled: nodes whose invert was gap-filled (DEM/slope-walk) -
+            the labeled-degrade count (>= 0); a large value means a low-confidence
+            network geometry.
+        n_topology_snapped: conduit endpoints snapped to a nearest node because
+            the GIS carried no explicit from/to topology (>= 0).
+        network_source: a short human label for where the network came from
+            (a user upload, an ArcGIS FeatureServer, or a synthesized fallback).
+    """
+
+    n_junctions: int = Field(ge=0)
+    n_conduits: int = Field(ge=0)
+    n_outfalls: int = Field(ge=0)
+    total_pipe_length_m: float = Field(ge=0.0)
+    peak_outfall_flow_cms: float = Field(ge=0.0)
+    total_outfall_volume_m3: float = Field(ge=0.0)
+    n_flooded_nodes: int = Field(ge=0)
+    n_surcharged_conduits: int = Field(ge=0)
+    max_node_hgl_m: float = 0.0
+    continuity_error_pct: float = 0.0
+    n_inverts_filled: int = Field(default=0, ge=0)
+    n_topology_snapped: int = Field(default=0, ge=0)
+    network_source: str = ""
+
+
+class SWMMDualDrainageLayerURI(SWMMDepthLayerURI):
+    """A ``LayerURI`` for a COUPLED dual-drainage run - the overland MAJOR system
+    (surface depth raster, inherited) EXCHANGING flow with the imported piped
+    MINOR system at inlets. The practice-verification's defining "both halves".
+
+    The primary layer is the OVERLAND peak-depth raster (inherits
+    ``max_depth_m`` / ``flooded_area_km2`` / ``n_buildings_affected``); a pipe
+    network vector is emitted alongside as context. Adds the MINOR-system +
+    coupling scalars the agent narrates (invariant 1):
+
+        n_pipe_junctions / n_pipe_conduits / n_pipe_outfalls: the imported piped
+            network's node/link/outfall counts (>= 0).
+        n_inlets: surface<->sewer coupling links wired (catchbasins/inlets) - the
+            count that makes the run dual drainage (>= 0).
+        pipe_peak_outfall_flow_cms: peak discharge summed across PIPE outfalls,
+            m^3/s - the minor system's captured, routed flow (>= 0).
+        n_pipe_flooded_nodes: pipe junctions that surcharged above their rim,
+            pushing water back to the surface (>= 0).
+        n_pipe_surcharged_conduits: pipes that ran full/surcharged (>= 0).
+        n_inverts_filled / n_topology_snapped: the imported network's
+            labeled-degrade counts (>= 0).
+    """
+
+    n_pipe_junctions: int = Field(default=0, ge=0)
+    n_pipe_conduits: int = Field(default=0, ge=0)
+    n_pipe_outfalls: int = Field(default=0, ge=0)
+    n_inlets: int = Field(default=0, ge=0)
+    pipe_peak_outfall_flow_cms: float = Field(default=0.0, ge=0.0)
+    n_pipe_flooded_nodes: int = Field(default=0, ge=0)
+    n_pipe_surcharged_conduits: int = Field(default=0, ge=0)
+    n_inverts_filled: int = Field(default=0, ge=0)
+    n_topology_snapped: int = Field(default=0, ge=0)
 
 
 class SWMMPollutantLayerURI(LayerURI):

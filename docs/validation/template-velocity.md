@@ -15,6 +15,7 @@ per NATE 2026-08-04.
 | Easy-four pt 1 (0122) | 1 (folding 3 board rows) | ~47 min | ~47 min - feature-build |
 | Easy-four pt 2 (0123) | 3 | ~71 min | ~24 min - recipes pre-scoped |
 | Triage-only waves (0121) | 0 (13 ground-truthed) | ~35 min | scoping overhead, amortized |
+| SWMM network family (0124) | 2 (network import + dual drainage, live Houston municipal net) | ~66 min | ~33 min - triage bought 5 honest STOPs + the published-deck-runner unlock |
 
 ## Working rates (sequential, incl close-out share)
 

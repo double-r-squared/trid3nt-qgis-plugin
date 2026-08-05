@@ -626,6 +626,18 @@ from ..workflows.modflow.saltwater_intrusion.saltwater_intrusion import modflow_
 # surfaced only by the run_swmm door's gate expansion. The composer chain
 # (model_swmm_urban_flood) is inlined in the template module.
 from ..workflows.swmm.urban_flood.urban_flood import swmm_urban_flood as _swmm_urban_flood  # noqa: E402,F401 - RENAME of run_swmm_urban_flood (engine=swmm, tier=template)
+# swmm_network_import TEMPLATE (engine="swmm", tier="template"), one folder under
+# workflows/swmm/network_import/. A DISTINCT capability: imports a REAL municipal
+# storm-drain GIS network (nodes + conduits) into a runnable SWMM model - the
+# dual-drainage MINOR system, the practice-verification's #1-ranked gap over the
+# DEM-synthesized overland mesh. The composer (model_swmm_network_import) is inlined.
+from ..workflows.swmm.network_import.network_import import swmm_network_import as _swmm_network_import  # noqa: E402,F401 - NEW capability (ADR 0124, SWMM network family #1) (engine=swmm, tier=template)
+# swmm_dual_drainage_coupling TEMPLATE (engine="swmm", tier="template"), one
+# folder under workflows/swmm/dual_drainage/. The DEFINING dual-drainage feature:
+# the overland MAJOR-system mesh EXCHANGES flow with the imported piped MINOR
+# system (row #1's machinery) at inlets. The composer (model_swmm_dual_drainage)
+# is inlined.
+from ..workflows.swmm.dual_drainage.dual_drainage import swmm_dual_drainage_coupling as _swmm_dual_drainage_coupling  # noqa: E402,F401 - NEW capability (ADR 0124, SWMM network family #2) (engine=swmm, tier=template)
 # telemac_river_dye TEMPLATE (engine="telemac", tier="template"), one folder
 # under workflows/telemac/river_dye/; EXCLUDED from the default retrieval
 # pool, surfaced only by the run_telemac door's gate expansion. The composer

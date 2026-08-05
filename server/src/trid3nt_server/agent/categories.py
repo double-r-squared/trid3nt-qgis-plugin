@@ -262,6 +262,8 @@ PRIMARY_CATEGORY: dict[str, str] = {
     "modflow_wellhead_protection": "hazard_modeling",
     "modflow_wetland_hydroperiod": "hazard_modeling",
     "swmm_urban_flood": "hazard_modeling",
+    "swmm_network_import": "hazard_modeling",
+    "swmm_dual_drainage_coupling": "hazard_modeling",
     "pelicun_damage_assessment": "hazard_modeling",
     "geoclaw_inundation": "hazard_modeling",
     "openquake_psha": "hazard_modeling",
