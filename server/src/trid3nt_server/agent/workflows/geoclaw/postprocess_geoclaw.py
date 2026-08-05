@@ -330,23 +330,29 @@ def rasterize_frame_to_grid(
     Builds an ``(H, W)`` depth grid over ``bbox`` (EPSG:4326), row 0 = NORTH (the
     standard COG orientation). Each AMR patch cell PAINTS its full footprint --
     every output cell whose centre falls inside that patch cell's ``dx``/``dy``
-    extent takes its depth (area/coverage fill), NOT a single nearest-cell
+    extent takes its value (area/coverage fill), NOT a single nearest-cell
     scatter. That keeps the field GAP-FREE when the output grid is FINER than a
-    coarse AMR patch: the coverage fill spans every output cell the patch cell
-    covers, instead of leaving neighbouring cells NaN.
+    coarse AMR patch.
 
-    Patches are sorted by AMR level ASCENDING so a finer (higher-level) patch is
-    painted LAST and OVERWRITES a coarser one where they overlap. Only wet
-    (>= ``NODATA_DEPTH_M``) patch cells write, so a finer patch's dry cells never
-    erase a coarser patch's wet value. Dry / sub-threshold / uncovered cells stay
-    NaN. Fully vectorized per patch (inverse sampling: each output cell -> the
-    patch cell that contains its centre) -- unit-testable on a synthetic patch
-    list.
+    Finest-available level wins per area, UNCONDITIONALLY. Patches are painted
+    coarse-to-fine (level ASCENDING) and a per-cell ``painted_level`` records the
+    finest patch that has touched each output cell. A patch OWNS every covered
+    cell whose recorded level is ``<=`` its own; on an owned cell it writes its
+    depth when wet (``>= NODATA_DEPTH_M``) and NaN when dry. So a finer patch's
+    DRY cell ERASES a coarser patch's wet value: the depth over any area is the
+    finest patch's solution there, never a coarse patch cell smeared across the
+    footprint of a finer patch that resolves the ground as dry. Dry /
+    sub-threshold / uncovered cells are NaN. Fully vectorized per patch (inverse
+    sampling: each output cell -> the patch cell that contains its centre) --
+    unit-testable on a synthetic patch list.
     """
     import numpy as np
 
     nrows, ncols = int(out_shape[0]), int(out_shape[1])
     grid = np.full((nrows, ncols), np.nan, dtype="float64")
+    # Finest AMR level that has painted each output cell (0 = untouched); a patch
+    # owns a cell iff its level >= the recorded level.
+    painted_level = np.zeros((nrows, ncols), dtype=np.int32)
     min_lon, min_lat, max_lon, max_lat = bbox
     if max_lon <= min_lon or max_lat <= min_lat:
         return grid
@@ -379,12 +385,15 @@ def rasterize_frame_to_grid(
         # Gather the (rows x cols) sub-block of patch depths (row 0 of `patch.h`
         # is ylow=south; `rows` is north->south, so pj already indexes correctly).
         sub = patch.h[np.ix_(pj, pi)]
-        wet = np.isfinite(sub) & (sub >= NODATA_DEPTH_M)
-        if not wet.any():
-            continue
         block = grid[np.ix_(rows, cols)]
-        block[wet] = sub[wet]
+        lvl_block = painted_level[np.ix_(rows, cols)]
+        own = patch.level >= lvl_block  # finest-or-equal patch owns the cell
+        wet = np.isfinite(sub) & (sub >= NODATA_DEPTH_M)
+        block[own & wet] = sub[own & wet]  # finest wet depth
+        block[own & ~wet] = np.nan  # finest DRY erases a coarser wet value
         grid[np.ix_(rows, cols)] = block
+        lvl_block[own] = patch.level
+        painted_level[np.ix_(rows, cols)] = lvl_block
     return grid
 
 
@@ -744,6 +753,7 @@ def postprocess_geoclaw(
     runs_bucket: str | None = None,
     topo_grid: Any = None,
     mask_ocean: bool = False,
+    sea_level_m: float = 0.0,
     fgmax_arrival_tol_m: float = GEOCLAW_DEFAULT_FGMAX_ARRIVAL_TOL_M,
 ) -> tuple[list[GeoClawDepthLayerURI], dict[str, Any]]:
     """Rasterize a solved GeoClaw run into a peak + per-frame depth-COG layer set.
@@ -778,25 +788,24 @@ def postprocess_geoclaw(
         runs_bucket: optional override for the runs bucket name.
         topo_grid: optional ``(H, W)`` topography grid (same shape) for the
             ``max_inundation_m`` land/ocean split AND (with ``mask_ocean``) the
-            belt-and-suspenders ``topo < 0`` OR-term of the overland depth mask.
+            ``topo <= sea_level_m`` water OR-term of the overland depth mask.
         mask_ocean: when True, mask the published depth (peak + every frame +
-            metrics) to OVERLAND inundation only -- set depth to NaN wherever the
-            cell is PERMANENT WATER (ocean). Permanent water is detected by the
-            SIMULATION'S OWN INITIAL WATER SURFACE (robust on any coast): any cell
-            WET at ``t=0`` (the earliest fort.q frame ``grids[0]`` -- GeoClaw's
-            still-water initial condition ``h = max(0, sea_level - B)``) is ocean,
-            using a small wet epsilon (``NODATA_DEPTH_M``) so only genuinely-wet sea
-            is caught even if an Okada ``dtopo`` perturbs the ``t=0`` surface. This
-            replaces the old ``topo < 0`` criterion, which failed on ETOPO coasts
-            (no CUDEM) where the nearshore bathymetry reads ~0 m (not negative) and
-            so caught only far-offshore deep cells -- the nearshore sea stayed in the
-            published COG. When a shape-matching ``topo_grid`` is supplied, ``topo <
-            0`` is OR-ed in as a belt-and-suspenders term (a cell that is either
-            initially-wet OR below the still-water datum is ocean) so nothing
-            regresses on CUDEM coasts. A strict NO-OP when NO cell is initially wet
-            AND (no topo cell is < 0), so it can never erase a legitimate inland
-            flood. The composer gates this to the OFFSHORE/COASTAL scenario families
+            metrics) to OVERLAND inundation only -- set depth to NaN on every
+            PERMANENT-WATER (ocean) cell so what remains is depth on dry land.
+            A cell is water when EITHER: (1) it is WET at ``t=0`` -- the earliest
+            fort.q frame ``grids[0]``, GeoClaw's still-water initial condition
+            ``h = max(0, sea_level - B)`` -- using a small wet epsilon
+            (``NODATA_DEPTH_M``) so only genuinely-wet sea counts even if an Okada
+            ``dtopo`` perturbs the ``t=0`` surface (robust on any coast, including
+            ETOPO coasts whose nearshore bathymetry reads ~0 m); OR (2) a
+            shape-matching ``topo_grid`` puts it AT OR BELOW the still-water datum
+            (``topo <= sea_level_m``) -- overland is strictly ``topo > sea_level_m``.
+            A strict NO-OP when no cell is initially wet AND no topo cell is at or
+            below the datum, so it can never erase a legitimate inland flood. The
+            composer gates this to the OFFSHORE/COASTAL scenario families
             (tsunami / surge); inland ``dam_break`` stays unmasked.
+        sea_level_m: still-water datum (m) for the overland/water split; a cell is
+            water when ``topo <= sea_level_m`` (default 0.0).
         fgmax_arrival_tol_m: the fgmax wet-cell threshold (m) backing
             ``arrival_time_s`` when an fgmax monitor was run.
 
@@ -855,44 +864,45 @@ def postprocess_geoclaw(
             ) from exc
         grids.append(rasterize_frame_to_grid(patches, bbox, grid_shape))
 
-    # --- Overland (initial-wet ocean-masked) inundation -------------------- #
+    # --- Overland (ocean-masked) inundation -------------------------------- #
     # For an OFFSHORE / COASTAL scenario (tsunami / surge) whose domain reaches the
     # open sea, GeoClaw's water DEPTH (q[0]=h) is the FULL water column, so the
     # ocean portion of the AOI renders as a sheet of sea rather than the coastal
-    # flood. OVERLAND INUNDATION = dry-land cells that got wet, i.e. cells DRY at
-    # t=0 that are wet in a later frame. So the ocean (PERMANENT WATER) is exactly
-    # the set of cells WET AT t=0: the earliest fort.q frame (grids[0], sorted by
-    # frame number) is GeoClaw's still-water initial condition h=max(0,sea_level-B).
-    # This initial-wet criterion is robust on ANY coast -- it replaces the old
-    # `topo<0` test that FAILED on ETOPO coasts (no CUDEM) where nearshore bathy
-    # reads ~0 m (not negative), leaving the nearshore sea in the published COG.
-    # A small wet epsilon (NODATA_DEPTH_M) means only genuinely-wet sea is caught,
-    # robust even if an Okada dtopo perturbs the t=0 surface offshore.
-    # `topo<0` (when an aligned topo_grid is supplied) is OR-ed in as a
-    # belt-and-suspenders term (initially-wet OR below-datum = ocean) so nothing
-    # regresses on CUDEM coasts. Applied to EVERY frame so PEAK, per-frame COGs, and
-    # all derived metrics are consistently overland. Guarded so a legitimate inland
-    # flood is never erased: (1) the composer only sets mask_ocean for tsunami/surge
-    # (inland dam_break stays unmasked), (2) a strict no-op when NO cell is wet at
-    # t=0 AND no topo cell is < 0.
+    # flood. Published inundation is depth on DRY LAND only. A cell is PERMANENT
+    # WATER (masked to NaN) when EITHER:
+    #   (1) it is WET at t=0 -- the earliest fort.q frame (grids[0]) is GeoClaw's
+    #       still-water initial condition h=max(0,sea_level-B); a small wet epsilon
+    #       (NODATA_DEPTH_M) catches only genuinely-wet sea, robust on ANY coast
+    #       (including ETOPO coasts whose nearshore bathy reads ~0 m) even if an
+    #       Okada dtopo perturbs the t=0 surface offshore; OR
+    #   (2) an aligned topo_grid puts it AT OR BELOW the still-water datum
+    #       (topo <= sea_level_m) -- overland is strictly topo > sea_level_m.
+    # Applied to EVERY frame so PEAK, per-frame COGs, and all derived metrics are
+    # consistently overland. Guarded so a legitimate inland flood is never erased:
+    # (1) the composer only sets mask_ocean for tsunami/surge (inland dam_break
+    # stays unmasked), (2) a strict no-op when no cell is wet at t=0 AND no topo
+    # cell is at or below the datum.
     if mask_ocean:
         try:
             # PRIMARY: any cell wet at t=0 is permanent water (the ocean).
             init = np.asarray(grids[0], dtype="float64")
             ocean = np.isfinite(init) & (init > NODATA_DEPTH_M)
             n_initwet = int(ocean.sum())
-            # ADDITIONAL OR (CUDEM belt-and-suspenders): below the still-water datum.
+            # ADDITIONAL OR: a cell AT OR BELOW the still-water datum is water, not
+            # overland -- published inundation is depth on dry land (topo >
+            # sea_level) only. The `<=` (not `<`) catches the nearshore sea on
+            # ETOPO coasts whose bathymetry reads ~0 m at the waterline.
             n_topo = 0
             if topo_grid is not None:
                 topo = np.asarray(topo_grid, dtype="float64")
                 if topo.shape == tuple(grid_shape):
-                    topo_ocean = np.isfinite(topo) & (topo < 0.0)
+                    topo_ocean = np.isfinite(topo) & (topo <= sea_level_m)
                     n_topo = int(topo_ocean.sum())
                     ocean = ocean | topo_ocean
                 else:
                     logger.warning(
                         "postprocess_geoclaw run_id=%s topo_grid shape %s != output "
-                        "grid %s; ocean mask uses initial-wet only (no topo<0 OR)",
+                        "grid %s; ocean mask uses initial-wet only (no topo OR)",
                         run_id,
                         tuple(topo.shape),
                         tuple(grid_shape),
@@ -905,8 +915,8 @@ def postprocess_geoclaw(
                     grids[_i] = gi
                 logger.info(
                     "postprocess_geoclaw run_id=%s masked %d/%d ocean cells "
-                    "(initial-wet=%d, topo<0=%d) -> overland inundation (was total "
-                    "water column)",
+                    "(initial-wet=%d, topo<=datum=%d) -> overland inundation (was "
+                    "total water column)",
                     run_id,
                     n_ocean,
                     int(ocean.size),
@@ -916,7 +926,7 @@ def postprocess_geoclaw(
             else:
                 logger.info(
                     "postprocess_geoclaw run_id=%s mask_ocean requested but no "
-                    "initial-wet or topo<0 cells (no permanent water) — no-op",
+                    "initial-wet or topo<=datum cells (no permanent water) - no-op",
                     run_id,
                 )
         except Exception as exc:  # noqa: BLE001 -- mask is best-effort; never sink the run

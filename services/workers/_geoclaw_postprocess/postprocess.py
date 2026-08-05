@@ -193,13 +193,19 @@ def rasterize_frame_to_grid(
     """Rasterize a frame's AMR patches onto a regular AOI grid (finest wins).
 
     Coverage fill: each AMR patch cell PAINTS its full footprint so the output
-    grid is gap-free at finer resolutions. Patches sorted by AMR level ascending
-    so finer levels overwrite coarser ones where they overlap.
+    grid is gap-free at finer resolutions. Finest-available level wins per area
+    UNCONDITIONALLY: patches are painted coarse-to-fine, a per-cell
+    ``painted_level`` records the finest patch touching each cell, and a patch
+    OWNS every covered cell whose recorded level is ``<=`` its own -- writing its
+    depth when wet and NaN when dry. So a finer patch's DRY cell ERASES a coarser
+    patch's wet value (no coarse patch cell survives smeared across the footprint
+    of a finer patch that resolves the ground as dry).
     """
     import numpy as np  # noqa: PLC0415
 
     nrows, ncols = int(out_shape[0]), int(out_shape[1])
     grid = np.full((nrows, ncols), np.nan, dtype="float64")
+    painted_level = np.zeros((nrows, ncols), dtype=np.int32)
     min_lon, min_lat, max_lon, max_lat = bbox
     if max_lon <= min_lon or max_lat <= min_lat:
         return grid
@@ -223,12 +229,15 @@ def rasterize_frame_to_grid(
         np.clip(pi, 0, patch.mx - 1, out=pi)
         np.clip(pj, 0, patch.my - 1, out=pj)
         sub = patch.h[np.ix_(pj, pi)]
-        wet = np.isfinite(sub) & (sub >= NODATA_DEPTH_M)
-        if not wet.any():
-            continue
         block = grid[np.ix_(rows, cols)]
-        block[wet] = sub[wet]
+        lvl_block = painted_level[np.ix_(rows, cols)]
+        own = patch.level >= lvl_block  # finest-or-equal patch owns the cell
+        wet = np.isfinite(sub) & (sub >= NODATA_DEPTH_M)
+        block[own & wet] = sub[own & wet]
+        block[own & ~wet] = np.nan  # finest DRY erases a coarser wet value
         grid[np.ix_(rows, cols)] = block
+        lvl_block[own] = patch.level
+        painted_level[np.ix_(rows, cols)] = lvl_block
     return grid
 
 

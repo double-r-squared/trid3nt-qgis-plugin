@@ -931,7 +931,7 @@ async def model_geoclaw_inundation(
         est_finest_cells,
         propagation_level,
         est_prop_domain_cells,
-    ) = plan_geoclaw_grid(bbox, domain_bbox, run_args.amr_levels)
+    ) = plan_geoclaw_grid(domain_bbox, bbox, run_args.amr_levels)
     logger.info(
         "model_geoclaw_inundation: grid plan base=%s amr_levels=%s "
         "(requested=%s) est_finest_aoi_cells=%d propagation_level=%s "
@@ -1263,6 +1263,7 @@ async def model_geoclaw_inundation(
                 grid_shape=geoclaw_grid_shape,
                 topo_grid=topo_grid,
                 mask_ocean=mask_ocean,
+                sea_level_m=run_args.sea_level_m,
                 fgmax_arrival_tol_m=run_args.fgmax_arrival_tol_m,
             )
 
