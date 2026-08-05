@@ -19,6 +19,7 @@ per NATE 2026-08-04.
 | HEC-RAS archetypes (0125) | 1 (levee_breach; rain-on-grid honest STOP) | ~3.0 h (incl 21-min triage wave + an upstream API drop + image rebuild) | ~3 h - engine-adjacent archetype w/ in-container mechanics pinning |
 | SCHISM candidates (0126) | 0 (2 triaged: CORIE deferred, WWM_Duck STOP) | ~2.0 h (incl a WWM binary verification build + a live GOTM-free WWM+SCHISM coupling spike proving Hs) | triage + build-spike; both recipes ready, WWM coupling de-risked to a single GOTM blocker |
 | SCHISM coupled_waves + GOTM leg (0131) | 1 (engine #12 second archetype; the GOTM build blocker resolved) | ~2.5 h (incl the GOTM cmake-shim de-risk + the faithful itur=3 Duck run + cross-shore V&V + image rebuild) | ~2.5 h - engine-class (a NEW build leg: GOTM 3.2.5 cmake shim -> pschism_WWM_GOTM_TVD-VL) + the template landing on the 0118 exemplar |
+| hecras_flood_2d promotion (0140) | 1 (fresh-AOI 2D flood; discharges the 0127-0139 beta arc into a registered template) | ~42 min builder (authoring image build + pipeline wiring + 2 live fresh-AOI acceptances + ~45 offline gates) | ~42 min promotion-of-proven-machinery; the 8-experiment arc itself (~2 days) was the real cost, amortized over every future authored-mesh row |
 
 ## Working rates (sequential, incl close-out share)
 

@@ -668,6 +668,12 @@ from ..workflows.hecras.riverine_flood.riverine_flood import hecras_riverine_flo
 # structure breach (levee fails -> floods; holds -> valid dry success). Composer
 # inlined in the module; the local solve seam is shared (workflows/hecras/run_hecras.py).
 from ..workflows.hecras.levee_breach.levee_breach import hecras_levee_breach as _hecras_levee_breach  # noqa: E402,F401 - engine #11 second archetype (engine=hecras, tier=template)
+# hecras_flood_2d TEMPLATE (engine="hecras", tier="template"), engine #11 third
+# archetype (ADR 0140 promotion): unlike the two Muncie templates, this AUTHORS the
+# 2D mesh + terrain subgrid tables for a GENUINELY-NEW user AOI (fetch_dem -> the
+# hecras2025-authoring worker image: AuthorMesh topology + ComputeFrom tables) then
+# solves the composed deck through run_solver (the M3-gate no-archetype path).
+from ..workflows.hecras.flood_2d.flood_2d import hecras_flood_2d as _hecras_flood_2d  # noqa: E402,F401 - engine #11 third archetype (engine=hecras, tier=template)
 # schism_tidal_hydro TEMPLATE (engine="schism", tier="template"), engine #12,
 # one folder under workflows/schism/tidal_hydro/. Barotropic tidal hydrodynamics
 # on an unstructured coastal mesh (ADR 0118): the QuarterAnnulus verification case

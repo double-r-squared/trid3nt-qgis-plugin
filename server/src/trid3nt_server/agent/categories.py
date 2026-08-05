@@ -290,6 +290,7 @@ PRIMARY_CATEGORY: dict[str, str] = {
     "telemac_river_dye": "hazard_modeling",
     "hecras_riverine_flood": "hazard_modeling",
     "hecras_levee_breach": "hazard_modeling",
+    "hecras_flood_2d": "hazard_modeling",
     "schism_tidal_hydro": "hazard_modeling",
     "schism_coupled_waves": "hazard_modeling",
     # The case-layer ingest seams (register_case_layer / ingest_user_layer)

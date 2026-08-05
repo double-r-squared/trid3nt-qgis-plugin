@@ -61,7 +61,15 @@ HECRAS_DEPTH_STYLE_PRESET: str = "continuous_flood_depth"
 #:     stay the queued next archetypes (ADR 0125 ledger), each needing its own
 #:     shipped-geometry fixture (the Bald Eagle model awaits the Windows-Phase-1
 #:     unblock).
-HECRAS_ARCHETYPES: tuple[str, ...] = ("muncie_riverine_flood", "muncie_levee_breach")
+#:   - ``fresh_aoi_flood_2d`` -- a GENUINELY-NEW user AOI (ADR 0140 promotion): a
+#:     fetched DEM is reprojected to a local ftUS grid and the 2D mesh + subgrid
+#:     tables are AUTHORED headless (the HEC-RAS 2025 AuthorMesh worker:
+#:     TryCreateMesh topology + MeshPropertyTables.ComputeFrom over the terrain),
+#:     then the production 6.6 engines solve it. NOT frozen demonstration geometry
+#:     -- the geometry is built per-AOI, so this floods a place the user names.
+HECRAS_ARCHETYPES: tuple[str, ...] = (
+    "muncie_riverine_flood", "muncie_levee_breach", "fresh_aoi_flood_2d",
+)
 
 # --- typed error codes (open-set A.6 surface) ------------------------------- #
 #: The unsteady solve failed: a non-zero engine exit, or a mass-balance / result
@@ -125,7 +133,9 @@ class HECRASRunArgs(GraceModel):
     """
 
     schema_version: Literal["v1"] = "v1"
-    archetype: Literal["muncie_riverine_flood", "muncie_levee_breach"] = "muncie_riverine_flood"
+    archetype: Literal[
+        "muncie_riverine_flood", "muncie_levee_breach", "fresh_aoi_flood_2d"
+    ] = "muncie_riverine_flood"
     breach_enabled: bool = True
     flow_scale: float = Field(default=1.0, ge=0.25, le=4.0)
     target_peak_cfs: float | None = Field(default=None, gt=0.0)

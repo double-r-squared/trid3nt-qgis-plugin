@@ -184,9 +184,21 @@ def compose_pure2d_deck(
     shutil.copy2(plan_template, plan_path)
 
     with h5py.File(plan_path, "r+") as f:
-        projection = f.attrs["Projection"]
-        proj_wkt = (projection.decode() if isinstance(projection, bytes)
-                    else projection) or projection_wkt
+        # Use the CALLER's CRS (the AOI's local ftUS WKT for a fresh AuthorMesh
+        # AOI; Muncie's own WKT for the carve self-check -- so the carve path
+        # stays byte-identical). STAMP it as the root Projection attr too: the
+        # postprocess reads the model CRS from there to reproject the mesh to
+        # 4326, so a fresh AOI must carry its OWN CRS or the depth COG mislocates
+        # onto Muncie's footprint (the per-AOI geolocation fix).
+        proj_wkt = projection_wkt
+        try:
+            existing = f.attrs["Projection"]
+            existing = existing.decode() if isinstance(existing, bytes) else str(existing)
+            if not proj_wkt:
+                proj_wkt = existing
+        except KeyError:
+            pass
+        f.attrs["Projection"] = np.bytes_(proj_wkt.encode("ascii", "replace"))
         parent = f[AREA_GROUP]
         if area_name in parent:
             del parent[area_name]

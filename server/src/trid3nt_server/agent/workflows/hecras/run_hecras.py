@@ -44,8 +44,17 @@ HECRAS_SOLVER_NAME: str = "hecras_riverine_flood"
 #: + logs read the capability honestly. Both map to the same LocalSolverSpec build.
 HECRAS_LEVEE_BREACH_SOLVER_NAME: str = "hecras_levee_breach"
 
-#: Every registered HEC-RAS solver name (one image, per-capability names).
-HECRAS_SOLVER_NAMES: tuple[str, ...] = (HECRAS_SOLVER_NAME, HECRAS_LEVEE_BREACH_SOLVER_NAME)
+#: The fresh-AOI 2D-flood template's solver identifier (ADR 0140 promotion). The
+#: SAME worker image, but the manifest carries a COMPOSED deck as ``inputs`` (no
+#: baked archetype): the entrypoint's M3-gate path (``plan_hdf`` + ``geom_suffix``,
+#: no archetype) runs RasGeomPreprocess + RasUnsteady on the staged fresh-authored
+#: deck. The authoring stage (a distinct image) runs upstream in the composer.
+HECRAS_FLOOD2D_SOLVER_NAME: str = "hecras_flood_2d"
+
+#: Every registered HEC-RAS solver name (one solver image, per-capability names).
+HECRAS_SOLVER_NAMES: tuple[str, ...] = (
+    HECRAS_SOLVER_NAME, HECRAS_LEVEE_BREACH_SOLVER_NAME, HECRAS_FLOOD2D_SOLVER_NAME,
+)
 
 #: Default worker image (override via env TRID3NT_HECRAS_IMAGE, mirroring
 #: TRID3NT_TELEMAC_IMAGE / TRID3NT_SFINCS_IMAGE).

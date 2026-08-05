@@ -17,16 +17,31 @@ APP=/opt/hecras2025/app
 WORK="${TRID3NT_HECRAS_WORK:-/work}"
 IN="${TRID3NT_HECRAS_IN:-/in}"
 OUT="${TRID3NT_HECRAS_OUT:-/out}"
-EPSG="${TRID3NT_HECRAS_EPSG:?set TRID3NT_HECRAS_EPSG to the DEM CRS, e.g. EPSG:2966}"
 TERRAIN_TIF="${TRID3NT_HECRAS_TERRAIN_TIF:-$WORK/terrain.tif}"
 NVALUE_TIF="${TRID3NT_HECRAS_NVALUE_TIF:-$WORK/nvalue.tif}"
 mkdir -p "$OUT"
 
-echo "== [1/2] ras createterrain (DEM -> HEC terrain, substituted GDAL/HDF5) =="
+# The CRS reaches createterrain's -j as EITHER an ESRI .prj FILE (fresh-AOI custom
+# ftUS CRS have no EPSG code -- TRID3NT_HECRAS_PRJ) OR an EPSG string
+# (TRID3NT_HECRAS_EPSG, e.g. a State-Plane fixture). A .prj file wins if set.
+if [ -n "${TRID3NT_HECRAS_PRJ:-}" ]; then
+  JARG="$TRID3NT_HECRAS_PRJ"
+elif [ -n "${TRID3NT_HECRAS_EPSG:-}" ]; then
+  JARG="$TRID3NT_HECRAS_EPSG"
+else
+  echo "set TRID3NT_HECRAS_PRJ (ESRI .prj path) or TRID3NT_HECRAS_EPSG (e.g. EPSG:2966)" >&2
+  exit 3
+fi
+
+echo "== [1/2] ras createterrain (DEM -> HEC terrain, substituted GDAL/HDF5) -j=$JARG =="
 # Build terrains IN the mount so the stored tile paths resolve (ADR 0129 note).
+# Clear any stale outputs first (createterrain refuses to overwrite its .hdf +
+# the "<stem>.terrain.tif" overview it exports beside it).
+rm -f "$WORK/terrain.hdf" "$WORK/nvalue.hdf" \
+      "$WORK/terrain.terrain.tif" "$WORK/nvalue.terrain.tif"
 ( cd "$APP"
-  dotnet ras.dll createterrain -f "$TERRAIN_TIF" -o "$WORK/terrain.hdf" -j "$EPSG"
-  dotnet ras.dll createterrain -f "$NVALUE_TIF"  -o "$WORK/nvalue.hdf"  -j "$EPSG" )
+  dotnet ras.dll createterrain -f "$TERRAIN_TIF" -o "$WORK/terrain.hdf" -j "$JARG"
+  dotnet ras.dll createterrain -f "$NVALUE_TIF"  -o "$WORK/nvalue.hdf"  -j "$JARG" )
 
 echo "== [2/2] AuthorMesh (TryCreateMesh topology + ComputeFrom subgrid tables) =="
 dotnet "$APP/authormesh.dll" "$IN" "$OUT" "$WORK/terrain.hdf" "$WORK/nvalue.hdf"

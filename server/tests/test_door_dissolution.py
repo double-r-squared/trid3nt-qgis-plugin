@@ -39,6 +39,7 @@ EXPECTED_TEMPLATES = {
     "telemac_river_dye",
     "hecras_riverine_flood",  # engine #11 (ADR 0109; renamed ADR 0120): HEC-RAS riverine-flood template (v1 geometry: Muncie)
     "hecras_levee_breach",  # engine #11 second archetype (ADR 0125): HEC-RAS levee-breach template (v1 geometry: Muncie leveed floodplain)
+    "hecras_flood_2d",  # engine #11 third archetype (ADR 0140): HEC-RAS fresh-AOI 2D flood (headless-authored geometry from a fetched DEM)
     "schism_tidal_hydro",  # engine #12 (ADR 0118): SCHISM barotropic tidal template
     "schism_coupled_waves",  # engine #12 second archetype (ADR 0131): SCHISM+WWM+GOTM coupled-wave template (Duck FRF)
     "swan_wave_field",
