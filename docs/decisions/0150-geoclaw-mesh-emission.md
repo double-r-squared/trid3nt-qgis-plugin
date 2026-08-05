@@ -76,12 +76,21 @@ self-evident because the grid gets DENSER in refined areas.
   ONLY overlay is the yellow dashed user window + white AOI box over Esri; caption
   strip states "yellow dashed = your AMR window; the mesh is the solver's response
   to it"). This SUPERSEDES the ADR 0148 abstract patch-family mesh proof.
-  `amr_regions.png` = the mid-run sea-surface anomaly (eta) snapshot (the approved
-  ADR 0148 raster style: a full-AOI wave field on the diverging blue-white-red
-  ramp; here the mid-run frame t=720 s, symmetric +-1.2 m, offshore drawdown ->
-  shoreline run-up; white AOI box + yellow window + red gauge dot).
-  `amr_regions_depth.png` = the peak-inundation depth product map. All from the
-  same re-smoke run; no annotation boxes, no suptitle, captions in the strip.
+  `amr_regions.png` = the sea-surface anomaly (eta) snapshot (the approved ADR 0148
+  raster style: a full-AOI wave field on the diverging blue-white-red ramp;
+  offshore drawdown -> shoreline run-up; white AOI box + yellow window + red gauge
+  dot). `amr_regions_depth.png` = the peak-inundation depth product map. All from
+  the same re-smoke run; no annotation boxes, no suptitle, captions in the strip.
+
+- **Determinism rule for frame-snapshot proofs (standing norm).** A snapshot proof
+  PINS its presentation so the same physics always renders the same way (a re-smoke
+  reads as the same experiment, never a new one), never auto-selects. Two pins,
+  BOTH stated in the caption strip: (1) a fixed frame criterion -- `amr_regions.png`
+  pins the frame nearest `t=900 s`; (2) a fixed symmetric colour scale --
+  `amr_regions.png` pins `+-0.5 m` (out-of-range values clip into the end colours,
+  standard). `scripts/proof_geoclaw_amr_mesh.py` carries the pins as
+  `ETA_SNAPSHOT_T_S` / `ETA_VLIM_M` constants. This applies to any future
+  frame-snapshot proof.
 
 - **Tests.** `test_geoclaw_postprocess_amr_flatten.py` gains a synthetic
   multi-patch structure test (per-level patches present, honest decimation flag +

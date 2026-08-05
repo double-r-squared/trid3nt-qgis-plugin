@@ -55,7 +55,13 @@ SOLVER_PREFIX = "01KZ9P4FGQPKPCZV4W7C4KR9EK"
 BBOX = (-124.24, 41.73, -124.16, 41.78)  # AOI (white box)
 WINDOW = (-124.21, 41.745, -124.18, 41.770)  # user AMR window (yellow dashed)
 GAUGE = (-124.20, 41.7325)  # coastal gauge (red dot)
-ETA_FRAME = 4  # mid-run fort.q frame (t=720 s) -- wave inside the domain
+# DETERMINISM RULE (comparable proofs): PIN the presentation, never auto-select.
+# A frame-snapshot proof fixes BOTH a frame criterion and the colour scale so the
+# SAME physics always renders the SAME way (a re-smoke reads as the same
+# experiment, not a new one). Values beyond the scale clip into the end colours
+# (standard, fine). State both pins in the caption strip.
+ETA_SNAPSHOT_T_S = 900.0  # fixed snapshot time; render the frame nearest it
+ETA_VLIM_M = 0.5  # fixed symmetric colour scale (+-0.5 m), NEVER data-scaled
 ZOOM = 13
 
 
@@ -249,18 +255,35 @@ def _grid_to_3857(grid, bbox):
     return dst, (wb, eb, sb, nb)
 
 
+def _frame_nearest(s3, bucket, t_target):
+    """Return (frame_no, t_s) of the fort.t frame whose time is nearest t_target."""
+    best = None
+    for no in range(0, 1000):
+        try:
+            raw = s3.get_object(Bucket=bucket,
+                                Key=f"{SOLVER_PREFIX}/_output/fort.t{no:04d}")["Body"].read()
+        except Exception:  # noqa: BLE001 -- ran off the end of the frames
+            break
+        t_s = float(raw.decode("utf-8", "replace").split()[0])
+        d = abs(t_s - t_target)
+        if best is None or d < best[2]:
+            best = (no, t_s, d)
+    return (best[0], best[1]) if best else (0, 0.0)
+
+
 def render_eta(s3):
-    txt = s3.get_object(Bucket=os.environ["TRID3NT_RUNS_BUCKET"],
-                        Key=f"{SOLVER_PREFIX}/_output/fort.q{ETA_FRAME:04d}")["Body"].read()
-    tsec = s3.get_object(Bucket=os.environ["TRID3NT_RUNS_BUCKET"],
-                         Key=f"{SOLVER_PREFIX}/_output/fort.t{ETA_FRAME:04d}")["Body"].read()
-    t_s = float(tsec.decode("utf-8", "replace").split()[0])
+    bucket = os.environ["TRID3NT_RUNS_BUCKET"]
+    # PIN 1: fixed snapshot time -- render the frame NEAREST ETA_SNAPSHOT_T_S.
+    frame_no, t_s = _frame_nearest(s3, bucket, ETA_SNAPSHOT_T_S)
+    txt = s3.get_object(Bucket=bucket,
+                        Key=f"{SOLVER_PREFIX}/_output/fort.q{frame_no:04d}")["Body"].read()
     patches = parse_fort_q_h_eta(txt.decode("utf-8", "replace"))
     eta = rasterize_eta(patches, BBOX, (360, 560))
     eta3857, (w, e, s_, n) = _grid_to_3857(eta, BBOX)
 
+    # PIN 2: FIXED symmetric colour scale (never data-scaled); out-of-range clips.
+    vlim = ETA_VLIM_M
     finite = eta3857[np.isfinite(eta3857)]
-    vlim = max(0.3, round(float(np.nanpercentile(np.abs(finite), 98)), 1)) if finite.size else 0.5
 
     view = (BBOX[0], BBOX[1], BBOX[2], BBOX[3])
     pad_x = (view[2] - view[0]) * 0.12
@@ -274,12 +297,12 @@ def render_eta(s3):
                    norm=Normalize(-vlim, vlim), alpha=0.82, zorder=3)
     _overlays(ax, gauge=True)
     _frame(ax, view)
-    cb = fig.colorbar(im, ax=ax, shrink=0.72, pad=0.02)
+    cb = fig.colorbar(im, ax=ax, shrink=0.72, pad=0.02, extend="both")
     cb.set_label("sea-surface anomaly eta (m)")
     fig.text(
         0.5, 0.02,
-        f"geoclaw_amr_refinement_regions  |  RASTER: mid-run sea-surface anomaly eta "
-        f"(t={t_s:.0f} s, diverging +-{vlim:.1f} m, same run as amr_regions_mesh.png)  |  "
+        f"geoclaw_amr_refinement_regions  |  RASTER: sea-surface anomaly eta "
+        f"(t={t_s:.0f} s, fixed +-{vlim:.1f} m scale, same run as amr_regions_mesh.png)  |  "
         f"yellow dashed = USER AMR window, white box = AOI, red dot = gauge  |  "
         f"basemap: Esri World Imagery",
         ha="center", fontsize=6.5, color="0.4",
@@ -288,7 +311,8 @@ def render_eta(s3):
     out = os.path.join(OUT_DIR, "amr_regions.png")
     fig.savefig(out)
     plt.close(fig)
-    print("wrote", out, f"| eta frame t={t_s:.0f}s vlim=+-{vlim:.1f} wetcells={finite.size}")
+    print("wrote", out, f"| eta frame {frame_no} t={t_s:.0f}s FIXED vlim=+-{vlim:.1f} "
+          f"wetcells={finite.size}")
 
 
 def render_mesh(s3):
