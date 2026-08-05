@@ -96,21 +96,31 @@ def build_ds_probability_chart_spec(
 def build_loss_identity_chart_spec(
     samples: Any, target_median: float
 ) -> dict[str, Any]:
-    """Loss-sample histogram with a rule at the target median. Pure."""
+    """Loss-distribution density line (QUANTITATIVE x) with a rule at the target median.
+
+    The histogram is emitted as a line over numeric bin centers -- NOT a bar mark
+    -- so the interpreter draws a clean numeric x axis with a handful of auto
+    ticks; the full-precision bin values never become rotated category labels.
+    The distribution is clipped to the 0.5th..99.5th percentile so the long
+    lognormal tail does not compress the informative bulk. Pure.
+    """
     import numpy as np
 
     arr = np.asarray(samples, dtype=float)
     arr = arr[np.isfinite(arr) & (arr > 0)]
+    if arr.size:
+        lo, hi = np.percentile(arr, 0.5), np.percentile(arr, 99.5)
+        arr = arr[(arr >= lo) & (arr <= hi)]
     hist, edges = np.histogram(arr, bins=40)
     centers = 0.5 * (edges[:-1] + edges[1:])
-    values = [{"loss": float(c), "count": int(n)} for c, n in zip(centers, hist)]
+    values = [{"loss": round(float(c), 4), "count": int(n)} for c, n in zip(centers, hist)]
     return {
         "$schema": VEGA_LITE_V5_SCHEMA,
         "title": "Loss distribution reproduces the input EDP (1:1 loss function)",
         "layer": [
             {
                 "data": {"values": values},
-                "mark": {"type": "bar", "color": "#4c78a8"},
+                "mark": {"type": "line", "color": "#4c78a8"},
                 "encoding": {
                     "x": {"field": "loss", "type": "quantitative", "title": "loss ratio"},
                     "y": {"field": "count", "type": "quantitative", "title": "count"},
