@@ -197,3 +197,44 @@ per-lake provenance (mapped / observed / potential) only if it earns it.
 Landlab chains themselves need NO change - fill-and-route treats real
 lakes and noise pits identically BY DESIGN and that is correct for
 routing; the discrepancy only ever mattered at the reporting boundary.
+
+## 2026-08-05 - Drawn-geometry supply path for gated spatial knobs (NATE)
+Spatial knobs the model must not place blindly (AMR refinement windows,
+mesh refine_regions, future drawn structures like walls/dams) should be
+suppliable by DRAWING in the QGIS plugin (rectangle/polygon on canvas)
+-> arrives as basis=user input through the input-review gate, replacing
+the model's prompt_interpreted proposal. Server-side gate wiring for
+geoclaw amr_regions lands with ADR 0147; the plugin draw affordance +
+WS plumbing is the follow-on leg. Pairs with the mesh layer's
+refine_regions component and the user-drawn-structures ideas.
+
+## 2026-08-05 - GeoClaw eta (wave anomaly) product layer (NATE, via Clawpack gallery)
+The canonical Clawpack plots color sea-surface ANOMALY (eta, diverging
+blue-white-red about 0) - far more legible for wave propagation than
+depth. Candidate product addition: emit eta frames (h+B - sea_level)
+alongside the depth frames for the tsunami templates, styled with a
+diverging ramp in QGIS, feeding the time-animation norm (wave arc
+visibly propagating on the scrubber). Proof-side the style is already
+adopted (ADR 0147 wave); this idea is the EMITTED-LAYER half.
+General norm captured in memory: where an engine has a canonical
+published plot style, proofs replicate IT rather than improvising.
+
+## 2026-08-05 - geoclaw-landspill engine candidate (NATE)
+barbagroup/geoclaw-landspill (JOSS, BSD-3): GeoClaw fork for pipeline-
+rupture oil overland flow (point sources, Darcy-Weisbach, evaporation,
+temp-dependent viscosity, inland-waterbody contact). Engine-ADJACENT
+landing: rides the existing geoclaw worker/docker pattern, fetch_dem
+3DEP, fetch_nhd_waterbodies; completes the hazmat class as the surface
+complement to the MODFLOW-GWT plume track. Published-first sources:
+JOSS paper (verify) + bundled cases (utah-flat-maya). Natural chart:
+volume ledger (spilled/evaporated/on-land/in-waterbody) over time.
+Awaiting NATE roadmap placement.
+
+## 2026-08-05 - Strict worker spec parsers (from the ADR 0148 lesson)
+Every services/workers/<engine> build-spec parser should HARD-ERROR on
+unknown fields instead of silently ignoring them. The stale geoclaw
+image silently dropped manning_coefficients/amr_regions and two
+registered knob templates ran as no-ops. A strict parse would have
+failed the very first live smoke with a loud unknown-field error.
+Sweep candidate: all worker parse_build_spec/parse_* entry points +
+a shared strict-parse helper.

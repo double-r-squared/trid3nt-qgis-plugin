@@ -90,11 +90,18 @@ was subsumed by the AOI default region.
 
 - **Proofs refreshed** (`docs/proof/templates/`): `regional_manning.png` (banded
   peak-depth over Esri), `regional_manning_chart.png` (banded vs scalar waveforms,
-  max|diff| in the caption strip), `amr_regions.png` (Chile-2010-style mid-run
-  sea-surface anomaly + black AMR patch outlines per level), `amr_regions_depth.png`
+  max|diff| in the caption strip), `amr_regions.png` (mid-run sea-surface anomaly
+  RASTER only), `amr_regions_mesh.png` (the AMR patch structure ALONE - black L4
+  patches + light-grey enclosing L3 + the user window), `amr_regions_depth.png`
   (peak-depth product), `amr_regions_chart.png` (inside-vs-outside level contrast).
   All follow the NATE norms: no annotation box over the plot area, diagnostics in
   the caption strip, white box = AOI, yellow dashed = user window, red dot = gauge.
+  **New standing proof norm:** raster and mesh are SEPARATE files (`stem.png` /
+  `stem_mesh.png`), never a composite - mirroring how QGIS presents them as
+  separate toggleable layers. The mesh caption explains that L4 patches legitimately
+  overshoot the window box (Berger-Rigoutsos clustering + nesting buffers); the
+  verified guarantee is all cells INSIDE the window reach L4 with no leakage past
+  the buffer.
 
 - **Standing deploy note:** a GeoClaw setrun_builder / entrypoint change is not
   live until `docker build -f services/workers/geoclaw/Dockerfile -t
