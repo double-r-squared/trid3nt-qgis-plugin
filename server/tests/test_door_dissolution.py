@@ -85,6 +85,7 @@ EXPECTED_TEMPLATES = {
     "modflow_sustainable_yield",
     "modflow_wellhead_protection",
     "modflow_wetland_hydroperiod",
+    "modflow_package_validation",  # ADR 0153 MODFLOW CAND-S: GWF-NPF Newton (Zaidel) / GWF-MAW (Sokol) / GWF-HFB package V&V benchmarks
 }
 
 # The 10 deleted engine-door concierge tools.

@@ -37,11 +37,11 @@ Design notes
 
 from __future__ import annotations
 
-from typing import Literal
+from typing import Any, Literal
 
 from pydantic import Field, field_validator
 
-from .common import EngineRunArgsMixin, GraceModel
+from .common import EngineRunArgsMixin, GraceModel, SyntheticInput
 from .execution import LayerURI
 
 # Streambed defaults for the RIV head-dependent river<->aquifer flux package
@@ -72,6 +72,7 @@ __all__ = [
     "SaltwaterWedgeLayerURI",
     "StreamReachLayerURI",
     "SubsidenceLayerURI",
+    "ModflowValidationResult",
     "DEFAULT_STREAMBED_CONDUCTANCE_M2_DAY",
     "DEFAULT_STREAMBED_THICKNESS_M",
     "DEFAULT_AQUIFER_SY",
@@ -1342,3 +1343,66 @@ class SubsidenceLayerURI(LayerURI):
             "Number of CSUB interbeds draped over the pumped footprint (>= 1)."
         ),
     )
+
+
+class ModflowValidationResult(GraceModel):
+    """Typed result of a MODFLOW package-VALIDATION case (ADR 0153).
+
+    NOT a ``LayerURI``: each case authors a SMALL SYNTHETIC benchmark deck
+    (a 200-cell channel, a 21x21 two-aquifer stub, a two-block barrier) whose
+    coordinates are SCHEMATIC (local model units, not lon/lat) and runs the mf6
+    binary to reproduce a PUBLISHED or ANALYTICAL reference. The product is the
+    computed-vs-reference CHART plus the typed scalars the agent cites - there is
+    NO georeferenced map layer. The case exercises a specific MF6 package
+    (NPF-Newton drying/rewetting, MAW cross-aquifer, HFB barrier) so the module
+    coverage of that package is demonstrated against a known answer.
+
+    Fields:
+        case: the validation case run (``newton_dry_rewet`` / ``maw_crossaquifer``
+            / ``hfb_barrier``).
+        question: the one-line question this case answers.
+        package: the MF6 package under test (e.g. "GWF-NPF (Newton)", "GWF-MAW",
+            "GWF-HFB").
+        computed_value: the mf6-computed quantity compared to the reference (the
+            MAW well head, the barrier flux, or None when the case is a
+            qualitative solver-robustness contrast).
+        reference_value: the analytical / published reference the computed value
+            is checked against (None when qualitative).
+        reference_label: what the reference is (e.g. "Sokol (1963) transmissivity-
+            weighted analytical well level", "HYDCHR barrier-conductance flux").
+        reference_source: the published/docs citation the case replicates.
+        delta: ``abs(computed - reference)`` when both are set, else None.
+        relative_error: ``delta / abs(reference)`` when meaningful, else None.
+        validated: True iff the case met its acceptance criterion (delta within
+            ``tolerance``, or the solver-robustness contrast held).
+        tolerance: the acceptance tolerance applied to ``delta`` /
+            ``relative_error`` (case-specific; 0.0 for a qualitative case).
+        metrics: case-specific extra scalars - all real parsed mf6 outputs (e.g.
+            per-grid barrier flux, Newton-vs-standard dry-cell counts, aquifer
+            transmissivities).
+        chart_titles: the titles of the computed-vs-reference chart(s) emitted.
+        demonstration_note: the LOUD honesty label - a synthetic package
+            benchmark on a schematic deck, not a georeferenced site study.
+        schematic_only: always True (no georeferenced layer).
+        basis: "synthetic" - the decks are authored small benchmark models.
+        synthetic_inputs: structured provenance (the synthetic-deck basis + the
+            published/docs reference the case replicates).
+    """
+
+    case: str
+    question: str = ""
+    package: str = ""
+    computed_value: float | None = None
+    reference_value: float | None = None
+    reference_label: str = ""
+    reference_source: str = ""
+    delta: float | None = None
+    relative_error: float | None = None
+    validated: bool = False
+    tolerance: float = 0.0
+    metrics: dict[str, Any] = Field(default_factory=dict)
+    chart_titles: list[str] = Field(default_factory=list)
+    demonstration_note: str = ""
+    schematic_only: bool = True
+    basis: str = "synthetic"
+    synthetic_inputs: list[SyntheticInput] = Field(default_factory=list)

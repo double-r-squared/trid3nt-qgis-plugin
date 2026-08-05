@@ -261,6 +261,7 @@ PRIMARY_CATEGORY: dict[str, str] = {
     "modflow_sustainable_yield": "hazard_modeling",
     "modflow_wellhead_protection": "hazard_modeling",
     "modflow_wetland_hydroperiod": "hazard_modeling",
+    "modflow_package_validation": "hazard_modeling",
     "swmm_urban_flood": "hazard_modeling",
     "swmm_network_import": "hazard_modeling",
     "swmm_dual_drainage_coupling": "hazard_modeling",

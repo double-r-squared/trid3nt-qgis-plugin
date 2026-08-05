@@ -1,0 +1,10 @@
+modflow_package_validation:
+- validate the MODFLOW Newton formulation drying and rewetting an unconfined channel
+- can the solver handle a staircase impervious base without oscillation or failure
+- Zaidel staircase channel benchmark Newton vs standard formulation
+- does a multi aquifer well equilibrate to the Sokol analytical water level
+- MAW cross aquifer non pumping well analytical validation
+- horizontal flow barrier flux grid refinement independence check
+- HFB barrier hydraulic characteristic containment wall benchmark
+- validate a MODFLOW package against a published or analytical reference
+- MODFLOW 6 package benchmark computed versus analytical

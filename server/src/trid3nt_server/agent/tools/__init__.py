@@ -621,6 +621,7 @@ from ..workflows.modflow.wetland_hydroperiod.wetland_hydroperiod import modflow_
 from ..workflows.modflow.capture_zone.capture_zone import modflow_capture_zone as _modflow_capture_zone  # noqa: E402,F401 - PRT capture zone
 from ..workflows.modflow.wellhead_protection.wellhead_protection import modflow_wellhead_protection as _modflow_wellhead_protection  # noqa: E402,F401 - EPA WHPA (split from capture_zone; shared composer)
 from ..workflows.modflow.saltwater_intrusion.saltwater_intrusion import modflow_saltwater_intrusion as _modflow_saltwater_intrusion  # noqa: E402,F401 - BUY variable-density Henry-style wedge
+from ..workflows.modflow.package_validation.package_validation import modflow_package_validation as _modflow_package_validation  # noqa: E402,F401 - NEW capability (ADR 0153, GWF-NPF Newton / GWF-MAW / GWF-HFB package V&V benchmarks) (engine=modflow, tier=template)
 # swmm_urban_flood TEMPLATE (engine="swmm", tier="template"), one folder under
 # workflows/swmm/urban_flood/; EXCLUDED from the default retrieval pool,
 # surfaced only by the run_swmm door's gate expansion. The composer chain
