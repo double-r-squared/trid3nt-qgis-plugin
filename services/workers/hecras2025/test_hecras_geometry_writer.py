@@ -23,10 +23,14 @@ h5py = pytest.importorskip("h5py")
 
 from hecras_geometry_writer import (  # noqa: E402  (after importorskip)
     AREA_GROUP,
+    BC_LINES_GROUP,
+    BoundaryConditionLine,
     Mesh2D,
     PropertyTableOptions,
     SubgridTables,
+    perimeter_face_run,
     write_2d_flow_area,
+    write_boundary_condition_lines,
 )
 
 _MUNCIE = (
@@ -122,6 +126,92 @@ def test_writer_reconstructs_muncie_geometry_value_identically(tmp_path):
         # parent Attributes compound + root Projection round-trip
         assert fw[f"{AREA_GROUP}/Attributes"][()]["Cell Count"][0] == 5391
         assert b"StatePlane" in bytes(fw.attrs["Projection"])
+
+
+def _synthetic_perimeter_mesh() -> Mesh2D:
+    """A tiny 5-facepoint / 4-external-face open chain for the BC-line unit test.
+
+    Facepoints on a straight line at x=0,10,20,30,40; four faces link them in
+    order; each face's outer cell is a ghost (index >= cell_count) so the
+    external-face detector marks all four.
+    """
+    fp = np.array([[0.0, 0.0], [10.0, 0.0], [20.0, 0.0], [30.0, 0.0], [40.0, 0.0]])
+    faces_fp = np.array([[0, 1], [1, 2], [2, 3], [3, 4]], dtype=np.int32)
+    faces_cell = np.array([[0, 5], [0, 5], [1, 5], [1, 5]], dtype=np.int32)  # 5 = ghost
+    z = np.zeros(1)
+    return Mesh2D(
+        perimeter=fp, cell_center_coord=np.array([[15.0, -5.0], [30.0, -5.0]]),
+        cell_facepoint_indexes=np.array([[0, 1, 2, -1], [2, 3, 4, -1]], np.int32),
+        cell_face_orientation_info=np.zeros((2, 2), np.int32),
+        cell_face_orientation_values=np.zeros((0, 2), np.int32),
+        cell_center_manning=np.full(2, 0.06, np.float32),
+        facepoints_coord=fp,
+        facepoints_cell_info=np.zeros((5, 2), np.int32),
+        facepoints_cell_index_values=np.zeros((0,), np.int32),
+        facepoints_face_orientation_info=np.zeros((5, 2), np.int32),
+        facepoints_face_orientation_values=np.zeros((0, 2), np.int32),
+        facepoints_is_perimeter=np.ones(5, np.int32),
+        faces_cell_indexes=faces_cell,
+        faces_facepoint_indexes=faces_fp,
+        faces_normal_unit_vector_length=np.zeros((4, 3), np.float32),
+        faces_perimeter_info=np.zeros((4, 2), np.int32),
+        faces_perimeter_values=np.zeros((0, 2), np.float64),
+        cell_count=2,
+    )
+
+
+def test_bc_lines_schema_and_stations_synthetic(tmp_path):
+    mesh = _synthetic_perimeter_mesh()
+    line = BoundaryConditionLine(name="Upstream Inflow", sa_2d="TestArea",
+                                 face_indices=[0, 1, 2])  # spans fp 0->1->2->3
+    out = tmp_path / "bc.hdf"
+    with h5py.File(out, "w") as f:
+        prov = write_boundary_condition_lines(f, [line], mesh)
+    assert prov["external_faces_total"] == 3
+    with h5py.File(out, "r") as f:
+        g = f[BC_LINES_GROUP]
+        attr = g["Attributes"][()]
+        assert attr.dtype.names == ("Name", "SA-2D", "Type", "Length")
+        assert attr["Name"][0] == b"Upstream Inflow"
+        assert attr["SA-2D"][0] == b"TestArea"
+        assert abs(float(attr["Length"][0]) - 30.0) < 1e-4  # 3 faces x 10 ft
+        ext = g["External Faces"][()]
+        assert ext.dtype.names[0] == "BC Line ID"
+        # facepoint chain 0->1->2->3, stations 0,10,20,30 monotone
+        assert list(ext["FP Start Index"]) == [0, 1, 2]
+        assert list(ext["FP End Index"]) == [1, 2, 3]
+        assert np.allclose(ext["Station Start"], [0, 10, 20])
+        assert np.allclose(ext["Station End"], [10, 20, 30])
+        # polyline round-trips: Info[pt_start,pt_count,part_start,part_count]
+        info = g["Polyline Info"][()]
+        parts = g["Polyline Parts"][()]
+        pts = g["Polyline Points"][()]
+        assert info.tolist() == [[0, 4, 0, 1]]
+        assert parts.tolist() == [[0, 4]]
+        assert pts.shape == (4, 2)
+        assert int(info[:, 1].sum()) == pts.shape[0]
+
+
+@pytest.mark.skipif(not _MUNCIE.is_file(), reason="Muncie fixture plan HDF absent")
+def test_bc_lines_on_real_muncie_perimeter(tmp_path):
+    """Author a BC line on the REAL Muncie mesh's external faces (topology only)."""
+    mesh, tables, _ = _load_muncie()
+    run = perimeter_face_run(mesh, min_elevation=tables.face_min_elevation, n_faces=10)
+    assert len(run) == 10
+    line = BoundaryConditionLine(name="Inflow BC", sa_2d=_AREA, face_indices=run)
+    out = tmp_path / "muncie_bc.hdf"
+    with h5py.File(out, "w") as f:
+        prov = write_boundary_condition_lines(f, [line], mesh)
+        g = f[BC_LINES_GROUP]
+        ext = g["External Faces"][()]
+        # stations strictly increase along the run; length matches last station
+        assert np.all(np.diff(ext["Station Start"]) > 0)
+        assert abs(float(g["Attributes"]["Length"][0]) - float(ext["Station End"][-1])) < 1e-3
+        # every referenced facepoint is a real Muncie perimeter facepoint
+        isper = mesh.facepoints_is_perimeter.astype(bool)
+        assert isper[ext["FP Start Index"]].all()
+        assert isper[ext["FP End Index"]].all()
+    assert prov["lines"][0]["faces"] == 10
 
 
 @pytest.mark.skipif(not _MUNCIE.is_file(), reason="Muncie fixture plan HDF absent")

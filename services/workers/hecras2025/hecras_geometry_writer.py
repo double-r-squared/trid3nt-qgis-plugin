@@ -30,6 +30,11 @@ pattern, mapped 1:1 to HEC's shipped Muncie geometry (schema extracted, never
 guessed -- see ``MUNCIE_2D_SCHEMA`` in the sibling test). Pure ``h5py`` / ``numpy``;
 no .NET, no server code, offline-suite-safe (h5py/numpy are worker-image deps and
 imported at module top only where the worker runs).
+
+``write_boundary_condition_lines`` (ADR 0134 link c3) authors the companion
+``/Geometry/Boundary Condition Lines/`` group -- the forcing-entry polylines on the
+mesh perimeter that a pure-2D ``.bNN`` inflow maps to positionally; schema from the
+shipped pure-2D ``BaldEagleDamBrk.g09.hdf`` (``pure2d_reference/g09_hdf_schema.json``).
 """
 
 from __future__ import annotations
@@ -43,12 +48,20 @@ __all__ = [
     "Mesh2D",
     "SubgridTables",
     "PropertyTableOptions",
+    "BoundaryConditionLine",
     "write_2d_flow_area",
+    "write_boundary_condition_lines",
+    "perimeter_face_run",
     "AREA_GROUP",
+    "BC_LINES_GROUP",
 ]
 
 #: Parent group for 2D flow areas in a 6.x geometry / plan HDF.
 AREA_GROUP = "Geometry/2D Flow Areas"
+
+#: Boundary Condition Lines group -- the forcing-entry polylines on the mesh
+#: perimeter (schema from the pure-2D BaldEagle ``g09.hdf``, ADR 0134).
+BC_LINES_GROUP = "Geometry/Boundary Condition Lines"
 
 #: Per-cell facepoint-index padding (a cell with fewer than max-sides facepoints).
 FACEPOINT_PAD = -1
@@ -307,3 +320,241 @@ def write_2d_flow_area(
         "cell_vol_values_rows": int(cvv.shape[0]),
         "face_area_values_rows": int(fav.shape[0]),
     }
+
+
+# =====================================================================
+# Boundary Condition Lines (ADR 0134 link c3) -- the forcing-entry polyline
+# =====================================================================
+#
+# A pure-2D deck forces the flow through a named 2D BC line on the mesh
+# PERIMETER (the ``.bNN`` bare ``Upstream Flow Hydrograph`` maps to it
+# positionally). HEC stores the BC lines in ``/Geometry/Boundary Condition
+# Lines/`` as five datasets whose schema was extracted from the shipped pure-2D
+# ``BaldEagleDamBrk.g09.hdf`` (``pure2d_reference/g09_hdf_schema.json``):
+#
+#   Attributes      compound[Name S32, SA-2D S16, Type S8, Length f4]   (one row per line)
+#   External Faces  compound[BC Line ID i4, Face Index i4, FP Start Index i4,
+#                            FP End Index i4, Station Start f4, Station End f4]
+#                   (each BC line -> the ordered perimeter faces it spans)
+#   Polyline Info   (n, 4) i4   [pt start, pt count, part start, part count]
+#   Polyline Parts  (n, 2) i4   [pt start, pt count]   (one part per line)
+#   Polyline Points (P, 2) f8   (flat -- the along-line facepoint coordinates)
+#
+# The ``External Faces`` FP Start/End Index + Station Start/End follow the exact
+# convention Muncie's ``Reference Lines/Internal Faces`` uses (verified): per
+# face, the two facepoint indices in along-line order + the cumulative station
+# (ft) at each. This is the same "each line -> its faces + facepoints" mapping.
+
+_BC_ATTR_DT = np.dtype([
+    ("Name", "S32"), ("SA-2D", "S16"), ("Type", "S8"), ("Length", "<f4"),
+])
+_BC_EXTFACE_DT = np.dtype([
+    ("BC Line ID", "<i4"), ("Face Index", "<i4"),
+    ("FP Start Index", "<i4"), ("FP End Index", "<i4"),
+    ("Station Start", "<f4"), ("Station End", "<f4"),
+])
+
+
+@dataclass
+class BoundaryConditionLine:
+    """One 2D BC line, defined by the ORDERED perimeter faces it spans.
+
+    ``face_indices`` is the sequence of GLOBAL external (perimeter) face indices
+    the line covers, in along-line order (see ``perimeter_face_run`` for the
+    default lowest-edge selection). The writer derives the facepoint ordering,
+    the polyline geometry, and the cumulative stations from the mesh topology --
+    the caller only chooses WHICH perimeter faces carry the forcing.
+    """
+
+    name: str
+    sa_2d: str
+    face_indices: Sequence[int]
+    line_type: str = "External"
+
+
+def _order_facepoints_along_run(
+    face_indices: Sequence[int], faces_fp: np.ndarray
+) -> np.ndarray:
+    """Return the (k+1,) ordered facepoint indices for a run of k external faces.
+
+    Consecutive perimeter faces share one facepoint; the run is walked so the
+    shared facepoint is the seam. Raises if the given faces are not a simple
+    connected chain (the honest failure -- a BC line must lie on contiguous
+    perimeter faces).
+    """
+    fis = [int(i) for i in face_indices]
+    if not fis:
+        raise ValueError("a BC line needs at least one external face")
+    if len(fis) == 1:
+        a, b = faces_fp[fis[0]]
+        return np.array([int(a), int(b)], dtype=np.int64)
+
+    # Orient the first face against the second (the free end leads).
+    f0, f1 = set(faces_fp[fis[0]].tolist()), set(faces_fp[fis[1]].tolist())
+    shared01 = f0 & f1
+    if len(shared01) != 1:
+        raise ValueError(f"faces {fis[0]},{fis[1]} do not share exactly one facepoint")
+    seam = shared01.pop()
+    lead = (f0 - {seam}).pop()
+    order = [lead, seam]
+    for fj in fis[1:]:
+        a, b = int(faces_fp[fj][0]), int(faces_fp[fj][1])
+        prev = order[-1]
+        if prev == a:
+            nxt = b
+        elif prev == b:
+            nxt = a
+        else:
+            raise ValueError(
+                f"face {fj} (fps {a},{b}) is not contiguous with the run at fp {prev}"
+            )
+        order.append(nxt)
+    return np.asarray(order, dtype=np.int64)
+
+
+def perimeter_face_run(
+    mesh: "Mesh2D",
+    *,
+    min_elevation: np.ndarray | None = None,
+    n_faces: int = 12,
+    edge: str | None = None,
+) -> list[int]:
+    """Pick a contiguous run of external (perimeter) faces for a BC line.
+
+    External faces are those whose Faces Cell Indexes reference a ghost cell
+    (cell index >= ``cell_count``) -- HEC's boundary-face marker. The run is
+    ordered around the perimeter ring and, by default, centred on the LOWEST
+    ``min_elevation`` external facepoint (where inflow naturally enters); pass
+    ``edge`` in {"n","s","e","w"} to force a compass side instead.
+
+    Returns up to ``n_faces`` contiguous global face indices. Pure topology +
+    (optional) elevation; no terrain, no solver.
+    """
+    nc = int(mesh.cell_count)
+    fc = np.asarray(mesh.faces_cell_indexes)
+    ext_mask = (fc[:, 0] >= nc) | (fc[:, 1] >= nc) | (fc[:, 0] < 0) | (fc[:, 1] < 0)
+    ext_faces = np.where(ext_mask)[0]
+    if ext_faces.size == 0:
+        # Fallback: faces whose BOTH facepoints are perimeter facepoints.
+        isper = np.asarray(mesh.facepoints_is_perimeter).astype(bool)
+        ffp = np.asarray(mesh.faces_facepoint_indexes)
+        ext_faces = np.where(isper[ffp[:, 0]] & isper[ffp[:, 1]])[0]
+    if ext_faces.size == 0:
+        raise ValueError("no external faces found on the mesh perimeter")
+
+    # Order the external faces into a ring by shared facepoints.
+    ffp = np.asarray(mesh.faces_facepoint_indexes)
+    remaining = list(int(i) for i in ext_faces)
+    ring = [remaining.pop(0)]
+    a0, b0 = int(ffp[ring[0]][0]), int(ffp[ring[0]][1])
+    tail = b0
+    changed = True
+    while remaining and changed:
+        changed = False
+        for j, fj in enumerate(remaining):
+            a, b = int(ffp[fj][0]), int(ffp[fj][1])
+            if a == tail:
+                ring.append(fj); tail = b; remaining.pop(j); changed = True; break
+            if b == tail:
+                ring.append(fj); tail = a; remaining.pop(j); changed = True; break
+    ring_arr = np.asarray(ring, dtype=np.int64)
+
+    n = min(int(n_faces), ring_arr.size)
+    coord = np.asarray(mesh.facepoints_coord)
+
+    def _face_key_coord(fi: int) -> np.ndarray:
+        a, b = ffp[fi]
+        return 0.5 * (coord[a] + coord[b])
+
+    if edge is not None:
+        keys = np.array([_face_key_coord(fi) for fi in ring_arr])
+        if edge in ("s", "n"):
+            order_val = keys[:, 1]
+            center = int(np.argmin(order_val) if edge == "s" else np.argmax(order_val))
+        else:
+            order_val = keys[:, 0]
+            center = int(np.argmin(order_val) if edge == "w" else np.argmax(order_val))
+    elif min_elevation is not None:
+        fmin = np.asarray(min_elevation, dtype=np.float64)
+        vals = np.array([
+            np.nanmin([fmin[a] if a < fmin.size else np.inf,
+                       fmin[b] if b < fmin.size else np.inf])
+            for a, b in ffp[ring_arr]
+        ])
+        center = int(np.nanargmin(vals))
+    else:
+        center = 0
+
+    half = n // 2
+    start = center - half
+    idx = [(start + k) % ring_arr.size for k in range(n)]
+    return [int(ring_arr[i]) for i in idx]
+
+
+def write_boundary_condition_lines(
+    f,
+    lines: Sequence[BoundaryConditionLine],
+    mesh: "Mesh2D",
+    *,
+    replace: bool = True,
+) -> dict:
+    """Author ``/Geometry/Boundary Condition Lines/`` for ``lines`` on ``mesh``.
+
+    ``f`` is an open ``h5py.File``/root in ``r+``/``w``. Writes the five datasets
+    (Attributes, External Faces, Polyline Info/Parts/Points) per the g09 schema.
+    The per-face facepoint ordering + cumulative stations are derived from the
+    mesh's ``faces_facepoint_indexes`` + ``facepoints_coord``. Returns a
+    provenance dict (per-line face counts + lengths).
+    """
+    import h5py  # noqa: F401  local import keeps numpy-only importers light
+
+    faces_fp = np.asarray(mesh.faces_facepoint_indexes)
+    coord = np.asarray(mesh.facepoints_coord, dtype=np.float64)
+
+    attr_rows = []
+    extface_rows = []
+    poly_pts: list[np.ndarray] = []
+    poly_info = []
+    poly_parts = []
+    prov_lines = []
+    pt_cursor = 0
+
+    for line_id, ln in enumerate(lines):
+        order = _order_facepoints_along_run(ln.face_indices, faces_fp)
+        pts = coord[order]                                   # (k+1, 2)
+        seg = np.linalg.norm(np.diff(pts, axis=0), axis=1)   # (k,)
+        station = np.concatenate([[0.0], np.cumsum(seg)])    # (k+1,)
+        length = float(station[-1])
+
+        for j, fi in enumerate(ln.face_indices):
+            extface_rows.append((
+                line_id, int(fi), int(order[j]), int(order[j + 1]),
+                float(station[j]), float(station[j + 1]),
+            ))
+        attr_rows.append((
+            ln.name.encode()[:32], ln.sa_2d.encode()[:16],
+            ln.line_type.encode()[:8], length,
+        ))
+        poly_pts.append(pts)
+        poly_parts.append((pt_cursor, pts.shape[0]))
+        poly_info.append((pt_cursor, pts.shape[0], line_id, 1))
+        pt_cursor += pts.shape[0]
+        prov_lines.append({"name": ln.name, "faces": len(ln.face_indices),
+                           "length_ft": length})
+
+    if BC_LINES_GROUP in f:
+        if replace:
+            del f[BC_LINES_GROUP]
+        else:
+            raise ValueError(f"{BC_LINES_GROUP} already present (replace=False)")
+    g = f.create_group(BC_LINES_GROUP)
+    g.create_dataset("Attributes", data=np.array(attr_rows, dtype=_BC_ATTR_DT))
+    g.create_dataset("External Faces", data=np.array(extface_rows, dtype=_BC_EXTFACE_DT))
+    g.create_dataset("Polyline Info", data=np.array(poly_info, dtype=np.int32))
+    g.create_dataset("Polyline Parts", data=np.array(poly_parts, dtype=np.int32))
+    g.create_dataset(
+        "Polyline Points",
+        data=(np.concatenate(poly_pts, axis=0) if poly_pts
+              else np.zeros((0, 2), np.float64)),
+    )
+    return {"lines": prov_lines, "external_faces_total": len(extface_rows)}

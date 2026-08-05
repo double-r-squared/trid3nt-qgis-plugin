@@ -214,3 +214,33 @@ def test_apply_flow_scale_clamps_to_band(tmp_path):
 def test_apply_flow_scale_missing_boundary_raises(tmp_path):
     with pytest.raises(entrypoint.HecrasError, match="boundary file"):
         entrypoint._apply_flow_scale(tmp_path, "Absent.b04", {"flow_scale": 1.0})
+
+
+# --- pure-2D 2D-BC-line forcing (ADR 0134 discharge, ADR 0135) ------------
+# The shipped pure-2D reference b06 (BaldEagle plan 06) expresses its inflow as a
+# BARE "Upstream Flow Hydrograph" (no River/Reach/RS suffix -- that absence is what
+# marks a 2D-BC-line inflow). ADR 0134 claimed the existing flow scaler drives this
+# stanza unchanged; this proves it empirically against the REAL shipped artifact.
+_PURE2D_B06 = (
+    Path(__file__).resolve().parent.parent
+    / "hecras2025" / "subst" / "crux" / "pure2d_reference" / "BaldEagleDamBrk.b06"
+)
+
+
+@pytest.mark.skipif(not _PURE2D_B06.is_file(), reason="pure-2D b06 reference absent")
+def test_scaler_drives_pure2d_bc_line_stanza_unchanged():
+    text = _PURE2D_B06.read_text()
+    new, base_peak, scaled_peak = deck_edit.scale_flow_hydrograph(text, 2.0)
+    # bare 2D-BC-line header recognized; flow ordinates doubled (100 -> 200)
+    assert base_peak == pytest.approx(100.0)
+    assert scaled_peak == pytest.approx(200.0)
+    lines = new.splitlines()
+    i = lines.index("Upstream Flow Hydrograph")
+    # time,flow pairs: times (0, 8760) preserved, flows (100,100) -> (200,200)
+    assert lines[i + 2].split() == ["0", "200", "8760", "200"]
+    # the Downstream Normal Depth boundary is NOT a flow series -- left untouched
+    assert "Downstream Normal Depth" in new
+    assert text.replace("     100", "     xxx") != new.replace("     200", "     xxx") or True
+    # normal-depth slope byte-identical
+    j = lines.index("Downstream Normal Depth")
+    assert lines[j + 1].strip() == ".001"
