@@ -38,11 +38,12 @@ import h5py
 import numpy as np
 
 try:  # flat-import (worker-dir) AND package-import (image PYTHONPATH) both work.
-    from deck_edit import DeckEditError, scale_flow_hydrograph
+    from deck_edit import DeckEditError, scale_flow_hydrograph, set_breach_enabled
 except ImportError:  # pragma: no cover - image runs from the worker dir
     from services.workers.hecras.deck_edit import (  # type: ignore[no-redef]
         DeckEditError,
         scale_flow_hydrograph,
+        set_breach_enabled,
     )
 
 #: Baked shipped-geometry decks (engine-landing wave). ``archetype`` in the
@@ -52,6 +53,16 @@ except ImportError:  # pragma: no cover - image runs from the worker dir
 _HERE = Path(__file__).resolve().parent
 _BAKED_DECKS: dict[str, dict[str, str]] = {
     "muncie_riverine_flood": {
+        "wrk_source": str(_HERE / "fixtures" / "muncie_smoke" / "wrk_source"),
+        "plan_hdf": "Muncie.p04.tmp.hdf",
+        "geom_suffix": "x04",
+        "boundary_file": "Muncie.b04",
+    },
+    # The SAME Muncie White River deck: its 2D Interior Area is a leveed protected
+    # floodplain and the ``.bNN`` carries a Breach Data block with 2 lateral-
+    # structure breaches. The levee-breach archetype toggles those breaches (the
+    # protected side floods when the levee fails, stays dry when it holds).
+    "muncie_levee_breach": {
         "wrk_source": str(_HERE / "fixtures" / "muncie_smoke" / "wrk_source"),
         "plan_hdf": "Muncie.p04.tmp.hdf",
         "geom_suffix": "x04",
@@ -188,6 +199,34 @@ def _stage_baked_deck(archetype: str, data_dir: Path) -> dict[str, str]:
     return spec
 
 
+def _apply_breach(data_dir: Path, boundary_file: str, manifest: dict) -> dict:
+    """Toggle the ``.bNN`` lateral-structure breaches per the manifest.
+
+    Absent ``breach_enabled`` the shipped breaches are left as-is (ON) -- so the
+    riverine-flood archetype is unaffected. When present, ``set_breach_enabled``
+    rewrites the ``Breach Data`` block deterministically (disabling zeroes the
+    count AND drops the record lines -- the in-container-verified valid edit).
+    Returns the breach provenance folded into the metrics.
+    """
+    if "breach_enabled" not in manifest:
+        return {}
+    breach_enabled = bool(manifest.get("breach_enabled"))
+    bpath = data_dir / boundary_file
+    if not bpath.is_file():
+        raise HecrasError(f"boundary file {boundary_file} not found in {data_dir}")
+    try:
+        new_text, n_active = set_breach_enabled(bpath.read_text(), breach_enabled)
+    except DeckEditError as exc:
+        raise HecrasError(f"breach toggle deck edit failed: {exc}") from exc
+    bpath.write_text(new_text)
+    print(
+        f"[hecras] breach_enabled={breach_enabled} -> {n_active} lateral-structure "
+        f"breach(es) active (boundary {boundary_file})",
+        flush=True,
+    )
+    return {"breach_enabled": breach_enabled, "breach_count_active": int(n_active)}
+
+
 def _apply_flow_scale(
     data_dir: Path, boundary_file: str, manifest: dict
 ) -> dict:
@@ -265,7 +304,9 @@ def run(data_dir: Path) -> dict:
         spec = _stage_baked_deck(str(archetype), data_dir)
         plan_hdf = manifest.get("plan_hdf") or spec["plan_hdf"]
         geom_suffix = manifest.get("geom_suffix") or spec["geom_suffix"]
-        forcing = _apply_flow_scale(data_dir, spec["boundary_file"], manifest)
+        # Breach toggle THEN flow scale -- disjoint .bNN blocks, so they compose.
+        forcing = _apply_breach(data_dir, spec["boundary_file"], manifest)
+        forcing.update(_apply_flow_scale(data_dir, spec["boundary_file"], manifest))
     else:
         plan_hdf = manifest["plan_hdf"]  # e.g. "Muncie.p04.tmp.hdf"
         geom_suffix = manifest["geom_suffix"]  # e.g. "x04"

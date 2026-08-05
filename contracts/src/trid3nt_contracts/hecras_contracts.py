@@ -52,12 +52,16 @@ __all__ = [
 #: depth range renders regardless of the QML preset library's coverage.
 HECRAS_DEPTH_STYLE_PRESET: str = "continuous_flood_depth"
 
-#: The registered archetypes for this engine. v1 ships exactly ONE: the
-#: Muncie-class 1D/2D riverine-flood archetype (frozen demonstration geometry,
-#: reparameterized unsteady flow forcing). Bald Eagle Creek 2D levee + rain-on-grid
-#: are the queued next archetypes (ADR 0109), each needing its own shipped-geometry
-#: fixture baked into the worker image.
-HECRAS_ARCHETYPES: tuple[str, ...] = ("muncie_riverine_flood",)
+#: The registered archetypes for this engine. Both reparameterize HEC's own shipped
+#: Muncie White River (Muncie IN) demonstration project (frozen 1D/2D geometry):
+#:   - ``muncie_riverine_flood`` -- what-if UNSTEADY FLOW forcing (ADR 0109).
+#:   - ``muncie_levee_breach`` -- what the LEVEED protected 2D floodplain looks like
+#:     when the lateral-structure levee FAILS vs HOLDS (ADR 0125); the deck's
+#:     Breach Data block is toggled. Bald Eagle Creek multi-2D levee + rain-on-grid
+#:     stay the queued next archetypes (ADR 0125 ledger), each needing its own
+#:     shipped-geometry fixture (the Bald Eagle model awaits the Windows-Phase-1
+#:     unblock).
+HECRAS_ARCHETYPES: tuple[str, ...] = ("muncie_riverine_flood", "muncie_levee_breach")
 
 # --- typed error codes (open-set A.6 surface) ------------------------------- #
 #: The unsteady solve failed: a non-zero engine exit, or a mass-balance / result
@@ -96,9 +100,14 @@ class HECRASRunArgs(GraceModel):
 
     Fields:
         schema_version: contract version pin (additive growth only).
-        archetype: the shipped-geometry riverine-flood archetype. v1 ships exactly
-            ``"muncie_riverine_flood"`` (White River, Muncie IN -- HEC's own
-            Linux-verified test project; the M3 replication gate).
+        archetype: the shipped-geometry archetype (both on the frozen Muncie White
+            River geometry). ``"muncie_riverine_flood"`` (what-if flow) or
+            ``"muncie_levee_breach"`` (levee fails vs holds).
+        breach_enabled: for ``muncie_levee_breach`` -- ``True`` (default) runs the
+            levee FAILURE (the lateral-structure breaches active, the protected 2D
+            floodplain floods); ``False`` runs the levee HOLDING (breaches disabled,
+            the protected side stays dry). Ignored by ``muncie_riverine_flood``
+            (its shipped breaches are left as-is).
         flow_scale: multiply the archetype's baseline inflow hydrograph by this
             factor (the plain-multiplier user/default path). ``1.0`` runs the
             published baseline; ``> 1`` a higher-flow "what-if" (deeper + wider
@@ -116,7 +125,8 @@ class HECRASRunArgs(GraceModel):
     """
 
     schema_version: Literal["v1"] = "v1"
-    archetype: Literal["muncie_riverine_flood"] = "muncie_riverine_flood"
+    archetype: Literal["muncie_riverine_flood", "muncie_levee_breach"] = "muncie_riverine_flood"
+    breach_enabled: bool = True
     flow_scale: float = Field(default=1.0, ge=0.25, le=4.0)
     target_peak_cfs: float | None = Field(default=None, gt=0.0)
     input_mode: Literal["auto", "user_gated"] | None = None
@@ -159,6 +169,11 @@ class HecrasDepthLayerURI(LayerURI):
             surfaced so a solve's numerical health is visible; a value outside a
             small band means an unreliable result.
         n_cells: total 2D flow-area cell count (>= 0) -- the modeled domain size.
+        breach_enabled: for the levee-breach archetype -- whether the levee FAILED
+            (``True``, breaches active) or HELD (``False``). A HELD run is a VALID
+            DRY SUCCESS: ``wet_cell_count == 0`` / ``depth_max_ft == 0`` means the
+            protected side stayed dry (the levee held), NOT an empty/failed solve.
+            ``None`` for the riverine-flood archetype.
 
     ``layer_type`` is ``"raster"`` (the peak-depth COG); it uses the
     ``continuous_flood_depth`` style preset + a data-driven ``legend``. The
@@ -173,3 +188,4 @@ class HecrasDepthLayerURI(LayerURI):
     peak_inflow_cfs: float | None = Field(default=None, ge=0.0)
     volume_error_pct: float | None = Field(default=None)
     n_cells: int | None = Field(default=None, ge=0)
+    breach_enabled: bool | None = Field(default=None)

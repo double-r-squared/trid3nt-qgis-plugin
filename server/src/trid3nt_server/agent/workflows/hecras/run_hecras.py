@@ -39,6 +39,14 @@ logger = logging.getLogger("trid3nt.workflows.run_hecras")
 #: ``SOLVER_WORKFLOW_REGISTRY`` (presence gate) and ``LOCAL_SOLVER_SPEC_REGISTRY``.
 HECRAS_SOLVER_NAME: str = "hecras_riverine_flood"
 
+#: The levee-breach template's solver identifier -- the SAME worker image (the
+#: archetype + breach toggle ride in the manifest), a distinct name so the dispatch
+#: + logs read the capability honestly. Both map to the same LocalSolverSpec build.
+HECRAS_LEVEE_BREACH_SOLVER_NAME: str = "hecras_levee_breach"
+
+#: Every registered HEC-RAS solver name (one image, per-capability names).
+HECRAS_SOLVER_NAMES: tuple[str, ...] = (HECRAS_SOLVER_NAME, HECRAS_LEVEE_BREACH_SOLVER_NAME)
+
 #: Default worker image (override via env TRID3NT_HECRAS_IMAGE, mirroring
 #: TRID3NT_TELEMAC_IMAGE / TRID3NT_SFINCS_IMAGE).
 DEFAULT_HECRAS_IMAGE: str = "trid3nt-local/hecras:latest"
@@ -54,23 +62,26 @@ _COMPLETION_METRIC_KEYS: tuple[str, ...] = (
     "flow_scale",
     "baseline_peak_cfs",
     "peak_inflow_cfs",
+    "breach_enabled",
+    "breach_count_active",
     "ran_geompre",
 )
 
 
 def register_hecras_solver() -> None:
-    """Register ``'hecras_riverine_flood'`` in ``SOLVER_WORKFLOW_REGISTRY``.
+    """Register the HEC-RAS solver names in ``SOLVER_WORKFLOW_REGISTRY``.
 
     The registry value is a PRESENCE GATE for ``run_solver``; the live routing
-    comes from the backend sentinel. HEC-RAS is local-docker only, so it maps to
-    the local-docker workflow-name sentinel. Idempotent ``setdefault``.
+    comes from the backend sentinel. HEC-RAS is local-docker only, so every name
+    maps to the local-docker workflow-name sentinel. Idempotent ``setdefault``.
     """
     from trid3nt_server.agent.tools.simulation.solver.solver import (
         LOCAL_DOCKER_WORKFLOW_NAME,
         SOLVER_WORKFLOW_REGISTRY,
     )
 
-    SOLVER_WORKFLOW_REGISTRY.setdefault(HECRAS_SOLVER_NAME, LOCAL_DOCKER_WORKFLOW_NAME)
+    for name in HECRAS_SOLVER_NAMES:
+        SOLVER_WORKFLOW_REGISTRY.setdefault(name, LOCAL_DOCKER_WORKFLOW_NAME)
 
 
 register_hecras_solver()
@@ -119,8 +130,11 @@ def _classify_exit(
     return status, exit_code, error, extra
 
 
-def hecras_local_spec() -> "Any":
-    """Build the HEC-RAS ``LocalSolverSpec`` for the local-docker backend."""
+def hecras_local_spec(solver_name: str = HECRAS_SOLVER_NAME) -> "Any":
+    """Build a HEC-RAS ``LocalSolverSpec`` for the local-docker backend.
+
+    ``solver_name`` names the capability (riverine-flood or levee-breach); both
+    drive the SAME worker image (the archetype + knobs ride in the manifest)."""
     import os
 
     from trid3nt_server.agent.tools.simulation.solver.solver import (
@@ -149,7 +163,7 @@ def hecras_local_spec() -> "Any":
         ]
 
     return LocalSolverSpec(
-        solver=HECRAS_SOLVER_NAME,
+        solver=solver_name,
         workflow_name=LOCAL_DOCKER_WORKFLOW_NAME,
         args_key="hecras_args",
         build_argv=build_argv,
@@ -163,10 +177,11 @@ def hecras_local_spec() -> "Any":
 
 
 def register_hecras_local_spec() -> None:
-    """Register the HEC-RAS LocalSolverSpec factory for the local-docker backend."""
+    """Register the HEC-RAS LocalSolverSpec factory for every capability name."""
     from trid3nt_server.agent.tools.simulation.solver.solver import register_local_solver_spec
 
-    register_local_solver_spec(HECRAS_SOLVER_NAME, hecras_local_spec)
+    for name in HECRAS_SOLVER_NAMES:
+        register_local_solver_spec(name, lambda n=name: hecras_local_spec(n))
 
 
 register_hecras_local_spec()

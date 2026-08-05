@@ -115,12 +115,19 @@ def _first_area_name(f: Any) -> str:
     return keys[0]
 
 
-def _read_depth_per_cell(plan_hdf: Path) -> tuple[Any, Any, str, dict[str, Any]]:
+def _read_depth_per_cell(
+    plan_hdf: Path, *, allow_dry: bool = False
+) -> tuple[Any, Any, str, dict[str, Any]]:
     """Return ``(depth_ft, wet_mask, area_name, stats)`` per 2D cell.
 
     ``depth_ft`` is the peak WATER DEPTH (max WSE minus bed elevation, feet),
     ``wet_mask`` marks cells with depth > the wet floor. Raises
-    ``HECRAS_OUTPUT_EMPTY`` when no Results / no wet cells.
+    ``HECRAS_OUTPUT_EMPTY`` when no Results.
+
+    A solve with ZERO wet cells raises ``HECRAS_OUTPUT_EMPTY`` UNLESS ``allow_dry``
+    -- the levee-breach archetype's levee-HOLDS case is a VALID DRY SUCCESS (the
+    protected 2D floodplain stayed dry), returned with zeroed stats rather than an
+    error.
     """
     import h5py  # lazy
     import numpy as np
@@ -152,11 +159,21 @@ def _read_depth_per_cell(plan_hdf: Path) -> tuple[Any, Any, str, dict[str, Any]]
     wet = np.isfinite(depth) & (depth > HECRAS_WET_DEPTH_FT)
 
     wet_count = int(wet.sum())
-    if wet_count == 0:
+    if wet_count == 0 and not allow_dry:
         raise PostprocessHecrasError(
             HECRAS_OUTPUT_EMPTY,
             message="the solve produced no wet 2D cells (empty inundation)",
         )
+    if wet_count == 0:
+        # Valid dry success (levee held): zeroed stats, all-dry depth/mask.
+        stats = {
+            "n_cells": int(bed.shape[0]),
+            "wet_cell_count": 0,
+            "depth_max_ft": 0.0,
+            "depth_mean_ft": 0.0,
+            "wse_max_ft": (float(np.nanmax(wse)) if bool(np.isfinite(wse).any()) else 0.0),
+        }
+        return depth, wet, area, stats
     stats = {
         "n_cells": int(bed.shape[0]),
         "wet_cell_count": wet_count,
@@ -224,6 +241,8 @@ def postprocess_hecras(
     volume_error_pct: float | None = None,
     runs_bucket: str | None = None,
     fallback_note: str | None = None,
+    allow_dry: bool = False,
+    breach_enabled: bool | None = None,
 ) -> tuple[list[LayerURI], dict[str, Any]]:
     """Rasterize a solved HEC-RAS 2D result to a peak-depth COG + mesh preview.
 
@@ -235,6 +254,12 @@ def postprocess_hecras(
         runs_bucket: override; else ``TRID3NT_RUNS_BUCKET``.
         fallback_note: the demonstration-geometry honesty floor stamped on the
             layer (the composer supplies the LOUD wording).
+        allow_dry: when ``True``, a zero-wet-cell solve is a VALID DRY SUCCESS (the
+            levee-breach levee-HOLDS case) -- an all-nodata depth COG + zeroed stats
+            rather than a ``HECRAS_OUTPUT_EMPTY`` error.
+        breach_enabled: the levee scenario the layer carries (``True`` failed /
+            ``False`` held / ``None`` riverine) -- surfaced so a dry result reads as
+            "levee held", never a failure.
 
     Returns:
         ``(layers, metrics)``: ``layers[0]`` the ``HecrasDepthLayerURI`` peak-depth
@@ -247,7 +272,8 @@ def postprocess_hecras(
             upload fault.
     """
     plan_hdf = Path(plan_hdf)
-    depth, wet, area_name, stats = _read_depth_per_cell(plan_hdf)
+    depth, wet, area_name, stats = _read_depth_per_cell(plan_hdf, allow_dry=allow_dry)
+    is_dry = stats["wet_cell_count"] == 0
 
     # Cell polygons (EPSG:4326) from the shared mesh reader -- reused for BOTH the
     # rasterization (paint each cell its depth) and the mesh-preview layer.
@@ -266,33 +292,37 @@ def postprocess_hecras(
     width_px, height_px = _adaptive_grid(bbox)
     transform = from_bounds(bbox[0], bbox[1], bbox[2], bbox[3], width_px, height_px)
 
-    # Build (geometry, depth) shapes for the WET cells only (dry cells contribute
-    # nothing so the sheet edge is crisp).
-    shapes: list[tuple[dict, float]] = []
-    for feat in fc["features"]:
-        if feat["properties"].get("role") != "cell":
-            continue
-        cid = int(feat["properties"]["cell_id"])
-        if cid >= depth.shape[0] or not wet[cid]:
-            continue
-        d = float(depth[cid])
-        if d > HECRAS_WET_DEPTH_FT:
-            shapes.append((feat["geometry"], d))
+    if is_dry:
+        # Levee-HELD: the protected side stayed dry -- an all-nodata depth sheet
+        # (nothing paints; the empty map IS the answer "the levee held").
+        grid = np.full((height_px, width_px), float("nan"), dtype="float32")
+    else:
+        # Build (geometry, depth) shapes for the WET cells only (dry cells
+        # contribute nothing so the sheet edge is crisp).
+        shapes: list[tuple[dict, float]] = []
+        for feat in fc["features"]:
+            if feat["properties"].get("role") != "cell":
+                continue
+            cid = int(feat["properties"]["cell_id"])
+            if cid >= depth.shape[0] or not wet[cid]:
+                continue
+            d = float(depth[cid])
+            if d > HECRAS_WET_DEPTH_FT:
+                shapes.append((feat["geometry"], d))
 
-    if not shapes:
-        raise PostprocessHecrasError(
-            HECRAS_OUTPUT_EMPTY, message="no wet cell polygons to rasterize"
+        if not shapes:
+            raise PostprocessHecrasError(
+                HECRAS_OUTPUT_EMPTY, message="no wet cell polygons to rasterize"
+            )
+
+        grid = rasterio.features.rasterize(
+            shapes,
+            out_shape=(height_px, width_px),
+            transform=transform,
+            fill=float("nan"),
+            dtype="float32",
+            all_touched=False,
         )
-
-    nodata = np.float32(np.nan)
-    grid = rasterio.features.rasterize(
-        shapes,
-        out_shape=(height_px, width_px),
-        transform=transform,
-        fill=float("nan"),
-        dtype="float32",
-        all_touched=False,
-    )
 
     try:
         cog_path = cog_io.write_cog_4326_from_grid(
@@ -322,9 +352,13 @@ def postprocess_hecras(
     finally:
         cog_io.safe_unlink(cog_path)
 
+    # A dry sheet has no depth range; give the legend a nominal wet-floor span so
+    # the LegendKey stays valid (the raster is all-nodata, so nothing paints).
+    legend_vmax = round(stats["depth_max_ft"], 3) if not is_dry else HECRAS_WET_DEPTH_FT
+    dry_name = " -- LEVEE HELD (protected side dry)" if is_dry else ""
     depth_layer = HecrasDepthLayerURI(
         layer_id=f"hecras-depth-peak-{run_id}",
-        name=f"Peak flood depth (HEC-RAS 2D, {area_name})",
+        name=f"Peak flood depth (HEC-RAS 2D, {area_name}){dry_name}",
         layer_type="raster",
         uri=cog_uri,
         style_preset=HECRAS_DEPTH_STYLE_PRESET,
@@ -335,7 +369,7 @@ def postprocess_hecras(
             kind="continuous",
             colormap="blues",
             vmin=0.0,
-            vmax=round(stats["depth_max_ft"], 3),
+            vmax=legend_vmax,
             units="ft",
             label="Peak water depth (ft)",
         ),
@@ -348,6 +382,7 @@ def postprocess_hecras(
         peak_inflow_cfs=(round(float(peak_inflow_cfs), 1) if peak_inflow_cfs is not None else None),
         volume_error_pct=(round(float(volume_error_pct), 6) if volume_error_pct is not None else None),
         n_cells=stats["n_cells"],
+        breach_enabled=breach_enabled,
     )
 
     layers: list[LayerURI] = [depth_layer]
@@ -361,6 +396,8 @@ def postprocess_hecras(
         "flow_scale": float(flow_scale),
         "peak_inflow_cfs": peak_inflow_cfs,
         "volume_error_pct": volume_error_pct,
+        "breach_enabled": breach_enabled,
+        "is_dry": is_dry,
         "bbox": bbox,
         "cog_uri": cog_uri,
         "inflow_hydrograph": _read_inflow_series(plan_hdf, float(flow_scale)),

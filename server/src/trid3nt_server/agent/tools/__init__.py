@@ -651,6 +651,12 @@ from ..workflows.telemac.river_dye.river_dye import telemac_river_dye as _telema
 # unsteady flow forcing). The composer chain (model_hecras_riverine_flood) is inlined
 # in the template module; workflows/hecras/run_hecras.py is the local solve seam.
 from ..workflows.hecras.riverine_flood.riverine_flood import hecras_riverine_flood as _hecras_riverine_flood  # noqa: E402,F401 - engine #11 (engine=hecras, tier=template)
+# hecras_levee_breach TEMPLATE (engine="hecras", tier="template"), engine #11 second
+# archetype (ADR 0125): the SAME frozen Muncie White River geometry, whose 2D
+# Interior Area is a LEVEED protected floodplain -- toggles the deck's lateral-
+# structure breach (levee fails -> floods; holds -> valid dry success). Composer
+# inlined in the module; the local solve seam is shared (workflows/hecras/run_hecras.py).
+from ..workflows.hecras.levee_breach.levee_breach import hecras_levee_breach as _hecras_levee_breach  # noqa: E402,F401 - engine #11 second archetype (engine=hecras, tier=template)
 # schism_tidal_hydro TEMPLATE (engine="schism", tier="template"), engine #12,
 # one folder under workflows/schism/tidal_hydro/. Barotropic tidal hydrodynamics
 # on an unstructured coastal mesh (ADR 0118): the QuarterAnnulus verification case

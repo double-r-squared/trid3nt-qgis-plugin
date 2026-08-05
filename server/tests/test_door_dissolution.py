@@ -34,6 +34,7 @@ EXPECTED_TEMPLATES = {
     "swmm_dual_drainage_coupling",  # ADR 0124 SWMM network family #2: overland mesh <-> imported pipe coupling
     "telemac_river_dye",
     "hecras_riverine_flood",  # engine #11 (ADR 0109; renamed ADR 0120): HEC-RAS riverine-flood template (v1 geometry: Muncie)
+    "hecras_levee_breach",  # engine #11 second archetype (ADR 0125): HEC-RAS levee-breach template (v1 geometry: Muncie leveed floodplain)
     "schism_tidal_hydro",  # engine #12 (ADR 0118): SCHISM barotropic tidal template
     "swan_wave_field",
     "geoclaw_inundation",
@@ -100,7 +101,7 @@ def test_all_templates_registered_and_callable():
         n for n, e in reg.items() if getattr(e.metadata, "tier", "general") == "template"
     }
     assert registered_templates == EXPECTED_TEMPLATES, (
-        "registered tier=template set drifted from the expected 29: "
+        "registered tier=template set drifted from the expected 30: "
         f"missing={sorted(EXPECTED_TEMPLATES - registered_templates)} "
         f"unexpected={sorted(registered_templates - EXPECTED_TEMPLATES)}"
     )

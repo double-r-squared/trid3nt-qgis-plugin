@@ -41,6 +41,11 @@ _PAIRS_PER_LINE = 5
 #: untouched.
 _FLOW_HEADERS = ("Flow Hydrograph", "Lateral Inflow Hydrograph", "Uniform Lateral Inflow")
 
+#: The section header that opens the lateral-structure breach block in a ``.bNN``.
+#: The next line is a right-justified count; then ``count`` breach records follow
+#: (each a few numeric fixed-field lines), then the next section header.
+_BREACH_HEADER = "Breach Data"
+
 
 class DeckEditError(RuntimeError):
     """A hydrograph block could not be parsed / rewritten."""
@@ -154,3 +159,77 @@ def scale_flow_hydrograph(text: str, scale: float) -> tuple[str, float, float]:
     if text.endswith("\n"):
         new_text += "\n"
     return new_text, base_peak, scaled_peak
+
+
+def set_breach_enabled(text: str, enabled: bool) -> tuple[str, int]:
+    """Toggle the lateral-structure breaches in a ``.bNN`` deck.
+
+    The Muncie deck's ``Breach Data`` block declares 2 lateral-structure breaches
+    (the levee/SA-2D-connection weirs that fail and flood the protected 2D interior
+    floodplain). This is the DETERMINISTIC fixed-field toggle -- the breach analogue
+    of ``scale_flow_hydrograph`` -- that composes with the flow scale (they touch
+    disjoint blocks).
+
+    Args:
+        text: the full ``.bNN`` boundary-file text.
+        enabled: ``True`` runs the levee FAILURE (deck returned byte-identical -- the
+            shipped deck breaches ON); ``False`` runs the levee HOLDING (the
+            protected side stays dry).
+
+    Returns:
+        ``(new_text, n_breaches)`` -- the (possibly rewritten) deck plus the number
+        of breaches ACTIVE after the edit (the original count when enabled; 0 when
+        disabled), so the caller can narrate "N breaches active / disabled".
+
+    Disabling sets the ``Breach Data`` count to 0 AND REMOVES the breach record
+    lines. Empirically pinned (in-container, 2026-08-04): leaving the record lines
+    with a 0 count crashes ``RasUnsteady`` (``Unetreal.for`` fatal); dropping them
+    yields the clean levee-holds solve (0 wet cells / 0.0021% volume error).
+
+    Raises:
+        DeckEditError: a ``Breach Data`` count line could not be parsed.
+    """
+    lines = text.splitlines()
+    out: list[str] = []
+    n_active = 0
+    i = 0
+    n_lines = len(lines)
+    while i < n_lines:
+        line = lines[i]
+        if line.strip() != _BREACH_HEADER:
+            out.append(line)
+            i += 1
+            continue
+
+        # The next line is the breach count (right-justified, fixed field).
+        out.append(line)
+        i += 1
+        if i >= n_lines:
+            raise DeckEditError("Breach Data header with no count line")
+        count_line = lines[i]
+        try:
+            orig_count = int(count_line.strip())
+        except ValueError as exc:
+            raise DeckEditError(
+                f"Breach Data count line not an integer: {count_line!r}"
+            ) from exc
+        i += 1
+
+        if enabled:
+            # Levee-failure: leave the block byte-identical.
+            out.append(count_line)
+            n_active = orig_count
+            continue
+
+        # Levee-holds: zero the count (preserving field width) and DROP the breach
+        # record lines up to the next section header (a non-indented, non-empty
+        # line) so the deck stays structurally valid.
+        out.append(f"{0:>{len(count_line)}}")
+        while i < n_lines and (lines[i] == "" or lines[i][:1].isspace()):
+            i += 1
+        n_active = 0
+
+    new_text = "\n".join(out)
+    if text.endswith("\n"):
+        new_text += "\n"
+    return new_text, n_active

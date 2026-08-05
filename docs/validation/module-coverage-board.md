@@ -238,7 +238,7 @@ Aspects: full unsteady St. Venant network routing; hydrologic (Modified Puls) ro
 
 ### 2D Unsteady Flow
 Purpose: Solve either the Diffusion-Wave or full Shallow-Water Equations on an unstructured/structured 2D mesh, standalone or coupled to 1D reaches.
-Today: 2D unsteady on shipped geometry is signed; levee handling is signed per roster note
+Today: 2D unsteady on shipped geometry is signed; levee handling is LANDED -- `hecras_levee_breach` template (ADR 0125, 2026-08-04): toggles the shipped Muncie deck's lateral-structure breach (levee fails -> ~4881 wet cells / 20.24 ft on the protected 2D floodplain; levee holds -> valid dry success, 0 wet cells), acceptance GREEN through the registered template. Bald Eagle multi-2D levee (the CAND-S/M rows below) awaits the Windows-Phase-1 geometry-authoring unblock (ledgered)
 Aspects: mesh generation + cell-size/breakline tuning; equation-set selection (Diffusion Wave vs full SWE) + accuracy/stability tradeoff; combined 1D-2D coupling via SA/2D connections; Courant-driven timestep + convergence troubleshooting; levee/refinement-region mesh control
 - [CAND-S] `simple_2d_diffusion_wave_mesh` [S] [US] - For a river reach draining to a defined floodplain, does a uniform-cell diffusion-wave 2D mesh with tributary inflows and normal-depth downstream BC converge to a stable, low-volume-error solution?
   src: https://www.hec.usace.army.mil/confluence/rasdocs/hgt/latest/tutorials/2d-unsteady-flow/creating-a-simple-2d-model (hecras_hgt_simple_2d_bald_eagle)

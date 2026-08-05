@@ -16,6 +16,7 @@ per NATE 2026-08-04.
 | Easy-four pt 2 (0123) | 3 | ~71 min | ~24 min - recipes pre-scoped |
 | Triage-only waves (0121) | 0 (13 ground-truthed) | ~35 min | scoping overhead, amortized |
 | SWMM network family (0124) | 2 (network import + dual drainage, live Houston municipal net) | ~66 min | ~33 min - triage bought 5 honest STOPs + the published-deck-runner unlock |
+| HEC-RAS archetypes (0125) | 1 (levee_breach; rain-on-grid honest STOP) | ~3.0 h (incl 21-min triage wave + an upstream API drop + image rebuild) | ~3 h - engine-adjacent archetype w/ in-container mechanics pinning |
 
 ## Working rates (sequential, incl close-out share)
 

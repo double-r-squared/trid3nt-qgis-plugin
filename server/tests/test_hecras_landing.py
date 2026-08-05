@@ -80,9 +80,41 @@ def test_depth_layer_uri_fields_and_roundtrip():
 
 def test_error_codes_and_archetypes_present():
     assert "muncie_riverine_flood" in HECRAS_ARCHETYPES
+    assert "muncie_levee_breach" in HECRAS_ARCHETYPES
     for code in ("HECRAS_SOLVE_FAILED", "HECRAS_INPUT_INVALID",
                  "HECRAS_FINISHED_SENTINEL_MISSING", "HECRAS_OUTPUT_EMPTY"):
         assert code in HECRAS_ERROR_CODES
+
+
+def test_runargs_levee_breach_archetype_and_toggle():
+    """The levee-breach archetype + breach_enabled knob round-trip (ADR 0125)."""
+    a = HECRASRunArgs(archetype="muncie_levee_breach", breach_enabled=False)
+    assert a.archetype == "muncie_levee_breach"
+    assert a.breach_enabled is False
+    back = HECRASRunArgs.model_validate(a.model_dump())
+    assert back == a
+    # default archetype keeps breach_enabled True (the levee-fails default)
+    assert HECRASRunArgs().breach_enabled is True
+
+
+def test_depth_layer_uri_dry_levee_held_is_valid():
+    """A levee-HELD result is a valid DRY layer: 0 wet cells / 0 depth, breach off."""
+    layer = HecrasDepthLayerURI(
+        layer_id="hecras-depth-peak-dry",
+        name="Peak flood depth (HEC-RAS 2D, 2D Interior Area) -- LEVEE HELD",
+        layer_type="raster",
+        uri="s3://runs/dry/hecras_depth_peak.tif",
+        style_preset=HECRAS_DEPTH_STYLE_PRESET,
+        depth_max_ft=0.0,
+        depth_mean_ft=0.0,
+        wet_cell_count=0,
+        flow_scale=1.0,
+        n_cells=5765,
+        breach_enabled=False,
+    )
+    back = HecrasDepthLayerURI.model_validate(layer.model_dump())
+    assert back.wet_cell_count == 0 and back.depth_max_ft == 0.0
+    assert back.breach_enabled is False
 
 
 # --------------------------------------------------------------------------- #
@@ -131,6 +163,53 @@ def test_postprocess_depth_and_mesh(fake_s3, monkeypatch):
     # the inflow-forcing series scales with the flow multiplier (invariant 1)
     series = metrics["inflow_hydrograph"]
     assert series and max(p["q_cfs"] for p in series) == pytest.approx(21000.0, rel=1e-3)
+
+
+def _write_dry_2d_hdf(path) -> None:
+    """A minimal plan HDF whose 2D area is entirely DRY (levee-holds case).
+
+    Only the two datasets ``_read_depth_per_cell`` reads: a Results max-WSE (all
+    <= 0, i.e. dry) + the geometry Cells Minimum Elevation. No engine, no mesh."""
+    import h5py
+    import numpy as np
+
+    area = "2D Interior Area"
+    with h5py.File(path, "w") as f:
+        f.create_group(f"Geometry/2D Flow Areas/{area}")
+        f[f"Geometry/2D Flow Areas/{area}"].create_dataset(
+            "Cells Minimum Elevation", data=np.array([940.0, 941.0, 942.0], dtype=np.float32)
+        )
+        base = ("Results/Unsteady/Output/Output Blocks/Base Output/Summary Output/"
+                f"2D Flow Areas/{area}")
+        f.create_group(base)
+        # all dry: WSE == 0 for every cell (a dry HEC-RAS cell stores WSE 0)
+        f[base].create_dataset(
+            "Maximum Water Surface", data=np.array([[0.0, 0.0, 0.0]], dtype=np.float32)
+        )
+
+
+def test_read_depth_per_cell_allow_dry_valid_success(tmp_path):
+    """0 wet cells raises HECRAS_OUTPUT_EMPTY by default, but is a valid dry
+    success under allow_dry (the levee-holds case -- ADR 0125)."""
+    from trid3nt_server.agent.workflows.hecras.postprocess_hecras import (
+        PostprocessHecrasError,
+        _read_depth_per_cell,
+    )
+
+    hdf = tmp_path / "dry.hdf"
+    _write_dry_2d_hdf(hdf)
+
+    with pytest.raises(PostprocessHecrasError) as ei:
+        _read_depth_per_cell(hdf, allow_dry=False)
+    assert ei.value.error_code == "HECRAS_OUTPUT_EMPTY"
+
+    depth, wet, area, stats = _read_depth_per_cell(hdf, allow_dry=True)
+    assert area == "2D Interior Area"
+    assert stats["wet_cell_count"] == 0
+    assert stats["depth_max_ft"] == 0.0
+    assert stats["depth_mean_ft"] == 0.0
+    assert stats["n_cells"] == 3
+    assert not bool(wet.any())
 
 
 @pytest.mark.skipif(not _FIXTURE.exists(), reason="solved fixture absent")
@@ -182,11 +261,15 @@ def test_classify_exit_error_on_nonzero_exit(tmp_path):
 
 
 def test_solver_registered():
-    from trid3nt_server.agent.workflows.hecras.run_hecras import HECRAS_SOLVER_NAME
+    from trid3nt_server.agent.workflows.hecras.run_hecras import (
+        HECRAS_SOLVER_NAME,
+        HECRAS_LEVEE_BREACH_SOLVER_NAME,
+    )
     from trid3nt_server.agent.tools.simulation.solver.solver import (
         SOLVER_WORKFLOW_REGISTRY,
         LOCAL_SOLVER_SPEC_REGISTRY,
     )
 
-    assert HECRAS_SOLVER_NAME in SOLVER_WORKFLOW_REGISTRY
-    assert HECRAS_SOLVER_NAME in LOCAL_SOLVER_SPEC_REGISTRY
+    for name in (HECRAS_SOLVER_NAME, HECRAS_LEVEE_BREACH_SOLVER_NAME):
+        assert name in SOLVER_WORKFLOW_REGISTRY
+        assert name in LOCAL_SOLVER_SPEC_REGISTRY
