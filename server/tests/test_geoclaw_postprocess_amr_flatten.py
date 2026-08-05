@@ -146,6 +146,114 @@ def test_finest_wins_and_overland_mask_not_uniform(tmp_path, _no_io):
     assert metrics["mean_depth_m"] < metrics["max_depth_m"]
 
 
+def test_mesh_geojson_structure_levels_and_decimation():
+    """The AMR grid-line mesh: per-level patches present, honest decimation flag,
+    correct CRS, and a valid LineString FeatureCollection."""
+    from trid3nt_server.agent.workflows.geoclaw.postprocess_geoclaw import (
+        build_geoclaw_mesh_geojson,
+    )
+
+    class _P:
+        def __init__(self, level, mx, my, xlow, ylow, dx, dy):
+            self.level, self.mx, self.my = level, mx, my
+            self.xlow, self.ylow, self.dx, self.dy = xlow, ylow, dx, dy
+            self.h = None  # mesh builder never touches depth
+
+    # L1 coarse full patch (4x4 <= full-cell threshold) + L2 fine LARGE patch
+    # (200x200 > threshold) forcing the decimation branch.
+    coarse = _P(1, 4, 4, -124.24, 41.73, 0.02, 0.0125)
+    fine = _P(2, 200, 200, -124.21, 41.745, 0.00015, 0.000125)
+    fc, stats = build_geoclaw_mesh_geojson([coarse, fine], frame_no=5)
+
+    # FeatureCollection shape + CRS honesty.
+    assert fc["type"] == "FeatureCollection"
+    assert fc["metadata"]["crs"] == "EPSG:4326"
+    assert fc["metadata"]["frame_no"] == 5
+    assert fc["metadata"]["level_histogram"] == {"1": 1, "2": 1}
+    assert fc["metadata"]["max_level"] == 2
+    assert stats["patch_count"] == 2
+
+    feats = {f["properties"]["level"]: f for f in fc["features"]}
+    assert set(feats) == {1, 2}
+    for f in fc["features"]:
+        assert f["geometry"]["type"] == "MultiLineString"
+        for seg in f["geometry"]["coordinates"]:
+            assert len(seg) == 2 and len(seg[0]) == 2  # a 2-point LineString, lon/lat
+
+    # L1 coarse: FULL grid, NOT decimated -> mx+1 + my+1 = 5+5 = 10 lines.
+    assert feats[1]["properties"]["decimated"] is False
+    assert feats[1]["properties"]["sample_stride_x"] == 1
+    assert feats[1]["properties"]["n_grid_lines"] == 10
+
+    # L2 fine: DECIMATED honestly (stride > 1) and bounded (~<= 2*(sample+boundary)).
+    assert feats[2]["properties"]["decimated"] is True
+    assert feats[2]["properties"]["sample_stride_x"] > 1
+    assert feats[2]["properties"]["n_grid_lines"] < 2 * 200  # far fewer than every edge
+    assert stats["decimated_patch_count"] == 1
+    assert "sampled" in fc["metadata"]["decimation_policy"]
+
+
+def test_build_geoclaw_mesh_layer_from_fort_q(tmp_path, monkeypatch):
+    """End-to-end: parse a synthetic multi-patch fort.q frame, build + 'upload'
+    the mesh, assert the emitted LayerURI envelope (vector / mesh_grid / context /
+    crs_authid) mirrors the hecras mesh row."""
+    from trid3nt_server.agent.workflows.geoclaw import postprocess_geoclaw as PPmod
+
+    out = tmp_path / "_output"
+    out.mkdir()
+    # Two frames; the LAST (final) frame is the one the mesh reads.
+    _write_fort_q(
+        out / "fort.q0000",
+        [{"level": 1, "mx": 2, "my": 2, "xlow": -124.24, "ylow": 41.73,
+          "dx": 0.04, "dy": 0.025, "h": [[0.1, 0.1], [0.1, 0.1]]}],
+    )
+    _write_fort_q(
+        out / "fort.q0001",
+        [
+            {"level": 1, "mx": 2, "my": 2, "xlow": -124.24, "ylow": 41.73,
+             "dx": 0.04, "dy": 0.025, "h": [[0.1, 0.1], [0.1, 0.1]]},
+            {"level": 2, "mx": 4, "my": 4, "xlow": -124.21, "ylow": 41.745,
+             "dx": 0.0075, "dy": 0.00625,
+             "h": [[0.2] * 4 for _ in range(4)]},
+        ],
+    )
+
+    captured: dict = {}
+
+    class _FakeS3:
+        def put_object(self, **kw):
+            captured.update(kw)
+
+    monkeypatch.setattr(
+        "trid3nt_server.agent.tools.simulation.solver.solver._get_s3_client",
+        lambda: _FakeS3(),
+    )
+    monkeypatch.setattr(
+        "trid3nt_server.agent.tools.simulation.solver.solver._get_runs_bucket",
+        lambda: "trid3nt-runs",
+    )
+
+    layer = PPmod.build_geoclaw_mesh_layer(tmp_path, run_id="TSTMESH")
+    assert layer is not None
+    assert layer.layer_type == "vector"
+    assert layer.style_preset == "mesh_grid"
+    assert layer.role == "context"
+    assert layer.bbox is None
+    assert layer.crs_authid == "EPSG:4326"
+    assert layer.uri == "s3://trid3nt-runs/TSTMESH/mesh.geojson"
+    assert layer.layer_id == "geoclaw-mesh-TSTMESH"
+
+    # The uploaded body is a valid FeatureCollection built from the FINAL frame
+    # (2 patches, L1 + L2), correct content type.
+    import json as _json
+
+    assert captured["ContentType"] == "application/geo+json"
+    fc = _json.loads(captured["Body"].decode("utf-8"))
+    assert fc["type"] == "FeatureCollection"
+    assert fc["metadata"]["frame_no"] == 1
+    assert {f["properties"]["level"] for f in fc["features"]} == {1, 2}
+
+
 def test_rasterize_finer_dry_erases_coarse_wet():
     """Pure rasterize: a finer DRY patch cell erases the coarser WET value beneath
     it (no coarse-cell smear), and the field is not uniform."""

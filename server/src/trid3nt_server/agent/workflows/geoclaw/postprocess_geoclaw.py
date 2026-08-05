@@ -47,6 +47,7 @@ import re
 from pathlib import Path
 from typing import Any
 
+from trid3nt_contracts.execution import LayerURI
 from trid3nt_contracts.geoclaw_contracts import (
     GEOCLAW_DEFAULT_FGMAX_ARRIVAL_TOL_M,
     GEOCLAW_DEPTH_STYLE_PRESET,
@@ -82,6 +83,10 @@ __all__ = [
     "RUNS_BUCKET_DEFAULT",
     "parse_geoclaw_gauge_series",
     "build_gauge_timeseries_chart_spec",
+    "GEOCLAW_MESH_STYLE_PRESET",
+    "build_geoclaw_mesh_geojson",
+    "make_geoclaw_mesh_layer_uri",
+    "build_geoclaw_mesh_layer",
 ]
 
 #: Target GROUND resolution (metres/pixel) for the adaptive GeoClaw output
@@ -105,6 +110,23 @@ GEOCLAW_MAX_TOTAL_CELLS: int = 5_000_000
 #: point the wave never reached. The reader maps these (and any negative time)
 #: to NaN so the earliest-arrival nanmin is honest.
 _FGMAX_SENTINEL_ABS: float = 1e8
+
+#: AMR mesh (grid-line) emission. The mesh preview is the RAW GRID: every AMR
+#: patch's actual cell edges as LineStrings, all levels in ONE FeatureCollection.
+#: Refinement is self-evident (a finer patch draws a denser grid), so there is
+#: no per-level colour/weight coding -- the plugin styles it ONE colour via the
+#: ``mesh_grid`` preset. A patch with at most this many cells emits its FULL
+#: cell-edge grid; a larger/finer patch (where every edge would be megabytes)
+#: emits its boundary plus interior lines DECIMATED to a sample stride. The
+#: decimation is STATED per-feature (``decimated`` + ``sample_stride_x/y``) and
+#: in the FeatureCollection ``metadata`` (honesty floor: the preview declares
+#: where it is a faithful full grid vs a sampled one).
+GEOCLAW_MESH_STYLE_PRESET: str = "mesh_grid"
+GEOCLAW_MESH_FULL_CELLLINES_MAX_CELLS: int = 2500
+GEOCLAW_MESH_SAMPLE_LINES_PER_SIDE: int = 40
+GEOCLAW_MESH_COORD_DECIMALS: int = 7
+#: Payload guard: warn (never fail) when the serialized mesh preview exceeds this.
+GEOCLAW_MESH_PAYLOAD_SOFT_CAP_MB: float = 8.0
 
 logger = logging.getLogger("trid3nt_server.agent.workflows.geoclaw.postprocess_geoclaw")
 
@@ -737,6 +759,266 @@ def _discover_frames(out_dir: Path) -> list[tuple[int, Path, Path | None]]:
             found.append((no, p, t_path if t_path.exists() else None))
     found.sort(key=lambda x: x[0])
     return found
+
+
+# --------------------------------------------------------------------------- #
+# AMR mesh (grid-line) preview -- the RAW GRID as a first-class per-run product.
+#
+# GeoClaw's adaptive mesh lives ONLY in the fort.q per-patch headers (each patch:
+# level, mx, my, xlow, ylow, dx, dy). This turns that structure into an emitted
+# vector layer of the ACTUAL cell edges, all levels in one FeatureCollection, so
+# refinement is visible as grid DENSITY (a finer patch = a denser grid) with no
+# per-level abstraction. Pure numpy-free arithmetic -- unit-testable on a
+# synthetic patch list.
+# --------------------------------------------------------------------------- #
+def build_geoclaw_mesh_geojson(
+    patches: list[_Patch],
+    *,
+    frame_no: int | None = None,
+    full_max_cells: int = GEOCLAW_MESH_FULL_CELLLINES_MAX_CELLS,
+    sample_lines: int = GEOCLAW_MESH_SAMPLE_LINES_PER_SIDE,
+    coord_decimals: int = GEOCLAW_MESH_COORD_DECIMALS,
+) -> tuple[dict[str, Any], dict[str, Any]]:
+    """Build the RAW AMR grid-line ``FeatureCollection`` from a frame's patches.
+
+    Each AMR patch becomes ONE ``MultiLineString`` feature holding its cell-edge
+    grid lines in EPSG:4326 (``xlow``/``ylow`` are lon/lat under GeoClaw's
+    spherical ``coordinate_system=2``). All levels land in ONE collection; the
+    finer a patch, the denser its lines -- the honest, self-evident picture of
+    where the solver refined.
+
+    Decimation (STATED, never silent): a patch with at most ``full_max_cells``
+    cells emits EVERY interior cell edge (a full grid). A larger/finer patch --
+    where every edge would be megabytes -- emits its BOUNDARY (i=0, i=mx, j=0,
+    j=my always included) plus interior lines sampled at a stride that keeps ~
+    ``sample_lines`` per side. Each feature carries ``decimated`` +
+    ``sample_stride_x/y``; the FeatureCollection ``metadata`` foreign member
+    summarizes the policy + per-level histogram.
+
+    Returns ``(feature_collection, stats)``.
+    """
+    import math
+
+    def _rd(v: float) -> float:
+        return round(float(v), coord_decimals)
+
+    features: list[dict[str, Any]] = []
+    total_lines = 0
+    total_vertices = 0
+    level_hist: dict[int, int] = {}
+    decimated_patches = 0
+
+    for gi, p in enumerate(sorted(patches, key=lambda q: q.level), start=1):
+        mx, my = int(p.mx), int(p.my)
+        if mx <= 0 or my <= 0 or p.dx <= 0 or p.dy <= 0:
+            continue
+        x0, y0 = float(p.xlow), float(p.ylow)
+        x1 = x0 + mx * float(p.dx)
+        y1 = y0 + my * float(p.dy)
+        n_cells = mx * my
+        decimate = n_cells > full_max_cells
+        if decimate:
+            sx = max(1, math.ceil(mx / max(sample_lines, 1)))
+            sy = max(1, math.ceil(my / max(sample_lines, 1)))
+            decimated_patches += 1
+        else:
+            sx = sy = 1
+        # Line indices: sampled stride ALWAYS unioned with the boundary (0, mx/my)
+        # so a decimated patch still draws its full outline.
+        xi = sorted(set(range(0, mx + 1, sx)) | {0, mx})
+        yj = sorted(set(range(0, my + 1, sy)) | {0, my})
+        segs: list[list[list[float]]] = []
+        for i in xi:  # vertical lines (constant lon), south->north
+            lon = _rd(x0 + i * float(p.dx))
+            segs.append([[lon, _rd(y0)], [lon, _rd(y1)]])
+        for j in yj:  # horizontal lines (constant lat), west->east
+            lat = _rd(y0 + j * float(p.dy))
+            segs.append([[_rd(x0), lat], [_rd(x1), lat]])
+        n_lines = len(segs)
+        total_lines += n_lines
+        total_vertices += 2 * n_lines
+        level_hist[int(p.level)] = level_hist.get(int(p.level), 0) + 1
+        features.append(
+            {
+                "type": "Feature",
+                "geometry": {"type": "MultiLineString", "coordinates": segs},
+                "properties": {
+                    "grid_number": gi,
+                    "level": int(p.level),
+                    "mx": mx,
+                    "my": my,
+                    "cell_dx_deg": _rd(p.dx),
+                    "cell_dy_deg": _rd(p.dy),
+                    "n_grid_lines": n_lines,
+                    "decimated": bool(decimate),
+                    "sample_stride_x": int(sx),
+                    "sample_stride_y": int(sy),
+                },
+            }
+        )
+
+    max_level = max(level_hist) if level_hist else 0
+    level_hist_str = {str(k): v for k, v in sorted(level_hist.items())}
+    metadata = {
+        "kind": "geoclaw_amr_gridlines",
+        "frame_no": frame_no,
+        "crs": "EPSG:4326",
+        "patch_count": len(features),
+        "level_histogram": level_hist_str,
+        "max_level": max_level,
+        "total_grid_lines": total_lines,
+        "total_vertices": total_vertices,
+        "decimated_patch_count": decimated_patches,
+        "decimation_policy": (
+            f"patches with <= {full_max_cells} cells emit every cell edge (full "
+            f"grid); larger patches emit their boundary plus interior lines "
+            f"sampled to ~{sample_lines} per side (per-feature 'decimated' + "
+            f"sample_stride_x/y). Grid density IS the AMR refinement, unabstracted."
+        ),
+    }
+    fc = {"type": "FeatureCollection", "features": features, "metadata": metadata}
+    stats = {
+        "patch_count": len(features),
+        "max_level": max_level,
+        "total_grid_lines": total_lines,
+        "total_vertices": total_vertices,
+        "decimated_patch_count": decimated_patches,
+        "level_histogram": level_hist_str,
+        "frame_no": frame_no,
+    }
+    return fc, stats
+
+
+def make_geoclaw_mesh_layer_uri(
+    fc: dict[str, Any],
+    mesh_stats: dict[str, Any],
+    *,
+    run_id: str,
+    runs_bucket: str | None = None,
+) -> LayerURI | None:
+    """Upload the AMR grid-line ``FeatureCollection`` to S3, return a LayerURI.
+
+    Mirrors ``make_hecras_mesh_layer_uri``: writes ``mesh.geojson`` to the durable
+    runs bucket at ``s3://<runs_bucket>/<run_id>/mesh.geojson`` and returns a
+    ``style_preset="mesh_grid"``, ``role="context"``, ``bbox=None`` vector LayerURI
+    (the mesh must not fight the flood camera) carrying ``crs_authid="EPSG:4326"``
+    (ADR 0118). Grid lines are a LineString FeatureCollection, so the renderable
+    QGIS type is a VECTOR (QgsVectorLayer draws the raw black grid); the row still
+    rides the mesh-preview protocol (mesh_grid preset + context role + crs_authid).
+
+    Best-effort: ``None`` on an empty FC or an S3 fault (a missing mesh preview
+    never voids the depth result). SYNC boto3 put -- wrap in ``asyncio.to_thread``.
+    """
+    import json as _json
+
+    features = fc.get("features") or []
+    if not features:
+        return None
+    body = _json.dumps(fc, separators=(",", ":")).encode("utf-8")
+    payload_mb = len(body) / 1_000_000.0
+    mesh_stats["payload_mb"] = round(payload_mb, 4)
+    if payload_mb > GEOCLAW_MESH_PAYLOAD_SOFT_CAP_MB:
+        logger.warning(
+            "geoclaw mesh preview is large (%.2f MB, %d grid lines) run_id=%s -- "
+            "emitting anyway (decimation already applied per-patch)",
+            payload_mb,
+            int(mesh_stats.get("total_grid_lines", 0) or 0),
+            run_id,
+        )
+    try:
+        from trid3nt_server.agent.tools.simulation.solver.solver import (
+            _get_runs_bucket,
+            _get_s3_client,
+        )
+
+        bucket = runs_bucket or _get_runs_bucket()
+        key = f"{run_id}/mesh.geojson"
+        _get_s3_client().put_object(
+            Bucket=bucket,
+            Key=key,
+            Body=body,
+            ContentType="application/geo+json",
+        )
+        s3_uri = f"s3://{bucket}/{key}"
+    except Exception as exc:  # noqa: BLE001 -- best-effort mesh preview
+        logger.warning(
+            "make_geoclaw_mesh_layer_uri: mesh.geojson S3 upload failed (non-fatal, "
+            "run_id=%s): %s",
+            run_id,
+            exc,
+        )
+        return None
+
+    max_level = int(mesh_stats.get("max_level", 0) or 0)
+    n_lines = int(mesh_stats.get("total_grid_lines", 0) or 0)
+    return LayerURI(
+        layer_id=f"geoclaw-mesh-{run_id}",
+        name=f"Computational mesh (AMR L1-L{max_level}, {n_lines} grid lines)",
+        layer_type="vector",
+        uri=s3_uri,
+        style_preset=GEOCLAW_MESH_STYLE_PRESET,
+        role="context",
+        bbox=None,
+        crs_authid="EPSG:4326",
+    )
+
+
+def build_geoclaw_mesh_layer(
+    out_dir: str | Path,
+    *,
+    run_id: str,
+    runs_bucket: str | None = None,
+    frame_no: int | None = None,
+) -> LayerURI | None:
+    """Build + upload the AMR grid-line mesh preview from a solved run's fort.q.
+
+    Reads the PEAK-relevant frame -- ``frame_no`` when given, else the LAST/final
+    frame (a pinned AMR window persists across every frame, so the final frame
+    faithfully shows the user's refinement) -- parses its patch structure, builds
+    the grid-line FeatureCollection, and uploads it as ``mesh.geojson``.
+
+    The ONE shared seam every GeoClaw inundation template rides (all templates
+    dispatch through ``model_geoclaw_inundation``). Best-effort: returns ``None``
+    on ANY failure (a missing mesh preview never voids the depth result).
+    """
+    try:
+        out = Path(out_dir)
+        frames = _discover_frames(out)
+        if not frames:
+            return None
+        if frame_no is not None:
+            chosen = next((f for f in frames if f[0] == frame_no), frames[-1])
+        else:
+            chosen = frames[-1]
+        _no, q_path, _t = chosen
+        patches = parse_fort_q_frame(q_path.read_text(errors="replace"))
+        if not patches:
+            return None
+        fc, stats = build_geoclaw_mesh_geojson(patches, frame_no=_no)
+        layer = make_geoclaw_mesh_layer_uri(
+            fc, stats, run_id=run_id, runs_bucket=runs_bucket
+        )
+        if layer is not None:
+            logger.info(
+                "build_geoclaw_mesh_layer run_id=%s frame_no=%d patches=%d "
+                "max_level=%d grid_lines=%d vertices=%d payload_mb=%.3f uri=%s",
+                run_id,
+                _no,
+                stats["patch_count"],
+                stats["max_level"],
+                stats["total_grid_lines"],
+                stats["total_vertices"],
+                float(stats.get("payload_mb", 0.0) or 0.0),
+                layer.uri,
+            )
+        return layer
+    except Exception as exc:  # noqa: BLE001 -- mesh preview is NEVER fatal
+        logger.warning(
+            "build_geoclaw_mesh_layer failed (non-fatal, run_id=%s): %s",
+            run_id,
+            exc,
+        )
+        return None
 
 
 # --------------------------------------------------------------------------- #

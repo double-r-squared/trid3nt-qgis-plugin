@@ -55,6 +55,7 @@ from trid3nt_server.agent.workflows.geoclaw.postprocess_geoclaw import (
     GEOCLAW_TARGET_GROUND_RES_M,
     PostprocessGeoClawError,
     build_gauge_timeseries_chart_spec,
+    build_geoclaw_mesh_layer,
     compute_geoclaw_grid_shape,
     parse_geoclaw_gauge_series,
     postprocess_geoclaw,
@@ -71,7 +72,7 @@ from trid3nt_server.agent.workflows.geoclaw.run_geoclaw import (
     stage_geoclaw_manifest,
 )
 from trid3nt_server.agent.workflows.shared.solve_progress import drive_live_solve_progress
-from trid3nt_server.emission.layer_uri_emit import emit_layer_uri
+from trid3nt_server.emission.layer_uri_emit import emit_layer_uri, publish_input_layer
 from trid3nt_server.emission.pipeline_emitter import (
     begin_substeps,
     current_emitter,
@@ -1246,6 +1247,7 @@ async def model_geoclaw_inundation(
     # unmasked total-depth (same as before this fix).
     mask_ocean = run_args.scenario in _GEOCLAW_OCEAN_MASK_SCENARIOS
     topo_grid = None
+    mesh_layer: LayerURI | None = None
     if mask_ocean:
         topo_grid = await asyncio.to_thread(
             _rasterize_topo_to_depth_grid,
@@ -1293,6 +1295,15 @@ async def model_geoclaw_inundation(
                 logger.warning(
                     "model_geoclaw_inundation: gauge parse failed (non-fatal): %s", exc
                 )
+
+        # --- AMR mesh preview (the RAW GRID as a first-class product) ---------
+        # Parse the peak-relevant (final) fort.q frame's AMR patch structure into
+        # a grid-line FeatureCollection and upload it as mesh.geojson. One shared
+        # seam every GeoClaw inundation template rides. Best-effort: a None mesh
+        # never voids the depth result. Built BEFORE the out_dir cleanup below.
+        mesh_layer = await asyncio.to_thread(
+            build_geoclaw_mesh_layer, out_dir, run_id=staging.run_id
+        )
     finally:
         if cleanup_outputs:
             _cleanup_dir(out_dir)
@@ -1321,6 +1332,13 @@ async def model_geoclaw_inundation(
 
     # --- Step 6b: publish + emit the per-frame animation layers OUT-OF-BAND --
     emitted_frames = await _emit_frame_layers(emitter, frame_layers, staging.run_id)
+
+    # --- Step 6c: surface the AMR mesh preview (raw grid, role="context") -----
+    # The mesh rides the reusable input/context seam (publish_input_layer): a
+    # vector s3:// geojson passes the emission guardrail untouched and carries its
+    # crs_authid onto the WS row. Never fatal (the depth answer stands regardless).
+    if mesh_layer is not None:
+        await publish_input_layer(emitter, mesh_layer, role="context")
 
     # --- Coastal gauge surface-elevation chart (the gauge-timeseries template) ---
     if emit_gauge_series and gauge_series is not None:
