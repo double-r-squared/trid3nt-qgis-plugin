@@ -788,6 +788,12 @@ from ..workflows.pelicun.closed_form_validation.closed_form_validation import pe
 from ..workflows.pelicun.mixed_fragility_loss.mixed_fragility_loss import pelicun_mixed_fragility_loss_assessment as _pelicun_mixed_fragility_loss_assessment  # noqa: E402,F401 - mixed fragility+loss-function assessment + EDP correlation spread
 from ..workflows.pelicun.replacement_threshold_sweep.replacement_threshold_sweep import pelicun_replacement_threshold_override_sweep as _pelicun_replacement_threshold_override_sweep  # noqa: E402,F401 - RID-triggered irreparable/replacement threshold sweep (RID inferred from PID)
 from ..workflows.pelicun.flood_foundation_depth_damage.flood_foundation_depth_damage import pelicun_flood_foundation_depth_damage_sweep as _pelicun_flood_foundation_depth_damage_sweep  # noqa: E402,F401 - HAZUS flood depth-damage curve sensitivity to foundation type
+# pelicun DL_calculation-driven TEMPLATES (engine="pelicun", tier="template") on
+# the _dl_calculation CLI harness (tempdir + serialized cwd + to_thread): a full
+# HAZUS earthquake building DL run (auto-populated building type) and the HAZUS EQ
+# v5.1-vs-v6.1 dataset comparison.
+from ..workflows.pelicun.hazus_seismic_dl_run.hazus_seismic_dl_run import pelicun_hazus_seismic_dl_run as _pelicun_hazus_seismic_dl_run  # noqa: E402,F401 - HAZUS earthquake building DL_calculation run with auto-populated building type
+from ..workflows.pelicun.hazus_eq_version_comparison.hazus_eq_version_comparison import pelicun_hazus_eq_version_comparison as _pelicun_hazus_eq_version_comparison  # noqa: E402,F401 - HAZUS earthquake v5.1-vs-v6.1 damage/loss dataset comparison
 
 
 # the 12-category registry + the two meta-tools

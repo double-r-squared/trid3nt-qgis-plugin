@@ -280,6 +280,10 @@ PRIMARY_CATEGORY: dict[str, str] = {
     "pelicun_mixed_fragility_loss_assessment": "damage_assessment",
     "pelicun_replacement_threshold_override_sweep": "damage_assessment",
     "pelicun_flood_foundation_depth_damage_sweep": "damage_assessment",
+    # pelicun DL_calculation-driven templates: full HAZUS EQ building DL run
+    # (auto-populated building type) + HAZUS EQ v5.1-vs-v6.1 dataset comparison.
+    "pelicun_hazus_seismic_dl_run": "damage_assessment",
+    "pelicun_hazus_eq_version_comparison": "damage_assessment",
     "geoclaw_inundation": "hazard_modeling",
     "openquake_psha": "hazard_modeling",
     # real-fault seismic-source fetcher: the OpenQuake PSHA input data fetcher
