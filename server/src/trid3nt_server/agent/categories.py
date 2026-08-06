@@ -318,6 +318,7 @@ PRIMARY_CATEGORY: dict[str, str] = {
     "hecras_flood_2d": "hazard_modeling",
     "schism_tidal_hydro": "hazard_modeling",
     "schism_coupled_waves": "hazard_modeling",
+    "schism_transport_validation": "hazard_modeling",
     # The case-layer ingest seams (register_case_layer / ingest_user_layer)
     # are DEREGISTERED (their functions serve the /api/ingest-layer HTTP route
     # directly, not the LLM catalog), so they carry

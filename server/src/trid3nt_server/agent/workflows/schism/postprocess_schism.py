@@ -47,6 +47,8 @@ __all__ = [
     "read_out2d_elevation",
     "read_out2d_waves",
     "read_station_series",
+    "read_transport_temperature",
+    "compare_transport_schemes",
     "verify_against_analytical",
     "verify_cross_shore_waves",
     "SCHISM_TARGET_GROUND_RES_M",
@@ -411,6 +413,132 @@ def verify_against_analytical(
     except Exception as exc:  # noqa: BLE001
         logger.warning("schism analytical verification failed (non-fatal): %s", exc)
         return None
+
+
+# --------------------------------------------------------------------------- #
+# transport-scheme validation (ADR 0156): numerical-mixing + mass conservation.
+# --------------------------------------------------------------------------- #
+def read_transport_temperature(temp_nc_path: str | Path) -> dict[str, Any]:
+    """Read the scribed ``temperature`` netCDF into per-time mixing/mass series.
+
+    The transport deck advects a temperature FRONT (a conservative scalar) and
+    scribes ``temperature`` (time, node, layer). Returns the plain-arithmetic
+    signals the scheme contrast is built from (invariant 1):
+
+        ``t_hr``: (T,) output times in hours.
+        ``variance``: (T,) domain SPATIAL variance of the depth-mean node field at
+            each step -- a sharp front has high variance; numerical mixing decays
+            it. ``variance[0]`` is the initial front variance.
+        ``mass``: (T,) domain-mean temperature at each step (a mass proxy for the
+            conservative scalar; drift measures conservation).
+        ``t_min`` / ``t_max``: (T,) domain min/max of the depth-mean field (bounds
+            preservation -- upwind is monotone, an unlimited scheme overshoots).
+        ``node_final`` / ``node_x`` / ``node_y``: the depth-mean field at run end +
+            node coords (for the front-profile proof).
+
+    Raises ``SCHISM_OUTPUT_EMPTY`` when temperature is absent / all non-finite.
+    """
+    import numpy as np
+    from netCDF4 import Dataset  # lazy
+
+    with Dataset(str(temp_nc_path), "r") as ds:
+        if "temperature" not in ds.variables:
+            raise PostprocessSchismError(
+                SCHISM_OUTPUT_EMPTY,
+                f"transport netCDF missing 'temperature' (have {list(ds.variables)[:12]})",
+            )
+        temp = np.asarray(ds.variables["temperature"][:], dtype=np.float64)
+        t = (
+            np.asarray(ds.variables["time"][:], dtype=np.float64).ravel()
+            if "time" in ds.variables else np.arange(temp.shape[0], dtype=float)
+        )
+    temp = np.where(np.isfinite(temp) & (np.abs(temp) < 1.0e6), temp, np.nan)
+    if temp.ndim == 2:  # (time, node) -- single layer
+        temp = temp[:, :, None]
+    # depth-mean per node per step -> (time, node)
+    with np.errstate(all="ignore"):
+        node_field = np.nanmean(temp, axis=2)
+    finite_any = np.isfinite(node_field).any()
+    if not finite_any:
+        raise PostprocessSchismError(
+            SCHISM_OUTPUT_EMPTY, "transport temperature is entirely non-finite (empty solve)"
+        )
+    with np.errstate(all="ignore"):
+        variance = np.nanvar(node_field, axis=1)
+        # mass proxy = full-field mean over all nodes AND layers (conservative)
+        mass = np.array([np.nanmean(temp[k]) for k in range(temp.shape[0])])
+        t_min = np.nanmin(node_field, axis=1)
+        t_max = np.nanmax(node_field, axis=1)
+    return {
+        "t_hr": (t - t[0]) / 3600.0 if t.size else t,
+        "variance": variance,
+        "mass": mass,
+        "t_min": t_min,
+        "t_max": t_max,
+        "node_final": node_field[-1],
+        "n_times": int(node_field.shape[0]),
+        "n_nodes": int(node_field.shape[1]),
+        "n_layers": int(temp.shape[2]),
+    }
+
+
+def compare_transport_schemes(
+    tvd: dict[str, Any],
+    upwind: dict[str, Any],
+    *,
+    t_hot: float,
+    t_cold: float,
+    mass_drift_tol_pct: float = 3.0,
+) -> dict[str, Any]:
+    """Contrast a TVD vs upwind transport run into the mixing + conservation metrics.
+
+    Both dicts come from ``read_transport_temperature``. Plain arithmetic only
+    (invariant 1). Returns the scalars the ``SchismTransportValidationResult`` cites
+    plus the two chart series. Acceptance (``validated``): upwind must lose STRICTLY
+    more front variance than TVD (the numerical-mixing signature) AND both mass
+    drifts stay within ``mass_drift_tol_pct`` (the conservative-tracer sanity gate).
+    """
+    import numpy as np
+
+    def _retained_pct(d: dict[str, Any]) -> float:
+        v0 = float(d["variance"][0])
+        vN = float(d["variance"][-1])
+        return 100.0 * vN / v0 if v0 > 0 else float("nan")
+
+    def _mass_drift_pct(d: dict[str, Any]) -> float:
+        m0 = float(d["mass"][0])
+        mN = float(d["mass"][-1])
+        return 100.0 * (mN - m0) / m0 if m0 != 0 else float("nan")
+
+    tvd_ret = _retained_pct(tvd)
+    up_ret = _retained_pct(upwind)
+    tvd_drift = _mass_drift_pct(tvd)
+    up_drift = _mass_drift_pct(upwind)
+    # excess mixing: how many times more variance upwind lost vs TVD.
+    tvd_lost = max(0.0, 100.0 - tvd_ret)
+    up_lost = max(0.0, 100.0 - up_ret)
+    excess = (up_lost / tvd_lost) if tvd_lost > 1e-9 else float("nan")
+    tvd_over = float(np.nanmax(tvd["t_max"]) - t_hot)
+    up_over = float(np.nanmax(upwind["t_max"]) - t_hot)
+
+    validated = bool(
+        np.isfinite(up_ret) and np.isfinite(tvd_ret) and up_ret < tvd_ret
+        and abs(tvd_drift) <= mass_drift_tol_pct
+        and abs(up_drift) <= mass_drift_tol_pct
+    )
+    return {
+        "tvd_variance_retained_pct": round(tvd_ret, 3),
+        "upwind_variance_retained_pct": round(up_ret, 3),
+        "excess_mixing_factor": (round(excess, 3) if np.isfinite(excess) else None),
+        "tvd_mass_drift_pct": round(tvd_drift, 4),
+        "upwind_mass_drift_pct": round(up_drift, 4),
+        "tvd_overshoot_c": round(tvd_over, 4),
+        "upwind_overshoot_c": round(up_over, 4),
+        "validated": validated,
+        "mass_drift_tol_pct": mass_drift_tol_pct,
+        "front_hot_c": t_hot,
+        "front_cold_c": t_cold,
+    }
 
 
 # --------------------------------------------------------------------------- #

@@ -47,6 +47,7 @@ EXPECTED_TEMPLATES = {
     "hecras_flood_2d",  # engine #11 third archetype (ADR 0140): HEC-RAS fresh-AOI 2D flood (headless-authored geometry from a fetched DEM)
     "schism_tidal_hydro",  # engine #12 (ADR 0118): SCHISM barotropic tidal template
     "schism_coupled_waves",  # engine #12 second archetype (ADR 0131): SCHISM+WWM+GOTM coupled-wave template (Duck FRF)
+    "schism_transport_validation",  # SCHISM CAND-S (ADR 0156): transport-scheme numerical-mixing + mass-conservation V&V (Test_HeatConsv / Test_GEN_MassConsv)
     "swan_wave_field",
     "swan_physics_sensitivity_sweep",  # SWAN CAND-S: physics-scheme A-vs-B sensitivity sweep
     "swan_stationary_snapshot_batch",  # SWAN CAND-S: batch of stationary snapshots sampling a storm event (MODE)

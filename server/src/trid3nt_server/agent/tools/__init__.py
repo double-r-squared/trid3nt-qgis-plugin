@@ -695,6 +695,11 @@ from ..workflows.schism.tidal_hydro.tidal_hydro import schism_tidal_hydro as _sc
 # pschism_WWM_GOTM_TVD-VL variant). The composer chain (model_schism_coupled_waves)
 # is inlined in the template module.
 from ..workflows.schism.coupled_waves.coupled_waves import schism_coupled_waves as _schism_coupled_waves  # noqa: E402,F401 - engine #12 second archetype (engine=schism, tier=template)
+# schism_transport_validation TEMPLATE (engine="schism", tier="template"), ADR 0156
+# SCHISM CAND-S: transport-scheme numerical-mixing V&V (Test_HeatConsv upwind-vs-TVD
+# + Test_GEN_MassConsv conservative-tracer mass conservation) on the hydro-core
+# binary; the composer chain (model_schism_transport_validation) is inlined.
+from ..workflows.schism.transport_validation.transport_validation import schism_transport_validation as _schism_transport_validation  # noqa: E402,F401 - ADR 0156 SCHISM CAND-S transport V&V (engine=schism, tier=template)
 # geoclaw_inundation TEMPLATE (engine="geoclaw", tier="template"), one folder
 # under workflows/geoclaw/inundation/; EXCLUDED from the default retrieval
 # pool, surfaced only by the run_geoclaw door's gate expansion. The composer

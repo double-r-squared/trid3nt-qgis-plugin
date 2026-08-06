@@ -39,6 +39,7 @@ __all__ = [
     "SchismDeckError",
     "quarterannulus_fixture_dir",
     "stage_quarterannulus_deck",
+    "stage_transport_scheme_deck",
     "wwm_duck_fixture_dir",
     "stage_wwm_duck_deck",
     "load_gr3_bridge",
@@ -224,6 +225,146 @@ def stage_wwm_duck_deck(
     shutil.copy(src / "hgrid.gr3", hgrid_wwm)
     out.append(hgrid_wwm)
     return out, 4, 4
+
+
+#: The transport-validation deck reuses the QA mesh + boundary but adds a live
+#: baroclinic tracer (temperature) so the transport solver actually runs. The
+#: hydro-core binary freezes T/S in barotropic mode (ibc=1), so the front needs
+#: ibc=0 + a 3D vgrid; the scheme is toggled by tvd.prop alone (identical flow).
+_TRANSPORT_VGRID_3D: str = (
+    "2 !ivcor\n5 1 1.e6 !nvrt, kz, h_s\nZ levels\n1 -1.e6\nS levels\n"
+    "40. 1. 1.e-4 !h_c, theta_b, theta_f\n"
+    "1 -1.\n2 -0.75\n3 -0.5\n4 -0.25\n5 0.\n"
+)
+#: SCHISM output vars the transport deck scribes (elevation, depth-avg vel,
+#: surface T, T@prism, salinity) -> nscribe must be >= this count.
+TRANSPORT_SCHEME_NSCRIBE: int = 6
+TRANSPORT_SCHEME_NLAYERS: int = 5
+
+
+def _read_gr3_nodes(gr3_text: str) -> tuple[int, int, list[tuple[float, float]]]:
+    """Parse ``(n_elem, n_node, [(x, y), ...])`` from an hgrid.gr3 string."""
+    lines = gr3_text.splitlines()
+    n_elem, n_node = (int(v) for v in lines[1].split()[:2])
+    nodes = [
+        (float(lines[2 + i].split()[1]), float(lines[2 + i].split()[2]))
+        for i in range(n_node)
+    ]
+    return n_elem, n_node, nodes
+
+
+def _patch_transport_param(
+    qa_param_text: str, *, sim_days: float, dt_s: float
+) -> str:
+    """Reuse the QA param.nml, switching to a baroclinic tracer-transport run.
+
+    ibc=0 (baroclinic -> temperature is a LIVE transported tracer, not frozen),
+    itr_met=3 (horizontal TVD; the per-element tvd.prop toggles TVD vs upwind),
+    h_tvd=5 (TVD active where flagged), temperature + salinity initialized from
+    the staged temp.ic / salt.ic (flag_ic(1:2)=1), and elevation + T outputs on.
+    One output stack (ihfskip = nsteps). No forcing legs beyond the baked M2
+    boundary that drives the advecting current.
+    """
+    import re
+
+    nsteps = int(math.ceil(sim_days * 86400.0 / dt_s))
+    hourly = max(1, int(round(3600.0 / dt_s)))
+
+    def sub(pat: str, repl: str, t: str) -> str:
+        return re.sub(pat, repl, t, count=1, flags=re.M)
+
+    t = qa_param_text
+    t = sub(r"^(\s*rnday\s*=\s*)\S+", rf"\g<1>{sim_days:g}", t)
+    t = sub(r"^(\s*dt\s*=\s*)\S+", rf"\g<1>{dt_s:g}.", t)
+    t = sub(r"^(\s*ibc\s*=\s*)\S+", r"\g<1>0", t)  # baroclinic: live tracer
+    t = sub(r"^(\s*dramp\s*=\s*)\S+", r"\g<1>0.1", t)
+    t = sub(r"^(\s*drampbc\s*=\s*)\S+", r"\g<1>0.", t)
+    t = sub(r"^(\s*itr_met\s*=\s*)\S+", r"\g<1>3", t)
+    t = sub(r"^(\s*h_tvd\s*=\s*)\S+", r"\g<1>5", t)
+    t = sub(r"^(\s*ihfskip\s*=\s*)\S+", rf"\g<1>{nsteps}", t)
+    t = sub(r"^(\s*nspool\s*=\s*)\S+", rf"\g<1>{hourly}", t)
+    t = sub(r"^(\s*nspool_sta\s*=\s*)\S+", rf"\g<1>{hourly}", t)
+    t = sub(r"^(\s*flag_ic\(1\)\s*=\s*)\S+", r"\g<1>1", t)
+    t = sub(r"^(\s*flag_ic\(2\)\s*=\s*)\S+", r"\g<1>1", t)
+    t = sub(r"^(\s*iof_hydro\(18\)\s*=\s*)\S+", r"\g<1>1", t)  # surface T
+    t = sub(r"^(\s*iof_hydro\(29\)\s*=\s*)\S+", r"\g<1>1", t)  # T @ prism
+    t = sub(r"^(\s*iof_hydro\(19\)\s*=\s*)\S+", r"\g<1>1", t)  # salinity
+    return t
+
+
+def stage_transport_scheme_deck(
+    dest_dir: str | Path,
+    *,
+    scheme: str,
+    sim_days: float = 2.0,
+    dt_s: float = 300.0,
+    t_hot: float = 20.0,
+    t_cold: float = 10.0,
+) -> dict[str, Any]:
+    """Author a heat-front transport deck on the QA mesh for ONE transport scheme.
+
+    Stages the QuarterAnnulus mesh + M2 boundary + drag + station verbatim, adds a
+    3D pure-sigma vgrid (so the baroclinic transport solver runs), a temperature
+    FRONT initial condition (temp.ic: ``t_hot`` where x < x_mid, ``t_cold``
+    otherwise), a uniform salt.ic, and a per-element ``tvd.prop`` that toggles the
+    scheme: ``scheme="tvd"`` -> all 1 (TVD^2 limiter active), ``scheme="upwind"``
+    -> all 0 (first-order upwind everywhere). Both runs share the identical mesh /
+    boundary / flow, so the scheme is the ONLY difference. Returns
+    ``{"files": [...], "n_nodes", "n_elements", "n_layers", "x_mid", "t_hot",
+    "t_cold", "nscribe"}``.
+    """
+    from trid3nt_contracts.schism_contracts import SCHISM_TRANSPORT_SCHEMES
+
+    if scheme not in SCHISM_TRANSPORT_SCHEMES:
+        raise SchismDeckError(
+            "SCHISM_INPUT_INVALID",
+            f"scheme must be one of {SCHISM_TRANSPORT_SCHEMES}, got {scheme!r}",
+        )
+    dest_dir = Path(dest_dir)
+    dest_dir.mkdir(parents=True, exist_ok=True)
+    qa = quarterannulus_fixture_dir()
+
+    for name in ("hgrid.gr3", "bctides.in", "drag.gr3", "station.in"):
+        shutil.copy(qa / name, dest_dir / name)
+
+    gr3_text = (qa / "hgrid.gr3").read_text(encoding="utf-8")
+    n_elem, n_node, nodes = _read_gr3_nodes(gr3_text)
+    xs = [x for x, _ in nodes]
+    x_mid = 0.5 * (min(xs) + max(xs))
+
+    (dest_dir / "vgrid.in").write_text(_TRANSPORT_VGRID_3D, encoding="utf-8")
+
+    tvd_flag = 1 if scheme == "tvd" else 0
+    (dest_dir / "tvd.prop").write_text(
+        "".join(f"{e + 1} {tvd_flag}\n" for e in range(n_elem)), encoding="utf-8"
+    )
+
+    temp_lines = [f"temp front IC ({scheme})", f"{n_elem} {n_node}"]
+    salt_lines = [f"salt IC ({scheme}, uniform)", f"{n_elem} {n_node}"]
+    for i, (x, y) in enumerate(nodes):
+        tval = t_hot if x < x_mid else t_cold
+        temp_lines.append(f"{i + 1} {x:.6f} {y:.6f} {tval:.4f}")
+        salt_lines.append(f"{i + 1} {x:.6f} {y:.6f} 0.0000")
+    (dest_dir / "temp.ic").write_text("\n".join(temp_lines) + "\n", encoding="utf-8")
+    (dest_dir / "salt.ic").write_text("\n".join(salt_lines) + "\n", encoding="utf-8")
+
+    param_text = _patch_transport_param(
+        (qa / "param.nml").read_text(encoding="utf-8"), sim_days=sim_days, dt_s=dt_s
+    )
+    (dest_dir / "param.nml").write_text(param_text, encoding="utf-8")
+
+    files = [
+        dest_dir / n
+        for n in (
+            "hgrid.gr3", "vgrid.in", "param.nml", "bctides.in", "drag.gr3",
+            "station.in", "temp.ic", "salt.ic", "tvd.prop",
+        )
+    ]
+    return {
+        "files": files, "n_nodes": n_node, "n_elements": n_elem,
+        "n_layers": TRANSPORT_SCHEME_NLAYERS, "x_mid": x_mid,
+        "t_hot": t_hot, "t_cold": t_cold, "nscribe": TRANSPORT_SCHEME_NSCRIBE,
+    }
 
 
 def load_gr3_bridge() -> Any:

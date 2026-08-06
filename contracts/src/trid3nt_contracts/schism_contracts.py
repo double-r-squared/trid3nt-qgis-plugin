@@ -33,11 +33,11 @@ SCREENING use ``sfincs_flood``; SCHISM is the refinement-grade cross-scale core.
 
 from __future__ import annotations
 
-from typing import Literal
+from typing import Any, Literal
 
 from pydantic import Field, field_validator
 
-from .common import GraceModel
+from .common import GraceModel, SyntheticInput
 from .execution import LayerURI
 
 __all__ = [
@@ -46,9 +46,11 @@ __all__ = [
     "SCHISMRunArgs",
     "SchismElevationLayerURI",
     "SchismWaveLayerURI",
+    "SchismTransportValidationResult",
     "SCHISM_ARCHETYPES",
     "SCHISM_MESH_SOURCES",
     "SCHISM_CONSTITUENTS",
+    "SCHISM_TRANSPORT_SCHEMES",
     "SCHISM_ERROR_CODES",
     "SCHISM_SOLVE_FAILED",
     "SCHISM_MESH_INVALID",
@@ -84,6 +86,12 @@ SCHISM_MESH_SOURCES: tuple[str, ...] = ("bundled_quarterannulus", "coastal_tin")
 #: 8; v1 defaults to M2, the dominant semidiurnal). A per-constituent amplitude +
 #: phase is authored into ``bctides.in`` at the open boundary nodes.
 SCHISM_CONSTITUENTS: tuple[str, ...] = ("M2", "S2", "N2", "K2", "K1", "O1", "P1", "Q1")
+
+#: The transport-scheme settings the transport-validation template contrasts, both
+#: driven through the SAME ``itr_met=3`` code path on the hydro-core binary via the
+#: per-element ``tvd.prop`` flag (1 -> TVD^2 limiter active; 0 -> first-order upwind
+#: everywhere). The published Test_HeatConsv_TVD / Test_HeatConsv_Upwind pair.
+SCHISM_TRANSPORT_SCHEMES: tuple[str, ...] = ("tvd", "upwind")
 
 # --- typed error codes (open-set A.6 surface) ------------------------------- #
 #: The SCHISM solve failed: the "Run completed successfully" sentinel was never
@@ -293,3 +301,79 @@ class SchismWaveLayerURI(LayerURI):
     vv_offshore_hs_obs_m: float | None = Field(default=None, ge=0.0)
     vv_offshore_hs_mod_m: float | None = Field(default=None, ge=0.0)
     vv_tp_rmse_s: float | None = Field(default=None, ge=0.0)
+
+
+class SchismTransportValidationResult(GraceModel):
+    """Typed result of a SCHISM transport-scheme numerical-mixing V&V (ADR 0156).
+
+    NOT a ``LayerURI``: the case advects a temperature FRONT (a conservative scalar)
+    across the idealized QuarterAnnulus tidal channel TWICE on the hydro-core binary
+    -- once with the TVD^2 limiter active (per-element ``tvd.prop=1``) and once with
+    first-order upwind everywhere (``tvd.prop=0``) -- through the identical flow, so
+    the difference isolates the transport scheme's NUMERICAL MIXING. The mesh is
+    schematic (planar, non-georeferenced), so the product is the scheme-contrast
+    CHART + typed scalars, never a georeferenced map. Every number is plain
+    arithmetic off the scribed ``temperature`` netCDF (invariant 1). Covers the two
+    published Test_HeatConsv_* / Test_GEN_MassConsv verification questions in one
+    run pair (the GEN module-specific path is full-monty-only -- documented, not
+    run here).
+
+    Fields:
+        question: the one-line question answered.
+        n_nodes / n_elements / n_layers: the SCHISM grid size (modeled domain).
+        sim_days: the run length (days).
+        front_t_hot_c / front_t_cold_c: the injected temperature-front end values
+            (deg C) -- the conservative scalar's initial min/max.
+        tvd_variance_retained_pct: fraction (percent) of the initial tracer spatial
+            VARIANCE the TVD run still holds at run end -- higher = sharper front,
+            less numerical mixing.
+        upwind_variance_retained_pct: same for the first-order upwind run (lower --
+            upwind is more numerically diffusive).
+        excess_mixing_factor: how many times MORE variance the upwind scheme lost
+            vs TVD (``(1 - upwind_frac) / (1 - tvd_frac)``) -- the headline mixing
+            contrast (>1 means upwind mixes more).
+        tvd_mass_drift_pct / upwind_mass_drift_pct: domain-integrated tracer-mass
+            drift over the run (percent of the initial mass) -- the mass-conservation
+            sanity gate (a conservative scalar with only open-boundary exchange
+            should drift only slightly; near-zero is the numerical-scheme sanity
+            check the Test_GEN_MassConsv question asks).
+        tvd_overshoot_c / upwind_overshoot_c: the max excursion ABOVE the initial
+            hot value (deg C) -- upwind is monotone (~0); an unlimited scheme would
+            overshoot.
+        validated: True iff the acceptance held (upwind lost strictly more variance
+            than TVD AND both mass drifts within the sanity bound).
+        metrics: extra scalars (per-scheme variance/mass time series endpoints,
+            tolerances) -- all real parsed netCDF outputs.
+        chart_titles: titles of the emitted comparison chart(s).
+        demonstration_note: the LOUD honesty label -- an idealized verification-mesh
+            numerical-mixing benchmark, not a georeferenced site study.
+        schematic_only: always True (no georeferenced layer).
+        gen_module_note: the honest disposition of the GEN-module-specific path
+            (USE_GEN is full-monty-only and demands every module namelist; the
+            conservative temperature tracer demonstrates the same mass-conservation
+            mechanism on the clean hydro-core binary).
+        synthetic_inputs: structured provenance (the verification-mesh basis + the
+            published Test_HeatConsv_* / Test_GEN_MassConsv references).
+    """
+
+    question: str = ""
+    n_nodes: int | None = Field(default=None, ge=0)
+    n_elements: int | None = Field(default=None, ge=0)
+    n_layers: int | None = Field(default=None, ge=0)
+    sim_days: float | None = Field(default=None, ge=0.0)
+    front_t_hot_c: float | None = None
+    front_t_cold_c: float | None = None
+    tvd_variance_retained_pct: float | None = Field(default=None, ge=0.0)
+    upwind_variance_retained_pct: float | None = Field(default=None, ge=0.0)
+    excess_mixing_factor: float | None = Field(default=None, ge=0.0)
+    tvd_mass_drift_pct: float | None = None
+    upwind_mass_drift_pct: float | None = None
+    tvd_overshoot_c: float | None = None
+    upwind_overshoot_c: float | None = None
+    validated: bool = False
+    metrics: dict[str, Any] = Field(default_factory=dict)
+    chart_titles: list[str] = Field(default_factory=list)
+    demonstration_note: str = ""
+    schematic_only: bool = True
+    gen_module_note: str = ""
+    synthetic_inputs: list[SyntheticInput] = Field(default_factory=list)

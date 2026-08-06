@@ -1,0 +1,15 @@
+# Template routing phrasings: the SCHISM transport-scheme numerical-mixing V&V
+# (ADR 0156). Walked into the main retrieval index directly.
+schism_transport_validation:
+- compare SCHISM transport schemes
+- upwind vs TVD numerical mixing in SCHISM
+- SCHISM heat conservation test
+- transport scheme accuracy comparison
+- numerical diffusion of the SCHISM transport solver
+- does the SCHISM tracer conserve mass
+- conservative passive tracer mass conservation
+- SCHISM Test_HeatConsv verification
+- how much does the transport scheme change numerical mixing
+- first-order upwind vs TVD limiter scalar front
+- SCHISM tracer transport numerical sanity check
+- generic passive tracer domain mass conservation
