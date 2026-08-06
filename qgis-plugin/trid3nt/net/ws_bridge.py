@@ -263,6 +263,7 @@ class AgentWorker(QObject):
         model_id: str = "",
         aoi_bbox: Optional[Tuple[float, float, float, float]] = None,
         tool_choice_mode: str = "",
+        drawn_geometry: Optional[dict] = None,
     ) -> None:
         if self.client is not None:
             self.client.send_chat(
@@ -271,6 +272,7 @@ class AgentWorker(QObject):
                 model_id=model_id,
                 aoi_bbox=aoi_bbox,
                 tool_choice_mode=tool_choice_mode,
+                drawn_geometry=drawn_geometry,
             )
 
     def send_dev_tool_invoke(
@@ -461,6 +463,7 @@ class AgentBridge(QObject):
         model_id: str = "",
         aoi_bbox: Optional[Tuple[float, float, float, float]] = None,
         tool_choice_mode: str = "",
+        drawn_geometry: Optional[dict] = None,
     ) -> None:
         if self._worker is not None:
             self._worker.send_chat(
@@ -469,6 +472,7 @@ class AgentBridge(QObject):
                 model_id=model_id,
                 aoi_bbox=aoi_bbox,
                 tool_choice_mode=tool_choice_mode,
+                drawn_geometry=drawn_geometry,
             )
 
     def send_dev_tool_invoke(

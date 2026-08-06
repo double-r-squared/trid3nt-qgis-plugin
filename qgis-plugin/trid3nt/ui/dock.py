@@ -265,6 +265,16 @@ class Trid3ntDock(QDockWidget):
         self._aoi_rubber = None
         self._aoi_map_tool = None
         self._prev_aoi_tool = None
+        # ADR 0159: the 'Draw region' supply path -- ONE rubber-band rectangle
+        # attached to the NEXT chat turn as ``drawn_geometry`` (a basis="user"
+        # spatial knob the composer gates consume, e.g. geoclaw amr_regions).
+        # ``_drawn_region`` is the pending ``{"geometry_type": "rectangle",
+        # "bbox": [w,s,e,n]}`` payload (None until drawn), CLEARED on send (one
+        # rectangle, one turn). Its map tool + overlay mirror the Set-AOI pair.
+        self._drawn_region: Optional[dict] = None
+        self._region_rubber = None
+        self._region_map_tool = None
+        self._prev_region_tool = None
         # A1 (NATE 2026-07-20): True while the Set-AOI canvas key-filter (BACKSPACE
         # /DELETE -> _clear_aoi) is installed -- see ``_toggle_aoi_draw``.
         self._aoi_key_filter_on = False
@@ -433,6 +443,20 @@ class Trid3ntDock(QDockWidget):
         )
         self.aoi_btn.toggled.connect(self._toggle_aoi_draw)
         button_row.addWidget(self.aoi_btn)
+
+        # ADR 0159: 'Draw region' -- drag ONE rectangle that rides the NEXT chat
+        # turn as ``drawn_geometry`` (a basis="user" spatial knob for composer
+        # gates, e.g. geoclaw amr_regions). Distinct from Set AOI (the analysis
+        # extent): a drawn region is a sub-region knob, cleared on send.
+        self.region_btn = QToolButton()
+        self.region_btn.setText("Draw region")
+        self.region_btn.setCheckable(True)
+        self.region_btn.setToolTip(
+            "Drag a rectangle to attach to your next message as a refinement "
+            "region (e.g. where GeoClaw refines its mesh). Cleared on send."
+        )
+        self.region_btn.toggled.connect(self._toggle_draw_region)
+        button_row.addWidget(self.region_btn)
 
         # Charts (charts-window 2026-08-04): the count button that SHOWS the
         # bottom charts window. It stays in the chat dock; charts themselves
@@ -616,6 +640,9 @@ class Trid3ntDock(QDockWidget):
         # linger across a switch -- _on_case_open_event repaints it below from
         # the newly-opened case's own bbox (or leaves it cleared when absent).
         self._clear_aoi_overlay()
+        # ADR 0159: a pending drawn region is per-turn/per-case -- drop it on a
+        # case switch so it never rides a turn in the wrong case.
+        self._clear_region_overlay()
         # BUG 3b (live-feedback 2026-07-12): the probe panel shows CASE
         # data -- a table from the previous case must not linger across a
         # switch. Hide it (its next click repopulates it).
@@ -1195,6 +1222,138 @@ class Trid3ntDock(QDockWidget):
                 "AOI overlay cleared (not connected -- nothing to sync)"
             )
 
+    # -- draw-a-region supply path (ADR 0159) --------------------------------- #
+
+    def _toggle_draw_region(self, checked: bool) -> None:
+        """Install/restore the 'Draw region' map tool -- mirrors the Set-AOI
+        release-point discipline: ON saves the active tool then installs a
+        ``QgsMapToolExtent`` (its ``extentChanged`` fires on the drag release),
+        OFF restores the saved tool. Unlike Set AOI, drawing is allowed offline
+        (the region attaches to the NEXT message, sent when connected); an older
+        QGIS build lacking the tool degrades honestly (snap off + note)."""
+        try:
+            canvas = self.iface.mapCanvas()
+        except Exception:  # noqa: BLE001 -- headless / no canvas -- no-op
+            return
+        if checked:
+            if self._region_map_tool is None:
+                try:
+                    from qgis.gui import QgsMapToolExtent
+
+                    self._region_map_tool = QgsMapToolExtent(canvas)
+                    self._region_map_tool.extentChanged.connect(
+                        self._on_region_extent_chosen
+                    )
+                except Exception:  # noqa: BLE001 -- older build lacks the tool
+                    self._note(
+                        "Draw region is unavailable in this QGIS build "
+                        "(QgsMapToolExtent missing).",
+                        error=True,
+                    )
+                    self.region_btn.blockSignals(True)
+                    self.region_btn.setChecked(False)
+                    self.region_btn.blockSignals(False)
+                    return
+            self._prev_region_tool = canvas.mapTool()
+            canvas.setMapTool(self._region_map_tool)
+        else:
+            if canvas.mapTool() is self._region_map_tool:
+                canvas.setMapTool(self._prev_region_tool)
+            self._prev_region_tool = None
+
+    def _on_region_extent_chosen(self, rect) -> None:
+        """A rectangle was dragged with the 'Draw region' tool: convert the
+        canvas-CRS ``QgsRectangle`` -> EPSG:4326 (the same path Set-AOI uses),
+        stash it as the pending ``drawn_geometry`` payload, paint the overlay,
+        then restore the prior tool + pop the button. The region rides the NEXT
+        ``send_chat`` and is cleared on send (one rectangle, one turn)."""
+        try:
+            canvas = self.iface.mapCanvas()
+            authid = canvas.mapSettings().destinationCrs().authid()
+        except Exception:  # noqa: BLE001 -- headless / no canvas
+            return
+        if rect is None or rect.isEmpty():
+            return
+        bbox = self._rect_to_bbox4326(rect, authid)
+        if bbox is None:
+            self._note(
+                "Could not set the region: the drawn extent did not resolve "
+                "to EPSG:4326.",
+                error=True,
+            )
+            self.region_btn.setChecked(False)  # restores the prior tool
+            return
+        self._drawn_region = {
+            "geometry_type": "rectangle",
+            "bbox": list(bbox),
+        }
+        self._render_region_overlay(bbox)
+        self._note(
+            f"Region drawn {aoi.format_bbox(bbox)} -- attaches to your next "
+            "message, then clears."
+        )
+        self.region_btn.setChecked(False)
+
+    def _render_region_overlay(
+        self, bbox4326: Tuple[float, float, float, float]
+    ) -> None:
+        """Paint the pending drawn region as a SOLID amber outline-only rectangle
+        (distinct from the dashed blue AOI overlay) so the user sees what will
+        attach. Same lazy-rubber-band + 4326->canvas transform path as
+        ``_render_aoi_overlay``; headless / construction failure is a silent
+        no-op (``_drawn_region`` stays authoritative for the send)."""
+        try:
+            canvas = self.iface.mapCanvas()
+        except Exception:  # noqa: BLE001 -- headless / no iface -- no overlay
+            return
+        try:
+            from qgis.core import (
+                QgsCoordinateReferenceSystem,
+                QgsCoordinateTransform,
+                QgsGeometry,
+                QgsProject,
+                QgsRectangle,
+                QgsWkbTypes,
+            )
+            from qgis.gui import QgsRubberBand
+            from qgis.PyQt.QtGui import QColor
+
+            lon_min, lat_min, lon_max, lat_max = bbox4326
+            rect = QgsRectangle(lon_min, lat_min, lon_max, lat_max)
+            dst_crs = canvas.mapSettings().destinationCrs()
+            src_crs = QgsCoordinateReferenceSystem("EPSG:4326")
+            if src_crs != dst_crs:
+                transform = QgsCoordinateTransform(
+                    src_crs, dst_crs, QgsProject.instance().transformContext()
+                )
+                rect = transform.transformBoundingBox(rect)
+            if self._region_rubber is None:
+                self._region_rubber = QgsRubberBand(
+                    canvas, QgsWkbTypes.PolygonGeometry
+                )
+                self._region_rubber.setColor(QColor("#e3b341"))  # amber
+                self._region_rubber.setWidth(2)
+                self._region_rubber.setFillColor(QColor(0, 0, 0, 0))
+            self._region_rubber.setToGeometry(QgsGeometry.fromRect(rect), None)
+            self._region_rubber.show()
+        except Exception:  # noqa: BLE001 -- overlay is cosmetic; never crash
+            return
+
+    def _clear_region_overlay(self) -> None:
+        """Drop the pending drawn region + hide its overlay. Called on send
+        (clear-on-send) and on case switch / disconnect so a stale region never
+        rides a later turn or lingers on the canvas."""
+        self._drawn_region = None
+        if self._region_rubber is None:
+            return
+        try:
+            from qgis.core import QgsWkbTypes
+
+            self._region_rubber.reset(QgsWkbTypes.PolygonGeometry)
+            self._region_rubber.hide()
+        except Exception:  # noqa: BLE001 -- best-effort teardown
+            pass
+
     # -- connection ----------------------------------------------------------- #
 
     def _wire_bridge(self) -> None:
@@ -1271,6 +1430,7 @@ class Trid3ntDock(QDockWidget):
         # Per-case-bbox 2026-07-19: the case AOI is per-case state -- a
         # disconnect ends the case binding, so the overlay must go too.
         self._clear_aoi_overlay()
+        self._clear_region_overlay()  # ADR 0159: drop any pending drawn region
         self._set_case_label("")
         self._set_dot("disconnected")
         self.status_label.setText("Not connected")
@@ -1416,6 +1576,7 @@ class Trid3ntDock(QDockWidget):
         # leaves it cleared when the new case has none). _clear_aoi_overlay
         # also nulls self._case_bbox.
         self._clear_aoi_overlay()
+        self._clear_region_overlay()  # ADR 0159: drop any pending drawn region
         # A2 (NATE 2026-07-20): a NEW case is BBOX-LESS -- the canvas-as-AOI
         # seed is gone. A clean slate with no AOI until the user Sets one (the
         # Set-AOI rectangle) or the LLM geocodes it.
@@ -2695,9 +2856,15 @@ class Trid3ntDock(QDockWidget):
                 model_id=self.settings.model_id,
                 aoi_bbox=bbox,
                 tool_choice_mode=self.settings.tool_choice_mode,
+                # ADR 0159: attach any pending drawn region to THIS turn, then
+                # clear it below (one rectangle, one turn).
+                drawn_geometry=self._drawn_region,
             )
         except Exception as exc:  # noqa: BLE001
             self._pending.add_note(f"send failed: {exc}", error=True)
+        # Clear-on-send: the drawn region rides exactly one message.
+        if self._drawn_region is not None:
+            self._clear_region_overlay()
 
     # -- teardown ------------------------------------------------------------- #
 

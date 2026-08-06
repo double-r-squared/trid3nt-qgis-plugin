@@ -152,3 +152,61 @@ async def test_auto_mode_stamps_window_and_proceeds(monkeypatch):
     assert isinstance(res, GeoClawDepthLayerURI)
     win = [e for e in res.synthetic_inputs if e.param == "amr_window_1"]
     assert win and win[0].basis == "prompt_interpreted"
+
+
+# --------------------------------------------------------------------------- #
+# ADR 0159: a turn-bound drawn geometry OVERRIDES the model's proposal
+# --------------------------------------------------------------------------- #
+
+
+@pytest.mark.asyncio
+async def test_drawn_geometry_overrides_model_proposal(monkeypatch):
+    """A user-drawn region bound to the turn REPLACES the model's
+    prompt-interpreted ``amr_regions`` with ONE finest-level window over the drawn
+    bbox and forces ``basis="user"`` -- the WHERE-to-refine input becomes an
+    explicit user choice, not an LLM guess."""
+    _stub_model(monkeypatch)
+    monkeypatch.setattr(pe, "current_emitter", lambda: None)  # auto (gate fails open)
+    drawn_bbox = [-124.2000, 41.7500, -124.1850, 41.7650]
+    tok = pe.bind_turn_drawn_geometry(
+        {"geometry_type": "rectangle", "bbox": drawn_bbox}
+    )
+    try:
+        res = await ar.geoclaw_amr_refinement_regions(
+            # model proposed _WIN (a DIFFERENT box) + prompt_interpreted basis;
+            # the drawn geometry must win.
+            bbox=_AOI, amr_regions=[_WIN], amr_levels=4, input_mode="auto",
+            window_basis="prompt_interpreted", sim_duration_s=1800.0,
+        )
+    finally:
+        pe._TURN_DRAWN_GEOMETRY.reset(tok)
+
+    assert isinstance(res, GeoClawDepthLayerURI)
+    wins = [e for e in res.synthetic_inputs if e.param.startswith("amr_window_")]
+    # exactly ONE window (the model's _WIN was REPLACED, not appended).
+    assert len(wins) == 1
+    assert wins[0].basis == "user"
+    # the DRAWN bbox coordinates surface (not the model's _WIN coords).
+    v = str(wins[0].value)
+    assert "-124.2000" in v and "-124.1850" in v
+    assert "41.7500" in v and "41.7650" in v
+
+
+@pytest.mark.asyncio
+async def test_no_drawn_geometry_keeps_model_proposal(monkeypatch):
+    """With NO drawn geometry bound the model's window + basis flow through
+    unchanged (byte-identical to the pre-ADR-0159 path)."""
+    _stub_model(monkeypatch)
+    monkeypatch.setattr(pe, "current_emitter", lambda: None)
+    # Ensure the contextvar is clear (no leakage from a prior test).
+    tok = pe.bind_turn_drawn_geometry(None)
+    try:
+        res = await ar.geoclaw_amr_refinement_regions(
+            bbox=_AOI, amr_regions=[_WIN], amr_levels=4, input_mode="auto",
+        )
+    finally:
+        pe._TURN_DRAWN_GEOMETRY.reset(tok)
+    win = [e for e in res.synthetic_inputs if e.param == "amr_window_1"]
+    assert win and win[0].basis == "prompt_interpreted"
+    # the model's _WIN coordinates (lon -124.21..-124.18) are preserved.
+    assert "-124.2100" in str(win[0].value)

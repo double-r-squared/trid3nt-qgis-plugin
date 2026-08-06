@@ -37,6 +37,7 @@ from trid3nt_contracts.tool_registry import AtomicToolMetadata
 
 from trid3nt_server.agent.gates.input_review import gate_input_review
 from trid3nt_server.agent.tool_arg_normalizer import coerce_bbox_value
+from trid3nt_server.emission.pipeline_emitter import current_turn_drawn_geometry
 from trid3nt_server.agent.tools import register_tool
 from trid3nt_server.agent.workflows.geoclaw._template_card import TemplateCard
 from trid3nt_server.agent.workflows.geoclaw.inundation.inundation import (
@@ -146,8 +147,10 @@ async def geoclaw_amr_refinement_regions(
             BEFORE the solve; in "auto" they ride the assumptions block labeled.
         window_basis: provenance class for the windows ("prompt_interpreted" when the
             model derived the box from the prompt, "user" when explicit coordinates /
-            a drawn geometry were supplied). The plugin draw-a-rectangle supply path
-            (which would set "user") is a follow-on; the LLM-derived path defaults to
+            a drawn geometry were supplied). A user-drawn region bound to the turn
+            (the QGIS dock 'Draw region' rubber-band, ADR 0159) OVERRIDES the model
+            proposal here -- it replaces ``amr_regions`` with one finest-level window
+            over the whole sim and forces "user". The LLM-derived path defaults to
             "prompt_interpreted" so an invented window is visible for review.
 
     Returns:
@@ -164,6 +167,32 @@ async def geoclaw_amr_refinement_regions(
                 "(min_lon, min_lat, max_lon, max_lat) in EPSG:4326."
             ),
         }
+    # --- ADR 0159 draw-a-geometry supply path -------------------------------- #
+    # A user-drawn region (the QGIS dock 'Draw region' rubber-band, bound to this
+    # turn as ``drawn_geometry``) OVERRIDES the model's prompt-interpreted window
+    # proposal: build ONE refinement window from its bbox at the finest level
+    # over the whole sim window and stamp ``window_basis="user"``. The WHERE-to-
+    # refine input then rides the gate as an EXPLICIT user choice, not an LLM
+    # guess. Absent a drawn geometry the model-supplied ``amr_regions`` +
+    # ``window_basis`` flow through unchanged.
+    _drawn = current_turn_drawn_geometry()
+    _drawn_bbox = _drawn.get("bbox") if isinstance(_drawn, dict) else None
+    if isinstance(_drawn_bbox, (list, tuple)) and len(_drawn_bbox) == 4:
+        db = [float(v) for v in _drawn_bbox]
+        amr_regions = [
+            {
+                "min_level": int(amr_levels),
+                "max_level": int(amr_levels),
+                "t_start_s": 0.0,
+                "t_end_s": float(sim_duration_s),
+                "min_lon": db[0],
+                "min_lat": db[1],
+                "max_lon": db[2],
+                "max_lat": db[3],
+            }
+        ]
+        window_basis = "user"
+
     if not amr_regions:
         return {
             "status": "error",
@@ -171,7 +200,8 @@ async def geoclaw_amr_refinement_regions(
             "error_message": (
                 "geoclaw_amr_refinement_regions requires amr_regions: a non-empty "
                 "list of {min_level, max_level, t_start_s, t_end_s, min_lon, "
-                "max_lon, min_lat, max_lat} windows."
+                "max_lon, min_lat, max_lat} windows (or a drawn region from the "
+                "QGIS dock)."
             ),
         }
     coerced = coerce_bbox_value(bbox)

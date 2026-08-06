@@ -136,6 +136,35 @@ def current_turn_case() -> str | None:
 
 
 # --------------------------------------------------------------------------- #
+# Per-turn drawn-geometry binding (ADR 0159)
+# --------------------------------------------------------------------------- #
+#
+# The dock's 'Draw region' rubber-band rectangle rides ``user-message`` as
+# ``drawn_geometry``; the turn dispatcher binds it into this per-task ContextVar
+# so composer input-review gates can read it WITHOUT threading a new kwarg down
+# every dispatch path (mirrors the active-emitter / turn-case ContextVars). A
+# composer reads ``current_turn_drawn_geometry()`` and, when present, consumes it
+# as a ``basis="user"`` spatial knob (e.g. geoclaw amr_regions), overriding the
+# model's prompt-interpreted proposal. Per-task, so concurrent turns never
+# cross-read. ``None`` = nothing drawn this turn (the common case).
+
+_TURN_DRAWN_GEOMETRY: contextvars.ContextVar[dict | None] = contextvars.ContextVar(
+    "trid3nt_turn_drawn_geometry", default=None
+)
+
+
+def bind_turn_drawn_geometry(geometry: dict | None) -> contextvars.Token:
+    """Bind the turn's user-drawn geometry (dict) for gate consumption; returns
+    the token."""
+    return _TURN_DRAWN_GEOMETRY.set(geometry)
+
+
+def current_turn_drawn_geometry() -> dict | None:
+    """The drawn geometry bound to the current task's turn, or None."""
+    return _TURN_DRAWN_GEOMETRY.get()
+
+
+# --------------------------------------------------------------------------- #
 # Active-emitter ContextVar
 # --------------------------------------------------------------------------- #
 #

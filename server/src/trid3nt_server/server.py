@@ -166,6 +166,7 @@ from .emission.pipeline_emitter import (
     PipelineEmitter,
     _json_for_tool_io,
     bind_turn_case,
+    bind_turn_drawn_geometry,
     complete_compaction_card,
     current_turn_case,
     mint_compaction_card,
@@ -2368,6 +2369,14 @@ class SessionState:
     # ``_set_active_aoi_from_payload``. Read by dispatch-time bbox auto-fill:
     # explicit arg > active AOI > case bbox. ``None`` = no drawn AOI.
     active_aoi_bbox: list[float] | None = None
+    # ADR 0159: the turn's user-DRAWN geometry (the QGIS dock 'Draw region'
+    # rubber-band rectangle) as ``{"geometry_type": "rectangle", "bbox": [...] }``
+    # (EPSG:4326). Set/cleared per user-message by ``_set_drawn_geometry_from_payload``
+    # and bound into a per-task ContextVar so composer gates read it as a
+    # ``basis="user"`` spatial knob (e.g. geoclaw amr_regions). ``None`` = nothing
+    # drawn. Distinct from ``active_aoi_bbox`` (the analysis extent): a drawn
+    # region is a sub-region knob, not the AOI.
+    drawn_geometry: dict | None = None
     # ADR 0018 (Stage 3): per-session routing-visibility mode ('auto' | 'ask').
     # Set by the ``session-config`` envelope's ``mode`` field; ``None`` falls
     # back to the TRID3NT_MODE env default (see _session_routing_mode). Governs
@@ -10645,6 +10654,44 @@ def _set_active_aoi_from_payload(state: SessionState, raw: Any) -> None:
     )
 
 
+def _set_drawn_geometry_from_payload(state: SessionState, raw: Any) -> None:
+    """ADR 0159: bind/clear the turn's user-drawn geometry.
+
+    Called when a ``user-message`` payload carries the ``drawn_geometry`` key
+    (``{"geometry_type": "rectangle", "bbox": [min_lon, min_lat, max_lon,
+    max_lat]}`` EPSG:4326, ``None`` when nothing is drawn). A valid rectangle
+    sets it; an explicit ``None`` clears it; a malformed value is logged and
+    ignored (never blocks the turn). Stored as a plain dict; the turn dispatcher
+    binds it into ``bind_turn_drawn_geometry`` so composer gates consume it.
+    """
+    if raw is None:
+        state.drawn_geometry = None
+        return
+    if not isinstance(raw, dict):
+        logger.warning(
+            "drawn-geometry ignoring non-dict payload=%r session=%s",
+            raw, state.session_id,
+        )
+        return
+    coerced = coerce_bbox_value(raw.get("bbox"))
+    if (
+        coerced is None
+        or not all(math.isfinite(v) for v in coerced)
+        or not (coerced[0] < coerced[2] and coerced[1] < coerced[3])
+    ):
+        logger.warning(
+            "drawn-geometry ignoring malformed bbox in %r session=%s",
+            raw, state.session_id,
+        )
+        return
+    gtype = str(raw.get("geometry_type") or "rectangle")
+    state.drawn_geometry = {"geometry_type": gtype, "bbox": list(coerced)}
+    logger.info(
+        "drawn-geometry set session=%s type=%s bbox=%s",
+        state.session_id, gtype, coerced,
+    )
+
+
 async def _persist_case_loaded_layers(
     state: SessionState, *, case_id: str | None = None
 ) -> None:
@@ -11194,6 +11241,9 @@ async def _dispatch_gemini_and_persist(
     # envelope this turn emits (chunks, pipeline-state, session-state, …)
     # carries Envelope.case_id and the web routes it to the right stream.
     bind_turn_case(turn_case_id)
+    # ADR 0159: bind this turn's user-drawn geometry so composer gates read it
+    # (current_turn_drawn_geometry) as a basis="user" spatial knob.
+    bind_turn_drawn_geometry(state.drawn_geometry)
     # Per-turn object capture: a concurrent turn (or Case switch) re-points
     # both SessionState fields mid-stream, so this wrapper gauges completion
     # against THIS turn's history list and joins the narration list
@@ -11371,6 +11421,7 @@ async def _dispatch_tool_and_persist(
     # Entry-time Case capture -- see _dispatch_gemini_and_persist.
     turn_case_id = _turn_case_id(state)
     bind_turn_case(turn_case_id)  # job-0277: envelope tagging
+    bind_turn_drawn_geometry(state.drawn_geometry)  # ADR 0159
     try:
         try:
             await _invoke_tool_via_emitter(
@@ -11976,6 +12027,15 @@ def _make_handler(settings: ModelSettings):
                         if "aoi_bbox" in payload_dict:
                             _set_active_aoi_from_payload(
                                 state, payload_dict.get("aoi_bbox")
+                            )
+                        # ADR 0159: the dock's 'Draw region' rubber-band
+                        # rectangle. Same key-present semantics as aoi_bbox: a
+                        # value SETS the drawn geometry, an explicit null CLEARS
+                        # it, an absent key leaves the prior state (no-op for
+                        # clients that never send it).
+                        if "drawn_geometry" in payload_dict:
+                            _set_drawn_geometry_from_payload(
+                                state, payload_dict.get("drawn_geometry")
                             )
                         # ADR 0018: routing-visibility mode, carried as the
                         # user-message's ``tool_choice_mode`` field. Read

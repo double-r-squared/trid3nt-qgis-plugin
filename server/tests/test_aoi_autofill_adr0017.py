@@ -188,6 +188,59 @@ class TestActiveAoiPayloadSeam:
 
 
 # --------------------------------------------------------------------------- #
+# 2b. The drawn-geometry session-state seam (ADR 0159)
+# --------------------------------------------------------------------------- #
+
+
+class TestDrawnGeometryPayloadSeam:
+    _DRAWN = {"geometry_type": "rectangle", "bbox": [-91.7, 41.9, -91.6, 42.0]}
+
+    def _state(self):
+        from trid3nt_server.server import SessionState
+
+        return SessionState(session_id=new_ulid())
+
+    def test_valid_rectangle_sets_drawn_geometry(self) -> None:
+        from trid3nt_server.server import _set_drawn_geometry_from_payload
+
+        state = self._state()
+        _set_drawn_geometry_from_payload(state, self._DRAWN)
+        assert state.drawn_geometry == {
+            "geometry_type": "rectangle",
+            "bbox": [-91.7, 41.9, -91.6, 42.0],
+        }
+
+    def test_explicit_null_clears(self) -> None:
+        from trid3nt_server.server import _set_drawn_geometry_from_payload
+
+        state = self._state()
+        _set_drawn_geometry_from_payload(state, self._DRAWN)
+        _set_drawn_geometry_from_payload(state, None)
+        assert state.drawn_geometry is None
+
+    @pytest.mark.parametrize(
+        "malformed",
+        [
+            {"geometry_type": "rectangle", "bbox": [1, 2, 3]},  # wrong arity
+            {"bbox": [float("nan"), 0, 1, 1]},
+            {"bbox": [-91.6, 41.9, -91.7, 42.0]},  # min > max
+            "not a dict",
+            {"no_bbox": True},
+        ],
+    )
+    def test_malformed_value_is_ignored_never_clobbers(self, malformed) -> None:
+        from trid3nt_server.server import _set_drawn_geometry_from_payload
+
+        state = self._state()
+        _set_drawn_geometry_from_payload(state, self._DRAWN)
+        _set_drawn_geometry_from_payload(state, malformed)
+        assert state.drawn_geometry == {
+            "geometry_type": "rectangle",
+            "bbox": [-91.7, 41.9, -91.6, 42.0],
+        }
+
+
+# --------------------------------------------------------------------------- #
 # 3. The real dispatch seam
 # --------------------------------------------------------------------------- #
 

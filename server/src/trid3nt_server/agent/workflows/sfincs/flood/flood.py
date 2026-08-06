@@ -1941,7 +1941,15 @@ async def model_flood_scenario(
         # emitter so the web SequenceScrubber group forms, WITHOUT changing the tool's
         # single-LayerURI return shape (no re-publish trip in summarize_tool_result).
         primary_layers = [lyr for lyr in layers if lyr.role == "primary"]
-        frame_layers = [lyr for lyr in layers if lyr.role != "primary"]
+        # ADR 0159: the native quadtree mesh row (layer_type="mesh") is emitted
+        # via publish_input_layer (MDAL-native, NOT a WMS raster) -- pull it OUT
+        # of the frame set so it never takes the publish_layer raster path.
+        mesh_layers = [lyr for lyr in layers if lyr.layer_type == "mesh"]
+        frame_layers = [
+            lyr
+            for lyr in layers
+            if lyr.role != "primary" and lyr.layer_type != "mesh"
+        ]
 
         published_layers: list[LayerURI] = []
         for lyr in primary_layers:
@@ -2101,6 +2109,24 @@ async def model_flood_scenario(
                 "bound (direct/smoke/test) -- frames not emitted to the map.",
                 len(frame_layers),
             )
+
+        # --- Step 9c: native quadtree mesh preview (ADR 0159) ---
+        # A quadtree solve appends a layer_type="mesh" row (the UGRID
+        # sfincs_map.nc the QGIS plugin loads via MDAL). It is surfaced through
+        # the mesh-preview seam (publish_input_layer, role="context", bbox=None)
+        # so it rides beneath the flood answer and never fights the camera --
+        # NOT publish_layer (a mesh is not a WMS raster). Best-effort: a failure
+        # to surface the mesh never breaks the solve. Emitter-only (mirrors the
+        # frame + SCHISM mesh emit): the wrapper return + result_layers keep the
+        # raster peak layer shape.
+        for mesh_lyr in mesh_layers:
+            try:
+                await publish_input_layer(emitter, mesh_lyr, role="context")
+            except Exception as exc:  # noqa: BLE001 -- never break the solve
+                logger.warning(
+                    "sfincs native mesh preview emit skipped for %s: %s",
+                    mesh_lyr.layer_id, exc,
+                )
 
     # --- Step 10: build success envelope ---
     bbox_area_km2 = _bbox_area_km2(resolved_bbox)

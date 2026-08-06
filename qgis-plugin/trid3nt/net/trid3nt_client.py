@@ -1550,6 +1550,7 @@ class AgentClient:
         model_id: str = "",
         aoi_bbox: Optional[Tuple[float, float, float, float]] = None,
         tool_choice_mode: str = "",
+        drawn_geometry: Optional[dict] = None,
     ) -> None:
         """Send a user chat message.
 
@@ -1580,6 +1581,12 @@ class AgentClient:
             the server's default IS auto, so a default send stays byte-identical
             to the pre-field payload (the ``show_thinking`` omit convention;
             AUTO's measured-ambiguity cards need no flag).
+        :param drawn_geometry: ADR 0159 draw-a-region supply path -- the dock's
+            'Draw region' rubber-band rectangle as ``{"geometry_type":
+            "rectangle", "bbox": [min_lon, min_lat, max_lon, max_lat]}``
+            (EPSG:4326). Rides ``UserMessagePayload.drawn_geometry``; ``None``
+            (nothing drawn) OMITS the key. Consumed by composer input-review
+            gates as a ``basis="user"`` spatial knob (geoclaw amr_regions).
         """
         payload: dict = {"text": text, "case_id": self.case_id}
         if show_thinking:
@@ -1590,6 +1597,13 @@ class AgentClient:
             payload["aoi_bbox"] = [float(v) for v in aoi_bbox]
         if tool_choice_mode == "ask":
             payload["tool_choice_mode"] = "ask"
+        # ADR 0159: the dock's 'Draw region' rubber-band rectangle rides
+        # ``drawn_geometry`` ({"geometry_type": "rectangle", "bbox": [4 floats]},
+        # EPSG:4326) exactly as ``aoi_bbox`` carries the canvas AOI. Omitted when
+        # nothing was drawn so a plain message stays byte-identical to the
+        # pre-field payload (the aoi_bbox / show_thinking omit convention).
+        if drawn_geometry is not None:
+            payload["drawn_geometry"] = drawn_geometry
         self._send(
             "user-message",
             payload,
