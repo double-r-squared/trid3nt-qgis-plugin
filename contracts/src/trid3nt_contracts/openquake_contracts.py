@@ -60,6 +60,8 @@ __all__ = [
     "DEFAULT_GMPE",
     "OpenQuakeRunArgs",
     "SeismicHazardLayerURI",
+    "ScenarioGmfLayerURI",
+    "SecondaryPerilLayerURI",
 ]
 
 
@@ -291,3 +293,77 @@ class SeismicHazardLayerURI(LayerURI):
     # composer stamps them from the run it actually executed.
     logic_tree: Literal["single", "source_models", "gr_uncertainty"] = "single"
     n_realizations: int = Field(default=0, ge=0)
+
+
+class ScenarioGmfLayerURI(LayerURI):
+    """A ``LayerURI`` for a scenario ground-motion-field (GMF) mean map, plus the
+    narration scalars a scenario earthquake produces.
+
+    The scenario calculator computes ``number_of_ground_motion_fields`` correlated
+    ground-motion realizations of ONE rupture over a site grid; the average GMF
+    export gives, per site, the mean value (``gmv_<IMT>``) and the across-
+    realization geometric standard deviation (``gsd_<IMT>``). This layer carries
+    the MEAN COG plus the fields the agent cites (invariant 1 - typed, never
+    invented):
+
+        imt: the Intensity Measure Type this mean map represents (e.g. ``"PGA"``).
+        magnitude: the scenario rupture moment magnitude.
+        num_ground_motion_fields: how many correlated GMF realizations were drawn.
+        max_mean_value: peak mean ground-motion across the AOI, IMT units
+            (g for PGA/SA, cm/s for PGV) (>= 0).
+        median_spread_factor: the site-median across-realization geometric
+            standard deviation (dimensionless, >= 0); a compact scalar summary of
+            the realization spread the paired spread COG maps.
+        n_sites: number of scenario site-grid points (>= 0).
+        rupture_kind: ``"real-fault"`` (rupture placed on a GEM Global Active
+            Faults trace intersecting the AOI) or ``"synthetic"`` (a demo fault
+            through the AOI centre when no mapped fault intersects, or a caller-
+            supplied trace). HONESTY FLOOR: set to the path the run actually took.
+        rupture_note: a one-line narration of the rupture-geometry decision the
+            agent surfaces verbatim.
+
+    ``layer_type`` is ``"raster"``.
+    """
+
+    imt: str = DEFAULT_IMT
+    magnitude: float = Field(ge=0.0)
+    num_ground_motion_fields: int = Field(default=0, ge=0)
+    max_mean_value: float = Field(ge=0.0)
+    median_spread_factor: float = Field(default=0.0, ge=0.0)
+    n_sites: int = Field(default=0, ge=0)
+    rupture_kind: Literal["real-fault", "synthetic"] = "synthetic"
+    rupture_note: str = ""
+
+
+class SecondaryPerilLayerURI(LayerURI):
+    """A ``LayerURI`` for an earthquake-triggered secondary-peril screening map
+    (liquefaction or landslide probability), plus its narration scalars.
+
+    Produced by applying an ``openquake.sep`` model to a scenario GMF field and
+    the fetched site covariates (Vs30 / slope / compound topographic index). The
+    layer carries the per-site probability COG plus the fields the agent cites
+    (invariant 1 - typed, never invented):
+
+        peril: ``"liquefaction"`` or ``"landslide"``.
+        model_name: the published model applied (e.g. ``"zhu_etal_2015_general"``
+            / ``"jibson_2007_newmark"``).
+        max_probability: peak per-site probability across the AOI (0..1) (>= 0).
+        mean_probability: AOI-mean per-site probability (0..1) (>= 0).
+        exceedance_area_km2: areal footprint above the screening probability floor,
+            km^2 (>= 0).
+        n_sites: number of site-grid points evaluated (>= 0).
+        magnitude: the driving scenario rupture magnitude.
+        site_data_note: a one-line honest statement of where each covariate came
+            from (fetched vs labelled default) the agent surfaces verbatim.
+
+    ``layer_type`` is ``"raster"``.
+    """
+
+    peril: Literal["liquefaction", "landslide"]
+    model_name: str = ""
+    max_probability: float = Field(default=0.0, ge=0.0)
+    mean_probability: float = Field(default=0.0, ge=0.0)
+    exceedance_area_km2: float = Field(default=0.0, ge=0.0)
+    n_sites: int = Field(default=0, ge=0)
+    magnitude: float = Field(default=0.0, ge=0.0)
+    site_data_note: str = ""

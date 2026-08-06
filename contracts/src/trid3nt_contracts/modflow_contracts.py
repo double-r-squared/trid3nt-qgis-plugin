@@ -609,6 +609,29 @@ class MODFLOWRunArgs(EngineRunArgsMixin):
             "for a large domain). Must be > 0."
         ),
     )
+    regional_gradient_x: float | None = Field(
+        default=None,
+        description=(
+            "East-component (m/m) of the DEM-derived regional water-table gradient "
+            "for the capture_zone / wellhead_protection PRT deck, in the model-UTM "
+            "frame (x=east, y=north). The composer estimates (x, y) from a planar "
+            "fit of the fetched DEM over the AOI footprint (the shallow water table "
+            "as a subdued replica of surface topography -- a screening approximation, "
+            "not a measured potentiometric surface). The CHD boundary imposes a "
+            "planar head field oriented to this vector so groundwater flows "
+            "down-gradient and the capture zone extends up-gradient toward recharge. "
+            "When None (paired with regional_gradient_y) the adapter falls back to "
+            "the legacy hardcoded west->east demo gradient."
+        ),
+    )
+    regional_gradient_y: float | None = Field(
+        default=None,
+        description=(
+            "North-component (m/m) of the DEM-derived regional water-table gradient "
+            "(see regional_gradient_x). Both components must be supplied together to "
+            "enable georeferenced-gradient mode; either None => demo west->east."
+        ),
+    )
 
     # --- saltwater_intrusion: Henry-style variable-density wedge (Wave-5) ----- #
     # A coastal vertical cross-section (nrow=1 slice) with a seaward GHB+AUX
@@ -1039,6 +1062,64 @@ class CaptureZoneLayerURI(LayerURI):
             "solve. Normally equals ``MODFLOWRunArgs.n_particles``; may be slightly "
             "lower if the well cell was near the domain boundary and some release "
             "positions were clipped to valid grid cells."
+        ),
+    )
+    # --- georeferenced-mode narration scalars (ADDITIVE; default-safe) --------- #
+    # Populated when the capture zone runs in DEM-gradient georeferenced mode; the
+    # legacy synthetic path leaves them at their defaults so existing constructions
+    # and tests remain valid.
+    pathline_count: int = Field(
+        default=0,
+        ge=0,
+        description=(
+            "Number of backtracked particle PATHLINES emitted as LineString features "
+            "in the FlatGeobuf (one per released particle that tracked >= 2 vertices). "
+            "The pathline fan is the primary legibility element of the capture-zone "
+            "render -- it shows which land the well draws from. 0 => no pathlines "
+            "emitted (legacy hull-only path)."
+        ),
+    )
+    gradient_source: str = Field(
+        default="demo_west_east",
+        description=(
+            "Provenance of the regional gradient driving the flow field: 'dem' "
+            "(DEM-derived planar water-table proxy, georeferenced mode) or "
+            "'demo_west_east' (legacy hardcoded west->east screening gradient). The "
+            "agent narrates this so the user knows whether the zone orientation "
+            "reflects the site's topography or a placeholder direction."
+        ),
+    )
+    gradient_magnitude: float | None = Field(
+        default=None,
+        description=(
+            "Magnitude of the regional water-table gradient used (m/m). In DEM mode "
+            "this is the planar-fit topographic slope over the AOI (a screening "
+            "proxy for the hydraulic gradient), clamped to a plausible aquifer range."
+        ),
+    )
+    gradient_azimuth_deg: float | None = Field(
+        default=None,
+        description=(
+            "Compass azimuth (deg CW from north) the groundwater FLOWS toward "
+            "(down-gradient). The capture zone extends in the opposite (up-gradient) "
+            "direction. None when the gradient is degenerate/flat."
+        ),
+    )
+    stagnation_distance_m: float | None = Field(
+        default=None,
+        description=(
+            "Down-gradient stagnation-point distance from the well (m), Grubb "
+            "analytic x0 = Q / (2*pi*K*b*i) for a uniform-flow capture zone. A "
+            "screening sanity ballpark against the PRT-delineated envelope (K/b/i "
+            "are the demo/DEM aquifer params, so treat as order-of-magnitude)."
+        ),
+    )
+    capture_width_m: float | None = Field(
+        default=None,
+        description=(
+            "Far-field capture-zone width (m), Grubb analytic B = Q / (K*b*i). The "
+            "maximum cross-gradient width the well captures far up-gradient; a "
+            "screening sanity ballpark against the PRT-delineated envelope."
         ),
     )
 

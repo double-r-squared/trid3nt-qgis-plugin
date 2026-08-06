@@ -33,6 +33,7 @@ from __future__ import annotations
 import glob
 import hashlib
 import logging
+import math
 import tempfile
 from pathlib import Path
 from typing import Any
@@ -3270,6 +3271,12 @@ def postprocess_capture_zone(
     yoffset_m: float | None = None,
     model_utm_epsg: int | None = None,
     tier_years: list[float] | None = None,
+    gradient_source: str | None = None,
+    gradient_magnitude: float | None = None,
+    gradient_azimuth_deg: float | None = None,
+    k_m_per_day: float | None = None,
+    aquifer_thickness_m: float | None = None,
+    pumping_rate_m3_day: float | None = None,
 ) -> CaptureZoneLayerURI:
     """Convert MF6 PRT backward-tracking output into a ``CaptureZoneLayerURI``.
 
@@ -3364,7 +3371,11 @@ def postprocess_capture_zone(
         import numpy as np  # type: ignore[import-not-found]
         import shapely.affinity  # type: ignore[import-not-found]
         import shapely.ops  # type: ignore[import-not-found]
-        from shapely.geometry import MultiPoint, mapping  # type: ignore[import-not-found]
+        from shapely.geometry import (  # type: ignore[import-not-found]
+            LineString,
+            MultiPoint,
+            mapping,
+        )
     except Exception as exc:  # noqa: BLE001
         raise PostprocessMODFLOWError(
             "CAPTURE_ZONE_OUTPUT_READ_FAILED",
@@ -3585,6 +3596,47 @@ def postprocess_capture_zone(
             "area_km2": area,
         })
 
+    # --- Step 6b: per-particle backtracked pathlines (LineString features) ----
+    # The pathline fan is the primary legibility element of the capture-zone
+    # render: each line is one particle's up-gradient trajectory from the well
+    # screen back to its capture origin (the geoclaw particle-track emission
+    # pattern). Group the track rows by particle id, order by elapsed |t|, and
+    # build a LineString in LOCAL coords, then shift+reproject to EPSG:4326.
+    pathline_count = 0
+    if {"iprp", "irpt"}.issubset(df.columns):
+        for (_iprp, _irpt), grp in df.groupby(["iprp", "irpt"], sort=True):
+            g = grp.sort_values("ttravel_years")
+            xs = g["x"].values
+            ys = g["y"].values
+            if len(xs) < 2:
+                continue
+            line_local = LineString(list(zip(xs, ys)))
+            line_4326 = _shift_and_reproject(line_local)
+            t_max_line = float(g["ttravel_years"].max())
+            features_geom.append(line_4326)
+            features_props.append({
+                "feature_type": "pathline",
+                "travel_time_years": round(t_max_line, 4),
+                "area_km2": None,
+            })
+            pathline_count += 1
+
+    # --- Step 6c: Grubb uniform-flow analytic screening ballpark --------------
+    # Capture width B = Q / (K*b*i) and down-gradient stagnation distance
+    # x0 = Q / (2*pi*K*b*i) (Grubb 1993, uniform-flow capture-zone analytic). A
+    # sanity ballpark against the PRT-delineated envelope; K/b/i are the demo/DEM
+    # aquifer params so this is order-of-magnitude, NOT a calibrated width.
+    stagnation_distance_m: float | None = None
+    capture_width_m: float | None = None
+    _i = float(gradient_magnitude) if gradient_magnitude else 0.0
+    _k = float(k_m_per_day) if k_m_per_day else 0.0
+    _b = float(aquifer_thickness_m) if aquifer_thickness_m else 0.0
+    _q = float(pumping_rate_m3_day) if pumping_rate_m3_day else 0.0
+    _denom = _k * _b * _i
+    if _q > 0.0 and _denom > 0.0:
+        capture_width_m = _q / _denom
+        stagnation_distance_m = _q / (2.0 * math.pi * _denom)
+
     # --- Step 7: write FlatGeobuf in EPSG:4326 --------------------------------
     gdf = gpd.GeoDataFrame(features_props, geometry=features_geom, crs="EPSG:4326")
 
@@ -3633,6 +3685,16 @@ def postprocess_capture_zone(
         travel_time_years=actual_tiers,
         isochrone_areas_km2=isochrone_areas_km2,
         particle_count=particle_count,
+        pathline_count=pathline_count,
+        gradient_source=gradient_source or "demo_west_east",
+        gradient_magnitude=(
+            float(gradient_magnitude) if gradient_magnitude else None
+        ),
+        gradient_azimuth_deg=(
+            float(gradient_azimuth_deg) if gradient_azimuth_deg is not None else None
+        ),
+        stagnation_distance_m=stagnation_distance_m,
+        capture_width_m=capture_width_m,
     )
 
 

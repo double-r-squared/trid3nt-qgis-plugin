@@ -50,6 +50,7 @@ narrate this caveat when presenting the layer (FR-AS-7).
 from __future__ import annotations
 
 import logging
+import math
 from typing import Any
 
 from pydantic import Field
@@ -63,8 +64,12 @@ from trid3nt_contracts.modflow_contracts import (
 )
 from trid3nt_contracts.tool_registry import AtomicToolMetadata
 
-from trid3nt_server.emission.pipeline_emitter import begin_substeps, current_emitter
-from trid3nt_server.agent.tools import register_tool
+from trid3nt_server.emission.pipeline_emitter import (
+    begin_substeps,
+    current_emitter,
+    substep,
+)
+from trid3nt_server.agent.tools import TOOL_REGISTRY, register_tool
 from trid3nt_server.agent.workflows.modflow._template_card import TemplateCard
 # Reuse the shared archetype-run + AOI-resolve helpers from the sustainable_yield
 # composer (one implementation, all archetypes).
@@ -98,6 +103,115 @@ CAPTURE_ZONE_DEFAULT_TIERS: list[float] = [1.0, 5.0, 10.0]
 #: (SDWA Section 1428 wellhead protection program; delineation methods per EPA
 #: 440/6-87-010; the 2-year tier is the IMMEDIATE zone).
 WELLHEAD_PROTECTION_DEFAULT_TIERS: list[float] = [2.0, 5.0, 10.0]
+
+#: Plausible shallow-aquifer hydraulic-gradient bounds (m/m). The DEM-derived
+#: topographic slope is clamped into this range: a near-flat AOI below the floor
+#: makes the water-table proxy unreliable (fall back to demo); a cliff above the
+#: ceiling would drive an unphysical regional gradient. 5e-4..5e-2 spans typical
+#: valley-fill to steep-terrain water-table gradients.
+GRADIENT_MIN_MM: float = 5.0e-4
+GRADIENT_MAX_MM: float = 5.0e-2
+
+#: Half-width (deg) of the DEM footprint fetched around the AOI to estimate the
+#: regional gradient. ~0.025 deg ~= 2.7 km covers the 4.1 km PRT domain so the
+#: planar fit reflects the regional slope the capture zone sits in.
+DEM_GRADIENT_HALF_DEG: float = 0.025
+
+
+# --------------------------------------------------------------------------- #
+# DEM-derived regional water-table gradient (georeferenced-mode helpers)
+# --------------------------------------------------------------------------- #
+
+
+def _fit_plane(
+    xs: list[float], ys: list[float], zs: list[float]
+) -> tuple[float, float, float]:
+    """Least-squares fit ``z = a*x + b*y + c``; return ``(a, b, c)``.
+
+    ``(a, b)`` is the planar gradient of ``z`` in the ``x`` / ``y`` units. Pure
+    (numpy lstsq); raises ValueError on < 3 points or a degenerate system.
+    """
+    import numpy as np
+
+    if len(xs) < 3:
+        raise ValueError("_fit_plane needs >= 3 points")
+    A = np.column_stack([np.asarray(xs, float), np.asarray(ys, float), np.ones(len(xs))])
+    z = np.asarray(zs, float)
+    coeffs, *_ = np.linalg.lstsq(A, z, rcond=None)
+    return float(coeffs[0]), float(coeffs[1]), float(coeffs[2])
+
+
+def _planar_gradient_from_dem(
+    dem_uri: str, lat0: float, lon0: float
+) -> tuple[float, float, float, float] | None:
+    """Estimate the regional water-table gradient from a DEM (screening proxy).
+
+    Reads the fetched DEM, samples a decimated pixel grid, converts each pixel to
+    local east/north metres about ``(lat0, lon0)``, and fits a plane. The returned
+    ``(gx, gy)`` is the topographic slope vector (m/m, x=east y=north): under the
+    shallow-unconfined subdued-replica assumption the water table mimics surface
+    topography, so this slope is a SCREENING proxy for the hydraulic gradient (NOT
+    a measured potentiometric surface). Magnitude is clamped to
+    ``[GRADIENT_MIN_MM, GRADIENT_MAX_MM]`` (direction preserved); a below-floor
+    (near-flat) AOI returns ``None`` so the caller falls back to the demo gradient.
+
+    Returns ``(gx, gy, magnitude, azimuth_deg)`` where azimuth is the compass
+    bearing (deg CW from north) groundwater FLOWS toward (down-gradient), or
+    ``None`` on any read failure / degenerate/flat DEM. NEVER raises.
+    """
+    try:
+        import numpy as np
+        import rasterio
+        from pyproj import Transformer
+
+        from trid3nt_server.agent.tools.processing._gdal_runner import read_raster_bytes
+
+        # read_raster_bytes accepts s3:// or a bare local path; normalise file://.
+        read_uri = dem_uri[len("file://"):] if dem_uri.startswith("file://") else dem_uri
+        dem_bytes = read_raster_bytes(read_uri, on_error=lambda msg: RuntimeError(msg))
+        with rasterio.MemoryFile(dem_bytes) as mf:
+            with mf.open() as src:
+                arr = src.read(1, masked=True)
+                transform = src.transform
+                src_crs = src.crs
+                H, W = src.height, src.width
+        step = max(1, max(H, W) // 80)
+        data = np.ma.filled(arr.astype("float64"), np.nan)
+        rr, cc = np.mgrid[0:H:step, 0:W:step]
+        vals = data[rr, cc]
+        # Pixel-centre coordinates in the dataset CRS.
+        xs_ds, ys_ds = rasterio.transform.xy(transform, rr, cc)
+        xs_ds = np.asarray(xs_ds, float).ravel()
+        ys_ds = np.asarray(ys_ds, float).ravel()
+        vals = np.asarray(vals, float).ravel()
+        good = np.isfinite(vals)
+        if good.sum() < 8:
+            return None
+        xs_ds, ys_ds, vals = xs_ds[good], ys_ds[good], vals[good]
+        # Convert dataset-CRS coords -> lon/lat (identity when already 4326).
+        if src_crs is not None and src_crs.to_epsg() != 4326:
+            to_4326 = Transformer.from_crs(src_crs, "EPSG:4326", always_xy=True)
+            lons, lats = to_4326.transform(xs_ds, ys_ds)
+        else:
+            lons, lats = xs_ds, ys_ds
+        # Local east/north metres about the AOI centre (equirectangular).
+        m_per_deg_lat = 110_540.0
+        m_per_deg_lon = 111_320.0 * math.cos(math.radians(lat0))
+        east = (np.asarray(lons, float) - lon0) * m_per_deg_lon
+        north = (np.asarray(lats, float) - lat0) * m_per_deg_lat
+        a, b, _c = _fit_plane(list(east), list(north), list(vals))
+        mag = math.hypot(a, b)
+        if not math.isfinite(mag) or mag < GRADIENT_MIN_MM:
+            return None  # too flat: DEM proxy unreliable -> caller uses demo
+        clamped = min(mag, GRADIENT_MAX_MM)
+        scale = clamped / mag
+        gx, gy = a * scale, b * scale
+        # Down-gradient (flow) azimuth = bearing of -(gx, gy).
+        az = math.degrees(math.atan2(-gx, -gy)) % 360.0
+        return gx, gy, clamped, az
+    except Exception as exc:  # noqa: BLE001 -- DEM gradient is best-effort
+        logger.warning("capture_zone DEM-gradient estimate failed (non-fatal): %s", exc)
+        return None
 
 
 # --------------------------------------------------------------------------- #
@@ -159,6 +273,7 @@ async def model_capture_zone_scenario(
     archetype: str = "capture_zone",
     aquifer_k_ms: float | None = None,
     porosity: float | None = None,
+    use_dem_gradient: bool = True,
     compute_class: str = "standard",
     pipeline_emitter: Any | None = None,
 ) -> CaptureZoneResult:
@@ -229,10 +344,13 @@ async def model_capture_zone_scenario(
             )
 
     # declare the planned internal-tool count up front: geocode (only
-    # when a place string was supplied) + run_modflow_archetype_job (always).
+    # when a place string was supplied) + fetch_dem (georeferenced-gradient mode)
+    # + run_modflow_archetype_job (always).
     _planned = 1
     has_loc = bool(location and location.strip())
     if has_loc:
+        _planned += 1
+    if use_dem_gradient:
         _planned += 1
     begin_substeps(current_emitter(), _planned)
 
@@ -248,6 +366,50 @@ async def model_capture_zone_scenario(
             f"invalid well_location_latlon (expected (lat, lon)): {exc}"
         ) from exc
 
+    # --- Georeferenced-gradient mode (DEM water-table proxy) ------------------ #
+    # Fetch a DEM over the well footprint and estimate the regional gradient from
+    # its planar slope. The CHD boundary is then oriented to this vector so the
+    # capture zone extends up-gradient toward recharge -- the "what land does my
+    # well draw from" answer. A DEM fetch failure or a near-flat AOI is a LOUD
+    # fallback to the demo west->east gradient (gradient_source narrated), never a
+    # silent wrong-direction zone.
+    grad_x: float | None = None
+    grad_y: float | None = None
+    gradient_source = "demo_west_east"
+    gradient_magnitude: float | None = None
+    gradient_azimuth_deg: float | None = None
+    if use_dem_gradient:
+        try:
+            import asyncio
+
+            fetch_dem_entry = TOOL_REGISTRY.get("fetch_dem")
+            if fetch_dem_entry is None:
+                raise CaptureZoneScenarioError("fetch_dem tool is not registered")
+            d = DEM_GRADIENT_HALF_DEG
+            dem_bbox = [wlon - d, wlat - d, wlon + d, wlat + d]
+            async with substep(current_emitter(), "fetch_dem"):
+                dem_layer = await asyncio.to_thread(
+                    lambda: fetch_dem_entry.fn(bbox=dem_bbox)
+                )
+            dem_uri = (
+                dem_layer.get("uri")
+                if isinstance(dem_layer, dict)
+                else getattr(dem_layer, "uri", None)
+            )
+            if dem_uri:
+                grad = await asyncio.to_thread(
+                    _planar_gradient_from_dem, dem_uri, wlat, wlon
+                )
+                if grad is not None:
+                    grad_x, grad_y, gradient_magnitude, gradient_azimuth_deg = grad
+                    gradient_source = "dem"
+        except Exception as exc:  # noqa: BLE001 -- DEM gradient is best-effort
+            logger.warning(
+                "capture_zone DEM-gradient step failed (non-fatal, using demo "
+                "west->east gradient): %s",
+                exc,
+            )
+
     try:
         run_args = MODFLOWRunArgs(
             spill_location_latlon=(lat, lon),
@@ -258,6 +420,8 @@ async def model_capture_zone_scenario(
             well_location_latlon=(wlat, wlon),
             capture_zone_travel_time_years=tiers,
             n_particles=int(n_particles),
+            regional_gradient_x=grad_x,
+            regional_gradient_y=grad_y,
             **_aquifer_overrides(aquifer_k_ms, porosity, None, None),
         )
     except Exception as exc:  # noqa: BLE001  -  pydantic ValidationError
@@ -279,6 +443,9 @@ async def model_capture_zone_scenario(
         scenario_error=CaptureZoneScenarioError,
     )
 
+    layer_grad_source = getattr(layer, "gradient_source", gradient_source)
+    layer_grad_mag = getattr(layer, "gradient_magnitude", gradient_magnitude)
+    layer_grad_az = getattr(layer, "gradient_azimuth_deg", gradient_azimuth_deg)
     derived = {
         "location_name": location_name,
         "aoi_latlon": [lat, lon],
@@ -286,8 +453,27 @@ async def model_capture_zone_scenario(
         "archetype": archetype,
         "travel_time_years": tiers,
         "n_particles": n_particles,
+        "gradient_source": layer_grad_source,
+        "regional_gradient_x": grad_x,
+        "regional_gradient_y": grad_y,
+        "gradient_magnitude": layer_grad_mag,
+        "gradient_azimuth_deg": layer_grad_az,
     }
     iso_areas = getattr(layer, "isochrone_areas_km2", {})
+    if layer_grad_source == "dem":
+        gradient_caveat = (
+            f"Regional gradient DEM-derived: magnitude {layer_grad_mag:.2g} m/m, "
+            f"groundwater flows toward azimuth {layer_grad_az:.0f} deg (the capture "
+            "zone extends the opposite, up-gradient way). This is a SCREENING proxy "
+            "-- the shallow water table taken as a subdued replica of surface "
+            "topography (DEM slope), NOT a measured potentiometric surface."
+        )
+    else:
+        gradient_caveat = (
+            "Regional gradient is the DEMO west->east placeholder (no usable DEM "
+            "slope: fetch failed or the AOI is near-flat). The zone ORIENTATION is "
+            "a placeholder, not the site's true flow direction -- narrate this."
+        )
     summary = {
         "location_name": location_name,
         "archetype": archetype,
@@ -296,11 +482,18 @@ async def model_capture_zone_scenario(
         "travel_time_years": layer.travel_time_years,
         "isochrone_areas_km2": iso_areas,
         "particle_count": layer.particle_count,
+        "pathline_count": getattr(layer, "pathline_count", 0),
+        "gradient_source": layer_grad_source,
+        "gradient_magnitude_m_per_m": layer_grad_mag,
+        "gradient_azimuth_deg": layer_grad_az,
+        "stagnation_distance_m": getattr(layer, "stagnation_distance_m", None),
+        "capture_width_m": getattr(layer, "capture_width_m", None),
+        "gradient_caveat": gradient_caveat,
         "demo_aquifer_caveat": (
             f"Aquifer K={DEFAULT_AQUIFER_K_MS:g} m/s and porosity={DEFAULT_POROSITY:g} "
-            "are demo defaults, not site-specific hydrogeology. The polygon is the "
-            "CONVEX HULL of discrete backtracked pathlines on a structured 100 m "
-            "rectilinear grid -- treat it as a planning-level envelope, not a "
+            "are demo defaults, not site-specific hydrogeology. The zone is the fan "
+            "of backtracked PRT pathlines (+ their convex-hull isochrones) on a "
+            "structured 100 m grid -- a screening-tier wellhead delineation, not a "
             "legally defensible wellhead protection area."
         ),
     }

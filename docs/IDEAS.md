@@ -267,3 +267,14 @@ breaking pytest.raises in LATER files holding a stale top-of-file
 import (test_model_flood_scenario.py / _v2.py affected; the
 re-fetch-at-call-time pattern in test_sfincs_spiderweb.py is the
 fix). Sweep candidate when convenient.
+
+## 2026-08-06 - Layer-emission audit (NATE norm)
+NATE norm: emitted layers = map-app citizens; proofs must be
+georeferenced map renders, and validation-fixture templates whose
+deliverable is a chart/scalar should NOT emit orphan local-unit
+rasters. AUDIT candidate: sweep the registered templates for
+non-georeferenced layer emissions (modflow package_validation cases,
+schism transport_validation, any local-unit fixture COGs) and either
+(a) drop the layer emission in favor of charts/scalars, or (b) add a
+real-AOI georeferenced mode (the 0165 capture-zone pattern). Run when
+a lane frees.

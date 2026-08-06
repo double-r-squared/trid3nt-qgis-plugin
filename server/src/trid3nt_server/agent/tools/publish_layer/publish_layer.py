@@ -375,6 +375,14 @@ _TITILER_STYLE_REGISTRY: dict[str, tuple[str, str]] = {
     # its OWN data range (viridis ramp). Do not re-add a fixed rescale here.
     "continuous_seismic_pga": ("0,1", "magma"),
     "continuous_landslide_susceptibility": ("0,1", "rdylgn_r"),
+    # Earthquake-triggered liquefaction probability in [0,1] -> a sequential
+    # blue ramp (dry/low -> saturated/high), visibly distinct from the
+    # landslide rdylgn_r map when both perils render together. The scenario GMF
+    # across-realization spread is a dimensionless geometric-std factor (~1..2+)
+    # -> a viridis ramp over a modest band; the paired mean COG uses the PGA
+    # magma preset.
+    "continuous_liquefaction_probability": ("0,1", "ylgnbu"),
+    "continuous_gmf_spread": ("1,2.5", "viridis"),
     # conservation reference scenario -- ADDITIVE. NDVI is the canonical
     # vegetation index in [-1, 1]; bare/water near 0, healthy canopy ~0.6-0.9 ->
     # a green-up rdylgn ramp rescaled to the full physical range. MoBI

@@ -188,6 +188,54 @@ def toa_map(toa_path, out_name, title, caption, dom_km):
     print("wrote", out_name)
 
 
+def compare_map(items, out_name, title, caption, aoi_km, zoom=12):
+    """Overlay several scenarios' ToA contours (hour-labeled) on the Esri basemap.
+
+    ``items`` = [(toa_path, color, linestyle, label), ...]. White box = AOI, cyan
+    dot = ignition; the emitted raster's data (arrival-time contours) reads ON THE
+    MAP. Frame = the AOI (+ small margin) so the white AOI box is visible."""
+    from matplotlib.lines import Line2D
+
+    lw_a, ls_a, le_a, ln_a = bbox(aoi_km)
+    mlon = (le_a - lw_a) * 0.06
+    mlat = (ln_a - ls_a) * 0.06
+    basemap, bm_ext = fetch_basemap(lw_a - mlon, ls_a - mlat, le_a + mlon, ln_a + mlat, zoom)
+    fig, ax = plt.subplots(figsize=(8.6, 8.2), dpi=115)
+    ax.imshow(basemap, extent=bm_ext, origin="upper")
+    grids = []
+    all_max = 0.0
+    for path, color, ls, label in items:
+        toa, (w, e, s_, n), _ = to_3857(path)
+        nyi, nxi = toa.shape
+        X = np.linspace(w, e, nxi)
+        Y = np.linspace(n, s_, nyi)
+        grids.append((X, Y, toa, color, ls, label))
+        if np.isfinite(toa).any():
+            all_max = max(all_max, float(np.nanmax(toa)))
+    levels = np.linspace(all_max / 6.0, all_max * 0.98, 5)
+    handles = []
+    for X, Y, toa, color, ls, label in grids:
+        cs = ax.contour(X, Y, toa, levels=levels, colors=color, linewidths=1.6,
+                        linestyles=ls, zorder=3)
+        ax.clabel(cs, inline=True, fontsize=7, fmt="%.1f")
+        handles.append(Line2D([0], [0], color=color, lw=1.8, ls=ls))
+    bx0, by0 = TO_3857.transform(lw_a, ls_a)
+    bx1, by1 = TO_3857.transform(le_a, ln_a)
+    ax.plot([bx0, bx1, bx1, bx0, bx0], [by0, by0, by1, by1, by0],
+            color="white", lw=1.6, zorder=4)
+    ix, iy = TO_3857.transform(CENTER[0], CENTER[1])
+    ax.plot(ix, iy, marker="o", color="#00e5ff", ms=8, mec="black", zorder=5)
+    ax.legend(handles, [it[3] for it in items], loc="upper left", framealpha=0.85)
+    ax.set_xlim(bm_ext[0], bm_ext[1]); ax.set_ylim(bm_ext[2], bm_ext[3])
+    ax.set_xticks([]); ax.set_yticks([])
+    ax.set_title(title, fontsize=12, pad=8)
+    fig.text(0.5, 0.02, caption, ha="center", fontsize=8.5, wrap=True)
+    fig.subplots_adjust(bottom=0.10, top=0.95)
+    fig.savefig(f"{OUT}/{out_name}", dpi=115)
+    plt.close(fig)
+    print("wrote", out_name)
+
+
 def frame_grid(toa_hr, cellsize_m):
     """(x_m, y_m) meshgrid centred on ignition (domain centre) for a ToA grid."""
     ny, nx = toa_hr.shape
@@ -199,9 +247,10 @@ def frame_grid(toa_hr, cellsize_m):
 # --------------------------------------------------------------------------- #
 def proof_transient_wind():
     print("== transient wind ==")
-    tf_c, _, dc = solve(domain_km=16.0, wind_dir_deg=270.0, duration_hours=2.0,
+    dom = 12.0
+    tf_c, _, dc = solve(domain_km=dom, wind_dir_deg=270.0, duration_hours=2.0,
                         wind_speed_mph=25.0, cellsize_m=60.0, fuel_model=102)
-    tf_t, _, dt = solve(domain_km=16.0, wind_dir_deg=270.0, duration_hours=2.0,
+    tf_t, _, dt = solve(domain_km=dom, wind_dir_deg=270.0, duration_hours=2.0,
                         wind_speed_mph=25.0, cellsize_m=60.0, fuel_model=102,
                         weather_schedule=[{"wd": 270.0}, {"wd": 180.0}],
                         dt_meteorology_s=3600.0)
@@ -210,42 +259,27 @@ def proof_transient_wind():
             "Fire arrival time - mid-run wind shift (FROM 270 deg -> 180 deg)",
             "Frame: EPSG:5070 60 m, GR2 grass, 25 mph, 2 h burn; wind FROM 270 deg then shifts "
             "to 180 deg at 50% of the run (windowed on the burn). Cyan dot = ignition.",
-            16.0)
-    # Comparison in ONE figure: constant vs shifted ToA contours, ignition-frame.
+            dom)
+    # Measured heading shift of the burned-area centroid (constant -> transient).
     c = read_hr(tf_c); t = read_hr(tf_t)
-    Xc, Yc = frame_grid(c, 60.0); Xt, Yt = frame_grid(t, 60.0)
-    fig, ax = plt.subplots(figsize=(7.6, 6.6), dpi=115)
-    levels = np.linspace(0.05, max(np.nanmax(c), np.nanmax(t)), 6)
-    cs1 = ax.contour(Xc / 1000, Yc / 1000, c, levels=levels,
-                     colors="#1f5fbf", linewidths=1.4)
-    cs2 = ax.contour(Xt / 1000, Yt / 1000, t, levels=levels, colors="#d1495b",
-                     linewidths=1.4, linestyles="--")
-    ax.clabel(cs1, inline=True, fontsize=7, fmt="%.1f")
-    ax.plot(0, 0, "ko", ms=6)
-    # Zoom to the union burned extent (+ margin) so the redirect fills the frame.
-    fin = np.isfinite(c) | np.isfinite(t)
-    yy, xx = np.where(fin)
-    xex = np.abs(np.r_[Xc[fin], Xt[fin]]).max() / 1000.0
-    yex = np.abs(np.r_[Yc[fin], Yt[fin]]).max() / 1000.0
-    m = max(xex, yex) * 1.15
-    ax.set_xlim(-m * 0.4, m); ax.set_ylim(-m * 0.7, m * 0.7)
-    ax.set_xlabel("east of ignition (km)"); ax.set_ylabel("north of ignition (km)")
-    ax.set_aspect("equal"); ax.grid(alpha=0.25)
-    from matplotlib.lines import Line2D
-    ax.legend([Line2D([0], [0], color="#1f5fbf", lw=1.6),
-               Line2D([0], [0], color="#d1495b", lw=1.6, ls="--")],
-              ["constant wind (FROM 270)", "mid-run shift (270 -> 180)"], loc="upper left")
-    ax.set_title("Time-of-arrival contours: constant wind vs a mid-run wind shift", fontsize=11)
-    fig.text(0.5, 0.015,
-             "Contours = hours from ignition. Constant wind drives the fire due east; the "
-             "mid-run shift bends the spread axis northward (measured heading shift ~68 deg).",
-             ha="center", fontsize=8.5, wrap=True)
-    fig.subplots_adjust(bottom=0.14)
-    fig.savefig(f"{OUT}/elmfire_transient_wind_schedule_spread_chart.png", dpi=115)
-    plt.close(fig)
-    print("wrote elmfire_transient_wind_schedule_spread_chart.png")
+    Xc, Yc = frame_grid(c, 60.0)
+    def _az(grid, X, Y):
+        m = np.isfinite(grid)
+        return math.degrees(math.atan2(float(Y[m].mean()), float(X[m].mean())))
+    shift = abs(_az(t, Xc, Yc) - _az(c, Xc, Yc))
+    # Comparison AS A MAP: both scenarios' ToA contours over Esri (data on the map).
+    compare_map(
+        [(tf_c, "#1f5fbf", "-", "constant wind (FROM 270)"),
+         (tf_t, "#d1495b", "--", "mid-run shift (270 -> 180)")],
+        "elmfire_transient_wind_schedule_spread_chart.png",
+        "Time-of-arrival contours over the AOI: constant wind vs a mid-run wind shift",
+        "Contours = hours from ignition on Esri World Imagery. Constant wind (blue) drives the "
+        f"fire due east; the mid-run shift (red dashed) bends the spread axis northward "
+        f"(measured centroid heading shift {shift:.0f} deg). White box = AOI, cyan dot = ignition.",
+        dom, zoom=12)
+    import shutil
     for d in (dc, dt):
-        __import__("shutil").rmtree(d, ignore_errors=True)
+        shutil.rmtree(d, ignore_errors=True)
 
 
 def _crown_area(crown_path, cellsize_m):
@@ -275,42 +309,38 @@ def proof_crown():
     init = [(v, crown_solve(ccc=v)) for v in (0.30, 0.525, 0.75)]
     cap_tf, _, dcap = crown_solve(limit=120.0)
     unc_tf, _, dunc = crown_solve(limit=99999.0)
+    cap_a = _burned_area(cap_tf, 60.0); unc_a = _burned_area(unc_tf, 60.0)
 
-    # Map of the max-crown (lowest-threshold) run over Esri.
-    toa_map(init[0][1][0], "elmfire_crown_fire_initiation_threshold_sweep.png",
-            "Fire arrival time - active crown fire (canopy cc=60%, cbh=1.0 m)",
-            "Frame: EPSG:5070 60 m, 8 km domain, SH7 shrub + canopy (cc=60% cbh=1.0 m "
-            "cbd=0.18 cbd ch=37.5 m), 25 mph, 0.5 h, CRITICAL_CANOPY_COVER=0.30. "
-            "White box = AOI, cyan dot = ignition.",
-            8.0)
+    # Ceiling EXTENT CONTRAST as a MAP: capped vs uncapped ToA over Esri.
+    compare_map(
+        [(unc_tf, "#d1495b", "-", f"uncapped Cruz ({unc_a:.2f} km2)"),
+         (cap_tf, "#1f5fbf", "-", f"capped 120 ft/min ({cap_a:.2f} km2)")],
+        "elmfire_crown_fire_initiation_threshold_sweep.png",
+        "Crown-fire extent: Cruz active-crown rate ceiling capped vs uncapped",
+        "Time-of-arrival contours (hours) over Esri World Imagery, SH7 shrub + canopy "
+        "(cc=60%, cbh=1.0 m, cbd=0.18 kg/m3, ch=37.5 m), 25 mph, 0.5 h burn. Lifting "
+        f"CROWN_FIRE_SPREAD_RATE_LIMIT from 120 ft/min to uncapped grows the burn {unc_a/cap_a:.1f}x. "
+        "White box = AOI, cyan dot = ignition.",
+        8.0, zoom=13)
 
-    # ONE figure, two panels: initiation collapse + ceiling contrast.
-    fig, (axL, axR) = plt.subplots(1, 2, figsize=(11.0, 4.8), dpi=115)
+    # Initiation boundary as a PURE dock chart (active-crown area vs threshold).
+    fig, ax = plt.subplots(figsize=(7.4, 5.4), dpi=115)
     xs = [v for v, _ in init]
     ys = [_crown_area(r[1], 60.0) for _, r in init]
-    axL.plot(xs, ys, "-o", color="#d1495b", lw=1.8)
-    axL.axvline(0.60, color="#3a3a3a", ls=":", lw=1.3)
-    axL.text(0.60, axL.get_ylim()[1] * 0.5, " deck canopy cover 0.60",
-             rotation=90, va="center", fontsize=8, color="#3a3a3a")
-    axL.set_xlabel("CRITICAL_CANOPY_COVER threshold (fraction)")
-    axL.set_ylabel("active-crown area (km2)")
-    axL.set_title("Crown initiation boundary", fontsize=11)
-    axL.grid(alpha=0.25)
-
-    cap_a = _burned_area(cap_tf, 60.0); unc_a = _burned_area(unc_tf, 60.0)
-    axR.bar([0, 1], [cap_a, unc_a], color=["#1f5fbf", "#d1495b"], width=0.6)
-    axR.set_xticks([0, 1]); axR.set_xticklabels(["capped\n120 ft/min", "uncapped\n(Cruz)"])
-    axR.set_ylabel("burned area (km2)")
-    axR.set_title("Cruz active-crown rate ceiling", fontsize=11)
-    axR.grid(alpha=0.25, axis="y")
-    for xi, yi in ((0, cap_a), (1, unc_a)):
-        axR.text(xi, yi, f" {yi:.2f}", ha="center", va="bottom", fontsize=9)
+    ax.plot(xs, ys, "-o", color="#d1495b", lw=1.8)
+    ax.axvline(0.60, color="#3a3a3a", ls=":", lw=1.3)
+    ax.text(0.60, max(ys) * 0.5, " deck canopy cover 0.60", rotation=90,
+            va="center", fontsize=8, color="#3a3a3a")
+    ax.set_xlabel("CRITICAL_CANOPY_COVER threshold (fraction)")
+    ax.set_ylabel("active-crown area (km2)")
+    ax.set_title("Crown-fire initiation boundary vs critical canopy cover", fontsize=11)
+    ax.grid(alpha=0.25)
     fig.text(0.5, 0.015,
-             "Left: active-crown area collapses to zero once CRITICAL_CANOPY_COVER rises past the "
-             "deck's 0.60 canopy cover (the surface-to-crown initiation boundary). Right: lifting the "
-             f"CROWN_FIRE_SPREAD_RATE_LIMIT from 120 ft/min to uncapped grows burned area {unc_a/cap_a:.1f}x.",
+             "Active-crown area collapses to zero once CRITICAL_CANOPY_COVER rises past the deck's "
+             "0.60 canopy cover (dotted) - the surface-to-crown initiation boundary. SH7 shrub + "
+             "canopy, 25 mph, 0.5 h burn.",
              ha="center", fontsize=8.5, wrap=True)
-    fig.subplots_adjust(bottom=0.20, wspace=0.25)
+    fig.subplots_adjust(bottom=0.17)
     fig.savefig(f"{OUT}/elmfire_crown_fire_initiation_threshold_sweep_chart.png", dpi=115)
     plt.close(fig)
     print("wrote elmfire_crown_fire_initiation_threshold_sweep_chart.png")

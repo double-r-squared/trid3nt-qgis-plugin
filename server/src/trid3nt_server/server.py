@@ -211,6 +211,7 @@ from .agent.gates.cards import (
     _build_flood_run_settings_envelope,
     _build_geoclaw_confirm_envelope,
     _build_psha_confirm_envelope,
+    _build_scenario_confirm_envelope,
     _build_region_choice_request_payload,
     _build_spatial_input_request_payload,
     _build_swmm_granularity_envelope,
@@ -1120,6 +1121,14 @@ SOLVER_CONFIRM_TOOLS: set[str] = {
     # for classical PSHA (that is scenario mode, which is not built). Keyed on
     # the openquake_psha template (the tool that submits the solver).
     "openquake_psha",
+    # The OpenQuake scenario-GMF + secondary-perils templates also submit an
+    # OpenQuake engine run (a single-rupture ground-motion field, and the
+    # scenario-GMF-driven liquefaction + Newmark-landslide screens), so both are
+    # confirm-gated (Invariant 9) with an inline proceed/cancel card built by
+    # _build_scenario_confirm_envelope from the call args (scenario magnitude +
+    # AOI area). Keyed on the templates that submit the solver.
+    "openquake_scenario_gmf",
+    "openquake_secondary_perils",
     # The TELEMAC river-dye solver joins the confirm set with the richest
     # card yet: the builder runs the fast mesh-only worker (gmsh, no DEM, no
     # solve, ~10-25 s), emits the actual triangle-wireframe mesh onto the
@@ -7976,6 +7985,13 @@ async def _gate_on_solver_confirm(
             # the heavy Batch run; built inline since no composer extraction
             # is needed (the run args are the tool args).
             envelope = _build_psha_confirm_envelope(params)
+        elif tool_name in ("openquake_scenario_gmf", "openquake_secondary_perils"):
+            # OpenQuake scenario-GMF + secondary-perils solver-confirm card:
+            # simple proceed/cancel summarizing the scenario magnitude + AOI area
+            # (the secondary-perils variant names the two ground-failure screens),
+            # built inline from the tool args. A missing bbox falls through to the
+            # tool's typed *_PARAMS_INVALID error after approval.
+            envelope = _build_scenario_confirm_envelope(params, tool_name)
         elif tool_name == "elmfire_fire_spread":
             # ELMFIRE fire-spread solver-confirm card: simple proceed/cancel
             # with the approximate cell count + calibrated runtime estimate +

@@ -323,6 +323,8 @@ async def run_modflow_archetype_job(
                 capture_zone_travel_time_years=getattr(
                     run_args, "capture_zone_travel_time_years", None
                 ),
+                regional_gradient_x=getattr(run_args, "regional_gradient_x", None),
+                regional_gradient_y=getattr(run_args, "regional_gradient_y", None),
             )
             mf6_bin = _mf6_binary()
 
@@ -362,6 +364,23 @@ async def run_modflow_archetype_job(
             _pp_kwargs["tier_years"] = getattr(
                 run_args, "capture_zone_travel_time_years", None
             ) or getattr(_deck, "capture_zone_travel_time_years", None)
+            # Georeferenced-mode narration: the gradient provenance + the aquifer
+            # params the Grubb analytic (capture width / stagnation distance) reads,
+            # all from the authoritative in-memory manifest. K converts m/s -> m/day;
+            # b is the confined PRT aquifer thickness (top 50 m - bottom 0 m); Q is
+            # the WEL magnitude (stored negative on the manifest).
+            _pp_kwargs["gradient_source"] = getattr(_deck, "gradient_source", None)
+            _pp_kwargs["gradient_magnitude"] = getattr(_deck, "gradient_magnitude", None)
+            _pp_kwargs["gradient_azimuth_deg"] = getattr(
+                _deck, "gradient_azimuth_deg", None
+            )
+            _pp_kwargs["k_m_per_day"] = abs(
+                float(getattr(_deck, "aquifer_k_ms", 0.0) or 0.0)
+            ) * 86400.0
+            _pp_kwargs["aquifer_thickness_m"] = 50.0
+            _pp_kwargs["pumping_rate_m3_day"] = abs(
+                float(getattr(_deck, "pumping_rate_m3_day", 0.0) or 0.0)
+            )
         layer: LayerURI = await asyncio.to_thread(
             lambda: postprocess_fn(_postprocess_uri, **_pp_kwargs)
         )

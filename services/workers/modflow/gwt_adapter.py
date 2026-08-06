@@ -758,6 +758,18 @@ class DeckManifest:
     # Well easting/northing/lat/lon are the REAL coordinates (NOT local-origin).
     n_particles: int = 0       # number of particles in the PRT release ring
     capture_zone_travel_time_years: list[float] = field(default_factory=list)
+    # Regional water-table gradient driving the steady GWF flow field the PRT runs
+    # against. When ``gradient_source == "dem"`` the (x, y) components are the
+    # DEM-derived planar head-gradient (m/m) in the model-UTM frame (x=east,
+    # y=north); the CHD boundary imposes head(x,y)=TOP + gx*(x-xc) + gy*(y-yc) on
+    # the full perimeter so groundwater flows down-slope and the capture zone
+    # extends up-gradient toward the recharge area. When "demo_west_east" the
+    # legacy hardcoded west->east REGIONAL_GRADIENT drives the flow (no DEM).
+    regional_gradient_x: float = 0.0    # head-gradient east-component (m/m)
+    regional_gradient_y: float = 0.0    # head-gradient north-component (m/m)
+    gradient_source: str = "demo_west_east"  # "dem" | "demo_west_east"
+    gradient_magnitude: float = 0.0     # |gradient| (m/m); 0.0 => manifest not populated
+    gradient_azimuth_deg: float | None = None  # compass azimuth (deg) water flows toward
     # --- saltwater_intrusion (ADDITIVE) -------------------- #
     # ``archetype == "saltwater_intrusion"``: GWF (BUY variable-density) + GWT in ONE
     # sim, using a vertical nrow=1 slice (Henry geometry) with seaward GHB+AUX (salt)
@@ -2868,6 +2880,12 @@ def _build_prt_capture_zone_deck(
     pumping_rate_m3_day: float | None,
     n_particles: int,
     capture_zone_travel_time_years: list[float] | None,
+    # DEM-derived regional water-table gradient (m/m) in the model-UTM frame
+    # (x=east, y=north). When BOTH are supplied the CHD boundary imposes a PLANAR
+    # head field oriented to this vector (georeferenced mode); when None the legacy
+    # hardcoded west->east REGIONAL_GRADIENT CHD is built (byte-identical).
+    regional_gradient_x: float | None = None,
+    regional_gradient_y: float | None = None,
     # constitutive advanced-physics (levers STEP 3): resolved dict; regional_gradient
     # is the only lever this GWF-only PRT archetype reads. None/{} => byte-identical.
     advanced_physics: dict | None = None,
@@ -3087,21 +3105,67 @@ def _build_prt_capture_zone_deck(
         filename=f"{gwf_name}.npf",
     )
 
-    # CHD: west->east regional gradient (high head west, low head east).
-    # Use the same REGIONAL_GRADIENT as all other archetypes; domain_width in
-    # local coords is ncol * delr = 4100 m -> head drop = 0.002 * 4100 = 8.2 m.
-    # regional_gradient: CONSTITUTIVE lever (default EQUALS REGIONAL_GRADIENT ->
-    # byte-identical when unset; same phys.get seam as the spill deck).
+    # CHD: the regional water-table gradient that drives the steady flow field the
+    # PRT tracks against. TWO modes:
+    #
+    #   * GEOREFERENCED (regional_gradient_x/y supplied, "dem" source): a PLANAR
+    #     head field on the FULL perimeter ring -- head(x,y) = TOP + gx*(x-xc) +
+    #     gy*(y-yc), (gx,gy) the DEM-derived head-gradient (m/m). Groundwater flows
+    #     down-gradient = -(gx,gy); the capture zone extends up-gradient = +(gx,gy)
+    #     (toward the recharge area / topographic high). Orienting the CHD to the
+    #     true regional flow direction is what makes "what land does my well draw
+    #     from" answerable on a real AOI -- a fixed west->east boundary would point
+    #     the zone the wrong way at most sites.
+    #
+    #   * DEMO (no gradient vector): the legacy hardcoded west->east
+    #     REGIONAL_GRADIENT CHD (west + east columns only) -- byte-identical to the
+    #     pre-georeferenced deck. domain_width = ncol*delr = 4100 m -> head drop
+    #     0.002 * 4100 = 8.2 m. regional_gradient: CONSTITUTIVE lever (same phys.get
+    #     seam as the spill deck).
     phys = dict(advanced_physics or {})
     domain_width_m = ncol * delr
-    head_west = PRT_AQUIFER_TOP_M + float(
-        phys.get("regional_gradient", REGIONAL_GRADIENT)
-    ) * domain_width_m
-    head_east = PRT_AQUIFER_TOP_M
-    chd_records = []
-    for r in range(nrow):
-        chd_records.append([(0, r, 0), head_west])          # west boundary
-        chd_records.append([(0, r, ncol - 1), head_east])   # east boundary
+    xc_local = 0.5 * ncol * delr   # local-frame domain centre (x, east)
+    yc_local = 0.5 * nrow * delc   # local-frame domain centre (y, north)
+    have_vector = regional_gradient_x is not None and regional_gradient_y is not None
+    if have_vector:
+        gx = float(regional_gradient_x)
+        gy = float(regional_gradient_y)
+        gradient_source = "dem"
+        gradient_magnitude = float((gx * gx + gy * gy) ** 0.5)
+        # Compass azimuth (deg CW from north) water FLOWS toward = down-gradient
+        # = -(gx, gy). atan2(east, north) on the down-gradient vector.
+        import math as _math
+        gradient_azimuth_deg = (
+            _math.degrees(_math.atan2(-gx, -gy)) % 360.0
+            if gradient_magnitude > 0.0
+            else None
+        )
+        # Planar head field on the full boundary ring (dedupe corners by cellid).
+        seen: set[tuple[int, int]] = set()
+        chd_records = []
+        for r in range(nrow):
+            for c in range(ncol):
+                if 0 < r < nrow - 1 and 0 < c < ncol - 1:
+                    continue  # interior cell, not a boundary
+                if (r, c) in seen:
+                    continue
+                seen.add((r, c))
+                # local cell-centre coordinates (row 0 = northernmost).
+                x = (c + 0.5) * delr
+                y = (nrow - r - 0.5) * delc
+                head = PRT_AQUIFER_TOP_M + gx * (x - xc_local) + gy * (y - yc_local)
+                chd_records.append([(0, r, c), head])
+    else:
+        gx = gy = 0.0
+        gradient_source = "demo_west_east"
+        gradient_magnitude = float(phys.get("regional_gradient", REGIONAL_GRADIENT))
+        gradient_azimuth_deg = 90.0  # flows east
+        head_west = PRT_AQUIFER_TOP_M + gradient_magnitude * domain_width_m
+        head_east = PRT_AQUIFER_TOP_M
+        chd_records = []
+        for r in range(nrow):
+            chd_records.append([(0, r, 0), head_west])          # west boundary
+            chd_records.append([(0, r, ncol - 1), head_east])   # east boundary
     flopy.mf6.ModflowGwfchd(
         gwf,
         stress_period_data={0: chd_records},
@@ -3177,6 +3241,12 @@ def _build_prt_capture_zone_deck(
         model_utm_epsg=model_utm_epsg,
         n_particles=n_particles,
         capture_zone_travel_time_years=tz_years,
+        # Regional-gradient provenance (georeferenced vs demo west->east).
+        regional_gradient_x=gx,
+        regional_gradient_y=gy,
+        gradient_source=gradient_source,
+        gradient_magnitude=gradient_magnitude,
+        gradient_azimuth_deg=gradient_azimuth_deg,
     )
 
     if write:
@@ -3843,6 +3913,11 @@ def build_modflow_deck(
     n_particles: int = 16,
     capture_zone_travel_time_years: list[float] | None = None,
     prt_max_tracking_years: float | None = None,
+    # DEM-derived regional water-table gradient (m/m) in the model-UTM frame,
+    # threaded into the capture_zone / wellhead_protection PRT deck. BOTH None =>
+    # legacy hardcoded west->east CHD (byte-identical). Ignored for non-PRT decks.
+    regional_gradient_x: float | None = None,
+    regional_gradient_y: float | None = None,
     # --- saltwater_intrusion (ADDITIVE, optional) -- #
     # ``archetype == "saltwater_intrusion"``: Henry-style field-scale coastal
     # transect; GWF (BUY variable-density) + GWT in ONE sim. All three args are
@@ -4089,6 +4164,8 @@ def build_modflow_deck(
                 pumping_rate_m3_day=pumping_rate_m3_day,
                 n_particles=n_particles,
                 capture_zone_travel_time_years=capture_zone_travel_time_years,
+                regional_gradient_x=regional_gradient_x,
+                regional_gradient_y=regional_gradient_y,
                 advanced_physics=advanced_physics,
                 refine_regions=refine_regions,
             )

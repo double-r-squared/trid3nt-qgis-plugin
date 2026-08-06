@@ -756,6 +756,14 @@ from ..workflows.landlab.hand_wetness.hand_wetness import landlab_hand_wetness a
 # surfaced only by the run_openquake door's gate expansion. The composer chain
 # (model_openquake_psha) is inlined in the template module.
 from ..workflows.openquake.psha.psha import openquake_psha as _openquake_psha  # noqa: E402,F401 - RENAME of run_seismic_hazard_psha (engine=openquake, tier=template)
+# OpenQuake scenario ground-motion-field + earthquake secondary-perils TEMPLATES
+# (engine="openquake", tier="template"; ADR 0164). scenario_gmf runs the
+# in-process oq scenario calculator (single rupture + JB2009-correlated GMFs) and
+# maps the mean + across-realization spread; secondary_perils rides that GMF and
+# applies the openquake.sep liquefaction (Zhu 2015) + Newmark landslide (Jibson)
+# screens over fetched terrain covariates.
+from ..workflows.openquake.scenario_gmf.scenario_gmf import openquake_scenario_gmf as _openquake_scenario_gmf  # noqa: E402,F401
+from ..workflows.openquake.secondary_perils.secondary_perils import openquake_secondary_perils as _openquake_secondary_perils  # noqa: E402,F401
 # elmfire_fire_spread TEMPLATE (engine="elmfire", tier="template"), one
 # folder under workflows/elmfire/fire_spread/; EXCLUDED from the default
 # retrieval pool, surfaced only by the run_elmfire door's gate expansion. The

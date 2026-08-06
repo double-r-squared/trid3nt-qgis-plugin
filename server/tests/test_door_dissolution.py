@@ -73,6 +73,8 @@ EXPECTED_TEMPLATES = {
     "geoclaw_amr_refinement_regions",  # GeoClaw CAND-S: explicit lat/lon/time AMR region control
     "geoclaw_regional_manning_friction",  # GeoClaw CAND-S: spatially-varying banded Manning friction
     "openquake_psha",
+    "openquake_scenario_gmf",  # OpenQuake scenario GMF (ADR 0164): single-rupture correlated ground-motion field, mean + realization spread
+    "openquake_secondary_perils",  # OpenQuake secondary-perils (ADR 0164): scenario-GMF-driven liquefaction (Zhu 2015) + Newmark landslide screening
     "pelicun_damage_assessment",
     "pelicun_closed_form_validation",  # pelicun CAND-S: Monte-Carlo vs analytic closed form (damage-state prob + loss-function identity)
     "pelicun_mixed_fragility_loss_assessment",  # pelicun CAND-S: mixed fragility+loss-function assessment + EDP correlation spread

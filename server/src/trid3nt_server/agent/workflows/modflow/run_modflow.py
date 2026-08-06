@@ -845,6 +845,10 @@ def build_and_stage_modflow_deck(
                 run_args, "csub_interbed_thick_frac", None
             ),
             csub_cg_ske_m=getattr(run_args, "csub_cg_ske_m", None),
+            # --- capture_zone / wellhead_protection DEM-gradient (georeferenced) - #
+            # Both None => the PRT deck falls back to the demo west->east CHD.
+            regional_gradient_x=getattr(run_args, "regional_gradient_x", None),
+            regional_gradient_y=getattr(run_args, "regional_gradient_y", None),
         )
 
     # --- 1b. advanced-physics overrides (levers STEP 3) ---------------------

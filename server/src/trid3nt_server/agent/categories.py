@@ -286,6 +286,8 @@ PRIMARY_CATEGORY: dict[str, str] = {
     "pelicun_hazus_eq_version_comparison": "damage_assessment",
     "geoclaw_inundation": "hazard_modeling",
     "openquake_psha": "hazard_modeling",
+    "openquake_scenario_gmf": "hazard_modeling",
+    "openquake_secondary_perils": "hazard_modeling",
     # real-fault seismic-source fetcher: the OpenQuake PSHA input data fetcher
     # (USGS / GEM fault sources -> source-model XML). Filed alongside its consumer
     # openquake_psha (there is no dedicated geophysics data category).

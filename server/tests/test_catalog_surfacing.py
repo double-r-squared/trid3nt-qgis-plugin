@@ -3,7 +3,7 @@
 Covers the two arm prerequisites + the identity gate:
 
 - DEFAULT config (no arm flag): the 27 spec-served sources stay tier="general",
-  ambient-declarable; registry == 222 (+3 ELMFIRE transient-weather + crown-fire templates (ADR 0161): elmfire_transient_wind_schedule_spread (mid-run wind-shift redirection vs constant wind, multi-band NUM_METEOROLOGY_TIMES>1 + DT_METEOROLOGY interpolation) + elmfire_dead_fuel_moisture_interpolation_frequency_control (DT_INTERPOLATE_M1/M10/M100 accuracy-vs-cost sweep on a moisture-recovery schedule) + elmfire_crown_fire_initiation_threshold_sweep (CRITICAL_CANOPY_COVER initiation boundary + Cruz CROWN_FIRE_SPREAD_RATE_LIMIT ceiling folded sweep); +2 pelicun DL_calculation-harness templates (ADR 0160): pelicun_hazus_seismic_dl_run (auto-populated HAZUS EQ building damage+loss run via the tempdir+serialized-cwd DL_calculation harness) + pelicun_hazus_eq_version_comparison (HAZUS EQ v5.1-vs-v6.1 dataset comparison at the Assessment API); +1 SCHISM CAND-S transport-scheme V&V template: schism_transport_validation (Test_HeatConsv upwind-vs-TVD numerical mixing + Test_GEN_MassConsv conservative-tracer mass conservation on the hydro-core binary, ADR 0156); +1 MODFLOW CAND-S package-validation template: modflow_package_validation (GWF-NPF Newton/Zaidel + GWF-MAW/Sokol + GWF-HFB grid-independence cases, ADR 0153); +5 SWMM CAND-S mechanism-comparison templates: swmm_subcatchment_runoff_comparison + swmm_node_hydraulics_comparison + swmm_wetwell_pump_control_comparison + swmm_lid_performance_comparison + swmm_wq_buildup_washoff_comparison; +2 SWAN CAND-S templates: swan_physics_sensitivity_sweep + swan_stationary_snapshot_batch; +4 pelicun CAND-S Assessment-API validation templates:
+  ambient-declarable; registry == 224 (+2 OpenQuake templates (ADR 0164): openquake_scenario_gmf (in-process oq scenario single-rupture JB2009-correlated ground-motion field, mean + across-realization spread COGs) + openquake_secondary_perils (scenario-GMF-driven openquake.sep liquefaction Zhu-2015 + Newmark landslide Jibson screening over fetched DEM Vs30/slope/CTI covariates); +3 ELMFIRE transient-weather + crown-fire templates (ADR 0161): elmfire_transient_wind_schedule_spread (mid-run wind-shift redirection vs constant wind, multi-band NUM_METEOROLOGY_TIMES>1 + DT_METEOROLOGY interpolation) + elmfire_dead_fuel_moisture_interpolation_frequency_control (DT_INTERPOLATE_M1/M10/M100 accuracy-vs-cost sweep on a moisture-recovery schedule) + elmfire_crown_fire_initiation_threshold_sweep (CRITICAL_CANOPY_COVER initiation boundary + Cruz CROWN_FIRE_SPREAD_RATE_LIMIT ceiling folded sweep); +2 pelicun DL_calculation-harness templates (ADR 0160): pelicun_hazus_seismic_dl_run (auto-populated HAZUS EQ building damage+loss run via the tempdir+serialized-cwd DL_calculation harness) + pelicun_hazus_eq_version_comparison (HAZUS EQ v5.1-vs-v6.1 dataset comparison at the Assessment API); +1 SCHISM CAND-S transport-scheme V&V template: schism_transport_validation (Test_HeatConsv upwind-vs-TVD numerical mixing + Test_GEN_MassConsv conservative-tracer mass conservation on the hydro-core binary, ADR 0156); +1 MODFLOW CAND-S package-validation template: modflow_package_validation (GWF-NPF Newton/Zaidel + GWF-MAW/Sokol + GWF-HFB grid-independence cases, ADR 0153); +5 SWMM CAND-S mechanism-comparison templates: swmm_subcatchment_runoff_comparison + swmm_node_hydraulics_comparison + swmm_wetwell_pump_control_comparison + swmm_lid_performance_comparison + swmm_wq_buildup_washoff_comparison; +2 SWAN CAND-S templates: swan_physics_sensitivity_sweep + swan_stationary_snapshot_batch; +4 pelicun CAND-S Assessment-API validation templates:
   pelicun_closed_form_validation + pelicun_mixed_fragility_loss_assessment +
   pelicun_replacement_threshold_override_sweep + pelicun_flood_foundation_depth_damage_sweep;
   +2 GeoClaw CAND-S SWE+AMR knob templates: geoclaw_amr_refinement_regions + geoclaw_regional_manning_friction; +3 ELMFIRE CAND-S sensitivity templates:
@@ -103,7 +103,7 @@ def _os_environ() -> dict:
 def test_default_config_identity():
     r = _run_arm(None)
     assert r["arm"] is None
-    assert r["registry_size"] == 222
+    assert r["registry_size"] == 224
     assert r["n_specs"] == 95  # ADR 0112: +fetch_noaa_nwm_streamflow (fetcher finale ENDGAME -- last coded data-fetcher)
     # They stay ambient (tier=general) and IN the declarable pool.
     assert r["gridmet_tier"] == "general"
@@ -121,7 +121,7 @@ def test_default_config_identity():
 def test_arm2_specs_leave_pool_but_stay_indexed():
     r = _run_arm("2")
     assert r["arm"] == "2"
-    assert r["registry_size"] == 222  # registry does NOT shrink; only the pool does
+    assert r["registry_size"] == 224  # registry does NOT shrink; only the pool does
     assert r["gridmet_tier"] == "catalog"
     assert r["any_spec_in_declarable"] is False  # every spec leaves the ambient pool
     # -57, not -58: fetch_copernicus_dem is tier="internal" (wave-11 absorption into
@@ -151,7 +151,7 @@ def test_arm2_specs_leave_pool_but_stay_indexed():
 def test_arm1_signature_and_pool():
     r = _run_arm("1")
     assert r["arm"] == "1"
-    assert r["registry_size"] == 222
+    assert r["registry_size"] == 224
     assert r["gridmet_tier"] == "catalog"
     assert r["any_spec_in_declarable"] is False
     assert r["gridmet_in_index"] is True
@@ -238,7 +238,7 @@ def test_arm3_specs_leave_pool_and_source_param():
     composed fetcher's real dispatch path)."""
     r = _run_arm("3")
     assert r["arm"] == "3"
-    assert r["registry_size"] == 222  # registry does NOT shrink; only the pool does
+    assert r["registry_size"] == 224  # registry does NOT shrink; only the pool does
     assert r["gridmet_tier"] == "catalog"
     assert r["any_spec_in_declarable"] is False  # every spec leaves the ambient pool
     # -70, not -71: fetch_copernicus_dem is tier="internal" (already out of the pool).
