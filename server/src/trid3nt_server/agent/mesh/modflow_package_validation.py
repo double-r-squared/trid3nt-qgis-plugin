@@ -7,7 +7,7 @@ through the local ``mf6`` binary and extract the computed-vs-reference quantity.
 The product is a computed-vs-reference CHART plus typed scalars - NEVER a
 georeferenced map (the decks are schematic, local model units).
 
-Three cases, each exercising a package no archetype composer exposes:
+Five cases, each exercising a package no archetype composer exposes:
 
 - ``newton_dry_rewet`` (GWF-NPF / STO): the Zaidel (2013) staircase channel
   (modflow6-examples:ex-gwf-zaidel). A 200-cell unconfined channel over a
@@ -29,18 +29,38 @@ Three cases, each exercising a package no archetype composer exposes:
   grid refinement (HYDCHR is a per-unit-area characteristic). The case solves the
   same domain at several column counts and reports the flux at each.
 
+- ``prt_capture_zone`` (native mf6 PRT): a confined well in regional through-flow
+  (CHD inflow / RIV discharge) tracked FORWARD from the inflow boundary
+  (pathlines + travel times; the captured band width) and BACKWARD from the well
+  through the reversed flow field (the capture zone; the down-gradient stagnation
+  excursion). Both are checked against the Grubb (1993) uniform-flow capture-zone
+  analytical (stagnation x_s = Q/(2*pi*U), width W = Q/U). The ``direction`` /
+  ``n_particles`` knobs select the tracking direction shown and the release-ring
+  size. Native PRT ships in mf6 6.7.0 - no MODPATH 7 install is needed (the
+  ADR 0153 STOP was moot); an EXACT PRT-vs-MODPATH7 cross-tool match remains a
+  future recipe (install mp7, run both off the same GWF output).
+
+- ``henry_saltwater`` (GWF-BUY + GWT): the classic Henry (1964) coastal
+  cross-section (modflow6-examples:ex-gwt-henry-a). BUY couples the GWT salt
+  concentration to fluid density; a freshwater WEL inflow inland opposes a 35 ppt
+  GHB seawater boundary seaward. The case reports the 0.5-isochlor toe and the
+  wedge pattern (monotone stratification, fresh-top-inland / salt-bottom-seaward)
+  against the published wedge.
+
 Honesty (loud): every number is a real parsed mf6 output (invariant 1); the
 decks are AUTHORED synthetic benchmarks labeled ``SyntheticInput(basis=
-"default_demo")`` by the composer. The MODPATH-7 cross-tool PRT case is NOT
-included here - the mp7 binary is absent from the image/env (ADR 0153 STOP).
+"default_demo")`` by the composer.
 """
 
 from __future__ import annotations
 
+import csv
 import logging
+import math
 import os
 import shutil
 import tempfile
+from collections import defaultdict
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
@@ -56,6 +76,11 @@ __all__ = [
     "resolve_mf6_binary",
     "run_validation_case",
     "ModflowValidationError",
+    "build_prt_gwf",
+    "build_henry_saltwater",
+    "HFB_GRID_NCOLS",
+    "PRT_STAGNATION_M",
+    "HENRY_TOE_PENETRATION_REF_M",
 ]
 
 #: mf6 dry-cell / no-flow sentinel written by the standard (non-Newton)
@@ -135,6 +160,52 @@ VALIDATION_CASES: dict[str, ValidationCaseMeta] = {
             "not a site."
         ),
         tolerance=1.0e-2,  # relative error at the finest grid
+    ),
+    "prt_capture_zone": ValidationCaseMeta(
+        case="prt_capture_zone",
+        question=(
+            "does native MF6 PRT particle tracking delineate a pumping well's "
+            "capture zone (backward from the well) and pathlines/travel times "
+            "(forward from the regional inflow), matching the Grubb (1963/1993) "
+            "uniform-flow capture-zone analytical?"
+        ),
+        package="PRT (native mf6 particle tracking) on GWF-WEL/CHD/RIV",
+        reference_label=(
+            "Grubb (1993) uniform-flow capture-zone analytical: down-gradient "
+            "stagnation distance x_s = Q/(2*pi*K*b*i) and up-gradient capture "
+            "width W = Q/(K*b*i)"
+        ),
+        reference_source="Grubb (1993) Ground Water 31(1):27-32; mf6-examples:ex-prt-mp7-p01",
+        basis_note=(
+            "Confined single-layer 1210x1010 m domain (K=10 m/d, b=20 m), a "
+            "regional gradient set by a CHD inflow (west) and a RIV discharge "
+            "boundary (east), and a Q=60 m3/d well at centre. Native mf6 PRT "
+            "(ModflowPrt + ModflowEms), backward tracking via the reversed GWF "
+            "flow field. Synthetic benchmark, not a site."
+        ),
+        tolerance=1.0e-1,  # relative error on the stagnation distance
+    ),
+    "henry_saltwater": ValidationCaseMeta(
+        case="henry_saltwater",
+        question=(
+            "does the BUY variable-density package on a GWF-GWT pair reproduce "
+            "the classic Henry saltwater-intrusion wedge (the 0.5 isochlor "
+            "shape)?"
+        ),
+        package="GWF-BUY (variable density) + GWT",
+        reference_label=(
+            "Henry (1964) saltwater-intrusion wedge: a stable interface with the "
+            "0.5-relative-salinity isochlor toe at ~0.6 fractional inland "
+            "penetration (bottom layer)"
+        ),
+        reference_source="modflow6-examples:ex-gwt-henry-a (Henry, 1964)",
+        basis_note=(
+            "Henry 40-layer x 80-column vertical cross-section (2.0 m x 1.0 m), "
+            "K=864 m/d, porosity=0.35, diffc=0.57024, freshwater WEL inflow "
+            "5.7024 m3/d (inland) vs a 35 ppt GHB seawater boundary (seaward), "
+            "BUY drhodc=0.7. Synthetic benchmark, not a site."
+        ),
+        tolerance=0.20,  # relative band on the 0.5-isochlor toe penetration
     ),
 }
 
@@ -576,22 +647,447 @@ def _solve_hfb_barrier() -> SolvedValidation:
     )
 
 
+# --------------------------------------------------------------------------- #
+# PRT capture zone (native mf6 particle tracking) vs Grubb (1993) analytical.
+#
+# A confined single-layer aquifer with a regional gradient (CHD inflow west,
+# RIV discharge east) and a pumping well at the centre has a closed-form
+# capture-zone solution (Grubb, 1993): the down-gradient stagnation point sits at
+# x_s = Q/(2*pi*U) and the up-gradient capture width asymptotes to W = Q/U, with
+# U = K*b*i the regional volumetric flux per unit width. Native mf6 PRT
+# (ModflowPrt + ModflowEms) tracks particles FORWARD from the inflow boundary
+# (pathlines + travel times; the captured band width -> W) and BACKWARD from the
+# well through the reversed flow field (the capture zone; the max down-gradient
+# excursion -> x_s). Both are checked against Grubb, so - unlike the ADR 0153
+# STOP, which had no numeric reference for the 3-layer ex-prt-mp7-p01 system -
+# this case is validated NUMERICALLY, not just qualitatively.
+# --------------------------------------------------------------------------- #
+
+PRT_NLAY, PRT_NROW, PRT_NCOL = 1, 101, 121
+PRT_DELR = PRT_DELC = 10.0            # m
+PRT_TOP, PRT_BOTM = 20.0, 0.0        # confined thickness b = 20 m
+PRT_K = 10.0                         # m/d
+PRT_POROSITY = 0.20
+PRT_HW, PRT_HE = 21.0, 20.0          # west inflow head / east discharge stage
+PRT_Q = 60.0                         # well pumping (m3/d)
+PRT_WELL_ROW = PRT_NROW // 2
+PRT_WELL_COL = PRT_NCOL // 2
+#: aquifer thickness, regional gradient, and Grubb flux-per-unit-width.
+_PRT_B = PRT_TOP - PRT_BOTM
+_PRT_LX = PRT_NCOL * PRT_DELR
+_PRT_I = (PRT_HW - PRT_HE) / _PRT_LX
+_PRT_U = PRT_K * _PRT_B * _PRT_I
+#: Grubb analytical: stagnation distance and asymptotic capture width.
+PRT_STAGNATION_M = PRT_Q / (2.0 * math.pi * _PRT_U)
+PRT_CAPTURE_WIDTH_ASYMPTOTE_M = PRT_Q / _PRT_U
+
+
+def _grubb_capture_halfwidth(distance_upgradient_m: float) -> float:
+    """Grubb (1993) capture-zone half-width at a finite up-gradient distance.
+
+    The dividing streamline satisfies ``x = y / tan(2*pi*U*y/Q)``; the
+    up-gradient branch (y in ``(Q/4U, Q/2U)``) gives the half-width at distance
+    ``L = -x``. Solved by bisection so the finite-domain width is compared
+    (the asymptote W = Q/U is only reached as L -> infinity).
+    """
+    k = 2.0 * math.pi * _PRT_U / PRT_Q
+    lo, hi = PRT_Q / (4.0 * _PRT_U) + 1e-9, PRT_Q / (2.0 * _PRT_U) - 1e-9
+
+    def f(y: float) -> float:
+        return y / math.tan(k * y) + distance_upgradient_m
+
+    # f(lo) > 0, f(hi) < 0, monotone decreasing.
+    for _ in range(200):
+        mid = 0.5 * (lo + hi)
+        if f(mid) > 0.0:
+            lo = mid
+        else:
+            hi = mid
+    return 0.5 * (lo + hi)
+
+
+def _prt_xy_center(row: int, col: int) -> tuple[float, float]:
+    return (col + 0.5) * PRT_DELR, (PRT_NROW - row - 0.5) * PRT_DELC
+
+
+def build_prt_gwf(ws: str | None = None):
+    """Author + write the confined well+river GWF flow deck (no run)."""
+    import flopy
+
+    mf6 = resolve_mf6_binary()
+    ws = ws or _new_ws("prt")
+    sub = os.path.join(ws, "gwf")
+    sim = flopy.mf6.MFSimulation(sim_name="gwf", sim_ws=sub, exe_name=mf6 or "mf6")
+    flopy.mf6.ModflowTdis(sim, time_units="days", nper=1, perioddata=[(1.0, 1, 1.0)])
+    gwf = flopy.mf6.ModflowGwf(sim, modelname="gwf", save_flows=True)
+    flopy.mf6.ModflowIms(sim, complexity="simple", outer_dvclose=1e-9, inner_dvclose=1e-10)
+    flopy.mf6.ModflowGwfdis(gwf, nlay=PRT_NLAY, nrow=PRT_NROW, ncol=PRT_NCOL,
+                            delr=PRT_DELR, delc=PRT_DELC, top=PRT_TOP, botm=PRT_BOTM,
+                            length_units="meters")
+    flopy.mf6.ModflowGwfic(gwf, strt=PRT_HW)
+    flopy.mf6.ModflowGwfnpf(gwf, icelltype=0, k=PRT_K,
+                            save_specific_discharge=True, save_saturation=True)
+    flopy.mf6.ModflowGwfchd(gwf, stress_period_data=[
+        [(0, r, 0), PRT_HW] for r in range(PRT_NROW)])
+    # East = a RIV discharge boundary (high conductance -> fixed stage): the
+    # "river" the regional flow drains to.
+    flopy.mf6.ModflowGwfriv(gwf, stress_period_data=[
+        [(0, r, PRT_NCOL - 1), PRT_HE, 1.0e6, PRT_BOTM + 0.1] for r in range(PRT_NROW)])
+    flopy.mf6.ModflowGwfwel(gwf, stress_period_data=[[(0, PRT_WELL_ROW, PRT_WELL_COL), -PRT_Q]])
+    flopy.mf6.ModflowGwfoc(gwf, head_filerecord="gwf.hds", budget_filerecord="gwf.cbc",
+                           saverecord=[("HEAD", "ALL"), ("BUDGET", "ALL")])
+    sim.write_simulation(silent=True)
+    return sim, ws, sub
+
+
+def _prt_release_forward(sub_per_cell: int = 3) -> list[tuple]:
+    """Forward release: a dense line just inside the west inflow boundary."""
+    pts: list[tuple] = []
+    n = 0
+    z = (PRT_TOP + PRT_BOTM) / 2.0
+    for r in range(PRT_NROW):
+        for s in range(sub_per_cell):
+            x = (1 + 0.5) * PRT_DELR
+            y = (PRT_NROW - r - (s + 0.5) / sub_per_cell) * PRT_DELC
+            pts.append((n, (0, r, 1), x, y, z, f"f{n}"))
+            n += 1
+    return pts
+
+
+def _prt_release_backward(n_particles: int) -> list[tuple]:
+    """Backward release: a ring of particles around the well cell."""
+    cx, cy = _prt_xy_center(PRT_WELL_ROW, PRT_WELL_COL)
+    z = (PRT_TOP + PRT_BOTM) / 2.0
+    pts: list[tuple] = []
+    for n in range(n_particles):
+        a = 2.0 * math.pi * n / n_particles
+        pts.append((n, (0, PRT_WELL_ROW, PRT_WELL_COL),
+                    cx + 3.0 * math.cos(a), cy + 3.0 * math.sin(a), z, f"b{n}"))
+    return pts
+
+
+def _run_prt(ws: str, gwf_dir: str, direction: str, releasepts: list[tuple]) -> dict[str, list]:
+    """Build + run a PRT sim (reversing the GWF field for backward) -> tracks."""
+    import flopy
+    from flopy.utils import CellBudgetFile, HeadFile
+
+    mf6 = resolve_mf6_binary()
+    prt_ws = os.path.join(ws, direction)
+    os.makedirs(prt_ws, exist_ok=True)
+    hds = os.path.join(gwf_dir, "gwf.hds")
+    cbc = os.path.join(gwf_dir, "gwf.cbc")
+    if direction == "backward":
+        gsim = flopy.mf6.MFSimulation.load(sim_ws=gwf_dir, exe_name=mf6 or "mf6")
+        hrev, crev = hds + ".rev", cbc + ".rev"
+        CellBudgetFile(cbc, tdis=gsim.tdis).reverse(crev)
+        HeadFile(hds, tdis=gsim.tdis).reverse(hrev)
+        hds, cbc = hrev, crev
+    psim = flopy.mf6.MFSimulation(sim_name="prt", sim_ws=prt_ws, exe_name=mf6 or "mf6")
+    flopy.mf6.ModflowTdis(psim, time_units="days", nper=1, perioddata=[(1.0, 1, 1.0)])
+    prt = flopy.mf6.ModflowPrt(psim, modelname="prt")
+    flopy.mf6.ModflowPrtdis(prt, nlay=PRT_NLAY, nrow=PRT_NROW, ncol=PRT_NCOL,
+                            delr=PRT_DELR, delc=PRT_DELC, top=PRT_TOP, botm=PRT_BOTM,
+                            length_units="meters")
+    flopy.mf6.ModflowPrtmip(prt, porosity=PRT_POROSITY)
+    flopy.mf6.ModflowPrtprp(prt, pname="prp", nreleasepts=len(releasepts),
+                            packagedata=releasepts, boundnames=True,
+                            perioddata={0: ["FIRST"]}, extend_tracking=True,
+                            exit_solve_tolerance=1e-5)
+    flopy.mf6.ModflowPrtoc(prt, trackcsv_filerecord="prt.trk.csv")
+    flopy.mf6.ModflowPrtfmi(prt, packagedata=[
+        ("GWFHEAD", os.path.abspath(hds)), ("GWFBUDGET", os.path.abspath(cbc))])
+    ems = flopy.mf6.ModflowEms(psim)
+    psim.register_solution_package(ems, [prt.name])
+    psim.write_simulation(silent=True)
+    ok, _buff = psim.run_simulation(silent=True)
+    if not ok:
+        raise ModflowValidationError(f"PRT {direction} solve did not converge")
+    tracks: dict[str, list] = defaultdict(list)
+    with open(os.path.join(prt_ws, "prt.trk.csv")) as fh:
+        for row in csv.DictReader(fh):
+            tracks[row["name"]].append(row)
+    return dict(tracks)
+
+
+def _solve_prt_capture_zone(direction: str = "backward", n_particles: int = 40) -> SolvedValidation:
+    import flopy  # noqa: F401 - ensure flopy present
+
+    if direction not in ("forward", "backward"):
+        raise ModflowValidationError(
+            f"prt direction must be 'forward' or 'backward'; got {direction!r}"
+        )
+    sim, ws, gwf_dir = build_prt_gwf()
+    ok, _buff = sim.run_simulation(silent=True)
+    if not ok:
+        raise ModflowValidationError("PRT GWF flow solve did not converge")
+
+    # FORWARD: capture band width at the west inflow line vs Grubb finite-distance.
+    fwd = _run_prt(ws, gwf_dir, "forward", _prt_release_forward())
+    n_fwd = len(fwd)
+    captured_y: list[float] = []
+    fwd_all_terminated = True
+    travel_times: list[float] = []
+    for name, tr in fwd.items():
+        last = tr[-1]
+        if str(last["istatus"]) not in ("5", "3", "7", "8", "9"):
+            fwd_all_terminated = False
+        travel_times.append(float(last["t"]))
+        icell = int(float(last["icell"])) - 1
+        rr, cc = icell // PRT_NCOL, icell % PRT_NCOL
+        if (rr, cc) == (PRT_WELL_ROW, PRT_WELL_COL):
+            captured_y.append(float(last["y"]))
+    band_width = (len(captured_y) / n_fwd) * (PRT_NROW * PRT_DELC) if n_fwd else 0.0
+    release_dist = (PRT_WELL_COL - 1) * PRT_DELR
+    grubb_width = 2.0 * _grubb_capture_halfwidth(release_dist)
+    width_rel = abs(band_width - grubb_width) / grubb_width if grubb_width else None
+
+    # BACKWARD: capture zone; max down-gradient excursion -> stagnation distance.
+    bwd = _run_prt(ws, gwf_dir, "backward", _prt_release_backward(n_particles))
+    cx, _cy = _prt_xy_center(PRT_WELL_ROW, PRT_WELL_COL)
+    stagnation = 0.0
+    term_upgradient = 0
+    for name, tr in bwd.items():
+        stagnation = max(stagnation, max(0.0, max(float(p["x"]) for p in tr) - cx))
+        icell = int(float(tr[-1]["icell"])) - 1
+        if icell % PRT_NCOL <= 1:  # terminates at / adjacent to the west inflow
+            term_upgradient += 1
+    stag_rel = abs(stagnation - PRT_STAGNATION_M) / PRT_STAGNATION_M
+
+    validated = bool(
+        fwd_all_terminated
+        and len(captured_y) > 0
+        and width_rel is not None and width_rel < 0.20
+        and stag_rel < 0.10
+        and term_upgradient == len(bwd)
+    )
+
+    # Chart: computed/analytical ratio for the two Grubb metrics (target 1.0).
+    values = [
+        {"x": "stagnation distance", "y": round(stagnation / PRT_STAGNATION_M, 4)},
+        {"x": "capture width", "y": round((band_width / grubb_width) if grubb_width else 0.0, 4)},
+    ]
+    rule = [{"y": 1.0, "label": "Grubb (1993) analytical", "strokeDash": [5, 4]}]
+    spec = {
+        "title": f"Native MF6 PRT capture zone vs Grubb analytical ({direction} shown)",
+        "layer": [
+            {
+                "data": {"values": values},
+                "mark": {"type": "bar"},
+                "encoding": {
+                    "x": {"field": "x", "type": "nominal", "title": "capture-zone metric"},
+                    "y": {"field": "y", "type": "quantitative",
+                          "title": "PRT computed / Grubb analytical"},
+                },
+            },
+            {
+                "data": {"values": rule},
+                "mark": {"type": "rule"},
+                "encoding": {"y": {"field": "y", "type": "quantitative"}},
+            },
+        ],
+    }
+    caption = (
+        f"Backward stagnation {stagnation:.1f} m vs Grubb {PRT_STAGNATION_M:.1f} m "
+        f"(rel {stag_rel:.1%}); forward capture band {band_width:.0f} m vs Grubb "
+        f"finite-distance {grubb_width:.0f} m (rel {width_rel:.1%}); "
+        f"{len(captured_y)} of {n_fwd} inflow particles captured, "
+        f"{term_upgradient}/{len(bwd)} backward particles up-gradient. "
+        "Grubb (1993); mf6-examples:ex-prt-mp7-p01."
+    )
+    return SolvedValidation(
+        case="prt_capture_zone",
+        computed_value=stagnation, reference_value=PRT_STAGNATION_M,
+        delta=abs(stagnation - PRT_STAGNATION_M), relative_error=stag_rel,
+        validated=validated, tolerance=0.10,
+        metrics={
+            "direction_shown": direction,
+            "stagnation_distance_m": stagnation,
+            "stagnation_grubb_m": PRT_STAGNATION_M,
+            "stagnation_relative_error": stag_rel,
+            "capture_width_m": band_width,
+            "capture_width_grubb_finite_m": grubb_width,
+            "capture_width_asymptote_m": PRT_CAPTURE_WIDTH_ASYMPTOTE_M,
+            "capture_width_relative_error": width_rel,
+            "forward_particles": n_fwd,
+            "forward_captured": len(captured_y),
+            "forward_all_terminated": fwd_all_terminated,
+            "forward_travel_time_min_d": min(travel_times) if travel_times else None,
+            "forward_travel_time_max_d": max(travel_times) if travel_times else None,
+            "backward_particles": len(bwd),
+            "backward_terminate_upgradient": term_upgradient,
+            "regional_flux_U_m2_d": _PRT_U,
+            "pumping_rate_m3_d": PRT_Q,
+        },
+        chart_spec=spec,
+        chart_title=f"Native MF6 PRT capture zone vs Grubb analytical ({direction})",
+        chart_caption=caption,
+    )
+
+
+# --------------------------------------------------------------------------- #
+# Henry saltwater intrusion (BUY variable-density + GWT) vs the published wedge.
+# --------------------------------------------------------------------------- #
+
+HENRY_NLAY, HENRY_NROW, HENRY_NCOL = 40, 1, 80
+HENRY_DELR, HENRY_DELC = 0.025, 1.0     # m ; Lx = 2.0 m, Lz = 1.0 m
+HENRY_TOP = 1.0
+HENRY_K = 864.0                         # m/d
+HENRY_POROSITY = 0.35
+HENRY_DIFFC = 0.57024                   # m2/d
+HENRY_INFLOW_TOTAL = 5.7024             # m3/d freshwater inflow (inland)
+HENRY_GHB_COND = 1728.0
+HENRY_CSALT = 35.0                      # ppt seawater
+HENRY_DENSEREF = 1000.0
+HENRY_DRHODC = 0.7
+#: representative published 0.5-isochlor toe penetration (m, from the sea
+#: boundary at the bottom layer) for ex-gwt-henry-a - the pattern anchor.
+HENRY_TOE_PENETRATION_REF_M = 0.79
+
+
+def build_henry_saltwater(ws: str | None = None):
+    """Author + write the Henry BUY+GWT variable-density deck (no run)."""
+    import flopy
+
+    mf6 = resolve_mf6_binary()
+    ws = ws or _new_ws("henry")
+    botm = [HENRY_TOP - (i + 1) * (HENRY_TOP / HENRY_NLAY) for i in range(HENRY_NLAY)]
+    sim = flopy.mf6.MFSimulation(sim_name="henry", sim_ws=ws, exe_name=mf6 or "mf6")
+    flopy.mf6.ModflowTdis(sim, time_units="days", nper=1, perioddata=[(0.5, 500, 1.0)])
+    gwf = flopy.mf6.ModflowGwf(sim, modelname="flow", save_flows=True)
+    flopy.mf6.ModflowGwfdis(gwf, nlay=HENRY_NLAY, nrow=HENRY_NROW, ncol=HENRY_NCOL,
+                            delr=HENRY_DELR, delc=HENRY_DELC, top=HENRY_TOP, botm=botm)
+    flopy.mf6.ModflowGwfic(gwf, strt=HENRY_TOP)
+    flopy.mf6.ModflowGwfnpf(gwf, icelltype=0, k=HENRY_K, save_specific_discharge=True)
+    flopy.mf6.ModflowGwfbuy(gwf, denseref=HENRY_DENSEREF, nrhospecies=1,
+                            packagedata=[(0, HENRY_DRHODC, 0.0, "trans", "concentration")])
+    flopy.mf6.ModflowGwfwel(
+        gwf, auxiliary="CONCENTRATION", pname="WEL-1",
+        stress_period_data=[[(k, 0, 0), HENRY_INFLOW_TOTAL / HENRY_NLAY, 0.0]
+                            for k in range(HENRY_NLAY)])
+    flopy.mf6.ModflowGwfghb(
+        gwf, auxiliary="CONCENTRATION", pname="GHB-1",
+        stress_period_data=[[(k, 0, HENRY_NCOL - 1), HENRY_TOP, HENRY_GHB_COND, HENRY_CSALT]
+                            for k in range(HENRY_NLAY)])
+    flopy.mf6.ModflowGwfoc(gwf, head_filerecord="flow.hds", budget_filerecord="flow.cbc",
+                           saverecord=[("HEAD", "LAST"), ("BUDGET", "LAST")])
+    gwt = flopy.mf6.ModflowGwt(sim, modelname="trans")
+    flopy.mf6.ModflowGwtdis(gwt, nlay=HENRY_NLAY, nrow=HENRY_NROW, ncol=HENRY_NCOL,
+                            delr=HENRY_DELR, delc=HENRY_DELC, top=HENRY_TOP, botm=botm)
+    flopy.mf6.ModflowGwtic(gwt, strt=HENRY_CSALT)
+    flopy.mf6.ModflowGwtadv(gwt, scheme="upstream")
+    flopy.mf6.ModflowGwtdsp(gwt, xt3d_off=True, diffc=HENRY_DIFFC)
+    flopy.mf6.ModflowGwtmst(gwt, porosity=HENRY_POROSITY)
+    flopy.mf6.ModflowGwtssm(gwt, sources=[["GHB-1", "AUX", "CONCENTRATION"],
+                                          ["WEL-1", "AUX", "CONCENTRATION"]])
+    flopy.mf6.ModflowGwtoc(gwt, concentration_filerecord="trans.ucn",
+                           saverecord=[("CONCENTRATION", "LAST")])
+    flopy.mf6.ModflowGwfgwt(sim, exgtype="GWF6-GWT6", exgmnamea="flow", exgmnameb="trans")
+    # Two IMS: GWF first (must precede GWT in mfsim.nam), GWT second.
+    ims_flow = flopy.mf6.ModflowIms(sim, complexity="moderate", linear_acceleration="bicgstab",
+                                    outer_dvclose=1e-6, inner_dvclose=1e-7, filename="flow.ims")
+    sim.register_ims_package(ims_flow, ["flow"])
+    ims_trans = flopy.mf6.ModflowIms(sim, complexity="moderate", linear_acceleration="bicgstab",
+                                     outer_dvclose=1e-6, inner_dvclose=1e-7, filename="trans.ims")
+    sim.register_ims_package(ims_trans, ["trans"])
+    sim.write_simulation(silent=True)
+    return sim, ws
+
+
+def _solve_henry_saltwater() -> SolvedValidation:
+    sim, ws = build_henry_saltwater()
+    ok, _buff = sim.run_simulation(silent=True)
+    if not ok:
+        raise ModflowValidationError("Henry BUY+GWT solve did not converge")
+    conc = sim.get_model("trans").output.concentration().get_data()  # (nlay, nrow, ncol)
+    rel = np.asarray(conc)[:, 0, :] / HENRY_CSALT                     # (nlay, ncol)
+    xc = (np.arange(HENRY_NCOL) + 0.5) * HENRY_DELR                   # inland x=0 -> sea x=Lx
+    bottom = rel[-1, :]
+    # 0.5 isochlor toe on the bottom layer: inland-most (smallest x) crossing.
+    inland = np.where(bottom >= 0.5)[0]
+    toe_x = float(xc[int(inland.min())]) if inland.size else float("nan")
+    lx = HENRY_NCOL * HENRY_DELR
+    toe_penetration = lx - toe_x if inland.size else float("nan")     # from the sea
+    delta = abs(toe_penetration - HENRY_TOE_PENETRATION_REF_M)
+    rel_err = delta / HENRY_TOE_PENETRATION_REF_M
+    # pattern checks: a stable wedge (fresh inland-top, salt seaward-bottom), the
+    # bottom salinity monotone increasing toward the sea, and an intermediate toe.
+    monotone = bool(np.all(np.diff(bottom) >= -0.02))
+    fresh_top_inland = float(rel[0, 0]) < 0.1
+    salt_bottom_sea = float(rel[-1, -1]) > 0.9
+    intermediate_toe = bool(inland.size and 0.15 * lx < toe_x < 0.85 * lx)
+    validated = bool(monotone and fresh_top_inland and salt_bottom_sea
+                     and intermediate_toe and rel_err < 0.30)
+
+    # Chart: the 0.5-isochlor interface depth vs x (the canonical Henry plot).
+    values: list[dict[str, Any]] = []
+    depth_of = HENRY_TOP  # top elevation
+    for j in range(HENRY_NCOL):
+        col = rel[:, j]
+        idx = np.where(col >= 0.5)[0]
+        if idx.size:
+            # shallowest layer reaching 0.5 -> interface elevation at this x.
+            lay = int(idx.min())
+            z_iface = HENRY_TOP - (lay + 0.5) * (HENRY_TOP / HENRY_NLAY)
+            values.append({"x": round(float(xc[j]), 4), "y": round(float(z_iface), 4)})
+    spec = {
+        "data": {"values": values},
+        "mark": {"type": "line", "point": True, "color": "#1f5fbf"},
+        "encoding": {
+            "x": {"field": "x", "type": "quantitative",
+                  "title": "distance from inland boundary (m)  [sea at x=2.0]"},
+            "y": {"field": "y", "type": "quantitative", "title": "0.5-isochlor elevation (m)"},
+        },
+        "title": "Henry saltwater wedge: 0.5-relative-salinity isochlor",
+    }
+    caption = (
+        f"BUY+GWT Henry wedge: 0.5-isochlor toe penetrates {toe_penetration:.2f} m "
+        f"inland from the sea (bottom layer), vs the published ~{HENRY_TOE_PENETRATION_REF_M:.2f} m "
+        f"(rel {rel_err:.0%}); bottom salinity monotone toward the sea={monotone}. "
+        "modflow6-examples:ex-gwt-henry-a."
+    )
+    return SolvedValidation(
+        case="henry_saltwater",
+        computed_value=toe_penetration, reference_value=HENRY_TOE_PENETRATION_REF_M,
+        delta=delta, relative_error=rel_err, validated=validated, tolerance=0.30,
+        metrics={
+            "toe_penetration_from_sea_m": toe_penetration,
+            "toe_x_from_inland_m": toe_x,
+            "domain_length_m": lx,
+            "bottom_salinity_monotone_to_sea": monotone,
+            "fresh_top_inland": fresh_top_inland,
+            "salt_bottom_seaward": salt_bottom_sea,
+            "intermediate_toe": intermediate_toe,
+            "seawater_salinity_ppt": HENRY_CSALT,
+        },
+        chart_spec=spec,
+        chart_title="Henry saltwater wedge: 0.5-relative-salinity isochlor",
+        chart_caption=caption,
+    )
+
+
 _SOLVERS = {
     "newton_dry_rewet": _solve_newton_dry_rewet,
     "maw_crossaquifer": _solve_maw_crossaquifer,
     "hfb_barrier": _solve_hfb_barrier,
+    "henry_saltwater": _solve_henry_saltwater,
 }
 
 
-def run_validation_case(case: str) -> SolvedValidation:
+def run_validation_case(
+    case: str, *, direction: str = "backward", n_particles: int = 40
+) -> SolvedValidation:
     """Author + solve one validation case, returning the extracted V&V result.
 
-    Raises ``ModflowValidationError`` when ``case`` is unknown or no mf6 binary
-    is available (a solve is required - the product IS the mf6 comparison).
+    ``direction`` / ``n_particles`` apply ONLY to ``prt_capture_zone`` (the PRT
+    tracking direction shown and the backward release-ring size); the other
+    cases ignore them. Raises ``ModflowValidationError`` when ``case`` is unknown
+    or no mf6 binary is available (a solve is required - the product IS the mf6
+    comparison).
     """
-    if case not in _SOLVERS:
+    known = set(_SOLVERS) | {"prt_capture_zone"}
+    if case not in known:
         raise ModflowValidationError(
-            f"unknown validation case {case!r}; expected one of {sorted(_SOLVERS)}"
+            f"unknown validation case {case!r}; expected one of {sorted(known)}"
         )
     if resolve_mf6_binary() is None:
         err = ModflowValidationError(
@@ -600,7 +1096,10 @@ def run_validation_case(case: str) -> SolvedValidation:
         err.error_code = "MODFLOW_MF6_BIN_MISSING"
         raise err
     logger.info("modflow validation case=%s solving", case)
-    result = _SOLVERS[case]()
+    if case == "prt_capture_zone":
+        result = _solve_prt_capture_zone(direction=direction, n_particles=n_particles)
+    else:
+        result = _SOLVERS[case]()
     logger.info(
         "modflow validation case=%s validated=%s computed=%s reference=%s delta=%s",
         case, result.validated, result.computed_value, result.reference_value,

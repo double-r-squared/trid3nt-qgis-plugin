@@ -8,3 +8,10 @@ modflow_package_validation:
 - HFB barrier hydraulic characteristic containment wall benchmark
 - validate a MODFLOW package against a published or analytical reference
 - MODFLOW 6 package benchmark computed versus analytical
+- delineate a pumping well capture zone with native MF6 PRT particle tracking
+- backward particle tracking capture zone vs the Grubb analytical stagnation point
+- forward pathlines and travel times from the regional inflow to the well
+- MODFLOW PRT capture zone benchmark without MODPATH 7
+- does the BUY package reproduce the Henry saltwater intrusion wedge
+- variable density groundwater flow Henry problem 0.5 isochlor validation
+- BUY GWT density driven saltwater interface benchmark

@@ -1,6 +1,6 @@
 """Engine template ``modflow_package_validation`` (ADR 0153).
 
-A THIN composer over the shared package-validation engine core. Three synthetic
+A THIN composer over the shared package-validation engine core. Five synthetic
 MF6 benchmark cases selected by ``case``, each exercising a package no archetype
 composer exposes and checking the mf6 result against a published/analytical
 reference:
@@ -13,6 +13,11 @@ reference:
   delta).
 - ``hfb_barrier`` (GWF-HFB): a defined-thickness barrier whose cross-wall flux
   matches the HYDCHR analytical and is grid-refinement independent.
+- ``prt_capture_zone`` (native mf6 PRT): a confined well in regional through-flow
+  tracked forward (pathlines/travel times) and backward (capture zone) vs the
+  Grubb (1993) uniform-flow stagnation + capture-width analytical.
+- ``henry_saltwater`` (GWF-BUY + GWT): the classic Henry variable-density wedge -
+  does BUY reproduce the 0.5-isochlor saltwater-intrusion shape?
 
 The decks are SMALL SYNTHETIC benchmarks (schematic coordinates), so the product
 is the computed-vs-reference CHART + typed scalars, never a georeferenced map.
@@ -55,11 +60,16 @@ TEMPLATE_CARD = TemplateCard(
     question=(
         "does a MODFLOW package reproduce a published/analytical benchmark: the "
         "Newton formulation drying/rewetting a staircase channel, a multi-aquifer "
-        "well equilibrating to the Sokol analytical level, or a horizontal-flow "
-        "barrier whose flux is grid-refinement independent?"
+        "well equilibrating to the Sokol analytical level, a horizontal-flow "
+        "barrier whose flux is grid-refinement independent, native PRT particle "
+        "tracking delineating a well capture zone vs the Grubb analytical, or the "
+        "BUY package reproducing the Henry saltwater-intrusion wedge?"
     ),
     required_inputs=[],
-    knobs="case=newton_dry_rewet|maw_crossaquifer|hfb_barrier",
+    knobs=(
+        "case=newton_dry_rewet|maw_crossaquifer|hfb_barrier|prt_capture_zone|"
+        "henry_saltwater, direction=forward|backward (prt only), n_particles (prt only)"
+    ),
 )
 
 _METADATA = AtomicToolMetadata(
@@ -78,17 +88,22 @@ _DEMO_NOTE = (
 )
 
 
-async def run_package_validation(case: str) -> ModflowValidationResult:
+async def run_package_validation(
+    case: str, direction: str = "backward", n_particles: int = 40
+) -> ModflowValidationResult:
     """Solve one validation case, emit the chart, return the typed result.
 
-    Raises ``ModflowValidationError`` (unknown case / missing mf6) - the caller
-    maps it to a typed error frame.
+    ``direction`` / ``n_particles`` apply ONLY to ``prt_capture_zone``. Raises
+    ``ModflowValidationError`` (unknown case / missing mf6) - the caller maps it
+    to a typed error frame.
     """
     emitter = current_emitter()
     begin_substeps(emitter, 2)
 
     async with substep(emitter, "solve_case"):
-        solved: SolvedValidation = await asyncio.to_thread(run_validation_case, case)
+        solved: SolvedValidation = await asyncio.to_thread(
+            run_validation_case, case, direction=direction, n_particles=int(n_particles)
+        )
 
     async with substep(emitter, "chart_and_publish"):
         chart_titles: list[str] = []
@@ -149,7 +164,12 @@ async def run_package_validation(case: str) -> ModflowValidationResult:
     idempotent_hint=False,
 )
 async def modflow_package_validation(
-    case: Literal["newton_dry_rewet", "maw_crossaquifer", "hfb_barrier"] = "maw_crossaquifer",
+    case: Literal[
+        "newton_dry_rewet", "maw_crossaquifer", "hfb_barrier",
+        "prt_capture_zone", "henry_saltwater",
+    ] = "maw_crossaquifer",
+    direction: Literal["forward", "backward"] = "backward",
+    n_particles: int = 40,
     **_extra_ignored: Any,
 ) -> ModflowValidationResult | dict[str, Any]:
     """Validate a MODFLOW 6 package against a published/analytical benchmark.
@@ -157,7 +177,8 @@ async def modflow_package_validation(
     Fidelity: MODFLOW 6 mf6 solve on a SMALL SYNTHETIC benchmark deck (schematic,
     NOT a georeferenced AOI) - the computed-vs-reference chart + typed scalars are
     the product, no map layer. Off-scope: a real site groundwater study ->
-    modflow_contaminant_plume / modflow_sustainable_yield / modflow_capture_zone.
+    modflow_contaminant_plume / modflow_sustainable_yield / modflow_capture_zone /
+    modflow_saltwater_intrusion.
 
     Use this when the user asks whether a MODFLOW package/formulation reproduces a
     known benchmark, or to demonstrate a package's behavior:
@@ -172,9 +193,23 @@ async def modflow_package_validation(
         - ``hfb_barrier`` (GWF-HFB): does a defined-thickness barrier reduce
           cross-wall flux to the HYDCHR analytical value, independent of grid
           refinement? Reports the flux at several grid resolutions vs analytical.
+        - ``prt_capture_zone`` (native mf6 PRT): does particle tracking delineate
+          a pumping well's capture zone (backward from the well) + pathlines and
+          travel times (forward from the regional inflow), matching the Grubb
+          (1993) uniform-flow capture-zone analytical (stagnation distance +
+          capture width)? Native PRT ships in mf6 6.7.0 - no MODPATH 7 needed.
+        - ``henry_saltwater`` (GWF-BUY + GWT): does the BUY variable-density
+          package reproduce the classic Henry saltwater-intrusion wedge (the
+          0.5-isochlor shape)? Reports the toe penetration vs the published wedge.
 
     Params:
         case: which validation case to run (default ``maw_crossaquifer``).
+        direction: PRT tracking direction shown (``prt_capture_zone`` only;
+            ``"backward"`` = capture zone from the well, ``"forward"`` = pathlines
+            from the inflow). Both metrics are always computed; this selects the
+            headline framing. Ignored by other cases.
+        n_particles: PRT backward release-ring size (``prt_capture_zone`` only,
+            default 40). Ignored by other cases.
 
     Returns:
         On success ``ModflowValidationResult`` (case, package, computed vs
@@ -183,7 +218,9 @@ async def modflow_package_validation(
         ``{"status":"error", ...}`` with a typed ``MODFLOW_*`` code.
     """
     try:
-        result = await run_package_validation(str(case))
+        result = await run_package_validation(
+            str(case), direction=str(direction), n_particles=int(n_particles)
+        )
         return result
     except asyncio.CancelledError:
         raise
