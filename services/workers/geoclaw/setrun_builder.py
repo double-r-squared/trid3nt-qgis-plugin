@@ -91,6 +91,66 @@ class GeoClawDeckError(RuntimeError):
 
 _VALID_SCENARIOS = {"dam_break", "tsunami", "surge"}
 
+#: PARSER VERSION -- bump whenever a build_spec top-level field is added,
+#: renamed, or retired. Named in the strict-field error so a stale worker
+#: image (which silently dropped unknown fields before ADR 0158) is
+#: distinguishable from a genuinely-malformed caller.
+_PARSER_VERSION = "geoclaw-spec-2"
+
+#: Every top-level build_spec field ``parse_build_spec`` reads. No legacy /
+#: envelope-only fields exist here -- ``manifest.get("build_spec")`` is the
+#: pure spec dict (run_id / inputs / outputs live as SIBLING manifest keys,
+#: never inside build_spec), so an unknown key here is always a genuine typo
+#: or a stale/dropped composer field, never a deliberately-ignored envelope key.
+_KNOWN_SPEC_FIELDS = frozenset(
+    {
+        "scenario",
+        "bbox",
+        "domain_bbox",
+        "topo_file",
+        "sim_duration_s",
+        "output_frames",
+        "amr_levels",
+        "manning_n",
+        "sea_level_m",
+        "base_num_cells",
+        "dam_break_depth_m",
+        "source_lonlat",
+        "dtopo_file",
+        "source_magnitude",
+        "fault_strike_deg",
+        "fault_dip_deg",
+        "fault_rake_deg",
+        "fault_depth_km",
+        "surge_forcing_file",
+        "extra_topo_files",
+        "fgmax_arrival_tol_m",
+        "coastal_gauge_lonlat",
+        "amr_regions",
+        "manning_coefficients",
+        "manning_break",
+        "lagrangian_particles",
+        "fgmax_mask",
+    }
+)
+
+
+def _reject_unknown_spec_fields(raw: dict[str, Any]) -> None:
+    """Raise loudly if ``raw`` carries a top-level key ``parse_build_spec`` never
+    reads (ADR 0158 -- the ADR 0148 lesson: a stale image silently dropped
+    unknown build_spec fields and two registered knob templates ran as no-ops).
+    """
+    unknown = sorted(set(raw) - _KNOWN_SPEC_FIELDS)
+    if unknown:
+        raise GeoClawDeckError(
+            "GEOCLAW_SPEC_UNKNOWN_FIELDS",
+            f"build_spec carries unknown field(s) {unknown} that parser "
+            f"{_PARSER_VERSION} does not read -- this SILENTLY no-ops the "
+            f"intended knob(s) rather than applying them. Either the caller has "
+            f"a typo, or the worker image is stale (rebuild it -- ADR 0148). "
+            f"Known fields: {sorted(_KNOWN_SPEC_FIELDS)}.",
+        )
+
 
 @dataclass
 class GeoClawBuildSpec:
@@ -187,6 +247,7 @@ def parse_build_spec(raw: dict[str, Any]) -> GeoClawBuildSpec:
         raise GeoClawDeckError(
             "GEOCLAW_SPEC_INVALID", f"build_spec must be a JSON object, got {type(raw)}"
         )
+    _reject_unknown_spec_fields(raw)
 
     scenario = str(raw.get("scenario") or "dam_break").strip().lower()
     if scenario not in _VALID_SCENARIOS:

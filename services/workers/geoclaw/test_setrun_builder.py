@@ -69,6 +69,16 @@ def test_parse_valid_spec_fills_defaults():
     assert spec.bbox == tuple(_AOI)
 
 
+def test_parse_rejects_unknown_top_level_field():
+    """ADR 0158: an unknown build_spec field errors loudly (the ADR 0148 lesson
+    was a stale image SILENTLY dropping unknown fields -- two knob templates
+    ran as no-ops). Never a silent drop."""
+    with pytest.raises(GeoClawDeckError) as ei:
+        parse_build_spec(_spec(typo_field_name=1.0))
+    assert ei.value.error_code == "GEOCLAW_SPEC_UNKNOWN_FIELDS"
+    assert "typo_field_name" in str(ei.value)
+
+
 def test_parse_rejects_bad_scenario():
     with pytest.raises(GeoClawDeckError) as ei:
         parse_build_spec(_spec(scenario="nope"))

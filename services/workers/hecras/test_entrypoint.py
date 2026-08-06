@@ -83,6 +83,19 @@ def test_run_raises_on_missing_plan_hdf(tmp_path):
         entrypoint.run(tmp_path)
 
 
+def test_run_rejects_unknown_manifest_field(tmp_path):
+    """ADR 0158: an unknown manifest.json field errors loudly instead of
+    silently keeping the deck's baked default (the ADR 0148 lesson)."""
+    (tmp_path / "manifest.json").write_text(
+        json.dumps({
+            "plan_hdf": "Absent.p04.tmp.hdf", "geom_suffix": "x04",
+            "typo_field_name": 1.0,
+        })
+    )
+    with pytest.raises(entrypoint.HecrasError, match="typo_field_name"):
+        entrypoint.run(tmp_path)
+
+
 def test_main_returns_nonzero_on_failure(tmp_path):
     # No manifest -> run() raises -> main() surfaces a non-zero exit (honest).
     assert entrypoint.main([str(tmp_path)]) == 1

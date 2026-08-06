@@ -47,15 +47,24 @@ def test_reach_config_applies_overrides(tmp_path):
     assert cfg.workdir == str(tmp_path)
 
 
-def test_reach_config_drops_unknown_keys_and_ignores_workdir(tmp_path):
-    # unknown keys must not crash; a manifest 'workdir' must not override the pin
+def test_reach_config_ignores_manifest_workdir_pin(tmp_path):
+    # a manifest 'workdir' must not override the mounted-data-dir pin
     cfg = E._reach_config(tmp_path, {
-        "bogus": 123, "another_unknown": "x",
         "workdir": "/etc/should-not-win",
         "distance_km": 7.0,
     })
     assert cfg.distance_km == 7.0
     assert cfg.workdir == str(tmp_path)
+
+
+def test_reach_config_rejects_unknown_keys(tmp_path):
+    """ADR 0158: an unknown reach key errors loudly instead of being dropped
+    with a log warning (the ADR 0148 lesson -- a WARNING line is invisible in
+    practice; two registered knob templates ran as no-ops that way)."""
+    with pytest.raises(E.TelemacManifestUnknownFieldsError, match="bogus"):
+        E._reach_config(tmp_path, {
+            "bogus": 123, "another_unknown": "x", "distance_km": 7.0,
+        })
 
 
 def test_main_bad_manifest_writes_typed_error(tmp_path, monkeypatch):

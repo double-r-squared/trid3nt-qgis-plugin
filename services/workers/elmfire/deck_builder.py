@@ -131,6 +131,12 @@ class ElmfireSpecError(ElmfireDeckError):
     error_code = "ELMFIRE_DECK_SPEC_INVALID"
 
 
+class ElmfireSpecUnknownFieldsError(ElmfireSpecError):
+    """Deck spec carries a top-level field the parser does not read (ADR 0158)."""
+
+    error_code = "ELMFIRE_DECK_SPEC_UNKNOWN_FIELDS"
+
+
 class ElmfireInputMissingError(ElmfireDeckError):
     """A required input raster path/URI does not exist."""
 
@@ -173,6 +179,36 @@ def _require(d: dict, key: str, ctx: str) -> Any:
     return d[key]
 
 
+#: PARSER VERSION -- bump on a top-level deck-spec shape change. Named in the
+#: strict-field error (ADR 0158).
+_PARSER_VERSION = "elmfire-spec-1"
+
+#: Every top-level deck-spec key ``validate_deck_spec`` reads. The
+#: ``simulator_extra``/``outputs_extra``/``inputs_extra`` namelist-knob
+#: extension surface is NOT part of this dict-based spec -- it is a SEPARATE,
+#: fully-typed Python kwarg path (``run_elmfire.build_constant_flat_deck`` etc
+#: call ``render_namelist`` directly), so it does not belong in this allowlist.
+_KNOWN_SPEC_FIELDS = frozenset(
+    {"aoi", "ignitions", "weather", "duration_s", "inputs", "grid", "time"}
+)
+
+
+def _reject_unknown_spec_fields(spec: dict) -> None:
+    """Raise loudly if ``spec`` carries a top-level key ``validate_deck_spec``
+    never reads (ADR 0158 -- the ADR 0148 lesson: a stale image silently
+    dropped unknown build_spec fields and two registered knob templates ran
+    as no-ops)."""
+    unknown = sorted(set(spec) - _KNOWN_SPEC_FIELDS)
+    if unknown:
+        raise ElmfireSpecUnknownFieldsError(
+            f"deck-spec carries unknown field(s) {unknown} that parser "
+            f"{_PARSER_VERSION} does not read -- this SILENTLY no-ops the "
+            f"intended field rather than applying it. Either the caller has a "
+            f"typo, or the worker image is stale (rebuild it -- ADR 0148). "
+            f"Known fields: {sorted(_KNOWN_SPEC_FIELDS)}."
+        )
+
+
 def validate_deck_spec(spec: dict) -> dict:
     """Validate the deck spec shape; return a normalized deep-ish copy.
 
@@ -194,6 +230,7 @@ def validate_deck_spec(spec: dict) -> dict:
     """
     if not isinstance(spec, dict):
         raise ElmfireSpecError("deck-spec must be a dict")
+    _reject_unknown_spec_fields(spec)
 
     aoi = _require(spec, "aoi", "")
     bbox = _require(aoi, "bbox", "aoi")

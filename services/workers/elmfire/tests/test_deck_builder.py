@@ -292,6 +292,14 @@ def test_missing_spec_field_raises_spec_error(source_rasters, tmp_path) -> None:
         db.build_deck(spec, tmp_path / "deck")
 
 
+def test_unknown_top_level_spec_field_raises_typed_error(source_rasters, tmp_path) -> None:
+    """ADR 0158: an unknown top-level deck-spec field errors loudly instead of
+    silently vanishing (the ADR 0148 lesson)."""
+    spec = _make_spec(source_rasters, typo_field_name=1.0)
+    with pytest.raises(db.ElmfireSpecUnknownFieldsError, match="typo_field_name"):
+        db.build_deck(spec, tmp_path / "deck")
+
+
 def test_ignition_outside_domain_raises_typed_error(source_rasters, tmp_path) -> None:
     spec = _make_spec(
         source_rasters, ignitions=[{"lon": -121.5, "lat": 40.0, "t_ign_s": 0.0}]

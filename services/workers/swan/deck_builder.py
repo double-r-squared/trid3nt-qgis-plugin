@@ -140,6 +140,64 @@ SWAN_EXCEPTION_VALUE: float = -999.0
 #: ("Normal end of run", no swan_out.mat) -- the all-dry signature.
 SWAN_DEPMIN_M: float = 0.05
 
+#: PARSER VERSION -- bump whenever a build_spec top-level field is added,
+#: renamed, or retired. Named in the strict-field error so a stale worker
+#: image is distinguishable from a genuinely-malformed caller (ADR 0158).
+_PARSER_VERSION = "swan-spec-2"
+
+#: Every top-level build_spec field ``parse_build_spec`` reads. No legacy /
+#: envelope-only fields exist here -- ``manifest.get("build_spec")`` is the
+#: pure spec dict (run_id / inputs / outputs live as SIBLING manifest keys),
+#: so an unknown key is always a genuine typo or a stale/dropped composer field.
+_KNOWN_SPEC_FIELDS = frozenset(
+    {
+        "mode",
+        "bbox",
+        "bottom_file",
+        "mx",
+        "my",
+        "n_dir",
+        "n_freq",
+        "freq_low_hz",
+        "freq_high_hz",
+        "boundary",
+        "wind_file",
+        "friction",
+        "breaking",
+        "triads",
+        "gen_formulation",
+        "whitecapping",
+        "quad_iquad",
+        "breaking_alpha",
+        "breaking_gamma",
+        "friction_cfjon",
+        "triad_biphase",
+        "triad_urcrit",
+        "triad_lpar",
+        "sim_duration_s",
+        "time_step_s",
+        "output_frames",
+        "output_quantities",
+    }
+)
+
+
+def _reject_unknown_spec_fields(raw: dict[str, Any]) -> None:
+    """Raise loudly if ``raw`` carries a top-level key ``parse_build_spec`` never
+    reads (ADR 0158 -- the ADR 0148 lesson: a stale image silently dropped
+    unknown build_spec fields and two registered knob templates ran as no-ops).
+    """
+    unknown = sorted(set(raw) - _KNOWN_SPEC_FIELDS)
+    if unknown:
+        raise SwanDeckError(
+            "SWAN_SPEC_UNKNOWN_FIELDS",
+            f"build_spec carries unknown field(s) {unknown} that parser "
+            f"{_PARSER_VERSION} does not read -- this SILENTLY no-ops the "
+            f"intended knob(s) rather than applying them. Either the caller has "
+            f"a typo, or the worker image is stale (rebuild it -- ADR 0148). "
+            f"Known fields: {sorted(_KNOWN_SPEC_FIELDS)}.",
+        )
+
 
 class SwanDeckError(RuntimeError):
     """Raised on a malformed build_spec / unsupported value.
@@ -242,6 +300,7 @@ def parse_build_spec(raw: dict[str, Any]) -> SwanBuildSpec:
         raise SwanDeckError(
             "SWAN_SPEC_INVALID", f"build_spec must be a JSON object, got {type(raw)}"
         )
+    _reject_unknown_spec_fields(raw)
 
     mode = str(raw.get("mode") or "stationary").strip().lower()
     if mode not in {"stationary", "nonstationary"}:

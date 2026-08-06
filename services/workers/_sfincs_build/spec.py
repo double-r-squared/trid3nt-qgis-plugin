@@ -35,6 +35,48 @@ JOB_SPEC_SCHEMA_VERSION: int = 1
 #: The object key the agent stages the spec under (per run prefix).
 JOB_SPEC_FILENAME: str = "sfincs_build_spec.json"
 
+#: PARSER VERSION -- bump whenever a job_spec top-level field is added,
+#: renamed, or retired. Named in the strict-field error so a stale worker
+#: image is distinguishable from a genuinely-malformed caller (ADR 0158).
+_PARSER_VERSION = "sfincs-jobspec-1"
+
+#: Every top-level job_spec key this worker understands. ``schema_version`` /
+#: ``engine`` / ``run_id`` are envelope/provenance fields ``validate_job_spec``
+#: itself does not consume beyond ``schema_version`` (documented in the module
+#: docstring, echoed by the composer for logging/routing); ``return_period_yr``
+#: is a LEGACY top-level fallback ``build_sfincs_quadtree_deck`` reads directly
+#: (``options.return_period_yr`` wins when present) -- kept here, not dropped,
+#: so a caller that still sends it at the top level is not rejected.
+_KNOWN_SPEC_FIELDS = frozenset(
+    {
+        "schema_version",
+        "engine",
+        "run_id",
+        "bbox",
+        "nlcd_vintage_year",
+        "inputs",
+        "forcing",
+        "options",
+        "return_period_yr",
+    }
+)
+
+
+def _reject_unknown_spec_fields(spec: dict[str, Any]) -> None:
+    """Raise loudly if ``spec`` carries a top-level key this worker never reads
+    (ADR 0158 -- the ADR 0148 lesson: a stale image silently dropped unknown
+    build_spec fields and two registered knob templates ran as no-ops).
+    """
+    unknown = sorted(set(spec) - _KNOWN_SPEC_FIELDS)
+    if unknown:
+        raise ValueError(
+            f"job_spec carries unknown field(s) {unknown} that parser "
+            f"{_PARSER_VERSION} does not read -- this SILENTLY no-ops the "
+            f"intended knob(s) rather than applying them. Either the caller has "
+            f"a typo, or the worker image is stale (rebuild it -- ADR 0148). "
+            f"Known fields: {sorted(_KNOWN_SPEC_FIELDS)}."
+        )
+
 
 def validate_job_spec(spec: Any) -> dict[str, Any]:
     """Validate + normalize the agent-composed SFINCS build job_spec.
@@ -45,6 +87,7 @@ def validate_job_spec(spec: Any) -> dict[str, Any]:
     """
     if not isinstance(spec, dict):
         raise ValueError("job_spec must be a JSON object")
+    _reject_unknown_spec_fields(spec)
     sv = spec.get("schema_version")
     if sv is None:
         raise ValueError("job_spec missing schema_version")

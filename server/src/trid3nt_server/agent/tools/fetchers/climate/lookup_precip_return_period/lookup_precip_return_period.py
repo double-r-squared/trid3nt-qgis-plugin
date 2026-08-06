@@ -58,8 +58,10 @@ class PrecipForcingUnavailableError(FetchError):
 # Access pattern tier -- LIVE-VERIFIED matches kickoff inference (2026-06-07):
 #
 #   * NWS HDSC publishes the Precipitation Frequency Data Server (PFDS) as a
-#     point-query CSV endpoint at ``hdsc.nws.noaa.gov/cgi-bin/hdsc/new/
-#     fe_text_mean.csv?lat=&lon=&data=depth&units=english&series=pds``.
+#     point-query CSV endpoint at ``hdsc.nws.noaa.gov/cgi-bin/new/
+#     fe_text_mean.csv?lat=&lon=&data=depth&units=english&series=pds`` (ADR
+#     0158: the ORIGINAL ``/cgi-bin/hdsc/new/`` path 301-redirects here --
+#     live-reverified 2026-08-06 -- pointed at the final URL directly).
 #     Live probe at (lat=26.6, lon=-81.9) -- Fort Myers FL -- returned an HTTP
 #     200 with a 1598-byte CSV: header rows naming "NOAA Atlas 14 Volume 9
 #     Version 2" + "Project area: Southeastern States", then a matrix of
@@ -83,7 +85,12 @@ _LOOKUP_PRECIP_RETURN_PERIOD_METADATA = AtomicToolMetadata(
     cacheable=True,
 )
 
-_ATLAS14_PFDS_URL = "https://hdsc.nws.noaa.gov/cgi-bin/hdsc/new/fe_text_mean.csv"
+# ADR 0158: NWS HDSC retired /cgi-bin/hdsc/new/ in favor of /cgi-bin/new/ (live-
+# verified 2026-08-06: the old path 301-redirects to the new one). Point at the
+# final URL directly to save the extra round trip; ``requests.get`` still
+# follows redirects by default (allow_redirects=True, untouched below), so a
+# FUTURE HDSC path change degrades to one extra hop rather than a hard break.
+_ATLAS14_PFDS_URL = "https://hdsc.nws.noaa.gov/cgi-bin/new/fe_text_mean.csv"
 
 #: Atlas 14 native source grid: 1/120 degree (≈ 30 arc-seconds).
 _ATLAS14_GRID_DEG = 1.0 / 120.0
@@ -460,7 +467,7 @@ def lookup_precip_return_period(
 
     **What it does:** Issues a point query to the NOAA Hydrometeorological Design
     Studies Center (HDSC) Precipitation Frequency Data Server (PFDS) at
-    ``hdsc.nws.noaa.gov/cgi-bin/hdsc/new/fe_text_mean.csv``, parses the returned
+    ``hdsc.nws.noaa.gov/cgi-bin/new/fe_text_mean.csv``, parses the returned
     duration × ARI matrix, and returns the requested depth in inches. Input
     coordinates are snapped to Atlas 14's 1/120° (~30 arc-second) grid before
     the cache key is computed (FR-DC-4 dedup). This is a point query, not a

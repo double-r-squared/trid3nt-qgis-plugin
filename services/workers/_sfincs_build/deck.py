@@ -2227,8 +2227,79 @@ def _spiderweb_from_dict(d: dict[str, Any] | None) -> "SpiderwebForcing | None":
     )
 
 
+#: PARSER VERSION -- bump whenever ``forcing`` / ``options`` top-level fields
+#: change. Named in the strict-field errors below (ADR 0158).
+_FORCING_OPTIONS_PARSER_VERSION = "sfincs-forcing-options-1"
+
+#: Every top-level key ``forcing_spec_from_dict`` reads (mirrors the
+#: ``ForcingSpec`` dataclass fields exactly -- no envelope keys live here).
+_KNOWN_FORCING_FIELDS = frozenset(
+    {
+        "forcing_type",
+        "precip_inches",
+        "duration_hours",
+        "return_period_years",
+        "precip_magnitude_mm_per_hr",
+        "waterlevel",
+        "discharge",
+        "breach",
+        "wind",
+        "pressure",
+        "wind_spiderweb",
+        "infiltration",
+        "provenance",
+    }
+)
+
+#: Every top-level key ``build_options_from_dict`` reads or knowingly leaves
+#: for a sibling reader. ``quadtree`` and ``return_period_yr`` are NOT read by
+#: this function -- ``build_sfincs_quadtree_deck`` (deck_quadtree.py) reads
+#: them directly off ``spec["options"]`` (quadtree grid config + the design-
+#: surge return-period fallback) -- allowlisted here, not dropped, so this
+#: strict check does not reject a legitimate quadtree job_spec.
+_KNOWN_OPTIONS_FIELDS = frozenset(
+    {
+        "grid_resolution_m",
+        "simulation_hours",
+        "crs",
+        "output_setup_uri",
+        "compute_class",
+        "autoscale_grid",
+        "output_interval_min",
+        "enable_subgrid",
+        "subgrid_nr_subgrid_pixels",
+        "building_obstacle_uri",
+        "building_obstacle_mode",
+        "advanced_physics",
+        "quadtree",  # consumed by deck_quadtree.py directly, not this function
+        "return_period_yr",  # ditto -- the quadtree design-surge fallback
+    }
+)
+
+
+def _reject_unknown_dict_fields(
+    d: dict[str, Any], known: frozenset[str], *, what: str
+) -> None:
+    """Raise loudly if ``d`` carries a top-level key outside ``known`` (ADR 0158
+    -- the ADR 0148 lesson: a stale image silently dropped unknown build_spec
+    fields and two registered knob templates ran as no-ops)."""
+    unknown = sorted(set(d) - known)
+    if unknown:
+        raise SFINCSSetupError(
+            "SFINCS_SPEC_UNKNOWN_FIELDS",
+            message=(
+                f"{what} carries unknown field(s) {unknown} that parser "
+                f"{_FORCING_OPTIONS_PARSER_VERSION} does not read -- this "
+                f"SILENTLY no-ops the intended knob(s) rather than applying "
+                f"them. Either the caller has a typo, or the worker image is "
+                f"stale (rebuild it -- ADR 0148). Known fields: {sorted(known)}."
+            ),
+        )
+
+
 def forcing_spec_from_dict(d: dict[str, Any]) -> ForcingSpec:
     """Reconstruct a ``ForcingSpec`` from the job_spec ``forcing`` dict."""
+    _reject_unknown_dict_fields(d, _KNOWN_FORCING_FIELDS, what="job_spec.forcing")
     return ForcingSpec(
         forcing_type=d["forcing_type"],
         precip_inches=d.get("precip_inches"),
@@ -2249,6 +2320,7 @@ def forcing_spec_from_dict(d: dict[str, Any]) -> ForcingSpec:
 
 def build_options_from_dict(d: dict[str, Any]) -> BuildOptions:
     """Reconstruct ``BuildOptions`` from the job_spec ``options`` dict."""
+    _reject_unknown_dict_fields(d, _KNOWN_OPTIONS_FIELDS, what="job_spec.options")
     base = BuildOptions()
     return BuildOptions(
         grid_resolution_m=float(d.get("grid_resolution_m", base.grid_resolution_m)),

@@ -112,13 +112,29 @@ ENV PYTHONUNBUFFERED=1 \
 WORKDIR /data
 
 # Build-time smoke: the worker payload + entrypoint import cleanly under the
-# activated env, and a ReachConfig maps from a synthetic manifest override (no
-# network / no solve). Catches a path/import/pin mistake at BUILD time.
+# activated env, a ReachConfig maps from a synthetic manifest override (no
+# network / no solve), AND an unknown reach key raises loudly (ADR 0158 -- the
+# ADR 0148 lesson: a stale image silently dropping an unknown build_spec field
+# is exactly the failure this build-time smoke exists to catch). Catches a
+# path/import/pin mistake at BUILD time.
 RUN python -c "import sys; sys.path.insert(0, '/opt/trid3nt/services/workers/telemac'); \
 import telemac_river_dye_build as B; import entrypoint as E; \
-cfg = E._reach_config(__import__('pathlib').Path('/data'), {'distance_km': 4.0, 'bogus_key': 1}); \
+cfg = E._reach_config(__import__('pathlib').Path('/data'), {'distance_km': 4.0}); \
 assert cfg.distance_km == 4.0 and cfg.workdir == '/data'; \
-print('telemac worker import + ReachConfig map OK:', cfg.name)"
+print('telemac worker import + ReachConfig map OK:', cfg.name)" \
+    # A SEPARATE process for the negative case: an unknown reach key must
+    # raise ``TelemacManifestUnknownFieldsError`` (ADR 0158 -- the ADR 0148
+    # lesson: a stale image silently dropping an unknown build_spec field is
+    # exactly the failure this build-time smoke exists to catch). Captured to
+    # a file + grepped so a DIFFERENT (unrelated) crash does not falsely pass.
+    && (python -c "import sys; sys.path.insert(0, '/opt/trid3nt/services/workers/telemac'); \
+import entrypoint as E; \
+E._reach_config(__import__('pathlib').Path('/data'), {'distance_km': 4.0, 'bogus_key': 1})" \
+        > /tmp/telemac_strict_field_check.log 2>&1; echo "exit=$?" >> /tmp/telemac_strict_field_check.log) \
+    && grep -q "^exit=1$" /tmp/telemac_strict_field_check.log \
+    && grep -q "TelemacManifestUnknownFieldsError" /tmp/telemac_strict_field_check.log \
+    && rm -f /tmp/telemac_strict_field_check.log \
+    && echo "telemac strict-field gate OK: unknown reach key raised (ADR 0158)"
 
 # One-shot solver: the activation entrypoint (_entrypoint.sh) sources the base
 # env (HOMETEL/SYSTELCFG/PATH -> telemac2d.py), then execs the worker. CMD is

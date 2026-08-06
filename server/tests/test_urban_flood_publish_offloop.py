@@ -28,6 +28,8 @@ import math
 import time
 from contextlib import asynccontextmanager
 
+import pytest
+
 from trid3nt_contracts.swmm_contracts import SWMMDepthLayerURI, SWMMRunArgs
 from trid3nt_server.agent.tools.publish_layer.publish_layer import PublishLayerError
 from trid3nt_server.agent.workflows.swmm.urban_flood import urban_flood as M
@@ -244,6 +246,12 @@ def _install_pyswmm_free_chain(monkeypatch, *, solve_fn=None, n_buildings_droppe
     )
     # is_local_mode True so the run_solver out-of-process branch is skipped.
     monkeypatch.setattr(M, "is_local_mode", lambda: True)
+    # OFFLINE-SUITE HERMETICITY (ADR 0158): run_args carries no explicit
+    # total_rain_depth_mm, so Step 3 of the composer calls the LIVE Atlas-14
+    # lookup (lookup_precip_return_period) unless stubbed -- a fixed known
+    # depth here (mirrors test_run_swmm_local_chain.py's pattern) so this test
+    # never touches the network / NOAA outage risk.
+    monkeypatch.setattr(M, "_atlas14_total_depth_mm", lambda bbox, rp, dur: 120.0)
 
     def _default_solve(stg):  # noqa: ANN001
         return type("R", (), {"continuity_error_pct": 0.5})()
@@ -586,3 +594,36 @@ def test_solve_runs_off_the_event_loop(monkeypatch):
         f"loop was starved during the solve: only {ticks['n']} keepalive ticks "
         f"(expected >= {expected_min}); the blocking solve is NOT off-loop"
     )
+
+
+# --------------------------------------------------------------------------- #
+# ADR 0107 honest gate: SWMM_PRECIP_LOOKUP_FAILED (ADR 0158 hermeticity sweep
+# -- the offline suite has no dedicated coverage that the gate actually fires
+# when the Atlas-14 lookup dies; every other test here MOCKS the lookup to a
+# fixed depth, which would silently hide a regression in the gate itself).
+# --------------------------------------------------------------------------- #
+def test_atlas14_lookup_failure_raises_precip_lookup_failed_gate(monkeypatch):
+    """When the design-storm lookup fails (returns None) AND the user supplied
+    no explicit total_rain_depth_mm, the composer STOPS with a typed
+    SWMM_PRECIP_LOOKUP_FAILED error rather than fabricating a baked depth
+    (ADR 0091 gated-fallback pattern) -- never reaching build_and_stage_swmm_deck."""
+    _install_pyswmm_free_chain(monkeypatch)
+    # Override the fixed-depth stub the shared installer set: simulate an
+    # honest Atlas-14 (+ Atlas-2 fallback) miss for this AOI.
+    monkeypatch.setattr(M, "_atlas14_total_depth_mm", lambda bbox, rp, dur: None)
+
+    def _must_not_be_called(*a, **k):  # noqa: ANN001
+        raise AssertionError("build_and_stage_swmm_deck must not run after a precip-lookup miss")
+
+    monkeypatch.setattr(M, "build_and_stage_swmm_deck", _must_not_be_called)
+
+    run_args = SWMMRunArgs(bbox=(-88.0, 36.0, -87.99, 36.01))
+    with pytest.raises(M.UrbanFloodWorkflowError) as ei:
+        asyncio.run(
+            M.model_swmm_urban_flood(
+                run_args, dem_path="/tmp/synthetic.tif",
+                building_footprints=None, run_id="RID",
+            )
+        )
+    assert ei.value.error_code == "SWMM_PRECIP_LOOKUP_FAILED"
+    assert "total_rain_depth_mm" in str(ei.value)

@@ -99,6 +99,11 @@ def _install_offbox_chain(monkeypatch, *, job_id: str, run_result: Any):
     monkeypatch.setattr(M, "build_and_stage_swmm_deck", lambda *a, **k: staging)
     # Off-box lane: is_local_mode False -> run_solver / wait_for_completion path.
     monkeypatch.setattr(M, "is_local_mode", lambda: False)
+    # OFFLINE-SUITE HERMETICITY (ADR 0158): run_args carries no explicit
+    # total_rain_depth_mm, so Step 3 of the composer calls the LIVE Atlas-14
+    # lookup unless stubbed -- a fixed known depth so this test never touches
+    # the network / NOAA outage risk.
+    monkeypatch.setattr(M, "_atlas14_total_depth_mm", lambda bbox, rp, dur: 120.0)
     monkeypatch.setattr(M, "stage_swmm_manifest", lambda stg: "s3://runs/RID/manifest.json")
 
     handle = _FakeHandle(job_id)

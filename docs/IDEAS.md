@@ -249,3 +249,14 @@ already has dedicated coverage); sweep for other live-endpoint
 dependencies in the offline suite. Also: when NOAA settles, check
 whether the /cgi-bin/hdsc/new/ -> /cgi-bin/new/ redirect is permanent
 and update _ATLAS14_PFDS_URL at the source.
+
+## 2026-08-06 - Real quadtree run to replace the fixture mesh proof (NATE)
+The ADR 0159 native-mesh proof used a HAND-BUILT UGRID fixture (the
+cht deck-builder worker image is absent locally, only stock
+sfincs-cpu) - its haphazard block placement is fixture authorship,
+not generator output. Owed: build/stage the cht_sfincs quadtree
+worker image locally, run one real quadtree flood (2:1-balanced
+refinement from composer criteria), regenerate the mesh proof from
+the genuine sfincs_map.nc, and confirm the MDAL load in QGIS
+(NATE's visual). Until then the proof folder's quadtree mesh image
+is labeled a schema fixture.

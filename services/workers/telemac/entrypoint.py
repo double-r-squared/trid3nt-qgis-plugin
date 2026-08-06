@@ -146,13 +146,24 @@ def _parse_gaia_mass_balance(listing_text: str) -> dict[str, Any]:
     return out
 
 
+class TelemacManifestUnknownFieldsError(ValueError):
+    """manifest.json['reach'] carries a key ``ReachConfig`` has no field for."""
+
+
+#: PARSER VERSION -- bump on a ReachConfig field addition/rename/retirement.
+#: Named in the strict-field error (ADR 0158).
+_PARSER_VERSION = "telemac-reach-1"
+
+
 def _reach_config(data_dir: Path, reach_overrides: dict[str, Any]) -> Any:
     """Build a ``ReachConfig`` from manifest overrides, pinned to ``data_dir``.
 
-    Only known ReachConfig fields are accepted (unknown keys are dropped with a
-    warning) so a stray manifest key never crashes the worker. ``workdir`` is
-    forced to the mounted data dir so every artifact lands where the supervisor
-    uploads from.
+    Only known ``ReachConfig`` fields are accepted -- an unknown key raises
+    loudly (ADR 0158; formerly dropped with a log warning, which is exactly the
+    ADR 0148 failure mode: a stale image / typo'd knob silently ran as a
+    no-op instead of applying, and a WARNING-level log line is invisible in
+    practice). ``workdir`` is forced to the mounted data dir so every artifact
+    lands where the supervisor uploads from.
     """
     from telemac_river_dye_build import ReachConfig  # noqa: WPS433 -- worker payload
 
@@ -160,13 +171,22 @@ def _reach_config(data_dir: Path, reach_overrides: dict[str, Any]) -> Any:
 
     valid = {f.name for f in dataclasses.fields(ReachConfig)}
     clean: dict[str, Any] = {}
+    unknown: list[str] = []
     for key, value in (reach_overrides or {}).items():
         if key == "workdir":
             continue  # always pinned to the mounted data dir
         if key in valid:
             clean[key] = value
         else:
-            LOG.warning("telemac manifest: ignoring unknown reach key %r", key)
+            unknown.append(key)
+    if unknown:
+        raise TelemacManifestUnknownFieldsError(
+            f"manifest.json['reach'] carries unknown field(s) {sorted(unknown)} "
+            f"that parser {_PARSER_VERSION} does not read -- this SILENTLY "
+            f"no-ops the intended knob(s) rather than applying them. Either "
+            f"the caller has a typo, or the worker image is stale (rebuild it "
+            f"-- ADR 0148). Known ReachConfig fields: {sorted(valid)}."
+        )
     clean["workdir"] = str(data_dir)
     cfg = ReachConfig(**clean)
     return cfg

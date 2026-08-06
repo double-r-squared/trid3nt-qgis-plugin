@@ -84,6 +84,45 @@ class HecrasError(RuntimeError):
     """A HEC-RAS engine leg failed or produced no usable result."""
 
 
+#: PARSER VERSION -- bump on a manifest.json shape change. Named in the
+#: strict-field error (ADR 0158).
+_PARSER_VERSION = "hecras-manifest-1"
+
+#: Every top-level manifest.json key ``run()`` reads (both manifest shapes:
+#: the M3 gate -- plan_hdf/geom_suffix/run_geompre -- and the engine-landing
+#: archetype path -- archetype/breach_enabled/flow_scale/target_peak_cfs).
+#: An unknown key would otherwise silently keep the deck's baked default
+#: (e.g. a typo'd flow knob solving the UNSCALED baseline, never erroring) --
+#: the ADR 0148 lesson.
+_KNOWN_MANIFEST_FIELDS = frozenset(
+    {
+        "archetype",
+        "plan_hdf",
+        "geom_suffix",
+        "run_geompre",
+        "breach_enabled",
+        "flow_scale",
+        "target_peak_cfs",
+    }
+)
+
+
+def _reject_unknown_manifest_fields(manifest: dict) -> None:
+    """Raise loudly if ``manifest`` carries a top-level key ``run()`` never
+    reads (ADR 0158 -- the ADR 0148 lesson: a stale image silently dropped
+    unknown build_spec fields and two registered knob templates ran as
+    no-ops)."""
+    unknown = sorted(set(manifest) - _KNOWN_MANIFEST_FIELDS)
+    if unknown:
+        raise HecrasError(
+            f"manifest.json carries unknown field(s) {unknown} that parser "
+            f"{_PARSER_VERSION} does not read -- this SILENTLY no-ops the "
+            f"intended knob(s) rather than applying them. Either the caller "
+            f"has a typo, or the worker image is stale (rebuild it -- ADR "
+            f"0148). Known fields: {sorted(_KNOWN_MANIFEST_FIELDS)}."
+        )
+
+
 def _engine(name: str) -> str:
     """Absolute path to a bundled engine, preferring PATH then the bin dir."""
     direct = Path(BIN_DIR) / name
@@ -297,6 +336,9 @@ def run(data_dir: Path) -> dict:
     if not manifest_path.is_file():
         raise HecrasError(f"no manifest.json in {data_dir}")
     manifest = json.loads(manifest_path.read_text())
+    if not isinstance(manifest, dict):
+        raise HecrasError(f"manifest.json must be a JSON object, got {type(manifest)}")
+    _reject_unknown_manifest_fields(manifest)
 
     archetype = manifest.get("archetype")
     forcing: dict = {}

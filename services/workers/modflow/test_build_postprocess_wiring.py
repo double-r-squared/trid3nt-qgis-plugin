@@ -148,3 +148,46 @@ def test_validate_job_spec_gate():
     assert ok["run_args"]["spill_location_latlon"] == [40.0, -96.0]
     with pytest.raises(ValueError):
         validate_job_spec({"schema_version": 1, "run_args": {}})
+
+
+def test_validate_job_spec_rejects_unknown_top_level_field():
+    """ADR 0158: an unknown TOP-LEVEL job_spec key errors loudly instead of
+    silently vanishing (the ADR 0148 lesson). run_args internals stay open
+    (unpacked as **kwargs against build_modflow_deck's typed signature, which
+    already raises TypeError on an unknown run_args key)."""
+    from services.workers._modflow_build import validate_job_spec
+
+    with pytest.raises(ValueError, match="typo_field_name"):
+        validate_job_spec({
+            "schema_version": 1, "engine": "modflow",
+            "typo_field_name": 1.0,
+            "run_args": {
+                "spill_location_latlon": [40.0, -96.0], "contaminant": "x",
+                "release_rate_kg_s": 1.0, "duration_days": 5.0,
+            },
+        })
+
+
+def test_build_modflow_deck_rejects_unknown_run_args_key_via_typeerror():
+    """The run_args passthrough is ALREADY strict by construction: an unknown
+    optional-knob key survives validate_job_spec (run_args stays open) but
+    build_deck_kwargs_from_spec unpacks it as **kwargs against
+    build_modflow_deck's fully-typed signature, so a typo'd knob raises a loud
+    TypeError rather than silently no-op'ing (never reaching mf6)."""
+    from services.workers._modflow_build import (
+        build_deck_kwargs_from_spec,
+        validate_job_spec,
+    )
+    from services.workers.modflow import gwt_adapter
+
+    spec = validate_job_spec({
+        "schema_version": 1, "engine": "modflow",
+        "run_args": {
+            "spill_location_latlon": [40.0, -96.0], "contaminant": "x",
+            "release_rate_kg_s": 1.0, "duration_days": 5.0,
+            "aquifer_k_m_s": 1e-4,  # typo of aquifer_k_ms
+        },
+    })
+    deck_kwargs = build_deck_kwargs_from_spec(spec)
+    with pytest.raises(TypeError, match="aquifer_k_m_s"):
+        gwt_adapter.build_modflow_deck(workdir="/tmp/does-not-run", write=False, **deck_kwargs)

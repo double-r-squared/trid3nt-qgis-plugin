@@ -52,6 +52,34 @@ _REQUIRED_RUN_ARGS: tuple[str, ...] = (
     "duration_days",
 )
 
+#: PARSER VERSION -- bump on a top-level job_spec shape change. Named in the
+#: strict-field error (ADR 0158).
+_PARSER_VERSION = "modflow-jobspec-1"
+
+#: Every top-level job_spec key this worker reads. Unlike ``run_args`` (an
+#: intentionally-open passthrough dict -- see the module docstring: it is
+#: unpacked as ``**deck_kwargs`` against ``build_modflow_deck``'s fully-typed
+#: signature, so an unknown run_args key ALREADY raises a loud TypeError at the
+#: call site; no separate allowlist is needed there), the TOP-LEVEL job_spec
+#: keys are extracted via lenient ``.get()`` in this module and would
+#: otherwise silently vanish if misnamed (the ADR 0148 failure mode).
+_KNOWN_SPEC_FIELDS = frozenset({"schema_version", "engine", "spec_id", "run_args", "options"})
+
+
+def _reject_unknown_spec_fields(spec: dict[str, Any]) -> None:
+    """Raise loudly if ``spec`` carries a top-level key this worker never reads
+    (ADR 0158 -- the ADR 0148 lesson applied to the top-level job_spec envelope;
+    ``run_args`` internals stay open per the module docstring)."""
+    unknown = sorted(set(spec) - _KNOWN_SPEC_FIELDS)
+    if unknown:
+        raise ValueError(
+            f"job_spec carries unknown top-level field(s) {unknown} that parser "
+            f"{_PARSER_VERSION} does not read -- this SILENTLY no-ops the "
+            f"intended field rather than applying it. Either the caller has a "
+            f"typo, or the worker image is stale (rebuild it -- ADR 0148). "
+            f"Known top-level fields: {sorted(_KNOWN_SPEC_FIELDS)}."
+        )
+
 
 def validate_job_spec(spec: Any) -> dict[str, Any]:
     """Validate + normalize the agent-composed MODFLOW build job_spec.
@@ -63,6 +91,7 @@ def validate_job_spec(spec: Any) -> dict[str, Any]:
     """
     if not isinstance(spec, dict):
         raise ValueError("job_spec must be a JSON object")
+    _reject_unknown_spec_fields(spec)
     sv = spec.get("schema_version")
     if sv is None:
         raise ValueError("job_spec missing schema_version")

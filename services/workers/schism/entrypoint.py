@@ -36,6 +36,34 @@ from pathlib import Path
 BIN_DIR = Path(os.environ.get("SCHISM_BIN_DIR", "/opt/schism/bin"))
 DATA = Path(os.environ.get("SCHISM_DATA_DIR", "/data"))
 
+#: PARSER VERSION -- bump on a manifest.json shape change. Named in the
+#: strict-field error (ADR 0158).
+_PARSER_VERSION = "schism-manifest-1"
+
+#: Every top-level manifest.json key this entrypoint reads (see the module
+#: docstring schema). An unknown key would otherwise silently keep its default
+#: (e.g. a typo'd rank/variant knob solving with the WRONG config, never
+#: erroring) -- the ADR 0148 lesson.
+_KNOWN_MANIFEST_FIELDS = frozenset(
+    {"variant", "ncompute", "nscribe", "timeout_s", "run_id"}
+)
+
+
+class SchismManifestUnknownFieldsError(ValueError):
+    """manifest.json carries a top-level key this entrypoint does not read."""
+
+
+def _reject_unknown_manifest_fields(manifest: dict) -> None:
+    unknown = sorted(set(manifest) - _KNOWN_MANIFEST_FIELDS)
+    if unknown:
+        raise SchismManifestUnknownFieldsError(
+            f"manifest.json carries unknown field(s) {unknown} that parser "
+            f"{_PARSER_VERSION} does not read -- this SILENTLY keeps the "
+            f"default for the intended knob rather than applying it. Either "
+            f"the caller has a typo, or the worker image is stale (rebuild it "
+            f"-- ADR 0148). Known fields: {sorted(_KNOWN_MANIFEST_FIELDS)}."
+        )
+
 
 def _resolve_exe(variant: str) -> Path:
     # NOTE (ADR 0126): the "full" glob pschism_WWM_* sorts the COSINE full-monty
@@ -64,6 +92,9 @@ def main() -> int:
     if manifest_path.exists():
         try:
             manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+            if not isinstance(manifest, dict):
+                raise ValueError(f"manifest.json must be a JSON object, got {type(manifest)}")
+            _reject_unknown_manifest_fields(manifest)
         except Exception as exc:  # noqa: BLE001
             _write("schism_metrics.json", {"status": "error",
                    "error_code": "SCHISM_MANIFEST_INVALID", "error": f"{type(exc).__name__}: {exc}"})
