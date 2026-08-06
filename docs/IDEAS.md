@@ -289,3 +289,13 @@ curvature), NHD river as a head-dependent boundary (river capture
 fraction), backward-in-time contaminant source attribution, and the
 permit-grade checklist (what a state wellhead-protection submission
 actually requires). Revisit when NATE picks it up.
+
+## 2026-08-06 - "Hazard" vocabulary audit (NATE identity correction)
+TRID3NT = GENERAL GEOSPATIAL INTELLIGENCE, not a hazard workbench.
+Audit queued: the hazard_modeling primary category (misnamed for
+terrain diagnostics, validation gates, ecology-class tools), "hazard"
+phrasing in docstrings/corpus/board section framing, and category
+taxonomy generally - rename to question-class-honest names (the
+template-capability-naming norm applied to categories). Also reframes
+the scope calls: Landlab ecology/biogeography/tidal + MODFLOW GWE
+geothermal are in-scope coverage, priority TBD by NATE.
