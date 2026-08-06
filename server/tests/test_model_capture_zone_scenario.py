@@ -132,6 +132,7 @@ async def test_composer_full_chain_capture_zone(monkeypatch: pytest.MonkeyPatch)
         travel_time_years=[1.0, 5.0, 10.0],
         n_particles=16,
         archetype="capture_zone",
+        use_measured_heads=False,  # hermetic: no USGS well fetch
         use_dem_gradient=False,  # hermetic: this test asserts archetype threading
     )
 
@@ -172,6 +173,7 @@ async def test_composer_full_chain_wellhead_protection(monkeypatch: pytest.Monke
         well_location_latlon=(26.62, -81.88),
         travel_time_years=None,  # should default to [2, 5, 10]
         archetype="wellhead_protection",
+        use_measured_heads=False,  # hermetic: no USGS well fetch
         use_dem_gradient=False,  # hermetic: this test asserts default-tier threading
     )
 
@@ -200,6 +202,7 @@ async def test_composer_surfaces_run_error_dict(monkeypatch: pytest.MonkeyPatch)
         await model_capture_zone_scenario(
             aoi_latlon=(26.64, -81.87),
             well_location_latlon=(26.62, -81.88),
+            use_measured_heads=False,  # hermetic: no USGS well fetch
             use_dem_gradient=False,  # hermetic: assert the run-error surfacing path
         )
 

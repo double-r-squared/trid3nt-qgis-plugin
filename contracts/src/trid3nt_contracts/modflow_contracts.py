@@ -1082,19 +1082,24 @@ class CaptureZoneLayerURI(LayerURI):
     gradient_source: str = Field(
         default="demo_west_east",
         description=(
-            "Provenance of the regional gradient driving the flow field: 'dem' "
-            "(DEM-derived planar water-table proxy, georeferenced mode) or "
-            "'demo_west_east' (legacy hardcoded west->east screening gradient). The "
-            "agent narrates this so the user knows whether the zone orientation "
-            "reflects the site's topography or a placeholder direction."
+            "Provenance of the regional gradient driving the flow field, best-basis "
+            "first: 'measured_heads' (a potentiometric plane fit to recent USGS "
+            "observed well water levels -- the real measured water table), 'dem' "
+            "(DEM-derived planar water-table proxy when measured wells are too few / "
+            "degenerate), or 'demo_west_east' (last-resort hardcoded west->east "
+            "screening gradient). The agent narrates this so the user knows whether "
+            "the zone orientation reflects measured heads, site topography, or a "
+            "placeholder direction."
         ),
     )
     gradient_magnitude: float | None = Field(
         default=None,
         description=(
-            "Magnitude of the regional water-table gradient used (m/m). In DEM mode "
-            "this is the planar-fit topographic slope over the AOI (a screening "
-            "proxy for the hydraulic gradient), clamped to a plausible aquifer range."
+            "Magnitude of the regional water-table gradient used (m/m). In "
+            "'measured_heads' mode this is the fitted potentiometric-plane slope over "
+            "the observed wells; in 'dem' mode the planar-fit topographic slope (a "
+            "screening proxy for the hydraulic gradient), clamped to a plausible "
+            "aquifer range."
         ),
     )
     gradient_azimuth_deg: float | None = Field(

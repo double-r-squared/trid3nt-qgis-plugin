@@ -49,8 +49,10 @@ narrate this caveat when presenting the layer (FR-AS-7).
 
 from __future__ import annotations
 
+import asyncio
 import logging
 import math
+from pathlib import Path
 from typing import Any
 
 from pydantic import Field
@@ -70,6 +72,7 @@ from trid3nt_server.emission.pipeline_emitter import (
     substep,
 )
 from trid3nt_server.agent.tools import TOOL_REGISTRY, register_tool
+from trid3nt_server.emission.layer_uri_emit import publish_input_layer
 from trid3nt_server.agent.workflows.modflow._template_card import TemplateCard
 # Reuse the shared archetype-run + AOI-resolve helpers from the sustainable_yield
 # composer (one implementation, all archetypes).
@@ -215,6 +218,399 @@ def _planar_gradient_from_dem(
 
 
 # --------------------------------------------------------------------------- #
+# Measured-head regional gradient (potentiometric plane from USGS wells)
+# --------------------------------------------------------------------------- #
+
+#: Feet -> metres (USGS groundwater levels are reported in feet).
+FT_TO_M: float = 0.3048
+
+#: Half-width (deg) of the well-search + land-surface-DEM footprint about the
+#: well. ~0.1 deg ~= 11 km catches a screening-regional set of NWIS wells around
+#: the 4.1 km PRT domain; a thin in-domain set is exactly why this is the modest
+#: EXPANDED footprint (not the tight domain box).
+WELL_SEARCH_HALF_DEG: float = 0.1
+
+#: Coarse DEM resolution (m) for sampling land-surface elevation at depth-to-water
+#: wells -- a metre-scale vertical datum, not terrain detail, so 30 m is ample and
+#: keeps the wider footprint's pixel budget small.
+WELL_DEM_RESOLUTION_M: int = 30
+
+#: Recency window (years, knob default) for a usable well reading. Older readings
+#: are excluded so the fitted gradient reflects a current water table.
+MEASURED_RECENCY_YEARS: float = 10.0
+
+#: Nominal NGVD29 -> NAVD88 vertical shift (m) for the central Great Plains
+#: (regional VERTCON magnitude). Applied to NGVD29 groundwater-ELEVATION readings
+#: to co-reference them with NAVD88 heads. A UNIFORM offset does not change a
+#: fitted gradient (slope); it only matters where NGVD29 and NAVD88 wells are
+#: MIXED, and up to ~2 m of national datum spread is why this normalization is a
+#: stated screening approximation, not a rigorous point transform.
+NGVD29_TO_NAVD88_M: float = -0.20
+
+#: Minimum usable wells + spatial-spread thresholds for a non-degenerate plane
+#: fit. The minor-axis (perpendicular) spread guards against a collinear/clustered
+#: set that leaves the cross-gradient component unconstrained.
+MIN_MEASURED_WELLS: int = 3
+MIN_WELL_EXTENT_M: float = 500.0
+MIN_WELL_MINOR_STD_M: float = 150.0
+
+#: USGS parameter codes reporting a DEPTH (below land surface / measuring point) --
+#: a head ELEVATION requires the land-surface elevation (DEM) minus this depth.
+_DEPTH_PCODES = frozenset({"72019", "61055"})
+#: USGS parameter codes reporting a groundwater ELEVATION + its native datum.
+_ELEV_PCODE_DATUM = {"72150": "NAVD88", "62611": "NAVD88", "62610": "NGVD29"}
+
+
+def _parse_iso_utc(value: Any) -> "datetime | None":  # noqa: F821
+    """Parse an ISO-8601 timestamp (or bare date) to an aware UTC datetime, or None."""
+    from datetime import datetime, timezone
+
+    if not value:
+        return None
+    s = str(value).strip().replace("Z", "+00:00")
+    for cand in (s, s[:10]):
+        try:
+            dt = datetime.fromisoformat(cand)
+        except ValueError:
+            continue
+        if dt.tzinfo is None:
+            dt = dt.replace(tzinfo=timezone.utc)
+        return dt
+    return None
+
+
+def _read_wells_features(wells_uri: str) -> list[dict[str, Any]]:
+    """Read the fetched wells FlatGeobuf into ``[{lon, lat, props}]``. NEVER raises."""
+    try:
+        import geopandas as gpd
+
+        read_uri = (
+            wells_uri[len("file://"):] if wells_uri.startswith("file://") else wells_uri
+        )
+        gdf = gpd.read_file(read_uri)
+        cols = [c for c in gdf.columns if c != "geometry"]
+        feats: list[dict[str, Any]] = []
+        for _, row in gdf.iterrows():
+            geom = row.geometry
+            if geom is None or geom.is_empty:
+                continue
+            feats.append(
+                {"lon": float(geom.x), "lat": float(geom.y),
+                 "props": {c: row[c] for c in cols}}
+            )
+        return feats
+    except Exception as exc:  # noqa: BLE001 -- reading wells is best-effort
+        logger.warning("capture_zone: reading wells FGB failed (non-fatal): %s", exc)
+        return []
+
+
+def _sample_dem_at_points(
+    dem_uri: str, lons: list[float], lats: list[float]
+) -> list[float | None]:
+    """Sample DEM elevation (m, 3DEP NAVD88) at each ``(lon, lat)``; None off-grid.
+
+    The rasterio ``MemoryFile`` is held open across the whole sample loop (an
+    orphaned MemoryFile GC-corrupts a lazy read). Reprojects the query points to
+    the dataset CRS when it is not already EPSG:4326. NEVER raises.
+    """
+    try:
+        import rasterio
+        from pyproj import Transformer
+
+        from trid3nt_server.agent.tools.processing._gdal_runner import read_raster_bytes
+
+        read_uri = dem_uri[len("file://"):] if dem_uri.startswith("file://") else dem_uri
+        dem_bytes = read_raster_bytes(read_uri, on_error=lambda msg: RuntimeError(msg))
+        out: list[float | None] = []
+        with rasterio.MemoryFile(dem_bytes) as mf:
+            with mf.open() as src:
+                src_crs = src.crs
+                if src_crs is not None and src_crs.to_epsg() != 4326:
+                    to_ds = Transformer.from_crs("EPSG:4326", src_crs, always_xy=True)
+                    xs, ys = to_ds.transform(list(lons), list(lats))
+                else:
+                    xs, ys = list(lons), list(lats)
+                nodata = src.nodata
+                for val in src.sample(list(zip(xs, ys)), indexes=1):
+                    v = float(val[0])
+                    if (nodata is not None and v == float(nodata)) or not math.isfinite(v):
+                        out.append(None)
+                    else:
+                        out.append(v)
+        return out
+    except Exception as exc:  # noqa: BLE001 -- DEM sampling is best-effort
+        logger.warning("capture_zone: DEM point-sampling failed (non-fatal): %s", exc)
+        return [None] * len(lons)
+
+
+def _usable_well_heads(
+    features: list[dict[str, Any]],
+    dem_uri: str | None,
+    lat0: float,
+    lon0: float,
+    *,
+    now: "datetime",  # noqa: F821
+    recency_years: float,
+) -> tuple[list[dict[str, Any]], dict[str, Any]]:
+    """Reduce fetched well readings to usable head ELEVATIONS (NAVD88 m) + provenance.
+
+    THE DATUM LADDER (each reading -> a head elevation in NAVD88 metres):
+      * DEPTH-to-water (pcode 72019 / 61055): head = DEM land-surface (3DEP NAVD88)
+        minus the depth. A non-positive depth (water at/above land surface =
+        flowing/artesian) is EXCLUDED (head ambiguous vs land surface).
+      * groundwater ELEVATION, NAVD88 (72150 / 62611): head = the value directly.
+      * groundwater ELEVATION, NGVD29 (62610): head = value + NGVD29_TO_NAVD88_M
+        (nominal regional shift; a uniform offset does not bias the fitted slope).
+      * any other / 'Local Assumed' vertical datum on an elevation reading:
+        EXCLUDED (not vertically georeferenced).
+
+    Readings are filtered to the recency window (most-recent per site retained),
+    to a parseable value + timestamp, and to a non-rejected approval status.
+
+    Returns ``(usable_wells, meta)``. Each usable well carries local east/north
+    metres about ``(lat0, lon0)``, the head elevation, its basis, datum, date, and
+    identity. ``meta`` counts totals / per-basis / exclusion reasons for narration.
+    """
+    cutoff = now.timestamp() - float(recency_years) * 365.25 * 86400.0
+    m_per_deg_lat = 110_540.0
+    m_per_deg_lon = 111_320.0 * math.cos(math.radians(lat0))
+    excluded: dict[str, int] = {}
+
+    def _drop(reason: str) -> None:
+        excluded[reason] = excluded.get(reason, 0) + 1
+
+    # --- Pass 1: parse + classify usable-shaped readings ---------------------
+    depth_idx: list[int] = []
+    staged: list[dict[str, Any]] = []
+    for f in features:
+        p = f.get("props", {}) or {}
+        try:
+            wl = float(p.get("water_level"))
+        except (TypeError, ValueError):
+            _drop("no_value")
+            continue
+        if not math.isfinite(wl):
+            _drop("no_value")
+            continue
+        dt = _parse_iso_utc(p.get("datetime"))
+        if dt is None:
+            _drop("no_date")
+            continue
+        if dt.timestamp() < cutoff:
+            _drop("stale")
+            continue
+        status = str(p.get("approval_status") or "").lower()
+        if "reject" in status or "delet" in status:
+            _drop("rejected_status")
+            continue
+        pcode = str(p.get("parameter_code") or "").strip()
+        unit = str(p.get("unit") or "").strip().lower()
+        # NWIS groundwater levels are feet unless the unit says metres.
+        wl_m = wl if unit.startswith("m") else wl * FT_TO_M
+        datum_raw = str(p.get("vertical_datum") or "").strip().upper()
+        label = str(p.get("parameter_label") or "").lower()
+
+        if pcode in _DEPTH_PCODES or (not pcode and ("depth" in label or "below" in label)):
+            kind, datum = "depth", "NAVD88"
+        elif pcode in _ELEV_PCODE_DATUM or (not pcode and ("elev" in label or "level" in label)):
+            datum = datum_raw or _ELEV_PCODE_DATUM.get(pcode, "")
+            kind = "elev"
+        else:
+            _drop("unknown_parameter")
+            continue
+
+        rec = {
+            "site_no": str(p.get("site_no") or "").strip() or f"{f['lon']:.5f},{f['lat']:.5f}",
+            "lon": float(f["lon"]), "lat": float(f["lat"]),
+            "wl_m": wl_m, "kind": kind, "datum": datum,
+            "date": dt, "date_iso": dt.date().isoformat(),
+            "parameter_code": pcode or None,
+        }
+        if kind == "depth":
+            if wl_m <= 0.0:
+                _drop("artesian_or_above_surface")
+                continue
+            depth_idx.append(len(staged))
+        staged.append(rec)
+
+    # --- Sample the DEM land surface for depth-to-water wells (one read) ------
+    if depth_idx:
+        if not dem_uri:
+            for i in depth_idx:
+                staged[i]["_dead"] = "no_dem"
+        else:
+            samples = _sample_dem_at_points(
+                dem_uri,
+                [staged[i]["lon"] for i in depth_idx],
+                [staged[i]["lat"] for i in depth_idx],
+            )
+            for i, ls in zip(depth_idx, samples):
+                staged[i]["_land_surface_m"] = ls
+
+    # --- Pass 2: resolve head elevation (NAVD88 m) + basis --------------------
+    resolved: list[dict[str, Any]] = []
+    for rec in staged:
+        if rec["kind"] == "depth":
+            if rec.get("_dead") == "no_dem":
+                _drop("no_dem_for_depth")
+                continue
+            ls = rec.get("_land_surface_m")
+            if ls is None:
+                _drop("dem_off_grid")
+                continue
+            head_m = float(ls) - rec["wl_m"]
+            basis = "dem_minus_depth"
+        else:
+            datum = rec["datum"]
+            if datum in ("NAVD88", "NAVD 88", "NAVD1988"):
+                head_m = rec["wl_m"]
+                basis = "elev_navd88"
+            elif datum in ("NGVD29", "NGVD 29", "NGVD1929"):
+                head_m = rec["wl_m"] + NGVD29_TO_NAVD88_M
+                basis = "elev_ngvd29_shifted"
+            else:
+                _drop("elev_unusable_datum")
+                continue
+        east = (rec["lon"] - lon0) * m_per_deg_lon
+        north = (rec["lat"] - lat0) * m_per_deg_lat
+        resolved.append({
+            "site_no": rec["site_no"], "lon": rec["lon"], "lat": rec["lat"],
+            "east": east, "north": north, "head_m": head_m, "basis": basis,
+            "datum": rec["datum"], "date": rec["date"], "date_iso": rec["date_iso"],
+            "water_level_ft": rec["wl_m"] / FT_TO_M, "parameter_code": rec["parameter_code"],
+        })
+
+    # --- Most-recent reading per site ----------------------------------------
+    by_site: dict[str, dict[str, Any]] = {}
+    for w in resolved:
+        prev = by_site.get(w["site_no"])
+        if prev is None or w["date"] > prev["date"]:
+            by_site[w["site_no"]] = w
+    usable = sorted(by_site.values(), key=lambda w: w["site_no"])
+
+    basis_counts: dict[str, int] = {}
+    for w in usable:
+        basis_counts[w["basis"]] = basis_counts.get(w["basis"], 0) + 1
+    meta = {
+        "readings_fetched": len(features),
+        "usable_wells": len(usable),
+        "by_basis": basis_counts,
+        "excluded": excluded,
+    }
+    return usable, meta
+
+
+def _fit_measured_gradient(
+    usable: list[dict[str, Any]],
+) -> tuple[dict[str, Any] | None, str]:
+    """Fit a potentiometric plane over the usable wells -> gradient vector or None.
+
+    Guards: >= MIN_MEASURED_WELLS wells; a spatial spread with minor-axis std >=
+    MIN_WELL_MINOR_STD_M and extent >= MIN_WELL_EXTENT_M (collinear/clustered sets
+    leave the cross-gradient component unconstrained); a finite gradient at or
+    above GRADIENT_MIN_MM (a near-flat measured table gives an unreliable capture
+    direction -> fall back); and a plane residual RMS not exceeding the head relief
+    (a fit no better than the mean is noise). Magnitude is clamped to
+    GRADIENT_MAX_MM (direction preserved), mirroring the DEM path.
+
+    Returns ``(fit, reason)``: ``fit`` is a dict (gx, gy in m/m east/north; the
+    clamped magnitude; flow azimuth deg; residual_m; n; head_range_m; date_min /
+    date_max ISO) or ``None`` when degenerate, with ``reason`` naming the cause.
+    """
+    import numpy as np
+
+    n = len(usable)
+    if n < MIN_MEASURED_WELLS:
+        return None, f"too_few_wells ({n} < {MIN_MEASURED_WELLS})"
+    east = np.asarray([w["east"] for w in usable], float)
+    north = np.asarray([w["north"] for w in usable], float)
+    head = np.asarray([w["head_m"] for w in usable], float)
+
+    cov = np.cov(np.vstack([east, north]))
+    evals = np.linalg.eigvalsh(cov)  # ascending; [minor, major] variance
+    minor_std = math.sqrt(max(float(evals[0]), 0.0))
+    extent = math.hypot(float(east.max() - east.min()), float(north.max() - north.min()))
+    if extent < MIN_WELL_EXTENT_M or minor_std < MIN_WELL_MINOR_STD_M:
+        return None, (
+            f"degenerate_spread (extent {extent:.0f} m, minor-axis std "
+            f"{minor_std:.0f} m; need >= {MIN_WELL_EXTENT_M:.0f} / "
+            f"{MIN_WELL_MINOR_STD_M:.0f} m)"
+        )
+
+    a, b, c = _fit_plane(list(east), list(north), list(head))
+    resid = head - (a * east + b * north + c)
+    rms = float(math.sqrt(float(np.mean(resid ** 2))))
+    head_range = float(head.max() - head.min())
+    mag = math.hypot(a, b)
+    if not math.isfinite(mag) or mag < GRADIENT_MIN_MM:
+        return None, f"near_flat (|grad| {mag:.2e} m/m < floor {GRADIENT_MIN_MM:.0e})"
+    if head_range > 0.0 and rms > head_range:
+        return None, f"poor_fit (residual {rms:.2f} m > head relief {head_range:.2f} m)"
+
+    clamped = min(mag, GRADIENT_MAX_MM)
+    scale = clamped / mag
+    gx, gy = a * scale, b * scale
+    az = math.degrees(math.atan2(-gx, -gy)) % 360.0
+    dates = sorted(w["date_iso"] for w in usable)
+    return (
+        {
+            "gx": gx, "gy": gy, "magnitude": clamped, "azimuth": az,
+            "residual_m": rms, "n": n, "head_range_m": head_range,
+            "date_min": dates[0], "date_max": dates[-1],
+        },
+        "ok",
+    )
+
+
+def _build_used_wells_layer(usable: list[dict[str, Any]], run_id: str) -> Any:
+    """Emit the gradient wells as a point-FlatGeobuf ``LayerURI`` (context overlay).
+
+    One Point per used well carrying head elevation (m NAVD88), the reading date,
+    depth/elevation basis, datum, and identity, so the user SEES the observed data
+    the measured gradient was fitted to. NEVER raises -- returns ``None`` on any
+    write/upload failure (the solve is unaffected).
+    """
+    try:
+        import geopandas as gpd
+        from shapely.geometry import Point
+
+        from trid3nt_contracts.execution import LayerURI
+        from trid3nt_server.agent.workflows.modflow.postprocess_modflow import _upload_fgb
+
+        props = [
+            {
+                "site_no": w["site_no"],
+                "head_elev_m": round(float(w["head_m"]), 3),
+                "water_level_ft": round(float(w["water_level_ft"]), 2),
+                "basis": w["basis"],
+                "vertical_datum": w["datum"],
+                "date": w["date_iso"],
+                "parameter_code": w["parameter_code"] or "",
+            }
+            for w in usable
+        ]
+        geom = [Point(float(w["lon"]), float(w["lat"])) for w in usable]
+        gdf = gpd.GeoDataFrame(props, geometry=geom, crs="EPSG:4326")
+        import tempfile
+
+        tmp = Path(tempfile.mkdtemp(prefix="cz_wells_")) / "gradient_wells_4326.fgb"
+        gdf.to_file(str(tmp), driver="FlatGeobuf", engine="pyogrio")
+        uri = _upload_fgb(tmp, run_id, None, fgb_filename="gradient_wells_4326.fgb")
+        return LayerURI(
+            layer_id=f"gradient-wells-{run_id}",
+            name=f"Gradient wells (measured heads, n={len(usable)})",
+            layer_type="vector",
+            uri=uri,
+            style_preset="usgs_groundwater",
+            role="context",
+            bbox=None,
+        )
+    except Exception as exc:  # noqa: BLE001 -- context layer is best-effort
+        logger.warning("capture_zone: building wells context layer failed (non-fatal): %s", exc)
+        return None
+
+
+# --------------------------------------------------------------------------- #
 # Result envelope
 # --------------------------------------------------------------------------- #
 
@@ -273,6 +669,8 @@ async def model_capture_zone_scenario(
     archetype: str = "capture_zone",
     aquifer_k_ms: float | None = None,
     porosity: float | None = None,
+    use_measured_heads: bool = True,
+    measured_recency_years: float = MEASURED_RECENCY_YEARS,
     use_dem_gradient: bool = True,
     compute_class: str = "standard",
     pipeline_emitter: Any | None = None,
@@ -301,6 +699,16 @@ async def model_capture_zone_scenario(
             carrier.
         aquifer_k_ms / porosity: optional demo-aquifer overrides (narrated as
             demo defaults, not site-specific hydrogeology).
+        use_measured_heads: when True (default) the regional gradient is fit to
+            recent USGS observed well water levels around the AOI (the measured
+            water table); a too-thin / degenerate well set falls back (loud) to the
+            DEM proxy, then the demo gradient. The source ladder is narrated so the
+            user sees which basis oriented their capture zone.
+        measured_recency_years: recency window (years) for a usable well reading
+            (default 10); the most-recent reading per well within the window is used.
+        use_dem_gradient: when True (default) the DEM water-table proxy is the
+            SECOND rung of the gradient ladder (used only when measured heads are
+            unavailable / degenerate).
         compute_class: FR-CE-3 compute class. NOTE: PRT archetypes are
             LOCAL-ONLY (fast; the Batch path is never used).
         pipeline_emitter: optional PipelineEmitter for live progress cards.
@@ -343,13 +751,17 @@ async def model_capture_zone_scenario(
                 f"got {travel_time_years!r}."
             )
 
-    # declare the planned internal-tool count up front: geocode (only
-    # when a place string was supplied) + fetch_dem (georeferenced-gradient mode)
-    # + run_modflow_archetype_job (always).
+    # declare the planned internal-tool count up front: geocode (only when a place
+    # string was supplied) + measured-heads gradient (fetch wells + fetch DEM) +
+    # DEM-proxy fallback (fetch DEM) + run_modflow_archetype_job (always). An
+    # over-count is harmless (progress bar finishes a touch early on the common
+    # measured-success path where the DEM proxy is never reached).
     _planned = 1
     has_loc = bool(location and location.strip())
     if has_loc:
         _planned += 1
+    if use_measured_heads:
+        _planned += 2
     if use_dem_gradient:
         _planned += 1
     begin_substeps(current_emitter(), _planned)
@@ -366,22 +778,87 @@ async def model_capture_zone_scenario(
             f"invalid well_location_latlon (expected (lat, lon)): {exc}"
         ) from exc
 
-    # --- Georeferenced-gradient mode (DEM water-table proxy) ------------------ #
-    # Fetch a DEM over the well footprint and estimate the regional gradient from
-    # its planar slope. The CHD boundary is then oriented to this vector so the
-    # capture zone extends up-gradient toward recharge -- the "what land does my
-    # well draw from" answer. A DEM fetch failure or a near-flat AOI is a LOUD
-    # fallback to the demo west->east gradient (gradient_source narrated), never a
-    # silent wrong-direction zone.
+    # --- Regional-gradient source ladder (honest, best-basis first) ----------- #
+    # The CHD boundary is oriented to a regional gradient so the capture zone
+    # extends up-gradient toward recharge -- the "what land does my well draw from"
+    # answer. Three rungs, each a LOUD downgrade to the next:
+    #   1. MEASURED heads: a potentiometric plane fit to recent USGS observed well
+    #      water levels (the real water table). Cross-dataset, so narrated loudly.
+    #   2. DEM proxy: the shallow water table as a subdued replica of topography.
+    #   3. Demo west->east: the last-resort typed placeholder direction.
     grad_x: float | None = None
     grad_y: float | None = None
     gradient_source = "demo_west_east"
     gradient_magnitude: float | None = None
     gradient_azimuth_deg: float | None = None
-    if use_dem_gradient:
-        try:
-            import asyncio
+    measured_meta: dict[str, Any] = {}
+    measured_fit: dict[str, Any] | None = None
+    measured_fallback_reason: str | None = None
+    used_wells: list[dict[str, Any]] = []
 
+    if use_measured_heads:
+        try:
+            from datetime import datetime, timezone
+
+            gw_entry = TOOL_REGISTRY.get("fetch_usgs_groundwater_levels")
+            dem_entry = TOOL_REGISTRY.get("fetch_dem")
+            if gw_entry is None or dem_entry is None:
+                measured_fallback_reason = "usgs/dem fetcher not registered"
+            else:
+                d = WELL_SEARCH_HALF_DEG
+                wells_bbox = [wlon - d, wlat - d, wlon + d, wlat + d]
+                async with substep(current_emitter(), "fetch_usgs_groundwater_levels"):
+                    wells_layer = await asyncio.to_thread(
+                        lambda: gw_entry.fn(bbox=wells_bbox)
+                    )
+                wells_uri = (
+                    wells_layer.get("uri")
+                    if isinstance(wells_layer, dict)
+                    else getattr(wells_layer, "uri", None)
+                )
+                ls_dem_uri = None
+                if wells_uri:
+                    async with substep(current_emitter(), "fetch_dem"):
+                        ls_dem = await asyncio.to_thread(
+                            lambda: dem_entry.fn(
+                                bbox=wells_bbox, resolution_m=WELL_DEM_RESOLUTION_M
+                            )
+                        )
+                    ls_dem_uri = (
+                        ls_dem.get("uri")
+                        if isinstance(ls_dem, dict)
+                        else getattr(ls_dem, "uri", None)
+                    )
+                feats = await asyncio.to_thread(_read_wells_features, wells_uri) if wells_uri else []
+                used_wells, measured_meta = await asyncio.to_thread(
+                    _usable_well_heads,
+                    feats, ls_dem_uri, wlat, wlon,
+                    now=datetime.now(timezone.utc),
+                    recency_years=float(measured_recency_years),
+                )
+                measured_fit, fit_reason = _fit_measured_gradient(used_wells)
+                if measured_fit is not None:
+                    grad_x = measured_fit["gx"]
+                    grad_y = measured_fit["gy"]
+                    gradient_magnitude = measured_fit["magnitude"]
+                    gradient_azimuth_deg = measured_fit["azimuth"]
+                    gradient_source = "measured_heads"
+                else:
+                    measured_fallback_reason = fit_reason
+        except Exception as exc:  # noqa: BLE001 -- measured heads is best-effort
+            measured_fallback_reason = f"measured-heads step error: {exc}"
+            logger.warning(
+                "capture_zone measured-heads step failed (non-fatal, dropping to "
+                "the DEM proxy): %s",
+                exc,
+            )
+
+    # --- Georeferenced-gradient mode (DEM water-table proxy, 2nd rung) -------- #
+    # Runs only when measured heads did not yield a usable gradient. A DEM fetch
+    # failure or a near-flat AOI is a LOUD fallback to the demo west->east
+    # gradient, never a silent wrong-direction zone.
+    if use_dem_gradient and gradient_source != "measured_heads":
+        try:
             fetch_dem_entry = TOOL_REGISTRY.get("fetch_dem")
             if fetch_dem_entry is None:
                 raise CaptureZoneScenarioError("fetch_dem tool is not registered")
@@ -443,6 +920,24 @@ async def model_capture_zone_scenario(
         scenario_error=CaptureZoneScenarioError,
     )
 
+    # The adapter labels any supplied gradient vector "dem" (it cannot tell measured
+    # heads from a DEM proxy -- both are a vector). The composer is the authority on
+    # provenance: relabel the layer when the vector came from measured heads so the
+    # rendered/inspected layer reads honestly (magnitude/azimuth are already correct,
+    # recomputed by the adapter from the same clamped vector).
+    if gradient_source == "measured_heads":
+        layer.gradient_source = "measured_heads"
+        # Emit the used wells as a context overlay so the user SEES the observed
+        # data the gradient was fit to (best-effort; never fails the solve).
+        wells_layer = await asyncio.to_thread(
+            _build_used_wells_layer, used_wells, layer.layer_id
+        )
+        if wells_layer is not None:
+            await publish_input_layer(
+                pipeline_emitter or current_emitter(), wells_layer, role="context"
+            )
+            measured_meta["wells_layer_uri"] = wells_layer.uri
+
     layer_grad_source = getattr(layer, "gradient_source", gradient_source)
     layer_grad_mag = getattr(layer, "gradient_magnitude", gradient_magnitude)
     layer_grad_az = getattr(layer, "gradient_azimuth_deg", gradient_azimuth_deg)
@@ -458,21 +953,51 @@ async def model_capture_zone_scenario(
         "regional_gradient_y": grad_y,
         "gradient_magnitude": layer_grad_mag,
         "gradient_azimuth_deg": layer_grad_az,
+        "measured_heads": measured_meta,
+        "measured_fallback_reason": measured_fallback_reason,
+        "used_wells": [
+            {"site_no": w["site_no"], "lon": w["lon"], "lat": w["lat"],
+             "head_elev_m": round(float(w["head_m"]), 3), "basis": w["basis"],
+             "datum": w["datum"], "date": w["date_iso"]}
+            for w in used_wells
+        ] if layer_grad_source == "measured_heads" else [],
     }
     iso_areas = getattr(layer, "isochrone_areas_km2", {})
-    if layer_grad_source == "dem":
+    if layer_grad_source == "measured_heads" and measured_fit is not None:
+        _bc = ", ".join(f"{k}={v}" for k, v in (measured_meta.get("by_basis") or {}).items())
         gradient_caveat = (
-            f"Regional gradient DEM-derived: magnitude {layer_grad_mag:.2g} m/m, "
+            f"Regional gradient fit to MEASURED heads: {measured_fit['n']} USGS "
+            f"observed wells ({measured_fit['date_min']}..{measured_fit['date_max']}), "
+            f"magnitude {layer_grad_mag:.2g} m/m, groundwater flows toward azimuth "
+            f"{layer_grad_az:.0f} deg (the capture zone extends the opposite, "
+            f"up-gradient way). Potentiometric-plane fit residual "
+            f"{measured_fit['residual_m']:.2f} m over a {measured_fit['head_range_m']:.1f} m "
+            f"head relief; well basis [{_bc}]. Heads are co-referenced to NAVD88 "
+            f"(depth-to-water anchored to 3DEP land surface; NGVD29 elevations "
+            f"shifted a nominal {NGVD29_TO_NAVD88_M:+.2f} m). A screening measured "
+            f"gradient (observed wells, cross-dataset), not a calibrated flow model."
+        )
+    elif layer_grad_source == "dem":
+        _why = (
+            f" (measured heads unusable: {measured_fallback_reason})"
+            if measured_fallback_reason else ""
+        )
+        gradient_caveat = (
+            f"Regional gradient DEM-derived{_why}: magnitude {layer_grad_mag:.2g} m/m, "
             f"groundwater flows toward azimuth {layer_grad_az:.0f} deg (the capture "
             "zone extends the opposite, up-gradient way). This is a SCREENING proxy "
             "-- the shallow water table taken as a subdued replica of surface "
             "topography (DEM slope), NOT a measured potentiometric surface."
         )
     else:
+        _why = (
+            f" (measured heads unusable: {measured_fallback_reason})"
+            if measured_fallback_reason else ""
+        )
         gradient_caveat = (
-            "Regional gradient is the DEMO west->east placeholder (no usable DEM "
-            "slope: fetch failed or the AOI is near-flat). The zone ORIENTATION is "
-            "a placeholder, not the site's true flow direction -- narrate this."
+            f"Regional gradient is the DEMO west->east placeholder{_why} (no usable "
+            "measured heads or DEM slope). The zone ORIENTATION is a placeholder, "
+            "not the site's true flow direction -- narrate this."
         )
     summary = {
         "location_name": location_name,
@@ -486,6 +1011,14 @@ async def model_capture_zone_scenario(
         "gradient_source": layer_grad_source,
         "gradient_magnitude_m_per_m": layer_grad_mag,
         "gradient_azimuth_deg": layer_grad_az,
+        "gradient_well_count": (measured_fit["n"] if measured_fit is not None else None),
+        "gradient_fit_residual_m": (
+            measured_fit["residual_m"] if measured_fit is not None else None
+        ),
+        "gradient_date_range": (
+            f"{measured_fit['date_min']}..{measured_fit['date_max']}"
+            if measured_fit is not None else None
+        ),
         "stagnation_distance_m": getattr(layer, "stagnation_distance_m", None),
         "capture_width_m": getattr(layer, "capture_width_m", None),
         "gradient_caveat": gradient_caveat,

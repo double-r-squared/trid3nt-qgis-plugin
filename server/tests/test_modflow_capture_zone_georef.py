@@ -29,9 +29,13 @@ from trid3nt_contracts.modflow_contracts import CaptureZoneLayerURI
 from trid3nt_server.agent.workflows.modflow import postprocess_modflow as pp
 from trid3nt_server.agent.workflows.modflow.capture_zone import capture_zone as cz_mod
 from trid3nt_server.agent.workflows.modflow.capture_zone.capture_zone import (
+    FT_TO_M,
     GRADIENT_MAX_MM,
+    NGVD29_TO_NAVD88_M,
+    _fit_measured_gradient,
     _fit_plane,
     _planar_gradient_from_dem,
+    _usable_well_heads,
     model_capture_zone_scenario,
 )
 
@@ -385,3 +389,251 @@ async def test_composer_falls_back_on_fetch_error(monkeypatch: pytest.MonkeyPatc
     )
     assert captured["run_args"].regional_gradient_x is None
     assert result.derived_params["gradient_source"] == "demo_west_east"
+
+
+# --------------------------------------------------------------------------- #
+# 6. Measured-head gradient: datum ladder + plane fit (ADR 0166)
+# --------------------------------------------------------------------------- #
+
+
+def _now() -> "Any":
+    from datetime import datetime, timezone
+
+    return datetime(2026, 8, 6, tzinfo=timezone.utc)
+
+
+def _reading(
+    lon: float, lat: float, *, pcode: str, value: float, datum: str = "",
+    date: str = "2024-06-01", status: str = "Approved", unit: str = "ft",
+) -> dict[str, Any]:
+    return {
+        "lon": lon, "lat": lat,
+        "props": {
+            "site_no": f"{lon:.4f}_{lat:.4f}_{pcode}", "parameter_code": pcode,
+            "parameter_label": "", "water_level": value, "unit": unit,
+            "vertical_datum": datum, "datetime": f"{date}T12:00:00Z",
+            "approval_status": status,
+        },
+    }
+
+
+def test_usable_well_heads_depth_anchored_to_dem(tmp_path: Path) -> None:
+    """Depth-to-water readings -> head = DEM land surface minus depth (NAVD88 m)."""
+    lat0, lon0 = 40.86, -98.40
+    dem = tmp_path / "dem.tif"
+    # Flat-ish DEM at 100 m so land surface is a known constant near the wells.
+    _write_tilted_dem(dem, lat0=lat0, lon0=lon0, slope_e=1e-4, slope_n=1e-4)
+    feats = [
+        _reading(lon0 - 0.005, lat0 + 0.004, pcode="72019", value=30.0),
+        _reading(lon0 + 0.006, lat0 - 0.003, pcode="72019", value=25.0),
+        _reading(lon0 + 0.002, lat0 + 0.006, pcode="72019", value=28.0),
+    ]
+    usable, meta = _usable_well_heads(
+        feats, f"file://{dem}", lat0, lon0, now=_now(), recency_years=10.0
+    )
+    assert meta["usable_wells"] == 3
+    assert meta["by_basis"] == {"dem_minus_depth": 3}
+    # head = ~100 m (DEM) - depth_ft*0.3048.
+    heads = {w["site_no"]: w["head_m"] for w in usable}
+    for f, depth in [(feats[0], 30.0), (feats[1], 25.0), (feats[2], 28.0)]:
+        sid = f["props"]["site_no"]
+        assert heads[sid] == pytest.approx(100.0 - depth * FT_TO_M, abs=1.0)
+
+
+def test_usable_well_heads_datum_permutations(tmp_path: Path) -> None:
+    """Mixed depth / NAVD88 / NGVD29 / artesian / stale / local-datum readings.
+
+    Verifies the datum ladder: depth->DEM-anchored, NAVD88 direct, NGVD29 shifted,
+    and the exclusions (artesian depth<=0, stale beyond recency, non-georeferenced
+    'Local Assumed Datum', rejected status)."""
+    lat0, lon0 = 40.86, -98.40
+    dem = tmp_path / "dem.tif"
+    _write_tilted_dem(dem, lat0=lat0, lon0=lon0, slope_e=1e-4, slope_n=1e-4)
+    feats = [
+        _reading(lon0 - 0.005, lat0 + 0.004, pcode="72019", value=30.0),          # depth
+        _reading(lon0 + 0.006, lat0 - 0.003, pcode="62611", value=560.0, datum="NAVD88"),  # elev NAVD88
+        _reading(lon0 + 0.002, lat0 + 0.006, pcode="62610", value=560.0, datum="NGVD29"),  # elev NGVD29
+        _reading(lon0 - 0.001, lat0 - 0.006, pcode="72019", value=-2.0),          # artesian (excl)
+        _reading(lon0 + 0.004, lat0 + 0.001, pcode="72019", value=27.0, date="2005-01-01"),  # stale (excl)
+        _reading(lon0 + 0.003, lat0 + 0.002, pcode="62611", value=560.0, datum="Local Assumed Datum"),  # excl
+        _reading(lon0 - 0.004, lat0 - 0.001, pcode="72019", value=26.0, status="Rejected"),  # excl
+    ]
+    usable, meta = _usable_well_heads(
+        feats, f"file://{dem}", lat0, lon0, now=_now(), recency_years=10.0
+    )
+    assert meta["by_basis"] == {
+        "dem_minus_depth": 1, "elev_navd88": 1, "elev_ngvd29_shifted": 1
+    }
+    assert meta["usable_wells"] == 3
+    # Exclusions surfaced honestly.
+    assert meta["excluded"].get("artesian_or_above_surface") == 1
+    assert meta["excluded"].get("stale") == 1
+    assert meta["excluded"].get("elev_unusable_datum") == 1
+    assert meta["excluded"].get("rejected_status") == 1
+    # NGVD29 elevation carries the nominal shift; NAVD88 does not.
+    by_basis = {w["basis"]: w for w in usable}
+    assert by_basis["elev_navd88"]["head_m"] == pytest.approx(560.0 * FT_TO_M, abs=1e-6)
+    assert by_basis["elev_ngvd29_shifted"]["head_m"] == pytest.approx(
+        560.0 * FT_TO_M + NGVD29_TO_NAVD88_M, abs=1e-6
+    )
+
+
+def _wells_on_head_plane(
+    lat0: float, lon0: float, *, slope_e: float, slope_n: float, base: float = 550.0
+) -> list[dict[str, Any]]:
+    """NAVD88-elevation wells whose head elevation lies on a known planar surface."""
+    m_per_deg_lat = 110_540.0
+    m_per_deg_lon = 111_320.0 * math.cos(math.radians(lat0))
+    offs = [(-0.006, 0.005), (0.007, -0.004), (0.003, 0.006), (-0.005, -0.006), (0.006, 0.002)]
+    feats = []
+    for i, (dlon, dlat) in enumerate(offs):
+        lon, lat = lon0 + dlon, lat0 + dlat
+        east = dlon * m_per_deg_lon
+        north = dlat * m_per_deg_lat
+        head_m = base + slope_e * east + slope_n * north
+        feats.append(
+            _reading(lon, lat, pcode="62611", value=head_m / FT_TO_M, datum="NAVD88",
+                     date=f"2024-0{(i % 6) + 1}-15")
+        )
+    return feats
+
+
+def test_fit_measured_gradient_recovers_plane() -> None:
+    """A head plane sloping up-east -> gradient east, flow azimuth ~270, tiny residual."""
+    lat0, lon0 = 40.86, -98.40
+    feats = _wells_on_head_plane(lat0, lon0, slope_e=0.003, slope_n=0.0)
+    usable, _meta = _usable_well_heads(
+        feats, None, lat0, lon0, now=_now(), recency_years=10.0
+    )
+    fit, reason = _fit_measured_gradient(usable)
+    assert fit is not None and reason == "ok"
+    assert fit["magnitude"] == pytest.approx(0.003, rel=0.05)
+    assert fit["azimuth"] == pytest.approx(270.0, abs=3.0)  # flows west
+    assert fit["residual_m"] < 0.05
+    assert fit["n"] == 5
+
+
+def test_fit_measured_gradient_too_few_wells() -> None:
+    lat0, lon0 = 40.86, -98.40
+    feats = _wells_on_head_plane(lat0, lon0, slope_e=0.003, slope_n=0.0)[:2]
+    usable, _m = _usable_well_heads(feats, None, lat0, lon0, now=_now(), recency_years=10.0)
+    fit, reason = _fit_measured_gradient(usable)
+    assert fit is None and "too_few_wells" in reason
+
+
+def test_fit_measured_gradient_collinear_is_degenerate() -> None:
+    """Wells strung along one line -> the cross-gradient is unconstrained -> None."""
+    lat0, lon0 = 40.86, -98.40
+    m_per_deg_lat = 110_540.0
+    feats = []
+    for i, d in enumerate([-0.006, -0.003, 0.0, 0.003, 0.006]):
+        lat = lat0 + d
+        head = 550.0 + 0.003 * (d * m_per_deg_lat)
+        feats.append(_reading(lon0, lat, pcode="62611", value=head / FT_TO_M,
+                              datum="NAVD88", date=f"2024-0{(i % 6) + 1}-10"))
+    usable, _m = _usable_well_heads(feats, None, lat0, lon0, now=_now(), recency_years=10.0)
+    fit, reason = _fit_measured_gradient(usable)
+    assert fit is None and "degenerate_spread" in reason
+
+
+# --------------------------------------------------------------------------- #
+# 7. Composer: measured-heads threading + loud fallback to the DEM proxy
+# --------------------------------------------------------------------------- #
+
+
+def _patch_measured(
+    monkeypatch: pytest.MonkeyPatch, *, wells_feats: list[dict[str, Any]],
+    dem_path: Path,
+) -> dict:
+    """Wire fetch_usgs_groundwater_levels + fetch_dem to local artifacts; fake the run."""
+    import geopandas as gpd
+    from shapely.geometry import Point
+
+    # Write the wells FGB the composer's _read_wells_features will read back.
+    props = [dict(f["props"]) for f in wells_feats]
+    geom = [Point(f["lon"], f["lat"]) for f in wells_feats]
+    wells_fgb = dem_path.parent / "wells.fgb"
+    gpd.GeoDataFrame(props, geometry=geom, crs="EPSG:4326").to_file(
+        str(wells_fgb), driver="FlatGeobuf", engine="pyogrio"
+    )
+
+    captured: dict[str, Any] = {}
+
+    async def _fake_run(run_args: Any, **_kw: Any) -> CaptureZoneLayerURI:
+        captured["run_args"] = run_args
+        # The adapter would label a supplied vector "dem"; the composer relabels it.
+        return _fake_layer("dem")
+
+    import trid3nt_server.agent.tools.simulation.modflow.run_modflow_archetype_tool as _tool
+
+    monkeypatch.setattr(_tool, "run_modflow_archetype_job", _fake_run)
+    monkeypatch.setattr(
+        pp, "_upload_fgb",
+        lambda local_fgb, run_id, runs_bucket, **kw: f"file://{local_fgb}",
+    )
+
+    def _fetch_gw(**kw: Any) -> dict:
+        return {"uri": f"file://{wells_fgb}"}
+
+    def _fetch_dem(**kw: Any) -> dict:
+        return {"uri": f"file://{dem_path}"}
+
+    monkeypatch.setattr(
+        cz_mod, "TOOL_REGISTRY",
+        {"fetch_usgs_groundwater_levels": SimpleNamespace(fn=_fetch_gw),
+         "fetch_dem": SimpleNamespace(fn=_fetch_dem)},
+    )
+    return captured
+
+
+@pytest.mark.asyncio
+async def test_composer_threads_measured_gradient(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """Enough usable wells -> run_args carries the measured vector; source=measured_heads."""
+    lat0, lon0 = 40.86, -98.40
+    dem = tmp_path / "dem.tif"
+    _write_tilted_dem(dem, lat0=lat0, lon0=lon0, slope_e=1e-4, slope_n=1e-4)
+    feats = _wells_on_head_plane(lat0, lon0, slope_e=0.003, slope_n=0.0)
+    captured = _patch_measured(monkeypatch, wells_feats=feats, dem_path=dem)
+
+    result = await model_capture_zone_scenario(
+        aoi_latlon=(lat0, lon0),
+        well_location_latlon=(lat0, lon0),
+        use_measured_heads=True,
+        use_dem_gradient=True,
+    )
+    ra = captured["run_args"]
+    assert ra.regional_gradient_x is not None
+    assert ra.regional_gradient_x == pytest.approx(0.003, rel=0.1)
+    assert abs(ra.regional_gradient_y) < 5e-4
+    assert result.summary["gradient_source"] == "measured_heads"
+    assert result.capture_zone_layer.gradient_source == "measured_heads"
+    assert result.summary["gradient_well_count"] == 5
+    assert result.summary["gradient_fit_residual_m"] is not None
+    assert "MEASURED heads" in result.summary["gradient_caveat"]
+    assert len(result.derived_params["used_wells"]) == 5
+
+
+@pytest.mark.asyncio
+async def test_composer_measured_falls_back_to_dem(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """Too few usable wells -> loud fall back to the DEM proxy (gradient_source='dem')."""
+    lat0, lon0 = 40.86, -98.40
+    dem = tmp_path / "dem.tif"
+    # Real east-tilted DEM so the DEM-proxy 2nd rung yields a usable gradient.
+    _write_tilted_dem(dem, lat0=lat0, lon0=lon0, slope_e=0.01, slope_n=0.0)
+    feats = _wells_on_head_plane(lat0, lon0, slope_e=0.003, slope_n=0.0)[:2]  # only 2
+    captured = _patch_measured(monkeypatch, wells_feats=feats, dem_path=dem)
+
+    result = await model_capture_zone_scenario(
+        aoi_latlon=(lat0, lon0),
+        well_location_latlon=(lat0, lon0),
+        use_measured_heads=True,
+        use_dem_gradient=True,
+    )
+    assert result.summary["gradient_source"] == "dem"
+    assert "measured heads unusable" in result.summary["gradient_caveat"]
+    assert "too_few_wells" in (result.derived_params["measured_fallback_reason"] or "")
+    assert captured["run_args"].regional_gradient_x is not None  # DEM vector threaded
