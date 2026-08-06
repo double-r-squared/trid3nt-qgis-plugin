@@ -278,3 +278,14 @@ schism transport_validation, any local-unit fixture COGs) and either
 (a) drop the layer emission in favor of charts/scalars, or (b) add a
 real-AOI georeferenced mode (the 0165 capture-zone pattern). Run when
 a lane frees.
+
+## 2026-08-06 - Wellhead-protection track: REEVAL flag (NATE)
+Nothing wrong - NATE wants CONTINUED DEVELOPMENT of the capture-zone/
+wellhead surface (ADRs 0163/0165/0166). Candidate next rungs:
+transient pumping schedules + multi-well interference, heterogeneous
+K (SSURGO/aquifer-property data instead of uniform defaults), kriged
+potentiometric surface over the 3-point plane fit (more wells = real
+curvature), NHD river as a head-dependent boundary (river capture
+fraction), backward-in-time contaminant source attribution, and the
+permit-grade checklist (what a state wellhead-protection submission
+actually requires). Revisit when NATE picks it up.
