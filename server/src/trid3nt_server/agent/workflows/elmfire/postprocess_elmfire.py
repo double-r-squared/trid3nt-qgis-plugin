@@ -129,6 +129,10 @@ _RASTER_PATTERNS: dict[str, re.Pattern[str]] = {
     "flame_length": re.compile(r"^flame_length.*\.(bil|tif)$", re.I),
     "spread_rate": re.compile(r"^vs.*\.(bil|tif)$", re.I),
     "fireline_intensity": re.compile(r"^flin.*\.(bil|tif)$", re.I),
+    # DUMP_CROWN_FIRE writes crown_fire_<case>_<t>.bil: per-cell crown-fire type
+    # (0 none / 1 passive-torching / 2 active crown). The leading-digit guard
+    # after the underscore excludes crown_fire_area_* (DUMP_CROWN_FIRE_AREA).
+    "crown_fire": re.compile(r"^crown_fire_\d.*\.(bil|tif)$", re.I),
 }
 
 

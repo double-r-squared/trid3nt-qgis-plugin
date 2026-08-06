@@ -1,0 +1,32 @@
+# ELMFIRE local-docker DEV image (trid3nt/elmfire:dev) - the image the local
+# solver spec (run_elmfire.elmfire_local_spec) runs:
+#
+#     docker run --rm --name <run_id> --cpus N -v <rundir>:/deck -w /deck \
+#         trid3nt/elmfire:dev bash -c 'mkdir -p outputs scratch && \
+#         elmfire_2025.0526 ./inputs/elmfire.data'
+#
+# That invocation requires the image to have NO intercepting ENTRYPOINT (the
+# Batch/FIRE-4 image's `python -m services.workers.elmfire.entrypoint` entrypoint
+# swallows `bash -c ...` as argv), so this dev image resets ENTRYPOINT to empty.
+#
+# Thin overlay FROM the compiled base (binary + gdal + libs intact) that ONLY
+# re-bakes the agent-side deck builder (worker-image law, ADRs 0148/0158: a
+# deck_builder change is not live in the image until re-baked) and drops the
+# entrypoint. Build with ABSOLUTE -f and context (context-drift law, ADR 0158):
+#
+#     docker build -f /abs/.../services/workers/elmfire/Dockerfile.dev \
+#         -t trid3nt/elmfire:dev /abs/.../trid3nt-local
+FROM trid3nt/elmfire:dev
+
+# Re-bake the worker package (deck_builder.py is loaded agent-side for the local
+# path, but the image carries a copy for provenance/tests -- keep it in lockstep).
+COPY services/workers/elmfire/ /opt/trid3nt/services/workers/elmfire/
+RUN find /opt/trid3nt/services -name __pycache__ -type d -prune -exec rm -rf {} + || true
+
+# The local spec drives the solver via `bash -c`; no intercepting entrypoint.
+ENTRYPOINT []
+CMD []
+
+# Build-time smoke: the solver binary + gdal are present and runnable.
+RUN test -x /opt/elmfire/bin/elmfire_2025.0526 && command -v gdal_translate && \
+    bash -c 'echo elmfire dev image OK'

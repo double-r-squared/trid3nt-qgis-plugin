@@ -524,6 +524,34 @@ def write_constant_raster_typed(
         ds.write(arr, 1)
 
 
+def write_weather_bands(values_per_band: list[float], grid: dict, dest: Path) -> None:
+    """Write a MULTI-BAND constant-in-space Float32 weather raster.
+
+    ELMFIRE reads the ws/wd/m1/m10/m100 weather rasters as multi-band BSQ
+    (``WS%NBANDS`` bands); band ``k`` is the value at meteorology time ``k``, and
+    the solver linearly interpolates between the bracketing bands every
+    ``DT_METEOROLOGY`` seconds (``elmfire_level_set.f90`` ITLO/ITHI_METEOROLOGY).
+    Each band here is spatially UNIFORM (the value from ``values_per_band[k]``) --
+    the synthetic transient-weather schedule varies a scalar over TIME, not space.
+    One band reproduces the single-band constant raster byte-for-byte in intent
+    (but callers use :func:`write_constant_raster_typed` for the 1-band case so
+    the constant deck stays byte-identical). Raises :class:`ElmfireSpecError`
+    on an empty band list."""
+    import numpy as np
+    import rasterio
+
+    if not values_per_band:
+        raise ElmfireSpecError("write_weather_bands: values_per_band is empty")
+    nbands = len(values_per_band)
+    profile = _grid_profile(grid, "float32")
+    profile["count"] = nbands
+    with rasterio.open(dest, "w", **profile) as ds:
+        for k, value in enumerate(values_per_band, start=1):
+            ds.write(
+                np.full((grid["ny"], grid["nx"]), float(value), dtype="float32"), k
+            )
+
+
 # --------------------------------------------------------------------------- #
 # The same-grid HARD ASSERT.
 # --------------------------------------------------------------------------- #
@@ -626,9 +654,13 @@ def render_namelist(
     dt_s: float = 30.0,
     dtdump_s: float = 3600.0,
     *,
+    dt_meteorology_s: float = 3600.0,
+    num_meteorology_times: int = 1,
+    target_cfl: float | None = None,
     simulator_extra: dict[str, str] | None = None,
     outputs_extra: dict[str, str] | None = None,
     inputs_extra: dict[str, str] | None = None,
+    time_control_extra: dict[str, str] | None = None,
 ) -> str:
     """Render ``elmfire.data`` with the tutorial-01 key set (proven).
 
@@ -644,11 +676,22 @@ def render_namelist(
     the composer publishes the flame-length raster as its own COG.
 
     KNOB-EXTENSION SURFACE (sensitivity templates): ``simulator_extra`` /
-    ``outputs_extra`` / ``inputs_extra`` append extra ``KEY = VALUE`` lines to
-    the respective groups (each value a pre-formatted string the caller owns —
-    e.g. ``{"MAX_LOW": "8.0000"}``, ``{"WIND_FLUCTUATIONS": ".TRUE."}``,
-    ``{"DUMP_CROWN_FIRE_AREA": ".TRUE."}``). Unset (the default) reproduces the
-    base deck byte-for-byte.
+    ``outputs_extra`` / ``inputs_extra`` / ``time_control_extra`` append extra
+    ``KEY = VALUE`` lines to the &SIMULATOR / &OUTPUTS / &INPUTS / &TIME_CONTROL
+    groups respectively (each value a pre-formatted string the caller owns — e.g.
+    ``{"MAX_LOW": "8.0000"}``, ``{"WIND_FLUCTUATIONS": ".TRUE."}``,
+    ``{"DUMP_CROWN_FIRE_AREA": ".TRUE."}``, ``{"DT_INTERPOLATE_M1": "600.0"}``).
+    Unset (the default) reproduces the base deck byte-for-byte.
+
+    TRANSIENT WEATHER (multi-band decks): ``num_meteorology_times`` > 1 emits a
+    ``&MONTE_CARLO`` group carrying ``NUM_METEOROLOGY_TIMES`` (read unconditionally
+    by every run), and ``dt_meteorology_s`` sets ``DT_METEOROLOGY`` (the
+    band-to-band spacing the solver linearly interpolates over). The weather
+    rasters must then be MULTI-BAND (:func:`write_weather_bands`, one band per
+    meteorology time). ``target_cfl`` emits ``TARGET_CFL`` in &TIME_CONTROL.
+    At the defaults (single band, ``DT_METEOROLOGY = 3600.0``, no TARGET_CFL /
+    time-control extras / MONTE_CARLO group) the deck is byte-identical to the
+    constant tutorial-01 deck.
     """
 
     def _f(v: float) -> str:
@@ -664,6 +707,29 @@ def render_namelist(
     outputs_extra_block = _extra_lines(outputs_extra)
     inputs_extra_block = _extra_lines(inputs_extra)
 
+    _dt_met = f"{float(dt_meteorology_s):.1f}"
+
+    # &TIME_CONTROL: SIMULATION_DT + TSTOP always; TARGET_CFL + the interpolation-
+    # frequency / DTMAX pass-through (``time_control_extra``) only when set, so the
+    # default (constant) deck stays byte-identical.
+    tc_lines = [f"SIMULATION_DT    = {_f(dt_s)}", f"SIMULATION_TSTOP = {_f(duration_s)}"]
+    if target_cfl is not None:
+        tc_lines.append(f"TARGET_CFL       = {_f(target_cfl)}")
+    tc_body = "\n".join(tc_lines) + "\n" + _extra_lines(time_control_extra)
+
+    # &MONTE_CARLO carries NUM_METEOROLOGY_TIMES (read unconditionally by every
+    # run -- elmfire.f90 READ_MONTE_CARLO). Emitted ONLY for a transient
+    # (multi-band) weather deck; a constant deck omits the group entirely (the
+    # default of 1 is what the solver assumes when the group is absent), keeping
+    # the constant deck byte-identical.
+    montecarlo_block = ""
+    if int(num_meteorology_times) > 1:
+        montecarlo_block = (
+            "\n&MONTE_CARLO\n"
+            f"NUM_METEOROLOGY_TIMES = {int(num_meteorology_times)}\n"
+            "/\n"
+        )
+
     return f"""&INPUTS
 FUELS_AND_TOPOGRAPHY_DIRECTORY = './inputs'
 ASP_FILENAME                   = 'asp'
@@ -676,7 +742,7 @@ FBFM_FILENAME                  = 'fbfm40'
 SLP_FILENAME                   = 'slp'
 ADJ_FILENAME                   = 'adj'
 PHI_FILENAME                   = 'phi'
-DT_METEOROLOGY                 = 3600.0
+DT_METEOROLOGY                 = {_dt_met}
 WEATHER_DIRECTORY              = './inputs'
 WS_FILENAME                    = 'ws'
 WD_FILENAME                    = 'wd'
@@ -705,9 +771,7 @@ COMPUTATIONAL_DOMAIN_YLLCORNER = {_f(grid["yll"])}
 /
 
 &TIME_CONTROL
-SIMULATION_DT    = {_f(dt_s)}
-SIMULATION_TSTOP = {_f(duration_s)}
-/
+{tc_body}/
 
 &SIMULATOR
 {sim_block}
@@ -719,7 +783,7 @@ WSMFEFF_LOW_MULT = 0.011364
 PATH_TO_GDAL                   = '/usr/bin'
 SCRATCH                        = './scratch'
 /
-"""
+{montecarlo_block}"""
 
 
 # --------------------------------------------------------------------------- #

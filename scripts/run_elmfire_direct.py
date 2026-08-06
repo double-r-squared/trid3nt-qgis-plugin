@@ -54,7 +54,45 @@ async def _run():
             lh_min_pct=30.0, lh_max_pct=150.0, n_moisture_steps=3,
             wind_speed_mph=20.0, duration_hours=0.75, cellsize_m=45.0, domain_km=10.0,
         )
-    raise SystemExit(f"unknown template {WHICH!r} (ltw|wind|moisture)")
+    if WHICH == "transient_wind":
+        from trid3nt_server.agent.workflows.elmfire.transient.wind_schedule.wind_schedule import (
+            elmfire_transient_wind_schedule_spread as fn,
+        )
+        return await fn(
+            wind_speed_mph=22.0, wind_dir_initial_deg=270.0, wind_dir_shifted_deg=180.0,
+            shift_fraction=0.5, duration_hours=0.5, cellsize_m=60.0, domain_km=8.0,
+            input_mode="auto",
+        )
+    if WHICH == "dead_fuel_interp":
+        from trid3nt_server.agent.workflows.elmfire.transient.dead_fuel_interp.dead_fuel_interp import (
+            elmfire_dead_fuel_moisture_interpolation_frequency_control as fn,
+        )
+        return await fn(
+            cadence_min_s=60.0, cadence_max_s=1800.0, n_steps=4, n_bands=4,
+            m1_start_pct=3.0, m1_end_pct=10.0, wind_speed_mph=18.0,
+            duration_hours=1.0, cellsize_m=60.0, domain_km=8.0, input_mode="auto",
+        )
+    if WHICH == "crown_init":
+        from trid3nt_server.agent.workflows.elmfire.crown.crown_fire import (
+            elmfire_crown_fire_initiation_threshold_sweep as fn,
+        )
+        return await fn(
+            sweep_variable="critical_canopy_cover", n_steps=3,
+            wind_speed_mph=25.0, duration_hours=0.5, cellsize_m=60.0, domain_km=8.0,
+        )
+    if WHICH == "crown_ceiling":
+        from trid3nt_server.agent.workflows.elmfire.crown.crown_fire import (
+            elmfire_crown_fire_initiation_threshold_sweep as fn,
+        )
+        return await fn(
+            sweep_variable="spread_rate_limit", sweep_min=120.0, sweep_max=99999.0,
+            n_steps=2, wind_speed_mph=25.0, duration_hours=0.5, cellsize_m=60.0,
+            domain_km=8.0,
+        )
+    raise SystemExit(
+        f"unknown template {WHICH!r} "
+        "(ltw|wind|moisture|transient_wind|dead_fuel_interp|crown_init|crown_ceiling)"
+    )
 
 
 result = asyncio.run(_run())

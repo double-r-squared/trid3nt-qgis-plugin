@@ -774,6 +774,17 @@ from ..workflows.elmfire.verification.verification import elmfire_verification_e
 from ..workflows.elmfire.sensitivity.ltw_ceiling.ltw_ceiling import elmfire_length_to_width_ceiling_sensitivity as _elmfire_length_to_width_ceiling_sensitivity  # noqa: E402,F401 - MAX_LOW length:width ceiling sweep
 from ..workflows.elmfire.sensitivity.wind_fluctuation.wind_fluctuation import elmfire_wind_fluctuation_randomization as _elmfire_wind_fluctuation_randomization  # noqa: E402,F401 - WIND_FLUCTUATIONS deterministic-vs-randomized sweep
 from ..workflows.elmfire.sensitivity.live_moisture.live_moisture import elmfire_live_fuel_moisture_sensitivity as _elmfire_live_fuel_moisture_sensitivity  # noqa: E402,F401 - live herbaceous/woody moisture override sweep
+# ELMFIRE transient/multi-band weather-deck templates (ADR 0161, front A): a
+# synthetic time-varying weather schedule (NUM_METEOROLOGY_TIMES>1 + DT_METEOROLOGY
+# interpolation) drives a mid-run wind shift and a dead-fuel moisture-recovery
+# interpolation-cadence sweep. tier=template, engine=elmfire.
+from ..workflows.elmfire.transient.wind_schedule.wind_schedule import elmfire_transient_wind_schedule_spread as _elmfire_transient_wind_schedule_spread  # noqa: E402,F401 - mid-run wind-shift redirection vs constant wind
+from ..workflows.elmfire.transient.dead_fuel_interp.dead_fuel_interp import elmfire_dead_fuel_moisture_interpolation_frequency_control as _elmfire_dead_fuel_moisture_interpolation_frequency_control  # noqa: E402,F401 - DT_INTERPOLATE_M1/M10/M100 accuracy-vs-cost sweep
+# ELMFIRE crown-fire family (ADR 0161, front B): a folded crown template sweeping
+# the surface-to-crown initiation boundary (CRITICAL_CANOPY_COVER) or the Cruz
+# active-crown spread-rate ceiling (CROWN_FIRE_SPREAD_RATE_LIMIT) on a canopied
+# deck. tier=template, engine=elmfire.
+from ..workflows.elmfire.crown.crown_fire import elmfire_crown_fire_initiation_threshold_sweep as _elmfire_crown_fire_initiation_threshold_sweep  # noqa: E402,F401 - crown-fire initiation + Cruz-rate-ceiling folded sweep
 # pelicun_damage_assessment TEMPLATE (engine="pelicun", tier="template")
 # under workflows/pelicun/damage_assessment/; EXCLUDED from the default
 # retrieval pool, surfaced only by the run_pelicun door's gate expansion. Its

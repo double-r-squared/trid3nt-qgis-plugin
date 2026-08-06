@@ -385,6 +385,61 @@ VERIFICATION_FLAT_ELEVATION_M: int = 1000
 #: CBH_TIMES_10 / CBD_TIMES_100 namelist defaults).
 _ZERO_CANOPY: dict[str, int] = {"cbh": 0, "cbd": 0, "cc": 0, "ch": 0}
 
+#: deck weather-raster name -> the ELMFIRE-unit weather-dict key it carries.
+_WEATHER_RASTER_KEYS: dict[str, str] = {
+    "ws": "ws_mph_20ft",
+    "wd": "wd_deg",
+    "m1": "m1_pct",
+    "m10": "m10_pct",
+    "m100": "m100_pct",
+}
+
+#: schedule-entry alias -> canonical ELMFIRE weather-dict key. A schedule entry
+#: may use the short raster names (``ws``/``wd``/``m1``/``m10``/``m100``) or the
+#: canonical ``*_pct`` / ``*_mph_20ft`` / ``*_deg`` keys interchangeably.
+_SCHEDULE_ALIASES: dict[str, str] = {
+    "ws": "ws_mph_20ft", "ws_mph_20ft": "ws_mph_20ft",
+    "wd": "wd_deg", "wd_deg": "wd_deg",
+    "m1": "m1_pct", "m1_pct": "m1_pct",
+    "m10": "m10_pct", "m10_pct": "m10_pct",
+    "m100": "m100_pct", "m100_pct": "m100_pct",
+}
+
+
+def _normalize_weather_schedule(
+    schedule: list[dict[str, float]], base_weather: dict[str, float]
+) -> list[dict[str, float]]:
+    """Expand a transient weather schedule into full per-band ELMFIRE-unit dicts.
+
+    Each entry may specify any subset of ws/wd/m1/m10/m100 (short or canonical
+    keys); an absent field inherits ``base_weather`` (the run-args base weather).
+    Returns one dict per band carrying all five ``_WEATHER_RASTER_KEYS`` values.
+    Raises ``ElmfireWorkflowError`` on an empty schedule or an unknown key (never
+    a silently dropped schedule field)."""
+    if not schedule:
+        raise ElmfireWorkflowError(
+            "ELMFIRE_PARAMS_INVALID", "weather_schedule is empty"
+        )
+    bands: list[dict[str, float]] = []
+    for i, entry in enumerate(schedule):
+        if not isinstance(entry, dict):
+            raise ElmfireWorkflowError(
+                "ELMFIRE_PARAMS_INVALID",
+                f"weather_schedule[{i}] must be a dict, got {type(entry).__name__}",
+            )
+        band = {k: float(base_weather[k]) for k in _WEATHER_RASTER_KEYS.values()}
+        for k, v in entry.items():
+            canon = _SCHEDULE_ALIASES.get(str(k))
+            if canon is None:
+                raise ElmfireWorkflowError(
+                    "ELMFIRE_PARAMS_INVALID",
+                    f"weather_schedule[{i}] carries unknown key {k!r} "
+                    f"(known: {sorted(_SCHEDULE_ALIASES)})",
+                )
+            band[canon] = float(v)
+        bands.append(band)
+    return bands
+
 
 def build_constant_flat_deck(
     run_args: ElmfireRunArgs,
@@ -394,9 +449,13 @@ def build_constant_flat_deck(
     flat_elevation_m: int = VERIFICATION_FLAT_ELEVATION_M,
     canopy: dict[str, int] | None = None,
     moisture_override: dict[str, float] | None = None,
+    weather_schedule: list[dict[str, float]] | None = None,
+    dt_meteorology_s: float = 3600.0,
+    target_cfl: float | None = None,
     simulator_extra: dict[str, str] | None = None,
     outputs_extra: dict[str, str] | None = None,
     inputs_extra: dict[str, str] | None = None,
+    time_control_extra: dict[str, str] | None = None,
     dt_s: float = 30.0,
     dtdump_s: float = 3600.0,
 ) -> dict[str, Any]:
@@ -415,8 +474,18 @@ def build_constant_flat_deck(
     (the same ``services/workers/elmfire/deck_builder`` seam ``build_elmfire_deck``
     uses, so the namelist / grid-identity assert / ignition projection / manifest
     are byte-identical). ``simulator_extra`` / ``outputs_extra`` / ``inputs_extra``
-    inject extra namelist knobs (pre-formatted-string values the caller owns);
-    unset reproduces the canonical constant deck. Returns the SAME manifest shape
+    / ``time_control_extra`` inject extra namelist knobs (pre-formatted-string
+    values the caller owns); unset reproduces the canonical constant deck.
+
+    TRANSIENT WEATHER: ``weather_schedule`` is a list of per-meteorology-time
+    scalar-weather dicts (each carrying any of ``ws``/``wd``/``m1``/``m10``/``m100``
+    in ELMFIRE units -- mph@20ft, met-degrees, dead-fuel-moisture percent -- with
+    absent keys inheriting the run-args base weather). When given, the ws/wd/m1/
+    m10/m100 rasters are written MULTI-BAND (one band per schedule entry),
+    ``NUM_METEOROLOGY_TIMES`` is set to the entry count, and ``DT_METEOROLOGY`` to
+    ``dt_meteorology_s``; the solver linearly interpolates the spatially-uniform
+    band values over time (a synthetic wind-shift / moisture-recovery timeline).
+    Unset keeps the single-band constant weather. Returns the SAME manifest shape
     ``build_elmfire_deck`` returns so ``stage_elmfire_manifest`` consumes it
     unchanged.
     """
@@ -464,20 +533,34 @@ def build_constant_flat_deck(
         "wd_deg": float(run_args.wind_dir_deg),
         **moisture,
     }
-    float_constants = {
-        "ws": weather["ws_mph_20ft"],
-        "wd": weather["wd_deg"],
-        "m1": weather["m1_pct"],
-        "m10": weather["m10_pct"],
-        "m100": weather["m100_pct"],
-        "adj": db.ADJ_VALUE,
-        "phi": db.PHI_VALUE,
-    }
-    for name, value in float_constants.items():
+    # adj/phi are always single-band Float32 constants.
+    for name, value in (("adj", db.ADJ_VALUE), ("phi", db.PHI_VALUE)):
         db.write_constant_raster_typed(
             value, grid, inputs_dir / f"{name}.tif", dtype="float32"
         )
         provenance[name] = {"source": f"constant:{value}", "nodata_fraction": 0.0}
+
+    # Weather: single constant band, OR a multi-band transient schedule.
+    num_met_times = 1
+    if weather_schedule:
+        bands = _normalize_weather_schedule(weather_schedule, weather)
+        num_met_times = len(bands)
+        for name, key in _WEATHER_RASTER_KEYS.items():
+            db.write_weather_bands(
+                [float(b[key]) for b in bands], grid, inputs_dir / f"{name}.tif"
+            )
+            provenance[name] = {
+                "source": f"schedule[{num_met_times}]:{[round(b[key], 3) for b in bands]}",
+                "nodata_fraction": 0.0,
+            }
+    else:
+        for name, key in _WEATHER_RASTER_KEYS.items():
+            db.write_constant_raster_typed(
+                float(weather[key]), grid, inputs_dir / f"{name}.tif", dtype="float32"
+            )
+            provenance[name] = {
+                "source": f"constant:{weather[key]}", "nodata_fraction": 0.0
+            }
 
     # HARD ASSERT the grid identity across all rasters (same guard as build_deck).
     db.verify_deck_grid(inputs_dir, grid)
@@ -493,9 +576,13 @@ def build_constant_flat_deck(
     namelist = db.render_namelist(
         grid, ignitions_xy, weather, duration_s=duration_s,
         dt_s=float(dt_s), dtdump_s=float(dtdump_s),
+        dt_meteorology_s=float(dt_meteorology_s),
+        num_meteorology_times=num_met_times,
+        target_cfl=target_cfl,
         simulator_extra=simulator_extra,
         outputs_extra=outputs_extra,
         inputs_extra=inputs_extra,
+        time_control_extra=time_control_extra,
     )
     (inputs_dir / "elmfire.data").write_text(namelist)
 
@@ -509,10 +596,11 @@ def build_constant_flat_deck(
     (deck_dir / "deck_manifest.json").write_text(_json.dumps(manifest, indent=2))
     logger.info(
         "build_constant_flat_deck: fuel=%d canopy=%s flat-terrain %dx%d @%sm "
-        "wind=%.1fmph@%.0fdeg duration=%.0fs extra=%s -> %s",
+        "wind=%.1fmph@%.0fdeg duration=%.0fs num_met_times=%d dt_met=%.0fs "
+        "extra=%s -> %s",
         fuel_model, canopy_vals, grid["nx"], grid["ny"], grid["cellsize_m"],
-        weather["ws_mph_20ft"], weather["wd_deg"], duration_s,
-        sorted((simulator_extra or {}).keys()), deck_dir,
+        weather["ws_mph_20ft"], weather["wd_deg"], duration_s, num_met_times,
+        float(dt_meteorology_s), sorted((simulator_extra or {}).keys()), deck_dir,
     )
     return manifest
 

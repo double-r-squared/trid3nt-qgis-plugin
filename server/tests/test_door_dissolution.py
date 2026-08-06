@@ -56,6 +56,9 @@ EXPECTED_TEMPLATES = {
     "elmfire_length_to_width_ceiling_sensitivity",  # ELMFIRE CAND-S: MAX_LOW length:width ceiling sweep
     "elmfire_wind_fluctuation_randomization",  # ELMFIRE CAND-S: deterministic-vs-randomized wind-fluctuation ensemble
     "elmfire_live_fuel_moisture_sensitivity",  # ELMFIRE CAND-S: live herbaceous moisture override sweep
+    "elmfire_transient_wind_schedule_spread",  # ELMFIRE transient-weather front (ADR 0161): mid-run wind-shift redirection vs constant wind
+    "elmfire_dead_fuel_moisture_interpolation_frequency_control",  # ELMFIRE transient-weather front (ADR 0161): DT_INTERPOLATE_M1/M10/M100 accuracy-vs-cost sweep
+    "elmfire_crown_fire_initiation_threshold_sweep",  # ELMFIRE crown-fire front (ADR 0161): CRITICAL_CANOPY_COVER initiation + Cruz-rate ceiling folded sweep
     "landlab_susceptibility",
     "landlab_flow_accumulation",  # ADR 0122 hazard-easy-four #1: Landlab flow-accumulation / drainage-area + channel-network template
     "landlab_green_ampt_overland_flow",  # ADR 0123 hazard-easy-four continuation #1: Green-Ampt infiltration/runoff partition

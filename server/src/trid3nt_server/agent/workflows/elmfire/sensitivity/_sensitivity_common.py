@@ -88,6 +88,8 @@ class SweepCaseResult:
     length_to_width_ratio: float | None = None
     err_fraction: float | None = None
     corr_class: str | None = None
+    crown_active_area_km2: float | None = None
+    crown_any_area_km2: float | None = None
     bbox: tuple[float, float, float, float] = (0.0, 0.0, 0.0, 0.0)
     extras: dict[str, float] = field(default_factory=dict)
 
@@ -159,14 +161,19 @@ async def solve_constant_case(
     fuel_model: int,
     canopy: dict[str, int] | None = None,
     moisture_override: dict[str, float] | None = None,
+    weather_schedule: list[dict[str, float]] | None = None,
+    dt_meteorology_s: float = 3600.0,
+    target_cfl: float | None = None,
     simulator_extra: dict[str, str] | None = None,
     outputs_extra: dict[str, str] | None = None,
     inputs_extra: dict[str, str] | None = None,
+    time_control_extra: dict[str, str] | None = None,
     dt_s: float = 30.0,
     dtdump_s: float = 3600.0,
     compute_class: str = "small",
     emitter: Any = None,
     measure_ltw: bool = False,
+    measure_crown: bool = False,
     step_label: str = "build_elmfire_deck",
 ) -> SweepCaseResult:
     """Solve ONE constant flat-deck sweep point; return the measured scalars.
@@ -188,9 +195,13 @@ async def solve_constant_case(
             fuel_model=int(fuel_model),
             canopy=canopy,
             moisture_override=moisture_override,
+            weather_schedule=weather_schedule,
+            dt_meteorology_s=dt_meteorology_s,
+            target_cfl=target_cfl,
             simulator_extra=simulator_extra,
             outputs_extra=outputs_extra,
             inputs_extra=inputs_extra,
+            time_control_extra=time_control_extra,
             dt_s=dt_s,
             dtdump_s=dtdump_s,
         )
@@ -242,6 +253,21 @@ async def solve_constant_case(
         if np.isfinite(vs_arr).any():
             max_spread_rate_m_min = float(np.nanmax(vs_arr)) * FTMIN_TO_MMIN
 
+    crown_active_area_km2: float | None = None
+    crown_any_area_km2: float | None = None
+    if measure_crown:
+        crown_path = rasters.get("crown_fire")
+        if crown_path is not None:
+            crown_arr, _t, _c, crown_cs = await asyncio.to_thread(
+                read_fire_raster, crown_path, epsg=epsg
+            )
+            # Per-cell crown-fire type: 2 = active crown, 1 = passive/torching.
+            cell_km2 = (float(crown_cs) * float(crown_cs)) / 1.0e6
+            active = np.isfinite(crown_arr) & (crown_arr >= 1.5)
+            anyc = np.isfinite(crown_arr) & (crown_arr >= 0.5)
+            crown_active_area_km2 = float(int(active.sum())) * cell_km2
+            crown_any_area_km2 = float(int(anyc.sum())) * cell_km2
+
     ltw: float | None = None
     err_fraction: float | None = None
     corr_class: str | None = None
@@ -275,6 +301,8 @@ async def solve_constant_case(
         length_to_width_ratio=ltw,
         err_fraction=err_fraction,
         corr_class=corr_class,
+        crown_active_area_km2=crown_active_area_km2,
+        crown_any_area_km2=crown_any_area_km2,
         bbox=tuple(run_args.bbox),  # type: ignore[arg-type]
     )
 

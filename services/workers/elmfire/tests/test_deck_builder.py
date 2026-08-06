@@ -430,3 +430,59 @@ def test_non_s3_uri_scheme_rejected(source_rasters, tmp_path) -> None:
     inputs["asp"] = "https://example.com/asp.tif"
     with pytest.raises(db.ElmfireSpecError, match="unsupported URI scheme"):
         db.build_deck(_make_spec(source_rasters, inputs=inputs), tmp_path / "deck")
+
+
+# --------------------------------------------------------------------------- #
+# Transient multi-band weather + time-control emission (ADR 0161 front A/B).
+# --------------------------------------------------------------------------- #
+
+_GRID = {
+    "epsg": 5070, "cellsize_m": 30.0, "xll": 0.0, "yll": 0.0,
+    "nx": 8, "ny": 8, "transform": (30.0, 0.0, 0.0, 0.0, -30.0, 240.0),
+}
+_IGN_XY = [{"x": 120.0, "y": 120.0, "t_ign_s": 0.0}]
+_WEATHER = {
+    "ws_mph_20ft": 20.0, "wd_deg": 270.0, "m1_pct": 3.0, "m10_pct": 4.0,
+    "m100_pct": 5.0, "lh_pct": 30.0, "lw_pct": 60.0,
+}
+
+
+def test_render_namelist_constant_defaults_unchanged() -> None:
+    """The default (constant) render carries DT_METEOROLOGY=3600.0, no MONTE_CARLO
+    group, no TARGET_CFL, no time-control extras (byte-identical intent)."""
+    text = db.render_namelist(_GRID, _IGN_XY, _WEATHER, duration_s=3600.0)
+    assert "DT_METEOROLOGY                 = 3600.0" in text
+    assert "&MONTE_CARLO" not in text
+    assert "NUM_METEOROLOGY_TIMES" not in text
+    assert "TARGET_CFL" not in text
+
+
+def test_render_namelist_transient_emits_monte_carlo_and_time_control() -> None:
+    text = db.render_namelist(
+        _GRID, _IGN_XY, _WEATHER, duration_s=3600.0,
+        dt_meteorology_s=1800.0, num_meteorology_times=3, target_cfl=0.1,
+        time_control_extra={"DT_INTERPOLATE_M1": "600.0"},
+        simulator_extra={"CROWN_FIRE_MODEL": "1", "BANDTHICKNESS": "3"},
+        outputs_extra={"DUMP_CROWN_FIRE": ".TRUE."},
+    )
+    assert "DT_METEOROLOGY                 = 1800.0" in text
+    assert "&MONTE_CARLO" in text and "NUM_METEOROLOGY_TIMES = 3" in text
+    assert "TARGET_CFL       = 0.1000" in text
+    assert "DT_INTERPOLATE_M1 = 600.0" in text
+    assert "CROWN_FIRE_MODEL = 1" in text and "BANDTHICKNESS = 3" in text
+    assert "DUMP_CROWN_FIRE = .TRUE." in text
+
+
+def test_write_weather_bands_multiband(tmp_path) -> None:
+    dest = tmp_path / "ws.tif"
+    db.write_weather_bands([10.0, 20.0, 30.0], _GRID, dest)
+    with rasterio.open(dest) as ds:
+        assert ds.count == 3
+        assert (ds.width, ds.height) == (_GRID["nx"], _GRID["ny"])
+        assert float(ds.read(1).mean()) == pytest.approx(10.0)
+        assert float(ds.read(3).mean()) == pytest.approx(30.0)
+
+
+def test_write_weather_bands_empty_raises(tmp_path) -> None:
+    with pytest.raises(db.ElmfireSpecError):
+        db.write_weather_bands([], _GRID, tmp_path / "ws.tif")
