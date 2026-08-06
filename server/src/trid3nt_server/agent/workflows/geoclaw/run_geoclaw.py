@@ -265,6 +265,16 @@ def build_geoclaw_build_spec(
     if run_args.manning_coefficients is not None:
         spec["manning_coefficients"] = [float(n) for n in run_args.manning_coefficients]
         spec["manning_break"] = [float(b) for b in run_args.manning_break]
+    # Lagrangian particle gauges: thread the seed points ONLY when supplied (else
+    # no gtype dict / extra gauges are emitted -> byte-identical deck).
+    if run_args.lagrangian_particles:
+        spec["lagrangian_particles"] = [
+            [float(p[0]), float(p[1])] for p in run_args.lagrangian_particles
+        ]
+    # fgmax point set: thread the ONSHORE mask selector ONLY when non-default so a
+    # "full" run stays byte-identical (the worker defaults fgmax_mask -> "full").
+    if getattr(run_args, "fgmax_mask", "full") != "full":
+        spec["fgmax_mask"] = str(run_args.fgmax_mask)
     return spec
 
 

@@ -56,6 +56,8 @@ from trid3nt_server.agent.workflows.geoclaw.postprocess_geoclaw import (
     PostprocessGeoClawError,
     build_gauge_timeseries_chart_spec,
     build_geoclaw_mesh_layer,
+    build_geoclaw_particle_track_layer,
+    build_particle_track_chart_spec,
     compute_geoclaw_grid_shape,
     parse_geoclaw_gauge_series,
     postprocess_geoclaw,
@@ -161,6 +163,8 @@ async def geoclaw_inundation(
     extra_topo_uris: list[str] | None = None,
     coastal_gauge_lonlat: tuple[float, float] | list[float] | None = None,
     fgmax_arrival_tol_m: float | None = None,
+    lagrangian_particles: list[list[float]] | None = None,
+    fgmax_mask: str = "full",
     compute_class: str = "standard",
     input_mode: str | None = None,
     # absorb LLM-invented kwargs (centralized at server.py via
@@ -219,6 +223,15 @@ async def geoclaw_inundation(
             time series.
         fgmax_arrival_tol_m: optional wet-cell threshold for arrival time
             (default 0.01m when unset).
+        lagrangian_particles: optional list of (lon, lat) seed points for
+            LAGRANGIAN particle gauges advected by the flow -- drifters that
+            trace the depth-averaged velocity (e.g. a harbour wake / vortex).
+            When supplied, their drift TRACKS are emitted as a LineString
+            product layer plus a cumulative-drift chart. Unset -> none.
+        fgmax_mask: fgmax point set -- "full" (default, a uniform grid over the
+            whole AOI) or "onshore" (restrict the fgmax maxima to the DEM
+            onshore cells via a topotype-3 mask, cutting the fgmax output size
+            for a coastal AOI). Only affects tsunami / surge runs.
         compute_class: compute class (default "standard").
         input_mode: run-mode lever (ADR 0107). ``"user_gated"`` presents the
             resolved inputs (dam height/location, magnitude, window) for review
@@ -442,6 +455,12 @@ async def geoclaw_inundation(
                 kwargs["coastal_gauge_lonlat"] = (float(cg[0]), float(cg[1]))
         if fgmax_arrival_tol_m is not None:
             kwargs["fgmax_arrival_tol_m"] = float(fgmax_arrival_tol_m)
+        if lagrangian_particles:
+            kwargs["lagrangian_particles"] = [
+                (float(p[0]), float(p[1])) for p in lagrangian_particles
+            ]
+        if str(fgmax_mask).strip().lower() != "full":
+            kwargs["fgmax_mask"] = str(fgmax_mask).strip().lower()
         run_args = GeoClawRunArgs(**kwargs)
     except Exception as exc:  # noqa: BLE001 -- pydantic ValidationError or coercion
         return {
@@ -466,6 +485,7 @@ async def geoclaw_inundation(
             compute_class=compute_class,
             dam_source_note=dam_source_note,
             synthetic_inputs=provenance,
+            emit_particle_tracks=bool(run_args.lagrangian_particles),
         )
         logger.info(
             "geoclaw_inundation complete layer_id=%s scenario=%s "
@@ -780,6 +800,7 @@ async def model_geoclaw_inundation(
     dam_source_note: str | None = None,
     synthetic_inputs: list[SyntheticInput] | None = None,
     emit_gauge_series: bool = False,
+    emit_particle_tracks: bool = False,
 ) -> GeoClawDepthLayerURI:
     """Compose the full GeoClaw shallow-water inundation chain end-to-end (Batch).
 
@@ -1304,6 +1325,26 @@ async def model_geoclaw_inundation(
         mesh_layer = await asyncio.to_thread(
             build_geoclaw_mesh_layer, out_dir, run_id=staging.run_id
         )
+
+        # --- Lagrangian particle tracks (the wake-tracking fold) --------------
+        # When the run seeded Lagrangian particle gauges, parse their drift tracks
+        # into a LineString product layer + narration scalars. Built BEFORE the
+        # out_dir cleanup below. Best-effort: no tracks -> None (the plain path).
+        particle_layer: LayerURI | None = None
+        particle_tracks: list[dict[str, Any]] = []
+        if emit_particle_tracks:
+            try:
+                particle_layer, particle_tracks = await asyncio.to_thread(
+                    build_geoclaw_particle_track_layer,
+                    out_dir,
+                    run_id=staging.run_id,
+                )
+            except Exception as exc:  # noqa: BLE001 - never sink the solve
+                logger.warning(
+                    "model_geoclaw_inundation: particle-track parse failed "
+                    "(non-fatal): %s",
+                    exc,
+                )
     finally:
         if cleanup_outputs:
             _cleanup_dir(out_dir)
@@ -1327,6 +1368,14 @@ async def model_geoclaw_inundation(
         _peak_update["synthetic_inputs"] = list(synthetic_inputs)
     if gauge_scalars:
         _peak_update.update(gauge_scalars)
+    if particle_tracks:
+        _peak_update["particle_track_count"] = len(particle_tracks)
+        _peak_update["particle_max_track_length_m"] = max(
+            float(t["length_m"]) for t in particle_tracks
+        )
+        _peak_update["particle_track_duration_s"] = max(
+            float(t["duration_s"]) for t in particle_tracks
+        )
     if _peak_update:
         peak = peak.model_copy(update=_peak_update)
 
@@ -1339,6 +1388,14 @@ async def model_geoclaw_inundation(
     # crs_authid onto the WS row. Never fatal (the depth answer stands regardless).
     if mesh_layer is not None:
         await publish_input_layer(emitter, mesh_layer, role="context")
+
+    # --- Lagrangian particle-track product layer + drift chart -----------------
+    # The tracks ARE a product (the drifter / wake paths), so they ride the same
+    # context/vector seam as the mesh; the drift chart goes to the charts window.
+    if particle_layer is not None:
+        await publish_input_layer(emitter, particle_layer, role="context")
+    if particle_tracks:
+        await _maybe_emit_particle_chart(emitter, particle_tracks, peak.uri)
 
     # --- Coastal gauge surface-elevation chart (the gauge-timeseries template) ---
     if emit_gauge_series and gauge_series is not None:
@@ -1447,6 +1504,33 @@ async def _maybe_emit_gauge_chart(
         await emitter.emit_chart(payload)
     except Exception as exc:  # noqa: BLE001 - non-fatal
         logger.warning("gauge time-series chart emit failed: %s", exc)
+
+
+async def _maybe_emit_particle_chart(
+    emitter: Any, tracks: list[dict[str, Any]] | None, source_uri: str
+) -> None:
+    """Emit the Lagrangian particle cumulative-drift chart to the charts window."""
+    if emitter is None or not hasattr(emitter, "emit_chart"):
+        return
+    spec = build_particle_track_chart_spec(tracks)
+    if spec is None:
+        return
+    from trid3nt_server.agent.tools.processing.charts_common import build_chart_payload
+
+    payload = build_chart_payload(
+        vega_lite_spec=spec,
+        title="Lagrangian particle drift",
+        caption=(
+            "Cumulative drift distance of each Lagrangian particle gauge over time "
+            "-- the particles are advected by the depth-averaged velocity, tracing "
+            "the flow (wake / drift path). The spatial paths are the map overlay."
+        ),
+        source_layer_uri=source_uri,
+    )
+    try:
+        await emitter.emit_chart(payload)
+    except Exception as exc:  # noqa: BLE001 - non-fatal
+        logger.warning("particle-track chart emit failed: %s", exc)
 
 
 async def _emit_frame_layers(

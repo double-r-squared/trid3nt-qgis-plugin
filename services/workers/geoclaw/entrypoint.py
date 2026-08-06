@@ -236,6 +236,16 @@ _OFFSHORE_FLAT_WET_THRESHOLD_M: float = -2.0
 _OFFSHORE_FLAT_MIN_WET_FRACTION: float = 0.05
 
 
+class GeoClawFgmaxMaskError(RuntimeError):
+    """The onshore fgmax point mask (point_style=4) could not be built or would
+    select zero points -- a degenerate fgmax run.
+
+    ``error_code`` rides into the completion manifest so the failure is a named,
+    debuggable typed error rather than a silent empty fgmax output."""
+
+    error_code: str = "GEOCLAW_FGMAX_MASK_FAILED"
+
+
 class GeoClawBathymetryFlatError(RuntimeError):
     """The staged OFFSHORE topo is effectively flat / non-negative -- no genuine
     ocean reaches the solver, so the run would inundate nothing.
@@ -459,6 +469,121 @@ def _normalize_topo_files(scratch: Path, build_spec: dict) -> None:
     # Flat-ocean gate (P0.3): offshore primary topo MUST be genuinely-negative.
     if offshore:
         _validate_offshore_bathymetry(primary_name, primary_stats)
+
+
+def _generate_fgmax_mask(scratch: Path, build_spec: dict) -> None:
+    """Write the ONSHORE fgmax point mask (point_style=4) when requested.
+
+    When ``build_spec.fgmax_mask == "onshore"`` (and the scenario emits fgmax:
+    tsunami / surge), the setrun references ``fgmax_mask.tt3`` via ``fg.xy_fname``.
+    This builds that file: a topotype-3 grid over the AOI at the SAME geometry the
+    full point_style=2 fgmax grid uses (``setrun_builder.fgmax_grid_geom``), with
+    Z=1 on the cells whose DEM topography is ABOVE ``sea_level_m`` (onshore) and
+    Z=0 elsewhere -- so the fgmax monitor records only the onshore run-up cells (a
+    strict subset of the full grid), cutting the fgmax output size for a coastal
+    AOI. The onshore cells' maxima match the full-grid maxima cell-for-cell.
+
+    Called AFTER ``_normalize_topo_files`` (so ``topo.asc`` is a genuine topotype-3
+    ASCII) and BEFORE the solve. Best-effort with a LOUD typed failure: a mask that
+    would select ZERO cells raises ``GeoClawFgmaxMaskError`` (point_style=4 with an
+    empty mask is a degenerate run), rather than a silent empty fgmax.
+    """
+    if not isinstance(build_spec, dict):
+        return
+    if str(build_spec.get("fgmax_mask") or "full").strip().lower() != "onshore":
+        return
+    scenario = str(build_spec.get("scenario") or "").strip().lower()
+    if scenario not in ("tsunami", "surge"):
+        return
+
+    import numpy as np  # noqa: WPS433 - worker image deps
+    from clawpack.geoclaw import topotools  # noqa: WPS433
+
+    from services.workers.geoclaw.setrun_builder import (
+        FGMAX_MASK_FILENAME,
+        fgmax_grid_geom,
+        parse_build_spec,
+    )
+
+    spec = parse_build_spec(build_spec)
+    geom = fgmax_grid_geom(spec)
+    sea_level_m = float(spec.sea_level_m)
+
+    nx, ny, dx = int(geom["nx"]), int(geom["ny"]), float(geom["dx"])
+    xs = geom["x1"] + dx * np.arange(nx)
+    ys = geom["y1"] + dx * np.arange(ny)
+
+    def _sample_topo(path: Path) -> Any:
+        """Nearest-neighbour sample of one topotype-3 topo onto the fgmax grid.
+
+        Returns a (ny, nx) array; cells OUTSIDE the topo's own coverage are NaN
+        (so a fine AOI tile only overrides where it actually has data). Pure numpy
+        index arithmetic on the regular ascending grid (no scipy)."""
+        t = topotools.Topography(path=str(path), topo_type=3)
+        tx = np.asarray(t.x, dtype="float64")
+        ty = np.asarray(t.y, dtype="float64")
+        tZ = np.asarray(t.Z, dtype="float64")  # Z[j, i] at (ty[j], tx[i])
+        if tx.size < 2 or ty.size < 2:
+            return np.full((ny, nx), np.nan)
+        tdx = float(tx[1] - tx[0])
+        tdy = float(ty[1] - ty[0])
+        ci = np.clip(np.round((xs - tx[0]) / tdx).astype(int), 0, tx.size - 1)
+        rj = np.clip(np.round((ys - ty[0]) / tdy).astype(int), 0, ty.size - 1)
+        vals = tZ[np.ix_(rj, ci)]
+        # NaN out fgmax cells outside this topo's coverage (nearest clamps to the
+        # edge, which would falsely override with an edge value).
+        in_x = (xs >= tx[0] - abs(tdx)) & (xs <= tx[-1] + abs(tdx))
+        in_y = (ys >= ty[0] - abs(tdy)) & (ys <= ty[-1] + abs(tdy))
+        cover = np.outer(in_y, in_x)
+        return np.where(cover, vals, np.nan)
+
+    # Layer the staged topos finest-LAST (primary, then extra tiles ordered
+    # coarse->fine) so the mask coastline matches the topo GeoClaw actually solves
+    # on (finest-in-overlap) -- otherwise a coarse ETOPO base misclassifies the
+    # nearshore and the onshore maxima disagree with the full grid.
+    names = [str(build_spec.get("topo_file") or "topo.asc")]
+    names.extend(str(f) for f in (build_spec.get("extra_topo_files") or []))
+    topo_grid = np.full((ny, nx), np.nan)
+    sampled_any = False
+    for name in names:
+        p = scratch / name
+        if not p.exists():
+            continue
+        s = _sample_topo(p)
+        finite = np.isfinite(s)
+        topo_grid = np.where(finite, s, topo_grid)  # finer (later) overrides
+        sampled_any = sampled_any or bool(finite.any())
+    if not sampled_any:
+        raise GeoClawFgmaxMaskError(
+            "GEOCLAW_FGMAX_MASK_FAILED: no staged topo could be sampled for the "
+            "onshore fgmax mask"
+        )
+    # Onshore = DEM strictly above the still-water datum. NaN (nodata) -> 0.
+    mask = np.where(np.isfinite(topo_grid) & (topo_grid > sea_level_m), 1.0, 0.0)
+    n_onshore = int(mask.sum())
+    if n_onshore == 0:
+        raise GeoClawFgmaxMaskError(
+            "GEOCLAW_FGMAX_MASK_FAILED: the onshore fgmax mask selected ZERO cells "
+            f"over the AOI (no DEM cell above sea_level={sea_level_m} m). "
+            "point_style=4 with an empty mask is a degenerate run; refusing it "
+            "(the AOI may be entirely below the datum -- use fgmax_mask='full')."
+        )
+
+    out = topotools.Topography()
+    out._x = xs
+    out._y = ys
+    out._Z = mask
+    out.generate_2d_coordinates()
+    out.write(str(scratch / FGMAX_MASK_FILENAME), topo_type=3, Z_format="%1i")
+    LOG.info(
+        "fgmax onshore mask: %s (%dx%d grid, %d/%d onshore cells above %.2f m)",
+        FGMAX_MASK_FILENAME,
+        nx,
+        ny,
+        n_onshore,
+        nx * ny,
+        sea_level_m,
+    )
 
 
 def _run_geoclaw(cwd: Path) -> tuple[int, Path, Path]:
@@ -695,6 +820,11 @@ def main(argv: list[str] | None = None) -> int:
         # never loads and the run starts DRY (Total mass = 0 -> no tsunami).
         _normalize_topo_files(scratch, build_spec if isinstance(build_spec, dict) else {})
 
+        # Generate the ONSHORE fgmax point mask (point_style=4) when requested,
+        # after topo normalization (topo.asc is now genuine topotype-3) and before
+        # the deck/solve so setrun's fg.xy_fname reference resolves.
+        _generate_fgmax_mask(scratch, build_spec if isinstance(build_spec, dict) else {})
+
         # Author the deck (setrun.py + scenario source) into the scratch dir.
         deck_manifest = _author_deck(build_spec, scratch)
         scenario = deck_manifest.scenario
@@ -745,6 +875,10 @@ def main(argv: list[str] | None = None) -> int:
     except Exception as exc:  # pragma: no cover — defensive, logged + emitted
         LOG.exception("solver entrypoint failed")
         error_msg = f"{type(exc).__name__}: {exc}"
+        # Capture a typed error_code when the exception carries one (the
+        # flat-ocean gate, the onshore fgmax-mask gate) so the completion names
+        # the failure instead of a bare exception string.
+        error_code = getattr(exc, "error_code", None) or error_code
         exit_code = 1
         status = "error"
 

@@ -98,18 +98,23 @@ surfaces):
 ## Live smoke (row 1)
 
 Two solves through the real `run_solver(solver='telemac_river_dye')` local-docker
-seam, Eel River near Scotia CA (~2.5 km, 1059 nodes / 1778 elements, ~20 m):
-baseline (no wind) and 18 m/s wind FROM 270 deg. Both reached CORRECT END OF RUN
-(`correct_end=True`), ~30 s solver wall each (~65 s incl. fetch+mesh). The wind
-echo (`wind_speed_mps=18.0`, `wind_dir_from_deg=270.0`) rode manifest ->
-ReachConfig -> deck -> metrics. Wind setup (wind - baseline free-surface): a
-monotonic tilt of range 7.35 cm - ~7 cm setdown on the upwind end converging to
-baseline downwind, the textbook wind setup/setdown direction.
+seam, Eel River near Scotia CA (~2.5 km, ~20 m) on the DEFAULT
+`bank_source=nhd_area` (REAL NHDArea river-polygon banks, `domain_mode=water-polygon`,
+mean width 131 m, 1702 nodes / 3048 elements): baseline (no wind) and 18 m/s wind
+FROM 270 deg. Both reached CORRECT END OF RUN (`correct_end=True`), ~35 s solver
+wall each (~70 s incl. fetch+mesh). The wind echo (`wind_speed_mps=18.0`,
+`wind_dir_from_deg=270.0`) rode manifest -> ReachConfig -> deck -> metrics. Wind
+setup (wind - baseline free-surface): a monotonic tilt of range 8.09 cm - ~8 cm
+setdown on the upwind end converging to baseline downwind, the textbook wind
+setup/setdown direction.
 
-Proofs (docs/proof/templates/): `telemac_wind_stress_forcing_chart.png`
-(dock-interpreter overlay, baseline vs wind WSE along the wind axis),
-`telemac_wind_stress_forcing.png` (setup field over Esri World Imagery, white AOI
-box), `telemac_wind_stress_forcing_mesh.png` (raw triangulation).
+Proofs (docs/proof/templates/), all from the nhd_area run:
+`telemac_wind_stress_forcing_chart.png` (dock-interpreter overlay, baseline vs
+wind WSE along the wind axis), `telemac_wind_stress_forcing.png` (setup field over
+Esri World Imagery, white AOI box), `telemac_wind_stress_forcing_mesh.png` (raw
+triangulation over Esri - the mesh follows the variable-width real banks).
+`telemac_wind_stress_forcing_mesh_ribbon.png` is kept as an honest contrast
+artifact (an earlier constant_ribbon meshing of the same reach).
 
 ## Consequences
 

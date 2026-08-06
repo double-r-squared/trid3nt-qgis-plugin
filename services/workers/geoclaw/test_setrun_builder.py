@@ -25,9 +25,11 @@ from pathlib import Path
 import pytest
 
 from services.workers.geoclaw.setrun_builder import (
+    FGMAX_MASK_FILENAME,
     GeoClawBuildSpec,
     GeoClawDeckError,
     build_geoclaw_deck,
+    fgmax_grid_geom,
     parse_build_spec,
     render_maketopo_dtopo,
     render_makefile,
@@ -739,3 +741,89 @@ def test_no_amr_window_keeps_aoi_at_the_requested_finest():
     assert "rundata.regiondata.regions.append([3, 3, 0., 1800.0, -85.75, -85.25, 29.55, 30.2])" in txt
     assert "amrdata.amr_levels_max = 3" in txt
     assert "fg.min_level_check = 3" in txt
+
+
+# ===========================================================================
+# GeoClaw CAND-S tail (ADR 0155): Lagrangian particle gauges + onshore fgmax.
+# ===========================================================================
+def test_lagrangian_particles_emit_gauges_and_per_gauge_gtype():
+    """Seeded particles become gtype='lagrangian' gauges (ids 100+); the coastal
+    gauge (id 1) is absent from the gtype dict -> stays stationary."""
+    spec = parse_build_spec(
+        _spec(scenario="tsunami", lagrangian_particles=[[-85.5, 29.8], [-85.45, 29.82]])
+    )
+    assert spec.lagrangian_particles == [(-85.5, 29.8), (-85.45, 29.82)]
+    txt = render_setrun_py(spec)
+    ast.parse(txt)
+    # the stationary coastal gauge (id 1) is still emitted.
+    assert "rundata.gaugedata.gauges.append([1, " in txt
+    # two Lagrangian particle gauges, ids 100 and 101.
+    assert "rundata.gaugedata.gauges.append([100, -85.5, 29.8, 0., 1.e10])" in txt
+    assert "rundata.gaugedata.gauges.append([101, -85.45, 29.82, 0., 1.e10])" in txt
+    # a per-gauge gtype dict marks ONLY the particle gauges lagrangian.
+    assert "rundata.gaugedata.gtype = {100: 'lagrangian', 101: 'lagrangian'}" in txt
+
+
+def test_no_lagrangian_particles_is_byte_identical_default():
+    """No particles -> no gtype dict, no extra gauges (byte-identical deck)."""
+    spec = parse_build_spec(_spec(scenario="tsunami"))
+    txt = render_setrun_py(spec)
+    assert "gaugedata.gtype" not in txt
+    assert "gauges.append([100," not in txt
+
+
+def test_fgmax_mask_onshore_emits_point_style_4_and_xy_fname():
+    """fgmax_mask='onshore' -> point_style=4 referencing the topotype-3 mask file,
+    NOT the point_style=2 uniform grid."""
+    spec = parse_build_spec(_spec(scenario="tsunami", amr_levels=3, fgmax_mask="onshore"))
+    assert spec.fgmax_mask == "onshore"
+    txt = render_setrun_py(spec)
+    ast.parse(txt)
+    assert "fg.point_style = 4" in txt
+    assert f"fg.xy_fname = {FGMAX_MASK_FILENAME!r}" in txt
+    assert "fg.point_style = 2" not in txt
+    assert "rundata.fgmax_data.num_fgmax_val = 2" in txt
+    assert "fg.min_level_check = 3" in txt
+    assert "fg.arrival_tol = 0.01" in txt
+
+
+def test_fgmax_mask_full_is_byte_identical_point_style_2():
+    """Default fgmax_mask='full' keeps the point_style=2 uniform grid (unchanged)."""
+    spec_full = parse_build_spec(_spec(scenario="tsunami", amr_levels=3))
+    spec_default = parse_build_spec(_spec(scenario="tsunami", amr_levels=3))
+    assert spec_full.fgmax_mask == "full"
+    txt = render_setrun_py(spec_default)
+    assert "fg.point_style = 2" in txt
+    assert "point_style = 4" not in txt
+    assert FGMAX_MASK_FILENAME not in txt
+
+
+def test_fgmax_grid_geom_dx_matches_emitted_point_style_2_grid():
+    """The shared fgmax_grid_geom dx (used by the entrypoint onshore-mask builder)
+    equals the dx_fine the point_style=2 setrun emits -- so the onshore mask lands
+    on the SAME grid as the full grid (common cells match)."""
+    spec = parse_build_spec(
+        _spec(scenario="tsunami", amr_levels=3, domain_bbox=[-86.5, 28.9, -85.0, 30.5])
+    )
+    geom = fgmax_grid_geom(spec)
+    txt = render_setrun_py(spec)
+    # extract the emitted `dx_fine = <value>` from the point_style=2 block.
+    line = next(l for l in txt.splitlines() if "dx_fine =" in l and "AOI ambient" in l)
+    emitted_dx = float(line.split("dx_fine =")[1].split("#")[0].strip())
+    assert abs(geom["dx"] - emitted_dx) < 1e-15
+    assert geom["nx"] >= 2 and geom["ny"] >= 2
+
+
+def test_parse_rejects_bad_fgmax_mask_and_bad_particles():
+    with pytest.raises(GeoClawDeckError):
+        parse_build_spec(_spec(fgmax_mask="sideways"))
+    with pytest.raises(GeoClawDeckError):
+        parse_build_spec(_spec(lagrangian_particles=[[-85.5]]))  # not a 2-tuple
+    with pytest.raises(GeoClawDeckError):
+        parse_build_spec(_spec(lagrangian_particles="nope"))
+
+
+def test_cand_s_tail_additive_defaults_preserve_behaviour():
+    spec = parse_build_spec({"bbox": _AOI, "topo_file": "t.asc"})
+    assert spec.lagrangian_particles == []
+    assert spec.fgmax_mask == "full"

@@ -305,6 +305,22 @@ class GeoClawRunArgs(GraceModel):
     # Optional single coastal gauge (lon, lat) for a recorded water-level series.
     coastal_gauge_lonlat: tuple[float, float] | None = None
 
+    # Lagrangian (particle-tracking) gauges. Each (lon, lat) seed point is added as
+    # a gauge advected BY THE FLOW (GeoClaw gtype='lagrangian'): its recorded
+    # position (x(t), y(t)) traces the depth-averaged velocity field, so the gauge
+    # follows the water (a drifter / wake tracer) instead of holding a fixed point.
+    # The stationary coastal gauge is unaffected (per-gauge gtype). Empty/None ->
+    # no particle gauges (additive: absence preserves prior behaviour).
+    lagrangian_particles: list[tuple[float, float]] | None = None
+
+    # fgmax monitor point set: "full" (default) monitors a uniform rectangular grid
+    # over the whole AOI (point_style=2); "onshore" restricts the fgmax points to
+    # the ONSHORE cells of the real DEM (topography above ``sea_level_m``) via a
+    # topotype-3 mask (point_style=4), cutting the fgmax output size for a coastal
+    # AOI while keeping the run-up maxima on land. Only affects tsunami / surge runs
+    # (the scenarios that emit fgmax). Additive: "full" is byte-identical to prior.
+    fgmax_mask: Literal["full", "onshore"] = "full"
+
     # Explicit AMR refinement windows (region-based flagging). Each window forces
     # a lat/lon/time box to a min/max AMR level, appended AFTER the engine's
     # default region tiers. Empty -> refinement follows the default flag2refine
@@ -347,6 +363,28 @@ class GeoClawRunArgs(GraceModel):
         if not (-90.0 <= lat <= 90.0):
             raise ValueError(f"source_lonlat lat out of range [-90, 90]: {lat}")
         return (lon, lat)
+
+    @field_validator("lagrangian_particles")
+    @classmethod
+    def _validate_lagrangian_particles(
+        cls, value: list[tuple[float, float]] | None
+    ) -> list[tuple[float, float]] | None:
+        """Range-check each ``(lon, lat)`` particle seed point."""
+        if value is None:
+            return None
+        out: list[tuple[float, float]] = []
+        for pt in value:
+            if len(pt) != 2:
+                raise ValueError(
+                    f"lagrangian_particles entries must be (lon, lat), got {pt!r}"
+                )
+            lon, lat = float(pt[0]), float(pt[1])
+            if not (-180.0 <= lon <= 180.0):
+                raise ValueError(f"particle lon out of range [-180, 180]: {lon}")
+            if not (-90.0 <= lat <= 90.0):
+                raise ValueError(f"particle lat out of range [-90, 90]: {lat}")
+            out.append((lon, lat))
+        return out
 
     @field_validator("manning_coefficients")
     @classmethod
@@ -446,6 +484,16 @@ class GeoClawDepthLayerURI(LayerURI):
     gauge_max_amplitude_m: float | None = Field(default=None, ge=0.0)
     gauge_coseismic_offset_m: float | None = Field(default=None)
     gauge_max_depth_m: float | None = Field(default=None, ge=0.0)
+
+    # Lagrangian particle-track scalars (the wake-tracking fold). Populated only
+    # when the run seeded Lagrangian particle gauges and their tracks were parsed;
+    # None on every other path. Additive: absence preserves prior behaviour.
+    #   particle_track_count: number of particle tracks recorded (>= 0).
+    #   particle_max_track_length_m: longest cumulative drift distance, m (>= 0).
+    #   particle_track_duration_s: time span the particles were advected over, s.
+    particle_track_count: int | None = Field(default=None, ge=0)
+    particle_max_track_length_m: float | None = Field(default=None, ge=0.0)
+    particle_track_duration_s: float | None = Field(default=None, ge=0.0)
 
     # Provenance of the driver source (dam-break: real NID dam vs user-supplied
     # location/height). Set by the composer/tool so the agent narrates WHERE the

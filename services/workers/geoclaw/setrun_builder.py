@@ -148,6 +148,14 @@ class GeoClawBuildSpec:
     # len(coefficients) - 1). None -> the single global manning_n is used.
     manning_coefficients: list[float] | None = None
     manning_break: list[float] = field(default_factory=list)
+    # Lagrangian (particle-tracking) gauges: each (lon, lat) is added as a gauge
+    # advected by the flow (gtype='lagrangian'), tracing the depth-averaged
+    # velocity. Empty -> only the stationary coastal gauge is emitted.
+    lagrangian_particles: list[tuple[float, float]] = field(default_factory=list)
+    # fgmax point set: "full" (uniform grid, point_style=2) or "onshore" (the DEM
+    # onshore cells only, point_style=4 with a topotype-3 mask). "full" is the
+    # byte-identical default; "onshore" needs the entrypoint mask-gen step.
+    fgmax_mask: str = "full"
 
 
 @dataclass
@@ -375,6 +383,37 @@ def parse_build_spec(raw: dict[str, Any]) -> GeoClawBuildSpec:
                 f"manning_break must be strictly ascending: {manning_break}",
             )
 
+    # Lagrangian particle seed points (each an (lon, lat) 2-tuple).
+    lp_raw = raw.get("lagrangian_particles")
+    lagrangian_particles: list[tuple[float, float]] = []
+    if lp_raw is not None:
+        if not isinstance(lp_raw, (list, tuple)):
+            raise GeoClawDeckError(
+                "GEOCLAW_SPEC_INVALID",
+                f"lagrangian_particles must be a list of (lon, lat), got {lp_raw!r}",
+            )
+        for pt in lp_raw:
+            if not isinstance(pt, (list, tuple)) or len(pt) != 2:
+                raise GeoClawDeckError(
+                    "GEOCLAW_SPEC_INVALID",
+                    f"lagrangian_particles entry must be (lon, lat), got {pt!r}",
+                )
+            try:
+                lagrangian_particles.append((float(pt[0]), float(pt[1])))
+            except (TypeError, ValueError) as exc:
+                raise GeoClawDeckError(
+                    "GEOCLAW_SPEC_INVALID",
+                    f"lagrangian_particles values must be numeric: {pt!r}",
+                ) from exc
+
+    # fgmax point set selector.
+    fgmax_mask = str(raw.get("fgmax_mask") or "full").strip().lower()
+    if fgmax_mask not in ("full", "onshore"):
+        raise GeoClawDeckError(
+            "GEOCLAW_SPEC_INVALID",
+            f"fgmax_mask must be 'full' or 'onshore', got {fgmax_mask!r}",
+        )
+
     sim_duration_s = _num("sim_duration_s", 3600.0)
     if sim_duration_s <= 0:
         raise GeoClawDeckError(
@@ -421,6 +460,8 @@ def parse_build_spec(raw: dict[str, Any]) -> GeoClawBuildSpec:
         amr_regions=amr_regions,
         manning_coefficients=manning_coefficients,
         manning_break=manning_break,
+        lagrangian_particles=lagrangian_particles,
+        fgmax_mask=fgmax_mask,
     )
 
 
@@ -468,6 +509,11 @@ def _coastal_gauge(spec: GeoClawBuildSpec) -> tuple[float, float]:
     gx = 0.5 * (min_lon + max_lon)
     gy = min_lat + 0.05 * (max_lat - min_lat)
     return (gx, gy)
+
+
+#: Filename of the topotype-3 fgmax point mask (point_style=4) the entrypoint
+#: generates from the staged DEM and the setrun references via ``fg.xy_fname``.
+FGMAX_MASK_FILENAME: str = "fgmax_mask.tt3"
 
 
 def _refinement_ratios(amr_levels: int) -> list[int]:
@@ -535,6 +581,50 @@ _SYNTHETIC_FAULT_STRIKE_DEG = 0.0
 _SYNTHETIC_FAULT_DIP_DEG = 15.0
 _SYNTHETIC_FAULT_RAKE_DEG = 90.0
 _SYNTHETIC_FAULT_DEPTH_KM = 10.0
+
+
+def fgmax_grid_geom(spec: GeoClawBuildSpec) -> dict[str, Any]:
+    """The fgmax monitor grid geometry over the AOI (shared source of truth).
+
+    Returns ``{x1, y1, x2, y2, nx, ny, dx, aoi_level}`` for the uniform fgmax
+    sample grid the setrun emits for a tsunami/surge run: the AOI extent inset by
+    a half AOI-ambient-level cell, at cell size ``dx`` (the base cell divided by
+    the refinement product up to the AOI ambient level). ``render_setrun_py``
+    emits the point_style=2 grid from EXACTLY this ``dx`` (locked by a unit test),
+    and the entrypoint builds the point_style=4 ONSHORE mask on THIS grid so the
+    masked fgmax points are a strict subset of the full-grid points (their common
+    cells match cell-for-cell). Pure arithmetic -- no clawpack import.
+    """
+    min_lon, min_lat, max_lon, max_lat = spec.bbox
+    dom_min_lon, dom_min_lat, dom_max_lon, dom_max_lat = _domain(spec)
+    nx, ny = spec.base_num_cells
+    amr_levels = int(spec.amr_levels)
+    has_amr_windows = bool(spec.amr_regions)
+    window_max_level = max((int(r[1]) for r in spec.amr_regions), default=0)
+    max_levels = max(amr_levels, window_max_level)
+    aoi_level = max(amr_levels - 1, 1) if has_amr_windows else amr_levels
+    ratios = _refinement_ratios(max_levels)
+    base_dx = (dom_max_lon - dom_min_lon) / float(nx)
+    aoi_product = 1
+    for r in ratios[: aoi_level - 1]:
+        aoi_product *= int(r)
+    dx = base_dx / float(aoi_product)
+    x1 = min_lon + dx / 2.0
+    x2 = max_lon - dx / 2.0
+    y1 = min_lat + dx / 2.0
+    y2 = max_lat - dx / 2.0
+    gnx = int(round((x2 - x1) / dx)) + 1
+    gny = int(round((y2 - y1) / dx)) + 1
+    return {
+        "x1": x1,
+        "y1": y1,
+        "x2": x2,
+        "y2": y2,
+        "nx": gnx,
+        "ny": gny,
+        "dx": dx,
+        "aoi_level": aoi_level,
+    }
 
 
 def render_qinit_data(spec: GeoClawBuildSpec) -> str:
@@ -772,27 +862,49 @@ def render_setrun_py(spec: GeoClawBuildSpec) -> str:
         # A sane fgmax check cadence: ~50 checks across the run, floored at 1 s.
         dt_check = max(tfinal / 50.0, 1.0)
         arrival_tol = float(spec.fgmax_arrival_tol_m)
-        fgmax_block = (
-            "    # --- fgmax: max depth/speed/arrival monitored over the AOI ---\n"
-            "    rundata.fgmax_data.num_fgmax_val = 2  # save max depth + speed\n"
-            "    fgmax_grids = rundata.fgmax_data.fgmax_grids\n"
-            f"    dx_fine = {dx_fgmax!r}  # AOI ambient-level cell size (fgmax spacing)\n"
-            "    fg = fgmax_tools.FGmaxGrid()\n"
-            "    fg.point_style = 2  # uniform rectangular x-y grid\n"
-            "    # align sample pts with AOI ambient-level FV cell centers (half-cell inset):\n"
-            f"    fg.x1 = {min_lon!r} + dx_fine / 2.0\n"
-            f"    fg.x2 = {max_lon!r} - dx_fine / 2.0\n"
-            f"    fg.y1 = {min_lat!r} + dx_fine / 2.0\n"
-            f"    fg.y2 = {max_lat!r} - dx_fine / 2.0\n"
-            "    fg.dx = dx_fine\n"
-            "    fg.tstart_max = 0.0  # monitor max values from t0\n"
-            "    fg.tend_max = 1.e10\n"
-            f"    fg.dt_check = {dt_check!r}\n"
-            f"    fg.min_level_check = {aoi_level!r}  # monitor at the AOI ambient level\n"
-            f"    fg.arrival_tol = {arrival_tol!r}  # wet-cell threshold for arrival\n"
-            "    fg.interp_method = 0  # 0 ==> pw const in cells, recommended\n"
-            "    fgmax_grids.append(fg)\n"
-        )
+        if spec.fgmax_mask == "onshore":
+            # point_style=4: the fgmax points are the ONSHORE cells of a topotype-3
+            # mask (fgmax_mask.tt3) the entrypoint generates from the DEM. The mask
+            # grid (built on fgmax_grid_geom) supplies x/y/dx, so here we only
+            # reference it + the shared monitor settings -- a strict onshore subset
+            # of the full point_style=2 grid (fewer points -> smaller fgmax output).
+            fgmax_block = (
+                "    # --- fgmax: max depth/speed/arrival on the ONSHORE DEM cells ---\n"
+                "    rundata.fgmax_data.num_fgmax_val = 2  # save max depth + speed\n"
+                "    fgmax_grids = rundata.fgmax_data.fgmax_grids\n"
+                "    fg = fgmax_tools.FGmaxGrid()\n"
+                "    fg.point_style = 4  # points = onshore cells of a topotype-3 mask\n"
+                f"    fg.xy_fname = {FGMAX_MASK_FILENAME!r}  # 0/1 mask (1 = monitored cell)\n"
+                "    fg.tstart_max = 0.0  # monitor max values from t0\n"
+                "    fg.tend_max = 1.e10\n"
+                f"    fg.dt_check = {dt_check!r}\n"
+                f"    fg.min_level_check = {aoi_level!r}  # monitor at the AOI ambient level\n"
+                f"    fg.arrival_tol = {arrival_tol!r}  # wet-cell threshold for arrival\n"
+                "    fg.interp_method = 0  # 0 ==> pw const in cells, recommended\n"
+                "    fgmax_grids.append(fg)\n"
+            )
+        else:
+            fgmax_block = (
+                "    # --- fgmax: max depth/speed/arrival monitored over the AOI ---\n"
+                "    rundata.fgmax_data.num_fgmax_val = 2  # save max depth + speed\n"
+                "    fgmax_grids = rundata.fgmax_data.fgmax_grids\n"
+                f"    dx_fine = {dx_fgmax!r}  # AOI ambient-level cell size (fgmax spacing)\n"
+                "    fg = fgmax_tools.FGmaxGrid()\n"
+                "    fg.point_style = 2  # uniform rectangular x-y grid\n"
+                "    # align sample pts with AOI ambient-level FV cell centers (half-cell inset):\n"
+                f"    fg.x1 = {min_lon!r} + dx_fine / 2.0\n"
+                f"    fg.x2 = {max_lon!r} - dx_fine / 2.0\n"
+                f"    fg.y1 = {min_lat!r} + dx_fine / 2.0\n"
+                f"    fg.y2 = {max_lat!r} - dx_fine / 2.0\n"
+                "    fg.dx = dx_fine\n"
+                "    fg.tstart_max = 0.0  # monitor max values from t0\n"
+                "    fg.tend_max = 1.e10\n"
+                f"    fg.dt_check = {dt_check!r}\n"
+                f"    fg.min_level_check = {aoi_level!r}  # monitor at the AOI ambient level\n"
+                f"    fg.arrival_tol = {arrival_tol!r}  # wet-cell threshold for arrival\n"
+                "    fg.interp_method = 0  # 0 ==> pw const in cells, recommended\n"
+                "    fgmax_grids.append(fg)\n"
+            )
 
     # --- GAP3 regions: the canonical multi-scale tsunami setup ---------------
     # COARSE deep ocean + INTERMEDIATE shelf/propagation + FINE AOI. GeoClaw
@@ -843,6 +955,24 @@ def render_setrun_py(spec: GeoClawBuildSpec) -> str:
         "    # --- Gauges: one coastal time-series gauge ---\n"
         f"    rundata.gaugedata.gauges.append([1, {gx!r}, {gy!r}, 0., 1.e10])\n"
     )
+    # Lagrangian particle gauges: each seeded point is added as a gauge advected by
+    # the flow (gtype='lagrangian'), its recorded columns q[2,3] replaced by the
+    # particle position (x(t), y(t)). The stationary coastal gauge (id 1) stays
+    # 'stationary' via the per-gauge gtype dict (unlisted -> default). Empty ->
+    # byte-identical (no gtype dict, no extra gauges).
+    if spec.lagrangian_particles:
+        gauges_block += "    # --- Lagrangian particle gauges (advected by the flow) ---\n"
+        _gtype_entries: list[str] = []
+        for _i, (plon, plat) in enumerate(spec.lagrangian_particles):
+            _gid = 100 + _i
+            gauges_block += (
+                f"    rundata.gaugedata.gauges.append([{_gid}, "
+                f"{float(plon)!r}, {float(plat)!r}, 0., 1.e10])\n"
+            )
+            _gtype_entries.append(f"{_gid}: 'lagrangian'")
+        gauges_block += (
+            f"    rundata.gaugedata.gtype = {{{', '.join(_gtype_entries)}}}\n"
+        )
 
     # --- GAP7 nested DEM: primary topo + any extra (coarse->fine) topo files ---
     topo_lines = [f"    topo_data.topofiles.append([3, {spec.topo_file!r}])\n"]

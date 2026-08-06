@@ -83,6 +83,12 @@ __all__ = [
     "RUNS_BUCKET_DEFAULT",
     "parse_geoclaw_gauge_series",
     "build_gauge_timeseries_chart_spec",
+    "parse_geoclaw_particle_tracks",
+    "build_geoclaw_particle_track_geojson",
+    "make_geoclaw_particle_track_layer_uri",
+    "build_geoclaw_particle_track_layer",
+    "build_particle_track_chart_spec",
+    "GEOCLAW_PARTICLE_TRACK_STYLE_PRESET",
     "GEOCLAW_MESH_STYLE_PRESET",
     "build_geoclaw_mesh_geojson",
     "make_geoclaw_mesh_layer_uri",
@@ -122,6 +128,12 @@ _FGMAX_SENTINEL_ABS: float = 1e8
 #: in the FeatureCollection ``metadata`` (honesty floor: the preview declares
 #: where it is a faithful full grid vs a sampled one).
 GEOCLAW_MESH_STYLE_PRESET: str = "mesh_grid"
+#: Lagrangian particle-track vector style (the plugin draws the drift paths as
+#: LineStrings). The tracks ARE a product layer (the wake / drifter path), not a
+#: mesh abstraction, so they carry their own preset.
+GEOCLAW_PARTICLE_TRACK_STYLE_PRESET: str = "particle_track"
+#: Metres per degree of latitude (spherical mean) for track-length arithmetic.
+_M_PER_DEG_LAT: float = 111_320.0
 GEOCLAW_MESH_FULL_CELLLINES_MAX_CELLS: int = 2500
 GEOCLAW_MESH_SAMPLE_LINES_PER_SIDE: int = 40
 GEOCLAW_MESH_COORD_DECIMALS: int = 7
@@ -1515,6 +1527,308 @@ def build_gauge_timeseries_chart_spec(
             "tooltip": [
                 {"field": "t_s", "type": "quantitative", "format": ".0f"},
                 {"field": "eta_m", "type": "quantitative", "format": ".3f"},
+            ],
+        },
+    }
+
+
+# --------------------------------------------------------------------------- #
+# Lagrangian particle tracks -- the wake-tracking fold.
+#
+# A Lagrangian particle gauge is a gauge advected BY THE FLOW: GeoClaw replaces
+# its q[2,3] output columns with the particle position (x(t), y(t)). The gauge
+# file header carries "# Lagrangian particle, q[2,3] replaced by (x(t),y(t))"
+# and the data rows are [level, t, h, xg, yg, eta]. We parse each such file into
+# a drift TRACK (the sequence of (xg, yg) positions) and emit it as a LineString
+# vector product + a cumulative-drift-distance chart. Pure python -- no clawpack.
+# --------------------------------------------------------------------------- #
+def _lonlat_step_m(
+    lon0: float, lat0: float, lon1: float, lat1: float
+) -> float:
+    """Planar great-circle-approx distance (m) between two lon/lat points.
+
+    Metres-per-degree with a ``cos(mean_lat)`` longitude correction -- the same
+    convention the depth-metric + grid-shape helpers use (consistent, not WGS84
+    geodesic-exact; a drift track spans metres, so the flat approx is negligible)."""
+    import math
+
+    mean_lat = 0.5 * (lat0 + lat1)
+    m_per_deg_lon = _M_PER_DEG_LAT * max(math.cos(math.radians(mean_lat)), 1e-6)
+    dx_m = (lon1 - lon0) * m_per_deg_lon
+    dy_m = (lat1 - lat0) * _M_PER_DEG_LAT
+    return math.hypot(dx_m, dy_m)
+
+
+def parse_geoclaw_particle_tracks(
+    output_dir: str | Path,
+) -> list[dict[str, Any]]:
+    """Parse Lagrangian particle-gauge drift tracks from a solved run's ``_output/``.
+
+    Scans every ``gauge*.txt`` under ``output_dir`` (recursively), keeps only the
+    LAGRANGIAN gauges (header line ``# Lagrangian particle``), and reads each into
+    a drift track. A Lagrangian gauge row is ``[level, t, h, xg, yg, eta]`` where
+    ``xg, yg`` are the advected particle position (lon, lat) that replaced hu, hv.
+
+    Returns a list (ascending by gauge id) of
+    ``{"gauge_id", "t": [...], "coords": [[lon, lat], ...], "length_m",
+       "duration_s", "start", "end"}``; empty when no Lagrangian gauge is present
+    (the plain inundation / Eulerian-gauge path). Pure -- unit-testable on a
+    fixture gauge file (no clawpack, no numpy)."""
+    root = Path(output_dir)
+    tracks: list[dict[str, Any]] = []
+    for gauge_path in sorted(root.rglob("gauge*.txt")):
+        try:
+            text = gauge_path.read_text(encoding="utf-8", errors="replace")
+        except OSError:
+            continue
+        lines = text.splitlines()
+        is_lagrangian = any(
+            l.startswith("#") and "lagrangian particle" in l.lower() for l in lines
+        )
+        if not is_lagrangian:
+            continue
+        gauge_id = None
+        for l in lines:
+            if l.startswith("#") and "gauge_id=" in l:
+                try:
+                    gauge_id = int(l.split("gauge_id=")[1].split()[0])
+                except (ValueError, IndexError):
+                    gauge_id = None
+                break
+        times: list[float] = []
+        coords: list[list[float]] = []
+        for l in lines:
+            s = l.strip()
+            if not s or s.startswith("#"):
+                continue
+            parts = s.split()
+            if len(parts) < 5:
+                continue
+            try:
+                t = float(parts[1])
+                xg = float(parts[3])  # q[1] slot holds x(t) for a Lagrangian gauge
+                yg = float(parts[4])  # q[2] slot holds y(t)
+            except (ValueError, IndexError):
+                continue
+            times.append(t)
+            coords.append([xg, yg])
+        if len(coords) < 2:
+            continue
+        length_m = 0.0
+        for a, b in zip(coords[:-1], coords[1:]):
+            length_m += _lonlat_step_m(a[0], a[1], b[0], b[1])
+        tracks.append(
+            {
+                "gauge_id": gauge_id if gauge_id is not None else len(tracks) + 1,
+                "t": times,
+                "coords": coords,
+                "length_m": float(length_m),
+                "duration_s": float(times[-1] - times[0]),
+                "start": list(coords[0]),
+                "end": list(coords[-1]),
+            }
+        )
+    tracks.sort(key=lambda tr: int(tr["gauge_id"]))
+    return tracks
+
+
+def build_geoclaw_particle_track_geojson(
+    tracks: list[dict[str, Any]],
+    *,
+    coord_decimals: int = GEOCLAW_MESH_COORD_DECIMALS,
+) -> tuple[dict[str, Any], dict[str, Any]]:
+    """Build the particle-track ``FeatureCollection`` (one LineString per track).
+
+    Each track becomes a ``LineString`` of its (lon, lat) drift positions in
+    EPSG:4326, carrying ``gauge_id`` / ``track_length_m`` / ``duration_s`` /
+    ``n_points`` properties. Returns ``(feature_collection, stats)``. Pure."""
+
+    def _rd(v: float) -> float:
+        return round(float(v), coord_decimals)
+
+    features: list[dict[str, Any]] = []
+    max_len = 0.0
+    max_dur = 0.0
+    for tr in tracks:
+        coords = [[_rd(c[0]), _rd(c[1])] for c in tr["coords"]]
+        if len(coords) < 2:
+            continue
+        max_len = max(max_len, float(tr["length_m"]))
+        max_dur = max(max_dur, float(tr["duration_s"]))
+        features.append(
+            {
+                "type": "Feature",
+                "geometry": {"type": "LineString", "coordinates": coords},
+                "properties": {
+                    "gauge_id": int(tr["gauge_id"]),
+                    "n_points": len(coords),
+                    "track_length_m": round(float(tr["length_m"]), 3),
+                    "duration_s": round(float(tr["duration_s"]), 2),
+                },
+            }
+        )
+    metadata = {
+        "kind": "geoclaw_lagrangian_particle_tracks",
+        "crs": "EPSG:4326",
+        "track_count": len(features),
+        "max_track_length_m": round(max_len, 3),
+        "max_duration_s": round(max_dur, 2),
+    }
+    fc = {"type": "FeatureCollection", "features": features, "metadata": metadata}
+    stats = {
+        "track_count": len(features),
+        "max_track_length_m": max_len,
+        "max_duration_s": max_dur,
+    }
+    return fc, stats
+
+
+def make_geoclaw_particle_track_layer_uri(
+    fc: dict[str, Any],
+    stats: dict[str, Any],
+    *,
+    run_id: str,
+    runs_bucket: str | None = None,
+) -> LayerURI | None:
+    """Upload the particle-track ``FeatureCollection`` to S3, return a LayerURI.
+
+    Writes ``particles.geojson`` to the durable runs bucket and returns a
+    ``particle_track`` vector LayerURI (role ``"context"``, ``bbox=None`` so the
+    tracks never fight the flood camera) carrying ``crs_authid="EPSG:4326"``.
+    Best-effort: ``None`` on an empty FC or an S3 fault. SYNC boto3 put -- the
+    caller wraps it in ``asyncio.to_thread``."""
+    import json as _json
+
+    features = fc.get("features") or []
+    if not features:
+        return None
+    body = _json.dumps(fc, separators=(",", ":")).encode("utf-8")
+    try:
+        from trid3nt_server.agent.tools.simulation.solver.solver import (
+            _get_runs_bucket,
+            _get_s3_client,
+        )
+
+        bucket = runs_bucket or _get_runs_bucket()
+        key = f"{run_id}/particles.geojson"
+        _get_s3_client().put_object(
+            Bucket=bucket,
+            Key=key,
+            Body=body,
+            ContentType="application/geo+json",
+        )
+        s3_uri = f"s3://{bucket}/{key}"
+    except Exception as exc:  # noqa: BLE001 -- best-effort product layer
+        logger.warning(
+            "make_geoclaw_particle_track_layer_uri: particles.geojson upload "
+            "failed (non-fatal, run_id=%s): %s",
+            run_id,
+            exc,
+        )
+        return None
+
+    n_tracks = int(stats.get("track_count", 0) or 0)
+    return LayerURI(
+        layer_id=f"geoclaw-particles-{run_id}",
+        name=f"Lagrangian particle tracks ({n_tracks} drifters)",
+        layer_type="vector",
+        uri=s3_uri,
+        style_preset=GEOCLAW_PARTICLE_TRACK_STYLE_PRESET,
+        role="context",
+        bbox=None,
+        crs_authid="EPSG:4326",
+    )
+
+
+def build_geoclaw_particle_track_layer(
+    out_dir: str | Path,
+    *,
+    run_id: str,
+    runs_bucket: str | None = None,
+) -> tuple[LayerURI | None, list[dict[str, Any]]]:
+    """Parse + upload the Lagrangian particle tracks from a solved run.
+
+    Returns ``(layer, tracks)``: the ``particle_track`` vector LayerURI (or
+    ``None`` when no Lagrangian gauge ran / an S3 fault) plus the parsed track
+    dicts (for the chart + narration scalars). NEVER raises (best-effort)."""
+    try:
+        tracks = parse_geoclaw_particle_tracks(out_dir)
+        if not tracks:
+            return None, []
+        fc, stats = build_geoclaw_particle_track_geojson(tracks)
+        layer = make_geoclaw_particle_track_layer_uri(
+            fc, stats, run_id=run_id, runs_bucket=runs_bucket
+        )
+        if layer is not None:
+            logger.info(
+                "build_geoclaw_particle_track_layer run_id=%s tracks=%d "
+                "max_length_m=%.1f max_duration_s=%.0f uri=%s",
+                run_id,
+                stats["track_count"],
+                float(stats["max_track_length_m"]),
+                float(stats["max_duration_s"]),
+                layer.uri,
+            )
+        return layer, tracks
+    except Exception as exc:  # noqa: BLE001 -- particle tracks are NEVER fatal
+        logger.warning(
+            "build_geoclaw_particle_track_layer failed (non-fatal, run_id=%s): %s",
+            run_id,
+            exc,
+        )
+        return None, []
+
+
+def build_particle_track_chart_spec(
+    tracks: list[dict[str, Any]] | None,
+) -> dict[str, Any] | None:
+    """Build the Vega-Lite cumulative-drift-distance chart for the particle tracks.
+
+    A multi-series line of cumulative drift distance (m) vs time (s), ONE series
+    per particle (colour + legend by gauge id) -- so each drifter's total travel
+    and its rate are read off a quantitative axis (the spatial path itself is the
+    map overlay). Returns ``None`` when there are no tracks. Pure."""
+    if not tracks:
+        return None
+    values: list[dict[str, Any]] = []
+    for tr in tracks:
+        coords = tr["coords"]
+        times = tr["t"]
+        if len(coords) < 2:
+            continue
+        gid = int(tr["gauge_id"])
+        cum = 0.0
+        label = f"particle {gid}"
+        values.append({"t_s": float(times[0]), "dist_m": 0.0, "particle": label})
+        for k in range(1, len(coords)):
+            cum += _lonlat_step_m(
+                coords[k - 1][0], coords[k - 1][1], coords[k][0], coords[k][1]
+            )
+            values.append(
+                {"t_s": float(times[k]), "dist_m": round(cum, 3), "particle": label}
+            )
+    if not values:
+        return None
+    return {
+        "$schema": "https://vega.github.io/schema/vega-lite/v5.json",
+        "data": {"values": values},
+        "mark": {"type": "line"},
+        "encoding": {
+            "x": {"field": "t_s", "type": "quantitative", "title": "time (s)"},
+            "y": {
+                "field": "dist_m",
+                "type": "quantitative",
+                "title": "cumulative drift (m)",
+            },
+            "color": {
+                "field": "particle",
+                "type": "nominal",
+                "title": "particle",
+            },
+            "tooltip": [
+                {"field": "particle", "type": "nominal"},
+                {"field": "t_s", "type": "quantitative", "format": ".0f"},
+                {"field": "dist_m", "type": "quantitative", "format": ".1f"},
             ],
         },
     }
