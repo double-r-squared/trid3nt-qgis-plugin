@@ -78,6 +78,16 @@ _DEFAULT_RES_M: float = 60.0
 #: suggestion surfaced for override (the user-controlled-granularity norm).
 _SOFT_CELL_CAP: int = 12000
 
+#: User-facing 2D equation-set choices -> the plan-HDF string the engine reads.
+#: "diffusion_wave" is the validated default (every acceptance solved with it at
+#: low volume error); "full_swe" is the heavier full-momentum shallow-water solver
+#: (advanced, less-tested on authored meshes).
+_EQUATION_SET_MAP: dict[str, str] = {
+    "diffusion_wave": "Diffusion Wave",
+    "full_swe": "SWE-ELM",
+}
+_DEFAULT_EQUATION_SET: str = "diffusion_wave"
+
 _FIDELITY_NOTE: str = (
     "REFINEMENT-GRADE production HEC-RAS 6.x solver on a 2025-AUTHORED 2D mesh "
     "(headless AuthorMesh topology + terrain-sampled subgrid tables), transplant-"
@@ -155,6 +165,7 @@ async def hecras_flood_2d(
     sim_hours: float = 24.0,
     inlet_edge: str | None = None,
     outlet_edge: str | None = None,
+    equation_set: str = _DEFAULT_EQUATION_SET,
     input_mode: str | None = None,
     **_extra_ignored: Any,
 ) -> HecrasDepthLayerURI | dict[str, Any]:
@@ -188,6 +199,11 @@ async def hecras_flood_2d(
         inlet_edge / outlet_edge: OPTIONAL compass overrides ("n"/"s"/"e"/"w") for
             where flow enters / drains. Defaults: inflow on the lowest-elevation
             perimeter run, outlet on the south edge (the drainage physics).
+        equation_set: the 2D solver -- ``"diffusion_wave"`` (default, VALIDATED:
+            every acceptance converged at low volume error) or ``"full_swe"`` (the
+            heavier full-momentum shallow-water solver; advanced, less-tested on
+            authored meshes). Use diffusion wave unless local inertia/momentum
+            matters (steep supercritical reaches, sharp constrictions).
         input_mode: ``"user_gated"`` reviews the forcing + resolution + fetched-
             terrain basis before the (heavy) solve; ``"auto"`` (default) proceeds
             with them labeled.
@@ -228,16 +244,21 @@ async def hecras_flood_2d(
         except (TypeError, ValueError):
             pass
 
+    eq_key = str(equation_set or "").strip().lower()
+    if eq_key not in _EQUATION_SET_MAP:
+        logger.warning("hecras_flood_2d: equation_set %r unknown - using diffusion_wave", equation_set)
+        eq_key = _DEFAULT_EQUATION_SET
+
     logger.info(
-        "hecras_flood_2d bbox=%s res=%.1fm peak=%.0fcfs sim=%sh inlet=%s outlet=%s",
-        aoi, resolution_m, peak, sim_hours, inlet_edge, outlet_edge,
+        "hecras_flood_2d bbox=%s res=%.1fm peak=%.0fcfs sim=%sh inlet=%s outlet=%s eq=%s",
+        aoi, resolution_m, peak, sim_hours, inlet_edge, outlet_edge, eq_key,
     )
 
     try:
         depth = await model_hecras_flood_2d(
             bbox=aoi, target_peak_cfs=peak, resolution_m=resolution_m,
             sim_hours=float(sim_hours), inlet_edge=inlet_edge, outlet_edge=outlet_edge,
-            input_mode=input_mode,
+            equation_set=eq_key, input_mode=input_mode,
         )
         if isinstance(depth, dict):
             return depth
@@ -319,7 +340,8 @@ def _fetch_dem_local(bbox: list[float]) -> str:
 
 def _author_and_compose(dem_tif: str, workdir: str, *, peak_cfs: float,
                         resolution_m: float, inlet_edge: str | None,
-                        outlet_edge: str | None) -> Any:
+                        outlet_edge: str | None,
+                        equation_set: str = "Diffusion Wave") -> Any:
     """Run the authoring + compose stages (docker author + host compose)."""
     import sys
 
@@ -332,6 +354,7 @@ def _author_and_compose(dem_tif: str, workdir: str, *, peak_cfs: float,
         result, info = author_and_compose(
             dem_tif, workdir, peak_cfs=peak_cfs, resolution_m=resolution_m,
             inflow_edge=inlet_edge, ds_edge=(outlet_edge or "s"),
+            equation_set=equation_set,
         )
     except Flood2dPipelineError as exc:
         raise HecrasFlood2dError(HECRAS_SOLVE_FAILED, f"authoring/compose failed: {exc}") from exc
@@ -401,11 +424,17 @@ async def model_hecras_flood_2d(
     sim_hours: float = 24.0,
     inlet_edge: str | None = None,
     outlet_edge: str | None = None,
+    equation_set: str = _DEFAULT_EQUATION_SET,
     input_mode: str | None = None,
 ) -> HecrasDepthLayerURI | dict[str, Any]:
     """fetch DEM -> author+compose -> run_solver -> postprocess -> publish."""
     emitter = current_emitter()
     begin_substeps(emitter, 4)  # fetch+author, run_solver, postprocess, publish
+
+    eq_key = str(equation_set or "").strip().lower()
+    if eq_key not in _EQUATION_SET_MAP:
+        eq_key = _DEFAULT_EQUATION_SET
+    eq_hec = _EQUATION_SET_MAP[eq_key]
 
     n_cells_est = _estimate_cells(bbox, resolution_m)
     review_entries: list[SyntheticInput] = [
@@ -426,6 +455,12 @@ async def model_hecras_flood_2d(
         SyntheticInput(
             param="resolution_m", value=round(float(resolution_m), 1), units="m",
             basis="derived", note=f"2D cell size (~{n_cells_est} cells; granularity-gated)",
+        ),
+        SyntheticInput(
+            param="equation_set", value=eq_hec,
+            basis="user" if eq_key != _DEFAULT_EQUATION_SET else "default",
+            note="2D solver stamped on the plan (Diffusion Wave = validated default; "
+            "SWE = full-momentum, advanced)",
         ),
     ]
     review = await gate_input_review(
@@ -452,6 +487,7 @@ async def model_hecras_flood_2d(
             _author_and_compose, dem_tif, workdir,
             peak_cfs=target_peak_cfs, resolution_m=resolution_m,
             inlet_edge=inlet_edge, outlet_edge=outlet_edge,
+            equation_set=eq_hec,
         )
     logger.info(
         "hecras_flood_2d authored deck run_tag=%s cells=%d faces=%d crs=local-ftUS",

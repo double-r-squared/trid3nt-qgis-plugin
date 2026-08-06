@@ -83,6 +83,20 @@ DEFAULT_START_DATE = "01Jan1900 2400"
 DEFAULT_END_DATE = "02Jan1900 2400"
 DEFAULT_N_ORD = 25
 
+#: The plan-HDF path + attribute name the Linux engine reads the 2D solver from.
+#: ``RasUnsteady`` prints "2D Unsteady <name> Equation Set" from this value
+#: (ADR 0136), so the composed plan honours it with no ASCII .pXX and no image
+#: rebuild -- it is a pure host-side h5py attribute on the copied plan skeleton.
+_PLAN_PARAMS_GROUP = "Plan Data/Plan Parameters"
+_EQUATION_SET_ATTR = "2D Equation Set"
+
+#: The 2D equation sets the 6.x engine accepts. "Diffusion Wave" is the validated
+#: default (every hecras_flood_2d acceptance solved with it, low volume error);
+#: the SWE forms are the full-momentum shallow-water solvers (advanced, heavier,
+#: less-tested on authored meshes).
+EQUATION_SETS = ("Diffusion Wave", "SWE-ELM", "SWE-EM")
+DEFAULT_EQUATION_SET = "Diffusion Wave"
+
 
 @dataclass
 class DeckPaths:
@@ -153,6 +167,7 @@ def compose_pure2d_deck(
     n_bc_faces: int = 14,
     inflow_edge: str | None = None,
     ds_edge: str = "s",
+    equation_set: str = DEFAULT_EQUATION_SET,
     opts: PropertyTableOptions | None = None,
 ) -> dict:
     """Assemble the complete pure-2D deck for ``mesh``/``tables`` in ``rundir``.
@@ -162,10 +177,20 @@ def compose_pure2d_deck(
     hydrograph OR a ``target_peak_cfs`` (a depth-based default ramp via
     ``default_hydrograph``); one of the two must be given.
 
+    ``equation_set`` selects the 2D solver stamped on the plan HDF: "Diffusion
+    Wave" (default, validated -- low volume error on every acceptance) or a full
+    shallow-water form ("SWE-ELM"/"SWE-EM"). The engine reads it from the plan
+    HDF, so switching needs no ASCII plan and no image rebuild.
+
     Returns a provenance dict (mesh counts, BC line length + face count, the EC
-    peak/ordinates, the deck paths) for logging + the template's typed envelope.
+    peak/ordinates, the equation set, the deck paths) for logging + the template's
+    typed envelope.
     """
     import h5py
+
+    if equation_set not in EQUATION_SETS:
+        raise ValueError(
+            f"equation_set {equation_set!r} not one of {EQUATION_SETS}")
 
     if times is None or flows is None:
         if target_peak_cfs is None:
@@ -199,6 +224,9 @@ def compose_pure2d_deck(
         except KeyError:
             pass
         f.attrs["Projection"] = np.bytes_(proj_wkt.encode("ascii", "replace"))
+        # Stamp the 2D solver on the plan skeleton (the engine reads it here).
+        if _PLAN_PARAMS_GROUP in f:
+            f[_PLAN_PARAMS_GROUP].attrs[_EQUATION_SET_ATTR] = np.bytes_(equation_set)
         parent = f[AREA_GROUP]
         if area_name in parent:
             del parent[area_name]
@@ -244,6 +272,7 @@ def compose_pure2d_deck(
 
     return {
         "area_name": area_name,
+        "equation_set": equation_set,
         "cells_real": int(mesh.cell_count),
         "cells_total": int(mesh.cell_center_coord.shape[0]),
         "faces": int(mesh.faces_cell_indexes.shape[0]),

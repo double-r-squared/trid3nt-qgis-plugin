@@ -60,6 +60,19 @@ def test_resolution_autoscale_respects_soft_cap():
     assert _autoscale_resolution(tiny, 60.0) == 60.0
 
 
+def test_equation_set_map_covers_choices():
+    from trid3nt_server.agent.workflows.hecras.flood_2d.flood_2d import (
+        _EQUATION_SET_MAP,
+        _DEFAULT_EQUATION_SET,
+    )
+
+    # the validated default maps to the plan-HDF Diffusion Wave string
+    assert _DEFAULT_EQUATION_SET == "diffusion_wave"
+    assert _EQUATION_SET_MAP["diffusion_wave"] == "Diffusion Wave"
+    # the advanced full-momentum choice maps to a shallow-water solver string
+    assert _EQUATION_SET_MAP["full_swe"] == "SWE-ELM"
+
+
 @pytest.mark.asyncio
 async def test_bad_bbox_returns_typed_error():
     from trid3nt_server.agent.workflows.hecras.flood_2d.flood_2d import hecras_flood_2d

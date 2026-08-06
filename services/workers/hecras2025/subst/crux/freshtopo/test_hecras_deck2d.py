@@ -94,6 +94,35 @@ def test_compose_plan_hdf_has_area_bclines_and_event_conditions(tmp_path, carved
             assert grp not in f["Geometry"], f"combined-1D/2D group {grp} not stripped"
 
 
+def test_compose_stamps_equation_set_on_plan(tmp_path, carved, projection):
+    # default is the validated Diffusion Wave; an explicit SWE form is honoured.
+    from hecras_deck2d import _PLAN_PARAMS_GROUP, _EQUATION_SET_ATTR
+
+    info = compose_pure2d_deck(
+        tmp_path / "dw", carved.mesh, carved.tables,
+        projection_wkt=projection, target_peak_cfs=2000.0)
+    assert info["equation_set"] == "Diffusion Wave"
+    with h5py.File(info["paths"].plan, "r") as f:
+        attr = f[_PLAN_PARAMS_GROUP].attrs[_EQUATION_SET_ATTR]
+        assert (attr.decode() if isinstance(attr, bytes) else str(attr)) == "Diffusion Wave"
+
+    info2 = compose_pure2d_deck(
+        tmp_path / "swe", carved.mesh, carved.tables,
+        projection_wkt=projection, target_peak_cfs=2000.0, equation_set="SWE-ELM")
+    assert info2["equation_set"] == "SWE-ELM"
+    with h5py.File(info2["paths"].plan, "r") as f:
+        attr = f[_PLAN_PARAMS_GROUP].attrs[_EQUATION_SET_ATTR]
+        assert (attr.decode() if isinstance(attr, bytes) else str(attr)) == "SWE-ELM"
+
+
+def test_compose_rejects_unknown_equation_set(tmp_path, carved, projection):
+    with pytest.raises(ValueError, match="equation_set"):
+        compose_pure2d_deck(
+            tmp_path / "run", carved.mesh, carved.tables,
+            projection_wkt=projection, target_peak_cfs=2000.0,
+            equation_set="Kinematic")
+
+
 def test_compose_rejects_overlapping_inflow_and_ds_runs(tmp_path, carved, projection):
     # forcing the inflow onto the SAME south edge as DS must be refused (the outlet
     # cannot share the inlet faces -- the ADR 0138 drainage physics)

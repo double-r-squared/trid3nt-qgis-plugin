@@ -99,7 +99,8 @@ def _docker_author(workdir: Path, prep: TerrainPrep, image: str) -> Path:
 
 
 def _compose(dump: Path, deck_dir: Path, prep: TerrainPrep, peak_cfs: float,
-             inflow_edge: str | None, ds_edge: str) -> dict:
+             inflow_edge: str | None, ds_edge: str,
+             equation_set: str = "Diffusion Wave") -> dict:
     from authormesh_to_mesh2d import load_authormesh
     from hecras_deck2d import compose_pure2d_deck
 
@@ -107,7 +108,7 @@ def _compose(dump: Path, deck_dir: Path, prep: TerrainPrep, peak_cfs: float,
     info = compose_pure2d_deck(
         deck_dir, res.mesh, res.tables,
         projection_wkt=prep.crs_wkt, target_peak_cfs=float(peak_cfs),
-        inflow_edge=inflow_edge, ds_edge=ds_edge,
+        inflow_edge=inflow_edge, ds_edge=ds_edge, equation_set=equation_set,
     )
     info.pop("paths", None)
     return info
@@ -140,6 +141,7 @@ def author_and_compose(
     manning_n: float = 0.06,
     inflow_edge: str | None = None,
     ds_edge: str = "s",
+    equation_set: str = "Diffusion Wave",
     authoring_image: str = AUTHORING_IMAGE_DEFAULT,
 ) -> tuple[Flood2dResult, dict]:
     """Fetch-DEM-prep -> author (docker) -> compose the deck (NO solve).
@@ -148,13 +150,14 @@ def author_and_compose(
     (``Fresh2D.p04.tmp.hdf`` + ``.x04`` + ``.b04``), ready to stage as run_solver
     inputs (the M3-gate no-archetype path in the hecras worker) OR to solve
     directly via ``_docker_solve``. This is the template's authoring stage; the
-    solve dispatches through the generic run_solver seam."""
+    solve dispatches through the generic run_solver seam. ``equation_set`` selects
+    the 2D solver stamped on the plan HDF (Diffusion Wave default / SWE forms)."""
     workdir = Path(workdir)
     workdir.mkdir(parents=True, exist_ok=True)
     prep = prepare_terrain(dem_tif, workdir, resolution_m=resolution_m, manning_n=manning_n)
     dump = _docker_author(workdir, prep, authoring_image)
     deck_dir = workdir / "deck"
-    info = _compose(dump, deck_dir, prep, peak_cfs, inflow_edge, ds_edge)
+    info = _compose(dump, deck_dir, prep, peak_cfs, inflow_edge, ds_edge, equation_set)
     result = Flood2dResult(
         plan_hdf=str(deck_dir / "Fresh2D.p04.tmp.hdf"), deck_dir=str(deck_dir),
         dump_dir=str(dump), crs_wkt=prep.crs_wkt,
@@ -175,6 +178,7 @@ def run_flood2d(
     manning_n: float = 0.06,
     inflow_edge: str | None = None,
     ds_edge: str = "s",
+    equation_set: str = "Diffusion Wave",
     authoring_image: str = AUTHORING_IMAGE_DEFAULT,
     solver_image: str = SOLVER_IMAGE_DEFAULT,
 ) -> tuple[Flood2dResult, dict]:
@@ -184,7 +188,7 @@ def run_flood2d(
     prep = prepare_terrain(dem_tif, workdir, resolution_m=resolution_m, manning_n=manning_n)
     dump = _docker_author(workdir, prep, authoring_image)
     deck_dir = workdir / "deck"
-    info = _compose(dump, deck_dir, prep, peak_cfs, inflow_edge, ds_edge)
+    info = _compose(dump, deck_dir, prep, peak_cfs, inflow_edge, ds_edge, equation_set)
     metrics = _docker_solve(deck_dir, solver_image)
     result = Flood2dResult(
         plan_hdf=str(deck_dir / "Fresh2D.p04.tmp.hdf"), deck_dir=str(deck_dir),
@@ -205,10 +209,12 @@ def main() -> int:
     ap.add_argument("--resolution-m", type=float, default=60.0)
     ap.add_argument("--inflow-edge", default=None)
     ap.add_argument("--ds-edge", default="s")
+    ap.add_argument("--equation-set", default="Diffusion Wave")
     args = ap.parse_args()
     result, metrics = run_flood2d(
         args.dem_tif, args.workdir, peak_cfs=args.peak_cfs,
         resolution_m=args.resolution_m, inflow_edge=args.inflow_edge, ds_edge=args.ds_edge,
+        equation_set=args.equation_set,
     )
     print(json.dumps({"result": asdict(result), "solve": metrics}, indent=2))
     return 0
