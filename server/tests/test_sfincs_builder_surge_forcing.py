@@ -33,6 +33,9 @@ the same seam ``test_sfincs_builder_mask_active`` asserts against):
 
 from __future__ import annotations
 
+from datetime import timedelta
+
+import pytest
 import yaml
 
 from trid3nt_server.agent.workflows.sfincs.sfincs_builder import (
@@ -42,10 +45,13 @@ from trid3nt_server.agent.workflows.sfincs.sfincs_builder import (
     ForcingSpec,
     InfiltrationForcing,
     PressureForcing,
+    SFINCS_TREF,
+    SFINCSSetupError,
     WaterlevelForcing,
     WindForcing,
     _generate_hydromt_yaml_config,
     _install_pandas_set_forcing_1d_guard,
+    _write_wind_timeseries_csv,
 )
 
 # A coastal AOI near Mexico Beach, FL (the coastal SFINCS geography).
@@ -388,6 +394,60 @@ def test_wind_drag_zero_keeps_default_formula() -> None:
     assert "cdnrb" not in cfg
 
 
+def test_wind_drag_curve_emits_custom_breakpoints() -> None:
+    """``wind_drag_curve`` (ADR 0162) writes a custom cdnrb/cdwnd/cdval curve."""
+    forcing = ForcingSpec(
+        forcing_type="pluvial_synthetic", precip_inches=8.0, duration_hours=24.0
+    )
+    deck = _emit(
+        forcing,
+        BuildOptions(
+            autoscale_grid=False,
+            advanced_physics={
+                "wind_drag_curve": [(0.0, 0.001), (28.0, 0.0025), (50.0, 0.0018)],
+            },
+        ),
+    )
+    cfg = deck["setup_config"]
+    assert cfg["cdnrb"] == 3
+    assert cfg["cdwnd"] == [0.0, 28.0, 50.0]
+    assert cfg["cdval"] == [0.001, 0.0025, 0.0018]
+
+
+def test_wind_drag_curve_and_flat_wind_drag_conflict() -> None:
+    """Setting BOTH ``wind_drag`` and ``wind_drag_curve`` is ambiguous (both
+    target sfincs.inp cdnrb/cdwnd/cdval) -- a typed conflict, never a silent
+    last-key-wins overwrite (Invariant 7).
+
+    Re-fetches ``SFINCSSetupError`` off the LIVE module at call time (mirrors
+    ``test_sfincs_spiderweb.py``'s pattern) rather than trusting the
+    top-of-file import: ``test_sfincs_autoscale.py``'s env-override tests
+    ``importlib.reload`` the ``sfincs_builder`` module in the SAME session,
+    which rebinds a NEW ``SFINCSSetupError`` class in the module namespace --
+    a stale pre-reload class reference would fail the ``isinstance`` check
+    inside ``pytest.raises`` even though the RIGHT error was raised.
+    """
+    from trid3nt_server.agent.workflows.sfincs.sfincs_builder import (
+        SFINCSSetupError as _CurrentSFINCSSetupError,
+    )
+
+    forcing = ForcingSpec(
+        forcing_type="pluvial_synthetic", precip_inches=8.0, duration_hours=24.0
+    )
+    with pytest.raises(_CurrentSFINCSSetupError) as exc_info:
+        _emit(
+            forcing,
+            BuildOptions(
+                autoscale_grid=False,
+                advanced_physics={
+                    "wind_drag": 0.002,
+                    "wind_drag_curve": [(0.0, 0.001), (28.0, 0.0025)],
+                },
+            ),
+        )
+    assert exc_info.value.error_code == "WIND_DRAG_CURVE_CONFLICT"
+
+
 def test_pluvial_deck_setup_config_unchanged_without_physics() -> None:
     """REGRESSION: a pluvial deck with advanced_physics=None carries NONE of the
     physics keys in setup_config (byte-identical baseline)."""
@@ -620,3 +680,112 @@ def test_tsunami_synth_feeds_waterlevel_deck(tmp_path) -> None:
     # is inert (the surge-inundation root cause).
     assert "setup_mask_bounds" in deck
     assert deck["setup_mask_bounds"]["btype"] == "waterlevel"
+
+
+# --------------------------------------------------------------------------- #
+# Test 12 — uniform wind SCHEDULE (ADR 0162, sfincs.wnd timeseries)
+# --------------------------------------------------------------------------- #
+
+
+def test_wind_timeseries_writes_csv_and_emits_timeseries_kwarg(tmp_path) -> None:
+    """A ``WindForcing.timeseries`` schedule is written to a CSV inside
+    ``build_dir`` and ``setup_wind_forcing`` receives its ``timeseries`` path
+    (not ``magnitude``/``direction``) -- the ramping/veering storm-wind case."""
+    schedule = [
+        (0.0, 10.0, 270.0),
+        (3600.0, 17.5, 225.0),
+        (7200.0, 25.0, 180.0),
+    ]
+    forcing = ForcingSpec(
+        forcing_type="pluvial_synthetic",
+        precip_inches=8.0,
+        duration_hours=24.0,
+        wind=WindForcing(timeseries=schedule),
+    )
+    text = _generate_hydromt_yaml_config(
+        bbox=_MEXICO_BEACH_BBOX,
+        options=BuildOptions(autoscale_grid=False),
+        dem_local_path=_DEM,
+        landcover_local_path=_LC,
+        river_local_path=None,
+        forcing=forcing,
+        mapping_csv_path=_MAP,
+        build_dir=tmp_path,
+    )
+    deck = yaml.safe_load(text)
+    assert "setup_wind_forcing" in deck
+    wind_cfg = deck["setup_wind_forcing"]
+    assert "timeseries" in wind_cfg
+    assert "magnitude" not in wind_cfg
+    assert "direction" not in wind_cfg
+    csv_path = wind_cfg["timeseries"]
+    assert (tmp_path / "sfincs_wind_timeseries.csv").exists()
+    assert str(tmp_path) in csv_path
+
+    import csv as _csv
+
+    with open(csv_path, newline="") as fh:
+        rows = list(_csv.reader(fh))
+    header, data_rows = rows[0], rows[1:]
+    assert header == ["time", "mag", "dir"]
+    assert len(data_rows) == 3
+    # Row 0 lands exactly on SFINCS_TREF (t_s=0); magnitude/direction verbatim.
+    assert data_rows[0][0] == SFINCS_TREF.strftime("%Y-%m-%d %H:%M:%S")
+    assert data_rows[0][1] == "10.0"
+    assert data_rows[0][2] == "270.0"
+    # Row 2 (t_s=7200 -> +2h) carries the ramped-up 25 m/s / veered 180 deg.
+    assert data_rows[2][0] == (SFINCS_TREF + timedelta(hours=2)).strftime(
+        "%Y-%m-%d %H:%M:%S"
+    )
+    assert data_rows[2][1] == "25.0"
+    assert data_rows[2][2] == "180.0"
+
+
+def test_wind_timeseries_takes_precedence_over_magnitude_direction() -> None:
+    """A ``WindForcing`` carrying BOTH ``timeseries`` and ``magnitude``/
+    ``direction`` emits the timeseries path (the schedule wins)."""
+    forcing = ForcingSpec(
+        forcing_type="pluvial_synthetic",
+        precip_inches=8.0,
+        duration_hours=24.0,
+        wind=WindForcing(
+            magnitude=45.0, direction=170.0, timeseries=[(0.0, 10.0, 270.0), (3600.0, 25.0, 180.0)]
+        ),
+    )
+    deck = _emit(forcing, BuildOptions(autoscale_grid=False))
+    assert "timeseries" in deck["setup_wind_forcing"]
+    assert "magnitude" not in deck["setup_wind_forcing"]
+
+
+def test_wind_constant_path_byte_identical_without_timeseries() -> None:
+    """REGRESSION: ``WindForcing(magnitude=, direction=)`` with NO ``timeseries``
+    set is untouched -- the constant-wind path stays byte-identical to the
+    pre-ADR-0162 emission (test-locked)."""
+    forcing = ForcingSpec(
+        forcing_type="pluvial_synthetic",
+        precip_inches=8.0,
+        duration_hours=24.0,
+        wind=WindForcing(magnitude=45.0, direction=170.0),
+    )
+    deck = _emit(forcing, BuildOptions(autoscale_grid=False))
+    assert deck["setup_wind_forcing"] == {"magnitude": 45.0, "direction": 170.0}
+
+
+def test_write_wind_timeseries_csv_helper_direct(tmp_path) -> None:
+    """``_write_wind_timeseries_csv`` (direct unit test): absolute timestamps
+    off ``SFINCS_TREF``, mag/dir columns verbatim, header ``time,mag,dir``."""
+    import csv as _csv
+
+    out_path = _write_wind_timeseries_csv(
+        [(0.0, 5.0, 0.0), (60.0, 6.0, 45.0)], SFINCS_TREF, tmp_path / "wnd.csv"
+    )
+    assert out_path.exists()
+    with open(out_path, newline="") as fh:
+        rows = list(_csv.reader(fh))
+    assert rows[0] == ["time", "mag", "dir"]
+    assert rows[1] == [SFINCS_TREF.strftime("%Y-%m-%d %H:%M:%S"), "5.0", "0.0"]
+    assert rows[2] == [
+        (SFINCS_TREF + timedelta(seconds=60)).strftime("%Y-%m-%d %H:%M:%S"),
+        "6.0",
+        "45.0",
+    ]

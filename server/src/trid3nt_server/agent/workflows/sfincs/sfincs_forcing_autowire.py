@@ -213,7 +213,8 @@ def _build_surge_forcing_members(
           "discharge":  {"timeseries_uri": ..., "locations_uri": ...,
                           "rivers_uri": ..., "hydrography_uri": ...,
                           "river_upa_km2": ...},
-          "wind":       {"magnitude": ..., "direction": ...} | {"grid_uri": ...},
+          "wind":       {"magnitude": ..., "direction": ...} | {"grid_uri": ...}
+                        | {"timeseries": [(t_s, magnitude_mps, direction_deg), ...]},
           "pressure":   {"grid_uri": ..., "fill_value": ...},
         }
 
@@ -263,15 +264,24 @@ def _build_surge_forcing_members(
     )
 
     wd_raw = _sub("wind")
+    # ADR 0162: ``timeseries`` -- a uniform wind SCHEDULE (ordered list of
+    # ``(t_s, magnitude_mps, direction_deg)``) -- is a THIRD wind path
+    # alongside the constant magnitude/direction pair and the gridded
+    # grid_uri. Passed straight through to ``WindForcing.timeseries``;
+    # ``_emit_surge_forcing_blocks`` resolves the precedence (grid > schedule
+    # > constant).
+    wd_timeseries = wd_raw.get("timeseries") or None
     wind = (
         WindForcing(
             magnitude=wd_raw.get("magnitude"),
             direction=wd_raw.get("direction"),
             grid_uri=wd_raw.get("grid_uri"),
+            timeseries=wd_timeseries,
         )
         if wd_raw
         and (
             wd_raw.get("grid_uri")
+            or wd_timeseries
             or (wd_raw.get("magnitude") is not None and wd_raw.get("direction") is not None)
         )
         else None

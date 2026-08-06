@@ -464,6 +464,42 @@ def test_wind_deck_emits_wndfile_and_physics_switches(tmp_path, manning_csv) -> 
     assert _inp_value(inp, "latitude") == "29.9"
 
 
+def test_wind_timeseries_and_drag_curve_deck_end_to_end(tmp_path, manning_csv) -> None:
+    """ADR 0162 REAL-HYDROMT proof: a ``WindForcing.timeseries`` SCHEDULE (a
+    ramping/veering storm wind) lands the SAME ``wndfile`` artifact as the
+    constant-wind path (hydromt-sfincs's own ``setup_wind_forcing`` writes it
+    from the tabulated timeseries), AND a ``wind_drag_curve`` custom breakpoint
+    curve reaches ``sfincs.inp`` as ``cdnrb``/``cdwnd``/``cdval`` -- the same
+    proof tier ``test_wind_deck_emits_wndfile_and_physics_switches`` runs for
+    the constant-wind + flat-cd-curve path."""
+    forcing = ForcingSpec(
+        forcing_type="storm_surge",
+        wind=WindForcing(
+            timeseries=[
+                (0.0, 10.0, 270.0),
+                (7200.0, 17.5, 225.0),
+                (14400.0, 25.0, 180.0),
+            ]
+        ),
+    )
+    options = _options(
+        tmp_path,
+        simulation_hours=6.0,
+        advanced_physics={
+            "wind_drag_curve": [(0.0, 0.001), (28.0, 0.0025), (50.0, 0.0018)],
+        },
+    )
+    deck, inp, listing = _build_and_capture(forcing, options, tmp_path, manning_csv)
+    # setup_wind_forcing(timeseries=...) writes the SAME wndfile artifact as the
+    # constant-wind (magnitude/direction) path.
+    assert _inp_value(inp, "wndfile") == "sfincs.wnd"
+    assert "sfincs.wnd" in listing
+    # The custom wind-drag breakpoint curve reached sfincs.inp verbatim.
+    assert _inp_value(inp, "cdnrb") == "3"
+    assert _inp_value(inp, "cdwnd") == "0.0 28.0 50.0"
+    assert _inp_value(inp, "cdval") == "0.001 0.0025 0.0018"
+
+
 # --------------------------------------------------------------------------- #
 # LEVEE-BREACH - interior dis point source (disfile/srcfile, single src)
 # --------------------------------------------------------------------------- #

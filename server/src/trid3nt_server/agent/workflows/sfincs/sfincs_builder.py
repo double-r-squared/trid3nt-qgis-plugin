@@ -106,6 +106,7 @@ __all__ = [
     "SFINCS_THREAD_EXP",
     "SFINCS_MIN_CELL_CAP",
     "SFINCS_COMPUTE_CLASS_VCPUS",
+    "SFINCS_TREF",
 ]
 
 logger = logging.getLogger("trid3nt_server.agent.workflows.sfincs.sfincs_builder")
@@ -233,6 +234,14 @@ def _install_pandas_set_forcing_1d_guard() -> bool:
 _PANDAS_GUARD_OK = _install_pandas_set_forcing_1d_guard()
 
 
+#: The SFINCS deck reference time (``sfincs.inp:tref``) every deck build uses --
+#: hoisted to module scope (was a local inside ``_generate_hydromt_yaml_config``)
+#: so any forcing-schedule emitter that needs to convert a "seconds since sim
+#: start" offset into an absolute timestamp (e.g. the wind timeseries CSV) uses
+#: the SAME reference instant, not a re-derived one.
+SFINCS_TREF: datetime = datetime(2026, 1, 1, 0, 0, 0)
+
+
 # --------------------------------------------------------------------------- #
 # Manning's mapping CSV location + version + loader now live in
 # ``shared/manning.py`` (cross-engine substrate: the SWMM mesh builder reads the
@@ -357,19 +366,34 @@ class DischargeForcing:
 
 @dataclass(frozen=True)
 class WindForcing:
-    """Wind forcing -- uniform (``setup_wind_forcing``) or gridded.
+    """Wind forcing -- uniform constant, uniform SCHEDULE, or gridded.
 
-    - Uniform: ``magnitude`` (m/s) + ``direction`` (deg, where the wind comes
-      FROM; 0=N, 90=E) → ``setup_wind_forcing(magnitude=, direction=)``. This is
-      the quick storm-wind paddle for the coastal demo.
+    - Uniform constant: ``magnitude`` (m/s) + ``direction`` (deg, where the
+      wind comes FROM; 0=N, 90=E) → ``setup_wind_forcing(magnitude=,
+      direction=)``. This is the quick storm-wind paddle for the coastal demo.
+    - Uniform SCHEDULE: ``timeseries`` -- an ordered list of ``(t_s,
+      magnitude_mps, direction_deg)`` tuples (``t_s`` = seconds elapsed since
+      the deck's ``tref``, i.e. sim-start) → written to a tabulated CSV
+      (``_write_wind_timeseries_csv``) and passed to
+      ``setup_wind_forcing(timeseries=<path>)`` per the live
+      ``SfincsModel.setup_wind_forcing`` signature (``timeseries=None,
+      magnitude=None, direction=None`` -- ``timeseries`` reads
+      ``data_catalog.get_dataframe(..., parse_dates=True, index_col=0)``,
+      datetime index + mag/dir columns in that order). A domain-scale
+      screening run with a ramping/veering storm wind (e.g. 10 m/s from 270
+      ramping to 25 m/s from 180) is the target use case. Takes precedence
+      over ``magnitude``/``direction`` when set; a ``None`` timeseries leaves
+      the constant path byte-identical.
     - Gridded: ``grid_uri`` (a netCDF with ``wind10_u`` / ``wind10_v`` over
       ``time,y,x``) → ``setup_wind_forcing_from_grid(wind=)`` for a real
-      spatially-varying wind field (e.g. ERA5 / HRRR).
+      spatially-varying wind field (e.g. ERA5 / HRRR). Takes precedence over
+      both uniform paths when set.
     """
 
     magnitude: float | None = None
     direction: float | None = None
     grid_uri: str | None = None
+    timeseries: list[tuple[float, float, float]] | None = None
     provenance: dict[str, Any] = field(default_factory=dict)
 
 
@@ -991,6 +1015,48 @@ def _write_hydromt_reclass_table_csv(
         writer.writerow(["nlcd_class", "N"])
         for cls in sorted(mapping.keys()):
             writer.writerow([cls, mapping[cls]])
+    return out_path
+
+
+def _write_wind_timeseries_csv(
+    timeseries: list[tuple[float, float, float]],
+    tref: datetime,
+    out_path: Path,
+) -> Path:
+    """Write a uniform wind SCHEDULE to a ``setup_wind_forcing(timeseries=)`` CSV.
+
+    ``SfincsModel.setup_wind_forcing`` reads its ``timeseries`` kwarg via
+    ``data_catalog.get_dataframe(timeseries, time_tuple=(tstart, tstop),
+    parse_dates=True, index_col=0)`` -- an absolute-datetime index in the first
+    column, magnitude (m/s) in the second, direction (deg, FROM) in the third
+    (the column ORDER hydromt hardcodes onto ``["mag", "dir"]`` regardless of
+    header text -- see ``hydromt_sfincs.sfincs.SfincsModel.setup_wind_forcing``).
+
+    Each ``(t_s, magnitude_mps, direction_deg)`` row's ``t_s`` is seconds
+    elapsed since the deck's ``tref`` (sim-start); this converts it to an
+    absolute timestamp so the row lands inside the ``get_model_time()``
+    ``(tstart, tstop)`` window ``setup_wind_forcing`` filters against.
+
+    Args:
+        timeseries: ordered ``[(t_s, magnitude_mps, direction_deg), ...]``.
+        tref: the deck's reference time (``SFINCS_TREF``).
+        out_path: destination path inside the per-build temp dir.
+
+    Returns:
+        ``out_path`` for convenience.
+    """
+    with out_path.open("w", encoding="utf-8", newline="") as fh:
+        writer = csv.writer(fh)
+        writer.writerow(["time", "mag", "dir"])
+        for t_s, magnitude_mps, direction_deg in timeseries:
+            ts = tref + timedelta(seconds=float(t_s))
+            writer.writerow(
+                [
+                    ts.strftime("%Y-%m-%d %H:%M:%S"),
+                    float(magnitude_mps),
+                    float(direction_deg),
+                ]
+            )
     return out_path
 
 
@@ -1710,6 +1776,7 @@ def suggest_sfincs_resolution_from_bbox(
 def _emit_surge_forcing_blocks(
     components: list[str],
     forcing: ForcingSpec,
+    build_dir: Path | str | None = None,
 ) -> None:
     """Append the COASTAL SFINCS surge / discharge / wind / pressure YAML blocks.
 
@@ -1723,8 +1790,9 @@ def _emit_surge_forcing_blocks(
        boundary. The inflow step (rivers / hydrography) ALWAYS precedes the
        discharge-series step (HydroMT contract: inflow makes the ``src`` points,
        discharge attaches the series). Order is load-bearing.
-    3. ``setup_wind_forcing`` (uniform mag/dir) OR ``setup_wind_forcing_from_grid``
-       (gridded netCDF).
+    3. ``setup_wind_forcing`` (uniform constant mag/dir, OR a uniform
+       ``timeseries`` SCHEDULE materialised via ``_write_wind_timeseries_csv``)
+       OR ``setup_wind_forcing_from_grid`` (gridded netCDF).
     4. ``setup_pressure_forcing_from_grid`` (gridded MSL pressure netCDF).
 
     Every input URI is staged to a local path via ``_stage_gcs_local`` first
@@ -1733,6 +1801,11 @@ def _emit_surge_forcing_blocks(
     All steps funnel surge/discharge series through
     ``set_forcing_1d``, which the module-level pandas guard keeps callable on
     pandas >= 3.0.
+
+    ``build_dir`` is the per-build temp directory (``build_sfincs_model``'s
+    ``tmp``) a wind ``timeseries`` SCHEDULE's generated CSV is written into --
+    ``None`` (e.g. direct unit-test calls of ``_generate_hydromt_yaml_config``)
+    falls back to the system temp dir.
     """
     # --- 0. Water-level BOUNDARY CELLS (msk=2) along the seaward active edge ---
     # CRITICAL: ``setup_mask_active`` only marks ACTIVE cells (msk=1); it does
@@ -1821,12 +1894,26 @@ def _emit_surge_forcing_blocks(
         )
         components.append("  merge: true  # breach point-source merges with river dis")
 
-    # --- 3. Wind (uniform OR gridded) ---
+    # --- 3. Wind (gridded, OR uniform SCHEDULE, OR uniform constant) ---
     wind = forcing.wind
     if wind is not None:
         if wind.grid_uri:
             components.append("setup_wind_forcing_from_grid:")
             components.append(f"  wind: '{_stage_gcs_local(wind.grid_uri)}'")
+        elif wind.timeseries:
+            # Uniform wind SCHEDULE: materialise the (t_s, mag, dir) rows to a
+            # tabulated CSV (absolute timestamps off SFINCS_TREF) and hand
+            # setup_wind_forcing its ``timeseries`` path -- the SAME uniform
+            # windfile SFINCS ingests, just time-varying instead of a constant
+            # two-row bracket. The constant magnitude/direction path below is
+            # untouched (byte-identical) whenever ``timeseries`` is unset.
+            _wind_dir = Path(build_dir) if build_dir is not None else Path(tempfile.gettempdir())
+            _wind_dir.mkdir(parents=True, exist_ok=True)
+            _wind_csv = _write_wind_timeseries_csv(
+                wind.timeseries, SFINCS_TREF, _wind_dir / "sfincs_wind_timeseries.csv"
+            )
+            components.append("setup_wind_forcing:")
+            components.append(f"  timeseries: '{_wind_csv.as_posix()}'")
         elif wind.magnitude is not None and wind.direction is not None:
             components.append("setup_wind_forcing:")
             components.append(f"  magnitude: {wind.magnitude}  # m/s")
@@ -1932,9 +2019,10 @@ def _emit_physics_config(
     ``key = value`` line in sfincs.inp), so each resolved physics override lands
     directly in the deck. ``physics`` is the dict resolved by
     ``physics_registry.validate_and_resolve_physics('sfincs', overrides)`` (keys
-    a subset of advection/theta/alpha/huthresh/coriolis_latitude/wind_drag). The
-    caller appends these AFTER the existing crs/tref/tstart/tstop/dtout lines but
-    still inside the same ``setup_config:`` block, so they merge into one dict.
+    a subset of advection/theta/alpha/huthresh/coriolis_latitude/wind_drag/
+    wind_drag_curve). The caller appends these AFTER the existing
+    crs/tref/tstart/tstop/dtout lines but still inside the same
+    ``setup_config:`` block, so they merge into one dict.
 
     Key mapping (deck_target):
       - advection/theta/alpha/huthresh -> the same sfincs.inp key verbatim.
@@ -1943,6 +2031,10 @@ def _emit_physics_config(
       - wind_drag (cd > 0)             -> a flat ``cdval: [cd,cd,cd]`` curve with
         ``cdnrb: 3`` (physics_registry FIX -- cdwnd is the speed-breakpoint axis,
         cdval is the coefficients). cd == 0 keeps the SFINCS default formula.
+      - wind_drag_curve (>=2 (wind_mps, cd) pairs) -> a custom ``cdnrb:
+        len(curve)`` / ``cdwnd: [...]`` / ``cdval: [...]`` breakpoint curve --
+        mutually exclusive with ``wind_drag`` (raises
+        ``SFINCSSetupError("WIND_DRAG_CURVE_CONFLICT")`` if both resolve).
 
     ``infiltration.constant_mm_per_hr`` (a bare scalar with no raster/lulc) is
     ALSO emitted here as ``qinf: <v>`` -- the only setup_config-routed loss term
@@ -1967,9 +2059,29 @@ def _emit_physics_config(
         # Coriolis: a latitude float -> sfincs.inp:latitude (the constant-f plane).
         if "coriolis_latitude" in physics:
             components.append(f"  latitude: {float(physics['coriolis_latitude'])}")
-        # Wind drag: a constant cd > 0 -> a flat cdval [cd,cd,cd] curve (cdnrb=3).
+        # Wind drag: EITHER a constant cd > 0 (flat cdval [cd,cd,cd], cdnrb=3)
+        # OR a custom multi-point breakpoint curve (wind_drag_curve) -- BOTH
+        # target the same sfincs.inp cdnrb/cdwnd/cdval keys, so setting both
+        # is ambiguous (Invariant 7: no silent overwrite/last-key-wins).
         cd = physics.get("wind_drag")
-        if cd is not None and float(cd) > 0.0:
+        cd_curve = physics.get("wind_drag_curve")
+        if cd_curve is not None and cd is not None and float(cd) > 0.0:
+            raise SFINCSSetupError(
+                "WIND_DRAG_CURVE_CONFLICT",
+                message=(
+                    "wind_drag (flat constant-cd curve) and wind_drag_curve "
+                    "(custom breakpoint curve) both target sfincs.inp "
+                    "cdnrb/cdwnd/cdval -- set exactly one."
+                ),
+                details={"wind_drag": cd, "wind_drag_curve": cd_curve},
+            )
+        if cd_curve is not None:
+            winds = [float(w) for w, _ in cd_curve]
+            vals = [float(v) for _, v in cd_curve]
+            components.append(f"  cdnrb: {len(cd_curve)}")
+            components.append(f"  cdwnd: [{', '.join(str(w) for w in winds)}]")
+            components.append(f"  cdval: [{', '.join(str(v) for v in vals)}]")
+        elif cd is not None and float(cd) > 0.0:
             cd_f = float(cd)
             components.append("  cdnrb: 3")
             components.append("  cdwnd: [0.0, 28.0, 50.0]")
@@ -1994,6 +2106,7 @@ def _generate_hydromt_yaml_config(
     river_local_path: str | None,
     forcing: ForcingSpec,
     mapping_csv_path: str,
+    build_dir: Path | str | None = None,
 ) -> str:
     """Compose a HydroMT-SFINCS YAML build config string.
 
@@ -2060,6 +2173,11 @@ def _generate_hydromt_yaml_config(
 
     Returns the YAML as a string. Test code parses it back; the production
     runtime writes it to a temp file and points HydroMT at it.
+
+    ``build_dir`` is forwarded to ``_emit_surge_forcing_blocks`` -- the
+    per-build temp dir a wind ``timeseries`` SCHEDULE CSV is staged into
+    (``None`` falls back to the system temp dir; direct unit-test callers
+    omit it).
     """
     crs = options.crs
     grid_res = options.grid_resolution_m
@@ -2074,11 +2192,10 @@ def _generate_hydromt_yaml_config(
     # arithmetic), NOT a whole-day rounding: anchoring tstop to the real
     # requested hours makes SFINCS run exactly the forcing window, so the
     # rising surge limb marches the front inland across frames.
-    _SFINCS_TREF = datetime(2026, 1, 1, 0, 0, 0)
     _sim_hours = max(1.0, float(options.simulation_hours))
-    _tstop_dt = _SFINCS_TREF + timedelta(hours=_sim_hours)
-    components.append(f'  tref: "{_SFINCS_TREF.strftime("%Y%m%d %H%M%S")}"')
-    components.append(f'  tstart: "{_SFINCS_TREF.strftime("%Y%m%d %H%M%S")}"')
+    _tstop_dt = SFINCS_TREF + timedelta(hours=_sim_hours)
+    components.append(f'  tref: "{SFINCS_TREF.strftime("%Y%m%d %H%M%S")}"')
+    components.append(f'  tstart: "{SFINCS_TREF.strftime("%Y%m%d %H%M%S")}"')
     components.append(f'  tstop: "{_tstop_dt.strftime("%Y%m%d %H%M%S")}"')
     # --- Map-output cadence (flood-animation Phase 1, engine-agnostic) ---
     # ``dtout`` / ``dtmaxout`` are native sfincs.inp parameters (seconds) that
@@ -2236,7 +2353,7 @@ def _generate_hydromt_yaml_config(
     # ORDER MATTERS: ``setup_river_inflow`` MUST precede ``setup_discharge_forcing``
     # -- the former establishes the ``src`` discharge points (and trims boundary
     # cells the river crosses); the latter attaches the time series to them.
-    _emit_surge_forcing_blocks(components, forcing)
+    _emit_surge_forcing_blocks(components, forcing, build_dir=build_dir)
     # --- Precip forcing emission (uniform netamt magnitude) ---
     #
     # Two upstream paths converge on the same SFINCS ``setup_precip_forcing``
@@ -2550,6 +2667,10 @@ def build_sfincs_model(
             river_local_path=river_geometry_uri,
             forcing=forcing,
             mapping_csv_path=str(reclass_csv_path),
+            # A wind ``timeseries`` SCHEDULE's CSV is staged inside the SAME
+            # per-build temp dir as the deck itself -- cleaned up automatically
+            # when the ``with tempfile.TemporaryDirectory()`` block exits.
+            build_dir=tmp,
         )
         yaml_path.write_text(yaml_text, encoding="utf-8")
         try:

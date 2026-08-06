@@ -67,6 +67,7 @@ _KNOB_KEYS: tuple[str, ...] = (
     "viscosity",
     "nuvisc",
     "wind_drag",
+    "wind_drag_curve",
     "coriolis_latitude",
     "manning_land",
     "manning_sea",
@@ -94,7 +95,7 @@ TEMPLATE_CARD = TemplateCard(
         "flood-depth map + the resolved solver-settings delta"
     ),
     required_inputs=["location_query (or bbox)"],
-    knobs="theta, alpha, advection, huthresh, viscosity, nuvisc, wind_drag, coriolis_latitude, manning_land, manning_sea, return_period_yr, duration_hr, input_mode",
+    knobs="theta, alpha, advection, huthresh, viscosity, nuvisc, wind_drag, wind_drag_curve, coriolis_latitude, manning_land, manning_sea, return_period_yr, duration_hr, input_mode",
 )
 
 
@@ -125,6 +126,7 @@ async def sfincs_advanced_numerical_physics_knobs(
     viscosity: int | None = None,
     nuvisc: float | None = None,
     wind_drag: float | None = None,
+    wind_drag_curve: list[list[float]] | list[tuple[float, float]] | None = None,
     coriolis_latitude: float | None = None,
     manning_land: float | None = None,
     manning_sea: float | None = None,
@@ -147,10 +149,11 @@ async def sfincs_advanced_numerical_physics_knobs(
     THE tool for "how sensitive is the SFINCS flood to the numerical scheme", "run
     SFINCS with advection off / a different theta / a smaller CFL alpha", "tune the
     SFINCS solver settings (huthresh wet/dry threshold, wind drag, theta, alpha)",
-    "enable SFINCS horizontal viscosity smoothing (viscosity/nuvisc)", "change the
-    SFINCS land/sea Manning roughness zonation", "SFINCS numerical stability /
-    solver-settings study". A run with NO knob set is byte-identical to the
-    ``sfincs_flood`` baseline.
+    "customize the SFINCS wind-drag breakpoint curve for hurricane-force wind
+    (wind_drag_curve)", "enable SFINCS horizontal viscosity smoothing (viscosity/
+    nuvisc)", "change the SFINCS land/sea Manning roughness zonation", "SFINCS
+    numerical stability / solver-settings study". A run with NO knob set is
+    byte-identical to the ``sfincs_flood`` baseline.
 
     Do NOT use this for:
         - The flood scenario itself (pluvial/coastal/riverine/compound forcing,
@@ -175,6 +178,12 @@ async def sfincs_advanced_numerical_physics_knobs(
             default 0.01). Only active with ``viscosity=1``.
         wind_drag: constant wind-drag coefficient override (range 0-0.01; 0 keeps
             the SFINCS default drag formula). Only meaningful with wind forcing.
+        wind_drag_curve: custom wind-drag breakpoint curve -- an ordered list of
+            ``>=2`` ``[wind_speed_mps, drag_coefficient]`` pairs (strictly
+            increasing wind speed; each within 0-100 m/s / 0-0.01 respectively)
+            replacing the SFINCS default 3-point cdwnd/cdval curve for
+            extreme-wind (hurricane-force) drag saturation/decrease. Mutually
+            exclusive with ``wind_drag`` (both target sfincs.inp cdval).
         coriolis_latitude: constant-plane Coriolis latitude (deg; 0 = no Coriolis)
             for a large-domain surge run.
         manning_land / manning_sea: the CONSTANT land / open-water Manning n
@@ -229,7 +238,14 @@ async def sfincs_advanced_numerical_physics_knobs(
         review_entries = [
             SyntheticInput(
                 param=key,
-                value=info["to"],
+                # ``SyntheticInput.value`` is scalar/str-only; a non-scalar
+                # resolved value (e.g. ``wind_drag_curve``'s tuple-of-pairs)
+                # renders as its str() rather than breaking pydantic validation.
+                value=(
+                    info["to"]
+                    if isinstance(info["to"], (int, float, str, type(None)))
+                    else str(info["to"])
+                ),
                 basis="user",
                 note=f"{info['doc']} (deck default {info['from']}; -> {info['deck_target']})",
             )

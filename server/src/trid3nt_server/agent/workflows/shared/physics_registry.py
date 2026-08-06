@@ -155,6 +155,34 @@ PHYSICS_REGISTRY: dict[str, dict[str, dict[str, Any]]] = {
                 "curve [cd,cd,cd] with cdnrb=3 (0 = keep SFINCS default formula)."
             ),
         },
+        # Custom multi-point wind-drag breakpoint curve (parameters.html,
+        # Vatvani et al. 2012 -- drag saturates/decreases in hurricane-force
+        # wind). SFINCS v2.3.3's ``SfincsInput`` carries THREE real attrs for
+        # this: ``cdnrb`` (int, breakpoint count), ``cdwnd`` (list, wind-speed
+        # m/s breakpoints), ``cdval`` (list, drag coefficients) -- confirmed
+        # live against ``hydromt_sfincs.sfincs_input.SfincsInput.__init__``
+        # (defaults ``cdnrb=3, cdwnd=[0.0,28.0,50.0], cdval=[0.001,0.0025,
+        # 0.0015]``) and ``.write``/``.read`` (space-joined list I/O). Mutually
+        # exclusive with the flat ``wind_drag`` override -- both target the
+        # same cdval/cdnrb/cdwnd keys (checked in ``_emit_physics_config``).
+        # "type" is the sentinel string "float_pairs" (not a python type
+        # object) -- validated by the dedicated branch in
+        # ``_coerce_and_check`` as an ordered list of >=2 (wind_mps, cd)
+        # pairs with STRICTLY INCREASING wind breakpoints. "range" is a pair
+        # of per-column bounds ((wind_lo, wind_hi), (cd_lo, cd_hi)).
+        "wind_drag_curve": {
+            "type": "float_pairs",
+            "range": ((0.0, 100.0), (0.0, 0.01)),
+            "default": None,
+            "deck_target": "sfincs.inp:cdnrb/cdwnd/cdval",
+            "doc": (
+                "Custom wind-drag breakpoint curve: an ordered list of >=2 "
+                "(wind_speed_mps, drag_coefficient) pairs with strictly "
+                "increasing wind breakpoints, replacing the SFINCS default "
+                "3-point cdwnd/cdval curve. None = keep the SFINCS default "
+                "curve (mutually exclusive with the flat wind_drag override)."
+            ),
+        },
         # CONSTITUTIVE physics (advanced / demo-default). The CONSTANT land/sea
         # Manning fallback for cells the NLCD reclass does not cover. Defaults
         # EQUAL HydroMT's setup_manning_roughness defaults -> unset omits the
@@ -526,6 +554,65 @@ def _coerce_and_check(engine: str, key: str, spec: dict[str, Any], value: Any) -
     """Coerce ``value`` to the spec type + range-check it (raises on violation)."""
     want = spec["type"]
     rng = spec.get("range")
+
+    # --- float_pairs: an ordered list of >=2 (x, y) numeric pairs (e.g. a --- #
+    # --- custom wind-drag breakpoint curve). ``rng`` is ((x_lo,x_hi),      --- #
+    # --- (y_lo,y_hi)) per-column bounds; x must be STRICTLY INCREASING     --- #
+    # --- (a physical breakpoint axis, not just a bounded scalar).          --- #
+    if want == "float_pairs":
+        if not isinstance(value, (list, tuple)) or len(value) < 2:
+            raise PhysicsRegistryError(
+                f"{engine}.{key}: expected a list of >=2 (x, y) pairs, "
+                f"got {value!r}",
+                engine=engine,
+                key=key,
+            )
+        (x_lo, x_hi), (y_lo, y_hi) = rng if rng is not None else (
+            (float("-inf"), float("inf")),
+            (float("-inf"), float("inf")),
+        )
+        pairs: list[tuple[float, float]] = []
+        prev_x: float | None = None
+        for item in value:
+            if not isinstance(item, (list, tuple)) or len(item) != 2:
+                raise PhysicsRegistryError(
+                    f"{engine}.{key}: each entry must be a 2-element (x, y) "
+                    f"pair, got {item!r}",
+                    engine=engine,
+                    key=key,
+                )
+            x_raw, y_raw = item
+            try:
+                x_val = float(x_raw)
+                y_val = float(y_raw)
+            except (TypeError, ValueError) as exc:
+                raise PhysicsRegistryError(
+                    f"{engine}.{key}: cannot coerce pair {item!r} to floats: {exc}",
+                    engine=engine,
+                    key=key,
+                ) from exc
+            if not (x_lo <= x_val <= x_hi):
+                raise PhysicsRegistryError(
+                    f"{engine}.{key}: x-value {x_val} out of range [{x_lo}, {x_hi}]",
+                    engine=engine,
+                    key=key,
+                )
+            if not (y_lo <= y_val <= y_hi):
+                raise PhysicsRegistryError(
+                    f"{engine}.{key}: y-value {y_val} out of range [{y_lo}, {y_hi}]",
+                    engine=engine,
+                    key=key,
+                )
+            if prev_x is not None and x_val <= prev_x:
+                raise PhysicsRegistryError(
+                    f"{engine}.{key}: x-values must be strictly increasing "
+                    f"(got {x_val} after {prev_x})",
+                    engine=engine,
+                    key=key,
+                )
+            prev_x = x_val
+            pairs.append((x_val, y_val))
+        return tuple(pairs)
 
     # --- bool: keep strict (a bool is an int subclass, so check it first). --- #
     if want is bool:

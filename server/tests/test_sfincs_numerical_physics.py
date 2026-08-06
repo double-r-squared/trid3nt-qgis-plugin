@@ -84,3 +84,31 @@ async def test_invalid_advection_value_rejected(monkeypatch):
     assert isinstance(out, dict)
     assert out["error_code"] == "ADVANCED_PHYSICS_INVALID"
     assert seen == {}
+
+
+@pytest.mark.asyncio
+async def test_wind_drag_curve_knob_threads_resolved_delta(monkeypatch):
+    """ADR 0162: ``wind_drag_curve`` (a list of (wind_mps, cd) pairs) resolves
+    through the SAME physics_registry validator + threads onto
+    ``model_flood_scenario`` alongside the other knobs."""
+    seen = _capture(monkeypatch)
+    curve = [[0.0, 0.001], [28.0, 0.0025], [50.0, 0.0018]]
+    out = await sfincs_advanced_numerical_physics_knobs(
+        location_query="Boulder, CO", wind_drag_curve=curve,
+    )
+    assert out.envelope_id == "ENV-TEST"
+    assert seen["advanced_physics"]["wind_drag_curve"] == (
+        (0.0, 0.001), (28.0, 0.0025), (50.0, 0.0018),
+    )
+
+
+@pytest.mark.asyncio
+async def test_wind_drag_curve_out_of_range_rejected(monkeypatch):
+    seen = _capture(monkeypatch)
+    # A single pair is below the >=2 breakpoint minimum -- typed rejection.
+    out = await sfincs_advanced_numerical_physics_knobs(
+        location_query="X", wind_drag_curve=[[0.0, 0.001]],
+    )
+    assert isinstance(out, dict)
+    assert out["error_code"] == "ADVANCED_PHYSICS_INVALID"
+    assert seen == {}

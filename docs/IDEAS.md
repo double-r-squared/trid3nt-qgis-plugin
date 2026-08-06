@@ -260,3 +260,10 @@ refinement from composer criteria), regenerate the mesh proof from
 the genuine sfincs_map.nc, and confirm the MDAL load in QGIS
 (NATE's visual). Until then the proof folder's quadtree mesh image
 is labeled a schema fixture.
+
+## 2026-08-06 - Order-dependent SFINCSSetupError reload flake (0162 finding)
+test_sfincs_autoscale.py's importlib.reload rebinds SFINCSSetupError,
+breaking pytest.raises in LATER files holding a stale top-of-file
+import (test_model_flood_scenario.py / _v2.py affected; the
+re-fetch-at-call-time pattern in test_sfincs_spiderweb.py is the
+fix). Sweep candidate when convenient.

@@ -436,16 +436,21 @@ async def model_flood_scenario(
             ``fetch_dem``). ``False`` (default) -> no discharge boundary.
         compound: COMPOUND flood -- auto-wire waterlevel AND discharge AND precip
             together (implies ``coastal`` + ``river``). ``False`` (default).
-        wind: optional uniform/gridded WIND forcing -- ``{"magnitude": <m/s>,
-            "direction": <deg-from>}`` OR ``{"grid_uri": <nc>}`` (user/ERA5
-            supplied, never fabricated). When set, defaults ``advanced_physics`` to
+        wind: optional uniform-constant / uniform-SCHEDULE / gridded WIND
+            forcing -- ``{"magnitude": <m/s>, "direction": <deg-from>}`` OR
+            ``{"timeseries": [(t_s, magnitude_mps, direction_deg), ...]}``
+            (ADR 0162; ``t_s`` = seconds since sim-start, e.g. a ramping/
+            veering storm wind) OR ``{"grid_uri": <nc>}`` (user/ERA5 supplied,
+            never fabricated). When set, defaults ``advanced_physics`` to
             ``{"advection": 1}`` (the registry exposes ``coriolis_latitude`` +
-            ``wind_drag`` for the user to lift). ``None`` (default) -> no wind.
+            ``wind_drag``/``wind_drag_curve`` for the user to lift). ``None``
+            (default) -> no wind.
         advanced_physics: optional SFINCS physics overrides validated via
             ``physics_registry`` (keys subset of ``{advection, theta, alpha,
-            huthresh, coriolis_latitude, wind_drag}``) and threaded onto
-            ``BuildOptions.advanced_physics`` -> the deck ``setup_config`` block.
-            ``None`` (default) -> deck physics byte-identical to today.
+            huthresh, coriolis_latitude, wind_drag, wind_drag_curve}``) and
+            threaded onto ``BuildOptions.advanced_physics`` -> the deck
+            ``setup_config`` block. ``None`` (default) -> deck physics
+            byte-identical to today.
         infiltration: SOIL-INFILTRATION loss (GCN250 curve numbers). ``True`` ->
             auto-fetch GCN250; a ``str`` -> verbatim CN raster URI; ``False``
             (default) -> no infiltration loss. Best-effort (a fetch failure
