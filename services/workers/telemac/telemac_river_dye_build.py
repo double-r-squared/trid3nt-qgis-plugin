@@ -172,6 +172,27 @@ class ReachConfig:
     sediment_density: float = 2650.0    # grain density kg/m3 (quartz)
     sediment_type: str = "sand"         # sand|silt|mud (narration + grain hint)
     erodible_bed: bool = False          # v2 flag - v1 forces supply-limited
+    # WAQTEL O2 "do_sag" class (mutually exclusive with oil/decay/sediment): the
+    # dissolved-oxygen SAG below a permitted discharge (US TMDL/permit question).
+    # author_deck couples WAQTEL with WATER QUALITY PROCESS = 2 (the O2 module),
+    # which appends THREE tracers after the dye: DISSOLVED O2, ORGANIC LOAD (=
+    # ultimate CBOD as an O2 equivalent) and NH4 LOAD (nametrac_waqtel order,
+    # PINNED by the 2026-08-07 in-image smoke). The reach is modeled STARTING at
+    # the fully-mixed discharge: the mixed CBOD + DO ride in at the INFLOW
+    # boundary (PRESCRIBED TRACERS VALUES, boundary-major per lb_order), decay
+    # downstream (k1) consuming O2, and reaeration (k2) recovers it -- the classic
+    # Streeter-Phelps profile (in-image V&V: 0.011 mg/L at the sag minimum vs the
+    # 1925 closed form when P=R=BEN=k44=0, constant k2/Cs, T=20C). The dye tracer
+    # stays as an inert conservative-dilution reference. write_waqtel_o2 writes
+    # the O2 steering file; the defaults leave every non-do_sag run byte-identical.
+    do_sag_bod_mgl: float = 20.0        # fully-mixed inflow CBOD (organic load) mg/L
+    do_sag_upstream_do_mgl: float = 9.0 # DO carried in at the inflow mg/L
+    do_sat_mgl: float = 9.0             # O2 SATURATION DENSITY CS mg/L (temp-dependent)
+    do_water_temp_c: float = 20.0       # WATER TEMPERATURE for the O2 kinetics
+    do_k1_per_day: float = 0.3          # K1 deoxygenation d^-1 (realistic default)
+    do_k2_per_day: float = 0.9          # K2 reaeration d^-1 (constant-k2 default)
+    do_k2_formula: int = 0              # FORMK2: 0=constant K2, 1=TVA .. 5=combined
+    do_standard_mgl: float = 5.0        # WQ DO standard (chart reference line only)
     n_drogues: int = 100                # slick particle count (oil class)
     drogues_period_s: int = 60          # particle snapshot cadence, seconds
     # release AFTER the startup transient: constant-depth init drains shallow
@@ -1756,6 +1777,56 @@ def write_waqtel_decay(cfg, workdir: str) -> str:
     return WAQTEL_FILENAME
 
 
+def write_waqtel_o2(cfg, workdir: str) -> str:
+    """Author the WAQTEL steering file for the O2 module (WATER QUALITY PROCESS 2).
+
+    The dissolved-oxygen SAG kinetics. Every English keyword name is verified vs
+    the in-image waqtel.dico (v9.0). To reproduce the Streeter-Phelps closed form
+    the eutrophication/benthic O2 sources are zeroed (BENTHIC DEMAND, PHOTOSYNTHESIS
+    P, VEGETAL RESPIRATION R = 0) and nitrification is off (K4 = 0), leaving only
+    first-order deoxygenation (K1) balanced by surface reaeration (K2). FORMULA FOR
+    COMPUTING K2 = 0 uses the CONSTANT reaeration coefficient K22 (the S-P k2); a
+    non-zero formula (1 TVA .. 5 combined) computes k2 from the modeled U/H instead.
+    FORMULA FOR COMPUTING CS = 0 uses the CONSTANT saturation O2SATU (the S-P Cs),
+    set from a temperature-dependent value upstream. WATER SALINITY = 0 (freshwater
+    river; salinity only matters when CS is computed). Returns the steering filename
+    written into ``workdir``; every line respects the DAMOCLES 72-char clamp.
+    """
+    k1 = float(getattr(cfg, "do_k1_per_day", 0.3))
+    k2 = float(getattr(cfg, "do_k2_per_day", 0.9))
+    formk2 = int(getattr(cfg, "do_k2_formula", 0))
+    cs = float(getattr(cfg, "do_sat_mgl", 9.0))
+    temp = float(getattr(cfg, "do_water_temp_c", 20.0))
+    lines = [
+        "/------------------------------------------------------------------/",
+        "/  WAQTEL O2 steering - dissolved-oxygen sag (process 2)",
+        f"/  k1={k1:g} d^-1  k2={k2:g} d^-1 (FORMK2={formk2})  Cs={cs:g} T={temp:g}C",
+        "/------------------------------------------------------------------/",
+        f"WATER TEMPERATURE                             = {temp:g}",
+        "WATER SALINITY                                = 0.",
+        f"CONSTANT OF DEGRADATION OF ORGANIC LOAD K1    = {k1:g}",
+        "CONSTANT OF NITRIFICATION KINETIC K4          = 0.",
+        f"FORMULA FOR COMPUTING K2                      = {formk2}",
+        f"K2 REAERATION COEFFICIENT                     = {k2:g}",
+        "FORMULA FOR COMPUTING CS                      = 0",
+        f"O2 SATURATION DENSITY OF WATER (CS)           = {cs:g}",
+        "BENTHIC DEMAND                                = 0.",
+        "PHOTOSYNTHESIS P                              = 0.",
+        "VEGETAL RESPIRATION R                         = 0.",
+    ]
+    clamped = [ln[:72] if len(ln) > 72 else ln for ln in lines]
+    over = [ln for ln in clamped if len(ln) > 72]
+    if over:
+        LOG.warning("waqtel O2 steering lines still >72 chars after clamp: %r",
+                    over[:3])
+    path = os.path.join(workdir, WAQTEL_FILENAME)
+    with open(path, "w") as f:
+        f.write("\n".join(clamped) + "\n")
+    LOG.info("waqtel O2 steering authored: k1=%g k2=%g formk2=%d Cs=%g -> %s",
+             k1, k2, formk2, cs, WAQTEL_FILENAME)
+    return WAQTEL_FILENAME
+
+
 #: the worker-authored GAIA steering file (its own DAMOCLES-parsed .cas, same
 #: 72-char line limit) named in the t2d cas via GAIA STEERING FILE, and the GAIA
 #: result SELAFIN carrying CUMUL BED EVOL (deposition). Both ship as outputs.
@@ -1925,20 +1996,49 @@ def author_deck(cfg, mesh, slf, cli, res, cas_path, lb_order, bed):
     """
     bed_outflow = bed["bed_top_m"] - bed["bed_drop_m"]
     outflow_stage = bed_outflow + cfg.init_depth_m
+    is_do_sag = str(getattr(cfg, "substance_class", "tracer")).lower() == "do_sag"
     q = []; elev = []; tracer = []
     for role in lb_order:
         if role == "inflow":
             q.append(f"{cfg.inflow_q_m3s}")
             elev.append("0.0")
-            tracer.append("0.0")     # clean flow -- dye enters via the point source
+            if is_do_sag:
+                # WAQTEL O2 appends DISSOLVED O2, ORGANIC LOAD, NH4 LOAD after the
+                # dye tracer (boundary-major PRESCRIBED, tr.f IRANK order): the
+                # fully-mixed discharge rides in here (DO + CBOD), the dye stays 0.
+                tracer += ["0.0",
+                           f"{float(cfg.do_sag_upstream_do_mgl):g}",
+                           f"{float(cfg.do_sag_bod_mgl):g}", "0.0"]
+            else:
+                tracer.append("0.0")   # clean flow -- dye enters via the point source
         else:  # outflow: prescribe a downstream stage = bed + target depth
             q.append("0.0")
             elev.append(f"{outflow_stage:.3f}")
-            tracer.append("0.0")
+            if is_do_sag:
+                tracer += ["0.0", "0.0", "0.0", "0.0"]   # exit boundary: free
+            else:
+                tracer.append("0.0")
 
     sx, sy, snode = spill_point(mesh, cfg)
-    src_path = os.path.join(os.path.dirname(os.path.abspath(cas_path)), SOURCES_FILENAME)
-    write_sources_pulse(src_path, cfg)
+    # do_sag models the reach STARTING at the fully-mixed discharge: the CBOD + DO
+    # ride in at the INFLOW boundary (PRESCRIBED TRACERS VALUES), so there is NO
+    # point-source dye pulse. Omitting the SOURCES FILE + source keywords avoids a
+    # single-tracer source array colliding with the O2 module's 4 tracers.
+    if not is_do_sag:
+        src_path = os.path.join(os.path.dirname(os.path.abspath(cas_path)),
+                                SOURCES_FILENAME)
+        write_sources_pulse(src_path, cfg)
+        sources_file_line = f"SOURCES FILE                    = {SOURCES_FILENAME}\n"
+        sources_block = (
+            "MAXIMUM NUMBER OF SOURCES        = 20\n"
+            f"ABSCISSAE OF SOURCES             = {sx:.3f}\n"
+            f"ORDINATES OF SOURCES             = {sy:.3f}\n"
+            "WATER DISCHARGE OF SOURCES       = 0.0\n"
+            "VALUES OF THE TRACERS AT THE SOURCES = 0.0\n"
+        )
+    else:
+        sources_file_line = ""
+        sources_block = ""
 
     # TELEMAC-PHYS-1 constitutive-physics literals. SAFETY INVARIANT: when the
     # ReachConfig override is None (unset) the deck emits the EXACT historical
@@ -2000,8 +2100,7 @@ def author_deck(cfg, mesh, slf, cli, res, cas_path, lb_order, bed):
 GEOMETRY FILE                   = {os.path.basename(slf)}
 BOUNDARY CONDITIONS FILE        = {os.path.basename(cli)}
 RESULTS FILE                    = {os.path.basename(res)}
-SOURCES FILE                    = {SOURCES_FILENAME}
-/
+{sources_file_line}/
 TITLE : '{cfg.name} REAL RIVER DYE PULSE'
 VARIABLES FOR GRAPHIC PRINTOUTS = 'U,V,H,S,B,T1'
 GRAPHIC PRINTOUT PERIOD         = {cfg.graphic_period}
@@ -2016,12 +2115,7 @@ INITIAL DEPTH                   = {cfg.init_depth_m:.3f}
 PRESCRIBED FLOWRATES            = {';'.join(q)}
 PRESCRIBED ELEVATIONS           = {';'.join(elev)}
 /
-MAXIMUM NUMBER OF SOURCES        = 20
-ABSCISSAE OF SOURCES             = {sx:.3f}
-ORDINATES OF SOURCES             = {sy:.3f}
-WATER DISCHARGE OF SOURCES       = 0.0
-VALUES OF THE TRACERS AT THE SOURCES = 0.0
-/
+{sources_block}/
 LAW OF BOTTOM FRICTION          = {_fric_law}
 FRICTION COEFFICIENT            = {_fric_coef}
 VELOCITY DIFFUSIVITY            = {_vel_diff}
@@ -2106,6 +2200,32 @@ COEFFICIENT FOR DIFFUSION OF TRACERS     = {_tracer_diff}
             "COUPLING WITH                   = 'WAQTEL'\n"
             f"WAQTEL STEERING FILE            = {WAQTEL_FILENAME}\n"
             "WATER QUALITY PROCESS           = 17\n"
+        )
+
+    if is_do_sag:
+        # WAQTEL O2 class (mutually exclusive with oil/decay/sediment): couple
+        # WAQTEL with WATER QUALITY PROCESS = 2 (the O2 module). nametrac_waqtel
+        # appends THREE tracers after the dye - DISSOLVED O2 (T2), ORGANIC LOAD /
+        # CBOD (T3), NH4 LOAD (T4) - so the deck must (a) OUTPUT them (add T2,T3,T4
+        # to the graphic printouts) and (b) size INITIAL VALUES OF TRACERS to the
+        # FOUR tracers (the single-value default only covers the dye). PRESCRIBED
+        # TRACERS VALUES is already widened to 4-per-boundary in the lb_order loop
+        # above (the mixed CBOD + DO ride in at the inflow). The O2 kinetics
+        # (k1/k2/Cs) live in the steering file. In-image V&V (2026-08-07): the
+        # sag reproduces the Streeter-Phelps 1925 closed form to 0.011 mg/L.
+        write_waqtel_o2(cfg, os.path.dirname(os.path.abspath(cas_path)))
+        cas = cas.replace(
+            "VARIABLES FOR GRAPHIC PRINTOUTS = 'U,V,H,S,B,T1'",
+            "VARIABLES FOR GRAPHIC PRINTOUTS = 'U,V,H,S,B,T1,T2,T3,T4'")
+        cas = cas.replace(
+            "INITIAL VALUES OF TRACERS       = 0.",
+            "INITIAL VALUES OF TRACERS       = 0.;"
+            f"{float(cfg.do_sag_upstream_do_mgl):g};0.;0.")
+        cas += (
+            "/\n"
+            "COUPLING WITH                   = 'WAQTEL'\n"
+            f"WAQTEL STEERING FILE            = {WAQTEL_FILENAME}\n"
+            "WATER QUALITY PROCESS           = 2\n"
         )
 
     if str(getattr(cfg, "substance_class", "tracer")).lower() == "sediment":

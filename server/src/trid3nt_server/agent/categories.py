@@ -323,6 +323,7 @@ PRIMARY_CATEGORY: dict[str, str] = {
     "swan_physics_sensitivity_sweep": "hazard_modeling",
     "swan_stationary_snapshot_batch": "hazard_modeling",
     "telemac_river_dye": "hazard_modeling",
+    "telemac_do_sag": "hazard_modeling",
     "hecras_riverine_flood": "hazard_modeling",
     "hecras_levee_breach": "hazard_modeling",
     "hecras_flood_2d": "hazard_modeling",

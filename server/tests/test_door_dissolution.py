@@ -42,6 +42,7 @@ EXPECTED_TEMPLATES = {
     "swmm_lid_performance_comparison",  # ADR 0151 SWMM CAND-S: green roof / rain barrel vs rooftop disconnect / vegetative swale
     "swmm_wq_buildup_washoff_comparison",  # ADR 0151 SWMM CAND-S: curb-length vs area buildup + EMC vs exp washoff
     "telemac_river_dye",
+    "telemac_do_sag",
     "hecras_riverine_flood",  # engine #11 (ADR 0109; renamed ADR 0120): HEC-RAS riverine-flood template (v1 geometry: Muncie)
     "hecras_levee_breach",  # engine #11 second archetype (ADR 0125): HEC-RAS levee-breach template (v1 geometry: Muncie leveed floodplain)
     "hecras_flood_2d",  # engine #11 third archetype (ADR 0140): HEC-RAS fresh-AOI 2D flood (headless-authored geometry from a fetched DEM)

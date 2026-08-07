@@ -665,6 +665,11 @@ from ..workflows.swmm.wq_buildup_washoff_comparison.wq_buildup_washoff_compariso
 # workflows/telemac/run_telemac.py is the local solve seam
 # (the door holds the run_telemac name; the template submits the solver).
 from ..workflows.telemac.river_dye.river_dye import telemac_river_dye as _telemac_river_dye  # noqa: E402,F401 - NAME FLIP of run_telemac (engine=telemac, tier=template)
+# telemac_do_sag TEMPLATE (engine="telemac", tier="template"), workflows/telemac/
+# do_sag/: the WAQTEL O2 dissolved-oxygen sag (US TMDL/permit). Reuses the
+# river_dye reach-seeding + solve via model_telemac_river_dye(do_sag_config=...);
+# WATER QUALITY PROCESS = 2, V&V to Streeter-Phelps 0.011 mg/L (ADR 0169).
+from ..workflows.telemac.do_sag.do_sag import telemac_do_sag as _telemac_do_sag  # noqa: E402,F401 - WAQTEL O2 front (engine=telemac, tier=template)
 # hecras_riverine_flood TEMPLATE (engine="hecras", tier="template"), engine #11,
 # one folder under workflows/hecras/riverine_flood/. TEMPLATE-FIRST: reparameterizes
 # HEC's shipped Muncie White River (IN) demonstration deck (frozen geometry, scaled

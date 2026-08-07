@@ -25,9 +25,11 @@ __all__ = [
     "TELEMAC_DYE_STYLE_PRESET",
     "TELEMAC_BED_EVOLUTION_STYLE_PRESET",
     "TELEMAC_WSE_STYLE_PRESET",
+    "TELEMAC_DO_STYLE_PRESET",
     "TelemacDyeLayerURI",
     "TelemacSedimentLayerURI",
     "TelemacWseLayerURI",
+    "TelemacDoLayerURI",
 ]
 
 #: Style preset for the dye-concentration raster. A DISTINCT key (not the flood
@@ -56,6 +58,16 @@ TELEMAC_BED_EVOLUTION_STYLE_PRESET: str = "diverging_bed_evolution"
 #: data-driven ``legend`` so the real WSE range renders (additive /
 #: legend-drives-render, same as the other TELEMAC layers).
 TELEMAC_WSE_STYLE_PRESET: str = "continuous_water_surface_elevation"
+
+#: Style preset for the DISSOLVED-OXYGEN (DO) field raster from a WAQTEL O2 sag
+#: run. A DISTINCT continuous key (never the dye/WSE/sediment presets) so
+#: ``publish_layer._resolve_titiler_style_params`` renders it on a REVERSED
+#: sequential ramp (low DO = the hazard = the hot end) and
+#: ``export_case_to_qgis._MESH_SIBLING_BY_STYLE_PRESET`` maps it to the TELEMAC
+#: SELAFIN mesh sibling without colliding with another engine. The layer carries
+#: a data-driven ``legend`` so the mg/L range renders (additive /
+#: legend-drives-render, same as the other TELEMAC layers).
+TELEMAC_DO_STYLE_PRESET: str = "continuous_dissolved_oxygen"
 
 
 class TelemacWseLayerURI(LayerURI):
@@ -154,6 +166,57 @@ class TelemacDyeLayerURI(LayerURI):
     deposited_mass_kg: float | None = Field(default=None, ge=0.0)
     deposit_fraction: float | None = Field(default=None, ge=0.0)
     max_deposition_mm: float | None = Field(default=None, ge=0.0)
+
+
+class TelemacDoLayerURI(LayerURI):
+    """A ``LayerURI`` for a TELEMAC-2D WAQTEL dissolved-oxygen (DO) sag layer.
+
+    The WAQTEL O2 (WATER QUALITY PROCESS = 2) analogue of ``TelemacDyeLayerURI``:
+    below a permitted discharge, downstream CBOD decay consumes oxygen and
+    reaeration recovers it - the classic Streeter-Phelps sag. The published raster
+    is the steady-state DISSOLVED O2 field (mg/L); the along-reach DO-vs-distance
+    sag curve rides in ``sag_curve_*`` for the dock chart. Extends ``LayerURI``
+    field-for-field and adds the typed scalars the agent narrates rather than
+    invents (Invariant 1 / FR-AS-7):
+
+        do_min_mgl: the SAG minimum - lowest dissolved oxygen anywhere in the
+            reach, mg/L (>= 0). The headline: how low DO bottoms out.
+        do_min_distance_m: along-reach distance (m, >= 0) from the discharge to
+            that sag minimum - WHERE the critical point sits.
+        do_upstream_mgl: DO carried in at the top of the reach (the fully-mixed
+            discharge DO), mg/L - the pre-sag reference.
+        do_saturation_mgl: the O2 saturation Cs (mg/L) the deficit is measured
+            against (temperature-dependent) - the recovery ceiling.
+        do_standard_mgl: the water-quality DO standard (mg/L) the sag is judged
+            against (e.g. 5 mg/L warm-water aquatic-life) - chart reference only.
+        do_violates_standard: True when ``do_min_mgl`` falls below
+            ``do_standard_mgl`` (the sag violates the standard) - the permit answer.
+        bod_upstream_mgl: the fully-mixed ultimate CBOD (mg/L) loaded at the top
+            of the reach - the driver of the sag.
+        sag_curve_distance_m / sag_curve_do_mgl / sag_curve_bod_mgl: OPTIONAL
+            equal-length arrays of the centerline DO-sag curve (downstream
+            distance, DO, CBOD) the dock chart plots against the standard line.
+        mesh_size_m / mesh_node_estimate / mesh_resolution_label: the granularity
+            the solve used (the visible, narratable resolution lever).
+
+    ``layer_type`` is ``"raster"`` (the steady-state DO COG); the time animation
+    plays from the SELAFIN mesh sibling. The raster uses the
+    ``continuous_dissolved_oxygen`` style preset + a data-driven ``legend``.
+    """
+
+    do_min_mgl: float = Field(ge=0.0)
+    do_min_distance_m: float | None = Field(default=None, ge=0.0)
+    do_upstream_mgl: float | None = Field(default=None, ge=0.0)
+    do_saturation_mgl: float | None = Field(default=None, ge=0.0)
+    do_standard_mgl: float | None = Field(default=None, ge=0.0)
+    do_violates_standard: bool | None = Field(default=None)
+    bod_upstream_mgl: float | None = Field(default=None, ge=0.0)
+    sag_curve_distance_m: list[float] | None = Field(default=None)
+    sag_curve_do_mgl: list[float] | None = Field(default=None)
+    sag_curve_bod_mgl: list[float] | None = Field(default=None)
+    mesh_size_m: float | None = Field(default=None, gt=0.0)
+    mesh_node_estimate: int | None = Field(default=None, ge=0)
+    mesh_resolution_label: str | None = Field(default=None)
 
 
 class TelemacSedimentLayerURI(LayerURI):
