@@ -446,7 +446,7 @@ Aspects: AMR refinement control: explicit region-based flagging vs default flag2
   src: https://github.com/clawpack/geoclaw/blob/master/examples/tsunami/chile2010/setrun.py (geoclaw_chile2010_setrun)
   knobs: amrdata.regions=[[level,level,t0,t1,x0,x1,y0,y1],...], refinement_ratios_x/y, flag2refine=True, flag_richardson=False
   LANDED as `geoclaw_amr_refinement_regions` (ADR 0143): user-supplied AmrRegionWindow list appended to setrun regiondata AFTER the engine default tiers (GeoClaw combines by MAX of covering levels); flag_richardson stays False + flag2refine True (region-based over error flagging). Live smoke Crescent City CA: level-3 window over the harbour, real solve (initial water mass ~6.5e10 = genuine ocean, not dry ~1e5), max_depth 0.73 m. proof docs/proof/templates/amr_regions.png + _chart.png.
-- [CAND-L] `adjoint_guided_amr_flagging` [L] [US] - How do I flag AMR refinement using an adjoint (backward-in-time) sensitivity solve targeted at a specific gauge/QoI, instead of uniform/error-based refinement?
+- [CULLED] `adjoint_guided_amr_flagging` (NATE ruling 2026-08-06: separate solver build / research-grade machinery, weakest user-question link; revivable by ruling only) [L] [US] - How do I flag AMR refinement using an adjoint (backward-in-time) sensitivity solve targeted at a specific gauge/QoI, instead of uniform/error-based refinement?
   src: https://github.com/clawpack/geoclaw/tree/master/examples/tsunami/chile2010_adjoint (geoclaw_chile2010_adjoint)
   knobs: adjointdata.use_adjoint, adjoint output time window, refinement tolerance (Davis & LeVeque method)
   notes: New solver capability - requires a separate backward adjoint run coupled to the forward run, not just a setrun toggle.
@@ -547,7 +547,7 @@ Aspects: Two-layer plane-wave/internal-wave propagation over a bathymetry jump; 
   src: https://github.com/clawpack/geoclaw/tree/master/examples/multi-layer/plane_wave (geoclaw_multilayer_plane_wave)
   knobs: per-layer rho (density), eta (interface depths), wave angle/location, Makefile.multilayer build target
   notes: Idealized test case (Mandli 2013 theoretical background); a real US stratified use case (e.g. estuary salt-wedge) would need further adaptation. Separate Riemann solver/build from single-layer SWE.
-- [CAND-L] `multilayer_dry_state_bowl_validation` [L] [non-US] - How do I validate multilayer wetting/drying (a layer vanishing near shore) using the multilayer radial-bowl test case, and what are the current known AMR limitations?
+- [CULLED] `multilayer_dry_state_bowl_validation` (NATE ruling 2026-08-06: separate solver build / research-grade machinery, weakest user-question link; revivable by ruling only) [L] [non-US] - How do I validate multilayer wetting/drying (a layer vanishing near shore) using the multilayer radial-bowl test case, and what are the current known AMR limitations?
   src: https://github.com/clawpack/geoclaw/tree/master/examples/multi-layer/bowl-radial (geoclaw_multilayer_bowl_radial)
   knobs: layer dry-state tolerance, AMR levels (experimental for multilayer per docs)
 

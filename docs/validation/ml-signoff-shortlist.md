@@ -215,3 +215,12 @@ ripple, ~6, mostly individually foldable).
   refinement-grade.
 - **Sediment/morphology** in SCHISM-SED (4), TELEMAC-GAIA (5), HEC-RAS-sediment
   (3). Standardize authoring on one before fanning out.
+
+## NATE RULINGS (2026-08-06, applied)
+- CULLED: GeoClaw multilayer + adjoint only.
+- KEPT as open candidates: SCHISM icepack (Alaska coverage), TELEMAC
+  MASCARET/KHIONE (await real anchors), non-US V&V rows (as fixtures).
+- Ecology/geothermal: in-scope (geospatial-intelligence identity),
+  queued AFTER the fronts + the 34-row shortlist.
+- Overlap: IRRELEVANT to builds (coverage=capability); fidelity ladder
+  owns quality/routing. The pick-one-WQ-lead recommendation is void.
