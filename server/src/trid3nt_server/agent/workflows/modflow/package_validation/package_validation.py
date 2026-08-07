@@ -18,6 +18,11 @@ reference:
   Grubb (1993) uniform-flow stagnation + capture-width analytical.
 - ``henry_saltwater`` (GWF-BUY + GWT): the classic Henry variable-density wedge -
   does BUY reproduce the 0.5-isochlor saltwater-intrusion shape?
+- ``sfr_stream_depletion`` (GWF-SFR + WEL): a well-connected SFR stream + a pumping
+  well - does the transient stream-depletion fraction q(t)/Q match the Glover
+  (1954) erfc analytical (via a pump/no-pump superposition)?
+- ``mvr_routing`` (GWF-MVR): does the Mover transfer rejected UZF infiltration +
+  DRN discharge into SFR reaches within one timestep, conserving mass exactly?
 
 The decks are SMALL SYNTHETIC benchmarks (schematic coordinates), so the product
 is the computed-vs-reference CHART + typed scalars, never a georeferenced map.
@@ -62,13 +67,16 @@ TEMPLATE_CARD = TemplateCard(
         "Newton formulation drying/rewetting a staircase channel, a multi-aquifer "
         "well equilibrating to the Sokol analytical level, a horizontal-flow "
         "barrier whose flux is grid-refinement independent, native PRT particle "
-        "tracking delineating a well capture zone vs the Grubb analytical, or the "
-        "BUY package reproducing the Henry saltwater-intrusion wedge?"
+        "tracking delineating a well capture zone vs the Grubb analytical, the "
+        "BUY package reproducing the Henry saltwater-intrusion wedge, an SFR-coupled "
+        "well reproducing the Glover stream-depletion curve, or the MVR package "
+        "routing rejected UZF infiltration and discharge into SFR reaches?"
     ),
     required_inputs=[],
     knobs=(
         "case=newton_dry_rewet|maw_crossaquifer|hfb_barrier|prt_capture_zone|"
-        "henry_saltwater, direction=forward|backward (prt only), n_particles (prt only)"
+        "henry_saltwater|sfr_stream_depletion|mvr_routing, "
+        "direction=forward|backward (prt only), n_particles (prt only)"
     ),
 )
 
@@ -166,7 +174,8 @@ async def run_package_validation(
 async def modflow_package_validation(
     case: Literal[
         "newton_dry_rewet", "maw_crossaquifer", "hfb_barrier",
-        "prt_capture_zone", "henry_saltwater",
+        "prt_capture_zone", "henry_saltwater", "sfr_stream_depletion",
+        "mvr_routing",
     ] = "maw_crossaquifer",
     direction: Literal["forward", "backward"] = "backward",
     n_particles: int = 40,
@@ -201,6 +210,14 @@ async def modflow_package_validation(
         - ``henry_saltwater`` (GWF-BUY + GWT): does the BUY variable-density
           package reproduce the classic Henry saltwater-intrusion wedge (the
           0.5-isochlor shape)? Reports the toe penetration vs the published wedge.
+        - ``sfr_stream_depletion`` (GWF-SFR + WEL): does an SFR-coupled well near a
+          stream reproduce the Glover (1954) transient stream-depletion curve - the
+          fraction of the pumping rate captured from the stream vs time? Uses a
+          pump/no-pump superposition; reports the depletion fraction vs Glover erfc.
+        - ``mvr_routing`` (GWF-MVR): does the Mover package transfer rejected UZF
+          infiltration and DRN groundwater discharge into SFR reaches within one
+          coupled timestep, conserving mass exactly? Reports the routed volumes and
+          the conservation delta.
 
     Params:
         case: which validation case to run (default ``maw_crossaquifer``).

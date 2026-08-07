@@ -47,6 +47,21 @@ Five cases, each exercising a package no archetype composer exposes:
   wedge pattern (monotone stratification, fresh-top-inland / salt-bottom-seaward)
   against the published wedge.
 
+- ``sfr_stream_depletion`` (GWF-SFR + WEL): a well-connected SFR stream and a
+  pumping well in a confined aquifer. Stream depletion (the fraction of the
+  pumping rate captured from the stream) is extracted by SUPERPOSITION - the
+  SFR->GWF leakage difference between a pumping and a no-pumping run - and checked
+  against the Glover & Balmer (1954) transient analytical q(t)/Q = erfc(sqrt(a^2
+  S/(4 T t))) across a sequence of times. A well-connected streambed reproduces the
+  fully-penetrating Glover curve; realistic streambed resistance sits below it.
+
+- ``mvr_routing`` (GWF-MVR): a synthetic watershed cell block where a UZF column
+  rejects the infiltration exceeding its vertical Ks and a DRN discharges
+  groundwater, with MVR routing BOTH into the head reach of an SFR network. The
+  case checks mover mass CONSERVATION - the volume SFR receives (FROM-MVR) equals
+  the sum drawn from the providers (UZF rejected-infiltration + DRN discharge
+  TO-MVR) to machine precision, within one coupled timestep.
+
 Honesty (loud): every number is a real parsed mf6 output (invariant 1); the
 decks are AUTHORED synthetic benchmarks labeled ``SyntheticInput(basis=
 "default_demo")`` by the composer.
@@ -78,9 +93,14 @@ __all__ = [
     "ModflowValidationError",
     "build_prt_gwf",
     "build_henry_saltwater",
+    "build_glover_sfr",
+    "build_mvr_routing",
     "HFB_GRID_NCOLS",
     "PRT_STAGNATION_M",
     "HENRY_TOE_PENETRATION_REF_M",
+    "GLOVER_A_M",
+    "GLOVER_TIMES_D",
+    "glover_depletion_fraction",
 ]
 
 #: mf6 dry-cell / no-flow sentinel written by the standard (non-Newton)
@@ -206,6 +226,50 @@ VALIDATION_CASES: dict[str, ValidationCaseMeta] = {
             "BUY drhodc=0.7. Synthetic benchmark, not a site."
         ),
         tolerance=0.20,  # relative band on the 0.5-isochlor toe penetration
+    ),
+    "sfr_stream_depletion": ValidationCaseMeta(
+        case="sfr_stream_depletion",
+        question=(
+            "does a MODFLOW 6 SFR-coupled pumping well reproduce the Glover (1954) "
+            "analytical stream-depletion curve - the fraction of the pumping rate "
+            "captured from a nearby stream as a function of time?"
+        ),
+        package="GWF-SFR (streamflow routing) + WEL",
+        reference_label=(
+            "Glover-Balmer (1954) transient stream-depletion fraction q(t)/Q = "
+            "erfc(sqrt(a^2 S / (4 T t))) for a fully-penetrating stream"
+        ),
+        reference_source="Glover & Balmer (1954) Eos Trans. AGU 35(3):468-470",
+        basis_note=(
+            "Confined single-layer 6000x4500 m domain (T=200 m2/d, S=0.1), a "
+            "well-connected SFR stream along the west edge, and a Q=400 m3/d well "
+            "300 m from the stream pumped from t=0. Stream depletion is the SFR->GWF "
+            "leakage difference between a pumping and a no-pumping run (superposition). "
+            "Synthetic benchmark, not a site."
+        ),
+        tolerance=0.15,  # max relative error over the resolved (q/Q>=0.05) window
+    ),
+    "mvr_routing": ValidationCaseMeta(
+        case="mvr_routing",
+        question=(
+            "can the MVR (Mover) package transfer rejected UZF infiltration and "
+            "groundwater discharge into SFR reaches within one coupled timestep, "
+            "conserving mass exactly?"
+        ),
+        package="GWF-MVR (Mover) coupling UZF + DRN -> SFR",
+        reference_label=(
+            "mover mass conservation: total volume received by SFR (FROM-MVR) equals "
+            "the sum drawn from the providers (UZF rejected-infiltration + DRN "
+            "discharge TO-MVR), to machine precision"
+        ),
+        reference_source="modflow6-docs:gwf-mvr; ex-gwf-sfr/uzf watershed tradition",
+        basis_note=(
+            "Synthetic 10x12 x 100 m watershed cell block: a UZF column with "
+            "infiltration (2 m/d) exceeding vertical Ks (0.5 m/d) rejects the excess, "
+            "a DRN discharges groundwater, and MVR routes BOTH into the head reach of "
+            "an 8-reach SFR network. Synthetic benchmark, not a site."
+        ),
+        tolerance=1.0e-6,  # relative conservation error
     ),
 }
 
@@ -1065,11 +1129,375 @@ def _solve_henry_saltwater() -> SolvedValidation:
     )
 
 
+# --------------------------------------------------------------------------- #
+# SFR stream depletion (streamflow routing + pumping well) vs Glover (1954).
+#
+# A confined single-layer aquifer with a well-connected SFR stream along the
+# west edge and a well at distance ``a`` has a closed-form transient stream-
+# depletion solution (Glover & Balmer, 1954): the fraction of the pumping rate
+# captured from the stream is q(t)/Q = erfc(sqrt(a^2 S / (4 T t))). Stream
+# depletion is defined by SUPERPOSITION - the difference in SFR->GWF leakage
+# between a pumping and a no-pumping run - so the baseline stream stage / mounding
+# cancels and only the well's capture remains (exactly what Glover predicts). A
+# well-connected streambed (conductance >> aquifer transmissivity scale)
+# reproduces the fully-penetrating Glover bound; the georeferenced stream_depletion
+# composer uses realistic (lower) streambed K and correctly sits below this curve.
+# --------------------------------------------------------------------------- #
+
+GLOV_NLAY, GLOV_NROW, GLOV_NCOL = 1, 90, 120
+GLOV_DELR = GLOV_DELC = 50.0          # m ; 6000 x 4500 m domain
+GLOV_TOP, GLOV_BOTM = 20.0, 0.0       # confined thickness b = 20 m
+GLOV_K = 10.0                         # m/d
+GLOV_T = GLOV_K * (GLOV_TOP - GLOV_BOTM)   # transmissivity 200 m2/d
+GLOV_S = 0.1                          # storage coefficient
+GLOV_STRT = 19.0                      # uniform initial head = stream stage datum
+GLOV_Q = 400.0                        # well pumping (m3/d)
+GLOV_WELL_COL = 6                     # well 6 cells (300 m) east of the col-0 stream
+GLOV_WELL_ROW = GLOV_NROW // 2
+GLOV_INFLOW = 3000.0                  # SFR headwater inflow (>> Q so reaches stay wet)
+#: well-to-stream distance (m), cell-centre to col-0 stream line.
+GLOVER_A_M: float = GLOV_WELL_COL * GLOV_DELR
+#: elapsed times after pump start (days) the depletion curve is sampled at.
+GLOVER_TIMES_D: tuple[float, ...] = (2.0, 5.0, 10.0, 20.0, 40.0, 80.0, 160.0)
+
+
+def glover_depletion_fraction(t_days: float, a_m: float = GLOVER_A_M) -> float:
+    """Glover & Balmer (1954) transient stream-depletion fraction q(t)/Q.
+
+    ``erfc(sqrt(a^2 S / (4 T t)))`` for a fully-penetrating stream a distance
+    ``a_m`` from a well pumping since ``t=0`` in a confined aquifer (T, S). Pure.
+    """
+    if t_days <= 0.0:
+        return 0.0
+    return math.erfc(math.sqrt(a_m * a_m * GLOV_S / (4.0 * GLOV_T * t_days)))
+
+
+def build_glover_sfr(pump: bool, ws: str | None = None):
+    """Author + write one Glover SFR deck (pumping or no-pumping). No run.
+
+    A confined transient GWF with an SFR stream along col 0 (well-connected
+    streambed) and a WEL at ``(GLOV_WELL_ROW, GLOV_WELL_COL)`` running at
+    ``GLOV_Q`` when ``pump`` else 0. Multi-period so the depletion is sampled at
+    ``GLOVER_TIMES_D``; the SFR gwf-exchange is written to an OBS csv per reach.
+    """
+    import flopy
+
+    mf6 = resolve_mf6_binary()
+    ws = ws or _new_ws("glover")
+    sub = os.path.join(ws, "pump" if pump else "nopump")
+    name = "glov"
+    perlen = [GLOVER_TIMES_D[0]] + [
+        GLOVER_TIMES_D[i] - GLOVER_TIMES_D[i - 1] for i in range(1, len(GLOVER_TIMES_D))
+    ]
+    nper = len(perlen)
+    sim = flopy.mf6.MFSimulation(sim_name=name, sim_ws=sub, exe_name=mf6 or "mf6")
+    flopy.mf6.ModflowTdis(sim, time_units="days", nper=nper,
+                          perioddata=[(pl, 12, 1.3) for pl in perlen])
+    flopy.mf6.ModflowIms(sim, complexity="moderate", linear_acceleration="bicgstab",
+                         outer_maximum=500, inner_maximum=500, under_relaxation="dbd",
+                         outer_dvclose=1e-7, inner_dvclose=1e-8)
+    gwf = flopy.mf6.ModflowGwf(sim, modelname=name, save_flows=True)
+    flopy.mf6.ModflowGwfdis(gwf, nlay=GLOV_NLAY, nrow=GLOV_NROW, ncol=GLOV_NCOL,
+                            delr=GLOV_DELR, delc=GLOV_DELC, top=GLOV_TOP, botm=GLOV_BOTM,
+                            length_units="meters")
+    flopy.mf6.ModflowGwfic(gwf, strt=GLOV_STRT)
+    flopy.mf6.ModflowGwfnpf(gwf, icelltype=0, k=GLOV_K, save_flows=True)
+    flopy.mf6.ModflowGwfsto(gwf, iconvert=0, ss=GLOV_S / (GLOV_TOP - GLOV_BOTM),
+                            sy=GLOV_S, transient={i: True for i in range(nper)})
+    nreach = GLOV_NROW
+    pak, con = [], []
+    for i in range(nreach):
+        # (ifno, cellid, rlen, rwid, rgrd, rtp, rbth, rhk, man, ncon, ustrf, ndv)
+        pak.append((i, (0, i, 0), GLOV_DELC, 45.0, 0.0005, GLOV_STRT, 1.0, 2.0, 0.03,
+                    (1 if i in (0, nreach - 1) else 2), 1.0, 0))
+        c = [i]
+        if i > 0:
+            c.append(i - 1)
+        if i < nreach - 1:
+            c.append(-(i + 1))
+        con.append(c)
+    sfr = flopy.mf6.ModflowGwfsfr(
+        gwf, save_flows=True, budgetcsv_filerecord=f"{name}.sfr.bud.csv",
+        nreaches=nreach, packagedata=pak, connectiondata=con,
+        perioddata={0: [(0, "INFLOW", GLOV_INFLOW)]}, unit_conversion=86400.0)
+    obs = {f"{name}.sfr.obs.csv": [(f"gwf_r{i + 1}", "sfr", i + 1) for i in range(nreach)]}
+    sfr.obs.initialize(filename=f"{name}.sfr.obs", continuous=obs)
+    q = GLOV_Q if pump else 0.0
+    flopy.mf6.ModflowGwfwel(gwf, stress_period_data={
+        p: [[(0, GLOV_WELL_ROW, GLOV_WELL_COL), -q]] for p in range(nper)})
+    flopy.mf6.ModflowGwfoc(gwf, saverecord=[])
+    sim.write_simulation(silent=True)
+    return sim, sub, name
+
+
+def _glover_leak_series(sub: str, name: str):
+    """Read the per-reach SFR->GWF obs csv -> (times, total-leakage) arrays."""
+    rows = list(csv.DictReader(open(os.path.join(sub, f"{name}.sfr.obs.csv"))))
+    nreach = GLOV_NROW
+    t = np.array([float(r["time"]) for r in rows])
+    leak = np.array([sum(float(r[f"GWF_R{i + 1}"]) for i in range(nreach)) for r in rows])
+    return t, leak
+
+
+def _solve_sfr_stream_depletion() -> SolvedValidation:
+    sim_p, sub_p, name = build_glover_sfr(pump=True)
+    okp, _ = sim_p.run_simulation(silent=True)
+    if not okp:
+        raise ModflowValidationError("SFR stream-depletion pumping solve did not converge")
+    sim_n, sub_n, _ = build_glover_sfr(pump=False)
+    okn, _ = sim_n.run_simulation(silent=True)
+    if not okn:
+        raise ModflowValidationError("SFR stream-depletion baseline solve did not converge")
+
+    tp, lp = _glover_leak_series(sub_p, name)
+    tn, ln = _glover_leak_series(sub_n, name)
+
+    fracs: list[float] = []
+    glovers: list[float] = []
+    rels: list[float] = []
+    for t in GLOVER_TIMES_D:
+        jp = int(np.argmin(np.abs(tp - t)))
+        jn = int(np.argmin(np.abs(tn - t)))
+        depl = float(lp[jp] - ln[jn])  # extra stream->aquifer transfer due to pumping
+        frac = depl / GLOV_Q
+        glov = glover_depletion_fraction(t)
+        fracs.append(frac)
+        glovers.append(glov)
+        rels.append(abs(frac - glov) / glov if glov else float("nan"))
+
+    # resolved window: times where the depletion fraction is non-trivial (>= 5%);
+    # below that the discretization noise on a tiny signal dominates the relative
+    # error and Glover's semi-infinite assumption is not yet informative.
+    resolved = [i for i, g in enumerate(glovers) if g >= 0.05]
+    max_rel = max((rels[i] for i in resolved), default=float("nan"))
+    rms_rel = (
+        float(math.sqrt(sum(rels[i] ** 2 for i in resolved) / len(resolved)))
+        if resolved else float("nan")
+    )
+    monotone = all(fracs[i] <= fracs[i + 1] + 1e-3 for i in range(len(fracs) - 1))
+    in_range = all(-0.02 <= f <= 1.02 for f in fracs)
+    validated = bool(
+        okp and okn and resolved and monotone and in_range and max_rel < 0.15
+    )
+    # headline on the latest sampled time (the best-resolved, most-informative point)
+    computed = fracs[-1]
+    reference = glovers[-1]
+
+    values: list[dict[str, Any]] = []
+    for t, f, g in zip(GLOVER_TIMES_D, fracs, glovers):
+        values.append({"x": float(t), "y": round(float(f), 4), "series": "MF6 SFR (superposition)"})
+        values.append({"x": float(t), "y": round(float(g), 4), "series": "Glover (1954) erfc"})
+    spec = {
+        "data": {"values": values},
+        "mark": {"type": "line", "point": True},
+        "encoding": {
+            "x": {"field": "x", "type": "quantitative", "title": "time since pumping start (days)"},
+            "y": {"field": "y", "type": "quantitative", "title": "stream-depletion fraction q(t)/Q"},
+            "color": {"field": "series", "type": "nominal", "title": ""},
+        },
+        "title": "SFR stream depletion vs Glover (1954) analytical",
+    }
+    caption = (
+        f"MF6 SFR-coupled well (a={GLOVER_A_M:.0f} m, Q={GLOV_Q:.0f} m3/d, T={GLOV_T:.0f} "
+        f"m2/d, S={GLOV_S:g}) depletion fraction {computed:.3f} at {GLOVER_TIMES_D[-1]:.0f} d "
+        f"vs Glover {reference:.3f} (delta {abs(computed - reference):.3f}); max relative "
+        f"error {max_rel:.1%} over the resolved window. Glover & Balmer (1954)."
+    )
+    return SolvedValidation(
+        case="sfr_stream_depletion",
+        computed_value=computed, reference_value=reference,
+        delta=abs(computed - reference), relative_error=rels[-1],
+        validated=validated, tolerance=0.15,
+        metrics={
+            "well_to_stream_distance_m": GLOVER_A_M,
+            "pumping_rate_m3_d": GLOV_Q,
+            "transmissivity_m2_d": GLOV_T,
+            "storage_coefficient": GLOV_S,
+            "times_days": list(GLOVER_TIMES_D),
+            "depletion_fraction_mf6": [round(f, 4) for f in fracs],
+            "depletion_fraction_glover": [round(g, 4) for g in glovers],
+            "relative_error_by_time": [round(r, 4) for r in rels],
+            "max_relative_error_resolved": max_rel,
+            "rms_relative_error_resolved": rms_rel,
+            "monotone_increasing": monotone,
+            "pump_converged": okp,
+            "baseline_converged": okn,
+        },
+        chart_spec=spec,
+        chart_title="SFR stream depletion vs Glover (1954) analytical",
+        chart_caption=caption,
+    )
+
+
+# --------------------------------------------------------------------------- #
+# MVR (Mover) routing: UZF rejected infiltration + DRN discharge -> SFR.
+#
+# The MVR package moves water between advanced packages. This case authors a
+# small watershed cell block where a UZF column rejects the infiltration its
+# vertical Ks cannot accept and a DRN discharges groundwater, and MVR routes BOTH
+# into the head reach of an SFR network. The V&V is mover mass CONSERVATION: the
+# volume SFR receives (FROM-MVR) equals the sum the providers give up (UZF
+# rejected-infiltration + DRN discharge TO-MVR), to machine precision, in the same
+# timestep. This answers the advanced-package-mover row: does MVR transfer rejected
+# UZF + package discharge into SFR reaches within one coupled timestep?
+# --------------------------------------------------------------------------- #
+
+MVR_NROW, MVR_NCOL = 10, 12
+MVR_DELR = MVR_DELC = 100.0
+MVR_TOP, MVR_BOTM = 50.0, 0.0
+MVR_K = 5.0
+MVR_SFR_ROW = 5
+MVR_NREACH = 8
+
+
+def build_mvr_routing(ws: str | None = None):
+    """Author + write the UZF+DRN -> SFR mover watershed deck. No run."""
+    import flopy
+
+    mf6 = resolve_mf6_binary()
+    ws = ws or _new_ws("mvr")
+    name = "mvr"
+    sim = flopy.mf6.MFSimulation(sim_name=name, sim_ws=ws, exe_name=mf6 or "mf6")
+    flopy.mf6.ModflowTdis(sim, time_units="days", nper=1, perioddata=[(10.0, 10, 1.2)])
+    flopy.mf6.ModflowIms(sim, complexity="moderate", linear_acceleration="bicgstab",
+                         outer_maximum=500, inner_maximum=500, under_relaxation="dbd",
+                         outer_dvclose=1e-7, inner_dvclose=1e-8)
+    gwf = flopy.mf6.ModflowGwf(sim, modelname=name, newtonoptions="NEWTON", save_flows=True)
+    flopy.mf6.ModflowGwfdis(gwf, nlay=1, nrow=MVR_NROW, ncol=MVR_NCOL,
+                            delr=MVR_DELR, delc=MVR_DELC, top=MVR_TOP, botm=MVR_BOTM,
+                            length_units="meters")
+    flopy.mf6.ModflowGwfic(gwf, strt=45.0)
+    flopy.mf6.ModflowGwfnpf(gwf, icelltype=1, k=MVR_K, save_flows=True)
+    flopy.mf6.ModflowGwfsto(gwf, iconvert=1, ss=1e-5, sy=0.2, transient={0: True})
+    flopy.mf6.ModflowGwfchd(gwf, stress_period_data=[
+        [(0, r, MVR_NCOL - 1), 40.0] for r in range(MVR_NROW)])
+    # SFR receiver: 8 reaches along a row, mover-enabled.
+    pak, con = [], []
+    for i in range(MVR_NREACH):
+        pak.append((i, (0, MVR_SFR_ROW, 1 + i), MVR_DELR, 5.0, 0.001, 44.0 - 0.1 * i,
+                    1.0, 0.2, 0.035, (1 if i in (0, MVR_NREACH - 1) else 2), 1.0, 0))
+        c = [i]
+        if i > 0:
+            c.append(i - 1)
+        if i < MVR_NREACH - 1:
+            c.append(-(i + 1))
+        con.append(c)
+    flopy.mf6.ModflowGwfsfr(
+        gwf, save_flows=True, mover=True, pname="SFR-1",
+        budgetcsv_filerecord=f"{name}.sfr.bud.csv",
+        nreaches=MVR_NREACH, packagedata=pak, connectiondata=con,
+        perioddata={0: [(0, "INFLOW", 1000.0)]}, unit_conversion=86400.0)
+    # DRN provider: groundwater discharge on upland cells (elev below the head).
+    flopy.mf6.ModflowGwfdrn(gwf, save_flows=True, mover=True, pname="DRN-1",
+                            stress_period_data=[[(0, r, 2), 43.0, 500.0] for r in range(2, 5)])
+    # UZF provider: infiltration (2 m/d) exceeding vertical Ks (0.5 m/d) -> rejected.
+    uzf_cells = [(0, r, 3) for r in range(2, 5)]
+    uzf_pack = [(n, cid, 1, -1, 0.1, 0.5, 0.05, 0.30, 0.08, 4.0)
+                for n, cid in enumerate(uzf_cells)]
+    uzf_spd = {0: [(n, 2.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0) for n in range(len(uzf_cells))]}
+    flopy.mf6.ModflowGwfuzf(
+        gwf, save_flows=True, mover=True, pname="UZF-1",
+        budget_filerecord=f"{name}.uzf.bud", simulate_et=False, linear_gwet=False,
+        nuzfcells=len(uzf_cells), ntrailwaves=7, nwavesets=40,
+        packagedata=uzf_pack, perioddata=uzf_spd)
+    # MVR: route DRN + UZF (rejected) discharge into SFR reach 0.
+    packages = [("DRN-1",), ("UZF-1",), ("SFR-1",)]
+    perioddata = [(prov, pid, "SFR-1", 0, "FACTOR", 1.0)
+                  for prov in ("DRN-1", "UZF-1") for pid in range(3)]
+    flopy.mf6.ModflowGwfmvr(gwf, print_flows=True, maxmvr=len(perioddata),
+                            maxpackages=len(packages), packages=packages,
+                            perioddata={0: perioddata})
+    flopy.mf6.ModflowGwfoc(gwf, budget_filerecord=f"{name}.cbc",
+                           saverecord=[("BUDGET", "ALL")])
+    sim.write_simulation(silent=True)
+    return sim, ws, name
+
+
+def _solve_mvr_routing() -> SolvedValidation:
+    import flopy
+
+    sim, ws, name = build_mvr_routing()
+    ok, _ = sim.run_simulation(silent=True)
+    if not ok:
+        raise ModflowValidationError("MVR routing solve did not converge")
+
+    gwf_bud = flopy.utils.CellBudgetFile(os.path.join(ws, f"{name}.cbc"), precision="double")
+    kk = gwf_bud.get_kstpkper()[-1]
+    drn_mvr = abs(float(np.sum(gwf_bud.get_data(text="DRN-TO-MVR", kstpkper=kk)[0]["q"])))
+    uzf_bud = flopy.utils.CellBudgetFile(os.path.join(ws, f"{name}.uzf.bud"), precision="double")
+    uzf_mvr = 0.0
+    for nm in uzf_bud.get_unique_record_names():
+        txt = nm.decode().strip() if isinstance(nm, bytes) else nm.strip()
+        if "MVR" in txt and "REJ" in txt:
+            uzf_mvr = abs(float(np.sum(uzf_bud.get_data(text=txt, kstpkper=kk)[0]["q"])))
+    rows = list(csv.DictReader(open(os.path.join(ws, f"{name}.sfr.bud.csv"))))
+    sfr_from_mvr = float(rows[-1]["FROM-MVR_IN"])
+
+    providers = drn_mvr + uzf_mvr
+    delta = abs(providers - sfr_from_mvr)
+    rel = delta / sfr_from_mvr if sfr_from_mvr else None
+    validated = bool(
+        rel is not None and rel < 1e-6 and uzf_mvr > 0.0 and drn_mvr > 0.0
+    )
+
+    values = [
+        {"x": "UZF rejected", "y": round(uzf_mvr, 3), "series": "provider TO-MVR"},
+        {"x": "DRN discharge", "y": round(drn_mvr, 3), "series": "provider TO-MVR"},
+        {"x": "SFR received", "y": round(sfr_from_mvr, 3), "series": "receiver FROM-MVR"},
+    ]
+    rule = [{"y": round(providers, 3), "label": "providers total (UZF + DRN)",
+             "strokeDash": [5, 4]}]
+    spec = {
+        "title": "MVR mass conservation: UZF rejected + DRN discharge routed to SFR",
+        "layer": [
+            {
+                "data": {"values": values},
+                "mark": {"type": "bar"},
+                "encoding": {
+                    "x": {"field": "x", "type": "nominal", "title": "mover flow"},
+                    "y": {"field": "y", "type": "quantitative", "title": "routed rate (m3/d)"},
+                    "color": {"field": "series", "type": "nominal", "title": ""},
+                },
+            },
+            {
+                "data": {"values": rule},
+                "mark": {"type": "rule"},
+                "encoding": {"y": {"field": "y", "type": "quantitative"}},
+            },
+        ],
+    }
+    caption = (
+        f"MVR routes UZF rejected infiltration {uzf_mvr:.1f} + DRN discharge "
+        f"{drn_mvr:.1f} = {providers:.1f} m3/d into SFR, which receives "
+        f"{sfr_from_mvr:.1f} m3/d (conservation delta {delta:.2e} m3/d, "
+        f"rel {rel:.1e}). modflow6-docs:gwf-mvr."
+    )
+    return SolvedValidation(
+        case="mvr_routing",
+        computed_value=sfr_from_mvr, reference_value=providers,
+        delta=delta, relative_error=rel, validated=validated, tolerance=1e-6,
+        metrics={
+            "uzf_rejected_to_mvr_m3_d": uzf_mvr,
+            "drn_discharge_to_mvr_m3_d": drn_mvr,
+            "providers_total_m3_d": providers,
+            "sfr_received_from_mvr_m3_d": sfr_from_mvr,
+            "conservation_delta_m3_d": delta,
+            "conservation_relative_error": rel,
+            "converged": ok,
+        },
+        chart_spec=spec,
+        chart_title="MVR mass conservation: UZF rejected + DRN discharge routed to SFR",
+        chart_caption=caption,
+    )
+
+
 _SOLVERS = {
     "newton_dry_rewet": _solve_newton_dry_rewet,
     "maw_crossaquifer": _solve_maw_crossaquifer,
     "hfb_barrier": _solve_hfb_barrier,
     "henry_saltwater": _solve_henry_saltwater,
+    "sfr_stream_depletion": _solve_sfr_stream_depletion,
+    "mvr_routing": _solve_mvr_routing,
 }
 
 

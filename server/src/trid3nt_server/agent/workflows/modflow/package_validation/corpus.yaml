@@ -15,3 +15,10 @@ modflow_package_validation:
 - does the BUY package reproduce the Henry saltwater intrusion wedge
 - variable density groundwater flow Henry problem 0.5 isochlor validation
 - BUY GWT density driven saltwater interface benchmark
+- does an SFR coupled well reproduce the Glover stream depletion curve
+- stream depletion by pumping fraction versus time Glover analytical validation
+- streamflow routing SFR well capture fraction from a nearby stream benchmark
+- how much of a pumping well water is captured from the stream over time
+- does the MVR mover package route rejected UZF infiltration into SFR reaches
+- MVR mover mass conservation UZF rejected infiltration and discharge to SFR
+- advanced package mover routing UZF SFR within one coupled timestep

@@ -29,14 +29,16 @@ _needs_mf6 = pytest.mark.skipif(not _HAS_MF6, reason="no mf6 binary resolvable")
 def test_case_registry_is_wellformed():
     assert set(core.VALIDATION_CASES) == {
         "newton_dry_rewet", "maw_crossaquifer", "hfb_barrier",
-        "prt_capture_zone", "henry_saltwater",
+        "prt_capture_zone", "henry_saltwater", "sfr_stream_depletion",
+        "mvr_routing",
     }
     for name, meta in core.VALIDATION_CASES.items():
         assert meta.case == name
         assert meta.package
         # every case cites a published/analytical reference source.
         assert any(tok in meta.reference_source
-                   for tok in ("modflow6-", "mf6-examples", "Grubb", "Henry"))
+                   for tok in ("modflow6-", "mf6-examples", "Grubb", "Henry",
+                               "Glover", "gwf-mvr"))
         assert meta.question
 
 
@@ -99,6 +101,34 @@ def test_build_henry_authors_buy_gwt_pair():
     assert os.path.isfile(os.path.join(ws, "henry.gwfgwt"))
     buy_txt = open(os.path.join(ws, "flow.buy")).read().upper()
     assert "DENSEREF" in buy_txt
+
+
+def test_glover_analytical_is_monotone_and_bounded():
+    # the closed-form depletion fraction rises with time, in (0, 1).
+    fracs = [core.glover_depletion_fraction(t) for t in core.GLOVER_TIMES_D]
+    assert all(0.0 < f < 1.0 for f in fracs)
+    assert all(fracs[i] < fracs[i + 1] for i in range(len(fracs) - 1))
+    assert core.GLOVER_A_M == 300.0
+
+
+def test_build_glover_sfr_authors_pump_and_baseline_decks():
+    for pump in (True, False):
+        sim, sub, name = core.build_glover_sfr(pump=pump)
+        assert os.path.isfile(os.path.join(sub, f"{name}.sfr"))  # SFR package
+        assert os.path.isfile(os.path.join(sub, f"{name}.wel"))
+        wel_txt = open(os.path.join(sub, f"{name}.wel")).read()
+        # the pumping deck writes a nonzero rate; the baseline writes zero
+        # (flopy writes the rate in scientific notation, e.g. -4.00000000E+02).
+        assert ("4.00000000E+02" in wel_txt) is pump
+
+
+def test_build_mvr_routing_authors_uzf_drn_sfr_mover():
+    sim, ws, name = core.build_mvr_routing()
+    for ext in ("sfr", "drn", "uzf", "mvr"):
+        assert os.path.isfile(os.path.join(ws, f"{name}.{ext}")), ext
+    mvr_txt = open(os.path.join(ws, f"{name}.mvr")).read().upper()
+    # DRN + UZF are movers routing into SFR.
+    assert "DRN-1" in mvr_txt and "UZF-1" in mvr_txt and "SFR-1" in mvr_txt
 
 
 # --------------------------------------------------------------------------- #
@@ -179,6 +209,34 @@ def test_henry_saltwater_reproduces_wedge():
     # 0.5-isochlor toe at an intermediate inland penetration (a real wedge).
     assert 0.0 < m["toe_penetration_from_sea_m"] < m["domain_length_m"]
     assert r.relative_error < 0.30
+
+
+@_needs_mf6
+def test_sfr_stream_depletion_matches_glover():
+    r = core.run_validation_case("sfr_stream_depletion")
+    assert r.validated is True
+    m = r.metrics
+    # the SFR depletion curve tracks Glover erfc over the resolved window ...
+    assert m["max_relative_error_resolved"] < 0.15
+    assert m["monotone_increasing"] is True
+    assert m["pump_converged"] and m["baseline_converged"]
+    # ... and both the mf6 and Glover late-time fractions are a real capture (>0.5).
+    assert r.computed_value > 0.5 and r.reference_value > 0.5
+    assert len(m["depletion_fraction_mf6"]) == len(core.GLOVER_TIMES_D)
+
+
+@_needs_mf6
+def test_mvr_routing_conserves_mass():
+    r = core.run_validation_case("mvr_routing")
+    assert r.validated is True
+    m = r.metrics
+    # SFR receives EXACTLY the sum drawn from the two providers (mover invariant).
+    assert m["sfr_received_from_mvr_m3_d"] == pytest.approx(
+        m["providers_total_m3_d"], rel=1e-6)
+    assert m["conservation_delta_m3_d"] < 1e-3
+    # both providers actually route (rejected UZF + DRN discharge are nonzero).
+    assert m["uzf_rejected_to_mvr_m3_d"] > 0.0
+    assert m["drn_discharge_to_mvr_m3_d"] > 0.0
 
 
 @_needs_mf6
