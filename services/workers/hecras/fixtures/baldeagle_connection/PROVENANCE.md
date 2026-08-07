@@ -61,3 +61,60 @@ diff the connection HDF schema were kept:
 
 See `schema_notes.md` for the HDF `Geometry/Structures` schema dump (the
 ADR 0171 diff reference) and the VERIFY results.
+
+## g09 mesh added -- the Sayers Dam SA/2D connection SOLVE pair (ADR 0174)
+
+ADR 0173 partitioned the connection blocker to a single data gap: the shipped
+`pure2d_reference/BaldEagleDamBrk.x09` (`Section - Storage Area Connection Data`,
+Sayers Dam, weir coef 3.1, HW/TW face-index pairing arrays) had no matching mesh,
+and the seeded `g01.hdf` had no matching `.xNN`. This job seeds that missing mesh:
+`BaldEagleDamBrk.g09.hdf` -- the 18066-cell `BaldEagleCr` 2D area whose sole
+`Type="Connection"` structure IS Sayers Dam (weir coef 3.1, width 80, one gate
+group, `Use 2D for Overflow=1`), the exact geometry the `x09` preprocessor was
+emitted from.
+
+### Source (matches the `x09`, NOT the g01/g11 above)
+
+- `x09` is a **HEC-RAS 6.6** distribution artifact (`pure2d_reference` sha
+  `ea239b50...`), so its matching mesh must come from the SAME distribution --
+  `Example_Projects_6_6.zip`, NOT the `7_0` zip the g01/g11 fixtures above came
+  from (a 7.0 mesh could renumber cells/faces vs the 6.2-authored `x09`).
+- `https://github.com/HydrologicEngineeringCenter/hec-downloads/releases/download/1.0.33/Example_Projects_6_6.zip`
+  (linked from the HEC-RAS download page; release tag `1.0.33`),
+  whole-zip **432,389,121 bytes**, whole-zip SHA-256
+  `ea239b506155a2dfeda2af80b3c2af948eef42c40218bcd65de472cfed386887` (the value
+  recorded by `pure2d_reference/README.md` when the `x09`/`b06` were seeded;
+  re-derivation would require the full 432 MB download, avoided here -- see below).
+- Path inside the zip:
+  `2D Unsteady Flow Hydraulics/BaldEagleCrkMulti2D/`
+- Public domain, U.S. Federal Government work (USACE HEC).
+
+### Members added (partial HTTP-Range extraction, per-member CRC-verified)
+
+The two members were pulled by an HTTP-Range read of the zip's central directory
++ each member's local header/deflate stream (no full 432 MB download; the
+tmpfs/disk-headroom directive). Each member's inflated bytes were verified against
+the zip's own **CRC-32** manifest entry (integrity vs the distribution's own
+checksum), and its SHA-256 recorded:
+
+| member | inflated bytes | SHA-256 |
+| --- | --- | --- |
+| `BaldEagleDamBrk.g09.hdf` | 11,690,739 | `2f9a72892816824276efdd12fc758a1c89eba7beac5ec491f15b83b03965173a` |
+| `BaldEagleDamBrk.g09` (GUI geometry text) | 659,649 | `8666056c38dfc0edfebdd27dcfd165495d37875c25ea034ec814dbd25eabe3d5` |
+
+### Numbering-match evidence (the ADR 0174 GATE-1 check)
+
+- **Provenance:** same zip (6_6, tag 1.0.33), same `BaldEagleDamBrk` project, same
+  geometry index 09 -- `x09` is by construction `g09`'s preprocessor output.
+- **Structural identity:** `g09.hdf` `Geometry/Structures/Attributes` carries ONE
+  structure, `Type="Connection"` `Connection="Sayers Dam"` `Weir Coef=3.1`
+  `Weir Width=80` `Gate Groups=1` `Use 2D for Overflow=1` -- byte-for-byte the
+  `x09` `Conn 6 Sayers Dam` block (`T 3.1 ... 80 ... gate 1`).
+- **Range:** every `x09` HW/TW face index (max 17779) and facepoint index
+  (max ~19340) falls inside `g09`'s 37594 faces / 19529 facepoints.
+- The `.xNN` preprocessor enumerates faces differently from the `.gNN.hdf` display
+  face-array rows (a raw index->row lookup lands off-centerline), so the
+  self-consistency of the pairing is proven by the SOLVE, not by row identity:
+  the pair drives `RasGeomPreprocess`+`RasUnsteady` to `Finished` with vol-accounting
+  error 0.0006% and NONZERO weir flow through the Sayers Dam connection (peak
+  ~300k cfs, gate flow 0). See ADR 0174.
