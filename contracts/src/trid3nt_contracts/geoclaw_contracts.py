@@ -62,6 +62,8 @@ __all__ = [
     "DEFAULT_AMR_LEVELS",
     "GEOCLAW_DEFAULT_FGMAX_ARRIVAL_TOL_M",
     "AmrRegionWindow",
+    "StormTrackPoint",
+    "WindDragLaw",
     "GeoClawRunArgs",
     "GeoClawDepthLayerURI",
     "GEOCLAW_DEPTH_STYLE_PRESET",
@@ -130,6 +132,45 @@ class AmrRegionWindow(GraceModel):
         if lo is not None and not (lo < v):
             raise ValueError(f"t_end_s ({v}) must be > t_start_s ({lo})")
         return v
+
+class StormTrackPoint(GraceModel):
+    """One forecast point of a parametric-Holland storm track (a surge run).
+
+    GeoClaw's ``geoclaw.surge`` parametric-storm path (Holland 1980) drives the
+    wind + pressure forcing from a track file: at each forecast time the storm's
+    eye location + intensity parameters define an analytic wind/pressure field.
+    This is one such point. Times are SECONDS RELATIVE TO LANDFALL (t=0 at
+    landfall; negative before) so a track is landfall-referenced regardless of the
+    calendar date.
+
+    Fields:
+        t_s: forecast time, seconds relative to landfall (t=0). Negative before
+            landfall. Points must be strictly ascending in ``t_s``.
+        lon, lat: the storm eye location at this time, EPSG:4326.
+        max_wind_speed_ms: maximum sustained wind speed, m/s (> 0).
+        max_wind_radius_m: radius of maximum winds (eyewall radius), m (> 0).
+        central_pressure_pa: minimum central (eye) pressure, Pa (> 0; a deeper
+            storm has a lower value, e.g. 95000 Pa = 950 hPa).
+        storm_radius_m: outer storm radius (radius of the outermost closed
+            isobar / gale extent), m (> 0). Default 500 km (GeoClaw's fill).
+    """
+
+    t_s: float
+    lon: float = Field(ge=-180.0, le=180.0)
+    lat: float = Field(ge=-90.0, le=90.0)
+    max_wind_speed_ms: float = Field(gt=0.0)
+    max_wind_radius_m: float = Field(gt=0.0)
+    central_pressure_pa: float = Field(gt=0.0)
+    storm_radius_m: float = Field(default=500000.0, gt=0.0)
+
+
+#: Wind-stress drag law for the surge wind forcing (GeoClaw ``surge_data.drag_law``):
+#:   "none"    — no wind stress (pressure + any prescribed forcing only).
+#:   "garratt" — Garratt (1977) capped linear drag (the GeoClaw default).
+#:   "powell"  — Powell (2003) sector-averaged drag (saturates/decreases at high wind).
+#: The choice measurably changes the surface stress -> the surge height (the knob
+#: must DO something, never silently no-op — the ADR 0143 lesson).
+WindDragLaw = Literal["none", "garratt", "powell"]
 
 #: The driver-scenario families GeoClaw can run. Open ``Literal`` so the engine
 #: may add scenarios (e.g. "landslide") without a wire break.
@@ -336,6 +377,36 @@ class GeoClawRunArgs(GraceModel):
     # global ``manning_n`` is used. Additive: None preserves prior behaviour.
     manning_coefficients: list[float] | None = None
     manning_break: list[float] = Field(default_factory=list)
+
+    # --- Storm surge (scenario="surge"): parametric-Holland forcing ------------
+    # A storm track drives GeoClaw's geoclaw.surge Holland-1980 wind + pressure
+    # forcing. Empty -> the worker synthesizes a NON-SITE-SPECIFIC demo storm
+    # making landfall at the AOI centroid (surfaced as synthetic, never a real
+    # storm). Only consumed for scenario="surge". Additive: absence is byte-neutral.
+    storm_track: list[StormTrackPoint] = Field(default_factory=list)
+    # The wind-stress drag law (surge). "garratt" (GeoClaw default) | "none" |
+    # "powell". A distinct law measurably changes the surface stress -> surge height.
+    wind_drag_law: WindDragLaw = "garratt"
+    # Run-window START, seconds relative to landfall (surge). A surge opens the
+    # window BEFORE landfall (< 0) so the storm spins up; the run spans
+    # [surge_t0_s, surge_t0_s + sim_duration_s]. None -> the worker derives it from
+    # the storm track (its earliest time). Ignored for dam_break / tsunami (t0=0).
+    surge_t0_s: float | None = None
+
+    @field_validator("storm_track")
+    @classmethod
+    def _validate_storm_track(
+        cls, value: list[StormTrackPoint]
+    ) -> list[StormTrackPoint]:
+        """Storm-track times must be strictly ascending (GeoClaw interpolates the
+        storm in time; a non-monotone track corrupts the interpolation)."""
+        for i in range(len(value) - 1):
+            if value[i].t_s >= value[i + 1].t_s:
+                raise ValueError(
+                    "storm_track times (t_s) must be strictly ascending, got "
+                    f"{[p.t_s for p in value]}"
+                )
+        return value
 
     @field_validator("scenario", mode="before")
     @classmethod

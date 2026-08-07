@@ -718,6 +718,11 @@ from ..workflows.geoclaw.amr_regions.amr_regions import geoclaw_amr_refinement_r
 # folder under workflows/geoclaw/regional_manning/: spatially-varying (banded)
 # Manning bottom-friction. Rides the inundation composer.
 from ..workflows.geoclaw.regional_manning.regional_manning import geoclaw_regional_manning_friction as _geoclaw_regional_manning_friction  # noqa: E402,F401 - GeoClaw CAND-S SWE+AMR knob (engine=geoclaw, tier=template)
+# geoclaw_storm_surge TEMPLATE (engine="geoclaw", tier="template"), one folder
+# under workflows/geoclaw/storm_surge/: parametric-Holland tropical-cyclone storm
+# surge (wind + pressure forcing from a storm track, selectable wind drag law).
+# Rides the inundation composer. ADR 0168.
+from ..workflows.geoclaw.storm_surge.storm_surge import geoclaw_storm_surge as _geoclaw_storm_surge  # noqa: E402,F401 - GeoClaw storm-surge front (engine=geoclaw, tier=template)
 # swan_wave_field TEMPLATE (engine="swan", tier="template"), one folder under
 # workflows/swan/wave_field/; EXCLUDED from the default retrieval pool,
 # surfaced only by the run_swan door's gate expansion. The composer chain

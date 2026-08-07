@@ -244,6 +244,37 @@ def build_geoclaw_build_spec(
         spec["dtopo_file"] = dtopo_dest
     if run_args.scenario == "surge" and surge_dest is not None:
         spec["surge_forcing_file"] = surge_dest
+    # --- Storm surge parametric-Holland forcing (scenario="surge") ------------
+    # Thread the storm track (as the 7-tuple rows the worker's render_storm_file
+    # consumes), the wind-stress drag law, and the run-window start t0_s. The
+    # worker synthesizes a NON-SITE-SPECIFIC demo storm when the track is empty,
+    # so an empty track is intentional (surfaced as synthetic downstream). t0_s
+    # opens the window BEFORE landfall so the storm spins up: the explicit
+    # surge_t0_s when supplied, else the track's earliest time, else half the run
+    # before landfall (a demo default) -- always negative so the run reaches
+    # landfall (t=0) mid-window.
+    if run_args.scenario == "surge":
+        if run_args.storm_track:
+            spec["storm_track"] = [
+                [
+                    float(p.t_s),
+                    float(p.lon),
+                    float(p.lat),
+                    float(p.max_wind_speed_ms),
+                    float(p.max_wind_radius_m),
+                    float(p.central_pressure_pa),
+                    float(p.storm_radius_m),
+                ]
+                for p in run_args.storm_track
+            ]
+        spec["wind_drag_law"] = str(run_args.wind_drag_law)
+        if run_args.surge_t0_s is not None:
+            t0_s = float(run_args.surge_t0_s)
+        elif run_args.storm_track:
+            t0_s = float(min(p.t_s for p in run_args.storm_track))
+        else:
+            t0_s = -0.5 * float(run_args.sim_duration_s)
+        spec["t0_s"] = t0_s
     # Explicit AMR refinement windows (region-based flagging): thread ONLY when the
     # user/template supplied them (empty list preserves the default-flagging deck).
     if run_args.amr_regions:

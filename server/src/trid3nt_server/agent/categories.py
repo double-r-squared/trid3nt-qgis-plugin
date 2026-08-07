@@ -311,6 +311,7 @@ PRIMARY_CATEGORY: dict[str, str] = {
     "geoclaw_tsunami_gauge_timeseries": "hazard_modeling",
     "geoclaw_amr_refinement_regions": "hazard_modeling",
     "geoclaw_regional_manning_friction": "hazard_modeling",
+    "geoclaw_storm_surge": "hazard_modeling",
     # USGS post-fire debris-flow hazard composer (pfdf: Staley 2017 M1
     # likelihood + Gartner 2014 emergency volume + Cannon 2010 combined class
     # over a delineated stream-segment network). Filed as a hazard engine;

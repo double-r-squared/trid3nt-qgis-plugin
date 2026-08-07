@@ -35,6 +35,8 @@ from services.workers.geoclaw.setrun_builder import (
     render_makefile,
     render_qinit_data,
     render_setrun_py,
+    render_storm_file,
+    resolve_storm_track,
 )
 
 _AOI = [-85.75, 29.55, -85.25, 30.20]  # Mexico Beach-ish demo box
@@ -208,8 +210,114 @@ def test_render_setrun_surge_has_neither_qinit_nor_dtopo():
     ast.parse(text)
     assert "qinit_data.qinit_type" not in text
     assert "dtopo_data.dtopofiles" not in text
-    # sea_level offset is the surge v0.1 fallback.
     assert "geo_data.sea_level = 1.5" in text
+
+
+# ===========================================================================
+# (surge) parametric-Holland wind + pressure forcing machinery.
+# ===========================================================================
+def _surge_spec(**over) -> dict:
+    base = {
+        "scenario": "surge",
+        "bbox": list(_AOI),
+        "topo_file": "topo.asc",
+        "sim_duration_s": 54000.0,
+        "t0_s": -43200.0,
+        "output_frames": 10,
+        "amr_levels": 2,
+        "wind_drag_law": "garratt",
+        "storm_track": [
+            [-43200.0, -85.6, 27.0, 45.0, 46000.0, 96000.0, 500000.0],
+            [0.0, -85.5, 29.8, 49.0, 46000.0, 95000.0, 500000.0],
+            [10800.0, -85.4, 31.0, 40.0, 46000.0, 96000.0, 500000.0],
+        ],
+    }
+    base.update(over)
+    return base
+
+
+def test_render_setrun_surge_wires_wind_and_pressure_forcing():
+    text = render_setrun_py(parse_build_spec(_surge_spec()))
+    ast.parse(text)
+    assert "surge_data = rundata.surge_data" in text
+    assert "surge_data.wind_forcing = True" in text
+    assert "surge_data.pressure_forcing = True" in text
+    assert "surge_data.storm_specification_type = 'holland80'" in text
+    assert "storm.storm" in text
+    # surge geo physics constants + the storm aux layout (3 shallow + 1 friction
+    # + 3 storm = 7) matching surge_data's default wind/pressure indices.
+    assert "geo_data.coriolis_forcing = True" in text
+    assert "clawdata.num_aux = 7" in text
+    assert 'amrdata.aux_type = ["center", "capacity", "yleft", "center", "center", "center", "center"]' in text
+    # the run opens BEFORE landfall (t0 < 0) so the storm spins up.
+    assert "clawdata.t0 = -43200.0" in text
+    assert "clawdata.tfinal = 10800.0" in text
+
+
+@pytest.mark.parametrize("law,code", [("none", 0), ("garratt", 1), ("powell", 2)])
+def test_render_setrun_surge_drag_law_selects_distinct_code(law, code):
+    text = render_setrun_py(parse_build_spec(_surge_spec(wind_drag_law=law)))
+    assert f"surge_data.drag_law = {code}" in text
+
+
+def test_parse_rejects_bad_drag_law():
+    with pytest.raises(GeoClawDeckError):
+        parse_build_spec(_surge_spec(wind_drag_law="quadratic"))
+
+
+def test_parse_rejects_nonascending_storm_track():
+    bad = _surge_spec(storm_track=[
+        [0.0, -85.5, 29.8, 45.0, 46000.0, 96000.0, 500000.0],
+        [-3600.0, -85.6, 27.0, 45.0, 46000.0, 96000.0, 500000.0],  # goes backwards
+    ])
+    with pytest.raises(GeoClawDeckError):
+        parse_build_spec(bad)
+
+
+def test_render_storm_file_geoclaw_format():
+    spec = parse_build_spec(_surge_spec())
+    txt = render_storm_file(spec)
+    lines = txt.splitlines()
+    assert int(lines[0]) == 3               # num_casts
+    assert lines[1].strip() == "0.0"        # time_offset (times are s from landfall)
+    assert lines[2].strip() == ""           # blank header line
+    rows = [r for r in lines[3:] if r.strip()]
+    assert len(rows) == 3
+    assert all(len(r.split()) == 7 for r in rows)  # 7 GeoClaw storm columns
+    # first data row is the earliest track point (t = -43200 s).
+    assert float(rows[0].split()[0]) == -43200.0
+
+
+def test_resolve_storm_track_synthesizes_demo_when_absent():
+    spec = parse_build_spec(_surge_spec(storm_track=[]))
+    track, is_synth = resolve_storm_track(spec)
+    assert is_synth is True
+    assert len(track) >= 2
+    # the demo track brackets the run window [t0, t0 + duration].
+    assert track[0][0] <= spec.t0_s
+    assert track[-1][0] >= spec.t0_s + spec.sim_duration_s
+    # a user track is passed through verbatim (not synthesized).
+    spec2 = parse_build_spec(_surge_spec())
+    track2, is_synth2 = resolve_storm_track(spec2)
+    assert is_synth2 is False
+    assert len(track2) == 3
+
+
+def test_surge_deck_stores_storm_file_and_drag_provenance(tmp_path: Path):
+    manifest = build_geoclaw_deck(_surge_spec(wind_drag_law="powell"), tmp_path)
+    assert "storm.storm" in manifest.files_written
+    assert (tmp_path / "storm.storm").exists()
+    assert "powell" in manifest.driver_descriptor
+
+
+def test_non_surge_scenarios_keep_three_aux_byte_layout():
+    # dam_break / tsunami keep the 3-aux shallow layout + t0 == 0 (byte-neutral).
+    for scen in ("dam_break", "tsunami"):
+        text = render_setrun_py(parse_build_spec(_spec(scenario=scen)))
+        assert "clawdata.num_aux = 3" in text
+        assert 'amrdata.aux_type = ["center", "capacity", "yleft"]' in text
+        assert "clawdata.t0 = 0.0" in text
+        assert "surge_data" not in text
 
 
 def test_render_setrun_amr_ratios_scale_with_levels():
@@ -353,14 +461,24 @@ def test_build_tsunami_staged_dtopo_skips_maketopo(tmp_path: Path):
     assert "my_dtopo.tt3" in (tmp_path / "setrun.py").read_text()
 
 
-def test_build_surge_deck_writes_setrun_and_makefile_only(tmp_path: Path):
+def test_build_surge_deck_writes_setrun_makefile_and_storm_file(tmp_path: Path):
     manifest = build_geoclaw_deck(_spec(scenario="surge", sea_level_m=2.0), tmp_path)
     assert (tmp_path / "setrun.py").exists()
     assert (tmp_path / "Makefile").exists()
     assert not (tmp_path / "qinit.xyz").exists()
     assert not (tmp_path / "maketopo.py").exists()
-    # surge writes no scenario source file -- only the setrun.py + the Makefile.
-    assert manifest.files_written == ["setrun.py", "Makefile"]
+    # surge authors the parametric-Holland storm track file (no user track ->
+    # a synthetic demo track), alongside the setrun.py + the Makefile.
+    assert (tmp_path / "storm.storm").exists()
+    assert manifest.files_written == ["setrun.py", "Makefile", "storm.storm"]
+    # GeoClaw storm-file header: <num_casts>\n<time_offset>\n<blank>\n then rows.
+    storm_lines = (tmp_path / "storm.storm").read_text().splitlines()
+    n_casts = int(storm_lines[0])
+    assert n_casts >= 2  # a demo track has multiple forecast rows
+    assert storm_lines[1].strip() == "0.0"  # time_offset 0 -> times are s from landfall
+    data_rows = [r for r in storm_lines[3:] if r.strip()]
+    assert len(data_rows) == n_casts
+    assert all(len(r.split()) == 7 for r in data_rows)  # 7 GeoClaw storm columns
 
 
 def test_source_lonlat_overrides_centroid_in_qinit(tmp_path: Path):

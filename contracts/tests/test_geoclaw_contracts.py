@@ -28,6 +28,7 @@ from trid3nt_contracts.geoclaw_contracts import (
     AmrRegionWindow,
     GeoClawDepthLayerURI,
     GeoClawRunArgs,
+    StormTrackPoint,
 )
 from trid3nt_contracts.execution import LayerURI
 
@@ -50,6 +51,42 @@ def _depth_layer(**overrides: object) -> GeoClawDepthLayerURI:
     )
     base.update(overrides)
     return GeoClawDepthLayerURI(**base)  # type: ignore[arg-type]
+
+
+# --------------------------------------------------------------------------- #
+# Storm-surge fields (parametric-Holland forcing) -- ADR 0168.
+# --------------------------------------------------------------------------- #
+def test_surge_fields_default_neutral() -> None:
+    a = GeoClawRunArgs(bbox=BBOX, scenario="surge")
+    assert a.storm_track == []
+    assert a.wind_drag_law == "garratt"
+    assert a.surge_t0_s is None
+
+
+def test_surge_wind_drag_law_literal() -> None:
+    for law in ("none", "garratt", "powell"):
+        assert GeoClawRunArgs(bbox=BBOX, scenario="surge", wind_drag_law=law).wind_drag_law == law
+    with pytest.raises(ValidationError):
+        GeoClawRunArgs(bbox=BBOX, scenario="surge", wind_drag_law="quadratic")
+
+
+def test_storm_track_point_and_ascending_validator() -> None:
+    pts = [
+        StormTrackPoint(t_s=-43200, lon=-94.9, lat=27.0, max_wind_speed_ms=45,
+                        max_wind_radius_m=46000, central_pressure_pa=96000),
+        StormTrackPoint(t_s=0, lon=-94.7, lat=29.3, max_wind_speed_ms=49,
+                        max_wind_radius_m=46000, central_pressure_pa=95000),
+    ]
+    a = GeoClawRunArgs(bbox=BBOX, scenario="surge", storm_track=pts, surge_t0_s=-43200.0)
+    assert len(a.storm_track) == 2
+    assert a.storm_track[0].storm_radius_m == 500000.0  # default fill
+    # non-ascending times rejected.
+    with pytest.raises(ValidationError):
+        GeoClawRunArgs(bbox=BBOX, scenario="surge", storm_track=list(reversed(pts)))
+    # non-positive central pressure rejected.
+    with pytest.raises(ValidationError):
+        StormTrackPoint(t_s=0, lon=-94, lat=29, max_wind_speed_ms=40,
+                        max_wind_radius_m=40000, central_pressure_pa=0)
 
 
 # --------------------------------------------------------------------------- #

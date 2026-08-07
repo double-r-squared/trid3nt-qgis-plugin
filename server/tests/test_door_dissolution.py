@@ -72,6 +72,7 @@ EXPECTED_TEMPLATES = {
     "geoclaw_tsunami_gauge_timeseries",  # ADR 0123 continuation #3: coastal gauge water-level time series
     "geoclaw_amr_refinement_regions",  # GeoClaw CAND-S: explicit lat/lon/time AMR region control
     "geoclaw_regional_manning_friction",  # GeoClaw CAND-S: spatially-varying banded Manning friction
+    "geoclaw_storm_surge",  # ADR 0168: parametric-Holland tropical-cyclone storm-surge front (wind+pressure from a storm track, drag-law knob)
     "openquake_psha",
     "openquake_scenario_gmf",  # OpenQuake scenario GMF (ADR 0164): single-rupture correlated ground-motion field, mean + realization spread
     "openquake_secondary_perils",  # OpenQuake secondary-perils (ADR 0164): scenario-GMF-driven liquefaction (Zhu 2015) + Newmark landslide screening
