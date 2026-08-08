@@ -20,8 +20,24 @@ TWO PHASES, one source of truth:
 - SERVE (per request, ``render_plugins_xml`` / ``served_zip_path`` -- mounted
   by ``tool_catalog_http._handle_http``). ``GET /plugin-repo/plugins.xml``
   returns the packaged index with its ``download_url`` host filled in from the
-  REQUEST's own Host header; ``GET /plugin-repo/<zip>`` serves the packaged zip
-  bytes.
+  REQUEST's own Host header; ``GET /plugin-repo/<versioned-zip>`` serves the
+  packaged zip bytes as a fallback/manual-QA path.
+
+- FRESH ZIP (per request, ``build_fresh_zip`` -- also mounted by
+  ``tool_catalog_http._handle_http`` at the FIXED path
+  :data:`FRESH_ZIP_URL_PATH`, ``/plugin-repo/trid3nt.zip``). This is the
+  ``download_url`` every ``plugins.xml`` now advertises. It builds straight
+  from ``qgis-plugin/trid3nt/`` on the daemon's OWN checkout -- no prior
+  ``package_plugin_repo()`` deploy step required -- and mtime-caches the
+  result (a cheap stat-only signature over the source tree; a real rebuild
+  only happens when a file's size or mtime actually changed), so Install-
+  from-ZIP / Plugin Manager's download is never stale behind a forgotten
+  packaging step. The zip carries a build-time provenance stamp
+  (``trid3nt/installed_version.txt``, git sha + branch) using the SAME
+  two-line format ``scripts/install_plugin.sh`` writes into an rsync-
+  installed profile -- today's PACKAGE zip excludes that file entirely (see
+  ``_ZIP_IGNORE``), so a zip install previously had NO provenance a human
+  could eyeball; the fresh-build path fixes that too.
 
 HOST DERIVATION (the bug the stopgap static server had): a hardcoded IP in
 ``plugins.xml`` breaks the moment the client dials a different host. The
@@ -29,6 +45,22 @@ packaged ``plugins.xml`` therefore carries a :data:`HOST_SENTINEL` in place of
 the host; ``render_plugins_xml`` substitutes the per-request Host at serve
 time, so a tailnet client's "Add repository" URL always round-trips to a
 reachable zip URL.
+
+CACHE-BUSTING: ``download_url`` carries ``?v=<version>`` (the same
+metadata.txt version driving everything else) so a client or intermediate
+cache that keyed on the URL sees a new URL the moment the plugin version
+changes. The server does not read or validate ``?v=`` -- it always serves
+whatever ``build_fresh_zip`` currently builds; the query string is a pure
+client/cache hint.
+
+SAFARI CAVEAT: a browser (not QGIS itself) fetching ``download_url`` directly
+-- e.g. a human clicking the link inside a rendered ``plugins.xml`` -- can
+still auto-decompress the download depending on the browser's "open safe
+files after downloading" setting (Safari on macOS defaults this on for
+``application/zip``). ``Content-Type: application/zip`` +
+``Content-Disposition: attachment`` reduce the chance but cannot eliminate
+it -- that setting is entirely client-side. QGIS's OWN Plugin Manager
+download path does not go through the browser and is unaffected.
 
 VERSION (metadata.txt-driven, no auto-bump): ``<version>`` in ``plugins.xml``
 and the zip's ``metadata.txt`` are the SAME ``version=`` line straight from
@@ -47,11 +79,13 @@ agent's event loop (it would stall the WS keepalive).
 from __future__ import annotations
 
 import hashlib
+import io
 import json
 import logging
 import os
 import shutil
 import subprocess
+import threading
 import zipfile
 from pathlib import Path
 from typing import Any
@@ -61,10 +95,12 @@ logger = logging.getLogger("trid3nt_server.plugin_repo")
 __all__ = [
     "PLUGIN_NAME",
     "HOST_SENTINEL",
+    "FRESH_ZIP_URL_PATH",
     "PluginRepoBuildError",
     "package_plugin_repo",
     "render_plugins_xml",
     "served_zip_path",
+    "build_fresh_zip",
     "read_manifest",
     "build_plugins_repo_xml",
     "build_version_payload",
@@ -77,6 +113,12 @@ _DEFAULT_QGIS_MINIMUM_VERSION = "3.28"
 #: ``render_plugins_xml`` swaps it for the per-request Host so the served index
 #: always points at a host the client can actually reach.
 HOST_SENTINEL = "__TRID3NT_DAEMON_HOST__"
+
+#: Fixed-name route the FRESH zip is served at (see module docstring). The
+#: literal string in ``tool_catalog_http.py``'s route dispatch MUST match
+#: this -- it is duplicated there rather than imported to follow that
+#: module's existing per-branch literal-path convention.
+FRESH_ZIP_URL_PATH = "/plugin-repo/trid3nt.zip"
 
 #: Files/dirs never carried into the zip (caches, hidden files, and the
 #: dev-loop marker ``install_plugin.sh`` drops into an installed profile).
@@ -162,16 +204,15 @@ def _plugin_version(plugin_src: Path) -> str:
     return version
 
 
-def _tree_sha(plugin_src: Path) -> str:
-    """A stable content hash of the packaged plugin tree.
-
-    Hashes every file that WOULD land in the zip (same excludes as
-    ``_build_zip``: caches, ``.pyc``, hidden files, the installed-version
-    marker), each as ``<relpath>\\0<bytes>``, in sorted-relpath order. Used
-    only for the deploy-time version-drift warning -- two byte-identical trees
-    hash the same regardless of filesystem mtimes.
+def _iter_packaged_files(plugin_src: Path):
+    """Every file that belongs in a packaged trid3nt zip, in sorted-relpath
+    order -- the one exclude rule (``__pycache__``, ``.pyc``, hidden files,
+    the installed-version marker) shared by ``_tree_sha``, the fresh-zip
+    mtime signature, and the in-memory fresh-build zip itself. (``_build_zip``
+    -- the deploy-time PACKAGE path -- expresses the same rule as a
+    ``shutil.ignore_patterns`` for ``copytree`` instead; kept separate since
+    it walks a different way.)
     """
-    h = hashlib.sha256()
     for item in sorted(plugin_src.rglob("*")):
         if not item.is_file():
             continue
@@ -180,11 +221,37 @@ def _tree_sha(plugin_src: Path) -> str:
             continue
         if item.suffix == ".pyc" or item.name in _TREE_HASH_EXCLUDE_NAMES:
             continue
+        yield item
+
+
+def _tree_sha(plugin_src: Path) -> str:
+    """A stable content hash of the packaged plugin tree.
+
+    Hashes every packaged file (see ``_iter_packaged_files``) as
+    ``<relpath>\\0<bytes>``, in sorted-relpath order. Used only for the
+    deploy-time version-drift warning -- two byte-identical trees hash the
+    same regardless of filesystem mtimes.
+    """
+    h = hashlib.sha256()
+    for item in _iter_packaged_files(plugin_src):
         rel = item.relative_to(plugin_src).as_posix()
         h.update(rel.encode("utf-8"))
         h.update(b"\x00")
         h.update(item.read_bytes())
     return h.hexdigest()
+
+
+def _source_signature(plugin_src: Path) -> tuple[tuple[str, int, int], ...]:
+    """Cheap (stat-only, no file reads) signature of the packaged tree, used
+    to invalidate the fresh-zip cache: ``(relpath, size, mtime_ns)`` per
+    packaged file (see ``_iter_packaged_files``), sorted-relpath order. Unlike
+    ``_tree_sha`` this never reads file bytes -- it is meant to run on every
+    request."""
+    entries = []
+    for item in _iter_packaged_files(plugin_src):
+        st = item.stat()
+        entries.append((item.relative_to(plugin_src).as_posix(), st.st_size, st.st_mtime_ns))
+    return tuple(entries)
 
 
 # ---------------------------------------------------------------------------
@@ -218,6 +285,69 @@ def _build_zip(repo_root: Path, plugin_src: Path, dest_zip: Path) -> None:
         tmp_zip.replace(dest_zip)
     finally:
         shutil.rmtree(staging_root, ignore_errors=True)
+
+
+def _build_zip_bytes(repo_root: Path, plugin_src: Path) -> bytes:
+    """In-memory build for :func:`build_fresh_zip` -- same top-level
+    ``trid3nt/`` layout + LICENSE + excludes as ``_build_zip``, plus a
+    build-time provenance stamp (``trid3nt/installed_version.txt``, git sha +
+    branch in the same two-line format ``scripts/install_plugin.sh`` writes)
+    that the deploy-time PACKAGE zip deliberately excludes."""
+    buf = io.BytesIO()
+    with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as zf:
+        for item in _iter_packaged_files(plugin_src):
+            arcname = f"{PLUGIN_NAME}/{item.relative_to(plugin_src).as_posix()}"
+            zf.write(item, arcname)
+        license_src = repo_root / "qgis-plugin" / "LICENSE"
+        if license_src.is_file():
+            zf.write(license_src, f"{PLUGIN_NAME}/LICENSE")
+        sha, branch = _git_provenance(repo_root)
+        zf.writestr(f"{PLUGIN_NAME}/installed_version.txt", f"{sha}\n{branch}\n")
+    return buf.getvalue()
+
+
+#: In-memory fresh-zip cache: ``str(plugin_src) -> (signature, zip_bytes,
+#: version, zip_filename)``. One entry in practice (one plugin source tree
+#: per daemon process); keyed by path anyway so tests that swap
+#: ``TRID3NT_REPO_ROOT`` never see another test's bytes.
+_fresh_zip_cache: dict[str, tuple[Any, bytes, str, str]] = {}
+_fresh_zip_lock = threading.Lock()
+
+
+def build_fresh_zip(repo_root: Path | None = None) -> tuple[bytes, str, str]:
+    """SYNC -- build (or reuse a cached) plugin zip straight from the source
+    tree ``qgis-plugin/trid3nt/``. See the module docstring's FRESH ZIP
+    section. No prior ``package_plugin_repo()`` call is required; every call
+    re-stats the source tree (cheap -- ``_source_signature`` never reads file
+    bytes) and only re-zips when a file's size or mtime actually changed, so
+    a hot source edit is served on the very next request.
+
+    Returns ``(zip_bytes, version, zip_filename)`` -- ``zip_filename`` is the
+    versioned display name (``trid3nt-<version>.zip``) for
+    Content-Disposition; the served URL itself is the fixed
+    :data:`FRESH_ZIP_URL_PATH`.
+
+    Raises :class:`PluginRepoBuildError` when there is no source tree on this
+    checkout (mirrors ``package_plugin_repo``).
+    """
+    root = repo_root if repo_root is not None else _repo_root()
+    plugin_src = _plugin_src_dir(root)
+    if not plugin_src.is_dir():
+        raise PluginRepoBuildError(f"plugin source tree not found: {plugin_src}")
+
+    cache_key = str(plugin_src)
+    signature = _source_signature(plugin_src)
+    with _fresh_zip_lock:
+        cached = _fresh_zip_cache.get(cache_key)
+        if cached is not None and cached[0] == signature:
+            _sig, data, version, zip_filename = cached
+            return data, version, zip_filename
+
+        version = _plugin_version(plugin_src)
+        zip_filename = f"{PLUGIN_NAME}-{version}.zip"
+        data = _build_zip_bytes(root, plugin_src)
+        _fresh_zip_cache[cache_key] = (signature, data, version, zip_filename)
+        return data, version, zip_filename
 
 
 # ---------------------------------------------------------------------------
@@ -372,7 +502,12 @@ def package_plugin_repo(served_dir: Path | str | None = None) -> dict[str, Any]:
             stale.unlink()
     _build_zip(repo_root, plugin_src, dest / zip_filename)
 
-    download_url = f"http://{HOST_SENTINEL}/plugin-repo/{zip_filename}"
+    # download_url points at the FIXED fresh-build endpoint (not this
+    # versioned zip_filename -- that artifact is still written to `dest` as a
+    # manual-QA/fallback path, see served_zip_path) so Plugin Manager never
+    # depends on this deploy-time packaging step having run; ?v= is a pure
+    # cache-busting hint, see module docstring.
+    download_url = f"http://{HOST_SENTINEL}{FRESH_ZIP_URL_PATH}?v={version}"
     xml = build_plugins_repo_xml(plugin_src, download_url, zip_filename, version)
     (dest / "plugins.xml").write_bytes(xml)
 
@@ -455,6 +590,19 @@ def _run_git(repo_root: Path, *args: str) -> str | None:
 def _git_head_sha(repo_root: Path) -> str:
     """Full HEAD sha, or ``"unknown"`` (not a git checkout / git missing)."""
     return _run_git(repo_root, "rev-parse", "HEAD") or "unknown"
+
+
+def _git_provenance(repo_root: Path) -> tuple[str, str]:
+    """Short git sha + branch for ``repo_root``, the same two values
+    ``scripts/install_plugin.sh`` stamps into an rsync-installed profile's
+    ``installed_version.txt`` -- ``"unknown"`` for either when this checkout
+    is not a git repo (matches that script's own fallback). Used by
+    :func:`_build_zip_bytes` to stamp the same file into the fresh-build zip.
+    """
+    head = _git_head_sha(repo_root)
+    sha = head[:7] if head != "unknown" else "unknown"
+    branch = _run_git(repo_root, "rev-parse", "--abbrev-ref", "HEAD") or "unknown"
+    return sha, branch
 
 
 def build_version_payload() -> dict[str, Any]:

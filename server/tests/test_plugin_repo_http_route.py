@@ -20,6 +20,7 @@ Everything runs against a throwaway plugin tree + served dir under ``tmp_path``
 from __future__ import annotations
 
 import asyncio
+import io
 import json
 import logging
 import subprocess
@@ -213,7 +214,7 @@ def test_render_substitutes_host(fake_repo):
     assert plugin_el.find("file_name").text == "trid3nt-1.2.3.zip"
     assert (
         plugin_el.find("download_url").text
-        == "http://myhost:8766/plugin-repo/trid3nt-1.2.3.zip"
+        == "http://myhost:8766/plugin-repo/trid3nt.zip?v=1.2.3"
     )
 
 
@@ -242,6 +243,82 @@ def test_served_zip_path_rejects(fake_repo, bad):
     plugin_repo.package_plugin_repo()
     with pytest.raises(FileNotFoundError):
         plugin_repo.served_zip_path(bad)
+
+
+# ---------------------------------------------------------------------------
+# build_fresh_zip -- on-demand build straight from source, mtime-cached
+# ---------------------------------------------------------------------------
+
+
+def test_build_fresh_zip_layout_and_version(fake_repo):
+    data, version, zip_filename = plugin_repo.build_fresh_zip()
+    assert version == "1.2.3"
+    assert zip_filename == "trid3nt-1.2.3.zip"
+
+    dest = fake_repo.parent / "fresh.zip"
+    dest.write_bytes(data)
+    assert dest.read_bytes()[:4] == b"PK\x03\x04"
+    with zipfile.ZipFile(dest) as zf:
+        assert zf.testzip() is None
+        names = zf.namelist()
+        assert all(n.startswith("trid3nt/") for n in names), names
+        assert "trid3nt/__init__.py" in names
+        assert "trid3nt/net/__init__.py" in names
+        assert "trid3nt/metadata.txt" in names
+        assert "trid3nt/LICENSE" in names
+        assert not any("__pycache__" in n for n in names)
+        assert not any(n.endswith(".pyc") for n in names)
+        assert not any(n.endswith("/.hidden") for n in names)
+        meta_text = zf.read("trid3nt/metadata.txt").decode("utf-8")
+        assert "version=1.2.3\n" in meta_text
+        # Build-time provenance stamp -- present here even though the
+        # deploy-time PACKAGE zip excludes it (excluded from the SOURCE tree
+        # too, per _make_fake_repo -- what's asserted here is that
+        # build_fresh_zip writes its OWN fresh copy regardless).
+        provenance = zf.read("trid3nt/installed_version.txt").decode("utf-8")
+        assert provenance.count("\n") == 2
+        assert provenance.splitlines() != ["dev"]  # not the source-tree bait file
+
+
+def test_build_fresh_zip_missing_source_tree_raises(tmp_path, monkeypatch):
+    empty_root = tmp_path / "empty"
+    empty_root.mkdir()
+    monkeypatch.setenv("TRID3NT_REPO_ROOT", str(empty_root))
+    with pytest.raises(plugin_repo.PluginRepoBuildError):
+        plugin_repo.build_fresh_zip()
+
+
+def test_build_fresh_zip_reflects_source_edit_without_repackage(fake_repo):
+    data_before, version_before, _ = plugin_repo.build_fresh_zip()
+    with zipfile.ZipFile(io.BytesIO(data_before)) as zf:
+        before_text = zf.read("trid3nt/plugin.py").decode("utf-8")
+    assert before_text == "# plugin code\n"
+
+    plugin_file = fake_repo / "qgis-plugin" / "trid3nt" / "plugin.py"
+    # Different LENGTH (not just content) so the cache-invalidation signature
+    # changes on size alone -- independent of filesystem mtime resolution.
+    plugin_file.write_text("# edited body -- longer than before\n", encoding="utf-8")
+
+    data_after, version_after, _ = plugin_repo.build_fresh_zip()
+    assert version_after == version_before  # no version bump, still reflected
+    with zipfile.ZipFile(io.BytesIO(data_after)) as zf:
+        after_text = zf.read("trid3nt/plugin.py").decode("utf-8")
+    assert after_text == "# edited body -- longer than before\n"
+    assert data_after != data_before
+
+
+def test_build_fresh_zip_cache_hits_when_source_unchanged(fake_repo, monkeypatch):
+    calls = {"n": 0}
+    real_build = plugin_repo._build_zip_bytes
+
+    def _counting_build(repo_root, plugin_src):
+        calls["n"] += 1
+        return real_build(repo_root, plugin_src)
+
+    monkeypatch.setattr(plugin_repo, "_build_zip_bytes", _counting_build)
+    plugin_repo.build_fresh_zip()
+    plugin_repo.build_fresh_zip()
+    assert calls["n"] == 1  # second call was a cache hit, no rebuild
 
 
 # ---------------------------------------------------------------------------
@@ -371,7 +448,7 @@ def test_plugins_xml_route_serves_packaged_index_with_host(fake_repo):
     assert _headers(out)["content-type"].startswith("text/xml")
     body = _body_bytes(out).decode()
     assert (
-        "http://agent.local:8766/plugin-repo/trid3nt-1.2.3.zip" in body
+        "http://agent.local:8766/plugin-repo/trid3nt.zip?v=1.2.3" in body
     )
     assert plugin_repo.HOST_SENTINEL not in body
 
@@ -381,7 +458,7 @@ def test_plugins_xml_route_falls_back_when_host_absent(fake_repo, monkeypatch):
     plugin_repo.package_plugin_repo()
     out = bytes(_dispatch("/plugin-repo/plugins.xml", host=None).buffer)
     assert _status(out) == 200
-    assert "http://127.0.0.1:8766/plugin-repo/trid3nt-1.2.3.zip" in _body_bytes(out).decode()
+    assert "http://127.0.0.1:8766/plugin-repo/trid3nt.zip?v=1.2.3" in _body_bytes(out).decode()
 
 
 def test_plugins_xml_route_before_package_is_503(fake_repo):
@@ -423,6 +500,49 @@ def test_zip_route_traversal_is_404(fake_repo):
     plugin_repo.package_plugin_repo()
     out = bytes(_dispatch("/plugin-repo/nope.zip").buffer)
     assert _status(out) == 404
+
+
+# --- /plugin-repo/trid3nt.zip (fresh, no packaging required) ---------------
+
+
+def test_fresh_zip_route_serves_valid_zip_no_packaging(fake_repo):
+    # Deliberately no package_plugin_repo() call -- the whole point of this
+    # route is that it works without the deploy-time step.
+    out = bytes(_dispatch("/plugin-repo/trid3nt.zip").buffer)
+    assert _status(out) == 200
+    headers = _headers(out)
+    assert headers["content-type"] == "application/zip"
+    assert 'filename="trid3nt-1.2.3.zip"' in headers["content-disposition"]
+    body = _body_bytes(out)
+    assert body[:4] == b"PK\x03\x04"
+    assert int(headers["content-length"]) == len(body)
+    with zipfile.ZipFile(io.BytesIO(body)) as zf:
+        assert zf.testzip() is None
+        assert all(n.startswith("trid3nt/") for n in zf.namelist())
+        assert "trid3nt/metadata.txt" in zf.namelist()
+
+
+def test_fresh_zip_route_ignores_cache_bust_query_string(fake_repo):
+    out = bytes(_dispatch("/plugin-repo/trid3nt.zip?v=1.2.3").buffer)
+    assert _status(out) == 200
+    assert _headers(out)["content-type"] == "application/zip"
+
+
+def test_fresh_zip_route_missing_source_tree_is_503(tmp_path, monkeypatch):
+    empty_root = tmp_path / "empty"
+    empty_root.mkdir()
+    monkeypatch.setenv("TRID3NT_REPO_ROOT", str(empty_root))
+    out = bytes(_dispatch("/plugin-repo/trid3nt.zip").buffer)
+    assert _status(out) == 503
+
+
+def test_fresh_zip_route_unexpected_error_is_500(fake_repo, monkeypatch):
+    def _boom():
+        raise RuntimeError("kaboom")
+
+    monkeypatch.setattr(plugin_repo, "build_fresh_zip", _boom)
+    out = bytes(_dispatch("/plugin-repo/trid3nt.zip").buffer)
+    assert _status(out) == 500
 
 
 # --- unrelated path still 404 ----------------------------------------------

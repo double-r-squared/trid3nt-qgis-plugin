@@ -2411,9 +2411,47 @@ async def _handle_http(
             writer.write(
                 _format_response(500, b'{"error":"plugin repo index failed"}')
             )
+    elif proxy_path == "/plugin-repo/trid3nt.zip":
+        # THE zip Plugin Manager / Install-from-ZIP downloads -- every
+        # plugins.xml download_url now points here. Fixed name (must match
+        # plugin_repo.FRESH_ZIP_URL_PATH), built on demand straight from
+        # qgis-plugin/trid3nt/ and mtime-cached -- see plugin_repo.py's
+        # module docstring (FRESH ZIP section). No deploy-time
+        # package_plugin_repo() step required. ?v=<version> (already
+        # stripped into proxy_qs above) is a pure cache-busting hint.
+        from . import plugin_repo
+
+        try:
+            data, _version, zip_filename = await asyncio.to_thread(
+                plugin_repo.build_fresh_zip
+            )
+            writer.write(
+                _format_response(
+                    200,
+                    data,
+                    content_type="application/zip",
+                    extra_headers={
+                        "Content-Disposition": f'attachment; filename="{zip_filename}"'
+                    },
+                )
+            )
+        except plugin_repo.PluginRepoBuildError as exc:
+            writer.write(
+                _format_response(
+                    503,
+                    json.dumps({"error": str(exc)}, separators=(",", ":")).encode(
+                        "utf-8"
+                    ),
+                )
+            )
+        except Exception:  # noqa: BLE001
+            logger.exception("plugin zip (fresh) serve failed")
+            writer.write(_format_response(500, b'{"error":"plugin zip failed"}'))
     elif proxy_path.startswith("/plugin-repo/") and proxy_path.endswith(".zip"):
-        # The installable zip Plugin Manager downloads on install/update --
-        # served straight from the packaged directory (deploy-time artifact).
+        # The versioned zip built by package_plugin_repo() -- kept as a
+        # manual-QA / fallback path; served straight from the packaged
+        # directory (deploy-time artifact). Not what plugins.xml advertises
+        # anymore (see the /plugin-repo/trid3nt.zip branch above).
         from . import plugin_repo
 
         filename = proxy_path[len("/plugin-repo/") :]

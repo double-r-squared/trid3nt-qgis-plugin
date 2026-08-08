@@ -266,6 +266,11 @@ PROGRESS_TERMINAL: int = 100
 #: no-op, so the composer-name value here wins.
 SOLVER_WORKFLOW_REGISTRY: dict[str, str] = {
     "sfincs": "model_flood_scenario",
+    # QUADTREE build+solve dispatch (variable-resolution coastal deck authored
+    # by cht_sfincs inside the worker image). Distinct from ``"sfincs"`` (the
+    # regular-grid pre-built-deck volume-mount path); the LocalSolverSpec is
+    # registered by workflows.sfincs.flood.quadtree_dispatch at import.
+    "sfincs-quadtree": "model_flood_scenario",
     # NEW engines (parallel lanes) - orchestrator-wired per the lane
     # handoff. GeoClaw's value supersedes its own import-time ``setdefault``
     # (static literal wins).

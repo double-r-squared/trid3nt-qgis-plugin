@@ -127,6 +127,12 @@ def _ensure_cht_importable() -> None:
 _DEFAULT_BASE_RES_M = 200.0
 _DEFAULT_COAST_REFINE_LEVEL = 2  # base/4 at the shoreline (SFINCS-native)
 _MAX_REFINE_LEVEL = 4
+#: Coastal refinement band half-width (metres) around the z=0 shoreline when
+#: ``coast_band_m`` is not supplied: the wider of 2x the base cell or 800 m, so
+#: the fine band always spans at least a couple of coarse cells either side of
+#: the land-sea interface.
+_DEFAULT_COAST_BAND_FACTOR = 2.0
+_DEFAULT_COAST_BAND_FLOOR_M = 800.0
 _ACTIVE_ZMIN = -20.0  # deepest active bed (m NAVD88); below -> offshore inactive
 _ACTIVE_ZMAX = 15.0   # highest active land (m NAVD88)
 
@@ -171,6 +177,70 @@ def _sample_dem_on_points(dem_path: str, xs, ys, src_crs) -> Any:
     if nodata is not None:
         z = np.where(z == nodata, np.nan, z)
     return z
+
+
+def _coast_refinement_geom(
+    dem_path: str, crs_epsg: int, bbox_utm: tuple[float, float, float, float],
+    coast_band_m: float,
+):
+    """A COAST-FOLLOWING refinement polygon buffered around the z=0 shoreline.
+
+    Reprojects the topobathy DEM to the grid CRS, clips to the domain, extracts
+    the ``z == 0`` land-sea interface as contour lines, and buffers them by
+    ``coast_band_m`` on each side -- so the fine cells hug the ACTUAL shoreline
+    (the meandering coast) rather than a horizontal latitude swath. Returns a
+    shapely geometry clipped to the domain, or ``None`` when the AOI carries no
+    land-sea interface (entirely wet or entirely dry -- the caller degrades to a
+    center band with a loud warning).
+    """
+    import numpy as np
+    import rioxarray  # noqa: F401 - registers the .rio accessor
+    import xarray as xr
+    from shapely.geometry import LineString, box
+    from shapely.ops import unary_union
+
+    xlo, ylo, xhi, yhi = bbox_utm
+    da = xr.open_dataarray(dem_path)
+    if da.rio.crs is None:
+        da = da.rio.write_crs("EPSG:4326")
+    da = da.rio.reproject(f"EPSG:{crs_epsg}")
+    if "band" in da.dims:
+        da = da.isel(band=0, drop=True)
+    try:
+        da = da.rio.clip_box(minx=xlo, miny=ylo, maxx=xhi, maxy=yhi)
+    except Exception:  # noqa: BLE001 - DEM footprint may not cover the box; use as-is
+        pass
+    # Downsample for a fast contour (the shoreline shape survives a ~4x stride).
+    da = da.isel(x=slice(None, None, 4), y=slice(None, None, 4))
+    z = da.values.astype("float64")
+    nodata = da.rio.nodata
+    if nodata is not None:
+        z = np.where(z == nodata, np.nan, z)
+    finite = z[np.isfinite(z)]
+    if finite.size == 0 or (finite < 0.0).sum() == 0 or (finite > 0.0).sum() == 0:
+        return None  # no land-sea interface in the AOI
+    xs = np.asarray(da.x.values, dtype="float64")
+    ys = np.asarray(da.y.values, dtype="float64")
+    zz = np.where(np.isfinite(z), z, 1.0e6)  # NaN -> high land so it reads dry
+    import matplotlib
+
+    matplotlib.use("Agg")
+    import matplotlib.pyplot as plt
+
+    try:
+        cs = plt.contour(xs, ys, zz, levels=[0.0])
+        segs = [LineString(s) for s in cs.allsegs[0] if len(s) >= 2]
+    except Exception:  # noqa: BLE001 - contouring failed -> caller degrades
+        return None
+    finally:
+        plt.close("all")
+    if not segs:
+        return None
+    band = unary_union(segs).buffer(float(coast_band_m))
+    band = band.intersection(box(xlo, ylo, xhi, yhi))
+    if band.is_empty or band.area <= 0.0:
+        return None
+    return band
 
 
 def _mesh_geojson_from_grid(grid, crs_epsg: int) -> dict:
@@ -258,6 +328,10 @@ def build_sfincs_quadtree_deck(
     base_res = float(qt.get("base_resolution_m") or _DEFAULT_BASE_RES_M)
     coast_level = int(qt.get("coast_refine_level") or _DEFAULT_COAST_REFINE_LEVEL)
     max_level = int(qt.get("max_refine_level") or _MAX_REFINE_LEVEL)
+    coast_band_m = float(
+        qt.get("coast_band_m")
+        or max(base_res * _DEFAULT_COAST_BAND_FACTOR, _DEFAULT_COAST_BAND_FLOOR_M)
+    )
 
     # --- Grid CRS: best UTM zone for the AOI centre ---
     lon_c = 0.5 * (bbox[0] + bbox[2])
@@ -283,25 +357,48 @@ def build_sfincs_quadtree_deck(
             details={"import_error": str(exc)},
         ) from exc
 
-    # --- Refinement polygons: a coastal band (shoreline +/- buffer) + drawn ---
-    # The coastal band: refine where the topobathy crosses z=0. We approximate it
-    # by refining the whole domain's SEAWARD HALF at coast_level, then any drawn
-    # refine_region at its own level. The seaward half is toward the lower-mean-
-    # elevation edge (found after sampling below); pre-mesh we refine a shoreline
-    # band derived from the DEM. To stay single-pass we refine a band around the
-    # domain centreline as the shoreline proxy and rely on the mask (z-based) to
-    # deactivate deep-offshore/high-land cells. Drawn regions always honored.
+    # --- Refinement polygons: a COAST-FOLLOWING band (shoreline +/- buffer) ---
+    # Refine where the topobathy crosses z=0 -- the true land-sea interface -- so
+    # the fine cells hug the meandering coast, not a horizontal latitude swath.
+    # ``_coast_refinement_geom`` extracts the z=0 contour and buffers it by
+    # ``coast_band_m``. When the AOI has no interface (entirely wet or dry) it
+    # degrades LOUDLY to a cross-shore center band. Drawn regions always honored.
+    xlo, ylo = min(x0, x1), min(y0, y1)
+    xhi, yhi = max(x0, x1), max(y0, y1)
     refine_rows: list[dict] = []
-    # Coastal band: middle 40% of the domain in the cross-shore (y) direction.
-    band = Polygon(
-        [
-            (min(x0, x1), y0 + 0.30 * (y1 - y0)),
-            (max(x0, x1), y0 + 0.30 * (y1 - y0)),
-            (max(x0, x1), y0 + 0.70 * (y1 - y0)),
-            (min(x0, x1), y0 + 0.70 * (y1 - y0)),
-        ]
+    coast_geom = _coast_refinement_geom(
+        dem_local, epsg, (xlo, ylo, xhi, yhi), coast_band_m
     )
-    refine_rows.append({"geometry": band, "refinement_level": max(1, min(coast_level, max_level))})
+    if coast_geom is not None:
+        refine_source = "shoreline_z0_contour"
+        # cht_sfincs refine_in_polygon reads ``polygon.exterior`` per row, so a
+        # MultiPolygon (disjoint coastal reaches) must be EXPLODED into one
+        # single-Polygon row each (all at the coast refine level).
+        _coast_level = max(1, min(coast_level, max_level))
+        for poly in getattr(coast_geom, "geoms", [coast_geom]):
+            if getattr(poly, "geom_type", "") == "Polygon" and not poly.is_empty:
+                refine_rows.append({"geometry": poly, "refinement_level": _coast_level})
+    if not refine_rows:
+        coast_geom = None  # exploded to nothing -> fall through to center band
+    if coast_geom is None:
+        refine_source = "center_band_fallback"
+        logger.warning(
+            "quadtree: no z=0 land-sea interface resolved in AOI %s -- degrading "
+            "refinement to the cross-shore center band (coast-following unavailable).",
+            list(bbox),
+        )
+        band = Polygon(
+            [
+                (xlo, ylo + 0.30 * (yhi - ylo)),
+                (xhi, ylo + 0.30 * (yhi - ylo)),
+                (xhi, ylo + 0.70 * (yhi - ylo)),
+                (xlo, ylo + 0.70 * (yhi - ylo)),
+            ]
+        )
+        refine_rows.append(
+            {"geometry": band, "refinement_level": max(1, min(coast_level, max_level))}
+        )
+    n_coast_rows = len(refine_rows)  # coast band rows precede any drawn regions
     for rr in qt.get("refine_regions") or []:
         try:
             geom4326 = shape(rr["polygon"]["geometry"] if "geometry" in rr["polygon"] else rr["polygon"])
@@ -473,7 +570,9 @@ def build_sfincs_quadtree_deck(
             "finest_resolution_m": float(base_res / (2 ** max(0, nr_levels - 1))),
             "cell_sizes_m": cell_sizes,
             "coast_refine_level": coast_level,
-            "n_drawn_refine_regions": len(refine_rows) - 1,
+            "coast_band_m": coast_band_m,
+            "refine_source": refine_source,
+            "n_drawn_refine_regions": len(refine_rows) - n_coast_rows,
             "sea_boundary_edge": sea_edge,
         },
         "n_active_cells": n_active,

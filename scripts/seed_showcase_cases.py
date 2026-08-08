@@ -133,15 +133,15 @@ SHOWCASE: list[Showcase] = [
              "ADR 0152 SFINCS pluvial flood, Chattanooga TN AOI", 600),
     Showcase("sfincs_flood",
              {"bbox": _MEXBEACH, "quadtree": True, "coastal": True,
-              "return_period_yr": 100, "duration_hr": 12, "compute_class": "small"},
-             "ADR 0176 SFINCS variable-resolution quadtree flood, Mexico Beach FL "
-             "(Hurricane Michael lineage). Genuine cht_sfincs generator run proven "
-             "worker-side (--build-spec-uri): 42772 cells, 2:1-balanced 400->50 m, "
-             "native sfincs_map.nc mesh. NOTE: the composer-side quadtree DISPATCH "
-             "(sfincs_flood quadtree=True -> worker build+solve) is not yet wired -- "
-             "quadtree=True today only routes DEM to topobathy + auto-surge; the "
-             "quadtree deck is built in the worker's build+solve mode. Live-seed once "
-             "the dispatch lands.", 900),
+              "return_period_yr": 100, "duration_hr": 12, "compute_class": "small",
+              "quadtree_base_resolution_m": 400.0, "quadtree_coast_refine_level": 3,
+              "quadtree_max_refine_level": 3},
+             "ADR 0178 SFINCS COAST-FOLLOWING quadtree flood, Mexico Beach FL "
+             "(Hurricane Michael lineage). Full PRODUCT path: sfincs_flood(quadtree="
+             "True) stages the topobathy DEM + build_spec and dispatches the worker "
+             "build+solve (solver=sfincs-quadtree); cht_sfincs authors the grid with "
+             "the fine 50 m band hugging the z=0 shoreline (2:1-balanced 400->50 m, "
+             "~12k cells), the native sfincs_map.nc mesh carries EPSG:32616.", 900),
     # -- GeoClaw coastal -----------------------------------------------------
     Showcase("geoclaw_inundation",
              {"bbox": _CRESCENT, "scenario": "tsunami", "sim_duration_s": 1800,
