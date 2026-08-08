@@ -269,3 +269,60 @@ assumes a **geographic (EPSG:4326)** DEM (its default `fetch_copernicus_dem` is
 watershed mesher therefore reprojects 3DEP 5070 -> 4326 before delineation.
 Making `delineate_watershed` reproject a projected `dem_uri` internally is a
 small hardening worth queuing.
+
+---
+
+## 8. ADR 0194 -- coastal water-edge landed (OSM coastline; CUSP verdict)
+
+The ADR 0193 remaining live step (an OSM-coastline / CUSP water-edge builder to
+re-mesh Delaware Bay + Tampa Bay full-domain with the real edge) is now DONE.
+
+### 8.1 Shoreline-source verdict for open coast / bay / estuary
+
+| Candidate | Reachable as a queryable vector layer? | Verdict |
+|---|---|---|
+| **OSM `natural=coastline`** (Overpass, 3-mirror) | Yes -- the repo's reliable OSM path; Tampa ways are sourced from USGS Ortho per their tags | **LANDED** high-res source |
+| **NOAA CUSP** (NGS Continually Updated Shoreline Product) | **No** -- `gis.charttools.noaa.gov/.../MCS/CUSP/MapServer` returns a service-absent error; CUSP is distributed as downloadable shapefiles via the NOAA Shoreline Data Explorer, not a query API | documented, not used |
+| NOAA ENC-derived shoreline (`encdirect/enc_coastal`, `CoastlineP`) | Partially -- reachable but S-57 nautical-chart geometry, straightforward geojson envelope queries error out, no clear fidelity gain over OSM | not used |
+| NHDPlus HR **NHDArea** (layer 8) + **NHDWaterbody** (layer 9) | Yes | **UNION add-on** -- open-water areal features (SeaOcean / StreamRiver-area) + connected waterbodies add river arms the coastline generalizes over |
+
+So CUSP was evaluated (probed live) and is **download-only** -- there is no
+public queryable ArcGIS vector layer to prefer. OSM `natural=coastline` is the
+landed high-res source, UNIONed with connected NHDPlus HR areal water. The probe
+result is recorded in each run's provenance (`water_edge` block, `noaa_cusp_probe`).
+
+### 8.2 Method (implemented, verified)
+
+`water_edge.py`: fetch OSM coastline ways -> polygonize(domain box + coastline)
+-> classify each face LAND/WATER by the OSM direction convention (water on the
+RIGHT of a way), islands surviving as holes -> UNION connected NHD areal water,
+clipped to the domain. `_mesh_water_edge_incontainer.py` (mounted, not baked)
+meshes the water polygon interior with a **custom signed-distance function** +
+feature (distance-to-shore) and wavelength (depth) sizing.
+
+The coastal `om.Shoreline` path is deliberately NOT used for the water edge: it
+models polygons as exterior-ring-only coord arrays (drops island holes -- a
+"box minus water" land polygon collapses to nothing) AND Chaikin-smooths the
+shoreline, moving the meshed edge off the imagery. A custom SDF over the exact
+water polygon keeps the edge ON the real shoreline -- the whole point of the
+directive. This is the same custom-SDF pattern ADR 0193 proved for watersheds,
+with coastal sizing instead of distance-to-river.
+
+### 8.3 Verified cases
+
+Full-bay domains (the tight v1 AOI box is a residual overlay, not a cookie-cutter):
+
+- **Delaware Bay** (DE/NJ) -- domain -75.60..-74.82 x 38.72..39.55; water 3953
+  km^2; 5308 nodes / 9422 elems; 107-4292 m (median 420 m); min qE 0.52 median
+  0.95; 0 inverted; closed (6 loops). MDAL + SERAFIN verified.
+- **Tampa Bay** (FL) -- domain -82.90..-82.38 x 27.48..28.06; water 2262 km^2
+  (coastline 2228 + NHD 201 areal / 45 waterbodies); 10797 nodes / 18726 elems;
+  84-3043 m (median 273 m); min qE 0.43 median 0.96; 0 inverted; closed (18
+  loops). MDAL + SERAFIN verified.
+
+Alignment proof: `docs/proof/templates/oceanmesh_standalone_{delaware_bay,
+tampa_bay}.png` + `_closeup` companions (mesh edge tracks the imagery shoreline:
+Delaware NJ tidal creeks / bay mouth; Tampa Gulf barrier islands + passes + the
+NHD river arms). This answers Section 6 Q2 (shoreline fidelity) for the coasts;
+the v1 GSHHG meshes remain only for the open-coast/complex cases duck_nc +
+puget_sound.
