@@ -64,6 +64,7 @@ _SF_BAY = [-122.30, 37.70, -122.10, 37.90]             # ADR 0149 PSHA AOI
 _EAST_BAY = [-122.30, 37.75, -122.10, 37.95]           # ADR 0164 Hayward AOI
 _APALACHEE = [-85.55, 29.70, -85.40, 29.85]            # ADR 0147 SWAN shelf
 _CHATTANOOGA = [-85.32, 35.03, -85.28, 35.07]          # ADR 0152 SFINCS pluvial
+_MEXBEACH = [-85.5522, 29.6983, -85.3976, 29.8517]     # ADR 0176 SFINCS quadtree (Michael)
 _CRESCENT = [-124.24, 41.73, -124.16, 41.78]           # ADR 0148 GeoClaw tsunami
 _GALVESTON = [-95.2, 29.0, -94.2, 29.8]                # ADR 0168 surge shelf
 _PLATTE = [40.905, -98.42]                              # ADR 0165/0166 well (lat, lon)
@@ -130,6 +131,17 @@ SHOWCASE: list[Showcase] = [
              {"bbox": _CHATTANOOGA, "return_period_yr": 100, "duration_hr": 24,
               "compute_class": "small"},
              "ADR 0152 SFINCS pluvial flood, Chattanooga TN AOI", 600),
+    Showcase("sfincs_flood",
+             {"bbox": _MEXBEACH, "quadtree": True, "coastal": True,
+              "return_period_yr": 100, "duration_hr": 12, "compute_class": "small"},
+             "ADR 0176 SFINCS variable-resolution quadtree flood, Mexico Beach FL "
+             "(Hurricane Michael lineage). Genuine cht_sfincs generator run proven "
+             "worker-side (--build-spec-uri): 42772 cells, 2:1-balanced 400->50 m, "
+             "native sfincs_map.nc mesh. NOTE: the composer-side quadtree DISPATCH "
+             "(sfincs_flood quadtree=True -> worker build+solve) is not yet wired -- "
+             "quadtree=True today only routes DEM to topobathy + auto-surge; the "
+             "quadtree deck is built in the worker's build+solve mode. Live-seed once "
+             "the dispatch lands.", 900),
     # -- GeoClaw coastal -----------------------------------------------------
     Showcase("geoclaw_inundation",
              {"bbox": _CRESCENT, "scenario": "tsunami", "sim_duration_s": 1800,
