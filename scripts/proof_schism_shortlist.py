@@ -3,7 +3,7 @@
     at the Duck NC FRF + a KNOB-demonstration cross-shore chart (storm Hs vs calm
     Hs, with wave setup) + the FRF mesh.
   Row 2 schism_baroclinic_circulation: surface + bottom salinity over Esri imagery
-    (Delaware Bay footprint) + a stratification chart + the estuary mesh.
+    (Galveston Bay footprint) + a stratification chart + the estuary mesh.
 
 Usage: set -a; source .env.local; set +a
        python scripts/proof_schism_shortlist.py <storm_run_id> <calm_run_id> <baroclinic_run_id>
@@ -28,6 +28,13 @@ from netCDF4 import Dataset
 from PIL import Image
 from pyproj import Transformer
 from scipy.spatial import cKDTree, Delaunay
+
+# Baroclinic showcase IC parameters (match the composer defaults) so the proof
+# can subtract the initial linear salinity gradient and show CIRCULATION.
+_EST_BBOX = (-94.95, 29.35, -94.70, 29.75)   # default Galveston Bay footprint
+_OCEAN_SIDE = "south"
+_OCEAN_SAL = 33.0
+_RIVER_SAL = 0.0
 
 TILE_URL = "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}"
 OUT = "/home/nate/Documents/trid3nt-local/docs/proof/templates"
@@ -84,7 +91,7 @@ def read_gr3_nodes(path):
     return xy
 
 
-def rasterize(lon, lat, vals, w, h, bbox):
+def rasterize(lon, lat, vals, w, h, bbox, mask_tri=None):
     minx, miny, maxx, maxy = bbox
     xs = minx + (np.arange(w) + 0.5) * (maxx - minx) / w
     ys = maxy - (np.arange(h) + 0.5) * (maxy - miny) / h
@@ -94,6 +101,16 @@ def rasterize(lon, lat, vals, w, h, bbox):
     tree = cKDTree(pts)
     _, idx = tree.query(q, k=1)
     grid = vals[idx].reshape(h, w)
+    # Mask to the modeled domain. Prefer the REAL element triangulation (a
+    # shoreline-clipped mesh) so no cell paints land in a concavity; fall back to
+    # the node convex hull when no connectivity is supplied.
+    if mask_tri is not None:
+        try:
+            finder = mask_tri.get_trifinder()
+            inside = finder(gx.ravel(), gy.ravel()) >= 0
+            return np.where(inside.reshape(h, w), grid, np.nan)
+        except Exception:
+            pass
     try:
         hull = Delaunay(pts)
         inside = hull.find_simplex(q) >= 0
@@ -103,13 +120,14 @@ def rasterize(lon, lat, vals, w, h, bbox):
     return grid
 
 
-def render_map(lon, lat, vals, title, cbar, cmap, out_name, zoom=12, pad=0.25, vmin=0.0, vmax=None):
+def render_map(lon, lat, vals, title, cbar, cmap, out_name, zoom=12, pad=0.25, vmin=0.0, vmax=None,
+               mask_tri=None):
     lw, le = float(lon.min()), float(lon.max())
     ls, ln = float(lat.min()), float(lat.max())
     px, py = (le - lw) * pad, (ln - ls) * pad
     basemap, bm = fetch_basemap(lw - px, ls - py, le + px, ln + py, zoom)
     W = 700; H = int(W * (ln - ls) / max(le - lw, 1e-9))
-    grid = rasterize(lon, lat, vals, W, H, (lw, ls, le, ln))
+    grid = rasterize(lon, lat, vals, W, H, (lw, ls, le, ln), mask_tri=mask_tri)
     if vmax is None:
         vmax = float(np.nanpercentile(vals, 99))
     # to 3857 for overlay
@@ -132,11 +150,14 @@ def render_map(lon, lat, vals, title, cbar, cmap, out_name, zoom=12, pad=0.25, v
     print("wrote", out_name, "vmax=%.3f" % vmax)
 
 
-def render_mesh(lon, lat, title, out_name, zoom=11, pad=0.15):
-    # raw grid one color; white box = AOI only
+def render_mesh(lon, lat, title, out_name, zoom=11, pad=0.15, tris=None):
+    # raw grid one color; white box = AOI only. Triangulate on the REAL element
+    # connectivity when supplied (a shoreline-clipped mesh's concavities would
+    # otherwise be bridged by an unconstrained Delaunay into spurious fans).
     lw, le = float(lon.min()), float(lon.max()); ls, ln = float(lat.min()), float(lat.max())
     px, py = (le - lw) * pad, (ln - ls) * pad
-    tri = mtri.Triangulation(lon, lat)
+    tri = mtri.Triangulation(lon, lat, triangles=tris) if tris is not None \
+        else mtri.Triangulation(lon, lat)
     fig, ax = plt.subplots(figsize=(8, 7.5), dpi=115)
     ax.triplot(tri, color="#2b8cbe", linewidth=0.4)
     ax.add_patch(Rectangle((lw, ls), le - lw, ln - ls, fill=False, edgecolor="white",
@@ -223,6 +244,11 @@ def row2(baro_id):
     with Dataset(o2) as ds:
         lon = np.asarray(ds.variables["SCHISM_hgrid_node_x"][:], float).ravel()
         lat = np.asarray(ds.variables["SCHISM_hgrid_node_y"][:], float).ravel()
+        # REAL element connectivity (shoreline-clipped mesh): SCHISM face_nodes are
+        # 1-based, quads padded with -1; all our cells are triangles (cols 0:3).
+        fnodes = np.ma.filled(np.asarray(ds.variables["SCHISM_hgrid_face_nodes"][:]), -1)
+        tris0 = (fnodes[:, :3] - 1).astype(int)
+    mask_tri = mtri.Triangulation(lon, lat, triangles=tris0)
     with Dataset(salt) as ds:
         s = np.asarray(ds.variables["salinity"][:], float)
     s = np.where(np.isfinite(s) & (s >= 0) & (s < 100), s, np.nan)
@@ -238,15 +264,17 @@ def row2(baro_id):
     fin = np.isfinite(surf) & np.isfinite(bot)
     smax = float(np.nanmax([np.nanmax(surf[fin]), np.nanmax(bot[fin])]))
     render_map(lon[fin], lat[fin], surf[fin],
-               "schism_baroclinic_circulation -- SURFACE salinity (Delaware Bay footprint, 3D baroclinic)",
+               "schism_baroclinic_circulation -- SURFACE salinity (Galveston Bay footprint, 3D baroclinic)",
                "Surface salinity (psu)", "viridis",
-               "schism_baroclinic_circulation_surface_salinity.png", zoom=9, vmin=0, vmax=smax)
+               "schism_baroclinic_circulation_surface_salinity.png", zoom=9, vmin=0, vmax=smax,
+               mask_tri=mask_tri)
     render_map(lon[fin], lat[fin], bot[fin],
                "schism_baroclinic_circulation -- BOTTOM salinity (salt wedge intrusion)",
                "Bottom salinity (psu)", "viridis",
-               "schism_baroclinic_circulation_bottom_salinity.png", zoom=9, vmin=0, vmax=smax)
-    render_mesh(lon, lat, "schism_baroclinic_circulation -- coarse estuary channel mesh (Delaware Bay)",
-                "schism_baroclinic_circulation_mesh.png", zoom=9)
+               "schism_baroclinic_circulation_bottom_salinity.png", zoom=9, vmin=0, vmax=smax,
+               mask_tri=mask_tri)
+    render_mesh(lon, lat, "schism_baroclinic_circulation -- shoreline-clipped estuary mesh (Galveston Bay)",
+                "schism_baroclinic_circulation_mesh.png", zoom=9, tris=tris0)
     # stratification chart: surface vs bottom salinity along the estuary axis (latitude)
     order = np.argsort(lat[fin])
     la = lat[fin][order]; su = surf[fin][order]; bo = bot[fin][order]
@@ -273,6 +301,64 @@ def row2(baro_id):
     plt.close(fig)
     print("wrote schism_baroclinic_circulation_stratification_chart.png",
           "strat_max=%.2f" % float(np.nanmax((bot - surf)[fin])))
+
+    # ---- change-from-IC map: CIRCULATION, not the initial condition ---------
+    # The run starts from a LINEAR salinity gradient (fresh landward -> salty
+    # seaward). After multi-day river + tidal forcing, the density-driven
+    # (gravitational) circulation restructures it: the surface freshens where the
+    # river plume + estuarine outflow ride over the wedge, the seaward end mixes.
+    # surface(spun-up) MINUS the initial gradient makes that dynamics visible
+    # (fresher-than-IC = blue, saltier-than-IC = red) -- if this were the IC
+    # echoed back it would be flat zero everywhere.
+    from matplotlib.colors import TwoSlopeNorm
+    lon0, lat0, lon1, lat1 = _EST_BBOX
+    if _OCEAN_SIDE in ("south", "north"):
+        fr = (lat - lat0) / (lat1 - lat0)
+        if _OCEAN_SIDE == "south":
+            fr = 1.0 - fr
+    else:
+        fr = (lon - lon0) / (lon1 - lon0)
+        if _OCEAN_SIDE == "west":
+            fr = 1.0 - fr
+    ic_surf = _RIVER_SAL + (_OCEAN_SAL - _RIVER_SAL) * np.clip(fr, 0.0, 1.0)
+    delta = surf - ic_surf
+    dfin = fin & np.isfinite(delta)
+    dv = float(np.nanpercentile(np.abs(delta[dfin]), 98)) or 1.0
+    lw, le = float(lon[dfin].min()), float(lon[dfin].max())
+    ls, ln = float(lat[dfin].min()), float(lat[dfin].max())
+    px, py = (le - lw) * 0.25, (ln - ls) * 0.25
+    basemap, bm = fetch_basemap(lw - px, ls - py, le + px, ln + py, 9)
+    W = 700; H = int(W * (ln - ls) / max(le - lw, 1e-9))
+    grid = rasterize(lon[dfin], lat[dfin], delta[dfin], W, H, (lw, ls, le, ln), mask_tri=mask_tri)
+    gx0, gy0 = TO_3857.transform(lw, ls); gx1, gy1 = TO_3857.transform(le, ln)
+    fig, ax = plt.subplots(figsize=(9, 8.5), dpi=115)
+    ax.imshow(basemap, extent=bm, origin="upper")
+    im = ax.imshow(grid, extent=(gx0, gx1, gy0, gy1), origin="upper", cmap="RdBu_r",
+                   norm=TwoSlopeNorm(vcenter=0.0, vmin=-dv, vmax=dv), alpha=0.85, zorder=3)
+    ax.add_patch(Rectangle((gx0, gy0), gx1 - gx0, gy1 - gy0, fill=False,
+                           edgecolor="white", linewidth=1.6, zorder=4))
+    wx0, _ = TO_3857.transform(lw - px, ls); wx1, _ = TO_3857.transform(le + px, ls)
+    _, wy0 = TO_3857.transform(lw, ls - py); _, wy1 = TO_3857.transform(lw, ln + py)
+    ax.set_xlim(wx0, wx1); ax.set_ylim(wy0, wy1); ax.set_xticks([]); ax.set_yticks([])
+    ax.set_title("schism_baroclinic_circulation -- surface salinity CHANGE from the "
+                 "initial gradient\n(density-driven circulation restructures the field; "
+                 "blue=fresher, red=saltier)", fontsize=10)
+    cb = fig.colorbar(im, ax=ax, shrink=0.72, pad=0.02)
+    cb.set_label("surface salinity minus initial condition (psu)")
+    fig.text(0.01, 0.01,
+             f"Galveston Bay footprint, shoreline-clipped mesh. Spun-up surface salinity "
+             f"minus the linear IC (fresh river -> {_OCEAN_SAL:.0f} psu ocean). A non-zero "
+             f"field = the 3D baroclinic solve moved salt (gravitational estuarine "
+             f"circulation + tidal exchange), NOT the IC echoed back. Pinned scale "
+             f"+-{dv:.2f} psu. Coarse demo geometry (ADR 0191).",
+             fontsize=7, color="0.35", wrap=True)
+    fig.tight_layout()
+    fig.savefig(os.path.join(OUT, "schism_baroclinic_circulation_salinity_change.png"),
+                bbox_inches="tight")
+    plt.close(fig)
+    print("wrote schism_baroclinic_circulation_salinity_change.png",
+          "abs_delta_p98=%.2f max_fresh=%.2f max_salt=%.2f"
+          % (dv, float(np.nanmin(delta[dfin])), float(np.nanmax(delta[dfin]))))
 
 
 if __name__ == "__main__":

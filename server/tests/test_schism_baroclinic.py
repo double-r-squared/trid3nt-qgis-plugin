@@ -97,6 +97,70 @@ def test_author_baroclinic_estuary_deck(tmp_path: Path):
     assert float(msource[0].split()[2]) == pytest.approx(0.0)  # S=0 freshwater
 
 
+def test_build_estuary_mesh_shoreline_clip():
+    """A water mask clips the lattice to the wet body: NO triangle centroid lands
+    on 'land', and no surviving node is outside the water region."""
+    from trid3nt_server.agent.workflows.schism import deck_authoring as D
+
+    bbox = (-75.55, 38.85, -75.05, 39.45)
+    # synthetic coastline: WATER only west of lon=-75.25 (a connected sub-body)
+    def wet(lon, lat):
+        return np.asarray(lon) < -75.25
+
+    pts, tris, depths, clipped = D._build_estuary_mesh(
+        bbox, nx=20, ny=24, ocean_side="south",
+        depth_ocean_m=15.0, depth_river_m=3.0, water_mask_fn=wet,
+    )
+    assert clipped is True
+    # every kept TRIANGLE centroid is water (cells kept by water-centroid; the
+    # raster is masked by the mesh, so no cell paints land -- boundary NODES may
+    # straddle the coastline by up to one cell, which is correct).
+    cent = pts[tris].mean(axis=1)
+    assert bool(np.all(cent[:, 0] < -75.25))
+    assert depths.shape[0] == pts.shape[0]
+    # the clipped mesh is smaller than the full lattice
+    assert pts.shape[0] < 20 * 24
+    # no node sits DEEP in land (more than ~one cell width past the coast)
+    dx = (bbox[2] - bbox[0]) / 19
+    assert bool(np.all(pts[:, 0] < -75.25 + dx + 1e-9))
+
+
+def test_build_estuary_mesh_unclipped_fallback():
+    """Too little water -> the full rectangle is kept (clipped=False), never a
+    sliver, so the caller can loudly note the coastline clip was unavailable."""
+    from trid3nt_server.agent.workflows.schism import deck_authoring as D
+
+    bbox = (-75.55, 38.85, -75.05, 39.45)
+    pts, tris, depths, clipped = D._build_estuary_mesh(
+        bbox, nx=10, ny=10, ocean_side="south",
+        depth_ocean_m=15.0, depth_river_m=3.0,
+        water_mask_fn=lambda lon, lat: np.zeros(np.asarray(lon).shape, dtype=bool),
+    )
+    assert clipped is False
+    assert pts.shape[0] == 10 * 10  # full lattice
+
+
+def test_author_baroclinic_deck_shoreline_clip_no_land(tmp_path: Path):
+    """With a coastline mask, salt.ic carries NO node on the 'land' side -- the
+    deliverable cannot paint salinity over land."""
+    from trid3nt_server.agent.workflows.schism import deck_authoring as D
+
+    deck = D.author_baroclinic_estuary_deck(
+        tmp_path / "clip", bbox=(-75.55, 38.85, -75.05, 39.45),
+        constituents=["M2"], tidal_amplitude_m=0.6, sim_days=1.0, ocean_side="south",
+        river_discharge_m3s=800.0, ocean_salinity_psu=32.0, nvrt=8, nx=20, ny=24,
+        water_mask_fn=lambda lon, lat: np.asarray(lon) < -75.25,
+    )
+    assert deck["shoreline_clipped"] is True
+    salt_lines = (tmp_path / "clip" / "salt.ic").read_text().splitlines()[2:]
+    lons = np.array([float(l.split()[1]) for l in salt_lines if l.strip()])
+    # no node sits deep in land: within ~one cell width of the coastline at worst
+    dx = (-75.05 - (-75.55)) / 19
+    assert bool(np.all(lons < -75.25 + dx + 1e-6))
+    # the mesh is genuinely water-dominated (most nodes on the water side)
+    assert float(np.mean(lons < -75.25)) > 0.75
+
+
 def test_sz_vgrid_layer_ordering():
     from trid3nt_server.agent.workflows.schism import deck_authoring as D
 

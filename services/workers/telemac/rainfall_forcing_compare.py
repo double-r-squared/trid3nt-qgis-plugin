@@ -49,8 +49,14 @@ def _base_reach(duration_s: float) -> dict:
         "distance_km": 3.0,
         "channel_width_m": 60.0,
         "mesh_size_m": 16.0,
-        # constant_ribbon: the assumed-width channel (identical between the two
-        # runs) -- this is a physics comparison, not a bank-fidelity test.
+        # The mesh follows the REAL NHDPlus flowline centerline (true river
+        # planform + bends). constant_ribbon offsets it to an assumed constant
+        # width because this short 3 km demo reach has no NHDArea water-polygon
+        # coverage (the nhd_area path raises TELEMAC_BANKS_UNAVAILABLE here). The
+        # channel is NOT an offset-from-the-river fan -- it is the real digitized
+        # flowline with a symmetric channel; identical between the two runs (a
+        # clean rain vs no-rain A/B). Bank fidelity (variable banks + islands)
+        # rides the nhd_area default on reaches with NHDArea coverage.
         "bank_source": "constant_ribbon",
         "inflow_q_m3s": 250.0,
         "init_depth_m": 2.5,
@@ -183,7 +189,8 @@ def main() -> int:
 
     # persist the mesh + diff for the proof renderer
     np.savez(out / "telemac_river_dye_rain_forcing_arrays.npz",
-             x=b["mesh"]["x"], y=b["mesh"]["y"], utm_epsg=_utm_epsg(base_id),
+             x=b["mesh"]["x"], y=b["mesh"]["y"], ikle=b["mesh"]["ikle"],
+             utm_epsg=_utm_epsg(base_id),
              rain_mm_per_day=args.rain_mm_per_day, duration_s=args.duration_s,
              d_base=d_base[:n], d_rain=d_rain[:n], ddiff=ddiff,
              times_base=b["times"], times_rain=r["times"],

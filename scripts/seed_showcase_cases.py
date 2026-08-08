@@ -117,8 +117,9 @@ SHOWCASE: list[Showcase] = [
              "ADR 0151 SWMM wet-well pump-control comparison defaults", 240),
     # -- SCHISM shortlist batch 5 (ADR 0189) --------------------------------
     Showcase("schism_baroclinic_circulation",
-             {"location_query": "Delaware Bay", "river_discharge_m3s": 800.0, "sim_days": 1.0},
-             "ADR 0189 SCHISM 3D baroclinic estuary stratification (coarse Delaware Bay smoke)", 600),
+             {"river_discharge_m3s": 800.0, "sim_days": 4.0},
+             "ADR 0189/0191 SCHISM 3D baroclinic estuary: shoreline-clipped mesh (default "
+             "Galveston Bay), 4-day spin-up so river+tide restructure the salinity field", 1200),
     Showcase("schism_coupled_waves",
              {"significant_wave_height_m": 4.0, "peak_period_s": 13.0,
               "mean_direction_deg": 70.0, "directional_spread": 25.0, "sim_hours": 0.5},

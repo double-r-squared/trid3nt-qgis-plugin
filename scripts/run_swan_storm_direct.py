@@ -20,9 +20,15 @@ import sys
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 log = logging.getLogger("swan_storm")
 
-# Apalachee Bay / Big Bend FL shelf (real below-datum bathymetry; the ADR 0147
-# SWAN shelf AOI). Open ocean to the SOUTH -> boundary side S.
-BBOX = (-84.30, 29.70, -83.90, 30.05)
+# Mexico Beach / Tyndall FL shelf (the ADR 0147 SWAN shelf AOI, matching the
+# showcase _APALACHEE box). Real continuous below-datum CUDEM bathymetry, ~86%
+# wet -- open ocean to the SOUTH -> boundary side S. NOTE: the Big Bend box near
+# -84.0 was ABANDONED for the proof because its CUDEM topobathy tile carries a
+# large interior elevation==0.0 void (a source tile gap), which the depth sampler
+# reads as dry (depth 0 < DEPMIN) -> ~half the AOI meshes dry and the wave field
+# fills only the connected wet strip. The deck grid extent is correct; the void
+# is a bathymetry-DATA artifact, so the fix is a void-free shelf AOI.
+BBOX = (-85.55, 29.70, -85.40, 29.85)
 SIM_HOURS = 36.0
 PEAK_HOUR = 18.0
 BASELINE_HS = 1.0

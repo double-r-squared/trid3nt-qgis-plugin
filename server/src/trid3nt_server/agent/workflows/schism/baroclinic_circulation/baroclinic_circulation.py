@@ -62,10 +62,13 @@ __all__ = [
     "TEMPLATE_CARD",
 ]
 
-#: A default US estuary footprint (Delaware Bay, DE/NJ) when neither location_query
-#: nor bbox is supplied -- a labeled default_demo AOI, not an invented site.
-_DEFAULT_ESTUARY_BBOX: tuple[float, float, float, float] = (-75.55, 38.85, -75.05, 39.45)
-_DEFAULT_ESTUARY_NAME: str = "Delaware Bay (DE/NJ)"
+#: A default US estuary footprint (Galveston Bay, TX) when neither location_query
+#: nor bbox is supplied -- a labeled default_demo AOI, not an invented site. A
+#: broad, well-covered open-water bay (Trinity/San Jacinto river inflow, the
+#: Bolivar Roads Gulf mouth at the SOUTH edge) so the shoreline-clipped mesh is a
+#: genuine water body, not a mostly-land box.
+_DEFAULT_ESTUARY_BBOX: tuple[float, float, float, float] = (-94.95, 29.35, -94.70, 29.75)
+_DEFAULT_ESTUARY_NAME: str = "Galveston Bay (TX)"
 
 #: The LOUD coarse-demonstration honesty floor stamped on every result.
 _DEMO_NOTE: str = (
@@ -312,6 +315,85 @@ def _stage_manifest(deck_files: list[Path], run_tag: str, *, ncompute: int, nscr
     return f"s3://{cache_bucket}/{key}"
 
 
+#: USGS NHDPlus_HR MapServer NHDArea (water-body polygons) query endpoint -- the
+#: same vector source the TELEMAC river-dye pipeline samples for real banks. A fast
+#: (~2 s) polygon query, far cheaper than a full-resolution coastal DEM fetch.
+_NHDAREA_URL = (
+    "https://hydro.nationalmap.gov/arcgis/rest/services/NHDPlus_HR/"
+    "MapServer/8/query"
+)
+
+
+def _build_water_mask(bbox: tuple[float, float, float, float]) -> Any:
+    """Return a vectorized ``water_mask_fn(lon_arr, lat_arr) -> bool_arr`` from the
+    real USGS NHDArea WATER-body polygons over the AOI, or ``None`` when none cover
+    it.
+
+    Queries NHDPlus_HR NHDArea (bay / estuary / river polygons) for the bbox and
+    unions them (holes = islands), so a lon/lat point tests WATER iff it lies inside
+    the real water body. The estuary mesh is then clipped to the true shoreline and
+    the salinity raster never paints land. A vector query (~2 s) -- much cheaper
+    than a full-resolution CUDEM fetch, and it is exactly the shoreline. Best-effort:
+    any failure / no coverage returns ``None`` and the caller meshes the full
+    rectangle with a loud note (never a silent dead-end)."""
+    import json
+    import urllib.parse
+    import urllib.request
+
+    import numpy as np
+
+    try:
+        params = urllib.parse.urlencode({
+            "geometry": ",".join(f"{v:.6f}" for v in bbox),
+            "geometryType": "esriGeometryEnvelope",
+            "inSR": "4326", "outSR": "4326",
+            "spatialRel": "esriSpatialRelIntersects",
+            "outFields": "ftype", "f": "geojson",
+            # server-side simplification + a record cap: the coarse demo mesh needs
+            # the shoreline shape, not every vertex of a large estuary polygon.
+            "maxAllowableOffset": "0.0008", "resultRecordCount": "200",
+        })
+        req = urllib.request.Request(f"{_NHDAREA_URL}?{params}",
+                                     headers={"User-Agent": "trid3nt-local (agent@trid3nt.dev)"})
+        with urllib.request.urlopen(req, timeout=45.0) as r:
+            data = json.loads(r.read().decode("utf-8"))
+
+        import shapely
+        import shapely.geometry as sg
+        from shapely.ops import unary_union
+
+        polys = []
+        for f in data.get("features") or []:
+            g = f.get("geometry") or {}
+            if g.get("type") == "Polygon":
+                rings_list = [g.get("coordinates") or []]
+            elif g.get("type") == "MultiPolygon":
+                rings_list = g.get("coordinates") or []
+            else:
+                continue
+            for rings in rings_list:
+                if rings and len(rings[0]) >= 4:
+                    holes = [h for h in rings[1:] if len(h) >= 4]
+                    polys.append(sg.Polygon(rings[0], holes=holes))
+        polys = [p.buffer(0) for p in polys if not p.is_empty]
+        if not polys:
+            logger.warning("baroclinic water mask: no NHDArea water polygon covers "
+                           "%s -- meshing the full rectangle", bbox)
+            return None
+        union = unary_union(polys)
+
+        def water_mask_fn(lons: Any, lats: Any) -> Any:
+            lons = np.asarray(lons, dtype="float64")
+            lats = np.asarray(lats, dtype="float64")
+            return np.asarray(shapely.contains_xy(union, lons, lats), dtype=bool)
+
+        return water_mask_fn
+    except Exception as exc:  # noqa: BLE001 -- best-effort; fall back to rectangle
+        logger.warning("baroclinic water mask build failed (%s) -- meshing the full "
+                       "rectangle", exc)
+        return None
+
+
 def _download_run_output(run_id: str, rel_key: str) -> str | None:
     from trid3nt_server.agent.tools.simulation.solver.solver import (
         _get_runs_bucket, _get_s3_client,
@@ -343,20 +425,33 @@ async def model_schism_baroclinic_circulation(
 
     aoi_bbox, aoi_label, aoi_basis = _resolve_bbox(location_query, bbox)
 
+    # Real coastline clip: mesh only the estuary WATER (no salinity over land).
+    water_mask_fn = await asyncio.to_thread(_build_water_mask, aoi_bbox)
+
     workdir = Path(tempfile.mkdtemp(prefix="schism-baroclinic-deck-"))
     deck = deck_authoring.author_baroclinic_estuary_deck(
         workdir, bbox=aoi_bbox, constituents=["M2"], tidal_amplitude_m=0.6,
         sim_days=sim_days, ocean_side=ocean_side,
         river_discharge_m3s=river_discharge_m3s, ocean_salinity_psu=ocean_salinity_psu,
+        water_mask_fn=water_mask_fn,
     )
+    shoreline_clipped = bool(deck.get("shoreline_clipped"))
+    logger.info("baroclinic mesh: %d nodes x %d layers, shoreline_clipped=%s",
+                deck["n_nodes"], deck["n_layers"], shoreline_clipped)
 
     review_entries = [
         SyntheticInput(param="estuary_aoi", value=aoi_label, basis=aoi_basis,
                        note="the georeferenced estuary footprint the coarse channel spans"),
         SyntheticInput(param="mesh_geometry",
-                       value=f"coarse idealized channel ({deck['n_nodes']} nodes x {deck['n_layers']} layers)",
+                       value=(f"coarse {'shoreline-clipped' if shoreline_clipped else 'rectangular'} "
+                              f"channel ({deck['n_nodes']} nodes x {deck['n_layers']} layers)"),
                        basis="default_demo",
-                       note="a graded lon/lat lattice + linearly-deepening idealized bathymetry -- NOT surveyed"),
+                       note=("a lon/lat lattice clipped to the real WATER body (coastline from "
+                             "topo-bathymetry) with linearly-deepening idealized bathymetry -- the "
+                             "SHORELINE is real, the bathymetry is NOT surveyed"
+                             if shoreline_clipped else
+                             "a graded lon/lat lattice + linearly-deepening idealized bathymetry -- "
+                             "NOT surveyed (coastline clip unavailable for this AOI)")),
         SyntheticInput(param="river_discharge", value=round(river_discharge_m3s, 1), units="m3/s",
                        basis="user" if river_discharge_m3s != 500.0 else "default_demo",
                        note="freshwater point source at the landward edge (S=0)"),

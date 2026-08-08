@@ -161,14 +161,16 @@ def read_selafin(path: str | Path) -> dict[str, Any]:
     title trailer. Returns::
 
         {"title": str, "varnames": [str], "npoin": int, "nelem": int,
-         "x": ndarray(npoin), "y": ndarray(npoin),
+         "x": ndarray(npoin), "y": ndarray(npoin), "ikle": ndarray(nelem, ndp),
          "times": ndarray(nframes),
          "data": {varname: ndarray(nframes, npoin)}}
 
-    Only the variable NAMES + node coords + per-frame values are needed here (we
-    never touch IKLE for the raster path -- scattered-node interpolation is
-    enough), but IKLE/IPOBO records are still consumed to keep the byte cursor
-    aligned. Pure numpy; validated against a real solved ``r2d_river.slf``.
+    The raster path uses only the variable NAMES + node coords + per-frame values
+    (scattered-node interpolation), but the REAL element connectivity ``ikle``
+    (0-based triangles) is returned so mesh-faithful renders can triangulate the
+    channel along its true elements rather than an unconstrained Delaunay of the
+    node cloud (which bridges river bends into a spurious fan). IPOBO is consumed
+    for cursor alignment. Pure numpy; validated against a real solved ``r2d_river.slf``.
     """
     import numpy as np
 
@@ -192,7 +194,10 @@ def read_selafin(path: str | Path) -> dict[str, Any]:
             _read_record(fh)
 
         nelem, npoin, ndp, _ = struct.unpack(">4i", _read_record(fh))
-        _read_record(fh)  # IKLE (nelem*ndp int32) -- consumed, not used here
+        # IKLE (nelem*ndp int32): the element connectivity, 1-based in SELAFIN.
+        # Return it 0-based so a mesh-faithful render triangulates real elements.
+        ikle = (np.frombuffer(_read_record(fh), dtype=">i4").astype("int64")
+                .reshape(nelem, ndp) - 1)
         _read_record(fh)  # IPOBO (npoin int32)    -- consumed, not used here
         x = np.frombuffer(_read_record(fh), dtype=fdtype).astype("float64")
         y = np.frombuffer(_read_record(fh), dtype=fdtype).astype("float64")
@@ -226,6 +231,7 @@ def read_selafin(path: str | Path) -> dict[str, Any]:
         "nelem": int(nelem),
         "x": x,
         "y": y,
+        "ikle": ikle,
         "times": np.asarray(times, dtype="float64"),
         "data": {v: (np.vstack(a) if a else np.empty((0, npoin))) for v, a in data.items()},
     }

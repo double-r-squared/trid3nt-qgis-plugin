@@ -530,6 +530,43 @@ def _patch_baroclinic_param(
     return t
 
 
+#: Minimum wet lattice nodes required to clip to a shoreline-following mesh; below
+#: this the water mask covered too little of the AOI to build a domain, so the deck
+#: author falls back to the full rectangle (loudly noted) rather than a sliver.
+_MIN_CLIP_NODES: int = 40
+
+
+def _largest_connected_component(pts: Any, tris: Any) -> Any:
+    """Return the subset of ``tris`` in the largest node-connected component.
+
+    A centroid-clipped Delaunay can leave small water pockets disconnected from
+    the main estuary body; SCHISM's open-boundary extraction wants one connected
+    domain. Union-find over triangle edges, keep the component with the most
+    triangles.
+    """
+    import numpy as np
+
+    n = int(pts.shape[0])
+    parent = np.arange(n)
+
+    def find(a: int) -> int:
+        while parent[a] != a:
+            parent[a] = parent[parent[a]]
+            a = parent[a]
+        return a
+
+    for tri in tris:
+        r = find(int(tri[0]))
+        for k in (1, 2):
+            parent[find(int(tri[k]))] = r
+    roots = np.array([find(int(t[0])) for t in tris])
+    if roots.size == 0:
+        return tris
+    labels, counts = np.unique(roots, return_counts=True)
+    keep_root = labels[int(np.argmax(counts))]
+    return tris[roots == keep_root]
+
+
 def _build_estuary_mesh(
     bbox: tuple[float, float, float, float],
     *,
@@ -538,14 +575,24 @@ def _build_estuary_mesh(
     ocean_side: str,
     depth_ocean_m: float,
     depth_river_m: float,
-) -> tuple[Any, Any, Any]:
-    """Build a coarse structured triangulated channel over ``bbox`` (lon/lat).
+    water_mask_fn: Any = None,
+) -> tuple[Any, Any, Any, bool]:
+    """Build a coarse triangulated estuary channel over ``bbox`` (lon/lat).
 
-    Returns ``(points(N,2), tris(M,3), depths(N,))``. A regular ``nx x ny`` lon/lat
-    lattice triangulated by Delaunay; bathymetry ramps linearly from
-    ``depth_river_m`` at the landward edge to ``depth_ocean_m`` at ``ocean_side``
-    (positive-down SCHISM depth). An IDEALIZED coarse demonstration channel, not a
-    surveyed estuary bathymetry (the honesty floor the template stamps).
+    Returns ``(points(N,2), tris(M,3), depths(N,), clipped)``. A regular ``nx x ny``
+    lon/lat lattice; bathymetry ramps linearly from ``depth_river_m`` at the
+    landward edge to ``depth_ocean_m`` at ``ocean_side`` (positive-down SCHISM
+    depth) -- an IDEALIZED coarse demonstration BATHYMETRY (the honesty floor).
+
+    When ``water_mask_fn(lon_arr, lat_arr) -> bool_arr`` is supplied the lattice is
+    CLIPPED TO WATER: land nodes are dropped, the wet nodes are Delaunay-meshed,
+    triangles whose centroid is land are removed (so the mesh follows the real
+    SHORELINE instead of painting the rectangle over land), and only the largest
+    connected water body is kept. ``clipped`` reports whether a shoreline mesh was
+    built (False -> the mask covered too little water and the full rectangle was
+    kept, a loud caller-side note). ``water_mask_fn`` is INJECTED (a real coastline
+    / DEM-sign classifier live; a synthetic one in the offline tests), so this
+    function stays pure + network-free.
     """
     import numpy as np
     from scipy.spatial import Delaunay
@@ -555,7 +602,29 @@ def _build_estuary_mesh(
     ys = np.linspace(lat0, lat1, ny)
     gx, gy = np.meshgrid(xs, ys)
     pts = np.column_stack([gx.ravel(), gy.ravel()])
+
     tris = Delaunay(pts).simplices
+    clipped = False
+    if water_mask_fn is not None:
+        wet = np.asarray(water_mask_fn(pts[:, 0], pts[:, 1]), dtype=bool)
+        if int(wet.sum()) >= _MIN_CLIP_NODES:
+            # Keep the STRUCTURED lattice triangulation (clean 2-manifold topology)
+            # and drop only cells whose centroid is land -- a staircase shoreline
+            # boundary that tin_to_hgrid can walk, unlike a re-Delaunay of the water
+            # subset (which bridges concavities with slivers and breaks the boundary
+            # extraction). Then keep the largest connected water body + re-index.
+            cent = pts[tris].mean(axis=1)
+            water_cell = np.asarray(
+                water_mask_fn(cent[:, 0], cent[:, 1]), dtype=bool)
+            wtris = tris[water_cell]
+            wtris = _largest_connected_component(pts, wtris)
+            used = np.unique(wtris)
+            if used.size >= _MIN_CLIP_NODES and wtris.shape[0] > 0:
+                remap = np.full(pts.shape[0], -1, dtype=np.int64)
+                remap[used] = np.arange(used.size)
+                pts = pts[used]
+                tris = remap[wtris]
+                clipped = True
 
     # normalized 0(landward/river) .. 1(ocean) coordinate along the forcing axis
     if ocean_side in ("south", "north"):
@@ -567,7 +636,7 @@ def _build_estuary_mesh(
         if ocean_side == "west":
             frac = 1.0 - frac
     depths = depth_river_m + (depth_ocean_m - depth_river_m) * frac
-    return pts, tris, depths.astype(float)
+    return pts, tris, depths.astype(float), clipped
 
 
 def _river_source_element(hgrid_text: str, ocean_side: str) -> int:
@@ -623,10 +692,11 @@ def author_baroclinic_estuary_deck(
     river_temp_c: float = 14.0,
     ocean_temp_c: float = 14.0,
     nvrt: int = BAROCLINIC_NVRT,
-    nx: int = 10,
-    ny: int = 24,
+    nx: int = 20,
+    ny: int = 40,
     dt_s: float = 120.0,
     coastal_drag_cd: float = 0.0025,
+    water_mask_fn: Any = None,
 ) -> dict[str, Any]:
     """Author a coarse density-driven 3D BAROCLINIC estuary deck into ``dest_dir``.
 
@@ -647,10 +717,16 @@ def author_baroclinic_estuary_deck(
     dest_dir = Path(dest_dir)
     dest_dir.mkdir(parents=True, exist_ok=True)
 
-    pts, tris, depths = _build_estuary_mesh(
+    pts, tris, depths, clipped = _build_estuary_mesh(
         bbox, nx=nx, ny=ny, ocean_side=ocean_side,
-        depth_ocean_m=15.0, depth_river_m=3.0,
+        depth_ocean_m=15.0, depth_river_m=3.0, water_mask_fn=water_mask_fn,
     )
+    if water_mask_fn is not None and not clipped:
+        logger.warning(
+            "baroclinic estuary: water mask covered too little of the AOI to clip "
+            "to a shoreline mesh -- meshing the full rectangle (salinity may render "
+            "over land). Supply a wetter AOI / a coastline mask."
+        )
     bridge = load_gr3_bridge()
     try:
         gr3_text = bridge.tin_to_hgrid(
@@ -767,6 +843,7 @@ def author_baroclinic_estuary_deck(
         "source_elem": source_elem,
         "bbox": tuple(bbox),
         "centroid": (lon_c, lat_c),
+        "shoreline_clipped": bool(clipped),
     }
 
 

@@ -94,7 +94,15 @@ def main():
     to_ll = Transformer.from_crs(f"EPSG:{epsg}", "EPSG:4326", always_xy=True)
     lon, lat = to_ll.transform(x, y)
     mx, my = TO3857.transform(lon, lat)
-    tri = Triangulation(mx, my)
+    # Triangulate on the REAL SELAFIN element connectivity (IKLE), NOT an
+    # unconstrained Delaunay of the node cloud. A Delaunay of a sinuous channel's
+    # nodes bridges every river bend with long triangles across the convex hull,
+    # painting a chaotic fan OUTSIDE the actual water body (the pre-fix defect).
+    # The true elements follow the meshed banks, so the fill + wireframe trace
+    # the real river and never leave the channel.
+    ikle = data["ikle"] if "ikle" in data else None
+    tri = (Triangulation(mx, my, triangles=ikle) if ikle is not None
+           else Triangulation(mx, my))
 
     lw, le, ls, ln = lon.min(), lon.max(), lat.min(), lat.max()
     pad_x = (le - lw) * 0.35 + 1e-4

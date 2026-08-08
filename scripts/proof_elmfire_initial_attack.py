@@ -47,12 +47,12 @@ def main():
               loc="upper right", frameon=False, ncol=2)
     ax.grid(True, alpha=0.25)
     ax.set_title("Hirsch (1998) initial-attack POC vs attack delay", fontsize=8)
-    fig.text(0.5, 0.005,
-             "elmfire_initial_attack_containment_probability: a faster-spreading, "
-             "more intense fire loses containability sooner as response slows "
-             "(ADR 0190 row 2; exact published elmfire.io Hirsch coefficients)",
-             ha="center", fontsize=6, color="0.4")
-    fig.tight_layout(rect=(0, 0.05, 1, 1))
+    fig.text(0.5, 0.02,
+             "elmfire_initial_attack_containment_probability: a faster-spreading, more\n"
+             "intense fire loses containability sooner as response slows (ADR 0190 row 2;\n"
+             "exact published elmfire.io Hirsch coefficients)",
+             ha="center", va="bottom", fontsize=6, color="0.4")
+    fig.tight_layout(rect=(0, 0.20, 1, 1))
     p1 = os.path.join(OUT, f"{STEM}_poc_delay_chart.png")
     fig.savefig(p1, dpi=200)
     plt.close(fig)
