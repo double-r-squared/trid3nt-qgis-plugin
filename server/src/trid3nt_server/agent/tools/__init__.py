@@ -658,6 +658,10 @@ from ..workflows.swmm.node_hydraulics_comparison.node_hydraulics_comparison impo
 from ..workflows.swmm.wetwell_pump_control_comparison.wetwell_pump_control_comparison import swmm_wetwell_pump_control_comparison as _swmm_wetwell_pump_control_comparison  # noqa: E402,F401 - NEW capability (ADR 0151, wet-well pump curve + duty/standby + multi-condition RTC) (engine=swmm, tier=template)
 from ..workflows.swmm.lid_performance_comparison.lid_performance_comparison import swmm_lid_performance_comparison as _swmm_lid_performance_comparison  # noqa: E402,F401 - NEW capability (ADR 0151, green roof / rain barrel vs rooftop disconnect / vegetative swale) (engine=swmm, tier=template)
 from ..workflows.swmm.wq_buildup_washoff_comparison.wq_buildup_washoff_comparison import swmm_wq_buildup_washoff_comparison as _swmm_wq_buildup_washoff_comparison  # noqa: E402,F401 - NEW capability (ADR 0151, curb-length vs area buildup + EMC vs exp washoff) (engine=swmm, tier=template)
+# swmm_rdii_rtk_unit_hydrograph (ADR 0190 row 4): RTK triangular unit-hydrograph
+# RDII (rainfall-derived inflow+infiltration) at a node vs direct runoff; closed
+# form validated against the native SWMM 5 [HYDROGRAPHS]/[RDII] engine. tier=template.
+from ..workflows.swmm.rdii_rtk.rdii_rtk import swmm_rdii_rtk_unit_hydrograph as _swmm_rdii_rtk_unit_hydrograph  # noqa: E402,F401 - RTK unit-hydrograph RDII
 # telemac_river_dye TEMPLATE (engine="telemac", tier="template"), one folder
 # under workflows/telemac/river_dye/; EXCLUDED from the default retrieval
 # pool, surfaced only by the run_telemac door's gate expansion. The composer
@@ -824,6 +828,10 @@ from ..workflows.elmfire.transient.dead_fuel_interp.dead_fuel_interp import elmf
 # active-crown spread-rate ceiling (CROWN_FIRE_SPREAD_RATE_LIMIT) on a canopied
 # deck. tier=template, engine=elmfire.
 from ..workflows.elmfire.crown.crown_fire import elmfire_crown_fire_initiation_threshold_sweep as _elmfire_crown_fire_initiation_threshold_sweep  # noqa: E402,F401 - crown-fire initiation + Cruz-rate-ceiling folded sweep
+# ELMFIRE initial-attack POC (ADR 0190 row 2): the Hirsch 1998 closed-form
+# probability of containment (fire size + head-fire intensity + attack delay).
+# CLOSED-FORM validation class (no engine run, chart/scalars). tier=template.
+from ..workflows.elmfire.initial_attack.initial_attack import elmfire_initial_attack_containment_probability as _elmfire_initial_attack_containment_probability  # noqa: E402,F401 - Hirsch POC closed form
 # pelicun_damage_assessment TEMPLATE (engine="pelicun", tier="template")
 # under workflows/pelicun/damage_assessment/; EXCLUDED from the default
 # retrieval pool, surfaced only by the run_pelicun door's gate expansion. Its

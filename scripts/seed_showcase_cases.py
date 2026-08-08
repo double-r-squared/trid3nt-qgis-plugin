@@ -77,11 +77,13 @@ class Showcase:
     args: dict
     note: str
     timeout_s: float = 300.0
+    title_suffix: str = ""  # distinguishes multiple showcases of one template
 
     @property
     def case_title(self) -> str:
         # Humanize the tool name into a Case label the left rail reads well.
-        return "showcase: " + self.tool.replace("_", " ")
+        base = "showcase: " + self.tool.replace("_", " ")
+        return f"{base} ({self.title_suffix})" if self.title_suffix else base
 
 
 SHOWCASE: list[Showcase] = [
@@ -90,10 +92,25 @@ SHOWCASE: list[Showcase] = [
              "ADR 0146 pelicun validation wave (analytic DS-probability identity)", 180),
     Showcase("pelicun_hazus_seismic_dl_run", {},
              "ADR 0160 HAZUS seismic DL harness defaults (C1 Low-Rise Pre-Code)", 240),
+    Showcase("elmfire_initial_attack_containment_probability",
+             {"head_fire_intensity_kw_m": 2500.0, "attack_delay_min": 30.0},
+             "ADR 0190 row 2 ELMFIRE Hirsch (1998) initial-attack probability of "
+             "containment closed form: POC vs attack delay across head-fire "
+             "intensities (no engine run; chart + scalars).", 120),
     Showcase("modflow_package_validation", {"case": "maw_crossaquifer"},
              "ADR 0153 MODFLOW package validation, MAW cross-aquifer fixture", 300),
     Showcase("modflow_package_validation", {"case": "sfr_stream_depletion"},
              "ADR 0167 MODFLOW SFR stream-depletion fixture", 300),
+    Showcase("swmm_rdii_rtk_unit_hydrograph",
+             {"R1": 0.12, "T1": 1.0, "K1": 2.0, "R2": 0.15, "T2": 3.0, "K2": 3.0,
+              "R3": 0.09, "T3": 8.0, "K3": 3.0, "sewershed_area_ac": 10.0,
+              "rainfall_series_in_per_hr": [0.0, 0.25, 0.5, 0.8, 0.4, 0.1, 0.0],
+              "cross_check_swmm": True},
+             "ADR 0190 row 4 SWMM RTK unit-hydrograph RDII on the EPA SWMM 5 Ch.7 "
+             "Table 7-1 worked example (10-acre sewershed, R sum 0.36, published "
+             "hourly rainfall): RDII at a node vs direct runoff, closed form "
+             "validated against the native SWMM 5 [HYDROGRAPHS]/[RDII] engine "
+             "(peak match <1%, ~4% of the published Fig 7-10 peak).", 180),
     Showcase("swmm_subcatchment_runoff_comparison", {"compare": "infiltration_method"},
              "ADR 0151 SWMM mechanism comparison (infiltration method A/B)", 240),
     Showcase("swmm_wetwell_pump_control_comparison", {},
@@ -188,6 +205,17 @@ SHOWCASE: list[Showcase] = [
              {"bbox": _GALVESTON, "sim_duration_s": 54000, "output_frames": 12,
               "amr_levels": 2},
              "ADR 0168 GeoClaw storm surge, synthetic demo track on Galveston shelf", 600),
+    # -- SWAN nonstationary storm evolution (ADR 0190 row 3) -----------------
+    Showcase("swan_wave_field",
+             {"bbox": _APALACHEE, "mode": "nonstationary",
+              "boundary_hs_m": 1.0, "boundary_side": "S",
+              "storm_peak_hs_m": 6.0, "storm_peak_hour": 18.0,
+              "sim_duration_s": 129600, "time_step_s": 600, "output_frames": 18},
+             "ADR 0190 row 3 SWAN NONSTATIONARY time-marching storm evolution: a "
+             "time-varying offshore boundary builds to Hs=6 m at hour 18 then "
+             "decays over 36 h (Apalachee Bay FL shelf), producing time-stamped "
+             "nearshore Hs frames for the scrubber + a peak-Hs field (native "
+             "solver).", 1200, title_suffix="nonstationary storm"),
     # -- TELEMAC water quality / transport -----------------------------------
     Showcase("telemac_do_sag", {"location": "Sacramento River near Colusa, California"},
              "ADR 0169 TELEMAC-WAQTEL DO-sag, real NHDPlus reach nr Colusa CA", 600),
@@ -195,6 +223,15 @@ SHOWCASE: list[Showcase] = [
              {"location": "Eel River near Scotia, California",
               "wind_speed_mps": 18.0, "wind_direction_deg": 270.0},
              "ADR 0154 TELEMAC river dye + wind forcing, Eel River nr Scotia CA", 600),
+    Showcase("telemac_river_dye",
+             {"location": "Eel River near Scotia, California",
+              "rainfall_mm_per_day": 150.0, "sim_duration_s": 5400},
+             "ADR 0190 row 1 TELEMAC distributed on-mesh rainfall forcing: a real "
+             "atmospheric-river daily rate (150 mm/day) applied as a native RAIN OR "
+             "EVAPORATION source term at every wet node raises inundation depth "
+             "INDEPENDENT of the inflow hydrograph (Eel River nr Scotia CA). gridMET "
+             "real-storm auto-source proven live at 158 mm/day for Hurricane Harvey.",
+             900, title_suffix="rainfall"),
     # -- HEC-RAS (bundled Muncie deck; cheap 1D/2D) --------------------------
     Showcase("hecras_flood_2d",
              {"bbox": [-98.115, 29.975, -98.083, 30.000], "target_peak_cfs": 15000,
@@ -486,7 +523,7 @@ async def _verify_persistence(session_id: str, results: list[Result]) -> None:
 
 async def run_all(only: str | None) -> list[Result]:
     import websockets.asyncio.client as wsc
-    entries = [s for s in SHOWCASE if (only is None or only in s.tool)]
+    entries = [s for s in SHOWCASE if (only is None or only in s.tool or only in s.title_suffix)]
     session_id = new_ulid()
     log.info("=== showcase seeding: %d entries, session=%s ===", len(entries), session_id)
     results: list[Result] = []
@@ -516,7 +553,7 @@ async def run_all(only: str | None) -> list[Result]:
 # --------------------------------------------------------------------------- #
 def dry_run(only: str | None) -> int:
     from trid3nt.net.run_invocation import parse_run_invocation
-    entries = [s for s in SHOWCASE if (only is None or only in s.tool)]
+    entries = [s for s in SHOWCASE if (only is None or only in s.tool or only in s.title_suffix)]
     print(f"planned showcase Cases: {len(entries)}\n")
     failures = 0
     for sc in entries:

@@ -91,6 +91,18 @@ class ReachConfig:
     wind_speed_mps: float = 0.0         # sustained wind speed (0 -> no wind)
     wind_dir_from_deg: float = 0.0      # meteorological: direction wind blows FROM
     wind_drag_coef: float = None        # type: ignore[assignment]  # None -> dico default
+    # DISTRIBUTED ON-MESH RAINFALL / EVAPORATION forcing (TELEMAC-2D native
+    # source term). Default None leaves the deck byte-identical: author_deck
+    # emits NO rain block and RAIN OR EVAPORATION stays absent (= NO). A set
+    # value activates a spatially-uniform, temporally-constant water flux applied
+    # at EVERY wet mesh node (distinct from the inflow-boundary hydrograph): the
+    # deck sets RAIN OR EVAPORATION = YES + RAIN OR EVAPORATION IN MM PER DAY =
+    # <value>. TELEMAC's single signed keyword: POSITIVE = rainfall (adds water,
+    # raises stage, wets tidal flats), NEGATIVE = evaporation (removes water).
+    # The rate is a real gridMET storm total (mm/day) resolved by the composer,
+    # or a user override. Keyword pinned against telemac2d.dico v9.0 (RAIN OR
+    # EVAPORATION / RAIN OR EVAPORATION IN MM PER DAY).
+    rain_or_evap_mm_per_day: float = None  # type: ignore[assignment]  # None -> no rain block
     # FINITE SPILL PULSE (realism default): a mid-reach point source injects dye
     # for a short window then stops, so the slug TRAVELS downstream and dilutes
     # rather than the old continuous upstream-inflow injection saturating the
@@ -2088,6 +2100,31 @@ def author_deck(cfg, mesh, slf, cli, res, cas_path, lb_order, bed):
     else:
         wind_block = ""
 
+    # DISTRIBUTED ON-MESH RAINFALL / EVAPORATION. Emitted ONLY when
+    # rain_or_evap_mm_per_day is set (non-None); unset leaves the deck
+    # byte-identical (no RAIN lines, RAIN OR EVAPORATION absent = NO). The
+    # native TELEMAC-2D source term applies a uniform water flux at every wet
+    # node - independent of the inflow-boundary hydrograph (q above). Signed:
+    # positive = rain (water in), negative = evaporation (water out).
+    _rain_rate = getattr(cfg, "rain_or_evap_mm_per_day", None)
+    if _rain_rate is not None:
+        # When RAIN is active AND tracers exist, TELEMAC-2D (DAMOCLES) REQUIRES
+        # the rainwater tracer concentration (keyword VALUES OF TRACERS IN THE
+        # RAIN / MNEMO TRAIN) with one value per tracer - omitting it aborts with
+        # "GIVE AS MANY VALUES AS TRACERS". Rainwater carries ZERO dye / sediment
+        # (a clean-rain default). Tracer count: do_sag = 4 (dye + DO + CBOD +
+        # NH4), sediment (GAIA) = 2 (dye + suspended class), else 1 (dye).
+        _subst = str(getattr(cfg, "substance_class", "tracer")).lower()
+        _n_tracers = 4 if _subst == "do_sag" else (2 if _subst == "sediment" else 1)
+        _train = ";".join(["0."] * _n_tracers)
+        rain_block = (
+            "RAIN OR EVAPORATION             = YES\n"
+            f"RAIN OR EVAPORATION IN MM PER DAY = {_cas_real(float(_rain_rate))}\n"
+            f"VALUES OF TRACERS IN THE RAIN   = {_train}\n"
+        )
+    else:
+        rain_block = ""
+
     cas = f"""/-------------------------------------------------------------------/
 /  TELEMAC-2D  P1 REAL RIVER DYE  -  {cfg.name}
 /  Mesh from NHDPlus flowlines (Gmsh, tagged physical groups) -> rank IPOBO.
@@ -2119,7 +2156,7 @@ PRESCRIBED ELEVATIONS           = {';'.join(elev)}
 LAW OF BOTTOM FRICTION          = {_fric_law}
 FRICTION COEFFICIENT            = {_fric_coef}
 VELOCITY DIFFUSIVITY            = {_vel_diff}
-{wind_block}/
+{wind_block}{rain_block}/
 EQUATIONS                       = 'SAINT-VENANT FE'
 TREATMENT OF THE LINEAR SYSTEM  = 2
 TYPE OF ADVECTION               = 1;5

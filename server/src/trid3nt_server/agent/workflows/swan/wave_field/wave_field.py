@@ -123,6 +123,42 @@ _SIDE_WORD_TO_CARDINAL = {
 }
 
 
+def build_storm_hydrograph(
+    baseline_hs_m: float,
+    peak_hs_m: float,
+    tp_s: float,
+    dir_deg: float,
+    spread_deg: float,
+    sim_duration_s: float,
+    peak_hour: float | None,
+    n_points: int = 9,
+) -> list[tuple[float, float, float, float, float]]:
+    """Build a time-varying storm boundary series (build to a peak, then decay).
+
+    Returns ``[(t_sec, hs_m, tp_s, dir_deg, spread_deg), ...]`` - a triangular
+    Hs envelope from ``baseline_hs_m`` up to ``peak_hs_m`` at ``peak_hour`` then
+    back to baseline at the end. Tp grows modestly with Hs (a longer-period sea
+    at the peak). Pure - unit-testable, no network."""
+    dur = float(sim_duration_s)
+    peak_t = (float(peak_hour) * 3600.0 if peak_hour is not None else dur / 2.0)
+    peak_t = min(max(peak_t, dur * 0.05), dur * 0.95)
+    base = max(float(baseline_hs_m), 0.1)
+    peak = max(float(peak_hs_m), base)
+    ts = [dur * k / (n_points - 1) for k in range(n_points)]
+    rows: list[tuple[float, float, float, float, float]] = []
+    for t in ts:
+        if t <= peak_t:
+            frac = t / peak_t if peak_t > 0 else 1.0
+        else:
+            frac = (dur - t) / (dur - peak_t) if dur > peak_t else 0.0
+        hs = base + (peak - base) * max(0.0, min(1.0, frac))
+        # Tp scales gently with the sea state (peak sea ~ +25% period).
+        tp = float(tp_s) * (1.0 + 0.25 * (hs - base) / max(peak - base, 1e-6))
+        rows.append((round(t, 1), round(hs, 3), round(tp, 3),
+                     float(dir_deg), float(spread_deg)))
+    return rows
+
+
 def _normalize_boundary_side(raw: Any) -> str | None:
     """Coerce a free-text boundary side to one of N/S/E/W (None if unparseable).
 
@@ -166,7 +202,7 @@ TEMPLATE_CARD = TemplateCard(
         "mode (stationary / nonstationary), boundary_hs_m, boundary_tp_s, "
         "boundary_dir_deg, boundary_spread_deg, boundary_side, wind_uri, "
         "n_dir, n_freq, freq_low_hz, freq_high_hz, sim_duration_s, time_step_s, "
-        "output_frames, friction, breaking, triads"
+        "output_frames, storm_peak_hs_m, storm_peak_hour, friction, breaking, triads"
     ),
 )
 
@@ -208,6 +244,8 @@ async def swan_wave_field(
     sim_duration_s: float = 10800.0,
     time_step_s: float = 600.0,
     output_frames: int = 24,
+    storm_peak_hs_m: float | None = None,
+    storm_peak_hour: float | None = None,
     friction: bool = True,
     breaking: bool = True,
     triads: bool = True,
@@ -249,6 +287,14 @@ async def swan_wave_field(
         boundary_hs_m/boundary_tp_s/boundary_dir_deg/boundary_spread_deg:
             offshore boundary sea state; unset synthesizes a demo storm.
         boundary_side: forcing side {"N","S","E","W"}; auto-chosen if unset.
+        storm_peak_hs_m: OPTIONAL peak offshore Hs (m) of a TIME-VARYING storm
+            (nonstationary only). When set, the offshore boundary BUILDS from the
+            baseline ``boundary_hs_m`` up to this peak at ``storm_peak_hour`` then
+            DECAYS back over ``sim_duration_s`` - a passing 24-48 h storm whose
+            nearshore wave field genuinely evolves (vs a constant-boundary
+            spin-up). Forces ``mode="nonstationary"``.
+        storm_peak_hour: OPTIONAL hour (from run start) of the storm peak.
+            Default = the middle of the run. Only used with ``storm_peak_hs_m``.
         wind_uri: optional ERA5 wind grid; enables GEN3 wind-sea growth.
         n_dir/n_freq/freq_low_hz/freq_high_hz: spectral discretization
             (defaults 36/32/0.04/1.0).
@@ -321,6 +367,26 @@ async def swan_wave_field(
                     bkwargs["side"] = norm_side
             boundary = SwanWaveBoundary(**bkwargs)
 
+        # TIME-VARYING storm: a storm_peak_hs_m forces nonstationary mode and
+        # builds the offshore boundary hydrograph (build-peak-decay). Requires a
+        # resolved boundary (baseline Hs + Tp/dir/spread come from it).
+        storm_series = None
+        if storm_peak_hs_m is not None:
+            mode = "nonstationary"
+            _b = boundary
+            base_hs = float(_b.hs_m) if _b is not None else (
+                float(boundary_hs_m) if boundary_hs_m is not None else 1.0)
+            base_tp = float(_b.tp_s) if _b is not None else (
+                float(boundary_tp_s) if boundary_tp_s is not None else 10.0)
+            base_dir = float(_b.dir_deg) if _b is not None else (
+                float(boundary_dir_deg) if boundary_dir_deg is not None else 180.0)
+            base_spread = float(_b.spread_deg) if _b is not None else (
+                float(boundary_spread_deg) if boundary_spread_deg is not None else 25.0)
+            storm_series = build_storm_hydrograph(
+                base_hs, float(storm_peak_hs_m), base_tp, base_dir, base_spread,
+                float(sim_duration_s), storm_peak_hour,
+            )
+
         kwargs: dict[str, Any] = dict(
             bbox=tuple(coerced),  # type: ignore[arg-type]
             mode=mode,
@@ -349,6 +415,8 @@ async def swan_wave_field(
             kwargs["boundary"] = boundary
         if wind_uri:
             kwargs["wind_uri"] = str(wind_uri)
+        if storm_series is not None:
+            kwargs["storm_boundary_timeseries"] = storm_series
         run_args = SwanRunArgs(**kwargs)
     except Exception as exc:  # noqa: BLE001 -- pydantic ValidationError or coercion
         return {

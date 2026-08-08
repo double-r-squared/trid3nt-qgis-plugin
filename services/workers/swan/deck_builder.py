@@ -87,6 +87,17 @@ __all__ = [
 OUTPUT_MAT_FILENAME: str = "swan_out.mat"
 INPUT_FILENAME: str = "INPUT"
 
+#: Time-varying storm-boundary series (TPAR) file for a NONSTATIONARY storm-
+#: evolution run. Written by author_deck ONLY when the build_spec carries a
+#: boundary_timeseries; referenced by BOUNDSPEC SIDE ... CONSTANT FILE.
+TPAR_FILENAME: str = "storm_boundary.tpar"
+
+#: SWAN nonstationary reference date. SWAN needs full ISO date-time strings
+#: (YYYYMMDD.HHMMSS) for a multi-day (24-48 h storm) run - the relative
+#: HHMMSS.sss form overflows past 24 h. A fixed epoch keeps the deck
+#: self-contained (the wave field is relative-time; the calendar is cosmetic).
+_SWAN_REF_DATE: str = "20170101"
+
 #: The SWAN *case name* the entrypoint hands to ``swanrun -input <SWN_CASENAME>``.
 #: The TU Delft ``swanrun`` launcher APPENDS ``.swn`` to this argument: it looks
 #: for ``<SWN_CASENAME>.swn``, copies it to the file literally named ``INPUT``,
@@ -143,7 +154,7 @@ SWAN_DEPMIN_M: float = 0.05
 #: PARSER VERSION -- bump whenever a build_spec top-level field is added,
 #: renamed, or retired. Named in the strict-field error so a stale worker
 #: image is distinguishable from a genuinely-malformed caller (ADR 0158).
-_PARSER_VERSION = "swan-spec-2"
+_PARSER_VERSION = "swan-spec-3"
 
 #: Every top-level build_spec field ``parse_build_spec`` reads. No legacy /
 #: envelope-only fields exist here -- ``manifest.get("build_spec")`` is the
@@ -177,6 +188,7 @@ _KNOWN_SPEC_FIELDS = frozenset(
         "sim_duration_s",
         "time_step_s",
         "output_frames",
+        "boundary_timeseries",
         "output_quantities",
     }
 )
@@ -261,6 +273,11 @@ class SwanBuildSpec:
     sim_duration_s: float = 10800.0
     time_step_s: float = 600.0
     output_frames: int = 24
+    # TIME-VARYING storm boundary (nonstationary only). A sequence of
+    # (t_sec, hs_m, tp_s, dir_deg, spread_deg) rows written to a TPAR file so the
+    # offshore forcing BUILDS to a peak then DECAYS over the run - genuine storm
+    # evolution. None (default) keeps the CONSTANT-boundary deck byte-identical.
+    boundary_timeseries: tuple[tuple[float, float, float, float, float], ...] | None = None
     # output.
     output_quantities: tuple[str, ...] = DEFAULT_OUTPUT_QUANTITIES
 
@@ -408,6 +425,44 @@ def parse_build_spec(raw: dict[str, Any]) -> SwanBuildSpec:
             "SWAN_SPEC_INVALID", f"output_frames must be >= 1, got {output_frames}"
         )
 
+    # TIME-VARYING storm boundary (nonstationary only): list of
+    # [t_sec, hs, tp, dir, spread] rows. Validated + coerced to a tuple of
+    # 5-float tuples, sorted by time. None/absent -> the constant-boundary deck.
+    bts_raw = raw.get("boundary_timeseries")
+    boundary_timeseries: tuple[tuple[float, float, float, float, float], ...] | None = None
+    if bts_raw:
+        if mode != "nonstationary":
+            raise SwanDeckError(
+                "SWAN_SPEC_INVALID",
+                "boundary_timeseries requires mode='nonstationary'",
+            )
+        if not isinstance(bts_raw, (list, tuple)) or len(bts_raw) < 2:
+            raise SwanDeckError(
+                "SWAN_SPEC_INVALID",
+                f"boundary_timeseries must be >= 2 rows, got {bts_raw!r}",
+            )
+        rows: list[tuple[float, float, float, float, float]] = []
+        for r in bts_raw:
+            if not isinstance(r, (list, tuple)) or len(r) != 5:
+                raise SwanDeckError(
+                    "SWAN_SPEC_INVALID",
+                    f"each boundary_timeseries row must be "
+                    f"[t_sec, hs, tp, dir, spread], got {r!r}",
+                )
+            t_sec, hs_r, tp_r, dir_r, dd_r = (float(x) for x in r)
+            if hs_r <= 0.0 or tp_r <= 0.0 or dd_r <= 0.0:
+                raise SwanDeckError(
+                    "SWAN_SPEC_INVALID",
+                    f"boundary_timeseries hs/tp/spread must be > 0, got {r!r}",
+                )
+            if not (0.0 <= dir_r < 360.0):
+                raise SwanDeckError(
+                    "SWAN_SPEC_INVALID",
+                    f"boundary_timeseries dir must be in [0,360), got {dir_r}",
+                )
+            rows.append((t_sec, hs_r, tp_r, dir_r, dd_r))
+        boundary_timeseries = tuple(sorted(rows, key=lambda x: x[0]))
+
     quants_raw = raw.get("output_quantities") or list(DEFAULT_OUTPUT_QUANTITIES)
     if not isinstance(quants_raw, (list, tuple)) or not quants_raw:
         raise SwanDeckError(
@@ -509,6 +564,7 @@ def parse_build_spec(raw: dict[str, Any]) -> SwanBuildSpec:
         sim_duration_s=sim_duration_s,
         time_step_s=time_step_s,
         output_frames=output_frames,
+        boundary_timeseries=boundary_timeseries,
         output_quantities=tuple(quants),
     )
 
@@ -528,6 +584,34 @@ def _grid_geometry(spec: SwanBuildSpec) -> dict[str, float]:
         "xlenc": max_lon - min_lon,
         "ylenc": max_lat - min_lat,
     }
+
+
+def _swan_iso_time(seconds: float) -> str:
+    """Seconds-from-epoch -> a SWAN ISO time string ``YYYYMMDD.HHMMSS`` on the
+    fixed ``_SWAN_REF_DATE`` epoch. Used for COMPUTE NONSTATIONARY / BLOCK OUTPUT
+    / TPAR times so a 24-48 h storm run carries valid multi-day timestamps
+    (the old relative HHMMSS.sss form silently overflowed past 24 h)."""
+    import datetime as _dt
+
+    base = _dt.datetime.strptime(_SWAN_REF_DATE, "%Y%m%d")
+    t = base + _dt.timedelta(seconds=float(seconds))
+    return t.strftime("%Y%m%d.%H%M%S")
+
+
+def render_tpar(spec: SwanBuildSpec) -> str | None:
+    """Render the TPAR time-varying boundary file text from
+    ``spec.boundary_timeseries`` (a sequence of ``(t_sec, hs, tp, dir, spread)``
+    rows), or ``None`` when no series is set. SWAN TPAR format: the ``TPAR``
+    header then one ``<isotime> <Hs> <Per> <Dir> <dd>`` row per time."""
+    series = getattr(spec, "boundary_timeseries", None)
+    if not series:
+        return None
+    rows = ["TPAR"]
+    for row in series:
+        t_sec, hs, tp, bdir, dd = (float(row[0]), float(row[1]), float(row[2]),
+                                   float(row[3]), float(row[4]))
+        rows.append(f"{_swan_iso_time(t_sec)} {hs:.3f} {tp:.3f} {bdir:.2f} {dd:.2f}")
+    return "\n".join(rows) + "\n"
 
 
 def render_swn_command_file(spec: SwanBuildSpec) -> str:
@@ -688,36 +772,59 @@ def render_swn_command_file(spec: SwanBuildSpec) -> str:
     #   BOUNDSPEC SIDE <side> CONSTANT PAR <hs> <per> <dir> <dd>
     lines.append("BOUND SHAPE JONSWAP PEAK DSPR DEGREES")
     side_word = {"N": "N", "S": "S", "E": "E", "W": "W"}[spec.boundary_side]
-    lines.append(
-        f"BOUNDSPEC SIDE {side_word} CONSTANT PAR "
-        f"{spec.boundary_hs_m:.3f} {spec.boundary_tp_s:.3f} "
-        f"{spec.boundary_dir_deg:.2f} {spec.boundary_spread_deg:.2f}"
-    )
+    if spec.mode == "nonstationary" and getattr(spec, "boundary_timeseries", None):
+        # TIME-VARYING storm boundary: a build-peak-decay Hs series drives genuine
+        # 24-48 h storm EVOLUTION (not a constant spin-up). SWAN reads the offshore
+        # parametric boundary from a TPAR file (written by author_deck).
+        lines.append(
+            f"BOUNDSPEC SIDE {side_word} CONSTANT FILE '{TPAR_FILENAME}' 1"
+        )
+    else:
+        lines.append(
+            f"BOUNDSPEC SIDE {side_word} CONSTANT PAR "
+            f"{spec.boundary_hs_m:.3f} {spec.boundary_tp_s:.3f} "
+            f"{spec.boundary_dir_deg:.2f} {spec.boundary_spread_deg:.2f}"
+        )
+
+    # NONSTATIONARY propagation scheme: the default higher-order (S&L / SORDUP)
+    # scheme is CFL-restricted and SWAN ABORTS (error level 2, "inadvisable to
+    # use the higher order scheme for nonstationary computation with CFL greater
+    # than 10") on a time-marching storm at a normal time step. PROP BSBT is
+    # SWAN's unconditionally-stable first-order backward-space-backward-time
+    # scheme, the recommended nonstationary propagation (more diffusive but
+    # robust). Stationary runs keep the default higher-order scheme.
+    if spec.mode == "nonstationary":
+        lines.append("PROP BSBT")
 
     # Gridded output BLOCK over the whole computational grid -> a Matlab file the
     # postprocess reads. NOHEADER keeps it a plain array per quantity; LAYOUT 3 is
-    # the standard ordering.
+    # the standard ordering. In NONSTATIONARY mode the BLOCK MUST carry an OUTPUT
+    # <tbeg> <delt> <unit> clause or SWAN writes NO per-frame dumps (a silent gap
+    # the pre-ADR-0190 deck had). The output cadence is set so ~output_frames
+    # dumps span the run.
     quant_str = " ".join(spec.output_quantities)
-    lines.append(
-        f"BLOCK 'COMPGRID' NOHEADER '{OUTPUT_MAT_FILENAME}' LAYOUT 3 {quant_str}"
-    )
+    if spec.mode == "nonstationary":
+        out_delt = max(spec.sim_duration_s / max(int(spec.output_frames), 1), spec.time_step_s)
+        lines.append(
+            f"BLOCK 'COMPGRID' NOHEADER '{OUTPUT_MAT_FILENAME}' LAYOUT 3 {quant_str} "
+            f"OUTPUT {_swan_iso_time(0.0)} {out_delt:.1f} SEC"
+        )
+    else:
+        lines.append(
+            f"BLOCK 'COMPGRID' NOHEADER '{OUTPUT_MAT_FILENAME}' LAYOUT 3 {quant_str}"
+        )
 
     # Compute + stop.
     if spec.mode == "nonstationary":
-        # COMPUTE NONSTATIONARY <tstart> <dt> <unit> <tstop>. SWAN time strings
-        # are ISO-like; we use a relative seconds-from-zero convention via SEC
-        # unit so the deck is self-contained (no absolute calendar dependency).
-        n_steps = int(spec.output_frames)
-        # tbegin=0, tend=sim_duration; dt set so we get ~output_frames dumps.
+        # COMPUTE NONSTATIONARY <tbegc> <deltc> <unit> <tendc>. tbegc/tendc are
+        # full ISO date-time strings (YYYYMMDD.HHMMSS) so a multi-day storm run
+        # carries valid timestamps (the old bare-seconds tendc was malformed --
+        # it overflowed the HHMMSS field past 24 h). deltc is the compute step.
         lines.append(
             "COMPUTE NONSTATIONARY "
-            f"000000.000 {spec.time_step_s:.1f} SEC "
-            f"{spec.sim_duration_s:.1f}"
+            f"{_swan_iso_time(0.0)} {spec.time_step_s:.1f} SEC "
+            f"{_swan_iso_time(spec.sim_duration_s)}"
         )
-        # NOTE: per-frame BLOCK dumps are emitted by SWAN at each compute step
-        # when the BLOCK is inside the COMPUTE window; n_steps is carried in the
-        # manifest for the postprocess frame-selection cap.
-        _ = n_steps
     else:
         # STATIONARY mode: the SWAN manual is explicit -- "if the SWAN mode is
         # stationary, then only the command COMPUTE should be given here (no
@@ -827,6 +934,12 @@ def build_swan_deck(
     bottom_text = render_bottom_input(spec, depth_fn=depth_fn)
     (deck / spec.bottom_file).write_text(bottom_text, encoding="utf-8")
     written.append(spec.bottom_file)
+
+    # The TIME-VARYING storm boundary (TPAR), when a boundary_timeseries is set.
+    tpar_text = render_tpar(spec)
+    if tpar_text is not None:
+        (deck / TPAR_FILENAME).write_text(tpar_text, encoding="utf-8")
+        written.append(TPAR_FILENAME)
 
     wind_enabled = spec.wind_file is not None
     _phys = f"gen={spec.gen_formulation} gamma={spec.breaking_gamma:.2f} cfjon={spec.friction_cfjon:.3f}"

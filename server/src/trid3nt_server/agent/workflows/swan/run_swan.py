@@ -289,6 +289,11 @@ def build_swan_build_spec(
     }
     if run_args.wind_uri is not None and wind_dest is not None:
         spec["wind_file"] = wind_dest
+    # TIME-VARYING storm boundary (nonstationary storm evolution): pass the
+    # build-peak-decay Hs series through so the worker writes a TPAR boundary.
+    ts = getattr(run_args, "storm_boundary_timeseries", None)
+    if ts:
+        spec["boundary_timeseries"] = [list(map(float, row)) for row in ts]
     return spec
 
 

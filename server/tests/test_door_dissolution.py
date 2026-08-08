@@ -41,6 +41,7 @@ EXPECTED_TEMPLATES = {
     "swmm_wetwell_pump_control_comparison",  # ADR 0151 SWMM CAND-S: wet-well pump curve + duty/standby + multi-condition RTC
     "swmm_lid_performance_comparison",  # ADR 0151 SWMM CAND-S: green roof / rain barrel vs rooftop disconnect / vegetative swale
     "swmm_wq_buildup_washoff_comparison",  # ADR 0151 SWMM CAND-S: curb-length vs area buildup + EMC vs exp washoff
+    "swmm_rdii_rtk_unit_hydrograph",  # ADR 0190 row 4: RTK unit-hydrograph RDII vs direct runoff (closed form + native SWMM cross-check)
     "telemac_river_dye",
     "telemac_do_sag",
     "hecras_riverine_flood",  # engine #11 (ADR 0109; renamed ADR 0120): HEC-RAS riverine-flood template (v1 geometry: Muncie)
@@ -61,6 +62,7 @@ EXPECTED_TEMPLATES = {
     "elmfire_transient_wind_schedule_spread",  # ELMFIRE transient-weather front (ADR 0161): mid-run wind-shift redirection vs constant wind
     "elmfire_dead_fuel_moisture_interpolation_frequency_control",  # ELMFIRE transient-weather front (ADR 0161): DT_INTERPOLATE_M1/M10/M100 accuracy-vs-cost sweep
     "elmfire_crown_fire_initiation_threshold_sweep",  # ELMFIRE crown-fire front (ADR 0161): CRITICAL_CANOPY_COVER initiation + Cruz-rate ceiling folded sweep
+    "elmfire_initial_attack_containment_probability",  # ADR 0190 row 2: Hirsch 1998 closed-form probability of containment (fire size + head-fire intensity + attack delay)
     "landlab_susceptibility",
     "landlab_flow_accumulation",  # ADR 0122 hazard-easy-four #1: Landlab flow-accumulation / drainage-area + channel-network template
     "landlab_green_ampt_overland_flow",  # ADR 0123 hazard-easy-four continuation #1: Green-Ampt infiltration/runoff partition

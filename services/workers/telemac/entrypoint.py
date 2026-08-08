@@ -152,7 +152,7 @@ class TelemacManifestUnknownFieldsError(ValueError):
 
 #: PARSER VERSION -- bump on a ReachConfig field addition/rename/retirement.
 #: Named in the strict-field error (ADR 0158).
-_PARSER_VERSION = "telemac-reach-1"
+_PARSER_VERSION = "telemac-reach-2"
 
 
 def _reach_config(data_dir: Path, reach_overrides: dict[str, Any]) -> Any:

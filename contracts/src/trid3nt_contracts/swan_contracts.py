@@ -249,6 +249,13 @@ class SwanRunArgs(GraceModel):
     time_step_s: float = Field(default=DEFAULT_TIME_STEP_S, gt=0.0)
     output_frames: int = Field(default=DEFAULT_OUTPUT_FRAMES, ge=1)
 
+    # TIME-VARYING storm boundary (nonstationary only): a build-peak-decay
+    # offshore-Hs series driving genuine 24-48 h storm evolution. Each row is
+    # (t_sec, hs_m, tp_s, dir_deg, spread_deg). None keeps the constant boundary.
+    storm_boundary_timeseries: (
+        list[tuple[float, float, float, float, float]] | None
+    ) = None
+
     friction: bool = True
     breaking: bool = True
     triads: bool = True

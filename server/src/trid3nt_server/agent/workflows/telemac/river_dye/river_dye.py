@@ -83,7 +83,8 @@ TEMPLATE_CARD = TemplateCard(
         "spill_fraction, spill_duration_s, dye_concentration_mgl, "
         "reach_length_km, sim_duration_s, source_q_m3s, channel_width_m, "
         "substance (dye / oil / sewage / sediment), mesh_resolution, "
-        "decay_half_life_hours, grain_size_um, friction_coefficient"
+        "decay_half_life_hours, grain_size_um, friction_coefficient, "
+        "rainfall_mm_per_day, rainfall_gridmet_window, evaporation_mm_per_day"
     ),
 )
 
@@ -137,6 +138,9 @@ async def telemac_river_dye(
     tracer_diffusivity: float | None = None,
     wind_speed_mps: float = 0.0,
     wind_direction_deg: float = 0.0,
+    rainfall_mm_per_day: float | None = None,
+    evaporation_mm_per_day: float | None = None,
+    rainfall_gridmet_window: str | None = None,
     compute_class: str = "medium",
     bank_source: str = "nhd_area",
     discharge_m3s: float | None = None,
@@ -275,6 +279,23 @@ async def telemac_river_dye(
         wind_direction_deg: OPTIONAL meteorological wind direction in DEGREES,
             the compass bearing the wind blows FROM (0=N, 90=E, 180=S, 270=W).
             Default 0. Only meaningful when ``wind_speed_mps`` > 0.
+        rainfall_mm_per_day: OPTIONAL distributed ON-MESH rainfall rate (mm/day)
+            applied as a native TELEMAC-2D source term at EVERY wet mesh node,
+            INDEPENDENT of the inflow-boundary hydrograph - the "how does
+            distributed rain change inundation depth/timing" question. Default
+            None = no rain (unchanged solve). A positive value raises stage +
+            wets tidal flats over the whole reach. Pair with (or supersede via)
+            ``rainfall_gridmet_window`` for a real US storm total.
+        evaporation_mm_per_day: OPTIONAL distributed evaporation rate (mm/day),
+            SUBTRACTED from the net rain flux (TELEMAC's signed RAIN OR
+            EVAPORATION keyword). Default None. Set with no rain to model a net
+            water LOSS from the free surface.
+        rainfall_gridmet_window: OPTIONAL real-storm auto-source: an ISO date
+            window ``"YYYY-MM-DD:YYYY-MM-DD"`` (e.g. a hurricane landfall week).
+            Fetches gridMET daily precipitation (``pr``) over the reach AOI for
+            that window and uses the domain-mean daily rate (mm/day) as the
+            rainfall forcing - a REAL observed storm total, not a guess.
+            Supersedes ``rainfall_mm_per_day`` when set.
         compute_class: FR-CE-3 compute class. Default ``"medium"``.
         bank_source: river-bank geometry source. ``"nhd_area"`` (default) meshes
             REAL banks sampled from USGS NHDArea water polygons; when NO NHDArea
@@ -585,6 +606,9 @@ async def telemac_river_dye(
             tracer_diffusivity=tracer_diffusivity,
             wind_speed_mps=wind_speed_mps,
             wind_direction_deg=wind_direction_deg,
+            rainfall_mm_per_day=rainfall_mm_per_day,
+            evaporation_mm_per_day=evaporation_mm_per_day,
+            rainfall_gridmet_window=rainfall_gridmet_window,
             compute_class=compute_class,
             bank_source=bank_source,
             discharge_m3s=(float(discharge_m3s) if discharge_m3s is not None else None),
@@ -1311,6 +1335,124 @@ def _stage_manifest(
     return f"s3://{cache_bucket}/{key}"
 
 
+def _parse_gridmet_window(window: str) -> tuple[str, str]:
+    """Parse a ``"YYYY-MM-DD:YYYY-MM-DD"`` rain window -> (start, end) ISO dates.
+
+    Raises ``TelemacDyeScenarioInputError`` on a malformed window so a bad knob
+    is a loud typed error, never a silent no-rain solve."""
+    parts = [p.strip() for p in str(window or "").split(":") if p.strip()]
+    if len(parts) != 2:
+        raise TelemacDyeScenarioInputError(
+            f"rainfall_gridmet_window must be 'YYYY-MM-DD:YYYY-MM-DD' (got {window!r})."
+        )
+    import datetime as _dt
+    try:
+        _dt.date.fromisoformat(parts[0])
+        _dt.date.fromisoformat(parts[1])
+    except ValueError as exc:
+        raise TelemacDyeScenarioInputError(
+            f"rainfall_gridmet_window has a non-ISO date: {exc}"
+        ) from exc
+    return parts[0], parts[1]
+
+
+def _gridmet_domain_mean_pr(river_bbox: tuple[float, float, float, float],
+                            start_date: str, end_date: str) -> float:
+    """Domain-mean daily precipitation (mm/day) over ``river_bbox`` for the
+    window, from the wired ``fetch_gridmet`` (variable ``pr``, time-mean COG).
+
+    Reuses the registered gridMET fetcher (no new data path), downloads the
+    emitted COG, and returns the finite-pixel spatial mean. Raises
+    ``TelemacDyeScenarioError`` (TELEMAC_RAIN_SOURCE_FAILED) on any failure so a
+    real-storm request never silently degrades to zero rain."""
+    import numpy as np
+    import rasterio
+    from rasterio.io import MemoryFile
+    from trid3nt_server.agent.tools.simulation.solver.solver import _get_s3_client
+
+    try:
+        layer = TOOL_REGISTRY["fetch_gridmet"].fn(
+            bbox=list(river_bbox), variable="pr",
+            start_date=start_date, end_date=end_date,
+        )
+    except Exception as exc:  # noqa: BLE001
+        raise TelemacDyeScenarioError(
+            "TELEMAC_RAIN_SOURCE_FAILED",
+            f"gridMET precip fetch failed for {start_date}..{end_date}: {exc}",
+        ) from exc
+    uri = _layer_field(layer, "uri")
+    if not uri:
+        raise TelemacDyeScenarioError(
+            "TELEMAC_RAIN_SOURCE_FAILED", "gridMET fetch returned no COG uri.")
+    try:
+        if str(uri).startswith("s3://"):
+            _, _, rest = str(uri).partition("s3://")
+            bucket, _, key = rest.partition("/")
+            data = _get_s3_client().get_object(Bucket=bucket, Key=key)["Body"].read()
+            with MemoryFile(data) as mem, mem.open() as ds:
+                arr = ds.read(1, masked=True).astype("float64")
+        else:
+            with rasterio.open(str(uri)) as ds:
+                arr = ds.read(1, masked=True).astype("float64")
+    except Exception as exc:  # noqa: BLE001
+        raise TelemacDyeScenarioError(
+            "TELEMAC_RAIN_SOURCE_FAILED",
+            f"gridMET COG read failed: {exc}",
+        ) from exc
+    vals = np.asarray(arr.compressed() if hasattr(arr, "compressed") else arr, dtype="float64")
+    vals = vals[np.isfinite(vals)]
+    if vals.size == 0:
+        raise TelemacDyeScenarioError(
+            "TELEMAC_RAIN_SOURCE_FAILED",
+            "gridMET precip COG had no finite pixels over the reach AOI.")
+    return float(vals.mean())
+
+
+def _resolve_rain_or_evap_mm_per_day(
+    rainfall_mm_per_day: float | None,
+    evaporation_mm_per_day: float | None,
+    rainfall_gridmet_window: str | None,
+    river_bbox: tuple[float, float, float, float],
+) -> tuple[float | None, str | None]:
+    """Resolve the SIGNED net rain-or-evaporation rate (mm/day) for the deck.
+
+    Precedence for the rain term: ``rainfall_gridmet_window`` (real gridMET
+    storm total) supersedes an explicit ``rainfall_mm_per_day``. Evaporation is
+    then subtracted (TELEMAC's single signed RAIN OR EVAPORATION keyword:
+    positive = net rain, negative = net evaporation). Returns
+    ``(signed_rate_or_None, provenance_note)``. ``None`` = no forcing (the deck
+    stays byte-identical)."""
+    rain: float | None = None
+    note_bits: list[str] = []
+    if rainfall_gridmet_window is not None and str(rainfall_gridmet_window).strip():
+        start_date, end_date = _parse_gridmet_window(rainfall_gridmet_window)
+        rain = _gridmet_domain_mean_pr(river_bbox, start_date, end_date)
+        note_bits.append(
+            f"gridMET pr domain-mean {rain:.1f} mm/day ({start_date}..{end_date})")
+    elif rainfall_mm_per_day is not None:
+        try:
+            rain = float(rainfall_mm_per_day)
+        except (TypeError, ValueError):
+            rain = None
+        else:
+            note_bits.append(f"rainfall {rain:.1f} mm/day (user)")
+    evap: float | None = None
+    if evaporation_mm_per_day is not None:
+        try:
+            evap = float(evaporation_mm_per_day)
+        except (TypeError, ValueError):
+            evap = None
+        else:
+            note_bits.append(f"evaporation {evap:.1f} mm/day")
+    if rain is None and evap is None:
+        return None, None
+    net = (rain or 0.0) - (evap or 0.0)
+    # clamp to a physically-sane band (a violent storm ~ 500 mm/day; extreme
+    # PET ~ 20 mm/day) so a bad knob cannot destabilize the solve.
+    net = float(min(max(net, -50.0), 2000.0))
+    return net, "; ".join(note_bits) + f" -> net {net:+.1f} mm/day (distributed on-mesh)"
+
+
 def _download_telemac_result(run_id: str) -> tuple[str, int]:
     """Download ``r2d_river.slf`` + read ``utm_epsg`` from ``telemac_metrics.json``
     for a completed run. Returns ``(local_slf_path, utm_epsg)``. Raises
@@ -1580,6 +1722,9 @@ async def model_telemac_river_dye(
     tracer_diffusivity: float | None = None,
     wind_speed_mps: float = 0.0,
     wind_direction_deg: float = 0.0,
+    rainfall_mm_per_day: float | None = None,
+    evaporation_mm_per_day: float | None = None,
+    rainfall_gridmet_window: str | None = None,
     compute_class: str = "medium",
     bank_source: str = "nhd_area",
     discharge_m3s: float | None = None,
@@ -1649,6 +1794,19 @@ async def model_telemac_river_dye(
         location_name = f"AOI ({center_lat:.4f}, {center_lon:.4f})"
 
     river_bbox = _bbox_around(center_lon, center_lat, DEFAULT_RIVER_AOI_HALF_DEG)
+
+    # --- Distributed on-mesh rainfall / evaporation forcing ------------------ #
+    # Resolve the SIGNED net RAIN OR EVAPORATION rate (mm/day) BEFORE the solve:
+    # a real gridMET storm total (window) supersedes an explicit rate, minus any
+    # evaporation. None = no forcing (byte-identical deck). The gridMET fetch is
+    # a sync network call, so run it off the loop (no keepalive stall).
+    rain_or_evap_mm_per_day, rain_note = await asyncio.to_thread(
+        _resolve_rain_or_evap_mm_per_day,
+        rainfall_mm_per_day, evaporation_mm_per_day,
+        rainfall_gridmet_window, river_bbox,
+    )
+    if rain_note:
+        logger.info("model_telemac_river_dye rainfall forcing: %s", rain_note)
 
     # --- Stage 2: obtain the river flowline (reuse a provided one, else fetch)
     #     + pick a mid-reach seed. When the caller already fetched the reach
@@ -1906,6 +2064,12 @@ async def model_telemac_river_dye(
         **({"wind_speed_mps": float(wind_speed_mps),
             "wind_dir_from_deg": float(wind_direction_deg)}
            if wind_speed_mps and float(wind_speed_mps) > 0.0 else {}),
+        # DISTRIBUTED ON-MESH RAINFALL / EVAPORATION: threaded onto the manifest
+        # ONLY when a net rate was resolved (explicit knob or gridMET storm);
+        # absent otherwise, so the worker ReachConfig field stays None and
+        # author_deck emits NO rain block (byte-identical solve).
+        **({"rain_or_evap_mm_per_day": float(rain_or_evap_mm_per_day)}
+           if rain_or_evap_mm_per_day is not None else {}),
         "nav_direction": "DM",
         "distance_km": float(reach_length_km),
         "channel_width_m": float(channel_width_m),

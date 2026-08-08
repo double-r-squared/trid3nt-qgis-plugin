@@ -629,3 +629,83 @@ def test_parse_rejects_bad_physics_knobs():
     ):
         with pytest.raises(SwanDeckError):
             parse_build_spec(_spec(**bad))
+
+
+# ===========================================================================
+# (7) NONSTATIONARY storm evolution: ISO times + BLOCK OUTPUT + TPAR boundary
+#     (ADR 0190 row 3).
+# ===========================================================================
+def test_nonstationary_compute_uses_iso_datetime_strings():
+    """The COMPUTE tbegc/tendc are full ISO YYYYMMDD.HHMMSS strings (not bare
+    seconds), so a 24 h run carries valid multi-day timestamps."""
+    text = render_swn_command_file(
+        parse_build_spec(_spec(mode="nonstationary", sim_duration_s=86400.0,
+                               time_step_s=600.0))
+    )
+    compute = [l for l in text.splitlines() if l.startswith("COMPUTE NONSTATIONARY")][0]
+    assert "20170101.000000" in compute      # tbegc
+    assert "20170102.000000" in compute      # tendc = +24 h
+    assert "86400.0" not in compute          # NOT the old bare-seconds bug
+
+
+def test_nonstationary_block_has_output_clause():
+    """The nonstationary BLOCK carries an OUTPUT <t> <dt> <unit> clause, or SWAN
+    writes NO per-frame dumps."""
+    text = render_swn_command_file(
+        parse_build_spec(_spec(mode="nonstationary", sim_duration_s=86400.0,
+                               output_frames=16))
+    )
+    block = [l for l in text.splitlines() if l.startswith("BLOCK 'COMPGRID'")][0]
+    assert "OUTPUT 20170101.000000" in block
+
+
+def test_stationary_block_has_no_output_clause():
+    text = render_swn_command_file(parse_build_spec(_spec(mode="stationary")))
+    block = [l for l in text.splitlines() if l.startswith("BLOCK 'COMPGRID'")][0]
+    assert "OUTPUT" not in block
+
+
+def test_storm_boundary_timeseries_writes_tpar_and_uses_file_boundspec(tmp_path):
+    from services.workers.swan.deck_builder import TPAR_FILENAME
+    series = [[0, 1.0, 10, 180, 20], [43200, 5.0, 12, 180, 20], [86400, 1.0, 10, 180, 20]]
+    manifest = build_swan_deck(
+        _spec(mode="nonstationary", sim_duration_s=86400.0,
+              boundary_timeseries=series), tmp_path)
+    assert TPAR_FILENAME in manifest.files_written
+    tpar = (tmp_path / TPAR_FILENAME).read_text()
+    assert tpar.startswith("TPAR")
+    assert "20170101.120000 5.000" in tpar  # peak row at +12 h
+    swn = (tmp_path / SWN_FILENAME).read_text()
+    assert f"CONSTANT FILE '{TPAR_FILENAME}'" in swn
+    assert "CONSTANT PAR" not in swn  # the TPAR path supersedes the constant PAR
+
+
+def test_constant_boundary_when_no_timeseries():
+    """No timeseries -> the deck keeps the CONSTANT PAR boundary (byte-compatible)."""
+    text = render_swn_command_file(parse_build_spec(_spec(mode="nonstationary")))
+    assert "CONSTANT PAR" in text
+    assert ".tpar" not in text
+
+
+def test_boundary_timeseries_rejected_in_stationary_mode():
+    with pytest.raises(SwanDeckError):
+        parse_build_spec(_spec(mode="stationary",
+                               boundary_timeseries=[[0, 1, 10, 180, 20],
+                                                    [3600, 2, 10, 180, 20]]))
+
+
+def test_boundary_timeseries_unknown_field_still_rejected():
+    with pytest.raises(SwanDeckError):
+        parse_build_spec(_spec(mode="nonstationary", bogus_storm_field=1))
+
+
+def test_nonstationary_uses_bsbt_propagation_scheme():
+    """Nonstationary decks emit PROP BSBT (stable) -- the default higher-order
+    scheme aborts on CFL for a time-marching run."""
+    text = render_swn_command_file(parse_build_spec(_spec(mode="nonstationary")))
+    assert "PROP BSBT" in text
+
+
+def test_stationary_omits_prop_bsbt():
+    text = render_swn_command_file(parse_build_spec(_spec(mode="stationary")))
+    assert "PROP BSBT" not in text

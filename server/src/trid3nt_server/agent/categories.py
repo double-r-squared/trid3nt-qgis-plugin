@@ -301,6 +301,7 @@ PRIMARY_CATEGORY: dict[str, str] = {
     "swmm_wetwell_pump_control_comparison": "simulation_modeling",
     "swmm_lid_performance_comparison": "simulation_modeling",
     "swmm_wq_buildup_washoff_comparison": "simulation_modeling",
+    "swmm_rdii_rtk_unit_hydrograph": "simulation_modeling",
     "pelicun_damage_assessment": "simulation_modeling",
     # pelicun Assessment-API validation / sensitivity templates: idealized
     # damage-and-loss methodology checks, primary damage_assessment.
@@ -357,6 +358,7 @@ PRIMARY_CATEGORY: dict[str, str] = {
     "elmfire_transient_wind_schedule_spread": "simulation_modeling",
     "elmfire_dead_fuel_moisture_interpolation_frequency_control": "simulation_modeling",
     "elmfire_crown_fire_initiation_threshold_sweep": "simulation_modeling",
+    "elmfire_initial_attack_containment_probability": "model_validation",
     "geoclaw_tsunami_gauge_timeseries": "simulation_modeling",
     "geoclaw_amr_refinement_regions": "simulation_modeling",
     "geoclaw_regional_manning_friction": "simulation_modeling",
@@ -868,6 +870,7 @@ SECONDARY_CATEGORIES: dict[str, tuple[str, ...]] = {
     "geoclaw_thacker_validation": ("simulation_modeling",),
     "pelicun_closed_form_validation": ("damage_assessment",),
     "elmfire_verification_elliptical_replication": ("fire", "simulation_modeling"),
+    "elmfire_initial_attack_containment_probability": ("fire", "simulation_modeling"),
     # Run diagnostics (mass balance / convergence / instability) operate ON a
     # run and are the correctness read-out, so they cross-list to model_validation.
     "read_run_diagnostics": ("model_validation",),

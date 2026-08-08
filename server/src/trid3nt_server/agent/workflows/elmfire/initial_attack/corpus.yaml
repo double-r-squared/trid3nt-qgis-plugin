@@ -1,0 +1,12 @@
+# Template routing phrasings: engine templates are ordinary retrieval-pool tools.
+elmfire_initial_attack_containment_probability:
+- probability that initial attack contains a wildfire
+- how likely is a fire crew to hold a fire given its intensity and size
+- Hirsch probability of containment initial attack
+- how does attack delay affect the chance of containing a fire
+- initial attack success probability versus head fire intensity
+- can initial attack contain a fire before it escapes
+- get-away time sensitivity of fire containment probability
+- what head fire intensity can initial attack crews hold
+- probability of containment as a function of fire size and intensity
+- how much does a slower initial attack lower the containment probability
