@@ -229,7 +229,7 @@ def test_coupled_waves_registered_and_solver_wired():
     assert "schism_coupled_waves" in TOOL_REGISTRY
     md = TOOL_REGISTRY["schism_coupled_waves"].metadata
     assert md.engine == "schism" and md.tier == "template"
-    assert PRIMARY_CATEGORY.get("schism_coupled_waves") == "hazard_modeling"
+    assert PRIMARY_CATEGORY.get("schism_coupled_waves") == "simulation_modeling"
     assert SOLVER_WORKFLOW_REGISTRY.get("schism_coupled_waves") == "local-docker"
     assert "schism_coupled_waves" in LOCAL_SOLVER_SPEC_REGISTRY
 

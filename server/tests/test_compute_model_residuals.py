@@ -435,7 +435,7 @@ def test_category_and_corpus() -> None:
         categories.PRIMARY_CATEGORY["compute_model_residuals"]
         == "geographic_primitives"
     )
-    assert "hazard_modeling" in categories.SECONDARY_CATEGORIES.get(
+    assert "model_validation" in categories.SECONDARY_CATEGORIES.get(
         "compute_model_residuals", ()
     )
     corpus = dd._load_corpus()

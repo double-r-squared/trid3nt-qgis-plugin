@@ -124,7 +124,7 @@ def test_registered_and_categorized():
     e = TOOL_REGISTRY.get("schism_transport_validation")
     assert e is not None
     assert e.metadata.engine == "schism" and e.metadata.tier == "template"
-    assert PRIMARY_CATEGORY["schism_transport_validation"] == "hazard_modeling"
+    assert PRIMARY_CATEGORY["schism_transport_validation"] == "model_validation"
 
 
 def test_corpus_surfaces_the_template():

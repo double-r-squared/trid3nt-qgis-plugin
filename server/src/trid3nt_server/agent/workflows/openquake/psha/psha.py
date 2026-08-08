@@ -2,8 +2,8 @@
 seismic-hazard (PSHA) (engine-door refactor - OPENQUAKE slice; was
 ``run_seismic_hazard_psha``).
 
-The LLM-facing exposure of the OpenQuake classical-PSHA engine (the multi-hazard
-workbench's seismic driver, pairing with the existing Pelicun impact path).
+The LLM-facing exposure of the OpenQuake classical-PSHA engine (the platform's
+seismic driver, pairing with the existing Pelicun impact path).
 ``openquake_psha(...)`` takes the ``OpenQuakeRunArgs`` parameters, runs the
 deterministic assemble -> stage -> solve -> postprocess chain
 (``model_openquake_psha`` below, in this module), and returns a

@@ -1733,7 +1733,7 @@ Aspects: radiation-driven aspect control on plant-functional-type organization (
 - [CAND-L] `species_zone_biogeography_under_landscape_change` [L] [US] - As this landscape's habitable zones fragment or merge over time, how do species ranges split, merge, or go extinct?
   src: https://landlab.readthedocs.io/en/latest/tutorials/species_evolution/Introduction_to_SpeciesEvolver.html (landlab_speciesevolver_tutorial)
   knobs: zone connectivity function, environmental driver (e.g. temperature) time series
-  notes: Published worked example has a fully deterministic expected outcome (2 founder species -> 22 extant taxa after two fragmentation events) - an excellent V&V case, but ecological/biogeography framing is a scope stretch for a hazard workbench; flag for a scope decision rather than building speculatively.
+  notes: Published worked example has a fully deterministic expected outcome (2 founder species -> 22 extant taxa after two fragmentation events) - an excellent V&V case, but ecological/biogeography framing is a scope stretch for the current engine roster; flag for a scope decision rather than building speculatively.
 
 ### Lithology & Stratigraphy
 Purpose: Give a landscape-evolution run spatially/vertically variable rock properties (erodibility, diffusivity) instead of a uniform substrate.

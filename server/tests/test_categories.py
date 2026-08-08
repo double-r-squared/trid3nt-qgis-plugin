@@ -1,7 +1,8 @@
-"""Tests for the 12-category registry + meta-tools (Wave 4.10 job-B5).
+"""Tests for the 13-category registry + meta-tools (Wave 4.10 job-B5;
+taxonomy audited to question-class-honest ids in ADR 0177).
 
 Coverage:
-- ``CATEGORIES`` enumerates exactly the 12 specified ids.
+- ``CATEGORIES`` enumerates exactly the 13 audited ids.
 - Every primary-mapped tool name appears in ``TOOL_REGISTRY`` once the full
   startup import path has run.
 - Every registered tool has exactly one primary category (after eager init).
@@ -46,11 +47,13 @@ def _ensure_full_registry() -> set[str]:
 # ---------------------------------------------------------------------------
 
 
-def test_twelve_categories_registered() -> None:
-    """The spec calls for exactly 12 categories."""
-    assert len(CATEGORIES) == 12
+def test_thirteen_categories_registered() -> None:
+    """Vocabulary audit (ADR 0177): hazard_modeling renamed to
+    simulation_modeling + a model_validation split -> 13 question-class
+    categories."""
+    assert len(CATEGORIES) == 13
     ids = [c.id for c in CATEGORIES]
-    assert len(set(ids)) == 12, "category ids must be unique"
+    assert len(set(ids)) == 13, "category ids must be unique"
 
 
 def test_categories_have_required_fields() -> None:
@@ -66,9 +69,10 @@ def test_categories_have_required_fields() -> None:
 
 
 def test_expected_category_ids_present() -> None:
-    """The 12 ids must match the kickoff list verbatim."""
+    """The 13 ids must match the audited (ADR 0177) taxonomy verbatim."""
     expected = {
-        "hazard_modeling",
+        "simulation_modeling",
+        "model_validation",
         "weather_atmosphere",
         "hydrology",
         "terrain_elevation",
@@ -160,8 +164,8 @@ def test_cross_listing_known_tools_appear_in_both_categories() -> None:
         "the run_pelicun door was dissolved (ADR 0094)"
     )
     # Their primary categories still claim them too.
-    hazard_members = set(tools_for_category("hazard_modeling"))
-    assert "pelicun_damage_assessment" in hazard_members
+    sim_members = set(tools_for_category("simulation_modeling"))
+    assert "pelicun_damage_assessment" in sim_members
     landuse_members = set(tools_for_category("land_cover_development"))
     assert "fetch_usace_nsi" in landuse_members
 
@@ -171,12 +175,12 @@ def test_cross_listing_known_tools_appear_in_both_categories() -> None:
 # ---------------------------------------------------------------------------
 
 
-def test_list_categories_returns_twelve_shaped_entries() -> None:
+def test_list_categories_returns_thirteen_shaped_entries() -> None:
     """``list_categories()`` returns the spec-shape ``{categories: [...]}``."""
     result = list_categories()
     assert "categories" in result
     cats = result["categories"]
-    assert len(cats) == 12
+    assert len(cats) == 13
     for entry in cats:
         assert set(entry.keys()) == {"id", "name", "description"}
         assert isinstance(entry["id"], str)
@@ -228,7 +232,7 @@ def test_list_tools_in_category_unknown_category_raises() -> None:
     assert exc.value.error_code == "UNKNOWN_CATEGORY"
     assert exc.value.retryable is False
     # The hint includes the valid ids.
-    assert "hazard_modeling" in exc.value.valid_ids
+    assert "simulation_modeling" in exc.value.valid_ids
 
 
 def test_list_tools_in_category_is_registered() -> None:
