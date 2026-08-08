@@ -30,3 +30,7 @@ docs/proof/
 dist/
 .restructure-baseline/
 .structural-baseline/
+
+# oceanmesh sandbox bulk data (re-downloadable DEMs + GSHHG shoreline)
+scripts/sandbox/oceanmesh/_runs/
+scripts/sandbox/oceanmesh/shoreline/

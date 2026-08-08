@@ -67,7 +67,7 @@ def main():
     cb = fig.colorbar(im, ax=ax, shrink=0.72, pad=0.02)
     cb.set_label("peak Hs (m)")
     fig.text(0.01, 0.01,
-             f"Apalachee Bay FL shelf. Peak-over-36h Hs from a time-varying storm "
+             f"Mexico Beach / Tyndall FL shelf. Peak-over-36h Hs from a time-varying storm"
              f"boundary (build to Hs=6 m offshore at hour 18, decay). max Hs "
              f"{vmax:.1f} m. run {RUN_ID}. swan_wave_field mode=nonstationary "
              f"storm_peak_hs_m (ADR 0190 row 3).",

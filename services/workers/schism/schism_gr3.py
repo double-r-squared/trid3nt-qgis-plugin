@@ -193,6 +193,10 @@ def tin_to_hgrid(
     # any node the cleaning orphaned and re-index nodes/cells/depths contiguously.
     if clean_boundary:
         cells = remove_boundary_pinch_points(points, cells)
+        # ALWAYS resync n_elem: pinch removal can drop cells WITHOUT orphaning any
+        # node (a removed pinch triangle whose nodes survive on other cells), and a
+        # stale n_elem then over-indexes cells[] in the element-table loop below.
+        n_elem = cells.shape[0]
         used = np.unique(cells)
         if used.shape[0] != n_nodes:
             remap = np.full(n_nodes, -1, dtype=np.int64)
