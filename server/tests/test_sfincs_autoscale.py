@@ -248,41 +248,41 @@ def test_unreadable_dem_degrades_to_bbox_fallback(tmp_path: Path) -> None:
 
 def test_pathological_huge_aoi_clamps_to_coarsest_rung(tmp_path: Path, monkeypatch) -> None:
     """An absurdly large AOI that overruns the cap even at 200 m clamps to the
-    coarsest ladder rung (non-empty) rather than producing an empty grid."""
-    # Force a tiny cap so any real DEM overruns every rung.
-    monkeypatch.setenv("TRID3NT_SFINCS_MIN_CELL_CAP", "1")
-    monkeypatch.setenv("TRID3NT_SFINCS_SOLVE_BUDGET_S", "0.0001")
-    import importlib
+    coarsest ladder rung (non-empty) rather than producing an empty grid.
 
+    Forces a tiny cap by patching the module CONSTANTS directly rather than
+    the env var + importlib.reload -- a reload re-executes the module body
+    and rebinds every class it defines (including SFINCSSetupError) to a new
+    object, which desyncs any other test module's top-of-file import of that
+    class from what the reloaded module actually raises (docs/decisions/
+    0181-reload-flake-sweep.md). monkeypatch.setattr reverts automatically.
+    """
     from trid3nt_server.agent.workflows.sfincs import sfincs_builder as sb
 
-    importlib.reload(sb)
-    try:
-        dem = _write_dem(tmp_path / "huge.tif", np.full((800, 800), 100.0))
-        res = sb.autoscale_grid_resolution(
-            str(dem), _BBOX, zmin=-1000.0, zmax=9000.0, compute_class="small",
-            base_resolution_m=30.0,
-        )
-        assert res.grid_resolution_m == max(sb.SFINCS_RES_LADDER)
-        assert res.estimated_active_cells >= 1  # never zero/empty
-    finally:
-        monkeypatch.delenv("TRID3NT_SFINCS_MIN_CELL_CAP", raising=False)
-        monkeypatch.delenv("TRID3NT_SFINCS_SOLVE_BUDGET_S", raising=False)
-        importlib.reload(sb)
+    monkeypatch.setattr(sb, "SFINCS_MIN_CELL_CAP", 1)
+    monkeypatch.setattr(sb, "SFINCS_SOLVE_BUDGET_S", 0.0001)
+
+    dem = _write_dem(tmp_path / "huge.tif", np.full((800, 800), 100.0))
+    res = sb.autoscale_grid_resolution(
+        str(dem), _BBOX, zmin=-1000.0, zmax=9000.0, compute_class="small",
+        base_resolution_m=30.0,
+    )
+    assert res.grid_resolution_m == max(sb.SFINCS_RES_LADDER)
+    assert res.estimated_active_cells >= 1  # never zero/empty
 
 
 def test_resolution_ladder_env_override(monkeypatch) -> None:
-    monkeypatch.setenv("TRID3NT_SFINCS_RES_LADDER", "25, 75, 150")
-    import importlib
+    """TRID3NT_SFINCS_RES_LADDER parses to a sorted, de-duplicated tuple.
 
+    Exercises the parse function directly (the exact call the module-level
+    SFINCS_RES_LADDER constant makes at import time) rather than reloading
+    the module -- see the no-reload rationale on
+    test_pathological_huge_aoi_clamps_to_coarsest_rung above.
+    """
+    monkeypatch.setenv("TRID3NT_SFINCS_RES_LADDER", "25, 75, 150")
     from trid3nt_server.agent.workflows.sfincs import sfincs_builder as sb
 
-    importlib.reload(sb)
-    try:
-        assert sb.SFINCS_RES_LADDER == (25.0, 75.0, 150.0)
-    finally:
-        monkeypatch.delenv("TRID3NT_SFINCS_RES_LADDER", raising=False)
-        importlib.reload(sb)
+    assert sb._env_resolution_ladder((30.0, 50.0, 100.0, 200.0)) == (25.0, 75.0, 150.0)
 
 
 # --------------------------------------------------------------------------- #
