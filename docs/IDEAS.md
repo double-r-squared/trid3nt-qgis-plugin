@@ -278,6 +278,22 @@ schism transport_validation, any local-unit fixture COGs) and either
 (a) drop the layer emission in favor of charts/scalars, or (b) add a
 real-AOI georeferenced mode (the 0165 capture-zone pattern). Run when
 a lane frees.
+AUDITED 2026-08-07 (ADR 0180): swept all 68 registered templates. NO
+strict orphan exists - the norm was already upheld. The two named
+suspects (modflow_package_validation, schism_transport_validation) and
+every fixture/validation/comparison/schematic-deck template are
+chart/scalar-only with NO map layer (10 carry explicit "no map layer"
+docstrings); every map-emitting template is real-AOI georeferenced
+(bbox/latlon/geocode/deck-projection/transect). Two ADJACENT follow-ups
+left for NATE's call, NOT chased: (1) elmfire_verification_elliptical_
+replication publishes an idealized constant-fuel ToA COG at a FIXED demo
+center (Kansas -98.5/38.5) - georeferenced so not a strict orphan, but
+its true deliverable is the RMSE/correlation scalar + ellipse-overlay
+chart; option-(a) drop is a return-type/contract change -> NATE rules.
+(2) postprocess_modflow._write_reprojected_cog SILENTLY falls back to
+Affine.identity() (null-island) when the deck can't load, inconsistent
+with modflow_mesh which SKIPS on geo=None; harden to a loud typed error
+(or the same skip) in a modflow-hardening job WITH the MODFLOW canary.
 
 ## 2026-08-06 - Wellhead-protection track: REEVAL flag (NATE)
 Nothing wrong - NATE wants CONTINUED DEVELOPMENT of the capture-zone/
