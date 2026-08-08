@@ -99,6 +99,9 @@ GEOCLAW_OUTPUT_GLOBS: list[str] = [
     "_output/fgmax*.txt",
     "_output/fgmax_grids.data",
     "_output/gauge*.txt",
+    "_output/fgout*.q*",
+    "_output/fgout*.t*",
+    "_output/fgout*.b*",
     "deck_manifest.json",
 ]
 
@@ -306,6 +309,10 @@ def build_geoclaw_build_spec(
     # "full" run stays byte-identical (the worker defaults fgmax_mask -> "full").
     if getattr(run_args, "fgmax_mask", "full") != "full":
         spec["fgmax_mask"] = str(run_args.fgmax_mask)
+    # fgout smooth-animation frames: thread ONLY when > 0 so a run without fgout
+    # stays byte-identical (the worker defaults fgout_frames -> 0 = no fgout block).
+    if int(getattr(run_args, "fgout_frames", 0) or 0) > 0:
+        spec["fgout_frames"] = int(run_args.fgout_frames)
     return spec
 
 

@@ -362,6 +362,13 @@ class GeoClawRunArgs(GraceModel):
     # (the scenarios that emit fgmax). Additive: "full" is byte-identical to prior.
     fgmax_mask: Literal["full", "onshore"] = "full"
 
+    # fgout SMOOTH-animation frame count. When > 0 (tsunami / surge) the worker
+    # emits an fgout fixed-grid monitor: a uniform grid over the AOI dumped at this
+    # many EVENLY-SPACED times (decoupled from the AMR fort.q cadence) -> smooth
+    # single-resolution animation frames. 0 (default) emits no fgout block, so the
+    # deck is byte-identical to a pre-fgout run. Only affects tsunami / surge.
+    fgout_frames: int = Field(default=0, ge=0)
+
     # Explicit AMR refinement windows (region-based flagging). Each window forces
     # a lat/lon/time box to a min/max AMR level, appended AFTER the engine's
     # default region tiers. Empty -> refinement follows the default flag2refine

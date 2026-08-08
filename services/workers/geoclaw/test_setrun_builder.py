@@ -955,3 +955,63 @@ def test_cand_s_tail_additive_defaults_preserve_behaviour():
     spec = parse_build_spec({"bbox": _AOI, "topo_file": "t.asc"})
     assert spec.lagrangian_particles == []
     assert spec.fgmax_mask == "full"
+    assert spec.fgout_frames == 0
+
+
+# ===========================================================================
+# (fgout) SMOOTH fixed-grid animation frames.
+# ===========================================================================
+def test_render_setrun_no_fgout_block_by_default():
+    """A spec without fgout_frames emits NO fgout block -- byte-identical to a
+    pre-fgout deck (the additive-off invariant)."""
+    for scen in ("dam_break", "tsunami", "surge"):
+        over = {"scenario": scen}
+        if scen == "surge":
+            over = _surge_spec()
+        text = render_setrun_py(parse_build_spec(_spec(**over) if scen != "surge" else over))
+        assert "fgout_tools" not in text
+        assert "fgout_data.fgout_grids" not in text
+
+
+def test_render_setrun_tsunami_emits_fgout_block_when_frames_set():
+    spec = parse_build_spec(_spec(scenario="tsunami", fgout_frames=20))
+    text = render_setrun_py(spec)
+    ast.parse(text)
+    assert "from clawpack.geoclaw import fgout_tools" in text
+    assert "rundata.fgout_data.fgout_grids" in text
+    assert "fgout.point_style = 2" in text
+    assert "fgout.output_format = 'ascii'" in text
+    assert "fgout.nout = 20" in text
+    assert "fgout.fgno = 1" in text
+
+
+def test_render_setrun_surge_emits_fgout_block_when_frames_set():
+    text = render_setrun_py(parse_build_spec(_surge_spec(fgout_frames=8)))
+    ast.parse(text)
+    assert "fgout_tools" in text
+    assert "fgout.nout = 8" in text
+    # tend/tstart follow the surge window (t0 < 0 .. t0 + duration).
+    assert "fgout.tstart = -43200.0" in text
+
+
+def test_render_setrun_dam_break_never_emits_fgout_even_with_frames():
+    """dam_break has no coastal-animation concept; fgout is tsunami/surge only."""
+    text = render_setrun_py(parse_build_spec(_spec(scenario="dam_break", fgout_frames=12)))
+    assert "fgout_tools" not in text
+
+
+def test_fgout_grid_shares_fgmax_resolution():
+    """The fgout uniform grid uses the AOI-ambient dx (same as fgmax) so the two
+    monitors share a resolution."""
+    spec = parse_build_spec(_spec(scenario="tsunami", amr_levels=3, fgout_frames=10))
+    geom = fgmax_grid_geom(spec)
+    text = render_setrun_py(spec)
+    gnx_line = next(l for l in text.splitlines() if l.strip().startswith("fgout.nx ="))
+    gnx = int(gnx_line.split("=")[1].strip())
+    # nx from AOI span / dx_fgmax (fgmax grid geom dx), within one cell of fgmax nx.
+    assert abs(gnx - geom["nx"]) <= 1
+
+
+def test_parse_rejects_negative_fgout_frames():
+    with pytest.raises(GeoClawDeckError):
+        parse_build_spec(_spec(fgout_frames=-1))

@@ -111,7 +111,7 @@ _VALID_SCENARIOS = {"dam_break", "tsunami", "surge"}
 #: renamed, or retired. Named in the strict-field error so a stale worker
 #: image (which silently dropped unknown fields before ADR 0158) is
 #: distinguishable from a genuinely-malformed caller.
-_PARSER_VERSION = "geoclaw-spec-3"
+_PARSER_VERSION = "geoclaw-spec-4"
 
 #: GeoClaw ``surge_data.drag_law`` codes (storm_module.f90): the wind-stress
 #: coefficient law selected for the surge wind forcing. The knob MUST land a
@@ -156,6 +156,7 @@ _KNOWN_SPEC_FIELDS = frozenset(
         "manning_break",
         "lagrangian_particles",
         "fgmax_mask",
+        "fgout_frames",
     }
 )
 
@@ -254,6 +255,12 @@ class GeoClawBuildSpec:
     # onshore cells only, point_style=4 with a topotype-3 mask). "full" is the
     # byte-identical default; "onshore" needs the entrypoint mask-gen step.
     fgmax_mask: str = "full"
+    # fgout smooth-animation frame count. When > 0 (tsunami / surge) an fgout
+    # fixed-grid monitor is emitted: a uniform grid over the AOI at the AOI ambient
+    # cell size, dumped at ``fgout_frames`` EVENLY-SPACED times (decoupled from the
+    # AMR fort.q cadence) -> SMOOTH single-resolution animation frames. 0 (default)
+    # emits no fgout block -> byte-identical to a pre-fgout deck.
+    fgout_frames: int = 0
 
 
 @dataclass
@@ -596,6 +603,11 @@ def parse_build_spec(raw: dict[str, Any]) -> GeoClawBuildSpec:
         raise GeoClawDeckError(
             "GEOCLAW_SPEC_INVALID", f"amr_levels must be >= 1, got {amr_levels}"
         )
+    fgout_frames = _int("fgout_frames", 0)
+    if fgout_frames < 0:
+        raise GeoClawDeckError(
+            "GEOCLAW_SPEC_INVALID", f"fgout_frames must be >= 0, got {fgout_frames}"
+        )
 
     return GeoClawBuildSpec(
         scenario=scenario,
@@ -632,6 +644,7 @@ def parse_build_spec(raw: dict[str, Any]) -> GeoClawBuildSpec:
         manning_break=manning_break,
         lagrangian_particles=lagrangian_particles,
         fgmax_mask=fgmax_mask,
+        fgout_frames=fgout_frames,
     )
 
 
@@ -1244,6 +1257,45 @@ def render_setrun_py(spec: GeoClawBuildSpec) -> str:
                 "    fgmax_grids.append(fg)\n"
             )
 
+    # --- fgout: SMOOTH fixed-grid animation frames (decoupled from AMR cadence) --
+    # fgout = a fixed uniform grid interpolated at REGULAR time intervals, so the
+    # animation frames are SMOOTH (single resolution, evenly-spaced times) rather
+    # than the coarse/variable fort.q AMR-patch cadence the scrubber uses by
+    # default. Emitted for tsunami / surge ONLY when ``fgout_frames`` > 0 -- a
+    # 0-frame spec emits NO fgout block (byte-identical to a pre-fgout deck). The
+    # grid spans the AOI at the AOI-ambient cell size (SAME dx as the fgmax grid,
+    # so the two monitors share a resolution) and dumps ``fgout_frames`` frames
+    # evenly across [t0, tfinal]. Output is ASCII (topotype-analogue fort.q layout)
+    # so the postprocess reads each frame with the same uniform-grid parser it uses
+    # for fort.q -- no AMR flatten, no clawpack import agent-side.
+    fgout_block = ""
+    fgout_import = ""
+    if spec.scenario in ("tsunami", "surge") and int(spec.fgout_frames) > 0:
+        fgout_import = "from clawpack.geoclaw import fgout_tools\n"
+        fgout_nout = int(spec.fgout_frames)
+        gnx = int(round((max_lon - min_lon) / dx_fgmax))
+        gny = int(round((max_lat - min_lat) / dx_fgmax))
+        gnx = max(gnx, 2)
+        gny = max(gny, 2)
+        fgout_block = (
+            "    # --- fgout: uniform-grid SMOOTH animation frames over the AOI ---\n"
+            "    fgout_grids = rundata.fgout_data.fgout_grids\n"
+            "    fgout = fgout_tools.FGoutGrid()\n"
+            "    fgout.fgno = 1\n"
+            "    fgout.point_style = 2  # uniform rectangular x-y grid\n"
+            "    fgout.output_format = 'ascii'  # fort.q-layout frames (uniform-grid parse)\n"
+            f"    fgout.nx = {gnx!r}\n"
+            f"    fgout.ny = {gny!r}\n"
+            f"    fgout.x1 = {min_lon!r}\n"
+            f"    fgout.x2 = {max_lon!r}\n"
+            f"    fgout.y1 = {min_lat!r}\n"
+            f"    fgout.y2 = {max_lat!r}\n"
+            f"    fgout.tstart = {t0_val!r}\n"
+            f"    fgout.tend = {tfinal!r}\n"
+            f"    fgout.nout = {fgout_nout!r}  # evenly-spaced frames (smooth cadence)\n"
+            "    fgout_grids.append(fgout)\n"
+        )
+
     # --- GAP3 regions: the canonical multi-scale tsunami setup ---------------
     # COARSE deep ocean + INTERMEDIATE shelf/propagation + FINE AOI. GeoClaw
     # combines overlapping regions by taking the MAX of the covering regions'
@@ -1342,7 +1394,7 @@ Domain (EPSG:4326): {spec.bbox}
 Do NOT hand-edit — regenerate from the build_spec.
 """
 from clawpack.clawutil import data
-{fgmax_import}{surge_import}
+{fgmax_import}{fgout_import}{surge_import}
 
 def setrun(claw_pkg="geoclaw"):
     assert claw_pkg.lower() == "geoclaw", "setrun expects claw_pkg='geoclaw'"
@@ -1414,7 +1466,7 @@ def setrun(claw_pkg="geoclaw"):
     amrdata.regrid_buffer_width = 2
     amrdata.verbosity_regrid = 0
 
-{regions_block}{gauges_block}{fgmax_block}{qinit_block}{dtopo_block}{surge_block}    return rundata
+{regions_block}{gauges_block}{fgmax_block}{fgout_block}{qinit_block}{dtopo_block}{surge_block}    return rundata
 
 
 def setgeo(rundata):

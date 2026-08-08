@@ -760,6 +760,9 @@ DEFAULT_OUTPUT_GLOBS: list[str] = [
     "_output/fgmax*.txt",
     "_output/fgmax_grids.data",
     "_output/gauge*.txt",
+    "_output/fgout*.q*",
+    "_output/fgout*.t*",
+    "_output/fgout*.b*",
     "deck_manifest.json",
     "*.tif",
 ]
