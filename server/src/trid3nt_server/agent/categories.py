@@ -361,6 +361,10 @@ PRIMARY_CATEGORY: dict[str, str] = {
     "geoclaw_amr_refinement_regions": "simulation_modeling",
     "geoclaw_regional_manning_friction": "simulation_modeling",
     "geoclaw_storm_surge": "simulation_modeling",
+    # Thacker paraboloid-basin V&V: a numerical-verification benchmark (period /
+    # amplitude / shoreline / mass conservation vs the 1981 closed form), so its
+    # PRIMARY is model_validation; cross-lists to simulation_modeling below.
+    "geoclaw_thacker_validation": "model_validation",
     # USGS post-fire debris-flow hazard composer (pfdf: Staley 2017 M1
     # likelihood + Gartner 2014 emergency volume + Cannon 2010 combined class
     # over a delineated stream-segment network). Filed as a hazard engine;
@@ -860,6 +864,7 @@ SECONDARY_CATEGORIES: dict[str, tuple[str, ...]] = {
     # engine domain so they surface from the simulation/damage/fire lane too.
     "modflow_package_validation": ("simulation_modeling",),
     "schism_transport_validation": ("simulation_modeling",),
+    "geoclaw_thacker_validation": ("simulation_modeling",),
     "pelicun_closed_form_validation": ("damage_assessment",),
     "elmfire_verification_elliptical_replication": ("fire", "simulation_modeling"),
     # Run diagnostics (mass balance / convergence / instability) operate ON a

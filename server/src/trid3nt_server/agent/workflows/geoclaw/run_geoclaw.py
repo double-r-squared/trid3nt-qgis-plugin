@@ -313,6 +313,13 @@ def build_geoclaw_build_spec(
     # stays byte-identical (the worker defaults fgout_frames -> 0 = no fgout block).
     if int(getattr(run_args, "fgout_frames", 0) or 0) > 0:
         spec["fgout_frames"] = int(run_args.fgout_frames)
+    # Thacker paraboloid-basin V&V bowl parameters: threaded ONLY for the thacker
+    # scenario (the contract already forbids them elsewhere). The worker generates
+    # the bowl topo + analytic qinit from these -- no DEM is staged.
+    if run_args.scenario == "thacker":
+        spec["bowl_a_m"] = float(run_args.bowl_a_m)
+        spec["bowl_h0_m"] = float(run_args.bowl_h0_m)
+        spec["bowl_eta_amp"] = float(run_args.bowl_eta_amp)
     return spec
 
 
@@ -1121,8 +1128,26 @@ def stage_geoclaw_manifest(
     rid = run_id or new_ulid()
     bbox = tuple(run_args.bbox)
 
-    # Stage the DEM BY REFERENCE; the worker downloads it as topo.asc.
-    inputs: list[dict[str, str]] = [{"gs_uri": dem_uri, "dest": "topo.asc"}]
+    # DEM-free THACKER path: the worker GENERATES the paraboloid topo + analytic
+    # qinit from the bowl parameters, so NO topo is staged (inputs empty). A staged
+    # DEM would be ignored -> refuse it loudly (bowl mode vs AOI-DEM mode are
+    # mutually exclusive, already enforced on GeoClawRunArgs; guard here too).
+    is_thacker = run_args.scenario == "thacker"
+    if is_thacker and dem_uri:
+        raise GeoClawWorkflowError(
+            "GEOCLAW_PARAMS_INVALID",
+            message=(
+                "scenario='thacker' is DEM-free (the worker generates the bowl "
+                "topo); no dem_uri may be staged. Bowl mode and AOI-DEM mode are "
+                "mutually exclusive."
+            ),
+        )
+
+    # Stage the DEM BY REFERENCE; the worker downloads it as topo.asc. THACKER
+    # stages NO inputs (the worker writes topo.asc + qinit.xyz itself).
+    inputs: list[dict[str, str]] = (
+        [] if is_thacker else [{"gs_uri": dem_uri, "dest": "topo.asc"}]
+    )
     dtopo_dest: str | None = None
     surge_dest: str | None = None
     # Additional topo/bathy tiles (ordered coarse -> fine) staged BY REFERENCE.

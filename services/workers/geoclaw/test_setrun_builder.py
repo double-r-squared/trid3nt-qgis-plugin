@@ -1015,3 +1015,74 @@ def test_fgout_grid_shares_fgmax_resolution():
 def test_parse_rejects_negative_fgout_frames():
     with pytest.raises(GeoClawDeckError):
         parse_build_spec(_spec(fgout_frames=-1))
+
+
+# --------------------------------------------------------------------------- #
+# Thacker paraboloid-basin V&V deck (ADR 0187) -- spec-5, Cartesian, frictionless.
+# --------------------------------------------------------------------------- #
+def _thacker_spec(**over):
+    base = {
+        "scenario": "thacker", "bbox": [-1.6, -1.6, 1.6, 1.6], "topo_file": "topo.asc",
+        "sim_duration_s": 5.6, "output_frames": 20, "amr_levels": 3,
+        "base_num_cells": [60, 60],
+        "bowl_a_m": 1.0, "bowl_h0_m": 0.1, "bowl_eta_amp": 0.5,
+    }
+    base.update(over)
+    return base
+
+
+def test_thacker_parse_requires_bowl_params():
+    from services.workers.geoclaw.setrun_builder import parse_build_spec, GeoClawDeckError
+    import pytest
+    with pytest.raises(GeoClawDeckError):
+        parse_build_spec(_thacker_spec(bowl_a_m=None))
+    with pytest.raises(GeoClawDeckError):
+        parse_build_spec(_thacker_spec(bowl_eta_amp=1.5))  # out of (0,1)
+    spec = parse_build_spec(_thacker_spec())
+    assert spec.scenario == "thacker"
+    assert spec.bowl_a_m == 1.0 and spec.bowl_h0_m == 0.1 and spec.bowl_eta_amp == 0.5
+
+
+def test_bowl_params_rejected_for_geographic_scenario():
+    from services.workers.geoclaw.setrun_builder import parse_build_spec, GeoClawDeckError
+    import pytest
+    raw = {"scenario": "tsunami", "bbox": [-124.3, 41.7, -124.1, 41.8],
+           "topo_file": "topo.asc", "bowl_a_m": 1.0}
+    with pytest.raises(GeoClawDeckError):
+        parse_build_spec(raw)
+
+
+def test_thacker_setrun_is_cartesian_frictionless_walled():
+    from services.workers.geoclaw.setrun_builder import parse_build_spec, render_setrun_py
+    sr = render_setrun_py(parse_build_spec(_thacker_spec()))
+    assert "geo_data.coordinate_system = 1" in sr
+    assert "clawdata.capa_index = 0" in sr
+    assert "clawdata.num_aux = 1" in sr
+    assert "geo_data.friction_forcing = False" in sr
+    assert sr.count('= "wall"') == 4  # all four boundaries closed
+    assert "qinit_data.qinit_type = 4" in sr
+    assert 'topo_data.topofiles.append([1, "topo.asc"])' in sr
+    assert "gauges.append([1, 0.0, 0.0" in sr  # center gauge
+    # NO offshore/fgmax/fgout machinery in a thacker deck.
+    assert "fgmax" not in sr and "fgout" not in sr and "coordinate_system = 2" not in sr
+
+
+def test_thacker_deck_writes_topo_and_qinit_matching_analytic(tmp_path):
+    from services.workers.geoclaw.setrun_builder import build_geoclaw_deck
+    from trid3nt_contracts.geoclaw_thacker import thacker_bed_elevation, thacker_eta
+    m = build_geoclaw_deck(_thacker_spec(), tmp_path)
+    assert "topo.asc" in m.files_written and "qinit.xyz" in m.files_written
+
+    def _nearest(fn, tx, ty):
+        best, bz, bd = None, None, 1e18
+        for ln in (tmp_path / fn).read_text().splitlines():
+            x, y, z = (float(v) for v in ln.split())
+            d = (x - tx) ** 2 + (y - ty) ** 2
+            if d < bd:
+                bd, best, bz = d, (x, y), z
+        return bz
+
+    # topo == paraboloid bed; qinit == analytic t=0 surface (center + off-center).
+    assert abs(_nearest("topo.asc", 0, 0) - thacker_bed_elevation(0, 0, 1.0, 0.1)) < 1e-6
+    assert abs(_nearest("qinit.xyz", 0, 0) - thacker_eta(0, 0, 0, 1.0, 0.1, 0.5)) < 1e-6
+    assert abs(_nearest("qinit.xyz", 0.5, 0) - thacker_eta(0.5, 0, 0, 1.0, 0.1, 0.5)) < 2e-3

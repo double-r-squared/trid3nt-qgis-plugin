@@ -105,13 +105,19 @@ class GeoClawDeckError(RuntimeError):
         self.error_code = error_code
 
 
-_VALID_SCENARIOS = {"dam_break", "tsunami", "surge"}
+_VALID_SCENARIOS = {"dam_break", "tsunami", "surge", "thacker"}
 
 #: PARSER VERSION -- bump whenever a build_spec top-level field is added,
 #: renamed, or retired. Named in the strict-field error so a stale worker
 #: image (which silently dropped unknown fields before ADR 0158) is
 #: distinguishable from a genuinely-malformed caller.
-_PARSER_VERSION = "geoclaw-spec-4"
+_PARSER_VERSION = "geoclaw-spec-5"
+
+#: Gravitational acceleration (m/s^2) the Thacker deck uses. Kept in lockstep with
+#: ``trid3nt_contracts.geoclaw_thacker.THACKER_GRAVITY`` (the agent-side analytic
+#: reference) -- duplicated here (not imported) so the worker deck-author stays
+#: dependency-free (no trid3nt_contracts in the worker image).
+_THACKER_GRAVITY = 9.81
 
 #: GeoClaw ``surge_data.drag_law`` codes (storm_module.f90): the wind-stress
 #: coefficient law selected for the surge wind forcing. The knob MUST land a
@@ -157,6 +163,9 @@ _KNOWN_SPEC_FIELDS = frozenset(
         "lagrangian_particles",
         "fgmax_mask",
         "fgout_frames",
+        "bowl_a_m",
+        "bowl_h0_m",
+        "bowl_eta_amp",
     }
 )
 
@@ -261,6 +270,13 @@ class GeoClawBuildSpec:
     # AMR fort.q cadence) -> SMOOTH single-resolution animation frames. 0 (default)
     # emits no fgout block -> byte-identical to a pre-fgout deck.
     fgout_frames: int = 0
+    # Thacker paraboloid-basin V&V (scenario="thacker"). The basin radius a (m),
+    # central still-water depth h0 (m), and dimensionless oscillation amplitude A
+    # in (0,1). Consumed ONLY for scenario="thacker" (the worker generates the
+    # bowl topo + analytic still-surface qinit from them); None otherwise.
+    bowl_a_m: float | None = None
+    bowl_h0_m: float | None = None
+    bowl_eta_amp: float | None = None
 
 
 @dataclass
@@ -609,6 +625,33 @@ def parse_build_spec(raw: dict[str, Any]) -> GeoClawBuildSpec:
             "GEOCLAW_SPEC_INVALID", f"fgout_frames must be >= 0, got {fgout_frames}"
         )
 
+    # --- Thacker bowl parameters (mutually exclusive with a geographic scenario).
+    bowl_a_m = _opt_num("bowl_a_m")
+    bowl_h0_m = _opt_num("bowl_h0_m")
+    bowl_eta_amp = _opt_num("bowl_eta_amp")
+    if scenario == "thacker":
+        if bowl_a_m is None or bowl_h0_m is None or bowl_eta_amp is None:
+            raise GeoClawDeckError(
+                "GEOCLAW_SPEC_INVALID",
+                "scenario='thacker' requires bowl_a_m, bowl_h0_m, bowl_eta_amp",
+            )
+        if bowl_a_m <= 0.0 or bowl_h0_m <= 0.0:
+            raise GeoClawDeckError(
+                "GEOCLAW_SPEC_INVALID",
+                f"bowl_a_m and bowl_h0_m must be > 0, got a={bowl_a_m}, h0={bowl_h0_m}",
+            )
+        if not (0.0 < bowl_eta_amp < 1.0):
+            raise GeoClawDeckError(
+                "GEOCLAW_SPEC_INVALID",
+                f"bowl_eta_amp must be in (0, 1), got {bowl_eta_amp}",
+            )
+    elif any(v is not None for v in (bowl_a_m, bowl_h0_m, bowl_eta_amp)):
+        raise GeoClawDeckError(
+            "GEOCLAW_SPEC_INVALID",
+            "bowl_a_m / bowl_h0_m / bowl_eta_amp are only valid for "
+            f"scenario='thacker', not scenario={scenario!r}",
+        )
+
     return GeoClawBuildSpec(
         scenario=scenario,
         bbox=bbox,  # type: ignore[arg-type]
@@ -645,6 +688,9 @@ def parse_build_spec(raw: dict[str, Any]) -> GeoClawBuildSpec:
         lagrangian_particles=lagrangian_particles,
         fgmax_mask=fgmax_mask,
         fgout_frames=fgout_frames,
+        bowl_a_m=bowl_a_m,
+        bowl_h0_m=bowl_h0_m,
+        bowl_eta_amp=bowl_eta_amp,
     )
 
 
@@ -1071,6 +1117,229 @@ def render_storm_file(spec: GeoClawBuildSpec) -> str:
     return "\n".join(lines) + "\n"
 
 
+# --------------------------------------------------------------------------- #
+# Thacker (1981) paraboloid-basin V&V deck (scenario="thacker").
+#
+# An IDEALIZED, frictionless, closed-wall bowl in PLANAR Cartesian metres
+# (coordinate_system=1) with a worker-GENERATED paraboloid topo + an analytic
+# still-surface qinit -- NO fetched DEM. Mirrors the clawpack Cartesian bowl
+# examples' conventions (num_aux=1, capa_index=0, topotype qinit_type=4) but uses
+# the EXACT radially-symmetric Thacker solution (omega = sqrt(8 g h0)/a) as the
+# t=0 initial condition so the numerical run can be graded against the closed form
+# (period / central amplitude / shoreline excursion / mass conservation).
+# See trid3nt_contracts.geoclaw_thacker for the shared analytic definition.
+# --------------------------------------------------------------------------- #
+#: Grid resolution (points per side) of the worker-written bowl topo + qinit
+#: topotype-1 files. 201 matches the clawpack bowl examples (well below solve
+#: cost; GeoClaw samples them onto the coarser computational grid).
+_THACKER_TOPO_N = 201
+
+
+def _thacker_k(amp_A: float) -> float:
+    """Thacker amplitude ratio k = (1+A)/(1-A) (> 1)."""
+    return (1.0 + amp_A) / (1.0 - amp_A)
+
+
+def _render_topotype1_grid(
+    x0: float, x1: float, y0: float, y1: float, n: int, zfunc
+) -> str:
+    """Render an ``n x n`` bare ``x y z`` topotype-1 ASCII over [x0,x1]x[y0,y1].
+
+    NORTH-FIRST rows (decreasing y), x-fastest (west->east) within each row -- the
+    layout clawpack ``Topography.write(topo_type=1)`` emits and GeoClaw's readers
+    expect (first line = ``x0 y1 z``). Pure string render (no numpy / clawpack)."""
+    dx = (x1 - x0) / (n - 1)
+    dy = (y1 - y0) / (n - 1)
+    lines: list[str] = []
+    for j in range(n - 1, -1, -1):
+        y = y0 + dy * j
+        for i in range(n):
+            x = x0 + dx * i
+            lines.append(f"{x:.8f} {y:.8f} {zfunc(x, y):.8f}")
+    return "\n".join(lines) + "\n"
+
+
+def render_thacker_topo(spec: GeoClawBuildSpec) -> str:
+    """Render the paraboloid bed ``B(x,y) = h0 (r^2/a^2 - 1)`` as topotype-1 ASCII."""
+    x0, y0, x1, y1 = spec.bbox
+    a = float(spec.bowl_a_m)  # type: ignore[arg-type]
+    h0 = float(spec.bowl_h0_m)  # type: ignore[arg-type]
+
+    def _b(x: float, y: float) -> float:
+        return h0 * ((x * x + y * y) / (a * a) - 1.0)
+
+    return _render_topotype1_grid(x0, x1, y0, y1, _THACKER_TOPO_N, _b)
+
+
+def render_thacker_qinit(spec: GeoClawBuildSpec) -> str:
+    """Render the analytic t=0 Thacker surface as a topotype-1 qinit perturbation.
+
+    ``eta(r,0) = h0 [ sqrt(k) - 1 - (r^2/a^2)(k-1) ]``, ``k = (1+A)/(1-A)`` -- the
+    still-surface extremum of the radially-symmetric oscillation (zero velocity at
+    t=0). qinit_type=4 adds this to eta (sea_level=0), so the initial water surface
+    IS this analytic surface and h = max(0, eta - B)."""
+    x0, y0, x1, y1 = spec.bbox
+    a = float(spec.bowl_a_m)  # type: ignore[arg-type]
+    h0 = float(spec.bowl_h0_m)  # type: ignore[arg-type]
+    amp_A = float(spec.bowl_eta_amp)  # type: ignore[arg-type]
+    k = _thacker_k(amp_A)
+    sqrt_k = k ** 0.5
+
+    def _eta0(x: float, y: float) -> float:
+        r2 = (x * x + y * y) / (a * a)
+        return h0 * (sqrt_k - 1.0 - r2 * (k - 1.0))
+
+    return _render_topotype1_grid(x0, x1, y0, y1, _THACKER_TOPO_N, _eta0)
+
+
+def render_thacker_setrun_py(spec: GeoClawBuildSpec) -> str:
+    """Render the Cartesian, frictionless, closed-wall Thacker ``setrun.py``.
+
+    PLANAR ``coordinate_system=1`` (metres), ``capa_index=0``, ``num_aux=1``,
+    ``friction_forcing=False`` (the exact solution is inviscid), ``bc_*='wall'``
+    (a closed basin so total mass is conserved -- the V&V gate). Reads the
+    worker-written ``topo.asc`` (topotype-1 paraboloid) + ``qinit.xyz``
+    (topotype-1 analytic surface, qinit_type=4). Records a CENTER gauge (eta(0,t)
+    -> period + central amplitude) plus a dense +x-axis gauge line
+    (depth(r,t) -> shoreline excursion). PURE string render -- no clawpack."""
+    x0, y0, x1, y1 = spec.bbox
+    nx, ny = spec.base_num_cells
+    amr_levels = int(spec.amr_levels)
+    ratios = _refinement_ratios(amr_levels)
+    amr_ratios = ", ".join(str(r) for r in ratios)
+    tfinal = float(spec.sim_duration_s)
+    num_output_times = int(spec.output_frames)
+    a = float(spec.bowl_a_m)  # type: ignore[arg-type]
+
+    # Gauges: id 1 at the basin centre (0,0); a dense +x-axis line (ids 100+) from
+    # r=0 to 1.5a so the V&V finds the moving shoreline (largest wet radius).
+    gauge_lines = "    rundata.gaugedata.gauges.append([1, 0.0, 0.0, 0., 1.e10])\n"
+    gid = 100
+    steps = 30  # 0 .. 1.5a in 0.05a steps
+    for s in range(steps + 1):
+        xr = (1.5 * a) * (s / steps)
+        gauge_lines += (
+            f"    rundata.gaugedata.gauges.append([{gid}, {xr!r}, 0.0, 0., 1.e10])\n"
+        )
+        gid += 1
+
+    return f'''"""Auto-generated by the GeoClaw worker (setrun_builder) -- Thacker V&V.
+
+Idealized paraboloid-basin (Thacker 1981) frictionless closed-wall bowl.
+Domain (planar metres): {spec.bbox}
+Do NOT hand-edit -- regenerate from the build_spec.
+"""
+from clawpack.clawutil import data
+
+
+def setrun(claw_pkg="geoclaw"):
+    assert claw_pkg.lower() == "geoclaw", "setrun expects claw_pkg='geoclaw'"
+    num_dim = 2
+    rundata = data.ClawRunData(claw_pkg, num_dim)
+    rundata = setgeo(rundata)
+
+    clawdata = rundata.clawdata
+    clawdata.num_dim = num_dim
+
+    # --- Planar Cartesian domain (metres) ---
+    clawdata.lower[0] = {x0!r}
+    clawdata.upper[0] = {x1!r}
+    clawdata.lower[1] = {y0!r}
+    clawdata.upper[1] = {y1!r}
+
+    clawdata.num_cells[0] = {nx!r}
+    clawdata.num_cells[1] = {ny!r}
+
+    clawdata.num_eqn = 3
+    clawdata.num_aux = 1  # Cartesian: topo aux only (no capacity/yleft metric)
+    clawdata.capa_index = 0  # uniform Cartesian capacity (no lat/lon metric)
+
+    # --- Time domain + evenly-spaced output frames ---
+    clawdata.t0 = 0.0
+    clawdata.output_style = 1
+    clawdata.num_output_times = {num_output_times!r}
+    clawdata.tfinal = {tfinal!r}
+    clawdata.output_t0 = True
+    clawdata.output_format = "ascii"
+    clawdata.output_q_components = "all"
+    clawdata.output_aux_components = "none"
+
+    # --- Numerics ---
+    clawdata.dt_initial = 0.01
+    clawdata.dt_variable = True
+    clawdata.dt_max = 1.0e99
+    clawdata.cfl_desired = 0.75
+    clawdata.cfl_max = 1.0
+    clawdata.steps_max = 100000
+    clawdata.order = 2
+    clawdata.dimensional_split = "unsplit"
+    clawdata.transverse_waves = 2
+    clawdata.num_waves = 3
+    clawdata.limiter = ["mc", "mc", "mc"]
+    clawdata.use_fwaves = True
+    clawdata.source_split = "godunov"
+
+    # --- Boundary conditions: CLOSED WALLS (a closed basin -> mass conserved) ---
+    clawdata.num_ghost = 2
+    clawdata.bc_lower[0] = "wall"
+    clawdata.bc_upper[0] = "wall"
+    clawdata.bc_lower[1] = "wall"
+    clawdata.bc_upper[1] = "wall"
+
+    # --- AMR ---
+    amrdata = rundata.amrdata
+    amrdata.amr_levels_max = {amr_levels!r}
+    amrdata.refinement_ratios_x = [{amr_ratios}]
+    amrdata.refinement_ratios_y = [{amr_ratios}]
+    amrdata.refinement_ratios_t = [{amr_ratios}]
+    amrdata.aux_type = ["center"]
+    amrdata.flag_richardson = False
+    amrdata.flag2refine = True
+    amrdata.regrid_interval = 3
+    amrdata.regrid_buffer_width = 2
+    amrdata.verbosity_regrid = 0
+
+    # --- Gauges: centre (period + amplitude) + a +x-axis line (shoreline) ---
+{gauge_lines}
+    # --- qinit: the analytic t=0 Thacker surface (perturbation to eta) ---
+    qinit_data = rundata.qinit_data
+    qinit_data.qinit_type = 4  # perturbation to eta (water surface)
+    qinit_data.qinitfiles = []
+    qinit_data.qinitfiles.append(["qinit.xyz"])
+    return rundata
+
+
+def setgeo(rundata):
+    try:
+        geo_data = rundata.geo_data
+    except AttributeError:
+        raise AttributeError("Missing geo_data; rundata must be a GeoClaw run.")
+
+    geo_data.gravity = {_THACKER_GRAVITY!r}
+    geo_data.coordinate_system = 1  # 1 = Cartesian (metres), planar bowl
+    geo_data.earth_radius = 6367500.0
+    geo_data.dry_tolerance = 1.0e-3
+    geo_data.friction_forcing = False  # inviscid -- the exact solution is frictionless
+    geo_data.sea_level = 0.0
+
+    refine_data = rundata.refinement_data
+    refine_data.wave_tolerance = 1.0e-3
+    refine_data.variable_dt_refinement_ratios = True
+
+    topo_data = rundata.topo_data
+    topo_data.topofiles = []
+    # topotype 1 = bare x y z; the paraboloid bed the worker wrote as topo.asc.
+    topo_data.topofiles.append([1, "topo.asc"])
+
+    return rundata
+
+
+if __name__ == "__main__":
+    rundata = setrun()
+    rundata.write()
+'''
+
+
 def render_setrun_py(spec: GeoClawBuildSpec) -> str:
     """Render the canonical GeoClaw ``setrun.py`` for the build_spec.
 
@@ -1084,6 +1353,12 @@ def render_setrun_py(spec: GeoClawBuildSpec) -> str:
     import lives INSIDE the generated module (executed only when the entrypoint
     runs it), never in this authoring module.
     """
+    # Thacker is a wholly-different (planar, frictionless, closed-wall) deck; it
+    # has its own renderer rather than threading Cartesian branches through every
+    # geographic block below (which stays byte-identical for the other scenarios).
+    if spec.scenario == "thacker":
+        return render_thacker_setrun_py(spec)
+
     # The AOI (fine-AMR region + fgmax monitor + gauge + rasterize extent).
     min_lon, min_lat, max_lon, max_lat = spec.bbox
     # The COMPUTATIONAL DOMAIN (clawdata lower/upper + base grid). Extends offshore
@@ -1610,7 +1885,17 @@ def build_geoclaw_deck(build_spec_raw: dict[str, Any], deck_dir: Any) -> DeckMan
     written.append("Makefile")
 
     driver = ""
-    if spec.scenario == "dam_break":
+    if spec.scenario == "thacker":
+        # Worker-GENERATED paraboloid bed + analytic still-surface qinit (NO DEM).
+        (deck / "topo.asc").write_text(render_thacker_topo(spec), encoding="utf-8")
+        written.append("topo.asc")
+        (deck / "qinit.xyz").write_text(render_thacker_qinit(spec), encoding="utf-8")
+        written.append("qinit.xyz")
+        driver = (
+            f"thacker paraboloid-basin V&V (a={spec.bowl_a_m} m, h0={spec.bowl_h0_m} m, "
+            f"A={spec.bowl_eta_amp}), frictionless closed-wall planar bowl"
+        )
+    elif spec.scenario == "dam_break":
         (deck / "qinit.xyz").write_text(render_qinit_data(spec), encoding="utf-8")
         written.append("qinit.xyz")
         driver = f"dam_break raised column {spec.dam_break_depth_m:.1f} m at {_centroid(spec)}"

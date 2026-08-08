@@ -93,6 +93,8 @@ __all__ = [
     "build_geoclaw_mesh_geojson",
     "make_geoclaw_mesh_layer_uri",
     "build_geoclaw_mesh_layer",
+    "compute_thacker_vandv",
+    "build_thacker_validation_chart_spec",
 ]
 
 #: Target GROUND resolution (metres/pixel) for the adaptive GeoClaw output
@@ -773,6 +775,69 @@ def _discover_frames(out_dir: Path) -> list[tuple[int, Path, Path | None]]:
     return found
 
 
+#: fgout ascii-frame name (``fgout0001.q0007``): a fixed-grid monitor number then
+#: the frame number. output_format='ascii' lands each frame in the SAME fort.q
+#: uniform-grid layout (a single uniform patch), so ``parse_fort_q_frame`` +
+#: ``rasterize_frame_to_grid`` read them with NO AMR flatten and NO clawpack import.
+_FGOUT_Q_RE = re.compile(r"^fgout\d+\.q(\d{4,})$")
+
+
+def _discover_fgout_frames(out_dir: Path) -> list[tuple[int, Path, Path | None]]:
+    """List ``(frame_no, fgoutNNNN.qMMMM, .tMMMM | None)`` ascending by frame_no.
+
+    The fgout monitor (setrun ``FGoutGrid``, gated by ``fgout_frames > 0``) writes
+    a SMOOTH single-resolution frame series (``fgout0001.q0001``, ``.q0002``, ...)
+    at EVENLY-SPACED times, decoupled from the coarse/variable fort.q AMR-patch
+    cadence. Discovered separately from ``_discover_frames`` so an fgout run keeps
+    the fort.q peak while the fgout frames BECOME the animation series.
+    """
+    found: list[tuple[int, Path, Path | None]] = []
+    search_dirs = [out_dir]
+    sub = out_dir / "_output"
+    if sub.is_dir():
+        search_dirs.insert(0, sub)
+    seen: set[int] = set()
+    for d in search_dirs:
+        if not d.is_dir():
+            continue
+        for p in sorted(d.iterdir()):
+            m = _FGOUT_Q_RE.match(p.name)
+            if not m:
+                continue
+            no = int(m.group(1))
+            if no in seen:
+                continue
+            seen.add(no)
+            t_path = p.with_name(p.name.replace(".q", ".t", 1))
+            found.append((no, p, t_path if t_path.exists() else None))
+    found.sort(key=lambda x: x[0])
+    return found
+
+
+def _read_frames_to_grids(
+    frame_files: list[tuple[int, Path, Path | None]],
+    bbox: tuple[float, float, float, float],
+    grid_shape: tuple[int, int],
+) -> list[Any]:
+    """Parse + rasterize each ``fort.q``/``fgout`` frame onto the regular AOI grid.
+
+    One uniform-grid read path for BOTH the AMR fort.q frames and the uniform
+    fgout frames (the fgout ascii layout IS the fort.q layout). Raises the typed
+    ``GEOCLAW_OUTPUT_READ_FAILED`` on an unreadable frame."""
+    grids: list[Any] = []
+    for _no, q_path, _t_path in frame_files:
+        try:
+            patches = parse_fort_q_frame(q_path.read_text(errors="replace"))
+        except Exception as exc:  # noqa: BLE001
+            raise PostprocessGeoClawError(
+                "GEOCLAW_OUTPUT_READ_FAILED",
+                message=f"could not read {q_path.name}: {exc}",
+                details={"frame": q_path.name},
+            ) from exc
+        grids.append(rasterize_frame_to_grid(patches, bbox, grid_shape))
+    return grids
+
+
 # --------------------------------------------------------------------------- #
 # AMR mesh (grid-line) preview -- the RAW GRID as a first-class per-run product.
 #
@@ -1146,17 +1211,7 @@ def postprocess_geoclaw(
             tuple(bbox),
         )
 
-    grids: list[Any] = []
-    for _no, q_path, _t_path in frame_files:
-        try:
-            patches = parse_fort_q_frame(q_path.read_text(errors="replace"))
-        except Exception as exc:  # noqa: BLE001
-            raise PostprocessGeoClawError(
-                "GEOCLAW_OUTPUT_READ_FAILED",
-                message=f"could not read {q_path.name}: {exc}",
-                details={"frame": q_path.name},
-            ) from exc
-        grids.append(rasterize_frame_to_grid(patches, bbox, grid_shape))
+    grids: list[Any] = _read_frames_to_grids(frame_files, bbox, grid_shape)
 
     # --- Overland (ocean-masked) inundation -------------------------------- #
     # For an OFFSHORE / COASTAL scenario (tsunami / surge) whose domain reaches the
@@ -1176,6 +1231,11 @@ def postprocess_geoclaw(
     # (1) the composer only sets mask_ocean for tsunami/surge (inland dam_break
     # stays unmasked), (2) a strict no-op when no cell is wet at t=0 AND no topo
     # cell is at or below the datum.
+    #
+    # The resolved ``ocean_mask`` (the permanent-water cells) is retained so the
+    # SAME mask is applied to the fgout animation frames below -- the fort.q t=0
+    # still-water frame is the authoritative ocean reference for both series.
+    ocean_mask: Any = None
     if mask_ocean:
         try:
             # PRIMARY: any cell wet at t=0 is permanent water (the ocean).
@@ -1203,6 +1263,7 @@ def postprocess_geoclaw(
                     )
             n_ocean = int(ocean.sum())
             if n_ocean:
+                ocean_mask = ocean
                 for _i in range(len(grids)):
                     gi = np.asarray(grids[_i], dtype="float64").copy()
                     gi[ocean] = np.nan
@@ -1232,6 +1293,44 @@ def postprocess_geoclaw(
             )
 
     n_steps = len(grids)
+
+    # --- fgout SMOOTH animation frames (when the run emitted them) ------------
+    # The fgout monitor (gated by fgout_frames > 0) dumps a uniform single-
+    # resolution grid at EVENLY-SPACED times -- a smooth animation cadence
+    # decoupled from the coarse/variable fort.q AMR-patch output. When present the
+    # fgout frames BECOME the scrubber animation series; the fort.q peak (+ any
+    # fgmax override) still supplies the PEAK layer + narration scalars. The same
+    # ocean mask (from the fort.q t=0 still-water frame) is applied so the fgout
+    # frames are overland-consistent with the peak. Absent -> the fort.q frames
+    # remain the animation source (byte-identical to a pre-fgout run).
+    fgout_files = _discover_fgout_frames(out)
+    fgout_grids: list[Any] = []
+    if fgout_files:
+        try:
+            fgout_grids = _read_frames_to_grids(fgout_files, bbox, grid_shape)
+            if ocean_mask is not None:
+                for _i in range(len(fgout_grids)):
+                    gi = np.asarray(fgout_grids[_i], dtype="float64").copy()
+                    gi[ocean_mask] = np.nan
+                    fgout_grids[_i] = gi
+            logger.info(
+                "postprocess_geoclaw run_id=%s using %d fgout frames as the SMOOTH "
+                "animation series (fort.q peak retained; %d fort.q frames)",
+                run_id,
+                len(fgout_grids),
+                n_steps,
+            )
+        except PostprocessGeoClawError as exc:
+            logger.warning(
+                "postprocess_geoclaw run_id=%s fgout frame read failed (%s); "
+                "falling back to the fort.q animation frames",
+                run_id,
+                exc,
+            )
+            fgout_grids = []
+
+    # The animation series: fgout frames when present, else the fort.q frames.
+    anim_grids = fgout_grids if fgout_grids else grids
 
     # --- PEAK grid (max-total-depth step) ---
     best_grid = None
@@ -1318,10 +1417,14 @@ def postprocess_geoclaw(
     ]
 
     # --- per-frame layers (engine-agnostic flood animation, Phase 1) ---
-    if n_steps > 1:
-        frame_indices = _select_frame_time_indices(n_steps)
+    # ``anim_grids`` is the fgout smooth series when the run emitted one, else the
+    # fort.q frames -- so the scrubber gets an evenly-spaced single-resolution
+    # animation when fgout was requested, the coarse AMR cadence otherwise.
+    n_anim = len(anim_grids)
+    if n_anim > 1:
+        frame_indices = _select_frame_time_indices(n_anim)
         frame_layers = _emit_frame_layers(
-            grids,
+            anim_grids,
             frame_indices,
             bbox=bbox,
             run_id=run_id,
@@ -1829,6 +1932,273 @@ def build_particle_track_chart_spec(
                 {"field": "particle", "type": "nominal"},
                 {"field": "t_s", "type": "quantitative", "format": ".0f"},
                 {"field": "dist_m", "type": "quantitative", "format": ".1f"},
+            ],
+        },
+    }
+
+
+# --------------------------------------------------------------------------- #
+# Thacker (1981) paraboloid-basin V&V (scenario="thacker").
+#
+# Grades a solved bowl run against the closed-form radially-symmetric Thacker
+# solution (trid3nt_contracts.geoclaw_thacker): the CENTER gauge (id 1) supplies
+# the central surface elevation eta(0,t) -> numerical PERIOD (autocorrelation) +
+# central AMPLITUDE; the dense +x-axis gauge line (ids 100+, radii 0..1.5a)
+# supplies the moving SHORELINE (largest wet radius over time) + a closed-wall
+# MASS-conservation proxy (ring-integrated volume drift). Pure numpy over the
+# gauge files -- no clawpack; the deck + this grader share the analytic module so
+# they agree by construction.
+# --------------------------------------------------------------------------- #
+def _parse_geoclaw_gauge_file(path: Path) -> tuple[list[float], list[float], list[float]]:
+    """Parse ``(t, h, eta)`` columns from one ``gaugeNNNNN.txt`` (h=col2, eta=last)."""
+    ts: list[float] = []
+    hs: list[float] = []
+    es: list[float] = []
+    for line in path.read_text(errors="replace").splitlines():
+        s = line.strip()
+        if not s or s.startswith("#"):
+            continue
+        p = s.split()
+        if len(p) < 4:
+            continue
+        try:
+            ts.append(float(p[1]))
+            hs.append(float(p[2]))
+            es.append(float(p[-1]))
+        except ValueError:
+            continue
+    return ts, hs, es
+
+
+def compute_thacker_vandv(
+    out_dir: str | Path,
+    a_m: float,
+    h0_m: float,
+    amp_A: float,
+    *,
+    dry_tol_m: float = 5.0e-3,
+    n_axis_gauges: int = 31,
+    axis_r_max_factor: float = 1.5,
+) -> dict[str, Any]:
+    """Grade a solved Thacker run against the closed form; return the V&V scalars.
+
+    Reads the center gauge (id 1) + the +x-axis gauge line (ids 100..100+N-1 at
+    radii ``0 .. axis_r_max_factor*a`` in ``n_axis_gauges`` steps, matching the
+    deck) from ``out_dir/_output``. Computes:
+
+      - ``period_s_numerical`` (autocorrelation of the detrended center eta) vs
+        ``period_s_analytic`` (``2*pi*a/sqrt(8 g h0)``);
+      - ``eta_center_max/min/amplitude`` numerical vs analytic;
+      - ``r_shore_min/max`` (the shoreline's closest / furthest wet radius over the
+        run) numerical vs analytic;
+      - ``mass_drift_pct`` -- ring-integrated water volume peak-to-peak drift over
+        the run (a closed-wall conservation proxy; ~0 for perfect conservation);
+      - ``rms_eta_m`` -- RMS of (numerical - analytic) center elevation;
+      - ``series`` -- ``{t, eta_numerical, eta_analytic}`` for the overlay chart.
+
+    Pure numpy; raises ``PostprocessGeoClawError('GEOCLAW_OUTPUT_EMPTY')`` when the
+    center gauge is missing / empty (an un-narratable run)."""
+    import numpy as np
+
+    from trid3nt_contracts.geoclaw_thacker import thacker_eta, thacker_reference
+
+    out = Path(out_dir)
+    base = out / "_output"
+    if not base.is_dir():
+        base = out
+    ref = thacker_reference(a_m, h0_m, amp_A)
+
+    center = base / "gauge00001.txt"
+    if not center.exists():
+        raise PostprocessGeoClawError(
+            "GEOCLAW_OUTPUT_EMPTY",
+            message=f"thacker center gauge not found under {base}",
+            details={"out_dir": str(base)},
+        )
+    ts, _hc, es = _parse_geoclaw_gauge_file(center)
+    if len(ts) < 8:
+        raise PostprocessGeoClawError(
+            "GEOCLAW_OUTPUT_EMPTY",
+            message=f"thacker center gauge has too few samples ({len(ts)})",
+        )
+    t = np.asarray(ts, dtype="float64")
+    eta_num = np.asarray(es, dtype="float64")
+    eta_ana = np.asarray(
+        [thacker_eta(0.0, 0.0, float(tt), a_m, h0_m, amp_A) for tt in ts],
+        dtype="float64",
+    )
+
+    # Period via autocorrelation of the uniformly-resampled, detrended signal:
+    # the first autocorrelation maximum AFTER the correlation first goes negative
+    # is the fundamental period (robust to the wetting/dry-front wiggles a naive
+    # peak-picker trips on).
+    tu = np.linspace(t[0], t[-1], 4000)
+    eu = np.interp(tu, t, eta_num)
+    eu = eu - eu.mean()
+    ac = np.correlate(eu, eu, mode="full")[len(eu) - 1:]
+    dtu = float(tu[1] - tu[0])
+    below = np.nonzero(ac < 0)[0]
+    period_num = float("nan")
+    if below.size:
+        seg = ac[below[0]:]
+        if seg.size:
+            period_num = float((below[0] + int(np.argmax(seg))) * dtu)
+
+    rms_eta = float(np.sqrt(np.mean((eta_num - eta_ana) ** 2)))
+
+    # Shoreline: per sampled time, the largest axis-gauge radius that is wet
+    # (h > dry_tol); its max / min over the run are r_shore_max / r_shore_min.
+    radii = [axis_r_max_factor * a_m * (k / (n_axis_gauges - 1)) for k in range(n_axis_gauges)]
+    axis: dict[float, tuple[np.ndarray, np.ndarray]] = {}
+    for k, r in enumerate(radii):
+        gp = base / f"gauge{100 + k:05d}.txt"
+        if not gp.exists():
+            continue
+        gts, ghs, _ge = _parse_geoclaw_gauge_file(gp)
+        if gts:
+            axis[r] = (np.asarray(gts, "float64"), np.asarray(ghs, "float64"))
+
+    r_shore_max_num = 0.0
+    r_shore_min_num = float(axis_r_max_factor * a_m)
+    if axis:
+        sample_ts = np.linspace(max(t[0], 0.05), t[-1], 200)
+        wet_r = []
+        for tt in sample_ts:
+            best_r = 0.0
+            for r, (gt, gh) in axis.items():
+                idx = int(np.argmin(np.abs(gt - tt)))
+                if float(gh[idx]) > dry_tol_m and r > best_r:
+                    best_r = r
+            wet_r.append(best_r)
+        r_shore_max_num = float(max(wet_r))
+        r_shore_min_num = float(min(wet_r))
+
+    # Mass conservation: total water volume per fort.q frame, integrated over the
+    # LEVEL-1 (base) patch that uniformly covers the whole domain -- sum(max(h,0))
+    # * dx * dy, threshold-free (no dry cutoff) and overlap-free (a single level, so
+    # no AMR double counting). A closed-wall frictionless basin conserves mass, so
+    # the peak-to-peak drift is the honest conservation gate. (A finest-wins
+    # rasterization with a wet threshold would falsely "lose" the thin sheet the
+    # bowl spreads at mid-period; the base-level integral avoids that.) NaN when the
+    # fort.q frames are absent.
+    mass_drift_pct = float("nan")
+    total_volume_m3_first = float("nan")
+    try:
+        frames = _discover_frames(out)
+        vols: list[float] = []
+        for _no, q_path, _t in frames:
+            patches = parse_fort_q_frame(q_path.read_text(errors="replace"))
+            base = [p for p in patches if p.level == min(p2.level for p2 in patches)] if patches else []
+            v = 0.0
+            for p in base:
+                harr = np.asarray(p.h, dtype="float64")
+                v += float(np.nansum(np.clip(harr, 0.0, None))) * abs(p.dx * p.dy)
+            vols.append(v)
+        if vols:
+            total_volume_m3_first = vols[0]
+            vmean = float(np.mean(vols))
+            mass_drift_pct = (
+                (max(vols) - min(vols)) / vmean * 100.0 if vmean > 0 else float("nan")
+            )
+    except Exception as exc:  # noqa: BLE001 -- mass proxy is best-effort
+        logger.warning("compute_thacker_vandv: fort.q mass integral failed: %s", exc)
+
+    def _err(num: float, ana: float) -> float:
+        return abs(num - ana) / abs(ana) * 100.0 if ana else float("nan")
+
+    return {
+        "bowl_a_m": float(a_m),
+        "bowl_h0_m": float(h0_m),
+        "bowl_eta_amp": float(amp_A),
+        "gravity": ref["gravity"],
+        "period_s_numerical": period_num,
+        "period_s_analytic": ref["period_s"],
+        "period_error_pct": _err(period_num, ref["period_s"]),
+        "eta_center_max_numerical_m": float(np.nanmax(eta_num)),
+        "eta_center_max_analytic_m": ref["eta_center_max_m"],
+        "eta_center_min_numerical_m": float(np.nanmin(eta_num)),
+        "eta_center_min_analytic_m": ref["eta_center_min_m"],
+        "eta_center_amplitude_numerical_m": float(np.nanmax(eta_num) - np.nanmin(eta_num)),
+        "eta_center_amplitude_analytic_m": ref["eta_center_amplitude_m"],
+        "eta_amplitude_error_pct": _err(
+            float(np.nanmax(eta_num) - np.nanmin(eta_num)), ref["eta_center_amplitude_m"]
+        ),
+        "r_shore_max_numerical_m": r_shore_max_num,
+        "r_shore_max_analytic_m": ref["r_shore_max_m"],
+        "r_shore_max_error_pct": _err(r_shore_max_num, ref["r_shore_max_m"]),
+        "r_shore_min_numerical_m": r_shore_min_num,
+        "r_shore_min_analytic_m": ref["r_shore_min_m"],
+        "r_shore_min_error_pct": _err(r_shore_min_num, ref["r_shore_min_m"]),
+        "mass_drift_pct": mass_drift_pct,
+        "total_volume_m3": total_volume_m3_first,
+        "rms_eta_m": rms_eta,
+        "series": {
+            "t": [float(x) for x in ts],
+            "eta_numerical": [float(x) for x in eta_num],
+            "eta_analytic": [float(x) for x in eta_ana],
+        },
+    }
+
+
+def build_thacker_validation_chart_spec(
+    vandv: dict[str, Any] | None,
+) -> dict[str, Any] | None:
+    """Vega-Lite overlay: numerical vs analytic center elevation eta(0,t).
+
+    ONE figure layering the GeoClaw center-gauge series over the Thacker closed
+    form -- the visual heart of the V&V. Returns ``None`` when the series is empty."""
+    if not vandv:
+        return None
+    series = vandv.get("series") or {}
+    ts = series.get("t") or []
+    if not ts:
+        return None
+    en_all = series.get("eta_numerical", [])
+    ea_all = series.get("eta_analytic", [])
+    # Downsample so BOTH lines fit well under the chart-payload inline-row cap
+    # (~2000 rows) WITHOUT truncating the time axis: stride to <= 500 samples per
+    # line (1000 rows total), preserving the full [0, tfinal] range.
+    stride = max(1, len(ts) // 500)
+    values = []
+    for i in range(0, len(ts), stride):
+        tt = float(ts[i])
+        if i < len(en_all):
+            values.append({"t_s": tt, "eta_m": float(en_all[i]), "solution": "GeoClaw (numerical)"})
+        if i < len(ea_all):
+            values.append({"t_s": tt, "eta_m": float(ea_all[i]), "solution": "Thacker 1981 (analytic)"})
+    return {
+        "$schema": "https://vega.github.io/schema/vega-lite/v5.json",
+        "data": {"values": values},
+        "mark": {"type": "line"},
+        "encoding": {
+            "x": {"field": "t_s", "type": "quantitative", "title": "time (s)"},
+            "y": {
+                "field": "eta_m",
+                "type": "quantitative",
+                "title": "center surface elevation eta(0,t) [m]",
+            },
+            "color": {
+                "field": "solution",
+                "type": "nominal",
+                "title": None,
+                "scale": {
+                    "domain": ["GeoClaw (numerical)", "Thacker 1981 (analytic)"],
+                    "range": ["#1f5fbf", "#d1495b"],
+                },
+            },
+            "strokeDash": {
+                "field": "solution",
+                "type": "nominal",
+                "scale": {
+                    "domain": ["GeoClaw (numerical)", "Thacker 1981 (analytic)"],
+                    "range": [[1, 0], [6, 3]],
+                },
+                "legend": None,
+            },
+            "tooltip": [
+                {"field": "solution", "type": "nominal"},
+                {"field": "t_s", "type": "quantitative", "format": ".2f"},
+                {"field": "eta_m", "type": "quantitative", "format": ".4f"},
             ],
         },
     }

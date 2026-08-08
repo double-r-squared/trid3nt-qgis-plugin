@@ -371,3 +371,29 @@ def test_run_args_defaults_leave_manning_scalar_path() -> None:
     assert args.manning_coefficients is None
     assert args.manning_break == []
     assert args.amr_regions == []
+
+
+def test_thacker_scenario_requires_bowl_params():
+    """scenario='thacker' requires all three bowl parameters (loud, not silent)."""
+    import pytest
+    from trid3nt_contracts.geoclaw_contracts import GeoClawRunArgs
+    with pytest.raises(Exception):
+        GeoClawRunArgs(bbox=(-1.6, -1.6, 1.6, 1.6), scenario="thacker")  # missing bowl_*
+    ok = GeoClawRunArgs(bbox=(-1.6, -1.6, 1.6, 1.6), scenario="thacker",
+                        bowl_a_m=1.0, bowl_h0_m=0.1, bowl_eta_amp=0.5)
+    assert ok.scenario == "thacker" and ok.bowl_a_m == 1.0
+
+
+def test_bowl_params_forbidden_on_geographic_scenario():
+    """bowl_* on a tsunami/dam_break/surge run is a typed error (mutual exclusion)."""
+    import pytest
+    from trid3nt_contracts.geoclaw_contracts import GeoClawRunArgs
+    with pytest.raises(Exception):
+        GeoClawRunArgs(bbox=(-124.3, 41.7, -124.1, 41.8), scenario="tsunami", bowl_a_m=1.0)
+
+
+def test_bowl_alias_normalizes_to_thacker():
+    from trid3nt_contracts.geoclaw_contracts import GeoClawRunArgs
+    a = GeoClawRunArgs(bbox=(-1.6, -1.6, 1.6, 1.6), scenario="parabolic_bowl",
+                       bowl_a_m=1.0, bowl_h0_m=0.1, bowl_eta_amp=0.5)
+    assert a.scenario == "thacker"

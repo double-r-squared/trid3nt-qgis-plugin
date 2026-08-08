@@ -116,7 +116,7 @@ TEMPLATE_CARD = TemplateCard(
         "dam_break_depth_m, source_lonlat, source_magnitude, tsunami_dtopo_uri, "
         "surge_forcing_uri, output_frames, amr_levels, manning_n, sea_level_m, "
         "fault_strike_deg/dip/rake/depth_km, extra_topo_uris, "
-        "coastal_gauge_lonlat, fgmax_arrival_tol_m"
+        "coastal_gauge_lonlat, fgmax_arrival_tol_m, fgout_frames (smooth animation)"
     ),
 )
 
@@ -165,6 +165,7 @@ async def geoclaw_inundation(
     fgmax_arrival_tol_m: float | None = None,
     lagrangian_particles: list[list[float]] | None = None,
     fgmax_mask: str = "full",
+    fgout_frames: int = 0,
     compute_class: str = "standard",
     input_mode: str | None = None,
     # absorb LLM-invented kwargs (centralized at server.py via
@@ -232,6 +233,13 @@ async def geoclaw_inundation(
             whole AOI) or "onshore" (restrict the fgmax maxima to the DEM
             onshore cells via a topotype-3 mask, cutting the fgmax output size
             for a coastal AOI). Only affects tsunami / surge runs.
+        fgout_frames: SMOOTH-animation frame count (default 0 = off). When > 0
+            (tsunami / surge) the run emits an fgout fixed-grid monitor -- a
+            uniform single-resolution grid over the AOI dumped at this many
+            EVENLY-SPACED times -- and those frames BECOME the scrubber
+            animation series (a smooth cadence decoupled from the coarse AMR
+            fort.q output). The peak-depth layer is unchanged. Try ~12-24 for a
+            fluid run-up animation. 0 keeps the fort.q-frame animation.
         compute_class: compute class (default "standard").
         input_mode: run-mode lever (ADR 0107). ``"user_gated"`` presents the
             resolved inputs (dam height/location, magnitude, window) for review
@@ -461,6 +469,8 @@ async def geoclaw_inundation(
             ]
         if str(fgmax_mask).strip().lower() != "full":
             kwargs["fgmax_mask"] = str(fgmax_mask).strip().lower()
+        if int(fgout_frames or 0) > 0:
+            kwargs["fgout_frames"] = int(fgout_frames)
         run_args = GeoClawRunArgs(**kwargs)
     except Exception as exc:  # noqa: BLE001 -- pydantic ValidationError or coercion
         return {
@@ -1620,10 +1630,14 @@ def _cleanup_dir(d: str | Path) -> None:
 
 def _is_geoclaw_output_key(base: str) -> bool:
     """A GeoClaw output object the composer downloads: the ``fort.*`` AMR frames
-    (rasterized to depth) AND the coastal ``gaugeNNNNN.txt`` time series (the
+    (rasterized to depth), the ``fgout*`` SMOOTH fixed-grid animation frames (the
+    uniform-grid series the postprocess promotes to the scrubber animation when
+    ``fgout_frames > 0``), AND the coastal ``gaugeNNNNN.txt`` time series (the
     gauge-timeseries template reads it; the plain inundation path ignores it)."""
-    return base.startswith("fort.") or (
-        base.startswith("gauge") and base.endswith(".txt")
+    return (
+        base.startswith("fort.")
+        or base.startswith("fgout")
+        or (base.startswith("gauge") and base.endswith(".txt"))
     )
 
 

@@ -49,7 +49,7 @@ from __future__ import annotations
 
 from typing import Any, Literal
 
-from pydantic import Field, field_validator
+from pydantic import Field, field_validator, model_validator
 
 from .common import BBox, GraceModel
 from .execution import LayerURI
@@ -177,7 +177,10 @@ WindDragLaw = Literal["none", "garratt", "powell"]
 #:   "dam_break" — raised water column released over dry topo (qinit).
 #:   "tsunami"   — seafloor-displacement source (dtopotools).
 #:   "surge"     — prescribed sea-surface boundary forcing (surge hydrograph).
-GeoClawScenario = Literal["dam_break", "tsunami", "surge"]
+#:   "thacker"   — idealized frictionless paraboloid-basin V&V (worker-generated
+#:                 bowl topo + analytic tilted qinit; NO fetched DEM). NOT a
+#:                 geographic hazard scenario -- a synthetic closed-form check.
+GeoClawScenario = Literal["dam_break", "tsunami", "surge", "thacker"]
 
 #: LLM-friendly aliases for ``scenario``. The agent frequently invents synonyms
 #: ("flood", "wave", "breach", ...) that fail the bare ``Literal`` and trigger a
@@ -206,6 +209,13 @@ _SCENARIO_ALIASES: dict[str, str] = {
     "storm_surge": "surge",
     "stormsurge": "surge",
     "coastal_surge": "surge",
+    # idealized paraboloid-basin V&V.
+    "bowl": "thacker",
+    "parabolic_bowl": "thacker",
+    "paraboloid": "thacker",
+    "thacker_bowl": "thacker",
+    "planar_bowl": "thacker",
+    "oscillating_bowl": "thacker",
 }
 
 
@@ -369,6 +379,20 @@ class GeoClawRunArgs(GraceModel):
     # deck is byte-identical to a pre-fgout run. Only affects tsunami / surge.
     fgout_frames: int = Field(default=0, ge=0)
 
+    # --- Thacker paraboloid-basin V&V (scenario="thacker") ---------------------
+    # An IDEALIZED, frictionless, closed-wall bowl with a worker-GENERATED
+    # paraboloid topography and an analytic still-surface qinit -- NO fetched DEM.
+    # The domain is PLANAR Cartesian metres (coordinate_system=1), so ``bbox`` for
+    # a thacker run is the metres domain [-L,-L,L,L], NOT lon/lat. Consumed ONLY for
+    # scenario="thacker"; ignored (must be None) otherwise. See geoclaw_thacker.py.
+    #   bowl_a_m:      basin radius a (m) -- the still-water shoreline radius (> 0).
+    #   bowl_h0_m:     central still-water depth h0 (m) at r=0 (> 0).
+    #   bowl_eta_amp:  Thacker dimensionless oscillation amplitude A in (0, 1) --
+    #                  larger A = a stronger slosh + a wider shoreline excursion.
+    bowl_a_m: float | None = Field(default=None, gt=0.0)
+    bowl_h0_m: float | None = Field(default=None, gt=0.0)
+    bowl_eta_amp: float | None = Field(default=None, gt=0.0, lt=1.0)
+
     # Explicit AMR refinement windows (region-based flagging). Each window forces
     # a lat/lon/time box to a min/max AMR level, appended AFTER the engine's
     # default region tiers. Empty -> refinement follows the default flag2refine
@@ -426,6 +450,37 @@ class GeoClawRunArgs(GraceModel):
             return value
         key = value.strip().lower()
         return _SCENARIO_ALIASES.get(key, key)
+
+    @model_validator(mode="after")
+    def _validate_bowl_mutual_exclusion(self) -> "GeoClawRunArgs":
+        """Bowl mode and geographic mode are MUTUALLY EXCLUSIVE (loud, not silent).
+
+        ``scenario="thacker"`` REQUIRES all three bowl parameters (the idealized
+        basin is fully defined by ``bowl_a_m`` / ``bowl_h0_m`` / ``bowl_eta_amp``,
+        with NO fetched DEM). Any OTHER scenario FORBIDS the bowl parameters (a
+        geographic run has a real AOI DEM, never a synthetic paraboloid) -- so a
+        bowl field on a tsunami/dam_break/surge run is a typed error, never a
+        silently-ignored no-op."""
+        bowl_fields = {
+            "bowl_a_m": self.bowl_a_m,
+            "bowl_h0_m": self.bowl_h0_m,
+            "bowl_eta_amp": self.bowl_eta_amp,
+        }
+        set_bowl = [k for k, v in bowl_fields.items() if v is not None]
+        if self.scenario == "thacker":
+            missing = [k for k, v in bowl_fields.items() if v is None]
+            if missing:
+                raise ValueError(
+                    "scenario='thacker' requires all bowl parameters "
+                    f"(bowl_a_m, bowl_h0_m, bowl_eta_amp); missing {missing}"
+                )
+        elif set_bowl:
+            raise ValueError(
+                f"bowl parameters {set_bowl} are only valid for scenario='thacker' "
+                f"(the idealized paraboloid-basin V&V), not scenario={self.scenario!r} "
+                "-- bowl mode and geographic-AOI mode are mutually exclusive"
+            )
+        return self
 
     @field_validator("source_lonlat")
     @classmethod

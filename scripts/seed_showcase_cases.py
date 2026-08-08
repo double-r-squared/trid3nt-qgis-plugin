@@ -166,8 +166,16 @@ SHOWCASE: list[Showcase] = [
     # -- GeoClaw coastal -----------------------------------------------------
     Showcase("geoclaw_inundation",
              {"bbox": _CRESCENT, "scenario": "tsunami", "sim_duration_s": 1800,
-              "amr_levels": 2, "output_frames": 6},
-             "ADR 0148 GeoClaw tsunami inundation, Crescent City CA (cheapest AMR)", 600),
+              "amr_levels": 2, "output_frames": 6, "fgout_frames": 12},
+             "ADR 0187 GeoClaw tsunami inundation with fgout SMOOTH animation, "
+             "Crescent City CA: fgout_frames=12 -> 12 evenly-spaced uniform-grid "
+             "frames become the scrubber animation (fort.q peak retained)", 600),
+    Showcase("geoclaw_thacker_validation",
+             {"bowl_a_m": 1.0, "bowl_h0_m": 0.1, "bowl_eta_amp": 0.5,
+              "n_periods": 2.5, "amr_levels": 3, "base_cells": 60},
+             "ADR 0187 GeoClaw Thacker paraboloid-basin V&V: frictionless closed-wall "
+             "bowl vs the 1981 closed form (period ~1.9%, amplitude ~0.1%, mass drift "
+             "~5%). Synthetic non-geographic solver verification (charts/scalars).", 300),
     Showcase("geoclaw_storm_surge",
              {"bbox": _GALVESTON, "sim_duration_s": 54000, "output_frames": 12,
               "amr_levels": 2},

@@ -728,6 +728,11 @@ from ..workflows.geoclaw.regional_manning.regional_manning import geoclaw_region
 # surge (wind + pressure forcing from a storm track, selectable wind drag law).
 # Rides the inundation composer. ADR 0168.
 from ..workflows.geoclaw.storm_surge.storm_surge import geoclaw_storm_surge as _geoclaw_storm_surge  # noqa: E402,F401 - GeoClaw storm-surge front (engine=geoclaw, tier=template)
+# geoclaw_thacker_validation TEMPLATE (engine="geoclaw", tier="template"), one
+# folder under workflows/geoclaw/thacker_validation/: a synthetic, non-geographic
+# V&V of the wet-dry SWE+AMR solver vs Thacker's 1981 exact paraboloid-basin
+# solution (DEM-free composer branch; chart+scalars only). ADR 0187.
+from ..workflows.geoclaw.thacker_validation.thacker_validation import geoclaw_thacker_validation as _geoclaw_thacker_validation  # noqa: E402,F401 - GeoClaw SWE+AMR analytic V&V (engine=geoclaw, tier=template)
 # swan_wave_field TEMPLATE (engine="swan", tier="template"), one folder under
 # workflows/swan/wave_field/; EXCLUDED from the default retrieval pool,
 # surfaced only by the run_swan door's gate expansion. The composer chain

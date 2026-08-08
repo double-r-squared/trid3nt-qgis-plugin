@@ -12,3 +12,6 @@ geoclaw_inundation:
 - track how far floating particles are pushed by the wave over time
 - restrict the fgmax run-up maxima to the onshore cells of the real DEM
 - record max wave height and first-arrival time only on the dry-land cells
+- give me a smooth fluid tsunami run-up animation instead of the choppy AMR frames
+- dump evenly-spaced fixed-grid output frames for a smooth inundation scrubber
+- render the wave run-up as smooth single-resolution animation frames over the AOI
