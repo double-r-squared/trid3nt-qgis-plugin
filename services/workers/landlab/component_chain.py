@@ -199,12 +199,16 @@ def run_component_chain(
         return _run_hacks_law(dem, resolution_m, build_spec)
     if analysis == "hand":
         return _run_hand(dem, resolution_m, build_spec)
+    if analysis == "channel_incision":
+        return _run_channel_incision(dem, resolution_m, build_spec)
+    if analysis == "chi_map":
+        return _run_chi_map(dem, resolution_m, build_spec)
     raise ValueError(
         f"unknown Landlab analysis {analysis!r} (expected one of "
         "'landslide_probability', 'overland_flow', 'flow_accumulation', "
         "'green_ampt_overland_flow', 'landslide_storm_ensemble', "
         "'overland_flow_timeseries', 'dem_pit_fill', 'lake_mapping', "
-        "'hacks_law', 'hand')"
+        "'hacks_law', 'hand', 'channel_incision', 'chi_map')"
     )
 
 
@@ -1612,6 +1616,274 @@ def _run_hacks_law(
             "hack_coefficient": coefficient,
             "largest_basin_area_km2": largest_area_km2,
             "n_basins": n_basins,
+            "scatter": scatter,
+        },
+        secondary_fields=secondary,
+    )
+
+
+# --------------------------------------------------------------------------- #
+# channel_incision: detachment-limited stream-power landscape evolution to
+# steady state (FastscapeEroder + rock uplift), with the slope-area V&V.
+# --------------------------------------------------------------------------- #
+def _run_channel_incision(
+    dem: Any, resolution_m: float, spec: dict[str, Any]
+) -> ChainResult:
+    """Detachment-limited stream-power incision to steady state + slope-area V&V.
+
+    Evolves the AOI DEM under a demo rock-uplift + stream-power erodibility
+    forcing using the implicit FastscapeEroder (E = K A^m S^n; unconditionally
+    stable so a large dt reaches steady state in a bounded step budget). At the
+    end the channel-node slope-area relation is fit in log-log space and compared
+    to the analytical stream-power steady state S = (U/K)^(1/n) A^(-m/n): the
+    fitted concavity (negative log-log slope) is checked against m_sp/n_sp and K
+    is back-solved from the intercept (K = U / exp(n * intercept)).
+
+    The PRIMARY field is the EVOLVED topographic elevation (the real terrain
+    evolved under the labeled demo forcing); the normalized channel steepness
+    (ksn = S * A^theta_ref) is a secondary field; the subsampled slope-area
+    scatter drives the log-log V&V chart.
+    """
+    import numpy as np
+    from landlab.components import (  # type: ignore
+        FastscapeEroder,
+        FlowAccumulator,
+        LinearDiffuser,
+    )
+
+    grid, nodata_mask, z = _build_grid(dem, resolution_m)
+    nrows, ncols = np.asarray(dem).shape
+
+    K = float(spec.get("k_bedrock", 1.0e-5))
+    m_sp = float(spec.get("m_sp", 0.5))
+    n_sp = float(spec.get("n_sp", 1.0))
+    U = float(spec.get("uplift_rate_m_yr", 1.0e-3))
+    total_yr = float(spec.get("incision_run_duration_yr", 1.0e6))
+    n_steps = max(int(spec.get("incision_n_timesteps", 500)), 1)
+    diffusivity = float(spec.get("hillslope_diffusivity_m2_yr", 0.0))
+    ref_theta = float(spec.get("reference_concavity", m_sp / max(n_sp, 1e-9)))
+    threshold_cells = max(int(spec.get("channel_threshold_cells", 100)), 1)
+    cell_area = float(resolution_m) ** 2
+    threshold_m2 = threshold_cells * cell_area
+    dt = total_yr / float(n_steps)
+
+    fa = FlowAccumulator(
+        grid, flow_director="D8", depression_finder="DepressionFinderAndRouter"
+    )
+    sp = FastscapeEroder(grid, K_sp=K, m_sp=m_sp, n_sp=n_sp)
+    ld = (
+        LinearDiffuser(grid, linear_diffusivity=diffusivity)
+        if diffusivity > 0.0
+        else None
+    )
+    core = grid.core_nodes
+    for _ in range(n_steps):
+        z[core] += U * dt
+        fa.run_one_step()
+        if ld is not None:
+            ld.run_one_step(dt)
+        sp.run_one_step(dt)
+
+    drainage = np.asarray(grid.at_node["drainage_area"], dtype="float64")
+    slope = np.asarray(grid.at_node["topographic__steepest_slope"], dtype="float64")
+    is_core = np.zeros(grid.number_of_nodes, dtype=bool)
+    is_core[core] = True
+    chan = is_core & (drainage >= threshold_m2) & (slope > 0.0)
+
+    fitted_concavity = 0.0
+    k_recovered = 0.0
+    fit_r2 = 0.0
+    n_chan = int(np.count_nonzero(chan))
+    scatter: list[dict[str, float]] = []
+    if n_chan >= 3:
+        A = drainage[chan]
+        S = slope[chan]
+        log_a = np.log(A)
+        log_s = np.log(S)
+        coef = np.polyfit(log_a, log_s, 1)
+        fitted_concavity = float(-coef[0])
+        intercept = float(coef[1])
+        # S = (U/K)^(1/n) A^(-m/n) -> log S = (1/n) log(U/K) - (m/n) log A.
+        # intercept = (1/n) log(U/K) -> K = U / exp(n * intercept).
+        k_recovered = float(U / np.exp(n_sp * intercept))
+        pred = np.polyval(coef, log_a)
+        ss_res = float(np.sum((log_s - pred) ** 2))
+        ss_tot = float(np.sum((log_s - log_s.mean()) ** 2))
+        fit_r2 = float(1.0 - ss_res / ss_tot) if ss_tot > 0.0 else 0.0
+        # Subsample the scatter for the chart (bounded payload).
+        idx = np.arange(A.size)
+        if A.size > 400:
+            idx = np.unique(np.linspace(0, A.size - 1, 400).round().astype(int))
+        scatter = [
+            {"area_m2": float(A[i]), "slope": float(S[i])} for i in idx
+        ]
+
+    # Evolved elevation (primary) + channel steepness ksn (secondary), NaN-masked.
+    elev = np.asarray(z, dtype="float64").reshape(nrows, ncols).copy()
+    elev[nodata_mask] = np.nan
+
+    ksn_flat = np.full(grid.number_of_nodes, np.nan, dtype="float64")
+    if n_chan >= 1:
+        ksn_flat[chan] = slope[chan] * (drainage[chan] ** ref_theta)
+    ksn = ksn_flat.reshape(nrows, ncols)
+    ksn[nodata_mask] = np.nan
+    secondary: dict[str, Any] = {}
+    if np.any(np.isfinite(ksn)):
+        secondary["channel_steepness"] = ksn
+
+    analytical_concavity = float(m_sp / max(n_sp, 1e-9))
+    LOG.info(
+        "landlab channel_incision: T=%.0f yr steps=%d K=%.3e U=%.3e m/yr "
+        "fitted_theta=%.4f analytical_theta=%.4f K_rec=%.3e r2=%.4f n_chan=%d",
+        total_yr, n_steps, K, U, fitted_concavity, analytical_concavity,
+        k_recovered, fit_r2, n_chan,
+    )
+    return ChainResult(
+        field=elev,
+        analysis="channel_incision",
+        unstable_area_fraction=0.0,
+        min_factor_of_safety=0.0,
+        mean_probability_of_failure=0.0,
+        output_field_name="topographic__elevation",
+        extra={
+            "fitted_concavity": fitted_concavity,
+            "analytical_concavity": analytical_concavity,
+            "k_input": K,
+            "k_recovered": k_recovered,
+            "m_sp": m_sp,
+            "n_sp": n_sp,
+            "uplift_rate_m_yr": U,
+            "run_duration_yr": total_yr,
+            "n_timesteps": n_steps,
+            "reference_concavity": ref_theta,
+            "fit_r2": fit_r2,
+            "n_channel_nodes": n_chan,
+            "scatter": scatter,
+        },
+        secondary_fields=secondary,
+    )
+
+
+# --------------------------------------------------------------------------- #
+# chi_map: ChiFinder + SteepnessFinder channel-steepness diagnostic on the
+# routed real DEM (knickpoint / tectonic proxy).
+# --------------------------------------------------------------------------- #
+def _run_chi_map(dem: Any, resolution_m: float, spec: dict[str, Any]) -> ChainResult:
+    """The chi index + normalized channel steepness (ksn) diagnostic.
+
+    Routes flow (D8) over the real DEM, runs ChiFinder (chi integrated at the
+    reference concavity) and SteepnessFinder (ksn) on the extracted channel
+    network (drainage-area threshold), and reports both. The PRIMARY field is the
+    chi index over the channel network; ksn is a secondary field; the channel
+    mask is a secondary vectorized by the composer; the chi-elevation profile
+    drives the chart.
+    """
+    import numpy as np
+    from landlab.components import (  # type: ignore
+        ChiFinder,
+        FlowAccumulator,
+        SteepnessFinder,
+    )
+
+    grid, nodata_mask, _z = _build_grid(dem, resolution_m)
+    nrows, ncols = np.asarray(dem).shape
+    elevation = np.asarray(grid.at_node["topographic__elevation"], dtype="float64")
+
+    theta = float(spec.get("reference_concavity", 0.5))
+    threshold_cells = max(int(spec.get("channel_threshold_cells", 100)), 1)
+    cell_area = float(resolution_m) ** 2
+    min_da = threshold_cells * cell_area
+
+    fa = FlowAccumulator(
+        grid, flow_director="D8", depression_finder="DepressionFinderAndRouter"
+    )
+    fa.run_one_step()
+    drainage = np.asarray(grid.at_node["drainage_area"], dtype="float64")
+
+    cf = ChiFinder(
+        grid, min_drainage_area=min_da, reference_concavity=theta, clobber=True
+    )
+    cf.calculate_chi()
+    chi = np.asarray(grid.at_node["channel__chi_index"], dtype="float64")
+
+    sf = SteepnessFinder(
+        grid, reference_concavity=theta, min_drainage_area=min_da
+    )
+    # SteepnessFinder log10's channel slopes internally; a zero-slope reach emits
+    # a benign divide-by-zero. Suppress it (the resulting inf/nan is masked out).
+    with np.errstate(divide="ignore", invalid="ignore"):
+        sf.calculate_steepnesses()
+    ksn = np.asarray(grid.at_node["channel__steepness_index"], dtype="float64")
+
+    is_core = np.zeros(grid.number_of_nodes, dtype=bool)
+    is_core[grid.core_nodes] = True
+    chan = is_core & (drainage >= min_da)
+
+    # Primary = chi over the channel network (NaN elsewhere).
+    chi_field = np.full(grid.number_of_nodes, np.nan, dtype="float64")
+    chi_field[chan] = chi[chan]
+    chi_grid = chi_field.reshape(nrows, ncols)
+    chi_grid[nodata_mask] = np.nan
+
+    ksn_field = np.full(grid.number_of_nodes, np.nan, dtype="float64")
+    ksn_field[chan] = ksn[chan]
+    ksn_grid = ksn_field.reshape(nrows, ncols)
+    ksn_grid[nodata_mask] = np.nan
+
+    channel_mask = np.where(chan, 1.0, np.nan).reshape(nrows, ncols)
+    channel_mask[nodata_mask] = np.nan
+
+    secondary: dict[str, Any] = {"channel_network": channel_mask}
+    if np.any(np.isfinite(ksn_grid)):
+        secondary["channel_steepness"] = ksn_grid
+
+    ksn_chan = ksn[chan]
+    ksn_chan = ksn_chan[np.isfinite(ksn_chan)]
+    max_ksn = float(np.max(ksn_chan)) if ksn_chan.size else 0.0
+    mean_ksn = float(np.mean(ksn_chan)) if ksn_chan.size else 0.0
+    chi_chan = chi[chan]
+    chi_chan_fin = chi_chan[np.isfinite(chi_chan)]
+    max_chi = float(np.max(chi_chan_fin)) if chi_chan_fin.size else 0.0
+    n_chan = int(np.count_nonzero(chan))
+
+    # chi-elevation profile scatter (subsampled): the classic chi plot where
+    # knickpoints appear as breaks in an otherwise-linear chi-z trend.
+    scatter: list[dict[str, float]] = []
+    if n_chan >= 3:
+        cc = chi[chan]
+        ee = elevation[chan]
+        keep = np.isfinite(cc) & np.isfinite(ee)
+        cc = cc[keep]
+        ee = ee[keep]
+        order = np.argsort(cc)
+        cc = cc[order]
+        ee = ee[order]
+        if cc.size > 400:
+            idx = np.unique(np.linspace(0, cc.size - 1, 400).round().astype(int))
+            cc = cc[idx]
+            ee = ee[idx]
+        scatter = [
+            {"chi": float(c), "elevation_m": float(e)} for c, e in zip(cc, ee)
+        ]
+
+    LOG.info(
+        "landlab chi_map: theta=%.3f min_da=%.4g m2 n_chan=%d max_chi=%.3f "
+        "max_ksn=%.3f mean_ksn=%.3f",
+        theta, min_da, n_chan, max_chi, max_ksn, mean_ksn,
+    )
+    return ChainResult(
+        field=chi_grid,
+        analysis="chi_map",
+        unstable_area_fraction=0.0,
+        min_factor_of_safety=max_ksn,
+        mean_probability_of_failure=0.0,
+        output_field_name="channel__chi_index",
+        extra={
+            "max_chi": max_chi,
+            "max_ksn": max_ksn,
+            "mean_ksn": mean_ksn,
+            "reference_concavity": theta,
+            "n_channel_nodes": n_chan,
             "scatter": scatter,
         },
         secondary_fields=secondary,

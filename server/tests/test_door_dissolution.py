@@ -69,6 +69,9 @@ EXPECTED_TEMPLATES = {
     "landlab_lake_mapping",  # Landlab CAND-S: lake extent + depth mapping
     "landlab_hacks_law_scaling",  # Landlab CAND-S: Hack's-law basin length-area scaling diagnostic
     "landlab_hand_wetness",  # Landlab CAND-S: Height Above Nearest Drainage wetness proxy
+    "landlab_channel_incision_steady_state",  # ADR 0184 Landlab shortlist: detachment-limited stream-power incision to steady state + slope-area V&V
+    "landlab_channel_steepness_chi_map",  # ADR 0184 Landlab shortlist: ChiFinder + SteepnessFinder chi/ksn knickpoint diagnostic
+    "landlab_storm_sequence_generator",  # ADR 0184 Landlab shortlist: PrecipitationDistribution stochastic storm-sequence forcing generator
     "elmfire_verification_elliptical_replication",  # ADR 0123 continuation #2: constant-wind elliptical-spread verification
     "geoclaw_tsunami_gauge_timeseries",  # ADR 0123 continuation #3: coastal gauge water-level time series
     "geoclaw_amr_refinement_regions",  # GeoClaw CAND-S: explicit lat/lon/time AMR region control

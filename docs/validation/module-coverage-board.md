@@ -1647,12 +1647,12 @@ Aspects: single-path steepest-descent routing (D4/D8); multi-flow-direction dist
 
 ### Erosion & Stream Power (channel incision / landscape evolution)
 Purpose: Model long-term channel incision and hillslope-to-channel sediment routing driven by drainage area and slope - bedrock rivers, transport-limited gravel rivers, threshold-limited erosion.
-Today: None surfaced - TRID3NT has no landscape-evolution / channel-incision analysis today; this is a wholly new module.
+Today: LANDED as `landlab_channel_incision_steady_state` (ADR 0184): detachment-limited stream-power incision (FastscapeEroder + rock uplift) evolved to steady state, with the analytical slope-area V&V. Other aspects (smooth-threshold, gravel-bed transport-limited) remain CAND-M.
 Aspects: detachment-limited bedrock incision (stream power law); smooth-threshold incision (avoids numerical artifacts at low erosive power); transport-limited gravel-bed river evolution with downstream abrasion; combined erosion-deposition / lateral bank erosion
-- [CAND-M] `detachment_limited_incision_steady_state` [M] [US] - Run this catchment to a steady-state channel profile under a given uplift rate and erodibility - does the resulting channel slope-area relationship match the analytical stream-power prediction?
+- [LANDED] `detachment_limited_incision_steady_state` [M] [US] (ADR 0184: `landlab_channel_incision_steady_state`) - Run this catchment to a steady-state channel profile under a given uplift rate and erodibility - does the resulting channel slope-area relationship match the analytical stream-power prediction?
   src: https://landlab.readthedocs.io/en/latest/tutorials/landscape_evolution/erosion_deposition/shared_stream_power.html (landlab_shared_stream_power_tutorial)
-  knobs: k_bedrock, k_transport, m_sp, n_sp, uplift_rate, run duration
-  notes: Published expected output: power-law slope-area relationship + steepness index rising over ~10,000yr after a 10x uplift-rate step - a strong V&V check.
+  knobs: k_bedrock, m_sp, n_sp, uplift_rate_m_yr, incision_run_duration_yr, incision_n_timesteps, hillslope_diffusivity_m2_yr, target_resolution_m
+  notes: LANDED exec-mode chain: FastscapeEroder (implicit, large stable dt) + uplift to steady state; primary = the EVOLVED topography (real DEM under a LABELED demo forcing, SyntheticInput), secondary = channel steepness (ksn), chart = slope-area log-log vs the analytical S=(U/K)^(1/n) A^(-m/n) at the known K. Live V&V (Boulder foothills, 90m, U=1mm/yr, K=1e-5, m=0.5, n=1, T=1 Myr): fitted concavity 0.485 vs analytical 0.500 (delta 0.015), K recovered 1.23e-5 vs input 1.0e-5 (ratio 1.23), R^2=0.972, n_chan=73.
 - [CAND-M] `threshold_incision_sensitivity` [M] [US] - Below what erosive power does this channel stop incising, and does that threshold create unrealistic numerical jumps?
   src: https://landlab.readthedocs.io/en/latest/tutorials/landscape_evolution/smooth_threshold_eroder/stream_power_smooth_threshold_eroder.html (landlab_spste_tutorial)
   knobs: threshold_sp (erosion threshold), K_sp, m_sp, n_sp
@@ -1772,12 +1772,12 @@ Aspects: fill-based pit removal (mass-preserving, raises depression floor); brea
 
 ### Terrain / Drainage-Network Analysis (diagnostic metrics)
 Purpose: Extract quantitative drainage-network descriptors from an already-routed DEM - channel steepness, drainage density, basin scaling - diagnostic metrics rather than process models.
-Today: Unsurfaced. Hack's Law is LANDED as `landlab_hacks_law_scaling` (ADR 0141): exponent fit + basin vector (Boulder foothills smoke: 0.566, in the classic range). ChiFinder/drainage-density remain CAND-M.
+Today: Hack's Law is LANDED as `landlab_hacks_law_scaling` (ADR 0141): exponent fit + basin vector (Boulder foothills smoke: 0.566, in the classic range). ChiFinder + SteepnessFinder are LANDED as `landlab_channel_steepness_chi_map` (ADR 0184). Drainage-density remains CAND-M.
 Aspects: normalized channel steepness / chi-based concavity mapping; drainage density (channel-network extent per unit area); Hack's-law basin-shape scaling
-- [CAND-M] `channel_steepness_chi_map` [M] [US] - Which channel reaches in this watershed are anomalously steep for their drainage area (a common tectonic-activity / knickpoint proxy)?
+- [LANDED] `channel_steepness_chi_map` [M] [US] (ADR 0184: `landlab_channel_steepness_chi_map`) - Which channel reaches in this watershed are anomalously steep for their drainage area (a common tectonic-activity / knickpoint proxy)?
   src: https://landlab.readthedocs.io/en/latest/tutorials/terrain_analysis/chi_finder/chi_finder.html (landlab_chi_finder_tutorial)
-  knobs: reference_concavity theta (~0.5 default), minimum drainage area for channel definition
-  notes: Published US case: NASADEM snippet over West Bijou Creek escarpment, Colorado high plains.
+  knobs: reference_concavity theta (~0.5 default), channel_threshold_cells, target_resolution_m
+  notes: LANDED exec-mode chain: ChiFinder (chi at reference concavity) + SteepnessFinder (ksn) on the routed real DEM; primary = chi over the channel network, secondary = ksn raster + channel vector, chart = chi-elevation profile. Live smoke on the published US case (West Bijou Creek escarpment, CO, 30m, theta=0.5): max ksn 133.2, mean ksn 12.5, max chi 6.93, 1476 channel nodes.
 - [CAND-M] `drainage_density_index` [M] [US] - How densely channelized is this watershed, and how does that compare across sub-basins?
   src: https://landlab.readthedocs.io/en/latest/tutorials/terrain_analysis/drainage_density/drainage_density.html (landlab_drainage_density_tutorial)
   knobs: channel-definition method (area-slope threshold vs supplied channel mask), threshold value
@@ -1802,12 +1802,12 @@ Aspects: parcel-based transport with grain-size-dependent mobility; initializing
 
 ### Climate & Precipitation Generators (stochastic forcing)
 Purpose: Generate the stochastic storm/tide forcing that drives other process components, rather than requiring a hand-supplied fixed hyetograph.
-Today: Unsurfaced as a reusable forcing tool - the signed overland_flow chain's storm_duration_hr/rainfall_intensity_mm_hr are fixed scalars, not a drawn stochastic sequence.
+Today: LANDED as `landlab_storm_sequence_generator` (ADR 0184): an in-process PrecipitationDistribution stochastic storm-sequence generator (chart-led forcing utility, AOI point marker). The signed overland_flow chain's fixed scalars are unchanged; this is the reusable stochastic forcing surface.
 Aspects: point (spatially-uniform) stochastic storm generator (Poisson storm/interstorm/depth); tidal-cycle-averaged flow-velocity forcing for estuarine/marsh AOIs
-- [CAND-M] `stochastic_storm_sequence_generator` [M] [US] - Instead of one fixed design storm, drive this analysis with a realistic multi-year sequence of storm/interstorm events.
+- [LANDED] `stochastic_storm_sequence_generator` [M] [US] (ADR 0184: `landlab_storm_sequence_generator`) - Instead of one fixed design storm, drive this analysis with a realistic multi-year sequence of storm/interstorm events.
   src: https://landlab.readthedocs.io/en/latest/generated/api/landlab.components.uniform_precip.generate_uniform_precip.html (landlab_precipitationdistribution_api)
-  knobs: mean_storm_duration, mean_interstorm_duration, mean_storm_depth, total_t, random_seed
-  notes: Reusable forcing utility other chains (groundwater, overland flow, landslide-probability ensembles) can all consume - a genuine capability upgrade over today's fixed-scalar storms.
+  knobs: mean_storm_duration_hr, mean_interstorm_duration_hr, mean_storm_depth_mm, storm_total_years, random_seed
+  notes: LANDED as an IN-PROCESS forcing utility (spatially-uniform point rainfall = no grid/DEM; runs in the composer, AOI point marker + sequence chart + storm-depth distribution). Reusable stochastic forcing surface other chains (groundwater seepage, overland flow, landslide ensembles) consume. Live smoke (Boulder, 5 yr, mean 15mm, seed 1234): 865 storms, total 13305mm, mean depth 15.4mm, mean intensity 7.32mm/hr, max 187mm (deterministic).
 - [CAND-L] `tidal_cycle_flow_forcing` [L] [US] - For this coastal marsh/estuary AOI, what does tidal-cycle-averaged flow velocity look like (ebb vs flood), and how does channel vs marsh roughness change it?
   src: https://landlab.readthedocs.io/en/latest/tutorials/tidal_flow/tidal_flow_calculator.html (landlab_tidal_flow_tutorial)
   knobs: tidal_range, tidal_period, mean_sea_level, spatially-varying Manning's n (channel vs marsh)

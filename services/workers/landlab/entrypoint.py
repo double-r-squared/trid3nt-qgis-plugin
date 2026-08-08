@@ -405,6 +405,8 @@ _JSON_SAFE_EXTRA_ANALYSES: frozenset[str] = frozenset(
         "lake_mapping",
         "hacks_law",
         "hand",
+        "channel_incision",
+        "chi_map",
     }
 )
 

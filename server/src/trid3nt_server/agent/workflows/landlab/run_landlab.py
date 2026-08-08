@@ -179,6 +179,24 @@ def build_landlab_build_spec(run_args: LandlabRunArgs) -> dict[str, Any]:
         "fill_flat": bool(getattr(run_args, "fill_flat", True)),
         "min_lake_depth_m": float(getattr(run_args, "min_lake_depth_m", 1.0)),
         "min_lake_area_m2": float(getattr(run_args, "min_lake_area_m2", 10000.0)),
+        # channel_incision (detachment-limited stream-power evolution) parameters.
+        "k_bedrock": float(getattr(run_args, "k_bedrock", 1.0e-5)),
+        "m_sp": float(getattr(run_args, "m_sp", 0.5)),
+        "n_sp": float(getattr(run_args, "n_sp", 1.0)),
+        "uplift_rate_m_yr": float(getattr(run_args, "uplift_rate_m_yr", 1.0e-3)),
+        "incision_run_duration_yr": float(
+            getattr(run_args, "incision_run_duration_yr", 1.0e6)
+        ),
+        "incision_n_timesteps": int(
+            getattr(run_args, "incision_n_timesteps", 500)
+        ),
+        "hillslope_diffusivity_m2_yr": float(
+            getattr(run_args, "hillslope_diffusivity_m2_yr", 0.0)
+        ),
+        # chi_map (ChiFinder + SteepnessFinder) reference concavity.
+        "reference_concavity": float(
+            getattr(run_args, "reference_concavity", 0.5)
+        ),
     }
     # Merge the validated physics overrides (the chain reads flow_director /
     # overland_alpha / mannings_n). Absent => byte-identical.

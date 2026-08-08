@@ -33,6 +33,8 @@ from typing import Any
 
 from trid3nt_contracts.execution import LayerURI
 from trid3nt_contracts.landlab_contracts import (
+    LandlabChannelIncisionLayerURI,
+    LandlabChiMapLayerURI,
     LandlabDemConditioningLayerURI,
     LandlabFlowAccumulationLayerURI,
     LandlabGreenAmptLayerURI,
@@ -58,11 +60,17 @@ __all__ = [
     "postprocess_landlab_lake_mapping",
     "postprocess_landlab_hacks_law",
     "postprocess_landlab_hand",
+    "postprocess_landlab_channel_incision",
+    "postprocess_landlab_chi_map",
     "build_routing_comparison_chart_spec",
     "build_infiltration_partition_chart_spec",
     "build_storm_ensemble_chart_spec",
     "build_overland_hydrograph_chart_spec",
     "build_hacks_law_chart_spec",
+    "build_slope_area_chart_spec",
+    "build_chi_elevation_chart_spec",
+    "build_storm_sequence_chart_spec",
+    "build_storm_statistics_chart_spec",
     "publish_landlab_quantities",
     "compute_landlab_metrics",
     "LANDSLIDE_STYLE_PRESET",
@@ -73,6 +81,9 @@ __all__ = [
     "FILL_DEPTH_STYLE_PRESET",
     "LAKE_DEPTH_STYLE_PRESET",
     "HAND_STYLE_PRESET",
+    "EVOLVED_ELEVATION_STYLE_PRESET",
+    "CHANNEL_STEEPNESS_STYLE_PRESET",
+    "CHI_STYLE_PRESET",
     "UNSTABLE_PROBABILITY_THRESHOLD",
     "SECONDARY_QUANTITY_BY_TOKEN",
 ]
@@ -121,6 +132,20 @@ RUNOFF_STYLE_PRESET: str = "continuous_flood_depth"
 FILL_DEPTH_STYLE_PRESET: str = "continuous_flood_depth"
 LAKE_DEPTH_STYLE_PRESET: str = "continuous_flood_depth"
 HAND_STYLE_PRESET: str = "continuous_flood_depth"
+
+#: The channel-incision evolved-elevation primary is a terrain-elevation field
+#: (m), so it reuses the existing ``continuous_dem`` terrain preset.
+EVOLVED_ELEVATION_STYLE_PRESET: str = "continuous_dem"
+
+#: Normalized channel steepness (ksn) reuses the ``continuous_slope`` ylorrd
+#: "steeper = hotter" ramp (ksn IS a slope-normalized steepness). A dedicated ksn
+#: ramp is a NAMED RESIDUAL -- the existing slope preset is the reused styling.
+CHANNEL_STEEPNESS_STYLE_PRESET: str = "continuous_slope"
+
+#: The chi index is a monotonic along-network integral (like drainage area), so
+#: it reuses the ``continuous_drainage_area`` viridis sequential ramp. A dedicated
+#: chi ramp is a NAMED RESIDUAL -- the existing preset is the reused styling.
+CHI_STYLE_PRESET: str = "continuous_drainage_area"
 
 #: Mirror of the worker threshold for recomputing the unstable fraction when the
 #: completion result block is absent (kept in sync with
@@ -1775,3 +1800,399 @@ def postprocess_landlab_hand(
         run_id, mean_h, max_h, chan_frac, len(layers) > 1, uri,
     )
     return layers, metrics
+
+
+# --------------------------------------------------------------------------- #
+# channel_incision postprocess: evolved-elevation raster + channel-steepness
+# raster + the slope-area V&V log-log chart (fitted vs analytical stream power).
+# --------------------------------------------------------------------------- #
+def build_slope_area_chart_spec(
+    scatter: list[dict[str, Any]],
+    *,
+    k_input: float,
+    k_recovered: float,
+    uplift_rate_m_yr: float,
+    m_sp: float,
+    n_sp: float,
+    fit_r2: float,
+) -> dict[str, Any] | None:
+    """Build the slope-area V&V log-log chart (Vega-Lite).
+
+    Channel-node slope vs drainage-area points on log-log axes plus the analytical
+    steady-state stream-power prediction S = (U/K)^(1/n) A^(-m/n) evaluated at the
+    KNOWN forcing K (k_input) - the line the steady-state data should lie on. The
+    fitted concavity (-slope) and the recovered K are the reported V&V deltas.
+    Returns ``None`` when the scatter is empty. Pure."""
+    _ = k_recovered  # reported as a scalar; the prediction line uses the known K.
+    pts = [
+        {"area_m2": float(p.get("area_m2", 0.0)), "slope": float(p.get("slope", 0.0))}
+        for p in (scatter or [])
+        if float(p.get("area_m2", 0.0)) > 0.0 and float(p.get("slope", 0.0)) > 0.0
+    ]
+    if len(pts) < 3:
+        return None
+    areas = [p["area_m2"] for p in pts]
+    a_min, a_max = min(areas), max(areas)
+    n = max(float(n_sp), 1e-9)
+    k = max(float(k_input), 1e-30)
+    coeff = (float(uplift_rate_m_yr) / k) ** (1.0 / n)
+    expo = -float(m_sp) / n
+    line = [
+        {"area_m2": a_min, "slope": coeff * (a_min ** expo)},
+        {"area_m2": a_max, "slope": coeff * (a_max ** expo)},
+    ]
+    return {
+        "$schema": "https://vega.github.io/schema/vega-lite/v5.json",
+        "layer": [
+            {
+                "data": {"values": pts},
+                "mark": {"type": "point", "filled": True, "color": "#1f5fbf", "opacity": 0.45},
+                "encoding": {
+                    "x": {
+                        "field": "area_m2",
+                        "type": "quantitative",
+                        "scale": {"type": "log"},
+                        "title": "drainage area A (m^2)",
+                    },
+                    "y": {
+                        "field": "slope",
+                        "type": "quantitative",
+                        "scale": {"type": "log"},
+                        "title": "channel slope S",
+                    },
+                },
+            },
+            {
+                "data": {"values": line},
+                "mark": {"type": "line", "color": "#b5442f", "strokeDash": [6, 3]},
+                "encoding": {
+                    "x": {"field": "area_m2", "type": "quantitative", "scale": {"type": "log"}},
+                    "y": {"field": "slope", "type": "quantitative", "scale": {"type": "log"}},
+                },
+            },
+        ],
+    }
+
+
+def postprocess_landlab_channel_incision(
+    field_cog_path: str | Path,
+    *,
+    run_id: str,
+    result: dict[str, Any] | None = None,
+    ksn_cog_path: str | Path | None = None,
+    runs_bucket: str | None = None,
+) -> tuple[list[LayerURI], dict[str, Any]]:
+    """Reproject the evolved-elevation COG + emit the incision diagnostic layers.
+
+    Returns ``(layers, metrics)`` where ``layers[0]`` is the evolved-elevation
+    ``LandlabChannelIncisionLayerURI`` (role ``"primary"``), ``layers[1:]`` the
+    channel-steepness (ksn) context raster when present, and ``metrics`` carries
+    the slope-area V&V scalars + scatter (the composer builds the log-log chart).
+    """
+    src = Path(field_cog_path)
+    _field = _read_field_array(src)
+    block = (result or {}).get("channel_incision") if isinstance(result, dict) else None
+    block = block if isinstance(block, dict) else {}
+
+    fitted = max(0.0, _pick_from_block(block, "fitted_concavity", 0.0))
+    analytical = max(0.0, _pick_from_block(block, "analytical_concavity", 0.5))
+    k_input = _pick_from_block(block, "k_input", 1.0e-5)
+    k_input = k_input if k_input > 0.0 else 1.0e-5
+    k_recovered = max(0.0, _pick_from_block(block, "k_recovered", 0.0))
+    uplift = _pick_from_block(block, "uplift_rate_m_yr", 1.0e-3)
+    uplift = uplift if uplift > 0.0 else 1.0e-3
+    run_dur = _pick_from_block(block, "run_duration_yr", 1.0e6)
+    run_dur = run_dur if run_dur > 0.0 else 1.0e6
+    m_sp = _pick_from_block(block, "m_sp", 0.5)
+    n_sp = _pick_from_block(block, "n_sp", 1.0)
+    fit_r2 = _pick_from_block(block, "fit_r2", 0.0)
+    n_chan = int(_pick_from_block(block, "n_channel_nodes", 0.0))
+    scatter = block.get("scatter") or []
+
+    dst_cog, bbox = _reproject_field_cog_4326(src)
+    try:
+        uri = _upload_cog_to_runs_bucket(
+            dst_cog, run_id, runs_bucket, dest_filename="landlab_evolved_elevation.tif"
+        )
+    finally:
+        _safe_unlink(dst_cog)
+
+    primary = LandlabChannelIncisionLayerURI(
+        layer_id=f"landlab-channel-incision-{run_id}",
+        name="Evolved topography (steady-state incision)",
+        layer_type="raster",
+        uri=uri,
+        style_preset=EVOLVED_ELEVATION_STYLE_PRESET,
+        role="primary",
+        units="meters",
+        bbox=bbox,
+        fitted_concavity=fitted,
+        analytical_concavity=analytical,
+        k_input=k_input,
+        k_recovered=k_recovered,
+        uplift_rate_m_yr=uplift,
+        run_duration_yr=run_dur,
+        fit_r2=fit_r2,
+        n_channel_nodes=max(n_chan, 0),
+    )
+    layers: list[LayerURI] = [primary]
+
+    if ksn_cog_path is not None and Path(ksn_cog_path).exists():
+        dst_ksn, _kb = _reproject_field_cog_4326(Path(ksn_cog_path))
+        try:
+            ksn_uri = _upload_cog_to_runs_bucket(
+                dst_ksn, run_id, runs_bucket, dest_filename="landlab_channel_steepness.tif"
+            )
+        finally:
+            _safe_unlink(dst_ksn)
+        layers.append(
+            LayerURI(
+                layer_id=f"landlab-channel-steepness-{run_id}",
+                name="Channel steepness (ksn)",
+                layer_type="raster",
+                uri=ksn_uri,
+                style_preset=CHANNEL_STEEPNESS_STYLE_PRESET,
+                role="context",
+                units="m^(2*theta)",
+                bbox=bbox,
+            )
+        )
+
+    metrics = {
+        "analysis": "channel_incision",
+        "crs": "EPSG:4326",
+        "fitted_concavity": fitted,
+        "analytical_concavity": analytical,
+        "k_input": k_input,
+        "k_recovered": k_recovered,
+        "uplift_rate_m_yr": uplift,
+        "run_duration_yr": run_dur,
+        "m_sp": m_sp,
+        "n_sp": n_sp,
+        "fit_r2": fit_r2,
+        "n_channel_nodes": n_chan,
+        "scatter": scatter,
+    }
+    logger.info(
+        "postprocess_landlab_channel_incision run_id=%s theta_fit=%.4f "
+        "theta_an=%.4f K_in=%.3e K_rec=%.3e r2=%.4f ksn_raster=%s uri=%s",
+        run_id, fitted, analytical, k_input, k_recovered, fit_r2,
+        len(layers) > 1, uri,
+    )
+    return layers, metrics
+
+
+# --------------------------------------------------------------------------- #
+# chi_map postprocess: chi raster + channel-steepness (ksn) raster + channel
+# vector + the chi-elevation profile chart.
+# --------------------------------------------------------------------------- #
+def build_chi_elevation_chart_spec(
+    scatter: list[dict[str, Any]],
+) -> dict[str, Any] | None:
+    """Build the chi-elevation profile chart (Vega-Lite).
+
+    Elevation vs chi for the channel network: a near-linear chi-z trend means
+    uniform channel steepness; slope breaks flag knickpoints / anomalously steep
+    reaches. Returns ``None`` when the scatter is too small. Pure."""
+    pts = [
+        {"chi": float(p.get("chi", 0.0)), "elevation_m": float(p.get("elevation_m", 0.0))}
+        for p in (scatter or [])
+    ]
+    if len(pts) < 3:
+        return None
+    return {
+        "$schema": "https://vega.github.io/schema/vega-lite/v5.json",
+        "data": {"values": pts},
+        "mark": {"type": "point", "filled": True, "color": "#1f5fbf", "opacity": 0.5},
+        "encoding": {
+            "x": {"field": "chi", "type": "quantitative", "title": "chi index"},
+            "y": {
+                "field": "elevation_m",
+                "type": "quantitative",
+                "title": "elevation (m)",
+            },
+            "tooltip": [
+                {"field": "chi", "type": "quantitative", "format": ".3f"},
+                {"field": "elevation_m", "type": "quantitative", "format": ".1f"},
+            ],
+        },
+    }
+
+
+def postprocess_landlab_chi_map(
+    field_cog_path: str | Path,
+    *,
+    run_id: str,
+    result: dict[str, Any] | None = None,
+    ksn_cog_path: str | Path | None = None,
+    channel_cog_path: str | Path | None = None,
+    runs_bucket: str | None = None,
+) -> tuple[list[LayerURI], dict[str, Any]]:
+    """Reproject the chi COG + emit the chi-map diagnostic layers.
+
+    Returns ``(layers, metrics)`` where ``layers[0]`` is the chi-index
+    ``LandlabChiMapLayerURI`` (role ``"primary"``), ``layers[1:]`` the ksn context
+    raster + channel-network vector when present, and ``metrics`` carries the
+    steepness scalars + chi-elevation scatter (the composer builds the chart).
+    """
+    src = Path(field_cog_path)
+    _field = _read_field_array(src)
+    block = (result or {}).get("chi_map") if isinstance(result, dict) else None
+    block = block if isinstance(block, dict) else {}
+
+    max_chi = max(0.0, _pick_from_block(block, "max_chi", 0.0))
+    max_ksn = max(0.0, _pick_from_block(block, "max_ksn", 0.0))
+    mean_ksn = max(0.0, _pick_from_block(block, "mean_ksn", 0.0))
+    ref_theta = _pick_from_block(block, "reference_concavity", 0.5)
+    ref_theta = ref_theta if 0.0 < ref_theta < 1.0 else 0.5
+    n_chan = int(_pick_from_block(block, "n_channel_nodes", 0.0))
+    scatter = block.get("scatter") or []
+
+    dst_cog, bbox = _reproject_field_cog_4326(src)
+    try:
+        uri = _upload_cog_to_runs_bucket(
+            dst_cog, run_id, runs_bucket, dest_filename="landlab_chi_index.tif"
+        )
+    finally:
+        _safe_unlink(dst_cog)
+
+    primary = LandlabChiMapLayerURI(
+        layer_id=f"landlab-chi-map-{run_id}",
+        name="Channel chi index",
+        layer_type="raster",
+        uri=uri,
+        style_preset=CHI_STYLE_PRESET,
+        role="primary",
+        units="chi",
+        bbox=bbox,
+        max_chi=max_chi,
+        max_ksn=max_ksn,
+        mean_ksn=mean_ksn,
+        reference_concavity=ref_theta,
+        n_channel_nodes=max(n_chan, 0),
+    )
+    layers: list[LayerURI] = [primary]
+
+    if ksn_cog_path is not None and Path(ksn_cog_path).exists():
+        dst_ksn, _kb = _reproject_field_cog_4326(Path(ksn_cog_path))
+        try:
+            ksn_uri = _upload_cog_to_runs_bucket(
+                dst_ksn, run_id, runs_bucket, dest_filename="landlab_chi_steepness.tif"
+            )
+        finally:
+            _safe_unlink(dst_ksn)
+        layers.append(
+            LayerURI(
+                layer_id=f"landlab-chi-steepness-{run_id}",
+                name="Channel steepness (ksn)",
+                layer_type="raster",
+                uri=ksn_uri,
+                style_preset=CHANNEL_STEEPNESS_STYLE_PRESET,
+                role="context",
+                units="m^(2*theta)",
+                bbox=bbox,
+            )
+        )
+
+    if channel_cog_path is not None:
+        collection = _vectorize_mask_cog(Path(channel_cog_path), property_name="channel")
+        if collection is not None:
+            geojson_uri = _upload_geojson_to_runs_bucket(
+                collection, run_id, runs_bucket, dest_filename="landlab_chi_channel.geojson"
+            )
+            layers.append(
+                LayerURI(
+                    layer_id=f"landlab-chi-channel-{run_id}",
+                    name="Channel network",
+                    layer_type="vector",
+                    uri=geojson_uri,
+                    style_preset="mesh_grid",
+                    role="context",
+                    bbox=bbox,
+                )
+            )
+
+    metrics = {
+        "analysis": "chi_map",
+        "crs": "EPSG:4326",
+        "max_chi": max_chi,
+        "max_ksn": max_ksn,
+        "mean_ksn": mean_ksn,
+        "reference_concavity": ref_theta,
+        "n_channel_nodes": n_chan,
+        "scatter": scatter,
+    }
+    logger.info(
+        "postprocess_landlab_chi_map run_id=%s max_chi=%.3f max_ksn=%.3f "
+        "mean_ksn=%.3f theta=%.3f n_chan=%d ksn_raster=%s uri=%s",
+        run_id, max_chi, max_ksn, mean_ksn, ref_theta, n_chan,
+        len(layers) > 1, uri,
+    )
+    return layers, metrics
+
+
+# --------------------------------------------------------------------------- #
+# storm_sequence chart builders (the generator runs IN the composer; these are
+# pure Vega-Lite builders over the drawn sequence + statistics).
+# --------------------------------------------------------------------------- #
+def build_storm_sequence_chart_spec(
+    sequence: list[dict[str, Any]],
+) -> dict[str, Any] | None:
+    """Build the storm-sequence time-series chart (Vega-Lite).
+
+    Per-storm depth (mm) plotted at each storm's start time (days) as stems, so
+    the realized multi-year storm sequence is visible. Returns ``None`` when the
+    sequence is empty. Pure."""
+    pts = [
+        {
+            "start_day": float(s.get("start_day", 0.0)),
+            "depth_mm": float(s.get("depth_mm", 0.0)),
+        }
+        for s in (sequence or [])
+    ]
+    if len(pts) < 2:
+        return None
+    return {
+        "$schema": "https://vega.github.io/schema/vega-lite/v5.json",
+        "data": {"values": pts},
+        "mark": {"type": "bar", "width": 1.5, "color": "#1f5fbf"},
+        "encoding": {
+            "x": {"field": "start_day", "type": "quantitative", "title": "time (days)"},
+            "y": {"field": "depth_mm", "type": "quantitative", "title": "storm depth (mm)"},
+            "tooltip": [
+                {"field": "start_day", "type": "quantitative", "format": ".0f"},
+                {"field": "depth_mm", "type": "quantitative", "format": ".1f"},
+            ],
+        },
+    }
+
+
+def build_storm_statistics_chart_spec(
+    sequence: list[dict[str, Any]],
+) -> dict[str, Any] | None:
+    """Build the storm-depth distribution histogram (Vega-Lite).
+
+    A histogram of per-storm depths (mm) over the sequence - the storm-depth
+    climatology the Poisson generator produced. Returns ``None`` when the sequence
+    is too small. Pure."""
+    depths = [
+        {"depth_mm": float(s.get("depth_mm", 0.0))}
+        for s in (sequence or [])
+        if float(s.get("depth_mm", 0.0)) > 0.0
+    ]
+    if len(depths) < 5:
+        return None
+    return {
+        "$schema": "https://vega.github.io/schema/vega-lite/v5.json",
+        "data": {"values": depths},
+        "mark": {"type": "bar", "color": "#3f7d54"},
+        "encoding": {
+            "x": {
+                "field": "depth_mm",
+                "type": "quantitative",
+                "bin": {"maxbins": 24},
+                "title": "storm depth (mm)",
+            },
+            "y": {"aggregate": "count", "type": "quantitative", "title": "storm count"},
+        },
+    }

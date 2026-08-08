@@ -761,6 +761,9 @@ from ..workflows.landlab.dem_conditioning.dem_conditioning import landlab_dem_co
 from ..workflows.landlab.lake_mapping.lake_mapping import landlab_lake_mapping as _landlab_lake_mapping  # noqa: E402,F401 - lake extent + depth mapping
 from ..workflows.landlab.hacks_law.hacks_law import landlab_hacks_law_scaling as _landlab_hacks_law_scaling  # noqa: E402,F401 - Hack's-law basin length-area scaling diagnostic
 from ..workflows.landlab.hand_wetness.hand_wetness import landlab_hand_wetness as _landlab_hand_wetness  # noqa: E402,F401 - Height Above Nearest Drainage wetness proxy
+from ..workflows.landlab.channel_incision.channel_incision import landlab_channel_incision_steady_state as _landlab_channel_incision_steady_state  # noqa: E402,F401 - ADR 0184: detachment-limited stream-power incision to steady state + slope-area V&V
+from ..workflows.landlab.chi_map.chi_map import landlab_channel_steepness_chi_map as _landlab_channel_steepness_chi_map  # noqa: E402,F401 - ADR 0184: chi index + channel steepness (ksn) knickpoint diagnostic
+from ..workflows.landlab.storm_sequence.storm_sequence import landlab_storm_sequence_generator as _landlab_storm_sequence_generator  # noqa: E402,F401 - ADR 0184: stochastic storm-sequence forcing generator (PrecipitationDistribution)
 # openquake_psha TEMPLATE (engine="openquake", tier="template"), one folder
 # under workflows/openquake/psha/; EXCLUDED from the default retrieval pool,
 # surfaced only by the run_openquake door's gate expansion. The composer chain

@@ -344,6 +344,9 @@ PRIMARY_CATEGORY: dict[str, str] = {
     "landlab_lake_mapping": "hydrology",
     "landlab_hacks_law_scaling": "terrain_elevation",
     "landlab_hand_wetness": "hydrology",
+    "landlab_channel_incision_steady_state": "simulation_modeling",
+    "landlab_channel_steepness_chi_map": "terrain_elevation",
+    "landlab_storm_sequence_generator": "weather_atmosphere",
     # constant-wind elliptical-spread verification vs the analytic ellipse: a
     # correctness gate -> model_validation; cross-lists to fire +
     # simulation_modeling below.
@@ -850,6 +853,9 @@ SECONDARY_CATEGORIES: dict[str, tuple[str, ...]] = {
     "landlab_hand_wetness": ("terrain_elevation",),
     "landlab_dem_conditioning": ("hydrology",),
     "landlab_hacks_law_scaling": ("hydrology",),
+    "landlab_channel_incision_steady_state": ("terrain_elevation",),
+    "landlab_channel_steepness_chi_map": ("hydrology",),
+    "landlab_storm_sequence_generator": ("simulation_modeling",),
     # V&V templates whose PRIMARY is model_validation still cross-list to their
     # engine domain so they surface from the simulation/damage/fire lane too.
     "modflow_package_validation": ("simulation_modeling",),

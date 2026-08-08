@@ -94,6 +94,9 @@ __all__ = [
     "LandlabLakeMappingLayerURI",
     "LandlabHacksLawLayerURI",
     "LandlabHandLayerURI",
+    "LandlabChannelIncisionLayerURI",
+    "LandlabChiMapLayerURI",
+    "LandlabStormSequenceLayerURI",
 ]
 
 
@@ -126,6 +129,19 @@ __all__ = [
 #       drainage-area scaling exponent per basin (chart-led + basin vector).
 #   "hand" - HeightAboveDrainageCalculator (Nobre et al. 2011): height above the
 #       nearest drainage channel (a wetness / relative-elevation proxy field).
+#   "channel_incision" - detachment-limited stream-power landscape evolution
+#       (FastscapeEroder + rock uplift) run to steady state: the evolved
+#       topography + channel steepness, with the slope-area V&V against the
+#       analytical stream-power prediction S = (U/K)^(1/n) A^(-m/n) (fitted vs
+#       analytical concavity + K recovery). Terrain is REAL; uplift/erodibility
+#       forcing is a labeled demo scenario.
+#   "chi_map" - a ChiFinder + SteepnessFinder diagnostic on the routed real DEM:
+#       chi index + normalized channel steepness (ksn) as knickpoint / tectonic
+#       proxies, with the chi-elevation profile.
+#   "storm_sequence" - a PrecipitationDistribution stochastic storm-sequence
+#       forcing generator (Poisson storm/interstorm/depth). A reusable forcing
+#       utility; the composer runs it IN-PROCESS (no worker grid / no DEM field),
+#       so ``run_component_chain`` does not implement it.
 LandlabAnalysis = Literal[
     "landslide_probability",
     "overland_flow",
@@ -137,6 +153,9 @@ LandlabAnalysis = Literal[
     "lake_mapping",
     "hacks_law",
     "hand",
+    "channel_incision",
+    "chi_map",
+    "storm_sequence",
 ]
 
 # How the flow-accumulation chain handles closed depressions before routing:
@@ -190,6 +209,24 @@ DEFAULT_CONDITION_DEM: bool = False
 # lake_mapping discrimination floors: separate real lakes from DEM noise pits.
 DEFAULT_MIN_LAKE_DEPTH_M: float = 1.0  # deepest point must clear this, m
 DEFAULT_MIN_LAKE_AREA_M2: float = 10_000.0  # surface area must clear this, m^2
+
+# channel_incision (detachment-limited stream-power evolution) demo defaults.
+# The V&V recovers K + concavity from the steady state, so these are chosen to
+# reach quasi-steady state in a bounded step budget (K=1e-5, U=1 mm/yr, 1 Myr).
+DEFAULT_K_BEDROCK: float = 1.0e-5  # stream-power erodibility (n_sp=1 form)
+DEFAULT_M_SP: float = 0.5  # drainage-area exponent
+DEFAULT_N_SP: float = 1.0  # slope exponent (analytical concavity = m_sp/n_sp)
+DEFAULT_UPLIFT_RATE_M_YR: float = 1.0e-3  # rock uplift, m/yr (1 mm/yr)
+DEFAULT_INCISION_RUN_DURATION_YR: float = 1.0e6  # total simulated time, yr
+DEFAULT_INCISION_N_TIMESTEPS: int = 500  # Fastscape steps (implicit, large dt ok)
+DEFAULT_HILLSLOPE_DIFFUSIVITY_M2_YR: float = 0.0  # pure-fluvial by default
+
+# chi_map (ChiFinder + SteepnessFinder) demo default reference concavity.
+DEFAULT_REFERENCE_CONCAVITY: float = 0.5  # classic theta ~0.45-0.5
+
+# storm_sequence (PrecipitationDistribution) demo defaults.
+DEFAULT_STORM_TOTAL_YEARS: float = 5.0  # simulated span of the storm sequence
+DEFAULT_STORM_RANDOM_SEED: int = 1234  # deterministic Poisson seed
 
 
 class LandlabRunArgs(EngineRunArgsMixin):
@@ -341,6 +378,53 @@ class LandlabRunArgs(EngineRunArgsMixin):
     #: the depression is DEM noise (a few-cell pit), dropped from every lake output.
     min_lake_area_m2: float = Field(default=DEFAULT_MIN_LAKE_AREA_M2, ge=0.0)
 
+    # --- channel_incision (detachment-limited stream-power evolution) ---
+    #: Stream-power bedrock erodibility K in E = K A^m S^n (units depend on
+    #: m_sp/n_sp; demo default 1e-5 for the n_sp=1 form). Drives how fast channels
+    #: incise; the slope-area V&V recovers this value from the steady state (> 0).
+    k_bedrock: float = Field(default=DEFAULT_K_BEDROCK, gt=0.0)
+    #: Stream-power drainage-area exponent m in E = K A^m S^n (demo default 0.5).
+    m_sp: float = Field(default=DEFAULT_M_SP, gt=0.0)
+    #: Stream-power slope exponent n in E = K A^m S^n (demo default 1.0). The
+    #: analytical steady-state concavity is m_sp / n_sp.
+    n_sp: float = Field(default=DEFAULT_N_SP, gt=0.0)
+    #: Rock uplift rate driving the evolution to steady state, m/yr (demo default
+    #: 1e-3 = 1 mm/yr). Labeled demo forcing, not a site-measured uplift (> 0).
+    uplift_rate_m_yr: float = Field(default=DEFAULT_UPLIFT_RATE_M_YR, gt=0.0)
+    #: Total simulated time for the landscape-evolution run, yr (demo default
+    #: 1e6). Long enough that the channel network reaches quasi-steady state under
+    #: the demo forcing (the slope-area V&V requires steady state) (> 0).
+    incision_run_duration_yr: float = Field(
+        default=DEFAULT_INCISION_RUN_DURATION_YR, gt=0.0
+    )
+    #: Number of FastscapeEroder timesteps over the run duration (dt = duration /
+    #: steps). FastscapeEroder is implicit / unconditionally stable so a large dt
+    #: is valid (demo default 500) (>= 1).
+    incision_n_timesteps: int = Field(default=DEFAULT_INCISION_N_TIMESTEPS, ge=1)
+    #: Optional linear hillslope diffusivity (soil creep) mixed in each step,
+    #: m^2/yr (>= 0). Demo default 0.0 = pure-fluvial evolution so the channel
+    #: slope-area relation is not blurred by hillslope transport at small A.
+    hillslope_diffusivity_m2_yr: float = Field(
+        default=DEFAULT_HILLSLOPE_DIFFUSIVITY_M2_YR, ge=0.0
+    )
+
+    # --- chi_map (ChiFinder + SteepnessFinder diagnostic) ---
+    #: Reference concavity theta used to integrate chi and normalize channel
+    #: steepness (ksn). The classic default 0.45-0.5; demo default 0.5. Both the
+    #: chi index and ksn are computed at this reference concavity (> 0, < 1).
+    reference_concavity: float = Field(
+        default=DEFAULT_REFERENCE_CONCAVITY, gt=0.0, lt=1.0
+    )
+
+    # --- storm_sequence (PrecipitationDistribution forcing generator) ---
+    #: Total simulated span of the stochastic storm sequence, yr (demo default
+    #: 5). The Poisson generator draws storms/interstorms until this span is
+    #: filled (> 0).
+    storm_total_years: float = Field(default=DEFAULT_STORM_TOTAL_YEARS, gt=0.0)
+    #: Deterministic random seed for the Poisson storm generator (reproducible
+    #: sequence). Demo default 1234.
+    random_seed: int = Field(default=DEFAULT_STORM_RANDOM_SEED)
+
     @field_validator("depression_handler", mode="before")
     @classmethod
     def _normalize_depression_handler(cls, value: Any) -> Any:
@@ -449,6 +533,34 @@ class LandlabRunArgs(EngineRunArgsMixin):
             "height_above_nearest_drainage": "hand",
             "hand_wetness": "hand",
             "wetness_proxy": "hand",
+            # channel_incision
+            "channel_incision": "channel_incision",
+            "incision": "channel_incision",
+            "detachment_limited": "channel_incision",
+            "detachment_limited_incision": "channel_incision",
+            "stream_power": "channel_incision",
+            "stream_power_incision": "channel_incision",
+            "landscape_evolution": "channel_incision",
+            "fastscape": "channel_incision",
+            "steady_state_channel": "channel_incision",
+            "slope_area": "channel_incision",
+            # chi_map
+            "chi_map": "chi_map",
+            "chi": "chi_map",
+            "chi_finder": "chi_map",
+            "channel_steepness": "chi_map",
+            "steepness": "chi_map",
+            "ksn": "chi_map",
+            "knickpoint": "chi_map",
+            "channel_steepness_chi_map": "chi_map",
+            # storm_sequence
+            "storm_sequence": "storm_sequence",
+            "storm_generator": "storm_sequence",
+            "stochastic_storm": "storm_sequence",
+            "stochastic_storm_sequence": "storm_sequence",
+            "precipitation_distribution": "storm_sequence",
+            "storm_series": "storm_sequence",
+            "rainfall_sequence": "storm_sequence",
         }
         return aliases.get(key, key)
 
@@ -704,4 +816,107 @@ class LandlabHandLayerURI(LayerURI):
     channel_area_fraction: float = Field(ge=0.0, le=1.0)
     lowland_area_fraction: float = Field(ge=0.0, le=1.0)
 
+    source_note: str | None = Field(default=None)
+
+
+class LandlabChannelIncisionLayerURI(LayerURI):
+    """A ``LayerURI`` for the detachment-limited channel-incision evolution, plus
+    the slope-area V&V narration scalars.
+
+    The primary raster is the EVOLVED topographic elevation (a real AOI DEM
+    evolved to steady state under a labeled demo uplift/erodibility forcing); the
+    normalized channel steepness (ksn) is a companion raster and the slope-area
+    log-log scatter with the fitted + analytical stream-power lines is the
+    companion chart. Adds the structured numbers the agent narrates (typed
+    fields, never invented):
+
+        fitted_concavity: the concavity theta fitted from the steady-state
+            slope-area relation (the negative log-log slope), dimensionless.
+        analytical_concavity: the analytical stream-power prediction m_sp / n_sp.
+        k_input: the erodibility K the evolution was forced with.
+        k_recovered: the erodibility back-solved from the steady-state intercept
+            (S = (U/K)^(1/n) A^(-m/n)) - the V&V recovery of K.
+        uplift_rate_m_yr: the demo rock-uplift forcing (m/yr).
+        run_duration_yr: the total simulated evolution time (yr).
+        fit_r2: coefficient of determination of the log-log slope-area fit.
+        n_channel_nodes: number of channel nodes entering the fit.
+
+    ``layer_type`` for the evolved-elevation field is ``"raster"``.
+    """
+
+    fitted_concavity: float = Field(ge=0.0)
+    analytical_concavity: float = Field(ge=0.0)
+    k_input: float = Field(gt=0.0)
+    k_recovered: float = Field(ge=0.0)
+    uplift_rate_m_yr: float = Field(gt=0.0)
+    run_duration_yr: float = Field(gt=0.0)
+    fit_r2: float = Field(default=0.0)
+    n_channel_nodes: int = Field(ge=0)
+
+    #: Input provenance: the DEM is REAL; the uplift/erodibility forcing is a
+    #: labeled demo scenario (SyntheticInput). None preserves prior behaviour.
+    source_note: str | None = Field(default=None)
+
+
+class LandlabChiMapLayerURI(LayerURI):
+    """A ``LayerURI`` for the chi / channel-steepness diagnostic, plus the
+    steepness narration scalars.
+
+    The primary raster is the chi index over the extracted channel network (a
+    tectonic / knickpoint proxy integrated at the reference concavity); the
+    normalized channel steepness (ksn) is a companion raster, the channel network
+    a companion vector, and the chi-elevation profile the companion chart. Adds
+    the structured numbers the agent narrates (typed fields, never invented):
+
+        max_chi: maximum chi index over the channel network (m at the reference
+            concavity's integration units).
+        max_ksn: maximum normalized channel steepness (a high-ksn reach is
+            anomalously steep for its drainage area - a knickpoint proxy).
+        mean_ksn: mean normalized channel steepness over the channel network.
+        reference_concavity: the theta chi + ksn were computed at.
+        n_channel_nodes: number of channel nodes in the diagnostic.
+
+    ``layer_type`` for the chi field is ``"raster"``.
+    """
+
+    max_chi: float = Field(ge=0.0)
+    max_ksn: float = Field(ge=0.0)
+    mean_ksn: float = Field(ge=0.0)
+    reference_concavity: float = Field(gt=0.0, lt=1.0)
+    n_channel_nodes: int = Field(ge=0)
+
+    source_note: str | None = Field(default=None)
+
+
+class LandlabStormSequenceLayerURI(LayerURI):
+    """A ``LayerURI`` for the stochastic storm-sequence forcing generator, plus
+    the storm-climatology narration scalars.
+
+    The generator is spatially-uniform POINT rainfall (a Poisson
+    storm/interstorm/depth sequence), so the map anchor is an AOI marker
+    (``layer_type="vector"``); the storm-sequence time series and the
+    storm-statistics distribution are the companion charts. Adds the structured
+    numbers the agent narrates (typed fields, never invented):
+
+        n_storms: number of storm events drawn over the simulated span.
+        total_years: the simulated span (yr).
+        total_rainfall_mm: summed storm depth over the sequence (mm).
+        mean_storm_depth_mm: mean per-storm depth (mm).
+        mean_storm_intensity_mm_hr: mean per-storm rainfall intensity (mm/hr).
+        mean_storm_duration_hr: mean storm duration (hr).
+        mean_interstorm_duration_hr: mean dry interval between storms (hr).
+        max_storm_depth_mm: the largest single-storm depth in the sequence (mm).
+    """
+
+    n_storms: int = Field(ge=0)
+    total_years: float = Field(gt=0.0)
+    total_rainfall_mm: float = Field(ge=0.0)
+    mean_storm_depth_mm: float = Field(ge=0.0)
+    mean_storm_intensity_mm_hr: float = Field(ge=0.0)
+    mean_storm_duration_hr: float = Field(ge=0.0)
+    mean_interstorm_duration_hr: float = Field(ge=0.0)
+    max_storm_depth_mm: float = Field(ge=0.0)
+
+    #: Input provenance: the storm sequence is a labeled stochastic demo
+    #: climatology (SyntheticInput), not a fetched historical record.
     source_note: str | None = Field(default=None)

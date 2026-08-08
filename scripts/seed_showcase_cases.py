@@ -60,6 +60,7 @@ LOG_FILE = Path("/tmp/seed_showcase_cases.log")
 # solve.
 # --------------------------------------------------------------------------- #
 _BOULDER = [-105.37, 39.998, -105.33, 40.032]          # ADR 0141 landlab AOI
+_WEST_BIJOU = [-104.33, 39.31, -104.28, 39.35]         # ADR 0184 chi-map escarpment
 _SF_BAY = [-122.30, 37.70, -122.10, 37.90]             # ADR 0149 PSHA AOI
 _EAST_BAY = [-122.30, 37.75, -122.10, 37.95]           # ADR 0164 Hayward AOI
 _APALACHEE = [-85.55, 29.70, -85.40, 29.85]            # ADR 0147 SWAN shelf
@@ -106,6 +107,16 @@ SHOWCASE: list[Showcase] = [
              "ADR 0141/0145 landlab lake mapping, Boulder CO AOI", 360),
     Showcase("landlab_overland_flow_timeseries", {"bbox": _BOULDER},
              "ADR 0141 landlab overland-flow timeseries, Boulder CO AOI", 420),
+    Showcase("landlab_channel_incision_steady_state", {"bbox": _BOULDER},
+             "ADR 0184 landlab detachment-limited incision to steady state + "
+             "slope-area V&V, Boulder CO foothills (fitted concavity ~0.485 vs "
+             "analytical 0.5, K recovered within ~25%)", 480),
+    Showcase("landlab_channel_steepness_chi_map", {"bbox": _WEST_BIJOU},
+             "ADR 0184 landlab chi / channel-steepness (ksn) knickpoint diagnostic, "
+             "West Bijou Creek escarpment CO", 420),
+    Showcase("landlab_storm_sequence_generator", {"bbox": _BOULDER},
+             "ADR 0184 landlab stochastic storm-sequence generator "
+             "(PrecipitationDistribution, in-process), Boulder CO AOI", 180),
     # -- MODFLOW georeferenced wellhead/capture-zone -------------------------
     Showcase("modflow_wellhead_protection",
              {"aoi_latlon": _PLATTE, "well_location_latlon": _PLATTE,

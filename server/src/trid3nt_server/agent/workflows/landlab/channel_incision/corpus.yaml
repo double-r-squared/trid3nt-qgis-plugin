@@ -1,0 +1,10 @@
+# Template routing phrasings: engine templates are ordinary retrieval-pool tools
+# walked into the main index.
+landlab_channel_incision_steady_state:
+- evolve this catchment to a steady-state channel profile under uplift
+- does the steady channel slope-area match the analytical stream-power prediction
+- detachment-limited stream power incision to steady state
+- run landscape evolution to steady state and recover erodibility K
+- channel incision slope-area law verification for this terrain
+- FastscapeEroder uplift steady state concavity check
+- how does channel steepness respond to a stream-power erodibility over this AOI
