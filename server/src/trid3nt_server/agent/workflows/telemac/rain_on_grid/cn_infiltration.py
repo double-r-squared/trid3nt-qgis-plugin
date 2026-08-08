@@ -39,6 +39,7 @@ mesh, the deck, or the network.
 from __future__ import annotations
 
 import math
+from dataclasses import dataclass
 
 __all__ = [
     "scs_potential_retention_mm",
@@ -49,6 +50,8 @@ __all__ = [
     "landcover_cn_manning",
     "node_curve_numbers",
     "rainfall_excess_hyetograph",
+    "select_runoff_path",
+    "RunoffPathDecision",
     "NLCD_CN_MANNING",
     "CNInfiltrationError",
 ]
@@ -272,3 +275,88 @@ def node_curve_numbers(
             "steep_slope_correction requires slopes_m_per_m aligned with nlcd_codes"
         )
     return [huang_steep_slope_cn(cn, s) for cn, s in zip(base, slopes_m_per_m)]
+
+
+# ---------------------------------------------------------------------------
+# Automatic CN-path selection (native runoff model vs preprocessing).
+#
+# TELEMAC v9.0.0's native SCS-CN runoff model is hardcoded to a CONSTANT rain
+# intensity (RAINDEF=1); a time-varying hyetograph cannot drive it without a
+# solver recompile (ADR 0195, Decision 2). So the template picks per run:
+#   * CONSTANT-intensity rain (a design storm: one rate over a duration) -> the
+#     NATIVE model (RAINFALL-RUNOFF MODEL=1 + ANTECEDENT MOISTURE CONDITIONS +
+#     the FORMATTED DATA FILE 2 per-node CN2 field). Infiltration is the
+#     engine's own SCS-CN, spatially variable via the CN map.
+#   * TIME-VARYING rain (an hourly MRMS hyetograph) -> the PREPROCESSING path:
+#     rainfall_excess_hyetograph applies eq 7-8 up front and the net (excess)
+#     series is fed as time-varying rain with RAINFALL-RUNOFF MODEL=0 (no
+#     double counting). This overcomes the RAINDEF=1 constant-rain limit.
+# The chosen path is recorded in the run envelope (runoff_path + reason).
+# ---------------------------------------------------------------------------
+
+
+@dataclass(frozen=True)
+class RunoffPathDecision:
+    """Which CN/runoff path a rain-on-grid run uses, plus why.
+
+    ``path`` is ``"native"`` (RAINFALL-RUNOFF MODEL=1 + FORMATTED DATA FILE 2
+    CN2 map) or ``"preprocessing"`` (SCS-CN rainfall-excess up front, net rain
+    fed with RAINFALL-RUNOFF MODEL=0). ``time_varying`` is the driving fact.
+    Both fields ride into the run envelope so the narration is honest about how
+    infiltration was handled.
+    """
+
+    path: str
+    time_varying: bool
+    reason: str
+
+
+def select_runoff_path(
+    *,
+    hyetograph_mm: list[float] | None = None,
+    constant_intensity_mm_per_hr: float | None = None,
+) -> RunoffPathDecision:
+    """Pick the runoff path automatically from the rain forcing shape.
+
+    A ``hyetograph_mm`` with two or more DISTINCT non-zero increments is
+    time-varying -> ``"preprocessing"``. A single constant intensity (a design
+    storm, or a hyetograph that is effectively one flat rate) -> ``"native"``.
+    Exactly one of ``hyetograph_mm`` / ``constant_intensity_mm_per_hr`` should be
+    given; supplying neither is an error (no rain = no runoff run).
+    """
+    if hyetograph_mm is None and constant_intensity_mm_per_hr is None:
+        raise CNInfiltrationError(
+            "select_runoff_path needs either a hyetograph_mm series or a "
+            "constant_intensity_mm_per_hr; got neither (no rain forcing)."
+        )
+    if hyetograph_mm is not None:
+        nonzero = [float(v) for v in hyetograph_mm if float(v) != 0.0]
+        distinct = {round(v, 6) for v in nonzero}
+        if len(distinct) >= 2:
+            return RunoffPathDecision(
+                path="preprocessing",
+                time_varying=True,
+                reason=(
+                    f"time-varying hyetograph ({len(nonzero)} non-zero steps, "
+                    f"{len(distinct)} distinct rates) cannot drive the native "
+                    "RAINDEF=1 constant-rain runoff model -> SCS-CN rainfall-"
+                    "excess preprocessing (RAINFALL-RUNOFF MODEL=0)."
+                ),
+            )
+        return RunoffPathDecision(
+            path="native",
+            time_varying=False,
+            reason=(
+                "hyetograph is effectively a single constant rate -> native "
+                "SCS-CN runoff model (RAINFALL-RUNOFF MODEL=1)."
+            ),
+        )
+    return RunoffPathDecision(
+        path="native",
+        time_varying=False,
+        reason=(
+            f"constant design-storm intensity "
+            f"{float(constant_intensity_mm_per_hr):g} mm/h -> native SCS-CN "
+            "runoff model (RAINFALL-RUNOFF MODEL=1 + FORMATTED DATA FILE 2 CN2)."
+        ),
+    )
