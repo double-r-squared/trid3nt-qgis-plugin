@@ -42,6 +42,7 @@ __all__ = [
     "build_reach_profile_chart",
     "build_saltwater_wedge_chart",
     "build_head_series_chart",
+    "build_hydrograph_overlay_chart",
 ]
 
 logger = logging.getLogger("trid3nt_server.agent.tools.processing.charts_common")
@@ -1204,6 +1205,108 @@ def build_head_series_chart(
         f"{len(rows)} steps · {caption_label} · range {swing:.3g} m "
         f"(min {vmin:.3g} -> max {vmax:.3g})"
     )
+    return build_chart_payload(
+        vega_lite_spec=spec,
+        title=title,
+        caption=caption,
+        source_layer_uri=source_layer_uri,
+        created_turn_id=created_turn_id,
+    )
+
+def build_hydrograph_overlay_chart(
+    *,
+    times: list[float] | list[str],
+    computed: list[float | None],
+    observed: list[float | None] | None = None,
+    x_title: str = "elapsed hours",
+    y_title: str = "discharge (m3/s)",
+    title: str = "Computed vs observed hydrograph",
+    computed_label: str = "computed",
+    observed_label: str = "observed",
+    nse: float | None = None,
+    r2: float | None = None,
+    source_layer_uri: str | None = None,
+    created_turn_id: str | None = None,
+) -> dict[str, Any] | None:
+    """Overlay a computed hydrograph against an observed one (rain-on-grid V&V).
+
+    The computed-vs-observed discharge overlay the rain-on-grid validation
+    protocol (Godara et al. 2024) reports: two colour-split line series on a
+    shared time axis. ``times`` is the shared x axis -- numeric (elapsed hours,
+    quantitative) or ISO8601 strings (temporal). ``computed`` is the simulated
+    outlet-discharge series (required); ``observed`` is the gauge series
+    (optional -- when absent or all-null the chart is computed-only, still a
+    valid single-series hydrograph). ``nse`` / ``r2`` (from
+    ``nash_sutcliffe_efficiency`` / ``pearson_r2``) are folded into the caption
+    when supplied; the chart never recomputes them.
+
+    Honesty floor: returns ``None`` when the computed series has fewer than 2
+    finite points aligned with ``times`` (a single point is not a hydrograph).
+    Non-finite / mismatched-length samples are dropped, never fabricated.
+    """
+    n = min(len(times), len(computed))
+    xs_raw = list(times)[:n]
+    numeric_x = all(isinstance(x, (int, float)) and not isinstance(x, bool) for x in xs_raw)
+    x_type = "quantitative" if numeric_x else "temporal"
+
+    def _series_rows(values: list[Any] | None, label: str) -> list[dict[str, Any]]:
+        if not values:
+            return []
+        rows: list[dict[str, Any]] = []
+        for i in range(min(n, len(values))):
+            v = values[i]
+            try:
+                fv = float(v)
+            except (TypeError, ValueError):
+                continue
+            if not math.isfinite(fv):
+                continue
+            x = float(xs_raw[i]) if numeric_x else str(xs_raw[i])
+            rows.append({"t": x, "discharge": fv, "series": label})
+        return rows
+
+    computed_rows = _series_rows(list(computed), computed_label)
+    if len(computed_rows) < 2:
+        return None
+    observed_rows = _series_rows(list(observed) if observed else None, observed_label)
+    rows = computed_rows + observed_rows
+    if len(rows) > _MAX_ROWS:
+        # Uniform per-series stride so both series survive the wire-size cap.
+        keep: list[dict[str, Any]] = []
+        for label_rows in (computed_rows, observed_rows):
+            if not label_rows:
+                continue
+            stride = max(1, len(label_rows) // (_MAX_ROWS // 2))
+            keep.extend(label_rows[::stride])
+        rows = keep
+
+    spec = {
+        "title": title,
+        "data": {"values": rows},
+        "mark": {"type": "line", "point": True, "tooltip": True},
+        "encoding": {
+            "x": {"field": "t", "type": x_type, "title": x_title},
+            "y": {"field": "discharge", "type": "quantitative", "title": y_title},
+            "color": {"field": "series", "type": "nominal", "title": "series"},
+        },
+        "width": "container",
+    }
+
+    comp_peak = max(r["discharge"] for r in computed_rows)
+    skill_txt = ""
+    if nse is not None:
+        skill_txt += f" · NSE {nse:.3f}"
+    if r2 is not None:
+        skill_txt += f" · R2 {r2:.3f}"
+    if observed_rows:
+        obs_peak = max(r["discharge"] for r in observed_rows)
+        caption = (
+            f"computed (peak {comp_peak:.3g}) vs observed (peak {obs_peak:.3g}) "
+            f"{y_title}{skill_txt}"
+        )
+    else:
+        caption = f"computed outlet hydrograph · peak {comp_peak:.3g} {y_title}{skill_txt}"
+
     return build_chart_payload(
         vega_lite_spec=spec,
         title=title,
