@@ -96,6 +96,20 @@ def test_run_rejects_unknown_manifest_field(tmp_path):
         entrypoint.run(tmp_path)
 
 
+def test_seam_envelope_fields_are_accepted():
+    """ADR 0188: the generic run_solver-seam envelope (run_id/inputs/outputs/
+    hecras_args) rides the same manifest.json and must NOT be rejected as
+    unknown -- the M3-gate fresh-deck path (hecras_flood_2d) stages via it."""
+    for field in ("run_id", "inputs", "outputs", "hecras_args"):
+        assert field in entrypoint._KNOWN_MANIFEST_FIELDS, field
+    # a full M3 manifest with the seam envelope passes the field check
+    entrypoint._reject_unknown_manifest_fields({
+        "run_id": "01ABC", "plan_hdf": "Fresh2D.p04.tmp.hdf", "geom_suffix": "x04",
+        "run_geompre": True, "inputs": [{"gs_uri": "s3://x", "dest": "a"}],
+        "hecras_args": [], "outputs": ["Fresh2D.p04.tmp.hdf"],
+    })
+
+
 def test_main_returns_nonzero_on_failure(tmp_path):
     # No manifest -> run() raises -> main() surfaces a non-zero exit (honest).
     assert entrypoint.main([str(tmp_path)]) == 1

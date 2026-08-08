@@ -123,6 +123,40 @@ def test_compose_rejects_unknown_equation_set(tmp_path, carved, projection):
             equation_set="Kinematic")
 
 
+def _b04_interval(deck_paths) -> str:
+    for ln in deck_paths.bnn.read_text().splitlines():
+        if "Computation Interval" in ln:
+            return ln.split("=", 1)[1].strip()
+    raise AssertionError("no Computation Interval line in .bNN")
+
+
+def test_compose_computation_interval_default_2min(tmp_path, carved, projection):
+    # ADR 0188: the stability knob defaults to the shipped Chippewa 2MIN step.
+    info = compose_pure2d_deck(
+        tmp_path / "run", carved.mesh, carved.tables,
+        projection_wkt=projection, target_peak_cfs=2000.0)
+    assert info["computation_interval"] == "2MIN"
+    assert _b04_interval(info["paths"]) == "2MIN"
+
+
+def test_compose_computation_interval_override_patches_bnn(tmp_path, carved, projection):
+    # ADR 0188: an explicit interval is patched into the .bNN + rides provenance.
+    info = compose_pure2d_deck(
+        tmp_path / "run", carved.mesh, carved.tables,
+        projection_wkt=projection, target_peak_cfs=2000.0,
+        computation_interval="30SEC")
+    assert info["computation_interval"] == "30SEC"
+    assert _b04_interval(info["paths"]) == "30SEC"
+
+
+def test_compose_rejects_bad_computation_interval(tmp_path, carved, projection):
+    with pytest.raises(ValueError, match="computation_interval"):
+        compose_pure2d_deck(
+            tmp_path / "run", carved.mesh, carved.tables,
+            projection_wkt=projection, target_peak_cfs=2000.0,
+            computation_interval="fast")
+
+
 def test_compose_rejects_overlapping_inflow_and_ds_runs(tmp_path, carved, projection):
     # forcing the inflow onto the SAME south edge as DS must be refused (the outlet
     # cannot share the inlet faces -- the ADR 0138 drainage physics)

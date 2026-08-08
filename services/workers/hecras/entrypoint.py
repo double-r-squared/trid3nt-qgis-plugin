@@ -94,6 +94,13 @@ _PARSER_VERSION = "hecras-manifest-1"
 #: An unknown key would otherwise silently keep the deck's baked default
 #: (e.g. a typo'd flow knob solving the UNSCALED baseline, never erroring) --
 #: the ADR 0148 lesson.
+#:
+#: The GENERIC run_solver-seam envelope (``run_id`` / ``inputs`` / ``outputs`` /
+#: ``hecras_args``) rides the SAME manifest.json: the seam reads ``inputs``/
+#: ``outputs`` to stage the deck + collect results (solver.py) while the worker
+#: reads only the solve fields. They are ACCEPTED-and-ignored here so the M3-gate
+#: no-archetype path (a fresh composed deck staged as ``inputs``, ADR 0140/0188)
+#: is not rejected as "unknown fields" -- they are the seam's contract, not typos.
 _KNOWN_MANIFEST_FIELDS = frozenset(
     {
         "archetype",
@@ -103,6 +110,11 @@ _KNOWN_MANIFEST_FIELDS = frozenset(
         "breach_enabled",
         "flow_scale",
         "target_peak_cfs",
+        # generic run_solver-seam envelope (consumed by the seam, not the worker):
+        "run_id",
+        "inputs",
+        "outputs",
+        "hecras_args",
     }
 )
 

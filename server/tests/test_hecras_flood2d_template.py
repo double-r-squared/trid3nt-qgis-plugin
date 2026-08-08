@@ -73,6 +73,18 @@ def test_equation_set_map_covers_choices():
     assert _EQUATION_SET_MAP["full_swe"] == "SWE-ELM"
 
 
+def test_computation_interval_regex_accepts_hec_tokens():
+    # ADR 0188: the stability-knob validator accepts int+SEC/MIN/HOUR, rejects prose.
+    from trid3nt_server.agent.workflows.hecras.flood_2d.flood_2d import (
+        _COMPUTATION_INTERVAL_RE,
+    )
+
+    for good in ("30SEC", "1MIN", "5MIN", "2HOUR"):
+        assert _COMPUTATION_INTERVAL_RE.match(good), good
+    for bad in ("fast", "2 MIN", "MIN", "0.5MIN", "10sec"):
+        assert not _COMPUTATION_INTERVAL_RE.match(bad), bad
+
+
 @pytest.mark.asyncio
 async def test_bad_bbox_returns_typed_error():
     from trid3nt_server.agent.workflows.hecras.flood_2d.flood_2d import hecras_flood_2d

@@ -31,6 +31,7 @@ import json
 import logging
 import math
 import os
+import re
 import tempfile
 from pathlib import Path
 from typing import Any
@@ -61,7 +62,7 @@ __all__ = [
 #: pure-python composer); imported at CALL time (not import time) so the server
 #: package carries no hard dependency on services/workers.
 _WORKERS_FRESHTOPO = (
-    Path(__file__).resolve().parents[6]
+    Path(__file__).resolve().parents[7]
     / "services/workers/hecras2025/subst/crux/freshtopo"
 )
 
@@ -87,6 +88,12 @@ _EQUATION_SET_MAP: dict[str, str] = {
     "full_swe": "SWE-ELM",
 }
 _DEFAULT_EQUATION_SET: str = "diffusion_wave"
+
+#: The RasUnsteady 2D time step (patched into the .bNN Computation Interval). The
+#: primary numerical-stability knob for the stability-diagnostic sweep: a coarse
+#: step overshoots the peak (spurious water-surface spikes), tightening it converges
+#: the peak. Integer + SEC/MIN/HOUR; None keeps the composer 2MIN default.
+_COMPUTATION_INTERVAL_RE = re.compile(r"^\d+(SEC|MIN|HOUR)$")
 
 _FIDELITY_NOTE: str = (
     "REFINEMENT-GRADE production HEC-RAS 6.x solver on a 2025-AUTHORED 2D mesh "
@@ -114,7 +121,7 @@ TEMPLATE_CARD = TemplateCard(
         "discharge or scale a default event"
     ),
     required_inputs=["bbox (or a location that resolves to one)"],
-    knobs="target_peak_cfs, resolution_m, sim_hours, inlet_edge, outlet_edge, input_mode",
+    knobs="target_peak_cfs, resolution_m, sim_hours, inlet_edge, outlet_edge, equation_set, computation_interval, input_mode",
 )
 
 _METADATA = AtomicToolMetadata(
@@ -166,6 +173,7 @@ async def hecras_flood_2d(
     inlet_edge: str | None = None,
     outlet_edge: str | None = None,
     equation_set: str = _DEFAULT_EQUATION_SET,
+    computation_interval: str | None = None,
     input_mode: str | None = None,
     **_extra_ignored: Any,
 ) -> HecrasDepthLayerURI | dict[str, Any]:
@@ -199,11 +207,18 @@ async def hecras_flood_2d(
         inlet_edge / outlet_edge: OPTIONAL compass overrides ("n"/"s"/"e"/"w") for
             where flow enters / drains. Defaults: inflow on the lowest-elevation
             perimeter run, outlet on the south edge (the drainage physics).
-        equation_set: the 2D solver -- ``"diffusion_wave"`` (default, VALIDATED:
-            every acceptance converged at low volume error) or ``"full_swe"`` (the
-            heavier full-momentum shallow-water solver; advanced, less-tested on
-            authored meshes). Use diffusion wave unless local inertia/momentum
-            matters (steep supercritical reaches, sharp constrictions).
+        equation_set: the 2D solver -- ``"diffusion_wave"`` (default) or
+            ``"full_swe"`` (the full-momentum shallow-water solver, SWE-ELM). Both
+            are validated. On a steep dam-flood the two agree on the peak-inundation
+            envelope (extent/max depth to sub-inch) and separate ONLY at a small set
+            (~0.3% of cells, up to ~1.9 ft) of momentum-dominated cells (channel
+            constrictions, rapid transitions). Use ``full_swe`` when that local
+            inertial detail matters; diffusion wave otherwise (cheaper, same footprint).
+        computation_interval: the RasUnsteady 2D time step (e.g. ``"30SEC"``,
+            ``"1MIN"``, ``"5MIN"``; default 2MIN). The numerical-stability knob -- a
+            coarse step overshoots the peak (spurious water-surface spikes), a finer
+            step converges it. Sweep it (coarse -> fine) to diagnose 2D-model
+            stability; tighten it if a run reports an unphysical peak.
         input_mode: ``"user_gated"`` reviews the forcing + resolution + fetched-
             terrain basis before the (heavy) solve; ``"auto"`` (default) proceeds
             with them labeled.
@@ -249,16 +264,26 @@ async def hecras_flood_2d(
         logger.warning("hecras_flood_2d: equation_set %r unknown - using diffusion_wave", equation_set)
         eq_key = _DEFAULT_EQUATION_SET
 
+    interval = None
+    if computation_interval is not None:
+        cand = str(computation_interval).strip().upper()
+        if _COMPUTATION_INTERVAL_RE.match(cand):
+            interval = cand
+        else:
+            logger.warning(
+                "hecras_flood_2d: computation_interval %r invalid (need int+SEC/MIN/HOUR) "
+                "- using the 2MIN default", computation_interval)
+
     logger.info(
-        "hecras_flood_2d bbox=%s res=%.1fm peak=%.0fcfs sim=%sh inlet=%s outlet=%s eq=%s",
-        aoi, resolution_m, peak, sim_hours, inlet_edge, outlet_edge, eq_key,
+        "hecras_flood_2d bbox=%s res=%.1fm peak=%.0fcfs sim=%sh inlet=%s outlet=%s eq=%s interval=%s",
+        aoi, resolution_m, peak, sim_hours, inlet_edge, outlet_edge, eq_key, interval or "2MIN",
     )
 
     try:
         depth = await model_hecras_flood_2d(
             bbox=aoi, target_peak_cfs=peak, resolution_m=resolution_m,
             sim_hours=float(sim_hours), inlet_edge=inlet_edge, outlet_edge=outlet_edge,
-            equation_set=eq_key, input_mode=input_mode,
+            equation_set=eq_key, computation_interval=interval, input_mode=input_mode,
         )
         if isinstance(depth, dict):
             return depth
@@ -341,7 +366,8 @@ def _fetch_dem_local(bbox: list[float]) -> str:
 def _author_and_compose(dem_tif: str, workdir: str, *, peak_cfs: float,
                         resolution_m: float, inlet_edge: str | None,
                         outlet_edge: str | None,
-                        equation_set: str = "Diffusion Wave") -> Any:
+                        equation_set: str = "Diffusion Wave",
+                        computation_interval: str | None = None) -> Any:
     """Run the authoring + compose stages (docker author + host compose)."""
     import sys
 
@@ -354,7 +380,7 @@ def _author_and_compose(dem_tif: str, workdir: str, *, peak_cfs: float,
         result, info = author_and_compose(
             dem_tif, workdir, peak_cfs=peak_cfs, resolution_m=resolution_m,
             inflow_edge=inlet_edge, ds_edge=(outlet_edge or "s"),
-            equation_set=equation_set,
+            equation_set=equation_set, computation_interval=computation_interval,
         )
     except Flood2dPipelineError as exc:
         raise HecrasFlood2dError(HECRAS_SOLVE_FAILED, f"authoring/compose failed: {exc}") from exc
@@ -425,6 +451,7 @@ async def model_hecras_flood_2d(
     inlet_edge: str | None = None,
     outlet_edge: str | None = None,
     equation_set: str = _DEFAULT_EQUATION_SET,
+    computation_interval: str | None = None,
     input_mode: str | None = None,
 ) -> HecrasDepthLayerURI | dict[str, Any]:
     """fetch DEM -> author+compose -> run_solver -> postprocess -> publish."""
@@ -459,8 +486,13 @@ async def model_hecras_flood_2d(
         SyntheticInput(
             param="equation_set", value=eq_hec,
             basis="user" if eq_key != _DEFAULT_EQUATION_SET else "default",
-            note="2D solver stamped on the plan (Diffusion Wave = validated default; "
-            "SWE = full-momentum, advanced)",
+            note="2D solver stamped on the plan (Diffusion Wave = default; "
+            "SWE-ELM = full-momentum; same footprint, local inertial detail differs)",
+        ),
+        SyntheticInput(
+            param="computation_interval", value=(computation_interval or "2MIN"),
+            basis="user" if computation_interval else "default",
+            note="RasUnsteady 2D time step (stability knob; coarser overshoots the peak)",
         ),
     ]
     review = await gate_input_review(
@@ -487,7 +519,7 @@ async def model_hecras_flood_2d(
             _author_and_compose, dem_tif, workdir,
             peak_cfs=target_peak_cfs, resolution_m=resolution_m,
             inlet_edge=inlet_edge, outlet_edge=outlet_edge,
-            equation_set=eq_hec,
+            equation_set=eq_hec, computation_interval=computation_interval,
         )
     logger.info(
         "hecras_flood_2d authored deck run_tag=%s cells=%d faces=%d crs=local-ftUS",

@@ -188,6 +188,14 @@ SHOWCASE: list[Showcase] = [
               "wind_speed_mps": 18.0, "wind_direction_deg": 270.0},
              "ADR 0154 TELEMAC river dye + wind forcing, Eel River nr Scotia CA", 600),
     # -- HEC-RAS (bundled Muncie deck; cheap 1D/2D) --------------------------
+    Showcase("hecras_flood_2d",
+             {"bbox": [-98.115, 29.975, -98.083, 30.000], "target_peak_cfs": 15000,
+              "resolution_m": 30, "equation_set": "full_swe", "computation_interval": "1MIN"},
+             "ADR 0188 HEC-RAS 2D fresh-AOI flood on the Blanco River canyon nr "
+             "Wimberley TX (329 ft relief), exercising the equation_set (full SWE-ELM) "
+             "+ computation_interval (1MIN stability step) knobs. DW vs SWE agree on "
+             "the peak footprint, separating only at momentum-dominated channel cells; "
+             "the coarse-step overshoot converges as the step tightens.", 900),
     Showcase("hecras_riverine_flood", {},
              "ADR 0170/0172 HEC-RAS riverine flood, shipped Muncie deck", 480),
     Showcase("hecras_levee_breach", {"breach_enabled": True},

@@ -37,6 +37,7 @@ monotone x1.5 delta) exactly.
 """
 from __future__ import annotations
 
+import re
 import shutil
 import sys
 from dataclasses import dataclass
@@ -96,6 +97,33 @@ _EQUATION_SET_ATTR = "2D Equation Set"
 #: less-tested on authored meshes).
 EQUATION_SETS = ("Diffusion Wave", "SWE-ELM", "SWE-EM")
 DEFAULT_EQUATION_SET = "Diffusion Wave"
+
+#: The 2D computation (time-step) interval the RasUnsteady solver marches at, read
+#: from the ``Computation Interval`` line of the ``.bNN`` boundary file (the shipped
+#: Chippewa default is 2MIN). It is the primary numerical-stability knob: a
+#: too-coarse step produces spurious water-surface oscillation spikes that shrink as
+#: the step tightens (the stability-diagnostic convergence). Format is an integer +
+#: a HEC-RAS unit token (SEC / MIN / HOUR), e.g. "30SEC", "1MIN", "5MIN".
+_COMP_INTERVAL_RE = re.compile(r"^\d+(SEC|MIN|HOUR)$")
+DEFAULT_COMPUTATION_INTERVAL = "2MIN"
+
+
+def _patch_computation_interval(bnn_text: str, interval: str) -> str:
+    """Rewrite the ``.bNN`` ``Computation Interval`` line to ``interval``.
+
+    ``interval`` is validated against ``_COMP_INTERVAL_RE`` (integer + SEC/MIN/HOUR)
+    -- the caller passing an unrecognized token is a hard error, not a silent
+    fall-through (the loud-typed-fallback norm)."""
+    interval = str(interval).strip().upper()
+    if not _COMP_INTERVAL_RE.match(interval):
+        raise ValueError(
+            f"computation_interval {interval!r} must be an integer + SEC/MIN/HOUR "
+            f"(e.g. '30SEC', '1MIN', '5MIN')")
+    new, n = re.subn(r"(Computation Interval\s*=\s*)\S+", r"\g<1>" + interval,
+                     bnn_text, count=1)
+    if n != 1:
+        raise ValueError("no 'Computation Interval' line found in the .bNN to patch")
+    return new
 
 
 @dataclass
@@ -168,6 +196,7 @@ def compose_pure2d_deck(
     inflow_edge: str | None = None,
     ds_edge: str = "s",
     equation_set: str = DEFAULT_EQUATION_SET,
+    computation_interval: str | None = None,
     opts: PropertyTableOptions | None = None,
 ) -> dict:
     """Assemble the complete pure-2D deck for ``mesh``/``tables`` in ``rundir``.
@@ -182,9 +211,14 @@ def compose_pure2d_deck(
     shallow-water form ("SWE-ELM"/"SWE-EM"). The engine reads it from the plan
     HDF, so switching needs no ASCII plan and no image rebuild.
 
+    ``computation_interval`` overrides the shipped Chippewa 2MIN time step marched
+    by RasUnsteady (patched into the ``.bNN``), the primary numerical-stability
+    knob: a coarse step over-shoots (spurious water-surface spikes) and tightening
+    it converges the peak. ``None`` keeps the 2MIN default.
+
     Returns a provenance dict (mesh counts, BC line length + face count, the EC
-    peak/ordinates, the equation set, the deck paths) for logging + the template's
-    typed envelope.
+    peak/ordinates, the equation set, the computation interval, the deck paths) for
+    logging + the template's typed envelope.
     """
     import h5py
 
@@ -267,12 +301,16 @@ def compose_pure2d_deck(
     # AOI whose terrain sits below it -- the per-AOI initial-condition fix).
     terrain_min = float(np.nanmin(np.asarray(tables.cell_min_elevation, np.float64)))
     initial_stage = terrain_min - 10.0
-    bnn_path.write_text(patch_chippewa_bnn(
-        100.0, hydrograph_node=1, initial_stage=initial_stage))
+    bnn_text = patch_chippewa_bnn(100.0, hydrograph_node=1, initial_stage=initial_stage)
+    interval = computation_interval or DEFAULT_COMPUTATION_INTERVAL
+    if computation_interval is not None:
+        bnn_text = _patch_computation_interval(bnn_text, computation_interval)
+    bnn_path.write_text(bnn_text)
 
     return {
         "area_name": area_name,
         "equation_set": equation_set,
+        "computation_interval": interval,
         "cells_real": int(mesh.cell_count),
         "cells_total": int(mesh.cell_center_coord.shape[0]),
         "faces": int(mesh.faces_cell_indexes.shape[0]),
