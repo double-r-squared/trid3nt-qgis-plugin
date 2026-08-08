@@ -223,6 +223,10 @@ class PostprocessMODFLOWError(RuntimeError):
     - ``PLUME_REPROJECT_FAILED`` - the UTM → EPSG:4326 warp failed.
     - ``PLUME_COG_WRITE_FAILED`` - rasterio could not write the COG.
     - ``PLUME_COG_UPLOAD_FAILED`` - the GCS upload of the COG failed.
+    - ``MODFLOW_GEOREGISTRATION_MISSING`` - the deck's grid origin/cell-size
+      could not be read (flopy deck-load failure or no ``deck_dir``); raised
+      by ``_write_reprojected_cog`` / ``_modflow_src_transform`` instead of
+      silently placing the raster at an arbitrary identity-transform origin.
     """
 
     error_code: str = "POSTPROCESS_MODFLOW_FAILED"
@@ -955,6 +959,14 @@ def _grid_georegistration_from_deck(deck_dir: str | None) -> dict[str, Any] | No
     requires it), so either works; we PREFER the GWT model (the spill/seepage
     deck's transport grid) and fall back to the GWF model (a GWF-only archetype
     deck has no GWT model). Any model with a structured modelgrid is acceptable.
+
+    A ``None`` return means the caller cannot place the output raster on the
+    map. ``_write_reprojected_cog`` / ``_modflow_src_transform`` raise
+    ``PostprocessMODFLOWError("MODFLOW_GEOREGISTRATION_MISSING")`` rather than
+    silently writing at an arbitrary identity-transform origin; a handful of
+    callers whose narrated deliverable is a scalar (not the raster itself,
+    e.g. ``postprocess_budget_partition`` / ``postprocess_asr``) instead catch
+    that error and degrade to an unplaced fallback URI, honestly logged.
     """
     if not deck_dir:
         return None
@@ -1042,27 +1054,44 @@ def _write_reprojected_cog(
             NaN off the reach) so negative gaining values survive - masking by a
             positive floor would wrongly drop every gaining (negative) reach
             cell. Passed to cog_io as the declared ``mask`` callable.
+
+    Raises:
+        PostprocessMODFLOWError: ``MODFLOW_GEOREGISTRATION_MISSING`` when
+            ``geo`` is ``None`` (the deck's grid origin/cell-size could not be
+            read) - the raster's spatial pattern is the deliverable for every
+            caller of this writer, so an unplaced (identity-transform) COG
+            would be a confidently-wrong map layer, worse than an honest
+            failure. A caller whose real deliverable is a scalar (not this
+            raster) - e.g. ``postprocess_budget_partition`` / ``postprocess_asr``
+            - catches this and degrades to an unplaced fallback URI instead.
     """
     import numpy as np  # type: ignore[import-not-found]
     import rasterio  # type: ignore[import-not-found]
     from rasterio.warp import Resampling
 
+    if geo is None:
+        raise PostprocessMODFLOWError(
+            "MODFLOW_GEOREGISTRATION_MISSING",
+            message=(
+                "grid georegistration could not be read from the deck (flopy "
+                "deck-load failure, or no deck_dir was supplied); refusing to "
+                "write the COG at an arbitrary identity-transform origin - a "
+                "misplaced raster is a worse failure than an honest error."
+            ),
+            details={"model_crs": model_crs},
+        )
+
     arr = np.asarray(final2d, dtype="float32")
     nrow, ncol = arr.shape
 
-    if geo is not None:
-        delr = geo["delr"]
-        delc = geo["delc"]
-        xorigin = geo["xorigin"]
-        yorigin = geo["yorigin"]
-        # flopy row 0 = north; rasterio's from_origin top-left = (west, north).
-        west = xorigin
-        north = yorigin + nrow * delc
-        src_transform = rasterio.transform.from_origin(west, north, delr, delc)
-    else:
-        # Degraded fallback: identity transform (metrics still valid; placement
-        # arbitrary). Logged by the caller via the None geo path.
-        src_transform = rasterio.Affine.identity()
+    delr = geo["delr"]
+    delc = geo["delc"]
+    xorigin = geo["xorigin"]
+    yorigin = geo["yorigin"]
+    # flopy row 0 = north; rasterio's from_origin top-left = (west, north).
+    west = xorigin
+    north = yorigin + nrow * delc
+    src_transform = rasterio.transform.from_origin(west, north, delr, delc)
 
     def _mask(a: Any) -> Any:
         if mask_below_floor:
@@ -1199,9 +1228,12 @@ def postprocess_modflow(
         run_id: the run identifier the COG is keyed under in the runs bucket.
         model_crs: the deck's projected CRS (e.g. ``"EPSG:32617"``) - the
             OQ-MOD-3 handoff field the reprojection needs.
-        deck_dir: optional on-disk deck dir for grid georegistration (origin +
-            cell size). When ``None``, the COG uses an identity transform
-            (metrics stay valid; geographic placement degrades).
+        deck_dir: on-disk deck dir for grid georegistration (origin + cell
+            size). REQUIRED for a correctly-placed COG: when ``None`` or the
+            deck fails to load, ``_write_reprojected_cog`` raises
+            ``PostprocessMODFLOWError("MODFLOW_GEOREGISTRATION_MISSING")``
+            rather than silently placing the plume raster at an arbitrary
+            identity-transform origin.
         runs_bucket: optional override for the runs bucket name.
         publish: when True, dispatch ``publish_layer`` (mocked in tests).
 
@@ -2080,14 +2112,30 @@ def _read_concentration_steps(ucn_path: Path) -> tuple[list[Any], Any]:
 
 
 def _modflow_src_transform(geo: dict[str, Any] | None, nrow: int) -> Any:
-    """Build the rasterio source transform from the deck georegistration."""
+    """Build the rasterio source transform from the deck georegistration.
+
+    Raises:
+        PostprocessMODFLOWError: ``MODFLOW_GEOREGISTRATION_MISSING`` when
+            ``geo`` is ``None``. Feeds the concentration-animation +
+            water-table rasters (``publish_modflow_quantities``, both
+            ``default_on=True`` active map layers) - same honesty floor as
+            ``_write_reprojected_cog``: an unplaced raster is a worse failure
+            than refusing to build it.
+    """
     import rasterio  # type: ignore[import-not-found]
 
-    if geo is not None:
-        west = geo["xorigin"]
-        north = geo["yorigin"] + nrow * geo["delc"]
-        return rasterio.transform.from_origin(west, north, geo["delr"], geo["delc"])
-    return rasterio.Affine.identity()
+    if geo is None:
+        raise PostprocessMODFLOWError(
+            "MODFLOW_GEOREGISTRATION_MISSING",
+            message=(
+                "grid georegistration could not be read from the deck; "
+                "refusing to place the concentration-animation / water-table "
+                "raster at an arbitrary identity-transform origin."
+            ),
+        )
+    west = geo["xorigin"]
+    north = geo["yorigin"] + nrow * geo["delc"]
+    return rasterio.transform.from_origin(west, north, geo["delr"], geo["delc"])
 
 
 def publish_modflow_quantities(
@@ -2967,9 +3015,14 @@ def postprocess_asr(
     lat/lon re-derivation is needed -- the ASR well is, by construction, the cell
     where the cyclic inject/recover drives the largest head swing.
 
+    A missing deck georegistration degrades the head COG to an unplaced
+    fallback URI (honestly logged) rather than failing the call -- the
+    narrated deliverable (``recovery_efficiency`` / ``head_timeseries``) does
+    not depend on the raster placement.
+
     Raises:
-        PostprocessMODFLOWError: any read / reproject / write / upload step
-            failed; ``error_code`` identifies the stage.
+        PostprocessMODFLOWError: a head-file read failure; ``error_code``
+            identifies the stage.
     """
     hds_path = _resolve_gwf_hds_path(run_outputs_uri)
     geo = _grid_georegistration_from_deck(deck_dir)
@@ -2994,24 +3047,36 @@ def postprocess_asr(
         len(head_timeseries) if head_timeseries is not None else 0,
     )
 
-    # Spatial carrier = the final-step water-table head COG (continuous head ramp).
+    # Spatial carrier = the final-step water-table head COG (continuous head
+    # ramp) -- context for the well-head sawtooth deliverable above, NOT the
+    # deliverable itself (mirrors postprocess_budget_partition): a missing
+    # deck georegistration degrades to an unplaced fallback URI, honestly
+    # logged, rather than sinking the recovery_efficiency / head_timeseries
+    # this call already computed.
     head_grid = head_steps[-1]
-    cog_path = _write_reprojected_cog(
-        head_grid, model_crs, geo, mask_below_floor=False
-    )
-    bbox_4326 = _cog_bbox_4326(cog_path)
-    cog_uri = _upload_cog(
-        cog_path, run_id, runs_bucket, cog_filename="asr_head_4326.tif"
-    )
-
+    bbox_4326: tuple[float, float, float, float] | None = None
+    final_uri: str
     layer_id = f"asr-{run_id}"
-    final_uri = cog_uri
-    if publish:
-        wms_url = _dispatch_publish_layer(
-            cog_uri, layer_id, style_preset=ASR_STYLE_PRESET
+    try:
+        cog_path = _write_reprojected_cog(
+            head_grid, model_crs, geo, mask_below_floor=False
         )
-        if wms_url:
-            final_uri = wms_url
+        bbox_4326 = _cog_bbox_4326(cog_path)
+        final_uri = _upload_cog(
+            cog_path, run_id, runs_bucket, cog_filename="asr_head_4326.tif"
+        )
+        if publish:
+            wms_url = _dispatch_publish_layer(
+                final_uri, layer_id, style_preset=ASR_STYLE_PRESET
+            )
+            if wms_url:
+                final_uri = wms_url
+    except PostprocessMODFLOWError as exc:
+        logger.warning(
+            "ASR water-table head COG unavailable (sawtooth still returned): %s",
+            exc,
+        )
+        final_uri = run_outputs_uri
 
     return ASRLayerURI(
         layer_id=layer_id,
