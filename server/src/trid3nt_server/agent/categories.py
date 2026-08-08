@@ -379,6 +379,7 @@ PRIMARY_CATEGORY: dict[str, str] = {
     "swan_stationary_snapshot_batch": "simulation_modeling",
     "telemac_river_dye": "simulation_modeling",
     "telemac_do_sag": "simulation_modeling",
+    "telemac_rain_on_grid": "simulation_modeling",
     "hecras_riverine_flood": "simulation_modeling",
     "hecras_levee_breach": "simulation_modeling",
     "hecras_flood_2d": "simulation_modeling",

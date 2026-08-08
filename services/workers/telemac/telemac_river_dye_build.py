@@ -218,6 +218,35 @@ class ReachConfig:
     graphic_period: int = 200
     min_bed_slope: float = 3.0e-4       # enforced gentle downstream slope floor
     max_bed_slope: float = 6.0e-3
+    # RAIN-ON-GRID (ADR 0196). mode="rain_on_grid" routes the worker to the RoG
+    # pipeline (rog_build) instead of the channel-dye pipeline: a rain-fed
+    # delineated-watershed TIN (staged by the agent-side mesh_acquisition step as
+    # watershed_slf, UTM metres, BOTTOM = bed) solves with a distributed CN
+    # infiltration + per-NLCD Manning + a free-exit outlet at the pour point. The
+    # per-node CN2/Manning fields are staged as node_cn2_file/node_manning_file
+    # (one value per line, mesh-node order); runoff_path ("native" constant-rain
+    # SCS-CN vs "preprocessing" net-excess rain) is chosen by the agent-side
+    # select_runoff_path and threaded here so the deck author writes the matching
+    # branch. rain_intensity_mm_per_hr + rain_duration_s define the constant
+    # design storm (native path); curve_number is the uniform-CN override (else
+    # the NLCD-distributed field is used); amc_condition is the SCS antecedent
+    # moisture class (1 dry / 2 normal / 3 wet); observed_gauge_id wires the
+    # USGS-NWIS NSE/R2 overlay. Defaults leave every non-RoG (channel-dye) run
+    # byte-identical: mode="river_dye" is the historical path.
+    mode: str = "river_dye"
+    watershed_slf: str = ""             # staged BOTTOM SELAFIN basename (RoG mesh)
+    runoff_path: str = "native"         # native | preprocessing
+    curve_number: float = None          # type: ignore[assignment]  # uniform CN2 override
+    amc_condition: int = 2              # SCS antecedent moisture: 1 dry / 2 norm / 3 wet
+    initial_abstraction_option: int = 1  # OPTION FOR INITIAL ABSTRACTION RATIO (1=0.2, 2=0.05)
+    rain_intensity_mm_per_hr: float = 25.0   # constant design-storm intensity (native)
+    rain_duration_s: float = None       # type: ignore[assignment]  # rain-on window (defaults to duration_s)
+    rain_hyetograph_mm: list = None     # type: ignore[assignment]  # per-step net rain (preprocessing)
+    node_cn2_file: str = ""             # staged per-node CN2 field basename
+    node_manning_file: str = ""         # staged per-node Manning field basename
+    outlet_lonlat: tuple = None         # type: ignore[assignment]  # pour-point (lon, lat)
+    n_outlet_nodes: int = 6             # ring nodes marked as the free-exit outlet
+    observed_gauge_id: str = ""         # USGS NWIS gauge for NSE/R2 (composer wiring)
     workdir: str = field(default_factory=lambda: os.path.dirname(os.path.abspath(__file__)))
 
 

@@ -44,6 +44,7 @@ EXPECTED_TEMPLATES = {
     "swmm_rdii_rtk_unit_hydrograph",  # ADR 0190 row 4: RTK unit-hydrograph RDII vs direct runoff (closed form + native SWMM cross-check)
     "telemac_river_dye",
     "telemac_do_sag",
+    "telemac_rain_on_grid",  # ADR 0196: SCS-CN rainfall-runoff on a delineated watershed (Coweeta Creek NC live V&V)
     "hecras_riverine_flood",  # engine #11 (ADR 0109; renamed ADR 0120): HEC-RAS riverine-flood template (v1 geometry: Muncie)
     "hecras_levee_breach",  # engine #11 second archetype (ADR 0125): HEC-RAS levee-breach template (v1 geometry: Muncie leveed floodplain)
     "hecras_flood_2d",  # engine #11 third archetype (ADR 0140): HEC-RAS fresh-AOI 2D flood (headless-authored geometry from a fetched DEM)
@@ -149,7 +150,7 @@ def test_all_templates_registered_and_callable():
         n for n, e in reg.items() if getattr(e.metadata, "tier", "general") == "template"
     }
     assert registered_templates == EXPECTED_TEMPLATES, (
-        "registered tier=template set drifted from the expected 31: "
+        "registered tier=template set drifted from the expected 32: "
         f"missing={sorted(EXPECTED_TEMPLATES - registered_templates)} "
         f"unexpected={sorted(registered_templates - EXPECTED_TEMPLATES)}"
     )

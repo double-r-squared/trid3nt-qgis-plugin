@@ -67,6 +67,30 @@ def test_reach_config_rejects_unknown_keys(tmp_path):
         })
 
 
+def test_parser_version_is_reach_3():
+    """ADR 0196: the RoG field additions bump the strict-parser version stamp."""
+    assert E._PARSER_VERSION == "telemac-reach-3"
+
+
+def test_reach_config_accepts_rog_fields(tmp_path):
+    cfg = E._reach_config(tmp_path, {
+        "mode": "rain_on_grid", "watershed_slf": "watershed.slf",
+        "runoff_path": "native", "curve_number": 82.0, "amc_condition": 1,
+        "rain_intensity_mm_per_hr": 40.0, "node_cn2_file": "cn.txt",
+        "node_manning_file": "n.txt", "outlet_lonlat": (-83.4, 35.05),
+        "observed_gauge_id": "02086500",
+    })
+    assert cfg.mode == "rain_on_grid" and cfg.runoff_path == "native"
+    assert cfg.curve_number == 82.0 and cfg.amc_condition == 1
+    assert cfg.observed_gauge_id == "02086500"
+
+
+def test_reach_config_rejects_unknown_rog_key_names_v3(tmp_path):
+    """A bogus reach key raises naming the CURRENT parser version (telemac-reach-3)."""
+    with pytest.raises(E.TelemacManifestUnknownFieldsError, match="telemac-reach-3"):
+        E._reach_config(tmp_path, {"bogus_rog_field": 1, "mode": "rain_on_grid"})
+
+
 def test_main_bad_manifest_writes_typed_error(tmp_path, monkeypatch):
     # A malformed manifest (JSON array, not object) -> exit 2 + typed metrics.
     (tmp_path / "manifest.json").write_text("[1, 2, 3]", encoding="utf-8")

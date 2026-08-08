@@ -49,6 +49,7 @@ __all__ = [
     "catchment_exterior_and_river_coords",
     "reproject_nodes_to_utm",
     "assemble_node_fields",
+    "validate_catchment_not_degenerate",
     "DEFAULT_MESH_IMAGE",
 ]
 
@@ -61,6 +62,19 @@ DEFAULT_MESH_IMAGE: str = "trid3nt-local/mesh:latest"
 _MESH_INCONTAINER = (
     "scripts/sandbox/oceanmesh/_mesh_watershed_incontainer.py"
 )
+
+#: Outlet-snap search radius (D8 cells) around the pour point. The outlet is
+#: snapped to the MAXIMUM-accumulation cell within this window so a coarse-DEM
+#: outlet lands on the main channel regardless of grid alignment (~8 cells at
+#: 30 m ~ 240 m). Widen only if outlets routinely sit far off the mapped channel.
+_OUTLET_SNAP_SEARCH_CELLS: int = 8
+
+#: Minimum delineated catchment size (D8 cells) before the result is treated as a
+#: degenerate sliver. A pour point that does not sit on the catchment channel, or
+#: an AOI that does not contain the upstream basin, delineates a handful of cells
+#: (the ADR 0196 live bug: 20 cells / 0.018 km^2); meshing + solving that is a
+#: silent dead-end, so we fail LOUD with a typed AOI/pour-point-mismatch error.
+_MIN_CATCHMENT_CELLS: int = 50
 
 
 class MeshAcquisitionError(RuntimeError):
@@ -254,6 +268,30 @@ def assemble_node_fields(
     return cn2, manning
 
 
+def validate_catchment_not_degenerate(
+    cell_count: int,
+    area_km2: float,
+    pour_point: tuple[float, float],
+) -> None:
+    """Raise a typed error when the delineated catchment is a degenerate sliver.
+
+    A pour point that does not land on the catchment's channel, or an AOI that
+    does not contain the upstream basin, yields a handful of D8 cells rather than
+    a real catchment. Meshing + solving that sliver is a silent dead-end, so we
+    fail LOUD here with an AOI/pour-point-mismatch message (never a quiet 0.018
+    km^2 result). Below :data:`_MIN_CATCHMENT_CELLS` cells is degenerate."""
+    if int(cell_count) < _MIN_CATCHMENT_CELLS:
+        raise MeshAcquisitionError(
+            "TELEMAC_ROG_CATCHMENT_DEGENERATE",
+            f"the delineated catchment is degenerate: only {int(cell_count)} D8 "
+            f"cells (~{float(area_km2):.3f} km^2) upstream of pour point "
+            f"{tuple(round(float(v), 5) for v in pour_point)}. The pour point "
+            "likely does not sit on the catchment channel, or the analysis AOI "
+            "does not contain the upstream basin. Move the pour point onto the "
+            "stream, or supply a bbox that covers the whole catchment.",
+        )
+
+
 # --------------------------------------------------------------------------- #
 # Provider 1: build our own watershed mesh (container-driven; live).
 # --------------------------------------------------------------------------- #
@@ -296,7 +334,6 @@ def acquire_watershed_mesh(
     bbox: tuple[float, float, float, float],
     output_dir: str,
     dem_uri: str | None = None,
-    snap_threshold: int = 200,
     min_edge_length_m: float = 40.0,
     max_edge_length_m: float = 400.0,
     grade: float = 0.20,
@@ -305,11 +342,11 @@ def acquire_watershed_mesh(
 ) -> WatershedMesh:
     """Delineate + mesh the catchment at ``pour_point``, write the solve SELAFIN.
 
-    The "build our own" precondition-gate provider: registered
-    ``delineate_watershed`` -> catchment polygon; ``fetch_river_geometry`` ->
-    the interior river network; ``fetch_dem`` -> the bed; OceanMesh2D
-    (mesh image) triangulates the catchment interior refined by distance-to-
-    river; the lon/lat nodes are projected to UTM and written as a BOTTOM
+    The "build our own" precondition-gate provider: ``_delineate_catchment``
+    (robust pysheds outlet-snap + catchment) -> catchment polygon;
+    ``fetch_river_geometry`` -> the interior river network; ``fetch_dem`` -> the
+    bed; OceanMesh2D (mesh image) triangulates the catchment interior refined by
+    distance-to-river; the lon/lat nodes are projected to UTM and written as a BOTTOM
     SELAFIN. LIVE (needs the mesh image + network); the pure helpers it composes
     are unit-tested.
     """
@@ -317,8 +354,7 @@ def acquire_watershed_mesh(
 
     import geopandas as gpd  # noqa: F401 -- ensures the geo stack is importable
     import numpy as np
-    from shapely.geometry import mapping, shape
-    from shapely.ops import unary_union
+    from shapely.geometry import mapping
 
     from trid3nt_server.agent.tools import TOOL_REGISTRY
 
@@ -331,20 +367,21 @@ def acquire_watershed_mesh(
         or "scripts/sandbox/oceanmesh"
     ).resolve()
 
-    # 1. delineate the catchment (pysheds) at the pour point.
-    dw = TOOL_REGISTRY["delineate_watershed"].fn(
-        pour_point=tuple(pour_point),
-        bbox=tuple(bbox),
-        dem_uri=dem_uri,
-        snap_threshold=int(snap_threshold),
-        _output_dir=str(rundir),
-    )
-    fc = _json.loads(Path(dw.uri).read_text())
-    catch = unary_union([shape(f["geometry"]) for f in fc["features"]])
+    dem_notes: list[str] = []
+    # 1. delineate the catchment (pysheds) at the pour point on Copernicus GLO-30
+    #    (natively geographic EPSG:4326 -- the lon/lat frame the outlet snap needs;
+    #    a bare-earth 3DEP DEM is projected EPSG:5070 and reprojecting it corrupts
+    #    the D8 grid, so bare earth is pinned for the mesh BED only). Uses the
+    #    robust local delineator (max-accumulation outlet pre-snap + index-space
+    #    catchment) instead of the shared delineate_watershed tool, whose
+    #    coordinate-space snap mis-maps an exact outlet to a neighbour cell on
+    #    certain grid alignments (observed: a 1-cell sliver vs the 28.7 km^2 truth).
+    catch, outlet, area_km2, cell_count = _delineate_catchment(
+        rundir, bbox, tuple(pour_point), dem_uri)
+    validate_catchment_not_degenerate(cell_count, area_km2, tuple(pour_point))
     catch_path = rundir / "catchment.geojson"
     catch_path.write_text(_json.dumps({"type": "FeatureCollection", "features": [
         {"type": "Feature", "properties": {}, "geometry": mapping(catch)}]}))
-    outlet = tuple(getattr(dw, "snapped_pour_point", None) or pour_point)
 
     # 2. river network inside the catchment -> exterior + sizing points.
     try:
@@ -371,8 +408,10 @@ def acquire_watershed_mesh(
     points_ll = np.asarray(points_ll, dtype=float)
     cells = np.asarray(cells, dtype=np.int64)
 
-    # 4. DEM bed sampled at the nodes (positive-up elevation).
-    dem_path = _resolve_dem(rundir, bbox, dem_uri)
+    # 4. DEM bed sampled at the nodes (positive-up elevation), bare-earth 10 m.
+    dem_path = _resolve_bare_earth_dem(
+        rundir, bbox, dem_uri, resolution_m=10,
+        filename="dem_bed.tif", notes=dem_notes)
     bed = _sample_raster_at_nodes(dem_path, points_ll)
 
     # 5. project to UTM metres + write the solve SELAFIN.
@@ -380,7 +419,7 @@ def acquire_watershed_mesh(
     slf_path = str(rundir / "watershed.slf")
     _write_bottom_selafin(slf_path, points_m, cells, bed)
 
-    area_km2 = float(getattr(dw, "area_km2", 0.0)) or _polygon_area_km2(catch)
+    area_km2 = float(area_km2) or _polygon_area_km2(catch)
     logger.info(
         "rog mesh acquired: %d nodes %d cells %.2f km^2 epsg=%d outlet=%s",
         points_m.shape[0], cells.shape[0], area_km2, epsg, outlet)
@@ -395,7 +434,8 @@ def acquire_watershed_mesh(
         pour_point_lonlat=tuple(pour_point),
         outlet_lonlat=outlet,
         provenance="delineated",
-        meta={"mesh_stats": stats, "points_lonlat": points_ll},
+        meta={"mesh_stats": stats, "points_lonlat": points_ll,
+              "dem_notes": dem_notes},
     )
 
 
@@ -446,19 +486,124 @@ def use_supplied_mesh(
 # --------------------------------------------------------------------------- #
 # Lifted raster/geometry/SELAFIN helpers (sandbox parity; live).
 # --------------------------------------------------------------------------- #
-def _resolve_dem(rundir: Path, bbox: Any, dem_uri: str | None) -> Path:
-    """Local DEM path (reuse a supplied ``dem_uri`` else fetch 3DEP 10 m)."""
+def _delineate_catchment(
+    rundir: Path,
+    bbox: Any,
+    pour_point: tuple[float, float],
+    dem_uri: str | None,
+    *,
+    snap_search_cells: int = _OUTLET_SNAP_SEARCH_CELLS,
+) -> tuple[Any, tuple[float, float], float, int]:
+    """Robust pysheds catchment upstream of ``pour_point`` -> (polygon, outlet, area_km2, cells).
+
+    Reuses the shared pysheds plumbing (``_stage_dem`` -> Copernicus GLO-30 unless
+    ``dem_uri`` is supplied; ``_condition_dem`` -> fdir/accumulation) but does the
+    outlet snap + catchment IN-MODULE to avoid the shared ``delineate_watershed``
+    tool's fragility: its snap works in coordinate space and, on certain grid
+    alignments, ``grid.catchment(xytype="coordinate")`` maps an exact outlet to a
+    NEIGHBOUR cell -> a 1-cell sliver instead of the real basin. Here the outlet is
+    snapped to the MAX-accumulation cell in a small window (guaranteeing the main
+    channel) and the catchment is traced in INDEX space (integer col/row), which is
+    alignment-invariant (verified: 33.7-34.0k cells across exact/round2/round3/round4
+    box quantizations for the Coweeta outlet, vs 1-14 cells the coordinate path
+    returns). The polygon is EPSG:4326."""
+    import numpy as np
+    from rasterio import features as rio_features
+    from shapely.geometry import shape
+    from shapely.ops import unary_union
+
+    from trid3nt_server.agent.tools.processing._hydrology_common import (
+        _condition_dem,
+        _stage_dem,
+        _validate_bbox,
+    )
+
+    q_bbox = _validate_bbox(tuple(bbox))
+    dem_path = _stage_dem(q_bbox, dem_uri, str(rundir), [])
+    grid, fdir, acc = _condition_dem(dem_path)
+    acc = np.asarray(acc)
+    affine = grid.affine
+
+    col_f, row_f = ~affine * (float(pour_point[0]), float(pour_point[1]))
+    r0, c0 = int(row_f), int(col_f)
+    R = int(snap_search_cells)
+    rmin, rmax = max(0, r0 - R), min(acc.shape[0], r0 + R + 1)
+    cmin, cmax = max(0, c0 - R), min(acc.shape[1], c0 + R + 1)
+    if rmin >= rmax or cmin >= cmax:
+        raise MeshAcquisitionError(
+            "TELEMAC_ROG_POUR_POINT_OFF_DEM",
+            f"pour point {tuple(pour_point)} falls outside the DEM window "
+            f"{q_bbox}; supply a bbox/pour point inside the analysis AOI.")
+    win = acc[rmin:rmax, cmin:cmax]
+    di, dj = np.unravel_index(int(np.argmax(win)), win.shape)
+    rr, cc = rmin + int(di), cmin + int(dj)
+    x_snap, y_snap = affine * (cc + 0.5, rr + 0.5)
+
+    catch = grid.catchment(
+        x=cc, y=rr, fdir=fdir, xytype="index", nodata_out=np.bool_(False))
+    mask = np.asarray(catch, dtype=bool)
+    cell_count = int(mask.sum())
+    geoms = [
+        shape(g)
+        for g, v in rio_features.shapes(
+            mask.astype("uint8"), mask=mask, transform=affine)
+        if v == 1
+    ]
+    catch_geom = unary_union(geoms) if geoms else None
+    area_km2 = _polygon_area_km2(catch_geom) if catch_geom is not None else 0.0
+    return catch_geom, (float(x_snap), float(y_snap)), float(area_km2), cell_count
+
+
+def _resolve_bare_earth_dem(
+    rundir: Path,
+    bbox: Any,
+    dem_uri: str | None,
+    *,
+    resolution_m: int,
+    filename: str,
+    notes: list[str] | None = None,
+) -> Path:
+    """Local BARE-EARTH DEM path for the mesh BED (canopy-free node elevations).
+
+    Pins the mesh bed to USGS 3DEP bare-earth (source="3dep") within CONUS: a DSM
+    (Copernicus GLO-30 includes forest CANOPY) inflates node elevations under
+    tree cover, so it is not the bed default. The bed is sampled at the mesh
+    nodes with an on-read CRS transform, so 3DEP's native projected grid is fine
+    here (no reprojection -- unlike D8 delineation, which needs a lon/lat DEM and
+    stays on the natively-geographic Copernicus). If 3DEP is unavailable for the
+    AOI the cross-dataset fallback to Copernicus is LOUD (a logged warning + a
+    typed note appended to ``notes`` for the envelope), per the data-source
+    fallback norm -- never a silent surface-model swap. A caller-supplied
+    ``dem_uri`` (already bare-earth by contract) is honored."""
     if dem_uri and Path(dem_uri).exists():
         return Path(dem_uri)
     from trid3nt_server.agent.tools import TOOL_REGISTRY
     from trid3nt_server.agent.tools.cache import read_object_bytes_s3
 
-    layer = TOOL_REGISTRY["fetch_dem"].fn(
-        bbox=tuple(bbox), source="3dep", resolution_m=10)
-    dst = rundir / "dem.tif"
+    try:
+        layer = TOOL_REGISTRY["fetch_dem"].fn(
+            bbox=tuple(bbox), source="3dep", resolution_m=int(resolution_m))
+        if notes is not None:
+            notes.append(
+                f"mesh bed DEM: USGS 3DEP bare-earth ({int(resolution_m)} m).")
+    except Exception as exc:  # noqa: BLE001 -- LOUD cross-dataset fallback
+        logger.warning(
+            "rog mesh: USGS 3DEP bare-earth DEM unavailable for bbox=%s (%s); "
+            "falling back to Copernicus GLO-30 -- a DSM that INCLUDES forest "
+            "canopy, which inflates bed elevations under tree cover",
+            tuple(bbox), exc)
+        layer = TOOL_REGISTRY["fetch_copernicus_dem"].fn(bbox=tuple(bbox))
+        if notes is not None:
+            notes.append(
+                "mesh bed DEM CROSS-DATASET FALLBACK: USGS 3DEP bare-earth was "
+                "unavailable for this AOI; used Copernicus GLO-30 instead. That "
+                "is a SURFACE model (canopy-inclusive), so bed elevations under "
+                "forest may be biased high.")
+    uri = layer.uri if hasattr(layer, "uri") else layer["uri"]
+    dst = rundir / filename
     dst.write_bytes(
-        read_object_bytes_s3(layer.uri) if str(layer.uri).startswith("s3://")
-        else Path(layer.uri).read_bytes())
+        read_object_bytes_s3(uri) if str(uri).startswith("s3://")
+        else Path(uri).read_bytes())
     return dst
 
 

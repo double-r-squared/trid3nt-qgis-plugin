@@ -28,7 +28,9 @@ from trid3nt_server.agent.workflows.telemac.rain_on_grid.mesh_acquisition import
     catchment_exterior_and_river_coords,
     reproject_nodes_to_utm,
     use_supplied_mesh,
+    validate_catchment_not_degenerate,
     _ipobo_from_cells,
+    _resolve_bare_earth_dem,
     _write_bottom_selafin,
 )
 
@@ -213,3 +215,156 @@ def test_ipobo_all_boundary_for_single_triangle():
     # a lone triangle: every edge is a boundary edge, so all 3 nodes number 1..3.
     ipobo = _ipobo_from_cells(3, np.array([[0, 1, 2]]))
     assert sorted(ipobo.tolist()) == [1, 2, 3]
+
+
+# --------------------------------------------------------------------------- #
+# Degenerate-catchment guard (bug 1: the 20-cell sliver must fail LOUD).
+# --------------------------------------------------------------------------- #
+def test_validate_catchment_not_degenerate_raises():
+    # the ADR 0196 live bug: a town bbox clipped Coweeta to a 20-cell sliver.
+    with pytest.raises(MeshAcquisitionError) as ei:
+        validate_catchment_not_degenerate(20, 0.018, (-83.40402, 35.05746))
+    assert ei.value.error_code == "TELEMAC_ROG_CATCHMENT_DEGENERATE"
+    # the message must name the AOI / pour-point mismatch, not just fail.
+    assert "pour point" in str(ei.value).lower()
+
+
+def test_validate_catchment_not_degenerate_ok():
+    # a real catchment (thousands of cells) passes silently.
+    validate_catchment_not_degenerate(4854, 28.7, (-83.40402, 35.05746))
+
+
+# --------------------------------------------------------------------------- #
+# Bare-earth DEM pin + LOUD cross-dataset fallback (bug 2).
+# --------------------------------------------------------------------------- #
+def test_resolve_bare_earth_dem_pins_3dep(tmp_path, monkeypatch):
+    """The mesh BED DEM must be requested from 3DEP bare-earth, never the
+    Copernicus DSM (canopy inflates node elevations under tree cover)."""
+    import types
+
+    from trid3nt_server.agent.tools import TOOL_REGISTRY
+
+    src_dem = tmp_path / "src_dem.tif"
+    src_dem.write_bytes(b"GTIFF-bare-earth")
+    seen: dict = {}
+
+    def fake_fetch_dem(**kwargs):
+        seen.update(kwargs)
+        return types.SimpleNamespace(uri=str(src_dem))
+
+    monkeypatch.setitem(
+        TOOL_REGISTRY, "fetch_dem", types.SimpleNamespace(fn=fake_fetch_dem))
+
+    notes: list[str] = []
+    out = _resolve_bare_earth_dem(
+        tmp_path, (-83.47, 35.02, -83.36, 35.10), None,
+        resolution_m=10, filename="dem_bed.tif", notes=notes)
+    assert out.read_bytes() == b"GTIFF-bare-earth"
+    assert seen["source"] == "3dep"          # bare-earth, not copernicus
+    assert seen["resolution_m"] == 10
+    assert any("3DEP bare-earth" in n for n in notes)
+
+
+def test_resolve_bare_earth_dem_loud_fallback(tmp_path, monkeypatch, caplog):
+    """When 3DEP is unavailable the Copernicus swap must be LOUD: a logged
+    warning + a typed note (never a silent surface-model substitution)."""
+    import logging
+    import types
+
+    from trid3nt_server.agent.tools import TOOL_REGISTRY
+
+    cop_dem = tmp_path / "cop_dem.tif"
+    cop_dem.write_bytes(b"GTIFF-copernicus-dsm")
+
+    def fetch_dem_down(**kwargs):
+        raise RuntimeError("USGS 3DEP DEM fetch failed (service outage)")
+
+    def fetch_copernicus(**kwargs):
+        return types.SimpleNamespace(uri=str(cop_dem))
+
+    monkeypatch.setitem(
+        TOOL_REGISTRY, "fetch_dem", types.SimpleNamespace(fn=fetch_dem_down))
+    monkeypatch.setitem(
+        TOOL_REGISTRY, "fetch_copernicus_dem",
+        types.SimpleNamespace(fn=fetch_copernicus))
+
+    notes: list[str] = []
+    with caplog.at_level(logging.WARNING):
+        out = _resolve_bare_earth_dem(
+            tmp_path, (-83.47, 35.02, -83.36, 35.10), None,
+            resolution_m=10, filename="dem_bed.tif", notes=notes)
+    assert out.read_bytes() == b"GTIFF-copernicus-dsm"
+    assert any("CROSS-DATASET FALLBACK" in n for n in notes)
+    assert any("Copernicus" in r.message for r in caplog.records)
+
+
+def test_resolve_bare_earth_dem_honors_supplied_uri(tmp_path):
+    """A caller-supplied dem_uri (bare-earth by contract) is used as-is."""
+    supplied = tmp_path / "user_dem.tif"
+    supplied.write_bytes(b"user")
+    out = _resolve_bare_earth_dem(
+        tmp_path, (-83.47, 35.02, -83.36, 35.10), str(supplied),
+        resolution_m=10, filename="dem_bed.tif", notes=[])
+    assert out == supplied
+
+
+def test_delineate_catchment_index_space_on_synthetic_dem(tmp_path):
+    """_delineate_catchment traces the catchment in INDEX space off the
+    max-accumulation cell, so a convergent bowl draining to its centre yields a
+    large, non-degenerate basin (the coordinate-space path in the shared tool
+    collapses to a sliver on some alignments; index space does not)."""
+    import numpy as np
+    import rasterio
+    from rasterio.transform import from_origin
+
+    from trid3nt_server.agent.workflows.telemac.rain_on_grid.mesh_acquisition import (
+        _delineate_catchment,
+    )
+
+    # a 40x40 paraboloid bowl, lowest at the centre: every cell drains inward, so
+    # the centre outlet captures ~the whole grid (>> the degenerate threshold).
+    n = 40
+    rows, cols = np.mgrid[0:n, 0:n]
+    oi = oj = n // 2
+    z = ((rows - oi) ** 2 + (cols - oj) ** 2 + 1.0).astype("float32")
+    dem = tmp_path / "bowl.tif"
+    dx = 0.001
+    top_lat = 35.10
+    left_lon = -83.50
+    with rasterio.open(
+        dem, "w", driver="GTiff", height=n, width=n, count=1, dtype="float32",
+        crs="EPSG:4326", nodata=-9999.0,
+        transform=from_origin(left_lon, top_lat, dx, dx)) as ds:
+        ds.write(z, 1)
+
+    # pour point at the bowl centre (the lowest / highest-accumulation cell).
+    pour = (left_lon + oj * dx, top_lat - oi * dx)
+    bbox = (left_lon, top_lat - n * dx, left_lon + n * dx, top_lat)
+    catch, outlet, area_km2, cells = _delineate_catchment(
+        tmp_path, bbox, pour, str(dem))
+    assert cells >= 100          # a broad convergent basin, not a sliver
+    assert area_km2 > 0.0
+    assert catch is not None and not catch.is_empty
+
+
+def test_acquire_mesh_guards_degenerate_catchment(tmp_path, monkeypatch):
+    """acquire_watershed_mesh must fail LOUD, before any meshing, when the
+    delineated catchment is a degenerate sliver (the ADR 0196 live failure)."""
+    from shapely.geometry import Point
+
+    from trid3nt_server.agent.workflows.telemac.rain_on_grid import (
+        mesh_acquisition as MA,
+    )
+
+    def fake_delineate(rundir, bbox, pour_point, dem_uri, **_kw):
+        # (polygon, outlet, area_km2, cell_count) -- a 20-cell sliver.
+        return Point(pour_point).buffer(0.001), tuple(pour_point), 0.018, 20
+
+    monkeypatch.setattr(MA, "_delineate_catchment", fake_delineate, raising=True)
+
+    with pytest.raises(MeshAcquisitionError) as ei:
+        MA.acquire_watershed_mesh(
+            pour_point=(-83.40402, 35.05746),
+            bbox=(-83.47, 35.02, -83.36, 35.10),
+            output_dir=str(tmp_path))
+    assert ei.value.error_code == "TELEMAC_ROG_CATCHMENT_DEGENERATE"

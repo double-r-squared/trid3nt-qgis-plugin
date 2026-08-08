@@ -1,10 +1,10 @@
 # ADR 0196 - TELEMAC-2D rain-on-grid build wave (mesh-acquisition step + runoff-path selector; worker/template/live-proof spec)
 
 Date: 2026-08-08
-Status: Accepted (offline substrate landed + tested green; the worker RoG deck
-pipeline, parser bump, template registration, image rebuild and live Coweeta
-proof are a bounded continuation, specified here, deferred for the same
-worker-image / hours-class reasons ADR 0195 recorded)
+Status: LANDED (2026-08-08) -- C1-C4 all complete and live-verified. The offline
+substrate (Decisions 1-2) landed first; the bounded continuation (C1 worker RoG
+deck + C2 parser bump + image rebuild + C3 template registration + C4 live
+Coweeta proof) landed in the continuation wave. See "Continuation landed" below.
 Source: Godara, Bruland and Alfredsen 2024, Front. Water 6:1384205 (NATE-provided).
 Builds on: ADR 0195 (RoG foundation), ADR 0193 (pysheds watershed mesh),
 ADR 0190 (RAIN OR EVAPORATION deck seam), ADR 0158 (strict manifest parser).
@@ -70,7 +70,57 @@ The composer calls this, records `runoff_path` + `runoff_path_reason` in the
 envelope, and threads `runoff_path` into the worker manifest so the deck builder
 authors the matching branch. Offline-tested (4 cases).
 
-## Bounded continuation (specified; NOT yet landed) -- reasons per item
+## Continuation LANDED (2026-08-08) -- C1-C4
+
+All four continuation items landed and were live-verified through the rebuilt
+image. Grounding note: the deck was authored against the ACTUAL installed
+v9.0.0 sources (runoff_scs_cn.f, hydromap.f, friction_read.f/friction_user.f,
+telemac2d.dico), not guessed.
+
+- C1 worker RoG pipeline: `services/workers/telemac/rog_build.py` +
+  `mode="rain_on_grid"` dispatch in `entrypoint.py::run_rog_pipeline`. Consumes
+  the staged watershed SELAFIN, rebuilds the boundary + rank IPOBO, marks the
+  ring nodes nearest the pour point a FREE exit (KSORT=4, NO fixed stage; the
+  rain-fed interior drains out there) with walls (KLOG=2) elsewhere. Writes the
+  per-node CN2 scatter (FORMATTED DATA FILE 2, read by HYDROMAP) + distributed
+  Manning as native friction ZONES (FRICTION DATA FILE zone laws + ZONES FILE
+  node->zone via friction_user KFROPT) + the deck (RAIN OR EVAPORATION +
+  RAINFALL-RUNOFF MODEL=1 + AMC + OPTION FOR INITIAL ABSTRACTION RATIO for the
+  native path; MODEL=0 net-rain for preprocessing). Extracts the outlet
+  hydrograph (unit discharge integrated across the outlet edges per frame),
+  max-depth/velocity fields, and the WATER VOLUME continuity from the listing.
+  NOTE (installed-build limit): runoff_scs_cn.f hardcodes RAINDEF=1, so the
+  native path is CONSTANT design-storm intensity; a true time-varying MRMS
+  hyetograph needs a recompiled user_rain.f (the preprocessing path collapses
+  the excess series to a mean for the constant-rain engine). Offline-first: a
+  synthetic tilted-plane catchment reaches CORRECT END with continuity -4e-16
+  and a monotone AMC knob (dry 1.26 / normal 4.99 / wet 8.28 m3/s).
+- C2 ReachConfig RoG fields + parser bump telemac-reach-2 -> telemac-reach-3
+  (unknown-field rejection test names v3). Image rebuilt (id 4835445811db,
+  `docker history` GRACE-2 refs = 0); parser v3 accept/reject + a solve verified
+  THROUGH the baked image. 16 worker unit tests green.
+- C3 template `telemac_rain_on_grid` (engine=telemac, tier=template,
+  cacheable=False, ttl live-no-cache, source workflow_dispatch): composes
+  acquire_watershed_mesh + fetch_landcover node CN/Manning + select_runoff_path +
+  the run_solver seam + postprocess_telemac_wse (peak-depth COG). corpus.yaml +
+  categories mapping + 6 offline tests + door-dissolution expected-set bump (31
+  -> 32) + retrieve_visible_tools surfaces it. Showcase seeded (natural prompt
+  "Coweeta Creek watershed North Carolina"); verified !run line:
+  `!run telemac_rain_on_grid(location='Coweeta Creek watershed North Carolina', antecedent_moisture='normal', design_storm_mm_per_hr=25.0, storm_duration_hr=6.0)`
+- C4 live Coweeta proof (through the rebuilt image, via the direct driver
+  scripts/sandbox/telemac/rog_coweeta_live.py -- the SAME worker path the
+  template dispatches): delineated Coweeta Creek NC catchment (28.72 km2, 4854
+  nodes / 9521 tris, 3DEP bed, NLCD-distributed CN 75-90 + Manning 0.05-0.20),
+  AMC II (peak 45.5 m3/s, runoff 162x10^3 m3, maxH 6.95 m, continuity 1.3e-15)
+  vs AMC I dry (peak 6.1 m3/s, runoff 9.6x10^3 m3, maxH 1.21 m). Both CORRECT END
+  in ~45 s wall. Proofs (EPSG:3857, both tiles + data projected): docs/proof/
+  templates/telemac_rain_on_grid.png (peak depth self-organizing into the real
+  dendritic drainage over ESRI + red catchment), _chart.png (dock hydrograph,
+  AMC II vs AMC I overlay + NSE/R2 slot), _mesh.png (TIN wireframe). Template
+  smoke, NOT the replication experiment (no calibration; NATE has not signed off
+  the methodology).
+
+## Bounded continuation (original spec; now LANDED per above) -- reasons per item
 
 ### C1 - worker RoG pipeline + deck authoring (needs image rebuild + live smoke)
 A new manifest mode `mode="rain_on_grid"` in `services/workers/telemac/entrypoint.py`

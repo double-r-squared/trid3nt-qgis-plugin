@@ -151,8 +151,10 @@ class TelemacManifestUnknownFieldsError(ValueError):
 
 
 #: PARSER VERSION -- bump on a ReachConfig field addition/rename/retirement.
-#: Named in the strict-field error (ADR 0158).
-_PARSER_VERSION = "telemac-reach-2"
+#: Named in the strict-field error (ADR 0158). Bumped to -3 for the ADR 0196
+#: rain-on-grid fields (mode/watershed_slf/runoff_path/curve_number/
+#: amc_condition/rain_*/node_*_file/outlet_lonlat/observed_gauge_id).
+_PARSER_VERSION = "telemac-reach-3"
 
 
 def _reach_config(data_dir: Path, reach_overrides: dict[str, Any]) -> Any:
@@ -732,6 +734,186 @@ def run_pipeline(
     return metrics
 
 
+def run_rog_pipeline(
+    data_dir: Path,
+    reach_overrides: dict[str, Any],
+    run_id: str | None,
+) -> dict[str, Any]:
+    """Run the rain-on-grid pipeline (ADR 0196) in ``data_dir``.
+
+    Consumes the watershed SELAFIN + per-node CN2/Manning fields the agent-side
+    composer staged into the rundir (mesh_acquisition + fetch_landcover), builds
+    the boundary/outlet, authors the RoG deck (distributed CN infiltration +
+    per-NLCD Manning + free-exit outlet), solves, and extracts the outlet
+    hydrograph + max fields + mass balance. The result COGs are produced from
+    max_depth/max_velocity by the agent-side postprocess (this worker emits the
+    node fields into rog_geometry.slf's sibling arrays via the metrics + a
+    max-field SELAFIN)."""
+    import numpy as np  # noqa: WPS433
+    import rog_build as R  # noqa: WPS433 -- RoG worker payload
+
+    t0 = time.time()
+    cfg = _reach_config(data_dir, reach_overrides)
+    slf_name = str(getattr(cfg, "watershed_slf", "") or R.WATERSHED_SLF)
+    watershed_slf = str(data_dir / slf_name)
+    LOG.info("rog: watershed=%s runoff_path=%s amc=%s intensity=%.2f mm/h",
+             slf_name, cfg.runoff_path, cfg.amc_condition,
+             float(getattr(cfg, "rain_intensity_mm_per_hr", 0.0)))
+
+    # 1. read the staged watershed mesh + boundary + outlet.
+    m = R.read_watershed_mesh(watershed_slf)
+    b = R.build_boundary(m["X"], m["Y"], m["ikle"])
+    outlet_ll = getattr(cfg, "outlet_lonlat", None)
+    if outlet_ll:
+        # project the pour point lon/lat into the mesh UTM frame.
+        epsg = int(reach_overrides.get("utm_epsg") or 0) or _guess_utm_epsg(m["X"], m["Y"], outlet_ll)
+        from pyproj import Transformer  # noqa: WPS433
+        tr = Transformer.from_crs(4326, epsg, always_xy=True)
+        ox, oy = tr.transform(float(outlet_ll[0]), float(outlet_ll[1]))
+        outlet_xy = (float(ox), float(oy))
+    else:
+        # no pour point given: lowest-bed boundary node is the outlet.
+        ring = b["ring"]
+        outlet_xy = (float(m["X"][ring][np.argmin(m["bed"][ring])]),
+                     float(m["Y"][ring][np.argmin(m["bed"][ring])]))
+    bc = R.classify_outlet(m["X"], m["Y"], b["ring"], outlet_xy,
+                           n_outlet_nodes=int(getattr(cfg, "n_outlet_nodes", 6)))
+
+    # 2. per-node CN2 + Manning (staged by the composer; else uniform fallbacks).
+    cn2 = _read_node_field(data_dir, getattr(cfg, "node_cn2_file", ""), m["npoin"],
+                           default=float(getattr(cfg, "curve_number", None) or 75.0))
+    manning = _read_node_field(data_dir, getattr(cfg, "node_manning_file", ""),
+                               m["npoin"], default=0.06)
+    if getattr(cfg, "curve_number", None) is not None:
+        cn2 = np.full(m["npoin"], float(cfg.curve_number))
+
+    # 3. author the input decks.
+    slf = str(data_dir / R.ROG_GEOMETRY_SLF)
+    cli = str(data_dir / R.ROG_CLI)
+    res = str(data_dir / R.ROG_RESULT_SLF)
+    cas = str(data_dir / R.ROG_CAS)
+    cn_map = str(data_dir / R.ROG_CN_MAP)
+    fric = str(data_dir / R.ROG_FRICTION_COF)
+    zones = str(data_dir / R.ROG_ZONES_FILE)
+    R.write_rog_slf(slf, m["X"], m["Y"], b["ikle"], m["bed"],
+                    b["ipob"], b["ring"], b["nptfr"])
+    R.write_rog_cli(cli, b["ring"], bc)
+    R.write_cn_map(cn_map, m["X"], m["Y"], cn2)
+    fric_stats = R.write_friction_files(fric, zones, manning)
+
+    rain_mm_per_day = float(getattr(cfg, "rain_intensity_mm_per_hr", 25.0)) * 24.0
+    R.author_rog_deck(
+        cfg, slf=slf, cli=cli, res=res, cas_path=cas, cn_map=cn_map,
+        friction_cof=fric, zones_file=zones, rain_mm_per_day=rain_mm_per_day,
+        runoff_path=str(getattr(cfg, "runoff_path", "native")))
+
+    # 4. solve (hours-class for a real catchment; the supervisor sets the timeout).
+    solve_timeout = float(os.environ.get("TRID3NT_TELEMAC_SOLVE_TIMEOUT", "86400"))
+    ok, out = R.run_solver(cas, res, str(data_dir), timeout=solve_timeout)
+    (data_dir / "full_listing.log").write_text(out, encoding="utf-8")
+    LOG.info("rog solve CORRECT_END=%s", ok)
+
+    metrics: dict[str, Any] = {
+        "status": "ok" if ok else "error",
+        "correct_end": bool(ok),
+        "mode": "rain_on_grid",
+        "run_id": run_id,
+        "result_slf": R.ROG_RESULT_SLF,
+        "geometry_slf": R.ROG_GEOMETRY_SLF,
+        "cli": R.ROG_CLI,
+        "cas": R.ROG_CAS,
+        "reach_name": cfg.name,
+        "runoff_path": str(getattr(cfg, "runoff_path", "native")),
+        "amc_condition": int(getattr(cfg, "amc_condition", 2)),
+        "rain_intensity_mm_per_hr": float(getattr(cfg, "rain_intensity_mm_per_hr", 25.0)),
+        "npoin": m["npoin"],
+        "nelem": m["nelem"],
+        "nptfr": b["nptfr"],
+        "n_outlet_nodes": bc["n_outlet_nodes"],
+        "outlet_dist_min_m": bc["outlet_dist_min_m"],
+        "friction_zones": fric_stats["n_zones"],
+        "wall_s": round(time.time() - t0, 1),
+    }
+    if not ok:
+        metrics["error"] = "TELEMAC did not reach CORRECT END OF RUN"
+        metrics["listing_tail"] = "\n".join(out.splitlines()[-60:])
+        return metrics
+
+    # 5. outlet hydrograph + max fields + mass balance.
+    ext = R.extract_rog_outputs(
+        res, out, X=m["X"], Y=m["Y"], ring=b["ring"],
+        outlet_nodes=bc["outlet_nodes"])
+    max_depth = ext.pop("max_depth_m")
+    max_vel = ext.pop("max_velocity_ms")
+    # write the max fields as a 2-variable SELAFIN so the postprocess renders the
+    # depth/velocity COGs from a real geometry (same mesh, static frame).
+    _write_max_fields_slf(str(data_dir / "rog_max_fields.slf"),
+                          m["X"], m["Y"], b["ikle"], b["ipob"], b["ring"],
+                          b["nptfr"], max_depth, max_vel)
+    (data_dir / R.ROG_HYDROGRAPH).write_text(
+        json.dumps(ext["outlet_hydrograph"]), encoding="utf-8")
+    ext.pop("outlet_hydrograph", None)
+    metrics.update(ext)
+    metrics["max_fields_slf"] = "rog_max_fields.slf"
+    metrics["outlet_hydrograph_json"] = R.ROG_HYDROGRAPH
+    LOG.info("rog outputs: peak_Q=%.3f m3/s vol=%.1f m3 maxH=%.3f m frames=%d",
+             metrics.get("peak_discharge_m3s", 0.0),
+             metrics.get("outflow_volume_m3", 0.0),
+             metrics.get("max_depth_peak_m", 0.0),
+             metrics.get("n_frames", 0))
+    return metrics
+
+
+def _guess_utm_epsg(X: Any, Y: Any, outlet_ll: Any) -> int:
+    """UTM zone EPSG from the pour-point lon/lat (mesh is already in that zone)."""
+    lon, lat = float(outlet_ll[0]), float(outlet_ll[1])
+    zone = int((lon + 180.0) // 6.0) + 1
+    return (32600 if lat >= 0 else 32700) + zone
+
+
+def _read_node_field(data_dir: Path, name: str, npoin: int, *, default: float) -> Any:
+    """Read a one-value-per-line per-node field; fall back to a uniform default."""
+    import numpy as np  # noqa: WPS433
+
+    if name:
+        p = data_dir / name
+        if p.exists() and p.stat().st_size > 0:
+            vals = np.array([float(x) for x in p.read_text().split()], dtype=float)
+            if vals.shape[0] == npoin:
+                return vals
+            LOG.warning("rog node field %s has %d values (npoin=%d); using default",
+                        name, vals.shape[0], npoin)
+    return np.full(npoin, float(default), dtype=float)
+
+
+def _write_max_fields_slf(path: str, X: Any, Y: Any, ikle: Any, ipob: Any,
+                          ring: Any, nptfr: int, max_depth: Any,
+                          max_vel: Any) -> str:
+    """Write MAX WATER DEPTH + MAX VELOCITY as a single-frame SELAFIN."""
+    import numpy as np  # noqa: WPS433
+    from data_manip.extraction.telemac_file import TelemacFile
+
+    if os.path.exists(path):
+        os.remove(path)
+    tf = TelemacFile(path, access="w")
+    tf.add_header("TRID3NT ROG MAX FIELDS", date=np.array([2026, 8, 8, 0, 0, 0]))
+    tf.add_mesh(np.asarray(X, float), np.asarray(Y, float),
+                np.asarray(ikle, np.int64),
+                z=np.asarray(max_depth, float))
+    tf._ipob3 = np.asarray(ipob, dtype=np.int32)
+    tf._ipob2 = tf._ipob3
+    tf._nptfr = int(nptfr)
+    tf._nbor = (np.asarray(ring, dtype=np.int32) + 1)
+    tf._knolg = np.arange(1, int(np.asarray(X).shape[0]) + 1, dtype=np.int32)
+    tf.add_variable("MAXIMUM DEPTH   ", "M               ")
+    tf.add_variable("MAXIMUM VELOCITY", "M/S             ")
+    tf.add_data_value("MAXIMUM DEPTH   ", 0, np.asarray(max_depth, float))
+    tf.add_data_value("MAXIMUM VELOCITY", 0, np.asarray(max_vel, float))
+    tf.write()
+    tf.close()
+    return path
+
+
 def _build_argv_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(
         prog="trid3nt-telemac-entrypoint",
@@ -790,8 +972,15 @@ def main(argv: list[str] | None = None) -> int:
 
     import telemac_river_dye_build as B  # noqa: WPS433 -- for the typed banks gate
 
+    # ADR 0196: mode="rain_on_grid" routes to the RoG pipeline (rog_build); every
+    # other value keeps the historical channel-dye pipeline byte-identical.
+    mode = str((reach_overrides or {}).get("mode", "river_dye") or "river_dye").lower()
+
     try:
-        metrics = run_pipeline(data_dir, reach_overrides, run_id, mesh_only=mesh_only)
+        if mode == "rain_on_grid":
+            metrics = run_rog_pipeline(data_dir, reach_overrides, run_id)
+        else:
+            metrics = run_pipeline(data_dir, reach_overrides, run_id, mesh_only=mesh_only)
     except B.BanksUnavailableError as exc:  # nhd_area path, no NHDArea coverage
         LOG.warning("telemac banks unavailable: %s", exc)
         _write_metrics(data_dir, {

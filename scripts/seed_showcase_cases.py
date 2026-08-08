@@ -220,6 +220,18 @@ SHOWCASE: list[Showcase] = [
     # -- TELEMAC water quality / transport -----------------------------------
     Showcase("telemac_do_sag", {"location": "Sacramento River near Colusa, California"},
              "ADR 0169 TELEMAC-WAQTEL DO-sag, real NHDPlus reach nr Colusa CA", 600),
+    Showcase("telemac_rain_on_grid",
+             {"location": "Otto, North Carolina",
+              "pour_point": (-83.40402, 35.05746),
+              "antecedent_moisture": "normal", "design_storm_mm_per_hr": 25.0,
+              "storm_duration_hr": 6.0},
+             "ADR 0196 TELEMAC rain-on-grid: an SCS-CN design storm on the "
+             "delineated Coweeta Creek NC catchment (steep gauged US replication "
+             "site). NLCD-distributed CN + Manning; native RAINFALL-RUNOFF MODEL=1 "
+             "with the antecedent-moisture (dry/normal/wet) knob as the dominant "
+             "infiltration lever; outlet hydrograph + peak flood-depth COG. Live "
+             "V&V: 4854-node catchment, AMC II peak 45.5 vs AMC I (dry) 6.1 m3/s.",
+             1800),
     Showcase("telemac_river_dye",
              {"location": "Eel River near Scotia, California",
               "wind_speed_mps": 18.0, "wind_direction_deg": 270.0},
