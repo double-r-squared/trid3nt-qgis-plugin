@@ -774,6 +774,14 @@ from ..workflows.openquake.psha.psha import openquake_psha as _openquake_psha  #
 # screens over fetched terrain covariates.
 from ..workflows.openquake.scenario_gmf.scenario_gmf import openquake_scenario_gmf as _openquake_scenario_gmf  # noqa: E402,F401
 from ..workflows.openquake.secondary_perils.secondary_perils import openquake_secondary_perils as _openquake_secondary_perils  # noqa: E402,F401
+# OpenQuake disaggregation + event-based-PSHA TEMPLATES (engine="openquake",
+# tier="template"; ADR 0182). Both run the installed oq engine locally as a
+# composer subprocess (the offline lane): disaggregation decomposes a site's
+# hazard into the dominant magnitude-distance-epsilon scenario; event_based
+# samples a synthetic earthquake catalogue, maps the event-based hazard, and
+# cross-checks the back-derived curve against classical PSHA.
+from ..workflows.openquake.disaggregation.disaggregation import openquake_disaggregation as _openquake_disaggregation  # noqa: E402,F401
+from ..workflows.openquake.event_based.event_based import openquake_event_based as _openquake_event_based  # noqa: E402,F401
 # elmfire_fire_spread TEMPLATE (engine="elmfire", tier="template"), one
 # folder under workflows/elmfire/fire_spread/; EXCLUDED from the default
 # retrieval pool, surfaced only by the run_elmfire door's gate expansion. The

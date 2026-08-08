@@ -77,6 +77,8 @@ EXPECTED_TEMPLATES = {
     "openquake_psha",
     "openquake_scenario_gmf",  # OpenQuake scenario GMF (ADR 0164): single-rupture correlated ground-motion field, mean + realization spread
     "openquake_secondary_perils",  # OpenQuake secondary-perils (ADR 0164): scenario-GMF-driven liquefaction (Zhu 2015) + Newmark landslide screening
+    "openquake_disaggregation",  # OpenQuake disaggregation (ADR 0182): which magnitude-distance-epsilon scenario dominates a site's hazard (M-R contribution matrix)
+    "openquake_event_based",  # OpenQuake event-based/stochastic PSHA (ADR 0182): synthetic catalogue + event-based hazard map + classical convergence check
     "pelicun_damage_assessment",
     "pelicun_closed_form_validation",  # pelicun CAND-S: Monte-Carlo vs analytic closed form (damage-state prob + loss-function identity)
     "pelicun_mixed_fragility_loss_assessment",  # pelicun CAND-S: mixed fragility+loss-function assessment + EDP correlation spread

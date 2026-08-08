@@ -62,6 +62,8 @@ __all__ = [
     "SeismicHazardLayerURI",
     "ScenarioGmfLayerURI",
     "SecondaryPerilLayerURI",
+    "DisaggregationLayerURI",
+    "EventBasedHazardLayerURI",
 ]
 
 
@@ -333,6 +335,91 @@ class ScenarioGmfLayerURI(LayerURI):
     n_sites: int = Field(default=0, ge=0)
     rupture_kind: Literal["real-fault", "synthetic"] = "synthetic"
     rupture_note: str = ""
+
+
+class DisaggregationLayerURI(LayerURI):
+    """A ``LayerURI`` for a seismic-hazard disaggregation, plus its narration
+    scalars.
+
+    The disaggregation calculator decomposes the hazard at a single site (the AOI
+    centroid) at a target probability of exceedance into contributions by
+    magnitude, distance, and epsilon (the GMPE residual in standard deviations) -
+    the "which earthquake scenario dominates my site's hazard" answer. The layer
+    surfaces the disaggregation SITE as a point marker (``layer_type`` =
+    ``"vector"``); the magnitude-distance contribution matrix is the paired chart.
+    All scalars are real engine output (invariant 1 - never invented):
+
+        imt: the Intensity Measure Type disaggregated (e.g. ``"PGA"``).
+        poe: the probability of exceedance disaggregated at (e.g. 0.10).
+        investigation_time_years: the PoE window, years.
+        return_period_years: the implied return period, years.
+        iml_at_poe: the ground-motion level (IMT units) exceeded at ``poe`` over
+            the investigation time - the hazard level being disaggregated (>= 0).
+        dominant_magnitude: the modal (largest-contribution) magnitude bin centre.
+        dominant_distance_km: the modal distance bin centre, km (>= 0).
+        dominant_epsilon: the modal epsilon bin centre (GMPE-residual sigmas).
+        mean_magnitude: contribution-weighted mean magnitude.
+        mean_distance_km: contribution-weighted mean distance, km (>= 0).
+        n_bins: number of populated magnitude-distance-epsilon bins (>= 0).
+        source_model_note: an honest one-line statement of the seismic source the
+            disaggregation ran against (a labelled synthetic demo area source).
+    """
+
+    imt: str = DEFAULT_IMT
+    poe: float = Field(default=DEFAULT_POE, gt=0.0, lt=1.0)
+    investigation_time_years: float = Field(
+        default=DEFAULT_INVESTIGATION_TIME_YEARS, gt=0.0
+    )
+    return_period_years: float = Field(default=0.0, ge=0.0)
+    iml_at_poe: float = Field(default=0.0, ge=0.0)
+    dominant_magnitude: float = Field(default=0.0, ge=0.0)
+    dominant_distance_km: float = Field(default=0.0, ge=0.0)
+    dominant_epsilon: float = 0.0
+    mean_magnitude: float = Field(default=0.0, ge=0.0)
+    mean_distance_km: float = Field(default=0.0, ge=0.0)
+    n_bins: int = Field(default=0, ge=0)
+    source_model_note: str = ""
+
+
+class EventBasedHazardLayerURI(LayerURI):
+    """A ``LayerURI`` for an event-based-PSHA hazard map + its narration scalars.
+
+    The event-based calculator samples ``ses_per_logic_tree_path`` stochastic
+    event sets (a synthetic earthquake catalogue) and computes a ground-motion
+    field per rupture; the hazard curve is then back-derived from the GMFs and a
+    hazard map extracted at the target PoE. This layer carries the event-based
+    hazard-map COG (primary) and the fields the agent cites (invariant 1):
+
+        imt: the Intensity Measure Type the map represents (e.g. ``"PGA"``).
+        poe: the probability of exceedance the map is computed at.
+        investigation_time_years: the PoE window, years.
+        return_period_years: the implied return period, years.
+        max_hazard_value: peak event-based ground-motion across the AOI, IMT units
+            (>= 0).
+        hazard_area_km2: areal footprint above the hazard floor, km^2 (>= 0).
+        n_sites: number of site-grid points (>= 0).
+        ses_per_logic_tree_path: the stochastic-event-set multiplier that sets the
+            synthetic-catalogue length (>= 0).
+        n_ruptures: number of ruptures in the sampled event set (>= 0).
+        n_events: number of events (rupture occurrences) in the catalogue (>= 0).
+        classical_consistency_note: an honest one-line statement of how the
+            event-based hazard curve compares to the classical-PSHA curve at the
+            AOI centroid (the convergence check the paired chart shows).
+    """
+
+    imt: str = DEFAULT_IMT
+    poe: float = Field(default=DEFAULT_POE, gt=0.0, lt=1.0)
+    investigation_time_years: float = Field(
+        default=DEFAULT_INVESTIGATION_TIME_YEARS, gt=0.0
+    )
+    return_period_years: float = Field(default=0.0, ge=0.0)
+    max_hazard_value: float = Field(default=0.0, ge=0.0)
+    hazard_area_km2: float = Field(default=0.0, ge=0.0)
+    n_sites: int = Field(default=0, ge=0)
+    ses_per_logic_tree_path: int = Field(default=0, ge=0)
+    n_ruptures: int = Field(default=0, ge=0)
+    n_events: int = Field(default=0, ge=0)
+    classical_consistency_note: str = ""
 
 
 class SecondaryPerilLayerURI(LayerURI):

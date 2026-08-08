@@ -135,7 +135,7 @@ def parse_hazard_map_csv(text: str) -> tuple[list[tuple[float, float, float]], s
     for i, name in enumerate(cols):
         if i in (lon_idx, lat_idx):
             continue
-        if name in {"depth", "vs30", "z1pt0", "z2pt5"}:
+        if name in {"depth", "vs30", "z1pt0", "z2pt5", "custom_site_id", "site_id"}:
             continue
         val_idx = i
         break

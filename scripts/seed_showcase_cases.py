@@ -118,6 +118,16 @@ SHOWCASE: list[Showcase] = [
              "ADR 0164 scenario GMF, East Bay M6.9 (auto Hayward-fault trace)", 480),
     Showcase("openquake_secondary_perils", {"bbox": _EAST_BAY, "magnitude": 6.9},
              "ADR 0164 secondary perils (liquefaction/landslide), East Bay M6.9", 480),
+    Showcase("openquake_disaggregation", {"bbox": _SF_BAY},
+             "ADR 0182 hazard disaggregation, SF Bay AOI (dominant M-R-eps at 10%/50yr; "
+             "local oq subprocess, ~30s)", 300),
+    Showcase("openquake_event_based",
+             {"bbox": _SF_BAY, "ses_per_logic_tree_path": 300},
+             "ADR 0182 event-based/stochastic PSHA, SF Bay AOI (synthetic catalogue + "
+             "classical convergence check; local oq subprocess)", 480),
+    Showcase("openquake_psha", {"bbox": _SF_BAY, "vs30_compare": 260.0},
+             "ADR 0182 Vs30 site-response A/B fold, SF Bay AOI (rock 760 vs soft 260 m/s "
+             "hazard-curve overlay on the classical map path)", 480),
     # -- ELMFIRE wildfire sensitivity ----------------------------------------
     Showcase("elmfire_live_fuel_moisture_sensitivity", {},
              "ADR 0142 ELMFIRE live-fuel-moisture sensitivity defaults (GR2)", 420),

@@ -153,6 +153,7 @@ async def openquake_psha(
     min_magnitude: float = 5.0,
     max_magnitude: float = 7.5,
     vs30: float | None = None,
+    vs30_compare: float | None = None,
     logic_tree: str = "single",
     secondary_poe: float | None = None,
     uniform_hazard_spectra: bool = False,
@@ -200,6 +201,11 @@ async def openquake_psha(
         min_magnitude/max_magnitude: demo source range, default 5.0/7.5.
         vs30: reference site Vs30 (m/s). Unset -> the generic 760 rock demo
             default (labeled, not site-specific; no Vs30 fetcher yet).
+        vs30_compare: optional SECOND reference Vs30 (m/s) for a site-response
+            A/B. When set, a paired hazard-curve overlay is emitted comparing the
+            run's Vs30 (rock default 760) against this softer/stiffer soil value
+            at the AOI centroid on the same demo source -- the "how does my soil
+            change the hazard" question. None => no comparison (unchanged).
         logic_tree: epistemic uncertainty mode. ``"single"`` (default) = one
             source model + one GMPE (a single hazard estimate). ``"source_models"``
             = two competing weighted source-model interpretations + 2 GMPEs
@@ -318,6 +324,7 @@ async def openquake_psha(
         layer = await model_openquake_psha(
             run_args,
             compute_class=compute_class,
+            vs30_compare=(float(vs30_compare) if vs30_compare is not None else None),
         )
         layer = layer.model_copy(update={"synthetic_inputs": _vs30_prov})
         logger.info(
@@ -1079,12 +1086,139 @@ async def _emit_oq_curve_charts(
 
 
 # --------------------------------------------------------------------------- #
+# Vs30 site-response A/B overlay (row-4 fold): two single-site classical hazard
+# curves on the same demo area source, differing ONLY in reference Vs30 (the
+# run's rock value vs a softer/stiffer comparison soil), overlaid in ONE figure.
+# Runs the installed oq locally (the offline lane, off the loop); best-effort -
+# a failure to build the A/B never fails the primary hazard map.
+# --------------------------------------------------------------------------- #
+async def _emit_vs30_ab_chart(
+    run_args: OpenQuakeRunArgs,
+    *,
+    vs30_rock: float,
+    vs30_compare: float,
+    source_layer_uri: str | None,
+) -> None:
+    """Emit the Vs30 rock-vs-soil hazard-curve A/B overlay (best-effort, no-op safe)."""
+    try:
+        from trid3nt_server.agent.tools.processing.charts_common import (
+            build_chart_payload,
+        )
+        from trid3nt_server.agent.workflows.openquake._local_oq import (
+            aoi_centroid,
+            render_area_source_model_xml,
+            render_classical_point_job_ini,
+            render_trivial_gmpe_logic_tree_xml,
+            render_trivial_source_logic_tree_xml,
+            run_oq_local,
+        )
+
+        bbox = tuple(run_args.bbox)
+        lon, lat = aoi_centroid(bbox)  # type: ignore[arg-type]
+        source_xml = render_area_source_model_xml(
+            bbox, a_value=float(run_args.a_value), b_value=float(run_args.b_value),  # type: ignore[arg-type]
+            min_magnitude=float(run_args.min_magnitude),
+            max_magnitude=float(run_args.max_magnitude),
+        )
+        slt = render_trivial_source_logic_tree_xml()
+        glt = render_trivial_gmpe_logic_tree_xml(str(run_args.gmpe))
+
+        def _curve_for(vs30: float) -> dict[str, list[float]]:
+            files = {
+                "source_model.xml": source_xml,
+                "source_model_logic_tree.xml": slt,
+                "gmpe_logic_tree.xml": glt,
+                "job.ini": render_classical_point_job_ini(
+                    site_lon=lon, site_lat=lat, imt=str(run_args.imt),
+                    investigation_time_years=float(run_args.investigation_time_years),
+                    max_distance_km=float(run_args.max_distance_km),
+                    reference_vs30=float(vs30),
+                    description=f"Vs30 site-response A/B ({vs30:g} m/s)",
+                ),
+            }
+            outdir = run_oq_local(files, label="vs30ab")
+            curves = sorted(outdir.glob("hazard_curve-mean*.csv"))
+            if not curves:
+                return {"imls": [], "poe": []}
+            parsed = parse_hazard_curve_csv(curves[0].read_text(encoding="utf-8"))
+            return {
+                "imls": list(parsed.get("hazard_curve_imls_g") or []),
+                "poe": list(parsed.get("hazard_curve_mean_poe") or []),
+            }
+
+        rock = await asyncio.to_thread(_curve_for, vs30_rock)
+        soil = await asyncio.to_thread(_curve_for, vs30_compare)
+
+        rows: list[dict[str, Any]] = []
+        for label_vs30, curve in (
+            (f"Vs30 {vs30_rock:g} m/s", rock),
+            (f"Vs30 {vs30_compare:g} m/s", soil),
+        ):
+            for x, p in zip(curve.get("imls") or [], curve.get("poe") or []):
+                if float(x) > 0.0 and float(p) > 0.0:
+                    rows.append({"iml": float(x), "poe": float(p), "site": label_vs30})
+        if len({r["site"] for r in rows}) < 2:
+            return
+
+        # amplitude ratio at the run PoE (soil / rock IML at the target PoE),
+        # read off the two curves for the caption strip.
+        def _iml_at(curve: dict[str, list[float]], poe: float) -> float | None:
+            xs, ps = curve.get("imls") or [], curve.get("poe") or []
+            best = None
+            for x, p in zip(xs, ps):
+                if p and p > 0 and x and x > 0:
+                    if best is None or abs(p - poe) < best[0]:
+                        best = (abs(p - poe), x)
+            return best[1] if best else None
+
+        rock_iml = _iml_at(rock, float(run_args.poe))
+        soil_iml = _iml_at(soil, float(run_args.poe))
+        ratio_txt = ""
+        if rock_iml and soil_iml and rock_iml > 0:
+            ratio_txt = (
+                f" Near {run_args.poe * 100:g}% PoE the softer/stiffer site's "
+                f"{run_args.imt} is ~{soil_iml / rock_iml:.2f}x the rock value."
+            )
+
+        inv = int(round(float(run_args.investigation_time_years))) or 50
+        softer = vs30_compare < vs30_rock
+        spec = {
+            "data": {"values": rows},
+            "mark": {"type": "line", "point": True, "tooltip": True},
+            "encoding": {
+                "x": {"field": "iml", "type": "quantitative",
+                      "scale": {"type": "log"}, "title": f"{run_args.imt} (g)"},
+                "y": {"field": "poe", "type": "quantitative",
+                      "scale": {"type": "log"}, "title": f"Mean PoE in {inv}yr"},
+                "color": {"field": "site", "type": "nominal", "title": "Site condition",
+                          "scale": {"range": ["#1f5fbf", "#e07a00"]}},
+            },
+            "width": "container",
+        }
+        payload = build_chart_payload(
+            vega_lite_spec=spec,
+            title=f"Vs30 site-response A/B - {run_args.imt} hazard curve",
+            caption=(
+                f"Classical {run_args.imt} hazard curve at the AOI centroid for "
+                f"reference Vs30 {vs30_rock:g} m/s (rock) vs {vs30_compare:g} m/s "
+                f"({'softer soil' if softer else 'stiffer site'}) on the same demo "
+                f"source over {inv} yr.{ratio_txt}"
+            ),
+            source_layer_uri=source_layer_uri,
+        )
+        await emit_chart_payloads(payload)
+    except Exception as exc:  # noqa: BLE001 - the A/B is best-effort
+        logger.warning("vs30 A/B chart emit failed (non-fatal): %s", exc)
+
+
+# --------------------------------------------------------------------------- #
 # Composer.
 # --------------------------------------------------------------------------- #
 async def model_openquake_psha(
     run_args: OpenQuakeRunArgs,
     *,
     compute_class: str = "standard",
+    vs30_compare: float | None = None,
 ) -> SeismicHazardLayerURI:
     """Run a classical-PSHA OpenQuake hazard calculation end-to-end on AWS Batch.
 
@@ -1279,6 +1413,11 @@ async def model_openquake_psha(
             investigation_time_years=float(run_args.investigation_time_years),
             source_layer_uri=_oq_layer.uri, logic_tree=_logic_tree,
         )
+        if vs30_compare is not None:
+            await _emit_vs30_ab_chart(
+                run_args, vs30_rock=float(run_args.reference_vs30_ms),
+                vs30_compare=float(vs30_compare), source_layer_uri=_oq_layer.uri,
+            )
         return _oq_layer
 
     # 3) Download the hazard-map CSV from the worker's run_id prefix (the Batch
@@ -1333,6 +1472,13 @@ async def model_openquake_psha(
         source_layer_uri=layer.uri,
         logic_tree=_logic_tree,
     )
+
+    # row-4 Vs30 site-response A/B overlay (best-effort, non-fatal).
+    if vs30_compare is not None:
+        await _emit_vs30_ab_chart(
+            run_args, vs30_rock=float(run_args.reference_vs30_ms),
+            vs30_compare=float(vs30_compare), source_layer_uri=layer.uri,
+        )
 
     logger.info(
         "model_openquake_psha complete run_id=%s layer_id=%s "

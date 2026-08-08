@@ -1,0 +1,11 @@
+# Template routing phrasings (door dissolution, ADR 0094): walked into the main
+# retrieval index directly.
+openquake_event_based:
+- event based probabilistic seismic hazard analysis over this region
+- generate a synthetic earthquake catalogue with stochastic event sets
+- stochastic event set ground motion fields for the sites in this area
+- confirm the event based hazard curve matches the classical PSHA curve
+- event based PSHA hazard map and convergence check against classical
+- simulate many earthquake ruptures and derive the hazard from the catalogue
+- per rupture ground motion fields across a synthetic seismic catalogue
+- does the event based hazard converge to the classical hazard curve here

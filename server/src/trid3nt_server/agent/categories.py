@@ -319,6 +319,13 @@ PRIMARY_CATEGORY: dict[str, str] = {
     "openquake_psha": "simulation_modeling",
     "openquake_scenario_gmf": "simulation_modeling",
     "openquake_secondary_perils": "simulation_modeling",
+    # ADR 0182 shortlist batch: hazard disaggregation (which M-R-eps scenario
+    # dominates a site's hazard) + event-based / stochastic PSHA (synthetic
+    # catalogue + classical convergence check). Distinct oq calculators, run in
+    # the local subprocess lane; both model_validation-adjacent but filed under
+    # simulation_modeling alongside the other openquake calculators.
+    "openquake_disaggregation": "simulation_modeling",
+    "openquake_event_based": "simulation_modeling",
     # real-fault seismic-source fetcher: the OpenQuake PSHA input data fetcher
     # (USGS / GEM fault sources -> source-model XML). Filed alongside its consumer
     # openquake_psha (there is no dedicated geophysics data category).
