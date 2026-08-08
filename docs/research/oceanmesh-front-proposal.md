@@ -196,3 +196,76 @@ generated `.cli` into TELEMAC-2D as the flagship pairing).
 6. **BOTTOM sign convention**: `.slf` BOTTOM is written as positive-up elevation;
    TELEMAC setups vary (some expect positive depth). Confirm the convention for
    the flagship pairing.
+
+---
+
+## 7. ADR 0193 -- watershed-first domains + real water-edge alignment (NATE-directed)
+
+NATE inspected the v1 coastal meshes and gave two directives that supersede the
+Section 6 open questions on domain and shoreline:
+
+1. **The AOI must not truncate the mesh.** A bbox is the wrong domain for a
+   riverine/estuarine target. The domain-first method is now: **delineate the
+   watershed (or take the water-body geometry) FIRST, then mesh THAT polygon.**
+   The AOI box is only a residual render overlay, never a cookie-cutter.
+2. **The meshed water edge must match the imagery water edge.** GSHHG
+   intermediate (`GSHHS_i`) is too coarse -- "close but not really" aligned to
+   the river. Replace it with high-resolution water-edge sources.
+
+### 7.1 Watershed-first domain strategy (IMPLEMENTED, verified)
+
+`scripts/sandbox/oceanmesh/build_watershed_mesh.py` realises the method end to
+end for a river watershed:
+
+1. **Delineate** the watershed with the registered pysheds primitive
+   `delineate_watershed` (D8 catchment upstream of a snapped pour point) on a
+   real **USGS 3DEP** DEM (reprojected EPSG:5070 -> 4326).
+2. The **catchment polygon IS the meshing domain** -- passed to OceanMesh2D as
+   the domain boundary. The mesh fills the whole catchment; the AOI box is drawn
+   only as a dashed residual overlay and demonstrably does not clip the mesh.
+3. **Refinement follows the river network:** the element size is
+   `clip(min_edge + grade * distance_to_river, min_edge, max_edge)` where the
+   river vertices are the NHDPlus HR / OSM flowlines
+   (`fetch_river_geometry`) clipped to the catchment -- fine along the valleys,
+   coarse on the ridges. This is the literal "mesh the watershed's valley
+   network from the NHD geometry" instruction.
+
+**Engine detail that mattered.** OceanMesh2D's coastal `Shoreline` path meshes
+the water *outside* land polygons *within a rectangular region*; it cannot mesh
+a fully-enclosed inland catchment (a "box with a hole" yields *no zero level
+set*). The watershed mesher therefore hands `generate_mesh` a **custom
+signed-distance function** (negative inside the catchment polygon) plus a
+**custom distance-to-river edge-length function**, bypassing `Shoreline`
+entirely. This lives in the mounted (not baked) `_mesh_watershed_incontainer.py`,
+so the coastal `_mesh_incontainer.py` path is untouched.
+
+Verified case: **Coweeta Creek watershed** (Nantahala Mtns, NC) -- catchment
+30.0 km^2; mesh 4956 nodes / 9727 elements; 31-272 m (median 69 m); min element
+quality qE 0.72, median 0.97; 0 inverted; single closed boundary; MDAL- and
+SERAFIN-verified; render `docs/proof/templates/oceanmesh_standalone_coweeta_river.png`.
+
+### 7.2 Shoreline-source decision (answers Section 6 Q2)
+
+| Target type | Water-edge source | Status |
+|---|---|---|
+| River / valley network | **NHDPlus HR flowlines** (`fetch_river_geometry`) drive the mesh refinement; the pysheds catchment is the domain | IMPLEMENTED (Coweeta) |
+| Interior lakes / reservoirs / marsh | **NHDPlus HR waterbody polygons** (`fetch_nhd_waterbodies`, ftype LakePond/Reservoir/SwampMarsh) | fetcher verified; wiring pending |
+| Open coast / bay / estuary | **NOAA CUSP** (Continually Updated Shoreline Product) is the production-grade coastal source; **OSM `natural=coastline`** is the implementable high-res upgrade in-repo | DECISION recorded; estuary re-mesh is the remaining live step |
+
+Honest finding on estuaries: NHDPlus HR **waterbody** polygons do NOT contain the
+open bay (Tampa Bay `fetch_nhd_waterbodies` returns 4246 lakes/ponds/marshes but
+not the bay itself -- open estuary water is NHDArea/SeaOcean, not NHDWaterbody).
+So the Delaware/Tampa open-water edge needs a coastline source (CUSP or OSM
+coastline), not NHD waterbodies. That is why the directive names CUSP for coasts.
+The v1 coastal meshes (GSHHG_i) remain as-is pending that CUSP/OSM-coastline
+water-edge builder; the watershed-first river case is the verified demonstration
+of the new domain method.
+
+### 7.3 Open finding: projected-DEM pour points
+
+`delineate_watershed` snaps a lon/lat pour point through the DEM affine, so it
+assumes a **geographic (EPSG:4326)** DEM (its default `fetch_copernicus_dem` is
+4326). A raw 3DEP `dem_uri` is EPSG:5070 (metres) and would mis-snap. The
+watershed mesher therefore reprojects 3DEP 5070 -> 4326 before delineation.
+Making `delineate_watershed` reproject a projected `dem_uri` internally is a
+small hardening worth queuing.

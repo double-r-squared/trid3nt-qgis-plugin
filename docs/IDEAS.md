@@ -315,3 +315,20 @@ taxonomy generally - rename to question-class-honest names (the
 template-capability-naming norm applied to categories). Also reframes
 the scope calls: Landlab ecology/biogeography/tidal + MODFLOW GWE
 geothermal are in-scope coverage, priority TBD by NATE.
+
+## 2026-08-08 - Mesh as optional user-supplied precondition (NATE design)
+Mesh creation = explicit user prompts via the standalone mesh tool
+(watershed-then-mesh lives HERE, never auto-guessed inside model
+templates). Model templates gain precondition polymorphism: if a
+mesh artifact exists in the case -> USER GATE "use this mesh?";
+accepted -> engine consumes it; declined/absent -> existing
+AOI-bounded mesh authoring unchanged. Rationale: delineating within
+a bbox reproduces the cut-off problem + complexity in a bbox-first
+design. Basis ranking: user mesh > drawn box > geocoded AOI (same
+seam family as DrawnGeometry + input-review gates). Orchestrator
+addition, NATE-unruled: the gate validates engine compatibility
+(format/CRS/open-boundary needs per SCHISM/TELEMAC/SWAN) and
+honestly declines mismatches rather than force-fitting; standalone
+tool keeps emitting all engine formats per mesh to make acceptance
+the common case. Build AFTER mesh v2 (ADR 0193) lands + NATE
+validates alignment.

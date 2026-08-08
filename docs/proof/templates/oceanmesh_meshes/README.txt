@@ -28,3 +28,21 @@ file GEOMETRY FILE at it, or open in BlueKenue.
 
 All coordinates are EPSG:4326 (lon/lat degrees).
 Regenerate: scripts/sandbox/oceanmesh/build_coastal_mesh.py
+
+-----------------------------------------------------------------------------
+ADR 0193 -- WATERSHED-FIRST river meshes (scripts/sandbox/oceanmesh/build_watershed_mesh.py)
+-----------------------------------------------------------------------------
+NATE's watershed-then-mesh method: the mesh DOMAIN is a delineated watershed
+(pysheds catchment), NOT a bbox -- the AOI box never truncates the mesh. The
+element size is refined by DISTANCE TO the NHDPlus HR / OSM river network within
+the catchment (fine along the valleys, coarse on the ridges). The catchment
+interior is meshed by a custom signed-distance function handed to OceanMesh2D's
+generate_mesh (the coastal Shoreline path only meshes water touching the region
+boundary and cannot mesh a fully-enclosed inland catchment).
+
+Cases (<case>):
+  coweeta_river   Coweeta Creek watershed, Nantahala Mtns NC. 3DEP 10 m DEM
+                  (EPSG:5070 -> 4326). Catchment 30.0 km^2; mesh 4956 nodes /
+                  9727 elements; resolution 31-272 m (median 69 m); min qE 0.72
+                  median 0.97; 0 inverted; single closed boundary. MDAL- and
+                  SERAFIN-verified. Same 4-format emission as the coastal cases.

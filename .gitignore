@@ -35,3 +35,5 @@ dist/
 # oceanmesh sandbox bulk data (re-downloadable DEMs + GSHHG shoreline)
 scripts/sandbox/oceanmesh/_runs/
 scripts/sandbox/oceanmesh/shoreline/
+# pysheds watershed sandbox bulk data (re-downloadable 3DEP DEMs)
+scripts/sandbox/pysheds_watershed/_work/
