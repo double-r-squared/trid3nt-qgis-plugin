@@ -43,9 +43,11 @@ from .execution import LayerURI
 __all__ = [
     "SCHISM_ELEV_STYLE_PRESET",
     "SCHISM_WAVE_STYLE_PRESET",
+    "SCHISM_SALINITY_STYLE_PRESET",
     "SCHISMRunArgs",
     "SchismElevationLayerURI",
     "SchismWaveLayerURI",
+    "SchismBaroclinicLayerURI",
     "SchismTransportValidationResult",
     "SCHISM_ARCHETYPES",
     "SCHISM_MESH_SOURCES",
@@ -77,7 +79,9 @@ SCHISM_WAVE_STYLE_PRESET: str = "continuous_flood_depth"
 #: SCHISM+WWM two-way wave-current coupling archetype (``coupled_waves``, the Duck
 #: FRF validation, ADR 0126/0129) is the second. STOFS-class surge + CORIE estuary
 #: remain queued sign-off candidates (each needing its own forcing legs).
-SCHISM_ARCHETYPES: tuple[str, ...] = ("tidal_hydro", "coupled_waves")
+SCHISM_ARCHETYPES: tuple[str, ...] = (
+    "tidal_hydro", "coupled_waves", "baroclinic_circulation"
+)
 
 #: The mesh sources the ``tidal_hydro`` archetype accepts.
 SCHISM_MESH_SOURCES: tuple[str, ...] = ("bundled_quarterannulus", "coastal_tin")
@@ -267,6 +271,20 @@ class SchismWaveLayerURI(LayerURI):
         n_nodes / n_elements: the SCHISM grid size (the modeled domain extent).
         sim_hours: the coupled-run length (hours; the Duck case is 4 h).
 
+    Boundary forcing (ADR 0189 -- the parametric-spectrum row):
+
+        forcing_mode: ``"observed_spectrum"`` (the bundled non-parametric Duck
+            8m-array boundary -- the validation case) or ``"parametric_jonswap"``
+            (a prescribed JONSWAP boundary driven by the four knobs below).
+        forced_hs_m / forced_tp_s / forced_dir_deg / forced_spread_deg: the
+            prescribed offshore JONSWAP boundary parameters when
+            ``forcing_mode="parametric_jonswap"`` (``None`` for the observed case).
+        wave_setup_m: the nearshore wave SETUP contribution -- the mean
+            free-surface elevation over the shallowest (breaking-zone) nodes
+            (metres); the radiation-stress-driven super-elevation the coupled solve
+            produces as waves shoal + break. ``None`` if the elevation field was
+            unavailable.
+
     Cross-shore VERIFICATION vs the bundled published gauge transect (the 8m-array /
     pressure-transducer Hm0/Tp; ``None`` when the V&V data is absent):
 
@@ -293,6 +311,13 @@ class SchismWaveLayerURI(LayerURI):
     n_nodes: int | None = Field(default=None, ge=0)
     n_elements: int | None = Field(default=None, ge=0)
     sim_hours: float | None = Field(default=None, ge=0.0)
+    # boundary forcing (ADR 0189 parametric-spectrum row)
+    forcing_mode: str | None = None
+    forced_hs_m: float | None = Field(default=None, ge=0.0)
+    forced_tp_s: float | None = Field(default=None, ge=0.0)
+    forced_dir_deg: float | None = None
+    forced_spread_deg: float | None = Field(default=None, ge=0.0)
+    wave_setup_m: float | None = None
     # cross-shore V&V vs the bundled published gauge transect
     vv_n_gauges: int | None = Field(default=None, ge=0)
     vv_hs_rmse_m: float | None = Field(default=None, ge=0.0)
@@ -301,6 +326,57 @@ class SchismWaveLayerURI(LayerURI):
     vv_offshore_hs_obs_m: float | None = Field(default=None, ge=0.0)
     vv_offshore_hs_mod_m: float | None = Field(default=None, ge=0.0)
     vv_tp_rmse_s: float | None = Field(default=None, ge=0.0)
+
+
+#: Style preset for the surface-SALINITY raster. A continuous field 0..~35 psu;
+#: honest reuse of the flood-depth family ramp with a DATA-DRIVEN legend carrying
+#: the real psu range + label.
+SCHISM_SALINITY_STYLE_PRESET: str = "continuous_flood_depth"
+
+
+class SchismBaroclinicLayerURI(LayerURI):
+    """A ``LayerURI`` for a density-driven 3D SCHISM estuary: surface salinity + stratification.
+
+    The ``baroclinic_circulation`` archetype's typed result (ADR 0189): a 3D
+    baroclinic (ibc=0) estuary solve on a coarse georeferenced channel, forced by an
+    estuarine salinity gradient + a sustained freshwater river source + a tidal
+    ocean boundary, so the density field drives a gravitational circulation and the
+    water column stratifies. The primary raster is the surface (top-layer) salinity
+    at each mesh node, interpolated onto a regular grid + clipped to the mesh AOI +
+    COG-tiled (ADR 0116). The scalars the agent CITES rather than invents
+    (invariant 1 / FR-AS-7):
+
+        surface_salinity_min_psu / surface_salinity_max_psu: the surface salinity
+            range over the wet nodes (psu) -- the fresh (river) to salty (ocean)
+            surface span.
+        bottom_salinity_max_psu: peak bottom-layer salinity (psu) -- the salty
+            bottom water intruding up-estuary.
+        max_stratification_psu: the maximum top-minus-bottom salinity difference
+            over the mesh nodes (psu) -- the headline stratification (a salt wedge
+            reads a large surface-to-bottom contrast).
+        mean_stratification_psu: the mesh-mean top-minus-bottom salinity difference
+            (psu) -- the domain-average vertical stratification.
+        river_discharge_m3s: the freshwater river source discharge (m3/s).
+        n_nodes / n_elements / n_layers: the SCHISM 3D grid size.
+        sim_days: the run length (days).
+
+    ``layer_type`` is ``"raster"`` (the surface-salinity COG); a SEPARATE bottom
+    salinity raster + the UGRID mesh preview ride as sibling layers. Uses the
+    ``continuous_flood_depth`` style preset + a data-driven ``legend``. The
+    ``fallback_note`` carries the coarse-demonstration-geometry honesty floor (this
+    is a screening estuary geometry, not the calibrated CORIE V&V).
+    """
+
+    surface_salinity_min_psu: float
+    surface_salinity_max_psu: float
+    bottom_salinity_max_psu: float | None = Field(default=None, ge=0.0)
+    max_stratification_psu: float | None = Field(default=None, ge=0.0)
+    mean_stratification_psu: float | None = Field(default=None, ge=0.0)
+    river_discharge_m3s: float | None = Field(default=None, ge=0.0)
+    n_nodes: int | None = Field(default=None, ge=0)
+    n_elements: int | None = Field(default=None, ge=0)
+    n_layers: int | None = Field(default=None, ge=0)
+    sim_days: float | None = Field(default=None, ge=0.0)
 
 
 class SchismTransportValidationResult(GraceModel):

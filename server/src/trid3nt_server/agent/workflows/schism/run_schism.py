@@ -45,6 +45,10 @@ SCHISM_SOLVER_NAME: str = "schism_tidal_hydro"
 #: spec.
 SCHISM_WAVE_SOLVER_NAME: str = "schism_coupled_waves"
 
+#: The baroclinic-circulation solver identifier (ADR 0189). Same worker image, the
+#: ``hydro`` executable variant (pschism_TVD-VL) run in 3D baroclinic mode (ibc=0).
+SCHISM_BAROCLINIC_SOLVER_NAME: str = "schism_baroclinic_circulation"
+
 #: Default worker image (override via env TRID3NT_SCHISM_IMAGE, mirroring
 #: TRID3NT_TELEMAC_IMAGE / TRID3NT_HECRAS_IMAGE).
 DEFAULT_SCHISM_IMAGE: str = "trid3nt-local/schism:latest"
@@ -77,6 +81,9 @@ def register_schism_solver() -> None:
 
     SOLVER_WORKFLOW_REGISTRY.setdefault(SCHISM_SOLVER_NAME, LOCAL_DOCKER_WORKFLOW_NAME)
     SOLVER_WORKFLOW_REGISTRY.setdefault(SCHISM_WAVE_SOLVER_NAME, LOCAL_DOCKER_WORKFLOW_NAME)
+    SOLVER_WORKFLOW_REGISTRY.setdefault(
+        SCHISM_BAROCLINIC_SOLVER_NAME, LOCAL_DOCKER_WORKFLOW_NAME
+    )
 
 
 register_schism_solver()
@@ -170,6 +177,10 @@ def register_schism_local_spec() -> None:
     register_local_solver_spec(SCHISM_SOLVER_NAME, schism_local_spec)
     register_local_solver_spec(
         SCHISM_WAVE_SOLVER_NAME, lambda: schism_local_spec(SCHISM_WAVE_SOLVER_NAME)
+    )
+    register_local_solver_spec(
+        SCHISM_BAROCLINIC_SOLVER_NAME,
+        lambda: schism_local_spec(SCHISM_BAROCLINIC_SOLVER_NAME),
     )
 
 

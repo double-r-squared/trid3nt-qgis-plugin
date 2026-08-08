@@ -31,8 +31,10 @@ from trid3nt_contracts.execution import LayerURI, LegendKey
 from trid3nt_contracts.schism_contracts import (
     SCHISM_ELEV_STYLE_PRESET,
     SCHISM_OUTPUT_EMPTY,
+    SCHISM_SALINITY_STYLE_PRESET,
     SCHISM_SOLVE_FAILED,
     SCHISM_WAVE_STYLE_PRESET,
+    SchismBaroclinicLayerURI,
     SchismElevationLayerURI,
     SchismWaveLayerURI,
 )
@@ -44,6 +46,9 @@ __all__ = [
     "PostprocessSchismError",
     "postprocess_schism",
     "postprocess_schism_waves",
+    "postprocess_schism_baroclinic",
+    "read_wave_setup_from_out2d",
+    "read_salinity_stratification",
     "read_out2d_elevation",
     "read_out2d_waves",
     "read_station_series",
@@ -628,6 +633,51 @@ def read_out2d_waves(out2d_path: str | Path) -> dict[str, Any]:
     }
 
 
+def read_wave_setup_from_out2d(out2d_path: str | Path, *, shallow_frac: float = 0.15) -> float | None:
+    """Estimate the nearshore wave SETUP from the coupled-run elevation field.
+
+    Wave setup is the radiation-stress-driven super-elevation of the mean water
+    level in the surf zone. From the same out2d that carries ``sigWaveHeight`` the
+    coupled deck also scribes ``elevation`` (iof_hydro(1)); setup is estimated as
+    the time-mean free-surface elevation averaged over the SHALLOWEST
+    ``shallow_frac`` of wet nodes (the breaking/surf zone) minus the deep-water
+    mean (the offshore reference ~0). Returns metres or ``None`` if the elevation /
+    depth fields are unavailable.
+    """
+    import numpy as np
+    from netCDF4 import Dataset  # lazy
+
+    try:
+        with Dataset(str(out2d_path), "r") as ds:
+            ek = _first_var(ds, _ELEV_CANDS)
+            dk = _first_var(ds, ("depth",))
+            if not ek or not dk:
+                return None
+            elev = np.asarray(ds.variables[ek][:], dtype=np.float64)
+            depth = np.asarray(ds.variables[dk][:], dtype=np.float64).ravel()
+        if elev.ndim == 1:
+            elev = elev[None, :]
+        elev = np.where(np.isfinite(elev) & (np.abs(elev) < 1.0e6), elev, np.nan)
+        with np.errstate(all="ignore"):
+            elev_mean = np.nanmean(elev, axis=0)  # time-mean per node
+        n = min(elev_mean.shape[0], depth.shape[0])
+        elev_mean, depth = elev_mean[:n], depth[:n]
+        ok = np.isfinite(elev_mean) & np.isfinite(depth)
+        if ok.sum() < 8:
+            return None
+        d = depth[ok]
+        e = elev_mean[ok]
+        thr = np.quantile(d, shallow_frac)  # shallowest nodes (small positive-down depth)
+        surf = e[d <= thr]
+        deep = e[d >= np.quantile(d, 1.0 - shallow_frac)]
+        if surf.size < 1 or deep.size < 1:
+            return None
+        return float(np.nanmean(surf) - np.nanmean(deep))
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("schism wave-setup estimate failed (non-fatal): %s", exc)
+        return None
+
+
 def postprocess_schism_waves(
     out2d_path: str | Path,
     out2d_uri: str,
@@ -638,6 +688,7 @@ def postprocess_schism_waves(
     n_elements_grid: int | None = None,
     runs_bucket: str | None = None,
     fallback_note: str | None = None,
+    forcing: dict[str, Any] | None = None,
 ) -> tuple[list[LayerURI], dict[str, Any]]:
     """Rasterize a SCHISM+WWM out2d to a max-Hs COG + emit the UGRID mesh preview.
 
@@ -724,6 +775,18 @@ def postprocess_schism_waves(
         sim_hours=float(sim_hours),
     )
 
+    # Wave setup (radiation-stress super-elevation) + the boundary-forcing echoes.
+    wave_setup_m = read_wave_setup_from_out2d(out2d_path)
+    f = forcing or {}
+    wave_layer = wave_layer.model_copy(update={
+        "wave_setup_m": (round(wave_setup_m, 4) if wave_setup_m is not None else None),
+        "forcing_mode": f.get("forcing_mode"),
+        "forced_hs_m": f.get("forced_hs_m"),
+        "forced_tp_s": f.get("forced_tp_s"),
+        "forced_dir_deg": f.get("forced_dir_deg"),
+        "forced_spread_deg": f.get("forced_spread_deg"),
+    })
+
     layers: list[LayerURI] = [wave_layer]
     mesh_layer = LayerURI(
         layer_id=f"schism-wave-mesh-{run_id}",
@@ -743,6 +806,7 @@ def postprocess_schism_waves(
         "tp_max_s": tp_max_s,
         "tp_at_hs_max_s": tp_at_hs_max_s,
         "offshore_hs_m": offshore_hs_m,
+        "wave_setup_m": wave_setup_m,
         "n_nodes": int(data["n_nodes"]),
         "n_times": int(data["n_times"]),
         "is_geographic": is_geographic,
@@ -904,3 +968,228 @@ def verify_cross_shore_waves(
     except Exception as exc:  # noqa: BLE001
         logger.warning("schism cross-shore wave V&V failed (non-fatal): %s", exc)
         return None
+
+
+# --------------------------------------------------------------------------- #
+# baroclinic_circulation archetype (ADR 0189): 3D estuary stratification.
+# --------------------------------------------------------------------------- #
+def read_salinity_stratification(
+    salt_nc_path: str | Path, out2d_path: str | Path | None = None,
+    *, spinup_frac: float = 0.5,
+) -> dict[str, Any]:
+    """Read a scribed 3D ``salinity`` netCDF into per-node surface/bottom salinity.
+
+    SCHISM scribes 3D salinity as ``(time, node, layer)`` with the vertical index
+    bottom-to-surface and dry/below-bed cells filled with a junk sentinel. Over the
+    spun-up window (the last ``spinup_frac`` of steps, time-mean) this returns, per
+    node, the topmost-valid (surface) and bottommost-valid (bottom) salinity, plus
+    the node coords for rasterisation. Node coords come from the salinity file when
+    present else the companion ``out2d``. Stratification is bottom-minus-surface
+    (positive = salty bottom under fresher surface: a stratified/salt-wedge column).
+
+    Returns ``{node_x, node_y, surface, bottom, stratification, finite, n_nodes,
+    n_layers, is_geographic, bbox}``. Raises ``SCHISM_OUTPUT_EMPTY`` when salinity is
+    absent / all non-finite.
+    """
+    import numpy as np
+    from netCDF4 import Dataset  # lazy
+
+    with Dataset(str(salt_nc_path), "r") as ds:
+        if "salinity" not in ds.variables:
+            raise PostprocessSchismError(
+                SCHISM_OUTPUT_EMPTY,
+                f"salinity netCDF missing 'salinity' (have {list(ds.variables)[:12]})",
+            )
+        salt = np.asarray(ds.variables["salinity"][:], dtype=np.float64)
+        xk = _first_var(ds, _NODE_X_CANDS)
+        yk = _first_var(ds, _NODE_Y_CANDS)
+        nx = np.asarray(ds.variables[xk][:], dtype=np.float64).ravel() if xk else None
+        ny = np.asarray(ds.variables[yk][:], dtype=np.float64).ravel() if yk else None
+
+    if (nx is None or ny is None) and out2d_path is not None:
+        with Dataset(str(out2d_path), "r") as ds2:
+            xk = _first_var(ds2, _NODE_X_CANDS)
+            yk = _first_var(ds2, _NODE_Y_CANDS)
+            nx = np.asarray(ds2.variables[xk][:], dtype=np.float64).ravel()
+            ny = np.asarray(ds2.variables[yk][:], dtype=np.float64).ravel()
+    if nx is None or ny is None:
+        raise PostprocessSchismError(SCHISM_OUTPUT_EMPTY, "salinity: no node coords found")
+
+    if salt.ndim == 2:  # (time, node) -- single layer, degenerate
+        salt = salt[:, :, None]
+    salt = np.where(np.isfinite(salt) & (salt >= 0.0) & (salt < 100.0), salt, np.nan)
+    nt = salt.shape[0]
+    k0 = min(nt - 1, int(nt * spinup_frac))
+    with np.errstate(all="ignore"):
+        node_layer = np.nanmean(salt[k0:], axis=0)  # (node, layer), spun-up time-mean
+
+    n_layers = int(node_layer.shape[1])
+    n_nodes = int(node_layer.shape[0])
+    surface = np.full(n_nodes, np.nan)
+    bottom = np.full(n_nodes, np.nan)
+    for i in range(n_nodes):
+        col = node_layer[i]
+        valid = np.where(np.isfinite(col))[0]
+        if valid.size:
+            bottom[i] = col[valid[0]]     # bottommost valid (index 0 = bed)
+            surface[i] = col[valid[-1]]   # topmost valid (last = surface)
+    finite = np.isfinite(surface) & np.isfinite(bottom)
+    if not finite.any():
+        raise PostprocessSchismError(
+            SCHISM_OUTPUT_EMPTY, "salinity is entirely non-finite (empty baroclinic solve)"
+        )
+    stratification = bottom - surface
+
+    n = min(nx.shape[0], ny.shape[0], n_nodes)
+    nx, ny = nx[:n], ny[:n]
+    surface, bottom, stratification, finite = (
+        surface[:n], bottom[:n], stratification[:n], finite[:n]
+    )
+    is_geographic = bool(
+        np.nanmax(np.abs(nx)) <= 360.0 and np.nanmax(np.abs(ny)) <= 90.0
+    )
+    fx, fy = nx[finite], ny[finite]
+    bbox = [float(fx.min()), float(fy.min()), float(fx.max()), float(fy.max())]
+    return {
+        "node_x": nx, "node_y": ny, "surface": surface, "bottom": bottom,
+        "stratification": stratification, "finite": finite, "n_nodes": int(n),
+        "n_layers": n_layers, "is_geographic": is_geographic, "bbox": bbox,
+    }
+
+
+def postprocess_schism_baroclinic(
+    salt_nc_path: str | Path,
+    mesh_uri: str,
+    *,
+    run_id: str,
+    sim_days: float,
+    river_discharge_m3s: float,
+    out2d_path: str | Path | None = None,
+    n_nodes_grid: int | None = None,
+    n_elements_grid: int | None = None,
+    n_layers: int | None = None,
+    runs_bucket: str | None = None,
+    fallback_note: str | None = None,
+) -> tuple[list[LayerURI], dict[str, Any]]:
+    """Rasterize a 3D SCHISM salinity field to surface + bottom salinity COGs.
+
+    Returns ``(layers, metrics)``: ``layers[0]`` the ``SchismBaroclinicLayerURI``
+    surface-salinity COG (primary), ``layers[1]`` the bottom-salinity COG
+    (context), ``layers[2]`` the mesh preview. ``metrics`` carries the
+    stratification stats.
+    """
+    import numpy as np
+
+    data = read_salinity_stratification(salt_nc_path, out2d_path)
+    node_x, node_y = data["node_x"], data["node_y"]
+    finite = data["finite"]
+    is_geographic = data["is_geographic"]
+    bbox = data["bbox"]
+
+    def _cog(values: Any, fname: str, label: str) -> str:
+        grid, transform = _rasterize_nodes(node_x, node_y, values, finite, bbox, is_geographic)
+        if is_geographic:
+            try:
+                cog_path = cog_io.write_cog_4326_from_grid(
+                    grid, src_crs="EPSG:4326", src_transform=transform,
+                    reproject=False, crs_roundtrip_guard=False,
+                )
+            except CogIoError as exc:
+                raise PostprocessSchismError(SCHISM_SOLVE_FAILED, f"{label} COG write failed: {exc}") from exc
+        else:
+            cog_path = _write_native_cog(grid, transform)
+        try:
+            return cog_io.upload_cog(cog_path, run_id, runs_bucket,
+                                     dest_filename=fname, log_label=label)
+        except CogIoError as exc:
+            raise PostprocessSchismError(SCHISM_SOLVE_FAILED, f"{label} COG upload failed: {exc}") from exc
+        finally:
+            cog_io.safe_unlink(cog_path)
+
+    surf_uri = _cog(data["surface"], "schism_surface_salinity.tif", "SCHISM surface-salinity COG")
+    bot_uri = _cog(data["bottom"], "schism_bottom_salinity.tif", "SCHISM bottom-salinity COG")
+    crs_authid = "EPSG:4326" if is_geographic else None
+
+    surf = data["surface"][finite]
+    bot = data["bottom"][finite]
+    strat = data["stratification"][finite]
+    surf_min = float(np.nanmin(surf))
+    surf_max = float(np.nanmax(surf))
+    bot_max = float(np.nanmax(bot))
+    strat_max = float(np.nanmax(strat))
+    strat_mean = float(np.nanmean(strat))
+
+    surf_layer = SchismBaroclinicLayerURI(
+        layer_id=f"schism-surf-salt-{run_id}",
+        name="Surface salinity (SCHISM 3D baroclinic estuary)",
+        layer_type="raster",
+        uri=surf_uri,
+        style_preset=SCHISM_SALINITY_STYLE_PRESET,
+        role="primary",
+        units="psu",
+        bbox=(tuple(bbox) if is_geographic else None),
+        crs_authid=crs_authid,
+        legend=LegendKey(
+            kind="continuous", colormap="viridis",
+            vmin=round(surf_min, 2), vmax=round(surf_max, 2),
+            units="psu", label="Surface salinity (psu)",
+        ),
+        fallback_note=fallback_note,
+        surface_salinity_min_psu=round(surf_min, 3),
+        surface_salinity_max_psu=round(surf_max, 3),
+        bottom_salinity_max_psu=round(bot_max, 3),
+        max_stratification_psu=round(strat_max, 3),
+        mean_stratification_psu=round(strat_mean, 3),
+        river_discharge_m3s=float(river_discharge_m3s),
+        n_nodes=int(n_nodes_grid or data["n_nodes"]),
+        n_elements=(int(n_elements_grid) if n_elements_grid else None),
+        n_layers=int(n_layers or data["n_layers"]),
+        sim_days=float(sim_days),
+    )
+    bottom_layer = LayerURI(
+        layer_id=f"schism-bot-salt-{run_id}",
+        name="Bottom salinity (SCHISM 3D baroclinic estuary)",
+        layer_type="raster",
+        uri=bot_uri,
+        style_preset=SCHISM_SALINITY_STYLE_PRESET,
+        role="context",
+        units="psu",
+        bbox=(tuple(bbox) if is_geographic else None),
+        crs_authid=crs_authid,
+        legend=LegendKey(
+            kind="continuous", colormap="viridis",
+            vmin=round(float(np.nanmin(bot)), 2), vmax=round(bot_max, 2),
+            units="psu", label="Bottom salinity (psu)",
+        ),
+    )
+    mesh_layer = LayerURI(
+        layer_id=f"schism-baroclinic-mesh-{run_id}",
+        name=f"SCHISM 3D mesh ({data['n_nodes']} nodes x {data['n_layers']} layers)",
+        layer_type="mesh",
+        uri=mesh_uri,
+        style_preset="mesh_grid",
+        role="context",
+        bbox=None,
+        crs_authid=crs_authid,
+    )
+    layers: list[LayerURI] = [surf_layer, bottom_layer, mesh_layer]
+    metrics = {
+        "surface_salinity_min_psu": surf_min,
+        "surface_salinity_max_psu": surf_max,
+        "bottom_salinity_max_psu": bot_max,
+        "max_stratification_psu": strat_max,
+        "mean_stratification_psu": strat_mean,
+        "n_nodes": int(data["n_nodes"]),
+        "n_layers": int(data["n_layers"]),
+        "is_geographic": is_geographic,
+        "bbox": bbox,
+        "surface_cog_uri": surf_uri,
+        "bottom_cog_uri": bot_uri,
+    }
+    logger.info(
+        "postprocess_schism_baroclinic run_id=%s nodes=%d layers=%d surf=[%.2f,%.2f] "
+        "bot_max=%.2f strat_max=%.2f strat_mean=%.2f psu",
+        run_id, data["n_nodes"], data["n_layers"], surf_min, surf_max,
+        bot_max, strat_max, strat_mean,
+    )
+    return layers, metrics

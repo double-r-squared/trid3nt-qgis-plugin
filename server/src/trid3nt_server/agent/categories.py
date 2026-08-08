@@ -382,6 +382,7 @@ PRIMARY_CATEGORY: dict[str, str] = {
     "hecras_flood_2d": "simulation_modeling",
     "schism_tidal_hydro": "simulation_modeling",
     "schism_coupled_waves": "simulation_modeling",
+    "schism_baroclinic_circulation": "simulation_modeling",
     # transport-scheme numerical-mixing + tracer-mass-conservation V&V: a
     # correctness gate -> model_validation; cross-lists to simulation_modeling.
     "schism_transport_validation": "model_validation",

@@ -245,3 +245,86 @@ def test_coupled_waves_corpus_seed_present():
             assert "coupled wave-current" in text
             return
     raise AssertionError("coupled_waves corpus.yaml not found")
+
+
+# --------------------------------------------------------------------------- #
+# ADR 0189: parametric-JONSWAP boundary forcing + wave setup
+# --------------------------------------------------------------------------- #
+def test_parametric_wwm_transform_toggles_and_values():
+    """The &BOUC block flips to a parametric JONSWAP boundary with the knob values."""
+    from trid3nt_server.agent.workflows.schism import deck_authoring as D
+
+    src = (D.wwm_duck_fixture_dir() / "wwminput.nml").read_text(encoding="utf-8")
+    out = D._transform_wwm_input_parametric(
+        src, hs_m=4.0, tp_s=14.0, dir_deg=70.0, spread_deg=25.0
+    )
+    import re
+
+    def _val(key: str) -> str:
+        m = re.search(rf"(?mi)^\s*{key}\s*=\s*(\S+)", out)
+        assert m, f"{key} not found"
+        return m.group(1)
+
+    assert _val("LBCWA") == "T"      # parametric ON
+    assert _val("LBCSP") == "F"      # non-parametric (file) OFF
+    assert _val("LINHOM") == "F"     # uniform boundary
+    assert _val("LBCSE") == "F"      # steady parametric boundary
+    assert _val("IBOUNDFORMAT") == "1"
+    assert _val("WBSS") == "2"       # JONSWAP
+    assert float(_val("WBHS")) == pytest.approx(4.0)
+    assert float(_val("WBTP")) == pytest.approx(14.0)
+    assert float(_val("WBDM")) == pytest.approx(70.0)
+    assert float(_val("WBDS")) == pytest.approx(25.0)
+    # the observed-spectrum default is UNCHANGED (no forcing dict)
+    assert "LBCSP         = T" in src or "LBCSP          = T" in src
+
+
+def test_stage_wwm_duck_deck_parametric_rewrites_wwminput(tmp_path):
+    from trid3nt_server.agent.workflows.schism import deck_authoring as D
+
+    files, nc, ns = D.stage_wwm_duck_deck(
+        tmp_path / "p", sim_hours=1.0,
+        wave_forcing={"hs_m": 3.0, "tp_s": 11.0, "dir_deg": 90.0, "spread_deg": 20.0},
+    )
+    wwm = (tmp_path / "p" / "wwminput.nml").read_text(encoding="utf-8")
+    assert "LBCWA         = T" in wwm.replace("          ", "     ") or "LBCWA" in wwm
+    import re
+    assert re.search(r"(?mi)^\s*WBHS\s*=\s*3\.0", wwm)
+    assert (nc, ns) == (4, 4)
+
+
+def test_resolve_wave_forcing_defaults_and_validation():
+    from trid3nt_server.agent.workflows.schism.coupled_waves.coupled_waves import (
+        _resolve_wave_forcing,
+    )
+
+    assert _resolve_wave_forcing(None, None, None, None) is None  # observed spectrum
+    f = _resolve_wave_forcing(5.0, None, None, None)
+    assert f == {"hs_m": 5.0, "tp_s": 12.0, "dir_deg": 80.0, "spread_deg": 30.0}
+    with pytest.raises(ValueError):
+        _resolve_wave_forcing(99.0, None, None, None)   # Hs out of range
+    with pytest.raises(ValueError):
+        _resolve_wave_forcing(None, 0.5, None, None)    # Tp out of range
+    with pytest.raises(ValueError):
+        _resolve_wave_forcing(None, None, 400.0, None)  # direction out of range
+
+
+def test_wave_setup_reader_on_synthetic_out2d(tmp_path):
+    """read_wave_setup_from_out2d returns a positive setup for a shoaling elevation field."""
+    from netCDF4 import Dataset
+    from trid3nt_server.agent.workflows.schism import postprocess_schism as PP
+
+    p = tmp_path / "out2d_1.nc"
+    n = 40
+    x = np.linspace(0, 39, n)
+    depth = np.linspace(1.0, 20.0, n)          # shallow (surf) -> deep (offshore)
+    elev = np.where(depth < 5.0, 0.20, 0.0)     # setup in the shallow breaking zone
+    with Dataset(str(p), "w") as ds:
+        ds.createDimension("node", n)
+        ds.createDimension("time", 2)
+        ds.createVariable("SCHISM_hgrid_node_x", "f8", ("node",))[:] = x
+        ds.createVariable("SCHISM_hgrid_node_y", "f8", ("node",))[:] = np.zeros(n)
+        ds.createVariable("depth", "f8", ("node",))[:] = depth
+        ds.createVariable("elevation", "f8", ("time", "node"))[:] = np.vstack([elev, elev])
+    setup = PP.read_wave_setup_from_out2d(p)
+    assert setup is not None and setup > 0.1

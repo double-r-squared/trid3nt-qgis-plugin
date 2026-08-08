@@ -98,6 +98,14 @@ SHOWCASE: list[Showcase] = [
              "ADR 0151 SWMM mechanism comparison (infiltration method A/B)", 240),
     Showcase("swmm_wetwell_pump_control_comparison", {},
              "ADR 0151 SWMM wet-well pump-control comparison defaults", 240),
+    # -- SCHISM shortlist batch 5 (ADR 0189) --------------------------------
+    Showcase("schism_baroclinic_circulation",
+             {"location_query": "Delaware Bay", "river_discharge_m3s": 800.0, "sim_days": 1.0},
+             "ADR 0189 SCHISM 3D baroclinic estuary stratification (coarse Delaware Bay smoke)", 600),
+    Showcase("schism_coupled_waves",
+             {"significant_wave_height_m": 4.0, "peak_period_s": 13.0,
+              "mean_direction_deg": 70.0, "directional_spread": 25.0, "sim_hours": 0.5},
+             "ADR 0189 SCHISM+WWM parametric JONSWAP boundary (Duck FRF, storm sea state)", 1200),
     # -- landlab diagnostics on the Boulder AOI (DEM fetch + solve) ----------
     Showcase("landlab_flow_accumulation", {"bbox": _BOULDER},
              "ADR 0141 landlab diagnostic wave, Boulder CO AOI", 360),

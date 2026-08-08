@@ -49,6 +49,7 @@ EXPECTED_TEMPLATES = {
     "schism_tidal_hydro",  # engine #12 (ADR 0118): SCHISM barotropic tidal template
     "schism_coupled_waves",  # engine #12 second archetype (ADR 0131): SCHISM+WWM+GOTM coupled-wave template (Duck FRF)
     "schism_transport_validation",  # SCHISM CAND-S (ADR 0156): transport-scheme numerical-mixing + mass-conservation V&V (Test_HeatConsv / Test_GEN_MassConsv)
+    "schism_baroclinic_circulation",  # ADR 0189: density-driven 3D baroclinic estuary circulation + stratification (ibc=0, SZ vgrid, river source)
     "swan_wave_field",
     "swan_physics_sensitivity_sweep",  # SWAN CAND-S: physics-scheme A-vs-B sensitivity sweep
     "swan_stationary_snapshot_batch",  # SWAN CAND-S: batch of stationary snapshots sampling a storm event (MODE)

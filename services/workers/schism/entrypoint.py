@@ -37,8 +37,10 @@ BIN_DIR = Path(os.environ.get("SCHISM_BIN_DIR", "/opt/schism/bin"))
 DATA = Path(os.environ.get("SCHISM_DATA_DIR", "/data"))
 
 #: PARSER VERSION -- bump on a manifest.json shape change. Named in the
-#: strict-field error (ADR 0158).
-_PARSER_VERSION = "schism-manifest-1"
+#: strict-field error (ADR 0158). v2 (ADR 0189): accept-and-ignore the generic
+#: run_solver-seam envelope fields (inputs/outputs/schism_args) the local-docker
+#: launcher writes verbatim into rundir/manifest.json.
+_PARSER_VERSION = "schism-manifest-2"
 
 #: Every top-level manifest.json key this entrypoint reads (see the module
 #: docstring schema). An unknown key would otherwise silently keep its default
@@ -48,13 +50,21 @@ _KNOWN_MANIFEST_FIELDS = frozenset(
     {"variant", "ncompute", "nscribe", "timeout_s", "run_id"}
 )
 
+#: Generic run_solver-seam envelope fields (ADR 0189). The local-docker launcher
+#: reads ``inputs`` to stage the deck + ``outputs`` to collect results, then writes
+#: the WHOLE manifest verbatim into rundir/manifest.json -- so the entrypoint SEES
+#: these keys but does not act on them. Accept-and-ignore (they are the seam's
+#: contract, not a typo) rather than reject as unknown. Mirrors the HEC-RAS
+#: ``hecras-manifest`` allowlist fix (ADR 0188).
+_SEAM_ENVELOPE_FIELDS = frozenset({"inputs", "outputs", "schism_args"})
+
 
 class SchismManifestUnknownFieldsError(ValueError):
     """manifest.json carries a top-level key this entrypoint does not read."""
 
 
 def _reject_unknown_manifest_fields(manifest: dict) -> None:
-    unknown = sorted(set(manifest) - _KNOWN_MANIFEST_FIELDS)
+    unknown = sorted(set(manifest) - _KNOWN_MANIFEST_FIELDS - _SEAM_ENVELOPE_FIELDS)
     if unknown:
         raise SchismManifestUnknownFieldsError(
             f"manifest.json carries unknown field(s) {unknown} that parser "

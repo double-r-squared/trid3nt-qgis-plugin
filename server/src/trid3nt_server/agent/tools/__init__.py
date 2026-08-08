@@ -705,6 +705,11 @@ from ..workflows.schism.coupled_waves.coupled_waves import schism_coupled_waves 
 # + Test_GEN_MassConsv conservative-tracer mass conservation) on the hydro-core
 # binary; the composer chain (model_schism_transport_validation) is inlined.
 from ..workflows.schism.transport_validation.transport_validation import schism_transport_validation as _schism_transport_validation  # noqa: E402,F401 - ADR 0156 SCHISM CAND-S transport V&V (engine=schism, tier=template)
+# schism_baroclinic_circulation TEMPLATE (engine="schism", tier="template"), ADR 0189
+# - density-driven 3D baroclinic estuary circulation + stratification (ibc=0, SZ
+# vgrid, river source, salinity gradient) on the hydro-core binary; the composer
+# chain (model_schism_baroclinic_circulation) is inlined.
+from ..workflows.schism.baroclinic_circulation.baroclinic_circulation import schism_baroclinic_circulation as _schism_baroclinic_circulation  # noqa: E402,F401 - ADR 0189 SCHISM 3D baroclinic template (engine=schism, tier=template)
 # geoclaw_inundation TEMPLATE (engine="geoclaw", tier="template"), one folder
 # under workflows/geoclaw/inundation/; EXCLUDED from the default retrieval
 # pool, surfaced only by the run_geoclaw door's gate expansion. The composer

@@ -31,6 +31,16 @@ def test_known_manifest_fields_accepted():
     )  # no raise
 
 
+def test_seam_envelope_fields_accepted():
+    # ADR 0189: the generic run_solver seam writes inputs/outputs/schism_args into
+    # rundir/manifest.json verbatim -- the entrypoint must accept-and-ignore them.
+    _reject_unknown_manifest_fields(
+        {"variant": "hydro", "ncompute": 3, "nscribe": 5, "run_id": "r2",
+         "inputs": [{"gs_uri": "s3://c/x", "dest": "hgrid.gr3"}],
+         "outputs": ["outputs/*.nc"], "schism_args": []}
+    )  # no raise
+
+
 def test_unknown_manifest_field_raises_typed_error():
     with pytest.raises(SchismManifestUnknownFieldsError, match="typo_field_name"):
         _reject_unknown_manifest_fields({"variant": "hydro", "typo_field_name": 1.0})

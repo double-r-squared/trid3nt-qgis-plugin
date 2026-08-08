@@ -45,6 +45,7 @@ __all__ = [
     "load_gr3_bridge",
     "sample_bathymetry_on_nodes",
     "author_coastal_tin_deck",
+    "author_baroclinic_estuary_deck",
     "CONSTITUENT_ANGULAR_FREQ_RAD_S",
 ]
 
@@ -152,6 +153,63 @@ def wwm_duck_fixture_dir() -> Path:
     )
 
 
+#: JONSWAP spectral shape selector for WWM's parametric boundary (WBSS=2 -> the
+#: Jonswap peak-enhanced spectrum; the sign of WBSS decides mean(-)/peak(+) period,
+#: we prescribe a PEAK period so WBSS is positive).
+_WWM_JONSWAP_WBSS: int = 2
+
+
+def _transform_wwm_input_parametric(
+    wwm_text: str,
+    *,
+    hs_m: float,
+    tp_s: float,
+    dir_deg: float,
+    spread_deg: float,
+) -> str:
+    """Rewrite the Duck wwminput.nml &BOUC block to a PARAMETRIC JONSWAP boundary.
+
+    The bundled Duck case forces WWM from a non-parametric observed spectrum
+    (``LBCSP=T``, ``IBOUNDFORMAT=6``, the ``DUCK94_wave_spectra_8m_array.nc`` file).
+    This switches the boundary to a PRESCRIBED parametric JONSWAP spectrum uniform
+    along the offshore boundary (``LBCWA=T``, ``LBCSP=F``, ``LINHOM=F``,
+    ``IBOUNDFORMAT=1``, steady in time ``LBCSE=F``) driven by the four physical
+    knobs -- the offshore Hs (``WBHS``), the peak period (``WBTP`` with ``WBSS=2``
+    JONSWAP), the mean wave direction (``WBDM``, nautical degrees), and the
+    directional spread in degrees (``WBDS`` with ``WBDSMS=1``). Deterministic +
+    line-oriented (a test asserts the toggles + values land). Only the &BOUC forcing
+    lines change; the spectral discretisation (MSC/MDC) and physics stay the
+    published values.
+    """
+    import re
+
+    # (key, new-value, trailing-comment-preserving) substitutions on the &BOUC lines.
+    scalar_subs: dict[str, str] = {
+        "LBCSE": "F",  # steady parametric boundary (no time interpolation needed)
+        "LBINTER": "F",
+        "LBCWA": "T",  # parametric wave spectra ON
+        "LBCSP": "F",  # non-parametric (file) spectra OFF
+        "LINHOM": "F",  # spatially uniform along the boundary
+        "IBOUNDFORMAT": "1",  # native WWM parametric
+        "WBSS": str(_WWM_JONSWAP_WBSS),  # JONSWAP, peak period (positive sign)
+        "WBHS": f"{float(hs_m):.4f}",
+        "WBTP": f"{float(tp_s):.4f}",
+        "WBDM": f"{float(dir_deg):.4f}",
+        "WBDSMS": "1",  # spread specified in degrees
+        "WBDS": f"{float(spread_deg):.4f}",
+    }
+    out_lines: list[str] = []
+    for line in wwm_text.splitlines():
+        m = re.match(r"(\s*)([A-Za-z_]\w*)(\s*=\s*)(\S+)(.*)$", line)
+        if m and m.group(2).upper() in scalar_subs:
+            key = m.group(2)
+            val = scalar_subs[m.group(2).upper()]
+            out_lines.append(f"{m.group(1)}{key}{m.group(3)}{val}{m.group(5)}")
+            continue
+        out_lines.append(line)
+    return "\n".join(out_lines) + ("\n" if wwm_text.endswith("\n") else "")
+
+
 def _transform_wwm_param(param_text: str, *, sim_hours: float) -> str:
     """Apply the ADR 0126 1d staging transforms to the pristine Duck param.nml.
 
@@ -190,7 +248,10 @@ def _transform_wwm_param(param_text: str, *, sim_hours: float) -> str:
 
 
 def stage_wwm_duck_deck(
-    dest_dir: str | Path, *, sim_hours: float = 4.0
+    dest_dir: str | Path,
+    *,
+    sim_hours: float = 4.0,
+    wave_forcing: dict[str, float] | None = None,
 ) -> tuple[list[Path], int, int]:
     """Stage the bundled Duck deck (transformed) into ``dest_dir`` for the coupled run.
 
@@ -199,6 +260,15 @@ def stage_wwm_duck_deck(
     WWM hardcode) so the deck runs on ``pschism_WWM_GOTM_TVD-VL``. Returns
     ``(deck_files, ncompute, nscribe)`` -- 4 compute + 4 scribe (the proven spike
     layout; >= the 3 trimmed output variables).
+
+    ``wave_forcing`` (ADR 0189, the parametric-spectrum row) switches the WWM open
+    boundary from the bundled non-parametric observed spectrum to a PRESCRIBED
+    parametric JONSWAP spectrum. When provided it must carry
+    ``{hs_m, tp_s, dir_deg, spread_deg}`` -- the four offshore-spectrum knobs -- and
+    ``wwminput.nml`` is rewritten (``_transform_wwm_input_parametric``); the bundled
+    ``DUCK94_wave_spectra_8m_array.nc`` is still staged but goes unread
+    (``LBCSP=F``). ``None`` keeps the published observed-spectrum forcing (the
+    validation case).
     """
     dest_dir = Path(dest_dir)
     dest_dir.mkdir(parents=True, exist_ok=True)
@@ -212,6 +282,17 @@ def stage_wwm_duck_deck(
         if name == "param.nml":
             d.write_text(
                 _transform_wwm_param(s.read_text(encoding="utf-8"), sim_hours=sim_hours),
+                encoding="utf-8",
+            )
+        elif name == "wwminput.nml" and wave_forcing:
+            d.write_text(
+                _transform_wwm_input_parametric(
+                    s.read_text(encoding="utf-8"),
+                    hs_m=float(wave_forcing["hs_m"]),
+                    tp_s=float(wave_forcing["tp_s"]),
+                    dir_deg=float(wave_forcing["dir_deg"]),
+                    spread_deg=float(wave_forcing["spread_deg"]),
+                ),
                 encoding="utf-8",
             )
         else:
@@ -364,6 +445,328 @@ def stage_transport_scheme_deck(
         "files": files, "n_nodes": n_node, "n_elements": n_elem,
         "n_layers": TRANSPORT_SCHEME_NLAYERS, "x_mid": x_mid,
         "t_hot": t_hot, "t_cold": t_cold, "nscribe": TRANSPORT_SCHEME_NSCRIBE,
+    }
+
+
+# --------------------------------------------------------------------------- #
+# baroclinic_circulation archetype (ADR 0189): density-driven 3D estuary.
+# --------------------------------------------------------------------------- #
+#: SCHISM output vars the baroclinic estuary deck scribes: elevation (2D) +
+#: salinity + temperature + depth-avg velocity (3D) -> nscribe must be >= this.
+BAROCLINIC_NSCRIBE: int = 5
+#: The default vertical-grid layer count for the coarse baroclinic smoke (pure-S
+#: SZ grid; enough layers to resolve a two-layer estuarine stratification).
+BAROCLINIC_NVRT: int = 10
+
+
+def _author_sz_vgrid(nvrt: int, *, theta_b: float = 1.0, theta_f: float = 4.0,
+                     h_c: float = 5.0) -> str:
+    """Author a pure-S (SZ with one Z level) vgrid.in with ``nvrt`` sigma layers.
+
+    ``ivcor=2`` (SZ), one degenerate Z level at the bottom, ``nvrt`` S levels from
+    the surface (sigma 0) to the bed (sigma -1). ``theta_f`` > 0 stretches
+    resolution toward the surface + bed (the estuarine pycnocline). This is the
+    3D vertical discretisation the baroclinic solver needs (the barotropic tidal
+    deck runs a 2-level vgrid; a density-driven run must resolve the water column).
+    """
+    if nvrt < 3:
+        raise SchismDeckError("SCHISM_INPUT_INVALID", "baroclinic nvrt must be >= 3")
+    lines = [
+        "2 !ivcor",
+        f"{nvrt} 1 1.e6 !nvrt, kz, h_s",
+        "Z levels",
+        "1 -1.e6",
+        "S levels",
+        f"{h_c:g}. {theta_b:g} {theta_f:g} !h_c, theta_b, theta_f",
+    ]
+    for k in range(nvrt):
+        sigma = -1.0 + k / (nvrt - 1)  # -1 (bed) .. 0 (surface)
+        lines.append(f"{k + 1} {sigma:.6f}")
+    return "\n".join(lines) + "\n"
+
+
+def _patch_baroclinic_param(
+    qa_param_text: str, *, sim_days: float, dt_s: float,
+) -> str:
+    """Reuse the QA param.nml for a density-driven 3D BAROCLINIC estuary run.
+
+    ibc=0 (baroclinic -> the T/S density field drives the flow), flag_ic(1:2)=1
+    (T/S read from temp.ic/salt.ic), if_source=1 (the river freshwater point
+    source), itr_met=3 + h_tvd=5 (TVD tracer transport), and the salinity +
+    temperature + depth-avg velocity outputs on so the stratification is scribed.
+    dramp/drampbc ramp the tidal + baroclinic forcing. One output stack.
+    """
+    import re
+
+    nsteps = int(math.ceil(sim_days * 86400.0 / dt_s))
+    hourly = max(1, int(round(3600.0 / dt_s)))
+
+    def sub(pat: str, repl: str, t: str) -> str:
+        return re.sub(pat, repl, t, count=1, flags=re.M)
+
+    t = qa_param_text
+    # ics=2 (lat/lon spherical): the estuary mesh is in geographic degrees, so
+    # SCHISM must compute great-circle distances -- with the QA fixture's ics=1
+    # (Cartesian) it would read degrees AS metres (a ~0.5 m domain) and the tracer
+    # backtracking overflows (nbtrk > mxnbt).
+    t = sub(r"^(\s*ics\s*=\s*)\S+", r"\g<1>2", t)
+    t = sub(r"^(\s*rnday\s*=\s*)\S+", rf"\g<1>{sim_days:g}", t)
+    t = sub(r"^(\s*dt\s*=\s*)\S+", rf"\g<1>{dt_s:g}.", t)
+    t = sub(r"^(\s*ibc\s*=\s*)\S+", r"\g<1>0", t)       # baroclinic
+    t = sub(r"^(\s*ibtp\s*=\s*)\S+", r"\g<1>0", t)
+    t = sub(r"^(\s*dramp\s*=\s*)\S+", r"\g<1>0.5", t)
+    t = sub(r"^(\s*drampbc\s*=\s*)\S+", r"\g<1>0.5", t)
+    t = sub(r"^(\s*itr_met\s*=\s*)\S+", r"\g<1>3", t)
+    t = sub(r"^(\s*h_tvd\s*=\s*)\S+", r"\g<1>5", t)
+    t = sub(r"^(\s*if_source\s*=\s*)\S+", r"\g<1>1", t)  # river freshwater source
+    t = sub(r"^(\s*dramp_ss\s*=\s*)\S+", r"\g<1>0.5", t)
+    t = sub(r"^(\s*ihfskip\s*=\s*)\S+", rf"\g<1>{nsteps}", t)
+    t = sub(r"^(\s*nspool\s*=\s*)\S+", rf"\g<1>{hourly}", t)
+    t = sub(r"^(\s*nspool_sta\s*=\s*)\S+", rf"\g<1>{hourly}", t)
+    t = sub(r"^(\s*flag_ic\(1\)\s*=\s*)\S+", r"\g<1>1", t)
+    t = sub(r"^(\s*flag_ic\(2\)\s*=\s*)\S+", r"\g<1>1", t)
+    t = sub(r"^(\s*iof_hydro\(18\)\s*=\s*)\S+", r"\g<1>1", t)  # temperature
+    t = sub(r"^(\s*iof_hydro\(19\)\s*=\s*)\S+", r"\g<1>1", t)  # salinity
+    return t
+
+
+def _build_estuary_mesh(
+    bbox: tuple[float, float, float, float],
+    *,
+    nx: int,
+    ny: int,
+    ocean_side: str,
+    depth_ocean_m: float,
+    depth_river_m: float,
+) -> tuple[Any, Any, Any]:
+    """Build a coarse structured triangulated channel over ``bbox`` (lon/lat).
+
+    Returns ``(points(N,2), tris(M,3), depths(N,))``. A regular ``nx x ny`` lon/lat
+    lattice triangulated by Delaunay; bathymetry ramps linearly from
+    ``depth_river_m`` at the landward edge to ``depth_ocean_m`` at ``ocean_side``
+    (positive-down SCHISM depth). An IDEALIZED coarse demonstration channel, not a
+    surveyed estuary bathymetry (the honesty floor the template stamps).
+    """
+    import numpy as np
+    from scipy.spatial import Delaunay
+
+    lon0, lat0, lon1, lat1 = bbox
+    xs = np.linspace(lon0, lon1, nx)
+    ys = np.linspace(lat0, lat1, ny)
+    gx, gy = np.meshgrid(xs, ys)
+    pts = np.column_stack([gx.ravel(), gy.ravel()])
+    tris = Delaunay(pts).simplices
+
+    # normalized 0(landward/river) .. 1(ocean) coordinate along the forcing axis
+    if ocean_side in ("south", "north"):
+        frac = (pts[:, 1] - lat0) / (lat1 - lat0)  # 0 at south .. 1 at north
+        if ocean_side == "south":
+            frac = 1.0 - frac
+    else:  # east / west
+        frac = (pts[:, 0] - lon0) / (lon1 - lon0)  # 0 at west .. 1 at east
+        if ocean_side == "west":
+            frac = 1.0 - frac
+    depths = depth_river_m + (depth_ocean_m - depth_river_m) * frac
+    return pts, tris, depths.astype(float)
+
+
+def _river_source_element(hgrid_text: str, ocean_side: str) -> int:
+    """Pick the 1-based element id nearest the RIVER (landward) edge of the mesh.
+
+    Parses the written hgrid.gr3 element table (so the id matches SCHISM's own
+    numbering after any bridge re-index) and returns the element whose centroid is
+    farthest from the ocean boundary along the forcing axis -- the freshwater point
+    source location.
+    """
+    lines = hgrid_text.splitlines()
+    n_elem, n_node = (int(v) for v in lines[1].split()[:2])
+    xy = {}
+    for i in range(n_node):
+        p = lines[2 + i].split()
+        xy[int(p[0])] = (float(p[1]), float(p[2]))
+    ebase = 2 + n_node
+    best_e, best_key = 1, -1.0e30
+    xs = [c[0] for c in xy.values()]
+    ys = [c[1] for c in xy.values()]
+    lon0, lon1 = min(xs), max(xs)
+    lat0, lat1 = min(ys), max(ys)
+    for e in range(n_elem):
+        p = lines[ebase + e].split()
+        eid = int(p[0])
+        nn = [int(p[2]), int(p[3]), int(p[4])]
+        cx = sum(xy[k][0] for k in nn) / 3.0
+        cy = sum(xy[k][1] for k in nn) / 3.0
+        if ocean_side == "south":
+            key = cy  # farthest north = river
+        elif ocean_side == "north":
+            key = -cy
+        elif ocean_side == "west":
+            key = cx
+        else:  # east
+            key = -cx
+        if key > best_key:
+            best_key, best_e = key, eid
+    return best_e
+
+
+def author_baroclinic_estuary_deck(
+    dest_dir: str | Path,
+    *,
+    bbox: tuple[float, float, float, float],
+    constituents: list[str],
+    tidal_amplitude_m: float,
+    sim_days: float,
+    ocean_side: str = "south",
+    river_discharge_m3s: float = 500.0,
+    ocean_salinity_psu: float = 33.0,
+    river_salinity_psu: float = 0.0,
+    river_temp_c: float = 14.0,
+    ocean_temp_c: float = 14.0,
+    nvrt: int = BAROCLINIC_NVRT,
+    nx: int = 10,
+    ny: int = 24,
+    dt_s: float = 120.0,
+    coastal_drag_cd: float = 0.0025,
+) -> dict[str, Any]:
+    """Author a coarse density-driven 3D BAROCLINIC estuary deck into ``dest_dir``.
+
+    A coarse structured channel over ``bbox`` (a real US estuary footprint), a 3D
+    pure-S vgrid (``nvrt`` layers), ibc=0 baroclinic physics, an initial salinity
+    GRADIENT (fresh at the landward/river edge -> ``ocean_salinity_psu`` at the
+    ocean edge), a sustained freshwater river point SOURCE at the landward edge
+    (``river_discharge_m3s`` at S=0), and a tidal-elevation ocean open boundary --
+    so the density gradient drives a gravitational (estuarine) circulation and the
+    water column stratifies. Returns ``{"files": [...], "n_nodes", "n_elements",
+    "n_layers", "open_node_count", "source_elem", "bbox", "centroid"}``. The mesh +
+    bathymetry are an IDEALIZED coarse demonstration geometry (surfaced in the
+    template's synthetic_inputs), NOT a surveyed estuary -- the calibrated
+    Columbia-River CORIE 28-day 3D run is the NATE-gated validation.
+    """
+    import numpy as np
+
+    dest_dir = Path(dest_dir)
+    dest_dir.mkdir(parents=True, exist_ok=True)
+
+    pts, tris, depths = _build_estuary_mesh(
+        bbox, nx=nx, ny=ny, ocean_side=ocean_side,
+        depth_ocean_m=15.0, depth_river_m=3.0,
+    )
+    bridge = load_gr3_bridge()
+    try:
+        gr3_text = bridge.tin_to_hgrid(
+            pts, tris, depth=depths, grid_name="trid3nt_baroclinic_estuary",
+            open_boundary_side=ocean_side, clean_boundary=True,
+        )
+    except Exception as exc:  # noqa: BLE001
+        raise SchismDeckError("SCHISM_MESH_INVALID", f"tin_to_hgrid failed: {exc}") from exc
+
+    (dest_dir / "hgrid.gr3").write_text(gr3_text, encoding="utf-8")
+    open_node_count = _open_boundary_node_count(gr3_text)
+    header = gr3_text.splitlines()[1].split()
+    n_elem, n_nodes = int(header[0]), int(header[1])
+
+    # Re-parse the FINAL node coords (the bridge may re-index) for the IC gradient.
+    glines = gr3_text.splitlines()
+    node_xy = np.array(
+        [[float(glines[2 + i].split()[1]), float(glines[2 + i].split()[2])]
+         for i in range(n_nodes)], dtype=float,
+    )
+    lon0, lat0, lon1, lat1 = bbox
+    if ocean_side in ("south", "north"):
+        frac = (node_xy[:, 1] - lat0) / (lat1 - lat0)
+        if ocean_side == "south":
+            frac = 1.0 - frac
+    else:
+        frac = (node_xy[:, 0] - lon0) / (lon1 - lon0)
+        if ocean_side == "west":
+            frac = 1.0 - frac
+    frac = np.clip(frac, 0.0, 1.0)
+    salt_ic = river_salinity_psu + (ocean_salinity_psu - river_salinity_psu) * frac
+    temp_ic = np.full(n_nodes, 0.5 * (river_temp_c + ocean_temp_c))
+
+    # vgrid.in: 3D pure-S SZ grid.
+    (dest_dir / "vgrid.in").write_text(_author_sz_vgrid(nvrt), encoding="utf-8")
+
+    # param.nml: QA template patched to baroclinic + source.
+    qa = quarterannulus_fixture_dir()
+    (dest_dir / "param.nml").write_text(
+        _patch_baroclinic_param(
+            (qa / "param.nml").read_text(encoding="utf-8"), sim_days=sim_days, dt_s=dt_s,
+        ),
+        encoding="utf-8",
+    )
+
+    # bctides.in: tidal-elevation ocean boundary (zero-gradient T/S).
+    (dest_dir / "bctides.in").write_text(
+        _author_bctides(open_node_count, constituents, tidal_amplitude_m),
+        encoding="utf-8",
+    )
+
+    # drag.gr3: uniform coastal Cd.
+    drag_lines = ["0", f"{n_elem} {n_nodes}"]
+    for i in range(n_nodes):
+        drag_lines.append(
+            f"{i + 1} {node_xy[i, 0]:.9f} {node_xy[i, 1]:.9f} {coastal_drag_cd:.7e}"
+        )
+    (dest_dir / "drag.gr3").write_text("\n".join(drag_lines) + "\n", encoding="utf-8")
+
+    # temp.ic / salt.ic: horizontally-varying (the estuarine salinity gradient).
+    temp_lines = ["temp IC (baroclinic estuary)", f"{n_elem} {n_nodes}"]
+    salt_lines = ["salt IC (baroclinic estuary gradient)", f"{n_elem} {n_nodes}"]
+    for i in range(n_nodes):
+        temp_lines.append(
+            f"{i + 1} {node_xy[i, 0]:.6f} {node_xy[i, 1]:.6f} {temp_ic[i]:.4f}"
+        )
+        salt_lines.append(
+            f"{i + 1} {node_xy[i, 0]:.6f} {node_xy[i, 1]:.6f} {salt_ic[i]:.4f}"
+        )
+    (dest_dir / "temp.ic").write_text("\n".join(temp_lines) + "\n", encoding="utf-8")
+    (dest_dir / "salt.ic").write_text("\n".join(salt_lines) + "\n", encoding="utf-8")
+
+    # tvd.prop: per-element TVD^2 flag (itr_met=3 requires it) -- TVD everywhere.
+    (dest_dir / "tvd.prop").write_text(
+        "".join(f"{e + 1} 1\n" for e in range(n_elem)), encoding="utf-8"
+    )
+
+    # River freshwater point source (source_sink.in + vsource.th + msource.th).
+    source_elem = _river_source_element(gr3_text, ocean_side)
+    (dest_dir / "source_sink.in").write_text(
+        f"1 !# of elements with sources\n{source_elem}\n\n0 !# of elements with sinks\n",
+        encoding="utf-8",
+    )
+    t_end = sim_days * 86400.0
+    (dest_dir / "vsource.th").write_text(
+        f"0. {river_discharge_m3s:.3f}\n{t_end:.1f} {river_discharge_m3s:.3f}\n",
+        encoding="utf-8",
+    )
+    # msource.th columns: time, T@source, S@source (ntracer=2: T then S).
+    (dest_dir / "msource.th").write_text(
+        f"0. {river_temp_c:.3f} {river_salinity_psu:.3f}\n"
+        f"{t_end:.1f} {river_temp_c:.3f} {river_salinity_psu:.3f}\n",
+        encoding="utf-8",
+    )
+
+    # station.in: one station at the mesh centroid.
+    lon_c = float(node_xy[:, 0].mean())
+    lat_c = float(node_xy[:, 1].mean())
+    (dest_dir / "station.in").write_text(_author_station_in(lon_c, lat_c), encoding="utf-8")
+
+    files = [
+        dest_dir / n for n in (
+            "hgrid.gr3", "vgrid.in", "param.nml", "bctides.in", "drag.gr3",
+            "station.in", "temp.ic", "salt.ic", "tvd.prop",
+            "source_sink.in", "vsource.th", "msource.th",
+        )
+    ]
+    return {
+        "files": files,
+        "n_nodes": n_nodes,
+        "n_elements": n_elem,
+        "n_layers": nvrt,
+        "open_node_count": open_node_count,
+        "source_elem": source_elem,
+        "bbox": tuple(bbox),
+        "centroid": (lon_c, lat_c),
     }
 
 
