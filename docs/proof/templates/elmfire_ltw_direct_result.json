@@ -1,0 +1,55 @@
+{
+  "layer_id": "fire-arrival-01KZ964PF5W54B8F13BJ695EM7",
+  "name": "Fire arrival time (length:width ceiling sweep, natural cap)",
+  "layer_type": "raster",
+  "uri": "s3://trid3nt-runs/01KZ964PF5W54B8F13BJ695EM7/overviews/01KZ965YAEP2GTSMR6AZPWWNXD.tif",
+  "style_preset": "continuous_fire_arrival_hr",
+  "temporal": null,
+  "role": "primary",
+  "units": null,
+  "bbox": [
+    -98.56887057083105,
+    38.446101329500536,
+    -98.43112942916895,
+    38.553898670499464
+  ],
+  "legend": null,
+  "fallback_note": null,
+  "synthetic_inputs": [],
+  "crs_authid": null,
+  "burned_area_km2": 0.4212,
+  "fire_arrival_max_hr": 0.7530676947699653,
+  "max_flame_length_m": 2.4542525207519534,
+  "max_spread_rate_m_min": 37.123043353271484,
+  "duration_hours": 0.75,
+  "ignition_lonlat": [
+    -98.5,
+    38.5
+  ],
+  "swept_param": "max_low_cap",
+  "swept_units": "ratio",
+  "response_metric": "length_to_width_ratio",
+  "response_units": "ratio",
+  "sweep": [
+    {
+      "x": 3.0,
+      "y": 2.7142857142857144
+    },
+    {
+      "x": 7.5,
+      "y": 4.625
+    },
+    {
+      "x": 12.0,
+      "y": 4.625
+    }
+  ],
+  "summary": {
+    "fixed_wind_mph": 20.0,
+    "natural_ltw": 4.625,
+    "max_binding_cap": 3.0,
+    "min_cap": 3.0,
+    "max_cap": 12.0,
+    "n_max_low_steps": 3.0
+  }
+}

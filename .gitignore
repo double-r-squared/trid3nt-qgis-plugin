@@ -19,7 +19,8 @@ server/build/
 # Secret-bearing local env (OpenRouter/API keys) - never commit
 .env.local
 .env.*.local
-docs/proof/
+docs/proof/*
+!docs/proof/templates/
 # Nutshell — local server state and API key
 .nutshell-api-key
 .nutshell-server.pid

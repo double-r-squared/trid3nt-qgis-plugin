@@ -1,0 +1,60 @@
+/-------------------------------------------------------------------/
+/  TELEMAC-2D  P1 REAL RIVER DYE  -  snake_river_twin_falls_rain
+/  Mesh from NHDPlus flowlines (Gmsh, tagged physical groups) -> rank IP
+/  Clean flow (inflow->outflow) drives the reach; a FINITE dye pulse is
+/  released at a mid-reach point source (~25% along, node
+/  1168, x=720427.4 y=4718613.7) for 300s then stops, so
+/  the plume advects downstream following the REAL river curves and dilu
+/  Liquid-boundary order (walk): ['inflow', 'outflow']
+/-------------------------------------------------------------------/
+GEOMETRY FILE                   = river.slf
+BOUNDARY CONDITIONS FILE        = river.cli
+RESULTS FILE                    = r2d_river.slf
+SOURCES FILE                    = river_sources.txt
+/
+TITLE : 'snake_river_twin_falls_rain REAL RIVER DYE PULSE'
+VARIABLES FOR GRAPHIC PRINTOUTS = 'U,V,H,S,B,T1'
+GRAPHIC PRINTOUT PERIOD         = 200
+LISTING PRINTOUT PERIOD         = 500
+/
+DURATION                        = 3600.0
+TIME STEP                       = 1.0
+/
+INITIAL CONDITIONS              = 'CONSTANT DEPTH'
+INITIAL DEPTH                   = 2.500
+/
+PRESCRIBED FLOWRATES            = 250.0;0.0
+PRESCRIBED ELEVATIONS           = 0.0;1121.495
+/
+MAXIMUM NUMBER OF SOURCES        = 20
+ABSCISSAE OF SOURCES             = 720427.386
+ORDINATES OF SOURCES             = 4718613.688
+WATER DISCHARGE OF SOURCES       = 0.0
+VALUES OF THE TRACERS AT THE SOURCES = 0.0
+/
+LAW OF BOTTOM FRICTION          = 3
+FRICTION COEFFICIENT            = 33.
+VELOCITY DIFFUSIVITY            = 1.E-1
+/
+EQUATIONS                       = 'SAINT-VENANT FE'
+TREATMENT OF THE LINEAR SYSTEM  = 2
+TYPE OF ADVECTION               = 1;5
+SUPG OPTION                     = 0;0
+MASS-LUMPING ON H : 1.
+CONTINUITY CORRECTION : YES
+SOLVER                          = 1
+SOLVER ACCURACY                 = 1.E-6
+MAXIMUM NUMBER OF ITERATIONS FOR SOLVER = 500
+IMPLICITATION FOR DEPTH         = 0.6
+IMPLICITATION FOR VELOCITY      = 0.6
+TIDAL FLATS                             = YES
+OPTION FOR THE TREATMENT OF TIDAL FLATS = 1
+TREATMENT OF NEGATIVE DEPTHS            = 2
+H CLIPPING     : NO
+/
+NUMBER OF TRACERS               = 1
+NAMES OF TRACERS                = 'DYE             MG/L'
+INITIAL VALUES OF TRACERS       = 0.
+PRESCRIBED TRACERS VALUES       = 0.0;0.0
+SCHEME FOR ADVECTION OF TRACERS          = 1
+COEFFICIENT FOR DIFFUSION OF TRACERS     = 1.E-1

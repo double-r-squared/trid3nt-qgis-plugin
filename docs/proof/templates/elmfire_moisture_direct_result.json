@@ -1,0 +1,55 @@
+{
+  "layer_id": "fire-arrival-01KZ95W2KJ0C6KSFS8GPJHSR7C",
+  "name": "Fire arrival time (live-moisture sweep, driest live grass)",
+  "layer_type": "raster",
+  "uri": "s3://trid3nt-runs/01KZ95W2KJ0C6KSFS8GPJHSR7C/overviews/01KZ95ZT5SPXFAP3H0EA1B2QXK.tif",
+  "style_preset": "continuous_fire_arrival_hr",
+  "temporal": null,
+  "role": "primary",
+  "units": null,
+  "bbox": [
+    -98.5573921423592,
+    38.45508444125045,
+    -98.4426078576408,
+    38.54491555874955
+  ],
+  "legend": null,
+  "fallback_note": null,
+  "synthetic_inputs": [],
+  "crs_authid": null,
+  "burned_area_km2": 0.4212,
+  "fire_arrival_max_hr": 0.7530676947699653,
+  "max_flame_length_m": 2.4542525207519534,
+  "max_spread_rate_m_min": 37.123043353271484,
+  "duration_hours": 0.75,
+  "ignition_lonlat": [
+    -98.5,
+    38.5
+  ],
+  "swept_param": "live_herbaceous_moisture_pct",
+  "swept_units": "percent",
+  "response_metric": "burned_area_km2",
+  "response_units": "km2",
+  "sweep": [
+    {
+      "x": 30.0,
+      "y": 0.4212
+    },
+    {
+      "x": 90.0,
+      "y": 0.0648
+    },
+    {
+      "x": 150.0,
+      "y": 0.002025
+    }
+  ],
+  "summary": {
+    "lh_min_pct": 30.0,
+    "lh_max_pct": 150.0,
+    "burned_area_dry": 0.4212,
+    "burned_area_green": 0.002025,
+    "spread_reduction_fraction": 0.9951923076923077,
+    "n_moisture_steps": 3.0
+  }
+}

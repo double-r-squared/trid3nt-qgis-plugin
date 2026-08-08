@@ -1,0 +1,51 @@
+{
+  "layer_id": "fire-arrival-01KZBZD933DDQZ39QS06T1BRA5",
+  "name": "Fire arrival time (crown Cruz-rate ceiling sweep, uncapped)",
+  "layer_type": "raster",
+  "uri": "s3://trid3nt-runs/01KZBZD933DDQZ39QS06T1BRA5/overviews/01KZBZEGXQBZF1ETH75SCASYG2.tif",
+  "style_preset": "continuous_fire_arrival_hr",
+  "temporal": null,
+  "role": "primary",
+  "units": null,
+  "bbox": [
+    -98.54591371388737,
+    38.46406755300036,
+    -98.45408628611263,
+    38.53593244699964
+  ],
+  "legend": null,
+  "fallback_note": null,
+  "synthetic_inputs": [],
+  "crs_authid": null,
+  "burned_area_km2": 2.106,
+  "fire_arrival_max_hr": 0.5018452284071181,
+  "max_flame_length_m": 24.4344132019043,
+  "max_spread_rate_m_min": 150.54707124023437,
+  "duration_hours": 0.5,
+  "ignition_lonlat": [
+    -98.5,
+    38.5
+  ],
+  "swept_param": "crown_fire_spread_rate_limit",
+  "swept_units": "ft/min",
+  "response_metric": "burned_area_km2",
+  "response_units": "km2",
+  "sweep": [
+    {
+      "x": 120.0,
+      "y": 0.1944
+    },
+    {
+      "x": 99999.0,
+      "y": 2.106
+    }
+  ],
+  "summary": {
+    "capped_rate_ftmin": 120.0,
+    "uncapped_rate_ftmin": 99999.0,
+    "capped_burned_area_km2": 0.1944,
+    "uncapped_burned_area_km2": 2.106,
+    "extent_ratio_uncapped_to_capped": 10.833333333333334,
+    "fixed_wind_mph": 25.0
+  }
+}

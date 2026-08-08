@@ -1,0 +1,66 @@
+{
+  "layer_id": "fire-arrival-01KZ95M4Y9DYRY2WCDT46BVE7A",
+  "name": "Fire arrival time (wind-fluctuation ensemble, deterministic member)",
+  "layer_type": "raster",
+  "uri": "s3://trid3nt-runs/01KZ95M4Y9DYRY2WCDT46BVE7A/overviews/01KZ95TBRRZ442B5QCCACV96XD.tif",
+  "style_preset": "continuous_fire_arrival_hr",
+  "temporal": null,
+  "role": "primary",
+  "units": null,
+  "bbox": [
+    -98.5573921423592,
+    38.45508444125045,
+    -98.4426078576408,
+    38.54491555874955
+  ],
+  "legend": null,
+  "fallback_note": null,
+  "synthetic_inputs": [],
+  "crs_authid": null,
+  "burned_area_km2": 0.5265,
+  "fire_arrival_max_hr": 0.7555525716145833,
+  "max_flame_length_m": 2.840917872619629,
+  "max_spread_rate_m_min": 51.02380649414063,
+  "duration_hours": 0.75,
+  "ignition_lonlat": [
+    -98.5,
+    38.5
+  ],
+  "swept_param": "wind_fluctuation_member",
+  "swept_units": "member",
+  "response_metric": "burned_area_km2",
+  "response_units": "km2",
+  "sweep": [
+    {
+      "x": 0.0,
+      "y": 0.5265
+    },
+    {
+      "x": 1.0,
+      "y": 1.079325
+    },
+    {
+      "x": 2.0,
+      "y": 1.09755
+    },
+    {
+      "x": 3.0,
+      "y": 1.05705
+    },
+    {
+      "x": 4.0,
+      "y": 1.136025
+    }
+  ],
+  "summary": {
+    "deterministic_burned_area_km2": 0.5265,
+    "member_mean": 1.0924875,
+    "member_min": 1.05705,
+    "member_max": 1.136025,
+    "member_std": 0.028940502004111815,
+    "spread_fraction": 0.15000000000000005,
+    "n_members": 4.0,
+    "ws_fluctuation_intensity": 0.4,
+    "wd_fluctuation_intensity": 0.15
+  }
+}
