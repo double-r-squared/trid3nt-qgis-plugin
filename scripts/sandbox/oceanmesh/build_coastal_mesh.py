@@ -336,19 +336,48 @@ def run(aoi: str) -> dict:
     return summary
 
 
+def rerender(aoi: str) -> dict:
+    """Re-render the proof image from the cached mesh + summary (no re-mesh)."""
+    sys.path.insert(0, str(SANDBOX))
+    from render_mesh import render
+
+    rundir = OUT_ROOT / aoi
+    s = json.loads((rundir / "summary.json").read_text())
+    npz = np.load(rundir / "coastal_tin_mesh.npz")
+    points, cells = npz["points"], npz["cells"]
+    qa, stats = s["qa"], s["mesh_stats"]
+    caption = (
+        f"AOI: {s['label']}   bbox={tuple(round(v, 3) for v in s['bbox'])}\n"
+        f"engine: {stats['engine']}\n"
+        f"sizing: feature(distance-to-shore) + wavelength(bathymetry, wl=10);"
+        f" gradation g={stats['grade']}\n"
+        f"nodes={qa['n_vertices']}  elements={qa['n_elements']}  "
+        f"inverted={qa['inverted_elements']}  closed={qa['boundary_closed']}\n"
+        f"resolution: {qa['edge_min_m']:.0f}-{qa['edge_max_m']:.0f} m "
+        f"(median {qa['edge_median_m']:.0f} m)   "
+        f"quality qE min={qa['min_quality_qE']} median={qa['median_quality_qE']}"
+    )
+    out = PROOF_RENDERS / f"oceanmesh_standalone_{aoi}.png"
+    render(points, cells, s["bbox"], out, aoi_name=s["label"], caption=caption)
+    return s
+
+
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--aoi", choices=list(AOIS) + ["all"], default="all")
+    ap.add_argument("--render-only", action="store_true",
+                    help="re-render proof images from the cached mesh (no re-mesh)")
     args = ap.parse_args(argv)
     aois = list(AOIS) if args.aoi == "all" else [args.aoi]
     results = {}
     for a in aois:
         try:
-            results[a] = run(a)
+            results[a] = rerender(a) if args.render_only else run(a)
         except Exception as exc:  # noqa: BLE001
             log.exception("AOI %s FAILED: %s", a, exc)
             results[a] = {"aoi": a, "error": str(exc)}
-    (OUT_ROOT / "ALL_SUMMARY.json").write_text(json.dumps(results, indent=2), encoding="utf-8")
+    if not args.render_only:
+        (OUT_ROOT / "ALL_SUMMARY.json").write_text(json.dumps(results, indent=2), encoding="utf-8")
     return 0
 
 

@@ -27,12 +27,9 @@ Run:
 from __future__ import annotations
 
 import argparse
-import io
 import json
 import logging
-import math
 import sys
-import urllib.request
 from pathlib import Path
 
 import numpy as np
@@ -242,61 +239,8 @@ def run(aoi: str) -> dict:
 
 # --------------------------------------------------------------------------- #
 # ESRI-imagery render: mesh (cyan) + residual AOI box (white dashed) on imagery. #
+# Tile + Web-Mercator math lives in merc_render (single source of truth).       #
 # --------------------------------------------------------------------------- #
-_R = 6378137.0
-_TILE = "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}"
-
-
-def _ll_to_merc(lon, lat):
-    return _R * np.radians(lon), _R * np.log(np.tan(np.pi / 4 + np.radians(lat) / 2))
-
-
-def _lonlat_to_tile(lon, lat, z):
-    n = 2 ** z
-    lat_r = math.radians(lat)
-    return ((lon + 180) / 360 * n,
-            (1 - math.log(math.tan(lat_r) + 1 / math.cos(lat_r)) / math.pi) / 2 * n)
-
-
-def _tile_merc_bounds(x, y, z):
-    n = 2 ** z
-    lon1, lon2 = x / n * 360 - 180, (x + 1) / n * 360 - 180
-    lat1 = math.degrees(math.atan(math.sinh(math.pi * (1 - 2 * y / n))))
-    lat2 = math.degrees(math.atan(math.sinh(math.pi * (1 - 2 * (y + 1) / n))))
-    xa, ya = _ll_to_merc(lon1, lat1)
-    xb, yb = _ll_to_merc(lon2, lat2)
-    return xa, xb, ya, yb
-
-
-def _pick_zoom(bbox, max_tiles=10):
-    xmin, ymin, xmax, ymax = bbox
-    for z in range(17, 5, -1):
-        x0, y0 = _lonlat_to_tile(xmin, ymax, z)
-        x1, y1 = _lonlat_to_tile(xmax, ymin, z)
-        if abs(x1 - x0) <= max_tiles and abs(y1 - y0) <= max_tiles:
-            return z
-    return 11
-
-
-def _fetch_basemap(bbox, zoom):
-    from PIL import Image
-    xmin, ymin, xmax, ymax = bbox
-    xt0 = int(math.floor(_lonlat_to_tile(xmin, ymax, zoom)[0]))
-    xt1 = int(math.floor(_lonlat_to_tile(xmax, ymin, zoom)[0]))
-    yt0 = int(math.floor(_lonlat_to_tile(xmin, ymax, zoom)[1]))
-    yt1 = int(math.floor(_lonlat_to_tile(xmax, ymin, zoom)[1]))
-    xa, xb, ya, yb = min(xt0, xt1), max(xt0, xt1), min(yt0, yt1), max(yt0, yt1)
-    mosaic = Image.new("RGB", ((xb - xa + 1) * 256, (yb - ya + 1) * 256))
-    for j, ty in enumerate(range(ya, yb + 1)):
-        for i, tx in enumerate(range(xa, xb + 1)):
-            url = _TILE.format(z=zoom, x=tx, y=ty)
-            req = urllib.request.Request(url, headers={"User-Agent": "trid3nt-mesh"})
-            with urllib.request.urlopen(req, timeout=30) as rsp:
-                tile = Image.open(io.BytesIO(rsp.read())).convert("RGB")
-            mosaic.paste(tile, (i * 256, j * 256))
-    left, _, _, top = _tile_merc_bounds(xa, ya, zoom)
-    _, right, bottom, _ = _tile_merc_bounds(xb, yb, zoom)
-    return mosaic, (left, right, bottom, top)
 
 
 def _render(points, cells, extent_bbox, aoi_box, out_path, title, caption, *, closeup=False):
@@ -304,16 +248,18 @@ def _render(points, cells, extent_bbox, aoi_box, out_path, title, caption, *, cl
     matplotlib.use("Agg")
     import matplotlib.pyplot as plt
 
+    from merc_render import fetch_basemap, ll_to_merc, pick_zoom
+
     points = np.asarray(points, float)
     cells = np.asarray(cells, np.int64)
     minx, miny, maxx, maxy = extent_bbox
     pad = 0.02 if closeup else 0.06
     plon, plat = (maxx - minx) * pad, (maxy - miny) * pad
     fbox = (minx - plon, miny - plat, maxx + plon, maxy + plat)
-    zoom = _pick_zoom(fbox, max_tiles=12 if closeup else 10)
-    basemap, (left, right, bottom, top) = _fetch_basemap(fbox, zoom)
+    zoom = pick_zoom(fbox, max_tiles=12 if closeup else 10)
+    basemap, (left, right, bottom, top) = fetch_basemap(fbox, zoom)
 
-    mx, my = _ll_to_merc(points[:, 0], points[:, 1])
+    mx, my = ll_to_merc(points[:, 0], points[:, 1])
     # Frame to the fetched basemap bounds so no white margin shows past the tiles.
     xlo, xhi, ylo, yhi = left, right, bottom, top
 
@@ -328,8 +274,8 @@ def _render(points, cells, extent_bbox, aoi_box, out_path, title, caption, *, cl
     lw = 0.7 if closeup else 0.35
     ax.triplot(mx, my, cells, color="#00e5ff", linewidth=lw, alpha=0.95, zorder=5)
     if aoi_box is not None:
-        ax0, ay0 = _ll_to_merc(aoi_box[0], aoi_box[1])
-        ax1, ay1 = _ll_to_merc(aoi_box[2], aoi_box[3])
+        ax0, ay0 = ll_to_merc(aoi_box[0], aoi_box[1])
+        ax1, ay1 = ll_to_merc(aoi_box[2], aoi_box[3])
         ax.plot([ax0, ax1, ax1, ax0, ax0], [ay0, ay0, ay1, ay1, ay0],
                 color="white", linewidth=2.0, linestyle="--", zorder=6)
     ax.set_xlim(xlo, xhi)

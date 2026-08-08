@@ -27,11 +27,9 @@ Run:
 
 from __future__ import annotations
 
-import io
 import json
 import logging
-import math
-import urllib.request
+import sys
 from pathlib import Path
 
 import matplotlib
@@ -40,7 +38,6 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt  # noqa: E402
 import numpy as np  # noqa: E402
 import rasterio  # noqa: E402
-from PIL import Image  # noqa: E402
 from rasterio.crs import CRS  # noqa: E402
 from rasterio.warp import Resampling, calculate_default_transform, reproject  # noqa: E402
 
@@ -167,75 +164,23 @@ def pysheds_playground(dem_path: Path) -> dict:
 # --------------------------------------------------------------------------- #
 # ESRI basemap tiles + overlay renderer                                       #
 # --------------------------------------------------------------------------- #
-_R = 6378137.0
-_TILE = "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}"
-
-
-def _ll_to_merc(lon, lat):
-    x = _R * np.radians(lon)
-    y = _R * np.log(np.tan(np.pi / 4 + np.radians(lat) / 2))
-    return x, y
-
-
-def _lonlat_to_tile(lon, lat, z):
-    n = 2 ** z
-    xt = (lon + 180.0) / 360.0 * n
-    lat_r = math.radians(lat)
-    yt = (1.0 - math.log(math.tan(lat_r) + 1.0 / math.cos(lat_r)) / math.pi) / 2.0 * n
-    return xt, yt
-
-
-def _tile_merc_bounds(x, y, z):
-    n = 2 ** z
-    lon1, lon2 = x / n * 360.0 - 180.0, (x + 1) / n * 360.0 - 180.0
-    lat1 = math.degrees(math.atan(math.sinh(math.pi * (1 - 2 * y / n))))
-    lat2 = math.degrees(math.atan(math.sinh(math.pi * (1 - 2 * (y + 1) / n))))
-    xa, ya = _ll_to_merc(lon1, lat1)
-    xb, yb = _ll_to_merc(lon2, lat2)
-    return xa, xb, ya, yb
-
-
-def _fetch_basemap(bbox, zoom):
-    xmin, ymin, xmax, ymax = bbox
-    xt0 = int(math.floor(_lonlat_to_tile(xmin, ymax, zoom)[0]))
-    xt1 = int(math.floor(_lonlat_to_tile(xmax, ymin, zoom)[0]))
-    yt0 = int(math.floor(_lonlat_to_tile(xmin, ymax, zoom)[1]))
-    yt1 = int(math.floor(_lonlat_to_tile(xmax, ymin, zoom)[1]))
-    xa, xb, ya, yb = min(xt0, xt1), max(xt0, xt1), min(yt0, yt1), max(yt0, yt1)
-    mosaic = Image.new("RGB", ((xb - xa + 1) * 256, (yb - ya + 1) * 256))
-    for j, ty in enumerate(range(ya, yb + 1)):
-        for i, tx in enumerate(range(xa, xb + 1)):
-            url = _TILE.format(z=zoom, x=tx, y=ty)
-            req = urllib.request.Request(url, headers={"User-Agent": "trid3nt-pysheds"})
-            with urllib.request.urlopen(req, timeout=30) as rsp:
-                tile = Image.open(io.BytesIO(rsp.read())).convert("RGB")
-            mosaic.paste(tile, (i * 256, j * 256))
-    left, _, _, top = _tile_merc_bounds(xa, ya, zoom)
-    _, right, bottom, _ = _tile_merc_bounds(xb, yb, zoom)
-    return mosaic, (left, right, bottom, top)
-
-
-def _pick_zoom(bbox):
-    xmin, ymin, xmax, ymax = bbox
-    for z in range(16, 5, -1):
-        x0, y0 = _lonlat_to_tile(xmin, ymax, z)
-        x1, y1 = _lonlat_to_tile(xmax, ymin, z)
-        if abs(x1 - x0) <= 8 and abs(y1 - y0) <= 8:
-            return z
-    return 12
+# Tile + Web-Mercator math lives in the oceanmesh sandbox's merc_render (single
+# source of truth for every mesh/watershed proof render).
+sys.path.insert(0, str(REPO / "scripts/sandbox/oceanmesh"))
+from merc_render import fetch_basemap, ll_to_merc, pick_zoom  # noqa: E402
 
 
 def render(pg, catchment_fc, streams_fc, snapped, area_km2, stream_km, out_path, caption):
     plon = (BBOX[2] - BBOX[0]) * 0.08
     plat = (BBOX[3] - BBOX[1]) * 0.08
     fbox = (BBOX[0] - plon, BBOX[1] - plat, BBOX[2] + plon, BBOX[3] + plat)
-    zoom = _pick_zoom(fbox)
-    basemap, (left, right, bottom, top) = _fetch_basemap(fbox, zoom)
+    zoom = pick_zoom(fbox, max_tiles=8, zmax=16, fallback=12)
+    basemap, (left, right, bottom, top) = fetch_basemap(fbox, zoom, user_agent="trid3nt-pysheds")
 
-    xlo, ylo = _ll_to_merc(fbox[0], fbox[1])
-    xhi, yhi = _ll_to_merc(fbox[2], fbox[3])
-    bx0, by0 = _ll_to_merc(BBOX[0], BBOX[1])
-    bx1, by1 = _ll_to_merc(BBOX[2], BBOX[3])
+    xlo, ylo = ll_to_merc(fbox[0], fbox[1])
+    xhi, yhi = ll_to_merc(fbox[2], fbox[3])
+    bx0, by0 = ll_to_merc(BBOX[0], BBOX[1])
+    bx1, by1 = ll_to_merc(BBOX[2], BBOX[3])
 
     map_w = 10.0
     aspect = (yhi - ylo) / (xhi - xlo)
@@ -249,10 +194,10 @@ def render(pg, catchment_fc, streams_fc, snapped, area_km2, stream_km, out_path,
     # flow accumulation (log) as the signature chapter raster, warped to merc extent.
     acc = pg["acc"]
     ex = pg["extent"]  # (lon_left, lon_right, lat_bottom, lat_top)
-    mxl, _ = _ll_to_merc(ex[0], ex[2])
-    mxr, _ = _ll_to_merc(ex[1], ex[2])
-    _, myb = _ll_to_merc(ex[0], ex[2])
-    _, myt = _ll_to_merc(ex[0], ex[3])
+    mxl, _ = ll_to_merc(ex[0], ex[2])
+    mxr, _ = ll_to_merc(ex[1], ex[2])
+    _, myb = ll_to_merc(ex[0], ex[2])
+    _, myt = ll_to_merc(ex[0], ex[3])
     # mask below the floor so only channels glow (not a flat wash).
     acc_log = np.log10(np.where(acc >= ACC_RASTER_FLOOR, acc, np.nan))
     ax.imshow(acc_log, extent=[mxl, mxr, myb, myt], origin="upper",
@@ -266,18 +211,18 @@ def render(pg, catchment_fc, streams_fc, snapped, area_km2, stream_km, out_path,
         polys = geom.geoms if geom.geom_type == "MultiPolygon" else [geom]
         for poly in polys:
             xs, ys = poly.exterior.xy
-            mx, my = _ll_to_merc(np.asarray(xs), np.asarray(ys))
+            mx, my = ll_to_merc(np.asarray(xs), np.asarray(ys))
             ax.plot(mx, my, color="#ffd400", linewidth=2.6, zorder=4)
 
     # stream network vector (registered tool) -- bold white main stems.
     for feat in streams_fc["features"]:
         coords = feat["geometry"]["coordinates"]
         arr = np.asarray(coords)
-        mx, my = _ll_to_merc(arr[:, 0], arr[:, 1])
+        mx, my = ll_to_merc(arr[:, 0], arr[:, 1])
         ax.plot(mx, my, color="#ffffff", linewidth=1.4, alpha=0.95, zorder=5)
 
     # snapped pour point (red).
-    sx, sy = _ll_to_merc(snapped[0], snapped[1])
+    sx, sy = ll_to_merc(snapped[0], snapped[1])
     ax.scatter([sx], [sy], s=90, marker="v", color="#ff2b2b",
                edgecolor="white", linewidth=1.2, zorder=6)
 

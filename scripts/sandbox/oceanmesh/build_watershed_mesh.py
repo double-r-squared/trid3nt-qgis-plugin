@@ -22,13 +22,10 @@ Run:
 from __future__ import annotations
 
 import argparse
-import io
 import json
 import logging
-import math
 import shutil
 import sys
-import urllib.request
 from pathlib import Path
 
 import geopandas as gpd
@@ -261,81 +258,28 @@ def build_watershed_mesh(case: str) -> dict:
 
 # --------------------------------------------------------------------------- #
 # render: mesh (cyan) + catchment (yellow) + AOI residual box (white) on ESRI  #
+# Tile + Web-Mercator math lives in merc_render (single source of truth).      #
 # --------------------------------------------------------------------------- #
-_R = 6378137.0
-_TILE = "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}"
-
-
-def _ll_to_merc(lon, lat):
-    return _R * np.radians(lon), _R * np.log(np.tan(np.pi / 4 + np.radians(lat) / 2))
-
-
-def _lonlat_to_tile(lon, lat, z):
-    n = 2 ** z
-    lat_r = math.radians(lat)
-    return ((lon + 180) / 360 * n,
-            (1 - math.log(math.tan(lat_r) + 1 / math.cos(lat_r)) / math.pi) / 2 * n)
-
-
-def _tile_merc_bounds(x, y, z):
-    n = 2 ** z
-    lon1, lon2 = x / n * 360 - 180, (x + 1) / n * 360 - 180
-    lat1 = math.degrees(math.atan(math.sinh(math.pi * (1 - 2 * y / n))))
-    lat2 = math.degrees(math.atan(math.sinh(math.pi * (1 - 2 * (y + 1) / n))))
-    xa, ya = _ll_to_merc(lon1, lat1)
-    xb, yb = _ll_to_merc(lon2, lat2)
-    return xa, xb, ya, yb
-
-
-def _pick_zoom(bbox):
-    xmin, ymin, xmax, ymax = bbox
-    for z in range(16, 5, -1):
-        x0, y0 = _lonlat_to_tile(xmin, ymax, z)
-        x1, y1 = _lonlat_to_tile(xmax, ymin, z)
-        if abs(x1 - x0) <= 8 and abs(y1 - y0) <= 8:
-            return z
-    return 12
-
-
-def _fetch_basemap(bbox, zoom):
-    xmin, ymin, xmax, ymax = bbox
-    xt0 = int(math.floor(_lonlat_to_tile(xmin, ymax, zoom)[0]))
-    xt1 = int(math.floor(_lonlat_to_tile(xmax, ymin, zoom)[0]))
-    yt0 = int(math.floor(_lonlat_to_tile(xmin, ymax, zoom)[1]))
-    yt1 = int(math.floor(_lonlat_to_tile(xmax, ymin, zoom)[1]))
-    xa, xb, ya, yb = min(xt0, xt1), max(xt0, xt1), min(yt0, yt1), max(yt0, yt1)
-    from PIL import Image
-    mosaic = Image.new("RGB", ((xb - xa + 1) * 256, (yb - ya + 1) * 256))
-    for j, ty in enumerate(range(ya, yb + 1)):
-        for i, tx in enumerate(range(xa, xb + 1)):
-            url = _TILE.format(z=zoom, x=tx, y=ty)
-            req = urllib.request.Request(url, headers={"User-Agent": "trid3nt-mesh"})
-            with urllib.request.urlopen(req, timeout=30) as rsp:
-                tile = Image.open(io.BytesIO(rsp.read())).convert("RGB")
-            mosaic.paste(tile, (i * 256, j * 256))
-    left, _, _, top = _tile_merc_bounds(xa, ya, zoom)
-    _, right, bottom, _ = _tile_merc_bounds(xb, yb, zoom)
-    return mosaic, (left, right, bottom, top)
-
-
 def _render_watershed(points, cells, catch, aoi_bbox, out_path, aoi_name, caption):
     import matplotlib
     matplotlib.use("Agg")
     import matplotlib.pyplot as plt
+
+    from merc_render import fetch_basemap, ll_to_merc, pick_zoom
 
     points = np.asarray(points, float)
     cells = np.asarray(cells, np.int64)
     minx, miny, maxx, maxy = catch.bounds
     plon, plat = (maxx - minx) * 0.08, (maxy - miny) * 0.08
     fbox = (minx - plon, miny - plat, maxx + plon, maxy + plat)
-    zoom = _pick_zoom(fbox)
-    basemap, (left, right, bottom, top) = _fetch_basemap(fbox, zoom)
+    zoom = pick_zoom(fbox, max_tiles=8, zmax=16, fallback=12)
+    basemap, (left, right, bottom, top) = fetch_basemap(fbox, zoom)
 
     # frame to the fetched basemap bounds (no white letterbox bands).
     xlo, xhi, ylo, yhi = left, right, bottom, top
-    mx, my = _ll_to_merc(points[:, 0], points[:, 1])
-    ax0, ay0 = _ll_to_merc(aoi_bbox[0], aoi_bbox[1])
-    ax1, ay1 = _ll_to_merc(aoi_bbox[2], aoi_bbox[3])
+    mx, my = ll_to_merc(points[:, 0], points[:, 1])
+    ax0, ay0 = ll_to_merc(aoi_bbox[0], aoi_bbox[1])
+    ax1, ay1 = ll_to_merc(aoi_bbox[2], aoi_bbox[3])
 
     map_w = 10.0
     aspect = (yhi - ylo) / (xhi - xlo)
@@ -349,7 +293,7 @@ def _render_watershed(points, cells, catch, aoi_bbox, out_path, aoi_name, captio
     polys = catch.geoms if catch.geom_type == "MultiPolygon" else [catch]
     for poly in polys:
         xs, ys = poly.exterior.xy
-        cx, cy = _ll_to_merc(np.asarray(xs), np.asarray(ys))
+        cx, cy = ll_to_merc(np.asarray(xs), np.asarray(ys))
         ax.plot(cx, cy, color="#ffd400", linewidth=2.4, zorder=4)
     ax.triplot(mx, my, cells, color="#00e5ff", linewidth=0.45, alpha=0.95, zorder=5)
     ax.plot([ax0, ax1, ax1, ax0, ax0], [ay0, ay0, ay1, ay1, ay0],
@@ -372,13 +316,51 @@ def _render_watershed(points, cells, catch, aoi_bbox, out_path, aoi_name, captio
     log.info("render -> %s", out_path)
 
 
+def rerender(case: str) -> None:
+    """Re-render the proof image from the cached mesh (no Docker re-mesh).
+
+    The catchment polygon is re-derived from the cached DEM via the registered
+    delineate tool (offline); everything else is read from the cached npz + summary.
+    """
+    sys.path.insert(0, str(SANDBOX))
+    cfg = CASES[case]
+    rundir = OUT_ROOT / case
+    npz = np.load(rundir / "coastal_tin_mesh.npz")
+    points, cells = npz["points"], npz["cells"]
+    summ = json.loads((rundir / "summary.json").read_text())
+    dem_path = fetch_dem_4326(cfg["aoi_bbox"], rundir)
+    _, catch = delineate(cfg, dem_path, rundir)
+    qa, stats = summ["qa"], summ["mesh_stats"]
+    caption = (
+        f"WATERSHED-FIRST: {cfg['label']}\n"
+        f"domain = pysheds catchment {summ['catchment_km2']:.1f} km^2 (NOT the AOI "
+        f"box); river corridor within it {summ['corridor_km2']:.2f} km^2\n"
+        f"domain/sizing: {cfg['shoreline_source']}\n"
+        f"engine: {stats['engine']}   catchment-interior SDF + distance-to-river "
+        f"sizing; grade g={cfg['grade']}\n"
+        f"nodes={qa['n_vertices']} elements={qa['n_elements']} "
+        f"inverted={qa['inverted_elements']} closed={qa['boundary_closed']}   "
+        f"resolution {qa['edge_min_m']:.0f}-{qa['edge_max_m']:.0f} m "
+        f"(median {qa['edge_median_m']:.0f} m)   qE min={qa['min_quality_qE']} "
+        f"median={qa['median_quality_qE']}"
+    )
+    _render_watershed(points, cells, catch, cfg["aoi_bbox"],
+                      PROOF_RENDERS / f"oceanmesh_standalone_{case}.png",
+                      cfg["label"], caption)
+
+
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--case", choices=list(CASES) + ["all"], default="coweeta_river")
+    ap.add_argument("--render-only", action="store_true",
+                    help="re-render the proof image from the cached mesh (no re-mesh)")
     args = ap.parse_args(argv)
     cases = list(CASES) if args.case == "all" else [args.case]
     for c in cases:
-        build_watershed_mesh(c)
+        if args.render_only:
+            rerender(c)
+        else:
+            build_watershed_mesh(c)
     return 0
 
 

@@ -183,6 +183,13 @@ generated `.cli` into TELEMAC-2D as the flagship pairing).
 
 1. **CRS**: mesh in EPSG:4326 (current, simple, DEM-aligned) or a local UTM /
    stereographic projection (removes degree anisotropy, standard for OceanMesh2D)?
+   Note (ADR 0197): the degree-frame meshing is NOT a positional-accuracy concern.
+   The vertical mesh-vs-basemap misalignment NATE saw was a render tile-extent bug
+   (fixed), not a meshing-CRS artifact - the degree-frame mesh nodes were measured
+   to sit within one element of the true 4326 water polygon everywhere, with no
+   latitude-dependent drift. The only remaining degree-frame consequence is element
+   ANISOTROPY (triangle shape stretched by cos(lat)), not node displacement; that is
+   what a projected CRS would fix.
 2. **Shoreline fidelity**: GSHHG intermediate (`GSHHS_i`) is used; it is coarse
    for barrier islands and narrow inlets (some near-shore triangles ride onto
    marsh/land at this resolution). Upgrade to GSHHG full (`GSHHS_f`), NOAA

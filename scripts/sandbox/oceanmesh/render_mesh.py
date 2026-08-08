@@ -5,88 +5,19 @@ tiles to the project proof norms: white box = AOI extent only, wireframe a singl
 colour (element-size gradation reads through the mesh density), a caption strip
 stating the sizing settings + element count + resolution range.
 
-Self-contained: fetches ESRI World Imagery XYZ tiles directly
-(server.arcgisonline.com World_Imagery MapServer) with urllib + PIL, reprojects
-the lon/lat mesh to Web Mercator (EPSG:3857), and composites with matplotlib.
+Tiles + Web-Mercator math come from merc_render (single source of truth); the
+lon/lat mesh is reprojected to EPSG:3857 to share the imagery's frame.
 """
 
 from __future__ import annotations
-
-import io
-import math
-import urllib.request
 
 import matplotlib
 
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt  # noqa: E402
 import numpy as np  # noqa: E402
-from PIL import Image  # noqa: E402
 
-_R = 6378137.0
-_TILE = "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}"
-
-
-def _ll_to_merc(lon, lat):
-    x = _R * np.radians(lon)
-    y = _R * np.log(np.tan(np.pi / 4 + np.radians(lat) / 2))
-    return x, y
-
-
-def _lonlat_to_tile(lon, lat, z):
-    n = 2 ** z
-    xt = (lon + 180.0) / 360.0 * n
-    lat_r = math.radians(lat)
-    yt = (1.0 - math.log(math.tan(lat_r) + 1.0 / math.cos(lat_r)) / math.pi) / 2.0 * n
-    return xt, yt
-
-
-def _tile_merc_bounds(x, y, z):
-    n = 2 ** z
-    lon1 = x / n * 360.0 - 180.0
-    lon2 = (x + 1) / n * 360.0 - 180.0
-    lat1 = math.degrees(math.atan(math.sinh(math.pi * (1 - 2 * y / n))))
-    lat2 = math.degrees(math.atan(math.sinh(math.pi * (1 - 2 * (y + 1) / n))))
-    xa, ya = _ll_to_merc(lon1, lat1)
-    xb, yb = _ll_to_merc(lon2, lat2)
-    return xa, xb, ya, yb
-
-
-def _pick_zoom(bbox, target_tiles=4):
-    xmin, ymin, xmax, ymax = bbox
-    for z in range(16, 5, -1):
-        x0, _ = _lonlat_to_tile(xmin, ymax, z)
-        x1, _ = _lonlat_to_tile(xmax, ymin, z)
-        _, y0 = _lonlat_to_tile(xmin, ymax, z)
-        _, y1 = _lonlat_to_tile(xmax, ymin, z)
-        if (abs(x1 - x0) <= 8) and (abs(y1 - y0) <= 8):
-            return z
-    return 10
-
-
-def _fetch_basemap(bbox, zoom):
-    xmin, ymin, xmax, ymax = bbox
-    xt0 = int(math.floor(_lonlat_to_tile(xmin, ymax, zoom)[0]))
-    xt1 = int(math.floor(_lonlat_to_tile(xmax, ymin, zoom)[0]))
-    yt0 = int(math.floor(_lonlat_to_tile(xmin, ymax, zoom)[1]))
-    yt1 = int(math.floor(_lonlat_to_tile(xmax, ymin, zoom)[1]))
-    xa = min(xt0, xt1)
-    xb = max(xt0, xt1)
-    ya = min(yt0, yt1)
-    yb = max(yt0, yt1)
-    cols = xb - xa + 1
-    rows = yb - ya + 1
-    mosaic = Image.new("RGB", (cols * 256, rows * 256))
-    for j, ty in enumerate(range(ya, yb + 1)):
-        for i, tx in enumerate(range(xa, xb + 1)):
-            url = _TILE.format(z=zoom, x=tx, y=ty)
-            req = urllib.request.Request(url, headers={"User-Agent": "trid3nt-mesh-sandbox"})
-            with urllib.request.urlopen(req, timeout=30) as r:
-                tile = Image.open(io.BytesIO(r.read())).convert("RGB")
-            mosaic.paste(tile, (i * 256, j * 256))
-    left, _, _, top = _tile_merc_bounds(xa, ya, zoom)
-    _, right, bottom, _ = _tile_merc_bounds(xb, yb, zoom)
-    return mosaic, (left, right, bottom, top)
+from merc_render import fetch_basemap, ll_to_merc, pick_zoom  # noqa: E402
 
 
 def render(
@@ -106,15 +37,16 @@ def render(
     plon = (bbox[2] - bbox[0]) * 0.05
     plat = (bbox[3] - bbox[1]) * 0.05
     fetch_bbox = (bbox[0] - plon, bbox[1] - plat, bbox[2] + plon, bbox[3] + plat)
-    zoom = _pick_zoom(fetch_bbox)
-    basemap, (left, right, bottom, top) = _fetch_basemap(fetch_bbox, zoom)
+    zoom = pick_zoom(fetch_bbox, max_tiles=8, zmax=16, fallback=10)
+    basemap, (left, right, bottom, top) = fetch_basemap(
+        fetch_bbox, zoom, user_agent="trid3nt-mesh-sandbox"
+    )
 
-    mx, my = _ll_to_merc(points[:, 0], points[:, 1])
-    bx0, by0 = _ll_to_merc(bbox[0], bbox[1])
-    bx1, by1 = _ll_to_merc(bbox[2], bbox[3])
-    xlo, yl0 = _ll_to_merc(fetch_bbox[0], fetch_bbox[1])
-    xhi, yh0 = _ll_to_merc(fetch_bbox[2], fetch_bbox[3])
-    ylo, yhi = yl0, yh0
+    mx, my = ll_to_merc(points[:, 0], points[:, 1])
+    bx0, by0 = ll_to_merc(bbox[0], bbox[1])
+    bx1, by1 = ll_to_merc(bbox[2], bbox[3])
+    xlo, ylo = ll_to_merc(fetch_bbox[0], fetch_bbox[1])
+    xhi, yhi = ll_to_merc(fetch_bbox[2], fetch_bbox[3])
 
     # Match the figure aspect to the AOI so imshow(aspect='equal') fills the map
     # axes with no white letterboxing; a fixed caption strip sits underneath.
