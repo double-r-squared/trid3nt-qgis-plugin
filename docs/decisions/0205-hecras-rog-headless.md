@@ -143,3 +143,20 @@ missing hydrology-output scaffold, then completes the solve / metric-extractor /
 - Decompiler note: the `local/ilspy:9` image + the extracted decompiled trees live only in the
   session scratchpad (proprietary DLLs are gitignored; nothing vendored). Reproduce via the
   ADR 0199 DLL-extraction recipe + `ilspycmd -p`.
+
+## VERDICT 2026-08-09 (ADR 0207) -- the residual is UNBLOCKED on Linux, NOT via the 6.6 path
+
+The `READ_UN_HYDROLOGY2D` residual above (the Windows-preprocessing hydrology-output/region
+scaffold) does NOT need to be cracked, and NATE's Windows-GUI export is NO LONGER REQUIRED. The
+preprocessing-shim hunt (ADR 0207) found that the 2025 MANAGED engine preprocesses AND solves 2D
+unsteady shallow-water on Linux with the CPU solver -- the ONLY native P/Invoke in `Ras.Engine.dll`
+is the CUDA/GPU path; the CPU stack is pure managed C#. The 2025 CLI runs on Linux end-to-end:
+`migrate project` (v6->2025) -> `ras prepare` (writes the ready-to-run `<plan>.r2r.h5`, the Windows
+`.tmp.hdf` equivalent) -> `ras solve --solver CPU`. RAIN delivery is LIVE on this path: a constant
+`PrecipitationLayer` (SpatialDataType=Constant) applies rain to every cell in-memory (the same
+`InitializeComputeDriver` nearest-neighbour path decoded above), depth rises uniformly and linearly,
+mass-conservative (rate 100 -> +0.10 ft/hr, rate 300 -> +0.30 ft/hr). This is exactly what the 6.6
+Fortran path could not do ("Cell are not linked" -> zero precip). The 6.6-format precip-interp folder
+authoring (Decision 2) + SCS-CN scaffold (Decision 3) stay decoded-but-frozen -- a real-catchment RoG
+solve now goes through the 2025 managed engine, not the 6.6 Fortran solver. See ADR 0207 for the
+survey table, the live solve evidence, and the bounded continuation.
