@@ -1,0 +1,17 @@
+[
+  {
+    "label": "Ball Creek weir house #9 (sub-daily; main Coweeta Creek fork)",
+    "package_pid": "https://pasta.lternet.edu/package/metadata/eml/knb-lter-cwt/3037/19",
+    "data_pid": "https://pasta.lternet.edu/package/data/eml/knb-lter-cwt/3037/19/c35aa80cb6b763ced2bbae10b9638b48",
+    "object_name": "c35aa80cb6b763ced2bbae10b9638b48",
+    "date_col": "Date",
+    "discharge_col": "Discharge",
+    "discharge_unit": "cubicMetersPerSecond",
+    "interval": "hourly",
+    "first_ts": "2014-05-30 11:00:00",
+    "last_ts": "2019-01-14 16:00:00",
+    "n_rows": 40569,
+    "sha256": "0435057d4e239c65a661ce2028be9546abd5f605933dedbec1a68cad2ac91c86",
+    "bbox": {}
+  }
+]

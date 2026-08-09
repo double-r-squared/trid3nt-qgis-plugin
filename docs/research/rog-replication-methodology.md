@@ -1,5 +1,18 @@
 # Rain-on-Grid replication methodology (recon; for NATE sign-off BEFORE runs)
 
+> STATUS 2026-08-08 (ADR 0202): NATE signed off the sourcing (Coweeta site + USFS
+> Coweeta Hydrologic Lab / LTER gauge on EDI, not NWIS) and the coverage check was
+> run. FINDING: the replication is DATA-BLOCKED -- the EDI gauge record and the
+> MRMS precip archive do not overlap, so no candidate event is gradeable. The
+> [CONFIRM] flags below are resolved inline. Highest-resolution EDI Coweeta record
+> = Ball Creek weir #9 (knb-lter-cwt.3037/19), HOURLY discharge in m3/s, span
+> 2014-05-30 .. 2019-01-14; MRMS QPE begins ~2020-10 -> a ~21-month gap, ZERO
+> overlap; Fred 2021 / Helene 2024 / a 2021-2024 winter event all post-date the
+> gauge. STOPPED per protocol. Cheapest unblock: build an AORC (or Stage-IV)
+> hourly precip fetcher reaching back to 2014-2019 and replicate on Ball Creek
+> fork storm events (re-cut the mesh to the Ball Creek sub-basin). Full provenance,
+> weir->sub-catchment mapping, and the pour-point/basin spatial caveat: ADR 0202.
+
 Purpose: lay out the site, events, data coverage, calibration protocol, and
 comparison matrix to replicate the Godara, Bruland and Alfredsen (2024, Front.
 Water 6:1384205) TELEMAC-2D vs HEC-RAS 2D rain-on-grid flash-flood protocol on a
@@ -28,29 +41,39 @@ Primary site: the ADR 0193 **Coweeta Creek watershed**, Nantahala Mtns, NC.
     CAVEAT: Cartoogechaye Creek is a SEPARATE, larger Little Tennessee tributary
     (not the 30 km2 Coweeta Creek mesh) -- basin-mismatched; usable only if the
     mesh domain is re-cut to the Cartoogechaye catchment.
-  - [CONFIRM] Coweeta Creek proper: the authoritative sub-hourly record for the
-    Coweeta catchment is the **USFS Coweeta Hydrologic Laboratory** (Coweeta LTER
-    / USFS Southern Research Station) experimental watersheds (WS01/02/08/18/36
-    ...), continuous 5-min stage since the 1930s -- NOT in USGS NWIS; access via
-    the Coweeta LTER / EDI data portal. Exact station id, record length, and
-    sub-daily availability need NATE / USFS-portal confirmation (not fetchable by
-    our current USGS-NWIS surface). This is the highest-fidelity observed target
-    if we can ingest it; otherwise fall back to a USGS-IV catchment (below).
+  - [RESOLVED 2026-08-08, ADR 0202] Coweeta Creek proper via EDI: the
+    highest-resolution EDI streamflow record is **Ball Creek weir house #9**
+    (knb-lter-cwt.3037/19), **HOURLY** (not 5-min) water level + discharge in
+    m3/s, span 2014-05-30 .. 2019-01-14 (40,569 rows). Ball Creek is one of the
+    two forks of Coweeta Creek (the other, Shope Fork knb-lter-cwt.3032, ends
+    1999). Daily records: WS18 Grady Branch (3033) and WS27 (3034), both ending
+    2018-10-31, are tiny experimental control watersheds, not our 30 km2 domain.
+    The record ends 2019-01-14 -- BEFORE the MRMS archive begins (section 3) -> no
+    overlap. Spatial caveat: our pour point (-83.40402) is EAST of the Coweeta
+    Basin's east bound (-83.4217), i.e. downstream of the lab outlet; our 30 km2
+    catchment exceeds the 21.85 km2 gauged basin. See ADR 0202.
 
 ## 2. Candidate events (2 single-storm + 1 multi-peak)
 
 Hard constraint: our hourly precip product (`fetch_mrms_qpe`, 1h) has an S3
 archive beginning ~2020-10, so events MUST post-date that (see section 3).
 
-- [CONFIRM] Single-storm A -- **Tropical Storm Fred remnants, 2021-08-17..18**:
+- [NOT GRADEABLE 2026-08-08, ADR 0202: post-dates the gauge (ends 2019-01-14) by
+  2.6 yr -- MRMS covers it but no observed discharge exists]
+  Single-storm A -- **Tropical Storm Fred remnants, 2021-08-17..18**:
   extreme flash flooding in the western-NC mountains (Haywood/Transylvania,
   adjacent to Coweeta). Short high-intensity single-peak event ~ the paper's
   10-20 h class. Confirm the Coweeta-area rainfall + a clean single-peak gauge
   hydrograph.
-- [CONFIRM] Single-storm B -- **Hurricane Helene, 2024-09-26..27**: catastrophic
+- [NOT GRADEABLE 2026-08-08, ADR 0202: post-dates the gauge by 5.7 yr]
+  Single-storm B -- **Hurricane Helene, 2024-09-26..27**: catastrophic
   western-NC flooding covering the Coweeta area; large single-storm event, tests
   the upper end of the RoG envelope. Confirm gauge did not go out / clip.
-- [CONFIRM] Multi-peak -- a sustained winter frontal or rain-on-snow event
+- [NOT GRADEABLE 2026-08-08, ADR 0202: any 2021-2024 window post-dates the gauge.
+  NOTE the unblock -- Ball Creek hourly 2014-2019 DOES contain winter multi-peak
+  responses usable as the negative control ONCE a pre-2020 precip fetcher (AORC/
+  Stage-IV) exists]
+  Multi-peak -- a sustained winter frontal or rain-on-snow event
   (candidate window: a multi-day frontal passage 2021-2024 with inter-peak
   sustained flow). This is the event the paper's RoG approach is EXPECTED to
   reproduce POORLY (no subsurface return flow) -- the deliberate negative
