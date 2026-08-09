@@ -202,7 +202,16 @@ def classify_outlet(
     ry = Y[ring]
     d2 = (rx - ox) ** 2 + (ry - oy) ** 2
     k = max(2, min(int(n_outlet_nodes), nptfr - 3))
-    outlet_ring_idx = set(int(i) for i in np.argsort(d2)[:k])
+    # A CONTIGUOUS arc of k ring nodes centred on the node nearest the pour point.
+    # The ring is in boundary-walk order, so a contiguous index window is a
+    # contiguous boundary segment; the k globally-nearest nodes are NOT guaranteed
+    # contiguous and an isolated liquid node between two walls aborts the solver
+    # (FRONT2: "LIQUID POINT BETWEEN TWO SOLID POINTS"). Centring on argmin keeps
+    # the free-exit segment on the single stretch of boundary at the outlet.
+    i0 = int(np.argmin(d2))
+    half = k // 2
+    outlet_ring_idx = set(int((i0 + off) % nptfr)
+                          for off in range(-half, k - half))
 
     lihbor = np.full(nptfr, 2, dtype=int)
     liubor = np.full(nptfr, 2, dtype=int)
@@ -354,10 +363,24 @@ def author_rog_deck(
     dt = float(getattr(cfg, "time_step_s", 2.0))
     gp = int(getattr(cfg, "graphic_period", 100))
 
+    # Rain-on window: rain falls for rain_duration_s (native keyword
+    # DURATION OF RAIN OR EVAPORATION IN HOURS / RAIN_HDUR), then stops so the
+    # catchment drains -- the recession limb the constant-full-duration source
+    # cannot produce. Emitted only when a finite rain window shorter than the
+    # total DURATION is set; else rain falls the whole run (legacy behaviour).
+    rain_dur_s = getattr(cfg, "rain_duration_s", None)
+    rain_hdur_line = ""
+    if rain_dur_s is not None and 0.0 < float(rain_dur_s) < duration_s:
+        rain_hdur_line = (
+            "DURATION OF RAIN OR EVAPORATION IN HOURS = "
+            f"{_cas_real(float(rain_dur_s) / 3600.0)}\n"
+        )
+
     if str(runoff_path).lower() == "native":
         runoff_block = (
             "RAIN OR EVAPORATION             = YES\n"
             f"RAIN OR EVAPORATION IN MM PER DAY = {_cas_real(rain_mm_per_day)}\n"
+            f"{rain_hdur_line}"
             "RAINFALL-RUNOFF MODEL           = 1\n"
             f"ANTECEDENT MOISTURE CONDITIONS  = {amc}\n"
             f"OPTION FOR INITIAL ABSTRACTION RATIO = {ia_opt}\n"
@@ -369,6 +392,7 @@ def author_rog_deck(
         runoff_block = (
             "RAIN OR EVAPORATION             = YES\n"
             f"RAIN OR EVAPORATION IN MM PER DAY = {_cas_real(rain_mm_per_day)}\n"
+            f"{rain_hdur_line}"
             "RAINFALL-RUNOFF MODEL           = 0\n"
         )
 

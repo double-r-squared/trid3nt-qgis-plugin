@@ -1,0 +1,23 @@
+{
+  "site": "Ball Creek weir house #9, Coweeta Hydrologic Laboratory, Otto NC (EDI knb-lter-cwt.3037/19)",
+  "weir_pour_point_lonlat": [
+    -83.43131,
+    35.05701
+  ],
+  "weir_snapped_outlet_lonlat": [
+    -83.42966,
+    35.05917
+  ],
+  "delineated_area_km2_glo30": 7.24,
+  "shope_fork_area_km2_glo30": 8.41,
+  "cwtbasin_whole_area_km2_glo30": 18.06,
+  "cwtbasin_documented_km2": 21.85,
+  "fork_identity_evidence": "NHD/GNIS named reaches: 'Ball Creek' centroid (-83.4451,35.0466) SOUTH fork; 'Shope Fork' centroid (-83.4496,35.0589) NORTH fork. WS18(Grady Branch) + WS27 EML centroids both fall inside the SOUTH (Ball Creek) polygon.",
+  "reconciliation": "Ball Creek = SOUTH fork = 7.24 km2 on Copernicus GLO-30 (the mesh-acquisition delineation DEM). Ball(7.24)+Shope(8.41)+intervening = CWTBASIN. GLO-30 whole basin 18.06 under-captures the surveyed 21.85 km2 by ~17%; Ball Creek is ~40% of the GLO-30 basin (the smaller of the two comparable main forks), ~33% of the documented 21.85. Scaled for the DEM under-capture the true Ball Creek fork is ~8.7 km2.",
+  "mesh_bbox": [
+    -83.48,
+    35.02,
+    -83.418,
+    35.065
+  ]
+}

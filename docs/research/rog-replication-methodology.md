@@ -1,14 +1,26 @@
 # Rain-on-Grid replication methodology (recon; for NATE sign-off BEFORE runs)
 
-> STATUS 2026-08-08 (ADR 0202): NATE signed off the sourcing (Coweeta site + USFS
+> STATUS 2026-08-09 (ADR 0204): EXECUTED. The ADR 0202 data block was cleared by
+> the ADR 0203 AORC + LTER fetchers, and the replication was run computed-vs-observed
+> on the re-cut Ball Creek weir #9 catchment (7.24 km2, south fork; NHD/GNIS-confirmed).
+> RESULT: an honest PARTIAL replication -- the Dec 2015 flash-flood PEAK is reproduced
+> (8.46 vs 8.60 m3/s, -1.7%; peak-aligned R2 0.67) but the raw hourly NSE (-1.41) lands
+> well below the paper's 0.70-0.90 (screening-grade). The gap is fully attributable to
+> the installed stack: constant rain (RAINDEF=1) -> ~11 h peak-timing lag; no subsurface
+> return flow -> missing recession tail (event volume -52%); a 30-200 m mesh cannot
+> convey thin low-intensity flow (the Feb 2018 validation ponds); static SCS-CN does not
+> transfer one CN across antecedent regimes. The multi-peak control shows the expected
+> structural failure. Full weir mapping, calibration trials, results table and honest
+> paper comparison: ADR 0204. Historical context (the STOP + unblock) below.
+>
+> PRIOR STATUS 2026-08-08 (ADR 0202): NATE signed off the sourcing (Coweeta site + USFS
 > Coweeta Hydrologic Lab / LTER gauge on EDI, not NWIS) and the coverage check was
-> run. FINDING: the replication is DATA-BLOCKED -- the EDI gauge record and the
-> MRMS precip archive do not overlap, so no candidate event is gradeable. The
-> [CONFIRM] flags below are resolved inline. Highest-resolution EDI Coweeta record
-> = Ball Creek weir #9 (knb-lter-cwt.3037/19), HOURLY discharge in m3/s, span
-> 2014-05-30 .. 2019-01-14; MRMS QPE begins ~2020-10 -> a ~21-month gap, ZERO
+> run. FINDING: the replication was DATA-BLOCKED -- the EDI gauge record and the
+> MRMS precip archive do not overlap, so no candidate event is gradeable. Highest-resolution
+> EDI Coweeta record = Ball Creek weir #9 (knb-lter-cwt.3037/19), HOURLY discharge in
+> m3/s, span 2014-05-30 .. 2019-01-14; MRMS QPE begins ~2020-10 -> a ~21-month gap, ZERO
 > overlap; Fred 2021 / Helene 2024 / a 2021-2024 winter event all post-date the
-> gauge. STOPPED per protocol. Cheapest unblock: build an AORC (or Stage-IV)
+> gauge. STOPPED per protocol. Cheapest unblock (TAKEN, ADR 0203/0204): build an AORC
 > hourly precip fetcher reaching back to 2014-2019 and replicate on Ball Creek
 > fork storm events (re-cut the mesh to the Ball Creek sub-basin). Full provenance,
 > weir->sub-catchment mapping, and the pour-point/basin spatial caveat: ADR 0202.

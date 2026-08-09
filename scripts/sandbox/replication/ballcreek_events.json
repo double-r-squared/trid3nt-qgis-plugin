@@ -1,0 +1,32 @@
+{
+  "dec2015": {
+    "label": "Dec2015 (calibration, single-storm)",
+    "onset": "2015-12-22 07:00:00",
+    "tpeak": "2015-12-24 07:00:00",
+    "ttp_h": 48,
+    "intensity_mm_per_hr": 1.823,
+    "rain_to_peak_mm": 87.5,
+    "baseflow_m3s": 0.595,
+    "obs_peak_m3s": 8.602
+  },
+  "feb2018": {
+    "label": "Feb2018 (validation, single-storm)",
+    "onset": "2018-02-10 08:00:00",
+    "tpeak": "2018-02-11 11:00:00",
+    "ttp_h": 27,
+    "intensity_mm_per_hr": 2.296,
+    "rain_to_peak_mm": 62.0,
+    "baseflow_m3s": 0.396,
+    "obs_peak_m3s": 5.67
+  },
+  "dec2015_mp": {
+    "label": "Dec2015 full (multi-peak neg control)",
+    "onset": "2015-12-22 07:00:00",
+    "tpeak": "2015-12-24 07:00:00",
+    "ttp_h": 48,
+    "intensity_mm_per_hr": 1.823,
+    "rain_to_peak_mm": 87.5,
+    "baseflow_m3s": 0.595,
+    "obs_peak_m3s": 8.602
+  }
+}
