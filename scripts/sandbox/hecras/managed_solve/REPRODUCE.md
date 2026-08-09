@@ -91,6 +91,20 @@ ABSENT in the 2025 beta -> rain-only. The BC line must PROTRUDE past the mesh co
 is classed INTERNAL. Live-proven on Muncie (de-risk) + Coweeta Creek NC (25 mm/hr x 6 h,
 peak 195 m3/s).
 
+## Channel-refined (graded) mesh -- paper-style dynamic resolution (ADR 0210)
+`spec.json` may carry `"refine_dir": "/probe/rog_<name>/refine"`. When set, `RealTerrainRoG`
+overrides `CreateMesh()` to call `MeshFactory.TryCreateMesh(perimeter, seeds, breaklines,
+...)` on a graded cell-center cloud + channel breaklines (authored host-side by
+`freshtopo/rog_refine.py`: variable-radius Poisson-disk seeds sized from a channel distance
+field + crowding relief; main-stem breaklines) instead of the uniform `FromExtent`. HEC
+rejects any >8-sided cell, so `CreateMesh` retries with a growing random seed drop until it
+meshes. Fast check: `dotnet synthdrv.dll meshprobe <spec.json>` builds the mesh + dumps
+`cellcenters.f64` + `mesh_probe.json` (no solve) -> the realized cell-size histogram. Then
+the same `realrog` -> prepare -> solve path runs on the graded mesh. Coweeta (22 m channel /
+90 m background, 19462 cells): passes prepare, solves in ~7 min, sharpens channel routing
+(peak 5.7->4.9 h, max vel 5.7->6.8 m/s) vs the uniform 60 m mesh. Knob:
+`hecras_flood_2d(..., channel_refinement=<target channel cell size m>)`, default OFF.
+
 ## v6 migration path (alternative authoring, for a real catchment)
     dotnet migrate.dll project -s "<Muncie.prj>" -d /probe/muncie2025 --force
 Migration carries geometry+terrain+2D but leaves the plan's Terrain / NValue / BC

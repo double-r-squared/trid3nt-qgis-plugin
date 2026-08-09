@@ -180,11 +180,16 @@ def prepare_local_terrain(dem_tif, workdir, *, cell_size=60.0, elev_units="m",
 
 def _author_prepare_solve(prep: Rog2025Prep, workdir, *, precip_mm_hr, storm_hours,
                           sim_hours, dt_s, report_every, outlet_slope, diffusion,
-                          outlet_bc, outlet_stage, image, probe_dir, timeout_s=14400) -> Path:
+                          outlet_bc, outlet_stage, image, probe_dir, timeout_s=14400,
+                          refine=None) -> Path:
     """Run synthdrv realrog + ras prepare + ras solve in the authoring image.
 
     The project is authored under /probe/<name>; the exported synthetic Terrain.tif
-    is overwritten with the real local DEM before prepare. Returns the result HDF."""
+    is overwritten with the real local DEM before prepare. Returns the result HDF.
+
+    ``refine`` (ADR 0210) = a ``RefineResult`` from ``rog_refine.build_refined_inputs``;
+    when present the driver builds the graded ``TryCreateMesh`` mesh from the staged
+    seeds/breaklines instead of the uniform structured grid (spec ``refine_dir``)."""
     workdir = Path(workdir)
     name = workdir.name
     probe = Path(probe_dir)
@@ -202,6 +207,10 @@ def _author_prepare_solve(prep: Rog2025Prep, workdir, *, precip_mm_hr, storm_hou
         "outlet_bc": outlet_bc, "outlet_stage": outlet_stage,
         "precip_mm_hr": precip_mm_hr,
     }
+    if refine is not None:
+        # seeds.f64/breaklines.json are authored into stage/refine by the caller
+        # (build_refined_inputs); the driver reads them via spec["refine_dir"].
+        spec["refine_dir"] = f"/probe/rog_{name}/refine"
     (stage / "spec.json").write_text(json.dumps(spec))
 
     storm_seconds = storm_hours * 3600.0
@@ -263,8 +272,35 @@ def _catchment_mask(cell_xy_local, prep, catchment_geojson):
     return np.array([pg.contains(Point(x, y)) for x, y in zip(ux, uy)]), geom_utm.area
 
 
+def _voronoi_cell_areas(cell_xy, W, H):
+    """True per-cell area (m2) for the graded mesh: the Voronoi cell of each center
+    clipped to the domain rectangle IS the HEC cell (its cells are the clipped Voronoi
+    of the centers). Matched back to cell order by which polygon contains the center."""
+    import numpy as np
+    from shapely.geometry import MultiPoint, box, Point
+    from shapely.ops import voronoi_diagram
+    from shapely.strtree import STRtree
+
+    env = box(0.0, 0.0, W, H)
+    mp = MultiPoint([(float(x), float(y)) for x, y in cell_xy])
+    polys = [g.intersection(env) for g in voronoi_diagram(mp, envelope=env).geoms]
+    tree = STRtree(polys)
+    areas = np.zeros(len(cell_xy))
+    for i, (x, y) in enumerate(cell_xy):
+        p = Point(float(x), float(y))
+        got = False
+        for idx in tree.query(p):
+            if polys[idx].covers(p):
+                areas[i] = polys[idx].area
+                got = True
+                break
+        if not got:                                 # center on a shared edge -> nearest
+            areas[i] = polys[tree.nearest(p)].area
+    return areas
+
+
 def extract_metrics(result_h5, prep: Rog2025Prep, *, precip_mm_hr, storm_hours,
-                    catchment_geojson=None) -> dict:
+                    catchment_geojson=None, unstructured=False) -> dict:
     """Outlet Q + max depth/velocity + runoff volume + mass balance.
 
     TRUE cell volume comes from the engine's ``DEBUG/CellVolume`` (the subgrid
@@ -272,7 +308,10 @@ def extract_metrics(result_h5, prep: Rog2025Prep, *, precip_mm_hr, storm_hours,
     with a deep sub-cell channel reports a large depth but a small volume). Outlet Q
     is the mass-balance residual ``R_in - dV/dt`` (a single NormalDepth outlet, so all
     outflow leaves there), cross-checked against the direct ``DEBUG/FaceFlow`` sum
-    over the outlet-edge boundary faces."""
+    over the outlet-edge boundary faces. The core metrics are mesh-structure-agnostic
+    (subgrid volume + point-in-polygon catchment mask + field maxes); ``unstructured``
+    switches the wet-/domain-AREA reporting from a uniform cell_size**2 to true per-cell
+    Voronoi areas (the graded ADR-0210 mesh has non-uniform cells)."""
     import h5py
     import numpy as np
 
@@ -289,8 +328,11 @@ def extract_metrics(result_h5, prep: Rog2025Prep, *, precip_mm_hr, storm_hours,
         cell_xy = f[f"{gbase}/Cell Coordinates"][:]        # (Nc, 2) local m
     t_s = (t_days - t_days[0]) * 86400.0
     nt, nc = depth.shape
-    cell_area = prep.cell_size * prep.cell_size
-    domain_area = nc * cell_area
+    if unstructured:
+        cell_areas = _voronoi_cell_areas(cell_xy, prep.width_m, prep.height_m)  # (Nc,) m2
+    else:
+        cell_areas = np.full(nc, prep.cell_size * prep.cell_size)
+    domain_area = float(cell_areas.sum())
 
     # Restrict the metrics to the delineated catchment (fair like-for-like with the
     # TELEMAC catchment mesh): net flux leaving the catchment cells == pour-point Q.
@@ -347,8 +389,9 @@ def extract_metrics(result_h5, prep: Rog2025Prep, *, precip_mm_hr, storm_hours,
     rin = float(rain_rate_ms * contrib_area)
     rain_apply_ratio = round(early_dvdt / rin, 3) if rin > 0 else None
     peak_frame = int(depth[:, inmask].max(axis=1).argmax())
-    wet_cells = int(((depth[peak_frame] > 0.01) & inmask).sum())
-    wet_km2 = wet_cells * cell_area / 1e6
+    wet = (depth[peak_frame] > 0.01) & inmask
+    wet_cells = int(wet.sum())
+    wet_km2 = float(cell_areas[wet].sum()) / 1e6
 
     return {
         "peak_outlet_q_m3s": round(peak_q, 3),
@@ -371,13 +414,97 @@ def extract_metrics(result_h5, prep: Rog2025Prep, *, precip_mm_hr, storm_hours,
     }
 
 
+def build_depth_cog_unstructured(result_h5, prep, out_tif, catchment_geojson=None,
+                                 depth_scale=1.0, out_res_m=None):
+    """Rasterize the GRADED-mesh per-cell MAX depth to a 4326 COG (ADR 0210).
+
+    The structured mapping (cell -> (row,col) by cell_size) is invalid for the graded
+    mesh (multiple fine cells collapse into one pixel; coarse gaps). Instead paint a fine
+    UTM raster (at ``out_res_m``, ~ the channel cell size) by NEAREST cell center (KDTree),
+    mask dry + out-of-catchment, then warp to 4326 -- the same COG tail as the structured
+    path. Mesh-agnostic; resolves the fine channel water the coarse raster would smear."""
+    import h5py
+    import numpy as np
+    import rasterio
+    from rasterio.transform import from_origin
+    from rasterio.warp import calculate_default_transform, reproject, Resampling
+    from rasterio.crs import CRS
+    from scipy.spatial import cKDTree
+
+    if isinstance(prep, Rog2025Prep):
+        prep = asdict(prep)
+    W, H = prep["width_m"], prep["height_m"]
+    ox, oy, epsg = prep["origin_x"], prep["origin_y"], prep["utm_epsg"]
+    if out_res_m is None:
+        out_res_m = max(8.0, prep["cell_size"] / 5.0)
+    base = "/Results/Output Blocks/Base Output/2D Flow Areas/Base Mesh"
+    with h5py.File(result_h5, "r") as f:
+        depth = f[f"{base}/Cell Depth"][:].max(axis=0)         # (Nc,) per-cell max
+        cxy = f["/Geometry/2D Flow Areas/Base Mesh/Cell Coordinates"][:]
+    nx = max(1, int(round(W / out_res_m)))
+    ny = max(1, int(round(H / out_res_m)))
+    xs = (np.arange(nx) + 0.5) * (W / nx)
+    ys = (np.arange(ny) + 0.5) * (H / ny)
+    gx, gy = np.meshgrid(xs, ys)                                # local metres, y up
+    _, idx = cKDTree(cxy).query(np.c_[gx.ravel(), gy.ravel()])  # nearest cell per pixel
+    d = depth[idx].astype("float32")
+    d[d <= 0.02] = np.nan
+    d = d * float(depth_scale)
+    grid = d.reshape(ny, nx)[::-1, :]                           # raster row 0 = north
+    if catchment_geojson:
+        # mask pixels whose UTM location is outside the catchment
+        import json as _json
+        from shapely.geometry import shape, Point
+        from shapely.prepared import prep as shapely_prep
+        from shapely.ops import transform as shp_transform
+        from pyproj import Transformer
+        g = _json.load(open(catchment_geojson))
+        feats = g["features"] if isinstance(g, dict) and "features" in g else [g]
+        geom = shape(feats[0]["geometry"])
+        tr = Transformer.from_crs("EPSG:4326", f"EPSG:{epsg}", always_xy=True).transform
+        pg = shapely_prep(shp_transform(tr, geom))
+        uxg = ox + gx[::-1, :]; uyg = oy + gy[::-1, :]
+        inside = np.array([[pg.contains(Point(x, y)) for x, y in zip(rx, ry)]
+                           for rx, ry in zip(uxg, uyg)])
+        grid = np.where(inside, grid, np.nan)
+
+    src_crs = CRS.from_epsg(epsg)
+    src_transform = from_origin(ox, oy + ny * out_res_m, W / nx, H / ny)
+    dst_crs = CRS.from_epsg(4326)
+    dt, dw, dh = calculate_default_transform(src_crs, dst_crs, nx, ny,
+                                             ox, oy, ox + W, oy + H)
+    out = np.full((dh, dw), np.nan, dtype="float32")
+    reproject(source=grid, destination=out, src_transform=src_transform, src_crs=src_crs,
+              dst_transform=dt, dst_crs=dst_crs, src_nodata=np.nan, dst_nodata=np.nan,
+              resampling=Resampling.bilinear)
+    prof = {"driver": "COG", "dtype": "float32", "width": dw, "height": dh, "count": 1,
+            "crs": dst_crs, "transform": dt, "nodata": np.nan, "compress": "deflate"}
+    try:
+        with rasterio.open(out_tif, "w", **prof) as dst:
+            dst.write(out, 1)
+    except Exception:  # noqa: BLE001
+        prof.update(driver="GTiff", tiled=True, blockxsize=256, blockysize=256)
+        with rasterio.open(out_tif, "w", **prof) as dst:
+            dst.write(out, 1)
+    finite = out[np.isfinite(out)]
+    bounds = rasterio.transform.array_bounds(dh, dw, dt)
+    return {
+        "cog": str(out_tif),
+        "bbox4326": [bounds[0], bounds[1], bounds[2], bounds[3]],
+        "depth_max": float(finite.max()) if finite.size else 0.0,
+        "depth_mean": float(finite.mean()) if finite.size else 0.0,
+        "wet_px": int(finite.size),
+    }
+
+
 def build_depth_cog(result_h5, prep, out_tif, catchment_geojson=None, depth_scale=1.0):
     """Rasterize per-cell MAX depth (m) to an EPSG:4326 COG for the depth layer.
 
     The structured mesh cells map to a regular (ny,nx) grid; per-cell max depth is
     placed into a UTM raster (origin_x/origin_y from the reproject) and warped to
     4326. Cells outside the catchment (if given) are masked. Pure rasterio (no server
-    deps) so the server RoG branch just uploads + wraps this in the depth LayerURI."""
+    deps) so the server RoG branch just uploads + wraps this in the depth LayerURI.
+    (Graded ADR-0210 meshes use ``build_depth_cog_unstructured`` instead.)"""
     import h5py
     import numpy as np
     import rasterio
@@ -438,24 +565,51 @@ def run_rog2025(dem_tif, workdir, *, precip_mm_hr=25.0, storm_hours=6.0,
                 sim_hours=None, cell_size=60.0, elev_units="m", bbox4326=None,
                 pour_point=None, outlet_edge=None, dt_s=None, report_every=None,
                 outlet_slope=0.05, outlet_bc="normal_depth", diffusion=True,
-                catchment_geojson=None,
+                catchment_geojson=None, channel_refinement=None, flowlines_path=None,
                 image=AUTHORING_IMAGE_DEFAULT, probe_dir=PROBE_DIR_DEFAULT) -> dict:
-    """Full RoG-2025 pipeline; returns prep + metrics + provenance."""
+    """Full RoG-2025 pipeline; returns prep + metrics + provenance.
+
+    ``channel_refinement`` (ADR 0210): None -> the uniform structured mesh (cell_size
+    everywhere). Otherwise paper-style graded refinement -- a ``rog_refine.RefineConfig``
+    OR a float target channel cell size (m). The channel network comes from
+    ``flowlines_path`` (a river-geometry vector the caller fetched for the AOI); the
+    mesh grades from ``cell_size`` (background) down to the channel size along it. Finer
+    channel cells drive a smaller CFL time step."""
     workdir = Path(workdir)
     workdir.mkdir(parents=True, exist_ok=True)
     if sim_hours is None:
         # constant design storm for the whole window (matches the paper's 25mm/hr
         # x 6h forcing); the outlet hydrograph peaks at end-of-storm equilibrium.
         sim_hours = storm_hours
-    if dt_s is None:
-        # CFL-ish: shallow overland flow, keep courant < ~1 for the cell size
-        dt_s = max(1.0, min(10.0, cell_size / 20.0))
-    if report_every is None:
-        report_every = max(1, int(round((300.0) / dt_s)))   # ~5-min output
 
     prep = prepare_local_terrain(
         dem_tif, workdir, cell_size=cell_size, elev_units=elev_units,
-        bbox4326=bbox4326, pour_point=pour_point, outlet_edge=outlet_edge)
+        bbox4326=bbox4326, pour_point=pour_point, outlet_edge=outlet_edge,
+        terrain_res=_terrain_res_for(cell_size, channel_refinement))
+
+    refine = None
+    if channel_refinement is not None:
+        if flowlines_path is None or catchment_geojson is None:
+            raise Rog2025Error(
+                "channel_refinement needs flowlines_path + catchment_geojson (the channel "
+                "network + modeled domain to grade toward)")
+        from rog_refine import build_refined_inputs, RefineConfig
+        if isinstance(channel_refinement, RefineConfig):
+            cfg = channel_refinement
+        else:  # a target channel cell size (m)
+            cfg = RefineConfig(background_m=float(cell_size), channel_m=float(channel_refinement))
+        stage = Path(probe_dir) / f"rog_{workdir.name}" / "refine"
+        refine = build_refined_inputs(prep, catchment_geojson, flowlines_path, stage, cfg)
+        finest = refine.size_p5                              # realized channel cell size
+    else:
+        finest = cell_size
+
+    if dt_s is None:
+        # CFL-ish: shallow overland flow, keep courant < ~1 for the FINEST cell
+        dt_s = max(1.0, min(10.0, finest / 15.0))
+    if report_every is None:
+        report_every = max(1, int(round((300.0) / dt_s)))   # ~5-min output
+
     # outlet tailwater = the bed elevation on the pour-point edge (a free-ish
     # outfall for rain-on-grid); ConstantStage is the proven-external outlet BC.
     outlet_stage = prep.elev_min_m
@@ -463,17 +617,39 @@ def run_rog2025(dem_tif, workdir, *, precip_mm_hr=25.0, storm_hours=6.0,
         prep, workdir, precip_mm_hr=precip_mm_hr, storm_hours=storm_hours,
         sim_hours=sim_hours, dt_s=dt_s, report_every=report_every,
         outlet_slope=outlet_slope, diffusion=diffusion, outlet_bc=outlet_bc,
-        outlet_stage=outlet_stage, image=image, probe_dir=probe_dir)
+        outlet_stage=outlet_stage, image=image, probe_dir=probe_dir, refine=refine)
     # rain forces the whole plan window (the constant precip BC spans start..end),
     # so the effective storm length for the mass balance is the sim length.
     metrics = extract_metrics(result_h5, prep, precip_mm_hr=precip_mm_hr,
-                              storm_hours=sim_hours, catchment_geojson=catchment_geojson)
-    return {
+                              storm_hours=sim_hours, catchment_geojson=catchment_geojson,
+                              unstructured=(refine is not None))
+    out = {
         "result_h5": str(result_h5), "wall_s": round(wall, 1),
-        "prep": asdict(prep), "metrics": metrics,
+        "prep": asdict(prep), "metrics": metrics, "dt_s": dt_s,
         "precip_mm_hr": precip_mm_hr, "storm_hours": storm_hours, "sim_hours": sim_hours,
         "engine": "HEC-RAS 2025 managed (CPU, beta)", "infiltration": "absent (rain-only)",
+        "mesh": "graded (channel-refined)" if refine is not None else "uniform structured",
     }
+    if refine is not None:
+        out["refine"] = asdict(refine)
+    return out
+
+
+def _terrain_res_for(cell_size, channel_refinement):
+    """Terrain raster step: must stay FINER than the finest mesh cell so face profiles
+    sub-sample (a terrain at the mesh cell size makes prepare report 'Missing terrain
+    data'). Keep the prepare_local_terrain DEFAULT (max(5, cell/6)) whenever it is already
+    finer than the channel cell -- overriding it shifts the reprojection origin sub-pixel,
+    which perturbs the graded seed cloud; only go finer when the channel cell demands it."""
+    if channel_refinement is None:
+        return None                                         # prepare_local_terrain default
+    from rog_refine import RefineConfig
+    ch = (channel_refinement.channel_m if isinstance(channel_refinement, RefineConfig)
+          else float(channel_refinement))
+    default_tr = max(5.0, cell_size / 6.0)
+    if default_tr <= 0.9 * ch:
+        return None                                         # default already fine enough
+    return max(4.0, ch / 2.0)
 
 
 def main() -> int:

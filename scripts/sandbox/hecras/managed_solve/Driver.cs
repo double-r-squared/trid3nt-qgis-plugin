@@ -47,6 +47,96 @@ class RealTerrainRoG : Ras.Synthetics.BasicRectangleParams
     public string OutletBc = "stage";   // "stage" (proven external) | "normal_depth"
     public bool Diffusion = true;       // Diffusion Wave (default) vs full SWE
 
+    // ADR 0210 -- paper-style dynamic resolution. When RefineDir is set the mesh is
+    // built by MeshFactory.TryCreateMesh from a graded cell-center seed cloud +
+    // channel breaklines (host-authored by rog_refine.py in this LOCAL SI frame),
+    // NOT the uniform structured MeshFactory.FromExtent. The seeds ARE the cell
+    // sizing (coarse background grading to fine channel); breaklines magnetize
+    // facepoints onto the channel. Everything else (terrain overwrite, precip,
+    // outlet BC, prepare, solve) is unchanged -- the extent still equals SystemExtent.
+    public string RefineDir = null;
+    public bool SplitExternalFaces = false;   // blue-noise interior needs no external
+                                              // facepoint splitting; ON over-splits the
+                                              // irregular perimeter cells past 8 faces
+    private Mesh _refinedMesh;
+
+    public override Mesh CreateMesh()
+    {
+        if (RefineDir == null)
+            return base.CreateMesh();
+        if (_refinedMesh != null)
+            return _refinedMesh;
+        Polygon perim = Polygon.FromExtent(SystemExtent);
+        List<Point> seed0 = ReadPts(Path.Combine(RefineDir, "seeds.f64"));
+        IList<Polyline> breaks = ReadBreaklines(Path.Combine(RefineDir, "breaklines.json"));
+        var mgp = MeshGenerationParams.Default();
+        mgp.CreateVirtualCells = false;
+        mgp.SplitExternalFaces = SplitExternalFaces;
+        // The graded seeds leave a few >8-sided cells at the size transition that HEC
+        // hard-rejects (host-side degree repair relieves most, but HEC's face-collapse --
+        // not raw Delaunay degree -- sets the final count, so a handful survive and vary
+        // with the seed set). A TINY seed perturbation yields a different Delaunay/collapse
+        // that clears them; retry with a growing deterministic jitter until it meshes.
+        Mesh mesh = null; MeshError err = null;
+        int attempts = 12;
+        for (int a = 0; a < attempts; a++)
+        {
+            List<Point> seeds = a == 0 ? seed0 : DropSome(seed0, a);
+            bool ok = MeshFactory.TryCreateMesh(perim, seeds, breaks, out mesh, out err, mgp, null);
+            int nbad = err?.BadCells?.Count ?? -1;
+            Console.WriteLine($"[mesh] refined TryCreateMesh attempt={a} ok={ok} status={err?.Status} " +
+                              $"badcells={nbad} cells={mesh?.CellCount} faces={mesh?.FaceCount} " +
+                              $"seeds={seeds.Count} breaklines={breaks.Count}");
+            if (mesh != null) { _refinedMesh = mesh; return mesh; }
+        }
+        throw new Exception("refined TryCreateMesh failed after " + attempts +
+                            " decimation attempts: " + err?.StatusMessage);
+    }
+
+    // Deterministic random seed DROP (a growing fraction with the attempt) -- the residual
+    // >8-sided cell after the host-side crowding relief is a specific seed configuration;
+    // dropping a few seeds re-triangulates it to <= 8 without touching the resolution field
+    // (a fraction of a percent of >=22 m cells). Jitter/relaxation left it unchanged; a
+    // topology change clears it.
+    static List<Point> DropSome(List<Point> pts, int attempt)
+    {
+        var rng = new Random(9200 + attempt);
+        double frac = 0.004 * attempt;               // 0.4%, 0.8%, ... dropped
+        var outp = new List<Point>(pts.Count);
+        foreach (var p in pts)
+            if (rng.NextDouble() >= frac)
+                outp.Add(p);
+        return outp;
+    }
+
+    static List<Point> ReadPts(string path)
+    {
+        var bytes = File.ReadAllBytes(path);
+        int n = bytes.Length / 16;
+        var pts = new List<Point>(n);
+        for (int i = 0; i < n; i++)
+            pts.Add(new Point(BitConverter.ToDouble(bytes, i * 16),
+                              BitConverter.ToDouble(bytes, i * 16 + 8)));
+        return pts;
+    }
+
+    static IList<Polyline> ReadBreaklines(string path)
+    {
+        var list = new List<Polyline>();
+        if (!File.Exists(path))
+            return list;
+        using var doc = JsonDocument.Parse(File.ReadAllText(path));
+        foreach (var pl in doc.RootElement.EnumerateArray())
+        {
+            var pts = new List<Point>();
+            foreach (var pt in pl.EnumerateArray())
+                pts.Add(new Point(pt[0].GetDouble(), pt[1].GetDouble()));
+            if (pts.Count >= 2)
+                list.Add(new Polyline(pts));
+        }
+        return list;
+    }
+
     public override void InitPlanOptions(Plan pl)
     {
         pl.SolverType = SolverType.CPU;
@@ -86,8 +176,51 @@ class Driver
         string mode = args.Length > 0 ? args[0] : "rain";
         if (mode == "realrog")
             return RealRog(args[1]);
+        if (mode == "meshprobe")
+            return MeshProbe(args[1]);
         return Rain(args.Length > 1 ? args[1] : "/probe/rain",
                     args.Length > 2 ? float.Parse(args[2]) : 100f);
+    }
+
+    static RealTerrainRoG ParseRog(JsonElement s)
+    {
+        var p = new RealTerrainRoG {
+            CellsWide = s.GetProperty("nx").GetInt32(),
+            CellsTall = s.GetProperty("ny").GetInt32(),
+            CellSize = s.GetProperty("cell_size").GetDouble(),
+            NValue = (float)s.GetProperty("manning_n").GetDouble(),
+            Slope = 0.0,
+            SolveDt = s.GetProperty("dt_s").GetDouble(),
+            SolveDuration = s.GetProperty("sim_seconds").GetDouble(),
+            ReportFrequency = s.GetProperty("report_every").GetInt32(),
+            OutletEdge = s.GetProperty("outlet_edge").GetString(),
+            OutletSlope = s.GetProperty("outlet_slope").GetDouble(),
+            OutletStage = s.GetProperty("outlet_stage").GetDouble(),
+            OutletBc = s.GetProperty("outlet_bc").GetString(),
+            Diffusion = s.GetProperty("diffusion").GetBoolean(),
+        };
+        if (s.TryGetProperty("refine_dir", out var rd) && rd.ValueKind == JsonValueKind.String)
+            p.RefineDir = rd.GetString();
+        return p;
+    }
+
+    // -- fast mesh verification: build the (refined) mesh, dump cell centers +
+    // counts, NO prepare/solve. The host computes the realized cell-size histogram
+    // (nearest-neighbour cell-center spacing) to confirm the refinement landed. ------
+    static int MeshProbe(string specPath)
+    {
+        using var doc = JsonDocument.Parse(File.ReadAllText(specPath));
+        var p = ParseRog(doc.RootElement);
+        string outDir = doc.RootElement.GetProperty("out_dir").GetString();
+        Directory.CreateDirectory(outDir);
+        Mesh mesh = p.CreateMesh();
+        var cc = mesh.CellCenters;
+        using (var bw = new BinaryWriter(File.Open(Path.Combine(outDir, "cellcenters.f64"), FileMode.Create)))
+            for (int i = 0; i < cc.Length; i++) { bw.Write(cc[i].X); bw.Write(cc[i].Y); }
+        File.WriteAllText(Path.Combine(outDir, "mesh_probe.json"),
+            $"{{\"cells\":{mesh.CellCount},\"faces\":{mesh.FaceCount},\"refined\":{(p.RefineDir != null ? "true" : "false")}}}");
+        Console.WriteLine($"[meshprobe] cells={mesh.CellCount} faces={mesh.FaceCount} -> {outDir}");
+        return 0;
     }
 
     // -- calibration / mass-check: closed flat basin, uniform precip -------------
@@ -109,24 +242,11 @@ class Driver
         using var doc = JsonDocument.Parse(File.ReadAllText(specPath));
         var s = doc.RootElement;
         string outDir = s.GetProperty("out_dir").GetString();
-        var p = new RealTerrainRoG {
-            CellsWide = s.GetProperty("nx").GetInt32(),
-            CellsTall = s.GetProperty("ny").GetInt32(),
-            CellSize = s.GetProperty("cell_size").GetDouble(),
-            NValue = (float)s.GetProperty("manning_n").GetDouble(),
-            Slope = 0.0,
-            SolveDt = s.GetProperty("dt_s").GetDouble(),
-            SolveDuration = s.GetProperty("sim_seconds").GetDouble(),
-            ReportFrequency = s.GetProperty("report_every").GetInt32(),
-            OutletEdge = s.GetProperty("outlet_edge").GetString(),
-            OutletSlope = s.GetProperty("outlet_slope").GetDouble(),
-            OutletStage = s.GetProperty("outlet_stage").GetDouble(),
-            OutletBc = s.GetProperty("outlet_bc").GetString(),
-            Diffusion = s.GetProperty("diffusion").GetBoolean(),
-        };
+        var p = ParseRog(s);
         float rate = (float)s.GetProperty("precip_mm_hr").GetDouble();
         Console.WriteLine($"[drv] realrog dir={outDir} grid={p.CellsWide}x{p.CellsTall} cell={p.CellSize}m " +
-                          $"rate={rate}mm/hr outlet={p.OutletEdge} dt={p.SolveDt} dur={p.SolveDuration}");
+                          $"rate={rate}mm/hr outlet={p.OutletEdge} dt={p.SolveDt} dur={p.SolveDuration} " +
+                          $"refine={(p.RefineDir != null ? p.RefineDir : "off")}");
         AuthorWithPrecip(p, outDir, rate);
         return 0;
     }
