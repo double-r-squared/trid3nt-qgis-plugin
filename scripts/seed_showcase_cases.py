@@ -220,6 +220,17 @@ SHOWCASE: list[Showcase] = [
     # -- TELEMAC water quality / transport -----------------------------------
     Showcase("telemac_do_sag", {"location": "Sacramento River near Colusa, California"},
              "ADR 0169 TELEMAC-WAQTEL DO-sag, real NHDPlus reach nr Colusa CA", 600),
+    Showcase("generate_mesh",
+             {"location": "Coweeta Creek, North Carolina",
+              "pour_point": (-83.40402, 35.05746),
+              "min_edge_length_m": 40.0, "max_edge_length_m": 400.0},
+             "ADR 0200 standalone mesh builder: watershed mode (pour_point) on the "
+             "Coweeta Creek NC catchment. Delineate -> distance-to-river-refined "
+             "OceanMesh2D triangulation (GPL-isolated mesh:latest) -> UTM SELAFIN "
+             "+ MDAL .2dm display layer + a durable mesh artifact a model template "
+             "discovers via the precondition gate. Emits the mesh wireframe as a "
+             "layer_type=mesh row (crs_authid=EPSG:32617).",
+             1800),
     Showcase("telemac_rain_on_grid",
              {"location": "Otto, North Carolina",
               "pour_point": (-83.40402, 35.05746),

@@ -206,21 +206,32 @@ async def model_telemac_rain_on_grid(
     rundir.mkdir(parents=True, exist_ok=True)
 
     # --- Stage 2: acquire the watershed mesh -------------------------------- #
+    # Provenance line stamped onto the result when a case mesh was consumed or a
+    # mismatched one was skipped (ADR 0200 precondition gate).
+    mesh_gate_note: str | None = None
     if mesh_uri:
         mesh = MA.use_supplied_mesh(
             mesh_path=mesh_uri, pour_point=pp,
             utm_epsg=int(_guess_utm_epsg(pp)), outlet_lonlat=pp)
     else:
-        # Warm the geo stack in the MAIN thread first: shapely/geopandas have a
-        # thread-first-import circular-import race, and acquire_watershed_mesh
-        # runs in a worker thread (it is the first geopandas import on a fresh
-        # daemon). Importing here forces shapely to fully initialize on the main
-        # thread before the offload.
-        import geopandas as _gpd  # noqa: F401
-        mesh = await asyncio.to_thread(
-            MA.acquire_watershed_mesh, pour_point=pp, bbox=aoi,
-            output_dir=str(rundir), min_edge_length_m=40.0,
-            max_edge_length_m=300.0)
+        # Precondition gate (ADR 0200): if this case already holds an engine-
+        # compatible mesh (built explicitly by generate_mesh), offer to solve on
+        # it instead of delineating a fresh one. Accepted -> the supplied-mesh
+        # path; declined/absent/incompatible -> the delineation below, unchanged.
+        supplied, mesh_gate_note = await _mesh_precondition_gate(pp, rundir)
+        if supplied is not None:
+            mesh = supplied
+        else:
+            # Warm the geo stack in the MAIN thread first: shapely/geopandas have a
+            # thread-first-import circular-import race, and acquire_watershed_mesh
+            # runs in a worker thread (it is the first geopandas import on a fresh
+            # daemon). Importing here forces shapely to fully initialize on the
+            # main thread before the offload.
+            import geopandas as _gpd  # noqa: F401
+            mesh = await asyncio.to_thread(
+                MA.acquire_watershed_mesh, pour_point=pp, bbox=aoi,
+                output_dir=str(rundir), min_edge_length_m=40.0,
+                max_edge_length_m=300.0)
 
     # --- Stage 3: NLCD -> per-node CN2 + Manning ---------------------------- #
     node_cn2, node_manning = await asyncio.to_thread(
@@ -239,7 +250,85 @@ async def model_telemac_rain_on_grid(
         sim_s=sim_s, runoff_path=decision.path, pour_point=pp,
         observed_gauge_id=observed_gauge_id, compute_class=compute_class,
         reach_name=(location or "watershed"), run_tag=run_tag)
+    # Stamp the mesh provenance (consumed a case mesh / skipped an incompatible
+    # one) onto the result envelope so the assumptions line narrates it honestly.
+    if mesh_gate_note and layer is not None:
+        try:
+            from trid3nt_contracts.common import SyntheticInput
+            basis = "user" if mesh.provenance == "user_supplied" else "derived"
+            layer.synthetic_inputs = list(layer.synthetic_inputs) + [
+                SyntheticInput(param="mesh_domain", value=mesh_gate_note,
+                               basis=basis, real_source_if_any="generate_mesh")]
+        except Exception:  # noqa: BLE001 -- provenance stamping is never fatal
+            logger.debug("mesh-gate note stamp skipped", exc_info=True)
     return layer
+
+
+async def _mesh_precondition_gate(pp, rundir):
+    """Offer this case's mesh to the rain-on-grid solve (ADR 0200).
+
+    Returns ``(WatershedMesh | None, note | None)``: a fully-populated
+    ``WatershedMesh`` when a case mesh was discovered, engine-compatible, and
+    accepted (auto-default or user-approved); ``None`` when there is no usable
+    mesh, an incompatible one was skipped, or the user declined -- the caller then
+    delineates a fresh catchment. NEVER raises into the solve path (a discovery /
+    staging fault degrades to fresh authoring with a logged warning)."""
+    import asyncio
+
+    from trid3nt_server.agent.workflows.mesh.precondition_gate import (
+        gate_supplied_mesh, materialize_supplied_mesh,
+    )
+    from trid3nt_server.agent.workflows.telemac.rain_on_grid import (
+        mesh_acquisition as MA,
+    )
+
+    try:
+        from trid3nt_server.emission.pipeline_emitter import current_emitter
+        emitter = current_emitter()
+        loaded_mesh_uris = (
+            [ly.uri for ly in emitter.loaded_layers
+             if getattr(ly, "layer_type", None) == "mesh"]
+            if emitter is not None else [])
+        s3 = None
+        try:
+            from trid3nt_server.agent.tools.simulation.solver.solver import (
+                _get_s3_client,
+            )
+            s3 = _get_s3_client()
+        except Exception:  # noqa: BLE001 -- sidecar fallback is optional
+            s3 = None
+        decision = await gate_supplied_mesh(
+            tool_name="telemac_rain_on_grid", engine="telemac", input_mode=None,
+            loaded_mesh_uris=loaded_mesh_uris, s3_client=s3)
+        if not decision.use or decision.artifact is None:
+            return None, decision.note
+        # Accepted: stage the .slf (solver geometry) + .2dm (node parsing) locally
+        # and build the full supplied mesh (offloaded -- s3 + parse are blocking).
+        art = decision.artifact
+
+        def _materialize():
+            slf_local = materialize_supplied_mesh(
+                art, str(rundir), s3, engine="telemac")
+            twodm_local = str(Path(rundir) / "supplied_mesh.2dm")
+            bkt, key = art.display_uri[len("s3://"):].split("/", 1)
+            s3.download_file(bkt, key, twodm_local)
+            return MA.use_supplied_mesh_2dm(
+                twodm_path=twodm_local, slf_path=slf_local,
+                utm_epsg=int(art.utm_epsg), pour_point=tuple(pp),
+                outlet_lonlat=art.outlet_lonlat,
+                area_km2=float((art.provenance or {}).get("area_km2") or 0.0),
+                catchment_geojson=None)
+
+        mesh = await asyncio.to_thread(_materialize)
+        logger.info(
+            "rog: consuming case mesh %r (%d elements) instead of delineating",
+            art.name, art.element_count)
+        return mesh, decision.note
+    except Exception as exc:  # noqa: BLE001 -- gate must never break the solve
+        logger.warning(
+            "rog mesh precondition gate failed (%s); delineating fresh", exc,
+            exc_info=True)
+        return None, None
 
 
 #: Half-side (deg) of the pour-point-derived AOI. +-0.14 deg -> a 0.28-deg box,

@@ -45,6 +45,8 @@ __all__ = [
     "MeshAcquisitionError",
     "acquire_watershed_mesh",
     "use_supplied_mesh",
+    "use_supplied_mesh_2dm",
+    "read_2dm_mesh",
     "build_mesh_config",
     "catchment_exterior_and_river_coords",
     "reproject_nodes_to_utm",
@@ -481,6 +483,81 @@ def use_supplied_mesh(
         outlet_lonlat=tuple(outlet_lonlat or pour_point),
         provenance="user_supplied",
     )
+
+
+def read_2dm_mesh(twodm_path: str) -> tuple[Any, Any, Any]:
+    """Parse an SMS ``.2dm`` -> ``(points (N,2), cells (M,3) 0-based, z (N,))``.
+
+    The inverse of ``generate_mesh._write_2dm``: ``ND id x y z`` node rows and
+    ``E3T id n1 n2 n3 mat`` triangle rows (1-based ids). Nodes are returned in
+    id order; ``z`` is the bed field. Coordinates are the mesh's native metres
+    (the artifact's ``utm_epsg`` names the CRS)."""
+    import numpy as np
+
+    nodes: dict[int, tuple[float, float, float]] = {}
+    tris: list[tuple[int, int, int]] = []
+    for line in Path(twodm_path).read_text().splitlines():
+        parts = line.split()
+        if not parts:
+            continue
+        if parts[0] == "ND" and len(parts) >= 5:
+            nodes[int(parts[1])] = (
+                float(parts[2]), float(parts[3]), float(parts[4]))
+        elif parts[0] in ("E3T", "E3L") and len(parts) >= 5:
+            tris.append((int(parts[2]), int(parts[3]), int(parts[4])))
+    if not nodes or not tris:
+        raise MeshAcquisitionError(
+            "TELEMAC_ROG_SUPPLIED_MESH_UNREADABLE",
+            f"2dm mesh {twodm_path} parsed to {len(nodes)} nodes / {len(tris)} "
+            "elements; expected a MESH2D ND/E3T body.")
+    order = sorted(nodes)
+    remap = {nid: i for i, nid in enumerate(order)}
+    points = np.array([[nodes[n][0], nodes[n][1]] for n in order], dtype=float)
+    z = np.array([nodes[n][2] for n in order], dtype=float)
+    cells = np.array(
+        [[remap[a], remap[b], remap[c]] for a, b, c in tris], dtype=np.int64)
+    return points, cells, z
+
+
+def use_supplied_mesh_2dm(
+    *,
+    twodm_path: str,
+    slf_path: str,
+    utm_epsg: int,
+    pour_point: tuple[float, float],
+    outlet_lonlat: tuple[float, float] | None = None,
+    area_km2: float = 0.0,
+    catchment_geojson: str | None = None,
+) -> "WatershedMesh":
+    """Adopt a user/case mesh END TO END: read the ``.2dm`` nodes so the CN/Manning
+    node-field sampler works, and point the solve at the existing ``.slf``.
+
+    The precondition-gate consumption path (ADR 0200): a mesh already built in the
+    case (by ``generate_mesh``) is solved on DIRECTLY -- no fresh delineation. The
+    UTM ``.2dm`` nodes are reprojected back to lon/lat so NLCD sampling is
+    identical to the built path, and ``slf_path`` (the bathymetric SELAFIN) is the
+    solver GEOMETRY FILE."""
+    import numpy as np
+    from pyproj import Transformer
+
+    p = Path(slf_path)
+    if not p.exists() or p.stat().st_size == 0:
+        raise MeshAcquisitionError(
+            "TELEMAC_ROG_SUPPLIED_MESH_MISSING",
+            f"supplied mesh SELAFIN not found or empty: {slf_path}")
+    points_m, cells, bed = read_2dm_mesh(twodm_path)
+    tr = Transformer.from_crs(int(utm_epsg), 4326, always_xy=True)
+    lon, lat = tr.transform(points_m[:, 0], points_m[:, 1])
+    points_ll = np.column_stack([lon, lat]).astype(float)
+    return WatershedMesh(
+        slf_path=str(p),
+        catchment_geojson=str(catchment_geojson or ""),
+        points_utm=points_m, cells=cells, bed_elev=bed,
+        utm_epsg=int(utm_epsg), area_km2=float(area_km2),
+        pour_point_lonlat=tuple(pour_point),
+        outlet_lonlat=tuple(outlet_lonlat or pour_point),
+        provenance="user_supplied",
+        meta={"points_lonlat": points_ll, "supplied_2dm": twodm_path})
 
 
 # --------------------------------------------------------------------------- #

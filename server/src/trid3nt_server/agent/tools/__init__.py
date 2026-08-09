@@ -680,6 +680,11 @@ from ..workflows.telemac.do_sag.do_sag import telemac_do_sag as _telemac_do_sag 
 # native constant-storm SCS-CN worker deck (mode=rain_on_grid) -> outlet
 # hydrograph + peak-depth COG. Live V&V: Coweeta Creek NC (docs/proof/templates).
 from ..workflows.telemac.rain_on_grid.rain_on_grid import telemac_rain_on_grid as _telemac_rain_on_grid  # noqa: E402,F401 - RoG front (engine=telemac, tier=template)
+# generate_mesh (ADR 0200): the standalone mesh builder. Promotes the ADR 0193
+# watershed + ADR 0194 coastal water-edge sandbox meshers behind ONE tool (mode
+# inferred from inputs); emits an MDAL .2dm display layer + a durable mesh artifact
+# (facts + solver geometries) a model template discovers via the precondition gate.
+from ..workflows.mesh.generate_mesh.generate_mesh import generate_mesh as _generate_mesh  # noqa: E402,F401 - mesh domain primitive (tier=general)
 # hecras_riverine_flood TEMPLATE (engine="hecras", tier="template"), engine #11,
 # one folder under workflows/hecras/riverine_flood/. TEMPLATE-FIRST: reparameterizes
 # HEC's shipped Muncie White River (IN) demonstration deck (frozen geometry, scaled

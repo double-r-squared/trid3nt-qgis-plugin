@@ -380,6 +380,9 @@ PRIMARY_CATEGORY: dict[str, str] = {
     "telemac_river_dye": "simulation_modeling",
     "telemac_do_sag": "simulation_modeling",
     "telemac_rain_on_grid": "simulation_modeling",
+    # Standalone mesh builder (ADR 0200): a model DOMAIN primitive that feeds every
+    # unstructured solver (TELEMAC/SCHISM/SWAN) -- filed with the engines it serves.
+    "generate_mesh": "simulation_modeling",
     "hecras_riverine_flood": "simulation_modeling",
     "hecras_levee_breach": "simulation_modeling",
     "hecras_flood_2d": "simulation_modeling",
@@ -823,6 +826,9 @@ SECONDARY_CATEGORIES: dict[str, tuple[str, ...]] = {
     # so they materially belong to the terrain lane too.
     "delineate_watershed": ("terrain_elevation",),
     "extract_stream_network": ("terrain_elevation",),
+    # Mesh builder: PRIMARY simulation_modeling; a domain primitive materially
+    # reachable from the geographic-primitives + terrain lanes too.
+    "generate_mesh": ("geographic_primitives", "terrain_elevation"),
     # quick-win batch (2026-07-07)
     # Two-date NDVI/NDWI change: PRIMARY land-cover/development; vegetation
     # gain/loss mapping is materially a conservation surface too.

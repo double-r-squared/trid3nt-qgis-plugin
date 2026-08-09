@@ -194,6 +194,42 @@ def test_use_supplied_mesh_ok(tmp_path):
 
 
 # --------------------------------------------------------------------------- #
+# ADR 0200 precondition-gate consumption: read a case .2dm END TO END so the
+# node-field sampler works (populated points_lonlat), pointing the solve at .slf.
+# --------------------------------------------------------------------------- #
+def test_use_supplied_mesh_2dm_populates_nodes(tmp_path):
+    from trid3nt_server.agent.workflows.telemac.rain_on_grid.mesh_acquisition import (
+        use_supplied_mesh_2dm,
+    )
+
+    # a 2dm in UTM 17N metres (Coweeta), two triangles.
+    twodm = tmp_path / "mesh.2dm"
+    twodm.write_text(
+        "MESH2D\n"
+        "E3T 1 1 2 3 1\n"
+        "E3T 2 2 4 3 1\n"
+        "ND 1 275000.0 3881000.0 610.0\n"
+        "ND 2 275100.0 3881000.0 612.0\n"
+        "ND 3 275000.0 3881100.0 615.0\n"
+        "ND 4 275100.0 3881100.0 611.0\n")
+    slf = tmp_path / "mesh.slf"
+    slf.write_bytes(b"\x00" * 256)
+
+    wm = use_supplied_mesh_2dm(
+        twodm_path=str(twodm), slf_path=str(slf), utm_epsg=32617,
+        pour_point=(-83.4, 35.05), outlet_lonlat=(-83.40402, 35.05746))
+    assert wm.provenance == "user_supplied"
+    assert wm.slf_path == str(slf)
+    assert wm.points_utm.shape == (4, 2)
+    assert wm.cells.shape == (2, 3)
+    # node lon/lat were recovered (needed by the NLCD node-field sampler).
+    ll = wm.meta["points_lonlat"]
+    assert ll.shape == (4, 2)
+    assert (-84.0 < ll[:, 0]).all() and (ll[:, 0] < -83.0).all()
+    assert (34.5 < ll[:, 1]).all() and (ll[:, 1] < 35.5).all()
+
+
+# --------------------------------------------------------------------------- #
 # SELAFIN writer round-trip (header integrity).
 # --------------------------------------------------------------------------- #
 def test_bottom_selafin_header(tmp_path):
