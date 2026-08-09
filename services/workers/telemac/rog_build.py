@@ -72,6 +72,8 @@ ROG_CN_MAP = "rog_cn_map.dat"             # FORMATTED DATA FILE 2 (X Y CN2 scatt
 ROG_FRICTION_COF = "rog_friction.tbl"     # FRICTION DATA FILE (zone laws)
 ROG_ZONES_FILE = "rog_zones.dat"          # ZONES FILE (node -> zone id)
 ROG_HYDROGRAPH = "rog_outlet_hydrograph.json"  # outlet Q(t) + summary
+ROG_HYETO = "rog_hyeto.txt"               # FORMATTED DATA FILE 1 (block hyetograph)
+ROG_USER_FORTRAN_DIR = "user_fortran"     # per-case FORTRAN FILE (RAINDEF=3 override)
 
 
 class RogInputError(RuntimeError):
@@ -336,6 +338,93 @@ def write_friction_files(
 
 
 # --------------------------------------------------------------------------- #
+# 6b. time-varying hyetograph: block file + per-case RAINDEF=3 FORTRAN override.
+# --------------------------------------------------------------------------- #
+def write_hyetograph_file(path: str, blocks: Any, duration_s: float) -> dict[str, Any]:
+    """Write the block-type hyetograph FORMATTED DATA FILE 1 the engine reads.
+
+    ``blocks`` is a sequence of ``[t_end_s, mm]`` where ``mm`` is the GROSS
+    rainfall (mm) falling in the interval ``(t_prev, t_end]`` (t starts at 0).
+    This is the exact structure the installed ``runoff_scs_cn.f`` RAINDEF=3
+    branch consumes: two comment lines, a lone start time, then ``t_end mm``
+    rows; the rate over each interval is ``mm / (t_end - t_prev)``. A trailing
+    dry block is appended out to ``duration_s`` (+ one hour of margin) so the
+    reader never hits its "HYETOGRAPH FILE TOO SHORT" abort at the final
+    timestep. Returns the delivered gross-rain integral for the mass check."""
+    rows = []
+    t_prev = 0.0
+    total_mm = 0.0
+    for t_end, mm in blocks:
+        t_end = float(t_end)
+        mm = float(mm)
+        if t_end <= t_prev:
+            raise RogInputError(
+                "TELEMAC_ROG_HYETO_NONMONOTONE",
+                f"hyetograph times must strictly increase; got t_end={t_end} "
+                f"after {t_prev}.",
+            )
+        if mm < 0.0:
+            raise RogInputError(
+                "TELEMAC_ROG_HYETO_NEGATIVE",
+                f"hyetograph interval rainfall must be >= 0; got {mm} mm.",
+            )
+        rows.append((t_end, mm))
+        total_mm += mm
+        t_prev = t_end
+    if not rows:
+        raise RogInputError(
+            "TELEMAC_ROG_HYETO_EMPTY", "hyetograph has no intervals.")
+    # extend a dry tail past the last simulated instant (AT <= AT2 required).
+    tail = float(duration_s) + 3600.0
+    if rows[-1][0] < tail:
+        rows.append((tail, 0.0))
+    with open(path, "w") as f:
+        f.write("#HYETOGRAPH FILE (block type; mm per interval)\n")
+        f.write("#T (s) RAINFALL (mm)\n")
+        f.write("0.\n")
+        for t_end, mm in rows:
+            f.write(f"{t_end:.3f} {mm:.5f}\n")
+    return {"n_blocks": len(rows), "hyetograph_total_mm": round(total_mm, 4)}
+
+
+def stage_raindef3_fortran(user_fortran_dir: str) -> str:
+    """Stage the per-case FORTRAN FILE that flips RAINDEF 1 -> 3 in RUNOFF_SCS_CN.
+
+    The installed v9.0.0 ``runoff_scs_cn.f`` already implements a block-type
+    time-varying hyetograph (RAINDEF=3, reading FORMATTED DATA FILE 1) but
+    hardcodes ``INTEGER, PARAMETER ::RAINDEF=1``. We copy the ENGINE'S OWN
+    source and change only that one parameter, so the SCS-CN infiltration runs
+    per-timestep on the real hyetograph with zero other behaviour drift; the
+    steering ``FORTRAN FILE`` keyword makes ``telemac2d.py`` recompile + link it
+    over the library symbol at run launch (no image rebuild for the engine).
+    Fails loudly if the parameter line is absent (engine-version drift guard)."""
+    hometel = os.environ.get("HOMETEL", "")
+    src = os.path.join(hometel, "sources", "telemac2d", "runoff_scs_cn.f")
+    if not hometel or not os.path.exists(src):
+        raise RogInputError(
+            "TELEMAC_ROG_ENGINE_SOURCE_MISSING",
+            f"installed runoff_scs_cn.f not found (HOMETEL={hometel!r}); cannot "
+            "stage the RAINDEF=3 time-varying-rain override.",
+        )
+    text = open(src, "r").read()
+    patched, n = re.subn(
+        r"(INTEGER,\s*PARAMETER\s*::\s*RAINDEF\s*=\s*)1\b",
+        r"\g<1>3", text)
+    if n != 1:
+        raise RogInputError(
+            "TELEMAC_ROG_RAINDEF_PARAM_NOT_FOUND",
+            "could not locate the single 'INTEGER, PARAMETER ::RAINDEF=1' line "
+            f"in {src}; the installed engine source has drifted -- refusing to "
+            "stage a mis-patched override.",
+        )
+    os.makedirs(user_fortran_dir, exist_ok=True)
+    out = os.path.join(user_fortran_dir, "runoff_scs_cn.f")
+    with open(out, "w") as f:
+        f.write(patched)
+    return out
+
+
+# --------------------------------------------------------------------------- #
 # 7. author the RoG steering deck.
 # --------------------------------------------------------------------------- #
 def _cas_real(v: float) -> str:
@@ -347,15 +436,26 @@ def author_rog_deck(
     cfg: Any, *, slf: str, cli: str, res: str, cas_path: str,
     cn_map: str, friction_cof: str, zones_file: str,
     rain_mm_per_day: float, runoff_path: str,
+    hyetograph_file: str | None = None,
 ) -> str:
     """Write the rain-on-grid ``.cas``.
 
-    NATIVE path (``runoff_path == 'native'``): constant rain + RAINFALL-RUNOFF
-    MODEL = 1 (SCS-CN) + AMC + FORMATTED DATA FILE 2 (CN2 scatter). PREPROCESSING
-    path: RAINFALL-RUNOFF MODEL = 0 (the agent already removed infiltration up
-    front, so the fed rain is the net excess; no double counting). Both paths
-    share the free-exit outlet, distributed Manning and the zero-elevation
-    (dry) start. NO tracers -- pure hydraulics; the outlet hydrograph is the
+    NATIVE CONSTANT path (``runoff_path == 'native'``, no ``hyetograph_file``):
+    constant design-storm rain + RAINFALL-RUNOFF MODEL = 1 (SCS-CN) + AMC +
+    FORMATTED DATA FILE 2 (CN2 scatter).
+
+    NATIVE TIME-VARYING path (``hyetograph_file`` given): the SAME native SCS-CN
+    model, but a per-case ``FORTRAN FILE`` (RAINDEF=3, staged by
+    ``stage_raindef3_fortran``) reads the GROSS hourly hyetograph from FORMATTED
+    DATA FILE 1 and the engine applies the SCS-CN abstraction per timestep on the
+    real intensity structure -- the true time-varying rain the hardcoded
+    RAINDEF=1 build could not deliver. The recession comes from the hyetograph's
+    own dry tail, so no RAIN_HDUR window is emitted.
+
+    PREPROCESSING path: RAINFALL-RUNOFF MODEL = 0 (the agent already removed
+    infiltration up front, so the fed rain is the net excess; no double
+    counting). All paths share the free-exit outlet, distributed Manning and the
+    zero-elevation (dry) start. NO tracers -- the outlet hydrograph is the
     product."""
     amc = int(getattr(cfg, "amc_condition", 2) or 2)
     ia_opt = int(getattr(cfg, "initial_abstraction_option", 1) or 1)
@@ -368,15 +468,32 @@ def author_rog_deck(
     # catchment drains -- the recession limb the constant-full-duration source
     # cannot produce. Emitted only when a finite rain window shorter than the
     # total DURATION is set; else rain falls the whole run (legacy behaviour).
+    # The time-varying path ignores RAIN_HDUR (the hyetograph carries its own
+    # dry tail), so it is suppressed there.
     rain_dur_s = getattr(cfg, "rain_duration_s", None)
     rain_hdur_line = ""
-    if rain_dur_s is not None and 0.0 < float(rain_dur_s) < duration_s:
+    if (hyetograph_file is None and rain_dur_s is not None
+            and 0.0 < float(rain_dur_s) < duration_s):
         rain_hdur_line = (
             "DURATION OF RAIN OR EVAPORATION IN HOURS = "
             f"{_cas_real(float(rain_dur_s) / 3600.0)}\n"
         )
 
-    if str(runoff_path).lower() == "native":
+    if hyetograph_file is not None:
+        # native SCS-CN on a true time-varying gross hyetograph (RAINDEF=3
+        # override). RAIN OR EVAPORATION IN MM PER DAY stays (rain must be
+        # enabled) but is IGNORED by RAINDEF=3; the block file drives intensity.
+        runoff_block = (
+            "RAIN OR EVAPORATION             = YES\n"
+            f"RAIN OR EVAPORATION IN MM PER DAY = {_cas_real(rain_mm_per_day)}\n"
+            "RAINFALL-RUNOFF MODEL           = 1\n"
+            f"ANTECEDENT MOISTURE CONDITIONS  = {amc}\n"
+            f"OPTION FOR INITIAL ABSTRACTION RATIO = {ia_opt}\n"
+            f"FORMATTED DATA FILE 2           = {os.path.basename(cn_map)}\n"
+            f"FORMATTED DATA FILE 1           = {os.path.basename(hyetograph_file)}\n"
+            f"FORTRAN FILE                    = {ROG_USER_FORTRAN_DIR}\n"
+        )
+    elif str(runoff_path).lower() == "native":
         runoff_block = (
             "RAIN OR EVAPORATION             = YES\n"
             f"RAIN OR EVAPORATION IN MM PER DAY = {_cas_real(rain_mm_per_day)}\n"

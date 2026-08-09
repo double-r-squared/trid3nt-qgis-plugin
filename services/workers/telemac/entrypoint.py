@@ -151,10 +151,10 @@ class TelemacManifestUnknownFieldsError(ValueError):
 
 
 #: PARSER VERSION -- bump on a ReachConfig field addition/rename/retirement.
-#: Named in the strict-field error (ADR 0158). Bumped to -3 for the ADR 0196
-#: rain-on-grid fields (mode/watershed_slf/runoff_path/curve_number/
-#: amc_condition/rain_*/node_*_file/outlet_lonlat/observed_gauge_id).
-_PARSER_VERSION = "telemac-reach-3"
+#: Named in the strict-field error (ADR 0158). -3 added the ADR 0196
+#: rain-on-grid fields; -4 adds the ADR 0206 time-varying native hyetograph
+#: field (rain_hyetograph_blocks).
+_PARSER_VERSION = "telemac-reach-4"
 
 
 def _reach_config(data_dir: Path, reach_overrides: dict[str, Any]) -> Any:
@@ -802,10 +802,24 @@ def run_rog_pipeline(
     fric_stats = R.write_friction_files(fric, zones, manning)
 
     rain_mm_per_day = float(getattr(cfg, "rain_intensity_mm_per_hr", 25.0)) * 24.0
+    # TIME-VARYING native hyetograph (ADR 0206): when blocks are staged, write
+    # the block FORMATTED DATA FILE 1 + the per-case RAINDEF=3 FORTRAN FILE so
+    # the engine's native SCS-CN runs on the real hyetograph; else the constant
+    # design-storm native path is authored (byte-identical to before).
+    blocks = getattr(cfg, "rain_hyetograph_blocks", None)
+    hyeto_file = None
+    hyeto_stats: dict[str, Any] = {}
+    runoff_path = str(getattr(cfg, "runoff_path", "native"))
+    if blocks:
+        hyeto_file = str(data_dir / R.ROG_HYETO)
+        hyeto_stats = R.write_hyetograph_file(
+            hyeto_file, blocks, float(getattr(cfg, "duration_s", 3600.0)))
+        R.stage_raindef3_fortran(str(data_dir / R.ROG_USER_FORTRAN_DIR))
+        runoff_path = "native_hyetograph"
     R.author_rog_deck(
         cfg, slf=slf, cli=cli, res=res, cas_path=cas, cn_map=cn_map,
         friction_cof=fric, zones_file=zones, rain_mm_per_day=rain_mm_per_day,
-        runoff_path=str(getattr(cfg, "runoff_path", "native")))
+        runoff_path=runoff_path, hyetograph_file=hyeto_file)
 
     # 4. solve (hours-class for a real catchment; the supervisor sets the timeout).
     solve_timeout = float(os.environ.get("TRID3NT_TELEMAC_SOLVE_TIMEOUT", "86400"))
@@ -823,7 +837,7 @@ def run_rog_pipeline(
         "cli": R.ROG_CLI,
         "cas": R.ROG_CAS,
         "reach_name": cfg.name,
-        "runoff_path": str(getattr(cfg, "runoff_path", "native")),
+        "runoff_path": runoff_path,
         "amc_condition": int(getattr(cfg, "amc_condition", 2)),
         "rain_intensity_mm_per_hr": float(getattr(cfg, "rain_intensity_mm_per_hr", 25.0)),
         "npoin": m["npoin"],
@@ -833,6 +847,7 @@ def run_rog_pipeline(
         "outlet_dist_min_m": bc["outlet_dist_min_m"],
         "friction_zones": fric_stats["n_zones"],
         "wall_s": round(time.time() - t0, 1),
+        **hyeto_stats,
     }
     if not ok:
         metrics["error"] = "TELEMAC did not reach CORRECT END OF RUN"

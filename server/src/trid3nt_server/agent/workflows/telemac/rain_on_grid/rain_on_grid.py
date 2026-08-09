@@ -19,9 +19,11 @@ Pipeline (deterministic, composed here):
      overrides CN uniformly; the steep-slope Huang correction is baked in here
      because the engine branch is compiled off);
   4. ``select_runoff_path`` -- constant design storm -> the NATIVE SCS-CN model
-     (RAINFALL-RUNOFF MODEL=1 + FORMATTED DATA FILE 2 CN2 map + AMC); a
-     time-varying hyetograph -> preprocessing net-rain (the installed v9.0.0 build
-     hardcodes RAINDEF=1, so true time-varying rain needs a recompiled user_rain);
+     (RAINFALL-RUNOFF MODEL=1 + FORMATTED DATA FILE 2 CN2 map + AMC); a real
+     MRMS/AORC ``mrms_window`` -> the NATIVE TIME-VARYING path (ADR 0206): the
+     gross hourly hyetograph drives the SCS-CN per-timestep via a per-case
+     RAINDEF=3 FORTRAN FILE (FORMATTED DATA FILE 1), resolving the hydrograph
+     SHAPE the constant-rain build could not (no engine rebuild);
   5. stage the mesh + node fields + manifest and dispatch the generic
      ``run_solver`` seam (mode=rain_on_grid -> the worker's ``rog_build`` deck);
   6. ``postprocess_telemac_wse`` rasterizes the peak WATER DEPTH to a COG; the
@@ -118,7 +120,11 @@ async def telemac_rain_on_grid(
     Knobs: ``antecedent_moisture`` ("dry"/"normal"/"wet" = SCS AMC I/II/III) is
     the dominant infiltration lever; ``curve_number`` overrides CN uniformly;
     ``design_storm_mm_per_hr`` + ``storm_duration_hr`` set the constant design
-    storm; ``observed_gauge_id`` wires NSE/R2 vs a USGS-NWIS gauge.
+    storm; ``mrms_window`` ("start/end" dates) drives the REAL time-varying
+    hourly hyetograph instead (native SCS-CN per-timestep, improved peak SHAPE +
+    timing over a constant storm; residual lag is forcing/mesh-bound, and there
+    is still no subsurface return flow); ``observed_gauge_id`` wires NSE/R2 vs a
+    USGS-NWIS gauge.
 
     Params:
         location: place naming the catchment (geocoded). Supply this OR ``bbox``.
@@ -237,10 +243,22 @@ async def model_telemac_rain_on_grid(
     node_cn2, node_manning = await asyncio.to_thread(
         _sample_node_fields, mesh, aoi, curve_number)
 
-    # --- Stage 4: runoff-path decision (recorded in the envelope) ----------- #
-    decision = select_runoff_path(
-        constant_intensity_mm_per_hr=float(design_storm_mm_per_hr))
-    sim_s = float((sim_duration_hr or storm_duration_hr)) * 3600.0
+    # --- Stage 4: rain forcing + runoff-path decision (in the envelope) ------ #
+    # A real MRMS/AORC window -> the TRUE time-varying hyetograph drives the
+    # native SCS-CN per-timestep (ADR 0206 native_hyetograph path). Otherwise the
+    # constant design storm is used (the historical native path). The design-storm
+    # knobs stay for un-dated / hypothetical storms.
+    hyeto_blocks: list | None = None
+    if mrms_window:
+        hyeto_blocks, hyeto_series, sim_from_hyeto = await asyncio.to_thread(
+            _fetch_hyetograph_blocks, aoi, mrms_window,
+            float((sim_duration_hr or 0.0)) * 3600.0)
+        decision = select_runoff_path(hyetograph_mm=hyeto_series)
+        sim_s = sim_from_hyeto
+    else:
+        decision = select_runoff_path(
+            constant_intensity_mm_per_hr=float(design_storm_mm_per_hr))
+        sim_s = float((sim_duration_hr or storm_duration_hr)) * 3600.0
 
     # --- Stage 5: stage inputs + manifest, dispatch run_solver -------------- #
     layer = await _stage_solve_postprocess(
@@ -249,7 +267,8 @@ async def model_telemac_rain_on_grid(
         design_storm_mm_per_hr=float(design_storm_mm_per_hr),
         sim_s=sim_s, runoff_path=decision.path, pour_point=pp,
         observed_gauge_id=observed_gauge_id, compute_class=compute_class,
-        reach_name=(location or "watershed"), run_tag=run_tag)
+        reach_name=(location or "watershed"), run_tag=run_tag,
+        hyetograph_blocks=hyeto_blocks)
     # Stamp the mesh provenance (consumed a case mesh / skipped an incompatible
     # one) onto the result envelope so the assumptions line narrates it honestly.
     if mesh_gate_note and layer is not None:
@@ -383,10 +402,39 @@ def _sample_node_fields(mesh: Any, aoi: tuple, curve_number: float | None):
         steep_slope_correction=False)
 
 
+def _fetch_hyetograph_blocks(aoi, window: str, sim_s_hint: float):
+    """AOI-mean hourly hyetograph -> block list [[t_end_s, gross_mm], ...].
+
+    ``window`` is ``"YYYY-MM-DD/YYYY-MM-DD"`` (or ``start..end``). Fetches the
+    hourly AORC accumulation over the catchment AOI (the pre-2020-capable
+    product; MRMS only covers ~2020-10+), builds one 3600-s block per hour, and
+    returns (blocks, per-hour mm list, sim_seconds). The sim length is the
+    hyetograph span unless ``sim_s_hint`` is larger."""
+    from trid3nt_server.agent.tools import TOOL_REGISTRY
+
+    sep = "/" if "/" in window else (".." if ".." in window else None)
+    if not sep:
+        raise TelemacRainOnGridError(
+            "TELEMAC_ROG_BAD_WINDOW",
+            f"mrms_window must be 'start/end' dates; got {window!r}.")
+    a, b = [s.strip() for s in window.split(sep, 1)]
+    d = TOOL_REGISTRY["fetch_aorc_precip"].fn(
+        bbox=[float(v) for v in aoi], start_date=a, end_date=b)
+    d = d if isinstance(d, dict) else getattr(d, "__dict__", {})
+    mm = [max(0.0, float(v)) for v in d["precip_mm"]]
+    if len(mm) < 2:
+        raise TelemacRainOnGridError(
+            "TELEMAC_ROG_EMPTY_HYETO",
+            f"AORC returned {len(mm)} hourly steps for {window!r}; need >= 2.")
+    blocks = [[float((i + 1) * 3600), round(mm[i], 5)] for i in range(len(mm))]
+    sim_s = max(float(sim_s_hint or 0.0), float(len(mm) * 3600))
+    return blocks, mm, sim_s
+
+
 async def _stage_solve_postprocess(
     *, mesh, node_cn2, node_manning, amc, curve_number, design_storm_mm_per_hr,
     sim_s, runoff_path, pour_point, observed_gauge_id, compute_class,
-    reach_name, run_tag,
+    reach_name, run_tag, hyetograph_blocks=None,
 ):
     """Upload the mesh + node fields, dispatch run_solver, and rasterize the peak
     depth COG. Mirrors the ``telemac_river_dye`` run_solver seam."""
@@ -440,6 +488,10 @@ async def _stage_solve_postprocess(
         reach["curve_number"] = float(curve_number)
     if observed_gauge_id:
         reach["observed_gauge_id"] = str(observed_gauge_id)
+    if hyetograph_blocks:
+        # ADR 0206: the gross hourly hyetograph drives the native SCS-CN
+        # per-timestep (RAINDEF=3 FORTRAN FILE staged worker-side).
+        reach["rain_hyetograph_blocks"] = hyetograph_blocks
     manifest = {
         "reach": reach, "run_id": run_tag, "inputs": inputs, "telemac_args": [],
         "outputs": ["r2d_rog.slf", "rog_geometry.slf", "rog_max_fields.slf",

@@ -278,19 +278,25 @@ def node_curve_numbers(
 
 
 # ---------------------------------------------------------------------------
-# Automatic CN-path selection (native runoff model vs preprocessing).
+# Automatic CN-path selection (native constant vs native time-varying hyetograph).
 #
-# TELEMAC v9.0.0's native SCS-CN runoff model is hardcoded to a CONSTANT rain
-# intensity (RAINDEF=1); a time-varying hyetograph cannot drive it without a
-# solver recompile (ADR 0195, Decision 2). So the template picks per run:
+# TELEMAC v9.0.0's native SCS-CN runoff model ships with RAINDEF hardcoded to 1
+# (a single CONSTANT rain intensity). The installed source, however, already
+# implements a block-type time-varying hyetograph under RAINDEF=3 (reading
+# FORMATTED DATA FILE 1) -- so a per-case FORTRAN FILE that flips that one
+# parameter (ADR 0206, staged by the worker) unlocks the native model on a REAL
+# hyetograph without an image rebuild. The template picks per run:
 #   * CONSTANT-intensity rain (a design storm: one rate over a duration) -> the
 #     NATIVE model (RAINFALL-RUNOFF MODEL=1 + ANTECEDENT MOISTURE CONDITIONS +
 #     the FORMATTED DATA FILE 2 per-node CN2 field). Infiltration is the
 #     engine's own SCS-CN, spatially variable via the CN map.
-#   * TIME-VARYING rain (an hourly MRMS hyetograph) -> the PREPROCESSING path:
-#     rainfall_excess_hyetograph applies eq 7-8 up front and the net (excess)
-#     series is fed as time-varying rain with RAINFALL-RUNOFF MODEL=0 (no
-#     double counting). This overcomes the RAINDEF=1 constant-rain limit.
+#   * TIME-VARYING rain (an hourly MRMS/AORC hyetograph) -> the NATIVE
+#     TIME-VARYING path ("native_hyetograph", ADR 0206): the gross hourly
+#     hyetograph is staged as FORMATTED DATA FILE 1 and the engine's own SCS-CN
+#     applies the abstraction per-timestep on the real intensity structure
+#     (RAINDEF=3). This resolves the hydrograph SHAPE the constant-rain path
+#     could not; the residual peak-timing lag is bounded by the forcing product
+#     and mesh routing, not the rain representation.
 # The chosen path is recorded in the run envelope (runoff_path + reason).
 # ---------------------------------------------------------------------------
 
@@ -299,9 +305,10 @@ def node_curve_numbers(
 class RunoffPathDecision:
     """Which CN/runoff path a rain-on-grid run uses, plus why.
 
-    ``path`` is ``"native"`` (RAINFALL-RUNOFF MODEL=1 + FORMATTED DATA FILE 2
-    CN2 map) or ``"preprocessing"`` (SCS-CN rainfall-excess up front, net rain
-    fed with RAINFALL-RUNOFF MODEL=0). ``time_varying`` is the driving fact.
+    ``path`` is ``"native"`` (constant design storm; RAINFALL-RUNOFF MODEL=1 +
+    FORMATTED DATA FILE 2 CN2 map) or ``"native_hyetograph"`` (a real
+    time-varying gross hyetograph driving the native SCS-CN per-timestep via the
+    RAINDEF=3 FORTRAN FILE, ADR 0206). ``time_varying`` is the driving fact.
     Both fields ride into the run envelope so the narration is honest about how
     infiltration was handled.
     """
@@ -319,10 +326,11 @@ def select_runoff_path(
     """Pick the runoff path automatically from the rain forcing shape.
 
     A ``hyetograph_mm`` with two or more DISTINCT non-zero increments is
-    time-varying -> ``"preprocessing"``. A single constant intensity (a design
-    storm, or a hyetograph that is effectively one flat rate) -> ``"native"``.
-    Exactly one of ``hyetograph_mm`` / ``constant_intensity_mm_per_hr`` should be
-    given; supplying neither is an error (no rain = no runoff run).
+    time-varying -> ``"native_hyetograph"`` (RAINDEF=3 FORTRAN FILE; ADR 0206).
+    A single constant intensity (a design storm, or a hyetograph that is
+    effectively one flat rate) -> ``"native"``. Exactly one of ``hyetograph_mm``
+    / ``constant_intensity_mm_per_hr`` should be given; supplying neither is an
+    error (no rain = no runoff run).
     """
     if hyetograph_mm is None and constant_intensity_mm_per_hr is None:
         raise CNInfiltrationError(
@@ -334,13 +342,13 @@ def select_runoff_path(
         distinct = {round(v, 6) for v in nonzero}
         if len(distinct) >= 2:
             return RunoffPathDecision(
-                path="preprocessing",
+                path="native_hyetograph",
                 time_varying=True,
                 reason=(
                     f"time-varying hyetograph ({len(nonzero)} non-zero steps, "
-                    f"{len(distinct)} distinct rates) cannot drive the native "
-                    "RAINDEF=1 constant-rain runoff model -> SCS-CN rainfall-"
-                    "excess preprocessing (RAINFALL-RUNOFF MODEL=0)."
+                    f"{len(distinct)} distinct rates) drives the native SCS-CN "
+                    "per-timestep on the real intensity structure via the "
+                    "RAINDEF=3 FORTRAN FILE (gross rain as FORMATTED DATA FILE 1)."
                 ),
             )
         return RunoffPathDecision(

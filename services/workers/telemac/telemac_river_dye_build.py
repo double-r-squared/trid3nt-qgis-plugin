@@ -242,6 +242,14 @@ class ReachConfig:
     rain_intensity_mm_per_hr: float = 25.0   # constant design-storm intensity (native)
     rain_duration_s: float = None       # type: ignore[assignment]  # rain-on window (defaults to duration_s)
     rain_hyetograph_mm: list = None     # type: ignore[assignment]  # per-step net rain (preprocessing)
+    # TIME-VARYING native hyetograph (ADR 0206): a list of [t_end_s, gross_mm]
+    # blocks (gross rainfall per interval, t from 0). When set, the RoG worker
+    # stages a per-case FORTRAN FILE flipping the engine's hardcoded RAINDEF=1
+    # to RAINDEF=3 and writes the block file as FORMATTED DATA FILE 1, so the
+    # native SCS-CN model runs per-timestep on the REAL hyetograph (the fix for
+    # the constant-rain peak-timing lag). Empty/None -> the constant design-storm
+    # native path (rain_intensity_mm_per_hr) is used, byte-identical to before.
+    rain_hyetograph_blocks: list = None  # type: ignore[assignment]
     node_cn2_file: str = ""             # staged per-node CN2 field basename
     node_manning_file: str = ""         # staged per-node Manning field basename
     outlet_lonlat: tuple = None         # type: ignore[assignment]  # pour-point (lon, lat)

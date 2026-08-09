@@ -35,6 +35,34 @@ def test_docstring_carries_the_godara_envelope():
     assert "SCS" in doc or "curve-number" in doc.lower() or "curve number" in doc.lower()
 
 
+def test_fetch_hyetograph_blocks_builds_hourly_blocks(monkeypatch):
+    """ADR 0206: an MRMS/AORC window -> one 3600-s gross-mm block per hour, and
+    the sim length is at least the hyetograph span."""
+    from trid3nt_server.agent.tools import TOOL_REGISTRY
+    from trid3nt_server.agent.workflows.telemac.rain_on_grid import rain_on_grid as ROG
+
+    class _Stub:
+        fn = staticmethod(lambda **kw: {
+            "times": ["2015-12-23T18:00", "2015-12-23T19:00", "2015-12-23T20:00"],
+            "precip_mm": [3.0, 12.5, 0.0]})
+
+    monkeypatch.setitem(TOOL_REGISTRY, "fetch_aorc_precip", _Stub())
+    blocks, mm, sim_s = ROG._fetch_hyetograph_blocks(
+        (-83.47, 35.02, -83.42, 35.06), "2015-12-23/2015-12-24", 0.0)
+    assert mm == [3.0, 12.5, 0.0]
+    assert blocks == [[3600.0, 3.0], [7200.0, 12.5], [10800.0, 0.0]]
+    assert sim_s == 3 * 3600.0  # hyetograph span dominates the 0 hint
+
+
+def test_fetch_hyetograph_blocks_rejects_bad_window(monkeypatch):
+    from trid3nt_server.agent.workflows.telemac.rain_on_grid import rain_on_grid as ROG
+    from trid3nt_server.agent.workflows.telemac.rain_on_grid.rain_on_grid import (
+        TelemacRainOnGridError,
+    )
+    with pytest.raises(TelemacRainOnGridError):
+        ROG._fetch_hyetograph_blocks((-83.4, 35.0, -83.3, 35.1), "no-separator", 0.0)
+
+
 def test_amc_word_maps_to_scs_condition():
     from trid3nt_server.agent.workflows.telemac.rain_on_grid.rain_on_grid import _AMC
 

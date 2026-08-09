@@ -115,6 +115,100 @@ def test_write_friction_files_distinct_zones(tmp_path):
     assert zlines[0] == ["1", "1"] and zlines[2][1] == zlines[3][1]  # 0.20 nodes share a zone
 
 
+def test_write_hyetograph_file_block_format(tmp_path):
+    """ADR 0206: the block hyetograph matches the RAINDEF=3 reader contract --
+    two comment lines, a lone start time, then 't_end mm' rows, dry tail past
+    the sim end. Returns the gross-rain integral for the mass check."""
+    p = tmp_path / "hyeto.txt"
+    stats = R.write_hyetograph_file(
+        str(p), [[300.0, 25.0], [900.0, 0.0], [1200.0, 25.0]], duration_s=1800.0)
+    lines = p.read_text().splitlines()
+    assert lines[0].startswith("#") and lines[1].startswith("#")
+    assert lines[2].strip() == "0."
+    data = [ln.split() for ln in lines[3:]]
+    # 3 real blocks + one appended dry tail beyond 1800 s.
+    assert len(data) == 4
+    assert float(data[0][0]) == 300.0 and float(data[0][1]) == 25.0
+    assert float(data[-1][0]) > 1800.0 and float(data[-1][1]) == 0.0
+    assert stats["hyetograph_total_mm"] == 50.0
+    assert stats["n_blocks"] == 4
+
+
+def test_write_hyetograph_file_rejects_nonmonotone(tmp_path):
+    with pytest.raises(R.RogInputError):
+        R.write_hyetograph_file(str(tmp_path / "h.txt"),
+                                [[300.0, 5.0], [300.0, 2.0]], duration_s=600.0)
+
+
+def test_write_hyetograph_file_rejects_negative(tmp_path):
+    with pytest.raises(R.RogInputError):
+        R.write_hyetograph_file(str(tmp_path / "h.txt"),
+                                [[300.0, -1.0]], duration_s=600.0)
+
+
+def test_stage_raindef3_fortran_flips_parameter(tmp_path, monkeypatch):
+    """The staged override is the engine's own source with only RAINDEF 1->3."""
+    src_dir = tmp_path / "sources" / "telemac2d"
+    src_dir.mkdir(parents=True)
+    (src_dir / "runoff_scs_cn.f").write_text(
+        "      SUBROUTINE RUNOFF_SCS_CN\n"
+        "      INTEGER, PARAMETER ::RAINDEF=1\n"
+        "      RETURN\n      END\n")
+    monkeypatch.setenv("HOMETEL", str(tmp_path))
+    out = R.stage_raindef3_fortran(str(tmp_path / "user_fortran"))
+    body = Path(out).read_text()
+    assert "RAINDEF=3" in body and "RAINDEF=1" not in body
+
+
+def test_stage_raindef3_fortran_drift_guard(tmp_path, monkeypatch):
+    """If the RAINDEF=1 parameter line is gone, refuse (engine-version drift)."""
+    src_dir = tmp_path / "sources" / "telemac2d"
+    src_dir.mkdir(parents=True)
+    (src_dir / "runoff_scs_cn.f").write_text("      SUBROUTINE X\n      END\n")
+    monkeypatch.setenv("HOMETEL", str(tmp_path))
+    with pytest.raises(R.RogInputError):
+        R.stage_raindef3_fortran(str(tmp_path / "user_fortran"))
+
+
+def test_author_rog_deck_time_varying_emits_hyeto_keywords(tmp_path):
+    """With a hyetograph_file the deck wires FORTRAN FILE + FORMATTED DATA FILE 1
+    and keeps the native SCS-CN model (RAINFALL-RUNOFF MODEL = 1); no RAIN_HDUR."""
+    import types
+    cfg = types.SimpleNamespace(
+        name="tv", amc_condition=2, initial_abstraction_option=1,
+        duration_s=7200.0, time_step_s=2.0, graphic_period=100,
+        rain_duration_s=1800.0)
+    cas = tmp_path / "t.cas"
+    R.author_rog_deck(
+        cfg, slf="g.slf", cli="b.cli", res="r.slf", cas_path=str(cas),
+        cn_map="cn.dat", friction_cof="f.tbl", zones_file="z.dat",
+        rain_mm_per_day=120.0, runoff_path="native",
+        hyetograph_file=str(tmp_path / "rog_hyeto.txt"))
+    body = cas.read_text()
+    assert "FORTRAN FILE" in body and R.ROG_USER_FORTRAN_DIR in body
+    assert "FORMATTED DATA FILE 1" in body and "rog_hyeto.txt" in body
+    assert "RAINFALL-RUNOFF MODEL           = 1" in body
+    assert "DURATION OF RAIN OR EVAPORATION IN HOURS" not in body
+
+
+def test_author_rog_deck_constant_native_unchanged(tmp_path):
+    """No hyetograph_file -> the constant native path is byte-identical (no
+    FORTRAN FILE / FORMATTED DATA FILE 1); RAIN_HDUR still honoured."""
+    import types
+    cfg = types.SimpleNamespace(
+        name="c", amc_condition=2, initial_abstraction_option=1,
+        duration_s=7200.0, time_step_s=2.0, graphic_period=100,
+        rain_duration_s=1800.0)
+    cas = tmp_path / "t.cas"
+    R.author_rog_deck(
+        cfg, slf="g.slf", cli="b.cli", res="r.slf", cas_path=str(cas),
+        cn_map="cn.dat", friction_cof="f.tbl", zones_file="z.dat",
+        rain_mm_per_day=120.0, runoff_path="native")
+    body = cas.read_text()
+    assert "FORTRAN FILE" not in body and "FORMATTED DATA FILE 1" not in body
+    assert "DURATION OF RAIN OR EVAPORATION IN HOURS" in body
+
+
 def test_parse_mass_balance_reads_engine_closure():
     listing = (
         "     RUNOFF_SCS_CN : ACCUMULATED RAINFALL :    0.1500000     M\n"

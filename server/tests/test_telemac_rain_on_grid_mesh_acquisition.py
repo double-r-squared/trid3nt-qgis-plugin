@@ -46,11 +46,13 @@ def test_constant_intensity_selects_native():
     assert "RAINFALL-RUNOFF MODEL=1" in d.reason
 
 
-def test_time_varying_hyetograph_selects_preprocessing():
+def test_time_varying_hyetograph_selects_native_hyetograph():
+    # ADR 0206: a real time-varying hyetograph drives the NATIVE SCS-CN
+    # per-timestep via the RAINDEF=3 FORTRAN FILE (no more lossy preprocessing).
     d = select_runoff_path(hyetograph_mm=[2.0, 8.0, 15.0, 6.0, 1.0])
-    assert d.path == "preprocessing"
+    assert d.path == "native_hyetograph"
     assert d.time_varying is True
-    assert "RAINFALL-RUNOFF MODEL=0" in d.reason
+    assert "RAINDEF=3" in d.reason
 
 
 def test_flat_hyetograph_selects_native():

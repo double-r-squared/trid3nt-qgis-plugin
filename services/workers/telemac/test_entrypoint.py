@@ -67,9 +67,18 @@ def test_reach_config_rejects_unknown_keys(tmp_path):
         })
 
 
-def test_parser_version_is_reach_3():
-    """ADR 0196: the RoG field additions bump the strict-parser version stamp."""
-    assert E._PARSER_VERSION == "telemac-reach-3"
+def test_parser_version_is_reach_4():
+    """ADR 0206: the time-varying-hyetograph field bumps the parser version stamp."""
+    assert E._PARSER_VERSION == "telemac-reach-4"
+
+
+def test_reach_config_accepts_hyetograph_blocks(tmp_path):
+    """ADR 0206: rain_hyetograph_blocks is a known field (time-varying native path)."""
+    cfg = E._reach_config(tmp_path, {
+        "mode": "rain_on_grid", "watershed_slf": "watershed.slf",
+        "rain_hyetograph_blocks": [[3600.0, 12.5], [7200.0, 0.0]],
+    })
+    assert cfg.rain_hyetograph_blocks == [[3600.0, 12.5], [7200.0, 0.0]]
 
 
 def test_reach_config_accepts_rog_fields(tmp_path):
@@ -85,9 +94,9 @@ def test_reach_config_accepts_rog_fields(tmp_path):
     assert cfg.observed_gauge_id == "02086500"
 
 
-def test_reach_config_rejects_unknown_rog_key_names_v3(tmp_path):
-    """A bogus reach key raises naming the CURRENT parser version (telemac-reach-3)."""
-    with pytest.raises(E.TelemacManifestUnknownFieldsError, match="telemac-reach-3"):
+def test_reach_config_rejects_unknown_rog_key_names_v4(tmp_path):
+    """A bogus reach key raises naming the CURRENT parser version (telemac-reach-4)."""
+    with pytest.raises(E.TelemacManifestUnknownFieldsError, match="telemac-reach-4"):
         E._reach_config(tmp_path, {"bogus_rog_field": 1, "mode": "rain_on_grid"})
 
 

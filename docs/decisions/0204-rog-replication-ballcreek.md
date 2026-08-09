@@ -219,3 +219,34 @@ This is the fidelity-ladder verdict for rain-on-grid on the installed stack.
   `telemac_rain_on_grid_calibration_chart.png` (calibration).
 - The ADR 0195/0196 constant-design-storm template proofs remain valid; this ADR
   adds the graded computed-vs-observed replication the template smoke was not.
+
+## 8. RE-GRADE (2026-08-09, ADR 0206) -- true time-varying AORC hyetograph
+
+The section-1 "constant rain (RAINDEF=1)" limit is REMOVED in ADR 0206: a
+per-case FORTRAN FILE flips the installed `runoff_scs_cn.f` to RAINDEF=3 (its own
+block-hyetograph branch) so the native SCS-CN runs per-timestep on the REAL AORC
+hourly hyetograph -- no engine rebuild. Same 7.24 km2 mesh, same weir #9 gauge,
+same alignment. Re-calibrated CN 53 (the full 264 mm storm volume vs the 24 h
+constant-core shifts the optimum down from 55). Old (constant) -> new
+(hyetograph):
+
+| Event | raw NSE | aligned NSE | peak err | timing lag | vol err |
+| --- | --- | --- | --- | --- | --- |
+| Dec 2015 calibration | -1.41 -> -1.41 | +0.04 -> **+0.51** | -1.7% -> +5.4% | +11 h -> +10.8 h | -52% -> **-19%** |
+| Feb 2018 validation (CN 53) | -1.90 -> -1.90 | -- | ponds -> ponds | -- | -100% |
+| Feb 2018 standalone (CN 90) | -0.87 -> -1.27 | +0.44 -> +0.43 | +4% -> +31% | +8 h -> **+6.5 h** | -21% |
+| Dec 2015 multi-peak | -1.38 -> -3.57 | -0.47 -> -1.42 | -1.7% -> +116% | +11 h -> +118 h | -74% -> +7% |
+
+Findings: (a) the hyetograph materially improves hydrograph SHAPE (aligned NSE
+0.04 -> 0.51) and runoff VOLUME (-52% -> -19%) on the calibration event; (b) the
+residual +10.8 h lag is now decomposed as ~4 h AORC-vs-gauge forcing offset (the
+AORC rain peaks h17 vs the gauge h13) + ~6.5 h coarse-mesh routing -- NOT the
+constant-rain artifact; raw NSE stays negative because a ~11 h peak offset
+dominates a point-wise NSE regardless of shape; (c) the multi-peak SECOND peak is
+now REPRODUCED (real second storm) -- reversing this ADR's "second peak not
+reproduced" -- but over-peaks (+116%) as static SCS-CN abstraction exhausts, and
+the inter-peak baseflow is still missed (no return flow). The two remaining
+fidelity gaps are now cleanly the FORCING product + the coarse mesh + static-CN /
+no-soil-store, not the rain representation. See ADR 0206 for the full account,
+the RAINDEF=3 seam, the two-pulse discriminating physics test, and the refreshed
+proofs (regenerated in place from the hyetograph solves).
