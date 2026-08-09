@@ -142,3 +142,65 @@ Coweeta NC is the US steep replication site for the Sleddalen (Norway) methodolo
 - Files: `services/workers/hecras2025/subst/crux/freshtopo/{hecras_infiltration.py,
   hecras_meteorology.py,hecras_deck2d.py,flood2d_pipeline.py,test_hecras_rog.py}` +
   `scripts/sandbox/hecras/rog_compare_engines.py`.
+
+## APPENDIX 2026-08-08 -- the frozen-continuation reference hunt (Decision 2 link 3)
+
+The bounded reference hunt for the link-3 interpolation folder was executed. It did
+NOT yield the schema-bearing artifact; the wave stops at the reference wall with the
+search recorded (the "do not guess schema round 13" guardrail). No worker/registration
+code changed; every schema-dependent stage stays FROZEN.
+
+Genuine search record:
+
+- Downloaded the official USACE HEC-RAS 6.6 Example Projects -- the version that MATCHES
+  our 6.6 solver image. Provenance: URL
+  `https://github.com/HydrologicEngineeringCenter/hec-downloads/releases/download/1.0.33/Example_Projects_6_6.zip`,
+  size 432389121, sha256 `ea239b506155a2dfeda2af80b3c2af948eef42c40218bcd65de472cfed386887`.
+  (The same `hec-downloads` releases also carry the 6.1/6.2/6.3/6.4.1/6.5 and 7.0
+  example zips; the HEC download + documentation pages expose no separate rain-on-grid
+  companion dataset.)
+- The ONLY rain-on-grid-capable 2D example in the whole 432 MB set is
+  `2D Unsteady Flow Hydraulics/BaldEagleCrkMulti2D`: gridded NEXRAD precipitation via
+  DSS (`Precipitation/precip.2018.09.dss`), unsteady plans `u02`/`u03` with
+  `Precipitation Mode=Enable`, a real SCS-CN `Soils Data/Infiltration.hdf`, and Land
+  Classification. Extracted (minus the DEM tiles + DSS) to
+  `scripts/sandbox/hecras/_ref/` (gitignored).
+- DECISIVE NEGATIVE: the shipped decks persist only the meteorology CONFIG, never the
+  precomputed interpolation. `u03.hdf`'s `Event Conditions/Meteorology/Precipitation`
+  carries only `@DSS Filename` / `@DSS Pathname` / `@Enabled` / `@Mode='Gridded'` /
+  `@Source='DSS'` -- NO `Values`, NO `Timestamp`, and NO `Precipitation/2D Flow Areas/
+  <area>` interpolation folder. An airtight `h5py.visit` scan across EVERY shipped
+  `.hdf`/`.h5` in the project: interpolation folder present = False. The entire example
+  set ships exactly ONE computed plan HDF (`Water Quality/Nutrient Example/
+  WaterQualityExamp.p01.hdf`, no precipitation) -- zero plan HDFs with precipitation.
+- ROOT CAUSE now CONFIRMED (not inferred): `ras-commander` 0.99.1 (riding in
+  `trid3nt-local/hecras:latest`) `RasPreprocess.py` states verbatim -- "Windows
+  preprocessing is required for ALL HEC-RAS Linux versions (6.3.1+). The Linux binaries
+  cannot produce the .tmp.hdf or .b## files needed to begin execution." The per-2D-area
+  precip interpolation folder is a WINDOWS RAS-preprocessing artifact, generated when
+  RAS computes/preprocesses the plan; it is never shipped in example decks and cannot be
+  emitted by the Linux `RasUnsteady`/`RasGeomPreprocess`. ras-commander itself has NO
+  writer for it -- its gridded-precip HDF writer (`_update_precipitation_hdf`) stops at
+  `Precipitation/Imported Raster Data/Values` in the `u##.hdf` and offloads plan-HDF
+  generation to Windows.
+- Secondary generation avenue identified, NOT taken (out of the bounded hunt scope):
+  the authoring image `trid3nt-local/hecras2025-authoring` already runs RAS Mapper .NET
+  headless (`Ras.Mapper.dll` + a purpose-built `authormesh.dll` doing `TryCreateMesh` +
+  `MeshPropertyTables.ComputeFrom`). RAS Mapper's precip-to-mesh interpolation is the
+  same class of precompute, so a NEW C# driver invoking RasMapperLib's precip
+  interpolation + an image rebuild COULD generate the folder headless. That is a
+  multi-hour .NET build with schema/segfault uncertainty -- recorded as a future option,
+  not a session-completable unblock.
+
+Unblock -- the NATE GUI export (the ONE hand-off that ends the residual). On a Windows
+HEC-RAS 6.x install, produce ONE reference plan HDF whose
+`Event Conditions/Meteorology/Precipitation/2D Flow Areas/<area>` group EXISTS, by
+either: (1) opening the shipped `BaldEagleCrkMulti2D` (or any tiny 2D area), enabling a
+Constant or gridded Precipitation on the unsteady flow, pressing Compute (or letting RAS
+Mapper preprocess), and handing over the generated `<plan>.p##.tmp.hdf`; or (2) a
+minimal 1-cell-wide 2D area with Constant-mode precipitation computed once. Drop it at
+`scripts/sandbox/hecras/_ref/<name>.hdf`. The staged continuation then runs
+`scripts/sandbox/hecras/decode_precip_interp.py <name>.hdf` (dumps the interpolation
+tree byte-exact -- dataset names/dtypes/shapes/attrs + the cell-index mapping), authors
+the uniform-grid folder in `hecras_meteorology.py`, and completes the frozen
+solve/metric-extractor/registration/showcase chain.

@@ -37,3 +37,5 @@ scripts/sandbox/oceanmesh/_runs/
 scripts/sandbox/oceanmesh/shoreline/
 # pysheds watershed sandbox bulk data (re-downloadable 3DEP DEMs)
 scripts/sandbox/pysheds_watershed/_work/
+# hecras rain-on-grid reference decks (re-downloadable USACE example projects; ADR 0199)
+scripts/sandbox/hecras/_ref/
