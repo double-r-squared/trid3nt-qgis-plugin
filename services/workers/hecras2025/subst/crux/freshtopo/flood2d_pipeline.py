@@ -101,17 +101,26 @@ def _docker_author(workdir: Path, prep: TerrainPrep, image: str) -> Path:
 def _compose(dump: Path, deck_dir: Path, prep: TerrainPrep, peak_cfs: float,
              inflow_edge: str | None, ds_edge: str,
              equation_set: str = "Diffusion Wave",
-             computation_interval: str | None = None) -> dict:
+             computation_interval: str | None = None,
+             design_storm_mm_per_hr: float | None = None,
+             storm_duration_hr: float = 6.0,
+             curve_number: float | None = None,
+             amc_condition: str = "normal") -> dict:
     from authormesh_to_mesh2d import load_authormesh
     from hecras_deck2d import compose_pure2d_deck
 
     res = load_authormesh(dump)
-    info = compose_pure2d_deck(
-        deck_dir, res.mesh, res.tables,
-        projection_wkt=prep.crs_wkt, target_peak_cfs=float(peak_cfs),
-        inflow_edge=inflow_edge, ds_edge=ds_edge, equation_set=equation_set,
-        computation_interval=computation_interval,
-    )
+    # Rain-on-grid REPLACES the inflow hydrograph (no target_peak_cfs); a uniform
+    # design storm + SCS-CN infiltration drive the run.
+    kw = dict(projection_wkt=prep.crs_wkt, inflow_edge=inflow_edge, ds_edge=ds_edge,
+              equation_set=equation_set, computation_interval=computation_interval)
+    if design_storm_mm_per_hr is not None:
+        kw.update(design_storm_mm_per_hr=float(design_storm_mm_per_hr),
+                  storm_duration_hr=float(storm_duration_hr),
+                  curve_number=curve_number, amc_condition=amc_condition)
+    else:
+        kw.update(target_peak_cfs=float(peak_cfs))
+    info = compose_pure2d_deck(deck_dir, res.mesh, res.tables, **kw)
     info.pop("paths", None)
     return info
 
@@ -145,6 +154,10 @@ def author_and_compose(
     ds_edge: str = "s",
     equation_set: str = "Diffusion Wave",
     computation_interval: str | None = None,
+    design_storm_mm_per_hr: float | None = None,
+    storm_duration_hr: float = 6.0,
+    curve_number: float | None = None,
+    amc_condition: str = "normal",
     authoring_image: str = AUTHORING_IMAGE_DEFAULT,
 ) -> tuple[Flood2dResult, dict]:
     """Fetch-DEM-prep -> author (docker) -> compose the deck (NO solve).
@@ -162,7 +175,8 @@ def author_and_compose(
     dump = _docker_author(workdir, prep, authoring_image)
     deck_dir = workdir / "deck"
     info = _compose(dump, deck_dir, prep, peak_cfs, inflow_edge, ds_edge, equation_set,
-                    computation_interval)
+                    computation_interval, design_storm_mm_per_hr, storm_duration_hr,
+                    curve_number, amc_condition)
     result = Flood2dResult(
         plan_hdf=str(deck_dir / "Fresh2D.p04.tmp.hdf"), deck_dir=str(deck_dir),
         dump_dir=str(dump), crs_wkt=prep.crs_wkt,

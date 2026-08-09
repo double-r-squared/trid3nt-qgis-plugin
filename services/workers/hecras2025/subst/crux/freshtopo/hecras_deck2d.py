@@ -61,6 +61,13 @@ from hecras_event_conditions import (  # noqa: E402
     write_flow_hydrograph_2d_bc, write_normal_depth_2d_bc,
     strip_1d_reach_bcs, finalize_event_conditions,
 )
+from hecras_infiltration import (  # noqa: E402
+    build_infiltration_layer, write_infiltration_layer, amc_to_int,
+)
+from hecras_meteorology import (  # noqa: E402
+    write_uniform_precipitation, inject_precipitation_ascii,
+    design_storm_units_and_rate,
+)
 
 #: The area name is reused from Muncie so the plan skeleton's Results paths + the
 #: solve harness (``solve_freshtopo``) resolve unchanged.
@@ -106,6 +113,34 @@ DEFAULT_EQUATION_SET = "Diffusion Wave"
 #: a HEC-RAS unit token (SEC / MIN / HOUR), e.g. "30SEC", "1MIN", "5MIN".
 _COMP_INTERVAL_RE = re.compile(r"^\d+(SEC|MIN|HOUR)$")
 DEFAULT_COMPUTATION_INTERVAL = "2MIN"
+
+#: Plan-HDF simulation window attrs (Plan Data/Plan Information). Rain-on-grid
+#: patches the window to the storm duration so a CONSTANT-mode rate totals
+#: ``rate * storm_duration_hr`` (the mass-balance-checkable design storm).
+_PLAN_INFO_GROUP = "Plan Data/Plan Information"
+_SIM_START = "02Jan1900 00:00:00"
+_MONTHS = ("Jan", "Feb", "Mar", "Apr", "May", "Jun",
+           "Jul", "Aug", "Sep", "Oct", "Nov", "Dec")
+
+
+def _sim_end_from_duration(hours: float) -> str:
+    """The ``DDMonYYYY HH:MM:SS`` end time ``hours`` after the fixed 02Jan1900 start."""
+    import datetime as _dt
+    start = _dt.datetime(1900, 1, 2, 0, 0, 0)
+    end = start + _dt.timedelta(hours=float(hours))
+    return f"{end.day:02d}{_MONTHS[end.month - 1]}{end.year} " \
+           f"{end.hour:02d}:{end.minute:02d}:{end.second:02d}"
+
+
+def _patch_sim_window(f, storm_duration_hr: float) -> str:
+    """Set the plan's Simulation End Time / Time Window to a storm-duration window."""
+    end = _sim_end_from_duration(storm_duration_hr)
+    if _PLAN_INFO_GROUP in f:
+        g = f[_PLAN_INFO_GROUP]
+        g.attrs["Simulation Start Time"] = np.bytes_(_SIM_START)
+        g.attrs["Simulation End Time"] = np.bytes_(end)
+        g.attrs["Time Window"] = np.bytes_(f"{_SIM_START} to {end}")
+    return end
 
 
 def _patch_computation_interval(bnn_text: str, interval: str) -> str:
@@ -197,6 +232,13 @@ def compose_pure2d_deck(
     ds_edge: str = "s",
     equation_set: str = DEFAULT_EQUATION_SET,
     computation_interval: str | None = None,
+    design_storm_mm_per_hr: float | None = None,
+    storm_duration_hr: float = 6.0,
+    curve_number: float | None = None,
+    per_cell_cn2=None,
+    amc_condition: str = "normal",
+    ia_ratio: float = 0.2,
+    min_infiltration_in_hr: float = 0.0,
     opts: PropertyTableOptions | None = None,
 ) -> dict:
     """Assemble the complete pure-2D deck for ``mesh``/``tables`` in ``rundir``.
@@ -226,14 +268,28 @@ def compose_pure2d_deck(
         raise ValueError(
             f"equation_set {equation_set!r} not one of {EQUATION_SETS}")
 
-    if times is None or flows is None:
-        if target_peak_cfs is None:
-            raise ValueError(
-                "compose_pure2d_deck needs either an explicit times/flows "
-                "hydrograph or a target_peak_cfs default")
-        times, flows = default_hydrograph(target_peak_cfs)
-    times = np.asarray(times, np.float64).reshape(-1)
-    flows = np.asarray(flows, np.float64).reshape(-1)
+    # Rain-on-grid: a uniform design storm over the whole 2D area REPLACES the
+    # inflow hydrograph (no target_peak_cfs required); water is rain-fed and drains
+    # through a single normal-depth outlet at the pour point.
+    rain_on_grid = design_storm_mm_per_hr is not None
+    if rain_on_grid:
+        rain_rate, rain_units = design_storm_units_and_rate(design_storm_mm_per_hr)
+        amc_i = amc_to_int(amc_condition)
+        infil = build_infiltration_layer(
+            int(mesh.cell_center_coord.shape[0]),
+            curve_number=curve_number if per_cell_cn2 is None else None,
+            per_cell_cn2=per_cell_cn2, amc=amc_i, ia_ratio=ia_ratio,
+            min_infiltration_rate_in_hr=min_infiltration_in_hr,
+        )
+    else:
+        if times is None or flows is None:
+            if target_peak_cfs is None:
+                raise ValueError(
+                    "compose_pure2d_deck needs either an explicit times/flows "
+                    "hydrograph or a target_peak_cfs default")
+            times, flows = default_hydrograph(target_peak_cfs)
+        times = np.asarray(times, np.float64).reshape(-1)
+        flows = np.asarray(flows, np.float64).reshape(-1)
 
     rundir = Path(rundir)
     rundir.mkdir(parents=True, exist_ok=True)
@@ -271,26 +327,49 @@ def compose_pure2d_deck(
             projection_wkt=proj_wkt,
         )
 
-        inflow_run, ds_run = _bc_runs(
-            mesh, tables, n_bc_faces=n_bc_faces,
-            inflow_edge=inflow_edge, ds_edge=ds_edge)
-        lines = [
-            BoundaryConditionLine(name="Inflow", sa_2d=area_name, face_indices=inflow_run),
-            BoundaryConditionLine(name="DS", sa_2d=area_name, face_indices=ds_run),
-        ]
+        if rain_on_grid:
+            # ONE outlet BC line at the lowest-elevation perimeter run (the pour
+            # point where the rain-fed interior drains); all other perimeter is a
+            # closed wall (the watershed boundary). Mirrors the TELEMAC RoG design.
+            outlet_run = perimeter_face_run(
+                mesh, min_elevation=tables.face_min_elevation, n_faces=n_bc_faces)
+            lines = [BoundaryConditionLine(
+                name="Outlet", sa_2d=area_name, face_indices=outlet_run)]
+        else:
+            inflow_run, ds_run = _bc_runs(
+                mesh, tables, n_bc_faces=n_bc_faces,
+                inflow_edge=inflow_edge, ds_edge=ds_edge)
+            lines = [
+                BoundaryConditionLine(name="Inflow", sa_2d=area_name, face_indices=inflow_run),
+                BoundaryConditionLine(name="DS", sa_2d=area_name, face_indices=ds_run),
+            ]
         prov = write_boundary_condition_lines(f, lines, mesh)
         bc_len = prov["lines"][0]["length_ft"]
         for grp in _STRIP_2D_COUPLING:
             if grp in f["Geometry"]:
                 del f["Geometry"][grp]
 
-        # --- the 2D-BC-line Event-Conditions forcing (the wetting link, ADR 0138) ---
+        # --- Event-Conditions forcing (the wetting link, ADR 0138) --- #
         n_stale = strip_1d_reach_bcs(f)
-        ec = write_flow_hydrograph_2d_bc(
-            f, area_name, "Inflow", times, flows,
-            start_date=start_date, end_date=end_date, interval=interval)
-        write_normal_depth_2d_bc(f, area_name, "DS", slope=ds_slope)
-        finalize_event_conditions(f)
+        if rain_on_grid:
+            write_normal_depth_2d_bc(f, area_name, "Outlet", slope=ds_slope)
+            xy = np.asarray(mesh.cell_center_coord, np.float64)
+            met = write_uniform_precipitation(
+                f, rate_mm_per_hr=rain_rate, duration_hr=storm_duration_hr,
+                extents_xy=(float(xy[:, 0].min()), float(xy[:, 1].min()),
+                            float(xy[:, 0].max()), float(xy[:, 1].max())),
+                projection_wkt=proj_wkt)
+            infil_prov = write_infiltration_layer(
+                f, area_name, infil, n_faces=int(mesh.faces_cell_indexes.shape[0]))
+            sim_end = _patch_sim_window(f, storm_duration_hr)
+            finalize_event_conditions(f)
+            ec = {"faces": int(len(outlet_run)), "peak_cfs": 0.0, "n_ordinates": 0}
+        else:
+            ec = write_flow_hydrograph_2d_bc(
+                f, area_name, "Inflow", times, flows,
+                start_date=start_date, end_date=end_date, interval=interval)
+            write_normal_depth_2d_bc(f, area_name, "DS", slope=ds_slope)
+            finalize_event_conditions(f)
 
     n_perim = int(mesh.perimeter.shape[0])
     xnn_path.write_text(patch_chippewa_xnn(area_name, n_perim))
@@ -305,9 +384,13 @@ def compose_pure2d_deck(
     interval = computation_interval or DEFAULT_COMPUTATION_INTERVAL
     if computation_interval is not None:
         bnn_text = _patch_computation_interval(bnn_text, computation_interval)
+    if rain_on_grid:
+        # Persist the ASCII precipitation switch consistent with the plan-HDF
+        # Meteorology group (the engine reads the HDF; the .bNN keeps the switch).
+        bnn_text = inject_precipitation_ascii(bnn_text, rain_rate, rain_units)
     bnn_path.write_text(bnn_text)
 
-    return {
+    out = {
         "area_name": area_name,
         "equation_set": equation_set,
         "computation_interval": interval,
@@ -320,5 +403,18 @@ def compose_pure2d_deck(
         "ec_peak_cfs": round(float(ec["peak_cfs"]), 1),
         "ec_ordinates": int(ec["n_ordinates"]),
         "stale_1d_ec_removed": int(n_stale),
+        "rain_on_grid": bool(rain_on_grid),
         "paths": DeckPaths(rundir=rundir, plan=plan_path, xnn=xnn_path, bnn=bnn_path),
     }
+    if rain_on_grid:
+        out.update({
+            "design_storm_mm_per_hr": float(rain_rate),
+            "storm_duration_hr": float(storm_duration_hr),
+            "storm_total_mm": round(float(rain_rate) * float(storm_duration_hr), 2),
+            "amc_condition": amc_to_int(amc_condition),
+            "cn_min": infil_prov["cn_min"],
+            "cn_max": infil_prov["cn_max"],
+            "ia_ratio": infil_prov["ia_ratio"],
+            "sim_end": sim_end,
+        })
+    return out
