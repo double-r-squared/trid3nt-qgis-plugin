@@ -75,6 +75,18 @@ _COASTAL_NOTE_TMPL: str = (
     "(sfincs_flood for fast screening)."
 )
 
+#: The honesty floor when a user-supplied case mesh (generate_mesh) replaces the
+#: internal TIN: real domain geometry, the template's existing screening forcing.
+_COASTAL_SUPPLIED_NOTE_TMPL: str = (
+    "BAROTROPIC TIDAL SCREENING on a USER-SUPPLIED case mesh (generate_mesh): real "
+    "shoreline + real node-sampled bathymetry REPLACE the internal oceanmesh TIN; a "
+    "spatially-uniform {constituents} tidal boundary (amplitude {amp} m) re-keyed to "
+    "the mesh's open ({open_side}) side -- a screening tidal forcing, NOT a "
+    "FES2014/TPXO per-node field. Only the domain geometry is real; the forcing model "
+    "is the template's. Surge/waves/compound flooding are off-scope (sfincs_flood for "
+    "fast screening)."
+)
+
 
 class SchismScenarioError(RuntimeError):
     """Raised when the SCHISM chain fails fatally before producing a layer."""
@@ -141,6 +153,9 @@ async def schism_tidal_hydro(
       - ``coastal_tin``: an oceanmesh TIN for a REAL US coastal AOI (name it via
         ``location_query`` or ``bbox``), bathymetry sampled from our terrain tools,
         a constituent tidal boundary -> a clipped max-elevation COG + mesh + chart.
+        If this case already holds a SCHISM-compatible generate_mesh mesh, the
+        precondition gate offers to solve on THAT (real shoreline + bathymetry)
+        instead of building a fresh TIN.
 
     Do NOT use this for:
         - FAST arbitrary-AOI flood screening -- use ``sfincs_flood`` (SFINCS).
@@ -310,6 +325,81 @@ def _download_run_output(run_id: str, rel_key: str) -> str | None:
 def _runs_uri(run_id: str, rel_key: str) -> str:
     from trid3nt_server.agent.tools.simulation.solver.solver import _get_runs_bucket
     return f"s3://{_get_runs_bucket()}/{run_id}/{rel_key}"
+
+
+def _parse_hgrid_nodes_cells(gr3_text: str) -> tuple[Any, Any, Any]:
+    """Parse ``(points_lonlat (N,2), tris (M,3) 0-based, depths_down (N,))`` from an
+    hgrid.gr3 string -- the supplied-mesh geometry the coastal_tin deck consumes."""
+    import numpy as np
+
+    lines = gr3_text.splitlines()
+    n_elem, n_node = (int(v) for v in lines[1].split()[:2])
+    pts = np.empty((n_node, 2), dtype=float)
+    depths = np.empty(n_node, dtype=float)
+    for i in range(n_node):
+        p = lines[2 + i].split()
+        pts[i, 0], pts[i, 1], depths[i] = float(p[1]), float(p[2]), float(p[3])
+    ebase = 2 + n_node
+    tris = np.empty((n_elem, 3), dtype=np.int64)
+    for e in range(n_elem):
+        p = lines[ebase + e].split()
+        tris[e] = (int(p[2]) - 1, int(p[3]) - 1, int(p[4]) - 1)  # 1-based -> 0-based
+    return pts, tris, depths
+
+
+async def _schism_mesh_precondition_gate(
+    input_mode: str | None,
+) -> tuple[tuple[Any, Any, Any] | None, str | None, str | None]:
+    """Offer this case's SCHISM mesh to the coastal_tin tidal solve (ADR 0212).
+
+    Returns ``(supplied_mesh | None, open_boundary_side | None, note | None)``: a
+    parsed ``(points_lonlat, tris, depths_down)`` tuple when a case mesh was
+    discovered, SCHISM-compatible (a designated open boundary), and accepted; ``None``
+    when there is no usable mesh, an incompatible one was skipped, or the user
+    declined -- the caller then builds the internal oceanmesh TIN. ``open_boundary_side``
+    is taken from the mesh's designated open boundary. NEVER raises into the solve."""
+    from trid3nt_server.agent.workflows.mesh.precondition_gate import (
+        gate_supplied_mesh, materialize_supplied_mesh,
+    )
+
+    try:
+        emitter = current_emitter()
+        loaded_mesh_uris = (
+            [ly.uri for ly in emitter.loaded_layers
+             if getattr(ly, "layer_type", None) == "mesh"]
+            if emitter is not None else [])
+        s3 = None
+        try:
+            from trid3nt_server.agent.tools.simulation.solver.solver import (
+                _get_s3_client,
+            )
+            s3 = _get_s3_client()
+        except Exception:  # noqa: BLE001 -- sidecar fallback is optional
+            s3 = None
+        decision = await gate_supplied_mesh(
+            tool_name="schism_tidal_hydro", engine="schism",
+            input_mode=input_mode, loaded_mesh_uris=loaded_mesh_uris, s3_client=s3)
+        if not decision.use or decision.artifact is None:
+            return None, None, decision.note
+        art = decision.artifact
+        open_side = str((art.open_boundary_info or {}).get("open_boundary_side")
+                        or "").strip().lower() or None
+
+        def _materialize():
+            rundir = tempfile.mkdtemp(prefix="schism-tidal-suppliedmesh-")
+            gr3_local = materialize_supplied_mesh(art, rundir, s3, engine="schism")
+            return _parse_hgrid_nodes_cells(Path(gr3_local).read_text(encoding="utf-8"))
+
+        supplied_mesh = await asyncio.to_thread(_materialize)
+        logger.info(
+            "schism tidal_hydro: consuming case mesh %r (%d elements, open side=%s) "
+            "instead of the internal coastal TIN", art.name, art.element_count, open_side)
+        return supplied_mesh, open_side, decision.note
+    except Exception as exc:  # noqa: BLE001 -- gate must never break the solve
+        logger.warning(
+            "schism tidal_hydro mesh precondition gate failed (%s); building the "
+            "internal coastal TIN", exc, exc_info=True)
+        return None, None, None
 
 
 async def model_schism_tidal_hydro(
@@ -493,6 +583,44 @@ async def _build_coastal_tin_deck(
     shoreline shapefile, or a bathymetry raster) is unavailable -- an honest
     typed error, never a silent dead-end.
     """
+    # 0. Precondition gate (ADR 0212): if this case holds a SCHISM-compatible mesh
+    # (built explicitly by generate_mesh with an open boundary), offer to solve on
+    # it -- real shoreline + real sampled bathymetry replace the internal oceanmesh
+    # TIN, the tidal boundary re-keyed to the mesh's open side. Accepted -> the
+    # supplied-mesh deck; declined/absent/incompatible -> the internal TIN below.
+    supplied_mesh, gate_open_side, mesh_gate_note = (
+        await _schism_mesh_precondition_gate(input_mode))
+    if supplied_mesh is not None:
+        open_side = gate_open_side or open_boundary_side
+        deck = await asyncio.to_thread(
+            deck_authoring.author_coastal_tin_deck, workdir / "case",
+            supplied_mesh=supplied_mesh, constituents=constituents,
+            tidal_amplitude_m=tidal_amplitude_m, sim_days=sim_days,
+            open_boundary_side=open_side,
+        )
+        note = _COASTAL_SUPPLIED_NOTE_TMPL.format(
+            constituents="+".join(constituents), amp=f"{tidal_amplitude_m:g}",
+            open_side=open_side,
+        )
+        review_entries = [
+            SyntheticInput(param="mesh_source", value="coastal_tin (user-supplied mesh)",
+                           basis="user",
+                           note=(mesh_gate_note or "generate_mesh: real shoreline + real "
+                                 "sampled bathymetry replaced the internal oceanmesh TIN") +
+                                f" -- {deck['n_nodes']} nodes / {deck['n_elements']} elements"),
+            SyntheticInput(param="bathymetry", value="user-supplied mesh (node-sampled)",
+                           basis="user", note="the case mesh's own node bathymetry (positive-down)"),
+            SyntheticInput(param="tidal_amplitude_m", value=round(tidal_amplitude_m, 4), units="m",
+                           basis="user" if tidal_amplitude_m != 0.5 else "default_demo",
+                           note=f"uniform {'+'.join(constituents)} boundary re-keyed to the mesh's open ({open_side}) side"),
+            SyntheticInput(param="sim_days", value=round(sim_days, 3), units="d",
+                           basis="user" if sim_days != 5.0 else "default_demo"),
+        ]
+        return {
+            "deck_files": deck["files"], "fallback_note": note, "review_entries": review_entries,
+            "n_nodes": deck["n_nodes"], "n_elements": deck["n_elements"],
+        }
+
     # 1. Resolve the AOI bbox.
     if bbox is None:
         if not location_query:
@@ -560,6 +688,10 @@ async def _build_coastal_tin_deck(
         bathy_source=bathy_source, constituents="+".join(constituents),
         amp=f"{tidal_amplitude_m:g}",
     )
+    # An incompatible case mesh was loudly skipped by the gate: surface WHY in the
+    # provenance too (the gate already logged one WARNING line).
+    if mesh_gate_note:
+        note = f"{note} [case mesh skipped: {mesh_gate_note}]"
     review_entries = [
         SyntheticInput(param="mesh_source", value="coastal_tin", basis="derived",
                        note=f"oceanmesh TIN, {deck['n_nodes']} nodes / {deck['n_elements']} elements"),

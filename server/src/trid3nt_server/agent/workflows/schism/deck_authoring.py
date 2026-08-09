@@ -1012,29 +1012,47 @@ def _substitute_param_nml(qa_param_text: str, *, sim_days: float, dt_s: float) -
 def author_coastal_tin_deck(
     dest_dir: str | Path,
     *,
-    points: Any,
-    cells: Any,
-    depths: Any,
+    points: Any = None,
+    cells: Any = None,
+    depths: Any = None,
     constituents: list[str],
     tidal_amplitude_m: float,
     sim_days: float,
     open_boundary_side: str,
     dt_s: float = 120.0,
     coastal_drag_cd: float = 0.0025,
+    supplied_mesh: tuple[Any, Any, Any] | None = None,
 ) -> dict[str, Any]:
     """Author a full coastal_tin SCHISM deck into ``dest_dir``.
 
     Returns ``{"files": [Path, ...], "n_nodes": int, "n_elements": int,
     "open_node_count": int, "centroid": (lon, lat)}``. Raises SchismDeckError on a
     mesh/boundary fault (the honest-failure surface).
+
+    Geometry source: either ``points``/``cells``/``depths`` (the oceanmesh TIN +
+    node-sampled bathymetry) OR ``supplied_mesh`` (ADR 0212 precondition gate) as
+    ``(points_lonlat (N,2), tris (M,3) 0-based, depths_positive_down (N,))`` -- a
+    user mesh accepted by the gate REPLACES the internal TIN (real shoreline + real
+    sampled bathymetry). The tidal open boundary is re-keyed to ``open_boundary_side``
+    and the forcing (uniform constituent amplitude) stays as authored -- only the
+    domain geometry becomes real.
     """
     import numpy as np
 
     dest_dir = Path(dest_dir)
     dest_dir.mkdir(parents=True, exist_ok=True)
-    pts = np.asarray(points, dtype=float)
-    tris = np.asarray(cells, dtype=np.int64)
-    depth_arr = np.asarray(depths, dtype=float)
+    if supplied_mesh is not None:
+        pts = np.asarray(supplied_mesh[0], dtype=float)
+        tris = np.asarray(supplied_mesh[1], dtype=np.int64)
+        depth_arr = np.asarray(supplied_mesh[2], dtype=float)
+    else:
+        if points is None or cells is None or depths is None:
+            raise SchismDeckError(
+                "SCHISM_MESH_INVALID",
+                "author_coastal_tin_deck needs points+cells+depths or supplied_mesh")
+        pts = np.asarray(points, dtype=float)
+        tris = np.asarray(cells, dtype=np.int64)
+        depth_arr = np.asarray(depths, dtype=float)
 
     bridge = load_gr3_bridge()
     try:

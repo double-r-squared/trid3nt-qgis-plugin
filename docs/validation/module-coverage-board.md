@@ -66,6 +66,24 @@ solver's private meshing.
   consumed into a real baroclinic deck (2743 nodes, all 12 deck files); SWAN/absent/
   incompatible-watershed all decline correctly. +5 offline compat tests + a
   supplied-mesh deck test. Full suite 10853 passed / 9 baseline fails.
+  ADOPTION (2026-08-09, ADR 0212): the SECOND SCHISM consumer -- `schism_tidal_hydro`
+  coastal_tin path. Additive default-None `supplied_mesh` on `author_coastal_tin_deck`
+  (points/cells/depths now optional): an accepted case mesh's parsed
+  `(points, tris, depths_down)` REPLACES the internal oceanmesh TIN (real shoreline +
+  real node bathymetry) and the tidal open boundary is re-keyed to the mesh's open
+  side; the uniform-constituent forcing model is unchanged -- surfaced in
+  synthetic_inputs (basis=user). Gate runs at the TOP of `_build_coastal_tin_deck`, so
+  the accepted path SKIPS the TIN worker + bathymetry fetch (no GSHHG needed);
+  declined/absent -> the internal TIN unchanged; incompatible -> loud skip note folded
+  into provenance. QuarterAnnulus verification path never reaches the gate (default
+  unchanged). LIVE (same-process direct drive through the real SCHISM docker solver):
+  generate_mesh coastal Galveston -> stashed mesh 'Galveston Bay' (30 elems, open
+  side=south) -> gate AUTO-accepted + "consuming case mesh ... instead of the internal
+  coastal TIN" -> solve green (24 nodes, elev_max 0.395 m, tidal_range 0.895 m, run
+  01KZMCKZMVTXZ08KA140A1GVPJ); control QuarterAnnulus (no mesh) green + unchanged
+  (RMSE 0.0155 m, corr 0.99882). +5 offline tests (supplied-mesh deck, needs-geometry
+  guard, 3 gate-decision cases, gr3 parse round-trip). Touched slices 54 passed / 9
+  baseline fails unchanged.
 
 
 ## SCHISM (10 modules)

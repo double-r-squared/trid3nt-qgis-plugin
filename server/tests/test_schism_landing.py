@@ -186,6 +186,117 @@ def test_author_coastal_tin_deck_deterministic(tmp_path: Path):
     assert "0.400000" in bct  # the uniform amplitude
 
 
+def test_author_coastal_tin_deck_supplied_mesh(tmp_path: Path):
+    """ADR 0212 precondition gate: a supplied (points, tris, depths_down) mesh
+    REPLACES the internal TIN and the tidal deck (open boundary + bctides) is
+    authored on THOSE nodes -- no points/cells/depths needed."""
+    from trid3nt_server.agent.workflows.schism import deck_authoring as D
+
+    pts, cells = _square_mesh(nx=8, ny=8)
+    depths_down = np.full(pts.shape[0], 8.0)
+
+    deck = D.author_coastal_tin_deck(
+        tmp_path / "sm", supplied_mesh=(pts, cells, depths_down),
+        constituents=["M2"], tidal_amplitude_m=0.4, sim_days=4.0,
+        open_boundary_side="south",
+    )
+    names = {p.name for p in deck["files"]}
+    for req in ("hgrid.gr3", "vgrid.in", "param.nml", "bctides.in", "drag.gr3", "station.in"):
+        assert req in names, f"missing {req}"
+    assert 0 < deck["n_nodes"] <= pts.shape[0]
+    assert deck["open_node_count"] > 0  # a seaward open boundary was designated
+    # bctides carries the constituent + the uniform amplitude at the open nodes.
+    bct = (tmp_path / "sm" / "bctides.in").read_text()
+    assert "M2" in bct and "0.400000" in bct
+
+
+def test_author_coastal_tin_deck_needs_geometry(tmp_path: Path):
+    """Neither points/cells/depths nor supplied_mesh -> a typed honest error."""
+    from trid3nt_server.agent.workflows.schism import deck_authoring as D
+
+    with pytest.raises(D.SchismDeckError):
+        D.author_coastal_tin_deck(
+            tmp_path / "x", constituents=["M2"], tidal_amplitude_m=0.4,
+            sim_days=4.0, open_boundary_side="south")
+
+
+def _schism_mesh_artifact(*, compatible: bool):
+    """A MeshArtifact that is SCHISM-compatible (open boundary) or not (closed)."""
+    from trid3nt_server.agent.workflows.mesh.artifact import MeshArtifact
+
+    obi = ({"open_boundary_side": "south", "open_node_count": 12}
+           if compatible else {})
+    return MeshArtifact(
+        mesh_id="m-tin-1", name="Galveston coastal mesh", mode="coastal_water_edge",
+        display_uri="s3://runs/m/mesh.2dm", slf_uri="s3://runs/m/mesh.slf",
+        utm_epsg=32615, crs_authid="EPSG:32615", has_bathymetry=True,
+        node_count=340, element_count=600, bbox=(-95.0, 29.0, -94.6, 29.4),
+        engine_compat=(["telemac", "schism"] if compatible else ["telemac"]),
+        gr3_uri=("s3://runs/m/hgrid.gr3" if compatible else None),
+        open_boundary_info=obi, case_id="case-x")
+
+
+@pytest.mark.asyncio
+async def test_tidal_gate_decision_compatible_auto(monkeypatch):
+    """A SCHISM-compatible case mesh -> gate accepts in AUTO (headless) mode."""
+    from trid3nt_server.agent.workflows.mesh import precondition_gate as G
+
+    art = _schism_mesh_artifact(compatible=True)
+    monkeypatch.setattr(G, "find_case_mesh_artifacts", lambda **k: [art])
+    decision = await G.gate_supplied_mesh(
+        tool_name="schism_tidal_hydro", engine="schism", input_mode="auto",
+        case_id="case-x")
+    assert decision.use is True
+    assert decision.artifact is art
+    assert (art.open_boundary_info or {}).get("open_boundary_side") == "south"
+
+
+@pytest.mark.asyncio
+async def test_tidal_gate_decision_incompatible_loud_skip(monkeypatch):
+    """A case mesh with no open boundary -> NOT gated; loud-skip note, author fresh."""
+    from trid3nt_server.agent.workflows.mesh import precondition_gate as G
+
+    art = _schism_mesh_artifact(compatible=False)
+    monkeypatch.setattr(G, "find_case_mesh_artifacts", lambda **k: [art])
+    decision = await G.gate_supplied_mesh(
+        tool_name="schism_tidal_hydro", engine="schism", input_mode="auto",
+        case_id="case-x")
+    assert decision.use is False
+    assert decision.artifact is None
+    assert decision.note and "not compatible" in decision.note
+
+
+@pytest.mark.asyncio
+async def test_tidal_gate_decision_absent(monkeypatch):
+    """No case mesh -> None decision (author the internal TIN as before)."""
+    from trid3nt_server.agent.workflows.mesh import precondition_gate as G
+
+    monkeypatch.setattr(G, "find_case_mesh_artifacts", lambda **k: [])
+    decision = await G.gate_supplied_mesh(
+        tool_name="schism_tidal_hydro", engine="schism", input_mode="auto",
+        case_id="case-x")
+    assert decision.use is False
+    assert decision.artifact is None
+    assert decision.note is None
+
+
+def test_tidal_parse_hgrid_roundtrip(tmp_path: Path):
+    """The composer's gr3 parser round-trips tin_to_hgrid nodes/cells/depths."""
+    from trid3nt_server.agent.workflows.schism import deck_authoring as D
+    from trid3nt_server.agent.workflows.schism.tidal_hydro.tidal_hydro import (
+        _parse_hgrid_nodes_cells,
+    )
+
+    pts, cells = _square_mesh(nx=7, ny=7)
+    depths = np.full(pts.shape[0], 6.0)
+    bridge = D.load_gr3_bridge()
+    gr3 = bridge.tin_to_hgrid(pts, cells, depth=depths, open_boundary_side="south")
+    p2, t2, d2 = _parse_hgrid_nodes_cells(gr3)
+    assert p2.shape[0] == pts.shape[0]
+    assert t2.shape[1] == 3 and int(t2.min()) == 0  # 0-based triangles
+    assert np.allclose(d2, 6.0, atol=1e-6)
+
+
 def test_bctides_no_open_boundary_raises():
     from trid3nt_server.agent.workflows.schism import deck_authoring as D
 
