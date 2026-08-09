@@ -133,6 +133,32 @@ def test_compat_schism_missing_gr3():
     assert ok is False and "gr3" in reason.lower()
 
 
+def test_compat_schism_needs_open_boundary():
+    # a mesh WITH a .gr3 + bathymetry but NO designated open boundary is still
+    # incompatible with SCHISM (no seaward boundary to force tides/T-S at).
+    ok, reason = mesh_compatible_with_engine(
+        _artifact(gr3_uri="s3://cache/mesh/01ABC/hgrid.gr3"), "schism")
+    assert ok is False and "open" in reason.lower()
+
+
+def test_compat_schism_ok_with_open_boundary():
+    ok, reason = mesh_compatible_with_engine(
+        _artifact(mode="coastal_water_edge",
+                  gr3_uri="s3://cache/mesh/01ABC/hgrid.gr3",
+                  open_boundary_info={"open_boundary_side": "south",
+                                      "open_node_count": 42}),
+        "schism")
+    assert ok is True and reason == "compatible"
+
+
+def test_compat_swan_regular_grid_always_false():
+    # the SWAN worker is regular-grid only: it can NEVER consume a user mesh, even
+    # one carrying a fort.14 -- the honest answer names the regular-grid reason.
+    ok, reason = mesh_compatible_with_engine(
+        _artifact(fort14_uri="s3://cache/mesh/01ABC/fort.14"), "swan")
+    assert ok is False and "regular-grid" in reason.lower()
+
+
 def test_compat_unknown_engine_is_incompatible():
     ok, reason = mesh_compatible_with_engine(_artifact(), "made_up_engine")
     assert ok is False and "no mesh-compatibility rule" in reason

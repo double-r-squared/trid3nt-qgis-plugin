@@ -27,7 +27,10 @@ Pipeline (deterministic, composed here):
   5. stage the mesh + node fields + manifest and dispatch the generic
      ``run_solver`` seam (mode=rain_on_grid -> the worker's ``rog_build`` deck);
   6. ``postprocess_telemac_wse`` rasterizes the peak WATER DEPTH to a COG; the
-     outlet hydrograph + runoff volume + continuity ride in the metrics.
+     outlet hydrograph + runoff volume + continuity ride in the metrics;
+  7. the full-results SELAFIN (``r2d_rog.slf`` -- all frames, all variables) is
+     published as a ``layer_type="mesh"`` case layer alongside the depth COG (ADR
+     0208), so QGIS/MDAL animates it natively with the temporal controller.
 
 Registered ``engine="telemac", tier="template"``, ``cacheable=False`` +
 ``ttl_class="live-no-cache"`` + ``source_class="workflow_dispatch"`` (FR-DC-6,
@@ -524,7 +527,48 @@ async def _stage_solve_postprocess(
         raise TelemacRainOnGridError(
             "TELEMAC_ROG_NO_LAYER",
             "postprocess produced no depth layer (dry catchment?).")
+    # ADR 0208 (NATE full-results ask): publish the full-results SELAFIN
+    # (r2d_rog.slf -- ALL frames, ALL variables) as a case mesh layer alongside the
+    # peak-depth COG, so QGIS/MDAL animates it with the temporal controller.
+    await _publish_full_results_mesh(
+        batch_run_id, mesh_epsg=int(mesh.utm_epsg), reach_name=reach_name)
     return layers[0]
+
+
+async def _publish_full_results_mesh(
+    run_id: str, *, mesh_epsg: int, reach_name: str
+) -> None:
+    """Publish r2d_rog.slf as a ``layer_type="mesh"`` case layer (best-effort).
+
+    The full-results SELAFIN (every frame, every variable) is a native MDAL mesh:
+    QGIS opens it directly and its time steps drive the temporal controller (no
+    per-frame COGs, no plugin change -- the 0200 mesh-layer seam). It rides the
+    runs-bucket object the depth COG was rasterized from (no re-upload), stamped in
+    the mesh's own UTM CRS. NEVER fails the run.
+
+    Payload scaling: a 6 h / 37-frame run is ~4 MB; the SELAFIN grows ~linearly
+    with frames x nodes, so a multi-day / high-graphic-period run can reach tens of
+    MB (still MDAL-streamable via /vsicurl/, but sizeable to download)."""
+    from trid3nt_contracts.execution import LayerURI
+
+    from trid3nt_server.agent.tools.simulation.solver.solver import _get_runs_bucket
+    from trid3nt_server.emission.layer_uri_emit import publish_input_layer
+    from trid3nt_server.emission.pipeline_emitter import current_emitter
+
+    emitter = current_emitter()
+    if emitter is None:
+        return
+    try:
+        mesh_uri = f"s3://{_get_runs_bucket()}/{run_id}/r2d_rog.slf"
+        mesh_layer = LayerURI(
+            layer_id=f"rog-results-{run_id}",
+            name=f"Model results (time series): {reach_name}",
+            layer_type="mesh", uri=mesh_uri, style_preset="mesh_grid",
+            role="context", bbox=None, crs_authid=f"EPSG:{int(mesh_epsg)}")
+        await publish_input_layer(emitter, mesh_layer, role="context")
+        logger.info("rog: published full-results mesh layer %s", mesh_uri)
+    except Exception as exc:  # noqa: BLE001 -- full-results layer is a bonus
+        logger.warning("rog full-results mesh layer emit skipped: %s", exc)
 
 
 def _download_rog_result(run_id: str) -> str:

@@ -97,6 +97,41 @@ def test_author_baroclinic_estuary_deck(tmp_path: Path):
     assert float(msource[0].split()[2]) == pytest.approx(0.0)  # S=0 freshwater
 
 
+def test_author_baroclinic_deck_supplied_mesh(tmp_path: Path):
+    """The precondition-gate path: a supplied (points, tris, depths_down) mesh
+    REPLACES the idealized lattice, and the deck (open boundary + salinity IC
+    gradient + river source) is authored on THOSE nodes (ADR 0208)."""
+    from scipy.spatial import Delaunay
+
+    from trid3nt_server.agent.workflows.schism import deck_authoring as D
+
+    # a real-ish coastal lon/lat rectangle, triangulated, depths positive-DOWN.
+    xs = np.linspace(-70.60, -70.40, 9)
+    ys = np.linspace(41.20, 41.40, 11)
+    gx, gy = np.meshgrid(xs, ys)
+    pts = np.column_stack([gx.ravel(), gy.ravel()])
+    tris = Delaunay(pts).simplices
+    # deepen toward the south (ocean) edge: positive-down.
+    frac = 1.0 - (pts[:, 1] - ys.min()) / (ys.max() - ys.min())
+    depths_down = 3.0 + 12.0 * frac
+
+    deck = D.author_baroclinic_estuary_deck(
+        tmp_path / "sm", bbox=(-70.60, 41.20, -70.40, 41.40),
+        constituents=["M2"], tidal_amplitude_m=0.6, sim_days=1.0, ocean_side="south",
+        river_discharge_m3s=600.0, ocean_salinity_psu=33.0, nvrt=8,
+        supplied_mesh=(pts, tris, depths_down),
+    )
+    # the deck used the SUPPLIED node count (<= the 99 supplied, minus any bowtie
+    # cleaning), never the default 20x40 idealized lattice (800 nodes).
+    assert 0 < deck["n_nodes"] <= pts.shape[0]
+    assert deck["n_nodes"] < 800
+    assert deck["open_node_count"] > 0        # a seaward open boundary was designated
+    # the salinity IC still carries the estuarine gradient on the supplied nodes.
+    salt_lines = (tmp_path / "sm" / "salt.ic").read_text().splitlines()[2:]
+    svals = np.array([float(l.split()[3]) for l in salt_lines if l.strip()])
+    assert svals.min() < 5.0 and svals.max() > 25.0
+
+
 def test_build_estuary_mesh_shoreline_clip():
     """A water mask clips the lattice to the wet body: NO triangle centroid lands
     on 'land', and no surviving node is outside the water region."""

@@ -415,6 +415,84 @@ def _runs_uri(run_id: str, rel_key: str) -> str:
     return f"s3://{_get_runs_bucket()}/{run_id}/{rel_key}"
 
 
+def _parse_hgrid_nodes_cells(gr3_text: str) -> tuple[Any, Any, Any]:
+    """Parse ``(points_lonlat (N,2), tris (M,3) 0-based, depths_down (N,))`` from
+    an hgrid.gr3 string -- the supplied-mesh geometry the deck author consumes."""
+    import numpy as np
+
+    lines = gr3_text.splitlines()
+    n_elem, n_node = (int(v) for v in lines[1].split()[:2])
+    pts = np.empty((n_node, 2), dtype=float)
+    depths = np.empty(n_node, dtype=float)
+    for i in range(n_node):
+        p = lines[2 + i].split()
+        pts[i, 0], pts[i, 1], depths[i] = float(p[1]), float(p[2]), float(p[3])
+    ebase = 2 + n_node
+    tris = np.empty((n_elem, 3), dtype=np.int64)
+    for e in range(n_elem):
+        p = lines[ebase + e].split()
+        # "id 3 n1 n2 n3" (1-based nodes) -> 0-based triangle
+        tris[e] = (int(p[2]) - 1, int(p[3]) - 1, int(p[4]) - 1)
+    return pts, tris, depths
+
+
+async def _schism_mesh_precondition_gate(
+    input_mode: str | None,
+) -> tuple[tuple[Any, Any, Any] | None, str | None, str | None]:
+    """Offer this case's SCHISM mesh to the baroclinic solve (ADR 0208).
+
+    Returns ``(supplied_mesh | None, ocean_side | None, note | None)``: a parsed
+    ``(points_lonlat, tris, depths_down)`` tuple when a case mesh was discovered,
+    SCHISM-compatible (a designated open boundary), and accepted; ``None`` when
+    there is no usable mesh, an incompatible one was skipped, or the user declined
+    -- the caller then authors the idealized channel. ``ocean_side`` is taken from
+    the mesh's designated open boundary. NEVER raises into the solve path."""
+    import tempfile
+
+    from trid3nt_server.agent.workflows.mesh.precondition_gate import (
+        gate_supplied_mesh, materialize_supplied_mesh,
+    )
+
+    try:
+        emitter = current_emitter()
+        loaded_mesh_uris = (
+            [ly.uri for ly in emitter.loaded_layers
+             if getattr(ly, "layer_type", None) == "mesh"]
+            if emitter is not None else [])
+        s3 = None
+        try:
+            from trid3nt_server.agent.tools.simulation.solver.solver import (
+                _get_s3_client,
+            )
+            s3 = _get_s3_client()
+        except Exception:  # noqa: BLE001 -- sidecar fallback is optional
+            s3 = None
+        decision = await gate_supplied_mesh(
+            tool_name="schism_baroclinic_circulation", engine="schism",
+            input_mode=input_mode, loaded_mesh_uris=loaded_mesh_uris, s3_client=s3)
+        if not decision.use or decision.artifact is None:
+            return None, None, decision.note
+        art = decision.artifact
+        ocean_side = str((art.open_boundary_info or {}).get("open_boundary_side")
+                         or "").strip().lower() or None
+
+        def _materialize():
+            rundir = tempfile.mkdtemp(prefix="schism-baroclinic-suppliedmesh-")
+            gr3_local = materialize_supplied_mesh(art, rundir, s3, engine="schism")
+            return _parse_hgrid_nodes_cells(Path(gr3_local).read_text(encoding="utf-8"))
+
+        supplied_mesh = await asyncio.to_thread(_materialize)
+        logger.info(
+            "schism baroclinic: consuming case mesh %r (%d elements, open side=%s) "
+            "instead of the idealized lattice", art.name, art.element_count, ocean_side)
+        return supplied_mesh, ocean_side, decision.note
+    except Exception as exc:  # noqa: BLE001 -- gate must never break the solve
+        logger.warning(
+            "schism baroclinic mesh precondition gate failed (%s); authoring the "
+            "idealized channel", exc, exc_info=True)
+        return None, None, None
+
+
 async def model_schism_baroclinic_circulation(
     *, location_query, bbox, river_discharge_m3s, ocean_salinity_psu, sim_days,
     ocean_side, input_mode,
@@ -425,28 +503,47 @@ async def model_schism_baroclinic_circulation(
 
     aoi_bbox, aoi_label, aoi_basis = _resolve_bbox(location_query, bbox)
 
-    # Real coastline clip: mesh only the estuary WATER (no salinity over land).
-    water_mask_fn = await asyncio.to_thread(_build_water_mask, aoi_bbox)
+    # Precondition gate (ADR 0208): if this case holds a SCHISM-compatible mesh
+    # (built explicitly by generate_mesh with an open boundary), offer to solve on
+    # it -- real shoreline + real bathymetry replace the idealized lattice.
+    # Accepted -> the supplied-mesh path; declined/absent/incompatible -> the
+    # idealized channel below, unchanged.
+    supplied_mesh, gate_ocean_side, mesh_gate_note = (
+        await _schism_mesh_precondition_gate(input_mode))
+    if supplied_mesh is not None:
+        ocean_side = gate_ocean_side or ocean_side
+        water_mask_fn = None  # the supplied mesh IS the (real) shoreline
+    else:
+        # Real coastline clip: mesh only the estuary WATER (no salinity over land).
+        water_mask_fn = await asyncio.to_thread(_build_water_mask, aoi_bbox)
 
     workdir = Path(tempfile.mkdtemp(prefix="schism-baroclinic-deck-"))
     deck = deck_authoring.author_baroclinic_estuary_deck(
         workdir, bbox=aoi_bbox, constituents=["M2"], tidal_amplitude_m=0.6,
         sim_days=sim_days, ocean_side=ocean_side,
         river_discharge_m3s=river_discharge_m3s, ocean_salinity_psu=ocean_salinity_psu,
-        water_mask_fn=water_mask_fn,
+        water_mask_fn=water_mask_fn, supplied_mesh=supplied_mesh,
     )
     shoreline_clipped = bool(deck.get("shoreline_clipped"))
-    logger.info("baroclinic mesh: %d nodes x %d layers, shoreline_clipped=%s",
-                deck["n_nodes"], deck["n_layers"], shoreline_clipped)
+    used_supplied_mesh = supplied_mesh is not None
+    logger.info("baroclinic mesh: %d nodes x %d layers, shoreline_clipped=%s, "
+                "supplied_mesh=%s", deck["n_nodes"], deck["n_layers"],
+                shoreline_clipped, used_supplied_mesh)
 
     review_entries = [
         SyntheticInput(param="estuary_aoi", value=aoi_label, basis=aoi_basis,
                        note="the georeferenced estuary footprint the coarse channel spans"),
         SyntheticInput(param="mesh_geometry",
-                       value=(f"coarse {'shoreline-clipped' if shoreline_clipped else 'rectangular'} "
+                       value=(f"user-supplied mesh ({deck['n_nodes']} nodes x {deck['n_layers']} layers)"
+                              if used_supplied_mesh else
+                              f"coarse {'shoreline-clipped' if shoreline_clipped else 'rectangular'} "
                               f"channel ({deck['n_nodes']} nodes x {deck['n_layers']} layers)"),
-                       basis="default_demo",
-                       note=("a lon/lat lattice clipped to the real WATER body (coastline from "
+                       basis="user" if used_supplied_mesh else "default_demo",
+                       note=((mesh_gate_note or "consumed a user-supplied mesh (generate_mesh): real "
+                              "shoreline + real sampled bathymetry; the salinity IC gradient + tidal/"
+                              "river forcing remain idealized")
+                             if used_supplied_mesh else
+                             "a lon/lat lattice clipped to the real WATER body (coastline from "
                              "topo-bathymetry) with linearly-deepening idealized bathymetry -- the "
                              "SHORELINE is real, the bathymetry is NOT surveyed"
                              if shoreline_clipped else

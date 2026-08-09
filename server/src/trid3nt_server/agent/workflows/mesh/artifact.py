@@ -44,6 +44,7 @@ __all__ = [
     "read_mesh_artifact_sidecar",
     "find_case_mesh_artifacts",
     "mesh_compatible_with_engine",
+    "open_boundary_node_count",
     "ENGINE_MESH_REQUIREMENTS",
 ]
 
@@ -94,21 +95,43 @@ class MeshArtifact:
         return cls(**clean)
 
 
+#: A mesh carries SCHISM open-boundary segmentation iff its ``open_boundary_info``
+#: names a designated seaward side AND a positive open-node count -- the forcing
+#: boundary a barotropic/baroclinic SCHISM solve applies tides/T-S at. An inland
+#: catchment (``open_boundary_info == {}``) is fully closed and has none.
+def open_boundary_node_count(art: MeshArtifact) -> int:
+    """Number of designated open-boundary nodes on the mesh (0 = fully closed)."""
+    try:
+        return int((art.open_boundary_info or {}).get("open_node_count", 0) or 0)
+    except Exception:  # noqa: BLE001
+        return 0
+
+
 #: Engine -> the mesh format + facts that engine's solver REQUIRES. A mesh is
 #: compatible with an engine iff it carries the named format URI and (when
-#: ``needs_bathymetry``) a sampled bed. Open-set: SCHISM/SWAN adopt the same gate
-#: by reading their rows here, no new gate code.
+#: ``needs_bathymetry``) a sampled bed and (when ``needs_open_boundary``) a
+#: designated seaward open boundary. ``unstructured_unsupported`` marks an engine
+#: whose worker cannot consume ANY user mesh (a regular-grid-only solver). Open-set:
+#: templates adopt the same gate by reading their rows here, no new gate code.
 ENGINE_MESH_REQUIREMENTS: dict[str, dict[str, Any]] = {
     # TELEMAC-2D geometry is SELAFIN with a BOTTOM node field (the bed the
     # shallow-water solve needs); rain-on-grid + river-dye consume it.
     "telemac": {"uri_field": "slf_uri", "needs_bathymetry": True,
                 "format": "SELAFIN (.slf, BOTTOM)"},
-    # SCHISM reads an hgrid.gr3 with depths + open/land boundary segmentation.
+    # SCHISM reads an hgrid.gr3 with depths AND open/land boundary segmentation:
+    # bare bathymetry is not enough, the solve needs a designated seaward open
+    # boundary to force tides / T-S at. A generate_mesh WATERSHED mesh is an
+    # inland closed catchment (no open boundary) -> honestly declined; a COASTAL
+    # mesh built with an open_boundary_side carries one.
     "schism": {"uri_field": "gr3_uri", "needs_bathymetry": True,
-               "format": "SCHISM hgrid (.gr3)"},
-    # Unstructured SWAN reads an ADCIRC fort.14 mesh.
-    "swan": {"uri_field": "fort14_uri", "needs_bathymetry": True,
-             "format": "ADCIRC unstructured (fort.14)"},
+               "needs_open_boundary": True, "format": "SCHISM hgrid (.gr3)"},
+    # The SWAN worker is REGULAR-GRID ONLY (CGRID REGULAR + INPGRID BOTTOM +
+    # bottom.bot sampled from a DEM). It has no unstructured (fort.14) path, so it
+    # cannot consume a user mesh at all -- the honest answer is always False.
+    "swan": {"unstructured_unsupported": True,
+             "reason": ("the SWAN worker is REGULAR-GRID (CGRID REGULAR + "
+                        "bottom.bot); it has no unstructured-mesh (fort.14) path, "
+                        "so it cannot consume a user-supplied mesh")},
 }
 
 
@@ -123,6 +146,8 @@ def mesh_compatible_with_engine(
     req = ENGINE_MESH_REQUIREMENTS.get(str(engine).lower())
     if req is None:
         return False, f"no mesh-compatibility rule registered for engine {engine!r}"
+    if req.get("unstructured_unsupported"):
+        return False, str(req.get("reason") or f"{engine} cannot consume a user mesh")
     uri = getattr(art, str(req["uri_field"]), None)
     if not uri:
         return False, (
@@ -132,6 +157,11 @@ def mesh_compatible_with_engine(
         return False, (
             f"mesh {art.name!r} has no sampled bathymetry; {engine} needs a "
             "bed-carrying geometry")
+    if req.get("needs_open_boundary") and open_boundary_node_count(art) <= 0:
+        return False, (
+            f"mesh {art.name!r} has no designated open (seaward) boundary; "
+            f"{engine} needs an open-boundary segmentation to force at (build a "
+            "coastal mesh with an open_boundary_side to use it here)")
     return True, "compatible"
 
 

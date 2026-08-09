@@ -697,6 +697,7 @@ def author_baroclinic_estuary_deck(
     dt_s: float = 120.0,
     coastal_drag_cd: float = 0.0025,
     water_mask_fn: Any = None,
+    supplied_mesh: tuple[Any, Any, Any] | None = None,
 ) -> dict[str, Any]:
     """Author a coarse density-driven 3D BAROCLINIC estuary deck into ``dest_dir``.
 
@@ -711,22 +712,41 @@ def author_baroclinic_estuary_deck(
     bathymetry are an IDEALIZED coarse demonstration geometry (surfaced in the
     template's synthetic_inputs), NOT a surveyed estuary -- the calibrated
     Columbia-River CORIE 28-day 3D run is the NATE-gated validation.
+
+    ``supplied_mesh`` (ADR 0208 precondition gate): when given as
+    ``(points_lonlat (N,2), tris (M,3) 0-based, depths_positive_down (N,))`` -- a
+    user mesh accepted by the precondition gate -- it REPLACES the idealized lattice
+    (real shoreline + real sampled bathymetry). The salinity IC gradient, river
+    source, and tidal open boundary are still authored keyed to ``ocean_side`` (the
+    forcing remains idealized; only the geometry is real).
     """
     import numpy as np
 
     dest_dir = Path(dest_dir)
     dest_dir.mkdir(parents=True, exist_ok=True)
 
-    pts, tris, depths, clipped = _build_estuary_mesh(
-        bbox, nx=nx, ny=ny, ocean_side=ocean_side,
-        depth_ocean_m=15.0, depth_river_m=3.0, water_mask_fn=water_mask_fn,
-    )
-    if water_mask_fn is not None and not clipped:
-        logger.warning(
-            "baroclinic estuary: water mask covered too little of the AOI to clip "
-            "to a shoreline mesh -- meshing the full rectangle (salinity may render "
-            "over land). Supply a wetter AOI / a coastline mask."
+    if supplied_mesh is not None:
+        # A user mesh accepted by the precondition gate: real shoreline + real
+        # bathymetry replace the idealized lattice. The forcing (salinity IC
+        # gradient, river source, tidal boundary) is still authored below keyed to
+        # ocean_side -- only the domain geometry is real.
+        pts = np.asarray(supplied_mesh[0], dtype=float)
+        tris = np.asarray(supplied_mesh[1], dtype=np.int64)
+        depths = np.asarray(supplied_mesh[2], dtype=float)
+        clipped = True
+        bbox = (float(pts[:, 0].min()), float(pts[:, 1].min()),
+                float(pts[:, 0].max()), float(pts[:, 1].max()))
+    else:
+        pts, tris, depths, clipped = _build_estuary_mesh(
+            bbox, nx=nx, ny=ny, ocean_side=ocean_side,
+            depth_ocean_m=15.0, depth_river_m=3.0, water_mask_fn=water_mask_fn,
         )
+        if water_mask_fn is not None and not clipped:
+            logger.warning(
+                "baroclinic estuary: water mask covered too little of the AOI to clip "
+                "to a shoreline mesh -- meshing the full rectangle (salinity may render "
+                "over land). Supply a wetter AOI / a coastline mask."
+            )
     bridge = load_gr3_bridge()
     try:
         gr3_text = bridge.tin_to_hgrid(

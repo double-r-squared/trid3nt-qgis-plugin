@@ -96,6 +96,7 @@ async def generate_mesh(
     min_edge_length_m: float = 40.0,
     max_edge_length_m: float = 400.0,
     grade: float = 0.20,
+    open_boundary_side: str | None = None,
     compute_class: str = "medium",
     **_extra_ignored: Any,
 ) -> Any:
@@ -117,6 +118,12 @@ async def generate_mesh(
     ``max_edge_length_m`` bound the triangle size; ``grade`` (0.15-0.35) limits how
     fast elements coarsen away from the refined edge. US-only via our fetchers.
 
+    SCHISM readiness: a COASTAL mesh built with an ``open_boundary_side`` also emits
+    a SCHISM hgrid.gr3 whose seaward edge is a designated OPEN boundary, so a SCHISM
+    template (baroclinic circulation / tidal hydro) can consume it. Without an
+    ``open_boundary_side`` (or for a watershed mesh) no open boundary is designated
+    and SCHISM honestly declines the mesh (TELEMAC still consumes it).
+
     Params:
         location: place naming the domain (geocoded). Supply this OR ``bbox``.
         bbox: OPTIONAL AOI ``(min_lon,min_lat,max_lon,max_lat)`` EPSG:4326.
@@ -125,11 +132,15 @@ async def generate_mesh(
         min_edge_length_m: finest triangle edge (m).
         max_edge_length_m: coarsest triangle edge (m).
         grade: gradation limit (0.15-0.35; smaller = smoother size transitions).
+        open_boundary_side: OPTIONAL "south"|"north"|"east"|"west" -- the seaward
+            edge to designate as the SCHISM open (forcing) boundary on a coastal
+            mesh. Omit for a TELEMAC-only or inland mesh.
     """
     return await model_generate_mesh(
         location=location, bbox=bbox, pour_point=pour_point, mesh_mode=mesh_mode,
         min_edge_length_m=min_edge_length_m, max_edge_length_m=max_edge_length_m,
-        grade=grade, compute_class=compute_class)
+        grade=grade, open_boundary_side=open_boundary_side,
+        compute_class=compute_class)
 
 
 def _infer_mode(mesh_mode: str, pour_point: Any, bbox: Any) -> str:
@@ -151,6 +162,7 @@ async def model_generate_mesh(
     min_edge_length_m: float,
     max_edge_length_m: float,
     grade: float,
+    open_boundary_side: str | None = None,
     compute_class: str,
 ) -> LayerURI:
     """Deterministic mesh composer: resolve AOI/pour-point -> build -> stage the
@@ -200,11 +212,26 @@ async def model_generate_mesh(
             _build_coastal, aoi, str(rundir),
             min_edge_length_m, max_edge_length_m, grade)
 
+    obs = (open_boundary_side or "").strip().lower() or None
+    if obs is not None and obs not in ("south", "north", "east", "west"):
+        raise GenerateMeshError(
+            "GENERATE_MESH_BAD_OPEN_SIDE",
+            f"open_boundary_side must be south/north/east/west; got {obs!r}.")
+    if obs is not None and mode != "coastal_water_edge":
+        # An open (seaward) boundary is only meaningful on a coastal mesh; an inland
+        # catchment is fully closed. Drop it with a loud note rather than fabricate
+        # a seaward boundary on a watershed.
+        logger.warning(
+            "generate_mesh: open_boundary_side=%s ignored for mode=%s (only a "
+            "coastal mesh has a seaward open boundary)", obs, mode)
+        obs = None
+
     name = location or built.get("place") or f"{mode} mesh"
     layer = await asyncio.to_thread(
         _stage_and_record, built, mode=mode, mesh_id=mesh_id, name=str(name),
         aoi=aoi, pp=pp, min_edge_length_m=min_edge_length_m,
-        max_edge_length_m=max_edge_length_m, grade=grade)
+        max_edge_length_m=max_edge_length_m, grade=grade,
+        open_boundary_side=obs)
     return layer
 
 
@@ -271,8 +298,11 @@ def _build_coastal(aoi, rundir, min_edge, max_edge, grade) -> dict[str, Any]:
             f"no water polygon found for coastal AOI {aoi} (OSM coastline + NHD "
             "areal water both empty); is this an inland box?")
     dem_path = _fetch_topobathy(aoi, Path(rundir))
+    # The in-container mesher reads the water polygon from a FILE (json.load(open(
+    # ...))) under the /data mount, not an inline dict -- write it beside the config.
+    (Path(rundir) / "water.geojson").write_text(json.dumps(_mapping(water)))
     conf = {
-        "water_geojson": _mapping(water),
+        "water_geojson": "/data/water.geojson",
         "dem_path": "/data/topobathy.tif",
         "bbox": list(aoi),
         "min_edge_length_m": float(min_edge),
@@ -314,6 +344,7 @@ def _build_coastal(aoi, rundir, min_edge, max_edge, grade) -> dict[str, Any]:
 def _stage_and_record(
     built: dict[str, Any], *, mode: str, mesh_id: str, name: str, aoi, pp,
     min_edge_length_m: float, max_edge_length_m: float, grade: float,
+    open_boundary_side: str | None = None,
 ) -> LayerURI:
     import numpy as np
 
@@ -357,6 +388,26 @@ def _stage_and_record(
     twodm_uri = _put(s3, cache_bucket, f"{prefix}/mesh.2dm", twodm_local)
     slf_uri = _put(s3, cache_bucket, f"{prefix}/mesh.slf", slf_local)
 
+    # SCHISM hgrid.gr3 (best-effort): only a COASTAL mesh with a designated seaward
+    # open boundary is SCHISM-ready -- an inland/no-open-boundary mesh is honestly
+    # left TELEMAC-only (mesh_compatible_with_engine declines SCHISM). The bridge
+    # is the worker's proven pure-numpy tin_to_hgrid (SCHISM depth is positive-DOWN,
+    # so the mesh bed elevation-up is negated).
+    gr3_uri: str | None = None
+    open_boundary_info: dict[str, Any] = dict(built.get("open_boundary_info") or {})
+    if open_boundary_side and has_bathymetry:
+        gr3_uri, open_node_count = _emit_schism_gr3(
+            s3, cache_bucket, f"{prefix}/hgrid.gr3", rundir,
+            points_lonlat=np.asarray(built["points_lonlat"], dtype=float),
+            cells=cells, bed_up=bed, open_boundary_side=open_boundary_side,
+            grid_name=f"trid3nt_{mode}")
+        if gr3_uri is not None:
+            open_boundary_info.update({
+                "open_boundary_side": open_boundary_side,
+                "open_node_count": int(open_node_count),
+                "designated_by": "generate_mesh",
+            })
+
     # lon/lat bbox for the zoom-to camera.
     ll = np.asarray(built["points_lonlat"], dtype=float)
     lonlat_bbox = (float(ll[:, 0].min()), float(ll[:, 1].min()),
@@ -370,16 +421,19 @@ def _stage_and_record(
         "dem_source": built.get("dem_source"),
         "area_km2": built.get("area_km2"),
     }
+    engine_compat: list[str] = ["telemac"] if has_bathymetry else []
+    if gr3_uri is not None and int(open_boundary_info.get("open_node_count", 0)) > 0:
+        engine_compat.append("schism")
     case_id = current_turn_case()
     art = MeshArtifact(
         mesh_id=mesh_id, name=name, mode=mode, display_uri=twodm_uri,
         slf_uri=slf_uri, utm_epsg=utm_epsg, crs_authid=crs_authid,
         has_bathymetry=has_bathymetry, node_count=node_count,
         element_count=elem_count, bbox=lonlat_bbox,
-        engine_compat=(["telemac"] if has_bathymetry else []),
+        engine_compat=engine_compat, gr3_uri=gr3_uri,
         outlet_lonlat=built.get("outlet_lonlat"),
         pour_point_lonlat=(tuple(pp) if pp else None),
-        open_boundary_info=dict(built.get("open_boundary_info") or {}),
+        open_boundary_info=open_boundary_info,
         provenance=provenance, case_id=case_id)
     stash_mesh_artifact(case_id, art)
     sidecar = write_mesh_artifact_sidecar(art, s3)
@@ -427,6 +481,61 @@ def _write_2dm(points: Any, cells: Any, z: Any) -> str:
         zi = float(zz[i - 1]) if i - 1 < zz.size else 0.0
         lines.append(f"ND {i} {x:.6f} {y:.6f} {zi:.6f}")
     return "\n".join(lines) + "\n"
+
+
+# --------------------------------------------------------------------------- #
+# SCHISM hgrid emission (best-effort): the worker's proven tin_to_hgrid bridge.
+# --------------------------------------------------------------------------- #
+def _emit_schism_gr3(
+    s3: Any, bucket: str, key: str, rundir: Path, *,
+    points_lonlat: Any, cells: Any, bed_up: Any, open_boundary_side: str,
+    grid_name: str,
+) -> tuple[str | None, int]:
+    """Write + upload a SCHISM ``hgrid.gr3`` with a designated open boundary.
+
+    Reuses the SCHISM worker's pure-numpy ``tin_to_hgrid`` (single source of truth
+    -- never re-implemented here). SCHISM depth is positive-DOWN, so the mesh bed
+    (elevation positive-UP) is negated. Returns ``(gr3_uri | None, open_node_count)``;
+    best-effort -- any bridge/upload failure returns ``(None, 0)`` and the mesh
+    stays TELEMAC-only (never fails the whole build)."""
+    import numpy as np
+
+    try:
+        from trid3nt_server.agent.workflows.schism.deck_authoring import (
+            load_gr3_bridge,
+        )
+        bridge = load_gr3_bridge()
+        depth_down = -np.asarray(bed_up, dtype=float)
+        gr3_text = bridge.tin_to_hgrid(
+            np.asarray(points_lonlat, dtype=float), np.asarray(cells, dtype=np.int64),
+            depth=depth_down, grid_name=grid_name,
+            open_boundary_side=open_boundary_side, clean_boundary=True)
+        open_node_count = _gr3_open_node_count(gr3_text)
+        if open_node_count <= 0:
+            logger.warning(
+                "generate_mesh: tin_to_hgrid designated 0 open-boundary nodes on "
+                "side=%s -- leaving the mesh TELEMAC-only", open_boundary_side)
+            return None, 0
+        gr3_local = Path(rundir) / "hgrid.gr3"
+        gr3_local.write_text(gr3_text, encoding="utf-8")
+        s3.put_object(Bucket=bucket, Key=key, Body=gr3_local.read_bytes())
+        return f"s3://{bucket}/{key}", int(open_node_count)
+    except Exception as exc:  # noqa: BLE001 -- gr3 is a bonus, never fatal
+        logger.warning(
+            "generate_mesh: SCHISM hgrid.gr3 emission failed (%s); mesh stays "
+            "TELEMAC-only", exc)
+        return None, 0
+
+
+def _gr3_open_node_count(gr3_text: str) -> int:
+    """Parse the open-boundary node total from an hgrid.gr3 string (0 if none)."""
+    for line in gr3_text.splitlines():
+        if "Total number of open boundary nodes" in line:
+            try:
+                return int(line.split("=")[0].split()[0])
+            except Exception:  # noqa: BLE001
+                return 0
+    return 0
 
 
 # --------------------------------------------------------------------------- #
