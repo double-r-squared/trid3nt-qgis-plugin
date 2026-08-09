@@ -432,6 +432,7 @@ PRIMARY_CATEGORY: dict[str, str] = {
     "fetch_nws_event": "weather_atmosphere",
     "show_nexrad_radar": "weather_atmosphere",
     "fetch_mrms_qpe": "weather_atmosphere",
+    "fetch_aorc_precip": "weather_atmosphere",
     "fetch_hrrr_forecast": "weather_atmosphere",
     "fetch_hrrr_smoke": "weather_atmosphere",
     "fetch_goes_satellite": "weather_atmosphere",
@@ -464,6 +465,7 @@ PRIMARY_CATEGORY: dict[str, str] = {
     "fetch_storm_tracks": "weather_atmosphere",
     # ---- 3. hydrology -----------------------------------------------------
     "fetch_usgs_nwis_gauges": "hydrology",
+    "fetch_lter_records": "hydrology",
     "fetch_noaa_nwm_streamflow": "hydrology",
     "fetch_nhdplus_nldi_navigate": "hydrology",
     "fetch_river_geometry": "hydrology",

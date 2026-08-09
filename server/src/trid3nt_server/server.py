@@ -9213,6 +9213,14 @@ _ALWAYS_OFFLOAD_SYNC_TOOLS = frozenset(
         # (feedback_no_sync_blocking_on_asyncio_loop). Escalated by the
         # tools-session (tool-retrieval kickoff #6).
         "fetch_glm_lightning",
+        # ADR 0203 record fetchers: heavy SYNC I/O in the record hook. fetch_aorc_precip
+        # opens a public AORC Zarr year store (anonymous s3fs) and streams the windowed
+        # AOI-mean over multi-second network reads; fetch_lter_records downloads and parses
+        # a multi-MB EDI data entity through the DataONE mirror. Emit-free bodies (the
+        # surrounding emit_tool_call wrapper emits), so off-load so they never stall the WS
+        # heartbeat (feedback_no_sync_blocking_on_asyncio_loop).
+        "fetch_aorc_precip",
+        "fetch_lter_records",
         # sandbox-staging: code_exec_request now PRE-FETCHES each layer_ref URI
         # (single OR a list of animation frames) from S3 into the per-run sandbox
         # workdir before the jailed executor opens them as local files, then runs

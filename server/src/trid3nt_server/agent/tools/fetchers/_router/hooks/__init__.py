@@ -343,3 +343,13 @@ from . import goes_satellite  # noqa: E402,F401
 # reference-time/reach-count/NLDI-sample provenance RECORD), envelope (twin
 # nwm-streamflow-{product}-{seed} layer_id + name + provenance replay).
 from . import nwm_streamflow  # noqa: E402,F401
+# ADR 0203 (RoG replication unblock): fetch_aorc_precip -- the NOAA AORC v1.1 hourly
+# precipitation record. Record shape / pure-record path; the build_record hook owns
+# the public-bucket Zarr socket (anonymous s3fs) and returns the AOI-mean hyetograph
+# forcing series. The pre-2020 / any-historical-year precip MRMS cannot reach.
+from . import aorc_precip  # noqa: E402,F401
+# ADR 0203: fetch_lter_records -- a generic US-LTER / EDI package+entity reader via the
+# public DataONE mirror (PASTA is 403 anonymously). resolve_build/parse resolve the
+# entity data URL pre-cache-key; build_request/record parse the delimited time series
+# (the Coweeta Ball Creek hourly discharge is the proven case).
+from . import lter_records  # noqa: E402,F401

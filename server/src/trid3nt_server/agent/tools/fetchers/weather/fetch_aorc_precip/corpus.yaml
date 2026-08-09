@@ -1,0 +1,9 @@
+fetch_aorc_precip:
+- historical hourly precipitation forcing for a rain-on-grid model over this watershed
+- how much rain fell over the basin hour by hour during the 2015 storm
+- I need an AORC hyetograph to force a rainfall-runoff calibration against a gauge
+- give me the hourly precipitation series for this catchment in 2017
+- pre-2020 precipitation forcing where MRMS has no coverage
+- AORC analysis of record for calibration precipitation over this AOI
+- basin-average hourly rainfall time series to drive a hydrologic simulation
+- historical precipitation input for the National Water Model retrospective forcing
