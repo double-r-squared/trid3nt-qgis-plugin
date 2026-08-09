@@ -175,6 +175,10 @@ async def hecras_flood_2d(
     equation_set: str = _DEFAULT_EQUATION_SET,
     computation_interval: str | None = None,
     input_mode: str | None = None,
+    design_storm_mm_per_hr: float | None = None,
+    storm_duration_hr: float = 6.0,
+    curve_number: float | None = None,
+    amc_condition: str = "normal",
     **_extra_ignored: Any,
 ) -> HecrasDepthLayerURI | dict[str, Any]:
     """REFINEMENT-GRADE HEC-RAS 2D FLOOD at a REAL AOI you name (headless-authored geometry).
@@ -222,6 +226,19 @@ async def hecras_flood_2d(
         input_mode: ``"user_gated"`` reviews the forcing + resolution + fetched-
             terrain basis before the (heavy) solve; ``"auto"`` (default) proceeds
             with them labeled.
+        design_storm_mm_per_hr: set this to run RAIN-ON-GRID instead of an inflow
+            hydrograph -- a uniform design storm (mm/hr) falls on every cell and
+            drains to a pour-point outlet, solved on the HEC-RAS 2025 MANAGED engine
+            (beta). Use for "flood <place> from X mm/hr of rain", pluvial/flash-flood,
+            and rainfall-runoff questions. Validated on Coweeta Creek (Godara et al.
+            2024 envelope: 25 mm/hr x 6 h). LIMITATION: the 2025 beta has NO
+            infiltration layer, so rain-on-grid is RAIN-ONLY (gross rainfall, an
+            upper-bound runoff -- state this to the user); curve_number/amc are
+            accepted but INERT until infiltration ships.
+        storm_duration_hr: rain-on-grid storm length (hours; default 6). The constant
+            storm forces the whole window; the outlet hydrograph peaks at equilibrium.
+        curve_number / amc_condition: SCS-CN loss knobs -- INERT on the 2025 beta (no
+            infiltration layer); reserved for when it ships. Ignored for the inflow path.
 
     Returns:
         On success: ``HecrasDepthLayerURI`` -- the peak-depth COG (loaded beside
@@ -279,7 +296,25 @@ async def hecras_flood_2d(
         aoi, resolution_m, peak, sim_hours, inlet_edge, outlet_edge, eq_key, interval or "2MIN",
     )
 
+    # RAIN-ON-GRID branch: a design storm dispatches to the HEC-RAS 2025 managed
+    # engine (author + prepare + solve on the CPU) instead of the 6.6 inflow solve.
+    storm = None
+    if design_storm_mm_per_hr is not None:
+        try:
+            s = float(design_storm_mm_per_hr)
+            if s > 0.0:
+                storm = s
+        except (TypeError, ValueError):
+            storm = None
+
     try:
+        if storm is not None:
+            depth = await model_hecras_flood_2d_rog(
+                bbox=aoi, design_storm_mm_per_hr=storm,
+                storm_duration_hr=float(storm_duration_hr), resolution_m=resolution_m,
+                equation_set=eq_key, input_mode=input_mode,
+            )
+            return depth
         depth = await model_hecras_flood_2d(
             bbox=aoi, target_peak_cfs=peak, resolution_m=resolution_m,
             sim_hours=float(sim_hours), inlet_edge=inlet_edge, outlet_edge=outlet_edge,
@@ -615,6 +650,114 @@ async def model_hecras_flood_2d(
         batch_run_id, depth.depth_max_ft, depth.wet_cell_count, peak_cfs,
         depth.volume_error_pct, depth.uri,
     )
+    return depth
+
+
+_ROG_FIDELITY_NOTE: str = (
+    "HEC-RAS 2025 MANAGED engine (beta), rain-on-grid: a uniform design storm on a "
+    "structured 2D area over the fetched terrain, prepared + solved on the CPU. "
+    "RAIN-ONLY -- the 2025 beta exposes NO infiltration layer, so this is gross "
+    "rainfall (an upper-bound runoff, no SCS-CN loss). Screening-grade; validated on "
+    "the Coweeta Creek Godara-2024 envelope (25 mm/hr x 6 h). ADR 0209."
+)
+
+
+async def model_hecras_flood_2d_rog(
+    *,
+    bbox: list[float],
+    design_storm_mm_per_hr: float,
+    storm_duration_hr: float = 6.0,
+    resolution_m: float = _DEFAULT_RES_M,
+    equation_set: str = _DEFAULT_EQUATION_SET,
+    input_mode: str | None = None,
+) -> HecrasDepthLayerURI | dict[str, Any]:
+    """Rain-on-grid on the HEC-RAS 2025 managed engine -> peak-depth COG (ADR 0209).
+
+    fetch DEM -> author + prepare + solve on the 2025 CPU engine (rog2025_pipeline,
+    mounted-driver, no worker-image rebuild) -> rasterize max depth to a 4326 COG ->
+    publish. Rain-only (no infiltration in the beta)."""
+    import sys
+
+    emitter = current_emitter()
+    begin_substeps(emitter, 2)  # rog_solve, publish
+
+    eq_key = str(equation_set or "").strip().lower()
+    diffusion = eq_key != "full_swe"
+
+    review_entries: list[SyntheticInput] = [
+        SyntheticInput(param="geometry", value="structured 2D area (HEC-RAS 2025)",
+                       basis="derived", note="managed-engine rain-on-grid mesh over the fetched terrain"),
+        SyntheticInput(param="terrain", value="fetch_dem (3DEP/Copernicus)", basis="fetched",
+                       note="reprojected to a local SI grid (metres)"),
+        SyntheticInput(param="design_storm_mm_per_hr", value=round(float(design_storm_mm_per_hr), 2),
+                       units="mm/hr", basis="user", note="uniform constant precipitation forcing"),
+        SyntheticInput(param="storm_duration_hr", value=round(float(storm_duration_hr), 2),
+                       units="h", basis="user", note="constant storm window"),
+        SyntheticInput(param="infiltration", value="none (rain-only)", basis="derived",
+                       note="the 2025 beta has no infiltration layer -- gross rainfall, upper-bound runoff"),
+    ]
+    review = await gate_input_review(
+        tool_name="hecras_flood_2d", mode=input_mode, entries=review_entries,
+        params={"bbox": bbox, "design_storm_mm_per_hr": design_storm_mm_per_hr})
+    if not review.proceed:
+        return {"status": "error", "error_code": "HECRAS_INPUT_REVIEW_CANCELLED",
+                "error_message": review.cancel_reason or "input review not approved; the solver did not run"}
+
+    run_tag = new_ulid()
+    workdir = tempfile.mkdtemp(prefix=f"rog2025-{run_tag}-")
+
+    if str(_WORKERS_FRESHTOPO) not in sys.path:
+        sys.path.insert(0, str(_WORKERS_FRESHTOPO))
+        sys.path.insert(0, str(_WORKERS_FRESHTOPO.parents[2]))
+    from rog2025_pipeline import run_rog2025, build_depth_cog  # type: ignore
+
+    async with substep(emitter, "rog_solve"):
+        dem_tif = await asyncio.to_thread(_fetch_dem_local, bbox)
+        result = await asyncio.to_thread(
+            run_rog2025, dem_tif, workdir,
+            precip_mm_hr=float(design_storm_mm_per_hr), storm_hours=float(storm_duration_hr),
+            cell_size=float(resolution_m), elev_units="m", bbox4326=list(bbox),
+            diffusion=diffusion)
+    m = result["metrics"]
+    logger.info(
+        "hecras_flood_2d RoG(2025) run=%s peak_q=%.3g m3/s max_depth=%.3g m coeff=%s wall=%ss",
+        run_tag, m["peak_outlet_q_m3s"], m["max_depth_m"], m["runoff_coeff"], result["wall_s"])
+
+    # --- rasterize + publish the peak-depth COG (feet, matching the depth preset) - #
+    from trid3nt_contracts.execution import LegendKey
+    from trid3nt_contracts.hecras_contracts import HECRAS_DEPTH_STYLE_PRESET
+    from trid3nt_server.agent.workflows.shared import cog_io
+    from trid3nt_server.agent.tools.simulation.solver.solver import _get_runs_bucket
+
+    async with substep(emitter, "publish"):
+        cog_tif = str(Path(workdir) / "rog_depth.tif")
+        cinfo = await asyncio.to_thread(
+            build_depth_cog, result["result_h5"], result["prep"], cog_tif, None, 1.0 / 0.3048)
+        cog_uri = await asyncio.to_thread(
+            cog_io.upload_cog, Path(cog_tif), run_tag, _get_runs_bucket(),
+            dest_filename="hecras_rog_depth.tif", log_label="HEC-RAS 2025 RoG depth COG")
+        bb = cinfo["bbox4326"]
+        dmax_ft = round(cinfo["depth_max"], 3)
+        depth = HecrasDepthLayerURI(
+            layer_id=f"hecras-rog-depth-{run_tag}",
+            name=f"Peak rain-on-grid depth (HEC-RAS 2025, {design_storm_mm_per_hr:.0f} mm/hr x {storm_duration_hr:.0f} h)",
+            layer_type="raster", uri=cog_uri, style_preset=HECRAS_DEPTH_STYLE_PRESET,
+            role="primary", units="ft", bbox=(bb[0], bb[1], bb[2], bb[3]),
+            legend=LegendKey(kind="continuous", colormap="blues", vmin=0.0,
+                             vmax=dmax_ft, units="ft", label="Peak water depth (ft)"),
+            fallback_note=_ROG_FIDELITY_NOTE,
+            depth_max_ft=dmax_ft, depth_mean_ft=round(cinfo["depth_mean"], 3),
+            wet_cell_count=int(m["n_catchment_cells"] if m.get("n_catchment_cells") else cinfo["wet_px"]),
+            wse_max_ft=dmax_ft,
+            synthetic_inputs=list(review_entries),
+        )
+        depth = await asyncio.to_thread(_publish_depth_layer, depth, review_entries)
+
+    if emitter is not None and depth.bbox:
+        try:
+            await emitter.emit_map_command("zoom-to", {"bbox": list(depth.bbox)})
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("hecras_flood_2d RoG zoom-to failed: %s", exc)
     return depth
 
 

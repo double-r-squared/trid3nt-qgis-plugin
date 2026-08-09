@@ -76,6 +76,21 @@ Rain-only run: depth uniform min==max, rises linearly; rate=100 -> +0.10 ft/hr,
 rate=300 -> +0.30 ft/hr (ratio 3.0, mass-conservative). Inflow run: added volume
 matches inflow discharge.
 
+## Real-catchment rain-on-grid (ADR 0209)
+
+`Driver.cs` gained a `realrog` mode: `dotnet synthdrv.dll realrog <spec.json>` authors a
+`RealTerrainRoG` project (structured 2D area over the AOI extent + constant design-storm
+precipitation + a NormalDepth outlet on the pour-point wall). The host then OVERWRITES the
+exported synthetic `Terrains/Terrain.tif` with a reprojected real DEM (local SI metres,
+TILED + NoData + OVERVIEWS -- else `ras prepare` reports "Missing terrain data at Face"),
+and runs `ras prepare` + `ras solve --solver CPU`. The full host pipeline (reproject ->
+author -> prepare -> solve -> metrics from `DEBUG/CellVolume` + mass-balance outlet Q,
+catchment-restricted) is `services/workers/hecras2025/subst/crux/freshtopo/rog2025_pipeline.py`.
+Units: in an SI project `ConstantValue` IS the rate in mm/hr (mass-checked). Infiltration:
+ABSENT in the 2025 beta -> rain-only. The BC line must PROTRUDE past the mesh corners or it
+is classed INTERNAL. Live-proven on Muncie (de-risk) + Coweeta Creek NC (25 mm/hr x 6 h,
+peak 195 m3/s).
+
 ## v6 migration path (alternative authoring, for a real catchment)
     dotnet migrate.dll project -s "<Muncie.prj>" -d /probe/muncie2025 --force
 Migration carries geometry+terrain+2D but leaves the plan's Terrain / NValue / BC

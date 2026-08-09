@@ -265,6 +265,14 @@ SHOWCASE: list[Showcase] = [
              "+ computation_interval (1MIN stability step) knobs. DW vs SWE agree on "
              "the peak footprint, separating only at momentum-dominated channel cells; "
              "the coarse-step overshoot converges as the step tightens.", 900),
+    Showcase("hecras_flood_2d",
+             {"bbox": [-83.47, 35.02, -83.36, 35.10], "design_storm_mm_per_hr": 25.0,
+              "storm_duration_hr": 6.0, "resolution_m": 60},
+             "ADR 0209 HEC-RAS 2025 RAIN-ON-GRID: a 25 mm/hr x 6 h design storm over "
+             "Coweeta Creek NC, authored + solved on the managed CPU engine (the 6.6 "
+             "Fortran path could not; no Windows). Rain-only (the 2025 beta has no "
+             "infiltration layer) -> water self-organizes into the dendritic drainage, "
+             "peak outlet ~195 m3/s.", 1800, title_suffix="rain-on-grid"),
     Showcase("hecras_riverine_flood", {},
              "ADR 0170/0172 HEC-RAS riverine flood, shipped Muncie deck", 480),
     Showcase("hecras_levee_breach", {"breach_enabled": True},

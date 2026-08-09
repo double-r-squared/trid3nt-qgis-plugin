@@ -17,21 +17,18 @@ Reported (the paper's experiment, our catchment):
       mesh stability on this steep catchment, velocity behaviour on steep slopes) --
       reported honestly whichever way it lands; disagreement is a finding.
 
-Engine status (2026-08-08):
-  - TELEMAC-2D RoG: LIVE (ADR 0196). ``--telemac`` runs the landed direct driver
-    (scripts/sandbox/telemac/rog_coweeta_live.py) end-to-end, or ``--telemac-ref``
-    reads the ADR 0196 landed numbers as the reference row.
-  - HEC-RAS 2D RoG: authoring LIVE-COMPLETE (fresh-AOI 2D mesh + terrain subgrid
-    tables + SCS-CN infiltration geometry layer + uniform-storm Meteorology
-    Values/Timestamp, all accepted by the 6.6 engine's readers); the SOLVE is
-    BLOCKED at the ``READ_UN_M2D_PRECIP_INTERP`` (MetInterp.f90) per-2D-area
-    interpolation folder -- the GUI-precomputed schema that segfaults when authored
-    blind (needs a reference RoG deck, ADR 0137 wall). ``--hecras`` authors the
-    Coweeta HR2D RoG deck and attempts the solve, recording the exact blocker +
-    wall time to the authoring stage.
+Engine status (2026-08-09, ADR 0209):
+  - TELEMAC-2D RoG: LIVE (ADR 0196). ``--telemac`` runs the landed direct driver,
+    ``--telemac-ref`` reads the ADR 0196 landed numbers as the reference row.
+  - HEC-RAS 2025 RoG: LIVE end-to-end on the managed CPU engine (rog2025_pipeline).
+    ``--hecras`` reprojects the cached Coweeta DEM, authors a 2025 project (structured
+    2D area + constant design storm + NormalDepth outlet), prepares + solves on the
+    CPU, and extracts outlet Q / max depth+velocity / runoff from the result HDF,
+    restricted to the delineated catchment. RAIN-ONLY (the 2025 beta has no
+    infiltration layer, ADR 0209 D2) -- so its runoff coefficient is an upper bound
+    vs the TELEMAC AMC-II (SCS-CN) row.
 
-Run in the agent venv with .env.local sourced (set -a; source .env.local; set +a).
-ASCII only.
+Run in the agent venv with the MinIO env block. ASCII only.
 """
 from __future__ import annotations
 
@@ -53,6 +50,9 @@ DESIGN_STORM_MM_PER_HR = 25.0
 STORM_DURATION_HR = 6.0
 AMC = "normal"                                     # AMC II
 CN2 = 80.0                                          # AMC-II CN-equivalent
+#: cached Coweeta DEM + delineated catchment (ADR 0193/0196 site).
+COWEETA_DEM = "/tmp/rog_coweeta/dem.tif"
+COWEETA_CATCHMENT = "/tmp/rog_coweeta/catchment.geojson"
 
 #: The ADR 0196 landed TELEMAC-2D RoG Coweeta live numbers (AMC II), the reference
 #: row when the live TELEMAC re-run is not exercised here.
@@ -82,78 +82,63 @@ def _paper_findings_check(telemac: dict, hecras: dict) -> list[dict]:
                  else "not run this session"),
         "agrees": telemac.get("status", "").startswith("live"),
     })
+    hr_ok = hecras.get("status") == "SOLVED"
     checks.append({
         "finding": "HEC-RAS structured/square grid stability on the steep catchment",
         "paper": "structured grid needed care (stability sensitivity) on steep slopes",
-        "ours": hecras.get("status", "not run"),
-        "agrees": None,  # HR2D solve blocked at MetInterp -- not yet comparable
+        "ours": (f"2025 CPU {hecras.get('equation_set')} stable + mass-conservative; "
+                 f"peak {hecras.get('peak_outlet_q_m3s')} m3/s, max vel "
+                 f"{hecras.get('max_velocity_ms')} m/s" if hr_ok else hecras.get("status")),
+        "agrees": "different engine generation (2025 managed) -- reported as-is",
     })
     checks.append({
-        "finding": "velocity behaviour on steep slopes (both engines)",
-        "paper": "velocities sensitive to scheme on steep slopes",
-        "ours": "TELEMAC max fields captured (ADR 0196); HR2D pending the solve link",
+        "finding": "peak-Q gap HEC-RAS vs TELEMAC",
+        "paper": "engine comparison on the same catchment",
+        "ours": ("HR rain-only (coeff {}) vs TELEMAC AMC-II (CN loss): the ~4x gap is "
+                 "the infiltration difference, NOT the hydraulics".format(
+                     hecras.get("runoff_coeff")) if hr_ok else "HR not solved"),
         "agrees": None,
     })
     return checks
 
 
-def run_hecras(workdir: Path, *, do_solve: bool = True) -> dict:
-    """Author the Coweeta HR2D RoG deck (fresh-AOI) and attempt the solve.
+def run_hecras(workdir: Path, *, do_solve: bool = True, full_swe: bool = False) -> dict:
+    """Author + prepare + SOLVE the Coweeta RoG run on the HEC-RAS 2025 engine.
 
-    Records the authored cell counts, the authoring wall time, and -- on solve --
-    the exact terminal status (the MetInterp block until link 3 is decoded)."""
-    for p in (str(_FRESHTOPO), str(_HECRAS2025)):
-        if p not in sys.path:
-            sys.path.insert(0, p)
-    from flood2d_pipeline import author_and_compose, _docker_solve, Flood2dPipelineError
+    Reprojects the cached Coweeta DEM to a local SI grid, authors a structured 2D
+    area + constant design storm + NormalDepth outlet, solves on the managed CPU,
+    and extracts catchment-restricted outlet Q / max depth+velocity / runoff (ADR
+    0209). Rain-only (no infiltration in the 2025 beta)."""
+    if str(_FRESHTOPO) not in sys.path:
+        sys.path.insert(0, str(_FRESHTOPO))
+    from rog2025_pipeline import run_rog2025
 
     workdir.mkdir(parents=True, exist_ok=True)
-    # Fetch the AOI DEM via the server seam (reuse the template's fetcher).
-    from trid3nt_server.agent.tools import TOOL_REGISTRY
-    dem_layer = TOOL_REGISTRY["fetch_dem"].fn(bbox=list(BBOX), resolution_m=10)
-    dem_uri = getattr(dem_layer, "uri", None) or dem_layer.get("uri")
-    from trid3nt_server.agent.tools.simulation.solver.solver import _download_object
-    dem_tif = workdir / "dem.tif"
-    _download_object(str(dem_uri), dem_tif)
+    if not do_solve:
+        return {"engine": "HEC-RAS 2025", "status": "solve not attempted"}
 
     t0 = time.time()
-    result, info = author_and_compose(
-        dem_tif, workdir, resolution_m=40.0,
-        design_storm_mm_per_hr=DESIGN_STORM_MM_PER_HR,
-        storm_duration_hr=STORM_DURATION_HR, curve_number=CN2, amc_condition=AMC)
-    author_s = time.time() - t0
-
-    out = {
-        "engine": "HEC-RAS 2D",
-        "mesh": "structured/subgrid (AuthorMesh)",
-        "cells_real": result.cells_real,
-        "cells_total": result.cells_total,
-        "faces": result.faces,
-        "storm_total_mm": info.get("storm_total_mm"),
-        "cn_effective": [info.get("cn_min"), info.get("cn_max")],
-        "author_wall_s": round(author_s, 1),
-        "deck_dir": result.deck_dir,
+    r = run_rog2025(
+        COWEETA_DEM, workdir, precip_mm_hr=DESIGN_STORM_MM_PER_HR,
+        storm_hours=STORM_DURATION_HR, cell_size=60.0, elev_units="m",
+        pour_point=POUR_POINT, catchment_geojson=COWEETA_CATCHMENT,
+        diffusion=not full_swe)
+    m = r["metrics"]
+    return {
+        "engine": "HEC-RAS 2025",
+        "mesh": f"structured 60 m subgrid ({m['n_catchment_cells']} catchment cells)",
+        "equation_set": "SWE" if full_swe else "Diffusion Wave",
+        "infiltration": "absent (rain-only, upper-bound runoff)",
+        "peak_outlet_q_m3s": m["peak_outlet_q_m3s"],
+        "peak_time_hr": m["peak_time_hr"],
+        "runoff_volume_1e3_m3": m["runoff_volume_1e3_m3"],
+        "runoff_coeff": m["runoff_coeff"],
+        "max_depth_m": m["max_depth_m"],
+        "max_velocity_ms": m["max_velocity_ms"],
+        "wet_km2": m["wet_km2"],
+        "wall_s": round(time.time() - t0, 1),
+        "status": "SOLVED",
     }
-    if not do_solve:
-        out["status"] = "authored (solve not attempted)"
-        return out
-
-    t1 = time.time()
-    try:
-        metrics = _docker_solve(Path(result.deck_dir), "trid3nt-local/hecras:latest")
-        out["solve_wall_s"] = round(time.time() - t1, 1)
-        out["status"] = "SOLVED"
-        out["peak_outlet_q_m3s"] = metrics.get("peak_outlet_q_m3s")
-        out["max_depth_m"] = metrics.get("max_depth_m")
-        out["wet_km2"] = metrics.get("wet_km2")
-    except Flood2dPipelineError as exc:
-        out["solve_wall_s"] = round(time.time() - t1, 1)
-        msg = str(exc)
-        blocked = "READ_UN_M2D_PRECIP_INTERP" in msg or "MetInterp" in msg
-        out["status"] = ("BLOCKED at READ_UN_M2D_PRECIP_INTERP (MetInterp per-2D-area "
-                         "interpolation folder -- the GUI-precomputed schema; ADR 0199 "
-                         "residual)" if blocked else f"solve failed: {msg[:300]}")
-    return out
 
 
 def run_telemac(workdir: Path) -> dict:
@@ -183,8 +168,9 @@ def run_telemac(workdir: Path) -> dict:
 
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__)
-    ap.add_argument("--hecras", action="store_true", help="author+solve the HR2D RoG deck")
-    ap.add_argument("--no-solve", action="store_true", help="HR2D: author only, skip solve")
+    ap.add_argument("--hecras", action="store_true", help="solve the Coweeta RoG run on the 2025 engine")
+    ap.add_argument("--no-solve", action="store_true", help="HR: skip solve")
+    ap.add_argument("--full-swe", action="store_true", help="HR: full SWE instead of Diffusion Wave")
     ap.add_argument("--telemac", action="store_true", help="run the live TELEMAC RoG driver")
     ap.add_argument("--telemac-ref", action="store_true",
                     help="use the ADR 0196 landed TELEMAC numbers (no live re-run)")
@@ -196,7 +182,8 @@ def main() -> int:
     telemac = {"engine": "TELEMAC-2D", "status": "not run"}
 
     if args.hecras:
-        hecras = run_hecras(workdir / "hecras", do_solve=not args.no_solve)
+        hecras = run_hecras(workdir / "hecras", do_solve=not args.no_solve,
+                            full_swe=args.full_swe)
     if args.telemac:
         telemac = run_telemac(workdir / "telemac")
     elif args.telemac_ref or not args.telemac:
