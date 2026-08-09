@@ -42,6 +42,8 @@ import numpy as np
 
 MET_ROOT = "Event Conditions/Meteorology"
 PRECIP_PATH = f"{MET_ROOT}/Precipitation"
+#: The per-2D-area meteorology->cell interpolation folder (link 3, decoded 2026-08-08).
+PRECIP_INTERP_ROOT = f"{PRECIP_PATH}/2D Flow Areas"
 _PRECIP_UNITS = ("mm/hr", "in/hr")
 
 #: mm per US-survey inch (HEC-RAS depths are inches on a ftUS deck).
@@ -79,13 +81,18 @@ def write_uniform_precipitation(
       3. ``READ_UN_M2D_PRECIP_INTERP`` (``MetInterp.f90``) -> a per-2D-area
          ``Precipitation/2D Flow Areas/<area>`` interpolation folder.
 
-    Links 1-2 are authored here and pass the engine's readers; link 3 (the GUI-
-    precomputed raster->cell interpolation folder) is the RESIDUAL that segfaults
-    when authored blind -- the classic "needs a reference RoG deck" wall (ADR 0137).
-    This writer authors the fully-decoded 1-2 structure; the composer stamps an
-    empty per-area folder placeholder. ``depth = rate * duration`` (mm) is
-    mass-balance-checkable. Cumulative amounts (mm), grid-extent attrs on ``Values``,
-    ``Meteorology/Attributes`` index row. Returns a provenance dict."""
+    Links 1-2 are authored here; link 3 -- the per-2D-area raster->cell interpolation
+    folder ``Precipitation/2D Flow Areas/<area>`` that ``READ_UN_M2D_PRECIP_INTERP``
+    (``MetInterp.f90``) opens -- is authored by ``write_precipitation_interpolation``
+    (schema DECODED byte-exact 2026-08-08 from the un-stripped 6.6 ``RasUnsteady``
+    reader + the decompiled 2025 managed engine's nearest-neighbour math, ADR 0205).
+    That decode is VERIFIED live: the engine now reads PAST the MetInterp segfault
+    that blocked all 12 prior attempts. Actually delivering the rain to cells
+    (``INIT_PRECIP2CELL`` -> ``precip2fvcell``) routes through the 2D-hydrology module
+    (``READ_UN_HYDROLOGY2D``), which is the remaining frozen residual -- see ADR 0205.
+    ``depth = rate * duration`` (mm) is mass-balance-checkable. Cumulative amounts
+    (mm), grid-extent attrs on ``Values``, ``Meteorology/Attributes`` index row.
+    Returns a provenance dict."""
     rate = float(rate_mm_per_hr)
     dur = float(duration_hr)
     if not np.isfinite(rate) or rate < 0.0:
@@ -175,6 +182,61 @@ def write_uniform_precipitation(
     return {"mode": "Gridded (uniform)", "rate_mm_per_hr": rate,
             "duration_hr": dur, "total_mm": round(rate * dur, 2),
             "n_times": int(cumulative.shape[0])}
+
+
+def write_precipitation_interpolation(f, area_name: str, *, n_cells: int, n_faces: int) -> dict:
+    """Author link 3: the per-2D-area precipitation->mesh interpolation folder
+    ``Event Conditions/Meteorology/Precipitation/2D Flow Areas/<area>``.
+
+    SCHEMA DECODED byte-exact (2026-08-08), NOT guessed -- three converging sources:
+
+      1. The 6.6 solver binary ``RasUnsteady`` is NOT stripped: ``READ_HDF_INTERP_COEFF``
+         opens six datasets under the per-area group and its type-encoded HDF read
+         wrappers pin the dtypes/ranks --
+           ``mod_hdf_..._h5dread_f_integer2`` -> ``Cell Info`` / ``Face Info``   INTEGER rank-2
+           ``mod_hdf_..._h5dread_f_integer1`` -> ``Cell Indexes`` / ``Face Indexes`` INTEGER rank-1
+           ``mod_hdf_..._h5dread_f_real1``    -> ``Cell Weights`` / ``Face Weights``  REAL    rank-1
+         (Intel default INTEGER=int32, REAL=float32; the module descriptor sizes 0x60/0x48
+         confirm rank-2 vs rank-1.) The reader self-sizes each array from its dataspace.
+      2. The classic HEC ragged layout our geometry writer already authors and the SAME
+         engine already reads: ``Info`` = (n, 2) int32 ``[start, count]`` indexing flat
+         ``Indexes``/``Weights`` arrays (``hecras_geometry_writer`` convention).
+      3. The mapping MATH from the decompiled 2025 managed engine
+         (``Ras.Layers.BoundaryConditions.PrecipitationLayer.InitializeComputeDriver`` +
+         ``SpatiotemporalBoundaryCondition``): precip cells sample the source raster by
+         NEAREST-NEIGHBOUR of each cell centre (``RasterDefinition.GetNearestNeighborWeights``);
+         each cell/face gets exactly ONE source entry, weight 1.0. ``ApplyWeights`` sums
+         ``weight * source[index]`` per element.
+
+    Our ``write_uniform_precipitation`` authors a 1x1 gridded source (Raster Cols=Rows=1),
+    so the single met-source pixel has index 0 and every cell/face maps to it with weight
+    1.0 -- the exact spatially-uniform design storm. ``n_cells`` sizes the cell arrays 1:1
+    with ``Cells Center Manning's n`` (TOTAL incl. ghost cells, the infiltration/geometry
+    convention); ``n_faces`` sizes the face arrays. Returns a provenance dict."""
+    nc = int(n_cells)
+    nf = int(n_faces)
+    if nc <= 0 or nf <= 0:
+        raise HecrasMeteorologyError(
+            f"interpolation needs positive cell/face counts; got cells={nc} faces={nf}")
+
+    grp_path = f"{PRECIP_INTERP_ROOT}/{area_name}"
+    f.require_group(PRECIP_INTERP_ROOT)
+    if area_name in f[PRECIP_INTERP_ROOT]:
+        del f[PRECIP_INTERP_ROOT][area_name]
+    g = f.create_group(grp_path)
+
+    # CSR: one source entry per element -> start = element ordinal, count = 1.
+    cell_info = np.stack([np.arange(nc, dtype=np.int32), np.ones(nc, np.int32)], axis=1)
+    face_info = np.stack([np.arange(nf, dtype=np.int32), np.ones(nf, np.int32)], axis=1)
+    g.create_dataset("Cell Info", data=cell_info, dtype=np.int32)
+    g.create_dataset("Cell Indexes", data=np.zeros(nc, np.int32), dtype=np.int32)
+    g.create_dataset("Cell Weights", data=np.ones(nc, np.float32), dtype=np.float32)
+    g.create_dataset("Face Info", data=face_info, dtype=np.int32)
+    g.create_dataset("Face Indexes", data=np.zeros(nf, np.int32), dtype=np.int32)
+    g.create_dataset("Face Weights", data=np.ones(nf, np.float32), dtype=np.float32)
+
+    return {"area": area_name, "cells": nc, "faces": nf,
+            "source_pixels": 1, "scheme": "nearest (uniform single-pixel source)"}
 
 
 def _ensure_meteorology_attributes(f) -> None:

@@ -62,11 +62,12 @@ from hecras_event_conditions import (  # noqa: E402
     strip_1d_reach_bcs, finalize_event_conditions,
 )
 from hecras_infiltration import (  # noqa: E402
-    build_infiltration_layer, write_infiltration_layer, amc_to_int,
+    build_infiltration_layer, write_infiltration_layer,
+    write_percent_impervious, amc_to_int,
 )
 from hecras_meteorology import (  # noqa: E402
-    write_uniform_precipitation, inject_precipitation_ascii,
-    design_storm_units_and_rate,
+    write_uniform_precipitation, write_precipitation_interpolation,
+    inject_precipitation_ascii, design_storm_units_and_rate,
 )
 
 #: The area name is reused from Muncie so the plan skeleton's Results paths + the
@@ -239,6 +240,7 @@ def compose_pure2d_deck(
     amc_condition: str = "normal",
     ia_ratio: float = 0.2,
     min_infiltration_in_hr: float = 0.0,
+    apply_infiltration: bool = False,
     opts: PropertyTableOptions | None = None,
 ) -> dict:
     """Assemble the complete pure-2D deck for ``mesh``/``tables`` in ``rundir``.
@@ -359,8 +361,35 @@ def compose_pure2d_deck(
                 extents_xy=(float(xy[:, 0].min()), float(xy[:, 1].min()),
                             float(xy[:, 0].max()), float(xy[:, 1].max())),
                 projection_wkt=proj_wkt)
-            infil_prov = write_infiltration_layer(
-                f, area_name, infil, n_faces=int(mesh.faces_cell_indexes.shape[0]))
+            # The 2D-hydrology module (READ_UN_HYDROLOGY2D) is the FROZEN residual
+            # (ADR 0205). The decoded precip interpolation folder (below) is READ
+            # cleanly -- the engine passes the MetInterp segfault that blocked all 12
+            # prior attempts -- but precip application (INIT_PRECIP2CELL ->
+            # precip2fvcell) AND SCS-CN infiltration both route THROUGH the hydrology
+            # module, which faults in its output-id/region setup (H5Gcreate2: invalid
+            # location) -- a Windows-preprocessing coupling one layer below the precip
+            # decode. So: apply_infiltration=True authors the byte-exact Infiltration
+            # + Percent Impervious layers (offline-verified) and reaches the hydrology
+            # fault; apply_infiltration=False omits them and the deck COMPLETES but
+            # applies ZERO precipitation (hydrology skipped -> cells never linked).
+            # Neither yet delivers a real rain-on-grid solve -- the residual is making
+            # READ_UN_HYDROLOGY2D succeed (needs a NATE Windows reference plan HDF to
+            # decode the hydrology output/region setup). Default OFF for a clean,
+            # crash-free deck.
+            if apply_infiltration:
+                infil_prov = write_infiltration_layer(
+                    f, area_name, infil, n_faces=int(mesh.faces_cell_indexes.shape[0]))
+                write_percent_impervious(
+                    f, area_name, n_faces=int(mesh.faces_cell_indexes.shape[0]), percent=0.0)
+            else:
+                infil_prov = None
+            # Link 3: the per-area precip->cell interpolation folder MetInterp opens
+            # (schema decoded byte-exact, ADR 0205). Cell arrays index 1:1 with the
+            # geometry's Manning length (TOTAL cells incl. ghosts); faces = all faces.
+            n_cells_total = int(f[f"{AREA_GROUP}/{area_name}/Cells Center Manning's n"].shape[0])
+            interp_prov = write_precipitation_interpolation(
+                f, area_name, n_cells=n_cells_total,
+                n_faces=int(mesh.faces_cell_indexes.shape[0]))
             sim_end = _patch_sim_window(f, storm_duration_hr)
             finalize_event_conditions(f)
             ec = {"faces": int(len(outlet_run)), "peak_cfs": 0.0, "n_ordinates": 0}
@@ -412,9 +441,10 @@ def compose_pure2d_deck(
             "storm_duration_hr": float(storm_duration_hr),
             "storm_total_mm": round(float(rain_rate) * float(storm_duration_hr), 2),
             "amc_condition": amc_to_int(amc_condition),
-            "cn_min": infil_prov["cn_min"],
-            "cn_max": infil_prov["cn_max"],
-            "ia_ratio": infil_prov["ia_ratio"],
+            "cn_min": infil_prov["cn_min"] if infil_prov else round(float(infil.curve_number.min()), 3),
+            "cn_max": infil_prov["cn_max"] if infil_prov else round(float(infil.curve_number.max()), 3),
+            "ia_ratio": infil_prov["ia_ratio"] if infil_prov else round(float(infil.abstraction_ratio[0]), 4),
+            "infiltration_applied": bool(apply_infiltration),
             "sim_end": sim_end,
         })
     return out

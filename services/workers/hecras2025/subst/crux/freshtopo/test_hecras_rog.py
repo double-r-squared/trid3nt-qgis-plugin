@@ -43,7 +43,8 @@ from hecras_infiltration import (  # noqa: E402
 )
 from hecras_meteorology import (  # noqa: E402
     constant_precipitation_ascii, inject_precipitation_ascii,
-    design_storm_units_and_rate, HecrasMeteorologyError, PRECIP_PATH, MET_ROOT,
+    design_storm_units_and_rate, write_precipitation_interpolation,
+    HecrasMeteorologyError, PRECIP_PATH, PRECIP_INTERP_ROOT, MET_ROOT,
 )
 
 
@@ -126,6 +127,29 @@ def test_meteorology_units_validation():
         design_storm_units_and_rate(-1.0)
 
 
+def test_precip_interpolation_folder_schema(tmp_path):
+    # Byte-exact schema decoded from the un-stripped 6.6 READ_HDF_INTERP_COEFF
+    # (ADR 0205): 6 CSR datasets, int32 Info/Indexes + float32 Weights, one source
+    # entry per element (nearest single-pixel), weight 1.0.
+    p = tmp_path / "interp.hdf"
+    with h5py.File(p, "w") as f:
+        prov = write_precipitation_interpolation(f, "2D Interior Area", n_cells=7, n_faces=11)
+        g = f[f"{PRECIP_INTERP_ROOT}/2D Interior Area"]
+        assert g["Cell Info"].shape == (7, 2) and g["Cell Info"].dtype == np.int32
+        assert g["Cell Indexes"].shape == (7,) and g["Cell Indexes"].dtype == np.int32
+        assert g["Cell Weights"].shape == (7,) and g["Cell Weights"].dtype == np.float32
+        assert g["Face Info"].shape == (11, 2) and g["Face Info"].dtype == np.int32
+        assert g["Face Indexes"].shape == (11,) and g["Face Indexes"].dtype == np.int32
+        assert g["Face Weights"].shape == (11,) and g["Face Weights"].dtype == np.float32
+        assert np.array_equal(np.asarray(g["Cell Info"]),
+                              np.stack([np.arange(7), np.ones(7)], axis=1))
+        assert np.all(np.asarray(g["Face Weights"]) == np.float32(1.0))
+    assert prov["cells"] == 7 and prov["faces"] == 11 and prov["source_pixels"] == 1
+    with h5py.File(p, "a") as f:
+        with pytest.raises(HecrasMeteorologyError):
+            write_precipitation_interpolation(f, "2D Interior Area", n_cells=0, n_faces=3)
+
+
 # --- composed RoG deck: the plan-HDF trees the engine reads ------------------ #
 
 def test_rog_compose_authors_precip_infiltration_and_outlet(tmp_path, carved, projection):
@@ -133,8 +157,9 @@ def test_rog_compose_authors_precip_infiltration_and_outlet(tmp_path, carved, pr
         tmp_path / "rog", carved.mesh, carved.tables,
         projection_wkt=projection,
         design_storm_mm_per_hr=25.0, storm_duration_hr=6.0,
-        curve_number=80.0, amc_condition="normal")
+        curve_number=80.0, amc_condition="normal", apply_infiltration=True)
     assert info["rain_on_grid"] is True
+    assert info["infiltration_applied"] is True
     assert info["design_storm_mm_per_hr"] == 25.0
     assert info["storm_total_mm"] == pytest.approx(150.0)
     assert info["cn_min"] == pytest.approx(80.0, rel=1e-4)  # AMC II identity
@@ -173,6 +198,29 @@ def test_rog_compose_authors_precip_infiltration_and_outlet(tmp_path, carved, pr
             == b"SCS Initial Loss Reset Time"
         # infiltration attrs mirrored on the 2D-area group (the geometry cross-ref)
         assert "Infiltration Layername" in area.attrs
+        # the sibling Percent Impervious group READ_UN_HYDROLOGY2D also reads (ADR 0205)
+        pi = area["Percent Impervious"]
+        assert pi["Percent Impervious"].shape == (nc,) and pi["Percent Impervious"].dtype == np.float32
+        assert pi["Cell Center Classifications"].shape == (nc,)
+        assert pi["Face Center Classifications"].shape == (nf,)
+        assert np.all(np.asarray(pi["Percent Impervious"]) == np.float32(0.0))
+        assert "Percent Impervious Layername" in area.attrs
+
+        # (2b) link 3: the per-area precip->cell interpolation folder MetInterp reads
+        # (schema decoded byte-exact from the un-stripped 6.6 reader, ADR 0205).
+        interp = f[f"{PRECIP_INTERP_ROOT}/{AREA_NAME}"]
+        assert interp["Cell Info"].shape == (nc, 2)
+        assert interp["Cell Info"].dtype == np.int32
+        assert interp["Cell Indexes"].shape == (nc,) and interp["Cell Indexes"].dtype == np.int32
+        assert interp["Cell Weights"].shape == (nc,) and interp["Cell Weights"].dtype == np.float32
+        assert interp["Face Info"].shape == (nf, 2)
+        assert interp["Face Indexes"].shape == (nf,) and interp["Face Indexes"].dtype == np.int32
+        assert interp["Face Weights"].shape == (nf,) and interp["Face Weights"].dtype == np.float32
+        # nearest single-pixel source: every element -> index 0, weight 1.0, count 1
+        assert np.all(np.asarray(interp["Cell Indexes"]) == 0)
+        assert np.all(np.asarray(interp["Cell Weights"]) == np.float32(1.0))
+        assert np.all(np.asarray(interp["Cell Info"])[:, 1] == 1)
+        assert np.array_equal(np.asarray(interp["Cell Info"])[:, 0], np.arange(nc))
 
         # (3) a single normal-depth Outlet BC, NO inflow flow hydrograph
         bc_attrs = f["Geometry/Boundary Condition Lines/Attributes"][()]
@@ -192,6 +240,23 @@ def test_rog_compose_authors_precip_infiltration_and_outlet(tmp_path, carved, pr
     bnn = info["paths"].bnn.read_text()
     assert "Precipitation Mode=Enable" in bnn
     assert "Met BC=Precipitation|Constant Value=25" in bnn
+
+
+def test_rog_default_omits_infiltration_but_keeps_interp(tmp_path, carved, projection):
+    # DEFAULT rain-on-grid (apply_infiltration=False) authors the precip interp folder
+    # (the link-3 unblock that lets the deck SOLVE) but NOT the SCS-CN layer -- whose
+    # hydrology reader is the frozen ADR-0205 residual. This is the solve-completing
+    # structure proven live (zero-loss RoG).
+    info = compose_pure2d_deck(
+        tmp_path / "rog0", carved.mesh, carved.tables, projection_wkt=projection,
+        design_storm_mm_per_hr=25.0, storm_duration_hr=6.0, curve_number=80.0)
+    assert info["rain_on_grid"] is True and info["infiltration_applied"] is False
+    with h5py.File(info["paths"].plan, "r") as f:
+        area = f[f"Geometry/2D Flow Areas/{AREA_NAME}"]
+        assert "Infiltration" not in area          # frozen residual, omitted
+        assert "Percent Impervious" not in area
+        assert f"{PRECIP_INTERP_ROOT}/{AREA_NAME}" in f   # interp folder present (solves)
+        assert f"{PRECIP_PATH}/Values" in f
 
 
 def test_rog_amc_knob_changes_effective_cn(tmp_path, carved, projection):

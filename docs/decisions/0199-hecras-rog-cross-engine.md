@@ -204,3 +204,33 @@ minimal 1-cell-wide 2D area with Constant-mode precipitation computed once. Drop
 tree byte-exact -- dataset names/dtypes/shapes/attrs + the cell-index mapping), authors
 the uniform-grid folder in `hecras_meteorology.py`, and completes the frozen
 solve/metric-extractor/registration/showcase chain.
+
+## APPENDIX 2026-08-08 (2) -- the headless decode UNBLOCKED the interp folder (ADR 0205)
+
+The "headless RAS Mapper .NET" continuation (NATE-picked over waiting on a GUI export) ran.
+Outcome: the link-3 interpolation folder is DECODED byte-exact and the engine now reads PAST
+the `MetInterp` segfault -- but from a BETTER source than the .NET, and the residual moved one
+layer deeper. Full record in ADR 0205; summary:
+
+- The headless RAS-Mapper WRITER does not exist in our assemblies. Decompiling the authoring
+  image (`ilspycmd`) showed the 2025 beta `Ras.Mapper.dll` has the meteorology rasterizer
+  REMOVED ("Wind code removed"; the precip branch of `CompleteForComputations` is a no-op
+  stub) and the 2025 managed `Ras.Engine` does the precip->cell interpolation IN MEMORY
+  (`PrecipitationLayer.InitializeComputeDriver` -> `GetNearestNeighborWeights` ->
+  `SetPrecipitation`), never writing the 6.6 HDF folder. Documented negative on that avenue --
+  but it settled the MATH: nearest-neighbour raster-pixel -> cell-centre, one entry/cell, w=1.
+- The SCHEMA came from the un-stripped 6.6 `RasUnsteady` binary itself: `READ_HDF_INTERP_COEFF`
+  names six CSR datasets -- `Cell Info`/`Cell Indexes`/`Cell Weights` + `Face Info`/`Face
+  Indexes`/`Face Weights` -- and the type-encoded HDF read wrappers (`h5dread_f_integer2` for
+  Info, `_integer1` for Indexes, `_real1` for Weights) pin int32/int32/float32 with Info rank-2
+  `[start,count]`, the same ragged layout our geometry writer already authors.
+  `write_precipitation_interpolation` (Python) authors it; LIVE the engine reads past
+  "initializing 2D Area(s)" -- the SIGSEGV that blocked all 12 attempts is GONE.
+- RESIDUAL moved DOWN to `READ_UN_HYDROLOGY2D`: precip APPLICATION (`INIT_PRECIP2CELL` ->
+  `precip2fvcell`) and SCS-CN infiltration both route through the 2D-hydrology module, which
+  faults in its output-id/region setup (`H5Gcreate2: invalid location`). Crash-free without
+  infiltration but applies ZERO precip (cells never linked); reaches the fault with it. The
+  byte-exact SCS-CN Infiltration + the newly-decoded sibling `Percent Impervious` groups are
+  authored + gated (`apply_infiltration`, default off). Registered surface + parser stay FROZEN.
+- Unblock (narrower): a NATE Windows-GUI COMPUTED plan HDF -- now to decode the hydrology
+  output/region scaffold, not the precip interp folder (that is solved).

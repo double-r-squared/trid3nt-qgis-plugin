@@ -204,3 +204,60 @@ def write_infiltration_layer(
         "ia_ratio": round(float(layer.abstraction_ratio[0]), 4),
         "min_infil_in_hr": round(float(layer.min_infiltration_rate[0]), 4),
     }
+
+
+def write_percent_impervious(
+    f, area_name: str, *, n_faces: int, percent: float = 0.0,
+    filename: str = ".\\Land Classification\\LandCover.hdf",
+    layername: str = "LandCover",
+    date_stamp: str = "01JAN2026 00:00:00",
+) -> dict:
+    """Write the sibling ``.../<area>/Percent Impervious`` group the 2D hydrology
+    reader (``READ_UN_HYDROLOGY2D`` -> ``surfacemodule.setsurfacepercentimpervious``)
+    requires WHENEVER an Infiltration layer is present.
+
+    DECODED live (ADR 0205): with the precip interpolation folder in place the engine
+    reads past MetInterp into ``READ_UN_HYDROLOGY2D``, which reads Curve Number +
+    Abstraction Ratio + Minimum Infiltration Rate AND ``Percent Impervious``. Absent,
+    the surface-module lookup faults (``H5Gcreate2: invalid location``). Structure
+    byte-exact from the shipped ``BaldEagleDamBrk.g09.hdf`` sibling group:
+
+      Geometry/2D Flow Areas/<area>/Percent Impervious   @Percent Impervious Filename,
+                                                         @...Layername, @...File Date,
+                                                         @...Date Last Modified
+        Percent Impervious           (Nc,) f4   per-cell impervious fraction (0..100)
+        Cell Center Classifications  (Nc,) i4   class index per cell
+        Face Center Classifications  (Nf,) i4   class index per face
+
+    A rain-on-grid catchment with no impervious surfaces is ``percent = 0.0`` (the
+    reference values are 0.0). Cell arrays index 1:1 with ``Cells Center Manning's n``;
+    ``n_faces`` sizes the face array. Returns a provenance dict."""
+    area_path = f"{_AREA_ROOT}/{area_name}"
+    if area_path not in f:
+        raise HecrasInfiltrationError(
+            f"2D area {area_name!r} absent -- write the 2D flow area before impervious")
+    area = f[area_path]
+    nc = int(area["Cells Center Manning's n"].shape[0])
+    if not (0.0 <= float(percent) <= 100.0):
+        raise HecrasInfiltrationError(
+            f"percent impervious must be in [0, 100]; got {percent}")
+
+    if "Percent Impervious" in area:
+        del area["Percent Impervious"]
+    g = area.create_group("Percent Impervious")
+    g.create_dataset("Percent Impervious", data=np.full(nc, float(percent), np.float32))
+    g.create_dataset("Cell Center Classifications", data=np.ones(nc, np.int32))
+    g.create_dataset("Face Center Classifications", data=np.ones(int(n_faces), np.int32))
+
+    meta = {
+        "Percent Impervious Filename": np.bytes_(filename),
+        "Percent Impervious Layername": np.bytes_(layername),
+        "Percent Impervious Date Last Modified": np.bytes_(date_stamp),
+        "Percent Impervious File Date": np.bytes_(date_stamp),
+    }
+    for k, v in meta.items():
+        g.attrs[k] = v
+        area.attrs[k] = v  # mirror on the 2D-area group (the geometry cross-ref)
+
+    return {"area": area_name, "cells": nc, "faces": int(n_faces),
+            "percent_impervious": float(percent)}
