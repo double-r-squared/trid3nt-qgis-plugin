@@ -194,6 +194,126 @@ async def test_payload_warning_gate_composes_on_run_path(
     assert seen.get("tool_name") == _PROBE_NAME
 
 
+class _TypedToolError(RuntimeError):
+    """A stand-in for a tool's typed exception (MeshAcquisitionError etc.)."""
+
+    error_code = "TELEMAC_ROG_POUR_POINT_OFF_DEM"
+    retryable = False
+
+
+@pytest.mark.asyncio
+async def test_typed_tool_error_reaches_client_as_error_envelope() -> None:
+    """A typed tool exception on the ``!run`` no-awaiter path must surface as a
+    structured ``error`` envelope -- not vanish as an "asyncio Task exception was
+    never retrieved" while the client sees nothing (ADR 0198 honesty-floor fix).
+
+    The A.6 ``ErrorCode`` Literal is a CLOSED set, so a tool's own out-of-enum
+    code (``TELEMAC_ROG_POUR_POINT_OFF_DEM``) rides the wire as INTERNAL_ERROR
+    with the specific code LEADING the message as a ``[MARKER]`` (house
+    convention) -- honest + greppable, and it never raises inside _send_error
+    (which would re-open the silence)."""
+
+    def _raise(**_kw):
+        raise _TypedToolError("pour point falls outside the DEM window")
+
+    meta = AtomicToolMetadata(
+        name="compute_run_typed_fail", ttl_class="live-no-cache", cacheable=False
+    )
+    agent_tools.TOOL_REGISTRY["compute_run_typed_fail"] = RegisteredTool(
+        metadata=meta, fn=_raise, module=__name__
+    )
+    try:
+        ws = FakeWS()
+        state = server.SessionState(session_id=new_ulid())
+        await server._handle_dev_tool_invoke(
+            ws, state, {"name": "compute_run_typed_fail", "args": {}}
+        )
+        await _await_inflight(state)
+    finally:
+        agent_tools.TOOL_REGISTRY.pop("compute_run_typed_fail", None)
+
+    errs = _errors(ws)
+    assert errs, (
+        f"Expected an error envelope; got types {[e.get('type') for e in ws.sent]!r}"
+    )
+    payload = errs[0]["payload"]
+    assert payload["error_code"] == "INTERNAL_ERROR"
+    assert payload["retryable"] is False
+    # the specific tool code is preserved in the message marker, and the detail.
+    assert "[TELEMAC_ROG_POUR_POINT_OFF_DEM]" in payload["message"]
+    assert "DEM window" in payload["message"]
+
+
+@pytest.mark.asyncio
+async def test_valid_enum_tool_error_passes_code_through() -> None:
+    """When a tool's typed code IS already a valid A.6 ErrorCode it rides the
+    wire verbatim (an upstream-provider LLM_UNAVAILABLE is NOT internalized)."""
+
+    class _ValidCodeError(RuntimeError):
+        error_code = "DEM_SOURCE_UNAVAILABLE"
+        retryable = True
+
+    def _raise(**_kw):
+        raise _ValidCodeError("3DEP tiles unavailable for the AOI")
+
+    meta = AtomicToolMetadata(
+        name="compute_run_valid_code_fail", ttl_class="live-no-cache", cacheable=False
+    )
+    agent_tools.TOOL_REGISTRY["compute_run_valid_code_fail"] = RegisteredTool(
+        metadata=meta, fn=_raise, module=__name__
+    )
+    try:
+        ws = FakeWS()
+        state = server.SessionState(session_id=new_ulid())
+        await server._handle_dev_tool_invoke(
+            ws, state, {"name": "compute_run_valid_code_fail", "args": {}}
+        )
+        await _await_inflight(state)
+    finally:
+        agent_tools.TOOL_REGISTRY.pop("compute_run_valid_code_fail", None)
+
+    errs = _errors(ws)
+    assert errs
+    payload = errs[0]["payload"]
+    assert payload["error_code"] == "DEM_SOURCE_UNAVAILABLE"
+    assert payload["retryable"] is True
+    assert "3DEP" in payload["message"]
+
+
+@pytest.mark.asyncio
+async def test_untyped_tool_error_defaults_to_execution_failed() -> None:
+    """An UNTYPED tool exception (no error_code attr) still reaches the client,
+    the ``[TOOL_EXECUTION_FAILED]`` marker on INTERNAL_ERROR / non-retryable,
+    rather than silently dying on the create_task path."""
+
+    def _raise(**_kw):
+        raise ValueError("boom -- something broke inside the tool")
+
+    meta = AtomicToolMetadata(
+        name="compute_run_untyped_fail", ttl_class="live-no-cache", cacheable=False
+    )
+    agent_tools.TOOL_REGISTRY["compute_run_untyped_fail"] = RegisteredTool(
+        metadata=meta, fn=_raise, module=__name__
+    )
+    try:
+        ws = FakeWS()
+        state = server.SessionState(session_id=new_ulid())
+        await server._handle_dev_tool_invoke(
+            ws, state, {"name": "compute_run_untyped_fail", "args": {}}
+        )
+        await _await_inflight(state)
+    finally:
+        agent_tools.TOOL_REGISTRY.pop("compute_run_untyped_fail", None)
+
+    errs = _errors(ws)
+    assert errs
+    payload = errs[0]["payload"]
+    assert payload["error_code"] == "INTERNAL_ERROR"
+    assert payload["retryable"] is False
+    assert "[TOOL_EXECUTION_FAILED]" in payload["message"]
+    assert "boom" in payload["message"]
+
+
 def test_reconstruct_run_signature() -> None:
     assert server._reconstruct_run_signature("geocode_location", {}) == (
         "!run geocode_location"

@@ -496,60 +496,39 @@ def _delineate_catchment(
 ) -> tuple[Any, tuple[float, float], float, int]:
     """Robust pysheds catchment upstream of ``pour_point`` -> (polygon, outlet, area_km2, cells).
 
-    Reuses the shared pysheds plumbing (``_stage_dem`` -> Copernicus GLO-30 unless
-    ``dem_uri`` is supplied; ``_condition_dem`` -> fdir/accumulation) but does the
-    outlet snap + catchment IN-MODULE to avoid the shared ``delineate_watershed``
-    tool's fragility: its snap works in coordinate space and, on certain grid
-    alignments, ``grid.catchment(xytype="coordinate")`` maps an exact outlet to a
-    NEIGHBOUR cell -> a 1-cell sliver instead of the real basin. Here the outlet is
-    snapped to the MAX-accumulation cell in a small window (guaranteeing the main
-    channel) and the catchment is traced in INDEX space (integer col/row), which is
-    alignment-invariant (verified: 33.7-34.0k cells across exact/round2/round3/round4
-    box quantizations for the Coweeta outlet, vs 1-14 cells the coordinate path
-    returns). The polygon is EPSG:4326."""
-    import numpy as np
-    from rasterio import features as rio_features
-    from shapely.geometry import shape
-    from shapely.ops import unary_union
-
+    Delegates the outlet snap + catchment to the SHARED, alignment-invariant
+    ``snap_and_delineate_index_space`` (one implementation, also used by the
+    ``delineate_watershed`` tool): the outlet is snapped to the MAX-accumulation
+    cell in a small window (guaranteeing the main channel) and the catchment is
+    traced in INDEX space, which avoids the coordinate-space fragility that
+    collapses the basin to a 1-cell sliver on certain grid alignments (verified:
+    33.7-34.0k cells across box quantizations for the Coweeta outlet vs 1-14 for
+    the coordinate path). This wrapper keeps the workflow's geodesic-area
+    convention (equal-area cast) and its typed off-DEM error. The polygon is
+    EPSG:4326."""
     from trid3nt_server.agent.tools.processing._hydrology_common import (
+        HydrologyInputError,
         _condition_dem,
         _stage_dem,
         _validate_bbox,
+        snap_and_delineate_index_space,
     )
 
     q_bbox = _validate_bbox(tuple(bbox))
     dem_path = _stage_dem(q_bbox, dem_uri, str(rundir), [])
     grid, fdir, acc = _condition_dem(dem_path)
-    acc = np.asarray(acc)
-    affine = grid.affine
 
-    col_f, row_f = ~affine * (float(pour_point[0]), float(pour_point[1]))
-    r0, c0 = int(row_f), int(col_f)
-    R = int(snap_search_cells)
-    rmin, rmax = max(0, r0 - R), min(acc.shape[0], r0 + R + 1)
-    cmin, cmax = max(0, c0 - R), min(acc.shape[1], c0 + R + 1)
-    if rmin >= rmax or cmin >= cmax:
+    try:
+        _mask, catch_geom, (x_snap, y_snap), cell_count = (
+            snap_and_delineate_index_space(
+                grid, fdir, acc,
+                float(pour_point[0]), float(pour_point[1]),
+                snap_search_cells=int(snap_search_cells)))
+    except HydrologyInputError as exc:
         raise MeshAcquisitionError(
             "TELEMAC_ROG_POUR_POINT_OFF_DEM",
             f"pour point {tuple(pour_point)} falls outside the DEM window "
-            f"{q_bbox}; supply a bbox/pour point inside the analysis AOI.")
-    win = acc[rmin:rmax, cmin:cmax]
-    di, dj = np.unravel_index(int(np.argmax(win)), win.shape)
-    rr, cc = rmin + int(di), cmin + int(dj)
-    x_snap, y_snap = affine * (cc + 0.5, rr + 0.5)
-
-    catch = grid.catchment(
-        x=cc, y=rr, fdir=fdir, xytype="index", nodata_out=np.bool_(False))
-    mask = np.asarray(catch, dtype=bool)
-    cell_count = int(mask.sum())
-    geoms = [
-        shape(g)
-        for g, v in rio_features.shapes(
-            mask.astype("uint8"), mask=mask, transform=affine)
-        if v == 1
-    ]
-    catch_geom = unary_union(geoms) if geoms else None
+            f"{q_bbox}; supply a bbox/pour point inside the analysis AOI.") from exc
     area_km2 = _polygon_area_km2(catch_geom) if catch_geom is not None else 0.0
     return catch_geom, (float(x_snap), float(y_snap)), float(area_km2), cell_count
 

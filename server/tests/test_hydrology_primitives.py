@@ -224,6 +224,81 @@ def test_aoi_clamp_raises() -> None:
         )
 
 
+def _bowl_dem(path: str, origin_lon: float, top_lat: float, dx: float, n: int) -> tuple:
+    """A convergent paraboloid bowl (lowest at the centre) at a given origin.
+
+    Every cell drains inward, so the centre outlet captures the whole convergent
+    interior -- a large, non-degenerate basin. Returns (pour_point, bbox)."""
+    rows, cols = np.mgrid[0:n, 0:n]
+    oi = oj = n // 2
+    z = ((rows - oi) ** 2 + (cols - oj) ** 2 + 1.0).astype("float32")
+    from rasterio.transform import from_origin
+
+    with rasterio.open(
+        path, "w", driver="GTiff", height=n, width=n, count=1, dtype="float32",
+        crs="EPSG:4326", nodata=-9999.0,
+        transform=from_origin(origin_lon, top_lat, dx, dx),
+    ) as ds:
+        ds.write(z, 1)
+    pour = (origin_lon + oj * dx, top_lat - oi * dx)
+    bbox = (origin_lon, top_lat - n * dx, origin_lon + n * dx, top_lat)
+    return pour, bbox
+
+
+def test_index_space_beats_coordinate_path_on_convergent_dem(tmp_path) -> None:
+    """The bug the shared tool carried: ``grid.catchment(xytype="coordinate")``
+    round-trips the outlet coordinate to a NEIGHBOUR cell on some alignments and
+    collapses the basin to a sliver. On a convergent bowl the OLD coordinate path
+    returns a handful of cells while the FIXED index-space delineation (what
+    ``delineate_watershed`` now uses) captures the whole convergent interior."""
+    from trid3nt_server.agent.tools.processing._hydrology_common import _condition_dem
+
+    dem = str(tmp_path / "bowl.tif")
+    pour, bbox = _bowl_dem(dem, -83.50, 35.10, 0.001, 40)
+
+    # OLD path: coordinate-space catchment at the exact outlet coordinate.
+    grid, fdir, _acc = _condition_dem(dem)
+    catch_coord = np.asarray(
+        grid.catchment(
+            x=pour[0], y=pour[1], fdir=fdir, xytype="coordinate",
+            nodata_out=np.bool_(False)),
+        dtype=bool,
+    )
+    coord_cells = int(catch_coord.sum())
+
+    # FIXED path: the tool traces in index space off the max-accumulation cell.
+    out = tmp_path / "out"
+    out.mkdir()
+    result = delineate_watershed(
+        pour_point=pour, bbox=bbox, dem_uri=dem, _output_dir=str(out))
+
+    assert coord_cells < 30, (
+        f"expected the coordinate path to sliver; got {coord_cells} cells")
+    assert result.cell_count >= 100, (
+        f"index-space delineation collapsed ({result.cell_count} cells)")
+    assert result.cell_count > 5 * coord_cells
+    assert result.area_km2 > 0.0
+
+
+def test_delineation_alignment_invariant(tmp_path) -> None:
+    """The delineated basin size must not swing with sub-cell shifts of the grid
+    origin -- the property the coordinate path violated (1-14 vs 33.7-34.0k cells
+    across box quantizations for the same outlet)."""
+    counts: list[int] = []
+    for i, shift in enumerate((0.0, 0.0003, 0.0007, 0.00013, 0.0005)):
+        dem = str(tmp_path / f"bowl_{i}.tif")
+        pour, bbox = _bowl_dem(dem, -83.50 + shift, 35.10 + shift, 0.001, 40)
+        out = tmp_path / f"out_{i}"
+        out.mkdir()
+        result = delineate_watershed(
+            pour_point=pour, bbox=bbox, dem_uri=dem, _output_dir=str(out))
+        counts.append(result.cell_count)
+
+    assert min(counts) >= 100, f"a shift collapsed the basin: {counts}"
+    # alignment-invariant: the spread across sub-cell shifts is tight.
+    assert max(counts) - min(counts) <= 5, f"basin size swung with alignment: {counts}"
+
+
 def test_bad_inputs_raise(valley_dem, tmp_path) -> None:
     # Bad pour point shapes / values.
     with pytest.raises(HydrologyInputError):

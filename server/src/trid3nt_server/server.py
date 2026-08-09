@@ -41,7 +41,7 @@ import os
 from collections.abc import Awaitable
 from dataclasses import dataclass, field
 from datetime import datetime
-from typing import Any
+from typing import Any, get_args
 
 from pydantic import ValidationError
 from websockets.asyncio.server import ServerConnection, serve
@@ -85,6 +85,7 @@ from trid3nt_contracts.ws import (
     CatalogAdditionResponsePayload,
     Envelope,
     AgentThinkingChunkPayload,
+    ErrorCode,
     ErrorPayload,
     PipelineStatePayload,
     PipelineStep,
@@ -94,6 +95,11 @@ from trid3nt_contracts.ws import (
     SpatialInputResponsePayload,
     UserMessagePayload,
 )
+
+#: The closed A.6 ``ErrorCode`` Literal, as a runtime set -- the honesty-floor
+#: catch-all uses it to tell a tool's OWN typed code (a valid wire code) from an
+#: out-of-enum code that must be surfaced as a ``[MARKER]`` on INTERNAL_ERROR.
+_VALID_ERROR_CODES: frozenset[str] = frozenset(get_args(ErrorCode))
 
 from .main import MAX_TURNS_PER_SESSION
 
@@ -11433,6 +11439,20 @@ async def _dispatch_tool_and_persist(
     via ``summarize_tool_result``. Other typed routing exceptions
     (``PayloadWarningCancelledError``) are also caught so the manual surface
     sees the cancellation reason explicitly instead of disappearing.
+
+    Honesty-floor FIX (ADR 0198): the two named catches above cover ONLY the
+    routing failures; every OTHER typed tool exception (``MeshAcquisitionError``,
+    ``TelemacRainOnGridError``, ``HydrologyAoiTooLargeError``, ...) also has no
+    awaiter on this ``asyncio.create_task`` path -- pre-fix it escaped as an
+    "asyncio Task exception was never retrieved" log line while the CLIENT
+    received NO error envelope (the plugin silently showed nothing; a seeder saw
+    NO_RESULT). The broad ``except Exception`` below closes that hole: it routes
+    the tool's OWN typed ``error_code`` / ``retryable`` through ``_send_error``
+    (falling back to ``TOOL_EXECUTION_FAILED`` / non-retryable when the exception
+    is untyped), so a failing direct invocation always reaches the client as a
+    structured ``error``. It surfaces the exception's real code verbatim -- an
+    upstream-provider error carries its own code out honestly and is NOT
+    relabelled as an internal failure.
     """
     # Entry-time Case capture -- see _dispatch_gemini_and_persist.
     turn_case_id = _turn_case_id(state)
@@ -11472,6 +11492,39 @@ async def _dispatch_tool_and_persist(
                 exc.error_code,
                 str(exc),
                 retryable=exc.retryable,
+            )
+        except Exception as exc:  # noqa: BLE001 -- honesty-floor catch-all
+            # Any OTHER tool exception on this no-awaiter create_task path (see
+            # docstring): surface a structured envelope instead of a silent
+            # no-result. The A.6 ErrorCode Literal is a CLOSED set, so a tool's
+            # own code (e.g. TELEMAC_ROG_POUR_POINT_OFF_DEM) cannot be the wire
+            # ``error_code`` -- constructing ErrorPayload with it raises inside
+            # _send_error and (per the ws.py:CONTEXT_WINDOW bug) skips the send
+            # entirely, the very silence this fix closes. So: pass a typed tool
+            # code through only when it is already a valid ErrorCode, else fall
+            # back to INTERNAL_ERROR with the specific code LEADING the message
+            # as a ``[MARKER]`` (house convention, see
+            # _notify_layer_auto_publish_failed) -- honest + greppable, no enum
+            # widening. Upstream-provider codes that ARE valid (LLM_UNAVAILABLE)
+            # pass through un-internalized.
+            tool_code = getattr(exc, "error_code", None) or "TOOL_EXECUTION_FAILED"
+            retryable = bool(getattr(exc, "retryable", False))
+            if tool_code in _VALID_ERROR_CODES:
+                wire_code, message = tool_code, str(exc)
+            else:
+                wire_code, message = "INTERNAL_ERROR", f"[{tool_code}] {exc}"
+            logger.exception(
+                "/invoke directive tool raised session=%s tool=%s code=%s",
+                state.session_id,
+                tool_name,
+                tool_code,
+            )
+            await _send_error(
+                websocket,
+                state.session_id,
+                wire_code,
+                message,
+                retryable=retryable,
             )
     finally:
         if turn_case_id:
