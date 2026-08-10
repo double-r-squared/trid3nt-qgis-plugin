@@ -7,6 +7,7 @@ False stays byte-identical to the v1 supply-limited suspended deck.
 """
 from __future__ import annotations
 
+import numpy as np
 import pytest
 
 from services.workers.telemac import telemac_river_dye_build as B
@@ -15,6 +16,37 @@ from services.workers.telemac import telemac_river_dye_build as B
 def _read(path):
     with open(path) as f:
         return f.read()
+
+
+def _tiny_mesh():
+    """6x3 ribbon along y=0 (mid-row interior) - enough for spill_point + author
+    without a real solve; mirrors the WAQTEL/O2 offline deck tests."""
+    xs = [0.0, 20.0, 40.0, 60.0, 80.0, 100.0]
+    ys = [-15.0, 0.0, 15.0]
+    X, Y, ring, ipob = [], [], [], []
+    for i, x in enumerate(xs):
+        for j, y in enumerate(ys):
+            X.append(x)
+            Y.append(y)
+            is_boundary = (i in (0, len(xs) - 1)) or (j in (0, len(ys) - 1))
+            if is_boundary:
+                ring.append(len(X) - 1)
+            ipob.append(1 if is_boundary else 0)
+    return {
+        "X": np.array(X, dtype=float),
+        "Y": np.array(Y, dtype=float),
+        "ring": np.array(ring, dtype=int),
+        "ipob": np.array(ipob, dtype=int),
+        "centerline": np.array([[x, 0.0] for x in xs], dtype=float),
+    }
+
+
+def _author_t2d(cfg, workdir):
+    cas_path = str(workdir / "t2d_river.cas")
+    B.author_deck(cfg, _tiny_mesh(), "river.slf", "river.cli", "r2d_river.slf",
+                  cas_path, ["inflow", "outflow"],
+                  {"bed_top_m": 10.0, "bed_drop_m": 0.5})
+    return _read(cas_path)
 
 
 def test_gaia_v1_supply_limited_deck_unchanged(tmp_path):
@@ -45,6 +77,27 @@ def test_gaia_v2_erodible_deck_enables_bedload_and_stock(tmp_path):
     assert "SUSPENDED SEDIMENTS CONCENTRATION VALUES AT THE SOURCES" not in deck
     # DAMOCLES 72-char clamp holds
     assert all(len(ln) <= 72 for ln in deck.splitlines())
+
+
+def test_erodible_sediment_couples_gaia_in_t2d_deck(tmp_path):
+    # ADR 0216 false-green fix (deck-level proof): the config the server stages
+    # for a SCOUR prompt - substance_class='sediment', erodible_bed=True - MUST
+    # author the GAIA coupling into the t2d deck. The old mislabeled run staged
+    # NO substance_class, so the deck carried ZERO GAIA keywords (a plain tracer
+    # solve that only looked morphodynamic).
+    cfg = B.ReachConfig(substance_class="sediment", erodible_bed=True,
+                        bed_thickness_m=4.0, bedload_formula=1,
+                        morphological_factor=20.0, workdir=str(tmp_path))
+    cas = _author_t2d(cfg, tmp_path)
+    assert "COUPLING WITH" in cas and "'GAIA'" in cas
+    assert "GAIA STEERING FILE" in cas
+    assert B.GAIA_STEERING_FILENAME in cas
+    # v2 erodible-bed appends NO suspended tracer -> the dye stays the sole t2d
+    # tracer (single-tracer graphic printouts, unlike v1 suspended's T2).
+    assert "VARIABLES FOR GRAPHIC PRINTOUTS = 'U,V,H,S,B,T1'" in cas
+    # and the steering file carries the bedload recipe.
+    steering = _read(tmp_path / B.GAIA_STEERING_FILENAME)
+    assert "BED LOAD FOR ALL SANDS          = YES" in steering
 
 
 @pytest.mark.parametrize("thick,expected", [(0.005, "0.01"), (5.0, "5")])

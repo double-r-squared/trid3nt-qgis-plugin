@@ -146,3 +146,50 @@ Rather than half-build three rows, the two follow-ons land with a recipe:
   scour depth; MORPHOLOGICAL FACTOR is a demo amplifier; grain size is a demo
   default (no bed-composition fetcher); the inflow-boundary bedload pile-up is
   a named, capped GAIA artifact.
+
+## Amendment 2026-08-10 - false-green: `substance='scour'` never coupled GAIA
+
+The showcase-seeded scour case (old case `01KZPTN56PMHR0NVM6G01FQSBC`) passed the
+seeder's layer-count grade but was a **plain tracer solve**, not morphodynamics:
+its deck carried ZERO GAIA keywords and its run prefix had no
+`telemac_sediment_deposition.tif`.
+
+Root cause - two divergent gates on the SAME intent:
+- `classify_substance()` recognized only grain words
+  (`sediment`/`sand`/`silt`/`mud`/`slurry`/`tailings`), so `substance='scour'`
+  fell through to the `tracer` class. The GAIA coupling + deposition postprocess
+  are gated on `substance_class == 'sediment'`, so they silently never ran.
+- INDEPENDENTLY, the tool's `_scour_hint` auto-armed `erodible_bed=True` from the
+  word 'scour'. So the run LOOKED morphodynamic (erodible bed accepted, layers
+  published) while coupling no GAIA - a false green.
+
+Fix (one source of truth, not keyword whack-a-mole),
+`server/src/.../telemac/river_dye/river_dye.py`:
+- The composer FORCES `substance_class='sediment'` whenever `erodible_bed` is
+  armed (explicit knob OR the scour auto-arm), so the erodible_bed gate and the
+  classification gate cannot diverge. An armed erodible bed can never end
+  tracer-classified (asserted in the composer AND in a test) - the honesty floor:
+  the deck couples GAIA or the run does not claim morphodynamics.
+- `SCOUR_KEYWORDS` (scour/erosion/erod/bedload/degradation/aggrad/mobile bed/...)
+  is now the ONE vocabulary shared by `classify_substance` (routes to sediment)
+  AND the tool `_scour_hint` (auto-arms erodible_bed), so pure-prompt phrasing
+  routes right even without the knob. Worker unchanged (it already trusted
+  `substance_class`); server-only fix, daemon restart, no image rebuild.
+
+Live re-seed (fixed): new case `01KZPX3ZJZ8DS7MS2NEEJV7N29`, run
+`01KZPX5ED64AJJP9RVBBRV1P8E`.
+`!run telemac_river_dye(location='Snake River near Twin Falls, Idaho', substance='scour', erodible_bed=True, morphological_factor=5.0, grain_size_um=300.0, bed_thickness_m=5.0, sim_duration_s=900)`
+Physics assertions (downloaded from the run prefix, not layer counts):
+`status=ok`, `correct_end=True`, `substance_class=sediment`; t2d deck
+`COUPLING WITH = 'GAIA'`; `gaia_river.cas` `BED LOAD FOR ALL SANDS = YES`;
+`telemac_sediment_deposition.tif` present and SIGNED - max scour 254.9 mm, max
+deposition 199.6 mm, net bed mass -519,603 kg (net scour). The old
+`01KZPTN56PMHR0NVM6G01FQSBC` is superseded junk (a seeder case; noted for NATE's
+dock cleanup, not deleted).
+
+## Follow-up (recorded, not fixed here): seeder grades layer-count
+
+The seeder graded this run OK on layer count and passed a wrong-physics run. The
+stronger criterion is a PER-TEMPLATE physics assertion (like the
+`telemac_sediment_deposition.tif` + `substance_class=sediment` check above) - a
+deposition-raster / coupling-keyword gate per engine, not just a count. Queued.

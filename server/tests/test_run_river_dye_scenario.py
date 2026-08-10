@@ -192,8 +192,12 @@ def _install_composer_mocks(comp, solver_mod, captured: dict):
             "dye_peak_time_s": 420.0,
         }
 
-    def _fake_publish(raw_peak, run_id, location_name, reach_name):
+    def _fake_publish(raw_peak, *args, **kwargs):
+        # _publish_peak_layer grew mesh_* / substance / bank_source / synthetic
+        # params; accept them all so the mock tracks the real signature by shape.
         captured["published"] = True
+        captured["publish_substance"] = kwargs.get("substance", (
+            args[6] if len(args) > 6 else None))
         return raw_peak.model_copy(update={"uri": "https://tiles/dye_peak.png"})
 
     return patch.multiple(
@@ -352,3 +356,126 @@ def test_tool_maps_composer_error_to_typed_dict():
         out = asyncio.run(tool_mod.telemac_river_dye(location="Twin Falls, Idaho"))
     assert out["status"] == "error"
     assert out["error_code"] == "TELEMAC_DYE_RUN_FAILED"
+
+
+# ===========================================================================
+# (7) ADR 0216 false-green fix: the erodible-bed / GAIA single gate.
+#     An armed erodible bed (explicit knob OR scour/erosion/bedload phrasing)
+#     MUST route to the sediment class so the erodible_bed flag and the
+#     substance_class gate cannot diverge into a plain tracer solve that only
+#     LOOKS morphodynamic (accepts an erodible bed + publishes layers, couples
+#     no GAIA). The old bug: substance='scour' fell through classify to 'tracer'
+#     while _scour_hint independently auto-armed erodible_bed=True.
+# ===========================================================================
+@pytest.mark.parametrize("s", [
+    "scour", "bed scour below the weir", "erosion", "bed erosion",
+    "erodible bed", "bedload", "bed load transport", "bed degradation",
+    "channel aggradation", "mobile bed morphodynamics", "bed lowering",
+    "morphological change",
+])
+def test_scour_phrasing_classifies_as_sediment(s):
+    from trid3nt_server.agent.workflows.telemac.river_dye.river_dye import (
+        classify_substance,
+    )
+
+    cls, payload = classify_substance(s)
+    # scour/erosion/bedload phrasing routes to the GAIA sediment class (was the
+    # false-green: it fell through to 'tracer').
+    assert cls == "sediment", (s, cls)
+    assert isinstance(payload, dict) and payload.get("grain_size", 0) > 0.0
+
+
+def test_sediment_and_tracer_regression_unchanged():
+    # the scour keyword branch must not shadow the existing classes.
+    from trid3nt_server.agent.workflows.telemac.river_dye.river_dye import (
+        classify_substance,
+    )
+
+    assert classify_substance("dye") == ("tracer", None)
+    assert classify_substance("water") == ("tracer", None)
+    assert classify_substance("oil")[0] == "oil"
+    assert classify_substance("sewage")[0] == "decay"
+    assert classify_substance("sand")[0] == "sediment"
+    assert classify_substance("oily scour")[0] == "oil"      # oil still wins
+    assert classify_substance("sewage erosion")[0] == "decay"  # decay still wins
+
+
+def test_tool_auto_arms_erodible_bed_for_scour_phrasing():
+    # The tool arms erodible_bed=True from scour phrasing (no explicit knob) AND
+    # forwards the substance - the pair that must not diverge downstream.
+    from trid3nt_server.agent.workflows.telemac.river_dye import river_dye as tool_mod
+    from unittest.mock import patch
+
+    captured: dict = {}
+
+    async def _cap(**kwargs):
+        captured.update(kwargs)
+        return _fake_peak("TELERID", "reach")
+
+    with patch.object(tool_mod, "model_telemac_river_dye", _cap):
+        out = asyncio.run(tool_mod.telemac_river_dye(
+            location="Twin Falls, Idaho", substance="scour below the weir"))
+    assert isinstance(out, TelemacDyeLayerURI)
+    assert captured["erodible_bed"] is True
+    assert "scour" in captured["substance"]
+
+
+def test_composer_scour_prompt_routes_sediment_and_arms_gaia():
+    # END-TO-END tool -> composer for a pure scour prompt (no erodible_bed knob):
+    # the staged manifest reach MUST carry substance_class='sediment' (so the
+    # worker author_deck couples GAIA) AND erodible_bed=True (the v2 path). The
+    # old bug staged NO substance_class (a tracer solve) - the false green.
+    from trid3nt_server.agent.workflows.telemac.river_dye import river_dye as comp
+    from trid3nt_server.agent.tools.simulation.solver import solver as solver_mod
+
+    captured: dict = {}
+    cm_multi, cm_solver, cm_wait, cm_bind = _install_composer_mocks(
+        comp, solver_mod, captured
+    )
+    with cm_multi, cm_solver, cm_wait, cm_bind:
+        peak = asyncio.run(comp.telemac_river_dye(
+            location="Twin Falls, Idaho", substance="scour below the weir"))
+    assert isinstance(peak, TelemacDyeLayerURI)
+    reach = captured["reach"]
+    assert reach["substance_class"] == "sediment"   # NOT tracer (the bug)
+    assert reach["erodible_bed"] is True             # GAIA v2 erodible-bed armed
+
+
+@pytest.mark.parametrize("subst", ["dye", "water", "red dye", "some chemical"])
+def test_composer_erodible_bed_forces_sediment_over_any_tracer(subst):
+    # IMPOSSIBLE-DIVERGENCE: erodible_bed=True with a plain tracer substance can
+    # NEVER stage a tracer-classified run - it is forced to the sediment/GAIA
+    # class by construction, so the two gates cannot disagree.
+    from trid3nt_server.agent.workflows.telemac.river_dye import river_dye as comp
+    from trid3nt_server.agent.tools.simulation.solver import solver as solver_mod
+
+    captured: dict = {}
+    cm_multi, cm_solver, cm_wait, cm_bind = _install_composer_mocks(
+        comp, solver_mod, captured
+    )
+    with cm_multi, cm_solver, cm_wait, cm_bind:
+        peak = asyncio.run(comp.model_telemac_river_dye(
+            location="Twin Falls, Idaho", substance=subst, erodible_bed=True))
+    assert isinstance(peak, TelemacDyeLayerURI)
+    reach = captured["reach"]
+    assert reach["substance_class"] == "sediment"
+    assert reach["erodible_bed"] is True
+
+
+def test_composer_never_stages_erodible_tracer_invariant():
+    # Direct proof of the honesty-floor invariant: for a matrix of substances,
+    # an armed erodible bed always stages the sediment class (never tracer).
+    from trid3nt_server.agent.workflows.telemac.river_dye import river_dye as comp
+    from trid3nt_server.agent.tools.simulation.solver import solver as solver_mod
+
+    for subst in ("dye", "scour", "oil", "sewage", "sand"):
+        captured: dict = {}
+        cm_multi, cm_solver, cm_wait, cm_bind = _install_composer_mocks(
+            comp, solver_mod, captured
+        )
+        with cm_multi, cm_solver, cm_wait, cm_bind:
+            asyncio.run(comp.model_telemac_river_dye(
+                location="Twin Falls, Idaho", substance=subst, erodible_bed=True))
+        reach = captured["reach"]
+        assert not (reach.get("erodible_bed") and
+                    reach.get("substance_class") != "sediment"), (subst, reach)

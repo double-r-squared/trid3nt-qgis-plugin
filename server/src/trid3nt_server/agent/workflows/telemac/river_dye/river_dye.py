@@ -576,11 +576,8 @@ async def telemac_river_dye(
     # tuning levers to sane ranges here so a bogus arg never crashes the call; the
     # worker re-clamps. Only meaningful when the run classifies as the sediment
     # class - a non-sediment substance ignores these.
-    _scour_words = ("scour", "erosion", "erod", "bedload", "bed load",
-                    "degradation", "bed lowering", "mobile bed", "morpholog",
-                    "aggrad", "degrade")
-    _scour_hint = any(w in substance for w in _scour_words) or (
-        contaminant and any(w in str(contaminant).lower() for w in _scour_words))
+    _scour_hint = any(w in substance for w in SCOUR_KEYWORDS) or (
+        contaminant and any(w in str(contaminant).lower() for w in SCOUR_KEYWORDS))
     if erodible_bed is None:
         erodible_bed = bool(_scour_hint)
     else:
@@ -902,6 +899,18 @@ SEDIMENT_SUBSTANCE_PRESETS: dict[str, dict[str, float | str]] = {
     "tailings": {"type": "silt", "grain_size": 30.0},
 }
 
+#: SCOUR / EROSION / mobile-bed vocabulary - the ONE list shared by the
+#: classify_substance sediment branch AND the telemac_river_dye _scour_hint
+#: auto-arm, so the classification gate and the erodible_bed gate route off the
+#: same words and cannot disagree. Naming any of these is the GAIA v2
+#: ERODIBLE-BED question (a real erodible bed with active bedload -> the bed
+#: scours and re-deposits), routed to the sediment class here and armed as
+#: erodible_bed=True by the tool.
+SCOUR_KEYWORDS: tuple[str, ...] = (
+    "scour", "erosion", "erod", "bedload", "bed load", "degradation",
+    "bed lowering", "mobile bed", "morpholog", "aggrad", "degrade",
+)
+
 
 def classify_substance(substance: str) -> tuple[str, str | dict[str, float] | None]:
     """Route a substance string to a TELEMAC substance class + its payload.
@@ -912,9 +921,10 @@ def classify_substance(substance: str) -> tuple[str, str | dict[str, float] | No
     ``('sediment', {type, grain_size})`` for a settling sediment (payload = the
     GAIA type preset + default d50 in microns), and ``('tracer', None)`` for the
     plain conservative dye. Order matters: oil keywords win first, then decay,
-    then sediment, else the tracer default - so 'oil' stays oil, 'sewage' stays
-    decay, 'sand' is sediment, and a bare 'dye' stays a conservative tracer,
-    byte-identical to before for the first three classes.
+    then sediment (grain names OR the SCOUR_KEYWORDS scour/erosion/bedload
+    vocabulary), else the tracer default - so 'oil' stays oil, 'sewage' stays
+    decay, 'sand' and 'scour' are sediment, and a bare 'dye' stays a conservative
+    tracer.
     """
     s = str(substance or "dye").strip().lower()
     for key, preset in OIL_SUBSTANCE_PRESETS.items():
@@ -926,6 +936,13 @@ def classify_substance(substance: str) -> tuple[str, str | dict[str, float] | No
     for key, params in SEDIMENT_SUBSTANCE_PRESETS.items():
         if key in s:
             return "sediment", dict(params)
+    # SCOUR / EROSION / mobile-bed phrasing with no grain named is still the
+    # sediment class (the GAIA erodible-bed path) - matched off the SAME
+    # vocabulary the tool uses to auto-arm erodible_bed, so the two gates cannot
+    # diverge. Defaults to non-cohesive sand (a demo d50 the grain_size_um param
+    # overrides).
+    if any(w in s for w in SCOUR_KEYWORDS):
+        return "sediment", {"type": "sand", "grain_size": 200.0}
     return "tracer", None
 
 
@@ -1994,6 +2011,27 @@ async def model_telemac_river_dye(
     # gnis_name mainstem (confluence disambiguation, Columbia-proven).
     river_name = _named_watercourse(location or location_name) or ""
     substance_class, substance_payload = classify_substance(substance)
+    # SINGLE SOURCE OF TRUTH for the erodible-bed / GAIA gate (ADR 0216
+    # false-green fix). An armed erodible bed - an explicit erodible_bed knob OR
+    # the scour/erosion/bedload auto-arm in telemac_river_dye - IS a GAIA
+    # morphodynamics run, so it MUST route through the sediment class. Otherwise
+    # the erodible_bed flag and the substance_class gate diverge: erodible_bed
+    # reads True (mesh accepted, layers published) while classify returns a
+    # non-sediment class, so author_deck couples NOTHING and the run is a plain
+    # tracer solve that only LOOKS morphodynamic. Forcing sediment here makes the
+    # divergence impossible-by-construction (asserted below).
+    if erodible_bed and substance_class != "sediment":
+        logger.info(
+            "telemac dye: erodible_bed armed but classify(%r)=%s - forcing the "
+            "sediment class (GAIA erodible-bed morphodynamics)",
+            substance, substance_class)
+        substance_class = "sediment"
+        substance_payload = dict(SEDIMENT_SUBSTANCE_PRESETS["sediment"])
+    # Honesty floor: an armed erodible bed can NEVER end tracer-classified (a
+    # silent no-GAIA fallback) - the deck couples GAIA or the run does not claim
+    # morphodynamics.
+    assert not (erodible_bed and substance_class != "sediment"), (
+        "erodible_bed armed must route to the sediment/GAIA class, never tracer")
     oil_preset = substance_payload if substance_class == "oil" else None
     # WAQTEL v1a decay class: classify_substance picks the degradation law + a
     # literature default coefficient; the run_telemac decay_half_life_hours /
