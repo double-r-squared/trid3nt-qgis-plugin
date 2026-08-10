@@ -557,6 +557,43 @@ def _default_travel_time_years(archetype: str) -> list[float]:
         return list(DEFAULT_WELLHEAD_PROTECTION_TRAVEL_TIME_YEARS)
     return list(DEFAULT_CAPTURE_ZONE_TRAVEL_TIME_YEARS)
 
+
+def prt_grid_geometry(lat: float, lon: float) -> dict:
+    """The PRT capture-zone grid geometry for an AOI centre (SHARED, pure).
+
+    Reproduces exactly the local-origin grid ``_build_prt_capture_zone_deck``
+    builds so the COMPOSER can sample the kriged water-table surface at each cell
+    centre (ADR 0215 item 3, the per-cell IC) BEFORE the deck exists. Returns the
+    41x41 grid params + the model UTM EPSG + the per-cell centre coordinates in
+    both LOCAL (0-origin) and true UTM metres, plus their EPSG:4326 lon/lat.
+
+    Keys: nrow, ncol, delr, delc, xoffset_m, yoffset_m, model_utm_epsg,
+    cell_lon (nrow x ncol), cell_lat (nrow x ncol). Row 0 is the NORTH row
+    (flopy convention), matching ``starting_head_by_cell`` row order.
+    """
+    ncol = int(round(2 * PRT_DOMAIN_HALF_WIDTH_M / PRT_CELL_SIZE_M))
+    nrow = ncol
+    delr = delc = PRT_CELL_SIZE_M
+    crs = _utm_crs_for_lonlat(lon, lat)
+    to_utm = Transformer.from_crs("EPSG:4326", crs, always_xy=True)
+    back = Transformer.from_crs(crs, "EPSG:4326", always_xy=True)
+    aoi_east, aoi_north = to_utm.transform(lon, lat)
+    xoffset_m = aoi_east - PRT_DOMAIN_HALF_WIDTH_M
+    yoffset_m = aoi_north - PRT_DOMAIN_HALF_WIDTH_M
+    cols = np.arange(ncol)
+    rows = np.arange(nrow)
+    ce = xoffset_m + (cols + 0.5) * delr                       # (ncol,) UTM easting
+    cn = yoffset_m + (nrow - rows - 0.5) * delc                 # (nrow,) UTM northing
+    EE, NN = np.meshgrid(ce, cn)                                # (nrow, ncol)
+    lon_grid, lat_grid = back.transform(EE.ravel(), NN.ravel())
+    return {
+        "nrow": nrow, "ncol": ncol, "delr": delr, "delc": delc,
+        "xoffset_m": xoffset_m, "yoffset_m": yoffset_m,
+        "model_utm_epsg": crs.to_epsg(),
+        "cell_lon": np.asarray(lon_grid).reshape(nrow, ncol),
+        "cell_lat": np.asarray(lat_grid).reshape(nrow, ncol),
+    }
+
 #: Default PRT max tracking time (years). Particles are tracked until they hit a
 #: boundary or this time cap. 50 years is long enough for a 2 km domain at
 #: typical aquifer velocities (K ~ 10 m/day, gradient ~ 0.002, ne ~ 0.25 ->
@@ -767,6 +804,14 @@ class DeckManifest:
     # legacy hardcoded west->east REGIONAL_GRADIENT drives the flow (no DEM).
     regional_gradient_x: float = 0.0    # head-gradient east-component (m/m)
     regional_gradient_y: float = 0.0    # head-gradient north-component (m/m)
+    # multi-well WELLFIELD + NHD RIV (ADR 0215 wellhead-reeval part 2). One entry
+    # per snapped well cell: [row, col, rate_m3_day (negative = extraction), lat,
+    # lon]; empty for a single-well deck (the well_row/well_col/pumping_rate_m3_day
+    # fields carry the lone well). ``prt_river_cell_count`` echoes the NHD RIV cells
+    # draped onto the PRT grid (0 => CHD ring only, byte-identical to part 1).
+    prt_well_cells: list[list[float]] = field(default_factory=list)
+    prt_well_names: list[str] = field(default_factory=list)  # per-well labels (deck order)
+    prt_river_cell_count: int = 0
     gradient_source: str = "demo_west_east"  # "dem" | "demo_west_east"
     gradient_magnitude: float = 0.0     # |gradient| (m/m); 0.0 => manifest not populated
     gradient_azimuth_deg: float | None = None  # compass azimuth (deg) water flows toward
@@ -2886,6 +2931,27 @@ def _build_prt_capture_zone_deck(
     # hardcoded west->east REGIONAL_GRADIENT CHD is built (byte-identical).
     regional_gradient_x: float | None = None,
     regional_gradient_y: float | None = None,
+    # --- multi-well WELLFIELD + transient + NHD RIV + kriged IC (ADR 0215) ---- #
+    # ALL default to the single-well steady demo path (byte-identical to part 1).
+    #   wells: [{lon, lat, rate_m3_day, name}] -- a WELLFIELD. Each gets one WEL
+    #     record + a particle ring (US EPA 440/6-87-010; ex-prt-mp7-p03). None =>
+    #     the single ``well_location_latlon`` + ``pumping_rate_m3_day``.
+    #   transient/sim_years/n_periods/aquifer_sy/aquifer_ss: a steady spin-up +
+    #     N transient storage periods (GwfSto) so the isochrones evolve with the
+    #     wellfield drawdown; the PRT tracks the per-period REVERSED budget.
+    #   river_reaches: [[(lon, lat), ...], ...] NHD polylines draped as RIV cells;
+    #     stage sampled from the kriged IC, conductance a documented streambed
+    #     default, CHD ring retained where no reach bounds the domain.
+    #   starting_head_by_cell: nrow x ncol kriged water-table IC (deck-local datum).
+    wells: list[dict] | None = None,
+    transient: bool = False,
+    aquifer_sy: float | None = None,
+    aquifer_ss: float | None = None,
+    sim_years: float | None = None,
+    n_periods: int | None = None,
+    river_reaches: list[list[tuple[float, float]]] | None = None,
+    streambed_conductance_m2_day: float | None = None,
+    starting_head_by_cell: list[list[float]] | None = None,
     # constitutive advanced-physics (levers STEP 3): resolved dict; regional_gradient
     # is the only lever this GWF-only PRT archetype reads. None/{} => byte-identical.
     advanced_physics: dict | None = None,
@@ -2970,44 +3036,69 @@ def _build_prt_capture_zone_deck(
     model_utm_epsg = crs.to_epsg()
 
     # ---------------------------------------------------------------------- #
-    # Well cell: snap the caller-supplied lat/lon to the LOCAL grid, or use the
-    # grid centre when no well location is given.
+    # Well cells: snap each caller-supplied well to the LOCAL grid. ``wells`` (a
+    # WELLFIELD, ADR 0215) takes precedence; else the single ``well_location_latlon``
+    # (back-compat, part 1); else the grid centre. Each snapped well carries its
+    # cell index, the SIGNED WEL rate (negative = extraction), and its real coords.
     # ---------------------------------------------------------------------- #
-    pump_rate = -abs(float(pumping_rate_m3_day)) if pumping_rate_m3_day is not None \
-        else -abs(DEFAULT_PRT_PUMPING_RATE_M3_DAY)
+    back_to_4326 = Transformer.from_crs(crs, "EPSG:4326", always_xy=True)
 
-    if well_location_latlon is not None:
-        wlat, wlon = float(well_location_latlon[0]), float(well_location_latlon[1])
-        if not (-90.0 <= wlat <= 90.0) or not (-180.0 <= wlon <= 180.0):
+    def _snap_well(wlat_in: float, wlon_in: float) -> tuple[int, int]:
+        """Snap a lat/lon to the nearest interior (non-boundary) grid cell (row, col)."""
+        if not (-90.0 <= wlat_in <= 90.0) or not (-180.0 <= wlon_in <= 180.0):
             raise ValueError(
-                f"well_location_latlon out of range for capture_zone: {(wlat, wlon)!r}"
+                f"well location out of range for capture_zone: {(wlat_in, wlon_in)!r}"
             )
-        well_east_true, well_north_true = to_utm.transform(wlon, wlat)
-        # Convert to LOCAL grid coordinates (0-origin) for the cell index.
-        well_east_local = well_east_true - xoffset_m
-        well_north_local = well_north_true - yoffset_m
-        col = int(well_east_local // delr)
-        north_top_local = nrow * delc  # local grid top (no yorigin offset)
-        row = int((north_top_local - well_north_local) // delc)
-        # Clamp to interior cells (never the CHD boundary columns).
-        well_row = max(1, min(nrow - 2, row))
-        well_col = max(1, min(ncol - 2, col))
-        well_lat, well_lon_val = wlat, wlon
-    else:
-        # Centre of the 41x41 local grid.
-        well_row = nrow // 2  # 20 for a 41-cell grid
-        well_col = ncol // 2
-        well_lat, well_lon_val = lat, lon
+        we, wn = to_utm.transform(wlon_in, wlat_in)
+        col = int((we - xoffset_m) // delr)
+        row = int((nrow * delc - (wn - yoffset_m)) // delc)
+        return max(1, min(nrow - 2, row)), max(1, min(ncol - 2, col))
 
-    # True UTM coordinates of the chosen well cell centre (for manifest).
-    # cell_centre_local_x = (well_col + 0.5) * delr
-    # cell_centre_local_y = (nrow - well_row - 0.5) * delc (flopy row-0 = north)
+    # Assemble the wellfield: list of {row, col, rate (signed), lat, lon, name}.
+    # ``rate`` is stored NEGATIVE (MF6 WEL extraction sign) so the WEL records and
+    # the manifest read consistently with the single-well path.
+    well_cells: list[dict] = []
+    if wells:
+        for k, wspec in enumerate(wells):
+            wlon_k = float(wspec["lon"])
+            wlat_k = float(wspec["lat"])
+            rate_k = -abs(float(wspec.get("rate_m3_day") or DEFAULT_PRT_PUMPING_RATE_M3_DAY))
+            name_k = str(wspec.get("name") or f"well_{k}")
+            r, c = _snap_well(wlat_k, wlon_k)
+            # cell-centre real coords (for the manifest + allocation narration)
+            ce = xoffset_m + (c + 0.5) * delr
+            cn = yoffset_m + (nrow - r - 0.5) * delc
+            clon, clat = back_to_4326.transform(ce, cn)
+            well_cells.append(
+                {"row": r, "col": c, "rate": rate_k, "lat": clat, "lon": clon, "name": name_k}
+            )
+    else:
+        pump_rate = (
+            -abs(float(pumping_rate_m3_day)) if pumping_rate_m3_day is not None
+            else -abs(DEFAULT_PRT_PUMPING_RATE_M3_DAY)
+        )
+        if well_location_latlon is not None:
+            r, c = _snap_well(
+                float(well_location_latlon[0]), float(well_location_latlon[1])
+            )
+        else:
+            r, c = nrow // 2, ncol // 2  # grid centre (AOI point)
+        ce = xoffset_m + (c + 0.5) * delr
+        cn = yoffset_m + (nrow - r - 0.5) * delc
+        clon, clat = back_to_4326.transform(ce, cn)
+        well_cells.append(
+            {"row": r, "col": c, "rate": pump_rate, "lat": clat, "lon": clon, "name": "well_0"}
+        )
+
+    # Primary well (well_cells[0]) carries the legacy single-well manifest fields
+    # (well_row/well_col/pumping_rate_m3_day/well_lat/well_lon) the postprocess
+    # georegistration + Grubb-analytic narration already read.
+    primary = well_cells[0]
+    well_row, well_col = primary["row"], primary["col"]
+    pump_rate = primary["rate"]
     well_east_m = xoffset_m + (well_col + 0.5) * delr
     well_north_m = yoffset_m + (nrow - well_row - 0.5) * delc
-
-    back_to_4326 = Transformer.from_crs(crs, "EPSG:4326", always_xy=True)
-    _wlon, _wlat = back_to_4326.transform(well_east_m, well_north_m)
-    well_lat, well_lon_val = _wlat, _wlon
+    well_lat, well_lon_val = primary["lat"], primary["lon"]
 
     # ---------------------------------------------------------------------- #
     # PRT/isochrone parameters.
@@ -3019,19 +3110,17 @@ def _build_prt_capture_zone_deck(
     )
 
     # ---------------------------------------------------------------------- #
-    # GWF simulation (STEADY, single period of 1 day -> one time step).
+    # GWF simulation. STEADY single period (part-1 demo, byte-identical) OR
+    # TRANSIENT: a steady spin-up period 0 (wellfield OFF, the table equilibrates
+    # to the CHD/RIV boundaries) + N transient storage periods (wellfield ON) so
+    # the 1/5/10-yr isochrones evolve with the drawdown (ADR 0215; ex-prt-mp7-p03).
+    # The transient reversed budget is what the PRT tracks per period.
     # ---------------------------------------------------------------------- #
     sim = flopy.mf6.MFSimulation(
         sim_name=sim_name,
         sim_ws=str(sim_dir),
         exe_name="mf6",
         version="mf6",
-    )
-    flopy.mf6.ModflowTdis(
-        sim,
-        time_units=TIME_UNITS,
-        nper=1,
-        perioddata=[(1.0, 1, 1.0)],
     )
     ims = flopy.mf6.ModflowIms(
         sim,
@@ -3048,6 +3137,35 @@ def _build_prt_capture_zone_deck(
         save_flows=True,
     )
     sim.register_ims_package(ims, [gwf_name])
+
+    # Resolve the stress-period schedule up front (WEL/RIV records key on it).
+    if transient:
+        transient_periods = _resolve_transient_periods(
+            sim_years=sim_years, n_periods=n_periods
+        )
+        # TDIS + GwfSto (steady spin-up 0 + transient 1..N). Reuses the tested
+        # sustainable_yield helper so the storage term is written in one place.
+        eff_sy = float(aquifer_sy) if aquifer_sy is not None else DEFAULT_AQUIFER_SY
+        eff_ss = float(aquifer_ss) if aquifer_ss is not None else DEFAULT_AQUIFER_SS
+        n_stress_periods = _add_transient_sto_tdis(
+            sim,
+            gwf,
+            transient_periods=transient_periods,
+            sy=eff_sy,
+            ss=eff_ss,
+            gwf_name=gwf_name,
+        )
+        n_transient_periods = len(transient_periods)
+    else:
+        flopy.mf6.ModflowTdis(
+            sim,
+            time_units=TIME_UNITS,
+            nper=1,
+            perioddata=[(1.0, 1, 1.0)],
+        )
+        n_stress_periods = 1
+        n_transient_periods = 0
+        eff_sy = eff_ss = 0.0
 
     # Grid: uniform DIS (default, byte-identical) OR a gridgen-refined DISV
     # vertex grid when drawn refine_region polygons are supplied (ADR 0099 M2).
@@ -3090,8 +3208,23 @@ def _build_prt_capture_zone_deck(
             botm=PRT_AQUIFER_BOTTOM_M,
         )
 
-    # IC: initial head = aquifer top (hydrostatic start, overridden by CHD).
-    flopy.mf6.ModflowGwfic(gwf, strt=PRT_AQUIFER_TOP_M, filename=f"{gwf_name}.ic")
+    # IC: uniform aquifer-top head (part 1) OR the per-cell kriged water-table
+    # surface (ADR 0215 item 3). ``starting_head_by_cell`` is the composer's
+    # kriged/trend surface sampled at each cell centre and re-referenced about the
+    # deck datum, so the interior IC carries the measured water-table CURVATURE a
+    # single gradient plane cannot. The steady solve equilibrates to the boundaries
+    # regardless; the IC is what the TRANSIENT solve starts from before pumping.
+    if starting_head_by_cell is not None:
+        strt_arr = np.asarray(starting_head_by_cell, dtype=float)
+        if strt_arr.shape != (nrow, ncol):
+            raise ValueError(
+                f"starting_head_by_cell shape {strt_arr.shape} != grid "
+                f"({nrow}, {ncol}) for capture_zone IC"
+            )
+        strt = strt_arr.reshape((N_LAYERS, nrow, ncol))
+    else:
+        strt = PRT_AQUIFER_TOP_M
+    flopy.mf6.ModflowGwfic(gwf, strt=strt, filename=f"{gwf_name}.ic")
 
     # NPF: MUST set save_flows + save_specific_discharge + save_saturation.
     # Missing save_saturation -> FMI 'SATURATION NOT FOUND' error in PRT.
@@ -3166,16 +3299,81 @@ def _build_prt_capture_zone_deck(
         for r in range(nrow):
             chd_records.append([(0, r, 0), head_west])          # west boundary
             chd_records.append([(0, r, ncol - 1), head_east])   # east boundary
+    chd_cellids = {(rec[0][1], rec[0][2]) for rec in chd_records}
     flopy.mf6.ModflowGwfchd(
         gwf,
         stress_period_data={0: chd_records},
         filename=f"{gwf_name}.chd",
     )
 
-    # WEL: pumping extraction at the well cell (active in the single period).
+    # RIV: NHD river-reach head-dependent boundaries (ADR 0215 item 4). Each reach
+    # polyline is projected to the model UTM frame, rasterized onto the grid, and
+    # draped as RIV cells. The RIV STAGE is sampled from the kriged water-table IC
+    # at each reach cell (``starting_head_by_cell``) -- the river surface tracks the
+    # regional table -- with the streambed bottom a documented depth below and a
+    # documented conductance default. Cells that already carry a CHD boundary (the
+    # perimeter ring, retained where no reach bounds the domain) or a well are
+    # skipped -- a cell is one boundary type. When no reaches are supplied the CHD
+    # ring alone orients the flow field (byte-identical to part 1).
+    river_cell_count = 0
+    if river_reaches:
+        riv_records: list[list] = []
+        seen_riv: set[tuple[int, int]] = set()
+        well_cellids = {(w["row"], w["col"]) for w in well_cells}
+        riv_cond = float(
+            streambed_conductance_m2_day
+            if streambed_conductance_m2_day is not None
+            else DEFAULT_STREAMBED_CONDUCTANCE_M2_DAY
+        )
+        strt_grid = (
+            np.asarray(starting_head_by_cell, dtype=float)
+            if starting_head_by_cell is not None
+            else None
+        )
+        for reach in river_reaches:
+            vertices_en = [to_utm.transform(float(lon_v), float(lat_v)) for (lon_v, lat_v) in reach]
+            for (r, c, _reach_len) in _drape_polyline_onto_grid(
+                vertices_en,
+                xorigin=xoffset_m,
+                yorigin=yoffset_m,
+                delr=delr,
+                delc=delc,
+                nrow=nrow,
+                ncol=ncol,
+            ):
+                if (r, c) in chd_cellids or (r, c) in well_cellids or (r, c) in seen_riv:
+                    continue
+                seen_riv.add((r, c))
+                # Stage from the kriged surface at the cell (falls back to aquifer
+                # top when no kriged IC is supplied); rbot a demo depth below.
+                stage = (
+                    float(strt_grid[r, c]) if strt_grid is not None else PRT_AQUIFER_TOP_M
+                )
+                rbot = stage - DEFAULT_RIVER_STAGE_DEPTH_M
+                riv_records.append([(0, r, c), stage, riv_cond, rbot])
+        river_cell_count = len(riv_records)
+        if riv_records:
+            flopy.mf6.ModflowGwfriv(
+                gwf,
+                stress_period_data={0: riv_records},
+                save_flows=True,
+                filename=f"{gwf_name}.riv",
+                pname="riv-0",
+            )
+
+    # WEL: one extraction record per snapped wellfield cell (ADR 0215 item 1). For
+    # a TRANSIENT run the wells are OFF in the steady spin-up period 0 (the table
+    # equilibrates to the boundaries) and ON in every transient period 1..N so the
+    # isochrones reflect the drawdown as it develops; for a steady run the wells
+    # are active in the single period 0.
+    wel_records = [[(0, w["row"], w["col"]), w["rate"]] for w in well_cells]
+    if transient:
+        wel_spd = {0: [], **{p: wel_records for p in range(1, n_stress_periods)}}
+    else:
+        wel_spd = {0: wel_records}
     flopy.mf6.ModflowGwfwel(
         gwf,
-        stress_period_data={0: [[(0, well_row, well_col), pump_rate]]},
+        stress_period_data=wel_spd,
         save_flows=True,
         filename=f"{gwf_name}.wel",
         pname="wel-0",
@@ -3223,10 +3421,12 @@ def _build_prt_capture_zone_deck(
         # Archetype branch fields.
         archetype=archetype,
         gwt_present=False,
-        transient=False,
-        n_stress_periods=1,
-        n_transient_periods=0,
-        # Well info (reuse the sustainable_yield fields).
+        transient=transient,
+        n_stress_periods=n_stress_periods,
+        n_transient_periods=n_transient_periods,
+        aquifer_sy=eff_sy,
+        aquifer_ss=eff_ss,
+        # Well info (reuse the sustainable_yield fields for the PRIMARY well).
         well_row=well_row,
         well_col=well_col,
         well_easting_m=well_east_m,
@@ -3241,6 +3441,15 @@ def _build_prt_capture_zone_deck(
         model_utm_epsg=model_utm_epsg,
         n_particles=n_particles,
         capture_zone_travel_time_years=tz_years,
+        # Multi-well WELLFIELD + NHD RIV (ADR 0215): one [row, col, rate, lat, lon]
+        # per snapped well (deck order) + the RIV cell count draped from NHD.
+        prt_well_cells=[
+            [float(w["row"]), float(w["col"]), float(w["rate"]),
+             float(w["lat"]), float(w["lon"])]
+            for w in well_cells
+        ],
+        prt_well_names=[str(w["name"]) for w in well_cells],
+        prt_river_cell_count=river_cell_count,
         # Regional-gradient provenance (georeferenced vs demo west->east).
         regional_gradient_x=gx,
         regional_gradient_y=gy,
@@ -3353,13 +3562,25 @@ def build_and_run_prt_from_gwf(
         exe_name=mf6_bin,
         version="mf6",
     )
-    # TDIS: mirror the GWF (1 period, 1 step, 1 day). The PRT sim steps through
-    # the REVERSED flow field, which has the same time discretisation.
+    # TDIS: mirror the REVERSED GWF schedule so the PRT steps through the reversed
+    # flow field period-for-period. For a STEADY GWF (1 period) this is the legacy
+    # single (1 day, 1 step) period; for a TRANSIENT GWF (ADR 0215 item 1) the
+    # reversed schedule is the GWF periods in reverse order, so the per-period
+    # reversed budget the PRT FMI reads is the time-evolving wellfield drawdown run
+    # backward (the isochrones become time-evolving, ex-prt-mp7-p03).
+    gwf_pd = gsim_reload.tdis.perioddata.array
+    if len(gwf_pd) <= 1:
+        prt_perioddata = [(1.0, 1, 1.0)]
+    else:
+        prt_perioddata = [
+            (float(row["perlen"]), int(row["nstp"]), float(row["tsmult"]))
+            for row in reversed(list(gwf_pd))
+        ]
     flopy.mf6.ModflowTdis(
         psim,
         time_units=TIME_UNITS,
-        nper=1,
-        perioddata=[(1.0, 1, 1.0)],
+        nper=len(prt_perioddata),
+        perioddata=prt_perioddata,
     )
 
     # Create the PRT model.
@@ -3382,24 +3603,33 @@ def build_and_run_prt_from_gwf(
     # MIP: porosity REQUIRED -- drives travel-time calculation.
     flopy.mf6.ModflowPrtmip(prt, porosity=deck.porosity, filename=f"{prt_name}.mip")
 
-    # Build the particle release ring at the well cell (local coordinates).
-    # The GWF grid is at local (0,0) so cell centres are in local space.
-    # local grid: row 0 = northernmost row; ycellcenter for row r = (nrow-r-0.5)*delc.
-    wi = deck.well_row
-    wj = deck.well_col
-    cx = (wj + 0.5) * deck.delr              # local x of well cell centre
-    cy = (deck.nrow - wi - 0.5) * deck.delc  # local y of well cell centre
+    # Build a particle release ring around EACH wellfield cell (ADR 0215 item 1).
+    # The GWF grid is at local (0,0) so cell centres are in local space (row 0 =
+    # northernmost; ycellcenter for row r = (nrow-r-0.5)*delc). Each particle's
+    # boundname is "w{k}_p{n}" so the postprocess can ALLOCATE which well captured
+    # which particles (the wellfield WHPA answer). ``deck.prt_well_cells`` carries
+    # one [row, col, rate, lat, lon] per snapped well; the legacy single-well path
+    # falls back to deck.well_row/well_col.
+    if deck.prt_well_cells:
+        well_ij = [(int(w[0]), int(w[1])) for w in deck.prt_well_cells]
+    else:
+        well_ij = [(deck.well_row, deck.well_col)]
     n_ring = deck.n_particles
     angles = np.linspace(0, 2 * np.pi, n_ring, endpoint=False)
     radius = DEFAULT_PRT_RING_RADIUS_M  # 30 m (inside the 100 m cell)
     zrpt = (PRT_AQUIFER_TOP_M + PRT_AQUIFER_BOTTOM_M) / 2.0  # mid-aquifer depth
 
     releasepts = []
-    for n, a in enumerate(angles):
-        xrpt = cx + radius * np.cos(a)
-        yrpt = cy + radius * np.sin(a)
-        # PRP packagedata tuple: (irptno, (k,i,j), x, y, z, boundname)
-        releasepts.append((n, (0, wi, wj), xrpt, yrpt, zrpt, f"p{n}"))
+    irptno = 0
+    for k, (wi, wj) in enumerate(well_ij):
+        cx = (wj + 0.5) * deck.delr              # local x of well cell centre
+        cy = (deck.nrow - wi - 0.5) * deck.delc  # local y of well cell centre
+        for n, a in enumerate(angles):
+            xrpt = cx + radius * np.cos(a)
+            yrpt = cy + radius * np.sin(a)
+            # PRP packagedata tuple: (irptno, (k,i,j), x, y, z, boundname)
+            releasepts.append((irptno, (0, wi, wj), xrpt, yrpt, zrpt, f"w{k}_p{n}"))
+            irptno += 1
 
     trackbin = f"{prt_name}.trk"
     trackcsv = f"{prt_name}.trk.csv"
@@ -3918,6 +4148,13 @@ def build_modflow_deck(
     # legacy hardcoded west->east CHD (byte-identical). Ignored for non-PRT decks.
     regional_gradient_x: float | None = None,
     regional_gradient_y: float | None = None,
+    # --- multi-well WELLFIELD + transient + NHD RIV + kriged IC (ADR 0215) ---- #
+    # Threaded into the capture_zone / wellhead_protection PRT deck; ignored for
+    # every other archetype. ALL default to the single-well steady demo path.
+    wells: list[dict] | None = None,
+    capture_zone_transient: bool = False,
+    river_reaches: list[list[tuple[float, float]]] | None = None,
+    starting_head_by_cell: list[list[float]] | None = None,
     # --- saltwater_intrusion (ADDITIVE, optional) -- #
     # ``archetype == "saltwater_intrusion"``: Henry-style field-scale coastal
     # transect; GWF (BUY variable-density) + GWT in ONE sim. All three args are
@@ -4168,6 +4405,16 @@ def build_modflow_deck(
                 regional_gradient_y=regional_gradient_y,
                 advanced_physics=advanced_physics,
                 refine_regions=refine_regions,
+                # --- multi-well WELLFIELD + transient + NHD RIV + kriged IC ----- #
+                wells=wells,
+                transient=capture_zone_transient,
+                aquifer_sy=aquifer_sy,
+                aquifer_ss=aquifer_ss,
+                sim_years=sim_years,
+                n_periods=n_periods,
+                river_reaches=river_reaches,
+                streambed_conductance_m2_day=streambed_conductance_m2_day,
+                starting_head_by_cell=starting_head_by_cell,
             )
         # multi_species is a GWF+GWT deck (ONE shared GWF + N transport models),
         # NOT a GWF-only archetype, so it dispatches to its own builder.

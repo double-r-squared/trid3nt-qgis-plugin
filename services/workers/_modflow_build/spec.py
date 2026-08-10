@@ -52,9 +52,16 @@ _REQUIRED_RUN_ARGS: tuple[str, ...] = (
     "duration_days",
 )
 
-#: PARSER VERSION -- bump on a top-level job_spec shape change. Named in the
-#: strict-field error (ADR 0158).
-_PARSER_VERSION = "modflow-jobspec-1"
+#: PARSER VERSION -- bump on a change to the run_args the worker deck-builder
+#: accepts (ADR 0158 strict-field error names it). Bumped to -2 for the ADR 0215
+#: wellhead-reeval part 2: ``build_modflow_deck`` now accepts the capture_zone
+#: WELLFIELD (``wells``), transient flag (``capture_zone_transient``), NHD RIV
+#: (``river_reaches``), and kriged per-cell IC (``starting_head_by_cell``). These
+#: flow through the OPEN ``run_args`` passthrough into the typed
+#: ``build_modflow_deck`` signature, so a MISNAMED variant of any of them raises a
+#: loud TypeError at the call site (proven by the worker rejection tests) rather
+#: than silently no-op'ing -- the ADR 0148 failure mode this version guards.
+_PARSER_VERSION = "modflow-jobspec-2"
 
 #: Every top-level job_spec key this worker reads. Unlike ``run_args`` (an
 #: intentionally-open passthrough dict -- see the module docstring: it is

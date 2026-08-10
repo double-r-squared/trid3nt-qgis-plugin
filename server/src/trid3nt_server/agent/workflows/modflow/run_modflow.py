@@ -545,6 +545,60 @@ def resolve_river_polyline_lonlat(
     return coords
 
 
+def resolve_river_reaches_lonlat(
+    river_geometry_uri: str,
+    *,
+    max_reaches: int = 12,
+    max_vertices_per_reach: int = 120,
+) -> list[list[tuple[float, float]]]:
+    """Resolve a river-geometry artifact to a list of ``(lon, lat)`` reach polylines.
+
+    The MULTI-reach analogue of ``resolve_river_polyline_lonlat`` for the NHD RIV
+    capture-zone boundary (ADR 0215 item 4): every LineString reach in the
+    artifact is returned (downsampled) so the adapter can drape the whole reach
+    network onto the grid as RIV cells, not just the single longest flowline.
+    Returns the reaches longest-first, capped at ``max_reaches``. NEVER raises on
+    an empty/unreadable artifact -- returns ``[]`` so the caller falls back to the
+    CHD ring alone (a loud, degrade-not-fail path).
+    """
+    try:
+        import geopandas as gpd  # type: ignore[import-not-found]
+        from shapely.geometry import LineString, MultiLineString  # type: ignore[import-not-found]
+
+        suffix = ".fgb" if not river_geometry_uri.lower().endswith(
+            (".json", ".geojson")
+        ) else ".geojson"
+        tmp = Path(tempfile.mkdtemp(prefix="riv-reaches-")) / f"river{suffix}"
+        tmp.write_bytes(_read_vector_bytes(river_geometry_uri))
+        gdf = gpd.read_file(str(tmp), engine="pyogrio")
+        gdf = gdf[gdf.geometry.notna()]
+        if gdf.crs is None:
+            gdf = gdf.set_crs("EPSG:4326")
+        elif str(gdf.crs).upper() not in {"EPSG:4326", "WGS84"}:
+            gdf = gdf.to_crs("EPSG:4326")
+        lines: list = []
+        for geom in gdf.geometry:
+            if isinstance(geom, LineString):
+                lines.append(geom)
+            elif isinstance(geom, MultiLineString):
+                lines.extend(list(geom.geoms))
+        lines = sorted(lines, key=lambda ln: ln.length, reverse=True)[:max_reaches]
+        reaches: list[list[tuple[float, float]]] = []
+        for ln in lines:
+            coords = [(float(x), float(y)) for (x, y) in ln.coords]
+            if len(coords) > max_vertices_per_reach:
+                step = max(1, len(coords) // max_vertices_per_reach)
+                coords = coords[::step] + [coords[-1]]
+            if len(coords) >= 2:
+                reaches.append(coords)
+        return reaches
+    except Exception as exc:  # noqa: BLE001 -- NHD reaches are best-effort
+        logger.warning(
+            "resolve_river_reaches_lonlat failed (non-fatal, CHD ring only): %s", exc
+        )
+        return []
+
+
 # --------------------------------------------------------------------------- #
 # Deck build + GCS staging
 # --------------------------------------------------------------------------- #
@@ -710,6 +764,37 @@ def _build_and_stage_multi_species(
     )
 
 
+def _wellfield_dicts(wells: Any) -> list[dict[str, Any]] | None:
+    """Normalize ``run_args.wells`` (WellSpec objects or JSON dicts) to adapter dicts.
+
+    The adapter's capture_zone WELLFIELD path (ADR 0215) takes a list of
+    ``{lon, lat, rate_m3_day, name}`` dicts. ``run_args.wells`` may be WellSpec
+    pydantic models (in-process) or plain dicts (after a JSON job_spec round-trip);
+    both normalize here. Returns None for an empty/absent field (the single-well
+    path, byte-identical to part 1).
+    """
+    if not wells:
+        return None
+    out: list[dict[str, Any]] = []
+    for w in wells:
+        if isinstance(w, dict):
+            out.append(
+                {
+                    "lon": float(w["lon"]), "lat": float(w["lat"]),
+                    "rate_m3_day": float(w.get("rate_m3_day") or 0.0),
+                    "name": w.get("name"),
+                }
+            )
+        else:
+            out.append(
+                {
+                    "lon": float(w.lon), "lat": float(w.lat),
+                    "rate_m3_day": float(w.rate_m3_day), "name": w.name,
+                }
+            )
+    return out
+
+
 def build_and_stage_modflow_deck(
     run_args: MODFLOWRunArgs,
     *,
@@ -849,6 +934,14 @@ def build_and_stage_modflow_deck(
             # Both None => the PRT deck falls back to the demo west->east CHD.
             regional_gradient_x=getattr(run_args, "regional_gradient_x", None),
             regional_gradient_y=getattr(run_args, "regional_gradient_y", None),
+            # --- capture_zone WELLFIELD + transient + NHD RIV + kriged IC (ADR 0215) #
+            # All default to the single-well steady demo path when unset.
+            wells=_wellfield_dicts(getattr(run_args, "wells", None)),
+            capture_zone_transient=bool(
+                getattr(run_args, "capture_zone_transient", False)
+            ),
+            river_reaches=getattr(run_args, "river_reaches", None),
+            starting_head_by_cell=getattr(run_args, "starting_head_by_cell", None),
         )
 
     # --- 1b. advanced-physics overrides (levers STEP 3) ---------------------

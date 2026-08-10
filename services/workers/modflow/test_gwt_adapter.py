@@ -1735,6 +1735,170 @@ def test_real_run_capture_zone_produces_pathlines(tmp_path):
 
 
 # =========================================================================== #
+# ADR 0215 wellhead-reeval part 2: multi-well WELLFIELD + transient + NHD RIV +
+# kriged per-cell IC on the capture_zone / wellhead_protection PRT path. Deck-
+# SHAPE asserts (no mf6) + a REAL mf6-run transient multi-well test that proves
+# the isochrones grow with travel time and the per-well allocation is nonempty.
+# =========================================================================== #
+
+# A 3-well field near the _PLATTE High Plains site (ADR 0215 live case).
+PLATTE_WELLS = [
+    {"lon": -98.42, "lat": 40.905, "rate_m3_day": 1600.0, "name": "M-1"},
+    {"lon": -98.395, "lat": 40.895, "rate_m3_day": 1000.0, "name": "M-2"},
+    {"lon": -98.445, "lat": 40.915, "rate_m3_day": 800.0, "name": "M-3"},
+]
+PLATTE_REACHES = [[(-98.46, 40.925), (-98.43, 40.905), (-98.40, 40.89)]]
+PLATTE_SPILL = dict(
+    spill_location_latlon=(40.905, -98.42),
+    contaminant="n/a",
+    release_rate_kg_s=1.0,
+    duration_days=1.0,
+    aquifer_k_ms=2.48e-6,  # SoilGrids-derived K at _PLATTE (ADR 0215 part 1)
+    porosity=0.198,
+)
+
+
+def _platte_kriged_ic(nrow: int, ncol: int) -> list[list[float]]:
+    """A gentle ENE-trending kriged-style IC on the deck-local datum (top=50 m)."""
+    return [[50.0 + 0.0013 * (c - ncol // 2) * 100.0 for c in range(ncol)]
+            for _ in range(nrow)]
+
+
+def test_capture_zone_multi_well_one_wel_record_per_well(tmp_path):
+    """A wellfield emits ONE WEL record per snapped well + carries them on the manifest."""
+    d = build_modflow_deck(
+        workdir=tmp_path, archetype="capture_zone", wells=PLATTE_WELLS, **PLATTE_SPILL
+    )
+    assert len(d.prt_well_cells) == 3
+    assert d.prt_well_names == ["M-1", "M-2", "M-3"]
+    # Every WEL rate is stored NEGATIVE (extraction) and matches the requested magnitude.
+    rates = sorted(abs(w[2]) for w in d.prt_well_cells)
+    assert rates == pytest.approx([800.0, 1000.0, 1600.0])
+    wel_text = (tmp_path / "gwf_model.wel").read_text().lower()
+    assert "maxbound  3" in wel_text or "maxbound 3" in wel_text.replace("  ", " ")
+
+
+def test_capture_zone_single_well_backcompat(tmp_path):
+    """No ``wells`` => the single-well path (byte-identical to part 1): 0 wellfield cells."""
+    d = build_modflow_deck(
+        workdir=tmp_path, archetype="capture_zone", **PLATTE_SPILL
+    )
+    # The primary well still populates prt_well_cells (one entry) for the release
+    # ring, but the deck is the single steady well (transient False, 1 period).
+    assert len(d.prt_well_cells) == 1
+    assert d.transient is False
+    assert d.n_stress_periods == 1
+    assert d.prt_river_cell_count == 0
+    assert not (tmp_path / "gwf_model.sto").exists()
+
+
+def test_capture_zone_transient_writes_sto_and_spinup(tmp_path):
+    """Transient => a GwfSto + a steady spin-up period 0 + N transient periods."""
+    d = build_modflow_deck(
+        workdir=tmp_path, archetype="capture_zone", wells=PLATTE_WELLS,
+        capture_zone_transient=True, sim_years=10.0, n_periods=5, **PLATTE_SPILL
+    )
+    assert d.transient is True
+    assert d.n_stress_periods == 6  # 1 spin-up + 5 transient
+    assert d.n_transient_periods == 5
+    assert d.aquifer_sy == pytest.approx(DEFAULT_AQUIFER_SY)
+    assert d.aquifer_ss == pytest.approx(DEFAULT_AQUIFER_SS)
+    assert (tmp_path / "gwf_model.sto").is_file()
+    # The wellfield is OFF in the steady spin-up (period 0) and ON in period 2+.
+    wel_text = (tmp_path / "gwf_model.wel").read_text().lower()
+    assert "begin period  2" in wel_text or "begin period 2" in wel_text
+
+
+def test_capture_zone_river_reaches_drape_riv_cells(tmp_path):
+    """NHD reaches rasterize to RIV cells + a RIV package file (ADR 0215 item 4)."""
+    d = build_modflow_deck(
+        workdir=tmp_path, archetype="capture_zone", wells=PLATTE_WELLS,
+        river_reaches=PLATTE_REACHES, **PLATTE_SPILL
+    )
+    assert d.prt_river_cell_count > 0
+    assert (tmp_path / "gwf_model.riv").is_file()
+
+
+def test_capture_zone_no_reaches_no_riv(tmp_path):
+    """No reaches => no RIV file, CHD ring alone (byte-identical to part 1)."""
+    d = build_modflow_deck(
+        workdir=tmp_path, archetype="capture_zone", wells=PLATTE_WELLS, **PLATTE_SPILL
+    )
+    assert d.prt_river_cell_count == 0
+    assert not (tmp_path / "gwf_model.riv").exists()
+
+
+def test_capture_zone_kriged_ic_written_as_array(tmp_path):
+    """A per-cell kriged IC writes a non-constant strt array (ADR 0215 item 3)."""
+    n = int(round(2 * PRT_DOMAIN_HALF_WIDTH_M / PRT_CELL_SIZE_M))
+    ic = _platte_kriged_ic(n, n)
+    build_modflow_deck(
+        workdir=tmp_path, archetype="capture_zone", wells=PLATTE_WELLS,
+        starting_head_by_cell=ic, **PLATTE_SPILL
+    )
+    ic_text = (tmp_path / "gwf_model.ic").read_text().upper()
+    # A per-cell array is written INTERNAL/OPEN-CLOSE, not a single CONSTANT scalar.
+    assert "CONSTANT" not in ic_text.split("STRT")[-1][:60]
+
+
+def test_capture_zone_kriged_ic_shape_mismatch_raises(tmp_path):
+    """A mis-shaped starting_head_by_cell is a loud error, never silently ignored."""
+    with pytest.raises(ValueError, match="starting_head_by_cell shape"):
+        build_modflow_deck(
+            workdir=tmp_path, archetype="capture_zone", wells=PLATTE_WELLS,
+            starting_head_by_cell=[[50.0, 50.0], [49.0, 49.0]], **PLATTE_SPILL
+        )
+
+
+@requires_mf6
+def test_real_run_transient_multiwell_allocation_and_evolving_zones(tmp_path):
+    """Full transient multi-well workflow: build (3 wells + RIV + kriged IC +
+    transient), run mf6, per-period reverse, run PRT, and assert (a) the per-well
+    particle allocation is nonempty for every well and (b) the isochrone areas
+    GROW with travel time (the zones evolve, ADR 0215 item 1)."""
+    import pandas as pd
+    from shapely.geometry import MultiPoint
+
+    mf6 = _mf6_bin()
+    n = int(round(2 * PRT_DOMAIN_HALF_WIDTH_M / PRT_CELL_SIZE_M))
+    d = build_modflow_deck(
+        workdir=tmp_path, archetype="capture_zone", wells=PLATTE_WELLS,
+        capture_zone_transient=True, sim_years=10.0, n_periods=5,
+        river_reaches=PLATTE_REACHES, starting_head_by_cell=_platte_kriged_ic(n, n),
+        capture_zone_travel_time_years=[1.0, 5.0, 10.0], n_particles=24,
+        **PLATTE_SPILL,
+    )
+    assert d.transient is True and len(d.prt_well_cells) == 3
+    assert d.prt_river_cell_count > 0
+
+    rc, out = _run_mf6(d.sim_dir, mf6)
+    assert rc == 0 and "Normal termination of simulation" in out, out[-1500:]
+
+    prt_ws = build_and_run_prt_from_gwf(deck=d, gwf_run_dir=d.sim_dir, mf6_bin=mf6)
+    df = pd.read_csv(prt_ws / "prtmodel.trk.csv").dropna(subset=["x", "y"])
+    assert len(df) > 0
+
+    # (a) Per-well allocation from the uppercased boundname prefix "W{k}_".
+    df["well_k"] = df["name"].astype(str).str.extract(r"(?i)^w(\d+)_")
+    alloc = df.dropna(subset=["well_k"]).groupby("well_k")[["iprp", "irpt"]].apply(
+        lambda g: g.drop_duplicates().shape[0]
+    )
+    assert len(alloc) == 3, f"expected 3 wells in allocation, got {dict(alloc)}"
+    assert (alloc > 0).all(), f"every well must capture particles: {dict(alloc)}"
+
+    # (b) Isochrone areas grow with travel time.
+    df["tt_yr"] = df["t"].abs() / 365.25
+    areas = {}
+    for T in (1.0, 5.0, 10.0):
+        sub = df[df["tt_yr"] <= T]
+        if len(sub) >= 3:
+            areas[T] = MultiPoint(list(zip(sub["x"], sub["y"]))).convex_hull.area
+    assert len(areas) >= 2, f"need >=2 tiers with a hull, got {areas}"
+    ordered = [areas[t] for t in sorted(areas)]
+    assert ordered[-1] > ordered[0], f"outer tier must exceed inner: {areas}"
+
+
+# =========================================================================== #
 # sprint-18 Wave-5: saltwater_intrusion via MF6 BUY variable-density flow +
 # GWT salinity transport. Deck-SHAPE asserts (no mf6 required) + a REAL
 # mf6-run test that builds the deck, runs mf6, reads the salinity .ucn, and

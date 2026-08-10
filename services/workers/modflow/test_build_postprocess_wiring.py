@@ -191,3 +191,69 @@ def test_build_modflow_deck_rejects_unknown_run_args_key_via_typeerror():
     deck_kwargs = build_deck_kwargs_from_spec(spec)
     with pytest.raises(TypeError, match="aquifer_k_m_s"):
         gwt_adapter.build_modflow_deck(workdir="/tmp/does-not-run", write=False, **deck_kwargs)
+
+
+def test_parser_version_is_bumped_for_adr_0215_fields():
+    """The parser version names the ADR 0215 wellhead-reeval part-2 fields."""
+    from services.workers._modflow_build.spec import _PARSER_VERSION
+
+    assert _PARSER_VERSION == "modflow-jobspec-2"
+
+
+@pytest.mark.parametrize(
+    "field, value",
+    [
+        ("wells", [{"lon": -98.42, "lat": 40.905, "rate_m3_day": 1200.0, "name": "M-1"}]),
+        ("capture_zone_transient", True),
+        ("river_reaches", [[[-98.45, 40.92], [-98.43, 40.905]]]),
+    ],
+)
+def test_job_spec_accepts_adr_0215_capture_zone_fields(field, value, tmp_path):
+    """Each new ADR 0215 run_arg flows through the OPEN passthrough into the typed
+    build_modflow_deck signature and is CONSUMED (builds a deck) -- not dropped."""
+    from services.workers._modflow_build import (
+        build_deck_kwargs_from_spec,
+        validate_job_spec,
+    )
+    from services.workers.modflow import gwt_adapter
+
+    spec = validate_job_spec({
+        "schema_version": 1, "engine": "modflow",
+        "run_args": {
+            "spill_location_latlon": [40.905, -98.42], "contaminant": "n/a",
+            "release_rate_kg_s": 1.0, "duration_days": 1.0,
+            "aquifer_k_ms": 2.48e-6, "porosity": 0.198,
+            "archetype": "capture_zone",
+            field: value,
+        },
+    })
+    deck_kwargs = build_deck_kwargs_from_spec(spec)
+    deck = gwt_adapter.build_modflow_deck(workdir=str(tmp_path), write=False, **deck_kwargs)
+    assert deck.archetype == "capture_zone"
+
+
+@pytest.mark.parametrize(
+    "typo",
+    ["well", "capture_zone_transients", "river_reach", "starting_head_by_cells"],
+)
+def test_job_spec_rejects_typo_of_adr_0215_fields_via_typeerror(typo, tmp_path):
+    """A MISNAMED variant of any new field raises a loud TypeError at the deck
+    call (ADR 0148 guard), never silently no-op'ing the intended field."""
+    from services.workers._modflow_build import (
+        build_deck_kwargs_from_spec,
+        validate_job_spec,
+    )
+    from services.workers.modflow import gwt_adapter
+
+    spec = validate_job_spec({
+        "schema_version": 1, "engine": "modflow",
+        "run_args": {
+            "spill_location_latlon": [40.905, -98.42], "contaminant": "n/a",
+            "release_rate_kg_s": 1.0, "duration_days": 1.0,
+            "archetype": "capture_zone",
+            typo: True,
+        },
+    })
+    deck_kwargs = build_deck_kwargs_from_spec(spec)
+    with pytest.raises(TypeError, match=typo):
+        gwt_adapter.build_modflow_deck(workdir=str(tmp_path), write=False, **deck_kwargs)

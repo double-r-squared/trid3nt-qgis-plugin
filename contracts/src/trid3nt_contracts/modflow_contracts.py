@@ -59,6 +59,7 @@ DEFAULT_STREAMBED_THICKNESS_M: float = 1.0  # streambed (M) for K-derived conduc
 __all__ = [
     "MODFLOWRunArgs",
     "SpeciesSpec",
+    "WellSpec",
     "MultiSpeciesPlumeResult",
     "PlumeLayerURI",
     "SeepageLayerURI",
@@ -157,6 +158,45 @@ class SpeciesSpec(GraceModel):
     sorption_kd: float | None = Field(default=None, ge=0.0)
     decay_per_day: float | None = Field(default=None, ge=0.0)
     parent: str | None = None
+
+
+class WellSpec(GraceModel):
+    """One pumping well in a multi-well WHPA / capture-zone WELLFIELD (ADR 0215).
+
+    WHPA practice (US EPA 440/6-87-010; USGS modflow6-examples ex-prt-mp7-p03 for
+    transient PRT) delineates capture zones for a WELLFIELD of several wells, each
+    with its own extraction rate, not a single well. ``MODFLOWRunArgs.wells``
+    carries the field; the adapter emits ONE MF6 WEL record per snapped well cell
+    and releases a particle ring around EACH well so the postprocess can allocate
+    which well captures which particles.
+
+    Use this when:
+        Building one entry of ``MODFLOWRunArgs.wells`` for a multi-well
+        ``capture_zone`` / ``wellhead_protection`` run.
+
+    Do NOT use this for:
+        A single well (leave ``wells`` None and use the top-level
+        ``well_location_latlon`` + ``pumping_rate_m3_day`` -- byte-identical to
+        the pre-wellfield deck).
+
+    Fields:
+        lon: well longitude, EPSG:4326 (-180..180). Lon-first here (a WellSpec is
+            a lon/lat point per the NHD/BBox convention, NOT the lat-first
+            ``well_location_latlon`` tuple).
+        lat: well latitude, EPSG:4326 (-90..90).
+        rate_m3_day: sustained extraction rate as a POSITIVE magnitude, m^3/day
+            (> 0). The adapter applies the MF6 WEL sign internally (a negative
+            discharge removes water from the cell), so the caller passes a
+            positive number, exactly like ``pumping_rate_m3_day``.
+        name: OPTIONAL human label for the well (e.g. "Municipal-3"), carried into
+            the per-well allocation output for narration. None => the adapter
+            labels the well by its index ("well_0", "well_1", ...).
+    """
+
+    lon: float = Field(ge=-180.0, le=180.0)
+    lat: float = Field(ge=-90.0, le=90.0)
+    rate_m3_day: float = Field(gt=0.0)
+    name: str | None = None
 
 
 class MODFLOWRunArgs(EngineRunArgsMixin):
@@ -630,6 +670,76 @@ class MODFLOWRunArgs(EngineRunArgsMixin):
             "North-component (m/m) of the DEM-derived regional water-table gradient "
             "(see regional_gradient_x). Both components must be supplied together to "
             "enable georeferenced-gradient mode; either None => demo west->east."
+        ),
+    )
+
+    # --- multi-well WELLFIELD + transient + NHD RIV + kriged IC (ADR 0215) ---- #
+    # The wellhead-reeval part-2 upgrades to the capture_zone / wellhead_protection
+    # PRT path. ALL optional/defaulted -> additive; a run-args with none of them is
+    # byte-identical to the single-well steady demo deck (part 1).
+    wells: list[WellSpec] | None = Field(
+        default=None,
+        description=(
+            "Multi-well WELLFIELD for the capture_zone / wellhead_protection PRT "
+            "deck (US EPA 440/6-87-010; modflow6-examples ex-prt-mp7-p03). Each "
+            "WellSpec is a lon/lat point + a POSITIVE extraction rate (m^3/day) + "
+            "an optional name. The adapter emits ONE MF6 WEL record per snapped "
+            "well cell and releases a particle ring around EACH well; the "
+            "postprocess allocates which well captures which particles. When None "
+            "(the default) the deck uses the SINGLE ``well_location_latlon`` + "
+            "``pumping_rate_m3_day`` (byte-identical to the pre-wellfield deck). "
+            "Ignored for non-PRT archetypes (additive)."
+        ),
+    )
+    capture_zone_transient: bool = Field(
+        default=False,
+        description=(
+            "When True the capture_zone / wellhead_protection GWF solve is "
+            "TRANSIENT (a steady spin-up period 0 + N transient storage periods "
+            "via the GwfSto specific-yield/storage term), and the PRT tracks "
+            "particles backward through the per-period REVERSED budget so the "
+            "1/5/10-yr isochrones reflect the TIME-EVOLVING flow field a pumping "
+            "wellfield induces (US EPA 440/6-87-010; USGS ex-prt-mp7-p03 for "
+            "transient PRT). The transient schedule reuses ``sim_years`` / "
+            "``n_periods`` (the sustainable_yield transient knobs) with "
+            "``aquifer_sy`` / ``aquifer_ss`` storage. When False (the default) the "
+            "GWF solve is a single steady period (byte-identical to part 1). "
+            "Ignored for non-PRT archetypes (additive)."
+        ),
+    )
+    river_reaches: list[list[tuple[float, float]]] | None = Field(
+        default=None,
+        description=(
+            "NHD river-reach boundaries for the capture_zone / wellhead_protection "
+            "PRT deck (ADR 0215 item 4). Each reach is an ordered polyline of "
+            "``(lon, lat)`` vertices (lon-first, EPSG:4326) as returned by "
+            "``fetch_river_geometry`` / NLDI. The adapter rasterizes each reach "
+            "onto the model grid and drapes a RIV head-dependent boundary on the "
+            "traversed cells; the RIV stage is sampled from the kriged water-table "
+            "surface at each reach cell (``starting_head_by_cell``), the "
+            "conductance is a documented streambed default, and the perimeter CHD "
+            "ring is retained where no NHD feature bounds the domain. When None "
+            "(the default) no RIV cells are added and the demo/DEM CHD ring alone "
+            "orients the flow field (byte-identical to part 1). Ignored for "
+            "non-PRT archetypes (additive)."
+        ),
+    )
+    starting_head_by_cell: list[list[float]] | None = Field(
+        default=None,
+        description=(
+            "Per-cell initial head (IC ``strt``) for the capture_zone / "
+            "wellhead_protection GWF grid, one row per model row (north-first, "
+            "flopy convention) x one value per column, in the deck's LOCAL datum "
+            "(m; the PRT grid runs top=50 m / bottom=0 m). The composer samples "
+            "the shared kriged/trend water-table surface (ADR 0215 seam 2, "
+            "``water_table_interp.interpolate_water_table``) at each cell centre "
+            "and re-references it about the deck datum so the interior IC carries "
+            "the measured water-table CURVATURE a single gradient plane cannot "
+            "(the kriged per-cell IC, ADR 0215 item 3). This matters for the "
+            "TRANSIENT solve (the initial condition before pumping). When None "
+            "(the default) the IC is the uniform aquifer-top head (byte-identical "
+            "to part 1). Must be shape nrow x ncol when supplied. Ignored for "
+            "non-PRT archetypes (additive)."
         ),
     )
 
@@ -1125,6 +1235,41 @@ class CaptureZoneLayerURI(LayerURI):
             "Far-field capture-zone width (m), Grubb analytic B = Q / (K*b*i). The "
             "maximum cross-gradient width the well captures far up-gradient; a "
             "screening sanity ballpark against the PRT-delineated envelope."
+        ),
+    )
+    # --- multi-well allocation (ADR 0215; ADDITIVE, default-safe) -------------- #
+    well_capture_allocation: dict[str, Any] = Field(
+        default_factory=dict,
+        description=(
+            "Per-well capture allocation for a multi-well WELLFIELD run: which well "
+            "captured which particles (US EPA 440/6-87-010 wellfield WHPA). Keys "
+            "are the well labels (WellSpec.name or 'well_0', 'well_1', ...); each "
+            "value is a dict carrying that well's ``particle_count`` (particles "
+            "released around it that tracked), ``capture_area_km2`` (convex hull of "
+            "its own backtracked pathlines), ``rate_m3_day``, and its (lat, lon). "
+            "Empty {} for a single-well run (the legacy path). The agent narrates "
+            "the allocation so the user sees each well's zone of contribution."
+        ),
+    )
+    transient: bool = Field(
+        default=False,
+        description=(
+            "True when the capture zone was delineated on a TRANSIENT flow field "
+            "(steady spin-up + storage periods, per-period reversed PRT budget) so "
+            "the isochrones reflect the time-evolving wellfield drawdown (ADR 0215 "
+            "item 1); False for the single steady-period demo (part 1). Narrated so "
+            "the user knows whether the zones evolved with pumping time."
+        ),
+    )
+    river_cell_count: int = Field(
+        default=0,
+        ge=0,
+        description=(
+            "Number of NHD RIV head-dependent boundary cells draped onto the grid "
+            "from ``MODFLOWRunArgs.river_reaches`` (ADR 0215 item 4). 0 => no NHD "
+            "reaches bounded the domain (the demo/DEM CHD ring alone oriented the "
+            "flow field). Narrated so the user knows a real river boundary "
+            "constrained the capture zone."
         ),
     )
 

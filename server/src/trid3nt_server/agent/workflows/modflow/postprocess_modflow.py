@@ -3342,6 +3342,9 @@ def postprocess_capture_zone(
     k_m_per_day: float | None = None,
     aquifer_thickness_m: float | None = None,
     pumping_rate_m3_day: float | None = None,
+    well_specs: list[dict[str, Any]] | None = None,
+    transient: bool = False,
+    river_cell_count: int = 0,
 ) -> CaptureZoneLayerURI:
     """Convert MF6 PRT backward-tracking output into a ``CaptureZoneLayerURI``.
 
@@ -3686,6 +3689,36 @@ def postprocess_capture_zone(
             })
             pathline_count += 1
 
+    # --- Step 6b': per-well capture allocation (ADR 0215 item 1) --------------
+    # For a multi-well WELLFIELD the particle boundname is "W{k}_P{n}" (mf6
+    # UPPERCASES it), so the leading well index k allocates which well captured
+    # which particles. Each well's zone is the convex hull of ITS OWN backtracked
+    # pathlines (measured in true UTM). ``well_specs`` (name/lat/lon/rate per deck
+    # well, in index order) labels the allocation for narration. Empty {} for a
+    # single-well run.
+    well_capture_allocation: dict[str, Any] = {}
+    if "name" in df.columns and well_specs and len(well_specs) > 1:
+        well_k = df["name"].astype(str).str.extract(r"(?i)^w(\d+)_", expand=False)
+        for k_str, grp in df.assign(_wk=well_k).dropna(subset=["_wk"]).groupby("_wk"):
+            try:
+                k = int(k_str)
+            except (TypeError, ValueError):
+                continue
+            if k >= len(well_specs):
+                continue
+            spec = well_specs[k]
+            n_parts = int(grp[["iprp", "irpt"]].drop_duplicates().shape[0])
+            hull_local = MultiPoint(
+                list(zip(grp["x"].values, grp["y"].values))
+            ).convex_hull
+            label = str(spec.get("name") or f"well_{k}")
+            well_capture_allocation[label] = {
+                "particle_count": n_parts,
+                "capture_area_km2": round(_area_km2(hull_local), 6),
+                "rate_m3_day": abs(float(spec.get("rate_m3_day") or 0.0)),
+                "well_latlon": [spec.get("lat"), spec.get("lon")],
+            }
+
     # --- Step 6c: Grubb uniform-flow analytic screening ballpark --------------
     # Capture width B = Q / (K*b*i) and down-gradient stagnation distance
     # x0 = Q / (2*pi*K*b*i) (Grubb 1993, uniform-flow capture-zone analytic). A
@@ -3760,6 +3793,9 @@ def postprocess_capture_zone(
         ),
         stagnation_distance_m=stagnation_distance_m,
         capture_width_m=capture_width_m,
+        well_capture_allocation=well_capture_allocation,
+        transient=bool(transient),
+        river_cell_count=int(river_cell_count or 0),
     )
 
 

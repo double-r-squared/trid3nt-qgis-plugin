@@ -292,6 +292,7 @@ async def run_modflow_archetype_job(
             from trid3nt_server.agent.workflows.modflow.run_modflow import (
                 _import_gwt_adapter as _import_adapter,
                 _mf6_binary,
+                _wellfield_dicts,
                 build_modflow_deck as _build_modflow_deck,
             )
 
@@ -325,6 +326,16 @@ async def run_modflow_archetype_job(
                 ),
                 regional_gradient_x=getattr(run_args, "regional_gradient_x", None),
                 regional_gradient_y=getattr(run_args, "regional_gradient_y", None),
+                # ADR 0215: the WELLFIELD + transient + NHD RIV + kriged IC MUST be
+                # reconstructed identically here so the PRT phase reads the same
+                # prt_well_cells (release rings) + reversed per-period budget the
+                # staged GWF deck produced.
+                wells=_wellfield_dicts(getattr(run_args, "wells", None)),
+                capture_zone_transient=bool(
+                    getattr(run_args, "capture_zone_transient", False)
+                ),
+                river_reaches=getattr(run_args, "river_reaches", None),
+                starting_head_by_cell=getattr(run_args, "starting_head_by_cell", None),
             )
             mf6_bin = _mf6_binary()
 
@@ -380,6 +391,23 @@ async def run_modflow_archetype_job(
             _pp_kwargs["aquifer_thickness_m"] = 50.0
             _pp_kwargs["pumping_rate_m3_day"] = abs(
                 float(getattr(_deck, "pumping_rate_m3_day", 0.0) or 0.0)
+            )
+            # ADR 0215: per-well allocation + transient + NHD RIV narration. The
+            # per-well specs (name/lat/lon/rate, deck index order) come from the
+            # in-memory manifest so the postprocess can label which well captured
+            # which particles from the "W{k}_" boundname prefix.
+            _prt_cells = getattr(_deck, "prt_well_cells", None) or []
+            _prt_names = getattr(_deck, "prt_well_names", None) or []
+            _pp_kwargs["well_specs"] = [
+                {
+                    "name": (_prt_names[i] if i < len(_prt_names) else f"well_{i}"),
+                    "lat": c[3], "lon": c[4], "rate_m3_day": c[2],
+                }
+                for i, c in enumerate(_prt_cells)
+            ]
+            _pp_kwargs["transient"] = bool(getattr(_deck, "transient", False))
+            _pp_kwargs["river_cell_count"] = int(
+                getattr(_deck, "prt_river_cell_count", 0) or 0
             )
         layer: LayerURI = await asyncio.to_thread(
             lambda: postprocess_fn(_postprocess_uri, **_pp_kwargs)

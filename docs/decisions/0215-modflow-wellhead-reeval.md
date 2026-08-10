@@ -126,3 +126,60 @@ Hengl, Heuvelink & Rossiter (2007), Computers & Geosciences 33(10):1301-1315
 
 Supersedes nothing. The measured-heads gradient path (ADR 0166) is preserved and
 now routes its surface through the shared seam.
+
+## Part 2 outcome (landed) - the designed worker+contract+image wave
+
+The three "NOT landed" designs above are now SHIPPED and live-proven with real
+mf6 6.7.0 (both on the local-exec path and THROUGH the rebuilt worker image).
+
+**Contract** (`MODFLOWRunArgs`, additive): a `WellSpec` (lon/lat/rate/name) list
+`wells` (the WELLFIELD), a `capture_zone_transient` flag, an NHD `river_reaches`
+payload (list of lon/lat polylines), and a `starting_head_by_cell` kriged IC
+grid. `CaptureZoneLayerURI` grows `well_capture_allocation`, `transient`, and
+`river_cell_count`. Every field defaults to the single-well steady demo (part 1
+byte-identical). Parser version `modflow-jobspec-2`; a misnamed variant of any new
+field raises a loud TypeError at the deck call (rejection tests added).
+
+**Worker** (`_build_prt_capture_zone_deck` + `build_and_run_prt_from_gwf`):
+- ONE MF6 WEL record per snapped well (extraction sign applied); a particle ring
+  released around EACH well with a `W{k}_P{n}` boundname so the postprocess
+  allocates which well captures which particles.
+- Transient = a steady spin-up period 0 (wellfield OFF) + N transient GwfSto
+  storage periods (wellfield ON) via the shared `_add_transient_sto_tdis`; the PRT
+  TDIS mirrors the REVERSED per-period schedule and the FMI reads the per-period
+  reversed budget (the isochrones evolve with the drawdown; USGS ex-prt-mp7-p03).
+- NHD `river_reaches` rasterized onto the grid as RIV cells (stage sampled from
+  the kriged IC at each reach cell, a documented streambed conductance default);
+  the perimeter CHD ring is retained where no reach bounds the domain.
+- The uniform IC replaced by the per-cell kriged surface (`starting_head_by_cell`)
+  re-referenced about the deck datum so the interior carries the measured
+  water-table curvature (item 3). Shared `prt_grid_geometry` lets the composer
+  sample the surface at each cell centre before the deck exists.
+
+**Image law**: the worker image was rebuilt with absolute -f/context paths and
+BUMPED to mf6 6.7.0 (6.5.0 rejected the PRT deck: "UNKNOWN PRP OPTION:
+EXTEND_TRACKING" -- the capture-zone PRT was already 6.7.0-only), matching the
+production local-exec binary. SHA-256 pinned from the release asset digest. Docker
+history carries zero GRACE-2 refs. Behavior-proving smoke THROUGH the baked image
+built a transient 3-well + 57-RIV-cell deck, solved it, ran PRT, and asserted the
+1/5/10-yr zones grow (1.03/2.15/2.94 km2) with a nonempty 24/24/24 per-well
+allocation.
+
+**Live evidence** (real fetchers + real mf6):
+- _PLATTE (40.905/-98.42), TRANSIENT 3-well WHPA: soil K 2.477e-6 m/s (SoilGrids),
+  regression-kriging IC from 22 usable USGS wells (570 raw; basis NAVD88 x10 /
+  NGVD29-shifted x7 / DEM-minus-depth x5), measured gradient |grad| 1.30e-3 m/m
+  azimuth 73.5 deg, trend residual RMS 1.09 m -- all matching part 1. Isochrones
+  1.06/2.22/3.00 km2; per-well allocation 3.12/2.11/0.63 km2. `river_cell_count=0`
+  is HONEST: the nearest NHD reach is 4.78 km away, outside the 4.1 km domain, so
+  the CHD ring alone bounds it (the "where no NHD feature bounds the domain" rule).
+- Grand Island reach AOI (40.857/-98.412), the RIV-active companion: ALL FOUR
+  seams active -- soil K + regression-kriging IC (26 wells) + transient + NHD RIV
+  58 cells; isochrones 0.65/1.40/1.95 km2, per-well allocation 2.39/3.24/1.06 km2,
+  head-residual RMS 1.06 m over 26 wells (mean ~0, range -2.71..+3.70 m). This is
+  the fresh showcase case (`title_suffix="multi-well transient NHD RIV"`).
+
+Proofs: `docs/proof/templates/modflow_wellhead_protection_multiwell_transient_nhd_riv.png`
+(WHPA map: wells, 1/5/10-yr zones, NHD reaches, up-gradient pathline fan) +
+`..._chart.png` (computed-vs-measured heads + residual histogram). Offline
+matplotlib renders; NATE does the live QGIS/ESRI verification (working agreement).

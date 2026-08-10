@@ -70,6 +70,7 @@ _MEXBEACH = [-85.5522, 29.6983, -85.3976, 29.8517]     # ADR 0176 SFINCS quadtre
 _CRESCENT = [-124.24, 41.73, -124.16, 41.78]           # ADR 0148 GeoClaw tsunami
 _GALVESTON = [-95.2, 29.0, -94.2, 29.8]                # ADR 0168 surge shelf
 _PLATTE = [40.905, -98.42]                              # ADR 0165/0166 well (lat, lon)
+_GRAND_ISLAND_REACH = [40.857, -98.412]                 # ADR 0215 Wood River reach AOI (lat, lon)
 
 
 @dataclass
@@ -160,6 +161,22 @@ SHOWCASE: list[Showcase] = [
              {"aoi_latlon": _PLATTE, "well_location_latlon": _PLATTE,
               "travel_time_years": [5.0, 10.0, 25.0], "n_particles": 48},
              "ADR 0165/0166 Platte valley nr Grand Island NE, well 40.905/-98.42", 480),
+    Showcase("modflow_wellhead_protection",
+             {"aoi_latlon": _GRAND_ISLAND_REACH,
+              "wells": [
+                  {"lon": -98.412, "lat": 40.857, "rate_m3_day": 1600.0, "name": "GI-1"},
+                  {"lon": -98.40, "lat": 40.862, "rate_m3_day": 1100.0, "name": "GI-2"},
+                  {"lon": -98.425, "lat": 40.85, "rate_m3_day": 800.0, "name": "GI-3"},
+              ],
+              "transient": True, "sim_years": 10.0, "n_periods": 5,
+              "use_nhd_river_boundaries": True,
+              "travel_time_years": [1.0, 5.0, 10.0], "n_particles": 24},
+             "ADR 0215 wellhead-reeval part 2: 3-well WELLFIELD nr Grand Island NE with "
+             "soil-derived K + kriged/measured water-table IC + NHD RIV boundaries all "
+             "active on a TRANSIENT solve (steady spin-up + 5x 2-yr storage periods); "
+             "per-well capture allocation + 1/5/10-yr isochrones that evolve with the "
+             "drawdown (EPA 440/6-87-010; USGS ex-prt-mp7-p03)", 600,
+             title_suffix="multi-well transient NHD RIV"),
     # -- OpenQuake seismic ---------------------------------------------------
     Showcase("openquake_psha", {"bbox": _SF_BAY, "logic_tree": "gr_uncertainty"},
              "ADR 0149 PSHA logic-tree GR uncertainty, SF Bay AOI", 480),

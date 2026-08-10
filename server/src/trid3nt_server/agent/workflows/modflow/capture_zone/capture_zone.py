@@ -735,6 +735,63 @@ def _aquifer_k_caveat(
 
 
 # --------------------------------------------------------------------------- #
+# Kriged per-cell starting head (ADR 0215 item 3)
+# --------------------------------------------------------------------------- #
+
+
+def _build_kriged_starting_head(
+    surface: Any, lat: float, lon: float, wlat: float, wlon: float
+) -> list[list[float]] | None:
+    """Sample the kriged/trend water-table surface at each PRT cell centre.
+
+    Returns the ``starting_head_by_cell`` (nrow x ncol, north-first) the worker
+    writes as the GWF IC (ADR 0215 item 3). The surface's local east/north frame
+    is anchored at ``(wlat, wlon)`` (the ``_usable_well_heads`` origin); each cell
+    centre is converted to that frame with the same equirectangular formula, the
+    surface is sampled, and the field is RE-REFERENCED about the domain-centre
+    head so it sits on the deck-local datum (aquifer top) consistent with the CHD
+    plane. The interior thus carries the measured water-table CURVATURE a single
+    gradient plane cannot. NEVER raises -- returns None so the caller keeps the
+    uniform-IC fallback.
+    """
+    try:
+        import numpy as np
+
+        from trid3nt_server.agent.workflows.modflow.run_modflow import (
+            _import_gwt_adapter,
+        )
+
+        adapter = _import_gwt_adapter()
+        geom = adapter.prt_grid_geometry(lat, lon)
+        top = float(adapter.PRT_AQUIFER_TOP_M)
+        clon = geom["cell_lon"]
+        clat = geom["cell_lat"]
+        m_per_deg_lat = 110_540.0
+        m_per_deg_lon = 111_320.0 * math.cos(math.radians(wlat))
+        east = (clon - wlon) * m_per_deg_lon
+        north = (clat - wlat) * m_per_deg_lat
+        heads = np.asarray(
+            surface.sample(east.ravel(), north.ravel()), float
+        ).reshape(clon.shape)
+        centre_head = float(
+            np.asarray(
+                surface.sample(
+                    (lon - wlon) * m_per_deg_lon, (lat - wlat) * m_per_deg_lat
+                ),
+                float,
+            ).ravel()[0]
+        )
+        ic = top + (heads - centre_head)
+        return [[float(v) for v in row] for row in ic]
+    except Exception as exc:  # noqa: BLE001 -- kriged IC is best-effort
+        logger.warning(
+            "capture_zone: kriged starting-head build failed (non-fatal, uniform "
+            "IC fallback): %s", exc
+        )
+        return None
+
+
+# --------------------------------------------------------------------------- #
 # Result envelope
 # --------------------------------------------------------------------------- #
 
@@ -797,6 +854,12 @@ async def model_capture_zone_scenario(
     measured_recency_years: float = MEASURED_RECENCY_YEARS,
     use_dem_gradient: bool = True,
     use_soil_k: bool = True,
+    # --- multi-well WELLFIELD + transient + NHD RIV + kriged IC (ADR 0215) ---- #
+    wells: list[Any] | None = None,
+    transient: bool = False,
+    sim_years: float | None = None,
+    n_periods: int | None = None,
+    use_nhd_river_boundaries: bool = False,
     compute_class: str = "standard",
     pipeline_emitter: Any | None = None,
 ) -> CaptureZoneResult:
@@ -859,13 +922,35 @@ async def model_capture_zone_scenario(
             f"'wellhead_protection'; got {archetype!r}."
         )
 
+    # --- Normalize the WELLFIELD (ADR 0215): ``wells`` (list of WellSpec-like
+    # objects/dicts) is the multi-well path; the single ``well_location_latlon``
+    # is the back-compat path. When wells are supplied the primary well seeds the
+    # legacy field so the honesty gate + AOI defaults still hold.
+    well_dicts: list[dict[str, Any]] = []
+    if wells:
+        for w in wells:
+            well_dicts.append(
+                {
+                    "lon": float(w["lon"] if isinstance(w, dict) else w.lon),
+                    "lat": float(w["lat"] if isinstance(w, dict) else w.lat),
+                    "rate_m3_day": float(
+                        (w.get("rate_m3_day") if isinstance(w, dict) else w.rate_m3_day)
+                        or 0.0
+                    ),
+                    "name": (w.get("name") if isinstance(w, dict) else w.name),
+                }
+            )
+        if well_location_latlon is None:
+            well_location_latlon = (well_dicts[0]["lat"], well_dicts[0]["lon"])
+
     # --- Honesty gate (Invariant 9): never fabricate the well -----------------
     if well_location_latlon is None:
         raise CaptureZoneInputError(
-            f"{archetype} requires a pumping-well location (well_location_latlon). "
-            "The well coordinates are a user input and are NEVER invented; ask the "
-            "user to supply the pumping-well lat/lon. The capture-zone polygon is "
-            "computed by MF6 backward particle tracking from the real well cell."
+            f"{archetype} requires a pumping-well location (well_location_latlon "
+            "or a non-empty wells list). The well coordinates are a user input and "
+            "are NEVER invented; ask the user to supply the pumping-well lat/lon. "
+            "The capture-zone polygon is computed by MF6 backward particle tracking "
+            "from the real well cell."
         )
 
     # Apply archetype-specific default tiers when the caller did not supply them.
@@ -931,6 +1016,7 @@ async def model_capture_zone_scenario(
     measured_fallback_reason: str | None = None
     used_wells: list[dict[str, Any]] = []
     interp_provenance: dict[str, Any] = {}
+    wt_surface: Any = None  # the kriged/trend WaterTableSurface (per-cell IC source)
 
     if use_measured_heads:
         try:
@@ -990,6 +1076,7 @@ async def model_capture_zone_scenario(
                         interpolate_water_table, used_wells
                     )
                     if surface is not None:
+                        wt_surface = surface
                         interp_provenance = surface.provenance()
                 else:
                     measured_fallback_reason = fit_reason
@@ -1056,6 +1143,52 @@ async def model_capture_zone_scenario(
             if porosity is None:
                 eff_porosity = pk.porosity
 
+    # --- Kriged per-cell IC (ADR 0215 item 3) --------------------------------- #
+    # Sample the kriged/trend water-table surface at each PRT cell centre so the
+    # GWF IC carries the measured water-table CURVATURE (matters for the transient
+    # solve). Only when a surface was fitted (measured-heads success); otherwise
+    # the worker keeps its uniform-IC fallback (loud, honest).
+    starting_head_by_cell: list[list[float]] | None = None
+    if wt_surface is not None:
+        starting_head_by_cell = await asyncio.to_thread(
+            _build_kriged_starting_head, wt_surface, lat, lon, wlat, wlon
+        )
+
+    # --- NHD river boundaries (ADR 0215 item 4) ------------------------------- #
+    # Fetch the NHD flowline network around the AOI and drape it as RIV cells. A
+    # fetch/read failure degrades LOUDLY to the CHD ring alone (never fails the
+    # solve). ``fetch_river_geometry`` returns a flowline artifact the shared
+    # ``resolve_river_reaches_lonlat`` reads into per-reach lon/lat polylines.
+    river_reaches: list[list[tuple[float, float]]] | None = None
+    if use_nhd_river_boundaries:
+        try:
+            from trid3nt_server.agent.workflows.modflow.run_modflow import (
+                resolve_river_reaches_lonlat,
+            )
+
+            river_entry = TOOL_REGISTRY.get("fetch_river_geometry")
+            if river_entry is not None:
+                d = DEM_GRADIENT_HALF_DEG
+                riv_bbox = [wlon - d, wlat - d, wlon + d, wlat + d]
+                async with substep(current_emitter(), "fetch_river_geometry"):
+                    riv_layer = await asyncio.to_thread(
+                        lambda: river_entry.fn(bbox=riv_bbox)
+                    )
+                riv_uri = (
+                    riv_layer.get("uri") if isinstance(riv_layer, dict)
+                    else getattr(riv_layer, "uri", None)
+                )
+                if riv_uri:
+                    reaches = await asyncio.to_thread(
+                        resolve_river_reaches_lonlat, riv_uri
+                    )
+                    river_reaches = reaches or None
+        except Exception as exc:  # noqa: BLE001 -- NHD boundaries are best-effort
+            logger.warning(
+                "capture_zone NHD river-boundary step failed (non-fatal, CHD ring "
+                "only): %s", exc
+            )
+
     try:
         run_args = MODFLOWRunArgs(
             spill_location_latlon=(lat, lon),
@@ -1068,6 +1201,13 @@ async def model_capture_zone_scenario(
             n_particles=int(n_particles),
             regional_gradient_x=grad_x,
             regional_gradient_y=grad_y,
+            # ADR 0215: multi-well WELLFIELD + transient + NHD RIV + kriged IC.
+            wells=(well_dicts or None),
+            capture_zone_transient=bool(transient),
+            sim_years=sim_years,
+            n_periods=n_periods,
+            river_reaches=river_reaches,
+            starting_head_by_cell=starting_head_by_cell,
             **_aquifer_overrides(eff_k, eff_porosity, None, None),
         )
     except Exception as exc:  # noqa: BLE001  -  pydantic ValidationError
@@ -1255,6 +1395,12 @@ async def modflow_capture_zone(
     n_particles: int = 16,
     aquifer_k_ms: float | None = None,
     porosity: float | None = None,
+    # ADR 0215: multi-well WELLFIELD + transient + NHD RIV boundaries.
+    wells: list[Any] | None = None,
+    transient: bool = False,
+    sim_years: float | None = None,
+    n_periods: int | None = None,
+    use_nhd_river_boundaries: bool = False,
     compute_class: str = "standard",
     # absorb LLM-invented kwargs.
     **_extra_ignored: Any,
@@ -1327,6 +1473,11 @@ async def modflow_capture_zone(
             archetype="capture_zone",
             aquifer_k_ms=aquifer_k_ms,
             porosity=porosity,
+            wells=wells,
+            transient=bool(transient),
+            sim_years=sim_years,
+            n_periods=n_periods,
+            use_nhd_river_boundaries=bool(use_nhd_river_boundaries),
             compute_class=compute_class,
             pipeline_emitter=None,
         )

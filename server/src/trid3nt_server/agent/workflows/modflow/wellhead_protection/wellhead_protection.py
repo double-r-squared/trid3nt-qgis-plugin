@@ -66,6 +66,12 @@ async def modflow_wellhead_protection(
     n_particles: int = 16,
     aquifer_k_ms: float | None = None,
     porosity: float | None = None,
+    # ADR 0215: multi-well WELLFIELD + transient + NHD RIV boundaries.
+    wells: list[Any] | None = None,
+    transient: bool = False,
+    sim_years: float | None = None,
+    n_periods: int | None = None,
+    use_nhd_river_boundaries: bool = False,
     compute_class: str = "standard",
     # absorb LLM-invented kwargs.
     **_extra_ignored: Any,
@@ -135,6 +141,11 @@ async def modflow_wellhead_protection(
             archetype="wellhead_protection",
             aquifer_k_ms=aquifer_k_ms,
             porosity=porosity,
+            wells=wells,
+            transient=bool(transient),
+            sim_years=sim_years,
+            n_periods=n_periods,
+            use_nhd_river_boundaries=bool(use_nhd_river_boundaries),
             compute_class=compute_class,
             pipeline_emitter=None,
         )
