@@ -250,6 +250,23 @@ class ReachConfig:
     # the constant-rain peak-timing lag). Empty/None -> the constant design-storm
     # native path (rain_intensity_mm_per_hr) is used, byte-identical to before.
     rain_hyetograph_blocks: list = None  # type: ignore[assignment]
+    # CONTINUOUS SOIL-MOISTURE STORE (ADR 0213). When soil_store is True and a
+    # rain_hyetograph_blocks GROSS series is set, the worker transforms the gross
+    # hyetograph into a NET rainfall-excess hyetograph through a Michel et al.
+    # (2005) continuous SCS-CN production store (level V, capacity S, recovery
+    # timescale tau), then feeds that net series to the engine through a uniform
+    # CN=100 pass-through (the engine adds no further abstraction). This replaces
+    # the static per-event curve number with a dynamic antecedent STATE: the
+    # store fills during rain and drains between storms over recovery_h, so a
+    # single parameter set carries antecedent wetness a static CN cannot. S is the
+    # calibration knob (soil_store_capacity_mm), recovery_h the drying-timescale
+    # lever, init_mm the initial level V0 (from the antecedent-precipitation
+    # spin-up the agent computes). None/False -> the static-CN native paths above
+    # run unchanged.
+    soil_store: bool = False
+    soil_store_capacity_mm: float = None  # type: ignore[assignment]  # S (max retention)
+    soil_store_recovery_h: float = None   # type: ignore[assignment]  # tau (drying timescale)
+    soil_store_init_mm: float = None      # type: ignore[assignment]  # V0 (initial store level)
     node_cn2_file: str = ""             # staged per-node CN2 field basename
     node_manning_file: str = ""         # staged per-node Manning field basename
     outlet_lonlat: tuple = None         # type: ignore[assignment]  # pour-point (lon, lat)

@@ -8,6 +8,7 @@ scripts/sandbox/telemac/rog_offline_smoke.py and the C4 Coweeta proof.
 
 from __future__ import annotations
 
+import math
 import sys
 from pathlib import Path
 
@@ -224,3 +225,103 @@ def test_parse_mass_balance_reads_engine_closure():
     assert out["accumulated_rainfall_m"] == 0.15
     assert out["source_volume_m3"] == 25.96
     assert out["listing_peak_boundary_flux_m3s"] == 5.6872
+
+
+# --------------------------------------------------------------------------- #
+# continuous soil-moisture store (ADR 0213) -- hand-computed fixtures.
+# --------------------------------------------------------------------------- #
+def test_soil_store_dry_infiltrates_all():
+    """An empty store (V0=0) has runoff coeff 1-(1-0)^2 = 0: the first pulse
+    fully infiltrates (net excess 0)."""
+    net, a = R.soil_moisture_excess(
+        [[3600.0, 10.0]], capacity_mm=100.0, recovery_h=1.0e12, init_mm=0.0)
+    assert net == [[3600.0, 0.0]]
+    assert a["soil_store_excess_mm"] == 0.0
+    assert a["soil_store_infiltration_mm"] == 10.0
+
+
+def test_soil_store_full_runs_off_all():
+    """A full store (V0=S) has runoff coeff 1: the pulse fully runs off."""
+    net, a = R.soil_moisture_excess(
+        [[3600.0, 10.0]], capacity_mm=100.0, recovery_h=1.0e12, init_mm=100.0)
+    assert net == [[3600.0, 10.0]]
+    assert a["soil_store_excess_mm"] == 10.0
+
+
+def test_soil_store_half_full_quadratic_coeff():
+    """At fill V/S=0.5 the runoff coeff is 1-(0.5)^2 = 0.75 (Michel eq): 10 mm
+    gross -> 7.5 mm excess."""
+    net, a = R.soil_moisture_excess(
+        [[3600.0, 10.0]], capacity_mm=100.0, recovery_h=1.0e12, init_mm=50.0)
+    assert net == [[3600.0, 7.5]]
+
+
+def test_soil_store_recovery_drains_between_steps():
+    """A dry step drains the store toward empty over tau: V0=50, dt=1 h, tau=1 h
+    -> drain = 50*(1-e^-1) = 31.606 mm, final level 18.394 mm."""
+    net, a = R.soil_moisture_excess(
+        [[3600.0, 0.0]], capacity_mm=100.0, recovery_h=1.0, init_mm=50.0)
+    assert net == [[3600.0, 0.0]]
+    assert abs(a["soil_store_drain_mm"] - 50.0 * (1.0 - math.exp(-1.0))) < 1e-3
+    assert abs(a["soil_store_final_level_mm"] - 18.394) < 1e-2
+
+
+def test_soil_store_mass_balance_closes():
+    """gross == excess + (final_level - init) + drain, to ~1e-9, on a multi-step
+    series with rain AND recovery active."""
+    blocks = [[3600.0, 20.0], [7200.0, 0.0], [10800.0, 15.0], [14400.0, 0.0]]
+    net, a = R.soil_moisture_excess(
+        blocks, capacity_mm=80.0, recovery_h=48.0, init_mm=25.0)
+    lhs = a["soil_store_gross_mm"]
+    rhs = (a["soil_store_excess_mm"]
+           + (a["soil_store_final_level_mm"] - a["soil_store_init_mm"])
+           + a["soil_store_drain_mm"])
+    assert abs(lhs - rhs) < 1e-6
+    assert abs(a["soil_store_mass_residual_mm"]) < 1e-6
+
+
+def test_soil_store_recovery_reduces_second_pulse_excess():
+    """The store's whole point: recovery between two identical pulses makes the
+    SECOND pulse run off LESS than with no recovery (a fast-draining store
+    recovers antecedent capacity a static cumulative CN cannot). Two 30 mm
+    pulses 48 h apart (dry between)."""
+    blocks = ([[3600.0, 30.0]]
+              + [[3600.0 + i * 3600.0, 0.0] for i in range(1, 48)]
+              + [[3600.0 + 48 * 3600.0, 30.0]])
+    # renumber t_end monotonically
+    blocks = [[float((i + 1) * 3600), mm] for i, (_, mm) in enumerate(blocks)]
+    net_norecov, _ = R.soil_moisture_excess(
+        blocks, capacity_mm=80.0, recovery_h=1.0e12, init_mm=20.0)
+    net_recov, _ = R.soil_moisture_excess(
+        blocks, capacity_mm=80.0, recovery_h=48.0, init_mm=20.0)
+    p2_norecov = net_norecov[-1][1]
+    p2_recov = net_recov[-1][1]
+    assert p2_recov < p2_norecov
+
+
+def test_soil_store_rejects_bad_params():
+    with pytest.raises(R.RogInputError):
+        R.soil_moisture_excess([[3600.0, 5.0]], capacity_mm=0.0,
+                               recovery_h=10.0, init_mm=0.0)
+    with pytest.raises(R.RogInputError):
+        R.soil_moisture_excess([[3600.0, 5.0]], capacity_mm=50.0,
+                               recovery_h=-1.0, init_mm=0.0)
+    with pytest.raises(R.RogInputError):
+        R.soil_moisture_excess([[3600.0, -5.0]], capacity_mm=50.0,
+                               recovery_h=10.0, init_mm=0.0)
+
+
+def test_soil_store_net_never_exceeds_gross():
+    """Net excess per interval is bounded by the gross rain (0 <= rc <= 1)."""
+    blocks = [[3600.0, 5.0], [7200.0, 40.0], [10800.0, 2.0]]
+    net, _ = R.soil_moisture_excess(
+        blocks, capacity_mm=30.0, recovery_h=24.0, init_mm=10.0)
+    for (t_g, g), (t_n, n) in zip(blocks, net):
+        assert 0.0 <= n <= g + 1e-9
+
+
+def test_soil_store_passthrough_cn_is_100():
+    """The pass-through CN yields SCS S = 0 so the engine abstracts nothing on
+    the soil-store path (the store IS the infiltration model)."""
+    assert R.SOIL_STORE_PASSTHROUGH_CN == 100.0
+    assert 25400.0 / R.SOIL_STORE_PASSTHROUGH_CN - 254.0 == 0.0

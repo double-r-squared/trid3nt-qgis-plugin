@@ -152,9 +152,11 @@ class TelemacManifestUnknownFieldsError(ValueError):
 
 #: PARSER VERSION -- bump on a ReachConfig field addition/rename/retirement.
 #: Named in the strict-field error (ADR 0158). -3 added the ADR 0196
-#: rain-on-grid fields; -4 adds the ADR 0206 time-varying native hyetograph
-#: field (rain_hyetograph_blocks).
-_PARSER_VERSION = "telemac-reach-4"
+#: rain-on-grid fields; -4 added the ADR 0206 time-varying native hyetograph
+#: field (rain_hyetograph_blocks); -5 adds the ADR 0213 continuous
+#: soil-moisture-store fields (soil_store, soil_store_capacity_mm,
+#: soil_store_recovery_h, soil_store_init_mm).
+_PARSER_VERSION = "telemac-reach-5"
 
 
 def _reach_config(data_dir: Path, reach_overrides: dict[str, Any]) -> Any:
@@ -809,8 +811,33 @@ def run_rog_pipeline(
     blocks = getattr(cfg, "rain_hyetograph_blocks", None)
     hyeto_file = None
     hyeto_stats: dict[str, Any] = {}
+    soil_audit: dict[str, Any] = {}
     runoff_path = str(getattr(cfg, "runoff_path", "native"))
-    if blocks:
+    if blocks and getattr(cfg, "soil_store", False):
+        # CONTINUOUS SOIL-MOISTURE STORE (ADR 0213): transform the GROSS
+        # hyetograph to NET rainfall-excess through the Michel-2005 store, then
+        # feed the net series to the engine on a uniform CN=100 pass-through so
+        # the engine's SCS-CN abstracts nothing (the store IS the infiltration
+        # model on this path -- no double counting).
+        cap = getattr(cfg, "soil_store_capacity_mm", None)
+        rec = getattr(cfg, "soil_store_recovery_h", None)
+        if cap is None or rec is None:
+            raise R.RogInputError(
+                "TELEMAC_ROG_SOIL_STORE_UNCONFIGURED",
+                "soil_store=True requires soil_store_capacity_mm and "
+                "soil_store_recovery_h; got "
+                f"capacity={cap!r} recovery={rec!r}.")
+        net_blocks, soil_audit = R.soil_moisture_excess(
+            blocks, capacity_mm=float(cap), recovery_h=float(rec),
+            init_mm=float(getattr(cfg, "soil_store_init_mm", 0.0) or 0.0))
+        cn2 = np.full(m["npoin"], R.SOIL_STORE_PASSTHROUGH_CN)
+        R.write_cn_map(cn_map, m["X"], m["Y"], cn2)  # rewrite as pass-through
+        hyeto_file = str(data_dir / R.ROG_HYETO)
+        hyeto_stats = R.write_hyetograph_file(
+            hyeto_file, net_blocks, float(getattr(cfg, "duration_s", 3600.0)))
+        R.stage_raindef3_fortran(str(data_dir / R.ROG_USER_FORTRAN_DIR))
+        runoff_path = "soil_store"
+    elif blocks:
         hyeto_file = str(data_dir / R.ROG_HYETO)
         hyeto_stats = R.write_hyetograph_file(
             hyeto_file, blocks, float(getattr(cfg, "duration_s", 3600.0)))
@@ -848,6 +875,7 @@ def run_rog_pipeline(
         "friction_zones": fric_stats["n_zones"],
         "wall_s": round(time.time() - t0, 1),
         **hyeto_stats,
+        **soil_audit,
     }
     if not ok:
         metrics["error"] = "TELEMAC did not reach CORRECT END OF RUN"

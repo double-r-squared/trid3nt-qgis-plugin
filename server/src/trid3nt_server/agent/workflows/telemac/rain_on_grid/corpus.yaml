@@ -10,3 +10,5 @@ telemac_rain_on_grid:
 - peak flow and runoff volume at the basin outlet from a storm of a given intensity and duration
 - overland rainfall-runoff on a triangular mesh of the watershed interior, TELEMAC rain on grid
 - how much water runs off this drainage basin during a heavy rain event, curve number infiltration
+- multi-storm sequence over a watershed with soil-moisture recovery between storms, continuous rainfall-runoff
+- back-to-back storms on a basin, the second peak should be smaller because the soil dried out between them

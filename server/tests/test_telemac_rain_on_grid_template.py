@@ -63,6 +63,43 @@ def test_fetch_hyetograph_blocks_rejects_bad_window(monkeypatch):
         ROG._fetch_hyetograph_blocks((-83.4, 35.0, -83.3, 35.1), "no-separator", 0.0)
 
 
+def test_spin_up_soil_v0_fills_from_antecedent(monkeypatch):
+    """ADR 0213: the soil-store V0 is spun up from the antecedent AORC series; a
+    wetter antecedent -> a higher V0, and V0 never exceeds the capacity S."""
+    from trid3nt_server.agent.tools import TOOL_REGISTRY
+    from trid3nt_server.agent.workflows.telemac.rain_on_grid import rain_on_grid as ROG
+
+    def _stub(precip):
+        class _S:
+            fn = staticmethod(lambda **kw: {"precip_mm": precip})
+        return _S()
+
+    aoi = (-83.47, 35.02, -83.42, 35.06)
+    monkeypatch.setitem(TOOL_REGISTRY, "fetch_aorc_precip", _stub([5.0] * 240))
+    v_wet = ROG._spin_up_soil_v0(aoi, "2018-02-10/2018-02-11", 300.0, 120.0)
+    monkeypatch.setitem(TOOL_REGISTRY, "fetch_aorc_precip", _stub([1.0] * 240))
+    v_dry = ROG._spin_up_soil_v0(aoi, "2018-02-10/2018-02-11", 300.0, 120.0)
+    assert v_wet > v_dry >= 0.0
+    assert v_wet <= 300.0  # never over capacity
+
+
+def test_soil_store_requires_capacity_and_window():
+    """soil_store without a capacity, or without an mrms_window, raises loudly."""
+    import asyncio
+
+    from trid3nt_server.agent.workflows.telemac.rain_on_grid.rain_on_grid import (
+        TelemacRainOnGridError, model_telemac_rain_on_grid,
+    )
+    with pytest.raises(TelemacRainOnGridError, match="mrms_window"):
+        asyncio.run(model_telemac_rain_on_grid(
+            location="x", bbox=(-83.47, 35.02, -83.42, 35.06), pour_point=None,
+            curve_number=None, antecedent_moisture="normal",
+            design_storm_mm_per_hr=25.0, storm_duration_hr=6.0,
+            sim_duration_hr=None, mrms_window=None, observed_gauge_id=None,
+            mesh_uri=None, compute_class="medium", soil_store=True,
+            soil_store_capacity_mm=300.0, soil_recovery_hr=120.0))
+
+
 def test_amc_word_maps_to_scs_condition():
     from trid3nt_server.agent.workflows.telemac.rain_on_grid.rain_on_grid import _AMC
 

@@ -425,6 +425,115 @@ def stage_raindef3_fortran(user_fortran_dir: str) -> str:
 
 
 # --------------------------------------------------------------------------- #
+# 6c. continuous soil-moisture store: gross hyetograph -> net rainfall-excess.
+# --------------------------------------------------------------------------- #
+#: uniform curve number fed to the engine on the soil-store path. CN=100 => the
+#: SCS maximum retention S = 25400/CN - 254 = 0, so the engine's SCS-CN abstracts
+#: nothing and routes exactly the NET excess the store already computed (no
+#: double counting); the store IS the infiltration model on this path.
+SOIL_STORE_PASSTHROUGH_CN = 100.0
+
+
+def soil_moisture_excess(
+    blocks: Any, *, capacity_mm: float, recovery_h: float, init_mm: float,
+) -> tuple[list, dict[str, Any]]:
+    """Michel et al. (2005) continuous SCS-CN soil-moisture-accounting store.
+
+    Transforms a GROSS block hyetograph ``[[t_end_s, gross_mm], ...]`` (gross
+    rainfall per interval, ``t`` from 0) into a NET rainfall-excess block
+    hyetograph in the SAME format. A single production store of capacity
+    ``S = capacity_mm`` holds level ``V`` (mm), initialized at ``V = init_mm``.
+    Per interval of gross rain ``P`` (Michel et al. 2005, WRR 41 W02011 -- the
+    soil-moisture-accounting reformulation of SCS-CN; with the initial
+    abstraction folded into the store's initial level the instantaneous runoff
+    coefficient is ``dQ/dP = 1 - (1 - V/S)^2``)::
+
+        rc = 1 - (1 - V/S)^2            # runoff coefficient at the current fill
+        q  = rc * P                     # rainfall excess (runoff) this interval
+        f  = P - q  ->  V += f          # infiltration fills the store
+
+    Between and within storms the store drains toward empty over the recovery
+    timescale ``tau = recovery_h`` (lumped drainage + evapotranspiration); each
+    interval of length ``dt`` (from the block spacing)::
+
+        drain = V * (1 - exp(-dt / tau))  ->  V -= drain
+
+    so a store wetted by an early storm recovers before a later one -- the
+    dynamic antecedent STATE a static per-event curve number cannot carry
+    (a fixed CN either resets each event or, applied cumulatively, exhausts on a
+    multi-storm sequence). ``S`` is the calibration knob, ``tau`` the recovery
+    lever, ``init_mm`` the antecedent-derived initial level.
+
+    Returns ``(net_blocks, audit)``. The audit closes the water balance exactly:
+    ``gross_mm == excess_mm + (final_level - init_mm) + drain_mm`` (the residual
+    is reported for the mass check)."""
+    S = float(capacity_mm)
+    tau_h = float(recovery_h)
+    V = float(init_mm)
+    if not S > 0.0:
+        raise RogInputError(
+            "TELEMAC_ROG_SOIL_STORE_CAPACITY",
+            f"soil-store capacity must be > 0 mm; got {S}.")
+    if not tau_h > 0.0:
+        raise RogInputError(
+            "TELEMAC_ROG_SOIL_STORE_RECOVERY",
+            f"soil-store recovery timescale must be > 0 h; got {tau_h}.")
+    if V < 0.0:
+        raise RogInputError(
+            "TELEMAC_ROG_SOIL_STORE_INIT",
+            f"soil-store initial level must be >= 0 mm; got {V}.")
+    V = min(V, S)  # a store cannot start over capacity
+
+    net_blocks: list[list[float]] = []
+    t_prev = 0.0
+    gross_tot = 0.0
+    excess_tot = 0.0
+    infil_tot = 0.0
+    drain_tot = 0.0
+    for t_end, mm in blocks:
+        t_end = float(t_end)
+        mm = float(mm)
+        if t_end <= t_prev:
+            raise RogInputError(
+                "TELEMAC_ROG_SOIL_STORE_NONMONOTONE",
+                f"hyetograph times must strictly increase; got t_end={t_end} "
+                f"after {t_prev}.")
+        if mm < 0.0:
+            raise RogInputError(
+                "TELEMAC_ROG_SOIL_STORE_NEGATIVE",
+                f"gross interval rainfall must be >= 0; got {mm} mm.")
+        dt_s = t_end - t_prev
+        gross_tot += mm
+        fill = min(1.0, max(0.0, V / S))
+        rc = 1.0 - (1.0 - fill) ** 2
+        q = rc * mm
+        infil = mm - q
+        V += infil
+        excess_tot += q
+        infil_tot += infil
+        # recovery (drying) over this interval; tau in hours, dt in seconds.
+        drain = V * (1.0 - math.exp(-(dt_s / 3600.0) / tau_h))
+        V -= drain
+        drain_tot += drain
+        net_blocks.append([t_end, round(q, 6)])
+        t_prev = t_end
+
+    residual = gross_tot - (excess_tot + (V - float(init_mm)) + drain_tot)
+    audit = {
+        "soil_store_capacity_mm": round(S, 4),
+        "soil_store_recovery_h": round(tau_h, 4),
+        "soil_store_init_mm": round(float(min(float(init_mm), S)), 4),
+        "soil_store_gross_mm": round(gross_tot, 4),
+        "soil_store_excess_mm": round(excess_tot, 4),
+        "soil_store_infiltration_mm": round(infil_tot, 4),
+        "soil_store_drain_mm": round(drain_tot, 4),
+        "soil_store_final_level_mm": round(V, 4),
+        "soil_store_mass_residual_mm": round(residual, 9),
+    }
+    return net_blocks, audit
+
+
+# --------------------------------------------------------------------------- #
 # 7. author the RoG steering deck.
 # --------------------------------------------------------------------------- #
 def _cas_real(v: float) -> str:

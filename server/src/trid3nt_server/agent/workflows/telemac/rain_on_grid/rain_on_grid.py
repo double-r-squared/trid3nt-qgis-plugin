@@ -100,6 +100,9 @@ async def telemac_rain_on_grid(
     storm_duration_hr: float = 6.0,
     sim_duration_hr: float | None = None,
     mrms_window: str | None = None,
+    soil_store: bool = False,
+    soil_store_capacity_mm: float | None = None,
+    soil_recovery_hr: float = 120.0,
     observed_gauge_id: str | None = None,
     mesh_uri: str | None = None,
     compute_class: str = "medium",
@@ -111,7 +114,15 @@ async def telemac_rain_on_grid(
     infiltration (per-node CN from NLCD land cover) on a delineated catchment
     meshed from a real 3DEP DEM; planning-grade single-storm flash-flood demo, not
     a calibrated rainfall-runoff model. Single-storm ~10-20 h events only (no
-    baseflow / no snow / no multi-peak return flow).
+    baseflow / no snow). ``soil_store`` (ADR 0213) swaps the static curve number
+    for a continuous soil-moisture store, which recovers antecedent capacity
+    BETWEEN storms -- it fixes the multi-peak second-peak overshoot a static CN
+    exhausts on (Ball Creek: +116% -> -11%) and sharpens single-event shape +
+    timing (aligned NSE 0.51 -> 0.75, lag 10.8 h -> 7.8 h), but it still adds NO
+    subsurface return flow / baseflow, and its antecedent state is
+    rainfall-driven, so it does NOT transfer across a SEASONAL wetness difference
+    that antecedent rainfall points the wrong way on (a dormant-season saturated
+    basin is not captured).
 
     THE tool for "how much runoff / peak discharge from a storm over this
     watershed", "rain falls on the catchment and floods the valley", "rainfall-
@@ -126,8 +137,10 @@ async def telemac_rain_on_grid(
     storm; ``mrms_window`` ("start/end" dates) drives the REAL time-varying
     hourly hyetograph instead (native SCS-CN per-timestep, improved peak SHAPE +
     timing over a constant storm; residual lag is forcing/mesh-bound, and there
-    is still no subsurface return flow); ``observed_gauge_id`` wires NSE/R2 vs a
-    USGS-NWIS gauge.
+    is still no subsurface return flow); ``soil_store`` (needs ``mrms_window``)
+    turns on the continuous store, ``soil_store_capacity_mm`` is its retention
+    calibration knob and ``soil_recovery_hr`` its between-storm drying timescale;
+    ``observed_gauge_id`` wires NSE/R2 vs a USGS-NWIS gauge.
 
     Params:
         location: place naming the catchment (geocoded). Supply this OR ``bbox``.
@@ -139,6 +152,13 @@ async def telemac_rain_on_grid(
         design_storm_mm_per_hr: constant storm intensity (native SCS-CN path).
         storm_duration_hr: rain-on duration (h).
         sim_duration_hr: total sim length (h); defaults to storm_duration_hr.
+        soil_store: continuous soil-moisture store instead of the static CN
+            (ADR 0213); requires ``mrms_window`` (needs the real hyetograph +
+            antecedent). Recommended for MULTI-STORM windows.
+        soil_store_capacity_mm: store retention capacity S (mm), the calibration
+            knob (larger = less runoff); required when ``soil_store``.
+        soil_recovery_hr: between-storm drying timescale tau (h); the antecedent
+            recovery lever (smaller = drains faster between storms).
         observed_gauge_id: USGS NWIS gauge id for the NSE/R2 overlay.
         mesh_uri: OPTIONAL user-supplied watershed SELAFIN (skips delineation).
     """
@@ -147,7 +167,10 @@ async def telemac_rain_on_grid(
         curve_number=curve_number, antecedent_moisture=antecedent_moisture,
         design_storm_mm_per_hr=design_storm_mm_per_hr,
         storm_duration_hr=storm_duration_hr, sim_duration_hr=sim_duration_hr,
-        mrms_window=mrms_window, observed_gauge_id=observed_gauge_id,
+        mrms_window=mrms_window, soil_store=soil_store,
+        soil_store_capacity_mm=soil_store_capacity_mm,
+        soil_recovery_hr=soil_recovery_hr,
+        observed_gauge_id=observed_gauge_id,
         mesh_uri=mesh_uri, compute_class=compute_class,
     )
 
@@ -170,6 +193,9 @@ async def model_telemac_rain_on_grid(
     observed_gauge_id: str | None,
     mesh_uri: str | None,
     compute_class: str,
+    soil_store: bool = False,
+    soil_store_capacity_mm: float | None = None,
+    soil_recovery_hr: float = 120.0,
 ) -> Any:
     """Deterministic rain-on-grid composer (geocode -> mesh -> CN -> solve ->
     depth COG). Inlined here (the ``telemac_river_dye`` analogue)."""
@@ -183,6 +209,22 @@ async def model_telemac_rain_on_grid(
     )
 
     amc = _AMC.get(str(antecedent_moisture).strip().lower(), 2)
+
+    # Fail fast on soil-store misconfiguration BEFORE any mesh/network work
+    # (ADR 0213): the store needs the real hyetograph + its antecedent history
+    # (mrms_window) and a retention capacity to calibrate against.
+    if soil_store:
+        if not mrms_window:
+            raise TelemacRainOnGridError(
+                "TELEMAC_ROG_SOIL_STORE_NEEDS_WINDOW",
+                "soil_store requires mrms_window (the real hyetograph + its "
+                "antecedent history); it cannot run on a hypothetical design "
+                "storm.")
+        if soil_store_capacity_mm is None:
+            raise TelemacRainOnGridError(
+                "TELEMAC_ROG_SOIL_STORE_NO_CAPACITY",
+                "soil_store requires soil_store_capacity_mm (the retention "
+                "calibration knob, mm).")
 
     # --- Stage 1: resolve pour point, THEN the analysis AOI ----------------- #
     # The pour point is resolved FIRST: when it is supplied the analysis AOI is
@@ -252,12 +294,27 @@ async def model_telemac_rain_on_grid(
     # constant design storm is used (the historical native path). The design-storm
     # knobs stay for un-dated / hypothetical storms.
     hyeto_blocks: list | None = None
+    soil_params: dict | None = None
     if mrms_window:
         hyeto_blocks, hyeto_series, sim_from_hyeto = await asyncio.to_thread(
             _fetch_hyetograph_blocks, aoi, mrms_window,
             float((sim_duration_hr or 0.0)) * 3600.0)
         decision = select_runoff_path(hyetograph_mm=hyeto_series)
         sim_s = sim_from_hyeto
+        if soil_store:
+            # ADR 0213: continuous store instead of static CN. Spin up the
+            # initial store level V0 from the real antecedent precipitation, so
+            # the antecedent wetness is dynamic STATE (the whole point). The
+            # capacity/window preconditions were validated up front.
+            v0 = await asyncio.to_thread(
+                _spin_up_soil_v0, aoi, mrms_window,
+                float(soil_store_capacity_mm), float(soil_recovery_hr))
+            soil_params = {
+                "soil_store": True,
+                "soil_store_capacity_mm": float(soil_store_capacity_mm),
+                "soil_store_recovery_h": float(soil_recovery_hr),
+                "soil_store_init_mm": float(v0),
+            }
     else:
         decision = select_runoff_path(
             constant_intensity_mm_per_hr=float(design_storm_mm_per_hr))
@@ -271,7 +328,7 @@ async def model_telemac_rain_on_grid(
         sim_s=sim_s, runoff_path=decision.path, pour_point=pp,
         observed_gauge_id=observed_gauge_id, compute_class=compute_class,
         reach_name=(location or "watershed"), run_tag=run_tag,
-        hyetograph_blocks=hyeto_blocks)
+        hyetograph_blocks=hyeto_blocks, soil_params=soil_params)
     # Stamp the mesh provenance (consumed a case mesh / skipped an incompatible
     # one) onto the result envelope so the assumptions line narrates it honestly.
     if mesh_gate_note and layer is not None:
@@ -434,10 +491,46 @@ def _fetch_hyetograph_blocks(aoi, window: str, sim_s_hint: float):
     return blocks, mm, sim_s
 
 
+def _spin_up_soil_v0(aoi, window: str, capacity_mm: float, recovery_h: float,
+                     antecedent_days: int = 45) -> float:
+    """Initial soil-store level V0 (mm) at the window start, spun up by running
+    the Michel-2005 production store forward over the REAL antecedent AORC hourly
+    precipitation (from V=0). V0 IS the integrated antecedent wetness the store
+    carries into the event -- the dynamic-state initialization that replaces a
+    per-event AMC/CN choice (ADR 0213). Same store dynamics as the worker's
+    ``soil_moisture_excess`` so the spin-up and the run are one continuous model.
+    """
+    import datetime as _dt
+    import math as _math
+
+    from trid3nt_server.agent.tools import TOOL_REGISTRY
+
+    sep = "/" if "/" in window else (".." if ".." in window else None)
+    if not sep:
+        raise TelemacRainOnGridError(
+            "TELEMAC_ROG_BAD_WINDOW",
+            f"mrms_window must be 'start/end' dates; got {window!r}.")
+    start = window.split(sep, 1)[0].strip()
+    start_d = _dt.date.fromisoformat(start[:10])
+    ant_start = (start_d - _dt.timedelta(days=int(antecedent_days))).isoformat()
+    d = TOOL_REGISTRY["fetch_aorc_precip"].fn(
+        bbox=[float(v) for v in aoi], start_date=ant_start, end_date=start)
+    d = d if isinstance(d, dict) else getattr(d, "__dict__", {})
+    S = float(capacity_mm)
+    tau = float(recovery_h)
+    V = 0.0
+    for v in d.get("precip_mm", []):
+        mm = max(0.0, float(v))
+        fill = min(1.0, max(0.0, V / S))
+        V += mm - (1.0 - (1.0 - fill) ** 2) * mm
+        V -= V * (1.0 - _math.exp(-1.0 / tau))  # hourly antecedent step
+    return round(min(V, S), 4)
+
+
 async def _stage_solve_postprocess(
     *, mesh, node_cn2, node_manning, amc, curve_number, design_storm_mm_per_hr,
     sim_s, runoff_path, pour_point, observed_gauge_id, compute_class,
-    reach_name, run_tag, hyetograph_blocks=None,
+    reach_name, run_tag, hyetograph_blocks=None, soil_params=None,
 ):
     """Upload the mesh + node fields, dispatch run_solver, and rasterize the peak
     depth COG. Mirrors the ``telemac_river_dye`` run_solver seam."""
@@ -495,6 +588,10 @@ async def _stage_solve_postprocess(
         # ADR 0206: the gross hourly hyetograph drives the native SCS-CN
         # per-timestep (RAINDEF=3 FORTRAN FILE staged worker-side).
         reach["rain_hyetograph_blocks"] = hyetograph_blocks
+    if soil_params:
+        # ADR 0213: the continuous soil-moisture store transforms the gross
+        # hyetograph to net excess worker-side (uniform CN=100 pass-through).
+        reach.update(soil_params)
     manifest = {
         "reach": reach, "run_id": run_tag, "inputs": inputs, "telemac_args": [],
         "outputs": ["r2d_rog.slf", "rog_geometry.slf", "rog_max_fields.slf",

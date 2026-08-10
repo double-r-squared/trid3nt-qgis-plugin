@@ -212,3 +212,18 @@ live session, not an offline build step.
   {calibration,replication,multipeak}_chart.png` (hyetograph solves).
 - The RAINDEF=3 per-case-fortran pattern is a reusable seam for the other
   hardcoded `runoff_scs_cn.f` flags (e.g. STEEPSLOPECOR) without an image rebuild.
+
+## 6. RE-GRADE II (2026-08-10, ADR 0213) -- the soil store closes the multi-peak clause
+
+This ADR's two open residuals -- static-CN exhaustion on the multi-peak (+116%
+global / the second peak over-peaking) and the ~6.5 h coarse-mesh routing lag --
+are attacked in ADR 0213. A Michel et al. (2005) continuous soil-moisture store
+(preprocessing net-excess on the same RAINDEF=3 CN=100 pass-through seam, no
+engine rebuild) with a between-storm RECOVERY timescale fixes the second-peak
+overshoot (static CN 2nd peak +210% vs obs-2nd -> store -11%; recovery is the
+mechanism -- off, it reverts to +167%) and lifts the single-event aligned NSE
+0.51 -> 0.75 with the lag down 10.8 -> 7.8 h. A channel-resolving mesh halves the
+residual routing lag (7.8 -> 3.8 h). The store does NOT fix the Feb split-sample
+(the wetness difference is seasonal, and a rainfall-only antecedent store points
+the wrong way on it) and adds no baseflow -- the honest remaining rungs. See ADR
+0213.

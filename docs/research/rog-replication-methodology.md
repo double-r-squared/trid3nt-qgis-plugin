@@ -147,3 +147,20 @@ CN2 + Manning n, paper T2D column, HSG-B mid values). Protocol:
 4. Sign off the CN/Manning per-class bands (paper Table 1 analog) as calibration
    inputs.
 5. THEN build the registered template (ADR 0195 deferred build wave) and run.
+
+## Status update -- 2026-08-10 (ADR 0213, fidelity-ladder-2)
+
+The two ADR 0206 residuals were attacked with two levers on the same Ball Creek
+grade. LEVER 1 -- a Michel et al. (2005) continuous soil-moisture store
+(preprocessing net-excess on the RAINDEF=3 CN=100 pass-through seam, no engine
+rebuild): fixes the multi-peak second-peak overshoot (static CN +210% vs obs-2nd
+-> store -11%; the between-storm recovery timescale is the mechanism) and lifts
+the single-event calibration (aligned NSE 0.51 -> 0.75, lag 10.8 -> 7.8 h), but
+does NOT transfer Dec->Feb (rainfall-only antecedent is inverted vs the true
+seasonal wetness; an honest negative). LEVER 2 -- a channel-resolving mesh
+(channel edge 30 -> ~18 m): halves the routing lag (7.8 -> 3.8 h) at the cost of
+the overland sheet's peak/volume on the finer TIN. Continuity O(1e-15)
+throughout. Full account, ladder table, store formulation + mass audit: ADR 0213.
+The remaining rungs are an ET/baseflow-state-aware store (for the seasonal
+transfer + the missing recession/baseflow volume) and a channel-refined mesh
+that still delivers the hillslope sheet.

@@ -250,3 +250,23 @@ fidelity gaps are now cleanly the FORCING product + the coarse mesh + static-CN 
 no-soil-store, not the rain representation. See ADR 0206 for the full account,
 the RAINDEF=3 seam, the two-pulse discriminating physics test, and the refreshed
 proofs (regenerated in place from the hyetograph solves).
+
+## 9. RE-GRADE II (2026-08-10, ADR 0213) -- continuous soil-moisture store + fine mesh
+
+The two residuals this ADR attributed are attacked in ADR 0213. (1) The static
+SCS-CN is replaced by a Michel et al. (2005) continuous soil-moisture store
+(level V, capacity S, recovery tau, V0 spun up from the real 45-day antecedent),
+fed to the engine as NET excess on a uniform CN=100 pass-through (same RAINDEF=3
+seam, no engine rebuild). It DECISIVELY fixes the multi-peak second-peak
+overshoot (static CN +210% vs obs-2nd -> store -11%; turning recovery off
+reverts it to +167%) and sharpens the single-event calibration (aligned NSE
+0.51 -> 0.75, lag 10.8 -> 7.8 h), but it does NOT close the Dec->Feb transfer:
+Dec had MORE antecedent rain (612 vs 268 mm/45 d) yet Feb is the wetter-
+responding basin (obs runoff coeff 0.55 vs 0.34), so a rainfall-only store's
+antecedent signal is INVERTED vs the true (seasonal/subsurface) wetness -- an
+honest negative that isolates the next rung as an ET/baseflow-aware store.
+(2) A channel-resolving re-mesh (channel edge 30 -> ~18 m, 1834 -> 3533 nodes)
+HALVES the routing lag (7.8 -> 3.8 h), confirming the coarse-mesh-routing
+attribution -- at the honest cost of the thin overland sheet's peak/volume on the
+finer TIN. Continuity O(1e-15) throughout. See ADR 0213 for the ladder table,
+the store formulation + mass audit, and the refreshed proofs.
