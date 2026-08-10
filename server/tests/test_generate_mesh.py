@@ -11,6 +11,8 @@ logic (auto-default use, incompatible skip, no-mesh) with no live session.
 from __future__ import annotations
 
 import asyncio
+import tempfile
+from pathlib import Path
 
 import numpy as np
 import pytest
@@ -234,3 +236,112 @@ def test_gate_auto_default_off_declines():
         tool_name="telemac_rain_on_grid", engine="telemac", input_mode="auto",
         case_id="gateCaseC", default_use=False))
     assert d.use is False
+
+
+# --------------------------------------------------------------------------- #
+# HEC-RAS RoG channel-refined mesh (ADR 0211): mode, artifact bundle, compat, gate.
+# --------------------------------------------------------------------------- #
+from trid3nt_server.agent.workflows.mesh.artifact import (  # noqa: E402
+    HECRAS_INPUT_KEYS, materialize_hecras_mesh_inputs,
+)
+
+
+def _hecras_artifact(**over) -> MeshArtifact:
+    base = dict(
+        mesh_id="01HEC", name="Coweeta HEC-RAS RoG mesh", mode="hecras_rog",
+        display_uri="s3://cache/mesh/01HEC/cells_lonlat.fgb", slf_uri=None,
+        utm_epsg=32617, crs_authid="EPSG:32617", has_bathymetry=True,
+        node_count=56131, element_count=19462, bbox=(-83.47, 35.02, -83.36, 35.10),
+        engine_compat=["hecras"], cells_validated=True,
+        channel_target_size_m=22.0, background_size_m=90.0,
+        hecras_inputs={
+            "seeds": "s3://cache/mesh/01HEC/seeds.f64",
+            "breaklines": "s3://cache/mesh/01HEC/breaklines.json",
+            "local_dem": "s3://cache/mesh/01HEC/local_dem.tif",
+            "prep_json": "s3://cache/mesh/01HEC/prep.json",
+            "catchment": "s3://cache/mesh/01HEC/catchment.geojson",
+            "flowlines": "s3://cache/mesh/01HEC/flowlines.fgb"})
+    base.update(over)
+    return MeshArtifact(**base)
+
+
+def test_infer_mode_hecras_via_mesh_mode():
+    assert _infer_mode("hecras", (-83.4, 35.05), None) == "hecras_rog"
+
+
+def test_infer_mode_hecras_via_engine_hint():
+    assert _infer_mode("auto", (-83.4, 35.05), None, "hecras") == "hecras_rog"
+
+
+def test_hecras_artifact_json_roundtrip():
+    a = _hecras_artifact()
+    b = MeshArtifact.from_json(a.to_json())
+    assert b.mode == "hecras_rog" and b.slf_uri is None
+    assert b.hecras_inputs == a.hecras_inputs
+    assert b.cells_validated is True
+    assert b.channel_target_size_m == 22.0 and b.background_size_m == 90.0
+    assert b.engine_compat == ["hecras"]
+
+
+def test_hecras_compat_ok():
+    ok, reason = mesh_compatible_with_engine(_hecras_artifact(), "hecras")
+    assert ok is True and reason == "compatible"
+
+
+def test_hecras_compat_missing_bundle_key_declined_loud():
+    inputs = dict(_hecras_artifact().hecras_inputs)
+    inputs.pop("local_dem")
+    ok, reason = mesh_compatible_with_engine(
+        _hecras_artifact(hecras_inputs=inputs), "hecras")
+    assert ok is False and "local_dem" in reason
+
+
+def test_hecras_compat_unvalidated_declined():
+    ok, reason = mesh_compatible_with_engine(
+        _hecras_artifact(cells_validated=False), "hecras")
+    assert ok is False and "valid cell mesh" in reason
+
+
+def test_hecras_mesh_declines_telemac_and_schism():
+    a = _hecras_artifact()
+    assert mesh_compatible_with_engine(a, "telemac")[0] is False
+    assert mesh_compatible_with_engine(a, "schism")[0] is False
+    # ... and a TELEMAC watershed mesh declines HEC-RAS (no bundle):
+    assert mesh_compatible_with_engine(_artifact(), "hecras")[0] is False
+
+
+def test_gate_offers_hecras_mesh_auto_default():
+    stash_mesh_artifact("hecGate", _hecras_artifact(mesh_id="hg1"))
+    d = asyncio.run(gate_supplied_mesh(
+        tool_name="hecras_flood_2d", engine="hecras", input_mode="auto",
+        case_id="hecGate"))
+    assert d.use is True
+    assert d.artifact is not None and d.artifact.mesh_id == "hg1"
+
+
+def test_materialize_hecras_bundle_downloads_required_keys():
+    downloaded = {}
+
+    class _FakeS3:
+        def download_file(self, bucket, key, local):
+            downloaded[key.rsplit("/", 1)[-1]] = local
+            Path(local).write_text("x")
+
+    with tempfile.TemporaryDirectory() as td:
+        out = materialize_hecras_mesh_inputs(_hecras_artifact(), td, _FakeS3())
+    assert set(out).issuperset({"seeds", "breaklines", "local_dem", "prep_json"})
+    assert "seeds.f64" in downloaded and "prep.json" in downloaded
+
+
+def test_materialize_hecras_bundle_missing_required_raises():
+    inputs = dict(_hecras_artifact().hecras_inputs)
+    inputs.pop("seeds")
+
+    class _FakeS3:
+        def download_file(self, *a):
+            raise AssertionError("should not download when required key missing")
+
+    with tempfile.TemporaryDirectory() as td:
+        with pytest.raises(ValueError, match="seeds"):
+            materialize_hecras_mesh_inputs(
+                _hecras_artifact(hecras_inputs=inputs), td, _FakeS3())

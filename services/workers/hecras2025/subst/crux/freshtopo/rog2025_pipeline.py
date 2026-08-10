@@ -635,6 +635,56 @@ def run_rog2025(dem_tif, workdir, *, precip_mm_hr=25.0, storm_hours=6.0,
     return out
 
 
+def run_rog2025_prebuilt(prep_doc, local_dem, seeds_path, breaklines_path, workdir, *,
+                         precip_mm_hr=25.0, storm_hours=6.0, sim_hours=None,
+                         diffusion=True, catchment_geojson=None,
+                         image=AUTHORING_IMAGE_DEFAULT, probe_dir=PROBE_DIR_DEFAULT) -> dict:
+    """Consume a PRE-BUILT channel-refined mesh (ADR 0211): re-realize + solve.
+
+    The ``generate_mesh`` / gate consume path. Skips ``prepare_local_terrain`` AND
+    ``rog_refine.build_refined_inputs`` -- the local terrain frame (``prep_doc`` +
+    ``local_dem``) and the graded seeds/breaklines are the STORED artifact inputs, so
+    NO fresh DEM reprojection, delineation, or re-seeding happens. The 2025 driver
+    re-realizes the SAME cell mesh from the identical seeds (deterministic) and solves
+    it. Metrics are the graded-mesh (unstructured) path. Returns the run_rog2025 shape."""
+    workdir = Path(workdir)
+    workdir.mkdir(parents=True, exist_ok=True)
+    if sim_hours is None:
+        sim_hours = storm_hours
+
+    # reconstruct the frame; point local_dem at the downloaded terrain
+    doc = dict(prep_doc)
+    doc["local_dem"] = str(local_dem)
+    prep = Rog2025Prep(**{k: doc[k] for k in Rog2025Prep.__dataclass_fields__ if k in doc})
+
+    # stage the stored seeds/breaklines where the container sees them (the refine dir
+    # _author_prepare_solve points the driver at); no build_refined_inputs call.
+    stage_refine = Path(probe_dir) / f"rog_{workdir.name}" / "refine"
+    stage_refine.mkdir(parents=True, exist_ok=True)
+    (stage_refine / "seeds.f64").write_bytes(Path(seeds_path).read_bytes())
+    (stage_refine / "breaklines.json").write_bytes(Path(breaklines_path).read_bytes())
+
+    finest = doc.get("channel_m_realized") or max(1.0, prep.cell_size / 4.0)
+    dt_s = max(1.0, min(10.0, float(finest) / 15.0))
+    report_every = max(1, int(round(300.0 / dt_s)))
+    outlet_stage = prep.elev_min_m
+    result_h5, wall = _author_prepare_solve(
+        prep, workdir, precip_mm_hr=precip_mm_hr, storm_hours=storm_hours,
+        sim_hours=sim_hours, dt_s=dt_s, report_every=report_every,
+        outlet_slope=0.05, diffusion=diffusion, outlet_bc="normal_depth",
+        outlet_stage=outlet_stage, image=image, probe_dir=probe_dir, refine=True)
+    metrics = extract_metrics(result_h5, prep, precip_mm_hr=precip_mm_hr,
+                              storm_hours=sim_hours, catchment_geojson=catchment_geojson,
+                              unstructured=True)
+    return {
+        "result_h5": str(result_h5), "wall_s": round(wall, 1),
+        "prep": asdict(prep), "metrics": metrics, "dt_s": dt_s,
+        "precip_mm_hr": precip_mm_hr, "storm_hours": storm_hours, "sim_hours": sim_hours,
+        "engine": "HEC-RAS 2025 managed (CPU, beta)", "infiltration": "absent (rain-only)",
+        "mesh": "graded (channel-refined, consumed from a prebuilt generate_mesh artifact)",
+    }
+
+
 def _terrain_res_for(cell_size, channel_refinement):
     """Terrain raster step: must stay FINER than the finest mesh cell so face profiles
     sub-sample (a terrain at the mesh cell size makes prepare report 'Missing terrain

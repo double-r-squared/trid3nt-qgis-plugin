@@ -12,3 +12,7 @@ generate_mesh:
 - mesh the valley network of this watershed and save it as a layer
 - generate the model mesh / domain for this area and keep it in the case
 - produce a bathymetric mesh of the estuary for a hydrodynamic solver
+- build a channel-refined HEC-RAS rain-on-grid mesh I can inspect then solve on
+- author a graded HEC-RAS 2D cell mesh, fine along the river and coarse on the hillslopes
+- make the HEC-RAS rain-on-grid mesh for this catchment so I can review it before running
+- generate a HEC-RAS mesh refined to the channel network for a design-storm run

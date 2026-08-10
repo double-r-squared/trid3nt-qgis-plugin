@@ -54,6 +54,8 @@ logger = logging.getLogger("trid3nt_server.agent.workflows.hecras.flood_2d.flood
 __all__ = [
     "hecras_flood_2d",
     "model_hecras_flood_2d",
+    "model_hecras_flood_2d_rog",
+    "acquire_channel_inputs",
     "HecrasFlood2dError",
     "TEMPLATE_CARD",
 ]
@@ -421,14 +423,15 @@ def _fetch_dem_local(bbox: list[float]) -> str:
     return str(tmp)
 
 
-def _acquire_channel_inputs(bbox: list[float], workdir: str):
-    """Delineated catchment + channel network for the AOI (ADR 0210 refined mesh).
+def acquire_channel_inputs(bbox: list[float], workdir: str, pour_point=None):
+    """Delineated catchment + channel network for the AOI (ADR 0210/0211 refined mesh).
 
-    Reuses the TELEMAC rain-on-grid acquisition: the pour point is the lowest-elevation
-    DEM cell in the bbox (the drainage outlet), the catchment is delineated there, and
+    Reuses the TELEMAC rain-on-grid acquisition: an explicit ``pour_point`` (lon,lat)
+    is the drainage outlet when given (the user-named catchment outlet); otherwise it
+    is the lowest-elevation DEM cell in the bbox. The catchment is delineated there and
     the channel network is ``fetch_river_geometry``. Returns ``(catchment_geojson_path,
     flowlines_path)`` or ``(None, None)`` on any failure -- the caller then degrades to
-    the uniform mesh honestly."""
+    the uniform mesh honestly. Shared with ``generate_mesh`` mode=hecras (ADR 0211)."""
     import json as _json
 
     try:
@@ -442,21 +445,30 @@ def _acquire_channel_inputs(bbox: list[float], workdir: str):
 
         rundir = Path(workdir) / "channel"
         rundir.mkdir(parents=True, exist_ok=True)
-        dem_layer = TOOL_REGISTRY["fetch_dem"].fn(bbox=list(bbox), resolution_m=30)
+        # D8 delineation needs a NATIVELY GEOGRAPHIC (EPSG:4326) DEM -- the lon/lat frame
+        # the index-space outlet snap expects. 3DEP is projected (EPSG:5070) and its
+        # snap mis-maps (a spurious "pour point outside the window"), so delineate on
+        # Copernicus GLO-30 (the same choice the TELEMAC watershed mesher makes).
+        dem_layer = TOOL_REGISTRY["fetch_dem"].fn(
+            bbox=list(bbox), resolution_m=30, source="copernicus")
         dem_uri = getattr(dem_layer, "uri", None) or (
             dem_layer.get("uri") if isinstance(dem_layer, dict) else None)
         from trid3nt_server.agent.tools.simulation.solver.solver import _download_object
         dem_local = rundir / "dem.tif"
         _download_object(str(dem_uri), dem_local)
-        # pour point = lowest-elevation cell (the outlet the catchment drains to)
-        with rasterio.open(dem_local) as src:
-            arr = src.read(1, masked=True)
-            r, c = np.unravel_index(int(np.ma.argmin(arr)), arr.shape)
-            px, py = src.xy(r, c)
-            if str(src.crs).upper() not in ("EPSG:4326", "OGC:CRS84"):
-                from pyproj import Transformer
-                px, py = Transformer.from_crs(
-                    src.crs, "EPSG:4326", always_xy=True).transform(px, py)
+        if pour_point is not None:
+            # the user-named catchment outlet (matches generate_mesh's pour_point).
+            px, py = float(pour_point[0]), float(pour_point[1])
+        else:
+            # pour point = lowest-elevation cell (the outlet the catchment drains to)
+            with rasterio.open(dem_local) as src:
+                arr = src.read(1, masked=True)
+                r, c = np.unravel_index(int(np.ma.argmin(arr)), arr.shape)
+                px, py = src.xy(r, c)
+                if str(src.crs).upper() not in ("EPSG:4326", "OGC:CRS84"):
+                    from pyproj import Transformer
+                    px, py = Transformer.from_crs(
+                        src.crs, "EPSG:4326", always_xy=True).transform(px, py)
         catch, _outlet, area_km2, cell_count = _delineate_catchment(
             rundir, list(bbox), (float(px), float(py)), str(dem_uri))
         catch_path = rundir / "catchment.geojson"
@@ -767,11 +779,38 @@ async def model_hecras_flood_2d_rog(
     eq_key = str(equation_set or "").strip().lower()
     diffusion = eq_key != "full_swe"
 
-    geom_value = ("channel-refined 2D mesh (HEC-RAS 2025)" if channel_refinement
-                  else "structured 2D area (HEC-RAS 2025)")
+    # --- ADR 0211: consume a pre-built HEC-RAS mesh from the case, if one exists + the
+    # user accepts. A generate_mesh mode=hecras artifact carries the graded seeds +
+    # breaklines + local terrain frame; the gate offers it (labeled default USE), and
+    # an accepted mesh is re-realized + solved directly (no fresh delineation / seeding
+    # / channel acquisition). Declined / absent / incompatible -> unchanged 0209/0210. --
+    from trid3nt_server.agent.workflows.mesh.precondition_gate import gate_supplied_mesh
+    from trid3nt_server.agent.tools.simulation.solver.solver import _get_s3_client
+
+    supplied_note: str | None = None
+    supplied_art = None
+    try:
+        mesh_decision = await gate_supplied_mesh(
+            tool_name="hecras_flood_2d", engine="hecras", input_mode=input_mode,
+            s3_client=_get_s3_client())
+        supplied_note = mesh_decision.note
+        if mesh_decision.use and mesh_decision.artifact is not None:
+            supplied_art = mesh_decision.artifact
+    except Exception as exc:  # noqa: BLE001 -- the gate never blocks the run
+        logger.warning("hecras_flood_2d RoG: mesh precondition gate skipped (%s)", exc)
+
+    consumed = supplied_art is not None
+    if consumed:
+        channel_refinement = None  # the case mesh defines the resolution field
+        geom_value = f"consumed case mesh {supplied_art.name!r} (HEC-RAS 2025, channel-refined)"
+    else:
+        geom_value = ("channel-refined 2D mesh (HEC-RAS 2025)" if channel_refinement
+                      else "structured 2D area (HEC-RAS 2025)")
     review_entries: list[SyntheticInput] = [
         SyntheticInput(param="geometry", value=geom_value,
-                       basis="derived", note="managed-engine rain-on-grid mesh over the fetched terrain"),
+                       basis=("user" if consumed else "derived"),
+                       note=(supplied_note or
+                             "managed-engine rain-on-grid mesh over the fetched terrain")),
         SyntheticInput(param="terrain", value="fetch_dem (3DEP/Copernicus)", basis="fetched",
                        note="reprojected to a local SI grid (metres)"),
         SyntheticInput(param="design_storm_mm_per_hr", value=round(float(design_storm_mm_per_hr), 2),
@@ -795,34 +834,58 @@ async def model_hecras_flood_2d_rog(
         sys.path.insert(0, str(_WORKERS_FRESHTOPO))
         sys.path.insert(0, str(_WORKERS_FRESHTOPO.parents[2]))
     from rog2025_pipeline import (  # type: ignore
-        run_rog2025, build_depth_cog, build_depth_cog_unstructured)
+        run_rog2025, run_rog2025_prebuilt, build_depth_cog, build_depth_cog_unstructured)
 
     catchment_geojson = None
     flowlines_path = None
-    if channel_refinement is not None:
-        catchment_geojson, flowlines_path = await asyncio.to_thread(
-            _acquire_channel_inputs, bbox, workdir)
-        if catchment_geojson is None:            # acquisition failed -> uniform, honest
-            logger.warning("hecras_flood_2d RoG: channel refinement inputs unavailable; "
-                           "falling back to the uniform mesh")
-            channel_refinement = None
-            review_entries[0] = SyntheticInput(
-                param="geometry", value="structured 2D area (HEC-RAS 2025)", basis="derived",
-                note="channel-refinement inputs unavailable for this AOI; uniform mesh")
 
-    async with substep(emitter, "rog_solve"):
-        dem_tif = await asyncio.to_thread(_fetch_dem_local, bbox)
-        result = await asyncio.to_thread(
-            run_rog2025, dem_tif, workdir,
-            precip_mm_hr=float(design_storm_mm_per_hr), storm_hours=float(storm_duration_hr),
-            cell_size=float(resolution_m), elev_units="m", bbox4326=list(bbox),
-            diffusion=diffusion, channel_refinement=channel_refinement,
-            flowlines_path=flowlines_path, catchment_geojson=catchment_geojson)
+    if consumed:
+        # CONSUME the case mesh: stage its stored authoring bundle + re-realize the SAME
+        # cell mesh + solve. NO fetch_dem, NO delineation, NO re-seeding -- the mesh NATE
+        # inspected IS the mesh that solves (TryCreateMesh deterministic on the seeds).
+        from trid3nt_server.agent.workflows.mesh.artifact import (
+            materialize_hecras_mesh_inputs,
+        )
+        bundle = await asyncio.to_thread(
+            materialize_hecras_mesh_inputs, supplied_art, workdir, _get_s3_client())
+        catchment_geojson = bundle.get("catchment")
+        prep_doc = json.loads(Path(bundle["prep_json"]).read_text())
+        async with substep(emitter, "rog_solve"):
+            result = await asyncio.to_thread(
+                run_rog2025_prebuilt, prep_doc, bundle["local_dem"], bundle["seeds"],
+                bundle["breaklines"], workdir,
+                precip_mm_hr=float(design_storm_mm_per_hr),
+                storm_hours=float(storm_duration_hr), diffusion=diffusion,
+                catchment_geojson=catchment_geojson)
+        logger.info(
+            "hecras_flood_2d RoG: CONSUMED case mesh %r (%d cells) -- re-realized from "
+            "the stored seeds, NO fresh delineation/seeding",
+            supplied_art.name, supplied_art.element_count)
+    else:
+        if channel_refinement is not None:
+            catchment_geojson, flowlines_path = await asyncio.to_thread(
+                acquire_channel_inputs, bbox, workdir)
+            if catchment_geojson is None:        # acquisition failed -> uniform, honest
+                logger.warning("hecras_flood_2d RoG: channel refinement inputs unavailable; "
+                               "falling back to the uniform mesh")
+                channel_refinement = None
+                review_entries[0] = SyntheticInput(
+                    param="geometry", value="structured 2D area (HEC-RAS 2025)", basis="derived",
+                    note="channel-refinement inputs unavailable for this AOI; uniform mesh")
+        async with substep(emitter, "rog_solve"):
+            dem_tif = await asyncio.to_thread(_fetch_dem_local, bbox)
+            result = await asyncio.to_thread(
+                run_rog2025, dem_tif, workdir,
+                precip_mm_hr=float(design_storm_mm_per_hr), storm_hours=float(storm_duration_hr),
+                cell_size=float(resolution_m), elev_units="m", bbox4326=list(bbox),
+                diffusion=diffusion, channel_refinement=channel_refinement,
+                flowlines_path=flowlines_path, catchment_geojson=catchment_geojson)
+
     m = result["metrics"]
-    refined = channel_refinement is not None
+    refined = consumed or (channel_refinement is not None)
     logger.info(
-        "hecras_flood_2d RoG(2025) run=%s peak_q=%.3g m3/s max_depth=%.3g m coeff=%s wall=%ss",
-        run_tag, m["peak_outlet_q_m3s"], m["max_depth_m"], m["runoff_coeff"], result["wall_s"])
+        "hecras_flood_2d RoG(2025) run=%s consumed=%s peak_q=%.3g m3/s max_depth=%.3g m coeff=%s wall=%ss",
+        run_tag, consumed, m["peak_outlet_q_m3s"], m["max_depth_m"], m["runoff_coeff"], result["wall_s"])
 
     # --- rasterize + publish the peak-depth COG (feet, matching the depth preset) - #
     from trid3nt_contracts.execution import LegendKey

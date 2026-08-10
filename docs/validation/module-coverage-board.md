@@ -84,6 +84,44 @@ solver's private meshing.
   (RMSE 0.0155 m, corr 0.99882). +5 offline tests (supplied-mesh deck, needs-geometry
   guard, 3 gate-decision cases, gr3 parse round-trip). Touched slices 54 passed / 9
   baseline fails unchanged.
+  HEC-RAS ADOPTION (2026-08-09, ADR 0211): the ADR 0210 channel-refined RAS mesh
+  machinery -- previously reachable ONLY as the embedded `channel_refinement` knob in a
+  `hecras_flood_2d` rain-on-grid run -- is now a STANDALONE act + a consumable artifact.
+  `generate_mesh(mesh_mode="hecras")` (or `engine="hecras"`) builds a channel-refined
+  HEC-RAS CELL mesh: delineate the catchment at the pour point (on the GEOGRAPHIC
+  Copernicus DEM -- FIXED a latent bug where acquire_channel_inputs fetched a PROJECTED
+  3DEP DEM, mis-mapping the index-space outlet snap and silently degrading the 0210
+  refined path to uniform) -> graded Poisson-disk seeds + main-stem breaklines
+  (rog_refine, reused not duplicated) -> realize + VALIDATE through the in-container
+  `meshprobe` (<= 8 sides/cell, no prepare/solve) -> the realized Voronoi cell wireframe
+  as a `layer_type="vector"` display layer + a PORTABLE authoring bundle (seeds +
+  breaklines + local terrain frame + prep + catchment/flowlines) as the MeshArtifact.
+  ARTIFACT DESIGN settled with EVIDENCE: `TryCreateMesh` is DETERMINISTIC on identical
+  seeds (two independent meshprobe realizations -> byte-identical cell centers, sha256
+  a95bab60..., 19462 cells / 56131 faces, clean at attempt 0), so consumption re-realizes
+  EXACTLY the inspected mesh -- the bundle stores authoring INPUTS, not a mesh file (the
+  realized geometry rides only as the display face). CONSUME: `hecras_flood_2d` RoG runs
+  the precondition gate with engine="hecras" at start -- an accepted case mesh
+  materializes its bundle + `run_rog2025_prebuilt` re-realizes + solves with NO fetch_dem
+  / delineation / re-seeding (logged "CONSUMED case mesh ... NO fresh delineation");
+  declined/absent -> 0209/0210 unchanged; incompatible (a TELEMAC-only TIN) -> loud skip.
+  Compat: HEC-RAS is a BUNDLE engine (`ENGINE_MESH_REQUIREMENTS["hecras"]={bundle,
+  needs_validated}`); a hecras mesh declines TELEMAC/SCHISM and vice-versa. min/max edge
+  levers ARE the channel/hillslope target cell sizes (22/90 m). Direct-build validated:
+  Coweeta 19554 cells / 56470 faces, channel p5 25.8 m / hillslope p50 76.2 m, attempt-0
+  clean. LIVE (through the daemon, case 01KZMDT3XNGKGVEVNJTWP9YZ8J): (a) generate_mesh
+  hecras -> mesh 01KZMDTJ... 19554 cells, vector wireframe layer, RECONNECT-DURABLE (fresh
+  connect lists 2 persisted layers: the mesh + the consume depth COG); (b) hecras_flood_2d
+  RoG user_gated -> mesh gate FIRED ("Use it as the hecras model domain?") + accepted ->
+  "CONSUMED case mesh ... re-realized from the stored seeds, NO fresh delineation/seeding"
+  -> consumed=True peak_q=202 m3/s / max_depth 8.83 m / coeff 0.789 (matches the 0210
+  refined 200.4 / 0.796); (c) absent case -> uniform, consumed=False peak_q 345 / wall
+  71.8 s, 0209 unchanged. Files: hecras_mesh.py (NEW),
+  rog2025_pipeline.run_rog2025_prebuilt, generate_mesh/hecras_build.py (NEW), artifact.py
+  (bundle facts + materializer), flood_2d.py (consume gate + Copernicus delineation fix).
+  Offline: server touched slices 54 passed + freshtopo test_hecras_mesh 3 passed; +10
+  generate_mesh + 3 freshtopo tests. Corpus +4 hecras-mesh phrasings; showcase +1
+  (generate_mesh hecras rain-on-grid). ADR 0211.
 
 
 ## SCHISM (10 modules)

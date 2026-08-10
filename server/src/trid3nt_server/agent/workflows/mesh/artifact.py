@@ -45,7 +45,9 @@ __all__ = [
     "find_case_mesh_artifacts",
     "mesh_compatible_with_engine",
     "open_boundary_node_count",
+    "materialize_hecras_mesh_inputs",
     "ENGINE_MESH_REQUIREMENTS",
+    "HECRAS_INPUT_KEYS",
 ]
 
 
@@ -64,8 +66,8 @@ class MeshArtifact:
 
     mesh_id: str
     name: str
-    mode: str  # "watershed" | "coastal_water_edge"
-    display_uri: str  # s3:// .2dm (the MDAL mesh layer face)
+    mode: str  # "watershed" | "coastal_water_edge" | "hecras_rog"
+    display_uri: str  # s3:// display face (a .2dm mesh, or a cell-polygon vector)
     slf_uri: str | None
     utm_epsg: int
     crs_authid: str
@@ -81,6 +83,19 @@ class MeshArtifact:
     open_boundary_info: dict[str, Any] = field(default_factory=dict)
     provenance: dict[str, Any] = field(default_factory=dict)
     case_id: str | None = None
+    #: HEC-RAS RoG mesh (mode ``hecras_rog``): the PORTABLE AUTHORING INPUTS the 2025
+    #: managed engine re-realizes the graded cell mesh from -- a ``{key: s3-uri}`` map
+    #: over :data:`HECRAS_INPUT_KEYS`. The engine's ``MeshFactory.TryCreateMesh`` is
+    #: DETERMINISTIC on identical seeds (verified byte-identical over independent
+    #: realizations), so re-realizing on consume reproduces exactly the cell mesh NATE
+    #: inspected -- no realized geometry need be stored for the solve.
+    hecras_inputs: dict[str, str] = field(default_factory=dict)
+    channel_target_size_m: float | None = None
+    background_size_m: float | None = None
+    #: True iff the in-container meshprobe realized the cells (``TryCreateMesh`` ok,
+    #: HEC's <= 8-sides-per-cell validation passed). A mesh that never realized cleanly
+    #: is not offered for consumption.
+    cells_validated: bool = False
 
     def to_json(self) -> dict[str, Any]:
         return asdict(self)
@@ -132,7 +147,23 @@ ENGINE_MESH_REQUIREMENTS: dict[str, dict[str, Any]] = {
              "reason": ("the SWAN worker is REGULAR-GRID (CGRID REGULAR + "
                         "bottom.bot); it has no unstructured-mesh (fort.14) path, "
                         "so it cannot consume a user-supplied mesh")},
+    # The HEC-RAS 2025 managed engine realizes its graded cell mesh INSIDE the project
+    # from a graded seed cloud + channel breaklines over a local-SI terrain (it has no
+    # single geometry file); so its "geometry" is a BUNDLE of authoring inputs the
+    # engine re-realizes on consume (deterministic). Compatible iff the bundle carries
+    # the seeds + breaklines + local terrain + frame AND the cell mesh validated in the
+    # meshprobe. rain-on-grid only.
+    "hecras": {"bundle": True, "needs_validated": True,
+               "format": ("HEC-RAS RoG authoring bundle (graded seeds + channel "
+                          "breaklines + local terrain frame)")},
 }
+
+#: The keys a ``hecras`` mesh's :attr:`MeshArtifact.hecras_inputs` bundle carries. The
+#: first four are REQUIRED to re-realize + solve; ``catchment``/``flowlines`` are the
+#: modeled-domain provenance (the metrics mask + the channel network it graded toward).
+HECRAS_INPUT_KEYS: tuple[str, ...] = (
+    "seeds", "breaklines", "local_dem", "prep_json", "catchment", "flowlines")
+_HECRAS_REQUIRED_KEYS: tuple[str, ...] = ("seeds", "breaklines", "local_dem", "prep_json")
 
 
 def mesh_compatible_with_engine(
@@ -148,6 +179,19 @@ def mesh_compatible_with_engine(
         return False, f"no mesh-compatibility rule registered for engine {engine!r}"
     if req.get("unstructured_unsupported"):
         return False, str(req.get("reason") or f"{engine} cannot consume a user mesh")
+    if req.get("bundle"):
+        # HEC-RAS RoG bundle: check the authoring inputs are all present + the cells
+        # realized, rather than a single geometry-file field.
+        missing = [k for k in _HECRAS_REQUIRED_KEYS if not (art.hecras_inputs or {}).get(k)]
+        if missing:
+            return False, (
+                f"mesh {art.name!r} is not a {req['format']} (missing "
+                f"{', '.join(missing)}; built as mode={art.mode!r})")
+        if req.get("needs_validated") and not art.cells_validated:
+            return False, (
+                f"mesh {art.name!r} never realized a valid cell mesh (the meshprobe "
+                "did not confirm <= 8 sides/cell), so it is not solve-ready")
+        return True, "compatible"
     uri = getattr(art, str(req["uri_field"]), None)
     if not uri:
         return False, (
@@ -286,4 +330,33 @@ def find_case_mesh_artifacts(
             if art is not None:
                 out.append(art)
                 covered.add(uri)
+    return out
+
+
+def materialize_hecras_mesh_inputs(
+    art: MeshArtifact, dst_dir: str, s3_client: Any
+) -> dict[str, str]:
+    """Download a ``hecras`` mesh's authoring bundle to ``dst_dir`` -> ``{key: path}``.
+
+    The accepted-gate consume path: the 2025 engine re-realizes the graded cell mesh
+    from these staged inputs (seeds + breaklines + the local terrain frame), so the
+    solve reproduces exactly the mesh NATE inspected -- no fresh delineation, no
+    re-seeding. Missing OPTIONAL keys are skipped; a missing REQUIRED key raises."""
+    import os as _os
+
+    out: dict[str, str] = {}
+    dst = dst_dir
+    _os.makedirs(dst, exist_ok=True)
+    for key in HECRAS_INPUT_KEYS:
+        uri = (art.hecras_inputs or {}).get(key)
+        if not uri:
+            if key in _HECRAS_REQUIRED_KEYS:
+                raise ValueError(
+                    f"hecras mesh {art.name!r} bundle is missing required input {key!r}")
+            continue
+        rest = str(uri)[len("s3://"):]
+        bucket, dkey = rest.split("/", 1)
+        local = _os.path.join(dst, _os.path.basename(dkey))
+        s3_client.download_file(bucket, dkey, local)
+        out[key] = local
     return out

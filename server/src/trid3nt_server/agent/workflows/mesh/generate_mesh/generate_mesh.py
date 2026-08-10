@@ -93,6 +93,7 @@ async def generate_mesh(
     bbox: tuple[float, float, float, float] | list[float] | str | None = None,
     pour_point: tuple[float, float] | list[float] | str | None = None,
     mesh_mode: str = "auto",
+    engine: str | None = None,
     min_edge_length_m: float = 40.0,
     max_edge_length_m: float = 400.0,
     grade: float = 0.20,
@@ -100,51 +101,62 @@ async def generate_mesh(
     compute_class: str = "medium",
     **_extra_ignored: Any,
 ) -> Any:
-    """BUILD A COMPUTATIONAL MESH for a domain -> an MDAL mesh layer + a solver-ready mesh artifact.
+    """BUILD A COMPUTATIONAL MESH for a domain -> a mesh layer + a solver-ready mesh artifact.
 
     THE tool for "mesh this watershed / coastline", "build a grid for TELEMAC /
-    SCHISM / SWAN", "make an unstructured triangulation of this basin / bay",
-    "generate the model domain for me to reuse". Mesh creation is EXPLICIT and
-    lives HERE, never auto-guessed inside a model template -- a template that finds
-    this mesh in the case will ASK before consuming it.
+    SCHISM / HEC-RAS", "make an unstructured triangulation of this basin / bay",
+    "author a channel-refined HEC-RAS rain-on-grid mesh I can inspect then solve on",
+    "generate the model domain for me to reuse". Mesh creation is EXPLICIT and lives
+    HERE, never auto-guessed inside a model template -- a template that finds this
+    mesh in the case will ASK before consuming it.
 
-    Mode is INFERRED: a ``pour_point`` (or ``mesh_mode="watershed"``) meshes the
-    delineated CATCHMENT refined by distance-to-river; a coastal AOI (or
-    ``mesh_mode="coastal"``) meshes the OSM+NHD WATER polygon refined by distance-
-    to-shore + wavelength. Emits an MDAL ``.2dm`` display layer + a bathymetric
-    SELAFIN (and best-effort SCHISM/SWAN geometries) as durable case artifacts.
+    Mode is INFERRED (or forced via ``mesh_mode`` / an ``engine`` hint):
+      * a ``pour_point`` (or ``mesh_mode="watershed"``) -> the delineated CATCHMENT
+        refined by distance-to-river -> a triangular TIN (.2dm + bathymetric SELAFIN;
+        TELEMAC-ready, SCHISM with an ``open_boundary_side``);
+      * a coastal AOI (or ``mesh_mode="coastal"``) -> the OSM+NHD WATER polygon
+        refined by distance-to-shore + wavelength -> a coastal TIN;
+      * ``mesh_mode="hecras"`` (or ``engine="hecras"``) -> a channel-refined HEC-RAS
+        rain-on-grid CELL mesh: a coarse hillslope background grading down to a fine
+        cell along the delineated channel network (graded Poisson-disk seeds + channel
+        breaklines), realized + validated through the HEC meshprobe. It emits the
+        realized cell wireframe as the display layer + a PORTABLE authoring bundle a
+        later ``hecras_flood_2d`` rain-on-grid run consumes via the precondition gate.
 
-    Resolution levers (granularity norm): ``min_edge_length_m`` /
-    ``max_edge_length_m`` bound the triangle size; ``grade`` (0.15-0.35) limits how
-    fast elements coarsen away from the refined edge. US-only via our fetchers.
+    Resolution levers (granularity norm): ``min_edge_length_m`` / ``max_edge_length_m``
+    bound the cell/triangle size (for ``hecras`` these ARE the channel + hillslope
+    target cell sizes -- e.g. 22 / 90 m); ``grade`` limits coarsening. US-only.
 
-    SCHISM readiness: a COASTAL mesh built with an ``open_boundary_side`` also emits
-    a SCHISM hgrid.gr3 whose seaward edge is a designated OPEN boundary, so a SCHISM
-    template (baroclinic circulation / tidal hydro) can consume it. Without an
-    ``open_boundary_side`` (or for a watershed mesh) no open boundary is designated
-    and SCHISM honestly declines the mesh (TELEMAC still consumes it).
+    SCHISM readiness: a COASTAL mesh built with an ``open_boundary_side`` also emits a
+    SCHISM hgrid.gr3 (seaward OPEN boundary). Without it (or for a watershed mesh)
+    SCHISM honestly declines the mesh.
 
     Params:
         location: place naming the domain (geocoded). Supply this OR ``bbox``.
         bbox: OPTIONAL AOI ``(min_lon,min_lat,max_lon,max_lat)`` EPSG:4326.
-        pour_point: OPTIONAL ``(lon, lat)`` catchment outlet -> watershed mode.
-        mesh_mode: "auto" (infer) | "watershed" | "coastal".
-        min_edge_length_m: finest triangle edge (m).
-        max_edge_length_m: coarsest triangle edge (m).
-        grade: gradation limit (0.15-0.35; smaller = smoother size transitions).
+        pour_point: OPTIONAL ``(lon, lat)`` catchment outlet -> watershed / hecras.
+        mesh_mode: "auto" (infer) | "watershed" | "coastal" | "hecras".
+        engine: OPTIONAL target-solver hint; ``"hecras"`` selects the RoG cell mesh.
+        min_edge_length_m: finest cell/triangle edge (m); the CHANNEL cell for hecras.
+        max_edge_length_m: coarsest edge (m); the HILLSLOPE background for hecras.
+        grade: gradation limit (0.15-0.35; smaller = smoother size transitions;
+            unused for hecras, whose grading is the seed size field).
         open_boundary_side: OPTIONAL "south"|"north"|"east"|"west" -- the seaward
-            edge to designate as the SCHISM open (forcing) boundary on a coastal
-            mesh. Omit for a TELEMAC-only or inland mesh.
+            edge to designate as the SCHISM open boundary on a coastal mesh.
     """
     return await model_generate_mesh(
         location=location, bbox=bbox, pour_point=pour_point, mesh_mode=mesh_mode,
-        min_edge_length_m=min_edge_length_m, max_edge_length_m=max_edge_length_m,
-        grade=grade, open_boundary_side=open_boundary_side,
-        compute_class=compute_class)
+        engine=engine, min_edge_length_m=min_edge_length_m,
+        max_edge_length_m=max_edge_length_m, grade=grade,
+        open_boundary_side=open_boundary_side, compute_class=compute_class)
 
 
-def _infer_mode(mesh_mode: str, pour_point: Any, bbox: Any) -> str:
+def _infer_mode(mesh_mode: str, pour_point: Any, bbox: Any,
+                engine: str | None = None) -> str:
     m = (mesh_mode or "auto").strip().lower()
+    # an explicit HEC-RAS target (mode or engine hint) -> the channel-refined RoG mesh.
+    if m in ("hecras", "hecras_rog") or str(engine or "").strip().lower() == "hecras":
+        return "hecras_rog"
     if m in ("watershed", "coastal", "coastal_water_edge"):
         return "coastal_water_edge" if m.startswith("coastal") else "watershed"
     # auto: a pour point is an unambiguous watershed signal.
@@ -163,10 +175,11 @@ async def model_generate_mesh(
     max_edge_length_m: float,
     grade: float,
     open_boundary_side: str | None = None,
+    engine: str | None = None,
     compute_class: str,
 ) -> LayerURI:
     """Deterministic mesh composer: resolve AOI/pour-point -> build -> stage the
-    mesh objects to the case -> emit the MDAL layer + persist the artifact."""
+    mesh objects to the case -> emit the mesh layer + persist the artifact."""
     import asyncio
 
     from trid3nt_server.agent.tools import TOOL_REGISTRY
@@ -191,7 +204,31 @@ async def model_generate_mesh(
         aoi = coerce_bbox_value(getattr(geo, "bbox", None) or geo["bbox"])
     aoi = tuple(float(v) for v in aoi)
 
-    mode = _infer_mode(mesh_mode, pp, aoi)
+    mode = _infer_mode(mesh_mode, pp, aoi, engine)
+
+    # HEC-RAS channel-refined rain-on-grid cell mesh (ADR 0211): a distinct build +
+    # artifact (graded seed cloud + breaklines + local terrain frame, meshprobe-
+    # validated), consumed by hecras_flood_2d RoG via the precondition gate.
+    if mode == "hecras_rog":
+        from trid3nt_server.emission.pipeline_emitter import current_turn_case
+        from trid3nt_server.agent.workflows.mesh.generate_mesh.hecras_build import (
+            build_and_record_hecras_mesh,
+        )
+        # A RoG mesh grades a whole terrain box down to the channel; the generic AOI
+        # buffer (0.14 deg ~ 25 km) would mesh a needlessly huge domain. When the box
+        # was auto-derived from a pour point, tighten it to a catchment-scale window.
+        hec_aoi = aoi
+        if bbox is None and pp is not None:
+            # a catchment-tight window (~10 x 9 km): the graded cell mesh's <= 8-sides
+            # acceptance is fragile on a large seed cloud, so keep the domain snug to
+            # the catchment rather than the generic 0.14 deg buffer.
+            hec_aoi = (pp[0] - 0.055, pp[1] - 0.04, pp[0] + 0.055, pp[1] + 0.04)
+        case_id = current_turn_case()
+        return await asyncio.to_thread(
+            build_and_record_hecras_mesh, location=location, bbox=hec_aoi, pour_point=pp,
+            channel_m=float(min_edge_length_m), background_m=float(max_edge_length_m),
+            case_id=case_id)
+
     if mode == "watershed" and pp is None:
         pp = ((aoi[0] + aoi[2]) / 2.0, (aoi[1] + aoi[3]) / 2.0)
 
