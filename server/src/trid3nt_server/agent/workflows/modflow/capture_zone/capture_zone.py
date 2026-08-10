@@ -290,14 +290,28 @@ def _parse_iso_utc(value: Any) -> "datetime | None":  # noqa: F821
 
 
 def _read_wells_features(wells_uri: str) -> list[dict[str, Any]]:
-    """Read the fetched wells FlatGeobuf into ``[{lon, lat, props}]``. NEVER raises."""
+    """Read the fetched wells FlatGeobuf into ``[{lon, lat, props}]``. NEVER raises.
+
+    An ``s3://`` artifact is fetched with the boto3 object reader (which honors
+    the MinIO ``AWS_ENDPOINT_URL`` env block) into a temp file, then read with
+    pyogrio -- NEVER handed to GDAL's ``/vsis3/``, which ignores the custom
+    endpoint and fails with an ambient-credential error (no-ambient-AWS norm).
+    """
     try:
+        import tempfile
+
         import geopandas as gpd
 
-        read_uri = (
-            wells_uri[len("file://"):] if wells_uri.startswith("file://") else wells_uri
+        from trid3nt_server.agent.workflows.modflow.run_modflow import (
+            _read_vector_bytes,
         )
-        gdf = gpd.read_file(read_uri)
+
+        suffix = ".geojson" if wells_uri.lower().endswith(
+            (".json", ".geojson")
+        ) else ".fgb"
+        tmp = Path(tempfile.mkdtemp(prefix="wells-")) / f"wells{suffix}"
+        tmp.write_bytes(_read_vector_bytes(wells_uri))
+        gdf = gpd.read_file(str(tmp), engine="pyogrio")
         cols = [c for c in gdf.columns if c != "geometry"]
         feats: list[dict[str, Any]] = []
         for _, row in gdf.iterrows():

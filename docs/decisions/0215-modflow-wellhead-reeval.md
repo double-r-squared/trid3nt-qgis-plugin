@@ -183,3 +183,60 @@ Proofs: `docs/proof/templates/modflow_wellhead_protection_multiwell_transient_nh
 (WHPA map: wells, 1/5/10-yr zones, NHD reaches, up-gradient pathline fan) +
 `..._chart.png` (computed-vs-measured heads + residual histogram). Offline
 matplotlib renders; NATE does the live QGIS/ESRI verification (working agreement).
+
+## Part 2 follow-up (landed) - the ZERO-layers emission bug
+
+Re-seeding the wellhead showcases surfaced a LATENT honesty-floor hole (present
+since the archetype composers were written, NOT introduced by part 2): a
+`modflow_wellhead_protection` / `modflow_capture_zone` run completed end-to-end
+(FGB in the run prefix, `scenario complete` logged) but the Case received ZERO
+layers, with no error raised.
+
+**Root cause** (`sustainable_yield.py::_run_archetype`, the seam every MODFLOW
+archetype flows through). The archetype run tool returns a typed `LayerURI`, and
+the server dispatch's `add_loaded_layer` gate fires ONLY on a bare-`LayerURI`
+return; the thin workflow tools serialize the composer's `*Result` to a dict
+(`result.model_dump(mode="json")`), which the dispatch does NOT auto-load. The
+composer was expected to load the headline layer via
+`_maybe_emit(pipeline_emitter, ...)` routing through `emit_tool_call`'s gate --
+but the thin tools pass `pipeline_emitter=None`, so `_maybe_emit` ran the solver
+directly and NOTHING loaded. Only the `role="context"` wells overlay attached
+(it used `pipeline_emitter or current_emitter()`); the primary zone did not. The
+whole archetype family (capture zone, wellhead, drawdown, dewatering, subsidence,
+...) was affected - `plume` and `seepage` were unaffected because they load
+explicitly / return a bare `LayerURI`. No error envelope fired because nothing
+FAILED: the tool returned a valid `CaptureZoneResult` dict; the layer simply had
+no path onto the map (the second honesty-floor hole, now closed).
+
+**Fix.** `_run_archetype` loads its returned primary layer explicitly
+(`current_emitter().add_loaded_layer(emit_layer_uri(result))`) after the typed
+validation - the single seam for all archetypes, matching the `plume`/subsidence
+pattern and the `run_modflow_archetype_job` docstring contract ("Return it so the
+emitter's `add_loaded_layer` gate loads it onto the map"). Dedups by identity, so
+a caller that also loads is a no-op.
+
+**Ambient-AWS fix.** `capture_zone.py::_read_wells_features` read the `s3://`
+wells FGB with `gpd.read_file(s3_uri)` -> GDAL `/vsis3/`, which ignores the MinIO
+`AWS_ENDPOINT_URL` and failed with "AWS Access Key Id ... does not exist" (a
+silent degrade to no gradient-wells overlay). It now fetches the bytes through
+the boto3 object reader (`run_modflow._read_vector_bytes`) into a temp file and
+reads with pyogrio - the no-ambient-AWS norm.
+
+**Regression test.** `server/tests/test_archetype_layer_emission.py` (3 offline,
+no mf6/S3): `_run_archetype` loads the typed layer onto `current_emitter()` even
+with `pipeline_emitter=None`; an error-dict return raises + loads nothing; and a
+composer's dict-shaped return is (correctly) NOT auto-loaded by `emit_tool_call`
+(documents the root cause).
+
+**Re-seed (physics-verified GREEN, both cases 2 layers each):**
+- single-well `modflow_wellhead_protection` case=`01KZPZHVXFTFCF62NGCNJMAFP3`
+  run=`01KZPZKYR5RVJ31PMPX81MVA29`; `!run modflow_wellhead_protection(aoi_latlon=[40.905, -98.42], well_location_latlon=[40.905, -98.42], travel_time_years=[5.0, 10.0, 25.0], n_particles=48)`;
+  capture_zone FGB present, tiers [5,10,25], + gradient-wells overlay.
+- multi-well transient NHD RIV case=`01KZPZP13CPA0RKV5GP9WQ2QZ5`
+  run=`01KZPZPGRZK3TZCP2NSG6H0CP8`; `!run modflow_wellhead_protection(aoi_latlon=[40.857, -98.412], wells=[GI-1 1600, GI-2 1100, GI-3 800], transient=True, sim_years=10.0, n_periods=5, use_nhd_river_boundaries=True, travel_time_years=[1.0, 5.0, 10.0], n_particles=24)`;
+  capture_zone FGB present, tiers [1,5,10], `well_capture_allocation` nonempty
+  (GI-1 2.394 km2 / 24 particles / 1600 m3/d, GI-2, GI-3). No ambient-AWS warning.
+
+Superseded junk cases (earlier no_result seed attempts on the pre-fix daemon):
+`01KZPXHRN8MVCQ2C9GCX0JGJY1` (single-well) and `01KZPXK071BN70K1FQH9CBG1KV`
+(multi-well) - both seeded ZERO layers; safe to delete.

@@ -55,6 +55,7 @@ from trid3nt_contracts.modflow_contracts import (
 )
 from trid3nt_contracts.tool_registry import AtomicToolMetadata
 
+from trid3nt_server.emission.layer_uri_emit import emit_layer_uri
 from trid3nt_server.emission.pipeline_emitter import (
     begin_substeps,
     current_emitter,
@@ -683,14 +684,12 @@ async def _run_subsidence(
     )
 
     # Emit the CONTEXT drawdown COG (the cone that drove the compaction) beside the
-    # primary subsidence bowl (the primary layer was already loaded by the
-    # run_modflow_archetype_job _maybe_emit; the context layer is stashed on the
-    # subsidence layer as a private attr by the postprocess). Best-effort.
+    # primary subsidence bowl (the primary layer is loaded by _run_archetype; the
+    # context layer is stashed on the subsidence layer as a private attr by the
+    # postprocess). Best-effort.
     drawdown_context = getattr(layer, "_drawdown_context", None)
     if drawdown_context is not None:
         try:
-            from trid3nt_server.emission.layer_uri_emit import emit_layer_uri
-
             emitter = current_emitter()
             emit_layer = emit_layer_uri(drawdown_context)
             if emitter is not None and emit_layer is not None:
@@ -804,6 +803,23 @@ async def _run_archetype(
                 ecode = result.get("error_code", ecode)
                 emsg = result.get("error_message", emsg)
             raise scenario_error(f"{ecode}: {emsg}")
+
+    # Load the primary archetype layer onto the map + Case. The thin workflow
+    # tool serializes the composer's typed ``*Result`` to a dict, and the server
+    # dispatch's ``add_loaded_layer`` gate fires ONLY on a bare-``LayerURI``
+    # return -- so a dict-returning composer must load its own headline layer.
+    # ``_maybe_emit`` above only routes through ``emit_tool_call`` (whose gate
+    # would load it) when a live ``pipeline_emitter`` is passed; the thin tools
+    # pass ``None``, so this is the seam every archetype (capture zone, wellhead,
+    # drawdown, dewatering, subsidence, ...) relies on to reach the map. Dedups
+    # by layer identity, so a caller that also loads it (or a re-run) is a no-op.
+    # Best-effort: a ``None`` emitter (direct-call / CI) or a dropped
+    # un-renderable layer no-ops.
+    emitter = current_emitter()
+    if emitter is not None:
+        emit_layer = emit_layer_uri(result)
+        if emit_layer is not None:
+            await emitter.add_loaded_layer(emit_layer)
     return result
 
 
