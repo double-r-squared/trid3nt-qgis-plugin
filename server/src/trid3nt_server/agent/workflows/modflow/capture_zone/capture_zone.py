@@ -74,6 +74,16 @@ from trid3nt_server.emission.pipeline_emitter import (
 from trid3nt_server.agent.tools import TOOL_REGISTRY, register_tool
 from trid3nt_server.emission.layer_uri_emit import publish_input_layer
 from trid3nt_server.agent.workflows.modflow._template_card import TemplateCard
+# Shared, engine-agnostic provenance seams (also importable by the Landlab
+# groundwater templates): near-surface soil texture -> saturated K (pedotransfer)
+# and measured well heads -> a kriged / trend water-table surface.
+from trid3nt_server.agent.workflows.shared.soil_hydraulics import (
+    SoilHydraulicsInputError,
+    ksat_from_texture,
+)
+from trid3nt_server.agent.workflows.shared.water_table_interp import (
+    interpolate_water_table,
+)
 # Reuse the shared archetype-run + AOI-resolve helpers from the sustainable_yield
 # composer (one implementation, all archetypes).
 from trid3nt_server.agent.workflows.modflow.sustainable_yield.sustainable_yield import (
@@ -611,6 +621,120 @@ def _build_used_wells_layer(usable: list[dict[str, Any]], run_id: str) -> Any:
 
 
 # --------------------------------------------------------------------------- #
+# Soil-derived hydraulic conductivity (pedotransfer basis)
+# --------------------------------------------------------------------------- #
+
+#: Half-width (deg) of the SoilGrids window fetched around the well for texture.
+#: A tight box (~0.02 deg ~= 2 km) is ample - a single texture sample at the well
+#: cell, not a field, drives the pedotransfer K.
+SOIL_TEXTURE_HALF_DEG: float = 0.02
+
+#: SoilGrids depth read for texture. The 5-15 cm horizon is a stable near-surface
+#: texture (below the tilled/organic surface skin) - still a NEAR-SURFACE proxy,
+#: NOT aquifer-depth material (the standing pedotransfer limitation).
+SOIL_TEXTURE_DEPTH: str = "5-15cm"
+
+
+def _derive_soil_k(wlat: float, wlon: float) -> tuple[Any, dict[str, Any]]:
+    """Derive a labeled pedotransfer K at the well from SoilGrids texture.
+
+    Fetches SoilGrids sand + clay percent at ``SOIL_TEXTURE_DEPTH`` in a tight
+    box around the well, samples both rasters at the well point, and runs the
+    shared Saxton-Rawls seam. Returns ``(pedotransfer_k_or_None, meta)`` - a loud
+    provenance dict for narration. NEVER raises: any fetch / sample / pedotransfer
+    failure returns ``(None, meta_with_reason)`` so the caller falls back to the
+    demo default aquifer K (loud, labeled).
+    """
+    meta: dict[str, Any] = {}
+    try:
+        soil_entry = TOOL_REGISTRY.get("fetch_soilgrids")
+        if soil_entry is None:
+            meta["reason"] = "fetch_soilgrids not registered"
+            return None, meta
+        d = SOIL_TEXTURE_HALF_DEG
+        soil_bbox = [wlon - d, wlat - d, wlon + d, wlat + d]
+
+        def _fetch(prop: str) -> str | None:
+            layer = soil_entry.fn(
+                bbox=soil_bbox, soil_property=prop, depth=SOIL_TEXTURE_DEPTH
+            )
+            return (
+                layer.get("uri") if isinstance(layer, dict)
+                else getattr(layer, "uri", None)
+            )
+
+        sand_uri = _fetch("sand")
+        clay_uri = _fetch("clay")
+        if not sand_uri or not clay_uri:
+            meta["reason"] = "soilgrids returned no raster (ocean / off soil surface)"
+            return None, meta
+        sand_pct = _sample_dem_at_points(sand_uri, [wlon], [wlat])[0]
+        clay_pct = _sample_dem_at_points(clay_uri, [wlon], [wlat])[0]
+        if sand_pct is None or clay_pct is None:
+            meta["reason"] = "soil texture sample off-grid at the well"
+            return None, meta
+        pk = ksat_from_texture(
+            float(sand_pct) / 100.0, float(clay_pct) / 100.0,
+            depth_label=SOIL_TEXTURE_DEPTH,
+        )
+        meta.update(
+            {"sand_pct": round(float(sand_pct), 1), "clay_pct": round(float(clay_pct), 1),
+             "k_m_s": pk.k_m_s, "porosity": pk.porosity, "basis": pk.basis,
+             "depth": SOIL_TEXTURE_DEPTH, "clamped": pk.clamped}
+        )
+        return pk, meta
+    except SoilHydraulicsInputError as exc:
+        meta["reason"] = f"pedotransfer input invalid: {exc}"
+        return None, meta
+    except Exception as exc:  # noqa: BLE001 -- soil-K is best-effort
+        meta["reason"] = f"soil-K step error: {exc}"
+        logger.warning(
+            "capture_zone soil-K step failed (non-fatal, using demo aquifer K): %s", exc
+        )
+        return None, meta
+
+
+def _aquifer_k_caveat(
+    k_source: str, k_ms: float | None, porosity: float | None,
+    soil_k_meta: dict[str, Any],
+) -> str:
+    """Source-aware aquifer-K caveat string (demo / user / soil pedotransfer).
+
+    Every branch keeps the standing screening-tier warning: the zone is a fan of
+    backtracked PRT pathlines on a structured 100 m grid, not a legally defensible
+    delineation.
+    """
+    tail = (
+        "The zone is the fan of backtracked PRT pathlines (+ their convex-hull "
+        "isochrones) on a structured 100 m grid -- a screening-tier wellhead "
+        "delineation, not a legally defensible wellhead protection area."
+    )
+    # An unspecified K/porosity resolves to the contract default downstream; show
+    # that value rather than a bare None.
+    k_ms = DEFAULT_AQUIFER_K_MS if k_ms is None else k_ms
+    porosity = DEFAULT_POROSITY if porosity is None else porosity
+    if k_source == "soil_pedotransfer":
+        clamp = " (clamped to the plausible-media span)" if soil_k_meta.get("clamped") else ""
+        return (
+            f"Aquifer K={k_ms:.2g} m/s and porosity={porosity:g} are DERIVED from "
+            f"SoilGrids texture at the well (sand={soil_k_meta.get('sand_pct')}%, "
+            f"clay={soil_k_meta.get('clay_pct')}%, {soil_k_meta.get('depth')}) via "
+            f"the Saxton-Rawls (2006) pedotransfer function{clamp}. This is a "
+            "NEAR-SURFACE soil PROXY, NOT a measured aquifer conductivity -- true "
+            "aquifer K can differ by orders of magnitude. " + tail
+        )
+    if k_source == "user_supplied":
+        return (
+            f"Aquifer K={k_ms:.2g} m/s and porosity={porosity:g} are caller-supplied. "
+            + tail
+        )
+    return (
+        f"Aquifer K={DEFAULT_AQUIFER_K_MS:g} m/s and porosity={DEFAULT_POROSITY:g} "
+        "are demo defaults, not site-specific hydrogeology. " + tail
+    )
+
+
+# --------------------------------------------------------------------------- #
 # Result envelope
 # --------------------------------------------------------------------------- #
 
@@ -672,6 +796,7 @@ async def model_capture_zone_scenario(
     use_measured_heads: bool = True,
     measured_recency_years: float = MEASURED_RECENCY_YEARS,
     use_dem_gradient: bool = True,
+    use_soil_k: bool = True,
     compute_class: str = "standard",
     pipeline_emitter: Any | None = None,
 ) -> CaptureZoneResult:
@@ -709,6 +834,12 @@ async def model_capture_zone_scenario(
         use_dem_gradient: when True (default) the DEM water-table proxy is the
             SECOND rung of the gradient ladder (used only when measured heads are
             unavailable / degenerate).
+        use_soil_k: when True (default) AND the caller supplied no ``aquifer_k_ms``,
+            the aquifer K is DERIVED from SoilGrids texture at the well via the
+            Saxton-Rawls pedotransfer seam and threaded as a LABELED derived basis
+            (a near-surface soil PROXY, narrated loudly, never presented as
+            measured aquifer K). A soil fetch/sample failure falls back (loud) to
+            the demo default K. Ignored when ``aquifer_k_ms`` is supplied.
         compute_class: FR-CE-3 compute class. NOTE: PRT archetypes are
             LOCAL-ONLY (fast; the Batch path is never used).
         pipeline_emitter: optional PipelineEmitter for live progress cards.
@@ -764,6 +895,10 @@ async def model_capture_zone_scenario(
         _planned += 2
     if use_dem_gradient:
         _planned += 1
+    # Soil-derived K adds two SoilGrids fetches (sand + clay), but only when the
+    # caller did not supply an explicit aquifer K.
+    if use_soil_k and aquifer_k_ms is None:
+        _planned += 2
     begin_substeps(current_emitter(), _planned)
 
     lat, lon, location_name = await _resolve_aoi_point(
@@ -795,6 +930,7 @@ async def model_capture_zone_scenario(
     measured_fit: dict[str, Any] | None = None
     measured_fallback_reason: str | None = None
     used_wells: list[dict[str, Any]] = []
+    interp_provenance: dict[str, Any] = {}
 
     if use_measured_heads:
         try:
@@ -843,6 +979,18 @@ async def model_capture_zone_scenario(
                     gradient_magnitude = measured_fit["magnitude"]
                     gradient_azimuth_deg = measured_fit["azimuth"]
                     gradient_source = "measured_heads"
+                    # Interpolate a water-table SURFACE from the same usable wells
+                    # (regression kriging when the set is dense enough, else a
+                    # trend plane; the shared seam states the rule). The surface's
+                    # method + variogram are recorded for provenance and for the
+                    # (worker-side) per-cell starting-head follow-on; the CHD
+                    # gradient itself stays the measured plane fit above (the two
+                    # agree - both fit the same regional trend).
+                    surface = await asyncio.to_thread(
+                        interpolate_water_table, used_wells
+                    )
+                    if surface is not None:
+                        interp_provenance = surface.provenance()
                 else:
                     measured_fallback_reason = fit_reason
         except Exception as exc:  # noqa: BLE001 -- measured heads is best-effort
@@ -887,6 +1035,27 @@ async def model_capture_zone_scenario(
                 exc,
             )
 
+    # --- Aquifer-K source ladder (soil-derived pedotransfer, then demo) ------- #
+    # When the caller supplied no K, DERIVE it from SoilGrids texture at the well
+    # via the Saxton-Rawls pedotransfer seam and thread it as a LABELED derived
+    # basis. This is a NEAR-SURFACE soil proxy, narrated loudly - never presented
+    # as measured aquifer hydrogeology. A soil fetch/sample failure is a LOUD
+    # fallback to the contract demo default K.
+    eff_k = aquifer_k_ms
+    eff_porosity = porosity
+    k_source = "user_supplied" if aquifer_k_ms is not None else "demo_default"
+    soil_k_meta: dict[str, Any] = {}
+    if use_soil_k and aquifer_k_ms is None:
+        async with substep(current_emitter(), "fetch_soilgrids"):
+            pk, soil_k_meta = await asyncio.to_thread(_derive_soil_k, wlat, wlon)
+        if pk is not None:
+            eff_k = pk.k_m_s
+            k_source = "soil_pedotransfer"
+            # Adopt the pedotransfer porosity too (consistent basis) only when the
+            # caller supplied none.
+            if porosity is None:
+                eff_porosity = pk.porosity
+
     try:
         run_args = MODFLOWRunArgs(
             spill_location_latlon=(lat, lon),
@@ -899,7 +1068,7 @@ async def model_capture_zone_scenario(
             n_particles=int(n_particles),
             regional_gradient_x=grad_x,
             regional_gradient_y=grad_y,
-            **_aquifer_overrides(aquifer_k_ms, porosity, None, None),
+            **_aquifer_overrides(eff_k, eff_porosity, None, None),
         )
     except Exception as exc:  # noqa: BLE001  -  pydantic ValidationError
         raise CaptureZoneInputError(
@@ -955,6 +1124,11 @@ async def model_capture_zone_scenario(
         "gradient_azimuth_deg": layer_grad_az,
         "measured_heads": measured_meta,
         "measured_fallback_reason": measured_fallback_reason,
+        "water_table_interpolation": interp_provenance,
+        "aquifer_k_source": k_source,
+        "aquifer_k_ms": eff_k,
+        "porosity": eff_porosity,
+        "soil_k": soil_k_meta,
         "used_wells": [
             {"site_no": w["site_no"], "lon": w["lon"], "lat": w["lat"],
              "head_elev_m": round(float(w["head_m"]), 3), "basis": w["basis"],
@@ -1022,12 +1196,11 @@ async def model_capture_zone_scenario(
         "stagnation_distance_m": getattr(layer, "stagnation_distance_m", None),
         "capture_width_m": getattr(layer, "capture_width_m", None),
         "gradient_caveat": gradient_caveat,
-        "demo_aquifer_caveat": (
-            f"Aquifer K={DEFAULT_AQUIFER_K_MS:g} m/s and porosity={DEFAULT_POROSITY:g} "
-            "are demo defaults, not site-specific hydrogeology. The zone is the fan "
-            "of backtracked PRT pathlines (+ their convex-hull isochrones) on a "
-            "structured 100 m grid -- a screening-tier wellhead delineation, not a "
-            "legally defensible wellhead protection area."
+        "water_table_interp_method": interp_provenance.get("method"),
+        "aquifer_k_source": k_source,
+        "aquifer_k_ms": eff_k,
+        "demo_aquifer_caveat": _aquifer_k_caveat(
+            k_source, eff_k, eff_porosity, soil_k_meta
         ),
     }
     logger.info(
