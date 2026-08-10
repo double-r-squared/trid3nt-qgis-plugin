@@ -97,6 +97,15 @@ __all__ = [
     "LandlabChannelIncisionLayerURI",
     "LandlabChiMapLayerURI",
     "LandlabStormSequenceLayerURI",
+    "LandlabGroundwaterLayerURI",
+    "LandlabGroundwaterStormLayerURI",
+    "DEFAULT_GW_HYDRAULIC_CONDUCTIVITY_M_S",
+    "DEFAULT_GW_POROSITY",
+    "DEFAULT_GW_AQUIFER_THICKNESS_M",
+    "DEFAULT_GW_RECHARGE_MM_YR",
+    "DEFAULT_GW_STORM_AQUIFER_THICKNESS_M",
+    "DEFAULT_GW_STORM_MEAN_DEPTH_MM",
+    "DEFAULT_GW_STORM_TOTAL_DAYS",
 ]
 
 
@@ -142,6 +151,16 @@ __all__ = [
 #       forcing generator (Poisson storm/interstorm/depth). A reusable forcing
 #       utility; the composer runs it IN-PROCESS (no worker grid / no DEM field),
 #       so ``run_component_chain`` does not implement it.
+#   "groundwater_steady" - GroundwaterDupuitPercolator relaxed to steady state
+#       under constant areal recharge (the canonical groundwater_flow tutorial
+#       chain): the depth-to-water-table field + water-table-elevation +
+#       seepage (surface-water specific discharge) rasters, with the tutorial's
+#       mass-conservation V&V (cumulative recharge == fluxes out + storage change)
+#       and the total baseflow discharge at the boundary.
+#   "groundwater_storm" - the SAME GroundwaterDupuitPercolator driven by a Poisson
+#       storm sequence (PrecipitationDistribution): the seepage/baseflow
+#       hydrograph over time + the aquifer drainage (recession) timescale + the
+#       peak-seepage field (where return-flow emerges during storms).
 LandlabAnalysis = Literal[
     "landslide_probability",
     "overland_flow",
@@ -156,6 +175,8 @@ LandlabAnalysis = Literal[
     "channel_incision",
     "chi_map",
     "storm_sequence",
+    "groundwater_steady",
+    "groundwater_storm",
 ]
 
 # How the flow-accumulation chain handles closed depressions before routing:
@@ -227,6 +248,22 @@ DEFAULT_REFERENCE_CONCAVITY: float = 0.5  # classic theta ~0.45-0.5
 # storm_sequence (PrecipitationDistribution) demo defaults.
 DEFAULT_STORM_TOTAL_YEARS: float = 5.0  # simulated span of the storm sequence
 DEFAULT_STORM_RANDOM_SEED: int = 1234  # deterministic Poisson seed
+
+# groundwater (GroundwaterDupuitPercolator) demo defaults. Labeled demo aquifer
+# properties, NOT site-calibrated hydrogeologic parameters (no SSURGO/aquifer
+# fetcher yet). Mirror the worker component_chain groundwater constants.
+DEFAULT_GW_HYDRAULIC_CONDUCTIVITY_M_S: float = 1.0e-4  # saturated K, m/s (sand)
+DEFAULT_GW_POROSITY: float = 0.3  # drainable porosity (dimensionless)
+DEFAULT_GW_AQUIFER_THICKNESS_M: float = 20.0  # max saturated thickness above base
+DEFAULT_GW_RECHARGE_MM_YR: float = 200.0  # areal recharge, mm/yr (labeled default)
+DEFAULT_GW_REGULARIZATION_F: float = 0.01  # seepage-transition smoothing factor
+# groundwater_storm transient defaults (thinner aquifer so storms move the water
+# table + a Poisson storm sequence). Storm means reuse the storm-generator shape.
+DEFAULT_GW_STORM_AQUIFER_THICKNESS_M: float = 8.0  # thinner for a visible response
+DEFAULT_GW_STORM_MEAN_DEPTH_MM: float = 20.0  # mean per-storm depth, mm
+DEFAULT_GW_STORM_MEAN_DURATION_HR: float = 3.0  # mean storm duration, hr
+DEFAULT_GW_STORM_MEAN_INTERSTORM_HR: float = 72.0  # mean dry interval, hr
+DEFAULT_GW_STORM_TOTAL_DAYS: float = 120.0  # simulated span of the storm sequence
 
 
 class LandlabRunArgs(EngineRunArgsMixin):
@@ -408,6 +445,48 @@ class LandlabRunArgs(EngineRunArgsMixin):
         default=DEFAULT_HILLSLOPE_DIFFUSIVITY_M2_YR, ge=0.0
     )
 
+    # --- groundwater (GroundwaterDupuitPercolator) shared aquifer parameters ---
+    #: Saturated hydraulic conductivity K, m/s (> 0). Demo default (permeable
+    #: sand); not aquifer-test-calibrated. Shared by both groundwater analyses.
+    gw_hydraulic_conductivity_m_s: float = Field(
+        default=DEFAULT_GW_HYDRAULIC_CONDUCTIVITY_M_S, gt=0.0
+    )
+    #: Drainable aquifer porosity, dimensionless in (0, 1). Demo default.
+    gw_porosity: float = Field(default=DEFAULT_GW_POROSITY, gt=0.0, lt=1.0)
+    #: Maximum saturated aquifer thickness above the base, m (> 0), for the
+    #: steady-state chain (aquifer_base = topo - thickness). Demo default.
+    gw_aquifer_thickness_m: float = Field(
+        default=DEFAULT_GW_AQUIFER_THICKNESS_M, gt=0.0
+    )
+    #: Constant areal groundwater recharge, mm/yr (>= 0), for the steady-state
+    #: chain. Demo default (~5-20% of humid-region precip); not site-calibrated.
+    gw_recharge_mm_yr: float = Field(default=DEFAULT_GW_RECHARGE_MM_YR, ge=0.0)
+    #: Seepage-transition regularization factor (tutorial convention) (> 0).
+    gw_regularization_f: float = Field(default=DEFAULT_GW_REGULARIZATION_F, gt=0.0)
+
+    # --- groundwater_storm (transient storm-driven) parameters ---
+    #: Aquifer thickness for the transient storm chain, m (> 0). Demo default
+    #: (thinner so storms move the water table and drive a seepage hydrograph).
+    gw_storm_aquifer_thickness_m: float = Field(
+        default=DEFAULT_GW_STORM_AQUIFER_THICKNESS_M, gt=0.0
+    )
+    #: Mean per-storm depth (mm) for the Poisson storm generator (> 0).
+    gw_storm_mean_depth_mm: float = Field(
+        default=DEFAULT_GW_STORM_MEAN_DEPTH_MM, gt=0.0
+    )
+    #: Mean storm duration (hr) for the Poisson storm generator (> 0).
+    gw_storm_mean_duration_hr: float = Field(
+        default=DEFAULT_GW_STORM_MEAN_DURATION_HR, gt=0.0
+    )
+    #: Mean dry interstorm duration (hr) for the storm generator (> 0).
+    gw_storm_mean_interstorm_hr: float = Field(
+        default=DEFAULT_GW_STORM_MEAN_INTERSTORM_HR, gt=0.0
+    )
+    #: Simulated span of the storm sequence, days (> 0). Demo default 120.
+    gw_storm_total_days: float = Field(default=DEFAULT_GW_STORM_TOTAL_DAYS, gt=0.0)
+    #: Deterministic random seed for the Poisson storm generator.
+    gw_storm_random_seed: int = Field(default=DEFAULT_STORM_RANDOM_SEED)
+
     # --- chi_map (ChiFinder + SteepnessFinder diagnostic) ---
     #: Reference concavity theta used to integrate chi and normalize channel
     #: steepness (ksn). The classic default 0.45-0.5; demo default 0.5. Both the
@@ -561,6 +640,28 @@ class LandlabRunArgs(EngineRunArgsMixin):
             "precipitation_distribution": "storm_sequence",
             "storm_series": "storm_sequence",
             "rainfall_sequence": "storm_sequence",
+            # groundwater_steady
+            "groundwater_steady": "groundwater_steady",
+            "groundwater": "groundwater_steady",
+            "water_table": "groundwater_steady",
+            "water_table_depth": "groundwater_steady",
+            "depth_to_water": "groundwater_steady",
+            "aquifer": "groundwater_steady",
+            "unconfined_aquifer": "groundwater_steady",
+            "dupuit": "groundwater_steady",
+            "groundwater_dupuit": "groundwater_steady",
+            "baseflow": "groundwater_steady",
+            "seepage": "groundwater_steady",
+            "return_flow": "groundwater_steady",
+            # groundwater_storm
+            "groundwater_storm": "groundwater_storm",
+            "groundwater_recession": "groundwater_storm",
+            "storm_seepage": "groundwater_storm",
+            "seepage_hydrograph": "groundwater_storm",
+            "baseflow_hydrograph": "groundwater_storm",
+            "aquifer_recession": "groundwater_storm",
+            "recession": "groundwater_storm",
+            "storm_baseflow": "groundwater_storm",
         }
         return aliases.get(key, key)
 
@@ -919,4 +1020,80 @@ class LandlabStormSequenceLayerURI(LayerURI):
 
     #: Input provenance: the storm sequence is a labeled stochastic demo
     #: climatology (SyntheticInput), not a fetched historical record.
+    source_note: str | None = Field(default=None)
+
+
+class LandlabGroundwaterLayerURI(LayerURI):
+    """A ``LayerURI`` for the steady-state groundwater water-table state, plus the
+    hydrogeologic narration scalars.
+
+    The primary raster is the per-cell DEPTH TO THE WATER TABLE (m; topographic
+    surface minus the steady water-table elevation, 0 at a seepage face). The
+    steady water-table elevation and the seepage (surface-water specific
+    discharge) fields are emitted as companion rasters. Adds the structured
+    numbers the agent narrates (invariant 1, FR-AS-7 -- typed fields, never
+    invented):
+
+        mean_depth_to_water_m: domain-mean depth to the water table (m).
+        max_depth_to_water_m: deepest depth to the water table (m).
+        min_depth_to_water_m: shallowest depth to the water table (m; 0 at a
+            seepage face).
+        baseflow_discharge_m3s: total groundwater + seepage discharge leaving the
+            open boundary at steady state (m3/s) -- the catchment baseflow.
+        seeping_area_fraction: fraction of active cells where groundwater returns
+            to the surface (seepage), dimensionless in [0, 1].
+        mass_balance_rel_error: the tutorial's V&V -- (recharge in - fluxes out -
+            storage change) / recharge in; |value| < 0.01 passes the gate.
+        recharge_mm_yr: the constant areal recharge the state was solved under.
+
+    ``layer_type`` for the depth-to-water field is ``"raster"``.
+    """
+
+    mean_depth_to_water_m: float = Field(ge=0.0)
+    max_depth_to_water_m: float = Field(ge=0.0)
+    min_depth_to_water_m: float = Field(ge=0.0)
+    baseflow_discharge_m3s: float = Field(ge=0.0)
+    seeping_area_fraction: float = Field(ge=0.0, le=1.0)
+    mass_balance_rel_error: float = Field(default=0.0)
+    recharge_mm_yr: float = Field(ge=0.0)
+
+    #: Input provenance: the DEM is REAL; the aquifer block (K / porosity /
+    #: thickness) and the recharge are labeled demo defaults (SyntheticInput).
+    source_note: str | None = Field(default=None)
+
+
+class LandlabGroundwaterStormLayerURI(LayerURI):
+    """A ``LayerURI`` for the storm-driven groundwater seepage/baseflow hydrograph,
+    plus the recession narration scalars.
+
+    The primary raster is the per-cell PEAK SEEPAGE specific discharge (m/s) over
+    the storm sequence (where return-flow emerges during storms); the
+    baseflow-discharge-vs-time hydrograph is the companion chart. Adds the
+    structured numbers the agent narrates (typed fields, never invented):
+
+        peak_baseflow_m3s: peak total discharge (groundwater + seepage) leaving
+            the open boundary over the sequence (m3/s).
+        final_baseflow_m3s: discharge at the end of the sequence (m3/s).
+        recession_timescale_days: the aquifer drainage (linear-reservoir)
+            timescale fit from the first recession limb after the peak (days).
+        seeping_area_fraction: fraction of active cells that seeped at any time,
+            dimensionless in [0, 1].
+        mass_balance_rel_error: the transient mass-conservation V&V; |value| <
+            0.01 passes the gate.
+        n_storms: number of storm intervals in the drawn sequence.
+        total_days: the simulated span (days).
+
+    ``layer_type`` for the peak-seepage field is ``"raster"``.
+    """
+
+    peak_baseflow_m3s: float = Field(ge=0.0)
+    final_baseflow_m3s: float = Field(ge=0.0)
+    recession_timescale_days: float = Field(ge=0.0)
+    seeping_area_fraction: float = Field(ge=0.0, le=1.0)
+    mass_balance_rel_error: float = Field(default=0.0)
+    n_storms: int = Field(ge=0)
+    total_days: float = Field(gt=0.0)
+
+    #: Input provenance: the DEM is REAL; the aquifer block + the stochastic storm
+    #: sequence are labeled demo defaults (SyntheticInput).
     source_note: str | None = Field(default=None)

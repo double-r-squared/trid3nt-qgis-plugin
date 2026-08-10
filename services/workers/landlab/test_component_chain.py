@@ -436,3 +436,101 @@ def test_green_ampt_conductivity_monotonicity_and_determinism():
     f1 = np.nan_to_num(np.asarray(lo.field), nan=-1.0)
     f2 = np.nan_to_num(np.asarray(lo2.field), nan=-1.0)
     assert np.array_equal(f1, f2)
+
+
+# ===========================================================================
+# (5) groundwater_steady / groundwater_storm chains -- REAL landlab chains
+# (gated on the dep). ADR 0214: GroundwaterDupuitPercolator water table +
+# seepage + baseflow (mass-conservation V&V) and storm-driven recession.
+# ===========================================================================
+@_REQUIRES_LANDLAB
+def test_groundwater_steady_fields_and_mass_conservation():
+    """The REAL steady GroundwaterDupuitPercolator chain: depth-to-water primary
+    + water-table + seepage secondaries + the tutorial's mass-conservation V&V."""
+    dem = _tilted_dem(n=24)
+    res = run_component_chain(
+        dem,
+        resolution_m=30.0,
+        build_spec={
+            "analysis": "groundwater_steady",
+            "gw_hydraulic_conductivity_m_s": 1e-4,
+            "gw_porosity": 0.3,
+            "gw_aquifer_thickness_m": 15.0,
+            "gw_recharge_mm_yr": 300.0,
+            "gw_steady_max_steps": 300,
+        },
+    )
+    assert res.analysis == "groundwater_steady"
+    assert res.output_field_name == "depth_to_water"
+    dtw = np.asarray(res.field)
+    assert dtw.shape == dem.shape
+    # depth to water is non-negative where finite.
+    assert np.nanmin(dtw) >= -1e-9
+    assert "water_table_elevation" in res.secondary_fields
+    e = res.extra
+    # the mass-conservation gate: |rel error| < 1% (the V&V acceptance).
+    assert abs(e["mass_balance_rel_error"]) < 0.01
+    assert e["baseflow_discharge_m3s"] >= 0.0
+    assert 0.0 <= e["seeping_area_fraction"] <= 1.0
+    assert e["n_steps"] >= 1
+
+
+@_REQUIRES_LANDLAB
+def test_groundwater_steady_recharge_monotonicity_and_determinism():
+    """MORE recharge => a SHALLOWER mean water table (smaller depth-to-water);
+    two identical runs produce a byte-identical field (Invariant 1)."""
+    dem = _tilted_dem(n=20)
+
+    def _run(recharge):
+        return run_component_chain(
+            dem,
+            resolution_m=30.0,
+            build_spec={
+                "analysis": "groundwater_steady",
+                "gw_recharge_mm_yr": recharge,
+                "gw_aquifer_thickness_m": 15.0,
+                "gw_steady_max_steps": 300,
+            },
+        )
+
+    lo = _run(100.0)
+    hi = _run(600.0)
+    # higher recharge raises the water table -> smaller mean depth-to-water.
+    assert hi.extra["mean_depth_to_water_m"] < lo.extra["mean_depth_to_water_m"]
+    # determinism: re-run of the low-recharge case is byte-identical.
+    lo2 = _run(100.0)
+    f1 = np.nan_to_num(np.asarray(lo.field), nan=-1.0)
+    f2 = np.nan_to_num(np.asarray(lo2.field), nan=-1.0)
+    assert np.array_equal(f1, f2)
+
+
+@_REQUIRES_LANDLAB
+def test_groundwater_storm_hydrograph_and_conservation():
+    """The REAL storm-driven chain: peak-seepage primary + a baseflow hydrograph
+    + the transient mass-conservation V&V + a fitted recession timescale."""
+    dem = _tilted_dem(n=20)
+    res = run_component_chain(
+        dem,
+        resolution_m=30.0,
+        build_spec={
+            "analysis": "groundwater_storm",
+            "gw_storm_aquifer_thickness_m": 6.0,
+            "gw_storm_mean_depth_mm": 20.0,
+            "gw_storm_total_days": 90.0,
+        },
+    )
+    assert res.analysis == "groundwater_storm"
+    assert res.output_field_name == "peak_seepage_specific_discharge"
+    assert np.asarray(res.field).shape == dem.shape
+    e = res.extra
+    # transient mass-conservation gate: |rel error| < 1%.
+    assert abs(e["mass_balance_rel_error"]) < 0.01
+    # a hydrograph with >= 2 points and a non-negative peak discharge.
+    assert isinstance(e["hydrograph"], list) and len(e["hydrograph"]) >= 2
+    assert e["peak_baseflow_m3s"] >= 0.0
+    assert e["recession_timescale_days"] >= 0.0
+    assert e["n_storms"] >= 1
+    # JSON-safety of the extra block (the entrypoint folds it verbatim).
+    import json
+
+    json.dumps(e)

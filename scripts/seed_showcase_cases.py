@@ -61,6 +61,7 @@ LOG_FILE = Path("/tmp/seed_showcase_cases.log")
 # --------------------------------------------------------------------------- #
 _BOULDER = [-105.37, 39.998, -105.33, 40.032]          # ADR 0141 landlab AOI
 _WEST_BIJOU = [-104.33, 39.31, -104.28, 39.35]         # ADR 0184 chi-map escarpment
+_PANOLA = [-84.18, 33.60, -84.14, 33.64]               # ADR 0214 groundwater AOI (Panola Mtn GA)
 _SF_BAY = [-122.30, 37.70, -122.10, 37.90]             # ADR 0149 PSHA AOI
 _EAST_BAY = [-122.30, 37.75, -122.10, 37.95]           # ADR 0164 Hayward AOI
 _APALACHEE = [-85.55, 29.70, -85.40, 29.85]            # ADR 0147 SWAN shelf
@@ -143,6 +144,17 @@ SHOWCASE: list[Showcase] = [
     Showcase("landlab_storm_sequence_generator", {"bbox": _BOULDER},
              "ADR 0184 landlab stochastic storm-sequence generator "
              "(PrecipitationDistribution, in-process), Boulder CO AOI", 180),
+    Showcase("landlab_groundwater_water_table",
+             {"bbox": _PANOLA, "gw_recharge_mm_yr": 250.0, "gw_aquifer_thickness_m": 15.0},
+             "ADR 0214 landlab GroundwaterDupuitPercolator steady water table + seepage "
+             "under recharge, Panola Mtn Research Watershed GA (mass-conservation V&V "
+             "rel err ~1e-3; depth-to-water shallow along valleys, deep on ridges)", 600),
+    Showcase("landlab_groundwater_storm_recession",
+             {"bbox": _PANOLA, "gw_storm_aquifer_thickness_m": 6.0,
+              "gw_storm_mean_depth_mm": 22.0, "gw_storm_total_days": 120.0},
+             "ADR 0214 landlab GroundwaterDupuitPercolator storm-driven seepage/baseflow "
+             "hydrograph + recession, Panola Mtn GA (43 storms, first-limb recession "
+             "tau ~0.7 d, mass-conservation V&V rel err ~6e-3)", 420),
     # -- MODFLOW georeferenced wellhead/capture-zone -------------------------
     Showcase("modflow_wellhead_protection",
              {"aoi_latlon": _PLATTE, "well_location_latlon": _PLATTE,

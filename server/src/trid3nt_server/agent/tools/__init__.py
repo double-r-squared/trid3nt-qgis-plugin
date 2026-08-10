@@ -789,6 +789,8 @@ from ..workflows.landlab.hand_wetness.hand_wetness import landlab_hand_wetness a
 from ..workflows.landlab.channel_incision.channel_incision import landlab_channel_incision_steady_state as _landlab_channel_incision_steady_state  # noqa: E402,F401 - ADR 0184: detachment-limited stream-power incision to steady state + slope-area V&V
 from ..workflows.landlab.chi_map.chi_map import landlab_channel_steepness_chi_map as _landlab_channel_steepness_chi_map  # noqa: E402,F401 - ADR 0184: chi index + channel steepness (ksn) knickpoint diagnostic
 from ..workflows.landlab.storm_sequence.storm_sequence import landlab_storm_sequence_generator as _landlab_storm_sequence_generator  # noqa: E402,F401 - ADR 0184: stochastic storm-sequence forcing generator (PrecipitationDistribution)
+from ..workflows.landlab.groundwater_water_table.groundwater_water_table import landlab_groundwater_water_table as _landlab_groundwater_water_table  # noqa: E402,F401 - ADR 0214: GroundwaterDupuitPercolator steady-state water table + seepage + baseflow (mass-conservation V&V)
+from ..workflows.landlab.groundwater_storm_recession.groundwater_storm_recession import landlab_groundwater_storm_recession as _landlab_groundwater_storm_recession  # noqa: E402,F401 - ADR 0214: GroundwaterDupuitPercolator storm-driven seepage/baseflow hydrograph + recession
 # openquake_psha TEMPLATE (engine="openquake", tier="template"), one folder
 # under workflows/openquake/psha/; EXCLUDED from the default retrieval pool,
 # surfaced only by the run_openquake door's gate expansion. The composer chain

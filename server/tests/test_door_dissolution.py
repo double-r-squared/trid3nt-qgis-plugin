@@ -76,6 +76,8 @@ EXPECTED_TEMPLATES = {
     "landlab_channel_incision_steady_state",  # ADR 0184 Landlab shortlist: detachment-limited stream-power incision to steady state + slope-area V&V
     "landlab_channel_steepness_chi_map",  # ADR 0184 Landlab shortlist: ChiFinder + SteepnessFinder chi/ksn knickpoint diagnostic
     "landlab_storm_sequence_generator",  # ADR 0184 Landlab shortlist: PrecipitationDistribution stochastic storm-sequence forcing generator
+    "landlab_groundwater_water_table",  # ADR 0214 Landlab groundwater: GroundwaterDupuitPercolator steady-state water table + seepage + baseflow (mass-conservation V&V)
+    "landlab_groundwater_storm_recession",  # ADR 0214 Landlab groundwater: storm-driven seepage/baseflow hydrograph + aquifer recession timescale
     "elmfire_verification_elliptical_replication",  # ADR 0123 continuation #2: constant-wind elliptical-spread verification
     "geoclaw_tsunami_gauge_timeseries",  # ADR 0123 continuation #3: coastal gauge water-level time series
     "geoclaw_amr_refinement_regions",  # GeoClaw CAND-S: explicit lat/lon/time AMR region control

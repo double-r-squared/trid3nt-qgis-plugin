@@ -197,6 +197,37 @@ def build_landlab_build_spec(run_args: LandlabRunArgs) -> dict[str, Any]:
         "reference_concavity": float(
             getattr(run_args, "reference_concavity", 0.5)
         ),
+        # groundwater (GroundwaterDupuitPercolator) shared aquifer parameters.
+        "gw_hydraulic_conductivity_m_s": float(
+            getattr(run_args, "gw_hydraulic_conductivity_m_s", 1.0e-4)
+        ),
+        "gw_porosity": float(getattr(run_args, "gw_porosity", 0.3)),
+        "gw_aquifer_thickness_m": float(
+            getattr(run_args, "gw_aquifer_thickness_m", 20.0)
+        ),
+        "gw_recharge_mm_yr": float(getattr(run_args, "gw_recharge_mm_yr", 200.0)),
+        "gw_regularization_f": float(
+            getattr(run_args, "gw_regularization_f", 0.01)
+        ),
+        # groundwater_storm (transient storm-driven) parameters.
+        "gw_storm_aquifer_thickness_m": float(
+            getattr(run_args, "gw_storm_aquifer_thickness_m", 8.0)
+        ),
+        "gw_storm_mean_depth_mm": float(
+            getattr(run_args, "gw_storm_mean_depth_mm", 20.0)
+        ),
+        "gw_storm_mean_duration_hr": float(
+            getattr(run_args, "gw_storm_mean_duration_hr", 3.0)
+        ),
+        "gw_storm_mean_interstorm_hr": float(
+            getattr(run_args, "gw_storm_mean_interstorm_hr", 72.0)
+        ),
+        "gw_storm_total_days": float(
+            getattr(run_args, "gw_storm_total_days", 120.0)
+        ),
+        "gw_storm_random_seed": int(
+            getattr(run_args, "gw_storm_random_seed", 1234)
+        ),
     }
     # Merge the validated physics overrides (the chain reads flow_director /
     # overland_alpha / mannings_n). Absent => byte-identical.

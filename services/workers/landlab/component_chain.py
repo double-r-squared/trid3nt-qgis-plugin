@@ -98,6 +98,45 @@ DEFAULT_MIN_LAKE_AREA_M2: float = 10_000.0
 #: drainage-area-threshold channel extraction).
 DEFAULT_CHANNEL_THRESHOLD_CELLS: int = 100
 
+#: Groundwater (Dupuit-Forchheimer) demo defaults (labeled demo values, not
+#: site-calibrated aquifer parameters). ``GroundwaterDupuitPercolator``:
+#: saturated hydraulic conductivity K (m/s, a permeable-sand default), drainable
+#: porosity, and the maximum saturated aquifer thickness above the base (m). The
+#: base elevation is topographic__elevation - thickness; the water table is
+#: initialized mid-aquifer and relaxed to steady state under areal recharge.
+DEFAULT_GW_HYDRAULIC_CONDUCTIVITY_M_S: float = 1.0e-4
+DEFAULT_GW_POROSITY: float = 0.3
+DEFAULT_GW_AQUIFER_THICKNESS_M: float = 20.0
+#: Areal groundwater recharge (mm/yr) driving the water table; a labeled default
+#: (~5-20% of humid-region precip). Converted to m/s for the component.
+DEFAULT_GW_RECHARGE_MM_YR: float = 200.0
+#: Regularization factor smoothing the seepage transition as the water table
+#: reaches the surface (tutorial convention) and the adaptive-solver Courant
+#: coefficient (0.2 is the tutorial's stable choice).
+DEFAULT_GW_REGULARIZATION_F: float = 0.01
+DEFAULT_GW_COURANT_COEFFICIENT: float = 0.2
+#: Steady-state relaxation: adaptive-solver timestep (s) and step budget. The
+#: run stops early once the fractional storage change per step falls below the
+#: convergence tolerance (steady state reached), else at the step cap. dt ~ 11.6
+#: days: the adaptive solver subdivides internally for stability, so a large outer
+#: dt reaches the multi-year groundwater equilibration in a bounded step budget.
+DEFAULT_GW_STEADY_DT_S: float = 1.0e6
+DEFAULT_GW_STEADY_MAX_STEPS: int = 800
+GW_STEADY_CONVERGENCE_TOL: float = 1.0e-5
+#: A seepage specific-discharge (m/s) at/above this counts a cell as "seeping"
+#: (groundwater returning to the surface) for the seeping-area fraction.
+GW_SEEP_FLOOR_M_S: float = 1.0e-9
+#: Storm-recession demo defaults: the Poisson storm generator means + span, and
+#: the aquifer thickness for the transient case (thinner so storms move the water
+#: table and drive a visible seepage/baseflow hydrograph).
+DEFAULT_GW_STORM_AQUIFER_THICKNESS_M: float = 8.0
+DEFAULT_GW_STORM_MEAN_DEPTH_MM: float = 20.0
+DEFAULT_GW_STORM_MEAN_DURATION_HR: float = 3.0
+DEFAULT_GW_STORM_MEAN_INTERSTORM_HR: float = 72.0
+DEFAULT_GW_STORM_TOTAL_DAYS: float = 120.0
+DEFAULT_GW_STORM_DELTA_T_HR: float = 6.0
+DEFAULT_GW_STORM_RANDOM_SEED: int = 1234
+
 #: The flow-routing directors compared in the routing-comparison output (the
 #: FlowAccumulator tutorial's central question: how much does the routing choice
 #: change where concentrated flow ends up). Each is run through the
@@ -203,12 +242,17 @@ def run_component_chain(
         return _run_channel_incision(dem, resolution_m, build_spec)
     if analysis == "chi_map":
         return _run_chi_map(dem, resolution_m, build_spec)
+    if analysis == "groundwater_steady":
+        return _run_groundwater_steady(dem, resolution_m, build_spec)
+    if analysis == "groundwater_storm":
+        return _run_groundwater_storm(dem, resolution_m, build_spec)
     raise ValueError(
         f"unknown Landlab analysis {analysis!r} (expected one of "
         "'landslide_probability', 'overland_flow', 'flow_accumulation', "
         "'green_ampt_overland_flow', 'landslide_storm_ensemble', "
         "'overland_flow_timeseries', 'dem_pit_fill', 'lake_mapping', "
-        "'hacks_law', 'hand', 'channel_incision', 'chi_map')"
+        "'hacks_law', 'hand', 'channel_incision', 'chi_map', "
+        "'groundwater_steady', 'groundwater_storm')"
     )
 
 
@@ -1980,4 +2024,399 @@ def _run_hand(dem: Any, resolution_m: float, spec: dict[str, Any]) -> ChainResul
             "hand_lowland_threshold_m": lowland_thr,
         },
         secondary_fields={"channel_network": channel_layer},
+    )
+
+
+# --------------------------------------------------------------------------- #
+# groundwater_steady / groundwater_storm: the Dupuit-Forchheimer shallow
+# unconfined-aquifer chain (GroundwaterDupuitPercolator). Both share the aquifer
+# grid builder + the seepage routing + the mass-conservation V&V gate; they
+# differ only in the forcing (constant areal recharge relaxed to steady state vs
+# a Poisson storm sequence integrated transiently).
+#
+# Mirrors the canonical Landlab groundwater_flow tutorial:
+#   RasterModelGrid(DEM as topographic__elevation)
+#     -> aquifer_base__elevation = topo - aquifer_thickness
+#     -> water_table__elevation initialized mid-aquifer
+#     -> GroundwaterDupuitPercolator (K, porosity, recharge, regularization)
+#     -> FlowAccumulator routes surface_water__specific_discharge (seepage) into
+#        surface_water__discharge so calc_sw_flux_out (baseflow at the boundary)
+#        and the mass balance are defined.
+# The mass-conservation check is the tutorial's own V&V: cumulative recharge in
+# must equal cumulative fluxes out (groundwater + surface water) plus the change
+# in aquifer storage, to within a small relative error.
+# --------------------------------------------------------------------------- #
+def _build_aquifer_grid(
+    dem: Any, resolution_m: float, thickness_m: float
+) -> tuple[Any, Any, Any]:
+    """Build a RasterModelGrid with the Dupuit aquifer fields seeded.
+
+    Reuses ``_build_grid`` (no-data -> closed boundaries). Sets
+    ``aquifer_base__elevation`` = topo - thickness, initializes the INTERIOR
+    ``water_table__elevation`` mid-aquifer (clamped into ``[base, surface]``), and
+    pins the finite OPEN-boundary water table at the aquifer BASE -- a
+    free-drainage ("drained edge") boundary so groundwater always discharges
+    OUTWARD across the domain edge (the regional-drainage BC). A fixed-value
+    boundary at the initial mid-aquifer head would instead make high-relief edges
+    act as constant SOURCES, so the drained edge is the physically-correct choice
+    on real terrain. Returns ``(grid, nodata_mask, z)``.
+    """
+    import numpy as np
+
+    grid, nodata_mask, z = _build_grid(dem, resolution_m)
+    zc = np.asarray(z, dtype="float64")
+    base = grid.add_zeros("aquifer_base__elevation", at="node", clobber=True)
+    base[:] = zc - float(thickness_m)
+    wt = grid.add_zeros("water_table__elevation", at="node", clobber=True)
+    wt[:] = np.minimum(np.maximum(zc - 0.5 * float(thickness_m), base), zc)
+    # Drained edge: the open-boundary water table is pinned at the aquifer base
+    # (fully drained) so the aquifer discharges outward across the domain edge.
+    bnodes = grid.boundary_nodes
+    wt[bnodes] = base[bnodes]
+    return grid, nodata_mask, z
+
+
+def _seepage_generated_m3s(grid: Any) -> float:
+    """Total saturation-excess seepage GENERATED over the core (m3/s).
+
+    ``surface_water__specific_discharge`` (m/s) is the groundwater return-flow the
+    GroundwaterDupuitPercolator sheds where the water table meets the surface.
+    Integrated over the cell areas it is the volumetric seepage the aquifer emits
+    -- the physically-generated return-flow, measured at the SOURCE (independent of
+    any surface router, which is unreliable over a pitted real DEM). This is the
+    surface-water term in the aquifer mass balance + the seepage share of the
+    catchment baseflow.
+    """
+    import numpy as np
+
+    core = grid.core_nodes
+    q = np.asarray(grid.at_node["surface_water__specific_discharge"], dtype="float64")
+    ca = np.asarray(grid.cell_area_at_node, dtype="float64")
+    return float(np.sum(q[core] * ca[core]))
+
+
+def _run_groundwater_steady(
+    dem: Any, resolution_m: float, spec: dict[str, Any]
+) -> ChainResult:
+    """Steady-state unconfined water table + seepage under constant recharge.
+
+    Relaxes the ``GroundwaterDupuitPercolator`` to steady state under a constant
+    areal recharge, then reports the hydrogeologic state:
+
+      * PRIMARY field = ``depth_to_water`` (m): topographic surface minus the
+        water table (0 where the water table reaches the surface = a seepage
+        face).
+      * SECONDARY ``water_table_elevation`` (m): the steady water-table surface.
+      * SECONDARY ``seepage_specific_discharge`` (m/s): where groundwater returns
+        to the surface (the return-flow / baseflow-generating cells).
+
+    V&V (the tutorial's own mass-conservation gate): cumulative recharge in must
+    equal cumulative fluxes out (groundwater + surface water) plus the aquifer
+    storage change, to within ``mass_balance_rel_error`` (target < 1%). The
+    total baseflow discharge leaving the open boundary is narrated in m3/s.
+
+    build_spec keys: ``gw_hydraulic_conductivity_m_s``, ``gw_porosity``,
+    ``gw_aquifer_thickness_m``, ``gw_recharge_mm_yr``, ``gw_regularization_f``,
+    ``gw_courant_coefficient``.
+    """
+    import numpy as np
+    from landlab.components import GroundwaterDupuitPercolator  # type: ignore
+
+    nrows, ncols = np.asarray(dem).shape
+    K = float(spec.get("gw_hydraulic_conductivity_m_s", DEFAULT_GW_HYDRAULIC_CONDUCTIVITY_M_S))
+    porosity = float(spec.get("gw_porosity", DEFAULT_GW_POROSITY))
+    thickness = float(spec.get("gw_aquifer_thickness_m", DEFAULT_GW_AQUIFER_THICKNESS_M))
+    recharge_mm_yr = float(spec.get("gw_recharge_mm_yr", DEFAULT_GW_RECHARGE_MM_YR))
+    reg_f = float(spec.get("gw_regularization_f", DEFAULT_GW_REGULARIZATION_F))
+    courant = float(spec.get("gw_courant_coefficient", DEFAULT_GW_COURANT_COEFFICIENT))
+    recharge_ms = recharge_mm_yr / 1000.0 / (365.25 * 86400.0)
+
+    grid, nodata_mask, z = _build_aquifer_grid(dem, resolution_m, thickness)
+    gdp = GroundwaterDupuitPercolator(
+        grid,
+        hydraulic_conductivity=K,
+        porosity=porosity,
+        recharge_rate=recharge_ms,
+        regularization_f=reg_f,
+        courant_coefficient=courant,
+    )
+
+    # Relax to steady state (adaptive-solver substeps for stability), stopping
+    # once the fractional storage change per step falls below the convergence
+    # tolerance (dStorage/dt -> 0), else at the step cap.
+    dt = float(spec.get("gw_steady_dt_s", DEFAULT_GW_STEADY_DT_S))
+    max_steps = max(int(spec.get("gw_steady_max_steps", DEFAULT_GW_STEADY_MAX_STEPS)), 1)
+    prev_storage = float(gdp.calc_total_storage())
+    steps = 0
+    for _ in range(max_steps):
+        gdp.run_with_adaptive_time_step_solver(dt)
+        steps += 1
+        storage = float(gdp.calc_total_storage())
+        denom = abs(prev_storage) if abs(prev_storage) > 0 else 1.0
+        converged = abs(storage - prev_storage) / denom < GW_STEADY_CONVERGENCE_TOL
+        prev_storage = storage
+        if converged:
+            break
+
+    # V&V: the STEADY-STATE mass balance on instantaneous rates (dStorage/dt -> 0
+    # at convergence): recharge in must equal the total outflux = groundwater
+    # underflow at the boundary + saturation-excess seepage generated over the
+    # core. Measured at the SOURCE (seepage generated), not via a surface router.
+    recharge_in_m3s = float(gdp.calc_recharge_flux_in())
+    gw_flux_out_m3s = float(gdp.calc_gw_flux_out())
+    surface_seepage_m3s = _seepage_generated_m3s(grid)
+    baseflow_m3s = gw_flux_out_m3s + surface_seepage_m3s
+    mass_balance_rel_error = (
+        float((recharge_in_m3s - baseflow_m3s) / recharge_in_m3s)
+        if recharge_in_m3s > 0
+        else 0.0
+    )
+
+    zc = np.asarray(grid.at_node["topographic__elevation"], dtype="float64")
+    wte = np.asarray(grid.at_node["water_table__elevation"], dtype="float64")
+    seep = np.asarray(
+        grid.at_node["surface_water__specific_discharge"], dtype="float64"
+    )
+    depth_to_water = (zc - wte).reshape(nrows, ncols)
+    depth_to_water[nodata_mask] = np.nan
+    wte_grid = wte.reshape(nrows, ncols).copy()
+    wte_grid[nodata_mask] = np.nan
+    seep_grid = seep.reshape(nrows, ncols).copy()
+    seep_grid[nodata_mask] = np.nan
+
+    active = np.isfinite(depth_to_water)
+    dvals = depth_to_water[active]
+    n_active = int(active.sum())
+    mean_depth = float(np.mean(dvals)) if dvals.size else 0.0
+    max_depth = float(np.max(dvals)) if dvals.size else 0.0
+    min_depth = float(np.min(dvals)) if dvals.size else 0.0
+    seep_active = seep_grid[active]
+    n_seep = int(np.count_nonzero(seep_active >= GW_SEEP_FLOOR_M_S))
+    seeping_area_fraction = float(n_seep / n_active) if n_active else 0.0
+    max_seepage_ms = float(np.nanmax(seep_grid)) if np.any(np.isfinite(seep_grid)) else 0.0
+
+    secondary: dict[str, Any] = {}
+    if np.any(np.isfinite(wte_grid)):
+        secondary["water_table_elevation"] = wte_grid
+    if np.any(seep_grid[np.isfinite(seep_grid)] > 0.0):
+        secondary["seepage_specific_discharge"] = seep_grid
+
+    LOG.info(
+        "landlab groundwater_steady: K=%.2e n=%.2f H=%.1f m rech=%.0f mm/yr "
+        "steps=%d rel_err=%.3e dtw mean=%.2f/max=%.2f m seep_frac=%.3f "
+        "baseflow=%.4f m3/s",
+        K, porosity, thickness, recharge_mm_yr, steps, mass_balance_rel_error,
+        mean_depth, max_depth, seeping_area_fraction, baseflow_m3s,
+    )
+    # Contract carrier reuse: unstable_area_fraction := seeping-area fraction;
+    # min_factor_of_safety := mean depth-to-water (m); mean_probability_of_failure
+    # unused (0.0). The typed groundwater scalars travel in ``extra``.
+    return ChainResult(
+        field=depth_to_water,
+        analysis="groundwater_steady",
+        unstable_area_fraction=seeping_area_fraction,
+        min_factor_of_safety=mean_depth,
+        mean_probability_of_failure=0.0,
+        output_field_name="depth_to_water",
+        extra={
+            "mass_balance_rel_error": mass_balance_rel_error,
+            "mean_depth_to_water_m": mean_depth,
+            "max_depth_to_water_m": max_depth,
+            "min_depth_to_water_m": min_depth,
+            "seeping_area_fraction": seeping_area_fraction,
+            "max_seepage_specific_discharge_m_s": max_seepage_ms,
+            "baseflow_discharge_m3s": baseflow_m3s,
+            "groundwater_underflow_m3s": gw_flux_out_m3s,
+            "surface_seepage_m3s": surface_seepage_m3s,
+            "recharge_in_m3s": recharge_in_m3s,
+            "recharge_mm_yr": recharge_mm_yr,
+            "hydraulic_conductivity_m_s": K,
+            "porosity": porosity,
+            "aquifer_thickness_m": thickness,
+            "n_steps": steps,
+        },
+        secondary_fields=secondary,
+    )
+
+
+def _run_groundwater_storm(
+    dem: Any, resolution_m: float, spec: dict[str, Any]
+) -> ChainResult:
+    """Storm-driven seepage/baseflow hydrograph + aquifer drainage (recession).
+
+    Drives the ``GroundwaterDupuitPercolator`` with a Poisson storm sequence
+    (``PrecipitationDistribution``): each storm/interstorm interval sets the
+    recharge and the aquifer is integrated transiently, tracking the total
+    discharge leaving the open boundary (groundwater + surface-water seepage) =
+    the baseflow hydrograph. The recession timescale is fit from the declining
+    tail after the peak (ln Q vs t).
+
+      * PRIMARY field = ``peak_seepage`` (m/s): the per-cell MAXIMUM seepage
+        specific discharge over the sequence (where return-flow emerges during
+        storms).
+      * chart (extra ``hydrograph``): baseflow discharge (m3/s) vs time (days).
+
+    Thematic tie: this is the groundwater return-flow that a surface-only
+    rain-on-grid run (e.g. TELEMAC RoG) omits -- stated in the tool docstring, NOT
+    a coupling claim.
+
+    build_spec keys: ``gw_hydraulic_conductivity_m_s``, ``gw_porosity``,
+    ``gw_storm_aquifer_thickness_m``, ``gw_storm_mean_depth_mm``,
+    ``gw_storm_mean_duration_hr``, ``gw_storm_mean_interstorm_hr``,
+    ``gw_storm_total_days``, ``gw_storm_random_seed``.
+    """
+    import numpy as np
+    from landlab.components import (  # type: ignore
+        GroundwaterDupuitPercolator,
+        PrecipitationDistribution,
+    )
+
+    nrows, ncols = np.asarray(dem).shape
+    K = float(spec.get("gw_hydraulic_conductivity_m_s", DEFAULT_GW_HYDRAULIC_CONDUCTIVITY_M_S))
+    porosity = float(spec.get("gw_porosity", DEFAULT_GW_POROSITY))
+    thickness = float(
+        spec.get("gw_storm_aquifer_thickness_m", DEFAULT_GW_STORM_AQUIFER_THICKNESS_M)
+    )
+    reg_f = float(spec.get("gw_regularization_f", DEFAULT_GW_REGULARIZATION_F))
+    courant = float(spec.get("gw_courant_coefficient", DEFAULT_GW_COURANT_COEFFICIENT))
+    mean_depth_mm = float(spec.get("gw_storm_mean_depth_mm", DEFAULT_GW_STORM_MEAN_DEPTH_MM))
+    mean_dur_hr = float(spec.get("gw_storm_mean_duration_hr", DEFAULT_GW_STORM_MEAN_DURATION_HR))
+    mean_inter_hr = float(
+        spec.get("gw_storm_mean_interstorm_hr", DEFAULT_GW_STORM_MEAN_INTERSTORM_HR)
+    )
+    total_days = float(spec.get("gw_storm_total_days", DEFAULT_GW_STORM_TOTAL_DAYS))
+    delta_t_hr = float(spec.get("gw_storm_delta_t_hr", DEFAULT_GW_STORM_DELTA_T_HR))
+    seed = int(spec.get("gw_storm_random_seed", DEFAULT_GW_STORM_RANDOM_SEED))
+
+    grid, nodata_mask, z = _build_aquifer_grid(dem, resolution_m, thickness)
+    gdp = GroundwaterDupuitPercolator(
+        grid,
+        hydraulic_conductivity=K,
+        porosity=porosity,
+        recharge_rate=0.0,
+        regularization_f=reg_f,
+        courant_coefficient=courant,
+    )
+    pd = PrecipitationDistribution(
+        mean_storm_duration=mean_dur_hr,
+        mean_interstorm_duration=mean_inter_hr,
+        mean_storm_depth=mean_depth_mm,
+        total_t=total_days * 24.0,
+        delta_t=delta_t_hr,
+        random_seed=seed,
+    )
+
+    s0 = float(gdp.calc_total_storage())
+    cum_in = cum_out = 0.0
+    peak_seep = np.zeros(grid.number_of_nodes, dtype="float64")
+    times_days: list[float] = []
+    q_series: list[float] = []
+    elapsed_hr = 0.0
+    n_storms = 0
+    # subdivide_interstorms=True chunks the long dry intervals to delta_t as well,
+    # so the endpoint flux accounting (cum_out sampled per interval) stays a
+    # fine-enough Riemann sum for the mass-balance V&V (a 72 h interstorm sampled
+    # as one endpoint overstates the flux integral; delta_t chunks fix it). The
+    # outflux is groundwater underflow + saturation-excess seepage GENERATED (the
+    # discharge = the baseflow hydrograph), measured at the source.
+    for interval_hr, rate_mm_hr in pd.yield_storm_interstorm_duration_intensity(
+        subdivide_interstorms=True
+    ):
+        if interval_hr <= 0.0:
+            continue
+        gdp.recharge = rate_mm_hr / 1000.0 / 3600.0  # mm/hr -> m/s (setter)
+        if rate_mm_hr > 0.0:
+            n_storms += 1
+        interval_s = interval_hr * 3600.0
+        gdp.run_with_adaptive_time_step_solver(interval_s)
+        peak_seep = np.maximum(
+            peak_seep,
+            np.asarray(grid.at_node["surface_water__specific_discharge"], dtype="float64"),
+        )
+        q = float(gdp.calc_gw_flux_out()) + _seepage_generated_m3s(grid)
+        cum_in += float(gdp.calc_recharge_flux_in()) * interval_s
+        cum_out += q * interval_s
+        elapsed_hr += interval_hr
+        times_days.append(elapsed_hr / 24.0)
+        q_series.append(q)
+    s1 = float(gdp.calc_total_storage())
+
+    f_in = cum_in
+    f_out = cum_out + (s1 - s0)
+    mass_balance_rel_error = float((f_in - f_out) / f_in) if f_in > 0 else 0.0
+
+    q_arr = np.asarray(q_series, dtype="float64")
+    t_arr = np.asarray(times_days, dtype="float64")
+    peak_q = float(q_arr.max()) if q_arr.size else 0.0
+    final_q = float(q_arr[-1]) if q_arr.size else 0.0
+    # Recession timescale tau (days): the linear-reservoir aquifer drainage
+    # constant, fit as ln Q = ln Q0 - t/tau on the FIRST clean recession limb
+    # after the global peak (walk forward while Q declines, stop when the next
+    # storm lifts it). Fitting the whole spiky multi-storm tail is contaminated by
+    # later storms; the first full dry-down limb is the characteristic timescale.
+    recession_tau_days = 0.0
+    if q_arr.size > 6 and peak_q > 0.0:
+        ip = int(q_arr.argmax())
+        j = ip
+        while j + 1 < q_arr.size and q_arr[j + 1] <= q_arr[j]:
+            j += 1
+        limb_q = q_arr[ip : j + 1]
+        limb_t = t_arr[ip : j + 1]
+        good = limb_q > max(0.02 * peak_q, 0.0)
+        if int(good.sum()) >= 4:
+            coef = np.polyfit(limb_t[good] * 86400.0, np.log(limb_q[good]), 1)
+            slope = float(coef[0])
+            if slope < 0.0:
+                recession_tau_days = float(-1.0 / slope / 86400.0)
+
+    peak_seep_grid = peak_seep.reshape(nrows, ncols).copy()
+    peak_seep_grid[nodata_mask] = np.nan
+    active = np.isfinite(peak_seep_grid)
+    n_active = int(active.sum())
+    n_seep = int(np.count_nonzero(peak_seep_grid[active] >= GW_SEEP_FLOOR_M_S))
+    seeping_area_fraction = float(n_seep / n_active) if n_active else 0.0
+    max_peak_seep_ms = (
+        float(np.nanmax(peak_seep_grid)) if np.any(np.isfinite(peak_seep_grid)) else 0.0
+    )
+
+    # Subsample the hydrograph for the chart payload (bounded).
+    n = q_arr.size
+    if n > 400:
+        idx = np.unique(np.linspace(0, n - 1, 400).round().astype(int))
+    else:
+        idx = np.arange(n)
+    hydrograph = [
+        {"time_days": float(t_arr[i]), "discharge_m3s": float(q_arr[i])} for i in idx
+    ]
+
+    LOG.info(
+        "landlab groundwater_storm: K=%.2e H=%.1f m storms=%d frames=%d "
+        "peak_q=%.4f final_q=%.4f tau=%.1f d rel_err=%.3e seep_frac=%.3f",
+        K, thickness, n_storms, n, peak_q, final_q, recession_tau_days,
+        mass_balance_rel_error, seeping_area_fraction,
+    )
+    return ChainResult(
+        field=peak_seep_grid,
+        analysis="groundwater_storm",
+        unstable_area_fraction=seeping_area_fraction,
+        min_factor_of_safety=peak_q,
+        mean_probability_of_failure=0.0,
+        output_field_name="peak_seepage_specific_discharge",
+        extra={
+            "peak_baseflow_m3s": peak_q,
+            "final_baseflow_m3s": final_q,
+            "recession_timescale_days": recession_tau_days,
+            "mass_balance_rel_error": mass_balance_rel_error,
+            "seeping_area_fraction": seeping_area_fraction,
+            "max_peak_seepage_specific_discharge_m_s": max_peak_seep_ms,
+            "n_storms": n_storms,
+            "n_frames": int(n),
+            "hydraulic_conductivity_m_s": K,
+            "porosity": porosity,
+            "aquifer_thickness_m": thickness,
+            "mean_storm_depth_mm": mean_depth_mm,
+            "total_days": total_days,
+            "hydrograph": hydrograph,
+        },
+        secondary_fields={},
     )

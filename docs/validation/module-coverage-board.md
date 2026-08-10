@@ -1810,16 +1810,20 @@ Aspects: full de Almeida shallow-water routing (signed, explicit local inertial)
 
 ### Groundwater
 Purpose: Shallow unconfined aquifer flow (Dupuit-Forchheimer approximation), coupling groundwater storage/discharge to surface-water seepage.
-Today: Unsurfaced - GroundwaterDupuitPercolator is not wired into any TRID3NT analysis; the signed landslide chain's soil parameters (transmissivity, thickness) are static constants with no coupled water-table dynamics.
-Aspects: constant-recharge mass-conservation baseline; storm-driven time-varying recharge -> seepage/outflow hydrograph; fixed-gradient / regional-flow boundary conditions
-- [CAND-L] `aquifer_storm_seepage_hydrograph` [L] [US] - For this catchment, what does groundwater seepage/return-flow to the surface look like through a sequence of storms, and where does it emerge?
+Today: LANDED (ADR 0214) - the FIRST groundwater engine chain. GroundwaterDupuitPercolator (Dupuit-Forchheimer shallow unconfined aquifer) is surfaced as TWO templates sharing the aquifer-grid builder + seepage/mass-balance seam: `landlab_groundwater_water_table` (steady) + `landlab_groundwater_storm_recession` (transient). Drained-edge BC (open-boundary water table pinned at the aquifer base) so the aquifer discharges outward; seepage measured at the SOURCE (saturation-excess generated over the core) not via an unreliable surface router; mass-conservation V&V baked in (< 1% rel error, live-verified on real 3DEP terrain).
+Aspects: constant-recharge steady water-table + seepage baseline (LANDED); storm-driven time-varying recharge -> seepage/baseflow hydrograph + recession (LANDED); fixed-gradient / regional-flow boundary conditions (drained-edge implemented; other BCs remain a future lever)
+- [LANDED] `steady_water_table_and_seepage` [M] [US] (ADR 0214: `landlab_groundwater_water_table`) - For this catchment, how deep is the water table, where does groundwater seep back to the surface, and what is the steady baseflow, under sustained recharge?
   src: https://landlab.readthedocs.io/en/latest/tutorials/groundwater/groundwater_flow.html (landlab_groundwater_flow_tutorial)
-  knobs: hydraulic conductivity, porosity, aquifer thickness, storm generator (mean_storm/interstorm duration+depth), regularization factor
-  notes: First groundwater engine chain in TRID3NT. Published V&V gate: cumulative flux vs cumulative recharge conserved to <1% relative error; peak surface-water flux ~0.04 m3/s in the tutorial's 500x500m case.
-- [CAND-M] `constant_recharge_mass_balance_gate` [M] [US] - Prove the groundwater chain conserves mass across a range of recharge rates before trusting the seepage numbers on a real AOI.
+  knobs: gw_hydraulic_conductivity_m_s, gw_porosity, gw_aquifer_thickness_m, gw_recharge_mm_yr, target_resolution_m
+  notes: PRIMARY depth-to-water raster + water-table-elevation + seepage secondary rasters + baseflow-partition chart (underflow vs seepage). Folds `constant_recharge_mass_balance_gate` as the baked-in V&V (steady-state instantaneous balance: recharge in == underflow + seepage-generated). Live V&V (Panola Mtn Research Watershed GA, 30m, 250 mm/yr, 15m aquifer): mean depth-to-water 11.4 m, baseflow 0.162 m3/s (= recharge in 0.160, conserved), rel err -1.4e-3 (run 01KZPN1ZS5ZKEV7CPYJADYHMGB). Depth-to-water shallow along valleys, deep on ridges.
+- [LANDED] `aquifer_storm_seepage_hydrograph` [L] [US] (ADR 0214: `landlab_groundwater_storm_recession`) - For this catchment, what does groundwater seepage/return-flow to the surface look like through a sequence of storms, and where does it emerge?
   src: https://landlab.readthedocs.io/en/latest/tutorials/groundwater/groundwater_flow.html (landlab_groundwater_flow_tutorial)
-  knobs: recharge_rate sweep (1e-5 to 1e-8 m/s), adaptive timestep size
-  notes: A V&V/test-harness recipe layered on the aquifer solver above, not new physics - the mandatory acceptance gate before the seepage chain ships.
+  knobs: gw_hydraulic_conductivity_m_s, gw_porosity, gw_storm_aquifer_thickness_m, gw_storm_mean_depth_mm, gw_storm_total_days, random_seed
+  notes: PRIMARY peak-seepage raster (return-flow emergence along the drainage network) + baseflow-hydrograph chart + fitted first-limb recession timescale. Transient cumulative mass-balance V&V (subdivide_interstorms delta_t chunking). Live V&V (Panola Mtn GA, 6m aquifer, mean storm 22mm, 120d): peak baseflow 12.95 m3/s, final 1.53, recession tau 0.72 d, 43 storms, rel err -6.5e-3 (run 01KZPN3V7VKRFVW4DH4JG5DSHD). Thematic tie: this is the groundwater return-flow a surface-only TELEMAC RoG run omits (MODELED standalone, NOT a coupling).
+- [LANDED] `constant_recharge_mass_balance_gate` [M] [US] (ADR 0214: FOLDED as the baked-in V&V of `landlab_groundwater_water_table`) - Prove the groundwater chain conserves mass before trusting the seepage numbers on a real AOI.
+  src: https://landlab.readthedocs.io/en/latest/tutorials/groundwater/groundwater_flow.html (landlab_groundwater_flow_tutorial)
+  knobs: gw_recharge_mm_yr, adaptive timestep + convergence tolerance
+  notes: FOLDED - not a standalone template. The steady-state mass balance (recharge in == underflow + seepage-generated at convergence, < 1% rel err) is the mandatory acceptance gate embedded in every steady groundwater run's result block; the transient template carries the cumulative-balance analogue. Both live-verified on real 3DEP terrain.
 
 ### Vegetation & Ecohydrology
 Purpose: Couple radiation/PET/soil-moisture/vegetation-competition components into a spatially explicit plant-functional-type model driven by topography and climate.

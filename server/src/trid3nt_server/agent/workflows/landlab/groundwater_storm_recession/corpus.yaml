@@ -1,0 +1,11 @@
+# Template routing phrasings (ADR 0214): engine templates are ordinary
+# retrieval-pool tools walked into the main index.
+landlab_groundwater_storm_recession:
+- groundwater seepage hydrograph through a sequence of storms
+- baseflow response and recession after storms for this catchment
+- how fast does the aquifer drain between storms
+- storm-driven return flow and where seepage emerges over this DEM
+- transient groundwater discharge hydrograph for this watershed
+- aquifer recession timescale from a storm sequence
+- baseflow hydrograph and drainage timescale for this basin
+- peak groundwater seepage during storms on this terrain

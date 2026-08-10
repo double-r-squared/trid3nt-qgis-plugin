@@ -38,6 +38,8 @@ from trid3nt_contracts.landlab_contracts import (
     LandlabDemConditioningLayerURI,
     LandlabFlowAccumulationLayerURI,
     LandlabGreenAmptLayerURI,
+    LandlabGroundwaterLayerURI,
+    LandlabGroundwaterStormLayerURI,
     LandlabHacksLawLayerURI,
     LandlabHandLayerURI,
     LandlabLakeMappingLayerURI,
@@ -62,6 +64,10 @@ __all__ = [
     "postprocess_landlab_hand",
     "postprocess_landlab_channel_incision",
     "postprocess_landlab_chi_map",
+    "postprocess_landlab_groundwater",
+    "postprocess_landlab_groundwater_storm",
+    "build_baseflow_partition_chart_spec",
+    "build_baseflow_hydrograph_chart_spec",
     "build_routing_comparison_chart_spec",
     "build_infiltration_partition_chart_spec",
     "build_storm_ensemble_chart_spec",
@@ -84,6 +90,9 @@ __all__ = [
     "EVOLVED_ELEVATION_STYLE_PRESET",
     "CHANNEL_STEEPNESS_STYLE_PRESET",
     "CHI_STYLE_PRESET",
+    "DEPTH_TO_WATER_STYLE_PRESET",
+    "WATER_TABLE_STYLE_PRESET",
+    "SEEPAGE_STYLE_PRESET",
     "UNSTABLE_PROBABILITY_THRESHOLD",
     "SECONDARY_QUANTITY_BY_TOKEN",
 ]
@@ -146,6 +155,15 @@ CHANNEL_STEEPNESS_STYLE_PRESET: str = "continuous_slope"
 #: it reuses the ``continuous_drainage_area`` viridis sequential ramp. A dedicated
 #: chi ramp is a NAMED RESIDUAL -- the existing preset is the reused styling.
 CHI_STYLE_PRESET: str = "continuous_drainage_area"
+
+#: Groundwater style presets (NAMED RESIDUALS -- reuse existing ramps). Depth to
+#: the water table + seepage specific discharge are metric depth/flux fields, so
+#: they reuse ``continuous_flood_depth``; the water-table elevation is a terrain
+#: surface so it reuses ``continuous_dem``. Dedicated water-table / seepage ramps
+#: are named residuals, not new presets.
+DEPTH_TO_WATER_STYLE_PRESET: str = "continuous_flood_depth"
+WATER_TABLE_STYLE_PRESET: str = "continuous_dem"
+SEEPAGE_STYLE_PRESET: str = "continuous_flood_depth"
 
 #: Mirror of the worker threshold for recomputing the unstable fraction when the
 #: completion result block is absent (kept in sync with
@@ -2196,3 +2214,319 @@ def build_storm_statistics_chart_spec(
             "y": {"aggregate": "count", "type": "quantitative", "title": "storm count"},
         },
     }
+
+
+# --------------------------------------------------------------------------- #
+# groundwater_steady / groundwater_storm: the Dupuit-Forchheimer aquifer
+# postprocess. Steady = depth-to-water primary + water-table + seepage context
+# rasters + baseflow-partition chart; storm = peak-seepage primary + baseflow
+# hydrograph chart. Both reuse the shared reproject/upload/vectorize seam.
+# --------------------------------------------------------------------------- #
+def build_baseflow_partition_chart_spec(
+    groundwater_underflow_m3s: float,
+    surface_seepage_m3s: float,
+) -> dict[str, Any] | None:
+    """Build the steady-state baseflow-partition chart (Vega-Lite).
+
+    Splits the steady catchment baseflow into the subsurface groundwater underflow
+    leaving the boundary vs the surface seepage (return-flow) share -- the two
+    pathways by which recharge exits the aquifer. Returns ``None`` when both are
+    zero. Pure (unit-testable on scalars)."""
+    gw = max(0.0, float(groundwater_underflow_m3s))
+    sw = max(0.0, float(surface_seepage_m3s))
+    if gw <= 0.0 and sw <= 0.0:
+        return None
+    values = [
+        {"pathway": "groundwater underflow", "discharge_m3s": gw},
+        {"pathway": "surface seepage", "discharge_m3s": sw},
+    ]
+    return {
+        "$schema": "https://vega.github.io/schema/vega-lite/v5.json",
+        "data": {"values": values},
+        "mark": {"type": "bar"},
+        "encoding": {
+            "x": {
+                "field": "pathway",
+                "type": "nominal",
+                "title": "baseflow pathway",
+                "sort": ["groundwater underflow", "surface seepage"],
+            },
+            "y": {
+                "field": "discharge_m3s",
+                "type": "quantitative",
+                "title": "steady discharge (m3/s)",
+            },
+            "color": {
+                "field": "pathway",
+                "type": "nominal",
+                "scale": {
+                    "domain": ["groundwater underflow", "surface seepage"],
+                    "range": ["#1f5fbf", "#2a9d8f"],
+                },
+                "legend": None,
+            },
+            "tooltip": [
+                {"field": "pathway", "type": "nominal"},
+                {"field": "discharge_m3s", "type": "quantitative", "format": ".4f"},
+            ],
+        },
+    }
+
+
+def build_baseflow_hydrograph_chart_spec(
+    hydrograph: list[dict[str, Any]],
+) -> dict[str, Any] | None:
+    """Build the storm-driven baseflow-discharge-vs-time hydrograph (Vega-Lite).
+
+    A line of total discharge (groundwater + seepage) leaving the boundary against
+    elapsed days over the storm sequence -- the storm response + recession the
+    aquifer produces. Returns ``None`` when the series is too short. Pure."""
+    if not hydrograph or len(hydrograph) < 2:
+        return None
+    values = [
+        {
+            "time_days": float(p.get("time_days", 0.0)),
+            "discharge_m3s": float(p.get("discharge_m3s", 0.0)),
+        }
+        for p in hydrograph
+    ]
+    return {
+        "$schema": "https://vega.github.io/schema/vega-lite/v5.json",
+        "data": {"values": values},
+        "mark": {"type": "line", "color": "#1f5fbf"},
+        "encoding": {
+            "x": {"field": "time_days", "type": "quantitative", "title": "time (days)"},
+            "y": {
+                "field": "discharge_m3s",
+                "type": "quantitative",
+                "title": "baseflow discharge (m3/s)",
+            },
+            "tooltip": [
+                {"field": "time_days", "type": "quantitative", "format": ".1f"},
+                {"field": "discharge_m3s", "type": "quantitative", "format": ".4f"},
+            ],
+        },
+    }
+
+
+def _reproject_upload(
+    src_cog: Path, run_id: str, runs_bucket: str | None, dest_filename: str
+) -> tuple[str, tuple[float, float, float, float] | None]:
+    """Reproject a metric-CRS field COG to EPSG:4326 and upload it. Returns
+    ``(uri, bbox)``. The temp 4326 COG is removed after upload."""
+    dst_cog, bbox = _reproject_field_cog_4326(src_cog)
+    try:
+        uri = _upload_cog_to_runs_bucket(
+            dst_cog, run_id, runs_bucket, dest_filename=dest_filename
+        )
+    finally:
+        _safe_unlink(dst_cog)
+    return uri, bbox
+
+
+def postprocess_landlab_groundwater(
+    field_cog_path: str | Path,
+    *,
+    run_id: str,
+    result: dict[str, Any] | None = None,
+    water_table_cog_path: str | Path | None = None,
+    seepage_cog_path: str | Path | None = None,
+    runs_bucket: str | None = None,
+) -> tuple[list[LayerURI], dict[str, Any]]:
+    """Reproject the depth-to-water COG + emit the water-table + seepage context layers.
+
+    Reads the worker's ``depth_to_water`` primary field COG, reprojects to
+    EPSG:4326, uploads it, and returns the primary
+    ``LandlabGroundwaterLayerURI`` plus (when supplied) the water-table-elevation
+    and seepage context rasters. The typed scalars come from the worker's
+    authoritative ``result["groundwater_steady"]`` block.
+
+    Returns ``(layers, metrics)`` where ``layers[0]`` is the depth-to-water raster
+    (role ``"primary"``), ``layers[1:]`` the context rasters, and ``metrics``
+    carries the baseflow-partition scalars for the chart.
+    """
+    import numpy as np
+
+    src = Path(field_cog_path)
+    field = _read_field_array(src)
+    gw = (result or {}).get("groundwater_steady") if isinstance(result, dict) else None
+    gw = gw if isinstance(gw, dict) else {}
+
+    active = np.isfinite(field)
+    dvals = field[active]
+    recomputed_mean = float(np.mean(dvals)) if dvals.size else 0.0
+    recomputed_max = float(np.max(dvals)) if dvals.size else 0.0
+    recomputed_min = float(np.min(dvals)) if dvals.size else 0.0
+
+    def _pick(key: str, fallback: float) -> float:
+        v = gw.get(key)
+        try:
+            return float(v) if v is not None else float(fallback)
+        except (TypeError, ValueError):
+            return float(fallback)
+
+    mean_dtw = max(0.0, _pick("mean_depth_to_water_m", recomputed_mean))
+    max_dtw = max(0.0, _pick("max_depth_to_water_m", recomputed_max))
+    min_dtw = max(0.0, _pick("min_depth_to_water_m", recomputed_min))
+    baseflow = max(0.0, _pick("baseflow_discharge_m3s", 0.0))
+    gw_underflow = max(0.0, _pick("groundwater_underflow_m3s", 0.0))
+    surface_seep = max(0.0, _pick("surface_seepage_m3s", 0.0))
+    seep_frac = max(0.0, min(1.0, _pick("seeping_area_fraction", 0.0)))
+    rel_err = _pick("mass_balance_rel_error", 0.0)
+    recharge_mm_yr = max(0.0, _pick("recharge_mm_yr", 0.0))
+
+    uri, bbox = _reproject_upload(
+        src, run_id, runs_bucket, "landlab_depth_to_water.tif"
+    )
+    primary = LandlabGroundwaterLayerURI(
+        layer_id=f"landlab-depth-to-water-{run_id}",
+        name="Depth to water table",
+        layer_type="raster",
+        uri=uri,
+        style_preset=DEPTH_TO_WATER_STYLE_PRESET,
+        role="primary",
+        units="meters",
+        bbox=bbox,
+        mean_depth_to_water_m=mean_dtw,
+        max_depth_to_water_m=max_dtw,
+        min_depth_to_water_m=min_dtw,
+        baseflow_discharge_m3s=baseflow,
+        seeping_area_fraction=seep_frac,
+        mass_balance_rel_error=rel_err,
+        recharge_mm_yr=recharge_mm_yr,
+    )
+    layers: list[LayerURI] = [primary]
+
+    if water_table_cog_path is not None and Path(water_table_cog_path).exists():
+        wt_uri, _b = _reproject_upload(
+            Path(water_table_cog_path), run_id, runs_bucket,
+            "landlab_water_table_elevation.tif",
+        )
+        layers.append(
+            LayerURI(
+                layer_id=f"landlab-water-table-{run_id}",
+                name="Water-table elevation",
+                layer_type="raster",
+                uri=wt_uri,
+                style_preset=WATER_TABLE_STYLE_PRESET,
+                role="context",
+                units="meters",
+                bbox=bbox,
+            )
+        )
+    if seepage_cog_path is not None and Path(seepage_cog_path).exists():
+        sp_uri, _b = _reproject_upload(
+            Path(seepage_cog_path), run_id, runs_bucket,
+            "landlab_seepage.tif",
+        )
+        layers.append(
+            LayerURI(
+                layer_id=f"landlab-seepage-{run_id}",
+                name="Groundwater seepage (return flow)",
+                layer_type="raster",
+                uri=sp_uri,
+                style_preset=SEEPAGE_STYLE_PRESET,
+                role="context",
+                units="m/s",
+                bbox=bbox,
+            )
+        )
+
+    metrics = {
+        "analysis": "groundwater_steady",
+        "crs": "EPSG:4326",
+        "mean_depth_to_water_m": mean_dtw,
+        "max_depth_to_water_m": max_dtw,
+        "baseflow_discharge_m3s": baseflow,
+        "groundwater_underflow_m3s": gw_underflow,
+        "surface_seepage_m3s": surface_seep,
+        "seeping_area_fraction": seep_frac,
+        "mass_balance_rel_error": rel_err,
+    }
+    logger.info(
+        "postprocess_landlab_groundwater run_id=%s mean_dtw=%.2f m baseflow=%.4f "
+        "m3/s seep_frac=%.3f rel_err=%.3e context=%d uri=%s",
+        run_id, mean_dtw, baseflow, seep_frac, rel_err, len(layers) - 1, uri,
+    )
+    return layers, metrics
+
+
+def postprocess_landlab_groundwater_storm(
+    field_cog_path: str | Path,
+    *,
+    run_id: str,
+    result: dict[str, Any] | None = None,
+    runs_bucket: str | None = None,
+) -> tuple[list[LayerURI], dict[str, Any]]:
+    """Reproject the peak-seepage COG + return the storm groundwater layer.
+
+    Reads the worker's ``peak_seepage_specific_discharge`` primary field COG,
+    reprojects to EPSG:4326, uploads it, and returns the primary
+    ``LandlabGroundwaterStormLayerURI``. The typed hydrograph/recession scalars
+    come from the worker's authoritative ``result["groundwater_storm"]`` block;
+    ``metrics`` carries the hydrograph series for the chart.
+    """
+    import numpy as np
+
+    src = Path(field_cog_path)
+    field = _read_field_array(src)
+    gw = (result or {}).get("groundwater_storm") if isinstance(result, dict) else None
+    gw = gw if isinstance(gw, dict) else {}
+
+    active = np.isfinite(field)
+    n_seep = int(np.count_nonzero(field[active] > 0.0)) if active.any() else 0
+    recomputed_frac = float(n_seep / int(active.sum())) if active.sum() else 0.0
+
+    def _pick(key: str, fallback: float) -> float:
+        v = gw.get(key)
+        try:
+            return float(v) if v is not None else float(fallback)
+        except (TypeError, ValueError):
+            return float(fallback)
+
+    peak_q = max(0.0, _pick("peak_baseflow_m3s", 0.0))
+    final_q = max(0.0, _pick("final_baseflow_m3s", 0.0))
+    tau_days = max(0.0, _pick("recession_timescale_days", 0.0))
+    seep_frac = max(0.0, min(1.0, _pick("seeping_area_fraction", recomputed_frac)))
+    rel_err = _pick("mass_balance_rel_error", 0.0)
+    n_storms = int(_pick("n_storms", 0.0))
+    total_days = max(1e-6, _pick("total_days", 1.0))
+    hydrograph = gw.get("hydrograph") if isinstance(gw.get("hydrograph"), list) else []
+
+    uri, bbox = _reproject_upload(
+        src, run_id, runs_bucket, "landlab_peak_seepage.tif"
+    )
+    primary = LandlabGroundwaterStormLayerURI(
+        layer_id=f"landlab-peak-seepage-{run_id}",
+        name="Peak groundwater seepage",
+        layer_type="raster",
+        uri=uri,
+        style_preset=SEEPAGE_STYLE_PRESET,
+        role="primary",
+        units="m/s",
+        bbox=bbox,
+        peak_baseflow_m3s=peak_q,
+        final_baseflow_m3s=final_q,
+        recession_timescale_days=tau_days,
+        seeping_area_fraction=seep_frac,
+        mass_balance_rel_error=rel_err,
+        n_storms=n_storms,
+        total_days=total_days,
+    )
+
+    metrics = {
+        "analysis": "groundwater_storm",
+        "crs": "EPSG:4326",
+        "peak_baseflow_m3s": peak_q,
+        "final_baseflow_m3s": final_q,
+        "recession_timescale_days": tau_days,
+        "mass_balance_rel_error": rel_err,
+        "n_storms": n_storms,
+        "hydrograph": hydrograph,
+    }
+    logger.info(
+        "postprocess_landlab_groundwater_storm run_id=%s peak_q=%.4f tau=%.1f d "
+        "seep_frac=%.3f rel_err=%.3e n_storms=%d uri=%s",
+        run_id, peak_q, tau_days, seep_frac, rel_err, n_storms, uri,
+    )
+    return [primary], metrics
