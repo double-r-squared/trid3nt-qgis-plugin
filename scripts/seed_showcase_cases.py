@@ -282,6 +282,19 @@ SHOWCASE: list[Showcase] = [
              "INDEPENDENT of the inflow hydrograph (Eel River nr Scotia CA). gridMET "
              "real-storm auto-source proven live at 158 mm/day for Hurricane Harvey.",
              900, title_suffix="rainfall"),
+    Showcase("telemac_river_dye",
+             {"location": "Snake River near Twin Falls, Idaho",
+              "substance": "scour", "erodible_bed": True,
+              "morphological_factor": 5.0, "grain_size_um": 300.0,
+              "bed_thickness_m": 5.0, "sim_duration_s": 900},
+             "ADR 0216 TELEMAC GAIA v2 ERODIBLE-BED scour morphodynamics: a real "
+             "erodible bed + active bedload (Meyer-Peter-Mueller) under flow, so the "
+             "bed SCOURS where it steepens and re-deposits where it slackens (Snake "
+             "R. nr Twin Falls ID). Signed CUMUL BED EVOL map (scour<0<deposition) + "
+             "max_scour_mm. In-image smoke: scour to -0.82 m, mass balance closes. "
+             "MORPHOLOGICAL FACTOR is the demo speed-up lever; grain d50 a demo "
+             "default (no bed-composition fetcher).",
+             1200, title_suffix="erodible-bed-scour"),
     # -- HEC-RAS (bundled Muncie deck; cheap 1D/2D) --------------------------
     Showcase("hecras_flood_2d",
              {"bbox": [-98.115, 29.975, -98.083, 30.000], "target_peak_cfs": 15000,

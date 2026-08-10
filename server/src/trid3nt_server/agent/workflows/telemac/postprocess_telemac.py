@@ -619,8 +619,16 @@ def postprocess_telemac_deposition(
     worker_sed_metrics: dict[str, Any] | None = None,
     runs_bucket: str | None = None,
     target_ground_res_m: float = TELEMAC_TARGET_GROUND_RES_M,
+    erodible: bool = False,
 ) -> tuple[list[TelemacSedimentLayerURI], dict[str, Any]]:
-    """Rasterize the GAIA final CUMUL BED EVOL field into ONE deposition COG.
+    """Rasterize the GAIA final CUMUL BED EVOL field into ONE bed-evolution COG.
+
+    ``erodible=False`` (v1 supply-limited): renders only the positive DEPOSITION
+    tongue (nothing erodes) and errors if nothing deposited. ``erodible=True`` (v2
+    morphodynamics): renders the SIGNED bed change - SCOUR (negative) and
+    DEPOSITION (positive) - on the diverging ramp centered on 0, reports
+    ``max_scour_mm`` beside ``max_deposition_mm``, and is valid as long as the bed
+    moved either way.
 
     Reads ``gaia_river.slf`` (the GAIA result), picks the CUMUL BED EVOL variable
     (mnemonic ``E``; the in-image smoke confirmed it is present in METRES), takes
@@ -683,6 +691,11 @@ def postprocess_telemac_deposition(
     node_final_mm = evol[-1] * 1000.0          # final cumulative bed change, mm
     dep_only_mm = np.where(node_final_mm > 0.0, node_final_mm, 0.0)
     max_dep_mm = float(dep_only_mm.max()) if dep_only_mm.size else 0.0
+    # v2 erodible-bed morphodynamics: the SCOUR limb is the point of the run, so
+    # the deepest scour (most-negative bed change, reported as a positive mm depth)
+    # is measured beside the deposition peak.
+    scour_only_mm = np.where(node_final_mm < 0.0, -node_final_mm, 0.0)
+    max_scour_mm = float(scour_only_mm.max()) if scour_only_mm.size else 0.0
 
     from pyproj import Transformer
 
@@ -691,7 +704,17 @@ def postprocess_telemac_deposition(
     lon = np.asarray(lon)
     lat = np.asarray(lat)
 
-    if max_dep_mm <= 0.0:
+    if erodible:
+        # SCOUR + DEPOSITION both matter: valid unless the bed did not move at all.
+        if max_dep_mm <= 0.0 and max_scour_mm <= 0.0:
+            raise PostprocessTelemacError(
+                "TELEMAC_OUTPUT_EMPTY",
+                message=f"no bed evolution anywhere in {slf.name} "
+                f"(erodible-bed run neither scoured nor deposited measurably)",
+                details={"max_deposition_mm": max_dep_mm,
+                         "max_scour_mm": max_scour_mm},
+            )
+    elif max_dep_mm <= 0.0:
         raise PostprocessTelemacError(
             "TELEMAC_OUTPUT_EMPTY",
             message=f"no bed deposition anywhere in {slf.name} "
@@ -707,17 +730,25 @@ def postprocess_telemac_deposition(
     shape = _grid_shape(bbox, target_ground_res_m)
     clip_dist_deg = 1.5 * max(
         (bbox[2] - bbox[0]) / shape[1], (bbox[3] - bbox[1]) / shape[0])
-    # rasterize the DEPOSITION (positive mm) field; erosion/zero -> NaN so the
-    # diverging ramp reads the tongue cleanly (v1 is supply-limited: near all
-    # signal is deposition). wet_floor tiny so a mm-scale tongue is not clipped.
     try:
-        grid = _rasterize_nodes_to_grid(
-            lon, lat, dep_only_mm, bbox, shape, clip_dist_deg,
-            wet_floor=max(1e-4, 0.02 * max_dep_mm))
+        if erodible:
+            # rasterize the SIGNED bed change (scour negative / deposition
+            # positive) with wet_floor -1e30 so NO node is value-masked - the
+            # diverging ramp centered on 0 reads scour (blue) AND deposition (red).
+            grid = _rasterize_nodes_to_grid(
+                lon, lat, node_final_mm, bbox, shape, clip_dist_deg,
+                wet_floor=-1e30)
+        else:
+            # v1 supply-limited: rasterize the DEPOSITION (positive mm) field;
+            # erosion/zero -> NaN so the diverging ramp reads the tongue cleanly.
+            # wet_floor tiny so a mm-scale tongue is not clipped.
+            grid = _rasterize_nodes_to_grid(
+                lon, lat, dep_only_mm, bbox, shape, clip_dist_deg,
+                wet_floor=max(1e-4, 0.02 * max_dep_mm))
     except Exception as exc:  # noqa: BLE001
         raise PostprocessTelemacError(
             "TELEMAC_OUTPUT_READ_FAILED",
-            message=f"deposition rasterization failed: {exc}",
+            message=f"bed-evolution rasterization failed: {exc}",
         ) from exc
 
     from rasterio.transform import from_bounds
@@ -756,22 +787,47 @@ def postprocess_telemac_deposition(
     _net = wsm.get("sediment_net_bed_mass_kg")
     deposited_mass_kg = max(float(_net), 0.0) if _net is not None else None
     deposit_fraction = wsm.get("sediment_deposit_fraction")
-    # diverging legend centered on 0; range = the deposition peak (symmetric so
-    # the rdbu midpoint is 0 bed change). mm units.
-    vext = round(max(max_dep_mm, 1e-3), 4)
+    # diverging legend centered on 0 (rdbu midpoint = 0 bed change), mm units. For
+    # the erodible signed field the range is symmetric on the LARGER limb but capped
+    # at the 99th percentile of |bed change| so a single inflow-boundary bedload
+    # pile-up node does not wash the interior scour/deposition pattern off the ramp.
+    if erodible:
+        both = np.abs(node_final_mm)
+        robust = float(np.percentile(both, 99)) if both.size else 0.0
+        vext = round(max(min(max(max_dep_mm, max_scour_mm), max(robust, 1e-3)),
+                         1e-3), 4)
+    else:
+        vext = round(max(max_dep_mm, 1e-3), 4)
     legend = LegendKey(
         kind="continuous", colormap="rdbu", vmin=-vext, vmax=vext, units="mm",
-        label="Bed evolution / deposition (mm)",
+        label="Bed evolution (mm): scour < 0 < deposition"
+        if erodible else "Bed evolution / deposition (mm)",
     )
-    honesty = (
-        "Event-scale deposition (mm), not annual morphology: a supply-limited "
-        "GAIA run (bed initial thickness 0) - only the injected sediment pulse "
-        "can deposit, nothing erodes. Grain size is a demo default / user "
-        "override (no site bed-composition fetcher exists), not a site measurement."
-    )
+    if erodible:
+        honesty = (
+            "Event-scale bed evolution (mm) under active bedload morphodynamics "
+            "(Meyer-Peter-Mueller family), amplified by a MORPHOLOGICAL FACTOR - a "
+            "planning-grade scour/deposition PATTERN, not a calibrated scour depth. "
+            "Scour is negative bed change, deposition positive, on a diverging ramp "
+            "centered at 0. A localized bedload pile-up at the sediment inflow "
+            "boundary is a known GAIA artifact (capped off the diverging ramp). "
+            "Grain size is a demo default / user override (no site bed-composition "
+            "fetcher exists)."
+        )
+        layer_name = f"Bed evolution / scour ({reach_name})"
+        layer_id = f"telemac-bed-evolution-{run_id}"
+    else:
+        honesty = (
+            "Event-scale deposition (mm), not annual morphology: a supply-limited "
+            "GAIA run (bed initial thickness 0) - only the injected sediment pulse "
+            "can deposit, nothing erodes. Grain size is a demo default / user "
+            "override (no site bed-composition fetcher exists), not a site measurement."
+        )
+        layer_name = f"Sediment deposition ({reach_name})"
+        layer_id = f"telemac-sediment-deposition-{run_id}"
     layer = TelemacSedimentLayerURI(
-        layer_id=f"telemac-sediment-deposition-{run_id}",
-        name=f"Sediment deposition ({reach_name})",
+        layer_id=layer_id,
+        name=layer_name,
         layer_type="raster",
         uri=uri,
         style_preset=TELEMAC_BED_EVOLUTION_STYLE_PRESET,
@@ -783,12 +839,14 @@ def postprocess_telemac_deposition(
         deposited_mass_kg=deposited_mass_kg,
         deposit_fraction=deposit_fraction,
         max_deposition_mm=round(max_dep_mm, 4),
+        max_scour_mm=round(max_scour_mm, 4) if erodible else None,
         grain_size_um=wsm.get("grain_size_um"),
         sediment_type=wsm.get("sediment_type"),
     )
     metrics: dict[str, Any] = {
         "evol_var": evol_var.strip(),
         "max_deposition_mm": round(max_dep_mm, 4),
+        "max_scour_mm": round(max_scour_mm, 4) if erodible else None,
         "deposited_mass_kg": deposited_mass_kg,
         "deposit_fraction": deposit_fraction,
         "npoin": int(mesh["npoin"]),

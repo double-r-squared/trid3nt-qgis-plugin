@@ -155,8 +155,10 @@ class TelemacManifestUnknownFieldsError(ValueError):
 #: rain-on-grid fields; -4 added the ADR 0206 time-varying native hyetograph
 #: field (rain_hyetograph_blocks); -5 adds the ADR 0213 continuous
 #: soil-moisture-store fields (soil_store, soil_store_capacity_mm,
-#: soil_store_recovery_h, soil_store_init_mm).
-_PARSER_VERSION = "telemac-reach-5"
+#: soil_store_recovery_h, soil_store_init_mm); -6 adds the GAIA v2 erodible-bed
+#: morphodynamics fields (erodible_bed toggles bedload scour; bed_thickness_m,
+#: bedload_formula, morphological_factor tune the erodible stock + transport law).
+_PARSER_VERSION = "telemac-reach-6"
 
 
 def _reach_config(data_dir: Path, reach_overrides: dict[str, Any]) -> Any:

@@ -67,9 +67,20 @@ def test_reach_config_rejects_unknown_keys(tmp_path):
         })
 
 
-def test_parser_version_is_reach_5():
-    """ADR 0213: the continuous soil-moisture-store fields bump the parser stamp."""
-    assert E._PARSER_VERSION == "telemac-reach-5"
+def test_parser_version_is_reach_6():
+    """ADR 0216: the GAIA v2 erodible-bed morphodynamics fields bump the parser stamp."""
+    assert E._PARSER_VERSION == "telemac-reach-6"
+
+
+def test_reach_config_accepts_erodible_bed_fields(tmp_path):
+    """ADR 0216: the GAIA v2 erodible-bed knobs are known fields (bedload scour)."""
+    cfg = E._reach_config(tmp_path, {
+        "substance_class": "sediment", "erodible_bed": True,
+        "bed_thickness_m": 4.0, "bedload_formula": 1,
+        "morphological_factor": 20.0, "grain_size_um": 400.0,
+    })
+    assert cfg.erodible_bed is True and cfg.bed_thickness_m == 4.0
+    assert cfg.bedload_formula == 1 and cfg.morphological_factor == 20.0
 
 
 def test_reach_config_accepts_soil_store_fields(tmp_path):
@@ -106,9 +117,9 @@ def test_reach_config_accepts_rog_fields(tmp_path):
     assert cfg.observed_gauge_id == "02086500"
 
 
-def test_reach_config_rejects_unknown_rog_key_names_v5(tmp_path):
-    """A bogus reach key raises naming the CURRENT parser version (telemac-reach-5)."""
-    with pytest.raises(E.TelemacManifestUnknownFieldsError, match="telemac-reach-5"):
+def test_reach_config_rejects_unknown_key_names_v6(tmp_path):
+    """A bogus reach key raises naming the CURRENT parser version (telemac-reach-6)."""
+    with pytest.raises(E.TelemacManifestUnknownFieldsError, match="telemac-reach-6"):
         E._reach_config(tmp_path, {"bogus_rog_field": 1, "mode": "rain_on_grid"})
 
 

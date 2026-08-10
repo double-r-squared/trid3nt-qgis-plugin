@@ -166,6 +166,9 @@ class TelemacDyeLayerURI(LayerURI):
     deposited_mass_kg: float | None = Field(default=None, ge=0.0)
     deposit_fraction: float | None = Field(default=None, ge=0.0)
     max_deposition_mm: float | None = Field(default=None, ge=0.0)
+    # GAIA v2 erodible-bed only: deepest bed SCOUR magnitude (mm, >= 0). None on
+    # the v1 supply-limited path and every non-sediment run.
+    max_scour_mm: float | None = Field(default=None, ge=0.0)
 
 
 class TelemacDoLayerURI(LayerURI):
@@ -249,5 +252,11 @@ class TelemacSedimentLayerURI(LayerURI):
     deposited_mass_kg: float | None = Field(default=None, ge=0.0)
     deposit_fraction: float | None = Field(default=None, ge=0.0)
     max_deposition_mm: float | None = Field(default=None, ge=0.0)
+    # GAIA v2 erodible-bed morphodynamics only: the magnitude (mm, >= 0) of the
+    # DEEPEST bed SCOUR anywhere in the reach - the most-negative CUMUL BED EVOL
+    # node. None on the v1 supply-limited path (nothing erodes). Reported beside
+    # max_deposition_mm so the agent narrates both limbs of the signed
+    # scour/deposition field it renders on the diverging ramp (Invariant 1).
+    max_scour_mm: float | None = Field(default=None, ge=0.0)
     grain_size_um: float | None = Field(default=None, gt=0.0)
     sediment_type: str | None = Field(default=None)

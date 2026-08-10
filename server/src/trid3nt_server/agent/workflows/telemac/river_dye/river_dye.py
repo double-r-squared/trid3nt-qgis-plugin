@@ -75,15 +75,17 @@ TEMPLATE_CARD = TemplateCard(
     question=(
         "how far a DYE / TRACER / CONTAMINANT / oil / sewage / sediment spill "
         "travels DOWNSTREAM in a river reach (surface water) + its peak "
-        "concentration (TELEMAC-2D shallow-water advection over a real reach; "
-        "animated time-stepped plume)"
+        "concentration; OR where the BED SCOURS / ERODES and re-deposits under a "
+        "flood (GAIA erodible-bed morphodynamics) - TELEMAC-2D shallow-water over "
+        "a real reach; animated time-stepped plume / bed evolution"
     ),
     required_inputs=["location OR bbox"],
     knobs=(
         "spill_fraction, spill_duration_s, dye_concentration_mgl, "
         "reach_length_km, sim_duration_s, source_q_m3s, channel_width_m, "
-        "substance (dye / oil / sewage / sediment), mesh_resolution, "
-        "decay_half_life_hours, grain_size_um, friction_coefficient, "
+        "substance (dye / oil / sewage / sediment / scour), mesh_resolution, "
+        "decay_half_life_hours, grain_size_um, erodible_bed, bed_thickness_m, "
+        "bedload_formula, morphological_factor, friction_coefficient, "
         "rainfall_mm_per_day, rainfall_gridmet_window, evaporation_mm_per_day"
     ),
 )
@@ -132,6 +134,10 @@ async def telemac_river_dye(
     decay_rate_per_day: float | None = None,
     grain_size_um: float | None = None,
     sediment_type: str | None = None,
+    erodible_bed: bool | None = None,
+    bed_thickness_m: float | None = None,
+    bedload_formula: int | None = None,
+    morphological_factor: float | None = None,
     friction_coefficient: float | None = None,
     friction_law: int | None = None,
     velocity_diffusivity: float | None = None,
@@ -241,8 +247,12 @@ async def telemac_river_dye(
             ribbon). The GAIA path is SUPPLY-LIMITED: the deposition comes from a
             PRESCRIBED UPSTREAM SEDIMENT SUPPLY (source concentration), not an
             initial bed stock - i.e. THIS is the "reservoir-inflow sedimentation /
-            upstream sediment supply rate" question. Everything else is a plain
-            conservative dye tracer.
+            upstream sediment supply rate" question. Naming SCOUR / EROSION / a
+            mobile bed instead ("scour"/"erosion"/"erodible"/"bedload"/"bed
+            degradation") routes to the GAIA v2 ERODIBLE-BED path (see
+            ``erodible_bed``): a real erodible bed with active bedload, so the bed
+            LOWERS (scours) and re-deposits under the flow. Everything else is a
+            plain conservative dye tracer.
         decay_half_life_hours: OPTIONAL, decaying substance only - first-order
             half-life in HOURS (k = ln(2)/half_life). Default honest
             literature value ~2h (bacterial T90 in daylight freshwater).
@@ -256,8 +266,29 @@ async def telemac_river_dye(
             [5, 2000]. Honest demo default (no site bed-composition
             fetcher) unless user-specified.
         sediment_type: OPTIONAL sediment alias - "sand"/"silt"/"mud" - picks
-            default grain size when ``grain_size_um`` unset. Non-cohesive
-            in v1.
+            default grain size when ``grain_size_um`` unset. Non-cohesive.
+        erodible_bed: OPTIONAL - GAIA v2 ERODIBLE-BED MORPHODYNAMICS. Leave
+            unset (auto): a substance/prompt naming SCOUR / EROSION / a mobile
+            bed ("where does the bed scour below the dam/weir/bridge", "bed
+            degradation under a flood") auto-arms it; pass ``True`` to force it,
+            ``False`` to force the v1 supply-limited suspended-deposition path.
+            When True the run puts a real ERODIBLE BED under the reach with
+            active BEDLOAD transport, so the bed SCOURS where the flow steepens
+            and re-DEPOSITS where it slackens - the deliverable is a SIGNED
+            bed-evolution map (scour negative / deposition positive) plus a
+            bed-change profile, and ``max_scour_mm`` / ``max_deposition_mm`` are
+            reported. Distinct from the default supply-limited path, where nothing
+            erodes (only an injected pulse deposits).
+        bed_thickness_m: OPTIONAL erodible-bed only - depth of the erodible bed
+            stock (m). Default 5; clamped [0.05, 50]. A thicker stock keeps the
+            reach erodible over a long event.
+        bedload_formula: OPTIONAL erodible-bed only - GAIA bed-load transport
+            law: 1=Meyer-Peter-Mueller (default), 2=Einstein-Brown, 7=van Rijn.
+            Other picks fall back to the default.
+        morphological_factor: OPTIONAL erodible-bed only - amplifies bed change
+            per hydraulic step so a short demo hydrograph yields a readable scour
+            depth. Default 10; clamped [1, 100]. Higher = more bed change (a
+            speed-up lever, not a physical rate).
         friction_coefficient: OPTIONAL ADVANCED lever - bed roughness
             (Strickler Ks). Leave unset for demo default (33); clamped
             [10, 90]. Set only from a site-specific user value.
@@ -538,6 +569,40 @@ async def telemac_river_dye(
             c for c in str(sediment_type).strip().lower()
             if c.isalnum() or c in " -_")[:8] or None
 
+    # GAIA v2 ERODIBLE-BED MORPHODYNAMICS knobs. erodible_bed auto-arms when the
+    # substance/contaminant text names SCOUR / EROSION / a mobile bed (the "where
+    # does the bed scour below a dam/weir/bridge contraction" question) even if the
+    # LLM did not pass the flag; an explicit True/False always wins. Coerce the
+    # tuning levers to sane ranges here so a bogus arg never crashes the call; the
+    # worker re-clamps. Only meaningful when the run classifies as the sediment
+    # class - a non-sediment substance ignores these.
+    _scour_words = ("scour", "erosion", "erod", "bedload", "bed load",
+                    "degradation", "bed lowering", "mobile bed", "morpholog",
+                    "aggrad", "degrade")
+    _scour_hint = any(w in substance for w in _scour_words) or (
+        contaminant and any(w in str(contaminant).lower() for w in _scour_words))
+    if erodible_bed is None:
+        erodible_bed = bool(_scour_hint)
+    else:
+        erodible_bed = bool(erodible_bed)
+    bed_thickness_m = _pos_float(bed_thickness_m, 0.05, 50.0)
+    morphological_factor = _pos_float(morphological_factor, 1.0, 100.0)
+    if bedload_formula is not None:
+        try:
+            bedload_formula = int(bedload_formula)
+        except (TypeError, ValueError):
+            bedload_formula = None
+        else:
+            # gaia.dico v9.0 BED-LOAD TRANSPORT FORMULA FOR ALL SANDS choices
+            # compatible with a suspension-off run (1 MPM, 2 Einstein-Brown,
+            # 7 van Rijn bedload). Others (Engelund-Hansen total etc.) are dropped
+            # to the default so a bad pick never wedges the solve.
+            if bedload_formula not in (1, 2, 7):
+                logger.warning(
+                    "telemac_river_dye: bedload_formula %r not in {1,2,7} - "
+                    "using default (1=Meyer-Peter-Mueller)", bedload_formula)
+                bedload_formula = None
+
     # TELEMAC-PHYS-1 constitutive-physics overrides (advanced / demo-default
     # levers). Coerce + CLAMP to the physics_registry ranges here so a set value
     # never errors the call (matches this tool's defensive style); the workflow
@@ -600,6 +665,10 @@ async def telemac_river_dye(
             decay_rate_per_day=decay_rate_per_day,
             grain_size_um=grain_size_um,
             sediment_type=sediment_type,
+            erodible_bed=erodible_bed,
+            bed_thickness_m=bed_thickness_m,
+            bedload_formula=bedload_formula,
+            morphological_factor=morphological_factor,
             friction_coefficient=friction_coefficient,
             friction_law=friction_law,
             velocity_diffusivity=velocity_diffusivity,
@@ -1712,6 +1781,10 @@ async def model_telemac_river_dye(
     decay_rate_per_day: float | None = None,
     grain_size_um: float | None = None,
     sediment_type: str | None = None,
+    erodible_bed: bool = False,
+    bed_thickness_m: float | None = None,
+    bedload_formula: int | None = None,
+    morphological_factor: float | None = None,
     *,
     release_seeds_reach: bool | None = None,
     seed_release_lon: float | None = None,
@@ -1979,9 +2052,11 @@ async def model_telemac_river_dye(
             except (TypeError, ValueError):
                 pass
         sed_grain_um = float(min(max(sed_grain_um, 5.0), 2000.0))  # [5,2000] um
-        logger.info("substance %r -> sediment class (GAIA, type=%s d50=%.4gum): "
-                    "suspended settling + supply-limited deposition",
-                    substance, sed_type, sed_grain_um)
+        logger.info(
+            "substance %r -> sediment class (GAIA, type=%s d50=%.4gum): %s",
+            substance, sed_type, sed_grain_um,
+            "v2 erodible-bed bedload morphodynamics (scour + deposition)"
+            if erodible_bed else "v1 suspended settling + supply-limited deposition")
     # 2026-07-18 release-seeding: plausible release coords ride the manifest;
     # whether they ALSO seed the worker's centerline/corridor resolution
     # (nearest flowline to the RELEASE, not the geocode center) is the
@@ -2042,7 +2117,16 @@ async def model_telemac_river_dye(
            if substance_class == "decay" else {}),
         **({"substance_class": "sediment", "sediment_type": sed_type,
             "grain_size_um": sed_grain_um, "sediment_density": 2650.0,
-            "erodible_bed": False}
+            "erodible_bed": bool(erodible_bed),
+            # v2 erodible-bed tuning rides the manifest ONLY when armed AND set;
+            # unset lets the worker ReachConfig defaults apply. When erodible_bed is
+            # False (v1 supply-limited) none of these are threaded (byte-identical).
+            **({"bed_thickness_m": float(bed_thickness_m)}
+               if erodible_bed and bed_thickness_m is not None else {}),
+            **({"bedload_formula": int(bedload_formula)}
+               if erodible_bed and bedload_formula is not None else {}),
+            **({"morphological_factor": float(morphological_factor)}
+               if erodible_bed and morphological_factor is not None else {})}
            if substance_class == "sediment" else {}),
         # WAQTEL O2 do_sag class: the fully-mixed discharge (CBOD + DO) rides in at
         # the inflow (author_deck O2 branch omits the dye point source entirely).
@@ -2313,7 +2397,14 @@ async def model_telemac_river_dye(
                         utm_epsg=utm_epsg,
                         reach_name=reach_name,
                         worker_sed_metrics=worker_sed,
+                        erodible=bool(erodible_bed),
                     )
+                # v2 erodible-bed: fold the deepest scour (mm) onto the returned
+                # peak so the agent narrates the scour limb (Invariant 1 - the
+                # value comes from the postprocessed field, never invented).
+                if erodible_bed and _dep_metrics.get("max_scour_mm") is not None:
+                    peak = peak.model_copy(update={
+                        "max_scour_mm": _dep_metrics.get("max_scour_mm")})
                 try:
                     Path(gaia_path).unlink(missing_ok=True)
                 except Exception:  # noqa: BLE001

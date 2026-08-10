@@ -183,7 +183,26 @@ class ReachConfig:
     grain_size_um: float = 200.0        # suspended d50 in microns (fine sand)
     sediment_density: float = 2650.0    # grain density kg/m3 (quartz)
     sediment_type: str = "sand"         # sand|silt|mud (narration + grain hint)
+    # GAIA v2 ERODIBLE-BED MORPHODYNAMICS (bedload scour/deposition). erodible_bed
+    # False (default) leaves the v1 SUPPLY-LIMITED suspended path byte-identical
+    # (LAYERS INITIAL THICKNESS = 0, SUSPENSION on, BED LOAD off - only the pulse
+    # deposits). erodible_bed True flips write_gaia_deck to the v2 recipe: a real
+    # erodible bed stock (LAYERS INITIAL THICKNESS = bed_thickness_m), BED LOAD FOR
+    # ALL SANDS = YES with a Shields-based bed-load transport formula
+    # (bedload_formula, default 1 = Meyer-Peter-Mueller), SUSPENSION off, and a
+    # MORPHOLOGICAL FACTOR (morphological_factor) that amplifies bed evolution per
+    # hydraulic step. Under a flood hydrograph the bed then SCOURS (negative CUMUL
+    # BED EVOL) below a contraction/steepening and re-deposits where the flow
+    # slackens - the "where does the bed scour and where does it re-deposit"
+    # question. On the T2D side the bedload path appends NO suspended tracer (the
+    # dye stays the sole hydraulic-companion tracer), so the coupling adds only the
+    # COUPLING WITH / GAIA STEERING FILE lines - no tracer widening. Keywords pinned
+    # against gaia.dico v9.0 (LAYERS INITIAL THICKNESS / BED LOAD FOR ALL SANDS /
+    # BED-LOAD TRANSPORT FORMULA FOR ALL SANDS / MORPHOLOGICAL FACTOR).
     erodible_bed: bool = False          # v2 flag - v1 forces supply-limited
+    bed_thickness_m: float = 5.0        # v2 erodible bed stock depth (LAYERS INITIAL THICKNESS)
+    bedload_formula: int = 1            # v2 BED-LOAD TRANSPORT FORMULA (1=Meyer-Peter-Mueller)
+    morphological_factor: float = 10.0  # v2 MORPHOLOGICAL FACTOR (bed-evolution amplification)
     # WAQTEL O2 "do_sag" class (mutually exclusive with oil/decay/sediment): the
     # dissolved-oxygen SAG below a permitted discharge (US TMDL/permit question).
     # author_deck couples WAQTEL with WATER QUALITY PROCESS = 2 (the O2 module),
@@ -1929,30 +1948,65 @@ def write_gaia_deck(cfg, slf_name: str, cli_name: str, workdir: str) -> str:
     # d50 in METRES from microns; floored so a bogus value cannot zero the grain.
     d50_m = max(float(getattr(cfg, "grain_size_um", 200.0)), 1.0) * 1.0e-6
     density = float(getattr(cfg, "sediment_density", 2650.0))
-    lines = [
-        "/------------------------------------------------------------------/",
-        "/  GAIA steering - ONE suspended NCO class, supply-limited bed",
-        "/  (LAYERS INITIAL THICKNESS = 0 -> only the injected pulse deposits)",
-        f"/  type={str(getattr(cfg, 'sediment_type', 'sand'))[:8]} "
-        f"d50={d50_m*1e6:g}um conc={conc_kgm3:g}kg/m3",
-        "/------------------------------------------------------------------/",
-        f"GEOMETRY FILE                   = {os.path.basename(slf_name)}",
-        f"BOUNDARY CONDITIONS FILE        = {os.path.basename(cli_name)}",
-        f"RESULTS FILE                    = {GAIA_RESULT_FILENAME}",
-        "VARIABLES FOR GRAPHIC PRINTOUTS = 'B,E'",
-        "CLASSES TYPE OF SEDIMENT        = NCO",
-        f"CLASSES SEDIMENT DIAMETERS      = {d50_m:g}",
-        f"CLASSES SEDIMENT DENSITY        = {density:g}",
-        "CLASSES INITIAL FRACTION        = 1.",
-        "CLASSES SETTLING VELOCITIES     = -9.",
-        "SUSPENSION FOR ALL SANDS        = YES",
-        "BED LOAD FOR ALL SANDS          = NO",
-        "SUSPENSION TRANSPORT FORMULA FOR ALL SANDS = 3",
-        "LAYERS INITIAL THICKNESS        = 0.",
-        "SCHEME FOR ADVECTION OF SUSPENDED SEDIMENTS = 1",
-        f"SUSPENDED SEDIMENTS CONCENTRATION VALUES AT THE SOURCES = {conc_kgm3:g}",
-        "MASS-BALANCE                    = YES",
-    ]
+    if bool(getattr(cfg, "erodible_bed", False)):
+        # v2 ERODIBLE-BED MORPHODYNAMICS: a real erodible bed stock + active bedload
+        # transport, so the bed SCOURS (negative CUMUL BED EVOL) where the flow
+        # steepens and re-deposits where it slackens. SUSPENSION is OFF (pure
+        # bedload morphodynamics -> a clean scour/deposition signal and NO suspended
+        # tracer appended to T2D, so the dye stays the sole hydraulic companion).
+        # MORPHOLOGICAL FACTOR amplifies the bed change per hydraulic step so a
+        # short demo hydrograph produces a readable scour depth. Keywords pinned
+        # against gaia.dico v9.0. LAYERS INITIAL THICKNESS carries per-layer stock;
+        # one generous layer keeps the whole reach erodible over the demo.
+        bed_thick = max(float(getattr(cfg, "bed_thickness_m", 5.0)), 0.01)
+        formula = int(getattr(cfg, "bedload_formula", 1) or 1)
+        mofac = max(float(getattr(cfg, "morphological_factor", 10.0)), 1.0)
+        lines = [
+            "/------------------------------------------------------------------/",
+            "/  GAIA steering - v2 ERODIBLE BED, bedload morphodynamics (scour)",
+            f"/  type={str(getattr(cfg, 'sediment_type', 'sand'))[:8]} "
+            f"d50={d50_m*1e6:g}um bed={bed_thick:g}m icf={formula} mofac={mofac:g}",
+            "/------------------------------------------------------------------/",
+            f"GEOMETRY FILE                   = {os.path.basename(slf_name)}",
+            f"BOUNDARY CONDITIONS FILE        = {os.path.basename(cli_name)}",
+            f"RESULTS FILE                    = {GAIA_RESULT_FILENAME}",
+            "VARIABLES FOR GRAPHIC PRINTOUTS = 'B,E'",
+            "CLASSES TYPE OF SEDIMENT        = NCO",
+            f"CLASSES SEDIMENT DIAMETERS      = {d50_m:g}",
+            f"CLASSES SEDIMENT DENSITY        = {density:g}",
+            "CLASSES INITIAL FRACTION        = 1.",
+            "SUSPENSION FOR ALL SANDS        = NO",
+            "BED LOAD FOR ALL SANDS          = YES",
+            f"BED-LOAD TRANSPORT FORMULA FOR ALL SANDS = {formula}",
+            f"LAYERS INITIAL THICKNESS        = {bed_thick:g}",
+            f"MORPHOLOGICAL FACTOR            = {mofac:g}",
+            "MASS-BALANCE                    = YES",
+        ]
+    else:
+        lines = [
+            "/------------------------------------------------------------------/",
+            "/  GAIA steering - ONE suspended NCO class, supply-limited bed",
+            "/  (LAYERS INITIAL THICKNESS = 0 -> only the injected pulse deposits)",
+            f"/  type={str(getattr(cfg, 'sediment_type', 'sand'))[:8]} "
+            f"d50={d50_m*1e6:g}um conc={conc_kgm3:g}kg/m3",
+            "/------------------------------------------------------------------/",
+            f"GEOMETRY FILE                   = {os.path.basename(slf_name)}",
+            f"BOUNDARY CONDITIONS FILE        = {os.path.basename(cli_name)}",
+            f"RESULTS FILE                    = {GAIA_RESULT_FILENAME}",
+            "VARIABLES FOR GRAPHIC PRINTOUTS = 'B,E'",
+            "CLASSES TYPE OF SEDIMENT        = NCO",
+            f"CLASSES SEDIMENT DIAMETERS      = {d50_m:g}",
+            f"CLASSES SEDIMENT DENSITY        = {density:g}",
+            "CLASSES INITIAL FRACTION        = 1.",
+            "CLASSES SETTLING VELOCITIES     = -9.",
+            "SUSPENSION FOR ALL SANDS        = YES",
+            "BED LOAD FOR ALL SANDS          = NO",
+            "SUSPENSION TRANSPORT FORMULA FOR ALL SANDS = 3",
+            "LAYERS INITIAL THICKNESS        = 0.",
+            "SCHEME FOR ADVECTION OF SUSPENDED SEDIMENTS = 1",
+            f"SUSPENDED SEDIMENTS CONCENTRATION VALUES AT THE SOURCES = {conc_kgm3:g}",
+            "MASS-BALANCE                    = YES",
+        ]
     # DAMOCLES hard 72-char line limit (identical to author_deck's clamp): every
     # line is defensively sliced; comments are safe, the data lines are short by
     # construction (the keyword above is the longest at 55 + a small number).
@@ -2169,7 +2223,11 @@ def author_deck(cfg, mesh, slf, cli, res, cas_path, lb_order, bed):
         # (a clean-rain default). Tracer count: do_sag = 4 (dye + DO + CBOD +
         # NH4), sediment (GAIA) = 2 (dye + suspended class), else 1 (dye).
         _subst = str(getattr(cfg, "substance_class", "tracer")).lower()
-        _n_tracers = 4 if _subst == "do_sag" else (2 if _subst == "sediment" else 1)
+        # sediment: v1 SUSPENSION appends a 2nd tracer (dye + suspended class); v2
+        # ERODIBLE bedload appends none (dye only). do_sag = 4 (dye + DO + CBOD + NH4).
+        _sed_suspended = _subst == "sediment" and not bool(
+            getattr(cfg, "erodible_bed", False))
+        _n_tracers = 4 if _subst == "do_sag" else (2 if _sed_suspended else 1)
         _train = ";".join(["0."] * _n_tracers)
         rain_block = (
             "RAIN OR EVAPORATION             = YES\n"
@@ -2338,17 +2396,24 @@ COEFFICIENT FOR DIFFUSION OF TRACERS     = {_tracer_diff}
         # (author_gaia_deck clamps its own file; these three t2d lines are short).
         write_gaia_deck(cfg, os.path.basename(slf), os.path.basename(cli),
                         os.path.dirname(os.path.abspath(cas_path)))
-        # add T2 (the appended gaia suspended tracer) to the graphic printouts
-        cas = cas.replace(
-            "VARIABLES FOR GRAPHIC PRINTOUTS = 'U,V,H,S,B,T1'",
-            "VARIABLES FOR GRAPHIC PRINTOUTS = 'U,V,H,S,B,T1,T2'")
-        # widen PRESCRIBED TRACERS VALUES to (dye + gaia class) x n_liquid_bounds
-        # zeros (clean boundaries - dye + sediment both enter via the point source
-        # / gaia source keyword, never the open boundaries).
-        n_tr_vals = 2 * max(len(lb_order), 1)
-        cas = cas.replace(
-            "PRESCRIBED TRACERS VALUES       = " + ";".join(tracer),
-            "PRESCRIBED TRACERS VALUES       = " + ";".join(["0."] * n_tr_vals))
+        if not bool(getattr(cfg, "erodible_bed", False)):
+            # v1 SUPPLY-LIMITED SUSPENSION: GAIA appends its ONE suspended class as
+            # a SECOND t2d tracer, so the deck must OUTPUT it (add T2) and size
+            # PRESCRIBED TRACERS VALUES for BOTH tracers x every liquid boundary.
+            cas = cas.replace(
+                "VARIABLES FOR GRAPHIC PRINTOUTS = 'U,V,H,S,B,T1'",
+                "VARIABLES FOR GRAPHIC PRINTOUTS = 'U,V,H,S,B,T1,T2'")
+            # widen PRESCRIBED TRACERS VALUES to (dye + gaia class) x n_liquid_bounds
+            # zeros (clean boundaries - dye + sediment both enter via the point
+            # source / gaia source keyword, never the open boundaries).
+            n_tr_vals = 2 * max(len(lb_order), 1)
+            cas = cas.replace(
+                "PRESCRIBED TRACERS VALUES       = " + ";".join(tracer),
+                "PRESCRIBED TRACERS VALUES       = " + ";".join(["0."] * n_tr_vals))
+        # else: v2 ERODIBLE-BED bedload path appends NO suspended tracer (SUSPENSION
+        # FOR ALL SANDS = NO), so the dye stays the sole t2d tracer - the deck's
+        # single-tracer graphic printouts + PRESCRIBED TRACERS VALUES are already
+        # correct. Only the GAIA coupling lines below are added.
         cas += (
             "/\n"
             "COUPLING WITH                   = 'GAIA'\n"
