@@ -241,19 +241,21 @@ Aspects: sea-level-rise-driven marsh extent migration (slr_rate); migration barr
 
 ### PaHM (Parametric Hurricane Model)
 Purpose: NOAA/CSDL parametric tropical cyclone wind/pressure field generator (GAHM and symmetric-vortex options) that forces SCHISM directly from best-track data, optionally blended with a regional NWP (e.g. HRRR/GFS) wind field; operational in STOFS-3D-Atlantic.
-Today: Not surfaced in TRID3NT today.
+Today: Surfaced as `schism_pahm_surge` (ADR 0217) via STANDALONE parametric Holland-1980 sflux winds on the hydro-core binary (the honest no-rebuild route -- the baked USE_PAHM full-monty binary demands every module namelist, ADR 0115). Symmetric-vortex screening scope; native GAHM + regional-wx blend remain refinement follow-ups.
 Aspects: GAHM (Generalized Asymmetric Holland Model) parametric vortex; symmetric-vortex simpler formulation; blending with a regional weather model wind field; best-track (a/b-deck) ingestion
-- [CAND-L] `besttrack_parametric_hurricane_wind_forcing` [L] [US] - Given a historical Atlantic hurricane's best-track (b-deck), what is the resulting storm-surge water-level response using PaHM-generated GAHM winds alone?
+- [LANDED] `besttrack_parametric_hurricane_wind_forcing` [L] [US] - Given a historical Atlantic hurricane's best-track (b-deck), what is the resulting storm-surge water-level response using PaHM-generated GAHM winds alone?
   src: https://schism-dev.github.io/schism/master/modules/pahm.html (schism-docs-pahm)
   knobs: PaHM_inputs (b-deck file), GAHM vs symmetric-vortex switch, pahm_control.in
+  LANDED (ADR 0217): `schism_pahm_surge` -- a best track -> a SYMMETRIC Holland-1980 vortex wind/pressure field authored as sflux inputs (nws=2) -> barotropic surge on a georeferenced coastal TIN (still-water boundary, so the surge is PURELY wind/pressure driven). Cites Holland 1980 (Mon. Wea. Rev. 108) + the SCHISM sflux format (sflux_9c.F90, verified in-source at v5.11.0). Live smoke through the image: published Hurricane Ike (2008) best track -> peak surge 1.56 m growing monotonically toward landfall (0.03->0.12->0.50->1.56 m), no NaN, "Run completed successfully". GAHM asymmetry + native-PaHM targeted binary = the refinement follow-up.
   notes: New coupled forcing capability (build+run PaHM ahead of/alongside SCHISM); manual hosted externally at noaa-ocs-modeling.github.io/PaHM (not independently WebFetched - cite with caution).
 - [CAND-M] `hurricane_niran_gahm_vs_regional_wx_blend_replication` [M] [non-US] - Do we reproduce the published Cyclone Niran (2021) comparison of GAHM-only vs regional-weather-model-blended wind/surge output?
   src: https://github.com/schism-dev/schism/tree/master/sample_inputs/PaHM_inputs (schism-repo-sample-inputs-PaHM-niran2021)
   knobs: niran2021-bdeck.dat + cyclone_Niran_RegionalWeatherModel_vs_GAHM.jpg / _vs_HM.jpg comparison figures
   notes: Cyclone Niran struck New Caledonia/Australia region - NOT a US case; confirmed present via gh api listing (niran2021-bdeck.dat, two comparison JPGs) but fails the US-only doctrine. Keep as a mechanical-contract PaHM smoke test only, not a V&V replication target; pair with a genuine US Atlantic storm best-track for the real V&V candidate.
-- [CAND-L] `stofs3d_operational_pahm_forcing_pattern` [L] [US] - Following the STOFS-3D-Atlantic operational pattern, what does an end-to-end PaHM-forced SCHISM storm-surge nowcast/forecast pipeline look like for a US Atlantic-basin storm?
+- [LANDED] `stofs3d_operational_pahm_forcing_pattern` [L] [US] - Following the STOFS-3D-Atlantic operational pattern, what does an end-to-end PaHM-forced SCHISM storm-surge nowcast/forecast pipeline look like for a US Atlantic-basin storm?
   src: https://registry.opendata.aws/noaa-nos-stofs3d/ (noaa-stofs3d-atlantic-aws-registry)
   knobs: PaHM + NWM river coupling + G-RTOFS open-boundary; operational STOFS-operational repo config under noaa-ocs-modeling/STOFS-operational/stofs_3d_atl
+  LANDED (ADR 0217): `schism_pahm_surge` realizes the STOFS-class end-to-end pattern in screening form -- best track (a named US Atlantic storm via fetch_storm_tracks/IBTrACS, else the published Ike default) -> parametric wind/pressure sflux -> SCHISM barotropic surge -> peak-surge COG + best-track overlay + coastal gauge surge hydrograph. NOT the full operational stack (NWM river coupling + G-RTOFS open-boundary + GAHM asymmetry are the documented refinement follow-ups); it is the published-first surge-response pipeline.
   notes: Confirmed live: NOAA STOFS-3D-Atlantic is the first operational SCHISM system at NOAA (Jan 2023), US Atlantic basin, published config repo noaa-ocs-modeling/STOFS-operational verified to exist via gh api (contains stofs_3d_atl/ subdir). Best published-first, US-applicable PaHM template candidate.
 
 ### Harmonic analysis (in-code HA)

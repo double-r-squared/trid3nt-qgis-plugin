@@ -725,6 +725,12 @@ from ..workflows.schism.transport_validation.transport_validation import schism_
 # vgrid, river source, salinity gradient) on the hydro-core binary; the composer
 # chain (model_schism_baroclinic_circulation) is inlined.
 from ..workflows.schism.baroclinic_circulation.baroclinic_circulation import schism_baroclinic_circulation as _schism_baroclinic_circulation  # noqa: E402,F401 - ADR 0189 SCHISM 3D baroclinic template (engine=schism, tier=template)
+# schism_pahm_surge TEMPLATE (engine="schism", tier="template"), ADR 0217:
+# parametric hurricane storm surge -- a best track -> a standalone Holland-1980
+# sflux wind/pressure field (nws=2) -> barotropic surge on a coastal TIN (peak
+# surge COG + track overlay + gauge hydrograph). The composer chain
+# (model_schism_pahm_surge) is inlined.
+from ..workflows.schism.pahm_surge.pahm_surge import schism_pahm_surge as _schism_pahm_surge  # noqa: E402,F401 - ADR 0217 SCHISM PaHM storm-surge template (engine=schism, tier=template)
 # geoclaw_inundation TEMPLATE (engine="geoclaw", tier="template"), one folder
 # under workflows/geoclaw/inundation/; EXCLUDED from the default retrieval
 # pool, surfaced only by the run_geoclaw door's gate expansion. The composer

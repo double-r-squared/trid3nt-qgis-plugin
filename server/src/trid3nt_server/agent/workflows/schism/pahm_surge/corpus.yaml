@@ -1,0 +1,16 @@
+# Template routing phrasings: the SCHISM parametric-hurricane storm-surge
+# archetype (ADR 0217). Parametric Holland-1980 sflux winds -> barotropic surge.
+schism_pahm_surge:
+- storm surge from a hurricane
+- hurricane storm surge simulation
+- SCHISM storm surge
+- parametric hurricane wind surge
+- how much storm surge from hurricane
+- best-track storm surge response
+- coastal surge from a hurricane best track
+- Holland parametric hurricane wind and pressure surge
+- simulate hurricane surge on a coastal mesh
+- peak storm-surge water level for a hurricane
+- Hurricane Ike storm surge Galveston
+- SCHISM parametric hurricane model surge
+- tropical cyclone storm surge water level

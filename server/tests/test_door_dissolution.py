@@ -28,6 +28,7 @@ from trid3nt_server.agent.tools.search.tool_retrieval import retrieve_visible_to
 # The registered engine templates (12 engines; MODFLOW ships 11, HEC-RAS #11 ships
 # 2, SCHISM #12 ships 2 -- tidal_hydro + coupled_waves).
 EXPECTED_TEMPLATES = {
+    "schism_pahm_surge",
     "sfincs_flood",
     "sfincs_advanced_numerical_physics_knobs",  # S-tier wave 1: SFINCS numerical solver-settings knob template
     "swmm_urban_flood",
@@ -152,7 +153,7 @@ def test_all_templates_registered_and_callable():
         n for n, e in reg.items() if getattr(e.metadata, "tier", "general") == "template"
     }
     assert registered_templates == EXPECTED_TEMPLATES, (
-        "registered tier=template set drifted from the expected 32: "
+        "registered tier=template set drifted from the expected 33: "
         f"missing={sorted(EXPECTED_TEMPLATES - registered_templates)} "
         f"unexpected={sorted(registered_templates - EXPECTED_TEMPLATES)}"
     )

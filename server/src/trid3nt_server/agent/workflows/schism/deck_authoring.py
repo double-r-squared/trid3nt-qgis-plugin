@@ -46,6 +46,7 @@ __all__ = [
     "sample_bathymetry_on_nodes",
     "author_coastal_tin_deck",
     "author_baroclinic_estuary_deck",
+    "author_pahm_surge_deck",
     "CONSTITUENT_ANGULAR_FREQ_RAD_S",
 ]
 
@@ -997,8 +998,11 @@ def _substitute_param_nml(qa_param_text: str, *, sim_days: float, dt_s: float) -
     import re
 
     nsteps = int(math.ceil(sim_days * 86400.0 / dt_s))
-    ihfskip = nsteps  # one stack for the whole run
-    hourly = max(1, int(round(3600.0 / dt_s)))  # ~1 output/hour
+    hourly = max(1, int(round(3600.0 / dt_s)))  # ~1 output/hour (nspool)
+    # SCHISM REQUIRES ihfskip to be an integer multiple of nspool (else
+    # "ABORT: ihfskip/nspool /= integer"). Round the single-stack length UP to the
+    # next nspool multiple that still covers the whole run.
+    ihfskip = int(math.ceil(nsteps / hourly)) * hourly
 
     text = qa_param_text
     text = re.sub(r"(?m)^(\s*rnday\s*=\s*)\S+", rf"\g<1>{sim_days:g}", text, count=1)
@@ -1113,4 +1117,240 @@ def author_coastal_tin_deck(
         "n_elements": n_elem,
         "open_node_count": open_node_count,
         "centroid": (lon_c, lat_c),
+    }
+
+
+# --------------------------------------------------------------------------- #
+# PaHM surge archetype (ADR 0217): parametric Holland-1980 wind/pressure sflux
+# forcing on a georeferenced coastal TIN, hydro-core binary (nws=2, ics=2).
+# --------------------------------------------------------------------------- #
+
+#: Metres per degree for the local equirectangular projection (ics=1 surge mesh).
+_M_PER_DEG_LON: float = 111_320.0
+_M_PER_DEG_LAT: float = 110_540.0
+
+
+def _reproject_hgrid_to_lonlat(
+    gr3_text: str, lon_c: float, lat_c: float, coslat: float
+) -> str:
+    """Rewrite an hgrid (node metres) to lon/lat, preserving topology node-for-node.
+
+    Inverse of the equirectangular projection: ``lon = lon_c + x/(M_lon*coslat)``,
+    ``lat = lat_c + y/M_lat``. Only the two coordinate columns of each node line
+    change; the header, element block, and boundary block are copied verbatim so
+    hgrid.ll matches hgrid.gr3 exactly (SCHISM's ics=1 sflux/Coriolis requirement).
+    """
+    lines = gr3_text.splitlines()
+    n_elem, n_node = (int(v) for v in lines[1].split()[:2])
+    out = list(lines[:2])
+    for i in range(n_node):
+        parts = lines[2 + i].split()
+        idx, x, y = parts[0], float(parts[1]), float(parts[2])
+        rest = parts[3:]
+        lon = lon_c + x / (_M_PER_DEG_LON * coslat)
+        lat = lat_c + y / _M_PER_DEG_LAT
+        out.append(f"{idx} {lon:.9f} {lat:.9f} " + " ".join(rest))
+    out.extend(lines[2 + n_node:])
+    return "\n".join(out) + "\n"
+
+
+def _author_bctides_stillwater(open_node_count: int) -> str:
+    """A STILL-WATER (constant elevation = 0) open boundary (iettype=2).
+
+    No tidal frequencies -- the boundary is a flat, time-invariant sea surface so
+    the ONLY driver of any elevation change is the storm's wind/pressure sflux
+    field. This is the behavior-proving surge setup: a nonzero peak elevation MUST
+    come from the forcing, never from a tide (the ADR 0217 physics assertion).
+    """
+    if open_node_count <= 0:
+        raise SchismDeckError(
+            "SCHISM_MESH_INVALID",
+            "the coastal TIN has no open-boundary nodes; cannot force a surge boundary "
+            "(check open_boundary_side)",
+        )
+    lines = [
+        "01/01/2000 00:00:00 PST",
+        "0 40. ntip",   # earth tidal potential OFF
+        "0 nbfr",       # no tidal constituents (still water)
+        "1 nope",
+        f"{open_node_count} 2 0 0 0",  # iettype=2 (constant elev), ifltype=0 (no vel)
+        "0.0",          # the constant boundary elevation (m) for the segment
+    ]
+    return "\n".join(lines) + "\n"
+
+
+def _substitute_param_nml_surge(
+    qa_param_text: str,
+    *,
+    sim_days: float,
+    dt_s: float,
+    base_date: tuple[int, int, int, int],
+    ref_lat: float,
+    ref_lon: float,
+    wtiminc_s: float,
+) -> str:
+    """QA param.nml -> a georeferenced barotropic SURGE deck.
+
+    On top of the coastal knobs (rnday/dt/ihfskip/nspool), keeps the proven
+    ``ics=1`` Cartesian path (hgrid.gr3 is PROJECTED to local metres; hgrid.ll
+    carries lon/lat for the sflux geographic interpolation + the beta-plane
+    Coriolis), enables Coriolis (``ncor=1`` on an f-plane referenced at the mesh
+    centroid ``sfea0``/``slam0``), sets the run start to the storm ``base_date``, and
+    turns on sflux atmospheric forcing (``nws=2`` + ``wtiminc`` + ``iwind_form=-1``
+    Pond & Pichard wind stress + a short wind ramp). Barotropic (ibc=1, ihconsv=0)
+    is inherited; the vgrid stays the 2D nvrt=2 template.
+    """
+    import re
+
+    text = _substitute_param_nml(qa_param_text, sim_days=sim_days, dt_s=dt_s)
+    # Record the projection centre (ics=1 informational; not load-bearing here).
+    text = re.sub(r"(?m)^(\s*sfea0\s*=\s*)\S+", rf"\g<1>{ref_lat:.5f}", text, count=1)
+    text = re.sub(r"(?m)^(\s*slam0\s*=\s*)\S+", rf"\g<1>{ref_lon:.5f}", text, count=1)
+    # Run start = storm base date.
+    yr, mo, dy, hr = base_date
+    text = re.sub(r"(?m)^(\s*start_year\s*=\s*)\S+", rf"\g<1>{yr}", text, count=1)
+    text = re.sub(r"(?m)^(\s*start_month\s*=\s*)\S+", rf"\g<1>{mo}", text, count=1)
+    text = re.sub(r"(?m)^(\s*start_day\s*=\s*)\S+", rf"\g<1>{dy}", text, count=1)
+    text = re.sub(r"(?m)^(\s*start_hour\s*=\s*)\S+", rf"\g<1>{hr}", text, count=1)
+    # Atmospheric sflux forcing block (replace the bare `nws = 0` line). The valid
+    # SCHISM v5.11 &OPT wind members are nws/wtiminc/iwind_form/drampwind/iwindoff
+    # (there is NO nrampwind -- the global `nramp` ramps the forcing). drampwind
+    # sets the wind ramp-up (days); iwind_form=-1 is the Pond & Pichard wind stress.
+    surge_block = (
+        "  nws = 2\n"
+        f"  wtiminc = {wtiminc_s:g}.\n"
+        "  drampwind = 0.5\n"
+        "  iwindoff = 0\n"
+        "  iwind_form = -1"
+    )
+    text = re.sub(r"(?m)^\s*nws\s*=\s*\S+.*$", surge_block, text, count=1)
+    return text
+
+
+def author_pahm_surge_deck(
+    dest_dir: str | Path,
+    *,
+    track: list[Any],
+    mesh_bbox: tuple[float, float, float, float],
+    base_date: tuple[int, int, int, int],
+    points: Any = None,
+    cells: Any = None,
+    depths: Any = None,
+    sim_days: float,
+    open_boundary_side: str,
+    dt_s: float = 120.0,
+    coastal_drag_cd: float = 0.0025,
+    sflux_cadence_hr: float = 1.0,
+    supplied_mesh: tuple[Any, Any, Any] | None = None,
+) -> dict[str, Any]:
+    """Author a full PaHM-surge SCHISM deck (Holland sflux + still-water boundary).
+
+    ``track`` is a list of ``holland_sflux.TrackFix`` (time_hr since ``base_date``,
+    center lon/lat, Pc, Vmax, Rmw, Pn). Geometry is the georeferenced coastal TIN
+    (``points``/``cells``/``depths``) or a gate-supplied case mesh. Returns
+    ``{"files", "n_nodes", "n_elements", "open_node_count", "centroid",
+    "holland_field"}``. Raises ``SchismDeckError`` on a mesh/track fault.
+    """
+    import numpy as np
+
+    from trid3nt_server.agent.workflows.schism import holland_sflux as _H
+
+    dest_dir = Path(dest_dir)
+    dest_dir.mkdir(parents=True, exist_ok=True)
+    if supplied_mesh is not None:
+        pts = np.asarray(supplied_mesh[0], dtype=float)
+        tris = np.asarray(supplied_mesh[1], dtype=np.int64)
+        depth_arr = np.asarray(supplied_mesh[2], dtype=float)
+    else:
+        if points is None or cells is None or depths is None:
+            raise SchismDeckError(
+                "SCHISM_MESH_INVALID",
+                "author_pahm_surge_deck needs points+cells+depths or supplied_mesh")
+        pts = np.asarray(points, dtype=float)
+        tris = np.asarray(cells, dtype=np.int64)
+        depth_arr = np.asarray(depths, dtype=float)
+
+    lon_c = float(pts[:, 0].mean())
+    lat_c = float(pts[:, 1].mean())
+
+    # ics=1 solve geometry: PROJECT lon/lat -> local metres (equirectangular about
+    # the mesh centroid), an invertible map so hgrid.ll (lon/lat) reconstructs
+    # node-for-node. hgrid.gr3 (metres) is the solve mesh; hgrid.ll (lon/lat) drives
+    # the sflux geographic interpolation. Both share the SAME node/element order.
+    coslat = math.cos(math.radians(lat_c))
+    pts_m = np.empty_like(pts)
+    pts_m[:, 0] = (pts[:, 0] - lon_c) * _M_PER_DEG_LON * coslat
+    pts_m[:, 1] = (pts[:, 1] - lat_c) * _M_PER_DEG_LAT
+
+    bridge = load_gr3_bridge()
+    try:
+        gr3_text = bridge.tin_to_hgrid(
+            pts_m, tris, depth=depth_arr, grid_name="trid3nt_pahm_surge",
+            open_boundary_side=open_boundary_side, clean_boundary=True,
+        )
+    except Exception as exc:  # noqa: BLE001
+        raise SchismDeckError("SCHISM_MESH_INVALID", f"tin_to_hgrid failed: {exc}") from exc
+
+    open_node_count = _open_boundary_node_count(gr3_text)
+    header = gr3_text.splitlines()[1].split()
+    n_elem, n_nodes = int(header[0]), int(header[1])
+
+    (dest_dir / "hgrid.gr3").write_text(gr3_text, encoding="utf-8")
+    # hgrid.ll: identical topology, node metres -> lon/lat via the inverse map.
+    ll_text = _reproject_hgrid_to_lonlat(gr3_text, lon_c, lat_c, coslat)
+    (dest_dir / "hgrid.ll").write_text(ll_text, encoding="utf-8")
+
+    qa = quarterannulus_fixture_dir()
+    shutil.copy(qa / "vgrid.in", dest_dir / "vgrid.in")
+
+    wtiminc_s = sflux_cadence_hr * 3600.0
+    param_text = _substitute_param_nml_surge(
+        (qa / "param.nml").read_text(encoding="utf-8"), sim_days=sim_days, dt_s=dt_s,
+        base_date=base_date, ref_lat=lat_c, ref_lon=lon_c, wtiminc_s=wtiminc_s,
+    )
+    (dest_dir / "param.nml").write_text(param_text, encoding="utf-8")
+
+    # Still-water open boundary: surge is purely wind/pressure driven.
+    (dest_dir / "bctides.in").write_text(
+        _author_bctides_stillwater(open_node_count), encoding="utf-8")
+
+    # drag.gr3: uniform coastal Cd.
+    drag_lines = ["0", f"{n_elem} {n_nodes}"]
+    for i in range(n_nodes):
+        drag_lines.append(f"{i + 1} {pts[i, 0]:.9f} {pts[i, 1]:.9f} {coastal_drag_cd:.7e}")
+    (dest_dir / "drag.gr3").write_text("\n".join(drag_lines) + "\n", encoding="utf-8")
+
+    # windrot_geo2proj.gr3: the per-node wind-rotation angle (rad) from geographic
+    # (east/north) to the projected mesh frame, which SCHISM nws=2 requires. The
+    # equirectangular projection keeps north aligned, so the rotation is 0.0 at
+    # every node (no reprojection of the sflux wind vectors is needed).
+    rot_lines = ["0", f"{n_elem} {n_nodes}"]
+    for i in range(n_nodes):
+        rot_lines.append(f"{i + 1} {pts[i, 0]:.9f} {pts[i, 1]:.9f} 0.0")
+    (dest_dir / "windrot_geo2proj.gr3").write_text("\n".join(rot_lines) + "\n", encoding="utf-8")
+
+    # station.in at the mesh centroid (the surge-hydrograph gauge point).
+    (dest_dir / "station.in").write_text(_author_station_in(lon_c, lat_c), encoding="utf-8")
+
+    # sflux/: the Holland-1980 parametric wind/pressure field (staged as sflux/...).
+    field = _H.write_sflux_air(
+        dest_dir / "sflux", track, mesh_bbox, base_date=base_date, sim_days=sim_days,
+        cadence_hr=sflux_cadence_hr,
+    )
+
+    files = [
+        dest_dir / n for n in (
+            "hgrid.gr3", "hgrid.ll", "vgrid.in", "param.nml", "bctides.in",
+            "drag.gr3", "windrot_geo2proj.gr3", "station.in",
+            "sflux/sflux_air_1.0001.nc", "sflux/sflux_inputs.txt",
+        )
+    ]
+    return {
+        "files": files,
+        "n_nodes": n_nodes,
+        "n_elements": n_elem,
+        "open_node_count": open_node_count,
+        "centroid": (lon_c, lat_c),
+        "proj_center": (lon_c, lat_c, coslat),  # for the out2d metres->lon/lat inverse
+        "holland_field": field,
     }

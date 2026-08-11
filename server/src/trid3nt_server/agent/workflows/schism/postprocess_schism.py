@@ -97,13 +97,19 @@ def _first_var(ds: Any, cands: tuple[str, ...]) -> str | None:
     return None
 
 
-def read_out2d_elevation(out2d_path: str | Path) -> dict[str, Any]:
+def read_out2d_elevation(out2d_path: str | Path, reproject_xy=None) -> dict[str, Any]:
     """Read node coords + peak/min surface elevation from a scribed out2d netCDF.
 
     Returns ``{node_x, node_y, elev_max, elev_min, n_nodes, is_geographic,
     n_times, bbox}``. ``elev_max``/``elev_min`` are (N,) max/min over time per node.
     Raises ``SCHISM_OUTPUT_EMPTY`` when elevation / node coords are absent or all
     non-finite.
+
+    ``reproject_xy`` (optional): a callable ``(node_x, node_y) -> (lon, lat)`` that
+    maps PROJECTED node metres back to lon/lat for georeferencing. The PaHM-surge
+    deck solves in a local metres projection (ics=1), so its out2d node coords are
+    metres, not degrees -- the surge composer passes the inverse map so the COG
+    georeferences to the real AOI. Everything else leaves this ``None`` (no-op).
     """
     import numpy as np
     from netCDF4 import Dataset  # lazy
@@ -121,6 +127,9 @@ def read_out2d_elevation(out2d_path: str | Path) -> dict[str, Any]:
         node_x = np.asarray(ds.variables[xk][:], dtype=np.float64).ravel()
         node_y = np.asarray(ds.variables[yk][:], dtype=np.float64).ravel()
         elev = np.asarray(ds.variables[ek][:], dtype=np.float64)  # (time, node) or (node,)
+
+    if reproject_xy is not None:
+        node_x, node_y = reproject_xy(node_x, node_y)
 
     if elev.ndim == 1:
         elev = elev[None, :]
@@ -229,15 +238,20 @@ def postprocess_schism(
     n_elements_grid: int | None = None,
     runs_bucket: str | None = None,
     fallback_note: str | None = None,
+    reproject_xy=None,
 ) -> tuple[list[LayerURI], dict[str, Any]]:
     """Rasterize a SCHISM out2d to a max-elevation COG + emit the UGRID mesh preview.
 
     Returns ``(layers, metrics)``: ``layers[0]`` the ``SchismElevationLayerURI``
     max-elevation COG (primary), ``layers[1]`` the ``layer_type="mesh"`` out2d
     UGRID preview (context). ``metrics`` carries the elevation stats.
+
+    ``reproject_xy`` (optional): a ``(node_x, node_y) -> (lon, lat)`` map applied to
+    the out2d node coords before rasterizing -- the PaHM-surge deck's local metres
+    projection inverse (ics=1), so the surge COG + mesh georeference to the AOI.
     """
     out2d_path = Path(out2d_path)
-    data = read_out2d_elevation(out2d_path)
+    data = read_out2d_elevation(out2d_path, reproject_xy=reproject_xy)
     node_x, node_y = data["node_x"], data["node_y"]
     elev_max, elev_min, finite = data["elev_max"], data["elev_min"], data["finite"]
     is_geographic = data["is_geographic"]

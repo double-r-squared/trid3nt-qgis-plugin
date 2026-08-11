@@ -126,6 +126,12 @@ SHOWCASE: list[Showcase] = [
              {"significant_wave_height_m": 4.0, "peak_period_s": 13.0,
               "mean_direction_deg": 70.0, "directional_spread": 25.0, "sim_hours": 0.5},
              "ADR 0189 SCHISM+WWM parametric JONSWAP boundary (Duck FRF, storm sea state)", 1200),
+    # -- SCHISM PaHM storm surge (ADR 0217) ----------------------------------
+    Showcase("schism_pahm_surge",
+             {"bbox": [-95.05, 29.0, -94.55, 29.45], "sim_days": 1.2},
+             "ADR 0217 SCHISM PaHM storm surge: published Hurricane Ike (2008) best track "
+             "-> Holland-1980 parametric sflux winds -> barotropic surge on a Galveston "
+             "coastal TIN (peak surge COG + best-track overlay + gauge surge hydrograph)", 1200),
     # -- landlab diagnostics on the Boulder AOI (DEM fetch + solve) ----------
     Showcase("landlab_flow_accumulation", {"bbox": _BOULDER},
              "ADR 0141 landlab diagnostic wave, Boulder CO AOI", 360),

@@ -49,6 +49,11 @@ SCHISM_WAVE_SOLVER_NAME: str = "schism_coupled_waves"
 #: ``hydro`` executable variant (pschism_TVD-VL) run in 3D baroclinic mode (ibc=0).
 SCHISM_BAROCLINIC_SOLVER_NAME: str = "schism_baroclinic_circulation"
 
+#: The PaHM storm-surge solver identifier (ADR 0217). Same worker image, the
+#: ``hydro`` executable variant (pschism_TVD-VL) with nws=2 sflux atmospheric
+#: forcing (parametric Holland-1980 wind/pressure fields).
+SCHISM_SURGE_SOLVER_NAME: str = "schism_pahm_surge"
+
 #: Default worker image (override via env TRID3NT_SCHISM_IMAGE, mirroring
 #: TRID3NT_TELEMAC_IMAGE / TRID3NT_HECRAS_IMAGE).
 DEFAULT_SCHISM_IMAGE: str = "trid3nt-local/schism:latest"
@@ -83,6 +88,9 @@ def register_schism_solver() -> None:
     SOLVER_WORKFLOW_REGISTRY.setdefault(SCHISM_WAVE_SOLVER_NAME, LOCAL_DOCKER_WORKFLOW_NAME)
     SOLVER_WORKFLOW_REGISTRY.setdefault(
         SCHISM_BAROCLINIC_SOLVER_NAME, LOCAL_DOCKER_WORKFLOW_NAME
+    )
+    SOLVER_WORKFLOW_REGISTRY.setdefault(
+        SCHISM_SURGE_SOLVER_NAME, LOCAL_DOCKER_WORKFLOW_NAME
     )
 
 
@@ -181,6 +189,10 @@ def register_schism_local_spec() -> None:
     register_local_solver_spec(
         SCHISM_BAROCLINIC_SOLVER_NAME,
         lambda: schism_local_spec(SCHISM_BAROCLINIC_SOLVER_NAME),
+    )
+    register_local_solver_spec(
+        SCHISM_SURGE_SOLVER_NAME,
+        lambda: schism_local_spec(SCHISM_SURGE_SOLVER_NAME),
     )
 
 
