@@ -226,6 +226,12 @@ SHOWCASE: list[Showcase] = [
     Showcase("openquake_psha", {"bbox": _SF_BAY, "vs30_compare": 260.0},
              "ADR 0182 Vs30 site-response A/B fold, SF Bay AOI (rock 760 vs soft 260 m/s "
              "hazard-curve overlay on the classical map path)", 480),
+    Showcase("openquake_psha",
+             {"bbox": [-112.02, 40.66, -111.80, 40.85], "nehrp_amp_class": "E"},
+             "ADR 0220 discrete NEHRP site-class amplification A/B, Salt Lake City valley "
+             "(soft basin soil vs Wasatch rock): unamplified 760 rock vs classes C/D/E via "
+             "the ASCE 7-22 Fpga AmplificationFunction convolution; PoE monotone rock<C<D<E, "
+             "class E ~2.3x rock at 0.556 g PGA; local oq subprocess", 480),
     # -- ELMFIRE wildfire sensitivity ----------------------------------------
     Showcase("elmfire_live_fuel_moisture_sensitivity", {},
              "ADR 0142 ELMFIRE live-fuel-moisture sensitivity defaults (GR2)", 420),

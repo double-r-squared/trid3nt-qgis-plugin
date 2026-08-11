@@ -154,6 +154,7 @@ async def openquake_psha(
     max_magnitude: float = 7.5,
     vs30: float | None = None,
     vs30_compare: float | None = None,
+    nehrp_amp_class: str | None = None,
     logic_tree: str = "single",
     secondary_poe: float | None = None,
     uniform_hazard_spectra: bool = False,
@@ -206,6 +207,15 @@ async def openquake_psha(
             run's Vs30 (rock default 760) against this softer/stiffer soil value
             at the AOI centroid on the same demo source -- the "how does my soil
             change the hazard" question. None => no comparison (unchanged).
+        nehrp_amp_class: optional NEHRP site class ("C", "D", or "E") for a
+            DISCRETE site-class amplification A/B -- a different mechanism from
+            vs30_compare. Rather than sweeping a GMPE's continuous Vs30 term, a
+            discrete AmplificationFunction table (published ASCE 7-22 Fpga site
+            coefficient per class) is CONVOLVED into the hazard curve, and the
+            unamplified 760 m/s reference rock is overlaid against the soft soil
+            classes C/D/E at the AOI centroid, highlighting the named class -- the
+            "how do NEHRP soil classes change the shaking vs rock" question. None
+            => no amplification overlay.
         logic_tree: epistemic uncertainty mode. ``"single"`` (default) = one
             source model + one GMPE (a single hazard estimate). ``"source_models"``
             = two competing weighted source-model interpretations + 2 GMPEs
@@ -325,6 +335,7 @@ async def openquake_psha(
             run_args,
             compute_class=compute_class,
             vs30_compare=(float(vs30_compare) if vs30_compare is not None else None),
+            nehrp_amp_class=(str(nehrp_amp_class) if nehrp_amp_class else None),
         )
         layer = layer.model_copy(update={"synthetic_inputs": _vs30_prov})
         logger.info(
@@ -1211,6 +1222,168 @@ async def _emit_vs30_ab_chart(
         logger.warning("vs30 A/B chart emit failed (non-fatal): %s", exc)
 
 
+async def _emit_nehrp_amp_chart(
+    run_args: OpenQuakeRunArgs,
+    *,
+    highlight_class: str,
+    source_layer_uri: str | None,
+) -> None:
+    """Emit the discrete NEHRP site-class amplification overlay (best-effort).
+
+    Distinct mechanism from the ``vs30_compare`` A/B (which sweeps a GMPE's
+    continuous Vs30 term): here a discrete AmplificationFunction table
+    (``amplification.csv``, published ASCE 7-22 Fpga per NEHRP class) is convolved
+    into the hazard curve via ``amplification_method = convolution``. Overlays the
+    unamplified 760 m/s reference rock against the soft soil classes C/D/E at the
+    AOI centroid on the same demo source, and reports the amplification factor for
+    the highlighted class in the caption strip.
+    """
+    try:
+        from trid3nt_server.agent.tools.processing.charts_common import (
+            build_chart_payload,
+        )
+        from trid3nt_server.agent.workflows.openquake._local_oq import (
+            NEHRP_FPGA,
+            NEHRP_VS30,
+            aoi_centroid,
+            render_amplification_csv,
+            render_area_source_model_xml,
+            render_classical_amp_job_ini,
+            render_site_model_csv,
+            render_trivial_gmpe_logic_tree_xml,
+            render_trivial_source_logic_tree_xml,
+            run_oq_local,
+        )
+
+        bbox = tuple(run_args.bbox)
+        lon, lat = aoi_centroid(bbox)  # type: ignore[arg-type]
+        imt = str(run_args.imt)
+        source_xml = render_area_source_model_xml(
+            bbox, a_value=float(run_args.a_value), b_value=float(run_args.b_value),  # type: ignore[arg-type]
+            min_magnitude=float(run_args.min_magnitude),
+            max_magnitude=float(run_args.max_magnitude),
+        )
+        slt = render_trivial_source_logic_tree_xml()
+        glt = render_trivial_gmpe_logic_tree_xml(str(run_args.gmpe))
+
+        def _curve_for(ampcode: str, vs30: float, factor: float) -> dict[str, list[float]]:
+            files = {
+                "source_model.xml": source_xml,
+                "source_model_logic_tree.xml": slt,
+                "gmpe_logic_tree.xml": glt,
+                "site_model.csv": render_site_model_csv(
+                    site_lon=lon, site_lat=lat, vs30=vs30, ampcode=ampcode),
+                "amplification.csv": render_amplification_csv(
+                    ampcode=ampcode, factor=factor, imt=imt),
+                "job.ini": render_classical_amp_job_ini(
+                    imt=imt,
+                    investigation_time_years=float(run_args.investigation_time_years),
+                    max_distance_km=float(run_args.max_distance_km),
+                    description=f"NEHRP {ampcode} amplification A/B",
+                ),
+            }
+            outdir = run_oq_local(files, label="nehrpamp")
+            curve_files = sorted(outdir.glob("hazard_curve-mean*.csv"))
+            if not curve_files:
+                return {"imls": [], "poe": []}
+            parsed = parse_hazard_curve_csv(curve_files[0].read_text(encoding="utf-8"))
+            return {
+                "imls": list(parsed.get("hazard_curve_imls_g") or []),
+                "poe": list(parsed.get("hazard_curve_mean_poe") or []),
+            }
+
+        # Unamplified 760 rock reference (factor 1.0) + soft classes C/D/E, all
+        # through the identical convolution deck so curves differ ONLY by the
+        # discrete site-class factor.
+        classes = [("Rock ref (Vs30 760)", "R", 760.0, 1.0)]
+        for cls in ("C", "D", "E"):
+            classes.append(
+                (f"NEHRP {cls} (Fpga {NEHRP_FPGA[cls]:g})", cls, NEHRP_VS30[cls],
+                 NEHRP_FPGA[cls]))
+
+        curves: dict[str, dict[str, list[float]]] = {}
+        for label, code, vs30, factor in classes:
+            curves[label] = await asyncio.to_thread(_curve_for, code, vs30, factor)
+
+        rows: list[dict[str, Any]] = []
+        for label, curve in curves.items():
+            for x, p in zip(curve.get("imls") or [], curve.get("poe") or []):
+                if float(x) > 0.0 and float(p) > 0.0:
+                    rows.append({"iml": float(x), "poe": float(p), "site": label})
+        if len({r["site"] for r in rows}) < 2:
+            return
+
+        # Amplification factor for the highlighted class: PoE ratio (soil / rock)
+        # at the target-PoE IML, read off both curves for the caption strip.
+        ref = curves.get("Rock ref (Vs30 760)", {"imls": [], "poe": []})
+        hl_label = next(
+            (lbl for lbl in curves if lbl.startswith(f"NEHRP {highlight_class} ")),
+            None)
+
+        def _poe_at_iml(curve: dict[str, list[float]], target_iml: float) -> float | None:
+            best = None
+            for x, p in zip(curve.get("imls") or [], curve.get("poe") or []):
+                if best is None or abs(x - target_iml) < best[0]:
+                    best = (abs(x - target_iml), p)
+            return best[1] if best else None
+
+        def _iml_at_poe(curve: dict[str, list[float]], target_poe: float) -> float | None:
+            best = None
+            for x, p in zip(curve.get("imls") or [], curve.get("poe") or []):
+                if p and p > 0 and x and x > 0:
+                    if best is None or abs(p - target_poe) < best[0]:
+                        best = (abs(p - target_poe), x)
+            return best[1] if best else None
+
+        amp_txt = ""
+        if hl_label and ref.get("imls"):
+            ref_iml = _iml_at_poe(ref, float(run_args.poe))
+            hl_iml = _iml_at_poe(curves[hl_label], float(run_args.poe))
+            if ref_iml and hl_iml and ref_iml > 0:
+                amp_txt = (
+                    f" At {run_args.poe * 100:g}% PoE the NEHRP {highlight_class} "
+                    f"{imt} is ~{hl_iml / ref_iml:.2f}x the reference-rock value."
+                )
+            else:
+                mid = 0.284  # a representative PGA-scale probe on the ladder
+                rp, hp = _poe_at_iml(ref, mid), _poe_at_iml(curves[hl_label], mid)
+                if rp and hp and rp > 0:
+                    amp_txt = (
+                        f" At {mid:g} g the NEHRP {highlight_class} exceedance "
+                        f"probability is ~{hp / rp:.2f}x the reference rock.")
+
+        inv = int(round(float(run_args.investigation_time_years))) or 50
+        spec = {
+            "data": {"values": rows},
+            "mark": {"type": "line", "point": True, "tooltip": True},
+            "encoding": {
+                "x": {"field": "iml", "type": "quantitative",
+                      "scale": {"type": "log"}, "title": f"{imt} (g)"},
+                "y": {"field": "poe", "type": "quantitative",
+                      "scale": {"type": "log"}, "title": f"Mean PoE in {inv}yr"},
+                "color": {"field": "site", "type": "nominal", "title": "Site class",
+                          "scale": {"range": ["#444444", "#1f8f4e", "#e07a00",
+                                              "#c0212f"]}},
+            },
+            "width": "container",
+        }
+        payload = build_chart_payload(
+            vega_lite_spec=spec,
+            title=f"NEHRP site-class amplification - {imt} hazard curve",
+            caption=(
+                f"Classical {imt} hazard curve at the AOI centroid convolved with a "
+                f"discrete NEHRP site-class amplification table (ASCE 7-22 Fpga, "
+                f"vs30_ref 760 m/s) over {inv} yr: unamplified reference rock vs "
+                f"soft soil classes C/D/E on the same demo source. Deterministic "
+                f"median site coefficient (sigma 0).{amp_txt}"
+            ),
+            source_layer_uri=source_layer_uri,
+        )
+        await emit_chart_payloads(payload)
+    except Exception as exc:  # noqa: BLE001 - the amplification A/B is best-effort
+        logger.warning("NEHRP amplification chart emit failed (non-fatal): %s", exc)
+
+
 # --------------------------------------------------------------------------- #
 # Composer.
 # --------------------------------------------------------------------------- #
@@ -1219,6 +1392,7 @@ async def model_openquake_psha(
     *,
     compute_class: str = "standard",
     vs30_compare: float | None = None,
+    nehrp_amp_class: str | None = None,
 ) -> SeismicHazardLayerURI:
     """Run a classical-PSHA OpenQuake hazard calculation end-to-end on AWS Batch.
 
@@ -1418,6 +1592,11 @@ async def model_openquake_psha(
                 run_args, vs30_rock=float(run_args.reference_vs30_ms),
                 vs30_compare=float(vs30_compare), source_layer_uri=_oq_layer.uri,
             )
+        if nehrp_amp_class is not None:
+            await _emit_nehrp_amp_chart(
+                run_args, highlight_class=str(nehrp_amp_class).upper(),
+                source_layer_uri=_oq_layer.uri,
+            )
         return _oq_layer
 
     # 3) Download the hazard-map CSV from the worker's run_id prefix (the Batch
@@ -1478,6 +1657,12 @@ async def model_openquake_psha(
         await _emit_vs30_ab_chart(
             run_args, vs30_rock=float(run_args.reference_vs30_ms),
             vs30_compare=float(vs30_compare), source_layer_uri=layer.uri,
+        )
+    # discrete NEHRP site-class amplification overlay (best-effort, non-fatal).
+    if nehrp_amp_class is not None:
+        await _emit_nehrp_amp_chart(
+            run_args, highlight_class=str(nehrp_amp_class).upper(),
+            source_layer_uri=layer.uri,
         )
 
     logger.info(

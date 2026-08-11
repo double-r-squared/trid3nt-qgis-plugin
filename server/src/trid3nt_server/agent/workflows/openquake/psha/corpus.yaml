@@ -14,3 +14,8 @@ openquake_psha:
 - LogicTreeCase-style logic-tree hazard with quantile band over this area
 - uniform hazard spectrum and hazard map at 10% and 2% probability of exceedance in 50 years
 - UHS response spectrum plus the 475-year and 2475-year hazard maps for this US site
+- how does the local soil site class change the shaking compared to rock here
+- compare the NEHRP site classes C D and E amplification of the seismic hazard
+- discrete site-class amplification factor for soft soil versus reference rock
+- how much does soft basin soil amplify the ground motion over bedrock at this site
+- apply the ASCE 7 site coefficient soil amplification to the hazard curve

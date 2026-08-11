@@ -27,16 +27,37 @@ logger = logging.getLogger("trid3nt_server.agent.workflows.openquake._local_oq")
 
 __all__ = [
     "DEFAULT_IMLS_G",
+    "NEHRP_FPGA",
+    "NEHRP_VS30",
     "LocalOqError",
     "aoi_centroid",
     "imls_list_str",
     "region_str",
+    "render_amplification_csv",
     "render_area_source_model_xml",
+    "render_classical_amp_job_ini",
+    "render_classical_point_job_ini",
+    "render_site_model_csv",
     "render_trivial_source_logic_tree_xml",
     "render_trivial_gmpe_logic_tree_xml",
-    "render_classical_point_job_ini",
     "run_oq_local",
 ]
+
+#: Published discrete site-class amplification factors: ASCE 7-22 / FEMA P-2078
+#: peak-ground-acceleration site coefficient Fpga at low intensity, keyed to the
+#: NEHRP site classes OpenQuake carries natively (site.ampcode_dt codes). Relative
+#: to the class B/C reference rock (vs30_ref 760 m/s). These are the discrete
+#: table alternative to a continuous Vs30 GMPE term (the amplification-convolution
+#: path, oq-manual amplification-function).
+NEHRP_FPGA: dict[str, float] = {
+    "A": 0.8, "B": 0.9, "C": 1.3, "D": 1.6, "E": 2.4,
+}
+
+#: Representative Vs30 (m/s) per NEHRP class midpoint, for the site_model.csv
+#: vs30 column and honest narration (BSSC 2020 / ASCE 7-22 class boundaries).
+NEHRP_VS30: dict[str, float] = {
+    "A": 1500.0, "B": 1080.0, "C": 540.0, "D": 260.0, "E": 150.0,
+}
 
 #: The oq CLI binary (overridable for a non-standard install).
 _OQ_BIN: str = os.environ.get("TRID3NT_OQ_BIN", "oq")
@@ -233,6 +254,85 @@ def render_classical_point_job_ini(
         f'intensity_measure_types_and_levels = {{"{imt}": [{iml_list}]}}\n'
         "truncation_level = 3\n"
         f"maximum_distance = {max_distance_km:g}\n\n"
+        "[output]\n"
+        "export_dir = out\n"
+        "mean = true\n"
+    )
+
+
+def render_site_model_csv(
+    *, site_lon: float, site_lat: float, vs30: float, ampcode: str,
+) -> str:
+    """Render a one-site ``site_model.csv`` carrying an ``ampcode`` (NEHRP class).
+
+    The ``ampcode`` column keys the amplification-convolution table to this site's
+    discrete soil class; ``vs30`` rides for GMPE site terms + narration.
+    """
+    return (
+        "lon,lat,vs30,vs30measured,z1pt0,z2pt5,ampcode\n"
+        f"{site_lon:.6f},{site_lat:.6f},{vs30:g},1,50.0,1.0,{ampcode}\n"
+    )
+
+
+def render_amplification_csv(*, ampcode: str, factor: float, imt: str) -> str:
+    """Render a discrete amplification-function table (one ampcode, one IMT).
+
+    NRML-adjacent CSV the convolution amplifier reads (oq-manual
+    amplification-function): a header ``vs30_ref`` comment, then one median
+    amplification factor + zero sigma for the target IMT. Deterministic median
+    site coefficient (sigma 0), narrated as such.
+    """
+    return (
+        "#,,,vs30_ref=760\n"
+        f"ampcode,{imt},sigma_{imt}\n"
+        f"{ampcode},{factor:g},.0\n"
+    )
+
+
+def render_classical_amp_job_ini(
+    *,
+    imt: str,
+    investigation_time_years: float,
+    max_distance_km: float,
+    soil_intensities: str = "0.01 0.05 0.1 0.2 0.4 0.8 1.2",
+    gmpe_lt_file: str = "gmpe_logic_tree.xml",
+    source_lt_file: str = "source_model_logic_tree.xml",
+    description: str = "classical PSHA amplification",
+) -> str:
+    """Render a classical-PSHA job.ini that convolves a discrete amplification table.
+
+    Distinct from ``render_classical_point_job_ini``: the site + its soil class
+    come from ``site_model.csv`` (ampcode), and ``amplification_method =
+    convolution`` folds the ``amplification.csv`` factor into the hazard curve.
+    ``vs30_tolerance`` is set wide so a soft-soil Vs30 far from the 760 reference
+    is accepted (the amplification is carried by the discrete table, not the GMPE
+    Vs30 term). Proven on oq 3.25.1 (case_55 convolution deck).
+    """
+    iml_list = imls_list_str(DEFAULT_IMLS_G)
+    return (
+        "[general]\n"
+        f"description = {description}\n"
+        "calculation_mode = classical\n"
+        "random_seed = 23\n\n"
+        "[logic_tree]\n"
+        "number_of_logic_tree_samples = 0\n\n"
+        "[erf]\n"
+        "rupture_mesh_spacing = 5\n"
+        "width_of_mfd_bin = 0.2\n"
+        "area_source_discretization = 10.0\n\n"
+        "[site_params]\n"
+        "site_model_file = site_model.csv\n\n"
+        "[calculation]\n"
+        f"source_model_logic_tree_file = {source_lt_file}\n"
+        f"gsim_logic_tree_file = {gmpe_lt_file}\n"
+        f"investigation_time = {investigation_time_years:g}\n"
+        f'intensity_measure_types_and_levels = {{"{imt}": [{iml_list}]}}\n'
+        f"soil_intensities = {soil_intensities}\n"
+        "truncation_level = 3\n"
+        f"maximum_distance = {max_distance_km:g}\n"
+        "amplification_csv = amplification.csv\n"
+        "amplification_method = convolution\n"
+        "vs30_tolerance = 2000\n\n"
         "[output]\n"
         "export_dir = out\n"
         "mean = true\n"
