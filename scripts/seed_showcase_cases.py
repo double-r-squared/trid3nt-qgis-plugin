@@ -113,6 +113,23 @@ SHOWCASE: list[Showcase] = [
              "hourly rainfall): RDII at a node vs direct runoff, closed form "
              "validated against the native SWMM 5 [HYDROGRAPHS]/[RDII] engine "
              "(peak match <1%, ~4% of the published Fig 7-10 peak).", 180),
+    Showcase("swmm_snowmelt_degree_day", {},
+             "ADR 0218 SWMM Snow Pack degree-day melt (rain-on-snow) on real KBUF "
+             "(Buffalo) Jan 2024 ASOS temperature: snowpack accumulates through the "
+             "cold spell then melts with the warm rain -- snowmelt vs rain-only "
+             "runoff visibly different, plus the snow-removal (plowing) knob. "
+             "PHYSICS: peak SWE 4.32 in > 0, total melt 1.21 in > 0, rain-on-snow "
+             "peak amplification 1.19x > 1, plowing cuts peak SWE to 1.41 in, "
+             "runoff continuity 0.00%. Proof docs/proof/templates/"
+             "swmm_snowmelt_degree_day_{swe_series,runoff_snowmelt_vs_rainonly}.png", 180),
+    Showcase("swmm_aquifer_baseflow_to_node", {},
+             "ADR 0218 SWMM two-zone [AQUIFERS]/[GROUNDWATER] baseflow-to-node: a "
+             "shallow aquifer under a pervious subcatchment sustains baseflow to a "
+             "drainage node between two storms; the day-12 storm re-recharges it. "
+             "PHYSICS: between-storms baseflow 0.930 cfs > 0 with groundwater vs "
+             "0.000 cfs surface-only, storm-2 recharge bump +1.60 cfs, recession "
+             "tau ~964 h, flow-routing continuity 0.00%. Proof docs/proof/templates/"
+             "swmm_aquifer_baseflow_to_node_{node_hydrograph,baseflow_recession}.png", 180),
     Showcase("swmm_subcatchment_runoff_comparison", {"compare": "infiltration_method"},
              "ADR 0151 SWMM mechanism comparison (infiltration method A/B)", 240),
     Showcase("swmm_wetwell_pump_control_comparison", {},

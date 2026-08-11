@@ -43,6 +43,8 @@ EXPECTED_TEMPLATES = {
     "swmm_lid_performance_comparison",  # ADR 0151 SWMM CAND-S: green roof / rain barrel vs rooftop disconnect / vegetative swale
     "swmm_wq_buildup_washoff_comparison",  # ADR 0151 SWMM CAND-S: curb-length vs area buildup + EMC vs exp washoff
     "swmm_rdii_rtk_unit_hydrograph",  # ADR 0190 row 4: RTK unit-hydrograph RDII vs direct runoff (closed form + native SWMM cross-check)
+    "swmm_snowmelt_degree_day",  # ADR 0218 board rows swmm_snowmelt_degree_day + swmm_snow_removal_plowing: Snow Pack degree-day melt (rain-on-snow) + plow-removal knob
+    "swmm_aquifer_baseflow_to_node",  # ADR 0218 board row swmm_aquifer_baseflow_to_node: two-zone [AQUIFERS]/[GROUNDWATER] baseflow-to-node
     "telemac_river_dye",
     "telemac_do_sag",
     "telemac_rain_on_grid",  # ADR 0196: SCS-CN rainfall-runoff on a delineated watershed (Coweeta Creek NC live V&V)
@@ -153,7 +155,7 @@ def test_all_templates_registered_and_callable():
         n for n, e in reg.items() if getattr(e.metadata, "tier", "general") == "template"
     }
     assert registered_templates == EXPECTED_TEMPLATES, (
-        "registered tier=template set drifted from the expected 33: "
+        "registered tier=template set drifted from the expected set: "
         f"missing={sorted(EXPECTED_TEMPLATES - registered_templates)} "
         f"unexpected={sorted(registered_templates - EXPECTED_TEMPLATES)}"
     )
@@ -186,9 +188,9 @@ def _template_corpus() -> dict[str, list[str]]:
 
 
 def test_every_template_surfaces_in_top8(warm_index):
-    """Model-free retrieve_visible_tools(query, None, 8): for EACH of the 23
-    engine templates, at least one of its natural corpus queries surfaces it in
-    the top-8. This is the discovery guarantee that lets the doors die."""
+    """Model-free retrieve_visible_tools(query, None, 8): for EACH engine
+    template, at least one of its natural corpus queries surfaces it in the
+    top-8. This is the discovery guarantee that lets the doors die."""
     corpus = _template_corpus()
     misses: dict[str, list[str]] = {}
     for tmpl in sorted(EXPECTED_TEMPLATES):

@@ -302,6 +302,8 @@ PRIMARY_CATEGORY: dict[str, str] = {
     "swmm_lid_performance_comparison": "simulation_modeling",
     "swmm_wq_buildup_washoff_comparison": "simulation_modeling",
     "swmm_rdii_rtk_unit_hydrograph": "simulation_modeling",
+    "swmm_snowmelt_degree_day": "simulation_modeling",
+    "swmm_aquifer_baseflow_to_node": "simulation_modeling",
     "pelicun_damage_assessment": "simulation_modeling",
     # pelicun Assessment-API validation / sensitivity templates: idealized
     # damage-and-loss methodology checks, primary damage_assessment.

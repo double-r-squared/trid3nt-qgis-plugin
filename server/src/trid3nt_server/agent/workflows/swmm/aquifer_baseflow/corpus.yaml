@@ -1,0 +1,12 @@
+# Template routing phrasings: engine templates are ordinary retrieval-pool tools.
+swmm_aquifer_baseflow_to_node:
+- how much baseflow does a shallow aquifer add to a stream between storms
+- groundwater baseflow contribution to a drainage node versus surface runoff
+- two-zone aquifer under a subcatchment feeding a stream node
+- sustained baseflow recession between storms from the water table
+- how does adding groundwater change the node hydrograph
+- SWMM aquifer and groundwater objects baseflow to a node
+- shallow water table discharging baseflow to a channel
+- storm recharge raising the water table then slow baseflow release
+- subsurface return flow to the drainage network between rain events
+- does the stream keep flowing between storms from groundwater

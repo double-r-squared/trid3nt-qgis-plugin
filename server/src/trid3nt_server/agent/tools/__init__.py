@@ -662,6 +662,17 @@ from ..workflows.swmm.wq_buildup_washoff_comparison.wq_buildup_washoff_compariso
 # RDII (rainfall-derived inflow+infiltration) at a node vs direct runoff; closed
 # form validated against the native SWMM 5 [HYDROGRAPHS]/[RDII] engine. tier=template.
 from ..workflows.swmm.rdii_rtk.rdii_rtk import swmm_rdii_rtk_unit_hydrograph as _swmm_rdii_rtk_unit_hydrograph  # noqa: E402,F401 - RTK unit-hydrograph RDII
+# swmm_snowmelt_degree_day (ADR 0218 board rows swmm_snowmelt_degree_day +
+# swmm_snow_removal_plowing): Snow Pack [SNOWPACKS] + degree-day melt on a
+# subcatchment; rain-on-snow winter flood driver charted snowmelt-vs-rain-only,
+# with the snow-removal/plowing REMOVAL block as a knob. Chart-first validation
+# class (RDII precedent), host-side pyswmm, no worker image. tier=template.
+from ..workflows.swmm.snowmelt_degree_day.snowmelt_degree_day import swmm_snowmelt_degree_day as _swmm_snowmelt_degree_day  # noqa: E402,F401 - Snow Pack degree-day melt (engine=swmm, tier=template)
+# swmm_aquifer_baseflow_to_node (ADR 0218 board row swmm_aquifer_baseflow_to_node):
+# the [GROUNDWATER] two-zone aquifer under a pervious subcatchment contributing
+# baseflow to a drainage node BETWEEN storms; charted with-GW vs no-GW. The SWMM
+# analogue of the Landlab groundwater / RoG return-flow theme. tier=template.
+from ..workflows.swmm.aquifer_baseflow.aquifer_baseflow import swmm_aquifer_baseflow_to_node as _swmm_aquifer_baseflow_to_node  # noqa: E402,F401 - two-zone aquifer baseflow (engine=swmm, tier=template)
 # telemac_river_dye TEMPLATE (engine="telemac", tier="template"), one folder
 # under workflows/telemac/river_dye/; EXCLUDED from the default retrieval
 # pool, surfaced only by the run_telemac door's gate expansion. The composer
