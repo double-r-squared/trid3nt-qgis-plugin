@@ -39,8 +39,8 @@ OUT = REPO / "docs" / "proof" / "templates"
 COG = SCRATCH / "schism_elev_max.tif"
 STAOUT = SCRATCH / "staout_1"
 
-RUN_ID = "01KZRWHNM33Q4NP99BD1XBKP22"
-CASE_ID = "01KZRWZK2XRF1ADH68NX6SA602"
+RUN_ID = "01KZS6NG40P717B2FGSSKP4P1N"
+CASE_ID = "01KZS6M3TX4QZSVKN5QC6E6EGA"
 
 # Published Hurricane Ike (2008, bal092008) best track, verbatim from
 # pahm_surge.py PUBLISHED_IKE_TRACK: (time_hr, lon, lat, pres_mb, wind_kt, rmw_nmi).
@@ -54,7 +54,7 @@ IKE_TRACK = (
 IKE_BASE = dt.datetime(2008, 9, 12, 6, tzinfo=dt.timezone.utc)
 LANDFALL_IDX = 3
 
-VMAX_PINNED = 1.2  # m, pinned surge-color scale (peak observed 1.15 m)
+VMAX_PINNED = 3.5  # m, pinned surge-color scale (peak modeled 3.18 m)
 
 
 def _reproject_to_merc(cog_path):
@@ -83,9 +83,9 @@ def _track_time_label(time_hr):
 def render_map():
     arr, extent, bounds_ll = _reproject_to_merc(COG)
     bbox_ll = (bounds_ll.left, bounds_ll.bottom, bounds_ll.right, bounds_ll.top)
-    # generous context margin: the full Galveston Bay, the barrier island and
-    # the city, not just the raster's own footprint.
-    pad_lon, pad_lat = 0.32, 0.30
+    # modest context margin -- the greater-Galveston domain already spans the bay,
+    # Bolivar Peninsula, the island and the open Gulf shelf.
+    pad_lon, pad_lat = 0.12, 0.12
     bbox_pad = (bbox_ll[0] - pad_lon, bbox_ll[1] - pad_lat,
                 bbox_ll[2] + pad_lon, bbox_ll[3] + pad_lat)
 
@@ -156,7 +156,7 @@ def render_map():
 
     ax.set_title(
         "schism_pahm_surge (SCHISM barotropic + Holland-1980 sflux winds) -- "
-        "Hurricane Ike (2008), Galveston Bay / NW Gulf coast, TX",
+        "Hurricane Ike (2008), greater Galveston Bay + Gulf shelf, TX",
         fontsize=10,
     )
     ax.text(
@@ -169,10 +169,12 @@ def render_map():
 
     caption = (
         f"workflow: schism_pahm_surge  |  storm: Hurricane Ike (2008, bal092008)  |  "
-        f"peak surge {peak_surge_m:.2f} m  |  case {CASE_ID}  |  run {RUN_ID}  |  "
-        "SCREENING: SCHISM barotropic + parametric Holland-1980 winds on a synthetic "
-        "coastal TIN -- NOT GAHM asymmetry, NOT tide-coupled, NOT a calibrated STOFS "
-        f"nowcast  |  color scale pinned 0-{VMAX_PINNED:.1f} m (peak observed {peak_surge_m:.2f} m)"
+        f"peak surge {peak_surge_m:.2f} m on/near Bolivar Peninsula + upper bay (right of track)  |  "
+        f"case {CASE_ID}  |  run {RUN_ID}  |  "
+        "SCREENING: SCHISM barotropic + parametric Holland-1980 winds on the greater-"
+        "Galveston TIN with REAL ETOPO 2022 screening bathymetry (deep Gulf shelf + "
+        "shallow bay) -- NOT GAHM asymmetry, NOT tide-coupled, NOT a calibrated STOFS "
+        f"nowcast; observed Ike ~3-4 m at the coast  |  color scale pinned 0-{VMAX_PINNED:.1f} m"
     )
     fig.text(0.5, -0.02, caption, ha="center", va="top", fontsize=8, color="#3a3a3c",
               wrap=True)
@@ -209,13 +211,14 @@ def render_chart():
     fig.tight_layout()
 
     trough_m = float(elev_m.min())
+    peak_m = float(elev_m.max())
     caption = (
-        "gauge location: SCHISM station.in point at the run's mesh centroid -- the "
-        "BLUE dot on the map panel, inside Galveston Bay, landward of the barrier "
-        f"island and away from the coastal peak-surge cells  |  min {trough_m:.2f} m "
-        "(bay-interior wind setdown under the Holland vortex, settling to a steady "
-        "state by ~15 h -- distinct from the coastal peak-surge value on the map, "
-        "which is read at nearshore nodes, not at this gauge)"
+        "gauge: SCHISM station.in at the mesh centroid ~(-94.80, 29.28) -- the BLUE "
+        "dot on the map, the Galveston Bay entrance / Bolivar Roads near Pier 21  |  "
+        f"setdown to {trough_m:.2f} m as the vortex approaches (offshore-directed "
+        f"winds on the left flank), then set-up to +{peak_m:.2f} m at/after landfall "
+        "-- the classic surge setdown/setup story, distinct from the 3.18 m coastal "
+        "peak read at the right-of-track Bolivar nodes on the map"
     )
     fig.text(0.5, -0.06, caption, ha="center", va="top", fontsize=6.6, color="#3a3a3c",
               wrap=True)

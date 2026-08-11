@@ -37,6 +37,7 @@ from typing import Any
 from trid3nt_contracts import new_ulid
 from trid3nt_contracts.common import SyntheticInput
 from trid3nt_contracts.schism_contracts import (
+    SCHISM_BATHYMETRY_UNAVAILABLE,
     SCHISM_INPUT_INVALID,
     SCHISM_SOLVE_FAILED,
     SchismElevationLayerURI,
@@ -82,9 +83,78 @@ PUBLISHED_IKE_TRACK: tuple[tuple[float, float, float, float, float], ...] = (
     (30.0, -95.4, 30.5, 964.0, 60.0, 60.0),
 )
 _IKE_BASE_DATE = (2008, 9, 12, 6)
-#: The Ike landfall AOI (NW Gulf / Galveston) when no location is supplied.
-_IKE_BBOX = (-95.6, 28.6, -94.0, 30.0)
+#: The Ike showcase AOI: GREATER GALVESTON -- the bay, Bolivar Peninsula, Galveston
+#: Island, and the open Gulf shelf seaward (south). Generous on purpose so the whole
+#: surge footprint (right-of-track lobe onto Bolivar + the bay) is visible; the
+#: barotropic screening solve is fast at coarse resolution.
+_IKE_BBOX = (-95.4, 28.6, -94.2, 29.95)
 _PN_MB = 1008.0  # environmental pressure fallback (POCI-class)
+
+#: Bathymetry-fetch resolution bounds (m); mirrors fetch_topobathy's own
+#: resolution_m param bounds (source.yaml: min 1, max 1000) so the autoscaler
+#: never proposes something the fetcher would reject.
+_SURGE_RES_MIN_M = 25.0
+_SURGE_RES_MAX_M = 1000.0
+#: Target long-side pixel count for the screening bathymetry COG (the granularity
+#: doctrine's "bounded grid dimension" -- 500-800 px is enough detail for a
+#: barotropic screening surge without an oversized composite).
+_SURGE_BATHY_TARGET_PX = 750.0
+#: Target AOI kilometres per internal-TIN node (per axis) -- the "sane node
+#: budget": denser than this wastes solve time on a screening barotropic surge,
+#: coarser loses the coastal surge structure (right-of-track lobe, bay funneling).
+_SURGE_TIN_KM_PER_NODE = 6.0
+_SURGE_TIN_DIM_MIN = 8
+_SURGE_TIN_DIM_MAX = 40
+
+
+def _autoscale_surge_domain(
+    bbox: tuple[float, float, float, float],
+    *,
+    target_bathy_px: float = _SURGE_BATHY_TARGET_PX,
+    min_res_m: float = _SURGE_RES_MIN_M,
+    max_res_m: float = _SURGE_RES_MAX_M,
+    km_per_tin_node: float = _SURGE_TIN_KM_PER_NODE,
+) -> dict[str, float | int]:
+    """Autoscale the surge domain's bathymetry-fetch resolution + TIN node grid
+    from the AOI size alone (no DEM read -- safe to call before any fetch).
+
+    Two independent targets, both driven by the AOI's approximate WGS84 extent
+    in kilometres (equirectangular approx at the AOI's mid-latitude, consistent
+    with the rest of this module):
+
+    - ``resolution_m`` (the bathymetry-fetch grid): sized so the AOI's LONGER
+      side is ``target_bathy_px`` pixels (default 750, within the 500-800 px
+      granularity-doctrine band) -- enough real seabed/shelf detail for a
+      screening surge without compositing an oversized COG. Clamped to
+      ``[min_res_m, max_res_m]`` (matches ``fetch_topobathy``'s own
+      ``resolution_m`` bounds).
+    - ``tin_nx``/``tin_ny`` (the internal graded coastal TIN): one node per
+      ``km_per_tin_node`` kilometres on each axis, clamped to
+      ``[_SURGE_TIN_DIM_MIN, _SURGE_TIN_DIM_MAX]`` per axis so a tiny AOI still
+      gets a usable mesh and a huge one stays a fast barotropic screening solve.
+
+    Returns a dict: ``resolution_m``, ``tin_nx``, ``tin_ny``, ``width_km``,
+    ``height_km`` (the last two carried for provenance narration).
+    """
+    west, south, east, north = bbox
+    mid_lat_rad = math.radians(0.5 * (south + north))
+    width_km = max(abs(east - west) * 111.320 * math.cos(mid_lat_rad), 1e-6)
+    height_km = max(abs(north - south) * 110.540, 1e-6)
+    long_dim_km = max(width_km, height_km)
+
+    resolution_m = (long_dim_km * 1000.0) / max(target_bathy_px, 1.0)
+    resolution_m = min(max(resolution_m, min_res_m), max_res_m)
+
+    tin_nx = min(max(round(width_km / km_per_tin_node), _SURGE_TIN_DIM_MIN), _SURGE_TIN_DIM_MAX)
+    tin_ny = min(max(round(height_km / km_per_tin_node), _SURGE_TIN_DIM_MIN), _SURGE_TIN_DIM_MAX)
+
+    return {
+        "resolution_m": resolution_m,
+        "tin_nx": int(tin_nx),
+        "tin_ny": int(tin_ny),
+        "width_km": width_km,
+        "height_km": height_km,
+    }
 
 
 class SchismSurgeError(RuntimeError):
@@ -118,6 +188,39 @@ TEMPLATE_CARD = TemplateCard(
 )
 
 
+#: fetch_topobathy's own declared default resolution (source.yaml resolution_m
+#: default) -- the basis its ``payload_estimate: bbox_area`` model (400 mb/sq-deg)
+#: implicitly assumes. This tool's bathymetry acquisition runs coarser (the
+#: autoscaled/user ``resolution_m`` SCREENING grid, never native), so the estimate
+#: below reuses fetch_topobathy's SAME declared model + constants (never a parallel
+#: check) and resolution-scales it by (native/resolved)**2 pixel-count ratio.
+_TOPOBATHY_NATIVE_RES_M = 10.0
+
+
+def estimate_payload_mb(
+    bbox: list[float] | tuple[float, float, float, float] | None = None,
+    location_query: str | None = None,
+    resolution_m: float | None = None,
+    **_kw: Any,
+) -> float:
+    """Pre-dispatch payload estimate for the tool-payload-warning gate (server
+    ``_maybe_gate_on_payload_warning``): reuses ``fetch_topobathy.estimate_payload_mb``
+    (the SAME bbox-area model this tool's own bathymetry fetch is a resolution-
+    scaled instance of) rather than inventing a second threshold check. A bare
+    ``location_query`` (not yet geocoded pre-dispatch) falls back to the Ike
+    showcase AOI -- the largest default domain, so the estimate stays conservative
+    when the real AOI is unknown at gate time."""
+    from trid3nt_server.agent.tools.fetchers._router.hooks.topobathy import (
+        estimate_payload_mb as _topobathy_estimate_payload_mb,
+    )
+
+    resolved_bbox = tuple(float(v) for v in bbox) if bbox and len(bbox) == 4 else _IKE_BBOX
+    native_mb = _topobathy_estimate_payload_mb(bbox=resolved_bbox)
+    res_m = float(resolution_m) if resolution_m else _autoscale_surge_domain(resolved_bbox)["resolution_m"]
+    scale = (_TOPOBATHY_NATIVE_RES_M / max(res_m, 1.0)) ** 2
+    return max(native_mb * scale, 0.5)
+
+
 _SURGE_METADATA = AtomicToolMetadata(
     name="schism_pahm_surge",
     ttl_class="live-no-cache",
@@ -125,6 +228,7 @@ _SURGE_METADATA = AtomicToolMetadata(
     cacheable=False,
     engine="schism",
     tier="template",
+    payload_mb_estimator_name="estimate_payload_mb",
 )
 
 
@@ -143,6 +247,8 @@ async def schism_pahm_surge(
     sim_days: float = 1.5,
     open_boundary_side: str = "south",
     input_mode: str | None = None,
+    allow_synthetic_domain: bool = False,
+    resolution_m: float | None = None,
     **_extra_ignored: Any,
 ) -> SchismElevationLayerURI | dict[str, Any]:
     """PARAMETRIC HURRICANE STORM SURGE on a coastal mesh (SCHISM + Holland-1980 winds).
@@ -181,12 +287,33 @@ async def schism_pahm_surge(
             default ``south`` for a Gulf coast).
         input_mode: ``"user_gated"`` reviews the resolved storm + forcing + mesh
             basis (and previews the mesh) before solving.
+        allow_synthetic_domain: MECHANISM-DEMO MODE ONLY, default ``False``. When
+            real topo-bathymetry cannot be fetched for the AOI, the default
+            behaviour is an honest ``SCHISM_BATHYMETRY_UNAVAILABLE`` typed error --
+            fabricated bathymetry is never a silent fallback (NATE ruling,
+            2026-08-11). Setting this ``True`` opts into an IDEALIZED sloping-shelf
+            substitute so the Holland-vortex/sflux/solve PATHWAY can still be
+            exercised without real geography; the resulting envelope is marked
+            ``synthetic_inputs`` and the surge PATTERN is explicitly non-physical.
+        resolution_m: the bathymetry-fetch grid resolution (metres), a USER LEVER
+            (the granularity-gate doctrine -- resolution is the user's right, never
+            a silent cap). Default ``None`` -> AUTOSCALED from the resolved AOI
+            (``_autoscale_surge_domain``: the AOI's longer side sized to ~750 px,
+            clamped to fetch_topobathy's own [25, 1000] m bounds); an explicit
+            value always wins and is honored even when it implies a large fetch --
+            oversized requests trip the payload-warning gate (this tool declares
+            ``estimate_payload_mb``), never a silent resolution ceiling. Whether
+            the resolution used was auto or user-supplied is recorded in
+            ``synthetic_inputs`` (``resolution_m`` entry, ``basis`` ``derived`` vs
+            ``user``).
 
     Returns:
         On success: ``SchismElevationLayerURI`` -- the peak-surge COG beside the
         mesh preview + the track overlay + the gauge hydrograph. ``elev_max_m`` is
         the PEAK surge (metres); narrate the typed fields only (invariant 1).
-        On failure: dict ``status="error"`` + ``error_code`` + ``error_message``.
+        On failure: dict ``status="error"`` + ``error_code`` + ``error_message``
+        (``SCHISM_BATHYMETRY_UNAVAILABLE`` when real bathymetry could not be
+        fetched and ``allow_synthetic_domain`` was not set).
 
     FR-DC-6: ``cacheable=False``, ``ttl_class="live-no-cache"``,
     ``source_class="workflow_dispatch"``.
@@ -209,7 +336,8 @@ async def schism_pahm_surge(
         result = await model_schism_pahm_surge(
             storm_name=storm_name, year=year, location_query=location_query,
             bbox=bbox_t, sim_days=sim_days, open_boundary_side=open_boundary_side,
-            input_mode=input_mode,
+            input_mode=input_mode, allow_synthetic_domain=bool(allow_synthetic_domain),
+            resolution_m=float(resolution_m) if resolution_m is not None else None,
         )
         if isinstance(result, dict):
             return result
@@ -421,6 +549,8 @@ async def model_schism_pahm_surge(
     sim_days: float,
     open_boundary_side: str,
     input_mode: str | None,
+    allow_synthetic_domain: bool = False,
+    resolution_m: float | None = None,
 ) -> SchismElevationLayerURI | dict[str, Any]:
     """Resolve track + AOI + mesh + bathymetry -> author surge deck -> solve -> publish."""
     import numpy as np
@@ -446,10 +576,21 @@ async def model_schism_pahm_surge(
     if bbox is None:
         bbox = _IKE_BBOX if not storm_name else _track_landfall_bbox(fixes)
 
+    # --- Stage 2b: resolution (the user lever; autoscaled from the AOI when not
+    # supplied -- the #154 granularity-gate pattern, no silent resolution cap). --
+    autoscale = _autoscale_surge_domain(bbox)
+    if resolution_m is not None:
+        resolved_res_m = float(resolution_m)
+        res_basis: str = "user"
+    else:
+        resolved_res_m = float(autoscale["resolution_m"])
+        res_basis = "derived"
+
     # --- Stage 3: mesh (case mesh via the gate, else internal TIN) ----------- #
     supplied_mesh, gate_open_side, mesh_gate_note = await _surge_mesh_gate(input_mode)
     workdir = Path(tempfile.mkdtemp(prefix="schism-surge-"))
     case_dir = workdir / "case"
+    synthetic_bathy = False
 
     if supplied_mesh is not None:
         open_side = gate_open_side or open_boundary_side
@@ -461,7 +602,8 @@ async def model_schism_pahm_surge(
         )
     else:
         open_side = open_boundary_side
-        points, cells = _build_internal_tin(bbox)
+        points, cells = _build_internal_tin(
+            bbox, nx=int(autoscale["tin_nx"]), ny=int(autoscale["tin_ny"]))
         # Bathymetry: fetch a topobathy/DEM COG; else a synthetic sloping shelf.
         bathy_override = os.environ.get("TRID3NT_SCHISM_BATHY_PATH")
         depths = None
@@ -470,12 +612,34 @@ async def model_schism_pahm_surge(
             bathy_source = "local topobathy COG"
         else:
             try:
-                dem_path, bathy_source = await _fetch_bathymetry_cog(bbox)
+                # SCREENING acquisition: a coarse grid (autoscaled from the AOI, or
+                # the user's explicit resolution_m) + ETOPO bathy base so a large
+                # surge domain fetches a light REAL COG (deep Gulf shelf + shallow
+                # bay), not a synthetic slope, and never blows up into a ~12000 px
+                # CUDEM composite that times out (ADR 0217 flag).
+                dem_path, bathy_source = await _fetch_bathymetry_cog(
+                    bbox, screening_res_m=resolved_res_m, force_bathy_base=True)
                 depths = deck_authoring.sample_bathymetry_on_nodes(points, dem_path)
+                bathy_source = (
+                    f"{bathy_source} COG (screening ~{resolved_res_m:.0f} m "
+                    f"[{res_basis}], ETOPO shelf base)"
+                )
             except Exception as exc:  # noqa: BLE001
-                logger.warning("surge bathymetry fetch failed (%s); synthetic shelf", exc)
+                if not allow_synthetic_domain:
+                    raise SchismSurgeError(
+                        SCHISM_BATHYMETRY_UNAVAILABLE,
+                        f"no real topo-bathymetry could be fetched for this AOI "
+                        f"(fetch_topobathy + fetch_dem both failed/unavailable: {exc}); "
+                        "the surge run stopped rather than substitute fabricated "
+                        "bathymetry. Pass allow_synthetic_domain=True to run the "
+                        "declared mechanism-demo mode on an idealized shelf instead.",
+                    ) from exc
+                logger.warning(
+                    "surge bathymetry fetch failed (%s); allow_synthetic_domain=True "
+                    "-> idealized sloping shelf (declared mechanism-demo mode)", exc)
                 depths = _synthetic_shelf_depths(points, bbox, open_side)
-                bathy_source = "SYNTHETIC sloping shelf (no bathymetry fetched)"
+                bathy_source = "SYNTHETIC sloping shelf (no bathymetry fetched; mechanism-demo mode)"
+                synthetic_bathy = True
         deck = await asyncio.to_thread(
             deck_authoring.author_pahm_surge_deck, case_dir,
             track=fixes, mesh_bbox=bbox, base_date=base_date, points=points,
@@ -487,6 +651,13 @@ async def model_schism_pahm_surge(
         storm=storm_label, vmax=field.peak_wind_ms, pmin=field.min_pressure_pa / 100.0,
         bathy=bathy_source,
     )
+    if synthetic_bathy:
+        note = (
+            "WARNING -- SYNTHETIC BATHYMETRY: no real topo-bathy could be fetched for "
+            "this AOI, so the surge ran on an IDEALIZED sloping shelf. The peak piles "
+            "against the domain's open edge, NOT real coastal geography -- treat the "
+            "surge PATTERN as non-physical (magnitude only, screening). "
+        ) + note
     if track_basis == "published_fallback":
         note += " [fetch_storm_tracks unavailable -- published Ike track substituted]"
     if mesh_gate_note:
@@ -508,7 +679,27 @@ async def model_schism_pahm_surge(
         SyntheticInput(param="bathymetry", value=bathy_source,
                        basis="fetched" if "COG" in bathy_source else "default_demo",
                        real_source_if_any=bathy_source if "COG" in bathy_source else None),
+        SyntheticInput(
+            param="domain_provenance",
+            value="SYNTHETIC (idealized sloping shelf)" if synthetic_bathy else "REAL",
+            basis="default_demo" if synthetic_bathy else "fetched",
+            real_source_if_any=None if synthetic_bathy else bathy_source,
+            note=("mechanism-demo mode (allow_synthetic_domain=True): the surge PATTERN "
+                  "is non-physical, magnitude-only" if synthetic_bathy else
+                  "bathymetry traced to a real fetched source; the surge geometry reflects "
+                  "actual coastal bathymetry, not an idealized shelf"),
+        ),
         SyntheticInput(param="sim_days", value=round(sim_days, 3), units="d", basis="default_demo"),
+        SyntheticInput(
+            param="resolution_m", value=round(resolved_res_m, 1), units="m", basis=res_basis,
+            note=(
+                f"user-supplied (overrides the {autoscale['resolution_m']:.0f} m autoscale "
+                "suggestion)" if res_basis == "user" else
+                f"autoscaled from the AOI ({autoscale['width_km']:.0f}x{autoscale['height_km']:.0f} "
+                f"km) targeting ~{_SURGE_BATHY_TARGET_PX:.0f} px on the long side, TIN "
+                f"{autoscale['tin_nx']}x{autoscale['tin_ny']} nodes"
+            ),
+        ),
     ]
     review = await gate_input_review(
         tool_name="schism_pahm_surge", mode=input_mode, entries=review_entries,

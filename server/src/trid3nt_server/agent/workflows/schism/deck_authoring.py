@@ -906,15 +906,24 @@ def sample_bathymetry_on_nodes(
     tidal SCREENING run keeps every node wet (a documented screening choice --
     surfaced in the template's synthetic_inputs). NaN samples (outside the raster)
     also clamp to the min depth. Returns an (N,) float array.
+
+    ``rasterio.sample`` needs the query coordinates in the RASTER's CRS -- a
+    topobathy COG is EPSG:32616 (UTM), not 4326 -- so the lon/lat nodes are
+    reprojected into the raster CRS first (sampling a UTM raster with raw lon/lat
+    lands every node off-grid -> all-NaN -> a flat clamped domain).
     """
     import numpy as np
     import rasterio
 
     pts = np.asarray(points, dtype=float)
     with rasterio.open(str(dem_path)) as ds:
-        # rasterio.sample expects (lon, lat) in the raster CRS; our COGs are 4326.
+        qx = [float(x) for x in pts[:, 0]]
+        qy = [float(y) for y in pts[:, 1]]
+        if ds.crs is not None and ds.crs.to_epsg() != 4326:
+            from rasterio.warp import transform as _warp_pts
+            qx, qy = _warp_pts("EPSG:4326", ds.crs, qx, qy)
         sampled = np.array(
-            [v[0] for v in ds.sample([(float(x), float(y)) for x, y in pts[:, :2]])],
+            [v[0] for v in ds.sample(zip(qx, qy))],
             dtype=float,
         )
         nodata = ds.nodata

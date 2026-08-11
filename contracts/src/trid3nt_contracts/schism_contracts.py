@@ -113,12 +113,20 @@ SCHISM_INPUT_INVALID: str = "SCHISM_INPUT_INVALID"
 #: The solve completed but produced no out2d elevation field / no finite nodes
 #: (an empty solve is a failure, not an empty success -- honesty floor).
 SCHISM_OUTPUT_EMPTY: str = "SCHISM_OUTPUT_EMPTY"
+#: No real topo-bathymetry could be acquired for a NAMED-PLACE AOI after the
+#: retry/degrade chain (fetch_topobathy + fetch_dem both failed or returned
+#: nothing). Fabricated bathymetry is never a fallback tier (NATE ruling,
+#: 2026-08-11) -- the run stops honestly instead of silently substituting an
+#: idealized shelf. ``allow_synthetic_domain=True`` is the only way to reach the
+#: synthetic path, and only for the declared mechanism-demo mode.
+SCHISM_BATHYMETRY_UNAVAILABLE: str = "SCHISM_BATHYMETRY_UNAVAILABLE"
 
 SCHISM_ERROR_CODES: tuple[str, ...] = (
     SCHISM_SOLVE_FAILED,
     SCHISM_MESH_INVALID,
     SCHISM_INPUT_INVALID,
     SCHISM_OUTPUT_EMPTY,
+    SCHISM_BATHYMETRY_UNAVAILABLE,
 )
 
 

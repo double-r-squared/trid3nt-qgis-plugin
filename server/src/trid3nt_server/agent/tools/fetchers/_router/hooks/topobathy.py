@@ -900,20 +900,41 @@ def _select_and_merge(
     force_bathy_base: bool,
     include_regional_fine: bool,
     min_pixel_m: float | None,
+    skip_cudem: bool = False,
+    skip_land: bool = False,
 ) -> tuple[Any, Any, str, dict[str, Any]]:
     """Run the 4-leg discovery + datum gate + merge; return ``(array, transform,
     crs, provenance)``. ``provenance`` carries the four TopobathyResult fields plus
-    the LABELED loud-degrade warnings (ADR 0110 / the 0091 follow-up)."""
+    the LABELED loud-degrade warnings (ADR 0110 / the 0091 follow-up).
+
+    ``skip_cudem`` drops the fine NOAA CUDEM 1/9" nearshore composite (and its
+    per-tile network reads) -- a SCREENING caller (e.g. a coarse surge TIN) that
+    only needs the GLOBAL ETOPO shelf base + 3DEP land, where reading dozens of
+    CUDEM tiles over a large domain is both wasted (at coarse node density) and the
+    dominant time/failure cost. It forces the ETOPO bathy base on so a real
+    below-waterline bed is still present.
+
+    ``skip_land`` drops the 3DEP land leg. The 3DEP land DEM fills the nearshore
+    ocean with a 0 m sea-level value that (as the higher-precedence source) CLOBBERS
+    the ETOPO negative bathy over water -- flattening a surge domain to ~0 m depth.
+    ETOPO 2022 is already a COMPLETE topo-bathy (land positive, sea negative), so a
+    screening surge mesh (whose land nodes are clamped to min-wet anyway) wants
+    ETOPO-only: real negative bathy offshore, no 0 m ocean clobber."""
     # 1) CUDEM tiles (best-effort -- empty == no coverage).
     cudem_urls: list[str] = []
-    try:
-        cudem_urls = _select_cudem_tiles(bbox, timeout_s)
-    except TopobathyUpstreamError as exc:
-        logger.warning(
-            "fetch_topobathy: CUDEM tile-index unreachable (%s); degrading to "
-            "3DEP-land-only", exc,
-        )
-        cudem_urls = []
+    if skip_cudem:
+        force_bathy_base = True  # ETOPO shelf base replaces the skipped CUDEM bathy
+        logger.info("fetch_topobathy: skip_cudem -- screening acquisition on the "
+                    "ETOPO global shelf base + 3DEP land (no CUDEM tile reads)")
+    else:
+        try:
+            cudem_urls = _select_cudem_tiles(bbox, timeout_s)
+        except TopobathyUpstreamError as exc:
+            logger.warning(
+                "fetch_topobathy: CUDEM tile-index unreachable (%s); degrading to "
+                "3DEP-land-only", exc,
+            )
+            cudem_urls = []
     cudem_vsicurl: list[str] = [f"/vsicurl/{u}" for u in cudem_urls]
 
     # 2) Datum gate per selected CUDEM tile (Invariant 7).
@@ -960,8 +981,9 @@ def _select_and_merge(
             )
             regional_vsicurl = []
 
-    # 3) 3DEP land DEM (REUSE fetch_dem) -- best-effort.
-    land_local = _fetch_3dep_land_to_file(bbox, resolution_m)
+    # 3) 3DEP land DEM (REUSE fetch_dem) -- best-effort. Skipped for a screening
+    # surge (its 0 m ocean fill would clobber the ETOPO negative bathy over water).
+    land_local = None if skip_land else _fetch_3dep_land_to_file(bbox, resolution_m)
     land_absent = land_local is None
 
     # 4) Merge / reproject -> composite array.
@@ -1106,12 +1128,14 @@ def read_topobathy(
     fetch_timeout = float(params.get("timeout_s") or 120.0)
     force_bathy_base = bool(params.get("force_bathy_base", False))
     include_regional_fine = bool(params.get("include_regional_fine", False))
+    skip_cudem = bool(params.get("skip_cudem", False))
+    skip_land = bool(params.get("skip_land", False))
     mpx = params.get("min_pixel_m")
     min_pixel_m = float(mpx) if mpx is not None else None
 
     array, transform, crs, provenance = _select_and_merge(
         bbox, resolution_m, target_crs, navd88_offset_m, fetch_timeout,
-        force_bathy_base, include_regional_fine, min_pixel_m,
+        force_bathy_base, include_regional_fine, min_pixel_m, skip_cudem, skip_land,
     )
     record_provenance(provenance)
     return array, transform, crs

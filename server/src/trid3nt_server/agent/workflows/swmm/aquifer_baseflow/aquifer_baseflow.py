@@ -272,7 +272,7 @@ def _node_chart_spec(hours: list[float], with_gw: list[float],
     idempotent_hint=True,
 )
 async def swmm_aquifer_baseflow_to_node(
-    rainfall_series_in_hr: list[tuple[str, float]] | list[list[Any]] | None = None,
+    rainfall_series_in_hr: list[list[Any]] | list[tuple[str, float]] | None = None,
     dt_min: int = 15,
     area_ac: float = 100.0,
     a1: float = 0.002,
@@ -299,9 +299,10 @@ async def swmm_aquifer_baseflow_to_node(
     (module docstring).
 
     Parameters:
-      rainfall_series_in_hr: rainfall intensity ``[("H:MM", in/hr), ...]``.
-        Default = a representative two-storm sequence (day 1 and day 12) so the
-        between-storms baseflow and the day-12 recharge bump are explicit.
+      rainfall_series_in_hr: rainfall intensity ``[["H:MM", in/hr], ...]``
+        pairs. Default = a representative two-storm sequence (day 1 and day
+        12) so the between-storms baseflow and the day-12 recharge bump are
+        explicit.
       dt_min: wet-weather timestep, minutes. Default 15.
       area_ac: subcatchment area, acres. Default 100.
       a1: groundwater-to-node flow coefficient (the baseflow term). Default

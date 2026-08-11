@@ -36,6 +36,7 @@ from typing import Any
 from trid3nt_contracts import new_ulid
 from trid3nt_contracts.common import SyntheticInput
 from trid3nt_contracts.schism_contracts import (
+    SCHISM_BATHYMETRY_UNAVAILABLE,
     SCHISM_INPUT_INVALID,
     SCHISM_SOLVE_FAILED,
     SchismElevationLayerURI,
@@ -709,16 +710,41 @@ async def _build_coastal_tin_deck(
     }
 
 
-async def _fetch_bathymetry_cog(bbox) -> tuple[str, str]:
-    """Fetch a topobathy (else DEM) COG for the AOI; return (local_path, source_label)."""
+async def _fetch_bathymetry_cog(
+    bbox, *, screening_res_m: float | None = None, force_bathy_base: bool = False,
+) -> tuple[str, str]:
+    """Fetch a topobathy (else DEM) COG for the AOI; return (local_path, source_label).
+
+    ``screening_res_m`` caps the acquisition to a coarse SCREENING grid: it floors
+    the topobathy composite (``min_pixel_m``) AND coarsens the 3DEP land leg
+    (``resolution_m``) so a large (surge) domain fetches a light few-hundred-metre
+    COG instead of compositing multiple CUDEM 1/9" tiles onto a ~12000 px grid --
+    the native-resolution path over a >30 km AOI intermittently times out, and the
+    caller then falls back to a synthetic shelf. ``None`` keeps the native-resolution
+    acquisition (the tidal-mesh path, whose bathymetry detail matters). When
+    ``force_bathy_base`` is set the ETOPO global bathy is laid as the always-on base
+    so the open (seaward) portion of the domain is genuinely-negative bathymetry."""
     from trid3nt_server.agent.tools import TOOL_REGISTRY
 
-    for tool_name, label in (("fetch_topobathy", "topobathy"), ("fetch_dem", "DEM")):
+    topobathy_kw: dict[str, Any] = {}
+    dem_kw: dict[str, Any] = {}
+    if screening_res_m is not None:
+        # A coarse screening TIN only needs the ETOPO global shelf base + 3DEP land;
+        # skip the fine CUDEM 1/9" composite (dozens of per-tile network reads over a
+        # large domain -- wasted at coarse node density AND the dominant fetch cost).
+        topobathy_kw = {"resolution_m": int(screening_res_m),
+                        "min_pixel_m": float(screening_res_m),
+                        "force_bathy_base": bool(force_bathy_base),
+                        "skip_cudem": True, "skip_land": True}
+        dem_kw = {"resolution_m": int(screening_res_m)}
+
+    for tool_name, label, kw in (("fetch_topobathy", "topobathy", topobathy_kw),
+                                 ("fetch_dem", "DEM", dem_kw)):
         entry = TOOL_REGISTRY.get(tool_name)
         if entry is None:
             continue
         try:
-            res = entry.fn(bbox=list(bbox))
+            res = entry.fn(bbox=list(bbox), **kw)
             if asyncio.iscoroutine(res):
                 res = await res
         except Exception as exc:  # noqa: BLE001
@@ -731,9 +757,11 @@ async def _fetch_bathymetry_cog(bbox) -> tuple[str, str]:
         if local:
             return local, label
     raise SchismScenarioError(
-        SCHISM_INPUT_INVALID,
-        "could not fetch bathymetry (topobathy/DEM) for the coastal AOI -- the tidal "
-        "mesh needs bathymetry sampled onto its nodes",
+        SCHISM_BATHYMETRY_UNAVAILABLE,
+        "no real bathymetry could be fetched for this AOI (fetch_topobathy and "
+        "fetch_dem both failed or returned no usable COG) -- the coastal_tin mesh "
+        "needs real bathymetry sampled onto its nodes; fabricated bathymetry is "
+        "never a fallback (NATE ruling, 2026-08-11), so the run stopped honestly",
     )
 
 

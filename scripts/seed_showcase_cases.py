@@ -145,10 +145,19 @@ SHOWCASE: list[Showcase] = [
              "ADR 0189 SCHISM+WWM parametric JONSWAP boundary (Duck FRF, storm sea state)", 1200),
     # -- SCHISM PaHM storm surge (ADR 0217) ----------------------------------
     Showcase("schism_pahm_surge",
-             {"bbox": [-95.05, 29.0, -94.55, 29.45], "sim_days": 1.2},
-             "ADR 0217 SCHISM PaHM storm surge: published Hurricane Ike (2008) best track "
-             "-> Holland-1980 parametric sflux winds -> barotropic surge on a Galveston "
-             "coastal TIN (peak surge COG + best-track overlay + gauge surge hydrograph)", 1200),
+             {"bbox": [-95.4, 28.6, -94.2, 29.95], "sim_days": 1.5},
+             "ADR 0219 SCHISM PaHM storm surge: published Hurricane Ike (2008) best track "
+             "-> Holland-1980 parametric sflux winds -> barotropic surge on the greater "
+             "Galveston domain (bay + Bolivar + island + open Gulf shelf) with REAL ETOPO "
+             "screening bathymetry (peak surge COG + best-track overlay + gauge hydrograph). "
+             "PHYSICS: peak surge 3.18 m > 0 (plausible vs observed Ike ~3-4 m at the coast), "
+             "right-of-track lobe on Bolivar Peninsula + upper bay (NE mean 1.28 m >> SW "
+             "offshore 0.46 m), gauge setdown -1.45 m then set-up +1.21 m at landfall. "
+             "DOMAIN PROVENANCE (NATE ruling, 2026-08-11): synthetic_inputs.domain_provenance "
+             "must read REAL with bathymetry traced to the fetched COG source -- fabricated "
+             "bathymetry is never a silent fallback; a bathy-fetch failure raises "
+             "SCHISM_BATHYMETRY_UNAVAILABLE instead (allow_synthetic_domain=True opts into the "
+             "declared idealized-shelf mechanism-demo mode only)", 1800),
     # -- landlab diagnostics on the Boulder AOI (DEM fetch + solve) ----------
     Showcase("landlab_flow_accumulation", {"bbox": _BOULDER},
              "ADR 0141 landlab diagnostic wave, Boulder CO AOI", 360),

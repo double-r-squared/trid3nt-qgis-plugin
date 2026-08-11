@@ -36,6 +36,12 @@ params:
   include_regional_fine:
     type: bool
     default: false
+  skip_cudem:
+    type: bool
+    default: false
+  skip_land:
+    type: bool
+    default: false
   min_pixel_m:
     type: float
     schema_optional: true

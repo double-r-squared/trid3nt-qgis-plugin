@@ -322,8 +322,8 @@ def _runoff_chart_spec(hours: list[float], snowmelt: list[float],
     idempotent_hint=True,
 )
 async def swmm_snowmelt_degree_day(
-    temperature_series_f: list[tuple[str, float]] | list[list[Any]] | None = None,
-    rainfall_series_in_hr: list[tuple[str, float]] | list[list[Any]] | None = None,
+    temperature_series_f: list[list[Any]] | list[tuple[str, float]] | None = None,
+    rainfall_series_in_hr: list[list[Any]] | list[tuple[str, float]] | None = None,
     dt_min: int = 60,
     area_ac: float = 50.0,
     cmin: float = 0.001,
@@ -350,12 +350,13 @@ async def swmm_snowmelt_degree_day(
     Manual Vol. I snowmelt chapter (module docstring).
 
     Parameters:
-      temperature_series_f: hourly air temperature as ``[("H:MM", degF), ...]``
-        (the degree-day driver + rain/snow split). Default = a representative
-        Buffalo NY rain-on-snow event; the live proof passes REAL ASOS ``tmpf``.
-      rainfall_series_in_hr: rainfall intensity ``[("H:MM", in/hr), ...]``.
-        Default pairs with the temperature default (snowfall in the cold spell,
-        a warm rain burst on the ripe snowpack).
+      temperature_series_f: hourly air temperature as
+        ``[["H:MM", degF], ...]`` pairs (the degree-day driver + rain/snow
+        split). Default = a representative Buffalo NY rain-on-snow event; the
+        live proof passes REAL ASOS ``tmpf``.
+      rainfall_series_in_hr: rainfall intensity ``[["H:MM", in/hr], ...]``
+        pairs. Default pairs with the temperature default (snowfall in the
+        cold spell, a warm rain burst on the ripe snowpack).
       dt_min: timestep, minutes. Default 60.
       area_ac: subcatchment area, acres. Default 50.
       cmin, cmax: degree-day melt coefficients (in/hr/degF), seasonally ramped.
