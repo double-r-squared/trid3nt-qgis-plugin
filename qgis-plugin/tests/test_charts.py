@@ -160,74 +160,81 @@ class TestMatplotlibGuard(unittest.TestCase):
                 charts_mod.matplotlib_error()
                 self.assertEqual(spy.call_count, 1)
 
+def _fake_isfile(true_for):
+    real = os.path.isfile
+
+    def _f(path):
+        return path in true_for or real(path)
+
+    return _f
+
+
+def _fake_access(true_for):
+    real = os.access
+
+    def _f(path, mode):
+        return path in true_for or real(path, mode)
+
+    return _f
+
+
 class TestInstallCommandBuilder(unittest.TestCase):
-    """Per-OS install command string builder -- pure, no subprocess. The
-    executable-resolution logic itself is shared with ``install_dependencies``
-    (one source of truth); these tests confirm ``charts`` delegates rather
-    than re-implementing it, and that the built argv targets the shared
-    script instead of raw pip."""
+    """Per-OS install command builders -- pure, no subprocess. ``charts``
+    delegates the Windows/macOS derivations to ``install_dependencies``
+    (one source of truth; full probe-order coverage lives in
+    ``test_install_dependencies``); these tests confirm the delegation and
+    the Linux literal."""
 
-    def test_mac_derives_from_exec_prefix_bin_python3(self):
-        py = charts_mod.install_python_executable(
-            "darwin",
-            "/Applications/QGIS.app/Contents/MacOS",
-            "/Applications/QGIS.app/Contents/MacOS/QGIS",
+    def test_linux_is_a_plain_literal_no_derivation(self):
+        cmd = charts_mod.linux_install_command()
+        self.assertEqual(cmd, "python3 -m pip install matplotlib")
+
+    def test_linux_honors_extra_pip_names(self):
+        cmd = charts_mod.linux_install_command(["matplotlib", "otherpkg"])
+        self.assertEqual(cmd, "python3 -m pip install matplotlib otherpkg")
+
+    def test_windows_delegates_to_shared_probe(self):
+        exec_prefix = r"C:\QGIS\apps\Python312"
+        executable = r"C:\QGIS\bin\qgis-bin.exe"
+        expected = os.path.join(exec_prefix, "python.exe")
+        with mock.patch(
+            "trid3nt.install_dependencies.os.path.isfile", _fake_isfile({expected})
+        ), mock.patch(
+            "trid3nt.install_dependencies.os.access", _fake_access({expected})
+        ):
+            cmd = charts_mod.windows_install_command(
+                exec_prefix=exec_prefix, executable=executable
+            )
+        self.assertEqual(cmd, f"{expected} -m pip install matplotlib")
+
+    def test_windows_honest_fallback_when_nothing_found(self):
+        exec_prefix = r"C:\QGIS-ghost\apps\Python312"
+        with mock.patch(
+            "trid3nt.install_dependencies.os.path.isfile", lambda p: False
+        ), mock.patch(
+            "trid3nt.install_dependencies.os.access", lambda p, m: False
+        ):
+            cmd = charts_mod.windows_install_command(
+                exec_prefix=exec_prefix, executable=exec_prefix + r"\QGIS"
+            )
+        self.assertTrue(cmd.startswith("could not locate the QGIS python.exe"))
+        self.assertNotIn("pip install", cmd)
+
+    def test_mac_wheel_recipe_delegates_to_shared_recipe(self):
+        recipe = charts_mod.mac_wheel_recipe(
+            python_version="3.12",
+            platform_tag="macosx_11_0_arm64",
+            profile_python="/profile/python",
         )
         self.assertEqual(
-            py, "/Applications/QGIS.app/Contents/MacOS/bin/python3"
+            recipe,
+            install_dependencies.mac_wheel_recipe(
+                ("matplotlib",), "3.12", "macosx_11_0_arm64", "/profile/python"
+            ),
         )
-
-    def test_linux_uses_running_interpreter(self):
-        py = charts_mod.install_python_executable(
-            "linux", "/usr", "/usr/bin/python3"
-        )
-        self.assertEqual(py, "/usr/bin/python3")
-
-    def test_linux_falls_back_to_exec_prefix_when_executable_empty(self):
-        py = charts_mod.install_python_executable("linux", "/usr", "")
-        self.assertEqual(py, "/usr/bin/python3")
-
-    def test_windows_derives_from_exec_prefix(self):
-        # ``os.path.join`` on this (posix) test host renders a win32-style
-        # exec_prefix with '/' -- the assertion below tracks whatever this
-        # host's os.path.join produces, mirroring the production code path
-        # rather than asserting a literal backslash it would never emit here.
-        py = charts_mod.install_python_executable(
-            "win32", r"C:\QGIS\apps\Python312", r"C:\QGIS\bin\qgis-bin.exe"
-        )
-        self.assertEqual(
-            py, os.path.join(r"C:\QGIS\apps\Python312", "python.exe")
-        )
-        self.assertTrue(py.endswith("python.exe"))
-        self.assertTrue(py.startswith(r"C:\QGIS\apps\Python312"))
-
-    def test_argv_shape_delegates_to_shared_script(self):
-        """The command displayed must run install_dependencies.py, not raw
-        pip -- one source of truth for check/install/re-verify."""
-        argv = charts_mod.install_command_argv(
-            "linux", "/usr", "/usr/bin/python3"
-        )
-        self.assertEqual(argv, ["/usr/bin/python3", install_dependencies.__file__])
-
-    def test_command_str_unquoted_when_no_spaces(self):
-        cmd = charts_mod.install_command_str("linux", "/usr", "/usr/bin/python3")
-        self.assertEqual(cmd, f"/usr/bin/python3 {install_dependencies.__file__}")
-
-    def test_command_str_quotes_path_with_spaces(self):
-        cmd = charts_mod.install_command_str(
-            "darwin", "/Applications/QGIS 4.app/Contents/MacOS", "irrelevant"
-        )
-        self.assertTrue(cmd.startswith('"/Applications/QGIS 4.app'))
-        self.assertTrue(cmd.endswith(install_dependencies.__file__))
-
-    def test_nothing_hardcoded_reflects_runtime_prefix(self):
-        """Different exec_prefix inputs must produce different commands --
-        proof the path is derived, not baked in."""
-        cmd_a = charts_mod.install_command_str("darwin", "/opt/QGIS-A", "x")
-        cmd_b = charts_mod.install_command_str("darwin", "/opt/QGIS-B", "x")
-        self.assertNotEqual(cmd_a, cmd_b)
-        self.assertIn("/opt/QGIS-A/bin/python3", cmd_a)
-        self.assertIn("/opt/QGIS-B/bin/python3", cmd_b)
+        self.assertIn("pip download matplotlib", recipe)
+        self.assertIn("-d /tmp/qgis_mpl", recipe)
+        self.assertIn('"/profile/python"', recipe)
 
 
 def _qt_python() -> str | None:

@@ -27,22 +27,27 @@ free -- the hazard curve is log-log, which pure-QPainter code would have to
 hand-roll. GEM's IRMT plugin was rejected (not installed, its viewer is
 coupled to OQ-engine NRML outputs, not our Vega payloads); a server-side PNG
 render was rejected (server change + restart + flood smoke for zero offline
-benefit). matplotlib import is GUARDED: when absent the window degrades to a guided
-fix panel (what's missing, why, the exact per-OS command to run
-``install_dependencies.py`` from a terminal) -- see ``charts_window
-.MissingMatplotlibPanel`` -- never a crash. QGIS 4's macOS/Windows bundles
-dropped matplotlib (QGIS 3 shipped it); the guard + panel below are what
-makes that survivable offline. The panel is terminal-only, not in-dock: an
-in-process install launched via ``QProcess`` failed to start inside the QGIS
-app bundle on NATE's macOS QGIS -- see ``install_dependencies.py``.
+benefit). matplotlib import is GUARDED: when absent the window degrades to a
+guided fix panel -- see ``charts_window.MissingMatplotlibPanel`` -- never a
+crash. QGIS 4's macOS/Windows bundles dropped matplotlib (QGIS 3 shipped
+it); the guard + panel below are what makes that survivable offline.
+
+The fix is PER-OS (NATE ground truth, live-verified, supersedes every
+earlier console/PYTHONPATH attempt): Linux and Windows QGIS pythons have
+pip, so ``linux_install_command`` / ``windows_install_command`` below are
+plain ``pip install`` one-liners. macOS QGIS 4's bundled python has NO pip
+module at all ("No module named pip") -- nothing installs into it, so
+``mac_wheel_recipe`` instead downloads prebuilt wheels with the system
+python3 (a pure downloader) and unzips them straight into the QGIS
+profile's own ``python/`` dir, which is already on QGIS's ``sys.path``.
+Nothing here is ever run in-process by the plugin -- every command is for
+the user to paste into a real terminal; see ``install_dependencies.py``.
 """
 
 from __future__ import annotations
 
 import math
-import os
-import sys
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Sequence
 
 from .. import install_dependencies
 
@@ -100,55 +105,63 @@ def matplotlib_error() -> Optional[str]:
 
 
 # --------------------------------------------------------------------------- #
-# Per-OS "how do I get matplotlib into THIS interpreter" command builder.
-# Pure (no Qt, no subprocess) -- the panel's Copy/Attempt-install actions and
-# the tests both call through this. Never hardcodes a path: QGIS embeds its
-# own python per-OS (macOS: <QGIS.app>/Contents/MacOS/bin/python3, a wrapper
-# the running ``sys.executable`` is NOT; Linux/Windows: the running
-# interpreter already IS the real, invokable one). The executable-resolution
-# logic itself lives in ``install_dependencies`` (one source of truth shared
-# with the standalone script) -- this module only re-exports it under its
-# established name.
+# Per-OS "how do I get matplotlib" command builders. Pure (no Qt, no
+# subprocess) -- the panel's Copy action and the tests both call through
+# these. Every value is re-exported from ``install_dependencies`` (one
+# source of truth shared with the standalone script); this module only
+# wraps them under the panel's established names.
 # --------------------------------------------------------------------------- #
 
 
-def install_python_executable(
-    platform: Optional[str] = None,
+def linux_install_command(pip_names: Sequence[str] = ("matplotlib",)) -> str:
+    """Linux one-liner -- QGIS runs under the SYSTEM python3 there, which
+    already has pip, so this is the plain literal command: no interpreter
+    to derive or probe."""
+    return f"python3 -m pip install {' '.join(pip_names)}"
+
+
+def windows_install_command(
+    pip_names: Sequence[str] = ("matplotlib",),
     exec_prefix: Optional[str] = None,
     executable: Optional[str] = None,
 ) -> str:
-    """The python binary that must run ``install_dependencies.py`` to land
-    matplotlib where this QGIS's interpreter will find it -- derived from
-    ``sys.exec_prefix`` / ``sys.executable`` at call time, never a baked-in
-    path."""
-    return install_dependencies.install_python_executable(
-        platform, exec_prefix, executable
+    """Windows one-liner -- the OSGeo4W python.exe pip ships with
+    (exec_prefix-derived, verified real on disk before being shown; an
+    honest 'could not locate' sentence, never a fabricated path, when it
+    can't be verified)."""
+    python_exe = install_dependencies.windows_python_executable(
+        exec_prefix, executable
     )
+    if python_exe.startswith("could not locate"):
+        return python_exe
+    quoted = f'"{python_exe}"' if " " in python_exe else python_exe
+    return f"{quoted} -m pip install {' '.join(pip_names)}"
 
 
-def install_command_argv(
-    platform: Optional[str] = None,
-    exec_prefix: Optional[str] = None,
-    executable: Optional[str] = None,
-) -> List[str]:
-    """``[python, install_dependencies.py]`` -- the shared script (not raw
-    pip) so the check/install/re-verify logic has exactly one
-    implementation. Used only to build ``install_command_str`` below; the
-    panel runs nothing itself (terminal-only, see module docstring)."""
-    py = install_python_executable(platform, exec_prefix, executable)
-    return [py, install_dependencies.__file__]
-
-
-def install_command_str(
-    platform: Optional[str] = None,
-    exec_prefix: Optional[str] = None,
-    executable: Optional[str] = None,
+def mac_wheel_recipe(
+    pip_names: Sequence[str] = ("matplotlib",),
+    python_version: Optional[str] = None,
+    platform_tag: Optional[str] = None,
+    profile_python: Optional[str] = None,
 ) -> str:
-    """The human-facing, copy-button command line the panel displays."""
-    py, script = install_command_argv(platform, exec_prefix, executable)
-    quoted_py = f'"{py}"' if " " in py else py
-    quoted_script = f'"{script}"' if " " in script else script
-    return " ".join([quoted_py, quoted_script])
+    """NATE's verified macOS recipe (RULING -- QGIS 4's bundled python has
+    NO pip module at all, live-verified: 'No module named pip'; there is
+    no interpreter here to install into). The SYSTEM python3 downloads
+    prebuilt wheels (``pip download --only-binary``, never touching QGIS's
+    own interpreter) and they are unzipped straight into ``<profile>/
+    python`` -- already on QGIS's ``sys.path``. Every value is
+    runtime-derived: python-version from this process's own
+    ``sys.version_info``, the platform tag from ``platform.machine()``,
+    the profile path from ``install_dependencies``'s own file location.
+    Delegates entirely to ``install_dependencies.mac_wheel_recipe`` (one
+    source of truth)."""
+    return install_dependencies.mac_wheel_recipe(
+        pip_names,
+        python_version,
+        platform_tag,
+        profile_python,
+        file=install_dependencies.__file__,
+    )
 
 
 # Default series colors (matplotlib tab10 order) for color-field grouping.

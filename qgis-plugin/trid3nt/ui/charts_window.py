@@ -40,17 +40,25 @@ switch clears it (``clear``) -- charts are per-Case state (the per-case
 durability norm).
 
 matplotlib import is GUARDED in ``charts``: when absent the chart canvas
-degrades to ``MissingMatplotlibPanel`` -- what's missing, why, and the exact
-per-OS command to run ``install_dependencies.py`` from a terminal (copy
-button). The panel does NOT attempt the install itself: a QGIS-app-bundle
-Python subprocess launch (``QProcess`` against the exec_prefix-derived
-interpreter) failed to start on NATE's live macOS QGIS
-(``ProcessError.FailedToStart``) -- the terminal invocation is the only path
-proven to work, so that is the only path the plugin offers.
+degrades to ``MissingMatplotlibPanel`` -- what's missing, why, and ONE
+copy-able fix for the platform actually running (NATE ground truth,
+live-verified, supersedes every earlier console/PYTHONPATH attempt in this
+module's history): Linux and Windows QGIS pythons have pip, so the panel
+shows a plain ``pip install matplotlib`` one-liner for them
+(``charts.linux_install_command`` / ``charts.windows_install_command``).
+QGIS 4's bundled python on macOS has NO pip module at all ("No module
+named pip") -- there is no interpreter here to install into, pip-based or
+otherwise, so the panel instead shows ``charts.mac_wheel_recipe``: a
+two-line recipe that downloads prebuilt wheels with the SYSTEM python3 (a
+pure downloader) and unzips them straight into the QGIS profile's own
+``python/`` dir, already on QGIS's ``sys.path``. The panel never runs
+anything itself -- every command is for the user to paste into a real
+terminal, then restart QGIS.
 """
 
 from __future__ import annotations
 
+import sys
 from typing import Any, Callable, Dict, List, Optional
 
 from qgis.PyQt.QtCore import Qt
@@ -89,40 +97,63 @@ _CANVAS_MIN_HEIGHT = 220  # px -- the bottom dock is short + wide (TUFLOW-esque)
 _LIST_WIDTH = 180  # px -- the thin chart-switcher strip
 
 
+def _platform_label(platform_id: str) -> str:
+    if platform_id.startswith("darwin"):
+        return "macOS"
+    if platform_id.startswith("win"):
+        return "Windows"
+    return "Linux"
+
+
+def _platform_command(platform_id: str) -> str:
+    if platform_id.startswith("darwin"):
+        return charts.mac_wheel_recipe()
+    if platform_id.startswith("win"):
+        return charts.windows_install_command()
+    return charts.linux_install_command()
+
+
 class MissingMatplotlibPanel(QWidget):
     """The guided fix shown in place of the chart canvas when matplotlib is
     unavailable in this QGIS python (QGIS 4's macOS/Windows bundles dropped
-    it; QGIS 3 shipped it). Explains what's missing and why, and offers the
-    exact per-OS command (copy button, derived from ``charts
-    .install_command_str`` -- never hardcoded) to run
-    ``install_dependencies.py`` from a terminal.
+    it; QGIS 3 shipped it). Explains what's missing and why, and shows ONE
+    copy-able command for the platform actually running (never hardcoded --
+    derived from ``charts`` at render time).
 
-    Terminal-only by design, not laziness: an in-dock "Attempt install" that
-    launched the exec_prefix-derived interpreter via ``QProcess`` failed to
-    even start inside the QGIS app-bundle process on NATE's macOS QGIS
-    (``ProcessError.FailedToStart``) -- subprocess launch from inside the
-    bundle is unreliable, so the plugin does not offer it. A real terminal
-    always has a launchable shell. matplotlib is picked up on the next QGIS
-    restart (Python's module cache is fresh then), so there is no in-app
-    reload/recheck action either.
+    Nothing here runs in-dock, by design, not laziness: an in-dock "Attempt
+    install" that launched a QGIS-derived interpreter via ``QProcess``
+    failed to even start inside the QGIS app-bundle process on NATE's
+    macOS QGIS (``ProcessError.FailedToStart``); worse, QGIS 4's bundled
+    python on macOS has NO pip module at all ("No module named pip",
+    live-verified) -- there is no interpreter here an in-dock installer
+    could target even if the launch worked. On Linux/Windows the command is
+    a plain ``pip install`` one-liner for the user's own terminal; on
+    macOS it is NATE's verified wheel-download recipe, run with the
+    SYSTEM python3, never QGIS's own. matplotlib is picked up on the next
+    QGIS restart (Python's module cache is fresh then), so there is no
+    in-app reload/recheck action either.
     """
 
     def __init__(self, parent: Optional[QWidget] = None):
         super().__init__(parent)
-        self._command = charts.install_command_str()
+        platform_id = sys.platform
+        self._command = _platform_command(platform_id)
+        os_label = _platform_label(platform_id)
 
         root = QVBoxLayout(self)
         root.setContentsMargins(8, 8, 8, 8)
         root.setSpacing(6)
 
-        why = QLabel(
+        why_text = (
             "Charts need matplotlib, which this QGIS's Python does not have.\n"
-            "QGIS 4 no longer bundles matplotlib in its Python environment "
-            "(QGIS 3 did) -- it is a one-time pip install into QGIS's own "
-            "interpreter, not a TRID3NT bug.\n\n"
+            "QGIS 4 no longer bundles matplotlib (QGIS 3 did). On macOS, "
+            "QGIS 4's bundled Python has no pip module at all -- it cannot "
+            "install anything into itself, on any OS, so the fix below "
+            "downloads/installs with a python OUTSIDE QGIS instead.\n\n"
             f"Reason: {charts.matplotlib_error()}\n\n"
-            "Run this command in a terminal, then restart QGIS:"
+            f"{os_label}: run this in a terminal, then restart QGIS:"
         )
+        why = QLabel(why_text)
         why.setWordWrap(True)
         root.addWidget(why)
 
@@ -139,7 +170,7 @@ class MissingMatplotlibPanel(QWidget):
         cmd_row.addWidget(self._cmd_label, 1)
         copy_btn = QToolButton()
         copy_btn.setText("Copy")
-        copy_btn.setToolTip("Copy the install command to the clipboard")
+        copy_btn.setToolTip("Copy the command to the clipboard")
         copy_btn.clicked.connect(self._on_copy)
         cmd_row.addWidget(copy_btn)
         root.addLayout(cmd_row)

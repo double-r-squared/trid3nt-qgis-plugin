@@ -158,21 +158,125 @@ class TestInstallMissing(unittest.TestCase):
         self.assertFalse(ok)
 
 
-class TestInstallPythonExecutable(unittest.TestCase):
-    """Mirrors trid3nt.ui.charts' own coverage -- this is the shared
-    implementation ``charts`` now delegates to."""
+def _fake_isfile(true_for):
+    real = os.path.isfile
 
-    def test_mac_derives_from_exec_prefix_bin_python3(self):
-        py = inst.install_python_executable(
-            "darwin",
-            "/Applications/QGIS.app/Contents/MacOS",
-            "/Applications/QGIS.app/Contents/MacOS/QGIS",
+    def _f(path):
+        return path in true_for or real(path)
+
+    return _f
+
+
+def _fake_access(true_for):
+    real = os.access
+
+    def _f(path, mode):
+        return path in true_for or real(path, mode)
+
+    return _f
+
+
+class TestWindowsPythonExecutable(unittest.TestCase):
+    """The OSGeo4W python.exe probe -- Windows is the only platform that
+    still needs an interpreter derived/verified on disk (Linux uses the
+    literal ``python3``; macOS never targets a QGIS-side interpreter at
+    all, see ``TestMacWheelRecipe``)."""
+
+    def test_picks_exec_prefix_python_exe(self):
+        exec_prefix = r"C:\QGIS\apps\Python312"
+        executable = r"C:\QGIS\bin\qgis-bin.exe"
+        expected = os.path.join(exec_prefix, "python.exe")
+        with mock.patch("os.path.isfile", _fake_isfile({expected})), mock.patch(
+            "os.access", _fake_access({expected})
+        ):
+            py = inst.windows_python_executable(exec_prefix, executable)
+        self.assertEqual(py, expected)
+
+    def test_falls_back_to_executable_dir(self):
+        # Forward slashes so os.path.dirname sees a separator on this posix
+        # test host, mirroring real Windows behavior.
+        exec_prefix = "C:/QGIS/apps/Python312"
+        executable = "C:/QGIS/bin/qgis-bin.exe"
+        expected = os.path.join(os.path.dirname(executable), "python.exe")
+        with mock.patch("os.path.isfile", _fake_isfile({expected})), mock.patch(
+            "os.access", _fake_access({expected})
+        ):
+            py = inst.windows_python_executable(exec_prefix, executable)
+        self.assertEqual(py, expected)
+
+    def test_nothing_found_gives_honest_fallback_not_fabricated_path(self):
+        exec_prefix = r"C:\QGIS-ghost\apps\Python312"
+        with mock.patch("os.path.isfile", lambda p: False), mock.patch(
+            "os.access", lambda p, m: False
+        ):
+            py = inst.windows_python_executable(exec_prefix, exec_prefix + r"\QGIS")
+        self.assertTrue(py.startswith("could not locate the QGIS python.exe"))
+        self.assertIn(exec_prefix, py)
+
+
+class TestMacWheelRecipe(unittest.TestCase):
+    """NATE's ruling: macOS has no pip in QGIS's own python at all, so the
+    fix is a system-python3 wheel download + unzip into the profile, never
+    an interpreter probe against QGIS's own broken build."""
+
+    def test_python_version_tag_from_version_info(self):
+        from collections import namedtuple
+
+        FakeVersionInfo = namedtuple(
+            "FakeVersionInfo", ["major", "minor", "micro", "releaselevel", "serial"]
         )
-        self.assertEqual(py, "/Applications/QGIS.app/Contents/MacOS/bin/python3")
+        vi = FakeVersionInfo(3, 12, 0, "final", 0)
+        self.assertEqual(inst.python_version_tag(vi), "3.12")
 
-    def test_linux_uses_running_interpreter(self):
-        py = inst.install_python_executable("linux", "/usr", "/usr/bin/python3")
-        self.assertEqual(py, "/usr/bin/python3")
+    def test_mac_platform_tag_arm64(self):
+        self.assertEqual(inst.mac_platform_tag("arm64"), "macosx_11_0_arm64")
+
+    def test_mac_platform_tag_intel(self):
+        self.assertEqual(inst.mac_platform_tag("x86_64"), "macosx_11_0_x86_64")
+
+    def test_profile_python_dir_two_dirnames_up_from_package(self):
+        """The plugin ships at <profile>/python/plugins/trid3nt/; this
+        module lives directly inside trid3nt/, so its own path resolves to
+        <profile>/python."""
+        fake_file = "/Users/nate/Library/Application Support/QGIS/QGIS3/" \
+            "profiles/default/python/plugins/trid3nt/install_dependencies.py"
+        expected = "/Users/nate/Library/Application Support/QGIS/QGIS3/" \
+            "profiles/default/python"
+        self.assertEqual(inst.profile_python_dir(fake_file), expected)
+
+    def test_recipe_is_three_lines_download_drop_numpy_unzip(self):
+        recipe = inst.mac_wheel_recipe(
+            ["matplotlib"],
+            python_version="3.12",
+            platform_tag="macosx_11_0_arm64",
+            profile_python="/profile/python",
+        )
+        lines = recipe.splitlines()
+        self.assertEqual(len(lines), 3)
+        self.assertIn("pip download matplotlib", lines[0])
+        self.assertIn("--only-binary=:all:", lines[0])
+        self.assertIn("--python-version 3.12", lines[0])
+        self.assertIn("--platform macosx_11_0_arm64", lines[0])
+        self.assertIn("--implementation cp", lines[0])
+        self.assertIn("-d /tmp/qgis_mpl", lines[0])
+        # The numpy wheel must never reach the profile: it shadows the
+        # QGIS-bundled numpy and breaks shapely's ABI at startup.
+        self.assertIn("rm -f /tmp/qgis_mpl/numpy*.whl", lines[1])
+        self.assertIn("qgis_mpl/*.whl", lines[2])
+        self.assertIn('unzip -o -q "$w" -d "/profile/python"', lines[2])
+
+    def test_recipe_reflects_runtime_derivation_not_hardcoded(self):
+        recipe_a = inst.mac_wheel_recipe(
+            profile_python="/profile-a/python", platform_tag="macosx_11_0_arm64",
+            python_version="3.11",
+        )
+        recipe_b = inst.mac_wheel_recipe(
+            profile_python="/profile-b/python", platform_tag="macosx_11_0_x86_64",
+            python_version="3.12",
+        )
+        self.assertNotEqual(recipe_a, recipe_b)
+        self.assertIn("/profile-a/python", recipe_a)
+        self.assertIn("/profile-b/python", recipe_b)
 
 
 class TestMain(unittest.TestCase):
@@ -183,24 +287,45 @@ class TestMain(unittest.TestCase):
             code = inst.main(["--dry-run"])
         self.assertEqual(code, 0)
 
-    def test_dry_run_missing_exits_nonzero_and_installs_nothing(self):
+    def test_dry_run_missing_non_mac_exits_nonzero_and_installs_nothing(self):
         with mock.patch.object(
             inst,
             "check_all",
             return_value=[
                 inst.DependencyStatus("matplotlib", "matplotlib", False, "boom")
             ],
-        ), mock.patch("subprocess.run") as run:
+        ), mock.patch("subprocess.run") as run, mock.patch.object(
+            inst.sys, "platform", "linux"
+        ):
             code = inst.main(["--dry-run"])
         self.assertEqual(code, 1)
         run.assert_not_called()
+
+    def test_missing_on_darwin_prints_wheel_recipe_never_attempts_pip(self):
+        with mock.patch.object(
+            inst,
+            "check_all",
+            return_value=[
+                inst.DependencyStatus("matplotlib", "matplotlib", False, "boom")
+            ],
+        ), mock.patch("subprocess.run") as run, mock.patch.object(
+            inst.sys, "platform", "darwin"
+        ), mock.patch("builtins.print") as prn:
+            code = inst.main([])
+        self.assertEqual(code, 1)
+        run.assert_not_called()
+        printed = "\n".join(str(c.args[0]) for c in prn.call_args_list if c.args)
+        self.assertIn("No module named pip", printed)
+        self.assertIn("pip download matplotlib", printed)
 
     def test_full_run_installs_and_reverifies_success(self):
         missing = [inst.DependencyStatus("matplotlib", "matplotlib", False, "boom")]
         present = [inst.DependencyStatus("matplotlib", "matplotlib", True)]
         with mock.patch.object(
             inst, "check_all", side_effect=[missing, present]
-        ), mock.patch.object(inst, "install_missing", return_value=True) as im:
+        ), mock.patch.object(
+            inst, "install_missing", return_value=True
+        ) as im, mock.patch.object(inst.sys, "platform", "linux"):
             code = inst.main([])
         self.assertEqual(code, 0)
         im.assert_called_once()
@@ -209,7 +334,9 @@ class TestMain(unittest.TestCase):
         missing = [inst.DependencyStatus("matplotlib", "matplotlib", False, "boom")]
         with mock.patch.object(
             inst, "check_all", side_effect=[missing, missing]
-        ), mock.patch.object(inst, "install_missing", return_value=False):
+        ), mock.patch.object(
+            inst, "install_missing", return_value=False
+        ), mock.patch.object(inst.sys, "platform", "linux"):
             code = inst.main([])
         self.assertEqual(code, 1)
 
