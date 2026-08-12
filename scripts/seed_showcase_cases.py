@@ -489,10 +489,40 @@ async def _create_case(ws, session_id: str, title: str) -> str:
 
 
 async def _auto_confirm_warning(ws, session_id: str, msg: dict) -> None:
-    wid = msg["payload"].get("warning_id")
-    log.info("    auto-confirm tool-payload-warning warning_id=%s -> proceed", wid)
+    import re
+
+    payload = msg["payload"]
+    wid = payload.get("warning_id")
+    options = payload.get("options") or ["proceed"]
+    # Resolution doctrine (ADR 0224): a NATIVE-default heavy fetch (e.g. the surge
+    # big-domain showcase) can estimate over the hard cap, so the gate REMOVES
+    # ``proceed`` and offers only cancel/narrow_scope with a concrete coarsening
+    # suggestion in the recommendation ("coarsen (resolution_m=199)"). An automated
+    # seed cannot proceed native there; it accepts the offered coarsening so the demo
+    # stays green while exercising the real gate. When ``proceed`` is offered (every
+    # other showcase, and any under-cap surge run) the seed proceeds unchanged.
+    if "proceed" in options:
+        log.info("    auto-confirm tool-payload-warning warning_id=%s -> proceed", wid)
+        await ws.send(mk("tool-payload-confirmation", session_id,
+                         {"warning_id": wid, "decision": "proceed", "revised_args": None}))
+        return
+    m = re.search(r"resolution_m=(\d+(?:\.\d+)?)", payload.get("recommendation", ""))
+    if m and "narrow_scope" in options:
+        res = float(m.group(1))
+        # narrow_scope REPLACES params with revised_args (server), so send the FULL
+        # original args merged with the coarsening -- not just the delta.
+        revised = dict(payload.get("tool_args") or {})
+        revised["resolution_m"] = res
+        log.info("    auto-confirm tool-payload-warning warning_id=%s -> narrow_scope "
+                 "(proceed removed over hard cap; coarsen resolution_m=%s)", wid, res)
+        await ws.send(mk("tool-payload-confirmation", session_id,
+                         {"warning_id": wid, "decision": "narrow_scope",
+                          "revised_args": revised}))
+        return
+    log.info("    auto-confirm tool-payload-warning warning_id=%s -> cancel "
+             "(proceed removed, no coarsening suggestion parseable)", wid)
     await ws.send(mk("tool-payload-confirmation", session_id,
-                     {"warning_id": wid, "decision": "proceed", "revised_args": None}))
+                     {"warning_id": wid, "decision": "cancel", "revised_args": None}))
 
 
 async def _auto_approve_request(ws, session_id: str, msg: dict) -> None:

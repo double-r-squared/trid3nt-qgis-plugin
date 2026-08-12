@@ -41,7 +41,7 @@ from typing import Any
 
 from pydantic import Field
 
-from trid3nt_contracts.common import GraceModel
+from trid3nt_contracts.common import GraceModel, SyntheticInput
 from trid3nt_contracts.modflow_contracts import (
     DEFAULT_AQUIFER_K_MS,
     DEFAULT_POROSITY,
@@ -50,6 +50,10 @@ from trid3nt_contracts.modflow_contracts import (
 )
 from trid3nt_contracts.tool_registry import AtomicToolMetadata
 
+from trid3nt_server.agent.workflows.modflow._input_review import (
+    aquifer_k_review_entry,
+    review_modflow_entries,
+)
 from trid3nt_server.emission.pipeline_emitter import begin_substeps, current_emitter, substep
 from trid3nt_server.agent.tools import TOOL_REGISTRY, register_tool
 from trid3nt_server.agent.workflows.modflow._template_card import TemplateCard
@@ -263,6 +267,11 @@ async def model_river_seepage_scenario(
 
     # --- Stage 3: (optional) fetch a DEM for streambed sampling ---
     dem_uri: str | None = None
+    # ADR 0223: when the caller explicitly requested a real streambed DEM and the
+    # fetch fails, the run continues on a DEMO streambed -- but that cross-request
+    # degrade must be LABELED (a specific "your requested DEM was unavailable"
+    # review entry), not merely logged. Captured here, surfaced at the return.
+    streambed_dem_failure: str | None = None
     if fetch_dem_for_streambed:
         try:
             fetch_dem_fn = _registry_fn("fetch_dem")
@@ -275,7 +284,13 @@ async def model_river_seepage_scenario(
                 )
             dem_uri = _layer_uri_field(dem_layer, "uri")
         except Exception as exc:  # noqa: BLE001 -- DEM is optional, demo streambed otherwise
-            logger.warning("river-seepage DEM fetch skipped (non-fatal): %s", exc)
+            streambed_dem_failure = (
+                "a real streambed DEM was requested (fetch_dem_for_streambed=True) "
+                f"but fetch_dem failed for this AOI ({exc}); the run fell back to the "
+                "DEMO streambed elevation/conductance instead of a DEM-sampled "
+                "streambed -- the seepage geometry is not tied to real bed elevations."
+            )
+            logger.warning("river-seepage requested DEM unavailable: %s", exc)
 
     # --- Stage 4: run the river-seepage solver -> seepage + plume ---
     # FOLD (engine-door refactor): run_river_seepage_job is now the UNREGISTERED
@@ -350,6 +365,35 @@ async def model_river_seepage_scenario(
         seepage.losing_m3_day,
         seepage.river_cell_count,
     )
+
+    # ADR 0223: structured provenance through gate_input_review. Always the
+    # aquifer-K entry; when the caller REQUESTED a real streambed DEM that failed,
+    # a specific labeled streambed-basis entry (not just the standing generic
+    # caveat) so the cross-request degrade is visible on the envelope.
+    _entries = [aquifer_k_review_entry(
+        k_source=("user_supplied" if aquifer_k_ms is not None else "demo_default"),
+        k_ms=(aquifer_k_ms if aquifer_k_ms is not None else DEFAULT_AQUIFER_K_MS),
+        porosity=porosity, note=summary["demo_aquifer_caveat"],
+    )]
+    if streambed_dem_failure is not None:
+        summary["streambed_dem_fallback"] = streambed_dem_failure
+        _entries.append(SyntheticInput(
+            param="streambed_elevation", value="demo streambed (requested DEM unavailable)",
+            basis="default_demo", real_source_if_any=None, note=streambed_dem_failure,
+        ))
+    _review = await review_modflow_entries(
+        tool_name="modflow_river_seepage", entries=_entries,
+        params={"aquifer_k_ms": aquifer_k_ms, "porosity": porosity,
+                "fetch_dem_for_streambed": fetch_dem_for_streambed},
+    )
+    if _review.cancelled:
+        raise RiverSeepageScenarioError(
+            f"river-seepage input review {_review.cancel_reason or 'not approved'}"
+        )
+    try:
+        seepage = seepage.model_copy(update={"synthetic_inputs": list(_review.entries)})
+    except Exception as exc:  # noqa: BLE001 -- never break the run on a stamp failure
+        logger.warning("river-seepage: could not stamp synthetic_inputs (%s)", exc)
 
     return RiverSeepageResult(
         seepage_layer=seepage,

@@ -60,6 +60,38 @@ def test_resolution_autoscale_respects_soft_cap():
     assert _autoscale_resolution(tiny, 60.0) == 60.0
 
 
+def test_resolution_clamp_is_labeled_when_it_binds():
+    """ADR 0223 (audit #6): a finer-than-20 m request is clamped to the supported
+    HEC-RAS 2D range, and the clamp is LABELED (basis + note) on the envelope,
+    not silently swallowed."""
+    from trid3nt_server.agent.workflows.hecras.flood_2d.flood_2d import (
+        _MIN_RES_M,
+        _resolution_with_basis,
+    )
+
+    tiny = [-87.95, 38.11, -87.90, 38.15]
+    # (a) a 5 m request binds the clamp -> labeled default_demo + a naming note.
+    # (the effective value may be coarsened further by the AOI autoscale, but the
+    # clamp binding is what drives the default_demo basis + the "clamped" note.)
+    res, basis, note = _resolution_with_basis(tiny, 5.0)
+    assert res >= _MIN_RES_M
+    assert basis == "default_demo"
+    assert note is not None
+    assert "5.0 m" in note and "clamped" in note
+
+    # (b) an in-range request on a small AOI is user-basis with no note.
+    res2, basis2, note2 = _resolution_with_basis(tiny, 60.0)
+    assert res2 == 60.0
+    assert basis2 == "user"
+    assert note2 is None
+
+    # (c) a coarser-than-200 m request also binds the clamp (down to 200).
+    res3, basis3, note3 = _resolution_with_basis(tiny, 500.0)
+    assert res3 == 200.0
+    assert basis3 == "default_demo"
+    assert "clamped" in (note3 or "")
+
+
 def test_equation_set_map_covers_choices():
     from trid3nt_server.agent.workflows.hecras.flood_2d.flood_2d import (
         _EQUATION_SET_MAP,

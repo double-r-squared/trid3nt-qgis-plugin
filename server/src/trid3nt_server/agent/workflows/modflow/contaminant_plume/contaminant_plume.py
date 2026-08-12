@@ -51,6 +51,10 @@ from trid3nt_contracts.modflow_contracts import (
 )
 from trid3nt_contracts.tool_registry import AtomicToolMetadata
 
+from trid3nt_server.agent.workflows.modflow._input_review import (
+    aquifer_k_review_entry,
+    review_modflow_entries,
+)
 from trid3nt_server.emission.layer_uri_emit import emit_layer_uri
 from trid3nt_server.emission.pipeline_emitter import (
     begin_substeps,
@@ -382,6 +386,7 @@ async def model_contaminant_plume(
     porosity: float | None = None,
     duration_days: float | None = None,
     compute_class: str = "standard",
+    input_mode: str | None = None,
     pipeline_emitter: Any | None = None,
 ) -> ContaminantPlumeResult:
     """Compose spill point + contaminant(s) -> MODFLOW GWT -> plumes[] (>=1).
@@ -502,6 +507,26 @@ async def model_contaminant_plume(
             "coupling is recorded but not yet wired (independent transport)."
         ),
     }
+    # ADR 0223: structured aquifer-K provenance routed through gate_input_review,
+    # stamped onto each plume layer (the prose caveat stays on the summary).
+    _k_entry = aquifer_k_review_entry(
+        k_source=("user_supplied" if aquifer_k_ms is not None else "demo_default"),
+        k_ms=(aquifer_k_ms if aquifer_k_ms is not None else DEFAULT_AQUIFER_K_MS),
+        porosity=(porosity if porosity is not None else DEFAULT_POROSITY),
+        note=summary["demo_aquifer_caveat"],
+    )
+    _review = await review_modflow_entries(
+        tool_name="modflow_contaminant_plume", entries=[_k_entry],
+        params={"aquifer_k_ms": aquifer_k_ms, "porosity": porosity},
+        input_mode=input_mode,
+    )
+    if _review.cancelled:
+        raise ContaminantPlumeScenarioError(
+            f"contaminant-plume input review {_review.cancel_reason or 'not approved'}; "
+            "the plume was not finalized"
+        )
+    plumes = [p.model_copy(update={"synthetic_inputs": list(_review.entries)})
+              for p in plumes]
     logger.info(
         "contaminant_plume scenario complete location=%r n_plumes=%d",
         location_name,
@@ -544,6 +569,7 @@ async def modflow_contaminant_plume(
     porosity: float | None = None,
     duration_days: float | None = None,
     compute_class: str = "standard",
+    input_mode: str | None = None,
     # absorb LLM-invented kwargs.
     **_extra_ignored: Any,
 ) -> dict[str, Any]:
@@ -616,6 +642,7 @@ async def modflow_contaminant_plume(
                 float(duration_days) if duration_days is not None else None
             ),
             compute_class=compute_class,
+            input_mode=input_mode,
             pipeline_emitter=None,
         )
     except ContaminantPlumeInputError as exc:

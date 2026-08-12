@@ -1241,6 +1241,31 @@ def _compute_active_mask_bounds(dem_read_path: str) -> tuple[float, float, bool]
     return zmin, zmax, True
 
 
+def _mask_bounds_provenance(
+    adaptive: bool, zmin: float | None, zmax: float | None
+) -> dict[str, Any]:
+    """Structured active-mask elevation-window provenance for the run envelope.
+
+    ADR 0223: ``adaptive`` False means the DEM elevation range was unreadable and a
+    WIDE FALLBACK window was used (may activate cells a real DEM range would
+    exclude); ``note`` is populated ONLY in that degraded case so the composer can
+    surface a labeled warning instead of the flag being discarded to an ``.inp``
+    comment + log line.
+    """
+    return {
+        "adaptive": bool(adaptive),
+        "zmin": zmin,
+        "zmax": zmax,
+        "note": (
+            None if adaptive else
+            "DEM elevation range unreadable; the SFINCS active-cell mask used a "
+            "WIDE FALLBACK elevation window instead of the DEM-derived adaptive "
+            "window -- the active domain may include cells a real DEM range would "
+            "exclude. Treat the inundation extent as a wide screening bound."
+        ),
+    }
+
+
 # --------------------------------------------------------------------------- #
 # Adaptive grid-resolution autoscale (SFINCS per-job autoscale)
 #
@@ -2575,11 +2600,34 @@ def build_sfincs_model(
     # elevation range + native resolution); the same staged path is reused by
     # the YAML emitter below. Degrades gracefully (bbox-area fallback) if the
     # DEM can't be read; NEVER produces a degenerate/empty grid.
+    # ADR 0223: compute the active-mask elevation bounds ONCE and CAPTURE whether
+    # they are the DEM-derived adaptive window or the WIDE FALLBACK used when the
+    # DEM elevation range cannot be read. _generate_hydromt_yaml_config recomputes
+    # the same bounds for the deck (its .inp comment); here we thread the flag into
+    # the run envelope (ModelSetup.parameters.mask_bounds) so a wide-fallback mask
+    # -- which can activate cells a real DEM range would exclude -- surfaces to the
+    # user as a labeled degrade, not merely an .inp comment + agent.log line.
+    mask_adaptive: bool = True
+    mask_zmin: float | None = None
+    mask_zmax: float | None = None
+    try:
+        _dem_for_mask = _stage_gcs_local(dem_uri)
+        mask_zmin, mask_zmax, mask_adaptive = _compute_active_mask_bounds(_dem_for_mask)
+    except Exception as exc:  # noqa: BLE001 -- provenance read must never break the build
+        # Staging itself failed; the deck build would hit the same read and fall
+        # back too, so record the conservative wide-fallback signal.
+        logger.warning(
+            "mask-bounds provenance read failed (%s); recording wide-fallback "
+            "in the run envelope (conservative)", exc)
+        mask_adaptive = False
+
     autoscale_result: GridAutoscaleResult | None = None
     if opts.autoscale_grid:
         try:
             dem_staged = _stage_gcs_local(dem_uri)
-            mask_zmin, mask_zmax, _adaptive = _compute_active_mask_bounds(dem_staged)
+            if mask_zmin is None or mask_zmax is None:
+                mask_zmin, mask_zmax, mask_adaptive = _compute_active_mask_bounds(
+                    dem_staged)
             autoscale_result = autoscale_grid_resolution(
                 dem_staged,
                 bbox,
@@ -2856,6 +2904,11 @@ def build_sfincs_model(
             "forcing_type": forcing.forcing_type,
             "forcing_provenance": dict(forcing.provenance),
             "river_geometry_uri": river_geometry_uri,
+            # ADR 0223: active-mask elevation-window provenance. ``adaptive`` False
+            # means the DEM range was unreadable and a WIDE FALLBACK window was used
+            # (may activate cells a real DEM range would exclude) -- the composer
+            # lifts this into a labeled envelope note so the degrade is not silent.
+            "mask_bounds": _mask_bounds_provenance(mask_adaptive, mask_zmin, mask_zmax),
             # autoscale provenance - feeds the solve-telemetry record
             # so the cap can be re-tuned from logged (cells, vCPU, time) data.
             "compute_class": opts.compute_class,

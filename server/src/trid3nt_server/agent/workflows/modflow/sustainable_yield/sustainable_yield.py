@@ -55,6 +55,10 @@ from trid3nt_contracts.modflow_contracts import (
 )
 from trid3nt_contracts.tool_registry import AtomicToolMetadata
 
+from trid3nt_server.agent.workflows.modflow._input_review import (
+    aquifer_k_review_entry,
+    gate_and_stamp_modflow_inputs,
+)
 from trid3nt_server.emission.layer_uri_emit import emit_layer_uri
 from trid3nt_server.emission.pipeline_emitter import (
     begin_substeps,
@@ -438,6 +442,20 @@ async def model_sustainable_yield_scenario(
         location_name,
         layer.max_drawdown_m,
     )
+    # ADR 0223: structured aquifer-K provenance through gate_input_review.
+    layer, _review = await gate_and_stamp_modflow_inputs(
+        tool_name="modflow_sustainable_yield", layer=layer,
+        entries=[aquifer_k_review_entry(
+            k_source=("user_supplied" if aquifer_k_ms is not None else "demo_default"),
+            k_ms=(aquifer_k_ms if aquifer_k_ms is not None else DEFAULT_AQUIFER_K_MS),
+            porosity=porosity, note=summary["demo_aquifer_caveat"],
+        )],
+        params={"aquifer_k_ms": aquifer_k_ms, "porosity": porosity},
+    )
+    if _review.cancelled:
+        raise SustainableYieldScenarioError(
+            f"sustainable-yield input review {_review.cancel_reason or 'not approved'}"
+        )
     return SustainableYieldResult(
         drawdown_layer=layer, derived_params=derived, summary=summary
     )
@@ -615,6 +633,22 @@ async def _run_stream_depletion(
         layer.depletion_fraction,
         layer.n_reaches,
     )
+    # ADR 0223: structured aquifer-K provenance through gate_input_review.
+    _sd_k = aquifer_overrides.get("aquifer_k_ms")
+    layer, _review = await gate_and_stamp_modflow_inputs(
+        tool_name="modflow_stream_depletion", layer=layer,
+        entries=[aquifer_k_review_entry(
+            k_source=("user_supplied" if _sd_k is not None else "demo_default"),
+            k_ms=(_sd_k if _sd_k is not None else DEFAULT_AQUIFER_K_MS),
+            porosity=aquifer_overrides.get("porosity"),
+            note=summary["demo_aquifer_caveat"],
+        )],
+        params={"aquifer_k_ms": _sd_k},
+    )
+    if _review.cancelled:
+        raise SustainableYieldScenarioError(
+            f"stream-depletion input review {_review.cancel_reason or 'not approved'}"
+        )
     return StreamDepletionResult(
         reach_layer=layer, derived_params=derived, summary=summary
     )
@@ -739,6 +773,22 @@ async def _run_subsidence(
         layer.max_head_decline_m,
         layer.interbed_count,
     )
+    # ADR 0223: structured aquifer-K provenance through gate_input_review.
+    _sub_k = aquifer_overrides.get("aquifer_k_ms")
+    layer, _review = await gate_and_stamp_modflow_inputs(
+        tool_name="modflow_land_subsidence", layer=layer,
+        entries=[aquifer_k_review_entry(
+            k_source=("user_supplied" if _sub_k is not None else "demo_default"),
+            k_ms=(_sub_k if _sub_k is not None else DEFAULT_AQUIFER_K_MS),
+            porosity=aquifer_overrides.get("porosity"),
+            note=summary["demo_aquifer_caveat"],
+        )],
+        params={"aquifer_k_ms": _sub_k},
+    )
+    if _review.cancelled:
+        raise SustainableYieldScenarioError(
+            f"land-subsidence input review {_review.cancel_reason or 'not approved'}"
+        )
     return SubsidenceResult(
         subsidence_layer=layer, derived_params=derived, summary=summary
     )

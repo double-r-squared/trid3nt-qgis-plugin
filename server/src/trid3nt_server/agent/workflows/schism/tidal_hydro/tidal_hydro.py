@@ -710,33 +710,70 @@ async def _build_coastal_tin_deck(
     }
 
 
+#: Requested-resolution threshold (m) at/above which the fine CUDEM 1/9" nearshore
+#: composite is skipped as a PURE optimization: the requested grid cell is coarser
+#: than the GLOBAL ETOPO 2022 15" base's own ~450 m native cell, so CUDEM's fine
+#: nearshore structure cannot survive resampling onto it -- reading dozens of per-tile
+#: CUDEM COGs would be wasted network cost with zero fidelity gain. BELOW this cell
+#: (including the native default) CUDEM IS read: it materially refines the nearshore
+#: bed (the 0221 blockiness fix -- CUDEM was wrongly skipped unconditionally).
+_CUDEM_SKIP_RES_M = 500.0
+
+
+def _topobathy_fetch_kwargs(
+    resolution_m: float | None, force_bathy_base: bool, skip_land: bool,
+) -> tuple[dict[str, Any], dict[str, Any]]:
+    """Build the (fetch_topobathy, fetch_dem) kwargs for a surge/tidal bathymetry
+    acquisition (pure, so the resolution doctrine is unit-testable).
+
+    ``resolution_m=None`` -> NATIVE: no ``min_pixel_m`` floor, CUDEM read at its native
+    cell. An explicit value floors the composite to that cell and skips CUDEM only when
+    the cell is at/above ``_CUDEM_SKIP_RES_M`` (coarser than the ETOPO base's native,
+    so CUDEM adds nothing). ``force_bathy_base`` / ``skip_land`` pass through only when
+    set (so a bare native tidal call stays byte-identical to the pre-doctrine default).
+    """
+    topobathy_kw: dict[str, Any] = {}
+    dem_kw: dict[str, Any] = {}
+    if force_bathy_base:
+        topobathy_kw["force_bathy_base"] = True
+    if skip_land:
+        topobathy_kw["skip_land"] = True
+    if resolution_m is not None:
+        topobathy_kw["resolution_m"] = int(resolution_m)
+        topobathy_kw["min_pixel_m"] = float(resolution_m)
+        if float(resolution_m) >= _CUDEM_SKIP_RES_M:
+            topobathy_kw["skip_cudem"] = True
+        dem_kw["resolution_m"] = int(resolution_m)
+    return topobathy_kw, dem_kw
+
+
 async def _fetch_bathymetry_cog(
-    bbox, *, screening_res_m: float | None = None, force_bathy_base: bool = False,
+    bbox, *, resolution_m: float | None = None,
+    force_bathy_base: bool = False, skip_land: bool = False,
 ) -> tuple[str, str]:
     """Fetch a topobathy (else DEM) COG for the AOI; return (local_path, source_label).
 
-    ``screening_res_m`` caps the acquisition to a coarse SCREENING grid: it floors
-    the topobathy composite (``min_pixel_m``) AND coarsens the 3DEP land leg
-    (``resolution_m``) so a large (surge) domain fetches a light few-hundred-metre
-    COG instead of compositing multiple CUDEM 1/9" tiles onto a ~12000 px grid --
-    the native-resolution path over a >30 km AOI intermittently times out, and the
-    caller then falls back to a synthetic shelf. ``None`` keeps the native-resolution
-    acquisition (the tidal-mesh path, whose bathymetry detail matters). When
-    ``force_bathy_base`` is set the ETOPO global bathy is laid as the always-on base
-    so the open (seaward) portion of the domain is genuinely-negative bathymetry."""
+    ``resolution_m`` is the bathymetry-fetch grid cell size (metres) or ``None`` for
+    the NATIVE composite (resolution doctrine, 2026-08-11: DEFAULT = native/max;
+    coarsening is an EXPLICIT declaration). ``None`` reads the fine NOAA CUDEM 1/9"
+    nearshore composite at its native cell (bounded by fetch_topobathy's own 12000 px
+    guard). An explicit value floors the topobathy composite (``min_pixel_m``) so a
+    coarsened run fetches a lighter COG; CUDEM is still read UNLESS the requested cell
+    is at/above ``_CUDEM_SKIP_RES_M`` (coarser than the ETOPO base's native cell, so
+    CUDEM adds nothing the grid can hold).
+
+    ``force_bathy_base`` lays the ETOPO global shelf as the always-on base so the open
+    (seaward) portion of the domain is genuinely-negative bathymetry beyond CUDEM.
+    ``skip_land`` drops the 3DEP land leg: its 0 m sea-level fill, as the higher-
+    precedence source, would CLOBBER the ETOPO negative bathy over the open water
+    beyond CUDEM coverage, flattening the offshore domain to ~0 m -- CUDEM itself
+    carries the nearshore topography above the waterline, so a surge mesh needs no
+    separate land DEM."""
     from trid3nt_server.agent.tools import TOOL_REGISTRY
 
-    topobathy_kw: dict[str, Any] = {}
-    dem_kw: dict[str, Any] = {}
-    if screening_res_m is not None:
-        # A coarse screening TIN only needs the ETOPO global shelf base + 3DEP land;
-        # skip the fine CUDEM 1/9" composite (dozens of per-tile network reads over a
-        # large domain -- wasted at coarse node density AND the dominant fetch cost).
-        topobathy_kw = {"resolution_m": int(screening_res_m),
-                        "min_pixel_m": float(screening_res_m),
-                        "force_bathy_base": bool(force_bathy_base),
-                        "skip_cudem": True, "skip_land": True}
-        dem_kw = {"resolution_m": int(screening_res_m)}
+    topobathy_kw, dem_kw = _topobathy_fetch_kwargs(
+        resolution_m, force_bathy_base, skip_land
+    )
 
     for tool_name, label, kw in (("fetch_topobathy", "topobathy", topobathy_kw),
                                  ("fetch_dem", "DEM", dem_kw)):
@@ -744,9 +781,14 @@ async def _fetch_bathymetry_cog(
         if entry is None:
             continue
         try:
-            res = entry.fn(bbox=list(bbox), **kw)
-            if asyncio.iscoroutine(res):
-                res = await res
+            # OFFLOAD: the fetch is a SYNC tool that reads/composites CUDEM/ETOPO
+            # tiles + rasterio warps -- heavy at native resolution (many tiles ->
+            # 12000 px grid). Run it OFF the event loop so it cannot stall the WS
+            # keepalive (no-sync-blocking norm); a coroutine tool is awaited directly.
+            if asyncio.iscoroutinefunction(entry.fn):
+                res = await entry.fn(bbox=list(bbox), **kw)
+            else:
+                res = await asyncio.to_thread(entry.fn, bbox=list(bbox), **kw)
         except Exception as exc:  # noqa: BLE001
             logger.warning("schism bathymetry %s failed: %s", tool_name, exc)
             continue

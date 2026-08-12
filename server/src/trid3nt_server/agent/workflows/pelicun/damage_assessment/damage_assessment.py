@@ -93,6 +93,7 @@ from typing import Any, Literal
 
 import numpy as np
 
+from trid3nt_contracts.common import SyntheticInput
 from trid3nt_contracts.execution import LayerURI, LegendClass, LegendKey
 from trid3nt_contracts.tool_registry import AtomicToolMetadata
 
@@ -1524,13 +1525,37 @@ def pelicun_damage_assessment(
         assets_uri = _autofetch_assets_path
 
     try:
-        return _run_pelicun_damage_assessment(
+        _layer = _run_pelicun_damage_assessment(
             hazard_raster_uri=hazard_raster_uri,  # type: ignore[arg-type]
             assets_uri=assets_uri,  # type: ignore[arg-type]
             fragility_set=fragility_set,
             component_types=component_types,
             realization_count=realization_count,
         )
+        # ADR 0223 (audit #8): fold the synthetic-asset provenance up to the
+        # TEMPLATE surface. Auto-fetch mode has no explicit inventory -> a synthetic
+        # building-density point inventory with HAZUS class-DEFAULT replacement
+        # values (what postprocess_pelicun flags via n_default_rv). Stamp that as a
+        # structured SyntheticInput on the returned layer so the demo-default asset
+        # basis is machine-readable at the composer surface, not only in postprocess.
+        if isinstance(_layer, LayerURI):
+            _asset_entry = SyntheticInput(
+                param="asset_inventory",
+                value=("auto-fetched building-density grid"
+                       if _autofetch_assets_path is not None else "explicit inventory"),
+                basis=("derived" if _autofetch_assets_path is not None else "user"),
+                real_source_if_any=(
+                    "compute_building_density (MS Buildings / OSM footprints)"
+                    if _autofetch_assets_path is not None else assets_uri),
+                note=(
+                    "no explicit inventory supplied; a synthetic building-density "
+                    "point inventory was generated over the bbox -- per-asset "
+                    "replacement values are HAZUS class defaults, not measured "
+                    "per-structure values" if _autofetch_assets_path is not None
+                    else "caller-supplied asset inventory"),
+            )
+            _layer = _layer.model_copy(update={"synthetic_inputs": [_asset_entry]})
+        return _layer
     finally:
         if _autofetch_assets_path is not None:
             try:

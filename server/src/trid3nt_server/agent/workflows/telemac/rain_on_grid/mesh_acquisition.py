@@ -629,8 +629,12 @@ def _resolve_bare_earth_dem(
     stays on the natively-geographic Copernicus). If 3DEP is unavailable for the
     AOI the cross-dataset fallback to Copernicus is LOUD (a logged warning + a
     typed note appended to ``notes`` for the envelope), per the data-source
-    fallback norm -- never a silent surface-model swap. A caller-supplied
-    ``dem_uri`` (already bare-earth by contract) is honored."""
+    fallback norm -- never a silent surface-model swap. ADR 0223 (audit #7): the
+    labeling is UNCONDITIONAL -- if the caller passes no ``notes`` sink, the
+    canopy-inclusive swap RAISES (``MESH_BED_DEM_CROSS_DATASET_FALLBACK``) rather
+    than being ingested silently, so the label cannot be bypassed by the call
+    shape. A caller-supplied ``dem_uri`` (already bare-earth by contract) is
+    honored."""
     if dem_uri and Path(dem_uri).exists():
         return Path(dem_uri)
     from trid3nt_server.agent.tools import TOOL_REGISTRY
@@ -648,13 +652,20 @@ def _resolve_bare_earth_dem(
             "falling back to Copernicus GLO-30 -- a DSM that INCLUDES forest "
             "canopy, which inflates bed elevations under tree cover",
             tuple(bbox), exc)
+        fallback_note = (
+            "mesh bed DEM CROSS-DATASET FALLBACK: USGS 3DEP bare-earth was "
+            "unavailable for this AOI; used Copernicus GLO-30 instead. That "
+            "is a SURFACE model (canopy-inclusive), so bed elevations under "
+            "forest may be biased high.")
+        # UNCONDITIONAL LABELING (ADR 0223): a cross-dataset canopy swap must never
+        # be ingested silently. With an envelope sink, record it; WITHOUT one, fail
+        # loudly rather than let the DSM bias the mesh bed under forest cover -- the
+        # label cannot be bypassed by a caller passing notes=None.
+        if notes is None:
+            raise MeshAcquisitionError(
+                "MESH_BED_DEM_CROSS_DATASET_FALLBACK", fallback_note) from exc
+        notes.append(fallback_note)
         layer = TOOL_REGISTRY["fetch_copernicus_dem"].fn(bbox=tuple(bbox))
-        if notes is not None:
-            notes.append(
-                "mesh bed DEM CROSS-DATASET FALLBACK: USGS 3DEP bare-earth was "
-                "unavailable for this AOI; used Copernicus GLO-30 instead. That "
-                "is a SURFACE model (canopy-inclusive), so bed elevations under "
-                "forest may be biased high.")
     uri = layer.uri if hasattr(layer, "uri") else layer["uri"]
     dst = rundir / filename
     dst.write_bytes(

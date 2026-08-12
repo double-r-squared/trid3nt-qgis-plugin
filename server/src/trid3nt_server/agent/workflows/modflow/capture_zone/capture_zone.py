@@ -57,7 +57,7 @@ from typing import Any
 
 from pydantic import Field
 
-from trid3nt_contracts.common import GraceModel
+from trid3nt_contracts.common import GraceModel, SyntheticInput
 from trid3nt_contracts.modflow_contracts import (
     CaptureZoneLayerURI,
     DEFAULT_AQUIFER_K_MS,
@@ -72,6 +72,10 @@ from trid3nt_server.emission.pipeline_emitter import (
     substep,
 )
 from trid3nt_server.agent.tools import TOOL_REGISTRY, register_tool
+from trid3nt_server.agent.workflows.modflow._input_review import (
+    aquifer_k_review_entry,
+    gate_and_stamp_modflow_inputs,
+)
 from trid3nt_server.emission.layer_uri_emit import publish_input_layer
 from trid3nt_server.agent.workflows.modflow._template_card import TemplateCard
 # Shared, engine-agnostic provenance seams (also importable by the Landlab
@@ -875,6 +879,7 @@ async def model_capture_zone_scenario(
     n_periods: int | None = None,
     use_nhd_river_boundaries: bool = False,
     compute_class: str = "standard",
+    input_mode: str | None = None,
     pipeline_emitter: Any | None = None,
 ) -> CaptureZoneResult:
     """Compose place/AOI + a pumping well -> MODFLOW PRT -> CaptureZoneLayerURI.
@@ -1357,6 +1362,34 @@ async def model_capture_zone_scenario(
             k_source, eff_k, eff_porosity, soil_k_meta
         ),
     }
+    # ADR 0223: promote the aquifer-K + regional-gradient prose caveats to
+    # structured SyntheticInput review entries routed through gate_input_review, so
+    # the demo defaults are machine-readable on the layer envelope (and reviewable
+    # in user_gated sessions). The prose caveats stay on ``summary`` unchanged.
+    _review_entries = [
+        aquifer_k_review_entry(
+            k_source=k_source, k_ms=eff_k, porosity=eff_porosity,
+            note=summary["demo_aquifer_caveat"],
+        ),
+        SyntheticInput(
+            param="regional_gradient", value=layer_grad_source,
+            basis=("fetched" if layer_grad_source == "measured_heads"
+                   else "derived" if layer_grad_source == "dem" else "default_demo"),
+            real_source_if_any=(
+                "USGS observed well heads" if layer_grad_source == "measured_heads"
+                else "3DEP DEM slope" if layer_grad_source == "dem" else None),
+            note=gradient_caveat,
+        ),
+    ]
+    layer, _review = await gate_and_stamp_modflow_inputs(
+        tool_name="modflow_capture_zone", layer=layer, entries=_review_entries,
+        params={"archetype": archetype}, input_mode=input_mode,
+    )
+    if _review.cancelled:
+        raise CaptureZoneInputError(
+            f"capture-zone input review {_review.cancel_reason or 'not approved'}; "
+            "the delineation was not finalized"
+        )
     logger.info(
         "%s scenario complete location=%r capture_zone_area_km2=%.6g tiers=%s",
         archetype,
@@ -1416,6 +1449,7 @@ async def modflow_capture_zone(
     n_periods: int | None = None,
     use_nhd_river_boundaries: bool = False,
     compute_class: str = "standard",
+    input_mode: str | None = None,
     # absorb LLM-invented kwargs.
     **_extra_ignored: Any,
 ) -> dict[str, Any]:
@@ -1493,6 +1527,7 @@ async def modflow_capture_zone(
             n_periods=n_periods,
             use_nhd_river_boundaries=bool(use_nhd_river_boundaries),
             compute_class=compute_class,
+            input_mode=input_mode,
             pipeline_emitter=None,
         )
     except CaptureZoneInputError as exc:

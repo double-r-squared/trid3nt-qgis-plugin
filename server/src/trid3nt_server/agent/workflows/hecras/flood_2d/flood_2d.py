@@ -159,6 +159,40 @@ def _autoscale_resolution(bbox: list[float], resolution_m: float) -> float:
     return res
 
 
+def _resolution_with_basis(
+    bbox: list[float], requested_res_m: float
+) -> tuple[float, str, str | None]:
+    """Resolve the effective 2D resolution AND a labeled basis/note (ADR 0223).
+
+    Applies the supported-range clamp ([``_MIN_RES_M``, ``_MAX_RES_M``] m) then the
+    AOI cell-cap autoscale, and reports WHY the effective value differs from the
+    request so the clamp/autoscale is visible on the ``resolution_m`` review entry
+    instead of being silently swallowed. Returns ``(resolution_m, basis, note)``:
+    ``note`` is ``None`` (basis ``user``) when neither the clamp nor the autoscale
+    changed the request; ``default_demo`` when the clamp bound; ``derived`` when
+    only the autoscale bound.
+    """
+    clamped = min(max(float(requested_res_m), _MIN_RES_M), _MAX_RES_M)
+    clamp_bound = clamped != float(requested_res_m)
+    resolution_m = _autoscale_resolution(bbox, clamped)
+    autoscaled = resolution_m != clamped
+    if clamp_bound:
+        note = (
+            f"requested {float(requested_res_m):.1f} m clamped to the supported "
+            f"HEC-RAS 2D [{_MIN_RES_M:.0f}, {_MAX_RES_M:.0f}] m range ({clamped:.0f} m)"
+            + (f", then autoscaled to {resolution_m:.0f} m for this AOI" if autoscaled else "")
+            + "; 2D cell size (granularity-gated)"
+        )
+        return resolution_m, "default_demo", note
+    if autoscaled:
+        note = (
+            f"autoscaled from {clamped:.0f} m to {resolution_m:.0f} m to fit the soft "
+            "cell cap for this AOI; 2D cell size (granularity-gated)"
+        )
+        return resolution_m, "derived", note
+    return resolution_m, "user", None
+
+
 @register_tool(
     _METADATA,
     read_only_hint=False,
@@ -278,8 +312,8 @@ async def hecras_flood_2d(
         resolution_m = float(resolution_m)
     except (TypeError, ValueError):
         resolution_m = _DEFAULT_RES_M
-    resolution_m = min(max(resolution_m, _MIN_RES_M), _MAX_RES_M)
-    resolution_m = _autoscale_resolution(aoi, resolution_m)
+    # ADR 0223 (audit #6): make the supported-range clamp VISIBLE when it binds.
+    resolution_m, _res_basis, _res_note = _resolution_with_basis(aoi, resolution_m)
 
     peak = _DEFAULT_PEAK_CFS
     if target_peak_cfs is not None:
@@ -338,12 +372,14 @@ async def hecras_flood_2d(
                 bbox=aoi, design_storm_mm_per_hr=storm,
                 storm_duration_hr=float(storm_duration_hr), resolution_m=resolution_m,
                 equation_set=eq_key, input_mode=input_mode, channel_refinement=refine,
+                resolution_basis=_res_basis, resolution_note=_res_note,
             )
             return depth
         depth = await model_hecras_flood_2d(
             bbox=aoi, target_peak_cfs=peak, resolution_m=resolution_m,
             sim_hours=float(sim_hours), inlet_edge=inlet_edge, outlet_edge=outlet_edge,
             equation_set=eq_key, computation_interval=interval, input_mode=input_mode,
+            resolution_basis=_res_basis, resolution_note=_res_note,
         )
         if isinstance(depth, dict):
             return depth
@@ -579,6 +615,8 @@ async def model_hecras_flood_2d(
     equation_set: str = _DEFAULT_EQUATION_SET,
     computation_interval: str | None = None,
     input_mode: str | None = None,
+    resolution_basis: str = "derived",
+    resolution_note: str | None = None,
 ) -> HecrasDepthLayerURI | dict[str, Any]:
     """fetch DEM -> author+compose -> run_solver -> postprocess -> publish."""
     emitter = current_emitter()
@@ -607,7 +645,9 @@ async def model_hecras_flood_2d(
         ),
         SyntheticInput(
             param="resolution_m", value=round(float(resolution_m), 1), units="m",
-            basis="derived", note=f"2D cell size (~{n_cells_est} cells; granularity-gated)",
+            basis=resolution_basis,
+            note=(resolution_note or
+                  f"2D cell size (~{n_cells_est} cells; granularity-gated)"),
         ),
         SyntheticInput(
             param="equation_set", value=eq_hec,
@@ -762,6 +802,8 @@ async def model_hecras_flood_2d_rog(
     equation_set: str = _DEFAULT_EQUATION_SET,
     input_mode: str | None = None,
     channel_refinement: float | None = None,
+    resolution_basis: str = "derived",
+    resolution_note: str | None = None,
 ) -> HecrasDepthLayerURI | dict[str, Any]:
     """Rain-on-grid on the HEC-RAS 2025 managed engine -> peak-depth COG (ADR 0209/0210).
 
@@ -820,6 +862,15 @@ async def model_hecras_flood_2d_rog(
         SyntheticInput(param="infiltration", value="none (rain-only)", basis="derived",
                        note="the 2025 beta has no infiltration layer -- gross rainfall, upper-bound runoff"),
     ]
+    # ADR 0223 (audit #6): surface the resolution basis, incl. the supported-range
+    # clamp when it bound (unless a channel-refined/consumed case mesh defines the
+    # field, in which case the uniform resolution is not the operative granularity).
+    if not consumed and not channel_refinement:
+        review_entries.append(SyntheticInput(
+            param="resolution_m", value=round(float(resolution_m), 1), units="m",
+            basis=resolution_basis,
+            note=(resolution_note or "uniform 2D cell size (granularity-gated)"),
+        ))
     review = await gate_input_review(
         tool_name="hecras_flood_2d", mode=input_mode, entries=review_entries,
         params={"bbox": bbox, "design_storm_mm_per_hr": design_storm_mm_per_hr})

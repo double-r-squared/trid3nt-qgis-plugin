@@ -188,13 +188,28 @@ TEMPLATE_CARD = TemplateCard(
 )
 
 
-#: fetch_topobathy's own declared default resolution (source.yaml resolution_m
-#: default) -- the basis its ``payload_estimate: bbox_area`` model (400 mb/sq-deg)
-#: implicitly assumes. This tool's bathymetry acquisition runs coarser (the
-#: autoscaled/user ``resolution_m`` SCREENING grid, never native), so the estimate
-#: below reuses fetch_topobathy's SAME declared model + constants (never a parallel
-#: check) and resolution-scales it by (native/resolved)**2 pixel-count ratio.
-_TOPOBATHY_NATIVE_RES_M = 10.0
+def _fmt_mb(mb: float) -> str:
+    """Human size: MB below 1 GB, else GB (the gate quotes real numbers)."""
+    return f"{mb / 1024.0:.2f} GB" if mb >= 1024.0 else f"{mb:.1f} MB"
+
+
+def _surge_payload_estimate(
+    bbox: tuple[float, float, float, float], resolution_m: float | None
+):
+    """Measured surge-bathymetry payload estimate for the AOI at ``resolution_m``
+    (``None`` = native). Shares fetch_topobathy's sampled-density cache + acquisition
+    profile (the surge fetch IS a fetch_topobathy call), so this is never a parallel
+    threshold check -- it is the SAME measurement the fetch will emit."""
+    from trid3nt_server.agent.tools.fetchers._router.hooks.topobathy import (
+        _analytic_payload_mb,
+        _sample_topobathy_density,
+    )
+    from trid3nt_server.agent.tools.payload_sampling import estimate_mb
+
+    return estimate_mb(
+        "topobathy", bbox, analytic_mb=_analytic_payload_mb(bbox),
+        sample_fn=_sample_topobathy_density, resolution_m=resolution_m,
+    )
 
 
 def estimate_payload_mb(
@@ -203,22 +218,44 @@ def estimate_payload_mb(
     resolution_m: float | None = None,
     **_kw: Any,
 ) -> float:
-    """Pre-dispatch payload estimate for the tool-payload-warning gate (server
-    ``_maybe_gate_on_payload_warning``): reuses ``fetch_topobathy.estimate_payload_mb``
-    (the SAME bbox-area model this tool's own bathymetry fetch is a resolution-
-    scaled instance of) rather than inventing a second threshold check. A bare
-    ``location_query`` (not yet geocoded pre-dispatch) falls back to the Ike
-    showcase AOI -- the largest default domain, so the estimate stays conservative
-    when the real AOI is unknown at gate time."""
-    from trid3nt_server.agent.tools.fetchers._router.hooks.topobathy import (
-        estimate_payload_mb as _topobathy_estimate_payload_mb,
-    )
-
+    """Pre-dispatch payload estimate for the tool-payload-warning gate. Resolution
+    doctrine R-A (2026-08-11): DEFAULT = NATIVE, so ``resolution_m=None`` quotes the
+    NATIVE bathymetry fetch (the gate fires + offers coarsening); an explicit value
+    quotes that coarsened grid. Reuses fetch_topobathy's MEASURED sampled estimator
+    (R-B) -- the surge bathymetry fetch is a fetch_topobathy call, so this is the same
+    number it will emit, not a parallel guess. A bare ``location_query`` (not yet
+    geocoded) falls back to the Ike showcase AOI so the estimate stays conservative."""
     resolved_bbox = tuple(float(v) for v in bbox) if bbox and len(bbox) == 4 else _IKE_BBOX
-    native_mb = _topobathy_estimate_payload_mb(bbox=resolved_bbox)
-    res_m = float(resolution_m) if resolution_m else _autoscale_surge_domain(resolved_bbox)["resolution_m"]
-    scale = (_TOPOBATHY_NATIVE_RES_M / max(res_m, 1.0)) ** 2
-    return max(native_mb * scale, 0.5)
+    return _surge_payload_estimate(
+        resolved_bbox, float(resolution_m) if resolution_m else None
+    ).mb
+
+
+def estimate_payload_mb_detail(
+    bbox: list[float] | tuple[float, float, float, float] | None = None,
+    location_query: str | None = None,
+    resolution_m: float | None = None,
+    **_kw: Any,
+) -> str | None:
+    """Gate-text detail: the MEASURED estimate + estimator KIND + the autoscale
+    COARSENING suggestion (resolution doctrine R-B). For the native default the card
+    reads e.g. "native ~2.4 GB measured; suggested coarsening 199 m ~0.4 MB; proceed
+    native / coarsen (resolution_m=199) / cancel"; an explicit resolution names that
+    grid alone. The gate resolves this as ``<estimator>_detail`` and appends it to the
+    payload-warning recommendation (no new envelope field)."""
+    resolved_bbox = tuple(float(v) for v in bbox) if bbox and len(bbox) == 4 else _IKE_BBOX
+    if resolution_m:
+        est = _surge_payload_estimate(resolved_bbox, float(resolution_m))
+        return (f"surge bathymetry {float(resolution_m):.0f} m grid "
+                f"~{_fmt_mb(est.mb)} ({est.kind})")
+    native = _surge_payload_estimate(resolved_bbox, None)
+    coarse_res = float(_autoscale_surge_domain(resolved_bbox)["resolution_m"])
+    coarse = _surge_payload_estimate(resolved_bbox, coarse_res)
+    return (
+        f"native bathymetry ~{_fmt_mb(native.mb)} ({native.kind}); suggested "
+        f"coarsening {coarse_res:.0f} m ~{_fmt_mb(coarse.mb)}; proceed native / "
+        f"coarsen (resolution_m={coarse_res:.0f}) / cancel"
+    )
 
 
 _SURGE_METADATA = AtomicToolMetadata(
@@ -576,15 +613,20 @@ async def model_schism_pahm_surge(
     if bbox is None:
         bbox = _IKE_BBOX if not storm_name else _track_landfall_bbox(fixes)
 
-    # --- Stage 2b: resolution (the user lever; autoscaled from the AOI when not
-    # supplied -- the #154 granularity-gate pattern, no silent resolution cap). --
+    # --- Stage 2b: resolution (the user lever). Resolution doctrine (2026-08-11):
+    # DEFAULT = NATIVE bathymetry; coarsening is an EXPLICIT user declaration. When
+    # resolution_m is None the bathymetry fetch runs NATIVE (fine CUDEM 1/9"
+    # composite, 12000 px guard); the autoscaled cell is only the COARSENING HINT the
+    # payload gate quotes, never a silent coarsen. An explicit value is honored as-is.
     autoscale = _autoscale_surge_domain(bbox)
     if resolution_m is not None:
-        resolved_res_m = float(resolution_m)
+        resolved_res_m: float | None = float(resolution_m)
+        fetch_res_m: float | None = float(resolution_m)
         res_basis: str = "user"
     else:
-        resolved_res_m = float(autoscale["resolution_m"])
-        res_basis = "derived"
+        resolved_res_m = None  # native
+        fetch_res_m = None
+        res_basis = "derived"  # the tool DERIVED native as the default (SyntheticInput basis)
 
     # --- Stage 3: mesh (case mesh via the gate, else internal TIN) ----------- #
     supplied_mesh, gate_open_side, mesh_gate_note = await _surge_mesh_gate(input_mode)
@@ -612,17 +654,19 @@ async def model_schism_pahm_surge(
             bathy_source = "local topobathy COG"
         else:
             try:
-                # SCREENING acquisition: a coarse grid (autoscaled from the AOI, or
-                # the user's explicit resolution_m) + ETOPO bathy base so a large
-                # surge domain fetches a light REAL COG (deep Gulf shelf + shallow
-                # bay), not a synthetic slope, and never blows up into a ~12000 px
-                # CUDEM composite that times out (ADR 0217 flag).
+                # REAL bathymetry: the fine CUDEM 1/9" nearshore composite (native
+                # by default) + ETOPO shelf base beyond it, land leg dropped so the
+                # 0 m ocean fill never clobbers the offshore bathy. An explicit
+                # resolution_m coarsens the fetch grid (and skips CUDEM only when the
+                # cell is coarser than ETOPO's own -- see _CUDEM_SKIP_RES_M).
                 dem_path, bathy_source = await _fetch_bathymetry_cog(
-                    bbox, screening_res_m=resolved_res_m, force_bathy_base=True)
+                    bbox, resolution_m=fetch_res_m, force_bathy_base=True,
+                    skip_land=True)
                 depths = deck_authoring.sample_bathymetry_on_nodes(points, dem_path)
+                res_label = ("native CUDEM 1/9\"" if fetch_res_m is None
+                             else f"~{fetch_res_m:.0f} m [{res_basis}]")
                 bathy_source = (
-                    f"{bathy_source} COG (screening ~{resolved_res_m:.0f} m "
-                    f"[{res_basis}], ETOPO shelf base)"
+                    f"{bathy_source} COG ({res_label}, ETOPO shelf base)"
                 )
             except Exception as exc:  # noqa: BLE001
                 if not allow_synthetic_domain:
@@ -691,13 +735,17 @@ async def model_schism_pahm_surge(
         ),
         SyntheticInput(param="sim_days", value=round(sim_days, 3), units="d", basis="default_demo"),
         SyntheticInput(
-            param="resolution_m", value=round(resolved_res_m, 1), units="m", basis=res_basis,
+            param="resolution_m",
+            value=(round(resolved_res_m, 1) if resolved_res_m is not None
+                   else "native (CUDEM 1/9\")"),
+            units="m", basis=res_basis,
             note=(
                 f"user-supplied (overrides the {autoscale['resolution_m']:.0f} m autoscale "
-                "suggestion)" if res_basis == "user" else
-                f"autoscaled from the AOI ({autoscale['width_km']:.0f}x{autoscale['height_km']:.0f} "
-                f"km) targeting ~{_SURGE_BATHY_TARGET_PX:.0f} px on the long side, TIN "
-                f"{autoscale['tin_nx']}x{autoscale['tin_ny']} nodes"
+                "coarsening suggestion)" if res_basis == "user" else
+                "NATIVE bathymetry (default): the fine CUDEM 1/9\" nearshore composite, "
+                f"bounded by the 12000 px guard; the ~{autoscale['resolution_m']:.0f} m "
+                "autoscale cell is offered as the coarsening hint on the payload gate. "
+                f"TIN {autoscale['tin_nx']}x{autoscale['tin_ny']} nodes"
             ),
         ),
     ]

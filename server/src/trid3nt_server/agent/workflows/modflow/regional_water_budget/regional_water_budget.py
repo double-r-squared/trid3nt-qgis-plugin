@@ -44,6 +44,10 @@ from trid3nt_contracts.modflow_contracts import (
 )
 from trid3nt_contracts.tool_registry import AtomicToolMetadata
 
+from trid3nt_server.agent.workflows.modflow._input_review import (
+    aquifer_k_review_entry,
+    gate_and_stamp_modflow_inputs,
+)
 from trid3nt_server.emission.pipeline_emitter import (
     begin_substeps,
     current_emitter,
@@ -220,6 +224,27 @@ async def model_regional_water_budget_scenario(
         location_name,
         sorted(layer.budget_partition_m3_day),
     )
+    # ADR 0223: this archetype previously carried NO structured aquifer-K
+    # provenance -- add a machine-readable SyntheticInput routed through
+    # gate_input_review so the demo hydrogeology is labeled on the envelope.
+    _k_note = (
+        "Aquifer K is caller-supplied." if aquifer_k_ms is not None else
+        "Aquifer K/porosity are demo defaults, not site-specific hydrogeology; the "
+        "budget partition is a planning-level illustration, not a calibrated model."
+    )
+    layer, _review = await gate_and_stamp_modflow_inputs(
+        tool_name="modflow_regional_water_budget", layer=layer,
+        entries=[aquifer_k_review_entry(
+            k_source=("user_supplied" if aquifer_k_ms is not None else "demo_default"),
+            k_ms=aquifer_k_ms, porosity=porosity, note=_k_note,
+        )],
+        params={"aquifer_k_ms": aquifer_k_ms, "porosity": porosity},
+    )
+    if _review.cancelled:
+        raise RegionalWaterBudgetScenarioError(
+            f"regional-water-budget input review {_review.cancel_reason or 'not approved'}"
+        )
+    summary["demo_aquifer_caveat"] = _k_note
     return RegionalWaterBudgetResult(
         budget_layer=layer, derived_params=derived, summary=summary
     )

@@ -62,6 +62,7 @@ __all__ = [
     "TopobathyEmptyError",
     "TopobathyDatumError",
     "estimate_payload_mb",
+    "estimate_payload_mb_detail",
     "validate_topobathy",
     "read_topobathy",
     "envelope_topobathy",
@@ -195,12 +196,21 @@ _STYLE_PRESET = "continuous_dem"
 #: |z| at or above this is an UNFLAGGED fill/nodata sentinel leak, masked to NaN.
 _TOPOBATHY_SENTINEL_ABS = 9000.0
 
-#: GDAL no-sign-request env for anonymous public-S3 /vsicurl/ reads.
+#: GDAL no-sign-request env for anonymous public-S3 /vsicurl/ reads. The MULTIRANGE +
+#: MERGE + HTTP/2 options batch the many small per-block (256x256) range requests a
+#: bbox-windowed CUDEM read issues into few multiplexed transfers -- without them each
+#: tile block is a separate latency-bound round trip and a native-resolution AOI read
+#: crawls (the dominant surge-bathymetry fetch cost).
 _VSICURL_ENV_KW = dict(
     AWS_NO_SIGN_REQUEST="YES",
     GDAL_DISABLE_READDIR_ON_OPEN="EMPTY_DIR",
     CPL_VSIL_CURL_ALLOWED_EXTENSIONS=".tif,.tiff,.vrt",
     VSI_CACHE=True,
+    VSI_CACHE_SIZE="104857600",  # 100 MB per-file block cache
+    GDAL_HTTP_MULTIRANGE="YES",
+    GDAL_HTTP_MERGE_CONSECUTIVE_RANGES="YES",
+    GDAL_HTTP_VERSION="2",
+    GDAL_BAND_BLOCK_CACHE="HASHSET",
 )
 
 
@@ -210,11 +220,8 @@ _VSICURL_ENV_KW = dict(
 # ---------------------------------------------------------------------------
 
 
-def estimate_payload_mb(
-    bbox: tuple[float, float, float, float] | None = None,
-    **_kw: Any,
-) -> float:
-    """Estimate emitted COG size in MB (scales linearly with bbox area, floored)."""
+def _analytic_payload_mb(bbox: tuple[float, float, float, float] | None) -> float:
+    """The coarse bytes-per-square-degree fallback (used when sampling is unavailable)."""
     if bbox is None:
         return 50.0
     try:
@@ -223,6 +230,134 @@ def estimate_payload_mb(
     except (TypeError, ValueError):
         return 50.0
     return max(0.5, sq_deg * 400.0)
+
+
+#: Window (pixels/side) read from the finest source tile to MEASURE emit density --
+#: big enough to capture real compression, small enough to keep the gate sample fast.
+_SAMPLE_WIN_PX = 512
+
+
+def _sample_topobathy_density(
+    aoi_bbox: tuple[float, float, float, float],
+) -> Any:
+    """Measure the emit density from a SMALL native window in the AOI (R-B sampling).
+
+    Reads a ``_SAMPLE_WIN_PX`` window from the FINEST real source tile covering the AOI
+    centre (CUDEM 1/9" where present, else the ETOPO global base), re-encodes it as the
+    SAME float32 LZW COG the fetch emits to measure real bytes-per-pixel, and derives
+    the native output pixel density from the tile's native cell projected to metres.
+    Returns ``None`` (analytic fallback) when no real tile covers the AOI (offline / no
+    coverage). One header-range open + one window read -- no 4-leg merge, no urllist
+    beyond the centre intersect -- so it is gate-fast and cached per region."""
+    import numpy as np
+    import rasterio
+    from rasterio.windows import Window
+
+    from trid3nt_server.agent.tools.payload_sampling import SampledDensity
+
+    w, s, e, n = (float(v) for v in aoi_bbox)
+    cx, cy = 0.5 * (w + e), 0.5 * (s + n)
+    half = 0.01
+    win_bbox = (cx - half, cy - half, cx + half, cy + half)
+
+    # Finest source tile over the AOI centre: CUDEM, else ETOPO global base.
+    tile_url: str | None = None
+    try:
+        cudem = _select_cudem_tiles(win_bbox, 30.0)
+        if cudem:
+            tile_url = "/vsicurl/" + cudem[0]
+    except Exception:  # noqa: BLE001 -- best-effort; fall through to ETOPO
+        tile_url = None
+    if tile_url is None:
+        etopo = _select_etopo_tiles(win_bbox)
+        if etopo:
+            tile_url = "/vsicurl/" + etopo[0]
+    if tile_url is None:
+        return None
+
+    with rasterio.Env(**_VSICURL_ENV_KW):
+        with rasterio.open(tile_url) as ds:
+            wpx = min(_SAMPLE_WIN_PX, ds.width)
+            hpx = min(_SAMPLE_WIN_PX, ds.height)
+            if wpx <= 0 or hpx <= 0:
+                return None
+            col0 = max(0, (ds.width - wpx) // 2)
+            row0 = max(0, (ds.height - hpx) // 2)
+            arr = ds.read(1, window=Window(col0, row0, wpx, hpx)).astype("float32")
+            res_deg_x = abs(ds.transform.a)
+            res_deg_y = abs(ds.transform.e)
+            src_is_geographic = bool(getattr(ds.crs, "is_geographic", True))
+            win_transform = ds.window_transform(Window(col0, row0, wpx, hpx))
+            src_crs = ds.crs
+
+    npx = int(arr.shape[0]) * int(arr.shape[1])
+    if npx <= 0:
+        return None
+    cog_bytes = _array_to_topobathy_cog_bytes(arr, win_transform, src_crs)
+    bytes_per_px = len(cog_bytes) / npx
+
+    # Native OUTPUT pixel density: convert the source cell to metres (the output grid
+    # is metric EPSG:32616 at the finest source cell), then px per square degree.
+    if src_is_geographic:
+        mid = math.radians(cy)
+        res_m = min(res_deg_x * 111320.0 * math.cos(mid), res_deg_y * 110540.0)
+    else:
+        res_m = min(res_deg_x, res_deg_y)  # already metric
+    res_m = max(res_m, 0.5)
+    px_x_per_deg = 111320.0 * math.cos(math.radians(cy)) / res_m
+    px_y_per_deg = 110540.0 / res_m
+    px_per_sq_deg = px_x_per_deg * px_y_per_deg
+    return SampledDensity(bytes_per_px=bytes_per_px, px_per_sq_deg=px_per_sq_deg)
+
+
+def estimate_payload_mb(
+    bbox: tuple[float, float, float, float] | None = None,
+    resolution_m: float | int | None = None,
+    **_kw: Any,
+) -> float:
+    """Estimate the emitted COG size in MB (R-B: measured sample, analytic fallback).
+
+    Samples a small native window's real emit density (bytes/px + native pixel density)
+    and scales it by the AOI area, bounded by the 12000 px-per-side guard; falls back
+    to the bytes-per-square-degree analytic model when sampling is unavailable.
+    ``resolution_m=None`` estimates the NATIVE composite; an explicit value estimates
+    that coarsened grid."""
+    if bbox is None:
+        return _analytic_payload_mb(bbox)
+    from trid3nt_server.agent.tools.payload_sampling import estimate_mb
+
+    est = estimate_mb(
+        "topobathy", tuple(float(v) for v in bbox),
+        analytic_mb=_analytic_payload_mb(bbox),
+        sample_fn=_sample_topobathy_density,
+        resolution_m=float(resolution_m) if resolution_m else None,
+    )
+    return est.mb
+
+
+def estimate_payload_mb_detail(
+    bbox: tuple[float, float, float, float] | None = None,
+    resolution_m: float | int | None = None,
+    **_kw: Any,
+) -> str | None:
+    """Gate-text detail: the estimate + estimator KIND (measured vs analytic).
+
+    Companion to ``estimate_payload_mb`` (the gate resolves ``<estimator>_detail``);
+    returns a one-line human string naming whether the quoted number was measured from
+    a sampled window or the analytic fallback, so the payload card is honest about its
+    provenance. Returns ``None`` when there is no bbox to reason about."""
+    if bbox is None:
+        return None
+    from trid3nt_server.agent.tools.payload_sampling import estimate_mb
+
+    est = estimate_mb(
+        "topobathy", tuple(float(v) for v in bbox),
+        analytic_mb=_analytic_payload_mb(bbox),
+        sample_fn=_sample_topobathy_density,
+        resolution_m=float(resolution_m) if resolution_m else None,
+    )
+    grid = "native" if not resolution_m else f"{float(resolution_m):.0f} m"
+    return f"topo-bathy {grid} grid ~{est.mb:.1f} MB ({est.kind})"
 
 
 # ---------------------------------------------------------------------------
@@ -816,6 +951,62 @@ def _compute_target_grid(
     return dst_transform, width, height
 
 
+def _source_res_m(ds: Any) -> float:
+    """Approximate a source's native cell size in METRES (geographic -> mid-lat scaled)."""
+    res = abs(ds.transform.a)
+    try:
+        if ds.crs is not None and ds.crs.is_geographic:
+            lat = (ds.bounds.bottom + ds.bounds.top) / 2.0
+            return res * 111320.0 * max(math.cos(math.radians(lat)), 0.1)
+    except Exception:  # noqa: BLE001
+        pass
+    return res
+
+
+def _decimated_source_read(
+    ds: Any, target_res_m: float, aoi_bbox_4326: tuple[float, float, float, float],
+) -> tuple[Any, Any]:
+    """Read a source band CLIPPED to the AOI and decimated to ~the target resolution,
+    returning ``(array_float32, transform)`` (or ``(None, None)`` when the AOI does not
+    intersect this source).
+
+    Reading a full-native CUDEM 1/9" tile (8112x8112) only to resample it onto a coarse
+    bbox-clipped output grid is the dominant fetch cost (many tiles over /vsicurl).
+    CUDEM COGs carry no overviews but ARE internally tiled, so a bbox WINDOW read pulls
+    only the AOI-overlapping blocks (skipping the tile regions outside the AOI), and the
+    ``out_shape`` decimation then shrinks the decoded array + the downstream reproject
+    cost. The read is oversampled ~2x relative to the target cell so the bilinear
+    reprojection stays clean; a source already at/coarser than the target is read at
+    the window's native size."""
+    import numpy as np
+    import rasterio
+    from rasterio.warp import transform_bounds
+    from rasterio.windows import Window, from_bounds
+
+    w, s, e, n = aoi_bbox_4326
+    full = Window(0, 0, ds.width, ds.height)
+    try:
+        sw, ss, se, sn = transform_bounds("EPSG:4326", ds.crs, w, s, e, n, densify_pts=21)
+        win = from_bounds(sw, ss, se, sn, ds.transform).round_offsets().round_lengths()
+        win = win.intersection(full)
+    except Exception:  # noqa: BLE001 -- fall back to the whole tile
+        win = full
+    if win.width < 1 or win.height < 1:
+        return None, None
+
+    src_res_m = _source_res_m(ds)
+    factor = 1
+    if target_res_m and src_res_m and src_res_m > 0:
+        factor = max(1, int(target_res_m / src_res_m / 2.0))
+    oh = max(1, int(win.height) // factor)
+    ow = max(1, int(win.width) // factor)
+    arr = ds.read(1, window=win, out_shape=(oh, ow), masked=True).astype("float32")
+    transform = ds.window_transform(win) * rasterio.Affine.scale(
+        int(win.width) / ow, int(win.height) / oh
+    )
+    return arr.filled(np.nan).astype("float32"), transform
+
+
 def _composite_sources_to_array(
     sources_in_precedence: list[str],
     target_crs: str,
@@ -842,19 +1033,22 @@ def _composite_sources_to_array(
     composite = np.full((height, width), np.nan, dtype="float32")
     any_painted = False
 
+    target_res_m = abs(dst_transform.a)
     with rasterio.Env(**_VSICURL_ENV_KW):
         for src in sources_in_precedence:
             try:
                 with rasterio.open(src) as ds:
-                    src_band = ds.read(1, masked=True).astype("float32")
-                    src_arr = src_band.filled(np.nan).astype("float32")
+                    src_arr, src_transform = _decimated_source_read(
+                        ds, target_res_m, bbox
+                    )
+                    if src_arr is None:
+                        continue  # AOI does not intersect this source
                     src_arr = np.where(
                         np.abs(src_arr) >= np.float32(_TOPOBATHY_SENTINEL_ABS),
                         np.float32("nan"),
                         src_arr,
                     )
                     src_crs = ds.crs
-                    src_transform = ds.transform
             except Exception as exc:  # noqa: BLE001 -- skip an unreadable source
                 logger.warning(
                     "fetch_topobathy: skipping unreadable merge source %s: %s", src, exc,
@@ -891,6 +1085,71 @@ def _composite_sources_to_array(
 # ---------------------------------------------------------------------------
 
 
+def _compose_fallback_warnings(
+    *,
+    bbox: tuple[float, float, float, float],
+    cudem_status: str,
+    cudem_count: int,
+    regional_count: int,
+    has_etopo: bool,
+    bathy_present: bool,
+    land_absent: bool,
+) -> str | None:
+    """Build the LABELED fallback-warning string (data-source + loud-fallback norms).
+
+    Pure over the merge outcome so both R-C branches are testable without a fetch. The
+    GLOBAL-FALLBACK cause is HONEST: only ``cudem_status == "no_intersect"`` (a real
+    tile-index intersect that returned zero) may claim the collection omits this coast;
+    a caller ``skipped`` / an ``index_unreachable`` / a datum-gated ``present`` each
+    name their own true cause (the 0221 fix -- the old text lied when CUDEM was
+    skipped)."""
+    warnings: list[str] = []
+    if not bathy_present:
+        warnings.append(
+            "BATHYMETRY ABSENT: no NOAA NCEI CUDEM / regional topo-bathy tiles AND "
+            f"no global ETOPO 2022 fallback were available for this AOI {bbox}; the "
+            "elevation surface is 3DEP LAND-ONLY (below-waterline cells are nodata). "
+            "A coastal flood / surge / tsunami run on this DEM has NO nearshore bed "
+            "and will under-represent inundation. Treat results as land-pluvial only "
+            "until bathymetry is available."
+        )
+    elif cudem_count == 0 and regional_count == 0 and has_etopo:
+        if cudem_status == "skipped":
+            cause = ("the fine NOAA NCEI CUDEM 1/9\" nearshore composite was SKIPPED "
+                     "for this run (a coarse screening acquisition where CUDEM's fine "
+                     "detail could not survive the requested grid)")
+        elif cudem_status == "index_unreachable":
+            cause = ("the NOAA NCEI CUDEM tile index could not be reached, so CUDEM "
+                     "coverage for this AOI could not be determined")
+        elif cudem_status == "present":
+            cause = ("NOAA NCEI CUDEM 1/9\" tiles intersect this AOI but every one "
+                     "failed the vertical-datum / header gate")
+        else:  # no_intersect -- a real intersect returned zero
+            cause = ("no NOAA NCEI CUDEM 1/9\" topo-bathy tiles cover this AOI "
+                     "(CUDEM's hosted collection omits this coast)")
+        warnings.append(
+            f"GLOBAL-FALLBACK BATHYMETRY: {cause} for AOI {bbox}; nearshore "
+            "bathymetry was sourced from the GLOBAL NOAA ETOPO 2022 15 arc-second "
+            "relief model (~450 m, EGM2008/MSL-referenced rather than NAVD88, a "
+            "sub-metre vertical offset). This provides a REAL below-waterline bed "
+            "(so a tsunami/surge run produces actual inundation) but is COARSER than "
+            "CUDEM; treat nearshore detail as approximate."
+        )
+    # LOUD-FALLBACK NORM (the 0091 follow-up): the 3DEP land leg's SILENT swallow is a
+    # LABELED degrade -- when land failed but a bathy source is present the surface
+    # proceeds bathy-only, named honestly (never a silent land drop). (Land absent AND
+    # bathy absent already raised EmptyError upstream.)
+    if land_absent and bathy_present:
+        warnings.append(
+            "LABELED DEGRADE (land_absent): the USGS 3DEP land DEM leg failed for "
+            f"this AOI {bbox}; the surface is BATHYMETRY-ONLY (onshore / above-"
+            "waterline cells are nodata). Onshore inundation extent is not "
+            "represented -- treat above-waterline results as best-effort until the "
+            "land DEM is available."
+        )
+    return " ".join(warnings) or None
+
+
 def _select_and_merge(
     bbox: tuple[float, float, float, float],
     resolution_m: int,
@@ -920,21 +1179,29 @@ def _select_and_merge(
     ETOPO 2022 is already a COMPLETE topo-bathy (land positive, sea negative), so a
     screening surge mesh (whose land nodes are clamped to min-wet anyway) wants
     ETOPO-only: real negative bathy offshore, no 0 m ocean clobber."""
-    # 1) CUDEM tiles (best-effort -- empty == no coverage).
+    # 1) CUDEM tiles (best-effort -- empty == no coverage). ``cudem_status`` records
+    # WHY the fine composite is absent so the fallback warning is HONEST: only a real
+    # tile-index intersect that returns zero may claim the collection omits this coast
+    # (NATE resolution doctrine, 2026-08-11 -- the 0221 blockiness was CUDEM SKIPPED by
+    # the caller, not absent, so the old "collection omits this coast" text lied).
     cudem_urls: list[str] = []
+    cudem_status: str  # skipped | index_unreachable | no_intersect | present
     if skip_cudem:
         force_bathy_base = True  # ETOPO shelf base replaces the skipped CUDEM bathy
-        logger.info("fetch_topobathy: skip_cudem -- screening acquisition on the "
-                    "ETOPO global shelf base + 3DEP land (no CUDEM tile reads)")
+        cudem_status = "skipped"
+        logger.info("fetch_topobathy: skip_cudem -- caller acquisition on the "
+                    "ETOPO global shelf base (no CUDEM tile reads)")
     else:
         try:
             cudem_urls = _select_cudem_tiles(bbox, timeout_s)
+            cudem_status = "present" if cudem_urls else "no_intersect"
         except TopobathyUpstreamError as exc:
             logger.warning(
                 "fetch_topobathy: CUDEM tile-index unreachable (%s); degrading to "
                 "3DEP-land-only", exc,
             )
             cudem_urls = []
+            cudem_status = "index_unreachable"
     cudem_vsicurl: list[str] = [f"/vsicurl/{u}" for u in cudem_urls]
 
     # 2) Datum gate per selected CUDEM tile (Invariant 7).
@@ -1031,39 +1298,11 @@ def _select_and_merge(
     bathy_present = bool(cudem_vsicurl or regional_vsicurl or etopo_vsicurl)
 
     # 5) Honest, LABELED fallback warnings (data-source + loud-fallback norms).
-    warnings: list[str] = []
-    if not bathy_present:
-        warnings.append(
-            "BATHYMETRY ABSENT: no NOAA NCEI CUDEM / regional topo-bathy tiles AND "
-            f"no global ETOPO 2022 fallback were available for this AOI {bbox}; the "
-            "elevation surface is 3DEP LAND-ONLY (below-waterline cells are nodata). "
-            "A coastal flood / surge / tsunami run on this DEM has NO nearshore bed "
-            "and will under-represent inundation. Treat results as land-pluvial only "
-            "until bathymetry is available."
-        )
-    elif cudem_count == 0 and regional_count == 0 and etopo_vsicurl:
-        warnings.append(
-            "GLOBAL-FALLBACK BATHYMETRY: no NOAA NCEI CUDEM topo-bathy tiles cover "
-            f"this AOI {bbox} (CUDEM's hosted 1/9\" collection omits this coast); "
-            "nearshore bathymetry was sourced from the GLOBAL NOAA ETOPO 2022 15 "
-            "arc-second relief model (~450 m, EGM2008/MSL-referenced rather than "
-            "NAVD88, a sub-metre vertical offset). This provides a REAL below-"
-            "waterline bed (so a tsunami/surge run produces actual inundation) but "
-            "is COARSER than CUDEM; treat nearshore detail as approximate."
-        )
-    # LOUD-FALLBACK NORM (the 0091 follow-up): the 3DEP land leg's SILENT swallow
-    # is now a LABELED degrade -- when land failed but a bathy source is present the
-    # surface proceeds bathy-only, named so the user gets an honest signal (never a
-    # silent land drop). (Land absent AND bathy absent already raised EmptyError.)
-    if land_absent and bathy_present:
-        warnings.append(
-            "LABELED DEGRADE (land_absent): the USGS 3DEP land DEM leg failed for "
-            f"this AOI {bbox}; the surface is BATHYMETRY-ONLY (onshore / above-"
-            "waterline cells are nodata). Onshore inundation extent is not "
-            "represented -- treat above-waterline results as best-effort until the "
-            "land DEM is available."
-        )
-    fallback_warning = " ".join(warnings) or None
+    fallback_warning = _compose_fallback_warnings(
+        bbox=bbox, cudem_status=cudem_status, cudem_count=cudem_count,
+        regional_count=regional_count, has_etopo=bool(etopo_vsicurl),
+        bathy_present=bathy_present, land_absent=land_absent,
+    )
     if fallback_warning:
         logger.warning("fetch_topobathy: %s", fallback_warning)
 

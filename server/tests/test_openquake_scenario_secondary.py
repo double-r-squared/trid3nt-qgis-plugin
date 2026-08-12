@@ -120,6 +120,52 @@ def test_resolve_scenario_rupture_caller_trace_wins():
     assert rup.dip == pytest.approx(80.0)
 
 
+def _patch_no_fault(monkeypatch) -> None:
+    """Force the GEM fault fetch to return no intersecting faults (offline)."""
+    import types as _t
+
+    from trid3nt_server.agent.tools import TOOL_REGISTRY
+
+    monkeypatch.setitem(
+        TOOL_REGISTRY, "fetch_fault_sources",
+        _t.SimpleNamespace(fn=lambda bbox: {"faults": []}),
+    )
+
+
+def test_resolve_scenario_rupture_no_fault_without_optin_raises(monkeypatch):
+    """ADR 0223: no real fault + no caller trace + demo NOT opted in -> typed error,
+    never a silently fabricated fault (R1)."""
+    from trid3nt_server.agent.workflows.openquake.scenario_gmf.scenario_gmf import (
+        SCENARIO_NO_REAL_FAULT,
+        ScenarioGmfError,
+    )
+
+    _patch_no_fault(monkeypatch)
+    with pytest.raises(ScenarioGmfError) as ei:
+        resolve_scenario_rupture(
+            [-100.5, 40.0, -100.3, 40.2], 6.7,
+            rupture_trace=None, rake=0.0, dip=90.0, use_demo_fault=False,
+        )
+    assert ei.value.error_code == SCENARIO_NO_REAL_FAULT
+    # names what was searched + points at the opt-in knob.
+    msg = str(ei.value)
+    assert "fetch_fault_sources" in msg
+    assert "use_demo_fault=True" in msg
+
+
+def test_resolve_scenario_rupture_demo_optin_labels_warning(monkeypatch):
+    """ADR 0223: use_demo_fault=True -> the labelled synthetic demo fault with a
+    WARNING banner in the note that reaches the envelope."""
+    _patch_no_fault(monkeypatch)
+    rup = resolve_scenario_rupture(
+        [-100.5, 40.0, -100.3, 40.2], 6.7,
+        rupture_trace=None, rake=0.0, dip=90.0, use_demo_fault=True,
+    )
+    assert rup.kind == "synthetic"
+    assert rup.note.startswith("WARNING -- SYNTHETIC DEMO FAULT")
+    assert len(rup.trace) == 2
+
+
 def test_parse_avg_gmf_csv():
     text = (
         "#,,,,,,\"generated_by='OpenQuake 3.25.1'\"\n"

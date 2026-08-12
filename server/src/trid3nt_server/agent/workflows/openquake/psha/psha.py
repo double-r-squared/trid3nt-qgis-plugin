@@ -179,9 +179,12 @@ async def openquake_psha(
     Pelicun earthquake damage assessment. Builds a classical-PSHA OpenQuake deck
     over a site grid; when a REAL active fault (GEM Global Active Faults)
     intersects the AOI it builds a physics-based fault source (hazard peaks on
-    the trace), else falls back to a synthetic Gutenberg-Richter area source --
-    the returned ``source_model_kind`` ("real-fault"/"synthetic-area") must be
-    narrated HONESTLY, never claim real faults on a synthetic fallback. Do NOT
+    the trace), else falls back to a synthetic Gutenberg-Richter area source (ADR
+    0223 recorded exemption: an area source is STANDARD PSHA distributed-seismicity
+    methodology for unmapped-fault regions, always labeled, not fabricated data --
+    so unlike the surge/scenario demo paths it is NOT opt-in-gated) -- the returned
+    ``source_model_kind`` ("real-fault"/"synthetic-area") must be narrated HONESTLY,
+    never claim real faults on a synthetic fallback. Do NOT
     use for: surface-water/riverine/coastal flooding (``sfincs_flood``);
     urban/pluvial (``swmm_urban_flood``); groundwater
     (``modflow_contaminant_plume``); estimating building damage itself
@@ -575,6 +578,17 @@ def resolve_fault_sources(
     and degraded to the empty-faults synthetic path (we still want a hazard map).
     Only the caller's malformed bbox would surface upstream (already validated by
     ``OpenQuakeRunArgs``), so in practice this always returns cleanly.
+
+    ADR 0223 RECORDED EXEMPTION (provenance audit R1): unlike the surge/scenario
+    synthetic paths, the auto area-source fallback is NOT gated behind an opt-in.
+    A Gutenberg-Richter AREA SOURCE is standard PSHA methodology -- the accepted way
+    to model distributed background seismicity where active faults are unmapped or
+    absent (e.g. USGS NSHM uses gridded/area sources exactly this way alongside
+    fault sources). It is a legitimate source model, not fabricated site data
+    masquerading as real; the degrade is always LABELED in ``source_model_kind`` /
+    ``source_model_note`` on the layer. Hence R1's opt-in requirement is exempted
+    here -- the transparency obligation is met by the (strengthened) label, not by
+    stopping the run.
     """
     # fetch_fault_sources is now spec-driven (ADR 0081): resolve the router closure
     # off the registry seam (TOOL_REGISTRY[name].fn) and catch the router's typed
@@ -595,7 +609,11 @@ def resolve_fault_sources(
         )
         return [], (
             "Real active-fault sources were unavailable for this AOI "
-            f"({exc.error_code}); used the synthetic area source instead."
+            f"({exc.error_code}). The hazard was built from a synthetic "
+            "Gutenberg-Richter AREA SOURCE -- standard PSHA distributed-seismicity "
+            "methodology used where faults are unmapped: seismicity is spread over "
+            "the AOI, NOT peaked on a mapped fault trace. A legitimate source model "
+            "(not fabricated data), but not fault-specific."
         )
 
     # HONESTY FLOOR: the fetcher already drops degenerate traces (it requires a
@@ -627,15 +645,18 @@ def resolve_fault_sources(
         )
         return faults, note
 
-    # Empty AOI -> honest synthetic fallback. Surface the fetcher's typed note
-    # (read off either shape above).
+    # Empty AOI -> honest synthetic fallback (ADR 0223 recorded exemption: an area
+    # source is standard PSHA methodology, always labeled, not a silent fabrication).
+    detail = (
+        str(fetch_note) if fetch_note
+        else "No mapped active fault intersects this AOI."
+    )
     note = (
-        str(fetch_note)
-        if fetch_note
-        else (
-            "No mapped active fault intersects this AOI; used the synthetic "
-            "area source."
-        )
+        f"{detail} The hazard was built from a synthetic Gutenberg-Richter AREA "
+        "SOURCE -- standard PSHA distributed-seismicity methodology where faults are "
+        "unmapped: seismicity is spread over the AOI, NOT peaked on a mapped fault "
+        "trace. A legitimate source model (not fabricated data), but not "
+        "fault-specific."
     )
     return [], note
 

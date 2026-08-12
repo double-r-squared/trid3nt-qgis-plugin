@@ -312,17 +312,17 @@ def test_autoscale_surge_domain_is_pure_no_network():
     assert r1 == r2  # deterministic / pure
 
 
-def test_explicit_resolution_m_overrides_autoscale(monkeypatch):
-    """An explicit resolution_m always wins over the autoscale suggestion and is
-    forwarded verbatim to the bathymetry fetch, even when it implies a much
-    finer/larger fetch than the autoscaled default -- oversized requests are the
-    user's right (no silent resolution ceiling)."""
+def test_explicit_resolution_m_is_declared_coarsening(monkeypatch):
+    """Resolution doctrine R-A: an explicit resolution_m is an EXPLICIT user coarsening
+    declaration, forwarded verbatim to the bathymetry fetch as the ``resolution_m``
+    grid cell and recorded basis='user' -- oversized requests are the user's right
+    (no silent resolution ceiling)."""
     import trid3nt_server.agent.workflows.schism.pahm_surge.pahm_surge as P
 
     captured: dict = {}
 
-    async def _fake_fetch(bbox, *, screening_res_m=None, force_bathy_base=False):
-        captured["screening_res_m"] = screening_res_m
+    async def _fake_fetch(bbox, *, resolution_m=None, force_bathy_base=False, skip_land=False):
+        captured["resolution_m"] = resolution_m
         return "/tmp/fake_bathy.tif", "topobathy"
 
     def _fake_sample(points, dem_path):
@@ -348,19 +348,23 @@ def test_explicit_resolution_m_overrides_autoscale(monkeypatch):
             allow_synthetic_domain=False, resolution_m=37.5,
         ))
 
-    assert captured["screening_res_m"] == pytest.approx(37.5)
+    assert captured["resolution_m"] == pytest.approx(37.5)
     entries = _entries_by_param(captured_gate["entries"])
     assert entries["resolution_m"].value == pytest.approx(37.5)
     assert entries["resolution_m"].basis == "user"
 
 
-def test_resolution_m_provenance_auto_when_not_supplied(monkeypatch):
-    """When resolution_m is left None, the resolved value + basis='derived' come
-    from the autoscaler (not the user) -- the auto-vs-user distinction the
-    granularity-gate doctrine requires must be visible in the envelope."""
+def test_resolution_m_native_default_when_not_supplied(monkeypatch):
+    """Resolution doctrine R-A: with resolution_m left None the bathymetry fetch runs
+    NATIVE (resolution_m=None forwarded, so CUDEM is read at its native cell) and the
+    envelope records the native default (basis='derived', value names native) -- the
+    autoscale value is only the coarsening HINT, never the silent fetch resolution."""
     import trid3nt_server.agent.workflows.schism.pahm_surge.pahm_surge as P
 
-    async def _fake_fetch(bbox, *, screening_res_m=None, force_bathy_base=False):
+    captured: dict = {}
+
+    async def _fake_fetch(bbox, *, resolution_m=None, force_bathy_base=False, skip_land=False):
+        captured["resolution_m"] = resolution_m
         return "/tmp/fake_bathy.tif", "topobathy"
 
     def _fake_sample(points, dem_path):
@@ -370,10 +374,10 @@ def test_resolution_m_provenance_auto_when_not_supplied(monkeypatch):
     monkeypatch.setattr(P.deck_authoring, "sample_bathymetry_on_nodes", _fake_sample)
     monkeypatch.delenv("TRID3NT_SCHISM_BATHY_PATH", raising=False)
 
-    captured: dict = {}
+    captured_gate: dict = {}
 
     async def _fake_gate(*, tool_name, mode, entries, params):
-        captured["entries"] = entries
+        captured_gate["entries"] = entries
         raise _GateSentinel()
 
     monkeypatch.setattr(P, "gate_input_review", _fake_gate)
@@ -385,26 +389,30 @@ def test_resolution_m_provenance_auto_when_not_supplied(monkeypatch):
             allow_synthetic_domain=False, resolution_m=None,
         ))
 
-    entries = _entries_by_param(captured["entries"])
-    expected = P._autoscale_surge_domain(P._IKE_BBOX)["resolution_m"]
+    assert captured["resolution_m"] is None  # NATIVE fetch (the 0221 fix)
+    entries = _entries_by_param(captured_gate["entries"])
     assert entries["resolution_m"].basis == "derived"
-    assert entries["resolution_m"].value == pytest.approx(round(expected, 1))
+    assert "native" in str(entries["resolution_m"].value).lower()
 
 
-def test_estimate_payload_mb_reuses_topobathy_model_resolution_scaled():
-    """schism_pahm_surge's declared payload estimator reuses fetch_topobathy's own
-    bbox-area model (never a parallel check) and scales it down for the coarser
-    SCREENING resolution this tool actually fetches at -- a bigger AOI or a finer
-    explicit resolution_m both raise the estimate."""
+def test_estimate_payload_mb_native_default_and_coarsening(monkeypatch):
+    """Resolution doctrine R-A/R-B: the declared estimator quotes the NATIVE payload by
+    default (the gate fires + offers coarsening) and reuses fetch_topobathy's MEASURED
+    sampled model. With sampling unavailable it falls back to the analytic model
+    (labeled), which stays resolution-aware: a smaller AOI or an explicit COARSER
+    resolution both LOWER the estimate below the native default."""
+    import trid3nt_server.agent.tools.fetchers._router.hooks.topobathy as tbh
     import trid3nt_server.agent.workflows.schism.pahm_surge.pahm_surge as P
 
+    monkeypatch.setattr(tbh, "_sample_topobathy_density", lambda b: None)  # analytic path
+
     small_bbox = (-95.05, 29.20, -94.95, 29.30)
-    est_default = P.estimate_payload_mb(bbox=list(P._IKE_BBOX))
-    est_small = P.estimate_payload_mb(bbox=list(small_bbox))
-    est_fine = P.estimate_payload_mb(bbox=list(P._IKE_BBOX), resolution_m=10.0)
+    est_default = P.estimate_payload_mb(bbox=list(P._IKE_BBOX))          # native
+    est_small = P.estimate_payload_mb(bbox=list(small_bbox))            # native, small AOI
+    est_coarse = P.estimate_payload_mb(bbox=list(P._IKE_BBOX), resolution_m=200.0)
 
     assert est_default > 0.0
-    assert est_small < est_default  # smaller AOI -> smaller estimate
-    # Forcing native (10 m) resolution over the showcase AOI must estimate a much
-    # bigger payload than the coarse autoscaled default.
-    assert est_fine > est_default * 100.0
+    assert est_small < est_default   # smaller AOI -> smaller estimate
+    # Explicit coarsening (200 m) is far LIGHTER than the native default -- the gate's
+    # coarsening suggestion is a real, quantified reduction.
+    assert est_coarse < est_default

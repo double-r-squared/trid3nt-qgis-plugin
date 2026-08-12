@@ -157,15 +157,21 @@ def test_resolve_fault_sources_real_path_calls_fetcher():
 
 
 def test_resolve_fault_sources_empty_falls_back_honestly():
-    """No faults in the AOI => empty records + the fetcher's typed honest note
-    (NEVER fabricates a fault, NEVER raises)."""
+    """No faults in the AOI => empty records + a strengthened honest note that
+    carries the fetcher's typed detail AND the ADR 0223 area-source methodology
+    framing (NEVER fabricates a fault, NEVER raises)."""
     fetch_note = "No GEM active faults intersect this AOI."
     cm, _ = _patch_fetch(return_value=_fault_result([], note=fetch_note))
     with cm:
         recs, note = resolve_fault_sources(list(_BBOX))
 
     assert recs == []
-    assert note == fetch_note
+    # the fetcher's detail is preserved AND the strengthened area-source label
+    # (standard PSHA methodology, not fabricated data) is appended.
+    assert fetch_note in note
+    assert "AREA SOURCE" in note
+    assert "standard PSHA" in note
+    assert "not fabricated data" in note
 
 
 def test_resolve_fault_sources_fetch_error_degrades_to_synthetic():
@@ -307,9 +313,15 @@ async def test_composer_falls_back_and_narrates_honestly_when_no_faults(monkeypa
     assert staged["spec"]["site_grid_spacing_km"] == pytest.approx(
         DEFAULT_SITE_GRID_SPACING_KM
     )
-    # The typed result is HONEST: synthetic, not real-fault.
+    # The typed result is HONEST: synthetic, not real-fault. ADR 0223: the
+    # strengthened area-source label reaches the layer envelope (source_model_note)
+    # -- the fetcher detail is preserved AND the standard-PSHA-methodology framing
+    # is present.
     assert layer.source_model_kind == "synthetic-area"
-    assert layer.source_model_note == fetch_note
+    assert fetch_note in layer.source_model_note
+    assert "AREA SOURCE" in layer.source_model_note
+    assert "standard PSHA" in layer.source_model_note
+    assert "not fabricated data" in layer.source_model_note
     assert "real" not in layer.source_model_kind
 
 

@@ -26,6 +26,22 @@ then landlab_green_ampt_overland_flow + elmfire_verification_elliptical_replicat
 
 citations live-verified; roster gaps recorded honestly per engine.
 
+PROVENANCE-TRANSPARENCY PASS (ADR 0223, 2026-08-11): a cross-cutting remediation
+of the ADR 0222 audit findings -- NOT new coverage rows, but a consistency fix that
+touches these landed templates' PROVENANCE surface: `openquake_scenario_gmf` (demo
+fault now opt-in via `use_demo_fault` + WARNING banner), `openquake_psha` (area-
+source fallback = recorded exemption, strengthened label), `sfincs_flood` (wide-
+fallback active-mask now envelope-labeled), the MODFLOW archetype family
+(capture_zone / river_seepage / contaminant_plume / saltwater_intrusion /
+managed_recharge / mine_dewatering / regional_water_budget / wetland_hydroperiod /
+sustainable_yield -> structured `SyntheticInput` review entries via the new shared
+`modflow/_input_review.py`; asr already compliant), `hecras_flood_2d` (resolution
+clamp now labeled), `telemac` rain-on-grid mesh_acquisition (unconditional cross-
+dataset note), `pelicun_damage_assessment` (synthetic-asset basis folded to the
+template surface), `telemac_river_dye` (domain-extent clamp labeled). No fidelity
+changed; only the honesty/label surface. `postprocess_schism` render cap left as-is
+(documented keep).
+
 
 ## MESH (cross-engine domain builder)
 
@@ -248,6 +264,7 @@ Aspects: GAHM (Generalized Asymmetric Holland Model) parametric vortex; symmetri
   knobs: PaHM_inputs (b-deck file), GAHM vs symmetric-vortex switch, pahm_control.in
   LANDED (ADR 0217; showcase re-proved on real geography ADR 0219): `schism_pahm_surge` -- a best track -> a SYMMETRIC Holland-1980 vortex wind/pressure field authored as sflux inputs (nws=2) -> barotropic surge on a georeferenced coastal TIN (still-water boundary, so the surge is PURELY wind/pressure driven). Cites Holland 1980 (Mon. Wea. Rev. 108) + the SCHISM sflux format (sflux_9c.F90, verified in-source at v5.11.0). Live re-run through the image (ADR 0219, run 01KZS6NG40P717B2FGSSKP4P1N): published Hurricane Ike (2008) on the greater-Galveston domain with REAL ETOPO 2022 screening bathymetry (0217's fetch fell back to a synthetic shelf; 0219 caps the acquisition + fixes a UTM-COG sampling bug + skips the 3DEP ocean clobber) -> peak surge 3.18 m on/near Bolivar Peninsula + upper bay (right-of-track lobe; NE mean 1.28 m >> SW offshore 0.46 m), gauge setdown -1.45 m then set-up +1.21 m at landfall. Observed Ike ~3-4 m at the coast (screening symmetric vortex undershoots the upper-bay extreme, honest gap). GAHM asymmetry + native-PaHM targeted binary + shoreline-clipped gate mesh = the refinement follow-up.
   notes: New coupled forcing capability (build+run PaHM ahead of/alongside SCHISM); manual hosted externally at noaa-ocs-modeling.github.io/PaHM (not independently WebFetched - cite with caution).
+  RESOLUTION DOCTRINE (ADR 0224, 2026-08-11): the 0219 "REAL ETOPO screening bathymetry" was actually the 0221 defect -- `skip_cudem=True` was FORCED on every screening fetch, so the fine NOAA CUDEM 1/9" composite (which DOES cover Galveston: 8 tiles intersect the Bolivar AOI) was NEVER read and the proof showed ETOPO ~450 m blockiness. NATE's rulings landed: R-A DEFAULT=NATIVE (resolution_m=None reads native CUDEM, px-capped; the autoscale cell is the coarsening HINT on the payload gate, never the silent default; explicit resolution_m = declared coarsening); `skip_cudem` survives only as an evidence-based optimization at requested cell >= 500 m (coarser than ETOPO's own native, so CUDEM can't survive the grid). R-B sampled payload estimator (`payload_sampling.py`): measure a small native window's real bytes/px + pixel density, scale by AOI area bounded by the 12000 px cap, cache per region, analytic fallback labeled; the surge/topobathy gate now quotes MEASURED numbers + a concrete coarsening suggestion ("native ~620 MB measured; coarsen 199 m ~1.9 MB"). R-C honest fallback warning: only a real zero-intersect may claim "CUDEM omits this coast"; a caller-skip / unreachable index / datum-gated set each name their own cause. Fetch offloaded off the WS loop (keepalive fix). +22 offline doctrine tests; 5 surge tests updated (caught a `SyntheticInput.basis="native"` schema violation -> "derived"). Live: fine Bolivar AOI (resolution_m=30) re-driven through the daemon -> 8/930 CUDEM tiles read (vs 0 before) = REAL nearshore bathymetry.
 - [CAND-M] `hurricane_niran_gahm_vs_regional_wx_blend_replication` [M] [non-US] - Do we reproduce the published Cyclone Niran (2021) comparison of GAHM-only vs regional-weather-model-blended wind/surge output?
   src: https://github.com/schism-dev/schism/tree/master/sample_inputs/PaHM_inputs (schism-repo-sample-inputs-PaHM-niran2021)
   knobs: niran2021-bdeck.dat + cyclone_Niran_RegionalWeatherModel_vs_GAHM.jpg / _vs_HM.jpg comparison figures

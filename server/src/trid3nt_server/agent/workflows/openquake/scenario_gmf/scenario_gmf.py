@@ -99,11 +99,17 @@ _OQ_BIN: str = os.environ.get("TRID3NT_OQ_BIN", "oq")
 _OQ_TIMEOUT_S: int = 600
 
 
+#: Error code when neither a real GEM fault nor a caller ``rupture_trace`` resolves
+#: and the synthetic demo fault was not opted into (``use_demo_fault=False``).
+SCENARIO_NO_REAL_FAULT: str = "SCENARIO_NO_REAL_FAULT"
+
+
 class ScenarioGmfError(RuntimeError):
     """Raised when the scenario-GMF chain fails fatally before producing a layer.
 
     Carries the open-set ``error_code`` so the agent emitter renders a typed
     error frame. Codes: ``SCENARIO_PARAMS_INVALID`` (bad bbox / magnitude),
+    ``SCENARIO_NO_REAL_FAULT`` (no real/caller fault + demo not opted in),
     ``SCENARIO_OQ_MISSING`` (the ``oq`` binary is not on PATH),
     ``SCENARIO_SOLVE_FAILED`` (the engine exited non-zero),
     ``SCENARIO_GMF_EMPTY`` (the solve produced no average-GMF export)."""
@@ -123,7 +129,7 @@ TEMPLATE_CARD = TemplateCard(
     required_inputs=["bbox"],
     knobs=(
         "magnitude, imt (PGA / PGV / SA(<period>)), num_ground_motion_fields, "
-        "gsim, vs30, site_grid_spacing_km, rupture_trace"
+        "gsim, vs30, site_grid_spacing_km, rupture_trace, use_demo_fault"
     ),
 )
 
@@ -157,6 +163,7 @@ async def openquake_scenario_gmf(
     rupture_trace: list[list[float]] | None = None,
     rake: float = 0.0,
     dip: float = 90.0,
+    use_demo_fault: bool = False,
     input_mode: str | None = None,
     **_extra_ignored: Any,
 ) -> ScenarioGmfLayerURI | dict[str, Any]:
@@ -166,10 +173,13 @@ async def openquake_scenario_gmf(
     (JB2009 within-event) ground-motion realizations of ONE rupture, averaged to
     a per-site mean + across-realization geometric-standard-deviation field. When
     a real GEM Global Active Fault intersects the AOI the rupture is placed on its
-    trace (rupture_kind ``"real-fault"``); otherwise a demo fault through the AOI
-    centre (or a caller-supplied ``rupture_trace``) is used (``"synthetic"``) - the
-    returned ``rupture_kind`` must be narrated honestly. The scenario MAGNITUDE is
-    a user/prompt-supplied planning value, not a source-calibrated number.
+    trace (rupture_kind ``"real-fault"``); a caller-supplied ``rupture_trace`` is
+    honoured directly. If NEITHER resolves, the run STOPS with a typed error rather
+    than silently fabricating a fault - pass ``use_demo_fault=True`` to opt into the
+    labelled demo-fault mode (a synthetic trace through the AOI centre; the shaking
+    PATTERN is illustrative, not tied to a real structure, and the envelope carries
+    a WARNING banner). The scenario MAGNITUDE is a user/prompt-supplied planning
+    value, not a source-calibrated number.
 
     Use this when: the user asks for a scenario / deterministic earthquake, a
     ShakeMap-style "if fault X ruptures at magnitude M" ground-motion map, the
@@ -195,6 +205,11 @@ async def openquake_scenario_gmf(
             prompt-interpreted geometry); unset -> real-fault-or-synthetic default.
         rake: rupture rake degrees, default 0 (strike-slip).
         dip: rupture dip degrees, default 90 (vertical).
+        use_demo_fault: opt-in (default False) to the labelled synthetic demo-fault
+            mode when no real GEM fault intersects the AOI and no ``rupture_trace``
+            was supplied. False -> a typed ``SCENARIO_NO_REAL_FAULT`` error naming
+            what was searched; True -> a synthetic trace through the AOI centre with
+            a WARNING banner in the envelope.
         input_mode: run-mode lever. ``"user_gated"`` presents the rupture geometry
             + magnitude for review before the solve; ``"auto"`` (default) proceeds
             with them labelled.
@@ -232,12 +247,24 @@ async def openquake_scenario_gmf(
 
     ref_vs30 = float(vs30) if vs30 is not None else 760.0
 
-    # Resolve the rupture geometry (real GEM fault / caller trace / synthetic
-    # demo) off the loop; it does a network fetch when no trace was supplied.
-    rupture = await asyncio.to_thread(
-        resolve_scenario_rupture,
-        list(coerced), mag, rupture_trace, float(rake), float(dip),
-    )
+    # Resolve the rupture geometry (real GEM fault / caller trace / opt-in demo)
+    # off the loop; it does a network fetch when no trace was supplied. With no
+    # real fault and no demo opt-in it raises SCENARIO_NO_REAL_FAULT rather than
+    # fabricating a fault (R1: synthetic is never a silent fallback tier).
+    try:
+        rupture = await asyncio.to_thread(
+            resolve_scenario_rupture,
+            list(coerced), mag, rupture_trace, float(rake), float(dip),
+            bool(use_demo_fault),
+        )
+    except ScenarioGmfError as exc:
+        logger.info(
+            "openquake_scenario_gmf rupture resolution stopped: %s", exc.error_code)
+        return {
+            "status": "error",
+            "error_code": exc.error_code,
+            "error_message": str(exc),
+        }
 
     # ADR 0107 input-review gate: the rupture geometry + magnitude are the
     # physically dominant, prompt-interpreted scenario inputs -> label them and,
@@ -344,14 +371,18 @@ def resolve_scenario_rupture(
     rupture_trace: list[list[float]] | None,
     rake: float,
     dip: float,
+    use_demo_fault: bool = False,
 ) -> ScenarioRupture:
     """Resolve the scenario rupture geometry for ``bbox`` (sync; run off the loop).
 
     Precedence: an explicit caller ``rupture_trace`` (prompt-interpreted) wins;
     else the longest real GEM Global Active Fault trace intersecting the AOI
-    (``real-fault``); else a synthetic demo fault through the AOI centre
-    (``synthetic``). NEVER raises for the no-fault / fetch-failed case - a missing
-    real fault is an honest fallback to the synthetic geometry, not an error.
+    (``real-fault``). When neither resolves the behaviour is gated on
+    ``use_demo_fault``: False (default) raises ``ScenarioGmfError``
+    (``SCENARIO_NO_REAL_FAULT``) naming what was searched rather than fabricating a
+    fault; True produces the labelled synthetic demo fault through the AOI centre
+    (``synthetic``) carrying a WARNING banner in its note. A caller ``rupture_trace``
+    is honoured regardless of the flag (it is user-supplied geometry, not fabricated).
     """
     min_lon, min_lat, max_lon, max_lat = (float(v) for v in bbox[:4])
     cx = (min_lon + max_lon) / 2.0
@@ -417,8 +448,21 @@ def resolve_scenario_rupture(
     except Exception as exc:  # noqa: BLE001 - fault resolution is best-effort
         logger.info("resolve_scenario_rupture: fault path skipped (%s)", exc)
 
-    # 3) synthetic demo fault: a trace through the AOI centre spanning ~60% of the
-    #    AOI diagonal (SW->NE), kept inside the region grid.
+    # 3) no real fault + no caller trace. R1: do NOT silently fabricate. Off by
+    #    default -> a typed error naming what was searched; opt-in -> the labelled
+    #    synthetic demo fault (a trace through the AOI centre spanning ~60% of the
+    #    AOI diagonal SW->NE) with a WARNING banner in its note.
+    if not use_demo_fault:
+        raise ScenarioGmfError(
+            SCENARIO_NO_REAL_FAULT,
+            "no real active-fault source resolved for this AOI: searched the GEM "
+            "Global Active Faults database (fetch_fault_sources) and no mapped fault "
+            "intersects the bbox, and no rupture_trace was supplied. The scenario "
+            "did not run on a fabricated fault. Pass use_demo_fault=True to run the "
+            "labelled demo-fault mode (a synthetic trace through the AOI centre - the "
+            "shaking PATTERN is illustrative, not tied to a real structure), or "
+            "supply rupture_trace=[[lon,lat], ...].",
+        )
     half_lon = 0.30 * (max_lon - min_lon)
     half_lat = 0.30 * (max_lat - min_lat)
     trace = [[cx - half_lon, cy - half_lat], [cx + half_lon, cy + half_lat]]
@@ -427,8 +471,11 @@ def resolve_scenario_rupture(
         upper_depth_km=2.0, lower_depth_km=14.0, hypocenter_depth_km=8.0,
         kind="synthetic",
         note=(
-            "No mapped active fault intersects this AOI; used a synthetic demo "
-            f"fault through the AOI centre (scenario magnitude {magnitude:g})."
+            "WARNING -- SYNTHETIC DEMO FAULT: no mapped active fault intersects this "
+            "AOI, so the scenario ran on a synthetic demo fault through the AOI "
+            f"centre (use_demo_fault=True, scenario magnitude {magnitude:g}). The "
+            "shaking PATTERN is illustrative and NOT tied to a real structure - "
+            "treat it as mechanism-demo only."
         ),
     )
 

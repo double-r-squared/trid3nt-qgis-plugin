@@ -7542,7 +7542,10 @@ async def _maybe_gate_on_payload_warning(
     if estimator_fn is None:
         return True, params
     try:
-        estimated_mb = float(estimator_fn(**params))
+        # Offloaded: a sampled estimator (resolution doctrine R-B) may read the
+        # network to MEASURE a small native window; keep it off the event loop so it
+        # cannot stall the WS keepalive (no-sync-blocking norm).
+        estimated_mb = float(await asyncio.to_thread(estimator_fn, **params))
     except Exception:  # noqa: BLE001 -- never let the gate kill a tool
         logger.exception(
             "payload-warning: estimator raised tool=%s name=%s; skipping gate",
@@ -7568,6 +7571,19 @@ async def _maybe_gate_on_payload_warning(
         f"({hard_cap_mb if over_hard_cap else threshold_mb:.0f} MB). "
         "Consider narrowing bbox or other scope parameters."
     )
+    # Resolution doctrine R-B: an OPTIONAL ``<estimator>_detail`` companion returns a
+    # one-line human string carrying the MEASURED-vs-analytic kind + a concrete
+    # coarsening suggestion ("native ~2.4 GB measured; suggested coarsening 199 m ~0.4
+    # MB; proceed native / coarsen / cancel"). Appended to the recommendation so the
+    # card quotes real numbers -- no new envelope field / WS event. Best-effort.
+    detail_fn = _resolve_payload_estimator(tool_name, f"{estimator_name}_detail")
+    if detail_fn is not None:
+        try:
+            detail = await asyncio.to_thread(detail_fn, **params)
+        except Exception:  # noqa: BLE001 -- detail is a nicety, never fatal
+            detail = None
+        if detail:
+            recommendation = f"{recommendation} {detail}"[:512]
 
     warning_id = new_ulid()
     warning_payload = PayloadWarningEnvelopePayload(

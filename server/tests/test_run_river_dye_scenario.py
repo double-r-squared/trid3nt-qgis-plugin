@@ -99,6 +99,30 @@ def test_tool_rejects_invalid_bbox():
     assert out["error_code"] == "TELEMAC_PARAMS_INVALID"
 
 
+def test_domain_extent_clamp_labels_when_it_binds():
+    """ADR 0223 (audit #9): an out-of-window domain-extent value is clamped AND a
+    labeled note is returned so the guardrail is visible on the envelope; an
+    in-range value passes through with no note."""
+    from trid3nt_server.agent.workflows.telemac.river_dye.river_dye import (
+        _clamp_domain_extent,
+    )
+
+    # a 50 km reach binds the clamp -> clamped value + a naming note.
+    val, note = _clamp_domain_extent(
+        50.0, valid_lo=0.5, valid_hi=15.0, clamp_lo=0.5, clamp_hi=8.0,
+        name="reach_length_km", unit="km")
+    assert val == 8.0
+    assert note is not None
+    assert "reach_length_km 50" in note and "clamped" in note
+
+    # an in-range value passes through unlabeled.
+    val2, note2 = _clamp_domain_extent(
+        6.0, valid_lo=0.5, valid_hi=15.0, clamp_lo=0.5, clamp_hi=8.0,
+        name="reach_length_km", unit="km")
+    assert val2 == 6.0
+    assert note2 is None
+
+
 def test_tool_rejects_neither_location_nor_bbox():
     from trid3nt_server.agent.workflows.telemac.river_dye.river_dye import telemac_river_dye
 

@@ -51,6 +51,30 @@ from trid3nt_server.agent.workflows.telemac.postprocess_telemac import Postproce
 
 logger = logging.getLogger("trid3nt_server.agent.workflows.telemac.river_dye.river_dye")
 
+
+def _clamp_domain_extent(
+    value: float, *, valid_lo: float, valid_hi: float,
+    clamp_lo: float, clamp_hi: float, name: str, unit: str,
+) -> tuple[float, str | None]:
+    """Clamp a domain-extent value to the modelable window (ADR 0223, audit #9).
+
+    A value INSIDE ``[valid_lo, valid_hi]`` passes through unchanged (``note``
+    None); an out-of-range value is clamped to ``[clamp_lo, clamp_hi]`` and a
+    labeled note is returned so the guardrail is visible on the run envelope
+    instead of only agent.log (R2 transparency). The clamp is a defensible
+    screening guardrail (a too-long reach hangs the mesh builder), just no longer
+    silent.
+    """
+    if valid_lo <= value <= valid_hi:
+        return value, None
+    clamped = min(max(value, clamp_lo), clamp_hi)
+    note = (
+        f"{name} {value:g} -> {clamped:g} {unit} "
+        f"(clamped to the modelable [{clamp_lo:g}, {clamp_hi:g}] {unit} window)"
+    )
+    return clamped, note
+
+
 __all__ = [
     "telemac_river_dye",
     "RunTelemacError",
@@ -460,6 +484,10 @@ async def telemac_river_dye(
         )
         compute_class = "medium"
 
+    # ADR 0223 (audit #9): the domain-extent guardrails below are defensible
+    # (a 50 km reach live-hung gmsh) but were silent. Record each clamp that BINDS
+    # so it surfaces as a labeled envelope note instead of only agent.log.
+    _domain_clamps: list[str] = []
     # LLM-invented reach-scale hardening (live 2026-07-17: the model asked for a
     # 50 km reach; gmsh hung/crashed banking the 2802-point meandering
     # centerline and the run died silently). Clamp to the modelable window - a
@@ -468,12 +496,12 @@ async def telemac_river_dye(
         reach_length_km = float(reach_length_km)
     except (TypeError, ValueError):
         reach_length_km = 6.0
-    if not (0.5 <= reach_length_km <= 15.0):
-        logger.warning(
-            "telemac_river_dye: reach_length_km %r outside [0.5, 15] - clamped",
-            reach_length_km,
-        )
-        reach_length_km = min(max(reach_length_km, 0.5), 8.0)
+    reach_length_km, _n = _clamp_domain_extent(
+        reach_length_km, valid_lo=0.5, valid_hi=15.0, clamp_lo=0.5, clamp_hi=8.0,
+        name="reach_length_km", unit="km")
+    if _n:
+        logger.warning("telemac_river_dye: %s", _n)
+        _domain_clamps.append(_n)
 
     # Ill-posed forcing hardening (live 2026-07-17: spill_fraction=1.0 planted
     # the source ON the outflow boundary -> TELEMAC startup abort 'GIVE A
@@ -494,12 +522,12 @@ async def telemac_river_dye(
         sim_duration_s = float(sim_duration_s)
     except (TypeError, ValueError):
         sim_duration_s = 3600.0
-    if not (600.0 <= sim_duration_s <= 14400.0):
-        logger.warning(
-            "telemac_river_dye: sim_duration_s %r outside [600, 14400] - clamped",
-            sim_duration_s,
-        )
-        sim_duration_s = min(max(sim_duration_s, 600.0), 14400.0)
+    sim_duration_s, _n = _clamp_domain_extent(
+        sim_duration_s, valid_lo=600.0, valid_hi=14400.0, clamp_lo=600.0,
+        clamp_hi=14400.0, name="sim_duration_s", unit="s")
+    if _n:
+        logger.warning("telemac_river_dye: %s", _n)
+        _domain_clamps.append(_n)
     # substance sanitize (label only - never solver-affecting)
     substance = "".join(c for c in str(substance or "dye").strip().lower()
                         if c.isalnum() or c in " -_")[:24] or "dye"
@@ -527,12 +555,12 @@ async def telemac_river_dye(
         channel_width_m = float(channel_width_m)
     except (TypeError, ValueError):
         channel_width_m = 60.0
-    if not (10.0 <= channel_width_m <= 1500.0):
-        logger.warning(
-            "telemac_river_dye: channel_width_m %r outside [10, 1500] - clamped",
-            channel_width_m,
-        )
-        channel_width_m = min(max(channel_width_m, 10.0), 1500.0)
+    channel_width_m, _n = _clamp_domain_extent(
+        channel_width_m, valid_lo=10.0, valid_hi=1500.0, clamp_lo=10.0,
+        clamp_hi=1500.0, name="channel_width_m", unit="m")
+    if _n:
+        logger.warning("telemac_river_dye: %s", _n)
+        _domain_clamps.append(_n)
     try:
         source_q_m3s = float(source_q_m3s)
     except (TypeError, ValueError):
@@ -679,6 +707,7 @@ async def telemac_river_dye(
             bank_source=bank_source,
             discharge_m3s=(float(discharge_m3s) if discharge_m3s is not None else None),
             input_mode=input_mode,
+            domain_clamp_notes=list(_domain_clamps),
         )
         logger.info(
             "telemac_river_dye complete layer_id=%s dye_cmax_mgl=%.4g plume_reach_m=%s "
@@ -1826,6 +1855,7 @@ async def model_telemac_river_dye(
     # dict carries the O2 knobs: bod_mgl, upstream_do_mgl, saturation_mgl,
     # water_temp_c, k1_per_day, k2_per_day, k2_formula, standard_mgl.
     do_sag_config: dict[str, Any] | None = None,
+    domain_clamp_notes: list[str] | None = None,
     pipeline_emitter: Any | None = None,
 ) -> "TelemacDyeLayerURI | TelemacDoLayerURI":
     """Compose place/AOI -> river reach -> TELEMAC-2D dye pulse -> animated layer.
@@ -2386,6 +2416,16 @@ async def model_telemac_river_dye(
             ),
         ),
     ]
+    # ADR 0223 (audit #9): if a domain-extent guardrail bound (in the tool's
+    # arg-hardening, threaded here), surface it as a labeled provenance entry (R2
+    # transparency) rather than only a log line.
+    if domain_clamp_notes:
+        _telemac_provenance.append(SyntheticInput(
+            param="domain_extent_clamped", value="; ".join(domain_clamp_notes),
+            basis="default_demo",
+            note="requested domain values exceeded the modelable window and were "
+                 "clamped to keep the mesh builder tractable (screening guardrail)",
+        ))
 
     # --- Stage 6: publish the peak COG (render chokepoint) + honest narration - #
     async with substep(emitter, "publish_layer"):

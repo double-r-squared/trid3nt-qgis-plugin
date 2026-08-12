@@ -44,6 +44,10 @@ from trid3nt_contracts.modflow_contracts import (
 )
 from trid3nt_contracts.tool_registry import AtomicToolMetadata
 
+from trid3nt_server.agent.workflows.modflow._input_review import (
+    aquifer_k_review_entry,
+    gate_and_stamp_modflow_inputs,
+)
 from trid3nt_server.emission.pipeline_emitter import begin_substeps, current_emitter, emit_chart_payloads
 from trid3nt_server.agent.tools import register_tool
 from trid3nt_server.agent.workflows.modflow._template_card import TemplateCard
@@ -272,6 +276,21 @@ async def model_wetland_hydroperiod_scenario(
         location_name,
         layer.seasonal_head_range_m,
     )
+    # ADR 0223: structured aquifer-K provenance routed through gate_input_review,
+    # stamped onto the layer envelope (the prose caveat stays on the summary).
+    layer, _review = await gate_and_stamp_modflow_inputs(
+        tool_name="modflow_wetland_hydroperiod", layer=layer,
+        entries=[aquifer_k_review_entry(
+            k_source=("user_supplied" if aquifer_k_ms is not None else "demo_default"),
+            k_ms=(aquifer_k_ms if aquifer_k_ms is not None else DEFAULT_AQUIFER_K_MS),
+            porosity=porosity, note=summary["demo_aquifer_caveat"],
+        )],
+        params={"aquifer_k_ms": aquifer_k_ms, "porosity": porosity},
+    )
+    if _review.cancelled:
+        raise WetlandHydroperiodScenarioError(
+            f"wetland-hydroperiod input review {_review.cancel_reason or 'not approved'}"
+        )
     return WetlandHydroperiodResult(
         hydroperiod_layer=layer, derived_params=derived, summary=summary
     )

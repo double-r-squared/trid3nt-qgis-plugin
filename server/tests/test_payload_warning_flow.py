@@ -124,6 +124,16 @@ def _register_dummy(
     )
 
 
+async def _pump(n: int = 60) -> None:
+    """Yield the event loop enough times for a gate coroutine to reach its next
+    emit/await point. The gate now offloads its estimator via ``asyncio.to_thread``
+    (resolution doctrine R-B, so a sampling estimator's network read can't stall the
+    WS keepalive), which introduces a real thread-scheduling boundary a single
+    ``sleep(0)`` no longer crosses -- pump briefly until the thread hop completes."""
+    for _ in range(n):
+        await asyncio.sleep(0.002)
+
+
 # --------------------------------------------------------------------------- #
 # Tests
 # --------------------------------------------------------------------------- #
@@ -170,7 +180,7 @@ def test_medium_payload_emits_warning_and_pauses() -> None:
             )
         )
         # Let the gate emit the warning + register its future.
-        await asyncio.sleep(0)
+        await _pump()
         # The warning envelope was sent.
         assert any(e["type"] == "tool-payload-warning" for e in ws.sent)
         warning_env = next(
@@ -216,7 +226,7 @@ def test_cancel_decision_skips_dispatch() -> None:
                 ws, state, "cancel_tool", {"mb": 50.0}
             )
         )
-        await asyncio.sleep(0)
+        await _pump()
         warning_env = next(
             e for e in ws.sent if e["type"] == "tool-payload-warning"
         )
@@ -251,7 +261,7 @@ def test_narrow_scope_decision_uses_revised_args() -> None:
                 ws, state, "narrow_tool", {"mb": 50.0, "extra": "drop"}
             )
         )
-        await asyncio.sleep(0)
+        await _pump()
         warning_env = next(
             e for e in ws.sent if e["type"] == "tool-payload-warning"
         )
@@ -285,7 +295,7 @@ def test_hard_cap_warning_omits_proceed_option() -> None:
                 ws, state, "hard_cap_tool", {}
             )
         )
-        await asyncio.sleep(0)
+        await _pump()
         warning_env = next(
             e for e in ws.sent if e["type"] == "tool-payload-warning"
         )
@@ -320,7 +330,7 @@ def test_hard_cap_rejects_proceed_decision() -> None:
                 ws, state, "rude_client_tool", {}
             )
         )
-        await asyncio.sleep(0)
+        await _pump()
         warning_env = next(
             e for e in ws.sent if e["type"] == "tool-payload-warning"
         )
@@ -353,7 +363,7 @@ def test_audit_log_records_every_event() -> None:
         gate_task = asyncio.create_task(
             _maybe_gate_on_payload_warning(ws, state, tool, {"mb": 40.0})
         )
-        await asyncio.sleep(0)
+        await _pump()
         warning_env = next(
             e for e in ws.sent
             if e["type"] == "tool-payload-warning"
@@ -424,7 +434,7 @@ def test_threshold_env_override() -> None:
             gate_task = asyncio.create_task(
                 _maybe_gate_on_payload_warning(ws, state, "env_tool", {"mb": 10.0})
             )
-            await asyncio.sleep(0)
+            await _pump()
             warning_env = next(
                 e for e in ws.sent if e["type"] == "tool-payload-warning"
             )
@@ -465,7 +475,7 @@ def test_invoke_tool_via_emitter_dispatches_after_proceed() -> None:
         )
         # Yield until the warning envelope is queued.
         for _ in range(50):
-            await asyncio.sleep(0)
+            await _pump()
             if any(e["type"] == "tool-payload-warning" for e in ws.sent):
                 break
         warning_env = next(
@@ -510,7 +520,7 @@ def test_invoke_tool_via_emitter_skips_after_cancel() -> None:
             )
         )
         for _ in range(50):
-            await asyncio.sleep(0)
+            await _pump()
             if any(e["type"] == "tool-payload-warning" for e in ws.sent):
                 break
         warning_env = next(

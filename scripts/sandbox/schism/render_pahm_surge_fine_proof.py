@@ -3,12 +3,13 @@ ESRI World Imagery (EPSG:3857 tiles AND data) with Hurricane Ike best track
 overlaid. Writes docs/proof/templates/schism_pahm_surge_fine.png as a NEW
 sibling file - does NOT overwrite schism_pahm_surge.png.
 
-Inputs: run 01KZSC54KS7FZQ66BZRVNQR44Q, case 01KZSC444YVANG0GH1HX2F1SM6 -
-schism_elev_max.tif at s3://trid3nt-runs/01KZSC54KS7FZQ66BZRVNQR44Q/.
+Inputs: run 01KZSKS296C6FHGPN3JE48W3HE, case 01KZSKQH2Q8BGNK70EGZB0ZA8X -
+schism_elev_max.tif at s3://trid3nt-runs/01KZSKS296C6FHGPN3JE48W3HE/.
 Small explicit-resolution AOI [-95.05, 29.2, -94.6, 29.65], resolution_m=30
-(user override). Bathymetry = ETOPO 2022 global (~450 m) because the hosted
-CUDEM collection does not cover this coast (labeled degrade, per envelope);
-the 3DEP land leg failed, so this is a bathymetry-only domain.
+(user coarsening). Bathymetry = REAL NOAA NCEI CUDEM 1/9" (8 tiles intersect
+this AOI, read + composited over the ETOPO 2022 shelf base) -- the resolution
+doctrine (ADR 0224) fix: the prior render used ETOPO ~450 m because skip_cudem
+was FORCED unconditionally, NOT because CUDEM omits this coast (it does not).
 """
 from __future__ import annotations
 
@@ -33,10 +34,10 @@ SCRATCH = Path(
 OUT = REPO / "docs" / "proof" / "templates"
 COG = SCRATCH / "schism_elev_max.tif"
 
-RUN_ID = "01KZSC54KS7FZQ66BZRVNQR44Q"
-CASE_ID = "01KZSC444YVANG0GH1HX2F1SM6"
+RUN_ID = "01KZSKS296C6FHGPN3JE48W3HE"
+CASE_ID = "01KZSKQH2Q8BGNK70EGZB0ZA8X"
 AOI = (-95.05, 29.2, -94.6, 29.65)
-PEAK_SURGE_REPORTED_M = 2.32
+PEAK_SURGE_REPORTED_M = 2.19
 RESOLUTION_M = 30
 
 # Published Hurricane Ike (2008, bal092008) best track, verbatim from
@@ -139,12 +140,13 @@ def render_map():
 
     caption = (
         f"workflow: schism_pahm_surge (fine AOI)  |  storm: Hurricane Ike (2008, bal092008)  |  "
-        f"AOI [-95.05, 29.2, -94.6, 29.65], explicit resolution_m={RESOLUTION_M} (USER OVERRIDE)  |  "
+        f"AOI [-95.05, 29.2, -94.6, 29.65], explicit resolution_m={RESOLUTION_M} (user coarsening)  |  "
         f"peak surge {peak_surge_m:.2f} m (reported {PEAK_SURGE_REPORTED_M:.2f} m)  |  "
         f"case {CASE_ID}  |  run {RUN_ID}  |  "
-        "bathymetry = ETOPO 2022 global (~450 m) -- hosted CUDEM collection does NOT cover "
-        "this coast (LABELED degrade, per envelope); 3DEP land leg FAILED -> bathymetry-only "
-        f"domain, no land topography  |  color scale pinned 0-{VMAX_PINNED:.1f} m"
+        "bathymetry = REAL NOAA NCEI CUDEM 1/9\" (8 tiles read + composited over the ETOPO "
+        "shelf base) -- resolution doctrine (ADR 0224): the prior render was ETOPO ~450 m "
+        "because skip_cudem was FORCED, not because CUDEM omits this coast  |  "
+        f"color scale pinned 0-{VMAX_PINNED:.1f} m"
     )
     fig.text(0.5, -0.02, caption, ha="center", va="top", fontsize=8, color="#3a3a3c",
               wrap=True)

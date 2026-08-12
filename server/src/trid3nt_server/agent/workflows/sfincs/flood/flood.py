@@ -1565,6 +1565,19 @@ async def model_flood_scenario(
         _built_res = getattr(model_setup, "grid_resolution_m", None)
         if _built_res:
             grid_resolution_m = float(_built_res)
+        # ADR 0223: surface a wide-fallback active-mask degrade (DEM elevation
+        # range unreadable) that build_sfincs_model recorded on the ModelSetup, so
+        # it is no longer only an .inp comment + agent.log line. Non-adaptive means
+        # the active domain may include cells a real DEM range would exclude.
+        _mask_bounds = (getattr(model_setup, "parameters", {}) or {}).get(
+            "mask_bounds") if model_setup is not None else None
+        if isinstance(_mask_bounds, dict) and _mask_bounds.get("adaptive") is False:
+            _mask_note = _mask_bounds.get("note") or (
+                "SFINCS active-cell mask used a WIDE FALLBACK elevation window "
+                "(DEM range unreadable)."
+            )
+            logger.warning(
+                "model_flood_scenario: %s (bbox=%s)", _mask_note, resolved_bbox)
     except asyncio.CancelledError:
         raise
     except asyncio.TimeoutError:
