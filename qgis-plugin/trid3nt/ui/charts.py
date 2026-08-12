@@ -41,6 +41,8 @@ import os
 import sys
 from typing import Any, Dict, List, Optional
 
+from .. import install_dependencies
+
 # -- guarded matplotlib import (see module docstring) ------------------------ #
 # ``Figure`` + a Qt canvas class, no pyplot (pyplot owns global backend state
 # we must not fight QGIS for). backend_qtagg resolves its binding via the
@@ -106,11 +108,14 @@ def recheck_matplotlib() -> bool:
 
 # --------------------------------------------------------------------------- #
 # Per-OS "how do I get matplotlib into THIS interpreter" command builder.
-# Pure (no Qt, no subprocess) -- the panel's Copy/Attempt-install actions
-# and the tests both call through this. Never hardcodes a path: QGIS embeds
-# its own python per-OS (macOS: <QGIS.app>/Contents/MacOS/bin/python3, a
-# wrapper the running ``sys.executable`` is NOT; Linux/Windows: the running
-# interpreter already IS the real, invokable one).
+# Pure (no Qt, no subprocess) -- the panel's Copy/Attempt-install actions and
+# the tests both call through this. Never hardcodes a path: QGIS embeds its
+# own python per-OS (macOS: <QGIS.app>/Contents/MacOS/bin/python3, a wrapper
+# the running ``sys.executable`` is NOT; Linux/Windows: the running
+# interpreter already IS the real, invokable one). The executable-resolution
+# logic itself lives in ``install_dependencies`` (one source of truth shared
+# with the standalone script and its "Attempt install" QProcess target) --
+# this module only re-exports it under its established name.
 # --------------------------------------------------------------------------- #
 
 
@@ -119,23 +124,13 @@ def install_python_executable(
     exec_prefix: Optional[str] = None,
     executable: Optional[str] = None,
 ) -> str:
-    """The python binary pip must run under to land matplotlib where this
-    QGIS's interpreter will find it -- derived from ``sys.exec_prefix`` /
-    ``sys.executable`` at call time, never a baked-in path."""
-    platform = sys.platform if platform is None else platform
-    exec_prefix = sys.exec_prefix if exec_prefix is None else exec_prefix
-    executable = sys.executable if executable is None else executable
-    if platform == "darwin":
-        # QGIS.app's macOS bundle: sys.executable is the QGIS launcher, not a
-        # runnable python; the real interpreter lives at exec_prefix/bin.
-        return os.path.join(exec_prefix, "bin", "python3")
-    if platform.startswith("win"):
-        candidate = os.path.join(exec_prefix, "python.exe")
-        return candidate
-    # Linux (and other POSIX): the running interpreter is already a real,
-    # directly-invokable python -- prefer it; exec_prefix is the fallback
-    # for the rare embedded build where sys.executable is empty.
-    return executable or os.path.join(exec_prefix, "bin", "python3")
+    """The python binary that must run ``install_dependencies.py`` to land
+    matplotlib where this QGIS's interpreter will find it -- derived from
+    ``sys.exec_prefix`` / ``sys.executable`` at call time, never a baked-in
+    path."""
+    return install_dependencies.install_python_executable(
+        platform, exec_prefix, executable
+    )
 
 
 def install_command_argv(
@@ -143,9 +138,11 @@ def install_command_argv(
     exec_prefix: Optional[str] = None,
     executable: Optional[str] = None,
 ) -> List[str]:
-    """The argv ``QProcess`` runs: ``[python, -m, pip, install, matplotlib]``."""
+    """The argv ``QProcess`` runs: ``[python, install_dependencies.py]`` --
+    the shared script (not raw pip) so the check/install/re-verify logic has
+    exactly one implementation."""
     py = install_python_executable(platform, exec_prefix, executable)
-    return [py, "-m", "pip", "install", "matplotlib"]
+    return [py, install_dependencies.__file__]
 
 
 def install_command_str(
@@ -154,9 +151,10 @@ def install_command_str(
     executable: Optional[str] = None,
 ) -> str:
     """The human-facing / copy-button command line for the same argv."""
-    py, *rest = install_command_argv(platform, exec_prefix, executable)
+    py, script = install_command_argv(platform, exec_prefix, executable)
     quoted_py = f'"{py}"' if " " in py else py
-    return " ".join([quoted_py, *rest])
+    quoted_script = f'"{script}"' if " " in script else script
+    return " ".join([quoted_py, quoted_script])
 
 
 # Default series colors (matplotlib tab10 order) for color-field grouping.

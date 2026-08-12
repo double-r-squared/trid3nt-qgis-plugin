@@ -95,13 +95,15 @@ class MissingMatplotlibPanel(QWidget):
     it; QGIS 3 shipped it). Explains what's missing and why, offers the
     exact per-OS pip command (copy button) derived from ``charts
     .install_command_str`` -- never hardcoded -- and an "Attempt install"
-    button that runs the bundled interpreter's pip via ``QProcess``,
-    streaming stdout+stderr live into this panel. Never installs without
-    the click. On success, prompts to reopen the chart dock (and offers an
-    in-place reload via ``on_reload``, which the window wires to a cache-bust
-    + re-render so the user does not have to close/reopen anything). On
-    failure, the streamed stderr stays on screen -- an honest failure, no
-    silent retry.
+    button that runs the bundled interpreter against the shared
+    ``install_dependencies.py`` script via ``QProcess`` (not raw pip -- one
+    source of truth with the standalone script, see ``charts
+    .install_command_argv``), streaming stdout+stderr live into this panel.
+    Never installs without the click. On success, prompts to reopen the
+    chart dock (and offers an in-place reload via ``on_reload``, which the
+    window wires to a cache-bust + re-render so the user does not have to
+    close/reopen anything). On failure, the streamed output stays on
+    screen -- an honest failure, no silent retry.
     """
 
     def __init__(
@@ -149,8 +151,8 @@ class MissingMatplotlibPanel(QWidget):
         action_row = QHBoxLayout()
         self.install_btn = QPushButton("Attempt install")
         self.install_btn.setToolTip(
-            "Run the command above via QGIS's own Python -- streams output "
-            "below; never runs without this click"
+            "Run install_dependencies.py via QGIS's own Python -- streams "
+            "output below; never runs without this click"
         )
         self.install_btn.clicked.connect(self._on_attempt_install)
         action_row.addWidget(self.install_btn)

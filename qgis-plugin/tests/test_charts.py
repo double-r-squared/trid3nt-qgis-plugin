@@ -28,6 +28,7 @@ from unittest import mock
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 sys.path.insert(0, os.path.dirname(__file__))
 
+from trid3nt import install_dependencies  # noqa: E402
 from trid3nt.net import trid3nt_client as tc  # noqa: E402
 from trid3nt.ui import charts as charts_mod  # noqa: E402
 
@@ -174,7 +175,11 @@ class TestMatplotlibGuard(unittest.TestCase):
 
 
 class TestInstallCommandBuilder(unittest.TestCase):
-    """Per-OS pip-install command string builder -- pure, no subprocess."""
+    """Per-OS install command string builder -- pure, no subprocess. The
+    executable-resolution logic itself is shared with ``install_dependencies``
+    (one source of truth); these tests confirm ``charts`` delegates rather
+    than re-implementing it, and that the panel's argv targets the shared
+    script instead of raw pip."""
 
     def test_mac_derives_from_exec_prefix_bin_python3(self):
         py = charts_mod.install_python_executable(
@@ -210,24 +215,24 @@ class TestInstallCommandBuilder(unittest.TestCase):
         self.assertTrue(py.endswith("python.exe"))
         self.assertTrue(py.startswith(r"C:\QGIS\apps\Python312"))
 
-    def test_argv_shape(self):
+    def test_argv_shape_delegates_to_shared_script(self):
+        """The panel's QProcess argv must run install_dependencies.py, not
+        raw pip -- one source of truth for check/install/re-verify."""
         argv = charts_mod.install_command_argv(
             "linux", "/usr", "/usr/bin/python3"
         )
-        self.assertEqual(
-            argv, ["/usr/bin/python3", "-m", "pip", "install", "matplotlib"]
-        )
+        self.assertEqual(argv, ["/usr/bin/python3", install_dependencies.__file__])
 
     def test_command_str_unquoted_when_no_spaces(self):
         cmd = charts_mod.install_command_str("linux", "/usr", "/usr/bin/python3")
-        self.assertEqual(cmd, "/usr/bin/python3 -m pip install matplotlib")
+        self.assertEqual(cmd, f"/usr/bin/python3 {install_dependencies.__file__}")
 
     def test_command_str_quotes_path_with_spaces(self):
         cmd = charts_mod.install_command_str(
             "darwin", "/Applications/QGIS 4.app/Contents/MacOS", "irrelevant"
         )
         self.assertTrue(cmd.startswith('"/Applications/QGIS 4.app'))
-        self.assertTrue(cmd.endswith(' -m pip install matplotlib'))
+        self.assertTrue(cmd.endswith(install_dependencies.__file__))
 
     def test_nothing_hardcoded_reflects_runtime_prefix(self):
         """Different exec_prefix inputs must produce different commands --

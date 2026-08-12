@@ -69,6 +69,39 @@ copy-pasting file paths.
   WebSocket; it never starts or stops it, and a client-only machine (see
   below) needs none of that -- just QGIS.
 
+## Dependencies
+
+QGIS bundles its own Python, and that bundle already carries most of what
+this plugin needs -- QGIS 4.0.3, for example, ships numpy, pandas, shapely,
+pyproj, lxml and psycopg2, none of which this plugin has to install. The one
+gap: **matplotlib**, which QGIS 3 bundled and QGIS 4 dropped -- the Charts
+dock needs it and nothing else does.
+
+`trid3nt/install_dependencies.py` (pure stdlib, ships inside the plugin) is
+the general fix: it checks every third-party import the plugin actually
+makes (today, just matplotlib), reports a present/missing table, installs
+only what's missing into the running interpreter, re-verifies, and exits
+nonzero if anything is still missing.
+
+Run it with **QGIS's own Python interpreter**, not your system Python:
+
+```bash
+# macOS
+"/Applications/QGIS.app/Contents/MacOS/bin/python3" trid3nt/install_dependencies.py
+
+# Linux (the interpreter QGIS runs under is already the one to use)
+python3 trid3nt/install_dependencies.py
+
+# Windows (adjust to your QGIS install path)
+"C:\Program Files\QGIS 3.xx\apps\Python3xx\python.exe" trid3nt\install_dependencies.py
+```
+
+Add `--dry-run` to see the present/missing table and the install command
+without installing anything. The Charts dock also drives this same script
+from its "Missing matplotlib" panel (Attempt-install button, streamed
+output) -- one source of truth whether you run it by hand or click the
+button.
+
 ## Install
 
 There are two ways to get this plugin into QGIS, depending on whether this
