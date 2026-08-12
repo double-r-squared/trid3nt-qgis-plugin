@@ -185,3 +185,42 @@ to 199 m reads 21 tiles); the payload gate is the intended lever there.
   `estimated_mb=620.50 over_hard_cap=True`, the seed auto-confirmed the coarsening
   (`narrow_scope resolution_m=199`), and the re-dispatch read 21 real CUDEM tiles
   -- the native->gate->coarsen path proven end-to-end.
+
+## Amendment (2026-08-11) -- mesh-density regression: an explicit resolution must drive the MESH, not only the fetch
+
+NATE caught it on the re-rendered fine proof: the fine Bolivar re-drive read real
+CUDEM (8 tiles) but the SURGE FIELD looked COARSER than a prior version, because the
+internal TIN was built at **8x8 = 64 nodes** -- the autoscale FLOOR.
+
+**Root cause (decoupling).** The resolution rewiring above routed `resolution_m` into
+the bathymetry fetch (`fetch_res_m`) but the internal TIN was still sized ONLY from
+`_autoscale_surge_domain(bbox)` -- a bbox-only rule (`_SURGE_TIN_KM_PER_NODE = 6 km`
+per node, clamped `[8, 40]` per axis). For the 44x50 km Bolivar box that floors at
+`round(44/6)=7 -> 8` and `round(50/6)=8`, i.e. **8x8 = 64 nodes regardless of the
+requested cell**. So a fine 30 m ask bought a fine bathymetry FETCH but the same
+coarse 64-node MESH -- the two were decoupled
+(`pahm_surge.py` `_build_internal_tin(bbox, nx=autoscale["tin_nx"], ny=autoscale["tin_ny"])`).
+
+**Fix (fidelity-first + declared clamps).** An explicit `resolution_m` now keys the
+TIN density too, via `_resolution_driven_tin_dims(bbox, resolution_m)`: target cell =
+`max(resolution_m, _SURGE_TIN_CELL_FLOOR_M=25 m)`, nodes per axis = AOI extent / cell,
+bounded by a DECLARED node-budget ceiling `_SURGE_TIN_DIM_MAX_FINE = 80` per axis. The
+ceiling is evidence-based, not a guess: the 0217-0219 runs solved ~440 nodes in ~30 s,
+so 80x80 = 6400 nodes (~15x the node count) stays a few-minute local screening solve.
+Per the declared-clamps ruling the ceiling is NEVER silent -- when it binds the
+`resolution_m` envelope entry states the requested cell, the unclamped node grid, the
+clamped grid, and the resulting effective mesh cell (and notes the bathymetry is still
+read at the requested resolution). The NATIVE (`resolution_m=None`) path is unchanged:
+mesh density keys to the AOI-driven autoscale suggestion (that path was fine).
+
+For the fine Bolivar box the TIN goes from **64 -> 6400 nodes** (30 m ask wanted a
+1454x1658 TIN; clamped to 80x80 by the budget, effective mesh cell ~545 m -- the
+declared ceiling); the proof field is now visibly FINER than every prior version.
+
+- Files: `pahm_surge.py` (`_resolution_driven_tin_dims`, `_SURGE_TIN_DIM_MAX_FINE`,
+  `_SURGE_TIN_CELL_FLOOR_M`, explicit-path mesh wiring, resolution envelope note);
+  `test_resolution_doctrine_0224.py` (mesh-density section: fine ask scales past the
+  floor, density tracks the requested cell, ceiling self-labels, native unchanged);
+  `test_schism_pahm_surge.py` (end-to-end: explicit fine ask -> dense mesh entry +
+  labeled clamp).
+- Re-drive: see the amendment live evidence appended below.

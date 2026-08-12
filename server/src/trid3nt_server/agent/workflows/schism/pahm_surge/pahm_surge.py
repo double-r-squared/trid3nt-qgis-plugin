@@ -99,12 +99,65 @@ _SURGE_RES_MAX_M = 1000.0
 #: doctrine's "bounded grid dimension" -- 500-800 px is enough detail for a
 #: barotropic screening surge without an oversized composite).
 _SURGE_BATHY_TARGET_PX = 750.0
-#: Target AOI kilometres per internal-TIN node (per axis) -- the "sane node
-#: budget": denser than this wastes solve time on a screening barotropic surge,
-#: coarser loses the coastal surge structure (right-of-track lobe, bay funneling).
+#: Target AOI kilometres per internal-TIN node (per axis) -- the NATIVE-default
+#: "sane node budget": denser than this wastes solve time on a screening barotropic
+#: surge, coarser loses the coastal surge structure (right-of-track lobe, bay
+#: funneling). This drives the TIN only on the NATIVE (resolution_m=None) path.
 _SURGE_TIN_KM_PER_NODE = 6.0
 _SURGE_TIN_DIM_MIN = 8
 _SURGE_TIN_DIM_MAX = 40
+#: The finest internal-TIN cell a screening barotropic surge will build regardless
+#: of an even-finer ask (m): mirrors the fetch resolution_m floor -- below this the
+#: graded coarse-TIN screening solve gains no physical fidelity, so the TIN target
+#: cell is max(resolution_m, this).
+_SURGE_TIN_CELL_FLOOR_M = _SURGE_RES_MIN_M  # 25 m
+#: DECLARED node-budget ceiling (per axis) for an EXPLICIT resolution_m ask -- the
+#: fidelity-first rule keys TIN density to the requested cell, bounded here. NOT a
+#: silent floor/ceiling: the envelope SAYS SO when this binds (declared-clamps
+#: ruling). Justification (evidence-based, not a guess): the barotropic screening
+#: solve's wall scales with node count; the 0217-0219 runs at ~440 nodes solved in
+#: ~30 s, so 80x80 = 6400 nodes (~15x the node count, a few minutes on the same
+#: local image) is a comfortably affordable ceiling that keeps a fine ask a
+#: screening-scale solve rather than an unbounded refinement.
+_SURGE_TIN_DIM_MAX_FINE = 80
+
+
+def _resolution_driven_tin_dims(
+    bbox: tuple[float, float, float, float], resolution_m: float
+) -> tuple[int, int, str]:
+    """Internal-TIN node grid for an EXPLICIT resolution_m ask: the requested cell
+    size drives MESH density (fidelity-first -- a fine ask buys a fine mesh, not just
+    a fine bathymetry fetch), bounded by the declared ``_SURGE_TIN_DIM_MAX_FINE``
+    node budget.
+
+    Target cell = ``max(resolution_m, _SURGE_TIN_CELL_FLOOR_M)``; nodes per axis =
+    AOI extent / cell, clamped to ``[_SURGE_TIN_DIM_MIN, _SURGE_TIN_DIM_MAX_FINE]``.
+    Returns ``(nx, ny, budget_note)`` where ``budget_note`` is non-empty ONLY when
+    the ceiling binds -- the clamp labels itself (no silent ceiling), quoting the
+    requested cell, the unclamped node grid, and the resulting effective cell.
+    """
+    west, south, east, north = bbox
+    mid_lat_rad = math.radians(0.5 * (south + north))
+    width_km = max(abs(east - west) * 111.320 * math.cos(mid_lat_rad), 1e-6)
+    height_km = max(abs(north - south) * 110.540, 1e-6)
+    cell_m = max(float(resolution_m), _SURGE_TIN_CELL_FLOOR_M)
+
+    want_nx = max(round(width_km * 1000.0 / cell_m), _SURGE_TIN_DIM_MIN)
+    want_ny = max(round(height_km * 1000.0 / cell_m), _SURGE_TIN_DIM_MIN)
+    nx = min(want_nx, _SURGE_TIN_DIM_MAX_FINE)
+    ny = min(want_ny, _SURGE_TIN_DIM_MAX_FINE)
+
+    note = ""
+    if nx < want_nx or ny < want_ny:
+        eff_cell_m = max(width_km * 1000.0 / nx, height_km * 1000.0 / ny)
+        note = (
+            f"requested ~{float(resolution_m):.0f} m cell wanted a {want_nx}x{want_ny} "
+            f"TIN; clamped to {nx}x{ny} by the {_SURGE_TIN_DIM_MAX_FINE}x"
+            f"{_SURGE_TIN_DIM_MAX_FINE}-node screening solver budget (effective mesh "
+            f"cell ~{eff_cell_m:.0f} m; the bathymetry fetch is still read at the "
+            f"requested resolution)"
+        )
+    return int(nx), int(ny), note
 
 
 def _autoscale_surge_domain(
@@ -623,10 +676,17 @@ async def model_schism_pahm_surge(
         resolved_res_m: float | None = float(resolution_m)
         fetch_res_m: float | None = float(resolution_m)
         res_basis: str = "user"
+        # Fidelity-first: an explicit resolution drives the MESH density too, not
+        # only the bathymetry fetch -- the requested cell keys the TIN, bounded by
+        # the declared node budget (which labels itself in the envelope if it binds).
+        tin_nx, tin_ny, tin_budget_note = _resolution_driven_tin_dims(bbox, resolved_res_m)
     else:
         resolved_res_m = None  # native
         fetch_res_m = None
         res_basis = "derived"  # the tool DERIVED native as the default (SyntheticInput basis)
+        # Native path: mesh density keys to the AOI-driven autoscale suggestion.
+        tin_nx, tin_ny = int(autoscale["tin_nx"]), int(autoscale["tin_ny"])
+        tin_budget_note = ""
 
     # --- Stage 3: mesh (case mesh via the gate, else internal TIN) ----------- #
     supplied_mesh, gate_open_side, mesh_gate_note = await _surge_mesh_gate(input_mode)
@@ -644,8 +704,7 @@ async def model_schism_pahm_surge(
         )
     else:
         open_side = open_boundary_side
-        points, cells = _build_internal_tin(
-            bbox, nx=int(autoscale["tin_nx"]), ny=int(autoscale["tin_ny"]))
+        points, cells = _build_internal_tin(bbox, nx=tin_nx, ny=tin_ny)
         # Bathymetry: fetch a topobathy/DEM COG; else a synthetic sloping shelf.
         bathy_override = os.environ.get("TRID3NT_SCHISM_BATHY_PATH")
         depths = None
@@ -740,12 +799,13 @@ async def model_schism_pahm_surge(
                    else "native (CUDEM 1/9\")"),
             units="m", basis=res_basis,
             note=(
-                f"user-supplied (overrides the {autoscale['resolution_m']:.0f} m autoscale "
-                "coarsening suggestion)" if res_basis == "user" else
+                (f"user-supplied (overrides the {autoscale['resolution_m']:.0f} m autoscale "
+                 f"coarsening suggestion); drives the mesh too -- TIN {tin_nx}x{tin_ny} nodes"
+                 + (f". {tin_budget_note}" if tin_budget_note else "")) if res_basis == "user" else
                 "NATIVE bathymetry (default): the fine CUDEM 1/9\" nearshore composite, "
                 f"bounded by the 12000 px guard; the ~{autoscale['resolution_m']:.0f} m "
                 "autoscale cell is offered as the coarsening hint on the payload gate. "
-                f"TIN {autoscale['tin_nx']}x{autoscale['tin_ny']} nodes"
+                f"TIN {tin_nx}x{tin_ny} nodes"
             ),
         ),
     ]

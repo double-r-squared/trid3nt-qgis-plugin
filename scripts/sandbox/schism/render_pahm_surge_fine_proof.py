@@ -3,8 +3,8 @@ ESRI World Imagery (EPSG:3857 tiles AND data) with Hurricane Ike best track
 overlaid. Writes docs/proof/templates/schism_pahm_surge_fine.png as a NEW
 sibling file - does NOT overwrite schism_pahm_surge.png.
 
-Inputs: run 01KZSKS296C6FHGPN3JE48W3HE, case 01KZSKQH2Q8BGNK70EGZB0ZA8X -
-schism_elev_max.tif at s3://trid3nt-runs/01KZSKS296C6FHGPN3JE48W3HE/.
+Inputs: run 01KZSS2EJ962MFQ9YTRT1CMARY, case 01KZSS0PJXTA6534NJ847XGAGC -
+schism_elev_max.tif at s3://trid3nt-runs/01KZSS2EJ962MFQ9YTRT1CMARY/.
 Small explicit-resolution AOI [-95.05, 29.2, -94.6, 29.65], resolution_m=30
 (user coarsening). Bathymetry = REAL NOAA NCEI CUDEM 1/9" (8 tiles intersect
 this AOI, read + composited over the ETOPO 2022 shelf base) -- the resolution
@@ -34,10 +34,10 @@ SCRATCH = Path(
 OUT = REPO / "docs" / "proof" / "templates"
 COG = SCRATCH / "schism_elev_max.tif"
 
-RUN_ID = "01KZSKS296C6FHGPN3JE48W3HE"
-CASE_ID = "01KZSKQH2Q8BGNK70EGZB0ZA8X"
+RUN_ID = "01KZSS2EJ962MFQ9YTRT1CMARY"
+CASE_ID = "01KZSS0PJXTA6534NJ847XGAGC"
 AOI = (-95.05, 29.2, -94.6, 29.65)
-PEAK_SURGE_REPORTED_M = 2.19
+PEAK_SURGE_REPORTED_M = 2.86
 RESOLUTION_M = 30
 
 # Published Hurricane Ike (2008, bal092008) best track, verbatim from
@@ -51,7 +51,7 @@ IKE_TRACK = (
 )
 LANDFALL_IDX = 3
 
-VMAX_PINNED = 2.5  # m, pinned scale per kickoff
+VMAX_PINNED = 3.0  # m, pinned scale per kickoff
 
 
 def _reproject_to_merc(cog_path):

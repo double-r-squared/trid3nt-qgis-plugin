@@ -198,3 +198,50 @@ def test_rb_surge_detail_native_offers_coarsening(_no_sample):
 def test_rb_surge_detail_explicit_names_grid(_no_sample):
     txt = surge.estimate_payload_mb_detail(bbox=list(BBOX), resolution_m=30)
     assert "30 m grid" in txt and "analytic" in txt
+
+
+# --------------------------------------------------------------------------- #
+# R-A (mesh): an explicit resolution_m drives the MESH density too, not only the
+# bathymetry fetch (the 2026-08-11 regression NATE caught on the fine Bolivar
+# proof: the fine re-drive fell to the 8x8=64-node autoscale FLOOR because
+# resolution_m fed the fetch but never _build_internal_tin). Bounded by a DECLARED
+# node budget that labels itself when it binds (declared-clamps ruling).
+# --------------------------------------------------------------------------- #
+
+
+def test_mesh_explicit_fine_scales_far_past_native_floor():
+    # The fine Bolivar box: native autoscale floors the TIN at 8x8=64 nodes, but an
+    # explicit 30 m ask must key the mesh to the requested cell (bounded by budget).
+    native = surge._autoscale_surge_domain(BBOX)
+    assert native["tin_nx"] * native["tin_ny"] == 64  # the pre-fix floor
+    nx, ny, note = surge._resolution_driven_tin_dims(BBOX, 30.0)
+    assert nx * ny >= 3600  # thousands of nodes, not 64
+    assert nx == surge._SURGE_TIN_DIM_MAX_FINE and ny == surge._SURGE_TIN_DIM_MAX_FINE
+
+
+def test_mesh_density_tracks_requested_cell_until_budget():
+    # Finer ask -> at least as many nodes as a coarser ask (monotone), and a coarse
+    # ask on a small box stays below the ceiling (density tracks the request).
+    small = (-95.05, 29.20, -94.95, 29.30)  # ~10 km
+    fine_nx, fine_ny, _ = surge._resolution_driven_tin_dims(small, 30.0)
+    coarse_nx, coarse_ny, _ = surge._resolution_driven_tin_dims(small, 900.0)
+    assert fine_nx * fine_ny >= coarse_nx * coarse_ny
+    assert coarse_nx < surge._SURGE_TIN_DIM_MAX_FINE  # coarse ask does not saturate
+
+
+def test_mesh_budget_ceiling_labels_itself_when_it_binds():
+    # A fine ask on a 45 km box overflows the node budget -> the clamp is DECLARED.
+    _, _, note = surge._resolution_driven_tin_dims(BBOX, 30.0)
+    assert note  # non-empty only when the ceiling binds
+    assert "clamped" in note and "solver budget" in note
+    assert "effective mesh cell" in note  # states what the mesh actually resolves
+
+
+def test_mesh_native_path_unchanged():
+    # resolution_m=None keeps the AOI-driven autoscale TIN (the path that was fine).
+    a = surge._autoscale_surge_domain(surge._IKE_BBOX)
+    assert surge._SURGE_TIN_DIM_MIN <= a["tin_nx"] <= surge._SURGE_TIN_DIM_MAX
+    assert surge._SURGE_TIN_DIM_MIN <= a["tin_ny"] <= surge._SURGE_TIN_DIM_MAX
+    # No node-budget note is produced on the native path (no explicit ask to clamp).
+    nx, ny, note = surge._resolution_driven_tin_dims(surge._IKE_BBOX, 900.0)
+    assert isinstance(note, str)

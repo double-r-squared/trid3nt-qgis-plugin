@@ -354,6 +354,50 @@ def test_explicit_resolution_m_is_declared_coarsening(monkeypatch):
     assert entries["resolution_m"].basis == "user"
 
 
+def test_explicit_resolution_m_drives_dense_mesh_not_the_floor(monkeypatch):
+    """Fidelity-first (the 2026-08-11 regression fix): an explicit fine resolution_m
+    must key the MESH density, not only the bathymetry fetch. On the fine Bolivar box
+    the native autoscale floors the TIN at 8x8=64 nodes; a 30 m ask must instead build
+    thousands of nodes (up to the declared budget) and the resolution entry must LABEL
+    the node-budget clamp when it binds."""
+    import trid3nt_server.agent.workflows.schism.pahm_surge.pahm_surge as P
+
+    bolivar = (-95.05, 29.2, -94.6, 29.65)  # the AOI NATE re-drove
+
+    async def _fake_fetch(bbox, *, resolution_m=None, force_bathy_base=False, skip_land=False):
+        return "/tmp/fake_bathy.tif", "topobathy"
+
+    def _fake_sample(points, dem_path):
+        return np.full(len(points), 10.0, dtype=float)
+
+    monkeypatch.setattr(P, "_fetch_bathymetry_cog", _fake_fetch)
+    monkeypatch.setattr(P.deck_authoring, "sample_bathymetry_on_nodes", _fake_sample)
+    monkeypatch.delenv("TRID3NT_SCHISM_BATHY_PATH", raising=False)
+
+    captured_gate: dict = {}
+
+    async def _fake_gate(*, tool_name, mode, entries, params):
+        captured_gate["entries"] = entries
+        raise _GateSentinel()
+
+    monkeypatch.setattr(P, "gate_input_review", _fake_gate)
+
+    with pytest.raises(_GateSentinel):
+        asyncio.run(P.model_schism_pahm_surge(
+            storm_name=None, year=None, location_query=None, bbox=bolivar,
+            sim_days=1.5, open_boundary_side="south", input_mode=None,
+            allow_synthetic_domain=False, resolution_m=30.0,
+        ))
+
+    entries = _entries_by_param(captured_gate["entries"])
+    # Mesh is DENSE now (was 64 nodes at the autoscale floor), thousands of nodes.
+    mesh_nodes = int(entries["mesh"].note.split()[0])
+    assert mesh_nodes >= 3000, mesh_nodes
+    # The declared node-budget clamp labels itself on the resolution entry.
+    assert "TIN 80x80 nodes" in entries["resolution_m"].note
+    assert "solver budget" in entries["resolution_m"].note
+
+
 def test_resolution_m_native_default_when_not_supplied(monkeypatch):
     """Resolution doctrine R-A: with resolution_m left None the bathymetry fetch runs
     NATIVE (resolution_m=None forwarded, so CUDEM is read at its native cell) and the
