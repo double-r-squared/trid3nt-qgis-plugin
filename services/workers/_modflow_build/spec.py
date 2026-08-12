@@ -53,15 +53,19 @@ _REQUIRED_RUN_ARGS: tuple[str, ...] = (
 )
 
 #: PARSER VERSION -- bump on a change to the run_args the worker deck-builder
-#: accepts (ADR 0158 strict-field error names it). Bumped to -2 for the ADR 0215
-#: wellhead-reeval part 2: ``build_modflow_deck`` now accepts the capture_zone
-#: WELLFIELD (``wells``), transient flag (``capture_zone_transient``), NHD RIV
-#: (``river_reaches``), and kriged per-cell IC (``starting_head_by_cell``). These
-#: flow through the OPEN ``run_args`` passthrough into the typed
-#: ``build_modflow_deck`` signature, so a MISNAMED variant of any of them raises a
-#: loud TypeError at the call site (proven by the worker rejection tests) rather
-#: than silently no-op'ing -- the ADR 0148 failure mode this version guards.
-_PARSER_VERSION = "modflow-jobspec-2"
+#: accepts (ADR 0158 strict-field error names it). Bumped to -3 for ADR 0228: the
+#: ``vadose_transport`` archetype adds the UZF+UZT forcing fields
+#: (``vadose_thickness_m``, ``vadose_thtr`` / ``vadose_thts`` / ``vadose_eps``,
+#: ``vadose_infiltration_conc``, ``vadose_infiltration_rate_m_day``,
+#: ``vadose_vks_m_day``) plus the CSUB formulation knobs (``csub_delay_interbeds``,
+#: ``csub_effective_stress``) to ``build_modflow_deck``. (-2 added the ADR 0215
+#: wellhead-reeval part-2 fields: capture_zone ``wells`` / ``capture_zone_transient``
+#: / ``river_reaches`` / ``starting_head_by_cell``.) All flow through the OPEN
+#: ``run_args`` passthrough into the typed ``build_modflow_deck`` signature, so a
+#: MISNAMED variant of any of them raises a loud TypeError at the call site
+#: (proven by the worker rejection tests) rather than silently no-op'ing -- the
+#: ADR 0148 failure mode this version guards.
+_PARSER_VERSION = "modflow-jobspec-3"
 
 #: Every top-level job_spec key this worker reads. Unlike ``run_args`` (an
 #: intentionally-open passthrough dict -- see the module docstring: it is

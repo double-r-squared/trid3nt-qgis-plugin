@@ -332,3 +332,20 @@ honestly declines mismatches rather than force-fitting; standalone
 tool keeps emitting all engine formats per mesh to make acceptance
 the common case. Build AFTER mesh v2 (ADR 0193) lands + NATE
 validates alignment.
+
+## 2026-08-12 - Procedural pipeline DSL (NATE design sketch, no build yet)
+A thin abstraction over the existing seams making templates read as
+chained verbs: load (fetchers, cached+provenance) -> gate (the
+reusable envelope gates: input-review/payload/mesh) -> simulate
+(run_solver dispatch) -> plot (publish_layer + LayerURI + emitter
+as ONE explicit required call; charts likewise). Rationale from
+evidence: today plot is three seams + an ambient emitter, and that
+ambiguity produced real latent bugs (the modflow archetype family
+never plotting its map; pipeline_emitter=None bypasses; dict-vs-
+LayerURI auto-load). The DSL formalizes what composers already do
+informally - load-before-plot becomes structural, gates become
+composable pieces (already true), templates become extendable
+recipes. NATE: 'I liked it to be procedural... build all the
+pieces of the pipeline flexible so we can make more with the same
+features.' Candidate shape: a small module wrapping the seams, one
+template ported as the demonstration, adopted opportunistically.

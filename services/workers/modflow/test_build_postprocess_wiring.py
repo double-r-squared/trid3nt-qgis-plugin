@@ -193,11 +193,65 @@ def test_build_modflow_deck_rejects_unknown_run_args_key_via_typeerror():
         gwt_adapter.build_modflow_deck(workdir="/tmp/does-not-run", write=False, **deck_kwargs)
 
 
-def test_parser_version_is_bumped_for_adr_0215_fields():
-    """The parser version names the ADR 0215 wellhead-reeval part-2 fields."""
+def test_parser_version_is_bumped_for_adr_0228_fields():
+    """The parser version is bumped to -3 for the ADR 0228 vadose_transport +
+    CSUB-knob run_args."""
     from services.workers._modflow_build.spec import _PARSER_VERSION
 
-    assert _PARSER_VERSION == "modflow-jobspec-2"
+    assert _PARSER_VERSION == "modflow-jobspec-3"
+
+
+def test_job_spec_accepts_vadose_transport_fields(tmp_path):
+    """The ADR 0228 vadose_transport run_args flow through the OPEN passthrough
+    into the typed build_modflow_deck signature and BUILD a deck (not dropped)."""
+    from services.workers._modflow_build import (
+        build_deck_kwargs_from_spec,
+        validate_job_spec,
+    )
+    from services.workers.modflow import gwt_adapter
+
+    spec = validate_job_spec({
+        "schema_version": 1, "engine": "modflow",
+        "run_args": {
+            "spill_location_latlon": [40.42, -86.9], "contaminant": "nitrate",
+            "release_rate_kg_s": 1.0, "duration_days": 1.0,
+            "aquifer_k_ms": 1e-4, "porosity": 0.3,
+            "archetype": "vadose_transport",
+            "vadose_thickness_m": 4.0,
+            "vadose_infiltration_rate_m_day": 0.01,
+        },
+    })
+    deck_kwargs = build_deck_kwargs_from_spec(spec)
+    deck = gwt_adapter.build_modflow_deck(workdir=str(tmp_path), write=False, **deck_kwargs)
+    assert deck.archetype == "vadose_transport"
+    assert deck.vadose_present is True
+
+
+@pytest.mark.parametrize(
+    "typo",
+    ["vadose_thickness_metres", "vadose_infiltration_rates", "csub_delay_interbed"],
+)
+def test_job_spec_rejects_typo_of_adr_0228_fields_via_typeerror(typo, tmp_path):
+    """A MISNAMED variant of any ADR 0228 field raises a loud TypeError at the deck
+    call (ADR 0148 guard), never silently no-op'ing the intended field."""
+    from services.workers._modflow_build import (
+        build_deck_kwargs_from_spec,
+        validate_job_spec,
+    )
+    from services.workers.modflow import gwt_adapter
+
+    spec = validate_job_spec({
+        "schema_version": 1, "engine": "modflow",
+        "run_args": {
+            "spill_location_latlon": [40.42, -86.9], "contaminant": "n/a",
+            "release_rate_kg_s": 1.0, "duration_days": 1.0,
+            "archetype": "vadose_transport",
+            typo: 4.0,
+        },
+    })
+    deck_kwargs = build_deck_kwargs_from_spec(spec)
+    with pytest.raises(TypeError, match=typo):
+        gwt_adapter.build_modflow_deck(workdir=str(tmp_path), write=False, **deck_kwargs)
 
 
 @pytest.mark.parametrize(

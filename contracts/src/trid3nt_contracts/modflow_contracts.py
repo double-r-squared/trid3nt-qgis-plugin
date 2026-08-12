@@ -73,12 +73,20 @@ __all__ = [
     "SaltwaterWedgeLayerURI",
     "StreamReachLayerURI",
     "SubsidenceLayerURI",
+    "VadoseBreakthroughLayerURI",
     "ModflowValidationResult",
     "DEFAULT_STREAMBED_CONDUCTANCE_M2_DAY",
     "DEFAULT_STREAMBED_THICKNESS_M",
     "DEFAULT_AQUIFER_SY",
     "DEFAULT_AQUIFER_SS",
     "DEFAULT_WETLAND_SY",
+    "DEFAULT_VADOSE_THICKNESS_M",
+    "DEFAULT_VADOSE_THTR",
+    "DEFAULT_VADOSE_THTS",
+    "DEFAULT_VADOSE_EPS",
+    "DEFAULT_VADOSE_INFILTRATION_CONC",
+    "DEFAULT_VADOSE_INFILTRATION_RATE_M_DAY",
+    "DEFAULT_VADOSE_VKS_M_DAY",
 ]
 
 
@@ -94,6 +102,21 @@ DEFAULT_POROSITY: float = 0.3  # effective porosity, dimensionless
 # steady + the byte-identical conservative-tracer deck). Demo values, narrated.
 DEFAULT_AQUIFER_SY: float = 0.2  # specific yield (drainable porosity), dimensionless
 DEFAULT_AQUIFER_SS: float = 1e-5  # specific storage (1/m), confined-aquifer demo value
+
+# Vadose-transport (UZT) demo defaults (ADR 0228). The unsaturated-zone solute
+# question ("surface spill -> how long to reach groundwater") is a purely-advective
+# vertical travel-time problem (MF6 has NO unsaturated dispersion). These parameterize
+# the UZF Brooks-Corey water-content column + the infiltration forcing. All are demo
+# values narrated as labeled assumptions (no site soil-hydraulics fetcher in v1); the
+# ARRIVAL TIME scales with vadose_thickness_m and the unsaturated flux, so the
+# composer narrates them, never as site precision.
+DEFAULT_VADOSE_THICKNESS_M: float = 4.0  # depth to water table (vadose-column thickness), m
+DEFAULT_VADOSE_THTR: float = 0.05  # Brooks-Corey residual water content (thtr)
+DEFAULT_VADOSE_THTS: float = 0.35  # Brooks-Corey saturated water content (thts, porosity)
+DEFAULT_VADOSE_EPS: float = 4.0  # Brooks-Corey exponent (eps)
+DEFAULT_VADOSE_INFILTRATION_CONC: float = 1.0  # tracer concentration in infiltration (unit)
+DEFAULT_VADOSE_INFILTRATION_RATE_M_DAY: float = 0.01  # surface infiltration flux, m/day
+DEFAULT_VADOSE_VKS_M_DAY: float = 0.1  # saturated vertical K of the unsat medium, m/day
 
 # Wetland-hydroperiod specific-yield default (sprint-18 Wave-2 wetland_hydroperiod
 # archetype). The seasonal water-table response under a recharging wetland is
@@ -419,6 +442,7 @@ class MODFLOWRunArgs(EngineRunArgsMixin):
             "saltwater_intrusion",
             "stream_depletion",
             "land_subsidence",
+            "vadose_transport",
         ]
         | None
     ) = None
@@ -566,6 +590,92 @@ class MODFLOWRunArgs(EngineRunArgsMixin):
             "archetype == 'land_subsidence'. Both knobs are demo-parameterized "
             "(sgm/sgs/ndelaycells are labeled assumptions -- no site clay-profile "
             "fetcher exists; narrate as demo values, never site precision)."
+        ),
+    )
+
+    # --- vadose_transport: UZF+UZT unsaturated-zone solute travel (ADR 0228) - #
+    # "A tracer/contaminant is spilled at the LAND SURFACE -- how long until it
+    # reaches the water table, and at what concentration?" A MODFLOW-6 UZF
+    # unsaturated-flow column (a vertical ivertcon chain of Brooks-Corey cells)
+    # coupled to a UZT transport package keyed to the UZF flows (flow_package_name),
+    # solved as a DUAL-model GWF+GWT simulation (dual IMS, GWF first). The deliverable
+    # is the ARRIVAL TIME at the water table + a breakthrough concentration series --
+    # NOT a saturated plume footprint (the deck, deliverable, and question all differ
+    # from modflow_contaminant_plume, so it is a distinct archetype, not a plume knob).
+    # Transport is purely ADVECTIVE (MF6 has no unsaturated dispersion; matches
+    # modflow6-examples ex-gwt-uzt-2d). The spill point reuses ``spill_location_latlon``.
+    # All fields below are OPTIONAL demo-defaulted (no site soil-hydraulics fetcher in
+    # v1 -- the arrival time is set by these, so the composer narrates them as demo
+    # assumptions, never site precision). When ``archetype`` is NOT "vadose_transport"
+    # they are ignored (additive; other decks byte-identical).
+    vadose_thickness_m: float | None = Field(
+        default=None,
+        gt=0.0,
+        description=(
+            "Depth to the water table at the spill point (the unsaturated-zone / "
+            "vadose-column thickness), m -- the tracer must transit this before "
+            "reaching groundwater, so the ARRIVAL TIME scales with it (the headline "
+            "physics). When None the adapter applies a ~4 m demo default (narrated as "
+            "a demo assumption; a real run reads it from a depth-to-water source). > 0."
+        ),
+    )
+    vadose_thtr: float = Field(
+        default=DEFAULT_VADOSE_THTR,
+        ge=0.0,
+        lt=1.0,
+        description=(
+            "Brooks-Corey RESIDUAL water content (thtr) of the unsaturated medium, "
+            "dimensionless -- the irreducible moisture the UZF column retains. Demo "
+            "default 0.05 (narrated as a demo soil-hydraulics assumption). In [0, 1)."
+        ),
+    )
+    vadose_thts: float = Field(
+        default=DEFAULT_VADOSE_THTS,
+        gt=0.0,
+        le=1.0,
+        description=(
+            "Brooks-Corey SATURATED water content (thts, the porosity) of the "
+            "unsaturated medium, dimensionless. Demo default 0.35 (narrated as a demo "
+            "soil-hydraulics assumption). Must exceed vadose_thtr. In (0, 1]."
+        ),
+    )
+    vadose_eps: float = Field(
+        default=DEFAULT_VADOSE_EPS,
+        gt=0.0,
+        description=(
+            "Brooks-Corey EXPONENT (eps) of the unsaturated water-content function, "
+            "dimensionless -- controls how sharply relative conductivity falls as the "
+            "medium dries. Demo default 4.0 (narrated as a demo assumption). > 0."
+        ),
+    )
+    vadose_infiltration_conc: float = Field(
+        default=DEFAULT_VADOSE_INFILTRATION_CONC,
+        ge=0.0,
+        description=(
+            "Tracer concentration carried in the surface infiltration (the UZT "
+            "INFILTRATION-term concentration), in the contaminant's units. Demo "
+            "default 1.0 (a unit tracer; the breakthrough curve is then a fraction of "
+            "the source concentration). >= 0."
+        ),
+    )
+    vadose_infiltration_rate_m_day: float = Field(
+        default=DEFAULT_VADOSE_INFILTRATION_RATE_M_DAY,
+        gt=0.0,
+        description=(
+            "Surface infiltration flux applied at the top UZF cell (the UZF finf), "
+            "m/day -- the water that carries the tracer down the vadose column. Demo "
+            "default 0.01 m/day (narrated as a demo assumption; a real run reads it "
+            "from a recharge/precipitation source). Faster infiltration -> earlier "
+            "arrival. Must be > 0."
+        ),
+    )
+    vadose_vks_m_day: float = Field(
+        default=DEFAULT_VADOSE_VKS_M_DAY,
+        gt=0.0,
+        description=(
+            "Saturated vertical hydraulic conductivity of the unsaturated medium (the "
+            "UZF vks), m/day. Demo default 0.1 m/day (narrated as a demo assumption). "
+            "Bounds the UZF column's downward flux capacity. Must be > 0."
         ),
     )
 
@@ -1601,6 +1711,97 @@ class SubsidenceLayerURI(LayerURI):
         ge=1,
         description=(
             "Number of CSUB interbeds draped over the pumped footprint (>= 1)."
+        ),
+    )
+
+
+class VadoseBreakthroughLayerURI(LayerURI):
+    """A ``LayerURI`` for the UZT vadose-transport breakthrough result (ADR 0228).
+
+    The headline output of the ``"vadose_transport"`` archetype: a MODFLOW-6
+    UZF+UZT unsaturated-zone column tracks a tracer spilled at the LAND SURFACE as
+    it transits the vadose zone to the water table. Unlike every other MODFLOW
+    archetype the PRIMARY product is a TIME SERIES, not a plan-view field: the
+    breakthrough concentration curve at the base of the vadose column (just above
+    the water table) and the ARRIVAL TIME (first crossing of half the infiltration
+    concentration). The MAP element is a spill-site CONTEXT POINT
+    (``layer_type='vector'``): a FlatGeobuf point at ``spill_location_latlon``
+    carrying the arrival time + peak concentration as feature attributes, so the
+    user sees WHERE the vadose column was evaluated. The chart carries the physics.
+
+    Transport is purely ADVECTIVE (MF6 has no unsaturated dispersion; matches
+    modflow6-examples ex-gwt-uzt-2d), so the breakthrough is a sharp advective
+    front whose timing is set by the vadose thickness and the unsaturated flux.
+
+    IMPORTANT PRECISION CAVEAT -- the vadose thickness, the Brooks-Corey water-
+    content parameters, the infiltration rate, and the unsaturated vertical K are
+    DEMO DEFAULTS with no site soil-hydraulics fetcher (v1). Treat the arrival time
+    as a qualitative screening estimate, NOT a calibrated contaminant-transport
+    forecast. The agent must narrate this caveat (invariant 1, FR-AS-7).
+
+    Extends ``LayerURI`` field-for-field so it maps onto ``map-command load-layer``
+    with no translation. Adds the structured numbers the agent narrates so the LLM
+    cites typed fields, never invents them (invariant 1, FR-AS-7):
+
+        breakthrough_time_days: time from the surface spill to the tracer reaching
+            the water table, days (>= 0) -- the FIRST time the base-of-column
+            concentration crosses half the infiltration concentration. The headline
+            scalar. NaN/None-guarded to a finite value (>= 0); a tracer that never
+            arrived within the simulated horizon is narrated separately.
+        peak_concentration: the base-of-column tracer concentration at the end of
+            the simulation (>= 0), in the contaminant's units -- the arriving
+            concentration at the water table (1.0 for a purely-advective unit
+            tracer that fully broke through).
+        vadose_thickness_m: the depth-to-water-table the column represented, m
+            (> 0) -- the travel distance the arrival time is measured across.
+        concentration_series: the breakthrough concentration at the base of the
+            vadose column, one value per saved transport step (the curve the dock
+            chart plots against ``time_series_days``). >= 1 value.
+        time_series_days: the saved transport times, days (one per
+            ``concentration_series`` value; strictly increasing).
+
+    ``layer_type`` defaults to ``'vector'`` (a FlatGeobuf spill-site context point);
+    the base contract's format vocabulary is inherited unchanged.
+    """
+
+    layer_type: Literal["raster", "vector"] = "vector"
+
+    breakthrough_time_days: float = Field(
+        ge=0.0,
+        description=(
+            "Time from the surface spill to the tracer reaching the water table, "
+            "days (>= 0) -- the first crossing of half the infiltration "
+            "concentration at the base of the vadose column. The headline scalar."
+        ),
+    )
+    peak_concentration: float = Field(
+        ge=0.0,
+        description=(
+            "Base-of-column tracer concentration at the end of the simulation "
+            "(>= 0), in the contaminant's units -- the concentration arriving at "
+            "the water table (1.0 for a fully-broken-through unit tracer)."
+        ),
+    )
+    vadose_thickness_m: float = Field(
+        gt=0.0,
+        description=(
+            "Depth to the water table the vadose column represented, m (> 0) -- the "
+            "travel distance the breakthrough_time_days is measured across."
+        ),
+    )
+    concentration_series: list[float] = Field(
+        min_length=1,
+        description=(
+            "Breakthrough concentration at the base of the vadose column, one value "
+            "per saved transport step -- the curve the dock chart plots against "
+            "time_series_days."
+        ),
+    )
+    time_series_days: list[float] = Field(
+        min_length=1,
+        description=(
+            "Saved transport times, days (one per concentration_series value, "
+            "strictly increasing). The x-axis of the breakthrough chart."
         ),
     )
 

@@ -231,6 +231,26 @@ DEFAULT_CSUB_NDELAYCELLS = 19
 DEFAULT_CSUB_SGM = 1.7
 DEFAULT_CSUB_SGS = 2.0
 
+#: Vadose-transport (UZF+UZT) demo defaults (ADR 0228). The unsaturated-zone
+#: solute question ("surface spill -> how long to reach groundwater") is a
+#: purely-advective vertical travel-time problem (MF6 has NO unsaturated
+#: dispersion; matches modflow6-examples ex-gwt-uzt-2d). These parameterize the
+#: UZF Brooks-Corey column + the infiltration forcing; the ARRIVAL TIME scales
+#: with the vadose thickness + the unsaturated flux. All are labeled demo values
+#: (no site soil-hydraulics fetcher in v1). Pinned by fixtures/uzt_smoke.
+DEFAULT_VADOSE_THICKNESS_M = 4.0     # depth to water table (vadose-column thickness), m
+VADOSE_DZ_M = 1.0                    # UZF cell height (m) -- the smoke's proven discretization
+DEFAULT_VADOSE_THTR = 0.05           # Brooks-Corey residual water content
+DEFAULT_VADOSE_THTS = 0.35           # Brooks-Corey saturated water content (porosity)
+DEFAULT_VADOSE_THTI = 0.08           # initial water content
+DEFAULT_VADOSE_EPS = 4.0             # Brooks-Corey exponent
+DEFAULT_VADOSE_INFILTRATION_CONC = 1.0        # tracer conc in infiltration (unit)
+DEFAULT_VADOSE_INFILTRATION_RATE_M_DAY = 0.01  # surface infiltration flux, m/day
+DEFAULT_VADOSE_VKS_M_DAY = 0.1       # saturated vertical K of the unsat medium, m/day
+VADOSE_N_SATURATED_LAYERS = 3        # saturated layers below the water table (smoke geometry)
+VADOSE_PERLEN_DAYS = 4000.0          # transport horizon (long enough for the deepest arrival)
+VADOSE_NSTP = 400                    # transport steps over the horizon
+
 
 # ---------------------------------------------------------------------------
 # Archetype demo defaults. The three new MODFLOW archetypes
@@ -883,6 +903,23 @@ class DeckManifest:
     csub_ssv_inelastic_m: float = 0.0  # inelastic Ssv written to every interbed (m^-1)
     csub_sse_elastic_m: float = 0.0    # elastic Sse written to every interbed (m^-1)
     csub_interbed_thick_frac: float = 0.0  # interbed thickness fraction of the layer
+    # --- ADR 0228: vadose_transport UZF+UZT unsaturated-zone solute travel ------ #
+    # ``archetype == "vadose_transport"``: a DUAL-model GWF+GWT sim (dual IMS, GWF
+    # first) with a UZF unsaturated-flow column (vertical ivertcon chain of
+    # Brooks-Corey cells) + a UZT transport package keyed to the UZF flows
+    # (flow_package_name). The deliverable is a BREAKTHROUGH time series at the base
+    # of the column, read from ``vadose_obs_file``. Every field below stays at its
+    # default for all other archetypes (byte-identical manifests).
+    vadose_present: bool = False   # True iff a UZF+UZT vadose column was written
+    vadose_thickness_m: float = 0.0  # depth to water table (vadose-column thickness), m
+    vadose_n_layers: int = 0       # number of UZF unsaturated cells above the water table
+    vadose_obs_file: str = ""      # the UZT obs csv (base-of-column breakthrough conc)
+    vadose_conc_file: str = ""     # the UZT concentration output file (.uzt.ucn)
+    vadose_thtr: float = 0.0       # Brooks-Corey residual water content written
+    vadose_thts: float = 0.0       # Brooks-Corey saturated water content written
+    vadose_eps: float = 0.0        # Brooks-Corey exponent written
+    vadose_infiltration_conc: float = 0.0     # UZT infiltration tracer concentration written
+    vadose_infiltration_rate_m_day: float = 0.0  # UZF surface infiltration flux written (m/day)
     # Files written (relative to sim_dir), for manifest/upload assembly:
     files: list[str] = field(default_factory=list)
 
@@ -2647,6 +2684,242 @@ def _with_dedup_suffix(base: str, suffix: int) -> str:
     return f"{head}{tag}"
 
 
+def _build_vadose_transport_deck(
+    *,
+    lat: float,
+    lon: float,
+    crs,
+    to_utm,
+    spill_east: float,
+    spill_north: float,
+    delr: float,
+    delc: float,
+    k_m_per_day: float,
+    aquifer_k_ms: float,
+    porosity: float,
+    contaminant: str,
+    vadose_thickness_m: float | None,
+    vadose_thtr: float | None,
+    vadose_thts: float | None,
+    vadose_eps: float | None,
+    vadose_infiltration_conc: float | None,
+    vadose_infiltration_rate_m_day: float | None,
+    vadose_vks_m_day: float | None,
+    sim_dir: Path,
+    sim_name: str,
+    gwf_name: str,
+    gwt_name: str,
+    write: bool,
+) -> DeckManifest:
+    """Assemble a vadose_transport UZF+UZT unsaturated-zone-travel deck (ADR 0228).
+
+    Productionizes ``fixtures/uzt_smoke`` (the proven deck): a 1-cell-plan vertical
+    column georegistered at the spill point, with a UZF unsaturated-flow package (a
+    vertical ``ivertcon`` chain of Brooks-Corey cells above the water table) coupled
+    to a UZT transport package keyed to the UZF flows (``flow_package_name``),
+    solved as a DUAL-model GWF+GWT simulation with DUAL IMS (GWF registered FIRST).
+    A constant surface infiltration flux carries a tracer down the column; the UZT
+    concentration observed at the lowest UZF cell (just above the water table) is
+    the breakthrough signal.
+
+    Transport is purely ADVECTIVE (MF6 has NO unsaturated dispersion, matching
+    modflow6-examples ex-gwt-uzt-2d). The arrival time increases MONOTONICALLY with
+    the vadose thickness (the physics the smoke pins). The deliverable is the
+    base-of-column breakthrough series read from the UZT obs csv; the map element is
+    a spill-site context point (the manifest carries the (lat, lon)).
+    """
+    thickness = float(
+        vadose_thickness_m if vadose_thickness_m is not None else DEFAULT_VADOSE_THICKNESS_M
+    )
+    if thickness <= 0.0:
+        raise ValueError(f"vadose_thickness_m must be > 0, got {thickness!r}")
+    thtr = float(vadose_thtr if vadose_thtr is not None else DEFAULT_VADOSE_THTR)
+    thts = float(vadose_thts if vadose_thts is not None else DEFAULT_VADOSE_THTS)
+    eps = float(vadose_eps if vadose_eps is not None else DEFAULT_VADOSE_EPS)
+    conc_in = float(
+        vadose_infiltration_conc
+        if vadose_infiltration_conc is not None
+        else DEFAULT_VADOSE_INFILTRATION_CONC
+    )
+    finf = float(
+        vadose_infiltration_rate_m_day
+        if vadose_infiltration_rate_m_day is not None
+        else DEFAULT_VADOSE_INFILTRATION_RATE_M_DAY
+    )
+    vks = float(vadose_vks_m_day if vadose_vks_m_day is not None else DEFAULT_VADOSE_VKS_M_DAY)
+    if not (thts > thtr):
+        raise ValueError(
+            f"vadose_thts ({thts}) must exceed vadose_thtr ({thtr}) (Brooks-Corey)"
+        )
+
+    # UZF column geometry: n_vadose unsaturated cells of VADOSE_DZ_M each above the
+    # water table, plus VADOSE_N_SATURATED_LAYERS saturated layers below (the smoke
+    # geometry). A 1-cell plan grid georegistered at the spill point.
+    dz = VADOSE_DZ_M
+    n_vadose = max(1, int(round(thickness / dz)))
+    nlay = n_vadose + VADOSE_N_SATURATED_LAYERS
+    nrow = ncol = 1
+    top = float(nlay) * dz
+    botm = [top - (i + 1) * dz for i in range(nlay)]
+    wt = botm[n_vadose - 1]          # water table at the base of the vadose column
+
+    xorigin = spill_east - delr / 2.0
+    yorigin = spill_north - delc / 2.0
+
+    sim = flopy.mf6.MFSimulation(
+        sim_name=sim_name, sim_ws=str(sim_dir), exe_name="mf6", version="mf6"
+    )
+    flopy.mf6.ModflowTdis(
+        sim, nper=1, perioddata=[(VADOSE_PERLEN_DAYS, VADOSE_NSTP, 1.0)],
+        time_units=TIME_UNITS,
+    )
+    # DUAL IMS (separate GWF + GWT solutions). UZF requires Newton, so both use
+    # BICGSTAB (an asymmetric-matrix acceleration), mirroring the smoke.
+    ims_gwf = flopy.mf6.ModflowIms(
+        sim, complexity="MODERATE", outer_maximum=200, inner_maximum=100,
+        linear_acceleration="BICGSTAB", filename=f"{gwf_name}.ims",
+    )
+    ims_gwt = flopy.mf6.ModflowIms(
+        sim, complexity="MODERATE", outer_maximum=200, inner_maximum=100,
+        linear_acceleration="BICGSTAB", filename=f"{gwt_name}.ims",
+    )
+
+    # --- GWF unsaturated-flow model ----------------------------------------- #
+    gwf = flopy.mf6.ModflowGwf(
+        sim, modelname=gwf_name, model_nam_file=f"{gwf_name}.nam",
+        save_flows=True, newtonoptions="NEWTON UNDER_RELAXATION",
+    )
+    dis = flopy.mf6.ModflowGwfdis(
+        gwf, nlay=nlay, nrow=nrow, ncol=ncol, delr=delr, delc=delc,
+        top=top, botm=botm, xorigin=xorigin, yorigin=yorigin,
+    )
+    gwf.modelgrid.set_coord_info(xoff=xorigin, yoff=yorigin, crs=crs.to_epsg())
+    flopy.mf6.ModflowGwfic(gwf, strt=wt)
+    flopy.mf6.ModflowGwfnpf(gwf, save_flows=True, icelltype=1, k=1.0, k33=vks)
+    flopy.mf6.ModflowGwfsto(gwf, iconvert=1, ss=1e-5, sy=thts, transient={0: True})
+    # fix the saturated head at the bottom layer (drain to hold a stable water table)
+    flopy.mf6.ModflowGwfchd(gwf, stress_period_data=[[(nlay - 1, 0, 0), wt]])
+
+    # UZF: vertical ivertcon chain of n_vadose cells. packagedata columns:
+    # [ifno, cellid, landflag, ivertcon, surfdep, vks, thtr, thts, thti, eps, bnd]
+    surfdep = 0.1
+    uzf_pkdat = []
+    for i in range(n_vadose):
+        ivertcon = i + 1 if i < n_vadose - 1 else -1   # chain down; -1 = to GW
+        landflag = 1 if i == 0 else 0
+        uzf_pkdat.append([
+            i, (i, 0, 0), landflag, ivertcon, surfdep,
+            vks, thtr, thts, DEFAULT_VADOSE_THTI, eps, f"uz{i}",
+        ])
+    # perioddata: [ifno, finf, pet, extdp, extwc, ha, hroot, rootact]
+    uzf_perdat = {0: [
+        [i, (finf if i == 0 else 0.0), 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
+        for i in range(n_vadose)
+    ]}
+    flopy.mf6.ModflowGwfuzf(
+        gwf, print_flows=False, save_flows=True,
+        simulate_et=False, linear_gwet=False,
+        nuzfcells=n_vadose, ntrailwaves=7, nwavesets=40,
+        packagedata=uzf_pkdat, perioddata=uzf_perdat,
+        budget_filerecord=f"{gwf_name}.uzf.bud",
+        boundnames=True, pname="uzf",
+    )
+    flopy.mf6.ModflowGwfoc(
+        gwf, head_filerecord=f"{gwf_name}.hds",
+        budget_filerecord=f"{gwf_name}.cbc",
+        saverecord=[("HEAD", "ALL"), ("BUDGET", "ALL")],
+    )
+
+    # --- GWT transport model (UZT solute in the unsaturated cells) ----------- #
+    gwt = flopy.mf6.ModflowGwt(
+        sim, modelname=gwt_name,
+        model_nam_file=f"{gwt_name}.nam", save_flows=True,
+    )
+    flopy.mf6.ModflowGwtdis(
+        gwt, nlay=nlay, nrow=nrow, ncol=ncol, delr=delr, delc=delc,
+        top=top, botm=botm, xorigin=xorigin, yorigin=yorigin,
+    )
+    flopy.mf6.ModflowGwtic(gwt, strt=0.0)
+    flopy.mf6.ModflowGwtmst(gwt, porosity=thts)
+    flopy.mf6.ModflowGwtadv(gwt, scheme="TVD")
+    flopy.mf6.ModflowGwtssm(gwt, sources=[[]])
+    flopy.mf6.ModflowGwtoc(
+        gwt, concentration_filerecord=f"{gwt_name}.ucn",
+        saverecord=[("CONCENTRATION", "ALL")],
+    )
+    uzt_obs_file = f"{gwt_name}.uzt.obs.csv"
+    uzt_conc_file = f"{gwt_name}.uzt.ucn"
+    uzt_pkdat = [[i, 0.0, f"uz{i}"] for i in range(n_vadose)]
+    uzt_perdat = {0: [[0, "INFILTRATION", conc_in]]}
+    flopy.mf6.ModflowGwtuzt(
+        gwt, flow_package_name="uzf",
+        print_flows=False, save_flows=True,
+        packagedata=uzt_pkdat, uztperioddata=uzt_perdat,
+        boundnames=True,
+        concentration_filerecord=uzt_conc_file,
+        observations={uzt_obs_file: [
+            ("uzbot", "concentration", f"uz{n_vadose - 1}")]},
+    )
+
+    # GWF-GWT exchange provides the flows (no manual FMI needed).
+    flopy.mf6.ModflowGwfgwt(
+        sim, exgtype="GWF6-GWT6", exgmnamea=gwf_name, exgmnameb=gwt_name,
+    )
+    # DUAL IMS: register GWF FIRST, then GWT (the engine law the smoke decoded).
+    sim.register_ims_package(ims_gwf, [gwf_name])
+    sim.register_ims_package(ims_gwt, [gwt_name])
+
+    manifest = DeckManifest(
+        sim_dir=str(sim_dir),
+        sim_name=sim_name,
+        gwf_name=gwf_name,
+        gwt_name=gwt_name,
+        model_crs=f"EPSG:{crs.to_epsg()}",
+        xorigin=xorigin,
+        yorigin=yorigin,
+        nrow=nrow,
+        ncol=ncol,
+        nlay=nlay,
+        delr=delr,
+        delc=delc,
+        spill_row=0,
+        spill_col=0,
+        spill_easting_m=spill_east,
+        spill_northing_m=spill_north,
+        spill_lat=lat,
+        spill_lon=lon,
+        mass_rate_g_per_day=0.0,
+        release_rate_kg_s=0.0,
+        duration_days=VADOSE_PERLEN_DAYS,
+        n_transport_steps=VADOSE_NSTP,
+        contaminant=contaminant,
+        aquifer_k_ms=aquifer_k_ms,
+        porosity=porosity,
+        archetype="vadose_transport",
+        gwt_present=True,
+        transient=True,
+        n_stress_periods=1,
+        n_transient_periods=1,
+        vadose_present=True,
+        vadose_thickness_m=float(n_vadose) * dz,
+        vadose_n_layers=n_vadose,
+        vadose_obs_file=uzt_obs_file,
+        vadose_conc_file=uzt_conc_file,
+        vadose_thtr=thtr,
+        vadose_thts=thts,
+        vadose_eps=eps,
+        vadose_infiltration_conc=conc_in,
+        vadose_infiltration_rate_m_day=finf,
+    )
+
+    if write:
+        sim.write_simulation()
+        manifest.files = sorted(
+            str(p.relative_to(sim_dir)) for p in sim_dir.rglob("*") if p.is_file()
+        )
+    return manifest
+
+
 def _build_multi_species_deck(
     *,
     species: list,
@@ -4150,6 +4423,16 @@ def build_modflow_deck(
     csub_cg_ske_m: float | None = None,
     csub_delay_interbeds: bool = False,
     csub_effective_stress: bool = False,
+    # --- ADR 0228: vadose_transport UZF+UZT forcing (ADDITIVE, all optional) - #
+    # Threaded into the vadose_transport dispatch branch when
+    # archetype == "vadose_transport"; ignored otherwise. All demo-defaulted.
+    vadose_thickness_m: float | None = None,
+    vadose_thtr: float | None = None,
+    vadose_thts: float | None = None,
+    vadose_eps: float | None = None,
+    vadose_infiltration_conc: float | None = None,
+    vadose_infiltration_rate_m_day: float | None = None,
+    vadose_vks_m_day: float | None = None,
     # --- Archetype switch (ADDITIVE, all optional) -------- #
     # archetype is None -> the EXISTING spill/seepage GWF+GWT deck (byte-identical).
     # The three new archetypes are GWF-only and dispatch to
@@ -4418,6 +4701,7 @@ def build_modflow_deck(
             "saltwater_intrusion",
             "stream_depletion",
             "land_subsidence",
+            "vadose_transport",
         ):
             raise ValueError(f"unknown MODFLOW archetype: {archetype!r}")
         # saltwater_intrusion: GWF (BUY variable-density) + GWT in ONE sim,
@@ -4503,6 +4787,37 @@ def build_modflow_deck(
                 write=write,
                 save_concentration_all_steps=save_concentration_all_steps,
                 advanced_physics=advanced_physics,
+            )
+        # vadose_transport is a DUAL-model GWF+GWT sim (UZF unsaturated column +
+        # UZT transport), NOT a GWF-only archetype, so it dispatches to its own
+        # builder (mirrors multi_species / saltwater_intrusion). The spill point
+        # reuses (lat, lon); the deliverable is a base-of-column breakthrough series.
+        if archetype == "vadose_transport":
+            return _build_vadose_transport_deck(
+                lat=lat,
+                lon=lon,
+                crs=crs,
+                to_utm=to_utm,
+                spill_east=spill_east,
+                spill_north=spill_north,
+                delr=delr,
+                delc=delc,
+                k_m_per_day=k_m_per_day,
+                aquifer_k_ms=aquifer_k_ms,
+                porosity=porosity,
+                contaminant=contaminant,
+                vadose_thickness_m=vadose_thickness_m,
+                vadose_thtr=vadose_thtr,
+                vadose_thts=vadose_thts,
+                vadose_eps=vadose_eps,
+                vadose_infiltration_conc=vadose_infiltration_conc,
+                vadose_infiltration_rate_m_day=vadose_infiltration_rate_m_day,
+                vadose_vks_m_day=vadose_vks_m_day,
+                sim_dir=sim_dir,
+                sim_name=sim_name,
+                gwf_name=gwf_name,
+                gwt_name=gwt_name,
+                write=write,
             )
         return _build_gwf_only_archetype_deck(
             archetype=archetype,
