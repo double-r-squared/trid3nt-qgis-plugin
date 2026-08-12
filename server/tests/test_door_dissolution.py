@@ -108,6 +108,7 @@ EXPECTED_TEMPLATES = {
     "modflow_river_seepage",
     "modflow_saltwater_intrusion",
     "modflow_sustainable_yield",
+    "modflow_vadose_transport",  # ADR 0228: UZF+UZT unsaturated-zone breakthrough (surface spill -> water table travel time)
     "modflow_wellhead_protection",
     "modflow_wetland_hydroperiod",
     "modflow_package_validation",  # ADR 0153 MODFLOW CAND-S: GWF-NPF Newton (Zaidel) / GWF-MAW (Sokol) / GWF-HFB package V&V benchmarks

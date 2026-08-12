@@ -778,6 +778,86 @@ def build_subsidence_timeseries_chart(
         created_turn_id=created_turn_id,
     )
 
+def build_vadose_breakthrough_chart(
+    *,
+    days: list[float],
+    concentration: list[float],
+    infiltration_conc: float,
+    breakthrough_time_days: float | None = None,
+    vadose_thickness_m: float | None = None,
+    source_layer_uri: str | None = None,
+    created_turn_id: str | None = None,
+) -> dict[str, Any] | None:
+    """Build the UZT vadose breakthrough concentration-vs-time chart (ADR 0228).
+
+    ``concentration`` is the base-of-column tracer concentration (just above the
+    water table), one value per saved transport step - the real UZT obs series the
+    postprocess parsed. ``days`` is the matching elapsed-time axis. The curve is a
+    sharp advective front (MF6 has no unsaturated dispersion), rising from 0 to the
+    infiltration concentration once the tracer transits the vadose column. A
+    horizontal rule marks the half-source (0.5 * infiltration_conc) breakthrough
+    threshold. Returns ``None`` when fewer than 2 points (a single point is not a
+    breakthrough curve). Capped at ``_MAX_ROWS`` with a uniform stride.
+    """
+    if not concentration or len(concentration) < 2:
+        return None
+    xs = list(days) if days and len(days) == len(concentration) else list(
+        range(len(concentration))
+    )
+    rows = [
+        {"days": float(x), "concentration": float(v)}
+        for x, v in zip(xs, concentration)
+    ]
+    if len(rows) > _MAX_ROWS:
+        stride = max(1, len(rows) // _MAX_ROWS)
+        rows = rows[::stride][:_MAX_ROWS]
+    threshold = 0.5 * float(infiltration_conc)
+    layers: list[dict[str, Any]] = [
+        {
+            "data": {"values": rows},
+            "mark": {"type": "line", "point": True, "tooltip": True},
+            "encoding": {
+                "x": {"field": "days", "type": "quantitative", "title": "elapsed days"},
+                "y": {
+                    "field": "concentration",
+                    "type": "quantitative",
+                    "title": "base-of-column concentration",
+                },
+            },
+        },
+        {
+            "data": {"values": [{"thr": threshold}]},
+            "mark": {"type": "rule", "strokeDash": [4, 4], "color": "#C0392B"},
+            "encoding": {"y": {"field": "thr", "type": "quantitative"}},
+        },
+    ]
+    spec = {
+        "title": "Vadose-zone tracer breakthrough at the water table",
+        "layer": layers,
+        "width": "container",
+    }
+    depth_note = (
+        f" through {float(vadose_thickness_m):.3g} m of vadose zone"
+        if vadose_thickness_m
+        else ""
+    )
+    arr_note = (
+        f"arrival {float(breakthrough_time_days):.3g} d"
+        if breakthrough_time_days is not None
+        else "no half-source arrival within the horizon"
+    )
+    caption = (
+        f"{len(rows)} steps · {arr_note}{depth_note} "
+        "(purely-advective UZF+UZT front; dashed rule = half-source threshold)"
+    )
+    return build_chart_payload(
+        vega_lite_spec=spec,
+        title="Vadose-zone tracer breakthrough at the water table",
+        caption=caption,
+        source_layer_uri=source_layer_uri,
+        created_turn_id=created_turn_id,
+    )
+
 def build_depletion_timeseries_chart(
     *,
     days: list[float],

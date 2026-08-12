@@ -284,6 +284,7 @@ PRIMARY_CATEGORY: dict[str, str] = {
     "modflow_river_seepage": "simulation_modeling",
     "modflow_saltwater_intrusion": "simulation_modeling",
     "modflow_sustainable_yield": "simulation_modeling",
+    "modflow_vadose_transport": "simulation_modeling",
     "modflow_wellhead_protection": "simulation_modeling",
     "modflow_wetland_hydroperiod": "simulation_modeling",
     # V&V benchmark deck (GWF-NPF Newton/Zaidel + MAW/Sokol + HFB grid

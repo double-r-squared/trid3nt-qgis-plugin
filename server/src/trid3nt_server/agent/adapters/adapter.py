@@ -598,7 +598,9 @@ dewatering -> modflow_mine_dewatering; saltwater intrusion ->
 modflow_saltwater_intrusion; managed recharge -> modflow_managed_recharge; ASR
 -> modflow_asr; sustainable yield / drawdown -> modflow_sustainable_yield;
 wetland hydroperiod -> modflow_wetland_hydroperiod; regional water budget ->
-modflow_regional_water_budget; river seepage -> modflow_river_seepage. When the
+modflow_regional_water_budget; river seepage -> modflow_river_seepage; how long a
+surface spill takes to reach the water table (unsaturated / vadose-zone travel) ->
+modflow_vadose_transport. When the
 user gives the spill parameters DIRECTLY (a location + contaminant +
 release rate/amount + duration), call modflow_contaminant_plume with
 spill_location_latlon as a 2-element [lat, lon] array (latitude first), the

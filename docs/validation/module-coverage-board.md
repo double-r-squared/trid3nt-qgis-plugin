@@ -1186,7 +1186,7 @@ Aspects: single cell-pair barrier definition; barrier-wall containment scenario 
 Purpose: Simulates aquitard/interbed compaction and land subsidence via either simple head-based storage or an effective-stress (delay/no-delay interbed) formulation.
 Today: Roster note: CSUB partial in TRID3NT today.
 Aspects: effective-stress vs head-based formulation cross-check; delay-interbed time-lagged compaction; preconsolidation stress / inelastic vs elastic compressibility
-- [CAND-M] `csub_effective_stress_vs_head_based_crosscheck` [M] [US] - Does the effective-stress CSUB formulation reproduce historical head-based compaction estimates at a real subsidence-monitored site within reported error bounds?
+- [LANDED 2026-08-12 (ADR 0228 stage 3)] `csub_effective_stress_vs_head_based_crosscheck` [M] [US] - Does the effective-stress CSUB formulation reproduce historical head-based compaction estimates at a real subsidence-monitored site within reported error bounds? Landed as the `csub_delay_interbeds` + `csub_effective_stress` knobs on `modflow_sustainable_yield` (couple_subsidence path). LIVE @ San Joaquin Valley corridor (well 36.75/-120.38, 4000 m3/day, 10 yr, mf6 6.7.0): head-based no-delay 36.99 cm, DELAY interbed 7.49 cm (time-lagged -> less at end-of-pumping), EFFECTIVE_STRESS 13.28 cm (~0.36 of head-based, order-of-magnitude crosscheck); head decline ~12.27 m identical across. Also fixed a latent reorg bug (package-internal OBS6 FILEIN never subdir-rewritten) that had blocked land_subsidence's live staged path entirely. Proofs: modflow_sustainable_yield_csub_*.png.
   src: https://modflow6-examples.readthedocs.io/en/latest/_examples/ex-gwf-csub-p03.html (modflow6-examples:ex-gwf-csub-p03)
   knobs: EFFECTIVE_STRESS_LAG option, interbed thickness/theta, CG_ske_cr/CR
 
@@ -1197,7 +1197,7 @@ Aspects: variable-density coupling via BUY buoyancy (saltwater intrusion); unsat
 - [CAND-M] `buy_density_driven_saltwater_intrusion` [M] [US] - Does activating the BUY buoyancy package on a GWF-GWT pair reproduce the classic freshwater-outflow-over-recirculating-saltwater interface shape (Henry problem)?
   src: https://modflow6-examples.readthedocs.io/en/latest/_notebooks/ex-gwt-henry.html (modflow6-examples:ex-gwt-henry)
   knobs: BUY DENSEREF/DRHODC, inflow rate scenarios, GWF-GWT exchange
-- [CAND-M] `unsaturated_zone_solute_transport_uzt` [M] [US] - Does UZF/UZT purely-advective unsaturated-zone transport match an independently-validated MT3D-USGS/VS2DT benchmark for a wetting front carrying solute to the water table?
+- [LANDED 2026-08-12 (ADR 0228 stage 3)] `unsaturated_zone_solute_transport_uzt` [M] [US] - Does UZF/UZT purely-advective unsaturated-zone transport match an independently-validated MT3D-USGS/VS2DT benchmark for a wetting front carrying solute to the water table? Landed as `modflow_vadose_transport` (question-class name; dual GWF+GWT UZF+UZT column, chart-primary breakthrough series + spill-site context point). LIVE @ Tippecanoe County IN (natural place, geocoded, mf6 6.7.0): 4 m depth-to-water -> arrival 50 d, peak ~1.0; 8 m -> arrival 110 d (MONOTONE arrival-vs-thickness, the smoke's law, through the registered composer). Registry 244->245, coded tools +1; retrieval 10/10 top-8. Proofs: modflow_vadose_transport_*.png.
   src: https://modflow6-examples.readthedocs.io/en/develop/_examples/ex-gwt-uzt-2d.html (modflow6-examples:ex-gwt-uzt-2d)
   knobs: UZT concentration BC, dispersion on/off (MF6 lacks unsat dispersion)
 

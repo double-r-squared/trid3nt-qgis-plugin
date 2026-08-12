@@ -210,6 +210,51 @@ SHOWCASE: list[Showcase] = [
              "per-well capture allocation + 1/5/10-yr isochrones that evolve with the "
              "drawdown (EPA 440/6-87-010; USGS ex-prt-mp7-p03)", 600,
              title_suffix="multi-well transient NHD RIV"),
+    # -- MODFLOW UZF+UZT vadose-zone breakthrough (ADR 0228) -----------------
+    # 1D advective column: how long a surface spill takes to reach the water table.
+    # Physics asserts: arrival is MONOTONE in depth-to-water (deeper -> later). At
+    # the 4 m demo default the tracer breaks through at ~50 d (peak ~1.0); the 8 m
+    # column arrives strictly LATER -- the depth relation the smoke pins, through
+    # the registered composer.
+    Showcase("modflow_vadose_transport",
+             {"location": "Tippecanoe County, Indiana", "contaminant": "nitrate"},
+             "ADR 0228 vadose_transport: Tippecanoe County IN ag setting (natural "
+             "place). Chart-primary breakthrough curve + spill-site context point. "
+             "4 m demo depth-to-water -> ~50 d arrival, peak ~1.0 (purely-advective "
+             "UZF+UZT; modflow6-examples ex-gwt-uzt-2d).", 300,
+             title_suffix="Tippecanoe 4m demo"),
+    Showcase("modflow_vadose_transport",
+             {"location": "Tippecanoe County, Indiana", "contaminant": "nitrate",
+              "vadose_thickness_m": 8.0},
+             "ADR 0228 vadose_transport depth relation: an 8 m depth-to-water column "
+             "at the SAME Tippecanoe site arrives strictly LATER than the 4 m demo "
+             "(~50 d) -- the monotone arrival-vs-thickness physics, exposed as a knob.",
+             300, title_suffix="Tippecanoe 8m deeper"),
+    # -- MODFLOW CSUB land subsidence formulation knobs (ADR 0228) -----------
+    # San Joaquin Valley corridor (natural site). couple_subsidence CSUB run.
+    # Physics asserts (vs the head-based no-delay baseline ~37 cm at this site):
+    # a DELAY interbed compacts LESS at end-of-pumping (time-lagged consolidation,
+    # ~7.5 cm), and the EFFECTIVE_STRESS formulation lands ~0.4-0.5 of head-based
+    # (~13 cm) -- both knobs bracket the same subsidence scale.
+    Showcase("modflow_sustainable_yield",
+             {"aoi_latlon": [36.75, -120.38], "well_location_latlon": [36.75, -120.38],
+              "pumping_rate_m3_day": 4000.0, "sim_years": 10.0, "n_periods": 10,
+              "couple_subsidence": True, "csub_delay_interbeds": True},
+             "ADR 0228 CSUB DELAY interbed: San Joaquin Valley corridor well "
+             "(36.75/-120.38), 4000 m3/day over 10 yr. Delay interbed -> TIME-LAGGED "
+             "compaction, LESS than the no-delay head-based baseline at end-of-pumping "
+             "(~7.5 vs ~37 cm). Subsidence-bowl COG + drawdown context + subsidence "
+             "chart. Interbed K + ndelaycells narrated as demo assumptions.", 300,
+             title_suffix="San Joaquin delay interbed"),
+    Showcase("modflow_sustainable_yield",
+             {"aoi_latlon": [36.75, -120.38], "well_location_latlon": [36.75, -120.38],
+              "pumping_rate_m3_day": 4000.0, "sim_years": 10.0, "n_periods": 10,
+              "couple_subsidence": True, "csub_effective_stress": True},
+             "ADR 0228 CSUB EFFECTIVE_STRESS formulation crosscheck: the SAME San "
+             "Joaquin well under the geostatic effective-stress formulation lands "
+             "~0.4-0.5 of the head-based baseline (~13 vs ~37 cm) -- an "
+             "order-of-magnitude crosscheck. sgm/sgs unit weights narrated as demo "
+             "assumptions.", 300, title_suffix="San Joaquin effective stress"),
     # -- OpenQuake seismic ---------------------------------------------------
     Showcase("openquake_psha", {"bbox": _SF_BAY, "logic_tree": "gr_uncertainty"},
              "ADR 0149 PSHA logic-tree GR uncertainty, SF Bay AOI", 480),

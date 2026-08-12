@@ -29,6 +29,7 @@ logger = logging.getLogger("trid3nt_server.agent.workflows.modflow._input_review
 __all__ = [
     "aquifer_k_basis",
     "aquifer_k_review_entry",
+    "vadose_soil_review_entries",
     "gate_and_stamp_modflow_inputs",
     "review_modflow_entries",
 ]
@@ -70,6 +71,63 @@ def aquifer_k_review_entry(
         real_source_if_any=real_source,
         note=note,
     )
+
+
+def vadose_soil_review_entries(
+    *,
+    thickness_m: float,
+    thickness_user_supplied: bool,
+    thtr: float,
+    thts: float,
+    eps: float,
+    infiltration_rate_m_day: float,
+    infiltration_conc: float,
+    vks_m_day: float,
+    note: str,
+) -> list["SyntheticInput"]:
+    """Build the structured vadose-transport soil-hydraulics provenance entries (ADR 0228).
+
+    The unsaturated arrival time is set by the vadose thickness (depth to water
+    table) + the Brooks-Corey water-content parameters + the infiltration flux --
+    all demo-defaulted (no site soil-hydraulics fetcher in v1). Each becomes a
+    machine-readable ``SyntheticInput`` so a ``user_gated`` session can review /
+    override them; the prose ``note`` is kept verbatim on the headline
+    thickness entry. ``vadose_thickness_m`` is ``user`` when the caller supplied
+    it, else a labelled demo default; the soil-hydraulics are always demo defaults.
+    """
+    return [
+        SyntheticInput(
+            param="vadose_thickness_m",
+            value=round(float(thickness_m), 4),
+            units="m",
+            basis=("user" if thickness_user_supplied else "default_demo"),
+            real_source_if_any=None,
+            note=note,
+        ),
+        SyntheticInput(
+            param="vadose_brooks_corey",
+            value=None,
+            units="thtr/thts/eps (dimensionless)",
+            basis="default_demo",
+            real_source_if_any=None,
+            note=(
+                f"Brooks-Corey demo soil hydraulics: thtr={thtr:g}, thts={thts:g}, "
+                f"eps={eps:g} (no site texture fetcher in v1)."
+            ),
+        ),
+        SyntheticInput(
+            param="vadose_infiltration_rate_m_day",
+            value=round(float(infiltration_rate_m_day), 6),
+            units="m/day",
+            basis="default_demo",
+            real_source_if_any=None,
+            note=(
+                f"Demo surface infiltration flux {infiltration_rate_m_day:g} m/day "
+                f"carrying a tracer at conc {infiltration_conc:g}; unsaturated vertical "
+                f"K vks={vks_m_day:g} m/day. Faster infiltration -> earlier arrival."
+            ),
+        ),
+    ]
 
 
 async def review_modflow_entries(

@@ -126,3 +126,61 @@ the orchestrator.
   default deck is byte-identical to today; the two booleans are additive.
 - UZT as a distinct archetype avoids overloading the saturated plumes[] envelope
   with a differently-typed (breakthrough-time) deliverable.
+
+## STAGE 3 CLOSED (2026-08-12): LLM-drivable landing + live proofs
+
+Stages 1+2 (commit db04f14) baked the deployed 6.7.0 fix + the vadose substrate.
+This stage lands the registration + live close, mirroring the saltwater_intrusion
+package (incl. its inline `_run_archetype` `add_loaded_layer` emission -- the
+zero-layers hole is avoided by construction: the spill-site context point is always
+loaded).
+
+Landed:
+- **`modflow_vadose_transport`** composer + tool (question-class name;
+  workflows/modflow/vadose_transport/). CHART-PRIMARY breakthrough concentration
+  series + a spill-site context POINT (1D-column physics). Registered
+  tier=template engine=modflow; corpus.yaml (10 queries, all top-8 via model-free
+  `retrieve_visible_tools`). Registry 244 -> 245, coded tools +1.
+- **`postprocess_vadose`** + `build_vadose_breakthrough_chart`: reads the UZT
+  `*.uzt.obs.csv` (base-of-column UZBOT series), computes the arrival time (first
+  half-source crossing), writes the spill-site FGB, stashes the chart.
+- **CSUB formulation knobs** (`csub_delay_interbeds`, `csub_effective_stress`)
+  exposed on `modflow_sustainable_yield` (couple_subsidence path), threaded through
+  the archetype run + narrated (delay/effective-stress physics + demo assumptions).
+- **Image-tag dispatch verdict**: `run_modflow` dispatches IMAGE-LESS local-exec
+  (`_modflow_local_spec` runs the pinned `$TRID3NT_MF6_BIN` binary directly; the
+  AWS Batch arm was removed in the local-only slim). There is NO solver-image tag
+  referenced in the dispatch to bump -- `trid3nt-modflow-solver:adr0228` is the
+  cloud-container artifact only. The deployed 6.7.0 fix rides the local mf6 6.7.0
+  binary, exercised live below.
+- **Reorg FILEIN fix** (`_reorganize_into_subdirs`): the gwf/+gwt/ subdir reorg
+  never rewrote package-INTERNAL `OBS6 FILEIN` references, so the CSUB (and UZT)
+  obs file failed to open (IOSTAT 29) the moment a deck was STAGED rather than run
+  flat -- land_subsidence's LIVE composer path had never converged (only the flat
+  smoke fixture ran). Fixed generally (FILEIN tokens get the subdir prefix; FILEOUT
+  stays bare so outputs land at root for the recursive-glob postprocess). vadose
+  additionally stages FLAT (like multi_species) since its 1D dual-model deck needs
+  no subdir contract.
+
+Live evidence (mf6 6.7.0, local, MinIO):
+- **vadose @ Tippecanoe County IN** (natural place, geocoded): 4 m demo
+  depth-to-water -> breakthrough arrival **50 d**, peak conc **~1.0**; the 8 m
+  column arrives **110 d** -- the MONOTONE arrival-vs-thickness depth relation, the
+  smoke's law, through the registered composer.
+- **CSUB knobs @ San Joaquin Valley corridor** (well 36.75/-120.38, 4000 m3/day,
+  10 yr) through `modflow_sustainable_yield`: head-based no-delay baseline peak
+  **36.99 cm**; DELAY interbed **7.49 cm** (time-lagged consolidation -> LESS at
+  end-of-pumping, delay < baseline PASS); EFFECTIVE_STRESS **13.28 cm** (~0.36 of
+  head-based, the order-of-magnitude crosscheck PASS). Head decline ~12.27 m
+  identical across all three (the knobs change compaction, not flow).
+
+Proofs (docs/proof/templates/, ESRI World Imagery EPSG:3857):
+- `modflow_vadose_transport_breakthrough_chart.png` (4 m @ 50 d vs 8 m @ 110 d,
+  half-source rule), `modflow_vadose_transport_spill_site.png` (Tippecanoe point).
+- `modflow_sustainable_yield_csub_subsidence_bowl.png` (subsidence-bowl COG over
+  ESRI, display-overview rescaled to the typed 37 cm peak),
+  `modflow_sustainable_yield_csub_knob_contrast_chart.png` (37.0/7.5/13.3 cm).
+
+Offline: four alphabetical slices from repo root = the exact SIX known baseline
+failures (fetch_resolution x4 + river_dye x2); the one regression (test_catalog_
+surfacing registry_size 244->245) was caught + fixed. Board rows LANDED.

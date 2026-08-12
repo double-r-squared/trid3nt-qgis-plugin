@@ -52,6 +52,7 @@ from trid3nt_contracts.modflow_contracts import (
     SeepageLayerURI,
     StreamReachLayerURI,
     SubsidenceLayerURI,
+    VadoseBreakthroughLayerURI,
 )
 
 from trid3nt_server.agent.workflows.shared import cog_io
@@ -72,6 +73,7 @@ __all__ = [
     "postprocess_wetland_hydroperiod",
     "postprocess_capture_zone",
     "postprocess_saltwater_intrusion",
+    "postprocess_vadose",
     "publish_modflow_quantities",
     "compute_plume_metrics",
     "compute_seepage_metrics",
@@ -97,6 +99,7 @@ __all__ = [
     "CAPTURE_ZONE_STYLE_PRESET",
     "SALTWATER_INTRUSION_STYLE_PRESET",
     "SUBSIDENCE_STYLE_PRESET",
+    "VADOSE_TRANSPORT_STYLE_PRESET",
     "GWF_CBC_FILENAME",
     "GWF_HDS_FILENAME",
     "RUNS_BUCKET_DEFAULT",
@@ -181,6 +184,16 @@ CAPTURE_ZONE_STYLE_PRESET: str = "capture_zone"
 #: water layers, and the red alert overlays. ``publish_layer`` is RASTER-ONLY and
 #: must NOT be called for this vector; the inline-GeoJSON path renders it over WS.
 SALTWATER_INTRUSION_STYLE_PRESET: str = "saltwater_intrusion"
+
+#: Vector style preset for the vadose_transport spill-site CONTEXT POINT (ADR
+#: 0228). A single FlatGeobuf point at the spill (lat, lon) carrying the arrival
+#: time + peak concentration as feature attributes: it geolocates WHERE the 1D
+#: vadose column was evaluated (the breakthrough CHART carries the physics). The
+#: client's vector renderer matches ``presetColorFor`` on the substring
+#: "contaminant" -> a warning hue so the spill point reads as a contamination
+#: source, distinct from the blue water layers. ``publish_layer`` is RASTER-ONLY
+#: and must NOT be called for this vector; the inline-GeoJSON path renders it.
+VADOSE_TRANSPORT_STYLE_PRESET: str = "contaminant_spill_point"
 
 #: Vector style preset for the SFR routed stream-depletion reach network (module
 #: wave). The reaches are a FlatGeobuf of per-reach line segments; the client's
@@ -4871,4 +4884,366 @@ def postprocess_saltwater_intrusion(
     # contaminate the contract boundary.
     object.__setattr__(result, "_chart_payload", chart_payload)
 
+    return result
+
+
+# --------------------------------------------------------------------------- #
+# vadose_transport (UZF+UZT unsaturated-zone breakthrough) - ADR 0228
+# --------------------------------------------------------------------------- #
+
+
+def _resolve_vadose_obs_path(run_outputs_uri: str) -> Path:
+    """Locate the UZT breakthrough obs csv (``*.uzt.obs.csv``) from a run output.
+
+    vadose_transport is LOCAL-ONLY (the FLAT dual-model deck is tiny + fast; the
+    Batch path is never used), so the live-evidence path always passes a local
+    dir / ``file://``. gs:// and s3:// are handled defensively for symmetry with
+    ``_resolve_ucn_path``: the specific obs filename is not known ahead of the
+    read, so the cloud branches fetch the whole prefix is not supported here -
+    the caller passes a local dir.
+
+    Raises ``PostprocessMODFLOWError("VADOSE_OUTPUT_READ_FAILED")`` when no obs
+    csv is found under the run output location.
+    """
+    p = Path(run_outputs_uri.replace("file://", ""))
+    if p.is_file() and p.name.endswith(".uzt.obs.csv"):
+        return p
+    if p.is_dir():
+        hits = sorted(glob.glob(str(p / "**" / "*.uzt.obs.csv"), recursive=True))
+        if hits:
+            return Path(hits[0])
+    raise PostprocessMODFLOWError(
+        "VADOSE_OUTPUT_READ_FAILED",
+        message=f"no *.uzt.obs.csv breakthrough obs found under {run_outputs_uri}",
+        details={"run_outputs_uri": run_outputs_uri},
+    )
+
+
+def _read_vadose_breakthrough(
+    obs_path: Path,
+) -> tuple[list[float], list[float]]:
+    """Read (time_days, base_of_column_concentration) from the UZT obs csv.
+
+    The UZT observations block writes a two-column csv (``time`` + the named
+    ``UZBOT`` observation: the base-of-column concentration just above the water
+    table). Mirrors the read the committed adapter smoke pins
+    (``test_gwt_adapter_vadose_transport``). Returns two parallel lists.
+
+    Raises:
+        PostprocessMODFLOWError: ``VADOSE_OUTPUT_READ_FAILED`` on a read failure;
+            ``VADOSE_OUTPUT_EMPTY`` when the csv carries no rows / no conc column.
+    """
+    try:
+        import numpy as np  # type: ignore[import-not-found]
+    except Exception as exc:  # noqa: BLE001
+        raise PostprocessMODFLOWError(
+            "VADOSE_OUTPUT_READ_FAILED",
+            message=f"numpy not importable: {exc}",
+            details={"obs_path": str(obs_path)},
+        ) from exc
+    try:
+        obs = np.genfromtxt(str(obs_path), delimiter=",", names=True)
+    except Exception as exc:  # noqa: BLE001
+        raise PostprocessMODFLOWError(
+            "VADOSE_OUTPUT_READ_FAILED",
+            message=f"could not read UZT obs csv {obs_path}: {exc}",
+            details={"obs_path": str(obs_path)},
+        ) from exc
+    names = obs.dtype.names or ()
+    # The concentration column is the single named observation (UZBOT); pick the
+    # first non-time column so a future obs rename still resolves.
+    conc_col = next((n for n in names if n.lower() != "time"), None)
+    if "time" not in [n.lower() for n in names] or conc_col is None:
+        raise PostprocessMODFLOWError(
+            "VADOSE_OUTPUT_EMPTY",
+            message=f"UZT obs csv {obs_path} lacks a time + concentration column",
+            details={"obs_path": str(obs_path), "columns": list(names)},
+        )
+    time_key = next(n for n in names if n.lower() == "time")
+    t = np.atleast_1d(obs[time_key]).astype("float64")
+    c = np.atleast_1d(obs[conc_col]).astype("float64")
+    if t.size == 0 or c.size == 0:
+        raise PostprocessMODFLOWError(
+            "VADOSE_OUTPUT_EMPTY",
+            message=f"UZT obs csv {obs_path} carries no rows",
+            details={"obs_path": str(obs_path)},
+        )
+    return [float(x) for x in t], [float(x) for x in c]
+
+
+def _write_vadose_point_fgb(
+    spill_latlon: tuple[float, float],
+    *,
+    breakthrough_time_days: float,
+    peak_concentration: float,
+    vadose_thickness_m: float,
+    run_id: str,
+) -> Path:
+    """Write the vadose spill-site CONTEXT POINT FlatGeobuf in EPSG:4326.
+
+    ONE feature: a POINT at the spill ``(lat, lon)`` carrying the arrival time,
+    peak concentration, and vadose thickness as attributes, so the user sees
+    WHERE the 1D vadose column was evaluated. The geometry coordinate order is
+    (lon, lat) per GeoJSON/WKT.
+
+    Raises:
+        PostprocessMODFLOWError: ``VADOSE_WRITE_FAILED`` on any shapely /
+            geopandas / file-system error.
+    """
+    try:
+        import geopandas as gpd  # type: ignore[import-not-found]
+        from shapely.geometry import Point  # type: ignore[import-not-found]
+    except Exception as exc:  # noqa: BLE001
+        raise PostprocessMODFLOWError(
+            "VADOSE_WRITE_FAILED",
+            message=f"shapely / geopandas not importable for vadose FGB write: {exc}",
+            details={"run_id": run_id},
+        ) from exc
+    try:
+        pt = Point(float(spill_latlon[1]), float(spill_latlon[0]))
+        props = [{
+            "feature_type": "spill_site",
+            "breakthrough_time_days": float(breakthrough_time_days),
+            "peak_concentration": float(peak_concentration),
+            "vadose_thickness_m": float(vadose_thickness_m),
+            "run_id": run_id,
+        }]
+        gdf = gpd.GeoDataFrame(props, geometry=[pt], crs="EPSG:4326")
+        fgb_path = Path(
+            tempfile.NamedTemporaryFile(
+                suffix=f"_vadose_spill_{run_id}.fgb", delete=False
+            ).name
+        )
+        gdf.to_file(str(fgb_path), driver="FlatGeobuf", engine="pyogrio")
+        return fgb_path
+    except Exception as exc:  # noqa: BLE001
+        raise PostprocessMODFLOWError(
+            "VADOSE_WRITE_FAILED",
+            message=f"could not write vadose spill-site FlatGeobuf: {exc}",
+            details={"run_id": run_id},
+        ) from exc
+
+
+def _vadose_params_from_deck(deck_dir: str | None) -> dict[str, float]:
+    """Read spill lat/lon + thickness + infiltration conc from the DeckManifest.
+
+    The FLAT vadose staging writes the worker-contract manifest.json (no vadose
+    fields), so these are primarily threaded from the dispatch; this is the
+    best-effort fallback when a manifest with the fields is present. Missing keys
+    fall back to 0.0 so the caller can guard with ``or <default>``.
+    """
+    defaults: dict[str, float] = {
+        "spill_lat": 0.0, "spill_lon": 0.0,
+        "vadose_thickness_m": 0.0, "vadose_infiltration_conc": 0.0,
+    }
+    if not deck_dir:
+        return defaults
+    import json
+
+    manifest_path = Path(deck_dir) / "manifest.json"
+    if not manifest_path.exists():
+        return defaults
+    try:
+        with manifest_path.open() as f:
+            m = json.load(f)
+        for k in defaults:
+            if k in m:
+                defaults[k] = float(m.get(k) or 0.0)
+        return defaults
+    except Exception as exc:  # noqa: BLE001
+        logger.warning(
+            "_vadose_params_from_deck: could not read manifest from %s: %s",
+            manifest_path, exc,
+        )
+        return defaults
+
+
+def postprocess_vadose(
+    run_outputs_uri: str,
+    *,
+    run_id: str,
+    model_crs: str,
+    deck_dir: str | None = None,
+    runs_bucket: str | None = None,
+    spill_lat: float | None = None,
+    spill_lon: float | None = None,
+    vadose_thickness_m: float | None = None,
+    vadose_infiltration_conc: float | None = None,
+) -> VadoseBreakthroughLayerURI:
+    """Convert a UZF+UZT vadose_transport run into a ``VadoseBreakthroughLayerURI``.
+
+    Reads the base-of-column breakthrough obs csv (``*.uzt.obs.csv``: the UZT
+    concentration just above the water table, one value per saved transport step),
+    computes the ARRIVAL TIME (first crossing of half the infiltration
+    concentration - the headline scalar), writes a spill-site CONTEXT POINT
+    FlatGeobuf in EPSG:4326, uploads it, and returns the typed
+    ``VadoseBreakthroughLayerURI``.
+
+    Unlike every other MODFLOW archetype the PRIMARY product is the TIME-SERIES
+    CHART (breakthrough concentration vs. time), built via
+    ``build_vadose_breakthrough_chart`` and stashed as the runtime attribute
+    ``_chart_payload`` on the returned layer; the composer reads it via
+    ``getattr(layer, "_chart_payload", None)`` and emits it. The MAP element is a
+    thin spill-site point that geolocates WHERE the 1D vadose column was
+    evaluated (1D-column physics -> chart carries the physics).
+
+    Georegistration: the vadose deck is a 1-cell-plan vertical column. There is no
+    plan-view field to reproject; the spill ``(lat, lon)`` (threaded from the
+    dispatch / staging) locates the context point. ``model_crs`` is accepted for
+    signature compatibility but not used (no raster COG; the FGB is built directly
+    in EPSG:4326).
+
+    Args:
+        run_outputs_uri: the run output location (local dir / ``file://``) that
+            contains the UZT obs csv.
+        run_id: run identifier for the FlatGeobuf filename in the runs bucket.
+        model_crs: the deck's projected CRS (accepted for signature compat; unused).
+        deck_dir: optional deck directory for the manifest fallback.
+        runs_bucket: optional override for the runs bucket name.
+        spill_lat / spill_lon: the spill-site ``(lat, lon)`` in EPSG:4326, threaded
+            from the dispatch (``DeckStaging.spill_lat/lon``). Preferred over the
+            manifest fallback; sentinel zeros when neither is available (the
+            composer honesty gate should have supplied a real AOI upstream).
+        vadose_thickness_m: the vadose-column thickness the deck used, m (for
+            narration + the chart depth annotation); manifest fallback otherwise.
+        vadose_infiltration_conc: the tracer concentration in the infiltration (the
+            half-of-this breakthrough threshold + the chart rule); defaults to 1.0
+            (the demo unit tracer) when neither threaded nor on the manifest.
+
+    Returns:
+        ``VadoseBreakthroughLayerURI`` with ``layer_type='vector'``,
+        ``style_preset='contaminant_spill_point'``, the FGB ``uri``, the
+        breakthrough scalars (``breakthrough_time_days``, ``peak_concentration``,
+        ``vadose_thickness_m``), and the ``concentration_series`` +
+        ``time_series_days``. ``_chart_payload`` (a runtime attr) carries the
+        breakthrough chart.
+
+    Raises:
+        PostprocessMODFLOWError:
+          - ``VADOSE_OUTPUT_READ_FAILED`` -- obs csv not found / unreadable.
+          - ``VADOSE_OUTPUT_EMPTY`` -- obs csv has no rows / no conc column.
+          - ``VADOSE_WRITE_FAILED`` -- FlatGeobuf write or upload failed.
+    """
+    del model_crs  # no raster COG to reproject; accepted for signature compat only.
+
+    # --- Step 1: locate + read the UZT breakthrough obs csv -----------------
+    obs_path = _resolve_vadose_obs_path(run_outputs_uri)
+    times_days, conc_series = _read_vadose_breakthrough(obs_path)
+
+    # --- Step 2: resolve narration params (dispatch-threaded > manifest > default)
+    mparams = _vadose_params_from_deck(deck_dir)
+    lat = float(spill_lat) if spill_lat is not None else float(mparams["spill_lat"])
+    lon = float(spill_lon) if spill_lon is not None else float(mparams["spill_lon"])
+    thickness = (
+        float(vadose_thickness_m)
+        if vadose_thickness_m is not None and float(vadose_thickness_m) > 0.0
+        else (float(mparams["vadose_thickness_m"]) or 4.0)
+    )
+    infil_conc = (
+        float(vadose_infiltration_conc)
+        if vadose_infiltration_conc is not None and float(vadose_infiltration_conc) > 0.0
+        else (float(mparams["vadose_infiltration_conc"]) or 1.0)
+    )
+
+    # --- Step 3: breakthrough time = first crossing of half the source conc ---
+    threshold = 0.5 * infil_conc
+    arrival_days: float = 0.0
+    arrived = False
+    for t, c in zip(times_days, conc_series):
+        if c >= threshold:
+            arrival_days = float(t)
+            arrived = True
+            break
+    # Never crossed the half-source threshold within the horizon: report the
+    # arrival as 0.0 (the honesty floor uses the SERIES presence, not this
+    # scalar; the composer narrates non-arrival when peak < threshold).
+    peak_conc = float(conc_series[-1])
+
+    logger.info(
+        "postprocess_vadose run_id=%s obs=%s steps=%d arrival_days=%.4g arrived=%s "
+        "peak_conc=%.4g thickness_m=%.4g",
+        run_id, obs_path, len(conc_series), arrival_days, arrived, peak_conc, thickness,
+    )
+
+    # --- Step 4: spill-site context point (sentinel-guarded) ----------------
+    if lat == 0.0 and lon == 0.0:
+        logger.warning(
+            "postprocess_vadose run_id=%s: no spill lat/lon threaded; using sentinel "
+            "zeros (the composer honesty gate should have supplied a real AOI)",
+            run_id,
+        )
+    fgb_path = _write_vadose_point_fgb(
+        (lat, lon),
+        breakthrough_time_days=arrival_days,
+        peak_concentration=peak_conc,
+        vadose_thickness_m=thickness,
+        run_id=run_id,
+    )
+    # A tiny bbox around the point (deg) so the map has a non-degenerate extent.
+    d = 0.01
+    bbox_4326: tuple[float, float, float, float] = (
+        lon - d, lat - d, lon + d, lat + d,
+    )
+
+    try:
+        fgb_uri = _upload_fgb(
+            fgb_path, run_id, runs_bucket, fgb_filename="vadose_spill_site_4326.fgb"
+        )
+    except PostprocessMODFLOWError as exc:
+        raise PostprocessMODFLOWError(
+            "VADOSE_WRITE_FAILED",
+            message=exc.args[0] if exc.args else str(exc),
+            details=exc.details,
+        ) from exc
+
+    # --- Step 5: build the breakthrough chart (stash on the result) ---------
+    # Downsample the contract series to keep the layer envelope light (the chart
+    # builder caps its own rows independently); the arrival scalar is exact.
+    def _thin(seq: list[float], cap: int = 200) -> list[float]:
+        if len(seq) <= cap:
+            return seq
+        stride = max(1, len(seq) // cap)
+        return seq[::stride][:cap]
+
+    conc_thin = _thin(conc_series)
+    time_thin = _thin(times_days)
+    # keep the two series length-aligned after independent thinning
+    n = min(len(conc_thin), len(time_thin))
+    conc_thin, time_thin = conc_thin[:n], time_thin[:n]
+
+    chart_payload: dict[str, Any] | None = None
+    try:
+        from trid3nt_server.agent.tools.processing.charts_common import (
+            build_vadose_breakthrough_chart,
+        )
+
+        chart_payload = build_vadose_breakthrough_chart(
+            days=times_days,
+            concentration=conc_series,
+            infiltration_conc=infil_conc,
+            breakthrough_time_days=arrival_days if arrived else None,
+            vadose_thickness_m=thickness,
+            source_layer_uri=fgb_uri,
+        )
+    except Exception as exc:  # noqa: BLE001
+        logger.warning(
+            "postprocess_vadose: chart build failed (non-fatal): %s", exc
+        )
+
+    layer_id = f"vadose-breakthrough-{run_id}"
+    result = VadoseBreakthroughLayerURI(
+        layer_id=layer_id,
+        name="Vadose-zone tracer breakthrough (UZF+UZT unsaturated travel)",
+        layer_type="vector",
+        uri=fgb_uri,
+        style_preset=VADOSE_TRANSPORT_STYLE_PRESET,
+        role="primary",
+        bbox=bbox_4326,
+        breakthrough_time_days=arrival_days,
+        peak_concentration=peak_conc,
+        vadose_thickness_m=thickness,
+        concentration_series=conc_thin,
+        time_series_days=time_thin,
+    )
+    object.__setattr__(result, "_chart_payload", chart_payload)
     return result

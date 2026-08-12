@@ -243,6 +243,8 @@ async def model_sustainable_yield_scenario(
     river_inflow_m3_s: float | None = None,
     couple_subsidence: bool = False,
     inelastic_storage_override: float | None = None,
+    csub_delay_interbeds: bool = False,
+    csub_effective_stress: bool = False,
     compute_class: str = "standard",
     pipeline_emitter: Any | None = None,
 ) -> SustainableYieldResult | StreamDepletionResult | SubsidenceResult:
@@ -373,6 +375,8 @@ async def model_sustainable_yield_scenario(
             sim_years=sim_years,
             n_periods=n_periods,
             inelastic_storage_override=inelastic_storage_override,
+            csub_delay_interbeds=bool(csub_delay_interbeds),
+            csub_effective_stress=bool(csub_effective_stress),
             aquifer_overrides=_aquifer_overrides(
                 aquifer_k_ms, porosity, aquifer_sy, aquifer_ss
             ),
@@ -671,6 +675,8 @@ async def _run_subsidence(
     sim_years: float | None,
     n_periods: int | None,
     inelastic_storage_override: float | None,
+    csub_delay_interbeds: bool = False,
+    csub_effective_stress: bool = False,
     aquifer_overrides: dict[str, Any],
     compute_class: str,
     pipeline_emitter: Any | None,
@@ -700,6 +706,8 @@ async def _run_subsidence(
                 if inelastic_storage_override is not None
                 else None
             ),
+            csub_delay_interbeds=bool(csub_delay_interbeds),
+            csub_effective_stress=bool(csub_effective_stress),
             **aquifer_overrides,
         )
     except Exception as exc:  # noqa: BLE001 -- pydantic ValidationError
@@ -744,6 +752,8 @@ async def _run_subsidence(
         "sim_years": sim_years,
         "n_periods": n_periods,
         "inelastic_storage_override": inelastic_storage_override,
+        "csub_delay_interbeds": bool(csub_delay_interbeds),
+        "csub_effective_stress": bool(csub_effective_stress),
     }
     summary = {
         "location_name": location_name,
@@ -753,6 +763,20 @@ async def _run_subsidence(
         "inelastic_fraction": layer.inelastic_fraction,
         "interbed_count": layer.interbed_count,
         "pumping_rate_m3_day": wel_q,
+        "csub_formulation": (
+            "EFFECTIVE_STRESS (geostatic sgm/sgs unit weights + specified "
+            "preconsolidation stress; demo-parameterized, ~0.4-0.5 of head-based)"
+            if csub_effective_stress
+            else "HEAD_BASED (initial head = preconsolidation; all drawdown -> "
+                 "inelastic compaction)"
+        ),
+        "csub_interbed_type": (
+            "DELAY interbed (finite consolidation diffusivity: compaction is "
+            "TIME-LAGGED and, at end-of-pumping, LESS than the equivalent no-delay "
+            "bed; ndelaycells + a low interbed vertical K are demo assumptions)"
+            if csub_delay_interbeds
+            else "no-delay interbed (consolidates instantly with head)"
+        ),
         "demo_aquifer_caveat": (
             f"Aquifer K={DEFAULT_AQUIFER_K_MS:g} m/s, porosity={DEFAULT_POROSITY:g}, "
             "and the CSUB interbed thickness + inelastic/elastic compaction "
@@ -916,6 +940,8 @@ async def modflow_sustainable_yield(
     river_inflow_m3_s: float | None = None,
     couple_subsidence: bool = False,
     inelastic_storage_override: float | None = None,
+    csub_delay_interbeds: bool = False,
+    csub_effective_stress: bool = False,
     compute_class: str = "standard",
     # absorb LLM-invented kwargs.
     **_extra_ignored: Any,
@@ -994,6 +1020,23 @@ async def modflow_sustainable_yield(
             Ssv (m^-1) for the CSUB interbed - the knob that sets the subsidence
             MAGNITUDE. A demo default (~2e-3) is applied when absent (narrated as a
             demo assumption). Only used when ``couple_subsidence=True``.
+        csub_delay_interbeds: CSUB formulation knob (only when
+            ``couple_subsidence=True``). When True the compressible interbed is a
+            DELAY interbed (finite consolidation diffusivity via ndelaycells + a low
+            interbed vertical K) so compaction is TIME-LAGGED: the bed keeps
+            consolidating after the head decline and, at end-of-pumping, has
+            compacted LESS than an equivalent no-delay bed. When False (default) the
+            bed consolidates instantly with head. ndelaycells + the interbed K are
+            demo assumptions (no site clay-profile fetcher), narrated as such.
+        csub_effective_stress: CSUB formulation knob (only when
+            ``couple_subsidence=True``). When True the run uses the EFFECTIVE_STRESS
+            formulation (geostatic sgm/sgs unit weights + a specified initial
+            preconsolidation stress) instead of the default HEAD_BASED formulation;
+            the two bracket the same subsidence scale (effective-stress typically
+            ~0.4-0.5 of head-based for the same stress path) as an
+            order-of-magnitude crosscheck. sgm/sgs are demo assumptions, narrated
+            as such. When False (default) HEAD_BASED with the initial head as the
+            preconsolidation head is used.
         compute_class: FR-CE-3 compute class. Default ``"standard"``.
 
     Returns:
@@ -1032,6 +1075,8 @@ async def modflow_sustainable_yield(
                 if inelastic_storage_override is not None
                 else None
             ),
+            csub_delay_interbeds=bool(csub_delay_interbeds),
+            csub_effective_stress=bool(csub_effective_stress),
             compute_class=compute_class,
             pipeline_emitter=None,
         )
