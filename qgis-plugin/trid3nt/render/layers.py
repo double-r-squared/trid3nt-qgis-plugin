@@ -106,7 +106,7 @@ from qgis.core import (
 from qgis.PyQt.QtCore import QDateTime, Qt
 from qgis.PyQt.QtGui import QColor
 
-from . import ramps, temporal
+from . import formatting, ramps, temporal
 from ..plugin_settings import PluginSettings
 from ..net.trid3nt_client import LayerEvent, qgis_xyz_uri, s3_to_http
 
@@ -624,7 +624,7 @@ def _color_ramp_items(
                             QgsColorRampShader.ColorRampItem(
                                 vmin + t * span,
                                 ramp.color(t),
-                                f"{vmin + t * span:g}",
+                                formatting.format_number(vmin + t * span),
                             )
                         )
                     return items, None
@@ -642,7 +642,8 @@ def _color_ramp_items(
     span = vmax - vmin
     items = [
         QgsColorRampShader.ColorRampItem(
-            vmin + t * span, QColor(color), f"{vmin + t * span:g}"
+            vmin + t * span, QColor(color),
+            formatting.format_number(vmin + t * span),
         )
         for t, color in stops
     ]
@@ -650,7 +651,15 @@ def _color_ramp_items(
 
 
 def _build_pseudocolor_renderer(layer, colormap, vmin: float, vmax: float):
-    """``(QgsSingleBandPseudoColorRenderer, note)`` -- Interpolated shader."""
+    """``(QgsSingleBandPseudoColorRenderer, note)`` -- Interpolated shader.
+
+    The SINGLE native seam that feeds ``QgsColorRampShader`` +
+    ``setClassificationMin/Max``: a non-finite (NaN/inf) or degenerate
+    (``vmax <= vmin``) range is coerced to a sane default HERE, so no caller
+    can hand QGIS a range whose legend-label precision computes to a
+    non-finite double (the arm64 INT_MAX -> ``qt_doubleToAscii`` crash).
+    """
+    vmin, vmax = formatting.sane_range(vmin, vmax)
     items, note = _color_ramp_items(colormap, vmin, vmax)
     shader_fn = QgsColorRampShader(vmin, vmax)
     try:
@@ -782,12 +791,16 @@ def _apply_raster_renderer(
             # GDAL's default renderer (grayscale autoscale / native RGB) IS
             # the correct render, exactly as TiTiler passed these through.
             return None
-        if vmin is None or vmax is None or float(vmax) <= float(vmin):
-            note_range = " (no usable range on the legend -- 0..1 assumed)"
-            vmin, vmax = 0.0, 1.0
-        else:
+        # A finiteness-aware guard: a NaN/inf bound DEFEATS a plain
+        # ``vmax <= vmin`` test (every NaN comparison is False), so it would
+        # otherwise reach the native color-ramp legend and crash Qt. Route the
+        # range through ``sane_range`` and note the substitution honestly.
+        if formatting.is_sane_range(vmin, vmax):
             note_range = ""
             vmin, vmax = float(vmin), float(vmax)
+        else:
+            note_range = " (no usable range on the legend -- 0..1 assumed)"
+            vmin, vmax = formatting.sane_range(vmin, vmax)
         renderer, note = _build_pseudocolor_renderer(layer, colormap, vmin, vmax)
         layer.setRenderer(renderer)
         if note_range:

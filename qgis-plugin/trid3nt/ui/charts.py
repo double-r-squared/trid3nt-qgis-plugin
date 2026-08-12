@@ -33,6 +33,7 @@ honest text card (title + caption + why), never a crash.
 
 from __future__ import annotations
 
+import math
 from typing import Any, Dict, List, Optional
 
 # -- guarded matplotlib import (see module docstring) ------------------------ #
@@ -139,9 +140,15 @@ def _is_log(channel: dict) -> bool:
 
 
 def _as_float(value: Any) -> Optional[float]:
+    """A plottable float, or None. Rejects bools AND non-finite (NaN/inf) --
+    a persisted spec carrying NaN/inf must not reach the matplotlib axis: it
+    poisons the auto-range into a degenerate (non-finite) extent, and the same
+    degenerate extent is what feeds a native precision computation elsewhere.
+    Non-finite points are dropped, exactly like non-numeric ones."""
     if isinstance(value, bool) or not isinstance(value, (int, float)):
         return None
-    return float(value)
+    v = float(value)
+    return v if math.isfinite(v) else None
 
 
 # --------------------------------------------------------------------------- #
