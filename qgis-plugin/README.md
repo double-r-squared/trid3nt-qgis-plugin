@@ -97,10 +97,12 @@ python3 trid3nt/install_dependencies.py
 ```
 
 Add `--dry-run` to see the present/missing table and the install command
-without installing anything. The Charts dock also drives this same script
-from its "Missing matplotlib" panel (Attempt-install button, streamed
-output) -- one source of truth whether you run it by hand or click the
-button.
+without installing anything. The Charts dock's "Missing matplotlib" panel
+shows this exact command (Copy button) for the same reason -- one source of
+truth -- but it does not run it for you: launching this script from inside
+the QGIS app bundle via `QProcess` failed to even start on macOS, so the
+panel is terminal-only. Run the command yourself in a real terminal, then
+restart QGIS.
 
 ## Install
 

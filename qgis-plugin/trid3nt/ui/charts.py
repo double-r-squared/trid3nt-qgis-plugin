@@ -28,10 +28,13 @@ hand-roll. GEM's IRMT plugin was rejected (not installed, its viewer is
 coupled to OQ-engine NRML outputs, not our Vega payloads); a server-side PNG
 render was rejected (server change + restart + flood smoke for zero offline
 benefit). matplotlib import is GUARDED: when absent the window degrades to a guided
-fix panel (what's missing, why, the exact per-OS pip command, an "Attempt
-install" button) -- see ``charts_window.MissingMatplotlibPanel`` -- never a
-crash. QGIS 4's macOS/Windows bundles dropped matplotlib (QGIS 3 shipped it);
-the guard + panel below are what makes that survivable offline.
+fix panel (what's missing, why, the exact per-OS command to run
+``install_dependencies.py`` from a terminal) -- see ``charts_window
+.MissingMatplotlibPanel`` -- never a crash. QGIS 4's macOS/Windows bundles
+dropped matplotlib (QGIS 3 shipped it); the guard + panel below are what
+makes that survivable offline. The panel is terminal-only, not in-dock: an
+in-process install launched via ``QProcess`` failed to start inside the QGIS
+app bundle on NATE's macOS QGIS -- see ``install_dependencies.py``.
 """
 
 from __future__ import annotations
@@ -50,8 +53,9 @@ from .. import install_dependencies
 # The check itself is cheap (one import attempt) and CACHED via
 # ``_MATPLOTLIB_CHECKED`` -- every chart-emission frame and every dock open
 # calls ``matplotlib_available()``, so a repeated failing import must not
-# re-walk sys.path on each one. ``recheck_matplotlib`` is the explicit
-# cache-bust, used after the panel's "Attempt install" succeeds.
+# re-walk sys.path on each one. matplotlib picked up post-install shows up on
+# the next QGIS restart (fresh module cache) -- no in-process cache-bust is
+# needed.
 Figure = None  # type: ignore[assignment]
 FigureCanvasQTAgg = None  # type: ignore[assignment]
 _MATPLOTLIB_ERROR: Optional[str] = None
@@ -95,17 +99,6 @@ def matplotlib_error() -> Optional[str]:
     return _MATPLOTLIB_ERROR
 
 
-def recheck_matplotlib() -> bool:
-    """Bust the cache and retry the import (post "Attempt install" -- pip
-    dropped fresh files onto sys.path that the cached failure predates)."""
-    import importlib
-
-    importlib.invalidate_caches()
-    global _MATPLOTLIB_CHECKED
-    _MATPLOTLIB_CHECKED = False
-    return matplotlib_available()
-
-
 # --------------------------------------------------------------------------- #
 # Per-OS "how do I get matplotlib into THIS interpreter" command builder.
 # Pure (no Qt, no subprocess) -- the panel's Copy/Attempt-install actions and
@@ -114,8 +107,8 @@ def recheck_matplotlib() -> bool:
 # the running ``sys.executable`` is NOT; Linux/Windows: the running
 # interpreter already IS the real, invokable one). The executable-resolution
 # logic itself lives in ``install_dependencies`` (one source of truth shared
-# with the standalone script and its "Attempt install" QProcess target) --
-# this module only re-exports it under its established name.
+# with the standalone script) -- this module only re-exports it under its
+# established name.
 # --------------------------------------------------------------------------- #
 
 
@@ -138,9 +131,10 @@ def install_command_argv(
     exec_prefix: Optional[str] = None,
     executable: Optional[str] = None,
 ) -> List[str]:
-    """The argv ``QProcess`` runs: ``[python, install_dependencies.py]`` --
-    the shared script (not raw pip) so the check/install/re-verify logic has
-    exactly one implementation."""
+    """``[python, install_dependencies.py]`` -- the shared script (not raw
+    pip) so the check/install/re-verify logic has exactly one
+    implementation. Used only to build ``install_command_str`` below; the
+    panel runs nothing itself (terminal-only, see module docstring)."""
     py = install_python_executable(platform, exec_prefix, executable)
     return [py, install_dependencies.__file__]
 
@@ -150,7 +144,7 @@ def install_command_str(
     exec_prefix: Optional[str] = None,
     executable: Optional[str] = None,
 ) -> str:
-    """The human-facing / copy-button command line for the same argv."""
+    """The human-facing, copy-button command line the panel displays."""
     py, script = install_command_argv(platform, exec_prefix, executable)
     quoted_py = f'"{py}"' if " " in py else py
     quoted_script = f'"{script}"' if " " in script else script

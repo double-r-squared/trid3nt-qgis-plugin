@@ -17,10 +17,14 @@ Pure stdlib (no PyQt/qgis import anywhere in this file) so it runs two ways:
       linux:   python3 install_dependencies.py   (already QGIS's interpreter)
       windows: <QGIS install>\\apps\\Python3xx\\python.exe install_dependencies.py
 
-  (b) imported by ``trid3nt.ui.charts.install_command_argv`` /
-      ``trid3nt.ui.charts_window.MissingMatplotlibPanel``, whose "Attempt
-      install" button runs THIS script (not raw pip) via ``QProcess`` -- one
-      source of truth for what gets installed and how.
+  (b) referenced by ``trid3nt.ui.charts.install_command_argv`` / ``.
+      install_command_str``, which the plugin's ``MissingMatplotlibPanel``
+      displays as the terminal command to run THIS script (not raw pip) --
+      one source of truth for what gets installed and how. The panel does
+      not run it itself: launching this script via ``QProcess`` from inside
+      the QGIS app bundle failed to even start on NATE's macOS QGIS
+      (``ProcessError.FailedToStart``), so the plugin only ever shows the
+      command for the user to run in a real terminal.
 
 Behavior (direct run): check each dependency importable, print a
 present/missing table, pip-install only what's missing into the running

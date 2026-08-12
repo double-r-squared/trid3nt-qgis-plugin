@@ -40,26 +40,26 @@ switch clears it (``clear``) -- charts are per-Case state (the per-case
 durability norm).
 
 matplotlib import is GUARDED in ``charts``: when absent the chart canvas
-degrades to ``MissingMatplotlibPanel`` -- what's missing, why, the exact
-per-OS pip command (copy button), and an "Attempt install" button that runs
-it via ``QProcess`` with streamed output -- never a crash and never a silent
-auto-install.
+degrades to ``MissingMatplotlibPanel`` -- what's missing, why, and the exact
+per-OS command to run ``install_dependencies.py`` from a terminal (copy
+button). The panel does NOT attempt the install itself: a QGIS-app-bundle
+Python subprocess launch (``QProcess`` against the exec_prefix-derived
+interpreter) failed to start on NATE's live macOS QGIS
+(``ProcessError.FailedToStart``) -- the terminal invocation is the only path
+proven to work, so that is the only path the plugin offers.
 """
 
 from __future__ import annotations
 
 from typing import Any, Callable, Dict, List, Optional
 
-from qgis.PyQt.QtCore import QProcess, Qt
+from qgis.PyQt.QtCore import Qt
 from qgis.PyQt.QtGui import QGuiApplication
 from qgis.PyQt.QtWidgets import (
     QDockWidget,
     QHBoxLayout,
     QLabel,
     QListWidget,
-    QPlainTextEdit,
-    QPushButton,
-    QSizePolicy,
     QToolButton,
     QVBoxLayout,
     QWidget,
@@ -92,28 +92,23 @@ _LIST_WIDTH = 180  # px -- the thin chart-switcher strip
 class MissingMatplotlibPanel(QWidget):
     """The guided fix shown in place of the chart canvas when matplotlib is
     unavailable in this QGIS python (QGIS 4's macOS/Windows bundles dropped
-    it; QGIS 3 shipped it). Explains what's missing and why, offers the
-    exact per-OS pip command (copy button) derived from ``charts
-    .install_command_str`` -- never hardcoded -- and an "Attempt install"
-    button that runs the bundled interpreter against the shared
-    ``install_dependencies.py`` script via ``QProcess`` (not raw pip -- one
-    source of truth with the standalone script, see ``charts
-    .install_command_argv``), streaming stdout+stderr live into this panel.
-    Never installs without the click. On success, prompts to reopen the
-    chart dock (and offers an in-place reload via ``on_reload``, which the
-    window wires to a cache-bust + re-render so the user does not have to
-    close/reopen anything). On failure, the streamed output stays on
-    screen -- an honest failure, no silent retry.
+    it; QGIS 3 shipped it). Explains what's missing and why, and offers the
+    exact per-OS command (copy button, derived from ``charts
+    .install_command_str`` -- never hardcoded) to run
+    ``install_dependencies.py`` from a terminal.
+
+    Terminal-only by design, not laziness: an in-dock "Attempt install" that
+    launched the exec_prefix-derived interpreter via ``QProcess`` failed to
+    even start inside the QGIS app-bundle process on NATE's macOS QGIS
+    (``ProcessError.FailedToStart``) -- subprocess launch from inside the
+    bundle is unreliable, so the plugin does not offer it. A real terminal
+    always has a launchable shell. matplotlib is picked up on the next QGIS
+    restart (Python's module cache is fresh then), so there is no in-app
+    reload/recheck action either.
     """
 
-    def __init__(
-        self,
-        on_reload: Optional[Callable[[], bool]] = None,
-        parent: Optional[QWidget] = None,
-    ):
+    def __init__(self, parent: Optional[QWidget] = None):
         super().__init__(parent)
-        self._on_reload = on_reload
-        self._process: Optional[QProcess] = None
         self._command = charts.install_command_str()
 
         root = QVBoxLayout(self)
@@ -125,7 +120,8 @@ class MissingMatplotlibPanel(QWidget):
             "QGIS 4 no longer bundles matplotlib in its Python environment "
             "(QGIS 3 did) -- it is a one-time pip install into QGIS's own "
             "interpreter, not a TRID3NT bug.\n\n"
-            f"Reason: {charts.matplotlib_error()}"
+            f"Reason: {charts.matplotlib_error()}\n\n"
+            "Run this command in a terminal, then restart QGIS:"
         )
         why.setWordWrap(True)
         root.addWidget(why)
@@ -148,36 +144,10 @@ class MissingMatplotlibPanel(QWidget):
         cmd_row.addWidget(copy_btn)
         root.addLayout(cmd_row)
 
-        action_row = QHBoxLayout()
-        self.install_btn = QPushButton("Attempt install")
-        self.install_btn.setToolTip(
-            "Run install_dependencies.py via QGIS's own Python -- streams "
-            "output below; never runs without this click"
-        )
-        self.install_btn.clicked.connect(self._on_attempt_install)
-        action_row.addWidget(self.install_btn)
-        self.reload_btn = QPushButton("Reopen chart")
-        self.reload_btn.setToolTip(
-            "Re-check for matplotlib and re-render this chart"
-        )
-        self.reload_btn.setEnabled(False)
-        self.reload_btn.clicked.connect(self._on_reload_clicked)
-        action_row.addWidget(self.reload_btn)
-        action_row.addStretch(1)
-        root.addLayout(action_row)
-
         self.status_label = QLabel("")
         self.status_label.setWordWrap(True)
         root.addWidget(self.status_label)
-
-        self.output = QPlainTextEdit()
-        self.output.setReadOnly(True)
-        self.output.setStyleSheet("font-family: monospace; font-size: 8pt;")
-        self.output.setSizePolicy(
-            QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding
-        )
-        self.output.setVisible(False)
-        root.addWidget(self.output, 1)
+        root.addStretch(1)
 
     # -- copy ------------------------------------------------------------- #
 
@@ -186,67 +156,6 @@ class MissingMatplotlibPanel(QWidget):
         if clipboard is not None:
             clipboard.setText(self._command)
         self.status_label.setText("Command copied to clipboard.")
-
-    # -- attempt install (QProcess, streamed) ------------------------------ #
-
-    def _on_attempt_install(self) -> None:
-        if self._process is not None:
-            return  # already running -- the button is disabled meanwhile
-        argv = charts.install_command_argv()
-        self.install_btn.setEnabled(False)
-        self.reload_btn.setEnabled(False)
-        self.status_label.setText(f"Running: {self._command}")
-        self.output.setVisible(True)
-        self.output.clear()
-
-        proc = QProcess(self)
-        proc.setProgram(argv[0])
-        proc.setArguments(argv[1:])
-        proc.readyReadStandardOutput.connect(self._on_stdout)
-        proc.readyReadStandardError.connect(self._on_stderr)
-        proc.finished.connect(self._on_finished)
-        proc.errorOccurred.connect(self._on_error_occurred)
-        self._process = proc
-        proc.start()
-
-    def _on_stdout(self) -> None:
-        if self._process is not None:
-            self.output.appendPlainText(
-                bytes(self._process.readAllStandardOutput()).decode(
-                    "utf-8", "replace"
-                )
-            )
-
-    def _on_stderr(self) -> None:
-        if self._process is not None:
-            self.output.appendPlainText(
-                bytes(self._process.readAllStandardError()).decode(
-                    "utf-8", "replace"
-                )
-            )
-
-    def _on_error_occurred(self, error) -> None:
-        # QProcess failed to even start (bad path, permissions, ...) --
-        # honest surfacing, same as a nonzero exit.
-        self.output.appendPlainText(f"\nfailed to start process: {error}")
-
-    def _on_finished(self, exit_code: int, _exit_status) -> None:
-        self._process = None
-        self.install_btn.setEnabled(True)
-        if exit_code == 0:
-            self.status_label.setText(
-                "Install finished. Click 'Reopen chart' to load it now "
-                "(or close and reopen the TRID3NT Charts window)."
-            )
-            self.reload_btn.setEnabled(True)
-        else:
-            self.status_label.setText(
-                f"Install failed (exit code {exit_code}) -- see output above."
-            )
-
-    def _on_reload_clicked(self) -> None:
-        if self._on_reload is not None:
-            self._on_reload()
 
 
 class ChartsWindow(QDockWidget):
@@ -513,7 +422,7 @@ class ChartsWindow(QDockWidget):
         this QGIS python."""
         if not charts.matplotlib_available():
             self.last_render_summary = {"fallback": True}
-            panel = MissingMatplotlibPanel(on_reload=self._on_matplotlib_reload)
+            panel = MissingMatplotlibPanel()
             self._canvas_host.addWidget(panel)
             return
 
@@ -543,30 +452,6 @@ class ChartsWindow(QDockWidget):
         self._scroll_cid = canvas.mpl_connect(
             "scroll_event", self._on_scroll
         )
-
-    def _on_matplotlib_reload(self) -> bool:
-        """MissingMatplotlibPanel's "Reopen chart" -- bust the cached import
-        failure, retry, and re-render the current chart in place when it
-        now succeeds (post a successful "Attempt install"). Returns whether
-        matplotlib is now available."""
-        global _NAV_TOOLBAR
-        available = charts.recheck_matplotlib()
-        if available and _NAV_TOOLBAR is None:
-            try:
-                from matplotlib.backends.backend_qtagg import (
-                    NavigationToolbar2QT as _toolbar_cls,
-                )
-            except Exception:  # noqa: BLE001
-                try:
-                    from matplotlib.backends.backend_qt5agg import (
-                        NavigationToolbar2QT as _toolbar_cls,
-                    )
-                except Exception:  # noqa: BLE001
-                    _toolbar_cls = None
-            _NAV_TOOLBAR = _toolbar_cls
-        if available:
-            self._refresh()
-        return available
 
     # -- interactivity: hover (a) -------------------------------------------- #
 

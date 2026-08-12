@@ -134,7 +134,7 @@ class TestMatplotlibGuard(unittest.TestCase):
 
     def setUp(self):
         charts_mod._MATPLOTLIB_CHECKED = False
-        self.addCleanup(charts_mod.recheck_matplotlib)
+        self.addCleanup(setattr, charts_mod, "_MATPLOTLIB_CHECKED", False)
 
     def test_missing_module_reports_unavailable_with_reason(self):
         with mock.patch.dict(sys.modules, _MATPLOTLIB_POISON):
@@ -160,25 +160,11 @@ class TestMatplotlibGuard(unittest.TestCase):
                 charts_mod.matplotlib_error()
                 self.assertEqual(spy.call_count, 1)
 
-    def test_recheck_busts_the_cache(self):
-        with mock.patch.dict(sys.modules, _MATPLOTLIB_POISON):
-            charts_mod._MATPLOTLIB_CHECKED = False
-            self.assertFalse(charts_mod.matplotlib_available())
-        # Outside the poisoned sys.modules, an explicit recheck must
-        # re-attempt the import rather than trust the cached failure.
-        with mock.patch.object(
-            charts_mod, "_do_matplotlib_check",
-            wraps=charts_mod._do_matplotlib_check,
-        ) as spy:
-            charts_mod.recheck_matplotlib()
-            self.assertEqual(spy.call_count, 1)
-
-
 class TestInstallCommandBuilder(unittest.TestCase):
     """Per-OS install command string builder -- pure, no subprocess. The
     executable-resolution logic itself is shared with ``install_dependencies``
     (one source of truth); these tests confirm ``charts`` delegates rather
-    than re-implementing it, and that the panel's argv targets the shared
+    than re-implementing it, and that the built argv targets the shared
     script instead of raw pip."""
 
     def test_mac_derives_from_exec_prefix_bin_python3(self):
@@ -216,8 +202,8 @@ class TestInstallCommandBuilder(unittest.TestCase):
         self.assertTrue(py.startswith(r"C:\QGIS\apps\Python312"))
 
     def test_argv_shape_delegates_to_shared_script(self):
-        """The panel's QProcess argv must run install_dependencies.py, not
-        raw pip -- one source of truth for check/install/re-verify."""
+        """The command displayed must run install_dependencies.py, not raw
+        pip -- one source of truth for check/install/re-verify."""
         argv = charts_mod.install_command_argv(
             "linux", "/usr", "/usr/bin/python3"
         )
