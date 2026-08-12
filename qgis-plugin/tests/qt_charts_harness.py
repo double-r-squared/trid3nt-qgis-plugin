@@ -68,7 +68,7 @@ def pump(n: int = 10) -> None:
 assert charts.matplotlib_available(), (
     "matplotlib must be importable in the QGIS python for this harness "
     "(the guarded text fallback exists for live, but the harness asserts "
-    f"the real renderer): {charts._MATPLOTLIB_ERROR}"
+    f"the real renderer): {charts.matplotlib_error()}"
 )
 
 # --------------------------------------------------------------------------- #

@@ -27,35 +27,136 @@ free -- the hazard curve is log-log, which pure-QPainter code would have to
 hand-roll. GEM's IRMT plugin was rejected (not installed, its viewer is
 coupled to OQ-engine NRML outputs, not our Vega payloads); a server-side PNG
 render was rejected (server change + restart + flood smoke for zero offline
-benefit). matplotlib import is GUARDED: when absent the window degrades to an
-honest text card (title + caption + why), never a crash.
+benefit). matplotlib import is GUARDED: when absent the window degrades to a guided
+fix panel (what's missing, why, the exact per-OS pip command, an "Attempt
+install" button) -- see ``charts_window.MissingMatplotlibPanel`` -- never a
+crash. QGIS 4's macOS/Windows bundles dropped matplotlib (QGIS 3 shipped it);
+the guard + panel below are what makes that survivable offline.
 """
 
 from __future__ import annotations
 
 import math
+import os
+import sys
 from typing import Any, Dict, List, Optional
 
 # -- guarded matplotlib import (see module docstring) ------------------------ #
 # ``Figure`` + a Qt canvas class, no pyplot (pyplot owns global backend state
 # we must not fight QGIS for). backend_qtagg resolves its binding via the
 # already-imported qgis.PyQt (PyQt5); backend_qt5agg is the pre-3.5 fallback.
+# The check itself is cheap (one import attempt) and CACHED via
+# ``_MATPLOTLIB_CHECKED`` -- every chart-emission frame and every dock open
+# calls ``matplotlib_available()``, so a repeated failing import must not
+# re-walk sys.path on each one. ``recheck_matplotlib`` is the explicit
+# cache-bust, used after the panel's "Attempt install" succeeds.
+Figure = None  # type: ignore[assignment]
+FigureCanvasQTAgg = None  # type: ignore[assignment]
 _MATPLOTLIB_ERROR: Optional[str] = None
-try:  # noqa: SIM105
-    from matplotlib.figure import Figure
+_MATPLOTLIB_CHECKED = False
 
-    try:
-        from matplotlib.backends.backend_qtagg import FigureCanvasQTAgg
-    except ImportError:  # older matplotlib
-        from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg
-except Exception as _exc:  # noqa: BLE001 -- absence is a supported state
-    Figure = None  # type: ignore[assignment]
-    FigureCanvasQTAgg = None  # type: ignore[assignment]
-    _MATPLOTLIB_ERROR = f"{type(_exc).__name__}: {_exc}"
+
+def _do_matplotlib_check() -> None:
+    global Figure, FigureCanvasQTAgg, _MATPLOTLIB_ERROR, _MATPLOTLIB_CHECKED
+    try:  # noqa: SIM105
+        from matplotlib.figure import Figure as _Figure
+
+        try:
+            from matplotlib.backends.backend_qtagg import (
+                FigureCanvasQTAgg as _Canvas,
+            )
+        except ImportError:  # older matplotlib
+            from matplotlib.backends.backend_qt5agg import (
+                FigureCanvasQTAgg as _Canvas,
+            )
+        Figure = _Figure
+        FigureCanvasQTAgg = _Canvas
+        _MATPLOTLIB_ERROR = None
+    except Exception as _exc:  # noqa: BLE001 -- absence is a supported state
+        Figure = None
+        FigureCanvasQTAgg = None
+        _MATPLOTLIB_ERROR = f"{type(_exc).__name__}: {_exc}"
+    _MATPLOTLIB_CHECKED = True
 
 
 def matplotlib_available() -> bool:
+    if not _MATPLOTLIB_CHECKED:
+        _do_matplotlib_check()
     return _MATPLOTLIB_ERROR is None
+
+
+def matplotlib_error() -> Optional[str]:
+    """The cached import failure string, or None once available. Always
+    forces the (cached) check first so a caller that never called
+    ``matplotlib_available()`` still gets an answer."""
+    matplotlib_available()
+    return _MATPLOTLIB_ERROR
+
+
+def recheck_matplotlib() -> bool:
+    """Bust the cache and retry the import (post "Attempt install" -- pip
+    dropped fresh files onto sys.path that the cached failure predates)."""
+    import importlib
+
+    importlib.invalidate_caches()
+    global _MATPLOTLIB_CHECKED
+    _MATPLOTLIB_CHECKED = False
+    return matplotlib_available()
+
+
+# --------------------------------------------------------------------------- #
+# Per-OS "how do I get matplotlib into THIS interpreter" command builder.
+# Pure (no Qt, no subprocess) -- the panel's Copy/Attempt-install actions
+# and the tests both call through this. Never hardcodes a path: QGIS embeds
+# its own python per-OS (macOS: <QGIS.app>/Contents/MacOS/bin/python3, a
+# wrapper the running ``sys.executable`` is NOT; Linux/Windows: the running
+# interpreter already IS the real, invokable one).
+# --------------------------------------------------------------------------- #
+
+
+def install_python_executable(
+    platform: Optional[str] = None,
+    exec_prefix: Optional[str] = None,
+    executable: Optional[str] = None,
+) -> str:
+    """The python binary pip must run under to land matplotlib where this
+    QGIS's interpreter will find it -- derived from ``sys.exec_prefix`` /
+    ``sys.executable`` at call time, never a baked-in path."""
+    platform = sys.platform if platform is None else platform
+    exec_prefix = sys.exec_prefix if exec_prefix is None else exec_prefix
+    executable = sys.executable if executable is None else executable
+    if platform == "darwin":
+        # QGIS.app's macOS bundle: sys.executable is the QGIS launcher, not a
+        # runnable python; the real interpreter lives at exec_prefix/bin.
+        return os.path.join(exec_prefix, "bin", "python3")
+    if platform.startswith("win"):
+        candidate = os.path.join(exec_prefix, "python.exe")
+        return candidate
+    # Linux (and other POSIX): the running interpreter is already a real,
+    # directly-invokable python -- prefer it; exec_prefix is the fallback
+    # for the rare embedded build where sys.executable is empty.
+    return executable or os.path.join(exec_prefix, "bin", "python3")
+
+
+def install_command_argv(
+    platform: Optional[str] = None,
+    exec_prefix: Optional[str] = None,
+    executable: Optional[str] = None,
+) -> List[str]:
+    """The argv ``QProcess`` runs: ``[python, -m, pip, install, matplotlib]``."""
+    py = install_python_executable(platform, exec_prefix, executable)
+    return [py, "-m", "pip", "install", "matplotlib"]
+
+
+def install_command_str(
+    platform: Optional[str] = None,
+    exec_prefix: Optional[str] = None,
+    executable: Optional[str] = None,
+) -> str:
+    """The human-facing / copy-button command line for the same argv."""
+    py, *rest = install_command_argv(platform, exec_prefix, executable)
+    quoted_py = f'"{py}"' if " " in py else py
+    return " ".join([quoted_py, *rest])
 
 
 # Default series colors (matplotlib tab10 order) for color-field grouping.

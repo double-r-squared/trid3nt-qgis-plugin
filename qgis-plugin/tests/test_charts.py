@@ -23,11 +23,13 @@ import shutil
 import subprocess
 import sys
 import unittest
+from unittest import mock
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 sys.path.insert(0, os.path.dirname(__file__))
 
 from trid3nt.net import trid3nt_client as tc  # noqa: E402
+from trid3nt.ui import charts as charts_mod  # noqa: E402
 
 CHART_ROW = {
     "envelope_type": "chart-emission",
@@ -108,6 +110,133 @@ class TestChartEventDispatch(unittest.TestCase):
         self.assertIsNotNone(ev)
         self.assertEqual(ev.kind, "chart")
         self.assertEqual(ev.data, CHART_ROW)
+
+
+# sys.modules poisoning that forces the NEXT ``import matplotlib...`` to
+# fail regardless of whether this venv already imported it earlier (once a
+# submodule is cached in sys.modules, a bare ``from matplotlib.figure import
+# Figure`` short-circuits straight to the cache and never re-checks the
+# parent -- every entry point the guard's try/except can hit must be poisoned
+# too, or the mock is a no-op).
+_MATPLOTLIB_POISON = {
+    k: None for k in [
+        "matplotlib", "matplotlib.figure",
+        "matplotlib.backends.backend_qtagg",
+        "matplotlib.backends.backend_qt5agg",
+    ]
+}
+
+
+class TestMatplotlibGuard(unittest.TestCase):
+    """The import guard itself (``charts.py`` has no Qt imports at module
+    level -- these run in the pure-python venv, no ``qgis.PyQt`` needed)."""
+
+    def setUp(self):
+        charts_mod._MATPLOTLIB_CHECKED = False
+        self.addCleanup(charts_mod.recheck_matplotlib)
+
+    def test_missing_module_reports_unavailable_with_reason(self):
+        with mock.patch.dict(sys.modules, _MATPLOTLIB_POISON):
+            charts_mod._MATPLOTLIB_CHECKED = False
+            available = charts_mod.matplotlib_available()
+        self.assertFalse(available)
+        self.assertIsNone(charts_mod.Figure)
+        self.assertIsNone(charts_mod.FigureCanvasQTAgg)
+        reason = charts_mod.matplotlib_error()
+        self.assertIsNotNone(reason)
+        self.assertIn("matplotlib", reason.lower())
+
+    def test_cached_after_first_check(self):
+        """A second call must not re-attempt the import (cheap+cached)."""
+        with mock.patch.dict(sys.modules, _MATPLOTLIB_POISON):
+            charts_mod._MATPLOTLIB_CHECKED = False
+            with mock.patch.object(
+                charts_mod, "_do_matplotlib_check",
+                wraps=charts_mod._do_matplotlib_check,
+            ) as spy:
+                charts_mod.matplotlib_available()
+                charts_mod.matplotlib_available()
+                charts_mod.matplotlib_error()
+                self.assertEqual(spy.call_count, 1)
+
+    def test_recheck_busts_the_cache(self):
+        with mock.patch.dict(sys.modules, _MATPLOTLIB_POISON):
+            charts_mod._MATPLOTLIB_CHECKED = False
+            self.assertFalse(charts_mod.matplotlib_available())
+        # Outside the poisoned sys.modules, an explicit recheck must
+        # re-attempt the import rather than trust the cached failure.
+        with mock.patch.object(
+            charts_mod, "_do_matplotlib_check",
+            wraps=charts_mod._do_matplotlib_check,
+        ) as spy:
+            charts_mod.recheck_matplotlib()
+            self.assertEqual(spy.call_count, 1)
+
+
+class TestInstallCommandBuilder(unittest.TestCase):
+    """Per-OS pip-install command string builder -- pure, no subprocess."""
+
+    def test_mac_derives_from_exec_prefix_bin_python3(self):
+        py = charts_mod.install_python_executable(
+            "darwin",
+            "/Applications/QGIS.app/Contents/MacOS",
+            "/Applications/QGIS.app/Contents/MacOS/QGIS",
+        )
+        self.assertEqual(
+            py, "/Applications/QGIS.app/Contents/MacOS/bin/python3"
+        )
+
+    def test_linux_uses_running_interpreter(self):
+        py = charts_mod.install_python_executable(
+            "linux", "/usr", "/usr/bin/python3"
+        )
+        self.assertEqual(py, "/usr/bin/python3")
+
+    def test_linux_falls_back_to_exec_prefix_when_executable_empty(self):
+        py = charts_mod.install_python_executable("linux", "/usr", "")
+        self.assertEqual(py, "/usr/bin/python3")
+
+    def test_windows_derives_from_exec_prefix(self):
+        # ``os.path.join`` on this (posix) test host renders a win32-style
+        # exec_prefix with '/' -- the assertion below tracks whatever this
+        # host's os.path.join produces, mirroring the production code path
+        # rather than asserting a literal backslash it would never emit here.
+        py = charts_mod.install_python_executable(
+            "win32", r"C:\QGIS\apps\Python312", r"C:\QGIS\bin\qgis-bin.exe"
+        )
+        self.assertEqual(
+            py, os.path.join(r"C:\QGIS\apps\Python312", "python.exe")
+        )
+        self.assertTrue(py.endswith("python.exe"))
+        self.assertTrue(py.startswith(r"C:\QGIS\apps\Python312"))
+
+    def test_argv_shape(self):
+        argv = charts_mod.install_command_argv(
+            "linux", "/usr", "/usr/bin/python3"
+        )
+        self.assertEqual(
+            argv, ["/usr/bin/python3", "-m", "pip", "install", "matplotlib"]
+        )
+
+    def test_command_str_unquoted_when_no_spaces(self):
+        cmd = charts_mod.install_command_str("linux", "/usr", "/usr/bin/python3")
+        self.assertEqual(cmd, "/usr/bin/python3 -m pip install matplotlib")
+
+    def test_command_str_quotes_path_with_spaces(self):
+        cmd = charts_mod.install_command_str(
+            "darwin", "/Applications/QGIS 4.app/Contents/MacOS", "irrelevant"
+        )
+        self.assertTrue(cmd.startswith('"/Applications/QGIS 4.app'))
+        self.assertTrue(cmd.endswith(' -m pip install matplotlib'))
+
+    def test_nothing_hardcoded_reflects_runtime_prefix(self):
+        """Different exec_prefix inputs must produce different commands --
+        proof the path is derived, not baked in."""
+        cmd_a = charts_mod.install_command_str("darwin", "/opt/QGIS-A", "x")
+        cmd_b = charts_mod.install_command_str("darwin", "/opt/QGIS-B", "x")
+        self.assertNotEqual(cmd_a, cmd_b)
+        self.assertIn("/opt/QGIS-A/bin/python3", cmd_a)
+        self.assertIn("/opt/QGIS-B/bin/python3", cmd_b)
 
 
 def _qt_python() -> str | None:

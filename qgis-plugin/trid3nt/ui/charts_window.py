@@ -39,20 +39,27 @@ Durability: the window's chart list rebuilds from the persisted
 switch clears it (``clear``) -- charts are per-Case state (the per-case
 durability norm).
 
-matplotlib import is GUARDED in ``charts``: when absent the window degrades
-to an honest text list (title + caption + why), never a crash.
+matplotlib import is GUARDED in ``charts``: when absent the chart canvas
+degrades to ``MissingMatplotlibPanel`` -- what's missing, why, the exact
+per-OS pip command (copy button), and an "Attempt install" button that runs
+it via ``QProcess`` with streamed output -- never a crash and never a silent
+auto-install.
 """
 
 from __future__ import annotations
 
 from typing import Any, Callable, Dict, List, Optional
 
-from qgis.PyQt.QtCore import Qt
+from qgis.PyQt.QtCore import QProcess, Qt
+from qgis.PyQt.QtGui import QGuiApplication
 from qgis.PyQt.QtWidgets import (
     QDockWidget,
     QHBoxLayout,
     QLabel,
     QListWidget,
+    QPlainTextEdit,
+    QPushButton,
+    QSizePolicy,
     QToolButton,
     QVBoxLayout,
     QWidget,
@@ -80,6 +87,164 @@ if charts.matplotlib_available():
 
 _CANVAS_MIN_HEIGHT = 220  # px -- the bottom dock is short + wide (TUFLOW-esque)
 _LIST_WIDTH = 180  # px -- the thin chart-switcher strip
+
+
+class MissingMatplotlibPanel(QWidget):
+    """The guided fix shown in place of the chart canvas when matplotlib is
+    unavailable in this QGIS python (QGIS 4's macOS/Windows bundles dropped
+    it; QGIS 3 shipped it). Explains what's missing and why, offers the
+    exact per-OS pip command (copy button) derived from ``charts
+    .install_command_str`` -- never hardcoded -- and an "Attempt install"
+    button that runs the bundled interpreter's pip via ``QProcess``,
+    streaming stdout+stderr live into this panel. Never installs without
+    the click. On success, prompts to reopen the chart dock (and offers an
+    in-place reload via ``on_reload``, which the window wires to a cache-bust
+    + re-render so the user does not have to close/reopen anything). On
+    failure, the streamed stderr stays on screen -- an honest failure, no
+    silent retry.
+    """
+
+    def __init__(
+        self,
+        on_reload: Optional[Callable[[], bool]] = None,
+        parent: Optional[QWidget] = None,
+    ):
+        super().__init__(parent)
+        self._on_reload = on_reload
+        self._process: Optional[QProcess] = None
+        self._command = charts.install_command_str()
+
+        root = QVBoxLayout(self)
+        root.setContentsMargins(8, 8, 8, 8)
+        root.setSpacing(6)
+
+        why = QLabel(
+            "Charts need matplotlib, which this QGIS's Python does not have.\n"
+            "QGIS 4 no longer bundles matplotlib in its Python environment "
+            "(QGIS 3 did) -- it is a one-time pip install into QGIS's own "
+            "interpreter, not a TRID3NT bug.\n\n"
+            f"Reason: {charts.matplotlib_error()}"
+        )
+        why.setWordWrap(True)
+        root.addWidget(why)
+
+        cmd_row = QHBoxLayout()
+        self._cmd_label = QLabel(self._command)
+        self._cmd_label.setWordWrap(True)
+        self._cmd_label.setStyleSheet(
+            "font-family: monospace; font-size: 8pt; padding: 4px; "
+            "background: rgba(127,127,127,0.15); border-radius: 3px;"
+        )
+        self._cmd_label.setTextInteractionFlags(
+            Qt.TextInteractionFlag.TextSelectableByMouse
+        )
+        cmd_row.addWidget(self._cmd_label, 1)
+        copy_btn = QToolButton()
+        copy_btn.setText("Copy")
+        copy_btn.setToolTip("Copy the install command to the clipboard")
+        copy_btn.clicked.connect(self._on_copy)
+        cmd_row.addWidget(copy_btn)
+        root.addLayout(cmd_row)
+
+        action_row = QHBoxLayout()
+        self.install_btn = QPushButton("Attempt install")
+        self.install_btn.setToolTip(
+            "Run the command above via QGIS's own Python -- streams output "
+            "below; never runs without this click"
+        )
+        self.install_btn.clicked.connect(self._on_attempt_install)
+        action_row.addWidget(self.install_btn)
+        self.reload_btn = QPushButton("Reopen chart")
+        self.reload_btn.setToolTip(
+            "Re-check for matplotlib and re-render this chart"
+        )
+        self.reload_btn.setEnabled(False)
+        self.reload_btn.clicked.connect(self._on_reload_clicked)
+        action_row.addWidget(self.reload_btn)
+        action_row.addStretch(1)
+        root.addLayout(action_row)
+
+        self.status_label = QLabel("")
+        self.status_label.setWordWrap(True)
+        root.addWidget(self.status_label)
+
+        self.output = QPlainTextEdit()
+        self.output.setReadOnly(True)
+        self.output.setStyleSheet("font-family: monospace; font-size: 8pt;")
+        self.output.setSizePolicy(
+            QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding
+        )
+        self.output.setVisible(False)
+        root.addWidget(self.output, 1)
+
+    # -- copy ------------------------------------------------------------- #
+
+    def _on_copy(self) -> None:
+        clipboard = QGuiApplication.clipboard()
+        if clipboard is not None:
+            clipboard.setText(self._command)
+        self.status_label.setText("Command copied to clipboard.")
+
+    # -- attempt install (QProcess, streamed) ------------------------------ #
+
+    def _on_attempt_install(self) -> None:
+        if self._process is not None:
+            return  # already running -- the button is disabled meanwhile
+        argv = charts.install_command_argv()
+        self.install_btn.setEnabled(False)
+        self.reload_btn.setEnabled(False)
+        self.status_label.setText(f"Running: {self._command}")
+        self.output.setVisible(True)
+        self.output.clear()
+
+        proc = QProcess(self)
+        proc.setProgram(argv[0])
+        proc.setArguments(argv[1:])
+        proc.readyReadStandardOutput.connect(self._on_stdout)
+        proc.readyReadStandardError.connect(self._on_stderr)
+        proc.finished.connect(self._on_finished)
+        proc.errorOccurred.connect(self._on_error_occurred)
+        self._process = proc
+        proc.start()
+
+    def _on_stdout(self) -> None:
+        if self._process is not None:
+            self.output.appendPlainText(
+                bytes(self._process.readAllStandardOutput()).decode(
+                    "utf-8", "replace"
+                )
+            )
+
+    def _on_stderr(self) -> None:
+        if self._process is not None:
+            self.output.appendPlainText(
+                bytes(self._process.readAllStandardError()).decode(
+                    "utf-8", "replace"
+                )
+            )
+
+    def _on_error_occurred(self, error) -> None:
+        # QProcess failed to even start (bad path, permissions, ...) --
+        # honest surfacing, same as a nonzero exit.
+        self.output.appendPlainText(f"\nfailed to start process: {error}")
+
+    def _on_finished(self, exit_code: int, _exit_status) -> None:
+        self._process = None
+        self.install_btn.setEnabled(True)
+        if exit_code == 0:
+            self.status_label.setText(
+                "Install finished. Click 'Reopen chart' to load it now "
+                "(or close and reopen the TRID3NT Charts window)."
+            )
+            self.reload_btn.setEnabled(True)
+        else:
+            self.status_label.setText(
+                f"Install failed (exit code {exit_code}) -- see output above."
+            )
+
+    def _on_reload_clicked(self) -> None:
+        if self._on_reload is not None:
+            self._on_reload()
 
 
 class ChartsWindow(QDockWidget):
@@ -341,17 +506,13 @@ class ChartsWindow(QDockWidget):
         self._highlight = None
 
     def _build_canvas(self, chart: dict) -> None:
-        """The rendered chart + its interactivity, or the honest text fallback
-        when matplotlib is unavailable in this QGIS python."""
+        """The rendered chart + its interactivity, or the guided
+        ``MissingMatplotlibPanel`` fix when matplotlib is unavailable in
+        this QGIS python."""
         if not charts.matplotlib_available():
             self.last_render_summary = {"fallback": True}
-            fallback = QLabel(
-                f"{chart.get('title') or chart.get('chart_id')}\n"
-                f"(chart not rendered: matplotlib unavailable -- "
-                f"{charts._MATPLOTLIB_ERROR})"
-            )
-            fallback.setWordWrap(True)
-            self._canvas_host.addWidget(fallback)
+            panel = MissingMatplotlibPanel(on_reload=self._on_matplotlib_reload)
+            self._canvas_host.addWidget(panel)
             return
 
         figure = charts.Figure(figsize=(6.0, _CANVAS_MIN_HEIGHT / 100.0), dpi=100)
@@ -380,6 +541,30 @@ class ChartsWindow(QDockWidget):
         self._scroll_cid = canvas.mpl_connect(
             "scroll_event", self._on_scroll
         )
+
+    def _on_matplotlib_reload(self) -> bool:
+        """MissingMatplotlibPanel's "Reopen chart" -- bust the cached import
+        failure, retry, and re-render the current chart in place when it
+        now succeeds (post a successful "Attempt install"). Returns whether
+        matplotlib is now available."""
+        global _NAV_TOOLBAR
+        available = charts.recheck_matplotlib()
+        if available and _NAV_TOOLBAR is None:
+            try:
+                from matplotlib.backends.backend_qtagg import (
+                    NavigationToolbar2QT as _toolbar_cls,
+                )
+            except Exception:  # noqa: BLE001
+                try:
+                    from matplotlib.backends.backend_qt5agg import (
+                        NavigationToolbar2QT as _toolbar_cls,
+                    )
+                except Exception:  # noqa: BLE001
+                    _toolbar_cls = None
+            _NAV_TOOLBAR = _toolbar_cls
+        if available:
+            self._refresh()
+        return available
 
     # -- interactivity: hover (a) -------------------------------------------- #
 
