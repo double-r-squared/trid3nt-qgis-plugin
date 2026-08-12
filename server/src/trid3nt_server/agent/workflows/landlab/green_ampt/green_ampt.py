@@ -51,6 +51,7 @@ from trid3nt_server.agent.tools.publish_layer.publish_layer import (
     publish_layer,
 )
 from trid3nt_server.agent.workflows.landlab._template_card import TemplateCard
+from trid3nt_server.agent.workflows.landlab.run_landlab import LANDLAB_RES_SPEC
 from trid3nt_server.agent.workflows.landlab.postprocess_landlab import (
     INFILTRATION_STYLE_PRESET,
     PostprocessLandlabError,
@@ -130,6 +131,7 @@ _METADATA = AtomicToolMetadata(
     cacheable=False,
     engine="landlab",
     tier="template",
+    resolution_specs=(LANDLAB_RES_SPEC,),
 )
 
 

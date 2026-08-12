@@ -60,24 +60,20 @@ def test_resolution_autoscale_respects_soft_cap():
     assert _autoscale_resolution(tiny, 60.0) == 60.0
 
 
-def test_resolution_clamp_is_labeled_when_it_binds():
-    """ADR 0223 (audit #6): a finer-than-20 m request is clamped to the supported
-    HEC-RAS 2D range, and the clamp is LABELED (basis + note) on the envelope,
-    not silently swallowed."""
-    from trid3nt_server.agent.workflows.hecras.flood_2d.flood_2d import (
-        _MIN_RES_M,
-        _resolution_with_basis,
-    )
+def test_resolution_out_of_range_is_quoted_back_not_clamped():
+    """ADR 0225 (upgrades ADR 0223's labeled snap): an out-of-[20, 200] m request is
+    QUOTED BACK as a typed ResolutionOutOfRangeError (the range + native hint), never
+    silently clamped to an undeclared value. An in-range value stays user-basis; an
+    in-range value the AOI autoscale coarsens gets a labeled derived note (within the
+    declared range)."""
+    from trid3nt_server.agent.workflows.hecras.flood_2d.flood_2d import _resolution_with_basis
+    from trid3nt_server.agent.tools.resolution_declared import ResolutionOutOfRangeError
 
     tiny = [-87.95, 38.11, -87.90, 38.15]
-    # (a) a 5 m request binds the clamp -> labeled default_demo + a naming note.
-    # (the effective value may be coarsened further by the AOI autoscale, but the
-    # clamp binding is what drives the default_demo basis + the "clamped" note.)
-    res, basis, note = _resolution_with_basis(tiny, 5.0)
-    assert res >= _MIN_RES_M
-    assert basis == "default_demo"
-    assert note is not None
-    assert "5.0 m" in note and "clamped" in note
+    # (a) a 5 m request is OUT OF RANGE -> quoted back (typed error), NOT clamped.
+    with pytest.raises(ResolutionOutOfRangeError) as ei:
+        _resolution_with_basis(tiny, 5.0)
+    assert "20-200 m" in str(ei.value) and "5 m requested" in str(ei.value)
 
     # (b) an in-range request on a small AOI is user-basis with no note.
     res2, basis2, note2 = _resolution_with_basis(tiny, 60.0)
@@ -85,11 +81,9 @@ def test_resolution_clamp_is_labeled_when_it_binds():
     assert basis2 == "user"
     assert note2 is None
 
-    # (c) a coarser-than-200 m request also binds the clamp (down to 200).
-    res3, basis3, note3 = _resolution_with_basis(tiny, 500.0)
-    assert res3 == 200.0
-    assert basis3 == "default_demo"
-    assert "clamped" in (note3 or "")
+    # (c) a coarser-than-200 m request is ALSO out of range -> quoted back, not clamped.
+    with pytest.raises(ResolutionOutOfRangeError):
+        _resolution_with_basis(tiny, 500.0)
 
 
 def test_equation_set_map_covers_choices():

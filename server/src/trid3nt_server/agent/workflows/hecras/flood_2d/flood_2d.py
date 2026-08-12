@@ -43,9 +43,13 @@ from trid3nt_contracts.hecras_contracts import (
     HECRAS_SOLVE_FAILED,
     HecrasDepthLayerURI,
 )
-from trid3nt_contracts.tool_registry import AtomicToolMetadata
+from trid3nt_contracts.tool_registry import AtomicToolMetadata, ResolutionSpec
 
 from trid3nt_server.agent.tools import register_tool
+from trid3nt_server.agent.tools.resolution_declared import (
+    ResolutionOutOfRangeError,
+    enforce_resolution,
+)
 from trid3nt_server.agent.gates.input_review import gate_input_review
 from trid3nt_server.agent.workflows.hecras._template_card import TemplateCard
 
@@ -76,6 +80,26 @@ _DEFAULT_PEAK_CFS: float = 5000.0
 _MIN_RES_M: float = 20.0
 _MAX_RES_M: float = 200.0
 _DEFAULT_RES_M: float = 60.0
+
+#: DECLARED resolution range (ADR 0225). The 20-200 m window is a SOLVER constraint
+#: (the HEC-RAS 2025 AuthorMesh subgrid-table path): finer overwhelms subgrid-table
+#: authoring for a screening solve, coarser drops the channel. Out-of-range asks are
+#: QUOTED BACK (typed error), never silently clamped -- the ADR 0223 labeled-snap is
+#: upgraded to the full ruling here. In-range requests may still autoscale-coarsen for
+#: the soft cell cap (a labeled ``derived`` note, not a silent snap).
+_RES_SPEC = ResolutionSpec(
+    param="resolution_m",
+    unit="m",
+    min_value=_MIN_RES_M,
+    max_value=_MAX_RES_M,
+    native_hint="3DEP 10 m (fetch_dem)",
+    constraint_source="solver",
+    rationale=(
+        "HEC-RAS 2025 AuthorMesh 2D subgrid solve accepts a 20-200 m cell; finer "
+        "overwhelms subgrid-table authoring for a screening run, coarser loses the "
+        "channel"
+    ),
+)
 #: Soft cell-count ceiling the resolution autoscaler respects (keeps a cheap
 #: screening solve minutes-scale); the estimate + this cap are the granularity
 #: suggestion surfaced for override (the user-controlled-granularity norm).
@@ -133,6 +157,7 @@ _METADATA = AtomicToolMetadata(
     cacheable=False,
     engine="hecras",
     tier="template",
+    resolution_specs=(_RES_SPEC,),
 )
 
 
@@ -162,32 +187,24 @@ def _autoscale_resolution(bbox: list[float], resolution_m: float) -> float:
 def _resolution_with_basis(
     bbox: list[float], requested_res_m: float
 ) -> tuple[float, str, str | None]:
-    """Resolve the effective 2D resolution AND a labeled basis/note (ADR 0223).
+    """Resolve the effective 2D resolution AND a labeled basis/note (ADR 0225).
 
-    Applies the supported-range clamp ([``_MIN_RES_M``, ``_MAX_RES_M``] m) then the
-    AOI cell-cap autoscale, and reports WHY the effective value differs from the
-    request so the clamp/autoscale is visible on the ``resolution_m`` review entry
-    instead of being silently swallowed. Returns ``(resolution_m, basis, note)``:
-    ``note`` is ``None`` (basis ``user``) when neither the clamp nor the autoscale
-    changed the request; ``default_demo`` when the clamp bound; ``derived`` when
-    only the autoscale bound.
+    ENFORCES the DECLARED ``_RES_SPEC`` range: an out-of-[20, 200] m request is QUOTED
+    BACK (``ResolutionOutOfRangeError``) so the caller re-raises a typed error -- never
+    the silent clamp ADR 0223 labeled. An in-range request may still autoscale-COARSEN
+    for the soft cell cap (a labeled ``derived`` note, a legitimate within-range degrade
+    for tractability, not a snap to an undeclared value). Returns
+    ``(resolution_m, basis, note)``: ``note`` is ``None`` (basis ``user``) when the
+    autoscale did not bind; ``derived`` when it coarsened within range.
     """
-    clamped = min(max(float(requested_res_m), _MIN_RES_M), _MAX_RES_M)
-    clamp_bound = clamped != float(requested_res_m)
-    resolution_m = _autoscale_resolution(bbox, clamped)
-    autoscaled = resolution_m != clamped
-    if clamp_bound:
+    requested = float(requested_res_m)
+    enforce_resolution(_RES_SPEC, requested)
+    resolution_m = _autoscale_resolution(bbox, requested)
+    if resolution_m != requested:
         note = (
-            f"requested {float(requested_res_m):.1f} m clamped to the supported "
-            f"HEC-RAS 2D [{_MIN_RES_M:.0f}, {_MAX_RES_M:.0f}] m range ({clamped:.0f} m)"
-            + (f", then autoscaled to {resolution_m:.0f} m for this AOI" if autoscaled else "")
-            + "; 2D cell size (granularity-gated)"
-        )
-        return resolution_m, "default_demo", note
-    if autoscaled:
-        note = (
-            f"autoscaled from {clamped:.0f} m to {resolution_m:.0f} m to fit the soft "
-            "cell cap for this AOI; 2D cell size (granularity-gated)"
+            f"autoscaled from {requested:.0f} m to {resolution_m:.0f} m to fit the soft "
+            f"cell cap for this AOI, within the declared {_MIN_RES_M:.0f}-{_MAX_RES_M:.0f} m "
+            "range; 2D cell size (granularity-gated)"
         )
         return resolution_m, "derived", note
     return resolution_m, "user", None
@@ -242,8 +259,10 @@ async def hecras_flood_2d(
             it to a real gauge/NWM peak; default ~5000 cfs when unset. The inflow
             hydrograph is a ramp to this peak (a real hydrograph override is the
             OI-D residual).
-        resolution_m: the 2D cell size (m), clamped [20, 200], granularity-gated
-            (auto-coarsened so the mesh stays under a soft cell cap; overridable).
+        resolution_m: the 2D cell size (m). Supported 20-200 m (mesh/solver); data
+            native 3DEP 10 m. Out-of-range asks are quoted the range (typed error),
+            never silently snapped (ADR 0225). An in-range value may auto-coarsen for
+            the soft cell cap (labeled derived note); overridable.
         sim_hours: unsteady window length (hours); default 24.
         inlet_edge / outlet_edge: OPTIONAL compass overrides ("n"/"s"/"e"/"w") for
             where flow enters / drains. Defaults: inflow on the lowest-elevation
@@ -312,8 +331,17 @@ async def hecras_flood_2d(
         resolution_m = float(resolution_m)
     except (TypeError, ValueError):
         resolution_m = _DEFAULT_RES_M
-    # ADR 0223 (audit #6): make the supported-range clamp VISIBLE when it binds.
-    resolution_m, _res_basis, _res_note = _resolution_with_basis(aoi, resolution_m)
+    # ADR 0225: an out-of-declared-range resolution_m is QUOTED BACK as a typed error
+    # (the range + native hint), never silently clamped. An in-range value may still
+    # autoscale-coarsen within the range (labeled derived note).
+    try:
+        resolution_m, _res_basis, _res_note = _resolution_with_basis(aoi, resolution_m)
+    except ResolutionOutOfRangeError as exc:
+        return {
+            "status": "error",
+            "error_code": HECRAS_INPUT_INVALID,
+            "error_message": str(exc),
+        }
 
     peak = _DEFAULT_PEAK_CFS
     if target_peak_cfs is not None:

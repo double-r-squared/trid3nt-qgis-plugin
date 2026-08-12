@@ -25,7 +25,7 @@ import logging
 from typing import Any
 
 from trid3nt_contracts.telemac_contracts import TelemacDoLayerURI
-from trid3nt_contracts.tool_registry import AtomicToolMetadata
+from trid3nt_contracts.tool_registry import AtomicToolMetadata, ResolutionSpec
 
 from trid3nt_server.agent.tools import register_tool
 from trid3nt_server.agent.tool_arg_normalizer import coerce_bbox_value
@@ -62,6 +62,23 @@ TEMPLATE_CARD = TemplateCard(
 )
 
 
+#: DECLARED mesh_resolution_m range (ADR 0225). Same TELEMAC mesh-builder machinery
+#: as telemac_river_dye: SOLVER floor 3 m (MESH_H_FLOOR_M), a long reach coarsened
+#: under the node budget (self-labeled), no fixed coarse ceiling. Out-of-range
+#: (sub-3 m) explicit ask quoted back, never silently snapped.
+_TELEMAC_DO_SAG_RES_SPEC = ResolutionSpec(
+    param="mesh_resolution_m",
+    unit="m",
+    min_value=3.0,
+    native_hint="NHD channel geometry + 3DEP terrain; edge sized from reach width",
+    constraint_source="solver",
+    rationale=(
+        "explicit target edge length; 3 m is the absolute finest the TELEMAC mesh "
+        "builder authors, a long reach is coarsened under the node budget "
+        "(self-labeled); no fixed coarse ceiling"
+    ),
+)
+
 _TELEMAC_DO_SAG_METADATA = AtomicToolMetadata(
     name="telemac_do_sag",
     ttl_class="live-no-cache",
@@ -69,6 +86,7 @@ _TELEMAC_DO_SAG_METADATA = AtomicToolMetadata(
     cacheable=False,
     engine="telemac",
     tier="template",
+    resolution_specs=(_TELEMAC_DO_SAG_RES_SPEC,),
 )
 
 

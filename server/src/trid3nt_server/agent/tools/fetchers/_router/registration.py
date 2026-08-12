@@ -325,6 +325,9 @@ def register_spec(spec: SourceSpec) -> str:
         # prior spec (none set output.auto_publish); an INTERMEDIATE raster spec
         # (fetch_3dep_extra) sets it False to opt out of the automatic render.
         auto_publish=spec.output.auto_publish,
+        # ADR 0225: DATA-native resolution declarations ride from the spec onto the
+        # metadata so the gate card can quote them (two-layer truth: data facts here).
+        resolution_specs=spec.resolution_declarations,
     )
     _tools.register_tool(metadata)(_promoted)
     _SPEC_REGISTRY[name] = spec

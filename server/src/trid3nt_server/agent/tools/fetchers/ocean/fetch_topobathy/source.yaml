@@ -73,6 +73,17 @@ payload_estimate:
   model: bbox_area
   mb_per_sq_deg: 400.0
   floor_mb: 0.5
+# ADR 0225 -- DATA-native resolution declaration. The coastal composite's native cells:
+# CUDEM 1/9 arc-second (~3 m) nearshore, ETOPO 2022 15 arc-second (~450 m) offshore
+# fallback, 3DEP land grid via resolution_m. The gate card quotes this beside a
+# consuming surge/flood solver's declared range (two-layer truth).
+resolution_declarations:
+- param: resolution_m
+  unit: m
+  min_value: 1
+  native_hint: CUDEM 1/9" ~3 m nearshore; ETOPO 2022 15" ~450 m offshore fallback; 3DEP 10 m land
+  constraint_source: data
+  rationale: coastal composite native cells (CUDEM 1/9 arc-second ~3 m nearshore, ETOPO 2022 ~450 m offshore, 3DEP land via resolution_m); no fine floor below CUDEM native
 caveats:
 - Coastal merged topo-bathymetry (NOAA NCEI CUDEM 1/9" + USGS 3DEP land via the sibling fetch_dem, NAVD88
   m, positive-up) built as one EPSG:32616 UTM composite -- CUDEM wins the nearshore, 3DEP fills the land.

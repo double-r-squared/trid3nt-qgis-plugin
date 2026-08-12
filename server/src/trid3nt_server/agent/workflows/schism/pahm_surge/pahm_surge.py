@@ -42,7 +42,7 @@ from trid3nt_contracts.schism_contracts import (
     SCHISM_SOLVE_FAILED,
     SchismElevationLayerURI,
 )
-from trid3nt_contracts.tool_registry import AtomicToolMetadata
+from trid3nt_contracts.tool_registry import AtomicToolMetadata, ResolutionSpec
 
 from trid3nt_server.agent.tools import register_tool
 from trid3nt_server.agent.gates.input_review import gate_input_review
@@ -120,6 +120,26 @@ _SURGE_TIN_CELL_FLOOR_M = _SURGE_RES_MIN_M  # 25 m
 #: local image) is a comfortably affordable ceiling that keeps a fine ask a
 #: screening-scale solve rather than an unbounded refinement.
 _SURGE_TIN_DIM_MAX_FINE = 80
+
+#: DECLARED resolution range (ADR 0225). The [25, 1000] m window mirrors
+#: fetch_topobathy's own resolution_m bounds (DATA-native: below 25 m a screening
+#: barotropic surge gains no fidelity; above 1000 m the fetcher rejects). Default
+#: None = NATIVE (resolution doctrine R-A). An explicit out-of-window ask is QUOTED
+#: BACK (typed error), never silently clamped; the separate _SURGE_TIN_DIM_MAX_FINE
+#: node-budget ceiling self-labels when it binds an in-range fine ask.
+_SURGE_RES_SPEC = ResolutionSpec(
+    param="resolution_m",
+    unit="m",
+    min_value=_SURGE_RES_MIN_M,
+    max_value=_SURGE_RES_MAX_M,
+    native_hint="CUDEM 1/9\" ~3 m nearshore / ETOPO ~450 m offshore (fetch_topobathy); default None = native",
+    constraint_source="data",
+    rationale=(
+        "mirrors fetch_topobathy resolution_m bounds (25-1000 m): finer buys no "
+        "screening-surge fidelity, coarser the fetcher rejects; an in-range fine ask "
+        "is further bounded by the 80x80-node screening solver budget (self-labeled)"
+    ),
+)
 
 
 def _resolution_driven_tin_dims(
@@ -319,6 +339,7 @@ _SURGE_METADATA = AtomicToolMetadata(
     engine="schism",
     tier="template",
     payload_mb_estimator_name="estimate_payload_mb",
+    resolution_specs=(_SURGE_RES_SPEC,),
 )
 
 
@@ -385,14 +406,15 @@ async def schism_pahm_surge(
             substitute so the Holland-vortex/sflux/solve PATHWAY can still be
             exercised without real geography; the resulting envelope is marked
             ``synthetic_inputs`` and the surge PATTERN is explicitly non-physical.
-        resolution_m: the bathymetry-fetch grid resolution (metres), a USER LEVER
-            (the granularity-gate doctrine -- resolution is the user's right, never
-            a silent cap). Default ``None`` -> AUTOSCALED from the resolved AOI
-            (``_autoscale_surge_domain``: the AOI's longer side sized to ~750 px,
-            clamped to fetch_topobathy's own [25, 1000] m bounds); an explicit
-            value always wins and is honored even when it implies a large fetch --
-            oversized requests trip the payload-warning gate (this tool declares
-            ``estimate_payload_mb``), never a silent resolution ceiling. Whether
+        resolution_m: the bathymetry-fetch grid resolution (metres), a USER LEVER.
+            Supported 25-1000 m (data-native, fetch_topobathy); data native CUDEM
+            1/9" ~3 m nearshore / ETOPO ~450 m offshore. Out-of-range asks are quoted
+            the range (typed error), never silently snapped (ADR 0225). Default
+            ``None`` -> NATIVE bathymetry; the ~AOI autoscale is only the coarsening
+            HINT the payload gate quotes. An explicit in-range value always wins and
+            is honored even when it implies a large fetch -- oversized requests trip
+            the payload-warning gate (this tool declares ``estimate_payload_mb``); a
+            fine ask is further bounded by the self-labeling node budget. Whether
             the resolution used was auto or user-supplied is recorded in
             ``synthetic_inputs`` (``resolution_m`` entry, ``basis`` ``derived`` vs
             ``user``).
@@ -672,6 +694,21 @@ async def model_schism_pahm_surge(
     # composite, 12000 px guard); the autoscaled cell is only the COARSENING HINT the
     # payload gate quotes, never a silent coarsen. An explicit value is honored as-is.
     autoscale = _autoscale_surge_domain(bbox)
+    # ADR 0225: an explicit out-of-declared-range resolution_m is QUOTED BACK as a
+    # typed error (the [25, 1000] m range + native hint), never silently clamped. The
+    # native default (None) is in-range by construction. An in-range fine ask remains
+    # subject to the self-labeling node-budget ceiling below.
+    if resolution_m is not None and not _SURGE_RES_SPEC.contains(float(resolution_m)):
+        # Out of the declared range -> compose all three layers in the ONE quote-back
+        # card (ADR 0225 item 4): the solver/data range + the data-native hint (on the
+        # spec) + the MEASURED payload of the requested cell (ADR 0224 sampled
+        # estimator, computed only on this cold error path, not the in-range hot path).
+        _est = _surge_payload_estimate(bbox, float(resolution_m))
+        _measured = f"{float(resolution_m):.0f} m grid ~{_fmt_mb(_est.mb)} ({_est.kind})"
+        raise SchismSurgeError(
+            SCHISM_INPUT_INVALID,
+            _SURGE_RES_SPEC.quote_back(float(resolution_m), measured=_measured),
+        )
     if resolution_m is not None:
         resolved_res_m: float | None = float(resolution_m)
         fetch_res_m: float | None = float(resolution_m)

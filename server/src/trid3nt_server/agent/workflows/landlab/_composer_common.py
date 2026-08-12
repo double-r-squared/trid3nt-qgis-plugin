@@ -22,6 +22,10 @@ from typing import Any
 from trid3nt_contracts.execution import LayerURI
 from trid3nt_contracts.landlab_contracts import LandlabRunArgs
 
+# LANDLAB_RES_SPEC lives in run_landlab (the cycle-free shared base every template
+# already imports); re-exported here for the templates that import via this module.
+from trid3nt_server.agent.workflows.landlab.run_landlab import LANDLAB_RES_SPEC  # noqa: F401
+
 from trid3nt_server.agent.tools.publish_layer.publish_layer import (
     PublishLayerError,
     publish_layer,

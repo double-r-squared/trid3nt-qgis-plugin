@@ -79,8 +79,9 @@ from trid3nt_contracts.envelope import (
     ResultLayer,
 )
 from trid3nt_contracts.execution import ExecutionHandle, LayerURI, ModelSetup, RunResult
-from trid3nt_contracts.tool_registry import AtomicToolMetadata
+from trid3nt_contracts.tool_registry import AtomicToolMetadata, ResolutionSpec
 
+from trid3nt_server.agent.tools.resolution_declared import enforce_resolution
 from trid3nt_server.emission.layer_uri_emit import emit_layer_uri, publish_input_layer
 from trid3nt_server.emission.pipeline_emitter import (
     begin_substeps,
@@ -1481,6 +1482,9 @@ async def model_flood_scenario(
         # it no-ops, and the run_solver step targets the quadtree spec.
         quadtree_manifest_uri: str | None = None
         if quadtree:
+            # ADR 0225: a sub-floor quadtree base cell is QUOTED BACK (typed error),
+            # never silently snapped. Only the quadtree path reads this knob.
+            enforce_resolution(_SFINCS_QUADTREE_RES_SPEC, float(quadtree_base_resolution_m))
             async with substep(emitter, "build_sfincs_model"):
                 quadtree_manifest_uri = await asyncio.to_thread(
                     stage_quadtree_build_solve,
@@ -2315,6 +2319,25 @@ TEMPLATE_CARD = TemplateCard(
 )
 
 
+#: DECLARED quadtree base-resolution range (ADR 0225). ``quadtree_base_resolution_m``
+#: is the COARSEST offshore cell; the coast band refines to base/2^coast_refine_level
+#: at the shoreline. A SOLVER floor of 10 m: finer than the DEM/topobathy native
+#: (3DEP 10 m) buys no data fidelity for the offshore base, and the coast refinement
+#: already delivers the nearshore cell. No coarse ceiling -- a coarser base is a valid
+#: cheaper screening choice. Out-of-range (sub-10 m) is quoted back, not snapped.
+_SFINCS_QUADTREE_RES_SPEC = ResolutionSpec(
+    param="quadtree_base_resolution_m",
+    unit="m",
+    min_value=10.0,
+    native_hint="3DEP 10 m (fetch_dem) / CUDEM ~3 m nearshore (fetch_topobathy); coast band refines to base/2^coast_refine_level",
+    constraint_source="solver",
+    rationale=(
+        "quadtree base is the offshore cell; a base finer than the ~10 m DEM native "
+        "buys no fidelity (coast refinement gives the nearshore cell); coarser is a "
+        "valid cheaper screening base, so no upper bound"
+    ),
+)
+
 _SFINCS_FLOOD_METADATA = AtomicToolMetadata(
     name="sfincs_flood",
     ttl_class="live-no-cache",
@@ -2322,6 +2345,7 @@ _SFINCS_FLOOD_METADATA = AtomicToolMetadata(
     cacheable=False,
     engine="sfincs",
     tier="template",
+    resolution_specs=(_SFINCS_QUADTREE_RES_SPEC,),
 )
 
 

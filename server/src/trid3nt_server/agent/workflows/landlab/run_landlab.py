@@ -30,6 +30,27 @@ from pathlib import Path
 from typing import Any
 
 from trid3nt_contracts.landlab_contracts import LandlabRunArgs
+from trid3nt_contracts.tool_registry import ResolutionSpec
+
+#: DECLARED target_resolution_m for EVERY Landlab template (ADR 0225). Shared: all
+#: templates run the same fetch-DEM -> grid chain. The DEM is 3DEP-native (1-10 m US
+#: lidar via fetch_3dep_extra/fetch_dem), so the DATA floor is 10 m -- a finer grid
+#: resamples the same 10 m DEM and buys no terrain fidelity. No hard coarse ceiling:
+#: a coarser landscape-evolution grid is a legitimate cheaper run. Out-of-range
+#: (sub-10 m) is quoted back, never silently snapped. Lives here (the cycle-free base
+#: every template imports) and is re-exported by _composer_common.
+LANDLAB_RES_SPEC = ResolutionSpec(
+    param="target_resolution_m",
+    unit="m",
+    min_value=10.0,
+    native_hint="3DEP 1-10 m US lidar (fetch_dem); DEM resampled to this grid",
+    constraint_source="data",
+    rationale=(
+        "the raster grid is resampled from the 3DEP-native DEM (1-10 m lidar); a "
+        "target finer than the 10 m fallback native buys no terrain fidelity, coarser "
+        "is a valid cheaper landscape-evolution grid so no upper bound"
+    ),
+)
 
 logger = logging.getLogger("trid3nt_server.agent.workflows.landlab.run_landlab")
 

@@ -36,6 +36,7 @@ from trid3nt_server.agent.gates.input_review import gate_input_review
 from trid3nt_server.agent.tool_arg_normalizer import coerce_bbox_value
 from trid3nt_server.agent.tools import register_tool
 from trid3nt_server.agent.workflows.landlab._composer_common import (
+    LANDLAB_RES_SPEC,
     cleanup_solve,
     emit_landlab_chart,
     emit_zoom_to,
@@ -91,6 +92,7 @@ _METADATA = AtomicToolMetadata(
     cacheable=False,
     engine="landlab",
     tier="template",
+    resolution_specs=(LANDLAB_RES_SPEC,),
 )
 
 

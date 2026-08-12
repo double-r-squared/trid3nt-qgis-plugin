@@ -71,6 +71,9 @@ def synthesize_metadata(spec: SourceSpec) -> AtomicToolMetadata:
         supports_global_query=spec.supports_global_query,
         payload_mb_estimator_name="estimate_payload_mb",
         open_world_hint=True,
+        # ADR 0225: data-native resolution declarations ride from the spec onto the
+        # metadata so the gate card can quote them (two-layer truth: data facts here).
+        resolution_specs=spec.resolution_declarations,
     )
 
 

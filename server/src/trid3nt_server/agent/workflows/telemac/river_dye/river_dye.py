@@ -41,7 +41,7 @@ from typing import Any
 
 from trid3nt_contracts.common import SyntheticInput
 from trid3nt_contracts.telemac_contracts import TelemacDyeLayerURI
-from trid3nt_contracts.tool_registry import AtomicToolMetadata
+from trid3nt_contracts.tool_registry import AtomicToolMetadata, ResolutionSpec
 
 from trid3nt_server.agent.tools import register_tool
 from trid3nt_server.agent.gates.input_review import gate_input_review
@@ -115,6 +115,25 @@ TEMPLATE_CARD = TemplateCard(
 )
 
 
+#: DECLARED mesh_resolution_m range (ADR 0225). SOLVER floor MESH_H_FLOOR_M (3 m):
+#: the finest edge the mesh builder authors regardless of ask; below it a screening
+#: dye plume gains nothing. No fixed coarse ceiling -- the node-budget floor coarsens
+#: a long reach WITHIN this declaration (self-labeled), and the effective edge stays
+#: >= 2 cells across the channel. An out-of-range (sub-3 m) explicit ask is quoted
+#: back, never silently snapped.
+_TELEMAC_RIVER_DYE_RES_SPEC = ResolutionSpec(
+    param="mesh_resolution_m",
+    unit="m",
+    min_value=3.0,  # == MESH_H_FLOOR_M (defined below; literal here to avoid a fwd ref)
+    native_hint="NHD channel geometry + 3DEP terrain; edge sized from reach width",
+    constraint_source="solver",
+    rationale=(
+        "explicit target edge length; MESH_H_FLOOR_M=3 m is the absolute finest the "
+        "builder authors, a long reach is further coarsened under the "
+        "MESH_NODE_CAP node budget (self-labeled); no fixed coarse ceiling"
+    ),
+)
+
 _TELEMAC_RIVER_DYE_METADATA = AtomicToolMetadata(
     name="telemac_river_dye",
     ttl_class="live-no-cache",
@@ -122,6 +141,7 @@ _TELEMAC_RIVER_DYE_METADATA = AtomicToolMetadata(
     cacheable=False,
     engine="telemac",
     tier="template",
+    resolution_specs=(_TELEMAC_RIVER_DYE_RES_SPEC,),
 )
 
 

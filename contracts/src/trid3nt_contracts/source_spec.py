@@ -33,7 +33,7 @@ from typing import Any, Literal
 from pydantic import Field, model_validator
 
 from .common import GraceModel
-from .tool_registry import TTLClass
+from .tool_registry import ResolutionSpec, TTLClass
 
 __all__ = [
     "SourceShape",
@@ -716,6 +716,14 @@ class SourceSpec(GraceModel):
     # --- honesty: caveats + fallback chain ---
     caveats: list[str] = Field(default_factory=list)
     fallback: list[str] = Field(default_factory=list)
+
+    # --- declared DATA-native resolutions (ADR 0225, two-layer truth) ---
+    # A source's native cell / tier facts live HERE (with the fetcher), so the
+    # payload/input-review gate card can QUOTE them ("data native 3DEP 10 m") next to
+    # a solver's declared range. Synthesized onto the tool's
+    # ``AtomicToolMetadata.resolution_specs`` (constraint_source='data'). Default () =
+    # a source with no granularity-bearing param (the common case).
+    resolution_declarations: tuple[ResolutionSpec, ...] = Field(default=())
 
     # --- retrieval phrasings (verbatim from the twin's corpus.yaml) ---
     corpus: list[str] = Field(default_factory=list)

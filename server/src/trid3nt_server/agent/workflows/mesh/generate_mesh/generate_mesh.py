@@ -41,7 +41,7 @@ from typing import Any
 from trid3nt_contracts import new_ulid
 from trid3nt_contracts.common import SyntheticInput
 from trid3nt_contracts.execution import LayerURI
-from trid3nt_contracts.tool_registry import AtomicToolMetadata
+from trid3nt_contracts.tool_registry import AtomicToolMetadata, ResolutionSpec
 
 from trid3nt_server.agent.tools import register_tool
 from trid3nt_server.agent.tool_arg_normalizer import coerce_bbox_value
@@ -73,11 +73,44 @@ class GenerateMeshError(RuntimeError):
         self.error_code = error_code
 
 
+#: DECLARED edge-length ranges (ADR 0225). Both are SOLVER (mesh-generator)
+#: constraints with a practical 5 m floor: a finer edge reliably trips HEC-RAS's
+#: <= 8-sides-per-cell acceptance on any non-trivial AOI (and over-refines a TELEMAC/
+#: SCHISM TIN). There is NO fixed coarse ceiling -- the true realizability is
+#: AOI-dependent and enforced at build time by a typed GenerateMeshError (>8-sided
+#: cells / gmsh failure), never a silent snap. The declaration documents the floor +
+#: the 8-side reality so the gate card can quote it.
+_MIN_EDGE_SPEC = ResolutionSpec(
+    param="min_edge_length_m",
+    unit="m",
+    min_value=5.0,
+    native_hint="3DEP 10 m (fetch_dem) terrain native",
+    constraint_source="solver",
+    rationale=(
+        "finest cell/triangle edge; below ~5 m the seed cloud reliably trips HEC's "
+        "<= 8-sides-per-cell acceptance (AOI-dependent, enforced by a typed build "
+        "error), and over-refines a TIN; no fixed coarse ceiling (grade + AOI govern)"
+    ),
+)
+_MAX_EDGE_SPEC = ResolutionSpec(
+    param="max_edge_length_m",
+    unit="m",
+    min_value=5.0,
+    native_hint="3DEP 10 m (fetch_dem) terrain native",
+    constraint_source="solver",
+    rationale=(
+        "coarsest background edge; bounded below by the 5 m floor, no fixed ceiling "
+        "(a coarser hillslope background is valid; realizability is the AOI-dependent "
+        "8-side/grade build check, a typed error not a silent snap)"
+    ),
+)
+
 _METADATA = AtomicToolMetadata(
     name="generate_mesh",
     ttl_class="live-no-cache",
     cacheable=False,
     tier="general",
+    resolution_specs=(_MIN_EDGE_SPEC, _MAX_EDGE_SPEC),
 )
 
 
@@ -125,7 +158,10 @@ async def generate_mesh(
 
     Resolution levers (granularity norm): ``min_edge_length_m`` / ``max_edge_length_m``
     bound the cell/triangle size (for ``hecras`` these ARE the channel + hillslope
-    target cell sizes -- e.g. 22 / 90 m); ``grade`` limits coarsening. US-only.
+    target cell sizes -- e.g. 22 / 90 m); ``grade`` limits coarsening. Both edges are
+    declared >=5 m (mesh/solver); a finer ask is quoted the floor + the AOI-dependent
+    <=8-sides-per-cell acceptance (a typed build error), never silently snapped (ADR
+    0225). US-only.
 
     SCHISM readiness: a COASTAL mesh built with an ``open_boundary_side`` also emits a
     SCHISM hgrid.gr3 (seaward OPEN boundary). Without it (or for a watershed mesh)

@@ -28,6 +28,7 @@ from pathlib import Path
 from typing import Any
 
 from trid3nt_contracts.execution import LayerURI, LegendKey
+from trid3nt_contracts.tool_registry import ResolutionSpec
 from trid3nt_contracts.schism_contracts import (
     SCHISM_ELEV_STYLE_PRESET,
     SCHISM_OUTPUT_EMPTY,
@@ -66,6 +67,26 @@ logger = logging.getLogger("trid3nt_server.agent.workflows.schism.postprocess_sc
 SCHISM_TARGET_GROUND_RES_M: float = 60.0
 _MIN_PX_PER_SIDE: int = 128
 _MAX_PX_PER_SIDE: int = 2500
+
+#: DECLARED output-artifact resolution cap (ADR 0225). Unlike a solver-input
+#: resolution, this bounds the DISPLAY COG's pixel dimensions -- a payload/display
+#: guardrail, not a simulation-granularity cap. Now OVERRIDABLE (postprocess_schism's
+#: ``max_px_per_side`` raises it) rather than a hard silent ceiling. Declared here so
+#: the cap + its override are documented as reality (the render-cap "ride" NATE
+#: offered); no coarse floor beyond ``_MIN_PX_PER_SIDE``.
+OUTPUT_RASTER_CAP_SPEC = ResolutionSpec(
+    param="max_px_per_side",
+    unit="px",
+    min_value=float(_MIN_PX_PER_SIDE),
+    max_value=float(_MAX_PX_PER_SIDE),
+    native_hint=f"default {_MAX_PX_PER_SIDE} px/side; overridable for a finer display COG",
+    constraint_source="solver",
+    rationale=(
+        "OUTPUT-artifact cap on the display COG pixel dimensions (not simulation "
+        "granularity); default 2500 px/side keeps the COG a reasonable display "
+        "payload, overridable via max_px_per_side for a finer raster"
+    ),
+)
 
 #: out2d UGRID variable-name candidates (SCHISM scribed-IO names first).
 _NODE_X_CANDS = ("SCHISM_hgrid_node_x", "SCHISM_hgrid_node_lon", "x", "longitude")
@@ -166,10 +187,20 @@ def read_out2d_elevation(out2d_path: str | Path, reproject_xy=None) -> dict[str,
     }
 
 
-def _adaptive_grid(bbox: list[float], is_geographic: bool) -> tuple[int, int]:
-    """Pick ``(width_px, height_px)`` for the elevation COG."""
+def _adaptive_grid(
+    bbox: list[float], is_geographic: bool, max_px_per_side: int | None = None
+) -> tuple[int, int]:
+    """Pick ``(width_px, height_px)`` for the elevation COG.
+
+    ``max_px_per_side`` (ADR 0225) is the OUTPUT-ARTIFACT resolution cap -- an
+    overridable ceiling on the COG's pixel dimensions, not a simulation-granularity
+    cap. ``None`` -> the declared ``_MAX_PX_PER_SIDE`` default; a caller may raise it
+    for a finer display raster (the "optional override" the render-cap declaration
+    promises).
+    """
     import math
 
+    cap = int(max_px_per_side) if max_px_per_side else _MAX_PX_PER_SIDE
     min_x, min_y, max_x, max_y = bbox
     if is_geographic:
         lat_mid = 0.5 * (min_y + max_y)
@@ -182,13 +213,14 @@ def _adaptive_grid(bbox: list[float], is_geographic: bool) -> tuple[int, int]:
         height_m = max_y - min_y
     w = int(round(width_m / SCHISM_TARGET_GROUND_RES_M))
     h = int(round(height_m / SCHISM_TARGET_GROUND_RES_M))
-    w = max(_MIN_PX_PER_SIDE, min(w, _MAX_PX_PER_SIDE))
-    h = max(_MIN_PX_PER_SIDE, min(h, _MAX_PX_PER_SIDE))
+    w = max(_MIN_PX_PER_SIDE, min(w, cap))
+    h = max(_MIN_PX_PER_SIDE, min(h, cap))
     return w, h
 
 
 def _rasterize_nodes(
-    node_x: Any, node_y: Any, values: Any, finite: Any, bbox: list[float], is_geographic: bool
+    node_x: Any, node_y: Any, values: Any, finite: Any, bbox: list[float],
+    is_geographic: bool, max_px_per_side: int | None = None
 ) -> tuple[Any, Any]:
     """Nearest-node rasterization of a per-node scalar onto a regular grid.
 
@@ -200,7 +232,7 @@ def _rasterize_nodes(
     from scipy.spatial import cKDTree
     from scipy.spatial import Delaunay
 
-    width_px, height_px = _adaptive_grid(bbox, is_geographic)
+    width_px, height_px = _adaptive_grid(bbox, is_geographic, max_px_per_side)
     min_x, min_y, max_x, max_y = bbox
     transform = from_bounds(min_x, min_y, max_x, max_y, width_px, height_px)
 
@@ -239,6 +271,7 @@ def postprocess_schism(
     runs_bucket: str | None = None,
     fallback_note: str | None = None,
     reproject_xy=None,
+    max_px_per_side: int | None = None,
 ) -> tuple[list[LayerURI], dict[str, Any]]:
     """Rasterize a SCHISM out2d to a max-elevation COG + emit the UGRID mesh preview.
 
@@ -259,7 +292,8 @@ def postprocess_schism(
 
     import numpy as np
 
-    grid, transform = _rasterize_nodes(node_x, node_y, elev_max, finite, bbox, is_geographic)
+    grid, transform = _rasterize_nodes(
+        node_x, node_y, elev_max, finite, bbox, is_geographic, max_px_per_side)
 
     # --- write + upload the max-elevation COG ---------------------------------
     if is_geographic:

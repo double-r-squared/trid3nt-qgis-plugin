@@ -51,6 +51,7 @@ from trid3nt_server.agent.gates.input_review import gate_input_review
 from trid3nt_server.agent.tool_arg_normalizer import coerce_bbox_value
 from trid3nt_server.agent.tools.publish_layer.publish_layer import PublishLayerError, publish_layer
 from trid3nt_server.agent.workflows.landlab._template_card import TemplateCard
+from trid3nt_server.agent.workflows.landlab.run_landlab import LANDLAB_RES_SPEC
 from trid3nt_server.agent.workflows.landlab.postprocess_landlab import (
     LANDSLIDE_STYLE_PRESET,
     PostprocessLandlabError,
@@ -163,6 +164,7 @@ _LANDLAB_SUSCEPTIBILITY_METADATA = AtomicToolMetadata(
     cacheable=False,
     engine="landlab",
     tier="template",
+    resolution_specs=(LANDLAB_RES_SPEC,),
 )
 
 

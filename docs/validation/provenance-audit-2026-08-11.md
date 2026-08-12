@@ -122,6 +122,28 @@ findings are consistency and completeness gaps, not active lies:
     output-raster cap as an override; acceptable as a payload guardrail (lowest
     priority).
 
+## Class-3 closure - ADR 0225 declared resolutions (2026-08-11)
+
+The class-3 granularity findings are closed by NATE's clamp ruling (ADR 0225): a tool
+DECLARES its valid resolutions (`ResolutionSpec` on `AtomicToolMetadata`), and an
+out-of-range ask is QUOTED BACK (typed error / gate card), never silently snapped.
+
+- **#6 hecras_flood_2d clamp** -> CLOSED. The ADR 0223 labeled snap is upgraded: an
+  out-of-[20, 200] m ask now raises a typed quote-back (range + native hint), not a
+  silent clamp. Live-proven (`resolution_m=5` -> `HECRAS_INPUT_INVALID` quote-back).
+- **#10 postprocess_schism `_MAX_PX_PER_SIDE`** -> CLOSED (took the ride NATE offered):
+  declared as an OUTPUT-artifact cap (`OUTPUT_RASTER_CAP_SPEC`, unit=px) and made
+  OVERRIDABLE via `postprocess_schism(max_px_per_side=...)` instead of a hard cap.
+- **#9 river_dye `_clamp_domain_extent`** -> KEPT as-is (out of ADR 0225 scope): reach
+  length / channel width / sim duration are DOMAIN-EXTENT guardrails, not resolution;
+  they keep the ADR 0223 labeled behaviour. `mesh_resolution_m` (the resolution knob)
+  IS declared under 0225 (>=3 m floor + node-budget self-label).
+
+Beyond the audit's three: `schism_pahm_surge`, `sfincs_flood`, `generate_mesh`, 13
+`landlab_*`, `telemac_do_sag`, and the `fetch_dem` / `fetch_topobathy` data-native
+declarations were adopted, and a self-enforcing registry sweep test makes the ruling
+self-policing (a future resolution param with no declaration FAILS). See ADR 0225.
+
 ## Method notes
 
 - Grep-driven hunt across the four classes (synthetic/fabricat/idealized/fallback/

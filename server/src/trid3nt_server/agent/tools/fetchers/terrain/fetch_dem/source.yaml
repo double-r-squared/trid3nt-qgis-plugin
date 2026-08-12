@@ -59,6 +59,17 @@ payload_estimate:
   model: bbox_area
   mb_per_sq_deg: 8.0
   floor_mb: 0.1
+# ADR 0225 -- DATA-native resolution declaration (the gate card quotes it beside a
+# consuming solver's declared range). 3DEP native is 1-10 m US lidar; source=copernicus
+# serves GLO-30 30 m global. A large bbox auto-coarsens (payload gate), so there is no
+# coarse ceiling; the fine floor is the 1 m lidar native.
+resolution_declarations:
+- param: resolution_m
+  unit: m
+  min_value: 1
+  native_hint: 3DEP 1-10 m US lidar (default 10 m); Copernicus GLO-30 30 m global via source=copernicus
+  constraint_source: data
+  rationale: 3DEP US lidar is native 1-10 m (10/30 m fastest on the tile tree); large bboxes auto-coarsen; no fine floor below the 1 m lidar native
 caveats:
 - 'USGS 3DEP US lidar (1-10 m) via the py3dep library-delegate (the library owns discovery + the socket).
   Default source="auto": on a 3DEP service outage/timeout it STOPS and asks (a typed DEM_FALLBACK_GATE

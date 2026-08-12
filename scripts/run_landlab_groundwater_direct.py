@@ -34,7 +34,7 @@ log = logging.getLogger("run_landlab_groundwater_direct")
 
 # Panola Mountain Research Watershed, GA -- ~4 km box (humid Piedmont catchment).
 BBOX = (-84.18, 33.60, -84.14, 33.64)
-TARGET_RESOLUTION_M = 30.0
+TARGET_RESOLUTION_M = 10.0
 
 which = sys.argv[1] if len(sys.argv) > 1 else "both"
 
