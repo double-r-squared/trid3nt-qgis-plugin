@@ -29,7 +29,10 @@ import pytest
 from trid3nt_contracts.execution import LayerURI
 from trid3nt_contracts import new_ulid
 
-from trid3nt_server.emission.layer_uri_emit import publish_input_layer
+from trid3nt_server.emission.layer_uri_emit import (
+    publish_input_layer,
+    publish_raster_input_cog,
+)
 from trid3nt_server.emission.pipeline_emitter import (
     _CURRENT_EMITTER,
     PipelineEmitter,
@@ -159,6 +162,101 @@ async def test_publish_input_layer_swallows_add_loaded_layer_failure():
     # Must NOT raise.
     ok = await publish_input_layer(emitter, layer)
     assert ok is False
+
+
+# ===========================================================================
+# (1b) publish_raster_input_cog -- the EXISTING-COG raster input seam
+#      (ADR 0227: the bathymetry-consuming coastal templates surface their
+#      fetched topobathy the same way the flood DEM path does).
+# ===========================================================================
+_PUBLISH_LAYER_TARGET = (
+    "trid3nt_server.agent.tools.publish_layer.publish_layer.publish_layer"
+)
+
+
+@pytest.mark.asyncio
+async def test_publish_raster_input_cog_surfaces_with_provenance():
+    """An existing s3:// COG rounds through publish_layer (mocked) and reaches
+    the emitter as a role="context" raster carrying the provenance name + the
+    continuous_dem ramp. This is the 0217-lesson gate: a valid input LayerURI
+    MUST reach the emitter, never silently drop."""
+    published: list[dict] = []
+
+    def _mock_publish_layer(layer_uri, layer_id, style_preset, name=None, **kw):  # noqa: ANN001
+        published.append(
+            {"layer_uri": layer_uri, "layer_id": layer_id,
+             "style_preset": style_preset, "name": name}
+        )
+        return "s3://test-runs/RID/input-bathymetry.tif"
+
+    emitter = _emitter()
+    with patch(_PUBLISH_LAYER_TARGET, side_effect=_mock_publish_layer):
+        ok = await publish_raster_input_cog(
+            emitter,
+            cog_uri="s3://test-cache/topobathy/aoi.tif",
+            layer_id="input-bathymetry-RID",
+            name='Input: bathymetry (topobathy, native CUDEM 1/9")',
+            style_preset="continuous_dem",
+        )
+
+    assert ok is True
+    # It rode the EXISTING object (no re-upload): the cog_uri went straight to
+    # publish_layer as the layer_uri.
+    assert len(published) == 1
+    assert published[0]["layer_uri"] == "s3://test-cache/topobathy/aoi.tif"
+    assert published[0]["style_preset"] == "continuous_dem"
+    # The valid LayerURI reached the emitter (cannot silently drop).
+    assert len(emitter._loaded_layers) == 1
+    row = emitter._loaded_layers[0]
+    assert row.role == "context"
+    assert row.layer_type == "raster"
+    assert row.style_preset == "continuous_dem"
+    assert row.name.startswith("Input: bathymetry (")
+    assert row.uri == "s3://test-runs/RID/input-bathymetry.tif"
+
+
+@pytest.mark.asyncio
+async def test_publish_raster_input_cog_publish_failure_non_fatal():
+    """A publish_layer PublishLayerError is swallowed (best-effort): returns
+    False, surfaces nothing, NEVER raises -- a failed input can never fail the
+    solve."""
+    from trid3nt_server.agent.tools.publish_layer.publish_layer import (
+        PublishLayerError,
+    )
+
+    def _boom(*a, **k):
+        raise PublishLayerError("PUBLISH_FAILED", "boom")
+
+    emitter = _emitter()
+    with patch(_PUBLISH_LAYER_TARGET, side_effect=_boom):
+        ok = await publish_raster_input_cog(
+            emitter, cog_uri="s3://c/x.tif", layer_id="input-bathymetry-x",
+            name="Input: bathymetry (x)", style_preset="continuous_dem",
+        )
+    assert ok is False
+    assert emitter._loaded_layers == []
+
+
+@pytest.mark.asyncio
+async def test_publish_raster_input_cog_none_emitter_or_uri_noop():
+    """No emitter bound OR a falsy cog_uri -> no-op, returns False, no raise,
+    and publish_layer is never even called."""
+    called = {"n": 0}
+
+    def _spy(*a, **k):  # pragma: no cover - must not run
+        called["n"] += 1
+        return "s3://x"
+
+    with patch(_PUBLISH_LAYER_TARGET, side_effect=_spy):
+        assert await publish_raster_input_cog(
+            None, cog_uri="s3://c/x.tif", layer_id="i", name="n",
+            style_preset="continuous_dem",
+        ) is False
+        assert await publish_raster_input_cog(
+            _emitter(), cog_uri="", layer_id="i", name="n",
+            style_preset="continuous_dem",
+        ) is False
+    assert called["n"] == 0
 
 
 # ===========================================================================

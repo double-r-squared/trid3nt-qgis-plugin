@@ -35,6 +35,7 @@ WARNING -- emissions are byte-identical to ``SIGNED_URLS`` absent. Default is
 
 from __future__ import annotations
 
+import asyncio
 import logging
 import os
 from typing import TYPE_CHECKING
@@ -46,7 +47,12 @@ if TYPE_CHECKING:  # pragma: no cover - typing-only import (no runtime cycle)
 
 logger = logging.getLogger("trid3nt_server.emission.layer_uri_emit")
 
-__all__ = ["emit_layer_uri", "publish_input_layer", "signed_urls_enabled"]
+__all__ = [
+    "emit_layer_uri",
+    "publish_input_layer",
+    "publish_raster_input_cog",
+    "signed_urls_enabled",
+]
 
 # Env var name for the dormant direct-fetch / signed-URL scaffold (Decision 11).
 SIGNED_URLS_ENV = "SIGNED_URLS"
@@ -202,3 +208,89 @@ async def publish_input_layer(
             exc,
         )
         return False
+
+
+async def publish_raster_input_cog(
+    emitter: "PipelineEmitter | None",
+    *,
+    cog_uri: str | None,
+    layer_id: str,
+    name: str,
+    style_preset: str,
+    role: str = "context",
+    fallback_note: str | None = None,
+) -> bool:
+    """BEST-EFFORT: surface an EXISTING ``s3://`` raster COG as an input/context row.
+
+    The raster twin of :func:`publish_input_layer` for a COG that is NOT yet
+    registered with the render bridge. Rides the object ALREADY in the runs
+    bucket / cache (NO re-upload): rounds the ``s3://`` COG through
+    ``publish_layer`` (which registers its ``style_preset`` and returns a
+    plugin-renderable uri), builds a ``role`` LayerURI, and hands it to
+    :func:`publish_input_layer`. This is the seam the flood-input DEM path
+    (model_flood_scenario) established inline; consolidated here so the
+    bathymetry-consuming coastal templates surface their fetched topobathy the
+    same way.
+
+    Best-effort contract: NEVER raises. Every failure (no emitter, a falsy uri,
+    a ``PublishLayerError`` on a non-``s3://`` / unregistered uri, the emit
+    guardrail dropping it) is swallowed with a WARNING and returns ``False``; a
+    failure to surface an input can NEVER fail the solve. Returns ``True`` only
+    when the layer actually reached the emitter.
+    """
+    if emitter is None or not cog_uri:
+        return False
+    try:
+        # Late import: keep this emission module free of a load-time dependency
+        # on the heavy publish_layer tool (rasterio / TiTiler), mirroring how the
+        # composers import it inline.
+        from trid3nt_server.agent.tools.publish_layer.publish_layer import (
+            PublishLayerError,
+            publish_layer,
+        )
+    except Exception as exc:  # noqa: BLE001 - input surfacing is NEVER fatal
+        logger.warning(
+            "publish_raster_input_cog: publish_layer import failed (non-fatal, "
+            "input absent): %s",
+            exc,
+        )
+        return False
+    try:
+        # OFFLOAD: publish_layer runs a sync worker-poll / rasterio path -- keep
+        # it off the event loop so the WS keepalive stays responsive.
+        renderable = await asyncio.to_thread(
+            publish_layer,
+            layer_uri=cog_uri,
+            layer_id=layer_id,
+            style_preset=style_preset,
+            name=name,
+        )
+    except PublishLayerError as exc:
+        logger.warning(
+            "publish_raster_input_cog: publish_layer failed for %s (non-fatal, "
+            "input absent) error_code=%s: %s",
+            layer_id,
+            getattr(exc, "error_code", "?"),
+            exc,
+        )
+        return False
+    except Exception as exc:  # noqa: BLE001 - input surfacing is NEVER fatal
+        logger.warning(
+            "publish_raster_input_cog: publish_layer raised for %s (non-fatal, "
+            "input absent): %s",
+            layer_id,
+            exc,
+        )
+        return False
+
+    layer = LayerURI(
+        layer_id=layer_id,
+        name=name,
+        layer_type="raster",
+        uri=renderable,
+        style_preset=style_preset,
+        role=role,
+        bbox=None,
+        fallback_note=fallback_note,
+    )
+    return await publish_input_layer(emitter, layer, role=role)

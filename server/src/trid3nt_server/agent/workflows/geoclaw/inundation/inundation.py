@@ -88,7 +88,11 @@ from trid3nt_server.agent.workflows.geoclaw.run_geoclaw import (
     stage_geoclaw_manifest,
 )
 from trid3nt_server.agent.workflows.shared.solve_progress import drive_live_solve_progress
-from trid3nt_server.emission.layer_uri_emit import emit_layer_uri, publish_input_layer
+from trid3nt_server.emission.layer_uri_emit import (
+    emit_layer_uri,
+    publish_input_layer,
+    publish_raster_input_cog,
+)
 from trid3nt_server.emission.pipeline_emitter import (
     begin_substeps,
     current_emitter,
@@ -686,6 +690,11 @@ _GEOCLAW_SEC_PER_CELL: float = 0.05
 #: anyway). GeoClaw picks finest-in-overlap, so this fine AOI tile wins the coast.
 _GEOCLAW_FINE_NEARSHORE_PIXEL_M: float = 10.0
 
+#: Style preset for the surfaced topo/bathy INPUT layer -- the SAME continuous-DEM
+#: elevation ramp the topobathy fetcher stamps, so the staged bed renders with the
+#: hypsometric/elevation ramp for spot-checking. Reused, never invented.
+GEOCLAW_BATHYMETRY_INPUT_STYLE_PRESET = "continuous_dem"
+
 #: Scenario families whose computational domain / AOI reaches the OPEN SEA, so the
 #: published depth must be masked to OVERLAND cells (topo >= 0) to render coastal
 #: inundation instead of the full water column that includes the ocean. tsunami =
@@ -728,8 +737,12 @@ def _fetch_topo_for_geoclaw(
     bbox: tuple[float, float, float, float],
     *,
     force_bathy_base: bool = False,
-) -> str:
-    """Fetch a topo/bathy DEM for the AOI and return its ``s3://`` URI.
+) -> tuple[str, str]:
+    """Fetch a topo/bathy DEM for the AOI; return ``(s3_uri, source_label)``.
+
+    ``source_label`` names WHICH data served (for the surfaced input-layer
+    provenance): the seamless CUDEM/ETOPO topobathy on the primary path, or the
+    3DEP land DEM on the fallback path.
 
     GeoClaw needs a SEAMLESS land+bathymetry DEM (the shallow-water bed): try
     ``fetch_topobathy`` first (the seamless coastal DEM, the right substrate for
@@ -757,7 +770,7 @@ def _fetch_topo_for_geoclaw(
             layer.get("uri") if isinstance(layer, dict) else None
         )
         if uri:
-            return str(uri)
+            return str(uri), "topobathy (CUDEM 1/9\" + ETOPO 2022 seamless)"
     except Exception as exc:  # noqa: BLE001 - fall through to fetch_dem
         logger.info(
             "fetch_topobathy failed (%s); falling back to fetch_dem(10m)", exc
@@ -773,7 +786,7 @@ def _fetch_topo_for_geoclaw(
                 "GEOCLAW_DEM_FETCH_FAILED",
                 f"fetch_dem returned no uri for bbox {bbox}",
             )
-        return str(uri)
+        return str(uri), "3DEP 10 m DEM (land-only fallback)"
     except GeoClawComposerError:
         raise
     except Exception as exc:  # noqa: BLE001
@@ -1034,13 +1047,14 @@ async def model_geoclaw_inundation(
     _force_bathy_base = run_args.scenario in GEOCLAW_OFFSHORE_SCENARIOS
     if dem_uri is None:
         async with substep(emitter, "fetch_topobathy"):
-            resolved_dem_uri = await asyncio.to_thread(
+            resolved_dem_uri, bathy_source = await asyncio.to_thread(
                 _fetch_topo_for_geoclaw,
                 fetch_bbox,
                 force_bathy_base=_force_bathy_base,
             )
     else:
         resolved_dem_uri = dem_uri
+        bathy_source = "user-supplied topo/bathy DEM"
 
     # --- CRS alignment: reproject the topo/bathy DEM to EPSG:4326 (lon/lat) ----
     # GeoClaw's tsunami solve runs in spherical lat/lon (coordinate_system=2) with
@@ -1058,6 +1072,19 @@ async def model_geoclaw_inundation(
         resolved_dem_uri,
         domain_bbox,
         bbox,
+    )
+
+    # Surface the staged topo/bathy DEM (the SHALLOW-WATER bed GeoClaw ran on,
+    # already reprojected to 4326) as a Case INPUT layer (role="context") so the
+    # user can spot-check WHICH data served the run in QGIS -- the source rides in
+    # the layer name. Rides the existing runs-bucket COG (no re-upload); BEST-
+    # EFFORT (a publish failure never touches the solve).
+    await publish_raster_input_cog(
+        emitter,
+        cog_uri=resolved_dem_uri,
+        layer_id=f"input-bathymetry-{run_id}",
+        name=f"Input: bathymetry ({bathy_source})",
+        style_preset=GEOCLAW_BATHYMETRY_INPUT_STYLE_PRESET,
     )
 
     # --- Bathymetry-aware Okada source placement (tsunami synthetic source) --

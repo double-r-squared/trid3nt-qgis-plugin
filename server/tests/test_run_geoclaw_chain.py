@@ -1289,7 +1289,7 @@ def test_composer_arg_assembly_and_dispatch(tmp_path: Path):
     # they must be patched at the SOURCE module, not on the composer module.
     from trid3nt_server.agent.tools.simulation.solver import solver as solver_mod
 
-    with patch.object(comp, "_fetch_topo_for_geoclaw", lambda b, **k: "s3://cache/topo.tif"), \
+    with patch.object(comp, "_fetch_topo_for_geoclaw", lambda b, **k: ("s3://cache/topo.tif", "topobathy (CUDEM 1/9\" + ETOPO 2022 seamless)")), \
          patch.object(comp, "stage_geoclaw_manifest", _fake_stage), \
          patch.object(solver_mod, "run_solver", _fake_run_solver), \
          patch.object(solver_mod, "wait_for_completion", _fake_wait), \

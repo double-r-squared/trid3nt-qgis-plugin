@@ -257,7 +257,10 @@ from trid3nt_server.agent.tools.publish_layer.publish_layer import (
     PublishLayerError,
     publish_layer,
 )
-from trid3nt_server.emission.layer_uri_emit import publish_input_layer
+from trid3nt_server.emission.layer_uri_emit import (
+    publish_input_layer,
+    publish_raster_input_cog,
+)
 from trid3nt_server.agent.workflows.schism import deck_authoring
 from trid3nt_server.agent.workflows.schism import postprocess_schism as pp
 from trid3nt_server.agent.workflows.schism.run_schism import SCHISM_SOLVER_NAME
@@ -672,11 +675,26 @@ async def _build_coastal_tin_deck(
     # 3. Sample bathymetry onto the nodes. TRID3NT_SCHISM_BATHY_PATH is an
     # offline/test seam (a worker-visible local topobathy COG); else fetch it.
     bathy_override = os.environ.get("TRID3NT_SCHISM_BATHY_PATH")
+    bathy_cog_uri: str | None = None
     if bathy_override and Path(bathy_override).exists():
         dem_path, bathy_source = bathy_override, "local topobathy COG"
     else:
-        dem_path, bathy_source = await _fetch_bathymetry_cog(bbox)
+        dem_path, bathy_source, bathy_cog_uri = await _fetch_bathymetry_cog(bbox)
     depths = deck_authoring.sample_bathymetry_on_nodes(points, dem_path)
+
+    # Surface the fetched topobathy as a Case INPUT layer (role="context") so the
+    # user can spot-check WHICH data served the run in QGIS -- the provenance
+    # (source + native resolution) rides in the layer name. Rides the existing
+    # runs-bucket COG (no re-upload) and is BEST-EFFORT: a publish failure never
+    # touches the solve.
+    if bathy_cog_uri:
+        await publish_raster_input_cog(
+            emitter,
+            cog_uri=bathy_cog_uri,
+            layer_id=f"input-bathymetry-{new_ulid()}",
+            name=f"Input: bathymetry ({bathy_source}, native CUDEM 1/9\")",
+            style_preset=_BATHYMETRY_INPUT_STYLE_PRESET,
+        )
 
     # 4. Author the deck.
     deck = await asyncio.to_thread(
@@ -708,6 +726,13 @@ async def _build_coastal_tin_deck(
         "deck_files": deck["files"], "fallback_note": note, "review_entries": review_entries,
         "n_nodes": deck["n_nodes"], "n_elements": deck["n_elements"],
     }
+
+
+#: Style preset for a surfaced bathymetry INPUT layer -- the SAME continuous-DEM
+#: elevation ramp the topobathy fetcher (and the SFINCS flood DEM-input path)
+#: stamp, so a fetched topobathy COG renders with the hypsometric/elevation ramp
+#: for spot-checking. Reused, never invented (no bespoke bathy preset exists).
+_BATHYMETRY_INPUT_STYLE_PRESET = "continuous_dem"
 
 
 #: Requested-resolution threshold (m) at/above which the fine CUDEM 1/9" nearshore
@@ -750,8 +775,16 @@ def _topobathy_fetch_kwargs(
 async def _fetch_bathymetry_cog(
     bbox, *, resolution_m: float | None = None,
     force_bathy_base: bool = False, skip_land: bool = False,
-) -> tuple[str, str]:
-    """Fetch a topobathy (else DEM) COG for the AOI; return (local_path, source_label).
+) -> tuple[str, str, str]:
+    """Fetch a topobathy (else DEM) COG for the AOI; return
+    (local_path, source_label, cog_s3_uri).
+
+    ``cog_s3_uri`` is the EXISTING runs-bucket / cache object the fetch produced
+    (an ``s3://`` COG) -- the caller rides it straight into the render bridge
+    (``publish_raster_input_cog``) to surface the fetched bathymetry as a Case
+    input layer, with NO re-upload. It equals the ``local_path`` when the fetch
+    returned a plain local path (an offline / test seam that never round-trips
+    through S3).
 
     ``resolution_m`` is the bathymetry-fetch grid cell size (metres) or ``None`` for
     the NATIVE composite (resolution doctrine, 2026-08-11: DEFAULT = native/max;
@@ -797,7 +830,7 @@ async def _fetch_bathymetry_cog(
             continue
         local = await asyncio.to_thread(_download_uri_to_tmp, uri)
         if local:
-            return local, label
+            return local, label, uri
     raise SchismScenarioError(
         SCHISM_BATHYMETRY_UNAVAILABLE,
         "no real bathymetry could be fetched for this AOI (fetch_topobathy and "

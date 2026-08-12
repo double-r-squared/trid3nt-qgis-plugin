@@ -42,6 +42,20 @@ template surface), `telemac_river_dye` (domain-extent clamp labeled). No fidelit
 changed; only the honesty/label surface. `postprocess_schism` render cap left as-is
 (documented keep).
 
+INPUT-LAYER SURFACING - BATHYMETRY (ADR 0227, 2026-08-12): the flood templates
+already emit their fetched inputs (SFINCS surfaces DEM/landcover/rivers as
+role="input" Case layers for QGIS spot-checking). Extended the SAME seam to the
+bathymetry-consuming coastal templates so a user can see WHICH topobathy served a
+run: `schism_pahm_surge`, `schism tidal_hydro coastal_tin`, and
+`geoclaw_inundation` now surface their fetched topo/bathy COG as a role="context"
+Case input layer (`continuous_dem` elevation ramp, provenance = source + native
+resolution in the layer name), riding the EXISTING runs-bucket object (no re-
+upload) via the new `publish_raster_input_cog` seam in `emission/layer_uri_emit.py`.
+`sfincs_flood` already surfaced its DEM/bathy (the cited precedent) -- unchanged.
+Best-effort (a publish failure never touches the solve) + an offline emitter test
+so the input can never silently drop (0217 track-overlay lesson). Not new coverage
+rows; a cross-cutting input-transparency parity fix.
+
 
 ## MESH (cross-engine domain builder)
 
