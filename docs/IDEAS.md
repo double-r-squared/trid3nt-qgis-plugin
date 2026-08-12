@@ -333,7 +333,7 @@ tool keeps emitting all engine formats per mesh to make acceptance
 the common case. Build AFTER mesh v2 (ADR 0193) lands + NATE
 validates alignment.
 
-## 2026-08-12 - Procedural pipeline DSL (NATE design sketch, no build yet)
+## 2026-08-12 - Procedural pipeline LIBRARY (NATE design sketch, no build yet - NOT a DSL: library code like OpenCV, plain well-named functions composed in ordinary Python)
 A thin abstraction over the existing seams making templates read as
 chained verbs: load (fetchers, cached+provenance) -> gate (the
 reusable envelope gates: input-review/payload/mesh) -> simulate
@@ -349,3 +349,36 @@ recipes. NATE: 'I liked it to be procedural... build all the
 pieces of the pipeline flexible so we can make more with the same
 features.' Candidate shape: a small module wrapping the seams, one
 template ported as the demonstration, adopted opportunistically.
+
+## 2026-08-12 - Zero-dependency chart rendering (NATE: why aren't libs included?)
+QGIS plugins have NO dependency mechanism; matplotlib is compiled
+(unvendorable); QGIS 4 stopped bundling it. 0.3.9 = detect-and-guide
+(the ecosystem best practice). Two zero-dep options if wanted later:
+(a) QPainter-native chart widget (always available, real rewrite);
+(b) server-rendered PNG degrade - client reports no-matplotlib, the
+chart card arrives as an image (server always has mpl; fits the
+loud-degrade doctrine; loses interactivity, keeps the data visible).
+
+## 2026-08-12 - Universal target_resolution_m (DISCUSSION OPEN, do not build)
+NATE design state: universal OPTIONAL knob named target_resolution_m
+(decided: target = intent, not fact) on all gridded-data tools,
+contract-level (shared field + sweep enforcement + generic
+discoverability). Resolution model (NATE 2026-08-12 final discussion shape): NOT
+rungs but two sources + one propagation rule - (1) EXPLICIT
+(basis=user): target_resolution_m passed at any signature (workflows
+expose the knob like any tool) and INHERITED by all inner calls
+(fetch/mesh/solve) unless overridden deeper; workflows NEVER
+hardcode their own resolution, they conduct the user's downward
+(the surge TIN bug = the anti-pattern: a private inner resolution
+ignoring the passed one). (2) SETTINGS (the single bottom layer, NATE
+2026-08-12 refinement): settings.default_resolution = a declared
+global value ('native' declarable) OR 'auto' = our autoscaling
+method as the user's CHOSEN policy - autoscale is never an imposed
+fallback, always a settings selection (reconciles the #154
+suggestion+override ruling: even the automatic path traces to an
+explicit user decision). Provenance records the resolving rung
+(basis=user / workflow / settings(<value>|auto)). Open Qs: settings
+location (server config vs QGIS-side), the inheritance MECHANISM (how inner calls receive the outer value - context object vs param forwarding; previews the pipeline LIBRARY). Vector
+fetchers keep separate explicit levers. NATE: discuss MORE after the
+0229 code walkthrough - "while I'm all for generics, templates, and
+meta programming I want to know before I go."

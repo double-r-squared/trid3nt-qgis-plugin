@@ -853,6 +853,50 @@ def _apply_vertical_offset(vsicurl_path: str, offset_m: float) -> str:
     return out
 
 
+#: Deep-water rung (ADR 0229): the 3DEP land DEM returns a FLAT ~0 m fill over open
+#: water (no bathymetry -- 3DEP is a bare-earth LAND product), and it sits at HIGHER
+#: composite precedence than the ETOPO global topo-bathy base. Over a rupture/basin-
+#: scale offshore domain (a finite-fault tsunami) that 0 m ocean fill CLOBBERS the
+#: ETOPO deep column, flattening the sea to land-only (the ADR 0226 Chignik land-only
+#: refusal: raw min -68 m, 0 % below -5 m, from a genuine ETOPO base of min -6438 m,
+#: 87 % below -5 m). When a caller forces the ETOPO bathy base ON (``force_bathy_base``
+#: -- the offshore/tsunami intent), the 3DEP land leg must contribute ONLY genuine
+#: emergent terrain (elevation ABOVE this waterline); its at/below-waterline cells are
+#: masked to NaN so the ETOPO full-column shows through offshore. ETOPO 2022 is itself
+#: a COMPLETE topo-bathy (land positive, sea negative), so the seam is: ETOPO base
+#: (deep + shelf + coarse onshore) <- 3DEP fine onshore (positive only) <- CUDEM 1/9"
+#: nearshore <- NCEI regional. Genuine below-datum US land is inland (not in an
+#: offshore tsunami domain) and ETOPO already carries it, so the mask never drops
+#: run-up-relevant terrain.
+_LAND_LEG_WATERLINE_M = 0.0
+
+
+def _mask_land_leg_ocean_fill(land_local_path: str) -> str:
+    """Drop the 3DEP land DEM's at/below-waterline ocean-fill cells (deep-water rung).
+
+    Reads the staged 3DEP land tif, masks every cell at or below
+    ``_LAND_LEG_WATERLINE_M`` to NaN (the flat 0 m ocean fill + any negative fringe),
+    and writes a temp GTiff carrying ONLY the genuine emergent (positive) terrain. The
+    generic LAST-wins composite then lets the ETOPO full-column bathy base show through
+    the masked cells offshore while the finer 3DEP land still paints onshore. Returns
+    the temp path (registered by the caller for cleanup)."""
+    import numpy as np
+    import rasterio
+
+    with rasterio.open(land_local_path) as ds:
+        profile = ds.profile.copy()
+        arr = ds.read(1).astype("float32")
+    arr = np.where(arr <= np.float32(_LAND_LEG_WATERLINE_M), np.float32("nan"), arr)
+    profile.update(dtype="float32", driver="GTiff", nodata=float("nan"))
+    with tempfile.NamedTemporaryFile(
+        suffix=".tif", delete=False, prefix="trid3nt_topobathy_landmask_"
+    ) as f:
+        out = f.name
+    with rasterio.open(out, "w", **profile) as dst:
+        dst.write(arr, 1)
+    return out
+
+
 def _merge_sources(
     sources_in_precedence: list[str],
     target_crs: str,
@@ -1252,6 +1296,20 @@ def _select_and_merge(
     # surge (its 0 m ocean fill would clobber the ETOPO negative bathy over water).
     land_local = None if skip_land else _fetch_3dep_land_to_file(bbox, resolution_m)
     land_absent = land_local is None
+    # Deep-water rung (ADR 0229): when the ETOPO bathy base is forced ON (the
+    # offshore/tsunami intent), the 3DEP land leg contributes ONLY genuine emergent
+    # terrain -- its flat ~0 m ocean fill is masked so the ETOPO full-column deep
+    # bathy shows through offshore instead of being clobbered to land-only. Onshore
+    # (positive) 3DEP detail is preserved; ETOPO/CUDEM paint the wet nearshore.
+    land_raw_tmp: str | None = land_local  # the un-masked 3DEP staged file (cleanup)
+    if force_bathy_base and land_local is not None:
+        try:
+            land_local = _mask_land_leg_ocean_fill(land_local)
+        except Exception as exc:  # noqa: BLE001 -- best-effort; fall back to raw land
+            logger.warning(
+                "fetch_topobathy: deep-water land-leg ocean-fill mask failed (%s); "
+                "using the raw 3DEP land leg", exc,
+            )
 
     # 4) Merge / reproject -> composite array.
     have_land = land_local is not None
@@ -1287,11 +1345,14 @@ def _select_and_merge(
                 os.unlink(p)
             except OSError:
                 pass
-        if land_local and land_local.startswith(tempfile.gettempdir()):
-            try:
-                os.unlink(land_local)
-            except OSError:
-                pass
+        # Clean up both the masked land tif (now land_local) AND, when the deep-water
+        # rung masked it, the raw 3DEP staged predecessor it was derived from.
+        for p in (land_local, land_raw_tmp):
+            if p and p.startswith(tempfile.gettempdir()):
+                try:
+                    os.unlink(p)
+                except OSError:
+                    pass
 
     cudem_count = len(cudem_vsicurl)
     regional_count = len(regional_vsicurl)

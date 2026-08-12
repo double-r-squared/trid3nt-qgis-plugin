@@ -441,3 +441,90 @@ def test_land_absent_labeled_degrade(monkeypatch, tmp_path, fake_s3) -> None:
     assert res.fallback_warning is not None
     assert "land_absent" in res.fallback_warning
     assert "BATHYMETRY-ONLY" in res.fallback_warning
+
+
+# --------------------------------------------------------------------------- #
+# Deep-water rung (ADR 0229): the 3DEP land leg's flat ocean-fill must not
+# clobber the ETOPO full-column bathy on a forced-bathy-base (offshore/tsunami)
+# fetch, so a rupture/basin-scale domain keeps a genuine deep column.
+# --------------------------------------------------------------------------- #
+
+
+def _write_ll_raster(path: str, bbox, nx: int, ny: int, arr: np.ndarray) -> None:
+    """Write a NaN-nodata EPSG:4326 float32 raster from a full (ny, nx) array."""
+    west, south, east, north = bbox
+    with rasterio.open(
+        path, "w", driver="GTiff", height=ny, width=nx, count=1, dtype="float32",
+        crs="EPSG:4326",
+        transform=from_origin(west, north, (east - west) / nx, (north - south) / ny),
+        nodata=float("nan"),
+    ) as dst:
+        dst.write(arr.astype("float32"), 1)
+
+
+def test_mask_land_leg_drops_ocean_fill_keeps_land(tmp_path: Any) -> None:
+    """The rung helper: cells at/below the waterline (the 0 m ocean fill + negative
+    fringe) become NaN; genuine emergent (positive) land is preserved unchanged."""
+    land_path = str(tmp_path / "land.tif")
+    _write_ll_raster(
+        land_path, _SMOKE_BBOX, 4, 1,
+        np.array([[-3.0, 0.0, 12.5, 50.0]], dtype="float32"),
+    )
+    out = tb._mask_land_leg_ocean_fill(land_path)
+    try:
+        with rasterio.open(out) as ds:
+            r = ds.read(1)
+    finally:
+        os.unlink(out)
+    assert np.isnan(r[0, 0]) and np.isnan(r[0, 1])  # -3 m and 0 m fill dropped
+    assert r[0, 2] == pytest.approx(12.5) and r[0, 3] == pytest.approx(50.0)  # land kept
+
+
+def _deep_rung_rasters(tmp_path):
+    """An all-ocean ETOPO deep column (-3000 m) under a 3DEP land leg that is a flat
+    0 m ocean fill with a narrow +50 m emergent strip -- the Chignik land-only shape
+    in miniature."""
+    etopo_path = str(tmp_path / "etopo.tif")
+    land_path = str(tmp_path / "land.tif")
+    n = 40
+    _write_ll_raster(etopo_path, _SMOKE_BBOX, n, n, np.full((n, n), -3000.0, "float32"))
+    land = np.zeros((n, n), dtype="float32")  # 0 m ocean fill (the 3DEP over-water fill)
+    col = np.arange(n)[None, :].repeat(n, axis=0)
+    land[col < 8] = 50.0  # a genuine emergent land strip
+    _write_ll_raster(land_path, _SMOKE_BBOX, n, n, land)
+    return etopo_path, land_path
+
+
+def test_deep_rung_restores_deep_column_under_land_fill(monkeypatch, tmp_path: Any) -> None:
+    """force_bathy_base=True: the 0 m land fill no longer clobbers the ETOPO deep
+    column -- the composite keeps a genuine deep bed AND the emergent land strip."""
+    etopo_path, land_path = _deep_rung_rasters(tmp_path)
+    _patch_delegate_sources(monkeypatch, cudem_tiles=[], land_path=land_path,
+                            etopo_tiles=[etopo_path])
+    arr, _tf, _crs, prov = tb._select_and_merge(
+        _SMOKE_BBOX, 10, TARGET_CRS, None, 30.0,
+        force_bathy_base=True, include_regional_fine=False, min_pixel_m=None,
+        skip_cudem=False, skip_land=False,
+    )
+    a = arr[np.isfinite(arr)]
+    assert a.min() < -2500.0                     # deep ETOPO column survived
+    assert (a > 40.0).any()                      # +50 m emergent land preserved
+    assert float(np.mean(a < -5.0)) > 0.5        # majority genuinely wet
+    assert prov["bathymetry_present"] is True
+
+
+def test_deep_rung_off_leaves_land_fill_clobber(monkeypatch, tmp_path: Any) -> None:
+    """force_bathy_base=False (small-box / non-offshore path): behaviour is UNCHANGED
+    -- the 3DEP 0 m fill still wins by precedence, so no deep column (the guard is
+    scoped strictly to the forced-bathy-base offshore intent)."""
+    etopo_path, land_path = _deep_rung_rasters(tmp_path)
+    _patch_delegate_sources(monkeypatch, cudem_tiles=[], land_path=land_path,
+                            etopo_tiles=[etopo_path])
+    arr, _tf, _crs, _prov = tb._select_and_merge(
+        _SMOKE_BBOX, 10, TARGET_CRS, None, 30.0,
+        force_bathy_base=False, include_regional_fine=False, min_pixel_m=None,
+        skip_cudem=False, skip_land=False,
+    )
+    a = arr[np.isfinite(arr)]
+    assert a.min() > -100.0                       # ETOPO deep column clobbered by fill
+    assert not (a < -5.0).any()

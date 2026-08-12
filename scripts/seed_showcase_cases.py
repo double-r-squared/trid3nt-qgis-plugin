@@ -322,24 +322,28 @@ SHOWCASE: list[Showcase] = [
     Showcase("geoclaw_inundation",
              {"bbox": _AK_PENINSULA, "earthquake_source": "Alaska Peninsula",
               "earthquake_min_magnitude": 8.0, "earthquake_start_date": "2021-07-01",
-              "earthquake_end_date": "2021-08-15", "sim_duration_s": 900,
-              "amr_levels": 2, "output_frames": 4, "compute_class": "small"},
-             "ADR 0226 finite-fault Okada real-event tsunami: earthquake_source='Alaska "
-             "Peninsula' resolves the REAL 2021 M8.2 Chignik earthquake (USGS ComCat "
-             "ak0219neiszm, epicenter -157.888/55.364, depth 35 km) AND fetches its "
-             "published USGS FINITE-FAULT inversion (ak0219neiszm, ~300 subfaults, "
-             "slip 0-5.6 m) -> a MULTI-subfault Okada seafloor-deformation product: a "
-             "concentrated, ASYMMETRIC uplift/subsidence field following the inverted "
-             "slip (max uplift ~+0.7 m / subsidence ~-0.4 m at dtopo dx=1/60), NOT a "
-             "single idealized rectangle. Physics asserts: deformation nonzero + "
-             "signed dipole (min<0<max); N>1 subfaults (the field is the Okada "
-             "superposition of the measured inversion); provenance basis="
-             "measured_inversion naming the product URL (NOT a scaling law, NOT the "
-             "catalog moment tensor). Fallback ladder: absent a finite-fault product "
-             "-> the single-subfault scaling synthesis (basis=derived, loudly "
-             "labeled). NOTE: the coastal run-up leg over the rupture-enclosing domain "
-             "is bathymetry-gated (the topobathy-over-large-Alaska-domain flat-ocean "
-             "follow-up); the deformation product is the proven driver.", 420,
+              "earthquake_end_date": "2021-08-15",
+              "coastal_gauge_lonlat": [-159.30, 55.30],
+              "sim_duration_s": 1800, "amr_levels": 3, "output_frames": 12,
+              "fgout_frames": 15, "compute_class": "standard"},
+             "ADR 0226 + 0229 finite-fault Okada real-event tsunami RUN-UP: "
+             "earthquake_source='Alaska Peninsula' resolves the REAL 2021 M8.2 Chignik "
+             "earthquake (USGS ComCat ak0219neiszm, epicenter -157.888/55.364, depth 35 "
+             "km) AND fetches its published USGS FINITE-FAULT inversion (ak0219neiszm, "
+             "294 subfaults, slip 0-5.55 m) -> a MULTI-subfault Okada seafloor-"
+             "deformation product: a concentrated, ASYMMETRIC uplift/subsidence dipole "
+             "(max uplift +1.01 m / subsidence -0.60 m), NOT a single idealized "
+             "rectangle. ADR 0229 deep-water rung: the topobathy fetched over the 6.5-"
+             "deg rupture-enclosing Alaska domain now keeps the ETOPO 2022 full column "
+             "(the 3DEP land 0 m ocean-fill no longer clobbers it), so the DEM the "
+             "solver runs on reaches ~ -6400 m and the GEOCLAW_BATHYMETRY_FLAT guard "
+             "PASSES -- the coastal run-up leg solves (max inundation ~0.09 m; a "
+             "coastal gauge records the tsunami mareogram, peak-to-trough ~0.08 m; the "
+             "fgout surface field decays with distance from the rupture and arrival "
+             "ordering matches distance). Physics asserts: deformation nonzero + signed "
+             "dipole; N>1 subfaults; provenance basis=measured_inversion naming the "
+             "product URL. Fallback ladder: absent a finite-fault product -> the single-"
+             "subfault scaling synthesis (basis=derived, loudly labeled).", 1200,
              title_suffix="finite-fault M8.2 Chignik"),
     # -- SWAN nonstationary storm evolution (ADR 0190 row 3) -----------------
     Showcase("swan_wave_field",
