@@ -111,7 +111,7 @@ _VALID_SCENARIOS = {"dam_break", "tsunami", "surge", "thacker"}
 #: renamed, or retired. Named in the strict-field error so a stale worker
 #: image (which silently dropped unknown fields before ADR 0158) is
 #: distinguishable from a genuinely-malformed caller.
-_PARSER_VERSION = "geoclaw-spec-5"
+_PARSER_VERSION = "geoclaw-spec-6"
 
 #: Gravitational acceleration (m/s^2) the Thacker deck uses. Kept in lockstep with
 #: ``trid3nt_contracts.geoclaw_thacker.THACKER_GRAVITY`` (the agent-side analytic
@@ -145,6 +145,7 @@ _KNOWN_SPEC_FIELDS = frozenset(
         "dam_break_depth_m",
         "source_lonlat",
         "dtopo_file",
+        "finite_fault_file",
         "source_magnitude",
         "fault_strike_deg",
         "fault_dip_deg",
@@ -218,6 +219,10 @@ class GeoClawBuildSpec:
     source_lonlat: tuple[float, float] | None = None
     # tsunami.
     dtopo_file: str | None = None
+    # Staged finite-fault subfault table (clawpack CSVFault CSV) -> the worker
+    # assembles a MULTI-subfault Okada dtopo (a real inverted slip distribution)
+    # instead of the single-subfault scaling synthesis. Absent -> single subfault.
+    finite_fault_file: str | None = None
     source_magnitude: float = 8.0
     # tsunami Okada fault geometry (user-gated; synthetic defaults when omitted).
     fault_strike_deg: float | None = None
@@ -666,6 +671,9 @@ def parse_build_spec(raw: dict[str, Any]) -> GeoClawBuildSpec:
         dam_break_depth_m=_num("dam_break_depth_m", 10.0),
         source_lonlat=source_lonlat,
         dtopo_file=(str(raw["dtopo_file"]).strip() if raw.get("dtopo_file") else None),
+        finite_fault_file=(
+            str(raw["finite_fault_file"]).strip() if raw.get("finite_fault_file") else None
+        ),
         source_magnitude=_num("source_magnitude", 8.0),
         fault_strike_deg=_opt_num("fault_strike_deg"),
         fault_dip_deg=_opt_num("fault_dip_deg"),
@@ -906,26 +914,42 @@ def render_qinit_data(spec: GeoClawBuildSpec) -> str:
     return "\n".join(lines) + "\n"
 
 
-def render_maketopo_dtopo(spec: GeoClawBuildSpec) -> str:
-    """Render a ``maketopo.py`` that synthesizes an Okada dtopo for the tsunami
-    scenario (when no dtopo file was staged).
+def _render_finite_fault_construction(spec: GeoClawBuildSpec) -> str:
+    """The maketopo.py FAULT-CONSTRUCTION block for a REAL finite-fault inversion.
 
-    Uses ``clawpack.geoclaw.dtopotools`` to build a single-subfault Okada source
-    scaled from ``source_magnitude`` at the source point and write ``dtopo.tt3``.
-    The fault GEOMETRY (strike / dip / rake / depth) is taken from the build_spec
-    when the user supplied it, else a NON-SITE-SPECIFIC synthetic default - and
-    the generated helper PRINTS a loud banner for every defaulted field so the
-    run NEVER silently fabricates a site-specific source.
+    Reads the staged clawpack ``CSVFault`` subfault table (a published inversion's
+    N patches: lon/lat/depth/strike/dip/rake/slip/length/width) with the NATIVE
+    ``dtopotools.CSVFault`` reader (``coordinate_specification="centroid"`` -- the
+    FSP convention). The resulting ``fault`` has MANY subfaults, so the Okada
+    superposition is a real, concentrated, asymmetric slip field -- NOT one
+    idealized rectangle. ``dx`` / ``buffer_size`` are tuned to the fault footprint
+    (a small buffer -- the fault IS the footprint)."""
+    csv = str(spec.finite_fault_file)
+    return f'''# REAL finite-fault inversion: a MULTI-subfault Okada source (basis =
+# measured-inversion). The staged CSV is a published USGS finite-fault product's
+# subfault table; the deformation is the Okada superposition of every patch's slip.
+print("*** MEASURED finite-fault inversion source: N-subfault Okada from a "
+      "published USGS finite-fault product (real inverted slip distribution).")
+fault = dtopotools.CSVFault()
+fault.read({csv!r}, coordinate_specification="centroid")
+_nsub = len(fault.subfaults)
+_slips = [float(_s.slip) for _s in fault.subfaults]
+print("finite-fault: %d subfaults, slip %.2f-%.2f m, Mw=%.2f"
+      % (_nsub, min(_slips), max(_slips), float(fault.Mw())))
 
-    The dtopo grid is built with ``fault.create_dtopo_xy(dx=1/60., buffer_size=
-    2.0)`` (the canonical GeoClaw helper) rather than a hand-rolled
-    ``np.linspace`` box, and ``coordinate_specification="centroid"`` is kept
-    (required by Okada - a wrong/empty value raises ValueError).
+# dtopo grid: a modest buffer around the fault footprint (the fault IS the
+# footprint for a finite-fault model, unlike a point-scaled single subfault).
+_DTOPO_DX = 1/60.
+_DTOPO_BUFFER = 0.5
+'''
 
-    This is emitted as a SEPARATE Python helper the entrypoint runs BEFORE the
-    solve (it imports clawpack, so it must not be imported by this authoring
-    module). Pure string render here.
-    """
+
+def _render_single_subfault_construction(spec: GeoClawBuildSpec) -> str:
+    """The maketopo.py FAULT-CONSTRUCTION block for the DEGRADE rung: a single
+    rectangular subfault scaled from ``source_magnitude`` (Wells & Coppersmith).
+
+    This is the DERIVED fallback (no finite-fault product): one idealized rectangle,
+    LOUDLY banner-flagged as non-site-specific whenever the geometry defaulted."""
     cx, cy = _centroid(spec)
     mw = float(spec.source_magnitude)
 
@@ -949,20 +973,15 @@ def render_maketopo_dtopo(spec: GeoClawBuildSpec) -> str:
     # field fell back to a synthetic, NON-SITE-SPECIFIC default.
     if defaulted:
         banner = (
-            "NON-SITE-SPECIFIC synthetic source: fault geometry field(s) "
-            + ", ".join(defaulted)
-            + " were NOT user-supplied and use generic synthetic defaults; "
-            "this dtopo is illustrative, NOT a site-specific seismic source."
+            "NON-SITE-SPECIFIC synthetic (DERIVED, scaling-law) source: fault "
+            "geometry field(s) " + ", ".join(defaulted)
+            + " were NOT user-supplied and use generic synthetic defaults; this "
+            "dtopo is a single idealized rectangle, NOT a site-specific inversion."
         )
     else:
         banner = ""
 
-    return f'''"""Auto-generated by the GeoClaw worker — synthesize an Okada dtopo."""
-import numpy as _np
-from clawpack.geoclaw import dtopotools
-
-# Honesty banner: loudly flag a non-site-specific synthetic source so the run
-# never silently fabricates a site-specific fault geometry.
+    return f'''# DERIVED single-subfault source (the degrade rung: no finite-fault product).
 BANNER = {banner!r}
 if BANNER:
     print("*** " + BANNER)
@@ -991,14 +1010,52 @@ subfault.coordinate_specification = "centroid"
 
 fault = dtopotools.Fault()
 fault.subfaults = [subfault]
+print("single-subfault: Mw=%s slip=%.2f m strike=%s dip=%s rake=%s depth_m=%s"
+      % (mw, slip, {float(strike)!r}, {float(dip)!r}, {float(rake)!r}, {depth_m!r}))
 
-# Build the dtopo grid with the canonical GeoClaw helper (auto-sizes a box
-# around the fault with a buffer), not a hand-rolled linspace box.
-x, y = fault.create_dtopo_xy(dx=1/60., buffer_size=2.0)
+# dtopo grid: a LARGE buffer around the point-scaled subfault so the deformation
+# footprint of the single rectangle is captured.
+_DTOPO_DX = 1/60.
+_DTOPO_BUFFER = 2.0
+'''
+
+
+def render_maketopo_dtopo(spec: GeoClawBuildSpec) -> str:
+    """Render a ``maketopo.py`` that synthesizes an Okada dtopo for the tsunami
+    scenario (when no dtopo file was staged).
+
+    Fallback ladder (ADR 0226 finite-fault upgrade -- the data-source fallback
+    norm):
+      * ``finite_fault_file`` staged -> a MULTI-subfault Okada from a published USGS
+        finite-fault inversion (``_render_finite_fault_construction``): a real,
+        concentrated, asymmetric slip field (basis=measured-inversion); else
+      * the DEGRADE rung -- a single rectangular subfault scaled from
+        ``source_magnitude`` (``_render_single_subfault_construction``), LOUDLY
+        banner-flagged non-site-specific.
+
+    Both paths build a ``fault`` object + set ``_DTOPO_DX`` / ``_DTOPO_BUFFER``, then
+    share the SAME tail: ``create_dtopography`` -> ``dtopo.tt3`` -> the final-time
+    vertical deformation ``deformation_dz.asc`` PRODUCT. ``coordinate_specification
+    ="centroid"`` throughout (required by Okada). Emitted as a SEPARATE Python helper
+    the entrypoint runs BEFORE the solve (it imports clawpack, so this authoring
+    module must not). Pure string render here.
+    """
+    if spec.finite_fault_file:
+        construction = _render_finite_fault_construction(spec)
+    else:
+        construction = _render_single_subfault_construction(spec)
+
+    return f'''"""Auto-generated by the GeoClaw worker — synthesize an Okada dtopo."""
+import numpy as _np
+from clawpack.geoclaw import dtopotools
+
+{construction}
+# Build the dtopo grid with the canonical GeoClaw helper (auto-sizes a box around
+# the fault with a buffer), not a hand-rolled linspace box.
+x, y = fault.create_dtopo_xy(dx=_DTOPO_DX, buffer_size=_DTOPO_BUFFER)
 fault.create_dtopography(x, y, times=[0.0, 1.0])
 fault.dtopo.write("dtopo.tt3", dtopo_type=3)
-print("wrote dtopo.tt3 mw=%s slip=%.2f m strike=%s dip=%s rake=%s depth_m=%s"
-      % (mw, slip, {float(strike)!r}, {float(dip)!r}, {float(rake)!r}, {depth_m!r}))
+print("wrote dtopo.tt3 (%d subfault(s))" % len(fault.subfaults))
 
 # Emit the FINAL-time vertical seafloor deformation dZ (m) as an ESRI-ASCII grid
 # (EPSG:4326, the regular create_dtopo_xy lon/lat box) so the agent-side / worker

@@ -46,6 +46,7 @@ __all__ = [
     "GeoClawStaging",
     "build_geoclaw_build_spec",
     "stage_geoclaw_manifest",
+    "stage_finite_fault_csv",
     "register_geoclaw_solver",
     "plan_geoclaw_domain",
     "plan_geoclaw_grid",
@@ -179,6 +180,7 @@ def build_geoclaw_build_spec(
     *,
     topo_dest: str = "topo.asc",
     dtopo_dest: str | None = None,
+    finite_fault_dest: str | None = None,
     surge_dest: str | None = None,
     extra_topo_files: list[str] | None = None,
     base_num_cells: tuple[int, int] = (40, 40),
@@ -253,6 +255,15 @@ def build_geoclaw_build_spec(
         spec["fault_depth_km"] = float(run_args.fault_depth_km)
     if run_args.scenario == "tsunami" and dtopo_dest is not None:
         spec["dtopo_file"] = dtopo_dest
+    # Finite-fault subfault table (measured-inversion rung): the worker builds a
+    # MULTI-subfault Okada dtopo from it. Threaded only for tsunami (and never
+    # alongside a prescribed dtopo_file -- a staged dtopo wins).
+    if (
+        run_args.scenario == "tsunami"
+        and finite_fault_dest is not None
+        and dtopo_dest is None
+    ):
+        spec["finite_fault_file"] = finite_fault_dest
     if run_args.scenario == "surge" and surge_dest is not None:
         spec["surge_forcing_file"] = surge_dest
     # --- Storm surge parametric-Holland forcing (scenario="surge") ------------
@@ -1083,12 +1094,46 @@ def reproject_dem_to_4326(dem_uri: str, *, run_id: str | None = None) -> str:
 # --------------------------------------------------------------------------- #
 # Staging — upload the build_spec manifest + the topo DEM to S3.
 # --------------------------------------------------------------------------- #
+def stage_finite_fault_csv(csv_text: str, run_id: str | None = None) -> str:
+    """Upload a finite-fault CSVFault subfault table to the cache bucket -> its URI.
+
+    The finite-fault CSV is GENERATED agent-side (from the parsed USGS finite-fault
+    inversion) so -- unlike the DEM / dtopo which are already staged upstream -- its
+    bytes must be uploaded before the worker can download it. Uses the SAME
+    scheme + boto3 client + cache bucket as ``stage_geoclaw_manifest`` (no new
+    client). Returns the ``{scheme}://<bucket>/<key>`` URI. Raises
+    ``GeoClawWorkflowError`` on an upload failure (never a silent dead-end)."""
+    from trid3nt_server.agent.tools.cache import CACHE_BUCKET, storage_scheme
+    from trid3nt_server.agent.tools.simulation.solver.solver import _get_s3_client
+
+    rid = run_id or new_ulid()
+    scheme = storage_scheme()
+    cache_bucket = os.environ.get("TRID3NT_CACHE_BUCKET") or CACHE_BUCKET
+    key = f"cache/static-30d/geoclaw_setup/{rid}/finite_fault.csv"
+    uri = f"{scheme}://{cache_bucket}/{key}"
+    try:
+        _get_s3_client().put_object(
+            Bucket=cache_bucket,
+            Key=key,
+            Body=csv_text.encode("utf-8"),
+            ContentType="text/csv",
+        )
+    except Exception as exc:  # noqa: BLE001
+        raise GeoClawWorkflowError(
+            "GEOCLAW_STAGING_FAILED",
+            message=f"failed to stage finite-fault CSV to {uri}: {exc}",
+            details={"run_id": rid, "finite_fault_uri": uri},
+        ) from exc
+    return uri
+
+
 def stage_geoclaw_manifest(
     run_args: GeoClawRunArgs,
     *,
     dem_uri: str,
     run_id: str | None = None,
     dtopo_uri: str | None = None,
+    finite_fault_uri: str | None = None,
     surge_uri: str | None = None,
     extra_dem_uris: list[str] | None = None,
     base_num_cells: tuple[int, int] = (40, 40),
@@ -1166,9 +1211,15 @@ def stage_geoclaw_manifest(
         dest = f"topo_extra_{i}.asc"
         inputs.append({"gs_uri": str(uri), "dest": dest})
         extra_topo_files.append(dest)
+    finite_fault_dest: str | None = None
     if run_args.scenario == "tsunami" and dtopo_uri:
         dtopo_dest = "dtopo.tt3"
         inputs.append({"gs_uri": dtopo_uri, "dest": dtopo_dest})
+    # Finite-fault CSV staged BY REFERENCE (worker downloads it as
+    # finite_fault.csv). Never alongside a prescribed dtopo (a staged dtopo wins).
+    if run_args.scenario == "tsunami" and finite_fault_uri and not dtopo_uri:
+        finite_fault_dest = "finite_fault.csv"
+        inputs.append({"gs_uri": finite_fault_uri, "dest": finite_fault_dest})
     if run_args.scenario == "surge" and surge_uri:
         surge_dest = "surge.csv"
         inputs.append({"gs_uri": surge_uri, "dest": surge_dest})
@@ -1177,6 +1228,7 @@ def stage_geoclaw_manifest(
         run_args,
         topo_dest="topo.asc",
         dtopo_dest=dtopo_dest,
+        finite_fault_dest=finite_fault_dest,
         surge_dest=surge_dest,
         extra_topo_files=extra_topo_files,
         base_num_cells=base_num_cells,

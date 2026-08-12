@@ -331,6 +331,18 @@ class GeoClawRunArgs(GraceModel):
     tsunami_dtopo_uri: str | None = None
     source_magnitude: float = Field(default=8.0, gt=0.0, le=10.0)
 
+    # ADR 0226 finite-fault UPGRADE (measured-inversion rung of the tsunami-source
+    # ladder). finite_fault_uri is a staged clawpack CSVFault subfault table (a
+    # published USGS finite-fault inversion's N patches) the worker reads to build a
+    # MULTI-subfault Okada dtopo -- a real, concentrated, asymmetric slip field, not
+    # the single idealized rectangle. finite_fault_footprint is the (min_lon, min_lat,
+    # max_lon, max_lat) enclosing all patch centroids, so the composer sizes the
+    # computational domain to span the whole rupture. Both None -> the single-subfault
+    # scaling synthesis (the degrade rung). Resolved by the composer from the ComCat
+    # event, never hand-typed.
+    finite_fault_uri: str | None = None
+    finite_fault_footprint: tuple[float, float, float, float] | None = None
+
     surge_forcing_uri: str | None = None
 
     output_frames: int = Field(default=DEFAULT_OUTPUT_FRAMES, ge=1)

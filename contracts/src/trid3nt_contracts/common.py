@@ -254,6 +254,9 @@ InputBasis = Literal[
     "prompt_interpreted",
     "default_demo",
     "derived",
+    # a MEASURED published inversion (e.g. a USGS finite-fault slip model) -- the
+    # strongest site-specific class: real measured data, not a scaling law/default.
+    "measured_inversion",
 ]
 
 
@@ -316,7 +319,7 @@ def render_assumptions_line(entries: Any) -> str | None:
     fetched, demo, other = [], [], []
     for e in entries:
         basis = _field(e, "basis")
-        if basis in ("fetched", "derived"):
+        if basis in ("fetched", "derived", "measured_inversion"):
             fetched.append(e)
         elif basis == "default_demo":
             demo.append(e)

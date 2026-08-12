@@ -279,15 +279,23 @@ SHOWCASE: list[Showcase] = [
               "earthquake_min_magnitude": 8.0, "earthquake_start_date": "2021-07-01",
               "earthquake_end_date": "2021-08-15", "sim_duration_s": 900,
               "amr_levels": 2, "output_frames": 4, "compute_class": "small"},
-             "ADR 0226 GeoClaw Okada real-event tsunami: earthquake_source='Alaska "
+             "ADR 0226 finite-fault Okada real-event tsunami: earthquake_source='Alaska "
              "Peninsula' resolves the REAL 2021 M8.2 Chignik earthquake (USGS ComCat "
-             "ak0219neiszm, epicenter -157.888/55.364, depth 35 km) -> a seafloor-"
-             "deformation DIPOLE product (MODELED Okada, max uplift +1.44 m / "
-             "subsidence -0.674 m, nonzero + signed) + local coastal run-up. Physics "
-             "asserts: deformation nonzero + dipole (min<0<max); wave reaches the "
-             "coast (max_inundation>0); mechanism DERIVED subduction-interface thrust "
-             "(LOUDLY labeled, NOT catalog moment tensor).", 420,
-             title_suffix="Okada real-event M8.2 Chignik"),
+             "ak0219neiszm, epicenter -157.888/55.364, depth 35 km) AND fetches its "
+             "published USGS FINITE-FAULT inversion (ak0219neiszm, ~300 subfaults, "
+             "slip 0-5.6 m) -> a MULTI-subfault Okada seafloor-deformation product: a "
+             "concentrated, ASYMMETRIC uplift/subsidence field following the inverted "
+             "slip (max uplift ~+0.7 m / subsidence ~-0.4 m at dtopo dx=1/60), NOT a "
+             "single idealized rectangle. Physics asserts: deformation nonzero + "
+             "signed dipole (min<0<max); N>1 subfaults (the field is the Okada "
+             "superposition of the measured inversion); provenance basis="
+             "measured_inversion naming the product URL (NOT a scaling law, NOT the "
+             "catalog moment tensor). Fallback ladder: absent a finite-fault product "
+             "-> the single-subfault scaling synthesis (basis=derived, loudly "
+             "labeled). NOTE: the coastal run-up leg over the rupture-enclosing domain "
+             "is bathymetry-gated (the topobathy-over-large-Alaska-domain flat-ocean "
+             "follow-up); the deformation product is the proven driver.", 420,
+             title_suffix="finite-fault M8.2 Chignik"),
     # -- SWAN nonstationary storm evolution (ADR 0190 row 3) -----------------
     Showcase("swan_wave_field",
              {"bbox": _APALACHEE, "mode": "nonstationary",

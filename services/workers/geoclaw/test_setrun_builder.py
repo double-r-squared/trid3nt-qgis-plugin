@@ -659,8 +659,11 @@ def test_render_maketopo_uses_create_dtopo_xy_and_centroid_spec():
     spec = parse_build_spec(_spec(scenario="tsunami", source_magnitude=9.0))
     text = render_maketopo_dtopo(spec)
     ast.parse(text)
-    # the canonical GeoClaw helper, not a hand-rolled np.linspace box.
-    assert "fault.create_dtopo_xy(dx=1/60., buffer_size=2.0)" in text
+    # the canonical GeoClaw helper, not a hand-rolled np.linspace box; the
+    # single-subfault degrade rung pins dx=1/60 + a 2.0-deg buffer.
+    assert "fault.create_dtopo_xy(dx=_DTOPO_DX, buffer_size=_DTOPO_BUFFER)" in text
+    assert "_DTOPO_DX = 1/60." in text
+    assert "_DTOPO_BUFFER = 2.0" in text
     assert "np.linspace" not in text
     # coordinate_specification stays 'centroid' (Okada requires it).
     assert 'subfault.coordinate_specification = "centroid"' in text
@@ -671,7 +674,7 @@ def test_render_maketopo_defaults_print_non_site_specific_banner():
     spec = parse_build_spec(_spec(scenario="tsunami"))
     text = render_maketopo_dtopo(spec)
     ast.parse(text)
-    assert "NON-SITE-SPECIFIC synthetic source" in text
+    assert "NON-SITE-SPECIFIC synthetic" in text
     # the defaulted geometry uses the synthetic values.
     assert "subfault.strike = 0.0" in text
     assert "subfault.dip = 15.0" in text
@@ -696,7 +699,28 @@ def test_render_maketopo_threads_user_fault_geometry_no_banner():
     assert "subfault.dip = 20.0" in text
     assert "subfault.rake = 95.0" in text
     assert "subfault.depth = 12000.0" in text  # 12 km -> 12000 m
-    assert "NON-SITE-SPECIFIC synthetic source" not in text
+    assert "NON-SITE-SPECIFIC synthetic" not in text
+
+
+def test_render_maketopo_finite_fault_builds_multi_subfault():
+    # ADR 0226 finite-fault upgrade: a staged finite_fault_file switches the
+    # maketopo to the NATIVE CSVFault multi-subfault reader (measured inversion),
+    # NOT the single idealized rectangle. No synthetic banner on this rung.
+    spec = parse_build_spec(
+        _spec(scenario="tsunami", finite_fault_file="finite_fault.csv")
+    )
+    text = render_maketopo_dtopo(spec)
+    ast.parse(text)
+    assert "dtopotools.CSVFault()" in text
+    assert 'fault.read(\'finite_fault.csv\', coordinate_specification="centroid")' in text
+    assert "MEASURED finite-fault inversion source" in text
+    # the finite-fault footprint IS the fault -> a modest 0.5-deg buffer.
+    assert "_DTOPO_BUFFER = 0.5" in text
+    # NO single-subfault synthesis / no synthetic banner on the measured rung.
+    assert "NON-SITE-SPECIFIC synthetic" not in text
+    assert "dtopotools.SubFault()" not in text
+    # the shared deformation-product tail still fires (the "what deformation" answer).
+    assert "deformation_dz.asc" in text
 
 
 def test_render_maketopo_partial_fault_geometry_still_banners():
@@ -705,7 +729,7 @@ def test_render_maketopo_partial_fault_geometry_still_banners():
     text = render_maketopo_dtopo(spec)
     ast.parse(text)
     assert "subfault.strike = 180.0" in text  # user value
-    assert "NON-SITE-SPECIFIC synthetic source" in text
+    assert "NON-SITE-SPECIFIC synthetic" in text
     assert "dip" in text and "rake" in text and "depth" in text
 
 

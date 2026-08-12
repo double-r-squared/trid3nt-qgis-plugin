@@ -57,7 +57,13 @@ from trid3nt_server.agent.workflows.geoclaw.earthquake_source import (
     EarthquakeSourceError,
     resolve_earthquake_source,
 )
+from trid3nt_server.agent.workflows.geoclaw.finite_fault import (
+    FiniteFaultError,
+    fetch_finite_fault_model,
+    to_csvfault_text,
+)
 from trid3nt_server.agent.workflows.geoclaw.postprocess_geoclaw import (
+    GEOCLAW_DEFORMATION_STYLE_PRESET,
     GEOCLAW_TARGET_GROUND_RES_M,
     PostprocessGeoClawError,
     build_gauge_timeseries_chart_spec,
@@ -78,6 +84,7 @@ from trid3nt_server.agent.workflows.geoclaw.run_geoclaw import (
     plan_geoclaw_grid,
     reproject_dem_to_4326,
     resolve_offshore_source,
+    stage_finite_fault_csv,
     stage_geoclaw_manifest,
 )
 from trid3nt_server.agent.workflows.shared.solve_progress import drive_live_solve_progress
@@ -310,6 +317,11 @@ async def geoclaw_inundation(
     effective_source_lonlat = source_lonlat
     effective_dam_depth = dam_break_depth_m
     dam_source_note: str | None = None
+    # ADR 0226 finite-fault upgrade: a resolved measured-inversion source (staged
+    # CSV + rupture footprint), threaded into the run_args when the ComCat event
+    # carries a USGS finite-fault product.
+    finite_fault_uri: str | None = None
+    finite_fault_footprint: tuple[float, float, float, float] | None = None
     # provenance-chain wave: structured per-input provenance for the physically
     # dominant source parameters. Built alongside the prose ``dam_source_note`` and
     # threaded onto the returned layer so the agent narrates demo-vs-fetched.
@@ -352,20 +364,67 @@ async def geoclaw_inundation(
             basis="fetched",
             note="epicenter/depth/Mw from the USGS ComCat catalog (real event)",
         ))
-        provenance.append(SyntheticInput(
-            param="fault_mechanism",
-            value=f"dip={fault_dip_deg} deg, rake={fault_rake_deg} deg",
-            basis="derived",
-            note=(
-                "shallow subduction-interface THRUST assumption -- NOT from the "
-                "catalog moment tensor; the Okada seafloor deformation is MODELED"
-            ),
-        ))
+
+        # --- Finite-fault UPGRADE (the measured-inversion rung) --------------
+        # Fetch THIS event's published USGS finite-fault inversion. When present it
+        # drives a MULTI-subfault Okada dtopo (real concentrated slip) and its
+        # geometry SUPERSEDES the derived subduction-interface mechanism. Absent
+        # (or unparseable) -> the single-subfault scaling synthesis is the DEGRADE
+        # rung, LOUDLY labeled derived (the data-source fallback norm).
+        _ff_model = None
+        try:
+            _ff_model = await asyncio.to_thread(
+                fetch_finite_fault_model, _eq.event_id
+            )
+        except FiniteFaultError as exc:
+            logger.warning(
+                "geoclaw_inundation: finite-fault product present but unparseable "
+                "for %s (%s) -> single-subfault degrade rung", _eq.event_id, exc,
+            )
+        if _ff_model is not None and _ff_model.n_subfaults > 1:
+            try:
+                finite_fault_uri = await asyncio.to_thread(
+                    stage_finite_fault_csv, to_csvfault_text(_ff_model)
+                )
+                finite_fault_footprint = _ff_model.footprint_bbox
+            except Exception as exc:  # noqa: BLE001 - stage failure -> degrade rung
+                logger.warning(
+                    "geoclaw_inundation: finite-fault CSV staging failed (%s) -> "
+                    "single-subfault degrade rung", exc,
+                )
+                finite_fault_uri = None
+        if finite_fault_uri is not None:
+            provenance.append(SyntheticInput(
+                param="finite_fault_model",
+                value=_ff_model.provenance_label,
+                basis="measured_inversion",
+                real_source_if_any=_ff_model.product_url or "USGS finite-fault product",
+                note=(
+                    f"MEASURED N-subfault slip inversion ({_ff_model.n_subfaults} "
+                    f"patches); the Okada deformation is the superposition of the "
+                    f"published inverted slip -- NOT a single scaling-law rectangle. "
+                    f"Product: {_ff_model.fsp_url}"
+                ),
+            ))
+        else:
+            # Degrade rung: no finite-fault product -> a DERIVED single-subfault
+            # mechanism (a shallow interface thrust), loudly labeled.
+            provenance.append(SyntheticInput(
+                param="fault_mechanism",
+                value=f"dip={fault_dip_deg} deg, rake={fault_rake_deg} deg",
+                basis="derived",
+                note=(
+                    "no USGS finite-fault product for this event; a single-subfault "
+                    "shallow subduction-interface THRUST assumption -- NOT the "
+                    "catalog moment tensor; the Okada deformation is MODELED"
+                ),
+            ))
         logger.info(
             "geoclaw_inundation earthquake_source=%r resolved -> %s "
-            "(source_lonlat=%s Mw=%.1f depth_km=%s)",
+            "(source_lonlat=%s Mw=%.1f depth_km=%s finite_fault=%s)",
             earthquake_source, _eq.provenance_label,
             effective_source_lonlat, source_magnitude, fault_depth_km,
+            (_ff_model.provenance_label if finite_fault_uri else "none (single-subfault)"),
         )
 
     if _scenario_l in ("dam_break", "dambreak", "dam-break"):
@@ -518,6 +577,14 @@ async def geoclaw_inundation(
                 kwargs["source_lonlat"] = (float(sl[0]), float(sl[1]))
         if tsunami_dtopo_uri:
             kwargs["tsunami_dtopo_uri"] = str(tsunami_dtopo_uri)
+        # Finite-fault measured-inversion source (ADR 0226): staged CSV + rupture
+        # footprint. Ignored when a prescribed dtopo was given (a staged dtopo wins).
+        if finite_fault_uri and not tsunami_dtopo_uri:
+            kwargs["finite_fault_uri"] = str(finite_fault_uri)
+            if finite_fault_footprint is not None:
+                kwargs["finite_fault_footprint"] = tuple(
+                    float(v) for v in finite_fault_footprint
+                )
         if surge_forcing_uri:
             kwargs["surge_forcing_uri"] = str(surge_forcing_uri)
         # USER-GATED Okada fault overrides: thread ONLY the ones supplied so the
@@ -936,6 +1003,27 @@ async def model_geoclaw_inundation(
     # a tsunami we size that extended domain HERE and fetch the bathymetry over
     # IT (not just the AOI); dam_break / surge keep domain == AOI.
     domain_bbox = plan_geoclaw_domain(bbox, run_args.scenario, run_args.source_lonlat)
+    # Finite-fault (measured inversion): the rupture patches have REAL geographic
+    # coordinates spanning the whole fault, so the computational domain must ENCLOSE
+    # the rupture footprint (else the Okada deformation falls outside the integrated
+    # box -> no run-up). Union the AOI-planned domain with the footprint (padded),
+    # clamped to valid lon/lat. The source is NOT relocated (unlike the single-point
+    # path) -- resolve_offshore_source is skipped below.
+    if run_args.finite_fault_uri and run_args.finite_fault_footprint is not None:
+        fmin_lon, fmin_lat, fmax_lon, fmax_lat = (
+            float(v) for v in run_args.finite_fault_footprint
+        )
+        _pad = 0.3
+        domain_bbox = (
+            max(min(domain_bbox[0], fmin_lon - _pad), -180.0),
+            max(min(domain_bbox[1], fmin_lat - _pad), -90.0),
+            min(max(domain_bbox[2], fmax_lon + _pad), 180.0),
+            min(max(domain_bbox[3], fmax_lat + _pad), 90.0),
+        )
+        logger.info(
+            "model_geoclaw_inundation: domain grown to enclose finite-fault "
+            "footprint %s -> domain=%s", run_args.finite_fault_footprint, domain_bbox,
+        )
     fetch_bbox = domain_bbox  # fetch topo/bathy over the FULL computational domain
 
     # --- Step 1: topo/bathy DEM (off-loop blocking I/O) ---------------------
@@ -975,12 +1063,15 @@ async def model_geoclaw_inundation(
     # --- Bathymetry-aware Okada source placement (tsunami synthetic source) --
     # Honor a user/composer offshore source when it is over deep water, else
     # project onto the deepest seaward cell of the fetched bathymetry. Skipped
-    # for a STAGED dtopo (the source is prescribed by that file) and for the
-    # non-offshore scenarios.
+    # for a STAGED dtopo (the source is prescribed by that file), for a
+    # FINITE-FAULT source (the patches are at their real inverted coordinates --
+    # relocating a single point would corrupt the multi-patch geometry), and for
+    # the non-offshore scenarios.
     source_override: tuple[float, float] | None = None
     if (
         run_args.scenario in GEOCLAW_OFFSHORE_SCENARIOS
         and run_args.tsunami_dtopo_uri is None
+        and run_args.finite_fault_uri is None
     ):
         source_override = await asyncio.to_thread(
             resolve_offshore_source,
@@ -1108,6 +1199,7 @@ async def model_geoclaw_inundation(
             dem_uri=resolved_dem_uri,
             run_id=run_id,
             dtopo_uri=dtopo_uri,
+            finite_fault_uri=run_args.finite_fault_uri,
             surge_uri=surge_uri,
             extra_dem_uris=extra_dem_uris,
             base_num_cells=base_num_cells,

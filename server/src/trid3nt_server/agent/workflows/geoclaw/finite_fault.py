@@ -29,7 +29,6 @@ from __future__ import annotations
 
 import json
 import logging
-import math
 import re
 import urllib.request
 from dataclasses import dataclass, field
@@ -194,20 +193,22 @@ def parse_fsp(text: str) -> FiniteFaultModel:
     length_m = float(dx_km) * 1000.0 if dx_km else 10_000.0
     width_m = float(dz_km) * 1000.0 if dz_km else 10_000.0
 
-    # Locate the DATA column header (the last comment line naming LAT + LON) so the
-    # column indices are read from the file, not assumed.
+    # Locate the DATA column header so the column indices are read from the file,
+    # not assumed. The real header is the comment line naming LAT + LON + SLIP as
+    # standalone column tokens (NOT the "% Loc : LAT = .. LON = .." scalar line,
+    # which lacks SLIP); take the LAST such line (it sits just above the data).
     col_idx: dict[str, int] = {}
     for ln in lines:
         s = ln.lstrip()
         if not s.startswith("%"):
             continue
-        toks = s.lstrip("%").split()
-        upper = [t.upper() for t in toks]
-        if "LAT" in upper and "LON" in upper:
-            for i, t in enumerate(upper):
-                key = t.split("==")[0]  # "X==EW" -> "X"
-                if key in ("LAT", "LON", "Z", "SLIP", "RAKE", "STRIKE", "DIP") and key not in col_idx:
-                    col_idx[key] = i
+        toks = [t.upper().split("==")[0] for t in s.lstrip("%").split()]  # "X==EW" -> "X"
+        if "LAT" in toks and "LON" in toks and "SLIP" in toks:
+            found: dict[str, int] = {}
+            for i, key in enumerate(toks):
+                if key in ("LAT", "LON", "Z", "SLIP", "RAKE", "STRIKE", "DIP") and key not in found:
+                    found[key] = i
+            col_idx = found  # last matching header wins
     if "LAT" not in col_idx or "LON" not in col_idx or "SLIP" not in col_idx:
         # Header column line absent -> assume the canonical SRCMOD order
         # LAT LON X Y Z SLIP RAKE TRUP RISE SF_MOMENT.

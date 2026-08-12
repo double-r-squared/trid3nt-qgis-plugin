@@ -1229,7 +1229,8 @@ def test_composer_arg_assembly_and_dispatch(tmp_path: Path):
 
     captured: dict = {}
 
-    def _fake_stage(ra, *, dem_uri, run_id=None, dtopo_uri=None, surge_uri=None,
+    def _fake_stage(ra, *, dem_uri, run_id=None, dtopo_uri=None,
+                    finite_fault_uri=None, surge_uri=None,
                     extra_dem_uris=None, base_num_cells=(40, 40),
                     domain_bbox=None, source_lonlat_override=None,
                     amr_levels_override=None):

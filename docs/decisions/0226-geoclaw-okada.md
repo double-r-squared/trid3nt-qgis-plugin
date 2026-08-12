@@ -94,15 +94,90 @@ peak `source_note` both label it modeled.
 - `earthquake_min_magnitude` is a magnitude floor, NOT a resolution knob -- the 0225
   declared-resolution sweep passes without a ResolutionSpec.
 
+## Amendment 2026-08-11 -- FINITE-FAULT upgrade (measured-inversion rung)
+
+NATE reviewed the single-subfault Okada deformation proof: the band "looks like a
+straight line" -- correct, it IS one idealized rectangle. This amendment upgrades the
+tsunami source to REAL published slip and turns the deferred #18 fold below into
+landed work.
+
+### The fallback ladder (data-source fallback norm, now three rungs)
+
+1. MEASURED finite-fault inversion (new top rung) -- for a real ComCat event the
+   composer fetches the event's USGS **finite-fault product** and drives a
+   MULTI-subfault Okada dtopo from the published inverted slip.
+2. DERIVED single-subfault scaling synthesis (the prior path, now explicitly the
+   degrade rung) -- one Wells & Coppersmith rectangle from Mw, LOUDLY labeled
+   `basis="derived"`, used ONLY when the event has no finite-fault product.
+3. Honest typed error on an unreachable/unparseable product that IS present.
+
+### What landed
+
+- `server/.../geoclaw/finite_fault.py`: `parse_fsp` (PURE parse of the SRCMOD-style
+  `complete_inversion.fsp`: header `STRK`/`DIP` + `Dx`/`Dz` subfault dims + the
+  per-subfault LAT/LON/Z/SLIP/RAKE data rows -> a normalized `FiniteFaultModel` of
+  N `FiniteFaultPatch`); `fetch_finite_fault_model` (the ComCat products I/O boundary:
+  event-detail -> the `finite-fault` product -> download `complete_inversion.fsp`,
+  monkeypatchable `_http_get`); `to_csvfault_text` (serializes the patches in clawpack
+  `dtopotools.CSVFault` column format). Basis-verified live: the 2021 M8.2 Chignik
+  event `ak0219neiszm` carries TWO finite-fault products (`ak0219neiszm_1` = 396
+  subfaults, `_2` = 294 subfaults); the selector prefers the most-recently-updated.
+  Product cited:
+  `https://earthquake.usgs.gov/product/finite-fault/ak0219neiszm_1/us/1635188938271/complete_inversion.fsp`.
+- Worker (`setrun_builder.render_maketopo_dtopo`): a `finite_fault_file` build_spec
+  field (parser bumped `geoclaw-spec-5` -> `geoclaw-spec-6`) switches maketopo to the
+  NATIVE `dtopotools.CSVFault().read(coordinate_specification="centroid")` reader ->
+  an N-subfault `Fault` -> the SAME `dtopo.tt3` + `deformation_dz.asc` product tail.
+  The single-subfault synthesis is unchanged as the degrade rung.
+- Composer + contract: `GeoClawRunArgs.finite_fault_uri` + `finite_fault_footprint`;
+  the tool wrapper fetches the finite-fault model on an `earthquake_source` resolve,
+  stages the CSV (`stage_finite_fault_csv`), and stamps `basis="measured_inversion"`
+  provenance naming the product URL (a new `InputBasis` member, grouped site-derived).
+  When present it SUPERSEDES the derived subduction-interface `fault_mechanism` label.
+  The composer sizes the computational domain to ENCLOSE the rupture footprint and
+  SKIPS the single-point offshore relocation (the patches are at real coordinates).
+
+### Re-proof (the canonical proof is now the real-slip one)
+
+- `docs/proof/templates/geoclaw_okada_deformation.png` OVERWRITTEN: the REAL Chignik
+  finite-fault deformation (`ak0219neiszm_1`, 396 subfaults) over Esri World Imagery
+  (EPSG:3857) -- a concentrated, asymmetric red-uplift lobe (max +0.735 m) flanked by
+  a broad blue subsidence field (min -0.389 m), visibly NOT a bar.
+  `geoclaw_okada_deformation_synthetic.png` keeps the single-subfault sibling (one
+  straight N-S bar, +2.34 / -1.00 m) for contrast. Driver:
+  `scripts/proof_geoclaw_okada_finite_fault.py`.
+- Live path (`scripts/drive_geoclaw_finite_fault_chignik.py`, local-docker): resolve
+  -> finite-fault fetch (294-subfault `_2`) -> CSV stage -> domain enclosure -> worker
+  multi-subfault dtopo assembled -> solve dispatched. The run-up SOLVE was refused by
+  the pre-existing `GEOCLAW_BATHYMETRY_FLAT` guard: the topobathy fetched over the
+  6.5-deg rupture-enclosing Alaska domain came back land-only (min -35 m, 0 % below
+  -5 m) -- the deep Pacific bathymetry never reached the solver. This is a
+  topobathy-over-large-domain limitation, NOT a finite-fault defect; the finite-fault
+  ingestion + multi-subfault dtopo + deformation product (the run-up's physical
+  driver) are proven.
+
+### Scoped follow-ups
+
+- **Scenario geometry (Slab2)**: for a SCENARIO (Cascadia-class) source that is not a
+  named event, follow the real USGS Slab2 subduction-interface geometry (public grids)
+  -- a strike-varying multi-segment fault along the trench beats the straight
+  rectangle. Recipe: fetch the Slab2 `dep`/`str`/`dip` grids for the zone, tile the
+  interface into subfaults, distribute a target-Mw slip (taper), reuse the SAME
+  `to_csvfault_text` -> `finite_fault_file` seam. DEFERRED (Slab2 grid ingestion is
+  heavy); the finite-fault leg landed first per the honest-scope directive.
+- **Topobathy over a large rupture-enclosing domain**: the flat-ocean guard fires when
+  the enclosing domain outgrows the topobathy composite's deep-water coverage. The
+  finite-fault run-up leg is bathymetry-gated until this is addressed (a coarse global
+  GEBCO/ETOPO deep-water base laid UNDER the domain regardless of AOI, or a
+  domain-cropping strategy that keeps the near-AOI slip + a deep column).
+
 ## Not done / future folds
 
-- #18 `multi_subfault_dtopo_from_finite_fault_model` -- a paradigm-B
-  `fetch_finite_fault_model` (USGS ComCat `.fsp` / SRCMOD / NOAA SIFT unit sources ->
-  a normalized N-subfault table) + a `dtopotools.Fault` of N subfaults. DEFERRED
-  behind the US-cases PAPER-FIRST gate: it replicates published finite-fault slip
-  models, so it needs NATE-verified citations BEFORE build (the 1964 Alaska / Prince
-  William Sound anchor). The single-subfault Okada + real-event source landed here is
-  its prerequisite front.
+- #18 `multi_subfault_dtopo_from_finite_fault_model` -- LANDED (see the 2026-08-11
+  finite-fault amendment above). `fetch_finite_fault_model` (USGS ComCat `.fsp` ->
+  a normalized N-subfault table) + a `dtopotools.CSVFault` of N subfaults now drive
+  the measured-inversion rung. The single-subfault Okada + real-event source landed
+  earlier was its prerequisite front.
 - V&V against the NGDC/NCEI runup catalog (a calibrated hindcast) -- this landing is
   planning-grade (MODELED Okada from catalog Mw + an assumed interface mechanism),
   never a validated tide-gauge hindcast.
