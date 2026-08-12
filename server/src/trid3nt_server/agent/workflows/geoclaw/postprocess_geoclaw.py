@@ -93,6 +93,8 @@ __all__ = [
     "build_geoclaw_mesh_geojson",
     "make_geoclaw_mesh_layer_uri",
     "build_geoclaw_mesh_layer",
+    "GEOCLAW_DEFORMATION_STYLE_PRESET",
+    "build_geoclaw_deformation_layer",
     "compute_thacker_vandv",
     "build_thacker_validation_chart_spec",
 ]
@@ -1096,6 +1098,131 @@ def build_geoclaw_mesh_layer(
             exc,
         )
         return None
+
+
+# --------------------------------------------------------------------------- #
+# Okada seafloor-deformation PRODUCT (the ADR 0226 Okada-dtopo front).
+# --------------------------------------------------------------------------- #
+#: Signed vertical seafloor deformation (m): uplift(+)/subsidence(-) -> a diverging
+#: rdbu ramp centered on 0 (publish_layer pins the symmetric rescale so the dipole
+#: reads blue=subsidence / white=0 / red=uplift). Registered in
+#: publish_layer._TITILER_STYLE_REGISTRY.
+GEOCLAW_DEFORMATION_STYLE_PRESET: str = "diverging_seafloor_deformation"
+
+
+def _read_esri_ascii_grid(
+    path: Path,
+) -> tuple[Any, tuple[float, float, float, float]]:
+    """Parse a bare ESRI-ASCII grid -> ``(north-up float32 array, EPSG:4326 bbox)``.
+
+    The tsunami ``maketopo.py`` writes ``deformation_dz.asc`` NORTH-first (row 0 =
+    highest latitude), so the returned array is already row-0=north (the COG-writer
+    convention). NODATA -> NaN. Pure (numpy only, no gdal)."""
+    import numpy as np
+
+    hdr: dict[str, float] = {}
+    rows: list[list[float]] = []
+    with path.open("r", errors="replace") as fh:
+        for line in fh:
+            s = line.strip()
+            if not s:
+                continue
+            key = s.split()[0].lower()
+            if key in ("ncols", "nrows", "xllcorner", "yllcorner", "xllcenter",
+                       "yllcenter", "cellsize", "nodata_value"):
+                hdr[key] = float(s.split()[1])
+            else:
+                rows.append([float(v) for v in s.split()])
+    ncols, nrows = int(hdr["ncols"]), int(hdr["nrows"])
+    cell = float(hdr["cellsize"])
+    xll = float(hdr.get("xllcorner", hdr.get("xllcenter", 0.0) - cell / 2.0))
+    yll = float(hdr.get("yllcorner", hdr.get("yllcenter", 0.0) - cell / 2.0))
+    nodata = float(hdr.get("nodata_value", -9999.0))
+    arr = np.asarray(rows, dtype="float32").reshape(nrows, ncols)
+    arr = np.where(arr == nodata, np.nan, arr)
+    bbox = (xll, yll, xll + ncols * cell, yll + nrows * cell)
+    return arr, bbox
+
+
+def build_geoclaw_deformation_layer(
+    out_dir: str | Path,
+    *,
+    run_id: str,
+    runs_bucket: str | None = None,
+) -> tuple[LayerURI | None, dict[str, float]]:
+    """Rasterize the Okada seafloor-deformation dZ into a SIGNED product COG + layer.
+
+    Reads the tsunami ``deformation_dz.asc`` (final-time vertical dZ the worker's
+    ``maketopo.py`` wrote over the Okada source box), writes a signed EPSG:4326 COG,
+    uploads it, and returns ``(LayerURI, {"max_uplift_m", "max_subsidence_m"})`` --
+    the direct answer to "what seafloor deformation does this earthquake drive"
+    (MODELED, not observed). Returns ``(None, {})`` when no deformation grid is
+    present (dam_break / surge / a staged dtopo run) or the grid is degenerate.
+    Best-effort: NEVER raises (the depth answer stands on its own)."""
+    try:
+        import numpy as np
+        from rasterio.transform import from_bounds
+
+        candidates = sorted(Path(out_dir).rglob("deformation_dz.asc"))
+        if not candidates:
+            return None, {}
+        grid, dbbox = _read_esri_ascii_grid(candidates[0])
+        finite = grid[np.isfinite(grid)]
+        if finite.size == 0 or float(np.nanmax(np.abs(grid))) == 0.0:
+            return None, {}
+
+        nrows, ncols = grid.shape
+        transform = from_bounds(dbbox[0], dbbox[1], dbbox[2], dbbox[3], ncols, nrows)
+        try:
+            local_cog = cog_io.write_cog_4326_from_grid(
+                np.asarray(grid, dtype="float32"),
+                src_crs="EPSG:4326",
+                src_transform=transform,
+                reproject=False,
+                crs_roundtrip_guard=True,
+                dst_suffix="_geoclaw_deformation_4326.tif",
+            )
+        except CogIoError as exc:
+            raise _reraise_cogio(exc, bbox=dbbox) from exc
+        try:
+            uri = _upload_cog_to_runs_bucket(
+                local_cog, run_id, runs_bucket,
+                dest_filename="geoclaw_seafloor_deformation.tif",
+            )
+        finally:
+            _safe_unlink(local_cog)
+
+        max_uplift = float(np.nanmax(grid))
+        max_subsidence = float(np.nanmin(grid))
+        layer = LayerURI(
+            layer_id=f"geoclaw-seafloor-deformation-{run_id}",
+            name="Seafloor deformation (Okada)",
+            layer_type="raster",
+            uri=uri,
+            style_preset=GEOCLAW_DEFORMATION_STYLE_PRESET,
+            role="context",
+            units="meters",
+            bbox=tuple(dbbox),  # type: ignore[arg-type]
+            fallback_note=(
+                f"modeled Okada coseismic deformation: max uplift {max_uplift:.3g} m, "
+                f"max subsidence {max_subsidence:.3g} m (NOT an observed field)"
+            ),
+        )
+        logger.info(
+            "build_geoclaw_deformation_layer run_id=%s uplift=%.4g m "
+            "subsidence=%.4g m grid=%dx%d bbox=%s uri=%s",
+            run_id, max_uplift, max_subsidence, nrows, ncols, dbbox, uri,
+        )
+        return layer, {
+            "max_uplift_m": max_uplift,
+            "max_subsidence_m": max_subsidence,
+        }
+    except Exception as exc:  # noqa: BLE001 -- the deformation product is NEVER fatal
+        logger.warning(
+            "build_geoclaw_deformation_layer failed (non-fatal, run_id=%s): %s",
+            run_id, exc,
+        )
+        return None, {}
 
 
 # --------------------------------------------------------------------------- #

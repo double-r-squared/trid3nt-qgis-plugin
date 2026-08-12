@@ -365,6 +365,14 @@ def test_render_maketopo_dtopo_is_valid_python_and_uses_dtopotools():
     assert "from clawpack.geoclaw import dtopotools" in text
     assert "mw = 9.0" in text
     assert 'fault.dtopo.write("dtopo.tt3"' in text
+    # The Okada dtopo-authoring front (ADR 0226): the helper ALSO writes the
+    # final-time vertical deformation dZ as an ESRI-ASCII grid so postprocess can
+    # rasterize the coseismic uplift/subsidence PRODUCT (the "what deformation"
+    # answer). Assert the numpy import + the ESRI header + the north-first write.
+    assert "import numpy as _np" in text
+    assert 'open("deformation_dz.asc"' in text
+    assert "ncols %d" in text and "cellsize %.12f" in text
+    assert "fault.dtopo.dZ" in text
 
 
 # ===========================================================================

@@ -364,6 +364,13 @@ _TITILER_STYLE_REGISTRY: dict[str, tuple[str, str]] = {
     # driven legend (mm-scale) so the actual range renders; this registry range is
     # the fallback (a fixed mm band would wash out sub-mm event deposition).
     "diverging_bed_evolution": ("-20,20", "rdbu"),
+    # GeoClaw Okada coseismic seafloor deformation (m): a SIGNED field
+    # (uplift positive / subsidence negative) -> a diverging rdbu ramp centered on
+    # 0 so the dipole reads blue=subsidence / white=0 / red=uplift. The +/-5 m band
+    # spans a great-earthquake (Mw ~8-9) source; a smaller event's data-driven
+    # band_stats legend still renders its own range. Same pattern as river seepage /
+    # bed evolution above.
+    "diverging_seafloor_deformation": ("-5,5", "rdbu"),
     # sprint-WQ: SWMM per-cell peak washoff CONCENTRATION (mg/L) - a sequential
     # YlOrBr ramp (low->high pollutant load), visibly distinct from depth's
     # SWMM WQ concentration (SWMM-WQ-1 fix 2026-07-21): INTENTIONALLY NOT a fixed

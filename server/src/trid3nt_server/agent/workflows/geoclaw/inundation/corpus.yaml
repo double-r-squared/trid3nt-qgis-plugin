@@ -7,6 +7,11 @@ geoclaw_inundation:
 - storm-surge run-up over the topography with adaptive mesh refinement
 - peak overland depth from a magnitude-8 offshore earthquake source
 - how far inland does the tsunami reach and what is the max depth here
+- what seafloor deformation does this earthquake drive and what tsunami results
+- model the Okada coseismic uplift and subsidence from a subduction earthquake
+- tsunami from the largest recent earthquake off the Alaska Peninsula
+- given the Aleutian megathrust event what run-up hits the US west coast
+- coseismic seafloor uplift dipole and the wave it generates toward this coast
 - trace the wake / drift path of particles carried by the tsunami in the harbour
 - seed Lagrangian drifter gauges and follow where the flow advects them
 - track how far floating particles are pushed by the wave over time

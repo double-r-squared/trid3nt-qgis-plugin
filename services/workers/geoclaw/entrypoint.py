@@ -765,6 +765,12 @@ DEFAULT_OUTPUT_GLOBS: list[str] = [
     "_output/fgout*.b*",
     "deck_manifest.json",
     "*.tif",
+    # Okada seafloor-deformation source (tsunami): the final-time dZ ESRI-ASCII the
+    # postprocess rasterizes into the deformation PRODUCT, plus the dtopo/maketopo
+    # provenance a run keeps for the "what deformation" answer.
+    "deformation_dz.asc",
+    "dtopo.tt3",
+    "maketopo.py",
 ]
 
 

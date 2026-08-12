@@ -68,6 +68,7 @@ _APALACHEE = [-85.55, 29.70, -85.40, 29.85]            # ADR 0147 SWAN shelf
 _CHATTANOOGA = [-85.32, 35.03, -85.28, 35.07]          # ADR 0152 SFINCS pluvial
 _MEXBEACH = [-85.5522, 29.6983, -85.3976, 29.8517]     # ADR 0176 SFINCS quadtree (Michael)
 _CRESCENT = [-124.24, 41.73, -124.16, 41.78]           # ADR 0148 GeoClaw tsunami
+_AK_PENINSULA = [-159.8, 55.0, -158.8, 55.6]           # ADR 0226 Okada real-event (Chignik)
 _GALVESTON = [-95.2, 29.0, -94.2, 29.8]                # ADR 0168 surge shelf
 _PLATTE = [40.905, -98.42]                              # ADR 0165/0166 well (lat, lon)
 _GRAND_ISLAND_REACH = [40.857, -98.412]                 # ADR 0215 Wood River reach AOI (lat, lon)
@@ -273,6 +274,20 @@ SHOWCASE: list[Showcase] = [
              {"bbox": _GALVESTON, "sim_duration_s": 54000, "output_frames": 12,
               "amr_levels": 2},
              "ADR 0168 GeoClaw storm surge, synthetic demo track on Galveston shelf", 600),
+    Showcase("geoclaw_inundation",
+             {"bbox": _AK_PENINSULA, "earthquake_source": "Alaska Peninsula",
+              "earthquake_min_magnitude": 8.0, "earthquake_start_date": "2021-07-01",
+              "earthquake_end_date": "2021-08-15", "sim_duration_s": 900,
+              "amr_levels": 2, "output_frames": 4, "compute_class": "small"},
+             "ADR 0226 GeoClaw Okada real-event tsunami: earthquake_source='Alaska "
+             "Peninsula' resolves the REAL 2021 M8.2 Chignik earthquake (USGS ComCat "
+             "ak0219neiszm, epicenter -157.888/55.364, depth 35 km) -> a seafloor-"
+             "deformation DIPOLE product (MODELED Okada, max uplift +1.44 m / "
+             "subsidence -0.674 m, nonzero + signed) + local coastal run-up. Physics "
+             "asserts: deformation nonzero + dipole (min<0<max); wave reaches the "
+             "coast (max_inundation>0); mechanism DERIVED subduction-interface thrust "
+             "(LOUDLY labeled, NOT catalog moment tensor).", 420,
+             title_suffix="Okada real-event M8.2 Chignik"),
     # -- SWAN nonstationary storm evolution (ADR 0190 row 3) -----------------
     Showcase("swan_wave_field",
              {"bbox": _APALACHEE, "mode": "nonstationary",

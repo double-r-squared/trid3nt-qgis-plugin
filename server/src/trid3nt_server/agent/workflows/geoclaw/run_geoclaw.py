@@ -103,6 +103,14 @@ GEOCLAW_OUTPUT_GLOBS: list[str] = [
     "_output/fgout*.t*",
     "_output/fgout*.b*",
     "deck_manifest.json",
+    # Okada seafloor-deformation source (tsunami synthetic Okada, ADR 0226): the
+    # final-time dZ ESRI-ASCII the composer rasterizes into the coseismic-
+    # deformation PRODUCT, plus the dtopo/maketopo provenance the run keeps. This
+    # manifest list is AUTHORITATIVE (it overrides the worker's DEFAULT_OUTPUT_GLOBS),
+    # so the deformation artifacts MUST be listed HERE to be uploaded.
+    "deformation_dz.asc",
+    "dtopo.tt3",
+    "maketopo.py",
 ]
 
 

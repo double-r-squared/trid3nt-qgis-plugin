@@ -51,10 +51,17 @@ from trid3nt_server.agent.gates.input_review import gate_input_review
 from trid3nt_server.agent.tool_arg_normalizer import coerce_bbox_value
 from trid3nt_server.agent.tools.publish_layer.publish_layer import PublishLayerError, publish_layer
 from trid3nt_server.agent.workflows.geoclaw._template_card import TemplateCard
+from trid3nt_server.agent.workflows.geoclaw.earthquake_source import (
+    SUBDUCTION_INTERFACE_DIP_DEG,
+    SUBDUCTION_INTERFACE_RAKE_DEG,
+    EarthquakeSourceError,
+    resolve_earthquake_source,
+)
 from trid3nt_server.agent.workflows.geoclaw.postprocess_geoclaw import (
     GEOCLAW_TARGET_GROUND_RES_M,
     PostprocessGeoClawError,
     build_gauge_timeseries_chart_spec,
+    build_geoclaw_deformation_layer,
     build_geoclaw_mesh_layer,
     build_geoclaw_particle_track_layer,
     build_particle_track_chart_spec,
@@ -151,6 +158,10 @@ async def geoclaw_inundation(
     source_lonlat: tuple[float, float] | list[float] | None = None,
     source_magnitude: float = 8.0,
     tsunami_dtopo_uri: str | None = None,
+    earthquake_source: str | None = None,
+    earthquake_min_magnitude: float = 7.0,
+    earthquake_start_date: str | None = None,
+    earthquake_end_date: str | None = None,
     surge_forcing_uri: str | None = None,
     output_frames: int = 24,
     amr_levels: int = 2,
@@ -211,6 +222,18 @@ async def geoclaw_inundation(
         source_magnitude: tsunami synthetic-source Mw (default 8.0).
         tsunami_dtopo_uri: optional prescribed dtopo file (else synthetic
             Okada source).
+        earthquake_source: OPTIONAL name of a seismic REGION (geocoded, e.g.
+            "Alaska Peninsula", "Aleutian Islands") -- resolves the LARGEST real
+            USGS ComCat event there to the tsunami source (epicenter -> source_lonlat,
+            focal depth -> fault_depth_km, Mw -> source_magnitude). Forces scenario
+            "tsunami". The epicenter/depth/Mw are REAL catalog values; the fault
+            mechanism (strike/dip/rake) is DERIVED (a shallow subduction-interface
+            thrust) unless fault_* is supplied -- this is surfaced as a labeled
+            provenance entry (MODELED deformation, not an observed field). A tsunami
+            drives a seafloor-deformation RASTER product alongside the run-up.
+        earthquake_min_magnitude: catalog magnitude floor for earthquake_source
+            (default 7.0). earthquake_start_date / earthquake_end_date: OPTIONAL
+            ISO window narrowing the catalog search.
         surge_forcing_uri: optional sea-surface hydrograph CSV.
         output_frames: animation frame count (default 24).
         amr_levels: AMR refinement levels (default 2).
@@ -292,6 +315,59 @@ async def geoclaw_inundation(
     # threaded onto the returned layer so the agent narrates demo-vs-fetched.
     provenance: list[SyntheticInput] = []
     _scenario_l = str(scenario).strip().lower()
+
+    # --- Real-event tsunami source (ADR 0226): resolve a named seismic region to
+    # the LARGEST USGS ComCat event and drive the Okada source from its REAL
+    # epicenter / focal depth / Mw. Forces the tsunami scenario. The mechanism
+    # (strike/dip/rake) stays DERIVED (subduction-interface thrust) unless the user
+    # supplied fault_* -- surfaced as a labeled provenance entry so the modeled
+    # deformation is never mistaken for an observed field.
+    if earthquake_source:
+        try:
+            _eq = resolve_earthquake_source(
+                str(earthquake_source),
+                min_magnitude=float(earthquake_min_magnitude),
+                start_date=earthquake_start_date,
+                end_date=earthquake_end_date,
+            )
+        except EarthquakeSourceError as exc:
+            return {
+                "status": "error",
+                "error_code": exc.error_code,
+                "error_message": str(exc),
+            }
+        scenario = "tsunami"
+        _scenario_l = "tsunami"
+        effective_source_lonlat = (_eq.lon, _eq.lat)
+        source_magnitude = float(_eq.magnitude)
+        if _eq.depth_km is not None and fault_depth_km is None:
+            fault_depth_km = float(_eq.depth_km)
+        if fault_dip_deg is None:
+            fault_dip_deg = SUBDUCTION_INTERFACE_DIP_DEG
+        if fault_rake_deg is None:
+            fault_rake_deg = SUBDUCTION_INTERFACE_RAKE_DEG
+        provenance.append(SyntheticInput(
+            param="earthquake_source",
+            value=_eq.provenance_label,
+            basis="fetched",
+            note="epicenter/depth/Mw from the USGS ComCat catalog (real event)",
+        ))
+        provenance.append(SyntheticInput(
+            param="fault_mechanism",
+            value=f"dip={fault_dip_deg} deg, rake={fault_rake_deg} deg",
+            basis="derived",
+            note=(
+                "shallow subduction-interface THRUST assumption -- NOT from the "
+                "catalog moment tensor; the Okada seafloor deformation is MODELED"
+            ),
+        ))
+        logger.info(
+            "geoclaw_inundation earthquake_source=%r resolved -> %s "
+            "(source_lonlat=%s Mw=%.1f depth_km=%s)",
+            earthquake_source, _eq.provenance_label,
+            effective_source_lonlat, source_magnitude, fault_depth_km,
+        )
+
     if _scenario_l in ("dam_break", "dambreak", "dam-break"):
         _has_loc = source_lonlat is not None
         _has_height = dam_break_depth_m is not None
@@ -1336,6 +1412,24 @@ async def model_geoclaw_inundation(
             build_geoclaw_mesh_layer, out_dir, run_id=staging.run_id
         )
 
+        # --- Okada seafloor-deformation PRODUCT (ADR 0226) --------------------
+        # For a tsunami synthetic-Okada run, rasterize the final-time dZ the worker
+        # wrote (deformation_dz.asc) into a SIGNED uplift/subsidence COG -- the
+        # direct answer to "what seafloor deformation does this quake drive". Built
+        # BEFORE the out_dir cleanup. Best-effort: None on dam_break / surge /
+        # staged dtopo (never voids the depth answer).
+        deformation_layer: LayerURI | None = None
+        deformation_scalars: dict[str, float] = {}
+        try:
+            deformation_layer, deformation_scalars = await asyncio.to_thread(
+                build_geoclaw_deformation_layer, out_dir, run_id=staging.run_id
+            )
+        except Exception as exc:  # noqa: BLE001 - never sink the solve
+            logger.warning(
+                "model_geoclaw_inundation: deformation product failed "
+                "(non-fatal): %s", exc,
+            )
+
         # --- Lagrangian particle tracks (the wake-tracking fold) --------------
         # When the run seeded Lagrangian particle gauges, parse their drift tracks
         # into a LineString product layer + narration scalars. Built BEFORE the
@@ -1386,6 +1480,19 @@ async def model_geoclaw_inundation(
         _peak_update["particle_track_duration_s"] = max(
             float(t["duration_s"]) for t in particle_tracks
         )
+    if deformation_scalars:
+        # Narrate the MODELED coseismic extremes as a determinism-boundary
+        # provenance string on the peak layer (the deformation dipole itself is
+        # the raster product below).
+        _defo_note = (
+            "modeled Okada coseismic seafloor deformation: max uplift "
+            f"{deformation_scalars['max_uplift_m']:.3g} m, max subsidence "
+            f"{deformation_scalars['max_subsidence_m']:.3g} m"
+        )
+        _existing_note = _peak_update.get("source_note")
+        _peak_update["source_note"] = (
+            f"{_existing_note}; {_defo_note}" if _existing_note else _defo_note
+        )
     if _peak_update:
         peak = peak.model_copy(update=_peak_update)
 
@@ -1398,6 +1505,13 @@ async def model_geoclaw_inundation(
     # crs_authid onto the WS row. Never fatal (the depth answer stands regardless).
     if mesh_layer is not None:
         await publish_input_layer(emitter, mesh_layer, role="context")
+
+    # --- Step 6d: surface the Okada seafloor-deformation raster (ADR 0226) -----
+    # A SIGNED raster COG, so it rides the render chokepoint (publish_layer) to get
+    # its diverging tile URL + data-driven legend before add_loaded_layer. Its bbox
+    # is the OFFSHORE Okada source box (distinct from the AOI coast). Never fatal.
+    if deformation_layer is not None:
+        await _emit_deformation_layer(emitter, deformation_layer)
 
     # --- Lagrangian particle-track product layer + drift chart -----------------
     # The tracks ARE a product (the drifter / wake paths), so they ride the same
@@ -1437,6 +1551,39 @@ async def model_geoclaw_inundation(
             )
 
     return peak
+
+
+async def _emit_deformation_layer(emitter: Any, layer: LayerURI) -> None:
+    """Publish + emit the Okada seafloor-deformation raster (render chokepoint).
+
+    Routes the signed s3:// deformation COG through ``publish_layer`` (so it gets
+    its diverging tile URL + data-driven legend), then ``add_loaded_layer``. A
+    publish failure HONESTLY drops the layer (the depth answer stands). Never
+    raises."""
+    if emitter is None:
+        return
+    try:
+        published_uri = await asyncio.to_thread(
+            publish_layer,
+            layer_uri=layer.uri,
+            layer_id=layer.layer_id,
+            style_preset=layer.style_preset or GEOCLAW_DEFORMATION_STYLE_PRESET,
+        )
+    except PublishLayerError as exc:
+        logger.warning(
+            "model_geoclaw_inundation: publish_layer FAILED for the deformation "
+            "layer_id=%s error_code=%s (%s) - dropping it.",
+            layer.layer_id, exc.error_code, exc,
+        )
+        return
+    try:
+        safe = emit_layer_uri(layer.model_copy(update={"uri": published_uri}))
+        if safe is not None:
+            await emitter.add_loaded_layer(safe)
+    except Exception as exc:  # noqa: BLE001 - never break the solve
+        logger.warning(
+            "model_geoclaw_inundation: deformation add_loaded_layer failed: %s", exc,
+        )
 
 
 def _publish_peak_layer(
@@ -1632,12 +1779,15 @@ def _is_geoclaw_output_key(base: str) -> bool:
     """A GeoClaw output object the composer downloads: the ``fort.*`` AMR frames
     (rasterized to depth), the ``fgout*`` SMOOTH fixed-grid animation frames (the
     uniform-grid series the postprocess promotes to the scrubber animation when
-    ``fgout_frames > 0``), AND the coastal ``gaugeNNNNN.txt`` time series (the
-    gauge-timeseries template reads it; the plain inundation path ignores it)."""
+    ``fgout_frames > 0``), the coastal ``gaugeNNNNN.txt`` time series (the
+    gauge-timeseries template reads it; the plain inundation path ignores it), AND
+    the tsunami Okada ``deformation_dz.asc`` (the final-time seafloor dZ the
+    postprocess rasterizes into the coseismic-deformation PRODUCT, ADR 0226)."""
     return (
         base.startswith("fort.")
         or base.startswith("fgout")
         or (base.startswith("gauge") and base.endswith(".txt"))
+        or base == "deformation_dz.asc"
     )
 
 
