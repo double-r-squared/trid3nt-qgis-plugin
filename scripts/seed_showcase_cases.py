@@ -69,6 +69,7 @@ _CHATTANOOGA = [-85.32, 35.03, -85.28, 35.07]          # ADR 0152 SFINCS pluvial
 _MEXBEACH = [-85.5522, 29.6983, -85.3976, 29.8517]     # ADR 0176 SFINCS quadtree (Michael)
 _CRESCENT = [-124.24, 41.73, -124.16, 41.78]           # ADR 0148 GeoClaw tsunami
 _AK_PENINSULA = [-159.8, 55.0, -158.8, 55.6]           # ADR 0226 Okada real-event (Chignik)
+_NEWPORT_OR = [-124.15, 44.45, -123.95, 44.80]         # ADR 0230 Slab2 Cascadia scenario AOI
 _GALVESTON = [-95.2, 29.0, -94.2, 29.8]                # ADR 0168 surge shelf
 _PLATTE = [40.905, -98.42]                              # ADR 0165/0166 well (lat, lon)
 _GRAND_ISLAND_REACH = [40.857, -98.412]                 # ADR 0215 Wood River reach AOI (lat, lon)
@@ -345,6 +346,25 @@ SHOWCASE: list[Showcase] = [
              "product URL. Fallback ladder: absent a finite-fault product -> the single-"
              "subfault scaling synthesis (basis=derived, loudly labeled).", 1200,
              title_suffix="finite-fault M8.2 Chignik"),
+    # -- Slab2 SCENARIO tsunami (ADR 0230): the scenario rung -----------------
+    Showcase("geoclaw_inundation",
+             {"bbox": _NEWPORT_OR, "scenario_fault": "Cascadia",
+              "scenario_magnitude": 9.0, "scenario_epicenter_lonlat": [-125.5, 45.0],
+              "target_resolution_m": 25000.0, "coastal_gauge_lonlat": [-124.10, 44.62],
+              "sim_duration_s": 3600, "amr_levels": 2, "output_frames": 12,
+              "fgout_frames": 15, "compute_class": "standard"},
+             "ADR 0230 Slab2 SCENARIO tsunami: a HYPOTHETICAL full-margin Cascadia M9.0 "
+             "rupture -- NOT a real event. scenario_fault='Cascadia' takes the REAL USGS "
+             "Slab2 subduction-interface geometry (depth/strike/dip grids, DOI "
+             "10.5066/F7PV6JNV), tiles it into ~200 subfaults FOLLOWING THE CURVED "
+             "trench (Strasser-2010 area scaling -> ~1.24e5 km2 / L 614 km / W 189 km; "
+             "Tukey-tapered slip 0-~20 m normalized to M9.0), and drives a multi-subfault "
+             "Okada seafloor deformation that tracks the trench curve -- NOT a straight "
+             "bar. dtopo -> the ADR 0229 deep-water column -> GeoClaw solve -> a coastal "
+             "mareogram at Newport, Oregon. Provenance basis=scenario_slab2, LOUDLY a "
+             "scenario ('hypothetical rupture on real published geometry, NOT a real "
+             "event') -- never confusable with the measured-inversion Chignik case.", 2400,
+             title_suffix="Slab2 scenario Cascadia M9"),
     # -- SWAN nonstationary storm evolution (ADR 0190 row 3) -----------------
     Showcase("swan_wave_field",
              {"bbox": _APALACHEE, "mode": "nonstationary",

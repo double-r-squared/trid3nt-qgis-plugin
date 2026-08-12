@@ -257,6 +257,11 @@ InputBasis = Literal[
     # a MEASURED published inversion (e.g. a USGS finite-fault slip model) -- the
     # strongest site-specific class: real measured data, not a scaling law/default.
     "measured_inversion",
+    # a SCENARIO source built on REAL published geometry but a HYPOTHETICAL rupture
+    # (e.g. a USGS Slab2 subduction-interface + a target-Mw tapered slip) -- LOUDLY a
+    # "what if", never confusable with a real event. The interface geometry is real;
+    # the earthquake is not.
+    "scenario_slab2",
 ]
 
 
@@ -316,10 +321,12 @@ def render_assumptions_line(entries: Any) -> str | None:
             val_txt = f"={value}" + (f" {units}" if units else "")
         return f"{param}{val_txt}"
 
-    fetched, demo, other = [], [], []
+    fetched, demo, scenario, other = [], [], [], []
     for e in entries:
         basis = _field(e, "basis")
-        if basis in ("fetched", "derived", "measured_inversion"):
+        if basis == "scenario_slab2":
+            scenario.append(e)
+        elif basis in ("fetched", "derived", "measured_inversion"):
             fetched.append(e)
         elif basis == "default_demo":
             demo.append(e)
@@ -336,6 +343,11 @@ def render_assumptions_line(entries: Any) -> str | None:
         src_txt = f" (via {', '.join(srcs)})" if srcs else ""
         segments.append(
             "site-derived: " + ", ".join(_one(e) for e in fetched) + src_txt
+        )
+    if scenario:
+        segments.append(
+            "SCENARIO (hypothetical rupture on real published geometry, NOT a real "
+            "event): " + ", ".join(_one(e) for e in scenario)
         )
     if demo:
         segments.append(

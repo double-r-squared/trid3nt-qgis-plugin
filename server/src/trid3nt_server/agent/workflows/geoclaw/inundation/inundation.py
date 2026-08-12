@@ -44,9 +44,10 @@ from trid3nt_contracts.geoclaw_contracts import (
     GeoClawDepthLayerURI,
     GeoClawRunArgs,
 )
-from trid3nt_contracts.tool_registry import AtomicToolMetadata
+from trid3nt_contracts.tool_registry import AtomicToolMetadata, ResolutionSpec
 
 from trid3nt_server.agent.tools import register_tool
+from trid3nt_server.agent.tools.resolution_declared import enforce_resolution
 from trid3nt_server.agent.gates.input_review import gate_input_review
 from trid3nt_server.agent.tool_arg_normalizer import coerce_bbox_value
 from trid3nt_server.agent.tools.publish_layer.publish_layer import PublishLayerError, publish_layer
@@ -61,6 +62,10 @@ from trid3nt_server.agent.workflows.geoclaw.finite_fault import (
     FiniteFaultError,
     fetch_finite_fault_model,
     to_csvfault_text,
+)
+from trid3nt_server.agent.workflows.geoclaw.scenario_slab2 import (
+    ScenarioSlab2Error,
+    resolve_slab2_scenario,
 )
 from trid3nt_server.agent.workflows.geoclaw.postprocess_geoclaw import (
     GEOCLAW_DEFORMATION_STYLE_PRESET,
@@ -139,6 +144,24 @@ TEMPLATE_CARD = TemplateCard(
 )
 
 
+#: ADR 0230: the Slab2 SCENARIO subfault-tiling patch size. The finer floor is the
+#: Slab2 grid native spacing (~0.05 deg ~ 5 km) -- a tiling finer than the interface
+#: grid buys no geometry fidelity; coarser is a valid cheaper (fewer-subfault) tiling,
+#: so no upper bound. Named per the NATE convention (any resolution-class param =
+#: target_resolution_m).
+_SCENARIO_TILING_RES_SPEC = ResolutionSpec(
+    param="target_resolution_m",
+    unit="m",
+    min_value=5000.0,
+    native_hint="USGS Slab2 interface grid ~0.05 deg (~5 km) (fetch via scenario_slab2)",
+    constraint_source="data",
+    rationale=(
+        "subfault patch edge for the Slab2 scenario tiling; finer than the ~5 km "
+        "Slab2 grid buys no interface-geometry fidelity, coarser is a valid cheaper "
+        "tiling so no upper bound"
+    ),
+)
+
 _GEOCLAW_INUNDATION_METADATA = AtomicToolMetadata(
     name="geoclaw_inundation",
     ttl_class="live-no-cache",
@@ -146,6 +169,7 @@ _GEOCLAW_INUNDATION_METADATA = AtomicToolMetadata(
     cacheable=False,
     engine="geoclaw",
     tier="template",
+    resolution_specs=(_SCENARIO_TILING_RES_SPEC,),
 )
 
 
@@ -173,6 +197,10 @@ async def geoclaw_inundation(
     earthquake_min_magnitude: float = 7.0,
     earthquake_start_date: str | None = None,
     earthquake_end_date: str | None = None,
+    scenario_fault: str | None = None,
+    scenario_magnitude: float | None = None,
+    scenario_epicenter_lonlat: tuple[float, float] | list[float] | None = None,
+    target_resolution_m: float | None = None,
     surge_forcing_uri: str | None = None,
     output_frames: int = 24,
     amr_levels: int = 2,
@@ -245,6 +273,24 @@ async def geoclaw_inundation(
         earthquake_min_magnitude: catalog magnitude floor for earthquake_source
             (default 7.0). earthquake_start_date / earthquake_end_date: OPTIONAL
             ISO window narrowing the catalog search.
+        scenario_fault: OPTIONAL subduction-zone name for a SCENARIO ("what if")
+            tsunami source -- "Cascadia" or "Alaska-Aleutians". Unlike
+            earthquake_source (a REAL catalog event), this builds a HYPOTHETICAL
+            rupture on the REAL published USGS Slab2 subduction-interface geometry:
+            the Slab2 depth/strike/dip grids are tiled into subfaults following the
+            CURVED trench, and a target-Mw tapered slip is distributed over them
+            (Strasser 2010 area scaling + a Tukey-tapered slip normalized to the
+            moment). Forces scenario "tsunami" and drives a multi-subfault Okada
+            deformation that tracks the trench curve. LOUDLY labeled a scenario
+            (basis "scenario_slab2") -- never confusable with a real event.
+        scenario_magnitude: REQUIRED with scenario_fault -- the target moment
+            magnitude Mw (e.g. 9.0 for a full-margin Cascadia rupture).
+        scenario_epicenter_lonlat: OPTIONAL (lon, lat) hint centering the rupture
+            along the interface (and the domain source point); unset -> the
+            slip-weighted rupture centroid.
+        target_resolution_m: OPTIONAL Slab2 scenario subfault patch edge (m,
+            default 20000). Declared range >= 5000 m (Slab2 grid ~5 km native);
+            a finer ask is quoted back (ADR 0225).
         surge_forcing_uri: optional sea-surface hydrograph CSV.
         output_frames: animation frame count (default 24).
         amr_levels: AMR refinement levels (default 2).
@@ -431,6 +477,99 @@ async def geoclaw_inundation(
             (_ff_model.provenance_label if finite_fault_uri else "none (single-subfault)"),
         )
 
+    # --- SCENARIO tsunami source (ADR 0230): a HYPOTHETICAL rupture on the REAL USGS
+    # Slab2 subduction-interface geometry. Unlike earthquake_source (a named real
+    # catalog event), scenario_fault answers "what if <zone> ruptures at M<x>" -- there
+    # is NO measured slip to fetch, so the geometry is the published Slab2 dep/str/dip
+    # grids and a target-Mw tapered slip is distributed over the tiled CURVED interface.
+    # It reuses the SAME finite_fault_uri seam the measured rung uses, so the worker
+    # builds a real multi-subfault Okada dtopo whose deformation tracks the trench.
+    # LOUDLY labeled basis="scenario_slab2" so it is never mistaken for a real event.
+    # There is no degrade rung: a scenario the interface cannot support is a typed
+    # error, never a silent single-rectangle fallback.
+    elif scenario_fault:
+        if scenario_magnitude is None:
+            return {
+                "status": "error",
+                "error_code": "GEOCLAW_SCENARIO_MAGNITUDE_REQUIRED",
+                "error_message": (
+                    "scenario_fault requires scenario_magnitude (the target moment "
+                    "magnitude, e.g. 9.0 for a full-margin Cascadia rupture)."
+                ),
+            }
+        try:
+            # None (the module default subfault size) is always in-range; an
+            # out-of-declared-range ask is quoted back (ADR 0225).
+            enforce_resolution(_SCENARIO_TILING_RES_SPEC, target_resolution_m)
+        except Exception as exc:  # noqa: BLE001 - ResolutionOutOfRangeError -> typed
+            return {
+                "status": "error",
+                "error_code": "GEOCLAW_INPUT_INVALID",
+                "error_message": str(exc),
+            }
+        _epi: tuple[float, float] | None = None
+        if scenario_epicenter_lonlat is not None:
+            _el = list(scenario_epicenter_lonlat)
+            if len(_el) == 2:
+                _epi = (float(_el[0]), float(_el[1]))
+        try:
+            _scn_model = await asyncio.to_thread(
+                resolve_slab2_scenario,
+                str(scenario_fault),
+                float(scenario_magnitude),
+                epicenter_lonlat=_epi,
+                target_resolution_m=float(target_resolution_m or 20_000.0),
+            )
+        except ScenarioSlab2Error as exc:
+            return {
+                "status": "error",
+                "error_code": exc.error_code,
+                "error_message": str(exc),
+            }
+        scenario = "tsunami"
+        _scenario_l = "tsunami"
+        source_magnitude = float(scenario_magnitude)
+        effective_source_lonlat = _epi if _epi is not None else _scn_model.centroid_lonlat
+        try:
+            finite_fault_uri = await asyncio.to_thread(
+                stage_finite_fault_csv, to_csvfault_text(_scn_model)
+            )
+            finite_fault_footprint = _scn_model.footprint_bbox
+        except Exception as exc:  # noqa: BLE001 - staging failure -> honest typed error
+            return {
+                "status": "error",
+                "error_code": "GEOCLAW_SCENARIO_STAGING_FAILED",
+                "error_message": (
+                    f"failed to stage the Slab2 scenario fault CSV: {exc}"
+                ),
+            }
+        _peak = _scn_model.max_slip_m
+        _avg = (sum(p.slip_m for p in _scn_model.patches) / _scn_model.n_subfaults
+                if _scn_model.n_subfaults else 0.0)
+        provenance.append(SyntheticInput(
+            param="scenario_fault",
+            value=(
+                f"Slab2 {scenario_fault} M{scenario_magnitude:.1f}: "
+                f"{_scn_model.n_subfaults} subfaults, slip {_scn_model.min_slip_m:.1f}-"
+                f"{_peak:.1f} m (avg {_avg:.1f} m)"
+            ),
+            basis="scenario_slab2",
+            real_source_if_any="USGS Slab2 (DOI 10.5066/F7PV6JNV)",
+            note=(
+                "HYPOTHETICAL scenario rupture -- NOT a real event. Interface geometry "
+                "(depth/strike/dip) is the REAL published USGS Slab2 model; the rupture "
+                "size uses Strasser et al. (2010) interface scaling and the slip is a "
+                "Tukey-tapered distribution normalized to the target moment. The Okada "
+                "deformation is MODELED."
+            ),
+        ))
+        logger.info(
+            "geoclaw_inundation scenario_fault=%r M%.1f -> %d subfaults "
+            "(source_lonlat=%s footprint=%s)",
+            scenario_fault, scenario_magnitude, _scn_model.n_subfaults,
+            effective_source_lonlat, finite_fault_footprint,
+        )
+
     if _scenario_l in ("dam_break", "dambreak", "dam-break"):
         _has_loc = source_lonlat is not None
         _has_height = dam_break_depth_m is not None
@@ -508,7 +647,7 @@ async def geoclaw_inundation(
                 ("depth", fault_depth_km is not None),
             ) if not supplied
         ]
-        if _fault_defaulted:
+        if _fault_defaulted and finite_fault_uri is None:
             provenance.append(SyntheticInput(
                 param="fault_geometry",
                 value="generic synthetic Okada",
