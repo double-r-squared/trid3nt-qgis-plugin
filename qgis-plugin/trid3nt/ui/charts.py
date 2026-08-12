@@ -320,13 +320,16 @@ def render_spec(figure, spec: dict) -> Dict[str, Any]:
 
     title = spec_title(spec)
     if title:
-        ax.set_title(title, fontsize=9)
+        ax.set_title(title, fontsize=9, pad=4)
     handles, labels = ax.get_legend_handles_labels()
     if labels:
         summary["legend_labels"] = list(labels)
         ax.legend(fontsize=7, framealpha=0.6)
     try:
-        figure.tight_layout()
+        # pad=0.3 (default 1.08) -- the axes title is already small; the
+        # plot area, not whitespace above it, should dominate the dock
+        # (NATE chart-chrome feedback).
+        figure.tight_layout(pad=0.3)
     except Exception:  # noqa: BLE001 -- tight_layout can fail on odd extents
         pass
     return summary

@@ -61,7 +61,7 @@ from __future__ import annotations
 import sys
 from typing import Any, Callable, Dict, List, Optional
 
-from qgis.PyQt.QtCore import Qt
+from qgis.PyQt.QtCore import QSize, Qt
 from qgis.PyQt.QtGui import QGuiApplication
 from qgis.PyQt.QtWidgets import (
     QDockWidget,
@@ -91,6 +91,82 @@ if charts.matplotlib_available():
             )
         except Exception:  # noqa: BLE001 -- no toolbar, canvas still renders
             _NAV_TOOLBAR = None
+
+# Compact nav toolbar (NATE chart-chrome feedback, first live look, QGIS 4
+# mac: "there is a large header ... maybe we can shrink it"). The stock
+# ``NavigationToolbar2QT`` draws its full Home/Back/Forward/Pan/Zoom/
+# Subplots/Customize/Save set with text-under-icon buttons at retina icon
+# sizes -- a tall row for a dock that is supposed to be short-and-wide. This
+# keeps only the subset a chart dock actually needs (Home/Pan/Zoom/Save),
+# icon-only, at a small fixed icon size, with the coordinate readout off
+# (the dock's own ``hover_label`` already shows x/y -- ADR: interactivity
+# (a) above). Guarded exactly like ``_NAV_TOOLBAR``: None when matplotlib/the
+# toolbar backend is absent.
+_COMPACT_TOOLITEMS = {"Home", "Pan", "Zoom", "Save"}
+_TOOLBAR_ICON_SIZE = QSize(16, 16)
+_CompactNavToolbar = None
+if _NAV_TOOLBAR is not None:
+
+    def _compact_toolitems():
+        kept = []
+        for item in _NAV_TOOLBAR.toolitems:
+            if item is not None and item[0] not in _COMPACT_TOOLITEMS:
+                continue
+            if item is None and (not kept or kept[-1] is None):
+                continue  # collapse now-adjacent/leading separators
+            kept.append(item)
+        while kept and kept[-1] is None:
+            kept.pop()
+        return tuple(kept)
+
+    class _CompactNavToolbar(_NAV_TOOLBAR):  # noqa: N801 -- matches base name
+        toolitems = _compact_toolitems()
+
+        def __init__(self, canvas, parent=None):
+            super().__init__(canvas, parent, coordinates=False)
+            self.setIconSize(_TOOLBAR_ICON_SIZE)
+            self.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonIconOnly)
+
+
+class _CompactTitleBar(QWidget):
+    """A slim ``QDockWidget.setTitleBarWidget`` replacement (NATE: "there is
+    a large header ... I think it is the default. Maybe we can shrink it?").
+    A fixed-height single row: small-font title, stretch, float + close --
+    the same two affordances the native title bar gave, just without its
+    generous default padding/icon sizing."""
+
+    _HEIGHT = 20  # px -- vs the platform-default title bar (30-40+ px)
+
+    def __init__(self, dock: QDockWidget):
+        super().__init__(dock)
+        row = QHBoxLayout(self)
+        row.setContentsMargins(6, 2, 2, 2)
+        row.setSpacing(2)
+
+        title = QLabel(dock.windowTitle())
+        title.setStyleSheet("font-size: 8pt; font-weight: 600;")
+        row.addWidget(title)
+        row.addStretch(1)
+
+        float_btn = QToolButton()
+        float_btn.setText("⧉")  # float/dock glyph
+        float_btn.setAutoRaise(True)
+        float_btn.setFixedSize(16, 16)
+        float_btn.setToolTip("Float/dock this window")
+        float_btn.clicked.connect(
+            lambda: dock.setFloating(not dock.isFloating())
+        )
+        row.addWidget(float_btn)
+
+        close_btn = QToolButton()
+        close_btn.setText("✕")  # close glyph
+        close_btn.setAutoRaise(True)
+        close_btn.setFixedSize(16, 16)
+        close_btn.setToolTip("Close")
+        close_btn.clicked.connect(dock.close)
+        row.addWidget(close_btn)
+
+        self.setFixedHeight(self._HEIGHT)
 
 
 _CANVAS_MIN_HEIGHT = 220  # px -- the bottom dock is short + wide (TUFLOW-esque)
@@ -210,6 +286,7 @@ class ChartsWindow(QDockWidget):
     ):
         super().__init__("TRID3NT Charts", parent)
         self.setObjectName("Trid3ntChartsWindow")
+        self.setTitleBarWidget(_CompactTitleBar(self))
         self._charts: List[dict] = []
         self._index = 0
         self._locate_callback = locate_callback
@@ -468,9 +545,10 @@ class ChartsWindow(QDockWidget):
         self._canvas = canvas
         self._ax = figure.axes[0] if figure.axes else None
 
-        # (c) navigation toolbar (pan / rubber-band zoom / home).
-        if _NAV_TOOLBAR is not None:
-            self._toolbar = _NAV_TOOLBAR(canvas, self)
+        # (c) navigation toolbar (pan / rubber-band zoom / home) -- the
+        # compact Home/Pan/Zoom/Save subset, small icon-only buttons.
+        if _CompactNavToolbar is not None:
+            self._toolbar = _CompactNavToolbar(canvas, self)
             self._toolbar_host.addWidget(self._toolbar)
 
         # (a)/(b)/(c) mpl event callbacks bound to THIS canvas.
