@@ -213,6 +213,24 @@ DEFAULT_CSUB_INTERBED_THICK_FRAC = 0.5
 #: via cg_ske_cr) -- the engine-enforced double-count guard. Pinned in the smoke.
 CSUB_STO_SS_FLOOR = 0.0
 
+#: Vertical hydraulic conductivity (m/day) of a DELAY interbed (csub_delay_interbeds
+#: knob, ADR 0228). A LOW kv gives finite consolidation diffusivity -> slow, time-
+#: lagged compaction; the delay bed compacts BELOW an equivalent no-delay bed at
+#: end-of-pumping. Pinned by fixtures/csub_delay_smoke proof (B). nodelay ignores kv.
+CSUB_DELAY_INTERBED_KV_M_DAY = 1e-6
+
+#: Number of numerical sub-cells discretizing a DELAY interbed's vertical head
+#: profile (the CSUB ndelaycells). Only written when any interbed is a delay bed.
+#: Pinned by fixtures/csub_delay_smoke (ndelaycells=19).
+DEFAULT_CSUB_NDELAYCELLS = 19
+
+#: Geostatic unit weights (specific gravity) for the EFFECTIVE_STRESS CSUB
+#: formulation (csub_effective_stress knob, ADR 0228): sgm = moist (above water
+#: table), sgs = saturated (below). Pinned by fixtures/csub_delay_smoke proof (C).
+#: Only written when csub_effective_stress is on (head_based is dropped).
+DEFAULT_CSUB_SGM = 1.7
+DEFAULT_CSUB_SGS = 2.0
+
 
 # ---------------------------------------------------------------------------
 # Archetype demo defaults. The three new MODFLOW archetypes
@@ -1234,6 +1252,7 @@ def _build_csub_interbeds(
     sse: float,
     thick_frac: float,
     theta: float,
+    delay: bool = False,
 ) -> dict[str, Any]:
     """Turn a pumped-cell footprint into MF6 CSUB deck inputs (ONE no-delay
     HEAD_BASED interbed per cell).
@@ -1259,15 +1278,20 @@ def _build_csub_interbeds(
       * kv       = 1.0 (ignored for nodelay; a positive dummy avoids the DELAY
                    validation);
       * h0       = 0.0 (initial interbed head offset);
-      * boundname = ``sub_r{i}`` (mf6 UPPERCASES it in the OBS csv header ->
-                    COMPACTION_R{i} / INE_R{i} / ELA_R{i}, pinned by the smoke).
+      * boundname = ``sub_r{i}`` (a stable per-interbed label carried in
+                    packagedata; NOT used as the OBS id -- see below).
 
     The continuous OBS (registered to ``<gwf>.csub.obs.csv``) records, per
     interbed: ``interbed-compaction`` (total, m), ``inelastic-compaction`` (INE,
     the permanent share) and ``elastic-compaction`` (ELA, the recoverable share).
-    The postprocess parses these for ``inelastic_fraction = sum(INE) / (sum(INE)
-    + sum(ELA))``. The OBS types + the uppercased casing are pinned by the Phase-1
-    smoke fixture (fixtures/csub_smoke).
+    Each obs is keyed by the 1-based icsubno (interbed NUMBER), NOT the boundname:
+    mf6 6.7.0 HARD-ERRORS "BOUNDNAME (...) not allowed for CSUB observation type
+    'INTERBED-COMPACTION'" (the substrate-found latent regression; the per-interbed
+    compaction obs types accept icsubno only). The obsname (1st tuple element)
+    still drives the csv header (uppercased -> COMPACTION_R{i} / INE_R{i} /
+    ELA_R{i}), so the postprocess parses ``inelastic_fraction = sum(INE) /
+    (sum(INE) + sum(ELA))`` unchanged. Pinned by fixtures/csub_delay_smoke + the
+    6.7.0 icsubno law.
 
     Returns a dict with ``packagedata`` / ``obs`` / ``interbed_meta`` (the ordered
     ``[icsubno, row, col]`` echo for postprocess georegistration) and
@@ -1277,6 +1301,14 @@ def _build_csub_interbeds(
     n = len(footprint_cells)
     if n < 1:
         raise ValueError("CSUB requires >= 1 footprint cell (empty pumped footprint?)")
+    # cdelay / kv select nodelay-vs-delay interbeds (ADR 0228 csub_delay_interbeds
+    # knob). nodelay (default) ignores kv -> a positive dummy keeps the byte-
+    # identical v1 deck; a "delay" interbed models finite consolidation diffusivity
+    # via a LOW vertical K (1e-6 m/day -> slow, time-lagged compaction; the delay
+    # bed compacts BELOW an equivalent no-delay bed at end-of-pumping). Pinned by
+    # fixtures/csub_delay_smoke proof (B).
+    cdelay = "delay" if delay else "nodelay"
+    kv = CSUB_DELAY_INTERBED_KV_M_DAY if delay else 1.0
     packagedata: list[tuple] = []
     interbed_meta: list[tuple[int, int, int]] = []
     for i, (row, col) in enumerate(footprint_cells):
@@ -1285,29 +1317,36 @@ def _build_csub_interbeds(
             (
                 i,                    # icsubno (0-based interbed number)
                 cellid,               # cellid (lay, row, col)
-                "nodelay",            # cdelay (no delay interbeds v1)
+                cdelay,               # cdelay (nodelay v1; delay = knob)
                 0.0,                  # pcs0 (preconsolidation OFFSET = 0)
                 float(thick_frac),    # thick (fraction of cell thickness)
                 1.0,                  # rnb (single equivalent interbed)
                 float(ssv),           # ssv_cc (inelastic Ssv, m^-1)
                 float(sse),           # sse_cr (elastic Sse, m^-1)
                 float(theta),         # theta (interbed porosity)
-                1.0,                  # kv (ignored for nodelay; positive dummy)
+                float(kv),            # kv (delay: finite diffusivity; nodelay: dummy)
                 0.0,                  # h0 (initial interbed head offset)
-                f"sub_r{i}",          # boundname (-> SUB_R{i} in the OBS csv)
+                f"sub_r{i}",          # boundname (packagedata label; OBS uses icsubno)
             )
         )
         interbed_meta.append((i, int(row), int(col)))
 
     # --- continuous OBS: total / inelastic / elastic compaction per interbed - #
-    # boundname-keyed obs (mf6 UPPERCASES -> COMPACTION_R{i} / INE_R{i} / ELA_R{i}).
-    obs_entries: list[tuple[str, str, str]] = []
+    # The obs ID must be the 1-based icsubno (interbed NUMBER), NOT the boundname:
+    # mf6 6.7.0 HARD-ERRORS "BOUNDNAME (...) not allowed for CSUB observation type
+    # 'INTERBED-COMPACTION'" (likewise inelastic-/elastic-compaction) -- the
+    # per-interbed compaction obs types are keyed by icsubno only. The obsname (1st
+    # tuple element) still drives the csv header (uppercased -> COMPACTION_R{i} /
+    # INE_R{i} / ELA_R{i}), so the postprocess parser is unaffected; only the id
+    # changes from boundname to icsubno. Pinned by the fixtures/csub_delay_smoke
+    # law + the 6.7.0 repro (the substrate-found latent regression).
+    obs_entries: list[tuple[str, str, int]] = []
     for i in range(n):
-        obs_entries.append((f"compaction_r{i}", "interbed-compaction", f"sub_r{i}"))
+        obs_entries.append((f"compaction_r{i}", "interbed-compaction", i + 1))
     for i in range(n):
-        obs_entries.append((f"ine_r{i}", "inelastic-compaction", f"sub_r{i}"))
+        obs_entries.append((f"ine_r{i}", "inelastic-compaction", i + 1))
     for i in range(n):
-        obs_entries.append((f"ela_r{i}", "elastic-compaction", f"sub_r{i}"))
+        obs_entries.append((f"ela_r{i}", "elastic-compaction", i + 1))
     obs = {"{gwf}.csub.obs.csv": obs_entries}
 
     return {
@@ -1510,6 +1549,8 @@ def _build_gwf_only_archetype_deck(
     csub_sse_elastic_m: float | None = None,
     csub_interbed_thick_frac: float | None = None,
     csub_cg_ske_m: float | None = None,
+    csub_delay_interbeds: bool = False,
+    csub_effective_stress: bool = False,
     # constitutive advanced-physics (levers STEP 3): ALREADY-VALIDATED resolved
     # dict (regional_gradient / streambed_k_m_day / sfr_manning_n). None/{} =>
     # every phys.get below returns the historical constant => byte-identical.
@@ -2251,6 +2292,7 @@ def _build_gwf_only_archetype_deck(
             sse=csub_sse_written,
             thick_frac=csub_thick_frac_written,
             theta=porosity,
+            delay=bool(csub_delay_interbeds),
         )
         csub_n_interbeds = int(csub_build["n_interbeds"])
         csub_interbed_cells_meta = [list(m) for m in csub_build["interbed_meta"]]
@@ -2258,12 +2300,16 @@ def _build_gwf_only_archetype_deck(
             key.format(gwf=gwf_name): entries
             for key, entries in csub_build["obs"].items()
         }
-        csub_pkg = flopy.mf6.ModflowGwfcsub(
-            gwf,
+        # Formulation knobs (ADR 0228; DEFAULTS byte-identical to v1):
+        #   csub_effective_stress OFF (default) -> HEAD_BASED + initial-head
+        #     preconsolidation (v1, byte-identical). ON -> drop head_based for the
+        #     EFFECTIVE_STRESS formulation (geostatic sgm/sgs unit weights + a
+        #     specified initial preconsolidation stress). Pinned by csub_delay_smoke (C).
+        #   csub_delay_interbeds ON -> add ndelaycells (the delay bed's vertical
+        #     head-profile discretization). nodelay writes no ndelaycells (v1).
+        csub_kwargs: dict[str, Any] = dict(
             save_flows=True,
             boundnames=True,
-            head_based=True,
-            initial_preconsolidation_head=True,
             cell_fraction=True,          # thick is a fraction of cell thickness
             compression_indices=False,   # ssv_cc/sse_cr are Ss values (m^-1)
             ninterbeds=csub_n_interbeds,
@@ -2276,6 +2322,16 @@ def _build_gwf_only_archetype_deck(
             filename=f"{gwf_name}.csub",
             pname="csub-0",
         )
+        if csub_effective_stress:
+            csub_kwargs["sgm"] = DEFAULT_CSUB_SGM
+            csub_kwargs["sgs"] = DEFAULT_CSUB_SGS
+            csub_kwargs["specified_initial_preconsolidation_stress"] = True
+        else:
+            csub_kwargs["head_based"] = True
+            csub_kwargs["initial_preconsolidation_head"] = True
+        if csub_delay_interbeds:
+            csub_kwargs["ndelaycells"] = DEFAULT_CSUB_NDELAYCELLS
+        csub_pkg = flopy.mf6.ModflowGwfcsub(gwf, **csub_kwargs)
         csub_pkg.obs.initialize(
             filename=f"{gwf_name}.csub.obs", continuous=obs_map
         )
@@ -4092,6 +4148,8 @@ def build_modflow_deck(
     csub_sse_elastic_m: float | None = None,
     csub_interbed_thick_frac: float | None = None,
     csub_cg_ske_m: float | None = None,
+    csub_delay_interbeds: bool = False,
+    csub_effective_stress: bool = False,
     # --- Archetype switch (ADDITIVE, all optional) -------- #
     # archetype is None -> the EXISTING spill/seepage GWF+GWT deck (byte-identical).
     # The three new archetypes are GWF-only and dispatch to
@@ -4507,6 +4565,8 @@ def build_modflow_deck(
             csub_sse_elastic_m=csub_sse_elastic_m,
             csub_interbed_thick_frac=csub_interbed_thick_frac,
             csub_cg_ske_m=csub_cg_ske_m,
+            csub_delay_interbeds=csub_delay_interbeds,
+            csub_effective_stress=csub_effective_stress,
             advanced_physics=advanced_physics,
         )
 

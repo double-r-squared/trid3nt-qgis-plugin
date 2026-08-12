@@ -539,6 +539,35 @@ class MODFLOWRunArgs(EngineRunArgsMixin):
             "applied (narrated as a demo assumption). Must be > 0."
         ),
     )
+    csub_delay_interbeds: bool = Field(
+        default=False,
+        description=(
+            "CSUB formulation knob (ADR 0228): when True the compressible interbed "
+            "is a DELAY interbed (cdelay='delay' + ndelaycells + a LOW interbed "
+            "vertical K) -> finite consolidation diffusivity, so compaction is "
+            "TIME-LAGGED (the interbed keeps consolidating after the head decline, "
+            "and at end-of-pumping it has compacted LESS than an equivalent no-delay "
+            "bed). When False (the default) the interbed is a no-delay bed that "
+            "consolidates instantly with head (byte-identical to the v1 deck). "
+            "Ignored unless archetype == 'land_subsidence'."
+        ),
+    )
+    csub_effective_stress: bool = Field(
+        default=False,
+        description=(
+            "CSUB formulation knob (ADR 0228): when True the CSUB package uses the "
+            "EFFECTIVE_STRESS formulation (geostatic sgm/sgs unit weights + a "
+            "specified initial preconsolidation stress) instead of the default "
+            "HEAD_BASED formulation. The two formulations bracket the same "
+            "subsidence scale (an order-of-magnitude crosscheck; effective-stress "
+            "typically ~0.4-0.5 of head-based for the same stress path). When False "
+            "(the default) HEAD_BASED is used with the initial head as the "
+            "preconsolidation head (byte-identical to the v1 deck). Ignored unless "
+            "archetype == 'land_subsidence'. Both knobs are demo-parameterized "
+            "(sgm/sgs/ndelaycells are labeled assumptions -- no site clay-profile "
+            "fetcher exists; narrate as demo values, never site precision)."
+        ),
+    )
 
     # --- multi_species: N-species solute transport (Wave-3) ----------------- #
     # An optional list of per-species transport specs. When None (the default)
