@@ -845,6 +845,7 @@ Aspects: dead fuel moisture (1/10/100-hr) raster ingestion + linear-interpolatio
   notes: Requires standing up/consuming the Cloudfire microservice client, not just a namelist knob - new integration surface.
 
 ### Ensembles / Monte Carlo
+**HELD BY NATE (2026-08-13): do not build this section until NATE explicitly releases it, or last on the board.**
 Purpose: Run many stochastically-perturbed realizations (ignition location, weather stream, input-raster perturbation, wind fluctuation) and aggregate into probabilistic outputs like burn probability.
 Today: Not confirmed as surfaced; roster lists only single point-ignition spread. NUM_ENSEMBLE_MEMBERS=100 appears in the published Validation Case 01 (County Fire, CA) as the field-tested ensemble scale.
 Aspects: randomized ignition locations (uniform vs density-weighted, ignition-mask constrained); weather-stream / historical-meteorology-band sampling; raster perturbation (uniform PDF on fuel moisture, wind, canopy, etc.); wind fluctuation intensity randomization; burn-probability aggregation output (conventional / passive crown / active crown bands)
