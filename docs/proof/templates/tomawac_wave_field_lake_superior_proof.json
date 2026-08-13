@@ -1,0 +1,25 @@
+{
+  "case": "lake_superior_fetch_pair",
+  "adr": "0236",
+  "westerly": {
+    "hs_max_m": 3.0367,
+    "hs_upwind_m": 0.3991,
+    "hs_downwind_m": 3.0353,
+    "depth_max_m": 359.0,
+    "depth_mean_m": 198.7,
+    "npoin": 5376,
+    "n_wet_nodes": 4763,
+    "utm_epsg": 32616,
+    "wall_s": 41.4
+  },
+  "easterly": {
+    "hs_max_m": 3.0045,
+    "hs_upwind_m": 2.8525,
+    "hs_downwind_m": 0.4188,
+    "wall_s": 41.6
+  },
+  "run_ids": {
+    "westerly": "01KZX3YCG91QSXVVW72F7YDMG6",
+    "easterly": "01KZX41SA664C5T9MYTD87WV5E"
+  }
+}

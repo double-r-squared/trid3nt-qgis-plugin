@@ -1,0 +1,15 @@
+# Template routing phrasings (ADR 0236): the TOMAWAC spectral-wave engine is an
+# ordinary retrieval-pool member (door dissolution, ADR 0094). Four question
+# classes (fetch_growth / shoaling / bottom_friction / wave_current) share ONE
+# tool, so the phrasings span all four.
+tomawac_wave_field:
+- how big do the waves get on Lake Superior in a westerly gale
+- significant wave height Hs over this lake during a storm
+- fetch-limited wind-wave growth across the lake from the upwind shore to the downwind shore
+- how far do the waves grow downwind across this fetch
+- run a TOMAWAC spectral wave field for this lake / coastal AOI
+- refinement-grade wave physics to complement the SFINCS SnapWave screening
+- swell shoaling and depth-induced breaking as waves run up the beach
+- wave-current interaction, an opposing current steepening the waves
+- wave energy dissipation by bottom friction on a shallow shelf
+- the sea state a sustained storm wind builds over a Great Lake

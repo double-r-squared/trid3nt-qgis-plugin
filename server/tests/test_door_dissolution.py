@@ -47,6 +47,7 @@ EXPECTED_TEMPLATES = {
     "swmm_aquifer_baseflow_to_node",  # ADR 0218 board row swmm_aquifer_baseflow_to_node: two-zone [AQUIFERS]/[GROUNDWATER] baseflow-to-node
     "telemac_river_dye",
     "telemac_do_sag",
+    "tomawac_wave_field",
     "telemac_rain_on_grid",  # ADR 0196: SCS-CN rainfall-runoff on a delineated watershed (Coweeta Creek NC live V&V)
     "hecras_riverine_flood",  # engine #11 (ADR 0109; renamed ADR 0120): HEC-RAS riverine-flood template (v1 geometry: Muncie)
     "hecras_levee_breach",  # engine #11 second archetype (ADR 0125): HEC-RAS levee-breach template (v1 geometry: Muncie leveed floodplain)

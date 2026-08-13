@@ -41,10 +41,12 @@ from trid3nt_contracts.telemac_contracts import (
     TELEMAC_BED_EVOLUTION_STYLE_PRESET,
     TELEMAC_DO_STYLE_PRESET,
     TELEMAC_DYE_STYLE_PRESET,
+    TELEMAC_WAVE_STYLE_PRESET,
     TELEMAC_WSE_STYLE_PRESET,
     TelemacDoLayerURI,
     TelemacDyeLayerURI,
     TelemacSedimentLayerURI,
+    TelemacWaveLayerURI,
     TelemacWseLayerURI,
 )
 from trid3nt_contracts.execution import LegendKey
@@ -59,7 +61,9 @@ __all__ = [
     "postprocess_telemac_deposition",
     "postprocess_telemac_wse",
     "postprocess_telemac_do",
+    "postprocess_tomawac",
     "read_selafin",
+    "TELEMAC_WAVE_STYLE_PRESET",
     "TELEMAC_DYE_STYLE_PRESET",
     "TELEMAC_BED_EVOLUTION_STYLE_PRESET",
     "TELEMAC_WSE_STYLE_PRESET",
@@ -1481,4 +1485,185 @@ def postprocess_telemac_do(
         "postprocess_telemac_do run_id=%s do_var=%s do_min=%.3g mg/L at %.0fm "
         "violates=%s n_frames=%d -> %s",
         run_id, do_var.strip(), do_min, do_min_dist, violates, int(times.size), uri)
+    return [layer], metrics
+
+
+# --------------------------------------------------------------------------- #
+# TOMAWAC significant-wave-height (Hs) - the spectral-wave COG (ADR 0236).
+# --------------------------------------------------------------------------- #
+#: Hs (m) below which a wet node is treated as "flat water" for the extent
+#: metrics / detection floor. Tiny absolute floor separates a real wave field
+#: from a genuinely empty solve.
+_HS_WET_FLOOR: float = 1e-3
+
+
+def postprocess_tomawac(
+    slf_path: str | Path,
+    *,
+    run_id: str,
+    utm_epsg: int,
+    reach_name: str = "wave_field",
+    wave_mode: str = "fetch_growth",
+    runs_bucket: str | None = None,
+    target_ground_res_m: float = 30.0,
+) -> tuple[list[TelemacWaveLayerURI], dict[str, Any]]:
+    """Rasterize a solved TOMAWAC result into ONE significant-wave-height COG.
+
+    Reads ``slf_path`` (the TOMAWAC 2D result SELAFIN), picks the significant
+    wave height variable (``WAVE HEIGHT HM0``, mnemonic ``HM0``), takes the FINAL
+    frame (the steady sea state), reprojects the mesh nodes ``utm_epsg`` ->
+    EPSG:4326, rasterizes Hs onto an adaptive 4326 grid clipped to the wet domain,
+    writes + uploads ONE COG (``tomawac_hs.tif``), and returns
+    ``([TelemacWaveLayerURI], metrics)``. The time evolution plays from the
+    SELAFIN mesh sibling ``export_case_to_qgis`` discovers via
+    ``TELEMAC_WAVE_STYLE_PRESET`` (no per-frame COGs).
+
+    Honesty floor (invariant 1): every wave scalar is plain arithmetic over the
+    Hs field -- no LLM. The COG carries a spectral-screening label so a demo run
+    is never read as a calibrated hindcast.
+
+    Raises ``PostprocessTelemacError`` on any read / rasterize / COG failure.
+    """
+    try:
+        import numpy as np
+        from pyproj import Transformer  # noqa: F401
+    except Exception as exc:  # noqa: BLE001
+        raise PostprocessTelemacError(
+            "TELEMAC_DEPENDENCY_MISSING",
+            message=f"numpy/pyproj unavailable for TOMAWAC postprocess: {exc}",
+        ) from exc
+
+    slf = Path(slf_path)
+    try:
+        mesh = read_selafin(slf)
+    except Exception as exc:  # noqa: BLE001
+        raise PostprocessTelemacError(
+            "TELEMAC_OUTPUT_READ_FAILED",
+            message=f"could not parse SELAFIN {slf.name}: {exc}",
+            details={"slf": str(slf)},
+        ) from exc
+
+    import numpy as np
+
+    hs_var = None
+    for v in mesh["varnames"]:
+        u = v.strip().upper()
+        if "HM0" in u or "WAVE HEIGHT" in u:
+            hs_var = v
+            break
+    if hs_var is None or mesh["data"].get(hs_var) is None or mesh["data"][hs_var].size == 0:
+        raise PostprocessTelemacError(
+            "TELEMAC_OUTPUT_EMPTY",
+            message=f"no WAVE HEIGHT HM0 field / no time steps in {slf.name} "
+            f"(vars={mesh['varnames']})",
+            details={"slf": str(slf), "varnames": mesh["varnames"]},
+        )
+
+    hs = np.asarray(mesh["data"][hs_var])          # (nframes, npoin)
+    node_hs = hs[-1]                                # final frame = steady sea state
+    x_utm = np.asarray(mesh["x"])
+    y_utm = np.asarray(mesh["y"])
+    finite = np.isfinite(node_hs)
+    hs_max = float(np.nanmax(node_hs[finite])) if finite.any() else 0.0
+    hs_mean = float(np.nanmean(node_hs[finite & (node_hs > _HS_WET_FLOOR)])) \
+        if (finite & (node_hs > _HS_WET_FLOOR)).any() else 0.0
+    if hs_max < _HS_WET_FLOOR:
+        raise PostprocessTelemacError(
+            "TELEMAC_OUTPUT_EMPTY",
+            message=f"Hs never exceeded {_HS_WET_FLOOR} m anywhere in {slf.name} "
+            f"(peak {hs_max:.4g}) -- a dry/zero-wave solve?",
+            details={"hs_max_m": hs_max},
+        )
+
+    from pyproj import Transformer
+
+    back = Transformer.from_crs(int(utm_epsg), 4326, always_xy=True)
+    lon, lat = back.transform(x_utm, y_utm)
+    lon = np.asarray(lon)
+    lat = np.asarray(lat)
+
+    pad = 0.0009
+    bbox = (
+        float(lon.min() - pad), float(lat.min() - pad),
+        float(lon.max() + pad), float(lat.max() + pad),
+    )
+    shape = _grid_shape(bbox, target_ground_res_m)
+    # coarse wave grid -> clip at ~2 output cells so interior stays filled.
+    clip_dist_deg = 2.0 * max(
+        (bbox[2] - bbox[0]) / shape[1], (bbox[3] - bbox[1]) / shape[0])
+    try:
+        # wet_floor tiny so a small-Hs run is not clipped; NaN nodes drop out.
+        grid = _rasterize_nodes_to_grid(
+            lon, lat, node_hs, bbox, shape, clip_dist_deg, wet_floor=_HS_WET_FLOOR)
+    except Exception as exc:  # noqa: BLE001
+        raise PostprocessTelemacError(
+            "TELEMAC_OUTPUT_READ_FAILED",
+            message=f"Hs rasterization failed: {exc}",
+        ) from exc
+
+    from rasterio.transform import from_bounds
+
+    transform = from_bounds(bbox[0], bbox[1], bbox[2], bbox[3], shape[1], shape[0])
+    try:
+        cog = cog_io.write_cog_4326_from_grid(
+            grid, src_crs="EPSG:4326", src_transform=transform,
+            reproject=False, crs_roundtrip_guard=True,
+            dst_suffix="_tomawac_hs_4326.tif",
+        )
+    except CogIoError as exc:
+        raise _reraise_cogio(exc) from exc
+    try:
+        uri = cog_io.upload_cog(
+            cog, run_id, runs_bucket,
+            dest_filename="tomawac_hs.tif",
+            content_type="image/tiff", gs_backend="fsspec",
+            gs_fallback_to_file=False, runs_bucket_default=RUNS_BUCKET_DEFAULT,
+            log_label="TOMAWAC Hs COG",
+        )
+    except CogIoError as exc:
+        raise _reraise_cogio(exc) from exc
+    finally:
+        cog_io.safe_unlink(cog)
+
+    vmax = round(max(hs_max, _HS_WET_FLOOR), 4)
+    legend = LegendKey(
+        kind="continuous", colormap="viridis", vmin=0.0, vmax=vmax, units="m",
+        label="Significant wave height Hs (m)",
+    )
+    honesty = (
+        "Spectral-wave screening (TOMAWAC WAM4 physics): significant wave height "
+        "Hs over the domain. A planning-grade wave field driven by a prescribed "
+        "steady wind / boundary swell, not a calibrated hindcast."
+    )
+    layer = TelemacWaveLayerURI(
+        layer_id=f"tomawac-hs-{run_id}",
+        name=f"Significant wave height ({reach_name})",
+        layer_type="raster",
+        uri=uri,
+        style_preset=TELEMAC_WAVE_STYLE_PRESET,
+        role="primary",
+        units="m",
+        bbox=bbox,
+        legend=legend,
+        fallback_note=honesty,
+        hs_max_m=round(hs_max, 4),
+        hs_mean_m=round(hs_mean, 4),
+        wave_mode=wave_mode,
+    )
+    metrics: dict[str, Any] = {
+        "hs_var": hs_var.strip(),
+        "hs_max_m": round(hs_max, 4),
+        "hs_mean_m": round(hs_mean, 4),
+        "wave_mode": wave_mode,
+        "npoin": int(mesh["npoin"]),
+        "nelem": int(mesh["nelem"]),
+        "utm_epsg": int(utm_epsg),
+        "bbox": list(bbox),
+        "crs": "EPSG:4326",
+        "honesty_label": honesty,
+    }
+    logger.info(
+        "postprocess_tomawac run_id=%s hs_var=%s hs_max=%.4g m mode=%s -> %s",
+        run_id, hs_var.strip(), hs_max, wave_mode, uri,
+    )
     return [layer], metrics

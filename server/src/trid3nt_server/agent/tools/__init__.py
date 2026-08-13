@@ -694,6 +694,13 @@ from ..workflows.telemac.do_sag.do_sag import telemac_do_sag as _telemac_do_sag 
 # native constant-storm SCS-CN worker deck (mode=rain_on_grid) -> outlet
 # hydrograph + peak-depth COG. Live V&V: Coweeta Creek NC (docs/proof/templates).
 from ..workflows.telemac.rain_on_grid.rain_on_grid import telemac_rain_on_grid as _telemac_rain_on_grid  # noqa: E402,F401 - RoG front (engine=telemac, tier=template)
+# tomawac_wave_field TEMPLATE (engine="telemac", tier="template"), workflows/
+# telemac/wave_field/: the TOMAWAC third-generation spectral-wave engine (ADR
+# 0236). ONE question-class tool, four modes (fetch_growth / shoaling /
+# bottom_friction / wave_current); real Great Lakes lake-datum bathymetry or an
+# idealized basin. Physics proven through the baked tomawac binary; the
+# refinement-grade complement to SFINCS/SnapWave coastal screening.
+from ..workflows.telemac.wave_field.wave_field import tomawac_wave_field as _tomawac_wave_field  # noqa: E402,F401 - TOMAWAC wave front (engine=telemac, tier=template)
 # generate_mesh (ADR 0200): the standalone mesh builder. Promotes the ADR 0193
 # watershed + ADR 0194 coastal water-edge sandbox meshers behind ONE tool (mode
 # inferred from inputs); emits an MDAL .2dm display layer + a durable mesh artifact

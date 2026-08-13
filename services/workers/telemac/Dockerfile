@@ -136,6 +136,24 @@ E._reach_config(__import__('pathlib').Path('/data'), {'distance_km': 4.0, 'bogus
     && rm -f /tmp/telemac_strict_field_check.log \
     && echo "telemac strict-field gate OK: unknown reach key raised (ADR 0158)"
 
+# TOMAWAC wave leg build-time smoke (ADR 0236): tomawac_build + entrypoint import
+# cleanly, a TomawacConfig maps from a synthetic manifest['wave'] override (no
+# network / no solve), AND an unknown wave key raises loudly (ADR 0158 strict
+# field gate -- the ADR 0148 stale-image lesson applied to the wave parser).
+RUN python -c "import sys; sys.path.insert(0, '/opt/trid3nt/services/workers/telemac'); \
+import tomawac_build as W; import entrypoint as E; \
+cfg = E._tomawac_config(__import__('pathlib').Path('/data'), {'wave_mode': 'shoaling', 'wind_speed_mps': 18.0}); \
+assert cfg.wave_mode == 'shoaling' and cfg.wind_speed_mps == 18.0 and cfg.workdir == '/data'; \
+print('tomawac worker import + TomawacConfig map OK:', cfg.name)" \
+    && (python -c "import sys; sys.path.insert(0, '/opt/trid3nt/services/workers/telemac'); \
+import entrypoint as E; \
+E._tomawac_config(__import__('pathlib').Path('/data'), {'wave_mode': 'fetch_growth', 'bogus_wave_key': 1})" \
+        > /tmp/tomawac_strict_field_check.log 2>&1; echo "exit=$?" >> /tmp/tomawac_strict_field_check.log) \
+    && grep -q "^exit=1$" /tmp/tomawac_strict_field_check.log \
+    && grep -q "TomawacManifestUnknownFieldsError" /tmp/tomawac_strict_field_check.log \
+    && rm -f /tmp/tomawac_strict_field_check.log \
+    && echo "tomawac strict-field gate OK: unknown wave key raised (ADR 0158)"
+
 # One-shot solver: the activation entrypoint (_entrypoint.sh) sources the base
 # env (HOMETEL/SYSTELCFG/PATH -> telemac2d.py), then execs the worker. CMD is
 # the default argv; the launcher appends nothing (telemac_args=[]) so the

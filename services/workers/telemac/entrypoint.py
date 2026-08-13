@@ -983,6 +983,73 @@ def _write_max_fields_slf(path: str, X: Any, Y: Any, ikle: Any, ipob: Any,
     return path
 
 
+class TomawacManifestUnknownFieldsError(ValueError):
+    """manifest.json['wave'] carries a key ``TomawacConfig`` has no field for."""
+
+
+#: TOMAWAC PARSER VERSION (ADR 0236) -- bump on a TomawacConfig field
+#: addition/rename/retirement OR a wave worker-output-contract change, because it
+#: doubles as the tomawac worker-image/behavior provenance marker the
+#: image-staleness law (ADR 0148) keys off. -1 is the initial wave leg
+#: (idealized 4 question classes + the NOAA Great Lakes real-bathy path).
+_TOMAWAC_PARSER_VERSION = "tomawac-wave-1"
+
+
+def _tomawac_config(data_dir: Path, overrides: dict[str, Any]) -> Any:
+    """Build a ``TomawacConfig`` from manifest['wave'], rejecting unknown keys.
+
+    Same strict-unknown-field gate as ``_reach_config`` (ADR 0158): an unknown key
+    raises loudly rather than silently no-opping the intended wave knob (the ADR
+    0148 stale-image failure mode). ``workdir`` is pinned to the mounted data dir.
+    """
+    from tomawac_build import TomawacConfig  # noqa: WPS433 -- worker payload
+
+    import dataclasses
+
+    valid = {f.name for f in dataclasses.fields(TomawacConfig)}
+    clean: dict[str, Any] = {}
+    unknown: list[str] = []
+    for key, value in (overrides or {}).items():
+        if key in ("workdir", "mode"):
+            continue  # workdir pinned; 'mode' is the routing key, not a field
+        if key in valid:
+            clean[key] = value
+        else:
+            unknown.append(key)
+    if unknown:
+        raise TomawacManifestUnknownFieldsError(
+            f"manifest.json['wave'] carries unknown field(s) {sorted(unknown)} "
+            f"that parser {_TOMAWAC_PARSER_VERSION} does not read -- this SILENTLY "
+            f"no-ops the intended wave knob(s) rather than applying them. Either "
+            f"the caller has a typo, or the worker image is stale (rebuild it -- "
+            f"ADR 0148). Known TomawacConfig fields: {sorted(valid)}."
+        )
+    if "bbox" in clean and clean["bbox"] is not None:
+        clean["bbox"] = tuple(float(v) for v in clean["bbox"])
+    clean["workdir"] = str(data_dir)
+    return TomawacConfig(**clean)
+
+
+def run_tomawac_pipeline(
+    data_dir: Path, wave_overrides: dict[str, Any], run_id: str | None
+) -> dict[str, Any]:
+    """Run the TOMAWAC wave pipeline (ADR 0236) in ``data_dir``.
+
+    Authors + solves ONE spectral-wave field (one of the four question classes)
+    through the baked tomawac binary and writes the result SELAFIN + metrics into
+    the mounted rundir; the agent-side postprocess rasterizes the Hs field to a
+    4326 COG. ``correct_end`` gates status exactly like the channel-dye path.
+    """
+    import tomawac_build as W  # noqa: WPS433 -- wave worker payload
+
+    tcfg = _tomawac_config(data_dir, wave_overrides)
+    LOG.info("tomawac wave: mode=%s bathy=%s wind=%.1f m/s from %s bbox=%s",
+             tcfg.wave_mode, tcfg.bathy_source, tcfg.wind_speed_mps,
+             tcfg.wind_dir_from_deg, tcfg.bbox)
+    metrics = W.solve(tcfg, str(data_dir), run_id=run_id)
+    return metrics
+
+
 def _build_argv_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(
         prog="trid3nt-telemac-entrypoint",
@@ -1019,12 +1086,14 @@ def main(argv: list[str] | None = None) -> int:
     reach_overrides: dict[str, Any] = {}
     run_id = args.run_id or None
     mesh_only = False
+    wave_overrides: dict[str, Any] | None = None
     try:
         if manifest_path.exists():
             manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
             if not isinstance(manifest, dict):
                 raise ValueError("manifest must be a JSON object")
             reach_overrides = manifest.get("reach") or {}
+            wave_overrides = manifest.get("wave")
             run_id = run_id or manifest.get("run_id")
             mesh_only = bool(manifest.get("mesh_only"))
         else:
@@ -1040,6 +1109,36 @@ def main(argv: list[str] | None = None) -> int:
         return 2
 
     import telemac_river_dye_build as B  # noqa: WPS433 -- for the typed banks gate
+
+    # ADR 0236: a manifest['wave'] block routes to the TOMAWAC spectral-wave
+    # pipeline (tomawac_build) through the baked tomawac binary -- entirely
+    # separate from the channel-dye / RoG legs (no shared ReachConfig).
+    if wave_overrides is not None:
+        import tomawac_build as W  # noqa: WPS433 -- wave worker payload
+        try:
+            metrics = run_tomawac_pipeline(data_dir, wave_overrides, run_id)
+        except (TomawacManifestUnknownFieldsError, W.TomawacInputError) as exc:
+            LOG.warning("tomawac input gate: %s", exc)
+            _write_metrics(data_dir, {
+                "status": "error",
+                "correct_end": False,
+                "error_code": getattr(exc, "error_code", "TOMAWAC_PARAMS_INVALID"),
+                "error": str(exc),
+            })
+            return 5
+        except Exception as exc:  # noqa: BLE001 -- typed metrics error
+            LOG.exception("tomawac pipeline failed")
+            _write_metrics(data_dir, {
+                "status": "error",
+                "correct_end": False,
+                "error": f"{type(exc).__name__}: {exc}",
+            })
+            return 1
+        _write_metrics(data_dir, metrics)
+        ok = bool(metrics.get("correct_end"))
+        LOG.info("trid3nt-tomawac worker done status=%s correct_end=%s wall_s=%s",
+                 metrics.get("status"), ok, metrics.get("wall_s"))
+        return 0 if ok else 1
 
     # ADR 0196: mode="rain_on_grid" routes to the RoG pipeline (rog_build); every
     # other value keeps the historical channel-dye pipeline byte-identical.

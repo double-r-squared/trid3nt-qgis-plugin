@@ -26,11 +26,20 @@ __all__ = [
     "TELEMAC_BED_EVOLUTION_STYLE_PRESET",
     "TELEMAC_WSE_STYLE_PRESET",
     "TELEMAC_DO_STYLE_PRESET",
+    "TELEMAC_WAVE_STYLE_PRESET",
     "TelemacDyeLayerURI",
     "TelemacSedimentLayerURI",
     "TelemacWseLayerURI",
     "TelemacDoLayerURI",
+    "TelemacWaveLayerURI",
 ]
+
+#: Style preset for the TOMAWAC significant-wave-height (Hs) raster (ADR 0236). A
+#: DISTINCT continuous key so ``export_case_to_qgis._MESH_SIBLING_BY_STYLE_PRESET``
+#: maps it to the TOMAWAC result SELAFIN mesh sibling for animation without
+#: colliding with the dye/WSE/DO presets. The layer always carries a data-driven
+#: ``legend`` so it renders regardless of QML preset-library coverage.
+TELEMAC_WAVE_STYLE_PRESET: str = "continuous_significant_wave_height"
 
 #: Style preset for the dye-concentration raster. A DISTINCT key (not the flood
 #: ``continuous_flood_depth`` nor the MODFLOW ``continuous_plume_concentration``)
@@ -260,3 +269,47 @@ class TelemacSedimentLayerURI(LayerURI):
     max_scour_mm: float | None = Field(default=None, ge=0.0)
     grain_size_um: float | None = Field(default=None, gt=0.0)
     sediment_type: str | None = Field(default=None)
+
+
+class TelemacWaveLayerURI(LayerURI):
+    """A ``LayerURI`` for a TOMAWAC significant-wave-height (Hs) field (ADR 0236).
+
+    The spectral-wave analogue of ``TelemacDyeLayerURI``: TOMAWAC solves the
+    wave-action balance (wind-wave generation, shoaling/breaking, wave-current
+    interaction, bottom friction) over a real-lake or idealized basin, and the
+    primary artifact is the significant wave height Hs field. Extends ``LayerURI``
+    field-for-field and adds the wave scalars the agent cites rather than invents
+    (invariant 1, FR-AS-7):
+
+        hs_max_m: peak significant wave height anywhere in the domain, m (>= 0)
+            -- the strongest sea the storm builds.
+        hs_mean_m: OPTIONAL mean Hs over the wet domain, m (>= 0).
+        hs_upwind_m / hs_downwind_m: OPTIONAL Hs sampled near the upwind vs
+            downwind shore (m, >= 0) -- the proof-norm-#9 discriminating pair for
+            a fetch run (same storm, opposite shores; downwind >> upwind).
+        peak_period_max_s: OPTIONAL peak wave period at the strongest sea, s
+            (>= 0).
+        wave_mode: which question class the field answers (fetch_growth /
+            shoaling / bottom_friction / wave_current).
+        wind_speed_mps: OPTIONAL sustained wind speed the run was forced with
+            (m/s, >= 0) -- the forcing the agent narrates, never invents.
+        mesh_size_m: OPTIONAL grid node spacing (m, > 0) the solve used -- the
+            visible granularity lever.
+        mesh_node_estimate: OPTIONAL node count for that resolution (>= 0).
+        mesh_resolution_label: OPTIONAL human label for the resolution choice.
+
+    ``layer_type`` is ``"raster"`` (the Hs COG); the time evolution plays from the
+    TOMAWAC result SELAFIN mesh sibling that ``export_case_to_qgis`` discovers via
+    ``TELEMAC_WAVE_STYLE_PRESET``. The raster carries a data-driven ``legend``.
+    """
+
+    hs_max_m: float = Field(ge=0.0)
+    hs_mean_m: float | None = Field(default=None, ge=0.0)
+    hs_upwind_m: float | None = Field(default=None, ge=0.0)
+    hs_downwind_m: float | None = Field(default=None, ge=0.0)
+    peak_period_max_s: float | None = Field(default=None, ge=0.0)
+    wave_mode: str | None = Field(default=None)
+    wind_speed_mps: float | None = Field(default=None, ge=0.0)
+    mesh_size_m: float | None = Field(default=None, gt=0.0)
+    mesh_node_estimate: int | None = Field(default=None, ge=0)
+    mesh_resolution_label: str | None = Field(default=None)

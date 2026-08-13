@@ -153,3 +153,57 @@ build, NOT blocked:
 - SWAN overlap (queued roster entry): TOMAWAC's edge over SWAN is native TELEMAC
   coupling (current fields from a TELEMAC-2D run) + unstructured meshes; a
   TOMAWAC row does not fold into SWAN. Both remain distinct wave tiers.
+
+## COMPLETE (2026-08-13): productionized end-to-end
+
+The productionization layer the recipe above scoped is BUILT, baked, and LIVE.
+Status is now LANDED (not CAND); the seven board rows collapse to ONE registered
+tool with four modes.
+
+**Worker leg** - `services/workers/telemac/tomawac_build.py` (promoted verbatim
+from `tomawac_sandbox.py`, all six gotchas baked): `TomawacConfig` +
+`solve(cfg)`; four modes (fetch_growth/shoaling/bottom_friction/wave_current);
+two bathymetry paths - `idealized` (the proven rectangular basin) and
+`noaa_greatlakes` (real lake-datum bed sampled from the NOAA NGDC `DEM_all`
+ImageServer, which serves `greatlakes_lakedatum` bathymetry; verified -159.3 m at
+a Superior deep point, 3DEP returns NoData over the lake, Copernicus gives only
+the lake SURFACE). `entrypoint.py` routes a `manifest['wave']` block to
+`run_tomawac_pipeline` with a STRICT-unknown-field parser (`_tomawac_config`,
+version `tomawac-wave-1`, ADR 0158) + a build-time smoke in the Dockerfile
+(import + config map + the negative unknown-key gate, mirroring the telemac one).
+Image REBUILT: the code is baked into `trid3nt-local/telemac:latest` and the four
+modes solve THROUGH the rebuilt image (no mounted source).
+
+**Composer + tool** - `tomawac_wave_field` (engine=telemac, tier=template,
+cacheable=False, ttl live-no-cache), one question-class tool with the four modes;
+`model_tomawac_wave_field` stages the `wave` manifest -> `run_solver(solver=
+'tomawac_wave')` (a distinct LocalSolverSpec reusing the telemac image) ->
+downloads `res_wave.slf` -> `postprocess_tomawac` (final-frame HM0 -> 4326 Hs COG,
+`TelemacWaveLayerURI` + `TELEMAC_WAVE_STYLE_PRESET`) -> `publish_layer`. ADR 0225
+`target_resolution_m` ResolutionSpec (150 m floor + node-budget coarsen) + LOUD
+labeled defaults (prescribed storm wind/swell, no wave-forcing fetcher) via the
+input-review gate; real-bathy input labeled on the layer.
+
+**Registration** - corpus.yaml beside the template (walked into the retrieval
+index), categories (simulation_modeling + coastal), EXPECTED_TEMPLATES row.
+Model-free retrieval: `tomawac_wave_field` ranks #1 on all five wave prompts,
+co-surfacing with swan_wave_field / schism_coupled_waves without stealing their
+distinctness.
+
+**Live proof (proof norm #9, the discriminating fetch pair over the real lake)** -
+LIVE daemon E2E GREEN over Lake Superior (bbox -89.0,47.0,-86.5,48.0; 5376 nodes,
+4763 wet, NOAA depths to 359 m):
+- Westerly 22 m/s storm: Hs 0.399 m at the upwind (WEST) shore -> 3.035 m at the
+  downwind (EAST) shore (Hs_max 3.037 m).
+- Easterly 22 m/s storm: the high-Hs shore FLIPS to the west (2.853 m) with the
+  east shore falling to 0.419 m - fetch physics tracks the wind, not a domain
+  artifact.
+COG uploaded to `s3://trid3nt-runs/<run>/tomawac_hs.tif` (761 KB). Showcase seeded
+GREEN through the product path (`!run tomawac_wave_field(...)`, 1 layer, persists
+across reconnect). All four modes re-verified through the rebuilt image:
+shoaling dip-rise-break (Hs peak 1.997 m), friction OFF 1.612 vs ON 1.450 m
+(-10%), wave-current opposing amplifies to 4.097 m - matching the sandbox numbers.
+Proof: `docs/proof/templates/tomawac_wave_field_lake_superior_fetch_pair.png` +
+`tomawac_wave_field_lake_superior_proof.json` (never cleaned).
+
+Coded-tools delta this landing: +1 registered tool (`tomawac_wave_field`).

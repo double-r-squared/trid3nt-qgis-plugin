@@ -214,3 +214,93 @@ def register_telemac_local_spec() -> None:
 # Register at import so run_solver(solver='telemac_river_dye') with
 # TRID3NT_SOLVER_BACKEND=local-docker dispatches to the docker spec.
 register_telemac_local_spec()
+
+
+# --------------------------------------------------------------------------- #
+# TOMAWAC spectral-wave solver (ADR 0236) -- SAME worker image, a manifest['wave']
+# block routing the entrypoint to the tomawac pipeline through the baked tomawac
+# binary. A DISTINCT solver name so the run listing / showcase separates a wave
+# field from a river-dye run and the completion carries wave-specific keys.
+# --------------------------------------------------------------------------- #
+TOMAWAC_SOLVER_NAME: str = "tomawac_wave"
+
+#: Wave metrics keys folded into completion.json.
+_WAVE_COMPLETION_METRIC_KEYS: tuple[str, ...] = (
+    "correct_end", "wave_mode", "bathy_source", "result_slf", "geometry_slf",
+    "npoin", "nelem", "utm_epsg", "hs_max_m", "hs_mean_m", "hs_upwind_m",
+    "hs_downwind_m", "peak_period_max_s", "wind_speed_mps", "wind_dir_from_deg",
+    "depth_max_m", "depth_mean_m", "dx_m", "coarsened", "n_wet_nodes", "wall_s",
+    "error_code",
+)
+
+
+def _classify_wave_exit(
+    rundir: Path, exit_code: int
+) -> tuple[str, int, str | None, dict[str, Any]]:
+    """Resolve wave-run status from telemac_metrics.json (dye classify analogue)."""
+    metrics: dict[str, Any] = {}
+    metrics_path = rundir / _METRICS_FILENAME
+    try:
+        if metrics_path.exists():
+            loaded = json.loads(metrics_path.read_text(encoding="utf-8"))
+            if isinstance(loaded, dict):
+                metrics = loaded
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("tomawac classify_exit: metrics read failed %s: %s", metrics_path, exc)
+    extra: dict[str, Any] = {
+        k: metrics[k] for k in _WAVE_COMPLETION_METRIC_KEYS if k in metrics
+    }
+    correct_end = bool(metrics.get("correct_end"))
+    if exit_code != 0:
+        status = "error"
+        error: str | None = (
+            metrics.get("error") or f"tomawac_wave exited with non-zero code {exit_code}")
+    elif metrics and not correct_end:
+        status, exit_code = "error", 2
+        error = metrics.get("error") or "TOMAWAC did not reach CORRECT END OF RUN"
+    else:
+        status, exit_code, error = "ok", 0, None
+    return status, exit_code, error, extra
+
+
+def tomawac_local_spec() -> "Any":
+    """Build the TOMAWAC ``LocalSolverSpec`` -- same image + volume mount as the
+    river-dye spec (identical build_argv), a wave-specific classify_exit."""
+    import os
+    from trid3nt_server.agent.tools.simulation.solver.solver import LOCAL_DOCKER_WORKFLOW_NAME, LocalSolverSpec
+
+    image = os.environ.get("TRID3NT_TELEMAC_IMAGE") or DEFAULT_TELEMAC_IMAGE
+
+    def build_argv(run_id: str, rundir: Path, args: list[str]) -> list[str]:
+        return [
+            "docker", "run", "--rm", "--name", run_id,
+            "-v", f"{rundir}:/data", "-w", "/data", image, *args,
+        ]
+
+    return LocalSolverSpec(
+        solver=TOMAWAC_SOLVER_NAME,
+        workflow_name=LOCAL_DOCKER_WORKFLOW_NAME,
+        args_key="telemac_args",
+        build_argv=build_argv,
+        stdout_name="tomawac.stdout",
+        stderr_name="tomawac.stderr",
+        stdout_uri_field="tomawac_stdout_uri",
+        stderr_uri_field="tomawac_stderr_uri",
+        exec_kind="docker",
+        classify_exit=_classify_wave_exit,
+    )
+
+
+def register_tomawac_solver() -> None:
+    """Register ``'tomawac_wave'`` in the solver + local-spec registries."""
+    from trid3nt_server.agent.tools.simulation.solver.solver import (
+        LOCAL_DOCKER_WORKFLOW_NAME,
+        SOLVER_WORKFLOW_REGISTRY,
+        register_local_solver_spec,
+    )
+
+    SOLVER_WORKFLOW_REGISTRY.setdefault(TOMAWAC_SOLVER_NAME, LOCAL_DOCKER_WORKFLOW_NAME)
+    register_local_solver_spec(TOMAWAC_SOLVER_NAME, tomawac_local_spec)
+
+
+register_tomawac_solver()
