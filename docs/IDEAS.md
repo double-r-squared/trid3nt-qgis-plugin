@@ -382,3 +382,38 @@ location (server config vs QGIS-side), the inheritance MECHANISM (how inner call
 fetchers keep separate explicit levers. NATE: discuss MORE after the
 0229 code walkthrough - "while I'm all for generics, templates, and
 meta programming I want to know before I go."
+
+## 2026-08-13 - Speculative-intervention gate (NATE design, DEFERRED until after the real-data proofs)
+Generic precondition pattern, NOT per-template patchwork - the
+byo-mesh/mesh-gate model generalized: some runs have an optional
+INTERVENTION precondition (a speculative breakwater at the marina,
+a speculative fire blocker/fuel break, a levee, a dam removal...)
+that can be USER-SUPPLIED (drawn/params) or NATURALLY DERIVED
+(OSM surveyed structure / the real river) - "could either be added
+or derived, it really depends on what the user wants." A simple
+user gate removes the ambiguity: offer the derived/natural state +
+the option to add the speculative object; decline never cancels.
+NATE: "our user gates kinda already cover these problems simply."
+Discuss AFTER NATE reviews the real-data marina + river-jump
+proofs. Candidate seam: the tool-payload/precondition gate family
+(the mesh gate precedent).
+
+## 2026-08-13 - Fetcher-owned emission + ambient reusable assets (NATE design, DISCUSS-ONLY)
+1. EMIT-ON-FETCH: context-layer emission becomes the FETCHER's
+   responsibility, not per-composer patchwork - one implementation at
+   the router seam, gated by a declarative visualize:true flag in the
+   spec YAML; all specs inherit; forgetting becomes impossible (the
+   0231 audit found ~20 forgotten composer call sites). Design Qs:
+   per-call suppression for internal probe fetches (the river-AOI
+   harness fetched 4 candidate reaches - only the consumed one should
+   surface); emitter binding (ambient vs explicit-arg, ties to the
+   pipeline-library discussion). load() == fetch+emit in the library.
+2. AMBIENT REUSABLE ASSETS: fetched data = first-class visible
+   reusable asset, not invisible plumbing - the cache already dedupes
+   and 0227/0231 layers already ride existing objects by reference;
+   the paradigm makes the shared substrate VISIBLE ("the context
+   layers show that the reusable data isn't invisible").
+3. Fire-growth diagnostic refinement (queued): 5-min early frames in
+   the growth montage so the point-source origin + early acceleration
+   are visible (the triangle question - correct wind-ellipse physics,
+   30-min cadence hid the birth).

@@ -552,6 +552,59 @@ def write_weather_bands(values_per_band: list[float], grid: dict, dest: Path) ->
             )
 
 
+#: weather-raster name -> the ELMFIRE-unit ``weather`` dict key it carries.
+#: Mirrors ``run_elmfire._WEATHER_RASTER_KEYS`` (the typed flat-deck path) --
+#: duplicated here (not imported) because ``run_elmfire`` imports THIS module,
+#: not the reverse.
+WEATHER_RASTER_KEYS: dict[str, str] = {
+    "ws": "ws_mph_20ft", "wd": "wd_deg",
+    "m1": "m1_pct", "m10": "m10_pct", "m100": "m100_pct",
+}
+
+#: schedule-entry alias -> canonical ELMFIRE weather-dict key. A schedule entry
+#: may use the short raster names or the canonical ``*_pct``/``*_mph_20ft``/
+#: ``*_deg`` keys interchangeably.
+_SCHEDULE_ALIASES: dict[str, str] = {
+    "ws": "ws_mph_20ft", "ws_mph_20ft": "ws_mph_20ft",
+    "wd": "wd_deg", "wd_deg": "wd_deg",
+    "m1": "m1_pct", "m1_pct": "m1_pct",
+    "m10": "m10_pct", "m10_pct": "m10_pct",
+    "m100": "m100_pct", "m100_pct": "m100_pct",
+}
+
+
+def normalize_weather_schedule(
+    schedule: list[dict[str, float]], base_weather: dict[str, float]
+) -> list[dict[str, float]]:
+    """Expand a transient weather schedule into full per-band ELMFIRE-unit dicts.
+
+    Each entry may specify any subset of ws/wd/m1/m10/m100 (short or canonical
+    keys); an absent field inherits ``base_weather`` (the deck spec's base
+    weather). Returns one dict per band carrying all five
+    :data:`WEATHER_RASTER_KEYS` values. Raises :class:`ElmfireSpecError` on an
+    empty schedule or an unknown key (never a silently dropped schedule
+    field) -- the same honesty norm as the strict spec-field allowlist."""
+    if not schedule:
+        raise ElmfireSpecError("weather_schedule is empty")
+    bands: list[dict[str, float]] = []
+    for i, entry in enumerate(schedule):
+        if not isinstance(entry, dict):
+            raise ElmfireSpecError(
+                f"weather_schedule[{i}] must be a dict, got {type(entry).__name__}"
+            )
+        band = {k: float(base_weather[k]) for k in WEATHER_RASTER_KEYS.values()}
+        for k, v in entry.items():
+            canon = _SCHEDULE_ALIASES.get(str(k))
+            if canon is None:
+                raise ElmfireSpecError(
+                    f"weather_schedule[{i}] carries unknown key {k!r} "
+                    f"(known: {sorted(_SCHEDULE_ALIASES)})"
+                )
+            band[canon] = float(v)
+        bands.append(band)
+    return bands
+
+
 #: Nonburnable FBFM40 code for a fuel break (NB1 = "urban/developed", zero ROS).
 FUEL_BREAK_NONBURNABLE_FBFM: int = 91
 
@@ -919,13 +972,15 @@ def build_deck(
     deck_dir: str | Path,
     *,
     spotting_extra: dict[str, str] | None = None,
+    weather_schedule: list[dict[str, float]] | None = None,
+    dt_meteorology_s: float = 3600.0,
 ) -> dict:
     """Build a run-ready ELMFIRE deck directory from ``spec``.
 
     Steps: validate spec -> compute the ONE target grid -> localize + warp
-    the 8 fuels/topography rasters -> generate the 5 constant weather rasters
-    + adj/phi -> HARD-ASSERT grid identity across all 15 rasters -> project
-    ignitions (in-domain assert) -> render ``elmfire.data`` -> write
+    the 8 fuels/topography rasters -> generate the 5 weather rasters + adj/phi
+    -> HARD-ASSERT grid identity across all 15 rasters -> project ignitions
+    (in-domain assert) -> render ``elmfire.data`` -> write
     ``deck_manifest.json``. Returns the manifest dict.
 
     ``spotting_extra`` (the typed Python namelist-knob path, NOT a dict-spec
@@ -933,6 +988,16 @@ def build_deck(
     (:func:`render_namelist`); unset (default) reproduces the base no-spotting
     deck byte-for-byte. This is the REAL-DATA spotting surface: the same fetched
     LANDFIRE/DEM warp with the ``&SPOTTING`` group toggled OFF vs ON.
+
+    ``weather_schedule`` (also a typed Python kwarg, NOT a dict-spec field) is
+    the REAL-DATA transient-weather surface -- the same real fetched LANDFIRE/
+    DEM warp, but the ws/wd/m1/m10/m100 rasters written MULTI-BAND
+    (:func:`write_weather_bands`, via :func:`normalize_weather_schedule`)
+    instead of single-band constants, with ``NUM_METEOROLOGY_TIMES`` set to the
+    band count and ``DT_METEOROLOGY`` to ``dt_meteorology_s``. Unset (default)
+    reproduces the base constant-weather deck byte-for-byte -- mirrors the
+    synthetic flat-deck path's ``build_constant_flat_deck(weather_schedule=)``
+    (ADR 0161) onto the real-data deck (ADR 0239 amendment 3).
 
     Every failure mode is a typed :class:`ElmfireDeckError` subclass — a deck
     that returns from this function is co-registered, complete and runnable::
@@ -966,20 +1031,30 @@ def build_deck(
         src = _localize_input(name, spec["inputs"][name], srcs_dir)
         provenance[name] = warp_to_grid(name, src, grid, inputs_dir / f"{name}.tif")
 
-    # Constant weather + adj/phi, generated directly on THE grid (Float32).
+    # adj/phi: always single-band Float32 constants (never scheduled).
     w = spec["weather"]
-    constant_values = {
-        "ws": w["ws_mph_20ft"],
-        "wd": w["wd_deg"],
-        "m1": w["m1_pct"],
-        "m10": w["m10_pct"],
-        "m100": w["m100_pct"],
-        "adj": ADJ_VALUE,
-        "phi": PHI_VALUE,
-    }
-    for name, value in constant_values.items():
+    for name, value in (("adj", ADJ_VALUE), ("phi", PHI_VALUE)):
         write_constant_raster(value, grid, inputs_dir / f"{name}.tif")
         provenance[name] = {"source": f"constant:{value}", "nodata_fraction": 0.0}
+
+    # Weather: single constant band (default, byte-identical to the prior
+    # behaviour), OR a multi-band transient schedule (``weather_schedule``).
+    num_met_times = 1
+    if weather_schedule:
+        bands = normalize_weather_schedule(weather_schedule, w)
+        num_met_times = len(bands)
+        for name, key in WEATHER_RASTER_KEYS.items():
+            write_weather_bands(
+                [float(b[key]) for b in bands], grid, inputs_dir / f"{name}.tif"
+            )
+            provenance[name] = {
+                "source": f"schedule[{num_met_times}]:{[round(b[key], 3) for b in bands]}",
+                "nodata_fraction": 0.0,
+            }
+    else:
+        for name, key in WEATHER_RASTER_KEYS.items():
+            write_constant_raster(float(w[key]), grid, inputs_dir / f"{name}.tif")
+            provenance[name] = {"source": f"constant:{w[key]}", "nodata_fraction": 0.0}
 
     # HARD ASSERT: every raster sits on the byte-identical grid.
     verified = verify_deck_grid(inputs_dir, grid)
@@ -994,6 +1069,8 @@ def build_deck(
         duration_s=spec["duration_s"],
         dt_s=spec["time"]["dt_s"],
         dtdump_s=spec["time"]["dtdump_s"],
+        dt_meteorology_s=float(dt_meteorology_s),
+        num_meteorology_times=num_met_times,
         spotting_extra=spotting_extra,
     )
     (inputs_dir / "elmfire.data").write_text(namelist)

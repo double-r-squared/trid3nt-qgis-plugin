@@ -309,3 +309,59 @@ overlaid): `docs/proof/templates/artemis_real_breakwater/artemis_real_breakwater
 **Showcase reseed.** Canonical case = the REAL Lower Harbor breakwater
 (auto-OSM + real bathy); the analytic Sommerfeld semi-infinite schematic is kept
 beside it as the LABELED verification tier (norm #10).
+
+---
+
+## Amendment (2026-08-13): NATE's three-observation review of the Cinder Pond pair -- all resolved as RENDER, not physics
+
+NATE reviewed `artemis_real_breakwater_pair.png` and raised three observations,
+each a potential defect. Diagnosed OFFLINE against the SAME solved SELAFIN the
+flagged pair used (now stashed reproducibly under
+`docs/proof/templates/artemis_real_breakwater/solved_slf/`); numbers below.
+
+**Obs 1 -- "agitation moving through the breakwater" = RENDER-LIE (not a solution
+leak).** The solved mesh is genuinely cut at the structure: `0` elements of the
+present mesh cross any barrier segment, no kept node sits within `0.6*dx` (=18 m)
+of the line (min node-distance 18.1 m), and the near-wall field is discontinuous
+-- seaward Kd mean 0.365 vs lee Kd mean 0.044 (lee/seaward = **0.12**) in the
+18-60 m band. The through-wall bleed lived only in the RENDER: the old proof fed
+node Kd to `scipy.interpolate.griddata`, which Delaunay-triangulates the NODE
+CLOUD and bridges the ~36 m slit -- **154** node-cloud edges cross the barrier,
+and griddata returns finite Kd ON the barrier line where a mesh-faithful
+interpolator correctly returns NaN. FIX (render only): triangulate on the TRUE
+SELAFIN `ikle` element table (`matplotlib.tri`), so the slit stays blank and no
+value is interpolated across the wall.
+
+**Obs 2 -- "in the removed version I still see its outline" = COSMETIC overlay.**
+The removed control is a TRUE no-slit full mesh, not (as the original ADR text
+said) "the same split geometry with the classification dropped": for
+`remove_structure=True` the worker masks NO nodes (`on_bw_grid = zeros`), so 66
+nodes sit ON the former line (min-distance 0.1 m) and 182 elements cross it. There
+is no field structure along the line; the outline NATE saw was the red OSM
+polyline drawn identically on both panels. FIX (render only): on the REMOVED panel
+the geometry is dashed grey + labeled "not in solve".
+
+**Obs 3 -- "trajectory looks similar" = the smear, not an underestimate.** Because
+Obs 1/2 are render artifacts (0 leak, true control), the node-based basin metrics
+are render-independent and STAND unchanged: the breakwater cuts marina-lee
+agitation ~24% (Kd 0.119 -> 0.090). The near-wall discontinuity (lee/seaward 0.12)
+is the sharp local signature the smeared render hid.
+
+**No physics/worker/composer code changed** -- `artemis_build.py` was already
+correct (the 0.6*dx solid-barrier mask is a genuine topological cut; the
+marching-cell logic never bridges it). Fix is the render + regression tests +
+proof. Additions only in `docs/proof/templates`:
+`artemis_real_breakwater_pair_v2.png` (mesh-faithful present/removed + a
+no-interpolation node-scatter diagnostic panel), `artemis_real_breakwater_render_lie.png`
+(old griddata smear vs mesh-faithful, SAME field, barrier-crossing counts
+annotated), `pair_metrics_v2.json` (flagged metrics + the diagnostic numbers), and
+`solved_slf/` (the solved result meshes, so the corrected render is reproducible
+without docker). New render: `scripts/proof_artemis_real_breakwater_v2.py`
+(supersedes `proof_artemis_real_breakwater.py`; the flagged PNG is kept as the
+flagged iteration). Regression: two tests in
+`services/workers/telemac/tests/test_artemis_real_structure.py` pin the invariant
+through the real `build_mesh` -- the solid-barrier mask disconnects the mesh (0
+crossing elements) and the removed control does not (a slit re-bridge fails
+offline). LESSON: mesh-domain fields with internal thin barriers MUST render on
+the true element table -- an unconstrained Delaunay/`griddata` of the node cloud
+silently transmits energy across every slit.

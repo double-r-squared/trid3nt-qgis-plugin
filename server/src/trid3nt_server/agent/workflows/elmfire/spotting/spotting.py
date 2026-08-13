@@ -610,6 +610,8 @@ async def _solve_real_case(
     compute_class: str,
     emitter: Any,
     step_label: str,
+    weather_schedule: list[dict[str, float]] | None = None,
+    dt_meteorology_s: float = 3600.0,
 ) -> tuple[str, str, str, int, bool]:
     """Build ONE real-data deck (spotting OFF or ON) from ALREADY-fetched inputs,
     dispatch + wait, download outputs. Returns
@@ -620,7 +622,12 @@ async def _solve_real_case(
     landscape across the pair. The out_dir + deck_dir are KEPT for the caller to
     read rasters / measure the river; the caller cleans the temp deck_dir and any
     TEMP out_dir (a LOCAL rundir - ``out_is_temp=False`` - is the run's artifact
-    dir and is never deleted here)."""
+    dir and is never deleted here).
+
+    ``weather_schedule`` / ``dt_meteorology_s`` (optional) thread the REAL-DATA
+    transient-weather surface (a mid-run wind/moisture shift on the same real
+    fetched fuels/terrain) onto this deck - see
+    ``run_elmfire.build_elmfire_deck``. Unset keeps the constant-weather deck."""
     import tempfile
 
     from trid3nt_server.emission.pipeline_emitter import substep
@@ -628,7 +635,8 @@ async def _solve_real_case(
     deck_dir = tempfile.mkdtemp(prefix="elmfire-river-deck-")
     async with substep(emitter, step_label):
         deck_manifest = await asyncio.to_thread(
-            build_elmfire_deck, run_args, inputs, deck_dir, spotting_extra=spotting_extra
+            build_elmfire_deck, run_args, inputs, deck_dir, spotting_extra=spotting_extra,
+            weather_schedule=weather_schedule, dt_meteorology_s=dt_meteorology_s,
         )
     grid = deck_manifest.get("grid") or {}
     epsg = int(grid.get("epsg", 5070))

@@ -351,6 +351,8 @@ def build_elmfire_deck(
     deck_dir: str | Path,
     *,
     spotting_extra: dict[str, str] | None = None,
+    weather_schedule: list[dict[str, float]] | None = None,
+    dt_meteorology_s: float = 3600.0,
 ) -> dict[str, Any]:
     """Build the run-ready deck via the deck builder; return its manifest.
 
@@ -363,11 +365,20 @@ def build_elmfire_deck(
     ``spotting_extra`` threads a whole ``&SPOTTING`` namelist group onto the
     REAL-DATA deck (the same fetched LANDFIRE/DEM warp, spotting OFF vs ON) --
     the typed Python knob path, byte-identical when unset (no dict-spec field).
+
+    ``weather_schedule`` / ``dt_meteorology_s`` thread the REAL-DATA transient-
+    weather surface onto the same fetched LANDFIRE/DEM warp (mid-run wind/
+    moisture shift on real fuels/terrain) -- see
+    ``services.workers.elmfire.deck_builder.build_deck``. Unset (default)
+    reproduces the base constant-weather deck byte-for-byte.
     """
     db = load_deck_builder()
     spec = build_elmfire_deck_spec(run_args, inputs)
     try:
-        return db.build_deck(spec, deck_dir, spotting_extra=spotting_extra)
+        return db.build_deck(
+            spec, deck_dir, spotting_extra=spotting_extra,
+            weather_schedule=weather_schedule, dt_meteorology_s=dt_meteorology_s,
+        )
     except db.ElmfireDeckError as exc:
         raise ElmfireWorkflowError(
             getattr(exc, "error_code", "ELMFIRE_DECK_ERROR"), str(exc)

@@ -508,3 +508,63 @@ def test_write_weather_bands_multiband(tmp_path) -> None:
 def test_write_weather_bands_empty_raises(tmp_path) -> None:
     with pytest.raises(db.ElmfireSpecError):
         db.write_weather_bands([], _GRID, tmp_path / "ws.tif")
+
+
+# --------------------------------------------------------------------------- #
+# REAL-DATA transient weather (``build_deck(..., weather_schedule=)``,
+# ADR 0239 amendment 3 - the wind-shift-on-real-fuels surface).
+# --------------------------------------------------------------------------- #
+
+
+def test_build_deck_weather_schedule_unset_stays_constant(source_rasters, tmp_path) -> None:
+    """Unset ``weather_schedule`` reproduces the single-band constant deck
+    byte-for-byte (no MONTE_CARLO group, single-band weather rasters)."""
+    manifest = db.build_deck(_make_spec(source_rasters), tmp_path / "deck")
+    txt = (tmp_path / "deck" / "inputs" / "elmfire.data").read_text()
+    assert "&MONTE_CARLO" not in txt
+    assert "DT_METEOROLOGY                 = 3600.0" in txt
+    with rasterio.open(tmp_path / "deck" / "inputs" / "wd.tif") as ds:
+        assert ds.count == 1
+    assert manifest["sources"]["wd"]["source"] == f"constant:{WEATHER['wd_deg']}"
+
+
+def test_build_deck_weather_schedule_writes_multiband_and_monte_carlo(
+    source_rasters, tmp_path
+) -> None:
+    """A real ``weather_schedule`` (real LANDFIRE/DEM warp, transient wind) writes
+    MULTI-BAND ws/wd/m1/m10/m100 rasters, emits &MONTE_CARLO with the band count,
+    and sets DT_METEOROLOGY - the wind-shift-on-real-fuels surface."""
+    manifest = db.build_deck(
+        _make_spec(source_rasters),
+        tmp_path / "deck",
+        weather_schedule=[{"wd": 270.0}, {"wd": 200.0}],
+        dt_meteorology_s=10800.0,
+    )
+    txt = (tmp_path / "deck" / "inputs" / "elmfire.data").read_text()
+    assert "&MONTE_CARLO" in txt and "NUM_METEOROLOGY_TIMES = 2" in txt
+    assert "DT_METEOROLOGY                 = 10800.0" in txt
+    with rasterio.open(tmp_path / "deck" / "inputs" / "wd.tif") as ds:
+        assert ds.count == 2
+        assert float(ds.read(1).mean()) == pytest.approx(270.0)
+        assert float(ds.read(2).mean()) == pytest.approx(200.0)
+    # ws/m1/m10/m100 inherit the base weather on every band (unset in the entry).
+    with rasterio.open(tmp_path / "deck" / "inputs" / "ws.tif") as ds:
+        assert ds.count == 2
+        assert float(ds.read(1).mean()) == pytest.approx(WEATHER["ws_mph_20ft"])
+        assert float(ds.read(2).mean()) == pytest.approx(WEATHER["ws_mph_20ft"])
+    assert manifest["sources"]["wd"]["source"].startswith("schedule[2]:")
+
+
+def test_build_deck_weather_schedule_unknown_key_rejected(source_rasters, tmp_path) -> None:
+    """An unknown schedule key never silently no-ops (honest-failure norm)."""
+    with pytest.raises(db.ElmfireSpecError, match="unknown key"):
+        db.build_deck(
+            _make_spec(source_rasters),
+            tmp_path / "deck",
+            weather_schedule=[{"wind_direction": 270.0}],
+        )
+
+
+def test_normalize_weather_schedule_unknown_key_rejected() -> None:
+    with pytest.raises(db.ElmfireSpecError, match="unknown key"):
+        db.normalize_weather_schedule([{"bogus": 1.0}], WEATHER)

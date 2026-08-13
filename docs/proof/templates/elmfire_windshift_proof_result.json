@@ -1,0 +1,30 @@
+{
+  "bbox": [
+    -122.19893597835888,
+    40.0977537437604,
+    -122.11237150586113,
+    40.152662229617306
+  ],
+  "ignition_lonlat": [
+    -122.15767135716419,
+    40.12484241809142
+  ],
+  "wind_speed_mph": 35.0,
+  "duration_hours": 6.0,
+  "wind_dir_initial_deg": 270.0,
+  "wind_dir_shifted_deg": 200.0,
+  "shift_fraction": 0.5,
+  "dt_meteorology_s": 10800.0,
+  "mean_spotting_distance_m": 60.0,
+  "nembers": 30,
+  "pign_pct": 100.0,
+  "constant_run_id": "01KZY40SX1DQWEENH02SQ5YX54",
+  "transient_run_id": "01KZY422V430Q9TJ1R0WD71HEX",
+  "constant_burned_km2": 4.068,
+  "transient_burned_km2": 13.1796,
+  "constant_heading_deg": 90.47356677736671,
+  "transient_heading_deg": 53.810076280179544,
+  "heading_shift_deg": 36.66349049718718,
+  "constant_uri": "s3://trid3nt-runs/01KZY40SX1DQWEENH02SQ5YX54/overviews/01KZY4220ZMXX0HJCW9XEDW8TF.tif",
+  "transient_uri": "s3://trid3nt-runs/01KZY422V430Q9TJ1R0WD71HEX/overviews/01KZY43BMWRJ6YW27N32YC7513.tif"
+}
