@@ -1,0 +1,28 @@
+{
+  "engine": "TOMAWAC v9.0.0 (baked binary, trid3nt-local/telemac:latest)",
+  "fetch_limited": {
+    "short_10km_U20_Hs_end": 0.876015841960907,
+    "short_CERC": 1.0216813709025616,
+    "long_60km_U20_Hs_end": 2.381037473678589,
+    "long_CERC": 2.50259803841848,
+    "windlo_U10_40km_Hs_end": 0.7546448707580566,
+    "windlo_CERC": 1.0216813709025616,
+    "windhi_U25_40km_Hs_end": 2.5567972660064697,
+    "windhi_CERC": 2.554203427256404
+  },
+  "shoaling": {
+    "offshore_Hs": 1.4966880083084106,
+    "shoaling_peak_Hs": 1.957273244857788,
+    "nearshore_Hs_broken_by_depth": 1.3322012424468994,
+    "nearshore_depth_m": 3.0
+  },
+  "bottom_friction": {
+    "Hs_end_off": 1.9166407585144043,
+    "Hs_end_on": 1.7524429559707642
+  },
+  "wave_current": {
+    "opposing_end_Hs": 4.0962347984313965,
+    "none_end_Hs": 1.2811006307601929,
+    "following_end_Hs": 1.1287599802017212
+  }
+}
