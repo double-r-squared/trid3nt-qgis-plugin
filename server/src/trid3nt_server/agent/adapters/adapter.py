@@ -600,7 +600,10 @@ modflow_saltwater_intrusion; managed recharge -> modflow_managed_recharge; ASR
 wetland hydroperiod -> modflow_wetland_hydroperiod; regional water budget ->
 modflow_regional_water_budget; river seepage -> modflow_river_seepage; how long a
 surface spill takes to reach the water table (unsaturated / vadose-zone travel) ->
-modflow_vadose_transport. When the
+modflow_vadose_transport; a thermal plume from warm-water injection (heat
+transport / thermal pollution) -> modflow_thermal_plume; aquifer thermal energy
+storage recovery efficiency (ATES seasonal charge/recover) ->
+modflow_thermal_storage. When the
 user gives the spill parameters DIRECTLY (a location + contaminant +
 release rate/amount + duration), call modflow_contaminant_plume with
 spill_location_latlon as a 2-element [lat, lon] array (latitude first), the

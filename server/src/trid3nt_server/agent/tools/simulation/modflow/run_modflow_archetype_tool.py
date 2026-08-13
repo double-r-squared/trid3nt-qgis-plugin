@@ -75,6 +75,7 @@ from trid3nt_server.agent.workflows.modflow.postprocess_modflow import (
     postprocess_capture_zone,
     postprocess_dewatering,
     postprocess_drawdown,
+    postprocess_gwe_thermal,
     postprocess_mounding,
     postprocess_saltwater_intrusion,
     postprocess_stream_reaches,
@@ -152,6 +153,13 @@ ARCHETYPE_POSTPROCESS: dict[str, Any] = {
     # yet crossed the half-source threshold (honest non-arrival narrated by the
     # composer), so the > 0 scalar floor would wrongly reject a slow column.
     "vadose_transport": (postprocess_vadose, "concentration_series"),
+    # ADR 0235: GWE heat transport (both injection_plume + ates modes ride this
+    # one postprocess). The honesty headline is the peak temperature EXCESS above
+    # ambient (a positive scalar; the > 0 floor applies to BOTH modes -- an ates
+    # run's charged footprint always heats before recovery draws it down). The
+    # per-cycle recovery series is an ADDITIONAL ates deliverable, not the floor.
+    # LOCAL-ONLY (GWF+GWE dual model, kept off the Batch offload table).
+    "gwe_thermal": (postprocess_gwe_thermal, "peak_excess_temperature_c"),
 }
 
 #: Archetypes whose headline deliverable is a SERIES / dict (truthy-when-present)

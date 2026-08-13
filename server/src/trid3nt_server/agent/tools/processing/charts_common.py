@@ -1223,6 +1223,70 @@ def build_saltwater_wedge_chart(
         created_turn_id=created_turn_id,
     )
 
+def build_ates_recovery_chart(
+    *,
+    recovery_series: list[float],
+    injection_temperature_c: float | None = None,
+    ambient_temperature_c: float | None = None,
+    source_layer_uri: str | None = None,
+    created_turn_id: str | None = None,
+) -> dict[str, Any] | None:
+    """Build the ATES recovery-efficiency-vs-cycle bar chart (ADR 0235).
+
+    The PRIMARY deliverable of the ``gwe_thermal`` ``ates`` mode: one recovery
+    efficiency per seasonal inject/recover cycle (the fraction of the injected
+    thermal lift the well recovers), which RISES as the aquifer thermal buffer
+    pre-warms across cycles. ``recovery_series`` is the engine-parsed series the
+    postprocess computed (never synthesized). Returns ``None`` for an empty series.
+
+    Args:
+        recovery_series: per-cycle recovery efficiency (0..1), cycle order.
+        injection_temperature_c / ambient_temperature_c: optional, for the caption.
+    """
+    if not recovery_series:
+        return None
+    rows = [
+        {"cycle": int(i + 1), "recovery_efficiency": float(v)}
+        for i, v in enumerate(recovery_series)
+    ]
+    title = "Aquifer Thermal Energy Storage - recovery efficiency by cycle"
+    spec = {
+        "title": title,
+        "data": {"values": rows},
+        "mark": {"type": "bar", "tooltip": True},
+        "encoding": {
+            "x": {"field": "cycle", "type": "ordinal", "title": "inject/recover cycle"},
+            "y": {
+                "field": "recovery_efficiency",
+                "type": "quantitative",
+                "title": "recovery efficiency (fraction)",
+                "scale": {"domain": [0, 1]},
+            },
+        },
+        "width": "container",
+    }
+    first = float(recovery_series[0])
+    last = float(recovery_series[-1])
+    dt_note = ""
+    if injection_temperature_c is not None and ambient_temperature_c is not None:
+        dt_note = (
+            f" · inject {injection_temperature_c:.3g} degC vs ambient "
+            f"{ambient_temperature_c:.3g} degC"
+        )
+    caption = (
+        f"{len(rows)} cycle(s) · recovery efficiency {first * 100:.0f}% -> "
+        f"{last * 100:.0f}% (rises as the aquifer thermal buffer pre-warms)"
+        f"{dt_note}"
+    )
+    return build_chart_payload(
+        vega_lite_spec=spec,
+        title=title,
+        caption=caption,
+        source_layer_uri=source_layer_uri,
+        created_turn_id=created_turn_id,
+    )
+
+
 def build_head_series_chart(
     *,
     head_timeseries: list[float],

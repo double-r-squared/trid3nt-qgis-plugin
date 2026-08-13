@@ -87,6 +87,7 @@ from .modflow_contracts import (
     SaltwaterWedgeLayerURI,
     SeepageLayerURI,
     SpeciesSpec,
+    ThermalPlumeLayerURI,
     VadoseBreakthroughLayerURI,
 )
 from .publish_manifest import (
@@ -154,6 +155,8 @@ __all__ = [
     "MoundingLayerURI",
     "ASRLayerURI",
     "HydroperiodLayerURI",
+    # MODFLOW ADR 0235 GWE heat-transport temperature layer (gwe_thermal)
+    "ThermalPlumeLayerURI",
     # MODFLOW Wave-4 PRT capture-zone vector layer (capture_zone / wellhead_protection)
     "CaptureZoneLayerURI",
     # MODFLOW Wave-5 variable-density saltwater intrusion layer (saltwater_intrusion)

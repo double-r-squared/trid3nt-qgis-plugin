@@ -872,6 +872,86 @@ def _build_and_stage_vadose_transport(
     )
 
 
+def _build_and_stage_gwe_thermal(
+    run_args: MODFLOWRunArgs,
+    *,
+    run_id: str | None = None,
+    workdir: str | Path | None = None,
+) -> DeckStaging:
+    """Build a gwe_thermal deck (dual GWF+GWE heat transport) - FLAT layout (ADR 0235).
+
+    The gwe_thermal deck's second model is a GWE energy-transport model named
+    ``gwe_model`` (NOT ``gwt_model``) coupled through a ``GWF6-GWE6`` exchange. The
+    gwf/ + gwt/ subdir reorg (``_reorganize_into_subdirs``) globs ``gwt_model.*`` and
+    would leave the ``gwe_model.*`` files + the exchange orphaned, so - like
+    ``multi_species`` / ``vadose_transport`` - this deck stages FLAT (mf6 reads
+    ``mfsim.nam`` from the deck-dir CWD in local mode); the GWE ``gwe_model.ucn``
+    temperature output lands beside it for ``postprocess_gwe_thermal``.
+    gwe_thermal is LOCAL-ONLY (dual-model, off the Batch offload table).
+
+    Raises:
+        MODFLOWWorkflowError("MODFLOW_DECK_BUILD_FAILED"): the adapter build failed.
+        ValueError: re-raised from the adapter for an invalid gwe_mode / n_cycles.
+    """
+    rid = run_id or new_ulid()
+    base = Path(workdir) if workdir is not None else Path(
+        tempfile.mkdtemp(prefix=f"modflow-{rid}-")
+    )
+    deck_dir = base / "deck"
+    deck_dir.mkdir(parents=True, exist_ok=True)
+
+    try:
+        manifest_obj = build_modflow_deck(
+            spill_location_latlon=run_args.spill_location_latlon,
+            contaminant=run_args.contaminant,
+            release_rate_kg_s=run_args.release_rate_kg_s,
+            duration_days=run_args.duration_days,
+            aquifer_k_ms=run_args.aquifer_k_ms,
+            porosity=run_args.porosity,
+            workdir=str(deck_dir),
+            write=True,
+            archetype="gwe_thermal",
+            gwe_mode=getattr(run_args, "gwe_mode", None),
+            injection_temperature_c=getattr(run_args, "injection_temperature_c", None),
+            ambient_temperature_c=getattr(run_args, "ambient_temperature_c", None),
+            injection_rate_m3_day=getattr(run_args, "injection_rate_m3_day", None),
+            n_cycles=getattr(run_args, "n_cycles", None),
+            thermal_conductivity_solid_wmc=getattr(
+                run_args, "thermal_conductivity_solid_wmc", None
+            ),
+        )
+    except (MODFLOWWorkflowError, ValueError):
+        raise
+    except Exception as exc:  # noqa: BLE001
+        raise MODFLOWWorkflowError(
+            "MODFLOW_DECK_BUILD_FAILED",
+            message=f"gwe_thermal build_modflow_deck failed: {exc}",
+            details={"run_id": rid},
+        ) from exc
+
+    deck_base_uri = f"file://{deck_dir}/"
+    return DeckStaging(
+        run_id=rid,
+        manifest_uri=deck_base_uri + "manifest.json",
+        deck_base_uri=deck_base_uri,
+        local_deck_dir=str(deck_dir),
+        model_crs=manifest_obj.model_crs,
+        gwf_name=manifest_obj.gwf_name,
+        gwt_name=manifest_obj.gwe_name,
+        spill_lat=float(manifest_obj.spill_lat),
+        spill_lon=float(manifest_obj.spill_lon),
+        output_globs=[
+            f"{manifest_obj.gwe_name}.ucn",
+            f"{manifest_obj.gwf_name}.hds",
+            f"{manifest_obj.gwf_name}.cbc",
+            "*.lst",
+            "mfsim.lst",
+        ],
+        archetype="gwe_thermal",
+        gwt_present=True,
+    )
+
+
 def _wellfield_dicts(wells: Any) -> list[dict[str, Any]] | None:
     """Normalize ``run_args.wells`` (WellSpec objects or JSON dicts) to adapter dicts.
 
@@ -946,6 +1026,12 @@ def build_and_stage_modflow_deck(
     # (the reorg rewrites namefile tokens, not package-internal FILEIN paths).
     if getattr(run_args, "archetype", None) == "vadose_transport":
         return _build_and_stage_vadose_transport(run_args, run_id=rid, workdir=workdir)
+
+    # ADR 0235: gwe_thermal (dual GWF+GWE heat transport) stages FLAT too - its
+    # second model is ``gwe_model`` (not ``gwt_model``), so the gwf/+gwt/ subdir
+    # reorg would orphan the GWE files + the GWF6-GWE6 exchange. LOCAL-ONLY.
+    if getattr(run_args, "archetype", None) == "gwe_thermal":
+        return _build_and_stage_gwe_thermal(run_args, run_id=rid, workdir=workdir)
 
     # The base dir for both the FLAT build and the subdir-organised deck. We
     # keep it OUTSIDE a TemporaryDirectory context so the local-run path can

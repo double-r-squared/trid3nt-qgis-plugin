@@ -49,6 +49,11 @@ GWT_UCN_FILENAME: str = "gwt_model.ucn"
 #: GWF head output filename (gwt_adapter registers ``gwf_model.hds``).
 GWF_HDS_FILENAME: str = "gwf_model.hds"
 
+#: The MF6 GWE temperature output stem the GWE OC package writes (gwt_adapter's
+#: gwe_thermal deck registers ``gwe_model.ucn`` with text=TEMPERATURE). Recursive
+#: glob captures it wherever it lands (ADR 0235).
+GWE_UCN_FILENAME: str = "gwe_model.ucn"
+
 #: GWF cell-by-cell budget filename (gwt_adapter registers ``gwf_model.cbc``).
 GWF_CBC_FILENAME: str = "gwf_model.cbc"
 
@@ -60,6 +65,12 @@ PLUME_DETECTION_FLOOR_MGL: float = 0.001
 #: MF6 inactive/dry-cell sentinel magnitude (1e30). Cells above this absolute
 #: value are masked to NaN. Byte-identical to the agent's _MF6_DRY_SENTINEL.
 _MF6_DRY_SENTINEL: float = 1e29
+
+#: Temperature EXCESS floor (degC) below which a cell is NOT counted as a thermal
+#: plume (and is masked to NaN in the render COG). The GWE temperature COG renders
+#: the peak-over-time temperature excess above the undisturbed aquifer, so a cell
+#: within this margin of ambient reads as "no measurable heating" (ADR 0235).
+THERMAL_DETECTION_FLOOR_C: float = 0.1
 
 #: Default per-cell area (m^2) when the deck georegistration is unavailable
 #: (gwt_adapter CELL_SIZE_M == 50 m -> 2500 m^2). Mirrors the agent default.
@@ -80,6 +91,7 @@ HEAD_STYLE_PRESET: str = "continuous_head_m"
 MOUNDING_STYLE_PRESET: str = "continuous_mounding_m"
 ASR_STYLE_PRESET: str = "continuous_head_m"
 HYDROPERIOD_STYLE_PRESET: str = "continuous_hydroperiod_m"
+TEMPERATURE_STYLE_PRESET: str = "continuous_temperature_c"  # GWE thermal plume (degC excess)
 
 #: The deterministic COG key written into the deck dir (the entrypoint's ``*.tif``
 #: sweep ships it; the manifest points at the uploaded runs-bucket URI).
@@ -286,6 +298,179 @@ def _locate_cbc(deck_dir: Path) -> Path | None:
     if not hits:
         hits = sorted(glob.glob(str(deck_dir / "**" / "*.cbc"), recursive=True))
     return Path(hits[0]) if hits else None
+
+
+def _locate_gwe_ucn(deck_dir: Path) -> Path | None:
+    """Find ``gwe_model.ucn`` (the GWE TEMPERATURE output) under the deck dir.
+
+    NOT a plain ``*.ucn`` fallback: a gwe_thermal deck writes ONLY the GWE
+    temperature ucn (there is no GWT concentration ucn), so the exact stem is
+    the correct locator and avoids picking up an unrelated file. ADR 0235.
+    """
+    hits = sorted(glob.glob(str(deck_dir / "**" / GWE_UCN_FILENAME), recursive=True))
+    return Path(hits[0]) if hits else None
+
+
+# ---------------------------------------------------------------------------
+# GWE temperature readers (gwe_thermal heat-transport path, ADR 0235)
+# ---------------------------------------------------------------------------
+
+
+def _read_temperature_series(ucn_path: Path) -> tuple[Any, list[tuple[int, int]]]:
+    """Read the FULL GWE temperature history + its (kstp, kper) index.
+
+    MF6 GWE temperature output is a binary HEADFILE-format array written with
+    ``text="TEMPERATURE"``; flopy reads it via ``HeadFile(..., text="TEMPERATURE")``.
+    ``get_alldata()`` returns ``(ntimes, nlay, nrow, ncol)`` (degC); ``get_kstpkper()``
+    returns the parallel list of ``(kstp, kper)`` tuples so the ATES recovery
+    series can select the extract-period steps. Dry/inactive sentinels are masked.
+    """
+    import flopy.utils  # type: ignore[import-not-found]
+    import numpy as np  # type: ignore[import-not-found]
+
+    fp = flopy.utils.HeadFile(str(ucn_path), text="TEMPERATURE")
+    kstpkper = list(fp.get_kstpkper())
+    if not kstpkper:
+        raise ValueError(f"{ucn_path} carries no temperature timesteps")
+    data = np.asarray(fp.get_alldata(), dtype="float64")  # (ntimes, nlay, nrow, ncol)
+    data = np.where(np.abs(data) > _MF6_DRY_SENTINEL, np.nan, data)
+    return data, kstpkper
+
+
+def _temperature_peak_over_time(alldata: Any) -> Any:
+    """Reduce ``(ntimes, nlay, nrow, ncol)`` temperature to a 2D peak-over-time grid.
+
+    Max over the time AND layer axes -> the worst-case (hottest-ever) 2D thermal
+    footprint. For a continuous injection plume this equals the final field; for
+    seasonal ATES it captures the CHARGED footprint (before recovery draws it back
+    down), so the rendered COG always shows where the heat reached.
+    """
+    import numpy as np  # type: ignore[import-not-found]
+
+    arr = np.asarray(alldata, dtype="float64")
+    with np.errstate(invalid="ignore"):
+        return np.nanmax(arr, axis=(0, 1))  # (nrow, ncol)
+
+
+def _read_gwe_well_context(deck_dir: Path) -> dict[str, Any] | None:
+    """Read the GWE injection-well cell + ambient/inject temperatures + schedule.
+
+    Loads the deck via flopy and inspects the GWF WEL (cellid + q + the AUXILIARY
+    TEMPERATURE per stress period) plus the GWE IC (ambient ``strt``). Returns a
+    dict the ATES recovery series needs:
+
+        {well_row, well_col, ambient_c, inject_c,
+         inject_periods: [kper...], extract_periods: [kper...]}
+
+    ``injection_plume`` decks have only injection periods (no negative-q well), so
+    ``extract_periods`` is empty and the recovery series is skipped. Returns None
+    when the deck / WEL cannot be read (the COG still renders; only the recovery
+    chart is dropped).
+    """
+    try:
+        import flopy  # type: ignore[import-not-found]
+        import numpy as np  # type: ignore[import-not-found]
+
+        sim = flopy.mf6.MFSimulation.load(sim_ws=str(deck_dir), verbosity_level=0)
+        gwf = next(
+            (sim.get_model(m) for m in sim.model_names if m.startswith("gwf")), None
+        )
+        gwe = next(
+            (sim.get_model(m) for m in sim.model_names if m.startswith("gwe")), None
+        )
+        if gwf is None:
+            return None
+        wel = gwf.get_package("wel")
+        if wel is None:
+            return None
+        spd = wel.stress_period_data.get_data()  # {kper: recarray}
+
+        ambient_c: float | None = None
+        if gwe is not None:
+            try:
+                ambient_c = float(np.asarray(gwe.ic.strt.array).ravel()[0])
+            except Exception:  # noqa: BLE001
+                ambient_c = None
+
+        well_row = well_col = None
+        inject_c: float | None = None
+        inject_periods: list[int] = []
+        extract_periods: list[int] = []
+        for kper in sorted(spd or {}):
+            rec = spd[kper]
+            if rec is None or len(rec) == 0:
+                continue
+            row0 = rec[0]
+            cellid = row0["cellid"]
+            # cellid is (lay, row, col) for a DIS grid.
+            if well_row is None:
+                well_row, well_col = int(cellid[1]), int(cellid[2])
+            q = float(row0["q"])
+            # The WEL AUXILIARY temperature field name is written lower-case by
+            # flopy (the aux was declared "TEMPERATURE"); match case-insensitively.
+            temp_field = next(
+                (n for n in rec.dtype.names if n.lower() == "temperature"), None
+            )
+            temp = float(row0[temp_field]) if temp_field is not None else None
+            if q > 0.0:
+                inject_periods.append(int(kper))
+                if inject_c is None and temp is not None:
+                    inject_c = temp
+            elif q < 0.0:
+                extract_periods.append(int(kper))
+        if well_row is None:
+            return None
+        return {
+            "well_row": well_row,
+            "well_col": well_col,
+            "ambient_c": ambient_c,
+            "inject_c": inject_c,
+            "inject_periods": inject_periods,
+            "extract_periods": extract_periods,
+        }
+    except Exception as exc:  # noqa: BLE001
+        LOG.warning("could not read GWE well context from %s: %s", deck_dir, exc)
+        return None
+
+
+def compute_ates_recovery_series(
+    alldata: Any,
+    kstpkper: list[tuple[int, int]],
+    ctx: dict[str, Any],
+) -> list[float]:
+    """ATES per-cycle recovery efficiency series (chart data).
+
+    Recovery efficiency for a cycle = ``(mean produced-T at the well over that
+    cycle's EXTRACT period - ambient) / (inject_T - ambient)`` (the fraction of
+    the stored thermal lift that is recovered). One value per extract period, in
+    cycle order. Byte-faithful to the sandbox / adapter-test estimator.
+
+    Returns ``[]`` for an injection_plume deck (no extract periods) or when the
+    context is incomplete (ambient / inject_T unresolved).
+    """
+    import numpy as np  # type: ignore[import-not-found]
+
+    extract_periods = ctx.get("extract_periods") or []
+    ambient = ctx.get("ambient_c")
+    inject = ctx.get("inject_c")
+    r, c = ctx.get("well_row"), ctx.get("well_col")
+    if not extract_periods or ambient is None or inject is None or r is None:
+        return []
+    denom = float(inject) - float(ambient)
+    if abs(denom) < 1e-9:
+        return []
+    series: list[float] = []
+    arr = np.asarray(alldata, dtype="float64")  # (ntimes, nlay, nrow, ncol)
+    for kper in extract_periods:
+        vals = [
+            arr[i, 0, r, c]
+            for i, kk in enumerate(kstpkper)
+            if kk[1] == kper and np.isfinite(arr[i, 0, r, c])
+        ]
+        if not vals:
+            continue
+        series.append((float(np.mean(vals)) - float(ambient)) / denom)
+    return series
 
 
 # ---------------------------------------------------------------------------
@@ -1425,6 +1610,148 @@ def run_wetland_hydroperiod_postprocess(
     )
 
 
+def run_gwe_thermal_postprocess(
+    run_id: str,
+    deck_dir: Path,
+    model_crs: str,
+    runs_uri_for: Any,
+) -> ModflowPostprocessResult:
+    """GWE heat-transport temperature COG (+ ATES recovery series) -> manifest.
+
+    The heat twin of ``run_plume_postprocess``: reads the GWE ``gwe_model.ucn``
+    TEMPERATURE history, renders the peak-over-time temperature EXCESS above the
+    undisturbed aquifer as a reprojected EPSG:4326 COG, and (for an ``ates`` deck)
+    computes the per-cycle recovery-efficiency series for the chart. ADR 0235.
+
+    Honesty gate: peak temperature excess <= THERMAL_DETECTION_FLOOR_C ->
+    MODFLOW_THERMAL_EMPTY (a clean solve with no measurable heating never reads
+    status=ok).
+    """
+    import numpy as np  # type: ignore[import-not-found]
+
+    ucn_path = _locate_gwe_ucn(deck_dir)
+    if ucn_path is None:
+        return ModflowPostprocessResult(
+            status="error", manifest=None,
+            error_code="MODFLOW_THERMAL_OUTPUT_MISSING",
+            error_message=f"no {GWE_UCN_FILENAME} found under {deck_dir}",
+        )
+    try:
+        alldata, kstpkper = _read_temperature_series(ucn_path)
+    except Exception as exc:  # noqa: BLE001
+        return ModflowPostprocessResult(
+            status="error", manifest=None,
+            error_code="MODFLOW_THERMAL_OUTPUT_READ_FAILED",
+            error_message=f"could not read temperature from {ucn_path}: {exc}",
+        )
+
+    ctx = _read_gwe_well_context(deck_dir)
+    ambient_c = (ctx or {}).get("ambient_c")
+    if ambient_c is None:
+        # Fall back to the first-timestep modal value (period 0 is a WEL-off
+        # spin-up, so the field is still uniform ambient).
+        first2d = np.nanmax(np.asarray(alldata[0], dtype="float64"), axis=0)
+        finite0 = first2d[np.isfinite(first2d)]
+        ambient_c = float(np.median(finite0)) if finite0.size else 0.0
+
+    peak_over_time = _temperature_peak_over_time(alldata)  # (nrow, ncol), degC
+    excess = np.asarray(peak_over_time, dtype="float64") - float(ambient_c)
+    finite = excess[np.isfinite(excess)]
+    peak_excess_c = float(np.max(finite)) if finite.size else 0.0
+    peak_temperature_c = (
+        float(np.nanmax(peak_over_time)) if np.isfinite(peak_over_time).any() else 0.0
+    )
+    geo = _grid_georegistration(deck_dir)
+    cell_area_m2 = (
+        float(geo["delr"]) * float(geo["delc"]) if geo is not None
+        else _DEFAULT_CELL_AREA_M2
+    )
+    warm_cells = int(np.count_nonzero(finite > THERMAL_DETECTION_FLOOR_C))
+    thermal_plume_area_km2 = float(warm_cells) * float(cell_area_m2) / 1_000_000.0
+
+    recovery_series = compute_ates_recovery_series(alldata, kstpkper, ctx or {})
+    is_ates = bool((ctx or {}).get("extract_periods"))
+
+    LOG.info(
+        "gwe thermal postprocess run_id=%s peak_excess_c=%.6g peak_temp_c=%.6g "
+        "area_km2=%.6g ates=%s recovery_series=%s",
+        run_id, peak_excess_c, peak_temperature_c, thermal_plume_area_km2,
+        is_ates, [round(x, 4) for x in recovery_series],
+    )
+
+    def _metrics() -> dict[str, Any]:
+        m: dict[str, Any] = {
+            "peak_temperature_c": peak_temperature_c,
+            "peak_excess_temperature_c": peak_excess_c,
+            "ambient_temperature_c": float(ambient_c),
+            "thermal_plume_area_km2": thermal_plume_area_km2,
+            "gwe_mode": "ates" if is_ates else "injection_plume",
+        }
+        if recovery_series:
+            m["recovery_efficiency_series"] = recovery_series
+            m["recovery_efficiency"] = recovery_series[-1]
+        return m
+
+    # --- THERMAL EMPTY HONESTY GATE (Invariant 1) ------------------------------
+    if peak_excess_c <= THERMAL_DETECTION_FLOOR_C:
+        return ModflowPostprocessResult(
+            status="error",
+            manifest=_manifest.build_manifest(
+                engine="modflow", run_id=run_id, status="error", frame_count=0,
+                metrics=_metrics(), layers=[],
+                error_code="MODFLOW_THERMAL_EMPTY",
+            ),
+            metrics=_metrics(),
+            error_code="MODFLOW_THERMAL_EMPTY",
+            error_message=(
+                "solve clean but the thermal field is empty "
+                "(no cell above the temperature-excess detection floor)"
+            ),
+        )
+
+    # Render the temperature EXCESS above ambient (cells within the floor are
+    # masked to NaN so only the warm plume renders over the basemap).
+    excess_render = np.where(excess > THERMAL_DETECTION_FLOOR_C, excess, np.nan).astype(
+        "float32"
+    )
+    cog_filename = "thermal_plume_temperature_4326.tif"
+    cog_path = deck_dir / cog_filename
+    try:
+        _write_cog(excess_render, model_crs, geo, cog_path, mask_below_floor=False)
+    except Exception as exc:  # noqa: BLE001
+        return ModflowPostprocessResult(
+            status="error", manifest=None,
+            error_code="MODFLOW_THERMAL_COG_WRITE_FAILED",
+            error_message=f"thermal COG write/reproject failed: {exc}",
+        )
+
+    bbox = _cog_bbox_4326(cog_path)
+    cog_uri = runs_uri_for(cog_filename)
+    layer = _manifest.build_layer_entry(
+        layer_id_stem=f"thermal-plume-{run_id}",
+        name=(
+            "Aquifer Thermal Energy Storage (peak temperature excess)"
+            if is_ates
+            else "Thermal Plume (peak temperature excess)"
+        ),
+        role="primary",
+        style_preset=TEMPERATURE_STYLE_PRESET,
+        units="degC",
+        cog_uri=cog_uri,
+        frame_no=None,
+        bbox=bbox,
+        band_stats=_band_stats(cog_path),
+        metrics=_metrics(),
+    )
+    manifest = _manifest.build_manifest(
+        engine="modflow", run_id=run_id, status="ok", frame_count=1,
+        metrics=_metrics(), layers=[layer],
+    )
+    return ModflowPostprocessResult(
+        status="ok", manifest=manifest, metrics=_metrics(), cog_paths=[cog_path],
+    )
+
+
 # ---------------------------------------------------------------------------
 # Archetype dispatch table
 # ---------------------------------------------------------------------------
@@ -1439,4 +1766,7 @@ _ARCHETYPE_POSTPROCESS_RUNNERS: dict[str, str] = {
     "MAR": "run_mounding_postprocess",
     "ASR": "run_asr_postprocess",
     "wetland_hydroperiod": "run_wetland_hydroperiod_postprocess",
+    # ADR 0235: GWE heat transport (both injection_plume + ates modes ride this
+    # one runner; the recovery series is emitted only when extract periods exist).
+    "gwe_thermal": "run_gwe_thermal_postprocess",
 }

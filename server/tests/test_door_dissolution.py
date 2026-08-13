@@ -108,6 +108,8 @@ EXPECTED_TEMPLATES = {
     "modflow_river_seepage",
     "modflow_saltwater_intrusion",
     "modflow_sustainable_yield",
+    "modflow_thermal_plume",  # ADR 0235: GWE heat transport - thermal plume from warm-water injection (injection_plume mode)
+    "modflow_thermal_storage",  # ADR 0235: GWE heat transport - aquifer thermal energy storage recovery efficiency (ates mode)
     "modflow_vadose_transport",  # ADR 0228: UZF+UZT unsaturated-zone breakthrough (surface spill -> water table travel time)
     "modflow_wellhead_protection",
     "modflow_wetland_hydroperiod",

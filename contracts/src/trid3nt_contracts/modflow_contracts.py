@@ -69,6 +69,7 @@ __all__ = [
     "MoundingLayerURI",
     "ASRLayerURI",
     "HydroperiodLayerURI",
+    "ThermalPlumeLayerURI",
     "CaptureZoneLayerURI",
     "SaltwaterWedgeLayerURI",
     "StreamReachLayerURI",
@@ -1269,6 +1270,55 @@ class HydroperiodLayerURI(LayerURI):
 
     seasonal_head_range_m: float = Field(ge=0.0)
     head_timeseries: list[float] | None = None
+
+
+class ThermalPlumeLayerURI(LayerURI):
+    """A ``LayerURI`` for the GWE heat-transport layer + narration scalars (ADR 0235).
+
+    The headline output of the ``"gwe_thermal"`` archetype family (the heat twin
+    of ``PlumeLayerURI``). The postprocess reads the GWE temperature output
+    (``gwe_model.ucn`` with ``text=TEMPERATURE``) and renders the peak-over-time
+    temperature EXCESS above the undisturbed aquifer as a COG so the user sees the
+    downgradient thermal plume (``injection_plume`` mode) or the charged ATES
+    footprint (``ates`` mode).
+
+    Extends ``LayerURI`` field-for-field so it maps onto ``map-command load-layer``
+    with no translation (same as every other layer). Adds the structured numbers
+    the agent narrates so the LLM cites typed fields, never invents them
+    (invariant 1, FR-AS-7):
+
+        peak_temperature_c: peak absolute temperature anywhere in the domain, degC.
+        peak_excess_temperature_c: peak temperature EXCESS above the undisturbed
+            aquifer, degC (>= 0) -- the honesty headline (a clean solve with no
+            heating reads 0 and fails the empty-result floor).
+        ambient_temperature_c: the undisturbed aquifer temperature, degC.
+        thermal_plume_area_km2: plan-view area of cells heated above the detection
+            floor, km^2 (>= 0).
+        gwe_mode: "injection_plume" | "ates" -- which thermal question was run.
+        recovery_efficiency: OPTIONAL ATES recovery efficiency of the LAST cycle
+            (dimensionless, 0..1: the fraction of the injected thermal lift the
+            well recovers). None for an injection_plume run.
+        recovery_efficiency_series: OPTIONAL per-cycle ATES recovery efficiency
+            (chart data), one value per inject/recover cycle. None/empty for an
+            injection_plume run.
+
+    ``layer_type`` is ``"raster"`` (a temperature-excess COG); the base contract's
+    format vocabulary is inherited unchanged.
+
+    PRECISION CAVEAT: the thermal properties (heat capacities, densities, thermal
+    conductivities, ambient temperature) are LOUD demo defaults (no thermal-
+    property fetcher in v1). The temperature field is a qualitative planning-grade
+    heat-transport envelope, NOT a calibrated geothermal forecast. The agent must
+    narrate this caveat when presenting the layer (invariant 1, FR-AS-7).
+    """
+
+    peak_temperature_c: float
+    peak_excess_temperature_c: float = Field(ge=0.0)
+    ambient_temperature_c: float
+    thermal_plume_area_km2: float = Field(default=0.0, ge=0.0)
+    gwe_mode: str = "injection_plume"
+    recovery_efficiency: float | None = Field(default=None, ge=0.0, le=1.0)
+    recovery_efficiency_series: list[float] | None = None
 
 
 class CaptureZoneLayerURI(LayerURI):

@@ -1,0 +1,23 @@
+modflow_thermal_plume:
+  - how does injected warm water spread through the aquifer
+  - thermal plume from warm water injection in groundwater
+  - heat transport in an aquifer from a reinjection well
+  - thermal pollution plume in groundwater downgradient of a discharge
+  - how far does injected heat travel in the aquifer
+  - groundwater temperature plume from a heat source
+  - conductive advective heat transport around an injection well
+  - warm water injection thermal breakthrough in an aquifer
+  - model heat spreading from a geothermal reinjection well
+  - aquifer temperature rise from continuous warm water injection
+
+modflow_thermal_storage:
+  - aquifer thermal energy storage recovery efficiency
+  - seasonal storage of heat in groundwater for district heating
+  - ATES charge and recover cycling recovery fraction
+  - how much stored heat can a seasonal geothermal storage well recover
+  - well thermal energy storage seasonal cycling efficiency
+  - store summer heat in an aquifer and recover it in winter
+  - aquifer thermal energy storage recovery over multiple cycles
+  - seasonal heat storage recovery efficiency in an aquifer
+  - underground thermal energy storage well recovery performance
+  - how efficient is seasonal aquifer heat storage over cycles

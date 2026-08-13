@@ -432,6 +432,13 @@ _TITILER_STYLE_REGISTRY: dict[str, tuple[str, str]] = {
     # validates instead of silently falling back to the percentile default.
     "continuous_subsidence_cm": ("0,50", "inferno"),  # ground compaction (cm, +down)
     "continuous_hydroperiod_m": ("0,5", "viridis"),  # seasonal water-table range
+    # MODFLOW GWE heat transport (ADR 0235): the temperature COG renders the peak
+    # temperature EXCESS above the undisturbed aquifer in degC (a warm plume /
+    # ATES charged footprint). A sequential "hot" inferno ramp over a 0..40 degC
+    # band reads as heat (0 = ambient/cool, bright = the injection well core).
+    # EXACT key so it never falls through to the Kelvin "temperature" substring
+    # rule (250,320 rdylbu_r); a demo dT is ~30 degC so 0..40 keeps the core hot.
+    "continuous_temperature_c": ("0,40", "inferno"),
     # Landlab discarded fields the component chain already computes. Drainage
     # area spans many orders of magnitude -> a high-contrast viridis (the
     # percentile fallback would also work, but pinning a key keeps the colormap

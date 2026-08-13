@@ -30,6 +30,7 @@ __all__ = [
     "aquifer_k_basis",
     "aquifer_k_review_entry",
     "vadose_soil_review_entries",
+    "thermal_demo_review_entries",
     "gate_and_stamp_modflow_inputs",
     "review_modflow_entries",
 ]
@@ -125,6 +126,64 @@ def vadose_soil_review_entries(
                 f"Demo surface infiltration flux {infiltration_rate_m_day:g} m/day "
                 f"carrying a tracer at conc {infiltration_conc:g}; unsaturated vertical "
                 f"K vks={vks_m_day:g} m/day. Faster infiltration -> earlier arrival."
+            ),
+        ),
+    ]
+
+
+def thermal_demo_review_entries(
+    *,
+    ambient_temperature_c: float,
+    ambient_user_supplied: bool,
+    injection_temperature_c: float,
+    injection_user_supplied: bool,
+    thermal_conductivity_solid_wmc: float,
+    conductivity_user_supplied: bool,
+    note: str,
+) -> list["SyntheticInput"]:
+    """Build the structured GWE thermal-property provenance entries (ADR 0235).
+
+    The heat-transport field is set by the undisturbed aquifer temperature, the
+    injected-water temperature, and the aquifer thermal conductivities/heat
+    capacities -- all LOUD demo defaults (no thermal-property fetcher in v1). Each
+    becomes a machine-readable ``SyntheticInput`` so a ``user_gated`` session can
+    review / override them; the prose ``note`` is kept verbatim on the headline
+    ambient entry. Each temperature is ``user`` when the caller supplied it, else a
+    labelled demo default; the solid-grain conductivity + the fixed heat
+    capacities/densities are always demo defaults.
+    """
+    return [
+        SyntheticInput(
+            param="ambient_temperature_c",
+            value=round(float(ambient_temperature_c), 4),
+            units="degC",
+            basis=("user" if ambient_user_supplied else "default_demo"),
+            real_source_if_any=None,
+            note=note,
+        ),
+        SyntheticInput(
+            param="injection_temperature_c",
+            value=round(float(injection_temperature_c), 4),
+            units="degC",
+            basis=("user" if injection_user_supplied else "default_demo"),
+            real_source_if_any=None,
+            note=(
+                f"Injected-water temperature {injection_temperature_c:g} degC "
+                f"({'user-supplied' if injection_user_supplied else 'demo default = ambient + 30 degC'}); "
+                "sets the thermal lift the plume/ATES stores."
+            ),
+        ),
+        SyntheticInput(
+            param="thermal_conductivity_solid_wmc",
+            value=round(float(thermal_conductivity_solid_wmc), 4),
+            units="W/(m*degC)",
+            basis=("user" if conductivity_user_supplied else "default_demo"),
+            real_source_if_any=None,
+            note=(
+                f"Aquifer-grain thermal conductivity {thermal_conductivity_solid_wmc:g} "
+                "W/(m*degC) + water/solid heat capacities (4184 / 800 J/kg/degC) + "
+                "densities (1000 / 2650 kg/m3) are typical saturated sand/gravel demo "
+                "values (no site thermal-property fetcher in v1)."
             ),
         ),
     ]

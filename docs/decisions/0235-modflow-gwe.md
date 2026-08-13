@@ -1,9 +1,9 @@
 # ADR 0235 - MODFLOW GWE (Groundwater Energy / heat transport) archetype family
 
-Status: Accepted (physics proven on local mf6 6.7.0 through the product adapter;
-container-path deploy + LLM-drivable template registration is the follow-on, NOT
-shipped in this note)
-Date: 2026-08-12
+Status: Accepted + COMPLETE (Stage 3 landed 2026-08-13: two LLM-drivable question-
+class tools registered, temperature-COG + ATES-recovery postprocess, image rebuilt +
+through-image smoke, live daemon E2E at St. Paul MN GREEN -- see STAGE 3 section)
+Date: 2026-08-12 (Stage 3: 2026-08-13)
 
 ## Context
 
@@ -125,3 +125,71 @@ Follow-on to make GWE an LLM-drivable, deployed template:
 
 Supersedes nothing; extends the MODFLOW archetype family (0215 pattern, 0228
 vadose/dual-model laws) to the GWE model type.
+
+## STAGE 3 COMPLETE (2026-08-13): LLM-drivable landing + live proofs
+
+Stage 1+2 (commit b0a2213) baked the gwe_thermal substrate (adapter deck + contract
++ build-spec threading + sandbox/adapter physics). This stage makes GWE LLM-drivable
+and deployed, mirroring the 0228 vadose completion rhythm.
+
+DISTINCTNESS CALL (justified): GWE ships as TWO thin question-class tools over the
+ONE `gwe_thermal` archetype + ONE `postprocess_gwe_thermal`, NOT one tool with a
+mode knob. Precedent = `capture_zone` / `wellhead_protection` (two registered tools
+over one shared PRT archetype + `postprocess_capture_zone`, differing only in framing
++ default tiers). Basis: (1) the naming law = question class, and "aquifer thermal
+energy storage recovery" is a distinct question from "thermal plume spread"; (2) the
+PRIMARY deliverable differs (a raster plume footprint COG vs a recovery-efficiency
+chart); (3) distinct retrieval corpora route cleanly to distinct tools. Both share the
+`model_thermal_scenario` core and dispatch `archetype="gwe_thermal"` with the mode.
+
+Landed:
+- **`modflow_thermal_plume`** (gwe_mode=injection_plume) + **`modflow_thermal_storage`**
+  (gwe_mode=ates) composers + tools (thermal_plume/). Registered tier=template
+  engine=modflow; corpus.yaml (10 queries each, 10/10 surface top-8 via the model-free
+  `retrieve_visible_tools`). Registry 245 -> 247, coded tools +2.
+- **`postprocess_gwe_thermal`** (agent-side) + **`run_gwe_thermal_postprocess`**
+  (worker-side, `_ARCHETYPE_POSTPROCESS_RUNNERS["gwe_thermal"]`): read the GWE
+  `gwe_model.ucn` TEMPERATURE history, render the peak-over-time temperature EXCESS
+  above ambient as an EPSG:4326 COG (new `continuous_temperature_c` inferno preset),
+  compute the ATES per-cycle recovery-efficiency series, and (ates) build the recovery
+  chart (`build_ates_recovery_chart`). `ThermalPlumeLayerURI` contract carries the
+  typed scalars. Honesty gate: peak excess <= 0.1 degC -> MODFLOW_THERMAL_EMPTY.
+- **FLAT staging** (`_build_and_stage_gwe_thermal`): the dual-model deck's second
+  model is `gwe_model` (not `gwt_model`), so the gwf/+gwt/ subdir reorg would orphan
+  the GWE files + the GWF6-GWE6 exchange. Stages FLAT like multi_species/vadose.
+  gwe_thermal is LOCAL-ONLY (off the Batch offload table; the live path is image-less
+  local-exec `$TRID3NT_MF6_BIN`, per ADR 0228's dispatch verdict).
+- **Input-review provenance**: `thermal_demo_review_entries` stamps the LOUD thermal
+  demo defaults (ambient/injection temperature + conductivity/heat-capacity) through
+  `gate_input_review`. **0231 input-layer parity**: the injection-well site surfaces
+  as a role="input" context POINT (visible-by-default).
+- **0225/0232 resolution declaration: N/A** -- MODFLOW archetype decks run on a fixed
+  50 m demo grid; no `target_resolution_m` knob exists on any modflow template, so the
+  resolution-class declaration + the 0232 shared helper do not apply.
+
+Image (retired cloud artifact): `trid3nt-local/modflow:adr0235` rebuilt from mf6 6.5.0
+-> 6.7.0 baking the substrate + the worker postprocess (absolute -f/context paths;
+provenance verified: `_ARCHETYPE_POSTPROCESS_RUNNERS['gwe_thermal']` +
+`run_gwe_thermal_postprocess` + `GWE_UCN_FILENAME` all in the baked copy). Through-image
+smoke (both modes solved via `_run_build_mode` against MinIO): injection_plume peak
+excess MONOTONE in injection dT across all 3 dT; ates recovery series bounded in (0,1)
+and RISING (1-cycle 0.62; 3-cycle 0.62 -> 0.72 -> 0.76); the temperature COG lands in
+every run prefix.
+
+Live evidence (mf6 6.7.0 local, daemon pid 2367133, MinIO):
+- **modflow_thermal_plume @ St. Paul MN** (natural place; case 01KZWYGD6VVABFC44M489DCFWW):
+  40 degC injection into a 10 degC aquifer -> temperature-excess COG + injection-well
+  input point (2 layers). converged=True; peak excess NONZERO and CENTERED on the well
+  (peak cell within one grid cell of the AOI).
+- **modflow_thermal_storage @ St. Paul MN** (case 01KZWYKFJJMZXQBPEK6RSZJ628): 3-cycle
+  ATES at 50 degC -> recovery-efficiency chart (primary) + charged-footprint COG + well
+  point (2 layers + 1 chart). converged=True; recovery series [0.62, 0.72, 0.76]
+  bounded in (0,1) and RISING with cycles; charged footprint centered on the well.
+  !run lines round-trip through the product parser.
+
+Board rows LANDED: `gwe_radial_conductive_advective_vs_analytical`,
+`gwe_aquifer_thermal_energy_storage_cycling`, `gwe_borehole_heat_exchanger_thermal_loading`,
+`gwe_multisource_geothermal_interacting_bhes`, `gwe_vsc_temperature_dependent_viscosity_plume`
+(all folded into injection_plume + ates). Deferred (documented follow-on, not this wave):
+`gwe_particle_path_thermal_profile` (needs a PRT phase on the thermal field) and
+`gwe_infiltrating_heat_front_danckwerts` (needs a uze/UZE mode).

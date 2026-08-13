@@ -231,6 +231,36 @@ SHOWCASE: list[Showcase] = [
              "at the SAME Tippecanoe site arrives strictly LATER than the 4 m demo "
              "(~50 d) -- the monotone arrival-vs-thickness physics, exposed as a knob.",
              300, title_suffix="Tippecanoe 8m deeper"),
+    # -- MODFLOW GWE heat transport (ADR 0235) -------------------------------
+    # St. Paul MN (natural place, cold-climate ATES/geothermal setting). The
+    # gwe_thermal archetype family: two thin tools over ONE GWF+GWE dual-model
+    # deck. Physics PROVEN (sandbox + adapter test + through-image smoke):
+    #   injection_plume: peak temperature EXCESS above ambient is nonzero and
+    #     centered on the injection well; the warm plume advects downgradient.
+    #   ates: per-cycle recovery efficiency is bounded in (0,1) and RISES with
+    #     cycle count (0.62 -> 0.72 -> 0.76 for 1/2/3 cycles at the product deck).
+    Showcase("modflow_thermal_plume",
+             {"location": "St. Paul, Minnesota", "injection_temperature_c": 40.0,
+              "injection_rate_m3_day": 400.0},
+             "ADR 0235 gwe_thermal injection_plume: St. Paul MN (natural place, "
+             "cold-climate geothermal setting). Continuous 40 degC warm-water "
+             "injection into a 10 degC aquifer drives a downgradient THERMAL PLUME. "
+             "Temperature-excess COG (inferno ramp) + injection-well input point. "
+             "PHYSICS: peak temperature excess nonzero + centered on the well "
+             "(radial conductive-advective heat transport; modflow6-examples "
+             "ex-gwe-radial/bhe). Thermal properties narrated as demo defaults.", 300,
+             title_suffix="St Paul injection plume"),
+    Showcase("modflow_thermal_storage",
+             {"location": "St. Paul, Minnesota", "n_cycles": 3,
+              "injection_temperature_c": 50.0, "injection_rate_m3_day": 300.0},
+             "ADR 0235 gwe_thermal ates: aquifer thermal energy storage at St. Paul "
+             "MN. 3 seasonal inject-warm/recover cycles at 50 degC into a 10 degC "
+             "aquifer. Recovery-efficiency chart (primary) + charged-footprint COG + "
+             "well input point. PHYSICS: per-cycle recovery efficiency bounded in "
+             "(0,1) and RISING with cycles (0.62 -> 0.72 -> 0.76; the aquifer "
+             "thermal buffer pre-warms; modflow6-examples ex-gwe-ates). Thermal "
+             "properties narrated as demo defaults.", 400,
+             title_suffix="St Paul ATES 3 cycles"),
     # -- MODFLOW CSUB land subsidence formulation knobs (ADR 0228) -----------
     # San Joaquin Valley corridor (natural site). couple_subsidence CSUB run.
     # Physics asserts (vs the head-based no-delay baseline ~37 cm at this site):

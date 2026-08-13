@@ -284,6 +284,8 @@ PRIMARY_CATEGORY: dict[str, str] = {
     "modflow_river_seepage": "simulation_modeling",
     "modflow_saltwater_intrusion": "simulation_modeling",
     "modflow_sustainable_yield": "simulation_modeling",
+    "modflow_thermal_plume": "simulation_modeling",
+    "modflow_thermal_storage": "simulation_modeling",
     "modflow_vadose_transport": "simulation_modeling",
     "modflow_wellhead_protection": "simulation_modeling",
     "modflow_wetland_hydroperiod": "simulation_modeling",
