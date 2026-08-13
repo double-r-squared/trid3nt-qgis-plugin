@@ -83,3 +83,44 @@ wire -- no changes to the shared helper.
   before.
 - The Dockerfile fix is a text-only change; the actual retention behavior does
   not take effect in the deployed image until the next GeoClaw image rebuild.
+
+## Addendum (2026-08-12) - sweep-order fix + missing outputs-glob entry
+
+The rebuilt image's own smoke run (01KZWT7J3T0V95E8HF0E5S8XHF) surfaced a
+second, load-bearing defect: `services/workers/geoclaw/entrypoint.py::main`
+ran the `_expand_outputs` upload sweep **before**
+`run_geoclaw_postprocess` had written the peak/frame depth COGs into scratch.
+`services/workers/sfincs/entrypoint.py`'s `_solve_postprocess_sweep` has the
+correct order (postprocess writes COGs into `run_dir` BEFORE the sweep glob
+runs, per its own in-code comment) -- geoclaw's `main()` did not follow that
+pattern. Net effect: `publish_manifest.json` was written with valid
+`cog_uris`, but the referenced `.tif` objects were never actually uploaded to
+the runs prefix -- a live honesty-floor violation (a manifest that lies about
+what exists).
+
+**Fix 1 (ordering, `services/workers/geoclaw/entrypoint.py`)**: reordered
+`main()` to `postprocess -> sweep -> reap`, matching the sfincs pattern. The
+reap stays gated strictly inside `status == "ok"` and now runs AFTER the
+sweep (previously it ran interleaved with a sweep that had already happened),
+so a freshly-swept COG can never be reaped. Belt-and-suspenders: verified
+`GEOCLAW_SCRATCH_PATTERNS` (`_output/fort.q*`, `fort.t*`, `fort.b*`,
+`fort.a*`, `*.data`) can never match a `.tif` regardless of ordering.
+
+**Fix 2 (outputs-glob, `server/src/trid3nt_server/agent/workflows/geoclaw/run_geoclaw.py`)**:
+fixing the ordering alone was NOT sufficient -- a live smoke rerun after Fix 1
+still shipped zero COGs. Root cause: `GEOCLAW_OUTPUT_GLOBS`, the agent-authored
+manifest's `outputs` field, is AUTHORITATIVE and OVERRIDES the worker's
+`DEFAULT_OUTPUT_GLOBS` (the same rule already called out in this list's own
+comment for the deformation artifacts) -- and it never carried a `"*.tif"`
+entry. So even with the ordering fixed, the worker's sweep glob had nothing
+telling it to pick up `geoclaw_depth_peak.tif` / `geoclaw_depth_frame_NN.tif`.
+Added `"*.tif"` to `GEOCLAW_OUTPUT_GLOBS`.
+
+Both fixes were required together; the ordering fix alone reorders a sweep
+over an outputs list that still excluded COGs, and the glob fix alone would
+still race the COGs' write against an unordered sweep. Live smoke evidence
+(run `01KZWTS275YMV91NDW22TDR60Z`, Crescent City tsunami bbox) after both
+fixes: `geoclaw_depth_peak.tif` + 7 `geoclaw_depth_frame_NN.tif` files present
+in the run prefix, byte-for-byte matching `publish_manifest.json`'s 8
+`cog_uris`; raw `_output/fort.*` scratch absent (reaped); `_output/gauge00001.txt`
+kept; `completion.json` `output_uris` lists all 8 COGs + the manifest.

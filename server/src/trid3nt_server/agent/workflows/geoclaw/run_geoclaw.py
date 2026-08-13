@@ -112,6 +112,15 @@ GEOCLAW_OUTPUT_GLOBS: list[str] = [
     "deformation_dz.asc",
     "dtopo.tt3",
     "maketopo.py",
+    # Peak/frame depth COGs (services/workers/_geoclaw_postprocess writes these
+    # into scratch root as geoclaw_depth_peak.tif / geoclaw_depth_frame_NN.tif
+    # BEFORE the worker's output sweep runs). Same AUTHORITATIVE-override rule
+    # as the deformation artifacts above: this list replaces the worker's
+    # DEFAULT_OUTPUT_GLOBS (which does carry "*.tif"), so without this entry the
+    # postprocess COGs are silently never uploaded even though
+    # publish_manifest.json already references their cog_uris (ADR 0233
+    # rebuild-smoke finding, run 01KZWT7J3T0V95E8HF0E5S8XHF).
+    "*.tif",
 ]
 
 

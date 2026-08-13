@@ -850,18 +850,19 @@ def main(argv: list[str] | None = None) -> int:
         stdout_uri = _upload(stdout_path, _runs_uri(run_id, "geoclaw.stdout"))
         stderr_uri = _upload(stderr_path, _runs_uri(run_id, "geoclaw.stderr"))
 
-        output_rels: list[str] = []
-        for path in _expand_outputs(list(outputs), scratch):
-            rel = path.relative_to(scratch).as_posix()
-            uri = _upload(path, _runs_uri(run_id, rel))
-            output_uris.append(uri)
-            output_rels.append(rel)
-
         exit_code = rc
         status = "ok" if rc == 0 else "error"
         if rc != 0:
             error_msg = f"geoclaw worker exited with non-zero code {rc}"
 
+        # ---- RASTER POSTPROCESS (writes peak/frame COGs into scratch) --------
+        # Runs BEFORE the output sweep below (mirrors
+        # services/workers/sfincs/entrypoint.py's _solve_postprocess_sweep):
+        # the postprocess is what MATERIALIZES the *.tif COGs on disk, so the
+        # sweep's glob has to run after it or the freshly-written COGs never
+        # get uploaded even though publish_manifest.json already references
+        # their cog_uris (job-fix for the ADR 0233 rebuild smoke finding).
+        pp = None
         if rc == 0:
             try:
                 from services.workers._geoclaw_postprocess import run_geoclaw_postprocess
@@ -874,51 +875,64 @@ def main(argv: list[str] | None = None) -> int:
                 if pp.status == "ok" and pp.manifest is not None:
                     publish_manifest_uri = _write_publish_manifest(run_id, pp.manifest)
                     LOG.info("geoclaw postprocess ok: publish_manifest_uri=%s", publish_manifest_uri)
-
-                    # Retention (docs/decisions/0233-runs-retention.md): reap the
-                    # RAW SOLVER SCRATCH just uploaded above -- ONLY reached on a
-                    # successful postprocess (a failed run keeps its scratch for
-                    # debugging). Best-effort: a reap failure never fails the run.
-                    try:
-                        from services.workers._geoclaw_postprocess import (
-                            GEOCLAW_SCRATCH_KEEP_PATTERNS,
-                            GEOCLAW_SCRATCH_PATTERNS,
-                        )
-                        from services.workers._raster_postprocess.retention import (
-                            reap_run_scratch,
-                        )
-
-                        def _delete_scratch(rel: str) -> None:
-                            scheme, bucket, key = _split_object_uri(_runs_uri(run_id, rel))
-                            if scheme == "s3":
-                                _s3_client().delete_object(Bucket=bucket, Key=key)
-                            else:
-                                _gcs_client().bucket(bucket).blob(key).delete()
-
-                        reap = reap_run_scratch(
-                            _delete_scratch,
-                            run_id,
-                            output_rels,
-                            GEOCLAW_SCRATCH_PATTERNS,
-                            keep_patterns=GEOCLAW_SCRATCH_KEEP_PATTERNS,
-                        )
-                        if reap["deleted"]:
-                            reaped_uris = {_runs_uri(run_id, rel) for rel in reap["deleted"]}
-                            output_uris = [u for u in output_uris if u not in reaped_uris]
-                        LOG.info(
-                            "geoclaw scratch reap: deleted=%d errors=%d",
-                            len(reap["deleted"]), len(reap["errors"]),
-                        )
-                    except Exception as reap_exc:  # noqa: BLE001 -- hygiene, never fatal
-                        LOG.warning("geoclaw scratch reap failed (non-fatal): %s", reap_exc)
                 else:
                     error_code = pp.error_code
                     LOG.warning("geoclaw postprocess honesty gate: %s %s", pp.error_code, pp.error_message)
             except Exception as pp_exc:
                 LOG.warning("geoclaw postprocess failed (non-fatal): %s", pp_exc)
 
+        # ---- OUTPUT SWEEP (now AFTER postprocess so the *.tif glob ships the
+        # freshly-written peak/frame COGs alongside the raw solver scratch) ----
+        output_rels: list[str] = []
+        for path in _expand_outputs(list(outputs), scratch):
+            rel = path.relative_to(scratch).as_posix()
+            uri = _upload(path, _runs_uri(run_id, rel))
+            output_uris.append(uri)
+            output_rels.append(rel)
+
         if publish_manifest_uri and publish_manifest_uri not in output_uris:
             output_uris.append(publish_manifest_uri)
+
+        # ---- REAP (must run AFTER the sweep so freshly-swept COGs are never
+        # reaped -- Retention docs/decisions/0233-runs-retention.md). ONLY
+        # reached on a successful postprocess (a failed run keeps its scratch
+        # for debugging). Best-effort: a reap failure never fails the run.
+        # Belt-and-suspenders: GEOCLAW_SCRATCH_PATTERNS below match raw
+        # fort.q*/fort.t*/fort.b*/fort.a*/*.data solver scratch only, never
+        # *.tif, so even a future pattern change can't reap a COG.
+        if rc == 0 and pp is not None and pp.status == "ok" and pp.manifest is not None:
+            try:
+                from services.workers._geoclaw_postprocess import (
+                    GEOCLAW_SCRATCH_KEEP_PATTERNS,
+                    GEOCLAW_SCRATCH_PATTERNS,
+                )
+                from services.workers._raster_postprocess.retention import (
+                    reap_run_scratch,
+                )
+
+                def _delete_scratch(rel: str) -> None:
+                    scheme, bucket, key = _split_object_uri(_runs_uri(run_id, rel))
+                    if scheme == "s3":
+                        _s3_client().delete_object(Bucket=bucket, Key=key)
+                    else:
+                        _gcs_client().bucket(bucket).blob(key).delete()
+
+                reap = reap_run_scratch(
+                    _delete_scratch,
+                    run_id,
+                    output_rels,
+                    GEOCLAW_SCRATCH_PATTERNS,
+                    keep_patterns=GEOCLAW_SCRATCH_KEEP_PATTERNS,
+                )
+                if reap["deleted"]:
+                    reaped_uris = {_runs_uri(run_id, rel) for rel in reap["deleted"]}
+                    output_uris = [u for u in output_uris if u not in reaped_uris]
+                LOG.info(
+                    "geoclaw scratch reap: deleted=%d errors=%d",
+                    len(reap["deleted"]), len(reap["errors"]),
+                )
+            except Exception as reap_exc:  # noqa: BLE001 -- hygiene, never fatal
+                LOG.warning("geoclaw scratch reap failed (non-fatal): %s", reap_exc)
 
     except Exception as exc:  # pragma: no cover — defensive, logged + emitted
         LOG.exception("solver entrypoint failed")

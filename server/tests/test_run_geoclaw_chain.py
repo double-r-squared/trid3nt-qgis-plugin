@@ -523,6 +523,18 @@ def test_geoclaw_registered_in_solver_workflow_registry():
     assert GEOCLAW_SOLVER_NAME in SOLVER_WORKFLOW_REGISTRY
 
 
+def test_geoclaw_output_globs_ship_the_postprocess_cogs():
+    """Regression pin (ADR 0233 rebuild smoke, run 01KZWT7J3T0V95E8HF0E5S8XHF):
+    GEOCLAW_OUTPUT_GLOBS is AUTHORITATIVE over the worker's own
+    DEFAULT_OUTPUT_GLOBS (the manifest ``outputs`` field overrides it), so it
+    MUST carry "*.tif" or the postprocess-written peak/frame depth COGs are
+    silently never uploaded even though publish_manifest.json already
+    references their cog_uris."""
+    from trid3nt_server.agent.workflows.geoclaw.run_geoclaw import GEOCLAW_OUTPUT_GLOBS
+
+    assert "*.tif" in GEOCLAW_OUTPUT_GLOBS
+
+
 def test_geoclaw_inundation_typed_error_on_missing_bbox():
     import asyncio
 
