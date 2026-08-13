@@ -1,22 +1,26 @@
-"""task #207: surface engine INPUT data as renderable role="input" layers.
+"""Input-layer surfacing, post ADR 0244 S2 collapse.
 
-Every engine run consumes renderable inputs (OpenQuake fault traces, SFINCS
-DEM / landcover / rivers, SWMM building footprints) but historically only the
-RESULT layer was published. These tests pin the new surfacing seam:
+Router-fetched renderable inputs now surface via the emit-on-fetch router seam
+(``route()`` -> ``maybe_emit_input_on_fetch``); the per-family ``_surface_*``
+helpers + hand-written composer emission call sites were deleted in S2. What
+remains here pins the pieces the seam does NOT own:
 
-  (1) ``publish_input_layer`` -- the shared helper: forces role="input" +
-      bbox=None, is best-effort (NEVER raises), and respects the emit_layer_uri
-      guardrail (a raw-object-store raster is DROPPED, a vector passes).
-  (2) OpenQuake fault serialization -> a valid GeoJSON FeatureCollection of
-      LineStrings carrying the click-inspect props, and the composer emits a
-      role="input" fault vector ONLY when real faults were used (and nothing
-      extra when no real faults).
-  (3) SFINCS surfaces the river vector + the DEM/landcover rasters as
-      role="input" (publish_layer mocked).
-  (4) a failure to surface an input does NOT raise (the solve is unaffected).
+  (1) ``publish_input_layer`` / ``publish_raster_input_cog`` -- the emission
+      PRIMITIVES the seam itself rides: force role + bbox=None, best-effort
+      (NEVER raise), honour the emit_layer_uri guardrail (raw-object raster
+      DROPPED, vector passes).
+  (2) OpenQuake ``make_fault_sources_layer_uri`` + ``fault_records_to_feature_collection``
+      -- the fault-trace serialization util (kept, exported; the composer no
+      longer hand-surfaces -- ``fetch_fault_sources`` returns a renderable
+      FaultSourcesResult the seam publishes).
+  (3) river_dye's IN-WORKER bed-bathymetry surfacing -- a worker-COG the router
+      seam cannot cover (sampled inside the solver container).
+  (SWEEP) the ADR 0244 single-path guard: no ``_surface_*input*`` helper and no
+      hand-written input-emission call for router-fetched data may reappear.
 
 Everything I/O-bound (S3 put, publish_layer, the solver chain) is MOCKED -- no
-network / boto3 is touched.
+network / boto3 is touched. The per-family composer-surfacing cases were removed;
+the seam is now pinned by ``test_emit_on_fetch_seam.py``.
 """
 
 from __future__ import annotations
@@ -368,512 +372,17 @@ def test_make_fault_sources_layer_uri_s3_failure_is_non_fatal(monkeypatch):
     assert make_fault_sources_layer_uri([_FAULT_REC], run_id="RID") is None
 
 
-# --- composer end-to-end (mocked): emits a role="input" fault vector ONLY when
-#     real faults were used; nothing extra when no real faults. ---------------
-from trid3nt_contracts.openquake_contracts import OpenQuakeRunArgs  # noqa: E402
-from trid3nt_contracts.openquake_contracts import SeismicHazardLayerURI  # noqa: E402
-from trid3nt_server.agent.workflows.openquake.postprocess_openquake import (  # noqa: E402
-    SEISMIC_HAZARD_STYLE_PRESET,
-)
-from trid3nt_server.agent.workflows.openquake.psha.psha import (  # noqa: E402
-    assemble_build_spec,
-)
-
-_BBOX = (-122.55, 37.45, -122.15, 37.90)
-
-
-def _fault_result(faults, note=None):
-    return {
-        "catalog": "gem", "bbox": list(_BBOX), "fault_count": len(faults),
-        "faults": faults, "note": note, "source": "GEM",
-    }
-
-
-def _patch_fetch(*, return_value=None):
-    """Swap the fetch_fault_sources REGISTRY SEAM (folded, ADR 0081) -- the consumer
-    resolves TOOL_REGISTRY["fetch_fault_sources"].fn (a frozen RegisteredTool)."""
-    import dataclasses
-
-    from unittest.mock import MagicMock, patch
-
-    from trid3nt_server.agent.tools import TOOL_REGISTRY
-
-    mock = MagicMock(return_value=return_value)
-    entry = dataclasses.replace(TOOL_REGISTRY["fetch_fault_sources"], fn=mock)
-    return patch.dict(TOOL_REGISTRY, {"fetch_fault_sources": entry}), mock
-
-
-def _seismic_layer(run_id="BATCHRID"):
-    return SeismicHazardLayerURI(
-        layer_id=f"seismic-hazard-{run_id}",
-        name="Seismic hazard",
-        layer_type="raster",
-        uri="file:///tmp/hazard.tif",
-        style_preset=SEISMIC_HAZARD_STYLE_PRESET,
-        return_period_years=475.0,
-        max_hazard_value=0.62,
-        hazard_area_km2=100.0,
-        n_sites=9,
-    )
-
-
-def _wire_seismic_mocks(monkeypatch):
-    monkeypatch.setattr(
-        seismic, "stage_openquake_build_spec",
-        lambda run_args, run_id, *, fault_sources=None: "s3://cache/spec.json",
-    )
-
-    class _Handle:
-        run_id = "BATCHRID"
-
-    class _Result:
-        status = "complete"
-        run_id = "BATCHRID"
-        output_uri = "s3://runs/BATCHRID/"
-        error_code = None
-        error_message = None
-        cancellation_reason = None
-
-    async def _fake_wait(handle):
-        return _Result()
-
-    import trid3nt_server.agent.tools.simulation.solver.solver as solver_mod
-
-    monkeypatch.setattr(
-        solver_mod, "run_solver",
-        lambda *, solver, model_setup_uri, compute_class: _Handle(),
-        raising=False,
-    )
-    monkeypatch.setattr(solver_mod, "wait_for_completion", _fake_wait, raising=False)
-    monkeypatch.setattr(
-        seismic, "_download_batch_hazard_csv",
-        lambda run_result, run_id: "lon,lat,PGA-0.1\n-122.4,37.6,0.6\n",
-    )
-    monkeypatch.setattr(seismic, "postprocess_openquake", lambda *a, **k: _seismic_layer())
-
-    async def _no_charts(*a, **k):
-        return None
-
-    monkeypatch.setattr(seismic, "_emit_oq_curve_charts", _no_charts)
-    # Mock the S3 upload inside make_fault_sources_layer_uri (real serialize).
-    monkeypatch.setattr(solver_mod, "_get_runs_bucket", lambda: "test-runs")
-
-    class _FakeS3:
-        def put_object(self, **kw):
-            return None
-
-    monkeypatch.setattr(solver_mod, "_get_s3_client", lambda: _FakeS3())
-
-
-@pytest.mark.asyncio
-async def test_composer_emits_fault_input_when_real_faults(monkeypatch):
-    """When real faults are used, the composer surfaces a role="input" fault
-    VECTOR layer (the fault_sources.geojson) on the emitter."""
-    _wire_seismic_mocks(monkeypatch)
-    emitter = _emitter()
-    token = _CURRENT_EMITTER.set(emitter)
-    fetch_cm, _ = _patch_fetch(return_value=_fault_result([_FAULT_REC]))
-    try:
-        with fetch_cm, patch(
-            "trid3nt_server.emission.pipeline_emitter._read_vector_uri_as_geojson",
-            return_value=fault_records_to_feature_collection([_FAULT_REC]),
-        ):
-            await seismic.model_openquake_psha(
-                OpenQuakeRunArgs(bbox=_BBOX), compute_class="standard"
-            )
-    finally:
-        _CURRENT_EMITTER.reset(token)
-
-    fault_rows = [
-        l for l in emitter._loaded_layers if l.layer_id.startswith("fault-sources-")
-    ]
-    assert len(fault_rows) == 1, (
-        f"expected one role=input fault vector; got "
-        f"{[l.layer_id for l in emitter._loaded_layers]}"
-    )
-    assert fault_rows[0].role == "input"
-    assert fault_rows[0].layer_type == "vector"
-
-
-@pytest.mark.asyncio
-async def test_composer_emits_no_fault_input_when_no_real_faults(monkeypatch):
-    """When NO real fault intersects the AOI, the composer emits NO fault input
-    layer (nothing extra surfaced)."""
-    _wire_seismic_mocks(monkeypatch)
-    emitter = _emitter()
-    token = _CURRENT_EMITTER.set(emitter)
-    fetch_cm, _ = _patch_fetch(return_value=_fault_result([], note="No GEM faults in this AOI."))
-    try:
-        with fetch_cm:
-            await seismic.model_openquake_psha(
-                OpenQuakeRunArgs(bbox=_BBOX), compute_class="standard"
-            )
-    finally:
-        _CURRENT_EMITTER.reset(token)
-
-    fault_rows = [
-        l for l in emitter._loaded_layers if l.layer_id.startswith("fault-sources-")
-    ]
-    assert fault_rows == [], (
-        f"no fault input must be surfaced on the synthetic path; got {fault_rows}"
-    )
-
-
 # ===========================================================================
-# (3) SFINCS surfaces river vector + DEM/landcover rasters as role="input".
-# ===========================================================================
-import trid3nt_server.agent.workflows.sfincs.flood.flood as flood  # noqa: E402
-from trid3nt_server.agent.workflows.sfincs.flood.flood import model_flood_scenario  # noqa: E402
-
-
-def _flood_input_layer(kind: str) -> LayerURI:
-    if kind == "rivers":
-        return LayerURI(
-            layer_id="rivers-test", name="Rivers", layer_type="vector",
-            uri="s3://test-cache/rivers/test.fgb", style_preset="osm_waterways",
-            role="input",
-        )
-    return LayerURI(
-        layer_id=f"{kind}-test", name=f"{kind} layer", layer_type="raster",
-        uri=f"s3://test-cache/{kind}/test.tif",
-        style_preset="continuous_dem" if kind == "dem" else "categorical_landcover",
-        role="input",
-    )
-
-
-def _river_geometry_patch(return_value: LayerURI | None = None):
-    """Patch the fetch_river_geometry registry seam (ADR 0074).
-
-    flood.py no longer imports the twin directly -- it resolves
-    ``TOOL_REGISTRY["fetch_river_geometry"].fn`` at call time. RegisteredTool
-    is frozen, so swap the whole entry for one carrying a stub fn (mirrors
-    ``_patch_copernicus_seam`` in test_data_fetch.py).
-    """
-    from trid3nt_server.agent.tools import TOOL_REGISTRY, RegisteredTool
-
-    layer = return_value if return_value is not None else _flood_input_layer("rivers")
-    orig = TOOL_REGISTRY["fetch_river_geometry"]
-    return patch.dict(
-        TOOL_REGISTRY,
-        {
-            "fetch_river_geometry": RegisteredTool(
-                metadata=orig.metadata, fn=lambda **_kw: layer, module=orig.module
-            )
-        },
-    )
-
-
-@pytest.mark.asyncio
-async def test_sfincs_surfaces_dem_landcover_river_as_inputs(monkeypatch):
-    """The flood composer surfaces the river VECTOR (no publish round-trip) and
-    the DEM + landcover RASTERS (publish_layer mocked) as role="input"."""
-    run_id = new_ulid()
-    handle = ExecutionHandle_helper(run_id)
-    landcover_result = {"layer": _flood_input_layer("landcover"), "nlcd_vintage_year": 2021}
-    precip_result = {
-        "precip_inches": 8.0, "vintage_volume": "NOAA Atlas 14",
-        "project_area": "FL", "return_period_years": 100, "duration_hours": 24,
-    }
-
-    class _ModelSetup:
-        setup_id = new_ulid()
-        solver = "sfincs"
-        setup_uri = "s3://cache/setup/x"
-        grid_resolution_m = 30.0
-        bbox = (-81.92, 26.55, -81.80, 26.68)
-        parameters: dict = {}
-        created_at = datetime.now(timezone.utc)
-
-    _rid = run_id
-
-    class _RunResultOK:
-        run_id = _rid
-        handle_id = handle.handle_id
-        status = "complete"
-        output_uri = f"s3://trid3nt-runs/{_rid}/"
-        started_at = datetime.now(timezone.utc)
-        completed_at = datetime.now(timezone.utc)
-        duration_seconds = 1.0
-        error_code = None
-        error_message = None
-        cancellation_reason = None
-        batch_compute_meta = None
-
-    peak_layer = LayerURI(
-        layer_id=f"flood-depth-peak-{run_id}", name="Peak flood depth",
-        layer_type="raster", uri=f"gs://runs/{run_id}/flood_depth_peak.tif",
-        style_preset="continuous_flood_depth", role="primary", units="meters",
-    )
-
-    async def _wfc(_handle):
-        return _RunResultOK()
-
-    publish_calls: list[str] = []
-
-    def _mock_publish_layer(layer_uri, layer_id, style_preset, **kw):  # noqa: ANN001
-        publish_calls.append(layer_id)
-        from urllib.parse import quote
-
-        return (
-            "https://titiler.test/cog/tiles/{z}/{x}/{y}.png"
-            f"?url={quote(layer_uri, safe='')}&rescale=0,3"
-        )
-
-    emitter = _emitter()
-    token = _CURRENT_EMITTER.set(emitter)
-    try:
-        with (
-            patch.object(flood, "fetch_dem", return_value=_flood_input_layer("dem")),
-            patch.object(flood, "fetch_landcover", return_value=landcover_result),
-            _river_geometry_patch(),
-            patch.object(flood, "lookup_precip_return_period", return_value=precip_result),
-            patch.object(flood, "build_sfincs_model", return_value=_ModelSetup()),
-            patch.object(flood, "run_solver", return_value=handle),
-            patch.object(flood, "wait_for_completion", side_effect=_wfc),
-            patch.object(
-                flood, "postprocess_flood",
-                return_value=([peak_layer], {"max_depth_m": 1.0, "crs": "EPSG:32617", "units": "meters"}),
-            ),
-            patch.object(flood, "publish_layer", side_effect=_mock_publish_layer),
-            patch(
-                "trid3nt_server.emission.pipeline_emitter._read_vector_uri_as_geojson",
-                return_value={"type": "FeatureCollection", "features": []},
-            ),
-        ):
-            await model_flood_scenario(
-                bbox=(-81.92, 26.55, -81.80, 26.68),
-                return_period_yr=100,
-                duration_hr=24,
-                compute_class="medium",
-            )
-    finally:
-        _CURRENT_EMITTER.reset(token)
-
-    # DEM + landcover inputs went through a publish_layer round-trip.
-    input_pub = {c.rsplit("-", 1)[0] for c in publish_calls if c.startswith("input-")}
-    assert input_pub == {"input-dem", "input-landcover"}, (
-        f"DEM + landcover must publish as inputs; got {publish_calls}"
-    )
-
-    # The emitter carries the surfaced inputs, all role="input".
-    input_rows = [l for l in emitter._loaded_layers if l.role == "input"]
-    names = {l.layer_id for l in input_rows}
-    # river vector + the 2 published rasters surfaced.
-    assert any(n.startswith("input-dem") for n in names), names
-    assert any(n.startswith("input-landcover") for n in names), names
-    assert any(n == "rivers-test" for n in names), names
-    assert all(l.role == "input" for l in input_rows)
-
-
-# ===========================================================================
-# (4 bonus) SWMM building footprints surfaced as a role="input" vector.
-# ===========================================================================
-from trid3nt_server.agent.workflows.swmm.urban_flood.urban_flood import (  # noqa: E402
-    make_buildings_input_layer_uri,
-)
-
-
-def test_make_buildings_input_layer_uri_uploads_role_input(monkeypatch):
-    """A buildings FeatureCollection uploads to the runs bucket + returns a
-    role="input" vector LayerURI (bbox=None). S3 mocked."""
-    import trid3nt_server.agent.tools.simulation.solver.solver as solver_mod
-
-    puts: list[dict] = []
-
-    class _FakeS3:
-        def put_object(self, **kw):
-            puts.append(kw)
-
-    monkeypatch.setattr(solver_mod, "_get_s3_client", lambda: _FakeS3())
-    monkeypatch.setattr(solver_mod, "_get_runs_bucket", lambda: "test-runs")
-
-    fc = {
-        "type": "FeatureCollection",
-        "features": [
-            {"type": "Feature", "geometry": {"type": "Polygon", "coordinates": [[]]}, "properties": {}}
-        ],
-    }
-    layer = make_buildings_input_layer_uri(fc, run_id="RID")
-    assert layer is not None
-    assert layer.layer_type == "vector"
-    assert layer.role == "input"
-    assert layer.bbox is None
-    assert layer.uri == "s3://test-runs/RID/buildings_input.geojson"
-    assert len(puts) == 1
-
-
-def test_make_buildings_input_layer_uri_empty_returns_none(monkeypatch):
-    """An empty / non-FC input returns None (best-effort, no upload, no raise)."""
-    import trid3nt_server.agent.tools.simulation.solver.solver as solver_mod
-
-    monkeypatch.setattr(
-        solver_mod, "_get_s3_client",
-        lambda: (_ for _ in ()).throw(AssertionError("must not upload")),
-    )
-    monkeypatch.setattr(solver_mod, "_get_runs_bucket", lambda: "test-runs")
-    assert make_buildings_input_layer_uri(None, run_id="RID") is None
-    assert make_buildings_input_layer_uri(
-        {"type": "FeatureCollection", "features": []}, run_id="RID"
-    ) is None
-
-
-# Small ExecutionHandle factory (avoids importing the whole flood-test harness).
-from trid3nt_contracts.execution import ExecutionHandle  # noqa: E402
-
-
-def ExecutionHandle_helper(run_id: str) -> ExecutionHandle:
-    return ExecutionHandle(
-        handle_id=new_ulid(),
-        run_id=run_id,
-        solver="sfincs",
-        compute_class="standard",
-        workflows_execution_id="projects/t/locations/us/workflows/w/executions/e",
-        workflow_name="model_flood_scenario",
-        workflow_location="us-central1",
-        submitted_at=datetime.now(timezone.utc),
-    )
-
-
-# ===========================================================================
-# (5) ADR 0231 input-layer parity: the TELEMAC family surfaces the fetched
-#     river geometry (river_dye) + the mesh DEM bed + river flowline
-#     (rain_on_grid) as role="context" Case inputs -- never hidden layers.
-#     The cannot-silently-drop gate: a valid input LayerURI MUST reach the
-#     emitter. publish_layer + current_emitter are mocked; no network.
+# ADR 0244: the in-worker river bed bathymetry (a worker-COG, NOT router-fetched
+# -> the seam does not cover it, so this bespoke surfacing is KEPT + allowlisted
+# in the sweep below). The worker samples + fits the bed inside the container and
+# writes it as a 4326 COG (bed_bathymetry.tif) + records bed_cog in
+# telemac_metrics.json; the composer rides that object through
+# publish_raster_input_cog as a role=context input.
 # ===========================================================================
 import trid3nt_server.agent.workflows.telemac.river_dye.river_dye as river_dye  # noqa: E402
-import trid3nt_server.agent.workflows.telemac.rain_on_grid.rain_on_grid as rog  # noqa: E402
 
 
-@pytest.mark.asyncio
-async def test_river_dye_surfaces_fetched_river_layer_as_context():
-    """river_dye surfaces the FETCHED river-geometry LayerURI (the fetch path)
-    as a role="context" vector carrying a provenance name (re-keyed off the
-    result). Rides the inline s3:// FlatGeobuf -- no publish_layer round-trip."""
-    fetched = LayerURI(
-        layer_id="river-fetch-raw", name="Fetch river geometry",
-        layer_type="vector", uri="s3://test-cache/river_geometry/snake.fgb",
-        style_preset="osm_waterways", role="input",
-    )
-    emitter = _emitter()
-    with patch(
-        "trid3nt_server.emission.pipeline_emitter._read_vector_uri_as_geojson",
-        return_value={"type": "FeatureCollection", "features": []},
-    ):
-        ok = await river_dye._surface_river_geometry_input(
-            emitter, fetched, str(fetched.uri), "Snake River near Twin Falls, Idaho"
-        )
-    assert ok is True
-    assert len(emitter._loaded_layers) == 1
-    row = emitter._loaded_layers[0]
-    assert row.role == "context"
-    assert row.layer_type == "vector"
-    assert row.uri == "s3://test-cache/river_geometry/snake.fgb"
-    assert row.name.startswith("Input: river geometry (")
-    assert row.layer_id.startswith("input-river-geometry-")
-
-
-@pytest.mark.asyncio
-async def test_river_dye_surfaces_prefetched_river_uri_as_context():
-    """The prefetched path (only an s3:// uri string, no LayerURI) still surfaces
-    the flowline as a role="context" vector (osm_waterways preset)."""
-    emitter = _emitter()
-    with patch(
-        "trid3nt_server.emission.pipeline_emitter._read_vector_uri_as_geojson",
-        return_value={"type": "FeatureCollection", "features": []},
-    ):
-        ok = await river_dye._surface_river_geometry_input(
-            emitter, None, "s3://runs/r/reach.fgb", "Eel River"
-        )
-    assert ok is True
-    row = emitter._loaded_layers[0]
-    assert row.role == "context"
-    assert row.style_preset == "osm_waterways"
-    assert row.uri == "s3://runs/r/reach.fgb"
-
-
-@pytest.mark.asyncio
-async def test_river_dye_river_input_none_emitter_and_bad_uri_noop():
-    """No emitter -> no-op False; a non-object prefetch string surfaces nothing;
-    NEVER raises."""
-    assert await river_dye._surface_river_geometry_input(
-        None, None, "s3://r/x.fgb", "X"
-    ) is False
-    emitter = _emitter()
-    assert await river_dye._surface_river_geometry_input(
-        emitter, None, "fetch_river_geometry(...)", "X"
-    ) is False
-    assert emitter._loaded_layers == []
-
-
-class _FakeWatershedMesh:
-    """Minimal WatershedMesh stand-in carrying only the ADR 0231 input uris."""
-
-    def __init__(self, dem_uri=None, river_uri=None):
-        self.dem_input_s3_uri = dem_uri
-        self.river_input_s3_uri = river_uri
-
-
-@pytest.mark.asyncio
-async def test_rain_on_grid_surfaces_dem_and_river_as_context():
-    """rain_on_grid surfaces the mesh's fetched DEM bed (publish_raster_input_cog,
-    publish_layer mocked) + river flowline (publish_input_layer) as role="context"
-    Case inputs -- both reach the emitter (cannot silently drop)."""
-    mesh = _FakeWatershedMesh(
-        dem_uri="s3://test-cache/dem/otto.tif",
-        river_uri="s3://test-cache/river_geometry/otto.fgb",
-    )
-    emitter = _emitter()
-    token = _CURRENT_EMITTER.set(emitter)
-
-    def _mock_publish_layer(layer_uri, layer_id, style_preset, name=None, **kw):  # noqa: ANN001
-        return f"s3://test-runs/RID/{layer_id}.tif"
-
-    try:
-        with (
-            patch(_PUBLISH_LAYER_TARGET, side_effect=_mock_publish_layer),
-            patch(
-                "trid3nt_server.emission.pipeline_emitter._read_vector_uri_as_geojson",
-                return_value={"type": "FeatureCollection", "features": []},
-            ),
-        ):
-            await rog._surface_watershed_mesh_inputs(mesh, "Otto, North Carolina")
-    finally:
-        _CURRENT_EMITTER.reset(token)
-
-    rows = {l.layer_id.rsplit("-", 1)[0]: l for l in emitter._loaded_layers}
-    assert "input-dem" in rows, rows
-    assert "input-river-geometry" in rows, rows
-    dem_row = rows["input-dem"]
-    assert dem_row.role == "context"
-    assert dem_row.layer_type == "raster"
-    assert dem_row.style_preset == "continuous_dem"
-    assert dem_row.name.startswith("Input: DEM bed (")
-    river_row = rows["input-river-geometry"]
-    assert river_row.role == "context"
-    assert river_row.layer_type == "vector"
-    assert river_row.uri == "s3://test-cache/river_geometry/otto.fgb"
-    assert river_row.name.startswith("Input: river geometry (")
-
-
-@pytest.mark.asyncio
-async def test_rain_on_grid_supplied_mesh_no_uris_is_noop():
-    """A user-supplied mesh carries neither input uri -> nothing surfaced, no
-    raise (best-effort)."""
-    emitter = _emitter()
-    token = _CURRENT_EMITTER.set(emitter)
-    try:
-        await rog._surface_watershed_mesh_inputs(_FakeWatershedMesh(), "X")
-    finally:
-        _CURRENT_EMITTER.reset(token)
-
-
-# ===========================================================================
-# ADR 0231: the in-worker river bed bathymetry (the row NATE explicitly named).
-# The worker samples + fits the bed inside the container and writes it as a 4326
-# COG (bed_bathymetry.tif) + records bed_cog in telemac_metrics.json; the composer
-# rides that object through publish_raster_input_cog as a role=context input.
-# ===========================================================================
 @pytest.mark.asyncio
 async def test_river_dye_surfaces_in_worker_bed_bathymetry_as_context(monkeypatch):
     """The bed COG the worker recorded in the result envelope reaches the emitter
@@ -923,138 +432,117 @@ async def test_river_dye_bed_bathymetry_absent_key_and_none_emitter_noop():
 
 
 # ===========================================================================
-# ADR 0231 broad adoption -- per-family cannot-silently-drop pins.
+# (SWEEP) ADR 0244 single-path guard.
+#
+# After the S2 collapse the emit-on-fetch router seam (route() ->
+# maybe_emit_input_on_fetch) is the ONLY way a router-FETCHED renderable input
+# surfaces as a role=context "Input:" row. No composer may re-introduce a
+# per-family ``_surface_*input*`` helper or a hand-written
+# publish_input_layer / publish_raster_input_cog call for router-fetched data.
+#
+# What legitimately REMAINS (and is allow-listed below, each with its reason) is
+# emission the seam does NOT cover:
+#   * MESH previews          - the generated mesh is not a router fetch.
+#   * RESULT / derived COGs   - a solver's own secondary output layer.
+#   * IN-WORKER COGs          - bathymetry sampled inside the solver container,
+#                               which never touches route() (river_dye bed,
+#                               telemac3d bottom, swan bathy).
+#   * BARE-OSM fetches        - agitation's breakwaters bypass the router (an
+#                               S3 loose end, ADR 0244 S3).
+#   * USER-DATA overlays      - a point/vector built from a user-supplied
+#                               location (MODFLOW well / observed heads).
+#
+# A NEW input-emission site fails this test: route the fetch through the seam
+# (its render declaration surfaces it for free) or, if it is genuinely one of
+# the exempt classes above, add it here WITH a reason.
 # ===========================================================================
-@pytest.mark.asyncio
-async def test_landlab_surfaces_staged_dem_as_context(monkeypatch):
-    """The ONE _composer_common adoption that lights all 13 Landlab templates:
-    the staged DEM reaches the emitter as a role=context continuous_dem raster."""
-    import trid3nt_server.agent.workflows.landlab._composer_common as cc
+import pathlib  # noqa: E402
+import re  # noqa: E402
 
-    emitter = _emitter()
+_WORKFLOWS_DIR = (
+    pathlib.Path(__file__).resolve().parents[1]
+    / "src" / "trid3nt_server" / "agent" / "workflows"
+)
 
-    def _mock_publish_layer(layer_uri, layer_id, style_preset, name=None, **kw):  # noqa: ANN001
-        return layer_uri  # raw s3 COG passes the guardrail
+# relpath (from workflows/) -> (n_input_emission_calls, reason). Sum is the only
+# input-emission the tree is allowed to keep post-collapse.
+_ALLOWLISTED_INPUT_EMISSION: dict[str, tuple[int, str]] = {
+    "geoclaw/inundation/inundation.py": (2, "mesh preview + particle result"),
+    "hecras/flood_2d/flood_2d.py": (1, "mesh preview"),
+    "hecras/levee_breach/levee_breach.py": (1, "mesh preview"),
+    "hecras/riverine_flood/riverine_flood.py": (1, "mesh preview"),
+    "modflow/capture_zone/capture_zone.py": (1, "observed-wells user-data overlay"),
+    "modflow/thermal_plume/thermal_plume.py": (1, "injection-well user-data point"),
+    "openquake/scenario_gmf/scenario_gmf.py": (1, "computed GMF-spread result COG"),
+    "openquake/secondary_perils/secondary_perils.py": (1, "computed landslide result COG"),
+    "schism/baroclinic_circulation/baroclinic_circulation.py": (2, "bottom-salinity result + mesh preview"),
+    "schism/coupled_waves/coupled_waves.py": (1, "mesh preview"),
+    "schism/pahm_surge/pahm_surge.py": (2, "mesh preview + storm best-track result"),
+    "schism/tidal_hydro/tidal_hydro.py": (1, "mesh preview"),
+    "sfincs/flood/flood.py": (1, "mesh preview"),
+    "swan/wave_field/wave_field.py": (1, "in-worker bathymetry COG"),
+    "telemac/agitation/agitation.py": (1, "bare-OSM breakwaters (router-bypass, S3 loose end)"),
+    "telemac/rain_on_grid/rain_on_grid.py": (1, "full-results mesh"),
+    "telemac/river_dye/river_dye.py": (5, "deposition/slick/preview results + in-worker bed COG"),
+    "telemac/stratified_flow/stratified_flow.py": (1, "in-worker telemac3d bottom COG"),
+}
 
-    with patch(_PUBLISH_LAYER_TARGET, side_effect=_mock_publish_layer):
-        ok = await cc._surface_landlab_dem_input(
-            emitter, "s3://cache/landlab_setup/RID/dem.tif", "USGS 3DEP 1m LiDAR")
+# The ONE bespoke input-surfacing helper that survives: it rides an IN-WORKER bed
+# COG (recorded in the solver envelope), which the router seam cannot cover.
+_ALLOWLISTED_SURFACE_HELPERS = {"_surface_bed_bathymetry_input"}
 
-    assert ok is True
-    row = emitter._loaded_layers[0]
-    assert row.role == "context" and row.layer_type == "raster"
-    assert row.style_preset == "continuous_dem"
-    assert row.name == "Input: DEM (USGS 3DEP 1m LiDAR)"
-    assert row.layer_id.startswith("input-dem-")
-
-
-@pytest.mark.asyncio
-async def test_landlab_dem_none_uri_and_emitter_noop(monkeypatch):
-    """No DEM uri / no emitter -> nothing surfaced; NEVER raises."""
-    import trid3nt_server.agent.workflows.landlab._composer_common as cc
-
-    assert await cc._surface_landlab_dem_input(None, "s3://x/d.tif", "src") is False
-    emitter = _emitter()
-    assert await cc._surface_landlab_dem_input(emitter, None, "src") is False
-    assert emitter._loaded_layers == []
-
-
-@pytest.mark.asyncio
-async def test_telemac_rog_surfaces_nlcd_landcover_as_context(monkeypatch):
-    """rain_on_grid surfaces the fetched NLCD land cover (the per-node CN2/Manning
-    the infiltration derives from) as a role=context categorical input."""
-    import trid3nt_server.agent.workflows.telemac.rain_on_grid.rain_on_grid as rog
-
-    emitter = _emitter()
-    token = _CURRENT_EMITTER.set(emitter)
-
-    def _mock_publish_layer(layer_uri, layer_id, style_preset, name=None, **kw):  # noqa: ANN001
-        return layer_uri
-
-    try:
-        with patch(_PUBLISH_LAYER_TARGET, side_effect=_mock_publish_layer):
-            await rog._surface_landcover_input(
-                "s3://cache/nlcd/otto.tif", "Otto, North Carolina")
-    finally:
-        _CURRENT_EMITTER.reset(token)
-
-    row = emitter._loaded_layers[0]
-    assert row.role == "context" and row.layer_type == "raster"
-    assert row.style_preset == "categorical_landcover"
-    assert row.name.startswith("Input: land cover (")
+# Immediate paren only (a real call ``name(...``); a prose mention like
+# "publish_input_layer (never raises)" has a space and must NOT count.
+_EMISSION_CALL = re.compile(r"\b(publish_input_layer|publish_raster_input_cog)\(")
+_SURFACE_DEF = re.compile(r"^\s*(?:async\s+)?def\s+(_surface_\w*input\w*)\s*\(", re.M)
 
 
-@pytest.mark.asyncio
-async def test_telemac_rog_landcover_none_uri_noop():
-    """No NLCD uri -> nothing surfaced (best-effort), no raise."""
-    import trid3nt_server.agent.workflows.telemac.rain_on_grid.rain_on_grid as rog
-
-    emitter = _emitter()
-    token = _CURRENT_EMITTER.set(emitter)
-    try:
-        await rog._surface_landcover_input(None, "X")
-    finally:
-        _CURRENT_EMITTER.reset(token)
-    assert emitter._loaded_layers == []
+def _iter_workflow_py() -> list[pathlib.Path]:
+    return [p for p in _WORKFLOWS_DIR.rglob("*.py") if "__pycache__" not in p.parts]
 
 
-def test_swmm_fetch_dem_invokes_uri_sink(monkeypatch):
-    """SWMM _fetch_dem_for_urban feeds the fetched DEM s3 uri to uri_sink (so the
-    composer surfaces the terrain) -- cannot silently drop the DEM."""
-    import trid3nt_server.agent.workflows.swmm.urban_flood.urban_flood as uf
-    from trid3nt_server.agent.tools import TOOL_REGISTRY
-
-    class _Layer:
-        uri = "s3://cache/dem/urban.tif"
-
-    class _Entry:
-        fn = staticmethod(lambda **kw: _Layer())
-
-    monkeypatch.setitem(TOOL_REGISTRY, "fetch_3dep_extra", _Entry())
-    monkeypatch.setattr(uf, "_localize_to_dem_path", lambda uri: "/tmp/dem.tif")
-    captured: list[str] = []
-    path, source = uf._fetch_dem_for_urban((-1.0, -1.0, 1.0, 1.0), captured.append)
-    assert captured == ["s3://cache/dem/urban.tif"]
-    assert path == "/tmp/dem.tif"
+def test_sweep_no_surface_input_helpers_except_worker_cog():
+    """No per-family ``_surface_*input*`` helper may be (re)introduced -- the seam
+    surfaces fetched inputs. The sole exception is the in-worker bed-COG helper."""
+    offenders: list[str] = []
+    for path in _iter_workflow_py():
+        for name in _SURFACE_DEF.findall(path.read_text(encoding="utf-8")):
+            if name not in _ALLOWLISTED_SURFACE_HELPERS:
+                offenders.append(f"{path.relative_to(_WORKFLOWS_DIR)}::{name}")
+    assert not offenders, (
+        "router-fetched inputs surface via the emit-on-fetch seam (ADR 0244); "
+        "delete these hand-written _surface_*input* helpers:\n  "
+        + "\n  ".join(offenders)
+    )
 
 
-def test_swmm_fetch_dem_none_sink_is_noop(monkeypatch):
-    """A None uri_sink (every legacy caller) never errors -- byte-identical."""
-    import trid3nt_server.agent.workflows.swmm.urban_flood.urban_flood as uf
-    from trid3nt_server.agent.tools import TOOL_REGISTRY
+def test_sweep_input_emission_calls_match_allowlist():
+    """Every hand-written publish_input_layer / publish_raster_input_cog CALL in a
+    composer must be an allow-listed non-seam-covered emission (mesh / result /
+    in-worker COG / bare-OSM / user-data overlay). A new site -> route the fetch
+    through the seam, or allow-list it here with a reason."""
+    found: dict[str, int] = {}
+    for path in _iter_workflow_py():
+        n = 0
+        for line in path.read_text(encoding="utf-8").splitlines():
+            stripped = line.lstrip()
+            if stripped.startswith(("import ", "from ", "#")):
+                continue
+            n += len(_EMISSION_CALL.findall(line))
+        if n:
+            found[str(path.relative_to(_WORKFLOWS_DIR))] = n
 
-    class _Layer:
-        uri = "s3://cache/dem/urban.tif"
-
-    class _Entry:
-        fn = staticmethod(lambda **kw: _Layer())
-
-    monkeypatch.setitem(TOOL_REGISTRY, "fetch_3dep_extra", _Entry())
-    monkeypatch.setattr(uf, "_localize_to_dem_path", lambda uri: "/tmp/dem.tif")
-    path, source = uf._fetch_dem_for_urban((-1.0, -1.0, 1.0, 1.0))  # no sink
-    assert path == "/tmp/dem.tif"
-
-
-def test_openquake_secondary_perils_fetch_dem_invokes_uri_sink(monkeypatch):
-    """secondary_perils _fetch_dem_local feeds the fetched DEM s3 uri to uri_sink
-    (the vs30/slope/CTI covariates derive from it) -- cannot silently drop."""
-    import trid3nt_server.agent.workflows.openquake.secondary_perils.secondary_perils as sp
-    from trid3nt_server.agent.tools import TOOL_REGISTRY
-
-    class _Layer:
-        uri = "s3://cache/dem/sep.tif"
-
-    class _Entry:
-        fn = staticmethod(lambda **kw: _Layer())
-
-    monkeypatch.setitem(TOOL_REGISTRY, "fetch_copernicus_dem", _Entry())
-    monkeypatch.setattr(
-        sp, "read_object_bytes_s3", lambda uri: b"", raising=False)
-    # patch the cache import target too (imported lazily inside the function)
-    import trid3nt_server.agent.tools.cache as cache_mod
-    monkeypatch.setattr(cache_mod, "read_object_bytes_s3", lambda uri: b"tiff")
-    import os, tempfile
-    tmpdir = tempfile.mkdtemp()
-    captured: list[str] = []
-    sp._fetch_dem_local((-1.0, -1.0, 1.0, 1.0), tmpdir, captured.append)
-    assert captured == ["s3://cache/dem/sep.tif"]
+    expected = {rel: cnt for rel, (cnt, _reason) in _ALLOWLISTED_INPUT_EMISSION.items()}
+    unexpected = {
+        rel: cnt for rel, cnt in found.items()
+        if rel not in expected or cnt != expected[rel]
+    }
+    missing = {
+        rel: cnt for rel, cnt in expected.items()
+        if found.get(rel, 0) != cnt
+    }
+    assert not unexpected and not missing, (
+        "input-emission call sites drifted from the ADR 0244 allow-list.\n"
+        f"unexpected/changed (route through the seam or allow-list w/ reason): {unexpected}\n"
+        f"allow-listed but not found (update the allow-list): {missing}"
+    )

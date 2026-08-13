@@ -2071,11 +2071,9 @@ async def model_telemac_river_dye(
                 invoke=lambda: fetch_river_fn(bbox=river_bbox),
             )
         river_uri = _layer_field(river_layer, "uri")
-    # ADR 0231 input-layer parity: the river flowline the mesh corridor + seed
-    # derive from is a load-bearing FETCHED input; surface it as a role="context"
-    # Case vector so the channel geometry feeding the run is never a hidden layer
-    # (NATE's no-hidden-data-layers ruling). Best-effort -- NEVER fails the solve.
-    await _surface_river_geometry_input(emitter, river_layer, river_uri, location_name)
+    # The fetched river flowline is already on the map: the fresh fetch above rides
+    # ``emit_tool_call`` (which surfaces the returned vector), and a prefetched uri
+    # was surfaced by the parent composer's fetch. No hand-built re-surface here.
     seed: tuple[float, float] | None = None
     if river_uri:
         seed = await asyncio.to_thread(_river_seed_from_geometry, str(river_uri))
@@ -2972,55 +2970,6 @@ def _publish_peak_layer(
         mesh_resolution_label=mesh_resolution_label,
         synthetic_inputs=list(synthetic_inputs or []),
     )
-
-
-# --------------------------------------------------------------------------- #
-# ADR 0231 input-layer parity: surface the fetched river geometry
-# --------------------------------------------------------------------------- #
-async def _surface_river_geometry_input(
-    emitter: Any,
-    river_layer: Any,
-    river_uri: str | None,
-    location_name: str,
-) -> bool:
-    """BEST-EFFORT: surface the fetched river flowline as a role="context" input.
-
-    The TELEMAC-2D mesh corridor + centerline seed derive from this flowline
-    (``fetch_river_geometry`` -- OSM waterways / NHD), so it is a load-bearing
-    fetched input that ADR 0231 requires on the map, not a hidden layer. Rides
-    the existing ``s3://`` FlatGeobuf (inlined server-side by the emitter; no
-    ``publish_layer`` round-trip needed for a vector); provenance in the name.
-    NEVER raises -- a failure to surface an input can never fail the solve.
-    """
-    from trid3nt_contracts.execution import LayerURI
-    from trid3nt_server.emission.layer_uri_emit import publish_input_layer
-
-    if emitter is None:
-        return False
-    name = f"Input: river geometry ({_slug(location_name)}, NHD/OSM flowlines)"
-    if river_layer is not None:
-        # The fetched LayerURI already carries the vector uri + osm_waterways
-        # preset; force role="context" via the publish seam (it copies + strips
-        # the competing zoom-to). Re-key so it never collides with the result.
-        layer = river_layer.model_copy(update={
-            "layer_id": f"input-river-geometry-{new_ulid()}",
-            "name": name,
-            "role": "context",
-            "bbox": None,
-        })
-        return await publish_input_layer(emitter, layer, role="context")
-    if not river_uri or not str(river_uri).startswith(("s3://", "gs://")):
-        return False  # prefetched string was not a real object uri -> nothing to ride
-    layer = LayerURI(
-        layer_id=f"input-river-geometry-{new_ulid()}",
-        name=name,
-        layer_type="vector",
-        uri=str(river_uri),
-        style_preset="osm_waterways",
-        role="context",
-        bbox=None,
-    )
-    return await publish_input_layer(emitter, layer, role="context")
 
 
 #: DEM-source label for the bed-COG provenance name (the worker records which DEM

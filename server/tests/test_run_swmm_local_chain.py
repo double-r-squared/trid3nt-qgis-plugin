@@ -565,11 +565,12 @@ def test_full_local_chain_emits_peak_plus_frames(synthetic_inputs, monkeypatch):
         f for f in fake.loaded_layers if not isinstance(f, SWMMDepthLayerURI)
     ]
     mesh_layers = [f for f in non_frame_layers if f.style_preset == "mesh_grid"]
-    buildings_input_layers = [
-        f for f in non_frame_layers if f.style_preset == "osm_buildings"
-    ]
 
-    assert len(non_frame_layers) == len(mesh_layers) + len(buildings_input_layers), (
+    # ADR 0244 S2: the composer no longer hand-emits a buildings-input layer --
+    # the fetched OSM footprints surface via the emit-on-fetch router seam (pinned
+    # in test_emit_on_fetch_seam.py). Here footprints are passed in directly (no
+    # route() fetch), so the ONLY non-depth-frame layer is the #156 mesh.
+    assert len(non_frame_layers) == len(mesh_layers), (
         f"unexpected non-depth-frame layer(s): {[getattr(m, 'name', m) for m in non_frame_layers]}"
     )
 
@@ -578,14 +579,6 @@ def test_full_local_chain_emits_peak_plus_frames(synthetic_inputs, monkeypatch):
         f"expected exactly one mesh context layer; got {len(mesh_layers)}: "
         f"{[getattr(m, 'name', m) for m in mesh_layers]}"
     )
-    # Exactly ONE buildings-input layer (the synthetic deck's 2 footprints).
-    assert len(buildings_input_layers) == 1, (
-        f"expected exactly one buildings-input layer; got {len(buildings_input_layers)}: "
-        f"{[getattr(m, 'name', m) for m in buildings_input_layers]}"
-    )
-    buildings_layer = buildings_input_layers[0]
-    assert buildings_layer.role == "input", buildings_layer.role
-    assert buildings_layer.name.startswith("Building footprint"), buildings_layer.name
     mesh = mesh_layers[0]
     assert mesh.style_preset == "mesh_grid", mesh.style_preset
     assert mesh.role == "context", mesh.role
@@ -893,12 +886,11 @@ def test_batch_lane_returns_populated_peak_envelope(synthetic_inputs, monkeypatc
     assert peak.uri.startswith("http"), peak.uri
 
     # The Batch lane also emits the per-frame animation group out-of-band, PLUS
-    # the #156 computational-mesh context layer right after the deck build, PLUS
-    # (when footprints are supplied) an "input"-role "Building footprints (N)"
-    # layer from ``make_buildings_input_layer_uri``. Split the emitted layers:
-    # the depth FRAMES are SWMMDepthLayerURI; the mesh + buildings-input layers
-    # are the NON-SWMMDepthLayerURI additions (both inline-geojson vectors),
-    # distinguished by style_preset (mesh_grid vs osm_buildings).
+    # the #156 computational-mesh context layer right after the deck build. ADR
+    # 0244 S2: the composer no longer hand-emits a buildings-input layer -- the
+    # fetched OSM footprints surface via the emit-on-fetch router seam (pinned in
+    # test_emit_on_fetch_seam.py). Footprints are passed in directly here (no
+    # route() fetch), so the ONLY non-depth-frame layer is the #156 mesh.
     depth_frames = [
         f for f in fake.loaded_layers if isinstance(f, SWMMDepthLayerURI)
     ]
@@ -906,11 +898,8 @@ def test_batch_lane_returns_populated_peak_envelope(synthetic_inputs, monkeypatc
         f for f in fake.loaded_layers if not isinstance(f, SWMMDepthLayerURI)
     ]
     mesh_layers = [f for f in non_frame_layers if f.style_preset == "mesh_grid"]
-    buildings_input_layers = [
-        f for f in non_frame_layers if f.style_preset == "osm_buildings"
-    ]
 
-    assert len(non_frame_layers) == len(mesh_layers) + len(buildings_input_layers), (
+    assert len(non_frame_layers) == len(mesh_layers), (
         f"unexpected non-depth-frame layer(s): {[getattr(m, 'name', m) for m in non_frame_layers]}"
     )
 
@@ -919,14 +908,6 @@ def test_batch_lane_returns_populated_peak_envelope(synthetic_inputs, monkeypatc
         f"expected exactly one mesh context layer; got {len(mesh_layers)}: "
         f"{[getattr(m, 'name', m) for m in mesh_layers]}"
     )
-    # Exactly ONE buildings-input layer (the synthetic deck's footprints).
-    assert len(buildings_input_layers) == 1, (
-        f"expected exactly one buildings-input layer; got {len(buildings_input_layers)}: "
-        f"{[getattr(m, 'name', m) for m in buildings_input_layers]}"
-    )
-    buildings_layer = buildings_input_layers[0]
-    assert buildings_layer.role == "input", buildings_layer.role
-    assert buildings_layer.name.startswith("Building footprint"), buildings_layer.name
     mesh = mesh_layers[0]
     assert mesh.style_preset == "mesh_grid", mesh.style_preset
     assert mesh.role == "context", mesh.role

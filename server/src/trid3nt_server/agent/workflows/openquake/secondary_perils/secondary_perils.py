@@ -455,23 +455,19 @@ def _compute_cti(dem_filled: Any, slope_rad: Any, cell_m: float) -> tuple[Any, s
 
 
 def _fetch_dem_local(
-    bbox: tuple[float, float, float, float], tmpdir: str, uri_sink: Any = None
+    bbox: tuple[float, float, float, float], tmpdir: str
 ) -> str:
     """Fetch the AOI DEM and stage it locally; return the local COG path.
 
-    ``uri_sink`` (ADR 0231, optional): invoked with the fetched DEM's ``s3://``
-    uri so the composer can surface the terrain (the vs30/slope/CTI covariates
-    derive from it) as a role=context input without re-fetching.
+    The fetched DEM (the vs30/slope/CTI covariate substrate) is auto-surfaced as
+    a role=context input by the emit-on-fetch router seam (ADR 0244); the
+    ``purpose="terrain"`` fetch carries the name.
     """
     from trid3nt_server.agent.tools import TOOL_REGISTRY
 
-    layer = TOOL_REGISTRY["fetch_copernicus_dem"].fn(bbox=list(bbox))
+    layer = TOOL_REGISTRY["fetch_copernicus_dem"].fn(
+        bbox=list(bbox), purpose="terrain")
     uri = layer.uri
-    if uri_sink is not None and uri:
-        try:
-            uri_sink(str(uri))
-        except Exception:  # noqa: BLE001 - surfacing is never fatal
-            pass
     if uri.startswith("s3://"):
         from trid3nt_server.agent.tools.cache import read_object_bytes_s3
 
@@ -567,24 +563,11 @@ async def model_openquake_secondary_perils(
     lats = np.array([s["lat"] for s in result.sites], dtype="float64")
     pga = np.array([s.get("gmv_PGA", float("nan")) for s in result.sites], dtype="float64")
 
-    # 2) terrain covariates (DEM fetch + slope/Vs30/CTI) off the loop.
-    _dem_s3: list[str] = []
+    # 2) terrain covariates (DEM fetch + slope/Vs30/CTI) off the loop. The fetched
+    # DEM auto-surfaces as a role=context input via the emit-on-fetch seam (0244).
     async with substep(current_emitter(), "site_covariates"):
         cov = await asyncio.to_thread(
-            _covariates_for_sites, bbox, lons, lats, _dem_s3.append)
-
-    # ADR 0231: surface the fetched DEM (the Vs30/slope/CTI covariates derive from
-    # it) as a role=context input. Rides the fetched cache COG; best-effort.
-    if _dem_s3:
-        from trid3nt_server.emission.layer_uri_emit import publish_raster_input_cog
-        await publish_raster_input_cog(
-            current_emitter(),
-            cog_uri=_dem_s3[0],
-            layer_id=f"input-dem-{run_id}",
-            name="Input: DEM (Copernicus GLO-30, vs30/slope/CTI covariates)",
-            style_preset="continuous_dem",
-            role="context",
-        )
+            _covariates_for_sites, bbox, lons, lats)
 
     vs30 = (
         np.full(lons.shape, float(reference_vs30), dtype="float64")
@@ -664,15 +647,10 @@ async def model_openquake_secondary_perils(
 
 def _covariates_for_sites(
     bbox: tuple[float, float, float, float], lons: Any, lats: Any,
-    uri_sink: Any = None,
 ) -> SiteCovariates:
-    """Fetch the DEM + compute site covariates (sync; run off the loop).
-
-    ``uri_sink`` (ADR 0231): threaded to ``_fetch_dem_local`` so the composer can
-    surface the fetched DEM as a role=context input.
-    """
+    """Fetch the DEM + compute site covariates (sync; run off the loop)."""
     tmpdir = tempfile.mkdtemp(prefix="trid3nt_sep_dem_")
-    dem_path = _fetch_dem_local(bbox, tmpdir, uri_sink)
+    dem_path = _fetch_dem_local(bbox, tmpdir)
     return compute_site_covariates(dem_path, lons, lats)
 
 

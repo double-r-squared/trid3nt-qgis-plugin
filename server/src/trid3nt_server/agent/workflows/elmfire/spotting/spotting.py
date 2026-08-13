@@ -689,28 +689,6 @@ async def model_elmfire_river_barrier_crossing(
     async with substep(emitter, "fetch_elmfire_inputs"):
         inputs = await asyncio.to_thread(fetch_elmfire_inputs, bbox)
 
-    # ADR 0231: surface the fetched fuels (river corridor visible as the water class)
-    # + the DEM (terrain that drives slope/aspect spread) as role=context inputs.
-    from trid3nt_contracts import new_ulid
-    from trid3nt_server.emission.layer_uri_emit import publish_raster_input_cog
-
-    _fuels_uri = inputs.get("fbfm40")
-    if _fuels_uri and str(_fuels_uri).startswith("s3://"):
-        await publish_raster_input_cog(
-            emitter, cog_uri=str(_fuels_uri),
-            layer_id=f"input-landfire-fuels-{new_ulid()}",
-            name="Input: LANDFIRE fuel model (FBFM40, LF2022 30 m) - river = water class",
-            style_preset="categorical_landcover", role="context",
-        )
-    _dem_uri = inputs.get("dem")
-    if _dem_uri and str(_dem_uri).startswith("s3://"):
-        await publish_raster_input_cog(
-            emitter, cog_uri=str(_dem_uri),
-            layer_id=f"input-dem-{new_ulid()}",
-            name="Input: DEM (USGS 3DEP) - terrain driving slope/aspect spread",
-            style_preset="continuous_dem", role="context",
-        )
-
     spotting_extra = _spotting_namelist(
         mean_spotting_distance_m=mean_spotting_distance_m,
         nembers=nembers,

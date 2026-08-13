@@ -249,21 +249,15 @@ async def test_frames_emitted_as_distinct_loaded_layers_via_emitter() -> None:
     finally:
         _CURRENT_EMITTER.reset(token)
 
-    # task #207: input rasters (DEM + landcover) ALSO publish now (role="input"),
-    # so filter to the RESULT (flood-depth) publishes for the result-layer
-    # assertions. publish_layer fired for the peak + each of the 3 frames = 4
-    # result publishes; the 2 input publishes carry an "input-" layer_id prefix.
+    # Input rasters (DEM + landcover) surface via the router emit-on-fetch seam,
+    # which cannot fire here because the fetchers are patched at the composer
+    # module (see test_emit_on_fetch_seam/_equivalence for that coverage). Only
+    # the RESULT (flood-depth) publishes are asserted: peak + 3 frames = 4.
     result_calls = [c for c in publish_calls if c["layer_id"].startswith("flood-depth-")]
-    input_calls = [c for c in publish_calls if c["layer_id"].startswith("input-")]
     assert len(result_calls) == 4, (
         f"expected publish_layer x4 (peak + 3 frames); got {len(result_calls)}: "
         f"{[c['layer_id'] for c in result_calls]}"
     )
-    # The DEM + landcover inputs are surfaced via their own publish round-trip.
-    assert {c["layer_id"].rsplit('-', 1)[0] for c in input_calls} == {
-        "input-dem",
-        "input-landcover",
-    }, f"expected DEM + landcover input publishes; got {[c['layer_id'] for c in input_calls]}"
     pub_ids = [c["layer_id"] for c in result_calls]
     assert pub_ids[0] == f"flood-depth-peak-{run_id}"
     assert pub_ids[1:] == [f"flood-depth-frame-{i:02d}-{run_id}" for i in range(1, 4)]

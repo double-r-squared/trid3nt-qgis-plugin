@@ -263,7 +263,8 @@ def fetch_elmfire_inputs(
     for layer in _LANDFIRE_DECK_LAYERS:
         try:
             inputs[layer] = _uri_to_deck_input(
-                layer, _uri_of(fetch_landfire_fuels(bbox=bbox, layer=layer))
+                layer,
+                _uri_of(fetch_landfire_fuels(bbox=bbox, layer=layer, purpose=layer)),
             )
         except ElmfireWorkflowError:
             raise
@@ -275,7 +276,7 @@ def fetch_elmfire_inputs(
             ) from exc
 
     try:
-        dem_layer = fetch_dem(bbox=bbox, resolution_m=dem_resolution_m)
+        dem_layer = fetch_dem(bbox=bbox, resolution_m=dem_resolution_m, purpose="terrain")
         dem_uri = _uri_of(dem_layer)
         inputs["dem"] = _uri_to_deck_input("dem", dem_uri)
     except ElmfireWorkflowError:

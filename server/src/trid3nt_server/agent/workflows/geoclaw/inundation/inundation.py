@@ -96,7 +96,6 @@ from trid3nt_server.agent.workflows.shared.solve_progress import drive_live_solv
 from trid3nt_server.emission.layer_uri_emit import (
     emit_layer_uri,
     publish_input_layer,
-    publish_raster_input_cog,
 )
 from trid3nt_server.emission.pipeline_emitter import (
     begin_substeps,
@@ -874,10 +873,6 @@ _GEOCLAW_SEC_PER_CELL: float = 0.05
 _GEOCLAW_FINE_NEARSHORE_PIXEL_M: float = 10.0
 
 #: Style preset for the surfaced topo/bathy INPUT layer -- the SAME continuous-DEM
-#: elevation ramp the topobathy fetcher stamps, so the staged bed renders with the
-#: hypsometric/elevation ramp for spot-checking. Reused, never invented.
-GEOCLAW_BATHYMETRY_INPUT_STYLE_PRESET = "continuous_dem"
-
 #: Scenario families whose computational domain / AOI reaches the OPEN SEA, so the
 #: published depth must be masked to OVERLAND cells (topo >= 0) to render coastal
 #: inundation instead of the full water column that includes the ocean. tsunami =
@@ -982,7 +977,7 @@ def _fetch_topo_for_geoclaw(
             )
 
     try:
-        layer = fetch_topobathy(bbox, **topo_kw)
+        layer = fetch_topobathy(bbox, purpose="bathymetry", **topo_kw)
         uri = getattr(layer, "uri", None) or (
             layer.get("uri") if isinstance(layer, dict) else None
         )
@@ -994,7 +989,7 @@ def _fetch_topo_for_geoclaw(
         )
 
     try:
-        layer = fetch_dem(bbox=bbox, resolution_m=10)
+        layer = fetch_dem(bbox=bbox, resolution_m=10, purpose="bathymetry")
         uri = getattr(layer, "uri", None) or (
             layer.get("uri") if isinstance(layer, dict) else None
         )
@@ -1296,19 +1291,6 @@ async def model_geoclaw_inundation(
         resolved_dem_uri,
         domain_bbox,
         bbox,
-    )
-
-    # Surface the staged topo/bathy DEM (the SHALLOW-WATER bed GeoClaw ran on,
-    # already reprojected to 4326) as a Case INPUT layer (role="context") so the
-    # user can spot-check WHICH data served the run in QGIS -- the source rides in
-    # the layer name. Rides the existing runs-bucket COG (no re-upload); BEST-
-    # EFFORT (a publish failure never touches the solve).
-    await publish_raster_input_cog(
-        emitter,
-        cog_uri=resolved_dem_uri,
-        layer_id=f"input-bathymetry-{run_id}",
-        name=f"Input: bathymetry ({bathy_source})",
-        style_preset=GEOCLAW_BATHYMETRY_INPUT_STYLE_PRESET,
     )
 
     # --- Bathymetry-aware Okada source placement (tsunami synthetic source) --

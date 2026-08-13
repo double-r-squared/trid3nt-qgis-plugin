@@ -382,7 +382,7 @@ from trid3nt_server.agent.workflows.swmm.run_swmm import (
 from trid3nt_server.agent.workflows.shared.solve_progress import drive_live_solve_progress
 from trid3nt_server.agent.mesh.raster_cell_mesh import estimate_swmm_solve_seconds
 from trid3nt_server.agent.mesh.mesh_preview import make_swmm_mesh_layer_uri
-from trid3nt_server.emission.layer_uri_emit import emit_layer_uri, publish_input_layer
+from trid3nt_server.emission.layer_uri_emit import emit_layer_uri
 
 
 
@@ -504,7 +504,6 @@ def _localize_to_dem_path(uri: str) -> str:
 
 def _fetch_dem_for_urban(
     bbox: tuple[float, float, float, float],
-    uri_sink: Any = None,
 ) -> tuple[str, str]:
     """Fetch a DEM for the AOI: try ``fetch_3dep_extra`` 1 m first, fall back to
     ``fetch_dem`` 10 m (the data-source fallback norm: primary -> fallback,
@@ -512,20 +511,8 @@ def _fetch_dem_for_urban(
 
     Returns ``(local_dem_path, source_label)``. Raises
     ``UrbanFloodWorkflowError("SWMM_DEM_FETCH_FAILED")`` only when BOTH fail.
-
-    ``uri_sink`` (ADR 0231, non-breaking): an optional callable invoked with the
-    fetched DEM's ``s3://`` COG uri so the composer can surface the terrain as a
-    role=context input WITHOUT re-fetching. Default None (a no-op) keeps every
-    existing caller byte-identical.
     """
     from trid3nt_server.agent.tools import TOOL_REGISTRY
-
-    def _sink(uri: Any) -> None:
-        if uri_sink is not None and uri:
-            try:
-                uri_sink(str(uri))
-            except Exception:  # noqa: BLE001 - surfacing is never fatal
-                pass
 
     # fetch_3dep_extra (ADR 0075) + fetch_dem (ADR 0097) are spec-driven tools:
     # resolve through the registry seam (keyword-only) rather than deleted twins.
@@ -537,8 +524,7 @@ def _fetch_dem_for_urban(
     # takes ZERO positional args, so a positional ``bbox`` raises TypeError that
     # this except would swallow -> silent permanent 10 m degrade (the live bug).
     try:
-        layer = fetch_3dep_extra(bbox=bbox, resolution="1 meter")
-        _sink(layer.uri)
+        layer = fetch_3dep_extra(bbox=bbox, resolution="1 meter", purpose="terrain")
         return _localize_to_dem_path(layer.uri), "USGS 3DEP 1m LiDAR"
     except Exception as exc:  # noqa: BLE001 - fall through to the 10 m fallback
         logger.warning(
@@ -549,8 +535,7 @@ def _fetch_dem_for_urban(
 
     # Fallback: 10 m 3DEP (the canonical default).
     try:
-        layer = fetch_dem(bbox=bbox, resolution_m=10)
-        _sink(layer.uri)
+        layer = fetch_dem(bbox=bbox, resolution_m=10, purpose="terrain")
         return _localize_to_dem_path(layer.uri), "USGS 3DEP 10m"
     except Exception as exc:  # noqa: BLE001
         raise UrbanFloodWorkflowError(
@@ -573,7 +558,7 @@ def _fetch_buildings_for_urban(
     # a positional ``bbox`` raised TypeError that this except swallowed -> the
     # mesh silently dropped ALL building obstructions (the live integrity leak).
     try:
-        layer = fetch_buildings(bbox=bbox, source="osm")
+        layer = fetch_buildings(bbox=bbox, source="osm", purpose="buildings")
     except Exception as exc:  # noqa: BLE001 - buildings are optional
         logger.warning(
             "fetch_buildings(osm) failed (%s); proceeding WITHOUT building "
@@ -705,67 +690,6 @@ def _build_swmm_provenance(
             note="coarser DEM fallback",
         ))
     return out
-
-
-def make_buildings_input_layer_uri(
-    building_footprints: Any,
-    *,
-    run_id: str,
-    runs_bucket: str | None = None,
-) -> LayerURI | None:
-    """upload the OSM building footprints + return a role="input" vector.
-
-    The urban-flood deck consumes building footprints as obstructions, but the
-    fetched ``FeatureCollection`` was only ever passed to the mesh builder and
-    discarded as a renderable layer. Mirror :func:`make_swmm_mesh_layer_uri`:
-    upload the FC to the DURABLE runs bucket at
-    ``s3://<runs_bucket>/<run_id>/buildings_input.geojson`` (so the emitter can
-    inline the s3:// vector on every reconnect) and return a ``role="input"``
-    vector ``LayerURI`` with ``bbox=None`` (an input must not emit a competing
-    zoom-to).
-
-    Returns ``None`` (best-effort, never fatal) when the FC is empty/malformed or
-    the S3 upload fails. SYNC compute + boto3 upload -- the caller wraps it in
-    ``asyncio.to_thread`` (never run sync boto3 on the asyncio loop).
-    """
-    if not isinstance(building_footprints, dict):
-        return None
-    feats = building_footprints.get("features")
-    if not isinstance(feats, list) or len(feats) == 0:
-        return None
-
-    try:
-        from trid3nt_server.agent.tools.simulation.solver.solver import _get_runs_bucket, _get_s3_client
-
-        bucket = runs_bucket or _get_runs_bucket()
-        key = f"{run_id}/buildings_input.geojson"
-        _get_s3_client().put_object(
-            Bucket=bucket,
-            Key=key,
-            Body=json.dumps(building_footprints).encode("utf-8"),
-            ContentType="application/geo+json",
-        )
-        s3_uri = f"s3://{bucket}/{key}"
-    except Exception as exc:  # noqa: BLE001 - best-effort; S3 put failure non-fatal
-        logger.warning(
-            "make_buildings_input_layer_uri: buildings_input.geojson S3 upload "
-            "failed (non-fatal, buildings input absent; run_id=%s): %s",
-            run_id,
-            exc,
-        )
-        return None
-
-    n = len(feats)
-    plural = "footprint" if n == 1 else "footprints"
-    return LayerURI(
-        layer_id=f"buildings-input-{run_id}",
-        name=f"Building {plural} ({n})",
-        layer_type="vector",
-        uri=s3_uri,
-        style_preset="osm_buildings",
-        role="input",
-        bbox=None,
-    )
 
 
 def _atlas14_total_depth_mm(
@@ -951,14 +875,10 @@ async def model_swmm_urban_flood(
     )
     begin_substeps(emitter, _planned_substeps)
 
-    # ADR 0231: capture the fetched DEM's s3 COG uri (via a non-breaking sink) so
-    # the composer can surface the terrain the mesh was built on as a role=context
-    # input, without re-fetching.
-    _dem_s3: list[str] = []
     if dem_path is None:
         async with substep(emitter, "fetch_3dep_extra"):
             local_dem_path, dem_source = await asyncio.to_thread(
-                _fetch_dem_for_urban, bbox, _dem_s3.append
+                _fetch_dem_for_urban, bbox
             )
     else:
         local_dem_path, dem_source = dem_path, "supplied"
@@ -1121,41 +1041,6 @@ async def model_swmm_urban_flood(
             logger.warning(
                 "model_swmm_urban_flood: mesh layer emit failed (non-fatal): %s",
                 exc,
-            )
-
-        # ---: surface the building footprints as an INPUT layer ----
-        # The OSM footprints fed the mesh as obstructions but were never shown.
-        # Surface them as a role="input" vector (bbox=None) alongside the mesh so
-        # the user sees the buildings the model treated as obstacles. SYNC FC
-        # upload -> OFFLOADED off the loop; BEST-EFFORT (publish_input_layer never
-        # raises) so a failure can NEVER break the solve. No-op when no footprints
-        # were fetched (building_footprints is None / empty).
-        try:
-            buildings_layer = await asyncio.to_thread(
-                make_buildings_input_layer_uri,
-                building_footprints,
-                run_id=staging.run_id,
-            )
-            await publish_input_layer(emitter, buildings_layer)
-        except Exception as exc:  # noqa: BLE001 - input surfacing is NEVER fatal
-            logger.warning(
-                "model_swmm_urban_flood: buildings input emit failed "
-                "(non-fatal): %s",
-                exc,
-            )
-
-        # ADR 0231: surface the fetched DEM (the terrain the overland mesh was
-        # built on) as a role=context input. Rides the fetched cache COG (no
-        # re-upload); best-effort -- never fails the solve.
-        if _dem_s3:
-            from trid3nt_server.emission.layer_uri_emit import publish_raster_input_cog
-            await publish_raster_input_cog(
-                emitter,
-                cog_uri=_dem_s3[0],
-                layer_id=f"input-dem-{staging.run_id}",
-                name=f"Input: DEM ({dem_source}, fetch_dem)",
-                style_preset="continuous_dem",
-                role="context",
             )
 
         # --- Auto vertical scaling per case ----------------

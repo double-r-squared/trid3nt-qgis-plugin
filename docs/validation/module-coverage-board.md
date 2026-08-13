@@ -14,8 +14,13 @@ router fetch of renderable data (raster COG / vector FGB, not a `record`) now
 auto-surfaces as a role=context "Input:" layer whenever fetched nested inside a
 composer, so new coverage templates get input surfacing for FREE (fetch through
 the router -> the DEM/rivers/land cover appear; no per-composer call site). The
-S2 collapse (delete the 18 `_surface_*` helpers + ~54 call sites + the sweep test)
-+ the live flood canary are scoped to the NATE loop. LOOSE ENDS: artemis
+S2 collapse LANDED (2026-08-13): the 4 seam-covered `_surface_*` helpers + every
+direct role=context input-emission call site (13 composers) + the uri-threading
+plumbing are deleted, semantic names moved to `purpose=` on the fetch, and a
+name+call-pattern SWEEP TEST now polices single-path (net -555 LOC production
+code; 154 offline-green from repo root; workflows import 269/269 clean). The seam
+is now the ONLY path a router-fetched input surfaces. The live flood canary +
+NATE's QGIS visual remain the final gate (NATE loop). LOOSE ENDS: artemis
 (agitation) + tomawac (telemac/wave_field) sample bathymetry IN-WORKER, so their
 bed is not yet surfaced (river_dye's `bed_bathymetry.tif` recorded-COG surface is
 the template; a worker-image change is required).

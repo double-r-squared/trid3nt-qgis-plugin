@@ -616,7 +616,7 @@ def _fetch_dem_for_landslide(
     fetch_dem = TOOL_REGISTRY["fetch_dem"].fn
 
     try:
-        layer = fetch_3dep_extra(bbox, resolution="1 meter")
+        layer = fetch_3dep_extra(bbox, resolution="1 meter", purpose="terrain")
         return _localize_to_dem_path(layer.uri), "USGS 3DEP 1m LiDAR"
     except Exception as exc:  # noqa: BLE001 -- fall through to the 10 m fallback
         logger.info(
@@ -624,7 +624,7 @@ def _fetch_dem_for_landslide(
         )
 
     try:
-        layer = fetch_dem(bbox=bbox, resolution_m=10)
+        layer = fetch_dem(bbox=bbox, resolution_m=10, purpose="terrain")
         return _localize_to_dem_path(layer.uri), "USGS 3DEP 10m"
     except Exception as exc:  # noqa: BLE001
         raise LandslideWorkflowError(
@@ -827,14 +827,6 @@ async def model_landlab_susceptibility(
         staging: LandlabStaging = await asyncio.to_thread(
             stage_landlab_manifest, run_args, dem_path=local_dem_path, run_id=rid
         )
-
-    # ADR 0231: surface the staged DEM as a role=context input (this template
-    # stages its own DEM rather than routing through _composer_common's shared
-    # stage_solve_download). Best-effort -- never fails the solve.
-    from trid3nt_server.agent.workflows.landlab._composer_common import (
-        _surface_landlab_dem_input,
-    )
-    await _surface_landlab_dem_input(current_emitter(), staging.dem_uri, dem_source)
 
     # --- Step 3: dispatch through the generic Batch seam --------------------
     # Surface the dispatch + Batch wait as a single "run_solver" child row; the

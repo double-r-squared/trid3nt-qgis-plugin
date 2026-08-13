@@ -537,30 +537,6 @@ async def model_elmfire_fire_spread(
     async with substep(emitter, "fetch_elmfire_inputs"):
         inputs = await asyncio.to_thread(fetch_elmfire_inputs, bbox)
 
-    # ADR 0231: surface the two load-bearing fetched rasters -- the LANDFIRE fuel
-    # model (fbfm40) the fire spreads through and the DEM the terrain effects
-    # derive from -- as role=context inputs. Both are the raw s3:// COGs the deck
-    # references (no re-upload); best-effort -- never fails the solve.
-    from trid3nt_contracts import new_ulid
-    from trid3nt_server.emission.layer_uri_emit import publish_raster_input_cog
-
-    _fuels_uri = inputs.get("fbfm40")
-    if _fuels_uri and str(_fuels_uri).startswith("s3://"):
-        await publish_raster_input_cog(
-            emitter, cog_uri=str(_fuels_uri),
-            layer_id=f"input-landfire-fuels-{new_ulid()}",
-            name="Input: LANDFIRE fuel model (FBFM40, LF2022 30 m)",
-            style_preset="categorical_landcover", role="context",
-        )
-    _dem_uri = inputs.get("dem")
-    if _dem_uri and str(_dem_uri).startswith("s3://"):
-        await publish_raster_input_cog(
-            emitter, cog_uri=str(_dem_uri),
-            layer_id=f"input-dem-{new_ulid()}",
-            name="Input: DEM (USGS 3DEP, fetch_dem)",
-            style_preset="continuous_dem", role="context",
-        )
-
     # --- Step 2: the same-grid deck (off-loop warping + writes). ------
     deck_dir = tempfile.mkdtemp(prefix="elmfire-deck-")
     try:

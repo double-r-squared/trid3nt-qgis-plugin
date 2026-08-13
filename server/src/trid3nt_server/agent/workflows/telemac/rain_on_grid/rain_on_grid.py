@@ -284,19 +284,9 @@ async def model_telemac_rain_on_grid(
                 output_dir=str(rundir), min_edge_length_m=40.0,
                 max_edge_length_m=300.0)
 
-    # ADR 0231 input-layer parity: surface the fetched DEM bed + river flowline
-    # the mesh derives from as role="context" Case inputs -- never hidden layers
-    # (NATE's no-hidden-data-layers ruling). Best-effort; never fails the run.
-    await _surface_watershed_mesh_inputs(mesh, str(location or "watershed"))
-
     # --- Stage 3: NLCD -> per-node CN2 + Manning ---------------------------- #
     node_cn2, node_manning, nlcd_uri = await asyncio.to_thread(
         _sample_node_fields, mesh, aoi, curve_number)
-
-    # ADR 0231: surface the fetched NLCD land cover (the per-node CN2/Manning the
-    # infiltration derives from) as a role=context input. Rides the cache COG
-    # (categorical palette embedded); best-effort -- never fails the run.
-    await _surface_landcover_input(nlcd_uri, str(location or "watershed"))
 
     # --- Stage 4: rain forcing + runoff-path decision (in the envelope) ------ #
     # A real MRMS/AORC window -> the TRUE time-varying hyetograph drives the
@@ -465,7 +455,8 @@ def _sample_node_fields(mesh: Any, aoi: tuple, curve_number: float | None):
 
     points_ll = np.asarray(mesh.meta["points_lonlat"], dtype=float)
     lc = TOOL_REGISTRY["fetch_landcover"].fn(
-        bbox=list(aoi), dataset="nlcd_2021", resolution_m=30)
+        bbox=list(aoi), dataset="nlcd_2021", resolution_m=30,
+        purpose="land cover")
     lc_uri = lc["uri"] if isinstance(lc, dict) else getattr(lc, "uri")
     tmp = Path(mesh.slf_path).parent / "nlcd.tif"
     tmp.write_bytes(
@@ -646,81 +637,6 @@ async def _stage_solve_postprocess(
     await _publish_full_results_mesh(
         batch_run_id, mesh_epsg=int(mesh.utm_epsg), reach_name=reach_name)
     return layers[0]
-
-
-async def _surface_watershed_mesh_inputs(mesh: Any, label: str) -> None:
-    """BEST-EFFORT: surface the mesh's fetched DEM bed + river flowline (ADR 0231).
-
-    The delineated rain-on-grid mesh derives its BOTTOM from a fetched bare-earth
-    DEM and its edge sizing from a fetched river network; both were previously
-    consumed and discarded. Surface each as a role="context" Case input --- the
-    DEM raster via ``publish_raster_input_cog`` (rides the existing ``s3://`` COG),
-    the flowline via ``publish_input_layer`` (the FlatGeobuf inlines server-side).
-    Provenance in the name. NEVER raises: a user-supplied mesh carries neither uri
-    (no-op) and any failure leaves the run untouched.
-    """
-    from trid3nt_contracts import new_ulid
-    from trid3nt_contracts.execution import LayerURI
-    from trid3nt_server.emission.layer_uri_emit import (
-        publish_input_layer,
-        publish_raster_input_cog,
-    )
-    from trid3nt_server.emission.pipeline_emitter import current_emitter
-
-    emitter = current_emitter()
-    if emitter is None:
-        return
-    dem_uri = getattr(mesh, "dem_input_s3_uri", None)
-    river_uri = getattr(mesh, "river_input_s3_uri", None)
-    if dem_uri:
-        await publish_raster_input_cog(
-            emitter,
-            cog_uri=str(dem_uri),
-            layer_id=f"input-dem-{new_ulid()}",
-            name=f"Input: DEM bed ({label}, USGS 3DEP bare-earth 10 m)",
-            style_preset="continuous_dem",
-            role="context",
-        )
-    if river_uri:
-        await publish_input_layer(
-            emitter,
-            LayerURI(
-                layer_id=f"input-river-geometry-{new_ulid()}",
-                name=f"Input: river geometry ({label}, NHDPlus HR flowlines)",
-                layer_type="vector",
-                uri=str(river_uri),
-                style_preset="nhdplus_flowlines",
-                role="context",
-                bbox=None,
-            ),
-            role="context",
-        )
-
-
-async def _surface_landcover_input(nlcd_uri: str | None, label: str) -> None:
-    """BEST-EFFORT: surface the fetched NLCD land cover as a role=context input.
-
-    The per-node CN2 / Manning fields the rain-on-grid infiltration solve derives
-    come from THIS NLCD raster (ADR 0231 -- no hidden data layers). Rides the
-    fetched cache COG (categorical palette embedded); NEVER raises.
-    """
-    if not nlcd_uri:
-        return
-    from trid3nt_contracts import new_ulid
-    from trid3nt_server.emission.layer_uri_emit import publish_raster_input_cog
-    from trid3nt_server.emission.pipeline_emitter import current_emitter
-
-    emitter = current_emitter()
-    if emitter is None:
-        return
-    await publish_raster_input_cog(
-        emitter,
-        cog_uri=str(nlcd_uri),
-        layer_id=f"input-landcover-{new_ulid()}",
-        name=f"Input: land cover ({label}, NLCD 2021 30 m)",
-        style_preset="categorical_landcover",
-        role="context",
-    )
 
 
 async def _publish_full_results_mesh(

@@ -237,7 +237,7 @@ def test_bathy_fetch_ok_real_path_unchanged(monkeypatch):
     import trid3nt_server.agent.workflows.schism.pahm_surge.pahm_surge as P
 
     async def _ok(*a, **kw):
-        return ("/tmp/fake_bathy.tif", "topobathy", "s3://test-runs/fake/bathy.tif")
+        return ("/tmp/fake_bathy.tif", "topobathy")
 
     def _fake_sample(points, dem_path):
         return np.full(len(points), 10.0, dtype=float)
@@ -264,53 +264,6 @@ def test_bathy_fetch_ok_real_path_unchanged(monkeypatch):
     assert entries["domain_provenance"].value == "REAL"
     assert "SYNTHETIC" not in entries["bathymetry"].value
     assert entries["domain_provenance"].real_source_if_any == entries["bathymetry"].value
-
-
-def test_bathy_fetch_ok_surfaces_bathymetry_input_layer(monkeypatch):
-    """ADR 0227: on a successful topobathy fetch the surge composer surfaces the
-    fetched COG as a Case INPUT layer (publish_raster_input_cog) carrying the
-    provenance name + the continuous_dem ramp, riding the EXISTING s3 object.
-    The 0217-lesson gate: the emitter call cannot silently drop."""
-    import trid3nt_server.agent.workflows.schism.pahm_surge.pahm_surge as P
-
-    async def _ok(*a, **kw):
-        return ("/tmp/fake_bathy.tif", "topobathy", "s3://test-runs/fake/bathy.tif")
-
-    def _fake_sample(points, dem_path):
-        return np.full(len(points), 10.0, dtype=float)
-
-    surfaced: dict = {}
-
-    async def _spy_publish(emitter, *, cog_uri, layer_id, name, style_preset, **kw):
-        surfaced.update(
-            {"cog_uri": cog_uri, "layer_id": layer_id, "name": name,
-             "style_preset": style_preset}
-        )
-        return True
-
-    monkeypatch.setattr(P, "_fetch_bathymetry_cog", _ok)
-    monkeypatch.setattr(P.deck_authoring, "sample_bathymetry_on_nodes", _fake_sample)
-    monkeypatch.setattr(P, "publish_raster_input_cog", _spy_publish)
-    monkeypatch.delenv("TRID3NT_SCHISM_BATHY_PATH", raising=False)
-
-    async def _fake_gate(*, tool_name, mode, entries, params):
-        raise _GateSentinel()
-
-    monkeypatch.setattr(P, "gate_input_review", _fake_gate)
-
-    with pytest.raises(_GateSentinel):
-        asyncio.run(P.model_schism_pahm_surge(
-            storm_name=None, year=None, location_query=None, bbox=None,
-            sim_days=1.5, open_boundary_side="south", input_mode=None,
-            allow_synthetic_domain=False,
-        ))
-
-    assert surfaced, "the surge composer never surfaced the fetched bathymetry"
-    # Rode the EXISTING runs-bucket object (no re-upload).
-    assert surfaced["cog_uri"] == "s3://test-runs/fake/bathy.tif"
-    assert surfaced["style_preset"] == "continuous_dem"
-    assert surfaced["name"].startswith("Input: bathymetry (")
-    assert "topobathy" in surfaced["name"]
 
 
 # --------------------------------------------------------------------------- #
@@ -370,7 +323,7 @@ def test_explicit_resolution_m_is_declared_coarsening(monkeypatch):
 
     async def _fake_fetch(bbox, *, resolution_m=None, force_bathy_base=False, skip_land=False):
         captured["resolution_m"] = resolution_m
-        return "/tmp/fake_bathy.tif", "topobathy", "s3://test-runs/fake/bathy.tif"
+        return "/tmp/fake_bathy.tif", "topobathy"
 
     def _fake_sample(points, dem_path):
         return np.full(len(points), 10.0, dtype=float)
@@ -412,7 +365,7 @@ def test_explicit_resolution_m_drives_dense_mesh_not_the_floor(monkeypatch):
     bolivar = (-95.05, 29.2, -94.6, 29.65)  # the AOI NATE re-drove
 
     async def _fake_fetch(bbox, *, resolution_m=None, force_bathy_base=False, skip_land=False):
-        return "/tmp/fake_bathy.tif", "topobathy", "s3://test-runs/fake/bathy.tif"
+        return "/tmp/fake_bathy.tif", "topobathy"
 
     def _fake_sample(points, dem_path):
         return np.full(len(points), 10.0, dtype=float)
@@ -456,7 +409,7 @@ def test_resolution_m_native_default_when_not_supplied(monkeypatch):
 
     async def _fake_fetch(bbox, *, resolution_m=None, force_bathy_base=False, skip_land=False):
         captured["resolution_m"] = resolution_m
-        return "/tmp/fake_bathy.tif", "topobathy", "s3://test-runs/fake/bathy.tif"
+        return "/tmp/fake_bathy.tif", "topobathy"
 
     def _fake_sample(points, dem_path):
         return np.full(len(points), 10.0, dtype=float)

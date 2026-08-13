@@ -240,13 +240,10 @@ async def model_swmm_dual_drainage(
     begin_substeps(emitter, 7 if dem_path is None else 6)
 
     # --- Step 1: DEM ---
-    # ADR 0231: capture the fetched DEM's s3 COG uri (non-breaking sink) so the
-    # composer can surface the terrain the overland mesh was built on.
-    _dem_s3: list[str] = []
     if dem_path is None:
         async with substep(emitter, "fetch_dem"):
             dem_path, dem_source = await asyncio.to_thread(
-                _fetch_dem_for_urban, bbox, _dem_s3.append)
+                _fetch_dem_for_urban, bbox)
     else:
         dem_source = "supplied"
 
@@ -308,19 +305,6 @@ async def model_swmm_dual_drainage(
             await emitter.add_loaded_layer(pipe_layer)
         except Exception as exc:  # noqa: BLE001
             logger.warning("dual_drainage: pipe overlay emit failed: %s", exc)
-
-    # ADR 0231: surface the fetched DEM (the terrain the overland mesh was built
-    # on) as a role=context input. Rides the fetched cache COG; best-effort.
-    if _dem_s3:
-        from trid3nt_server.emission.layer_uri_emit import publish_raster_input_cog
-        await publish_raster_input_cog(
-            emitter,
-            cog_uri=_dem_s3[0],
-            layer_id=f"input-dem-{rid}",
-            name=f"Input: DEM ({dem_source}, fetch_dem)",
-            style_preset="continuous_dem",
-            role="context",
-        )
 
     # assemble the coupled primary (overland depth + minor-system scalars)
     result = SWMMDualDrainageLayerURI(

@@ -478,14 +478,12 @@ from trid3nt_server.emission.pipeline_emitter import (
 )
 from trid3nt_server.emission.layer_uri_emit import (
     publish_input_layer,
-    publish_raster_input_cog,
 )
 from trid3nt_server.agent.workflows.schism import deck_authoring
 from trid3nt_server.agent.workflows.schism import holland_sflux as _H
 from trid3nt_server.agent.workflows.schism import postprocess_schism as pp
 from trid3nt_server.agent.workflows.schism.run_schism import SCHISM_SURGE_SOLVER_NAME
 from trid3nt_server.agent.workflows.schism.tidal_hydro.tidal_hydro import (
-    _BATHYMETRY_INPUT_STYLE_PRESET,
     _download_run_output,
     _fetch_bathymetry_cog,
     _maybe_emit_station_chart,
@@ -759,7 +757,7 @@ async def model_schism_pahm_surge(
                 # 0 m ocean fill never clobbers the offshore bathy. An explicit
                 # resolution_m coarsens the fetch grid (and skips CUDEM only when the
                 # cell is coarser than ETOPO's own -- see _CUDEM_SKIP_RES_M).
-                dem_path, _src_kind, _bathy_cog_uri = await _fetch_bathymetry_cog(
+                dem_path, _src_kind = await _fetch_bathymetry_cog(
                     bbox, resolution_m=fetch_res_m, force_bathy_base=True,
                     skip_land=True)
                 depths = deck_authoring.sample_bathymetry_on_nodes(points, dem_path)
@@ -767,19 +765,6 @@ async def model_schism_pahm_surge(
                              else f"~{fetch_res_m:.0f} m [{res_basis}]")
                 bathy_source = (
                     f"{_src_kind} COG ({res_label}, ETOPO shelf base)"
-                )
-                # Surface the fetched topobathy as a Case INPUT layer (role=
-                # "context") so the user can spot-check WHICH data served the surge
-                # in QGIS -- source + resolution ride in the layer name. Rides the
-                # existing runs-bucket COG (no re-upload); BEST-EFFORT (a publish
-                # failure never touches the solve).
-                await publish_raster_input_cog(
-                    emitter,
-                    cog_uri=_bathy_cog_uri,
-                    layer_id=f"input-bathymetry-{new_ulid()}",
-                    name=(f"Input: bathymetry ({_src_kind}, {res_label}, "
-                          "ETOPO shelf base)"),
-                    style_preset=_BATHYMETRY_INPUT_STYLE_PRESET,
                 )
             except Exception as exc:  # noqa: BLE001
                 if not allow_synthetic_domain:

@@ -770,7 +770,8 @@ async def model_flood_scenario(
             # mismatch) raises a TopobathyError carrying an error_code that the
             # outer handler threads into the failed envelope.
             topobathy_layer = fetch_topobathy(
-                resolved_bbox, resolution_m=int(grid_resolution_m)
+                resolved_bbox, resolution_m=int(grid_resolution_m),
+                purpose="topo-bathymetry",
             )
             dem_layer = topobathy_layer
             _bathy_present = bool(getattr(topobathy_layer, "bathymetry_present", True))
@@ -796,7 +797,9 @@ async def model_flood_scenario(
                     or "bathymetry absent; coastal inundation under-represented",
                 )
         else:
-            dem_layer = fetch_dem(bbox=resolved_bbox, resolution_m=int(grid_resolution_m))
+            dem_layer = fetch_dem(
+                bbox=resolved_bbox, resolution_m=int(grid_resolution_m),
+                purpose="terrain")
             data_sources.append(
                 DataSource(
                     name="USGS 3DEP",
@@ -806,7 +809,8 @@ async def model_flood_scenario(
             )
         # The promoted router closure is keyword-only (_promoted(**kwargs)); pass bbox
         # by keyword (the twin accepted it positionally).
-        landcover_result = fetch_landcover(bbox=resolved_bbox, dataset="nlcd_2021")
+        landcover_result = fetch_landcover(
+            bbox=resolved_bbox, dataset="nlcd_2021", purpose="land cover")
         # LandcoverResult is a LayerURI subclass: the layer IS the result, and the
         # vintage-year sidecar is an attribute -- tolerate the twin's legacy dict too.
         landcover_layer: LayerURI = (
@@ -841,7 +845,8 @@ async def model_flood_scenario(
             from trid3nt_server.agent.tools import TOOL_REGISTRY as _TR
 
             _river_fn = _TR["fetch_river_geometry"].fn
-            river_layer = _river_fn(bbox=resolved_bbox, source="nhdplus_hr")
+            river_layer = _river_fn(
+                bbox=resolved_bbox, source="nhdplus_hr", purpose="river geometry")
             data_sources.append(
                 DataSource(
                     name="OSM Overpass waterways",
@@ -1062,71 +1067,6 @@ async def model_flood_scenario(
     nlcd_vintage_year = _fetch_out["nlcd_vintage_year"]
     river_layer = _fetch_out["river_layer"]
     bathymetry_present = bool(_fetch_out.get("bathymetry_present", True))
-
-    # ---: surface the SFINCS INPUT data as renderable layers --------
-    # The engine consumes renderable inputs (DEM/topobathy, NLCD landcover,
-    # NHDPlus rivers) but historically only the RESULT (flood-depth) was
-    # published. Surface them now as role="input" so the user sees the terrain /
-    # landcover / river network the model actually ran on. ALL best-effort
-    # (publish_input_layer never raises): a failure to surface an input can NEVER
-    # fail the solve. Gated on ``emitter is not None`` (no-op on the verify/CI
-    # direct-call path).
-    if emitter is not None:
-        # Stable per-turn id base for the surfaced input layer_ids (the solver
-        # run_id is not minted until AFTER the solve, below; an input is surfaced
-        # PRE-solve so the user sees the terrain/landcover/rivers immediately).
-        _input_id_base = new_ulid()
-        # (a) RIVERS -- a VECTOR already carrying role="input"; no publish_layer
-        # round-trip (the s3:// FlatGeobuf inlines server-side).
-        if river_layer is not None:
-            await publish_input_layer(emitter, river_layer)
-
-        # (b) DEM + LANDCOVER -- RASTERs carrying a raw s3:// COG, which MapLibre
-        #     cannot fetch; each needs a publish_layer round-trip to mint a
-        #     renderable tile/WMS URL FIRST, then emit as role="input" with its
-        #     existing preset (continuous_dem / categorical_landcover resolve in
-        #     the TiTiler registry). publish_layer runs a sync worker-poll loop ->
-        #     OFFLOADED off the loop. On AWS publish_layer fails until QGIS-on-AWS
-        # lands; the input is then simply absent (honest no-surface,
-        #     never fatal) -- exactly like the result-layer publish-or-drop gate.
-        for _raster_in, _fallback_preset, _kind in (
-            (dem_layer, "continuous_dem", "DEM"),
-            (landcover_layer, "categorical_landcover", "landcover"),
-        ):
-            if _raster_in is None:
-                continue
-            try:
-                _layer_id = f"input-{_kind.lower()}-{_input_id_base}"
-                _wms_url = await asyncio.to_thread(
-                    publish_layer,
-                    layer_uri=_raster_in.uri,
-                    layer_id=_layer_id,
-                    style_preset=_raster_in.style_preset or _fallback_preset,
-                )
-                _renderable = _raster_in.model_copy(
-                    update={
-                        "layer_id": _layer_id,
-                        "uri": _wms_url,
-                        "role": "input",
-                        "bbox": None,
-                        "style_preset": _raster_in.style_preset or _fallback_preset,
-                    }
-                )
-                await publish_input_layer(emitter, _renderable)
-            except PublishLayerError as exc:
-                logger.warning(
-                    "model_flood_scenario: %s input publish failed (non-fatal, "
-                    "input absent until QGIS-on-AWS) error_code=%s: %s",
-                    _kind,
-                    getattr(exc, "error_code", "?"),
-                    exc,
-                )
-            except Exception as exc:  # noqa: BLE001 - input surfacing is NEVER fatal
-                logger.warning(
-                    "model_flood_scenario: %s input surface failed (non-fatal): %s",
-                    _kind,
-                    exc,
-                )
 
     await _emit_presolver_progress(emitter, 25)
 

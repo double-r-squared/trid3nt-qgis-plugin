@@ -1,6 +1,6 @@
 # ADR 0244 - Emit-on-fetch: the render declaration IS the visualization intent
 
-Status: SEAM LANDED (2026-08-13). The IN-COMPOSER input-surfacing gap is closed
+Status: SEAM + S2 COLLAPSE LANDED (2026-08-13). The IN-COMPOSER input-surfacing gap is closed
 at the shared universal-fetcher router seam (`route()`): a fetch whose spec
 returns a renderable `LayerURI` (a raster COG or a vector FGB, never a `record`
 dict) is auto-surfaced as a `role="context"` "Input: ..." row whenever it is
@@ -97,3 +97,72 @@ captured by `emit_tool_call`):
   `publish_raster_input_cog` is the template). artemis (agitation) + tomawac
   (telemac/wave_field) do NOT yet emit an in-worker bed COG - a worker-image
   change (write + record `bed_cog`), scoped to the worker wave, not this landing.
+
+## S2 - the atomic collapse (COMPLETE, 2026-08-13)
+
+The transitional double-path is gone: the seam is now the SINGLE path by which a
+router-fetched renderable input surfaces. Realized scope (net **-555 LOC** of
+production code, +65 / -620 across 19 workflow files - the ~-550 estimate held):
+
+- **Deleted the 4 seam-covered `_surface_*` helpers** + every call site:
+  `_surface_landlab_dem_input` (`landlab/_composer_common.py`, lit all 13 Landlab
+  templates via `stage_solve_download` + 3 self-staging templates),
+  `_surface_watershed_mesh_inputs` + `_surface_landcover_input`
+  (`telemac/rain_on_grid`), `_surface_river_geometry_input`
+  (`telemac/river_dye`). The audit's "18 helpers" was the pre-count of call
+  SITES; the realized helper-def count was 4 (each fanned out to several
+  composers). `_surface_bed_bathymetry_input` (river_dye) SURVIVES - it rides an
+  IN-WORKER bed COG the router seam cannot cover (kept + sweep-allowlisted).
+- **Deleted the direct role=context input-emission call sites** that surfaced a
+  router-fetched renderable: sfincs flood (DEM/topobathy + landcover + river),
+  swmm urban_flood (DEM + buildings) + dual_drainage (DEM), elmfire fire_spread +
+  spotting (fuels + DEM), geoclaw inundation (topo/bathy), schism tidal_hydro +
+  pahm_surge (bathymetry), hecras flood_2d (DEM), openquake psha (fault traces -
+  `fetch_fault_sources` returns a renderable `FaultSourcesResult`) + secondary_perils
+  (DEM). Where a site carried semantic naming it moved to `purpose="<word>"` on
+  the fetch (terrain / mesh bed / bathymetry / land cover / river geometry /
+  topo-bathymetry / fuel model / fault sources), which the seam threads into the
+  `Input: <word> (...)` provenance name.
+- **Reverted the uri-threading plumbing** that existed ONLY to feed the deleted
+  helpers: `WatershedMesh.dem_input_s3_uri` / `river_input_s3_uri` fields + the
+  `uri_sink` params (`rain_on_grid/mesh_acquisition._resolve_bare_earth_dem`,
+  `swmm/_fetch_dem_for_urban`, `openquake/secondary_perils/_fetch_dem_local` +
+  `_covariates_for_sites`) + the `_fetch_bathymetry_cog` 3-tuple return (schism
+  tidal/pahm) - all back to their natural shapes.
+
+**KEPT (the seam does NOT cover these, sweep-allowlisted by site with a reason):**
+mesh previews (generated, not fetched); computed/derived result COGs (openquake
+liquefaction + landslide + GMF-spread, schism bottom-salinity, geoclaw particles,
+pahm storm best-track); IN-WORKER COGs (river_dye bed, telemac3d stratified_flow
+bottom, swan wave_field bathy); the bare-OSM agitation breakwaters (router-bypass,
+an S3 loose end); user-data overlays (MODFLOW capture_zone observed wells +
+thermal_plume injection well). river_dye's river fetch rides `emit_tool_call`
+(which suppresses the seam by binding `_DISPATCHED_TOOL` and emits the layer
+itself), so its river stays visible with no hand-surfacing.
+
+**Behavior deltas NATE should know (intended per the settled semantics):**
+- role NORMALIZES `input` -> `context` for surfaced inputs (the seam forces
+  `context`); coverage (which inputs appear) is preserved.
+- Composers that fetch MULTIPLE renderable bands now surface each (e.g. elmfire's
+  5 LANDFIRE bands fbfm40/cbh/cbd/cc/ch, not just fbfm40) and composers that fetch
+  a SEPARATE coarse delineation DEM surface it too - "the render declaration IS
+  the intent." If a band/probe is genuinely not worth showing, the fix is a
+  spec-level non-renderable declaration or `visualize=False` on a true probe fetch
+  - NOT re-adding a hand-emission.
+
+**Tests:** `test_input_layer_surfacing.py` collapsed to the emission PRIMITIVES +
+the `make_fault_sources_layer_uri` util + the river_dye in-worker-bed worker-COG
+pins + a two-part SWEEP (no `_surface_*input*` helper except the bed-COG one; every
+remaining `publish_input_layer`/`publish_raster_input_cog` call is an allow-listed
+non-seam-covered emission with a reason). `test_emit_on_fetch_equivalence.py` pins
+per-family coverage for the three representatives (landlab / telemac rain_on_grid /
+sfincs): each declares `purpose=` on its input fetches, and `input_layer_name`
+maps that word to the same `Input: <word>` row the helper emitted. The seam
+firing is pinned by `test_emit_on_fetch_seam.py`. Offline-green: 154 passing from
+repo root across the emit trio + edited-engine slices; full workflows import (269
+modules) clean; net-new failures = 0 (the `services`-PYTHONPATH + river_dye-NWM
+failures are pre-existing baseline, cwd/offline-env, not this change).
+
+The live flood canary (direct SFINCS/TELEMAC flood run + WS turn smoke through the
+restarted daemon + a live Case's input layers surfaced VIA THE SEAM) + NATE's QGIS
+visual are the final gate, per the NATE live-verification loop.

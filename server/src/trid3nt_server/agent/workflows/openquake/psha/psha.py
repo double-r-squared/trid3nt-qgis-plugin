@@ -63,7 +63,6 @@ from trid3nt_server.agent.workflows.openquake.postprocess_openquake import (
     parse_uhs_csv,
     postprocess_openquake,
 )
-from trid3nt_server.emission.layer_uri_emit import publish_input_layer
 from trid3nt_server.emission.pipeline_emitter import (
     begin_substeps,
     current_emitter,
@@ -599,7 +598,7 @@ def resolve_fault_sources(
     fetch_fault_sources = TOOL_REGISTRY["fetch_fault_sources"].fn
 
     try:
-        result = fetch_fault_sources(bbox=list(bbox))
+        result = fetch_fault_sources(bbox=list(bbox), purpose="fault sources")
     except FetchError as exc:
         logger.warning(
             "resolve_fault_sources: fault fetch failed bbox=%s (%s); "
@@ -1484,29 +1483,11 @@ async def model_openquake_psha(
         source_model_note,
     )
 
-    # 0.5): surface the resolved fault traces as a renderable INPUT
-    #      layer so the user can SEE the fault lines the hazard peaks on.
-    #      GATED on ``used_real_faults`` (no traces -> nothing to draw). The serialize +
-    #      S3 upload is SYNC boto3, OFFLOADED off the loop; the emit is BEST-
-    #      EFFORT (publish_input_layer never raises) so a failure to surface the
-    #      faults can NEVER fail the solve. role="input" + bbox=None: the traces
-    #      render under the hazard COG and do not fight the AOI camera.
-    # GATED additionally on an emitter being bound: there is no point serializing
-    # + uploading the fault GeoJSON when nothing can surface it (the verify/CI
-    # direct-call path), and skipping it keeps that path free of boto3.
-    if used_real_faults and current_emitter() is not None:
-        try:
-            fault_layer = await asyncio.to_thread(
-                make_fault_sources_layer_uri, fault_sources, run_id=run_id
-            )
-            await publish_input_layer(current_emitter(), fault_layer)
-        except Exception as exc:  # noqa: BLE001 - input surfacing is NEVER fatal
-            logger.warning(
-                "model_openquake_psha: fault-trace input surface failed "
-                "(non-fatal) run_id=%s: %s",
-                run_id,
-                exc,
-            )
+    # The resolved fault traces surface automatically as a role=context input:
+    # ``fetch_fault_sources`` returns a renderable ``FaultSourcesResult`` (vector),
+    # so the emit-on-fetch router seam (ADR 0244) publishes it when fetched nested
+    # in this composer (purpose="fault sources" carries the name). No hand-built
+    # surfacing here -- the render declaration IS the intent.
 
     # 1) Stage the build_spec (sync boto3 off the loop). Thread the resolved
     #    fault sources so a real-fault AOI stages the simpleFaultSource model.

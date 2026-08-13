@@ -445,7 +445,6 @@ from trid3nt_server.agent.tools.publish_layer.publish_layer import (
 )
 from trid3nt_server.emission.layer_uri_emit import (
     publish_input_layer,
-    publish_raster_input_cog,
 )
 from trid3nt_server.agent.workflows.hecras.postprocess_hecras import (
     PostprocessHecrasError,
@@ -462,7 +461,8 @@ def _fetch_dem_local(bbox: list[float]) -> tuple[str, str]:
     """
     from trid3nt_server.agent.tools import TOOL_REGISTRY
 
-    layer = TOOL_REGISTRY["fetch_dem"].fn(bbox=list(bbox), resolution_m=10)
+    layer = TOOL_REGISTRY["fetch_dem"].fn(
+        bbox=list(bbox), resolution_m=10, purpose="terrain")
     uri = getattr(layer, "uri", None) or (layer.get("uri") if isinstance(layer, dict) else None)
     if not uri:
         raise HecrasFlood2dError(HECRAS_SOLVE_FAILED, f"fetch_dem returned no uri for bbox {bbox}")
@@ -694,7 +694,7 @@ async def model_hecras_flood_2d(
     run_tag = new_ulid()
     workdir = tempfile.mkdtemp(prefix=f"flood2d-{run_tag}-")
     async with substep(emitter, "author_compose"):
-        dem_tif, dem_s3_uri = await asyncio.to_thread(_fetch_dem_local, bbox)
+        dem_tif, _dem_s3_uri = await asyncio.to_thread(_fetch_dem_local, bbox)
         result = await asyncio.to_thread(
             _author_and_compose, dem_tif, workdir,
             peak_cfs=target_peak_cfs, resolution_m=resolution_m,
@@ -776,18 +776,6 @@ async def model_hecras_flood_2d(
             await publish_input_layer(emitter, mesh_layer, role="context")
         except Exception as exc:  # noqa: BLE001
             logger.warning("hecras_flood_2d mesh preview emit skipped: %s", exc)
-
-    # ADR 0231: surface the fetched DEM (the terrain HEC-RAS meshed + solved on)
-    # as a role=context input. Rides the fetched cache COG (no re-upload); best-
-    # effort -- never fails the solve.
-    await publish_raster_input_cog(
-        emitter,
-        cog_uri=dem_s3_uri,
-        layer_id=f"input-dem-{batch_run_id}",
-        name="Input: DEM (USGS 3DEP 10 m, fetch_dem)",
-        style_preset="continuous_dem",
-        role="context",
-    )
 
     if emitter is not None:
         try:
