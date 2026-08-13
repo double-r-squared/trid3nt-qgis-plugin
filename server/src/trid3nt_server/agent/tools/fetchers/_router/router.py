@@ -713,6 +713,14 @@ def route(
     """The engine: validate -> gate -> dispatch -> cache -> emit LayerURI (or a
     record dict for a ``shape: record`` source, ADR 0076, or an ordered
     ``list[LayerURI]`` for a ``shape: animation_frames`` source, ADR 0087)."""
+    # Emit-on-fetch control kwargs (ADR 0244): router-level, so EVERY spec inherits
+    # them via the promoted signature's ``**_extra_ignored`` absorber. Popped here
+    # so they never reach validation / the cache key -- ``visualize=False`` (probe
+    # fetch) suppresses the in-composer input surfacing; ``purpose`` contributes one
+    # word to the surfaced layer's name.
+    raw_params = dict(raw_params)
+    _visualize = raw_params.pop("visualize", None)
+    _purpose = raw_params.pop("purpose", None)
     # Cross-sibling PRE-FLIGHT dispatch (ADR 0097): before ANY validation / gate /
     # cache / fetch, a declared ``source``-value condition may serve the request
     # from a named sibling tool and return its result verbatim (fetch_dem
@@ -823,6 +831,14 @@ def route(
     # to success or re-point the layer. No-op when unset.
     if spec.hooks is not None and spec.hooks.envelope:
         layer = _apply_envelope(spec, params, layer, result.data, result.provenance)
+    # Emit-on-fetch (ADR 0244): when this fetch ran NESTED inside a composer (not
+    # as its own direct dispatch), surface the fetched data as a role=context input
+    # so the engine's terrain / rivers / land cover are visible. Best-effort; never
+    # fails the fetch. A direct chat dispatch is skipped (the wrapper emits it).
+    from .emit_on_fetch import maybe_emit_input_on_fetch
+    maybe_emit_input_on_fetch(
+        spec, params, layer, visualize=_visualize, purpose=_purpose
+    )
     return layer
 
 

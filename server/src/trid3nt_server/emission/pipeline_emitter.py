@@ -93,6 +93,7 @@ __all__ = [
     "PipelineEmitter",
     "EmissionSink",
     "current_emitter",
+    "dispatched_tool_name",
     "substep",
     "begin_substeps",
     "emit_chart_payloads",
@@ -185,6 +186,19 @@ _CURRENT_EMITTER: contextvars.ContextVar["PipelineEmitter | None"] = (
     contextvars.ContextVar("trid3nt_current_emitter", default=None)
 )
 
+#: The name of the TOP-LEVEL tool ``emit_tool_call`` is currently dispatching.
+#: Bound alongside ``_CURRENT_EMITTER`` for the lifetime of one invocation so the
+#: emit-on-fetch router seam (ADR 0244) can tell its two calling modes apart: a
+#: DIRECT chat fetch is dispatched AS the tool (``dispatched_tool_name()`` == the
+#: fetcher's own name -> the tool-wrapper already emits the returned LayerURI, so
+#: the seam stays silent), whereas an IN-COMPOSER bare fetch runs nested under a
+#: COMPOSER dispatch (``dispatched_tool_name()`` is the composer's name != the
+#: fetcher -> the seam surfaces the fetched data as a role="context" input). A
+#: bare/CI/direct call outside ``emit_tool_call`` leaves this ``None``.
+_DISPATCHED_TOOL: contextvars.ContextVar[str | None] = (
+    contextvars.ContextVar("trid3nt_dispatched_tool", default=None)
+)
+
 
 def current_emitter() -> "PipelineEmitter | None":
     """Return the ``PipelineEmitter`` bracketing the current tool/workflow call.
@@ -195,6 +209,16 @@ def current_emitter() -> "PipelineEmitter | None":
     correctness gate.
     """
     return _CURRENT_EMITTER.get()
+
+
+def dispatched_tool_name() -> str | None:
+    """The top-level tool name ``emit_tool_call`` is dispatching (or ``None``).
+
+    The emit-on-fetch seam reads this to distinguish a DIRECT fetch dispatch
+    (name == the fetcher -> the wrapper emits) from an IN-COMPOSER nested fetch
+    (name == the composer -> the seam surfaces the input). See ``_DISPATCHED_TOOL``.
+    """
+    return _DISPATCHED_TOOL.get()
 
 
 @asynccontextmanager
@@ -1055,6 +1079,16 @@ class PipelineEmitter:
 
         #: Accumulated layers -- appended each time a tool returns a ``LayerURI``.
         self._loaded_layers: list[ProjectLayerSummary] = []
+
+        #: The asyncio loop this emitter is bracketed on -- captured by
+        #: ``emit_tool_call`` so the emit-on-fetch router seam (ADR 0244) can drive
+        #: its async input-surfacing coroutine from the worker thread an off-loaded
+        #: sync fetcher runs in. ``None`` until the first ``emit_tool_call``.
+        self._bound_loop: "asyncio.AbstractEventLoop | None" = None
+
+        #: Session-level dedup of already-surfaced input uris (ADR 0244): a fetched
+        #: input is surfaced ONCE per session even if several composers re-fetch it.
+        self._emitted_input_uris: set[str] = set()
 
         #: Monotonic stacking-order counter (z-index-fix). Every NEW layer
         #: appended in ``add_loaded_layer`` is stamped with ``self._next_z``,
@@ -2280,6 +2314,13 @@ class PipelineEmitter:
         # zoom-on-area-first UX). reset_token ensures the binding is unwound
         # exactly once, even on cancellation / exception paths.
         token = _CURRENT_EMITTER.set(self)
+        # Bind the dispatched tool name + capture the running loop so the
+        # emit-on-fetch router seam (ADR 0244) can (a) tell a direct fetch
+        # dispatch from an in-composer nested fetch and (b) drive its async
+        # input-surfacing coroutine back onto THIS loop from the worker thread a
+        # sync fetcher is off-loaded to.
+        _disp_token = _DISPATCHED_TOOL.set(tool_name)
+        self._bound_loop = asyncio.get_running_loop()
         # remember the previous parent so nested emit_tool_call
         # invocations restore it (defensive -- workflow bodies normally hold a
         # single top-level step). ``substep(...)`` mints children against this id.
@@ -2366,6 +2407,7 @@ class PipelineEmitter:
             return result
         finally:
             _CURRENT_EMITTER.reset(token)
+            _DISPATCHED_TOOL.reset(_disp_token)
             # restore the previous parent pointer. On the normal
             # single-top-level-step path this returns it to None.
             self._current_parent_step_id = _prev_parent

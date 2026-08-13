@@ -9,6 +9,17 @@ template landing (standing close-out rule). Mined by 13 research agents,
 
 **TOTALS: 126 modules mined, 334 candidate template rows, of which 92 are unsigned CAND-S (pre-authorized easy tier).** (ADR 0156 closed the 4 SCHISM easy-tier rows: transport_scheme_accuracy_comparison LANDED + generic_passive_tracer_mass_conservation FOLDED into the one `schism_transport_validation` template; tidal_constituent_extraction_inrun STOP-RECIPE (iharind needs a USE_HA build); harmonic_analysis_ccrm_wiki_method_notes DOC.) (ADR 0157 closed the 6 HECRAS easy-tier rows: simple_2d_diffusion_wave_mesh LANDED as an explicit `equation_set` knob on `hecras_flood_2d` (diffusion-wave was silent skeleton inheritance; now first-class + reviewed + host-side, no image rebuild); mixed_regime_multi_profile_solve + storage_area_network_flow_reversal + pump_station_trigger_and_ramp_control + wq_module_smoke_test_suite + simple_breach_geometry_setup all STOP-RECIPE - the roster's "1D steady signed" claim was WRONG (RasSteady is in the image but never invoked), and these need genuinely-new 1D-network/structure/WQ-engine authoring, not S-tier knobs.) (ADR 0162 closed the LAST 2 SFINCS easy-tier rows the ADR 0152 wave missed due to an extraction bug: uniform_wind_timeseries_forcing LANDED as a `WindForcing.timeseries` schedule -> `setup_wind_forcing(timeseries=<csv>)` -> native sfincs.wnd; wind_drag_coefficient_curve_tuning LANDED as a new `wind_drag_curve` physics_registry knob (list of >=2 (wind_mps, cd) pairs) -> cdnrb/cdwnd/cdval, mutually exclusive with the existing flat `wind_drag`. Zero SFINCS [CAND-S] rows remain.) (ADR 0218 closed the 3 SWMM Hydrology CAND-M rows: `swmm_snowmelt_degree_day` (native [SNOWPACKS] degree-day melt, live on real KBUF ASOS temperature) + `swmm_snow_removal_plowing` FOLDED as the `snow_removal` knob on it (same question class) + `swmm_aquifer_baseflow_to_node` (native two-zone [AQUIFERS]/[GROUNDWATER] baseflow-to-node); 2 new registered chart-first templates covering 3 rows.)
 
+INFRA NOTE (ADR 0244, 2026-08-13): emit-on-fetch seam LANDED -- every AGENT-SIDE
+router fetch of renderable data (raster COG / vector FGB, not a `record`) now
+auto-surfaces as a role=context "Input:" layer whenever fetched nested inside a
+composer, so new coverage templates get input surfacing for FREE (fetch through
+the router -> the DEM/rivers/land cover appear; no per-composer call site). The
+S2 collapse (delete the 18 `_surface_*` helpers + ~54 call sites + the sweep test)
++ the live flood canary are scoped to the NATE loop. LOOSE ENDS: artemis
+(agitation) + tomawac (telemac/wave_field) sample bathymetry IN-WORKER, so their
+bed is not yet surfaced (river_dye's `bed_bathymetry.tif` recorded-COG surface is
+the template; a worker-image change is required).
+
 WAVE-2 TRIAGE RE-SCOPE (ADR 0121, 2026-08-04): the hazard-cluster wave-2 rows
 (openquake scenario + logic-tree, pelicun FEMA-P58 / HAZUS-EQ / loss-aggregation,
 swmm wq_buildup_washoff, geoclaw gauge-timeseries, landlab flow-accumulator /
