@@ -876,6 +876,11 @@ from ..workflows.elmfire.transient.dead_fuel_interp.dead_fuel_interp import elmf
 # active-crown spread-rate ceiling (CROWN_FIRE_SPREAD_RATE_LIMIT) on a canopied
 # deck. tier=template, engine=elmfire.
 from ..workflows.elmfire.crown.crown_fire import elmfire_crown_fire_initiation_threshold_sweep as _elmfire_crown_fire_initiation_threshold_sweep  # noqa: E402,F401 - crown-fire initiation + Cruz-rate-ceiling folded sweep
+# ELMFIRE spotting family (ADR 0239): does wind-driven ember spotting carry the fire
+# ACROSS a non-burnable fuel break the contiguous front cannot cross (spotting OFF vs
+# ON on a grass deck with a barrier strip). Distinct question class - the barrier-jump
+# discriminant; folds the lognormal-distance / generation-gate / ember-count knobs.
+from ..workflows.elmfire.spotting.spotting import elmfire_spot_fire_barrier_crossing as _elmfire_spot_fire_barrier_crossing  # noqa: E402,F401 - ember-spotting barrier-jump (engine=elmfire, tier=template)
 # ELMFIRE initial-attack POC (ADR 0190 row 2): the Hirsch 1998 closed-form
 # probability of containment (fire size + head-fire intensity + attack delay).
 # CLOSED-FORM validation class (no engine run, chart/scalars). tier=template.

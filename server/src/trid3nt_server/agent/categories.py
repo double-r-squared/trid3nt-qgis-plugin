@@ -365,6 +365,7 @@ PRIMARY_CATEGORY: dict[str, str] = {
     "elmfire_transient_wind_schedule_spread": "simulation_modeling",
     "elmfire_dead_fuel_moisture_interpolation_frequency_control": "simulation_modeling",
     "elmfire_crown_fire_initiation_threshold_sweep": "simulation_modeling",
+    "elmfire_spot_fire_barrier_crossing": "simulation_modeling",
     "elmfire_initial_attack_containment_probability": "model_validation",
     "geoclaw_tsunami_gauge_timeseries": "simulation_modeling",
     "geoclaw_amr_refinement_regions": "simulation_modeling",

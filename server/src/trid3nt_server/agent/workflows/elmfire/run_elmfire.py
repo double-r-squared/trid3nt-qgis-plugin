@@ -456,6 +456,8 @@ def build_constant_flat_deck(
     outputs_extra: dict[str, str] | None = None,
     inputs_extra: dict[str, str] | None = None,
     time_control_extra: dict[str, str] | None = None,
+    spotting_extra: dict[str, str] | None = None,
+    fuel_break: dict[str, Any] | None = None,
     dt_s: float = 30.0,
     dtdump_s: float = 3600.0,
 ) -> dict[str, Any]:
@@ -474,8 +476,12 @@ def build_constant_flat_deck(
     (the same ``services/workers/elmfire/deck_builder`` seam ``build_elmfire_deck``
     uses, so the namelist / grid-identity assert / ignition projection / manifest
     are byte-identical). ``simulator_extra`` / ``outputs_extra`` / ``inputs_extra``
-    / ``time_control_extra`` inject extra namelist knobs (pre-formatted-string
-    values the caller owns); unset reproduces the canonical constant deck.
+    / ``time_control_extra`` / ``spotting_extra`` inject extra namelist knobs
+    (pre-formatted-string values the caller owns; ``spotting_extra`` emits a whole
+    ``&SPOTTING`` group); unset reproduces the canonical constant deck. ``fuel_break``
+    (see :func:`services.workers.elmfire.deck_builder.write_fbfm_with_break`) stamps a
+    NON-BURNABLE strip across the fuel bed the contiguous surface fire cannot cross --
+    the spotting barrier-jump deck; unset keeps the uniform bed.
 
     TRANSIENT WEATHER: ``weather_schedule`` is a list of per-meteorology-time
     scalar-weather dicts (each carrying any of ``ws``/``wd``/``m1``/``m10``/``m100``
@@ -504,9 +510,20 @@ def build_constant_flat_deck(
     )
 
     canopy_vals = {**_ZERO_CANOPY, **(canopy or {})}
-    # Constant fuels + topography (Int16): fuel bed, canopy, flat terrain.
+    provenance: dict[str, dict] = {}
+    # fbfm40: uniform fuel bed, OR a uniform bed with a NON-BURNABLE strip (a fuel
+    # break) the contiguous surface fire cannot cross (the spotting barrier-jump
+    # deck). ``fuel_break`` unset -> a plain constant fuel bed.
+    fbfm_prov = db.write_fbfm_with_break(
+        int(fuel_model), grid, inputs_dir / "fbfm40.tif", fuel_break
+    )
+    provenance["fbfm40"] = {
+        "source": f"constant:{fuel_model}"
+        + (f"+break{fbfm_prov}" if fbfm_prov else ""),
+        "nodata_fraction": 0.0,
+    }
+    # Constant topography (Int16): flat terrain + uniform canopy.
     int_constants: dict[str, int] = {
-        "fbfm40": int(fuel_model),
         "dem": int(flat_elevation_m),
         "slp": 0,
         "asp": 0,
@@ -515,7 +532,6 @@ def build_constant_flat_deck(
         "cc": int(canopy_vals["cc"]),
         "ch": int(canopy_vals["ch"]),
     }
-    provenance: dict[str, dict] = {}
     for name, value in int_constants.items():
         db.write_constant_raster_typed(
             value, grid, inputs_dir / f"{name}.tif", dtype="int16"
@@ -583,6 +599,7 @@ def build_constant_flat_deck(
         outputs_extra=outputs_extra,
         inputs_extra=inputs_extra,
         time_control_extra=time_control_extra,
+        spotting_extra=spotting_extra,
     )
     (inputs_dir / "elmfire.data").write_text(namelist)
 

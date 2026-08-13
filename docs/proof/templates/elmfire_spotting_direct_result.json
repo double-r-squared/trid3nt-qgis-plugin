@@ -1,0 +1,55 @@
+{
+  "layer_id": "fire-arrival-01KZXFARPZZGAKTRG424JGZC55",
+  "name": "Fire arrival time (ember spotting across a fuel break)",
+  "layer_type": "raster",
+  "uri": "s3://trid3nt-runs/01KZXFARPZZGAKTRG424JGZC55/overviews/01KZXFC0TP4P0S8S56221W8WEM.tif",
+  "style_preset": "continuous_fire_arrival_hr",
+  "temporal": null,
+  "role": "primary",
+  "units": null,
+  "bbox": [
+    -120.56915955968371,
+    38.793262666187566,
+    -120.43084044031629,
+    38.80673733381243
+  ],
+  "legend": null,
+  "fallback_note": null,
+  "synthetic_inputs": [],
+  "crs_authid": null,
+  "burned_area_km2": 16.2207,
+  "fire_arrival_max_hr": 4.00301025390625,
+  "max_flame_length_m": 2.840917872619629,
+  "max_spread_rate_m_min": 51.02380649414063,
+  "duration_hours": 4.0,
+  "ignition_lonlat": [
+    -120.55532764774696,
+    38.8
+  ],
+  "swept_param": "spotting_enabled",
+  "swept_units": "off(0)/on(1)",
+  "response_metric": "far_side_burned_area_km2",
+  "response_units": "km2",
+  "sweep": [
+    {
+      "x": 0.0,
+      "y": 0.0
+    },
+    {
+      "x": 1.0,
+      "y": 13.9041
+    }
+  ],
+  "summary": {
+    "far_side_area_spotting_off_km2": 0.0,
+    "far_side_area_spotting_on_km2": 13.9041,
+    "head_fire_area_km2": 2.3165999999999998,
+    "far_side_spot_cells_on": 15449.0,
+    "mean_spotting_distance_m": 25.0,
+    "nembers": 20.0,
+    "pign_pct": 100.0,
+    "critical_spotting_intensity_kwm": 0.0,
+    "fixed_wind_mph": 25.0,
+    "break_jumped": 1.0
+  }
+}

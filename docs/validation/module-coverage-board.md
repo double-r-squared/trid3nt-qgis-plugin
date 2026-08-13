@@ -794,21 +794,21 @@ Aspects: initiation threshold (critical canopy cover + fireline intensity); acti
 
 ### Spotting
 Purpose: Model ember lofting/transport/landing ahead of the main fire front as a stochastic Lagrangian process, producing new ignition points beyond the contiguous perimeter.
-Today: Disabled by default in ELMFIRE, off unless ENABLE_SPOTTING=.TRUE.; not confirmed as surfaced in TRID3NT today.
+Today: SURFACED (ADR 0239) via the registered template `elmfire_spot_fire_barrier_crossing` - the barrier-JUMP question class ("does the fire cross a fuel break via ember spotting?"), the cleanest discriminant in the program. Rows 1-3 FOLDED as its knobs; row 4 DEFERRED.
 Aspects: lognormal spot-distance distribution as fn(wind speed, fireline intensity); critical fireline-intensity gate for spot generation; ember count per torching event + landing ignition probability; stochastic/randomized spotting parameters for calibration and Monte Carlo
-- [CAND-M] `lognormal_spot_distance_model_calibration` [M] [US] - How do the semi-empirical lognormal spotting-distance parameters (mean/variance as power-law functions of wind speed and fireline intensity) shift the downwind spot-fire footprint?
+- [LANDED-KNOB] `lognormal_spot_distance_model_calibration` [M] [US] - How do the semi-empirical lognormal spotting-distance parameters (mean/variance as power-law functions of wind speed and fireline intensity) shift the downwind spot-fire footprint? [ADR 0239: FOLDED as the `mean_spotting_distance_m` knob on `elmfire_spot_fire_barrier_crossing` (the MEAN_SPOTTING_DIST distance-model scale; larger = farther downwind spot fires). BAKED-BINARY DEFAULT CORRECTIONS: SPOT_FLIN_EXP=0.5 (not 0.3), SPOT_WS_EXP=0.9 (not 0.7); scalar knobs are OVERWRITTEN by SET_SPOTTING_PARAMETERS from the _MIN/_MAX bounds, so the template sets MIN==MAX.]
   src: https://elmfire.io/user_guide/spotting.html (elmfire-spotting)
-  knobs: MEAN_SPOTTING_DIST (default 5.0m), SPOT_FLIN_EXP (0.3), SPOT_WS_EXP (0.7), NORMALIZED_SPOTTING_DIST_VARIANCE (250.0), SPOTTING_DISTRIBUTION_TYPE=LOGNORMAL
+  knobs: MEAN_SPOTTING_DIST_MIN/MAX, SPOT_FLIN_EXP_LO/HI, SPOT_WS_EXP_LO/HI, NORMALIZED_SPOTTING_DIST_VARIANCE_MIN/MAX, SPOTTING_DISTRIBUTION_TYPE=LOGNORMAL
   notes: Author's cited precursor paper (doi:10.1016/j.firesaf.2013.08.014) is explicitly noted as describing a different model than what's implemented - do not cite that DOI as the source, cite this page.
-- [CAND-M] `critical_spotting_intensity_threshold_gate` [S->M, STOP ADR 0142] [US] - Below what fireline intensity does ember generation stop, and how does raising CRITICAL_SPOTTING_FIRELINE_INTENSITY suppress nuisance spotting from low-intensity backing fire?
+- [LANDED-KNOB] `critical_spotting_intensity_threshold_gate` [S->M] [US] - Below what fireline intensity does ember generation stop, and how does raising CRITICAL_SPOTTING_FIRELINE_INTENSITY suppress nuisance spotting from low-intensity backing fire? [ADR 0239: FOLDED as the `critical_spotting_intensity_kwm` knob (broadcast across the per-fuel 0:303 array via the namelist N*value repeat form; 0 = generate always). SURFACE spotting REQUIRES both ENABLE_SURFACE_FIRE_SPOTTING=.TRUE. AND GLOBAL_SURFACE_FIRE_SPOTTING_PERCENT>0 (default 0 silently disables it - the spotting-knob-bounds trap).]
   src: https://elmfire.io/user_guide/spotting.html (elmfire-spotting)
-  knobs: CRITICAL_SPOTTING_FIRELINE_INTENSITY (default 0.0 kW/m), SURFACE_FIRE_SPOTTING_PERCENT(:) per fuel model, ENABLE_SURFACE_FIRE_SPOTTING
-- [CAND-M] `ember_count_and_landing_ignition_probability` [S->M, STOP ADR 0142, fold w/ intensity-gate row] [US] - How does the number of embers cast per torching event and their probability of igniting on landing change spot-fire proliferation rate?
+  knobs: CRITICAL_SPOTTING_FIRELINE_INTENSITY (per-fuel array), GLOBAL_SURFACE_FIRE_SPOTTING_PERCENT_MIN/MAX, ENABLE_SURFACE_FIRE_SPOTTING
+- [LANDED-KNOB] `ember_count_and_landing_ignition_probability` [S->M] [US] - How does the number of embers cast per torching event and their probability of igniting on landing change spot-fire proliferation rate? [ADR 0239: FOLDED as the `nembers` + `pign_pct` knobs. CORRECTION: the superseded (default) path DOES use NEMBERS_MIN + NINT(R0*(NEMBERS_MAX-NEMBERS_MIN)); PIGN binary default is 1.0=1% (docs "100%" is wrong for this binary).]
   src: https://elmfire.io/user_guide/spotting.html (elmfire-spotting)
-  knobs: NEMBERS_MIN/NEMBERS_MAX (default 1,1), PIGN (default 100%)
-- [CAND-L] `stochastic_spotting_parameter_ensemble` [L] [US] - What is the spread of spot-fire outcomes when all spotting parameters are randomized within user-defined ranges for Monte Carlo calibration, versus a single deterministic parameter set?
+  knobs: NEMBERS_MIN + NEMBERS_MAX_LO/HI, PIGN_MIN/MAX
+- [DEFERRED] `stochastic_spotting_parameter_ensemble` [L] [US] - What is the spread of spot-fire outcomes when all spotting parameters are randomized within user-defined ranges for Monte Carlo calibration, versus a single deterministic parameter set? [ADR 0239: DEFERRED - STOCHASTIC_SPOTTING is INERT in this binary ("This is not currently used"); the _MIN/_MAX bounds ARE the single-run mechanism (resolved once via the internal draw), so a true ensemble needs multi-member Monte Carlo (NUM_ENSEMBLE_MEMBERS>1), a distinct capability.]
   src: https://elmfire.io/user_guide/spotting.html (elmfire-spotting)
-  knobs: STOCHASTIC_SPOTTING=.TRUE. (randomizes 8 named parameters within min/max ranges)
+  knobs: STOCHASTIC_SPOTTING=.TRUE. (INERT in this binary)
   notes: Couples directly to the Ensembles/Monte Carlo module; page states this enables 'automated calibration' - a distinct capability from a single fixed-parameter spotting run.
 
 ### Suppression

@@ -552,6 +552,63 @@ def write_weather_bands(values_per_band: list[float], grid: dict, dest: Path) ->
             )
 
 
+#: Nonburnable FBFM40 code for a fuel break (NB1 = "urban/developed", zero ROS).
+FUEL_BREAK_NONBURNABLE_FBFM: int = 91
+
+
+def write_fbfm_with_break(
+    fuel_model: int,
+    grid: dict,
+    dest: Path,
+    break_spec: dict | None,
+) -> dict:
+    """Write the Int16 ``fbfm40`` raster: uniform ``fuel_model`` with an optional
+    NON-BURNABLE strip (a fuel break) the contiguous surface fire cannot cross.
+
+    ``break_spec`` (or ``None`` for a uniform bed)::
+
+        {"axis": "x"|"y",          # "x": a vertical strip spanning all rows (blocks
+                                    #      an E-W head fire); "y": a horizontal strip
+         "lo_frac": 0.0..1.0,       # strip start as a fraction of the axis extent
+         "hi_frac": 0.0..1.0,       # strip end   (hi_frac > lo_frac)
+         "fuel_model": 91}          # optional NB code (default NB1/91)
+
+    Returns break provenance (``{"axis","cols"/"rows","break_fuel_model"}``) or
+    ``{}`` for a uniform bed. Raises :class:`ElmfireSpecError` on a malformed spec
+    (a degenerate/zero-width strip that would silently no-op)."""
+    import numpy as np
+
+    arr = np.full((grid["ny"], grid["nx"]), int(fuel_model), dtype="int16")
+    prov: dict[str, Any] = {}
+    if break_spec:
+        axis = str(break_spec.get("axis", "x")).lower()
+        lo = float(break_spec.get("lo_frac"))
+        hi = float(break_spec.get("hi_frac"))
+        nb = int(break_spec.get("fuel_model", FUEL_BREAK_NONBURNABLE_FBFM))
+        if axis not in ("x", "y") or not (0.0 <= lo < hi <= 1.0):
+            raise ElmfireSpecError(
+                f"fuel_break malformed: axis={axis!r} lo_frac={lo} hi_frac={hi} "
+                "(need axis in x/y and 0<=lo<hi<=1)"
+            )
+        if axis == "x":
+            c0, c1 = int(lo * grid["nx"]), int(hi * grid["nx"])
+            if c1 <= c0:
+                raise ElmfireSpecError("fuel_break x-strip is zero cells wide")
+            arr[:, c0:c1] = nb
+            prov = {"axis": "x", "cols": [c0, c1], "break_fuel_model": nb}
+        else:
+            r0, r1 = int(lo * grid["ny"]), int(hi * grid["ny"])
+            if r1 <= r0:
+                raise ElmfireSpecError("fuel_break y-strip is zero cells wide")
+            arr[r0:r1, :] = nb
+            prov = {"axis": "y", "rows": [r0, r1], "break_fuel_model": nb}
+    import rasterio
+
+    with rasterio.open(dest, "w", **_grid_profile(grid, "int16")) as ds:
+        ds.write(arr, 1)
+    return prov
+
+
 # --------------------------------------------------------------------------- #
 # The same-grid HARD ASSERT.
 # --------------------------------------------------------------------------- #
@@ -661,6 +718,7 @@ def render_namelist(
     outputs_extra: dict[str, str] | None = None,
     inputs_extra: dict[str, str] | None = None,
     time_control_extra: dict[str, str] | None = None,
+    spotting_extra: dict[str, str] | None = None,
 ) -> str:
     """Render ``elmfire.data`` with the tutorial-01 key set (proven).
 
@@ -682,6 +740,19 @@ def render_namelist(
     ``{"MAX_LOW": "8.0000"}``, ``{"WIND_FLUCTUATIONS": ".TRUE."}``,
     ``{"DUMP_CROWN_FIRE_AREA": ".TRUE."}``, ``{"DT_INTERPOLATE_M1": "600.0"}``).
     Unset (the default) reproduces the base deck byte-for-byte.
+
+    SPOTTING SURFACE (``spotting_extra``): when given, an entire ``&SPOTTING``
+    namelist group is emitted carrying the caller's pre-formatted ``KEY = VALUE``
+    lines (e.g. ``{"ENABLE_SPOTTING": ".TRUE.", "MEAN_SPOTTING_DIST_MIN": "25.0000"}``).
+    ELMFIRE reads &SPOTTING as its OWN group (``READ_SPOTTING``) — the params do NOT
+    live in &SIMULATOR — so this is a separate surface. NOTE the baked binary runs
+    ``SET_SPOTTING_PARAMETERS`` whenever ``ENABLE_SPOTTING``, which OVERWRITES the
+    scalar knobs (``MEAN_SPOTTING_DIST``, ``PIGN``, ``SPOT_FLIN_EXP``, ``SPOT_WS_EXP``,
+    ``NEMBERS_MAX``, ``SURFACE_FIRE_SPOTTING_PERCENT``) from their ``_MIN/_MAX/_LO/_HI``
+    bounds; surface-fire spotting stays OFF unless ``GLOBAL_SURFACE_FIRE_SPOTTING_PERCENT_MIN``
+    (default 0) is raised. So callers set the BOUNDS (MIN==MAX for a deterministic run),
+    not the bare scalars. Unset (the default) emits NO &SPOTTING group (byte-identical
+    base deck; ELMFIRE keeps ``ENABLE_SPOTTING=.FALSE.``).
 
     TRANSIENT WEATHER (multi-band decks): ``num_meteorology_times`` > 1 emits a
     ``&MONTE_CARLO`` group carrying ``NUM_METEOROLOGY_TIMES`` (read unconditionally
@@ -729,6 +800,13 @@ def render_namelist(
             f"NUM_METEOROLOGY_TIMES = {int(num_meteorology_times)}\n"
             "/\n"
         )
+
+    # &SPOTTING: its OWN namelist group (READ_SPOTTING), emitted ONLY when the
+    # caller passes spotting knobs so the base (no-spotting) deck stays byte-
+    # identical (ELMFIRE defaults ENABLE_SPOTTING=.FALSE. when the group is absent).
+    spotting_block = ""
+    if spotting_extra:
+        spotting_block = "\n&SPOTTING\n" + _extra_lines(spotting_extra) + "/\n"
 
     return f"""&INPUTS
 FUELS_AND_TOPOGRAPHY_DIRECTORY = './inputs'
@@ -783,7 +861,7 @@ WSMFEFF_LOW_MULT = 0.011364
 PATH_TO_GDAL                   = '/usr/bin'
 SCRATCH                        = './scratch'
 /
-{montecarlo_block}"""
+{montecarlo_block}{spotting_block}"""
 
 
 # --------------------------------------------------------------------------- #

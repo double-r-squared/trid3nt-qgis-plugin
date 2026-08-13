@@ -168,6 +168,8 @@ async def solve_constant_case(
     outputs_extra: dict[str, str] | None = None,
     inputs_extra: dict[str, str] | None = None,
     time_control_extra: dict[str, str] | None = None,
+    spotting_extra: dict[str, str] | None = None,
+    fuel_break: dict[str, Any] | None = None,
     dt_s: float = 30.0,
     dtdump_s: float = 3600.0,
     compute_class: str = "small",
@@ -202,6 +204,8 @@ async def solve_constant_case(
             outputs_extra=outputs_extra,
             inputs_extra=inputs_extra,
             time_control_extra=time_control_extra,
+            spotting_extra=spotting_extra,
+            fuel_break=fuel_break,
             dt_s=dt_s,
             dtdump_s=dtdump_s,
         )
@@ -243,6 +247,23 @@ async def solve_constant_case(
         )
     burned_area_km2 = float(n_burned) * (cellsize_m * cellsize_m) / 1.0e6
     fire_arrival_max_hr = float(np.nanmax(toa_s)) / 3600.0
+
+    # Barrier-jump measurement: with a vertical (axis=x) fuel break, split the
+    # burned cells into WEST-of-break (the contiguous head fire) and EAST-of-break
+    # (reachable ONLY by lofted embers). Measured off the ToA raster (Invariant 1).
+    break_extras: dict[str, float] = {}
+    if fuel_break and str(fuel_break.get("axis", "x")).lower() == "x":
+        nxr = int(burned.shape[1])
+        c_lo = int(float(fuel_break["lo_frac"]) * nxr)
+        c_hi = int(float(fuel_break["hi_frac"]) * nxr)
+        cell_km2 = (float(cellsize_m) * float(cellsize_m)) / 1.0e6
+        east_cells = int(np.isfinite(toa_s[:, c_hi:]).sum())
+        west_cells = int(np.isfinite(toa_s[:, :c_lo]).sum())
+        break_extras = {
+            "east_of_break_cells": float(east_cells),
+            "east_of_break_km2": float(east_cells) * cell_km2,
+            "west_of_break_km2": float(west_cells) * cell_km2,
+        }
 
     max_spread_rate_m_min: float | None = None
     vs_path = rasters.get("spread_rate")
@@ -304,6 +325,7 @@ async def solve_constant_case(
         crown_active_area_km2=crown_active_area_km2,
         crown_any_area_km2=crown_any_area_km2,
         bbox=tuple(run_args.bbox),  # type: ignore[arg-type]
+        extras=break_extras,
     )
 
 

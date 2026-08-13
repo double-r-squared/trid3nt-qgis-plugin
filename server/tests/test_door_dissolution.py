@@ -69,6 +69,7 @@ EXPECTED_TEMPLATES = {
     "elmfire_dead_fuel_moisture_interpolation_frequency_control",  # ELMFIRE transient-weather front (ADR 0161): DT_INTERPOLATE_M1/M10/M100 accuracy-vs-cost sweep
     "elmfire_crown_fire_initiation_threshold_sweep",  # ELMFIRE crown-fire front (ADR 0161): CRITICAL_CANOPY_COVER initiation + Cruz-rate ceiling folded sweep
     "elmfire_initial_attack_containment_probability",  # ADR 0190 row 2: Hirsch 1998 closed-form probability of containment (fire size + head-fire intensity + attack delay)
+    "elmfire_spot_fire_barrier_crossing",  # ELMFIRE spotting front (ADR 0239): ember-spotting barrier-jump (spotting OFF vs ON across a fuel break)
     "landlab_susceptibility",
     "landlab_flow_accumulation",  # ADR 0122 hazard-easy-four #1: Landlab flow-accumulation / drainage-area + channel-network template
     "landlab_green_ampt_overland_flow",  # ADR 0123 hazard-easy-four continuation #1: Green-Ampt infiltration/runoff partition

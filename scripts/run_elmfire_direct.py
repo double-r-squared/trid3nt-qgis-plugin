@@ -89,9 +89,18 @@ async def _run():
             n_steps=2, wind_speed_mph=25.0, duration_hours=0.5, cellsize_m=60.0,
             domain_km=8.0,
         )
+    if WHICH == "spotting":
+        from trid3nt_server.agent.workflows.elmfire.spotting.spotting import (
+            elmfire_spot_fire_barrier_crossing as fn,
+        )
+        return await fn(
+            mean_spotting_distance_m=25.0, nembers=20, pign_pct=100.0,
+            wind_speed_mph=25.0, wind_dir_deg=270.0, duration_hours=4.0,
+            cellsize_m=30.0,
+        )
     raise SystemExit(
         f"unknown template {WHICH!r} "
-        "(ltw|wind|moisture|transient_wind|dead_fuel_interp|crown_init|crown_ceiling)"
+        "(ltw|wind|moisture|transient_wind|dead_fuel_interp|crown_init|crown_ceiling|spotting)"
     )
 
 
