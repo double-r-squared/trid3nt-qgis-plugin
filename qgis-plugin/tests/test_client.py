@@ -137,6 +137,92 @@ class TestPureHelpers(unittest.TestCase):
         self.assertEqual(tc.parse_layer_events({}), [])
         self.assertEqual(tc.parse_layer_events({"loaded_layers": "junk"}), [])
 
+    # -- WS-boundary non-finite style sweep (crash defense in depth) --------- #
+
+    def test_boundary_drops_nonfinite_opacity(self):
+        """A NaN/inf opacity from the wire never reaches ``setOpacity`` --
+        it is dropped to None at the boundary (``max/min`` would pass NaN
+        straight through to the native call)."""
+        nan = float("nan")
+        for bad in (nan, float("inf"), float("-inf")):
+            events = tc.parse_layer_events(
+                {"loaded_layers": [{"layer_id": "L1", "uri": "s3://b/x.tif", "opacity": bad}]}
+            )
+            self.assertEqual(len(events), 1)
+            self.assertIsNone(events[0].opacity)
+        # a finite opacity is preserved untouched
+        events = tc.parse_layer_events(
+            {"loaded_layers": [{"layer_id": "L1", "uri": "s3://b/x.tif", "opacity": 0.5}]}
+        )
+        self.assertEqual(events[0].opacity, 0.5)
+
+    def test_boundary_strips_nonfinite_legend_vmin_vmax(self):
+        """Non-finite legend ``vmin``/``vmax`` are removed so the downstream
+        renderer falls back to its ``sane_range`` default instead of feeding a
+        NaN to the native colour-ramp classification."""
+        events = tc.parse_layer_events(
+            {
+                "loaded_layers": [
+                    {
+                        "layer_id": "L1",
+                        "uri": "s3://b/x.tif",
+                        "legend": {
+                            "kind": "continuous",
+                            "colormap": "viridis",
+                            "vmin": float("nan"),
+                            "vmax": float("inf"),
+                        },
+                    }
+                ]
+            }
+        )
+        legend = events[0].legend
+        self.assertNotIn("vmin", legend)
+        self.assertNotIn("vmax", legend)
+        # non-numeric metadata is left intact -- only the bad scalars are pulled
+        self.assertEqual(legend["colormap"], "viridis")
+
+    def test_boundary_strips_nonfinite_class_anchors(self):
+        """Per-class numeric anchors (``value``/``value_min``/``value_max``) are
+        swept too, so a categorical legend cannot ferry a NaN into the gradient
+        fallback's native ramp items."""
+        events = tc.parse_layer_events(
+            {
+                "loaded_layers": [
+                    {
+                        "layer_id": "L1",
+                        "uri": "s3://b/x.tif",
+                        "legend": {
+                            "kind": "categorical",
+                            "classes": [
+                                {"value": float("nan"), "color": "#ffffcc"},
+                                {"value_min": 1.0, "value_max": float("inf"), "color": "#e31a1c"},
+                                {"value": 5.0, "color": "#800026"},
+                            ],
+                        },
+                    }
+                ]
+            }
+        )
+        classes = events[0].legend["classes"]
+        self.assertNotIn("value", classes[0])
+        self.assertNotIn("value_max", classes[1])
+        self.assertEqual(classes[1]["value_min"], 1.0)  # the finite half stays
+        self.assertEqual(classes[2]["value"], 5.0)      # a clean class untouched
+
+    def test_boundary_does_not_mutate_the_raw_row(self):
+        """Sanitizing builds a copy -- the original row (kept as ``raw``) is
+        never mutated, so nothing else reading ``raw`` sees a changed legend."""
+        row = {
+            "layer_id": "L1",
+            "uri": "s3://b/x.tif",
+            "legend": {"vmin": float("nan"), "vmax": 3.0},
+        }
+        events = tc.parse_layer_events({"loaded_layers": [row]})
+        self.assertNotIn("vmin", events[0].legend)
+        # the caller's own dict still carries the original (NaN) value
+        self.assertIn("vmin", row["legend"])
+
     # -- remote-daemon (tailnet) endpoint derivation (LANE P) ---------------- #
 
     def test_derive_http_base_from_ws_host(self):

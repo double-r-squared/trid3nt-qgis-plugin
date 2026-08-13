@@ -268,6 +268,17 @@ def zoom_to_extent(canvas, rect: Optional["QgsRectangle"], margin: float = 0.1) 
     try:
         if rect is None or rect.isEmpty():
             return False
+        # A NaN/inf bound DEFEATS ``isEmpty()`` (every NaN comparison is False),
+        # so a rectangle built from a layer whose extent is non-finite (a mesh
+        # with an all-nodata scalar, a broken CRS transform) slips through here.
+        # Feeding it to the native ``scale()`` / ``setExtent()`` propagates the
+        # non-finite double into the canvas map-to-pixel transform -- the same
+        # class of native numeric hazard the formatting clamps guard. Refuse it.
+        if not all(
+            formatting.is_finite_number(b)
+            for b in (rect.xMinimum(), rect.yMinimum(), rect.xMaximum(), rect.yMaximum())
+        ):
+            return False
         scaled = QgsRectangle(rect)
         scaled.scale(1.0 + margin)
         canvas.setExtent(scaled)
@@ -540,6 +551,71 @@ def _select_tracer_dataset_group(layer) -> bool:
     return False
 
 
+def _clamp_mesh_scalar_classification(layer) -> Optional[str]:
+    """Pin EVERY scalar dataset group's colour classification to a FINITE range.
+
+    The mesh analogue of the raster ``sane_range`` guard, and the reason it is
+    load-bearing on arm64: an MDAL scalar group whose statistics are degenerate
+    -- an all-nodata timestep, an all-dry SFINCS depth field, a group the
+    temporal scrubber steps onto that carries no wet cell -- reports a NaN/inf
+    (or zero-span) ``minimum()/maximum()``. Left to itself QGIS builds the mesh
+    colour-ramp legend from exactly that range, and the SAME non-finite ->
+    INT_MAX precision saturation that crashes the raster path in
+    ``qt_doubleToAscii`` fires here (the 0.3.8 fix never covered meshes).
+
+    We clamp ALL groups, not merely the initially-active one. The active group
+    is set once at add time, but the user drives the mesh live: switching the
+    active scalar group from the layer styling panel hands that group's
+    classification straight to the native renderer, so a single degenerate
+    NON-active group is a latent mid-session crash (the SFINCS/TELEMAC meshes
+    here carry many groups -- depth, water level, velocity magnitude, tracer --
+    and any one can be all-dry / all-nodata). Pinning a user-set classification
+    on every group additionally stops QGIS re-deriving a per-timestep range
+    while the Temporal Controller scrubs, so an empty timestep inside an
+    otherwise-wet group cannot regenerate a NaN range either. Each group's
+    extremes route through ``formatting.sane_range`` and are written back with
+    ``setClassificationMinimumMaximum`` BEFORE the layer reaches the canvas.
+    Returns an honest substitution note counting the degenerate groups, or
+    ``None`` when every range was already sane / there is nothing to classify.
+    Never raises -- a defensive no-op beats a lost mesh.
+    """
+    try:
+        settings = layer.rendererSettings()
+        group_count = int(layer.datasetGroupCount())
+    except Exception:  # noqa: BLE001 -- classification is best-effort, never fatal
+        return None
+    touched = 0
+    degenerate = 0
+    for group_index in range(group_count):
+        try:
+            scalar = settings.scalarSettings(group_index)
+            if scalar is None:
+                continue
+            meta = layer.datasetGroupMetadata(QgsMeshDatasetIndex(group_index, 0))
+            raw_min, raw_max = meta.minimum(), meta.maximum()
+            vmin, vmax = formatting.sane_range(raw_min, raw_max)
+            scalar.setClassificationMinimumMaximum(vmin, vmax)
+            settings.setScalarSettings(group_index, scalar)
+            touched += 1
+            if not formatting.is_sane_range(raw_min, raw_max):
+                degenerate += 1
+        except Exception:  # noqa: BLE001 -- a bad group is skipped, not fatal
+            continue
+    if touched == 0:
+        return None
+    try:
+        layer.setRendererSettings(settings)
+    except Exception:  # noqa: BLE001 -- never fatal
+        return None
+    if degenerate == 0:
+        return None
+    plural = "s" if degenerate != 1 else ""
+    return (
+        f" -- {degenerate} degenerate scalar range{plural} clamped to a "
+        "finite colour scale (native legend crash-guard)"
+    )
+
+
 # -- QGIS-native raster rendering (the TiTiler -> QGIS swap) ----------------- #
 
 
@@ -602,6 +678,11 @@ def _color_ramp_items(
             try:
                 t, color = float(entry[0]), str(entry[1])
             except (TypeError, ValueError, IndexError):
+                continue
+            # A non-finite offset survives ``min/max`` (NaN comparisons are all
+            # False) and would ride into a native ``ColorRampItem`` value; drop
+            # it rather than let it reach the native shader.
+            if not formatting.is_finite_number(t):
                 continue
             parsed.append((min(1.0, max(0.0, t)), color))
         stops = sorted(parsed) or None
@@ -719,9 +800,9 @@ def _categorical_fallback_stops(classes) -> Tuple[Optional[list], Optional[float
         if not isinstance(color, str) or not color:
             continue
         value = cls.get("value")
-        if not isinstance(value, (int, float)):
+        if not formatting.is_finite_number(value):
             lo, hi = cls.get("value_min"), cls.get("value_max")
-            if isinstance(lo, (int, float)) and isinstance(hi, (int, float)):
+            if formatting.is_finite_number(lo) and formatting.is_finite_number(hi):
                 value = (float(lo) + float(hi)) / 2.0
             else:
                 continue
@@ -1166,6 +1247,9 @@ class LayerMaterializer:
             note += " -- CRS unknown, set manually via layer properties"
         if not _select_peak_depth_dataset_group(layer):
             _select_tracer_dataset_group(layer)
+        clamp_note = _clamp_mesh_scalar_classification(layer)
+        if clamp_note:
+            note += clamp_note
         return self._add_to_group(layer, event, note)
 
     # -- project insertion helper -------------------------------------------- #
@@ -1177,7 +1261,11 @@ class LayerMaterializer:
         animation subgroup at construction time -- see the module docstring
         above the animation-grouping helpers for why members are never
         relocated into a subgroup after the fact."""
-        if event.opacity is not None:
+        if formatting.is_finite_number(event.opacity):
+            # ``max(0, min(1, nan))`` returns NaN (NaN defeats both bounds), so
+            # guard finiteness BEFORE the native ``setOpacity`` rather than rely
+            # on the clamp -- the boundary sweep already drops a non-finite
+            # opacity, this is the belt-and-braces at the native seam.
             try:
                 layer.setOpacity(max(0.0, min(1.0, float(event.opacity))))
             except (AttributeError, TypeError, ValueError):
