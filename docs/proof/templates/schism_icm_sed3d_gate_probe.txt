@@ -1,0 +1,55 @@
+SCHISM ICM/SED3D substrate gate probe (ADR 0242) -- 2026-08-13
+==============================================================
+Question: is the baked pschism binary built with USE_ICM / USE_SED, and can a
+single-module ICM or SED case be driven offline through it?
+
+VERDICT: flags PRESENT (compiled) but ONLY in the full-monty binary, which
+UNCONDITIONALLY initializes every compiled module and demands every module's
+namelist -- proven below. No targeted ICM-only or SED-only binary exists.
+
+--- (1) baked binaries in trid3nt-local/schism:latest ---------------------------
+$ docker run --rm --entrypoint ls trid3nt-local/schism:latest -la /opt/schism/bin/
+  pschism_TVD-VL                                                   (hydro core, NO modules)
+  pschism_WWM_COSINE_ICM_FIB_SED_ANALYSIS_PREC_EVAP_PAHM_HA_MARSH_GEN_AGE_TVD-VL
+                                                                   (FULL-MONTY: every module)
+  pschism_WWM_GOTM_TVD-VL                                          (targeted WWM+GOTM waves)
+
+  The full-monty executable name is SCHISM's own cmake-generated module tag:
+  ..._ICM_..._SED_... proves USE_ICM=ON and USE_SED=ON were compiled in.
+  There is NO pschism_ICM_* or pschism_SED_* targeted binary.
+
+--- (2) full-monty demands icm.nml even on a plain barotropic deck ---------------
+$ # complete hydro-only QuarterAnnulus deck (hgrid.gr3, vgrid.in, param.nml,
+$ #  bctides.in, drag.gr3, station.in) -- NO icm.nml, NO sediment.nml
+$ docker run --rm -v <rundir>:/data --entrypoint mpirun trid3nt-local/schism:latest \
+    --allow-run-as-root -np 4 \
+    /opt/schism/bin/pschism_WWM_COSINE_ICM_FIB_SED_ANALYSIS_PREC_EVAP_PAHM_HA_MARSH_GEN_AGE_TVD-VL 2
+
+  mirror.out:
+    Run begins at 20260813, 143355.555
+     Barotropic model without ST calculation
+  stderr:
+    At line 79 of file /src/schism/src/ICM/icm_init.F90 (unit = 31)
+    Fortran runtime error: Cannot open file './/icm.nml': No such file or directory
+    Error termination.
+  mpirun: Exit code 2 (all ranks aborted during init).
+
+  icm_init.F90:79 is reached (USE_ICM code path EXECUTES = compiled in) and it
+  hard-opens icm.nml with status='old' regardless of param.nml -- the ADR-0115
+  "a full-monty binary unconditionally initializes every compiled tracer module"
+  behavior, empirically confirmed. ICM is read FIRST; sediment.nml, cosine.nml,
+  fib/gen/age/pahm/marsh/ha inputs would each be demanded next in turn. There is
+  no runtime switch to disable a compiled module's init.
+
+--- (3) hydro-core binary runs the SAME deck to completion (control) ------------
+  pschism_TVD-VL on the identical deck -> "Run completed successfully"
+  (the in-image QuarterAnnulus gate, ADR 0115). The deck is valid; only the
+  full-monty binary's every-module namelist demand blocks it.
+
+CONSEQUENCE: driving ANY single ICM or SED row (clean nutrient->DO or
+settling-vs-resuspension V&V) through the full-monty binary requires authoring
+ALL of icm.nml + sediment.nml + cosine.nml + fib/gen/age/pahm/marsh/ha inputs
+SIMULTANEOUSLY, with all 12 tracer modules interacting -- which is neither a
+clean discriminating-pair V&V nor a practical deck. The doctrine-consistent path
+(ADR 0115/0126/0129: targeted variants) is a targeted-flag image rebuild. This
+is an IMAGE-REBUILD question; per the task it is NOT forced. Recipe in ADR 0242.
