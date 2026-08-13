@@ -701,6 +701,14 @@ from ..workflows.telemac.rain_on_grid.rain_on_grid import telemac_rain_on_grid a
 # idealized basin. Physics proven through the baked tomawac binary; the
 # refinement-grade complement to SFINCS/SnapWave coastal screening.
 from ..workflows.telemac.wave_field.wave_field import tomawac_wave_field as _tomawac_wave_field  # noqa: E402,F401 - TOMAWAC wave front (engine=telemac, tier=template)
+# artemis_harbor_agitation TEMPLATE (engine="telemac", tier="template"),
+# workflows/telemac/agitation/: the ARTEMIS phase-resolving elliptic mild-slope
+# (Berkhoff) harbour-agitation engine (ADR 0237). ONE question-class tool, three
+# modes (diffraction / resonance / shoal); real Great Lakes lake-datum bathymetry
+# with a schematic breakwater, or an idealized analytic domain. Physics proven
+# through the baked artemis binary; the phase-resolving complement to the TOMAWAC
+# spectral tier.
+from ..workflows.telemac.agitation.agitation import artemis_harbor_agitation as _artemis_harbor_agitation  # noqa: E402,F401 - ARTEMIS agitation front (engine=telemac, tier=template)
 # generate_mesh (ADR 0200): the standalone mesh builder. Promotes the ADR 0193
 # watershed + ADR 0194 coastal water-edge sandbox meshers behind ONE tool (mode
 # inferred from inputs); emits an MDAL .2dm display layer + a durable mesh artifact

@@ -386,6 +386,7 @@ PRIMARY_CATEGORY: dict[str, str] = {
     "swan_stationary_snapshot_batch": "simulation_modeling",
     "telemac_river_dye": "simulation_modeling",
     "tomawac_wave_field": "simulation_modeling",
+    "artemis_harbor_agitation": "simulation_modeling",
     "telemac_do_sag": "simulation_modeling",
     "telemac_rain_on_grid": "simulation_modeling",
     # Standalone mesh builder (ADR 0200): a model DOMAIN primitive that feeds every
@@ -749,6 +750,8 @@ SECONDARY_CATEGORIES: dict[str, tuple[str, ...]] = {
     # coastal cross-listing directly (its deleted door did before).
     "swan_wave_field": ("coastal",),
     "tomawac_wave_field": ("coastal",),
+    # ARTEMIS harbour-agitation is a coastal / harbour-engineering question class.
+    "artemis_harbor_agitation": ("coastal",),
     # The SWAN sensitivity-sweep + snapshot-batch templates share the coastal
     # cross-listing (both run the SWAN nearshore solver over a coastal AOI).
     "swan_physics_sensitivity_sweep": ("coastal",),

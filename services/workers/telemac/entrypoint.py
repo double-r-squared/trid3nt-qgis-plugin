@@ -90,6 +90,10 @@ DEFAULT_OUTPUTS = [
     "gaia_river.slf",      # sediment class: GAIA result (CUMUL BED EVOL deposition)
     "gaia_river.cas",      # sediment class: the GAIA steering file (evidence)
     "bed_bathymetry.tif",  # ADR 0231: the in-worker-sampled river bed as a 4326 COG
+    "res_agitation.slf",   # agitation class (ADR 0237): raw ARTEMIS result (mesh sibling)
+    "agit_field.slf",      # agitation class: single-frame WAVE HEIGHT field -> Kd COG
+    "art_agit.cas",        # agitation class: the ARTEMIS steering deck (evidence)
+    "bc_agit.cli",         # agitation class: boundary conditions (evidence)
 ]
 
 #: Metrics filename the ``LocalSolverSpec.classify_exit`` reads from the rundir.
@@ -1050,6 +1054,77 @@ def run_tomawac_pipeline(
     return metrics
 
 
+class ArtemisManifestUnknownFieldsError(ValueError):
+    """manifest.json['agitation'] carries a key ``ArtemisConfig`` has no field for."""
+
+
+#: ARTEMIS PARSER VERSION (ADR 0237) -- bump on an ArtemisConfig field
+#: addition/rename/retirement OR an agitation worker-output-contract change,
+#: because it doubles as the artemis worker-image/behavior provenance marker the
+#: image-staleness law (ADR 0148) keys off. -1 is the initial agitation leg (three
+#: question classes diffraction/resonance/shoal + the NOAA Great Lakes real-bathy
+#: breakwater-diffraction path).
+_ARTEMIS_PARSER_VERSION = "artemis-agitation-1"
+
+
+def _artemis_config(data_dir: Path, overrides: dict[str, Any]) -> Any:
+    """Build an ``ArtemisConfig`` from manifest['agitation'], rejecting unknown keys.
+
+    Same strict-unknown-field gate as ``_reach_config`` / ``_tomawac_config`` (ADR
+    0158): an unknown key raises loudly rather than silently no-opping the intended
+    agitation knob (the ADR 0148 stale-image failure mode). ``workdir`` is pinned
+    to the mounted data dir.
+    """
+    from artemis_build import ArtemisConfig  # noqa: WPS433 -- worker payload
+
+    import dataclasses
+
+    valid = {f.name for f in dataclasses.fields(ArtemisConfig)}
+    clean: dict[str, Any] = {}
+    unknown: list[str] = []
+    for key, value in (overrides or {}).items():
+        if key in ("workdir", "mode"):
+            continue  # workdir pinned; 'mode' is a routing key, not a field
+        if key in valid:
+            clean[key] = value
+        else:
+            unknown.append(key)
+    if unknown:
+        raise ArtemisManifestUnknownFieldsError(
+            f"manifest.json['agitation'] carries unknown field(s) {sorted(unknown)} "
+            f"that parser {_ARTEMIS_PARSER_VERSION} does not read -- this SILENTLY "
+            f"no-ops the intended agitation knob(s) rather than applying them. "
+            f"Either the caller has a typo, or the worker image is stale (rebuild "
+            f"it -- ADR 0148). Known ArtemisConfig fields: {sorted(valid)}."
+        )
+    for tup_key in ("bbox", "breakwater"):
+        if tup_key in clean and clean[tup_key] is not None:
+            clean[tup_key] = tuple(float(v) for v in clean[tup_key])
+    clean["workdir"] = str(data_dir)
+    return ArtemisConfig(**clean)
+
+
+def run_artemis_pipeline(
+    data_dir: Path, agitation_overrides: dict[str, Any], run_id: str | None
+) -> dict[str, Any]:
+    """Run the ARTEMIS harbour-agitation pipeline (ADR 0237) in ``data_dir``.
+
+    Authors + solves ONE phase-resolving agitation field (one of the three
+    question classes: diffraction / resonance / shoal) through the baked artemis
+    binary and writes the result SELAFIN + the single-frame agitation field +
+    metrics into the mounted rundir; the agent-side postprocess rasterizes the Kd
+    field to a 4326 COG. ``correct_end`` gates status exactly like the wave path.
+    """
+    import artemis_build as A  # noqa: WPS433 -- agitation worker payload
+
+    acfg = _artemis_config(data_dir, agitation_overrides)
+    LOG.info("artemis agitation: mode=%s bathy=%s T=%.1fs dir=%s H0=%.2f bbox=%s",
+             acfg.wave_mode, acfg.bathy_source, acfg.wave_period_s,
+             acfg.wave_dir_deg, acfg.wave_height_m, acfg.bbox)
+    metrics = A.solve(acfg, str(data_dir), run_id=run_id)
+    return metrics
+
+
 def _build_argv_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(
         prog="trid3nt-telemac-entrypoint",
@@ -1087,6 +1162,7 @@ def main(argv: list[str] | None = None) -> int:
     run_id = args.run_id or None
     mesh_only = False
     wave_overrides: dict[str, Any] | None = None
+    agitation_overrides: dict[str, Any] | None = None
     try:
         if manifest_path.exists():
             manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
@@ -1094,6 +1170,7 @@ def main(argv: list[str] | None = None) -> int:
                 raise ValueError("manifest must be a JSON object")
             reach_overrides = manifest.get("reach") or {}
             wave_overrides = manifest.get("wave")
+            agitation_overrides = manifest.get("agitation")
             run_id = run_id or manifest.get("run_id")
             mesh_only = bool(manifest.get("mesh_only"))
         else:
@@ -1109,6 +1186,36 @@ def main(argv: list[str] | None = None) -> int:
         return 2
 
     import telemac_river_dye_build as B  # noqa: WPS433 -- for the typed banks gate
+
+    # ADR 0237: a manifest['agitation'] block routes to the ARTEMIS phase-resolving
+    # harbour-agitation pipeline (artemis_build) through the baked artemis binary --
+    # entirely separate from the channel-dye / RoG / TOMAWAC legs.
+    if agitation_overrides is not None:
+        import artemis_build as A  # noqa: WPS433 -- agitation worker payload
+        try:
+            metrics = run_artemis_pipeline(data_dir, agitation_overrides, run_id)
+        except (ArtemisManifestUnknownFieldsError, A.ArtemisInputError) as exc:
+            LOG.warning("artemis input gate: %s", exc)
+            _write_metrics(data_dir, {
+                "status": "error",
+                "correct_end": False,
+                "error_code": getattr(exc, "error_code", "ARTEMIS_PARAMS_INVALID"),
+                "error": str(exc),
+            })
+            return 5
+        except Exception as exc:  # noqa: BLE001 -- typed metrics error
+            LOG.exception("artemis pipeline failed")
+            _write_metrics(data_dir, {
+                "status": "error",
+                "correct_end": False,
+                "error": f"{type(exc).__name__}: {exc}",
+            })
+            return 1
+        _write_metrics(data_dir, metrics)
+        ok = bool(metrics.get("correct_end"))
+        LOG.info("trid3nt-artemis worker done status=%s correct_end=%s wall_s=%s",
+                 metrics.get("status"), ok, metrics.get("wall_s"))
+        return 0 if ok else 1
 
     # ADR 0236: a manifest['wave'] block routes to the TOMAWAC spectral-wave
     # pipeline (tomawac_build) through the baked tomawac binary -- entirely

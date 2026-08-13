@@ -1,11 +1,12 @@
 # ADR 0237 - ARTEMIS phase-resolving harbour-agitation engine: local-first physics proof + productionization recipe
 
-Status: Physics PROVEN local-first (in-image, through the baked artemis binary,
-all three ARTEMIS question classes, discriminating pairs per proof norm #9,
-each matched against a published analytic solution). NOT productionized: no
-registered LLM tool, no worker composer, no entrypoint mode, no image rebuild.
-Registration recipe documented below. The six ARTEMIS board rows stay CAND
-(annotated PHYSICS-PROVEN), not COVERED.
+Status: COMPLETE (2026-08-13). Physics PROVEN local-first (in-image, through the
+baked artemis binary, all three ARTEMIS question classes, discriminating pairs
+per proof norm #9, each matched against a published analytic solution) AND
+productionized: registered tool `artemis_harbor_agitation` (registry 249), worker
+composer `artemis_build.py`, entrypoint mode `manifest['agitation']`, image
+rebuilt, LIVE on real Great Lakes bathymetry. See the COMPLETE section at the
+bottom. The three ARTEMIS question-class rows are COVERED.
 Date: 2026-08-13
 
 ## Context
@@ -195,3 +196,66 @@ two engines are both registered.
   answers in-harbour agitation, resonance, and diffraction where phase matters.
   The Jukbyeon-Port finding (ARTEMIS beats TOMAWAC in-lee, TOMAWAC better
   offshore) is the fidelity line both rows sit on.
+
+## COMPLETE (productionization landed, 2026-08-13)
+
+The remaining engine leg from the recipe above is BUILT and LIVE. `registry
+248 -> 249` (+1 coded tool `artemis_harbor_agitation`, hand-written
+`@register_tool` engine="telemac" tier="template"). All six ARTEMIS board rows
+LANDED (the three question classes COVERED; the fidelity-pairing row stays a
+documented nesting-narrative row).
+
+- **Worker leg** `services/workers/telemac/artemis_build.py` (~730 LOC): the
+  sandbox promoted verbatim with all eight gotchas baked, `ArtemisConfig` (23
+  strict fields), a `solve()` dispatching by (wave_mode x bathy_source). Three
+  modes proven THROUGH THE BAKED IMAGE (no bind mount, provenance-checked):
+  diffraction (kd_max 2.29, sheltered 0.295 << exposed 1.189, ratio 0.248),
+  resonance (response 2.65 at T=32 s -> seiche ladder n=3 33.7 s, off-resonance
+  0.77), shoal (Berkhoff focus kd_max 2.44 vs published ~2.2). Each writes
+  `res_agitation.slf` (the raw ARTEMIS mesh sibling) + `agit_field.slf` (the
+  single-frame WAVE HEIGHT field the agent-side postprocess rasterizes).
+- **Real-bathy path**: `noaa_greatlakes` samples the SAME NOAA NGDC DEM_all
+  lake-datum bathymetry the TOMAWAC leg proved (ADR 0236). Two gotchas beyond
+  the sandbox's eight, discovered building the real path: (a) build_mesh calls
+  `depth_fn` on the COMPACTED kept nodes, so the masked bed must be indexed by
+  the kept mask (a full-grid bed length mismatch aborts the SELAFIN write); (b)
+  the demo breakwater must be a semi-infinite barrier ATTACHED to the AOI edge
+  with an interior tip (a floating internal barrier isolates stray boundary
+  nodes and aborts the run), and interior coastline (masked-land) ring nodes
+  must be ABSORBING solid, never incident -- imposing a plane wave at a shore
+  injects spurious energy (the documented ARTEMIS complex-coastline weakness;
+  the Jukbyeon finding). An open-water AOI keeps kd_max physical.
+- **Entrypoint mode**: `manifest['agitation']` routes to `run_artemis_pipeline`
+  with the strict-unknown-field parser `artemis-agitation-1` (ADR 0158) -- an
+  unknown key raises loudly (build-time smoke asserts it).
+- **Host tool + schema**: `artemis_harbor_agitation` (one tool, three modes),
+  `ArtemisAgitationLayerURI` (kd_max / kd_sheltered / kd_exposed /
+  resonant_period_s / response_at_resonance narration scalars, invariant 1) +
+  `TELEMAC_AGITATION_STYLE_PRESET = continuous_wave_agitation`, `postprocess_artemis`
+  (Kd = Hs/H0 COG on a robust p99.5-capped viridis legend). `target_resolution_m`
+  DECLARED (ADR 0225, min 20 m). LOUD labeled defaults surfaced through the
+  input-review gate (prescribed monochromatic wave, schematic breakwater).
+  Retrieval: `artemis_harbor_agitation` top-8 on all corpus prompts (7/7,
+  model-free `retrieve_visible_tools`), TOMAWAC co-surfacing intact (distinct
+  tiers ruled). Solver `artemis_agitation` registered (same worker image).
+- **Image rebuilt** (`cec1f0420c03`) with build-time smoke (import + config map +
+  strict-field gate) and all three modes solved through the baked copy.
+- **Live E2E** through the daemon (`!run` path, case
+  `01KZXAF48WCA59CJB7YB540ZYE`, run `01KZXAFR5TH4BSVD4A1VNB63ZB`): breakwater
+  diffraction on REAL Lake Superior lake-datum bathymetry off Marquette MI
+  (~14830 wet nodes, mean depth ~80 m, dx 40 m). Physics asserts (proof norm
+  #9): agitation nonzero, kd_max 2.76, the sheltered lee behind the breakwater
+  mean Kd 0.051 vs the exposed approach 1.195 (sheltering ratio 0.043); a
+  no-breakwater control on the SAME bathymetry reads the lee at ~1.06 (no
+  shadow) -- the sheltering tracks the structure, not the domain. Showcase green
+  + reconnect-durable (1 persisted layer). Proof pair:
+  `docs/proof/templates/artemis_harbor_agitation_marquette_diffraction_pair.png`
+  (WITH vs WITHOUT breakwater, real solver field, mesh overlaid).
+- **Offline suite**: four alphabetical slices from repo root at the EXACT SIX
+  known failures (4 fetch_resolution [f-o] + 2 river_dye [p-r]; [a-e] + [s-z]
+  clean); the new offline guard `test_artemis_harbor_agitation.py` + the
+  249-registry pin + EXPECTED_TEMPLATES both green.
+- **Follow-ups** (clean): a real harbour-outline path (quay walls as solid RP
+  boundaries) for resonance/shoal over real geography; the TOMAWAC->ARTEMIS
+  nesting handoff (the fidelity-pairing row's CHAINTWC plumbing); a
+  surveyed-breakwater geometry fetcher to retire the schematic-barrier label.

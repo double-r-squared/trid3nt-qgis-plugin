@@ -27,12 +27,20 @@ __all__ = [
     "TELEMAC_WSE_STYLE_PRESET",
     "TELEMAC_DO_STYLE_PRESET",
     "TELEMAC_WAVE_STYLE_PRESET",
+    "TELEMAC_AGITATION_STYLE_PRESET",
     "TelemacDyeLayerURI",
     "TelemacSedimentLayerURI",
     "TelemacWseLayerURI",
     "TelemacDoLayerURI",
     "TelemacWaveLayerURI",
+    "ArtemisAgitationLayerURI",
 ]
+
+#: Style preset for the ARTEMIS agitation-coefficient (Kd = Hs/H0) raster (ADR
+#: 0237). A DISTINCT continuous key so it never collides with the TOMAWAC Hs
+#: preset for the mesh-sibling animation map; the layer carries a data-driven
+#: ``legend`` so the 0..~2.5 Kd range renders regardless of QML preset coverage.
+TELEMAC_AGITATION_STYLE_PRESET: str = "continuous_wave_agitation"
 
 #: Style preset for the TOMAWAC significant-wave-height (Hs) raster (ADR 0236). A
 #: DISTINCT continuous key so ``export_case_to_qgis._MESH_SIBLING_BY_STYLE_PRESET``
@@ -312,4 +320,47 @@ class TelemacWaveLayerURI(LayerURI):
     wind_speed_mps: float | None = Field(default=None, ge=0.0)
     mesh_size_m: float | None = Field(default=None, gt=0.0)
     mesh_node_estimate: int | None = Field(default=None, ge=0)
+    mesh_resolution_label: str | None = Field(default=None)
+
+
+class ArtemisAgitationLayerURI(LayerURI):
+    """A ``LayerURI`` for an ARTEMIS harbour-agitation field (ADR 0237).
+
+    The phase-RESOLVING complement to ``TelemacWaveLayerURI`` (TOMAWAC's
+    phase-averaged spectral tier): ARTEMIS solves the elliptic mild-slope
+    (Berkhoff) equation for steady-state diffraction / refraction / partial
+    reflection inside harbours and around structures. The primary artifact is the
+    dimensionless agitation coefficient Kd = Hs/H0 (how much the incident wave is
+    amplified or sheltered). Extends ``LayerURI`` field-for-field and adds the
+    agitation scalars the agent cites rather than invents (invariant 1, FR-AS-7):
+
+        kd_max: peak agitation coefficient anywhere in the domain (>= 0) -- the
+            strongest amplification (a resonant antinode or a focus caustic).
+        hs_max_m: peak significant wave height, m (>= 0).
+        kd_sheltered / kd_exposed: OPTIONAL mean Kd in the lee of a breakwater vs
+            the exposed approach (>= 0) -- the diffraction proof-norm-#9 pair
+            (sheltered << exposed proves the structure shelters).
+        resonant_period_s: OPTIONAL the harbour resonant (seiche) period, s (>= 0).
+        response_at_resonance / response_off_resonance: OPTIONAL in-harbour mean
+            Hs/H0 amplification AT vs OFF resonance (>= 0) -- the resonance pair.
+        wave_mode: the question class (diffraction / resonance / shoal).
+        wave_period_s: incident wave period the field was forced with (s, >= 0).
+        mesh_size_m: grid node spacing (m, > 0) the solve used.
+        mesh_resolution_label: OPTIONAL human label for the resolution choice.
+
+    ``layer_type`` is ``"raster"`` (the Kd COG); the phase field plays from the
+    ARTEMIS result SELAFIN mesh sibling discovered via
+    ``TELEMAC_AGITATION_STYLE_PRESET``. The raster carries a data-driven ``legend``.
+    """
+
+    kd_max: float = Field(ge=0.0)
+    hs_max_m: float | None = Field(default=None, ge=0.0)
+    kd_sheltered: float | None = Field(default=None, ge=0.0)
+    kd_exposed: float | None = Field(default=None, ge=0.0)
+    resonant_period_s: float | None = Field(default=None, ge=0.0)
+    response_at_resonance: float | None = Field(default=None, ge=0.0)
+    response_off_resonance: float | None = Field(default=None, ge=0.0)
+    wave_mode: str | None = Field(default=None)
+    wave_period_s: float | None = Field(default=None, ge=0.0)
+    mesh_size_m: float | None = Field(default=None, gt=0.0)
     mesh_resolution_label: str | None = Field(default=None)

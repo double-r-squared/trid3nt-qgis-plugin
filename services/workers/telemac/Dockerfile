@@ -154,6 +154,25 @@ E._tomawac_config(__import__('pathlib').Path('/data'), {'wave_mode': 'fetch_grow
     && rm -f /tmp/tomawac_strict_field_check.log \
     && echo "tomawac strict-field gate OK: unknown wave key raised (ADR 0158)"
 
+# ARTEMIS agitation leg build-time smoke (ADR 0237): artemis_build + entrypoint
+# import cleanly, an ArtemisConfig maps from a synthetic manifest['agitation']
+# override (no network / no solve), AND an unknown agitation key raises loudly
+# (ADR 0158 strict field gate -- the ADR 0148 stale-image lesson applied to the
+# agitation parser).
+RUN python -c "import sys; sys.path.insert(0, '/opt/trid3nt/services/workers/telemac'); \
+import artemis_build as A; import entrypoint as E; \
+cfg = E._artemis_config(__import__('pathlib').Path('/data'), {'wave_mode': 'resonance', 'wave_period_s': 32.0}); \
+assert cfg.wave_mode == 'resonance' and cfg.wave_period_s == 32.0 and cfg.workdir == '/data'; \
+print('artemis worker import + ArtemisConfig map OK:', cfg.name)" \
+    && (python -c "import sys; sys.path.insert(0, '/opt/trid3nt/services/workers/telemac'); \
+import entrypoint as E; \
+E._artemis_config(__import__('pathlib').Path('/data'), {'wave_mode': 'diffraction', 'bogus_agit_key': 1})" \
+        > /tmp/artemis_strict_field_check.log 2>&1; echo "exit=$?" >> /tmp/artemis_strict_field_check.log) \
+    && grep -q "^exit=1$" /tmp/artemis_strict_field_check.log \
+    && grep -q "ArtemisManifestUnknownFieldsError" /tmp/artemis_strict_field_check.log \
+    && rm -f /tmp/artemis_strict_field_check.log \
+    && echo "artemis strict-field gate OK: unknown agitation key raised (ADR 0158)"
+
 # One-shot solver: the activation entrypoint (_entrypoint.sh) sources the base
 # env (HOMETEL/SYSTELCFG/PATH -> telemac2d.py), then execs the worker. CMD is
 # the default argv; the launcher appends nothing (telemac_args=[]) so the

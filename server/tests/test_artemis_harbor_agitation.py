@@ -1,0 +1,53 @@
+"""Offline unit tests for the artemis_harbor_agitation engine template (ADR 0237).
+
+No solver / no network: registration shape + arg-guard rejection paths only.
+The physics-through-the-image proof lives in the Dockerfile build-time smoke +
+the live E2E; this is the offline-suite guard that the tool is registered as an
+engine template and rejects ill-posed args before any dispatch.
+"""
+from __future__ import annotations
+
+import asyncio
+
+
+def test_artemis_harbor_agitation_registered_as_engine_template():
+    from trid3nt_server.agent.tools import TOOL_REGISTRY
+    entry = TOOL_REGISTRY.get("artemis_harbor_agitation")
+    assert entry is not None, "artemis_harbor_agitation must be registered"
+    m = entry.metadata
+    assert m.engine == "telemac" and m.tier == "template"
+    assert m.cacheable is False and m.ttl_class == "live-no-cache"
+    specs = {r.param for r in (m.resolution_specs or ())}
+    assert "target_resolution_m" in specs
+
+
+def test_artemis_solver_registered():
+    from trid3nt_server.agent.tools.simulation.solver.solver import (
+        LOCAL_SOLVER_SPEC_REGISTRY,
+        SOLVER_WORKFLOW_REGISTRY,
+    )
+    assert "artemis_agitation" in SOLVER_WORKFLOW_REGISTRY
+    assert "artemis_agitation" in LOCAL_SOLVER_SPEC_REGISTRY
+
+
+def test_tool_rejects_neither_location_nor_bbox():
+    from trid3nt_server.agent.workflows.telemac.agitation.agitation import artemis_harbor_agitation
+    out = asyncio.run(artemis_harbor_agitation())
+    assert isinstance(out, dict) and out["status"] == "error"
+    assert out["error_code"] == "ARTEMIS_PARAMS_INCOMPLETE"
+
+
+def test_tool_rejects_invalid_bbox():
+    from trid3nt_server.agent.workflows.telemac.agitation.agitation import artemis_harbor_agitation
+    out = asyncio.run(artemis_harbor_agitation(bbox=[1.0, 2.0]))  # too few numbers
+    assert isinstance(out, dict) and out["status"] == "error"
+    assert out["error_code"] == "ARTEMIS_PARAMS_INVALID"
+
+
+def test_mode_classification_from_prompt():
+    from trid3nt_server.agent.workflows.telemac.agitation.agitation import _classify_mode
+    assert _classify_mode("harbour resonance and seiche amplification", None) == "resonance"
+    assert _classify_mode("reef shoal focusing offshore", None) == "shoal"
+    assert _classify_mode("does the breakwater shelter the berths", None) == "diffraction"
+    assert _classify_mode("how much agitation", None) == "diffraction"
+    assert _classify_mode("anything", "resonance") == "resonance"  # explicit wins

@@ -489,6 +489,25 @@ SHOWCASE: list[Showcase] = [
              "complement to SFINCS/SnapWave coastal screening; prescribed steady "
              "storm wind (no wave-forcing fetcher), not a calibrated hindcast.",
              600, title_suffix="lake-superior-fetch"),
+    # -- ARTEMIS (phase-resolving harbour agitation; real Great Lakes bathy) --
+    Showcase("artemis_harbor_agitation",
+             {"bbox": [-87.34, 46.57, -87.27, 46.61], "wave_mode": "diffraction",
+              "wave_height_m": 1.5, "wave_period_s": 8.0,
+              "target_resolution_m": 40.0},
+             "ADR 0237 ARTEMIS phase-resolving elliptic mild-slope (Berkhoff) "
+             "harbour agitation: breakwater DIFFRACTION sheltering on REAL Lake "
+             "Superior lake-datum bathymetry off Marquette (NOAA NGDC DEM_all; "
+             "~14830 wet nodes, mean depth ~80 m). A LABELED schematic semi-"
+             "infinite breakwater (thin solid barrier, normal incidence) - no "
+             "surveyed structure. Physics asserts (proof norm #9 discriminating "
+             "pair): agitation is nonzero and the sheltered lee BEHIND the "
+             "breakwater is far quieter than the exposed approach in front - mean "
+             "Kd ~0.05 sheltered vs ~1.20 exposed (sheltering ratio ~0.04), the "
+             "diffracted wave decaying into the geometric shadow. Refinement-grade "
+             "phase-resolving tier, the complement to the TOMAWAC phase-averaged "
+             "spectral field; prescribed monochromatic incident wave, not a "
+             "calibrated hindcast.",
+             600, title_suffix="marquette-breakwater-diffraction"),
     # -- HEC-RAS (bundled Muncie deck; cheap 1D/2D) --------------------------
     Showcase("hecras_flood_2d",
              {"bbox": [-98.115, 29.975, -98.083, 30.000], "target_peak_cfs": 15000,

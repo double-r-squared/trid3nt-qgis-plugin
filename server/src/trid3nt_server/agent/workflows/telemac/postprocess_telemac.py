@@ -38,11 +38,13 @@ from pathlib import Path
 from typing import Any
 
 from trid3nt_contracts.telemac_contracts import (
+    TELEMAC_AGITATION_STYLE_PRESET,
     TELEMAC_BED_EVOLUTION_STYLE_PRESET,
     TELEMAC_DO_STYLE_PRESET,
     TELEMAC_DYE_STYLE_PRESET,
     TELEMAC_WAVE_STYLE_PRESET,
     TELEMAC_WSE_STYLE_PRESET,
+    ArtemisAgitationLayerURI,
     TelemacDoLayerURI,
     TelemacDyeLayerURI,
     TelemacSedimentLayerURI,
@@ -62,8 +64,10 @@ __all__ = [
     "postprocess_telemac_wse",
     "postprocess_telemac_do",
     "postprocess_tomawac",
+    "postprocess_artemis",
     "read_selafin",
     "TELEMAC_WAVE_STYLE_PRESET",
+    "TELEMAC_AGITATION_STYLE_PRESET",
     "TELEMAC_DYE_STYLE_PRESET",
     "TELEMAC_BED_EVOLUTION_STYLE_PRESET",
     "TELEMAC_WSE_STYLE_PRESET",
@@ -1667,3 +1671,208 @@ def postprocess_tomawac(
         run_id, hs_var.strip(), hs_max, wave_mode, uri,
     )
     return [layer], metrics
+
+
+# --------------------------------------------------------------------------- #
+# ARTEMIS harbour agitation (Kd = Hs/H0) - the phase-resolving COG (ADR 0237).
+# --------------------------------------------------------------------------- #
+#: Kd (agitation coefficient) below which a wet node is treated as "flat water"
+#: for the detection floor. Tiny absolute floor separates a real agitation field
+#: from a genuinely empty solve.
+_KD_WET_FLOOR: float = 1e-3
+
+
+def postprocess_artemis(
+    slf_path: str | Path,
+    *,
+    run_id: str,
+    utm_epsg: int | None,
+    incident_hs_m: float,
+    reach_name: str = "harbor_agitation",
+    wave_mode: str = "diffraction",
+    runs_bucket: str | None = None,
+    target_ground_res_m: float = 20.0,
+) -> tuple[list[ArtemisAgitationLayerURI], dict[str, Any]]:
+    """Rasterize a solved ARTEMIS agitation field into ONE Kd (Hs/H0) COG.
+
+    Reads ``slf_path`` (the single-frame ``agit_field.slf`` the worker re-emits),
+    picks the ``WAVE HEIGHT`` variable, normalizes it by the incident wave height
+    ``incident_hs_m`` to the dimensionless agitation coefficient Kd = Hs/H0,
+    reprojects the mesh nodes ``utm_epsg`` -> EPSG:4326 (real-bathy path) or keeps
+    the local metres frame (idealized analytic path, ``utm_epsg`` None), rasterizes
+    Kd onto an adaptive grid clipped to the wet domain, writes + uploads ONE COG
+    (``artemis_agitation.tif``), and returns ``([ArtemisAgitationLayerURI], metrics)``.
+
+    Honesty floor (invariant 1): every agitation scalar is plain arithmetic over
+    the Hs field -- no LLM. The COG carries a phase-resolving-screening label.
+
+    Raises ``PostprocessTelemacError`` on any read / rasterize / COG failure.
+    """
+    try:
+        import numpy as np
+        from pyproj import Transformer  # noqa: F401
+    except Exception as exc:  # noqa: BLE001
+        raise PostprocessTelemacError(
+            "TELEMAC_DEPENDENCY_MISSING",
+            message=f"numpy/pyproj unavailable for ARTEMIS postprocess: {exc}",
+        ) from exc
+
+    slf = Path(slf_path)
+    try:
+        mesh = read_selafin(slf)
+    except Exception as exc:  # noqa: BLE001
+        raise PostprocessTelemacError(
+            "TELEMAC_OUTPUT_READ_FAILED",
+            message=f"could not parse SELAFIN {slf.name}: {exc}",
+            details={"slf": str(slf)},
+        ) from exc
+
+    import numpy as np
+
+    hs_var = None
+    for v in mesh["varnames"]:
+        u = v.strip().upper()
+        if "WAVE HEIGHT" in u or u in ("HS", "HM0"):
+            hs_var = v
+            break
+    if hs_var is None or mesh["data"].get(hs_var) is None or mesh["data"][hs_var].size == 0:
+        raise PostprocessTelemacError(
+            "TELEMAC_OUTPUT_EMPTY",
+            message=f"no WAVE HEIGHT field in {slf.name} (vars={mesh['varnames']})",
+            details={"slf": str(slf), "varnames": mesh["varnames"]},
+        )
+
+    hs = np.asarray(mesh["data"][hs_var])[-1]      # single-frame agitation field
+    h0 = max(float(incident_hs_m), 1e-6)
+    kd = hs / h0
+    x_m = np.asarray(mesh["x"])
+    y_m = np.asarray(mesh["y"])
+    finite = np.isfinite(kd)
+    kd_max = float(np.nanmax(kd[finite])) if finite.any() else 0.0
+    if kd_max < _KD_WET_FLOOR:
+        raise PostprocessTelemacError(
+            "TELEMAC_OUTPUT_EMPTY",
+            message=f"Kd never exceeded {_KD_WET_FLOOR} anywhere in {slf.name} "
+            f"(peak {kd_max:.4g}) -- a dry/zero-agitation solve?",
+            details={"kd_max": kd_max},
+        )
+
+    # real-bathy: reproject UTM -> 4326; idealized analytic: keep the local metres
+    # frame (utm_epsg None) and stamp a placeholder projected CRS the way the WSE
+    # local-frame path does, so the COG still renders on the map.
+    if utm_epsg is not None:
+        from pyproj import Transformer
+        back = Transformer.from_crs(int(utm_epsg), 4326, always_xy=True)
+        lon, lat = back.transform(x_m, y_m)
+        lon = np.asarray(lon)
+        lat = np.asarray(lat)
+        dst_crs = "EPSG:4326"
+        pad = 0.0009
+    else:
+        lon, lat = x_m, y_m         # local metres, rendered in a placeholder frame
+        dst_crs = f"EPSG:{_LOCAL_FRAME_EPSG}"
+        pad = max(2.0, float(target_ground_res_m))
+
+    bbox = (float(lon.min() - pad), float(lat.min() - pad),
+            float(lon.max() + pad), float(lat.max() + pad))
+    if utm_epsg is not None:
+        shape = _grid_shape(bbox, target_ground_res_m)
+        clip_dist = 2.0 * max((bbox[2] - bbox[0]) / shape[1],
+                              (bbox[3] - bbox[1]) / shape[0])
+    else:
+        import math
+        w_m = bbox[2] - bbox[0]
+        h_loc = bbox[3] - bbox[1]
+        res_loc = max(float(target_ground_res_m), _nn_spacing_m(x_m, y_m) * 0.5)
+        ncols = min(max(int(round(w_m / res_loc)), TELEMAC_MIN_PX_PER_SIDE), TELEMAC_MAX_PX_PER_SIDE)
+        nrows = min(max(int(round(h_loc / res_loc)), TELEMAC_MIN_PX_PER_SIDE), TELEMAC_MAX_PX_PER_SIDE)
+        shape = (nrows, ncols)
+        clip_dist = 2.0 * _nn_spacing_m(x_m, y_m)
+
+    try:
+        grid = _rasterize_nodes_to_grid(
+            lon, lat, kd, bbox, shape, clip_dist, wet_floor=_KD_WET_FLOOR)
+    except Exception as exc:  # noqa: BLE001
+        raise PostprocessTelemacError(
+            "TELEMAC_OUTPUT_READ_FAILED",
+            message=f"Kd rasterization failed: {exc}",
+        ) from exc
+
+    from rasterio.transform import from_bounds
+
+    transform = from_bounds(bbox[0], bbox[1], bbox[2], bbox[3], shape[1], shape[0])
+    try:
+        cog = cog_io.write_cog_4326_from_grid(
+            grid, src_crs=dst_crs, src_transform=transform,
+            reproject=False, crs_roundtrip_guard=True,
+            dst_suffix="_artemis_agitation.tif",
+        )
+    except CogIoError as exc:
+        raise _reraise_cogio(exc) from exc
+    try:
+        uri = cog_io.upload_cog(
+            cog, run_id, runs_bucket,
+            dest_filename="artemis_agitation.tif",
+            content_type="image/tiff", gs_backend="fsspec",
+            gs_fallback_to_file=False, runs_bucket_default=RUNS_BUCKET_DEFAULT,
+            log_label="ARTEMIS Kd COG",
+        )
+    except CogIoError as exc:
+        raise _reraise_cogio(exc) from exc
+    finally:
+        cog_io.safe_unlink(cog)
+
+    # legend vmax: a robust cap at the 99.5th percentile of the wet field so a
+    # single spurious hotspot (a coastline reflection / focus caustic) does not
+    # wash the readable 0..~2 agitation range off the ramp. The layer's kd_max
+    # metric still carries the TRUE peak (invariant 1); this only styles the COG.
+    kd_wet = kd[finite & (kd > _KD_WET_FLOOR)]
+    kd_p995 = float(np.percentile(kd_wet, 99.5)) if kd_wet.size else kd_max
+    vmax = round(max(min(kd_max, max(kd_p995, 1.0)), 1.0), 3)
+    legend = LegendKey(
+        kind="continuous", colormap="viridis", vmin=0.0, vmax=vmax, units="Kd",
+        label="Agitation coefficient Kd = Hs / H0",
+    )
+    honesty = (
+        "Phase-resolving harbour-agitation screening (ARTEMIS elliptic mild-slope "
+        "/ Berkhoff): agitation coefficient Kd = Hs/H0 (how much the incident wave "
+        "is amplified or sheltered). A planning-grade field driven by a prescribed "
+        "monochromatic incident wave, not a calibrated hindcast."
+    )
+    layer = ArtemisAgitationLayerURI(
+        layer_id=f"artemis-agitation-{run_id}",
+        name=f"Wave agitation Kd ({reach_name})",
+        layer_type="raster",
+        uri=uri,
+        style_preset=TELEMAC_AGITATION_STYLE_PRESET,
+        role="primary",
+        units="Kd",
+        bbox=bbox,
+        legend=legend,
+        fallback_note=honesty,
+        kd_max=round(kd_max, 3),
+        hs_max_m=round(float(np.nanmax(hs[finite])), 4) if finite.any() else None,
+        wave_mode=wave_mode,
+    )
+    metrics: dict[str, Any] = {
+        "hs_var": hs_var.strip(),
+        "kd_max": round(kd_max, 3),
+        "wave_mode": wave_mode,
+        "npoin": int(mesh["npoin"]),
+        "nelem": int(mesh["nelem"]),
+        "utm_epsg": utm_epsg,
+        "bbox": list(bbox),
+        "crs": dst_crs,
+        "honesty_label": honesty,
+    }
+    logger.info(
+        "postprocess_artemis run_id=%s hs_var=%s kd_max=%.3g mode=%s -> %s",
+        run_id, hs_var.strip(), kd_max, wave_mode, uri,
+    )
+    return [layer], metrics
+
+
+#: Placeholder projected EPSG the idealized analytic agitation COG is stamped with
+#: (its coordinates are in local metres, no real georeferencing) so the raster
+#: still renders on the map -- mirrors the WSE local-frame placeholder pattern.
+_LOCAL_FRAME_EPSG: int = 3857

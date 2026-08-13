@@ -304,3 +304,96 @@ def register_tomawac_solver() -> None:
 
 
 register_tomawac_solver()
+
+
+# --------------------------------------------------------------------------- #
+# ARTEMIS phase-resolving harbour-agitation solver (ADR 0237) -- SAME worker
+# image, a manifest['agitation'] block routing the entrypoint to the artemis
+# pipeline through the baked artemis binary. A DISTINCT solver name so the run
+# listing / showcase separates a harbour-agitation field from a wave / river-dye
+# run and the completion carries agitation-specific keys.
+# --------------------------------------------------------------------------- #
+ARTEMIS_SOLVER_NAME: str = "artemis_agitation"
+
+#: Agitation metrics keys folded into completion.json.
+_AGITATION_COMPLETION_METRIC_KEYS: tuple[str, ...] = (
+    "correct_end", "wave_mode", "bathy_source", "result_slf",
+    "agitation_field_slf", "npoin", "nelem", "utm_epsg", "kd_max", "hs_max_m",
+    "kd_sheltered", "kd_exposed", "sheltering_ratio", "resonant_period_s",
+    "response_at_resonance", "response_off_resonance", "kd_focus_peak",
+    "wave_period_s", "wave_dir_deg", "wave_height_m", "reflection_coef",
+    "dx_m", "depth_mean_m", "depth_max_m", "coarsened", "n_wet_nodes",
+    "wall_s", "error_code",
+)
+
+
+def _classify_agitation_exit(
+    rundir: Path, exit_code: int
+) -> tuple[str, int, str | None, dict[str, Any]]:
+    """Resolve agitation-run status from telemac_metrics.json (dye classify analogue)."""
+    metrics: dict[str, Any] = {}
+    metrics_path = rundir / _METRICS_FILENAME
+    try:
+        if metrics_path.exists():
+            loaded = json.loads(metrics_path.read_text(encoding="utf-8"))
+            if isinstance(loaded, dict):
+                metrics = loaded
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("artemis classify_exit: metrics read failed %s: %s", metrics_path, exc)
+    extra: dict[str, Any] = {
+        k: metrics[k] for k in _AGITATION_COMPLETION_METRIC_KEYS if k in metrics
+    }
+    correct_end = bool(metrics.get("correct_end"))
+    if exit_code != 0:
+        status = "error"
+        error: str | None = (
+            metrics.get("error") or f"artemis_agitation exited with non-zero code {exit_code}")
+    elif metrics and not correct_end:
+        status, exit_code = "error", 2
+        error = metrics.get("error") or "ARTEMIS did not reach CORRECT END OF RUN"
+    else:
+        status, exit_code, error = "ok", 0, None
+    return status, exit_code, error, extra
+
+
+def artemis_local_spec() -> "Any":
+    """Build the ARTEMIS ``LocalSolverSpec`` -- same image + volume mount as the
+    river-dye/tomawac specs (identical build_argv), an agitation classify_exit."""
+    import os
+    from trid3nt_server.agent.tools.simulation.solver.solver import LOCAL_DOCKER_WORKFLOW_NAME, LocalSolverSpec
+
+    image = os.environ.get("TRID3NT_TELEMAC_IMAGE") or DEFAULT_TELEMAC_IMAGE
+
+    def build_argv(run_id: str, rundir: Path, args: list[str]) -> list[str]:
+        return [
+            "docker", "run", "--rm", "--name", run_id,
+            "-v", f"{rundir}:/data", "-w", "/data", image, *args,
+        ]
+
+    return LocalSolverSpec(
+        solver=ARTEMIS_SOLVER_NAME,
+        workflow_name=LOCAL_DOCKER_WORKFLOW_NAME,
+        args_key="telemac_args",
+        build_argv=build_argv,
+        stdout_name="artemis.stdout",
+        stderr_name="artemis.stderr",
+        stdout_uri_field="artemis_stdout_uri",
+        stderr_uri_field="artemis_stderr_uri",
+        exec_kind="docker",
+        classify_exit=_classify_agitation_exit,
+    )
+
+
+def register_artemis_solver() -> None:
+    """Register ``'artemis_agitation'`` in the solver + local-spec registries."""
+    from trid3nt_server.agent.tools.simulation.solver.solver import (
+        LOCAL_DOCKER_WORKFLOW_NAME,
+        SOLVER_WORKFLOW_REGISTRY,
+        register_local_solver_spec,
+    )
+
+    SOLVER_WORKFLOW_REGISTRY.setdefault(ARTEMIS_SOLVER_NAME, LOCAL_DOCKER_WORKFLOW_NAME)
+    register_local_solver_spec(ARTEMIS_SOLVER_NAME, artemis_local_spec)
+
+
+register_artemis_solver()
