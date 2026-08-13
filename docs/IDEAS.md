@@ -417,3 +417,19 @@ proofs. Candidate seam: the tool-payload/precondition gate family
    the growth montage so the point-source origin + early acceleration
    are visible (the triangle question - correct wind-ellipse physics,
    30-min cadence hid the birth).
+
+## 2026-08-13 - Emit-on-fetch SETTLED SEMANTICS (NATE, discussion converged; build awaits go)
+No boolean flag. The spec's RENDER DECLARATION (style_preset /
+display face) IS the visualization intent: presence = the data has
+a visual form and WILL be emitted wherever fetched (both calling
+modes - the tool-wrapper path already honors it; the in-composer
+bare-function path is the gap to close, at the shared fetch seam);
+absence = the data genuinely has no visual form (records/series)
+and nothing tries. "The intent lives with this decision - omitting
+the param means it can't really be visualized." Per-call
+visualize=False = belt-and-suspenders reserved ONLY for probe
+fetches of visualizable data (AOI candidate scans); using it on
+consumed data = re-hiding a layer (sweep-test policeable). The
+purpose= label arg (composer contributes a word, not a pathway)
+stays from the earlier discussion. This is pipeline-library brick
+2 (load() = fetch + declared-emit).
