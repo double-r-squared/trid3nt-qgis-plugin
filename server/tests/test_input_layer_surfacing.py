@@ -732,3 +732,138 @@ def ExecutionHandle_helper(run_id: str) -> ExecutionHandle:
         workflow_location="us-central1",
         submitted_at=datetime.now(timezone.utc),
     )
+
+
+# ===========================================================================
+# (5) ADR 0231 input-layer parity: the TELEMAC family surfaces the fetched
+#     river geometry (river_dye) + the mesh DEM bed + river flowline
+#     (rain_on_grid) as role="context" Case inputs -- never hidden layers.
+#     The cannot-silently-drop gate: a valid input LayerURI MUST reach the
+#     emitter. publish_layer + current_emitter are mocked; no network.
+# ===========================================================================
+import trid3nt_server.agent.workflows.telemac.river_dye.river_dye as river_dye  # noqa: E402
+import trid3nt_server.agent.workflows.telemac.rain_on_grid.rain_on_grid as rog  # noqa: E402
+
+
+@pytest.mark.asyncio
+async def test_river_dye_surfaces_fetched_river_layer_as_context():
+    """river_dye surfaces the FETCHED river-geometry LayerURI (the fetch path)
+    as a role="context" vector carrying a provenance name (re-keyed off the
+    result). Rides the inline s3:// FlatGeobuf -- no publish_layer round-trip."""
+    fetched = LayerURI(
+        layer_id="river-fetch-raw", name="Fetch river geometry",
+        layer_type="vector", uri="s3://test-cache/river_geometry/snake.fgb",
+        style_preset="osm_waterways", role="input",
+    )
+    emitter = _emitter()
+    with patch(
+        "trid3nt_server.emission.pipeline_emitter._read_vector_uri_as_geojson",
+        return_value={"type": "FeatureCollection", "features": []},
+    ):
+        ok = await river_dye._surface_river_geometry_input(
+            emitter, fetched, str(fetched.uri), "Snake River near Twin Falls, Idaho"
+        )
+    assert ok is True
+    assert len(emitter._loaded_layers) == 1
+    row = emitter._loaded_layers[0]
+    assert row.role == "context"
+    assert row.layer_type == "vector"
+    assert row.uri == "s3://test-cache/river_geometry/snake.fgb"
+    assert row.name.startswith("Input: river geometry (")
+    assert row.layer_id.startswith("input-river-geometry-")
+
+
+@pytest.mark.asyncio
+async def test_river_dye_surfaces_prefetched_river_uri_as_context():
+    """The prefetched path (only an s3:// uri string, no LayerURI) still surfaces
+    the flowline as a role="context" vector (osm_waterways preset)."""
+    emitter = _emitter()
+    with patch(
+        "trid3nt_server.emission.pipeline_emitter._read_vector_uri_as_geojson",
+        return_value={"type": "FeatureCollection", "features": []},
+    ):
+        ok = await river_dye._surface_river_geometry_input(
+            emitter, None, "s3://runs/r/reach.fgb", "Eel River"
+        )
+    assert ok is True
+    row = emitter._loaded_layers[0]
+    assert row.role == "context"
+    assert row.style_preset == "osm_waterways"
+    assert row.uri == "s3://runs/r/reach.fgb"
+
+
+@pytest.mark.asyncio
+async def test_river_dye_river_input_none_emitter_and_bad_uri_noop():
+    """No emitter -> no-op False; a non-object prefetch string surfaces nothing;
+    NEVER raises."""
+    assert await river_dye._surface_river_geometry_input(
+        None, None, "s3://r/x.fgb", "X"
+    ) is False
+    emitter = _emitter()
+    assert await river_dye._surface_river_geometry_input(
+        emitter, None, "fetch_river_geometry(...)", "X"
+    ) is False
+    assert emitter._loaded_layers == []
+
+
+class _FakeWatershedMesh:
+    """Minimal WatershedMesh stand-in carrying only the ADR 0231 input uris."""
+
+    def __init__(self, dem_uri=None, river_uri=None):
+        self.dem_input_s3_uri = dem_uri
+        self.river_input_s3_uri = river_uri
+
+
+@pytest.mark.asyncio
+async def test_rain_on_grid_surfaces_dem_and_river_as_context():
+    """rain_on_grid surfaces the mesh's fetched DEM bed (publish_raster_input_cog,
+    publish_layer mocked) + river flowline (publish_input_layer) as role="context"
+    Case inputs -- both reach the emitter (cannot silently drop)."""
+    mesh = _FakeWatershedMesh(
+        dem_uri="s3://test-cache/dem/otto.tif",
+        river_uri="s3://test-cache/river_geometry/otto.fgb",
+    )
+    emitter = _emitter()
+    token = _CURRENT_EMITTER.set(emitter)
+
+    def _mock_publish_layer(layer_uri, layer_id, style_preset, name=None, **kw):  # noqa: ANN001
+        return f"s3://test-runs/RID/{layer_id}.tif"
+
+    try:
+        with (
+            patch(_PUBLISH_LAYER_TARGET, side_effect=_mock_publish_layer),
+            patch(
+                "trid3nt_server.emission.pipeline_emitter._read_vector_uri_as_geojson",
+                return_value={"type": "FeatureCollection", "features": []},
+            ),
+        ):
+            await rog._surface_watershed_mesh_inputs(mesh, "Otto, North Carolina")
+    finally:
+        _CURRENT_EMITTER.reset(token)
+
+    rows = {l.layer_id.rsplit("-", 1)[0]: l for l in emitter._loaded_layers}
+    assert "input-dem" in rows, rows
+    assert "input-river-geometry" in rows, rows
+    dem_row = rows["input-dem"]
+    assert dem_row.role == "context"
+    assert dem_row.layer_type == "raster"
+    assert dem_row.style_preset == "continuous_dem"
+    assert dem_row.name.startswith("Input: DEM bed (")
+    river_row = rows["input-river-geometry"]
+    assert river_row.role == "context"
+    assert river_row.layer_type == "vector"
+    assert river_row.uri == "s3://test-cache/river_geometry/otto.fgb"
+    assert river_row.name.startswith("Input: river geometry (")
+
+
+@pytest.mark.asyncio
+async def test_rain_on_grid_supplied_mesh_no_uris_is_noop():
+    """A user-supplied mesh carries neither input uri -> nothing surfaced, no
+    raise (best-effort)."""
+    emitter = _emitter()
+    token = _CURRENT_EMITTER.set(emitter)
+    try:
+        await rog._surface_watershed_mesh_inputs(_FakeWatershedMesh(), "X")
+    finally:
+        _CURRENT_EMITTER.reset(token)
+    assert emitter._loaded_layers == []

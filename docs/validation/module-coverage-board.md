@@ -56,6 +56,21 @@ Best-effort (a publish failure never touches the solve) + an offline emitter tes
 so the input can never silently drop (0217 track-overlay lesson). Not new coverage
 rows; a cross-cutting input-transparency parity fix.
 
+INPUT-LAYER PARITY - FULL SWEEP (ADR 0231, 2026-08-12): NATE's no-hidden-data-
+layers ruling ("if there is a river bed bathymetry I want it visualized"). Audited
+EVERY template family for fetched inputs that do NOT surface (full inventory table
+in `docs/decisions/0231-input-layer-parity.md`). TELEMAC-first landed + tested:
+`telemac_river_dye` / `telemac_do_sag` surface the fetched river flowline
+(role="context" vector), and `telemac_rain_on_grid` surfaces the fetched DEM bed
+(role="context" raster) + river flowline via the `acquire_watershed_mesh` uris now
+threaded through `WatershedMesh`. Same 0227 norms (provenance in the name, ride the
+existing object, best-effort, cannot-silently-drop offline test). Every remaining
+HIDDEN row in the inventory is agent-side surfaceable with the same two calls and
+queued for its next seeding (the 0227 precedent); the one exception is the
+`river_dye`/`do_sag` in-worker DEM bed, which needs a worker-envelope change (worker
+uploads its bed COG + returns the uri) + telemac image rebuild, tracked separately.
+Not new coverage rows; the input-transparency parity sweep.
+
 
 ## MESH (cross-engine domain builder)
 

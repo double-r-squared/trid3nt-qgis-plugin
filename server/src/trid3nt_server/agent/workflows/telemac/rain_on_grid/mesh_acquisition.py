@@ -118,6 +118,12 @@ class WatershedMesh:
     node_cn2: Any = None       # np.ndarray (N,) AMC-II curve numbers
     node_manning: Any = None   # np.ndarray (N,) Manning n
     node_slope: Any = None     # np.ndarray (N,) terrain slope m/m
+    # ADR 0231 input-layer parity: the ``s3://`` COG / FlatGeobuf the mesh BED +
+    # river-refined sizing derive from, threaded up so the composer can surface
+    # each as a role="context" Case input (they are otherwise hidden layers). Both
+    # ``None`` on a user-supplied mesh (nothing was fetched) or a non-s3 uri.
+    dem_input_s3_uri: str | None = None
+    river_input_s3_uri: str | None = None
     meta: dict[str, Any] = field(default_factory=dict)
 
 
@@ -386,10 +392,14 @@ def acquire_watershed_mesh(
         {"type": "Feature", "properties": {}, "geometry": mapping(catch)}]}))
 
     # 2. river network inside the catchment -> exterior + sizing points.
+    river_input_s3_uri: str | None = None
     try:
         rv = TOOL_REGISTRY["fetch_river_geometry"].fn(
             bbox=tuple(bbox), source="nhdplus_hr")
         from trid3nt_server.agent.tools.cache import read_object_bytes_s3
+        # ADR 0231: keep the fetched flowline object to surface as a Case input.
+        if str(rv.uri).startswith("s3://"):
+            river_input_s3_uri = str(rv.uri)
         fl_path = rundir / "flowlines.fgb"
         fl_path.write_bytes(
             read_object_bytes_s3(rv.uri) if str(rv.uri).startswith("s3://")
@@ -411,10 +421,14 @@ def acquire_watershed_mesh(
     cells = np.asarray(cells, dtype=np.int64)
 
     # 4. DEM bed sampled at the nodes (positive-up elevation), bare-earth 10 m.
+    #    ADR 0231: capture the fetched DEM's s3 uri (uri_sink) to surface as a
+    #    Case input; a caller-supplied local dem_uri leaves the sink empty.
+    dem_uri_sink: list[str] = []
     dem_path = _resolve_bare_earth_dem(
         rundir, bbox, dem_uri, resolution_m=10,
-        filename="dem_bed.tif", notes=dem_notes)
+        filename="dem_bed.tif", notes=dem_notes, uri_sink=dem_uri_sink)
     bed = _sample_raster_at_nodes(dem_path, points_ll)
+    dem_input_s3_uri = dem_uri_sink[0] if dem_uri_sink else None
 
     # 5. project to UTM metres + write the solve SELAFIN.
     points_m, epsg = reproject_nodes_to_utm(points_ll)
@@ -436,6 +450,8 @@ def acquire_watershed_mesh(
         pour_point_lonlat=tuple(pour_point),
         outlet_lonlat=outlet,
         provenance="delineated",
+        dem_input_s3_uri=dem_input_s3_uri,
+        river_input_s3_uri=river_input_s3_uri,
         meta={"mesh_stats": stats, "points_lonlat": points_ll,
               "dem_notes": dem_notes},
     )
@@ -618,6 +634,7 @@ def _resolve_bare_earth_dem(
     resolution_m: int,
     filename: str,
     notes: list[str] | None = None,
+    uri_sink: list[str] | None = None,
 ) -> Path:
     """Local BARE-EARTH DEM path for the mesh BED (canopy-free node elevations).
 
@@ -667,6 +684,11 @@ def _resolve_bare_earth_dem(
         notes.append(fallback_note)
         layer = TOOL_REGISTRY["fetch_copernicus_dem"].fn(bbox=tuple(bbox))
     uri = layer.uri if hasattr(layer, "uri") else layer["uri"]
+    # ADR 0231: expose the fetched DEM's object uri (s3 only) so the composer can
+    # surface it as a role="context" Case input; the Copernicus fallback uri is
+    # captured too (it IS the bed that fed the run, honestly labeled by name).
+    if uri_sink is not None and str(uri).startswith("s3://"):
+        uri_sink.append(str(uri))
     dst = rundir / filename
     dst.write_bytes(
         read_object_bytes_s3(uri) if str(uri).startswith("s3://")
