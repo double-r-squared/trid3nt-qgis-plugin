@@ -48,7 +48,7 @@ from trid3nt_contracts.tool_registry import AtomicToolMetadata, ResolutionSpec
 from trid3nt_server.agent.tools import register_tool
 from trid3nt_server.agent.tools.resolution_declared import (
     ResolutionOutOfRangeError,
-    enforce_resolution,
+    resolve_resolution,
 )
 from trid3nt_server.agent.gates.input_review import gate_input_review
 from trid3nt_server.agent.workflows.hecras._template_card import TemplateCard
@@ -184,32 +184,6 @@ def _autoscale_resolution(bbox: list[float], resolution_m: float) -> float:
     return res
 
 
-def _resolution_with_basis(
-    bbox: list[float], requested_res_m: float
-) -> tuple[float, str, str | None]:
-    """Resolve the effective 2D resolution AND a labeled basis/note (ADR 0225).
-
-    ENFORCES the DECLARED ``_RES_SPEC`` range: an out-of-[20, 200] m request is QUOTED
-    BACK (``ResolutionOutOfRangeError``) so the caller re-raises a typed error -- never
-    the silent clamp ADR 0223 labeled. An in-range request may still autoscale-COARSEN
-    for the soft cell cap (a labeled ``derived`` note, a legitimate within-range degrade
-    for tractability, not a snap to an undeclared value). Returns
-    ``(resolution_m, basis, note)``: ``note`` is ``None`` (basis ``user``) when the
-    autoscale did not bind; ``derived`` when it coarsened within range.
-    """
-    requested = float(requested_res_m)
-    enforce_resolution(_RES_SPEC, requested)
-    resolution_m = _autoscale_resolution(bbox, requested)
-    if resolution_m != requested:
-        note = (
-            f"autoscaled from {requested:.0f} m to {resolution_m:.0f} m to fit the soft "
-            f"cell cap for this AOI, within the declared {_MIN_RES_M:.0f}-{_MAX_RES_M:.0f} m "
-            "range; 2D cell size (granularity-gated)"
-        )
-        return resolution_m, "derived", note
-    return resolution_m, "user", None
-
-
 @register_tool(
     _METADATA,
     read_only_hint=False,
@@ -335,7 +309,12 @@ async def hecras_flood_2d(
     # (the range + native hint), never silently clamped. An in-range value may still
     # autoscale-coarsen within the range (labeled derived note).
     try:
-        resolution_m, _res_basis, _res_note = _resolution_with_basis(aoi, resolution_m)
+        _resolved = resolve_resolution(
+            resolution_m, spec=_RES_SPEC, autoscale=lambda r: _autoscale_resolution(aoi, r)
+        )
+        resolution_m, _res_basis, _res_note = (
+            _resolved.value, _resolved.basis, _resolved.note
+        )
     except ResolutionOutOfRangeError as exc:
         return {
             "status": "error",

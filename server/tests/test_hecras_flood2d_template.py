@@ -66,24 +66,37 @@ def test_resolution_out_of_range_is_quoted_back_not_clamped():
     silently clamped to an undeclared value. An in-range value stays user-basis; an
     in-range value the AOI autoscale coarsens gets a labeled derived note (within the
     declared range)."""
-    from trid3nt_server.agent.workflows.hecras.flood_2d.flood_2d import _resolution_with_basis
-    from trid3nt_server.agent.tools.resolution_declared import ResolutionOutOfRangeError
+    from trid3nt_server.agent.workflows.hecras.flood_2d.flood_2d import (
+        _autoscale_resolution,
+        _RES_SPEC,
+    )
+    from trid3nt_server.agent.tools.resolution_declared import (
+        ResolutionOutOfRangeError,
+        resolve_resolution,
+    )
 
     tiny = [-87.95, 38.11, -87.90, 38.15]
+
+    def _resolve(res_m):
+        # ADR 0232: flood_2d resolves through the shared resolve_resolution seam.
+        return resolve_resolution(
+            res_m, spec=_RES_SPEC, autoscale=lambda x: _autoscale_resolution(tiny, x)
+        )
+
     # (a) a 5 m request is OUT OF RANGE -> quoted back (typed error), NOT clamped.
     with pytest.raises(ResolutionOutOfRangeError) as ei:
-        _resolution_with_basis(tiny, 5.0)
+        _resolve(5.0)
     assert "20-200 m" in str(ei.value) and "5 m requested" in str(ei.value)
 
     # (b) an in-range request on a small AOI is user-basis with no note.
-    res2, basis2, note2 = _resolution_with_basis(tiny, 60.0)
-    assert res2 == 60.0
-    assert basis2 == "user"
-    assert note2 is None
+    r2 = _resolve(60.0)
+    assert r2.value == 60.0
+    assert r2.basis == "user"
+    assert r2.note is None
 
     # (c) a coarser-than-200 m request is ALSO out of range -> quoted back, not clamped.
     with pytest.raises(ResolutionOutOfRangeError):
-        _resolution_with_basis(tiny, 500.0)
+        _resolve(500.0)
 
 
 def test_equation_set_map_covers_choices():

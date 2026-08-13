@@ -18,13 +18,18 @@ snap -- only the out-of-DECLARED-range case is the hard error).
 """
 from __future__ import annotations
 
+from dataclasses import dataclass
+from typing import Callable
+
 from trid3nt_contracts.errors import ToolInputError
 from trid3nt_contracts.tool_registry import ResolutionSpec
 
 __all__ = [
     "ResolutionOutOfRangeError",
+    "ResolvedResolution",
     "enforce_resolution",
     "resolution_review_note",
+    "resolve_resolution",
 ]
 
 
@@ -102,3 +107,61 @@ def resolution_review_note(
         f"autoscaled from {float(requested):g} to {float(effective):g} {spec.unit} "
         f"for this AOI within the declared {spec.range_phrase()}"
     )
+
+
+@dataclass(frozen=True)
+class ResolvedResolution:
+    """The outcome of :func:`resolve_resolution`: value + a labeled provenance.
+
+    ``value`` is the effective resolution (``None`` == a native/source-decided default
+    the tool forwards as-is). ``basis`` is the UNIFORM two-value vocabulary the resolve
+    sites share: ``"user"`` (the caller's ask, forwarded unchanged) or ``"derived"``
+    (the tool resolved it -- an autoscale-coarsening within range, or a native default).
+    ``note`` is the labeled one-line derivation for the ``resolution_m`` review entry
+    (``None`` for the ``"user"`` unchanged case); the note -- not the basis -- carries
+    the finer autoscaled-vs-native distinction.
+    """
+
+    value: float | None
+    basis: str
+    note: str | None
+
+
+def resolve_resolution(
+    requested: float | None,
+    *,
+    spec: ResolutionSpec | None = None,
+    autoscale: Callable[[float], float] | None = None,
+    default: float | None = None,
+    measured: str | None = None,
+) -> ResolvedResolution:
+    """Resolve a resolution ask to ``(value, basis, note)`` -- the ONE resolve seam.
+
+    The consolidation of the per-template ``_resolution_with_basis`` pattern (ADR 0232):
+    a resolution knob is ENFORCED against its declared range, optionally autoscale-
+    coarsened within that range for tractability, and labeled with a uniform basis.
+
+    Steps:
+      1. ENFORCE: with a ``spec``, an out-of-declared-range ``requested`` is QUOTED BACK
+         (:class:`ResolutionOutOfRangeError`, the ADR 0225 typed card; ``measured`` folds
+         a cost line in). ``requested=None`` is in-range by construction.
+      2. SEED: the candidate is the caller's ``requested``, else the passed ``default``
+         (the tool's native/default resolution; ``None`` stays ``None`` -- forward native).
+      3. AUTOSCALE: when an ``autoscale`` callable is given it is applied to the seed and
+         may coarsen it WITHIN the declared range (the granularity-gate degrade). It takes
+         the candidate value (the user's ask is coarsened too, not only the native default)
+         -- the reference flood_2d behaviour.
+      4. LABEL: ``basis="user"`` iff the caller asked AND nothing moved the value; else
+         ``basis="derived"`` with a labeled :func:`resolution_review_note` (autoscaled-from
+         or native-resolved). Never a silent snap.
+    """
+    if spec is not None:
+        enforce_resolution(spec, requested, measured=measured)
+    seed = requested if requested is not None else default
+    effective = autoscale(seed) if (autoscale is not None and seed is not None) else seed
+    if requested is not None and (
+        effective is None or abs(float(effective) - float(requested)) <= 1e-9
+    ):
+        return ResolvedResolution(effective, "user", None)
+    note = resolution_review_note(spec, requested, effective) if spec is not None else None
+    return ResolvedResolution(effective, "derived", note)

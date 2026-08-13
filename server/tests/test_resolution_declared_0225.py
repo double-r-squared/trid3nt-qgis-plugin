@@ -17,6 +17,8 @@ from __future__ import annotations
 
 import asyncio
 import inspect
+import pathlib
+import re
 
 import pytest
 
@@ -26,6 +28,7 @@ from trid3nt_server.agent.tools.resolution_declared import (
     ResolutionOutOfRangeError,
     enforce_resolution,
     resolution_review_note,
+    resolve_resolution,
 )
 
 
@@ -163,19 +166,27 @@ def test_hecras_out_of_range_resolution_quotes_back():
     assert "pick a resolution_m in range" in msg
 
 
-def test_hecras_resolution_with_basis_in_range_unchanged():
+def test_hecras_resolution_resolve_in_range_unchanged():
+    # ADR 0232: flood_2d resolves through the shared resolve_resolution seam. A small
+    # AOI + in-range 60 m -> basis user, no autoscale note.
     from trid3nt_server.agent.workflows.hecras.flood_2d import flood_2d
-    # a small AOI + in-range 60 m -> basis user, no autoscale note.
-    res, basis, note = flood_2d._resolution_with_basis([-86.2, 40.20, -86.18, 40.22], 60.0)
-    assert res == 60.0 and basis == "user" and note is None
+    bbox = [-86.2, 40.20, -86.18, 40.22]
+    r = resolve_resolution(
+        60.0, spec=flood_2d._RES_SPEC,
+        autoscale=lambda x: flood_2d._autoscale_resolution(bbox, x),
+    )
+    assert r.value == 60.0 and r.basis == "user" and r.note is None
 
 
-def test_hecras_resolution_with_basis_out_of_range_raises():
+def test_hecras_resolution_resolve_out_of_range_raises():
     from trid3nt_server.agent.workflows.hecras.flood_2d import flood_2d
-    with pytest.raises(ResolutionOutOfRangeError):
-        flood_2d._resolution_with_basis([-86.2, 40.15, -86.1, 40.25], 5.0)
-    with pytest.raises(ResolutionOutOfRangeError):
-        flood_2d._resolution_with_basis([-86.2, 40.15, -86.1, 40.25], 500.0)
+    bbox = [-86.2, 40.15, -86.1, 40.25]
+    for bad in (5.0, 500.0):
+        with pytest.raises(ResolutionOutOfRangeError):
+            resolve_resolution(
+                bad, spec=flood_2d._RES_SPEC,
+                autoscale=lambda x: flood_2d._autoscale_resolution(bbox, x),
+            )
 
 
 def test_surge_out_of_range_resolution_quotes_back():
@@ -312,3 +323,33 @@ def test_declared_specs_are_wellformed():
                 assert spec.param in sig_params, (
                     f"{name} declares a ResolutionSpec for {spec.param!r} which is not a param"
                 )
+
+
+# --------------------------------------------------------------------------- #
+# 5. THE RESOLVE-SEAM SWEEP (ADR 0232).
+# --------------------------------------------------------------------------- #
+
+#: A private per-template resolution-resolve helper (the ``_resolution_with_basis``
+#: class flood_2d shipped) is BANNED: the one seam is
+#: :func:`resolve_resolution`. This name-pattern catches any workflow file that
+#: re-grows its own, so the consolidation cannot silently un-happen.
+_BANNED_RESOLVE_HELPER = re.compile(r"^\s*def\s+\w*resolution_with_basis\w*\s*\(", re.M)
+
+
+def test_no_workflow_defines_its_own_resolution_resolve_helper():
+    """SELF-ENFORCING (ADR 0232): no workflow file may define a private
+    ``*resolution_with_basis*`` function -- the resolve+basis+note pattern lives ONCE in
+    resolve_resolution. A template that re-hand-rolls it FAILS here."""
+    workflows_dir = (
+        pathlib.Path(__file__).resolve().parents[1]
+        / "src" / "trid3nt_server" / "agent" / "workflows"
+    )
+    offenders = [
+        str(py.relative_to(workflows_dir))
+        for py in workflows_dir.rglob("*.py")
+        if _BANNED_RESOLVE_HELPER.search(py.read_text(encoding="utf-8"))
+    ]
+    assert not offenders, (
+        "workflow files define their own resolution-resolve helper instead of calling "
+        f"resolve_resolution (ADR 0232 -- consolidate the resolve seam): {offenders}"
+    )
