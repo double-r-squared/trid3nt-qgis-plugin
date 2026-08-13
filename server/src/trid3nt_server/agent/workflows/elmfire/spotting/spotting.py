@@ -12,11 +12,15 @@ TWO modes:
     DEM (slope/aspect drive spread) are FETCHED over the caller's bbox - the river
     is the LANDFIRE water class (FBFM40 code 98), which renders NON-BURNABLE, so
     the contiguous surface front stops at the near bank. The river width is
-    measured off the fetched grid; the head fire (upwind of the near bank) and the
-    far-side burned area (downwind of the far bank) are split off the time-of-
-    arrival raster within the river's cross-wind shadow. The honest physics is
-    reported - the river may HOLD even with spotting at a realistic width, or the
-    embers may cross; there is NO tuning to force a jump.
+    measured off the fetched grid; the head fire (near/ignition side) vs far-side
+    burned area is split by CONNECTIVITY, not row-splitting - the fuel grid's land
+    cells are labelled into 8-connected components with the river as barrier
+    (:func:`check_river_separates_domain`, :func:`measure_river_split`), which is
+    exact for any river shape (a gooseneck that threads the fire between meanders
+    is rejected rather than mis-split). The honest physics is reported - the river
+    may HOLD even with spotting at a realistic width, or the embers may cross,
+    or the reach may LEAK (the contiguous OFF front already crosses, a confounded
+    reach); there is NO tuning to force a jump.
 
   - ``mode="verification"`` (the physics V&V tier): an
     ALL-CONSTANT flat grass deck carrying a single SYNTHETIC non-burnable strip
@@ -85,6 +89,9 @@ __all__ = [
     "elmfire_spot_fire_barrier_crossing",
     "model_elmfire_spot_fire_barrier_crossing",
     "model_elmfire_river_barrier_crossing",
+    "check_river_separates_domain",
+    "measure_river_split",
+    "river_barrier_captions",
 ]
 
 #: LANDFIRE FBFM40 code for open WATER - the non-burnable river barrier in the
@@ -129,12 +136,19 @@ _JUMP_FLOOR_KM2: float = 1.0e-3
 
 #: Real-mode river-band tolerance: rows where the warped water class briefly breaks
 #: (a warp-thinned bend) are bridged up to this many rows so one meandering river
-#: reads as ONE cross-wind band rather than several.
+#: reads as ONE cross-wind band rather than several (river WIDTH measurement only -
+#: the head/far-side SPLIT is connectivity-based, see ``measure_river_split``).
 _RIVER_BAND_ROW_GAP: int = 2
 
 #: Minimum river run width (cells) counted as the river crossing in a row - skips a
-#: lone warped water speck between the ignition and the true channel.
+#: lone warped water speck between the ignition and the true channel (width
+#: measurement only).
 _RIVER_MIN_RUN_CELLS: int = 2
+
+#: A connected land component below this fraction of the domain's cell count is
+#: noise (a river island, a warp speck) rather than a true "far side" - dropped
+#: when counting SIGNIFICANT land components for the two-component reach gate.
+_MIN_COMPONENT_DOMAIN_FRAC: float = 0.01
 
 
 def _spotting_namelist(
@@ -407,6 +421,53 @@ def _contiguous_band(rows: list[int], seed_row: int, max_gap: int) -> list[int]:
     return [r for r in range(lo, hi + 1)]
 
 
+def _label_land_components(fbfm_arr: Any, water_code: int) -> tuple[Any, int]:
+    """8-connectivity connected components of the non-water (land) cells of a fuel
+    grid - the river (``water_code``) is the sole barrier. Exact for any river
+    shape (straight, angled, meandering): a gooseneck that lets fire thread between
+    meanders leaves the land in ONE component (the river never fully separates);
+    a land bridge (a non-water gap in the water band) merges the two banks into ONE
+    component too. Pure."""
+    import numpy as np
+    from scipy import ndimage
+
+    land = np.asarray(fbfm_arr) != int(water_code)
+    structure = np.ones((3, 3), dtype=int)  # 8-connectivity (diagonal touches join)
+    labels, num = ndimage.label(land, structure=structure)
+    return labels, int(num)
+
+
+def check_river_separates_domain(
+    fbfm_arr: Any,
+    *,
+    water_code: int = _FBFM_WATER_CODE,
+    min_component_frac: float = _MIN_COMPONENT_DOMAIN_FRAC,
+) -> dict[str, Any]:
+    """Does the river (``water_code``) split the fuel grid's land cells into exactly
+    TWO significant connected components (8-connectivity)?
+
+    The exact, shape-independent reach-separation test: a straight or angled river
+    that fully crosses the domain gives 2 land components (near bank / far bank); a
+    gooseneck that threads the fire between meanders, or a land-bridge gap in the
+    water band, merges both banks into ONE component - structurally detectable
+    without running a solve. Components smaller than ``min_component_frac`` of the
+    grid are noise (a river island, a warp speck) and dropped before counting. Pure."""
+    import numpy as np
+
+    labels, num = _label_land_components(fbfm_arr, water_code)
+    total = int(np.asarray(fbfm_arr).size)
+    sizes = [int((labels == i).sum()) for i in range(1, num + 1)]
+    significant = sorted(
+        (s for s in sizes if total and (s / total) >= min_component_frac), reverse=True
+    )
+    return {
+        "num_components": num,
+        "component_sizes_cells": sizes,
+        "significant_component_sizes_cells": significant,
+        "two_component": len(significant) == 2,
+    }
+
+
 def measure_river_split(
     toa_s: Any,
     fbfm_arr: Any,
@@ -416,18 +477,29 @@ def measure_river_split(
     cellsize_m: float,
     water_code: int = _FBFM_WATER_CODE,
 ) -> dict[str, float]:
-    """Split burned cells into head (upwind) vs far-side (downwind of the river).
+    """Split burned cells into head (near/ignition side) vs far-side (the other
+    side of the river), by CONNECTIVITY - not row-splitting.
 
-    The river is the WATER barrier (``water_code``) crossing the E-W wind axis.
-    Downwind is +col (wind FROM the west) or -col (from the east). For each raster
-    row in the river's contiguous cross-wind shadow around the ignition, the river
-    crossing is the water run (>= ``_RIVER_MIN_RUN_CELLS`` wide) nearest DOWNWIND of
-    the ignition column; head = burned cells upwind of its near bank, far-side =
-    burned cells downwind of its far bank. Every scalar is measured off the ToA
-    raster + the fetched fbfm grid (Invariant 1). Pure.
+    The river (``water_code``) is the barrier. The fuel grid's land cells are
+    labelled into 8-connected components (:func:`_label_land_components`); the
+    component containing the ignition is the near side, and far-side burn is burned
+    cells in any OTHER component. This is exact for any river shape - a gooseneck
+    that threads the fire between meanders leaves ONE land component (rejected, see
+    below) rather than mis-splitting rows, and OFF-run (no spotting) burn in a
+    disconnected component is structurally impossible unless the river gap is
+    bridged, so ``off_side_leaks``/the "leaked" verdict is precise.
 
-    Raises ``ValueError`` when the wind is not E-W-dominant, no river separates the
-    ignition from downwind, or the ignition is not upwind of the river."""
+    The river WIDTH is still measured the original way (row-wise water runs nearest
+    downwind of the ignition, bridging small warp-thinned gaps) since that is
+    unaffected by the split method.
+
+    Every scalar is measured off the ToA raster + the fetched fbfm grid
+    (Invariant 1). Pure.
+
+    Raises ``ValueError`` when the wind is not E-W-dominant, the river does not
+    separate the AOI into exactly two significant land components (a gooseneck or a
+    land-bridge gap), the ignition sits on/off the land grid, or no river crossing
+    is found downwind of the ignition (width measurement)."""
     import numpy as np
 
     ny, nx = toa_s.shape
@@ -446,8 +518,33 @@ def measure_river_split(
     burned = np.isfinite(toa_s)
     cell_km2 = (float(cellsize_m) * float(cellsize_m)) / 1.0e6
 
+    # --- connectivity split (meander-robust, exact for any river shape) ---
+    sep = check_river_separates_domain(fbfm_arr, water_code=water_code)
+    if not sep["two_component"]:
+        raise ValueError(
+            "the river does not fully separate the AOI into two land components "
+            f"({sep['num_components']} raw / "
+            f"{len(sep['significant_component_sizes_cells'])} significant "
+            "component(s) found) - a gooseneck reach lets fire thread between "
+            "meanders, or a land-bridge gap connects the banks; pick a straighter "
+            "reach where the river fully crosses the domain."
+        )
+    if not (0 <= ign_row < ny and 0 <= ign_col < nx):
+        raise ValueError(f"ignition cell ({ign_row},{ign_col}) is outside the grid ({ny}x{nx}).")
+    if water[ign_row, ign_col]:
+        raise ValueError(
+            f"ignition cell ({ign_row},{ign_col}) is inside the river (water class) - "
+            "not a valid ignition."
+        )
+    labels, _num = _label_land_components(fbfm_arr, water_code)
+    ign_label = int(labels[ign_row, ign_col])
+    near_component = labels == ign_label
+    head_cells = int(np.count_nonzero(burned & near_component))
+    far_cells = int(np.count_nonzero(burned & ~near_component & ~water))
+
+    # --- width measurement (row-wise water runs nearest downwind of the ignition;
+    # independent of the connectivity split, kept unchanged). ---
     near: dict[int, int] = {}
-    far: dict[int, int] = {}
     width: dict[int, int] = {}
     for r in range(ny):
         runs = [
@@ -464,7 +561,6 @@ def measure_river_split(
             continue
         lo, hi = runs[0]
         near[r] = lo if downwind_sign > 0 else hi
-        far[r] = hi if downwind_sign > 0 else lo
         width[r] = hi - lo + 1
     if not near:
         raise ValueError(
@@ -480,16 +576,6 @@ def measure_river_split(
             f"(only {len(band)} river rows around row {ign_row})."
         )
 
-    head_cells = 0
-    far_cells = 0
-    for r in band:
-        if downwind_sign > 0:
-            head_cells += int(burned[r, :near[r]].sum())
-            far_cells += int(burned[r, far[r] + 1:].sum())
-        else:
-            head_cells += int(burned[r, near[r] + 1:].sum())
-            far_cells += int(burned[r, :far[r]].sum())
-
     widths = [width[r] for r in band]
     return {
         "head_cells": float(head_cells),
@@ -501,6 +587,7 @@ def measure_river_split(
         "river_band_rows": float(len(band)),
         "river_band_coverage": float((max(band) - min(band) + 1)) / float(ny),
         "downwind_sign": float(downwind_sign),
+        "num_land_components": float(sep["num_components"]),
     }
 
 
@@ -665,14 +752,17 @@ async def model_elmfire_river_barrier_crossing(
         ign_col_f, ign_row_f = inv * (float(ign_xy.get("x", 0.0)), float(ign_xy.get("y", 0.0)))
         ign_rowcol = (int(round(ign_row_f)), int(round(ign_col_f)))
 
-        off_split = measure_river_split(
-            off_toa, fbfm, ign_rowcol=ign_rowcol,
-            wind_dir_deg=float(run_args.wind_dir_deg), cellsize_m=float(cellsize_m),
-        )
-        on_split = measure_river_split(
-            on_toa, fbfm, ign_rowcol=ign_rowcol,
-            wind_dir_deg=float(run_args.wind_dir_deg), cellsize_m=float(cellsize_m),
-        )
+        try:
+            off_split = measure_river_split(
+                off_toa, fbfm, ign_rowcol=ign_rowcol,
+                wind_dir_deg=float(run_args.wind_dir_deg), cellsize_m=float(cellsize_m),
+            )
+            on_split = measure_river_split(
+                on_toa, fbfm, ign_rowcol=ign_rowcol,
+                wind_dir_deg=float(run_args.wind_dir_deg), cellsize_m=float(cellsize_m),
+            )
+        except ValueError as exc:
+            raise FireSpreadComposerError("ELMFIRE_RIVER_NOT_SEPARATING", str(exc)) from exc
         off_far = off_split["far_area_km2"]
         on_far = on_split["far_area_km2"]
         river_width_m = on_split["river_width_m"]
@@ -687,16 +777,27 @@ async def model_elmfire_river_barrier_crossing(
             )
 
         # HONEST verdict - NO assertion forcing a jump (NATE ruling: the river holding
-        # is a valid finding). break_jumped only when embers cleared a river the
-        # contiguous front could not.
-        jumped = bool(on_far > _JUMP_FLOOR_KM2 >= off_far)
-        held = bool(on_far <= _JUMP_FLOOR_KM2)
+        # is a valid finding). Three EXHAUSTIVE, mutually-exclusive outcomes (the
+        # connectivity split makes far-side burn on a disconnected component
+        # structurally impossible without spotting UNLESS the reach leaks, so
+        # "leaked" replaces the old ambiguous "inconclusive" bucket):
+        #   leaked: the OFF run (no embers) already burns past the river - the
+        #     contiguous front, not spotting, crossed; the reach is confounded.
+        #   jumped: OFF held (~0) AND ON cleared the river - the clean spotting
+        #     signal this template exists to measure.
+        #   held:   OFF held (~0) AND ON also held - the river stopped the fire
+        #     even with spotting at these knobs, a valid physics finding.
         off_leaks = bool(off_far > _JUMP_FLOOR_KM2)
+        jumped = bool(on_far > _JUMP_FLOOR_KM2 and not off_leaks)
+        held = bool(on_far <= _JUMP_FLOOR_KM2 and not off_leaks)
+        verdict = "leaked" if off_leaks else ("jumped" if jumped else "held")
         logger.info(
             "river barrier-jump: width=%.0fm  OFF far=%.4f km2  ON far=%.4f km2  "
-            "head=%.3f km2  jumped=%s held=%s off_leaks=%s band_rows=%d cov=%.2f",
-            river_width_m, off_far, on_far, head_km2, jumped, held, off_leaks,
+            "head=%.3f km2  verdict=%s off_leaks=%s band_rows=%d cov=%.2f "
+            "land_components=%d",
+            river_width_m, off_far, on_far, head_km2, verdict, off_leaks,
             int(on_split["river_band_rows"]), on_split["river_band_coverage"],
+            int(on_split["num_land_components"]),
         )
 
         # Publish the spotting-ON ToA COG (the far-side spot fire, if any) as primary.
@@ -710,9 +811,6 @@ async def model_elmfire_river_barrier_crossing(
         for d in scratch_dirs:
             _cleanup_dir(d)
 
-    verdict = (
-        "jumped" if jumped else ("held" if held else "inconclusive")
-    )
     sweep = [
         {"x": 0.0, "y": off_far},  # spotting OFF
         {"x": 1.0, "y": on_far},   # spotting ON
@@ -726,11 +824,13 @@ async def model_elmfire_river_barrier_crossing(
         "river_width_min_m": on_split["river_width_min_m"],
         "river_band_rows": on_split["river_band_rows"],
         "river_band_coverage": on_split["river_band_coverage"],
+        "num_land_components": on_split["num_land_components"],
         "mean_spotting_distance_m": float(mean_spotting_distance_m),
         "nembers": float(int(nembers)),
         "pign_pct": float(pign_pct),
         "critical_spotting_intensity_kwm": float(critical_spotting_intensity_kwm),
         "fixed_wind_mph": float(run_args.wind_speed_mph),
+        "verdict": verdict,
         "break_jumped": 1.0 if jumped else 0.0,
         "off_side_leaks": 1.0 if off_leaks else 0.0,
     }
@@ -942,6 +1042,58 @@ async def model_elmfire_spot_fire_barrier_crossing(
     return primary
 
 
+def river_barrier_captions(
+    *,
+    off_far_km2: float,
+    on_far_km2: float,
+    river_width_m: float,
+    verdict: str,
+) -> dict[str, str]:
+    """Build the verdict-consistent OFF/ON caption pair for the real-river-barrier
+    renders and chart.
+
+    States the ACTUAL measured numbers + the actual verdict for BOTH captions - no
+    conditional templating that can print the wrong side of a fact (the render
+    caption previously said "do NOT cross" beside a nonzero far-side burned-area
+    number in a leaked/inconclusive reach). Exactly one of three verdicts:
+    "jumped" (embers cleared a river the contiguous front could not), "held" (the
+    river stopped the fire even with spotting), "leaked" (the contiguous OFF-run
+    front already burns past the river - the reach does not cleanly separate, so
+    ON's far-side number is not a clean spotting signal). Pure."""
+    width_txt = f"river ~{river_width_m:.0f} m wide"
+    if verdict == "jumped":
+        off_line = (
+            f"Spotting OFF: the contiguous head fire stops at the near bank "
+            f"({width_txt}) - far-side burned area = {off_far_km2:.3g} km2."
+        )
+        on_line = (
+            f"Spotting ON [jumped]: lofted embers CROSSED the {width_txt} - far-side "
+            f"burned area = {on_far_km2:.3g} km2 (OFF = {off_far_km2:.3g} km2)."
+        )
+    elif verdict == "held":
+        off_line = (
+            f"Spotting OFF: the contiguous head fire stops at the near bank "
+            f"({width_txt}) - far-side burned area = {off_far_km2:.3g} km2."
+        )
+        on_line = (
+            f"Spotting ON [held]: the {width_txt} HELD - no embers cleared it "
+            f"(far-side burned area = {on_far_km2:.3g} km2, same as OFF)."
+        )
+    else:  # leaked
+        off_line = (
+            f"Spotting OFF [leaked]: the contiguous front ALREADY burns "
+            f"{off_far_km2:.3g} km2 beyond the {width_txt} with spotting OFF - this "
+            "reach does not cleanly separate the AOI (fire flowed around/through the "
+            "barrier, not via embers)."
+        )
+        on_line = (
+            f"Spotting ON [leaked]: far-side burned area = {on_far_km2:.3g} km2, but "
+            f"the OFF run already burns {off_far_km2:.3g} km2 past the {width_txt} - "
+            "not a clean spotting signal on this reach."
+        )
+    return {"off": off_line, "on": on_line, "verdict": verdict}
+
+
 async def _maybe_emit_chart(
     emitter: Any,
     off_east: float,
@@ -959,13 +1111,11 @@ async def _maybe_emit_chart(
             f"Does the fire jump the river? (~{river_width_m:.0f} m wide) - "
             f"far-side burned area, spotting OFF vs ON [{verdict}]"
         )
-        caption = (
-            f"Burned area on the FAR (downwind) side of a real river ~{river_width_m:.0f} m "
-            "wide (LANDFIRE water class, non-burnable), within its cross-wind shadow. "
-            "With spotting OFF the contiguous head fire stops at the near bank; with "
-            "spotting ON lofted embers may clear the river and ignite the far bank. "
-            "The honest physics is reported - the river can HOLD even with spotting."
+        cap = river_barrier_captions(
+            off_far_km2=off_east, on_far_km2=on_east,
+            river_width_m=river_width_m, verdict=str(verdict),
         )
+        caption = f"{cap['off']} {cap['on']}"
     else:
         title = "Does the fire jump the break? Far-side burned area, spotting OFF vs ON"
         caption = (

@@ -204,3 +204,104 @@ verification (synthetic V&V) path was re-run LIVE through the unchanged image af
 the refactor and is byte-for-byte the original discriminant: spotting OFF far-side =
 0.0 km2, ON = 13.9041 km2 (15449 spot cells), `break_jumped=1` - proving the OFF/ON
 spotting machinery + the refactor are intact.
+
+LANDFIRE recovered same-day; the first real-river run (John Day at Cottonwood, OR,
+committed 03ded49) proved the machinery end-to-end (OFF 0.024 km2 vs ON 3.107 km2 far-
+side - a 128x signal) but exposed three gaps closed by amendment 2 below: the
+goosenecked reach let the contiguous OFF front leak around a meander (honest
+`inconclusive`), a stale conditional caption string ("do NOT cross" printed beside a
+nonzero far-side number), and no structural way to tell "leaked around the ends" from
+"threaded between meanders".
+
+---
+
+## AMENDMENT 2 (2026-08-13) - connectivity split (meander-robust) + a verified straight reach
+
+### Decision
+
+Replace the row-splitting head/far measurement with a CONNECTIVITY split, exact for
+any river shape:
+
+- `check_river_separates_domain` labels the fuel grid's non-water (land) cells into
+  8-connected components (`scipy.ndimage.label`). A river that fully separates the
+  AOI gives exactly TWO significant components (near bank / far bank); a gooseneck
+  that lets the front thread between meanders, or a land-bridge gap in the water
+  band, merges both banks into ONE component - structurally rejected before any
+  solve runs. `measure_river_split` uses the ignition's own component as "head" and
+  every OTHER component as "far" - so an OFF-run (no spotting) burn in a
+  disconnected component is impossible unless the reach genuinely leaks, making
+  `off_side_leaks` precise rather than heuristic. River WIDTH is still measured the
+  original row-run way (unaffected by the split method).
+- Verdict is now three-way and EXHAUSTIVE (`leaked` replaces the old ambiguous
+  `inconclusive`): `leaked` (the OFF run already burns past the river - the reach
+  doesn't cleanly separate), `jumped` (OFF held, ON cleared it - the clean spotting
+  signal), `held` (both held).
+- `river_barrier_captions` (shared by the composer's chart caption and
+  `scripts/proof_elmfire_river_barrier.py`'s renders) builds the OFF/ON caption pair
+  from the ACTUAL verdict + numbers - fixes the stale-conditional-string bug (a
+  render previously said "do NOT cross" beside a nonzero far-side km2 in a
+  leaked/inconclusive reach).
+
+### Finding a genuine two-component reach
+
+A hand-picked ~10 km "straight-looking" bbox is NOT enough - re-scoring the
+iteration-1 candidates (Deschutes at Maupin/lower, John Day at Cottonwood, Sacramento
+at Red Bluff) under the connectivity gate, ALL FOUR failed (1 raw / 1 significant land
+component each - every one wraps into a single component within a ~10 km box). The
+proof harness (`scripts/proof_elmfire_river_barrier.py`) now searches instead of
+guessing: for each of several WIDE candidate regions (Deschutes x2, John Day, Sacramento,
+Snake nr Twin Falls), it fetches once, slides a ~6.6 km cross-wind row band down the
+region, centers a ~12 km window on the LOCAL river column within that band (a
+full-region-width window let the region's far east/west land "wings" reconnect around
+the window's top/bottom edge - the gooseneck failure mode again, just relocated), and
+gates every candidate window on `check_river_separates_domain`. Every surviving window
+is then RANKED (river width, then cross-wind coverage) and re-verified with an
+INDEPENDENT re-fetch/re-warp of its precise bbox before being trusted - the first
+candidate's own row-slice check can still pass on a resampling-fragile boundary that
+regresses when re-fetched for real (observed live: the top-ranked Sacramento window,
+`num_components=1`, was correctly rejected and the harness fell through to the next-
+ranked window, which held on re-verification). A `_subwindow_bbox` bug surfaced and
+was fixed in the process: `compute_target_grid`'s EPSG:5070 axis-aligned bounding box
+is measurably inflated by meridian/parallel convergence for any bbox with real extent
+at this longitude (up to 1.6x wider for a 50 km-tall region, up to ~3x taller for a
+wide-but-short one) - deriving a window's reported bbox from that inflated grid
+dimension propagated the inflation into the live re-fetch, pulling in landscape the
+window never covered. Fixed by deriving both axes as a plain fraction of
+row0/ny and col0/nx against the ORIGINAL request bbox - no reprojection.
+
+### Live numbers (Sacramento River nr Red Bluff, CA - the passing reach)
+
+Chosen reach `sacramento_redbluff_CA`, bbox
+`[-122.198936, 40.097754, -122.112372, 40.152662]` (291x265 cells @ 30 m), a genuine
+two-component split (land components 43863 / 30740 cells), river width 180 m,
+ignition `[-122.157671, 40.124842]` upwind, 35 mph W wind, 6 h, `mean_spotting_
+distance_m=60`, `nembers=30`, `pign_pct=100`:
+
+- **spotting OFF**: far-side burned area = **0.0 km2** (head fire 1.5453 km2, stops
+  clean at the near bank - `off_side_leaks=False`).
+- **spotting ON**: far-side burned area = **2.5227 km2** - embers cleared the 180 m
+  river. **verdict = `jumped`** - the clean, unconfounded discriminant this
+  refinement exists to produce (no leak, no gooseneck ambiguity).
+- Rejected candidates (all real bboxes, all logged with why): Deschutes at Maupin,
+  Deschutes lower, Snake nr Twin Falls - no sliding window in-region cleared the
+  two-component gate; one Sacramento window ranked #1 by width but was rejected on
+  independent re-warp (regressed to 1 component) before the harness fell through to
+  the window that was actually used.
+- Proofs: `docs/proof/templates/elmfire_spot_fire_barrier_crossing_{river_context,
+  toa_spotting_off,toa_spotting_on,off_vs_on_chart}.png` +
+  `elmfire_river_barrier_proof_result.json` (all four renders show the correct
+  verdict-consistent captions - no stale "do NOT cross" beside a nonzero number).
+- Showcase (`scripts/seed_showcase_cases.py`) updated to this reach + re-seeded
+  through the live daemon: `OK, 1 layer(s) + 1 chart(s), persisted=1` (reconnect
+  durability verified).
+- Offline: `server/tests/test_elmfire_river_barrier_split.py` rewritten for the
+  connectivity split (18 cases - straight river 2-component, a horseshoe-bend
+  gooseneck rejected 1-component, a land-bridge leak structurally detected,
+  a river-island noise speck correctly ignored, the caption pair never contradicting
+  a nonzero number).
+
+### Residual
+
+Snake River nr Twin Falls was tried as a candidate (per the ask) and rejected - its
+canyon reach did not offer a two-component window at the tried scales; not
+investigated further (the Sacramento reach already delivers the clean discriminant).

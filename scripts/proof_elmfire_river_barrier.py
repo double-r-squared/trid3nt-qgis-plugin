@@ -53,7 +53,8 @@ from trid3nt_server.agent.workflows.elmfire.fire_spread.fire_spread import (
 )
 from trid3nt_server.agent.workflows.elmfire.run_elmfire import fetch_elmfire_inputs
 from trid3nt_server.agent.workflows.elmfire.spotting.spotting import (
-    _RealCase, _solve_real_case, _spotting_namelist, measure_river_split,
+    _RealCase, _solve_real_case, _spotting_namelist,
+    check_river_separates_domain, measure_river_split, river_barrier_captions,
 )
 from trid3nt_server.agent.workflows.elmfire.sensitivity._sensitivity_common import (
     publish_primary_from_out_dir,
@@ -69,13 +70,40 @@ _r.loader.exec_module(rfp)
 CELL = 30.0
 WIND_DIR = 270.0  # from the west -> head fire runs east into the river
 
-# Candidate river reaches (real, grass/shrub fire country, roughly N-S river).
-CANDIDATES: dict[str, list[float]] = {
-    "deschutes_maupin_OR": [-121.145, 45.160, -121.035, 45.205],
-    "deschutes_lower_OR":  [-120.92, 45.36, -120.85, 45.46],
-    "john_day_cottonwood_OR": [-120.52, 45.40, -120.42, 45.48],
-    "sacramento_redbluff_CA": [-122.24, 40.00, -122.14, 40.09],
+# WIDE search regions (real, grass/shrub fire country, a river running roughly
+# N-S over the region at large). Iteration-2 finding: even a hand-picked ~10 km
+# "straight-looking" box (the iteration-1 candidates) wraps the land into ONE
+# component - a real river meanders enough that a single fixed small bbox rarely
+# lands cleanly on a fully-separating sub-reach. So each region here is WIDE in
+# the N-S (cross-wind / row) direction; a sliding narrower window is searched for
+# an actual straight two-component sub-reach (see _find_straight_subreach) rather
+# than guessing one fixed box.
+SEARCH_REGIONS: dict[str, list[float]] = {
+    "deschutes_maupin_OR":    [-121.20, 45.05, -120.98, 45.35],
+    "deschutes_lower_OR":     [-120.98, 45.15, -120.75, 45.60],
+    "john_day_cottonwood_OR": [-120.62, 45.25, -120.34, 45.65],
+    "sacramento_redbluff_CA": [-122.30, 39.80, -122.06, 40.25],
+    "snake_twin_falls_ID":    [-114.50, 42.35, -114.18, 42.70],
 }
+
+#: Sliding-window search: the cross-wind (N-S, row) extent tried per window, the
+#: step between windows, the HALF-WIDTH (E-W, col) window centered on the LOCAL
+#: river position within that row band, and the floors a window must clear to be
+#: a viable candidate reach (mirrors the live composer's realism floors).
+#:
+#: A full-region-width window (the first cut of this search) let a WIDE region's
+#: far east/west "wings" of land reconnect around the window's top/bottom edge -
+#: the very gooseneck-equivalent failure this refinement targets, just moved from
+#: "the river bends" to "the box is wider than the river cares about". Centering
+#: a MODEST-width window on the local river column (found from the water cells in
+#: that row band) keeps the window's aspect close to square, which is what an
+#: actual live user's bbox would look like too.
+_WINDOW_ROWS: int = 220           # ~6.6 km of river frontage per window try
+_WINDOW_STEP_ROWS: int = 30       # ~0.9 km slide between tries
+_WINDOW_HALF_COLS: int = 200      # ~6 km each side of the local river column
+_MIN_WIDTH_M: float = 60.0
+_MIN_BURNABLE_FRAC: float = 0.25
+_MIN_CROSS_WIND_COVERAGE: float = 0.5
 
 
 def _warp_fbfm(bbox: list[float]) -> tuple[np.ndarray, dict]:
@@ -92,8 +120,83 @@ def _warp_fbfm(bbox: list[float]) -> tuple[np.ndarray, dict]:
     return np.asarray(arr), grid
 
 
+def _subwindow_bbox(
+    region_bbox: list[float], ny: int, nx: int,
+    row0: int, rows: int, col0: int, cols: int,
+) -> list[float]:
+    """EPSG:4326 bbox of grid rows ``[row0, row0+rows)`` / cols ``[col0, col0+cols)``
+    of a region - LINEAR fraction-of-region interpolation on the ORIGINAL request
+    bbox (row 0 is the north edge, col 0 is the west edge), NOT a re-derivation
+    off the region's projected (EPSG:5070) grid dimensions.
+
+    ``compute_target_grid`` axis-aligns its bounding box in EPSG:5070 meters; for
+    a bbox with any real extent far from the Albers central meridian, that box
+    measurably grows past the true request in EITHER axis (meridian/parallel
+    convergence - verified up to 1.6x wider for a 0.45 deg / 50 km tall region,
+    and independently up to ~3x taller for a wide-but-short one, at this
+    longitude). Deriving a window's bbox from those inflated grid dimensions
+    propagates the inflation into the window's reported footprint, so a live
+    re-fetch at the reported (wrong, oversized) bbox pulls in landscape the
+    window never actually covered - exactly the regression this avoids. Both
+    axes are therefore a plain fraction of row0/ny and col0/nx against the KNOWN
+    request bbox - no reprojection needed."""
+    lon_lo, lat_lo, lon_hi, lat_hi = [float(v) for v in region_bbox]
+    left_frac = col0 / float(nx)
+    right_frac = (col0 + cols) / float(nx)
+    top_frac = row0 / float(ny)
+    bot_frac = (row0 + rows) / float(ny)
+    win_lon_lo = lon_lo + left_frac * (lon_hi - lon_lo)
+    win_lon_hi = lon_lo + right_frac * (lon_hi - lon_lo)
+    win_lat_hi = lat_hi - top_frac * (lat_hi - lat_lo)
+    win_lat_lo = lat_hi - bot_frac * (lat_hi - lat_lo)
+    return [win_lon_lo, win_lat_lo, win_lon_hi, win_lat_hi]
+
+
+def _find_straight_subreach(region_bbox: list[float]) -> list[dict]:
+    """Fetch ONE wide region, slide a cross-wind row band down it, and - for each
+    band - center a MODEST-width window on the LOCAL river column found in that
+    band (not the region's full width). Return every window that clears the
+    two-component connectivity gate + the realism floors, as scored dicts
+    carrying the window's precise sub-bbox.
+
+    Meander-robust by construction: a fixed guess at a "straight" reach missed on
+    every iteration-1 candidate, and a full-region-width window let the region's
+    far east/west land "wings" reconnect around the window's top/bottom edge (the
+    gooseneck failure mode again, just relocated); centering a modest window on
+    the local river position and gating each on ``check_river_separates_domain``
+    finds an ACTUAL straight sub-reach (or honestly finds none) instead of
+    trusting a hand-picked or over-wide box."""
+    arr, grid = _warp_fbfm(region_bbox)
+    ny, nx = arr.shape
+    water = arr == 98
+    hits: list[dict] = []
+    for row0 in range(0, max(1, ny - _WINDOW_ROWS + 1), _WINDOW_STEP_ROWS):
+        band_water = water[row0 : row0 + _WINDOW_ROWS, :]
+        if band_water.shape[0] < _WINDOW_ROWS or not band_water.any():
+            continue
+        col_center = int(np.median(np.where(band_water)[1]))
+        col0 = max(0, col_center - _WINDOW_HALF_COLS)
+        col1 = min(nx, col_center + _WINDOW_HALF_COLS)
+        sub = arr[row0 : row0 + _WINDOW_ROWS, col0:col1]
+        sep = check_river_separates_domain(sub)
+        if not sep["two_component"]:
+            continue
+        s = _score_reach(sub)
+        if (s["median_river_width_m"] < _MIN_WIDTH_M
+                or s["burnable_frac"] < _MIN_BURNABLE_FRAC
+                or s["cross_wind_coverage"] < _MIN_CROSS_WIND_COVERAGE):
+            continue
+        s["_sub_bbox"] = _subwindow_bbox(region_bbox, ny, nx, row0, _WINDOW_ROWS, col0, col1 - col0)
+        s["_row0"] = row0
+        hits.append(s)
+    return hits
+
+
 def _score_reach(arr: np.ndarray) -> dict:
-    """River metrics: median crossing width, burnable fraction, cross-wind coverage."""
+    """River metrics: median crossing width, burnable fraction, cross-wind coverage,
+    and the MEANDER-ROBUST two-component connectivity gate (does the river fully
+    separate the AOI's land into exactly two 8-connected components? - a gooseneck
+    that threads the fire between meanders, or a land-bridge gap, fails this)."""
     ny, nx = arr.shape
     water = arr == 98
     burn = np.isin(arr, list(range(100, 210)))
@@ -108,6 +211,7 @@ def _score_reach(arr: np.ndarray) -> dict:
             if best >= 2:
                 widths.append(best)
     med_w = float(np.median(widths)) * CELL if widths else 0.0
+    sep = check_river_separates_domain(arr)
     return {
         "median_river_width_m": med_w,
         "rows_with_river": len(widths),
@@ -115,6 +219,9 @@ def _score_reach(arr: np.ndarray) -> dict:
         "burnable_frac": float(burn.sum()) / arr.size,
         "water_frac": float(water.sum()) / arr.size,
         "grid": f"{nx}x{ny}",
+        "two_component": sep["two_component"],
+        "num_land_components": sep["num_components"],
+        "significant_land_component_sizes_cells": sep["significant_component_sizes_cells"],
     }
 
 
@@ -215,44 +322,99 @@ def _render_chart(off_km2, on_km2, width_m, verdict, out_png):
                   color=["#4c78a8", "#d1495b"], width=0.6)
     for b, v in zip(bars, [off_km2, on_km2]):
         ax.text(b.get_x() + b.get_width() / 2, v, f"{v:.3g}", ha="center", va="bottom", fontsize=10)
-    ax.set_ylabel("burned area beyond the river far bank (km2)")
+    ax.set_ylabel("burned area on the far land component (km2)")
     ax.set_title(f"Does the fire jump the river? (~{width_m:.0f} m wide) [{verdict}]", fontsize=11)
     ax.spines[["top", "right"]].set_visible(False)
-    fig.text(0.5, 0.01,
-             "Far (downwind) side burned area within the river's cross-wind shadow. OFF: the "
-             "contiguous front stops at the near bank. ON: lofted embers may clear the river. "
-             "Honest physics -- the river can HOLD even with spotting.",
-             ha="center", va="bottom", fontsize=7, wrap=True)
+    caps = river_barrier_captions(
+        off_far_km2=off_km2, on_far_km2=on_km2, river_width_m=width_m, verdict=verdict,
+    )
+    fig.text(0.5, 0.01, f"{caps['off']} {caps['on']}", ha="center", va="bottom", fontsize=7, wrap=True)
     fig.tight_layout(rect=(0, 0.07, 1, 1))
     fig.savefig(out_png, dpi=150)
     plt.close(fig)
 
 
 async def main() -> int:
-    # 1) pick the reach with the widest real river + grass banks.
-    scored = {}
-    for name, bbox in CANDIDATES.items():
+    # 1) per WIDE region, slide a narrower cross-wind window and keep every window
+    # that clears the two-component connectivity gate + realism floors. A region
+    # with zero surviving windows is REJECTED and reported with why (iteration-1
+    # fixed candidates all failed this gate - see the ADR amendment).
+    region_hits: dict[str, list[dict]] = {}
+    rejected: dict[str, str] = {}
+    for name, region_bbox in SEARCH_REGIONS.items():
         try:
-            arr, grid = _warp_fbfm(bbox)
-            s = _score_reach(arr)
-            s["_arr"] = arr; s["_grid"] = grid; s["_bbox"] = bbox
-            scored[name] = s
-            log.info("reach %s: %s", name, {k: v for k, v in s.items() if not k.startswith("_")})
+            hits = _find_straight_subreach(region_bbox)
         except Exception as e:
-            log.warning("reach %s fetch/score failed: %s", name, e)
-    good = {n: s for n, s in scored.items()
-            if s["median_river_width_m"] >= 60.0 and s["burnable_frac"] >= 0.25
-            and s["cross_wind_coverage"] >= 0.5}
-    pool = good or scored
-    if not pool:
-        log.error("no reach could be scored (LANDFIRE fetch failed for all)")
+            log.warning("region %s fetch/search failed: %s", name, e)
+            rejected[name] = f"fetch/search failed: {e}"
+            continue
+        log.info("region %s: %d passing window(s) found", name, len(hits))
+        if not hits:
+            rejected[name] = (
+                "no sliding window in this region cleared the two-component gate "
+                "+ realism floors (every window's land either fails to separate, "
+                "or is too narrow/sparse/short a river crossing)"
+            )
+            continue
+        region_hits[name] = hits
+
+    for name, reason in rejected.items():
+        log.warning("REJECTED region %s: %s", name, reason)
+    for name, hits in region_hits.items():
+        best = max(hits, key=lambda s: (s["median_river_width_m"], s["cross_wind_coverage"]))
+        log.info("region %s best window: bbox=%s width_m=%.0f coverage=%.2f",
+                  name, best["_sub_bbox"], best["median_river_width_m"], best["cross_wind_coverage"])
+
+    if not region_hits:
+        log.error(
+            "no region produced a passing straight sub-reach - rejected: %s", rejected,
+        )
         return 2
-    pick = max(pool, key=lambda n: (pool[n]["median_river_width_m"], pool[n]["cross_wind_coverage"]))
-    chosen = scored[pick]
-    bbox = chosen["_bbox"]; arr = chosen["_arr"]; grid = chosen["_grid"]
-    ign = _auto_ignition(arr, grid)
-    log.info("CHOSEN reach=%s bbox=%s ignition=%s metrics=%s",
-             pick, bbox, ign, {k: v for k, v in chosen.items() if not k.startswith("_")})
+
+    # Rank EVERY passing window across every region, best first, and take the
+    # first one that SURVIVES an independent re-fetch/re-warp of its precise
+    # bbox. The sliding-window's own check is exact (it labels the wide region's
+    # OWN pixels), but an independent live re-fetch at that footprint can still
+    # regress at a resampling-fragile boundary - so this is a ranked fallback,
+    # not a single hard gate, honestly logging every attempt that fails live.
+    ranked: list[tuple[str, dict]] = [
+        (name, s) for name, hits in region_hits.items() for s in hits
+    ]
+    ranked.sort(key=lambda ns: (ns[1]["median_river_width_m"], ns[1]["cross_wind_coverage"]), reverse=True)
+
+    pick = arr = grid = chosen = ign = bbox = None
+    live_rewarp_rejects: dict[str, str] = {}
+    for name, window in ranked:
+        cand_bbox = window["_sub_bbox"]
+        try:
+            cand_arr, cand_grid = _warp_fbfm(cand_bbox)
+        except Exception as e:
+            live_rewarp_rejects[f"{name}@{cand_bbox}"] = f"re-fetch failed: {e}"
+            continue
+        sep = check_river_separates_domain(cand_arr)
+        if not sep["two_component"]:
+            live_rewarp_rejects[f"{name}@{cand_bbox}"] = (
+                f"re-warp regressed on the two-component gate: {sep}"
+            )
+            continue
+        pick, arr, grid, bbox = name, cand_arr, cand_grid, cand_bbox
+        chosen = _score_reach(arr)
+        chosen["_arr"] = arr; chosen["_grid"] = grid; chosen["_bbox"] = bbox
+        ign = _auto_ignition(arr, grid)
+        break
+
+    for key, reason in live_rewarp_rejects.items():
+        log.warning("REJECTED window %s: %s", key, reason)
+    if pick is None:
+        log.error(
+            "every window's independent re-fetch regressed on the two-component "
+            "gate - rejected: %s", live_rewarp_rejects,
+        )
+        return 2
+    log.info("CHOSEN region=%s bbox=%s ignition=%s metrics=%s (tried %d window(s) total, "
+             "%d rejected on re-warp)",
+             pick, bbox, ign, {k: v for k, v in chosen.items() if not k.startswith("_")},
+             len(ranked), len(live_rewarp_rejects))
 
     run_args = ElmfireRunArgs(
         bbox=bbox, ignition_lonlat=list(ign), wind_speed_mph=35.0, wind_dir_deg=WIND_DIR,
@@ -289,25 +451,32 @@ async def main() -> int:
                                        wind_dir_deg=WIND_DIR, cellsize_m=on["cs"])
         off_far = off_split["far_area_km2"]; on_far = on_split["far_area_km2"]
         width = on_split["river_width_m"]
-        jumped = on_far > 1e-3 >= off_far
-        verdict = "jumped" if jumped else ("held" if on_far <= 1e-3 else "inconclusive")
+        # Same exhaustive, mutually-exclusive three-way verdict as the composer
+        # (spotting.py::model_elmfire_river_barrier_crossing) - "leaked" replaces
+        # the old ambiguous "inconclusive" bucket now that the connectivity split
+        # makes an OFF-run far-side burn structurally diagnostic of a bad reach.
+        off_leaks = off_far > 1e-3
+        jumped = bool(on_far > 1e-3 and not off_leaks)
+        verdict = "leaked" if off_leaks else ("jumped" if jumped else "held")
+        caps = river_barrier_captions(
+            off_far_km2=off_far, on_far_km2=on_far, river_width_m=width, verdict=verdict,
+        )
 
         # 4) renders
         base = "elmfire_spot_fire_barrier_crossing"
         _render_river_context(
             arr, grid, ign, str(PROOF / f"{base}_river_context.png"),
             f"Real river barrier + ignition -- {pick} (LANDFIRE water class, non-burnable)",
-            f"River ~{width:.0f} m wide crosses the E-W wind axis; ignition (star) is UPWIND "
-            f"in grass/shrub. Real LANDFIRE fuels; head fire runs downwind (yellow) into the river.")
+            f"River ~{width:.0f} m wide crosses the E-W wind axis, fully separating the AOI "
+            "into two land components (the connectivity gate); ignition (star) is UPWIND in "
+            "grass/shrub. Real LANDFIRE fuels; head fire runs downwind (yellow) into the river.")
         rfp.render(off["uri"], str(PROOF / f"{base}_toa_spotting_off.png"),
-                   f"Fire arrival -- spotting OFF ({pick})",
-                   f"Spotting OFF: the contiguous front stops at the river near bank. Far-side "
-                   f"burned area = {off_far:.3g} km2. Real LANDFIRE fuels + 3DEP DEM, 35 mph W wind, 6 h.",
+                   f"Fire arrival -- spotting OFF ({pick}) [{verdict}]",
+                   f"{caps['off']} Real LANDFIRE fuels + 3DEP DEM, 35 mph W wind, 6 h.",
                    cmap="YlOrRd", units_label="fire arrival (hr)")
         rfp.render(on["uri"], str(PROOF / f"{base}_toa_spotting_on.png"),
                    f"Fire arrival -- spotting ON ({pick}) [{verdict}]",
-                   f"Spotting ON: lofted embers {'CROSS' if jumped else 'do NOT cross'} the river. "
-                   f"Far-side burned area = {on_far:.3g} km2 (river ~{width:.0f} m). Same warp as OFF.",
+                   f"{caps['on']} Same warp as OFF.",
                    cmap="YlOrRd", units_label="fire arrival (hr)")
         _render_chart(off_far, on_far, width, verdict, str(PROOF / f"{base}_off_vs_on_chart.png"))
 
@@ -316,13 +485,17 @@ async def main() -> int:
             "river_width_m": width, "river_width_min_m": on_split["river_width_min_m"],
             "river_band_rows": on_split["river_band_rows"],
             "river_band_coverage": on_split["river_band_coverage"],
+            "num_land_components": on_split["num_land_components"],
             "reach_metrics": {k: v for k, v in chosen.items() if not k.startswith("_")},
+            "rejected_regions": rejected,
+            "rejected_windows_on_rewarp": live_rewarp_rejects,
+            "windows_tried_total": len(ranked),
             "wind_mph": 35.0, "wind_dir_deg": WIND_DIR, "duration_hours": 6.0,
             "mean_spotting_distance_m": 60.0, "nembers": 30, "pign_pct": 100.0,
             "far_side_area_spotting_off_km2": off_far,
             "far_side_area_spotting_on_km2": on_far,
             "head_fire_area_km2": on_split["head_area_km2"],
-            "off_side_leaks": bool(off_far > 1e-3),
+            "off_side_leaks": bool(off_leaks),
             "verdict": verdict,
             "off_run_id": off["run_id"], "on_run_id": on["run_id"],
             "off_uri": off["uri"], "on_uri": on["uri"],

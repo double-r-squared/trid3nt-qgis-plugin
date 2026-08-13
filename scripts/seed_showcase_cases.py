@@ -73,7 +73,8 @@ _NEWPORT_OR = [-124.15, 44.45, -123.95, 44.80]         # ADR 0230 Slab2 Cascadia
 _GALVESTON = [-95.2, 29.0, -94.2, 29.8]                # ADR 0168 surge shelf
 _PLATTE = [40.905, -98.42]                              # ADR 0165/0166 well (lat, lon)
 _GRAND_ISLAND_REACH = [40.857, -98.412]                 # ADR 0215 Wood River reach AOI (lat, lon)
-_DESCHUTES_MAUPIN = [-121.145, 45.160, -121.035, 45.205]  # ADR 0239 real river spotting barrier (lower Deschutes, OR)
+_DESCHUTES_MAUPIN = [-121.145, 45.160, -121.035, 45.205]  # ADR 0239 real river spotting barrier (lower Deschutes, OR) - SUPERSEDED as the showcase AOI (goosenecked, fails the two-component reach gate); kept as a documented reject case
+_SACRAMENTO_REDBLUFF = [-122.198936, 40.097754, -122.112372, 40.152662]  # ADR 0239 amendment 2 - meander-robust connectivity search found a genuine straight, two-component reach (Sacramento River nr Red Bluff, CA)
 
 
 @dataclass
@@ -103,17 +104,22 @@ SHOWCASE: list[Showcase] = [
              "containment closed form: POC vs attack delay across head-fire "
              "intensities (no engine run; chart + scalars).", 120),
     Showcase("elmfire_spot_fire_barrier_crossing",
-             {"mode": "real", "bbox": _DESCHUTES_MAUPIN,
-              "ignition_lonlat": [-121.115, 45.182],
+             {"mode": "real", "bbox": _SACRAMENTO_REDBLUFF,
+              "ignition_lonlat": [-122.157671, 40.124842],
               "mean_spotting_distance_m": 60.0, "nembers": 30, "pign_pct": 100.0,
               "wind_speed_mph": 35.0, "wind_dir_deg": 270.0, "duration_hours": 6.0,
               "cellsize_m": 30.0, "compute_class": "standard"},
-             "ADR 0239 (real-data mode, CANONICAL): does ember spotting carry a real "
-             "wildfire across a REAL RIVER (lower Deschutes nr Maupin, OR - LANDFIRE "
-             "water class, non-burnable) that the contiguous front cannot cross? Real "
-             "LANDFIRE fuels + 3DEP DEM (slope/aspect drive spread), spotting OFF vs ON "
-             "on the same warp; river width + far-side burned area measured off the ToA "
-             "grid. Honest physics (the river may HOLD - no forced jump).", 900),
+             "ADR 0239 amendment 2 (real-data mode, CANONICAL): does ember spotting "
+             "carry a real wildfire across a REAL RIVER (Sacramento River nr Red "
+             "Bluff, CA - LANDFIRE water class, non-burnable) that the contiguous "
+             "front cannot cross? The AOI is a CONNECTIVITY-VERIFIED two-component "
+             "reach (scripts/proof_elmfire_river_barrier.py's meander-robust sliding "
+             "search - the lower Deschutes nr Maupin AOI this showcase used through "
+             "amendment 1 was goosenecked and REJECTED by that same gate). Real "
+             "LANDFIRE fuels + 3DEP DEM (slope/aspect drive spread), spotting OFF vs "
+             "ON on the same warp; head/far-side burned area split by 8-connected "
+             "land component (exact for any river shape), river width measured off "
+             "the ToA grid. Honest physics (the river may HOLD - no forced jump).", 900),
     Showcase("modflow_package_validation", {"case": "maw_crossaquifer"},
              "ADR 0153 MODFLOW package validation, MAW cross-aquifer fixture", 300),
     Showcase("modflow_package_validation", {"case": "sfr_stream_depletion"},
