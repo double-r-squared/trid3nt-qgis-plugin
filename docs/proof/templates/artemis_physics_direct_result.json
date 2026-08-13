@@ -1,0 +1,62 @@
+{
+  "engine": "artemis",
+  "solver": "trid3nt-local/telemac:latest (baked v9.0 artemis binary)",
+  "note": "ADR 0237 local-first physics proof, in-image through the real ARTEMIS binary. Geography-free analytic V&V. NOT productionized (two-wave rhythm).",
+  "resonance_harbour_agitation": {
+    "question_class": "harbour wave agitation / resonance (harbor_wave_agitation_resonance + harbour_tranquility_breakwater_agitation)",
+    "geometry": "narrow-mouth rectangular harbour (Lh=500 m, mouth 25 m) coupled to open sea, constant depth 10 m",
+    "discriminating_on_vs_off": {
+      "interior_meanHs_over_H0_off_resonance": 0.65,
+      "interior_meanHs_over_H0_at_resonance": 2.66,
+      "backwall_maxHs_over_H0": 4.2
+    },
+    "analytic_seiche_ladder_half_wave_2Lh_over_nc_s": [
+      101.0,
+      50.5,
+      33.7,
+      25.2,
+      20.2
+    ],
+    "measured_resonant_peaks_s": [
+      32,
+      46,
+      83
+    ],
+    "strongest_resonance_period_s": 32,
+    "mode_shape": "standing wave, ~3 half-waves along harbour; wavelength cT=317 m matches half-wave mode n=3 (analytic 33.7 s vs measured 32 s, +5%)",
+    "citation": "closed/semi-open basin seiche ladder T_n=2L/(n sqrt(gh)) (Wilson 1972; standard harbour resonance theory)"
+  },
+  "breakwater_diffraction_sommerfeld": {
+    "question_class": "breakwater diffraction / sheltering (breakwater_wave_diffraction_sheltering + island_diffraction_refraction)",
+    "geometry": "semi-infinite thin breakwater, tip mid-domain, constant depth 10 m, monochromatic T=8 s (wavelength 70.9 m)",
+    "Kd_shadow_boundary_line": {
+      "measured": 0.545,
+      "sommerfeld_analytic": 0.5
+    },
+    "Kd_deep_shadow": 0.294,
+    "Kd_lit_zone": 0.889,
+    "control_absent_Kd": {
+      "shadow_line": 0.99,
+      "deep": 0.954,
+      "lit": 0.97,
+      "note": "uniform ~1.0"
+    },
+    "citation": "Sommerfeld (1896) / Penny & Price (1952) semi-infinite rigid screen diffraction; Kd=0.5 on the shadow-boundary ray"
+  },
+  "berkhoff_elliptic_shoal": {
+    "question_class": "reef/shoal wave sheltering + refraction (reef_shoal_wave_sheltering)",
+    "geometry": "EXACT Berkhoff-Booij-Radder (1982) elliptic shoal on a 1:50 beach rotated 20 deg (corfon bathymetry from official bosse_elliptique), monochromatic T=1 s, incident H=0.0464 m, dx=0.15 m",
+    "focus_wave_axis_transect_peak_Kd": 2.23,
+    "focus_max_Kd_masked_region": 2.44,
+    "focus_p99_Kd": 1.72,
+    "flat_control_Kd": {
+      "p99": 1.15,
+      "mean": 1.01,
+      "note": "uniform ~1.0"
+    },
+    "published_berkhoff_focus_Kd": 2.2,
+    "note": "shoreline singularity (depth->0, breaking off) excluded (depth>0.12 m); caustic offset laterally by the 20 deg shoal rotation, as in the experiment",
+    "citation": "Berkhoff, Booij & Radder (1982), Coastal Engineering 6:255-279"
+  },
+  "fidelity_pairing_note": "artemis_tomawac_fidelity_pairing: phase-resolving tier demonstrated here vs the phase-averaged TOMAWAC tier (ADR 0236). ARTEMIS ships the NESTING WITHIN TOMAWAC keyword family (CHAINTWC, TOMAWAC OUTER SPECTRAL/RESULT/LIQUID BOUNDARY FILE) in the baked dico - the boundary-spectrum->monochromatic handoff is reachable; plumbing is a completion-wave build."
+}
