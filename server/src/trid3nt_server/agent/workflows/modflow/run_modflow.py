@@ -1060,6 +1060,15 @@ def build_and_stage_modflow_deck(
             ),
             river_reaches=getattr(run_args, "river_reaches", None),
             starting_head_by_cell=getattr(run_args, "starting_head_by_cell", None),
+            # --- ADR 0235: gwe_thermal heat-transport forcing (demo-defaulted) - #
+            # Ignored unless archetype == "gwe_thermal"; reuses the shared
+            # injection_rate_m3_day / n_cycles fields above.
+            gwe_mode=getattr(run_args, "gwe_mode", None),
+            injection_temperature_c=getattr(run_args, "injection_temperature_c", None),
+            ambient_temperature_c=getattr(run_args, "ambient_temperature_c", None),
+            thermal_conductivity_solid_wmc=getattr(
+                run_args, "thermal_conductivity_solid_wmc", None
+            ),
         )
 
     # --- 1b. advanced-physics overrides (levers STEP 3) ---------------------
@@ -1364,6 +1373,11 @@ def _run_args_to_deck_kwargs(run_args: MODFLOWRunArgs) -> dict[str, Any]:
             "csub_sse_elastic_m",
             "csub_interbed_thick_frac",
             "csub_cg_ske_m",
+            # ADR 0235: gwe_thermal heat-transport forcing (demo-defaulted).
+            "gwe_mode",
+            "injection_temperature_c",
+            "ambient_temperature_c",
+            "thermal_conductivity_solid_wmc",
         ):
             val = getattr(run_args, name, None)
             if val is not None:

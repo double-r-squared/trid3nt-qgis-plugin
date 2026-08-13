@@ -443,6 +443,7 @@ class MODFLOWRunArgs(EngineRunArgsMixin):
             "stream_depletion",
             "land_subsidence",
             "vadose_transport",
+            "gwe_thermal",
         ]
         | None
     ) = None
@@ -676,6 +677,53 @@ class MODFLOWRunArgs(EngineRunArgsMixin):
             "Saturated vertical hydraulic conductivity of the unsaturated medium (the "
             "UZF vks), m/day. Demo default 0.1 m/day (narrated as a demo assumption). "
             "Bounds the UZF column's downward flux capacity. Must be > 0."
+        ),
+    )
+
+    # --- gwe_thermal: GWF+GWE heat transport (ADR 0235) --------------------- #
+    # The heat twin of the contaminant plume: a warm-water injection WEL carrying
+    # an AUXILIARY TEMPERATURE, coupled through a GWF6-GWE6 exchange to a GWE
+    # energy-transport model (CND conduction + EST heat storage). ``gwe_mode``
+    # selects the physics question. Thermal properties are LOUD demo defaults (no
+    # thermal-property fetcher exists; 0215 doctrine) -- narrated on the manifest.
+    # ADDITIVE: every field is optional and ignored unless archetype ==
+    # "gwe_thermal" (all other decks byte-identical).
+    gwe_mode: Literal["injection_plume", "ates"] | None = Field(
+        default=None,
+        description=(
+            "GWE heat-transport question when archetype == 'gwe_thermal'. "
+            "'injection_plume' = a continuous warm-water injection well drives a "
+            "downgradient thermal plume (radial conductive-advective heat "
+            "transport, temperature-dependent-viscosity, generic thermal source). "
+            "'ates' = seasonal charge/recover cycling for aquifer thermal energy "
+            "storage recovery efficiency. Defaults to 'injection_plume' in the "
+            "adapter when None. Ignored unless archetype == 'gwe_thermal'."
+        ),
+    )
+    injection_temperature_c: float | None = Field(
+        default=None,
+        description=(
+            "Temperature of the injected water, degC (gwe_thermal). Default = "
+            "ambient + 30 degC (a demo assumption; a real run reads it from the "
+            "injection-system design). Ignored unless archetype == 'gwe_thermal'."
+        ),
+    )
+    ambient_temperature_c: float | None = Field(
+        default=None,
+        description=(
+            "Undisturbed aquifer temperature, degC (gwe_thermal). Default 10 degC "
+            "(LOUD demo default; a real run reads it from a groundwater-temperature "
+            "source). Ignored unless archetype == 'gwe_thermal'."
+        ),
+    )
+    thermal_conductivity_solid_wmc: float | None = Field(
+        default=None,
+        gt=0.0,
+        description=(
+            "Thermal conductivity of the aquifer grains, W/(m*degC) (gwe_thermal). "
+            "Default 2.5 W/(m*degC) (LOUD demo default; typical saturated "
+            "sand/gravel). Higher -> more conductive heat spreading. Ignored unless "
+            "archetype == 'gwe_thermal'."
         ),
     )
 

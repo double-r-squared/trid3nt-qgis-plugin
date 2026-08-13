@@ -93,6 +93,29 @@ KG_TO_G = 1000.0
 TIME_UNITS = "DAYS"
 LENGTH_UNITS = "METERS"
 
+# --- GWE (Groundwater Energy / heat transport) thermal defaults (ADR 0235) --- #
+# NO thermal-property fetcher exists, so these are LOUD, provenance-labelled
+# defaults (per the 0215 wellhead-reeval doctrine): typical saturated
+# sand/gravel aquifer thermal properties from the MF6 GWE example suite
+# (modflow6-examples ex-gwe-* input decks) and standard geothermal references.
+# The adapter narrates them as demo assumptions on the manifest; a caller may
+# override any of them. SI units where noted; the CND thermal conductivities are
+# converted from W/(m*degC) to the deck's DAYS time base (J/(m*day*degC)).
+GWE_AMBIENT_TEMPERATURE_C = 10.0          # undisturbed aquifer temperature, degC
+GWE_HEAT_CAPACITY_WATER = 4184.0          # J/(kg*degC)  (liquid water)
+GWE_DENSITY_WATER = 1000.0                # kg/m3
+GWE_HEAT_CAPACITY_SOLID = 800.0           # J/(kg*degC)  (quartz/silicate grains)
+GWE_DENSITY_SOLID = 2650.0                # kg/m3        (grain density)
+GWE_KT_WATER_WMC = 0.56                   # W/(m*degC)   thermal conductivity of water
+GWE_KT_SOLID_WMC = 2.50                   # W/(m*degC)   thermal conductivity of grains
+GWE_THERMAL_DISPERSIVITY_M = 10.0         # longitudinal thermal dispersivity, m
+# Convert conductivities to the DAYS time base the deck runs in.
+GWE_KT_WATER_DAY = GWE_KT_WATER_WMC * SECONDS_PER_DAY   # J/(m*day*degC)
+GWE_KT_SOLID_DAY = GWE_KT_SOLID_WMC * SECONDS_PER_DAY
+# GWE archetype family modes (heat-twin-of-plume). "gwe_thermal" is the single
+# family archetype; MODE selects the physics question.
+GWE_MODES = ("injection_plume", "ates")
+
 # ---------------------------------------------------------------------------
 # River-coupling demo defaults (J9 river-seepage). The RIV package is
 # the simplest head-dependent river<->aquifer flux boundary: per reach cell
@@ -853,6 +876,19 @@ class DeckManifest:
     gradient_source: str = "demo_west_east"  # "dem" | "demo_west_east"
     gradient_magnitude: float = 0.0     # |gradient| (m/m); 0.0 => manifest not populated
     gradient_azimuth_deg: float | None = None  # compass azimuth (deg) water flows toward
+    # --- GWE (heat transport / gwe_thermal archetype family, ADR 0235) ------- #
+    # All default to the non-GWE (contaminant/flow) path so every other deck is
+    # byte-identical. Set only when archetype == "gwe_thermal".
+    gwe_present: bool = False           # True iff a GWE energy-transport model was written
+    gwe_name: str = ""                  # GWE model name (e.g. "gwe_model")
+    gwe_mode: str = ""                  # "injection_plume" | "ates"
+    thermal_ucn_file: str = ""          # GWE TEMPERATURE output file (energy.ucn)
+    injection_temperature_c: float = 0.0  # injected-water temperature, degC
+    ambient_temperature_c: float = 0.0    # undisturbed aquifer temperature, degC
+    injection_rate_m3_day: float = 0.0    # warm-water injection rate, m3/day
+    thermal_conductivity_water_wmc: float = 0.0  # ktw, W/(m*degC) (pre-DAYS-conversion)
+    thermal_conductivity_solid_wmc: float = 0.0  # kts, W/(m*degC) (pre-DAYS-conversion)
+    thermal_defaults_are_demo: bool = False  # True iff thermal props are LOUD demo defaults
     # --- saltwater_intrusion (ADDITIVE) -------------------- #
     # ``archetype == "saltwater_intrusion"``: GWF (BUY variable-density) + GWT in ONE
     # sim, using a vertical nrow=1 slice (Henry geometry) with seaward GHB+AUX (salt)
@@ -4386,6 +4422,232 @@ def _build_saltwater_intrusion_deck(
     return manifest
 
 
+def _build_gwe_thermal_deck(
+    *,
+    mode: str,
+    lat: float,
+    lon: float,
+    crs,
+    xorigin: float,
+    yorigin: float,
+    nrow: int,
+    ncol: int,
+    delr: float,
+    delc: float,
+    k_m_per_day: float,
+    aquifer_k_ms: float,
+    porosity: float,
+    well_row: int,
+    well_col: int,
+    well_east: float,
+    well_north: float,
+    sim_dir: Path,
+    sim_name: str,
+    gwf_name: str,
+    write: bool,
+    # --- thermal forcing (all optional; LOUD provenance-labelled defaults) --- #
+    injection_temperature_c: float | None,
+    ambient_temperature_c: float | None,
+    injection_rate_m3_day: float | None,
+    duration_days: float,
+    n_cycles: int | None,
+    thermal_conductivity_solid_wmc: float | None,
+) -> DeckManifest:
+    """Assemble a GWE (heat-transport) GWF+GWE deck -- the heat twin of the plume.
+
+    ONE steady/transient GWF flow model (the SAME UTM-georegistered 40x40x50 m
+    grid + west->east REGIONAL_GRADIENT CHD as the spill deck) coupled through a
+    ``GWF6-GWE6`` exchange to a GWE energy-transport model
+    (DIS/IC/ADV(TVD)/CND/EST/SSM/OC). Thermal energy enters through a
+    warm-water injection WEL carrying an AUXILIARY ``TEMPERATURE`` that the GWE
+    SSM maps onto the transport source (the ex-gwe-ates / ex-gwe-barends pattern
+    -- see docs/decisions/0235-modflow-gwe.md for the replicated example roster).
+
+    Two modes (the ``gwe_thermal`` archetype family; heat-twin-of-plume, ADR 0235):
+      * ``injection_plume`` -- continuous warm-water injection drives a
+        downgradient thermal plume (radial conductive-advective heat transport,
+        temperature-dependent-viscosity plume, generic thermal source). The GWE
+        temperature field is written to ``energy.ucn`` for the temperature COG.
+      * ``ates`` -- seasonal charge/recover: ``n_cycles`` of (inject warm) then
+        (extract) at the SAME well, for aquifer thermal energy storage recovery.
+
+    Thermal properties are LOUD demo defaults (no thermal-property fetcher
+    exists; 0215 doctrine): they are stamped on the manifest as demo assumptions.
+    CND thermal conductivities are converted to the deck's DAYS time base.
+    """
+    if mode not in GWE_MODES:
+        raise ValueError(f"unknown GWE mode: {mode!r} (expected one of {GWE_MODES})")
+
+    ambient_t = (
+        GWE_AMBIENT_TEMPERATURE_C
+        if ambient_temperature_c is None
+        else float(ambient_temperature_c)
+    )
+    inject_t = (
+        ambient_t + 30.0
+        if injection_temperature_c is None
+        else float(injection_temperature_c)
+    )
+    q_inject = (
+        250.0 if injection_rate_m3_day is None else float(injection_rate_m3_day)
+    )
+    kts_wmc = (
+        GWE_KT_SOLID_WMC
+        if thermal_conductivity_solid_wmc is None
+        else float(thermal_conductivity_solid_wmc)
+    )
+    kts_day = kts_wmc * SECONDS_PER_DAY
+    n_cyc = int(n_cycles) if (n_cycles is not None and mode == "ates") else 0
+
+    gwe_name = "gwe_model"
+
+    # --- Build TDIS period plan + WEL schedule per mode --------------------- #
+    # Period 0 is always a steady-state flow spin-up (WEL off) so the thermal
+    # source starts on an established flow field (same off-in-spin-up idiom as
+    # the spill deck). Each transient period injects/extracts warm/ambient water.
+    n_transport_steps = int(max(1, min(round(duration_days), 365)))
+    perioddata: list[tuple] = [(1.0, 1, 1.0)]
+    wel_spd: dict[int, list] = {0: []}
+    injection_periods = 0
+    recovery_periods = 0
+    if mode == "injection_plume":
+        perioddata.append((float(duration_days), n_transport_steps, 1.2))
+        wel_spd[1] = [[(0, well_row, well_col), q_inject, inject_t]]
+        injection_periods = 1
+    else:  # ates: n_cyc x (inject season, extract season)
+        season_days = max(1.0, float(duration_days) / max(1, 2 * n_cyc))
+        season_steps = int(max(1, min(round(season_days), 120)))
+        p = 1
+        for _ in range(n_cyc):
+            perioddata.append((season_days, season_steps, 1.1))
+            wel_spd[p] = [[(0, well_row, well_col), q_inject, inject_t]]
+            injection_periods += 1
+            p += 1
+            perioddata.append((season_days, season_steps, 1.1))
+            wel_spd[p] = [[(0, well_row, well_col), -q_inject, ambient_t]]
+            recovery_periods += 1
+            p += 1
+
+    sim = flopy.mf6.MFSimulation(
+        sim_name=sim_name, sim_ws=str(sim_dir), exe_name="mf6", version="mf6",
+    )
+    flopy.mf6.ModflowTdis(
+        sim, time_units=TIME_UNITS, nper=len(perioddata), perioddata=perioddata,
+    )
+
+    # --- GWF flow model ----------------------------------------------------- #
+    ims_gwf = flopy.mf6.ModflowIms(
+        sim, filename=f"{gwf_name}.ims", complexity="SIMPLE",
+        outer_dvclose=1e-6, inner_dvclose=1e-6, linear_acceleration="CG",
+    )
+    gwf = flopy.mf6.ModflowGwf(
+        sim, modelname=gwf_name, model_nam_file=f"{gwf_name}.nam", save_flows=True,
+    )
+    sim.register_ims_package(ims_gwf, [gwf_name])
+    _build_gwf_dis(
+        gwf, gwf_name=gwf_name, nlay=N_LAYERS, nrow=nrow, ncol=ncol,
+        delr=delr, delc=delc, top=AQUIFER_TOP_M, botm=AQUIFER_BOTTOM_M,
+        xorigin=xorigin, yorigin=yorigin, crs=crs,
+    )
+    domain_width_m = ncol * delr
+    head_west = AQUIFER_TOP_M + REGIONAL_GRADIENT * domain_width_m
+    head_east = AQUIFER_TOP_M
+    flopy.mf6.ModflowGwfic(gwf, strt=head_west, filename=f"{gwf_name}.ic")
+    flopy.mf6.ModflowGwfnpf(
+        gwf, save_flows=True, save_specific_discharge=True, icelltype=0,
+        k=k_m_per_day, filename=f"{gwf_name}.npf",
+    )
+    chd_records = []
+    for r in range(nrow):
+        chd_records.append([(0, r, 0), head_west])
+        chd_records.append([(0, r, ncol - 1), head_east])
+    chd_spd = {ip: chd_records for ip in range(len(perioddata))}
+    flopy.mf6.ModflowGwfchd(gwf, stress_period_data=chd_spd, filename=f"{gwf_name}.chd")
+    flopy.mf6.ModflowGwfwel(
+        gwf, auxiliary=["TEMPERATURE"], stress_period_data=wel_spd,
+        pname="wel", filename=f"{gwf_name}.wel",
+    )
+    flopy.mf6.ModflowGwfoc(
+        gwf, head_filerecord=f"{gwf_name}.hds", budget_filerecord=f"{gwf_name}.cbc",
+        saverecord=[("HEAD", "LAST"), ("BUDGET", "ALL")], filename=f"{gwf_name}.oc",
+    )
+
+    # --- GWE energy-transport model ---------------------------------------- #
+    ims_gwe = flopy.mf6.ModflowIms(
+        sim, filename=f"{gwe_name}.ims", complexity="MODERATE",
+        outer_dvclose=1e-6, inner_dvclose=1e-6, linear_acceleration="BICGSTAB",
+    )
+    gwe = flopy.mf6.ModflowGwe(
+        sim, modelname=gwe_name, model_nam_file=f"{gwe_name}.nam", save_flows=True,
+    )
+    sim.register_ims_package(ims_gwe, [gwe_name])
+    flopy.mf6.ModflowGwedis(
+        gwe, length_units=LENGTH_UNITS, nlay=N_LAYERS, nrow=nrow, ncol=ncol,
+        delr=delr, delc=delc, top=AQUIFER_TOP_M, botm=AQUIFER_BOTTOM_M,
+        xorigin=xorigin, yorigin=yorigin, filename=f"{gwe_name}.dis",
+    )
+    flopy.mf6.ModflowGweic(gwe, strt=ambient_t, filename=f"{gwe_name}.ic")
+    flopy.mf6.ModflowGweadv(gwe, scheme="TVD", filename=f"{gwe_name}.adv")
+    flopy.mf6.ModflowGwecnd(
+        gwe, alh=GWE_THERMAL_DISPERSIVITY_M,
+        ath1=GWE_THERMAL_DISPERSIVITY_M * TRANSVERSE_HORIZONTAL_RATIO,
+        ktw=GWE_KT_WATER_DAY, kts=kts_day, filename=f"{gwe_name}.cnd",
+    )
+    flopy.mf6.ModflowGweest(
+        gwe, porosity=porosity,
+        heat_capacity_water=GWE_HEAT_CAPACITY_WATER, density_water=GWE_DENSITY_WATER,
+        heat_capacity_solid=GWE_HEAT_CAPACITY_SOLID, density_solid=GWE_DENSITY_SOLID,
+        filename=f"{gwe_name}.est",
+    )
+    flopy.mf6.ModflowGwessm(
+        gwe, sources=[["wel", "AUX", "TEMPERATURE"]], filename=f"{gwe_name}.ssm",
+    )
+    flopy.mf6.ModflowGweoc(
+        gwe, temperature_filerecord=f"{gwe_name}.ucn",
+        budget_filerecord=f"{gwe_name}.cbc",
+        saverecord=[("TEMPERATURE", "ALL"), ("BUDGET", "LAST")],
+        filename=f"{gwe_name}.oc",
+    )
+    flopy.mf6.ModflowGwfgwe(
+        sim, exgtype="GWF6-GWE6", exgmnamea=gwf_name, exgmnameb=gwe_name,
+        filename=f"gwfgwe_{gwe_name}.exg",
+    )
+
+    manifest = DeckManifest(
+        sim_dir=str(sim_dir), sim_name=sim_name, gwf_name=gwf_name,
+        gwt_name=gwe_name, model_crs=f"EPSG:{crs.to_epsg()}",
+        xorigin=xorigin, yorigin=yorigin, nrow=nrow, ncol=ncol, nlay=N_LAYERS,
+        delr=delr, delc=delc,
+        spill_row=well_row, spill_col=well_col,
+        spill_easting_m=well_east, spill_northing_m=well_north,
+        spill_lat=lat, spill_lon=lon,
+        mass_rate_g_per_day=0.0, release_rate_kg_s=0.0,
+        duration_days=float(duration_days), n_transport_steps=n_transport_steps,
+        contaminant="temperature", aquifer_k_ms=aquifer_k_ms, porosity=porosity,
+        archetype="gwe_thermal", gwt_present=True, transient=True,
+        n_stress_periods=len(perioddata),
+        well_row=well_row, well_col=well_col,
+        well_easting_m=well_east, well_northing_m=well_north,
+        well_lat=lat, well_lon=lon,
+        n_cycles=n_cyc, injection_periods=injection_periods,
+        recovery_periods=recovery_periods,
+        gwe_present=True, gwe_name=gwe_name, gwe_mode=mode,
+        thermal_ucn_file=f"{gwe_name}.ucn",
+        injection_temperature_c=inject_t, ambient_temperature_c=ambient_t,
+        injection_rate_m3_day=q_inject,
+        thermal_conductivity_water_wmc=GWE_KT_WATER_WMC,
+        thermal_conductivity_solid_wmc=kts_wmc,
+        thermal_defaults_are_demo=True,
+    )
+
+    if write:
+        sim.write_simulation()
+        manifest.files = sorted(
+            str(p.relative_to(sim_dir)) for p in sim_dir.rglob("*") if p.is_file()
+        )
+    return manifest
+
+
 def build_modflow_deck(
     spill_location_latlon: tuple[float, float],
     contaminant: str,
@@ -4512,6 +4774,15 @@ def build_modflow_deck(
     # None (default) => uniform DIS, byte-identical. LIVE DISV gated on the
     # gridgen binary (GridgenUnavailableError names the image condition).
     refine_regions: list[dict] | None = None,
+    # --- gwe_thermal (heat transport, ADR 0235; ADDITIVE, all optional) ------ #
+    # Threaded into the GWE deck when archetype == "gwe_thermal"; ignored
+    # otherwise. ``gwe_mode`` selects injection_plume vs ates (reuses the shared
+    # ``n_cycles`` field for ates). Thermal properties are LOUD demo defaults
+    # (no thermal-property fetcher exists; 0215 doctrine).
+    gwe_mode: str | None = None,
+    injection_temperature_c: float | None = None,
+    ambient_temperature_c: float | None = None,
+    thermal_conductivity_solid_wmc: float | None = None,
 ) -> DeckManifest:
     """Assemble a complete MF6 GWF+GWT spill deck and (optionally) write it.
 
@@ -4633,6 +4904,17 @@ def build_modflow_deck(
             raise ValueError(
                 "multi_species archetype requires a non-empty species list"
             )
+    elif archetype == "gwe_thermal":
+        if duration_days <= 0:
+            raise ValueError(
+                f"gwe_thermal duration_days must be > 0, got {duration_days!r}"
+            )
+        if gwe_mode is not None and gwe_mode not in GWE_MODES:
+            raise ValueError(
+                f"unknown gwe_mode: {gwe_mode!r} (expected one of {GWE_MODES})"
+            )
+        if (gwe_mode == "ates") and (n_cycles is None or int(n_cycles) < 1):
+            raise ValueError("gwe_thermal ates mode requires n_cycles >= 1")
     if aquifer_k_ms <= 0:
         raise ValueError(f"aquifer_k_ms must be > 0, got {aquifer_k_ms!r}")
     if not (0.0 < porosity < 1.0):
@@ -4702,8 +4984,43 @@ def build_modflow_deck(
             "stream_depletion",
             "land_subsidence",
             "vadose_transport",
+            "gwe_thermal",
         ):
             raise ValueError(f"unknown MODFLOW archetype: {archetype!r}")
+        # gwe_thermal: GWF + GWE heat-transport in ONE sim (heat twin of the
+        # plume). Reuses the plan-view UTM georegistration + REGIONAL_GRADIENT
+        # CHD computed above; the warm-water injection WEL sits at the grid
+        # centre (the resolved spill cell). ADR 0235.
+        if archetype == "gwe_thermal":
+            return _build_gwe_thermal_deck(
+                mode=(gwe_mode or "injection_plume"),
+                lat=lat,
+                lon=lon,
+                crs=crs,
+                xorigin=xorigin,
+                yorigin=yorigin,
+                nrow=nrow,
+                ncol=ncol,
+                delr=delr,
+                delc=delc,
+                k_m_per_day=k_m_per_day,
+                aquifer_k_ms=aquifer_k_ms,
+                porosity=porosity,
+                well_row=spill_row,
+                well_col=spill_col,
+                well_east=spill_cell_east,
+                well_north=spill_cell_north,
+                sim_dir=sim_dir,
+                sim_name=sim_name,
+                gwf_name=gwf_name,
+                write=write,
+                injection_temperature_c=injection_temperature_c,
+                ambient_temperature_c=ambient_temperature_c,
+                injection_rate_m3_day=injection_rate_m3_day,
+                duration_days=duration_days,
+                n_cycles=n_cycles,
+                thermal_conductivity_solid_wmc=thermal_conductivity_solid_wmc,
+            )
         # saltwater_intrusion: GWF (BUY variable-density) + GWT in ONE sim,
         # vertical nrow=1 Henry-style slice with seaward GHB+AUX and inland WEL+AUX.
         # Bypasses the plan-view UTM georegistration used by other archetypes.
