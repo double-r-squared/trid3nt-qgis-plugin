@@ -1,0 +1,24 @@
+{
+  "source": "OSM Overpass man_made=breakwater",
+  "aoi_bbox": [
+    -87.392,
+    46.528,
+    -87.368,
+    46.55
+  ],
+  "osm_way_ids": [
+    216267644,
+    216267645,
+    216267671,
+    1107828566,
+    1107828567,
+    1107847179,
+    1107847180,
+    1107847181,
+    1107957648
+  ],
+  "n_ways": 9,
+  "n_vertices": 184,
+  "harbor": "Marquette Lower Harbor / Cinder Pond Marina, Lake Superior",
+  "incident_wave_dir_deg_trig": 129.2
+}

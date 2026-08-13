@@ -98,6 +98,16 @@ class ArtemisConfig:
     #: real-bathy diffraction: schematic breakwater segment (lon0,lat0,lon1,lat1),
     #: EPSG:4326. None -> a labeled demo segment across the AOI (see build).
     breakwater: tuple = None            # type: ignore[assignment]
+    #: real-bathy diffraction: the REAL surveyed structure as one or more polylines
+    #: [[lon,lat], ...] (e.g. OSM man_made=breakwater/pier ways), EPSG:4326. Takes
+    #: precedence over `breakwater` + the demo segment: the ACTUAL geometry is
+    #: meshed as a thin solid reflecting barrier over the real bathymetry.
+    breakwater_polylines: list = None   # type: ignore[assignment]
+    #: proof-norm-#9 REMOVED control: keep the real bathy + the same lee/exposed
+    #: split geometry but do NOT mesh the structure as solid (the "breakwater
+    #: removed" half of the present-vs-removed pair). Only meaningful with
+    #: breakwater_polylines set.
+    remove_structure: bool = False
     #: real-bathy: nodes shallower than this (or land / NaN) are masked out of the
     #: wet domain (m, positive depth below the datum).
     min_depth_m: float = 1.0
@@ -427,6 +437,43 @@ def _bbox_utm_epsg(bbox):
     return (32600 if lat >= 0 else 32700) + zone
 
 
+def _polylines_to_segments(polylines, tr, x0m, y0m):
+    """Project REAL lon/lat structure polylines to LOCAL-frame UTM segments.
+
+    ``polylines`` is a list of ``[[lon,lat], ...]`` vertex lists (e.g. OSM
+    man_made=breakwater / pier ways). Returns an ``(M, 4)`` array of consecutive
+    ``(x0,y0,x1,y1)`` segments in the mesh's local frame (AOI SW-corner origin
+    subtracted, matching the node coordinates). A degenerate polyline (< 2 pts)
+    contributes nothing; if NOTHING is drawable it is a typed input error."""
+    segs = []
+    for pl in polylines or ():
+        pts = [tr.transform(float(lon), float(lat)) for lon, lat in pl if pl]
+        for (ax, ay), (bx, by) in zip(pts[:-1], pts[1:]):
+            segs.append((ax - x0m, ay - y0m, bx - x0m, by - y0m))
+    if not segs:
+        raise ArtemisInputError(
+            "ARTEMIS_PARAMS_INVALID",
+            "breakwater_polylines carried no drawable segment (need >= 2 vertices "
+            "in at least one polyline).")
+    return np.asarray(segs, dtype=float)
+
+
+def _dist_to_segments(px, py, segs):
+    """Min distance from each point to a SET of segments (loops the few segments,
+    vectorized over the many points). ``segs`` is the ``(M,4)`` local-frame array."""
+    px = np.asarray(px, dtype=float)
+    py = np.asarray(py, dtype=float)
+    best = np.full(px.shape, np.inf)
+    for ax, ay, bx, by in segs:
+        vx, vy = bx - ax, by - ay
+        l2 = (vx * vx + vy * vy) or 1.0
+        t = np.clip(((px - ax) * vx + (py - ay) * vy) / l2, 0.0, 1.0)
+        cx = ax + t * vx
+        cy = ay + t * vy
+        best = np.minimum(best, np.hypot(px - cx, py - cy))
+    return best
+
+
 # ---------------------------------------------------------------------------
 # 5. The three question-class solves.
 #    Each writes: res_agitation.slf (the raw ARTEMIS result, mesh sibling for
@@ -519,40 +566,51 @@ def _solve_diffraction_real(cfg: ArtemisConfig, data_dir: str, run_id):
             "Pick an OPEN-WATER harbour approach AOI (few interior land nodes) "
             "inside a Great Lake.")
 
-    # breakwater segment (UTM, local origin). A user-supplied segment can float
-    # anywhere (the projection split handles it); the labeled DEMO segment is a
-    # semi-infinite breakwater ATTACHED to the west AOI edge with an interior tip
-    # -- the clean Sommerfeld topology (a floating internal barrier isolates stray
-    # boundary nodes and aborts FRONT2). For the demo, the incident wave is forced
-    # perpendicular (+Y) so the geometric shadow sits due-north of the tip.
-    demo_bw = not (cfg.breakwater and len(cfg.breakwater) == 4)
-    if not demo_bw:
+    # Structure geometry as LOCAL-frame UTM segments. Three sources, by priority:
+    #   1. breakwater_polylines -- the REAL surveyed structure (e.g. OSM man_made=
+    #      breakwater / pier ways): mesh the ACTUAL geometry as a thin solid barrier
+    #      (many segments; marching cells route the mesh around the 1-cell slit).
+    #   2. breakwater -- a single user-supplied (lon0,lat0,lon1,lat1) segment.
+    #   3. else -- a labeled schematic demo segment attached to the west AOI edge
+    #      (a floating internal barrier isolates stray boundary nodes and aborts
+    #      FRONT2, so the demo attaches to the edge; for the demo the incident wave
+    #      is forced perpendicular (+Y) so the geometric shadow sits due-north).
+    real_struct = bool(cfg.breakwater_polylines)
+    demo_bw = (not real_struct
+               and not (cfg.breakwater and len(cfg.breakwater) == 4))
+    if real_struct:
+        segs = _polylines_to_segments(cfg.breakwater_polylines, tr, x0m, y0m)
+        wdir = float(cfg.wave_dir_deg)
+        bw_label = (f"REAL surveyed breakwater (as mapped in OpenStreetMap "
+                    f"man_made=breakwater/pier, {len(segs)} segments) meshed as a "
+                    f"thin solid reflecting barrier over real NOAA lake bathymetry")
+    elif not demo_bw:
         bx0, by0 = tr.transform(cfg.breakwater[0], cfg.breakwater[1])
         bx1, by1 = tr.transform(cfg.breakwater[2], cfg.breakwater[3])
-        seg = (bx0 - x0m, by0 - y0m, bx1 - x0m, by1 - y0m)
+        segs = np.asarray([(bx0 - x0m, by0 - y0m, bx1 - x0m, by1 - y0m)],
+                          dtype=float)
         bw_label = "user-supplied breakwater segment"
         wdir = float(cfg.wave_dir_deg)
     else:
         y_bw = Ly * 0.55
         tip_x = Lx * 0.5
-        seg = (0.0, y_bw, tip_x, y_bw)   # west edge -> interior tip (horizontal)
+        segs = np.asarray([(0.0, y_bw, tip_x, y_bw)], dtype=float)
         wdir = 90.0                      # +Y, perpendicular to the barrier
         bw_label = ("schematic demo breakwater (labeled): a thin solid semi-"
                     "infinite barrier from the west AOI edge to an interior tip, "
                     "the incident wave normal to it -- not a surveyed structure")
 
-    # mask: wet AND not on the breakwater line (thin barrier ~1 cell wide)
-    bx0, by0, bx1, by1 = seg
-    seg_len = float(np.hypot(bx1 - bx0, by1 - by0)) or 1.0
+    def _dist_fn(px, py):
+        # min distance to ANY structure segment (single-seg + demo are 1-element).
+        return _dist_to_segments(px, py, segs)
 
-    def _dist_to_seg(px, py):
-        vx, vy = bx1 - bx0, by1 - by0
-        t = np.clip(((px - bx0) * vx + (py - by0) * vy) / (seg_len * seg_len), 0.0, 1.0)
-        cxp = bx0 + t * vx
-        cyp = by0 + t * vy
-        return np.hypot(px - cxp, py - cyp)
+    # proof-norm-#9 REMOVED control: same bathy + the same split geometry, but the
+    # structure is NOT a solid barrier (no masked line, no reflecting faces).
+    structure_solid = not (real_struct and bool(cfg.remove_structure))
 
-    on_bw_grid = _dist_to_seg(Xg, Yg) <= dx * 0.6
+    # mask: wet AND not on the structure line (thin barrier ~1 cell wide)
+    on_bw_grid = (_dist_fn(Xg, Yg) <= dx * 0.6) if structure_solid \
+        else np.zeros(Xg.shape, dtype=bool)
     keep_grid = wet_grid & (~on_bw_grid)
     # bed restricted to the kept nodes (build_mesh keeps nodes in np.nonzero(keep)
     # order, so the masked bed lines up with the compacted node coords).
@@ -582,8 +640,8 @@ def _solve_diffraction_real(cfg: ArtemisConfig, data_dir: str, run_id):
     edge_tol = dx * 0.5
 
     def classify(x, y):
-        if _dist_to_seg(np.array([x]), np.array([y]))[0] <= dx * 1.6:
-            return (2, 0.0, 0.0, 0.0, rp)
+        if structure_solid and _dist_fn(np.array([x]), np.array([y]))[0] <= dx * 1.6:
+            return (2, 0.0, 0.0, 0.0, rp)          # structure face: solid reflecting
         on_edge = (x <= edge_tol or x >= Lx - edge_tol
                    or y <= edge_tol or y >= Ly - edge_tol)
         if on_edge:
@@ -594,7 +652,9 @@ def _solve_diffraction_real(cfg: ArtemisConfig, data_dir: str, run_id):
                 n_wet_nodes=int(mesh["npoin"]), depth_mean_m=round(h_mean, 1),
                 depth_max_m=round(float(-np.nanmin(bed[wet_grid])), 1),
                 bathy_label="real NOAA Great Lakes lake-datum bathymetry",
-                bw_label=bw_label)
+                structure_present=bool(structure_solid),
+                bw_label=(bw_label if structure_solid
+                          else bw_label + " -- REMOVED (proof-norm-#9 control)"))
     if demo_bw:
         # semi-infinite west-attached barrier + normal incidence: the geometric
         # shadow is the idealized split (downwave of + laterally behind the tip).
@@ -604,10 +664,15 @@ def _solve_diffraction_real(cfg: ArtemisConfig, data_dir: str, run_id):
                                 bathy_label=meta["bathy_label"], utm_epsg=epsg,
                                 bbox=bbox, x0m=x0m, y0m=y0m, back=back,
                                 bw_mid=None, wave_uv=None, extra=meta)
-    # user-supplied floating segment: the projection split about the barrier mid.
+    # real surveyed structure OR user segment: the projection split about the
+    # structure centroid (all segment endpoints, local frame). Sheltered = downwave
+    # of the barrier along the incident direction; exposed = the lit approach.
     wrad = np.radians(wdir)
     ux, uy = np.cos(wrad), np.sin(wrad)
-    bw_mid = ((bx0 + bx1) * 0.5 - x0m, (by0 + by1) * 0.5 - y0m)
+    allx = np.concatenate([segs[:, 0], segs[:, 2]])
+    ally = np.concatenate([segs[:, 1], segs[:, 3]])
+    bw_mid = (float(allx.mean()), float(ally.mean()))
+    meta["n_structure_segments"] = int(len(segs))
     return _run_diffraction(cfg, mesh, data_dir, run_id, classify,
                             H0=H0, T=float(cfg.wave_period_s), h=max(h_mean, 1.0),
                             wdir=wdir, x_tip=None, y_bw=None, dx=dx,

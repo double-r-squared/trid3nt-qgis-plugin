@@ -1090,8 +1090,10 @@ class ArtemisManifestUnknownFieldsError(ValueError):
 #: because it doubles as the artemis worker-image/behavior provenance marker the
 #: image-staleness law (ADR 0148) keys off. -1 is the initial agitation leg (three
 #: question classes diffraction/resonance/shoal + the NOAA Great Lakes real-bathy
-#: breakwater-diffraction path).
-_ARTEMIS_PARSER_VERSION = "artemis-agitation-1"
+#: breakwater-diffraction path). -2 adds the REAL surveyed-structure path:
+#: breakwater_polylines (OSM man_made=breakwater/pier geometry meshed as a thin
+#: solid barrier) + remove_structure (the proof-norm-#9 present-vs-removed control).
+_ARTEMIS_PARSER_VERSION = "artemis-agitation-2"
 
 
 def _artemis_config(data_dir: Path, overrides: dict[str, Any]) -> Any:

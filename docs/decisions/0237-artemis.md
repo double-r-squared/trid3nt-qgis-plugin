@@ -259,3 +259,53 @@ documented nesting-narrative row).
   boundaries) for resonance/shoal over real geography; the TOMAWAC->ARTEMIS
   nesting handoff (the fidelity-pairing row's CHAINTWC plumbing); a
   surveyed-breakwater geometry fetcher to retire the schematic-barrier label.
+
+## Amendment 2026-08-13 -- REAL surveyed breakwater (norm #10) + latent #7 georef fix
+
+Two landings closed the schematic-barrier follow-up and the georef bug the
+proof-render ask surfaced (commit f575168 "the ask caught latent #7").
+
+**Latent #7 -- local-frame georef (BLOCKING, agent-side, no image rebuild).**
+`postprocess_artemis` fed the result mesh's LOCAL coordinates (origin-shifted by
+the AOI SW corner so SELAFIN float32 keeps sub-metre precision) straight through
+the `utm_epsg` inverse as if they were true eastings -- the published Kd COG (and
+the earlier schematic E2E `01KZXAF...`) landed at lon ~-91.5 / lat ~0 (Gulf of
+Guinea) instead of Marquette. FIX: reconstruct the origin offset from the request
+bbox SW corner (`Transformer(4326->utm).transform(min_lon,min_lat)` -- the exact
+value the mesh builder subtracts) and add it back before the inverse; require the
+bbox whenever `utm_epsg` is set (a missing offset is refused, never guessed). The
+composer threads `metrics["bbox"]` in. REGRESSION: `test_postprocess_artemis_georef.py`
+(3 tests) asserts the published COG bounds fall INSIDE the request bbox and that
+the pre-fix raw-coordinate path (center lon ~-91.46, lat ~0.02) is rejected -- the
+test that would have caught it.
+
+**Real marina (norm #10).** The worker meshes the ACTUAL surveyed breakwater as a
+thin solid barrier: `ArtemisConfig.breakwater_polylines` (a list of OSM
+man_made=breakwater ways [[lon,lat],...]) is projected to the local frame and
+masked/classified as many segments (marching cells route the mesh around the
+1-cell slit; single-ring topology preserved), and `remove_structure` keeps the
+same bathy + split geometry but drops the solid barrier -- the proof-norm-#9
+present-vs-removed control. Parser version -> `artemis-agitation-2`. The composer
+AUTO-FETCHES the real structure from OSM (man_made=breakwater; piers EXCLUDED --
+they are berthing docks, the thing sheltered, not barriers) for a real-bathy
+diffraction request, threads the polylines into the manifest, and surfaces the
+surveyed geometry as a `role="context"` FlatGeobuf (ADR 0231). Empty fetch -> the
+labeled schematic (never a fabricated structure).
+
+**Live numbers (Marquette Lower Harbor / Cinder Pond Marina, Lake Superior).**
+Through the rebuilt image, direct-call composer E2E (run `01KZXY0RZXZ3E7J7PSHHSZKFC0`):
+OSM auto-fetch 9 breakwater ways / 175 mesh segments (third Overpass mirror after
+two 504s -- the fallback chain earned its keep), real NOAA DEM_all bathy (~2670
+wet nodes, depths to ~215 m), labeled incident swell Hs=2.0 m T=8 s from the open
+lake (SE, dir 129 deg trig), rubble-mound RP=0.5. The real breakwater cuts the
+marina-lee agitation ~24% (mean Kd 0.119 removed -> 0.090 present) and sets up the
+seaward diffraction/reflection standing-wave field (kd_max 2.76 removed -> 3.95
+present); the sheltered lee (Kd~0.09) stays far below the exposed approach
+(Kd~0.35). Published Kd COG georeferences INSIDE the AOI (latent #7 fixed
+end-to-end). Proof pair (ESRI World Imagery, real solver field, OSM structure
+overlaid): `docs/proof/templates/artemis_real_breakwater/artemis_real_breakwater_pair.png`
++ `pair_metrics.json` + `osm_structure_evidence.json` (OSM way ids).
+
+**Showcase reseed.** Canonical case = the REAL Lower Harbor breakwater
+(auto-OSM + real bathy); the analytic Sommerfeld semi-infinite schematic is kept
+beside it as the LABELED verification tier (norm #10).

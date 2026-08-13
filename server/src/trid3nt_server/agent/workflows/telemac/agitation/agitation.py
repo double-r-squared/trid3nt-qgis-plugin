@@ -202,7 +202,10 @@ async def artemis_harbor_agitation(
     sheltering / focusing". Answers THREE question classes via ``wave_mode``:
 
       - ``diffraction`` (default) - a breakwater shelters a berthing area; the lee
-        agitation is far below the exposed approach.
+        agitation is far below the exposed approach. On a REAL Great Lakes harbour
+        the ACTUAL surveyed breakwater is auto-fetched from OpenStreetMap
+        (man_made=breakwater) and meshed as a thin solid barrier over real
+        bathymetry; only if OSM has no structure does a LABELED schematic apply.
       - ``resonance`` - a narrow-mouth harbour amplifies swell at its seiche
         periods (response spikes AT resonance, quiet OFF).
       - ``shoal`` - a nearshore reef/shoal refracts + focuses waves (a focus peak
@@ -230,8 +233,10 @@ async def artemis_harbor_agitation(
         reflection_coef: structure/quay reflection coefficient (1=fully reflecting,
             0=absorbing). Default 1. Clamped [0, 1].
         breakwater: OPTIONAL diffraction breakwater segment
-            ``(lon0, lat0, lon1, lat1)`` EPSG:4326 (real-bathy path). Unset -> a
-            LABELED schematic segment across the harbour approach.
+            ``(lon0, lat0, lon1, lat1)`` EPSG:4326 that PINS the structure and
+            suppresses the OSM auto-fetch. Unset (real-bathy) -> the ACTUAL
+            surveyed breakwater is fetched from OpenStreetMap and meshed; if OSM
+            has none, a LABELED schematic segment applies.
         target_resolution_m: OPTIONAL grid node spacing (m). Unset -> a labeled
             default (real 40 m, idealized 8 m). Floored at 20 m and coarsened
             under the node budget (self-labeled).
@@ -394,6 +399,86 @@ def _stage_agitation_manifest(agitation: dict[str, Any], run_tag: str) -> str:
     return f"s3://{cache_bucket}/{key}"
 
 
+#: Overpass mirrors (data-source fallback norm: primary -> mirror -> honest give-up).
+_OVERPASS_MIRRORS = (
+    "https://overpass-api.de/api/interpreter",
+    "https://overpass.kumi.systems/api/interpreter",
+    "https://maps.mail.ru/osm/tools/overpass/api/interpreter",
+)
+
+
+def _fetch_osm_breakwaters(aoi: tuple[float, float, float, float]) -> list[list[list[float]]]:
+    """Fetch REAL surveyed breakwater geometry (OSM man_made=breakwater ways) in the
+    AOI as polylines [[lon,lat], ...]. BEST-EFFORT: any failure returns [] (the run
+    falls back to the LABELED schematic barrier, never fabricates a structure).
+
+    man_made=pier is deliberately EXCLUDED: piers are marina berthing docks (the
+    thing being sheltered), not wave barriers -- meshing them as solid would be
+    physically wrong for the sheltering question."""
+    import urllib.parse
+    import urllib.request
+
+    w, s, e, n = (float(aoi[0]), float(aoi[1]), float(aoi[2]), float(aoi[3]))
+    ql = (f'[out:json][timeout:40];'
+          f'(way["man_made"="breakwater"]({s},{w},{n},{e}););out geom;')
+    body = b"data=" + urllib.parse.quote(ql).encode()
+    for url in _OVERPASS_MIRRORS:
+        try:
+            req = urllib.request.Request(
+                url, data=body, headers={"User-Agent": "trid3nt/0.1 (agent@trid3nt.dev)"})
+            with urllib.request.urlopen(req, timeout=45) as resp:
+                payload = json.loads(resp.read().decode("utf-8"))
+            polylines = [
+                [[float(p["lon"]), float(p["lat"])] for p in el.get("geometry", [])]
+                for el in payload.get("elements", [])
+                if len(el.get("geometry", [])) >= 2
+            ]
+            if polylines:
+                logger.info("artemis: fetched %d OSM breakwater ways in %s",
+                            len(polylines), aoi)
+            return polylines
+        except Exception as exc:  # noqa: BLE001 - best-effort, mirror fallback
+            logger.warning("artemis: OSM breakwater fetch via %s failed: %s",
+                           url.split("/")[2], exc)
+    logger.warning("artemis: OSM breakwater fetch exhausted for %s -- schematic fallback", aoi)
+    return []
+
+
+def _stage_breakwater_fgb(polylines, run_tag: str, name: str):
+    """Write the surveyed breakwater polylines to a FlatGeobuf in the cache bucket
+    and return a context ``LayerURI`` (role=context) for input-parity (ADR 0231).
+    BEST-EFFORT: returns None on any failure (input surfacing is never fatal)."""
+    try:
+        import geopandas as gpd
+        from shapely.geometry import LineString
+
+        from trid3nt_contracts.execution import LayerURI
+        from trid3nt_server.agent.tools.simulation.solver.solver import _get_s3_client
+
+        cache_bucket = (os.environ.get("TRID3NT_CACHE_BUCKET") or "").strip()
+        if not cache_bucket:
+            return None
+        geoms = [LineString(pl) for pl in polylines if len(pl) >= 2]
+        if not geoms:
+            return None
+        gdf = gpd.GeoDataFrame({"osm_kind": ["breakwater"] * len(geoms)},
+                               geometry=geoms, crs="EPSG:4326")
+        tmp = tempfile.mkdtemp(prefix=f"bw-fgb-{run_tag}-")
+        fgb = os.path.join(tmp, "breakwater.fgb")
+        gdf.to_file(fgb, driver="FlatGeobuf")
+        key = f"artemis/{run_tag}/breakwater_structure.fgb"
+        with open(fgb, "rb") as fh:
+            _get_s3_client().put_object(Bucket=cache_bucket, Key=key, Body=fh.read(),
+                                        ContentType="application/octet-stream")
+        return LayerURI(
+            layer_id=f"artemis-breakwater-{run_tag}", name=f"Surveyed breakwater ({name})",
+            layer_type="vector", uri=f"s3://{cache_bucket}/{key}",
+            style_preset="affected_buildings", role="context")
+    except Exception as exc:  # noqa: BLE001 - input surfacing is never fatal
+        logger.warning("artemis: breakwater FGB staging failed (non-fatal): %s", exc)
+        return None
+
+
 def _download_agitation_result(run_id: str) -> tuple[str, dict[str, Any]]:
     """Download ``agit_field.slf`` + read telemac_metrics.json. Returns (path, metrics)."""
     from trid3nt_server.agent.tools.simulation.solver.solver import (
@@ -440,13 +525,16 @@ async def model_artemis_harbor_agitation(
     bathy_source: str,
     compute_class: str = "medium",
     input_mode: str | None = None,
+    breakwater_polylines: list | None = None,
     pipeline_emitter: Any = None,
 ) -> ArtemisAgitationLayerURI:
     """Compose place/AOI -> ARTEMIS agitation field -> published Kd layer.
 
-    A real Great Lakes AOI (diffraction) -> NOAA lake-datum bathymetry + a
-    schematic breakwater; otherwise an idealized analytic domain (labeled). Stages
-    the ``agitation`` manifest, dispatches the generic run_solver seam
+    A real Great Lakes AOI (diffraction) -> NOAA lake-datum bathymetry + the REAL
+    surveyed breakwater auto-fetched from OSM (or a driver-supplied
+    ``breakwater_polylines``; a schematic only if OSM has none); otherwise an
+    idealized analytic domain (labeled). Stages the ``agitation`` manifest, the
+    surveyed structure surfaces as a context layer (ADR 0231), dispatches run_solver
     (solver=artemis_agitation), downloads the single-frame agitation field, and
     postprocesses it to a Kd 4326 COG.
     """
@@ -499,6 +587,7 @@ async def model_artemis_harbor_agitation(
     real = (wave_mode == "diffraction") and (
         src == "noaa_greatlakes" or (src == "auto" and lake is not None))
 
+    real_polylines: list | None = None
     if real:
         if bbox is not None:
             aoi = tuple(float(v) for v in bbox)
@@ -508,6 +597,14 @@ async def model_artemis_harbor_agitation(
             aoi = (round(center_lon - h, 4), round(center_lat - h, 4),
                    round(center_lon + h, 4), round(center_lat + h, 4))
         bathy_label = f"real NOAA Great Lakes lake-datum bathymetry ({lake or 'AOI'})"
+        # REAL surveyed structure (norm #10 "a real marina with a real breaker"):
+        # a driver-supplied geometry wins; else, when no single segment is pinned,
+        # auto-fetch the ACTUAL breakwater from OSM and mesh it. Empty fetch ->
+        # the labeled schematic barrier (never a fabricated structure).
+        if breakwater_polylines:
+            real_polylines = [pl for pl in breakwater_polylines if len(pl) >= 2]
+        elif not breakwater:
+            real_polylines = await asyncio.to_thread(_fetch_osm_breakwaters, aoi) or None
     else:
         aoi = None
         if wave_mode == "resonance":
@@ -537,14 +634,22 @@ async def model_artemis_harbor_agitation(
             basis="fetched" if real else "default_demo", note=bathy_label),
     ]
     if wave_mode == "diffraction":
+        if real_polylines:
+            _bw_val, _bw_basis, _bw_note = (
+                f"real_surveyed_{len(real_polylines)}_ways", "fetched",
+                "the REAL surveyed breakwater (OSM man_made=breakwater) meshed as a "
+                "thin solid barrier over real bathymetry")
+        elif breakwater:
+            _bw_val, _bw_basis, _bw_note = (
+                "user-supplied", "user", "user-supplied breakwater segment")
+        else:
+            _bw_val, _bw_basis, _bw_note = (
+                "schematic_demo", "default_demo",
+                "a LABELED schematic breakwater across the approach (no surveyed "
+                "structure fetched)")
         _review_entries.append(SyntheticInput(
-            param="breakwater",
-            value="user-supplied" if breakwater else "schematic_demo",
-            units=None,
-            basis="user" if breakwater else "default_demo",
-            note=("user-supplied breakwater segment" if breakwater else
-                  "a LABELED schematic breakwater across the approach (no surveyed "
-                  "structure fetched)")))
+            param="breakwater", value=_bw_val, units=None,
+            basis=_bw_basis, note=_bw_note))
     _review = await gate_input_review(
         tool_name="artemis_harbor_agitation", mode=input_mode,
         entries=_review_entries,
@@ -569,7 +674,11 @@ async def model_artemis_harbor_agitation(
     }
     if real:
         agitation["bbox"] = [round(v, 4) for v in aoi]
-        if breakwater:
+        if real_polylines:
+            agitation["breakwater_polylines"] = [
+                [[round(lon, 6), round(lat, 6)] for lon, lat in pl]
+                for pl in real_polylines]
+        elif breakwater:
             agitation["breakwater"] = [round(v, 5) for v in breakwater]
     run_tag = new_ulid()
     manifest_uri = await asyncio.to_thread(_stage_agitation_manifest, agitation, run_tag)
@@ -619,12 +728,17 @@ async def model_artemis_harbor_agitation(
     batch_run_id = getattr(run_result, "run_id", None) or run_id
     slf_path, metrics = await asyncio.to_thread(_download_agitation_result, batch_run_id)
     utm_epsg = metrics.get("utm_epsg")   # None on the idealized analytic path
+    # the AOI bbox the worker meshed in a LOCAL UTM frame: postprocess needs the SW
+    # corner to add the origin offset back before UTM->4326 (else the field lands at
+    # the zone origin, not the harbour). None on the idealized analytic path.
+    request_bbox = metrics.get("bbox")
     reach_name = _slug(location_name)
     try:
         async with substep(emitter, "postprocess_artemis"):
             layers, pmetrics = await asyncio.to_thread(
                 postprocess_artemis, slf_path, run_id=batch_run_id,
                 utm_epsg=int(utm_epsg) if utm_epsg is not None else None,
+                request_bbox=request_bbox,
                 incident_hs_m=float(wave_height_m), reach_name=reach_name,
                 wave_mode=wave_mode)
     finally:
@@ -668,6 +782,16 @@ async def model_artemis_harbor_agitation(
                 published = enriched.model_copy(update={"uri": pub_uri})
             except PublishLayerError as exc:
                 logger.warning("artemis publish_layer failed (%s) - unpublished COG", exc)
+
+    # input-parity (ADR 0231): surface the REAL surveyed breakwater geometry as a
+    # visible context layer (best-effort, never fatal). The bathymetry is fetched
+    # INSIDE the worker (no agent-side uri) -> it stays a 0231 worker-seam residual.
+    if real_polylines:
+        from trid3nt_server.emission.layer_uri_emit import publish_input_layer
+        bw_layer = await asyncio.to_thread(
+            _stage_breakwater_fgb, real_polylines, run_tag, _slug(location_name))
+        if bw_layer is not None:
+            await publish_input_layer(emitter, bw_layer, role="context")
     return published
 
 

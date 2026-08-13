@@ -34,6 +34,7 @@ from __future__ import annotations
 import logging
 import os
 import struct
+from collections.abc import Sequence
 from pathlib import Path
 from typing import Any
 
@@ -1691,6 +1692,7 @@ def postprocess_artemis(
     run_id: str,
     utm_epsg: int | None,
     incident_hs_m: float,
+    request_bbox: Sequence[float] | None = None,
     reach_name: str = "harbor_agitation",
     wave_mode: str = "diffraction",
     runs_bucket: str | None = None,
@@ -1703,6 +1705,17 @@ def postprocess_artemis(
     ``incident_hs_m`` to the dimensionless agitation coefficient Kd = Hs/H0,
     reprojects the mesh nodes ``utm_epsg`` -> EPSG:4326 (real-bathy path) or keeps
     the local metres frame (idealized analytic path, ``utm_epsg`` None), rasterizes
+
+    Georeferencing (real-bathy path): the worker meshes in a LOCAL UTM frame whose
+    origin is the AOI SW corner -- it subtracts ``(x0m, y0m) = min-easting,
+    min-northing`` from every node so the SELAFIN float32 coordinates keep sub-metre
+    precision (a raw UTM easting ~4e5 loses ~0.03 m of precision in float32). Those
+    LOCAL metres (x in [0, Lx], y in [0, Ly]) are what the result mesh carries, so
+    this postprocess MUST add the same origin offset back before the UTM->4326
+    inverse or the field georeferences to the UTM-zone origin (near lon -91, lat 0)
+    instead of the real harbour. The offset is reconstructed sub-mm from
+    ``request_bbox`` SW corner (the exact value the mesh builder subtracted:
+    ``Transformer(4326->utm_epsg).transform(min_lon, min_lat)``).
     Kd onto an adaptive grid clipped to the wet domain, writes + uploads ONE COG
     (``artemis_agitation.tif``), and returns ``([ArtemisAgitationLayerURI], metrics)``.
 
@@ -1765,8 +1778,25 @@ def postprocess_artemis(
     # local-frame path does, so the COG still renders on the map.
     if utm_epsg is not None:
         from pyproj import Transformer
+        # Reconstruct the LOCAL-frame origin the worker subtracted (AOI SW corner in
+        # UTM) and add it back so the local mesh metres become TRUE UTM before the
+        # inverse to 4326. Without request_bbox the offset is unknown and the field
+        # would land at the zone origin -- a georef bug, not a silent guess.
+        if request_bbox is None or len(tuple(request_bbox)) != 4:
+            raise PostprocessTelemacError(
+                "TELEMAC_PARAMS_INVALID",
+                message="postprocess_artemis needs request_bbox (min_lon,min_lat,"
+                "max_lon,max_lat) to georeference the local-frame mesh when "
+                f"utm_epsg={utm_epsg} is set.",
+                details={"utm_epsg": utm_epsg, "request_bbox": request_bbox},
+            )
+        rb = [float(v) for v in request_bbox]
+        fwd = Transformer.from_crs(4326, int(utm_epsg), always_xy=True)
+        # SW corner = (min_lon, min_lat); in a UTM zone easting/northing both
+        # increase NE so min(x0,x1)=x0 and min(y0,y1)=y0 -- exactly the mesh origin.
+        x0m, y0m = fwd.transform(rb[0], rb[1])
         back = Transformer.from_crs(int(utm_epsg), 4326, always_xy=True)
-        lon, lat = back.transform(x_m, y_m)
+        lon, lat = back.transform(x_m + float(x0m), y_m + float(y0m))
         lon = np.asarray(lon)
         lat = np.asarray(lat)
         dst_crs = "EPSG:4326"

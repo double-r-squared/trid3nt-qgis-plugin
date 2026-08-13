@@ -502,25 +502,48 @@ SHOWCASE: list[Showcase] = [
              "complement to SFINCS/SnapWave coastal screening; prescribed steady "
              "storm wind (no wave-forcing fetcher), not a calibrated hindcast.",
              600, title_suffix="lake-superior-fetch"),
-    # -- ARTEMIS (phase-resolving harbour agitation; real Great Lakes bathy) --
+    # -- ARTEMIS (phase-resolving harbour agitation) --------------------------
+    # CANONICAL real-marina case (norm #10 "a real marina with a real breaker"):
+    # the ACTUAL surveyed breakwater at Marquette Lower Harbor / Cinder Pond Marina
+    # (OSM man_made=breakwater, auto-fetched + meshed as a thin solid barrier) over
+    # REAL NOAA Lake Superior lake-datum bathymetry.
     Showcase("artemis_harbor_agitation",
-             {"bbox": [-87.34, 46.57, -87.27, 46.61], "wave_mode": "diffraction",
-              "wave_height_m": 1.5, "wave_period_s": 8.0,
-              "target_resolution_m": 40.0},
+             {"bbox": [-87.392, 46.528, -87.368, 46.55], "wave_mode": "diffraction",
+              "wave_height_m": 2.0, "wave_period_s": 8.0, "wave_direction_deg": 129.2,
+              "reflection_coef": 0.5, "target_resolution_m": 30.0},
              "ADR 0237 ARTEMIS phase-resolving elliptic mild-slope (Berkhoff) "
-             "harbour agitation: breakwater DIFFRACTION sheltering on REAL Lake "
-             "Superior lake-datum bathymetry off Marquette (NOAA NGDC DEM_all; "
-             "~14830 wet nodes, mean depth ~80 m). A LABELED schematic semi-"
-             "infinite breakwater (thin solid barrier, normal incidence) - no "
-             "surveyed structure. Physics asserts (proof norm #9 discriminating "
-             "pair): agitation is nonzero and the sheltered lee BEHIND the "
-             "breakwater is far quieter than the exposed approach in front - mean "
-             "Kd ~0.05 sheltered vs ~1.20 exposed (sheltering ratio ~0.04), the "
-             "diffracted wave decaying into the geometric shadow. Refinement-grade "
-             "phase-resolving tier, the complement to the TOMAWAC phase-averaged "
-             "spectral field; prescribed monochromatic incident wave, not a "
-             "calibrated hindcast.",
-             600, title_suffix="marquette-breakwater-diffraction"),
+             "harbour agitation: DIFFRACTION sheltering by the REAL surveyed "
+             "breakwater at Marquette Lower Harbor (Cinder Pond Marina), Lake "
+             "Superior. The ACTUAL structure geometry is auto-fetched from "
+             "OpenStreetMap (man_made=breakwater, ~175 mesh segments) and meshed as "
+             "a thin solid rubble-mound barrier (RP=0.5) over real NOAA NGDC "
+             "DEM_all lake-datum bathymetry (~2670 wet nodes, depths to ~215 m). "
+             "Labeled incident swell Hs=2.0 m T=8 s from the open lake (SE approach, "
+             "dir 129 deg trig). Physics asserts (proof norm #9 present-vs-removed "
+             "pair): the real breakwater cuts the marina-lee agitation ~24% (mean "
+             "Kd 0.119 removed -> 0.090 present) and sets up the seaward diffraction/"
+             "reflection standing-wave field; the sheltered lee (Kd~0.09) stays far "
+             "below the exposed approach (Kd~0.35). The surveyed breakwater + bathy "
+             "surface as context layers (ADR 0231). Refinement-grade phase-resolving "
+             "tier, the complement to the TOMAWAC phase-averaged spectral field; "
+             "prescribed monochromatic incident wave, not a calibrated hindcast.",
+             600, title_suffix="marquette-real-breakwater-diffraction"),
+    # VERIFICATION TIER (norm #10 labeled schematic): the analytic Sommerfeld
+    # semi-infinite breakwater V&V on an idealized flat bed -- the geography-free
+    # discriminating pair (Kd~0.5 on the shadow-boundary ray) that anchors the
+    # physics, kept beside the real case.
+    Showcase("artemis_harbor_agitation",
+             {"location": "Marquette, Michigan", "wave_mode": "diffraction",
+              "bathy_source": "idealized", "wave_height_m": 1.0,
+              "wave_period_s": 8.0, "target_resolution_m": 8.0},
+             "ADR 0237 ARTEMIS VERIFICATION TIER (labeled schematic, not a surveyed "
+             "structure): the analytic Sommerfeld / Penny-Price semi-infinite "
+             "breakwater diffraction on an idealized flat bed - Kd=0.545 on the "
+             "shadow-boundary ray (analytic 0.5), ~0.29 deep in the lee, ~0.89 in "
+             "the lit zone; vs a no-breakwater control Kd~1.0 uniform. The "
+             "geography-free physics anchor that validates the real-marina case "
+             "above; prescribed monochromatic incident wave.",
+             300, title_suffix="schematic-sommerfeld-verification"),
     # -- TELEMAC-3D (3D baroclinic hydrodynamics; real Great Lakes bathy) -----
     Showcase("telemac3d_stratified_flow",
              {"bbox": [-87.9, 47.2, -87.1, 47.7], "flow_mode": "wind_circulation",

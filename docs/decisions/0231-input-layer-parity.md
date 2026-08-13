@@ -209,3 +209,7 @@ COG + records key -> composer emits via the existing raster-input seam).
 Norms held on every landed row: role="context", provenance in the name, ride the
 existing object (no re-upload), best-effort (never fails the solve), a
 parameterized cannot-silently-drop test per adopted family.
+
+## Amendment 2026-08-13 -- ARTEMIS surveyed breakwater surfaced (ADR 0237 real-marina)
+
+| **artemis_harbor_agitation real-bathy diffraction (OSM breakwater)** | **SURFACED: the surveyed breakwater geometry is fetched AGENT-SIDE (composer OSM man_made=breakwater auto-fetch), staged as a `role="context"` FlatGeobuf, and surfaced via `publish_input_layer` (best-effort, never fatal). The NOAA lake bathymetry is fetched INSIDE the worker (no agent-side uri) -> a 0231 WORKER-SEAM RESIDUAL (surfacing it needs the worker to upload the sampled bed COG + return its uri + an image rebuild), recorded per the load-bearing distinction above.** |
