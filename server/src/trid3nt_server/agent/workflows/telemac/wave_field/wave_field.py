@@ -374,7 +374,8 @@ def _stage_wave_manifest(wave: dict[str, Any], run_tag: str) -> str:
         "telemac_args": [],
         "outputs": [
             "res_wave.slf", "geo_wave.slf", "bc_wave.cli", "tom_wave.cas",
-            "full_listing.log", "tomawac_wave.log", "telemac_metrics.json",
+            "full_listing.log", "tomawac_wave.log", "bed_bathymetry.tif",
+            "telemac_metrics.json",
         ],
     }
     key = f"tomawac/{run_tag}/manifest.json"
@@ -647,6 +648,18 @@ async def model_tomawac_wave_field(
                 published = enriched.model_copy(update={"uri": pub_uri})
             except PublishLayerError as exc:
                 logger.warning("tomawac publish_layer failed (%s) - unpublished COG", exc)
+
+    # in-worker bed input (ADR 0244 S3): the NOAA lake-datum bed is sampled inside
+    # the solver container (no agent-side router fetch), so the composer rides the
+    # bed COG the worker recorded through publish_raster_input_cog. Best-effort;
+    # only the real-bathy path writes one (metrics.bed_cog present).
+    from trid3nt_server.agent.workflows.telemac._bed_input import (
+        surface_in_worker_bed_input,
+    )
+    await surface_in_worker_bed_input(
+        emitter, run_metrics=metrics, run_id=batch_run_id,
+        name=(f"Input: lake bed bathymetry ({reach_name}, "
+              f"NOAA Great Lakes lake-datum, in-worker)"))
     return published
 
 

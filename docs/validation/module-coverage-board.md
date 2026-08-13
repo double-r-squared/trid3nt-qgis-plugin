@@ -20,10 +20,17 @@ plumbing are deleted, semantic names moved to `purpose=` on the fetch, and a
 name+call-pattern SWEEP TEST now polices single-path (net -555 LOC production
 code; 154 offline-green from repo root; workflows import 269/269 clean). The seam
 is now the ONLY path a router-fetched input surfaces. The live flood canary +
-NATE's QGIS visual remain the final gate (NATE loop). LOOSE ENDS: artemis
-(agitation) + tomawac (telemac/wave_field) sample bathymetry IN-WORKER, so their
-bed is not yet surfaced (river_dye's `bed_bathymetry.tif` recorded-COG surface is
-the template; a worker-image change is required).
+NATE's QGIS visual remain the final gate (NATE loop). LOOSE ENDS CLOSED (ADR 0244
+S3, 2026-08-13): artemis (agitation) + tomawac (telemac/wave_field) now write the
+sampled NOAA lake-datum bed as `bed_bathymetry.tif` (a 4326 COG via the shared
+`_bed_cog.write_bed_cog_lonlat`) + record `bed_cog` in the metrics envelope
+(parser markers tomawac-wave-2 / artemis-agitation-3, image rebuilt +
+provenance-verified + live-smoked), and the composers ride it through the shared
+`telemac/_bed_input.surface_in_worker_bed_input` -> `publish_raster_input_cog` as
+a role=context "Input: lake bed bathymetry" input. The artemis OSM breakwater
+STAYS a bare-Overpass router-bypass by design (its way-polyline geometry is
+consumed by the mesh; the router's only general overpass source collapses ways to
+centroids) -- surfaced explicitly + sweep-allowlisted.
 
 WAVE-2 TRIAGE RE-SCOPE (ADR 0121, 2026-08-04): the hazard-cluster wave-2 rows
 (openquake scenario + logic-tree, pelicun FEMA-P58 / HAZUS-EQ / loss-aggregation,

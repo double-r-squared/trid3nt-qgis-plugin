@@ -86,8 +86,9 @@ def test_entrypoint_strict_field_gate_still_rejects_unknown(tmp_path):
 
 
 def test_parser_version_bumped_for_real_structure():
-    # the image-provenance marker MUST move when ArtemisConfig gains fields (ADR 0148).
-    assert E._ARTEMIS_PARSER_VERSION == "artemis-agitation-2"
+    # the image-provenance marker MUST move on a worker-output-contract change too
+    # (ADR 0148); -3 adds the in-worker lake-datum bed COG (ADR 0244 S3).
+    assert E._ARTEMIS_PARSER_VERSION == "artemis-agitation-3"
 
 
 # ---------------------------------------------------------------------------

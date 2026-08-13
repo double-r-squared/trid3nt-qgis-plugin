@@ -655,6 +655,22 @@ def _solve_diffraction_real(cfg: ArtemisConfig, data_dir: str, run_id):
                 structure_present=bool(structure_solid),
                 bw_label=(bw_label if structure_solid
                           else bw_label + " -- REMOVED (proof-norm-#9 control)"))
+
+    # in-worker bed-COG input surface: write the sampled lake-datum bed the solve
+    # ran on (the RAW bathymetry at the full-grid nodes, NaN off the wet lake) as a
+    # 4326 COG so the composer surfaces it as a role=context input. Best-effort: a
+    # bed-COG hiccup NEVER voids a CORRECT END solve.
+    try:
+        import _bed_cog as _BC  # noqa: WPS433 -- worker payload sibling
+
+        bed_raw = np.where(wet_grid, bed, np.nan)
+        bed_cog_meta = _BC.write_bed_cog_lonlat(
+            lon, lat, bed_raw, os.path.join(data_dir, _BC.BED_COG_FILENAME))
+        bed_cog_meta["bed_cog_source"] = "noaa_greatlakes"
+        meta.update(bed_cog_meta)
+        LOG.info("artemis bed COG written: %s", bed_cog_meta)
+    except Exception as exc:  # noqa: BLE001 -- input surfacing is never fatal
+        LOG.warning("artemis bed COG write failed (non-fatal): %s", exc)
     if demo_bw:
         # semi-infinite west-attached barrier + normal incidence: the geometric
         # shadow is the idealized split (downwave of + laterally behind the tip).

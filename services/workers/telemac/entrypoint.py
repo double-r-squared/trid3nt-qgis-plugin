@@ -1023,7 +1023,11 @@ class TomawacManifestUnknownFieldsError(ValueError):
 #: doubles as the tomawac worker-image/behavior provenance marker the
 #: image-staleness law (ADR 0148) keys off. -1 is the initial wave leg
 #: (idealized 4 question classes + the NOAA Great Lakes real-bathy path).
-_TOMAWAC_PARSER_VERSION = "tomawac-wave-1"
+#: -2 marks the worker-output-contract change: the real-bathy run writes the
+#: sampled lake-datum bed as bed_bathymetry.tif (a 4326 COG) + records the bed_cog
+#: / bed_cog_min_m / bed_cog_max_m keys in telemac_metrics.json so the composer
+#: surfaces the lake bed bathymetry as a role=context input.
+_TOMAWAC_PARSER_VERSION = "tomawac-wave-2"
 
 
 def _tomawac_config(data_dir: Path, overrides: dict[str, Any]) -> Any:
@@ -1093,7 +1097,11 @@ class ArtemisManifestUnknownFieldsError(ValueError):
 #: breakwater-diffraction path). -2 adds the REAL surveyed-structure path:
 #: breakwater_polylines (OSM man_made=breakwater/pier geometry meshed as a thin
 #: solid barrier) + remove_structure (the proof-norm-#9 present-vs-removed control).
-_ARTEMIS_PARSER_VERSION = "artemis-agitation-2"
+#: -3 marks the worker-output-contract change: the real-bathy run writes the
+#: sampled lake-datum bed as bed_bathymetry.tif (a 4326 COG) + records the bed_cog
+#: / bed_cog_min_m / bed_cog_max_m keys in telemac_metrics.json so the composer
+#: surfaces the lake bed bathymetry as a role=context input.
+_ARTEMIS_PARSER_VERSION = "artemis-agitation-3"
 
 
 def _artemis_config(data_dir: Path, overrides: dict[str, Any]) -> Any:

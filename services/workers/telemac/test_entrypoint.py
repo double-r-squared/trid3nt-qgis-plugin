@@ -69,7 +69,7 @@ def test_reach_config_rejects_unknown_keys(tmp_path):
 
 def test_parser_version_is_reach_7():
     """ADR 0231: the in-worker bed-COG output contract bumps the parser stamp."""
-    assert E._PARSER_VERSION == "telemac-reach-7"
+    assert E._PARSER_VERSION == "telemac-reach-8"
 
 
 def test_reach_config_accepts_erodible_bed_fields(tmp_path):
@@ -118,8 +118,8 @@ def test_reach_config_accepts_rog_fields(tmp_path):
 
 
 def test_reach_config_rejects_unknown_key_names_v7(tmp_path):
-    """A bogus reach key raises naming the CURRENT parser version (telemac-reach-7)."""
-    with pytest.raises(E.TelemacManifestUnknownFieldsError, match="telemac-reach-7"):
+    """A bogus reach key raises naming the CURRENT parser version (telemac-reach-8)."""
+    with pytest.raises(E.TelemacManifestUnknownFieldsError, match="telemac-reach-8"):
         E._reach_config(tmp_path, {"bogus_rog_field": 1, "mode": "rain_on_grid"})
 
 
@@ -167,6 +167,55 @@ def test_write_bed_cog_nonconstant_and_finite(tmp_path):
         vals = band.compressed()
         assert vals.size > 0 and np.isfinite(vals).all()
         assert float(vals.max()) - float(vals.min()) > 1.0  # non-constant
+
+
+def test_write_bed_cog_lonlat_nonconstant_and_finite(tmp_path):
+    """ADR 0244 S3: the shared wave-module bed writer rasterizes node lon/lat/z
+    (a NOAA lake-datum bed) to a small 4326 COG whose valid pixels are FINITE and
+    NON-CONSTANT (the real sloped lake bed, never a flat placeholder), dropping
+    non-finite (off-lake / land) nodes. Offline on a synthetic sloped lake patch."""
+    np = pytest.importorskip("numpy")
+    pytest.importorskip("scipy")
+    rasterio = pytest.importorskip("rasterio")
+    import _bed_cog as BC
+
+    # a synthetic lake AOI near Marquette: lon/lat grid, bed deepening offshore,
+    # with a NaN land corner the writer must drop (not paint).
+    lons = np.linspace(-87.40, -87.36, 30)
+    lats = np.linspace(46.52, 46.56, 30)
+    glon, glat = np.meshgrid(lons, lats)
+    lon = glon.ravel()
+    lat = glat.ravel()
+    # lake-datum bed: -5 m at the north shore down to -40 m offshore (south).
+    z = -5.0 - 35.0 * (lats.max() - glat.ravel()) / (lats.max() - lats.min())
+    z[lat > 46.555] = np.nan  # a dry land strip -> non-finite, dropped
+
+    meta = BC.write_bed_cog_lonlat(lon, lat, z, str(tmp_path / BC.BED_COG_FILENAME))
+    cog = tmp_path / BC.BED_COG_FILENAME
+    assert cog.exists(), "lake bed COG was not written"
+    assert meta["bed_cog"] == BC.BED_COG_FILENAME
+    assert meta["bed_cog_max_m"] > meta["bed_cog_min_m"] + 1.0  # non-constant slope
+    with rasterio.open(cog) as src:
+        assert src.crs.to_epsg() == 4326
+        vals = src.read(1, masked=True).compressed()
+        assert vals.size > 0 and np.isfinite(vals).all()
+        assert float(vals.max()) - float(vals.min()) > 1.0
+        # lake-datum bed is BELOW datum -> negative elevations surfaced faithfully.
+        assert float(vals.min()) < 0.0
+
+
+def test_write_bed_cog_lonlat_too_few_nodes_raises(tmp_path):
+    """Fewer than 3 finite nodes cannot rasterize -> the writer raises (the caller
+    wraps it best-effort so this never voids a solve)."""
+    np = pytest.importorskip("numpy")
+    pytest.importorskip("scipy")
+    pytest.importorskip("rasterio")
+    import _bed_cog as BC
+
+    with pytest.raises(RuntimeError):
+        BC.write_bed_cog_lonlat(
+            np.array([-87.4, np.nan]), np.array([46.5, 46.5]),
+            np.array([-10.0, -12.0]), str(tmp_path / BC.BED_COG_FILENAME))
 
 
 def test_main_bad_manifest_writes_typed_error(tmp_path, monkeypatch):

@@ -461,6 +461,11 @@ def build_real_lake_grid(cfg: TomawacConfig):
             "Lake (Superior/Michigan/Huron/Erie/Ontario) open water.")
     Z = np.where(wet, bed, 2.0)                # NaN/land -> +2 m dry bed
     mesh["Z"] = Z.astype(np.float64)
+    # node lon/lat + the RAW sampled lake-datum bed (NaN off the wet lake) for the
+    # in-worker bed-COG input surface: show the true bathymetry, not the +2 m fill.
+    mesh["bed_lon"] = np.asarray(lon, dtype=float)
+    mesh["bed_lat"] = np.asarray(lat, dtype=float)
+    mesh["bed_raw"] = np.where(wet, bed, np.nan).astype(float)
     meta = dict(utm_epsg=epsg, dx_m=round(dx, 1), coarsened=coarsened,
                 n_wet_nodes=n_wet, depth_max_m=round(float(-np.nanmin(bed)), 1),
                 depth_mean_m=round(float(-np.nanmean(bed[wet])), 1),
@@ -525,6 +530,22 @@ def solve(cfg: TomawacConfig, workdir: str, run_id: str = None):
         bmeta = dict(utm_epsg=32615, dx_m=float(cfg.target_resolution_m or 1500.0),
                      coarsened=False)
 
+    # in-worker bed-COG input surface: write the sampled lake-datum bed the solve
+    # ran on as a 4326 COG so the composer can surface it as a role=context input.
+    # Best-effort: a bed-COG hiccup NEVER voids a CORRECT END solve. Only the real
+    # lake path carries node lon/lat (the idealized bed has no geographic footprint).
+    bed_cog_meta: dict = {}
+    if mesh.get("bed_lon") is not None:
+        try:
+            import _bed_cog as _BC  # noqa: WPS433 -- worker payload sibling
+            bed_cog_meta = _BC.write_bed_cog_lonlat(
+                mesh["bed_lon"], mesh["bed_lat"], mesh["bed_raw"],
+                os.path.join(workdir, _BC.BED_COG_FILENAME))
+            bed_cog_meta["bed_cog_source"] = "noaa_greatlakes"
+            LOG.info("tomawac bed COG written: %s", bed_cog_meta)
+        except Exception as exc:  # noqa: BLE001 -- input surfacing is never fatal
+            LOG.warning("tomawac bed COG write failed (non-fatal): %s", exc)
+
     geo = os.path.join(workdir, f"geo_{tag}.slf")
     cli = os.path.join(workdir, f"bc_{tag}.cli")
     res = os.path.join(workdir, f"res_{tag}.slf")
@@ -584,6 +605,7 @@ def solve(cfg: TomawacConfig, workdir: str, run_id: str = None):
         "wind_speed_mps": float(cfg.wind_speed_mps) if wind_on else 0.0,
         "wind_dir_from_deg": float(cfg.wind_dir_from_deg) if wind_on else None,
         **bmeta,
+        **bed_cog_meta,
         "wall_s": round(time.time() - t0, 1),
     }
     if not ok:

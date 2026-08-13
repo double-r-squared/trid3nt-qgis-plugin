@@ -388,7 +388,7 @@ def _stage_agitation_manifest(agitation: dict[str, Any], run_tag: str) -> str:
         "outputs": [
             "agit_field.slf", "res_agitation.slf", "geo_agit.slf", "bc_agit.cli",
             "art_agit.cas", "full_listing.log", "artemis_agit.log",
-            "telemac_metrics.json",
+            "bed_bathymetry.tif", "telemac_metrics.json",
         ],
     }
     key = f"artemis/{run_tag}/manifest.json"
@@ -783,15 +783,29 @@ async def model_artemis_harbor_agitation(
             except PublishLayerError as exc:
                 logger.warning("artemis publish_layer failed (%s) - unpublished COG", exc)
 
-    # input-parity (ADR 0231): surface the REAL surveyed breakwater geometry as a
-    # visible context layer (best-effort, never fatal). The bathymetry is fetched
-    # INSIDE the worker (no agent-side uri) -> it stays a 0231 worker-seam residual.
+    # input-parity: surface the REAL surveyed breakwater geometry as a visible
+    # context layer (best-effort, never fatal). This fetch needs the OSM way
+    # POLYLINE geometry (meshed as a thin barrier), which the router's only
+    # general overpass source collapses to centroids -- so it stays a bare-OSM
+    # router-bypass, surfaced here explicitly + sweep-allowlisted (ADR 0244 S3).
     if real_polylines:
         from trid3nt_server.emission.layer_uri_emit import publish_input_layer
         bw_layer = await asyncio.to_thread(
             _stage_breakwater_fgb, real_polylines, run_tag, _slug(location_name))
         if bw_layer is not None:
             await publish_input_layer(emitter, bw_layer, role="context")
+
+    # in-worker bed input (ADR 0244 S3): the NOAA lake-datum bed is sampled inside
+    # the solver container (no agent-side router fetch), so the composer rides the
+    # bed COG the worker recorded through publish_raster_input_cog. Best-effort;
+    # only the real-bathy diffraction path writes one (metrics.bed_cog present).
+    from trid3nt_server.agent.workflows.telemac._bed_input import (
+        surface_in_worker_bed_input,
+    )
+    await surface_in_worker_bed_input(
+        emitter, run_metrics=metrics, run_id=batch_run_id,
+        name=(f"Input: lake bed bathymetry ({reach_name}, "
+              f"NOAA Great Lakes lake-datum, in-worker)"))
     return published
 
 

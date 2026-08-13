@@ -166,3 +166,33 @@ failures are pre-existing baseline, cwd/offline-env, not this change).
 The live flood canary (direct SFINCS/TELEMAC flood run + WS turn smoke through the
 restarted daemon + a live Case's input layers surfaced VIA THE SEAM) + NATE's QGIS
 visual are the final gate, per the NATE live-verification loop.
+
+## S3 loose ends closed (2026-08-13): the two lake-datum wave beds
+
+The two remaining in-worker bathymetry residuals named under LOOSE ENDS above --
+artemis (agitation) + tomawac (telemac/wave_field) -- are surfaced. Both workers
+now sample-and-write the NOAA Great Lakes lake-datum bed the solve ran on as
+`bed_bathymetry.tif` (a 4326 COG, via the shared
+`services/workers/telemac/_bed_cog.write_bed_cog_lonlat` -- node lon/lat/z ->
+clipped griddata COG) and record `bed_cog` / `bed_cog_min_m` / `bed_cog_max_m` in
+`telemac_metrics.json`; the composers ride that existing object through the shared
+`telemac/_bed_input.surface_in_worker_bed_input` ->
+`publish_raster_input_cog` as a `role="context"` "Input: lake bed bathymetry
+(...)" continuous_dem input. Only the real-bathy path writes one (the idealized
+analytic beds have no geographic footprint). Parser/provenance markers moved
+(tomawac-wave-2, artemis-agitation-3); `bed_bathymetry.tif` was added to each
+manifest `outputs`. This is the wave-module analogue of river_dye's surviving
+in-worker bed surface; the sweep allow-lists the single shared emission site
+(`telemac/_bed_input.py`).
+
+The artemis OSM breakwater remains a bare-Overpass router-bypass by DESIGN, not
+neglect: the physics meshes the structure as a thin solid barrier, which needs the
+OSM way POLYLINE geometry (`out geom;`). The router's only general overpass source
+(`fetch_overpass_pois`) reduces every way match to a centroid Point, and
+`fetch_roads_osm` (the line-preserving overpass member) is bound to `highway=*`
+roads -- neither exposes an arbitrary-tag way-as-LineString fetch. Routing through
+the seam would therefore DESTROY the geometry the solve consumes; a new general
+"OSM ways as lines" router source would be a separate corpus-gated tool. So the
+breakwater fetch stays in the composer, is surfaced explicitly
+(`_stage_breakwater_fgb` -> `publish_input_layer(role="context")`), and is
+sweep-allowlisted. This is the "genuinely non-router" branch of the S3 decision.

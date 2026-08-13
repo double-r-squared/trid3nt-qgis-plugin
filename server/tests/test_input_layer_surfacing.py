@@ -432,6 +432,90 @@ async def test_river_dye_bed_bathymetry_absent_key_and_none_emitter_noop():
 
 
 # ===========================================================================
+# ADR 0244 S3: the shared in-worker lake-datum bed surface (tomawac + artemis).
+# The two TELEMAC wave workers sample a NOAA Great Lakes bed INSIDE the solver
+# container and write it as bed_bathymetry.tif + record bed_cog; the composers
+# ride that object through the shared surface_in_worker_bed_input helper. The
+# router seam cannot cover it (never touches route()), so it is allowlisted.
+# ===========================================================================
+from trid3nt_server.agent.workflows.telemac._bed_input import (  # noqa: E402
+    surface_in_worker_bed_input,
+)
+
+
+@pytest.mark.asyncio
+async def test_surface_in_worker_bed_input_surfaces_lake_bed_as_context(monkeypatch):
+    """The bed COG the wave worker recorded reaches the emitter as a role="context"
+    continuous_dem raster carrying the caller's provenance name, riding the
+    EXISTING s3 object (no re-upload) -- the in-worker lake bed cannot silently
+    drop."""
+    from trid3nt_server.agent.tools.simulation.solver import solver as solver_mod
+
+    monkeypatch.setattr(solver_mod, "_get_runs_bucket", lambda: "test-runs")
+    emitter = _emitter()
+
+    def _mock_publish_layer(layer_uri, layer_id, style_preset, name=None, **kw):  # noqa: ANN001
+        assert layer_uri == "s3://test-runs/RID/bed_bathymetry.tif"  # rode the object
+        return layer_uri  # raw s3 COG passes the emit guardrail (plugin /vsicurl/)
+
+    with patch(_PUBLISH_LAYER_TARGET, side_effect=_mock_publish_layer):
+        ok = await surface_in_worker_bed_input(
+            emitter,
+            run_metrics={"bed_cog": "bed_bathymetry.tif", "bed_cog_source": "noaa_greatlakes"},
+            run_id="RID",
+            name="Input: lake bed bathymetry (marquette, NOAA Great Lakes lake-datum, in-worker)",
+        )
+
+    assert ok is True
+    assert len(emitter._loaded_layers) == 1
+    row = emitter._loaded_layers[0]
+    assert row.role == "context"
+    assert row.layer_type == "raster"
+    assert row.style_preset == "continuous_dem"
+    assert row.uri == "s3://test-runs/RID/bed_bathymetry.tif"
+    assert row.name.startswith("Input: lake bed bathymetry (")
+    assert row.layer_id.startswith("input-lake-bed-")
+
+
+@pytest.mark.asyncio
+async def test_surface_in_worker_bed_input_absent_key_and_none_emitter_noop():
+    """No bed_cog (idealized bed / older image) surfaces nothing; a None emitter is
+    a no-op -- both return False and NEVER raise."""
+    assert await surface_in_worker_bed_input(
+        None, run_metrics={"bed_cog": "bed_bathymetry.tif"}, run_id="RID", name="x"
+    ) is False
+    emitter = _emitter()
+    assert await surface_in_worker_bed_input(
+        emitter, run_metrics={}, run_id="RID", name="x"
+    ) is False
+    assert emitter._loaded_layers == []
+
+
+@pytest.mark.asyncio
+async def test_surface_in_worker_bed_input_publish_failure_non_fatal(monkeypatch):
+    """A publish_layer failure is swallowed (best-effort): the emitter-drop cannot
+    be silent-crashing -- returns False, surfaces nothing, NEVER raises."""
+    from trid3nt_server.agent.tools.publish_layer.publish_layer import (
+        PublishLayerError,
+    )
+    from trid3nt_server.agent.tools.simulation.solver import solver as solver_mod
+
+    monkeypatch.setattr(solver_mod, "_get_runs_bucket", lambda: "test-runs")
+
+    def _boom(*a, **k):
+        raise PublishLayerError("PUBLISH_FAILED", "boom")
+
+    emitter = _emitter()
+    with patch(_PUBLISH_LAYER_TARGET, side_effect=_boom):
+        ok = await surface_in_worker_bed_input(
+            emitter, run_metrics={"bed_cog": "bed_bathymetry.tif"}, run_id="RID",
+            name="Input: lake bed bathymetry (x)",
+        )
+    assert ok is False
+    assert emitter._loaded_layers == []
+
+
+# ===========================================================================
 # (SWEEP) ADR 0244 single-path guard.
 #
 # After the S2 collapse the emit-on-fetch router seam (route() ->
@@ -446,7 +530,8 @@ async def test_river_dye_bed_bathymetry_absent_key_and_none_emitter_noop():
 #   * RESULT / derived COGs   - a solver's own secondary output layer.
 #   * IN-WORKER COGs          - bathymetry sampled inside the solver container,
 #                               which never touches route() (river_dye bed,
-#                               telemac3d bottom, swan bathy).
+#                               telemac3d bottom, swan bathy, and the shared
+#                               tomawac/artemis lake-datum bed via _bed_input.py).
 #   * BARE-OSM fetches        - agitation's breakwaters bypass the router (an
 #                               S3 loose end, ADR 0244 S3).
 #   * USER-DATA overlays      - a point/vector built from a user-supplied
@@ -467,6 +552,7 @@ _WORKFLOWS_DIR = (
 # relpath (from workflows/) -> (n_input_emission_calls, reason). Sum is the only
 # input-emission the tree is allowed to keep post-collapse.
 _ALLOWLISTED_INPUT_EMISSION: dict[str, tuple[int, str]] = {
+    "telemac/_bed_input.py": (1, "shared in-worker lake-datum bed-COG surfacing (tomawac/artemis)"),
     "geoclaw/inundation/inundation.py": (2, "mesh preview + particle result"),
     "hecras/flood_2d/flood_2d.py": (1, "mesh preview"),
     "hecras/levee_breach/levee_breach.py": (1, "mesh preview"),
