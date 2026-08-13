@@ -32,6 +32,8 @@ from typing import Any
 from trid3nt_contracts.landlab_contracts import LandlabRunArgs
 from trid3nt_contracts.tool_registry import ResolutionSpec
 
+from trid3nt_server.agent.tools.resolution_declared import enforce_resolution
+
 #: DECLARED target_resolution_m for EVERY Landlab template (ADR 0225). Shared: all
 #: templates run the same fetch-DEM -> grid chain. The DEM is 3DEP-native (1-10 m US
 #: lidar via fetch_3dep_extra/fetch_dem), so the DATA floor is 10 m -- a finer grid
@@ -290,6 +292,15 @@ def stage_landlab_manifest(
             complete (the off-box lane cannot dispatch without a reachable
             manifest — fail loudly, never a silent dead-end).
     """
+    # ADR 0232 enforcement (was declared-but-unwired): an out-of-declared-range
+    # target_resolution_m is QUOTED BACK (ADR 0225 typed INVALID_ARG card, the
+    # ResolutionOutOfRangeError the dispatch boundary serializes), never silently
+    # resampled. This is the ONE shared call that lights EVERY Landlab template --
+    # the _composer_common composers AND the self-staging green_ampt /
+    # flow_accumulation / susceptibility templates all funnel their DEM+grid
+    # through this stage. A default/in-range value returns silently.
+    enforce_resolution(LANDLAB_RES_SPEC, run_args.target_resolution_m)
+
     from trid3nt_server.agent.tools.cache import CACHE_BUCKET, storage_scheme
     from trid3nt_server.agent.tools.simulation.solver.solver import _get_s3_client
 
