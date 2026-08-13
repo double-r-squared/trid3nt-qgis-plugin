@@ -1,4 +1,4 @@
-"""Shared Microsoft Planetary Computer STAC helpers (conservation micro-North-Star).
+"""Shared Microsoft Planetary Computer STAC helpers (conservation reference scenario).
 
 The conservation tool set (``compute_ndvi`` / ``fetch_naip`` / ``fetch_mobi``)
 all read Cloud-Optimized GeoTIFF assets from the Microsoft Planetary Computer

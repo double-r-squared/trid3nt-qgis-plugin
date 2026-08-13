@@ -150,6 +150,8 @@ def fetch_source_array(spec: SourceSpec, params: dict[str, Any]) -> tuple[Any, A
         return _direct_window_to_array(spec, params)
     if access == "multi_url":
         return _multi_url_to_array(spec, params)
+    if access == "projected_vrt_window":
+        return _projected_vrt_window_to_array(spec, params)
     if access == "gzip_object":
         return _gzip_object_to_array(spec, params)
     if access == "grib_object":
@@ -415,7 +417,10 @@ def _resolve_multi_url_members(spec: SourceSpec, params: dict[str, Any]) -> tupl
     mu = ingest.get("multi_url", {})
     mode = mu.get("mode", "vrt")
     endpoint = spec.endpoints.get("data") or next(iter(spec.endpoints.values()))
-    url = endpoint.url or endpoint.url_template or ""
+    # A param-templated VRT URL (soilgrids: {property}/{property}_{depth}_mean.vrt)
+    # is filled from params; a static url passes through unchanged (no-op for hrsl /
+    # every prior multi_url spec, which declare a placeholder-free ``url``).
+    url = endpoint.url or (endpoint.url_template.format(**params) if endpoint.url_template else "")
     if url.startswith("/vsicurl/"):
         url = url[len("/vsicurl/"):]
     if mode != "vrt":
@@ -522,6 +527,147 @@ def _multi_url_to_array(spec: SourceSpec, params: dict[str, Any]) -> tuple[Any, 
 
     out_transform = rasterio.windows.transform(Window(c0, r0, out_w, out_h), transform)
     return np.asarray(out, dtype="float32"), out_transform, crs
+
+
+# --------------------------------------------------------------------------- #
+# projected_vrt_window: a VRT mosaic in a NON-4326 projected CRS (SoilGrids'
+# Interrupted Goode Homolosine 250 m grid, ADR 0086). Unlike multi_url (which
+# windows a 4326 VRT directly and returns the native array), this transform_bounds
+# the 4326 bbox INTO the source CRS (densified), windows the native grid (the twin's
+# floor/ceil + pad), reads the intersecting members through the SAME coalescing
+# transport opener, reprojects the native window -> EPSG:4326 (bilinear, the twin's
+# target-res grid), and applies a per-property Int16->physical scale divisor. NaN
+# fill; the serialize directive (nodata=-9999) writes the float32 COG. STRICT no-op
+# for every prior raster spec (a distinct access mode).
+# --------------------------------------------------------------------------- #
+
+
+def _projected_vrt_window_to_array(spec: SourceSpec, params: dict[str, Any]) -> tuple[Any, Any, Any]:
+    """Projected VRT window read + native->4326 reproject + per-property scale.
+
+    Reproduces the fetch_soilgrids twin ``_fetch_soilgrids_bytes`` value-for-value:
+    the 4326 bbox -> Homolosine bounds (densified), the floor/ceil + 2 px pad native
+    window, the intersecting-member mosaic, the bilinear reproject to the ~250 m
+    EPSG:4326 target grid, and the fixed-point Int16 -> physical scale (NaN fill).
+    An all-nodata window (ocean / off the soil land surface) -> typed EMPTY.
+    """
+    from concurrent.futures import ThreadPoolExecutor
+
+    import numpy as np
+    import rasterio
+    from rasterio.warp import Resampling, reproject, transform_bounds
+    from rasterio.windows import Window
+    from rasterio.windows import from_bounds as window_from_bounds
+
+    from ..transport import MAX_PARALLEL, TransportError, open_windowed_cog
+
+    ingest = spec.ingest or {}
+    pw = ingest.get("projected_window", {})
+    bbox = tuple(params["bbox"])
+
+    # fast-reject outside the source's global land coverage envelope (honest empty).
+    cov = pw.get("coverage_bbox")
+    if cov and not (bbox[0] <= cov[2] and bbox[2] >= cov[0]
+                    and bbox[1] <= cov[3] and bbox[3] >= cov[1]):
+        raise router_empty_error(
+            spec.error_code_prefix,
+            f"bbox={bbox} falls outside coverage {tuple(cov)}", spec.empty_error_suffix)
+
+    transform, xsize, ysize, crs, nodata, sources = _resolve_multi_url_members(spec, params)
+    src_nodata = int(nodata) if nodata == nodata else int(pw.get("src_nodata", -32768))
+
+    # 4326 bbox -> source (projected) bounds; densify so the curved edges are captured.
+    densify = int(pw.get("densify_pts", 21))
+    l, b, r, t = transform_bounds("EPSG:4326", crs, *bbox, densify_pts=densify)
+    win = window_from_bounds(l, b, r, t, transform=transform)
+    win = win.round_offsets(op="floor").round_lengths(op="ceil")
+    pad = int(pw.get("pad_px", 2))
+    win = Window(win.col_off - pad, win.row_off - pad,
+                 win.width + 2 * pad, win.height + 2 * pad)
+    c0 = max(0, int(win.col_off))
+    r0 = max(0, int(win.row_off))
+    c1 = min(xsize, int(win.col_off) + int(win.width))
+    r1 = min(ysize, int(win.row_off) + int(win.height))
+    if c1 <= c0 or r1 <= r0:
+        raise router_empty_error(
+            spec.error_code_prefix,
+            f"bbox={bbox} produces a zero-size window (outside coverage)",
+            spec.empty_error_suffix)
+    max_px = int(pw.get("max_window_pixels", 20_000 * 20_000))
+    if (c1 - c0) * (r1 - r0) > max_px:
+        err = router_input_error(
+            spec.error_code_prefix,
+            f"bbox={bbox} would request {(c1 - c0) * (r1 - r0):,} native pixels "
+            f"(refuse > {max_px:,}; narrow the bbox)", spec.input_error_suffix)
+        raise err
+    out_w, out_h = c1 - c0, r1 - r0
+    native = np.full((out_h, out_w), src_nodata, dtype="int16")
+
+    def _member_window(s: "_VrtSource") -> tuple["_VrtSource", int, int, int, int] | None:
+        ox0, ox1 = max(c0, s.dx), min(c1, s.dx + s.dw)
+        oy0, oy1 = max(r0, s.dy), min(r1, s.dy + s.dh)
+        if ox1 <= ox0 or oy1 <= oy0:
+            return None
+        return s, ox0, oy0, ox1, oy1
+
+    hits = [w for w in (_member_window(s) for s in sources) if w is not None]
+
+    def _read_hit(hit: tuple["_VrtSource", int, int, int, int]) -> tuple[int, int, int, int, Any]:
+        s, ox0, oy0, ox1, oy1 = hit
+        rx = s.sw / s.dw if s.dw else 1.0
+        ry = s.sh / s.dh if s.dh else 1.0
+        sx0 = s.sx + int(round((ox0 - s.dx) * rx))
+        sy0 = s.sy + int(round((oy0 - s.dy) * ry))
+        sw = max(1, int(round((ox1 - ox0) * rx)))
+        sh = max(1, int(round((oy1 - oy0) * ry)))
+        with open_windowed_cog(s.url) as src:
+            tile = src.read(1, window=Window(sx0, sy0, sw, sh),
+                            out_shape=(oy1 - oy0, ox1 - ox0))
+        return ox0, oy0, ox1, oy1, tile
+
+    if hits:
+        workers = min(MAX_PARALLEL, len(hits))
+        try:
+            with ThreadPoolExecutor(max_workers=workers) as pool:
+                reads = list(pool.map(_read_hit, hits))
+        except TransportError as exc:
+            raise router_upstream_error(spec.error_code_prefix, f"VRT member read failed: {exc}")
+        except Exception as exc:  # noqa: BLE001 -- any member read failure -> upstream
+            raise router_upstream_error(spec.error_code_prefix, f"VRT member read failed: {exc}")
+        for ox0, oy0, ox1, oy1, tile in reads:
+            native[oy0 - r0:oy1 - r0, ox0 - c0:ox1 - c0] = tile
+
+    native_transform = rasterio.windows.transform(Window(c0, r0, out_w, out_h), transform)
+
+    # Reproject the native window -> EPSG:4326 target grid (the twin's res).
+    target_res = float(pw.get("target_res_deg", 0.0025))
+    dst_w = max(1, int(round((bbox[2] - bbox[0]) / target_res)))
+    dst_h = max(1, int(round((bbox[3] - bbox[1]) / target_res)))
+    dst_transform = rasterio.transform.from_bounds(bbox[0], bbox[1], bbox[2], bbox[3], dst_w, dst_h)
+    reproj = np.full((dst_h, dst_w), src_nodata, dtype="int16")
+    reproject(
+        native, reproj,
+        src_transform=native_transform, src_crs=crs,
+        dst_transform=dst_transform, dst_crs="EPSG:4326",
+        src_nodata=src_nodata, dst_nodata=src_nodata,
+        resampling=Resampling.bilinear,
+    )
+    valid = reproj != src_nodata
+    if not bool(valid.any()):
+        raise router_empty_error(
+            spec.error_code_prefix,
+            f"bbox={bbox} produced no valid pixels (all-nodata window -- over open "
+            f"water or off the soil land surface)", spec.empty_error_suffix)
+
+    # Per-property fixed-point Int16 -> physical units; nodata -> NaN (the serialize
+    # directive fills NaN -> the -9999 float sentinel).
+    scale_div = 1.0
+    sbp = pw.get("scale_by_param")
+    if sbp:
+        scale_div = float((sbp.get("map") or {})[params.get(sbp.get("param"))])
+    out = np.full((dst_h, dst_w), np.nan, dtype="float32")
+    out[valid] = reproj[valid].astype("float32") / scale_div
+    return out, dst_transform, "EPSG:4326"
 
 
 # --------------------------------------------------------------------------- #
@@ -2346,6 +2492,116 @@ def _stac_to_array(spec: SourceSpec, params: dict[str, Any]) -> tuple[Any, Any, 
     return arr, transform, crs
 
 
+# --------------------------------------------------------------------------- #
+# stac_continuous_mosaic: a CONTINUOUS-value uint8 STAC mosaic (ADR 0086). Unlike
+# stac_search (categorical, Resampling.nearest, a single static mosaic.nodata, the
+# token-based sas sign) this reads each intersecting item's band-1 through the
+# two-tier PC REST /sign endpoint with BILINEAR resampling into a uint8 window with
+# a PER-BAND nodata sentinel (mosaic.nodata_by_param -- 0 for occurrence/recurrence/
+# seasonality, 253 for change), first-valid mosaic. execute() then bakes the pure
+# per-band colormap (hooks.colormap) into the band-1 palette via array_to_cog_bytes.
+# The jrc-gsw fold: a continuous 30 m water-statistics mosaic the categorical
+# stac_search mode cannot express without regressing the esri_landcover prior. STRICT
+# no-op for every prior raster spec (a distinct access mode).
+# --------------------------------------------------------------------------- #
+
+
+def _stac_continuous_nodata(spec: SourceSpec, params: dict[str, Any]) -> int:
+    """The per-band nodata sentinel (``mosaic.nodata_by_param`` keyed on a param)."""
+    mosaic_cfg = (spec.ingest or {}).get("mosaic", {})
+    nbp = mosaic_cfg.get("nodata_by_param")
+    if nbp:
+        return int((nbp.get("map") or {})[params.get(nbp.get("param"))])
+    return int(mosaic_cfg.get("nodata", 0))
+
+
+def _stac_continuous_mosaic(
+    spec: SourceSpec, params: dict[str, Any]
+) -> tuple[Any, Any, str, int]:
+    """Continuous-value uint8 STAC mosaic: search -> two-tier sign -> bilinear
+    windowed reproject -> first-valid mosaic (``(mosaic_uint8, transform, crs,
+    nodata)``). Reproduces the jrc-gsw twin ``_fetch_surface_water_cog_bytes``
+    fetch leg (the colormap bake is in :func:`execute`).
+    """
+    import numpy as np
+    import rasterio
+    from rasterio.warp import Resampling, reproject
+
+    from ...imagery import _pc_stac
+    from ..transport import TransportError, open_windowed_cog
+
+    ingest = spec.ingest or {}
+    stac = ingest.get("stac", {})
+    bbox = tuple(params["bbox"])
+    collection = stac.get("collection")
+    native_cell_m = float(ingest.get("native_cell_m", 30.0))
+    nodata = _stac_continuous_nodata(spec, params)
+
+    # asset key: a param-keyed map (jrc band -> asset name) or a static data_asset.
+    abp = stac.get("asset_by_param")
+    if abp:
+        asset_key = (abp.get("map") or {})[params.get(abp.get("param"))]
+    else:
+        asset_key = stac.get("data_asset", "data")
+
+    try:
+        from pystac_client import Client
+    except ImportError as exc:  # pragma: no cover -- pystac_client is a hard dep
+        raise router_upstream_error(spec.error_code_prefix, f"pystac-client unavailable: {exc}")
+    try:
+        client = Client.open(stac.get("root", _pc_stac.PC_STAC_ROOT))
+        search = client.search(collections=[collection], bbox=list(bbox), limit=100)
+        all_items = list(search.items())
+    except Exception as exc:  # noqa: BLE001 -- translate any pystac/http error
+        raise router_upstream_error(
+            spec.error_code_prefix,
+            f"STAC search failed (collection={collection!r}, bbox={bbox}): {exc}")
+    items = [it for it in all_items if _bbox_intersects(getattr(it, "bbox", None), bbox)]
+    if not items:
+        raise router_empty_error(
+            spec.error_code_prefix,
+            f"no {collection!r} item covers bbox={bbox}", spec.empty_error_suffix)
+
+    width_px, height_px = _pc_stac.bbox_pixel_dims(bbox, native_cell_m)
+    dst_transform = rasterio.transform.from_bounds(
+        bbox[0], bbox[1], bbox[2], bbox[3], width_px, height_px
+    )
+    mosaic = np.full((height_px, width_px), nodata, dtype="uint8")
+    filled = np.zeros((height_px, width_px), dtype=bool)
+    for item in items:
+        assets = getattr(item, "assets", {}) or {}
+        if asset_key not in assets:
+            continue
+        signed = _pc_sign_two_tier(spec, assets[asset_key].href, str(collection))
+        dst = np.full((height_px, width_px), nodata, dtype="uint8")
+        try:
+            with open_windowed_cog(signed) as src:
+                reproject(
+                    source=rasterio.band(src, 1), destination=dst,
+                    src_transform=src.transform, src_crs=src.crs,
+                    dst_transform=dst_transform, dst_crs="EPSG:4326",
+                    resampling=Resampling.bilinear,
+                    src_nodata=(src.nodata if src.nodata is not None else nodata),
+                    dst_nodata=nodata,
+                )
+        except TransportError as exc:
+            raise router_upstream_error(spec.error_code_prefix, f"STAC tile read failed: {exc}")
+        except Exception as exc:  # noqa: BLE001 -- translate any rasterio/GDAL error
+            raise router_upstream_error(spec.error_code_prefix, f"STAC tile read failed: {exc}")
+        valid = (dst != nodata) & (~filled)
+        if bool(valid.any()):
+            mosaic[valid] = dst[valid]
+            filled |= valid
+
+    if not bool(filled.any()):
+        # Items intersected but no real coverage over the AOI (ocean / fully dry).
+        raise router_empty_error(
+            spec.error_code_prefix,
+            f"{collection!r} items intersected bbox={bbox} but the mosaic is "
+            "entirely no-data over the AOI", spec.empty_error_suffix)
+    return mosaic, dst_transform, "EPSG:4326", nodata
+
+
 def execute(spec: SourceSpec, params: dict[str, Any]) -> bytes:
     """Fetch the source array and serialize to COG bytes (the ``fetch_fn`` body).
 
@@ -2378,6 +2634,19 @@ def execute(spec: SourceSpec, params: dict[str, Any]) -> bytes:
         dtype = str(ingest.get("dtype", "uint8"))
         return array_to_cog_bytes(
             arr, transform, crs, nodata=nodata, dtype=dtype, colormap=colormap
+        )
+    if access == "stac_continuous_mosaic":
+        # ADR 0086: a continuous-value uint8 STAC mosaic (bilinear + per-band nodata
+        # + two-tier PC REST /sign) with the PURE per-band colormap (hooks.colormap)
+        # baked into the band-1 palette -- value-identical to the jrc-gsw twin's COG.
+        arr, transform, crs, nodata = _stac_continuous_mosaic(spec, params)
+        colormap: dict | None = None
+        if spec.hooks is not None and spec.hooks.colormap:
+            from ..hooks import resolve_hook
+
+            colormap = resolve_hook(spec.hooks.colormap)(spec, params)
+        return array_to_cog_bytes(
+            arr, transform, crs, nodata=float(nodata), dtype="uint8", colormap=colormap
         )
     if access == "categorical_tile_grid":
         # ADR 0082: a uint8 categorical first-valid mosaic + the declarative palette

@@ -69,6 +69,66 @@ copy-pasting file paths.
   WebSocket; it never starts or stops it, and a client-only machine (see
   below) needs none of that -- just QGIS.
 
+## Dependencies
+
+QGIS bundles its own Python, and that bundle already carries most of what
+this plugin needs -- QGIS 4.0.3, for example, ships numpy, pandas, shapely,
+pyproj, lxml and psycopg2, none of which this plugin has to install. The one
+gap: **matplotlib**, which QGIS 3 bundled and QGIS 4 dropped -- the Charts
+dock needs it and nothing else does.
+
+`trid3nt/install_dependencies.py` (pure stdlib, ships inside the plugin) is
+the general fix on Linux/Windows: it checks every third-party import the
+plugin actually makes (today, just matplotlib), reports a present/missing
+table, installs only what's missing into the running interpreter,
+re-verifies, and exits nonzero if anything is still missing. **On macOS it
+prints the wheel-download recipe below instead** -- there is no interpreter
+there for it to install into (see why below).
+
+**Linux** -- QGIS runs under the system python3, which already has pip:
+
+```bash
+python3 -m pip install matplotlib
+# or: python3 trid3nt/install_dependencies.py
+```
+
+**Windows** -- the OSGeo4W python.exe QGIS ships with also has pip
+(adjust to your install path):
+
+```bash
+"C:\Program Files\QGIS 3.xx\apps\Python3xx\python.exe" -m pip install matplotlib
+```
+
+**macOS** -- QGIS 4's bundled Python has **no pip module at all**
+("No module named pip", NATE-verified live) -- not a PATH problem, not a
+missing package, pip is simply absent from that interpreter, so nothing can
+be installed into it, by any method. The fix (NATE's ruling): use your
+**system python3** as a pure wheel downloader, then unzip the wheels
+straight into the QGIS profile's own `python/` dir, which is already on
+QGIS's `sys.path` -- no QGIS-side interpreter involved at all:
+
+```bash
+python3 -m pip download matplotlib --only-binary=:all: \
+  --python-version <3.NN from this QGIS's Python> \
+  --platform <macosx_11_0_arm64 or macosx_11_0_x86_64> \
+  --implementation cp -d /tmp/qgis_mpl
+rm -f /tmp/qgis_mpl/numpy*.whl
+for w in /tmp/qgis_mpl/*.whl; do unzip -o -q "$w" -d "<profile>/python"; done
+```
+
+The `rm` line matters: QGIS bundles its own numpy, and unpacking the
+downloaded numpy wheel into the profile shadows it and breaks shapely
+(and with it all of PyQGIS) at startup. If that happens, recover with
+`rm -rf "<profile>/python"/numpy*` and restart QGIS.
+
+`<3.NN>` is this QGIS's own `sys.version_info`, `<arm64|x86_64>` is
+`platform.machine()`, and `<profile>/python` is two directories up from
+where the plugin itself lives (`<profile>/python/plugins/trid3nt/`). The
+Charts dock's "Missing matplotlib" panel shows this exact two-line block
+with every value already filled in for the QGIS you're running (Copy
+button) -- it never runs either recipe for you, on any OS: run the command
+yourself in a real terminal, then restart QGIS.
+
 ## Install
 
 There are two ways to get this plugin into QGIS, depending on whether this

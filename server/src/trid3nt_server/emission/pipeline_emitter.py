@@ -136,6 +136,35 @@ def current_turn_case() -> str | None:
 
 
 # --------------------------------------------------------------------------- #
+# Per-turn drawn-geometry binding (ADR 0159)
+# --------------------------------------------------------------------------- #
+#
+# The dock's 'Draw region' rubber-band rectangle rides ``user-message`` as
+# ``drawn_geometry``; the turn dispatcher binds it into this per-task ContextVar
+# so composer input-review gates can read it WITHOUT threading a new kwarg down
+# every dispatch path (mirrors the active-emitter / turn-case ContextVars). A
+# composer reads ``current_turn_drawn_geometry()`` and, when present, consumes it
+# as a ``basis="user"`` spatial knob (e.g. geoclaw amr_regions), overriding the
+# model's prompt-interpreted proposal. Per-task, so concurrent turns never
+# cross-read. ``None`` = nothing drawn this turn (the common case).
+
+_TURN_DRAWN_GEOMETRY: contextvars.ContextVar[dict | None] = contextvars.ContextVar(
+    "trid3nt_turn_drawn_geometry", default=None
+)
+
+
+def bind_turn_drawn_geometry(geometry: dict | None) -> contextvars.Token:
+    """Bind the turn's user-drawn geometry (dict) for gate consumption; returns
+    the token."""
+    return _TURN_DRAWN_GEOMETRY.set(geometry)
+
+
+def current_turn_drawn_geometry() -> dict | None:
+    """The drawn geometry bound to the current task's turn, or None."""
+    return _TURN_DRAWN_GEOMETRY.get()
+
+
+# --------------------------------------------------------------------------- #
 # Active-emitter ContextVar
 # --------------------------------------------------------------------------- #
 #
@@ -1945,6 +1974,11 @@ class PipelineEmitter:
             role=layer.role,
             temporal=layer.temporal is not None,
             legend=_legend,
+            # Mesh CRS (ADR 0118): carry the LayerURI's crs_authid onto the WS
+            # row so the plugin's _add_mesh can setCrs() an MDAL mesh whose
+            # native crs() is empty. None for raster/vector (byte-for-byte
+            # unchanged).
+            crs_authid=getattr(layer, "crs_authid", None),
         )
         # Dedup by underlying-COG identity -- in-place replace if present, else
         # append. ``_layer_identity_key`` collapses two display URLs of the same
@@ -2558,6 +2592,17 @@ class PipelineEmitter:
                 self._pipeline_id,
             )
 
+    async def send_envelope(self, message_type: str, payload: Any) -> None:
+        """Emit ONE arbitrary typed envelope on this session's sink.
+
+        Public seam for gates that ride the pause/resume spine from OUTSIDE the
+        emitter's pipeline-step vocabulary (ADR 0107's in-tool input-review gate
+        sends a ``tool-payload-warning`` this way). Same framing as ``_send``:
+        stamps the session + owning Case so the web routes it to the right
+        stream.
+        """
+        await self._send(message_type, payload)
+
     async def _send(self, message_type: str, payload: Any) -> None:
         env = Envelope(
             type=message_type,
@@ -2582,7 +2627,7 @@ class PipelineEmitter:
 # Two-card sim observability composer helpers
 # --------------------------------------------------------------------------- #
 #
-# Shared by BOTH off-box-solver composers (model_urban_flood_swmm /
+# Shared by BOTH off-box-solver composers (model_swmm_urban_flood /
 # model_flood_scenario) so the SWMM and SFINCS Batch dispatches mint the same
 # two cards: a "Dispatch" tool card recording the submit (lands complete
 # immediately) + a "Sim" compute card bound to the Batch jobId whose live

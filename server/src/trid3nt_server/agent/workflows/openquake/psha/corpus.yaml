@@ -1,7 +1,5 @@
-# TEMPLATE tier (engine-door refactor): phrasings for openquake_psha. NOT
-# merged into the main retrieval index; the run_openquake door surfaces this
-# template via gate expansion (select-then-call). Carried from the migrated
-# run_seismic_hazard_psha corpus entries.
+# Template routing phrasings (door dissolution, ADR 0094): walked into the main
+# retrieval index directly -- the engine templates are ordinary retrieval-pool tools.
 openquake_psha:
 - run the OpenQuake classical PSHA over this bbox with the Boore-Atkinson GMPE
 - probabilistic seismic hazard map - PGA with 10% exceedance in 50 years here
@@ -9,3 +7,15 @@ openquake_psha:
 - generate a spectral acceleration SA(1.0) hazard map over this area
 - classical hazard with a Gutenberg-Richter area source for this footprint
 - compute the PGA ground-motion input for a Pelicun building damage assessment
+- mean hazard curve with the 5/50/95 quantile spread across logic-tree realizations
+- how uncertain is the seismic hazard across competing source models and GMPEs here
+- non-trivial source-model logic tree with multiple ground-motion models per tectonic region
+- epistemic Gutenberg-Richter a b and Mmax uncertainty spread on the hazard curve
+- LogicTreeCase-style logic-tree hazard with quantile band over this area
+- uniform hazard spectrum and hazard map at 10% and 2% probability of exceedance in 50 years
+- UHS response spectrum plus the 475-year and 2475-year hazard maps for this US site
+- how does the local soil site class change the shaking compared to rock here
+- compare the NEHRP site classes C D and E amplification of the seismic hazard
+- discrete site-class amplification factor for soft soil versus reference rock
+- how much does soft basin soil amplify the ground motion over bedrock at this site
+- apply the ASCE 7 site coefficient soil amplification to the hazard curve

@@ -60,6 +60,10 @@ __all__ = [
     "DEFAULT_GMPE",
     "OpenQuakeRunArgs",
     "SeismicHazardLayerURI",
+    "ScenarioGmfLayerURI",
+    "SecondaryPerilLayerURI",
+    "DisaggregationLayerURI",
+    "EventBasedHazardLayerURI",
 ]
 
 
@@ -160,12 +164,39 @@ class OpenQuakeRunArgs(EngineRunArgsMixin):
 
     gmpe: str = Field(default=DEFAULT_GMPE, min_length=1)
 
+    # Reference site condition (Vs30, m/s) for the [site_params] deck block. The
+    # 760 m/s default is the generic NEHRP B/C rock boundary -- a DEMO default,
+    # NOT a site-specific measurement (there is no Vs30 fetcher yet, ADR 0107).
+    # ADDITIVE: default reproduces the prior hardcoded 760.0 byte-for-byte.
+    reference_vs30_ms: float = Field(default=760.0, gt=0.0)
+
     # Gutenberg-Richter recurrence + magnitude range of the demo area source.
     # TENTATIVE demo seismicity (narrated as demo values by the composer).
     a_value: float = Field(default=4.0)
     b_value: float = Field(default=1.0, gt=0.0)
     min_magnitude: float = Field(default=5.0, ge=0.0)
     max_magnitude: float = Field(default=7.5, gt=0.0)
+
+    # --- epistemic logic-tree mode (GEM LogicTreeCase1/Case2 mechanism) -------- #
+    # "single" (default) = the classical single-branch deck (real-fault or
+    # synthetic area source), byte-identical to before. "source_models" = two
+    # competing weighted source-model interpretations + 2 GMPEs (LogicTreeCase1).
+    # "gr_uncertainty" = a Gutenberg-Richter a/b + Mmax epistemic branch tree over
+    # a two-source model + 2 GMPEs per tectonic region (LogicTreeCase2, 324
+    # realizations). Both epistemic modes bypass the real-fault fetch (they use a
+    # synthetic demo source), export the mean hazard curve + the 5/50/95 quantile
+    # spread across realizations, and are narrated as published-mechanism cases.
+    logic_tree: Literal["single", "source_models", "gr_uncertainty"] = "single"
+
+    # Optional second probability of exceedance for the hazard map / UHS (the
+    # 2%-in-50yr / 2475-yr companion to the default 10%/475-yr). None => a single
+    # PoE map (unchanged). When set, the deck exports the hazard map at BOTH PoEs.
+    secondary_poe: float | None = Field(default=None, gt=0.0, lt=1.0)
+
+    # Export the Uniform Hazard Spectrum (spectral acceleration vs period at the
+    # target PoE) alongside the hazard map + curve. Default off (byte-identical
+    # classical deck); on, the deck adds the SA-period IML ladder + UHS export.
+    uniform_hazard_spectra: bool = False
 
     @field_validator("imt", mode="before")
     @classmethod
@@ -256,3 +287,170 @@ class SeismicHazardLayerURI(LayerURI):
     # flips it to "real-fault" only when it actually built fault sources.
     source_model_kind: Literal["real-fault", "synthetic-area"] = "synthetic-area"
     source_model_note: str = ""
+
+    # epistemic logic-tree provenance: which logic-tree mode produced the hazard
+    # ("single" / "source_models" / "gr_uncertainty") and how many logic-tree
+    # realizations were enumerated (the substrate for the 5/50/95 quantile spread).
+    # Default "single"/0 so every existing construction stays valid unchanged; the
+    # composer stamps them from the run it actually executed.
+    logic_tree: Literal["single", "source_models", "gr_uncertainty"] = "single"
+    n_realizations: int = Field(default=0, ge=0)
+
+
+class ScenarioGmfLayerURI(LayerURI):
+    """A ``LayerURI`` for a scenario ground-motion-field (GMF) mean map, plus the
+    narration scalars a scenario earthquake produces.
+
+    The scenario calculator computes ``number_of_ground_motion_fields`` correlated
+    ground-motion realizations of ONE rupture over a site grid; the average GMF
+    export gives, per site, the mean value (``gmv_<IMT>``) and the across-
+    realization geometric standard deviation (``gsd_<IMT>``). This layer carries
+    the MEAN COG plus the fields the agent cites (invariant 1 - typed, never
+    invented):
+
+        imt: the Intensity Measure Type this mean map represents (e.g. ``"PGA"``).
+        magnitude: the scenario rupture moment magnitude.
+        num_ground_motion_fields: how many correlated GMF realizations were drawn.
+        max_mean_value: peak mean ground-motion across the AOI, IMT units
+            (g for PGA/SA, cm/s for PGV) (>= 0).
+        median_spread_factor: the site-median across-realization geometric
+            standard deviation (dimensionless, >= 0); a compact scalar summary of
+            the realization spread the paired spread COG maps.
+        n_sites: number of scenario site-grid points (>= 0).
+        rupture_kind: ``"real-fault"`` (rupture placed on a GEM Global Active
+            Faults trace intersecting the AOI) or ``"synthetic"`` (a demo fault
+            through the AOI centre when no mapped fault intersects, or a caller-
+            supplied trace). HONESTY FLOOR: set to the path the run actually took.
+        rupture_note: a one-line narration of the rupture-geometry decision the
+            agent surfaces verbatim.
+
+    ``layer_type`` is ``"raster"``.
+    """
+
+    imt: str = DEFAULT_IMT
+    magnitude: float = Field(ge=0.0)
+    num_ground_motion_fields: int = Field(default=0, ge=0)
+    max_mean_value: float = Field(ge=0.0)
+    median_spread_factor: float = Field(default=0.0, ge=0.0)
+    n_sites: int = Field(default=0, ge=0)
+    rupture_kind: Literal["real-fault", "synthetic"] = "synthetic"
+    rupture_note: str = ""
+
+
+class DisaggregationLayerURI(LayerURI):
+    """A ``LayerURI`` for a seismic-hazard disaggregation, plus its narration
+    scalars.
+
+    The disaggregation calculator decomposes the hazard at a single site (the AOI
+    centroid) at a target probability of exceedance into contributions by
+    magnitude, distance, and epsilon (the GMPE residual in standard deviations) -
+    the "which earthquake scenario dominates my site's hazard" answer. The layer
+    surfaces the disaggregation SITE as a point marker (``layer_type`` =
+    ``"vector"``); the magnitude-distance contribution matrix is the paired chart.
+    All scalars are real engine output (invariant 1 - never invented):
+
+        imt: the Intensity Measure Type disaggregated (e.g. ``"PGA"``).
+        poe: the probability of exceedance disaggregated at (e.g. 0.10).
+        investigation_time_years: the PoE window, years.
+        return_period_years: the implied return period, years.
+        iml_at_poe: the ground-motion level (IMT units) exceeded at ``poe`` over
+            the investigation time - the hazard level being disaggregated (>= 0).
+        dominant_magnitude: the modal (largest-contribution) magnitude bin centre.
+        dominant_distance_km: the modal distance bin centre, km (>= 0).
+        dominant_epsilon: the modal epsilon bin centre (GMPE-residual sigmas).
+        mean_magnitude: contribution-weighted mean magnitude.
+        mean_distance_km: contribution-weighted mean distance, km (>= 0).
+        n_bins: number of populated magnitude-distance-epsilon bins (>= 0).
+        source_model_note: an honest one-line statement of the seismic source the
+            disaggregation ran against (a labelled synthetic demo area source).
+    """
+
+    imt: str = DEFAULT_IMT
+    poe: float = Field(default=DEFAULT_POE, gt=0.0, lt=1.0)
+    investigation_time_years: float = Field(
+        default=DEFAULT_INVESTIGATION_TIME_YEARS, gt=0.0
+    )
+    return_period_years: float = Field(default=0.0, ge=0.0)
+    iml_at_poe: float = Field(default=0.0, ge=0.0)
+    dominant_magnitude: float = Field(default=0.0, ge=0.0)
+    dominant_distance_km: float = Field(default=0.0, ge=0.0)
+    dominant_epsilon: float = 0.0
+    mean_magnitude: float = Field(default=0.0, ge=0.0)
+    mean_distance_km: float = Field(default=0.0, ge=0.0)
+    n_bins: int = Field(default=0, ge=0)
+    source_model_note: str = ""
+
+
+class EventBasedHazardLayerURI(LayerURI):
+    """A ``LayerURI`` for an event-based-PSHA hazard map + its narration scalars.
+
+    The event-based calculator samples ``ses_per_logic_tree_path`` stochastic
+    event sets (a synthetic earthquake catalogue) and computes a ground-motion
+    field per rupture; the hazard curve is then back-derived from the GMFs and a
+    hazard map extracted at the target PoE. This layer carries the event-based
+    hazard-map COG (primary) and the fields the agent cites (invariant 1):
+
+        imt: the Intensity Measure Type the map represents (e.g. ``"PGA"``).
+        poe: the probability of exceedance the map is computed at.
+        investigation_time_years: the PoE window, years.
+        return_period_years: the implied return period, years.
+        max_hazard_value: peak event-based ground-motion across the AOI, IMT units
+            (>= 0).
+        hazard_area_km2: areal footprint above the hazard floor, km^2 (>= 0).
+        n_sites: number of site-grid points (>= 0).
+        ses_per_logic_tree_path: the stochastic-event-set multiplier that sets the
+            synthetic-catalogue length (>= 0).
+        n_ruptures: number of ruptures in the sampled event set (>= 0).
+        n_events: number of events (rupture occurrences) in the catalogue (>= 0).
+        classical_consistency_note: an honest one-line statement of how the
+            event-based hazard curve compares to the classical-PSHA curve at the
+            AOI centroid (the convergence check the paired chart shows).
+    """
+
+    imt: str = DEFAULT_IMT
+    poe: float = Field(default=DEFAULT_POE, gt=0.0, lt=1.0)
+    investigation_time_years: float = Field(
+        default=DEFAULT_INVESTIGATION_TIME_YEARS, gt=0.0
+    )
+    return_period_years: float = Field(default=0.0, ge=0.0)
+    max_hazard_value: float = Field(default=0.0, ge=0.0)
+    hazard_area_km2: float = Field(default=0.0, ge=0.0)
+    n_sites: int = Field(default=0, ge=0)
+    ses_per_logic_tree_path: int = Field(default=0, ge=0)
+    n_ruptures: int = Field(default=0, ge=0)
+    n_events: int = Field(default=0, ge=0)
+    classical_consistency_note: str = ""
+
+
+class SecondaryPerilLayerURI(LayerURI):
+    """A ``LayerURI`` for an earthquake-triggered secondary-peril screening map
+    (liquefaction or landslide probability), plus its narration scalars.
+
+    Produced by applying an ``openquake.sep`` model to a scenario GMF field and
+    the fetched site covariates (Vs30 / slope / compound topographic index). The
+    layer carries the per-site probability COG plus the fields the agent cites
+    (invariant 1 - typed, never invented):
+
+        peril: ``"liquefaction"`` or ``"landslide"``.
+        model_name: the published model applied (e.g. ``"zhu_etal_2015_general"``
+            / ``"jibson_2007_newmark"``).
+        max_probability: peak per-site probability across the AOI (0..1) (>= 0).
+        mean_probability: AOI-mean per-site probability (0..1) (>= 0).
+        exceedance_area_km2: areal footprint above the screening probability floor,
+            km^2 (>= 0).
+        n_sites: number of site-grid points evaluated (>= 0).
+        magnitude: the driving scenario rupture magnitude.
+        site_data_note: a one-line honest statement of where each covariate came
+            from (fetched vs labelled default) the agent surfaces verbatim.
+
+    ``layer_type`` is ``"raster"``.
+    """
+
+    peril: Literal["liquefaction", "landslide"]
+    model_name: str = ""
+    max_probability: float = Field(default=0.0, ge=0.0)
+    mean_probability: float = Field(default=0.0, ge=0.0)
+    exceedance_area_km2: float = Field(default=0.0, ge=0.0)
+    n_sites: int = Field(default=0, ge=0)
+    magnitude: float = Field(default=0.0, ge=0.0)
+    site_data_note: str = ""

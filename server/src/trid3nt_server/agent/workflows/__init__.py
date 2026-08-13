@@ -42,15 +42,22 @@ from __future__ import annotations
 # Import the workflow modules so their @register_tool decorators fire at
 # package import time and the LLM-facing wrappers land in TOOL_REGISTRY.
 from .sfincs.flood.flood import sfincs_flood as _sfincs_flood  # noqa: F401  -- engine-door refactor (SFINCS slice): the run_model_flood_scenario wrapper is now the sfincs_flood template (engine=sfincs, tier=template); the run_sfincs door is imported in tools/__init__.py
-from .modflow.model_groundwater_contamination_scenario import model_groundwater_contamination_scenario as _model_groundwater_contamination_scenario  # noqa: F401 - Case 2 composer (news → MODFLOW → plume)
+from .sfincs.numerical_physics.numerical_physics import sfincs_advanced_numerical_physics_knobs as _sfincs_advanced_numerical_physics_knobs  # noqa: F401  -- S-tier wave 1 (ADR 0120): opt-in SFINCS numerical solver-settings knob template over model_flood_scenario (engine=sfincs, tier=template)
+# COMPOSER DISSOLUTION (ADR 0105): the standalone news-ingest MODFLOW composer
+# (run_model_groundwater_contamination_scenario) and the live-alert SFINCS
+# composer (run_model_nws_flood_event_scenario) are DELETED - the model composes
+# the fetch -> extract -> engine-template chain itself (aggregation is the user's
+# + the model's common sense). Their judgment survives in the system prompt +
+# the modflow_contaminant_plume / sfincs_flood / fetch_nws_alerts_conus docstrings.
 # engine-door refactor: run_model_contamination_affected_fields is CUT (composer
 # removed). Its plume half IS modflow_contaminant_plume; the zonal field-scoring
 # half re-homes to a playground recipe (docs/playbooks/modflow-affected-fields-recipe.md).
-from .sfincs.model_nws_flood_event_scenario import model_nws_flood_event_scenario as _model_nws_flood_event_scenario  # noqa: F401 - Case 3 composer
 # PELICUN fold: the former pelicun_damage_with_buildings composer folded into the
 # pelicun_damage_assessment template's bbox AUTO-FETCH input mode; the template is
 # registered via tools/__init__.py's import of
 # workflows/pelicun/damage_assessment/damage_assessment.py (no separate import here).
 from .telemac import run_telemac as _run_telemac  # noqa: F401  -- P2: registers the telemac_river_dye local-docker solve spec (SOLVER_WORKFLOW_REGISTRY + LOCAL_SOLVER_SPEC_REGISTRY); no LLM tool yet (P4)
+from .hecras import run_hecras as _run_hecras  # noqa: F401  -- engine #11: registers the hecras_riverine_flood + hecras_levee_breach local-docker solve specs (SOLVER_WORKFLOW_REGISTRY + LOCAL_SOLVER_SPEC_REGISTRY); the LLM templates are imported by tools/__init__.py
+from .schism import run_schism as _run_schism  # noqa: F401  -- engine #12 (ADR 0118): registers the schism_tidal_hydro local-docker solve spec (SOLVER_WORKFLOW_REGISTRY + LOCAL_SOLVER_SPEC_REGISTRY); the LLM template is imported by tools/__init__.py
 
 __all__: list[str] = []

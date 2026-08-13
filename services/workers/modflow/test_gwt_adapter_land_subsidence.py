@@ -215,3 +215,83 @@ def test_non_csub_archetype_deck_stays_byte_identical(tmp_path):
     ss_block = sto_txt.split("ss", 1)[1][:120]
     nums = re.findall(r"[0-9]+\.[0-9]+(?:e[+-][0-9]+)?", ss_block)
     assert nums and float(nums[0]) > 0.0, "sustainable_yield STO ss must stay non-zero"
+
+
+# --------------------------------------------------------------------------- #
+# 6.7.0 OBS regression: interbed-compaction obs MUST be keyed by icsubno, NOT
+# boundname (mf6 6.7.0 HARD-ERRORS "BOUNDNAME (...) not allowed for CSUB
+# observation type 'INTERBED-COMPACTION'"). The substrate-found latent regression.
+# --------------------------------------------------------------------------- #
+
+
+def test_csub_obs_keyed_by_icsubno_not_boundname():
+    """Every CSUB compaction obs id is the 1-based icsubno (an int), never the
+    boundname string -- mf6 6.7.0 rejects boundname for interbed-compaction."""
+    b = _build_csub_interbeds(
+        [(20, 20), (20, 21), (21, 20)],
+        ssv=2e-3, sse=5e-5, thick_frac=0.5, theta=0.3,
+    )
+    entries = b["obs"]["{gwf}.csub.obs.csv"]
+    # 3 interbeds x 3 obs types = 9 entries; each id is an int in 1..3.
+    assert len(entries) == 9
+    for obsname, obstype, obsid in entries:
+        assert isinstance(obsid, int), f"{obstype} obs id must be icsubno int, got {obsid!r}"
+        assert 1 <= obsid <= 3
+    # icsubno ids run 1..n per obs type, in interbed order (the header stays
+    # COMPACTION_R{i}/INE_R{i}/ELA_R{i} from the obsname, so postprocess is unaffected).
+    comp_ids = [e[2] for e in entries if e[1] == "interbed-compaction"]
+    assert comp_ids == [1, 2, 3]
+
+
+# --------------------------------------------------------------------------- #
+# CSUB formulation knobs (ADR 0228): csub_delay_interbeds + csub_effective_stress.
+# Defaults byte-identical to v1; the knobs are additive.
+# --------------------------------------------------------------------------- #
+
+
+def test_delay_flag_flips_cdelay_and_kv():
+    """delay=True writes 'delay' interbeds with a LOW vertical K; the default keeps
+    'nodelay' + the dummy kv (byte-identical v1)."""
+    from gwt_adapter import CSUB_DELAY_INTERBED_KV_M_DAY
+
+    nod = _build_csub_interbeds([(20, 20)], ssv=2e-3, sse=5e-5, thick_frac=0.5, theta=0.3)
+    assert nod["packagedata"][0][2] == "nodelay"
+    assert nod["packagedata"][0][9] == 1.0  # dummy kv
+    dly = _build_csub_interbeds(
+        [(20, 20)], ssv=2e-3, sse=5e-5, thick_frac=0.5, theta=0.3, delay=True
+    )
+    assert dly["packagedata"][0][2] == "delay"
+    assert dly["packagedata"][0][9] == pytest.approx(CSUB_DELAY_INTERBED_KV_M_DAY)
+
+
+def test_default_csub_deck_is_head_based_no_ndelaycells(csub_deck, tmp_path):
+    """The default land_subsidence deck (both knobs off) is HEAD_BASED with no
+    ndelaycells -- byte-identical to the v1 formulation."""
+    csub_txt = (tmp_path / "gwf_model.csub").read_text().lower()
+    assert "head_based" in csub_txt
+    assert "ndelaycells" not in csub_txt
+    assert "sgm" not in csub_txt and "sgs" not in csub_txt
+
+
+def test_delay_deck_writes_ndelaycells(tmp_path):
+    d = build_modflow_deck(
+        workdir=tmp_path, archetype="land_subsidence", well_location_latlon=WELL,
+        pumping_rate_m3_day=4000.0, sim_years=10.0, n_periods=10,
+        csub_delay_interbeds=True, **BASE,
+    )
+    assert d.csub_present is True
+    csub_txt = (tmp_path / "gwf_model.csub").read_text().lower()
+    assert "ndelaycells" in csub_txt
+    assert "delay" in csub_txt
+
+
+def test_effective_stress_deck_drops_head_based_for_geostatic(tmp_path):
+    d = build_modflow_deck(
+        workdir=tmp_path, archetype="land_subsidence", well_location_latlon=WELL,
+        pumping_rate_m3_day=4000.0, sim_years=10.0, n_periods=10,
+        csub_effective_stress=True, **BASE,
+    )
+    assert d.csub_present is True
+    csub_txt = (tmp_path / "gwf_model.csub").read_text().lower()
+    assert "head_based" not in csub_txt, "effective_stress must drop head_based"
+    assert "sgm" in csub_txt and "sgs" in csub_txt

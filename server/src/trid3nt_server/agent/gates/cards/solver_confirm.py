@@ -564,6 +564,75 @@ def _build_psha_confirm_envelope(params: dict) -> Any:
     )
 
 
+def _build_scenario_confirm_envelope(params: dict, tool_name: str) -> Any:
+    """build the OpenQuake scenario-GMF / secondary-perils solver-confirm card.
+
+    A simple proceed/cancel confirmation (Invariant 9 - a consequential engine
+    run). Summarizes the scenario magnitude + approximate AOI area; the
+    secondary-perils variant names the two ground-failure screens it produces.
+    Built inline from the tool args (the run args ARE the args).
+    """
+    import math
+
+    from trid3nt_contracts.payload_warning import PayloadWarningEnvelopePayload
+    from ...tool_arg_normalizer import coerce_bbox_value
+
+    try:
+        magnitude = float(params.get("magnitude", 6.7))
+    except (TypeError, ValueError):
+        magnitude = 6.7
+
+    bbox_area_km2: float | None = None
+    coerced = coerce_bbox_value(params.get("bbox"))
+    if coerced is not None and len(coerced) == 4:
+        min_lon, min_lat, max_lon, max_lat = (float(v) for v in coerced)
+        mid_lat = (min_lat + max_lat) / 2.0
+        width_km = abs(max_lon - min_lon) * 111.32 * math.cos(math.radians(mid_lat))
+        height_km = abs(max_lat - min_lat) * 111.32
+        bbox_area_km2 = max(0.0, width_km * height_km)
+    area_phrase = (
+        f"~{bbox_area_km2:,.0f} km^2 AOI" if bbox_area_km2 is not None
+        else "the requested AOI"
+    )
+    lane_phrase = (
+        "This runs the OpenQuake engine locally (typically seconds)."
+        if _local_compute_lane()
+        else "This dispatches the OpenQuake engine to AWS Batch (typically minutes)."
+    )
+    if tool_name == "openquake_secondary_perils":
+        recommendation = (
+            f"Screen earthquake-triggered LIQUEFACTION + LANDSLIDE ground failure "
+            f"for a magnitude {magnitude:g} scenario rupture over {area_phrase}: "
+            f"runs the scenario ground-motion field then the openquake.sep "
+            f"liquefaction + Newmark-landslide models over fetched terrain. "
+            f"{lane_phrase} Confirm to start."
+        )[:512]
+    else:
+        recommendation = (
+            f"Run a magnitude {magnitude:g} scenario ground-motion field over "
+            f"{area_phrase}: correlated realizations of one rupture -> the mean "
+            f"shaking map + across-realization spread. {lane_phrase} Confirm to "
+            f"start."
+        )[:512]
+
+    return PayloadWarningEnvelopePayload(
+        warning_id=new_ulid(),
+        tool_name=tool_name,
+        tool_args={
+            "bbox": list(coerced) if coerced is not None else params.get("bbox"),
+            "magnitude": magnitude,
+            "aoi_area_km2": (
+                round(bbox_area_km2) if bbox_area_km2 is not None else None
+            ),
+            "gsim": params.get("gsim", "BooreAtkinson2008"),
+        },
+        estimated_mb=0.0,
+        threshold_mb=0.0,
+        recommendation=recommendation,
+        options=["proceed", "cancel"],
+    )
+
+
 def _build_fire_confirm_envelope(params: dict) -> Any:
     """build the ELMFIRE fire-spread solver-confirm card.
 
@@ -806,7 +875,7 @@ async def _build_telemac_mesh_envelope(
         GranularitySuggestion,
         PayloadWarningEnvelopePayload,
     )
-    from ...workflows.telemac.model_river_dye_release_scenario.model_river_dye_release_scenario import (
+    from ...workflows.telemac.river_dye.river_dye import (
         MESH_H_FLOOR_M,
         MESH_NODE_CAP,
         plausible_release_coords,
@@ -820,6 +889,14 @@ async def _build_telemac_mesh_envelope(
     dt = float(stats["time_step_s"])
     est_s = float(stats["est_solve_seconds"])
     where = stats.get("location_name") or params.get("location") or "?"
+    # bank-source provenance (leg 1) shown on the approve-mesh card so the user
+    # sees whether the previewed banks are real (nhd_area) or an assumed ribbon.
+    _bank_source = str(stats.get("bank_source") or "constant_ribbon")
+    _bank_note = (
+        " Banks: real NHDArea geometry."
+        if _bank_source == "nhd_area"
+        else " Banks: assumed constant-width ribbon."
+    )
 
     # Release-coverage guard: when the CALL carried plausible release coords
     # the preview seeds the reach from them, so the built mesh should
@@ -877,7 +954,7 @@ async def _build_telemac_mesh_envelope(
         coarsened="clamped" in str(stats.get("resolution_label") or ""),
         reason=(
             f"Mesh previewed on the map: {npoin:,} nodes / {nelem:,} triangles "
-            f"at {h:g} m edges; CFL-coupled timestep {dt:g} s."
+            f"at {h:g} m edges; CFL-coupled timestep {dt:g} s." + _bank_note
         )[:512],
         spot_label=None,
     )
@@ -896,6 +973,7 @@ async def _build_telemac_mesh_envelope(
             # a point exists; the point rides back in revised_args.
             "release_point_required": True,
             "mesh_bbox": list(stats.get("bbox") or []),
+            "bank_source": _bank_source,
         },
         estimated_mb=0.0,
         threshold_mb=0.0,
@@ -949,12 +1027,12 @@ async def _build_swmm_granularity_envelope(params: dict) -> tuple[Any, Any, str]
         AWS_BATCH_COMPUTE_CLASS_SIZING,
         select_compute_class,
     )
-    from ...workflows.swmm.model_urban_flood_swmm.model_urban_flood_swmm import (
+    from ...workflows.swmm.urban_flood.urban_flood import (
         _enforce_min_urban_aoi,
         _fetch_dem_for_urban,
     )
     from ...workflows.swmm.run_swmm import is_local_mode
-    from ...workflows.swmm.swmm_mesh_builder import (
+    from ...mesh.raster_cell_mesh import (
         SWMM_RES_LADDER,
         estimate_swmm_solve_seconds,
         suggest_swmm_resolution,

@@ -1,7 +1,7 @@
 """Targeted tests for the real-fault wiring of the OpenQuake seismic composer
 (task #199).
 
-These exercise the seam that makes ``model_seismic_hazard_scenario`` use REAL
+These exercise the seam that makes ``model_openquake_psha`` use REAL
 active-fault sources (``fetch_fault_sources`` -> ``render_fault_source_model_xml``)
 when faults intersect the AOI, and fall back HONESTLY to the synthetic area source
 when none do. Everything I/O-bound (the fault fetch, run_solver /
@@ -17,7 +17,7 @@ Three lenses:
   (1) ``assemble_build_spec`` pure-mapping of fault_sources -> the build_spec the
       worker consumes (+ the finer real-fault site-grid default).
   (2) ``resolve_fault_sources`` calls the fetcher and degrades honestly.
-  (3) ``model_seismic_hazard_scenario`` end-to-end (mocked) asserting the fetch is
+  (3) ``model_openquake_psha`` end-to-end (mocked) asserting the fetch is
       called, the staged spec carries the right source model, and the returned
       layer narrates real-vs-fallback truthfully.
 """
@@ -32,8 +32,8 @@ from trid3nt_contracts.openquake_contracts import (
     SeismicHazardLayerURI,
 )
 
-import trid3nt_server.agent.workflows.openquake.model_seismic_hazard_scenario.model_seismic_hazard_scenario as comp
-from trid3nt_server.agent.workflows.openquake.model_seismic_hazard_scenario.model_seismic_hazard_scenario import (
+import trid3nt_server.agent.workflows.openquake.psha.psha as comp
+from trid3nt_server.agent.workflows.openquake.psha.psha import (
     REAL_FAULT_SITE_GRID_SPACING_KM,
     assemble_build_spec,
     resolve_fault_sources,
@@ -157,15 +157,21 @@ def test_resolve_fault_sources_real_path_calls_fetcher():
 
 
 def test_resolve_fault_sources_empty_falls_back_honestly():
-    """No faults in the AOI => empty records + the fetcher's typed honest note
-    (NEVER fabricates a fault, NEVER raises)."""
+    """No faults in the AOI => empty records + a strengthened honest note that
+    carries the fetcher's typed detail AND the ADR 0223 area-source methodology
+    framing (NEVER fabricates a fault, NEVER raises)."""
     fetch_note = "No GEM active faults intersect this AOI."
     cm, _ = _patch_fetch(return_value=_fault_result([], note=fetch_note))
     with cm:
         recs, note = resolve_fault_sources(list(_BBOX))
 
     assert recs == []
-    assert note == fetch_note
+    # the fetcher's detail is preserved AND the strengthened area-source label
+    # (standard PSHA methodology, not fabricated data) is appended.
+    assert fetch_note in note
+    assert "AREA SOURCE" in note
+    assert "standard PSHA" in note
+    assert "not fabricated data" in note
 
 
 def test_resolve_fault_sources_fetch_error_degrades_to_synthetic():
@@ -180,7 +186,7 @@ def test_resolve_fault_sources_fetch_error_degrades_to_synthetic():
 
 
 # ===========================================================================
-# (3) model_seismic_hazard_scenario end-to-end (mocked) — the real wiring.
+# (3) model_openquake_psha end-to-end (mocked) — the real wiring.
 # ===========================================================================
 def _seismic_layer(run_id="BATCHRID"):
     """A bare SeismicHazardLayerURI as postprocess would return it (synthetic-
@@ -263,7 +269,7 @@ async def test_composer_uses_real_faults_when_present(monkeypatch):
     _wire_common_mocks(monkeypatch, staged)
 
     with fetch_mock:
-        layer = await comp.model_seismic_hazard_scenario(
+        layer = await comp.model_openquake_psha(
             OpenQuakeRunArgs(bbox=_BBOX), compute_class="standard"
         )
 
@@ -296,7 +302,7 @@ async def test_composer_falls_back_and_narrates_honestly_when_no_faults(monkeypa
     _wire_common_mocks(monkeypatch, staged)
 
     with fetch_mock:
-        layer = await comp.model_seismic_hazard_scenario(
+        layer = await comp.model_openquake_psha(
             OpenQuakeRunArgs(bbox=_BBOX), compute_class="standard"
         )
 
@@ -307,9 +313,15 @@ async def test_composer_falls_back_and_narrates_honestly_when_no_faults(monkeypa
     assert staged["spec"]["site_grid_spacing_km"] == pytest.approx(
         DEFAULT_SITE_GRID_SPACING_KM
     )
-    # The typed result is HONEST: synthetic, not real-fault.
+    # The typed result is HONEST: synthetic, not real-fault. ADR 0223: the
+    # strengthened area-source label reaches the layer envelope (source_model_note)
+    # -- the fetcher detail is preserved AND the standard-PSHA-methodology framing
+    # is present.
     assert layer.source_model_kind == "synthetic-area"
-    assert layer.source_model_note == fetch_note
+    assert fetch_note in layer.source_model_note
+    assert "AREA SOURCE" in layer.source_model_note
+    assert "standard PSHA" in layer.source_model_note
+    assert "not fabricated data" in layer.source_model_note
     assert "real" not in layer.source_model_kind
 
 
@@ -322,7 +334,7 @@ async def test_composer_degrades_to_synthetic_on_fetch_error(monkeypatch):
     _wire_common_mocks(monkeypatch, staged)
 
     with fetch_mock:
-        layer = await comp.model_seismic_hazard_scenario(
+        layer = await comp.model_openquake_psha(
             OpenQuakeRunArgs(bbox=_BBOX), compute_class="standard"
         )
 

@@ -49,7 +49,7 @@ from __future__ import annotations
 
 from typing import Any, Literal
 
-from pydantic import Field, field_validator
+from pydantic import Field, field_validator, model_validator
 
 from .common import BBox, GraceModel
 from .execution import LayerURI
@@ -61,17 +61,126 @@ __all__ = [
     "DEFAULT_OUTPUT_FRAMES",
     "DEFAULT_AMR_LEVELS",
     "GEOCLAW_DEFAULT_FGMAX_ARRIVAL_TOL_M",
+    "AmrRegionWindow",
+    "StormTrackPoint",
+    "WindDragLaw",
     "GeoClawRunArgs",
     "GeoClawDepthLayerURI",
     "GEOCLAW_DEPTH_STYLE_PRESET",
 ]
+
+
+class AmrRegionWindow(GraceModel):
+    """One explicit AMR refinement window (a GeoClaw ``regiondata`` region).
+
+    GeoClaw's ``rundata.regiondata.regions`` list forces the adaptive mesh to at
+    least ``min_level`` and at most ``max_level`` inside a lat/lon box over a
+    time window ``[t_start_s, t_end_s]`` (overlapping regions combine by MAX of
+    covering min/max levels). This is the explicit region-based flagging path -
+    a deterministic alternative to leaving refinement to error estimation
+    (``flag2refine`` / Richardson) alone.
+
+    Fields:
+        min_level: the minimum AMR level FORCED inside the window (>= 1). The
+            mesh is refined to at least this level here for the whole window.
+        max_level: the maximum AMR level ALLOWED inside the window (>=
+            ``min_level``). Cap refinement here (e.g. keep a coarse offshore box
+            cheap, or hold a subregion at one fixed level).
+        t_start_s: window start time, seconds from t0 (>= 0).
+        t_end_s: window end time, seconds from t0 (> ``t_start_s``).
+        min_lon, max_lon: window longitude bounds, EPSG:4326 (min < max).
+        min_lat, max_lat: window latitude bounds, EPSG:4326 (min < max).
+    """
+
+    min_level: int = Field(ge=1, le=10)
+    max_level: int = Field(ge=1, le=10)
+    t_start_s: float = Field(ge=0.0)
+    t_end_s: float = Field(gt=0.0)
+    min_lon: float = Field(ge=-180.0, le=180.0)
+    max_lon: float = Field(ge=-180.0, le=180.0)
+    min_lat: float = Field(ge=-90.0, le=90.0)
+    max_lat: float = Field(ge=-90.0, le=90.0)
+
+    @field_validator("max_level")
+    @classmethod
+    def _max_ge_min(cls, v: int, info: Any) -> int:
+        lo = info.data.get("min_level")
+        if lo is not None and v < lo:
+            raise ValueError(f"max_level ({v}) must be >= min_level ({lo})")
+        return v
+
+    @field_validator("max_lon")
+    @classmethod
+    def _lon_ordered(cls, v: float, info: Any) -> float:
+        lo = info.data.get("min_lon")
+        if lo is not None and not (lo < v):
+            raise ValueError(f"max_lon ({v}) must be > min_lon ({lo})")
+        return v
+
+    @field_validator("max_lat")
+    @classmethod
+    def _lat_ordered(cls, v: float, info: Any) -> float:
+        lo = info.data.get("min_lat")
+        if lo is not None and not (lo < v):
+            raise ValueError(f"max_lat ({v}) must be > min_lat ({lo})")
+        return v
+
+    @field_validator("t_end_s")
+    @classmethod
+    def _t_ordered(cls, v: float, info: Any) -> float:
+        lo = info.data.get("t_start_s")
+        if lo is not None and not (lo < v):
+            raise ValueError(f"t_end_s ({v}) must be > t_start_s ({lo})")
+        return v
+
+class StormTrackPoint(GraceModel):
+    """One forecast point of a parametric-Holland storm track (a surge run).
+
+    GeoClaw's ``geoclaw.surge`` parametric-storm path (Holland 1980) drives the
+    wind + pressure forcing from a track file: at each forecast time the storm's
+    eye location + intensity parameters define an analytic wind/pressure field.
+    This is one such point. Times are SECONDS RELATIVE TO LANDFALL (t=0 at
+    landfall; negative before) so a track is landfall-referenced regardless of the
+    calendar date.
+
+    Fields:
+        t_s: forecast time, seconds relative to landfall (t=0). Negative before
+            landfall. Points must be strictly ascending in ``t_s``.
+        lon, lat: the storm eye location at this time, EPSG:4326.
+        max_wind_speed_ms: maximum sustained wind speed, m/s (> 0).
+        max_wind_radius_m: radius of maximum winds (eyewall radius), m (> 0).
+        central_pressure_pa: minimum central (eye) pressure, Pa (> 0; a deeper
+            storm has a lower value, e.g. 95000 Pa = 950 hPa).
+        storm_radius_m: outer storm radius (radius of the outermost closed
+            isobar / gale extent), m (> 0). Default 500 km (GeoClaw's fill).
+    """
+
+    t_s: float
+    lon: float = Field(ge=-180.0, le=180.0)
+    lat: float = Field(ge=-90.0, le=90.0)
+    max_wind_speed_ms: float = Field(gt=0.0)
+    max_wind_radius_m: float = Field(gt=0.0)
+    central_pressure_pa: float = Field(gt=0.0)
+    storm_radius_m: float = Field(default=500000.0, gt=0.0)
+
+
+#: Wind-stress drag law for the surge wind forcing (GeoClaw ``surge_data.drag_law``):
+#:   "none"    — no wind stress (pressure + any prescribed forcing only).
+#:   "garratt" — Garratt (1977) capped linear drag (the GeoClaw default).
+#:   "powell"  — Powell (2003) sector-averaged drag (saturates/decreases at high wind).
+#: The choice measurably changes the surface stress -> the surge height (the knob
+#: must DO something, never silently no-op — the ADR 0143 lesson).
+WindDragLaw = Literal["none", "garratt", "powell"]
 
 #: The driver-scenario families GeoClaw can run. Open ``Literal`` so the engine
 #: may add scenarios (e.g. "landslide") without a wire break.
 #:   "dam_break" — raised water column released over dry topo (qinit).
 #:   "tsunami"   — seafloor-displacement source (dtopotools).
 #:   "surge"     — prescribed sea-surface boundary forcing (surge hydrograph).
-GeoClawScenario = Literal["dam_break", "tsunami", "surge"]
+#:   "thacker"   — idealized frictionless paraboloid-basin V&V (worker-generated
+#:                 bowl topo + analytic tilted qinit; NO fetched DEM). NOT a
+#:                 geographic hazard scenario -- a synthetic closed-form check.
+GeoClawScenario = Literal["dam_break", "tsunami", "surge", "thacker"]
 
 #: LLM-friendly aliases for ``scenario``. The agent frequently invents synonyms
 #: ("flood", "wave", "breach", ...) that fail the bare ``Literal`` and trigger a
@@ -100,6 +209,13 @@ _SCENARIO_ALIASES: dict[str, str] = {
     "storm_surge": "surge",
     "stormsurge": "surge",
     "coastal_surge": "surge",
+    # idealized paraboloid-basin V&V.
+    "bowl": "thacker",
+    "parabolic_bowl": "thacker",
+    "paraboloid": "thacker",
+    "thacker_bowl": "thacker",
+    "planar_bowl": "thacker",
+    "oscillating_bowl": "thacker",
 }
 
 
@@ -215,6 +331,18 @@ class GeoClawRunArgs(GraceModel):
     tsunami_dtopo_uri: str | None = None
     source_magnitude: float = Field(default=8.0, gt=0.0, le=10.0)
 
+    # ADR 0226 finite-fault UPGRADE (measured-inversion rung of the tsunami-source
+    # ladder). finite_fault_uri is a staged clawpack CSVFault subfault table (a
+    # published USGS finite-fault inversion's N patches) the worker reads to build a
+    # MULTI-subfault Okada dtopo -- a real, concentrated, asymmetric slip field, not
+    # the single idealized rectangle. finite_fault_footprint is the (min_lon, min_lat,
+    # max_lon, max_lat) enclosing all patch centroids, so the composer sizes the
+    # computational domain to span the whole rupture. Both None -> the single-subfault
+    # scaling synthesis (the degrade rung). Resolved by the composer from the ComCat
+    # event, never hand-typed.
+    finite_fault_uri: str | None = None
+    finite_fault_footprint: tuple[float, float, float, float] | None = None
+
     surge_forcing_uri: str | None = None
 
     output_frames: int = Field(default=DEFAULT_OUTPUT_FRAMES, ge=1)
@@ -240,6 +368,89 @@ class GeoClawRunArgs(GraceModel):
     # Optional single coastal gauge (lon, lat) for a recorded water-level series.
     coastal_gauge_lonlat: tuple[float, float] | None = None
 
+    # Lagrangian (particle-tracking) gauges. Each (lon, lat) seed point is added as
+    # a gauge advected BY THE FLOW (GeoClaw gtype='lagrangian'): its recorded
+    # position (x(t), y(t)) traces the depth-averaged velocity field, so the gauge
+    # follows the water (a drifter / wake tracer) instead of holding a fixed point.
+    # The stationary coastal gauge is unaffected (per-gauge gtype). Empty/None ->
+    # no particle gauges (additive: absence preserves prior behaviour).
+    lagrangian_particles: list[tuple[float, float]] | None = None
+
+    # fgmax monitor point set: "full" (default) monitors a uniform rectangular grid
+    # over the whole AOI (point_style=2); "onshore" restricts the fgmax points to
+    # the ONSHORE cells of the real DEM (topography above ``sea_level_m``) via a
+    # topotype-3 mask (point_style=4), cutting the fgmax output size for a coastal
+    # AOI while keeping the run-up maxima on land. Only affects tsunami / surge runs
+    # (the scenarios that emit fgmax). Additive: "full" is byte-identical to prior.
+    fgmax_mask: Literal["full", "onshore"] = "full"
+
+    # fgout SMOOTH-animation frame count. When > 0 (tsunami / surge) the worker
+    # emits an fgout fixed-grid monitor: a uniform grid over the AOI dumped at this
+    # many EVENLY-SPACED times (decoupled from the AMR fort.q cadence) -> smooth
+    # single-resolution animation frames. 0 (default) emits no fgout block, so the
+    # deck is byte-identical to a pre-fgout run. Only affects tsunami / surge.
+    fgout_frames: int = Field(default=0, ge=0)
+
+    # --- Thacker paraboloid-basin V&V (scenario="thacker") ---------------------
+    # An IDEALIZED, frictionless, closed-wall bowl with a worker-GENERATED
+    # paraboloid topography and an analytic still-surface qinit -- NO fetched DEM.
+    # The domain is PLANAR Cartesian metres (coordinate_system=1), so ``bbox`` for
+    # a thacker run is the metres domain [-L,-L,L,L], NOT lon/lat. Consumed ONLY for
+    # scenario="thacker"; ignored (must be None) otherwise. See geoclaw_thacker.py.
+    #   bowl_a_m:      basin radius a (m) -- the still-water shoreline radius (> 0).
+    #   bowl_h0_m:     central still-water depth h0 (m) at r=0 (> 0).
+    #   bowl_eta_amp:  Thacker dimensionless oscillation amplitude A in (0, 1) --
+    #                  larger A = a stronger slosh + a wider shoreline excursion.
+    bowl_a_m: float | None = Field(default=None, gt=0.0)
+    bowl_h0_m: float | None = Field(default=None, gt=0.0)
+    bowl_eta_amp: float | None = Field(default=None, gt=0.0, lt=1.0)
+
+    # Explicit AMR refinement windows (region-based flagging). Each window forces
+    # a lat/lon/time box to a min/max AMR level, appended AFTER the engine's
+    # default region tiers. Empty -> refinement follows the default flag2refine
+    # error estimation only. Additive: an empty list preserves prior behaviour.
+    amr_regions: list[AmrRegionWindow] = Field(default_factory=list)
+
+    # Spatially-varying Manning bottom-friction. When set, ``manning_coefficients``
+    # is a list of n values for topography bands split by ``manning_break`` (a list
+    # of elevation breakpoints, ascending, length = len(coefficients) - 1): a cell
+    # with topography B below break[0] uses coefficients[0], between break[k-1] and
+    # break[k] uses coefficients[k], and so on (e.g. an offshore n for B < 0 and an
+    # onshore n for B >= 0 with a single break at 0.0). When ``None`` the single
+    # global ``manning_n`` is used. Additive: None preserves prior behaviour.
+    manning_coefficients: list[float] | None = None
+    manning_break: list[float] = Field(default_factory=list)
+
+    # --- Storm surge (scenario="surge"): parametric-Holland forcing ------------
+    # A storm track drives GeoClaw's geoclaw.surge Holland-1980 wind + pressure
+    # forcing. Empty -> the worker synthesizes a NON-SITE-SPECIFIC demo storm
+    # making landfall at the AOI centroid (surfaced as synthetic, never a real
+    # storm). Only consumed for scenario="surge". Additive: absence is byte-neutral.
+    storm_track: list[StormTrackPoint] = Field(default_factory=list)
+    # The wind-stress drag law (surge). "garratt" (GeoClaw default) | "none" |
+    # "powell". A distinct law measurably changes the surface stress -> surge height.
+    wind_drag_law: WindDragLaw = "garratt"
+    # Run-window START, seconds relative to landfall (surge). A surge opens the
+    # window BEFORE landfall (< 0) so the storm spins up; the run spans
+    # [surge_t0_s, surge_t0_s + sim_duration_s]. None -> the worker derives it from
+    # the storm track (its earliest time). Ignored for dam_break / tsunami (t0=0).
+    surge_t0_s: float | None = None
+
+    @field_validator("storm_track")
+    @classmethod
+    def _validate_storm_track(
+        cls, value: list[StormTrackPoint]
+    ) -> list[StormTrackPoint]:
+        """Storm-track times must be strictly ascending (GeoClaw interpolates the
+        storm in time; a non-monotone track corrupts the interpolation)."""
+        for i in range(len(value) - 1):
+            if value[i].t_s >= value[i + 1].t_s:
+                raise ValueError(
+                    "storm_track times (t_s) must be strictly ascending, got "
+                    f"{[p.t_s for p in value]}"
+                )
+        return value
+
     @field_validator("scenario", mode="before")
     @classmethod
     def _normalize_scenario(cls, value: Any) -> Any:
@@ -251,6 +462,37 @@ class GeoClawRunArgs(GraceModel):
             return value
         key = value.strip().lower()
         return _SCENARIO_ALIASES.get(key, key)
+
+    @model_validator(mode="after")
+    def _validate_bowl_mutual_exclusion(self) -> "GeoClawRunArgs":
+        """Bowl mode and geographic mode are MUTUALLY EXCLUSIVE (loud, not silent).
+
+        ``scenario="thacker"`` REQUIRES all three bowl parameters (the idealized
+        basin is fully defined by ``bowl_a_m`` / ``bowl_h0_m`` / ``bowl_eta_amp``,
+        with NO fetched DEM). Any OTHER scenario FORBIDS the bowl parameters (a
+        geographic run has a real AOI DEM, never a synthetic paraboloid) -- so a
+        bowl field on a tsunami/dam_break/surge run is a typed error, never a
+        silently-ignored no-op."""
+        bowl_fields = {
+            "bowl_a_m": self.bowl_a_m,
+            "bowl_h0_m": self.bowl_h0_m,
+            "bowl_eta_amp": self.bowl_eta_amp,
+        }
+        set_bowl = [k for k, v in bowl_fields.items() if v is not None]
+        if self.scenario == "thacker":
+            missing = [k for k, v in bowl_fields.items() if v is None]
+            if missing:
+                raise ValueError(
+                    "scenario='thacker' requires all bowl parameters "
+                    f"(bowl_a_m, bowl_h0_m, bowl_eta_amp); missing {missing}"
+                )
+        elif set_bowl:
+            raise ValueError(
+                f"bowl parameters {set_bowl} are only valid for scenario='thacker' "
+                f"(the idealized paraboloid-basin V&V), not scenario={self.scenario!r} "
+                "-- bowl mode and geographic-AOI mode are mutually exclusive"
+            )
+        return self
 
     @field_validator("source_lonlat")
     @classmethod
@@ -266,6 +508,70 @@ class GeoClawRunArgs(GraceModel):
         if not (-90.0 <= lat <= 90.0):
             raise ValueError(f"source_lonlat lat out of range [-90, 90]: {lat}")
         return (lon, lat)
+
+    @field_validator("lagrangian_particles")
+    @classmethod
+    def _validate_lagrangian_particles(
+        cls, value: list[tuple[float, float]] | None
+    ) -> list[tuple[float, float]] | None:
+        """Range-check each ``(lon, lat)`` particle seed point."""
+        if value is None:
+            return None
+        out: list[tuple[float, float]] = []
+        for pt in value:
+            if len(pt) != 2:
+                raise ValueError(
+                    f"lagrangian_particles entries must be (lon, lat), got {pt!r}"
+                )
+            lon, lat = float(pt[0]), float(pt[1])
+            if not (-180.0 <= lon <= 180.0):
+                raise ValueError(f"particle lon out of range [-180, 180]: {lon}")
+            if not (-90.0 <= lat <= 90.0):
+                raise ValueError(f"particle lat out of range [-90, 90]: {lat}")
+            out.append((lon, lat))
+        return out
+
+    @field_validator("manning_coefficients")
+    @classmethod
+    def _validate_manning_coefficients(
+        cls, value: list[float] | None
+    ) -> list[float] | None:
+        """Every Manning band coefficient must be strictly positive."""
+        if value is None:
+            return None
+        if not value:
+            raise ValueError("manning_coefficients, when set, must be non-empty")
+        for n in value:
+            if float(n) <= 0.0:
+                raise ValueError(f"manning coefficient must be > 0, got {n}")
+        return [float(n) for n in value]
+
+    @field_validator("manning_break")
+    @classmethod
+    def _validate_manning_break(cls, value: list[float], info: Any) -> list[float]:
+        """``manning_break`` must be ascending and exactly one shorter than
+        ``manning_coefficients`` (N coefficients need N-1 elevation breakpoints)."""
+        coeffs = info.data.get("manning_coefficients")
+        if not value:
+            if coeffs is not None and len(coeffs) > 1:
+                raise ValueError(
+                    f"manning_break must have {len(coeffs) - 1} breakpoint(s) for "
+                    f"{len(coeffs)} coefficients, got none"
+                )
+            return list(value)
+        brk = [float(b) for b in value]
+        if any(brk[i] >= brk[i + 1] for i in range(len(brk) - 1)):
+            raise ValueError(f"manning_break must be strictly ascending, got {brk}")
+        if coeffs is None:
+            raise ValueError(
+                "manning_break requires manning_coefficients to also be set"
+            )
+        if len(brk) != len(coeffs) - 1:
+            raise ValueError(
+                f"manning_break length ({len(brk)}) must equal "
+                f"len(manning_coefficients) - 1 ({len(coeffs) - 1})"
+            )
+        return brk
 
 
 class GeoClawDepthLayerURI(LayerURI):
@@ -307,3 +613,36 @@ class GeoClawDepthLayerURI(LayerURI):
     arrival_time_s: float | None = Field(default=None, ge=0.0)
 
     scenario: GeoClawScenario = "dam_break"
+
+    # Coastal-gauge time-series scalars (the tsunami gauge-timeseries template).
+    # Populated only when the run recorded + parsed a coastal gauge; None on the
+    # plain inundation path. Additive: absence preserves prior behaviour.
+    #   gauge_max_surface_elevation_m: peak water-surface elevation at the gauge, m.
+    #   gauge_min_surface_elevation_m: trough water-surface elevation, m (leading
+    #       depression / drawdown).
+    #   gauge_max_amplitude_m: peak-to-trough surface amplitude, m (>= 0).
+    #   gauge_coseismic_offset_m: initial (t0, post-quake) surface elevation at the
+    #       gauge, m -- the co-seismic subsidence/uplift offset where present.
+    #   gauge_max_depth_m: peak water depth at the gauge, m (>= 0).
+    gauge_max_surface_elevation_m: float | None = Field(default=None)
+    gauge_min_surface_elevation_m: float | None = Field(default=None)
+    gauge_max_amplitude_m: float | None = Field(default=None, ge=0.0)
+    gauge_coseismic_offset_m: float | None = Field(default=None)
+    gauge_max_depth_m: float | None = Field(default=None, ge=0.0)
+
+    # Lagrangian particle-track scalars (the wake-tracking fold). Populated only
+    # when the run seeded Lagrangian particle gauges and their tracks were parsed;
+    # None on every other path. Additive: absence preserves prior behaviour.
+    #   particle_track_count: number of particle tracks recorded (>= 0).
+    #   particle_max_track_length_m: longest cumulative drift distance, m (>= 0).
+    #   particle_track_duration_s: time span the particles were advected over, s.
+    particle_track_count: int | None = Field(default=None, ge=0)
+    particle_max_track_length_m: float | None = Field(default=None, ge=0.0)
+    particle_track_duration_s: float | None = Field(default=None, ge=0.0)
+
+    # Provenance of the driver source (dam-break: real NID dam vs user-supplied
+    # location/height). Set by the composer/tool so the agent narrates WHERE the
+    # dam geometry came from instead of presenting an invented centroid/height as
+    # site-specific. None on paths that do not resolve a named source (e.g. a
+    # prescribed dtopo). Additive: absence preserves prior behaviour.
+    source_note: str | None = Field(default=None)

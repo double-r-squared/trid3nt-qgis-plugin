@@ -57,11 +57,20 @@ import struct
 import threading
 import time
 import urllib.error
+import logging
 import urllib.parse
 import urllib.request
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from typing import Callable, Optional, Tuple
+
+# Pure-python (no PyQGIS) numeric-finiteness helpers -- shared with the render
+# path so the WS-boundary sanitizer and the native styling clamps agree on
+# exactly what "a real number" is. Importing render.formatting keeps this file
+# stdlib-testable: formatting.py imports only ``math``/``typing``.
+from ..render import formatting
+
+_LOG = logging.getLogger("trid3nt.trid3nt_client")
 
 __all__ = [
     "AgentClient",
@@ -195,11 +204,55 @@ class LayerEvent:
         return None
 
 
+#: The numeric style fields, per family, that ride from a wire message into a
+#: NATIVE QGIS colour-ramp / classification / opacity call. The boundary sweep
+#: below strips a non-finite (NaN/inf) value from every one of them, so that
+#: even if a downstream render call site forgets its own clamp, no styling
+#: family can ferry a NaN into native Qt code (the arm64 double-to-int32
+#: saturation that smashes the stack). This is the single choke point the
+#: render-side clamps sit behind.
+_LEGEND_SCALAR_FIELDS = ("vmin", "vmax")
+_LEGEND_CLASS_SCALAR_FIELDS = ("value", "value_min", "value_max")
+
+
+def _sanitize_legend_numerics(legend, dropped: list) -> Optional[dict]:
+    """A shallow copy of ``legend`` with every non-finite numeric style field
+    removed. ``dropped`` collects ``field=value`` descriptions for one honest
+    log line. A downstream renderer treats a missing ``vmin``/``vmax`` exactly
+    like an absent one (``sane_range`` default) -- strictly safer than a NaN."""
+    if not isinstance(legend, dict):
+        return legend if isinstance(legend, dict) else None
+    clean = dict(legend)
+    for name in _LEGEND_SCALAR_FIELDS:
+        if name in clean and clean[name] is not None and not formatting.is_finite_number(clean[name]):
+            dropped.append(f"legend.{name}={clean[name]!r}")
+            clean.pop(name, None)
+    classes = clean.get("classes")
+    if isinstance(classes, list):
+        clean_classes = []
+        for cls in classes:
+            if not isinstance(cls, dict):
+                clean_classes.append(cls)
+                continue
+            cls_clean = dict(cls)
+            for name in _LEGEND_CLASS_SCALAR_FIELDS:
+                if name in cls_clean and cls_clean[name] is not None and not formatting.is_finite_number(cls_clean[name]):
+                    dropped.append(f"legend.class.{name}={cls_clean[name]!r}")
+                    cls_clean.pop(name, None)
+            clean_classes.append(cls_clean)
+        clean["classes"] = clean_classes
+    return clean
+
+
 def parse_layer_events(session_state_payload: dict) -> list[LayerEvent]:
     """Parse ``session-state.loaded_layers`` rows into ``LayerEvent``s.
 
-    Defensive: malformed rows are skipped, never raised on -- a bad layer row
-    must not take down the chat stream.
+    Defensive on two axes: malformed rows are skipped (a bad layer row must not
+    take down the chat stream), AND every numeric style field is swept for
+    non-finite (NaN/inf) values here at the WS boundary -- opacity and the
+    legend's ``vmin``/``vmax``/class anchors -- so no NaN reaches a native QGIS
+    styling call no matter which downstream render site handles the layer. A
+    dropped value is logged once per row, never silently swallowed.
     """
     events: list[LayerEvent] = []
     rows = session_state_payload.get("loaded_layers") or []
@@ -215,6 +268,18 @@ def parse_layer_events(session_state_payload: dict) -> list[LayerEvent]:
         inline = row.get("inline_geojson")
         if not isinstance(inline, dict):
             inline = None
+        dropped: list = []
+        raw_opacity = row.get("opacity")
+        opacity = raw_opacity if formatting.is_finite_number(raw_opacity) else None
+        if raw_opacity is not None and opacity is None:
+            dropped.append(f"opacity={raw_opacity!r}")
+        legend = _sanitize_legend_numerics(row.get("legend"), dropped)
+        if dropped:
+            _LOG.warning(
+                "layer %s: dropped non-finite style value(s) at WS boundary: %s",
+                layer_id,
+                ", ".join(dropped),
+            )
         events.append(
             LayerEvent(
                 layer_id=layer_id,
@@ -226,9 +291,9 @@ def parse_layer_events(session_state_payload: dict) -> list[LayerEvent]:
                 if isinstance(row.get("style_preset"), str)
                 else None,
                 inline_geojson=inline,
-                opacity=row.get("opacity") if isinstance(row.get("opacity"), (int, float)) else None,
+                opacity=opacity,
                 visible=bool(row.get("visible", True)),
-                legend=row.get("legend") if isinstance(row.get("legend"), dict) else None,
+                legend=legend,
                 raw=row,
             )
         )
@@ -412,8 +477,8 @@ def fetch_case_list(base_url: str, timeout: float = 5.0) -> list:
     arrived as a WS envelope. The local agent's HTTP listener
     (``tool_catalog_http.py``) mirrors that same envelope's data over plain
     HTTP for the local single-user seam, so the dock's Cases dialog can
-    populate BEFORE a connection exists. Plain ``urllib`` (stdlib only, same
-    posture as ``case_export.py``'s HTTP calls) -- no WebSocket involved.
+    populate BEFORE a connection exists. Plain ``urllib`` (stdlib only) -- no
+    WebSocket involved.
 
     Returns ``[]`` (never raises) is NOT the contract here: a genuine failure
     (agent HTTP listener down, route absent, bad body) raises
@@ -794,12 +859,12 @@ def parse_case_open(payload: dict) -> Optional[CaseOpenInfo]:
 
 
 def is_auth_failure(text: str) -> bool:
-    """Classify a connection failure as an AUTH failure (dead/expired token)
-    vs a transport failure.
+    """Classify a connection failure as an AUTH failure (rejected shared
+    token) vs a transport failure.
 
-    The remote broker validates the ``?st=`` token BEFORE the WebSocket
-    upgrade, so a dead token surfaces as ``HandshakeFailed("upgrade rejected:
-    HTTP/1.1 401/403 ...")``. An in-band rejection surfaces as an ``error``
+    The broker validates the ``?st=`` shared token BEFORE the WebSocket
+    upgrade, so a rejected token surfaces as ``HandshakeFailed("upgrade
+    rejected: HTTP/1.1 401/403 ...")``. An in-band rejection surfaces as an ``error``
     envelope with ``error_code=AUTH_REQUIRED`` followed by a policy-violation
     close (1008). Transport failures (connection refused, read timeout, a
     mid-stream drop) must NOT classify as auth -- those drive the reconnect
@@ -1550,6 +1615,7 @@ class AgentClient:
         model_id: str = "",
         aoi_bbox: Optional[Tuple[float, float, float, float]] = None,
         tool_choice_mode: str = "",
+        drawn_geometry: Optional[dict] = None,
     ) -> None:
         """Send a user chat message.
 
@@ -1580,6 +1646,12 @@ class AgentClient:
             the server's default IS auto, so a default send stays byte-identical
             to the pre-field payload (the ``show_thinking`` omit convention;
             AUTO's measured-ambiguity cards need no flag).
+        :param drawn_geometry: ADR 0159 draw-a-region supply path -- the dock's
+            'Draw region' rubber-band rectangle as ``{"geometry_type":
+            "rectangle", "bbox": [min_lon, min_lat, max_lon, max_lat]}``
+            (EPSG:4326). Rides ``UserMessagePayload.drawn_geometry``; ``None``
+            (nothing drawn) OMITS the key. Consumed by composer input-review
+            gates as a ``basis="user"`` spatial knob (geoclaw amr_regions).
         """
         payload: dict = {"text": text, "case_id": self.case_id}
         if show_thinking:
@@ -1590,8 +1662,41 @@ class AgentClient:
             payload["aoi_bbox"] = [float(v) for v in aoi_bbox]
         if tool_choice_mode == "ask":
             payload["tool_choice_mode"] = "ask"
+        # ADR 0159: the dock's 'Draw region' rubber-band rectangle rides
+        # ``drawn_geometry`` ({"geometry_type": "rectangle", "bbox": [4 floats]},
+        # EPSG:4326) exactly as ``aoi_bbox`` carries the canvas AOI. Omitted when
+        # nothing was drawn so a plain message stays byte-identical to the
+        # pre-field payload (the aoi_bbox / show_thinking omit convention).
+        if drawn_geometry is not None:
+            payload["drawn_geometry"] = drawn_geometry
         self._send(
             "user-message",
+            payload,
+            case_id=self.case_id,
+            queue_if_closed=True,
+        )
+
+    def send_dev_tool_invoke(
+        self, name: str, args: dict, raw_text: str = ""
+    ) -> None:
+        """Send a ``!run`` direct tool invocation (ADR 0114).
+
+        The dock parses ``!run <tool>(...)`` CLIENT-side (``run_invocation``)
+        and calls this with the structured ``(name, args)``. The server runs
+        the named registry closure OUTSIDE the LLM loop through the SAME
+        emission pipeline a model-issued call uses (gates, sync-tool offload,
+        layer materialization, tool-card + turn-complete), so the result rides
+        the identical rendering path. ``raw_text`` carries the original
+        composer line so the server persists it as the turn's user row and a
+        Case reopen replays the ``!run`` signature above the tool card
+        (attribution durability). Buffered while disconnected like every
+        user-intent verb.
+        """
+        payload: dict = {"name": name, "args": args, "case_id": self.case_id}
+        if raw_text:
+            payload["raw_text"] = raw_text
+        self._send(
+            "dev-tool-invoke",
             payload,
             case_id=self.case_id,
             queue_if_closed=True,

@@ -18,9 +18,9 @@
 #   rather than using --break-system-packages.
 #
 # MODFLOW binary version pin (design doc § 1, § 9 OQ-MOD-1):
-#   MODFLOW 6.5.0 — the combined GWF + GWT binary `mf6` from the USGS GitHub
+#   MODFLOW 6.7.0 — the combined GWF + GWT + PRT binary `mf6` from the USGS GitHub
 #   release zip. The design doc cited the asset name `mf6.0_linux.zip`; the
-#   ACTUAL release asset is `mf6.5.0_linux.zip` and the canonical
+#   ACTUAL release asset is `mf6.7.0_linux.zip` and the canonical
 #   MODFLOW-USGS/modflow6 repo path 301-redirects to MODFLOW-ORG/modflow6.
 #   Both deviations are documented in report.md § Deviations. We pin the SHA-256
 #   of the zip (verified on the host smoke run, 2026-06-09) and verify it
@@ -39,22 +39,27 @@ FROM python:3.11-slim
 
 LABEL org.opencontainers.image.title="trid3nt-modflow-solver" \
       org.opencontainers.image.source="https://github.com/double-r-squared/trid3nt-qgis-plugin" \
-      org.opencontainers.image.description="MODFLOW 6 (mf6 6.5.0) solver runtime (Cloud Run Job). Reads a FloPy-generated GWF+GWT deck from s3://trid3nt-cache/, runs mf6, writes heads/concentration outputs + completion manifest to s3://trid3nt-runs/<run_id>/." \
+      org.opencontainers.image.description="MODFLOW 6 (mf6 6.7.0) solver runtime (Cloud Run Job). Reads a FloPy-generated GWF+GWT deck from s3://trid3nt-cache/, runs mf6, writes heads/concentration outputs + completion manifest to s3://trid3nt-runs/<run_id>/." \
       org.opencontainers.image.licenses="MIT"
 
-# MODFLOW 6.5.0 Linux release pin (design doc § 1). The zip ships statically
+# MODFLOW 6.7.0 Linux release pin (ADR 0215). The zip ships statically
 # linked binaries (mf6, libmf6.so, mf5to6, zbud6) — no Fortran runtime apt
-# package is required at run time. SHA-256 verified on the host smoke run
-# (reports/inflight/job-0220-infra-20260609/evidence/mf6_smoke.log).
-ARG MF6_VERSION=6.5.0
-ARG MF6_ZIP_URL=https://github.com/MODFLOW-USGS/modflow6/releases/download/6.5.0/mf6.5.0_linux.zip
-ARG MF6_ZIP_SHA256=0fac00211c42b7a74c7266abbe50776a6215ea8409c8ce887e5decd4a9335940
-# USGS naming is inconsistent: the 6.5.0 release zip + its top-level dir are
-# both `mf6.5.0_linux` (the leading "6." is dropped), even though the binary's
-# `mf6 --version` reports "6.5.0". So MF6_ZIP_DIR is pinned separately from
-# MF6_VERSION rather than derived — `mf6.${MF6_VERSION}_linux` would wrongly
-# expand to `mf6.6.5.0_linux`, which is NOT a path in the zip.
-ARG MF6_ZIP_DIR=mf6.5.0_linux
+# package is required at run time.
+# mf6 6.7.0 (ADR 0215): the PRT capture-zone / wellhead_protection workflow REQUIRES
+# 6.7.0 -- the PRP EXTEND_TRACKING + COORDINATE_CHECK_METHOD options (and the
+# transient per-period reversed-budget FMI) do NOT exist in 6.5.0, which rejected
+# the deck with "UNKNOWN PRP OPTION: EXTEND_TRACKING". 6.7.0 is also the binary the
+# EC2 local-exec supervisor (run_modflow.py) + the offline dev box already run, so
+# the image now matches the production binary the deck builder is tested against.
+# SHA-256 verified from the GitHub release asset digest (2026-08-10) before the pin.
+ARG MF6_VERSION=6.7.0
+ARG MF6_ZIP_URL=https://github.com/MODFLOW-ORG/modflow6/releases/download/6.7.0/mf6.7.0_linux.zip
+ARG MF6_ZIP_SHA256=f83e743bac1b3009836a44e6e4aa4b4c522ac2e2c7d291e280db47f68353ebdc
+# USGS naming is inconsistent: the release zip + its top-level dir are both
+# `mf6.7.0_linux` (the leading "6." is dropped), even though `mf6 --version`
+# reports "6.7.0". So MF6_ZIP_DIR is pinned separately from MF6_VERSION rather than
+# derived (`mf6.${MF6_VERSION}_linux` would wrongly expand to `mf6.6.7.0_linux`).
+ARG MF6_ZIP_DIR=mf6.7.0_linux
 
 # --- System deps (single layer) ------------------------------------------
 # ca-certificates (HTTPS), curl (binary download), unzip (mf6 zip extract).
@@ -140,7 +145,7 @@ ENV PYTHONPATH=/opt/trid3nt \
 # Runtime config. GCP is decommissioned: on AWS, MODFLOW runs the mf6 binary
 # directly via the agent's local-exec supervisor (run_modflow.py) — there is NO
 # Batch/Cloud-Run job-def for MODFLOW. This image is KEPT only as the SHA-pinned
-# record of the USGS mf6 6.5.0 install the EC2 box reuses; its GCS-only entrypoint
+# record of the USGS mf6 6.7.0 install the EC2 box reuses; its GCS-only entrypoint
 # is effectively retired. The bucket defaults below are pinned to the AWS S3
 # names for honesty (inert on the live local-exec path).
 #   TRID3NT_CACHE_BUCKET  — source bucket (FloPy deck + manifest under modflow/<run_id>/).

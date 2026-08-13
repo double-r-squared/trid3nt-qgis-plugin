@@ -1,0 +1,209 @@
+# Router source spec (ADR 0085) -- USGS NWIS / Water Services stream gauges.
+# Twin: fetch_usgs_nwis_gauges.py (the LAST flood-seam twin; canary-gated).
+# http_json parse_fallback executor: IV WaterML-JSON primary -> Site-RDB fallback.
+# usgs_nwis.resolve derives _mode (instantaneous 5-col vs hydrograph 12-col) pre-cache.
+schema_version: v1
+
+name: fetch_usgs_nwis_gauges
+source_class: usgs_nwis_gauges
+error_prefix: NWIS_GAUGES
+empty_error_suffix: NO_STATIONS
+shape: vector-fgb
+supports_global_query: false
+
+endpoints:
+  # Endpoints are built by usgs_nwis.build_request (IV + Site); this satisfies the
+  # SourceSpec min_length=1 and documents the machine API base.
+  iv:
+    url: "https://waterservices.usgs.gov/nwis/iv/"
+  site:
+    url: "https://waterservices.usgs.gov/nwis/site/"
+auth:
+  mode: none
+  user_agent: "trid3nt/0.1 (Hazard Modeling Agent; https://github.com/double-r-squared/trid3nt-qgis-plugin; agent@trid3nt.dev)"
+
+params:
+  state_code: {type: str, schema_optional: true}
+  bbox:       {type: bbox, schema_optional: true, quantize: round_6dp}
+  start_date: {type: str, schema_optional: true}
+  end_date:   {type: str, schema_optional: true}
+  period:     {type: str, schema_optional: true}
+
+ingest:
+  http_source:
+    parse_fallback: true
+  # Per-mode FGB column schema (pinned by the derived _mode): 5-field latest
+  # instantaneous vs 12-field discharge hydrograph -- the twin's _build_flatgeobuf
+  # vs _build_window_flatgeobuf output-schema switch.
+  properties_by_param:
+    param: _mode
+    map:
+      instantaneous: [site_no, site_name, discharge_cfs, gage_height_ft, reading_dt]
+      hydrograph: [site_no, site_name, discharge_cfs, gage_height_ft, reading_dt, time_series_csv, time_start, time_end, n_timesteps, discharge_min_cfs, discharge_max_cfs, discharge_mean_cfs]
+
+hooks:
+  pre_resolve: usgs_nwis.resolve
+  build_request: usgs_nwis.build_request
+  parse_response: usgs_nwis.parse
+
+normalize:
+  crs: "EPSG:4326"
+  units: "mixed (cfs / ft)"
+  quantity: streamflow
+  units_by_param:
+    param: _mode
+    map:
+      instantaneous: "mixed (cfs / ft)"
+      hydrograph: "ft^3/s (discharge hydrograph)"
+
+output:
+  layer_type: vector
+  ext: fgb
+  role: primary
+  style_preset: usgs_gauges
+  style_preset_by_param:
+    param: _mode
+    map:
+      instantaneous: usgs_gauges
+      hydrograph: usgs_gauges_hydrograph
+  # Camera extent from the emitted gauge points (twin _records_bbox, 0.05 deg pad).
+  bbox_from_features: {pad: 0.05}
+
+cache:
+  ttl_class: dynamic-1h
+# One Point/gauge (~150 B). ~10 gauges / 1 deg square in populated CONUS; always tiny.
+payload_estimate:
+  model: per_feature
+  features_per_sq_deg: 10.0
+  kb_per_feature: 0.15
+  floor_mb: 0.001
+
+caveats:
+  - "US + territories only (supports_global_query=False); pass EXACTLY ONE of state_code (no area limit) or bbox (<= ~25 deg^2)"
+  - "OBSERVED gauge network; for MODELED reach flow use fetch_noaa_nwm_streamflow (US + territories only)"
+  - "primary IV real-time -> Site-service location fallback -> honest NWIS_GAUGES_NO_STATIONS (never an empty-success layer)"
+fallback: [fetch_noaa_nwm_streamflow]
+
+# corpus lifted from sibling corpus.yaml.
+
+docstring: |
+  Fetch REAL, OBSERVED USGS stream-gauge stations as a point FlatGeobuf.
+
+  Retrieves active USGS NWIS / Water Services stream gauges and their latest
+  instantaneous readings — discharge (00060, ft^3/s) and/or gage height
+  (00065, ft) — from the machine API behind ``waterdata.usgs.gov``. Returns
+  one Point feature per gauge station at the station's coordinates, carrying
+  the latest reading. This is the canonical **observed** (instrument-record)
+  gauge source.
+
+  TWO MODES (the temporal selector decides):
+      - DEFAULT (no start/end/period): one Point per station carrying the
+        LATEST instantaneous discharge / gage height (the map-overlay mode).
+      - HYDROGRAPH WINDOW (an explicit ``start_date`` + ``end_date``, or a
+        relative ``period`` like ``"P7D"``): one Point per station carrying
+        the FULL discharge time series as an inline ``time_series_csv``
+        attribute (``"iso,value"`` rows, ft^3/s) — the same shape
+        ``fetch_noaa_coops_tides`` emits. This is the REAL river DISCHARGE
+        HYDROGRAPH the compound-flood SFINCS deck needs as its fluvial driver
+        (instead of a flat constant synthesised from a single value).
+
+  When to use:
+      - The user asks for USGS water/stream gauges, "gauge stations", "stream
+        gages", observed streamflow/stage, or "real gauge readings"
+        (e.g. "show me the USGS stream gauges in Washington", "where are the
+        river gauges near Boise", "current discharge at the gages upstream").
+      - You need actual measured discharge or gage height at instrumented
+        sites — the real instrument record, NOT a model estimate.
+      - Cross-checking / ground-truthing a modeled streamflow layer against
+        the observed gauge network.
+
+  When NOT to use:
+      - MODELED reach flow on the full NHDPlus channel network — that is
+        ``fetch_noaa_nwm_streamflow`` (the National Water Model, ~2.7M modeled
+        reaches). This tool (``fetch_usgs_nwis_gauges``) is the OBSERVED gauge
+        network; NWM is the MODELED companion. When the user says "USGS
+        gauges" / "real readings" → THIS tool. When they say "modeled flow" /
+        "NWM" / "the whole river network" → ``fetch_noaa_nwm_streamflow``.
+      - River-reach POLYLINES without gauges — use ``fetch_river_geometry``
+        (NHDPlus HR) or ``fetch_nhdplus_nldi_navigate``.
+      - This tool is US + territories only (supports_global_query=False);
+        there is no global river-discharge fetcher.
+      - Precipitation / design-storm forcing — use ``fetch_mrms_qpe`` or
+        ``lookup_precip_return_period``.
+      - Coastal tide-station water levels — use ``fetch_noaa_coops_tides``.
+
+  Spatial selector (pass EXACTLY ONE):
+      state_code: Optional 2-letter USPS state/territory code (e.g. ``"WA"``,
+          ``"FL"``, ``"CA"``). PREFER THIS for state-level asks ("Washington
+          state", "gauges in Florida"). ``stateCd`` has NO area limit, so it
+          is the correct call when the area of interest is a whole state —
+          a whole-state bbox would exceed the USGS bBox area cap and 400.
+      bbox: Optional ``(west, south, east, north)`` in EPSG:4326 for an
+          area-of-interest query (a metro, watershed, or sub-state region).
+          USGS limits the bbox so ``(east-west) × (north-south)`` must be
+          <= ~25 deg^2. If the bbox exceeds ~24.5 deg^2 AND ``state_code`` is
+          not given, ``NwisBboxTooLargeError`` is raised telling you to pass
+          ``state_code`` (or a smaller bbox) — we never silently 400.
+      When both are given, ``state_code`` wins. When neither is given,
+      ``NwisInputError`` is raised.
+
+  Temporal selector (controls instantaneous vs hydrograph mode):
+      start_date / end_date: Optional ISO ``YYYY-MM-DD`` window bounds. Pass
+          BOTH to request the full per-station DISCHARGE HYDROGRAPH over the
+          window (one Point per station carrying a ``time_series_csv``). The
+          window is capped at 120 days. Example: ``start_date="2018-10-08"``,
+          ``end_date="2018-10-14"`` for the Hurricane Michael week.
+      period: Optional relative ISO-8601 duration (e.g. ``"P7D"`` = last 7
+          days, ``"P1M"`` = last month, ``"PT6H"`` = last 6 hours). A simpler
+          alternative to start/end; ``period`` WINS if both are supplied. Use
+          this for "the last week's flow at the gauges".
+      When NONE of start_date / end_date / period is given, the tool returns
+      the LATEST instantaneous reading per station (the default overlay mode).
+
+  Returns:
+      ``LayerURI`` pointing at a FlatGeobuf in the cache bucket:
+      ``s3://trid3nt-cache/cache/dynamic-1h/usgs_nwis_gauges/<key>.fgb``
+      - ``layer_type="vector"``, ``role="primary"``,
+        ``style_preset="usgs_gauges"``, ``units="mixed (cfs / ft)"``.
+      - Geometry: Point at each gauge station's coordinates, EPSG:4326.
+      - ``bbox`` is set to the stations' extent so the client camera
+        auto-zooms (the layer renders via the inline-GeoJSON vector path).
+      - Properties per station: ``site_no`` (NWIS site number), ``site_name``,
+        ``discharge_cfs`` (latest 00060 reading, ft^3/s; null if not
+        reported), ``gage_height_ft`` (latest 00065 reading, ft; null if not
+        reported), ``reading_dt`` (ISO-8601 timestamp of the latest reading;
+        null when only locations are available via the Site-service fallback).
+
+  Fallback behaviour (data-source fallback norm — primary → fallback → honest
+  typed error): the Instantaneous Values service is the primary (observed
+  readings). If it returns zero active sites in scope, the tool falls back to
+  the Site service to at least return station LOCATIONS (with null readings).
+  If BOTH return zero stations, ``NwisNoStationsError`` is raised — never an
+  empty success-shaped layer.
+
+  Cache: ``ttl_class="dynamic-1h"``, ``source_class="usgs_nwis_gauges"``.
+  Cache key is SHA-256 of the resolved selector (``state_code`` or
+  bbox-rounded-6dp), so identical-scope calls within the hour reuse the FGB.
+
+  Cross-tool dependencies:
+      - Composes WITH: ``publish_layer`` (map overlay), ``geocode_location``
+        (derive a bbox or surface a state from a place name BEFORE this call),
+        ``fetch_administrative_boundaries`` (state/county framing).
+      - Cross-checks: ``fetch_noaa_nwm_streamflow`` (modeled reach flow —
+        observed-vs-modeled comparison), ``fetch_river_geometry`` (the reach
+        polylines the gauges sit on).
+      - Upstream data source: USGS Water Services
+        (waterservices.usgs.gov/nwis/iv + /nwis/site).
+
+  Errors:
+      - ``NwisInputError``: no selector / bad bbox / bad state code
+        (retryable=False).
+      - ``NwisBboxTooLargeError``: bbox exceeds the USGS ~25 deg^2 area limit
+        and no state_code given — re-issue with state_code (retryable=False).
+      - ``NwisUpstreamError``: USGS network failure / HTTP 5xx / bad body
+        (retryable=True).
+      - ``NwisNoStationsError``: no active gauges in scope from EITHER service
+        (retryable=False).
+
+
+  Tier-1 free. No API key. ``supports_global_query=False`` (US + territories).

@@ -107,7 +107,12 @@ def _run_top_k(query: str, k: int = 5) -> list[str]:
         ("show flood zones", "fetch_fema_nfhl_zones"),
         ("national parks polygons", "fetch_wdpa_protected_areas"),
         ("elevation Grand Canyon", "fetch_dem"),
-        ("model flooding", "run_sfincs"),
+        # Door dissolution (ADR 0094): the sfincs_flood template is the canonical
+        # flood engine. A bare "model flooding" is now genuinely ambiguous (the
+        # whole flood family competes -- swmm_urban_flood / geoclaw_inundation /
+        # the NWS composer), so the canonical routing query is the specific
+        # inundation-depth phrasing sfincs_flood owns.
+        ("simulate flood inundation depth", "sfincs_flood"),
     ],
 )
 def test_search_tools_routes_canonical_queries(query: str, expected_tool: str):

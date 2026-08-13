@@ -1,0 +1,10 @@
+# Template routing phrasings: engine templates are ordinary retrieval-pool tools
+# walked into the main index.
+landlab_overland_flow_timeseries:
+- show how storm inundation grows and recedes frame by frame over this terrain
+- time-stepped overland-flow depth animation across a catchment DEM
+- animate surface water depth during the storm over this watershed
+- overland flow depth at intervals plus a depth-vs-time hydrograph
+- watch runoff spread and drain over the DEM through the storm
+- time-resolved inundation instead of only the peak overland depth
+- scrubbable overland-flow depth frames over a catchment

@@ -324,7 +324,7 @@ _TITILER_STYLE_REGISTRY: dict[str, tuple[str, str]] = {
     # SnapWave significant wave height (m) - wave animation. A
     # CYAN/BLUE ramp (gnbu) over 0..6 m, visibly DISTINCT from depth's ylgnbu so
     # the wave layer group never looks identical to the flood-depth group on the
-    # Mexico Beach North Star. ADDITIVE - depth/plume stay byte-identical.
+    # Mexico Beach coastal case. ADDITIVE - depth/plume stay byte-identical.
     "continuous_wave_height": ("0,6", "gnbu"),
     # Precipitation (mm).
     "precipitation_mm": ("0,100", "blues"),
@@ -364,6 +364,13 @@ _TITILER_STYLE_REGISTRY: dict[str, tuple[str, str]] = {
     # driven legend (mm-scale) so the actual range renders; this registry range is
     # the fallback (a fixed mm band would wash out sub-mm event deposition).
     "diverging_bed_evolution": ("-20,20", "rdbu"),
+    # GeoClaw Okada coseismic seafloor deformation (m): a SIGNED field
+    # (uplift positive / subsidence negative) -> a diverging rdbu ramp centered on
+    # 0 so the dipole reads blue=subsidence / white=0 / red=uplift. The +/-5 m band
+    # spans a great-earthquake (Mw ~8-9) source; a smaller event's data-driven
+    # band_stats legend still renders its own range. Same pattern as river seepage /
+    # bed evolution above.
+    "diverging_seafloor_deformation": ("-5,5", "rdbu"),
     # sprint-WQ: SWMM per-cell peak washoff CONCENTRATION (mg/L) - a sequential
     # YlOrBr ramp (low->high pollutant load), visibly distinct from depth's
     # SWMM WQ concentration (SWMM-WQ-1 fix 2026-07-21): INTENTIONALLY NOT a fixed
@@ -375,7 +382,15 @@ _TITILER_STYLE_REGISTRY: dict[str, tuple[str, str]] = {
     # its OWN data range (viridis ramp). Do not re-add a fixed rescale here.
     "continuous_seismic_pga": ("0,1", "magma"),
     "continuous_landslide_susceptibility": ("0,1", "rdylgn_r"),
-    # conservation micro-North-Star -- ADDITIVE. NDVI is the canonical
+    # Earthquake-triggered liquefaction probability in [0,1] -> a sequential
+    # blue ramp (dry/low -> saturated/high), visibly distinct from the
+    # landslide rdylgn_r map when both perils render together. The scenario GMF
+    # across-realization spread is a dimensionless geometric-std factor (~1..2+)
+    # -> a viridis ramp over a modest band; the paired mean COG uses the PGA
+    # magma preset.
+    "continuous_liquefaction_probability": ("0,1", "ylgnbu"),
+    "continuous_gmf_spread": ("1,2.5", "viridis"),
+    # conservation reference scenario -- ADDITIVE. NDVI is the canonical
     # vegetation index in [-1, 1]; bare/water near 0, healthy canopy ~0.6-0.9 ->
     # a green-up rdylgn ramp rescaled to the full physical range. MoBI
     # imperiled-species importance is strictly positive (low->high); a ylgn ramp

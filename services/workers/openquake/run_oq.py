@@ -109,6 +109,10 @@ def run_oq(build_spec_path: str) -> int:
             fname = deck.filenames[logical]
             (cwd / fname).write_text(text, encoding="utf-8")
             LOG.info("rendered %s -> %s", logical, cwd / fname)
+        # Epistemic competing-source-model decks carry extra source_model_*.xml.
+        for fname, text in (deck.extra_files or {}).items():
+            (cwd / fname).write_text(text, encoding="utf-8")
+            LOG.info("rendered extra %s -> %s", fname, cwd / fname)
     except Exception as exc:
         sys.stderr.write(f"run_oq.py: deck render failed: {exc}\n")
         return 2

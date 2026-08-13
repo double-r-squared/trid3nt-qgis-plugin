@@ -102,8 +102,6 @@ class TestScenarioPublishedSignal:
         # All flood + plume scenario wrappers carry the published signal.
         for tool in (
             "sfincs_flood",
-            "run_model_nws_flood_event_scenario",
-            "run_model_groundwater_contamination_scenario",
             "modflow_contaminant_plume",
         ):
             assert tool in _published_scenario_tool_names(), tool

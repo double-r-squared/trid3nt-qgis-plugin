@@ -37,6 +37,9 @@ __all__ = [
     "TimeRange",
     "TemporalMode",
     "EngineRunArgsMixin",
+    "InputBasis",
+    "SyntheticInput",
+    "render_assumptions_line",
 ]
 
 
@@ -234,3 +237,123 @@ class EngineRunArgsMixin(GraceModel):
             return value
         key = value.strip().lower()
         return _TEMPORAL_MODE_ALIASES.get(key, key)
+
+
+# --------------------------------------------------------------------------- #
+# Structured input provenance (the provenance-chain wave)
+# --------------------------------------------------------------------------- #
+
+#: Where a single physical model input came from. The honest distinction the
+#: input-provenance audit demanded: a demo default (``default_demo``) is not the
+#: same as a value fetched from real data (``fetched``), user-supplied (``user``),
+#: interpreted from the user's request (``prompt_interpreted``), or computed from
+#: other inputs (``derived``). Open string Literal (forward-compat).
+InputBasis = Literal[
+    "fetched",
+    "user",
+    "prompt_interpreted",
+    "default_demo",
+    "derived",
+    # a MEASURED published inversion (e.g. a USGS finite-fault slip model) -- the
+    # strongest site-specific class: real measured data, not a scaling law/default.
+    "measured_inversion",
+    # a SCENARIO source built on REAL published geometry but a HYPOTHETICAL rupture
+    # (e.g. a USGS Slab2 subduction-interface + a target-Mw tapered slip) -- LOUDLY a
+    # "what if", never confusable with a real event. The interface geometry is real;
+    # the earthquake is not.
+    "scenario_slab2",
+]
+
+
+class SyntheticInput(GraceModel):
+    """One structured provenance entry for a physical model input.
+
+    Records WHERE a single physical parameter used in a run came from so the
+    agent can narrate provenance instead of inventing phrasing, and so a demo
+    default is never mistaken for site-derived data (the input-provenance audit
+    gate, structured half). Carried by the result-envelope contracts (base
+    ``LayerURI.synthetic_inputs`` + ``ImpactEnvelope.synthetic_inputs``); ADDITIVE
+    and default-empty so templates populate the list incrementally - an empty
+    list means "no declared provenance", never "all real".
+
+    Fields:
+      - ``param``: the canonical parameter name (e.g. ``"dam_break_depth_m"``).
+      - ``value``: the value actually used (scalar/str; None when not surfaced).
+      - ``units``: physical units, when applicable.
+      - ``basis``: the provenance class (see ``InputBasis``).
+      - ``real_source_if_any``: the fetcher / dataset name when
+        ``basis in {"fetched", "derived"}`` (e.g. ``"fetch_usace_dams"``).
+      - ``note``: a short human-readable qualifier.
+    """
+
+    param: str
+    value: float | int | str | None = None
+    units: str | None = None
+    basis: InputBasis
+    real_source_if_any: str | None = None
+    note: str | None = None
+
+
+def render_assumptions_line(entries: Any) -> str | None:
+    """Render a structured ``synthetic_inputs`` list into ONE compact narration
+    line, or ``None`` when there are no entries.
+
+    Groups by provenance so the agent narrates the risk (demo defaults) plainly
+    without a table (concise-chat norm). Accepts either ``SyntheticInput`` objects
+    or their ``model_dump`` dicts so both the server (typed) and the
+    narration-summary seam (dict) can call it. Example:
+
+        "Provenance: dam_break_depth_m=44.2 m, source_lonlat fetched (NID via
+        fetch_usace_dams); soil cohesion/friction/thickness = demo defaults."
+    """
+    if not entries:
+        return None
+
+    def _field(e: Any, name: str) -> Any:
+        return e.get(name) if isinstance(e, dict) else getattr(e, name, None)
+
+    def _one(e: Any) -> str:
+        param = _field(e, "param")
+        value = _field(e, "value")
+        units = _field(e, "units")
+        val_txt = ""
+        if value is not None:
+            val_txt = f"={value}" + (f" {units}" if units else "")
+        return f"{param}{val_txt}"
+
+    fetched, demo, scenario, other = [], [], [], []
+    for e in entries:
+        basis = _field(e, "basis")
+        if basis == "scenario_slab2":
+            scenario.append(e)
+        elif basis in ("fetched", "derived", "measured_inversion"):
+            fetched.append(e)
+        elif basis == "default_demo":
+            demo.append(e)
+        else:
+            other.append(e)
+
+    segments: list[str] = []
+    if fetched:
+        srcs = sorted({
+            str(_field(e, "real_source_if_any"))
+            for e in fetched
+            if _field(e, "real_source_if_any")
+        })
+        src_txt = f" (via {', '.join(srcs)})" if srcs else ""
+        segments.append(
+            "site-derived: " + ", ".join(_one(e) for e in fetched) + src_txt
+        )
+    if scenario:
+        segments.append(
+            "SCENARIO (hypothetical rupture on real published geometry, NOT a real "
+            "event): " + ", ".join(_one(e) for e in scenario)
+        )
+    if demo:
+        segments.append(
+            "demo defaults (NOT site-specific): "
+            + ", ".join(_one(e) for e in demo)
+        )
+    if other:
+        segments.append("user/prompt: " + ", ".join(_one(e) for e in other))
+    return "Input provenance -- " + "; ".join(segments) + "."

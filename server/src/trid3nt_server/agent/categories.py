@@ -21,24 +21,34 @@ This module implements the CachedContent Option A architecture from
   envelope, which Gemini reads on its next turn and retries (per
   retry-on-failure).
 
-Twelve categories (from ``project_generic_endpoint_architecture.md``):
+Thirteen categories (question classes, not places or hazards):
 
-1. ``hazard_modeling`` - SFINCS, MODFLOW (future), Pelicun
-2. ``weather_atmosphere`` - NWS, NEXRAD, MRMS, HRRR, GOES, ERA5, ASOS, RAWS,
+1. ``simulation_modeling`` - physics-based process simulation across domains:
+   surface/coastal flood (SFINCS, HEC-RAS, TELEMAC, SCHISM), urban drainage
+   (SWMM), groundwater flow + transport (MODFLOW 6 / MF6-GWT), seismic ground
+   motion (OpenQuake), wildfire spread (ELMFIRE), nearshore waves (SWAN),
+   landscape/landslide/overland-flow process (Landlab), tsunami/surge (GeoClaw).
+   Plus solver dispatch, parameter derivation, and run diagnostics. Use when the
+   user wants to RUN a model.
+2. ``model_validation`` - correctness/benchmark checks on a model or numerical
+   scheme: closed-form/analytic verification, grid-convergence and mass/heat
+   conservation gates, transport-scheme comparisons, and model-vs-observation
+   skill metrics.
+3. ``weather_atmosphere`` - NWS, NEXRAD, MRMS, HRRR, GOES, ERA5, ASOS, RAWS,
    gridMET, HRRR-Smoke
-3. ``hydrology`` - NWM, NHDPlus, river geometry, precip return period, STATSGO
-4. ``terrain_elevation`` - DEM, hillshade, slope, aspect, colored relief,
-   LANDFIRE
-5. ``land_cover_development`` - NLCD, building density, impervious, HRSL/MS
+4. ``hydrology`` - NWM, NHDPlus, river geometry, precip return period, STATSGO
+5. ``terrain_elevation`` - DEM, hillshade, slope, aspect, colored relief,
+   drainage/DEM diagnostics
+6. ``land_cover_development`` - NLCD, building density, impervious, HRSL/MS
    Buildings, OSM roads, USACE NSI
-6. ``conservation_ecology`` - GBIF, iNat, WDPA, IUCN, eBird, Movebank
-7. ``fire`` - FIRMS, MTBS, NIFC, LANDFIRE fuels, USFS canopy
-8. ``coastal`` - GTSM, CO-OPS tides, SLR scenarios, bathymetry
-9. ``damage_assessment`` - Pelicun, USACE NSI (cross-listed)
-10. ``flood_infrastructure`` - FEMA NFHL, USACE NLD (levees), USACE NID (dams)
-11. ``geographic_primitives`` - geocode, administrative boundaries, clip,
+7. ``conservation_ecology`` - GBIF, iNat, WDPA, IUCN, eBird, Movebank
+8. ``fire`` - FIRMS, MTBS, NIFC, LANDFIRE fuels, USFS canopy
+9. ``coastal`` - GTSM, CO-OPS tides, SLR scenarios, bathymetry
+10. ``damage_assessment`` - Pelicun, USACE NSI (cross-listed)
+11. ``flood_infrastructure`` - FEMA NFHL, USACE NLD (levees), USACE NID (dams)
+12. ``geographic_primitives`` - geocode, administrative boundaries, clip,
     publish, discovery, catalog
-12. ``news_events`` - web_fetch, NWS event, storm events, aggregate claims
+13. ``news_events`` - web_fetch, NWS event, storm events, aggregate claims
 
 The hot set (always-on at session start, before any category has been opened)
 is defined in ``HOT_SET_TOOLS`` - ten tools that span the most common entry
@@ -88,11 +98,11 @@ __all__ = [
 
 @dataclass(frozen=True)
 class CategorySpec:
-    """One of the 12 top-level tool categories.
+    """One of the 13 top-level tool categories.
 
     Fields:
 
-    - ``id`` - short stable identifier (e.g. ``"hazard_modeling"``). This is
+    - ``id`` - short stable identifier (e.g. ``"simulation_modeling"``). This is
       the argument the LLM passes to ``list_tools_in_category``.
     - ``name`` - human-readable name shown in the catalog UI / system prompt.
     - ``description`` - one-sentence priming for the LLM. Tells it when this
@@ -106,13 +116,27 @@ class CategorySpec:
 
 CATEGORIES: tuple[CategorySpec, ...] = (
     CategorySpec(
-        id="hazard_modeling",
-        name="Hazard modeling",
+        id="simulation_modeling",
+        name="Simulation and modeling",
         description=(
-            "End-to-end hazard simulation workflows: flood (SFINCS), "
-            "groundwater contamination plume (MODFLOW 6 + MF6-GWT), flood "
-            "+ habitat composers, Pelicun damage assessment. Use this when the "
-            "user wants to RUN a model, not just fetch source data."
+            "Physics-based process simulation across domains: flood (SFINCS, "
+            "HEC-RAS, TELEMAC, SCHISM), urban drainage (SWMM), groundwater flow "
+            "+ transport (MODFLOW 6), seismic ground motion (OpenQuake), "
+            "wildfire (ELMFIRE), nearshore waves (SWAN), landscape process "
+            "(Landlab), tsunami/surge (GeoClaw), plus solver dispatch and run "
+            "diagnostics. Use when the user wants to RUN a model, not fetch data."
+        ),
+    ),
+    CategorySpec(
+        id="model_validation",
+        name="Model validation",
+        description=(
+            "Correctness and benchmark checks on a model or numerical scheme: "
+            "closed-form/analytic verification, grid-convergence and "
+            "mass/heat-conservation gates, transport-scheme comparisons, and "
+            "model-vs-observation skill metrics (residuals, flood-extent skill, "
+            "high-water-mark pairing). Use when the question is whether a model "
+            "is correct, not what a scenario predicts."
         ),
     ),
     CategorySpec(
@@ -130,7 +154,7 @@ CATEGORIES: tuple[CategorySpec, ...] = (
         description=(
             "Surface-water datasets: USGS NWIS gauge stations (real observed "
             "discharge/stage), NOAA NWM modeled streamflow, NHDPlus/NLDI "
-            "navigation, river geometry, CaMa-Flood discharge, GCN250 curve "
+            "navigation, river geometry, GCN250 curve "
             "numbers, STATSGO soils, precipitation return-period lookups."
         ),
     ),
@@ -219,7 +243,7 @@ CATEGORIES: tuple[CategorySpec, ...] = (
         id="news_events",
         name="News and event ingest",
         description=(
-            "Hazard-event narratives and structured-claim ingestion: open "
+            "Event narratives and structured-claim ingestion: open "
             "web fetch, NWS event records, NOAA Storm Events Database, "
             "cross-source claim aggregation."
         ),
@@ -233,136 +257,188 @@ CATEGORIES: tuple[CategorySpec, ...] = (
 # Every registered tool has exactly one primary category (used for
 # ``list_tools_in_category`` membership). A small number cross-list as
 # secondaries when they materially belong to a second category too -
-# Pelicun shows up under both ``hazard_modeling`` (you run it as a hazard
-# workflow) and ``damage_assessment`` (it IS damage assessment). USACE NSI
+# Pelicun shows up under both ``simulation_modeling`` (you run it as a
+# simulation) and ``damage_assessment`` (it IS damage assessment). USACE NSI
 # shows up under ``land_cover_development`` (structure inventory) and
 # ``damage_assessment`` (it's the canonical Pelicun asset source in CONUS).
 # ---------------------------------------------------------------------------
 
 
 PRIMARY_CATEGORY: dict[str, str] = {
-    # ---- 1. hazard_modeling ------------------------------------------------
-    # engine-door refactor (SFINCS slice): run_model_flood_scenario is now the
-    # sfincs_flood template (tier=template, pool-EXCLUDED, NO category membership -
-    # surfaced only by the run_sfincs door's gate expansion). The DOOR carries the
-    # category membership so hazard_modeling widening surfaces the flood entry.
-    "run_sfincs": "hazard_modeling",
-    "run_model_nws_flood_event_scenario": "hazard_modeling",
-    "run_model_groundwater_contamination_scenario": "hazard_modeling",
-    # engine-door refactor: run_model_contamination_affected_fields is CUT;
-    # run_modflow_job folded into the modflow_contaminant_plume template. The 11
-    # MODFLOW templates are tier=template -> NOT categorized (categorizing one
-    # would re-leak it into the retrieval pool). Only the door is categorized.
-    # engine-door refactor: the read-only MODFLOW concierge door. Categorized
-    # (every registered tool needs a primary) but its tier=template members are
-    # NOT categorized - they are excluded from the pool and surfaced only by the
-    # door's gate expansion (adding a template to a category would re-leak it).
-    "run_modflow": "hazard_modeling",
-    # engine-door refactor (SWMM slice): run_swmm_urban_flood is now the
-    # swmm_urban_flood template (tier=template, pool-EXCLUDED, NO category
-    # membership - surfaced only by the run_swmm door's gate expansion). The
-    # DOOR carries the hazard_modeling membership.
-    "run_swmm": "hazard_modeling",
-    # engine-door refactor (PELICUN slice) + PELICUN fold: run_pelicun_damage_assessment
-    # + run_pelicun_with_buildings are now ONE pelicun_damage_assessment template
-    # (tier=template, pool-EXCLUDED, NO category membership - surfaced only by the
-    # run_pelicun door's gate expansion; the with-buildings composer folded into its
-    # bbox auto-fetch input mode). The DOOR carries the hazard_modeling membership.
-    "run_pelicun": "hazard_modeling",
-    # NEW engines (parallel lanes) - all are run_* hazard solvers /
-    # composers, filed alongside the other engines above.
-    # engine-door refactor: run_river_seepage_job + run_model_river_seepage_scenario
-    # folded into the modflow_river_seepage template (tier=template, not categorized).
-    # engine-door refactor (GEOCLAW slice): run_geoclaw_inundation is now the
-    # geoclaw_inundation template (tier=template, pool-EXCLUDED, NO category
-    # membership - surfaced only by the run_geoclaw door's gate expansion). The
-    # DOOR carries the hazard_modeling membership.
-    "run_geoclaw": "hazard_modeling",
-    # engine-door refactor (OPENQUAKE slice): run_seismic_hazard_psha is now the
-    # openquake_psha template (tier=template, pool-EXCLUDED, NO category
-    # membership - surfaced only by the run_openquake door's gate expansion). The
-    # DOOR carries the hazard_modeling membership.
-    "run_openquake": "hazard_modeling",
+    # ---- 1. simulation_modeling --------------------------------------------
+    # Door dissolution (ADR 0094): the 10 engine "door" concierge tools were
+    # DELETED. Each engine's tier=template members are ordinary retrieval-pool
+    # tools now and carry their OWN category membership (categorizing a template
+    # no longer re-leaks anything -- there is no pool exclusion). Most templates
+    # file under simulation_modeling; the pure V&V decks file under
+    # model_validation; pelicun/swan/elmfire also cross-list via
+    # SECONDARY_CATEGORIES (damage_assessment / coastal / fire).
+    "sfincs_flood": "simulation_modeling",
+    "sfincs_advanced_numerical_physics_knobs": "simulation_modeling",
+    "modflow_asr": "simulation_modeling",
+    "modflow_capture_zone": "simulation_modeling",
+    "modflow_contaminant_plume": "simulation_modeling",
+    "modflow_managed_recharge": "simulation_modeling",
+    "modflow_mine_dewatering": "simulation_modeling",
+    "modflow_regional_water_budget": "simulation_modeling",
+    "modflow_river_seepage": "simulation_modeling",
+    "modflow_saltwater_intrusion": "simulation_modeling",
+    "modflow_sustainable_yield": "simulation_modeling",
+    "modflow_vadose_transport": "simulation_modeling",
+    "modflow_wellhead_protection": "simulation_modeling",
+    "modflow_wetland_hydroperiod": "simulation_modeling",
+    # V&V benchmark deck (GWF-NPF Newton/Zaidel + MAW/Sokol + HFB grid
+    # independence): a correctness gate, not a scenario prediction -> filed
+    # under model_validation; cross-lists to simulation_modeling below.
+    "modflow_package_validation": "model_validation",
+    "swmm_urban_flood": "simulation_modeling",
+    "swmm_network_import": "simulation_modeling",
+    "swmm_dual_drainage_coupling": "simulation_modeling",
+    "swmm_lid_raingarden_wq": "simulation_modeling",
+    "swmm_wwtp_detention_ponds": "simulation_modeling",
+    "swmm_pump_pid_rtc": "simulation_modeling",
+    "swmm_subcatchment_runoff_comparison": "simulation_modeling",
+    "swmm_node_hydraulics_comparison": "simulation_modeling",
+    "swmm_wetwell_pump_control_comparison": "simulation_modeling",
+    "swmm_lid_performance_comparison": "simulation_modeling",
+    "swmm_wq_buildup_washoff_comparison": "simulation_modeling",
+    "swmm_rdii_rtk_unit_hydrograph": "simulation_modeling",
+    "swmm_snowmelt_degree_day": "simulation_modeling",
+    "swmm_aquifer_baseflow_to_node": "simulation_modeling",
+    "pelicun_damage_assessment": "simulation_modeling",
+    # pelicun Assessment-API validation / sensitivity templates: idealized
+    # damage-and-loss methodology checks, primary damage_assessment.
+    # Monte-Carlo-vs-analytic closed-form check (damage-state probability + loss
+    # identity): a correctness gate -> model_validation; cross-lists to
+    # damage_assessment below.
+    "pelicun_closed_form_validation": "model_validation",
+    "pelicun_mixed_fragility_loss_assessment": "damage_assessment",
+    "pelicun_replacement_threshold_override_sweep": "damage_assessment",
+    "pelicun_flood_foundation_depth_damage_sweep": "damage_assessment",
+    # pelicun DL_calculation-driven templates: full HAZUS EQ building DL run
+    # (auto-populated building type) + HAZUS EQ v5.1-vs-v6.1 dataset comparison.
+    "pelicun_hazus_seismic_dl_run": "damage_assessment",
+    "pelicun_hazus_eq_version_comparison": "damage_assessment",
+    "geoclaw_inundation": "simulation_modeling",
+    "openquake_psha": "simulation_modeling",
+    "openquake_scenario_gmf": "simulation_modeling",
+    "openquake_secondary_perils": "simulation_modeling",
+    # ADR 0182 shortlist batch: hazard disaggregation (which M-R-eps scenario
+    # dominates a site's hazard) + event-based / stochastic PSHA (synthetic
+    # catalogue + classical convergence check). Distinct oq calculators, run in
+    # the local subprocess lane; both model_validation-adjacent but filed under
+    # simulation_modeling alongside the other openquake calculators.
+    "openquake_disaggregation": "simulation_modeling",
+    "openquake_event_based": "simulation_modeling",
     # real-fault seismic-source fetcher: the OpenQuake PSHA input data fetcher
     # (USGS / GEM fault sources -> source-model XML). Filed alongside its consumer
-    # door run_openquake (there is no dedicated geophysics data category).
-    "fetch_fault_sources": "hazard_modeling",
-    # engine-door refactor (LANDLAB slice): run_landlab_susceptibility is now the
-    # landlab_susceptibility template (tier=template, pool-EXCLUDED, NO category
-    # membership - surfaced only by the run_landlab door's gate expansion). The
-    # DOOR carries the hazard_modeling membership.
-    "run_landlab": "hazard_modeling",
+    # openquake_psha (there is no dedicated geophysics data category).
+    "fetch_fault_sources": "simulation_modeling",
+    "landlab_susceptibility": "simulation_modeling",
+    # Terrain/hydrology diagnostics: these Landlab templates answer a terrain or
+    # drainage question (drainage area, channel network, DEM conditioning, lake
+    # extent, Hack's-law scaling, HAND wetness) -- NOT a hazard/scenario -- so
+    # they file under their honest data lanes (terrain_elevation / hydrology) and
+    # cross-list to the other via SECONDARY_CATEGORIES below.
+    "landlab_flow_accumulation": "hydrology",
+    "landlab_green_ampt_overland_flow": "simulation_modeling",
+    "landlab_landslide_storm_ensemble": "simulation_modeling",
+    "landlab_overland_flow_timeseries": "simulation_modeling",
+    "landlab_dem_conditioning": "terrain_elevation",
+    "landlab_lake_mapping": "hydrology",
+    "landlab_hacks_law_scaling": "terrain_elevation",
+    "landlab_hand_wetness": "hydrology",
+    "landlab_channel_incision_steady_state": "simulation_modeling",
+    "landlab_channel_steepness_chi_map": "terrain_elevation",
+    "landlab_storm_sequence_generator": "weather_atmosphere",
+    "landlab_groundwater_water_table": "hydrology",
+    "landlab_groundwater_storm_recession": "hydrology",
+    # constant-wind elliptical-spread verification vs the analytic ellipse: a
+    # correctness gate -> model_validation; cross-lists to fire +
+    # simulation_modeling below.
+    "elmfire_verification_elliptical_replication": "model_validation",
+    "elmfire_length_to_width_ceiling_sensitivity": "simulation_modeling",
+    "elmfire_wind_fluctuation_randomization": "simulation_modeling",
+    "elmfire_live_fuel_moisture_sensitivity": "simulation_modeling",
+    "elmfire_transient_wind_schedule_spread": "simulation_modeling",
+    "elmfire_dead_fuel_moisture_interpolation_frequency_control": "simulation_modeling",
+    "elmfire_crown_fire_initiation_threshold_sweep": "simulation_modeling",
+    "elmfire_initial_attack_containment_probability": "model_validation",
+    "geoclaw_tsunami_gauge_timeseries": "simulation_modeling",
+    "geoclaw_amr_refinement_regions": "simulation_modeling",
+    "geoclaw_regional_manning_friction": "simulation_modeling",
+    "geoclaw_storm_surge": "simulation_modeling",
+    # Thacker paraboloid-basin V&V: a numerical-verification benchmark (period /
+    # amplitude / shoreline / mass conservation vs the 1981 closed form), so its
+    # PRIMARY is model_validation; cross-lists to simulation_modeling below.
+    "geoclaw_thacker_validation": "model_validation",
     # USGS post-fire debris-flow hazard composer (pfdf: Staley 2017 M1
     # likelihood + Gartner 2014 emergency volume + Cannon 2010 combined class
     # over a delineated stream-segment network). Filed as a hazard engine;
     # cross-listed to fire below (reached from the wildfire lane next to
     # MTBS / NIFC / FIRMS).
-    "model_debris_flow": "hazard_modeling",
-    # engine-door refactor (ELMFIRE slice): model_fire_spread is now the
-    # elmfire_fire_spread template (tier=template, pool-EXCLUDED, NO category
-    # membership - surfaced only by the run_elmfire door's gate expansion). The
-    # DOOR carries the hazard_modeling membership; cross-listed to fire below
-    # (reached from the wildfire lane next to LANDFIRE / NIFC / FIRMS).
-    "run_elmfire": "hazard_modeling",
-    # The case-layer serving seams (hydrate_case_layers in cases/, and
-    # register_case_layer / ingest_user_layer) are DEREGISTERED
-    # (their functions serve the /api/export-qgis +
-    # /api/ingest-layer HTTP routes directly, not the LLM catalog), so they carry
+    "model_debris_flow": "simulation_modeling",
+    "elmfire_fire_spread": "simulation_modeling",
+    "swan_wave_field": "simulation_modeling",
+    "swan_physics_sensitivity_sweep": "simulation_modeling",
+    "swan_stationary_snapshot_batch": "simulation_modeling",
+    "telemac_river_dye": "simulation_modeling",
+    "telemac_do_sag": "simulation_modeling",
+    "telemac_rain_on_grid": "simulation_modeling",
+    # Standalone mesh builder (ADR 0200): a model DOMAIN primitive that feeds every
+    # unstructured solver (TELEMAC/SCHISM/SWAN) -- filed with the engines it serves.
+    "generate_mesh": "simulation_modeling",
+    "hecras_riverine_flood": "simulation_modeling",
+    "hecras_levee_breach": "simulation_modeling",
+    "hecras_flood_2d": "simulation_modeling",
+    "schism_tidal_hydro": "simulation_modeling",
+    "schism_coupled_waves": "simulation_modeling",
+    "schism_baroclinic_circulation": "simulation_modeling",
+    "schism_pahm_surge": "simulation_modeling",
+    # transport-scheme numerical-mixing + tracer-mass-conservation V&V: a
+    # correctness gate -> model_validation; cross-lists to simulation_modeling.
+    "schism_transport_validation": "model_validation",
+    # The case-layer ingest seams (register_case_layer / ingest_user_layer)
+    # are DEREGISTERED (their functions serve the /api/ingest-layer HTTP route
+    # directly, not the LLM catalog), so they carry
     # NO primary category -- a PRIMARY_CATEGORY entry for a non-registered tool
     # fails the test_no_primary_category_entry_points_to_missing_tool invariant.
     # case-analysis batch: point/series sampling + the case situation report are
     # general-purpose case utilities (the conversational-analysis surface);
     # exposure-in-footprint is an impact/exposure product, so it files under
-    # damage_assessment alongside compute_impact_envelope.
+    # damage_assessment alongside pelicun_damage_assessment.
     "compute_exposure_summary": "damage_assessment",
     "query_point_hazard": "geographic_primitives",
     "extract_timeseries_at_point": "geographic_primitives",
     "compose_case_report": "geographic_primitives",
-    # engine-door refactor: the MODFLOW GWF-only archetype composers +
-    # Waves 4-5 (PRT capture-zone / WHPA + BUY saltwater) are now engine TEMPLATES
-    # (tier=template, engine=modflow) under workflows/modflow/<template>/. They are
-    # deliberately NOT categorized: templates are excluded from the retrieval pool
-    # and surfaced only by the run_modflow door's gate expansion; adding one to a
-    # category (or opened-category widening) would re-leak it into the pool.
-    # SWAN Phase 1: standalone spectral nearshore wave-field engine (the additive
-    # comparison engine vs SFINCS+SnapWave). Filed as a hazard engine; also
-    # cross-listed under coastal (SECONDARY_CATEGORIES) since it is a coastal/wave
-    # tool a user reaches from the coastal lane.
-    # engine-door refactor (SWAN slice): run_swan_waves is now the swan_wave_field
-    # template (tier=template, pool-EXCLUDED, NO category membership - surfaced
-    # only by the run_swan door's gate expansion). The DOOR carries the
-    # hazard_modeling membership.
-    "run_swan": "hazard_modeling",
     # canopy-height ML-inference tool (Meta HighResCanopyHeight on CPU Batch).
     # It is a compute-heavy run_* model that dispatches the canopy Batch worker
     # and publishes a canopy-height (m) raster -- filed alongside the other
     # engine dispatchers; cross-listed to conservation_ecology + land_cover.
-    "compute_canopy_height": "hazard_modeling",
-    "run_solver": "hazard_modeling",
-    "wait_for_completion": "hazard_modeling",
-    # TELEMAC hydrodynamic/contaminant-transport dye-spill engine dispatcher --
-    # filed alongside the other run_* solver/engine composers.
-    "run_telemac": "hazard_modeling",
+    "compute_canopy_height": "simulation_modeling",
+    "run_solver": "simulation_modeling",
+    "wait_for_completion": "simulation_modeling",
     # V&V wave (ADR 0021, lane A): the per-engine run-diagnostics dispatcher
     # operates directly ON a run (mass balance / convergence / instability),
     # so it sits beside run_solver / wait_for_completion.
-    "read_run_diagnostics": "hazard_modeling",
+    "read_run_diagnostics": "simulation_modeling",
     # V&V wave (ADR 0021, lane D): derive-not-mutate parameter setters
     # operate directly ON a staged engine deck/setup -- filed beside the
     # solver seam they feed.
-    "set_sfincs_parameters": "hazard_modeling",
-    "set_swmm_parameters": "hazard_modeling",
-    "set_modflow_parameters": "hazard_modeling",
+    "set_sfincs_parameters": "simulation_modeling",
+    "set_swmm_parameters": "simulation_modeling",
+    "set_modflow_parameters": "simulation_modeling",
     # set_telemac_parameters was registered (malpasset arc) but never added to
     # PRIMARY_CATEGORY - a pre-existing gap surfaced by test_every_registered_
     # tool_has_a_primary_category; filed beside its sibling setters (tier=general,
     # NOT a template).
-    "set_telemac_parameters": "hazard_modeling",
+    "set_telemac_parameters": "simulation_modeling",
     # ---- 2. weather_atmosphere --------------------------------------------
     "fetch_nws_alerts_conus": "weather_atmosphere",
     "fetch_nws_event": "weather_atmosphere",
-    "fetch_nexrad_reflectivity": "weather_atmosphere",
+    "show_nexrad_radar": "weather_atmosphere",
     "fetch_mrms_qpe": "weather_atmosphere",
+    "fetch_aorc_precip": "weather_atmosphere",
     "fetch_hrrr_forecast": "weather_atmosphere",
     "fetch_hrrr_smoke": "weather_atmosphere",
     "fetch_goes_satellite": "weather_atmosphere",
@@ -395,10 +471,10 @@ PRIMARY_CATEGORY: dict[str, str] = {
     "fetch_storm_tracks": "weather_atmosphere",
     # ---- 3. hydrology -----------------------------------------------------
     "fetch_usgs_nwis_gauges": "hydrology",
+    "fetch_lter_records": "hydrology",
     "fetch_noaa_nwm_streamflow": "hydrology",
     "fetch_nhdplus_nldi_navigate": "hydrology",
     "fetch_river_geometry": "hydrology",
-    "fetch_cama_flood_discharge": "hydrology",
     "lookup_precip_return_period": "hydrology",
     "fetch_gcn250_curve_numbers": "hydrology",
     "fetch_statsgo_soils": "hydrology",
@@ -460,7 +536,7 @@ PRIMARY_CATEGORY: dict[str, str] = {
     # plus its two key-free vector fetchers. analyze_affected_habitats is filed in
     # the conservation lane (it is the "which habitats are affected" impact tool,
     # the ecology analogue of analyze_affected_fields) and cross-lists to
-    # hazard_modeling + damage_assessment below. fetch_nwi_wetlands (USFWS NWI
+    # simulation_modeling + damage_assessment below. fetch_nwi_wetlands (USFWS NWI
     # wetland polygons) and fetch_nhd_waterbodies (USGS NHD lake/pond/reservoir
     # polygons) are the habitat/wetland/waterbody data layers it composes, filed
     # here next to the other conservation/biodiversity fetchers.
@@ -487,12 +563,11 @@ PRIMARY_CATEGORY: dict[str, str] = {
     "fetch_noaa_slr_scenarios": "coastal",
     "fetch_noaa_slr_confidence": "coastal",
     "fetch_noaa_slr_marsh": "coastal",
-    # SFINCS North Star P1: merged coastal topo-bathymetry DEM (NOAA NCEI CUDEM
+    # Coastal SFINCS: merged coastal topo-bathymetry DEM (NOAA NCEI CUDEM
     # 1/9 arc-sec + USGS 3DEP land) - the bathymetric input the coastal SFINCS
     # bed needs (fetch_dem alone is land-only). EPSG:32616 NAVD88 positive-up.
     "fetch_topobathy": "coastal",
     # ---- 9. damage_assessment ---------------------------------------------
-    "compute_impact_envelope": "damage_assessment",
     "postprocess_pelicun": "damage_assessment",
     # ---- 10. flood_infrastructure -----------------------------------------
     "fetch_fema_nfhl_zones": "flood_infrastructure",
@@ -505,14 +580,13 @@ PRIMARY_CATEGORY: dict[str, str] = {
     # compute_model_residuals: an analysis primitive over an existing raster +
     # an existing/fetched vector layer -- same lane as the other raster-plus-vector
     # (its closest sibling: raster-plus-vector -> aggregate result). Cross-
-    # listed to hazard_modeling below (its primary use is MODFLOW head
-    # calibration against observed wells).
+    # listed to model_validation below (its primary use is MODFLOW head
+    # calibration against observed wells -- a correctness check).
     "compute_model_residuals": "geographic_primitives",
     # V&V wave (ADR 0021, lanes B + C): model-vs-observation skill/pairing
     # analysis primitives, siblings of compute_model_residuals above (same
     # "analysis primitive over model+obs" lane). Cross-listed to
-    # hazard_modeling below (their headline use validates a hazard-engine
-    # run).
+    # model_validation below (their headline use validates a model run).
     "compute_skill_metrics": "geographic_primitives",
     "compute_flood_extent_skill": "geographic_primitives",
     "extract_model_at_observations": "geographic_primitives",
@@ -561,6 +635,8 @@ PRIMARY_CATEGORY: dict[str, str] = {
     "search_tools": "geographic_primitives",
     "search_data_catalog": "geographic_primitives",
     "fetch_from_catalog": "geographic_primitives",
+    "search_living_atlas": "geographic_primitives",
+    "fetch_living_atlas_layer": "geographic_primitives",
     "list_qgis_algorithms": "geographic_primitives",
     "describe_qgis_algorithm": "geographic_primitives",
     "qgis_process": "geographic_primitives",
@@ -574,7 +650,7 @@ PRIMARY_CATEGORY: dict[str, str] = {
     "fetch_storm_events_db": "news_events",
     # a+b+c batch (2026-06-27)
     "digitize_water_body": "land_cover_development",
-    "fetch_usgs_earthquakes": "hazard_modeling",
+    "fetch_usgs_earthquakes": "simulation_modeling",
     "fetch_hifld_critical_infrastructure": "flood_infrastructure",
     "fetch_cdc_svi": "damage_assessment",
     "fetch_sentinel2_truecolor": "geographic_primitives",
@@ -582,7 +658,7 @@ PRIMARY_CATEGORY: dict[str, str] = {
     "compute_movement_trajectory": "conservation_ecology",
     # fetchers2 batch (2026-06-27)
     "fetch_epa_frs_facilities": "flood_infrastructure",
-    "fetch_us_drought_monitor": "hazard_modeling",
+    "fetch_us_drought_monitor": "simulation_modeling",
     "fetch_overpass_pois": "geographic_primitives",
     "fetch_census_acs": "land_cover_development",
     "fetch_landsat_imagery": "land_cover_development",
@@ -590,7 +666,7 @@ PRIMARY_CATEGORY: dict[str, str] = {
     "fetch_openfema_disasters": "news_events",
     "fetch_esri_landcover_10m": "land_cover_development",
     # batch3+4 (2026-06-27)
-    "fetch_usgs_volcano_alerts": "hazard_modeling",
+    "fetch_usgs_volcano_alerts": "simulation_modeling",
     "fetch_usgs_water_quality": "hydrology",
     "fetch_usgs_groundwater_levels": "hydrology",
     "fetch_snotel_snow": "hydrology",
@@ -647,33 +723,33 @@ SECONDARY_CATEGORIES: dict[str, tuple[str, ...]] = {
     # belongs to news_events too: it is a canonical "what event is happening"
     # ingest source the demoted aggregate_claims news role re-homes onto.
     "fetch_nws_event": ("news_events",),
-    # engine-door refactor (PELICUN slice): the DOOR carries the secondary
-    # damage_assessment membership; its templates are pool-EXCLUDED (no membership).
-    "run_pelicun": ("damage_assessment",),
+    # Door dissolution (ADR 0094): the pelicun_damage_assessment template carries
+    # the secondary damage_assessment membership directly (its deleted door did before).
+    "pelicun_damage_assessment": ("damage_assessment",),
     "fetch_usace_nsi": ("damage_assessment",),
     # habitat-impact batch (2026-07-20): the affected-habitats analysis is PRIMARY
     # conservation_ecology (the ecology impact readout) and materially belongs to
-    # hazard_modeling (it scores a hazard/flood/plume footprint) AND
+    # simulation_modeling (it scores a flood/plume model footprint) AND
     # damage_assessment (it IS an impact/exposure assessment, the ecology analogue
-    # of compute_impact_envelope / analyze_affected_fields).
+    # of analyze_affected_fields).
     # engine-door refactor: run_model_contamination_affected_fields is CUT (the
     # zonal field-analysis half re-homed to a playground recipe); its secondary
     # cross-listing is removed with it.
-    # Case 2 groundwater composer spans hazard_modeling (it runs MODFLOW) AND
-    # news_events (it's driven by a spill news article - the canonical "model
-    # the spill from this article" entry point).
-    "run_model_groundwater_contamination_scenario": ("news_events",),
-    # Case 3 composer spans hazard_modeling (it runs SFINCS) AND
-    # weather_atmosphere (it's driven by an active NWS flood warning + MRMS
-    # observed precip - the canonical "model the live flood" entry point).
-    "run_model_nws_flood_event_scenario": ("weather_atmosphere",),
-    # SWAN spans hazard_modeling (it runs the SWAN spectral solver) AND coastal
+    # composer dissolution (ADR 0105): the Case 2 groundwater news-ingest composer
+    # and the Case 3 live-alert flood composer are DELETED - the model composes the
+    # fetch -> engine-template chain itself, so there is no standalone tool to
+    # cross-list here.
+    # SWAN spans simulation_modeling (it runs the SWAN spectral solver) AND coastal
     # (it is THE defensible nearshore wave-field tool -- a user reaches it from the
     # coastal lane to compare against SFINCS+SnapWave on the same case).
-    # engine-door refactor (SWAN slice): the DOOR run_swan carries the coastal
-    # cross-listing; the swan_wave_field template is pool-excluded (no membership).
-    "run_swan": ("coastal",),
-    # The canopy-height ML-inference tool spans hazard_modeling (it dispatches a
+    # Door dissolution (ADR 0094): the swan_wave_field template carries the
+    # coastal cross-listing directly (its deleted door did before).
+    "swan_wave_field": ("coastal",),
+    # The SWAN sensitivity-sweep + snapshot-batch templates share the coastal
+    # cross-listing (both run the SWAN nearshore solver over a coastal AOI).
+    "swan_physics_sensitivity_sweep": ("coastal",),
+    "swan_stationary_snapshot_batch": ("coastal",),
+    # The canopy-height ML-inference tool spans simulation_modeling (it dispatches a
     # CPU Batch worker like the other engines) AND conservation_ecology + land
     # cover (a canopy-height surface is a vegetation/ecology product a user
     # reaches from either lane).
@@ -703,16 +779,14 @@ SECONDARY_CATEGORIES: dict[str, tuple[str, ...]] = {
     # weather_atmosphere lane too -- it is the cosmetic finishing pass a user
     # most often reaches for on a GOES/satellite true-color frame.
     "enhance_satellite_image": ("weather_atmosphere",),
-    # The post-fire debris-flow composer is PRIMARY hazard_modeling (a modeling
-    # engine) and materially belongs to fire (post-wildfire hazard, reached from
-    # the MTBS / NIFC / FIRMS lane).
+    # The post-fire debris-flow composer is PRIMARY simulation_modeling (a
+    # modeling engine) and materially belongs to fire (post-wildfire process,
+    # reached from the MTBS / NIFC / FIRMS lane).
     "model_debris_flow": ("fire",),
-    # engine-door refactor (ELMFIRE slice): the run_elmfire DOOR is PRIMARY
-    # hazard_modeling (its templates run the modeling engine) and materially
-    # belongs to fire (fire-behavior modeling, reached from the LANDFIRE / NIFC
-    # / FIRMS wildfire lane). The elmfire_fire_spread template gets NO category
-    # membership (pool-excluded, door-surfaced).
-    "run_elmfire": ("fire",),
+    # Door dissolution (ADR 0094): the elmfire_fire_spread template is PRIMARY
+    # simulation_modeling and cross-lists to fire (fire-behavior modeling, reached
+    # from the LANDFIRE / NIFC / FIRMS wildfire lane).
+    "elmfire_fire_spread": ("fire",),
     # a+b+c batch (2026-06-27)
     "digitize_water_body": ('hydrology', 'terrain_elevation',),
     "fetch_usgs_earthquakes": ('news_events', 'geographic_primitives',),
@@ -722,7 +796,7 @@ SECONDARY_CATEGORIES: dict[str, tuple[str, ...]] = {
     "compute_home_range_kde": ('geographic_primitives',),
     "compute_movement_trajectory": ('geographic_primitives',),
     # fetchers2 batch (2026-06-27)
-    "fetch_epa_frs_facilities": ('damage_assessment', 'hazard_modeling',),
+    "fetch_epa_frs_facilities": ('damage_assessment', 'simulation_modeling',),
     "fetch_us_drought_monitor": ('fire', 'conservation_ecology',),
     "fetch_overpass_pois": ('damage_assessment', 'flood_infrastructure',),
     "fetch_census_acs": ('damage_assessment', 'geographic_primitives',),
@@ -733,10 +807,10 @@ SECONDARY_CATEGORIES: dict[str, tuple[str, ...]] = {
     # batch3+4 (2026-06-27)
     "fetch_usgs_volcano_alerts": ('news_events',),
     "fetch_usgs_water_quality": ('conservation_ecology',),
-    "fetch_usgs_groundwater_levels": ('hazard_modeling',),
+    "fetch_usgs_groundwater_levels": ('simulation_modeling',),
     "fetch_snotel_snow": ('weather_atmosphere', 'terrain_elevation',),
     "fetch_sentinel1_sar": ('hydrology', 'weather_atmosphere',),
-    "fetch_modis_lst": ('hazard_modeling', 'conservation_ecology', 'land_cover_development',),
+    "fetch_modis_lst": ('simulation_modeling', 'conservation_ecology', 'land_cover_development',),
     "fetch_hifld_transmission_lines": ('damage_assessment', 'geographic_primitives',),
     "fetch_lehd_jobs": ('geographic_primitives',),
     "fetch_nws_river_forecast": ('flood_infrastructure', 'weather_atmosphere',),
@@ -747,7 +821,7 @@ SECONDARY_CATEGORIES: dict[str, tuple[str, ...]] = {
     "fetch_soilgrids": ('land_cover_development', 'terrain_elevation',),
     # batch5 (2026-06-27)
     "fetch_epa_ejscreen": ('land_cover_development', 'weather_atmosphere',),
-    "fetch_tsunami_events": ('hazard_modeling',),
+    "fetch_tsunami_events": ('simulation_modeling',),
     "fetch_climate_normals": ('hydrology',),
     "fetch_noaa_coops_currents": ('hydrology', 'geographic_primitives',),
     "fetch_airnow_air_quality": ('news_events', 'damage_assessment', 'fire',),
@@ -760,6 +834,9 @@ SECONDARY_CATEGORIES: dict[str, tuple[str, ...]] = {
     # so they materially belong to the terrain lane too.
     "delineate_watershed": ("terrain_elevation",),
     "extract_stream_network": ("terrain_elevation",),
+    # Mesh builder: PRIMARY simulation_modeling; a domain primitive materially
+    # reachable from the geographic-primitives + terrain lanes too.
+    "generate_mesh": ("geographic_primitives", "terrain_elevation"),
     # quick-win batch (2026-07-07)
     # Two-date NDVI/NDWI change: PRIMARY land-cover/development; vegetation
     # gain/loss mapping is materially a conservation surface too.
@@ -769,38 +846,61 @@ SECONDARY_CATEGORIES: dict[str, tuple[str, ...]] = {
     "compute_idf_curve": ("weather_atmosphere",),
     # Depth-damage screening: PRIMARY damage_assessment; a user reaches it
     # straight from a flood-model run, so it materially belongs to the
-    # hazard-modeling lane too.
-    "compute_flood_depth_damage": ("hazard_modeling",),
+    # simulation-modeling lane too.
+    "compute_flood_depth_damage": ("simulation_modeling",),
     # UHI: PRIMARY land_cover_development (quantifies the built-vs-vegetated
     # development effect); the LST side makes it materially a
     # weather/extreme-heat surface too.
     "compute_urban_heat_island": ("weather_atmosphere",),
     # Model residuals: PRIMARY geographic_primitives (analysis primitive next
     # to compute_zonal_statistics); its headline use is MODFLOW simulated-head
-    # calibration against observed wells, so it materially belongs to the
-    # hazard-modeling lane too.
-    "compute_model_residuals": ("hazard_modeling",),
+    # calibration against observed wells -- a correctness check -- so it
+    # materially belongs to the model_validation lane too.
+    "compute_model_residuals": ("model_validation",),
     # V&V wave (ADR 0021, section 4.1): PRIMARY geographic_primitives
     # (analysis primitives over model+obs); their headline use validates a
-    # hazard-engine run, so they materially belong to hazard_modeling too.
-    "compute_skill_metrics": ("hazard_modeling",),
-    "compute_flood_extent_skill": ("hazard_modeling",),
-    "extract_model_at_observations": ("hazard_modeling",),
+    # model run, so they materially belong to model_validation too.
+    "compute_skill_metrics": ("model_validation",),
+    "compute_flood_extent_skill": ("model_validation",),
+    "extract_model_at_observations": ("model_validation",),
     # V&V wave (ADR 0021, section 4.1): PRIMARY hydrology (observed flood
-    # data fetchers); materially belong to hazard_modeling too (the
-    # validation input for a flood-engine run).
-    "fetch_high_water_marks": ("hazard_modeling",),
-    "fetch_flood_extent_observation": ("hazard_modeling",),
+    # data fetchers); materially belong to model_validation too (the
+    # validation input a flood-engine run is scored against).
+    "fetch_high_water_marks": ("model_validation",),
+    "fetch_flood_extent_observation": ("model_validation",),
+    # Re-homed Landlab terrain/hydrology diagnostics (see PRIMARY_CATEGORY):
+    # each cross-lists to the sibling data lane it also answers for.
+    "landlab_flow_accumulation": ("terrain_elevation",),
+    "landlab_lake_mapping": ("terrain_elevation",),
+    "landlab_hand_wetness": ("terrain_elevation",),
+    "landlab_dem_conditioning": ("hydrology",),
+    "landlab_hacks_law_scaling": ("hydrology",),
+    "landlab_channel_incision_steady_state": ("terrain_elevation",),
+    "landlab_channel_steepness_chi_map": ("hydrology",),
+    "landlab_storm_sequence_generator": ("simulation_modeling",),
+    "landlab_groundwater_water_table": ("simulation_modeling", "terrain_elevation"),
+    "landlab_groundwater_storm_recession": ("simulation_modeling",),
+    # V&V templates whose PRIMARY is model_validation still cross-list to their
+    # engine domain so they surface from the simulation/damage/fire lane too.
+    "modflow_package_validation": ("simulation_modeling",),
+    "schism_transport_validation": ("simulation_modeling",),
+    "geoclaw_thacker_validation": ("simulation_modeling",),
+    "pelicun_closed_form_validation": ("damage_assessment",),
+    "elmfire_verification_elliptical_replication": ("fire", "simulation_modeling"),
+    "elmfire_initial_attack_containment_probability": ("fire", "simulation_modeling"),
+    # Run diagnostics (mass balance / convergence / instability) operate ON a
+    # run and are the correctness read-out, so they cross-list to model_validation.
+    "read_run_diagnostics": ("model_validation",),
 }
 
 # ---------------------------------------------------------------------------
 # Hot set - always-on tools surfaced before any category has been opened.
 # Picked to span the most-common entry points to a session:
 #
-# - run_sfincs (SFINCS flood door) - the top-level flood entry point a user is
-#   likely to invoke first (engine-door refactor: the door replaces
-#   run_model_flood_scenario as the always-on flood hot-path so the
-#   pool-excluded sfincs_flood template stays reachable).
+# - sfincs_flood (SFINCS flood template) - the top-level flood entry point a
+#   user is likely to invoke first (door dissolution, ADR 0094: the template is
+#   the always-on flood hot-path directly; the deleted run_sfincs door held this
+#   slot before).
 # - geocode_location, fetch_dem, fetch_nws_alerts_conus, fetch_nws_event -
 #   the most commonly cited "before you can do anything else" tools
 # (fetch_nws_event added - see inline comment).
@@ -813,7 +913,7 @@ SECONDARY_CATEGORIES: dict[str, tuple[str, ...]] = {
 
 HOT_SET_TOOLS: frozenset[str] = frozenset(
     {
-        "run_sfincs",
+        "sfincs_flood",
         "geocode_location",
         "fetch_dem",
         "fetch_nws_alerts_conus",
@@ -881,7 +981,7 @@ HOT_SET_TOOLS: frozenset[str] = frozenset(
 
 
 class UnknownCategoryError(ValueError):
-    """Raised when a category id is not one of the 12 registered ids.
+    """Raised when a category id is not one of the 13 registered ids.
 
     Carried by ``list_tools_in_category`` so a bad LLM-supplied category arg
     surfaces as a structured tool-error envelope rather than a silent empty
@@ -894,7 +994,7 @@ class UnknownCategoryError(ValueError):
     def __init__(self, category_id: str, valid_ids: Iterable[str]) -> None:
         valid_list = sorted(valid_ids)
         super().__init__(
-            f"category {category_id!r} is not one of the 12 registered "
+            f"category {category_id!r} is not one of the 13 registered "
             f"categories; valid ids are {valid_list}"
         )
         self.category_id = category_id
@@ -1079,7 +1179,7 @@ def tools_for_category(category_id: str) -> tuple[str, ...]:
     category_id``) and secondary cross-listings
     (``category_id in SECONDARY_CATEGORIES[name]``). Sorted for determinism.
 
-    Raises ``UnknownCategoryError`` if ``category_id`` is not one of the 12.
+    Raises ``UnknownCategoryError`` if ``category_id`` is not one of the 13.
     """
     valid_ids = {c.id for c in CATEGORIES}
     if category_id not in valid_ids:
@@ -1154,7 +1254,7 @@ def validate_function_call(call_name: str, allowed: AllowedToolSet) -> None:
 
 
 def _list_categories_impl() -> dict:
-    """Return all 12 categories with ids, names, and descriptions."""
+    """Return all 13 categories with ids, names, and descriptions."""
     return {
         "categories": [
             {"id": c.id, "name": c.name, "description": c.description}
@@ -1223,7 +1323,7 @@ def _first_sentence(doc: str, *, max_chars: int = 200) -> str:
     supports_global_query=True,
 )
 def list_categories() -> dict:
-    """List the 12 top-level tool categories with ids, names, and descriptions.
+    """List the 13 top-level tool categories with ids, names, and descriptions.
 
     Use this when:
         - You are not sure which tool to call and want to narrow the search.
@@ -1238,7 +1338,7 @@ def list_categories() -> dict:
 
     Returns:
         A dict ``{"categories": [{"id": str, "name": str, "description": str},
-        ...]}`` of length 12. The order is stable and follows the registry.
+        ...]}`` of length 13. The order is stable and follows the registry.
     """
     return _list_categories_impl()
 
@@ -1270,7 +1370,7 @@ def list_tools_in_category(category_id: str) -> dict:
         - Listing the categories themselves - call ``list_categories``.
 
     Args:
-        category_id: One of the 12 stable category ids returned by
+        category_id: One of the 13 stable category ids returned by
             ``list_categories``. Raises ``UnknownCategoryError`` (rendered as
             error_code ``UNKNOWN_CATEGORY``) if the id is not registered.
 

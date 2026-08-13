@@ -63,6 +63,10 @@ __all__ = [
     "fetch_elmfire_inputs",
     "build_elmfire_deck_spec",
     "build_elmfire_deck",
+    "build_constant_flat_deck",
+    "build_constant_verification_deck",
+    "VERIFICATION_FUEL_MODEL_GR2",
+    "VERIFICATION_FLAT_ELEVATION_M",
     "stage_elmfire_manifest",
     "estimate_elmfire_grid",
     "estimate_elmfire_runtime_s",
@@ -239,12 +243,12 @@ def fetch_elmfire_inputs(
     """
     from trid3nt_server.agent.tools.processing.compute_aspect.compute_aspect import compute_aspect
     from trid3nt_server.agent.tools.processing.compute_slope.compute_slope import compute_slope
-    from trid3nt_server.agent.tools.fetchers.terrain.fetch_dem.fetch_dem import fetch_dem
-    # fetch_landfire_fuels is now the spec-driven promoted tool (fold wave-7, ADR
-    # 0053): resolve it through the registry seam, not a direct twin import.
+    # fetch_landfire_fuels + fetch_dem (ADR 0097) are spec-driven promoted tools:
+    # resolve them through the registry seam (keyword-only), not direct twin imports.
     from trid3nt_server.agent.tools import TOOL_REGISTRY
 
     fetch_landfire_fuels = TOOL_REGISTRY["fetch_landfire_fuels"].fn
+    fetch_dem = TOOL_REGISTRY["fetch_dem"].fn
 
     inputs: dict[str, str] = {}
 
@@ -271,7 +275,7 @@ def fetch_elmfire_inputs(
             ) from exc
 
     try:
-        dem_layer = fetch_dem(bbox, resolution_m=dem_resolution_m)
+        dem_layer = fetch_dem(bbox=bbox, resolution_m=dem_resolution_m)
         dem_uri = _uri_of(dem_layer)
         inputs["dem"] = _uri_to_deck_input("dem", dem_uri)
     except ElmfireWorkflowError:
@@ -362,6 +366,260 @@ def build_elmfire_deck(
         raise ElmfireWorkflowError(
             getattr(exc, "error_code", "ELMFIRE_DECK_ERROR"), str(exc)
         ) from exc
+
+
+#: Fuel model for the elliptical-verification deck: GR2 (FBFM code 102), a
+#: low-load dry-climate grass fuel bed -- the canonical uniform-fuel bed for the
+#: constant-wind flat-terrain elliptical spread verification (Verification 01).
+VERIFICATION_FUEL_MODEL_GR2: int = 102
+
+#: Flat-terrain elevation (m) for every verification-deck DEM cell (slope 0,
+#: aspect 0). The absolute value is immaterial on a flat grid; a mid-CONUS value.
+VERIFICATION_FLAT_ELEVATION_M: int = 1000
+
+
+#: Default flat-deck canopy constants (Int16 rasters): ZERO canopy -- no
+#: crown-fire fuel. Sensitivity templates that need a canopy (crown-fire family)
+#: pass non-zero values in the ELMFIRE stored-unit convention (cc percent,
+#: ch = 10*m, cbh = 10*m, cbd = 100*kg/m3 -- the CC_IN_PERCENT / CH_TIMES_10 /
+#: CBH_TIMES_10 / CBD_TIMES_100 namelist defaults).
+_ZERO_CANOPY: dict[str, int] = {"cbh": 0, "cbd": 0, "cc": 0, "ch": 0}
+
+#: deck weather-raster name -> the ELMFIRE-unit weather-dict key it carries.
+_WEATHER_RASTER_KEYS: dict[str, str] = {
+    "ws": "ws_mph_20ft",
+    "wd": "wd_deg",
+    "m1": "m1_pct",
+    "m10": "m10_pct",
+    "m100": "m100_pct",
+}
+
+#: schedule-entry alias -> canonical ELMFIRE weather-dict key. A schedule entry
+#: may use the short raster names (``ws``/``wd``/``m1``/``m10``/``m100``) or the
+#: canonical ``*_pct`` / ``*_mph_20ft`` / ``*_deg`` keys interchangeably.
+_SCHEDULE_ALIASES: dict[str, str] = {
+    "ws": "ws_mph_20ft", "ws_mph_20ft": "ws_mph_20ft",
+    "wd": "wd_deg", "wd_deg": "wd_deg",
+    "m1": "m1_pct", "m1_pct": "m1_pct",
+    "m10": "m10_pct", "m10_pct": "m10_pct",
+    "m100": "m100_pct", "m100_pct": "m100_pct",
+}
+
+
+def _normalize_weather_schedule(
+    schedule: list[dict[str, float]], base_weather: dict[str, float]
+) -> list[dict[str, float]]:
+    """Expand a transient weather schedule into full per-band ELMFIRE-unit dicts.
+
+    Each entry may specify any subset of ws/wd/m1/m10/m100 (short or canonical
+    keys); an absent field inherits ``base_weather`` (the run-args base weather).
+    Returns one dict per band carrying all five ``_WEATHER_RASTER_KEYS`` values.
+    Raises ``ElmfireWorkflowError`` on an empty schedule or an unknown key (never
+    a silently dropped schedule field)."""
+    if not schedule:
+        raise ElmfireWorkflowError(
+            "ELMFIRE_PARAMS_INVALID", "weather_schedule is empty"
+        )
+    bands: list[dict[str, float]] = []
+    for i, entry in enumerate(schedule):
+        if not isinstance(entry, dict):
+            raise ElmfireWorkflowError(
+                "ELMFIRE_PARAMS_INVALID",
+                f"weather_schedule[{i}] must be a dict, got {type(entry).__name__}",
+            )
+        band = {k: float(base_weather[k]) for k in _WEATHER_RASTER_KEYS.values()}
+        for k, v in entry.items():
+            canon = _SCHEDULE_ALIASES.get(str(k))
+            if canon is None:
+                raise ElmfireWorkflowError(
+                    "ELMFIRE_PARAMS_INVALID",
+                    f"weather_schedule[{i}] carries unknown key {k!r} "
+                    f"(known: {sorted(_SCHEDULE_ALIASES)})",
+                )
+            band[canon] = float(v)
+        bands.append(band)
+    return bands
+
+
+def build_constant_flat_deck(
+    run_args: ElmfireRunArgs,
+    deck_dir: str | Path,
+    *,
+    fuel_model: int = VERIFICATION_FUEL_MODEL_GR2,
+    flat_elevation_m: int = VERIFICATION_FLAT_ELEVATION_M,
+    canopy: dict[str, int] | None = None,
+    moisture_override: dict[str, float] | None = None,
+    weather_schedule: list[dict[str, float]] | None = None,
+    dt_meteorology_s: float = 3600.0,
+    target_cfl: float | None = None,
+    simulator_extra: dict[str, str] | None = None,
+    outputs_extra: dict[str, str] | None = None,
+    inputs_extra: dict[str, str] | None = None,
+    time_control_extra: dict[str, str] | None = None,
+    dt_s: float = 30.0,
+    dtdump_s: float = 3600.0,
+) -> dict[str, Any]:
+    """Author an ALL-CONSTANT flat-grid ELMFIRE deck agent-side (no fetch).
+
+    Every fuels/topography raster is a CONSTANT over the target grid -- a single
+    uniform fuel model (``fuel_model``, GR2/102 by default), a uniform canopy
+    (``canopy``; zero by default -- no crown fuel), flat terrain (constant
+    elevation, slope 0, aspect 0) -- and the weather is the uniform constant wind
+    + fuel moisture from ``run_args``. Under a zero-canopy deck Rothermel's
+    surface spread rate is constant and the point-ignition perimeter is a
+    closed-form ellipse (Richards 1990), so the ToA raster is verifiable against
+    it; a non-zero canopy + crown-fire dumps drives the crown-fire family.
+
+    NO LANDFIRE / DEM fetch, NO warp: the deck is written directly on the grid
+    (the same ``services/workers/elmfire/deck_builder`` seam ``build_elmfire_deck``
+    uses, so the namelist / grid-identity assert / ignition projection / manifest
+    are byte-identical). ``simulator_extra`` / ``outputs_extra`` / ``inputs_extra``
+    / ``time_control_extra`` inject extra namelist knobs (pre-formatted-string
+    values the caller owns); unset reproduces the canonical constant deck.
+
+    TRANSIENT WEATHER: ``weather_schedule`` is a list of per-meteorology-time
+    scalar-weather dicts (each carrying any of ``ws``/``wd``/``m1``/``m10``/``m100``
+    in ELMFIRE units -- mph@20ft, met-degrees, dead-fuel-moisture percent -- with
+    absent keys inheriting the run-args base weather). When given, the ws/wd/m1/
+    m10/m100 rasters are written MULTI-BAND (one band per schedule entry),
+    ``NUM_METEOROLOGY_TIMES`` is set to the entry count, and ``DT_METEOROLOGY`` to
+    ``dt_meteorology_s``; the solver linearly interpolates the spatially-uniform
+    band values over time (a synthetic wind-shift / moisture-recovery timeline).
+    Unset keeps the single-band constant weather. Returns the SAME manifest shape
+    ``build_elmfire_deck`` returns so ``stage_elmfire_manifest`` consumes it
+    unchanged.
+    """
+    import json as _json
+
+    db = load_deck_builder()
+    deck_dir = Path(deck_dir)
+    inputs_dir = deck_dir / "inputs"
+    for d in (inputs_dir, deck_dir / "outputs", deck_dir / "scratch"):
+        d.mkdir(parents=True, exist_ok=True)
+
+    grid = db.compute_target_grid(
+        [float(v) for v in run_args.bbox],
+        target_epsg=5070,
+        cellsize_m=float(run_args.cellsize_m),
+    )
+
+    canopy_vals = {**_ZERO_CANOPY, **(canopy or {})}
+    # Constant fuels + topography (Int16): fuel bed, canopy, flat terrain.
+    int_constants: dict[str, int] = {
+        "fbfm40": int(fuel_model),
+        "dem": int(flat_elevation_m),
+        "slp": 0,
+        "asp": 0,
+        "cbh": int(canopy_vals["cbh"]),
+        "cbd": int(canopy_vals["cbd"]),
+        "cc": int(canopy_vals["cc"]),
+        "ch": int(canopy_vals["ch"]),
+    }
+    provenance: dict[str, dict] = {}
+    for name, value in int_constants.items():
+        db.write_constant_raster_typed(
+            value, grid, inputs_dir / f"{name}.tif", dtype="int16"
+        )
+        provenance[name] = {"source": f"constant:{value}", "nodata_fraction": 0.0}
+
+    # Constant weather + adj/phi (Float32) from the scenario dial. An explicit
+    # ``moisture_override`` (dead m1/m10/m100 or live lh/lw percent) replaces the
+    # preset values key-for-key -- the live/dead fuel-moisture override surface.
+    moisture = run_args.fuel_moisture_values()
+    if moisture_override:
+        moisture = {**moisture, **{k: float(v) for k, v in moisture_override.items()}}
+    weather = {
+        "ws_mph_20ft": float(run_args.wind_speed_mph),
+        "wd_deg": float(run_args.wind_dir_deg),
+        **moisture,
+    }
+    # adj/phi are always single-band Float32 constants.
+    for name, value in (("adj", db.ADJ_VALUE), ("phi", db.PHI_VALUE)):
+        db.write_constant_raster_typed(
+            value, grid, inputs_dir / f"{name}.tif", dtype="float32"
+        )
+        provenance[name] = {"source": f"constant:{value}", "nodata_fraction": 0.0}
+
+    # Weather: single constant band, OR a multi-band transient schedule.
+    num_met_times = 1
+    if weather_schedule:
+        bands = _normalize_weather_schedule(weather_schedule, weather)
+        num_met_times = len(bands)
+        for name, key in _WEATHER_RASTER_KEYS.items():
+            db.write_weather_bands(
+                [float(b[key]) for b in bands], grid, inputs_dir / f"{name}.tif"
+            )
+            provenance[name] = {
+                "source": f"schedule[{num_met_times}]:{[round(b[key], 3) for b in bands]}",
+                "nodata_fraction": 0.0,
+            }
+    else:
+        for name, key in _WEATHER_RASTER_KEYS.items():
+            db.write_constant_raster_typed(
+                float(weather[key]), grid, inputs_dir / f"{name}.tif", dtype="float32"
+            )
+            provenance[name] = {
+                "source": f"constant:{weather[key]}", "nodata_fraction": 0.0
+            }
+
+    # HARD ASSERT the grid identity across all rasters (same guard as build_deck).
+    db.verify_deck_grid(inputs_dir, grid)
+
+    # Ignition at the AOI centre -> domain coords -> namelist.
+    ign = {
+        "lon": float(run_args.ignition_lonlat[0]),
+        "lat": float(run_args.ignition_lonlat[1]),
+        "t_ign_s": 0.0,
+    }
+    ignitions_xy = db.project_ignitions([ign], grid)
+    duration_s = float(run_args.duration_hours) * 3600.0
+    namelist = db.render_namelist(
+        grid, ignitions_xy, weather, duration_s=duration_s,
+        dt_s=float(dt_s), dtdump_s=float(dtdump_s),
+        dt_meteorology_s=float(dt_meteorology_s),
+        num_meteorology_times=num_met_times,
+        target_cfl=target_cfl,
+        simulator_extra=simulator_extra,
+        outputs_extra=outputs_extra,
+        inputs_extra=inputs_extra,
+        time_control_extra=time_control_extra,
+    )
+    (inputs_dir / "elmfire.data").write_text(namelist)
+
+    spec_echo = {
+        "aoi": {"bbox": [float(v) for v in run_args.bbox]},
+        "ignitions": [ign],
+        "weather": weather,
+        "duration_s": duration_s,
+    }
+    manifest = db.compose_manifest(deck_dir, grid, spec_echo, ignitions_xy, provenance)
+    (deck_dir / "deck_manifest.json").write_text(_json.dumps(manifest, indent=2))
+    logger.info(
+        "build_constant_flat_deck: fuel=%d canopy=%s flat-terrain %dx%d @%sm "
+        "wind=%.1fmph@%.0fdeg duration=%.0fs num_met_times=%d dt_met=%.0fs "
+        "extra=%s -> %s",
+        fuel_model, canopy_vals, grid["nx"], grid["ny"], grid["cellsize_m"],
+        weather["ws_mph_20ft"], weather["wd_deg"], duration_s, num_met_times,
+        float(dt_meteorology_s), sorted((simulator_extra or {}).keys()), deck_dir,
+    )
+    return manifest
+
+
+def build_constant_verification_deck(
+    run_args: ElmfireRunArgs,
+    deck_dir: str | Path,
+    *,
+    fuel_model: int = VERIFICATION_FUEL_MODEL_GR2,
+    flat_elevation_m: int = VERIFICATION_FLAT_ELEVATION_M,
+) -> dict[str, Any]:
+    """The elliptical-verification deck: a zero-canopy constant flat deck.
+
+    A thin specialization of :func:`build_constant_flat_deck` (zero canopy, no
+    namelist extras) kept as its own named seam for the verification composer.
+    """
+    return build_constant_flat_deck(
+        run_args, deck_dir, fuel_model=fuel_model, flat_elevation_m=flat_elevation_m
+    )
 
 
 # --------------------------------------------------------------------------- #

@@ -40,7 +40,7 @@ _SRC = pathlib.Path(server.__file__).resolve().parent
 _WORKFLOWS = _SRC / "agent" / "workflows"
 _FLOOD = _WORKFLOWS / "sfincs" / "flood" / "flood.py"  # engine-door rollout renamed/moved
 # model_flood_scenario -> sfincs_flood (tier=template) under workflows/sfincs/flood/.
-_GEOCLAW = _WORKFLOWS / "geoclaw" / "model_dambreak_geoclaw_scenario" / "model_dambreak_geoclaw_scenario.py"
+_GEOCLAW = _WORKFLOWS / "geoclaw" / "inundation" / "inundation.py"
 
 
 def test_fetch_topobathy_in_always_set() -> None:
@@ -168,6 +168,6 @@ def test_geoclaw_topobathy_runs_off_loop() -> None:
     src = _GEOCLAW.read_text()
     assert "fetch_topobathy(" in src
     assert _calls_to_thread_with(src, "_fetch_topo_for_geoclaw"), (
-        "model_dambreak_geoclaw_scenario must run its topo helper (which calls "
+        "model_geoclaw_inundation must run its topo helper (which calls "
         "fetch_topobathy) via asyncio.to_thread"
     )

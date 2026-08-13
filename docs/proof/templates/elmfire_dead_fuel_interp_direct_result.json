@@ -1,0 +1,60 @@
+{
+  "layer_id": "fire-arrival-01KZBZJEDCF90J735464WYBG50",
+  "name": "Fire arrival time (dead-fuel interpolation cadence sweep, reference)",
+  "layer_type": "raster",
+  "uri": "s3://trid3nt-runs/01KZBZJEDCF90J735464WYBG50/overviews/01KZBZQDFGZX5CKF2277SRA5ME.tif",
+  "style_preset": "continuous_fire_arrival_hr",
+  "temporal": null,
+  "role": "primary",
+  "units": null,
+  "bbox": [
+    -98.54591371388737,
+    38.46406755300036,
+    -98.45408628611263,
+    38.53593244699964
+  ],
+  "legend": null,
+  "fallback_note": null,
+  "synthetic_inputs": [],
+  "crs_authid": null,
+  "burned_area_km2": 0.4104,
+  "fire_arrival_max_hr": 1.0244197591145834,
+  "max_flame_length_m": 2.2492590740203857,
+  "max_spread_rate_m_min": 31.228065966796876,
+  "duration_hours": 1.0,
+  "ignition_lonlat": [
+    -98.5,
+    38.5
+  ],
+  "swept_param": "dt_interpolate_m1_s",
+  "swept_units": "seconds",
+  "response_metric": "burned_area_km2",
+  "response_units": "km2",
+  "sweep": [
+    {
+      "x": 60.0,
+      "y": 0.4104
+    },
+    {
+      "x": 640.0,
+      "y": 0.4608
+    },
+    {
+      "x": 1220.0,
+      "y": 0.5076
+    },
+    {
+      "x": 1800.0,
+      "y": 0.5148
+    }
+  ],
+  "summary": {
+    "reference_cadence_s": 60.0,
+    "reference_burned_area_km2": 0.4104,
+    "coarsest_cadence_s": 1800.0,
+    "coarsest_burned_area_km2": 0.5148,
+    "max_burned_area_deviation_km2": 0.10440000000000005,
+    "max_burned_area_deviation_fraction": 0.2543859649122808,
+    "n_steps": 4.0
+  }
+}

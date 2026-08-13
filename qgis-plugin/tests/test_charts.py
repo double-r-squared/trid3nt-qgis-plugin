@@ -8,9 +8,11 @@ Two halves, mirroring the repo convention:
   ``AgentEvent("chart", ...)`` dispatch.
 * QT SUBPROCESS: ``qt_charts_harness.py`` under the system interpreter (the
   one with ``qgis.PyQt`` + matplotlib -- the ``test_dock_ui`` convention),
-  covering the ChartsPanel rendering (log-log hazard curve, dashed rule,
-  bars, paging, de-dupe, clear) and the dock wiring (panel + one pointer
-  note, never a chart widget in the chat message list).
+  covering the ChartsWindow rendering (log-log hazard curve, dashed rule,
+  bars, paging, de-dupe, clear), its interactivity (nearest-vertex click
+  inspect, locate-on-map enablement + callback) and the dock wiring (lazy
+  bottom window + "Charts (N)" button + one pointer note, never a chart
+  widget in the chat message list).
 """
 
 from __future__ import annotations
@@ -21,11 +23,14 @@ import shutil
 import subprocess
 import sys
 import unittest
+from unittest import mock
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 sys.path.insert(0, os.path.dirname(__file__))
 
+from trid3nt import install_dependencies  # noqa: E402
 from trid3nt.net import trid3nt_client as tc  # noqa: E402
+from trid3nt.ui import charts as charts_mod  # noqa: E402
 
 CHART_ROW = {
     "envelope_type": "chart-emission",
@@ -108,6 +113,130 @@ class TestChartEventDispatch(unittest.TestCase):
         self.assertEqual(ev.data, CHART_ROW)
 
 
+# sys.modules poisoning that forces the NEXT ``import matplotlib...`` to
+# fail regardless of whether this venv already imported it earlier (once a
+# submodule is cached in sys.modules, a bare ``from matplotlib.figure import
+# Figure`` short-circuits straight to the cache and never re-checks the
+# parent -- every entry point the guard's try/except can hit must be poisoned
+# too, or the mock is a no-op).
+_MATPLOTLIB_POISON = {
+    k: None for k in [
+        "matplotlib", "matplotlib.figure",
+        "matplotlib.backends.backend_qtagg",
+        "matplotlib.backends.backend_qt5agg",
+    ]
+}
+
+
+class TestMatplotlibGuard(unittest.TestCase):
+    """The import guard itself (``charts.py`` has no Qt imports at module
+    level -- these run in the pure-python venv, no ``qgis.PyQt`` needed)."""
+
+    def setUp(self):
+        charts_mod._MATPLOTLIB_CHECKED = False
+        self.addCleanup(setattr, charts_mod, "_MATPLOTLIB_CHECKED", False)
+
+    def test_missing_module_reports_unavailable_with_reason(self):
+        with mock.patch.dict(sys.modules, _MATPLOTLIB_POISON):
+            charts_mod._MATPLOTLIB_CHECKED = False
+            available = charts_mod.matplotlib_available()
+        self.assertFalse(available)
+        self.assertIsNone(charts_mod.Figure)
+        self.assertIsNone(charts_mod.FigureCanvasQTAgg)
+        reason = charts_mod.matplotlib_error()
+        self.assertIsNotNone(reason)
+        self.assertIn("matplotlib", reason.lower())
+
+    def test_cached_after_first_check(self):
+        """A second call must not re-attempt the import (cheap+cached)."""
+        with mock.patch.dict(sys.modules, _MATPLOTLIB_POISON):
+            charts_mod._MATPLOTLIB_CHECKED = False
+            with mock.patch.object(
+                charts_mod, "_do_matplotlib_check",
+                wraps=charts_mod._do_matplotlib_check,
+            ) as spy:
+                charts_mod.matplotlib_available()
+                charts_mod.matplotlib_available()
+                charts_mod.matplotlib_error()
+                self.assertEqual(spy.call_count, 1)
+
+def _fake_isfile(true_for):
+    real = os.path.isfile
+
+    def _f(path):
+        return path in true_for or real(path)
+
+    return _f
+
+
+def _fake_access(true_for):
+    real = os.access
+
+    def _f(path, mode):
+        return path in true_for or real(path, mode)
+
+    return _f
+
+
+class TestInstallCommandBuilder(unittest.TestCase):
+    """Per-OS install command builders -- pure, no subprocess. ``charts``
+    delegates the Windows/macOS derivations to ``install_dependencies``
+    (one source of truth; full probe-order coverage lives in
+    ``test_install_dependencies``); these tests confirm the delegation and
+    the Linux literal."""
+
+    def test_linux_is_a_plain_literal_no_derivation(self):
+        cmd = charts_mod.linux_install_command()
+        self.assertEqual(cmd, "python3 -m pip install matplotlib")
+
+    def test_linux_honors_extra_pip_names(self):
+        cmd = charts_mod.linux_install_command(["matplotlib", "otherpkg"])
+        self.assertEqual(cmd, "python3 -m pip install matplotlib otherpkg")
+
+    def test_windows_delegates_to_shared_probe(self):
+        exec_prefix = r"C:\QGIS\apps\Python312"
+        executable = r"C:\QGIS\bin\qgis-bin.exe"
+        expected = os.path.join(exec_prefix, "python.exe")
+        with mock.patch(
+            "trid3nt.install_dependencies.os.path.isfile", _fake_isfile({expected})
+        ), mock.patch(
+            "trid3nt.install_dependencies.os.access", _fake_access({expected})
+        ):
+            cmd = charts_mod.windows_install_command(
+                exec_prefix=exec_prefix, executable=executable
+            )
+        self.assertEqual(cmd, f"{expected} -m pip install matplotlib")
+
+    def test_windows_honest_fallback_when_nothing_found(self):
+        exec_prefix = r"C:\QGIS-ghost\apps\Python312"
+        with mock.patch(
+            "trid3nt.install_dependencies.os.path.isfile", lambda p: False
+        ), mock.patch(
+            "trid3nt.install_dependencies.os.access", lambda p, m: False
+        ):
+            cmd = charts_mod.windows_install_command(
+                exec_prefix=exec_prefix, executable=exec_prefix + r"\QGIS"
+            )
+        self.assertTrue(cmd.startswith("could not locate the QGIS python.exe"))
+        self.assertNotIn("pip install", cmd)
+
+    def test_mac_wheel_recipe_delegates_to_shared_recipe(self):
+        recipe = charts_mod.mac_wheel_recipe(
+            python_version="3.12",
+            platform_tag="macosx_11_0_arm64",
+            profile_python="/profile/python",
+        )
+        self.assertEqual(
+            recipe,
+            install_dependencies.mac_wheel_recipe(
+                ("matplotlib",), "3.12", "macosx_11_0_arm64", "/profile/python"
+            ),
+        )
+        self.assertIn("pip download matplotlib", recipe)
+        self.assertIn("-d /tmp/qgis_mpl", recipe)
+        self.assertIn('"/profile/python"', recipe)
+
+
 def _qt_python() -> str | None:
     """First interpreter that can import qgis.PyQt AND matplotlib (the
     charts harness asserts the real renderer, not the text fallback)."""
@@ -135,7 +264,7 @@ def _qt_python() -> str | None:
     return None
 
 
-class TestChartsPanel(unittest.TestCase):
+class TestChartsWindow(unittest.TestCase):
     def test_charts_harness(self):
         py = _qt_python()
         if py is None:

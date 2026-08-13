@@ -41,7 +41,7 @@ import os
 from collections.abc import Awaitable
 from dataclasses import dataclass, field
 from datetime import datetime
-from typing import Any
+from typing import Any, get_args
 
 from pydantic import ValidationError
 from websockets.asyncio.server import ServerConnection, serve
@@ -85,6 +85,7 @@ from trid3nt_contracts.ws import (
     CatalogAdditionResponsePayload,
     Envelope,
     AgentThinkingChunkPayload,
+    ErrorCode,
     ErrorPayload,
     PipelineStatePayload,
     PipelineStep,
@@ -94,6 +95,11 @@ from trid3nt_contracts.ws import (
     SpatialInputResponsePayload,
     UserMessagePayload,
 )
+
+#: The closed A.6 ``ErrorCode`` Literal, as a runtime set -- the honesty-floor
+#: catch-all uses it to tell a tool's OWN typed code (a valid wire code) from an
+#: out-of-enum code that must be surfaced as a ``[MARKER]`` on INTERNAL_ERROR.
+_VALID_ERROR_CODES: frozenset[str] = frozenset(get_args(ErrorCode))
 
 from .main import MAX_TURNS_PER_SESSION
 
@@ -166,6 +172,7 @@ from .emission.pipeline_emitter import (
     PipelineEmitter,
     _json_for_tool_io,
     bind_turn_case,
+    bind_turn_drawn_geometry,
     complete_compaction_card,
     current_turn_case,
     mint_compaction_card,
@@ -210,6 +217,7 @@ from .agent.gates.cards import (
     _build_flood_run_settings_envelope,
     _build_geoclaw_confirm_envelope,
     _build_psha_confirm_envelope,
+    _build_scenario_confirm_envelope,
     _build_region_choice_request_payload,
     _build_spatial_input_request_payload,
     _build_swmm_granularity_envelope,
@@ -1096,26 +1104,19 @@ class SolverConfirmationCancelledError(RuntimeError):
 # same pending_payload_warnings future seam as payload-warning/code-exec,
 # and injects confirmed=True only after the user approves.
 SOLVER_CONFIRM_TOOLS: set[str] = {
-    "run_model_groundwater_contamination_scenario",
-    # engine-door refactor: run_model_contamination_affected_fields is CUT
-    # (its zonal field-analysis half re-homed to a playground recipe). The
-    # MODFLOW plume templates were NOT confirm-gated before the fold, so
+    # The MODFLOW plume templates were NOT confirm-gated before the fold, so
     # gating parity is preserved by NOT adding them here.
     # Flood solvers are gated too: an unrequested SFINCS solve must not run
     # without confirmation. The card is built from the call args
-    # (location/return period/duration).
-    # engine-door refactor (SFINCS slice): run_model_flood_scenario is now
-    # the sfincs_flood template (the door run_sfincs executes no solve; the
-    # TEMPLATE submits the solver, so the gate keys on the template).
+    # (location/return period/duration). Keyed on the sfincs_flood template
+    # (the tool that submits the solver).
     "sfincs_flood",
     # The granularity gate: the SWMM urban-flood solver joins the confirm
     # set with an ENRICHED card carrying a GranularitySuggestion (the
     # autoscaler's pre-run resolution ladder + estimated cells / solve time /
     # compute class). The user can override the rung before the heavy solve
-    # via the existing tool-payload-confirmation ``narrow_scope`` path.
-    # engine-door refactor (SWMM slice): run_swmm_urban_flood is now the
-    # swmm_urban_flood template (the door run_swmm executes no solve; the
-    # TEMPLATE submits the solver, so the gate keys on the template).
+    # via the existing tool-payload-confirmation ``narrow_scope`` path. Keyed on
+    # the swmm_urban_flood template (the tool that submits the solver).
     "swmm_urban_flood",
     # The OpenQuake classical-PSHA solver joins the confirm set (Invariant 9
     # -- a consequential long Batch run must be user-confirmed). It dispatches
@@ -1123,11 +1124,17 @@ SOLVER_CONFIRM_TOOLS: set[str] = {
     # so it is a solve like SFINCS/SWMM/MODFLOW, not a fetch. The gate emits
     # a simple proceed/cancel card (no granularity picker): the area source
     # spans the whole AOI, so no rupture/incident-area user input is needed
-    # for classical PSHA (that is scenario mode, which is not built).
-    # engine-door refactor (OPENQUAKE slice): re-keyed run_seismic_hazard_psha
-    # -> openquake_psha (the template that submits the solver; the
-    # run_openquake door runs no solve).
+    # for classical PSHA (that is scenario mode, which is not built). Keyed on
+    # the openquake_psha template (the tool that submits the solver).
     "openquake_psha",
+    # The OpenQuake scenario-GMF + secondary-perils templates also submit an
+    # OpenQuake engine run (a single-rupture ground-motion field, and the
+    # scenario-GMF-driven liquefaction + Newmark-landslide screens), so both are
+    # confirm-gated (Invariant 9) with an inline proceed/cancel card built by
+    # _build_scenario_confirm_envelope from the call args (scenario magnitude +
+    # AOI area). Keyed on the templates that submit the solver.
+    "openquake_scenario_gmf",
+    "openquake_secondary_perils",
     # The TELEMAC river-dye solver joins the confirm set with the richest
     # card yet: the builder runs the fast mesh-only worker (gmsh, no DEM, no
     # solve, ~10-25 s), emits the actual triangle-wireframe mesh onto the
@@ -1135,9 +1142,8 @@ SOLVER_CONFIRM_TOOLS: set[str] = {
     # GranularitySuggestion (mesh_resolution_m ladder + real node/element
     # counts + CFL-coupled dt + conservative solve estimate). The user sees
     # the mesh before approving the expensive solve; narrow_scope re-runs
-    # with a different edge length. Keyed on the TEMPLATE that submits the
-    # solver (the run_telemac name is now the read-only door, which runs no
-    # solve; telemac_river_dye is the tool the gate must intercept).
+    # with a different edge length. Keyed on the telemac_river_dye template
+    # (the tool that submits the solver).
     "telemac_river_dye",
     # The ELMFIRE wildfire-spread solver joins the confirm set (Invariant 9
     # -- a consequential solver run: LANDFIRE fetches + a containerized
@@ -1145,10 +1151,8 @@ SOLVER_CONFIRM_TOOLS: set[str] = {
     # from the call args: approximate grid cell count + a calibrated runtime
     # estimate + the scenario weather, so the user confirms the actual run
     # about to dispatch. Simple proceed/cancel (no granularity picker at v1
-    # -- cellsize_m is an explicit tool arg the LLM can restate).
-    # engine-door refactor (ELMFIRE slice): re-keyed model_fire_spread ->
-    # elmfire_fire_spread (the template that submits the solver; the
-    # run_elmfire door runs no solve).
+    # -- cellsize_m is an explicit tool arg the LLM can restate). Keyed on the
+    # elmfire_fire_spread template (the tool that submits the solver).
     "elmfire_fire_spread",
     # The GeoClaw shallow-water inundation solver joins the confirm set
     # (Invariant 9 -- a consequential solver run: DEM/topobathy fetch + a
@@ -1156,9 +1160,14 @@ SOLVER_CONFIRM_TOOLS: set[str] = {
     # proceed/cancel card built inline by _build_geoclaw_confirm_envelope
     # from the call args (AOI area + scenario + sim window + AMR levels). No
     # granularity picker at v1 (amr_levels / sim_duration_s are explicit
-    # tool args the LLM can restate). Keyed on the geoclaw_inundation
-    # TEMPLATE that submits the solver; the run_geoclaw door runs no solve.
+    # tool args the LLM can restate). Keyed on the geoclaw_inundation template
+    # (the tool that submits the solver).
     "geoclaw_inundation",
+    # The GeoClaw tsunami gauge-timeseries template also submits a GeoClaw solve
+    # (a tsunami run recording a coastal gauge), so it is confirm-gated with the
+    # SAME inline card as geoclaw_inundation. Keyed on the template that submits
+    # the solver.
+    "geoclaw_tsunami_gauge_timeseries",
 }
 
 
@@ -1331,15 +1340,6 @@ _EMPTY_COMPLETION_NUDGE: str = (
 #: gate back toward the full catalog it was meant to trim.
 _DISCOVERY_EXPAND_CAP: int = 8
 
-#: ENGINE-DOOR gate expansion: an engine door lists a CLOSED, CURATED set - its
-#: own engine's registered tier=template members (11 for MODFLOW). The open-ended
-#: ``_DISCOVERY_EXPAND_CAP`` was calibrated to bound an UNBOUNDED ranked tail from
-#: dataset discovery; capping a door's curated listing at 8 would hide templates
-#: and silently break select-then-call. Doors get this separate, larger cap
-#: (>= the largest engine's template count, with headroom) applied ONLY on the
-#: door branch; the open-ended search_tools branch keeps _DISCOVERY_EXPAND_CAP.
-_DOOR_EXPAND_CAP: int = 24
-
 
 def _tool_search_tool_names() -> frozenset[str]:
     """The registered name(s) of the tool-search (data-discovery) tool.
@@ -1365,91 +1365,53 @@ def _tool_search_tool_names() -> frozenset[str]:
     return frozenset(names)
 
 
-def _engine_door_tool_names() -> frozenset[str]:
-    """Every registered engine-door name (``metadata.tier == "door"``).
-
-    Resolved by REGISTRY LOOKUP (never a hardcoded literal) so a new engine
-    door is picked up automatically the moment it registers. A door is a
-    gate-expander by construction: its result carries the ``templates`` list the
-    server unions into the turn's visible set. Never raises: a lookup fault
-    yields the empty set (the door simply does not expand).
-    """
-    names: set[str] = set()
-    try:
-        for _name, _entry in TOOL_REGISTRY.items():
-            if getattr(_entry.metadata, "tier", "general") == "door":
-                names.add(_name)
-    except Exception:  # noqa: BLE001 -- registry shape drift must not break dispatch
-        logger.debug("engine-door: registry lookup failed", exc_info=True)
-    return frozenset(names)
-
-
 def _default_declarable_registry() -> dict[str, Any]:
-    """The DEFAULT per-turn declarable tool set: the full ``TOOL_REGISTRY``
-    MINUS every ``tier="template"`` engine template.
+    """The DEFAULT per-turn declarable tool set.
 
-    ENGINE-DOOR invariant: engine templates (``sfincs_flood``, ``modflow_*``,
-    ``openquake_psha``, ...) surface to the model ONLY via their door's gate
-    expansion (see ``_gate_expander_tool_names`` and the door-expand block in
-    ``_stream_model_reply``). Declaring them by default -- which the raw
-    ``TOOL_REGISTRY`` default did in the gating-off / retrieval-off / fail-open
-    paths -- defeats the door architecture. This is the SINGLE default-registry
-    seam: the door expand re-adds the specific templates it lists back into the
-    per-turn ``_retrieval_registry`` (and the Case allowed-set), so an expanded
-    template stays declarable while the un-expanded rest never leak.
+    Door dissolution (ADR 0094): engine templates (``sfincs_flood``,
+    ``modflow_*``, ``openquake_psha``, ...) are ordinary retrieval-pool members
+    and are declarable by default like any tool -- the deleted engine doors no
+    longer gate them. Only ``catalog`` (catalog-surfacing experiment, arm-flagged;
+    no tool carries it in the DEFAULT config) and ``internal`` (an absorbed
+    in-process seam, e.g. fetch_copernicus_dem folded into fetch_dem --
+    registry-resolvable but never declared to the model) are withheld.
 
-    Resolved by REGISTRY LOOKUP (never a literal) so a new template is excluded
-    the moment it registers with ``tier="template"``. Mirrors the pool-side
-    filter in ``tools.discovery.tool_retrieval`` (fail-open dump) so the
-    default-declaration path and the retrieval pool exclude templates
-    identically.
+    Resolved by REGISTRY LOOKUP (never a literal). Mirrors the pool-side filter
+    in ``tools.search.tool_retrieval`` (fail-open dump) so the
+    default-declaration path and the retrieval pool stay identical.
     """
-    # The data-router fold's 5 promoted spec-driven tools are registered as
-    # ordinary tier="general" entries (registration.register_specs_from_tree at
-    # import), so they flow through this filter identically to any hand-written
-    # tool -- no special-casing (the env-gated experiment substitution retired
-    # once promotion became the default).
-    # ``catalog`` (catalog-surfacing experiment, arm-flagged) is excluded here
-    # for the same reason as ``template`` -- it leaves the ambient pool and is
-    # reached only by discovery expansion (Design 2) / card projection (Design 1).
-    # No tool carries tier="catalog" in the DEFAULT config, so this is a no-op
-    # unless an arm flag is set.
-    # ``internal`` (an absorbed in-process seam, e.g. fetch_copernicus_dem folded
-    # into fetch_dem) is excluded identically: registry-resolvable but never
-    # declared to the model.
     _reg = {
         name: entry
         for name, entry in TOOL_REGISTRY.items()
         if getattr(entry.metadata, "tier", "general")
-        not in ("template", "catalog", "internal")
+        not in ("catalog", "internal")
     }
     return _reg
 
 
 def _gate_expander_tool_names() -> frozenset[str]:
-    """The union of gate-expanders: the tool-search tool(s) AND every engine door.
+    """The gate-expanders: the tool-search (data-discovery) tool(s).
 
-    A call to any of these expands the turn's visible gate with the tool names
-    its result names (search_tools -> ``results[].tool_name``; an engine door ->
-    ``templates[].tool_name``). See ``_tool_names_from_search_result`` for the
-    extraction and the dispatch post-processing for the union + cap.
+    A call to one of these expands the turn's visible gate with the tool names
+    its result names (``results[].tool_name``). See
+    ``_tool_names_from_search_result`` for the extraction and the dispatch
+    post-processing for the union + cap. Door dissolution (ADR 0094) removed the
+    engine-door gate-expanders; templates are ordinary retrieval-pool tools now.
     """
-    return _tool_search_tool_names() | _engine_door_tool_names()
+    return _tool_search_tool_names()
 
 
 def _tool_names_from_search_result(result: Any) -> list[str]:
     """Extract the ranked tool names from a gate-expander result payload.
 
-    ``search_tools`` returns ``{"results": [{"tool_name": <name>, ...}, ...]}``;
-    an engine door returns ``{"templates": [{"tool_name": <name>, ...}, ...]}``.
-    Reads ``results`` first, falling back to ``templates`` when ``results`` is
-    absent/empty. Returns the names in listing order (best first), de-duplicated.
-    Tolerant of a malformed / partial shape -- a non-conforming entry is
-    skipped, never raised on.
+    ``search_tools`` returns ``{"results": [{"tool_name": <name>, ...}, ...]}``.
+    Returns the names in listing order (best first), de-duplicated. Tolerant of a
+    malformed / partial shape -- a non-conforming entry is skipped, never raised
+    on.
     """
     if not isinstance(result, dict):
         return []
-    rows = result.get("results") or result.get("templates")
+    rows = result.get("results")
     if not isinstance(rows, list):
         return []
     out: list[str] = []
@@ -1500,50 +1462,16 @@ def _is_terminal_composer(tool_name: str) -> bool:
 # ``tool-payload-confirmation`` handler can resolve a pending gate as long as
 # the session matches, since the client can open multiple WebSocket
 # connections per browser session. Shared by every confirmation gate --
-# payload warning, code-exec, solver.
-
-_PENDING_CONFIRMATIONS: dict[str, tuple[str, asyncio.Future]] = {}
-
-
-def _register_pending_confirmation(
-    session_id: str, warning_id: str, fut: "asyncio.Future"
-) -> None:
-    _PENDING_CONFIRMATIONS[warning_id] = (session_id, fut)
-
-
-def _pop_pending_confirmation(warning_id: str) -> None:
-    _PENDING_CONFIRMATIONS.pop(warning_id, None)
-
-
-def _resolve_pending_confirmation(
-    session_id: str, conf: "PayloadConfirmationEnvelopePayload"
-) -> bool:
-    """Complete the pending gate future for ``conf.warning_id``.
-
-    Returns True when a live future was resolved. False when the warning_id is
-    unknown/already-resolved, or when the confirming session is not the owner
-    (cross-session confirmation is refused loudly -- the warning_id is an
-    unguessable ULID, but defense-in-depth costs one string compare).
-    """
-    entry = _PENDING_CONFIRMATIONS.get(conf.warning_id)
-    if entry is None:
-        return False
-    owner_session, fut = entry
-    if owner_session != session_id:
-        logger.warning(
-            "tool-payload-confirmation REFUSED: session=%s is not the owner "
-            "(owner=%s) for warning_id=%s",
-            session_id,
-            owner_session,
-            conf.warning_id,
-        )
-        return False
-    if fut.done():
-        _PENDING_CONFIRMATIONS.pop(conf.warning_id, None)
-        return False
-    fut.set_result(conf)
-    _PENDING_CONFIRMATIONS.pop(conf.warning_id, None)
-    return True
+# payload warning, code-exec, solver-confirm, and the in-tool input-review gate
+# (ADR 0107). The registry + its accessors live in ``agent.gates.pending`` so
+# an in-tool gate (which cannot import ``server`` at module load) rides the SAME
+# spine; re-imported here so ``server._PENDING_CONFIRMATIONS`` stays that dict.
+from .agent.gates.pending import (  # noqa: E402
+    _PENDING_CONFIRMATIONS,
+    _pop_pending_confirmation,
+    _register_pending_confirmation,
+    _resolve_pending_confirmation,
+)
 
 
 # --------------------------------------------------------------------------- #
@@ -2456,6 +2384,14 @@ class SessionState:
     # ``_set_active_aoi_from_payload``. Read by dispatch-time bbox auto-fill:
     # explicit arg > active AOI > case bbox. ``None`` = no drawn AOI.
     active_aoi_bbox: list[float] | None = None
+    # ADR 0159: the turn's user-DRAWN geometry (the QGIS dock 'Draw region'
+    # rubber-band rectangle) as ``{"geometry_type": "rectangle", "bbox": [...] }``
+    # (EPSG:4326). Set/cleared per user-message by ``_set_drawn_geometry_from_payload``
+    # and bound into a per-task ContextVar so composer gates read it as a
+    # ``basis="user"`` spatial knob (e.g. geoclaw amr_regions). ``None`` = nothing
+    # drawn. Distinct from ``active_aoi_bbox`` (the analysis extent): a drawn
+    # region is a sub-region knob, not the AOI.
+    drawn_geometry: dict | None = None
     # ADR 0018 (Stage 3): per-session routing-visibility mode ('auto' | 'ask').
     # Set by the ``session-config`` envelope's ``mode`` field; ``None`` falls
     # back to the TRID3NT_MODE env default (see _session_routing_mode). Governs
@@ -3389,14 +3325,10 @@ async def _stream_model_reply(
     # registry, logged. The cachePoint TAIL is inserted downstream by
     # bedrock_adapter (after tools), so subsetting the dict here preserves it.
     #
-    # ENGINE-DOOR default: the DEFAULT declarable set is the full registry
-    # MINUS tier=template engine templates -- NOT the raw TOOL_REGISTRY.
-    # Templates surface to the model ONLY via their door's gate expansion
-    # (which re-adds the specific templates it lists back into
-    # _retrieval_registry). Using the raw registry here would re-leak every
-    # template into DEFAULT declarations in the gating-off / retrieval-off /
-    # fail-open paths, defeating the door architecture. See
-    # _default_declarable_registry.
+    # DEFAULT declarable set: the full registry MINUS tier=catalog/internal
+    # (never the raw TOOL_REGISTRY). Door dissolution (ADR 0094): engine
+    # templates are ordinary members of this default set now -- callable
+    # directly, no concierge. See _default_declarable_registry.
     _retrieval_registry = _default_declarable_registry()
     _retrieval_mode = _tool_retrieval_mode()
     if _retrieval_mode in ("shadow", "enforce"):
@@ -3472,10 +3404,10 @@ async def _stream_model_reply(
                 _retrieval_mode,
                 exc_info=True,
             )
-            # FAIL-OPEN to the template-filtered default (NOT raw TOOL_REGISTRY):
-            # a faulted retrieval must never re-leak engine templates into the
-            # default declarations. Templates still reach the turn via door
-            # expansion. See _default_declarable_registry.
+            # FAIL-OPEN to the tier-filtered default (NOT raw TOOL_REGISTRY):
+            # drops only tier=catalog/internal. Engine templates are ordinary
+            # members here (door dissolution, ADR 0094). See
+            # _default_declarable_registry.
             _retrieval_registry = _default_declarable_registry()
 
     # TOP-K TOOL GATING: the openai adapter path was sending ALL ~190 tool
@@ -4175,18 +4107,6 @@ async def _stream_model_reply(
                         result = await _handle_request_spatial_input(
                             websocket, state, call.args or {}
                         )
-                    # Emit an impact-envelope WS envelope whenever compute_impact_envelope
-                    # returns a result carrying a valid ImpactEnvelope (key signal:
-                    # raw_envelope dict with n_structures_total inside). Fires IN ADDITION
-                    # to the standard function_response -- the client gets both: replay for
-                    # the Gemini loop, and impact-envelope for ImpactPanel state.
-                    if (
-                        call.name == "compute_impact_envelope"
-                        and isinstance(result, dict)
-                        and isinstance(result.get("raw_envelope"), dict)
-                        and "n_structures_total" in result["raw_envelope"]
-                    ):
-                        await _maybe_emit_impact_envelope(websocket, state, result["raw_envelope"])
                     # Region-disambiguation picker: when geocode_location came back as a
                     # state-bbox-fallback snap, offer the user a narrower sub-region
                     # (default: counties) on top of the whole-state default. PAUSES the
@@ -4306,25 +4226,18 @@ async def _stream_model_reply(
                         cat_id = result.get("category_id")
                         if isinstance(cat_id, str) and cat_id:
                             state.allowed_tool_set.open_category(cat_id)
-                    # DISCOVERY-EXPANDS-GATE + ENGINE-DOOR expansion: when the tool-search
-                    # tool OR an engine door returns candidate tool names, UNION them into
-                    # this turn's visible gate (and the Case allowed-set, so validation
-                    # lets the model actually call them) for SUBSEQUENT rounds. Search
-                    # results are capped at _DISCOVERY_EXPAND_CAP (bounds an unbounded
-                    # ranked tail); an engine door lists a CLOSED, curated set of its own
-                    # templates and uses the larger _DOOR_EXPAND_CAP so select-then-call is
-                    # never truncated. Only names that are real, registered, and not
-                    # already visible count toward the cap; the rebuild of tool_decls is
-                    # deferred to once-per-round below.
+                    # DISCOVERY-EXPANDS-GATE: when the tool-search tool returns
+                    # candidate tool names, UNION them into this turn's visible gate
+                    # (and the Case allowed-set, so validation lets the model actually
+                    # call them) for SUBSEQUENT rounds, capped at _DISCOVERY_EXPAND_CAP
+                    # (bounds an unbounded ranked tail). Only names that are real,
+                    # registered, and not already visible count toward the cap; the
+                    # rebuild of tool_decls is deferred to once-per-round below.
                     elif call.name in _gate_expander_tool_names():
                         _hits = _tool_names_from_search_result(result)
-                        _is_door = call.name in _engine_door_tool_names()
-                        _expand_cap = (
-                            _DOOR_EXPAND_CAP if _is_door else _DISCOVERY_EXPAND_CAP
-                        )
                         _added_now: list[str] = []
                         for _cand in _hits:
-                            if len(_discovery_expanded) >= _expand_cap:
+                            if len(_discovery_expanded) >= _DISCOVERY_EXPAND_CAP:
                                 break
                             if (
                                 _cand in TOOL_REGISTRY
@@ -4340,12 +4253,11 @@ async def _stream_model_reply(
                             state.allowed_tool_set.add_tools(set(_added_now))
                             _tool_decls_dirty = True
                             logger.info(
-                                "%s-expand: +%d tool(s) into the gate "
+                                "discovery-expand: +%d tool(s) into the gate "
                                 "(turn total=%d/%d) via %s session=%s: %s",
-                                "door" if _is_door else "discovery",
                                 len(_added_now),
                                 len(_discovery_expanded),
-                                _expand_cap,
+                                _DISCOVERY_EXPAND_CAP,
                                 call.name,
                                 state.session_id,
                                 _added_now,
@@ -7054,9 +6966,9 @@ def _maybe_default_fetch_bbox_to_pinned_aoi(
 
 
 #: Expensive-solver scenario types whose domain IS an AOI bbox (areal solvers).
-#: ``scenario_type_for_tool`` also recognizes the POINT-driven groundwater solvers
-#: (``modflow_contaminant_plume`` / ``run_model_groundwater_contamination_scenario`` ->
-#: ``"plume"``) which take NO bbox param -- their domain is a well / source point,
+#: ``scenario_type_for_tool`` also recognizes the POINT-driven groundwater solver
+#: (``modflow_contaminant_plume`` -> ``"plume"``) which takes NO bbox param --
+#: its domain is a well / source point,
 #: not a rectangle. The AOI-snap below must NOT inject a bbox into those (it would
 #: be a spurious, ignored key today and latent wrong-extent debt tomorrow), so the
 #: guard is restricted to these bbox-driven scenario types.
@@ -7630,7 +7542,10 @@ async def _maybe_gate_on_payload_warning(
     if estimator_fn is None:
         return True, params
     try:
-        estimated_mb = float(estimator_fn(**params))
+        # Offloaded: a sampled estimator (resolution doctrine R-B) may read the
+        # network to MEASURE a small native window; keep it off the event loop so it
+        # cannot stall the WS keepalive (no-sync-blocking norm).
+        estimated_mb = float(await asyncio.to_thread(estimator_fn, **params))
     except Exception:  # noqa: BLE001 -- never let the gate kill a tool
         logger.exception(
             "payload-warning: estimator raised tool=%s name=%s; skipping gate",
@@ -7656,6 +7571,19 @@ async def _maybe_gate_on_payload_warning(
         f"({hard_cap_mb if over_hard_cap else threshold_mb:.0f} MB). "
         "Consider narrowing bbox or other scope parameters."
     )
+    # Resolution doctrine R-B: an OPTIONAL ``<estimator>_detail`` companion returns a
+    # one-line human string carrying the MEASURED-vs-analytic kind + a concrete
+    # coarsening suggestion ("native ~2.4 GB measured; suggested coarsening 199 m ~0.4
+    # MB; proceed native / coarsen / cancel"). Appended to the recommendation so the
+    # card quotes real numbers -- no new envelope field / WS event. Best-effort.
+    detail_fn = _resolve_payload_estimator(tool_name, f"{estimator_name}_detail")
+    if detail_fn is not None:
+        try:
+            detail = await asyncio.to_thread(detail_fn, **params)
+        except Exception:  # noqa: BLE001 -- detail is a nicety, never fatal
+            detail = None
+        if detail:
+            recommendation = f"{recommendation} {detail}"[:512]
 
     warning_id = new_ulid()
     warning_payload = PayloadWarningEnvelopePayload(
@@ -8011,37 +7939,7 @@ async def _gate_on_solver_confirm(
     # narrow_scope reply to it stays fail-closed (the card never offered it).
     flood_override_offered: bool = False
     try:
-        if tool_name == "run_model_groundwater_contamination_scenario":
-            from .agent.workflows.modflow.model_groundwater_contamination_scenario.model_groundwater_contamination_scenario import (
-                _build_confirmation_envelope,
-                extract_spill_parameters,
-            )
-            from trid3nt_contracts.modflow_contracts import MODFLOWRunArgs
-
-            article_text = params.get("article_text")
-            if not isinstance(article_text, str) or not article_text.strip():
-                # source_url path or missing text: let the composer surface
-                # its own typed error (v0.1 live path supplies article_text).
-                return True, params
-            # extract_spill_parameters is synchronous (pure extraction +
-            # cached geocode); off the event loop so the WS heartbeat lives.
-            derived = await asyncio.to_thread(
-                extract_spill_parameters, article_text, geocode=True
-            )
-            kwargs: dict[str, Any] = dict(
-                spill_location_latlon=derived["spill_location_latlon"],
-                contaminant=derived["contaminant"],
-                release_rate_kg_s=derived["release_rate_kg_s"],
-                duration_days=derived["duration_days"],
-            )
-            if params.get("aquifer_k_ms") is not None:
-                kwargs["aquifer_k_ms"] = float(params["aquifer_k_ms"])
-            if params.get("porosity") is not None:
-                kwargs["porosity"] = float(params["porosity"])
-            envelope = _build_confirmation_envelope(
-                derived, MODFLOWRunArgs(**kwargs)
-            )
-        elif tool_name == "sfincs_flood":
+        if tool_name == "sfincs_flood":
             # A SFINCS solve can take ~10-20 min -- show the user what is
             # about to run before dispatch. The card carries BOTH a
             # GranularitySuggestion (grid resolution) and a
@@ -8109,6 +8007,13 @@ async def _gate_on_solver_confirm(
             # the heavy Batch run; built inline since no composer extraction
             # is needed (the run args are the tool args).
             envelope = _build_psha_confirm_envelope(params)
+        elif tool_name in ("openquake_scenario_gmf", "openquake_secondary_perils"):
+            # OpenQuake scenario-GMF + secondary-perils solver-confirm card:
+            # simple proceed/cancel summarizing the scenario magnitude + AOI area
+            # (the secondary-perils variant names the two ground-failure screens),
+            # built inline from the tool args. A missing bbox falls through to the
+            # tool's typed *_PARAMS_INVALID error after approval.
+            envelope = _build_scenario_confirm_envelope(params, tool_name)
         elif tool_name == "elmfire_fire_spread":
             # ELMFIRE fire-spread solver-confirm card: simple proceed/cancel
             # with the approximate cell count + calibrated runtime estimate +
@@ -8116,13 +8021,13 @@ async def _gate_on_solver_confirm(
             # rasterio). A missing ignition point deliberately falls through
             # to the tool's typed FIRE_IGNITION_REQUIRED error after approval.
             envelope = _build_fire_confirm_envelope(params)
-        elif tool_name == "geoclaw_inundation":
+        elif tool_name in ("geoclaw_inundation", "geoclaw_tsunami_gauge_timeseries"):
             # GeoClaw shallow-water inundation solver-confirm card: simple
             # proceed/cancel with the approximate AOI area + scenario +
             # simulated window + AMR levels, built inline (pure arithmetic,
             # no fetch/rasterio). A missing bbox deliberately falls through
             # to the tool's typed GEOCLAW_PARAMS_INCOMPLETE error after
-            # approval.
+            # approval. The gauge-timeseries template reuses the same card.
             envelope = _build_geoclaw_confirm_envelope(params)
         else:  # unknown gated tool: fail open to the tool's own validation
             return True, params
@@ -8380,7 +8285,7 @@ async def _gate_on_solver_confirm(
         used_real_clamp = False
         if swmm_dem_path:
             try:
-                from .agent.workflows.swmm.swmm_mesh_builder import (
+                from .agent.mesh.raster_cell_mesh import (
                     clamp_swmm_resolution_to_real_cap,
                 )
 
@@ -9242,7 +9147,7 @@ _SYNC_OFFLOAD_SUBSET_PREFIXES = ("compute_", "clip_")
 #: added here). This is NOT "off-load everything": ~8 light vector/scalar fetchers
 #: (fetch_buildings, fetch_river_geometry, lookup_precip_return_period,
 #: fetch_landfire_fuels, fetch_usfs_canopy_fuels, fetch_mtbs_burn_severity,
-#: fetch_nexrad_reflectivity, fetch_field_boundaries) and all non-fetch sync tools
+#: show_nexrad_radar, fetch_field_boundaries) and all non-fetch sync tools
 #: stay on the loop. Justification per tool:
 #:   fetch_topobathy        -> CUDEM+3DEP tile merge + reproject + 189 MB COG (~61 s; ROOT-CAUSE of the 1005 turn-death)
 #:   fetch_dem              -> py3dep 3DEP tile mosaic + COG materialize
@@ -9259,10 +9164,13 @@ _SYNC_OFFLOAD_SUBSET_PREFIXES = ("compute_", "clip_")
 #:   fetch_hrrr_smoke       -> xr.open_zarr + merge + rio.reproject + compute + COG write
 #:   fetch_mrms_qpe         -> S3 grib2 download + rasterio GRIB read + warp.reproject + GeoTIFF write
 #:   fetch_goes_satellite   -> ~50 MB netCDF stream + warp.reproject + COG write
-#:   fetch_cama_flood_discharge -> NetCDF stream + xarray open + mean + COG write
 #:   fetch_gtsm_tide_surge  -> blocking CDS ZIP download + xr.open_mfdataset + per-gauge compute
 _ALWAYS_OFFLOAD_SYNC_TOOLS = frozenset(
     {
+        # first call builds the ~6.7k-doc dense index synchronously
+        # (sentence-transformers encode) - must never run on the WS loop
+        "search_living_atlas",
+        "fetch_living_atlas_layer",
         "fetch_topobathy",
         "fetch_dem",
         "fetch_3dep_extra",
@@ -9304,9 +9212,8 @@ _ALWAYS_OFFLOAD_SYNC_TOOLS = frozenset(
         # download + reproject core (_fetch_archive_frame_cog_bytes).
         "fetch_goes_archive_animation",
         "fetch_goes_active_fire",
-        "fetch_cama_flood_discharge",
         "fetch_gtsm_tide_surge",
-        # conservation micro-North-Star: PC STAC raster fetchers that do
+        # conservation reference scenario: PC STAC raster fetchers that do
         # multi-second sync work (SAS sign + windowed /vsicurl warp-read +
         # COG-write). Bodies are emit-free (the surrounding emit_tool_call
         # wrapper does the emit), so off-load so they never stall the WS
@@ -9322,6 +9229,14 @@ _ALWAYS_OFFLOAD_SYNC_TOOLS = frozenset(
         # (feedback_no_sync_blocking_on_asyncio_loop). Escalated by the
         # tools-session (tool-retrieval kickoff #6).
         "fetch_glm_lightning",
+        # ADR 0203 record fetchers: heavy SYNC I/O in the record hook. fetch_aorc_precip
+        # opens a public AORC Zarr year store (anonymous s3fs) and streams the windowed
+        # AOI-mean over multi-second network reads; fetch_lter_records downloads and parses
+        # a multi-MB EDI data entity through the DataONE mirror. Emit-free bodies (the
+        # surrounding emit_tool_call wrapper emits), so off-load so they never stall the WS
+        # heartbeat (feedback_no_sync_blocking_on_asyncio_loop).
+        "fetch_aorc_precip",
+        "fetch_lter_records",
         # sandbox-staging: code_exec_request now PRE-FETCHES each layer_ref URI
         # (single OR a list of animation frames) from S3 into the per-run sandbox
         # workdir before the jailed executor opens them as local files, then runs
@@ -10785,6 +10700,44 @@ def _set_active_aoi_from_payload(state: SessionState, raw: Any) -> None:
     )
 
 
+def _set_drawn_geometry_from_payload(state: SessionState, raw: Any) -> None:
+    """ADR 0159: bind/clear the turn's user-drawn geometry.
+
+    Called when a ``user-message`` payload carries the ``drawn_geometry`` key
+    (``{"geometry_type": "rectangle", "bbox": [min_lon, min_lat, max_lon,
+    max_lat]}`` EPSG:4326, ``None`` when nothing is drawn). A valid rectangle
+    sets it; an explicit ``None`` clears it; a malformed value is logged and
+    ignored (never blocks the turn). Stored as a plain dict; the turn dispatcher
+    binds it into ``bind_turn_drawn_geometry`` so composer gates consume it.
+    """
+    if raw is None:
+        state.drawn_geometry = None
+        return
+    if not isinstance(raw, dict):
+        logger.warning(
+            "drawn-geometry ignoring non-dict payload=%r session=%s",
+            raw, state.session_id,
+        )
+        return
+    coerced = coerce_bbox_value(raw.get("bbox"))
+    if (
+        coerced is None
+        or not all(math.isfinite(v) for v in coerced)
+        or not (coerced[0] < coerced[2] and coerced[1] < coerced[3])
+    ):
+        logger.warning(
+            "drawn-geometry ignoring malformed bbox in %r session=%s",
+            raw, state.session_id,
+        )
+        return
+    gtype = str(raw.get("geometry_type") or "rectangle")
+    state.drawn_geometry = {"geometry_type": gtype, "bbox": list(coerced)}
+    logger.info(
+        "drawn-geometry set session=%s type=%s bbox=%s",
+        state.session_id, gtype, coerced,
+    )
+
+
 async def _persist_case_loaded_layers(
     state: SessionState, *, case_id: str | None = None
 ) -> None:
@@ -10996,58 +10949,6 @@ async def _persist_case_manifest(
         await p.write_case_manifest(target_case)
     except Exception:  # noqa: BLE001 -- manifest is a side-effect, never a gate
         logger.warning("case-manifest: persist failed case=%s", target_case)
-
-
-async def _maybe_emit_impact_envelope(
-    websocket: ServerConnection,
-    state: SessionState,
-    raw_envelope: dict,
-) -> None:
-    """Emit an ``impact-envelope`` WS envelope for the ImpactPanel.
-
-    Called when ``compute_impact_envelope`` returns a result containing a
-    valid ``raw_envelope`` dict (ImpactEnvelope shape, key signal:
-    ``n_structures_total`` present at the top level).
-
-    Emitted IN ADDITION to the standard ``function_response`` so the client
-    gets both:
-
-    - ``function_response`` -> Gemini-loop replay (Gemini reads the summary).
-    - ``impact-envelope``   -> ImpactPanel state update.
-
-    Wire shape::
-
-        {
-          "type": "impact-envelope",
-          "session_id": str,
-          "payload": { ...full ImpactEnvelope dict... }
-        }
-
-    Best-effort: a serialization / wire failure is logged but never raised --
-    the ``function_response`` path must not be interrupted by a side-channel
-    emission failure.
-    """
-    import json as _json
-
-    try:
-        await websocket.send(
-            _json.dumps(
-                {
-                    "type": "impact-envelope",
-                    "session_id": state.session_id,
-                    "payload": raw_envelope,
-                }
-            )
-        )
-        logger.info(
-            "impact-envelope emitted session=%s n_structures_total=%s",
-            state.session_id,
-            raw_envelope.get("n_structures_total"),
-        )
-    except Exception:  # noqa: BLE001 -- side effect, never bubble up
-        logger.exception(
-            "impact-envelope emission failed session=%s", state.session_id
-        )
 
 
 async def _maybe_emit_code_exec_result(
@@ -11386,6 +11287,9 @@ async def _dispatch_gemini_and_persist(
     # envelope this turn emits (chunks, pipeline-state, session-state, …)
     # carries Envelope.case_id and the web routes it to the right stream.
     bind_turn_case(turn_case_id)
+    # ADR 0159: bind this turn's user-drawn geometry so composer gates read it
+    # (current_turn_drawn_geometry) as a basis="user" spatial knob.
+    bind_turn_drawn_geometry(state.drawn_geometry)
     # Per-turn object capture: a concurrent turn (or Case switch) re-points
     # both SessionState fields mid-stream, so this wrapper gauges completion
     # against THIS turn's history list and joins the narration list
@@ -11559,10 +11463,25 @@ async def _dispatch_tool_and_persist(
     via ``summarize_tool_result``. Other typed routing exceptions
     (``PayloadWarningCancelledError``) are also caught so the manual surface
     sees the cancellation reason explicitly instead of disappearing.
+
+    Honesty-floor FIX (ADR 0198): the two named catches above cover ONLY the
+    routing failures; every OTHER typed tool exception (``MeshAcquisitionError``,
+    ``TelemacRainOnGridError``, ``HydrologyAoiTooLargeError``, ...) also has no
+    awaiter on this ``asyncio.create_task`` path -- pre-fix it escaped as an
+    "asyncio Task exception was never retrieved" log line while the CLIENT
+    received NO error envelope (the plugin silently showed nothing; a seeder saw
+    NO_RESULT). The broad ``except Exception`` below closes that hole: it routes
+    the tool's OWN typed ``error_code`` / ``retryable`` through ``_send_error``
+    (falling back to ``TOOL_EXECUTION_FAILED`` / non-retryable when the exception
+    is untyped), so a failing direct invocation always reaches the client as a
+    structured ``error``. It surfaces the exception's real code verbatim -- an
+    upstream-provider error carries its own code out honestly and is NOT
+    relabelled as an internal failure.
     """
     # Entry-time Case capture -- see _dispatch_gemini_and_persist.
     turn_case_id = _turn_case_id(state)
     bind_turn_case(turn_case_id)  # job-0277: envelope tagging
+    bind_turn_drawn_geometry(state.drawn_geometry)  # ADR 0159
     try:
         try:
             await _invoke_tool_via_emitter(
@@ -11598,6 +11517,39 @@ async def _dispatch_tool_and_persist(
                 str(exc),
                 retryable=exc.retryable,
             )
+        except Exception as exc:  # noqa: BLE001 -- honesty-floor catch-all
+            # Any OTHER tool exception on this no-awaiter create_task path (see
+            # docstring): surface a structured envelope instead of a silent
+            # no-result. The A.6 ErrorCode Literal is a CLOSED set, so a tool's
+            # own code (e.g. TELEMAC_ROG_POUR_POINT_OFF_DEM) cannot be the wire
+            # ``error_code`` -- constructing ErrorPayload with it raises inside
+            # _send_error and (per the ws.py:CONTEXT_WINDOW bug) skips the send
+            # entirely, the very silence this fix closes. So: pass a typed tool
+            # code through only when it is already a valid ErrorCode, else fall
+            # back to INTERNAL_ERROR with the specific code LEADING the message
+            # as a ``[MARKER]`` (house convention, see
+            # _notify_layer_auto_publish_failed) -- honest + greppable, no enum
+            # widening. Upstream-provider codes that ARE valid (LLM_UNAVAILABLE)
+            # pass through un-internalized.
+            tool_code = getattr(exc, "error_code", None) or "TOOL_EXECUTION_FAILED"
+            retryable = bool(getattr(exc, "retryable", False))
+            if tool_code in _VALID_ERROR_CODES:
+                wire_code, message = tool_code, str(exc)
+            else:
+                wire_code, message = "INTERNAL_ERROR", f"[{tool_code}] {exc}"
+            logger.exception(
+                "/invoke directive tool raised session=%s tool=%s code=%s",
+                state.session_id,
+                tool_name,
+                tool_code,
+            )
+            await _send_error(
+                websocket,
+                state.session_id,
+                wire_code,
+                message,
+                retryable=retryable,
+            )
     finally:
         if turn_case_id:
             await _persist_chat_turn(
@@ -11612,6 +11564,122 @@ async def _dispatch_tool_and_persist(
         await _emit_turn_complete(
             websocket, state, pipeline_id=state.current_turn_pipeline_id
         )
+
+
+def _reconstruct_run_signature(name: str, args: dict) -> str:
+    """A human ``!run <name>(...)`` line for the persisted user row when the
+    client sent no ``raw_text`` (older client / programmatic driver). The exact
+    composer text is preferred (carries the user's literal syntax); this is the
+    honest fallback so a Case reopen still shows an attributable invocation."""
+    import json as _json
+
+    if not args:
+        return f"!run {name}"
+    try:
+        return f"!run {name} {_json.dumps(args, default=str)}"
+    except Exception:  # noqa: BLE001
+        return f"!run {name}"
+
+
+async def _handle_dev_tool_invoke(
+    websocket: ServerConnection,
+    state: SessionState,
+    payload_dict: dict,
+) -> None:
+    """Server handler for the ``!run`` direct tool invocation (ADR 0114).
+
+    The plugin parses ``!run <tool>(...)`` CLIENT-side and sends a structured
+    ``dev-tool-invoke {name, args, case_id, raw_text?}``. This runs the named
+    registry closure OUTSIDE the LLM loop through the SAME
+    ``_dispatch_tool_and_persist`` -> ``_invoke_tool_via_emitter`` seam a
+    ``/invoke`` directive uses -- so the payload-warning / code-exec / solver
+    gates, the ``_ALWAYS_OFFLOAD_SYNC_TOOLS`` thread offload, layer
+    materialization + Case persistence, the ``tool-io`` card sidecar, and the
+    end-of-turn ``turn-complete`` ALL ride the identical rendering path a
+    model-issued call does. An unknown tool routes through the same
+    ``ToolNotFoundError`` -> ``TOOL_NOT_FOUND`` envelope (raised inside
+    ``_invoke_tool_via_emitter`` and surfaced by ``_dispatch_tool_and_persist``).
+
+    Attribution: the ``raw_text`` composer line (or a reconstructed
+    ``!run name(args)``) is persisted as the turn's user row via
+    ``_prepare_user_turn`` -- a Case reopen replays the ``!run`` signature above
+    the tool card, distinguishing a manual call from a model call without a new
+    UI surface.
+
+    Wire-shape validation only (the plugin already validated syntax): ``name``
+    a non-empty str, ``args`` a dict.
+    """
+    name = payload_dict.get("name")
+    if not isinstance(name, str) or not name.strip():
+        await _send_error(
+            websocket,
+            state.session_id,
+            "TOOL_PARAMS_INVALID",
+            "dev-tool-invoke: 'name' must be a non-empty string",
+        )
+        return
+    name = name.strip()
+    args = payload_dict.get("args")
+    if args is None:
+        args = {}
+    if not isinstance(args, dict):
+        await _send_error(
+            websocket,
+            state.session_id,
+            "TOOL_PARAMS_INVALID",
+            "dev-tool-invoke: 'args' must be an object",
+        )
+        return
+    raw_text = payload_dict.get("raw_text")
+    if not isinstance(raw_text, str) or not raw_text.strip():
+        raw_text = _reconstruct_run_signature(name, args)
+    client_case_id = payload_dict.get("case_id")
+
+    # Reset the per-turn accumulators BEFORE the turn scaffolding, mirroring the
+    # user-message dispatch, so this manual turn's CaseChatMessage captures only
+    # its own layer/pipeline emissions.
+    state.current_turn_layer_ids = []
+    state.current_turn_pipeline_id = None
+    state.current_turn_map_commands = []
+
+    # Case rebind + sync + turn pin + user-row persist (the ``!run`` line lands
+    # as the user bubble so replay is attributable). ``_prepare_user_turn``
+    # parses ``/invoke`` (which ``!run`` text never matches) and auto-creates a
+    # Case when the session has none -- both correct here.
+    await _prepare_user_turn(
+        websocket, state, raw_text, client_case_id=client_case_id
+    )
+
+    # Bind the emitter + rebind any live turns onto this socket, exactly as the
+    # user-message path does before dispatching a turn task.
+    _ensure_emitter(websocket, state)
+    _rebind_live_turns(state.session_id, state.emitter)
+
+    # Stream-scoped supersede: a manual invocation in the SAME stream cancels
+    # that stream's in-flight turn (a running LLM turn or a prior ``!run``),
+    # mirroring a re-prompt. Turns in other Cases keep running.
+    turn_key = state.current_turn_case_id or _ROOT_STREAM_KEY
+    prior = state.inflight_tasks.get(turn_key)
+    if prior is None or prior.done():
+        prior = _find_live_turn(state.session_id, turn_key)
+    if prior is not None and not prior.done():
+        prior.cancel()
+    for _done_key in [
+        k for k, t in state.inflight_tasks.items() if t.done()
+    ]:
+        state.inflight_tasks.pop(_done_key, None)
+
+    logger.info(
+        "dev-tool-invoke dispatch session=%s tool=%s case=%s",
+        state.session_id,
+        name,
+        state.current_turn_case_id,
+    )
+    task = asyncio.create_task(
+        _dispatch_tool_and_persist(websocket, state, name, args, raw_text)
+    )
+    state.inflight_tasks[turn_key] = task
+    _register_live_turn(state.session_id, turn_key, task, state.emitter)
 
 
 # --------------------------------------------------------------------------- #
@@ -12053,6 +12121,15 @@ def _make_handler(settings: ModelSettings):
                             _set_active_aoi_from_payload(
                                 state, payload_dict.get("aoi_bbox")
                             )
+                        # ADR 0159: the dock's 'Draw region' rubber-band
+                        # rectangle. Same key-present semantics as aoi_bbox: a
+                        # value SETS the drawn geometry, an explicit null CLEARS
+                        # it, an absent key leaves the prior state (no-op for
+                        # clients that never send it).
+                        if "drawn_geometry" in payload_dict:
+                            _set_drawn_geometry_from_payload(
+                                state, payload_dict.get("drawn_geometry")
+                            )
                         # ADR 0018: routing-visibility mode, carried as the
                         # user-message's ``tool_choice_mode`` field. Read
                         # defensively off the raw dict; a set value updates
@@ -12191,6 +12268,23 @@ def _make_handler(settings: ModelSettings):
                         # the recorded emitter's sink.
                         _register_live_turn(
                             state.session_id, turn_key, task, state.emitter
+                        )
+
+                    elif msg_type == "dev-tool-invoke":
+                        # !run direct tool invocation (ADR 0114): the plugin
+                        # parsed ``!run <tool>(...)`` client-side and sent
+                        # structured {name, args}. Runs the registry closure
+                        # OUTSIDE the LLM loop through the SAME emission +
+                        # gate + persistence seam as /invoke -- see
+                        # _handle_dev_tool_invoke. Read defensively off the raw
+                        # dict (no new contract model, mirroring turn-complete
+                        # / aoi_bbox); the handler validates the wire shape and
+                        # routes an unknown tool through the TOOL_NOT_FOUND
+                        # envelope. Always-on in local mode (the tailnet is the
+                        # trust boundary; the code-exec HARD gate still fires
+                        # for code_exec_request via the shared invoke seam).
+                        await _handle_dev_tool_invoke(
+                            websocket, state, payload_dict
                         )
 
                     elif msg_type == "case-command":
@@ -12853,6 +12947,7 @@ __all__ = [
     "_emit_case_list",
     "_emit_case_open",
     "_handle_case_command",
+    "_handle_dev_tool_invoke",
     "_persist_chat_turn",
     # Lane A1: view-without-agent -- materialize the full case view to S3.
     "_persist_case_view_snapshot",

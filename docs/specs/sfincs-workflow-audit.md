@@ -3,7 +3,7 @@
 Read-only audit of `server/src/trid3nt_server/agent/workflows/sfincs/` and its
 coupled seams. Branch `refactor/engine-doors`. No code changed.
 
-Scope: NATE's smell-test on `workflows/sfincs/` -- North-Star-era remnants,
+Scope: NATE's smell-test on `workflows/sfincs/` -- reference-scenario-era remnants,
 non-conforming folder layout, and the 5,637-line `flood/flood.py` mini-monolith.
 
 ---
@@ -13,7 +13,7 @@ non-conforming folder layout, and the 5,637-line `flood/flood.py` mini-monolith.
 | Axis | Verdict |
 |---|---|
 | Layout conformance | **PARTIAL** -- template shells conform; engine root is a support-module dumping ground with mis-named + mis-located shared hubs and NO `run_sfincs.py` (solve dispatch is buried inside `flood.py`). |
-| North Star remnant count | **~22 remnant sites** across 6 files (docstrings/comments). Most ride ON load-bearing engineering prose (constraint-keep the module, cut the demo framing); a handful are pure narrative that dies; a few are stale refs to a **culled** composer. |
+| reference scenario remnant count | **~22 remnant sites** across 6 files (docstrings/comments). Most ride ON load-bearing engineering prose (constraint-keep the module, cut the demo framing); a handful are pure narrative that dies; a few are stale refs to a **culled** composer. |
 | `flood.py` split | 5,637 lines = **~1,100 lines dead Batch-era scaffold (delete)** + a forcing-autowire library (~1,200 lines -> engine-support module) + a solve/progress/telemetry layer (~600 -> `run_sfincs.py` + `shared`) + the ~2,000-line orchestrator + the thin wrapper. |
 | Per-path | pluvial **LIVE**; coastal-surge / spiderweb / river / compound / breach / tsunami **DEGRADED-LIVE** (regular-grid local-docker deck emits the forcing; no waves); quadtree + SnapWave waves **DEAD** (Batch arm removed); build-offload **DEAD**; habitat **DEAD** (culled, stale refs only). |
 | Coupling | **`postprocess_flood.py` is a 5-engine shared hub** (ELMFIRE/GeoClaw/TELEMAC/SWAN/SWMM import it) + `sfincs_builder.load_manning_mapping` + `manning_mapping.csv` shared into SWMM. The shared-helper-hub problem NATE flagged is REAL and unresolved. |
@@ -81,7 +81,7 @@ modules -- see 3 and 6.
 
 ---
 
-## 2. North Star remnant census
+## 2. reference scenario remnant census
 
 Three-way verdict per NATE's frame: **constraint-keep** (demo framing rides on
 load-bearing engineering prose -- cut the framing sentence, keep the module),
@@ -94,16 +94,16 @@ runtime**.
 
 | # | Site | Text (abridged) | Verdict |
 |---|---|---|---|
-| 1 | `sfincs_forcing_adapter.py:3` | "THE GAP THIS FILLS (COASTAL SFINCS North Star, Mexico Beach / Hurricane Michael):" | **constraint-keep** -- the sentence dies; the rest of the docstring (the hydromt-sfincs 1.2.2 CSV/locations format contract, time re-anchoring) is load-bearing and stays |
+| 1 | `sfincs_forcing_adapter.py:3` | "THE GAP THIS FILLS (COASTAL SFINCS reference scenario, Mexico Beach / Hurricane Michael):" | **constraint-keep** -- the sentence dies; the rest of the docstring (the hydromt-sfincs 1.2.2 CSV/locations format contract, time re-anchoring) is load-bearing and stays |
 | 2 | `sfincs_forcing_adapter.py:59` | "the fetchers carry REAL event timestamps (Hurricane Michael = Oct 2018)" | **constraint-keep** -- reword to a generic example; the re-anchoring rule is real |
-| 3 | `sfincs_spiderweb.py:3` | "The COASTAL SFINCS wind track:" (+ zone-16n / Mexico Beach de-risk log) | **genuine-decision** -- the de-risk block (exact `sfincs.inp` lines the binary accepted) is real evidence; drop "North Star", keep the contract |
-| 4 | `postprocess_waves.py:17` | "the visibly-animating SnapWave wave field on the Mexico Beach (Hurricane Michael) coastal North Star demo" | **dies** -- pure demo framing on a module whose runtime path is DEAD (see 4) |
-| 5 | `sfincs_builder.py:179` | "exactly the forcing path the COASTAL SFINCS North Star needs" | **constraint-keep** -- the pandas `is_integer` shim it justifies is real; reword the "why" |
-| 6 | `sfincs_builder.py:305,372,594` | "COASTAL SFINCS North Star: the surge / tide hydrograph ..." | **constraint-keep** -- `WaterlevelForcing`/`WindForcing` dataclass docs; strip the epithet |
+| 3 | `sfincs_spiderweb.py:3` | "The COASTAL SFINCS wind track:" (+ zone-16n / Mexico Beach de-risk log) | **genuine-decision** -- the de-risk block (exact `sfincs.inp` lines the binary accepted) is real evidence; drop "reference scenario", keep the contract |
+| 4 | `postprocess_waves.py:17` | "the visibly-animating SnapWave wave field on the Mexico Beach (Hurricane Michael) coastal reference scenario demo" | **dies** -- pure demo framing on a module whose runtime path is DEAD (see 4) |
+| 5 | `sfincs_builder.py:179` | "exactly the forcing path the COASTAL SFINCS reference scenario needs" | **constraint-keep** -- the pandas `is_integer` shim it justifies is real; reword the "why" |
+| 6 | `sfincs_builder.py:305,372,594` | "COASTAL SFINCS reference scenario: the surge / tide hydrograph ..." | **constraint-keep** -- `WaterlevelForcing`/`WindForcing` dataclass docs; strip the epithet |
 | 7 | `sfincs_builder.py:2282,2357` | "advanced / demo-default", "demonstrates the ..." | **constraint-keep** -- reword; the constitutive-physics lever is real |
-| 8 | `flood.py:2103` | "The COASTAL SFINCS North Star couples surge / tide / discharge / wind / pressure" | **constraint-keep** -- `_build_surge_forcing_members` docstring; the dict-shape contract stays |
-| 9 | `flood.py:2320-2321` | "Anchored to published Gulf-coast storm-tide observations (Hurricane Michael at Mexico Beach peaked near 4 m NAVD88)" | **genuine-decision** -- the parametric surge-scaling anchor is a real calibration citation; keep as a numeric provenance note, drop "North Star" |
-| 10 | `flood.py:1354,3350,3377,3473,3481,3665,4762,4916,5087` | recurring "SFINCS North Star P1", "coastal North Star", "Mexico Beach ... North Star" in `model_flood_scenario` param docs + inline comments | **mostly dies / some constraint-keep** -- the epithet dies everywhere; where it labels a still-live branch (coastal-AOI detection, cadence) keep the branch note without the demo name |
+| 8 | `flood.py:2103` | "The COASTAL SFINCS reference scenario couples surge / tide / discharge / wind / pressure" | **constraint-keep** -- `_build_surge_forcing_members` docstring; the dict-shape contract stays |
+| 9 | `flood.py:2320-2321` | "Anchored to published Gulf-coast storm-tide observations (Hurricane Michael at Mexico Beach peaked near 4 m NAVD88)" | **genuine-decision** -- the parametric surge-scaling anchor is a real calibration citation; keep as a numeric provenance note, drop "reference scenario" |
+| 10 | `flood.py:1354,3350,3377,3473,3481,3665,4762,4916,5087` | recurring "SFINCS reference scenario P1", "coastal reference scenario", "Mexico Beach ... reference scenario" in `model_flood_scenario` param docs + inline comments | **mostly dies / some constraint-keep** -- the epithet dies everywhere; where it labels a still-live branch (coastal-AOI detection, cadence) keep the branch note without the demo name |
 | 11 | `flood.py:2320`, `postprocess_waves`, `sfincs_spiderweb` "Michael offshore Hs ~ 8-10 m" (`flood.py:808`) | parametric wave magnitudes cited from Michael | **constraint-keep on live, dies on dead** -- wave magnitudes feed the DEAD wave-boundary synth (delete with it); surge magnitudes feed the LIVE surge scaling (keep, reword) |
 | 12 | `model_nws_flood_event_scenario.py:3` | "The **Case 3 demo composer**" | **genuine-decision (reword)** -- it is a registered, LLM-reachable capability (NWS alert -> MRMS -> flood); drop "demo", it is a real tool |
 | 13 | `flood.py:379` | "THE FIX for the demo-breaking 'run hangs / goes dark' symptom" | **constraint-keep** -- the pre-solver timeout is real hardening; reword "demo-breaking" |
@@ -276,8 +276,8 @@ DELETE (dead Batch-era scaffold):
 
 ### KEEP (constraint-keep -- strip demo epithet, retain engineering content)
 - `sfincs_forcing_adapter.py` whole module (hydromt-sfincs format contract) -- cut line 3's "THE GAP THIS FILLS ... Mexico Beach / Hurricane Michael" header only.
-- `sfincs_spiderweb.py` (Holland `.spw` + the byte-exact `sfincs.inp` de-risk log) -- keep; drop "COASTAL SFINCS ... North Star".
-- `sfincs_builder.py` surge/wind dataclasses, the pandas `is_integer` shim, constitutive-physics levers -- reword the North-Star/demo asides.
+- `sfincs_spiderweb.py` (Holland `.spw` + the byte-exact `sfincs.inp` de-risk log) -- keep; drop "COASTAL SFINCS ... reference scenario".
+- `sfincs_builder.py` surge/wind dataclasses, the pandas `is_integer` shim, constitutive-physics levers -- reword the reference-scenario/demo asides.
 - `flood.py` surge scaling anchored to "Hurricane Michael at Mexico Beach ~4 m NAVD88" (2320-2321) -- keep as a numeric provenance note (it calibrates the LIVE `_parametric_surge_peak_m`), drop the epithet.
 - The whole coastal-surge / spiderweb / river / compound / breach / tsunami FORCING path -- degraded-LIVE, keep.
 

@@ -1,7 +1,5 @@
-# TEMPLATE tier (engine-door refactor): phrasings for swmm_urban_flood. NOT
-# merged into the main retrieval index; the run_swmm door surfaces this template
-# via gate expansion (select-then-call). Carried from the migrated
-# run_swmm_urban_flood corpus entries.
+# Template routing phrasings (door dissolution, ADR 0094): walked into the main
+# retrieval index directly -- the engine templates are ordinary retrieval-pool tools.
 swmm_urban_flood:
 - run the PySWMM quasi-2D urban flood solve for a design-storm return period
 - street-level pluvial flooding around building obstructions over a city block

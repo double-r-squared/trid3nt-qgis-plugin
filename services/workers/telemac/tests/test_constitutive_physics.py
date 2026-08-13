@@ -131,3 +131,36 @@ def test_partial_set_leaves_unset_lines_historical(tmp_path):
     assert _HIST_TRACER_DIFF in cas
     # friction_law unset -> still the historical default.
     assert _HIST_FRIC_LAW in cas
+
+
+# --- (c) WIND-STRESS FORCING knob ------------------------------------------- #
+def test_no_wind_emits_no_wind_block(tmp_path):
+    """wind_speed_mps default 0.0 -> the deck carries NO wind keywords at all
+    (byte-identical to every prior run)."""
+    cfg = ReachConfig(workdir=str(tmp_path))
+    assert cfg.wind_speed_mps == 0.0
+    cas = _author(cfg, tmp_path)
+    assert "WIND" not in cas
+    assert "OPTION FOR WIND" not in cas
+    # the VELOCITY DIFFUSIVITY -> "/" separator transition is unchanged.
+    assert f"{_HIST_VEL_DIFF}\n/\n" in cas
+
+
+def test_wind_on_emits_constant_wind_block(tmp_path):
+    """A positive wind speed emits WIND=YES + OPTION FOR WIND=1 + resolved X/Y
+    velocity components in the UTM frame (FROM-direction blows TOWARD)."""
+    # wind FROM the west (270 deg) blows toward the east -> +X, ~0 Y.
+    cfg = ReachConfig(workdir=str(tmp_path), wind_speed_mps=12.0,
+                      wind_dir_from_deg=270.0)
+    cas = _author(cfg, tmp_path)
+    assert "WIND                            = YES" in cas
+    assert "OPTION FOR WIND                 = 1" in cas
+    assert "THRESHOLD DEPTH FOR WIND        = 1." in cas
+    import re
+    mx = re.search(r"WIND VELOCITY ALONG X\s+=\s+([-0-9.eE]+)", cas)
+    my = re.search(r"WIND VELOCITY ALONG Y\s+=\s+([-0-9.eE]+)", cas)
+    assert mx and my
+    assert float(mx.group(1)) > 11.0        # ~+12 m/s eastward
+    assert abs(float(my.group(1))) < 1e-6   # ~0 northward
+    # drag coefficient unset -> the dico default is used (no explicit line).
+    assert "COEFFICIENT OF WIND INFLUENCE" not in cas

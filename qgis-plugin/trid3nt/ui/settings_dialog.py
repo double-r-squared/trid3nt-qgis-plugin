@@ -20,7 +20,7 @@ from qgis.PyQt.QtWidgets import (
     QWidget,
 )
 
-from ..plugin_settings import MODE_LOCAL, MODE_REMOTE, PluginSettings
+from ..plugin_settings import PluginSettings
 from ..net.tasks import _ModelListTask, _ProviderConfigTask
 
 
@@ -137,29 +137,17 @@ class SettingsDialog(QDialog):
         self.setWindowTitle("TRID3NT settings")
         form = QFormLayout(self)
 
-        # "Server" section (remote-daemon design): mode picks WHICH url row
-        # is live (local tailnet-or-loopback vs. the cloud/Cognito path), but
-        # the token row is a SINGLE always-visible field either way -- both
-        # the tailnet shared token and the cloud bearer token are the same
-        # "paste a token" UX, just optional in local mode (OFF by default).
-        self.mode_combo = QComboBox()
-        self.mode_combo.addItems([MODE_LOCAL, MODE_REMOTE])
-        self.mode_combo.setCurrentText(settings.mode)
-        form.addRow("Mode", self.mode_combo)
-
+        # "Server" section: the agent runs locally or on a tailnet peer,
+        # reached over ws://. One "Server URL" row, plus an optional shared
+        # token (OFF by default; only needed when the daemon opts into the
+        # TRID3NT_ACCESS_TOKEN gate -- the tailnet itself is the trust boundary).
         self.local_url_edit = QLineEdit(settings.local_url)
         self.local_url_edit.setPlaceholderText("ws://127.0.0.1:8765/ws")
         form.addRow("Server URL", self.local_url_edit)
 
-        self.remote_url_edit = QLineEdit(settings.remote_url)
-        self.remote_url_edit.setPlaceholderText("wss://<host>/ws")
-        form.addRow("Remote agent URL", self.remote_url_edit)
-
         self.token_edit = QLineEdit(settings.token)
         self.token_edit.setEchoMode(QLineEdit.EchoMode.Password)
-        self.token_edit.setPlaceholderText(
-            "optional shared token (tailnet) / bearer token (remote)"
-        )
+        self.token_edit.setPlaceholderText("optional shared tailnet token")
         form.addRow("Server token (optional)", self.token_edit)
         # S2 (NATE 2026-07-20): the "Get token help" label row is REMOVED (the
         # explanation moves to a future Help page -- keep the dialog terse).
@@ -273,19 +261,7 @@ class SettingsDialog(QDialog):
             self.conn_toggle_btn.clicked.connect(self._connect_and_close)
         form.addRow("Connection", self.conn_toggle_btn)
 
-        # S1 (NATE 2026-07-20): the remote-only row (Remote agent URL) shows
-        # ONLY in REMOTE mode -- hidden in LOCAL. Toggled live off the mode
-        # combo and seeded from the current mode. Hiding a QFormLayout row
-        # hides BOTH the field and its label (labelForField). Remote-daemon
-        # design: the token row is NO LONGER remote-only -- it is the same
-        # "Server token (optional)" field in both modes now (LOCAL mode's
-        # optional shared tailnet token), so it stays visible always.
         self._form = form
-        self._remote_rows = [self.remote_url_edit]
-        self.mode_combo.currentTextChanged.connect(
-            self._apply_mode_field_visibility
-        )
-        self._apply_mode_field_visibility(self.mode_combo.currentText())
 
         # (Plugin self-update removed 2026-07: QGIS Plugin Manager -- the custom
         # repository / plugins.xml path -- is the update mechanism now, so the
@@ -296,20 +272,8 @@ class SettingsDialog(QDialog):
         buttons.rejected.connect(self.reject)
         form.addRow(buttons)
 
-    def _apply_mode_field_visibility(self, mode: str) -> None:
-        """S1 (NATE 2026-07-20): remote-only rows visible only in REMOTE mode
-        -- hide the field AND its label in LOCAL (labelForField)."""
-        show = mode == MODE_REMOTE
-        for field in self._remote_rows:
-            field.setVisible(show)
-            label = self._form.labelForField(field)
-            if label is not None:
-                label.setVisible(show)
-
     def accept(self) -> None:
-        self._settings.mode = self.mode_combo.currentText()
         self._settings.local_url = self.local_url_edit.text()
-        self._settings.remote_url = self.remote_url_edit.text()
         self._settings.token = self.token_edit.text()
         # Remote-daemon design: no minio_endpoint / export_api writes here --
         # those fields are gone from the dialog; both are DERIVED at call

@@ -55,8 +55,7 @@ class ProbePointRequestError(Exception):
 
 def _http_error_detail(exc: urllib.error.HTTPError) -> str:
     """The server's own ``{"error": ...}`` message, prefixed with the HTTP
-    status. Mirrors ``push_layer._http_error_detail`` /
-    ``case_export._http_error_detail``."""
+    status. Mirrors ``push_layer._http_error_detail``."""
     detail = ""
     try:
         payload = json.loads(exc.read().decode("utf-8", "replace"))

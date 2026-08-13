@@ -1,0 +1,12 @@
+{
+  "_comment": "Framework-dependent runtimeconfig that REPLACES the beta's self-contained ras.runtimeconfig.json so the managed ras.dll loads on the Linux .NET 9 shared runtime (the shipped config names no framework, so it looks for the Windows-only libhostpolicy.so and fails). ADR 0127.",
+  "runtimeOptions": {
+    "tfm": "net9.0",
+    "framework": { "name": "Microsoft.NETCore.App", "version": "9.0.0" },
+    "rollForward": "LatestMinor",
+    "configProperties": {
+      "System.Reflection.Metadata.MetadataUpdater.IsSupported": false,
+      "System.Runtime.Serialization.EnableUnsafeBinaryFormatterSerialization": false
+    }
+  }
+}

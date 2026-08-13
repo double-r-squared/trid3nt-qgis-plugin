@@ -96,6 +96,49 @@ def test_user_message_unknown_research_mode_rejected() -> None:
         ws.UserMessagePayload(text="hi", research_mode="extra_deep")  # type: ignore[arg-type]
 
 
+def test_user_message_drawn_geometry_roundtrip(session_id: str) -> None:
+    """ADR 0159: the dock's 'Draw region' rectangle rides ``drawn_geometry`` and
+    round-trips through the A.1 envelope wire form unchanged."""
+    payload = ws.UserMessagePayload(
+        text="refine the mesh where I drew",
+        drawn_geometry=ws.DrawnGeometry(
+            bbox=[-124.21, 41.745, -124.18, 41.77]
+        ),
+    )
+    dumped = _roundtrip_idempotent(_wrap(payload, session_id))
+    dg = dumped["payload"]["drawn_geometry"]
+    assert dg["geometry_type"] == "rectangle"
+    assert dg["bbox"] == [-124.21, 41.745, -124.18, 41.77]
+    reparsed = ws.UserMessagePayload.model_validate(dumped["payload"])
+    assert reparsed.drawn_geometry is not None
+    assert reparsed.drawn_geometry.bbox == [-124.21, 41.745, -124.18, 41.77]
+
+
+def test_user_message_drawn_geometry_defaults_none() -> None:
+    """Absent ``drawn_geometry`` stays None (byte-identical to the pre-field
+    payload -- nothing drawn is the common case)."""
+    payload = ws.UserMessagePayload(text="hi")
+    assert payload.drawn_geometry is None
+    assert "drawn_geometry" not in payload.model_dump(exclude_none=True)
+
+
+def test_drawn_geometry_rejects_bad_bbox() -> None:
+    """The bbox must be exactly 4 floats in EPSG:4326 order (min < max)."""
+    with pytest.raises(ValidationError):
+        ws.DrawnGeometry(bbox=[1.0, 2.0, 3.0])  # too few
+    with pytest.raises(ValidationError):
+        ws.DrawnGeometry(bbox=[3.0, 2.0, 1.0, 4.0])  # min_lon > max_lon
+
+
+def test_drawn_geometry_rejects_unknown_type() -> None:
+    """Only ``rectangle`` is wired today (a polygon editor is a follow-on)."""
+    with pytest.raises(ValidationError):
+        ws.DrawnGeometry(
+            geometry_type="polygon",  # type: ignore[arg-type]
+            bbox=[-1.0, -1.0, 1.0, 1.0],
+        )
+
+
 def test_cancel_message(session_id: str) -> None:
     payload = ws.CancelPayload(reason="user-requested")
     dumped = _roundtrip_idempotent(_wrap(payload, session_id))

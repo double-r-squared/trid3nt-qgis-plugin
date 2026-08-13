@@ -20,11 +20,11 @@ Invariants this module is responsible for:
 
 from __future__ import annotations
 
-from typing import Literal
+from typing import Any, Literal
 
 from pydantic import Field
 
-from .common import GraceModel, ULIDStr, UTCDatetime
+from .common import GraceModel, SyntheticInput, ULIDStr, UTCDatetime
 from .envelope import TemporalConfig
 
 __all__ = [
@@ -39,6 +39,12 @@ __all__ = [
     "FaultSourcesResult",
     "FloodExtentObservationResult",
     "LandcoverResult",
+    "DemLayerURI",
+    "TopobathyResult",
+    "StormTracksLayerURI",
+    "GOESSatelliteLayerURI",
+    "NWMStreamflowLayerURI",
+    "LivingAtlasLayerURI",
     "LAYER_RESULT_MODELS",
 ]
 
@@ -249,8 +255,12 @@ class LayerURI(GraceModel):
 
     layer_id: str  # stable id; flows into map-command load-layer args
     name: str
-    layer_type: Literal["raster", "vector"]
-    uri: str  # gs://... COG / FlatGeobuf / GeoParquet
+    # ``mesh`` (ADR 0118, SCHISM landing): an unstructured/UGRID solver mesh the
+    # plugin opens via MDAL (``QgsMeshLayer``) -- the ONE format the live
+    # materializer STAGES rather than streams (ADR 0116). SCHISM's out2d UGRID +
+    # (retroactively) the SFINCS quadtree map are the mesh producers.
+    layer_type: Literal["raster", "vector", "mesh"]
+    uri: str  # gs://... COG / FlatGeobuf / GeoParquet / UGRID netCDF (mesh)
     style_preset: str  # references the QML preset library
     temporal: TemporalConfig | None = None  # present iff time-varying
     role: Literal["primary", "context", "input"] = "primary"
@@ -265,6 +275,22 @@ class LayerURI(GraceModel):
     # (honesty floor). ``None`` => the layer is exactly the requested source.
     # Additive + optional per the GraceModel forward-compat rule.
     fallback_note: str | None = None
+    # Structured input provenance (provenance-chain wave): the physical model
+    # inputs this layer was built from, each tagged with WHERE it came from
+    # (fetched / user / default_demo / derived / prompt_interpreted). ADDITIVE +
+    # default-empty -- a template populates it incrementally; ``[]`` means the
+    # template has not declared its input provenance yet, NOT "all real". The
+    # narration seam (``summarize_tool_result``) renders it into one compact
+    # assumptions line so the agent narrates which quantities are demo defaults
+    # vs site-derived, and never mistakes a baked constant for measured data.
+    synthetic_inputs: list[SyntheticInput] = Field(default_factory=list)
+    # Explicit CRS authority id for a ``layer_type="mesh"`` row (ADR 0118).
+    # MDAL reports an EMPTY crs() for a SCHISM out2d UGRID / a SFINCS quadtree
+    # grid, so the plugin's ``_add_mesh`` applies this string via
+    # ``QgsMeshLayer.setCrs(QgsCoordinateReferenceSystem(crs_authid))`` (0116).
+    # ``None`` for a raster/vector row (their CRS rides in the object bytes).
+    # Additive + optional per the GraceModel forward-compat rule.
+    crs_authid: str | None = None
 
 
 # --------------------------------------------------------------------------- #
@@ -385,6 +411,150 @@ class LandcoverResult(LayerURI):
     downsampling_note: str | None = None
 
 
+class DemLayerURI(LayerURI):
+    """A NO-FIELD ``LayerURI`` subclass for the ``fetch_dem`` fold (ADR 0097).
+
+    ``fetch_dem`` carries NO business fields beyond the base ``LayerURI`` -- the
+    twin returned a plain ``LayerURI``. But the router's ONLY seam to override the
+    emitted ``layer_id`` / ``name`` (the twin's ``dem-{lon}-{lat}-{Nm}`` id and
+    ``USGS 3DEP DEM (Nm)`` name with the pixel-budget auto-coarsen stamp) is the
+    ``hooks.envelope`` post-emit hook, which ``registration._validate_hooks``
+    REQUIRES be declared TOGETHER with ``output.result_model`` (a name in this
+    table). This zero-field subclass satisfies that pairing with the LEAST
+    invasive change (no relaxation of the shared envelope/result_model validator,
+    which every other envelope spec depends on): it serializes field-for-field
+    like the base ``LayerURI``, so a consumer that expects a ``LayerURI`` sees an
+    identical shape (``isinstance`` holds).
+    """
+
+
+class TopobathyResult(LayerURI):
+    """A merged coastal topo-bathymetry ``LayerURI`` plus its fetch-time provenance.
+
+    The ``fetch_topobathy`` fold's result model (ADR 0110). The four extra fields
+    are FETCH-TIME PROVENANCE -- which of the composite's heterogeneous legs (CUDEM
+    1/9" tiles, NCEI regional 1 m tiles, the ETOPO 2022 global fallback, 3DEP land)
+    actually painted the merge -- and are NOT recoverable from the final single-band
+    COG. They are carried from the delegate to here by the provenance channel
+    (``topobathy.read`` records them; ``topobathy.envelope`` reads them back), so
+    they survive a cache hit that never re-runs the fetch. A cache object written
+    before the channel (no sidecar) yields ``None`` provenance, and these declared
+    DEFAULTS then hold -- byte-identical to the twin's own cache-hit behaviour.
+
+    - ``bathymetry_present`` -- True when CUDEM, the regional fine DEM, OR the ETOPO
+      global fallback contributed a real below-waterline bed; False on the
+      3DEP-land-only degrade.
+    - ``fallback_warning`` -- an honest human-readable warning when the surface
+      degraded (bathymetry absent; global ETOPO fallback bathy; the land leg was
+      absent). ``None`` on the clean CUDEM/regional path. NEVER a fabricated success.
+    - ``cudem_tile_count`` -- number of CUDEM 1/9" tiles merged (0 off the CUDEM path).
+    - ``regional_tile_count`` -- number of NCEI regional fine (~1 m) tiles merged.
+    """
+
+    bathymetry_present: bool = True
+    fallback_warning: str | None = None
+    cudem_tile_count: int = 0
+    regional_tile_count: int = 0
+
+
+class StormTracksLayerURI(LayerURI):
+    """The hurricane / tropical-cyclone track ``LayerURI`` plus its fetch-time mode provenance.
+
+    The ``fetch_storm_tracks`` fold's result model (ADR 0111). The twin returned a
+    plain ``LayerURI``; the router's only seam to override the emitted ``layer_id`` /
+    ``name`` (the twin's ``storm-tracks-{seed}`` id + ``Storm tracks - <mode> (<scope>)``
+    name) is the ``hooks.envelope`` post-emit hook, which pairs with a result model.
+    The extra fields are FETCH-TIME PROVENANCE (which mode served + which storms were
+    attributed) -- carried from the delegate to here by the provenance channel
+    (``storm_tracks.read`` records them; ``storm_tracks.envelope`` reads them back), so
+    they survive a cache hit that never re-runs the fetch. A pre-channel cache object
+    (no sidecar) yields ``None`` provenance and these declared DEFAULTS hold.
+
+    - ``mode`` -- ``"active"`` (NHC live) or ``"historical"`` (IBTrACS archive).
+    - ``storm_count`` -- number of distinct storms in the returned layer.
+    - ``storm_names`` -- the attributed storm names (or SIDs) in the layer.
+    """
+
+    mode: str = "historical"
+    storm_count: int = 0
+    storm_names: list[str] = []
+
+
+class GOESSatelliteLayerURI(LayerURI):
+    """The single-band GOES ABI imagery ``LayerURI`` plus its fetch-time scan provenance.
+
+    The ``fetch_goes_satellite`` fold's result model (ADR 0111). The twin returned a
+    plain ``LayerURI`` with an em-dash in its ``name``; the router's only seam to
+    reproduce that exact ``name`` is the ``hooks.envelope`` post-emit hook, which pairs
+    with a result model. The extra fields are FETCH-TIME PROVENANCE (which bird + which
+    scan actually served) carried by the provenance channel (``goes_satellite.read``
+    records them; ``goes_satellite.envelope`` reads them back) -- the ``scan_time`` in
+    particular is UNRECOVERABLE from the produced COG on a cache hit (the twin's own
+    cache hit lost which scan served), so the channel is what makes it durable.
+
+    - ``satellite`` -- the canonical bird token that served (``"goes-19"``).
+    - ``band`` -- the ABI band emitted (``"visible"`` / ``"ir_window"`` / ``"water_vapor"``).
+    - ``scan_time`` -- the ISO start-time of the chosen MCMIPC scan (``None`` on a
+      pre-channel cache object).
+    """
+
+    satellite: str = "goes-19"
+    band: str = "visible"
+    scan_time: str | None = None
+
+
+class NWMStreamflowLayerURI(LayerURI):
+    """The NOAA NWM point-streamflow ``LayerURI`` plus its fetch-time cycle provenance.
+
+    The ``fetch_noaa_nwm_streamflow`` fold's result model (ADR 0112, the fetcher-finale
+    endgame -- the LAST coded data-fetcher). The twin returned a plain ``LayerURI``; the
+    router's only seam to reproduce its exact ``layer_id`` /
+    ``name`` (``nwm-streamflow-{product}-{seed}`` + ``NWM streamflow -- <product>
+    (<latest|valid_time>[ +fNNN])``) is the ``hooks.envelope`` post-emit hook, which pairs
+    with a result model. The extra fields are FETCH-TIME PROVENANCE for a MULTI-SOURCE
+    COMPOSITE (which NWM cycle served + how many reaches joined + how many NLDI COMIDs the
+    5x5 bbox sample discovered) -- carried from the delegate to here by the provenance
+    channel (``nwm_streamflow.read`` records them; ``nwm_streamflow.envelope`` reads them
+    back), so they survive a cache hit that never re-runs the composite fetch. The
+    ``reference_time`` in particular is UNRECOVERABLE from the produced FGB's per-feature
+    ``valid_time`` attribute on a pre-channel cache object, so the channel is what makes it
+    durable. A pre-channel cache object (no sidecar) yields ``None`` provenance and these
+    declared DEFAULTS hold.
+
+    - ``product`` -- the NWM configuration that served (``"analysis_assim"`` / ``"short_range"``).
+    - ``reference_time`` -- the ISO valid/reference time of the resolved NWM cycle
+      (``None`` on a pre-channel cache object).
+    - ``reach_count`` -- number of joined NHDPlus reach points in the emitted layer.
+    - ``nldi_comids_discovered`` -- COMIDs the NLDI 5x5 bbox sample snapped (>= reach_count).
+    """
+
+    product: str = "analysis_assim"
+    reference_time: str | None = None
+    reach_count: int = 0
+    nldi_comids_discovered: int = 0
+
+
+class LivingAtlasLayerURI(LayerURI):
+    """A discovered ESRI Living Atlas layer ``LayerURI`` plus its curation envelope.
+
+    Built by ``fetch_living_atlas_layer`` (not a spec envelope hook -- the tool is
+    hand-written) around the router's produced ``LayerURI``. Carries NATE's
+    two-pool curation label so the agent/user can never mistake community-curated
+    content for authoritative ESRI content.
+
+    Extra fields beyond ``LayerURI``:
+    - ``curation`` -- "authoritative" (ESRI ``contentStatus`` badge) or "community".
+    - ``item_id`` -- the Living Atlas ArcGIS item id.
+    - ``service_type`` -- "Image Service" | "Feature Service" | "Map Service".
+    - ``provenance`` -- item id, curation, service type/url, owner, source string.
+    """
+
+    curation: Literal["authoritative", "community"] = "community"
+    item_id: str = ""
+    service_type: str = ""
+    provenance: dict[str, Any] = Field(default_factory=dict)
+
+
 #: name -> LayerURI-subclass. A spec's ``output.result_model`` string resolves
 #: here; the router builds the named subclass from the base LayerURI + the
 #: envelope hook's field dict. Empty of a name -> the plain LayerURI (no-op).
@@ -393,6 +563,12 @@ LAYER_RESULT_MODELS: dict[str, type[LayerURI]] = {
     "FaultSourcesResult": FaultSourcesResult,
     "FloodExtentObservationResult": FloodExtentObservationResult,
     "LandcoverResult": LandcoverResult,
+    "DemLayerURI": DemLayerURI,
+    "TopobathyResult": TopobathyResult,
+    "StormTracksLayerURI": StormTracksLayerURI,
+    "GOESSatelliteLayerURI": GOESSatelliteLayerURI,
+    "NWMStreamflowLayerURI": NWMStreamflowLayerURI,
+    "LivingAtlasLayerURI": LivingAtlasLayerURI,
 }
 
 

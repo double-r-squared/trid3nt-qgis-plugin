@@ -73,7 +73,7 @@ os.environ.setdefault("CPL_VSIL_CURL_CHUNK_SIZE", "1048576")  # 1 MiB
 # On the agent venv (pandas 2.2.3) these still exist but emit FutureWarning; on
 # any pandas>=3.0 they raise ``AttributeError: 'RangeIndex' object has no
 # attribute 'is_integer'`` deep inside the surge/river forcing path — exactly
-# the forcing path the COASTAL SFINCS North Star needs. The kickoff forbids
+# the forcing path the coastal SFINCS surge run needs. The kickoff forbids
 # editing the installed package and a hard ``pandas<2.0`` pin would fight the
 # rest of the stack, so we GUARD in OUR code: re-attach the removed methods to
 # ``pandas.Index`` (idempotent; a no-op where they already exist) delegating to
@@ -182,7 +182,7 @@ class SFINCSSetupError(RuntimeError):
 class WaterlevelForcing:
     """Surge / tide water-level boundary forcing (SFINCS ``bzs``).
 
-    COASTAL SFINCS North Star: the surge / tide hydrograph the boundary cells
+    Coastal SFINCS: the surge / tide hydrograph the boundary cells
     are driven with. Two ways the deck can ingest it, mirroring
     ``SfincsModel.setup_waterlevel_forcing(timeseries=..., locations=...)`` /
     ``geodataset=...``:
@@ -216,7 +216,7 @@ class DischargeForcing:
     """River-inflow discharge boundary forcing (SFINCS ``dis``).
 
     Fluvial / compound-flood coupling: the river-discharge hydrograph
-    (``fetch_noaa_nwm_streamflow`` / ``fetch_cama_flood_discharge``) injected at
+    (``fetch_noaa_nwm_streamflow``) injected at
     the points where rivers enter the domain.
 
     ORDER MATTERS (hydromt-sfincs contract): ``setup_river_inflow`` must run
@@ -332,7 +332,7 @@ class ForcingSpec:
     Star extends it with the surge / tide / discharge / wind / pressure members
     below, populated from the forcing fetchers
     (``fetch_gtsm_tide_surge`` / ``fetch_noaa_coops_tides`` /
-    ``fetch_noaa_nwm_streamflow`` / ``fetch_cama_flood_discharge`` / ERA5); the
+    ``fetch_noaa_nwm_streamflow`` / ERA5); the
     shape is intentionally open enough to grow.
 
     Surge / compound-flood members (all optional; ``None`` → that forcing block
@@ -446,7 +446,7 @@ class BuildOptions:
     - ``enable_subgrid`` — emit a ``setup_subgrid`` block. Subgrid tables let
       SFINCS run on a COARSE computational grid while still resolving local
       topography + roughness at sub-pixel resolution — the standard way to get
-      an urban-flood-around-buildings estimate cheaply (the COASTAL North Star's
+      an urban-flood-around-buildings estimate cheaply (the coastal case's
       "rough urban flood" ask). Default ``False`` (v0.1 pluvial decks stay on
       the plain ``setup_dep`` + ``setup_manning_roughness`` path).
     - ``subgrid_nr_subgrid_pixels`` — sub-pixels per computational cell in the
@@ -1716,6 +1716,13 @@ def _emit_physics_config(
         for key in ("theta", "alpha", "huthresh"):
             if key in physics:
                 components.append(f"  {key}: {float(physics[key])}")
+        # Horizontal eddy viscosity: `viscosity` (0/1) toggles the momentum-
+        # diffusion term; `nuvisc` (m2/s) sets its coefficient (only meaningful
+        # with viscosity=1). Both ride the setup_config passthrough verbatim.
+        if "viscosity" in physics:
+            components.append(f"  viscosity: {int(physics['viscosity'])}")
+        if "nuvisc" in physics:
+            components.append(f"  nuvisc: {float(physics['nuvisc'])}")
         # Coriolis: a latitude float -> sfincs.inp:latitude (the constant-f plane).
         if "coriolis_latitude" in physics:
             components.append(f"  latitude: {float(physics['coriolis_latitude'])}")
@@ -2220,8 +2227,79 @@ def _spiderweb_from_dict(d: dict[str, Any] | None) -> "SpiderwebForcing | None":
     )
 
 
+#: PARSER VERSION -- bump whenever ``forcing`` / ``options`` top-level fields
+#: change. Named in the strict-field errors below (ADR 0158).
+_FORCING_OPTIONS_PARSER_VERSION = "sfincs-forcing-options-1"
+
+#: Every top-level key ``forcing_spec_from_dict`` reads (mirrors the
+#: ``ForcingSpec`` dataclass fields exactly -- no envelope keys live here).
+_KNOWN_FORCING_FIELDS = frozenset(
+    {
+        "forcing_type",
+        "precip_inches",
+        "duration_hours",
+        "return_period_years",
+        "precip_magnitude_mm_per_hr",
+        "waterlevel",
+        "discharge",
+        "breach",
+        "wind",
+        "pressure",
+        "wind_spiderweb",
+        "infiltration",
+        "provenance",
+    }
+)
+
+#: Every top-level key ``build_options_from_dict`` reads or knowingly leaves
+#: for a sibling reader. ``quadtree`` and ``return_period_yr`` are NOT read by
+#: this function -- ``build_sfincs_quadtree_deck`` (deck_quadtree.py) reads
+#: them directly off ``spec["options"]`` (quadtree grid config + the design-
+#: surge return-period fallback) -- allowlisted here, not dropped, so this
+#: strict check does not reject a legitimate quadtree job_spec.
+_KNOWN_OPTIONS_FIELDS = frozenset(
+    {
+        "grid_resolution_m",
+        "simulation_hours",
+        "crs",
+        "output_setup_uri",
+        "compute_class",
+        "autoscale_grid",
+        "output_interval_min",
+        "enable_subgrid",
+        "subgrid_nr_subgrid_pixels",
+        "building_obstacle_uri",
+        "building_obstacle_mode",
+        "advanced_physics",
+        "quadtree",  # consumed by deck_quadtree.py directly, not this function
+        "return_period_yr",  # ditto -- the quadtree design-surge fallback
+    }
+)
+
+
+def _reject_unknown_dict_fields(
+    d: dict[str, Any], known: frozenset[str], *, what: str
+) -> None:
+    """Raise loudly if ``d`` carries a top-level key outside ``known`` (ADR 0158
+    -- the ADR 0148 lesson: a stale image silently dropped unknown build_spec
+    fields and two registered knob templates ran as no-ops)."""
+    unknown = sorted(set(d) - known)
+    if unknown:
+        raise SFINCSSetupError(
+            "SFINCS_SPEC_UNKNOWN_FIELDS",
+            message=(
+                f"{what} carries unknown field(s) {unknown} that parser "
+                f"{_FORCING_OPTIONS_PARSER_VERSION} does not read -- this "
+                f"SILENTLY no-ops the intended knob(s) rather than applying "
+                f"them. Either the caller has a typo, or the worker image is "
+                f"stale (rebuild it -- ADR 0148). Known fields: {sorted(known)}."
+            ),
+        )
+
+
 def forcing_spec_from_dict(d: dict[str, Any]) -> ForcingSpec:
     """Reconstruct a ``ForcingSpec`` from the job_spec ``forcing`` dict."""
+    _reject_unknown_dict_fields(d, _KNOWN_FORCING_FIELDS, what="job_spec.forcing")
     return ForcingSpec(
         forcing_type=d["forcing_type"],
         precip_inches=d.get("precip_inches"),
@@ -2242,6 +2320,7 @@ def forcing_spec_from_dict(d: dict[str, Any]) -> ForcingSpec:
 
 def build_options_from_dict(d: dict[str, Any]) -> BuildOptions:
     """Reconstruct ``BuildOptions`` from the job_spec ``options`` dict."""
+    _reject_unknown_dict_fields(d, _KNOWN_OPTIONS_FIELDS, what="job_spec.options")
     base = BuildOptions()
     return BuildOptions(
         grid_resolution_m=float(d.get("grid_resolution_m", base.grid_resolution_m)),

@@ -213,6 +213,44 @@ DEFAULT_CSUB_INTERBED_THICK_FRAC = 0.5
 #: via cg_ske_cr) -- the engine-enforced double-count guard. Pinned in the smoke.
 CSUB_STO_SS_FLOOR = 0.0
 
+#: Vertical hydraulic conductivity (m/day) of a DELAY interbed (csub_delay_interbeds
+#: knob, ADR 0228). A LOW kv gives finite consolidation diffusivity -> slow, time-
+#: lagged compaction; the delay bed compacts BELOW an equivalent no-delay bed at
+#: end-of-pumping. Pinned by fixtures/csub_delay_smoke proof (B). nodelay ignores kv.
+CSUB_DELAY_INTERBED_KV_M_DAY = 1e-6
+
+#: Number of numerical sub-cells discretizing a DELAY interbed's vertical head
+#: profile (the CSUB ndelaycells). Only written when any interbed is a delay bed.
+#: Pinned by fixtures/csub_delay_smoke (ndelaycells=19).
+DEFAULT_CSUB_NDELAYCELLS = 19
+
+#: Geostatic unit weights (specific gravity) for the EFFECTIVE_STRESS CSUB
+#: formulation (csub_effective_stress knob, ADR 0228): sgm = moist (above water
+#: table), sgs = saturated (below). Pinned by fixtures/csub_delay_smoke proof (C).
+#: Only written when csub_effective_stress is on (head_based is dropped).
+DEFAULT_CSUB_SGM = 1.7
+DEFAULT_CSUB_SGS = 2.0
+
+#: Vadose-transport (UZF+UZT) demo defaults (ADR 0228). The unsaturated-zone
+#: solute question ("surface spill -> how long to reach groundwater") is a
+#: purely-advective vertical travel-time problem (MF6 has NO unsaturated
+#: dispersion; matches modflow6-examples ex-gwt-uzt-2d). These parameterize the
+#: UZF Brooks-Corey column + the infiltration forcing; the ARRIVAL TIME scales
+#: with the vadose thickness + the unsaturated flux. All are labeled demo values
+#: (no site soil-hydraulics fetcher in v1). Pinned by fixtures/uzt_smoke.
+DEFAULT_VADOSE_THICKNESS_M = 4.0     # depth to water table (vadose-column thickness), m
+VADOSE_DZ_M = 1.0                    # UZF cell height (m) -- the smoke's proven discretization
+DEFAULT_VADOSE_THTR = 0.05           # Brooks-Corey residual water content
+DEFAULT_VADOSE_THTS = 0.35           # Brooks-Corey saturated water content (porosity)
+DEFAULT_VADOSE_THTI = 0.08           # initial water content
+DEFAULT_VADOSE_EPS = 4.0             # Brooks-Corey exponent
+DEFAULT_VADOSE_INFILTRATION_CONC = 1.0        # tracer conc in infiltration (unit)
+DEFAULT_VADOSE_INFILTRATION_RATE_M_DAY = 0.01  # surface infiltration flux, m/day
+DEFAULT_VADOSE_VKS_M_DAY = 0.1       # saturated vertical K of the unsat medium, m/day
+VADOSE_N_SATURATED_LAYERS = 3        # saturated layers below the water table (smoke geometry)
+VADOSE_PERLEN_DAYS = 4000.0          # transport horizon (long enough for the deepest arrival)
+VADOSE_NSTP = 400                    # transport steps over the horizon
+
 
 # ---------------------------------------------------------------------------
 # Archetype demo defaults. The three new MODFLOW archetypes
@@ -353,11 +391,246 @@ DEFAULT_CAPTURE_ZONE_TRAVEL_TIME_YEARS: list[float] = [1.0, 5.0, 10.0]
 DEFAULT_WELLHEAD_PROTECTION_TRAVEL_TIME_YEARS: list[float] = [2.0, 5.0, 10.0]
 
 
+def _build_gwf_dis(
+    gwf,
+    *,
+    gwf_name: str,
+    nlay: int,
+    nrow: int,
+    ncol: int,
+    delr,
+    delc,
+    top,
+    botm,
+    xorigin=None,
+    yorigin=None,
+    crs=None,
+):
+    """Construct the GWF structured-grid DIS package (the one DIS constructor).
+
+    Every archetype deck builds its DIS through here. ``xorigin``/``yorigin`` are
+    OMITTED when None so a local-(0,0)-origin deck (PRT capture zone, saltwater
+    cross-section) writes a .dis byte-identical to a bare call; when an origin AND
+    a ``crs`` are supplied the FloPy model grid is tagged (georeferencing only --
+    no effect on the .dis bytes). Returns the DIS package (callers that reference
+    it downstream capture the return).
+    """
+    kwargs = dict(
+        length_units=LENGTH_UNITS,
+        nlay=nlay,
+        nrow=nrow,
+        ncol=ncol,
+        delr=delr,
+        delc=delc,
+        top=top,
+        botm=botm,
+        filename=f"{gwf_name}.dis",
+    )
+    if xorigin is not None:
+        kwargs["xorigin"] = xorigin
+    if yorigin is not None:
+        kwargs["yorigin"] = yorigin
+    dis = flopy.mf6.ModflowGwfdis(gwf, **kwargs)
+    if xorigin is not None and yorigin is not None and crs is not None:
+        try:
+            gwf.modelgrid.set_coord_info(xoff=xorigin, yoff=yorigin, crs=crs.to_epsg())
+        except Exception:  # pragma: no cover - older flopy signature fallback
+            pass
+    return dis
+
+
+# ---------------------------------------------------------------------------
+# DISV / gridgen generator (ADR 0099, mesh wave M2). A refinement-capable
+# groundwater grid: flopy Gridgen refines a base structured grid around drawn
+# refine_region polygons (and the well) into a DISV vertex grid. Lives IN this
+# module -- NOT a sibling -- for the same dual-import reason _build_gwf_dis does
+# (gwt_adapter is imported FLAT server-side + PACKAGE worker-side, so a sibling
+# import resolves in neither; ADR 0098 decision 3).
+#
+# IMAGE DEPENDENCY (STOP condition): flopy Gridgen shells out to the USGS
+# ``gridgen`` binary at build() time. That binary is NOT in the modflow worker
+# image (services/workers/modflow/Dockerfile installs only mf6 + flopy). The
+# component builds + tests offline (availability probe + refinement-feature
+# construction + typed STOP); the LIVE DISV grid build is gated on adding the
+# gridgen binary to the image -- the named image-rebuild condition (ADR 0099).
+# ---------------------------------------------------------------------------
+
+#: The USGS gridgen executable name flopy's Gridgen wrapper resolves.
+GRIDGEN_EXE = "gridgen"
+
+
+class GridgenUnavailableError(RuntimeError):
+    """The ``gridgen`` binary is absent from the runtime image (DISV blocked).
+
+    Raised BEFORE any partial deck is built so a DISV request fails honestly
+    rather than silently degrading to a uniform DIS grid the user did not ask
+    for. The message names the image-rebuild condition (ADR 0099).
+    """
+
+    def __init__(self, exe_name: str = GRIDGEN_EXE) -> None:
+        super().__init__(
+            f"DISV grid requested but the {exe_name!r} binary is not installed "
+            "in the modflow worker image. Add the USGS gridgen executable to "
+            "services/workers/modflow/Dockerfile (the named image-rebuild "
+            "condition, ADR 0099) before the DISV/refinement leg can run live."
+        )
+        self.exe_name = exe_name
+        self.error_code = "MODFLOW_GRIDGEN_UNAVAILABLE"
+
+
+def gridgen_available(exe_name: str = GRIDGEN_EXE) -> bool:
+    """True iff the gridgen binary is resolvable on PATH (flopy build() needs it)."""
+    import shutil
+
+    return shutil.which(exe_name) is not None
+
+
+def _refine_level_for(base_size_m: float, target_size_m: float, *, max_level: int = 5) -> int:
+    """Quadtree depth taking a base cell to ``target_size_m`` or finer (worker copy).
+
+    ``target ~= base / 2**L`` -> ``L = ceil(log2(base/target))`` clamped
+    ``[0, max_level]``. Duplicated worker-side (the server surface lives in
+    ``agent/mesh/refine_regions.py`` but the Docker image COPYs only
+    ``services/workers/*``; fold-by-duplication, ADR 0098/0099).
+    """
+    import math as _math
+
+    if not (target_size_m > 0) or target_size_m >= base_size_m:
+        return 0
+    return max(0, min(int(max_level), int(_math.ceil(_math.log2(base_size_m / target_size_m)))))
+
+
+def _disv_refinement_features(
+    refine_regions: list[dict], base_size_m: float, to_local_xy, *, max_level: int = 5
+) -> list[tuple[list[list[list[float]]], int]]:
+    """Translate drawn refine_region dicts -> gridgen ``(polygon_rings, level)`` pairs.
+
+    Pure geometry (no gridgen binary): for each ``{polygon, target_size_m, bbox}``
+    entry, compute its quadtree refine level from ``target_size_m`` vs the base
+    cell, reproject the polygon's lon/lat ring into the grid's LOCAL (metre)
+    space via ``to_local_xy`` (a ``(lon, lat) -> (x, y)`` callable), and pair the
+    rings with the level. Regions at level 0 (target coarser than base, or no
+    finer size) are dropped. Unit-testable without the binary.
+    """
+    out: list[tuple[list[list[list[float]]], int]] = []
+    for region in refine_regions:
+        target = region.get("target_size_m")
+        target_size_m = float(target) if target is not None else base_size_m / 2.0
+        level = _refine_level_for(base_size_m, target_size_m, max_level=max_level)
+        if level <= 0:
+            continue
+        geom = (region.get("polygon") or {}).get("geometry") or {}
+        gtype = geom.get("type")
+        coords = geom.get("coordinates") or []
+        polys = coords if gtype == "MultiPolygon" else [coords]
+        for poly in polys:
+            rings = [
+                [list(to_local_xy(pt[0], pt[1])) for pt in ring] for ring in poly
+            ]
+            out.append((rings, int(level)))
+    return out
+
+
+def _build_disv_gridprops(
+    *,
+    nlay: int,
+    nrow: int,
+    ncol: int,
+    delr: float,
+    delc: float,
+    top: float,
+    botm,
+    refinement_features: list[tuple[list[list[list[float]]], int]],
+    model_ws,
+    exe_name: str = GRIDGEN_EXE,
+):
+    """Build DISV gridprops by refining a base structured grid with gridgen.
+
+    Raises :class:`GridgenUnavailableError` (honest STOP) if the gridgen binary
+    is missing -- BEFORE constructing any partial artifact. When available it
+    builds a :class:`flopy.discretization.StructuredGrid`, refines it around each
+    ``(polygon_rings, level)`` feature, runs gridgen, and returns the
+    ``get_gridprops_disv()`` dict ready for :func:`_build_gwf_disv`.
+    """
+    if not gridgen_available(exe_name):
+        raise GridgenUnavailableError(exe_name)
+
+    import numpy as _np
+    from flopy.discretization import StructuredGrid
+    from flopy.utils.gridgen import Gridgen
+
+    # Base structured grid at LOCAL (0,0) origin (matches the DIS deck).
+    sg = StructuredGrid(
+        delc=_np.full(nrow, float(delc)),
+        delr=_np.full(ncol, float(delr)),
+        top=_np.full((nrow, ncol), float(top)),
+        botm=_np.stack([_np.full((nrow, ncol), float(b)) for b in (
+            botm if isinstance(botm, (list, tuple)) else [botm] * nlay
+        )]),
+        nlay=nlay,
+    )
+    gridgen = Gridgen(sg, model_ws=str(model_ws), exe_name=exe_name)
+    for rings, level in refinement_features:
+        gridgen.add_refinement_features([rings], "polygon", level, range(nlay))
+    gridgen.build(verbose=False)
+    return gridgen.get_gridprops_disv()
+
+
+def _build_gwf_disv(gwf, *, gwf_name: str, gridprops: dict):
+    """Construct the GWF DISV package from gridgen gridprops (the DISV analogue
+    of :func:`_build_gwf_dis`). ``gridprops`` is a
+    :meth:`flopy.utils.gridgen.Gridgen.get_gridprops_disv` dict.
+    """
+    return flopy.mf6.ModflowGwfdisv(
+        gwf,
+        length_units=LENGTH_UNITS,
+        filename=f"{gwf_name}.disv",
+        **gridprops,
+    )
+
+
 def _default_travel_time_years(archetype: str) -> list[float]:
     """Archetype-specific default isochrone tiers (years) when none supplied."""
     if archetype == "wellhead_protection":
         return list(DEFAULT_WELLHEAD_PROTECTION_TRAVEL_TIME_YEARS)
     return list(DEFAULT_CAPTURE_ZONE_TRAVEL_TIME_YEARS)
+
+
+def prt_grid_geometry(lat: float, lon: float) -> dict:
+    """The PRT capture-zone grid geometry for an AOI centre (SHARED, pure).
+
+    Reproduces exactly the local-origin grid ``_build_prt_capture_zone_deck``
+    builds so the COMPOSER can sample the kriged water-table surface at each cell
+    centre (ADR 0215 item 3, the per-cell IC) BEFORE the deck exists. Returns the
+    41x41 grid params + the model UTM EPSG + the per-cell centre coordinates in
+    both LOCAL (0-origin) and true UTM metres, plus their EPSG:4326 lon/lat.
+
+    Keys: nrow, ncol, delr, delc, xoffset_m, yoffset_m, model_utm_epsg,
+    cell_lon (nrow x ncol), cell_lat (nrow x ncol). Row 0 is the NORTH row
+    (flopy convention), matching ``starting_head_by_cell`` row order.
+    """
+    ncol = int(round(2 * PRT_DOMAIN_HALF_WIDTH_M / PRT_CELL_SIZE_M))
+    nrow = ncol
+    delr = delc = PRT_CELL_SIZE_M
+    crs = _utm_crs_for_lonlat(lon, lat)
+    to_utm = Transformer.from_crs("EPSG:4326", crs, always_xy=True)
+    back = Transformer.from_crs(crs, "EPSG:4326", always_xy=True)
+    aoi_east, aoi_north = to_utm.transform(lon, lat)
+    xoffset_m = aoi_east - PRT_DOMAIN_HALF_WIDTH_M
+    yoffset_m = aoi_north - PRT_DOMAIN_HALF_WIDTH_M
+    cols = np.arange(ncol)
+    rows = np.arange(nrow)
+    ce = xoffset_m + (cols + 0.5) * delr                       # (ncol,) UTM easting
+    cn = yoffset_m + (nrow - rows - 0.5) * delc                 # (nrow,) UTM northing
+    EE, NN = np.meshgrid(ce, cn)                                # (nrow, ncol)
+    lon_grid, lat_grid = back.transform(EE.ravel(), NN.ravel())
+    return {
+        "nrow": nrow, "ncol": ncol, "delr": delr, "delc": delc,
+        "xoffset_m": xoffset_m, "yoffset_m": yoffset_m,
+        "model_utm_epsg": crs.to_epsg(),
+        "cell_lon": np.asarray(lon_grid).reshape(nrow, ncol),
+        "cell_lat": np.asarray(lat_grid).reshape(nrow, ncol),
+    }
 
 #: Default PRT max tracking time (years). Particles are tracked until they hit a
 #: boundary or this time cap. 50 years is long enough for a 2 km domain at
@@ -560,6 +833,26 @@ class DeckManifest:
     # Well easting/northing/lat/lon are the REAL coordinates (NOT local-origin).
     n_particles: int = 0       # number of particles in the PRT release ring
     capture_zone_travel_time_years: list[float] = field(default_factory=list)
+    # Regional water-table gradient driving the steady GWF flow field the PRT runs
+    # against. When ``gradient_source == "dem"`` the (x, y) components are the
+    # DEM-derived planar head-gradient (m/m) in the model-UTM frame (x=east,
+    # y=north); the CHD boundary imposes head(x,y)=TOP + gx*(x-xc) + gy*(y-yc) on
+    # the full perimeter so groundwater flows down-slope and the capture zone
+    # extends up-gradient toward the recharge area. When "demo_west_east" the
+    # legacy hardcoded west->east REGIONAL_GRADIENT drives the flow (no DEM).
+    regional_gradient_x: float = 0.0    # head-gradient east-component (m/m)
+    regional_gradient_y: float = 0.0    # head-gradient north-component (m/m)
+    # multi-well WELLFIELD + NHD RIV (ADR 0215 wellhead-reeval part 2). One entry
+    # per snapped well cell: [row, col, rate_m3_day (negative = extraction), lat,
+    # lon]; empty for a single-well deck (the well_row/well_col/pumping_rate_m3_day
+    # fields carry the lone well). ``prt_river_cell_count`` echoes the NHD RIV cells
+    # draped onto the PRT grid (0 => CHD ring only, byte-identical to part 1).
+    prt_well_cells: list[list[float]] = field(default_factory=list)
+    prt_well_names: list[str] = field(default_factory=list)  # per-well labels (deck order)
+    prt_river_cell_count: int = 0
+    gradient_source: str = "demo_west_east"  # "dem" | "demo_west_east"
+    gradient_magnitude: float = 0.0     # |gradient| (m/m); 0.0 => manifest not populated
+    gradient_azimuth_deg: float | None = None  # compass azimuth (deg) water flows toward
     # --- saltwater_intrusion (ADDITIVE) -------------------- #
     # ``archetype == "saltwater_intrusion"``: GWF (BUY variable-density) + GWT in ONE
     # sim, using a vertical nrow=1 slice (Henry geometry) with seaward GHB+AUX (salt)
@@ -610,6 +903,23 @@ class DeckManifest:
     csub_ssv_inelastic_m: float = 0.0  # inelastic Ssv written to every interbed (m^-1)
     csub_sse_elastic_m: float = 0.0    # elastic Sse written to every interbed (m^-1)
     csub_interbed_thick_frac: float = 0.0  # interbed thickness fraction of the layer
+    # --- ADR 0228: vadose_transport UZF+UZT unsaturated-zone solute travel ------ #
+    # ``archetype == "vadose_transport"``: a DUAL-model GWF+GWT sim (dual IMS, GWF
+    # first) with a UZF unsaturated-flow column (vertical ivertcon chain of
+    # Brooks-Corey cells) + a UZT transport package keyed to the UZF flows
+    # (flow_package_name). The deliverable is a BREAKTHROUGH time series at the base
+    # of the column, read from ``vadose_obs_file``. Every field below stays at its
+    # default for all other archetypes (byte-identical manifests).
+    vadose_present: bool = False   # True iff a UZF+UZT vadose column was written
+    vadose_thickness_m: float = 0.0  # depth to water table (vadose-column thickness), m
+    vadose_n_layers: int = 0       # number of UZF unsaturated cells above the water table
+    vadose_obs_file: str = ""      # the UZT obs csv (base-of-column breakthrough conc)
+    vadose_conc_file: str = ""     # the UZT concentration output file (.uzt.ucn)
+    vadose_thtr: float = 0.0       # Brooks-Corey residual water content written
+    vadose_thts: float = 0.0       # Brooks-Corey saturated water content written
+    vadose_eps: float = 0.0        # Brooks-Corey exponent written
+    vadose_infiltration_conc: float = 0.0     # UZT infiltration tracer concentration written
+    vadose_infiltration_rate_m_day: float = 0.0  # UZF surface infiltration flux written (m/day)
     # Files written (relative to sim_dir), for manifest/upload assembly:
     files: list[str] = field(default_factory=list)
 
@@ -979,6 +1289,7 @@ def _build_csub_interbeds(
     sse: float,
     thick_frac: float,
     theta: float,
+    delay: bool = False,
 ) -> dict[str, Any]:
     """Turn a pumped-cell footprint into MF6 CSUB deck inputs (ONE no-delay
     HEAD_BASED interbed per cell).
@@ -1004,15 +1315,20 @@ def _build_csub_interbeds(
       * kv       = 1.0 (ignored for nodelay; a positive dummy avoids the DELAY
                    validation);
       * h0       = 0.0 (initial interbed head offset);
-      * boundname = ``sub_r{i}`` (mf6 UPPERCASES it in the OBS csv header ->
-                    COMPACTION_R{i} / INE_R{i} / ELA_R{i}, pinned by the smoke).
+      * boundname = ``sub_r{i}`` (a stable per-interbed label carried in
+                    packagedata; NOT used as the OBS id -- see below).
 
     The continuous OBS (registered to ``<gwf>.csub.obs.csv``) records, per
     interbed: ``interbed-compaction`` (total, m), ``inelastic-compaction`` (INE,
     the permanent share) and ``elastic-compaction`` (ELA, the recoverable share).
-    The postprocess parses these for ``inelastic_fraction = sum(INE) / (sum(INE)
-    + sum(ELA))``. The OBS types + the uppercased casing are pinned by the Phase-1
-    smoke fixture (fixtures/csub_smoke).
+    Each obs is keyed by the 1-based icsubno (interbed NUMBER), NOT the boundname:
+    mf6 6.7.0 HARD-ERRORS "BOUNDNAME (...) not allowed for CSUB observation type
+    'INTERBED-COMPACTION'" (the substrate-found latent regression; the per-interbed
+    compaction obs types accept icsubno only). The obsname (1st tuple element)
+    still drives the csv header (uppercased -> COMPACTION_R{i} / INE_R{i} /
+    ELA_R{i}), so the postprocess parses ``inelastic_fraction = sum(INE) /
+    (sum(INE) + sum(ELA))`` unchanged. Pinned by fixtures/csub_delay_smoke + the
+    6.7.0 icsubno law.
 
     Returns a dict with ``packagedata`` / ``obs`` / ``interbed_meta`` (the ordered
     ``[icsubno, row, col]`` echo for postprocess georegistration) and
@@ -1022,6 +1338,14 @@ def _build_csub_interbeds(
     n = len(footprint_cells)
     if n < 1:
         raise ValueError("CSUB requires >= 1 footprint cell (empty pumped footprint?)")
+    # cdelay / kv select nodelay-vs-delay interbeds (ADR 0228 csub_delay_interbeds
+    # knob). nodelay (default) ignores kv -> a positive dummy keeps the byte-
+    # identical v1 deck; a "delay" interbed models finite consolidation diffusivity
+    # via a LOW vertical K (1e-6 m/day -> slow, time-lagged compaction; the delay
+    # bed compacts BELOW an equivalent no-delay bed at end-of-pumping). Pinned by
+    # fixtures/csub_delay_smoke proof (B).
+    cdelay = "delay" if delay else "nodelay"
+    kv = CSUB_DELAY_INTERBED_KV_M_DAY if delay else 1.0
     packagedata: list[tuple] = []
     interbed_meta: list[tuple[int, int, int]] = []
     for i, (row, col) in enumerate(footprint_cells):
@@ -1030,29 +1354,36 @@ def _build_csub_interbeds(
             (
                 i,                    # icsubno (0-based interbed number)
                 cellid,               # cellid (lay, row, col)
-                "nodelay",            # cdelay (no delay interbeds v1)
+                cdelay,               # cdelay (nodelay v1; delay = knob)
                 0.0,                  # pcs0 (preconsolidation OFFSET = 0)
                 float(thick_frac),    # thick (fraction of cell thickness)
                 1.0,                  # rnb (single equivalent interbed)
                 float(ssv),           # ssv_cc (inelastic Ssv, m^-1)
                 float(sse),           # sse_cr (elastic Sse, m^-1)
                 float(theta),         # theta (interbed porosity)
-                1.0,                  # kv (ignored for nodelay; positive dummy)
+                float(kv),            # kv (delay: finite diffusivity; nodelay: dummy)
                 0.0,                  # h0 (initial interbed head offset)
-                f"sub_r{i}",          # boundname (-> SUB_R{i} in the OBS csv)
+                f"sub_r{i}",          # boundname (packagedata label; OBS uses icsubno)
             )
         )
         interbed_meta.append((i, int(row), int(col)))
 
     # --- continuous OBS: total / inelastic / elastic compaction per interbed - #
-    # boundname-keyed obs (mf6 UPPERCASES -> COMPACTION_R{i} / INE_R{i} / ELA_R{i}).
-    obs_entries: list[tuple[str, str, str]] = []
+    # The obs ID must be the 1-based icsubno (interbed NUMBER), NOT the boundname:
+    # mf6 6.7.0 HARD-ERRORS "BOUNDNAME (...) not allowed for CSUB observation type
+    # 'INTERBED-COMPACTION'" (likewise inelastic-/elastic-compaction) -- the
+    # per-interbed compaction obs types are keyed by icsubno only. The obsname (1st
+    # tuple element) still drives the csv header (uppercased -> COMPACTION_R{i} /
+    # INE_R{i} / ELA_R{i}), so the postprocess parser is unaffected; only the id
+    # changes from boundname to icsubno. Pinned by the fixtures/csub_delay_smoke
+    # law + the 6.7.0 repro (the substrate-found latent regression).
+    obs_entries: list[tuple[str, str, int]] = []
     for i in range(n):
-        obs_entries.append((f"compaction_r{i}", "interbed-compaction", f"sub_r{i}"))
+        obs_entries.append((f"compaction_r{i}", "interbed-compaction", i + 1))
     for i in range(n):
-        obs_entries.append((f"ine_r{i}", "inelastic-compaction", f"sub_r{i}"))
+        obs_entries.append((f"ine_r{i}", "inelastic-compaction", i + 1))
     for i in range(n):
-        obs_entries.append((f"ela_r{i}", "elastic-compaction", f"sub_r{i}"))
+        obs_entries.append((f"ela_r{i}", "elastic-compaction", i + 1))
     obs = {"{gwf}.csub.obs.csv": obs_entries}
 
     return {
@@ -1255,6 +1586,8 @@ def _build_gwf_only_archetype_deck(
     csub_sse_elastic_m: float | None = None,
     csub_interbed_thick_frac: float | None = None,
     csub_cg_ske_m: float | None = None,
+    csub_delay_interbeds: bool = False,
+    csub_effective_stress: bool = False,
     # constitutive advanced-physics (levers STEP 3): ALREADY-VALIDATED resolved
     # dict (regional_gradient / streambed_k_m_day / sfr_manning_n). None/{} =>
     # every phys.get below returns the historical constant => byte-identical.
@@ -1411,9 +1744,9 @@ def _build_gwf_only_archetype_deck(
         n_transient_periods = 0
 
     # --- DIS ----------------------------------------------------------------- #
-    flopy.mf6.ModflowGwfdis(
+    _build_gwf_dis(
         gwf,
-        length_units=LENGTH_UNITS,
+        gwf_name=gwf_name,
         nlay=N_LAYERS,
         nrow=nrow,
         ncol=ncol,
@@ -1423,12 +1756,8 @@ def _build_gwf_only_archetype_deck(
         botm=AQUIFER_BOTTOM_M,
         xorigin=xorigin,
         yorigin=yorigin,
-        filename=f"{gwf_name}.dis",
+        crs=crs,
     )
-    try:
-        gwf.modelgrid.set_coord_info(xoff=xorigin, yoff=yorigin, crs=crs.to_epsg())
-    except Exception:  # pragma: no cover - older flopy signature fallback
-        pass
 
     # --- IC + NPF ------------------------------------------------------------ #
     # regional_gradient: CONSTITUTIVE lever. Default EQUALS REGIONAL_GRADIENT so
@@ -2000,6 +2329,7 @@ def _build_gwf_only_archetype_deck(
             sse=csub_sse_written,
             thick_frac=csub_thick_frac_written,
             theta=porosity,
+            delay=bool(csub_delay_interbeds),
         )
         csub_n_interbeds = int(csub_build["n_interbeds"])
         csub_interbed_cells_meta = [list(m) for m in csub_build["interbed_meta"]]
@@ -2007,12 +2337,16 @@ def _build_gwf_only_archetype_deck(
             key.format(gwf=gwf_name): entries
             for key, entries in csub_build["obs"].items()
         }
-        csub_pkg = flopy.mf6.ModflowGwfcsub(
-            gwf,
+        # Formulation knobs (ADR 0228; DEFAULTS byte-identical to v1):
+        #   csub_effective_stress OFF (default) -> HEAD_BASED + initial-head
+        #     preconsolidation (v1, byte-identical). ON -> drop head_based for the
+        #     EFFECTIVE_STRESS formulation (geostatic sgm/sgs unit weights + a
+        #     specified initial preconsolidation stress). Pinned by csub_delay_smoke (C).
+        #   csub_delay_interbeds ON -> add ndelaycells (the delay bed's vertical
+        #     head-profile discretization). nodelay writes no ndelaycells (v1).
+        csub_kwargs: dict[str, Any] = dict(
             save_flows=True,
             boundnames=True,
-            head_based=True,
-            initial_preconsolidation_head=True,
             cell_fraction=True,          # thick is a fraction of cell thickness
             compression_indices=False,   # ssv_cc/sse_cr are Ss values (m^-1)
             ninterbeds=csub_n_interbeds,
@@ -2025,6 +2359,16 @@ def _build_gwf_only_archetype_deck(
             filename=f"{gwf_name}.csub",
             pname="csub-0",
         )
+        if csub_effective_stress:
+            csub_kwargs["sgm"] = DEFAULT_CSUB_SGM
+            csub_kwargs["sgs"] = DEFAULT_CSUB_SGS
+            csub_kwargs["specified_initial_preconsolidation_stress"] = True
+        else:
+            csub_kwargs["head_based"] = True
+            csub_kwargs["initial_preconsolidation_head"] = True
+        if csub_delay_interbeds:
+            csub_kwargs["ndelaycells"] = DEFAULT_CSUB_NDELAYCELLS
+        csub_pkg = flopy.mf6.ModflowGwfcsub(gwf, **csub_kwargs)
         csub_pkg.obs.initialize(
             filename=f"{gwf_name}.csub.obs", continuous=obs_map
         )
@@ -2340,6 +2684,242 @@ def _with_dedup_suffix(base: str, suffix: int) -> str:
     return f"{head}{tag}"
 
 
+def _build_vadose_transport_deck(
+    *,
+    lat: float,
+    lon: float,
+    crs,
+    to_utm,
+    spill_east: float,
+    spill_north: float,
+    delr: float,
+    delc: float,
+    k_m_per_day: float,
+    aquifer_k_ms: float,
+    porosity: float,
+    contaminant: str,
+    vadose_thickness_m: float | None,
+    vadose_thtr: float | None,
+    vadose_thts: float | None,
+    vadose_eps: float | None,
+    vadose_infiltration_conc: float | None,
+    vadose_infiltration_rate_m_day: float | None,
+    vadose_vks_m_day: float | None,
+    sim_dir: Path,
+    sim_name: str,
+    gwf_name: str,
+    gwt_name: str,
+    write: bool,
+) -> DeckManifest:
+    """Assemble a vadose_transport UZF+UZT unsaturated-zone-travel deck (ADR 0228).
+
+    Productionizes ``fixtures/uzt_smoke`` (the proven deck): a 1-cell-plan vertical
+    column georegistered at the spill point, with a UZF unsaturated-flow package (a
+    vertical ``ivertcon`` chain of Brooks-Corey cells above the water table) coupled
+    to a UZT transport package keyed to the UZF flows (``flow_package_name``),
+    solved as a DUAL-model GWF+GWT simulation with DUAL IMS (GWF registered FIRST).
+    A constant surface infiltration flux carries a tracer down the column; the UZT
+    concentration observed at the lowest UZF cell (just above the water table) is
+    the breakthrough signal.
+
+    Transport is purely ADVECTIVE (MF6 has NO unsaturated dispersion, matching
+    modflow6-examples ex-gwt-uzt-2d). The arrival time increases MONOTONICALLY with
+    the vadose thickness (the physics the smoke pins). The deliverable is the
+    base-of-column breakthrough series read from the UZT obs csv; the map element is
+    a spill-site context point (the manifest carries the (lat, lon)).
+    """
+    thickness = float(
+        vadose_thickness_m if vadose_thickness_m is not None else DEFAULT_VADOSE_THICKNESS_M
+    )
+    if thickness <= 0.0:
+        raise ValueError(f"vadose_thickness_m must be > 0, got {thickness!r}")
+    thtr = float(vadose_thtr if vadose_thtr is not None else DEFAULT_VADOSE_THTR)
+    thts = float(vadose_thts if vadose_thts is not None else DEFAULT_VADOSE_THTS)
+    eps = float(vadose_eps if vadose_eps is not None else DEFAULT_VADOSE_EPS)
+    conc_in = float(
+        vadose_infiltration_conc
+        if vadose_infiltration_conc is not None
+        else DEFAULT_VADOSE_INFILTRATION_CONC
+    )
+    finf = float(
+        vadose_infiltration_rate_m_day
+        if vadose_infiltration_rate_m_day is not None
+        else DEFAULT_VADOSE_INFILTRATION_RATE_M_DAY
+    )
+    vks = float(vadose_vks_m_day if vadose_vks_m_day is not None else DEFAULT_VADOSE_VKS_M_DAY)
+    if not (thts > thtr):
+        raise ValueError(
+            f"vadose_thts ({thts}) must exceed vadose_thtr ({thtr}) (Brooks-Corey)"
+        )
+
+    # UZF column geometry: n_vadose unsaturated cells of VADOSE_DZ_M each above the
+    # water table, plus VADOSE_N_SATURATED_LAYERS saturated layers below (the smoke
+    # geometry). A 1-cell plan grid georegistered at the spill point.
+    dz = VADOSE_DZ_M
+    n_vadose = max(1, int(round(thickness / dz)))
+    nlay = n_vadose + VADOSE_N_SATURATED_LAYERS
+    nrow = ncol = 1
+    top = float(nlay) * dz
+    botm = [top - (i + 1) * dz for i in range(nlay)]
+    wt = botm[n_vadose - 1]          # water table at the base of the vadose column
+
+    xorigin = spill_east - delr / 2.0
+    yorigin = spill_north - delc / 2.0
+
+    sim = flopy.mf6.MFSimulation(
+        sim_name=sim_name, sim_ws=str(sim_dir), exe_name="mf6", version="mf6"
+    )
+    flopy.mf6.ModflowTdis(
+        sim, nper=1, perioddata=[(VADOSE_PERLEN_DAYS, VADOSE_NSTP, 1.0)],
+        time_units=TIME_UNITS,
+    )
+    # DUAL IMS (separate GWF + GWT solutions). UZF requires Newton, so both use
+    # BICGSTAB (an asymmetric-matrix acceleration), mirroring the smoke.
+    ims_gwf = flopy.mf6.ModflowIms(
+        sim, complexity="MODERATE", outer_maximum=200, inner_maximum=100,
+        linear_acceleration="BICGSTAB", filename=f"{gwf_name}.ims",
+    )
+    ims_gwt = flopy.mf6.ModflowIms(
+        sim, complexity="MODERATE", outer_maximum=200, inner_maximum=100,
+        linear_acceleration="BICGSTAB", filename=f"{gwt_name}.ims",
+    )
+
+    # --- GWF unsaturated-flow model ----------------------------------------- #
+    gwf = flopy.mf6.ModflowGwf(
+        sim, modelname=gwf_name, model_nam_file=f"{gwf_name}.nam",
+        save_flows=True, newtonoptions="NEWTON UNDER_RELAXATION",
+    )
+    dis = flopy.mf6.ModflowGwfdis(
+        gwf, nlay=nlay, nrow=nrow, ncol=ncol, delr=delr, delc=delc,
+        top=top, botm=botm, xorigin=xorigin, yorigin=yorigin,
+    )
+    gwf.modelgrid.set_coord_info(xoff=xorigin, yoff=yorigin, crs=crs.to_epsg())
+    flopy.mf6.ModflowGwfic(gwf, strt=wt)
+    flopy.mf6.ModflowGwfnpf(gwf, save_flows=True, icelltype=1, k=1.0, k33=vks)
+    flopy.mf6.ModflowGwfsto(gwf, iconvert=1, ss=1e-5, sy=thts, transient={0: True})
+    # fix the saturated head at the bottom layer (drain to hold a stable water table)
+    flopy.mf6.ModflowGwfchd(gwf, stress_period_data=[[(nlay - 1, 0, 0), wt]])
+
+    # UZF: vertical ivertcon chain of n_vadose cells. packagedata columns:
+    # [ifno, cellid, landflag, ivertcon, surfdep, vks, thtr, thts, thti, eps, bnd]
+    surfdep = 0.1
+    uzf_pkdat = []
+    for i in range(n_vadose):
+        ivertcon = i + 1 if i < n_vadose - 1 else -1   # chain down; -1 = to GW
+        landflag = 1 if i == 0 else 0
+        uzf_pkdat.append([
+            i, (i, 0, 0), landflag, ivertcon, surfdep,
+            vks, thtr, thts, DEFAULT_VADOSE_THTI, eps, f"uz{i}",
+        ])
+    # perioddata: [ifno, finf, pet, extdp, extwc, ha, hroot, rootact]
+    uzf_perdat = {0: [
+        [i, (finf if i == 0 else 0.0), 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
+        for i in range(n_vadose)
+    ]}
+    flopy.mf6.ModflowGwfuzf(
+        gwf, print_flows=False, save_flows=True,
+        simulate_et=False, linear_gwet=False,
+        nuzfcells=n_vadose, ntrailwaves=7, nwavesets=40,
+        packagedata=uzf_pkdat, perioddata=uzf_perdat,
+        budget_filerecord=f"{gwf_name}.uzf.bud",
+        boundnames=True, pname="uzf",
+    )
+    flopy.mf6.ModflowGwfoc(
+        gwf, head_filerecord=f"{gwf_name}.hds",
+        budget_filerecord=f"{gwf_name}.cbc",
+        saverecord=[("HEAD", "ALL"), ("BUDGET", "ALL")],
+    )
+
+    # --- GWT transport model (UZT solute in the unsaturated cells) ----------- #
+    gwt = flopy.mf6.ModflowGwt(
+        sim, modelname=gwt_name,
+        model_nam_file=f"{gwt_name}.nam", save_flows=True,
+    )
+    flopy.mf6.ModflowGwtdis(
+        gwt, nlay=nlay, nrow=nrow, ncol=ncol, delr=delr, delc=delc,
+        top=top, botm=botm, xorigin=xorigin, yorigin=yorigin,
+    )
+    flopy.mf6.ModflowGwtic(gwt, strt=0.0)
+    flopy.mf6.ModflowGwtmst(gwt, porosity=thts)
+    flopy.mf6.ModflowGwtadv(gwt, scheme="TVD")
+    flopy.mf6.ModflowGwtssm(gwt, sources=[[]])
+    flopy.mf6.ModflowGwtoc(
+        gwt, concentration_filerecord=f"{gwt_name}.ucn",
+        saverecord=[("CONCENTRATION", "ALL")],
+    )
+    uzt_obs_file = f"{gwt_name}.uzt.obs.csv"
+    uzt_conc_file = f"{gwt_name}.uzt.ucn"
+    uzt_pkdat = [[i, 0.0, f"uz{i}"] for i in range(n_vadose)]
+    uzt_perdat = {0: [[0, "INFILTRATION", conc_in]]}
+    flopy.mf6.ModflowGwtuzt(
+        gwt, flow_package_name="uzf",
+        print_flows=False, save_flows=True,
+        packagedata=uzt_pkdat, uztperioddata=uzt_perdat,
+        boundnames=True,
+        concentration_filerecord=uzt_conc_file,
+        observations={uzt_obs_file: [
+            ("uzbot", "concentration", f"uz{n_vadose - 1}")]},
+    )
+
+    # GWF-GWT exchange provides the flows (no manual FMI needed).
+    flopy.mf6.ModflowGwfgwt(
+        sim, exgtype="GWF6-GWT6", exgmnamea=gwf_name, exgmnameb=gwt_name,
+    )
+    # DUAL IMS: register GWF FIRST, then GWT (the engine law the smoke decoded).
+    sim.register_ims_package(ims_gwf, [gwf_name])
+    sim.register_ims_package(ims_gwt, [gwt_name])
+
+    manifest = DeckManifest(
+        sim_dir=str(sim_dir),
+        sim_name=sim_name,
+        gwf_name=gwf_name,
+        gwt_name=gwt_name,
+        model_crs=f"EPSG:{crs.to_epsg()}",
+        xorigin=xorigin,
+        yorigin=yorigin,
+        nrow=nrow,
+        ncol=ncol,
+        nlay=nlay,
+        delr=delr,
+        delc=delc,
+        spill_row=0,
+        spill_col=0,
+        spill_easting_m=spill_east,
+        spill_northing_m=spill_north,
+        spill_lat=lat,
+        spill_lon=lon,
+        mass_rate_g_per_day=0.0,
+        release_rate_kg_s=0.0,
+        duration_days=VADOSE_PERLEN_DAYS,
+        n_transport_steps=VADOSE_NSTP,
+        contaminant=contaminant,
+        aquifer_k_ms=aquifer_k_ms,
+        porosity=porosity,
+        archetype="vadose_transport",
+        gwt_present=True,
+        transient=True,
+        n_stress_periods=1,
+        n_transient_periods=1,
+        vadose_present=True,
+        vadose_thickness_m=float(n_vadose) * dz,
+        vadose_n_layers=n_vadose,
+        vadose_obs_file=uzt_obs_file,
+        vadose_conc_file=uzt_conc_file,
+        vadose_thtr=thtr,
+        vadose_thts=thts,
+        vadose_eps=eps,
+        vadose_infiltration_conc=conc_in,
+        vadose_infiltration_rate_m_day=finf,
+    )
+
+    if write:
+        sim.write_simulation()
+        manifest.files = sorted(
+            str(p.relative_to(sim_dir)) for p in sim_dir.rglob("*") if p.is_file()
+        )
+    return manifest
+
+
 def _build_multi_species_deck(
     *,
     species: list,
@@ -2433,9 +3013,9 @@ def _build_multi_species_deck(
     )
     sim.register_ims_package(ims_gwf, [gwf_name])
 
-    flopy.mf6.ModflowGwfdis(
+    _build_gwf_dis(
         gwf,
-        length_units=LENGTH_UNITS,
+        gwf_name=gwf_name,
         nlay=N_LAYERS,
         nrow=nrow,
         ncol=ncol,
@@ -2445,12 +3025,8 @@ def _build_multi_species_deck(
         botm=AQUIFER_BOTTOM_M,
         xorigin=xorigin,
         yorigin=yorigin,
-        filename=f"{gwf_name}.dis",
+        crs=crs,
     )
-    try:
-        gwf.modelgrid.set_coord_info(xoff=xorigin, yoff=yorigin, crs=crs.to_epsg())
-    except Exception:  # pragma: no cover - older flopy signature fallback
-        pass
 
     # regional_gradient: CONSTITUTIVE lever (default EQUALS REGIONAL_GRADIENT ->
     # byte-identical when unset; same phys.get seam as the spill deck).
@@ -2678,9 +3254,42 @@ def _build_prt_capture_zone_deck(
     pumping_rate_m3_day: float | None,
     n_particles: int,
     capture_zone_travel_time_years: list[float] | None,
+    # DEM-derived regional water-table gradient (m/m) in the model-UTM frame
+    # (x=east, y=north). When BOTH are supplied the CHD boundary imposes a PLANAR
+    # head field oriented to this vector (georeferenced mode); when None the legacy
+    # hardcoded west->east REGIONAL_GRADIENT CHD is built (byte-identical).
+    regional_gradient_x: float | None = None,
+    regional_gradient_y: float | None = None,
+    # --- multi-well WELLFIELD + transient + NHD RIV + kriged IC (ADR 0215) ---- #
+    # ALL default to the single-well steady demo path (byte-identical to part 1).
+    #   wells: [{lon, lat, rate_m3_day, name}] -- a WELLFIELD. Each gets one WEL
+    #     record + a particle ring (US EPA 440/6-87-010; ex-prt-mp7-p03). None =>
+    #     the single ``well_location_latlon`` + ``pumping_rate_m3_day``.
+    #   transient/sim_years/n_periods/aquifer_sy/aquifer_ss: a steady spin-up +
+    #     N transient storage periods (GwfSto) so the isochrones evolve with the
+    #     wellfield drawdown; the PRT tracks the per-period REVERSED budget.
+    #   river_reaches: [[(lon, lat), ...], ...] NHD polylines draped as RIV cells;
+    #     stage sampled from the kriged IC, conductance a documented streambed
+    #     default, CHD ring retained where no reach bounds the domain.
+    #   starting_head_by_cell: nrow x ncol kriged water-table IC (deck-local datum).
+    wells: list[dict] | None = None,
+    transient: bool = False,
+    aquifer_sy: float | None = None,
+    aquifer_ss: float | None = None,
+    sim_years: float | None = None,
+    n_periods: int | None = None,
+    river_reaches: list[list[tuple[float, float]]] | None = None,
+    streambed_conductance_m2_day: float | None = None,
+    starting_head_by_cell: list[list[float]] | None = None,
     # constitutive advanced-physics (levers STEP 3): resolved dict; regional_gradient
     # is the only lever this GWF-only PRT archetype reads. None/{} => byte-identical.
     advanced_physics: dict | None = None,
+    # Drawn refine_region polygons (ADR 0099 mesh M2): {polygon, target_size_m,
+    # bbox} entries. When provided the grid is built as a gridgen-refined DISV
+    # vertex grid around the regions/well; None (default) keeps the uniform DIS
+    # grid byte-identical. NOTE: the live DISV leg is gated on the gridgen binary
+    # (GridgenUnavailableError names the image-rebuild condition, ADR 0099).
+    refine_regions: list[dict] | None = None,
 ) -> DeckManifest:
     """Assemble the STEADY GWF deck for a PRT capture-zone or wellhead-protection run.
 
@@ -2756,44 +3365,69 @@ def _build_prt_capture_zone_deck(
     model_utm_epsg = crs.to_epsg()
 
     # ---------------------------------------------------------------------- #
-    # Well cell: snap the caller-supplied lat/lon to the LOCAL grid, or use the
-    # grid centre when no well location is given.
+    # Well cells: snap each caller-supplied well to the LOCAL grid. ``wells`` (a
+    # WELLFIELD, ADR 0215) takes precedence; else the single ``well_location_latlon``
+    # (back-compat, part 1); else the grid centre. Each snapped well carries its
+    # cell index, the SIGNED WEL rate (negative = extraction), and its real coords.
     # ---------------------------------------------------------------------- #
-    pump_rate = -abs(float(pumping_rate_m3_day)) if pumping_rate_m3_day is not None \
-        else -abs(DEFAULT_PRT_PUMPING_RATE_M3_DAY)
+    back_to_4326 = Transformer.from_crs(crs, "EPSG:4326", always_xy=True)
 
-    if well_location_latlon is not None:
-        wlat, wlon = float(well_location_latlon[0]), float(well_location_latlon[1])
-        if not (-90.0 <= wlat <= 90.0) or not (-180.0 <= wlon <= 180.0):
+    def _snap_well(wlat_in: float, wlon_in: float) -> tuple[int, int]:
+        """Snap a lat/lon to the nearest interior (non-boundary) grid cell (row, col)."""
+        if not (-90.0 <= wlat_in <= 90.0) or not (-180.0 <= wlon_in <= 180.0):
             raise ValueError(
-                f"well_location_latlon out of range for capture_zone: {(wlat, wlon)!r}"
+                f"well location out of range for capture_zone: {(wlat_in, wlon_in)!r}"
             )
-        well_east_true, well_north_true = to_utm.transform(wlon, wlat)
-        # Convert to LOCAL grid coordinates (0-origin) for the cell index.
-        well_east_local = well_east_true - xoffset_m
-        well_north_local = well_north_true - yoffset_m
-        col = int(well_east_local // delr)
-        north_top_local = nrow * delc  # local grid top (no yorigin offset)
-        row = int((north_top_local - well_north_local) // delc)
-        # Clamp to interior cells (never the CHD boundary columns).
-        well_row = max(1, min(nrow - 2, row))
-        well_col = max(1, min(ncol - 2, col))
-        well_lat, well_lon_val = wlat, wlon
-    else:
-        # Centre of the 41x41 local grid.
-        well_row = nrow // 2  # 20 for a 41-cell grid
-        well_col = ncol // 2
-        well_lat, well_lon_val = lat, lon
+        we, wn = to_utm.transform(wlon_in, wlat_in)
+        col = int((we - xoffset_m) // delr)
+        row = int((nrow * delc - (wn - yoffset_m)) // delc)
+        return max(1, min(nrow - 2, row)), max(1, min(ncol - 2, col))
 
-    # True UTM coordinates of the chosen well cell centre (for manifest).
-    # cell_centre_local_x = (well_col + 0.5) * delr
-    # cell_centre_local_y = (nrow - well_row - 0.5) * delc (flopy row-0 = north)
+    # Assemble the wellfield: list of {row, col, rate (signed), lat, lon, name}.
+    # ``rate`` is stored NEGATIVE (MF6 WEL extraction sign) so the WEL records and
+    # the manifest read consistently with the single-well path.
+    well_cells: list[dict] = []
+    if wells:
+        for k, wspec in enumerate(wells):
+            wlon_k = float(wspec["lon"])
+            wlat_k = float(wspec["lat"])
+            rate_k = -abs(float(wspec.get("rate_m3_day") or DEFAULT_PRT_PUMPING_RATE_M3_DAY))
+            name_k = str(wspec.get("name") or f"well_{k}")
+            r, c = _snap_well(wlat_k, wlon_k)
+            # cell-centre real coords (for the manifest + allocation narration)
+            ce = xoffset_m + (c + 0.5) * delr
+            cn = yoffset_m + (nrow - r - 0.5) * delc
+            clon, clat = back_to_4326.transform(ce, cn)
+            well_cells.append(
+                {"row": r, "col": c, "rate": rate_k, "lat": clat, "lon": clon, "name": name_k}
+            )
+    else:
+        pump_rate = (
+            -abs(float(pumping_rate_m3_day)) if pumping_rate_m3_day is not None
+            else -abs(DEFAULT_PRT_PUMPING_RATE_M3_DAY)
+        )
+        if well_location_latlon is not None:
+            r, c = _snap_well(
+                float(well_location_latlon[0]), float(well_location_latlon[1])
+            )
+        else:
+            r, c = nrow // 2, ncol // 2  # grid centre (AOI point)
+        ce = xoffset_m + (c + 0.5) * delr
+        cn = yoffset_m + (nrow - r - 0.5) * delc
+        clon, clat = back_to_4326.transform(ce, cn)
+        well_cells.append(
+            {"row": r, "col": c, "rate": pump_rate, "lat": clat, "lon": clon, "name": "well_0"}
+        )
+
+    # Primary well (well_cells[0]) carries the legacy single-well manifest fields
+    # (well_row/well_col/pumping_rate_m3_day/well_lat/well_lon) the postprocess
+    # georegistration + Grubb-analytic narration already read.
+    primary = well_cells[0]
+    well_row, well_col = primary["row"], primary["col"]
+    pump_rate = primary["rate"]
     well_east_m = xoffset_m + (well_col + 0.5) * delr
     well_north_m = yoffset_m + (nrow - well_row - 0.5) * delc
-
-    back_to_4326 = Transformer.from_crs(crs, "EPSG:4326", always_xy=True)
-    _wlon, _wlat = back_to_4326.transform(well_east_m, well_north_m)
-    well_lat, well_lon_val = _wlat, _wlon
+    well_lat, well_lon_val = primary["lat"], primary["lon"]
 
     # ---------------------------------------------------------------------- #
     # PRT/isochrone parameters.
@@ -2805,19 +3439,17 @@ def _build_prt_capture_zone_deck(
     )
 
     # ---------------------------------------------------------------------- #
-    # GWF simulation (STEADY, single period of 1 day -> one time step).
+    # GWF simulation. STEADY single period (part-1 demo, byte-identical) OR
+    # TRANSIENT: a steady spin-up period 0 (wellfield OFF, the table equilibrates
+    # to the CHD/RIV boundaries) + N transient storage periods (wellfield ON) so
+    # the 1/5/10-yr isochrones evolve with the drawdown (ADR 0215; ex-prt-mp7-p03).
+    # The transient reversed budget is what the PRT tracks per period.
     # ---------------------------------------------------------------------- #
     sim = flopy.mf6.MFSimulation(
         sim_name=sim_name,
         sim_ws=str(sim_dir),
         exe_name="mf6",
         version="mf6",
-    )
-    flopy.mf6.ModflowTdis(
-        sim,
-        time_units=TIME_UNITS,
-        nper=1,
-        perioddata=[(1.0, 1, 1.0)],
     )
     ims = flopy.mf6.ModflowIms(
         sim,
@@ -2835,22 +3467,93 @@ def _build_prt_capture_zone_deck(
     )
     sim.register_ims_package(ims, [gwf_name])
 
-    # DIS: local (0,0) origin -- do NOT pass xorigin/yorigin.
-    flopy.mf6.ModflowGwfdis(
-        gwf,
-        length_units=LENGTH_UNITS,
-        nlay=N_LAYERS,
-        nrow=nrow,
-        ncol=ncol,
-        delr=delr,
-        delc=delc,
-        top=PRT_AQUIFER_TOP_M,
-        botm=PRT_AQUIFER_BOTTOM_M,
-        filename=f"{gwf_name}.dis",
-    )
+    # Resolve the stress-period schedule up front (WEL/RIV records key on it).
+    if transient:
+        transient_periods = _resolve_transient_periods(
+            sim_years=sim_years, n_periods=n_periods
+        )
+        # TDIS + GwfSto (steady spin-up 0 + transient 1..N). Reuses the tested
+        # sustainable_yield helper so the storage term is written in one place.
+        eff_sy = float(aquifer_sy) if aquifer_sy is not None else DEFAULT_AQUIFER_SY
+        eff_ss = float(aquifer_ss) if aquifer_ss is not None else DEFAULT_AQUIFER_SS
+        n_stress_periods = _add_transient_sto_tdis(
+            sim,
+            gwf,
+            transient_periods=transient_periods,
+            sy=eff_sy,
+            ss=eff_ss,
+            gwf_name=gwf_name,
+        )
+        n_transient_periods = len(transient_periods)
+    else:
+        flopy.mf6.ModflowTdis(
+            sim,
+            time_units=TIME_UNITS,
+            nper=1,
+            perioddata=[(1.0, 1, 1.0)],
+        )
+        n_stress_periods = 1
+        n_transient_periods = 0
+        eff_sy = eff_ss = 0.0
 
-    # IC: initial head = aquifer top (hydrostatic start, overridden by CHD).
-    flopy.mf6.ModflowGwfic(gwf, strt=PRT_AQUIFER_TOP_M, filename=f"{gwf_name}.ic")
+    # Grid: uniform DIS (default, byte-identical) OR a gridgen-refined DISV
+    # vertex grid when drawn refine_region polygons are supplied (ADR 0099 M2).
+    if refine_regions:
+        # Reproject the drawn lon/lat polygons into the grid's LOCAL (metre)
+        # space, compute per-region quadtree levels, and attempt the DISV build.
+        # gridgen is absent from the image today, so this raises
+        # GridgenUnavailableError (honest STOP naming the image condition) BEFORE
+        # any partial deck is written. The downstream WEL/CHD/PRT packages assume
+        # a structured cellid and are NOT yet ported to DISV vertex nodes -- that
+        # port is the named follow-on the STOP gates (ADR 0099).
+        def _to_local_xy(lon_v: float, lat_v: float) -> tuple[float, float]:
+            e, n = to_utm.transform(lon_v, lat_v)
+            return (e - xoffset_m, n - yoffset_m)
+
+        feats = _disv_refinement_features(refine_regions, float(delr), _to_local_xy)
+        gridprops = _build_disv_gridprops(
+            nlay=N_LAYERS,
+            nrow=nrow,
+            ncol=ncol,
+            delr=delr,
+            delc=delc,
+            top=PRT_AQUIFER_TOP_M,
+            botm=PRT_AQUIFER_BOTTOM_M,
+            refinement_features=feats,
+            model_ws=sim_dir,
+        )
+        _build_gwf_disv(gwf, gwf_name=gwf_name, gridprops=gridprops)
+    else:
+        # DIS: local (0,0) origin -- do NOT pass xorigin/yorigin.
+        _build_gwf_dis(
+            gwf,
+            gwf_name=gwf_name,
+            nlay=N_LAYERS,
+            nrow=nrow,
+            ncol=ncol,
+            delr=delr,
+            delc=delc,
+            top=PRT_AQUIFER_TOP_M,
+            botm=PRT_AQUIFER_BOTTOM_M,
+        )
+
+    # IC: uniform aquifer-top head (part 1) OR the per-cell kriged water-table
+    # surface (ADR 0215 item 3). ``starting_head_by_cell`` is the composer's
+    # kriged/trend surface sampled at each cell centre and re-referenced about the
+    # deck datum, so the interior IC carries the measured water-table CURVATURE a
+    # single gradient plane cannot. The steady solve equilibrates to the boundaries
+    # regardless; the IC is what the TRANSIENT solve starts from before pumping.
+    if starting_head_by_cell is not None:
+        strt_arr = np.asarray(starting_head_by_cell, dtype=float)
+        if strt_arr.shape != (nrow, ncol):
+            raise ValueError(
+                f"starting_head_by_cell shape {strt_arr.shape} != grid "
+                f"({nrow}, {ncol}) for capture_zone IC"
+            )
+        strt = strt_arr.reshape((N_LAYERS, nrow, ncol))
+    else:
+        strt = PRT_AQUIFER_TOP_M
+    flopy.mf6.ModflowGwfic(gwf, strt=strt, filename=f"{gwf_name}.ic")
 
     # NPF: MUST set save_flows + save_specific_discharge + save_saturation.
     # Missing save_saturation -> FMI 'SATURATION NOT FOUND' error in PRT.
@@ -2864,31 +3567,142 @@ def _build_prt_capture_zone_deck(
         filename=f"{gwf_name}.npf",
     )
 
-    # CHD: west->east regional gradient (high head west, low head east).
-    # Use the same REGIONAL_GRADIENT as all other archetypes; domain_width in
-    # local coords is ncol * delr = 4100 m -> head drop = 0.002 * 4100 = 8.2 m.
-    # regional_gradient: CONSTITUTIVE lever (default EQUALS REGIONAL_GRADIENT ->
-    # byte-identical when unset; same phys.get seam as the spill deck).
+    # CHD: the regional water-table gradient that drives the steady flow field the
+    # PRT tracks against. TWO modes:
+    #
+    #   * GEOREFERENCED (regional_gradient_x/y supplied, "dem" source): a PLANAR
+    #     head field on the FULL perimeter ring -- head(x,y) = TOP + gx*(x-xc) +
+    #     gy*(y-yc), (gx,gy) the DEM-derived head-gradient (m/m). Groundwater flows
+    #     down-gradient = -(gx,gy); the capture zone extends up-gradient = +(gx,gy)
+    #     (toward the recharge area / topographic high). Orienting the CHD to the
+    #     true regional flow direction is what makes "what land does my well draw
+    #     from" answerable on a real AOI -- a fixed west->east boundary would point
+    #     the zone the wrong way at most sites.
+    #
+    #   * DEMO (no gradient vector): the legacy hardcoded west->east
+    #     REGIONAL_GRADIENT CHD (west + east columns only) -- byte-identical to the
+    #     pre-georeferenced deck. domain_width = ncol*delr = 4100 m -> head drop
+    #     0.002 * 4100 = 8.2 m. regional_gradient: CONSTITUTIVE lever (same phys.get
+    #     seam as the spill deck).
     phys = dict(advanced_physics or {})
     domain_width_m = ncol * delr
-    head_west = PRT_AQUIFER_TOP_M + float(
-        phys.get("regional_gradient", REGIONAL_GRADIENT)
-    ) * domain_width_m
-    head_east = PRT_AQUIFER_TOP_M
-    chd_records = []
-    for r in range(nrow):
-        chd_records.append([(0, r, 0), head_west])          # west boundary
-        chd_records.append([(0, r, ncol - 1), head_east])   # east boundary
+    xc_local = 0.5 * ncol * delr   # local-frame domain centre (x, east)
+    yc_local = 0.5 * nrow * delc   # local-frame domain centre (y, north)
+    have_vector = regional_gradient_x is not None and regional_gradient_y is not None
+    if have_vector:
+        gx = float(regional_gradient_x)
+        gy = float(regional_gradient_y)
+        gradient_source = "dem"
+        gradient_magnitude = float((gx * gx + gy * gy) ** 0.5)
+        # Compass azimuth (deg CW from north) water FLOWS toward = down-gradient
+        # = -(gx, gy). atan2(east, north) on the down-gradient vector.
+        import math as _math
+        gradient_azimuth_deg = (
+            _math.degrees(_math.atan2(-gx, -gy)) % 360.0
+            if gradient_magnitude > 0.0
+            else None
+        )
+        # Planar head field on the full boundary ring (dedupe corners by cellid).
+        seen: set[tuple[int, int]] = set()
+        chd_records = []
+        for r in range(nrow):
+            for c in range(ncol):
+                if 0 < r < nrow - 1 and 0 < c < ncol - 1:
+                    continue  # interior cell, not a boundary
+                if (r, c) in seen:
+                    continue
+                seen.add((r, c))
+                # local cell-centre coordinates (row 0 = northernmost).
+                x = (c + 0.5) * delr
+                y = (nrow - r - 0.5) * delc
+                head = PRT_AQUIFER_TOP_M + gx * (x - xc_local) + gy * (y - yc_local)
+                chd_records.append([(0, r, c), head])
+    else:
+        gx = gy = 0.0
+        gradient_source = "demo_west_east"
+        gradient_magnitude = float(phys.get("regional_gradient", REGIONAL_GRADIENT))
+        gradient_azimuth_deg = 90.0  # flows east
+        head_west = PRT_AQUIFER_TOP_M + gradient_magnitude * domain_width_m
+        head_east = PRT_AQUIFER_TOP_M
+        chd_records = []
+        for r in range(nrow):
+            chd_records.append([(0, r, 0), head_west])          # west boundary
+            chd_records.append([(0, r, ncol - 1), head_east])   # east boundary
+    chd_cellids = {(rec[0][1], rec[0][2]) for rec in chd_records}
     flopy.mf6.ModflowGwfchd(
         gwf,
         stress_period_data={0: chd_records},
         filename=f"{gwf_name}.chd",
     )
 
-    # WEL: pumping extraction at the well cell (active in the single period).
+    # RIV: NHD river-reach head-dependent boundaries (ADR 0215 item 4). Each reach
+    # polyline is projected to the model UTM frame, rasterized onto the grid, and
+    # draped as RIV cells. The RIV STAGE is sampled from the kriged water-table IC
+    # at each reach cell (``starting_head_by_cell``) -- the river surface tracks the
+    # regional table -- with the streambed bottom a documented depth below and a
+    # documented conductance default. Cells that already carry a CHD boundary (the
+    # perimeter ring, retained where no reach bounds the domain) or a well are
+    # skipped -- a cell is one boundary type. When no reaches are supplied the CHD
+    # ring alone orients the flow field (byte-identical to part 1).
+    river_cell_count = 0
+    if river_reaches:
+        riv_records: list[list] = []
+        seen_riv: set[tuple[int, int]] = set()
+        well_cellids = {(w["row"], w["col"]) for w in well_cells}
+        riv_cond = float(
+            streambed_conductance_m2_day
+            if streambed_conductance_m2_day is not None
+            else DEFAULT_STREAMBED_CONDUCTANCE_M2_DAY
+        )
+        strt_grid = (
+            np.asarray(starting_head_by_cell, dtype=float)
+            if starting_head_by_cell is not None
+            else None
+        )
+        for reach in river_reaches:
+            vertices_en = [to_utm.transform(float(lon_v), float(lat_v)) for (lon_v, lat_v) in reach]
+            for (r, c, _reach_len) in _drape_polyline_onto_grid(
+                vertices_en,
+                xorigin=xoffset_m,
+                yorigin=yoffset_m,
+                delr=delr,
+                delc=delc,
+                nrow=nrow,
+                ncol=ncol,
+            ):
+                if (r, c) in chd_cellids or (r, c) in well_cellids or (r, c) in seen_riv:
+                    continue
+                seen_riv.add((r, c))
+                # Stage from the kriged surface at the cell (falls back to aquifer
+                # top when no kriged IC is supplied); rbot a demo depth below.
+                stage = (
+                    float(strt_grid[r, c]) if strt_grid is not None else PRT_AQUIFER_TOP_M
+                )
+                rbot = stage - DEFAULT_RIVER_STAGE_DEPTH_M
+                riv_records.append([(0, r, c), stage, riv_cond, rbot])
+        river_cell_count = len(riv_records)
+        if riv_records:
+            flopy.mf6.ModflowGwfriv(
+                gwf,
+                stress_period_data={0: riv_records},
+                save_flows=True,
+                filename=f"{gwf_name}.riv",
+                pname="riv-0",
+            )
+
+    # WEL: one extraction record per snapped wellfield cell (ADR 0215 item 1). For
+    # a TRANSIENT run the wells are OFF in the steady spin-up period 0 (the table
+    # equilibrates to the boundaries) and ON in every transient period 1..N so the
+    # isochrones reflect the drawdown as it develops; for a steady run the wells
+    # are active in the single period 0.
+    wel_records = [[(0, w["row"], w["col"]), w["rate"]] for w in well_cells]
+    if transient:
+        wel_spd = {0: [], **{p: wel_records for p in range(1, n_stress_periods)}}
+    else:
+        wel_spd = {0: wel_records}
     flopy.mf6.ModflowGwfwel(
         gwf,
-        stress_period_data={0: [[(0, well_row, well_col), pump_rate]]},
+        stress_period_data=wel_spd,
         save_flows=True,
         filename=f"{gwf_name}.wel",
         pname="wel-0",
@@ -2936,10 +3750,12 @@ def _build_prt_capture_zone_deck(
         # Archetype branch fields.
         archetype=archetype,
         gwt_present=False,
-        transient=False,
-        n_stress_periods=1,
-        n_transient_periods=0,
-        # Well info (reuse the sustainable_yield fields).
+        transient=transient,
+        n_stress_periods=n_stress_periods,
+        n_transient_periods=n_transient_periods,
+        aquifer_sy=eff_sy,
+        aquifer_ss=eff_ss,
+        # Well info (reuse the sustainable_yield fields for the PRIMARY well).
         well_row=well_row,
         well_col=well_col,
         well_easting_m=well_east_m,
@@ -2954,6 +3770,21 @@ def _build_prt_capture_zone_deck(
         model_utm_epsg=model_utm_epsg,
         n_particles=n_particles,
         capture_zone_travel_time_years=tz_years,
+        # Multi-well WELLFIELD + NHD RIV (ADR 0215): one [row, col, rate, lat, lon]
+        # per snapped well (deck order) + the RIV cell count draped from NHD.
+        prt_well_cells=[
+            [float(w["row"]), float(w["col"]), float(w["rate"]),
+             float(w["lat"]), float(w["lon"])]
+            for w in well_cells
+        ],
+        prt_well_names=[str(w["name"]) for w in well_cells],
+        prt_river_cell_count=river_cell_count,
+        # Regional-gradient provenance (georeferenced vs demo west->east).
+        regional_gradient_x=gx,
+        regional_gradient_y=gy,
+        gradient_source=gradient_source,
+        gradient_magnitude=gradient_magnitude,
+        gradient_azimuth_deg=gradient_azimuth_deg,
     )
 
     if write:
@@ -3060,13 +3891,25 @@ def build_and_run_prt_from_gwf(
         exe_name=mf6_bin,
         version="mf6",
     )
-    # TDIS: mirror the GWF (1 period, 1 step, 1 day). The PRT sim steps through
-    # the REVERSED flow field, which has the same time discretisation.
+    # TDIS: mirror the REVERSED GWF schedule so the PRT steps through the reversed
+    # flow field period-for-period. For a STEADY GWF (1 period) this is the legacy
+    # single (1 day, 1 step) period; for a TRANSIENT GWF (ADR 0215 item 1) the
+    # reversed schedule is the GWF periods in reverse order, so the per-period
+    # reversed budget the PRT FMI reads is the time-evolving wellfield drawdown run
+    # backward (the isochrones become time-evolving, ex-prt-mp7-p03).
+    gwf_pd = gsim_reload.tdis.perioddata.array
+    if len(gwf_pd) <= 1:
+        prt_perioddata = [(1.0, 1, 1.0)]
+    else:
+        prt_perioddata = [
+            (float(row["perlen"]), int(row["nstp"]), float(row["tsmult"]))
+            for row in reversed(list(gwf_pd))
+        ]
     flopy.mf6.ModflowTdis(
         psim,
         time_units=TIME_UNITS,
-        nper=1,
-        perioddata=[(1.0, 1, 1.0)],
+        nper=len(prt_perioddata),
+        perioddata=prt_perioddata,
     )
 
     # Create the PRT model.
@@ -3089,24 +3932,33 @@ def build_and_run_prt_from_gwf(
     # MIP: porosity REQUIRED -- drives travel-time calculation.
     flopy.mf6.ModflowPrtmip(prt, porosity=deck.porosity, filename=f"{prt_name}.mip")
 
-    # Build the particle release ring at the well cell (local coordinates).
-    # The GWF grid is at local (0,0) so cell centres are in local space.
-    # local grid: row 0 = northernmost row; ycellcenter for row r = (nrow-r-0.5)*delc.
-    wi = deck.well_row
-    wj = deck.well_col
-    cx = (wj + 0.5) * deck.delr              # local x of well cell centre
-    cy = (deck.nrow - wi - 0.5) * deck.delc  # local y of well cell centre
+    # Build a particle release ring around EACH wellfield cell (ADR 0215 item 1).
+    # The GWF grid is at local (0,0) so cell centres are in local space (row 0 =
+    # northernmost; ycellcenter for row r = (nrow-r-0.5)*delc). Each particle's
+    # boundname is "w{k}_p{n}" so the postprocess can ALLOCATE which well captured
+    # which particles (the wellfield WHPA answer). ``deck.prt_well_cells`` carries
+    # one [row, col, rate, lat, lon] per snapped well; the legacy single-well path
+    # falls back to deck.well_row/well_col.
+    if deck.prt_well_cells:
+        well_ij = [(int(w[0]), int(w[1])) for w in deck.prt_well_cells]
+    else:
+        well_ij = [(deck.well_row, deck.well_col)]
     n_ring = deck.n_particles
     angles = np.linspace(0, 2 * np.pi, n_ring, endpoint=False)
     radius = DEFAULT_PRT_RING_RADIUS_M  # 30 m (inside the 100 m cell)
     zrpt = (PRT_AQUIFER_TOP_M + PRT_AQUIFER_BOTTOM_M) / 2.0  # mid-aquifer depth
 
     releasepts = []
-    for n, a in enumerate(angles):
-        xrpt = cx + radius * np.cos(a)
-        yrpt = cy + radius * np.sin(a)
-        # PRP packagedata tuple: (irptno, (k,i,j), x, y, z, boundname)
-        releasepts.append((n, (0, wi, wj), xrpt, yrpt, zrpt, f"p{n}"))
+    irptno = 0
+    for k, (wi, wj) in enumerate(well_ij):
+        cx = (wj + 0.5) * deck.delr              # local x of well cell centre
+        cy = (deck.nrow - wi - 0.5) * deck.delc  # local y of well cell centre
+        for n, a in enumerate(angles):
+            xrpt = cx + radius * np.cos(a)
+            yrpt = cy + radius * np.sin(a)
+            # PRP packagedata tuple: (irptno, (k,i,j), x, y, z, boundname)
+            releasepts.append((irptno, (0, wi, wj), xrpt, yrpt, zrpt, f"w{k}_p{n}"))
+            irptno += 1
 
     trackbin = f"{prt_name}.trk"
     trackcsv = f"{prt_name}.trk.csv"
@@ -3338,9 +4190,9 @@ def _build_saltwater_intrusion_deck(
     # Register GWF IMS first (BUY requirement).
     sim.register_ims_package(ims_gwf, [gwf_name])
 
-    flopy.mf6.ModflowGwfdis(
+    _build_gwf_dis(
         gwf,
-        length_units=LENGTH_UNITS,
+        gwf_name=gwf_name,
         nlay=nlay,
         nrow=1,
         ncol=ncol,
@@ -3348,7 +4200,6 @@ def _build_saltwater_intrusion_deck(
         delc=delc,
         top=top,
         botm=botm,
-        filename=f"{gwf_name}.dis",
     )
     # IC: start at sea level (head = top; overridden quickly by GHB).
     flopy.mf6.ModflowGwfic(gwf, strt=top, filename=f"{gwf_name}.ic")
@@ -3570,6 +4421,18 @@ def build_modflow_deck(
     csub_sse_elastic_m: float | None = None,
     csub_interbed_thick_frac: float | None = None,
     csub_cg_ske_m: float | None = None,
+    csub_delay_interbeds: bool = False,
+    csub_effective_stress: bool = False,
+    # --- ADR 0228: vadose_transport UZF+UZT forcing (ADDITIVE, all optional) - #
+    # Threaded into the vadose_transport dispatch branch when
+    # archetype == "vadose_transport"; ignored otherwise. All demo-defaulted.
+    vadose_thickness_m: float | None = None,
+    vadose_thtr: float | None = None,
+    vadose_thts: float | None = None,
+    vadose_eps: float | None = None,
+    vadose_infiltration_conc: float | None = None,
+    vadose_infiltration_rate_m_day: float | None = None,
+    vadose_vks_m_day: float | None = None,
     # --- Archetype switch (ADDITIVE, all optional) -------- #
     # archetype is None -> the EXISTING spill/seepage GWF+GWT deck (byte-identical).
     # The three new archetypes are GWF-only and dispatch to
@@ -3621,6 +4484,18 @@ def build_modflow_deck(
     n_particles: int = 16,
     capture_zone_travel_time_years: list[float] | None = None,
     prt_max_tracking_years: float | None = None,
+    # DEM-derived regional water-table gradient (m/m) in the model-UTM frame,
+    # threaded into the capture_zone / wellhead_protection PRT deck. BOTH None =>
+    # legacy hardcoded west->east CHD (byte-identical). Ignored for non-PRT decks.
+    regional_gradient_x: float | None = None,
+    regional_gradient_y: float | None = None,
+    # --- multi-well WELLFIELD + transient + NHD RIV + kriged IC (ADR 0215) ---- #
+    # Threaded into the capture_zone / wellhead_protection PRT deck; ignored for
+    # every other archetype. ALL default to the single-well steady demo path.
+    wells: list[dict] | None = None,
+    capture_zone_transient: bool = False,
+    river_reaches: list[list[tuple[float, float]]] | None = None,
+    starting_head_by_cell: list[list[float]] | None = None,
     # --- saltwater_intrusion (ADDITIVE, optional) -- #
     # ``archetype == "saltwater_intrusion"``: Henry-style field-scale coastal
     # transect; GWF (BUY variable-density) + GWT in ONE sim. All three args are
@@ -3632,6 +4507,11 @@ def build_modflow_deck(
     # --- advanced-physics overrides (levers STEP 3; ADDITIVE, optional) ----- #
     advanced_physics: dict | None = None,
     save_concentration_all_steps: bool = True,
+    # Drawn refine_region polygons (ADR 0099 M2): forwarded to the capture_zone /
+    # wellhead_protection PRT archetype to build a gridgen-refined DISV grid.
+    # None (default) => uniform DIS, byte-identical. LIVE DISV gated on the
+    # gridgen binary (GridgenUnavailableError names the image condition).
+    refine_regions: list[dict] | None = None,
 ) -> DeckManifest:
     """Assemble a complete MF6 GWF+GWT spill deck and (optionally) write it.
 
@@ -3821,6 +4701,7 @@ def build_modflow_deck(
             "saltwater_intrusion",
             "stream_depletion",
             "land_subsidence",
+            "vadose_transport",
         ):
             raise ValueError(f"unknown MODFLOW archetype: {archetype!r}")
         # saltwater_intrusion: GWF (BUY variable-density) + GWT in ONE sim,
@@ -3862,7 +4743,20 @@ def build_modflow_deck(
                 pumping_rate_m3_day=pumping_rate_m3_day,
                 n_particles=n_particles,
                 capture_zone_travel_time_years=capture_zone_travel_time_years,
+                regional_gradient_x=regional_gradient_x,
+                regional_gradient_y=regional_gradient_y,
                 advanced_physics=advanced_physics,
+                refine_regions=refine_regions,
+                # --- multi-well WELLFIELD + transient + NHD RIV + kriged IC ----- #
+                wells=wells,
+                transient=capture_zone_transient,
+                aquifer_sy=aquifer_sy,
+                aquifer_ss=aquifer_ss,
+                sim_years=sim_years,
+                n_periods=n_periods,
+                river_reaches=river_reaches,
+                streambed_conductance_m2_day=streambed_conductance_m2_day,
+                starting_head_by_cell=starting_head_by_cell,
             )
         # multi_species is a GWF+GWT deck (ONE shared GWF + N transport models),
         # NOT a GWF-only archetype, so it dispatches to its own builder.
@@ -3893,6 +4787,37 @@ def build_modflow_deck(
                 write=write,
                 save_concentration_all_steps=save_concentration_all_steps,
                 advanced_physics=advanced_physics,
+            )
+        # vadose_transport is a DUAL-model GWF+GWT sim (UZF unsaturated column +
+        # UZT transport), NOT a GWF-only archetype, so it dispatches to its own
+        # builder (mirrors multi_species / saltwater_intrusion). The spill point
+        # reuses (lat, lon); the deliverable is a base-of-column breakthrough series.
+        if archetype == "vadose_transport":
+            return _build_vadose_transport_deck(
+                lat=lat,
+                lon=lon,
+                crs=crs,
+                to_utm=to_utm,
+                spill_east=spill_east,
+                spill_north=spill_north,
+                delr=delr,
+                delc=delc,
+                k_m_per_day=k_m_per_day,
+                aquifer_k_ms=aquifer_k_ms,
+                porosity=porosity,
+                contaminant=contaminant,
+                vadose_thickness_m=vadose_thickness_m,
+                vadose_thtr=vadose_thtr,
+                vadose_thts=vadose_thts,
+                vadose_eps=vadose_eps,
+                vadose_infiltration_conc=vadose_infiltration_conc,
+                vadose_infiltration_rate_m_day=vadose_infiltration_rate_m_day,
+                vadose_vks_m_day=vadose_vks_m_day,
+                sim_dir=sim_dir,
+                sim_name=sim_name,
+                gwf_name=gwf_name,
+                gwt_name=gwt_name,
+                write=write,
             )
         return _build_gwf_only_archetype_deck(
             archetype=archetype,
@@ -3955,6 +4880,8 @@ def build_modflow_deck(
             csub_sse_elastic_m=csub_sse_elastic_m,
             csub_interbed_thick_frac=csub_interbed_thick_frac,
             csub_cg_ske_m=csub_cg_ske_m,
+            csub_delay_interbeds=csub_delay_interbeds,
+            csub_effective_stress=csub_effective_stress,
             advanced_physics=advanced_physics,
         )
 
@@ -4013,9 +4940,9 @@ def build_modflow_deck(
     )
     sim.register_ims_package(ims_gwf, [gwf_name])
 
-    dis = flopy.mf6.ModflowGwfdis(
+    dis = _build_gwf_dis(
         gwf,
-        length_units=LENGTH_UNITS,
+        gwf_name=gwf_name,
         nlay=N_LAYERS,
         nrow=nrow,
         ncol=ncol,
@@ -4025,15 +4952,8 @@ def build_modflow_deck(
         botm=AQUIFER_BOTTOM_M,
         xorigin=xorigin,
         yorigin=yorigin,
-        filename=f"{gwf_name}.dis",
+        crs=crs,
     )
-    # Tag the model grid CRS so any FloPy-side georeferencing is correct.
-    try:
-        gwf.modelgrid.set_coord_info(
-            xoff=xorigin, yoff=yorigin, crs=crs.to_epsg()
-        )
-    except Exception:  # pragma: no cover - older flopy signature fallback
-        pass
 
     # Constant-head gradient: west column high, east column low -> west->east
     # flow. Head drop = gradient x domain width. regional_gradient: CONSTITUTIVE

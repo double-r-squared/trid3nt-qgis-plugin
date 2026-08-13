@@ -1,10 +1,10 @@
-"""``model_wetland_hydroperiod_scenario``  -  MODFLOW wetland-hydroperiod composer.
+"""the composer  -  MODFLOW wetland-hydroperiod composer.
 
 The end-to-end higher-order workflow for the MODFLOW
 ``wetland_hydroperiod`` archetype: it turns a place (or AOI point) + a wetland
 footprint into a rendered seasonal-water-table-range layer  -  how much the wetland
 water table swings across the recharge / evapotranspiration seasons (the
-hydroperiod). It mirrors the chain shape of ``model_mine_dewatering_scenario``
+hydroperiod). It mirrors the chain shape of the composer
 (sibling footprint-driven archetype): the wetland footprint is draped as RCH
 recharge (a per-period wet/dry schedule) + an EVT head-dependent ET sink over an
 unconfined transient water table, and the seasonal head RANGE IS the deliverable.
@@ -19,7 +19,7 @@ water-table-fluctuation analysis):
         -> run_modflow_archetype_job (GWF transient RCH+EVT deck -> mf6 -> range)
         -> HydroperiodLayerURI (seasonal_head_range_m + head_timeseries)
 
-Invariants (same set as model_mine_dewatering_scenario):
+Invariants (same set as the composer):
 - **1 / 2 / 8: preserve** (typed numbers, deterministic composition, cancellable).
 - **9. No fabricated model inputs.** A ``wetland_hydroperiod`` run with no wetland
   footprint returns a typed ``USER_INPUT_REQUIRED`` failed envelope rather than
@@ -44,6 +44,10 @@ from trid3nt_contracts.modflow_contracts import (
 )
 from trid3nt_contracts.tool_registry import AtomicToolMetadata
 
+from trid3nt_server.agent.workflows.modflow._input_review import (
+    aquifer_k_review_entry,
+    gate_and_stamp_modflow_inputs,
+)
 from trid3nt_server.emission.pipeline_emitter import begin_substeps, current_emitter, emit_chart_payloads
 from trid3nt_server.agent.tools import register_tool
 from trid3nt_server.agent.workflows.modflow._template_card import TemplateCard
@@ -74,7 +78,7 @@ __all__ = [
 
 
 class WetlandHydroperiodResult(GraceModel):
-    """Return type for ``model_wetland_hydroperiod_scenario``.
+    """Return type for the composer.
 
     Bundles the hydroperiod layer + the derived args + a narration summary dict.
     Invariant 1: every narrated number is a typed field  -  ``hydroperiod_layer``
@@ -94,7 +98,7 @@ class WetlandHydroperiodResult(GraceModel):
 
 
 class WetlandHydroperiodScenarioError(RuntimeError):
-    """Base class for ``model_wetland_hydroperiod_scenario`` failures."""
+    """Base class for the composer failures."""
 
     error_code: str = "WETLAND_HYDROPERIOD_SCENARIO_ERROR"
     retryable: bool = False
@@ -272,6 +276,21 @@ async def model_wetland_hydroperiod_scenario(
         location_name,
         layer.seasonal_head_range_m,
     )
+    # ADR 0223: structured aquifer-K provenance routed through gate_input_review,
+    # stamped onto the layer envelope (the prose caveat stays on the summary).
+    layer, _review = await gate_and_stamp_modflow_inputs(
+        tool_name="modflow_wetland_hydroperiod", layer=layer,
+        entries=[aquifer_k_review_entry(
+            k_source=("user_supplied" if aquifer_k_ms is not None else "demo_default"),
+            k_ms=(aquifer_k_ms if aquifer_k_ms is not None else DEFAULT_AQUIFER_K_MS),
+            porosity=porosity, note=summary["demo_aquifer_caveat"],
+        )],
+        params={"aquifer_k_ms": aquifer_k_ms, "porosity": porosity},
+    )
+    if _review.cancelled:
+        raise WetlandHydroperiodScenarioError(
+            f"wetland-hydroperiod input review {_review.cancel_reason or 'not approved'}"
+        )
     return WetlandHydroperiodResult(
         hydroperiod_layer=layer, derived_params=derived, summary=summary
     )
@@ -340,6 +359,12 @@ async def modflow_wetland_hydroperiod(
     **_extra_ignored: Any,
 ) -> dict[str, Any]:
     """Model a wetland's seasonal water-table range (hydroperiod).
+
+    Fidelity: MODFLOW 6 local planning-grade groundwater envelope (aquifer
+    K/porosity default to narrated demo values unless supplied), not a
+    calibrated regulatory delineation. Off-scope: surface-water inundation
+    flooding -> sfincs_flood; urban storm-sewer / pipe-network flooding ->
+    swmm_urban_flood.
 
     Builds a transient MODFLOW 6 groundwater-flow model with an unconfined water
     table, an RCH recharge schedule (seasonal wet/dry), and an EVT

@@ -1,0 +1,113 @@
+THE MUNCIE TRANSPLANT EXPERIMENT -- reproduce (ADR 0132)
+=========================================================================
+
+QUESTION
+  Can subgrid property tables authored by the HEC-RAS 2025 beta compute path
+  (ADR 0130 -- MeshPropertyTables.ComputeFrom runs headless on Linux under the
+  substituted open-source GDAL/HDF5) be TRANSPLANTED into a 6.x geometry HDF and
+  solved by the PRODUCTION 6.x Linux solver -- validated against the Muncie
+  ground truth we already match bit-for-bit (ADR 0100 / 0109)?
+
+  Decomposed into three sub-questions:
+    Q1 mesh authoring   -- can 2025 author an ARBITRARY (real-AOI) mesh, or only
+                           MeshFactory.FromExtent grids?           [terrain-free]
+    Q3 solver ingest    -- does the PRODUCTION 6.x RasUnsteady consume 2D subgrid
+                           tables authored by an EXTERNAL writer?  [terrain-free]
+    Q2 numeric fidelity -- do 2025-computed table VALUES match the 6.x GUI tables
+                           for the same mesh + terrain?         [needs the terrain]
+
+IMAGES / DLLS (staged at reproduce time; DLLs are proprietary, gitignored)
+  hecras2025:subst-exp      ADR 0129 substituted GDAL 3.11.5 + HDF5 runtime
+  trid3nt-local/hecras:latest  ADR 0100/0109 6.x Linux engines + venv h5py
+  mcr.microsoft.com/dotnet/sdk:9.0  compile the C# harnesses
+  Beta DLLs (Ras.Core, Geospatial.Core, Geospatial.GDALAssist, Utility.Core):
+    cid=$(docker create hecras2025:subst-exp)
+    for d in Ras.Core Geospatial.Core Geospatial.GDALAssist Utility.Core; do
+      docker cp $cid:/opt/hecras2025/app/$d.dll dll/$d.dll; done
+    docker rm $cid
+
+STEP 0 -- extract the Muncie mesh + GUI tables (ground truth), export seeds
+  python3 extract_muncie_mesh.py            # -> scratchpad/transplant_proofs/muncie_mesh.npz
+  # perimeter + 5391 cell-center seeds -> meshgen_in/*.f64 (see the inline python
+  # in the ADR; perimeter must be CCW + OPEN, see STEP 2).
+
+STEP 1 -- Q1: reflect the 2025 mesh-authoring API
+  dotnet build -c Release -o out_probe ApiProbe.csproj   # in the sdk image, -v dll:/dll
+  # run inside hecras2025:subst-exp (drop apiprobe.dll beside the app, reuse
+  # ras.runtimeconfig.json). FINDINGS (01_api_probe.txt):
+  #   Geospatial.Vectors.Mesh has a PUBLIC ctor(Polygon, Cell[], Face[],
+  #     FacePoint[], Point[] cellCenters, Memory<Point>[] faceInternalPoints)
+  #     + public Cells/Faces/FacePoints/CellCenters/Perimeter fields  => EXACT import.
+  #   MeshFactory.TryCreateMesh(Polygon perimeter, IList<Point> cellCenters,
+  #     IList<Polyline> breaklines, out Mesh, out MeshError, MeshGenerationParams,
+  #     reporter)  => RASMapper-style regeneration from perimeter + seeds.
+  #   => ARBITRARY mesh authoring is available (not just FromExtent).
+
+STEP 2 -- Q1 evidence: regenerate the Muncie mesh, compare to 6.x
+  dotnet build -c Release -o out_meshgen MeshGen.csproj
+  # perimeter MUST be CCW-wound and OPEN (drop the duplicate closing point) or
+  # TryCreateMesh returns FacePerimeterConnectionError (05_meshgen.txt). CCW-open:
+  dotnet meshgen.dll /in novirt perimeter_ccw_open.f64   # -> 5391 cells (real)
+  dotnet meshgen.dll /in virt   perimeter_ccw_open.f64   # -> 5765 cells (with ghosts)
+  python3 compare_mesh_fidelity.py            # 06_mesh_fidelity.txt:
+  #   real cells 5391==5391 EXACT; total 5765==5765 EXACT; faces 11166 vs 11164
+  #   (delta 2); cell-center displacement max=mean=0.000000 ft (BIT-IDENTICAL).
+
+STEP 3 -- Q3: the M3 strip experiment IN REVERSE (external tables -> 6.x solve)
+  # RasGeomPreprocess does NOT recompute 2D subgrid tables (ADR 0100); it passes
+  # through whatever is in the plan HDF, so an h5py-authored table set is exactly
+  # what RasUnsteady solves. Run inside trid3nt-local/hecras:latest:
+  TRANSPLANT_MODE=identity     /opt/trid3nt/.venv/bin/python transplant_solve.py
+  TRANSPLANT_MODE=perturb      TRANSPLANT_FACTOR=1.5 ... transplant_solve.py
+  TRANSPLANT_MODE=perturb_face TRANSPLANT_FACTOR=0.4 ... transplant_solve.py
+  # RESULTS (02/03/04_transplant_*.txt):
+  #   identity     -> maxWSE 951.927 ft (baseline 951.93), wet 4896, vol 0.005834%  REPRODUCES
+  #   cell-vol x1.5 -> flux_out 33467.5->33388.1, vol 0.005788%  (solver consumed it)
+  #   face-area x0.4-> wet 4896->4945, vol 0.006757%             (stage-extent moved)
+  #   => the PRODUCTION 6.x solver reads + uses externally-authored 2D subgrid tables.
+
+STEP 4 -- Q2 (CLOSED, ADR 0132 addendum): numeric fidelity A/B + faithful solve
+  # 4a. OBTAIN THE TERRAIN. Download from HEC's example-projects distribution and
+  #     SHA-verify against the ADR 0125 pin (432 MB; delete after extraction):
+  curl -o Example_Projects_6_6.zip \
+    https://www.hec.usace.army.mil/software/hec-ras/downloads/Example_Projects_6_6.zip
+  sha256sum Example_Projects_6_6.zip   # == ea239b50...386887  (ADR 0125 pin)
+  unzip -j Example_Projects_6_6.zip "2D Unsteady Flow Hydraulics/Muncie/Terrain/*" -d work
+  # Terrain.hdf (23MAY2014) + Terrain.muncie_clip.tif + Terrain.vrt; EPSG:2965.
+  # (TerrainWithChannel.* also present; needs its ChannelOnly.tif co-located.)
+
+  # 4b. Build a constant n=0.06 nvalue terrain over the Muncie extent (EPSG:2965),
+  #     then createterrain it INSIDE the working dir (tile path must resolve):
+  #     (rasterio const 0.06 raster -> nvalue_const.tif; see the ADR addendum.)
+  docker run --rm -v $PWD/work:/work --entrypoint bash hecras2025:subst-exp -lc '
+    cd /opt/hecras2025/app
+    dotnet ras.dll createterrain -f /work/nvalue_const.tif -o /work/nvalue.h5 -j EPSG:2965 '
+
+  # 4c. AUTHOR the 2025 tables over the REAL terrain + regenerated mesh (ComputeMuncie):
+  dotnet build -c Release -o out_computemuncie ComputeMuncie.csproj   # in sdk:9.0, -v dll:/dll
+  docker run --rm -v $PWD/out_computemuncie:/hout:ro -v $PWD/meshgen_in:/in:ro \
+    -v $PWD/work:/work -v $PWD/out_terrain:/out --entrypoint bash hecras2025:subst-exp -lc '
+      cp /hout/computemuncie.dll /opt/hecras2025/app/; \
+      cp /opt/hecras2025/app/ras.runtimeconfig.json /opt/hecras2025/app/computemuncie.runtimeconfig.json; \
+      cd /opt/hecras2025/app; dotnet computemuncie.dll /work/Terrain.hdf /work/nvalue.h5 /in /out '
+  # ComputeFrom Result=True; dumps cell/face tables + centers/midpoints to /out.
+
+  # 4d. THE A/B: element-wise 2025-vs-shipped-GUI (cells by center, faces by midpoint):
+  python3 ab_compare.py out_terrain scratchpad/.../q2_proofs/muncie_mesh.npz OUTDIR terrain
+  #   cell vol corr 0.99988 (0.0066 ft depth-equiv err); face area corr 0.99839;
+  #   face WP corr 0.900 = a BOTTOM-ROW zero-point CONVENTION diff (top rows agree 0.4%);
+  #   Manning bit-identical; min elevations mean 0.016 ft.  -> q2_divergence_terrain.png
+
+  # 4e. THE FAITHFUL TRANSPLANT SOLVE (2025 values into Muncie's own 6.x topology):
+  python3 build_faithful_transplant.py out_terrain <wrk_source> work/faithful <npz>
+  docker run --rm -e TRANSPLANT_MODE=prebuilt -e TRANSPLANT_WRK=/mnt/faithful \
+    -v work/faithful:/mnt/faithful:ro -v $PWD:/t:ro --entrypoint bash \
+    trid3nt-local/hecras:latest -lc '/opt/trid3nt/.venv/bin/python /t/transplant_solve.py'
+  #   -> maxWSE 951.938 ft (baseline 951.93; dWSE 0.008), wet 4895, vol 0.00584%  REPRODUCES.
+
+VERDICT (see ADR 0132 + its 2026-08-04 addendum)
+  FULL VALIDATED UNLOCK. Q1 (arbitrary mesh authoring) + Q3 (6.x solver consumes
+  external tables) + Q2 (2025 table VALUES match the 6.x GUI; the faithful transplant
+  solves to the baseline) all proven end-to-end on Muncie. The one net-new build left
+  is a general HDF geometry-writer for a genuinely NEW AOI (OI-2); this proves its
+  output is solver-accepted.

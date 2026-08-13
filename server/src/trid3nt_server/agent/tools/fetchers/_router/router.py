@@ -21,8 +21,13 @@ from trid3nt_contracts.source_spec import SourceSpec
 from trid3nt_contracts.tool_registry import AtomicToolMetadata
 
 from .._fetch_common import _validate_bbox, round_bbox_to_resolution
-from ...cache import read_through
-from .errors import bbox_error_suffix, router_input_error, router_not_available_error
+from ...cache import ProvenanceRecorder, read_through
+from .errors import (
+    bbox_error_suffix,
+    router_input_error,
+    router_not_available_error,
+    router_upstream_error,
+)
 from .executors import raster_cog, station_timeseries, vector_fgb
 from .transforms import join as join_transform
 from .transforms import tiled_mosaic
@@ -34,8 +39,14 @@ __all__ = [
     "synthesize_payload_estimator",
     "validate_params",
     "select_executor",
+    "try_dispatch",
     "route",
 ]
+
+#: Sentinel: no ``spec.dispatch`` condition matched (distinct from a dispatch that
+#: legitimately returns ``None``, though none does today). ``route()`` proceeds to
+#: its own pipeline only on this sentinel.
+_NO_DISPATCH = object()
 
 #: CONUS domain for the conus_only gate (gridmet native bounds).
 _CONUS_BBOX: tuple[float, float, float, float] = (-124.77, 25.05, -67.06, 49.40)
@@ -60,6 +71,9 @@ def synthesize_metadata(spec: SourceSpec) -> AtomicToolMetadata:
         supports_global_query=spec.supports_global_query,
         payload_mb_estimator_name="estimate_payload_mb",
         open_world_hint=True,
+        # ADR 0225: data-native resolution declarations ride from the spec onto the
+        # metadata so the gate card can quote them (two-layer truth: data facts here).
+        resolution_specs=spec.resolution_declarations,
     )
 
 
@@ -576,7 +590,11 @@ def build_layer_uri(spec: SourceSpec, params: dict[str, Any], uri: str) -> Layer
     """Emit the ``LayerURI`` from ``spec.output`` (the shared emission seam)."""
     bbox = None
     for pname, pspec in spec.params.items():
-        if pspec.type == "bbox" and pname in params:
+        # A bbox param present-but-None (a pre_resolve that nulls bbox when an
+        # alternate selector wins the cache key -- nwis state_code) yields no bbox
+        # stamp; bbox_from_features / the requested bbox governs. No-op for priors
+        # (which never carry a None bbox value).
+        if pspec.type == "bbox" and params.get(pname) is not None:
             b = params[pname]
             bbox = (float(b[0]), float(b[1]), float(b[2]), float(b[3]))
             break
@@ -637,11 +655,81 @@ def build_layer_uri(spec: SourceSpec, params: dict[str, Any], uri: str) -> Layer
     )
 
 
-def route(spec: SourceSpec, raw_params: dict[str, Any]) -> LayerURI | dict[str, Any]:
+def try_dispatch(spec: SourceSpec, raw_params: dict[str, Any]) -> Any:
+    """Cross-sibling PRE-FLIGHT dispatch (ADR 0097). Returns the sibling tool's
+    result verbatim on a match, else the ``_NO_DISPATCH`` sentinel.
+
+    For ONE declared ``spec.dispatch`` condition whose ``param`` value matches, the
+    router SHORT-CIRCUITS before any validation / gate / cache / fetch and serves
+    the request from the named sibling registered tool -- returning THAT tool's
+    result byte-for-byte (its own ``source_class`` cache prefix, its own
+    ``layer_id`` / ``name``). Byte-identical to the twin's
+    ``TOOL_REGISTRY["fetch_copernicus_dem"].fn(bbox=bbox)`` leg: it forwards only
+    the ``pass_args``-mapped RAW params and re-caches NOTHING under this spec.
+
+    Constraints enforced (the seam is deliberately narrow, ADR 0097):
+      * ONE target per condition (``d.to`` is a single name);
+      * SPEC-DECLARED (``d.to`` / ``d.equals_any`` are literals);
+      * NO CHAINS -- a target that itself declares ``dispatch`` is refused here, so
+        the returned result is always exactly one sibling's verbatim output;
+      * PRE-FLIGHT -- evaluated on RAW params before validate/gate/cache/fetch.
+    """
+    if not spec.dispatch:
+        return _NO_DISPATCH
+    from trid3nt_server.agent.tools import TOOL_REGISTRY
+
+    from .registration import get_spec
+
+    for d in spec.dispatch:
+        raw = raw_params.get(d.param)
+        if d.normalize == "lower_strip" and isinstance(raw, str):
+            val = raw.strip().lower()
+        else:
+            val = raw
+        if val not in d.equals_any:
+            continue
+        # NO-CHAIN guard: the dispatched target must not itself dispatch.
+        target_spec = get_spec(d.to)
+        if target_spec is not None and target_spec.dispatch:
+            raise router_upstream_error(
+                spec.error_code_prefix,
+                f"dispatch target {d.to!r} itself declares a dispatch block; "
+                "cross-sibling dispatch chains are forbidden (ADR 0097)",
+            )
+        entry = TOOL_REGISTRY.get(d.to)
+        if entry is None:
+            raise router_upstream_error(
+                spec.error_code_prefix,
+                f"dispatch target {d.to!r} is not registered",
+            )
+        kwargs = {targ: raw_params.get(src) for targ, src in d.pass_args.items()}
+        return entry.fn(**kwargs)
+    return _NO_DISPATCH
+
+
+def route(
+    spec: SourceSpec, raw_params: dict[str, Any]
+) -> LayerURI | dict[str, Any] | list[LayerURI]:
     """The engine: validate -> gate -> dispatch -> cache -> emit LayerURI (or a
-    record dict for a ``shape: record`` source, ADR 0076)."""
+    record dict for a ``shape: record`` source, ADR 0076, or an ordered
+    ``list[LayerURI]`` for a ``shape: animation_frames`` source, ADR 0087)."""
+    # Cross-sibling PRE-FLIGHT dispatch (ADR 0097): before ANY validation / gate /
+    # cache / fetch, a declared ``source``-value condition may serve the request
+    # from a named sibling tool and return its result verbatim (fetch_dem
+    # source="copernicus" -> fetch_copernicus_dem's layer, byte-identical).
+    dispatched = try_dispatch(spec, raw_params)
+    if dispatched is not _NO_DISPATCH:
+        return dispatched
     metadata = synthesize_metadata(spec)
     params = validate_params(spec, raw_params)
+    # Frames-list output shape (ADR 0087): an animation source returns an ORDERED
+    # list[LayerURI] (one cache entry + one layer per timestamp), so the executor
+    # owns the per-frame read_through loop -- there is no single top-level
+    # read_through / LayerURI. It wins over every layer executor below. No-op for
+    # every prior spec (none are animation_frames).
+    if spec.shape == "animation_frames":
+        from .executors import animation_frames
+        return animation_frames.execute(spec, params, metadata)
     # A delegated spec's source-specific INPUT validation (wqp bbox-required, nldi
     # seed/comid mutual-exclusion + CONUS + comid gate) runs BEFORE read_through so
     # a bad request raises pre-cache / pre-network -- indistinguishable from the
@@ -692,11 +780,18 @@ def route(spec: SourceSpec, raw_params: dict[str, Any]) -> LayerURI | dict[str, 
         assert result.data is not None, "record source is cacheable; data must be set"
         return json.loads(result.data.decode("utf-8"))
 
+    # Fetch-time provenance channel (ADR 0110): a spec that declares
+    # output.provenance rides a recorder through read_through so the delegate's
+    # record_provenance() is persisted as a sidecar (fresh) and replayed from it
+    # (cache hit); the recorded dict reaches the envelope hook below. No-op
+    # (recorder=None -> byte-identical read_through) for every prior spec.
+    recorder = ProvenanceRecorder() if spec.output.provenance else None
     result = read_through(
         metadata=metadata,
         params=params,
         ext=spec.output.ext,
         fetch_fn=lambda: executor(spec, params),
+        provenance=recorder,
     )
     assert result.uri is not None, "router source is cacheable; uri must be set"
     # variant_by_emptiness (ADR 0081): a source whose non-empty path is a
@@ -727,7 +822,7 @@ def route(spec: SourceSpec, raw_params: dict[str, Any]) -> LayerURI | dict[str, 
     # the router drops uri/layer_type from its return so it can never flip an error
     # to success or re-point the layer. No-op when unset.
     if spec.hooks is not None and spec.hooks.envelope:
-        layer = _apply_envelope(spec, params, layer, result.data)
+        layer = _apply_envelope(spec, params, layer, result.data, result.provenance)
     return layer
 
 
@@ -737,20 +832,35 @@ _ENVELOPE_PROTECTED_KEYS = ("uri", "layer_type")
 
 
 def _apply_envelope(
-    spec: SourceSpec, params: dict[str, Any], layer: LayerURI, data: bytes | None
+    spec: SourceSpec,
+    params: dict[str, Any],
+    layer: LayerURI,
+    data: bytes | None,
+    provenance: dict[str, Any] | None = None,
 ) -> LayerURI:
     """Build the spec's ``output.result_model`` subclass via the pure envelope hook.
 
     The hook computes the extra business fields over the already-produced bytes
     (no I/O). Protected identity keys (``uri`` / ``layer_type``) are stripped from
     the hook's return so it can only enrich, never flip the honesty floor.
+
+    ``provenance`` (ADR 0110): the fetch-time provenance dict (fresh or cache-hit
+    replay) is passed to a hook that DECLARES a ``provenance`` parameter, so a
+    result model whose fields are fetch-time provenance survives every cache path.
+    A hook without that parameter (every ADR-0073 envelope hook) is called with the
+    original 4-arg signature -- strictly additive, no existing hook changes.
     """
+    import inspect
+
     from trid3nt_contracts.execution import LAYER_RESULT_MODELS
 
     from .hooks import resolve_hook
 
     hook = resolve_hook(spec.hooks.envelope)  # type: ignore[union-attr]
-    extra = hook(spec, params, layer, data)
+    if "provenance" in inspect.signature(hook).parameters:
+        extra = hook(spec, params, layer, data, provenance=provenance)
+    else:
+        extra = hook(spec, params, layer, data)
     if not isinstance(extra, dict):
         extra = {}
     extra = {k: v for k, v in extra.items() if k not in _ENVELOPE_PROTECTED_KEYS}

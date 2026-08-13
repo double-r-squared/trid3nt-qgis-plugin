@@ -1,0 +1,10 @@
+pelicun_mixed_fragility_loss_assessment:
+- combine fragility driven components and direct loss functions in one pelicun assessment
+- how does perfect vs independent EDP correlation change the portfolio loss spread
+- pelicun loss uncertainty sensitivity to the demand correlation structure
+- mix damage state components and loss function components and aggregate repair cost
+- how much does correlation between EDPs widen the aggregate loss distribution
+- run a combined fragility and loss function pelicun loss estimation
+- effect of AcrossFloors and AcrossDamageStates aggregation on portfolio cost
+- perfectly correlated versus independent demand sampling loss spread
+- portfolio loss distribution under different EDP correlation assumptions

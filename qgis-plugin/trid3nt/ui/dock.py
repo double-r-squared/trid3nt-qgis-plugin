@@ -16,9 +16,9 @@ Milestone 3 additions on top of milestone 2:
   * SELECTED-POLYGON AOI: retired by A2 (NATE 2026-07-20) -- the AOI model is
     explicit-only (the drawn Set-AOI rectangle / rehydrated case bbox); the
     selection + canvas toggles are gone.
-  * TOKEN UX: Settings explains where a token comes from (?st= carrier); an
-    auth-classified failure STOPS the reconnect ladder and paints an honest
-    "token expired -- paste a fresh one" status instead of silently looping.
+  * TOKEN UX: the optional shared tailnet token lives in Settings; an
+    auth-classified failure (the daemon rejected the token) STOPS the reconnect
+    ladder and paints an honest "token rejected" status instead of looping.
 
 Milestone 2 chat surface on top of milestone 1's plain-text bubbles:
 
@@ -44,19 +44,14 @@ Milestone 2 chat surface on top of milestone 1's plain-text bubbles:
     ``_on_case_open_event``) restores its chat AND its persisted layers in
     ONE gesture -- no separate "Open in QGIS"/"Export GeoTIFFs" action. The
     layers ride the SAME ``case-open`` WS envelope the chat replay uses
-    (``session_state.loaded_layers``, LOCAL mode only -- ``MODE_LOCAL``
-    guard in ``_on_case_open_event``) and land via the SAME by-URI
-    materializer live-published layers use. REMOTE mode has no automatic
-    restore yet (it cannot stream the store directly); its old manual
-    export trigger is gone too (zero user-facing export -- native QGIS
-    covers any file export the user wants), so the remote
-    materialize+download fallback (``hydrate_case_layers``, ``_ExportTask``)
-    is currently unreached from the UI, condemned in DELETION_LEDGER pending
-    remote store access.
+    (``session_state.loaded_layers``) and land via the SAME by-URI
+    materializer live-published layers use. There is zero user-facing export
+    (native QGIS covers any file export the user wants). Layers STREAM in
+    place from the advertised MinIO/S3 endpoint via GDAL ``/vsicurl/`` (ADR
+    0116); the download/export machinery is gone.
 
 All socket work lives on the AgentBridge worker thread; this widget only
-handles Qt signals. The export POST runs on a plain worker thread emitting
-cross-thread signals (auto-queued by Qt).
+handles Qt signals.
 """
 
 from __future__ import annotations
@@ -86,7 +81,8 @@ from qgis.PyQt.QtWidgets import (
 # "Push layer to case" layer-tree context-menu action (vector + raster).
 from qgis.core import QgsMapLayer
 
-from . import charts, gate
+from . import gate
+from .charts_window import ChartsWindow
 from .cards import (
     CodeExecCard,
     CredentialCard,
@@ -108,11 +104,10 @@ from ._style import (
     _THINKING_BLOCK_STYLE,
     _THINKING_TOGGLE_STYLE,
 )
-from ..case import aoi, case_export, push_layer
+from ..case import aoi, push_layer
 from ..net.tasks import (
     _CaseListTask,
     _EffectiveModelTask,
-    _ExportTask,
     _ProbePointTask,
     _ProviderConfigTask,
     _PushLayerTask,
@@ -126,12 +121,14 @@ from ..net.trid3nt_client import (
     resolve_data_base,
     resolve_http_base,
 )
+from ..net.run_invocation import USAGE as _RUN_USAGE_HINT, parse_run_invocation
 from ..net.ws_bridge import AgentBridge
-from ..plugin_settings import MODE_LOCAL, PluginSettings
+from ..plugin_settings import PluginSettings
 from ..render import probe
 from ..render.layers import (
     LayerMaterializer,
     ensure_basemap,
+    sweep_stale_session_dirs,
     zoom_to_bbox4326,
     zoom_to_extent,
 )
@@ -221,6 +218,10 @@ class Trid3ntDock(QDockWidget):
         self.iface = iface
         self.settings = PluginSettings()
         self.bridge = AgentBridge(self)
+        # Remote-streaming session TTL (ADR 0116): sweep crash-leftover staging
+        # dirs from prior sessions before this session opens its own. Only DEAD
+        # owners are swept -- a concurrent live QGIS instance keeps its dir.
+        sweep_stale_session_dirs()
         self.materializer = LayerMaterializer(self.settings)
         self._pending: Optional[_AssistantEntry] = None
         self._connected = False
@@ -238,7 +239,6 @@ class Trid3ntDock(QDockWidget):
         self._session_case_title: str = ""
         self._cases: List[CaseInfo] = []
         self._cases_dialog: Optional[CasesDialog] = None
-        self._export_tasks: List[_ExportTask] = []  # keep-alive refs (remote-mode only)
         self._case_list_tasks: List[_CaseListTask] = []  # keep-alive refs
         self._push_tasks: List[_PushLayerTask] = []  # keep-alive refs
         self._probe_tasks: List[_ProbePointTask] = []  # keep-alive refs
@@ -265,6 +265,16 @@ class Trid3ntDock(QDockWidget):
         self._aoi_rubber = None
         self._aoi_map_tool = None
         self._prev_aoi_tool = None
+        # ADR 0159: the 'Draw region' supply path -- ONE rubber-band rectangle
+        # attached to the NEXT chat turn as ``drawn_geometry`` (a basis="user"
+        # spatial knob the composer gates consume, e.g. geoclaw amr_regions).
+        # ``_drawn_region`` is the pending ``{"geometry_type": "rectangle",
+        # "bbox": [w,s,e,n]}`` payload (None until drawn), CLEARED on send (one
+        # rectangle, one turn). Its map tool + overlay mirror the Set-AOI pair.
+        self._drawn_region: Optional[dict] = None
+        self._region_rubber = None
+        self._region_map_tool = None
+        self._prev_region_tool = None
         # A1 (NATE 2026-07-20): True while the Set-AOI canvas key-filter (BACKSPACE
         # /DELETE -> _clear_aoi) is installed -- see ``_toggle_aoi_draw``.
         self._aoi_key_filter_on = False
@@ -311,6 +321,14 @@ class Trid3ntDock(QDockWidget):
         # the old ``_aoi_status_line`` / ``_last_aoi_note`` dedupe pair is
         # removed with it.
 
+        # Charts window (charts-window 2026-08-04): NATE's TUFLOW-Viewer
+        # directive -- charts get their OWN bottom-docked window, never an
+        # in-chat panel. Built LAZILY (first chart or first "Charts (N)" button
+        # click) so a chart-less session never spawns a bottom dock. The chat
+        # keeps only the count button; ``_charts_count`` drives its label.
+        self._charts_window: Optional[ChartsWindow] = None
+        self._charts_count = 0
+
         self._build_ui()
         self._wire_bridge()
         # Item R6 (live-feedback 2026-07-18): the persistent "Push layer"
@@ -332,17 +350,14 @@ class Trid3ntDock(QDockWidget):
     def _auto_connect_local_once(self) -> None:
         """AUTO-CONNECT (live-feedback 2026-07-09): cases must be visible
         WITHOUT the user pressing Connect, and the dock should not require a
-        manual connect at all in local mode. Fires once per dock show (reset
-        on hide, so re-opening the dock tries again); never retries on
-        failure within one show -- a failed attempt just paints the existing
-        honest status line via ``connect_agent``'s own failure path, exactly
-        like a manual click would. Remote mode is unaffected (manual connect
-        only, a pasted token is required)."""
+        manual connect at all. Fires once per dock show (reset on hide, so
+        re-opening the dock tries again); never retries on failure within one
+        show -- a failed attempt just paints the existing honest status line
+        via ``connect_agent``'s own failure path, exactly like a manual click
+        would."""
         if self._auto_connect_done_this_show:
             return
         self._auto_connect_done_this_show = True
-        if self.settings.mode != MODE_LOCAL:
-            return
         if self.bridge.running:
             return
         self.connect_agent()
@@ -429,6 +444,30 @@ class Trid3ntDock(QDockWidget):
         self.aoi_btn.toggled.connect(self._toggle_aoi_draw)
         button_row.addWidget(self.aoi_btn)
 
+        # ADR 0159: 'Draw region' -- drag ONE rectangle that rides the NEXT chat
+        # turn as ``drawn_geometry`` (a basis="user" spatial knob for composer
+        # gates, e.g. geoclaw amr_regions). Distinct from Set AOI (the analysis
+        # extent): a drawn region is a sub-region knob, cleared on send.
+        self.region_btn = QToolButton()
+        self.region_btn.setText("Draw region")
+        self.region_btn.setCheckable(True)
+        self.region_btn.setToolTip(
+            "Drag a rectangle to attach to your next message as a refinement "
+            "region (e.g. where GeoClaw refines its mesh). Cleared on send."
+        )
+        self.region_btn.toggled.connect(self._toggle_draw_region)
+        button_row.addWidget(self.region_btn)
+
+        # Charts (charts-window 2026-08-04): the count button that SHOWS the
+        # bottom charts window. It stays in the chat dock; charts themselves
+        # never render inline here. Click raises (creates lazily) the window;
+        # a new chart increments the count + subtly flags the button.
+        self.charts_btn = QToolButton()
+        self.charts_btn.setText("Charts (0)")
+        self.charts_btn.setToolTip("Show the charts window (bottom of the app)")
+        self.charts_btn.clicked.connect(self._show_charts_window)
+        button_row.addWidget(self.charts_btn)
+
         # A1 (NATE 2026-07-20): the "Clear AOI" header button is REMOVED --
         # clearing is MULTIPLEXED into the Set-AOI tool: while Set-AOI is active
         # (aoi_btn checked), pressing BACKSPACE or DELETE clears the current AOI
@@ -502,18 +541,11 @@ class Trid3ntDock(QDockWidget):
         self._probe_panel.setVisible(False)
         outer.addWidget(self._probe_panel)
 
-        # OpenQuake result parity (live-feedback 2026-07-13): the Charts
-        # panel -- the QGIS twin of the web's chart cards (hazard curves,
-        # UHS, damage distributions, ...). Same pinned-collapsible pattern
-        # as the probe panel: charts render HERE, never in the chat message
-        # list (NATE's clutter rule). Populated from the case-open replay
-        # (``session_state.charts``) and live ``chart-emission`` frames;
-        # cleared on case switch. Hidden until the case has a chart.
-        self.charts_panel = charts.ChartsPanel(
-            toggle_style=_THINKING_TOGGLE_STYLE,
-            block_style=_THINKING_BLOCK_STYLE,
-        )
-        outer.addWidget(self.charts_panel)
+        # Charts (charts-window 2026-08-04): the charts surface is the
+        # bottom-docked ``ChartsWindow`` (built lazily), NOT an in-chat panel.
+        # The chat dock keeps only the "Charts (N)" count button in the action
+        # row above; ``set_charts`` / ``add_chart`` / ``clear`` are driven on
+        # the window through ``_ensure_charts_window``.
 
         # Item 4 (live-feedback 2026-07-09): the AOI toggles (canvas /
         # selected polygon) moved into Settings -- apply-on-Save there now,
@@ -608,14 +640,22 @@ class Trid3ntDock(QDockWidget):
         # linger across a switch -- _on_case_open_event repaints it below from
         # the newly-opened case's own bbox (or leaves it cleared when absent).
         self._clear_aoi_overlay()
+        # ADR 0159: a pending drawn region is per-turn/per-case -- drop it on a
+        # case switch so it never rides a turn in the wrong case.
+        self._clear_region_overlay()
         # BUG 3b (live-feedback 2026-07-12): the probe panel shows CASE
         # data -- a table from the previous case must not linger across a
         # switch. Hide it (its next click repopulates it).
         self._probe_panel.setVisible(False)
         self.probe_result_label.setText("")
-        # Charts are per-Case state too (live-feedback 2026-07-13): the
-        # case-open replay below repopulates the panel for the new case.
-        self.charts_panel.clear()
+        # Charts are per-Case state (charts-window 2026-08-04): the case-open
+        # replay below repopulates the charts window for the new case. The
+        # window survives the switch (bottom dock stays put); only its list is
+        # cleared + the count button reset.
+        if self._charts_window is not None:
+            self._charts_window.clear()
+        self._charts_count = 0
+        self._set_charts_button()
         while self.messages_layout.count() > 1:
             item = self.messages_layout.takeAt(0)
             widget = item.widget()
@@ -1182,6 +1222,138 @@ class Trid3ntDock(QDockWidget):
                 "AOI overlay cleared (not connected -- nothing to sync)"
             )
 
+    # -- draw-a-region supply path (ADR 0159) --------------------------------- #
+
+    def _toggle_draw_region(self, checked: bool) -> None:
+        """Install/restore the 'Draw region' map tool -- mirrors the Set-AOI
+        release-point discipline: ON saves the active tool then installs a
+        ``QgsMapToolExtent`` (its ``extentChanged`` fires on the drag release),
+        OFF restores the saved tool. Unlike Set AOI, drawing is allowed offline
+        (the region attaches to the NEXT message, sent when connected); an older
+        QGIS build lacking the tool degrades honestly (snap off + note)."""
+        try:
+            canvas = self.iface.mapCanvas()
+        except Exception:  # noqa: BLE001 -- headless / no canvas -- no-op
+            return
+        if checked:
+            if self._region_map_tool is None:
+                try:
+                    from qgis.gui import QgsMapToolExtent
+
+                    self._region_map_tool = QgsMapToolExtent(canvas)
+                    self._region_map_tool.extentChanged.connect(
+                        self._on_region_extent_chosen
+                    )
+                except Exception:  # noqa: BLE001 -- older build lacks the tool
+                    self._note(
+                        "Draw region is unavailable in this QGIS build "
+                        "(QgsMapToolExtent missing).",
+                        error=True,
+                    )
+                    self.region_btn.blockSignals(True)
+                    self.region_btn.setChecked(False)
+                    self.region_btn.blockSignals(False)
+                    return
+            self._prev_region_tool = canvas.mapTool()
+            canvas.setMapTool(self._region_map_tool)
+        else:
+            if canvas.mapTool() is self._region_map_tool:
+                canvas.setMapTool(self._prev_region_tool)
+            self._prev_region_tool = None
+
+    def _on_region_extent_chosen(self, rect) -> None:
+        """A rectangle was dragged with the 'Draw region' tool: convert the
+        canvas-CRS ``QgsRectangle`` -> EPSG:4326 (the same path Set-AOI uses),
+        stash it as the pending ``drawn_geometry`` payload, paint the overlay,
+        then restore the prior tool + pop the button. The region rides the NEXT
+        ``send_chat`` and is cleared on send (one rectangle, one turn)."""
+        try:
+            canvas = self.iface.mapCanvas()
+            authid = canvas.mapSettings().destinationCrs().authid()
+        except Exception:  # noqa: BLE001 -- headless / no canvas
+            return
+        if rect is None or rect.isEmpty():
+            return
+        bbox = self._rect_to_bbox4326(rect, authid)
+        if bbox is None:
+            self._note(
+                "Could not set the region: the drawn extent did not resolve "
+                "to EPSG:4326.",
+                error=True,
+            )
+            self.region_btn.setChecked(False)  # restores the prior tool
+            return
+        self._drawn_region = {
+            "geometry_type": "rectangle",
+            "bbox": list(bbox),
+        }
+        self._render_region_overlay(bbox)
+        self._note(
+            f"Region drawn {aoi.format_bbox(bbox)} -- attaches to your next "
+            "message, then clears."
+        )
+        self.region_btn.setChecked(False)
+
+    def _render_region_overlay(
+        self, bbox4326: Tuple[float, float, float, float]
+    ) -> None:
+        """Paint the pending drawn region as a SOLID amber outline-only rectangle
+        (distinct from the dashed blue AOI overlay) so the user sees what will
+        attach. Same lazy-rubber-band + 4326->canvas transform path as
+        ``_render_aoi_overlay``; headless / construction failure is a silent
+        no-op (``_drawn_region`` stays authoritative for the send)."""
+        try:
+            canvas = self.iface.mapCanvas()
+        except Exception:  # noqa: BLE001 -- headless / no iface -- no overlay
+            return
+        try:
+            from qgis.core import (
+                QgsCoordinateReferenceSystem,
+                QgsCoordinateTransform,
+                QgsGeometry,
+                QgsProject,
+                QgsRectangle,
+                QgsWkbTypes,
+            )
+            from qgis.gui import QgsRubberBand
+            from qgis.PyQt.QtGui import QColor
+
+            lon_min, lat_min, lon_max, lat_max = bbox4326
+            rect = QgsRectangle(lon_min, lat_min, lon_max, lat_max)
+            dst_crs = canvas.mapSettings().destinationCrs()
+            src_crs = QgsCoordinateReferenceSystem("EPSG:4326")
+            if src_crs != dst_crs:
+                transform = QgsCoordinateTransform(
+                    src_crs, dst_crs, QgsProject.instance().transformContext()
+                )
+                rect = transform.transformBoundingBox(rect)
+            if self._region_rubber is None:
+                self._region_rubber = QgsRubberBand(
+                    canvas, QgsWkbTypes.PolygonGeometry
+                )
+                self._region_rubber.setColor(QColor("#e3b341"))  # amber
+                self._region_rubber.setWidth(2)
+                self._region_rubber.setFillColor(QColor(0, 0, 0, 0))
+            self._region_rubber.setToGeometry(QgsGeometry.fromRect(rect), None)
+            self._region_rubber.show()
+        except Exception:  # noqa: BLE001 -- overlay is cosmetic; never crash
+            return
+
+    def _clear_region_overlay(self) -> None:
+        """Drop the pending drawn region + hide its overlay. Called on send
+        (clear-on-send) and on case switch / disconnect so a stale region never
+        rides a later turn or lingers on the canvas."""
+        self._drawn_region = None
+        if self._region_rubber is None:
+            return
+        try:
+            from qgis.core import QgsWkbTypes
+
+            self._region_rubber.reset(QgsWkbTypes.PolygonGeometry)
+            self._region_rubber.hide()
+        except Exception:  # noqa: BLE001 -- best-effort teardown
+            pass
+
     # -- connection ----------------------------------------------------------- #
 
     def _wire_bridge(self) -> None:
@@ -1205,11 +1377,7 @@ class Trid3ntDock(QDockWidget):
         handshake; when absent (older daemon, or not connected yet -- e.g.
         the cold pre-connect case-list fetch) it derives ``:8766`` from the
         ONE "Server URL" setting's host, so pointing that URL at a tailnet
-        peer just works with no second field to configure. REMOTE (cloud)
-        mode is untouched -- CloudFront routes ``/api/*`` off the SAME
-        host/port as the WS, not a fixed :8766."""
-        if self.settings.mode != MODE_LOCAL:
-            return case_export.ws_url_to_http_base(self.settings.remote_url)
+        peer just works with no second field to configure."""
         return resolve_http_base(self._advertised_http_base, self.settings.local_url)
 
     def _effective_data_base(self) -> str:
@@ -1223,7 +1391,7 @@ class Trid3ntDock(QDockWidget):
         if self.bridge.running:
             return
         url = self.settings.effective_url()
-        if not url or url == "wss://":
+        if not url:
             self.status_label.setText("Set the agent URL in Settings first")
             self._set_dot("error")
             return
@@ -1241,24 +1409,28 @@ class Trid3ntDock(QDockWidget):
         self.bridge.start(
             url,
             token=self.settings.effective_token(),
-            anonymous_user_id=anon if self.settings.mode == MODE_LOCAL else None,
+            anonymous_user_id=anon,
             case_title=title,
             case_bbox=None,
-            # Live-feedback 2026-07-09: in local mode REUSE the resumed /
-            # newest existing case instead of minting a fresh "QGIS session
-            # ..." case on every connect (with auto-connect that regrew case
-            # clutter per dock-show); create only when zero cases exist.
-            # Remote keeps the milestone 1 always-create behavior.
-            reuse_case=self.settings.mode == MODE_LOCAL,
+            # Live-feedback 2026-07-09: REUSE the resumed / newest existing
+            # case instead of minting a fresh "QGIS session ..." case on every
+            # connect (with auto-connect that regrew case clutter per
+            # dock-show); create only when zero cases exist.
+            reuse_case=True,
         )
 
     def disconnect_agent(self) -> None:
         self.bridge.stop()
         self._connected = False
         self._case_id = None
+        # Remote-streaming session TTL (ADR 0116): a disconnect ends the
+        # session, so sweep everything staged this session (the ONE fallback
+        # for non-streamable meshes) -- nothing outlives the session.
+        self.materializer.cleanup_session()
         # Per-case-bbox 2026-07-19: the case AOI is per-case state -- a
         # disconnect ends the case binding, so the overlay must go too.
         self._clear_aoi_overlay()
+        self._clear_region_overlay()  # ADR 0159: drop any pending drawn region
         self._set_case_label("")
         self._set_dot("disconnected")
         self.status_label.setText("Not connected")
@@ -1404,6 +1576,7 @@ class Trid3ntDock(QDockWidget):
         # leaves it cleared when the new case has none). _clear_aoi_overlay
         # also nulls self._case_bbox.
         self._clear_aoi_overlay()
+        self._clear_region_overlay()  # ADR 0159: drop any pending drawn region
         # A2 (NATE 2026-07-20): a NEW case is BBOX-LESS -- the canvas-as-AOI
         # seed is gone. A clean slate with no AOI until the user Sets one (the
         # Set-AOI rectangle) or the LLM geocodes it.
@@ -1452,81 +1625,6 @@ class Trid3ntDock(QDockWidget):
         if self.bridge.refresh_case_list():
             return "Refreshing case list ..."
         return "Not connected -- the list refreshes on the next connect"
-
-    # -- remote-mode case-layer hydration (condemned; see DELETION_LEDGER) ------ #
-
-    def hydrate_case_layers(self, case_id: str, label: str) -> None:
-        """REMOTE-mode-ONLY case-layer materialize+download fallback (renamed
-        from ``open_case_in_qgis``, matching the server's ``cases.
-        hydrate_case_layers``, ADR 0058).
-
-        LOCAL mode no longer calls this: ``_on_case_open_event`` already
-        restores a case's layers automatically, in the SAME gesture as the
-        chat replay, the instant the case becomes active (decision A,
-        NATE 2026-07-31) -- the by-URI manifest fetch this method used to
-        also perform for local mode was fully redundant with that (same
-        source data, same materializer) and has been deleted.
-
-        REMOTE mode: not currently wired to any UI action either (zero
-        user-facing export remains -- native QGIS covers any file export a
-        user wants). Kept callable, not deleted, so the remote
-        materialize+download machinery (``_ExportTask`` /
-        ``case_export.post_export_case`` / ``materializer.
-        materialize_export``) is not lost outright -- condemned in
-        DELETION_LEDGER pending remote store access, at which point this is
-        the natural fold-in point for an automatic remote restore too. A
-        LOCAL-mode call is a defensive no-op (should never happen -- nothing
-        in the dock calls this for local anymore).
-        """
-        if self.settings.mode == MODE_LOCAL:
-            return
-        base_url = self._effective_http_base()
-        self._note(
-            f"Exporting case '{label}' on the remote agent "
-            f"({base_url}) -- artifacts download to a local temp dir ..."
-        )
-        task = _ExportTask(
-            base_url, case_id, self, remote=True,
-            minio_endpoint=self._effective_data_base(),
-        )
-        task.finished.connect(self._on_export_finished)
-        task.errored.connect(self._on_export_errored)
-        self._export_tasks.append(task)
-        task.start()
-
-    def _on_export_finished(self, case_id: str, result: dict) -> None:
-        plan = case_export.plan_export_layers(result)
-        notes = self.materializer.materialize_export(plan, group_label=case_id[:8])
-        for note in notes:
-            self._note(note)
-        if plan.qgz_path:
-            self._note(f"Styled QGIS project also written: {plan.qgz_path}")
-        if self.settings.auto_basemap:
-            note = ensure_basemap(self.settings.basemap_preset)
-            if note:
-                self._note(note)
-        # Item 1: zoom to the union of the just-exported layers' REAL extents
-        # (GeoTIFF/gpkg layers carry true GDAL/OGR extents, unlike the live
-        # XYZ tile layers) so the canvas is never left white/stale.
-        try:
-            canvas = self.iface.mapCanvas()
-            dest_crs = canvas.mapSettings().destinationCrs()
-            extent = self.materializer.last_added_export_extent(dest_crs)
-            zoom_to_extent(canvas, extent)
-        except Exception:  # noqa: BLE001 -- headless/no canvas, skip the zoom
-            pass
-        self._scroll_to_bottom()
-
-    def _on_export_errored(self, case_id: str, message: str) -> None:
-        if "has no layers to export" in message:
-            # Friendly, not an error: an empty case is expected, not broken.
-            self._note(
-                "This case has no layers yet -- open it and run a prompt to "
-                "generate data.",
-                error=False,
-            )
-            return
-        self._note(f"Case export failed: {message}", error=True)
 
     # -- push active layer into the case -------------------------------------- #
 
@@ -1714,7 +1812,7 @@ class Trid3ntDock(QDockWidget):
         data_base: str = "",
     ) -> None:
         self._connected = True
-        if is_anonymous and self.settings.mode == MODE_LOCAL:
+        if is_anonymous:
             self.settings.anonymous_user_id = user_id
         # Remote-daemon (tailnet) endpoint derivation: stash whatever this
         # handshake advertised BEFORE any :8766 call or layer materialize
@@ -1752,14 +1850,14 @@ class Trid3ntDock(QDockWidget):
         self.status_label.setText(f"Connection failed: {message}")
 
     def _on_auth_expired(self, message: str) -> None:
-        """The token was rejected (broker 401/403 or in-band AUTH_REQUIRED):
-        the worker has STOPPED -- no silent reconnect loop. Say exactly what
-        to do next."""
+        """The shared tailnet token was rejected (broker 401/403 or in-band
+        AUTH_REQUIRED): the worker has STOPPED -- no silent reconnect loop. Say
+        exactly what to do next."""
         self._connected = False
         self._pending_open_case = None  # the connect this was riding died
         self._set_dot("error")
         self.status_label.setText(
-            "Token expired or rejected -- paste a fresh one in Settings"
+            "Token rejected -- check the shared token in Settings"
         )
         self._note(f"Authentication failed: {message}", error=True)
 
@@ -1877,14 +1975,17 @@ class Trid3ntDock(QDockWidget):
             self._ensure_pending().add_note(f"{code}: {message}", error=True)
             self._scroll_to_bottom()
         elif kind == "chart":
-            # OpenQuake result parity (live-feedback 2026-07-13): a live
-            # mid-turn chart. The Charts panel renders it (never a chat
-            # widget); one pointer note in the transcript so the turn's
-            # narrative says where the chart went.
-            if self.charts_panel.add_chart(data):
+            # Charts-window 2026-08-04: a live mid-turn chart lands in the
+            # bottom-docked ChartsWindow (never a chat widget). The chat gets
+            # only the incremented "Charts (N)" button + one pointer note so
+            # the turn's narrative says where the chart went.
+            window = self._ensure_charts_window()
+            if window.add_chart(data):
+                self._charts_count = window.count
+                self._set_charts_button(flag=True)
                 title = data.get("title") or "chart"
                 self._ensure_pending().add_note(
-                    f"Chart added below: {title}"
+                    f"Chart added to the charts window: {title}"
                 )
                 self._scroll_to_bottom()
         elif kind == "solve-progress":
@@ -2030,20 +2131,18 @@ class Trid3ntDock(QDockWidget):
 
         THE fold chokepoint for decision A (NATE 2026-07-31): a case is
         confirmed open here with its chat AND its persisted layers restored
-        together, in one gesture -- the redundant explicit "Open in
-        QGIS"/"Export GeoTIFFs" action is gone (see ``hydrate_case_layers``).
+        together, in one gesture -- there is no separate export action.
         ``info.layers`` already carries the case's persisted
-        ``loaded_layer_summaries`` (the SAME source ``/api/case-layers``'s
-        manifest would have served -- no extra HTTP round trip needed, it
-        rides the case-open envelope for free), parsed by the client the
-        SAME way a manual manifest fetch would. LOCAL-mode-only: the by-URI
-        materializer needs the store directly reachable, which remote mode
-        cannot do yet (it "keeps its existing explicit flow" -- currently
-        none, until remote store access lands; see DELETION_LEDGER).
+        ``loaded_layer_summaries`` -- no extra HTTP round trip needed, it
+        rides the case-open envelope for free, parsed by the client the
+        SAME way a live publish would. The by-URI materializer STREAMS each
+        layer in place from the advertised store via ``/vsicurl/`` (which the
+        tailnet endpoint makes directly reachable -- the remote client reads
+        the same objects ranged over the tailnet, no download (ADR 0116).
 
         Rebinds the dock: authoritative title in the header, a FRESH layer
         group named for the case (dedup reset), the persisted loaded_layers
-        replayed into it (LOCAL mode), an OpenStreetMap basemap
+        replayed into it (streamed in place), an OpenStreetMap basemap
         (settings-gated, item 4), and a canvas zoom to the case bbox -- or,
         absent one, the union of the vector layers just materialized, or a
         further fallback bbox -- so the canvas is never silently left
@@ -2073,14 +2172,10 @@ class Trid3ntDock(QDockWidget):
         self._set_dot("connected")
         self._refresh_model_label()  # status text = active model, not case-id
         self._replay_chat_history(info.chat_messages)
-        self._note(f"Case '{info.title}' active")
         # Decision A (NATE 2026-07-31): layer restore rides the SAME gesture
-        # as the chat replay above, LOCAL mode only -- the by-URI
-        # materializer needs the store directly reachable (MinIO), which
-        # remote mode cannot do yet. Remote mode still gets its chat back;
-        # it just has no automatic (or, currently, any UI) layer restore
-        # until remote store access lands.
-        if self.settings.mode == MODE_LOCAL and info.layers:
+        # as the chat replay above -- the by-URI materializer reads the store
+        # directly (MinIO on this box or the tailnet peer).
+        if info.layers:
             notes = self.materializer.materialize(info.layers)
             if notes:
                 # BUG 3a (live-feedback 2026-07-12): the case-open replay
@@ -2088,11 +2183,18 @@ class Trid3ntDock(QDockWidget):
                 # pushing the conversation far up -- fold the batch into the
                 # collapsed "Layers (N)" toggle (errors stay visible).
                 self._ensure_pending().add_layer_notes(notes)
-        # OpenQuake result parity (live-feedback 2026-07-13): replay the
-        # case's persisted charts into the Charts panel (the web shows the
-        # hazard-curve card on case open; the dock now matches). The panel
-        # stays hidden for chart-less cases -- no chat noise either way.
-        self.charts_panel.set_charts(info.charts)
+        # Charts-window 2026-08-04: rebuild the charts window's list from the
+        # case's persisted SessionChartRecords (per-case durability). A
+        # chart-less case leaves the (possibly-existing) window empty and the
+        # button at "Charts (0)"; a chart-carrying case builds the window
+        # lazily but does NOT force it visible (the button invites it open).
+        if info.charts or self._charts_window is not None:
+            window = self._ensure_charts_window()
+            window.set_charts(info.charts)
+            self._charts_count = window.count
+        else:
+            self._charts_count = 0
+        self._set_charts_button()
         if self.settings.auto_basemap:
             note = ensure_basemap(self.settings.basemap_preset)
             if note:
@@ -2109,9 +2211,9 @@ class Trid3ntDock(QDockWidget):
 
     def _zoom_after_case_open(self, info) -> None:
         """ITEM D (live-feedback 2026-07-10, auto-focus on every case
-        switch): zoom the canvas to the just-opened case's area, and say
-        so. Fallback ladder, each rung tried only when the previous one is
-        absent or its transform fails:
+        switch): zoom the canvas to the just-opened case's area. Fallback
+        ladder, each rung tried only when the previous one is absent or its
+        transform fails:
 
           1. ``info.bbox`` -- the case-open's own ``session_state.case.bbox``
              (EPSG:4326).
@@ -2126,19 +2228,17 @@ class Trid3ntDock(QDockWidget):
              rehydration) -- can carry a bbox even when (1)-(3) come up
              empty.
 
-        A successful zoom appends "Zoomed to case area" so the behavior is
-        visible. A genuinely bbox-less, vector-less case (an OLD raster-only
-        case predating bbox seeding) says so honestly instead of silently
-        leaving the view wherever it was. Headless-safe: no canvas (no
-        ``iface``) is a silent no-op, never a crash (there would be no one
-        to show the note to in that environment either).
+        The zoom is silent (NATE de-noise 2026-08-04: the "Zoomed to case
+        area" subtext is gone). A genuinely bbox-less, vector-less case (an
+        OLD raster-only case predating bbox seeding) still says so honestly
+        instead of silently leaving the view wherever it was. Headless-safe:
+        no canvas (no ``iface``) is a silent no-op, never a crash.
         """
         try:
             canvas = self.iface.mapCanvas()
         except Exception:  # noqa: BLE001 -- no canvas (headless), nothing to zoom
             return
         if info.bbox is not None and zoom_to_bbox4326(canvas, info.bbox):
-            self._note("Zoomed to case area")
             return
         try:
             dest_crs = canvas.mapSettings().destinationCrs()
@@ -2146,11 +2246,9 @@ class Trid3ntDock(QDockWidget):
             return
         extent = self.materializer.last_added_vector_extent(dest_crs)
         if zoom_to_extent(canvas, extent):
-            self._note("Zoomed to case area")
             return
         fallback = self._fallback_case_bbox(info)
         if fallback is not None and zoom_to_bbox4326(canvas, fallback):
-            self._note("Zoomed to case area")
             return
         self._note("Case has no stored map area - keeping current view")
 
@@ -2174,6 +2272,124 @@ class Trid3ntDock(QDockWidget):
                     return (float(bbox[0]), float(bbox[1]), float(bbox[2]), float(bbox[3]))
             except (AttributeError, TypeError, ValueError):
                 continue
+        return None
+
+    # -- charts window (charts-window 2026-08-04) ------------------------------ #
+
+    def _ensure_charts_window(self) -> ChartsWindow:
+        """Lazily build the bottom-docked ChartsWindow (first chart / first
+        button click). Docked to ``Qt.BottomDockWidgetArea`` -- the TUFLOW
+        Viewer position. Headless-safe: no ``iface.addDockWidget`` (test
+        FakeIface) leaves the window a standalone widget, still fully driveable
+        for the chart-list / persistence logic."""
+        if self._charts_window is None:
+            self._charts_window = ChartsWindow(
+                locate_callback=self._locate_layer_on_map,
+                parent=self,
+            )
+            try:
+                self.iface.addDockWidget(
+                    Qt.DockWidgetArea.BottomDockWidgetArea, self._charts_window
+                )
+            except Exception:  # noqa: BLE001 -- headless / no main window
+                pass
+        return self._charts_window
+
+    def _show_charts_window(self) -> None:
+        """The chat "Charts (N)" button: create-if-needed + raise the bottom
+        window, clearing the new-chart flag (the count stays)."""
+        window = self._ensure_charts_window()
+        window.setVisible(True)
+        try:
+            window.raise_()
+        except Exception:  # noqa: BLE001 -- headless
+            pass
+        self._set_charts_button(flag=False)
+
+    def _set_charts_button(self, flag: bool = False) -> None:
+        """Repaint the "Charts (N)" button: the count, plus a subtle "*" flag
+        when a new chart arrived while the window was not being looked at
+        (cleared when the user opens/raises the window)."""
+        star = " *" if flag else ""
+        self.charts_btn.setText(f"Charts ({self._charts_count}){star}")
+
+    def _locate_layer_on_map(self, source_uri: str) -> None:
+        """ChartsWindow "Locate on map" (d): pan + flash the QGIS canvas to the
+        layer a chart was computed from. Matches ``source_uri`` to a loaded
+        layer stamped with it by the materializer (``trid3nt/source_uri``
+        custom property) or whose provider source contains it; zooms to that
+        layer's extent and flashes it. An unmatched uri is an HONEST note,
+        never a silent no-op or a crash. Headless (no canvas) is a no-op."""
+        try:
+            canvas = self.iface.mapCanvas()
+        except Exception:  # noqa: BLE001 -- no canvas (headless)
+            return
+        layer = self._find_layer_by_source_uri(source_uri)
+        if layer is None:
+            self._note(
+                "This chart's source layer is not loaded in QGIS - open it "
+                f"first (source: {source_uri})"
+            )
+            return
+        try:
+            from qgis.core import (
+                QgsCoordinateTransform,
+                QgsGeometry,
+                QgsProject,
+            )
+
+            extent = layer.extent()
+            dest_crs = canvas.mapSettings().destinationCrs()
+            src_crs = layer.crs()
+            if src_crs != dest_crs:
+                transform = QgsCoordinateTransform(
+                    src_crs, dest_crs, QgsProject.instance().transformContext()
+                )
+                extent = transform.transformBoundingBox(extent)
+            zoom_to_extent(canvas, extent)
+            # Best-effort flash so the eye catches the located layer.
+            try:
+                canvas.flashGeometries(
+                    [QgsGeometry.fromRect(extent)], dest_crs
+                )
+            except Exception:  # noqa: BLE001 -- flash is optional chrome
+                pass
+            self._note(f"Located '{layer.name()}' on the map")
+        except Exception as exc:  # noqa: BLE001
+            self._note(
+                f"Could not locate the source layer on the map "
+                f"({type(exc).__name__}: {exc})",
+                error=True,
+            )
+
+    def _find_layer_by_source_uri(self, source_uri: str):
+        """A loaded QgsMapLayer matching ``source_uri`` -- by the materializer's
+        ``trid3nt/source_uri`` stamp (exact), else a substring match either way
+        against the layer's provider source (the chart's ``gs://`` / ``s3://``
+        uri and the render uri can differ in scheme/host but share the object
+        key). Returns the first match or None. Never raises."""
+        try:
+            from qgis.core import QgsProject
+
+            layers = list(QgsProject.instance().mapLayers().values())
+        except Exception:  # noqa: BLE001 -- headless / no project
+            return None
+        # Pass 1: exact stamp match (the reliable path for our materialized
+        # layers).
+        for layer in layers:
+            try:
+                if layer.customProperty("trid3nt/source_uri") == source_uri:
+                    return layer
+            except Exception:  # noqa: BLE001
+                continue
+        # Pass 2: substring either direction against the provider source.
+        for layer in layers:
+            try:
+                src = layer.source() or ""
+            except Exception:  # noqa: BLE001
+                continue
+            if src and (src in source_uri or source_uri in src):
+                return layer
         return None
 
     # -- gate card -------------------------------------------------------------- #
@@ -2547,6 +2763,43 @@ class Trid3ntDock(QDockWidget):
 
     # -- sending ------------------------------------------------------------- #
 
+    def _send_run_invocation(self, text, run_inv) -> None:
+        """Handle a parsed ``!run`` invocation (ADR 0114).
+
+        ``help`` / a local parse ``error`` render an honest local bubble and
+        send NOTHING. A valid ``(name, args)`` echoes the ``!run`` signature as
+        the user bubble (the durable attribution -- the server persists the same
+        line above the tool card) and dispatches a ``dev-tool-invoke``; the tool
+        card + turn-complete then ride the SAME rendering path a model call
+        uses.
+        """
+        self.input_edit.clear()
+        self._add_user_bubble(text)
+        if run_inv.help:
+            self._ensure_pending().add_note(_RUN_USAGE_HINT)
+            self._scroll_to_bottom()
+            self._pending = None
+            return
+        if run_inv.error is not None:
+            entry = self._ensure_pending()
+            entry.add_note(run_inv.error, error=True)
+            self._scroll_to_bottom()
+            self._pending = None
+            return
+        # Mirror the chat path's pre-send turn bookkeeping so the tool card +
+        # turn-complete land on a fresh streaming entry.
+        self._tool_picker_turn_step = 0
+        if self._pending is not None:
+            self._pending.finalize_markdown()
+        self._pending = _AssistantEntry(self.messages_layout)
+        self._scroll_to_bottom()
+        try:
+            self.bridge.send_dev_tool_invoke(
+                run_inv.name, run_inv.args, raw_text=text
+            )
+        except Exception as exc:  # noqa: BLE001
+            self._pending.add_note(f"!run send failed: {exc}", error=True)
+
     def _send(self) -> None:
         # Item A (qgis-ux-batch 2026-07-19): multi-line composer -- read the
         # full document (toPlainText), not the one-line QLineEdit .text().
@@ -2555,6 +2808,15 @@ class Trid3ntDock(QDockWidget):
             return
         if not (self._case_id and self.bridge.running):
             self.status_label.setText("Not connected -- open Settings to connect")
+            return
+        # !run direct tool invocation (ADR 0114): PARSE-FIRST, before the chat
+        # path. A ``!run`` prefix routes straight to the server as a structured
+        # ``dev-tool-invoke``; anything else (including a message that merely
+        # MENTIONS !run mid-sentence) returns None and flows to chat below,
+        # byte-identically.
+        run_inv = parse_run_invocation(text)
+        if run_inv is not None:
+            self._send_run_invocation(text, run_inv)
             return
         self.input_edit.clear()
         self._add_user_bubble(text)
@@ -2594,9 +2856,15 @@ class Trid3ntDock(QDockWidget):
                 model_id=self.settings.model_id,
                 aoi_bbox=bbox,
                 tool_choice_mode=self.settings.tool_choice_mode,
+                # ADR 0159: attach any pending drawn region to THIS turn, then
+                # clear it below (one rectangle, one turn).
+                drawn_geometry=self._drawn_region,
             )
         except Exception as exc:  # noqa: BLE001
             self._pending.add_note(f"send failed: {exc}", error=True)
+        # Clear-on-send: the drawn region rides exactly one message.
+        if self._drawn_region is not None:
+            self._clear_region_overlay()
 
     # -- teardown ------------------------------------------------------------- #
 
@@ -2609,4 +2877,17 @@ class Trid3ntDock(QDockWidget):
             except Exception:  # noqa: BLE001
                 pass
         self._push_tree_actions = []
+        # Charts-window 2026-08-04: the bottom charts window is a sibling dock
+        # this dock owns -- tear it down with the dock so a plugin reload never
+        # leaves an orphaned bottom dock behind.
+        if self._charts_window is not None:
+            try:
+                self.iface.removeDockWidget(self._charts_window)
+            except Exception:  # noqa: BLE001 -- headless / never docked
+                pass
+            self._charts_window.deleteLater()
+            self._charts_window = None
         self.bridge.stop()
+        # Remote-streaming session TTL (ADR 0116): dock close / plugin unload
+        # ends the session -- remove its staging dir so nothing survives it.
+        self.materializer.cleanup_session()

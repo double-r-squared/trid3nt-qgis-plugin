@@ -27,6 +27,7 @@ Run via ``make test`` from qgis-plugin/.
 from __future__ import annotations
 
 import importlib
+import math
 import os
 import re
 import sys
@@ -264,7 +265,9 @@ def _import_layers():
     core.QgsCoordinateReferenceSystem = type("QgsCoordinateReferenceSystem", (), {})
     core.QgsCoordinateTransform = type("QgsCoordinateTransform", (), {})
     core.QgsRectangle = type("QgsRectangle", (), {})
-    core.QgsMeshDatasetIndex = type("QgsMeshDatasetIndex", (), {})
+    core.QgsMeshDatasetIndex = type(
+        "QgsMeshDatasetIndex", (), {"__init__": lambda self, group=0, dataset=0: None}
+    )
     core.QgsMeshLayer = type("QgsMeshLayer", (), {})
     core.QgsColorRampShader = _FakeColorRampShader
     core.QgsPalettedRasterRenderer = _FakePalettedRenderer
@@ -358,7 +361,7 @@ class TestDualShapeUriResolution(unittest.TestCase):
             f"/vsicurl/{MINIO}/trid3nt-runs/dem/asheville.tif",
         )
         self.assertEqual(layer.provider, "gdal")
-        self.assertTrue(any("COG via GDAL" in n for n in notes), notes)
+        self.assertTrue(any("streamed via /vsicurl" in n for n in notes), notes)
         # opacity parity with the old tile layers (event.opacity -> setOpacity)
         self.assertEqual(layer.opacity, 1.0)
 
@@ -414,18 +417,6 @@ class TestDualShapeUriResolution(unittest.TestCase):
         )
         self.assertEqual(fakes.RasterLayer.instances, [])
         self.assertTrue(any("skipped" in n for n in notes), notes)
-
-    def test_remote_mode_is_honest_skip(self):
-        layers, fakes = _import_layers()
-
-        class _Remote(_Settings):
-            mode = "remote"
-
-        m = layers.LayerMaterializer(settings=_Remote())
-        notes = m.materialize([_event(layers, RASTER_LAYER_ROW)])
-        self.assertEqual(fakes.RasterLayer.instances, [])
-        self.assertTrue(any("remote mode" in n for n in notes), notes)
-
 
 # --------------------------------------------------------------------------- #
 # renderer class per legend kind
@@ -563,7 +554,7 @@ class TestRendererPerLegendKind(unittest.TestCase):
         )
         layer = fakes.RasterLayer.instances[0]
         self.assertIsNone(layer.renderer)
-        self.assertTrue(any("added (COG via GDAL)" in n for n in notes), notes)
+        self.assertTrue(any("streamed via /vsicurl" in n for n in notes), notes)
 
 
 # --------------------------------------------------------------------------- #
@@ -633,6 +624,266 @@ class TestRampTableCoversServerRegistry(unittest.TestCase):
         # and every mirrored name must resolve (guards table typos)
         for name in found:
             self.assertIsNotNone(ramps.resolve_stops(name), name)
+
+
+# --------------------------------------------------------------------------- #
+# degenerate-numeric crash defenses (the 0.3.14 sweep)
+# --------------------------------------------------------------------------- #
+
+
+class _FakeDatasetIndex:
+    """Stand-in for ``QgsMeshDatasetIndex(group, dataset)`` that remembers its
+    group, so a fake mesh layer can map an index back to a group's metadata."""
+
+    def __init__(self, group=0, dataset=0):
+        self.group = group
+        self.dataset = dataset
+
+
+class _FakeGroupMeta:
+    def __init__(self, mn, mx, name="depth"):
+        self._mn, self._mx, self._name = mn, mx, name
+
+    def minimum(self):
+        return self._mn
+
+    def maximum(self):
+        return self._mx
+
+    def name(self):
+        return self._name
+
+
+class _FakeScalarSettings:
+    def __init__(self):
+        self.cmin = self.cmax = None
+
+    def setClassificationMinimumMaximum(self, mn, mx):
+        self.cmin, self.cmax = mn, mx
+
+
+class _FakeMeshRendererSettings:
+    def __init__(self, scalars):
+        self._scalars = scalars  # index -> _FakeScalarSettings
+        self.set_indices = []
+
+    def scalarSettings(self, idx):
+        return self._scalars.get(idx)
+
+    def setScalarSettings(self, idx, settings):
+        self.set_indices.append(idx)
+
+
+class _FakeMeshLayer:
+    """N scalar groups, each ``(min, max)``. The clamp must reach EVERY group
+    (not just the active one) -- a mid-session styling-panel switch to a
+    degenerate non-active group is the crash this closes."""
+
+    def __init__(self, ranges):
+        # ranges: list of (min, max)
+        self.scalars = {i: _FakeScalarSettings() for i in range(len(ranges))}
+        self._metas = {
+            i: _FakeGroupMeta(mn, mx) for i, (mn, mx) in enumerate(ranges)
+        }
+        self._settings = _FakeMeshRendererSettings(self.scalars)
+        self.renderer_settings_set = False
+
+    def datasetGroupCount(self):
+        return len(self.scalars)
+
+    def rendererSettings(self):
+        return self._settings
+
+    def setRendererSettings(self, settings):
+        self.renderer_settings_set = True
+
+    def datasetGroupMetadata(self, idx):
+        # idx is the (monkeypatched) QgsMeshDatasetIndex(group, 0) -> we stashed
+        # the group on it via the fake __init__ below.
+        return self._metas[idx.group]
+
+
+class TestMeshScalarClassificationClamp(unittest.TestCase):
+    """The mesh analogue of the raster ``sane_range`` guard -- a degenerate
+    MDAL scalar group range (all-nodata / all-dry / an empty scrubber
+    timestep) is pinned to a finite classification BEFORE the native mesh
+    renderer builds its colour-ramp legend (the arm64 SIGBUS the 0.3.8 raster
+    fix never covered). ALL groups are clamped, so switching the active scalar
+    group mid-session cannot hand a degenerate range to the native renderer."""
+
+    def _clamp(self, ranges):
+        layers, _ = _import_layers()
+        # QgsMeshDatasetIndex(group, 0) must expose ``group`` so the fake layer
+        # can map an index back to its group metadata.
+        layers.QgsMeshDatasetIndex = _FakeDatasetIndex
+        layer = _FakeMeshLayer(ranges)
+        note = layers._clamp_mesh_scalar_classification(layer)
+        return layer, note
+
+    def test_nan_group_range_is_clamped_to_finite_default(self):
+        layer, note = self._clamp([(float("nan"), float("nan"))])
+        s = layer.scalars[0]
+        # never a NaN into setClassificationMinimumMaximum
+        self.assertTrue(math.isfinite(s.cmin))
+        self.assertTrue(math.isfinite(s.cmax))
+        self.assertLess(s.cmin, s.cmax)
+        self.assertTrue(layer.renderer_settings_set)
+        self.assertIsNotNone(note)
+        self.assertIn("degenerate", note)
+
+    def test_inf_and_zero_span_are_clamped(self):
+        for mn, mx in ((0.0, float("inf")), (5.0, 5.0), (float("-inf"), 1.0)):
+            layer, note = self._clamp([(mn, mx)])
+            s = layer.scalars[0]
+            self.assertTrue(math.isfinite(s.cmin))
+            self.assertTrue(math.isfinite(s.cmax))
+            self.assertLess(s.cmin, s.cmax)
+            self.assertIsNotNone(note)
+
+    def test_finite_range_is_pinned_without_a_note(self):
+        # A sane range is still pinned (user-set classification -> QGIS will not
+        # re-derive a per-timestep range while scrubbing) but yields no note.
+        layer, note = self._clamp([(0.2, 3.4)])
+        s = layer.scalars[0]
+        self.assertEqual(s.cmin, 0.2)
+        self.assertEqual(s.cmax, 3.4)
+        self.assertIsNone(note)
+
+    def test_degenerate_NON_active_group_is_still_clamped(self):
+        # The crux of NATE's mid-session crash: group 0 (depth) is sane and
+        # rendered at add time, but group 1 (an all-dry water-level field) is
+        # NaN. Switching to group 1 in the styling panel would crash unless we
+        # clamped it up front. Every group is reached.
+        layer, note = self._clamp([(0.0, 2.5), (float("nan"), float("nan"))])
+        self.assertEqual(layer.scalars[0].cmin, 0.0)          # sane group pinned
+        self.assertTrue(math.isfinite(layer.scalars[1].cmin))  # bad group clamped
+        self.assertTrue(math.isfinite(layer.scalars[1].cmax))
+        self.assertLess(layer.scalars[1].cmin, layer.scalars[1].cmax)
+        self.assertIn("1 degenerate", note)
+
+    def test_no_scalar_groups_is_a_noop(self):
+        layer, note = self._clamp([])
+        self.assertFalse(layer.renderer_settings_set)
+        self.assertIsNone(note)
+
+
+class _FakeRect:
+    def __init__(self, xmin, ymin, xmax, ymax, empty=False):
+        self._b = (xmin, ymin, xmax, ymax)
+        self._empty = empty
+        self.scaled = False
+
+    def isEmpty(self):
+        return self._empty
+
+    def xMinimum(self):
+        return self._b[0]
+
+    def yMinimum(self):
+        return self._b[1]
+
+    def xMaximum(self):
+        return self._b[2]
+
+    def yMaximum(self):
+        return self._b[3]
+
+    def scale(self, factor):
+        self.scaled = True
+
+
+class _FakeCanvas:
+    def __init__(self):
+        self.extent_set = False
+
+    def setExtent(self, rect):
+        self.extent_set = True
+
+    def refresh(self):
+        pass
+
+
+class TestZoomToExtentFiniteGuard(unittest.TestCase):
+    """A NaN/inf layer extent DEFEATS ``isEmpty()`` (NaN comparisons are all
+    False); the finiteness guard stops it before the native ``setExtent`` /
+    map-to-pixel transform ingests a non-finite double."""
+
+    def test_nan_extent_is_refused(self):
+        layers, _ = _import_layers()
+        # monkeypatch the copy-constructor QgsRectangle to echo the fake back
+        layers.QgsRectangle = lambda r: r
+        canvas = _FakeCanvas()
+        rect = _FakeRect(float("nan"), 0.0, 1.0, 1.0)
+        self.assertFalse(layers.zoom_to_extent(canvas, rect))
+        self.assertFalse(canvas.extent_set)
+
+    def test_inf_extent_is_refused(self):
+        layers, _ = _import_layers()
+        layers.QgsRectangle = lambda r: r
+        canvas = _FakeCanvas()
+        rect = _FakeRect(0.0, 0.0, float("inf"), 1.0)
+        self.assertFalse(layers.zoom_to_extent(canvas, rect))
+        self.assertFalse(canvas.extent_set)
+
+    def test_finite_extent_zooms(self):
+        layers, _ = _import_layers()
+        layers.QgsRectangle = lambda r: r
+        canvas = _FakeCanvas()
+        rect = _FakeRect(-85.0, 29.0, -84.0, 30.0)
+        self.assertTrue(layers.zoom_to_extent(canvas, rect))
+        self.assertTrue(canvas.extent_set)
+
+
+class TestCategoricalNonFiniteAnchorsDropped(unittest.TestCase):
+    """A categorical legend whose class anchors carry NaN/inf must not ferry a
+    non-finite value into the gradient-fallback native ramp items."""
+
+    def test_nan_class_values_are_filtered_before_the_native_ramp(self):
+        layers, fakes = _import_layers()
+        m = layers.LayerMaterializer(settings=_Settings())
+        m.materialize(
+            [
+                _event(
+                    layers,
+                    {
+                        "layer_id": "01NANCLASSAAAAAAAAAAAAAAAA",
+                        "name": "Broken categorical",
+                        "uri": "s3://trid3nt-runs/x/y.tif",
+                        "legend": {
+                            "kind": "categorical",
+                            "classes": [
+                                {"value": float("nan"), "color": "#ffffcc"},
+                                {"value": 1.0, "color": "#fed976"},
+                                {"value": float("inf"), "color": "#e31a1c"},
+                                {"value": 5.0, "color": "#800026"},
+                            ],
+                        },
+                    },
+                )
+            ]
+        )
+        renderer = fakes.RasterLayer.instances[0].renderer
+        self.assertIsInstance(renderer, fakes.PseudoColorRenderer)
+        # the two finite anchors (1.0, 5.0) drive a sane, finite range
+        self.assertTrue(math.isfinite(renderer.cmin))
+        self.assertTrue(math.isfinite(renderer.cmax))
+        for item in renderer.shader.fn.items:
+            self.assertTrue(math.isfinite(item.value), item.value)
+
+
+class TestColorRampItemsRejectNonFiniteOffset(unittest.TestCase):
+    """An explicit stops list carrying a non-finite offset must not produce a
+    non-finite ``ColorRampItem`` value (``min/max`` pass NaN through)."""
+
+    def test_nan_offset_stop_is_dropped(self):
+        layers, _ = _import_layers()
+        items, _note = layers._color_ramp_items(
+            [[0.0, "#000000"], [float("nan"), "#808080"], [1.0, "#ffffff"]],
+            0.0,
+            10.0,
+        )
+        for item in items:
+            self.assertTrue(math.isfinite(item.value), item.value)
 
 
 if __name__ == "__main__":

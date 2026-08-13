@@ -60,10 +60,32 @@ RUN apt-get update \
         "pyyaml>=6.0" \
         "geopandas>=0.13" \
         "pandas>=2.0,<3" \
+        "matplotlib>=3.6,<4" \
         "hydromt-sfincs>=1.1.2,<2.0" \
     && python3 -c "from google.cloud import storage; import boto3; print('storage SDKs import OK (gcs + boto3)')" \
     && python3 -c "import xarray; from scipy.interpolate import griddata; import rasterio, pyproj; from pyproj import Transformer; print('raster_postprocess geo stack + GDAL/PROJ tripwire OK')" \
-    && python3 -c "import hydromt_sfincs, geopandas, yaml; print('hydromt-sfincs build stack import OK (heavy-compute offload)')"
+    && python3 -c "import hydromt_sfincs, geopandas, yaml; print('hydromt-sfincs build stack import OK (heavy-compute offload)')" \
+    # QUADTREE authoring (M4 / ADR 0113): cht_sfincs (GPL-3.0, Deltares Coastal
+    # Hazards Toolkit) is the ONLY tool that builds a SFINCS quadtree from scratch
+    # -- hydromt_sfincs cannot (setup_grid carries a TODO, setup_dep raises
+    # NotImplementedError for quadtree in every released version). --no-deps: the
+    # heavy geo stack (xugrid via hydromt_sfincs, geopandas, rioxarray) is already
+    # present; deck_quadtree.py injects lightweight sys.modules stand-ins for the
+    # OLD cht_utils API + the unused cht_bathymetry/datashader imports, so the
+    # image needs ONLY cht_sfincs + tabulate. GPL stays worker-isolated (the
+    # always-on agent NEVER imports cht_sfincs), same boundary hydromt_sfincs uses.
+    # cht_sfincs 1.0.0's grid_v2.py imports matplotlib at module load (colormaps
+    # for its plotting helpers, which the quadtree BUILD never calls); matplotlib
+    # is pinned in the with-deps block above so ``from cht_sfincs import SFINCS``
+    # -- which pulls grid_v2 -- resolves instead of ImportError-ing.
+    && pip3 install --no-cache-dir --no-deps "cht_sfincs==1.0.0" "tabulate>=0.9" "rioxarray>=0.13" "xugrid>=0.9" \
+    && python3 -c "import sys, types; \
+m=lambda n,**a: (lambda x:[setattr(x,k,v) for k,v in a.items()] and x or x)(types.ModuleType(n)); \
+sys.modules['cht_utils']=m('cht_utils'); sys.modules['cht_utils.misc_tools']=m('cht_utils.misc_tools', interp2=None); \
+sys.modules['cht_utils.pli_file']=m('cht_utils.pli_file', pli2gdf=None, gdf2pli=None, pol2gdf=None, gdf2pol=None); \
+sys.modules['cht_bathymetry']=m('cht_bathymetry'); sys.modules['cht_bathymetry.bathymetry_database']=m('cht_bathymetry.bathymetry_database', bathymetry_database=None); \
+sys.modules['datashader']=m('datashader', Canvas=None); sys.modules['datashader.transfer_functions']=m('datashader.transfer_functions', shade=None); sys.modules['datashader.utils']=m('datashader.utils', export_image=None); \
+import matplotlib; matplotlib.use('Agg'); import cht_sfincs; from cht_sfincs import SFINCS; import xugrid, rioxarray; print('cht_sfincs quadtree authoring import OK (grid_v2+matplotlib, GPL worker-isolated)')"
 
 # COPY the entrypoint into a stable runtime path. Build context is the repo
 # root (see infra/sfincs/cloudbuild.yaml); paths below are relative to repo

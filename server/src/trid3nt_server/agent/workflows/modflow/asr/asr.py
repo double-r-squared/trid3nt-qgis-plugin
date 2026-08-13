@@ -1,11 +1,11 @@
-"""``model_asr_scenario``  -  MODFLOW aquifer-storage-&-recovery (ASR) composer.
+"""the composer  -  MODFLOW aquifer-storage-&-recovery (ASR) composer.
 
 The end-to-end higher-order workflow for the MODFLOW ``ASR``
 archetype: it turns a place (or AOI point) + an ASR well (location + injection /
 recovery rates + cycle schedule) into a rendered ASR head layer  -  the cyclic
 inject-rise / recover-fall sawtooth at the well and the recovery efficiency (the
 fraction of injected water recovered). It mirrors the chain shape of
-``model_sustainable_yield_scenario`` (sibling well-driven archetype): a single
+the composer (sibling well-driven archetype): a single
 WEL well flips sign per the inject/recover schedule over a transient run, and the
 seasonal head series + the budget-split efficiency ARE the deliverable.
 
@@ -19,7 +19,7 @@ operational / recovery-efficiency analysis):
         -> run_modflow_archetype_job (GWF transient seasonal-WEL deck -> mf6 -> ASR)
         -> ASRLayerURI (recovery_efficiency + head_timeseries sawtooth)
 
-Invariants (same set as model_sustainable_yield_scenario):
+Invariants (same set as the composer):
 - **1 / 2 / 8: preserve** (typed numbers, deterministic composition, cancellable).
 - **9. No fabricated model inputs.** An ``ASR`` run with no well location OR no
   injection / recovery rate returns a typed ``USER_INPUT_REQUIRED`` failed
@@ -36,7 +36,7 @@ from typing import Any
 
 from pydantic import Field
 
-from trid3nt_contracts.common import GraceModel
+from trid3nt_contracts.common import GraceModel, SyntheticInput
 from trid3nt_contracts.modflow_contracts import (
     ASRLayerURI,
     DEFAULT_AQUIFER_K_MS,
@@ -45,6 +45,7 @@ from trid3nt_contracts.modflow_contracts import (
 from trid3nt_contracts.tool_registry import AtomicToolMetadata
 
 from trid3nt_server.emission.pipeline_emitter import begin_substeps, current_emitter, emit_chart_payloads
+from trid3nt_server.agent.gates.input_review import gate_input_review
 from trid3nt_server.agent.tools import register_tool
 from trid3nt_server.agent.workflows.modflow._template_card import TemplateCard
 from trid3nt_server.agent.workflows.modflow.sustainable_yield.sustainable_yield import (
@@ -71,7 +72,7 @@ __all__ = [
 
 
 class ASRResult(GraceModel):
-    """Return type for ``model_asr_scenario``.
+    """Return type for the composer.
 
     Bundles the ASR layer + the derived args + a narration summary dict.
     Invariant 1: every narrated number is a typed field  -  ``asr_layer`` carries
@@ -91,7 +92,7 @@ class ASRResult(GraceModel):
 
 
 class ASRScenarioError(RuntimeError):
-    """Base class for ``model_asr_scenario`` failures."""
+    """Base class for the composer failures."""
 
     error_code: str = "ASR_SCENARIO_ERROR"
     retryable: bool = False
@@ -149,6 +150,7 @@ async def model_asr_scenario(
     porosity: float | None = None,
     aquifer_sy: float | None = None,
     compute_class: str = "standard",
+    input_mode: str | None = None,
     pipeline_emitter: Any | None = None,
 ) -> ASRResult:
     """Compose place/AOI + an ASR well -> MODFLOW inject/recover -> ASRLayerURI.
@@ -213,6 +215,69 @@ async def model_asr_scenario(
     inj = abs(float(injection_rate_m3_day))
     rec = abs(float(recovery_rate_m3_day))
 
+    # provenance-chain wave: structure the demo-aquifer caveat. Each aquifer knob
+    # the caller left unset fell to a demo default, NOT site hydrogeology; a knob
+    # the user supplied is user-provenance. The inject/recover rates are user
+    # inputs (reviewable). Built BEFORE the solve so the ADR 0107 gate can present
+    # + adjust them (what-was-approved == what-ran).
+    provenance: list[SyntheticInput] = [
+        SyntheticInput(param="injection_rate_m3_day", value=round(inj, 3),
+                       units="m^3/day", basis="user"),
+        SyntheticInput(param="recovery_rate_m3_day", value=round(rec, 3),
+                       units="m^3/day", basis="user"),
+    ]
+    for _pname, _val, _units in (
+        ("aquifer_k_ms", aquifer_k_ms, "m/s"),
+        ("porosity", porosity, None),
+        ("aquifer_sy", aquifer_sy, None),
+    ):
+        provenance.append(SyntheticInput(
+            param=_pname,
+            value=(round(float(_val), 6) if _val is not None else None),
+            units=_units,
+            basis="user" if _val is not None else "default_demo",
+            note=None if _val is not None else "demo aquifer default, not site hydrogeology",
+        ))
+    for _pname, _val in (
+        ("injection_months", injection_months),
+        ("recovery_months", recovery_months),
+        ("n_cycles", n_cycles),
+    ):
+        if _val is None:
+            provenance.append(SyntheticInput(
+                param=_pname, basis="default_demo", note="demo cycle-schedule default",
+            ))
+
+    # --- ADR 0107 two-mode input gate: review-before-run -----------------------
+    # user_gated mode presents the resolved ASR inputs (rates + aquifer/schedule
+    # defaults) for review/adjust BEFORE the MODFLOW solve; auto (session default)
+    # + headless direct-call proceed with them labeled.
+    _review = await gate_input_review(
+        tool_name="modflow_asr",
+        mode=input_mode,
+        entries=provenance,
+        params={
+            "injection_rate_m3_day": inj,
+            "recovery_rate_m3_day": rec,
+            "aquifer_k_ms": aquifer_k_ms,
+            "porosity": porosity,
+            "aquifer_sy": aquifer_sy,
+        },
+    )
+    if _review.cancelled:
+        _cancel = ASRScenarioError(f"modflow_asr {_review.cancel_reason}")
+        _cancel.error_code = "USER_INPUT_CANCELLED"
+        raise _cancel
+    provenance = _review.entries
+    inj = abs(float(_review.params.get("injection_rate_m3_day", inj)))
+    rec = abs(float(_review.params.get("recovery_rate_m3_day", rec)))
+    _rv_k = _review.params.get("aquifer_k_ms", aquifer_k_ms)
+    _rv_por = _review.params.get("porosity", porosity)
+    _rv_sy = _review.params.get("aquifer_sy", aquifer_sy)
+    aquifer_k_ms = float(_rv_k) if _rv_k is not None else None
+    porosity = float(_rv_por) if _rv_por is not None else None
+    aquifer_sy = float(_rv_sy) if _rv_sy is not None else None
+
     try:
         run_args = MODFLOWRunArgs(
             spill_location_latlon=(lat, lon),
@@ -240,6 +305,7 @@ async def model_asr_scenario(
         error_code="ASR_RUN_FAILED",
         scenario_error=ASRScenarioError,
     )
+    layer = layer.model_copy(update={"synthetic_inputs": provenance})
 
     # Mirror the head-decline emit: side-emit the well-head sawtooth line chart
     # from the typed ASRLayerURI.head_timeseries (real solver output).
@@ -320,10 +386,17 @@ async def modflow_asr(
     porosity: float | None = None,
     aquifer_sy: float | None = None,
     compute_class: str = "standard",
+    input_mode: str | None = None,
     # absorb LLM-invented kwargs.
     **_extra_ignored: Any,
 ) -> dict[str, Any]:
     """Model aquifer storage & recovery (ASR): seasonal inject/recover at a well.
+
+    Fidelity: MODFLOW 6 local planning-grade groundwater envelope (aquifer
+    K/porosity default to narrated demo values unless supplied), not a
+    calibrated regulatory delineation. Off-scope: surface-water inundation
+    flooding -> sfincs_flood; urban storm-sewer / pipe-network flooding ->
+    swmm_urban_flood.
 
     Builds a transient MODFLOW 6 groundwater-flow model with a single ASR well
     that INJECTS water for the injection months then RECOVERS (extracts) it for
@@ -352,6 +425,9 @@ async def modflow_asr(
         injection_months / recovery_months / n_cycles: cycle schedule controls.
         aquifer_k_ms / porosity / aquifer_sy: optional demo-aquifer overrides.
         compute_class: FR-CE-3 compute class. Default ``"standard"``.
+        input_mode: run-mode lever (ADR 0107). ``"user_gated"`` presents the
+            resolved inputs (inject/recover rates, aquifer + cycle defaults) for
+            review before the solve; ``"auto"`` (default) proceeds labeled.
 
     Returns:
         On success: an ``ASRResult`` JSON dict with the ``asr_layer`` (an
@@ -392,6 +468,7 @@ async def modflow_asr(
             porosity=porosity,
             aquifer_sy=aquifer_sy,
             compute_class=compute_class,
+            input_mode=input_mode,
             pipeline_emitter=None,
         )
     except ASRInputError as exc:

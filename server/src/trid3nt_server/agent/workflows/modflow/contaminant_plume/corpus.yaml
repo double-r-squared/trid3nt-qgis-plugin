@@ -1,8 +1,5 @@
-# TEMPLATE tier (engine-door refactor): phrasings for modflow_contaminant_plume.
-# NOT merged into the main retrieval index (templates are excluded from the
-# default pool); the run_modflow door surfaces this template via gate expansion.
-# Carried verbatim from the migrated run_modflow_job (single-contaminant spill)
-# + run_model_multi_species_scenario (N-species) corpus entries.
+# Template routing phrasings (door dissolution, ADR 0094): walked into the main
+# retrieval index directly -- the engine templates are ordinary retrieval-pool tools.
 modflow_contaminant_plume:
 - model a groundwater contamination plume
 - where does this spill go in the aquifer

@@ -30,9 +30,9 @@ import inspect
 # 1. Each composer has the register-only branch in front of the on-box fallback.
 # --------------------------------------------------------------------------- #
 def test_geoclaw_composer_register_only_branch_and_fallback():
-    import trid3nt_server.agent.workflows.geoclaw.model_dambreak_geoclaw_scenario.model_dambreak_geoclaw_scenario as m
+    import trid3nt_server.agent.workflows.geoclaw.inundation.inundation as m
 
-    body = inspect.getsource(m.model_dambreak_geoclaw_scenario)
+    body = inspect.getsource(m.model_geoclaw_inundation)
     # register-only trigger
     assert "read_publish_manifest" in body
     assert "register_manifest_layers(" in body
@@ -43,9 +43,9 @@ def test_geoclaw_composer_register_only_branch_and_fallback():
 
 
 def test_openquake_composer_register_only_branch_and_fallback():
-    import trid3nt_server.agent.workflows.openquake.model_seismic_hazard_scenario.model_seismic_hazard_scenario as m
+    import trid3nt_server.agent.workflows.openquake.psha.psha as m
 
-    body = inspect.getsource(m.model_seismic_hazard_scenario)
+    body = inspect.getsource(m.model_openquake_psha)
     assert "read_publish_manifest" in body
     assert "register_manifest_layers(" in body
     assert "if _oq_manifest is not None:" in body
@@ -55,9 +55,9 @@ def test_openquake_composer_register_only_branch_and_fallback():
 
 
 def test_swmm_composer_register_only_branch_and_fallback():
-    import trid3nt_server.agent.workflows.swmm.model_urban_flood_swmm.model_urban_flood_swmm as m
+    import trid3nt_server.agent.workflows.swmm.urban_flood.urban_flood as m
 
-    body = inspect.getsource(m.model_urban_flood_swmm)
+    body = inspect.getsource(m.model_swmm_urban_flood)
     assert "read_publish_manifest" in body
     assert "register_manifest_layers(" in body
     assert "if _swmm_manifest is not None:" in body
@@ -67,9 +67,9 @@ def test_swmm_composer_register_only_branch_and_fallback():
 
 
 def test_landlab_composer_register_only_branch_and_fallback():
-    import trid3nt_server.agent.workflows.landlab.model_landslide_scenario.model_landslide_scenario as m
+    import trid3nt_server.agent.workflows.landlab.susceptibility.susceptibility as m
 
-    body = inspect.getsource(m.model_landslide_scenario)
+    body = inspect.getsource(m.model_landlab_susceptibility)
     assert "read_publish_manifest" in body
     assert "register_manifest_layers(" in body
     assert "if _manifest is not None:" in body

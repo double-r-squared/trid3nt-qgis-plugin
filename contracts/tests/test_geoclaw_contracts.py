@@ -25,8 +25,10 @@ from pydantic import ValidationError
 
 from trid3nt_contracts.geoclaw_contracts import (
     GEOCLAW_DEFAULT_FGMAX_ARRIVAL_TOL_M,
+    AmrRegionWindow,
     GeoClawDepthLayerURI,
     GeoClawRunArgs,
+    StormTrackPoint,
 )
 from trid3nt_contracts.execution import LayerURI
 
@@ -49,6 +51,42 @@ def _depth_layer(**overrides: object) -> GeoClawDepthLayerURI:
     )
     base.update(overrides)
     return GeoClawDepthLayerURI(**base)  # type: ignore[arg-type]
+
+
+# --------------------------------------------------------------------------- #
+# Storm-surge fields (parametric-Holland forcing) -- ADR 0168.
+# --------------------------------------------------------------------------- #
+def test_surge_fields_default_neutral() -> None:
+    a = GeoClawRunArgs(bbox=BBOX, scenario="surge")
+    assert a.storm_track == []
+    assert a.wind_drag_law == "garratt"
+    assert a.surge_t0_s is None
+
+
+def test_surge_wind_drag_law_literal() -> None:
+    for law in ("none", "garratt", "powell"):
+        assert GeoClawRunArgs(bbox=BBOX, scenario="surge", wind_drag_law=law).wind_drag_law == law
+    with pytest.raises(ValidationError):
+        GeoClawRunArgs(bbox=BBOX, scenario="surge", wind_drag_law="quadratic")
+
+
+def test_storm_track_point_and_ascending_validator() -> None:
+    pts = [
+        StormTrackPoint(t_s=-43200, lon=-94.9, lat=27.0, max_wind_speed_ms=45,
+                        max_wind_radius_m=46000, central_pressure_pa=96000),
+        StormTrackPoint(t_s=0, lon=-94.7, lat=29.3, max_wind_speed_ms=49,
+                        max_wind_radius_m=46000, central_pressure_pa=95000),
+    ]
+    a = GeoClawRunArgs(bbox=BBOX, scenario="surge", storm_track=pts, surge_t0_s=-43200.0)
+    assert len(a.storm_track) == 2
+    assert a.storm_track[0].storm_radius_m == 500000.0  # default fill
+    # non-ascending times rejected.
+    with pytest.raises(ValidationError):
+        GeoClawRunArgs(bbox=BBOX, scenario="surge", storm_track=list(reversed(pts)))
+    # non-positive central pressure rejected.
+    with pytest.raises(ValidationError):
+        StormTrackPoint(t_s=0, lon=-94, lat=29, max_wind_speed_ms=40,
+                        max_wind_radius_m=40000, central_pressure_pa=0)
 
 
 # --------------------------------------------------------------------------- #
@@ -288,3 +326,74 @@ def test_depth_layer_roundtrip_arrival_time_none_default() -> None:
 def test_schema_version_is_v1() -> None:
     assert GeoClawRunArgs(bbox=BBOX).schema_version == "v1"
     assert GeoClawRunArgs.model_fields["schema_version"].default == "v1"
+
+
+# ---------------------------------------------------------------------------
+# GeoClaw CAND-S knobs: explicit AMR region windows + banded Manning friction.
+# ---------------------------------------------------------------------------
+def test_amr_region_window_validates_and_orders() -> None:
+    w = AmrRegionWindow(min_level=2, max_level=3, t_start_s=0.0, t_end_s=600.0,
+                        min_lon=-124.2, max_lon=-124.1, min_lat=41.7, max_lat=41.8)
+    assert w.max_level >= w.min_level
+    with pytest.raises(ValidationError):
+        AmrRegionWindow(min_level=4, max_level=2, t_start_s=0.0, t_end_s=600.0,
+                        min_lon=-124.2, max_lon=-124.1, min_lat=41.7, max_lat=41.8)
+    with pytest.raises(ValidationError):
+        AmrRegionWindow(min_level=1, max_level=2, t_start_s=0.0, t_end_s=600.0,
+                        min_lon=-124.1, max_lon=-124.2, min_lat=41.7, max_lat=41.8)  # lon order
+    with pytest.raises(ValidationError):
+        AmrRegionWindow(min_level=1, max_level=2, t_start_s=600.0, t_end_s=600.0,
+                        min_lon=-124.2, max_lon=-124.1, min_lat=41.7, max_lat=41.8)  # t order
+
+
+def test_run_args_accepts_amr_regions_as_dicts() -> None:
+    args = GeoClawRunArgs(bbox=BBOX, amr_regions=[
+        {"min_level": 3, "max_level": 3, "t_start_s": 0.0, "t_end_s": 600.0,
+         "min_lon": -85.31, "max_lon": -85.29, "min_lat": 35.03, "max_lat": 35.05}])
+    assert len(args.amr_regions) == 1
+    assert isinstance(args.amr_regions[0], AmrRegionWindow)
+
+
+def test_run_args_banded_manning_break_len_enforced() -> None:
+    args = GeoClawRunArgs(bbox=BBOX, manning_coefficients=[0.02, 0.05], manning_break=[0.0])
+    assert args.manning_coefficients == [0.02, 0.05]
+    assert args.manning_break == [0.0]
+    with pytest.raises(ValidationError):
+        GeoClawRunArgs(bbox=BBOX, manning_coefficients=[0.02, 0.05], manning_break=[0.0, 1.0])
+    with pytest.raises(ValidationError):
+        GeoClawRunArgs(bbox=BBOX, manning_coefficients=[0.02, -0.01], manning_break=[0.0])
+    with pytest.raises(ValidationError):
+        GeoClawRunArgs(bbox=BBOX, manning_coefficients=[0.01, 0.02, 0.03], manning_break=[1.0, 0.0])
+
+
+def test_run_args_defaults_leave_manning_scalar_path() -> None:
+    args = GeoClawRunArgs(bbox=BBOX)
+    assert args.manning_coefficients is None
+    assert args.manning_break == []
+    assert args.amr_regions == []
+
+
+def test_thacker_scenario_requires_bowl_params():
+    """scenario='thacker' requires all three bowl parameters (loud, not silent)."""
+    import pytest
+    from trid3nt_contracts.geoclaw_contracts import GeoClawRunArgs
+    with pytest.raises(Exception):
+        GeoClawRunArgs(bbox=(-1.6, -1.6, 1.6, 1.6), scenario="thacker")  # missing bowl_*
+    ok = GeoClawRunArgs(bbox=(-1.6, -1.6, 1.6, 1.6), scenario="thacker",
+                        bowl_a_m=1.0, bowl_h0_m=0.1, bowl_eta_amp=0.5)
+    assert ok.scenario == "thacker" and ok.bowl_a_m == 1.0
+
+
+def test_bowl_params_forbidden_on_geographic_scenario():
+    """bowl_* on a tsunami/dam_break/surge run is a typed error (mutual exclusion)."""
+    import pytest
+    from trid3nt_contracts.geoclaw_contracts import GeoClawRunArgs
+    with pytest.raises(Exception):
+        GeoClawRunArgs(bbox=(-124.3, 41.7, -124.1, 41.8), scenario="tsunami", bowl_a_m=1.0)
+
+
+def test_bowl_alias_normalizes_to_thacker():
+    from trid3nt_contracts.geoclaw_contracts import GeoClawRunArgs
+    a = GeoClawRunArgs(bbox=(-1.6, -1.6, 1.6, 1.6), scenario="parabolic_bowl",
+                       bowl_a_m=1.0, bowl_h0_m=0.1, bowl_eta_amp=0.5)
+    assert a.scenario == "thacker"

@@ -1,0 +1,128 @@
+# Router source spec (ADR 0203) -- LTER / EDI environmental data records.
+# Record shape: a generic reader for one CSV/TSV data entity of an EDI (PASTA)
+# package, fetched through the public DataONE mirror (PASTA is 403 anonymously;
+# ADR 0202). resolve_build/parse resolve package_id -> entity data URL + parse
+# hints (pre-cache-key); build_request/record fetch + parse the time series.
+schema_version: v1
+
+name: fetch_lter_records
+source_class: lter_records
+error_prefix: LTER_RECORDS
+input_error_suffix: INPUT_INVALID
+empty_error_suffix: EMPTY
+shape: record
+
+endpoints:
+  # DataONE resolve base (redirect-followed by the transport). The hooks build the
+  # per-object resolve URLs; this records the access home for provenance.
+  data:
+    url: https://cn.dataone.org/cn/v2/resolve/
+auth:
+  mode: none
+  user_agent: trid3nt_default
+
+params:
+  package_id:
+    type: str
+    required: true
+  entity:
+    type: str
+    schema_optional: true
+  date_col:
+    type: str
+    schema_optional: true
+  value_cols:
+    type: str_list
+    schema_optional: true
+  start_date:
+    type: iso_date
+    schema_optional: true
+  end_date:
+    type: iso_date
+    schema_optional: true
+
+hooks:
+  resolve_build: lter_records.resolve_build
+  resolve_parse: lter_records.resolve_parse
+  build_request: lter_records.build_request
+  record: lter_records.build_record
+
+normalize:
+  crs: EPSG:4326
+
+output:
+  layer_type: record
+  ext: json
+  style_preset: none
+  emit_bbox: false
+
+cache:
+  ttl_class: static-30d
+
+# The record is a parsed time series (rows x a few columns) for one entity -- a
+# structured JSON dict, not a bulk raster. A tiny clipped estimate reproduces the
+# no-warning behaviour under the mandatory payload seam.
+payload_estimate:
+  model: bbox_area
+  floor_mb: 0.05
+  ceil_mb: 5.0
+  mb_per_sq_deg: 0.01
+
+caveats:
+  - "US-LTER / EDI records via the public DataONE mirror (native PASTA API is 403 anonymously; identical bytes)."
+  - "Generic package + entity reader: pass an EDI package_id (e.g. 'knb-lter-cwt.3037/19'); returns one data entity's parsed time series with per-column units."
+  - "Coverage is whatever the package published; many LTER series predate the MRMS precip archive (align the forcing window before grading a replication)."
+fallback: [fetch_usgs_nwis_gauges]
+
+# corpus lifted from sibling corpus.yaml.
+
+docstring: |
+  Read a US-LTER / EDI long-term environmental data record (a station time series) by package id.
+
+  **What it does:** Fetches one data entity (a CSV/TSV table) of an Environmental
+  Data Initiative (EDI) data package from the LTER network and parses it into a
+  time series with per-column units. Resolves the package's EML metadata, picks the
+  requested entity, then reads its data object -- all through the PUBLIC DataONE
+  mirror (``cn.dataone.org``), because EDI's native PASTA API is 403 for anonymous
+  access; the bytes are identical to a credentialed EDI pull.
+
+  **When to use:**
+  - You need a LONG-TERM ecological / hydrologic station record the LTER network
+    publishes: outlet discharge, water level, stream chemistry, met-station series,
+    soil/vegetation plots, etc., addressed by its EDI package id.
+  - Observed OUTLET-DISCHARGE to grade a rain-on-grid / rainfall-runoff replication
+    (computed-vs-observed): e.g. the Coweeta Ball Creek weir hourly discharge
+    (m3/s) is ``package_id="knb-lter-cwt.3037/19"``, the proven case.
+  - Any published EDI package where you know (or can look up) the package id and
+    want one entity's tabular series parsed with units.
+
+  **When NOT to use:**
+  - Real-time / operational USGS gauge discharge -- use
+    ``fetch_usgs_nwis_gauges`` (NWIS instantaneous values).
+  - A map layer / raster -- this returns a parsed TABLE (a record dict), not a
+    renderable layer.
+  - Discovery by keyword when you do not have a package id -- this reader needs the
+    EDI ``scope.identifier.revision`` id (the package is not searched here).
+
+  **Parameters:**
+  - ``package_id`` (str, required): the EDI/PASTA package id
+    ``scope.identifier.revision``, e.g. ``"knb-lter-cwt.3037/19"`` or
+    ``"knb-lter-cwt.3037.19"`` (revision joined by ``/`` or ``.``).
+  - ``entity`` (str, optional): which data entity -- a 1-based index or an
+    entity-name substring. Default: the first tabular (``dataTable``) entity.
+  - ``date_col`` (str, optional): override the auto-detected date/time column.
+  - ``value_cols`` (list[str], optional): the observation columns to return.
+    Default: the unit-carrying, non-flag/non-id columns (capped at 8).
+  - ``start_date`` / ``end_date`` (str, optional): ISO ``YYYY-MM-DD`` inclusive
+    window filter on the date column.
+
+  **Returns:** a JSON dict with ``package_id``, ``entity``, ``date_col``,
+  ``value_columns``, ``units`` (per column), ``n_rows``, ``first_ts`` / ``last_ts``,
+  ``window``, ``times`` (raw timestamps), ``series`` (per-column value lists;
+  ``null`` for unparseable cells), and ``summary`` (per-column ``peak`` / ``min`` /
+  ``mean`` + units). Cached ``static-30d``.
+
+  **Cross-tool dependencies:**
+  - Pairs with: ``fetch_aorc_precip`` (the AOI-mean hyetograph forcing a rain-on-grid
+    run whose outlet discharge this observed series grades).
+  - Alternative: ``fetch_usgs_nwis_gauges`` (operational USGS gauge series).

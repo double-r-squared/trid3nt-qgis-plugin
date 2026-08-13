@@ -1,12 +1,11 @@
-"""``model_river_seepage_scenario`` - MODFLOW river-seepage composer.
+"""the composer - MODFLOW river-seepage composer.
 
 The end-to-end higher-order workflow for the MODFLOW river-seepage
-North Star: it turns a place + a contaminant + a release into a rendered
+Reference scenario: it turns a place + a contaminant + a release into a rendered
 gaining/losing river-seepage layer (where the river leaks into the aquifer vs
 draws baseflow out of it) plus the contaminant plume that entered with the
-seepage. It is the river-coupled analogue of
-``model_groundwater_contamination_scenario`` (the point-spill composer)
-and mirrors its chain shape.
+seepage. It is the river-coupled analogue of ``modflow_contaminant_plume``
+(the point-spill engine template) and mirrors its chain shape.
 
 Canonical real-world pipeline mirrored here (MODFLOW 6 RIV + GWT, from the
 USGS modflow6-examples ex-gwf-sfr-p01 / Prudic stream-aquifer tradition,
@@ -42,7 +41,7 @@ from typing import Any
 
 from pydantic import Field
 
-from trid3nt_contracts.common import GraceModel
+from trid3nt_contracts.common import GraceModel, SyntheticInput
 from trid3nt_contracts.modflow_contracts import (
     DEFAULT_AQUIFER_K_MS,
     DEFAULT_POROSITY,
@@ -51,6 +50,10 @@ from trid3nt_contracts.modflow_contracts import (
 )
 from trid3nt_contracts.tool_registry import AtomicToolMetadata
 
+from trid3nt_server.agent.workflows.modflow._input_review import (
+    aquifer_k_review_entry,
+    review_modflow_entries,
+)
 from trid3nt_server.emission.pipeline_emitter import begin_substeps, current_emitter, substep
 from trid3nt_server.agent.tools import TOOL_REGISTRY, register_tool
 from trid3nt_server.agent.workflows.modflow._template_card import TemplateCard
@@ -80,7 +83,7 @@ DEFAULT_AOI_HALF_DEG: float = 0.012
 
 
 class RiverSeepageResult(GraceModel):
-    """Return type for ``model_river_seepage_scenario``.
+    """Return type for the composer.
 
     Bundles the river-seepage composer output: the published seepage layer (the
     gaining/losing river<->aquifer exchange) + the contaminant plume + the
@@ -105,7 +108,7 @@ class RiverSeepageResult(GraceModel):
 
 
 class RiverSeepageScenarioError(RuntimeError):
-    """Base class for ``model_river_seepage_scenario`` failures."""
+    """Base class for the composer failures."""
 
     error_code: str = "RIVER_SEEPAGE_SCENARIO_ERROR"
     retryable: bool = False
@@ -264,6 +267,11 @@ async def model_river_seepage_scenario(
 
     # --- Stage 3: (optional) fetch a DEM for streambed sampling ---
     dem_uri: str | None = None
+    # ADR 0223: when the caller explicitly requested a real streambed DEM and the
+    # fetch fails, the run continues on a DEMO streambed -- but that cross-request
+    # degrade must be LABELED (a specific "your requested DEM was unavailable"
+    # review entry), not merely logged. Captured here, surfaced at the return.
+    streambed_dem_failure: str | None = None
     if fetch_dem_for_streambed:
         try:
             fetch_dem_fn = _registry_fn("fetch_dem")
@@ -276,7 +284,13 @@ async def model_river_seepage_scenario(
                 )
             dem_uri = _layer_uri_field(dem_layer, "uri")
         except Exception as exc:  # noqa: BLE001 -- DEM is optional, demo streambed otherwise
-            logger.warning("river-seepage DEM fetch skipped (non-fatal): %s", exc)
+            streambed_dem_failure = (
+                "a real streambed DEM was requested (fetch_dem_for_streambed=True) "
+                f"but fetch_dem failed for this AOI ({exc}); the run fell back to the "
+                "DEMO streambed elevation/conductance instead of a DEM-sampled "
+                "streambed -- the seepage geometry is not tied to real bed elevations."
+            )
+            logger.warning("river-seepage requested DEM unavailable: %s", exc)
 
     # --- Stage 4: run the river-seepage solver -> seepage + plume ---
     # FOLD (engine-door refactor): run_river_seepage_job is now the UNREGISTERED
@@ -352,6 +366,35 @@ async def model_river_seepage_scenario(
         seepage.river_cell_count,
     )
 
+    # ADR 0223: structured provenance through gate_input_review. Always the
+    # aquifer-K entry; when the caller REQUESTED a real streambed DEM that failed,
+    # a specific labeled streambed-basis entry (not just the standing generic
+    # caveat) so the cross-request degrade is visible on the envelope.
+    _entries = [aquifer_k_review_entry(
+        k_source=("user_supplied" if aquifer_k_ms is not None else "demo_default"),
+        k_ms=(aquifer_k_ms if aquifer_k_ms is not None else DEFAULT_AQUIFER_K_MS),
+        porosity=porosity, note=summary["demo_aquifer_caveat"],
+    )]
+    if streambed_dem_failure is not None:
+        summary["streambed_dem_fallback"] = streambed_dem_failure
+        _entries.append(SyntheticInput(
+            param="streambed_elevation", value="demo streambed (requested DEM unavailable)",
+            basis="default_demo", real_source_if_any=None, note=streambed_dem_failure,
+        ))
+    _review = await review_modflow_entries(
+        tool_name="modflow_river_seepage", entries=_entries,
+        params={"aquifer_k_ms": aquifer_k_ms, "porosity": porosity,
+                "fetch_dem_for_streambed": fetch_dem_for_streambed},
+    )
+    if _review.cancelled:
+        raise RiverSeepageScenarioError(
+            f"river-seepage input review {_review.cancel_reason or 'not approved'}"
+        )
+    try:
+        seepage = seepage.model_copy(update={"synthetic_inputs": list(_review.entries)})
+    except Exception as exc:  # noqa: BLE001 -- never break the run on a stamp failure
+        logger.warning("river-seepage: could not stamp synthetic_inputs (%s)", exc)
+
     return RiverSeepageResult(
         seepage_layer=seepage,
         plume_layer=None,  # the plume is loaded as a context layer by the tool
@@ -361,7 +404,7 @@ async def model_river_seepage_scenario(
 
 
 # --------------------------------------------------------------------------- #
-# Pipeline-emitter helper (mirror model_groundwater_contamination_scenario)
+# Pipeline-emitter helper (mirror modflow_contaminant_plume)
 # --------------------------------------------------------------------------- #
 
 
@@ -436,6 +479,12 @@ async def modflow_river_seepage(
 ) -> dict[str, Any]:
     """GROUNDWATER <-> river seepage EXCHANGE: is a reach gaining or losing, how much leaks between aquifer and river.
 
+    Fidelity: MODFLOW 6 local planning-grade groundwater envelope (aquifer
+    K/porosity default to narrated demo values unless supplied), not a
+    calibrated regulatory delineation. Off-scope: surface-water inundation
+    flooding -> sfincs_flood; urban storm-sewer / pipe-network flooding ->
+    swmm_urban_flood.
+
     NOT for surface-water transport down the channel: "a dye plume travels
     downstream", "how far does the dye/contaminant travel down the river", "a
     spill moving down the river" is ``run_telemac`` (surface flow IN the river),
@@ -460,8 +509,7 @@ async def modflow_river_seepage(
 
     Do NOT use this for (see the routing block above):
         - Surface-water dye / tracer transport down the channel - ``run_telemac``.
-        - A point spill with NO river (use ``modflow_contaminant_plume`` /
-          ``run_model_groundwater_contamination_scenario``).
+        - A point spill with NO river (use ``modflow_contaminant_plume``).
         - Surface-water flooding (use ``sfincs_flood`` - SFINCS).
 
     Params:

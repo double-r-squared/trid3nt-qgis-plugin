@@ -211,6 +211,22 @@ class SwanRunArgs(GraceModel):
         breaking: enable depth-induced breaking. Demo True.
         triads: enable triad (three-wave) nonlinear interactions (shallow water).
             Demo True.
+        gen_formulation: wind-input growth formulation -- ``"westhuysen"``
+            (default), ``"komen"``, ``"janssen"`` (GEN3 sub-formulations) or
+            ``"gen1"`` / ``"gen2"`` (first-/second-generation). Only shapes
+            WIND-INPUT growth, so it is exercised meaningfully with ``wind_uri``.
+        whitecapping: deep-water dissipation scheme (GEN3 only) -- ``"ab"``
+            (Alves-Banner) or ``"komen"``; ``None`` keeps the GEN3 built-in default.
+        quad_iquad: DIA quadruplet integration method (1/2/3/8; 3 = per-iteration
+            DIA recommended under ambient currents). Applies only with ``wind_uri``.
+        breaking_alpha / breaking_gamma: constant depth-induced breaker index
+            (defaults 1.0 / 0.73). gamma is the first-order surf-zone Hs control.
+        friction_cfjon: JONSWAP bottom-friction coefficient (default 0.067 swell;
+            0.038 wind-sea; 0.019 smoother Gulf-of-Mexico-type shelf per the manual).
+        triad_biphase: triad biphase parametrization -- ``"eldeberky"`` (urcrit)
+            or ``"dewit"`` (lpar); ``None`` keeps the bare-DCTA default.
+        triad_urcrit / triad_lpar: biphase calibration constants (Eldeberky Ursell
+            threshold 0.63 / DeWit averaging 0.0).
         compute_class: FR-CE-3 compute class hint. Default ``"standard"``.
     """
 
@@ -233,9 +249,29 @@ class SwanRunArgs(GraceModel):
     time_step_s: float = Field(default=DEFAULT_TIME_STEP_S, gt=0.0)
     output_frames: int = Field(default=DEFAULT_OUTPUT_FRAMES, ge=1)
 
+    # TIME-VARYING storm boundary (nonstationary only): a build-peak-decay
+    # offshore-Hs series driving genuine 24-48 h storm evolution. Each row is
+    # (t_sec, hs_m, tp_s, dir_deg, spread_deg). None keeps the constant boundary.
+    storm_boundary_timeseries: (
+        list[tuple[float, float, float, float, float]] | None
+    ) = None
+
     friction: bool = True
     breaking: bool = True
     triads: bool = True
+
+    # --- Physics-scheme knobs (SWAN 41.51). Defaults reproduce the pre-knob deck. --
+    gen_formulation: Literal[
+        "westhuysen", "komen", "janssen", "gen1", "gen2"
+    ] = "westhuysen"
+    whitecapping: Literal["ab", "komen"] | None = None
+    quad_iquad: Literal[1, 2, 3, 8] | None = None
+    breaking_alpha: float = Field(default=1.0, gt=0.0)
+    breaking_gamma: float = Field(default=0.73, gt=0.0, lt=2.0)
+    friction_cfjon: float = Field(default=0.067, gt=0.0)
+    triad_biphase: Literal["eldeberky", "dewit"] | None = None
+    triad_urcrit: float = Field(default=0.63, gt=0.0)
+    triad_lpar: float = Field(default=0.0, ge=0.0)
 
     compute_class: str = "standard"
 
@@ -293,5 +329,11 @@ class WaveFieldLayerURI(LayerURI):
     mean_tp_s: float = Field(ge=0.0)
     mean_dir_deg: float = Field(ge=0.0, lt=360.0)
     wave_area_km2: float = Field(ge=0.0)
+    #: Mean significant wave height over the wave-bearing cells, m (>= 0). Unlike
+    #: the boundary-pinned ``max_hs_m``, this whole-field mean responds to path
+    #: dissipation (bottom friction, breaking), so it is the sensitivity metric the
+    #: physics-sweep template compares across schemes. Optional (default 0.0) so
+    #: pre-existing constructions stay valid.
+    mean_hs_m: float = Field(default=0.0, ge=0.0)
 
     mode: SwanMode = "stationary"

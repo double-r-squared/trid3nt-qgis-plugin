@@ -51,6 +51,8 @@ logger = logging.getLogger("trid3nt_server.agent.tools.fetchers._router.hooks")
 
 __all__ = [
     "RequestPlan",
+    "FramePlan",
+    "FrameDegraded",
     "HOOK_REGISTRY",
     "register_hook",
     "resolve_hook",
@@ -81,6 +83,52 @@ class RequestPlan:
     method: str = "GET"
     json_body: Any = None
     data: dict[str, Any] | None = None
+
+
+@dataclass(frozen=True)
+class FramePlan:
+    """One frame of a ``shape: animation_frames`` sequence (ADR 0087).
+
+    PURE data: the ``frames_plan`` hook produces the ORDERED list of these (the
+    pre-loop window/subsample already applied), and the ``animation_frames``
+    executor drives one ``read_through`` per frame + emits a ``LayerURI`` per frame.
+
+    - ``cache_params`` -- the per-frame read_through cache key (byte-identical to
+      the hand-written twin's per-frame params so the fold reuses cached frames).
+    - ``name`` -- the emitted ``LayerURI.name``, which MUST carry the monotonic
+      scrubber NAME-TOKEN (``step <N>`` + the ISO valid-time) the plugin
+      ``render/temporal.py group_frame_layers`` groups on.
+    - ``layer_id`` -- the emitted ``LayerURI.layer_id`` (a per-product stem keeps
+      sibling products in separate scrubber groups).
+    - ``bbox`` -- the AOI bbox stamped on every frame's ``LayerURI.bbox``.
+    - ``fetch_context`` -- OPTIONAL out-of-cache-key fetch inputs the frame_bytes
+      hook needs but that must NOT enter the read_through key (ADR 0088): the raw
+      MCMIPC S3 object key + the raw (unrounded) fetch args for an archive frame,
+      which is addressed by an opaque per-scan key the ts-addressed SLIDER frames
+      never carried. Defaulted empty -> a strict no-op for the wave-1 SLIDER frames.
+    """
+
+    cache_params: dict[str, Any]
+    name: str
+    layer_id: str
+    bbox: tuple[float, float, float, float]
+    fetch_context: dict[str, Any] = field(default_factory=dict)
+    #: OPTIONAL per-frame style_preset override (ADR 0088). The archive source emits
+    #: distinct bands with distinct presets (goes_rgb_animation for the RGB composites,
+    #: goes_fire_hotspots_rgba for the transparent hotspot RGBA) that a single
+    #: spec.output.style_preset cannot carry; None -> the executor falls back to
+    #: spec.output.style_preset (a strict no-op for the wave-1 single-preset SLIDER frames).
+    style_preset: str | None = None
+
+
+class FrameDegraded(Exception):
+    """A ``frame_bytes`` hook raises this to skip ONE degraded frame (ADR 0087).
+
+    A transparent / off-swath / upstream-failed single frame is a RECORDED
+    degradation the executor drops (never a silent gap); the executor's honesty
+    floor raises the source's typed EMPTY error only when EVERY frame degrades.
+    ``message`` is preserved for the all-frames-failed error text.
+    """
 
 
 class HookResolutionError(ValueError):
@@ -221,3 +269,87 @@ from . import lehd_jobs  # noqa: E402,F401
 # trigger wave (ADR 0084): fetch_buildings -- Overpass build_request + a (features,
 # tags) parse for the overpass_sidecar executor's constrained tags-sidecar side write.
 from . import buildings  # noqa: E402,F401
+# post-merge wave (ADR 0085): fetch_era5_reanalysis + fetch_gtsm_tide_surge -- the CDS
+# library_delegate pair (cdsapi owns the request-poll-download socket). One shared
+# module: era5.read (raster) / gtsm.read (vector features) + per-source *.validate
+# pre-cache gates; the missing-key/auth classifier maps the cdsapi failure to the
+# source's typed *_MISSING_KEY / *_AUTH_ERROR (the credential-card surface).
+from . import cds  # noqa: E402,F401
+# post-merge wave (ADR 0085): fetch_usgs_nwis_gauges -- the last flood-seam twin. The
+# parse_fallback http_source mode (IV WaterML-JSON primary -> Site-RDB fallback, honest
+# NO_STATIONS on all-empty) + a window-mode pre_resolve that switches the output schema
+# (instantaneous 5-col vs hydrograph 12-col) + style/units by the derived _mode.
+from . import usgs_nwis_gauges  # noqa: E402,F401
+# raster-modes wave (ADR 0086): fetch_jrc_global_surface_water -- the pure per-band
+# colormap hook (occurrence/recurrence/seasonality/change ramp, a function of the
+# band param alone) the stac_continuous_mosaic serializer bakes into the band-1
+# palette. The fetch side is the declarative stac_continuous_mosaic access mode.
+from . import jrc_global_surface_water  # noqa: E402,F401
+# animation wave 1 (ADR 0087): the frames-list output shape + the SLIDER-stitch
+# per-frame mode. fetch_goes_animation / fetch_goes_blend_animation (goes_animation
+# hooks, single + blend) + fetch_viirs_day_fire (viirs_day_fire hooks, polar day
+# passes) fold onto shape: animation_frames -- the router owns the per-frame
+# read_through loop + honesty floor + LayerURI emission; frames_plan resolves the
+# windowed frame set, frame_bytes builds one frame's COG.
+from . import goes_animation  # noqa: E402,F401
+from . import viirs_day_fire  # noqa: E402,F401
+# animation wave 2 (ADR 0088): the netcdf_cf_object per-frame mode. fetch_goes_archive_animation
+# (band-selectable Fire-Temp/true-color/hotspot/baked) + fetch_goes_active_fire (split-window
+# hotspots) fold onto shape: animation_frames -- ONE frames_plan/frame_bytes pair over the shared
+# _goes_archive_core substrate (S3 window list + CF-scaled MCMIPC netCDF band read + composite).
+from . import goes_archive  # noqa: E402,F401
+# approved-folds wave (ADR 0092): fetch_glm_lightning folds onto shape: animation_frames
+# (default output becomes a frames list; single accumulation = a one-frame list). glm.frames_plan
+# splits the window into buckets, glm.frame_bytes bins GLM-L2-LCFA GROUP energy (numpy.add.at) and
+# bakes the purple-log-ramp RGBA COG over the shared imagery._goes_archive_core grid + writer.
+from . import glm  # noqa: E402,F401
+# approved-folds wave (ADR 0092): fetch_population's WorldPop raster leg folds onto the
+# library_delegate raster mode (whole-object-download-then-window; WorldPop serves HTTP 200 to
+# range requests so /vsicurl cannot window it). worldpop.validate is the pre-cache vintage gate,
+# worldpop.read owns the download+window socket. The half-built ACS leg is DROPPED (fetch_census_acs).
+from . import worldpop  # noqa: E402,F401
+
+# fetch_dem fold (ADR 0097): the 3DEP DEM library-delegate hooks -- validate
+# (continent ceiling + auto-path out-of-coverage), coarsen (pixel-budget
+# pre_resolve), read (py3dep + bounded watchdog + source-conditional gating),
+# and envelope (the dem-{lon}-{lat}-{Nm} naming override). The Dem*Error twins'
+# stable home. The source="copernicus" leg is the spec's cross-sibling dispatch.
+from . import dem_3dep  # noqa: E402,F401
+# fetch_topobathy fold (ADR 0110): the coastal topo-bathymetry 4-leg UTM-composite
+# library-delegate hooks -- validate (US-coastal + finiteness), read (the CUDEM ->
+# regional -> ETOPO -> 3DEP-land warp merge returning (array, transform, crs) +
+# the FETCH-TIME provenance RECORD), envelope (twin layer_id/name + the four
+# provenance fields replayed from the channel). The TopobathyError twins' stable
+# home; consumer #1 of the fetch-time provenance channel.
+from . import topobathy  # noqa: E402,F401
+# fetch_storm_tracks fold (ADR 0111): the hurricane/TC-track library-delegate hooks --
+# validate (historical bbox-required + shape), resolve (storm_name canon + season
+# window pre-cache-key), read (IBTrACS historical OR NHC active + the binary
+# forecast-zip secondary-enrichment round, returning GeoJSON features + a mode
+# provenance RECORD), envelope (twin storm-tracks-{seed} id/name + the mode
+# provenance replayed from the channel). The StormTracks*Error twins' stable home.
+from . import storm_tracks  # noqa: E402,F401
+# fetch_goes_satellite fold (ADR 0111): the single-band float32 GOES ABI imagery
+# library-delegate hooks -- validate (bbox-required + band/satellite + CONUS pre-gate),
+# resolve (15-min valid_time cache rounding pre-key), read (list most-recent MCMIPC key
+# -> netCDF -> CF-scale physical-units reproject returning (array, transform, crs) + a
+# scan-time provenance RECORD), envelope (twin em-dash name + scan provenance replay).
+from . import goes_satellite  # noqa: E402,F401
+# fetch_noaa_nwm_streamflow fold (ADR 0112, THE FETCHER-FINALE ENDGAME -- the LAST coded
+# data-fetcher): the NOAA National Water Model multi-source composite library-delegate
+# hooks -- validate (CONUS-intersect + short_range fhour rule + valid_time parse), read
+# (own the S3 channel_rt netCDF read -> {feature_id: streamflow} lookup + the NLDI 5x5
+# spatial sample -> COMIDs + per-reach geometry + JOIN -> point features, and a
+# reference-time/reach-count/NLDI-sample provenance RECORD), envelope (twin
+# nwm-streamflow-{product}-{seed} layer_id + name + provenance replay).
+from . import nwm_streamflow  # noqa: E402,F401
+# ADR 0203 (RoG replication unblock): fetch_aorc_precip -- the NOAA AORC v1.1 hourly
+# precipitation record. Record shape / pure-record path; the build_record hook owns
+# the public-bucket Zarr socket (anonymous s3fs) and returns the AOI-mean hyetograph
+# forcing series. The pre-2020 / any-historical-year precip MRMS cannot reach.
+from . import aorc_precip  # noqa: E402,F401
+# ADR 0203: fetch_lter_records -- a generic US-LTER / EDI package+entity reader via the
+# public DataONE mirror (PASTA is 403 anonymously). resolve_build/parse resolve the
+# entity data URL pre-cache-key; build_request/record parse the delimited time series
+# (the Coweeta Ball Creek hourly discharge is the proven case).
+from . import lter_records  # noqa: E402,F401

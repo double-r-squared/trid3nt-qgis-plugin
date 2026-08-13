@@ -1,6 +1,6 @@
 """Tests for ``register_case_layer`` -- the bidirectional layer push core.
 
-Mirrors ``test_export_qgis_http_route.py`` / ``test_case_list_http_route.py``
+Mirrors ``test_case_list_http_route.py``
 in spirit: real geopandas/rasterio round trips (no fakes for the artifact
 parsing itself -- that IS the thing under test), but every object-store I/O
 call and the Persistence seam are monkeypatched so no network/boto3/MinIO is

@@ -52,7 +52,7 @@ from typing import Any
 from trid3nt_contracts import new_ulid
 from trid3nt_contracts.swmm_contracts import SWMMRunArgs
 
-from trid3nt_server.agent.workflows.swmm.swmm_mesh_builder import (
+from trid3nt_server.agent.mesh.raster_cell_mesh import (
     BuildResult,
     RunResult,
     SWMMMeshError,
@@ -461,6 +461,7 @@ def run_swmm_local(staging: SWMMStaging) -> RunResult:
             "SWMM_MASS_BALANCE_EXCEEDED",
             "SWMM_CONTINUITY_UNREADABLE",
             "SWMM_DEPENDENCY_MISSING",
+            "SWMM_SOLVE_TIMEOUT",
         } else "SWMM_LOCAL_RUN_FAILED"
         raise SWMMWorkflowError(
             code,

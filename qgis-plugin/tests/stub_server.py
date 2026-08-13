@@ -543,6 +543,8 @@ class StubAgentServer:
         #: default-auto send stays byte-identical, mirroring aoi_bbox).
         self.user_message_tool_choice_modes: list = []
         self.selects: list[Optional[str]] = []  # case-command select case_ids
+        #: ADR 0114 !run: every dev-tool-invoke payload received.
+        self.dev_tool_invokes: list[dict] = []
         #: ADR 0017 structured AOI: every ``aoi_bbox`` value PRESENT on a
         #: user-message payload (omitted keys are not recorded).
         self.user_message_aoi_bboxes: list = []
@@ -954,6 +956,82 @@ class StubAgentServer:
                             VECTOR_LAYER_ROW,
                             S3_VECTOR_LAYER_ROW,
                         ],
+                        "pipeline_history": [],
+                    },
+                    case_id=case_id,
+                )
+                await send("turn-complete", {}, case_id=case_id)
+            elif etype == "dev-tool-invoke":
+                # !run direct tool invocation (ADR 0114): the live server runs
+                # the named registry closure OUTSIDE the LLM loop and the result
+                # rides the SAME tool-io + pipeline-state + session-state +
+                # turn-complete frames a model call produces. Mirror that here
+                # so the client-side round-trip is validated offline. An unknown
+                # tool routes through the shared TOOL_NOT_FOUND error (then still
+                # turn-complete, as the live finally block does).
+                case_id = env.get("case_id")
+                payload = env.get("payload") or {}
+                self.dev_tool_invokes.append(payload)
+                name = str(payload.get("name") or "")
+                args = payload.get("args") or {}
+                if not name or "nonsense" in name:
+                    await send(
+                        "error",
+                        {
+                            "error_code": "TOOL_NOT_FOUND",
+                            "message": f"tool {name!r} is not registered",
+                            "retryable": False,
+                        },
+                        case_id=case_id,
+                    )
+                    await send("turn-complete", {}, case_id=case_id)
+                    continue
+                await send(
+                    "pipeline-state",
+                    {
+                        "pipeline_id": "01STUBRUNPIPELINEAAAAAAAAA",
+                        "steps": [
+                            {
+                                "step_id": "r1",
+                                "name": name,
+                                "tool_name": name,
+                                "state": "running",
+                            }
+                        ],
+                    },
+                    case_id=case_id,
+                )
+                await send(
+                    "tool-io",
+                    {
+                        "step_id": "r1",
+                        "tool_name": name,
+                        "raw_args": json.dumps(args),
+                        "function_response": json.dumps({"status": "ok"}),
+                        "is_error": False,
+                    },
+                    case_id=case_id,
+                )
+                await send(
+                    "pipeline-state",
+                    {
+                        "pipeline_id": "01STUBRUNPIPELINEAAAAAAAAA",
+                        "steps": [
+                            {
+                                "step_id": "r1",
+                                "name": name,
+                                "tool_name": name,
+                                "state": "complete",
+                            }
+                        ],
+                    },
+                    case_id=case_id,
+                )
+                await send(
+                    "session-state",
+                    {
+                        "chat_history": [],
+                        "loaded_layers": [RASTER_LAYER_ROW],
                         "pipeline_history": [],
                     },
                     case_id=case_id,

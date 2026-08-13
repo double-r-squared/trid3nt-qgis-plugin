@@ -407,11 +407,11 @@ def test_flood_scenario_branch_is_clean_if_else():
 
 
 def test_wave_scenario_branch_is_clean_if_else():
-    """model_wave_scenario gains the same present-manifest register-only branch in
-    front of the on-box download + postprocess_swan fallback."""
-    import trid3nt_server.agent.workflows.swan.model_wave_scenario.model_wave_scenario as mws
+    """model_swan_wave_field gains the same present-manifest register-only branch
+    in front of the on-box download + postprocess_swan fallback."""
+    import trid3nt_server.agent.workflows.swan.wave_field.wave_field as mws
 
-    body = inspect.getsource(mws.model_wave_scenario)
+    body = inspect.getsource(mws.model_swan_wave_field)
     assert "manifest = await asyncio.to_thread(read_publish_manifest, run_result)" in body
     assert "if manifest is not None:" in body
     assert "register_swan_wave_layers" in body

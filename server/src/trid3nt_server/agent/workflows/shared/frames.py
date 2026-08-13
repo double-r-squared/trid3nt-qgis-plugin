@@ -62,7 +62,7 @@ __all__ = [
 
 
 #: Upper bound on the number of per-frame depth COGs the time-stepped flood
-#: animation emits (flood North Star Phase 1, engine-agnostic). When a map output
+#: animation emits (flood animation Phase 1, engine-agnostic). When a map output
 #: carries MORE than this many time snapshots we subsample EVENLY across the full
 #: time span (first + last steps always kept) so the scrubber stays bounded and
 #: the per-Case session-state snapshot never balloons.

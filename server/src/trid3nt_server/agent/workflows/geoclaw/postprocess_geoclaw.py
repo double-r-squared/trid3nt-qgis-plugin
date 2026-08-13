@@ -47,6 +47,7 @@ import re
 from pathlib import Path
 from typing import Any
 
+from trid3nt_contracts.execution import LayerURI
 from trid3nt_contracts.geoclaw_contracts import (
     GEOCLAW_DEFAULT_FGMAX_ARRIVAL_TOL_M,
     GEOCLAW_DEPTH_STYLE_PRESET,
@@ -80,6 +81,22 @@ __all__ = [
     "NODATA_DEPTH_M",
     "MAX_FLOOD_FRAMES",
     "RUNS_BUCKET_DEFAULT",
+    "parse_geoclaw_gauge_series",
+    "build_gauge_timeseries_chart_spec",
+    "parse_geoclaw_particle_tracks",
+    "build_geoclaw_particle_track_geojson",
+    "make_geoclaw_particle_track_layer_uri",
+    "build_geoclaw_particle_track_layer",
+    "build_particle_track_chart_spec",
+    "GEOCLAW_PARTICLE_TRACK_STYLE_PRESET",
+    "GEOCLAW_MESH_STYLE_PRESET",
+    "build_geoclaw_mesh_geojson",
+    "make_geoclaw_mesh_layer_uri",
+    "build_geoclaw_mesh_layer",
+    "GEOCLAW_DEFORMATION_STYLE_PRESET",
+    "build_geoclaw_deformation_layer",
+    "compute_thacker_vandv",
+    "build_thacker_validation_chart_spec",
 ]
 
 #: Target GROUND resolution (metres/pixel) for the adaptive GeoClaw output
@@ -103,6 +120,29 @@ GEOCLAW_MAX_TOTAL_CELLS: int = 5_000_000
 #: point the wave never reached. The reader maps these (and any negative time)
 #: to NaN so the earliest-arrival nanmin is honest.
 _FGMAX_SENTINEL_ABS: float = 1e8
+
+#: AMR mesh (grid-line) emission. The mesh preview is the RAW GRID: every AMR
+#: patch's actual cell edges as LineStrings, all levels in ONE FeatureCollection.
+#: Refinement is self-evident (a finer patch draws a denser grid), so there is
+#: no per-level colour/weight coding -- the plugin styles it ONE colour via the
+#: ``mesh_grid`` preset. A patch with at most this many cells emits its FULL
+#: cell-edge grid; a larger/finer patch (where every edge would be megabytes)
+#: emits its boundary plus interior lines DECIMATED to a sample stride. The
+#: decimation is STATED per-feature (``decimated`` + ``sample_stride_x/y``) and
+#: in the FeatureCollection ``metadata`` (honesty floor: the preview declares
+#: where it is a faithful full grid vs a sampled one).
+GEOCLAW_MESH_STYLE_PRESET: str = "mesh_grid"
+#: Lagrangian particle-track vector style (the plugin draws the drift paths as
+#: LineStrings). The tracks ARE a product layer (the wake / drifter path), not a
+#: mesh abstraction, so they carry their own preset.
+GEOCLAW_PARTICLE_TRACK_STYLE_PRESET: str = "particle_track"
+#: Metres per degree of latitude (spherical mean) for track-length arithmetic.
+_M_PER_DEG_LAT: float = 111_320.0
+GEOCLAW_MESH_FULL_CELLLINES_MAX_CELLS: int = 2500
+GEOCLAW_MESH_SAMPLE_LINES_PER_SIDE: int = 40
+GEOCLAW_MESH_COORD_DECIMALS: int = 7
+#: Payload guard: warn (never fail) when the serialized mesh preview exceeds this.
+GEOCLAW_MESH_PAYLOAD_SOFT_CAP_MB: float = 8.0
 
 logger = logging.getLogger("trid3nt_server.agent.workflows.geoclaw.postprocess_geoclaw")
 
@@ -328,23 +368,29 @@ def rasterize_frame_to_grid(
     Builds an ``(H, W)`` depth grid over ``bbox`` (EPSG:4326), row 0 = NORTH (the
     standard COG orientation). Each AMR patch cell PAINTS its full footprint --
     every output cell whose centre falls inside that patch cell's ``dx``/``dy``
-    extent takes its depth (area/coverage fill), NOT a single nearest-cell
+    extent takes its value (area/coverage fill), NOT a single nearest-cell
     scatter. That keeps the field GAP-FREE when the output grid is FINER than a
-    coarse AMR patch: the coverage fill spans every output cell the patch cell
-    covers, instead of leaving neighbouring cells NaN.
+    coarse AMR patch.
 
-    Patches are sorted by AMR level ASCENDING so a finer (higher-level) patch is
-    painted LAST and OVERWRITES a coarser one where they overlap. Only wet
-    (>= ``NODATA_DEPTH_M``) patch cells write, so a finer patch's dry cells never
-    erase a coarser patch's wet value. Dry / sub-threshold / uncovered cells stay
-    NaN. Fully vectorized per patch (inverse sampling: each output cell -> the
-    patch cell that contains its centre) -- unit-testable on a synthetic patch
-    list.
+    Finest-available level wins per area, UNCONDITIONALLY. Patches are painted
+    coarse-to-fine (level ASCENDING) and a per-cell ``painted_level`` records the
+    finest patch that has touched each output cell. A patch OWNS every covered
+    cell whose recorded level is ``<=`` its own; on an owned cell it writes its
+    depth when wet (``>= NODATA_DEPTH_M``) and NaN when dry. So a finer patch's
+    DRY cell ERASES a coarser patch's wet value: the depth over any area is the
+    finest patch's solution there, never a coarse patch cell smeared across the
+    footprint of a finer patch that resolves the ground as dry. Dry /
+    sub-threshold / uncovered cells are NaN. Fully vectorized per patch (inverse
+    sampling: each output cell -> the patch cell that contains its centre) --
+    unit-testable on a synthetic patch list.
     """
     import numpy as np
 
     nrows, ncols = int(out_shape[0]), int(out_shape[1])
     grid = np.full((nrows, ncols), np.nan, dtype="float64")
+    # Finest AMR level that has painted each output cell (0 = untouched); a patch
+    # owns a cell iff its level >= the recorded level.
+    painted_level = np.zeros((nrows, ncols), dtype=np.int32)
     min_lon, min_lat, max_lon, max_lat = bbox
     if max_lon <= min_lon or max_lat <= min_lat:
         return grid
@@ -377,12 +423,15 @@ def rasterize_frame_to_grid(
         # Gather the (rows x cols) sub-block of patch depths (row 0 of `patch.h`
         # is ylow=south; `rows` is north->south, so pj already indexes correctly).
         sub = patch.h[np.ix_(pj, pi)]
-        wet = np.isfinite(sub) & (sub >= NODATA_DEPTH_M)
-        if not wet.any():
-            continue
         block = grid[np.ix_(rows, cols)]
-        block[wet] = sub[wet]
+        lvl_block = painted_level[np.ix_(rows, cols)]
+        own = patch.level >= lvl_block  # finest-or-equal patch owns the cell
+        wet = np.isfinite(sub) & (sub >= NODATA_DEPTH_M)
+        block[own & wet] = sub[own & wet]  # finest wet depth
+        block[own & ~wet] = np.nan  # finest DRY erases a coarser wet value
         grid[np.ix_(rows, cols)] = block
+        lvl_block[own] = patch.level
+        painted_level[np.ix_(rows, cols)] = lvl_block
     return grid
 
 
@@ -728,6 +777,454 @@ def _discover_frames(out_dir: Path) -> list[tuple[int, Path, Path | None]]:
     return found
 
 
+#: fgout ascii-frame name (``fgout0001.q0007``): a fixed-grid monitor number then
+#: the frame number. output_format='ascii' lands each frame in the SAME fort.q
+#: uniform-grid layout (a single uniform patch), so ``parse_fort_q_frame`` +
+#: ``rasterize_frame_to_grid`` read them with NO AMR flatten and NO clawpack import.
+_FGOUT_Q_RE = re.compile(r"^fgout\d+\.q(\d{4,})$")
+
+
+def _discover_fgout_frames(out_dir: Path) -> list[tuple[int, Path, Path | None]]:
+    """List ``(frame_no, fgoutNNNN.qMMMM, .tMMMM | None)`` ascending by frame_no.
+
+    The fgout monitor (setrun ``FGoutGrid``, gated by ``fgout_frames > 0``) writes
+    a SMOOTH single-resolution frame series (``fgout0001.q0001``, ``.q0002``, ...)
+    at EVENLY-SPACED times, decoupled from the coarse/variable fort.q AMR-patch
+    cadence. Discovered separately from ``_discover_frames`` so an fgout run keeps
+    the fort.q peak while the fgout frames BECOME the animation series.
+    """
+    found: list[tuple[int, Path, Path | None]] = []
+    search_dirs = [out_dir]
+    sub = out_dir / "_output"
+    if sub.is_dir():
+        search_dirs.insert(0, sub)
+    seen: set[int] = set()
+    for d in search_dirs:
+        if not d.is_dir():
+            continue
+        for p in sorted(d.iterdir()):
+            m = _FGOUT_Q_RE.match(p.name)
+            if not m:
+                continue
+            no = int(m.group(1))
+            if no in seen:
+                continue
+            seen.add(no)
+            t_path = p.with_name(p.name.replace(".q", ".t", 1))
+            found.append((no, p, t_path if t_path.exists() else None))
+    found.sort(key=lambda x: x[0])
+    return found
+
+
+def _read_frames_to_grids(
+    frame_files: list[tuple[int, Path, Path | None]],
+    bbox: tuple[float, float, float, float],
+    grid_shape: tuple[int, int],
+) -> list[Any]:
+    """Parse + rasterize each ``fort.q``/``fgout`` frame onto the regular AOI grid.
+
+    One uniform-grid read path for BOTH the AMR fort.q frames and the uniform
+    fgout frames (the fgout ascii layout IS the fort.q layout). Raises the typed
+    ``GEOCLAW_OUTPUT_READ_FAILED`` on an unreadable frame."""
+    grids: list[Any] = []
+    for _no, q_path, _t_path in frame_files:
+        try:
+            patches = parse_fort_q_frame(q_path.read_text(errors="replace"))
+        except Exception as exc:  # noqa: BLE001
+            raise PostprocessGeoClawError(
+                "GEOCLAW_OUTPUT_READ_FAILED",
+                message=f"could not read {q_path.name}: {exc}",
+                details={"frame": q_path.name},
+            ) from exc
+        grids.append(rasterize_frame_to_grid(patches, bbox, grid_shape))
+    return grids
+
+
+# --------------------------------------------------------------------------- #
+# AMR mesh (grid-line) preview -- the RAW GRID as a first-class per-run product.
+#
+# GeoClaw's adaptive mesh lives ONLY in the fort.q per-patch headers (each patch:
+# level, mx, my, xlow, ylow, dx, dy). This turns that structure into an emitted
+# vector layer of the ACTUAL cell edges, all levels in one FeatureCollection, so
+# refinement is visible as grid DENSITY (a finer patch = a denser grid) with no
+# per-level abstraction. Pure numpy-free arithmetic -- unit-testable on a
+# synthetic patch list.
+# --------------------------------------------------------------------------- #
+def build_geoclaw_mesh_geojson(
+    patches: list[_Patch],
+    *,
+    frame_no: int | None = None,
+    full_max_cells: int = GEOCLAW_MESH_FULL_CELLLINES_MAX_CELLS,
+    sample_lines: int = GEOCLAW_MESH_SAMPLE_LINES_PER_SIDE,
+    coord_decimals: int = GEOCLAW_MESH_COORD_DECIMALS,
+) -> tuple[dict[str, Any], dict[str, Any]]:
+    """Build the RAW AMR grid-line ``FeatureCollection`` from a frame's patches.
+
+    Each AMR patch becomes ONE ``MultiLineString`` feature holding its cell-edge
+    grid lines in EPSG:4326 (``xlow``/``ylow`` are lon/lat under GeoClaw's
+    spherical ``coordinate_system=2``). All levels land in ONE collection; the
+    finer a patch, the denser its lines -- the honest, self-evident picture of
+    where the solver refined.
+
+    Decimation (STATED, never silent): a patch with at most ``full_max_cells``
+    cells emits EVERY interior cell edge (a full grid). A larger/finer patch --
+    where every edge would be megabytes -- emits its BOUNDARY (i=0, i=mx, j=0,
+    j=my always included) plus interior lines sampled at a stride that keeps ~
+    ``sample_lines`` per side. Each feature carries ``decimated`` +
+    ``sample_stride_x/y``; the FeatureCollection ``metadata`` foreign member
+    summarizes the policy + per-level histogram.
+
+    Returns ``(feature_collection, stats)``.
+    """
+    import math
+
+    def _rd(v: float) -> float:
+        return round(float(v), coord_decimals)
+
+    features: list[dict[str, Any]] = []
+    total_lines = 0
+    total_vertices = 0
+    level_hist: dict[int, int] = {}
+    decimated_patches = 0
+
+    for gi, p in enumerate(sorted(patches, key=lambda q: q.level), start=1):
+        mx, my = int(p.mx), int(p.my)
+        if mx <= 0 or my <= 0 or p.dx <= 0 or p.dy <= 0:
+            continue
+        x0, y0 = float(p.xlow), float(p.ylow)
+        x1 = x0 + mx * float(p.dx)
+        y1 = y0 + my * float(p.dy)
+        n_cells = mx * my
+        decimate = n_cells > full_max_cells
+        if decimate:
+            sx = max(1, math.ceil(mx / max(sample_lines, 1)))
+            sy = max(1, math.ceil(my / max(sample_lines, 1)))
+            decimated_patches += 1
+        else:
+            sx = sy = 1
+        # Line indices: sampled stride ALWAYS unioned with the boundary (0, mx/my)
+        # so a decimated patch still draws its full outline.
+        xi = sorted(set(range(0, mx + 1, sx)) | {0, mx})
+        yj = sorted(set(range(0, my + 1, sy)) | {0, my})
+        segs: list[list[list[float]]] = []
+        for i in xi:  # vertical lines (constant lon), south->north
+            lon = _rd(x0 + i * float(p.dx))
+            segs.append([[lon, _rd(y0)], [lon, _rd(y1)]])
+        for j in yj:  # horizontal lines (constant lat), west->east
+            lat = _rd(y0 + j * float(p.dy))
+            segs.append([[_rd(x0), lat], [_rd(x1), lat]])
+        n_lines = len(segs)
+        total_lines += n_lines
+        total_vertices += 2 * n_lines
+        level_hist[int(p.level)] = level_hist.get(int(p.level), 0) + 1
+        features.append(
+            {
+                "type": "Feature",
+                "geometry": {"type": "MultiLineString", "coordinates": segs},
+                "properties": {
+                    "grid_number": gi,
+                    "level": int(p.level),
+                    "mx": mx,
+                    "my": my,
+                    "cell_dx_deg": _rd(p.dx),
+                    "cell_dy_deg": _rd(p.dy),
+                    "n_grid_lines": n_lines,
+                    "decimated": bool(decimate),
+                    "sample_stride_x": int(sx),
+                    "sample_stride_y": int(sy),
+                },
+            }
+        )
+
+    max_level = max(level_hist) if level_hist else 0
+    level_hist_str = {str(k): v for k, v in sorted(level_hist.items())}
+    metadata = {
+        "kind": "geoclaw_amr_gridlines",
+        "frame_no": frame_no,
+        "crs": "EPSG:4326",
+        "patch_count": len(features),
+        "level_histogram": level_hist_str,
+        "max_level": max_level,
+        "total_grid_lines": total_lines,
+        "total_vertices": total_vertices,
+        "decimated_patch_count": decimated_patches,
+        "decimation_policy": (
+            f"patches with <= {full_max_cells} cells emit every cell edge (full "
+            f"grid); larger patches emit their boundary plus interior lines "
+            f"sampled to ~{sample_lines} per side (per-feature 'decimated' + "
+            f"sample_stride_x/y). Grid density IS the AMR refinement, unabstracted."
+        ),
+    }
+    fc = {"type": "FeatureCollection", "features": features, "metadata": metadata}
+    stats = {
+        "patch_count": len(features),
+        "max_level": max_level,
+        "total_grid_lines": total_lines,
+        "total_vertices": total_vertices,
+        "decimated_patch_count": decimated_patches,
+        "level_histogram": level_hist_str,
+        "frame_no": frame_no,
+    }
+    return fc, stats
+
+
+def make_geoclaw_mesh_layer_uri(
+    fc: dict[str, Any],
+    mesh_stats: dict[str, Any],
+    *,
+    run_id: str,
+    runs_bucket: str | None = None,
+) -> LayerURI | None:
+    """Upload the AMR grid-line ``FeatureCollection`` to S3, return a LayerURI.
+
+    Mirrors ``make_hecras_mesh_layer_uri``: writes ``mesh.geojson`` to the durable
+    runs bucket at ``s3://<runs_bucket>/<run_id>/mesh.geojson`` and returns a
+    ``style_preset="mesh_grid"``, ``role="context"``, ``bbox=None`` vector LayerURI
+    (the mesh must not fight the flood camera) carrying ``crs_authid="EPSG:4326"``
+    (ADR 0118). Grid lines are a LineString FeatureCollection, so the renderable
+    QGIS type is a VECTOR (QgsVectorLayer draws the raw black grid); the row still
+    rides the mesh-preview protocol (mesh_grid preset + context role + crs_authid).
+
+    Best-effort: ``None`` on an empty FC or an S3 fault (a missing mesh preview
+    never voids the depth result). SYNC boto3 put -- wrap in ``asyncio.to_thread``.
+    """
+    import json as _json
+
+    features = fc.get("features") or []
+    if not features:
+        return None
+    body = _json.dumps(fc, separators=(",", ":")).encode("utf-8")
+    payload_mb = len(body) / 1_000_000.0
+    mesh_stats["payload_mb"] = round(payload_mb, 4)
+    if payload_mb > GEOCLAW_MESH_PAYLOAD_SOFT_CAP_MB:
+        logger.warning(
+            "geoclaw mesh preview is large (%.2f MB, %d grid lines) run_id=%s -- "
+            "emitting anyway (decimation already applied per-patch)",
+            payload_mb,
+            int(mesh_stats.get("total_grid_lines", 0) or 0),
+            run_id,
+        )
+    try:
+        from trid3nt_server.agent.tools.simulation.solver.solver import (
+            _get_runs_bucket,
+            _get_s3_client,
+        )
+
+        bucket = runs_bucket or _get_runs_bucket()
+        key = f"{run_id}/mesh.geojson"
+        _get_s3_client().put_object(
+            Bucket=bucket,
+            Key=key,
+            Body=body,
+            ContentType="application/geo+json",
+        )
+        s3_uri = f"s3://{bucket}/{key}"
+    except Exception as exc:  # noqa: BLE001 -- best-effort mesh preview
+        logger.warning(
+            "make_geoclaw_mesh_layer_uri: mesh.geojson S3 upload failed (non-fatal, "
+            "run_id=%s): %s",
+            run_id,
+            exc,
+        )
+        return None
+
+    max_level = int(mesh_stats.get("max_level", 0) or 0)
+    n_lines = int(mesh_stats.get("total_grid_lines", 0) or 0)
+    return LayerURI(
+        layer_id=f"geoclaw-mesh-{run_id}",
+        name=f"Computational mesh (AMR L1-L{max_level}, {n_lines} grid lines)",
+        layer_type="vector",
+        uri=s3_uri,
+        style_preset=GEOCLAW_MESH_STYLE_PRESET,
+        role="context",
+        bbox=None,
+        crs_authid="EPSG:4326",
+    )
+
+
+def build_geoclaw_mesh_layer(
+    out_dir: str | Path,
+    *,
+    run_id: str,
+    runs_bucket: str | None = None,
+    frame_no: int | None = None,
+) -> LayerURI | None:
+    """Build + upload the AMR grid-line mesh preview from a solved run's fort.q.
+
+    Reads the PEAK-relevant frame -- ``frame_no`` when given, else the LAST/final
+    frame (a pinned AMR window persists across every frame, so the final frame
+    faithfully shows the user's refinement) -- parses its patch structure, builds
+    the grid-line FeatureCollection, and uploads it as ``mesh.geojson``.
+
+    The ONE shared seam every GeoClaw inundation template rides (all templates
+    dispatch through ``model_geoclaw_inundation``). Best-effort: returns ``None``
+    on ANY failure (a missing mesh preview never voids the depth result).
+    """
+    try:
+        out = Path(out_dir)
+        frames = _discover_frames(out)
+        if not frames:
+            return None
+        if frame_no is not None:
+            chosen = next((f for f in frames if f[0] == frame_no), frames[-1])
+        else:
+            chosen = frames[-1]
+        _no, q_path, _t = chosen
+        patches = parse_fort_q_frame(q_path.read_text(errors="replace"))
+        if not patches:
+            return None
+        fc, stats = build_geoclaw_mesh_geojson(patches, frame_no=_no)
+        layer = make_geoclaw_mesh_layer_uri(
+            fc, stats, run_id=run_id, runs_bucket=runs_bucket
+        )
+        if layer is not None:
+            logger.info(
+                "build_geoclaw_mesh_layer run_id=%s frame_no=%d patches=%d "
+                "max_level=%d grid_lines=%d vertices=%d payload_mb=%.3f uri=%s",
+                run_id,
+                _no,
+                stats["patch_count"],
+                stats["max_level"],
+                stats["total_grid_lines"],
+                stats["total_vertices"],
+                float(stats.get("payload_mb", 0.0) or 0.0),
+                layer.uri,
+            )
+        return layer
+    except Exception as exc:  # noqa: BLE001 -- mesh preview is NEVER fatal
+        logger.warning(
+            "build_geoclaw_mesh_layer failed (non-fatal, run_id=%s): %s",
+            run_id,
+            exc,
+        )
+        return None
+
+
+# --------------------------------------------------------------------------- #
+# Okada seafloor-deformation PRODUCT (the ADR 0226 Okada-dtopo front).
+# --------------------------------------------------------------------------- #
+#: Signed vertical seafloor deformation (m): uplift(+)/subsidence(-) -> a diverging
+#: rdbu ramp centered on 0 (publish_layer pins the symmetric rescale so the dipole
+#: reads blue=subsidence / white=0 / red=uplift). Registered in
+#: publish_layer._TITILER_STYLE_REGISTRY.
+GEOCLAW_DEFORMATION_STYLE_PRESET: str = "diverging_seafloor_deformation"
+
+
+def _read_esri_ascii_grid(
+    path: Path,
+) -> tuple[Any, tuple[float, float, float, float]]:
+    """Parse a bare ESRI-ASCII grid -> ``(north-up float32 array, EPSG:4326 bbox)``.
+
+    The tsunami ``maketopo.py`` writes ``deformation_dz.asc`` NORTH-first (row 0 =
+    highest latitude), so the returned array is already row-0=north (the COG-writer
+    convention). NODATA -> NaN. Pure (numpy only, no gdal)."""
+    import numpy as np
+
+    hdr: dict[str, float] = {}
+    rows: list[list[float]] = []
+    with path.open("r", errors="replace") as fh:
+        for line in fh:
+            s = line.strip()
+            if not s:
+                continue
+            key = s.split()[0].lower()
+            if key in ("ncols", "nrows", "xllcorner", "yllcorner", "xllcenter",
+                       "yllcenter", "cellsize", "nodata_value"):
+                hdr[key] = float(s.split()[1])
+            else:
+                rows.append([float(v) for v in s.split()])
+    ncols, nrows = int(hdr["ncols"]), int(hdr["nrows"])
+    cell = float(hdr["cellsize"])
+    xll = float(hdr.get("xllcorner", hdr.get("xllcenter", 0.0) - cell / 2.0))
+    yll = float(hdr.get("yllcorner", hdr.get("yllcenter", 0.0) - cell / 2.0))
+    nodata = float(hdr.get("nodata_value", -9999.0))
+    arr = np.asarray(rows, dtype="float32").reshape(nrows, ncols)
+    arr = np.where(arr == nodata, np.nan, arr)
+    bbox = (xll, yll, xll + ncols * cell, yll + nrows * cell)
+    return arr, bbox
+
+
+def build_geoclaw_deformation_layer(
+    out_dir: str | Path,
+    *,
+    run_id: str,
+    runs_bucket: str | None = None,
+) -> tuple[LayerURI | None, dict[str, float]]:
+    """Rasterize the Okada seafloor-deformation dZ into a SIGNED product COG + layer.
+
+    Reads the tsunami ``deformation_dz.asc`` (final-time vertical dZ the worker's
+    ``maketopo.py`` wrote over the Okada source box), writes a signed EPSG:4326 COG,
+    uploads it, and returns ``(LayerURI, {"max_uplift_m", "max_subsidence_m"})`` --
+    the direct answer to "what seafloor deformation does this earthquake drive"
+    (MODELED, not observed). Returns ``(None, {})`` when no deformation grid is
+    present (dam_break / surge / a staged dtopo run) or the grid is degenerate.
+    Best-effort: NEVER raises (the depth answer stands on its own)."""
+    try:
+        import numpy as np
+        from rasterio.transform import from_bounds
+
+        candidates = sorted(Path(out_dir).rglob("deformation_dz.asc"))
+        if not candidates:
+            return None, {}
+        grid, dbbox = _read_esri_ascii_grid(candidates[0])
+        finite = grid[np.isfinite(grid)]
+        if finite.size == 0 or float(np.nanmax(np.abs(grid))) == 0.0:
+            return None, {}
+
+        nrows, ncols = grid.shape
+        transform = from_bounds(dbbox[0], dbbox[1], dbbox[2], dbbox[3], ncols, nrows)
+        try:
+            local_cog = cog_io.write_cog_4326_from_grid(
+                np.asarray(grid, dtype="float32"),
+                src_crs="EPSG:4326",
+                src_transform=transform,
+                reproject=False,
+                crs_roundtrip_guard=True,
+                dst_suffix="_geoclaw_deformation_4326.tif",
+            )
+        except CogIoError as exc:
+            raise _reraise_cogio(exc, bbox=dbbox) from exc
+        try:
+            uri = _upload_cog_to_runs_bucket(
+                local_cog, run_id, runs_bucket,
+                dest_filename="geoclaw_seafloor_deformation.tif",
+            )
+        finally:
+            _safe_unlink(local_cog)
+
+        max_uplift = float(np.nanmax(grid))
+        max_subsidence = float(np.nanmin(grid))
+        layer = LayerURI(
+            layer_id=f"geoclaw-seafloor-deformation-{run_id}",
+            name="Seafloor deformation (Okada)",
+            layer_type="raster",
+            uri=uri,
+            style_preset=GEOCLAW_DEFORMATION_STYLE_PRESET,
+            role="context",
+            units="meters",
+            bbox=tuple(dbbox),  # type: ignore[arg-type]
+            fallback_note=(
+                f"modeled Okada coseismic deformation: max uplift {max_uplift:.3g} m, "
+                f"max subsidence {max_subsidence:.3g} m (NOT an observed field)"
+            ),
+        )
+        logger.info(
+            "build_geoclaw_deformation_layer run_id=%s uplift=%.4g m "
+            "subsidence=%.4g m grid=%dx%d bbox=%s uri=%s",
+            run_id, max_uplift, max_subsidence, nrows, ncols, dbbox, uri,
+        )
+        return layer, {
+            "max_uplift_m": max_uplift,
+            "max_subsidence_m": max_subsidence,
+        }
+    except Exception as exc:  # noqa: BLE001 -- the deformation product is NEVER fatal
+        logger.warning(
+            "build_geoclaw_deformation_layer failed (non-fatal, run_id=%s): %s",
+            run_id, exc,
+        )
+        return None, {}
+
+
 # --------------------------------------------------------------------------- #
 # Top-level postprocess.
 # --------------------------------------------------------------------------- #
@@ -742,6 +1239,7 @@ def postprocess_geoclaw(
     runs_bucket: str | None = None,
     topo_grid: Any = None,
     mask_ocean: bool = False,
+    sea_level_m: float = 0.0,
     fgmax_arrival_tol_m: float = GEOCLAW_DEFAULT_FGMAX_ARRIVAL_TOL_M,
 ) -> tuple[list[GeoClawDepthLayerURI], dict[str, Any]]:
     """Rasterize a solved GeoClaw run into a peak + per-frame depth-COG layer set.
@@ -776,25 +1274,24 @@ def postprocess_geoclaw(
         runs_bucket: optional override for the runs bucket name.
         topo_grid: optional ``(H, W)`` topography grid (same shape) for the
             ``max_inundation_m`` land/ocean split AND (with ``mask_ocean``) the
-            belt-and-suspenders ``topo < 0`` OR-term of the overland depth mask.
+            ``topo <= sea_level_m`` water OR-term of the overland depth mask.
         mask_ocean: when True, mask the published depth (peak + every frame +
-            metrics) to OVERLAND inundation only -- set depth to NaN wherever the
-            cell is PERMANENT WATER (ocean). Permanent water is detected by the
-            SIMULATION'S OWN INITIAL WATER SURFACE (robust on any coast): any cell
-            WET at ``t=0`` (the earliest fort.q frame ``grids[0]`` -- GeoClaw's
-            still-water initial condition ``h = max(0, sea_level - B)``) is ocean,
-            using a small wet epsilon (``NODATA_DEPTH_M``) so only genuinely-wet sea
-            is caught even if an Okada ``dtopo`` perturbs the ``t=0`` surface. This
-            replaces the old ``topo < 0`` criterion, which failed on ETOPO coasts
-            (no CUDEM) where the nearshore bathymetry reads ~0 m (not negative) and
-            so caught only far-offshore deep cells -- the nearshore sea stayed in the
-            published COG. When a shape-matching ``topo_grid`` is supplied, ``topo <
-            0`` is OR-ed in as a belt-and-suspenders term (a cell that is either
-            initially-wet OR below the still-water datum is ocean) so nothing
-            regresses on CUDEM coasts. A strict NO-OP when NO cell is initially wet
-            AND (no topo cell is < 0), so it can never erase a legitimate inland
-            flood. The composer gates this to the OFFSHORE/COASTAL scenario families
+            metrics) to OVERLAND inundation only -- set depth to NaN on every
+            PERMANENT-WATER (ocean) cell so what remains is depth on dry land.
+            A cell is water when EITHER: (1) it is WET at ``t=0`` -- the earliest
+            fort.q frame ``grids[0]``, GeoClaw's still-water initial condition
+            ``h = max(0, sea_level - B)`` -- using a small wet epsilon
+            (``NODATA_DEPTH_M``) so only genuinely-wet sea counts even if an Okada
+            ``dtopo`` perturbs the ``t=0`` surface (robust on any coast, including
+            ETOPO coasts whose nearshore bathymetry reads ~0 m); OR (2) a
+            shape-matching ``topo_grid`` puts it AT OR BELOW the still-water datum
+            (``topo <= sea_level_m``) -- overland is strictly ``topo > sea_level_m``.
+            A strict NO-OP when no cell is initially wet AND no topo cell is at or
+            below the datum, so it can never erase a legitimate inland flood. The
+            composer gates this to the OFFSHORE/COASTAL scenario families
             (tsunami / surge); inland ``dam_break`` stays unmasked.
+        sea_level_m: still-water datum (m) for the overland/water split; a cell is
+            water when ``topo <= sea_level_m`` (default 0.0).
         fgmax_arrival_tol_m: the fgmax wet-cell threshold (m) backing
             ``arrival_time_s`` when an fgmax monitor was run.
 
@@ -841,70 +1338,67 @@ def postprocess_geoclaw(
             tuple(bbox),
         )
 
-    grids: list[Any] = []
-    for _no, q_path, _t_path in frame_files:
-        try:
-            patches = parse_fort_q_frame(q_path.read_text(errors="replace"))
-        except Exception as exc:  # noqa: BLE001
-            raise PostprocessGeoClawError(
-                "GEOCLAW_OUTPUT_READ_FAILED",
-                message=f"could not read {q_path.name}: {exc}",
-                details={"frame": q_path.name},
-            ) from exc
-        grids.append(rasterize_frame_to_grid(patches, bbox, grid_shape))
+    grids: list[Any] = _read_frames_to_grids(frame_files, bbox, grid_shape)
 
-    # --- Overland (initial-wet ocean-masked) inundation -------------------- #
+    # --- Overland (ocean-masked) inundation -------------------------------- #
     # For an OFFSHORE / COASTAL scenario (tsunami / surge) whose domain reaches the
     # open sea, GeoClaw's water DEPTH (q[0]=h) is the FULL water column, so the
     # ocean portion of the AOI renders as a sheet of sea rather than the coastal
-    # flood. OVERLAND INUNDATION = dry-land cells that got wet, i.e. cells DRY at
-    # t=0 that are wet in a later frame. So the ocean (PERMANENT WATER) is exactly
-    # the set of cells WET AT t=0: the earliest fort.q frame (grids[0], sorted by
-    # frame number) is GeoClaw's still-water initial condition h=max(0,sea_level-B).
-    # This initial-wet criterion is robust on ANY coast -- it replaces the old
-    # `topo<0` test that FAILED on ETOPO coasts (no CUDEM) where nearshore bathy
-    # reads ~0 m (not negative), leaving the nearshore sea in the published COG.
-    # A small wet epsilon (NODATA_DEPTH_M) means only genuinely-wet sea is caught,
-    # robust even if an Okada dtopo perturbs the t=0 surface offshore.
-    # `topo<0` (when an aligned topo_grid is supplied) is OR-ed in as a
-    # belt-and-suspenders term (initially-wet OR below-datum = ocean) so nothing
-    # regresses on CUDEM coasts. Applied to EVERY frame so PEAK, per-frame COGs, and
-    # all derived metrics are consistently overland. Guarded so a legitimate inland
-    # flood is never erased: (1) the composer only sets mask_ocean for tsunami/surge
-    # (inland dam_break stays unmasked), (2) a strict no-op when NO cell is wet at
-    # t=0 AND no topo cell is < 0.
+    # flood. Published inundation is depth on DRY LAND only. A cell is PERMANENT
+    # WATER (masked to NaN) when EITHER:
+    #   (1) it is WET at t=0 -- the earliest fort.q frame (grids[0]) is GeoClaw's
+    #       still-water initial condition h=max(0,sea_level-B); a small wet epsilon
+    #       (NODATA_DEPTH_M) catches only genuinely-wet sea, robust on ANY coast
+    #       (including ETOPO coasts whose nearshore bathy reads ~0 m) even if an
+    #       Okada dtopo perturbs the t=0 surface offshore; OR
+    #   (2) an aligned topo_grid puts it AT OR BELOW the still-water datum
+    #       (topo <= sea_level_m) -- overland is strictly topo > sea_level_m.
+    # Applied to EVERY frame so PEAK, per-frame COGs, and all derived metrics are
+    # consistently overland. Guarded so a legitimate inland flood is never erased:
+    # (1) the composer only sets mask_ocean for tsunami/surge (inland dam_break
+    # stays unmasked), (2) a strict no-op when no cell is wet at t=0 AND no topo
+    # cell is at or below the datum.
+    #
+    # The resolved ``ocean_mask`` (the permanent-water cells) is retained so the
+    # SAME mask is applied to the fgout animation frames below -- the fort.q t=0
+    # still-water frame is the authoritative ocean reference for both series.
+    ocean_mask: Any = None
     if mask_ocean:
         try:
             # PRIMARY: any cell wet at t=0 is permanent water (the ocean).
             init = np.asarray(grids[0], dtype="float64")
             ocean = np.isfinite(init) & (init > NODATA_DEPTH_M)
             n_initwet = int(ocean.sum())
-            # ADDITIONAL OR (CUDEM belt-and-suspenders): below the still-water datum.
+            # ADDITIONAL OR: a cell AT OR BELOW the still-water datum is water, not
+            # overland -- published inundation is depth on dry land (topo >
+            # sea_level) only. The `<=` (not `<`) catches the nearshore sea on
+            # ETOPO coasts whose bathymetry reads ~0 m at the waterline.
             n_topo = 0
             if topo_grid is not None:
                 topo = np.asarray(topo_grid, dtype="float64")
                 if topo.shape == tuple(grid_shape):
-                    topo_ocean = np.isfinite(topo) & (topo < 0.0)
+                    topo_ocean = np.isfinite(topo) & (topo <= sea_level_m)
                     n_topo = int(topo_ocean.sum())
                     ocean = ocean | topo_ocean
                 else:
                     logger.warning(
                         "postprocess_geoclaw run_id=%s topo_grid shape %s != output "
-                        "grid %s; ocean mask uses initial-wet only (no topo<0 OR)",
+                        "grid %s; ocean mask uses initial-wet only (no topo OR)",
                         run_id,
                         tuple(topo.shape),
                         tuple(grid_shape),
                     )
             n_ocean = int(ocean.sum())
             if n_ocean:
+                ocean_mask = ocean
                 for _i in range(len(grids)):
                     gi = np.asarray(grids[_i], dtype="float64").copy()
                     gi[ocean] = np.nan
                     grids[_i] = gi
                 logger.info(
                     "postprocess_geoclaw run_id=%s masked %d/%d ocean cells "
-                    "(initial-wet=%d, topo<0=%d) -> overland inundation (was total "
-                    "water column)",
+                    "(initial-wet=%d, topo<=datum=%d) -> overland inundation (was "
+                    "total water column)",
                     run_id,
                     n_ocean,
                     int(ocean.size),
@@ -914,7 +1408,7 @@ def postprocess_geoclaw(
             else:
                 logger.info(
                     "postprocess_geoclaw run_id=%s mask_ocean requested but no "
-                    "initial-wet or topo<0 cells (no permanent water) — no-op",
+                    "initial-wet or topo<=datum cells (no permanent water) - no-op",
                     run_id,
                 )
         except Exception as exc:  # noqa: BLE001 -- mask is best-effort; never sink the run
@@ -926,6 +1420,44 @@ def postprocess_geoclaw(
             )
 
     n_steps = len(grids)
+
+    # --- fgout SMOOTH animation frames (when the run emitted them) ------------
+    # The fgout monitor (gated by fgout_frames > 0) dumps a uniform single-
+    # resolution grid at EVENLY-SPACED times -- a smooth animation cadence
+    # decoupled from the coarse/variable fort.q AMR-patch output. When present the
+    # fgout frames BECOME the scrubber animation series; the fort.q peak (+ any
+    # fgmax override) still supplies the PEAK layer + narration scalars. The same
+    # ocean mask (from the fort.q t=0 still-water frame) is applied so the fgout
+    # frames are overland-consistent with the peak. Absent -> the fort.q frames
+    # remain the animation source (byte-identical to a pre-fgout run).
+    fgout_files = _discover_fgout_frames(out)
+    fgout_grids: list[Any] = []
+    if fgout_files:
+        try:
+            fgout_grids = _read_frames_to_grids(fgout_files, bbox, grid_shape)
+            if ocean_mask is not None:
+                for _i in range(len(fgout_grids)):
+                    gi = np.asarray(fgout_grids[_i], dtype="float64").copy()
+                    gi[ocean_mask] = np.nan
+                    fgout_grids[_i] = gi
+            logger.info(
+                "postprocess_geoclaw run_id=%s using %d fgout frames as the SMOOTH "
+                "animation series (fort.q peak retained; %d fort.q frames)",
+                run_id,
+                len(fgout_grids),
+                n_steps,
+            )
+        except PostprocessGeoClawError as exc:
+            logger.warning(
+                "postprocess_geoclaw run_id=%s fgout frame read failed (%s); "
+                "falling back to the fort.q animation frames",
+                run_id,
+                exc,
+            )
+            fgout_grids = []
+
+    # The animation series: fgout frames when present, else the fort.q frames.
+    anim_grids = fgout_grids if fgout_grids else grids
 
     # --- PEAK grid (max-total-depth step) ---
     best_grid = None
@@ -1012,10 +1544,14 @@ def postprocess_geoclaw(
     ]
 
     # --- per-frame layers (engine-agnostic flood animation, Phase 1) ---
-    if n_steps > 1:
-        frame_indices = _select_frame_time_indices(n_steps)
+    # ``anim_grids`` is the fgout smooth series when the run emitted one, else the
+    # fort.q frames -- so the scrubber gets an evenly-spaced single-resolution
+    # animation when fgout was requested, the coarse AMR cadence otherwise.
+    n_anim = len(anim_grids)
+    if n_anim > 1:
+        frame_indices = _select_frame_time_indices(n_anim)
         frame_layers = _emit_frame_layers(
-            grids,
+            anim_grids,
             frame_indices,
             bbox=bbox,
             run_id=run_id,
@@ -1103,3 +1639,693 @@ def _emit_frame_layers(
             _safe_unlink(p)
         return []
     return frame_layers
+
+
+# --------------------------------------------------------------------------- #
+# Coastal gauge time series (GAP4) -- the tsunami gauge-timeseries template.
+#
+# The GeoClaw worker always writes one coastal gauge (gaugeNNNNN.txt) under
+# _output/. The standard GeoClaw gauge file has a "#"-commented header then
+# numeric rows [level, t, q[0]=h, q[1]=hu, q[2]=hv, eta] (eta = water-surface
+# elevation, the last column). We parse the surface-elevation time series so the
+# composer can chart the wave (and any co-seismic subsidence, visible as the
+# initial post-quake surface offset at the gauge).
+# --------------------------------------------------------------------------- #
+def parse_geoclaw_gauge_series(
+    output_dir: str | Path,
+) -> tuple[dict[str, Any] | None, dict[str, float]]:
+    """Parse the coastal gauge time series from a solved run's ``_output/``.
+
+    Finds the first ``gauge*.txt`` under ``output_dir`` (recursively -- the
+    composer downloads it to ``<tmp>/_output/gauge00001.txt``), skips the
+    ``#``-commented header, and reads the numeric rows. Columns follow the
+    standard GeoClaw layout ``[level, t, h, hu, hv, eta]``; the surface elevation
+    ``eta`` is the LAST column and the depth ``h`` is column index 2. Degrades
+    honestly: a 3-column ``[level, t, eta]`` file uses eta=last, h=None.
+
+    Returns ``(series, scalars)`` where ``series`` is
+    ``{"t": [...], "eta": [...], "depth": [...]}`` (or ``None`` when no gauge
+    file / no rows), and ``scalars`` carries the typed narration numbers:
+    ``gauge_max_surface_elevation_m`` / ``gauge_min_surface_elevation_m`` /
+    ``gauge_max_amplitude_m`` / ``gauge_coseismic_offset_m`` / ``gauge_max_depth_m``.
+    Pure (unit-testable on a fixture gauge file)."""
+    root = Path(output_dir)
+    candidates = sorted(root.rglob("gauge*.txt"))
+    if not candidates:
+        return None, {}
+    gauge_path = candidates[0]
+
+    times: list[float] = []
+    etas: list[float] = []
+    depths: list[float] = []
+    try:
+        with gauge_path.open("r", encoding="utf-8", errors="replace") as fh:
+            for line in fh:
+                s = line.strip()
+                if not s or s.startswith("#"):
+                    continue
+                parts = s.split()
+                if len(parts) < 3:
+                    continue
+                try:
+                    t = float(parts[1])
+                    eta = float(parts[-1])
+                except (ValueError, IndexError):
+                    continue
+                h = None
+                if len(parts) >= 4:
+                    try:
+                        h = float(parts[2])
+                    except ValueError:
+                        h = None
+                times.append(t)
+                etas.append(eta)
+                depths.append(h if h is not None else float("nan"))
+    except OSError:
+        return None, {}
+
+    if not times:
+        return None, {}
+
+    import math
+
+    finite_depths = [d for d in depths if math.isfinite(d)]
+    eta0 = etas[0]
+    max_eta = max(etas)
+    min_eta = min(etas)
+    scalars: dict[str, float] = {
+        "gauge_max_surface_elevation_m": float(max_eta),
+        "gauge_min_surface_elevation_m": float(min_eta),
+        "gauge_max_amplitude_m": float(max_eta - min_eta),
+        "gauge_coseismic_offset_m": float(eta0),
+        "gauge_max_depth_m": float(max(finite_depths)) if finite_depths else 0.0,
+    }
+    series = {"t": times, "eta": etas, "depth": depths}
+    return series, scalars
+
+
+def build_gauge_timeseries_chart_spec(
+    series: dict[str, Any] | None,
+) -> dict[str, Any] | None:
+    """Build the Vega-Lite gauge surface-elevation time-series chart.
+
+    A line of water-surface elevation (m) vs time (s) at the coastal gauge -- the
+    tsunami waveform (leading depression / run-up peaks) and any co-seismic
+    subsidence (the initial post-quake surface offset). Returns ``None`` when the
+    series is empty. Pure (unit-testable on a synthetic series)."""
+    if not series or not series.get("t"):
+        return None
+    values = [
+        {"t_s": float(t), "eta_m": float(e)}
+        for t, e in zip(series["t"], series["eta"])
+    ]
+    return {
+        "$schema": "https://vega.github.io/schema/vega-lite/v5.json",
+        "data": {"values": values},
+        "mark": {"type": "line", "color": "#1f5fbf"},
+        "encoding": {
+            "x": {
+                "field": "t_s",
+                "type": "quantitative",
+                "title": "time (s)",
+            },
+            "y": {
+                "field": "eta_m",
+                "type": "quantitative",
+                "title": "surface elevation (m)",
+            },
+            "tooltip": [
+                {"field": "t_s", "type": "quantitative", "format": ".0f"},
+                {"field": "eta_m", "type": "quantitative", "format": ".3f"},
+            ],
+        },
+    }
+
+
+# --------------------------------------------------------------------------- #
+# Lagrangian particle tracks -- the wake-tracking fold.
+#
+# A Lagrangian particle gauge is a gauge advected BY THE FLOW: GeoClaw replaces
+# its q[2,3] output columns with the particle position (x(t), y(t)). The gauge
+# file header carries "# Lagrangian particle, q[2,3] replaced by (x(t),y(t))"
+# and the data rows are [level, t, h, xg, yg, eta]. We parse each such file into
+# a drift TRACK (the sequence of (xg, yg) positions) and emit it as a LineString
+# vector product + a cumulative-drift-distance chart. Pure python -- no clawpack.
+# --------------------------------------------------------------------------- #
+def _lonlat_step_m(
+    lon0: float, lat0: float, lon1: float, lat1: float
+) -> float:
+    """Planar great-circle-approx distance (m) between two lon/lat points.
+
+    Metres-per-degree with a ``cos(mean_lat)`` longitude correction -- the same
+    convention the depth-metric + grid-shape helpers use (consistent, not WGS84
+    geodesic-exact; a drift track spans metres, so the flat approx is negligible)."""
+    import math
+
+    mean_lat = 0.5 * (lat0 + lat1)
+    m_per_deg_lon = _M_PER_DEG_LAT * max(math.cos(math.radians(mean_lat)), 1e-6)
+    dx_m = (lon1 - lon0) * m_per_deg_lon
+    dy_m = (lat1 - lat0) * _M_PER_DEG_LAT
+    return math.hypot(dx_m, dy_m)
+
+
+def parse_geoclaw_particle_tracks(
+    output_dir: str | Path,
+) -> list[dict[str, Any]]:
+    """Parse Lagrangian particle-gauge drift tracks from a solved run's ``_output/``.
+
+    Scans every ``gauge*.txt`` under ``output_dir`` (recursively), keeps only the
+    LAGRANGIAN gauges (header line ``# Lagrangian particle``), and reads each into
+    a drift track. A Lagrangian gauge row is ``[level, t, h, xg, yg, eta]`` where
+    ``xg, yg`` are the advected particle position (lon, lat) that replaced hu, hv.
+
+    Returns a list (ascending by gauge id) of
+    ``{"gauge_id", "t": [...], "coords": [[lon, lat], ...], "length_m",
+       "duration_s", "start", "end"}``; empty when no Lagrangian gauge is present
+    (the plain inundation / Eulerian-gauge path). Pure -- unit-testable on a
+    fixture gauge file (no clawpack, no numpy)."""
+    root = Path(output_dir)
+    tracks: list[dict[str, Any]] = []
+    for gauge_path in sorted(root.rglob("gauge*.txt")):
+        try:
+            text = gauge_path.read_text(encoding="utf-8", errors="replace")
+        except OSError:
+            continue
+        lines = text.splitlines()
+        is_lagrangian = any(
+            l.startswith("#") and "lagrangian particle" in l.lower() for l in lines
+        )
+        if not is_lagrangian:
+            continue
+        gauge_id = None
+        for l in lines:
+            if l.startswith("#") and "gauge_id=" in l:
+                try:
+                    gauge_id = int(l.split("gauge_id=")[1].split()[0])
+                except (ValueError, IndexError):
+                    gauge_id = None
+                break
+        times: list[float] = []
+        coords: list[list[float]] = []
+        for l in lines:
+            s = l.strip()
+            if not s or s.startswith("#"):
+                continue
+            parts = s.split()
+            if len(parts) < 5:
+                continue
+            try:
+                t = float(parts[1])
+                xg = float(parts[3])  # q[1] slot holds x(t) for a Lagrangian gauge
+                yg = float(parts[4])  # q[2] slot holds y(t)
+            except (ValueError, IndexError):
+                continue
+            times.append(t)
+            coords.append([xg, yg])
+        if len(coords) < 2:
+            continue
+        length_m = 0.0
+        for a, b in zip(coords[:-1], coords[1:]):
+            length_m += _lonlat_step_m(a[0], a[1], b[0], b[1])
+        tracks.append(
+            {
+                "gauge_id": gauge_id if gauge_id is not None else len(tracks) + 1,
+                "t": times,
+                "coords": coords,
+                "length_m": float(length_m),
+                "duration_s": float(times[-1] - times[0]),
+                "start": list(coords[0]),
+                "end": list(coords[-1]),
+            }
+        )
+    tracks.sort(key=lambda tr: int(tr["gauge_id"]))
+    return tracks
+
+
+def build_geoclaw_particle_track_geojson(
+    tracks: list[dict[str, Any]],
+    *,
+    coord_decimals: int = GEOCLAW_MESH_COORD_DECIMALS,
+) -> tuple[dict[str, Any], dict[str, Any]]:
+    """Build the particle-track ``FeatureCollection`` (one LineString per track).
+
+    Each track becomes a ``LineString`` of its (lon, lat) drift positions in
+    EPSG:4326, carrying ``gauge_id`` / ``track_length_m`` / ``duration_s`` /
+    ``n_points`` properties. Returns ``(feature_collection, stats)``. Pure."""
+
+    def _rd(v: float) -> float:
+        return round(float(v), coord_decimals)
+
+    features: list[dict[str, Any]] = []
+    max_len = 0.0
+    max_dur = 0.0
+    for tr in tracks:
+        coords = [[_rd(c[0]), _rd(c[1])] for c in tr["coords"]]
+        if len(coords) < 2:
+            continue
+        max_len = max(max_len, float(tr["length_m"]))
+        max_dur = max(max_dur, float(tr["duration_s"]))
+        features.append(
+            {
+                "type": "Feature",
+                "geometry": {"type": "LineString", "coordinates": coords},
+                "properties": {
+                    "gauge_id": int(tr["gauge_id"]),
+                    "n_points": len(coords),
+                    "track_length_m": round(float(tr["length_m"]), 3),
+                    "duration_s": round(float(tr["duration_s"]), 2),
+                },
+            }
+        )
+    metadata = {
+        "kind": "geoclaw_lagrangian_particle_tracks",
+        "crs": "EPSG:4326",
+        "track_count": len(features),
+        "max_track_length_m": round(max_len, 3),
+        "max_duration_s": round(max_dur, 2),
+    }
+    fc = {"type": "FeatureCollection", "features": features, "metadata": metadata}
+    stats = {
+        "track_count": len(features),
+        "max_track_length_m": max_len,
+        "max_duration_s": max_dur,
+    }
+    return fc, stats
+
+
+def make_geoclaw_particle_track_layer_uri(
+    fc: dict[str, Any],
+    stats: dict[str, Any],
+    *,
+    run_id: str,
+    runs_bucket: str | None = None,
+) -> LayerURI | None:
+    """Upload the particle-track ``FeatureCollection`` to S3, return a LayerURI.
+
+    Writes ``particles.geojson`` to the durable runs bucket and returns a
+    ``particle_track`` vector LayerURI (role ``"context"``, ``bbox=None`` so the
+    tracks never fight the flood camera) carrying ``crs_authid="EPSG:4326"``.
+    Best-effort: ``None`` on an empty FC or an S3 fault. SYNC boto3 put -- the
+    caller wraps it in ``asyncio.to_thread``."""
+    import json as _json
+
+    features = fc.get("features") or []
+    if not features:
+        return None
+    body = _json.dumps(fc, separators=(",", ":")).encode("utf-8")
+    try:
+        from trid3nt_server.agent.tools.simulation.solver.solver import (
+            _get_runs_bucket,
+            _get_s3_client,
+        )
+
+        bucket = runs_bucket or _get_runs_bucket()
+        key = f"{run_id}/particles.geojson"
+        _get_s3_client().put_object(
+            Bucket=bucket,
+            Key=key,
+            Body=body,
+            ContentType="application/geo+json",
+        )
+        s3_uri = f"s3://{bucket}/{key}"
+    except Exception as exc:  # noqa: BLE001 -- best-effort product layer
+        logger.warning(
+            "make_geoclaw_particle_track_layer_uri: particles.geojson upload "
+            "failed (non-fatal, run_id=%s): %s",
+            run_id,
+            exc,
+        )
+        return None
+
+    n_tracks = int(stats.get("track_count", 0) or 0)
+    return LayerURI(
+        layer_id=f"geoclaw-particles-{run_id}",
+        name=f"Lagrangian particle tracks ({n_tracks} drifters)",
+        layer_type="vector",
+        uri=s3_uri,
+        style_preset=GEOCLAW_PARTICLE_TRACK_STYLE_PRESET,
+        role="context",
+        bbox=None,
+        crs_authid="EPSG:4326",
+    )
+
+
+def build_geoclaw_particle_track_layer(
+    out_dir: str | Path,
+    *,
+    run_id: str,
+    runs_bucket: str | None = None,
+) -> tuple[LayerURI | None, list[dict[str, Any]]]:
+    """Parse + upload the Lagrangian particle tracks from a solved run.
+
+    Returns ``(layer, tracks)``: the ``particle_track`` vector LayerURI (or
+    ``None`` when no Lagrangian gauge ran / an S3 fault) plus the parsed track
+    dicts (for the chart + narration scalars). NEVER raises (best-effort)."""
+    try:
+        tracks = parse_geoclaw_particle_tracks(out_dir)
+        if not tracks:
+            return None, []
+        fc, stats = build_geoclaw_particle_track_geojson(tracks)
+        layer = make_geoclaw_particle_track_layer_uri(
+            fc, stats, run_id=run_id, runs_bucket=runs_bucket
+        )
+        if layer is not None:
+            logger.info(
+                "build_geoclaw_particle_track_layer run_id=%s tracks=%d "
+                "max_length_m=%.1f max_duration_s=%.0f uri=%s",
+                run_id,
+                stats["track_count"],
+                float(stats["max_track_length_m"]),
+                float(stats["max_duration_s"]),
+                layer.uri,
+            )
+        return layer, tracks
+    except Exception as exc:  # noqa: BLE001 -- particle tracks are NEVER fatal
+        logger.warning(
+            "build_geoclaw_particle_track_layer failed (non-fatal, run_id=%s): %s",
+            run_id,
+            exc,
+        )
+        return None, []
+
+
+def build_particle_track_chart_spec(
+    tracks: list[dict[str, Any]] | None,
+) -> dict[str, Any] | None:
+    """Build the Vega-Lite cumulative-drift-distance chart for the particle tracks.
+
+    A multi-series line of cumulative drift distance (m) vs time (s), ONE series
+    per particle (colour + legend by gauge id) -- so each drifter's total travel
+    and its rate are read off a quantitative axis (the spatial path itself is the
+    map overlay). Returns ``None`` when there are no tracks. Pure."""
+    if not tracks:
+        return None
+    values: list[dict[str, Any]] = []
+    for tr in tracks:
+        coords = tr["coords"]
+        times = tr["t"]
+        if len(coords) < 2:
+            continue
+        gid = int(tr["gauge_id"])
+        cum = 0.0
+        label = f"particle {gid}"
+        values.append({"t_s": float(times[0]), "dist_m": 0.0, "particle": label})
+        for k in range(1, len(coords)):
+            cum += _lonlat_step_m(
+                coords[k - 1][0], coords[k - 1][1], coords[k][0], coords[k][1]
+            )
+            values.append(
+                {"t_s": float(times[k]), "dist_m": round(cum, 3), "particle": label}
+            )
+    if not values:
+        return None
+    return {
+        "$schema": "https://vega.github.io/schema/vega-lite/v5.json",
+        "data": {"values": values},
+        "mark": {"type": "line"},
+        "encoding": {
+            "x": {"field": "t_s", "type": "quantitative", "title": "time (s)"},
+            "y": {
+                "field": "dist_m",
+                "type": "quantitative",
+                "title": "cumulative drift (m)",
+            },
+            "color": {
+                "field": "particle",
+                "type": "nominal",
+                "title": "particle",
+            },
+            "tooltip": [
+                {"field": "particle", "type": "nominal"},
+                {"field": "t_s", "type": "quantitative", "format": ".0f"},
+                {"field": "dist_m", "type": "quantitative", "format": ".1f"},
+            ],
+        },
+    }
+
+
+# --------------------------------------------------------------------------- #
+# Thacker (1981) paraboloid-basin V&V (scenario="thacker").
+#
+# Grades a solved bowl run against the closed-form radially-symmetric Thacker
+# solution (trid3nt_contracts.geoclaw_thacker): the CENTER gauge (id 1) supplies
+# the central surface elevation eta(0,t) -> numerical PERIOD (autocorrelation) +
+# central AMPLITUDE; the dense +x-axis gauge line (ids 100+, radii 0..1.5a)
+# supplies the moving SHORELINE (largest wet radius over time) + a closed-wall
+# MASS-conservation proxy (ring-integrated volume drift). Pure numpy over the
+# gauge files -- no clawpack; the deck + this grader share the analytic module so
+# they agree by construction.
+# --------------------------------------------------------------------------- #
+def _parse_geoclaw_gauge_file(path: Path) -> tuple[list[float], list[float], list[float]]:
+    """Parse ``(t, h, eta)`` columns from one ``gaugeNNNNN.txt`` (h=col2, eta=last)."""
+    ts: list[float] = []
+    hs: list[float] = []
+    es: list[float] = []
+    for line in path.read_text(errors="replace").splitlines():
+        s = line.strip()
+        if not s or s.startswith("#"):
+            continue
+        p = s.split()
+        if len(p) < 4:
+            continue
+        try:
+            ts.append(float(p[1]))
+            hs.append(float(p[2]))
+            es.append(float(p[-1]))
+        except ValueError:
+            continue
+    return ts, hs, es
+
+
+def compute_thacker_vandv(
+    out_dir: str | Path,
+    a_m: float,
+    h0_m: float,
+    amp_A: float,
+    *,
+    dry_tol_m: float = 5.0e-3,
+    n_axis_gauges: int = 31,
+    axis_r_max_factor: float = 1.5,
+) -> dict[str, Any]:
+    """Grade a solved Thacker run against the closed form; return the V&V scalars.
+
+    Reads the center gauge (id 1) + the +x-axis gauge line (ids 100..100+N-1 at
+    radii ``0 .. axis_r_max_factor*a`` in ``n_axis_gauges`` steps, matching the
+    deck) from ``out_dir/_output``. Computes:
+
+      - ``period_s_numerical`` (autocorrelation of the detrended center eta) vs
+        ``period_s_analytic`` (``2*pi*a/sqrt(8 g h0)``);
+      - ``eta_center_max/min/amplitude`` numerical vs analytic;
+      - ``r_shore_min/max`` (the shoreline's closest / furthest wet radius over the
+        run) numerical vs analytic;
+      - ``mass_drift_pct`` -- ring-integrated water volume peak-to-peak drift over
+        the run (a closed-wall conservation proxy; ~0 for perfect conservation);
+      - ``rms_eta_m`` -- RMS of (numerical - analytic) center elevation;
+      - ``series`` -- ``{t, eta_numerical, eta_analytic}`` for the overlay chart.
+
+    Pure numpy; raises ``PostprocessGeoClawError('GEOCLAW_OUTPUT_EMPTY')`` when the
+    center gauge is missing / empty (an un-narratable run)."""
+    import numpy as np
+
+    from trid3nt_contracts.geoclaw_thacker import thacker_eta, thacker_reference
+
+    out = Path(out_dir)
+    base = out / "_output"
+    if not base.is_dir():
+        base = out
+    ref = thacker_reference(a_m, h0_m, amp_A)
+
+    center = base / "gauge00001.txt"
+    if not center.exists():
+        raise PostprocessGeoClawError(
+            "GEOCLAW_OUTPUT_EMPTY",
+            message=f"thacker center gauge not found under {base}",
+            details={"out_dir": str(base)},
+        )
+    ts, _hc, es = _parse_geoclaw_gauge_file(center)
+    if len(ts) < 8:
+        raise PostprocessGeoClawError(
+            "GEOCLAW_OUTPUT_EMPTY",
+            message=f"thacker center gauge has too few samples ({len(ts)})",
+        )
+    t = np.asarray(ts, dtype="float64")
+    eta_num = np.asarray(es, dtype="float64")
+    eta_ana = np.asarray(
+        [thacker_eta(0.0, 0.0, float(tt), a_m, h0_m, amp_A) for tt in ts],
+        dtype="float64",
+    )
+
+    # Period via autocorrelation of the uniformly-resampled, detrended signal:
+    # the first autocorrelation maximum AFTER the correlation first goes negative
+    # is the fundamental period (robust to the wetting/dry-front wiggles a naive
+    # peak-picker trips on).
+    tu = np.linspace(t[0], t[-1], 4000)
+    eu = np.interp(tu, t, eta_num)
+    eu = eu - eu.mean()
+    ac = np.correlate(eu, eu, mode="full")[len(eu) - 1:]
+    dtu = float(tu[1] - tu[0])
+    below = np.nonzero(ac < 0)[0]
+    period_num = float("nan")
+    if below.size:
+        seg = ac[below[0]:]
+        if seg.size:
+            period_num = float((below[0] + int(np.argmax(seg))) * dtu)
+
+    rms_eta = float(np.sqrt(np.mean((eta_num - eta_ana) ** 2)))
+
+    # Shoreline: per sampled time, the largest axis-gauge radius that is wet
+    # (h > dry_tol); its max / min over the run are r_shore_max / r_shore_min.
+    radii = [axis_r_max_factor * a_m * (k / (n_axis_gauges - 1)) for k in range(n_axis_gauges)]
+    axis: dict[float, tuple[np.ndarray, np.ndarray]] = {}
+    for k, r in enumerate(radii):
+        gp = base / f"gauge{100 + k:05d}.txt"
+        if not gp.exists():
+            continue
+        gts, ghs, _ge = _parse_geoclaw_gauge_file(gp)
+        if gts:
+            axis[r] = (np.asarray(gts, "float64"), np.asarray(ghs, "float64"))
+
+    r_shore_max_num = 0.0
+    r_shore_min_num = float(axis_r_max_factor * a_m)
+    if axis:
+        sample_ts = np.linspace(max(t[0], 0.05), t[-1], 200)
+        wet_r = []
+        for tt in sample_ts:
+            best_r = 0.0
+            for r, (gt, gh) in axis.items():
+                idx = int(np.argmin(np.abs(gt - tt)))
+                if float(gh[idx]) > dry_tol_m and r > best_r:
+                    best_r = r
+            wet_r.append(best_r)
+        r_shore_max_num = float(max(wet_r))
+        r_shore_min_num = float(min(wet_r))
+
+    # Mass conservation: total water volume per fort.q frame, integrated over the
+    # LEVEL-1 (base) patch that uniformly covers the whole domain -- sum(max(h,0))
+    # * dx * dy, threshold-free (no dry cutoff) and overlap-free (a single level, so
+    # no AMR double counting). A closed-wall frictionless basin conserves mass, so
+    # the peak-to-peak drift is the honest conservation gate. (A finest-wins
+    # rasterization with a wet threshold would falsely "lose" the thin sheet the
+    # bowl spreads at mid-period; the base-level integral avoids that.) NaN when the
+    # fort.q frames are absent.
+    mass_drift_pct = float("nan")
+    total_volume_m3_first = float("nan")
+    try:
+        frames = _discover_frames(out)
+        vols: list[float] = []
+        for _no, q_path, _t in frames:
+            patches = parse_fort_q_frame(q_path.read_text(errors="replace"))
+            base = [p for p in patches if p.level == min(p2.level for p2 in patches)] if patches else []
+            v = 0.0
+            for p in base:
+                harr = np.asarray(p.h, dtype="float64")
+                v += float(np.nansum(np.clip(harr, 0.0, None))) * abs(p.dx * p.dy)
+            vols.append(v)
+        if vols:
+            total_volume_m3_first = vols[0]
+            vmean = float(np.mean(vols))
+            mass_drift_pct = (
+                (max(vols) - min(vols)) / vmean * 100.0 if vmean > 0 else float("nan")
+            )
+    except Exception as exc:  # noqa: BLE001 -- mass proxy is best-effort
+        logger.warning("compute_thacker_vandv: fort.q mass integral failed: %s", exc)
+
+    def _err(num: float, ana: float) -> float:
+        return abs(num - ana) / abs(ana) * 100.0 if ana else float("nan")
+
+    return {
+        "bowl_a_m": float(a_m),
+        "bowl_h0_m": float(h0_m),
+        "bowl_eta_amp": float(amp_A),
+        "gravity": ref["gravity"],
+        "period_s_numerical": period_num,
+        "period_s_analytic": ref["period_s"],
+        "period_error_pct": _err(period_num, ref["period_s"]),
+        "eta_center_max_numerical_m": float(np.nanmax(eta_num)),
+        "eta_center_max_analytic_m": ref["eta_center_max_m"],
+        "eta_center_min_numerical_m": float(np.nanmin(eta_num)),
+        "eta_center_min_analytic_m": ref["eta_center_min_m"],
+        "eta_center_amplitude_numerical_m": float(np.nanmax(eta_num) - np.nanmin(eta_num)),
+        "eta_center_amplitude_analytic_m": ref["eta_center_amplitude_m"],
+        "eta_amplitude_error_pct": _err(
+            float(np.nanmax(eta_num) - np.nanmin(eta_num)), ref["eta_center_amplitude_m"]
+        ),
+        "r_shore_max_numerical_m": r_shore_max_num,
+        "r_shore_max_analytic_m": ref["r_shore_max_m"],
+        "r_shore_max_error_pct": _err(r_shore_max_num, ref["r_shore_max_m"]),
+        "r_shore_min_numerical_m": r_shore_min_num,
+        "r_shore_min_analytic_m": ref["r_shore_min_m"],
+        "r_shore_min_error_pct": _err(r_shore_min_num, ref["r_shore_min_m"]),
+        "mass_drift_pct": mass_drift_pct,
+        "total_volume_m3": total_volume_m3_first,
+        "rms_eta_m": rms_eta,
+        "series": {
+            "t": [float(x) for x in ts],
+            "eta_numerical": [float(x) for x in eta_num],
+            "eta_analytic": [float(x) for x in eta_ana],
+        },
+    }
+
+
+def build_thacker_validation_chart_spec(
+    vandv: dict[str, Any] | None,
+) -> dict[str, Any] | None:
+    """Vega-Lite overlay: numerical vs analytic center elevation eta(0,t).
+
+    ONE figure layering the GeoClaw center-gauge series over the Thacker closed
+    form -- the visual heart of the V&V. Returns ``None`` when the series is empty."""
+    if not vandv:
+        return None
+    series = vandv.get("series") or {}
+    ts = series.get("t") or []
+    if not ts:
+        return None
+    en_all = series.get("eta_numerical", [])
+    ea_all = series.get("eta_analytic", [])
+    # Downsample so BOTH lines fit well under the chart-payload inline-row cap
+    # (~2000 rows) WITHOUT truncating the time axis: stride to <= 500 samples per
+    # line (1000 rows total), preserving the full [0, tfinal] range.
+    stride = max(1, len(ts) // 500)
+    values = []
+    for i in range(0, len(ts), stride):
+        tt = float(ts[i])
+        if i < len(en_all):
+            values.append({"t_s": tt, "eta_m": float(en_all[i]), "solution": "GeoClaw (numerical)"})
+        if i < len(ea_all):
+            values.append({"t_s": tt, "eta_m": float(ea_all[i]), "solution": "Thacker 1981 (analytic)"})
+    return {
+        "$schema": "https://vega.github.io/schema/vega-lite/v5.json",
+        "data": {"values": values},
+        "mark": {"type": "line"},
+        "encoding": {
+            "x": {"field": "t_s", "type": "quantitative", "title": "time (s)"},
+            "y": {
+                "field": "eta_m",
+                "type": "quantitative",
+                "title": "center surface elevation eta(0,t) [m]",
+            },
+            "color": {
+                "field": "solution",
+                "type": "nominal",
+                "title": None,
+                "scale": {
+                    "domain": ["GeoClaw (numerical)", "Thacker 1981 (analytic)"],
+                    "range": ["#1f5fbf", "#d1495b"],
+                },
+            },
+            "strokeDash": {
+                "field": "solution",
+                "type": "nominal",
+                "scale": {
+                    "domain": ["GeoClaw (numerical)", "Thacker 1981 (analytic)"],
+                    "range": [[1, 0], [6, 3]],
+                },
+                "legend": None,
+            },
+            "tooltip": [
+                {"field": "solution", "type": "nominal"},
+                {"field": "t_s", "type": "quantitative", "format": ".2f"},
+                {"field": "eta_m", "type": "quantitative", "format": ".4f"},
+            ],
+        },
+    }

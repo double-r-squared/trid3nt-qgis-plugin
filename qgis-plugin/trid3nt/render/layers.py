@@ -21,12 +21,28 @@ tree, grouped under "TRID3NT <case>".
           non-TiTiler XYZ template (no ``url=`` param) still lands on the
           old wms/XYZ branch -- an unanticipated shape is never silently
           dropped.
-  vector  inline GeoJSON (the agent's additive ``inline_geojson`` merge) ->
-          temp ``.geojson`` file -> ogr layer. An ``s3://`` uri without inline
-          GeoJSON resolves through the local MinIO http form
-          (``http://127.0.0.1:9000/<bucket>/<key>`` via GDAL ``/vsicurl/``)
-          when mode=local; in remote mode it is skipped with a status line
-          (milestone 2+: presigned fetch).
+  vector  an ``s3://`` uri STREAMS in place through the advertised MinIO/S3
+          http form (``http://<data_base>/<bucket>/<key>`` via GDAL
+          ``/vsicurl/``): FlatGeobuf reads its spatial index ranged, so QGIS
+          fetches only the intersecting features -- NO local copy. The agent's
+          additive ``inline_geojson`` merge is INLINE data (not a remote
+          object), so it stages to the session temp dir as a small ``.geojson``
+          -> ogr layer, labeled as staged.
+
+STREAMING IS THE PATH (remote-streaming paradigm, ADR 0116): a layer registers
+reading IN PLACE from the advertised data endpoint -- COGs and FlatGeobuf via
+``/vsicurl/`` (ranged: overviews/windows for the COG, spatial-index reads for
+the FGB), so a remote client over the tailnet never downloads the project. The
+MinIO objects are plain anonymous HTTP GETs on the tailnet (the trust
+boundary), exactly what the vector/raster paths already issue -- ``/vsicurl/``
+mirrors that with no credentials. A format that GENUINELY cannot stream (MDAL
+netCDF -- QGIS's MDAL provider rejects a ``/vsicurl/`` or plain-URL source and
+demands a local path, proven live 2026-08-04) is the ONE fallback: it stages to
+a SESSION-scoped temp dir (``trid3nt_session_<tag>`` under the platform temp),
+cleaned up on dock disconnect/close, with a stale-session sweep at plugin start
+for crash leftovers (session TTL per NATE's no-silent-downloads policy). Every
+layer note says STREAMED vs STAGED -- nothing ever lands outside the session
+temp, and a staged layer is always labeled.
 
 Dedup: by ``layer_id`` -- session-state is replayed on every emit (A.7
 replace-not-reconcile), so the same rows arrive many times per turn.
@@ -38,25 +54,25 @@ groups) are stamped with per-layer fixed temporal ranges so the built-in
 QGIS Temporal Controller plays them natively. Pure grouping/range math lives
 in ``temporal`` (tested without QGIS); ``stamp_temporal`` here applies it.
 
-Mesh outputs (MDAL phase 1): ``materialize_export`` also loads each of the
-export plan's ``mesh_entries`` (``case_export.plan_export_layers`` -- a
-locally-downloaded SFINCS ``sfincs_map.nc``) as a native
-``QgsMeshLayer(local_path, name, "mdal")``, a SIBLING of the export's
-vector/raster layers (never nested into an animation subgroup -- a mesh
-carries its OWN internal dataset-group time series, it is not a member of
-the flood-depth-COG frame sequence). QGIS's MDAL provider reports an EMPTY
-crs() for a SFINCS quadtree NetCDF (proven live 2026-07-10), so
-``setCrs(QgsCoordinateReferenceSystem(crs_authid))`` is applied explicitly
-from the export entry's ``crs_authid``; when that is unresolved the layer is
-still added with an honest dock note instead of a silent wrong-CRS render.
-The active scalar dataset group is set to the ``maximum_water_depth_timemax``
-group with the LARGEST time suffix (the final cumulative peak-depth field --
-MDAL's own group ORDER is alphabetical, not chronological, so picking "the
-last group" by index would often land on an EARLY, near-zero timestep
-instead) so the mesh renders something meaningful the instant it lands. The
-libhdf5 "File Type" attribute warnings QGIS's MDAL/netCDF backend prints on
-open are benign (proven live) and are not treated as failure -- only
-``layer.isValid()`` gates success.
+Mesh outputs (MDAL, the ONE staged format): a ``layer_type == "mesh"`` event
+(SFINCS ``sfincs_map.nc`` and kin) STAGES to the session temp dir first --
+QGIS's MDAL provider cannot open a ``/vsicurl/`` or plain-URL netCDF (it
+demands a local path; proven live 2026-08-04) -- then loads
+``QgsMeshLayer(local_path, name, "mdal")`` (``_add_mesh``). QGIS's MDAL
+provider reports an EMPTY crs() for a SFINCS quadtree NetCDF (proven live
+2026-07-10), so ``setCrs(QgsCoordinateReferenceSystem(crs_authid))`` is applied
+explicitly from the event's ``crs_authid`` (carried on the row); when that is
+unresolved the layer is still added with an honest dock note instead of a
+silent wrong-CRS render. The active scalar dataset group is set to the
+``maximum_water_depth_timemax`` group with the LARGEST time suffix (the final
+cumulative peak-depth field -- MDAL's own group ORDER is alphabetical, not
+chronological, so picking "the last group" by index would often land on an
+EARLY, near-zero timestep instead), else a tracer/concentration group, so the
+mesh renders something meaningful the instant it lands. The libhdf5 "File Type"
+attribute warnings QGIS's MDAL/netCDF backend prints on open are benign (proven
+live) and are not treated as failure -- only ``layer.isValid()`` gates success.
+The staged ``.nc`` lives under the session temp dir and is swept on
+disconnect/close (session TTL) -- never a persistent download.
 """
 
 from __future__ import annotations
@@ -64,8 +80,11 @@ from __future__ import annotations
 import json
 import os
 import re
+import shutil
 import tempfile
 import urllib.parse
+import urllib.request
+import uuid
 from typing import List, Optional, Tuple
 
 from qgis.core import (
@@ -87,8 +106,8 @@ from qgis.core import (
 from qgis.PyQt.QtCore import QDateTime, Qt
 from qgis.PyQt.QtGui import QColor
 
-from . import ramps, temporal
-from ..plugin_settings import MODE_LOCAL, PluginSettings
+from . import formatting, ramps, temporal
+from ..plugin_settings import PluginSettings
 from ..net.trid3nt_client import LayerEvent, qgis_xyz_uri, s3_to_http
 
 _SAFE_NAME = re.compile(r"[^A-Za-z0-9_.-]+")
@@ -127,18 +146,84 @@ BASEMAP_PRESETS = {
 }
 _ALL_BASEMAP_LAYER_NAMES = [v[0] for v in BASEMAP_PRESETS.values()]
 
-#: Prefix shared by every TRID3NT-owned layer-tree group: the live per-case
-#: group ("TRID3NT <case>", ``LayerMaterializer.set_case``) AND the "Open
-#: case in QGIS" export group ("TRID3NT export <case>",
-#: ``materialize_export``). ITEM A (case-switch clear) matches on this
-#: prefix so BOTH kinds are swept on a case-open rebind. The OpenStreetMap
-#: basemap is added directly at layerTreeRoot (never inside a group -- see
-#: ``ensure_basemap``) so it never matches this prefix and is never touched.
+#: Prefix of every TRID3NT-owned layer-tree group -- the live per-case group
+#: ("TRID3NT <case>", ``LayerMaterializer.set_case``). ITEM A (case-switch
+#: clear) matches on this prefix so every such group is swept on a case-open
+#: rebind (a legacy "TRID3NT export <case>" group from a pre-streaming session
+#: still matches and is cleaned too). The OpenStreetMap basemap is added
+#: directly at layerTreeRoot (never inside a group -- see ``ensure_basemap``)
+#: so it never matches this prefix and is never touched.
 _GROUP_PREFIX = "TRID3NT "
 
 
 def _safe_filename(name: str) -> str:
     return _SAFE_NAME.sub("_", name).strip("_") or "layer"
+
+
+# -- session-scoped staging temp dir (remote-streaming TTL, ADR 0116) -------- #
+#
+# Streaming is the path; the ONE fallback (a format MDAL cannot open over
+# /vsicurl -- netCDF meshes) stages a local copy. Per NATE's no-silent-
+# downloads / session-TTL policy every staged byte lives under a per-SESSION
+# subdir (``trid3nt_session_<tag>``) beneath the platform temp, is cleaned up
+# when the dock disconnects/closes, and any crash leftover is swept at plugin
+# start. A dir carries its owner PID so the start sweep can tell a crash
+# leftover (dead PID) from a CONCURRENT live QGIS instance (live PID -- never
+# swept), so nothing a running session staged is ever deleted out from under it.
+
+_SESSION_DIR_PREFIX = "trid3nt_session_"
+_OWNER_PID_FILE = ".owner_pid"
+
+
+def _pid_alive(pid: int) -> bool:
+    """True when ``pid`` names a live process. ``os.kill(pid, 0)`` is the POSIX
+    liveness probe; any error other than "no such process" (permission, or a
+    platform where signal 0 is unsupported) is treated as ALIVE so the stale
+    sweep never deletes a dir it cannot prove is dead."""
+    try:
+        os.kill(pid, 0)
+    except ProcessLookupError:
+        return False
+    except Exception:  # noqa: BLE001 -- permission / unsupported -> assume alive
+        return True
+    return True
+
+
+def sweep_stale_session_dirs() -> int:
+    """Remove crash-leftover session temp dirs at plugin start; return the count
+    swept. A ``trid3nt_session_*`` dir is removed only when its owner PID is
+    DEAD (or unreadable) -- a dir owned by a live process (a concurrent QGIS
+    instance, or this one) is left alone. Best-effort: never raises."""
+    swept = 0
+    try:
+        root = tempfile.gettempdir()
+        for name in os.listdir(root):
+            if not name.startswith(_SESSION_DIR_PREFIX):
+                continue
+            path = os.path.join(root, name)
+            if not os.path.isdir(path):
+                continue
+            pid = None
+            try:
+                with open(os.path.join(path, _OWNER_PID_FILE), encoding="utf-8") as f:
+                    pid = int(f.read().strip())
+            except (OSError, ValueError):
+                pid = None
+            if pid is not None and _pid_alive(pid):
+                continue  # a live session owns it -- never touch
+            shutil.rmtree(path, ignore_errors=True)
+            swept += 1
+    except Exception:  # noqa: BLE001 -- honest no-op, never a crash on start
+        return swept
+    return swept
+
+
+def _streamed_note(kind: str, extra: str = "") -> str:
+    """The STREAMED label (no local copy) -- the honesty-floor marker every
+    /vsicurl layer carries so a remote-streamed layer is never confused with a
+    downloaded one."""
+    tail = f", {extra}" if extra else ""
+    return f"{kind} streamed via /vsicurl (no local copy{tail})"
 
 
 # -- basemap + canvas zoom (the "canvas is just white" fix) ------------------ #
@@ -182,6 +267,17 @@ def zoom_to_extent(canvas, rect: Optional["QgsRectangle"], margin: float = 0.1) 
     """
     try:
         if rect is None or rect.isEmpty():
+            return False
+        # A NaN/inf bound DEFEATS ``isEmpty()`` (every NaN comparison is False),
+        # so a rectangle built from a layer whose extent is non-finite (a mesh
+        # with an all-nodata scalar, a broken CRS transform) slips through here.
+        # Feeding it to the native ``scale()`` / ``setExtent()`` propagates the
+        # non-finite double into the canvas map-to-pixel transform -- the same
+        # class of native numeric hazard the formatting clamps guard. Refuse it.
+        if not all(
+            formatting.is_finite_number(b)
+            for b in (rect.xMinimum(), rect.yMinimum(), rect.xMaximum(), rect.yMaximum())
+        ):
             return False
         scaled = QgsRectangle(rect)
         scaled.scale(1.0 + margin)
@@ -455,6 +551,71 @@ def _select_tracer_dataset_group(layer) -> bool:
     return False
 
 
+def _clamp_mesh_scalar_classification(layer) -> Optional[str]:
+    """Pin EVERY scalar dataset group's colour classification to a FINITE range.
+
+    The mesh analogue of the raster ``sane_range`` guard, and the reason it is
+    load-bearing on arm64: an MDAL scalar group whose statistics are degenerate
+    -- an all-nodata timestep, an all-dry SFINCS depth field, a group the
+    temporal scrubber steps onto that carries no wet cell -- reports a NaN/inf
+    (or zero-span) ``minimum()/maximum()``. Left to itself QGIS builds the mesh
+    colour-ramp legend from exactly that range, and the SAME non-finite ->
+    INT_MAX precision saturation that crashes the raster path in
+    ``qt_doubleToAscii`` fires here (the 0.3.8 fix never covered meshes).
+
+    We clamp ALL groups, not merely the initially-active one. The active group
+    is set once at add time, but the user drives the mesh live: switching the
+    active scalar group from the layer styling panel hands that group's
+    classification straight to the native renderer, so a single degenerate
+    NON-active group is a latent mid-session crash (the SFINCS/TELEMAC meshes
+    here carry many groups -- depth, water level, velocity magnitude, tracer --
+    and any one can be all-dry / all-nodata). Pinning a user-set classification
+    on every group additionally stops QGIS re-deriving a per-timestep range
+    while the Temporal Controller scrubs, so an empty timestep inside an
+    otherwise-wet group cannot regenerate a NaN range either. Each group's
+    extremes route through ``formatting.sane_range`` and are written back with
+    ``setClassificationMinimumMaximum`` BEFORE the layer reaches the canvas.
+    Returns an honest substitution note counting the degenerate groups, or
+    ``None`` when every range was already sane / there is nothing to classify.
+    Never raises -- a defensive no-op beats a lost mesh.
+    """
+    try:
+        settings = layer.rendererSettings()
+        group_count = int(layer.datasetGroupCount())
+    except Exception:  # noqa: BLE001 -- classification is best-effort, never fatal
+        return None
+    touched = 0
+    degenerate = 0
+    for group_index in range(group_count):
+        try:
+            scalar = settings.scalarSettings(group_index)
+            if scalar is None:
+                continue
+            meta = layer.datasetGroupMetadata(QgsMeshDatasetIndex(group_index, 0))
+            raw_min, raw_max = meta.minimum(), meta.maximum()
+            vmin, vmax = formatting.sane_range(raw_min, raw_max)
+            scalar.setClassificationMinimumMaximum(vmin, vmax)
+            settings.setScalarSettings(group_index, scalar)
+            touched += 1
+            if not formatting.is_sane_range(raw_min, raw_max):
+                degenerate += 1
+        except Exception:  # noqa: BLE001 -- a bad group is skipped, not fatal
+            continue
+    if touched == 0:
+        return None
+    try:
+        layer.setRendererSettings(settings)
+    except Exception:  # noqa: BLE001 -- never fatal
+        return None
+    if degenerate == 0:
+        return None
+    plural = "s" if degenerate != 1 else ""
+    return (
+        f" -- {degenerate} degenerate scalar range{plural} clamped to a "
+        "finite colour scale (native legend crash-guard)"
+    )
+
+
 # -- QGIS-native raster rendering (the TiTiler -> QGIS swap) ----------------- #
 
 
@@ -518,6 +679,11 @@ def _color_ramp_items(
                 t, color = float(entry[0]), str(entry[1])
             except (TypeError, ValueError, IndexError):
                 continue
+            # A non-finite offset survives ``min/max`` (NaN comparisons are all
+            # False) and would ride into a native ``ColorRampItem`` value; drop
+            # it rather than let it reach the native shader.
+            if not formatting.is_finite_number(t):
+                continue
             parsed.append((min(1.0, max(0.0, t)), color))
         stops = sorted(parsed) or None
         if stops is None:
@@ -539,7 +705,7 @@ def _color_ramp_items(
                             QgsColorRampShader.ColorRampItem(
                                 vmin + t * span,
                                 ramp.color(t),
-                                f"{vmin + t * span:g}",
+                                formatting.format_number(vmin + t * span),
                             )
                         )
                     return items, None
@@ -557,7 +723,8 @@ def _color_ramp_items(
     span = vmax - vmin
     items = [
         QgsColorRampShader.ColorRampItem(
-            vmin + t * span, QColor(color), f"{vmin + t * span:g}"
+            vmin + t * span, QColor(color),
+            formatting.format_number(vmin + t * span),
         )
         for t, color in stops
     ]
@@ -565,7 +732,15 @@ def _color_ramp_items(
 
 
 def _build_pseudocolor_renderer(layer, colormap, vmin: float, vmax: float):
-    """``(QgsSingleBandPseudoColorRenderer, note)`` -- Interpolated shader."""
+    """``(QgsSingleBandPseudoColorRenderer, note)`` -- Interpolated shader.
+
+    The SINGLE native seam that feeds ``QgsColorRampShader`` +
+    ``setClassificationMin/Max``: a non-finite (NaN/inf) or degenerate
+    (``vmax <= vmin``) range is coerced to a sane default HERE, so no caller
+    can hand QGIS a range whose legend-label precision computes to a
+    non-finite double (the arm64 INT_MAX -> ``qt_doubleToAscii`` crash).
+    """
+    vmin, vmax = formatting.sane_range(vmin, vmax)
     items, note = _color_ramp_items(colormap, vmin, vmax)
     shader_fn = QgsColorRampShader(vmin, vmax)
     try:
@@ -625,9 +800,9 @@ def _categorical_fallback_stops(classes) -> Tuple[Optional[list], Optional[float
         if not isinstance(color, str) or not color:
             continue
         value = cls.get("value")
-        if not isinstance(value, (int, float)):
+        if not formatting.is_finite_number(value):
             lo, hi = cls.get("value_min"), cls.get("value_max")
-            if isinstance(lo, (int, float)) and isinstance(hi, (int, float)):
+            if formatting.is_finite_number(lo) and formatting.is_finite_number(hi):
                 value = (float(lo) + float(hi)) / 2.0
             else:
                 continue
@@ -697,12 +872,16 @@ def _apply_raster_renderer(
             # GDAL's default renderer (grayscale autoscale / native RGB) IS
             # the correct render, exactly as TiTiler passed these through.
             return None
-        if vmin is None or vmax is None or float(vmax) <= float(vmin):
-            note_range = " (no usable range on the legend -- 0..1 assumed)"
-            vmin, vmax = 0.0, 1.0
-        else:
+        # A finiteness-aware guard: a NaN/inf bound DEFEATS a plain
+        # ``vmax <= vmin`` test (every NaN comparison is False), so it would
+        # otherwise reach the native color-ramp legend and crash Qt. Route the
+        # range through ``sane_range`` and note the substitution honestly.
+        if formatting.is_sane_range(vmin, vmax):
             note_range = ""
             vmin, vmax = float(vmin), float(vmax)
+        else:
+            note_range = " (no usable range on the legend -- 0..1 assumed)"
+            vmin, vmax = formatting.sane_range(vmin, vmax)
         renderer, note = _build_pseudocolor_renderer(layer, colormap, vmin, vmax)
         layer.setRenderer(renderer)
         if note_range:
@@ -728,13 +907,17 @@ class LayerMaterializer:
         self.data_base_override: Optional[str] = None
         self._added_ids: set[str] = set()
         self._group_name: Optional[str] = None
+        #: Per-session staging dir tag (ADR 0116). One materializer = one dock
+        #: connection = one session; its ``trid3nt_session_<tag>`` subdir holds
+        #: every staged (non-streamable) artifact and is swept on close.
+        self._session_tag: str = uuid.uuid4().hex[:12]
         self._temp_dir: Optional[str] = None
         self._case_rasters: List = []  # QgsRasterLayer refs, this case
         self._stamped_counts: dict = {}  # frame-group stem -> stamped size
         self._grouped_counts: dict = {}  # frame-group stem -> animated size (ITEM C)
-        #: Layers added by the MOST RECENT ``materialize``/``materialize_export``
-        #: call (reset at the top of each) -- lets the dock zoom to "what just
-        #: landed" without re-deriving it from notes strings.
+        #: Layers added by the MOST RECENT ``materialize`` call (reset at its
+        #: top) -- lets the dock zoom to "what just landed" without re-deriving
+        #: it from notes strings.
         self.last_added_layers: List = []
 
     # -- lifecycle ------------------------------------------------------------- #
@@ -796,9 +979,32 @@ class LayerMaterializer:
             pass
 
     def _ensure_temp_dir(self) -> str:
+        """The SESSION staging dir (``trid3nt_session_<tag>`` under the platform
+        temp), created on first use with an owner-PID marker so a later plugin
+        start can distinguish this dir's crash leftover from a concurrent live
+        instance's. Recreated if it was swept underneath us."""
         if self._temp_dir is None or not os.path.isdir(self._temp_dir):
-            self._temp_dir = tempfile.mkdtemp(prefix="trid3nt_qgis_")
+            path = os.path.join(
+                tempfile.gettempdir(), f"{_SESSION_DIR_PREFIX}{self._session_tag}"
+            )
+            os.makedirs(path, exist_ok=True)
+            try:
+                with open(os.path.join(path, _OWNER_PID_FILE), "w", encoding="utf-8") as f:
+                    f.write(str(os.getpid()))
+            except OSError:
+                pass  # marker is best-effort; staging still works without it
+            self._temp_dir = path
         return self._temp_dir
+
+    def cleanup_session(self) -> None:
+        """Remove this session's staging dir and everything staged in it (the
+        session-TTL cleanup, ADR 0116): called on dock disconnect and on dock
+        close/plugin unload. Best-effort -- a cleanup failure is never a crash,
+        and any residue is caught by ``sweep_stale_session_dirs`` next start."""
+        path = self._temp_dir
+        self._temp_dir = None
+        if path and os.path.isdir(path):
+            shutil.rmtree(path, ignore_errors=True)
 
     def _ensure_group(self):
         root = QgsProject.instance().layerTreeRoot()
@@ -870,6 +1076,8 @@ class LayerMaterializer:
             return self._add_raster(event, frame_membership or {})
         if event.layer_type in ("vector", "geojson"):
             return self._add_vector(event)
+        if event.layer_type in ("mesh", "ugrid"):
+            return self._add_mesh(event)
         return f"layer '{event.name}': type '{event.layer_type}' not supported yet -- skipped"
 
     def _add_raster(self, event: LayerEvent, frame_membership: dict) -> str:
@@ -890,7 +1098,7 @@ class LayerMaterializer:
             None,
             None,
         )
-        source_label = "COG via GDAL"
+        source_label = _streamed_note("COG raster")
         if (event.uri or "").startswith("s3://"):
             cog_uri = event.uri
         else:
@@ -898,7 +1106,9 @@ class LayerMaterializer:
             if cog_uri is None and event.wms_url:
                 cog_uri, legacy_style = _unwrap_legacy_template(event.wms_url)
             if cog_uri is not None:
-                source_label = "COG via GDAL, legacy tile template unwrapped"
+                source_label = _streamed_note(
+                    "COG raster", "legacy tile template unwrapped"
+                )
 
         if cog_uri is None:
             # Neither a raw s3 COG nor a TiTiler wrap. A plain XYZ template
@@ -920,11 +1130,6 @@ class LayerMaterializer:
             return (
                 f"raster '{event.name}': tile template wraps a non-s3 uri "
                 f"({cog_uri}) -- skipped"
-            )
-        if self._settings is not None and self._settings.mode != MODE_LOCAL:
-            return (
-                f"raster '{event.name}': s3 uri in remote mode -- skipped "
-                "(no presigned fetch yet)"
             )
         http = s3_to_http(cog_uri, self._effective_data_base())
         if not http:
@@ -968,169 +1173,86 @@ class LayerMaterializer:
             layer = QgsVectorLayer(path, event.name, "ogr")
             if not layer.isValid():
                 return f"vector '{event.name}': GeoJSON did not load -- skipped"
-            return self._add_to_group(layer, event, f"vector '{event.name}' added (inline GeoJSON)")
+            return self._add_to_group(
+                layer,
+                event,
+                f"vector '{event.name}' added (staged to session temp, "
+                "inline GeoJSON)",
+            )
 
         if event.uri.startswith("s3://"):
-            if self._settings.mode != MODE_LOCAL:
-                return (
-                    f"vector '{event.name}': s3 uri in remote mode -- skipped "
-                    "(no presigned fetch yet)"
-                )
             http = s3_to_http(event.uri, self._effective_data_base())
             if not http:
                 return f"vector '{event.name}': unparseable s3 uri -- skipped"
             layer = QgsVectorLayer(f"/vsicurl/{http}", event.name, "ogr")
             if not layer.isValid():
-                return f"vector '{event.name}': MinIO fetch failed ({http}) -- skipped"
-            return self._add_to_group(layer, event, f"vector '{event.name}' added (MinIO)")
+                return f"vector '{event.name}': stream failed ({http}) -- skipped"
+            return self._add_to_group(
+                layer, event, f"vector '{event.name}' added ({_streamed_note('vector')})"
+            )
 
         return f"vector '{event.name}': no inline GeoJSON and non-s3 uri -- skipped"
 
-    # -- exported-case materialization (milestone 2, Open case in QGIS) -------- #
+    def _stage_s3_to_session(self, s3_uri: str, filename: str) -> Optional[str]:
+        """Download an ``s3://`` object to the SESSION temp dir and return the
+        local path (the ONE fallback for a format that cannot stream). The
+        object is a plain anonymous HTTP GET on the tailnet (the same trust
+        model /vsicurl uses). Returns None on any failure -- the caller turns
+        that into an honest skip note, never a crash. The staged file lives
+        under the session dir and is swept on disconnect/close (session TTL)."""
+        http = s3_to_http(s3_uri, self._effective_data_base())
+        if not http:
+            return None
+        dest = os.path.join(self._ensure_temp_dir(), filename)
+        try:
+            with urllib.request.urlopen(http, timeout=300.0) as resp:
+                data = resp.read()
+            with open(dest, "wb") as f:
+                f.write(data)
+        except Exception:  # noqa: BLE001 -- honest None, caller notes the skip
+            return None
+        return dest
 
-    def materialize_export(self, plan, group_label: str) -> List[str]:
-        """Add an exported case's layers (``case_export.ExportPlan``) to the
-        CURRENT project under their own group.
-
-        Documented decision (see ``case_export``): layers are ADDED, the
-        returned ``project.qgz`` is never opened via ``QgsProject.read()`` --
-        that would REPLACE the user's open project (unsaved work + the live
-        chat-session group would be lost). Never raises; every skip/failure
-        is an honest note.
-        """
-        notes: List[str] = []
-        self.last_added_layers = []
-        root = QgsProject.instance().layerTreeRoot()
-        group_name = f"TRID3NT export {group_label}"
-        group = root.findGroup(group_name)
-        if group is None:
-            group = root.insertGroup(0, group_name)
-
-        def _add(layer, label: str, destination=None) -> None:
-            if not layer.isValid():
-                notes.append(f"export layer '{label}': QGIS rejected it -- skipped")
-                return
-            QgsProject.instance().addMapLayer(layer, False)
-            (destination or group).insertLayer(0, layer)
-            self.last_added_layers.append(layer)
-            notes.append(f"export layer '{label}' added")
-
-        for name in plan.vector_layers:
-            _add(
-                QgsVectorLayer(f"{plan.gpkg_path}|layername={name}", name, "ogr"),
-                name,
-            )
-        export_rasters: List = []
-        raster_styles = getattr(plan, "raster_styles", None) or {}
-        # ITEM C: decide frame-sequence membership UP FRONT from every raster
-        # stem in this export (the whole batch lands in one call, so unlike
-        # the live-stream path there is no "existing + new" split -- see the
-        # animation-grouping module docstring for why placement happens at
-        # construction time rather than a post-hoc relocation).
-        stems = [os.path.splitext(os.path.basename(p))[0] for p in plan.raster_paths]
-        frame_membership = _frame_membership(stems)
-        for path in plan.raster_paths:
-            stem = os.path.splitext(os.path.basename(path))[0]
-            layer = QgsRasterLayer(path, stem, "gdal")
-            if layer.isValid():
-                export_rasters.append(layer)
-            destination = None
-            membership = frame_membership.get(stem)
-            if membership is not None:
-                anim_stem, count = membership
-                destination = _ensure_animation_subgroup(group, anim_stem, count)
-            _add(layer, stem, destination=destination)
-            # Sidecar .qml (the export tool's TiTiler-derived pseudocolor
-            # ramp): without it a GeoTIFF renders default grayscale --
-            # near-black flood frames. loadNamedStyle is Qt5/Qt6-neutral;
-            # a style failure is an honest note, never a lost layer.
-            qml = raster_styles.get(path)
-            if qml and layer.isValid():
-                notes.append(self._apply_named_style(layer, stem, qml))
-        # Frame-sequence rasters (Flood_depth_step_1..N GeoTIFFs) landed in
-        # their animation subgroups above; stamp the native Temporal
-        # Controller ranges and announce the grouping (fresh throwaway dedup
-        # dict -- the whole export lands in one call, unlike the incremental
-        # live stream, so every recognized sequence is "new" every time).
-        notes.extend(stamp_temporal(export_rasters))
-        notes.extend(_animation_group_notes(export_rasters, {}))
-
-        # Mesh outputs (MDAL phase 1): SIBLINGS of the export's vector/raster
-        # layers, never nested into an animation subgroup -- a mesh carries
-        # its OWN internal dataset-group time series, it is not a member of
-        # the flood-depth-COG frame sequence. Entries with no local_path
-        # (remote mode, or a failed download) are skipped here WITHOUT a
-        # duplicate note -- case_export.plan_export_layers already recorded
-        # the honest reason in plan.notes (extended below).
-        loaded_mesh_count = 0
-        for entry in getattr(plan, "mesh_entries", None) or []:
-            local_path = entry.get("local_path")
-            name = entry.get("name") or "SFINCS mesh"
+    def _add_mesh(self, event: LayerEvent) -> str:
+        """Native MDAL mesh (SFINCS ``sfincs_map.nc`` and kin) -- the ONE
+        STAGED format. QGIS's MDAL provider cannot open a ``/vsicurl/`` or
+        plain-URL netCDF (it demands a local path; proven live 2026-08-04), so
+        the object stages to the session temp dir first, then loads as
+        ``QgsMeshLayer(local_path, name, "mdal")``. CRS comes from the row's
+        ``crs_authid`` (MDAL reports an empty crs() for a SFINCS quadtree grid);
+        the active scalar group is the cumulative peak-depth field, else a
+        tracer group. Every outcome is an honest note; never raises."""
+        uri = event.uri or ""
+        if uri.startswith("s3://"):
+            fname = f"{_safe_filename(event.name)}_{event.layer_id[:8]}.nc"
+            local_path = self._stage_s3_to_session(uri, fname)
             if not local_path:
-                continue
-            layer = QgsMeshLayer(local_path, name, "mdal")
-            if not layer.isValid():
-                notes.append(f"mesh '{name}': QGIS/MDAL rejected the file -- skipped")
-                continue
-            crs_authid = entry.get("crs_authid")
-            crs = QgsCoordinateReferenceSystem(crs_authid) if crs_authid else None
-            if crs is not None and crs.isValid():
+                return f"mesh '{event.name}': could not stage {uri} -- skipped"
+        elif os.path.isfile(uri):
+            local_path = uri  # already-local mesh path (test/headless drive)
+        else:
+            return f"mesh '{event.name}': non-s3 / unreadable uri ({uri}) -- skipped"
+        layer = QgsMeshLayer(local_path, event.name, "mdal")
+        if not layer.isValid():
+            return f"mesh '{event.name}': QGIS/MDAL rejected the file -- skipped"
+        note = f"mesh '{event.name}' added (staged to session temp; MDAL netCDF)"
+        crs_authid = (event.raw or {}).get("crs_authid")
+        if isinstance(crs_authid, str) and crs_authid:
+            crs = QgsCoordinateReferenceSystem(crs_authid)
+            if crs.isValid():
                 layer.setCrs(crs)
             else:
-                notes.append(f"{name}: mesh CRS unknown - set manually via layer properties")
-            # Choose the DEFAULT active scalar group: SFINCS cumulative peak-depth
-            # first (flood meshes), else a tracer/concentration group (TELEMAC dye
-            # meshes -- MDAL would otherwise show VELOCITY U, not the plume).
-            if not _select_peak_depth_dataset_group(layer):
-                _select_tracer_dataset_group(layer)
-            QgsProject.instance().addMapLayer(layer, False)
-            group.insertLayer(0, layer)
-            self.last_added_layers.append(layer)
-            loaded_mesh_count += 1
-            notes.append(
-                f"{name}: native mesh loaded - dataset groups selectable in "
-                "Layer Properties; install the Crayfish plugin for "
-                "time-series plots and mesh export."
-            )
+                note += " -- CRS unresolved, set manually via layer properties"
+        else:
+            note += " -- CRS unknown, set manually via layer properties"
+        if not _select_peak_depth_dataset_group(layer):
+            _select_tracer_dataset_group(layer)
+        clamp_note = _clamp_mesh_scalar_classification(layer)
+        if clamp_note:
+            note += clamp_note
+        return self._add_to_group(layer, event, note)
 
-        notes.extend(plan.notes)
-        if not plan.vector_layers and not plan.raster_paths and loaded_mesh_count == 0:
-            notes.append(
-                "export produced no loadable layers -- nothing added "
-                f"(status={plan.status or 'unknown'})"
-            )
-        return notes
-
-    @staticmethod
-    def _apply_named_style(layer, label: str, qml_path: str) -> str:
-        """Apply a sidecar .qml to an added layer; returns an honest note.
-
-        ``QgsMapLayer.loadNamedStyle`` returns ``(message, ok)`` on both the
-        Qt5 and Qt6 PyQGIS bindings; handled defensively in case a binding
-        flattens it. Never raises -- a bad style must not lose the layer.
-        """
-        try:
-            result = layer.loadNamedStyle(qml_path)
-            if isinstance(result, (tuple, list)) and len(result) >= 2:
-                message, ok = str(result[0]), bool(result[1])
-            else:
-                message, ok = "", bool(result)
-            if not ok:
-                return (
-                    f"style for '{label}' did not apply"
-                    + (f" ({message})" if message else "")
-                    + " -- layer kept with default rendering"
-                )
-            try:
-                layer.triggerRepaint()
-            except (AttributeError, RuntimeError):
-                pass
-            return f"style applied to '{label}' (web colormap)"
-        except Exception as exc:  # noqa: BLE001 -- honest note, never a crash
-            return (
-                f"style for '{label}' failed ({type(exc).__name__}: {exc}) "
-                "-- layer kept with default rendering"
-            )
+    # -- project insertion helper -------------------------------------------- #
 
     def _add_to_group(self, layer, event: LayerEvent, note: str, group=None) -> str:
         """Add ``layer`` to the project + insert its tree node into
@@ -1139,12 +1261,25 @@ class LayerMaterializer:
         animation subgroup at construction time -- see the module docstring
         above the animation-grouping helpers for why members are never
         relocated into a subgroup after the fact."""
-        if event.opacity is not None:
+        if formatting.is_finite_number(event.opacity):
+            # ``max(0, min(1, nan))`` returns NaN (NaN defeats both bounds), so
+            # guard finiteness BEFORE the native ``setOpacity`` rather than rely
+            # on the clamp -- the boundary sweep already drops a non-finite
+            # opacity, this is the belt-and-braces at the native seam.
             try:
                 layer.setOpacity(max(0.0, min(1.0, float(event.opacity))))
             except (AttributeError, TypeError, ValueError):
                 pass
         QgsProject.instance().addMapLayer(layer, False)
+        # Charts-window 2026-08-04: stamp the source uri + layer id so the
+        # ChartsWindow "Locate on map" affordance can match a chart's
+        # ``source_layer_uri`` back to the loaded layer it was computed from.
+        try:
+            if event.uri:
+                layer.setCustomProperty("trid3nt/source_uri", event.uri)
+            layer.setCustomProperty("trid3nt/layer_id", event.layer_id)
+        except Exception:  # noqa: BLE001 -- stamping is best-effort metadata
+            pass
         target = group if group is not None else self._ensure_group()
         node = target.insertLayer(0, layer)
         if node is not None and not event.visible:
@@ -1187,10 +1322,3 @@ class LayerMaterializer:
         the canvas-zoom fallback when a case-open carries no bbox."""
         vectors = [l for l in self.last_added_layers if isinstance(l, QgsVectorLayer)]
         return self.combined_extent(dest_crs, vectors)
-
-    def last_added_export_extent(self, dest_crs) -> Optional["QgsRectangle"]:
-        """Combined extent of ALL layers added by the most recent
-        ``materialize_export()`` call -- exported GeoTIFFs carry real GDAL
-        extents (unlike the live XYZ tile layers), so rasters count here
-        too."""
-        return self.combined_extent(dest_crs, self.last_added_layers)

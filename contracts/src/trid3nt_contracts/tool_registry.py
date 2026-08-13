@@ -41,6 +41,8 @@ __all__ = [
     "TTLClass",
     "TTL_CLASSES",
     "EngineTier",
+    "ResolutionConstraintSource",
+    "ResolutionSpec",
     "AtomicToolMetadata",
 ]
 
@@ -97,6 +99,149 @@ TTL_CLASSES: tuple[str, ...] = (
 #: in-process ``TOOL_REGISTRY[name].fn`` call from another tool. Used for an absorbed
 #: seam that a public tool resolves internally (fetch_copernicus_dem <- fetch_dem).
 EngineTier = Literal["general", "door", "template", "catalog", "internal"]
+
+
+#: WHO owns a resolution bound (ADR 0225, the two-layer-truth architecture).
+#: ``"solver"`` - the bound is a MODEL constraint (a mesh-generator's edge-length
+#: window, a node-budget ceiling, an output-raster cap); it lives with the template.
+#: ``"data"`` - the bound is a DATA-native fact (a source's finest cell, a tier
+#: floor); it lives with the fetcher. The gate card COMPOSES both layers.
+ResolutionConstraintSource = Literal["solver", "data"]
+
+
+class ResolutionSpec(GraceModel):
+    """A DECLARED valid-resolution range for one granularity-bearing tool param.
+
+    NATE's clamp ruling (ADR 0225): silent coercion to an undeclared resolution is
+    BANNED. A tool DECLARES the resolutions it can actually run (min/max or a discrete
+    option set) so the user picks from REALITY; an out-of-range ask gets the declared
+    range QUOTED BACK (typed / gated), never a silent snap. This is the machine-readable
+    carrier of that declaration - one per resolution-class parameter. It is read by
+    (a) the tool docstring (via :meth:`docstring_line`), (b) the payload / input-review
+    gate card (via :meth:`quote_back`), and (c) the self-enforcing registry sweep test.
+
+    Fields (the kickoff shape ``{min, max, native_hint, step/options, unit,
+    constraint_source, rationale}``):
+
+    - ``param`` - the tool argument this constrains (e.g. ``"resolution_m"``,
+      ``"min_edge_length_m"``). The registry sweep matches specs to params by this name.
+    - ``unit`` - the value unit (``"m"`` default; ``"px"`` for an output-pixel cap,
+      ``"arcsec"`` for a lat/long-native source tier).
+    - ``min_value`` / ``max_value`` - the FINEST (smallest) and COARSEST (largest)
+      declared values, INCLUSIVE. ``None`` on either side declares that side UNBOUNDED
+      (e.g. no coarse ceiling). At least one bound, or ``options``, must be present.
+    - ``native_hint`` - a human string for the DATA-native / default resolution the
+      card quotes alongside the range (e.g. ``"CUDEM 1/9\" ~3 m nearshore; ETOPO ~450 m
+      offshore"``, ``"3DEP 10 m"``). ``None`` when there is no meaningful native.
+    - ``options`` - a DISCRETE valid-value set (mutually exclusive with a continuous
+      min/max window); used when only specific cells are supported.
+    - ``step`` - a discretization step within a continuous window, when the tool snaps
+      to a grid of allowed values (informational; ``None`` = continuous).
+    - ``constraint_source`` - ``"solver"`` or ``"data"`` (the two-layer-truth owner).
+    - ``rationale`` - WHY these are the bounds, evidence-based (the node-budget solve
+      time, the mesh-generator's accepted window, the source's native cell). Required so
+      a future reader/auditor can check the bound is real, not a guess.
+    """
+
+    param: str = Field(min_length=1)
+    unit: str = "m"
+    min_value: float | None = None
+    max_value: float | None = None
+    native_hint: str | None = None
+    options: tuple[float, ...] | None = None
+    step: float | None = None
+    constraint_source: ResolutionConstraintSource
+    rationale: str = Field(min_length=1)
+
+    @model_validator(mode="after")
+    def _validate_bounds(self) -> ResolutionSpec:
+        """A spec must declare a real constraint: continuous window OR discrete options.
+
+        Unbounded is a legitimate declaration (both bounds ``None`` + no options) ONLY
+        when the ``rationale`` explicitly says so, so an empty spec cannot masquerade as
+        a forgotten one. A discrete ``options`` set and a continuous ``min/max`` window
+        are mutually exclusive - pick one. When both bounds are set, ``min <= max``.
+        """
+        has_window = self.min_value is not None or self.max_value is not None
+        has_options = bool(self.options)
+        if has_window and has_options:
+            raise ValueError(
+                "ResolutionSpec: declare a continuous min/max window OR a discrete "
+                "options set, not both."
+            )
+        if (
+            self.min_value is not None
+            and self.max_value is not None
+            and self.min_value > self.max_value
+        ):
+            raise ValueError(
+                f"ResolutionSpec: min_value {self.min_value} > max_value "
+                f"{self.max_value} for param {self.param!r}."
+            )
+        if not has_window and not has_options and "unbounded" not in self.rationale.lower():
+            raise ValueError(
+                "ResolutionSpec: no min/max and no options declares an UNBOUNDED range; "
+                "the rationale must say so (contain 'unbounded') so it cannot be "
+                "confused with a forgotten declaration."
+            )
+        return self
+
+    def contains(self, value: float) -> bool:
+        """True when ``value`` is inside the declared range (inclusive) / option set."""
+        if self.options is not None:
+            return any(abs(value - o) <= 1e-9 for o in self.options)
+        if self.min_value is not None and value < self.min_value:
+            return False
+        if self.max_value is not None and value > self.max_value:
+            return False
+        return True
+
+    def range_phrase(self) -> str:
+        """Human phrase for the supported range, e.g. ``"20-200 m"`` / ``">=10 m"``."""
+        if self.options is not None:
+            return f"one of {', '.join(f'{o:g}' for o in self.options)} {self.unit}"
+        lo, hi = self.min_value, self.max_value
+        if lo is not None and hi is not None:
+            return f"{lo:g}-{hi:g} {self.unit}"
+        if lo is not None:
+            return f">={lo:g} {self.unit}"
+        if hi is not None:
+            return f"<={hi:g} {self.unit}"
+        return f"unbounded ({self.unit})"
+
+    def docstring_line(self) -> str:
+        """One-line declaration for the tool docstring (consistent across tools).
+
+        Front-loads the range so the LLM routes a request to a valid value; names the
+        constraint owner + native hint so an out-of-range ask is self-explanatory.
+        """
+        owner = "mesh/solver" if self.constraint_source == "solver" else "data-native"
+        native = f"; data native {self.native_hint}" if self.native_hint else ""
+        return (
+            f"{self.param}: supported {self.range_phrase()} ({owner}){native}. "
+            f"Out-of-range asks are quoted the range (typed/gated), never silently "
+            f"snapped."
+        )
+
+    def quote_back(self, requested: float, *, measured: str | None = None) -> str:
+        """The gate/typed-error card text for an out-of-range request.
+
+        Composes the two-layer truth in ONE card: the requested value, the supported
+        range + its owner, the data-native hint, and (optionally) the measured cost.
+        e.g. ``"30 m requested; this tool supports 20-200 m (mesh/solver); data native
+        10 m; pick a value in range."``
+        """
+        owner = "mesh/solver" if self.constraint_source == "solver" else "data-native"
+        parts = [
+            f"{requested:g} {self.unit} requested; this tool supports "
+            f"{self.range_phrase()} ({owner})"
+        ]
+        if self.native_hint:
+            parts.append(f"data native {self.native_hint}")
+        if measured:
+            parts.append(measured)
+        parts.append(f"pick a {self.param} in range")
+        return "; ".join(parts) + "."
 
 
 class AtomicToolMetadata(GraceModel):
@@ -294,6 +439,33 @@ class AtomicToolMetadata(GraceModel):
             "from retrieval visibility."
         ),
     )
+
+    # --- Declared resolutions (ADR 0225, NATE's clamp ruling) --- #
+    #
+    # A tool with a granularity-bearing param DECLARES the resolutions it can
+    # actually run so the user picks from reality; an out-of-range ask is quoted
+    # the range (typed/gated), never silently snapped. The declaration is the
+    # SINGLE source read by the docstring, the gate card, and the self-enforcing
+    # registry sweep test. Default () = no resolution-class param (zero impact on
+    # the ~200 non-granularity tools). The two-layer-truth architecture: a fetcher
+    # declares constraint_source='data' specs, a template declares 'solver' specs;
+    # the gate card composes both.
+    resolution_specs: tuple[ResolutionSpec, ...] = Field(
+        default=(),
+        description=(
+            "Declared valid-resolution ranges, one ResolutionSpec per "
+            "granularity-bearing parameter (ADR 0225). Read by the docstring, the "
+            "payload/input-review gate card, and the registry sweep test that FAILS "
+            "when a future resolution-class param ships without a declaration."
+        ),
+    )
+
+    def resolution_spec_for(self, param: str) -> ResolutionSpec | None:
+        """The declared :class:`ResolutionSpec` for ``param``, or ``None``."""
+        for spec in self.resolution_specs:
+            if spec.param == param:
+                return spec
+        return None
 
     @model_validator(mode="after")
     def _validate_cacheable_consistency(self) -> AtomicToolMetadata:

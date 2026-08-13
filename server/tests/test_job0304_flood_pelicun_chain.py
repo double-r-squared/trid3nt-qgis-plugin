@@ -1,7 +1,7 @@
 """job-0304 regressions: string-bbox coercion + flood-handle data-URI resolution.
 
 Live 2026-06-16 (AWS) the flood->Pelicun chain failed three ways:
-  A) compute_impact_envelope rejected a STRING bbox (no coercion).
+  A) a bbox-tool rejected a STRING bbox (no coercion).
   B) the TiTiler tile template displaced the s3:// COG under the flood handle,
      so Pelicun resolved the handle to a non-openable template (or nothing).
 These lock both fixes in.
@@ -37,7 +37,7 @@ def test_normalize_args_coerces_bbox_for_a_bbox_tool():
     def tool(bbox, structure_inventory_source="USACE_NSI"):
         return bbox
     out = normalize_args(
-        "compute_impact_envelope",
+        "pelicun_damage_assessment",
         {"bbox": "-81.9126085, 26.5476424, -81.7511414, 26.689176",
          "structure_inventory_source": "USACE_NSI"},
         tool,
@@ -75,8 +75,8 @@ def test_flood_handle_resolves_to_cog_not_template():
     resolved = reg.resolve_params("pelicun_damage_assessment", {"hazard_raster_uri": handle})
     assert resolved["hazard_raster_uri"] == cog
     # passing the template itself also resolves back to the COG
-    resolved2 = reg.resolve_params("compute_impact_envelope", {"flood_layer_uri": tpl})
-    assert resolved2["flood_layer_uri"] == cog
+    resolved2 = reg.resolve_params("pelicun_damage_assessment", {"hazard_raster_uri": tpl})
+    assert resolved2["hazard_raster_uri"] == cog
 
 
 def test_register_order_template_first_then_cog_still_keeps_cog():

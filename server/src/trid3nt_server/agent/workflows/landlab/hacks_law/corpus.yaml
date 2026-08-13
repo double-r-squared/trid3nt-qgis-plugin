@@ -1,0 +1,10 @@
+# Template routing phrasings: engine templates are ordinary retrieval-pool tools
+# walked into the main index.
+landlab_hacks_law_scaling:
+- does this basin follow Hack's law length versus drainage area
+- fit the Hack exponent for the channels in this watershed
+- length-area scaling diagnostic for this catchment
+- how does the longest flow path scale with drainage area here
+- compute Hack's law coefficient and exponent over this DEM
+- basin geomorphic scaling log-log length vs area
+- check the channel length drainage area power law for this terrain

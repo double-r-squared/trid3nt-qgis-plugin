@@ -520,7 +520,7 @@ def test_composer_mocked_end_to_end(tmp_path: Path, monkeypatch):
     solver outputs -> REAL deck build + REAL postprocess -> the primary
     FireSpreadLayerURI + frames + aux COGs as LayerURIs. No AWS, no docker."""
     from trid3nt_server.agent.tools.simulation.solver import solver as solver_mod
-    from trid3nt_server.agent.workflows.elmfire.model_fire_spread_scenario import model_fire_spread_scenario as comp
+    from trid3nt_server.agent.workflows.elmfire.fire_spread import fire_spread as comp
     from trid3nt_server.agent.workflows.elmfire import postprocess_elmfire as pe
     from trid3nt_server.agent.workflows.elmfire.run_elmfire import load_deck_builder
 
@@ -630,7 +630,7 @@ def test_composer_mocked_end_to_end(tmp_path: Path, monkeypatch):
          patch.object(pe, "_upload_cog_to_runs_bucket", _fake_upload), \
          patch.object(comp, "publish_layer", _fake_publish), \
          patch.object(comp, "current_emitter", lambda: _FakeEmitter()):
-        primary = asyncio.run(comp.model_fire_spread_scenario(run_args))
+        primary = asyncio.run(comp.model_elmfire_fire_spread(run_args))
 
     # Dispatch went through the generic seam with the staged manifest.
     assert captured["solver"] == "elmfire"

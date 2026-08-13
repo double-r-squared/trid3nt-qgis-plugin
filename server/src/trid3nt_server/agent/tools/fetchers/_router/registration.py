@@ -146,8 +146,13 @@ def promoted_signature(spec: SourceSpec) -> tuple[inspect.Signature, dict[str, A
         inspect.Parameter("_extra_ignored", inspect.Parameter.VAR_KEYWORD, annotation=Any)
     ]
     annotations["_extra_ignored"] = Any
-    annotations["return"] = dict
-    return inspect.Signature(params, return_annotation=dict), annotations
+    # An animation_frames source returns an ordered list[LayerURI] (ADR 0087); every
+    # other shape returns a single LayerURI / record dict. The return annotation is
+    # cosmetic to the inputSchema (built from params) but kept honest so the promoted
+    # signature reads like the twin's ``-> list[LayerURI]``.
+    ret = list if spec.shape == "animation_frames" else dict
+    annotations["return"] = ret
+    return inspect.Signature(params, return_annotation=ret), annotations
 
 
 def _synthesize_doc(spec: SourceSpec) -> str:
@@ -193,7 +198,8 @@ def _validate_hooks(spec: SourceSpec) -> None:
             "resolve_build", "resolve_parse", "next_page", "enrich_plan", "enrich_merge",
             "classify_status", "envelope",
             "delegate", "delegate_validate", "delegate_resolve",
-            "record", "pre_resolve",
+            "record", "pre_resolve", "colormap",
+            "frames_plan", "frame_bytes",
         ):
             name = getattr(spec.hooks, point)
             if name and not has_hook(name):
@@ -221,6 +227,18 @@ def _validate_hooks(spec: SourceSpec) -> None:
             f"spec {spec.name!r}: hooks.delegate_resolve requires hooks.delegate"
         )
 
+    # animation_frames shape (ADR 0087): a frames-list source MUST declare both
+    # frames_plan (pre-loop resolve) and frame_bytes (per-frame COG builder); the
+    # executor has nothing else to resolve the frame set / build a frame.
+    if spec.shape == "animation_frames":
+        fp = spec.hooks.frames_plan if spec.hooks is not None else None
+        fb = spec.hooks.frame_bytes if spec.hooks is not None else None
+        if not (fp and fb):
+            raise HookResolutionError(
+                f"spec {spec.name!r}: shape=animation_frames requires "
+                f"hooks.frames_plan + hooks.frame_bytes"
+            )
+
     # result_model (ADR 0073): if the spec names a LayerURI-subclass result model
     # it must resolve, and it pairs with an envelope hook (each is meaningless
     # without the other). Fail LOUD per-spec at load, never silently at first call.
@@ -237,6 +255,15 @@ def _validate_hooks(spec: SourceSpec) -> None:
         raise HookResolutionError(
             f"spec {spec.name!r}: output.result_model and hooks.envelope must be "
             f"declared together (got result_model={result_model!r}, envelope={envelope!r})"
+        )
+
+    # provenance channel (ADR 0110): the fetch-time provenance is delivered to the
+    # envelope hook, so a spec that declares output.provenance MUST declare an
+    # envelope hook to consume it (else the recorded dict has nowhere to land).
+    if spec.output.provenance and not envelope:
+        raise HookResolutionError(
+            f"spec {spec.name!r}: output.provenance requires hooks.envelope "
+            "(the provenance dict is delivered to the envelope hook)"
         )
 
 
@@ -298,6 +325,9 @@ def register_spec(spec: SourceSpec) -> str:
         # prior spec (none set output.auto_publish); an INTERMEDIATE raster spec
         # (fetch_3dep_extra) sets it False to opt out of the automatic render.
         auto_publish=spec.output.auto_publish,
+        # ADR 0225: DATA-native resolution declarations ride from the spec onto the
+        # metadata so the gate card can quote them (two-layer truth: data facts here).
+        resolution_specs=spec.resolution_declarations,
     )
     _tools.register_tool(metadata)(_promoted)
     _SPEC_REGISTRY[name] = spec

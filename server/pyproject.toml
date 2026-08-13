@@ -150,6 +150,13 @@ dependencies = [
     # bake the wheel from the GitLab clone during image build (mirrors how
     # hydromt-sfincs is pulled).
     "pfdf>=3.0.4",  # VENDORED wheel in server/wheels/ (USGS GitLab began 403ing git clones 2026-07-06; installs use --find-links)
+    # pysheds==0.4 (D8 terrain-hydrology: delineate_watershed +
+    # extract_stream_network import pysheds.grid.Grid directly). We do NOT pin
+    # it as a separate top-level requirement: pfdf 3.x HARD-pins pysheds==0.4
+    # (its own dependency), so a second pin here would be redundant and could
+    # only drift. pysheds is numba-based; the first tool CALL pays a ~2.2 s
+    # lazy import (not at daemon boot), the numba JIT first-call penalty is
+    # negligible (<0.1 s) -- no warm-up step needed (ADR 0108).
     # Wave 4.10 job-B7: rank_bm25 backs the BM25 channel of discover_dataset's
     # hybrid lexical+dense retrieval over the audited tool-docstring corpus +
     # tool_query_corpus.yaml synthetic queries. Pure-Python (numpy dep only),

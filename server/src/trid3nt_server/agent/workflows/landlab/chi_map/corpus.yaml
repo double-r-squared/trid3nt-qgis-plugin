@@ -1,0 +1,10 @@
+# Template routing phrasings: engine templates are ordinary retrieval-pool tools
+# walked into the main index.
+landlab_channel_steepness_chi_map:
+- which channel reaches are anomalously steep for their drainage area
+- chi map and channel steepness ksn for this watershed
+- knickpoint tectonic proxy from channel steepness here
+- compute the chi index and ksn over this DEM
+- normalized channel steepness map for this catchment
+- chi finder analysis flag steep reaches
+- channel concavity chi elevation profile for this terrain

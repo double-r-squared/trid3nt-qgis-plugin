@@ -1,0 +1,11 @@
+# Template routing phrasings (door dissolution, ADR 0094): walked into the main
+# retrieval index directly.
+openquake_scenario_gmf:
+- scenario earthquake ground motion map if this fault ruptures at magnitude 6.7
+- deterministic ShakeMap-style PGA shaking for a single rupture over this region
+- ground motion field for a scenario earthquake on the fault near this area
+- how strong is the shaking if a magnitude 7 earthquake strikes here
+- simulate the ground motion from one earthquake rupture with realization spread
+- scenario PGA and PGV map with the across-realization uncertainty band
+- single-event earthquake shaking intensity over this bounding box
+- what peak ground acceleration hits this area from a scenario fault rupture

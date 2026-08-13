@@ -1,6 +1,5 @@
-# TEMPLATE tier (engine-door refactor): phrasings for modflow_wellhead_protection. NOT merged
-# into the main retrieval index; the run_modflow door surfaces it via gate
-# expansion. Carried verbatim from the migrated run_model_wellhead_protection_scenario corpus entries.
+# Template routing phrasings (door dissolution, ADR 0094): walked into the main
+# retrieval index directly -- the engine templates are ordinary retrieval-pool tools.
 modflow_wellhead_protection:
 - wellhead protection area for this well
 - WHPA delineation around the drinking water well

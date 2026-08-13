@@ -1,0 +1,38 @@
+ras 0.1.0.2965-dev
+Copyright (C) 2026 US Army Corps of Engineers Hydrologic Engineering Center
+
+  -f, --force        Force overwrite output file if it already exists. Defaults
+                     to false.
+
+  --core-count       Overwrite core-count saved on the plan. 0 := Use plan
+                     value, -1 := Use all-available.
+
+  --solver           Overwrite the solver type loaded from the plan file.
+                     Current options are 'CPU' and 'GPU'.
+
+  --help             Display this help screen.
+
+  --version          Display version information.
+
+  source (pos. 0)    Required. Source to solve. This goes through a multi-step
+                     resolution process.
+                      If the given source is a directory or project file
+                      (*.ras), we will call the solver on every plan in the
+                      project.
+                      If the given source is a plan file (*.h5), we will open
+                      the project and call the solver on that specific plan.
+                      If given a ready-to-run (*.r2r.h5) RAS result file, solve
+                      directly.
+
+  output (pos. 1)    Output file or directory to write the solved result.
+                      If the input source is an entire project, this is
+                      interpreted as a flat destination directory, where all
+                      solved result files will be written.
+                      If the input source is a single plan, this is interpreted
+                      as a destination result (*.h5) file.
+                      If the input source is a ready-to-run (*.r2r.h5) result
+                      file, this is interpreted as a destination result (*.h5)
+                      file.
+                      If unspecified, solved result file(s) will be written to
+                      the default location within the project.
+

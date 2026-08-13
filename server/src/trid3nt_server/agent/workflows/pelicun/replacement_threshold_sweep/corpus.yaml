@@ -1,0 +1,10 @@
+pelicun_replacement_threshold_override_sweep:
+- at what residual drift threshold does the building switch to full replacement
+- sweep the irreparable damage override threshold and trace the portfolio loss curve
+- how does the replacement cost cutover threshold change the loss estimate
+- infer residual drift from peak interstory drift to trigger irreparable damage
+- RID from PID inference triggering irreparable replacement consequences in pelicun
+- irreparable damage override sensitivity to the residual drift threshold
+- when does pelicun report full replacement instead of summed repair costs
+- residual drift triggered replacement cost sweep
+- portfolio loss curve versus the irreparable damage threshold

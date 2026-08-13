@@ -1,0 +1,170 @@
+# Router source spec (ADR 0085) -- Copernicus ERA5 global reanalysis.
+# Twin: fetch_era5_reanalysis.py (library_delegate raster; cdsapi owns the socket).
+# CDS retrieve -> NetCDF -> time-mean COG. delegate: cds.era5_read; the derived
+# 10m_wind_speed = two component retrieves combined by hypot(u, v).
+schema_version: v1
+
+name: fetch_era5_reanalysis
+source_class: era5
+error_prefix: ERA5
+shape: raster-cog
+supports_global_query: true
+
+endpoints:
+  data:
+    url: "https://cds.climate.copernicus.eu/api"
+auth:
+  mode: cds
+  api_key_env: {var: TRID3NT_COPERNICUS_CDS_API_KEY, required: false}
+  user_agent: trid3nt_default
+
+params:
+  bbox:       {type: bbox, required: true, quantize: round_6dp}
+  variable:   {type: str, required: true}
+  start_date: {type: str, required: true}
+  end_date:   {type: str, required: true}
+  api_key:    {type: str, schema_optional: true}
+  secret_ref: {type: str, schema_optional: true}
+
+ingest:
+  access: library_delegate
+  delegate:
+    library: cdsapi
+    timeout_s: 300.0
+hooks:
+  delegate: era5.read
+  delegate_validate: era5.validate
+
+normalize:
+  crs: "EPSG:4326"
+  units_by_param:
+    param: variable
+    map:
+      10m_wind_speed: "m s-1"
+      10m_u_component_of_wind: "m s-1"
+      10m_v_component_of_wind: "m s-1"
+      2m_temperature: "K"
+      total_precipitation: "m"
+      runoff: "m"
+      significant_height_of_combined_wind_waves_and_swell: "m"
+
+output:
+  layer_type: raster
+  ext: tif
+  role: primary
+  style_preset: era5_2m_temperature
+  style_preset_by_param:
+    param: variable
+    map:
+      10m_wind_speed: wind_speed
+      10m_u_component_of_wind: era5_10m_u_component_of_wind
+      10m_v_component_of_wind: era5_10m_v_component_of_wind
+      2m_temperature: era5_2m_temperature
+      total_precipitation: era5_total_precipitation
+      runoff: era5_runoff
+      significant_height_of_combined_wind_waves_and_swell: era5_significant_height_of_combined_wind_waves_and_swell
+
+cache:
+  ttl_class: static-30d
+# ~0.5 MB / variable / day / 1 deg square (twin estimator, per_station reproduces
+# the area*days scaling the bbox_area model cannot: stations_per_sq_deg=1 *
+# kb_per_station_per_day=512 * n_days / 1024 = 0.5 * sq * n_days MB).
+payload_estimate:
+  model: per_station
+  stations_per_sq_deg: 1.0
+  kb_per_station_per_day: 512.0
+  overhead_kb: 0.0
+  floor_mb: 0.5
+
+caveats:
+  - "ERA5 lags: ~5 days (ERA5T preliminary) / ~3 months (finalised); NOT real-time -- use fetch_hrrr_forecast"
+  - "keyed: free Copernicus CDS key auto-requested via credential card on ERA5_MISSING_KEY; missing key is NOT a reason to route elsewhere"
+  - "0.25 deg native (~27 km); for CONUS precip prefer fetch_mrms_qpe (1 km gauge-corrected)"
+fallback: [fetch_mrms_qpe, fetch_hrrr_forecast]
+
+# corpus lifted from sibling corpus.yaml.
+
+docstring: |
+  Copernicus ERA5 global reanalysis fetcher: historical hourly wind / precip / temperature / wave height.
+
+  Use this (do not stop at geocode_location) when the user names ERA5 or wants
+  historical/global atmospheric reanalysis. Call it even if no key is set: the
+  Copernicus CDS key is auto-requested via a credential card if missing, so a
+  possible key prompt is NOT a reason to route elsewhere.
+
+  **What it does:** Retrieves an ERA5 hourly reanalysis variable for a bbox
+  and date range via the Copernicus Climate Data Store (CDS) ``cdsapi``
+  client, converts the returned NetCDF into a CRS-tagged COG (time-mean
+  over the requested window), and routes the result through the 30-day cache.
+  Supported variables: 10 m U/V wind components, 2 m temperature, total
+  precipitation, surface runoff, and significant wave height.
+
+  **When to use:**
+  - A GENERIC historical wind request ("how windy was it", "wind speed over
+    the Gulf during the storm", "show me the wind") → use
+    ``variable="10m_wind_speed"``. This returns a SINGLE positive wind-speed
+    magnitude field (``sqrt(u^2 + v^2)``, m s-1) -- the natural answer to "how
+    windy". Only reach for the lone signed ``10m_u_component_of_wind`` /
+    ``10m_v_component_of_wind`` when the user explicitly needs wind DIRECTION
+    or a vector component.
+  - Building global or non-CONUS compound-flood forcing: ERA5 winds, precip,
+    or wave height as SFINCS storm-surge / pluvial boundary conditions where
+    agency instrumentation (CO-OPS, MRMS, ATCF) does not reach.
+  - Any post-event analysis that needs a globally consistent atmospheric
+    reanalysis over a historical period (1940 to ~3 months ago).
+  - User asks for historical wind fields, precipitation totals, or sea-state
+    data outside the CONUS gauge network.
+  - Compound-flood substrate following Bates et al. (NHESS 2023): ERA5 is
+    the research-validated global atmospheric forcing for that workflow.
+
+  **When NOT to use:**
+  - DO NOT use for real-time / forecast data -- ERA5 lags by 5 days (ERA5T
+    preliminary) or 3 months (finalised); use ``fetch_hrrr_forecast`` or
+    ``fetch_goes_satellite`` for live/near-real-time queries.
+  - DO NOT use for CONUS precipitation when MRMS is available -- MRMS QPE is
+    1 km gauge-corrected vs ERA5's 27 km; use ``fetch_mrms_qpe`` instead.
+  - DO NOT use for sub-hourly timesteps; ERA5 is hourly minimum.
+  - Key auto-requested if missing: ERA5 uses a free Copernicus CDS API key
+    (register at https://cds.climate.copernicus.eu/user/register). If none is
+    configured the tool raises ``ERA5MissingKeyError``, which surfaces a
+    credential card and retries -- so a missing key is NOT a reason to avoid
+    this tool; call it normally.
+
+  **Parameters:**
+  - ``bbox`` (tuple[float, float, float, float]): ``(west, south, east,
+    north)`` in EPSG:4326. ``supports_global_query=True`` -- global bbox
+    ``(-180, -90, 180, 90)`` is valid but expensive. Example for Gulf
+    Coast: ``(-100.0, 20.0, -80.0, 35.0)``.
+  - ``variable`` (str): one of ``"10m_wind_speed"`` (DERIVED wind-speed
+    magnitude ``sqrt(u^2 + v^2)``, the answer to a generic "wind" request),
+    ``"10m_u_component_of_wind"``, ``"10m_v_component_of_wind"``,
+    ``"2m_temperature"``, ``"total_precipitation"``, ``"runoff"``,
+    ``"significant_height_of_combined_wind_waves_and_swell"``. For any
+    non-directional wind question pass ``"10m_wind_speed"``.
+  - ``start_date`` (str): ISO YYYY-MM-DD inclusive. ERA5 coverage: 1940-01-01
+    to ~3 months ago (finalised) or 5 days ago (ERA5T preliminary).
+  - ``end_date`` (str): ISO YYYY-MM-DD inclusive. Hard cap 366 days from start.
+  - ``api_key`` (str | None): explicit CDS key; overrides all other resolution
+    paths. Resolved priority: kwarg → ``secret_ref`` → env var
+    ``TRID3NT_COPERNICUS_CDS_API_KEY`` → ``~/.cdsapirc``.
+  - ``secret_ref`` (Any | None): per-Case ``SecretRecord`` for production.
+
+  **Returns:** A ``LayerURI`` pointing at a float32 COG in the cache bucket
+  (``s3://trid3nt-cache/cache/static-30d/era5/<key>.tif``)
+  carrying the time-mean of the requested variable, clipped to bbox.
+  ``layer_type="raster"``, ``role="primary"``. Units: ``"m s-1"`` for
+  wind, ``"K"`` for temperature, ``"m"`` for precipitation / runoff /
+  wave height. EPSG:4326, 0.25° native (~27 km).
+
+  **Cross-tool dependencies:**
+  - Upstream: ``geocode_location`` supplies bbox from a place name.
+  - Downstream: ``set_sfincs_parameters`` + ``run_sfincs`` consume wind/precip
+    COGs as forcing; ``fetch_gtsm_tide_surge`` pairs for the coastal boundary
+    condition.
+  - Alternative: ``fetch_mrms_qpe`` (CONUS, 1 km, gauge-corrected, no key),
+    ``fetch_hrrr_forecast`` (CONUS, 3 km, forecast, no key).
+
+  FR-CE-8: ``read_through`` with ``ttl_class="static-30d"``; cache key
+  is ``(variable, bbox-rounded-6dp, start_date, end_date)`` -- api_key
+  excluded so the same ERA5 grid is shared across callers (FR-DC-4 dedup).
+  CDS jobs are queued server-side; wrapped in a 5-minute wall-clock timeout.

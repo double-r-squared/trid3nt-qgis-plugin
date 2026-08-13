@@ -1136,6 +1136,7 @@ class Persistence:
                 style_preset=str(style_preset),
                 asset_url=str(asset_url),
                 wms_url=wms_url,
+                crs_authid=layer.get("crs_authid"),  # ADR 0118: carry mesh CRS
             )
         except Exception:  # noqa: BLE001 -- skip a row that won't validate
             logger.warning(

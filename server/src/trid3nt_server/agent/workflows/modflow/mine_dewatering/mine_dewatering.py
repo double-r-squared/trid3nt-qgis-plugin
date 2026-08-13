@@ -1,10 +1,10 @@
-"""``model_mine_dewatering_scenario``  -  MODFLOW mine-pit-dewatering composer.
+"""the composer  -  MODFLOW mine-pit-dewatering composer.
 
 The end-to-end higher-order workflow for the MODFLOW
 ``mine_dewatering`` archetype: it turns a place (or AOI point) + a pit footprint
 polygon into a rendered dewatering-rate layer  -  the per-cell drain outflow over
 the pit and the total pump-to-dewater rate the pit needs to stay dry. It mirrors
-the chain shape of ``model_sustainable_yield_scenario`` (sibling GWF-only
+the chain shape of the composer (sibling GWF-only
 archetype): the pit footprint is draped as a DRN drain ring (steady GWF,
 unconfined water table), and the DRN budget term IS the dewatering rate.
 
@@ -18,7 +18,7 @@ estimate, the standard MODFLOW open-pit-dewatering analysis):
         -> run_modflow_archetype_job (GWF steady DRN deck -> mf6 -> dewatering)
         -> DewaterLayerURI (dewatering_rate_m3_day + drain_cell_count)
 
-Invariants (same set as model_sustainable_yield_scenario):
+Invariants (same set as the composer):
 - **1 / 2 / 8: preserve** (typed numbers, deterministic composition, cancellable).
 - **9. No fabricated model inputs.** A ``mine_dewatering`` run with no pit
   footprint returns a typed ``USER_INPUT_REQUIRED`` failed envelope rather than
@@ -43,6 +43,10 @@ from trid3nt_contracts.modflow_contracts import (
 )
 from trid3nt_contracts.tool_registry import AtomicToolMetadata
 
+from trid3nt_server.agent.workflows.modflow._input_review import (
+    aquifer_k_review_entry,
+    gate_and_stamp_modflow_inputs,
+)
 from trid3nt_server.emission.pipeline_emitter import begin_substeps, current_emitter
 from trid3nt_server.agent.tools import register_tool
 from trid3nt_server.agent.workflows.modflow._template_card import TemplateCard
@@ -74,7 +78,7 @@ __all__ = [
 
 
 class MineDewateringResult(GraceModel):
-    """Return type for ``model_mine_dewatering_scenario``.
+    """Return type for the composer.
 
     Bundles the dewatering layer + the derived args + a narration summary dict.
     Invariant 1: every narrated number is a typed field  -  ``dewater_layer``
@@ -94,7 +98,7 @@ class MineDewateringResult(GraceModel):
 
 
 class MineDewateringScenarioError(RuntimeError):
-    """Base class for ``model_mine_dewatering_scenario`` failures."""
+    """Base class for the composer failures."""
 
     error_code: str = "MINE_DEWATERING_SCENARIO_ERROR"
     retryable: bool = False
@@ -260,6 +264,21 @@ async def model_mine_dewatering_scenario(
         layer.dewatering_rate_m3_day,
         layer.drain_cell_count,
     )
+    # ADR 0223: structured aquifer-K provenance routed through gate_input_review,
+    # stamped onto the layer envelope (the prose caveat stays on the summary).
+    layer, _review = await gate_and_stamp_modflow_inputs(
+        tool_name="modflow_mine_dewatering", layer=layer,
+        entries=[aquifer_k_review_entry(
+            k_source=("user_supplied" if aquifer_k_ms is not None else "demo_default"),
+            k_ms=(aquifer_k_ms if aquifer_k_ms is not None else DEFAULT_AQUIFER_K_MS),
+            porosity=porosity, note=summary["demo_aquifer_caveat"],
+        )],
+        params={"aquifer_k_ms": aquifer_k_ms, "porosity": porosity},
+    )
+    if _review.cancelled:
+        raise MineDewateringScenarioError(
+            f"mine-dewatering input review {_review.cancel_reason or 'not approved'}"
+        )
     return MineDewateringResult(
         dewater_layer=layer, derived_params=derived, summary=summary
     )
@@ -308,6 +327,12 @@ async def modflow_mine_dewatering(
     **_extra_ignored: Any,
 ) -> dict[str, Any]:
     """Model an open-pit mine's dewatering rate (groundwater inflow to the pit).
+
+    Fidelity: MODFLOW 6 local planning-grade groundwater envelope (aquifer
+    K/porosity default to narrated demo values unless supplied), not a
+    calibrated regulatory delineation. Off-scope: surface-water inundation
+    flooding -> sfincs_flood; urban storm-sewer / pipe-network flooding ->
+    swmm_urban_flood.
 
     Builds a steady MODFLOW 6 groundwater-flow model with an unconfined water
     table and a DRN drain over the user-supplied pit footprint, runs it, and

@@ -172,6 +172,26 @@ def run_chain(manifest_path: str) -> int:
         "grid_crs": str(crs),
         "secondary_field_files": secondary_files,
     }
+    # flow_accumulation folds its JSON-safe drainage-area scalars + routing
+    # comparison from ``chain.extra`` (mirrors the AWS Batch entrypoint).
+    if chain.analysis == "flow_accumulation":
+        from services.workers.landlab.entrypoint import (  # type: ignore[import]
+            _flow_accumulation_extra,
+        )
+
+        result_block["flow_accumulation"] = _flow_accumulation_extra(chain.extra or {})
+    if chain.analysis == "green_ampt_overland_flow":
+        from services.workers.landlab.entrypoint import (  # type: ignore[import]
+            _green_ampt_extra,
+        )
+
+        result_block["green_ampt"] = _green_ampt_extra(chain.extra or {})
+    from services.workers.landlab.entrypoint import (  # type: ignore[import]
+        _JSON_SAFE_EXTRA_ANALYSES,
+    )
+
+    if chain.analysis in _JSON_SAFE_EXTRA_ANALYSES:
+        result_block[chain.analysis] = dict(chain.extra or {})
     try:
         (cwd / RESULT_JSON_NAME).write_text(
             json.dumps(result_block, indent=2), encoding="utf-8"

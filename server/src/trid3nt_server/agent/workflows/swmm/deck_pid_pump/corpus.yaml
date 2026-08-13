@@ -1,0 +1,9 @@
+swmm_pump_pid_rtc:
+- run the published SWMM PID pump control example
+- demonstrate real-time control (RTC) of a pump holding a wet-well setpoint
+- show how the PID rule keeps the wet-well at its target depth in SWMM
+- run the Dickinson PID pump-control SWMM deck and chart the wet-well tracking
+- pump real-time control rule regulating an upstream node depth in SWMM
+- how does the PID controller adjust the pump to hold 3 feet in the wet well
+- published PID / RTC pump control demonstration deck in SWMM
+- show the pump flow and wet-well depth under the published PID control rule

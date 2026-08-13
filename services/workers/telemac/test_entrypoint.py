@@ -47,15 +47,80 @@ def test_reach_config_applies_overrides(tmp_path):
     assert cfg.workdir == str(tmp_path)
 
 
-def test_reach_config_drops_unknown_keys_and_ignores_workdir(tmp_path):
-    # unknown keys must not crash; a manifest 'workdir' must not override the pin
+def test_reach_config_ignores_manifest_workdir_pin(tmp_path):
+    # a manifest 'workdir' must not override the mounted-data-dir pin
     cfg = E._reach_config(tmp_path, {
-        "bogus": 123, "another_unknown": "x",
         "workdir": "/etc/should-not-win",
         "distance_km": 7.0,
     })
     assert cfg.distance_km == 7.0
     assert cfg.workdir == str(tmp_path)
+
+
+def test_reach_config_rejects_unknown_keys(tmp_path):
+    """ADR 0158: an unknown reach key errors loudly instead of being dropped
+    with a log warning (the ADR 0148 lesson -- a WARNING line is invisible in
+    practice; two registered knob templates ran as no-ops that way)."""
+    with pytest.raises(E.TelemacManifestUnknownFieldsError, match="bogus"):
+        E._reach_config(tmp_path, {
+            "bogus": 123, "another_unknown": "x", "distance_km": 7.0,
+        })
+
+
+def test_parser_version_is_reach_6():
+    """ADR 0216: the GAIA v2 erodible-bed morphodynamics fields bump the parser stamp."""
+    assert E._PARSER_VERSION == "telemac-reach-6"
+
+
+def test_reach_config_accepts_erodible_bed_fields(tmp_path):
+    """ADR 0216: the GAIA v2 erodible-bed knobs are known fields (bedload scour)."""
+    cfg = E._reach_config(tmp_path, {
+        "substance_class": "sediment", "erodible_bed": True,
+        "bed_thickness_m": 4.0, "bedload_formula": 1,
+        "morphological_factor": 20.0, "grain_size_um": 400.0,
+    })
+    assert cfg.erodible_bed is True and cfg.bed_thickness_m == 4.0
+    assert cfg.bedload_formula == 1 and cfg.morphological_factor == 20.0
+
+
+def test_reach_config_accepts_soil_store_fields(tmp_path):
+    """ADR 0213: the soil-store knobs are known fields (continuous SCS-CN store)."""
+    cfg = E._reach_config(tmp_path, {
+        "mode": "rain_on_grid", "watershed_slf": "watershed.slf",
+        "rain_hyetograph_blocks": [[3600.0, 12.5], [7200.0, 0.0]],
+        "soil_store": True, "soil_store_capacity_mm": 90.0,
+        "soil_store_recovery_h": 72.0, "soil_store_init_mm": 30.0,
+    })
+    assert cfg.soil_store is True and cfg.soil_store_capacity_mm == 90.0
+    assert cfg.soil_store_recovery_h == 72.0 and cfg.soil_store_init_mm == 30.0
+
+
+def test_reach_config_accepts_hyetograph_blocks(tmp_path):
+    """ADR 0206: rain_hyetograph_blocks is a known field (time-varying native path)."""
+    cfg = E._reach_config(tmp_path, {
+        "mode": "rain_on_grid", "watershed_slf": "watershed.slf",
+        "rain_hyetograph_blocks": [[3600.0, 12.5], [7200.0, 0.0]],
+    })
+    assert cfg.rain_hyetograph_blocks == [[3600.0, 12.5], [7200.0, 0.0]]
+
+
+def test_reach_config_accepts_rog_fields(tmp_path):
+    cfg = E._reach_config(tmp_path, {
+        "mode": "rain_on_grid", "watershed_slf": "watershed.slf",
+        "runoff_path": "native", "curve_number": 82.0, "amc_condition": 1,
+        "rain_intensity_mm_per_hr": 40.0, "node_cn2_file": "cn.txt",
+        "node_manning_file": "n.txt", "outlet_lonlat": (-83.4, 35.05),
+        "observed_gauge_id": "02086500",
+    })
+    assert cfg.mode == "rain_on_grid" and cfg.runoff_path == "native"
+    assert cfg.curve_number == 82.0 and cfg.amc_condition == 1
+    assert cfg.observed_gauge_id == "02086500"
+
+
+def test_reach_config_rejects_unknown_key_names_v6(tmp_path):
+    """A bogus reach key raises naming the CURRENT parser version (telemac-reach-6)."""
+    with pytest.raises(E.TelemacManifestUnknownFieldsError, match="telemac-reach-6"):
+        E._reach_config(tmp_path, {"bogus_rog_field": 1, "mode": "rain_on_grid"})
 
 
 def test_main_bad_manifest_writes_typed_error(tmp_path, monkeypatch):

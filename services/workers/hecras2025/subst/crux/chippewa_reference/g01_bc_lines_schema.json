@@ -1,0 +1,124 @@
+{
+  "group": "Geometry/Boundary Condition Lines",
+  "datasets": {
+    "Attributes": {
+      "shape": [
+        2
+      ],
+      "dtype": [
+        [
+          "Name",
+          [
+            "|S32",
+            {
+              "h5py_encoding": "ascii"
+            }
+          ]
+        ],
+        [
+          "SA-2D",
+          [
+            "|S16",
+            {
+              "h5py_encoding": "ascii"
+            }
+          ]
+        ],
+        [
+          "Type",
+          [
+            "|S8",
+            {
+              "h5py_encoding": "ascii"
+            }
+          ]
+        ],
+        [
+          "Length",
+          "<f4"
+        ]
+      ]
+    },
+    "External Faces": {
+      "shape": [
+        13
+      ],
+      "dtype": [
+        [
+          "BC Line ID",
+          "<i4"
+        ],
+        [
+          "Face Index",
+          "<i4"
+        ],
+        [
+          "FP Start Index",
+          "<i4"
+        ],
+        [
+          "FP End Index",
+          "<i4"
+        ],
+        [
+          "Station Start",
+          "<f4"
+        ],
+        [
+          "Station End",
+          "<f4"
+        ]
+      ]
+    },
+    "Polyline Info": {
+      "shape": [
+        2,
+        4
+      ],
+      "dtype": [
+        [
+          "",
+          "<i4"
+        ]
+      ]
+    },
+    "Polyline Parts": {
+      "shape": [
+        2,
+        2
+      ],
+      "dtype": [
+        [
+          "",
+          "<i4"
+        ]
+      ]
+    },
+    "Polyline Points": {
+      "shape": [
+        4,
+        2
+      ],
+      "dtype": [
+        [
+          "",
+          "<f8"
+        ]
+      ]
+    }
+  },
+  "attributes_rows": [
+    [
+      "b'Upstream'",
+      "b'Perimeter 1'",
+      "b'External'",
+      "1199.630615234375"
+    ],
+    [
+      "b'Downstream'",
+      "b'Perimeter 1'",
+      "b'External'",
+      "2029.0582275390625"
+    ]
+  ]
+}

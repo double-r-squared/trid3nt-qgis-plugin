@@ -1,7 +1,0 @@
-fetch_cama_flood_discharge:
-- I need global river discharge for SFINCS setup in Bangladesh
-- fetch CaMa-Flood fluvial forcing for the Mekong Delta scenario
-- give me gridded discharge for the Amazon basin flood model
-- I need non-CONUS river flow for compound flood setup in Southeast Asia
-- fetch global fluvial boundary conditions for the Niger River delta
-- I want CaMa-Flood discharge for the compound flood research workflow

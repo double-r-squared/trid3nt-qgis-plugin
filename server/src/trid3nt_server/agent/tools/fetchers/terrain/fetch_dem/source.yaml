@@ -1,0 +1,129 @@
+schema_version: v1
+name: fetch_dem
+source_class: dem
+shape: raster-cog
+supports_global_query: false
+endpoints:
+  data:
+    url: https://elevation.nationalmap.gov/
+auth:
+  mode: none
+params:
+  bbox:
+    type: bbox
+    required: true
+    quantize: round_6dp
+  resolution_m:
+    type: int
+    default: 10
+  source:
+    type: str
+    default: auto
+dispatch:
+- param: source
+  equals_any:
+  - copernicus
+  - cop-dem-glo-30
+  - glo-30
+  - glo30
+  - copernicus_glo30
+  normalize: lower_strip
+  to: fetch_copernicus_dem
+  pass_args:
+    bbox: bbox
+ingest:
+  access: library_delegate
+  delegate:
+    library: py3dep
+    timeout_s: 120.0
+hooks:
+  delegate: dem_3dep.read
+  delegate_validate: dem_3dep.validate
+  pre_resolve: dem_3dep.coarsen
+  envelope: dem_3dep.envelope
+normalize:
+  crs: EPSG:5070
+  units: meters
+  quantity: elevation
+output:
+  layer_type: raster
+  ext: tif
+  role: input
+  style_preset: continuous_dem
+  auto_publish: false
+  emit_bbox: true
+  result_model: DemLayerURI
+cache:
+  ttl_class: static-30d
+payload_estimate:
+  model: bbox_area
+  mb_per_sq_deg: 8.0
+  floor_mb: 0.1
+# ADR 0225 -- DATA-native resolution declaration (the gate card quotes it beside a
+# consuming solver's declared range). 3DEP native is 1-10 m US lidar; source=copernicus
+# serves GLO-30 30 m global. A large bbox auto-coarsens (payload gate), so there is no
+# coarse ceiling; the fine floor is the 1 m lidar native.
+resolution_declarations:
+- param: resolution_m
+  unit: m
+  min_value: 1
+  native_hint: 3DEP 1-10 m US lidar (default 10 m); Copernicus GLO-30 30 m global via source=copernicus
+  constraint_source: data
+  rationale: 3DEP US lidar is native 1-10 m (10/30 m fastest on the tile tree); large bboxes auto-coarsen; no fine floor below the 1 m lidar native
+caveats:
+- 'USGS 3DEP US lidar (1-10 m) via the py3dep library-delegate (the library owns discovery + the socket).
+  Default source="auto": on a 3DEP service outage/timeout it STOPS and asks (a typed DEM_FALLBACK_GATE
+  naming source="copernicus") rather than silently substituting a coarser cross-dataset radar DEM.'
+- source="copernicus" is served verbatim by fetch_copernicus_dem (global GLO-30 30 m) via the pre-flight
+  dispatch seam -- no re-cache under the dem prefix. A clearly non-US bbox on the auto path returns a
+  distinct DEM_OUT_OF_COVERAGE error naming copernicus.
+- State/multi-state bboxes auto-coarsen against a 4000 px/axis pixel budget (the delivered spacing + an
+  honest coarsening note are stamped into name/layer_id); continent-scale (> 5,000,000 km^2) hard-fails.
+docstring: "Fetch a digital elevation model (DEM) / terrain elevation for a bounding box (USGS 3DEP US\
+  \ lidar; on a 3DEP outage the default path STOPS and asks before any Copernicus GLO-30 swap; either\
+  \ source pinnable).\n\nUse this (not ``fetch_topobathy``, which is coastal land+seafloor) for a plain\n\
+  ground-elevation DEM. The default ``source=\"auto\"`` tries USGS 3DEP (US, 1-10 m\nlidar). If the 3DEP\
+  \ SERVICE is unavailable / times out it does NOT silently\nsubstitute a different dataset: it raises\
+  \ a typed error that names\n``source=\"copernicus\"`` (keyless GLOBAL 30 m radar) as the retry and states\
+  \ the\ntradeoff, so YOU relay it and the USER approves the coarser cross-dataset swap\nbefore it happens\
+  \ (a silent swap would degrade map integrity while looking like\nsuccess). Pass ``source=\"copernicus\"\
+  `` DIRECTLY for terrain OUTSIDE the US (the\nAlps, Andes, Himalaya, Africa, ...) -- the keyless global\
+  \ GLO-30 30 m model is a\nbuilt-in mode of this tool; a clearly non-US bbox on the auto path returns\
+  \ a\ndistinct out-of-coverage error naming copernicus. Pass ``source=\"3dep\"`` ONLY to\npin 3DEP: a\
+  \ pinned source never switches (a 3DEP outage then surfaces a typed\nerror suggesting Copernicus).\n\
+  \n**What it does:** Downloads a Cloud-Optimized GeoTIFF of ground elevation\nfrom the USGS 3D Elevation\
+  \ Program (3DEP) via the ``py3dep`` library and\nwrites it to the 30-day cache. Returns a ``LayerURI``\
+  \ pointing at the\ncached COG so downstream SFINCS/HydroMT setup and terrain analysis tools\ncan consume\
+  \ it without re-fetching. With ``source=\"copernicus\"`` it instead\nmosaics the global Copernicus GLO-30\
+  \ 30 m DEM (same ``continuous_dem`` ramp,\nsame ``LayerURI`` raster contract).\n\n**When to use:**\n\
+  - Any flood workflow step that needs terrain elevation: SFINCS model\n  domain setup, watershed delineation,\
+  \ slope/hillshade computation.\n- User asks \"show me the terrain elevation for [area]\" or \"what does\
+  \ the\n  ground look like here?\" -- render with the ``continuous_dem`` QML preset.\n- SFINCS setup\
+  \ (``set_sfincs_parameters`` + ``run_sfincs``) requires a\n  DEM for the model grid; this tool supplies\
+  \ it.\n- Pre-processing step before ``compute_slope``, ``compute_hillshade``,\n  ``compute_aspect``,\
+  \ or an AOI-scoped raster summary composed in the\n  code_exec playground (zonal stats over a polygon).\n\
+  \n**When NOT to use:**\n- Coverage outside the continental US with the DEFAULT source -- 3DEP is\n \
+  \ CONUS-only; pass ``source=\"copernicus\"`` for a global GLO-30 30 m DEM.\n- Bathymetry (below-water\
+  \ elevation) -- 3DEP/GLO-30 are land/surface models;\n  use ``fetch_topobathy`` for coastal seafloor\
+  \ depth.\n- Single-point elevation lookups -- the tool fetches a raster window;\n  for a point query\
+  \ use a future ``point_elevation`` tool.\n- Continent-scale bboxes (> 5,000,000 km²) -- rejected with\n\
+  \  ``BboxInvalidError``. State/multi-state bboxes auto-coarsen instead of\n  failing (not a dead end).\n\
+  \n**Parameters:**\n- ``bbox`` (tuple[float,float,float,float]): ``(min_lon, min_lat, max_lon,\n  max_lat)``\
+  \ in EPSG:4326. Max area 5,000,000 km²; large bboxes auto-coarsen.\n- ``resolution_m`` (int, default\
+  \ 10): DEM grid spacing in meters (3DEP only).\n  10 m or 30 m are fastest on 3DEP's tile tree. A large\
+  \ bbox may deliver a\n  coarser grid than requested (a pixel-budget auto-coarsen); the delivered\n \
+  \ spacing is stamped into the result.\n- ``source`` (str, default ``\"auto\"``): ``\"auto\"`` (USGS\
+  \ 3DEP first; on a 3DEP\n  service failure/timeout it raises a GATED typed error naming\n  ``source=\"\
+  copernicus\"`` for the user to approve -- NO silent cross-dataset\n  swap; a clearly non-US bbox raises\
+  \ a distinct out-of-coverage error);\n  ``\"3dep\"`` (PIN USGS 3DEP, US-only, honors ``resolution_m``,\
+  \ no fallback); or\n  ``\"copernicus\"`` (PIN Copernicus GLO-30, global 30 m radar, keyless -- the\n\
+  \  built-in global mode, the user-approved retry target).\n\n**Returns:**\nA ``LayerURI`` pointing at\
+  \ a Cloud-Optimized GeoTIFF in the cache bucket\n(``s3://trid3nt-cache/cache/static-30d/dem/<key>.tif``).\n\
+  CRS: EPSG:5070 (py3dep default); units: meters above NAVD88.\nFields consumed downstream: ``uri`` →\
+  \ by ``set_sfincs_parameters`` /\n``run_sfincs`` and the QGIS plugin's native rendering;\n``style_preset=\"\
+  continuous_dem\"`` → map rendering. When the\nbbox forced a coarser grid than requested, ``name`` carries\
+  \ an honest\ncoarsening note (approximate terrain -- fine for a hillshade/overview,\nnot site-scale\
+  \ analysis).\n\n**Cross-tool dependencies:**\n- Downstream: ``set_sfincs_parameters`` / ``run_sfincs``,\n\
+  \  ``compute_slope``, ``compute_hillshade``, ``compute_aspect``,\n  ``compute_colored_relief``, AOI\
+  \ zonal stats in the code_exec playground.\n- Typically called after: ``geocode_location`` supplies\
+  \ the bbox.\n- Sibling source: ``source=\"copernicus\"`` for non-US / global terrain."

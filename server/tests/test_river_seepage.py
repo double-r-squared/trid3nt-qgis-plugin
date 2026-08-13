@@ -271,6 +271,89 @@ async def test_composer_assembles_args_and_threads_result(monkeypatch) -> None:
     assert result.derived_params["river_geometry_uri"] == "s3://bucket/river.fgb"
 
 
+def _rs_common_mocks(monkeypatch):
+    """Wire geocode + river fetch + the run tool; return the module + calls dict."""
+    from trid3nt_contracts.execution import LayerURI
+
+    from trid3nt_server.agent.workflows.modflow.river_seepage import river_seepage as mod
+
+    calls: dict[str, Any] = {}
+
+    def _fake_geocode(location):
+        return {"latitude": 26.64, "longitude": -81.87}
+
+    def _fake_fetch_river(*, bbox):
+        return LayerURI(
+            layer_id="river-1", name="River", layer_type="vector",
+            uri="s3://bucket/river.fgb", style_preset="river_lines", role="input",
+        )
+
+    async def _fake_run(**kwargs):
+        return SeepageLayerURI(
+            layer_id="river-seepage-RUN1", name="River Seepage", layer_type="raster",
+            uri="s3://bucket/RUN1/river_seepage_4326.tif",
+            style_preset="diverging_river_seepage", role="primary", units="m^3/day",
+            total_leakage_m3_day=-2.5, gaining_m3_day=418.97, losing_m3_day=418.97,
+            river_cell_count=32,
+        )
+
+    fake_registry = {
+        "geocode_location": type("E", (), {"fn": staticmethod(_fake_geocode)}),
+        "fetch_river_geometry": type("E", (), {"fn": staticmethod(_fake_fetch_river)}),
+    }
+    monkeypatch.setattr(mod, "TOOL_REGISTRY", fake_registry)
+    import trid3nt_server.agent.tools.simulation.modflow.run_river_seepage_tool.run_river_seepage_tool as _rs
+    monkeypatch.setattr(_rs, "run_river_seepage_job", _fake_run)
+    return mod, calls
+
+
+@pytest.mark.asyncio
+async def test_aquifer_provenance_stamped_on_seepage_layer(monkeypatch) -> None:
+    """ADR 0223: the demo-aquifer prose caveat is mirrored as a structured
+    SyntheticInput on the returned seepage layer envelope (routed through the
+    input-review gate)."""
+    mod, _ = _rs_common_mocks(monkeypatch)
+    result = await mod.model_river_seepage_scenario(
+        location="Fort Myers, FL", contaminant="TCE",
+        release_rate_kg_s=0.02, duration_days=45.0,
+    )
+    si = result.seepage_layer.synthetic_inputs
+    assert any(e.param == "aquifer_k_ms" and e.basis == "default_demo" for e in si)
+    # No requested-DEM failure entry when the DEM was not requested.
+    assert not any(e.param == "streambed_elevation" for e in si)
+    assert "streambed_dem_fallback" not in result.summary
+
+
+@pytest.mark.asyncio
+async def test_requested_dem_failure_is_labeled(monkeypatch) -> None:
+    """ADR 0223 (audit #5): when fetch_dem_for_streambed=True and the DEM fetch
+    FAILS, the degrade is a specific labeled review entry (not just a log line),
+    naming the requested-DEM failure on the envelope + summary."""
+    mod, _ = _rs_common_mocks(monkeypatch)
+
+    def _boom_fetch_dem(*, bbox):
+        raise RuntimeError("3DEP tile unavailable for this AOI")
+
+    # add fetch_dem to the registry so the composer resolves it, then fails in it.
+    reg = dict(mod.TOOL_REGISTRY)
+    reg["fetch_dem"] = type("E", (), {"fn": staticmethod(_boom_fetch_dem)})
+    monkeypatch.setattr(mod, "TOOL_REGISTRY", reg)
+
+    result = await mod.model_river_seepage_scenario(
+        location="Fort Myers, FL", contaminant="TCE",
+        release_rate_kg_s=0.02, duration_days=45.0,
+        fetch_dem_for_streambed=True,
+    )
+    # The requested-DEM degrade is surfaced structurally AND on the summary.
+    assert "streambed_dem_fallback" in result.summary
+    assert "requested" in result.summary["streambed_dem_fallback"].lower()
+    si = result.seepage_layer.synthetic_inputs
+    bed = [e for e in si if e.param == "streambed_elevation"]
+    assert len(bed) == 1
+    assert bed[0].basis == "default_demo"
+    assert "fetch_dem failed" in (bed[0].note or "")
+
+
 @pytest.mark.asyncio
 async def test_composer_errors_when_no_river_found(monkeypatch) -> None:
     """A fetch_river_geometry result without a URI -> a typed scenario error

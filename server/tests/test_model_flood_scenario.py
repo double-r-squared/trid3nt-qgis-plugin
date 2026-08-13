@@ -107,6 +107,13 @@ def test_nlcd_validation_gate_raises_on_unmapped_class() -> None:
     try:
         mapping = load_manning_mapping(fixture_path)
         assert set(mapping) == {11, 41, 81}
+        # Re-fetch at call time: a prior test's importlib.reload of
+        # sfincs_builder (see test_sfincs_autoscale.py) rebinds this class;
+        # the module-top import above can be stale by the time this runs.
+        from trid3nt_server.agent.workflows.sfincs.sfincs_builder import (
+            SFINCSSetupError,
+        )
+
         with pytest.raises(SFINCSSetupError) as excinfo:
             validate_nlcd_vintage_against_mapping(
                 fetched_classes={11, 41, 99},  # 99 is unmapped
@@ -836,6 +843,12 @@ def test_build_sfincs_model_malformed_yaml_surfaces_typed_error(
             return_value=malformed_yaml,
         ),
     ):
+        # Re-fetch at call time (see the comment on
+        # test_nlcd_validation_gate_raises_on_unmapped_class above).
+        from trid3nt_server.agent.workflows.sfincs.sfincs_builder import (
+            SFINCSSetupError,
+        )
+
         with pytest.raises(SFINCSSetupError) as excinfo:
             build_sfincs_model(
                 dem_uri="gs://test/dem.tif",
@@ -3519,7 +3532,9 @@ def test_nlcd_gate_s3_read_boto3_failure_raises_landcover_read_failed() -> None:
         "trid3nt_server.agent.tools.cache.read_object_bytes_s3",
         side_effect=RuntimeError("boto3 get_object failed: AccessDenied"),
     ):
-        with pytest.raises(SFINCSSetupError) as excinfo:
+        # Re-fetch off the live module (already imported above) at call time
+        # -- see the comment on test_nlcd_validation_gate_raises_on_unmapped_class.
+        with pytest.raises(sfincs_builder.SFINCSSetupError) as excinfo:
             sfincs_builder._extract_unique_nlcd_classes(
                 "s3://test-cache/cache/landcover/nlcd.tif"
             )
@@ -3555,7 +3570,7 @@ def test_nlcd_gate_gs_read_unchanged_does_not_call_boto3() -> None:
             side_effect=RuntimeError("vsigs open stubbed"),
         ),
     ):
-        with pytest.raises(SFINCSSetupError) as excinfo:
+        with pytest.raises(sfincs_builder.SFINCSSetupError) as excinfo:
             sfincs_builder._extract_unique_nlcd_classes(gs_uri)
         assert excinfo.value.error_code == "LANDCOVER_READ_FAILED"
         mock_to_vsigs.assert_called_once_with(gs_uri)

@@ -1,0 +1,10 @@
+# Template routing phrasings: engine templates are ordinary retrieval-pool tools
+# walked into the main index.
+landlab_hand_wetness:
+- height above nearest drainage over this terrain
+- HAND wetness proxy raster for this catchment
+- how high is each cell above the nearest channel
+- flood-proneness proxy from height above drainage
+- relative elevation above the channel network on this DEM
+- compute HAND Nobre height above nearest drainage for this AOI
+- near-channel lowland map from height above drainage

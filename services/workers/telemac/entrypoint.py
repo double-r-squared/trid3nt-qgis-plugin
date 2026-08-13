@@ -146,13 +146,30 @@ def _parse_gaia_mass_balance(listing_text: str) -> dict[str, Any]:
     return out
 
 
+class TelemacManifestUnknownFieldsError(ValueError):
+    """manifest.json['reach'] carries a key ``ReachConfig`` has no field for."""
+
+
+#: PARSER VERSION -- bump on a ReachConfig field addition/rename/retirement.
+#: Named in the strict-field error (ADR 0158). -3 added the ADR 0196
+#: rain-on-grid fields; -4 added the ADR 0206 time-varying native hyetograph
+#: field (rain_hyetograph_blocks); -5 adds the ADR 0213 continuous
+#: soil-moisture-store fields (soil_store, soil_store_capacity_mm,
+#: soil_store_recovery_h, soil_store_init_mm); -6 adds the GAIA v2 erodible-bed
+#: morphodynamics fields (erodible_bed toggles bedload scour; bed_thickness_m,
+#: bedload_formula, morphological_factor tune the erodible stock + transport law).
+_PARSER_VERSION = "telemac-reach-6"
+
+
 def _reach_config(data_dir: Path, reach_overrides: dict[str, Any]) -> Any:
     """Build a ``ReachConfig`` from manifest overrides, pinned to ``data_dir``.
 
-    Only known ReachConfig fields are accepted (unknown keys are dropped with a
-    warning) so a stray manifest key never crashes the worker. ``workdir`` is
-    forced to the mounted data dir so every artifact lands where the supervisor
-    uploads from.
+    Only known ``ReachConfig`` fields are accepted -- an unknown key raises
+    loudly (ADR 0158; formerly dropped with a log warning, which is exactly the
+    ADR 0148 failure mode: a stale image / typo'd knob silently ran as a
+    no-op instead of applying, and a WARNING-level log line is invisible in
+    practice). ``workdir`` is forced to the mounted data dir so every artifact
+    lands where the supervisor uploads from.
     """
     from telemac_river_dye_build import ReachConfig  # noqa: WPS433 -- worker payload
 
@@ -160,13 +177,22 @@ def _reach_config(data_dir: Path, reach_overrides: dict[str, Any]) -> Any:
 
     valid = {f.name for f in dataclasses.fields(ReachConfig)}
     clean: dict[str, Any] = {}
+    unknown: list[str] = []
     for key, value in (reach_overrides or {}).items():
         if key == "workdir":
             continue  # always pinned to the mounted data dir
         if key in valid:
             clean[key] = value
         else:
-            LOG.warning("telemac manifest: ignoring unknown reach key %r", key)
+            unknown.append(key)
+    if unknown:
+        raise TelemacManifestUnknownFieldsError(
+            f"manifest.json['reach'] carries unknown field(s) {sorted(unknown)} "
+            f"that parser {_PARSER_VERSION} does not read -- this SILENTLY "
+            f"no-ops the intended knob(s) rather than applying them. Either "
+            f"the caller has a typo, or the worker image is stale (rebuild it "
+            f"-- ADR 0148). Known ReachConfig fields: {sorted(valid)}."
+        )
     clean["workdir"] = str(data_dir)
     cfg = ReachConfig(**clean)
     return cfg
@@ -212,12 +238,24 @@ def run_pipeline(
     tr = pmeta.pop("lonlat_transformer")
     LOG.info("centerline processed: %s", pmeta)
 
-    # 2b. real river banks from NHDArea polygons (honest fallback to the
-    # constant-width ribbon when the fetch/sampling cannot see water).
-    bank_source = "constant"
+    # 2b. river banks from an EXPLICIT source (NATE oceanmesh-wave leg 1 - no
+    # inexplicit mesh-source fallbacks). "nhd_area" (default) samples real NHDArea
+    # water polygons for per-station banks; "constant_ribbon" meshes the assumed
+    # constant channel width. On the nhd_area path with NO NHDArea coverage the
+    # worker raises BanksUnavailableError (typed TELEMAC_BANKS_UNAVAILABLE gate)
+    # instead of silently ribboning. bank_source below is the OUTPUT provenance
+    # label (constant_ribbon | nhd_area); it upgrades to nhd_area on a real-bank hit.
+    _raw_bank_source = str(getattr(cfg, "bank_source", "nhd_area")).lower()
+    _bank_mode = (
+        "constant_ribbon"
+        if _raw_bank_source in ("constant", "constant_ribbon", "ribbon")
+        else "nhd_area"  # "nhd_area" (default) / legacy "auto" / anything else
+    )
+    bank_source = "constant_ribbon"
     bank_stats = {}
-    if str(getattr(cfg, "bank_source", "auto")).lower() != "constant":
+    if _bank_mode == "nhd_area":
         _bank_t0 = time.time()
+        _banks_available = False
         try:
             lon0, lat0 = ll[:, 0].min(), ll[:, 1].min()
             lon1, lat1 = ll[:, 0].max(), ll[:, 1].max()
@@ -262,28 +300,34 @@ def run_pipeline(
                     # M3: the mesh builder carves ribbon-minus-water as island
                     # holes (walls), so slicks/dye route around real islands.
                     cfg.water_polys_utm = polys_utm
-                    bank_source = "nhdarea"
+                    bank_source = "nhd_area"
+                    _banks_available = True
                     bank_stats = {
                         "bank_valid_frac": frac,
                         "bank_width_min_m": round(float(2 * halfw.min()), 1),
                         "bank_width_mean_m": round(float(2 * halfw.mean()), 1),
                         "bank_width_max_m": round(float(2 * halfw.max()), 1),
                     }
-                    LOG.info("real banks: nhdarea frac=%.2f width min/mean/max="
+                    LOG.info("real banks: nhd_area frac=%.2f width min/mean/max="
                              "%.0f/%.0f/%.0f m", frac,
                              bank_stats["bank_width_min_m"],
                              bank_stats["bank_width_mean_m"],
                              bank_stats["bank_width_max_m"])
                 else:
-                    LOG.warning("bank sampling saw too little water; "
-                                "constant-width fallback")
+                    LOG.warning("bank sampling saw too little water on the "
+                                "nhd_area path")
             else:
-                LOG.warning("no NHDArea polygons; constant-width fallback")
-        except Exception:  # noqa: BLE001 -- banks are an enhancement, never fatal
-            LOG.exception("bank estimation failed; constant-width fallback")
+                LOG.warning("no NHDArea polygons on the nhd_area path")
+        except Exception:  # noqa: BLE001 -- on the nhd_area path this gates below
+            LOG.exception("NHDArea bank estimation failed on the nhd_area path")
+        if not _banks_available:
+            # No inexplicit mesh-source fallback: gate loudly with the assumed
+            # channel width as the explicit constant_ribbon retry (the server
+            # turns this into the TELEMAC_BANKS_UNAVAILABLE tool-retry gate).
+            raise B.BanksUnavailableError(float(cfg.channel_width_m))
 
     # 3. Gmsh mesh (tagged boundary)
-    mesh = B.build_channel_mesh(cl, cfg)
+    mesh = B.build_channel_mesh_guarded(cl, cfg)
     LOG.info("mesh: npoin=%d nelem=%d nptfr=%d in=%d out=%d banks_ok=%s smooth_tries=%d",
              mesh["npoin"], len(mesh["ikle"]), mesh["nptfr"], mesh["n_in"],
              mesh["n_out"], mesh["banks_ok"], mesh["smooth_tries"])
@@ -602,6 +646,12 @@ def run_pipeline(
         "bank_source": bank_source,
         **oil_stats,
         "substance_class": str(getattr(cfg, "substance_class", "tracer")),
+        # WIND-STRESS FORCING honesty: echo the wind the deck was authored with
+        # (only when active; absent otherwise) so the run summary carries the
+        # forcing the LLM narrates.
+        **({"wind_speed_mps": float(getattr(cfg, "wind_speed_mps", 0.0)),
+            "wind_dir_from_deg": float(getattr(cfg, "wind_dir_from_deg", 0.0))}
+           if float(getattr(cfg, "wind_speed_mps", 0.0) or 0.0) > 0.0 else {}),
         # WAQTEL v1a decay honesty: record the degradation law + coefficient the
         # deck was authored with (only meaningful for the decay class; harmless
         # defaults otherwise) so the run summary carries the decay parameters.
@@ -688,6 +738,227 @@ def run_pipeline(
     return metrics
 
 
+def run_rog_pipeline(
+    data_dir: Path,
+    reach_overrides: dict[str, Any],
+    run_id: str | None,
+) -> dict[str, Any]:
+    """Run the rain-on-grid pipeline (ADR 0196) in ``data_dir``.
+
+    Consumes the watershed SELAFIN + per-node CN2/Manning fields the agent-side
+    composer staged into the rundir (mesh_acquisition + fetch_landcover), builds
+    the boundary/outlet, authors the RoG deck (distributed CN infiltration +
+    per-NLCD Manning + free-exit outlet), solves, and extracts the outlet
+    hydrograph + max fields + mass balance. The result COGs are produced from
+    max_depth/max_velocity by the agent-side postprocess (this worker emits the
+    node fields into rog_geometry.slf's sibling arrays via the metrics + a
+    max-field SELAFIN)."""
+    import numpy as np  # noqa: WPS433
+    import rog_build as R  # noqa: WPS433 -- RoG worker payload
+
+    t0 = time.time()
+    cfg = _reach_config(data_dir, reach_overrides)
+    slf_name = str(getattr(cfg, "watershed_slf", "") or R.WATERSHED_SLF)
+    watershed_slf = str(data_dir / slf_name)
+    LOG.info("rog: watershed=%s runoff_path=%s amc=%s intensity=%.2f mm/h",
+             slf_name, cfg.runoff_path, cfg.amc_condition,
+             float(getattr(cfg, "rain_intensity_mm_per_hr", 0.0)))
+
+    # 1. read the staged watershed mesh + boundary + outlet.
+    m = R.read_watershed_mesh(watershed_slf)
+    b = R.build_boundary(m["X"], m["Y"], m["ikle"])
+    outlet_ll = getattr(cfg, "outlet_lonlat", None)
+    if outlet_ll:
+        # project the pour point lon/lat into the mesh UTM frame.
+        epsg = int(reach_overrides.get("utm_epsg") or 0) or _guess_utm_epsg(m["X"], m["Y"], outlet_ll)
+        from pyproj import Transformer  # noqa: WPS433
+        tr = Transformer.from_crs(4326, epsg, always_xy=True)
+        ox, oy = tr.transform(float(outlet_ll[0]), float(outlet_ll[1]))
+        outlet_xy = (float(ox), float(oy))
+    else:
+        # no pour point given: lowest-bed boundary node is the outlet.
+        ring = b["ring"]
+        outlet_xy = (float(m["X"][ring][np.argmin(m["bed"][ring])]),
+                     float(m["Y"][ring][np.argmin(m["bed"][ring])]))
+    bc = R.classify_outlet(m["X"], m["Y"], b["ring"], outlet_xy,
+                           n_outlet_nodes=int(getattr(cfg, "n_outlet_nodes", 6)))
+
+    # 2. per-node CN2 + Manning (staged by the composer; else uniform fallbacks).
+    cn2 = _read_node_field(data_dir, getattr(cfg, "node_cn2_file", ""), m["npoin"],
+                           default=float(getattr(cfg, "curve_number", None) or 75.0))
+    manning = _read_node_field(data_dir, getattr(cfg, "node_manning_file", ""),
+                               m["npoin"], default=0.06)
+    if getattr(cfg, "curve_number", None) is not None:
+        cn2 = np.full(m["npoin"], float(cfg.curve_number))
+
+    # 3. author the input decks.
+    slf = str(data_dir / R.ROG_GEOMETRY_SLF)
+    cli = str(data_dir / R.ROG_CLI)
+    res = str(data_dir / R.ROG_RESULT_SLF)
+    cas = str(data_dir / R.ROG_CAS)
+    cn_map = str(data_dir / R.ROG_CN_MAP)
+    fric = str(data_dir / R.ROG_FRICTION_COF)
+    zones = str(data_dir / R.ROG_ZONES_FILE)
+    R.write_rog_slf(slf, m["X"], m["Y"], b["ikle"], m["bed"],
+                    b["ipob"], b["ring"], b["nptfr"])
+    R.write_rog_cli(cli, b["ring"], bc)
+    R.write_cn_map(cn_map, m["X"], m["Y"], cn2)
+    fric_stats = R.write_friction_files(fric, zones, manning)
+
+    rain_mm_per_day = float(getattr(cfg, "rain_intensity_mm_per_hr", 25.0)) * 24.0
+    # TIME-VARYING native hyetograph (ADR 0206): when blocks are staged, write
+    # the block FORMATTED DATA FILE 1 + the per-case RAINDEF=3 FORTRAN FILE so
+    # the engine's native SCS-CN runs on the real hyetograph; else the constant
+    # design-storm native path is authored (byte-identical to before).
+    blocks = getattr(cfg, "rain_hyetograph_blocks", None)
+    hyeto_file = None
+    hyeto_stats: dict[str, Any] = {}
+    soil_audit: dict[str, Any] = {}
+    runoff_path = str(getattr(cfg, "runoff_path", "native"))
+    if blocks and getattr(cfg, "soil_store", False):
+        # CONTINUOUS SOIL-MOISTURE STORE (ADR 0213): transform the GROSS
+        # hyetograph to NET rainfall-excess through the Michel-2005 store, then
+        # feed the net series to the engine on a uniform CN=100 pass-through so
+        # the engine's SCS-CN abstracts nothing (the store IS the infiltration
+        # model on this path -- no double counting).
+        cap = getattr(cfg, "soil_store_capacity_mm", None)
+        rec = getattr(cfg, "soil_store_recovery_h", None)
+        if cap is None or rec is None:
+            raise R.RogInputError(
+                "TELEMAC_ROG_SOIL_STORE_UNCONFIGURED",
+                "soil_store=True requires soil_store_capacity_mm and "
+                "soil_store_recovery_h; got "
+                f"capacity={cap!r} recovery={rec!r}.")
+        net_blocks, soil_audit = R.soil_moisture_excess(
+            blocks, capacity_mm=float(cap), recovery_h=float(rec),
+            init_mm=float(getattr(cfg, "soil_store_init_mm", 0.0) or 0.0))
+        cn2 = np.full(m["npoin"], R.SOIL_STORE_PASSTHROUGH_CN)
+        R.write_cn_map(cn_map, m["X"], m["Y"], cn2)  # rewrite as pass-through
+        hyeto_file = str(data_dir / R.ROG_HYETO)
+        hyeto_stats = R.write_hyetograph_file(
+            hyeto_file, net_blocks, float(getattr(cfg, "duration_s", 3600.0)))
+        R.stage_raindef3_fortran(str(data_dir / R.ROG_USER_FORTRAN_DIR))
+        runoff_path = "soil_store"
+    elif blocks:
+        hyeto_file = str(data_dir / R.ROG_HYETO)
+        hyeto_stats = R.write_hyetograph_file(
+            hyeto_file, blocks, float(getattr(cfg, "duration_s", 3600.0)))
+        R.stage_raindef3_fortran(str(data_dir / R.ROG_USER_FORTRAN_DIR))
+        runoff_path = "native_hyetograph"
+    R.author_rog_deck(
+        cfg, slf=slf, cli=cli, res=res, cas_path=cas, cn_map=cn_map,
+        friction_cof=fric, zones_file=zones, rain_mm_per_day=rain_mm_per_day,
+        runoff_path=runoff_path, hyetograph_file=hyeto_file)
+
+    # 4. solve (hours-class for a real catchment; the supervisor sets the timeout).
+    solve_timeout = float(os.environ.get("TRID3NT_TELEMAC_SOLVE_TIMEOUT", "86400"))
+    ok, out = R.run_solver(cas, res, str(data_dir), timeout=solve_timeout)
+    (data_dir / "full_listing.log").write_text(out, encoding="utf-8")
+    LOG.info("rog solve CORRECT_END=%s", ok)
+
+    metrics: dict[str, Any] = {
+        "status": "ok" if ok else "error",
+        "correct_end": bool(ok),
+        "mode": "rain_on_grid",
+        "run_id": run_id,
+        "result_slf": R.ROG_RESULT_SLF,
+        "geometry_slf": R.ROG_GEOMETRY_SLF,
+        "cli": R.ROG_CLI,
+        "cas": R.ROG_CAS,
+        "reach_name": cfg.name,
+        "runoff_path": runoff_path,
+        "amc_condition": int(getattr(cfg, "amc_condition", 2)),
+        "rain_intensity_mm_per_hr": float(getattr(cfg, "rain_intensity_mm_per_hr", 25.0)),
+        "npoin": m["npoin"],
+        "nelem": m["nelem"],
+        "nptfr": b["nptfr"],
+        "n_outlet_nodes": bc["n_outlet_nodes"],
+        "outlet_dist_min_m": bc["outlet_dist_min_m"],
+        "friction_zones": fric_stats["n_zones"],
+        "wall_s": round(time.time() - t0, 1),
+        **hyeto_stats,
+        **soil_audit,
+    }
+    if not ok:
+        metrics["error"] = "TELEMAC did not reach CORRECT END OF RUN"
+        metrics["listing_tail"] = "\n".join(out.splitlines()[-60:])
+        return metrics
+
+    # 5. outlet hydrograph + max fields + mass balance.
+    ext = R.extract_rog_outputs(
+        res, out, X=m["X"], Y=m["Y"], ring=b["ring"],
+        outlet_nodes=bc["outlet_nodes"])
+    max_depth = ext.pop("max_depth_m")
+    max_vel = ext.pop("max_velocity_ms")
+    # write the max fields as a 2-variable SELAFIN so the postprocess renders the
+    # depth/velocity COGs from a real geometry (same mesh, static frame).
+    _write_max_fields_slf(str(data_dir / "rog_max_fields.slf"),
+                          m["X"], m["Y"], b["ikle"], b["ipob"], b["ring"],
+                          b["nptfr"], max_depth, max_vel)
+    (data_dir / R.ROG_HYDROGRAPH).write_text(
+        json.dumps(ext["outlet_hydrograph"]), encoding="utf-8")
+    ext.pop("outlet_hydrograph", None)
+    metrics.update(ext)
+    metrics["max_fields_slf"] = "rog_max_fields.slf"
+    metrics["outlet_hydrograph_json"] = R.ROG_HYDROGRAPH
+    LOG.info("rog outputs: peak_Q=%.3f m3/s vol=%.1f m3 maxH=%.3f m frames=%d",
+             metrics.get("peak_discharge_m3s", 0.0),
+             metrics.get("outflow_volume_m3", 0.0),
+             metrics.get("max_depth_peak_m", 0.0),
+             metrics.get("n_frames", 0))
+    return metrics
+
+
+def _guess_utm_epsg(X: Any, Y: Any, outlet_ll: Any) -> int:
+    """UTM zone EPSG from the pour-point lon/lat (mesh is already in that zone)."""
+    lon, lat = float(outlet_ll[0]), float(outlet_ll[1])
+    zone = int((lon + 180.0) // 6.0) + 1
+    return (32600 if lat >= 0 else 32700) + zone
+
+
+def _read_node_field(data_dir: Path, name: str, npoin: int, *, default: float) -> Any:
+    """Read a one-value-per-line per-node field; fall back to a uniform default."""
+    import numpy as np  # noqa: WPS433
+
+    if name:
+        p = data_dir / name
+        if p.exists() and p.stat().st_size > 0:
+            vals = np.array([float(x) for x in p.read_text().split()], dtype=float)
+            if vals.shape[0] == npoin:
+                return vals
+            LOG.warning("rog node field %s has %d values (npoin=%d); using default",
+                        name, vals.shape[0], npoin)
+    return np.full(npoin, float(default), dtype=float)
+
+
+def _write_max_fields_slf(path: str, X: Any, Y: Any, ikle: Any, ipob: Any,
+                          ring: Any, nptfr: int, max_depth: Any,
+                          max_vel: Any) -> str:
+    """Write MAX WATER DEPTH + MAX VELOCITY as a single-frame SELAFIN."""
+    import numpy as np  # noqa: WPS433
+    from data_manip.extraction.telemac_file import TelemacFile
+
+    if os.path.exists(path):
+        os.remove(path)
+    tf = TelemacFile(path, access="w")
+    tf.add_header("TRID3NT ROG MAX FIELDS", date=np.array([2026, 8, 8, 0, 0, 0]))
+    tf.add_mesh(np.asarray(X, float), np.asarray(Y, float),
+                np.asarray(ikle, np.int64),
+                z=np.asarray(max_depth, float))
+    tf._ipob3 = np.asarray(ipob, dtype=np.int32)
+    tf._ipob2 = tf._ipob3
+    tf._nptfr = int(nptfr)
+    tf._nbor = (np.asarray(ring, dtype=np.int32) + 1)
+    tf._knolg = np.arange(1, int(np.asarray(X).shape[0]) + 1, dtype=np.int32)
+    tf.add_variable("MAXIMUM DEPTH   ", "M               ")
+    tf.add_variable("MAXIMUM VELOCITY", "M/S             ")
+    tf.add_data_value("MAXIMUM DEPTH   ", 0, np.asarray(max_depth, float))
+    tf.add_data_value("MAXIMUM VELOCITY", 0, np.asarray(max_vel, float))
+    tf.write()
+    tf.close()
+    return path
+
+
 def _build_argv_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(
         prog="trid3nt-telemac-entrypoint",
@@ -744,8 +1015,45 @@ def main(argv: list[str] | None = None) -> int:
         })
         return 2
 
+    import telemac_river_dye_build as B  # noqa: WPS433 -- for the typed banks gate
+
+    # ADR 0196: mode="rain_on_grid" routes to the RoG pipeline (rog_build); every
+    # other value keeps the historical channel-dye pipeline byte-identical.
+    mode = str((reach_overrides or {}).get("mode", "river_dye") or "river_dye").lower()
+
     try:
-        metrics = run_pipeline(data_dir, reach_overrides, run_id, mesh_only=mesh_only)
+        if mode == "rain_on_grid":
+            metrics = run_rog_pipeline(data_dir, reach_overrides, run_id)
+        else:
+            metrics = run_pipeline(data_dir, reach_overrides, run_id, mesh_only=mesh_only)
+    except B.BanksUnavailableError as exc:  # nhd_area path, no NHDArea coverage
+        LOG.warning("telemac banks unavailable: %s", exc)
+        _write_metrics(data_dir, {
+            "status": "error",
+            "correct_end": False,
+            "error_code": "TELEMAC_BANKS_UNAVAILABLE",
+            "error": str(exc),
+            "bank_source_retry": "constant_ribbon",
+            "assumed_channel_width_m": float(exc.assumed_channel_width_m),
+        })
+        return 3
+    except (B.ReachDegenerateError, B.MeshBuildTimeout) as exc:
+        # Degenerate reach geometry (channel wider than the reach is long) gated
+        # BEFORE meshing, or a hard-watchdog kill of a runaway build -> a typed,
+        # retryable TELEMAC_REACH_DEGENERATE gate naming the corrective args.
+        LOG.warning("telemac reach-degenerate gate: %s", exc)
+        _payload = {
+            "status": "error",
+            "correct_end": False,
+            "error_code": "TELEMAC_REACH_DEGENERATE",
+            "error": str(exc),
+        }
+        if isinstance(exc, B.ReachDegenerateError):
+            _payload["reach_length_m"] = float(exc.reach_length_m)
+            _payload["degenerate_channel_width_m"] = float(exc.channel_width_m)
+            _payload["aspect_ratio"] = float(exc.aspect_ratio)
+        _write_metrics(data_dir, _payload)
+        return 4
     except Exception as exc:  # noqa: BLE001 -- any pipeline failure is a typed metrics error
         LOG.exception("telemac pipeline failed")
         _write_metrics(data_dir, {

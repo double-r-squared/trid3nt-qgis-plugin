@@ -1,6 +1,6 @@
 """Contract tests for the thin per-case manifest dual-write (#165 data-island).
 
-The data-island North Star wants a future cold path that lists cases + their
+The data-island reference scenario wants a future cold path that lists cases + their
 layers straight from S3 with the agent box asleep, WITHOUT downloading the fat
 case-view snapshot per Case. This sprint adds a THIN ``CaseManifest`` written
 ALONGSIDE the existing snapshot (DUAL-WRITE). The snapshot is NOT retired here

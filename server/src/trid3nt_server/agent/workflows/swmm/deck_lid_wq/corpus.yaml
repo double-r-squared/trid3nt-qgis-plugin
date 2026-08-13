@@ -1,0 +1,10 @@
+# Template routing phrasings (engine templates are ordinary retrieval-pool tools).
+swmm_lid_raingarden_wq:
+- run the published rain garden SWMM example with and without the LID control
+- show how a rain garden (bioretention LID) reduces runoff and pollutant washoff
+- demonstrate the two-subcatchment SWMM water quality example with rain gardens
+- how much does a bioretention cell cut runoff in the cited SWMM LID example
+- run the Dickinson rain-garden water-quality SWMM deck and chart the runoff
+- compare runoff with and without a rain garden using the published SWMM model
+- LID rain garden buildup washoff water quality demonstration in SWMM
+- show the expected-outcome check that the rain garden lowers runoff and TSS load

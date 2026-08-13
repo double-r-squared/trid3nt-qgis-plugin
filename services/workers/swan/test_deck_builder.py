@@ -86,6 +86,15 @@ def test_parse_valid_spec_fills_defaults():
     assert "HSIGN" in spec.output_quantities
 
 
+def test_parse_rejects_unknown_top_level_field():
+    """ADR 0158: an unknown build_spec field errors loudly instead of silently
+    no-opping the intended knob (the ADR 0148 lesson)."""
+    with pytest.raises(SwanDeckError) as ei:
+        parse_build_spec(_spec(typo_field_name=1.0))
+    assert ei.value.error_code == "SWAN_SPEC_UNKNOWN_FIELDS"
+    assert "typo_field_name" in str(ei.value)
+
+
 def test_parse_rejects_bad_mode():
     with pytest.raises(SwanDeckError) as ei:
         parse_build_spec(_spec(mode="nope"))
@@ -543,3 +552,160 @@ def test_all_dry_guard_excludes_exception_sentinel():
     assert wet == 1
     assert depth_min == pytest.approx(8.0, abs=1e-6)
     assert depth_max == pytest.approx(8.0, abs=1e-6)
+
+
+# ===========================================================================
+# Physics-scheme knobs (SWAN 41.51): explicit GEN / WCAPPING / QUADRUPL /
+# BREAKING / FRICTION / TRIAD selection. Defaults must reproduce the prior deck.
+# ===========================================================================
+def test_physics_knob_defaults_reproduce_prior_deck():
+    """Unset physics knobs render the exact pre-knob physics lines."""
+    text = render_swn_command_file(parse_build_spec(_spec()))
+    assert "GEN3 WESTHUYSEN" in text
+    assert "FRICTION JONSWAP CONSTANT 0.0670" in text
+    assert "BREAKING CONSTANT 1.000 0.730" in text
+    assert "\nTRIAD\n" in text  # bare DCTA default
+    assert "OFF QUAD" in text  # no wind -> quads off
+    assert "WCAPPING" not in text  # GEN3 built-in default
+
+
+def test_gen_formulation_selects_growth_command():
+    assert "GEN3 KOMEN" in render_swn_command_file(
+        parse_build_spec(_spec(gen_formulation="komen")))
+    assert "GEN3 JANSSEN" in render_swn_command_file(
+        parse_build_spec(_spec(gen_formulation="janssen")))
+    g1 = render_swn_command_file(parse_build_spec(_spec(gen_formulation="gen1")))
+    assert "\nGEN1\n" in g1 and "GEN3" not in g1
+    # GEN1/GEN2 carry neither whitecapping nor the no-wind OFF QUAD (not GEN3).
+    assert "WCAPPING" not in g1 and "OFF QUAD" not in g1
+
+
+def test_whitecapping_scheme_toggle_gen3_only():
+    ab = render_swn_command_file(parse_build_spec(_spec(whitecapping="ab")))
+    assert "WCAPPING AB" in ab
+    km = render_swn_command_file(parse_build_spec(_spec(whitecapping="komen")))
+    assert "WCAPPING KOMEN" in km
+    # Not emitted for GEN1 (whitecapping is a GEN3 concept).
+    g1 = render_swn_command_file(
+        parse_build_spec(_spec(gen_formulation="gen1", whitecapping="ab")))
+    assert "WCAPPING" not in g1
+
+
+def test_breaking_and_friction_coefficients_are_knobs():
+    text = render_swn_command_file(
+        parse_build_spec(_spec(breaking_gamma=0.55, breaking_alpha=1.0,
+                               friction_cfjon=0.019)))
+    assert "BREAKING CONSTANT 1.000 0.550" in text
+    assert "FRICTION JONSWAP CONSTANT 0.0190" in text
+
+
+def test_triad_biphase_parametrization_explicit():
+    eld = render_swn_command_file(
+        parse_build_spec(_spec(triad_biphase="eldeberky", triad_urcrit=0.63)))
+    assert "TRIAD DCTA 4.4 0.66667 COLL BIPHASE ELDEBERKY 0.630" in eld
+    dw = render_swn_command_file(
+        parse_build_spec(_spec(triad_biphase="dewit", triad_lpar=0.0)))
+    assert "BIPHASE DEWIT 0.000" in dw
+
+
+def test_quad_iquad_emitted_only_with_wind():
+    # No wind -> OFF QUAD regardless of iquad request.
+    no_wind = render_swn_command_file(parse_build_spec(_spec(quad_iquad=3)))
+    assert "OFF QUAD" in no_wind and "QUADRUPL" not in no_wind
+    # With a wind file -> QUADRUPL <iquad> and no OFF QUAD.
+    windy = render_swn_command_file(
+        parse_build_spec(_spec(wind_file="wind.dat", quad_iquad=3)))
+    assert "QUADRUPL 3" in windy and "OFF QUAD" not in windy
+
+
+def test_parse_rejects_bad_physics_knobs():
+    for bad in (
+        {"gen_formulation": "bogus"},
+        {"whitecapping": "bogus"},
+        {"quad_iquad": 7},
+        {"breaking_gamma": 5.0},
+        {"friction_cfjon": -1.0},
+        {"triad_biphase": "bogus"},
+    ):
+        with pytest.raises(SwanDeckError):
+            parse_build_spec(_spec(**bad))
+
+
+# ===========================================================================
+# (7) NONSTATIONARY storm evolution: ISO times + BLOCK OUTPUT + TPAR boundary
+#     (ADR 0190 row 3).
+# ===========================================================================
+def test_nonstationary_compute_uses_iso_datetime_strings():
+    """The COMPUTE tbegc/tendc are full ISO YYYYMMDD.HHMMSS strings (not bare
+    seconds), so a 24 h run carries valid multi-day timestamps."""
+    text = render_swn_command_file(
+        parse_build_spec(_spec(mode="nonstationary", sim_duration_s=86400.0,
+                               time_step_s=600.0))
+    )
+    compute = [l for l in text.splitlines() if l.startswith("COMPUTE NONSTATIONARY")][0]
+    assert "20170101.000000" in compute      # tbegc
+    assert "20170102.000000" in compute      # tendc = +24 h
+    assert "86400.0" not in compute          # NOT the old bare-seconds bug
+
+
+def test_nonstationary_block_has_output_clause():
+    """The nonstationary BLOCK carries an OUTPUT <t> <dt> <unit> clause, or SWAN
+    writes NO per-frame dumps."""
+    text = render_swn_command_file(
+        parse_build_spec(_spec(mode="nonstationary", sim_duration_s=86400.0,
+                               output_frames=16))
+    )
+    block = [l for l in text.splitlines() if l.startswith("BLOCK 'COMPGRID'")][0]
+    assert "OUTPUT 20170101.000000" in block
+
+
+def test_stationary_block_has_no_output_clause():
+    text = render_swn_command_file(parse_build_spec(_spec(mode="stationary")))
+    block = [l for l in text.splitlines() if l.startswith("BLOCK 'COMPGRID'")][0]
+    assert "OUTPUT" not in block
+
+
+def test_storm_boundary_timeseries_writes_tpar_and_uses_file_boundspec(tmp_path):
+    from services.workers.swan.deck_builder import TPAR_FILENAME
+    series = [[0, 1.0, 10, 180, 20], [43200, 5.0, 12, 180, 20], [86400, 1.0, 10, 180, 20]]
+    manifest = build_swan_deck(
+        _spec(mode="nonstationary", sim_duration_s=86400.0,
+              boundary_timeseries=series), tmp_path)
+    assert TPAR_FILENAME in manifest.files_written
+    tpar = (tmp_path / TPAR_FILENAME).read_text()
+    assert tpar.startswith("TPAR")
+    assert "20170101.120000 5.000" in tpar  # peak row at +12 h
+    swn = (tmp_path / SWN_FILENAME).read_text()
+    assert f"CONSTANT FILE '{TPAR_FILENAME}'" in swn
+    assert "CONSTANT PAR" not in swn  # the TPAR path supersedes the constant PAR
+
+
+def test_constant_boundary_when_no_timeseries():
+    """No timeseries -> the deck keeps the CONSTANT PAR boundary (byte-compatible)."""
+    text = render_swn_command_file(parse_build_spec(_spec(mode="nonstationary")))
+    assert "CONSTANT PAR" in text
+    assert ".tpar" not in text
+
+
+def test_boundary_timeseries_rejected_in_stationary_mode():
+    with pytest.raises(SwanDeckError):
+        parse_build_spec(_spec(mode="stationary",
+                               boundary_timeseries=[[0, 1, 10, 180, 20],
+                                                    [3600, 2, 10, 180, 20]]))
+
+
+def test_boundary_timeseries_unknown_field_still_rejected():
+    with pytest.raises(SwanDeckError):
+        parse_build_spec(_spec(mode="nonstationary", bogus_storm_field=1))
+
+
+def test_nonstationary_uses_bsbt_propagation_scheme():
+    """Nonstationary decks emit PROP BSBT (stable) -- the default higher-order
+    scheme aborts on CFL for a time-marching run."""
+    text = render_swn_command_file(parse_build_spec(_spec(mode="nonstationary")))
+    assert "PROP BSBT" in text
+
+
+def test_stationary_omits_prop_bsbt():
+    text = render_swn_command_file(parse_build_spec(_spec(mode="stationary")))
+    assert "PROP BSBT" not in text

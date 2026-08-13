@@ -1,0 +1,15 @@
+{
+  "rain_mm_per_day": 1500.0,
+  "duration_s": 5400.0,
+  "base_run_id": "01KZH53WRW8KB4NYSAK7VDG4NT",
+  "rain_run_id": "01KZH561BN64PFA5HWZ8EYEJPM",
+  "base_max_depth_m": 5.9802680015563965,
+  "rain_max_depth_m": 5.980978965759277,
+  "final_mean_depth_base_m": 1.4102406903324451,
+  "final_mean_depth_rain_m": 1.4188861489714972,
+  "final_mean_depth_delta_m": 0.008645458639052084,
+  "final_depth_diff_mean_m": 0.008645458639052157,
+  "final_depth_diff_max_m": 0.02123117446899414,
+  "base_final_wet_nodes": 1707,
+  "rain_final_wet_nodes": 1707
+}

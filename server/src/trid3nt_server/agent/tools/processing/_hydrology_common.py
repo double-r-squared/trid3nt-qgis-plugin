@@ -91,6 +91,12 @@ _ENGINE_NOTE = (
 #: pysheds' default D8 direction map, in [N, NE, E, SE, S, SW, W, NW] order.
 _D8_DIRMAP: tuple[int, ...] = (64, 128, 1, 2, 4, 8, 16, 32)
 
+#: Half-window (cells) for max-accumulation outlet snapping in the shared,
+#: alignment-invariant delineation. An 8-cell window (~240 m at 30 m) is enough
+#: to seat the outlet on the main channel without swallowing a neighbouring
+#: basin.
+_OUTLET_SNAP_SEARCH_CELLS: int = 8
+
 # ---------------------------------------------------------------------------
 # Shared helpers.
 # ---------------------------------------------------------------------------
@@ -214,6 +220,93 @@ def _condition_dem(dem_path: str) -> tuple[Any, Any, Any]:
             f"pysheds DEM conditioning / flow analysis failed: {exc}"
         ) from exc
     return grid, fdir, acc
+
+def snap_and_delineate_index_space(
+    grid: Any,
+    fdir: Any,
+    acc: Any,
+    lon: float,
+    lat: float,
+    *,
+    snap_search_cells: int = _OUTLET_SNAP_SEARCH_CELLS,
+) -> tuple[Any, Any, tuple[float, float], int]:
+    """Alignment-invariant catchment upstream of ``(lon, lat)`` -> (mask, polygon, snapped, cells).
+
+    The single robust delineation shared by ``delineate_watershed`` and the
+    TELEMAC rain-on-grid mesh acquisition. Two moves, in order:
+
+    1. Snap the outlet to the MAX-accumulation cell in a +-``snap_search_cells``
+       index window, which guarantees the outlet sits on the main channel.
+    2. Trace the catchment in INDEX space (``xytype="index"``), which is
+       alignment-invariant. ``xytype="coordinate"`` is NOT: its coordinate->cell
+       round-trip can land on a neighbour cell and collapse the basin to a
+       1-cell sliver on certain grid alignments (verified: 33.7-34.0k cells in
+       index space across box quantizations vs 1-14 for the coordinate path).
+
+    Returns ``(mask, polygon, (x_snap, y_snap), cell_count)``. ``polygon`` is in
+    the grid CRS (EPSG:4326 for the geographic Copernicus/3DEP-lonlat DEMs these
+    tools stage) or ``None`` when the catchment is empty. Raises
+    ``HydrologyInputError`` when the outlet window falls outside the grid and
+    ``HydrologyUpstreamError`` when the pysheds trace or polygonization fails.
+    """
+    acc_arr = np.asarray(acc)
+    affine = grid.affine
+    col_f, row_f = ~affine * (float(lon), float(lat))
+    r0, c0 = int(row_f), int(col_f)
+    radius = int(snap_search_cells)
+    rmin, rmax = max(0, r0 - radius), min(acc_arr.shape[0], r0 + radius + 1)
+    cmin, cmax = max(0, c0 - radius), min(acc_arr.shape[1], c0 + radius + 1)
+    if rmin >= rmax or cmin >= cmax:
+        raise HydrologyInputError(
+            f"pour point ({lon}, {lat}) falls outside the DEM window; supply a "
+            "bbox/pour point inside the analysis AOI."
+        )
+    win = acc_arr[rmin:rmax, cmin:cmax]
+    di, dj = np.unravel_index(int(np.argmax(win)), win.shape)
+    rr, cc = rmin + int(di), cmin + int(dj)
+    x_snap, y_snap = affine * (cc + 0.5, rr + 0.5)
+
+    try:
+        catch = grid.catchment(
+            x=cc,
+            y=rr,
+            fdir=fdir,
+            xytype="index",
+            # numpy-typed for the same NEP-50 reason as _condition_dem.
+            nodata_out=np.bool_(False),
+        )
+    except Exception as exc:  # noqa: BLE001
+        raise HydrologyUpstreamError(
+            f"pysheds catchment delineation failed: {exc}"
+        ) from exc
+    mask = np.asarray(catch, dtype=bool)
+    cell_count = int(mask.sum())
+    if cell_count == 0:
+        return mask, None, (float(x_snap), float(y_snap)), 0
+
+    try:
+        from rasterio import features as rio_features
+        from shapely.geometry import shape
+        from shapely.ops import unary_union
+    except ImportError as exc:
+        raise HydrologyDependencyError(
+            f"rasterio/shapely unavailable: {exc}"
+        ) from exc
+    try:
+        geoms = [
+            shape(geom)
+            for geom, val in rio_features.shapes(
+                mask.astype(np.uint8), mask=mask, transform=affine
+            )
+            if val == 1
+        ]
+        polygon = unary_union(geoms) if geoms else None
+    except Exception as exc:  # noqa: BLE001
+        raise HydrologyUpstreamError(
+            f"polygonizing the catchment mask failed: {exc}"
+        ) from exc
+    return mask, polygon, (float(x_snap), float(y_snap)), cell_count
+
 
 def _write_geojson(
     fc: dict[str, Any], prefix: str, seed: str, output_dir: str | None

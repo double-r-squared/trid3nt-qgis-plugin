@@ -46,6 +46,7 @@ __all__ = [
     "GeoClawStaging",
     "build_geoclaw_build_spec",
     "stage_geoclaw_manifest",
+    "stage_finite_fault_csv",
     "register_geoclaw_solver",
     "plan_geoclaw_domain",
     "plan_geoclaw_grid",
@@ -99,7 +100,18 @@ GEOCLAW_OUTPUT_GLOBS: list[str] = [
     "_output/fgmax*.txt",
     "_output/fgmax_grids.data",
     "_output/gauge*.txt",
+    "_output/fgout*.q*",
+    "_output/fgout*.t*",
+    "_output/fgout*.b*",
     "deck_manifest.json",
+    # Okada seafloor-deformation source (tsunami synthetic Okada, ADR 0226): the
+    # final-time dZ ESRI-ASCII the composer rasterizes into the coseismic-
+    # deformation PRODUCT, plus the dtopo/maketopo provenance the run keeps. This
+    # manifest list is AUTHORITATIVE (it overrides the worker's DEFAULT_OUTPUT_GLOBS),
+    # so the deformation artifacts MUST be listed HERE to be uploaded.
+    "deformation_dz.asc",
+    "dtopo.tt3",
+    "maketopo.py",
 ]
 
 
@@ -168,6 +180,7 @@ def build_geoclaw_build_spec(
     *,
     topo_dest: str = "topo.asc",
     dtopo_dest: str | None = None,
+    finite_fault_dest: str | None = None,
     surge_dest: str | None = None,
     extra_topo_files: list[str] | None = None,
     base_num_cells: tuple[int, int] = (40, 40),
@@ -242,8 +255,90 @@ def build_geoclaw_build_spec(
         spec["fault_depth_km"] = float(run_args.fault_depth_km)
     if run_args.scenario == "tsunami" and dtopo_dest is not None:
         spec["dtopo_file"] = dtopo_dest
+    # Finite-fault subfault table (measured-inversion rung): the worker builds a
+    # MULTI-subfault Okada dtopo from it. Threaded only for tsunami (and never
+    # alongside a prescribed dtopo_file -- a staged dtopo wins).
+    if (
+        run_args.scenario == "tsunami"
+        and finite_fault_dest is not None
+        and dtopo_dest is None
+    ):
+        spec["finite_fault_file"] = finite_fault_dest
     if run_args.scenario == "surge" and surge_dest is not None:
         spec["surge_forcing_file"] = surge_dest
+    # --- Storm surge parametric-Holland forcing (scenario="surge") ------------
+    # Thread the storm track (as the 7-tuple rows the worker's render_storm_file
+    # consumes), the wind-stress drag law, and the run-window start t0_s. The
+    # worker synthesizes a NON-SITE-SPECIFIC demo storm when the track is empty,
+    # so an empty track is intentional (surfaced as synthetic downstream). t0_s
+    # opens the window BEFORE landfall so the storm spins up: the explicit
+    # surge_t0_s when supplied, else the track's earliest time, else half the run
+    # before landfall (a demo default) -- always negative so the run reaches
+    # landfall (t=0) mid-window.
+    if run_args.scenario == "surge":
+        if run_args.storm_track:
+            spec["storm_track"] = [
+                [
+                    float(p.t_s),
+                    float(p.lon),
+                    float(p.lat),
+                    float(p.max_wind_speed_ms),
+                    float(p.max_wind_radius_m),
+                    float(p.central_pressure_pa),
+                    float(p.storm_radius_m),
+                ]
+                for p in run_args.storm_track
+            ]
+        spec["wind_drag_law"] = str(run_args.wind_drag_law)
+        if run_args.surge_t0_s is not None:
+            t0_s = float(run_args.surge_t0_s)
+        elif run_args.storm_track:
+            t0_s = float(min(p.t_s for p in run_args.storm_track))
+        else:
+            t0_s = -0.5 * float(run_args.sim_duration_s)
+        spec["t0_s"] = t0_s
+    # Explicit AMR refinement windows (region-based flagging): thread ONLY when the
+    # user/template supplied them (empty list preserves the default-flagging deck).
+    if run_args.amr_regions:
+        spec["amr_regions"] = [
+            [
+                int(w.min_level),
+                int(w.max_level),
+                float(w.t_start_s),
+                float(w.t_end_s),
+                float(w.min_lon),
+                float(w.max_lon),
+                float(w.min_lat),
+                float(w.max_lat),
+            ]
+            for w in run_args.amr_regions
+        ]
+    # Spatially-varying Manning friction: thread the coefficient list + breakpoints
+    # ONLY when set (else the single global manning_n rides through unchanged).
+    if run_args.manning_coefficients is not None:
+        spec["manning_coefficients"] = [float(n) for n in run_args.manning_coefficients]
+        spec["manning_break"] = [float(b) for b in run_args.manning_break]
+    # Lagrangian particle gauges: thread the seed points ONLY when supplied (else
+    # no gtype dict / extra gauges are emitted -> byte-identical deck).
+    if run_args.lagrangian_particles:
+        spec["lagrangian_particles"] = [
+            [float(p[0]), float(p[1])] for p in run_args.lagrangian_particles
+        ]
+    # fgmax point set: thread the ONSHORE mask selector ONLY when non-default so a
+    # "full" run stays byte-identical (the worker defaults fgmax_mask -> "full").
+    if getattr(run_args, "fgmax_mask", "full") != "full":
+        spec["fgmax_mask"] = str(run_args.fgmax_mask)
+    # fgout smooth-animation frames: thread ONLY when > 0 so a run without fgout
+    # stays byte-identical (the worker defaults fgout_frames -> 0 = no fgout block).
+    if int(getattr(run_args, "fgout_frames", 0) or 0) > 0:
+        spec["fgout_frames"] = int(run_args.fgout_frames)
+    # Thacker paraboloid-basin V&V bowl parameters: threaded ONLY for the thacker
+    # scenario (the contract already forbids them elsewhere). The worker generates
+    # the bowl topo + analytic qinit from these -- no DEM is staged.
+    if run_args.scenario == "thacker":
+        spec["bowl_a_m"] = float(run_args.bowl_a_m)
+        spec["bowl_h0_m"] = float(run_args.bowl_h0_m)
+        spec["bowl_eta_amp"] = float(run_args.bowl_eta_amp)
     return spec
 
 
@@ -999,12 +1094,46 @@ def reproject_dem_to_4326(dem_uri: str, *, run_id: str | None = None) -> str:
 # --------------------------------------------------------------------------- #
 # Staging — upload the build_spec manifest + the topo DEM to S3.
 # --------------------------------------------------------------------------- #
+def stage_finite_fault_csv(csv_text: str, run_id: str | None = None) -> str:
+    """Upload a finite-fault CSVFault subfault table to the cache bucket -> its URI.
+
+    The finite-fault CSV is GENERATED agent-side (from the parsed USGS finite-fault
+    inversion) so -- unlike the DEM / dtopo which are already staged upstream -- its
+    bytes must be uploaded before the worker can download it. Uses the SAME
+    scheme + boto3 client + cache bucket as ``stage_geoclaw_manifest`` (no new
+    client). Returns the ``{scheme}://<bucket>/<key>`` URI. Raises
+    ``GeoClawWorkflowError`` on an upload failure (never a silent dead-end)."""
+    from trid3nt_server.agent.tools.cache import CACHE_BUCKET, storage_scheme
+    from trid3nt_server.agent.tools.simulation.solver.solver import _get_s3_client
+
+    rid = run_id or new_ulid()
+    scheme = storage_scheme()
+    cache_bucket = os.environ.get("TRID3NT_CACHE_BUCKET") or CACHE_BUCKET
+    key = f"cache/static-30d/geoclaw_setup/{rid}/finite_fault.csv"
+    uri = f"{scheme}://{cache_bucket}/{key}"
+    try:
+        _get_s3_client().put_object(
+            Bucket=cache_bucket,
+            Key=key,
+            Body=csv_text.encode("utf-8"),
+            ContentType="text/csv",
+        )
+    except Exception as exc:  # noqa: BLE001
+        raise GeoClawWorkflowError(
+            "GEOCLAW_STAGING_FAILED",
+            message=f"failed to stage finite-fault CSV to {uri}: {exc}",
+            details={"run_id": rid, "finite_fault_uri": uri},
+        ) from exc
+    return uri
+
+
 def stage_geoclaw_manifest(
     run_args: GeoClawRunArgs,
     *,
     dem_uri: str,
     run_id: str | None = None,
     dtopo_uri: str | None = None,
+    finite_fault_uri: str | None = None,
     surge_uri: str | None = None,
     extra_dem_uris: list[str] | None = None,
     base_num_cells: tuple[int, int] = (40, 40),
@@ -1052,8 +1181,26 @@ def stage_geoclaw_manifest(
     rid = run_id or new_ulid()
     bbox = tuple(run_args.bbox)
 
-    # Stage the DEM BY REFERENCE; the worker downloads it as topo.asc.
-    inputs: list[dict[str, str]] = [{"gs_uri": dem_uri, "dest": "topo.asc"}]
+    # DEM-free THACKER path: the worker GENERATES the paraboloid topo + analytic
+    # qinit from the bowl parameters, so NO topo is staged (inputs empty). A staged
+    # DEM would be ignored -> refuse it loudly (bowl mode vs AOI-DEM mode are
+    # mutually exclusive, already enforced on GeoClawRunArgs; guard here too).
+    is_thacker = run_args.scenario == "thacker"
+    if is_thacker and dem_uri:
+        raise GeoClawWorkflowError(
+            "GEOCLAW_PARAMS_INVALID",
+            message=(
+                "scenario='thacker' is DEM-free (the worker generates the bowl "
+                "topo); no dem_uri may be staged. Bowl mode and AOI-DEM mode are "
+                "mutually exclusive."
+            ),
+        )
+
+    # Stage the DEM BY REFERENCE; the worker downloads it as topo.asc. THACKER
+    # stages NO inputs (the worker writes topo.asc + qinit.xyz itself).
+    inputs: list[dict[str, str]] = (
+        [] if is_thacker else [{"gs_uri": dem_uri, "dest": "topo.asc"}]
+    )
     dtopo_dest: str | None = None
     surge_dest: str | None = None
     # Additional topo/bathy tiles (ordered coarse -> fine) staged BY REFERENCE.
@@ -1064,9 +1211,15 @@ def stage_geoclaw_manifest(
         dest = f"topo_extra_{i}.asc"
         inputs.append({"gs_uri": str(uri), "dest": dest})
         extra_topo_files.append(dest)
+    finite_fault_dest: str | None = None
     if run_args.scenario == "tsunami" and dtopo_uri:
         dtopo_dest = "dtopo.tt3"
         inputs.append({"gs_uri": dtopo_uri, "dest": dtopo_dest})
+    # Finite-fault CSV staged BY REFERENCE (worker downloads it as
+    # finite_fault.csv). Never alongside a prescribed dtopo (a staged dtopo wins).
+    if run_args.scenario == "tsunami" and finite_fault_uri and not dtopo_uri:
+        finite_fault_dest = "finite_fault.csv"
+        inputs.append({"gs_uri": finite_fault_uri, "dest": finite_fault_dest})
     if run_args.scenario == "surge" and surge_uri:
         surge_dest = "surge.csv"
         inputs.append({"gs_uri": surge_uri, "dest": surge_dest})
@@ -1075,6 +1228,7 @@ def stage_geoclaw_manifest(
         run_args,
         topo_dest="topo.asc",
         dtopo_dest=dtopo_dest,
+        finite_fault_dest=finite_fault_dest,
         surge_dest=surge_dest,
         extra_topo_files=extra_topo_files,
         base_num_cells=base_num_cells,

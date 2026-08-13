@@ -79,9 +79,11 @@ def _import_tools_registry() -> int:
     # spec-driven; auto-registered by the router spec tree walk, no eager twin import.
     # fetch_buildings: sidecar-write fold (ADR 0084) -- twin DELETED, now spec-driven
     # (promoted by register_specs_from_tree at agent.tools import); no eager twin import.
-    from .agent.tools.fetchers.socioeconomic.fetch_population import fetch_population  # noqa: F401
+    # fetch_population: WorldPop library_delegate raster fold (ADR 0092) -- twin DELETED,
+    # now spec-driven; auto-registered by register_specs_from_tree at agent.tools import.
     from .agent.tools.fetchers.socioeconomic.geocode_location import geocode_location  # noqa: F401
-    from .agent.tools.fetchers.terrain.fetch_dem import fetch_dem  # noqa: F401
+    # fetch_dem is spec-driven (ADR 0097): promoted by register_specs_from_tree at
+    # agent.tools import; no eager twin import.
     # fetch_landcover is spec-driven (ADR 0082): promoted by register_specs_from_tree
     # at agent.tools import; no eager twin import.
     # register the 2 QGIS discovery atomic tools.
@@ -138,10 +140,10 @@ def _import_tools_registry() -> int:
     # TEMPLATE (was run_pelicun_damage_assessment) now lives under
     # workflows/pelicun/damage_assessment/; import it so it registers at daemon startup.
     from .agent.workflows.pelicun.damage_assessment.damage_assessment import pelicun_damage_assessment  # noqa: F401
-    # register fetch_nexrad_reflectivity (Iowa Mesonet NEXRAD WMS passthrough).
-    from .agent.tools.fetchers.weather.fetch_nexrad_reflectivity import fetch_nexrad_reflectivity  # noqa: F401
-    # register fetch_goes_satellite (GOES-16/17/18/19 satellite imagery via NOAA Big-Data S3).
-    from .agent.tools.fetchers.imagery.fetch_goes_satellite import fetch_goes_satellite  # noqa: F401
+    # register show_nexrad_radar (display tool: composes an Iowa Mesonet NEXRAD WMS URL).
+    from .agent.tools.display.show_nexrad_radar.show_nexrad_radar import show_nexrad_radar  # noqa: F401
+    # fetch_goes_satellite FOLDED to a spec-driven surface (ADR 0111): auto-registered by
+    # register_specs_from_tree (goes_satellite library-delegate raster hooks); no eager import.
     # fetch_mrms_qpe: weather/GRIB fold (ADR 0069) -- twin DELETED, now spec-driven
     # (S3-listed key resolve -> grib_object whole-object COG), via register_specs_from_tree.
     # fetch_hrsl_population: data-router fold phase-2 wave-9 (ADR 0055) -- twin
@@ -162,12 +164,9 @@ def _import_tools_registry() -> int:
     # register fetch_iucn_red_list_range (IUCN Red List Tier-2 species range info fetcher; per-Case secret_ref).
     # fetch_movebank_tracks: keyed CSV http_json fold (ADR 0077) -- twin DELETED, now
     # spec-driven (source.yaml + movebank_tracks hooks), auto-registered via register_specs_from_tree().
-    # register fetch_era5_reanalysis (Copernicus ERA5 reanalysis Tier-2 fetcher; compound-flood global substrate).
-    from .agent.tools.fetchers.climate.fetch_era5_reanalysis import fetch_era5_reanalysis  # noqa: F401
-    # register fetch_gtsm_tide_surge (GTSM v3.0 Tier-2 coastal water-level via CDS; compound-flood coastal boundary).
-    from .agent.tools.fetchers.ocean.fetch_gtsm_tide_surge import fetch_gtsm_tide_surge  # noqa: F401
-    # register fetch_cama_flood_discharge (CaMa-Flood global river discharge Tier-2 fetcher; compound-flood fluvial forcing).
-    from .agent.tools.fetchers.hydrology.fetch_cama_flood_discharge import fetch_cama_flood_discharge  # noqa: F401
+    # fetch_era5_reanalysis + fetch_gtsm_tide_surge: CDS library_delegate fold (ADR 0085)
+    # -- twins DELETED, now spec-driven (source.yaml + cds hooks), auto-registered via
+    # register_specs_from_tree().
 
     return len(tools.TOOL_REGISTRY)
 

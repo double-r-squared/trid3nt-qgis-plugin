@@ -1,10 +1,10 @@
-"""``model_regional_water_budget_scenario``  -  MODFLOW zonal-budget composer.
+"""the composer  -  MODFLOW zonal-budget composer.
 
 The end-to-end higher-order workflow for the MODFLOW
 ``regional_water_budget`` archetype: it turns a place (or AOI point) into a
 narrated regional water-budget partition  -  where the regional groundwater goes
 (CHD inflow / outflow across the gradient, storage, any wells). It mirrors the
-chain shape of ``model_sustainable_yield_scenario`` (sibling GWF-only archetype):
+chain shape of the composer (sibling GWF-only archetype):
 a steady GWF run with no new stress package; the deliverable is the cell-by-cell
 budget partition read agent-side, rendered over the water-table head.
 
@@ -21,7 +21,7 @@ Canonical real-world pipeline mirrored here (a regional groundwater water-budget
         -> run_modflow_archetype_job (GWF steady deck -> mf6 -> CBC partition)
         -> BudgetPartitionLayerURI (budget_partition_m3_day dict, real CBC terms)
 
-Invariants (same set as model_sustainable_yield_scenario):
+Invariants (same set as the composer):
 - **1 / 2 / 8: preserve** (typed numbers, deterministic composition, cancellable).
 - **9. No fabricated outputs.** The partition is built ONLY from real CBC budget
   terms the postprocess measured; a run with no non-trivial budget term returns
@@ -44,6 +44,10 @@ from trid3nt_contracts.modflow_contracts import (
 )
 from trid3nt_contracts.tool_registry import AtomicToolMetadata
 
+from trid3nt_server.agent.workflows.modflow._input_review import (
+    aquifer_k_review_entry,
+    gate_and_stamp_modflow_inputs,
+)
 from trid3nt_server.emission.pipeline_emitter import (
     begin_substeps,
     current_emitter,
@@ -76,7 +80,7 @@ __all__ = [
 
 
 class RegionalWaterBudgetResult(GraceModel):
-    """Return type for ``model_regional_water_budget_scenario``.
+    """Return type for the composer.
 
     Bundles the budget-partition layer + the derived args + a narration summary.
     Invariant 1: the narrated budget is the typed ``budget_layer
@@ -96,7 +100,7 @@ class RegionalWaterBudgetResult(GraceModel):
 
 
 class RegionalWaterBudgetScenarioError(RuntimeError):
-    """Base class for ``model_regional_water_budget_scenario`` failures."""
+    """Base class for the composer failures."""
 
     error_code: str = "REGIONAL_WATER_BUDGET_SCENARIO_ERROR"
     retryable: bool = False
@@ -220,6 +224,27 @@ async def model_regional_water_budget_scenario(
         location_name,
         sorted(layer.budget_partition_m3_day),
     )
+    # ADR 0223: this archetype previously carried NO structured aquifer-K
+    # provenance -- add a machine-readable SyntheticInput routed through
+    # gate_input_review so the demo hydrogeology is labeled on the envelope.
+    _k_note = (
+        "Aquifer K is caller-supplied." if aquifer_k_ms is not None else
+        "Aquifer K/porosity are demo defaults, not site-specific hydrogeology; the "
+        "budget partition is a planning-level illustration, not a calibrated model."
+    )
+    layer, _review = await gate_and_stamp_modflow_inputs(
+        tool_name="modflow_regional_water_budget", layer=layer,
+        entries=[aquifer_k_review_entry(
+            k_source=("user_supplied" if aquifer_k_ms is not None else "demo_default"),
+            k_ms=aquifer_k_ms, porosity=porosity, note=_k_note,
+        )],
+        params={"aquifer_k_ms": aquifer_k_ms, "porosity": porosity},
+    )
+    if _review.cancelled:
+        raise RegionalWaterBudgetScenarioError(
+            f"regional-water-budget input review {_review.cancel_reason or 'not approved'}"
+        )
+    summary["demo_aquifer_caveat"] = _k_note
     return RegionalWaterBudgetResult(
         budget_layer=layer, derived_params=derived, summary=summary
     )
@@ -265,6 +290,12 @@ async def modflow_regional_water_budget(
     **_extra_ignored: Any,
 ) -> dict[str, Any]:
     """Model a regional groundwater water-budget partition (where the water goes).
+
+    Fidelity: MODFLOW 6 local planning-grade groundwater envelope (aquifer
+    K/porosity default to narrated demo values unless supplied), not a
+    calibrated regulatory delineation. Off-scope: surface-water inundation
+    flooding -> sfincs_flood; urban storm-sewer / pipe-network flooding ->
+    swmm_urban_flood.
 
     Builds a steady MODFLOW 6 regional groundwater-flow model (a west->east
     regional gradient over the demo grid), runs it, reads the cell-by-cell flow

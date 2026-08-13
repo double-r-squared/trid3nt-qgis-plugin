@@ -1,0 +1,12 @@
+{
+  "_comment": "Muncie replication gate (mesh wave M3). HEC's own shipped Muncie test project (White River, Muncie IN) -- a combined 1D (61 cross-sections) + 2D (5765-cell flow area) unsteady model. wrk_source/ carries the GUI-computed inputs: Muncie.p04.tmp.hdf (plan HDF, Results stripped, still carrying GUI-computed hydraulic property tables), Muncie.x04 (1D geometry text), Muncie.b04 (unsteady boundary text). The worker entrypoint stages wrk_source into the mounted rundir, runs RasGeomPreprocess then RasUnsteady, and verifies. Provenance: HEC official Linux_RAS_v66.zip (SHA-256 e77271a473da5da28b5a95ebf019f77ba3d32fb6341ad43be3ad4a6004c60e4a), public-domain U.S. Federal Government software.",
+  "plan_hdf": "Muncie.p04.tmp.hdf",
+  "geom_suffix": "x04",
+  "run_geompre": true,
+  "expectations": {
+    "geom_property_tables": "bit-identical to the GUI-computed baseline in wrk_source/Muncie.p04.tmp.hdf (max|diff| == 0 on 1D XSEC Value + 2D Cells Volume-Elevation + 2D Faces Area-Elevation)",
+    "volume_accounting_error_pct_abs_max": 0.05,
+    "volume_accounting_error_pct_observed": 0.005835,
+    "max_water_surface_2d_ft_approx": 951.9
+  }
+}

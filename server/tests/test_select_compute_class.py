@@ -15,7 +15,7 @@ defaulting to ``"standard"`` (8 vCPU). These tests prove:
    (and is present in the alias map) — 48 vCPU / 96 GiB.
 5. ``model_flood_scenario`` passes the COMPUTED class (from the autoscale
    estimated_active_cells) to ``run_solver`` — not the caller's default.
-6. ``model_urban_flood_swmm`` passes the COMPUTED class (from the built mesh's
+6. ``model_swmm_urban_flood`` passes the COMPUTED class (from the built mesh's
    n_active_cells) to ``run_solver`` on the out-of-process lane.
 """
 
@@ -344,7 +344,7 @@ async def test_flood_workflow_falls_back_when_no_estimate(monkeypatch) -> None:
 
 
 # --------------------------------------------------------------------------- #
-# 6. model_urban_flood_swmm passes the COMPUTED class to run_solver
+# 6. model_swmm_urban_flood passes the COMPUTED class to run_solver
 # --------------------------------------------------------------------------- #
 
 
@@ -358,7 +358,7 @@ async def test_swmm_workflow_passes_computed_class_on_out_of_process_lane(
     awaits wait_for_completion and postprocesses from the Batch download."""
     from trid3nt_contracts.swmm_contracts import SWMMDepthLayerURI, SWMMRunArgs
 
-    from trid3nt_server.agent.workflows.swmm.model_urban_flood_swmm import model_urban_flood_swmm as mod
+    from trid3nt_server.agent.workflows.swmm.urban_flood import urban_flood as mod
 
     # Build-result stub with a LARGE active-cell count (-> 'large' tier).
     build = SimpleNamespace(
@@ -432,7 +432,7 @@ async def test_swmm_workflow_passes_computed_class_on_out_of_process_lane(
             "trid3nt_server.agent.tools.simulation.solver.solver.wait_for_completion", side_effect=_fake_wait
         ),
     ):
-        result = await mod.model_urban_flood_swmm(
+        result = await mod.model_swmm_urban_flood(
             run_args,
             dem_path="/tmp/dem.tif",  # skip the fetch
             building_footprints=None,

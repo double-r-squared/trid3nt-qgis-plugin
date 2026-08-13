@@ -3,10 +3,10 @@
 Pins the orchestrator half of the tool-retrieval feature:
 
 1. DEFAULT OFF computes no retrieval and logs no shadow row; build_tool_declarations
-   gets the DEFAULT declarable registry (full MINUS tier=template templates, per
-   the ENGINE-DOOR refactor -- templates surface only via a door's gate expansion).
+   gets the DEFAULT declarable registry (full MINUS the pool-hidden internal/catalog
+   tiers; door dissolution, ADR 0094 -- engine templates are ordinary members now).
 2. SHADOW mode logs the would-be-visible set WITHOUT trimming by retrieval
-   (build_tool_declarations still gets the template-filtered default; the shadow
+   (build_tool_declarations still gets the default declarable registry; the shadow
    event fires).
 3. FAIL-OPEN: a retrieval error in shadow/enforce never trims the catalog.
 4. ENFORCE mode subsets the registry to the visible set, the CORE FLOOR stays a
@@ -63,22 +63,22 @@ def _settings() -> ModelSettings:
 
 def _non_template_names() -> set[str]:
     """The names in the DEFAULT declarable registry: the full TOOL_REGISTRY
-    MINUS every tier=template engine template AND every tier=internal seam.
+    MINUS the pool-hidden tiers (tier=internal / tier=catalog).
 
-    ENGINE-DOOR refactor: the gating-OFF / shadow / fail-open paths no longer
-    hand the RAW TOOL_REGISTRY (templates included) to build_tool_declarations
-    -- templates surface ONLY via their door's gate expansion. wave-11 (ADR
-    0059): tier=internal (an absorbed seam, fetch_copernicus_dem) is excluded
-    identically. So the object passed to build_tool_declarations in these paths is
-    a template/internal-filtered NEW dict (server._default_declarable_registry),
-    not the live registry identity. Pre-door these tests asserted
-    ``regs[0] is TOOL_REGISTRY``; that contract is superseded."""
+    Door dissolution (ADR 0094): engine templates (tier=template) ARE in the
+    default declarable set now -- they are ordinary retrieval-pool tools, callable
+    directly. Only tier=internal (an absorbed seam, fetch_copernicus_dem; ADR
+    0059) and tier=catalog (arm-flagged, none in the default config) are withheld.
+    The object passed to build_tool_declarations is a NEW filtered dict
+    (server._default_declarable_registry), not the live registry identity --
+    pre-door these tests asserted ``regs[0] is TOOL_REGISTRY``; that is
+    superseded."""
     from trid3nt_server.agent.tools import TOOL_REGISTRY
 
     return {
         name
         for name, entry in TOOL_REGISTRY.items()
-        if getattr(entry.metadata, "tier", "general") not in ("template", "internal")
+        if getattr(entry.metadata, "tier", "general") not in ("internal", "catalog")
     }
 
 

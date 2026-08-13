@@ -656,6 +656,7 @@ def postprocess_swan(
             mean_tp_s=float(metrics["mean_tp_s"]),
             mean_dir_deg=float(metrics["mean_dir_deg"]),
             wave_area_km2=float(metrics["wave_area_km2"]),
+            mean_hs_m=float(metrics.get("mean_hs_m", 0.0)),
             mode=mode,  # type: ignore[arg-type]
         )
     ]
@@ -742,6 +743,7 @@ def _emit_frame_layers(
                     mean_tp_s=float(fm["mean_tp_s"]),
                     mean_dir_deg=float(fm["mean_dir_deg"]),
                     wave_area_km2=float(fm["wave_area_km2"]),
+                    mean_hs_m=float(fm.get("mean_hs_m", 0.0)),
                     mode=mode,  # type: ignore[arg-type]
                 )
             )

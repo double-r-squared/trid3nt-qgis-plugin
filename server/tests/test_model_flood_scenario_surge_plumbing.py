@@ -97,6 +97,19 @@ def test_surge_members_incomplete_subdicts_are_dropped() -> None:
     assert press is None
 
 
+def test_surge_members_wind_timeseries_schedule() -> None:
+    """ADR 0162: a ``wind.timeseries`` schedule threads through to
+    ``WindForcing.timeseries`` (a THIRD wind path alongside magnitude/
+    direction and grid_uri)."""
+    schedule = [(0.0, 10.0, 270.0), (3600.0, 25.0, 180.0)]
+    wl, dq, wind, press = _build_surge_forcing_members(
+        {"wind": {"timeseries": schedule}}
+    )
+    assert isinstance(wind, WindForcing)
+    assert wind.timeseries == schedule
+    assert wind.magnitude is None and wind.direction is None
+
+
 def test_resolve_building_obstacle_false_and_str() -> None:
     """``False`` → None; a string is used verbatim as the obstacle geofile URI."""
     assert _resolve_building_obstacle_uri(False, (0.0, 0.0, 1.0, 1.0), []) is None

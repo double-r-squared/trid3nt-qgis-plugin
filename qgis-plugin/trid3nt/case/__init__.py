@@ -1,1 +1,1 @@
-"""TRID3NT case I/O + AOI: export, push-layer, aoi subpackage."""
+"""TRID3NT case I/O + AOI: push-layer, aoi subpackage."""

@@ -1,6 +1,6 @@
 """SFINCS forcing adapter — hydrographs → bzs/dis timeseries + bnd/src locations.
 
-THE GAP THIS FILLS (COASTAL SFINCS North Star, Mexico Beach / Hurricane Michael):
+THE GAP THIS FILLS (coastal SFINCS, Mexico Beach / Hurricane Michael):
 
 The forcing FETCHERS produce per-station / per-reach hydrographs:
 
@@ -10,8 +10,6 @@ The forcing FETCHERS produce per-station / per-reach hydrographs:
   * ``fetch_noaa_nwm_streamflow`` → a FlatGeobuf with one Point feature per
     NHDPlus reach carrying ``feature_id`` + ``streamflow_cms`` (a SINGLE
     instantaneous discharge value per reach, plus ``valid_time``).
-  * ``fetch_cama_flood_discharge`` → a COG (time-mean discharge raster,
-    m^3/s, EPSG:4326) — NOT a per-point hydrograph; sampled at points.
 
 The DECK-EMISSION seam (``sfincs_builder._emit_surge_forcing_blocks``) consumes
 FILE URIs:
@@ -76,8 +74,6 @@ PUBLIC API (all pure-ish: read fetcher bytes → write forcing files → URIs)
     → ``{"timeseries_uri", "locations_uri", "offset", "buffer_m"}``.
   * ``discharge_forcing_from_fgb(...)`` — NWM FGB → dis CSV + src FGB →
     ``{"timeseries_uri", "locations_uri", ...}``.
-  * ``discharge_forcing_from_cama_cog(...)`` — CaMa-Flood COG → sampled src
-    points → constant-discharge dis CSV + src FGB.
 
 Lower-level (unit-tested directly):
 
@@ -118,7 +114,6 @@ __all__ = [
     "write_locations_fgb",
     "waterlevel_forcing_from_fgb",
     "discharge_forcing_from_fgb",
-    "discharge_forcing_from_cama_cog",
     "synthesize_tsunami_bzs",
     "build_surge_forcing",
     "SFINCS_TREF",
@@ -144,8 +139,8 @@ SFINCS_TREF: _dt.datetime = _dt.datetime(2026, 1, 1, 0, 0, 0, tzinfo=_dt.timezon
 SFINCS_TIME_FMT: str = "%Y-%m-%d %H:%M:%S"
 
 #: Minimum timesteps ``set_forcing_1d`` requires (it raises on < 2). When a
-#: source carries a single instantaneous value (NWM streamflow, CaMa time-mean)
-#: we synthesise a flat 2-point series spanning the deck window.
+#: source carries a single instantaneous value (NWM streamflow) we synthesise a
+#: flat 2-point series spanning the deck window.
 _MIN_TIMESTEPS: int = 2
 
 
@@ -964,119 +959,6 @@ def discharge_forcing_from_fgb(
     return out
 
 
-def discharge_forcing_from_cama_cog(
-    cog: str | bytes,
-    bbox: tuple[float, float, float, float],
-    *,
-    window_hours: float | None = None,
-    n_points: int = 1,
-    stage_dir: str | None = None,
-    timeseries_format: str = "datetime",
-) -> dict[str, Any]:
-    """CaMa-Flood time-mean discharge COG → sampled ``src`` points → ``dis`` files.
-
-    Unlike NWM (point FGB), ``fetch_cama_flood_discharge`` emits a single-band
-    time-mean discharge RASTER (m^3/s, EPSG:4326). We sample the cell(s) of
-    LARGEST discharge inside ``bbox`` (the main-stem river entering the domain),
-    materialise each as a constant-discharge src point (flat 2-point series over
-    the deck window), and return the ``DischargeForcing`` dict.
-
-    Args:
-        cog: the CaMa COG URI or bytes.
-        bbox: ``(min_lon, min_lat, max_lon, max_lat)`` — the model domain to
-            sample within.
-        n_points: how many highest-discharge cells to use as src points
-            (default 1 — the dominant inflow).
-    """
-    try:
-        import numpy as np  # type: ignore[import-not-found]
-        import rasterio  # type: ignore[import-not-found]
-        from rasterio.io import MemoryFile  # type: ignore[import-not-found]
-    except Exception as exc:  # noqa: BLE001
-        raise SFINCSForcingAdapterError(
-            "FORCING_DEPS_UNAVAILABLE",
-            message=f"rasterio/numpy not available for CaMa COG sampling: {exc}",
-        ) from exc
-
-    raw = _read_fetcher_bytes(cog)
-    try:
-        with MemoryFile(raw) as mf:
-            with mf.open() as src:
-                arr = src.read(1).astype("float64")
-                nodata = src.nodata
-                transform = src.transform
-                # row/col → lon/lat helpers via the affine transform
-                from rasterio.transform import xy as _xy
-    except SFINCSForcingAdapterError:
-        raise
-    except Exception as exc:  # noqa: BLE001
-        raise SFINCSForcingAdapterError(
-            "FORCING_COG_READ_FAILED",
-            message=f"could not read the CaMa discharge COG: {exc}",
-        ) from exc
-
-    mask = np.isfinite(arr)
-    if nodata is not None:
-        mask &= arr != nodata
-    mask &= arr >= 0.0
-    if not mask.any():
-        raise SFINCSForcingAdapterError(
-            "FORCING_COG_EMPTY",
-            message="CaMa discharge COG has no valid (finite, non-negative) cells",
-        )
-
-    flat = np.where(mask, arr, -np.inf)
-    n = max(1, int(n_points))
-    # Indices of the n largest discharge cells.
-    idx_flat = np.argpartition(flat.ravel(), -n)[-n:]
-    points: list[StationHydrograph] = []
-    next_id = 1
-    for fi in idx_flat:
-        r, c = np.unravel_index(int(fi), arr.shape)
-        v = float(arr[r, c])
-        if not math.isfinite(v) or v < 0:
-            continue
-        lon, lat = _xy(transform, int(r), int(c), offset="center")
-        points.append(
-            StationHydrograph(
-                point_id=next_id,
-                lon=float(lon),
-                lat=float(lat),
-                times=[SFINCS_TREF],
-                values=[v],
-                source_id=f"cama-cell-{next_id}",
-            )
-        )
-        next_id += 1
-
-    if not points:
-        raise SFINCSForcingAdapterError(
-            "FORCING_COG_EMPTY",
-            message="CaMa COG sampling produced no valid src points",
-        )
-
-    series_by_id: dict[int, ReanchoredSeries] = {
-        pt.point_id: reanchor_to_tref(pt.times, pt.values, window_hours=window_hours)
-        for pt in points
-    }
-    stage = _staging_dir(stage_dir)
-    csv_path = write_dis_timeseries_csv(
-        series_by_id, _unique(stage, "dis", "csv"), timeseries_format=timeseries_format
-    )
-    loc_path = write_locations_fgb(points, _unique(stage, "src", "fgb"))
-    return {
-        "timeseries_uri": csv_path,
-        "locations_uri": loc_path,
-        "_prov_n_cells": len(points),
-        "_prov_source": "cama_flood_time_mean",
-    }
-
-
-# --------------------------------------------------------------------------- #
-# Tsunami waveform synthesizer
-# --------------------------------------------------------------------------- #
-
-
 def synthesize_tsunami_bzs(
     bbox: tuple[float, float, float, float],
     *,
@@ -1235,8 +1117,6 @@ def build_surge_forcing(
     *,
     waterlevel_fgb: str | bytes | None = None,
     discharge_fgb: str | bytes | None = None,
-    cama_cog: str | bytes | None = None,
-    bbox: tuple[float, float, float, float] | None = None,
     window_hours: float | None = None,
     waterlevel_offset: float | None = None,
     waterlevel_buffer_m: float | None = None,
@@ -1251,9 +1131,8 @@ def build_surge_forcing(
 ) -> dict[str, Any]:
     """Assemble the ``surge_forcing`` dict ``model_flood_scenario`` consumes.
 
-    Given any combination of a water-level fetcher FGB (GTSM / CO-OPS), a
-    discharge fetcher FGB (NWM) and/or a CaMa COG, materialise the bzs/dis files
-    and return::
+    Given any combination of a water-level fetcher FGB (GTSM / CO-OPS) and a
+    discharge fetcher FGB (NWM), materialise the bzs/dis files and return::
 
         {"waterlevel": {...} | absent,
          "discharge":  {...} | absent,
@@ -1263,7 +1142,7 @@ def build_surge_forcing(
     ``model_flood_scenario(surge_forcing=<this>)`` →
     ``_build_surge_forcing_members`` → ``ForcingSpec`` → the deck. This is the
     single seam a caller invokes to turn fetched surge data into a deck-ready
-    forcing spec. A ``LayerURI`` may be passed directly for any *_fgb / cog arg
+    forcing spec. A ``LayerURI`` may be passed directly for any ``*_fgb`` arg
     — its ``.uri`` is read automatically.
 
     At least one forcing source must be provided, else ``ValueError`` (an empty
@@ -1274,10 +1153,10 @@ def build_surge_forcing(
         uri = getattr(x, "uri", None)
         return uri if uri is not None else x
 
-    if waterlevel_fgb is None and discharge_fgb is None and cama_cog is None and not wind and not pressure:
+    if waterlevel_fgb is None and discharge_fgb is None and not wind and not pressure:
         raise ValueError(
             "build_surge_forcing requires at least one forcing source "
-            "(waterlevel_fgb / discharge_fgb / cama_cog / wind / pressure)"
+            "(waterlevel_fgb / discharge_fgb / wind / pressure)"
         )
 
     surge: dict[str, Any] = {}
@@ -1300,16 +1179,6 @@ def build_surge_forcing(
             hydrography_uri=hydrography_uri,
             river_upa_km2=river_upa_km2,
             value_unit=discharge_value_unit,
-            stage_dir=stage_dir,
-            timeseries_format=timeseries_format,
-        )
-    elif cama_cog is not None:
-        if bbox is None:
-            raise ValueError("cama_cog requires bbox to sample the domain")
-        surge["discharge"] = discharge_forcing_from_cama_cog(
-            _coerce_uri(cama_cog),
-            bbox,
-            window_hours=window_hours,
             stage_dir=stage_dir,
             timeseries_format=timeseries_format,
         )

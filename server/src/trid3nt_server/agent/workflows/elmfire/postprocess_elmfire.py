@@ -69,7 +69,18 @@ __all__ = [
     "read_fire_raster",
     "toa_frame_grids",
     "postprocess_elmfire",
+    "verify_elliptical_replication",
+    "build_ellipse_overlay_chart_spec",
+    "ELLIPSE_VERIFICATION_TOLERANCE",
 ]
+
+#: Fractional shape-agreement tolerance for the elliptical-verification gate at a
+#: COARSE cheap-smoke grid (RMSE of the numerical perimeter from the Richards
+#: ellipse, normalized by the ellipse semi-major axis). This is the coarse-grid
+#: shape-fidelity tolerance, NOT the published fine-grid <0.5% Verification-01
+#: gate (which needs a fine grid + a full Rothermel-rate cross-check). A run at
+#: or below this passes; the corr_class field carries the graded quality.
+ELLIPSE_VERIFICATION_TOLERANCE: float = 0.08
 
 #: Unit conversions applied EXACTLY ONCE here (ELMFIRE emits imperial).
 FT_TO_M: float = 0.3048
@@ -118,6 +129,10 @@ _RASTER_PATTERNS: dict[str, re.Pattern[str]] = {
     "flame_length": re.compile(r"^flame_length.*\.(bil|tif)$", re.I),
     "spread_rate": re.compile(r"^vs.*\.(bil|tif)$", re.I),
     "fireline_intensity": re.compile(r"^flin.*\.(bil|tif)$", re.I),
+    # DUMP_CROWN_FIRE writes crown_fire_<case>_<t>.bil: per-cell crown-fire type
+    # (0 none / 1 passive-torching / 2 active crown). The leading-digit guard
+    # after the underscore excludes crown_fire_area_* (DUMP_CROWN_FIRE_AREA).
+    "crown_fire": re.compile(r"^crown_fire_\d.*\.(bil|tif)$", re.I),
 }
 
 
@@ -544,3 +559,184 @@ def postprocess_elmfire(
         len(aux_data),
     )
     return layers, metrics
+
+
+# --------------------------------------------------------------------------- #
+# Elliptical-verification (ADR 0123): compare the numerical ToA perimeter to the
+# closed-form Richards (1990) ellipse implied by its own head/flank/back rates.
+# Under constant fuel + uniform wind + flat terrain the fire perimeter from a
+# point ignition is an ellipse; this measures how well the level-set solver's
+# perimeter matches that ellipse (shape fidelity). Pure numpy, unit-testable.
+# --------------------------------------------------------------------------- #
+def _corr_class(corr: float) -> str:
+    """Grade a perimeter-vs-ellipse correlation into a quality class."""
+    if corr >= 0.995:
+        return "excellent"
+    if corr >= 0.98:
+        return "good"
+    if corr >= 0.95:
+        return "fair"
+    return "poor"
+
+
+def verify_elliptical_replication(
+    toa_s: Any,
+    *,
+    cellsize_m: float,
+    ignition_rowcol: tuple[int, int],
+    wind_from_deg: float,
+    n_bins: int = 72,
+) -> tuple[dict[str, Any], list[dict[str, float]]]:
+    """Verify a time-of-arrival grid against the closed-form ellipse.
+
+    ``toa_s`` is the ELMFIRE time-of-arrival grid (seconds, NaN where unburned);
+    the fire heads DOWNWIND (toward ``wind_from_deg + 180``). We extract the outer
+    burned perimeter (the max-radius burned cell per angular bin about the
+    ignition), rotate into the wind-aligned frame, and build the Richards ellipse
+    from the observed head / back / flank extents (semi-major ``a=(head+back)/2``,
+    centre offset ``(head-back)/2`` downwind, semi-minor ``b=flank``). The
+    verification triple is the RMSE of the perimeter from that ellipse, the
+    fractional error (RMSE / a), and the perimeter-vs-ellipse correlation (graded
+    into ``corr_class``).
+
+    Returns ``(result, overlay_points)`` where ``result`` carries
+    ``rmse_m`` / ``err_fraction`` / ``correlation`` / ``corr_class`` /
+    ``length_to_width_ratio`` / ``passed`` / ``n_perimeter_points`` /
+    ``head_m`` / ``back_m`` / ``flank_m`` / ``touches_domain_edge``, and
+    ``overlay_points`` is the observed-vs-ellipse perimeter (wind-frame metres)
+    for the overlay chart. A degenerate burn (< 8 perimeter points) returns a
+    ``passed=False`` result with ``error="insufficient_perimeter"``."""
+    import numpy as np
+
+    arr = np.asarray(toa_s, dtype="float64")
+    ny, nx = arr.shape
+    r0, c0 = int(ignition_rowcol[0]), int(ignition_rowcol[1])
+    ys, xs = np.where(np.isfinite(arr))
+    if ys.size < 8:
+        return (
+            {"passed": False, "error": "insufficient_perimeter", "n_perimeter_points": int(ys.size)},
+            [],
+        )
+
+    # Position in metres from the ignition (x east, y north; row increases south).
+    x = (xs - c0) * float(cellsize_m)
+    y = (r0 - ys) * float(cellsize_m)
+
+    # Wind-aligned frame: the fire heads toward (wind_from + 180) in compass deg;
+    # convert to a math angle (0 = east, CCW) and project.
+    head_compass = (float(wind_from_deg) + 180.0) % 360.0
+    mth = np.deg2rad(90.0 - head_compass)
+    ux, uy = np.cos(mth), np.sin(mth)
+    u = x * ux + y * uy          # along-head (downwind +)
+    v = -x * uy + y * ux         # cross-wind
+
+    ang = np.arctan2(v, u)
+    rad = np.sqrt(u * u + v * v)
+
+    bins = np.linspace(-np.pi, np.pi, n_bins + 1)
+    idx = np.clip(np.digitize(ang, bins) - 1, 0, n_bins - 1)
+    pu: list[float] = []
+    pv: list[float] = []
+    for bi in range(n_bins):
+        m = idx == bi
+        if not m.any():
+            continue
+        j = int(np.argmax(rad[m]))
+        pu.append(float(u[m][j]))
+        pv.append(float(v[m][j]))
+    pu_a = np.asarray(pu)
+    pv_a = np.asarray(pv)
+    if pu_a.size < 8:
+        return (
+            {"passed": False, "error": "insufficient_perimeter", "n_perimeter_points": int(pu_a.size)},
+            [],
+        )
+
+    head_ext = float(pu_a.max())
+    back_ext = float(-pu_a.min())
+    flank_ext = float(np.abs(pv_a).max())
+    a = max((head_ext + back_ext) / 2.0, 1e-6)
+    cx = (head_ext - back_ext) / 2.0
+    b = max(flank_ext, 1e-6)
+
+    dpu = pu_a - cx
+    phi = np.arctan2(pv_a, dpu)
+    r_pt = np.sqrt(dpu * dpu + pv_a * pv_a)
+    r_ell = a * b / np.sqrt((b * np.cos(phi)) ** 2 + (a * np.sin(phi)) ** 2)
+    resid = r_pt - r_ell
+    rmse = float(np.sqrt(np.mean(resid ** 2)))
+    err_fraction = float(rmse / a)
+    if r_pt.size >= 2 and np.std(r_ell) > 0:
+        correlation = float(np.corrcoef(r_pt, r_ell)[0, 1])
+    else:
+        correlation = 0.0
+
+    # Did the perimeter reach the domain edge (verification invalid if so)?
+    touches_edge = bool(
+        (xs.min() <= 1) or (xs.max() >= nx - 2)
+        or (ys.min() <= 1) or (ys.max() >= ny - 2)
+    )
+
+    passed = bool(err_fraction <= ELLIPSE_VERIFICATION_TOLERANCE and not touches_edge)
+    result = {
+        "rmse_m": rmse,
+        "err_fraction": err_fraction,
+        "correlation": correlation,
+        "corr_class": _corr_class(correlation),
+        "length_to_width_ratio": float(a / b),
+        "head_m": head_ext,
+        "back_m": back_ext,
+        "flank_m": flank_ext,
+        "n_perimeter_points": int(pu_a.size),
+        "tolerance": ELLIPSE_VERIFICATION_TOLERANCE,
+        "touches_domain_edge": touches_edge,
+        "passed": passed,
+    }
+
+    # Overlay points (wind-frame metres): observed perimeter + the fitted ellipse
+    # sampled at the same angular bins.
+    overlay: list[dict[str, float]] = []
+    theta = np.linspace(-np.pi, np.pi, n_bins, endpoint=False)
+    ell_r = a * b / np.sqrt((b * np.cos(theta)) ** 2 + (a * np.sin(theta)) ** 2)
+    ell_u = cx + ell_r * np.cos(theta)
+    ell_v = ell_r * np.sin(theta)
+    for eu, ev in zip(ell_u, ell_v):
+        overlay.append({"u_m": float(eu), "v_m": float(ev), "series": "ellipse"})
+    for ou, ov in zip(pu_a, pv_a):
+        overlay.append({"u_m": float(ou), "v_m": float(ov), "series": "numerical"})
+    return result, overlay
+
+
+def build_ellipse_overlay_chart_spec(
+    overlay_points: list[dict[str, float]],
+) -> dict[str, Any] | None:
+    """Build the Vega-Lite ellipse-overlay chart (numerical perimeter vs ellipse).
+
+    Two point series in the wind-aligned frame (along-head metres vs cross-wind
+    metres): the numerical ELMFIRE perimeter and the closed-form Richards ellipse.
+    Returns ``None`` when there are no points. Pure (unit-testable)."""
+    if not overlay_points:
+        return None
+    return {
+        "$schema": "https://vega.github.io/schema/vega-lite/v5.json",
+        "data": {"values": overlay_points},
+        "mark": {"type": "point", "filled": True, "size": 30},
+        "encoding": {
+            "x": {"field": "u_m", "type": "quantitative", "title": "along-head (m)"},
+            "y": {"field": "v_m", "type": "quantitative", "title": "cross-wind (m)"},
+            "color": {
+                "field": "series",
+                "type": "nominal",
+                "scale": {
+                    "domain": ["numerical", "ellipse"],
+                    "range": ["#d1495b", "#1f5fbf"],
+                },
+                "title": "perimeter",
+            },
+            "tooltip": [
+                {"field": "series", "type": "nominal"},
+                {"field": "u_m", "type": "quantitative", "format": ".0f"},
+                {"field": "v_m", "type": "quantitative", "format": ".0f"},
+            ],
+        },
+    }

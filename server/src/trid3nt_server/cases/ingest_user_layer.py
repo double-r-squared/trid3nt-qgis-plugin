@@ -1,7 +1,7 @@
 """``register_case_layer`` core -- bidirectional layer push (QGIS -> case).
 
-Every existing layer seam flows agent -> QGIS (``publish_layer``,
-``hydrate_case_layers``). This module is the REVERSE seam: the TRID3NT QGIS
+Every existing layer seam flows agent -> QGIS (``publish_layer``). This
+module is the REVERSE seam: the TRID3NT QGIS
 plugin's user has an ACTIVE layer in their desktop project (vector or raster)
 they want to bring INTO the current case as a first-class input layer.
 
@@ -99,7 +99,7 @@ _KINDS = (_VECTOR_KIND, _RASTER_KIND)
 
 
 # --------------------------------------------------------------------------- #
-# Typed errors (mirrors hydrate_case_layers.HydrateCaseError shape)
+# Typed errors (SCREAMING_SNAKE_CASE error_code per FR-AS-11)
 # --------------------------------------------------------------------------- #
 
 

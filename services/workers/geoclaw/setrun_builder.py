@@ -28,8 +28,11 @@ Canonical real-world pipeline (mirrored, not invented):
       - amrdata: amr_levels_max + refinement_ratios (adaptive mesh refinement).
       - qinit_data (dam_break): a raised-column perturbation file.
       - dtopo_data.dtopofiles (tsunami): the seafloor-deformation source.
-      - the surge scenario reuses a sea-surface boundary forcing (a fixed-grid
-        sea_level offset for the v0.1 single-pulse fallback).
+      - surge_data (surge): parametric Holland-1980 wind + pressure forcing
+        (geoclaw.surge) driven by a storm-track file (t, lon, lat, max wind
+        speed/radius, central pressure, storm radius). A drag_law selector
+        (none | Garratt | Powell) sets the wind-stress law; the run window opens
+        BEFORE landfall (clawdata.t0 = t0_s, negative) so the storm spins up.
 
 The build_spec schema (authored agent-side by ``workflows/run_geoclaw.py``):
     {
@@ -53,7 +56,18 @@ The build_spec schema (authored agent-side by ``workflows/run_geoclaw.py``):
       "dtopo_file": "dtopo.tt3",      # optional staged dtopo; else synthesize
       "source_magnitude": 8.0,
       # surge:
-      "surge_forcing_file": "surge.csv",  # optional staged hydrograph
+      "surge_forcing_file": "surge.csv",  # optional staged hydrograph (unused
+          # by the parametric path; reserved for a gridded-wind upgrade)
+      "storm_track": [                # OPTIONAL parametric-Holland storm track;
+          # each point is [t_s, lon, lat, max_wind_speed_ms, max_wind_radius_m,
+          # central_pressure_pa, storm_radius_m] with t_s SECONDS RELATIVE TO
+          # LANDFALL (negative before). Absent -> a synthetic demo track making
+          # landfall at the AOI centroid.
+          [-43200.0, -95.0, 26.0, 45.0, 46000.0, 96000.0, 500000.0],
+          [0.0, -94.7, 29.3, 49.0, 46000.0, 95000.0, 500000.0],
+      ],
+      "wind_drag_law": "garratt",     # none | garratt | powell (the wind-stress law)
+      "t0_s": -43200.0,               # run start, s from landfall (surge: < 0)
     }
 """
 
@@ -71,6 +85,8 @@ __all__ = [
     "render_setrun_py",
     "render_qinit_data",
     "render_maketopo_dtopo",
+    "render_storm_file",
+    "resolve_storm_track",
     "render_makefile",
     "build_geoclaw_deck",
 ]
@@ -89,7 +105,87 @@ class GeoClawDeckError(RuntimeError):
         self.error_code = error_code
 
 
-_VALID_SCENARIOS = {"dam_break", "tsunami", "surge"}
+_VALID_SCENARIOS = {"dam_break", "tsunami", "surge", "thacker"}
+
+#: PARSER VERSION -- bump whenever a build_spec top-level field is added,
+#: renamed, or retired. Named in the strict-field error so a stale worker
+#: image (which silently dropped unknown fields before ADR 0158) is
+#: distinguishable from a genuinely-malformed caller.
+_PARSER_VERSION = "geoclaw-spec-6"
+
+#: Gravitational acceleration (m/s^2) the Thacker deck uses. Kept in lockstep with
+#: ``trid3nt_contracts.geoclaw_thacker.THACKER_GRAVITY`` (the agent-side analytic
+#: reference) -- duplicated here (not imported) so the worker deck-author stays
+#: dependency-free (no trid3nt_contracts in the worker image).
+_THACKER_GRAVITY = 9.81
+
+#: GeoClaw ``surge_data.drag_law`` codes (storm_module.f90): the wind-stress
+#: coefficient law selected for the surge wind forcing. The knob MUST land a
+#: distinct integer (an unknown name raises) so a drag-law choice measurably
+#: changes the run rather than silently no-opping (the ADR 0143 lesson).
+_DRAG_LAW_CODES: dict[str, int] = {"none": 0, "garratt": 1, "powell": 2}
+
+#: Every top-level build_spec field ``parse_build_spec`` reads. No legacy /
+#: envelope-only fields exist here -- ``manifest.get("build_spec")`` is the
+#: pure spec dict (run_id / inputs / outputs live as SIBLING manifest keys,
+#: never inside build_spec), so an unknown key here is always a genuine typo
+#: or a stale/dropped composer field, never a deliberately-ignored envelope key.
+_KNOWN_SPEC_FIELDS = frozenset(
+    {
+        "scenario",
+        "bbox",
+        "domain_bbox",
+        "topo_file",
+        "sim_duration_s",
+        "output_frames",
+        "amr_levels",
+        "manning_n",
+        "sea_level_m",
+        "base_num_cells",
+        "dam_break_depth_m",
+        "source_lonlat",
+        "dtopo_file",
+        "finite_fault_file",
+        "source_magnitude",
+        "fault_strike_deg",
+        "fault_dip_deg",
+        "fault_rake_deg",
+        "fault_depth_km",
+        "surge_forcing_file",
+        "storm_track",
+        "wind_drag_law",
+        "t0_s",
+        "extra_topo_files",
+        "fgmax_arrival_tol_m",
+        "coastal_gauge_lonlat",
+        "amr_regions",
+        "manning_coefficients",
+        "manning_break",
+        "lagrangian_particles",
+        "fgmax_mask",
+        "fgout_frames",
+        "bowl_a_m",
+        "bowl_h0_m",
+        "bowl_eta_amp",
+    }
+)
+
+
+def _reject_unknown_spec_fields(raw: dict[str, Any]) -> None:
+    """Raise loudly if ``raw`` carries a top-level key ``parse_build_spec`` never
+    reads (ADR 0158 -- the ADR 0148 lesson: a stale image silently dropped
+    unknown build_spec fields and two registered knob templates ran as no-ops).
+    """
+    unknown = sorted(set(raw) - _KNOWN_SPEC_FIELDS)
+    if unknown:
+        raise GeoClawDeckError(
+            "GEOCLAW_SPEC_UNKNOWN_FIELDS",
+            f"build_spec carries unknown field(s) {unknown} that parser "
+            f"{_PARSER_VERSION} does not read -- this SILENTLY no-ops the "
+            f"intended knob(s) rather than applying them. Either the caller has "
+            f"a typo, or the worker image is stale (rebuild it -- ADR 0148). "
+            f"Known fields: {sorted(_KNOWN_SPEC_FIELDS)}.",
+        )
 
 
 @dataclass
@@ -123,6 +219,10 @@ class GeoClawBuildSpec:
     source_lonlat: tuple[float, float] | None = None
     # tsunami.
     dtopo_file: str | None = None
+    # Staged finite-fault subfault table (clawpack CSVFault CSV) -> the worker
+    # assembles a MULTI-subfault Okada dtopo (a real inverted slip distribution)
+    # instead of the single-subfault scaling synthesis. Absent -> single subfault.
+    finite_fault_file: str | None = None
     source_magnitude: float = 8.0
     # tsunami Okada fault geometry (user-gated; synthetic defaults when omitted).
     fault_strike_deg: float | None = None
@@ -131,12 +231,57 @@ class GeoClawBuildSpec:
     fault_depth_km: float | None = None
     # surge.
     surge_forcing_file: str | None = None
+    # Parametric-Holland storm track: each point is
+    # (t_s, lon, lat, max_wind_speed_ms, max_wind_radius_m, central_pressure_pa,
+    # storm_radius_m) with t_s SECONDS RELATIVE TO LANDFALL (negative before).
+    # Empty -> a synthetic demo track (landfall at the AOI centroid) is generated.
+    storm_track: list[tuple[float, float, float, float, float, float, float]] = (
+        field(default_factory=list)
+    )
+    # Wind-stress drag law for the surge wind forcing: none | garratt | powell.
+    wind_drag_law: str = "garratt"
+    # Run START time, seconds from landfall. Surge opens the window BEFORE
+    # landfall (< 0) so the storm spins up; the run spans [t0_s, t0_s +
+    # sim_duration_s]. Defaults 0.0 (dam_break/tsunami keep t0 == 0, byte-identical).
+    t0_s: float = 0.0
     # Nested DEM(s), ordered coarse->fine, appended after the primary topo.
     extra_topo_files: list[str] = field(default_factory=list)
     # fgmax (max water depth / speed / arrival time) monitoring.
     fgmax_arrival_tol_m: float = 0.01
     # Coastal gauge (lon, lat); deterministic seaward-edge fallback if None.
     coastal_gauge_lonlat: tuple[float, float] | None = None
+    # Explicit AMR refinement windows, each an 8-tuple in GeoClaw regiondata order
+    # (min_level, max_level, t_start_s, t_end_s, min_lon, max_lon, min_lat, max_lat)
+    # appended AFTER the engine default region tiers.
+    amr_regions: list[tuple[float, float, float, float, float, float, float, float]] = (
+        field(default_factory=list)
+    )
+    # Spatially-varying Manning bottom-friction. manning_coefficients is a list of n
+    # values for topography bands split by manning_break (ascending, length =
+    # len(coefficients) - 1). None -> the single global manning_n is used.
+    manning_coefficients: list[float] | None = None
+    manning_break: list[float] = field(default_factory=list)
+    # Lagrangian (particle-tracking) gauges: each (lon, lat) is added as a gauge
+    # advected by the flow (gtype='lagrangian'), tracing the depth-averaged
+    # velocity. Empty -> only the stationary coastal gauge is emitted.
+    lagrangian_particles: list[tuple[float, float]] = field(default_factory=list)
+    # fgmax point set: "full" (uniform grid, point_style=2) or "onshore" (the DEM
+    # onshore cells only, point_style=4 with a topotype-3 mask). "full" is the
+    # byte-identical default; "onshore" needs the entrypoint mask-gen step.
+    fgmax_mask: str = "full"
+    # fgout smooth-animation frame count. When > 0 (tsunami / surge) an fgout
+    # fixed-grid monitor is emitted: a uniform grid over the AOI at the AOI ambient
+    # cell size, dumped at ``fgout_frames`` EVENLY-SPACED times (decoupled from the
+    # AMR fort.q cadence) -> SMOOTH single-resolution animation frames. 0 (default)
+    # emits no fgout block -> byte-identical to a pre-fgout deck.
+    fgout_frames: int = 0
+    # Thacker paraboloid-basin V&V (scenario="thacker"). The basin radius a (m),
+    # central still-water depth h0 (m), and dimensionless oscillation amplitude A
+    # in (0,1). Consumed ONLY for scenario="thacker" (the worker generates the
+    # bowl topo + analytic still-surface qinit from them); None otherwise.
+    bowl_a_m: float | None = None
+    bowl_h0_m: float | None = None
+    bowl_eta_amp: float | None = None
 
 
 @dataclass
@@ -168,6 +313,7 @@ def parse_build_spec(raw: dict[str, Any]) -> GeoClawBuildSpec:
         raise GeoClawDeckError(
             "GEOCLAW_SPEC_INVALID", f"build_spec must be a JSON object, got {type(raw)}"
         )
+    _reject_unknown_spec_fields(raw)
 
     scenario = str(raw.get("scenario") or "dam_break").strip().lower()
     if scenario not in _VALID_SCENARIOS:
@@ -271,6 +417,198 @@ def parse_build_spec(raw: dict[str, Any]) -> GeoClawBuildSpec:
         v = raw.get(key)
         return float(v) if v is not None else None
 
+    # Explicit AMR refinement windows. Accept either the 8-tuple regiondata order
+    # or a dict with named keys; normalize to the 8-tuple the setrun emits.
+    amr_regions_raw = raw.get("amr_regions") or []
+    if not isinstance(amr_regions_raw, (list, tuple)):
+        raise GeoClawDeckError(
+            "GEOCLAW_SPEC_INVALID",
+            f"amr_regions must be a list of region windows, got {amr_regions_raw!r}",
+        )
+    amr_regions: list[
+        tuple[float, float, float, float, float, float, float, float]
+    ] = []
+    for r in amr_regions_raw:
+        if isinstance(r, dict):
+            try:
+                tup = (
+                    float(r["min_level"]),
+                    float(r["max_level"]),
+                    float(r["t_start_s"]),
+                    float(r["t_end_s"]),
+                    float(r["min_lon"]),
+                    float(r["max_lon"]),
+                    float(r["min_lat"]),
+                    float(r["max_lat"]),
+                )
+            except (KeyError, TypeError, ValueError) as exc:
+                raise GeoClawDeckError(
+                    "GEOCLAW_SPEC_INVALID",
+                    f"amr_regions window missing/invalid field: {r!r} ({exc})",
+                ) from exc
+        elif isinstance(r, (list, tuple)) and len(r) == 8:
+            try:
+                tup = tuple(float(v) for v in r)  # type: ignore[assignment]
+            except (TypeError, ValueError) as exc:
+                raise GeoClawDeckError(
+                    "GEOCLAW_SPEC_INVALID",
+                    f"amr_regions window values must be numeric: {r!r}",
+                ) from exc
+        else:
+            raise GeoClawDeckError(
+                "GEOCLAW_SPEC_INVALID",
+                f"amr_regions window must be an 8-tuple or dict, got {r!r}",
+            )
+        if tup[1] < tup[0]:
+            raise GeoClawDeckError(
+                "GEOCLAW_SPEC_INVALID",
+                f"amr_regions max_level < min_level: {tup}",
+            )
+        amr_regions.append(tup)  # type: ignore[arg-type]
+
+    # Spatially-varying Manning friction (coefficients + elevation breakpoints).
+    mc_raw = raw.get("manning_coefficients")
+    manning_coefficients: list[float] | None = None
+    manning_break: list[float] = []
+    if mc_raw is not None:
+        if not isinstance(mc_raw, (list, tuple)) or not mc_raw:
+            raise GeoClawDeckError(
+                "GEOCLAW_SPEC_INVALID",
+                f"manning_coefficients must be a non-empty list, got {mc_raw!r}",
+            )
+        try:
+            manning_coefficients = [float(v) for v in mc_raw]
+        except (TypeError, ValueError) as exc:
+            raise GeoClawDeckError(
+                "GEOCLAW_SPEC_INVALID",
+                f"manning_coefficients must be numeric: {mc_raw!r}",
+            ) from exc
+        if any(n <= 0.0 for n in manning_coefficients):
+            raise GeoClawDeckError(
+                "GEOCLAW_SPEC_INVALID",
+                f"manning coefficients must be > 0: {manning_coefficients}",
+            )
+        mb_raw = raw.get("manning_break") or []
+        try:
+            manning_break = [float(v) for v in mb_raw]
+        except (TypeError, ValueError) as exc:
+            raise GeoClawDeckError(
+                "GEOCLAW_SPEC_INVALID", f"manning_break must be numeric: {mb_raw!r}"
+            ) from exc
+        if len(manning_break) != len(manning_coefficients) - 1:
+            raise GeoClawDeckError(
+                "GEOCLAW_SPEC_INVALID",
+                f"manning_break length ({len(manning_break)}) must equal "
+                f"len(manning_coefficients) - 1 ({len(manning_coefficients) - 1})",
+            )
+        if any(
+            manning_break[i] >= manning_break[i + 1]
+            for i in range(len(manning_break) - 1)
+        ):
+            raise GeoClawDeckError(
+                "GEOCLAW_SPEC_INVALID",
+                f"manning_break must be strictly ascending: {manning_break}",
+            )
+
+    # Lagrangian particle seed points (each an (lon, lat) 2-tuple).
+    lp_raw = raw.get("lagrangian_particles")
+    lagrangian_particles: list[tuple[float, float]] = []
+    if lp_raw is not None:
+        if not isinstance(lp_raw, (list, tuple)):
+            raise GeoClawDeckError(
+                "GEOCLAW_SPEC_INVALID",
+                f"lagrangian_particles must be a list of (lon, lat), got {lp_raw!r}",
+            )
+        for pt in lp_raw:
+            if not isinstance(pt, (list, tuple)) or len(pt) != 2:
+                raise GeoClawDeckError(
+                    "GEOCLAW_SPEC_INVALID",
+                    f"lagrangian_particles entry must be (lon, lat), got {pt!r}",
+                )
+            try:
+                lagrangian_particles.append((float(pt[0]), float(pt[1])))
+            except (TypeError, ValueError) as exc:
+                raise GeoClawDeckError(
+                    "GEOCLAW_SPEC_INVALID",
+                    f"lagrangian_particles values must be numeric: {pt!r}",
+                ) from exc
+
+    # Parametric-Holland storm track (surge). Accept either the 7-tuple order or
+    # a dict with named keys; normalize to the 7-tuple the storm file emits.
+    st_raw = raw.get("storm_track") or []
+    if not isinstance(st_raw, (list, tuple)):
+        raise GeoClawDeckError(
+            "GEOCLAW_SPEC_INVALID",
+            f"storm_track must be a list of track points, got {st_raw!r}",
+        )
+    storm_track: list[tuple[float, float, float, float, float, float, float]] = []
+    for pt in st_raw:
+        if isinstance(pt, dict):
+            try:
+                tup = (
+                    float(pt["t_s"]),
+                    float(pt["lon"]),
+                    float(pt["lat"]),
+                    float(pt["max_wind_speed_ms"]),
+                    float(pt["max_wind_radius_m"]),
+                    float(pt["central_pressure_pa"]),
+                    float(pt.get("storm_radius_m", 500000.0)),
+                )
+            except (KeyError, TypeError, ValueError) as exc:
+                raise GeoClawDeckError(
+                    "GEOCLAW_SPEC_INVALID",
+                    f"storm_track point missing/invalid field: {pt!r} ({exc})",
+                ) from exc
+        elif isinstance(pt, (list, tuple)) and len(pt) in (6, 7):
+            try:
+                vals = [float(v) for v in pt]
+            except (TypeError, ValueError) as exc:
+                raise GeoClawDeckError(
+                    "GEOCLAW_SPEC_INVALID",
+                    f"storm_track point values must be numeric: {pt!r}",
+                ) from exc
+            if len(vals) == 6:  # storm_radius omitted -> 500 km fill (GeoClaw default)
+                vals.append(500000.0)
+            tup = tuple(vals)  # type: ignore[assignment]
+        else:
+            raise GeoClawDeckError(
+                "GEOCLAW_SPEC_INVALID",
+                f"storm_track point must be a 6/7-tuple or dict, got {pt!r}",
+            )
+        if tup[5] <= 0.0:
+            raise GeoClawDeckError(
+                "GEOCLAW_SPEC_INVALID",
+                f"storm_track central_pressure_pa must be > 0 (Pa): {tup!r}",
+            )
+        storm_track.append(tup)  # type: ignore[arg-type]
+    # Track times must be strictly ascending (GeoClaw interpolates the storm in
+    # time; a non-monotone file corrupts the interpolation).
+    if any(
+        storm_track[i][0] >= storm_track[i + 1][0]
+        for i in range(len(storm_track) - 1)
+    ):
+        raise GeoClawDeckError(
+            "GEOCLAW_SPEC_INVALID",
+            f"storm_track times (t_s) must be strictly ascending: "
+            f"{[p[0] for p in storm_track]}",
+        )
+
+    wind_drag_law = str(raw.get("wind_drag_law") or "garratt").strip().lower()
+    if wind_drag_law not in _DRAG_LAW_CODES:
+        raise GeoClawDeckError(
+            "GEOCLAW_SPEC_INVALID",
+            f"wind_drag_law must be one of {sorted(_DRAG_LAW_CODES)}, "
+            f"got {wind_drag_law!r}",
+        )
+
+    # fgmax point set selector.
+    fgmax_mask = str(raw.get("fgmax_mask") or "full").strip().lower()
+    if fgmax_mask not in ("full", "onshore"):
+        raise GeoClawDeckError(
+            "GEOCLAW_SPEC_INVALID",
+            f"fgmax_mask must be 'full' or 'onshore', got {fgmax_mask!r}",
+        )
+
     sim_duration_s = _num("sim_duration_s", 3600.0)
     if sim_duration_s <= 0:
         raise GeoClawDeckError(
@@ -285,6 +623,38 @@ def parse_build_spec(raw: dict[str, Any]) -> GeoClawBuildSpec:
     if amr_levels < 1:
         raise GeoClawDeckError(
             "GEOCLAW_SPEC_INVALID", f"amr_levels must be >= 1, got {amr_levels}"
+        )
+    fgout_frames = _int("fgout_frames", 0)
+    if fgout_frames < 0:
+        raise GeoClawDeckError(
+            "GEOCLAW_SPEC_INVALID", f"fgout_frames must be >= 0, got {fgout_frames}"
+        )
+
+    # --- Thacker bowl parameters (mutually exclusive with a geographic scenario).
+    bowl_a_m = _opt_num("bowl_a_m")
+    bowl_h0_m = _opt_num("bowl_h0_m")
+    bowl_eta_amp = _opt_num("bowl_eta_amp")
+    if scenario == "thacker":
+        if bowl_a_m is None or bowl_h0_m is None or bowl_eta_amp is None:
+            raise GeoClawDeckError(
+                "GEOCLAW_SPEC_INVALID",
+                "scenario='thacker' requires bowl_a_m, bowl_h0_m, bowl_eta_amp",
+            )
+        if bowl_a_m <= 0.0 or bowl_h0_m <= 0.0:
+            raise GeoClawDeckError(
+                "GEOCLAW_SPEC_INVALID",
+                f"bowl_a_m and bowl_h0_m must be > 0, got a={bowl_a_m}, h0={bowl_h0_m}",
+            )
+        if not (0.0 < bowl_eta_amp < 1.0):
+            raise GeoClawDeckError(
+                "GEOCLAW_SPEC_INVALID",
+                f"bowl_eta_amp must be in (0, 1), got {bowl_eta_amp}",
+            )
+    elif any(v is not None for v in (bowl_a_m, bowl_h0_m, bowl_eta_amp)):
+        raise GeoClawDeckError(
+            "GEOCLAW_SPEC_INVALID",
+            "bowl_a_m / bowl_h0_m / bowl_eta_amp are only valid for "
+            f"scenario='thacker', not scenario={scenario!r}",
         )
 
     return GeoClawBuildSpec(
@@ -301,6 +671,9 @@ def parse_build_spec(raw: dict[str, Any]) -> GeoClawBuildSpec:
         dam_break_depth_m=_num("dam_break_depth_m", 10.0),
         source_lonlat=source_lonlat,
         dtopo_file=(str(raw["dtopo_file"]).strip() if raw.get("dtopo_file") else None),
+        finite_fault_file=(
+            str(raw["finite_fault_file"]).strip() if raw.get("finite_fault_file") else None
+        ),
         source_magnitude=_num("source_magnitude", 8.0),
         fault_strike_deg=_opt_num("fault_strike_deg"),
         fault_dip_deg=_opt_num("fault_dip_deg"),
@@ -311,9 +684,21 @@ def parse_build_spec(raw: dict[str, Any]) -> GeoClawBuildSpec:
             if raw.get("surge_forcing_file")
             else None
         ),
+        storm_track=storm_track,
+        wind_drag_law=wind_drag_law,
+        t0_s=_num("t0_s", 0.0),
         extra_topo_files=extra_topo_files,
         fgmax_arrival_tol_m=_num("fgmax_arrival_tol_m", 0.01),
         coastal_gauge_lonlat=coastal_gauge_lonlat,
+        amr_regions=amr_regions,
+        manning_coefficients=manning_coefficients,
+        manning_break=manning_break,
+        lagrangian_particles=lagrangian_particles,
+        fgmax_mask=fgmax_mask,
+        fgout_frames=fgout_frames,
+        bowl_a_m=bowl_a_m,
+        bowl_h0_m=bowl_h0_m,
+        bowl_eta_amp=bowl_eta_amp,
     )
 
 
@@ -361,6 +746,11 @@ def _coastal_gauge(spec: GeoClawBuildSpec) -> tuple[float, float]:
     gx = 0.5 * (min_lon + max_lon)
     gy = min_lat + 0.05 * (max_lat - min_lat)
     return (gx, gy)
+
+
+#: Filename of the topotype-3 fgmax point mask (point_style=4) the entrypoint
+#: generates from the staged DEM and the setrun references via ``fg.xy_fname``.
+FGMAX_MASK_FILENAME: str = "fgmax_mask.tt3"
 
 
 def _refinement_ratios(amr_levels: int) -> list[int]:
@@ -430,6 +820,50 @@ _SYNTHETIC_FAULT_RAKE_DEG = 90.0
 _SYNTHETIC_FAULT_DEPTH_KM = 10.0
 
 
+def fgmax_grid_geom(spec: GeoClawBuildSpec) -> dict[str, Any]:
+    """The fgmax monitor grid geometry over the AOI (shared source of truth).
+
+    Returns ``{x1, y1, x2, y2, nx, ny, dx, aoi_level}`` for the uniform fgmax
+    sample grid the setrun emits for a tsunami/surge run: the AOI extent inset by
+    a half AOI-ambient-level cell, at cell size ``dx`` (the base cell divided by
+    the refinement product up to the AOI ambient level). ``render_setrun_py``
+    emits the point_style=2 grid from EXACTLY this ``dx`` (locked by a unit test),
+    and the entrypoint builds the point_style=4 ONSHORE mask on THIS grid so the
+    masked fgmax points are a strict subset of the full-grid points (their common
+    cells match cell-for-cell). Pure arithmetic -- no clawpack import.
+    """
+    min_lon, min_lat, max_lon, max_lat = spec.bbox
+    dom_min_lon, dom_min_lat, dom_max_lon, dom_max_lat = _domain(spec)
+    nx, ny = spec.base_num_cells
+    amr_levels = int(spec.amr_levels)
+    has_amr_windows = bool(spec.amr_regions)
+    window_max_level = max((int(r[1]) for r in spec.amr_regions), default=0)
+    max_levels = max(amr_levels, window_max_level)
+    aoi_level = max(amr_levels - 1, 1) if has_amr_windows else amr_levels
+    ratios = _refinement_ratios(max_levels)
+    base_dx = (dom_max_lon - dom_min_lon) / float(nx)
+    aoi_product = 1
+    for r in ratios[: aoi_level - 1]:
+        aoi_product *= int(r)
+    dx = base_dx / float(aoi_product)
+    x1 = min_lon + dx / 2.0
+    x2 = max_lon - dx / 2.0
+    y1 = min_lat + dx / 2.0
+    y2 = max_lat - dx / 2.0
+    gnx = int(round((x2 - x1) / dx)) + 1
+    gny = int(round((y2 - y1) / dx)) + 1
+    return {
+        "x1": x1,
+        "y1": y1,
+        "x2": x2,
+        "y2": y2,
+        "nx": gnx,
+        "ny": gny,
+        "dx": dx,
+        "aoi_level": aoi_level,
+    }
+
+
 def render_qinit_data(spec: GeoClawBuildSpec) -> str:
     """Render a ``qinit.xyz`` raised-column perturbation for the dam_break scenario.
 
@@ -480,26 +914,42 @@ def render_qinit_data(spec: GeoClawBuildSpec) -> str:
     return "\n".join(lines) + "\n"
 
 
-def render_maketopo_dtopo(spec: GeoClawBuildSpec) -> str:
-    """Render a ``maketopo.py`` that synthesizes an Okada dtopo for the tsunami
-    scenario (when no dtopo file was staged).
+def _render_finite_fault_construction(spec: GeoClawBuildSpec) -> str:
+    """The maketopo.py FAULT-CONSTRUCTION block for a REAL finite-fault inversion.
 
-    Uses ``clawpack.geoclaw.dtopotools`` to build a single-subfault Okada source
-    scaled from ``source_magnitude`` at the source point and write ``dtopo.tt3``.
-    The fault GEOMETRY (strike / dip / rake / depth) is taken from the build_spec
-    when the user supplied it, else a NON-SITE-SPECIFIC synthetic default - and
-    the generated helper PRINTS a loud banner for every defaulted field so the
-    run NEVER silently fabricates a site-specific source.
+    Reads the staged clawpack ``CSVFault`` subfault table (a published inversion's
+    N patches: lon/lat/depth/strike/dip/rake/slip/length/width) with the NATIVE
+    ``dtopotools.CSVFault`` reader (``coordinate_specification="centroid"`` -- the
+    FSP convention). The resulting ``fault`` has MANY subfaults, so the Okada
+    superposition is a real, concentrated, asymmetric slip field -- NOT one
+    idealized rectangle. ``dx`` / ``buffer_size`` are tuned to the fault footprint
+    (a small buffer -- the fault IS the footprint)."""
+    csv = str(spec.finite_fault_file)
+    return f'''# REAL finite-fault inversion: a MULTI-subfault Okada source (basis =
+# measured-inversion). The staged CSV is a published USGS finite-fault product's
+# subfault table; the deformation is the Okada superposition of every patch's slip.
+print("*** MEASURED finite-fault inversion source: N-subfault Okada from a "
+      "published USGS finite-fault product (real inverted slip distribution).")
+fault = dtopotools.CSVFault()
+fault.read({csv!r}, coordinate_specification="centroid")
+_nsub = len(fault.subfaults)
+_slips = [float(_s.slip) for _s in fault.subfaults]
+print("finite-fault: %d subfaults, slip %.2f-%.2f m, Mw=%.2f"
+      % (_nsub, min(_slips), max(_slips), float(fault.Mw())))
 
-    The dtopo grid is built with ``fault.create_dtopo_xy(dx=1/60., buffer_size=
-    2.0)`` (the canonical GeoClaw helper) rather than a hand-rolled
-    ``np.linspace`` box, and ``coordinate_specification="centroid"`` is kept
-    (required by Okada - a wrong/empty value raises ValueError).
+# dtopo grid: a modest buffer around the fault footprint (the fault IS the
+# footprint for a finite-fault model, unlike a point-scaled single subfault).
+_DTOPO_DX = 1/60.
+_DTOPO_BUFFER = 0.5
+'''
 
-    This is emitted as a SEPARATE Python helper the entrypoint runs BEFORE the
-    solve (it imports clawpack, so it must not be imported by this authoring
-    module). Pure string render here.
-    """
+
+def _render_single_subfault_construction(spec: GeoClawBuildSpec) -> str:
+    """The maketopo.py FAULT-CONSTRUCTION block for the DEGRADE rung: a single
+    rectangular subfault scaled from ``source_magnitude`` (Wells & Coppersmith).
+
+    This is the DERIVED fallback (no finite-fault product): one idealized rectangle,
+    LOUDLY banner-flagged as non-site-specific whenever the geometry defaulted."""
     cx, cy = _centroid(spec)
     mw = float(spec.source_magnitude)
 
@@ -523,19 +973,15 @@ def render_maketopo_dtopo(spec: GeoClawBuildSpec) -> str:
     # field fell back to a synthetic, NON-SITE-SPECIFIC default.
     if defaulted:
         banner = (
-            "NON-SITE-SPECIFIC synthetic source: fault geometry field(s) "
-            + ", ".join(defaulted)
-            + " were NOT user-supplied and use generic synthetic defaults; "
-            "this dtopo is illustrative, NOT a site-specific seismic source."
+            "NON-SITE-SPECIFIC synthetic (DERIVED, scaling-law) source: fault "
+            "geometry field(s) " + ", ".join(defaulted)
+            + " were NOT user-supplied and use generic synthetic defaults; this "
+            "dtopo is a single idealized rectangle, NOT a site-specific inversion."
         )
     else:
         banner = ""
 
-    return f'''"""Auto-generated by the GeoClaw worker — synthesize an Okada dtopo."""
-from clawpack.geoclaw import dtopotools
-
-# Honesty banner: loudly flag a non-site-specific synthetic source so the run
-# never silently fabricates a site-specific fault geometry.
+    return f'''# DERIVED single-subfault source (the degrade rung: no finite-fault product).
 BANNER = {banner!r}
 if BANNER:
     print("*** " + BANNER)
@@ -564,14 +1010,415 @@ subfault.coordinate_specification = "centroid"
 
 fault = dtopotools.Fault()
 fault.subfaults = [subfault]
+print("single-subfault: Mw=%s slip=%.2f m strike=%s dip=%s rake=%s depth_m=%s"
+      % (mw, slip, {float(strike)!r}, {float(dip)!r}, {float(rake)!r}, {depth_m!r}))
 
-# Build the dtopo grid with the canonical GeoClaw helper (auto-sizes a box
-# around the fault with a buffer), not a hand-rolled linspace box.
-x, y = fault.create_dtopo_xy(dx=1/60., buffer_size=2.0)
+# dtopo grid: a LARGE buffer around the point-scaled subfault so the deformation
+# footprint of the single rectangle is captured.
+_DTOPO_DX = 1/60.
+_DTOPO_BUFFER = 2.0
+'''
+
+
+def render_maketopo_dtopo(spec: GeoClawBuildSpec) -> str:
+    """Render a ``maketopo.py`` that synthesizes an Okada dtopo for the tsunami
+    scenario (when no dtopo file was staged).
+
+    Fallback ladder (ADR 0226 finite-fault upgrade -- the data-source fallback
+    norm):
+      * ``finite_fault_file`` staged -> a MULTI-subfault Okada from a published USGS
+        finite-fault inversion (``_render_finite_fault_construction``): a real,
+        concentrated, asymmetric slip field (basis=measured-inversion); else
+      * the DEGRADE rung -- a single rectangular subfault scaled from
+        ``source_magnitude`` (``_render_single_subfault_construction``), LOUDLY
+        banner-flagged non-site-specific.
+
+    Both paths build a ``fault`` object + set ``_DTOPO_DX`` / ``_DTOPO_BUFFER``, then
+    share the SAME tail: ``create_dtopography`` -> ``dtopo.tt3`` -> the final-time
+    vertical deformation ``deformation_dz.asc`` PRODUCT. ``coordinate_specification
+    ="centroid"`` throughout (required by Okada). Emitted as a SEPARATE Python helper
+    the entrypoint runs BEFORE the solve (it imports clawpack, so this authoring
+    module must not). Pure string render here.
+    """
+    if spec.finite_fault_file:
+        construction = _render_finite_fault_construction(spec)
+    else:
+        construction = _render_single_subfault_construction(spec)
+
+    return f'''"""Auto-generated by the GeoClaw worker — synthesize an Okada dtopo."""
+import numpy as _np
+from clawpack.geoclaw import dtopotools
+
+{construction}
+# Build the dtopo grid with the canonical GeoClaw helper (auto-sizes a box around
+# the fault with a buffer), not a hand-rolled linspace box.
+x, y = fault.create_dtopo_xy(dx=_DTOPO_DX, buffer_size=_DTOPO_BUFFER)
 fault.create_dtopography(x, y, times=[0.0, 1.0])
 fault.dtopo.write("dtopo.tt3", dtopo_type=3)
-print("wrote dtopo.tt3 mw=%s slip=%.2f m strike=%s dip=%s rake=%s depth_m=%s"
-      % (mw, slip, {float(strike)!r}, {float(dip)!r}, {float(rake)!r}, {depth_m!r}))
+print("wrote dtopo.tt3 (%d subfault(s))" % len(fault.subfaults))
+
+# Emit the FINAL-time vertical seafloor deformation dZ (m) as an ESRI-ASCII grid
+# (EPSG:4326, the regular create_dtopo_xy lon/lat box) so the agent-side / worker
+# postprocess can rasterize the Okada uplift(+)/subsidence(-) field as a
+# first-class PRODUCT -- the direct answer to "what seafloor deformation does this
+# earthquake drive". Pure text write (no gdal in this helper); dZ is (ntime, ny, nx)
+# indexed [lat, lon] with ascending x/y (verified against clawpack dtopotools).
+_dz = _np.asarray(fault.dtopo.dZ)[-1]
+_xs = _np.asarray(fault.dtopo.x, dtype=float)
+_ys = _np.asarray(fault.dtopo.y, dtype=float)
+_dx = float(_xs[1] - _xs[0]) if _xs.size > 1 else 1.0 / 60.0
+_dy = float(_ys[1] - _ys[0]) if _ys.size > 1 else _dx
+with open("deformation_dz.asc", "w") as _fh:
+    _fh.write("ncols %d\\n" % _xs.size)
+    _fh.write("nrows %d\\n" % _ys.size)
+    _fh.write("xllcorner %.10f\\n" % (float(_xs.min()) - _dx / 2.0))
+    _fh.write("yllcorner %.10f\\n" % (float(_ys.min()) - _dy / 2.0))
+    _fh.write("cellsize %.12f\\n" % _dx)
+    _fh.write("NODATA_value -9999.0\\n")
+    # NORTH-first rows (highest latitude first), west->east within each row.
+    for _j in range(_ys.size - 1, -1, -1):
+        _fh.write(" ".join("%.6f" % float(_v) for _v in _dz[_j, :]) + "\\n")
+print("wrote deformation_dz.asc dZ_min=%.4f m dZ_max=%.4f m ncols=%d nrows=%d"
+      % (float(_dz.min()), float(_dz.max()), _xs.size, _ys.size))
+'''
+
+
+# Synthetic (NON-SITE-SPECIFIC) demo storm defaults for a surge run when the
+# caller supplies NO storm_track. A generic Category-2-class Holland storm that
+# approaches from offshore and makes landfall at the AOI centroid at t=0.
+_DEMO_STORM_MAX_WIND_MS = 45.0          # ~Cat-2 (~87 kt)
+_DEMO_STORM_MAX_WIND_RADIUS_M = 46000.0  # ~25 nm eyewall radius
+_DEMO_STORM_CENTRAL_PRESSURE_PA = 96000.0  # 960 hPa
+_DEMO_STORM_RADIUS_M = 400000.0          # ~400 km outer radius (a large storm)
+#: Demo track approach vector: the storm centre travels this many degrees of
+#: latitude from offshore (south) to the coast over the pre-landfall window.
+_DEMO_STORM_APPROACH_DEG = 3.0
+
+
+def _synthetic_demo_track(
+    spec: GeoClawBuildSpec,
+) -> list[tuple[float, float, float, float, float, float, float]]:
+    """A NON-SITE-SPECIFIC demo storm track making landfall at the AOI centroid.
+
+    A generic Category-2-class Holland storm that tracks due north from
+    ``_DEMO_STORM_APPROACH_DEG`` degrees south of the AOI centroid (offshore) to
+    the centroid at t=0 (landfall), then continues inland. The intensity peaks at
+    landfall (deepest central pressure) and decays after. Used ONLY when the caller
+    supplied no ``storm_track`` - illustrative, not a real historical storm. Times
+    span ``[t0_s, t0_s + sim_duration_s]`` (t0_s < 0 opens the window pre-landfall)
+    with a little pad on each end so the run window stays inside the track.
+    """
+    clon, clat = _centroid(spec)
+    t0 = float(spec.t0_s)
+    tfinal = t0 + float(spec.sim_duration_s)
+    # Pad the track window so [t0, tfinal] is strictly interior (GeoClaw
+    # interpolates within the file; a window at the very edge risks extrapolation).
+    pad = max(0.25 * (tfinal - t0), 3600.0)
+    tstart = t0 - pad
+    tend = tfinal + pad
+    n = 9
+    track: list[tuple[float, float, float, float, float, float, float]] = []
+    for i in range(n):
+        frac = i / (n - 1)
+        t = tstart + frac * (tend - tstart)
+        # Latitude: south (offshore) -> centroid at landfall (t=0) -> inland.
+        # Linear in time relative to the landfall instant.
+        span = tend - tstart
+        # normalized time in [-1, +1] with 0 at landfall (t=0).
+        tau = t / max(abs(tstart), abs(tend), 1.0)
+        lat = clat + _DEMO_STORM_APPROACH_DEG * tau
+        lon = clon
+        # Intensity: deepest (lowest pressure / highest wind) at landfall, decaying
+        # with |tau|. A gentle triangular profile.
+        decay = min(abs(tau), 1.0)
+        pc = _DEMO_STORM_CENTRAL_PRESSURE_PA + 4000.0 * decay  # 960 -> up to 1000 hPa
+        vmax = _DEMO_STORM_MAX_WIND_MS * (1.0 - 0.35 * decay)
+        track.append(
+            (
+                float(t),
+                float(lon),
+                float(lat),
+                float(vmax),
+                float(_DEMO_STORM_MAX_WIND_RADIUS_M),
+                float(pc),
+                float(_DEMO_STORM_RADIUS_M),
+            )
+        )
+    return track
+
+
+def resolve_storm_track(
+    spec: GeoClawBuildSpec,
+) -> tuple[list[tuple[float, float, float, float, float, float, float]], bool]:
+    """The surge storm track + whether it is the SYNTHETIC demo (not user-supplied).
+
+    Returns ``(track, is_synthetic)``: the explicit ``spec.storm_track`` when the
+    caller supplied one (``is_synthetic=False``), else a generated demo track
+    (``is_synthetic=True``). The bool drives the honesty banner in the storm file
+    so a demo run never reads as a real historical storm.
+    """
+    if spec.storm_track:
+        return list(spec.storm_track), False
+    return _synthetic_demo_track(spec), True
+
+
+def render_storm_file(spec: GeoClawBuildSpec) -> str:
+    """Render the GeoClaw-format storm file (``storm.storm``) for a surge run.
+
+    The GeoClaw Fortran storm reader (``surge/storm.py`` write_geoclaw, read by
+    ``model_storm_module``) consumes a fixed 3-line header + one row per forecast:
+
+        <num_casts>
+        <time_offset>            # 0.0 -> track times are seconds from landfall
+        <blank>
+        t  lon  lat  max_wind_speed  max_wind_radius  central_pressure  storm_radius
+        ...                          # 7 columns, {:19,.8e}; np.loadtxt(skiprows=3)
+
+    Units (GeoClaw): time s, lon/lat deg, max_wind_speed m/s, max_wind_radius m,
+    central_pressure Pa, storm_radius m. ``time_offset = 0.0`` (a float) tells the
+    reader the row times are ALREADY seconds relative to landfall (t=0). This is a
+    PURE string render of exactly the bytes ``Storm.write(file_format='geoclaw')``
+    emits - so the worker never imports the pandas-backed ``Storm`` class to author
+    it (the deck-author stays clawpack-free + unit-testable).
+
+    A leading ``#``-comment honesty banner is NOT written (the Fortran reader is
+    strict: header is exactly 3 lines); the synthetic-vs-real provenance rides the
+    deck manifest / driver descriptor instead.
+    """
+    track, _is_synth = resolve_storm_track(spec)
+    if not track:
+        raise GeoClawDeckError(
+            "GEOCLAW_SPEC_INVALID",
+            "surge scenario resolved an EMPTY storm track (no user track and the "
+            "demo synthesizer produced nothing) - refusing a wind-free surge deck",
+        )
+    fmt = ("{:19,.8e} " * 7)[:-1]
+    lines = [str(len(track)), "0.0", ""]
+    for (t, lon, lat, vmax, rmw, pc, rstorm) in track:
+        lines.append(fmt.format(t, lon, lat, vmax, rmw, pc, rstorm))
+    return "\n".join(lines) + "\n"
+
+
+# --------------------------------------------------------------------------- #
+# Thacker (1981) paraboloid-basin V&V deck (scenario="thacker").
+#
+# An IDEALIZED, frictionless, closed-wall bowl in PLANAR Cartesian metres
+# (coordinate_system=1) with a worker-GENERATED paraboloid topo + an analytic
+# still-surface qinit -- NO fetched DEM. Mirrors the clawpack Cartesian bowl
+# examples' conventions (num_aux=1, capa_index=0, topotype qinit_type=4) but uses
+# the EXACT radially-symmetric Thacker solution (omega = sqrt(8 g h0)/a) as the
+# t=0 initial condition so the numerical run can be graded against the closed form
+# (period / central amplitude / shoreline excursion / mass conservation).
+# See trid3nt_contracts.geoclaw_thacker for the shared analytic definition.
+# --------------------------------------------------------------------------- #
+#: Grid resolution (points per side) of the worker-written bowl topo + qinit
+#: topotype-1 files. 201 matches the clawpack bowl examples (well below solve
+#: cost; GeoClaw samples them onto the coarser computational grid).
+_THACKER_TOPO_N = 201
+
+
+def _thacker_k(amp_A: float) -> float:
+    """Thacker amplitude ratio k = (1+A)/(1-A) (> 1)."""
+    return (1.0 + amp_A) / (1.0 - amp_A)
+
+
+def _render_topotype1_grid(
+    x0: float, x1: float, y0: float, y1: float, n: int, zfunc
+) -> str:
+    """Render an ``n x n`` bare ``x y z`` topotype-1 ASCII over [x0,x1]x[y0,y1].
+
+    NORTH-FIRST rows (decreasing y), x-fastest (west->east) within each row -- the
+    layout clawpack ``Topography.write(topo_type=1)`` emits and GeoClaw's readers
+    expect (first line = ``x0 y1 z``). Pure string render (no numpy / clawpack)."""
+    dx = (x1 - x0) / (n - 1)
+    dy = (y1 - y0) / (n - 1)
+    lines: list[str] = []
+    for j in range(n - 1, -1, -1):
+        y = y0 + dy * j
+        for i in range(n):
+            x = x0 + dx * i
+            lines.append(f"{x:.8f} {y:.8f} {zfunc(x, y):.8f}")
+    return "\n".join(lines) + "\n"
+
+
+def render_thacker_topo(spec: GeoClawBuildSpec) -> str:
+    """Render the paraboloid bed ``B(x,y) = h0 (r^2/a^2 - 1)`` as topotype-1 ASCII."""
+    x0, y0, x1, y1 = spec.bbox
+    a = float(spec.bowl_a_m)  # type: ignore[arg-type]
+    h0 = float(spec.bowl_h0_m)  # type: ignore[arg-type]
+
+    def _b(x: float, y: float) -> float:
+        return h0 * ((x * x + y * y) / (a * a) - 1.0)
+
+    return _render_topotype1_grid(x0, x1, y0, y1, _THACKER_TOPO_N, _b)
+
+
+def render_thacker_qinit(spec: GeoClawBuildSpec) -> str:
+    """Render the analytic t=0 Thacker surface as a topotype-1 qinit perturbation.
+
+    ``eta(r,0) = h0 [ sqrt(k) - 1 - (r^2/a^2)(k-1) ]``, ``k = (1+A)/(1-A)`` -- the
+    still-surface extremum of the radially-symmetric oscillation (zero velocity at
+    t=0). qinit_type=4 adds this to eta (sea_level=0), so the initial water surface
+    IS this analytic surface and h = max(0, eta - B)."""
+    x0, y0, x1, y1 = spec.bbox
+    a = float(spec.bowl_a_m)  # type: ignore[arg-type]
+    h0 = float(spec.bowl_h0_m)  # type: ignore[arg-type]
+    amp_A = float(spec.bowl_eta_amp)  # type: ignore[arg-type]
+    k = _thacker_k(amp_A)
+    sqrt_k = k ** 0.5
+
+    def _eta0(x: float, y: float) -> float:
+        r2 = (x * x + y * y) / (a * a)
+        return h0 * (sqrt_k - 1.0 - r2 * (k - 1.0))
+
+    return _render_topotype1_grid(x0, x1, y0, y1, _THACKER_TOPO_N, _eta0)
+
+
+def render_thacker_setrun_py(spec: GeoClawBuildSpec) -> str:
+    """Render the Cartesian, frictionless, closed-wall Thacker ``setrun.py``.
+
+    PLANAR ``coordinate_system=1`` (metres), ``capa_index=0``, ``num_aux=1``,
+    ``friction_forcing=False`` (the exact solution is inviscid), ``bc_*='wall'``
+    (a closed basin so total mass is conserved -- the V&V gate). Reads the
+    worker-written ``topo.asc`` (topotype-1 paraboloid) + ``qinit.xyz``
+    (topotype-1 analytic surface, qinit_type=4). Records a CENTER gauge (eta(0,t)
+    -> period + central amplitude) plus a dense +x-axis gauge line
+    (depth(r,t) -> shoreline excursion). PURE string render -- no clawpack."""
+    x0, y0, x1, y1 = spec.bbox
+    nx, ny = spec.base_num_cells
+    amr_levels = int(spec.amr_levels)
+    ratios = _refinement_ratios(amr_levels)
+    amr_ratios = ", ".join(str(r) for r in ratios)
+    tfinal = float(spec.sim_duration_s)
+    num_output_times = int(spec.output_frames)
+    a = float(spec.bowl_a_m)  # type: ignore[arg-type]
+
+    # Gauges: id 1 at the basin centre (0,0); a dense +x-axis line (ids 100+) from
+    # r=0 to 1.5a so the V&V finds the moving shoreline (largest wet radius).
+    gauge_lines = "    rundata.gaugedata.gauges.append([1, 0.0, 0.0, 0., 1.e10])\n"
+    gid = 100
+    steps = 30  # 0 .. 1.5a in 0.05a steps
+    for s in range(steps + 1):
+        xr = (1.5 * a) * (s / steps)
+        gauge_lines += (
+            f"    rundata.gaugedata.gauges.append([{gid}, {xr!r}, 0.0, 0., 1.e10])\n"
+        )
+        gid += 1
+
+    return f'''"""Auto-generated by the GeoClaw worker (setrun_builder) -- Thacker V&V.
+
+Idealized paraboloid-basin (Thacker 1981) frictionless closed-wall bowl.
+Domain (planar metres): {spec.bbox}
+Do NOT hand-edit -- regenerate from the build_spec.
+"""
+from clawpack.clawutil import data
+
+
+def setrun(claw_pkg="geoclaw"):
+    assert claw_pkg.lower() == "geoclaw", "setrun expects claw_pkg='geoclaw'"
+    num_dim = 2
+    rundata = data.ClawRunData(claw_pkg, num_dim)
+    rundata = setgeo(rundata)
+
+    clawdata = rundata.clawdata
+    clawdata.num_dim = num_dim
+
+    # --- Planar Cartesian domain (metres) ---
+    clawdata.lower[0] = {x0!r}
+    clawdata.upper[0] = {x1!r}
+    clawdata.lower[1] = {y0!r}
+    clawdata.upper[1] = {y1!r}
+
+    clawdata.num_cells[0] = {nx!r}
+    clawdata.num_cells[1] = {ny!r}
+
+    clawdata.num_eqn = 3
+    clawdata.num_aux = 1  # Cartesian: topo aux only (no capacity/yleft metric)
+    clawdata.capa_index = 0  # uniform Cartesian capacity (no lat/lon metric)
+
+    # --- Time domain + evenly-spaced output frames ---
+    clawdata.t0 = 0.0
+    clawdata.output_style = 1
+    clawdata.num_output_times = {num_output_times!r}
+    clawdata.tfinal = {tfinal!r}
+    clawdata.output_t0 = True
+    clawdata.output_format = "ascii"
+    clawdata.output_q_components = "all"
+    clawdata.output_aux_components = "none"
+
+    # --- Numerics ---
+    clawdata.dt_initial = 0.01
+    clawdata.dt_variable = True
+    clawdata.dt_max = 1.0e99
+    clawdata.cfl_desired = 0.75
+    clawdata.cfl_max = 1.0
+    clawdata.steps_max = 100000
+    clawdata.order = 2
+    clawdata.dimensional_split = "unsplit"
+    clawdata.transverse_waves = 2
+    clawdata.num_waves = 3
+    clawdata.limiter = ["mc", "mc", "mc"]
+    clawdata.use_fwaves = True
+    clawdata.source_split = "godunov"
+
+    # --- Boundary conditions: CLOSED WALLS (a closed basin -> mass conserved) ---
+    clawdata.num_ghost = 2
+    clawdata.bc_lower[0] = "wall"
+    clawdata.bc_upper[0] = "wall"
+    clawdata.bc_lower[1] = "wall"
+    clawdata.bc_upper[1] = "wall"
+
+    # --- AMR ---
+    amrdata = rundata.amrdata
+    amrdata.amr_levels_max = {amr_levels!r}
+    amrdata.refinement_ratios_x = [{amr_ratios}]
+    amrdata.refinement_ratios_y = [{amr_ratios}]
+    amrdata.refinement_ratios_t = [{amr_ratios}]
+    amrdata.aux_type = ["center"]
+    amrdata.flag_richardson = False
+    amrdata.flag2refine = True
+    amrdata.regrid_interval = 3
+    amrdata.regrid_buffer_width = 2
+    amrdata.verbosity_regrid = 0
+
+    # --- Gauges: centre (period + amplitude) + a +x-axis line (shoreline) ---
+{gauge_lines}
+    # --- qinit: the analytic t=0 Thacker surface (perturbation to eta) ---
+    qinit_data = rundata.qinit_data
+    qinit_data.qinit_type = 4  # perturbation to eta (water surface)
+    qinit_data.qinitfiles = []
+    qinit_data.qinitfiles.append(["qinit.xyz"])
+    return rundata
+
+
+def setgeo(rundata):
+    try:
+        geo_data = rundata.geo_data
+    except AttributeError:
+        raise AttributeError("Missing geo_data; rundata must be a GeoClaw run.")
+
+    geo_data.gravity = {_THACKER_GRAVITY!r}
+    geo_data.coordinate_system = 1  # 1 = Cartesian (metres), planar bowl
+    geo_data.earth_radius = 6367500.0
+    geo_data.dry_tolerance = 1.0e-3
+    geo_data.friction_forcing = False  # inviscid -- the exact solution is frictionless
+    geo_data.sea_level = 0.0
+
+    refine_data = rundata.refinement_data
+    refine_data.wave_tolerance = 1.0e-3
+    refine_data.variable_dt_refinement_ratios = True
+
+    topo_data = rundata.topo_data
+    topo_data.topofiles = []
+    # topotype 1 = bare x y z; the paraboloid bed the worker wrote as topo.asc.
+    topo_data.topofiles.append([1, "topo.asc"])
+
+    return rundata
+
+
+if __name__ == "__main__":
+    rundata = setrun()
+    rundata.write()
 '''
 
 
@@ -588,6 +1435,12 @@ def render_setrun_py(spec: GeoClawBuildSpec) -> str:
     import lives INSIDE the generated module (executed only when the entrypoint
     runs it), never in this authoring module.
     """
+    # Thacker is a wholly-different (planar, frictionless, closed-wall) deck; it
+    # has its own renderer rather than threading Cartesian branches through every
+    # geographic block below (which stays byte-identical for the other scenarios).
+    if spec.scenario == "thacker":
+        return render_thacker_setrun_py(spec)
+
     # The AOI (fine-AMR region + fgmax monitor + gauge + rasterize extent).
     min_lon, min_lat, max_lon, max_lat = spec.bbox
     # The COMPUTATIONAL DOMAIN (clawdata lower/upper + base grid). Extends offshore
@@ -595,25 +1448,50 @@ def render_setrun_py(spec: GeoClawBuildSpec) -> str:
     dom_min_lon, dom_min_lat, dom_max_lon, dom_max_lat = _domain(spec)
     nx, ny = spec.base_num_cells
     amr_levels = int(spec.amr_levels)
-    ratios = _refinement_ratios(amr_levels)
+    # Explicit AMR windows make the AOI a REGION-BASED refinement surface: the AOI
+    # is pinned to an AMBIENT level ONE BELOW the finest, and each window pins a
+    # finer level over its box -- so an in-AOI window is demonstrably finer than its
+    # surroundings (a window pinned at the AOI-wide finest would otherwise be
+    # subsumed by the default AOI region). ``aoi_level`` is the AOI ambient; the
+    # finest available level (``max_levels``) is raised to cover any window that asks
+    # for a level beyond ``amr_levels`` (a window is a bounded sub-box, so its
+    # extra-fine cells scale with the window area, not the whole AOI). With NO
+    # windows both collapse to ``amr_levels`` -- every non-window deck is unchanged.
+    has_amr_windows = bool(spec.amr_regions)
+    window_max_level = max((int(r[1]) for r in spec.amr_regions), default=0)
+    max_levels = max(amr_levels, window_max_level)
+    aoi_level = max(amr_levels - 1, 1) if has_amr_windows else amr_levels
+    ratios = _refinement_ratios(max_levels)
     amr_ratios = ", ".join(str(r) for r in ratios)
 
     # Evenly-spaced output frames including the final time (exclude t=0 dump:
     # GeoClaw always writes frame 0 at t=0, so we request output_frames AFTER it
     # via output_style=1 with num_output_times = output_frames and tfinal set).
     num_output_times = int(spec.output_frames)
-    tfinal = float(spec.sim_duration_s)
+    # Run window [t0, tfinal]. Surge opens BEFORE landfall (t0_s < 0) so the storm
+    # spins up; dam_break/tsunami keep t0_s == 0 so tfinal == sim_duration_s and the
+    # emitted deck is byte-identical. ``t0_zero_repr`` keeps the legacy ``0.``
+    # literal in the shared region/gauge blocks when t0 == 0 (byte-identical),
+    # switching to the real (negative) value only for a surge.
+    t0_val = float(spec.t0_s)
+    tfinal = t0_val + float(spec.sim_duration_s)
+    t0_zero_repr = "0." if t0_val == 0.0 else repr(t0_val)
+    is_surge = spec.scenario == "surge"
 
-    # Finest-level cell size (dx_fine): the base cell size divided by the product
-    # of the refinement ratios. The BASE grid spans the COMPUTATIONAL DOMAIN, so
-    # base_dx is measured across the domain (NOT the AOI) -- otherwise the fgmax
-    # sample points would be mis-aligned with the finest-level FV cell centers
-    # whenever the domain extends offshore beyond the AOI.
+    # fgmax sample spacing: the base cell size divided by the product of the
+    # refinement ratios up to the AOI AMBIENT level. The BASE grid spans the
+    # COMPUTATIONAL DOMAIN, so base_dx is measured across the domain (NOT the AOI)
+    # -- otherwise the fgmax sample points would be mis-aligned with the FV cell
+    # centers whenever the domain extends offshore beyond the AOI. fgmax samples at
+    # ``aoi_level`` (not the absolute finest) so the whole AOI depth field is
+    # captured regardless of the window/ambient split; a window's finer cells are
+    # picked up by interpolation. With no windows ``aoi_level == max_levels`` so the
+    # spacing is the finest-level cell size (the unchanged deck).
     base_dx = (dom_max_lon - dom_min_lon) / float(nx)
-    refine_product = 1
-    for r in ratios:
-        refine_product *= int(r)
-    dx_fine = base_dx / float(refine_product)
+    aoi_product = 1
+    for r in ratios[: aoi_level - 1]:
+        aoi_product *= int(r)
+    dx_fgmax = base_dx / float(aoi_product)
 
     # Scenario-specific source blocks.
     qinit_block = ""
@@ -633,9 +1511,53 @@ def render_setrun_py(spec: GeoClawBuildSpec) -> str:
             f"    dtopo_data.dtopofiles.append([3, {dtopo_file!r}])\n"
             "    dtopo_data.dt_max_dtopo = 1.0\n"
         )
-    # surge: the v0.1 fallback applies the sea_level offset only (a uniform
-    # raised sea surface as a single-pulse surge); a staged hydrograph upgrade
-    # plugs in here via a fgmax/boundary forcing in a later phase.
+    # surge: parametric Holland-1980 wind + pressure forcing driven by the storm
+    # track file (storm.storm, authored by render_storm_file). The storm-field aux
+    # layout (num_aux = 3 shallow + 1 friction + 3 storm) + the surge geo constants
+    # (rho / rho_air / ambient_pressure / coriolis) are wired in the num_aux / setgeo
+    # blocks below; the surge_data block here turns the forcing on + selects the
+    # wind-stress drag law.
+    surge_block = ""
+    surge_import = ""
+    surge_geo_block = ""
+    if is_surge:
+        surge_import = "import os\nimport numpy as np\n"
+        drag_code = _DRAG_LAW_CODES[spec.wind_drag_law]
+        surge_block = (
+            "    # --- Storm surge: parametric Holland 1980 wind + pressure ---\n"
+            "    surge_data = rundata.surge_data\n"
+            "    surge_data.wind_forcing = True\n"
+            "    surge_data.pressure_forcing = True\n"
+            f"    surge_data.drag_law = {drag_code!r}  # 0=none 1=Garratt 2=Powell "
+            f"({spec.wind_drag_law})\n"
+            "    surge_data.display_landfall_time = True\n"
+            "    surge_data.wind_refine = [20.0, 40.0, 60.0]\n"
+            "    surge_data.R_refine = [60.0e3, 40.0e3, 20.0e3]\n"
+            "    surge_data.storm_specification_type = 'holland80'\n"
+            "    surge_data.storm_file = os.path.join(os.getcwd(), 'storm.storm')\n"
+        )
+        # Surge geo physics constants + Coriolis (a rotating storm) + the
+        # variable-friction field the storm aux layout reserves (aux index 4).
+        surge_geo_block = (
+            "    geo_data.rho = 1025.0  # seawater density, kg/m^3\n"
+            "    geo_data.rho_air = 1.15  # air density, kg/m^3\n"
+            "    geo_data.ambient_pressure = 101.3e3  # background MSL pressure, Pa\n"
+            "    geo_data.coriolis_forcing = True  # a rotating (cyclonic) storm\n"
+        )
+
+    # Aux array layout. A surge run adds the storm fields to the shallow-water aux:
+    # 3 shallow (h/capacity/yleft) + 1 friction + 3 storm (wind_x, wind_y, pressure)
+    # = 7 (the canonical GeoClaw storm-surge aux, matching surge_data's default
+    # wind_index=4/pressure_index=6 -> Fortran 5/6/7). dam_break/tsunami keep the
+    # 3-aux shallow layout (byte-identical). aux_type is emitted with the SAME
+    # double-quoted literal formatting the original deck used.
+    aux_type_list = (
+        ["center", "capacity", "yleft", "center", "center", "center", "center"]
+        if is_surge
+        else ["center", "capacity", "yleft"]
+    )
+    num_aux_val = len(aux_type_list)
+    aux_type_str = "[" + ", ".join(f'"{t}"' for t in aux_type_list) + "]"
 
     # --- GAP1 fgmax: monitor max depth + speed + arrival time over the AOI ---
     # Emitted for tsunami and surge (the inundation scenarios) - the fgmax output
@@ -648,26 +1570,87 @@ def render_setrun_py(spec: GeoClawBuildSpec) -> str:
         # A sane fgmax check cadence: ~50 checks across the run, floored at 1 s.
         dt_check = max(tfinal / 50.0, 1.0)
         arrival_tol = float(spec.fgmax_arrival_tol_m)
-        fgmax_block = (
-            "    # --- fgmax: max depth/speed/arrival monitored over the AOI ---\n"
-            "    rundata.fgmax_data.num_fgmax_val = 2  # save max depth + speed\n"
-            "    fgmax_grids = rundata.fgmax_data.fgmax_grids\n"
-            f"    dx_fine = {dx_fine!r}  # finest-level cell size over the AOI\n"
-            "    fg = fgmax_tools.FGmaxGrid()\n"
-            "    fg.point_style = 2  # uniform rectangular x-y grid\n"
-            "    # align sample pts with finest-level FV cell centers (half-cell inset):\n"
-            f"    fg.x1 = {min_lon!r} + dx_fine / 2.0\n"
-            f"    fg.x2 = {max_lon!r} - dx_fine / 2.0\n"
-            f"    fg.y1 = {min_lat!r} + dx_fine / 2.0\n"
-            f"    fg.y2 = {max_lat!r} - dx_fine / 2.0\n"
-            "    fg.dx = dx_fine\n"
-            "    fg.tstart_max = 0.0  # monitor max values from t0\n"
-            "    fg.tend_max = 1.e10\n"
-            f"    fg.dt_check = {dt_check!r}\n"
-            f"    fg.min_level_check = {amr_levels!r}  # monitor on the finest level\n"
-            f"    fg.arrival_tol = {arrival_tol!r}  # wet-cell threshold for arrival\n"
-            "    fg.interp_method = 0  # 0 ==> pw const in cells, recommended\n"
-            "    fgmax_grids.append(fg)\n"
+        if spec.fgmax_mask == "onshore":
+            # point_style=4: the fgmax points are the ONSHORE cells of a topotype-3
+            # mask (fgmax_mask.tt3) the entrypoint generates from the DEM. The mask
+            # grid (built on fgmax_grid_geom) supplies x/y/dx, so here we only
+            # reference it + the shared monitor settings -- a strict onshore subset
+            # of the full point_style=2 grid (fewer points -> smaller fgmax output).
+            fgmax_block = (
+                "    # --- fgmax: max depth/speed/arrival on the ONSHORE DEM cells ---\n"
+                "    rundata.fgmax_data.num_fgmax_val = 2  # save max depth + speed\n"
+                "    fgmax_grids = rundata.fgmax_data.fgmax_grids\n"
+                "    fg = fgmax_tools.FGmaxGrid()\n"
+                "    fg.point_style = 4  # points = onshore cells of a topotype-3 mask\n"
+                f"    fg.xy_fname = {FGMAX_MASK_FILENAME!r}  # 0/1 mask (1 = monitored cell)\n"
+                f"    fg.tstart_max = {t0_zero_repr}  # monitor max values from t0\n"
+                "    fg.tend_max = 1.e10\n"
+                f"    fg.dt_check = {dt_check!r}\n"
+                f"    fg.min_level_check = {aoi_level!r}  # monitor at the AOI ambient level\n"
+                f"    fg.arrival_tol = {arrival_tol!r}  # wet-cell threshold for arrival\n"
+                "    fg.interp_method = 0  # 0 ==> pw const in cells, recommended\n"
+                "    fgmax_grids.append(fg)\n"
+            )
+        else:
+            fgmax_block = (
+                "    # --- fgmax: max depth/speed/arrival monitored over the AOI ---\n"
+                "    rundata.fgmax_data.num_fgmax_val = 2  # save max depth + speed\n"
+                "    fgmax_grids = rundata.fgmax_data.fgmax_grids\n"
+                f"    dx_fine = {dx_fgmax!r}  # AOI ambient-level cell size (fgmax spacing)\n"
+                "    fg = fgmax_tools.FGmaxGrid()\n"
+                "    fg.point_style = 2  # uniform rectangular x-y grid\n"
+                "    # align sample pts with AOI ambient-level FV cell centers (half-cell inset):\n"
+                f"    fg.x1 = {min_lon!r} + dx_fine / 2.0\n"
+                f"    fg.x2 = {max_lon!r} - dx_fine / 2.0\n"
+                f"    fg.y1 = {min_lat!r} + dx_fine / 2.0\n"
+                f"    fg.y2 = {max_lat!r} - dx_fine / 2.0\n"
+                "    fg.dx = dx_fine\n"
+                f"    fg.tstart_max = {t0_zero_repr}  # monitor max values from t0\n"
+                "    fg.tend_max = 1.e10\n"
+                f"    fg.dt_check = {dt_check!r}\n"
+                f"    fg.min_level_check = {aoi_level!r}  # monitor at the AOI ambient level\n"
+                f"    fg.arrival_tol = {arrival_tol!r}  # wet-cell threshold for arrival\n"
+                "    fg.interp_method = 0  # 0 ==> pw const in cells, recommended\n"
+                "    fgmax_grids.append(fg)\n"
+            )
+
+    # --- fgout: SMOOTH fixed-grid animation frames (decoupled from AMR cadence) --
+    # fgout = a fixed uniform grid interpolated at REGULAR time intervals, so the
+    # animation frames are SMOOTH (single resolution, evenly-spaced times) rather
+    # than the coarse/variable fort.q AMR-patch cadence the scrubber uses by
+    # default. Emitted for tsunami / surge ONLY when ``fgout_frames`` > 0 -- a
+    # 0-frame spec emits NO fgout block (byte-identical to a pre-fgout deck). The
+    # grid spans the AOI at the AOI-ambient cell size (SAME dx as the fgmax grid,
+    # so the two monitors share a resolution) and dumps ``fgout_frames`` frames
+    # evenly across [t0, tfinal]. Output is ASCII (topotype-analogue fort.q layout)
+    # so the postprocess reads each frame with the same uniform-grid parser it uses
+    # for fort.q -- no AMR flatten, no clawpack import agent-side.
+    fgout_block = ""
+    fgout_import = ""
+    if spec.scenario in ("tsunami", "surge") and int(spec.fgout_frames) > 0:
+        fgout_import = "from clawpack.geoclaw import fgout_tools\n"
+        fgout_nout = int(spec.fgout_frames)
+        gnx = int(round((max_lon - min_lon) / dx_fgmax))
+        gny = int(round((max_lat - min_lat) / dx_fgmax))
+        gnx = max(gnx, 2)
+        gny = max(gny, 2)
+        fgout_block = (
+            "    # --- fgout: uniform-grid SMOOTH animation frames over the AOI ---\n"
+            "    fgout_grids = rundata.fgout_data.fgout_grids\n"
+            "    fgout = fgout_tools.FGoutGrid()\n"
+            "    fgout.fgno = 1\n"
+            "    fgout.point_style = 2  # uniform rectangular x-y grid\n"
+            "    fgout.output_format = 'ascii'  # fort.q-layout frames (uniform-grid parse)\n"
+            f"    fgout.nx = {gnx!r}\n"
+            f"    fgout.ny = {gny!r}\n"
+            f"    fgout.x1 = {min_lon!r}\n"
+            f"    fgout.x2 = {max_lon!r}\n"
+            f"    fgout.y1 = {min_lat!r}\n"
+            f"    fgout.y2 = {max_lat!r}\n"
+            f"    fgout.tstart = {t0_val!r}\n"
+            f"    fgout.tend = {tfinal!r}\n"
+            f"    fgout.nout = {fgout_nout!r}  # evenly-spaced frames (smooth cadence)\n"
+            "    fgout_grids.append(fgout)\n"
         )
 
     # --- GAP3 regions: the canonical multi-scale tsunami setup ---------------
@@ -694,24 +1677,72 @@ def render_setrun_py(spec: GeoClawBuildSpec) -> str:
         "    #     (force the source->coast corridor + shelf to mid-resolution so\n"
         "    #     the wave is resolved as it shoals; cap at one-below-finest) ---\n"
         f"    rundata.regiondata.regions.append([{prop_min!r}, {offshore_max!r}, "
-        f"0., {tfinal!r}, {dom_min_lon!r}, {dom_max_lon!r}, {dom_min_lat!r}, {dom_max_lat!r}])\n"
-        "    # --- Regions: pin the finest AMR level over the AOI for the run ---\n"
-        f"    rundata.regiondata.regions.append([{amr_levels!r}, {amr_levels!r}, "
-        f"0., {tfinal!r}, {min_lon!r}, {max_lon!r}, {min_lat!r}, {max_lat!r}])\n"
+        f"{t0_zero_repr}, {tfinal!r}, {dom_min_lon!r}, {dom_max_lon!r}, {dom_min_lat!r}, {dom_max_lat!r}])\n"
+        "    # --- Regions: pin the AOI ambient AMR level for the run (one below the\n"
+        "    #     finest when explicit windows are present, so a window refines above\n"
+        "    #     it; the requested finest when there are no windows) ---\n"
+        f"    rundata.regiondata.regions.append([{aoi_level!r}, {aoi_level!r}, "
+        f"{t0_zero_repr}, {tfinal!r}, {min_lon!r}, {max_lon!r}, {min_lat!r}, {max_lat!r}])\n"
     )
+    # Explicit user-supplied AMR windows (region-based flagging): each forces a
+    # lat/lon/time box to [min_level, max_level]. Appended AFTER the default tiers
+    # (GeoClaw combines overlapping regions by MAX of covering min/max levels).
+    for reg in spec.amr_regions:
+        ml, xl, t0r, t1r, x0r, x1r, y0r, y1r = reg
+        regions_block += (
+            "    # --- Region: explicit user AMR window ---\n"
+            f"    rundata.regiondata.regions.append([{int(ml)!r}, {int(xl)!r}, "
+            f"{float(t0r)!r}, {float(t1r)!r}, {float(x0r)!r}, {float(x1r)!r}, "
+            f"{float(y0r)!r}, {float(y1r)!r}])\n"
+        )
 
     # --- GAP4 gauges: one coastal gauge (explicit or seaward-edge fallback) ---
     gx, gy = _coastal_gauge(spec)
     gauges_block = (
         "    # --- Gauges: one coastal time-series gauge ---\n"
-        f"    rundata.gaugedata.gauges.append([1, {gx!r}, {gy!r}, 0., 1.e10])\n"
+        f"    rundata.gaugedata.gauges.append([1, {gx!r}, {gy!r}, {t0_zero_repr}, 1.e10])\n"
     )
+    # Lagrangian particle gauges: each seeded point is added as a gauge advected by
+    # the flow (gtype='lagrangian'), its recorded columns q[2,3] replaced by the
+    # particle position (x(t), y(t)). The stationary coastal gauge (id 1) stays
+    # 'stationary' via the per-gauge gtype dict (unlisted -> default). Empty ->
+    # byte-identical (no gtype dict, no extra gauges).
+    if spec.lagrangian_particles:
+        gauges_block += "    # --- Lagrangian particle gauges (advected by the flow) ---\n"
+        _gtype_entries: list[str] = []
+        for _i, (plon, plat) in enumerate(spec.lagrangian_particles):
+            _gid = 100 + _i
+            gauges_block += (
+                f"    rundata.gaugedata.gauges.append([{_gid}, "
+                f"{float(plon)!r}, {float(plat)!r}, {t0_zero_repr}, 1.e10])\n"
+            )
+            _gtype_entries.append(f"{_gid}: 'lagrangian'")
+        gauges_block += (
+            f"    rundata.gaugedata.gtype = {{{', '.join(_gtype_entries)}}}\n"
+        )
 
     # --- GAP7 nested DEM: primary topo + any extra (coarse->fine) topo files ---
     topo_lines = [f"    topo_data.topofiles.append([3, {spec.topo_file!r}])\n"]
     for f in spec.extra_topo_files:
         topo_lines.append(f"    topo_data.topofiles.append([3, {f!r}])\n")
     topo_block = "".join(topo_lines)
+
+    # --- Friction: single global n, or a spatially-varying (banded) Manning n ---
+    # GeoClaw selects the friction coefficient per cell from ``manning_coefficient``
+    # (a list) split by ``manning_break`` (topography breakpoints): band k applies
+    # where manning_break[k-1] <= B < manning_break[k]. A single-element list with
+    # an empty break list is the uniform case (byte-identical to the scalar path).
+    if spec.manning_coefficients is not None:
+        mc = ", ".join(repr(float(n)) for n in spec.manning_coefficients)
+        mb = ", ".join(repr(float(b)) for b in spec.manning_break)
+        friction_block = (
+            f"    geo_data.manning_coefficient = [{mc}]\n"
+            f"    geo_data.manning_break = [{mb}]\n"
+        )
+    else:
+        friction_block = (
+            f"    geo_data.manning_coefficient = {float(spec.manning_n)!r}\n"
+        )
 
     return f'''"""Auto-generated by the GeoClaw worker (setrun_builder).
 
@@ -720,7 +1751,7 @@ Domain (EPSG:4326): {spec.bbox}
 Do NOT hand-edit — regenerate from the build_spec.
 """
 from clawpack.clawutil import data
-{fgmax_import}
+{fgmax_import}{fgout_import}{surge_import}
 
 def setrun(claw_pkg="geoclaw"):
     assert claw_pkg.lower() == "geoclaw", "setrun expects claw_pkg='geoclaw'"
@@ -744,14 +1775,14 @@ def setrun(claw_pkg="geoclaw"):
     clawdata.num_cells[1] = {ny!r}
 
     clawdata.num_eqn = 3
-    clawdata.num_aux = 3
+    clawdata.num_aux = {num_aux_val!r}
     clawdata.capa_index = 2
 
     # --- Time domain + evenly-spaced output frames (the fort.q animation) ---
-    clawdata.t0 = 0.0
+    clawdata.t0 = {t0_val!r}
     clawdata.output_style = 1
     clawdata.num_output_times = {num_output_times!r}
-    clawdata.tfinal = {float(spec.sim_duration_s)!r}
+    clawdata.tfinal = {tfinal!r}
     clawdata.output_t0 = True
     clawdata.output_format = "ascii"
     clawdata.output_q_components = "all"
@@ -781,18 +1812,18 @@ def setrun(claw_pkg="geoclaw"):
 
     # --- AMR (adaptive mesh refinement) ---
     amrdata = rundata.amrdata
-    amrdata.amr_levels_max = {int(spec.amr_levels)!r}
+    amrdata.amr_levels_max = {max_levels!r}
     amrdata.refinement_ratios_x = [{amr_ratios}]
     amrdata.refinement_ratios_y = [{amr_ratios}]
     amrdata.refinement_ratios_t = [{amr_ratios}]
-    amrdata.aux_type = ["center", "capacity", "yleft"]
+    amrdata.aux_type = {aux_type_str}
     amrdata.flag_richardson = False
     amrdata.flag2refine = True
     amrdata.regrid_interval = 3
     amrdata.regrid_buffer_width = 2
     amrdata.verbosity_regrid = 0
 
-{regions_block}{gauges_block}{fgmax_block}{qinit_block}{dtopo_block}    return rundata
+{regions_block}{gauges_block}{fgmax_block}{fgout_block}{qinit_block}{dtopo_block}{surge_block}    return rundata
 
 
 def setgeo(rundata):
@@ -804,11 +1835,10 @@ def setgeo(rundata):
     geo_data.gravity = 9.81
     geo_data.coordinate_system = 2  # 2 = lat/lon (spherical)
     geo_data.earth_radius = 6367500.0
-
+{surge_geo_block}
     geo_data.dry_tolerance = 1.0e-3
     geo_data.friction_forcing = True
-    geo_data.manning_coefficient = {float(spec.manning_n)!r}
-    geo_data.friction_depth = 1.0e6
+{friction_block}    geo_data.friction_depth = 1.0e6
 
     geo_data.sea_level = {float(spec.sea_level_m)!r}
 
@@ -937,7 +1967,17 @@ def build_geoclaw_deck(build_spec_raw: dict[str, Any], deck_dir: Any) -> DeckMan
     written.append("Makefile")
 
     driver = ""
-    if spec.scenario == "dam_break":
+    if spec.scenario == "thacker":
+        # Worker-GENERATED paraboloid bed + analytic still-surface qinit (NO DEM).
+        (deck / "topo.asc").write_text(render_thacker_topo(spec), encoding="utf-8")
+        written.append("topo.asc")
+        (deck / "qinit.xyz").write_text(render_thacker_qinit(spec), encoding="utf-8")
+        written.append("qinit.xyz")
+        driver = (
+            f"thacker paraboloid-basin V&V (a={spec.bowl_a_m} m, h0={spec.bowl_h0_m} m, "
+            f"A={spec.bowl_eta_amp}), frictionless closed-wall planar bowl"
+        )
+    elif spec.scenario == "dam_break":
         (deck / "qinit.xyz").write_text(render_qinit_data(spec), encoding="utf-8")
         written.append("qinit.xyz")
         driver = f"dam_break raised column {spec.dam_break_depth_m:.1f} m at {_centroid(spec)}"
@@ -960,7 +2000,17 @@ def build_geoclaw_deck(build_spec_raw: dict[str, Any], deck_dir: Any) -> DeckMan
         else:
             driver = f"tsunami staged dtopo {spec.dtopo_file}"
     else:  # surge
-        driver = f"surge sea_level offset {spec.sea_level_m:.2f} m (v0.1 fallback)"
+        (deck / "storm.storm").write_text(render_storm_file(spec), encoding="utf-8")
+        written.append("storm.storm")
+        track, is_synth = resolve_storm_track(spec)
+        _t0, _tN = track[0][0], track[-1][0]
+        _pc_min = min(p[5] for p in track) / 100.0  # Pa -> hPa
+        _origin = "synthetic demo storm" if is_synth else "user-supplied track"
+        driver = (
+            f"surge parametric-Holland ({_origin}, {len(track)} track pts, "
+            f"{spec.wind_drag_law} drag, min central pressure {_pc_min:.0f} hPa, "
+            f"landfall at {_centroid(spec)}, window t0={spec.t0_s:.0f}s)"
+        )
 
     manifest = DeckManifest(
         scenario=spec.scenario,

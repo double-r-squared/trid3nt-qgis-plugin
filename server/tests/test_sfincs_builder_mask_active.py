@@ -288,3 +288,32 @@ def test_all_nodata_dem_falls_back_to_wide_window() -> None:
         zmin, zmax, adaptive = _compute_active_mask_bounds(str(dem_path))
         assert adaptive is False
         assert (zmin, zmax) == (_MASK_FALLBACK_ZMIN, _MASK_FALLBACK_ZMAX)
+
+
+# --------------------------------------------------------------------------- #
+# Test 6 (ADR 0223) — the wide-fallback flag reaches the run envelope
+# --------------------------------------------------------------------------- #
+
+
+def test_mask_bounds_provenance_labels_wide_fallback() -> None:
+    """ADR 0223: the mask-bounds provenance threaded onto ModelSetup.parameters
+    (build_sfincs_model) LABELS the wide-fallback degrade -- adaptive False carries
+    a populated note; the adaptive path carries no note (silent-degrade fix)."""
+    from trid3nt_server.agent.workflows.sfincs.sfincs_builder import (
+        _mask_bounds_provenance,
+    )
+
+    # Reuse the real compute path to prove the flag ORIGIN is honest.
+    _z0, _z1, adaptive = _compute_active_mask_bounds("/tmp/does-not-exist-dep.tif")
+    assert adaptive is False
+    prov = _mask_bounds_provenance(adaptive, _MASK_FALLBACK_ZMIN, _MASK_FALLBACK_ZMAX)
+    assert prov["adaptive"] is False
+    assert prov["note"] is not None
+    assert "WIDE FALLBACK" in prov["note"]
+    assert prov["zmin"] == _MASK_FALLBACK_ZMIN
+    assert prov["zmax"] == _MASK_FALLBACK_ZMAX
+
+    # The adaptive (DEM-readable) path carries NO note -> no spurious warning.
+    ok = _mask_bounds_provenance(True, -10.0, 25.0)
+    assert ok["adaptive"] is True
+    assert ok["note"] is None

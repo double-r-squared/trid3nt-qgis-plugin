@@ -131,6 +131,12 @@ class ElmfireSpecError(ElmfireDeckError):
     error_code = "ELMFIRE_DECK_SPEC_INVALID"
 
 
+class ElmfireSpecUnknownFieldsError(ElmfireSpecError):
+    """Deck spec carries a top-level field the parser does not read (ADR 0158)."""
+
+    error_code = "ELMFIRE_DECK_SPEC_UNKNOWN_FIELDS"
+
+
 class ElmfireInputMissingError(ElmfireDeckError):
     """A required input raster path/URI does not exist."""
 
@@ -173,6 +179,36 @@ def _require(d: dict, key: str, ctx: str) -> Any:
     return d[key]
 
 
+#: PARSER VERSION -- bump on a top-level deck-spec shape change. Named in the
+#: strict-field error (ADR 0158).
+_PARSER_VERSION = "elmfire-spec-1"
+
+#: Every top-level deck-spec key ``validate_deck_spec`` reads. The
+#: ``simulator_extra``/``outputs_extra``/``inputs_extra`` namelist-knob
+#: extension surface is NOT part of this dict-based spec -- it is a SEPARATE,
+#: fully-typed Python kwarg path (``run_elmfire.build_constant_flat_deck`` etc
+#: call ``render_namelist`` directly), so it does not belong in this allowlist.
+_KNOWN_SPEC_FIELDS = frozenset(
+    {"aoi", "ignitions", "weather", "duration_s", "inputs", "grid", "time"}
+)
+
+
+def _reject_unknown_spec_fields(spec: dict) -> None:
+    """Raise loudly if ``spec`` carries a top-level key ``validate_deck_spec``
+    never reads (ADR 0158 -- the ADR 0148 lesson: a stale image silently
+    dropped unknown build_spec fields and two registered knob templates ran
+    as no-ops)."""
+    unknown = sorted(set(spec) - _KNOWN_SPEC_FIELDS)
+    if unknown:
+        raise ElmfireSpecUnknownFieldsError(
+            f"deck-spec carries unknown field(s) {unknown} that parser "
+            f"{_PARSER_VERSION} does not read -- this SILENTLY no-ops the "
+            f"intended field rather than applying it. Either the caller has a "
+            f"typo, or the worker image is stale (rebuild it -- ADR 0148). "
+            f"Known fields: {sorted(_KNOWN_SPEC_FIELDS)}."
+        )
+
+
 def validate_deck_spec(spec: dict) -> dict:
     """Validate the deck spec shape; return a normalized deep-ish copy.
 
@@ -194,6 +230,7 @@ def validate_deck_spec(spec: dict) -> dict:
     """
     if not isinstance(spec, dict):
         raise ElmfireSpecError("deck-spec must be a dict")
+    _reject_unknown_spec_fields(spec)
 
     aoi = _require(spec, "aoi", "")
     bbox = _require(aoi, "bbox", "aoi")
@@ -466,13 +503,53 @@ def warp_to_grid(name: str, src_path: Path, grid: dict, dest: Path) -> dict:
 
 def write_constant_raster(value: float, grid: dict, dest: Path) -> None:
     """Write a constant Float32 raster on the target grid (weather/adj/phi)."""
+    write_constant_raster_typed(value, grid, dest, dtype="float32")
+
+
+def write_constant_raster_typed(
+    value: float, grid: dict, dest: Path, *, dtype: str = "float32"
+) -> None:
+    """Write a constant raster on the target grid at the requested dtype.
+
+    Generalizes ``write_constant_raster`` so the verification deck can force a
+    constant INT16 fuel-model raster (e.g. GR2 = FBFM code 102 -- a uniform
+    grass fuel bed) and constant Int16 flat-topography rasters, alongside the
+    Float32 weather constants."""
     import numpy as np
     import rasterio
 
-    profile = _grid_profile(grid, "float32")
-    arr = np.full((grid["ny"], grid["nx"]), np.float32(value), dtype="float32")
+    profile = _grid_profile(grid, dtype)
+    arr = np.full((grid["ny"], grid["nx"]), value, dtype=dtype)
     with rasterio.open(dest, "w", **profile) as ds:
         ds.write(arr, 1)
+
+
+def write_weather_bands(values_per_band: list[float], grid: dict, dest: Path) -> None:
+    """Write a MULTI-BAND constant-in-space Float32 weather raster.
+
+    ELMFIRE reads the ws/wd/m1/m10/m100 weather rasters as multi-band BSQ
+    (``WS%NBANDS`` bands); band ``k`` is the value at meteorology time ``k``, and
+    the solver linearly interpolates between the bracketing bands every
+    ``DT_METEOROLOGY`` seconds (``elmfire_level_set.f90`` ITLO/ITHI_METEOROLOGY).
+    Each band here is spatially UNIFORM (the value from ``values_per_band[k]``) --
+    the synthetic transient-weather schedule varies a scalar over TIME, not space.
+    One band reproduces the single-band constant raster byte-for-byte in intent
+    (but callers use :func:`write_constant_raster_typed` for the 1-band case so
+    the constant deck stays byte-identical). Raises :class:`ElmfireSpecError`
+    on an empty band list."""
+    import numpy as np
+    import rasterio
+
+    if not values_per_band:
+        raise ElmfireSpecError("write_weather_bands: values_per_band is empty")
+    nbands = len(values_per_band)
+    profile = _grid_profile(grid, "float32")
+    profile["count"] = nbands
+    with rasterio.open(dest, "w", **profile) as ds:
+        for k, value in enumerate(values_per_band, start=1):
+            ds.write(
+                np.full((grid["ny"], grid["nx"]), float(value), dtype="float32"), k
+            )
 
 
 # --------------------------------------------------------------------------- #
@@ -556,6 +633,19 @@ def project_ignitions(ignitions: list[dict], grid: dict) -> list[dict]:
 # --------------------------------------------------------------------------- #
 
 
+def _extra_lines(extra: dict[str, str] | None) -> str:
+    """Render ``KEY = VALUE`` namelist lines from a pre-formatted-string dict.
+
+    Values are injected VERBATIM (the caller formats floats / ``.TRUE.`` /
+    per-fuel ``(:)`` array syntax), so the extension surface stays a thin
+    string pass-through — the deck builder never re-interprets ELMFIRE units.
+    An empty / ``None`` dict renders nothing (byte-identical to the base deck).
+    """
+    if not extra:
+        return ""
+    return "".join(f"{k} = {v}\n" for k, v in extra.items())
+
+
 def render_namelist(
     grid: dict,
     ignitions_xy: list[dict],
@@ -563,10 +653,18 @@ def render_namelist(
     duration_s: float,
     dt_s: float = 30.0,
     dtdump_s: float = 3600.0,
+    *,
+    dt_meteorology_s: float = 3600.0,
+    num_meteorology_times: int = 1,
+    target_cfl: float | None = None,
+    simulator_extra: dict[str, str] | None = None,
+    outputs_extra: dict[str, str] | None = None,
+    inputs_extra: dict[str, str] | None = None,
+    time_control_extra: dict[str, str] | None = None,
 ) -> str:
     """Render ``elmfire.data`` with the tutorial-01 key set (proven).
 
-    Every key below appears in
+    Every base key below appears in
     ``third_party/elmfire/tutorials/01-constant-wind/elmfire.data.in`` — the deck
     the proven container consumed; only the values are templated. Paths are
     relative to the case dir (``cd <deck_dir> && elmfire_<VER>
@@ -576,6 +674,24 @@ def render_namelist(
 . Tutorial 01 simply does not enable it; the flag is a first-class
     ``&OUTPUTS`` dump documented at https://elmfire.io/user_guide/io.html and
     the composer publishes the flame-length raster as its own COG.
+
+    KNOB-EXTENSION SURFACE (sensitivity templates): ``simulator_extra`` /
+    ``outputs_extra`` / ``inputs_extra`` / ``time_control_extra`` append extra
+    ``KEY = VALUE`` lines to the &SIMULATOR / &OUTPUTS / &INPUTS / &TIME_CONTROL
+    groups respectively (each value a pre-formatted string the caller owns — e.g.
+    ``{"MAX_LOW": "8.0000"}``, ``{"WIND_FLUCTUATIONS": ".TRUE."}``,
+    ``{"DUMP_CROWN_FIRE_AREA": ".TRUE."}``, ``{"DT_INTERPOLATE_M1": "600.0"}``).
+    Unset (the default) reproduces the base deck byte-for-byte.
+
+    TRANSIENT WEATHER (multi-band decks): ``num_meteorology_times`` > 1 emits a
+    ``&MONTE_CARLO`` group carrying ``NUM_METEOROLOGY_TIMES`` (read unconditionally
+    by every run), and ``dt_meteorology_s`` sets ``DT_METEOROLOGY`` (the
+    band-to-band spacing the solver linearly interpolates over). The weather
+    rasters must then be MULTI-BAND (:func:`write_weather_bands`, one band per
+    meteorology time). ``target_cfl`` emits ``TARGET_CFL`` in &TIME_CONTROL.
+    At the defaults (single band, ``DT_METEOROLOGY = 3600.0``, no TARGET_CFL /
+    time-control extras / MONTE_CARLO group) the deck is byte-identical to the
+    constant tutorial-01 deck.
     """
 
     def _f(v: float) -> str:
@@ -587,6 +703,32 @@ def render_namelist(
         sim_lines.append(f"Y_IGN({i})      = {_f(ign['y'])}")
         sim_lines.append(f"T_IGN({i})      = {_f(ign['t_ign_s'])}")
     sim_block = "\n".join(sim_lines)
+    sim_extra_block = _extra_lines(simulator_extra)
+    outputs_extra_block = _extra_lines(outputs_extra)
+    inputs_extra_block = _extra_lines(inputs_extra)
+
+    _dt_met = f"{float(dt_meteorology_s):.1f}"
+
+    # &TIME_CONTROL: SIMULATION_DT + TSTOP always; TARGET_CFL + the interpolation-
+    # frequency / DTMAX pass-through (``time_control_extra``) only when set, so the
+    # default (constant) deck stays byte-identical.
+    tc_lines = [f"SIMULATION_DT    = {_f(dt_s)}", f"SIMULATION_TSTOP = {_f(duration_s)}"]
+    if target_cfl is not None:
+        tc_lines.append(f"TARGET_CFL       = {_f(target_cfl)}")
+    tc_body = "\n".join(tc_lines) + "\n" + _extra_lines(time_control_extra)
+
+    # &MONTE_CARLO carries NUM_METEOROLOGY_TIMES (read unconditionally by every
+    # run -- elmfire.f90 READ_MONTE_CARLO). Emitted ONLY for a transient
+    # (multi-band) weather deck; a constant deck omits the group entirely (the
+    # default of 1 is what the solver assumes when the group is absent), keeping
+    # the constant deck byte-identical.
+    montecarlo_block = ""
+    if int(num_meteorology_times) > 1:
+        montecarlo_block = (
+            "\n&MONTE_CARLO\n"
+            f"NUM_METEOROLOGY_TIMES = {int(num_meteorology_times)}\n"
+            "/\n"
+        )
 
     return f"""&INPUTS
 FUELS_AND_TOPOGRAPHY_DIRECTORY = './inputs'
@@ -600,7 +742,7 @@ FBFM_FILENAME                  = 'fbfm40'
 SLP_FILENAME                   = 'slp'
 ADJ_FILENAME                   = 'adj'
 PHI_FILENAME                   = 'phi'
-DT_METEOROLOGY                 = 3600.0
+DT_METEOROLOGY                 = {_dt_met}
 WEATHER_DIRECTORY              = './inputs'
 WS_FILENAME                    = 'ws'
 WD_FILENAME                    = 'wd'
@@ -609,7 +751,7 @@ M10_FILENAME                   = 'm10'
 M100_FILENAME                  = 'm100'
 LH_MOISTURE_CONTENT            = {_f(weather["lh_pct"])}
 LW_MOISTURE_CONTENT            = {_f(weather["lw_pct"])}
-/
+{inputs_extra_block}/
 
 &OUTPUTS
 OUTPUTS_DIRECTORY    = './outputs'
@@ -619,7 +761,7 @@ DUMP_FLIN            = .TRUE.
 DUMP_SPREAD_RATE     = .TRUE.
 DUMP_TIME_OF_ARRIVAL = .TRUE.
 CONVERT_TO_GEOTIFF   = .FALSE.
-/
+{outputs_extra_block}/
 
 &COMPUTATIONAL_DOMAIN
 A_SRS = 'EPSG: {grid["epsg"]}'
@@ -629,21 +771,19 @@ COMPUTATIONAL_DOMAIN_YLLCORNER = {_f(grid["yll"])}
 /
 
 &TIME_CONTROL
-SIMULATION_DT    = {_f(dt_s)}
-SIMULATION_TSTOP = {_f(duration_s)}
-/
+{tc_body}/
 
 &SIMULATOR
 {sim_block}
 WX_BILINEAR_INTERPOLATION=.TRUE.
 WSMFEFF_LOW_MULT = 0.011364
-/
+{sim_extra_block}/
 
 &MISCELLANEOUS
 PATH_TO_GDAL                   = '/usr/bin'
 SCRATCH                        = './scratch'
 /
-"""
+{montecarlo_block}"""
 
 
 # --------------------------------------------------------------------------- #

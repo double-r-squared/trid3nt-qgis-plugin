@@ -375,32 +375,47 @@ def classify_provider_error_class(exc: BaseException) -> str:
 # ---------------------------------------------------------------------------
 
 SYSTEM_PROMPT = """\
-You are TRID3NT — a geospatial hazard-modeling assistant. You help users analyze,
-visualize, and model natural hazards (flooding, fire, hurricanes, etc.) using
-real data and physics-based simulation tools.
+You are TRID3NT - a general geospatial intelligence assistant. You help users
+fetch, analyze, visualize, and model geospatial data across any domain -
+terrain, land cover, hydrology, weather, ecology, the built environment, and
+physical-process simulation (flooding, fire, groundwater, seismic, waves, and
+more) - using real data and physics-based simulation tools.
 
-When a user asks you to model, analyze, simulate, or compute anything related
-to a hazard or geographic data, call the appropriate tool. Do not say you
-cannot help with modeling requests — you have tools for that.
+When a user asks you to fetch, model, analyze, simulate, or compute anything
+related to geographic data or a physical process, call the appropriate tool. Do
+not say you cannot help with modeling requests - you have tools for that.
 
 Key behaviors:
 - If the user asks to model a flood scenario, run a flood simulation, compute
-  flood depth, or analyze inundation for any location, call the run_sfincs DOOR
-  first (it lists the sfincs_flood template + makes it callable this turn), then
-  SELECT-THEN-CALL sfincs_flood -- UNLESS the request is urban / street-level /
-  storm-drain / stormwater / pipe-network / SWMM-style, in which case call the
-  run_swmm DOOR first (it lists the swmm_urban_flood template + makes it callable
-  this turn), then SELECT-THEN-CALL swmm_urban_flood (see the flood-engine
-  routing block below).
+  flood depth, or analyze inundation for any location, call sfincs_flood
+  directly -- UNLESS the request is urban / street-level / storm-drain /
+  stormwater / pipe-network / SWMM-style, in which case call swmm_urban_flood
+  directly (see the flood-engine routing block below).
 - For geographic data queries (elevation, population, land cover, roads,
   buildings), call the matching fetch_* tool.
 - For QGIS geoprocessing (clip, slope, hillshade, zonal statistics), call the
   matching compute_* or clip_* tool.
 - Never fabricate numbers. All depth, area, and count values in your replies
   must come from the tool result, not from your own generation.
+- Never invent PHYSICAL MODEL INPUTS. Rates, magnitudes, material properties,
+  and forcing values (dam height, earthquake magnitude, soil strength, carrier
+  discharge, wind, Vs30, rainfall) are never guessed. If a required physical
+  parameter has no value and no fetcher can supply it, do NOT fill it in: the
+  tool returns a typed INPUT-required error naming the missing parameters -- relay
+  them to the user with their units and typical ranges and ASK, rather than
+  supplying a plausible number yourself. When a tool result carries a
+  ``synthetic_inputs`` / ``assumptions_summary`` provenance line, you MUST state
+  in your narration which quantities are demo defaults versus site-derived.
+- Input review before a run (user-gated mode): when a solver pauses with an
+  INPUT REVIEW card (a ``tool-payload-warning`` carrying a resolved input table),
+  present the resolved inputs to the user as a compact list, ONE per line
+  (param = value [basis, source]), so they can look them over. If they approve,
+  proceed; if they want to change a value, collect the revision and confirm the
+  run with it; if they decline, cancel. Do not run the solver until the user has
+  approved the reviewed inputs.
 - When a tool result contains a flood depth layer, describe the results from
   the returned metrics — do not invent values.
-- Keep responses concise and focused on the hazard modeling context.
+- Keep responses concise and focused on the geospatial task at hand.
 - Key-gated tools (e.g. fetch_airnow_air_quality, fetch_era5_reanalysis): CALL
   them normally even if you think an API key may be missing. If a credential is
   needed the system automatically shows the user a credential-request card and
@@ -446,7 +461,7 @@ exists to feed the named tool.
 
 Example: user asks "show me NEXRAD radar in Florida"
   1. Call geocode_location for "Florida" (precursor) →
-  2. THEN call fetch_nexrad_reflectivity with the geocoded bbox →
+  2. THEN call show_nexrad_radar with the geocoded bbox →
   3. THEN narrate the result.
 
 Example: user asks "show me protected areas in Big Cypress"
@@ -531,8 +546,7 @@ Example: user asks "fetch population in Miami-Dade County"
 REUSE BEFORE RE-RUN — HARD RULE (CRITICAL, NON-NEGOTIABLE — job-0326,
 NATE 2026-06-16, supersedes every softer reuse clause below):
 Before you call ANY expensive simulation (sfincs_flood,
-run_model_nws_flood_event_scenario, modflow_contaminant_plume,
-run_model_groundwater_contamination_scenario, pelicun_*), ANY fetch_*,
+modflow_contaminant_plume, swmm_urban_flood, pelicun_*), ANY fetch_*,
 or ANY compute_*, you MUST FIRST check the "[Case state]" note for the
 layers ALREADY produced and on the map for this Case. If a layer or result
 that ALREADY ANSWERS the user's request is present, you MUST REUSE it — pass
@@ -576,38 +590,42 @@ minute SFINCS solve twice after detours instead of reusing the layer it
 had already produced). A completed solver's outputs stay valid for the
 rest of the turn and the Case.
 
-Groundwater / MODFLOW routing (CRITICAL — engine-door model):
-For ANY groundwater / aquifer question (contaminant plume, capture zone,
-wellhead protection, mine dewatering, saltwater intrusion, managed recharge,
-ASR, sustainable yield / drawdown, wetland hydroperiod, regional water budget,
-river seepage) call the run_modflow DOOR FIRST. It is a read-only concierge:
-it lists the available modflow_* templates (each with its question + required
-inputs) and makes them callable this turn. Then SELECT-THEN-CALL the chosen
-template directly — e.g. modflow_contaminant_plume for a spill plume. When the
+Groundwater / MODFLOW routing (CRITICAL):
+For ANY groundwater / aquifer question call the matching modflow_* template
+directly: contaminant plume -> modflow_contaminant_plume; capture zone ->
+modflow_capture_zone; wellhead protection -> modflow_wellhead_protection; mine
+dewatering -> modflow_mine_dewatering; saltwater intrusion ->
+modflow_saltwater_intrusion; managed recharge -> modflow_managed_recharge; ASR
+-> modflow_asr; sustainable yield / drawdown -> modflow_sustainable_yield;
+wetland hydroperiod -> modflow_wetland_hydroperiod; regional water budget ->
+modflow_regional_water_budget; river seepage -> modflow_river_seepage; how long a
+surface spill takes to reach the water table (unsaturated / vadose-zone travel) ->
+modflow_vadose_transport. When the
 user gives the spill parameters DIRECTLY (a location + contaminant +
 release rate/amount + duration), call modflow_contaminant_plume with
 spill_location_latlon as a 2-element [lat, lon] array (latitude first), the
 contaminant name, release_rate_kg_s, and duration_days (or a species=[...] list
-for several co-released contaminants). Do NOT use
-run_model_groundwater_contamination_scenario for a parameterized spill —
-that tool is the news-ARTICLE ingest path; it expects an article_text or
-source_url and a release amount stated in gallons / liters / barrels / tons
-that it must extract and convert. Use it ONLY when the user pastes or links a
-news article about a spill. Parameterized spill → run_modflow door →
-modflow_contaminant_plume; spill news article →
-run_model_groundwater_contamination_scenario.
+for several co-released contaminants).
 
-Flood-engine routing -- urban PySWMM vs SFINCS (CRITICAL, North Star B3):
+When the user instead pastes or links a NEWS ARTICLE about a spill, COMPOSE the
+chain yourself: read the article (web_fetch on a source_url, or the pasted
+text), EXTRACT the location, contaminant, released amount (gallons / liters /
+barrels / tons / kg), and duration, DERIVE the forcing (convert the amount to
+mass via the contaminant density, then release_rate_kg_s = mass / duration_s),
+and call modflow_contaminant_plume with those. NEVER INVENT a contamination
+parameter you cannot ground in the article or the user (Invariant 9): if the
+amount, duration, contaminant, or location is not stated, ASK the user for it
+(or state the single documented assumption you are making) BEFORE running -- a
+fabricated release rate produces a confidently-wrong plume. Confirm the derived
+forcing with the user before the solve.
+
+Flood-engine routing -- urban PySWMM vs SFINCS (CRITICAL):
 TRID3NT has TWO flood solvers. Route to the right one from the prompt; do NOT
-default every flood to SFINCS. The SFINCS engine is reached through the
-run_sfincs DOOR (a read-only concierge that lists the sfincs_flood template +
-makes it callable this turn); then SELECT-THEN-CALL sfincs_flood with the knobs
-below. The urban PySWMM engine is reached the SAME way through the run_swmm DOOR
-(lists the swmm_urban_flood template + makes it callable this turn); then
-SELECT-THEN-CALL swmm_urban_flood.
+default every flood to SFINCS. Call the chosen template DIRECTLY -- sfincs_flood
+for the coastal / riverine / watershed engine, swmm_urban_flood for the urban
+PySWMM engine (each with the knobs below). There is no separate concierge step.
 
-- run_swmm -> swmm_urban_flood (quasi-2D PySWMM, the URBAN engine). Call the
-  run_swmm door, then swmm_urban_flood. Route here when the
+- swmm_urban_flood (quasi-2D PySWMM, the URBAN engine). Route here when the
   scenario is urban / street-level / storm-drain / stormwater / drainage /
   pipe-network / sewer / SWMM / PCSWMM-style: street flooding from a design
   storm over a city block or neighborhood, ponding around BUILDINGS in a
@@ -619,8 +637,7 @@ SELECT-THEN-CALL swmm_urban_flood.
   "SWMM", "city block", "neighborhood", "around the buildings", "flood wall",
   "barrier", "flap gate". This is NATE's PCSWMM urban demo path.
 
-- run_sfincs -> sfincs_flood (SFINCS, the COASTAL / RIVERINE / WATERSHED engine).
-  Call the run_sfincs door, then sfincs_flood with these knobs.
+- sfincs_flood (SFINCS, the COASTAL / RIVERINE / WATERSHED engine).
   Route here for coastal / surge / storm-tide inundation, riverine / fluvial
   flooding along a river, and large pluvial-WATERSHED rainfall flooding over a
   county-or-larger AOI. Cue words: "coastal", "surge", "storm surge",
@@ -650,9 +667,72 @@ storm-drain / barrier / street framing, where either engine could fit), ASK the
 user one short clarifying question -- urban storm-drain street flooding (PySWMM)
 or watershed / coastal / riverine inundation (SFINCS)? -- before launching a
 multi-minute solve. This is consistent with the SFINCS ASK-WHEN-URBAN building
-opt-in: when the urban intent is clear, call the run_swmm door then
-swmm_urban_flood; when only the AOI is developed but the driver is unstated,
-confirm first.
+opt-in: when the urban intent is clear, call swmm_urban_flood directly; when
+only the AOI is developed but the driver is unstated, confirm first.
+
+LIVE NWS FLOOD WARNING -- model the flood that is HAPPENING NOW (compose it):
+When the user asks to model a flood that is actively happening / real-time /
+"under the current warning" (not a hypothetical design storm), COMPOSE the chain
+yourself -- there is no single tool for it:
+  1. fetch_nws_alerts_conus to pull the active CONUS alerts; FILTER to the
+     flood family (Flood Warning / Flash Flood Warning) and pick the
+     highest-severity warning (or the specific one the user named), and read its
+     warning polygon.
+  2. Derive the AOI from that warning polygon's extent (do NOT invent a bbox).
+  3. fetch_mrms_qpe over that AOI for the OBSERVED accumulated precipitation
+     (measured radar rainfall) -- the live event is driven by what actually
+     fell, NOT a return-period design storm.
+  4. Run sfincs_flood over the warning AOI forced by the observed precip.
+If there is NO active Flood Warning / Flash Flood Warning for the area, say so
+honestly and list what IS active -- never fabricate a flood over an arbitrary
+bbox (Invariant 7). This is the observed-event path; the plain return-period
+design-storm path stays the default when no live warning is in play.
+
+Cross-engine fidelity ladder (CRITICAL honesty rule -- applies to EVERY
+simulation template, never weaken it): the built-in solvers are SCREENING /
+PLANNING-grade, not calibrated regulatory or site-specific models. SFINCS is
+fast reduced-physics flood screening (never refinement-grade); TELEMAC-2D is the
+full-physics surface-water step up when a question needs it; refinement-grade or
+regulatory flood work belongs to a native solver (TELEMAC-2D / HEC-RAS) on a
+documented calibration case, not to SFINCS. Match engine to question: SFINCS =
+coastal / riverine / watershed inundation depth; swmm_urban_flood = urban
+storm-sewer / pipe-network; geoclaw_inundation = tsunami / dam-break / surge
+run-up; swan_wave_field = the nearshore spectral wave field; telemac_river_dye =
+surface-water dye / tracer transport; modflow_* = groundwater; openquake_psha =
+seismic hazard; landlab_susceptibility = landslide; elmfire_fire_spread =
+wildfire spread; pelicun_damage_assessment = damage / loss from an already-run
+hazard. When a template result carries a demo-default / synthetic-input caveat,
+state in your narration which quantities are demo defaults versus site-derived;
+never present a planning-grade screening result as a calibrated study.
+
+Cross-engine OVERLAP routing -- when two engines could answer, pick by scale /
+coupling / what is actually surfaced (grounded in what TRID3NT ships today):
+- WAVES (spectral): schism_coupled_waves is SCHISM+WWM -- tight two-way
+  wave-current feedback every timestep on an unstructured circulation mesh; use
+  it when the coupled current+wave field is the point. swan_wave_field is
+  standalone SWAN -- use it when the wave field itself is the deliverable, loosely
+  coupled. TRID3NT surfaces WWM only INSIDE SCHISM (there is no standalone WWM
+  tool); do not offer one.
+- SEDIMENT / morphodynamics: the GAIA sediment mode of telemac_river_dye
+  (substance = sediment/sand/silt/mud) is the surfaced morphodynamic path --
+  unstructured-mesh, multi-fraction, supply-limited bed evolution from a
+  prescribed upstream load through river-to-coastal transition, INCLUDING the
+  reservoir-inflow / upstream-sediment-supply question. SED3D (EPA) is
+  archived/defunct -- never offer it. HEC-RAS 2D sediment is a real US-standard
+  channel/reservoir tool but is NOT surfaced in TRID3NT (only HEC-RAS hydraulics
+  is); say so rather than implying a sediment run.
+- WATER QUALITY: SWMM water-quality (buildup/washoff -> pipe network -> outfall
+  load) is the URBAN-catchment scale; the WAQTEL decay mode of telemac_river_dye
+  (substance = sewage/effluent/E.coli) is the RECEIVING-water scale (what the
+  discharged load DOES in the river/lake -- decay, dilution, deposition). Chain
+  SWMM-WQ -> telemac decay for source-to-receiving-water. ICM (commercial
+  InfoWorks) spans both but is NOT in TRID3NT; use the SWMM + telemac combination.
+- RAIN-ON-GRID pluvial (three-tier fidelity ladder): sfincs_flood is the FAST
+  reduced-physics SCREENING tier (national-to-local pluvial); a full shallow-water
+  overland-flow refinement tier belongs to a native 2D solver (HEC-RAS 2D) on a
+  documented case; swmm_urban_flood is correct specifically when the drainage
+  NETWORK topology (pipes, inlets, weirs) is the object of the question rather
+  than the free-surface overland field.
 
 Satellite fire-animation routing (CIRA/GOES/JPSS fire timelapse):
 To "recreate a CIRA / GOES / JPSS fire animation" (cue words: "recreate the
@@ -1781,7 +1861,7 @@ def _classify_error(error: BaseException) -> tuple[str, bool]:
     (``WDPAError``, ``HRSLError``, ``MTBSError``, ``MRMSError``,
     ``INatError``, ``IUCNError``, ``FIRMSError``, ``GTSMError``,
     ``LANDFIREError``, ``OSMRoadsError``, ``GBIFError``,
-    ``CAMaFloodError``, ``GOESError``, ``CompFireError``,
+    ``GOESError``, ``CompFireError``,
     ``ColoredReliefError``, ``NIFCError``, ``NWSAlertsError``, etc.).
     Harvest those directly so the function_response the multi-turn loop
     feeds back to Gemini carries the retry signal the tool already knew.
@@ -2046,6 +2126,92 @@ def _layer_uri_is_published(result: Any) -> bool:
     return uri.startswith("http://") or uri.startswith("https://")
 
 
+def _extract_synthetic_inputs(result: Any) -> list[dict[str, Any]]:
+    """Pull the structured ``synthetic_inputs`` provenance list off a tool result,
+    wherever it rides (provenance-chain wave).
+
+    Checks, in order: a top-level attribute (a ``LayerURI`` / result model), a
+    dict ``"synthetic_inputs"`` key, the result's primary layer
+    (``.layers[0]`` / ``.asr_layer`` / ``.<x>_layer`` style single-layer field),
+    and a nested ``summary``/``derived_params`` dict. Returns a list of plain
+    dicts (``model_dump``-style) or ``[]`` when none is declared. Never raises --
+    a missing field on any shape degrades to ``[]``.
+    """
+
+    def _as_dicts(value: Any) -> list[dict[str, Any]]:
+        if not isinstance(value, (list, tuple)) or not value:
+            return []
+        out: list[dict[str, Any]] = []
+        for entry in value:
+            if isinstance(entry, dict):
+                out.append(entry)
+            elif hasattr(entry, "model_dump"):
+                try:
+                    out.append(entry.model_dump(mode="json"))
+                except Exception:  # noqa: BLE001
+                    continue
+        return out
+
+    # 1. top-level attribute (LayerURI subclass / result model)
+    direct = _as_dicts(getattr(result, "synthetic_inputs", None))
+    if direct:
+        return direct
+    # 2. dict key
+    if isinstance(result, dict):
+        found = _as_dicts(result.get("synthetic_inputs"))
+        if found:
+            return found
+        # nested summary / derived_params dicts
+        for key in ("summary", "derived_params"):
+            sub = result.get(key)
+            if isinstance(sub, dict):
+                found = _as_dicts(sub.get("synthetic_inputs"))
+                if found:
+                    return found
+        # a layers list of LayerURIs
+        for layer in result.get("layers") or []:
+            found = _as_dicts(getattr(layer, "synthetic_inputs", None))
+            if found:
+                return found
+        return []
+    # 3. result models that wrap a single primary layer
+    for attr in ("layers",):
+        seq = getattr(result, attr, None)
+        if isinstance(seq, (list, tuple)):
+            for layer in seq:
+                found = _as_dicts(getattr(layer, "synthetic_inputs", None))
+                if found:
+                    return found
+    for attr in ("asr_layer", "primary", "layer", "peak"):
+        layer = getattr(result, attr, None)
+        if layer is not None:
+            found = _as_dicts(getattr(layer, "synthetic_inputs", None))
+            if found:
+                return found
+    return []
+
+
+def _hoist_synthetic_inputs(payload: dict[str, Any], result: Any) -> None:
+    """When a tool result carries structured input provenance, hoist a compact
+    one-line ``assumptions_summary`` (+ the structured ``synthetic_inputs`` list)
+    to the TOP of the function_response so the LLM reliably narrates which inputs
+    are demo defaults vs site-derived (concise-chat: one line, never a table).
+
+    Mirrors the ``fallback_note`` hoist -- a no-op when the result declares no
+    provenance, so every existing result is byte-identical.
+    """
+    from trid3nt_contracts.common import render_assumptions_line
+
+    entries = _extract_synthetic_inputs(result)
+    if not entries:
+        return
+    line = render_assumptions_line(entries)
+    if line:
+        payload["assumptions_summary"] = line
+    # keep the structured list too (clipped) so a consumer can enumerate it.
+    payload["synthetic_inputs"] = entries[:12]
+
+
 def _summarize_published_scenario_layer(
     tool_name: str, result: Any
 ) -> dict[str, Any]:
@@ -2087,6 +2253,12 @@ def _summarize_published_scenario_layer(
     }
     if isinstance(bbox, (list, tuple)) and len(bbox) == 4:
         summary["bbox"] = list(bbox)
+    # provenance-chain wave: the bare-published-LayerURI path used to drop every
+    # field but the render metadata, losing any input-provenance the layer
+    # carried (sfincs_flood / swmm_urban_flood peak layers). Thread the structured
+    # ``synthetic_inputs`` + its rendered assumptions line through so the demo-vs-
+    # site-derived provenance reaches the narration on this path too.
+    _hoist_synthetic_inputs(summary, result)
     return summary
 
 
@@ -2326,6 +2498,12 @@ def summarize_tool_result(
         _fb_note = getattr(result, "fallback_note", None)
         if isinstance(_fb_note, str) and _fb_note:
             payload["fallback_note"] = _fb_note
+
+    # provenance-chain wave: whichever branch built the payload, hoist any
+    # structured input provenance the result carries (a demo default is buried in
+    # the coerced/repr'd result otherwise). Renders one compact assumptions line
+    # so the LLM narrates demo-vs-site-derived inputs. No-op when none declared.
+    _hoist_synthetic_inputs(payload, result)
 
     # Final char-budget clip: serialize, if oversized clip and re-wrap.
     try:

@@ -33,6 +33,7 @@ from typing import Any
 
 from trid3nt_contracts.source_spec import SourceSpec
 
+from ..._fetch_common import FetchError
 from ..errors import RouterError, router_upstream_error
 from ..hooks import resolve_hook
 from .vector_fgb import features_to_fgb_bytes
@@ -88,7 +89,12 @@ def resolve(spec: SourceSpec, params: dict[str, Any]) -> dict[str, Any]:
     )
     try:
         merged = hook(spec, params, timeout_s=timeout_s)
-    except RouterError:
+    except FetchError:
+        # Any typed FetchError the hook already raised -- a RouterError's A.6
+        # class OR a source-specific FetchError subclass carrying a pinned
+        # error_code (fetch_dem's Dem*Error twins, ADR 0097) -- propagates
+        # UNCHANGED so its exact typed code survives. Only a NON-FetchError
+        # library exception hits the generic upstream backstop below.
         raise
     except Exception as exc:  # noqa: BLE001 -- backstop: never leak a raw library error
         raise router_upstream_error(
@@ -129,8 +135,16 @@ def invoke(spec: SourceSpec, params: dict[str, Any]) -> Any:
     )
     try:
         return hook(spec, params, timeout_s=timeout_s)
-    except RouterError:
-        # The hook already mapped a library failure to a typed A.6 router error.
+    except FetchError:
+        # PASSTHROUGH (ADR 0097): the hook already raised a typed FetchError --
+        # either a RouterError (its twin-identical A.6 input/empty/upstream
+        # mapping) OR a source-specific FetchError subclass carrying a PINNED
+        # error_code the router must not clobber (fetch_dem's DemPartialCoverageError
+        # / DemPrimaryTimeoutError / DemAutoFallbackGateError / DemOutOfCoverageError,
+        # whose DEM_* codes are test-pinned). Broadened from the original
+        # ``except RouterError`` so those survive verbatim. A NON-FetchError library
+        # exception still hits the generic upstream backstop below (unchanged for
+        # every other delegate source: pfdf, dataretrieval, HRRR-Zarr).
         raise
     except Exception as exc:  # noqa: BLE001 -- backstop: never leak a raw library error
         raise router_upstream_error(

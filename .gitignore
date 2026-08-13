@@ -19,7 +19,8 @@ server/build/
 # Secret-bearing local env (OpenRouter/API keys) - never commit
 .env.local
 .env.*.local
-docs/proof/
+docs/proof/*
+!docs/proof/templates/
 # Nutshell — local server state and API key
 .nutshell-api-key
 .nutshell-server.pid
@@ -30,3 +31,11 @@ docs/proof/
 dist/
 .restructure-baseline/
 .structural-baseline/
+
+# oceanmesh sandbox bulk data (re-downloadable DEMs + GSHHG shoreline)
+scripts/sandbox/oceanmesh/_runs/
+scripts/sandbox/oceanmesh/shoreline/
+# pysheds watershed sandbox bulk data (re-downloadable 3DEP DEMs)
+scripts/sandbox/pysheds_watershed/_work/
+# hecras rain-on-grid reference decks (re-downloadable USACE example projects; ADR 0199)
+scripts/sandbox/hecras/_ref/

@@ -232,6 +232,41 @@ def _run_sfincs(args: list[str], cwd: Path) -> tuple[int, Path, Path]:
     return proc.returncode, stdout_path, stderr_path
 
 
+def _stamp_sfincs_map_crs(nc_path: Path, epsg: int) -> None:
+    """Stamp the true grid EPSG into ``sfincs_map.nc``'s ``crs`` variable.
+
+    The SFINCS binary writes the quadtree output's ``crs`` variable as a
+    placeholder (``attrs={'EPSG':'-'}``, value 0) -- it does NOT propagate the
+    deck's projection even though cht_sfincs built the grid in the AOI UTM zone.
+    Downstream (``_read_crs_from_dataset`` / the native mesh ``LayerURI`` /
+    MDAL) therefore falls back to EPSG:3857 while the nodes are UTM metres, so
+    QGIS would place the mesh at the wrong location. This stamps the real code
+    into the ``epsg_code`` attribute in place (cheap netCDF4 ``r+``), the most
+    upstream honest point at which the output artifact itself becomes correct.
+    Best-effort: any failure logs and leaves the file untouched (the mesh
+    answer still stands; the CRS just falls back as before).
+    """
+    if not nc_path.exists():
+        return
+    try:
+        import netCDF4  # type: ignore
+
+        ds = netCDF4.Dataset(str(nc_path), "r+")
+        try:
+            if "crs" in ds.variables:
+                ds.variables["crs"].setncattr("epsg_code", f"EPSG:{int(epsg)}")
+                LOG.info("stamped crs epsg_code=EPSG:%s into %s", epsg, nc_path.name)
+            else:
+                LOG.warning(
+                    "crs stamp: %s has no 'crs' variable -- not stamped.",
+                    nc_path.name,
+                )
+        finally:
+            ds.close()
+    except Exception as exc:  # noqa: BLE001 -- best-effort; never fatal
+        LOG.warning("crs stamp failed for %s (%s) -- left untouched.", nc_path, exc)
+
+
 def _expand_outputs(patterns: list[str], cwd: Path) -> list[Path]:
     seen: set[Path] = set()
     for pat in patterns:
@@ -414,6 +449,7 @@ def _solve_postprocess_sweep(
     run_dir: Path,
     sfincs_args: list[str],
     output_globs: list[str],
+    grid_crs_epsg: int | None = None,
 ) -> dict:
     """Run SFINCS in ``run_dir`` -> postprocess -> sweep outputs (shared tail).
 
@@ -423,8 +459,18 @@ def _solve_postprocess_sweep(
     build path), so from the solve onward the two modes are IDENTICAL. Writes the
     ``publish_manifest.json`` BEFORE the caller writes completion.json (Spot-
     reclaim atomicity). Returns a dict the caller folds into completion.json.
+
+    ``grid_crs_epsg`` (quadtree build path only) stamps the true UTM EPSG into
+    the freshly-solved ``sfincs_map.nc`` BEFORE the postprocess reads it, so both
+    the depth COG and the published native mesh carry the real authid rather than
+    the SFINCS placeholder. ``None`` (regular grid / legacy manifest) skips the
+    stamp -> byte-identical to the pre-stamp behaviour.
     """
     rc, stdout_path, stderr_path = _run_sfincs(list(sfincs_args), run_dir)
+    # CRS stamp (quadtree): fix the placeholder crs var on the solved output
+    # before the postprocess (which reads the crs for the depth COG) runs.
+    if grid_crs_epsg and rc == 0:
+        _stamp_sfincs_map_crs(run_dir / "sfincs_map.nc", int(grid_crs_epsg))
     # Always upload stdout/stderr so the smoke run produces evidence.
     stdout_uri = _upload(stdout_path, _runs_uri(run_id, "sfincs.stdout"))
     stderr_uri = _upload(stderr_path, _runs_uri(run_id, "sfincs.stderr"))
@@ -536,13 +582,23 @@ def main(argv: list[str] | None = None) -> int:
             # agent reproduces the SAME failed AssessmentEnvelope.
             from services.workers._sfincs_build import (
                 build_sfincs_deck,
+                build_sfincs_quadtree_deck,
                 validate_job_spec,
             )
             from services.workers._sfincs_build.deck import SFINCSSetupError
 
             spec = validate_job_spec(_read_manifest(build_spec_uri))
+            # QUADTREE (M4): a variable-resolution coastal quadtree deck authored
+            # by cht_sfincs (hydromt cannot build quadtree from scratch; ADR 0113).
+            # The solve + postprocess tail below is IDENTICAL to the regular grid
+            # (SFINCS consumes qtrfile natively; the read-side probe is face-aware).
+            _is_quadtree = bool((spec.get("options") or {}).get("quadtree"))
             try:
-                deck_provenance = build_sfincs_deck(spec, scratch, _download)
+                deck_provenance = (
+                    build_sfincs_quadtree_deck(spec, scratch, _download)
+                    if _is_quadtree
+                    else build_sfincs_deck(spec, scratch, _download)
+                )
             except SFINCSSetupError as exc:
                 LOG.warning("worker build failed: %s (%s)", exc.error_code, exc)
                 result.update(
@@ -553,8 +609,14 @@ def main(argv: list[str] | None = None) -> int:
                 )
                 raise _BuildAborted() from exc
             run_dir = Path(deck_provenance["deck_dir"])
+            # QUADTREE: stamp the true grid EPSG into the solved sfincs_map.nc
+            # (SFINCS writes a placeholder crs var; the deck knows the UTM zone).
+            _stamp_epsg = (
+                deck_provenance.get("grid_crs_epsg") if _is_quadtree else None
+            )
             result = _solve_postprocess_sweep(
-                run_id, run_dir, [], ["sfincs_map.nc", "*.nc", "*.tif"]
+                run_id, run_dir, [], ["sfincs_map.nc", "*.nc", "*.tif"],
+                grid_crs_epsg=_stamp_epsg,
             )
         else:
             # ---- LEGACY SOLVE MODE (pre-built deck via --manifest-uri) -------

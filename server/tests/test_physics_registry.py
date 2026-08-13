@@ -139,3 +139,67 @@ def test_delta_reports_from_to_and_deck_target() -> None:
     assert delta["sorption_kd"]["to"] == 5.0
     assert delta["sorption_kd"]["deck_target"] == "GwtMst:distcoef"
     assert "doc" in delta["sorption_kd"]
+
+
+# --------------------------------------------------------------------------- #
+# float_pairs (ADR 0162 -- sfincs.wind_drag_curve custom breakpoint curve)
+# --------------------------------------------------------------------------- #
+def test_float_pairs_resolves_ordered_pairs() -> None:
+    resolved = validate_and_resolve_physics(
+        "sfincs",
+        {"wind_drag_curve": [[0.0, 0.001], (28.0, 0.0025), [50.0, 0.0018]]},
+    )
+    assert resolved["wind_drag_curve"] == (
+        (0.0, 0.001),
+        (28.0, 0.0025),
+        (50.0, 0.0018),
+    )
+
+
+def test_float_pairs_rejects_fewer_than_two_pairs() -> None:
+    with pytest.raises(PhysicsRegistryError) as ei:
+        validate_and_resolve_physics("sfincs", {"wind_drag_curve": [[0.0, 0.001]]})
+    assert ei.value.key == "wind_drag_curve"
+
+
+def test_float_pairs_rejects_non_list() -> None:
+    with pytest.raises(PhysicsRegistryError):
+        validate_and_resolve_physics("sfincs", {"wind_drag_curve": 0.5})
+
+
+def test_float_pairs_rejects_malformed_pair() -> None:
+    with pytest.raises(PhysicsRegistryError):
+        validate_and_resolve_physics(
+            "sfincs", {"wind_drag_curve": [[0.0, 0.001, 99.0], [28.0, 0.0025]]}
+        )
+
+
+def test_float_pairs_rejects_non_increasing_x() -> None:
+    with pytest.raises(PhysicsRegistryError) as ei:
+        validate_and_resolve_physics(
+            "sfincs",
+            {"wind_drag_curve": [[28.0, 0.0025], [10.0, 0.001]]},
+        )
+    assert "strictly increasing" in str(ei.value)
+
+
+def test_float_pairs_rejects_equal_x_breakpoints() -> None:
+    with pytest.raises(PhysicsRegistryError):
+        validate_and_resolve_physics(
+            "sfincs",
+            {"wind_drag_curve": [[10.0, 0.001], [10.0, 0.002]]},
+        )
+
+
+def test_float_pairs_rejects_out_of_range_x() -> None:
+    with pytest.raises(PhysicsRegistryError):
+        validate_and_resolve_physics(
+            "sfincs", {"wind_drag_curve": [[-5.0, 0.001], [28.0, 0.0025]]}
+        )
+
+
+def test_float_pairs_rejects_out_of_range_y() -> None:
+    with pytest.raises(PhysicsRegistryError):
+        validate_and_resolve_physics(
+            "sfincs", {"wind_drag_curve": [[0.0, 0.5], [28.0, 0.0025]]}
+        )

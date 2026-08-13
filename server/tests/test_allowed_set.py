@@ -135,12 +135,12 @@ def test_explicit_add_tools() -> None:
 
 
 def test_secondary_category_open_surfaces_cross_listed_tool() -> None:
-    """A tool listed primary in hazard_modeling but cross-listed under
+    """A tool listed primary in simulation_modeling but cross-listed under
     damage_assessment becomes available when EITHER category is opened."""
     a1 = AllowedToolSet()
     a1.open_category("damage_assessment")
-    assert "run_pelicun" in a1.as_frozenset()
+    assert "pelicun_damage_assessment" in a1.as_frozenset()
 
     a2 = AllowedToolSet()
-    a2.open_category("hazard_modeling")
-    assert "run_pelicun" in a2.as_frozenset()
+    a2.open_category("simulation_modeling")
+    assert "pelicun_damage_assessment" in a2.as_frozenset()

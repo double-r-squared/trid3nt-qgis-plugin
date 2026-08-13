@@ -160,7 +160,7 @@ swmm_api = pytest.importorskip("swmm_api")
 pyswmm = pytest.importorskip("pyswmm")
 rasterio = pytest.importorskip("rasterio")
 
-from trid3nt_server.agent.workflows.swmm.swmm_mesh_builder import (  # noqa: E402
+from trid3nt_server.agent.mesh.raster_cell_mesh import (  # noqa: E402
     build_swmm_mesh,
     run_swmm_deck,
 )

@@ -62,6 +62,10 @@ def test_read_selafin_roundtrip(tmp_path):
     mesh = P.read_selafin(path)
     assert mesh["npoin"] == 4
     assert mesh["nelem"] == 2
+    # IKLE returned 0-based (SELAFIN stores it 1-based) so a mesh-faithful render
+    # can triangulate real elements, not an unconstrained Delaunay of the nodes.
+    assert mesh["ikle"].shape == (2, 3)
+    assert np.array_equal(mesh["ikle"], np.array([[0, 1, 2], [1, 3, 2]]))
     assert [v.strip() for v in mesh["varnames"]] == ["VELOCITY U      M/S", "DYE             MG/L"]
     assert np.allclose(mesh["x"], x)
     assert np.allclose(mesh["y"], y)

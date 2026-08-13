@@ -1,7 +1,7 @@
 """Direct PySWMM quasi-2D urban-flood invocation for trid3nt-local proof.
 
 Bypasses the LLM/agent chat layer -- calls the deterministic urban-flood workflow
-(``model_urban_flood_swmm``) directly. The workflow runs the FULL in-process chain:
+(``model_swmm_urban_flood``) directly. The workflow runs the FULL in-process chain:
   fetch_dem / fetch_buildings -> lookup_precip_return_period
   -> build_swmm_mesh (quasi-2D node/link deck)
   -> run_swmm_local (pyswmm IN-PROCESS, no container)
@@ -102,7 +102,7 @@ log.info("pre-run MinIO run prefixes: %s", sorted(pre_prefixes))
 # ---------------------------------------------------------------------------
 
 try:
-    from trid3nt_server.agent.workflows.swmm.model_urban_flood_swmm.model_urban_flood_swmm import model_urban_flood_swmm
+    from trid3nt_server.agent.workflows.swmm.urban_flood.urban_flood import model_swmm_urban_flood
     from trid3nt_contracts.swmm_contracts import SWMMRunArgs
 except ImportError as exc:
     log.error("import failed -- is PYTHONPATH set? %s", exc)
@@ -111,7 +111,7 @@ except ImportError as exc:
 
 async def _run():
     log.info(
-        "invoking model_urban_flood_swmm bbox=%s rp=%dyr dur=%.1fhr res=%.1fm",
+        "invoking model_swmm_urban_flood bbox=%s rp=%dyr dur=%.1fhr res=%.1fm",
         BBOX, RETURN_PERIOD_YR, STORM_DURATION_HR, TARGET_RESOLUTION_M,
     )
     run_args = SWMMRunArgs(
@@ -121,7 +121,7 @@ async def _run():
         target_resolution_m=TARGET_RESOLUTION_M,
         building_representation="drop",
     )
-    result = await model_urban_flood_swmm(run_args)
+    result = await model_swmm_urban_flood(run_args)
     return result
 
 

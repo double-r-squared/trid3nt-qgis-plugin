@@ -79,6 +79,7 @@ from trid3nt_server.agent.workflows.modflow.postprocess_modflow import (
     postprocess_saltwater_intrusion,
     postprocess_stream_reaches,
     postprocess_subsidence,
+    postprocess_vadose,
     postprocess_wetland_hydroperiod,
 )
 from trid3nt_server.agent.workflows.modflow.run_modflow import (
@@ -143,6 +144,14 @@ ARCHETYPE_POSTPROCESS: dict[str, Any] = {
     # ground subsidence in cm (a positive scalar; the > 0 empty-result floor
     # applies).
     "land_subsidence": (postprocess_subsidence, "max_subsidence_cm"),
+    # ADR 0228: UZF+UZT vadose-zone breakthrough (LOCAL-ONLY; FLAT dual-model
+    # deck, kept OFF the offload table). The deliverable is the base-of-column
+    # breakthrough SERIES (chart-primary), so the headline is the
+    # concentration_series presence, not a positive scalar (in _NON_SCALAR_HEADLINES
+    # below): a valid run always writes >= 1 obs step even when the tracer has not
+    # yet crossed the half-source threshold (honest non-arrival narrated by the
+    # composer), so the > 0 scalar floor would wrongly reject a slow column.
+    "vadose_transport": (postprocess_vadose, "concentration_series"),
 }
 
 #: Archetypes whose headline deliverable is a SERIES / dict (truthy-when-present)
@@ -153,7 +162,7 @@ ARCHETYPE_POSTPROCESS: dict[str, Any] = {
 #: capture_zone / wellhead_protection are NOT in this set: the headline scalar
 #: (capture_zone_area_km2) is a non-negative float and the ``> 0`` floor applies.
 _NON_SCALAR_HEADLINES: frozenset[str] = frozenset(
-    {"regional_water_budget", "ASR"}
+    {"regional_water_budget", "ASR", "vadose_transport"}
 )
 
 #: PRT archetypes run a two-simulation sequence (GWF + PRT backward
@@ -292,6 +301,7 @@ async def run_modflow_archetype_job(
             from trid3nt_server.agent.workflows.modflow.run_modflow import (
                 _import_gwt_adapter as _import_adapter,
                 _mf6_binary,
+                _wellfield_dicts,
                 build_modflow_deck as _build_modflow_deck,
             )
 
@@ -323,6 +333,18 @@ async def run_modflow_archetype_job(
                 capture_zone_travel_time_years=getattr(
                     run_args, "capture_zone_travel_time_years", None
                 ),
+                regional_gradient_x=getattr(run_args, "regional_gradient_x", None),
+                regional_gradient_y=getattr(run_args, "regional_gradient_y", None),
+                # ADR 0215: the WELLFIELD + transient + NHD RIV + kriged IC MUST be
+                # reconstructed identically here so the PRT phase reads the same
+                # prt_well_cells (release rings) + reversed per-period budget the
+                # staged GWF deck produced.
+                wells=_wellfield_dicts(getattr(run_args, "wells", None)),
+                capture_zone_transient=bool(
+                    getattr(run_args, "capture_zone_transient", False)
+                ),
+                river_reaches=getattr(run_args, "river_reaches", None),
+                starting_head_by_cell=getattr(run_args, "starting_head_by_cell", None),
             )
             mf6_bin = _mf6_binary()
 
@@ -362,6 +384,53 @@ async def run_modflow_archetype_job(
             _pp_kwargs["tier_years"] = getattr(
                 run_args, "capture_zone_travel_time_years", None
             ) or getattr(_deck, "capture_zone_travel_time_years", None)
+            # Georeferenced-mode narration: the gradient provenance + the aquifer
+            # params the Grubb analytic (capture width / stagnation distance) reads,
+            # all from the authoritative in-memory manifest. K converts m/s -> m/day;
+            # b is the confined PRT aquifer thickness (top 50 m - bottom 0 m); Q is
+            # the WEL magnitude (stored negative on the manifest).
+            _pp_kwargs["gradient_source"] = getattr(_deck, "gradient_source", None)
+            _pp_kwargs["gradient_magnitude"] = getattr(_deck, "gradient_magnitude", None)
+            _pp_kwargs["gradient_azimuth_deg"] = getattr(
+                _deck, "gradient_azimuth_deg", None
+            )
+            _pp_kwargs["k_m_per_day"] = abs(
+                float(getattr(_deck, "aquifer_k_ms", 0.0) or 0.0)
+            ) * 86400.0
+            _pp_kwargs["aquifer_thickness_m"] = 50.0
+            _pp_kwargs["pumping_rate_m3_day"] = abs(
+                float(getattr(_deck, "pumping_rate_m3_day", 0.0) or 0.0)
+            )
+            # ADR 0215: per-well allocation + transient + NHD RIV narration. The
+            # per-well specs (name/lat/lon/rate, deck index order) come from the
+            # in-memory manifest so the postprocess can label which well captured
+            # which particles from the "W{k}_" boundname prefix.
+            _prt_cells = getattr(_deck, "prt_well_cells", None) or []
+            _prt_names = getattr(_deck, "prt_well_names", None) or []
+            _pp_kwargs["well_specs"] = [
+                {
+                    "name": (_prt_names[i] if i < len(_prt_names) else f"well_{i}"),
+                    "lat": c[3], "lon": c[4], "rate_m3_day": c[2],
+                }
+                for i, c in enumerate(_prt_cells)
+            ]
+            _pp_kwargs["transient"] = bool(getattr(_deck, "transient", False))
+            _pp_kwargs["river_cell_count"] = int(
+                getattr(_deck, "prt_river_cell_count", 0) or 0
+            )
+        if archetype == "vadose_transport":
+            # 1D-column deck: the postprocess reads the breakthrough obs csv but
+            # has no plan-view grid to georeference the spill point, so thread the
+            # spill (lat, lon) from the staging + the thickness/infiltration-conc
+            # from run_args (the FLAT worker-contract manifest carries neither).
+            _pp_kwargs["spill_lat"] = float(getattr(staging, "spill_lat", 0.0) or 0.0)
+            _pp_kwargs["spill_lon"] = float(getattr(staging, "spill_lon", 0.0) or 0.0)
+            _pp_kwargs["vadose_thickness_m"] = getattr(
+                run_args, "vadose_thickness_m", None
+            )
+            _pp_kwargs["vadose_infiltration_conc"] = getattr(
+                run_args, "vadose_infiltration_conc", None
+            )
         layer: LayerURI = await asyncio.to_thread(
             lambda: postprocess_fn(_postprocess_uri, **_pp_kwargs)
         )

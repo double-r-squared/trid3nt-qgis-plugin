@@ -273,6 +273,15 @@ def build_swan_build_spec(
         "friction": bool(run_args.friction),
         "breaking": bool(run_args.breaking),
         "triads": bool(run_args.triads),
+        "gen_formulation": str(run_args.gen_formulation),
+        "whitecapping": run_args.whitecapping,
+        "quad_iquad": run_args.quad_iquad,
+        "breaking_alpha": float(run_args.breaking_alpha),
+        "breaking_gamma": float(run_args.breaking_gamma),
+        "friction_cfjon": float(run_args.friction_cfjon),
+        "triad_biphase": run_args.triad_biphase,
+        "triad_urcrit": float(run_args.triad_urcrit),
+        "triad_lpar": float(run_args.triad_lpar),
         "sim_duration_s": float(run_args.sim_duration_s),
         "time_step_s": float(run_args.time_step_s),
         "output_frames": int(run_args.output_frames),
@@ -280,6 +289,11 @@ def build_swan_build_spec(
     }
     if run_args.wind_uri is not None and wind_dest is not None:
         spec["wind_file"] = wind_dest
+    # TIME-VARYING storm boundary (nonstationary storm evolution): pass the
+    # build-peak-decay Hs series through so the worker writes a TPAR boundary.
+    ts = getattr(run_args, "storm_boundary_timeseries", None)
+    if ts:
+        spec["boundary_timeseries"] = [list(map(float, row)) for row in ts]
     return spec
 
 

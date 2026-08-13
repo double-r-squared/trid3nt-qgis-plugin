@@ -62,6 +62,11 @@ class OpenQuakeDeck:
             "gmpe_logic_tree_xml": "gmpe_logic_tree.xml",
         }
     )
+    #: Extra deck files keyed by on-disk filename (epistemic competing source
+    #: models write ``source_model_1.xml`` / ``source_model_2.xml`` here). The
+    #: worker writes every entry alongside the four canonical files. Empty for
+    #: the classical single-source deck.
+    extra_files: dict[str, str] = field(default_factory=dict)
 
 
 #: Default intensity-measure levels (IMLs) for a PGA/SA hazard curve, in g.
@@ -472,6 +477,265 @@ def render_gmpe_logic_tree_xml(
 _UHS_SA_PERIODS: tuple[float, ...] = (0.1, 0.2, 0.3, 0.5, 0.75, 1.0, 1.5, 2.0)
 
 
+# --------------------------------------------------------------------------- #
+# Epistemic logic-tree deck authoring (competing source models + GMPE branching
+# + Gutenberg-Richter a/b/Mmax uncertainty). Replicates the GEM training
+# LogicTreeCase1 (competing source models + 2 GMPEs per tectonic region) and
+# LogicTreeCase2 (a/b + Mmax epistemic branches, 324 realizations) mechanisms,
+# parameterized over the caller AOI. The classical single-branch path above is
+# untouched; these render only when build_spec["logic_tree"] selects a mode.
+# --------------------------------------------------------------------------- #
+
+#: GMPE branches per tectonic region type for the epistemic logic tree. Two
+#: competing ground-motion models per region, equally weighted -- the
+#: LogicTreeCase1/Case2 GMPE tree (BooreAtkinson2008/ChiouYoungs2008 for active
+#: shallow crust, ToroEtAl2002/Campbell2003 for stable continental crust).
+_GMPE_BRANCHES_BY_TRT: dict[str, tuple[tuple[str, float], ...]] = {
+    "Active Shallow Crust": (("BooreAtkinson2008", 0.5), ("ChiouYoungs2008", 0.5)),
+    "Stable Continental Crust": (("ToroEtAl2002", 0.5), ("Campbell2003", 0.5)),
+}
+
+
+def render_multi_gmpe_logic_tree_xml(
+    trts: tuple[str, ...] = ("Active Shallow Crust",),
+) -> str:
+    """Render a multi-branch GMPE logic tree: 2 competing GMPEs per TRT.
+
+    For each tectonic region type in ``trts`` a ``gmpeModel`` branch set with the
+    two equally-weighted GMPEs from ``_GMPE_BRANCHES_BY_TRT`` is emitted. With one
+    TRT this yields a 2-branch GMPE tree; with the two-TRT gr-uncertainty model it
+    yields the 4-GMPE-combination tree of LogicTreeCase2. NRML 0.4 (matching the
+    demo GMPE trees the engine accepts)."""
+    branch_sets: list[str] = []
+    for i, trt in enumerate(trts, start=1):
+        branches = _GMPE_BRANCHES_BY_TRT[trt]
+        rows = "\n".join(
+            f'                <logicTreeBranch branchID="bs{i}b{j}">\n'
+            f"                    <uncertaintyModel>{name}</uncertaintyModel>\n"
+            f"                    <uncertaintyWeight>{w}</uncertaintyWeight>\n"
+            f"                </logicTreeBranch>"
+            for j, (name, w) in enumerate(branches, start=1)
+        )
+        branch_sets.append(
+            f'            <logicTreeBranchSet uncertaintyType="gmpeModel" '
+            f'branchSetID="bs{i}"\n'
+            f'                    applyToTectonicRegionType="{trt}">\n'
+            f"{rows}\n"
+            f"            </logicTreeBranchSet>"
+        )
+    body = "\n".join(branch_sets)
+    return (
+        '<?xml version="1.0" encoding="UTF-8"?>\n'
+        '<nrml xmlns:gml="http://www.opengis.net/gml"\n'
+        '      xmlns="http://openquake.org/xmlns/nrml/0.4">\n'
+        '    <logicTree logicTreeID="lt1">\n'
+        f"{body}\n"
+        "    </logicTree>\n"
+        "</nrml>\n"
+    )
+
+
+def render_competing_source_model_logic_tree_xml(
+    entries: tuple[tuple[str, float], ...],
+) -> str:
+    """Render a source-model logic tree over N competing source-model files.
+
+    ``entries`` is ``((filename, weight), ...)`` -- each a full alternative source
+    model, weighted (weights should sum to 1). This is the LogicTreeCase1
+    epistemic-source-model mechanism (competing interpretations of the seismic
+    source, each a branch). NRML 0.4."""
+    rows = "\n".join(
+        f'                <logicTreeBranch branchID="b{i}">\n'
+        f"                    <uncertaintyModel>{fname}</uncertaintyModel>\n"
+        f"                    <uncertaintyWeight>{w}</uncertaintyWeight>\n"
+        f"                </logicTreeBranch>"
+        for i, (fname, w) in enumerate(entries, start=1)
+    )
+    return (
+        '<?xml version="1.0" encoding="UTF-8"?>\n'
+        '<nrml xmlns:gml="http://www.opengis.net/gml"\n'
+        '      xmlns="http://openquake.org/xmlns/nrml/0.4">\n'
+        '    <logicTree logicTreeID="lt1">\n'
+        '            <logicTreeBranchSet uncertaintyType="sourceModel"\n'
+        '                                branchSetID="bs1">\n'
+        f"{rows}\n"
+        "            </logicTreeBranchSet>\n"
+        "    </logicTree>\n"
+        "</nrml>\n"
+    )
+
+
+#: The three-way absolute-uncertainty branch weights (LogicTreeCase2 uses
+#: 0.333/0.333/0.334). Shared by the a/b and Mmax branch sets.
+_GR_BRANCH_WEIGHTS: tuple[float, float, float] = (0.333, 0.333, 0.334)
+
+
+def render_gr_uncertainty_logic_tree_xml(
+    source_filename: str = "source_model.xml",
+    *,
+    a_value: float = 4.5,
+    b_value: float = 1.0,
+    max_magnitude: float = 7.5,
+    source_ids: tuple[str, str] = ("first", "second"),
+) -> str:
+    """Render the LogicTreeCase2 a/b + Mmax epistemic logic tree.
+
+    One source model with two sources (``source_ids``), then, per source, a
+    3-branch ``abGRAbsolute`` set (the Gutenberg-Richter a and b values) and a
+    3-branch ``maxMagGRAbsolute`` set (the maximum magnitude). Combined with the
+    2-GMPE-per-TRT tree (2 TRTs -> 4 GMPE combinations) this enumerates
+    3*3*3*3*4 = 324 realizations -- the published LogicTreeCase2 count. The a/b
+    branch centre is the caller ``a_value``/``b_value`` (+/-0.1); the Mmax branch
+    centre is ``max_magnitude`` (+/-0.3). NRML 0.4."""
+    def _ab_set(bs_id: str, src: str, centre_a: float, centre_b: float) -> str:
+        vals = (
+            (round(centre_a + 0.1, 2), round(centre_b + 0.1, 2)),
+            (round(centre_a, 2), round(centre_b, 2)),
+            (round(centre_a - 0.1, 2), round(centre_b - 0.1, 2)),
+        )
+        rows = "\n".join(
+            f'                <logicTreeBranch branchID="{bs_id}b{k}">\n'
+            f"                    <uncertaintyModel>{a} {b}</uncertaintyModel>\n"
+            f"                    <uncertaintyWeight>{w}</uncertaintyWeight>\n"
+            f"                </logicTreeBranch>"
+            for k, ((a, b), w) in enumerate(zip(vals, _GR_BRANCH_WEIGHTS), start=1)
+        )
+        return (
+            f'            <logicTreeBranchSet uncertaintyType="abGRAbsolute"\n'
+            f'                                applyToSources="{src}"\n'
+            f'                                branchSetID="{bs_id}">\n'
+            f"{rows}\n"
+            f"            </logicTreeBranchSet>"
+        )
+
+    def _mmax_set(bs_id: str, src: str, centre_m: float) -> str:
+        vals = (round(centre_m - 0.3, 1), round(centre_m, 1), round(centre_m + 0.3, 1))
+        rows = "\n".join(
+            f'                <logicTreeBranch branchID="{bs_id}b{k}">\n'
+            f"                    <uncertaintyModel>{m}</uncertaintyModel>\n"
+            f"                    <uncertaintyWeight>{w}</uncertaintyWeight>\n"
+            f"                </logicTreeBranch>"
+            for k, (m, w) in enumerate(zip(vals, _GR_BRANCH_WEIGHTS), start=1)
+        )
+        return (
+            f'            <logicTreeBranchSet uncertaintyType="maxMagGRAbsolute"\n'
+            f'                                applyToSources="{src}"\n'
+            f'                                branchSetID="{bs_id}">\n'
+            f"{rows}\n"
+            f"            </logicTreeBranchSet>"
+        )
+
+    s1, s2 = source_ids
+    sm_set = (
+        '            <logicTreeBranchSet uncertaintyType="sourceModel"\n'
+        '                                branchSetID="bs1">\n'
+        '                <logicTreeBranch branchID="b11">\n'
+        f"                    <uncertaintyModel>{source_filename}</uncertaintyModel>\n"
+        "                    <uncertaintyWeight>1.0</uncertaintyWeight>\n"
+        "                </logicTreeBranch>\n"
+        "            </logicTreeBranchSet>"
+    )
+    sets = "\n".join(
+        [
+            sm_set,
+            _ab_set("bs2", s1, a_value, b_value),
+            _ab_set("bs3", s2, a_value - 1.2, b_value - 0.1),
+            _mmax_set("bs4", s1, max_magnitude),
+            _mmax_set("bs5", s2, max_magnitude + 0.3),
+        ]
+    )
+    return (
+        '<?xml version="1.0" encoding="UTF-8"?>\n'
+        '<nrml xmlns:gml="http://www.opengis.net/gml"\n'
+        '      xmlns="http://openquake.org/xmlns/nrml/0.4">\n'
+        '    <logicTree logicTreeID="lt1">\n'
+        f"{sets}\n"
+        "    </logicTree>\n"
+        "</nrml>\n"
+    )
+
+
+def _area_source_block(
+    bbox: tuple[float, float, float, float],
+    *,
+    source_id: str,
+    a_value: float,
+    b_value: float,
+    min_magnitude: float,
+    max_magnitude: float,
+    tectonic_region: str,
+) -> str:
+    """One ``areaSource`` body (the AOI rectangle) -- shared by the multi-source
+    epistemic models. Same geometry/MFD shape as ``render_source_model_xml``."""
+    min_lon, min_lat, max_lon, max_lat = bbox
+    pos_list = (
+        f"{min_lon} {min_lat} {max_lon} {min_lat} "
+        f"{max_lon} {max_lat} {min_lon} {max_lat}"
+    )
+    return (
+        f'        <areaSource id="{source_id}" name="AOI area source {source_id}"\n'
+        f'                    tectonicRegion="{tectonic_region}">\n'
+        "            <areaGeometry>\n"
+        "                <gml:Polygon>\n"
+        "                    <gml:exterior>\n"
+        "                        <gml:LinearRing>\n"
+        f"                            <gml:posList>{pos_list}</gml:posList>\n"
+        "                        </gml:LinearRing>\n"
+        "                    </gml:exterior>\n"
+        "                </gml:Polygon>\n"
+        "                <upperSeismoDepth>0.0</upperSeismoDepth>\n"
+        "                <lowerSeismoDepth>15.0</lowerSeismoDepth>\n"
+        "            </areaGeometry>\n"
+        "            <magScaleRel>WC1994</magScaleRel>\n"
+        "            <ruptAspectRatio>1.0</ruptAspectRatio>\n"
+        f'            <truncGutenbergRichterMFD aValue="{a_value}" bValue="{b_value}"\n'
+        f'                                      minMag="{min_magnitude}" maxMag="{max_magnitude}"/>\n'
+        "            <nodalPlaneDist>\n"
+        '                <nodalPlane probability="1.0" strike="0.0" dip="90.0" rake="0.0"/>\n'
+        "            </nodalPlaneDist>\n"
+        "            <hypoDepthDist>\n"
+        '                <hypoDepth probability="1.0" depth="10.0"/>\n'
+        "            </hypoDepthDist>\n"
+        "        </areaSource>"
+    )
+
+
+def render_two_area_source_model_xml(
+    bbox: tuple[float, float, float, float],
+    *,
+    a_value: float,
+    b_value: float,
+    min_magnitude: float,
+    max_magnitude: float,
+    source_ids: tuple[str, str] = ("first", "second"),
+) -> str:
+    """Render a source model with two AOI area sources across two tectonic
+    regions (active shallow + stable continental), the substrate the a/b/Mmax
+    epistemic branches (``render_gr_uncertainty_logic_tree_xml``) apply to. The
+    second source's a-value is offset lower (a less-active stable-crust source),
+    matching the LogicTreeCase2 two-source structure."""
+    s1, s2 = source_ids
+    src1 = _area_source_block(
+        bbox, source_id=s1, a_value=a_value, b_value=b_value,
+        min_magnitude=min_magnitude, max_magnitude=max_magnitude,
+        tectonic_region="Active Shallow Crust",
+    )
+    src2 = _area_source_block(
+        bbox, source_id=s2, a_value=round(a_value - 1.2, 2), b_value=round(b_value - 0.1, 2),
+        min_magnitude=min_magnitude, max_magnitude=round(max_magnitude + 0.3, 1),
+        tectonic_region="Stable Continental Crust",
+    )
+    return (
+        '<?xml version="1.0" encoding="UTF-8"?>\n'
+        '<nrml xmlns:gml="http://www.opengis.net/gml"\n'
+        '      xmlns="http://openquake.org/xmlns/nrml/0.4">\n'
+        '    <sourceModel name="AOI epistemic two-source model">\n'
+        f"{src1}\n{src2}\n"
+        "    </sourceModel>\n"
+        "</nrml>\n"
+    )
+
+
 def render_job_ini(
     bbox: tuple[float, float, float, float],
     *,
@@ -490,6 +754,10 @@ def render_job_ini(
     width_of_mfd_bin: float = 0.2,
     area_source_discretization_km: float = 10.0,
     uniform_hazard_spectra: bool = False,
+    reference_vs30_value: float = 760.0,
+    poes: tuple[float, ...] | None = None,
+    quantiles: tuple[float, ...] = (),
+    individual_rlzs: bool = False,
 ) -> str:
     """Render the classical-PSHA ``job.ini`` config text.
 
@@ -539,6 +807,16 @@ def render_job_ini(
         return str(int(f)) if f.is_integer() else repr(f)
 
     trunc_str = _num(truncation_level)
+    # PoE list: default the single requested poe; an epistemic/multi-return-period
+    # run passes e.g. (0.1, 0.02) for the 10%/2%-in-50yr pair.
+    poe_values = tuple(poes) if poes else (float(poe),)
+    poes_str = " ".join(_num(p) for p in poe_values)
+    # quantiles: empty (byte-identical classical) unless the epistemic path asks
+    # for the 5/50/95 spread across realizations.
+    # Keep the empty case byte-identical to the pre-existing classical deck
+    # ("quantiles =" with no trailing space); a non-empty list appends the values.
+    quantiles_str = (" " + " ".join(_num(q) for q in quantiles)) if quantiles else ""
+    individual_str = "\nindividual_rlzs = true" if individual_rlzs else ""
     return f"""[general]
 description = {description}
 calculation_mode = classical
@@ -558,7 +836,7 @@ area_source_discretization = {area_source_discretization_km}
 
 [site_params]
 reference_vs30_type = measured
-reference_vs30_value = 760.0
+reference_vs30_value = {reference_vs30_value}
 reference_depth_to_2pt5km_per_sec = 1.0
 reference_depth_to_1pt0km_per_sec = 50.0
 
@@ -573,10 +851,10 @@ maximum_distance = {max_distance_km}
 [output]
 export_dir = output
 mean = true
-quantiles =
+quantiles ={quantiles_str}{individual_str}
 hazard_maps = true
 uniform_hazard_spectra = {"true" if uniform_hazard_spectra else "false"}
-poes = {poe}
+poes = {poes_str}
 """
 
 
@@ -626,8 +904,94 @@ def render_openquake_deck(build_spec: dict[str, Any]) -> OpenQuakeDeck:
     # AND narrates "synthetic-area" otherwise); if the records somehow yield no
     # usable source the renderer raises and we fall back to the area source here
     # rather than failing the run.
+    # Epistemic logic-tree modes (competing source models + a/b/Mmax uncertainty)
+    # replace the trivial single-branch source/GMPE trees with the LogicTreeCase1/
+    # Case2 multi-branch mechanism, and turn on the 5/50/95 quantile spread across
+    # realizations. "single" (or absent) == the classical single-branch deck
+    # (real-fault or synthetic area source) rendered byte-for-byte as before.
+    logic_tree = str(build_spec.get("logic_tree", "single")).lower()
+
+    # PoE list (row-3 multi-return-period: e.g. 10%/2% in 50yr) + UHS flag.
+    poes_spec = build_spec.get("poes")
+    poes_tuple: tuple[float, ...] | None = (
+        tuple(float(p) for p in poes_spec)
+        if isinstance(poes_spec, (list, tuple)) and poes_spec
+        else None
+    )
+    uhs_on = bool(build_spec.get("uniform_hazard_spectra", False))
+    common_job_kwargs: dict[str, Any] = dict(
+        imt=imt,
+        poe=poe,
+        poes=poes_tuple,
+        investigation_time_years=inv_time,
+        site_grid_spacing_km=grid_km,
+        max_distance_km=max_dist,
+        truncation_level=float(build_spec.get("truncation_level", 3.0)),
+        rupture_mesh_spacing_km=float(build_spec.get("rupture_mesh_spacing_km", 5.0)),
+        width_of_mfd_bin=float(build_spec.get("width_of_mfd_bin", 0.2)),
+        area_source_discretization_km=float(
+            build_spec.get("area_source_discretization_km", 10.0)
+        ),
+        reference_vs30_value=float(build_spec.get("reference_vs30_value", 760.0)),
+        uniform_hazard_spectra=uhs_on,
+    )
+
+    if logic_tree == "source_models":
+        # Row 1: two competing source-model interpretations (differing G-R rate),
+        # each weighted 0.5, + 2 GMPEs on active shallow crust -> 4 realizations,
+        # 5/50/95 quantile spread.
+        sm1 = render_source_model_xml(
+            bbox, a_value=a_value, b_value=b_value,
+            min_magnitude=min_mag, max_magnitude=max_mag, source_id="1",
+        )
+        sm2 = render_source_model_xml(
+            bbox, a_value=round(a_value + 0.5, 2), b_value=round(b_value + 0.1, 2),
+            min_magnitude=min_mag, max_magnitude=round(max_mag + 0.3, 1), source_id="1",
+        )
+        smlt_xml = render_competing_source_model_logic_tree_xml(
+            (("source_model_1.xml", 0.5), ("source_model_2.xml", 0.5))
+        )
+        gmpelt_xml = render_multi_gmpe_logic_tree_xml(("Active Shallow Crust",))
+        job_ini = render_job_ini(
+            bbox, description="classical PSHA (competing source-model logic tree)",
+            quantiles=(0.05, 0.5, 0.95), individual_rlzs=True, **common_job_kwargs,
+        )
+        return OpenQuakeDeck(
+            job_ini=job_ini,
+            source_model_xml=sm1,
+            source_model_logic_tree_xml=smlt_xml,
+            gmpe_logic_tree_xml=gmpelt_xml,
+            extra_files={"source_model_1.xml": sm1, "source_model_2.xml": sm2},
+        )
+
+    if logic_tree == "gr_uncertainty":
+        # Row 2: LogicTreeCase2 a/b + Mmax epistemic branches on a two-source model
+        # (active shallow + stable continental) x 2 GMPEs per TRT -> 324
+        # realizations, 5/50/95 quantile spread.
+        source_model_xml = render_two_area_source_model_xml(
+            bbox, a_value=a_value, b_value=b_value,
+            min_magnitude=min_mag, max_magnitude=max_mag,
+        )
+        smlt_xml = render_gr_uncertainty_logic_tree_xml(
+            "source_model.xml", a_value=a_value, b_value=b_value, max_magnitude=max_mag,
+        )
+        gmpelt_xml = render_multi_gmpe_logic_tree_xml(
+            ("Active Shallow Crust", "Stable Continental Crust")
+        )
+        job_ini = render_job_ini(
+            bbox, description="classical PSHA (G-R a/b + Mmax epistemic logic tree)",
+            quantiles=(0.05, 0.5, 0.95), individual_rlzs=True, **common_job_kwargs,
+        )
+        return OpenQuakeDeck(
+            job_ini=job_ini,
+            source_model_xml=source_model_xml,
+            source_model_logic_tree_xml=smlt_xml,
+            gmpe_logic_tree_xml=gmpelt_xml,
+        )
+
+    # --- classical single-branch path (unchanged) ---------------------------- #
     fault_sources = build_spec.get("fault_sources")
-    source_model_xml: str | None = None
+    source_model_xml = None
     if isinstance(fault_sources, list) and fault_sources:
         try:
             source_model_xml = render_fault_source_model_xml(
@@ -651,25 +1015,7 @@ def render_openquake_deck(build_spec: dict[str, Any]) -> OpenQuakeDeck:
     # levers STEP 3: advanced-physics overrides + UHS flag (all default-match,
     # so a build_spec without them renders byte-identically). The agent merges
     # the validated PHYSICS_REGISTRY["openquake"] keys into the build_spec.
-    job_ini = render_job_ini(
-        bbox,
-        imt=imt,
-        poe=poe,
-        investigation_time_years=inv_time,
-        site_grid_spacing_km=grid_km,
-        max_distance_km=max_dist,
-        truncation_level=float(build_spec.get("truncation_level", 3.0)),
-        rupture_mesh_spacing_km=float(
-            build_spec.get("rupture_mesh_spacing_km", 5.0)
-        ),
-        width_of_mfd_bin=float(build_spec.get("width_of_mfd_bin", 0.2)),
-        area_source_discretization_km=float(
-            build_spec.get("area_source_discretization_km", 10.0)
-        ),
-        uniform_hazard_spectra=bool(
-            build_spec.get("uniform_hazard_spectra", False)
-        ),
-    )
+    job_ini = render_job_ini(bbox, **common_job_kwargs)
     return OpenQuakeDeck(
         job_ini=job_ini,
         source_model_xml=source_model_xml,

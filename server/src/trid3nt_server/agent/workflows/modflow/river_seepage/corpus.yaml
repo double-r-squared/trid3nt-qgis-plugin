@@ -1,7 +1,5 @@
-# TEMPLATE tier (engine-door refactor): phrasings for modflow_river_seepage. NOT
-# merged into the main retrieval index; the run_modflow door surfaces it via gate
-# expansion. FOLD - carried verbatim from the migrated run_model_river_seepage_
-# scenario corpus entries (run_river_seepage_job had no corpus of its own).
+# Template routing phrasings (door dissolution, ADR 0094): walked into the main
+# retrieval index directly -- the engine templates are ordinary retrieval-pool tools.
 modflow_river_seepage:
 - is this river reach gaining or losing water to the aquifer near the spill point
 - model the streambed seepage and tell me how much the river exchanges with the groundwater

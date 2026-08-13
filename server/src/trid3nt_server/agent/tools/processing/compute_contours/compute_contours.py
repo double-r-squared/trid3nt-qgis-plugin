@@ -79,6 +79,19 @@ __all__ = [
 
 logger = logging.getLogger("trid3nt_server.agent.tools.processing.compute_contours.compute_contours")
 
+
+def fetch_dem(**kwargs):
+    """Registry-closure indirection for the folded ``fetch_dem`` (ADR 0097).
+
+    ``fetch_dem`` is now a spec-driven router tool; this module-level shim resolves
+    it through ``TOOL_REGISTRY`` at call time and preserves the module-attribute
+    patch seam the compute_contours test monkeypatches. Keyword-only.
+    """
+    from trid3nt_server.agent.tools import TOOL_REGISTRY
+
+    return TOOL_REGISTRY["fetch_dem"].fn(**kwargs)
+
+
 # ---------------------------------------------------------------------------
 # Error class (mirrors HillshadeComputeError)
 # ---------------------------------------------------------------------------
@@ -360,10 +373,9 @@ def _resolve_dem_uri(
             "NO_DEM_INPUT",
             "compute_contours requires either dem_uri or bbox; neither given.",
         )
-    # Reuse fetch_dem -- the shared DEM-acquisition path (do not reinvent).
-    from trid3nt_server.agent.tools.fetchers.terrain.fetch_dem.fetch_dem import fetch_dem
-
-    dem_layer = fetch_dem(bbox)
+    # Reuse fetch_dem -- the shared DEM-acquisition path (do not reinvent). ADR 0097:
+    # fetch_dem is spec-driven, resolved through the module-level registry closure.
+    dem_layer = fetch_dem(bbox=bbox)
     assert dem_layer.uri is not None, "fetch_dem must return a uri"
     return dem_layer.uri
 

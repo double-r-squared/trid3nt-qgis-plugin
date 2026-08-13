@@ -3,8 +3,42 @@
 Covers the two arm prerequisites + the identity gate:
 
 - DEFAULT config (no arm flag): the 27 spec-served sources stay tier="general",
-  ambient-declarable; registry == 190; fetch_from_catalog keeps its exact
-  entry_id-only signature; search_data_catalog returns YAML catalog entries.
+  ambient-declarable; registry == 245 (+1 ADR 0228 modflow_vadose_transport UZF+UZT unsaturated-zone breakthrough) (+2 ADR 0218 swmm_snowmelt_degree_day + swmm_aquifer_baseflow_to_node) (+1 ADR 0217 schism_pahm_surge) (+2 ADR 0214 landlab_groundwater_water_table +
+  landlab_groundwater_storm_recession GroundwaterDupuitPercolator templates;
+  +2 ADR 0203 fetch_aorc_precip + fetch_lter_records;
+  +1 generate_mesh mesh builder ADR 0200;
+#  +1 telemac_rain_on_grid SCS-CN
+  rainfall-runoff template ADR 0196; +1 SWMM RTK unit-hydrograph RDII template ADR 0190 row 4 (+1 ELMFIRE Hirsch initial-attack POC
+  closed-form template ADR 0190 row 2; +1 SCHISM baroclinic template ADR 0189;
+  +3 Landlab shortlist-batch templates (ADR
+  0184): landlab_channel_incision_steady_state (detachment-limited stream-power
+  incision to steady state + analytical slope-area V&V) +
+  landlab_channel_steepness_chi_map (ChiFinder+SteepnessFinder chi/ksn knickpoint
+  diagnostic) + landlab_storm_sequence_generator (in-process
+  PrecipitationDistribution stochastic storm-sequence forcing generator); (+2
+  OpenQuake templates (ADR 0182):
+  openquake_disaggregation (local-subprocess disaggregation calculator: which
+  magnitude-distance-epsilon scenario dominates a site's hazard, M-R contribution
+  matrix) + openquake_event_based (local-subprocess event-based/stochastic PSHA:
+  synthetic catalogue + event-based hazard map + classical-convergence check);
+  +1 TELEMAC WAQTEL O2 template (ADR 0169):
+  telemac_do_sag (dissolved-oxygen sag below a discharge - US TMDL/permit; WATER
+  QUALITY PROCESS = 2 O2 module, V&V to Streeter-Phelps 1925 to 0.011 mg/L);
+  (+1 GeoClaw storm-surge front template (ADR
+  0168): geoclaw_storm_surge (parametric-Holland tropical-cyclone wind+pressure
+  surge from a storm track, selectable wind drag law none|Garratt|Powell);
+  (+2 OpenQuake templates (ADR 0164): openquake_scenario_gmf (in-process oq scenario single-rupture JB2009-correlated ground-motion field, mean + across-realization spread COGs) + openquake_secondary_perils (scenario-GMF-driven openquake.sep liquefaction Zhu-2015 + Newmark landslide Jibson screening over fetched DEM Vs30/slope/CTI covariates); +3 ELMFIRE transient-weather + crown-fire templates (ADR 0161): elmfire_transient_wind_schedule_spread (mid-run wind-shift redirection vs constant wind, multi-band NUM_METEOROLOGY_TIMES>1 + DT_METEOROLOGY interpolation) + elmfire_dead_fuel_moisture_interpolation_frequency_control (DT_INTERPOLATE_M1/M10/M100 accuracy-vs-cost sweep on a moisture-recovery schedule) + elmfire_crown_fire_initiation_threshold_sweep (CRITICAL_CANOPY_COVER initiation boundary + Cruz CROWN_FIRE_SPREAD_RATE_LIMIT ceiling folded sweep); +2 pelicun DL_calculation-harness templates (ADR 0160): pelicun_hazus_seismic_dl_run (auto-populated HAZUS EQ building damage+loss run via the tempdir+serialized-cwd DL_calculation harness) + pelicun_hazus_eq_version_comparison (HAZUS EQ v5.1-vs-v6.1 dataset comparison at the Assessment API); +1 SCHISM CAND-S transport-scheme V&V template: schism_transport_validation (Test_HeatConsv upwind-vs-TVD numerical mixing + Test_GEN_MassConsv conservative-tracer mass conservation on the hydro-core binary, ADR 0156); +1 MODFLOW CAND-S package-validation template: modflow_package_validation (GWF-NPF Newton/Zaidel + GWF-MAW/Sokol + GWF-HFB grid-independence cases, ADR 0153); +5 SWMM CAND-S mechanism-comparison templates: swmm_subcatchment_runoff_comparison + swmm_node_hydraulics_comparison + swmm_wetwell_pump_control_comparison + swmm_lid_performance_comparison + swmm_wq_buildup_washoff_comparison; +2 SWAN CAND-S templates: swan_physics_sensitivity_sweep + swan_stationary_snapshot_batch; +4 pelicun CAND-S Assessment-API validation templates:
+  pelicun_closed_form_validation + pelicun_mixed_fragility_loss_assessment +
+  pelicun_replacement_threshold_override_sweep + pelicun_flood_foundation_depth_damage_sweep;
+  +2 GeoClaw CAND-S SWE+AMR knob templates: geoclaw_amr_refinement_regions + geoclaw_regional_manning_friction; +1 GeoClaw Thacker V&V template (ADR 0187): geoclaw_thacker_validation (synthetic paraboloid-basin verification of the wet-dry SWE+AMR solver vs Thacker 1981 -- period/amplitude/shoreline/mass); +3 ELMFIRE CAND-S sensitivity templates:
+  elmfire_length_to_width_ceiling_sensitivity + elmfire_wind_fluctuation_randomization
+  + elmfire_live_fuel_moisture_sensitivity; +6 Landlab diagnostic templates:
+  landlab_landslide_storm_ensemble + landlab_overland_flow_timeseries +
+  landlab_dem_conditioning + landlab_lake_mapping + landlab_hacks_law_scaling +
+  landlab_hand_wetness; ADR 0140 +1 hecras_flood_2d fresh-AOI 2D-flood template; ADR 0128 +3 swmm_lid_raingarden_wq + swmm_wwtp_detention_ponds + swmm_pump_pid_rtc; ADR 0125 +1 hecras_levee_breach; ADR 0124 +2 swmm_network_import + swmm_dual_drainage_coupling; ADR 0123 +3 landlab_green_ampt_overland_flow + geoclaw_tsunami_gauge_timeseries + elmfire_verification_elliptical_replication; ADR 0122 +1 landlab_flow_accumulation; ADR 0120 +1 sfincs_advanced_numerical_physics_knobs; ADR 0118 +1 schism_tidal_hydro; ADR 0117 +2 living-atlas search+fetch; ADR 0109 +1 hecras_riverine_flood; ADR 0105: -3 standalone composers, atop ADR 0095 -1 fetch_cama_flood_discharge
+  deleted, atop ADR 0094 -10 engine doors); fetch_from_catalog keeps its exact
+  entry_id-only signature;
+  search_data_catalog returns YAML catalog entries.
 - Arm flag ON (own process): the 27 leave the default declarable pool (tier="catalog")
   but stay in the search index; Arm 1 exposes a fetch_from_catalog(source=...) branch
   + card projection; Arm 2 keeps them discoverable + gate-expandable.
@@ -93,8 +127,8 @@ def _os_environ() -> dict:
 def test_default_config_identity():
     r = _run_arm(None)
     assert r["arm"] is None
-    assert r["registry_size"] == 190
-    assert r["n_specs"] == 78  # ADR 0084: +fetch_lehd_jobs +fetch_buildings
+    assert r["registry_size"] == 245
+    assert r["n_specs"] == 97  # ADR 0112 +nwm_streamflow (fetcher finale); ADR 0203 +fetch_aorc_precip +fetch_lter_records
     # They stay ambient (tier=general) and IN the declarable pool.
     assert r["gridmet_tier"] == "general"
     assert r["any_spec_in_declarable"] is True
@@ -111,7 +145,7 @@ def test_default_config_identity():
 def test_arm2_specs_leave_pool_but_stay_indexed():
     r = _run_arm("2")
     assert r["arm"] == "2"
-    assert r["registry_size"] == 190  # registry does NOT shrink; only the pool does
+    assert r["registry_size"] == 245  # registry does NOT shrink; only the pool does
     assert r["gridmet_tier"] == "catalog"
     assert r["any_spec_in_declarable"] is False  # every spec leaves the ambient pool
     # -57, not -58: fetch_copernicus_dem is tier="internal" (wave-11 absorption into
@@ -125,7 +159,7 @@ def test_arm2_specs_leave_pool_but_stay_indexed():
     # + ADR 0076 wfigs record fold; + ADR 0077 movebank keyed-CSV fold; + ADR 0079
     # quick-folds firms / noaa_sst / sentinel1; + ADR 0080 STAC-composite trio
     # landsat / sentinel2 / naip; + ADR 0081 fault_sources constant-cache fold).
-    assert r["declarable_size"] == _run_arm(None)["declarable_size"] - 77  # ADR 0084: +lehd_jobs +buildings leave pool
+    assert r["declarable_size"] == _run_arm(None)["declarable_size"] - 96  # ADR 0112 +nwm_streamflow; ADR 0203 +aorc_precip +lter_records leave the arm-ON pool
     # Still searchable + rankable so a search hit can gate-expand it.
     assert r["gridmet_in_index"] is True
     assert r["gridmet_ranked_top25"] is True
@@ -141,7 +175,7 @@ def test_arm2_specs_leave_pool_but_stay_indexed():
 def test_arm1_signature_and_pool():
     r = _run_arm("1")
     assert r["arm"] == "1"
-    assert r["registry_size"] == 190
+    assert r["registry_size"] == 245
     assert r["gridmet_tier"] == "catalog"
     assert r["any_spec_in_declarable"] is False
     assert r["gridmet_in_index"] is True
@@ -228,11 +262,11 @@ def test_arm3_specs_leave_pool_and_source_param():
     composed fetcher's real dispatch path)."""
     r = _run_arm("3")
     assert r["arm"] == "3"
-    assert r["registry_size"] == 190  # registry does NOT shrink; only the pool does
+    assert r["registry_size"] == 245  # registry does NOT shrink; only the pool does
     assert r["gridmet_tier"] == "catalog"
     assert r["any_spec_in_declarable"] is False  # every spec leaves the ambient pool
     # -70, not -71: fetch_copernicus_dem is tier="internal" (already out of the pool).
-    assert r["declarable_size"] == _run_arm(None)["declarable_size"] - 77  # ADR 0084: +lehd_jobs +buildings leave pool
+    assert r["declarable_size"] == _run_arm(None)["declarable_size"] - 96  # ADR 0112 +nwm_streamflow; ADR 0203 +aorc_precip +lter_records leave the arm-ON pool
     assert r["gridmet_in_index"] is True
     # fetch_from_catalog exposes the source branch under Arm 3 (like Arm 1).
     assert r["ffc_params"] == ["entry_id", "params", "source", "_extra_ignored"]
@@ -261,7 +295,7 @@ def test_stratum_index_is_source_scoped(_stratum):
         if getattr(TOOL_REGISTRY[n].metadata, "tier", "general") != "internal"
     }
     assert set(idx.tool_names) == model_facing
-    assert len(idx.tool_names) == 77  # 78 specs minus the internal copernicus seam (ADR 0084)
+    assert len(idx.tool_names) == 96  # 97 specs minus the internal copernicus seam (ADR 0112 +nwm_streamflow; ADR 0203 +aorc_precip +lter_records)
 
 
 def test_stratum_activates_on_data_ask_enum_rank_order(_stratum):

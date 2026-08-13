@@ -1,0 +1,461 @@
+[probe] Geospatial asm: Geospatial.Core, Version=0.1.0.2965, Culture=neutral, PublicKeyToken=null
+[probe] Ras asm: Ras.Core, Version=0.1.0.2965, Culture=neutral, PublicKeyToken=null
+
+[probe] ==== ALL TYPES in Geospatial.Vectors.Meshes ====
+  Geospatial.Vectors.Meshes.HydraulicMeshComputer+<>c
+  Geospatial.Vectors.Meshes.MeshPropertyTables+<>c
+  Geospatial.Vectors.Meshes.HydraulicMeshComputer+<>c__DisplayClass101_0
+  Geospatial.Vectors.Meshes.MeshPropertyTables+<>c__DisplayClass102_0
+  Geospatial.Vectors.Meshes.HydraulicMeshComputer+<>c__DisplayClass104_0
+  Geospatial.Vectors.Meshes.HydraulicMeshComputer+<>c__DisplayClass107_0
+  Geospatial.Vectors.Meshes.HydraulicMeshComputer+<>c__DisplayClass117_0
+  Geospatial.Vectors.Meshes.HydraulicMeshComputer+<>c__DisplayClass120_0
+  Geospatial.Vectors.Meshes.HydraulicMeshComputer+NodeCompute+<>c__DisplayClass20_0
+  Geospatial.Vectors.Meshes.MeshPropertyTables+<>c__DisplayClass45_0
+  Geospatial.Vectors.Meshes.MeshPropertyTables+<>c__DisplayClass79_0
+  Geospatial.Vectors.Meshes.HydraulicMeshComputer+<>c__DisplayClass89_0
+  Geospatial.Vectors.Meshes.HydraulicMeshComputer+<>c__DisplayClass92_0
+  Geospatial.Vectors.Meshes.HydraulicMeshComputer+<>c__DisplayClass95_0
+  Geospatial.Vectors.Meshes.HydraulicMeshComputer+<>c__DisplayClass98_0
+  Geospatial.Vectors.Meshes.HydraulicMeshComputer+CellCompute
+  Geospatial.Vectors.Meshes.HydraulicMeshComputer+FaceCompute
+  Geospatial.Vectors.Meshes.FaceElevationMethod
+  Geospatial.Vectors.Meshes.HydraulicMeshComputer
+  Geospatial.Vectors.Meshes.IMutableSimplePropertyTables [abstract] [iface]
+  Geospatial.Vectors.Meshes.IPropertyConfig [abstract] [iface]
+  Geospatial.Vectors.Meshes.ISimpleMeshPropertyTables [abstract] [iface]
+  Geospatial.Vectors.Meshes.MeshPropertyTables
+  Geospatial.Vectors.Meshes.HydraulicMeshComputer+NodeCompute
+  Geospatial.Vectors.Meshes.MeshPropertyTables+PartialCellProps
+  Geospatial.Vectors.Meshes.MeshPropertyTables+PropertyTableErrors [abstract]
+  Geospatial.Vectors.Meshes.PropertyTableOptions
+  Geospatial.Vectors.Meshes.VectorMeshInputs
+  Geospatial.Vectors.Meshes.VectorMeshTimeSeriesInputs
+  Geospatial.Vectors.Meshes.WaterSurfaceMeshInputs
+  Geospatial.Vectors.Meshes.WaterSurfaceMeshTimeSeriesInputs
+
+[probe] Mesh param type = Geospatial.Vectors.Mesh in Geospatial.Core
+[probe] FOUND 'Mesh' => Geospatial.Vectors.Mesh (Geospatial.Core)
+[probe] FOUND 'MeshFactory' => Geospatial.Vectors.MeshFactory (Geospatial.Core)
+[probe] FOUND 'IResample`1' => Geospatial.Rasters.IResample`1 (Geospatial.Core)
+[probe] FOUND 'Terrain' => Ras.Layers.Terrain (Ras.Core)
+[probe] FOUND 'Terrain' => Ras.NamedResources+Terrain (Ras.Core)
+
+==== Geospatial.Vectors.Mesh (assembly Geospatial.Core) ====
+  -- public constructors --
+    pub ctor()
+    pub ctor(Polygon perim, Cell[] cells, Face[] faces, FacePoint[] facePoints, Point[] cellCenters, Memory`1[] faceInternalPoints)
+    pub ctor(Tin tin)
+  -- static methods --
+    int static Double <CellPolygonArea>g__AddSegment|72_0(Point pA, Point pB)
+    int static Void <TryGetCellPolygonPoints>g__TryAdd|77_0(Span`1 buf, Point pt, Int32& curIdx)
+    pub static Void CompareMeshes(Mesh meshA, Mesh meshB, Tuple`2[]& faceMatches, Int32[]& cellMatches)
+    int static Extent ComputeExtent(Mesh m)
+    pub static Void ComputeFaceAreaAndTopWidth(Single ws, Single faceLength, StationElevationProfile areaTable, Double& area, Double& topWidth)
+    pub static Double ComputeFacePerimeter(Single ws, PointCollection perimeterTable)
+    pub static Mesh FromRasterDefinition(RasterDefinition rdef)
+    pub static Mesh NullMesh()
+    int static List`1 OrderedRegionsFromCenters(Point[] regionCenters)
+    pub static Mesh Stream(BinaryReader br)
+  -- instance methods (declared) --
+    int Int32 <ApplyCellOrdering>b__177_0(Int32 f)
+    int Int32 <ApplyCellOrdering>b__177_1(Int32 f)
+    int BufferPool`1 <get_CellPool>b__36_0()
+    int BufferPool`1 <get_FacePointPool>b__42_0()
+    int BufferPool`1 <get_FacePool>b__39_0()
+    int BitArray <GetSquareCells>b__151_0()
+    int Point <SampleFaceMidpoints>b__164_0(Int32 f)
+    int Cell <Subset>b__166_0(Int32 cIdx)
+    int Point <Subset>b__166_1(Int32 cIdx)
+    int Face <Subset>b__166_2(Int32 fIdxGlobal)
+    int Memory`1 <Subset>b__166_4(Int32 fIdxGlobal)
+    pub Void ApplyCellOrdering(Int32[] cellOldToNew, Int32[]& faceOldToNew)
+    pub Boolean CellContains(Int32 cIdx, Point pt)
+    pub Point[] CellCornerPoints(Int32 cIdx, Boolean circleBackToFirstPoint)
+    pub Void CellCornerPoints(Int32 cIdx, Span`1 cellPts, Boolean circleBackToFirstPoint)
+    pub Extent CellExtent(Int32 cIdx)
+    pub List`1 CellFacePoints(Int32 cIdx)
+    pub Void CellFacePoints(Int32 cIdx, Span`1 fpOut)
+    pub Boolean CellIsPerimeter(Int32 cIdx)
+    pub Boolean CellIsVirtual(Int32 cIdx)
+    pub Point[] CellNodePoints(Int32 c)
+    pub Polygon CellNodes(Int32 c)
+    pub Polygon CellPolygon(Int32 c)
+    pub Double CellPolygonArea(Int32 c)
+    int List`1 CellPolygonPoints(Int32 cIdx)
+    pub Double CellSimpleArea(Int32 c)
+    pub List`1 CellsUnderPolyline(Polyline polyline, Boolean mergeSplitSegments)
+    pub List`1 CellsUnderSegment(Segment segment)
+    pub Segment CellToCellSegment(Int32 ca, Int32 cb)
+    pub ValuePolygon CellValuePolygon(Int32 cIdx)
+    pub Mesh Clone()
+    pub Void CoalesceCellArrays()
+    pub Void ComputeCellAdjacency(List`1[]& rows, Boolean addDiagonal)
+    pub Void ComputeCellAdjacencyMatrix(Int32[]& rowPointers, Int32[]& columnIndices, Boolean addDiagonal)
+    pub Double[] ComputeCellPolygonAreaInv()
+    pub Double[] ComputeCellPolygonAreas()
+    pub Double[] ComputeCellSimpleAreas()
+    pub SpatialIndex`1 ComputeCellSpatialIndex()
+    pub Void ComputeCellSubsetAdjacencyMatrix(IReadOnlyList`1 subsetCells, Int32[]& rowPointers, Int32[]& columnIndices, Boolean addDiagonal, Int32[]& localToGlobal, Dictionary`2& globalToLocal)
+    pub ComplexPolygon ComputeComplexPerimeter()
+    int Extent ComputeExtent()
+    pub Void ComputeFaceAdjacencyMatrix(Int32[]& rowPointers, Int32[]& columnIndices)
+    pub Double[] ComputeFaceInvertLengths()
+    pub FaceMidside ComputeFaceMidside(Int32 fIdx)
+    pub FaceMidside[] ComputeFaceMidsides()
+    pub Vector[] ComputeFaceNormals()
+    pub Void ComputeFacePointAdjacencyMatrix(Int32[]& rowPointers, Int32[]& columnIndices)
+    pub SpatialIndex`1 ComputeFacepointSpatialIndex()
+    pub SpatialIndex`1 ComputeFaceSpatialIndex()
+    int BitArray ComputeSquareCells()
+    pub SpatialIndex`1 ComputeUniqueFaceSpatialIndexBySimpleMidpoint(Int32 binCount)
+    pub Double DistanceToFace(Int32 f, Point pt)
+    pub Tin ExportAsTIN(MeshPropertyTables tables)
+    pub Int32 FaceCCWOfCell(Int32 fpIdx, Int32 cIdx)
+    pub Single FaceCentroidDistance(Int32 fidx)
+    pub Point FaceCentroidPoint(Int32 fidx)
+    pub Boolean FaceIsPerimeter(Int32 f)
+    pub Point FaceMidPoint(Int32 fIdx)
+    pub Segment FacePerpendicularSegment(Int32 fIdx)
+    pub Boolean FacePointIsPerimeter(Int32 fp)
+    pub Polyline FacePolyline(Int32 f)
+    pub Void FacePolylineInto(Int32 f, Polyline pline)
+    pub Double FacePolylineLength(Int32 f)
+    pub Int32 FacePolylinePointCount(Int32 f)
+    pub List`1 FacesAlongPolyline(Polyline pline)
+    pub List`1 FacesAlongPolyline_Clipped(Polyline pline)
+    pub List`1 FacesAlongPolylineWithStations(Polyline pline)
+    pub Segment FaceSegment(Int32 fIdx)
+    pub Point FaceSegmentMidpoint(Int32 fIdx)
+    pub IEnumerable`1 FaceSegments(Int32 f)
+    pub Double FaceSimpleLength(Int32 f)
+    pub Double FaceSimpleLengthSquared(Int32 f)
+    pub Void FillCellPolygon_CCW(Int32 cIdx, Polygon pg)
+    pub Int32[] FindCells(Memory`1 points)
+    pub Void FindCells(Memory`1 points, Memory`1 outCellIndexes)
+    pub List`1 FindFacesNear(Point pt, Double distanceTolerance)
+    pub Void Floodfill(Int32 seedCell, Func`2 canCrossFace, Action`1 onCellVisit, Boolean includeSeedCell)
+    pub Void ForceSetVersion(Int64 value)
+    pub Void FreezeOne()
+    pub Int32 GetCell(Point pt)
+    int Int32 GetCellPolygonPointCount(Int32 cIdx)
+    pub List`1 GetCells(Polygon polygon)
+    pub List`1 GetCellsAroundCell(Int32 cIdx)
+    pub Void GetCellsAroundCell(Int32 cIdx, Span`1 output)
+    pub List`1 GetCellsAroundFacepoint(Int32 fp)
+    pub SpatialIndex`1 GetCellSpatialIndex()
+    pub Int32 GetDataHash()
+    pub Int32 GetFaceBetweenCells(Int32 cA, Int32 cB)
+    pub List`1 GetFacePointsAroundFacePoint(Int32 fpIdx)
+    pub SpatialIndex`1 GetFacePointSpatialIndex()
+    pub List`1 GetFacesAroundFace(Int32 fIdx)
+    pub SpatialIndex`1 GetFaceSpatialIndex()
+    pub Int32[] GetLocalNodeIndexes(Int32 cIdx)
+    pub Void GetLocalNodeIndexes(Int32 cIdx, Span`1 outNodeIndexes)
+    pub T[] GetLocalNodeValues(Int32 cIdx, Span`1 globalNodeValues)
+    pub Void GetLocalNodeValues(Int32 cIdx, Span`1 globalNodeValues, Span`1 outLocalNodeValues)
+    pub T[] GetLocalNodeValues(Int32 cIdx, T[][] fpValuesPerCell)
+    pub Void GetLocalNodeValues(Int32 cIdx, T[][] nodeValuesPerCell, Span`1 outLocalNodeValues)
+    pub MeshStatistics GetMeshStatistics()
+    pub Void GetOneRing(Int32 cIdx, HashSet`1& cells, HashSet`1& faces, HashSet`1& nodes)
+    pub HashSet`1 GetOneRingCells(Memory`1 cells)
+    pub Polygon GetSingleRingPerimeter()
+    pub List`1 GetSingleRingPerimeterFaces()
+    pub BitArray GetSquareCells()
+    pub HashSet`1 GetUniqueCellsAroundFaces(List`1 faces)
+    pub List`1 GetUniqueFacepointsAroundFaces(List`1 faces)
+    int Boolean IsCellSquare(Int32 cidx)
+    int Boolean IsFaceInternalPointsReversed(Face face, Int32 cIdx)
+    pub Boolean IsValid()
+    pub Void MD5HashAppend(Hash hash)
+    pub Int32 NearestFaceInCell(Int32 c, Point point, Double& fDistance)
+    int Int32 NearestPerimeterFace(Point pt, PointOnPolyline& ptOnPoly)
+    pub List`1 NodesAlongPolyline(Polyline pline, Boolean forceToPolylineEndpoints)
+    pub List`1 OrderedRegions(List`1 cellRegions, Int32 numRegions, List`1[]& regionCells)
+    pub List`1 PerimeterFacesAlongPolyline(Polyline pline, Polyline& magnetizedPline)
+    pub List`1[] RegionCellsLists(List`1 cellRegions, Int32 numRegions)
+    pub Mesh ReindexMesh(Int32 quantumSize)
+    pub Mesh ReorderCellsByAdjacency(List`1 regionOrder, List`1 cellRegions, List`1[] regionCells)
+    pub Mesh ReorderCellsRandom(Nullable`1 seed)
+    pub Void ResetMetadataCache()
+    pub JaggedWeights`1 SampleCellCenters(RasterDefinition destRaster, ISpatialTransformer sourceToDestTransform)
+    pub JaggedWeights`1 SampleFaceMidpoints(RasterDefinition destRaster, ISpatialTransformer sourceToDestTransform)
+    pub OperationResult SanityCheck(Boolean xpDirectionalChecks)
+    pub List`1 ShortestPathBetweenCells(Int32 fromCell, Int32 toCell)
+    pub Void Stream(BinaryWriter bw)
+    pub Mesh Subset(List`1 cellIndexes, Int32[]& cellMapping, Tuple`2[]& faceMapping, Dictionary`2& cellGlobalToLocal, Dictionary`2& faceGlobalToLocal)
+    pub Void ThawOne()
+    pub Double TotalCellArea()
+    pub Mesh Transform(ISpatialTransformer transformer)
+    int Int32 TryGetCellPolygonPoints(Int32 cIdx, Span`1 pointSpan)
+  -- public/settable properties + fields --
+    prop RO Double AreaTolerance
+    prop RO Int32 CellCount
+    prop RW VirtualMeshCellPolygonCollection CellPolygons
+    prop RO BufferPool`1 CellPool
+    prop RO Extent Extent
+    prop RO Int32 FaceCount
+    prop RO Int32 FacePointCount
+    prop RO BufferPool`1 FacePointPool
+    prop RO BufferPool`1 FacePool
+    prop RO Double LengthTolerance
+    prop RO HydraulicMeshComputer MetadataCache
+    prop RO Int32 NodeCount
+    prop RW Polygon Perimeter
+    prop RO Int64 VersionXY
+    field Point[] CellCenters
+    field Cell[] Cells
+    field Memory`1[] FaceInternalPoints
+    field FacePoint[] FacePoints
+    field Face[] Faces
+    field MeshTags Tags
+
+==== Geospatial.Vectors.Meshes.MeshPropertyTables (assembly Geospatial.Core) ====
+  -- public constructors --
+    int ctor(Mesh m)
+  -- static methods --
+    int static OperationResult CheckReportBadNValues(Single[] fMann, ProgressReporter pr)
+    pub static OperationResult ComputeFrom(Mesh mesh, IResample`1 elevations, IResample`1 nValues, PropertyTableOptions opts, MeshPropertyTables& tables, ProgressReporter pr)
+    int static OperationResult ComputeSimple(Mesh mesh, IResample`1 elevations, IResample`1 nValues, PropertyTableOptions opts, MeshPropertyTables& tables, ProgressReporter pr)
+    pub static MeshPropertyTables CreateEmpty(Mesh mesh)
+    pub static MeshPropertyTables DebugAssignMinElevations(Mesh mesh, Single elev)
+    int static T InterpLinear(T ratio, T fromBound, T toBound)
+    int static T InterpRatio(T value, T fromBound, T toBound)
+    pub static MeshPropertyTables Reduce(MeshPropertyTables src)
+    pub static MeshPropertyTables Stream(BinaryReader br, Mesh m)
+  -- instance methods (declared) --
+    pub Single[] AllCellMinimumElevations()
+    pub Single CellMinElevation(Int32 cIdx)
+    pub String CellPropertySummary(Int32 cIdx)
+    pub MeshPropertyTables Clone(Mesh withMesh, Int32[] cellTableStart, Int16[] cellTableCount, Int32[] faceTableStart, Int16[] faceTableCount)
+    pub Void ComputeCellWettedAreaTables()
+    pub Void ComputeFaceBedFrictVariableTable(Mesh mesh, Double gravity, Double nSItoUnits, Double dzMin)
+    pub Double ComputeFaceConveyanceByArea(Int32& fIdx, Int32[] prevFoundIndexes, Double& wsel, Double nSItoUnits)
+    pub Void ComputeFaceConveyanceTable(Mesh mesh, Double nSItoUnits)
+    pub Double ComputeFaceHydraulicDepth(Int32& fIdx, Int32[] prevFoundIndexes, Double& wsel)
+    int Single ComputeFaceHydraulicDepthTableOne(Int32 fIdx, Int32 tblIdx)
+    pub Void ComputeFaceHydraulicDepthTables()
+    int Single ComputeFaceHydraulicRadiusTableOne(Int32 fIdx, Int32 tblIdx)
+    pub Void ComputeFaceHydraulicRadiusTables()
+    pub Void ComputeFaceShearFluxVarTable(Mesh mesh, Double gravity, Double nSItoUnits)
+    int Single ComputeFaceWettedTopWidthTableOne(Int32 fIdx, Int32 tblIdx)
+    pub Void ConvertDepthToStage(Memory`1 cellIndexes, Memory`1[] depths)
+    pub Void ConvertDepthToStage(Memory`1 cellIndexes, Memory`1 depths)
+    pub Void ConvertDepthToStage(Memory`1 depths)
+    pub Void ConvertStageToDepth(Memory`1 cellIndexes, Memory`1[] stages, Single truncateTolerance)
+    pub Void ConvertStageToDepth(Memory`1 stages)
+    pub Memory`1 EnsureCellMinElevationTable()
+    pub Void EnsurePartialTables()
+    pub Single FaceMinElevation(Int32 fIdx)
+    pub String FacePropertySummary(Int32 fIdx)
+    pub Void Floodfill(Int32 seedCell, Double stage, Action`1 visitCell, Boolean includeSeedCell)
+    pub Void GetCellAreaWet(Int32 cIdx, Double wsel, Double& wetArea)
+    pub Void GetCellPropertiesAtWaterSurface(Int32 cIdx, Double wsel, Double& volume, Double& wetArea, Int32& idx)
+    pub Void GetCellTables(Int32 cIdx, Memory`1& vols, Memory`1& elevs, Memory`1& wettedArea)
+    pub Void GetFaceHydraulicRadiusAtWaterSurface(Int32 fIdx, Double wsel, Double& hydRad, Int32& idx)
+    pub Void GetFaceTables(Int32 fIdx, Memory`1& areas, Memory`1& elevs, Memory`1& wettedPerim, Memory`1& hydrRadius)
+    pub String GetStatsStatusString()
+    pub Void InitCellTables(Int32 totalCellPropCount)
+    pub Void InitFaceTables(Int32 totalFacePropCount)
+    int T Interp(T a, T a1, T a2, T b1, T b2)
+    pub Double InterpolateCellElevation(Int32 cIdx, Double volume)
+    pub Double InterpolateCellVolume(Int32 cIdx, Double elev)
+    pub Double InterpolateFaceArea(Int32 fIdx, Double elev)
+    pub Single InterpolateFaceArea(Int32 fIdx, Single elev)
+    pub Void RebuildCellMinElevationsFromFullTable()
+    pub Void RebuildFaceMinElevationsFromFullTable()
+    pub Void RebuildMinElevationsFromFullTables()
+    pub Void RebuildTableCountsFromStarts()
+    int PartialCellProps SeedPartialProp(Int32 cIdx)
+    pub Void SetConstBedFrictCoeff(Double bedFrictionCoeff)
+    pub MeshPropertyTables ShallowCopy(Mesh withMesh)
+    pub Void Stats(Int32& smallestCellCount, Int32& largestCellCount, Double& avgCellCount, Int32& smallestFaceCount, Int32& largestFaceCount, Double& avgFaceCount)
+    pub Void Stream(BinaryWriter bw)
+    pub MeshPropertyTables Subset(Mesh subsetMesh, Int32[] cellMapping, Tuple`2[] faceMapping)
+    pub Void UpdateCellPartial(Int32& cIdx, Double& cellElevation, Double& cellArea, Double& newCellVolume)
+    int Void UpdateCellPartial(Int32 cIdx, PartialCellProps& cellProps, Double& cellElevation, Double& cellArea, Double newCellVolume)
+    pub Boolean UpdateCells(Double[] cellElevation, Double[] cellArea, Double[] cellVolume, Double[] cellHydraulicDepth, Int32[] priorIndexes, Double[] newCellVolumes, List`1 cellIndexes, ThreadFor threadFor)
+    pub Void UpdateCellsONE(Int32& cIdx, Double[] cellElevation, Double[] cellArea, Double[] cellVolume, Double[] cellHydraulicDepth, Int32[] cellPriorIndexes, Double[]& newCellVolume, Boolean& errorCellVolumeNegative)
+    int Void UpdateCellWindow(Int32 cIdx, PartialCellProps& cellProps, Double volume)
+    pub Void UpdateFaceMeanElevation()
+    pub Void UpdateFaceONE(Int32& fIdx, Int32[] prevFoundIndexes, Double[] faceWsel, Double[] faceArea, Double[] faceHydrRadius, Double[] faceHydrDepth, Double[] faceManning, Double[] faceNonlinFrictCoeff, Double[] faceShearFluxCoeff, Double[] faceConveyance, Double& wsel)
+    pub Void UpdateFaceONE(Int32& fIdx, Int32[] prevFoundIndexes, Double[] faceWsel, Double[] faceArea, Double[] faceHydrRadius, Double[] faceHydrDepth, Double[] faceManning, Double[] faceNonlinFrictCoeff, Double[] faceShearFluxCoeff, Double[] faceConveyance, Double& wsel)
+  -- public/settable properties + fields --
+    field Boolean calcConstBedFrictCoeff
+    field Boolean calcFaceBedFrictCoeff
+    field Boolean calcFaceConveyance
+    field Boolean calcFaceHydrDepth
+    field Boolean calcFaceHydrRadius
+    field Boolean calcFaceManning
+    field Boolean calcFaceShearFluxCoeff
+    field Boolean calcFaceWettedPerimeter
+    field Single[] CellElevationTable
+    field Single[] CellMinimumElevations
+    field Int16[] CellTableCount
+    field Int32[] CellTableStart
+    field Single[] CellVolumeTable
+    field Single[] CellWettedAreaTable
+    field Double ConstNonlinBedFrictionCoeff
+    field Single[] FaceAreaTable
+    field Single[] FaceBedFrictVarA
+    field Single[] FaceBedFrictVarB
+    field Single[] FaceBedFrictVarTable
+    field Single[] FaceConveyanceA
+    field Single[] FaceConveyanceB
+    field Single[] FaceConveyanceTable
+    field Single[] FaceElevationTable
+    field Single[] FaceHydraulicDepthTable
+    field Single[] FaceHydraulicRadiusTable
+    field Single[] FaceManningsTable
+    field Single[] FaceMeanElevation
+    field Single[] FaceMinimumElevations
+    field Single[] FaceShearFluxVarA
+    field Single[] FaceShearFluxVarB
+    field Single[] FaceShearFluxVarTable
+    field Int16[] FaceTableCount
+    field Int32[] FaceTableStart
+    field Single[] FaceWettedPerimeterTable
+    field Mesh Mesh
+    field Int32 RECENTER
+    field Int32 REUSE
+
+==== Geospatial.Vectors.Meshes.PropertyTableOptions (assembly Geospatial.Core) ====
+  -- public constructors --
+    pub ctor()
+  -- static methods --
+    pub static PropertyTableOptions Default(UnitSystem units)
+    pub static Double DefaultCellVolumeFilterTolerance(UnitSystem units)
+    pub static Double DefaultFaceAreaElevFilterTolerance(UnitSystem units)
+    pub static Double DefaultFaceProfileFilterTolerance(UnitSystem units)
+    pub static Double DefaultLaminarDepthTolerance(UnitSystem units)
+  -- instance methods (declared) --
+    pub PropertyTableOptions Clone()
+    pub Int32 GetDataHash()
+  -- public/settable properties + fields --
+    prop RW Double CellMinAreaFraction
+    prop RW Double CellVolumeFilterTolerance
+    prop RW Double FaceAreaConveyanceRatio
+    prop RW Double FaceAreaElevFilterTolerance
+    prop RW Double FaceLaminarDepthTolerance
+    prop RW Double FaceProfileFilterTolerance
+    field Int32 BinsPerCell
+    field Int32 SampledPointsPerCell
+    field Int32 SampledPointsPerFace
+    field Boolean UseSimpleTables
+
+==== Geospatial.Vectors.MeshFactory (assembly Geospatial.Core) ====
+  -- public constructors --
+    pub ctor()
+  -- static methods --
+    int static Boolean ANY(Memory`1 mem, Func`2 action)
+    int static Boolean ANY(Span`1 sp, Func`2 action)
+    pub static Mesh CircularMesh(Extent baseExt, Double cellSize)
+    int static Void CoalesceCellArrays(Cell[] cells)
+    int static Memory`1[] ConvertInternalPoints(List`1 pts)
+    pub static Mesh FromExtent(Extent baseExt, Int32 cellsW, Int32 cellsH, Boolean generateHexCells)
+    pub static Boolean TryCreateMesh(Polygon perimeter, IList`1 cellCenters, IList`1 breaklines, Mesh& mesh, MeshError& error, MeshGenerationParams meshParams, ProgressReporter reporter)
+    pub static Boolean TryCreateMeshWithDiagnostics(Polygon perimeter, IList`1 cellCenters, IList`1 breaklines, Mesh& mesh, MeshError& error, MeshDiagnosticInfo& diagnostics, MeshGenerationParams meshParams, ProgressReporter reporter)
+  -- instance methods (declared) --
+    int Tuple`2 <CellsSortedByLargestArea>b__77_0(Int32 cIdx)
+    int Boolean <CollapseFace>b__97_0(Int32 f)
+    int Point <SplitExternalCellMaintainIndexing>b__50_0(Int32 fpIdx)
+    int Void AddBeginning(List`1 list, Int32 newElement)
+    int Void ADDFACE(Face f)
+    int Void ADDFACESPOTINCELL(Int32 ID, Cell& c)
+    int Void ADDFACETOCELL(Int32 ID, Cell& c, Int32 newFaceIdx)
+    int Void AddVirtualCells()
+    int Void AdHocFixPerimeterIssues(Tin perimeterDevTIN)
+    int Boolean ApplyBreaklines(IList`1 breaklines)
+    int Boolean ArePointsConvexEnough(List`1 pts)
+    int Boolean ArePointsStrictlyConvex(List`1 pts)
+    int Void ASSIGNFACE(Cell c, Int32 index, Int32 newFaceIdx)
+    pub Double AverageFaceLengthAroundFacepoint(Int32 fpIdx)
+    pub List`1 CellFacePoints(Int32 cIdx)
+    pub Boolean CellIsPerimeter(Int32 cIdx)
+    pub Boolean CellIsVirtual(Int32 cIdx)
+    pub Polygon CellPolygon(Int32 c)
+    pub Double CellPolygonArea(Int32 c)
+    int List`1 CellPolygonPoints(Int32 c)
+    int List`1 CellsSortedByLargestArea(Int32 ct)
+    pub Segment CellToCellSegment(Int32 ca, Int32 cb)
+    int Void CollapseFace(Int32 fCollapseIdx, Int32& newFpIdx, Nullable`1 collapseToPoint)
+    int Boolean CollapseFaces(List`1 faceList)
+    int Void COMPLETECELLFACES(Cell c)
+    int Mesh CompositeMeshInputs()
+    int Point ComputeFPPrev(Int32 cellIdx, Int32 localFaceIdx, Polygon ccwPerimeter, PointOnPolyline& ptOnPoly, Boolean& isPoP, List`1 badPoints)
+    int Boolean CreateMeshInternal(Polygon perimeter, IList`1 cellCenters, IList`1 breaklines, ProgressReporter reporter)
+    int Void EnforceInternalPoints(IList`1 breaklines, Dictionary`2 fpsMoved, Dictionary`2 fpsMovedSecondPass)
+    pub Boolean FaceIsPerimeter(Int32 f)
+    pub Segment FacePerpendicularSegment(Int32 fIdx)
+    pub Segment FacePerpendicularSegment(Face f)
+    pub Boolean FacePointIsPerimeter(Int32 fp)
+    pub Segment FaceSegment(Int32 fIdx)
+    pub Double FaceSimpleLength(Int32 f)
+    int List`1 GetAllCollapsibleFaces(Boolean& needsAnotherPass, Double heuristicFactor)
+    int Polygon GetCCWPerimeter(Polygon perimeter)
+    pub List`1 GetCellsAroundFacepoint(Int32 fp)
+    int List`1 GetCollapsibleFaces(List`1 connectedToFacepoints, Double heuristicFactor)
+    int MeshStatistics GetMeshStatistics()
+    int Tin GetPerimeterTin(Polygon perimeter)
+    int List`1 GetPointsOutsidePerimeter(IList`1 points, Tin perimeterTIN)
+    int Boolean GetValidateMeshTIN(IList`1 cellCenters, Tin& meshTin, Extent MBR, ProgressReporter reporter)
+    int Void InitInternalStructures(Int32 numCells)
+    int Void InsertBoundaryFacePointaintainIndexing(Int32 fIdx, Int32 cIdx, Int32 faceInternalPtIdx)
+    int Void INSERTFACEAFTER(Int32 ID, Cell& c, Int32 afterThisGlobalFIdx, Int32 faceToInsert)
+    int Void InternalFacepointInsertions()
+    int Dictionary`2 MagnetizeFacepointsEnsureNonColinear(IList`1 breaklines, Int32& collapsedFaceCount, Dictionary`2& intersectionMagnetization, Double magneticRadiusFactor, Boolean useBackoffMethod)
+    pub Int32 NearestFacePointInCell(Int32 c, Point point, Double& fpDistance)
+    pub List`1 PointsOnFace(Int32 f)
+    int Void PopulateCellsWithInputPoints(IList`1 cellCenters)
+    int PointOnPolyline Project(Segment seg, Polygon ccwperimeter, Boolean useRHR, Double snapTolerance)
+    int Void REMOVEATFACE(Cell c, Int32 indexToRemove)
+    int Void REMOVEFACE(Int32 ID, Cell& c, Int32 faceToRemove)
+    int String SerializeMesh()
+    int Void SetCellsAndFaces(Tin meshTIN, Tin perimeterDevTIN, Tin bufferedPerimeterDevTIN, SpatialIndex`1 perimeterSpatialIndex, ProgressReporter reporter)
+    int Boolean SetFacepoints(SpatialIndex`1 perimeterSpatialIndex, Tin perimDevTin)
+    pub Int32 SmallestAdjacentFace(Int32 fpIdx, Int32& fpLocalIdx, Double& faceLen)
+    int Boolean SplitExternalCellMaintainIndexing(Int32 cIdx, Double cellTrueArea)
+    int Boolean SqueezeNullFFP()
+    int Boolean TryAutoFix(MeshError err, List`1& suggestedNewCells, List`1& suggestedRemoveCells)
+    int Boolean ValidateAllFacepointsSet()
+    int Boolean ValidateAreaCheck()
+    int Boolean ValidateCell(Int32 cidx)
+    int Boolean ValidateDCSubgraphs()
+    int Boolean ValidateDuplicatePoints(Tin meshTIN, IList`1 cellCenters, List`1 duplicatePoints)
+    int Boolean ValidateFacePointMove(Int32 fpIdx, Point candidateNewPt)
+    int Boolean ValidateFacePointMoveWithFaceCollapse(Int32 fpMoveIdx, Point candidateNewPt, Int32 collapseFaceIdx)
+    int Boolean ValidateInput(Polygon perim, IList`1 cells)
+    int Boolean ValidateMinFaceLength()
+    int Boolean ValidateNumFacesPerCell()
+    int Boolean ValidatePerimeterErrors(List`1 pointOnPerimeterErrors)
+    int Boolean ValidatePointsInsidePerim(IList`1 cellCenters, Tin perimeterDevTin)
+    int Boolean ValidateSqueezeErrors(List`1 cellErrs)
+  -- public/settable properties + fields --
+    prop RW Point[] CellCenters
+    prop RO Int32 CellCount
+    prop RW Cell[] Cells
+    prop RO MeshError Error
+    prop RO Int32 FaceCount
+    prop RW List`1 FaceInternalPoints
+    prop RO Int32 FacePointCount
+    prop RW List`1 FacePoints
+    prop RW List`1 Faces
+    prop RW Polygon Perimeter
+    field MeshDiagnosticInfo DiagnosticInfo
+    field MeshGenerationParams MeshGenParams
+    field Boolean TrackDiagnostics
+
+[probe] ==== types matching *Mesh*/*Cell*/*Face* with a geometry-ish ctor ====
+  Geospatial.Vectors.Mesh ctor(Polygon perim, Cell[] cells, Face[] faces, FacePoint[] facePoints, Point[] cellCenters, Memory`1[] faceInternalPoints)
+  Geospatial.Vectors.MeshReport ctor(Mesh mesh, MetricType metric, MetricElement elementType, List`1 selection)
+  Geospatial.Vectors.MeshReport ctor(Mesh mesh, Func`3 func, MetricElement elementType, List`1 selection)
+  Geospatial.Vectors.Rasterizers.FlatMeshMap ctor(Mesh mesh, Int32 meshIdx, MeshPropertyTables tables, List`1 cellList)
+  Geospatial.Vectors.Rasterizers.MeshMap ctor(Mesh mesh, Int32 meshIdx, MeshPropertyTables tables, List`1 uniqueFaces, List`1 uniqueFacepoints)
+  Geospatial.Vectors.Rasterizers.SlopingMeshMap ctor(Mesh mesh, Int32 meshIndex, MeshPropertyTables tables, List`1 d2MapCells, List`1 faces, List`1 facepoints)
+  Geospatial.Vectors.MeshTopology.MeshTriangulationError ctor(String message, Point location)
+  Geospatial.Vectors.MeshTopology.MeshAngleSmoother ctor(SlidingMesh mesh, IList`1 nodes)
+  Geospatial.Vectors.MeshTopology.MeshOptimizer ctor(SlidingMesh mesh, IList`1 nodes)
+  Geospatial.Vectors.MeshTopology.MeshOrthogonalizer ctor(SlidingMesh mesh, IList`1 nodes)
+  Geospatial.Vectors.MeshTopology.MeshScaledSmoother ctor(SlidingMesh mesh, IList`1 nodes)
+  Geospatial.Vectors.MeshTopology.MeshSmoother ctor(SlidingMesh mesh, IList`1 nodes)
+  Geospatial.Vectors.MeshTopology.MeshUnsmoother ctor(SlidingMesh mesh, IList`1 nodes)

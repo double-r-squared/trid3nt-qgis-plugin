@@ -44,7 +44,7 @@ from trid3nt_server.agent.workflows.sfincs.sfincs_builder import (
 # A normal inland pluvial AOI (the active AOI a non-archetype solve runs on).
 _PLUVIAL_BBOX = (-85.32, 35.02, -85.24, 35.08)
 
-# A coastal AOI near Mexico Beach, FL (the SFINCS North Star + archetype geography).
+# A coastal AOI near Mexico Beach, FL (the coastal SFINCS + archetype geography).
 _COASTAL_BBOX = (-85.45, 29.92, -85.38, 29.98)
 
 # Local paths so ``_stage_gcs_local`` is a no-op (no GCS/S3 in unit tests). The
@@ -249,7 +249,7 @@ def test_solver_guard_never_injects_bbox_into_point_driven_modflow() -> None:
     well / source point, not a rectangle; injecting a flood-AOI bbox would be a
     spurious key today and latent wrong-extent debt tomorrow."""
     pin = list(_SOLVE_DOMAIN)
-    for tool in ("modflow_contaminant_plume", "run_model_groundwater_contamination_scenario"):
+    for tool in ("modflow_contaminant_plume",):
         params = {"upgradient_offset_km": 1.0, "duration_days": 30}
         out = _maybe_default_solver_bbox_to_pinned_aoi(tool, params, pin)
         # Same object, no bbox injected -- byte-for-byte passthrough.

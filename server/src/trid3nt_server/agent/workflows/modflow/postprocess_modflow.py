@@ -33,6 +33,7 @@ from __future__ import annotations
 import glob
 import hashlib
 import logging
+import math
 import tempfile
 from pathlib import Path
 from typing import Any
@@ -51,6 +52,7 @@ from trid3nt_contracts.modflow_contracts import (
     SeepageLayerURI,
     StreamReachLayerURI,
     SubsidenceLayerURI,
+    VadoseBreakthroughLayerURI,
 )
 
 from trid3nt_server.agent.workflows.shared import cog_io
@@ -71,6 +73,7 @@ __all__ = [
     "postprocess_wetland_hydroperiod",
     "postprocess_capture_zone",
     "postprocess_saltwater_intrusion",
+    "postprocess_vadose",
     "publish_modflow_quantities",
     "compute_plume_metrics",
     "compute_seepage_metrics",
@@ -96,6 +99,7 @@ __all__ = [
     "CAPTURE_ZONE_STYLE_PRESET",
     "SALTWATER_INTRUSION_STYLE_PRESET",
     "SUBSIDENCE_STYLE_PRESET",
+    "VADOSE_TRANSPORT_STYLE_PRESET",
     "GWF_CBC_FILENAME",
     "GWF_HDS_FILENAME",
     "RUNS_BUCKET_DEFAULT",
@@ -181,6 +185,16 @@ CAPTURE_ZONE_STYLE_PRESET: str = "capture_zone"
 #: must NOT be called for this vector; the inline-GeoJSON path renders it over WS.
 SALTWATER_INTRUSION_STYLE_PRESET: str = "saltwater_intrusion"
 
+#: Vector style preset for the vadose_transport spill-site CONTEXT POINT (ADR
+#: 0228). A single FlatGeobuf point at the spill (lat, lon) carrying the arrival
+#: time + peak concentration as feature attributes: it geolocates WHERE the 1D
+#: vadose column was evaluated (the breakthrough CHART carries the physics). The
+#: client's vector renderer matches ``presetColorFor`` on the substring
+#: "contaminant" -> a warning hue so the spill point reads as a contamination
+#: source, distinct from the blue water layers. ``publish_layer`` is RASTER-ONLY
+#: and must NOT be called for this vector; the inline-GeoJSON path renders it.
+VADOSE_TRANSPORT_STYLE_PRESET: str = "contaminant_spill_point"
+
 #: Vector style preset for the SFR routed stream-depletion reach network (module
 #: wave). The reaches are a FlatGeobuf of per-reach line segments; the client's
 #: vector renderer matches ``presetColorFor`` on the substring "stream" -> the
@@ -222,6 +236,10 @@ class PostprocessMODFLOWError(RuntimeError):
     - ``PLUME_REPROJECT_FAILED`` - the UTM → EPSG:4326 warp failed.
     - ``PLUME_COG_WRITE_FAILED`` - rasterio could not write the COG.
     - ``PLUME_COG_UPLOAD_FAILED`` - the GCS upload of the COG failed.
+    - ``MODFLOW_GEOREGISTRATION_MISSING`` - the deck's grid origin/cell-size
+      could not be read (flopy deck-load failure or no ``deck_dir``); raised
+      by ``_write_reprojected_cog`` / ``_modflow_src_transform`` instead of
+      silently placing the raster at an arbitrary identity-transform origin.
     """
 
     error_code: str = "POSTPROCESS_MODFLOW_FAILED"
@@ -954,6 +972,14 @@ def _grid_georegistration_from_deck(deck_dir: str | None) -> dict[str, Any] | No
     requires it), so either works; we PREFER the GWT model (the spill/seepage
     deck's transport grid) and fall back to the GWF model (a GWF-only archetype
     deck has no GWT model). Any model with a structured modelgrid is acceptable.
+
+    A ``None`` return means the caller cannot place the output raster on the
+    map. ``_write_reprojected_cog`` / ``_modflow_src_transform`` raise
+    ``PostprocessMODFLOWError("MODFLOW_GEOREGISTRATION_MISSING")`` rather than
+    silently writing at an arbitrary identity-transform origin; a handful of
+    callers whose narrated deliverable is a scalar (not the raster itself,
+    e.g. ``postprocess_budget_partition`` / ``postprocess_asr``) instead catch
+    that error and degrade to an unplaced fallback URI, honestly logged.
     """
     if not deck_dir:
         return None
@@ -1041,27 +1067,44 @@ def _write_reprojected_cog(
             NaN off the reach) so negative gaining values survive - masking by a
             positive floor would wrongly drop every gaining (negative) reach
             cell. Passed to cog_io as the declared ``mask`` callable.
+
+    Raises:
+        PostprocessMODFLOWError: ``MODFLOW_GEOREGISTRATION_MISSING`` when
+            ``geo`` is ``None`` (the deck's grid origin/cell-size could not be
+            read) - the raster's spatial pattern is the deliverable for every
+            caller of this writer, so an unplaced (identity-transform) COG
+            would be a confidently-wrong map layer, worse than an honest
+            failure. A caller whose real deliverable is a scalar (not this
+            raster) - e.g. ``postprocess_budget_partition`` / ``postprocess_asr``
+            - catches this and degrades to an unplaced fallback URI instead.
     """
     import numpy as np  # type: ignore[import-not-found]
     import rasterio  # type: ignore[import-not-found]
     from rasterio.warp import Resampling
 
+    if geo is None:
+        raise PostprocessMODFLOWError(
+            "MODFLOW_GEOREGISTRATION_MISSING",
+            message=(
+                "grid georegistration could not be read from the deck (flopy "
+                "deck-load failure, or no deck_dir was supplied); refusing to "
+                "write the COG at an arbitrary identity-transform origin - a "
+                "misplaced raster is a worse failure than an honest error."
+            ),
+            details={"model_crs": model_crs},
+        )
+
     arr = np.asarray(final2d, dtype="float32")
     nrow, ncol = arr.shape
 
-    if geo is not None:
-        delr = geo["delr"]
-        delc = geo["delc"]
-        xorigin = geo["xorigin"]
-        yorigin = geo["yorigin"]
-        # flopy row 0 = north; rasterio's from_origin top-left = (west, north).
-        west = xorigin
-        north = yorigin + nrow * delc
-        src_transform = rasterio.transform.from_origin(west, north, delr, delc)
-    else:
-        # Degraded fallback: identity transform (metrics still valid; placement
-        # arbitrary). Logged by the caller via the None geo path.
-        src_transform = rasterio.Affine.identity()
+    delr = geo["delr"]
+    delc = geo["delc"]
+    xorigin = geo["xorigin"]
+    yorigin = geo["yorigin"]
+    # flopy row 0 = north; rasterio's from_origin top-left = (west, north).
+    west = xorigin
+    north = yorigin + nrow * delc
+    src_transform = rasterio.transform.from_origin(west, north, delr, delc)
 
     def _mask(a: Any) -> Any:
         if mask_below_floor:
@@ -1198,9 +1241,12 @@ def postprocess_modflow(
         run_id: the run identifier the COG is keyed under in the runs bucket.
         model_crs: the deck's projected CRS (e.g. ``"EPSG:32617"``) - the
             OQ-MOD-3 handoff field the reprojection needs.
-        deck_dir: optional on-disk deck dir for grid georegistration (origin +
-            cell size). When ``None``, the COG uses an identity transform
-            (metrics stay valid; geographic placement degrades).
+        deck_dir: on-disk deck dir for grid georegistration (origin + cell
+            size). REQUIRED for a correctly-placed COG: when ``None`` or the
+            deck fails to load, ``_write_reprojected_cog`` raises
+            ``PostprocessMODFLOWError("MODFLOW_GEOREGISTRATION_MISSING")``
+            rather than silently placing the plume raster at an arbitrary
+            identity-transform origin.
         runs_bucket: optional override for the runs bucket name.
         publish: when True, dispatch ``publish_layer`` (mocked in tests).
 
@@ -2079,14 +2125,30 @@ def _read_concentration_steps(ucn_path: Path) -> tuple[list[Any], Any]:
 
 
 def _modflow_src_transform(geo: dict[str, Any] | None, nrow: int) -> Any:
-    """Build the rasterio source transform from the deck georegistration."""
+    """Build the rasterio source transform from the deck georegistration.
+
+    Raises:
+        PostprocessMODFLOWError: ``MODFLOW_GEOREGISTRATION_MISSING`` when
+            ``geo`` is ``None``. Feeds the concentration-animation +
+            water-table rasters (``publish_modflow_quantities``, both
+            ``default_on=True`` active map layers) - same honesty floor as
+            ``_write_reprojected_cog``: an unplaced raster is a worse failure
+            than refusing to build it.
+    """
     import rasterio  # type: ignore[import-not-found]
 
-    if geo is not None:
-        west = geo["xorigin"]
-        north = geo["yorigin"] + nrow * geo["delc"]
-        return rasterio.transform.from_origin(west, north, geo["delr"], geo["delc"])
-    return rasterio.Affine.identity()
+    if geo is None:
+        raise PostprocessMODFLOWError(
+            "MODFLOW_GEOREGISTRATION_MISSING",
+            message=(
+                "grid georegistration could not be read from the deck; "
+                "refusing to place the concentration-animation / water-table "
+                "raster at an arbitrary identity-transform origin."
+            ),
+        )
+    west = geo["xorigin"]
+    north = geo["yorigin"] + nrow * geo["delc"]
+    return rasterio.transform.from_origin(west, north, geo["delr"], geo["delc"])
 
 
 def publish_modflow_quantities(
@@ -2966,9 +3028,14 @@ def postprocess_asr(
     lat/lon re-derivation is needed -- the ASR well is, by construction, the cell
     where the cyclic inject/recover drives the largest head swing.
 
+    A missing deck georegistration degrades the head COG to an unplaced
+    fallback URI (honestly logged) rather than failing the call -- the
+    narrated deliverable (``recovery_efficiency`` / ``head_timeseries``) does
+    not depend on the raster placement.
+
     Raises:
-        PostprocessMODFLOWError: any read / reproject / write / upload step
-            failed; ``error_code`` identifies the stage.
+        PostprocessMODFLOWError: a head-file read failure; ``error_code``
+            identifies the stage.
     """
     hds_path = _resolve_gwf_hds_path(run_outputs_uri)
     geo = _grid_georegistration_from_deck(deck_dir)
@@ -2993,24 +3060,36 @@ def postprocess_asr(
         len(head_timeseries) if head_timeseries is not None else 0,
     )
 
-    # Spatial carrier = the final-step water-table head COG (continuous head ramp).
+    # Spatial carrier = the final-step water-table head COG (continuous head
+    # ramp) -- context for the well-head sawtooth deliverable above, NOT the
+    # deliverable itself (mirrors postprocess_budget_partition): a missing
+    # deck georegistration degrades to an unplaced fallback URI, honestly
+    # logged, rather than sinking the recovery_efficiency / head_timeseries
+    # this call already computed.
     head_grid = head_steps[-1]
-    cog_path = _write_reprojected_cog(
-        head_grid, model_crs, geo, mask_below_floor=False
-    )
-    bbox_4326 = _cog_bbox_4326(cog_path)
-    cog_uri = _upload_cog(
-        cog_path, run_id, runs_bucket, cog_filename="asr_head_4326.tif"
-    )
-
+    bbox_4326: tuple[float, float, float, float] | None = None
+    final_uri: str
     layer_id = f"asr-{run_id}"
-    final_uri = cog_uri
-    if publish:
-        wms_url = _dispatch_publish_layer(
-            cog_uri, layer_id, style_preset=ASR_STYLE_PRESET
+    try:
+        cog_path = _write_reprojected_cog(
+            head_grid, model_crs, geo, mask_below_floor=False
         )
-        if wms_url:
-            final_uri = wms_url
+        bbox_4326 = _cog_bbox_4326(cog_path)
+        final_uri = _upload_cog(
+            cog_path, run_id, runs_bucket, cog_filename="asr_head_4326.tif"
+        )
+        if publish:
+            wms_url = _dispatch_publish_layer(
+                final_uri, layer_id, style_preset=ASR_STYLE_PRESET
+            )
+            if wms_url:
+                final_uri = wms_url
+    except PostprocessMODFLOWError as exc:
+        logger.warning(
+            "ASR water-table head COG unavailable (sawtooth still returned): %s",
+            exc,
+        )
+        final_uri = run_outputs_uri
 
     return ASRLayerURI(
         layer_id=layer_id,
@@ -3270,6 +3349,15 @@ def postprocess_capture_zone(
     yoffset_m: float | None = None,
     model_utm_epsg: int | None = None,
     tier_years: list[float] | None = None,
+    gradient_source: str | None = None,
+    gradient_magnitude: float | None = None,
+    gradient_azimuth_deg: float | None = None,
+    k_m_per_day: float | None = None,
+    aquifer_thickness_m: float | None = None,
+    pumping_rate_m3_day: float | None = None,
+    well_specs: list[dict[str, Any]] | None = None,
+    transient: bool = False,
+    river_cell_count: int = 0,
 ) -> CaptureZoneLayerURI:
     """Convert MF6 PRT backward-tracking output into a ``CaptureZoneLayerURI``.
 
@@ -3364,7 +3452,11 @@ def postprocess_capture_zone(
         import numpy as np  # type: ignore[import-not-found]
         import shapely.affinity  # type: ignore[import-not-found]
         import shapely.ops  # type: ignore[import-not-found]
-        from shapely.geometry import MultiPoint, mapping  # type: ignore[import-not-found]
+        from shapely.geometry import (  # type: ignore[import-not-found]
+            LineString,
+            MultiPoint,
+            mapping,
+        )
     except Exception as exc:  # noqa: BLE001
         raise PostprocessMODFLOWError(
             "CAPTURE_ZONE_OUTPUT_READ_FAILED",
@@ -3585,6 +3677,77 @@ def postprocess_capture_zone(
             "area_km2": area,
         })
 
+    # --- Step 6b: per-particle backtracked pathlines (LineString features) ----
+    # The pathline fan is the primary legibility element of the capture-zone
+    # render: each line is one particle's up-gradient trajectory from the well
+    # screen back to its capture origin (the geoclaw particle-track emission
+    # pattern). Group the track rows by particle id, order by elapsed |t|, and
+    # build a LineString in LOCAL coords, then shift+reproject to EPSG:4326.
+    pathline_count = 0
+    if {"iprp", "irpt"}.issubset(df.columns):
+        for (_iprp, _irpt), grp in df.groupby(["iprp", "irpt"], sort=True):
+            g = grp.sort_values("ttravel_years")
+            xs = g["x"].values
+            ys = g["y"].values
+            if len(xs) < 2:
+                continue
+            line_local = LineString(list(zip(xs, ys)))
+            line_4326 = _shift_and_reproject(line_local)
+            t_max_line = float(g["ttravel_years"].max())
+            features_geom.append(line_4326)
+            features_props.append({
+                "feature_type": "pathline",
+                "travel_time_years": round(t_max_line, 4),
+                "area_km2": None,
+            })
+            pathline_count += 1
+
+    # --- Step 6b': per-well capture allocation (ADR 0215 item 1) --------------
+    # For a multi-well WELLFIELD the particle boundname is "W{k}_P{n}" (mf6
+    # UPPERCASES it), so the leading well index k allocates which well captured
+    # which particles. Each well's zone is the convex hull of ITS OWN backtracked
+    # pathlines (measured in true UTM). ``well_specs`` (name/lat/lon/rate per deck
+    # well, in index order) labels the allocation for narration. Empty {} for a
+    # single-well run.
+    well_capture_allocation: dict[str, Any] = {}
+    if "name" in df.columns and well_specs and len(well_specs) > 1:
+        well_k = df["name"].astype(str).str.extract(r"(?i)^w(\d+)_", expand=False)
+        for k_str, grp in df.assign(_wk=well_k).dropna(subset=["_wk"]).groupby("_wk"):
+            try:
+                k = int(k_str)
+            except (TypeError, ValueError):
+                continue
+            if k >= len(well_specs):
+                continue
+            spec = well_specs[k]
+            n_parts = int(grp[["iprp", "irpt"]].drop_duplicates().shape[0])
+            hull_local = MultiPoint(
+                list(zip(grp["x"].values, grp["y"].values))
+            ).convex_hull
+            label = str(spec.get("name") or f"well_{k}")
+            well_capture_allocation[label] = {
+                "particle_count": n_parts,
+                "capture_area_km2": round(_area_km2(hull_local), 6),
+                "rate_m3_day": abs(float(spec.get("rate_m3_day") or 0.0)),
+                "well_latlon": [spec.get("lat"), spec.get("lon")],
+            }
+
+    # --- Step 6c: Grubb uniform-flow analytic screening ballpark --------------
+    # Capture width B = Q / (K*b*i) and down-gradient stagnation distance
+    # x0 = Q / (2*pi*K*b*i) (Grubb 1993, uniform-flow capture-zone analytic). A
+    # sanity ballpark against the PRT-delineated envelope; K/b/i are the demo/DEM
+    # aquifer params so this is order-of-magnitude, NOT a calibrated width.
+    stagnation_distance_m: float | None = None
+    capture_width_m: float | None = None
+    _i = float(gradient_magnitude) if gradient_magnitude else 0.0
+    _k = float(k_m_per_day) if k_m_per_day else 0.0
+    _b = float(aquifer_thickness_m) if aquifer_thickness_m else 0.0
+    _q = float(pumping_rate_m3_day) if pumping_rate_m3_day else 0.0
+    _denom = _k * _b * _i
+    if _q > 0.0 and _denom > 0.0:
+        capture_width_m = _q / _denom
+        stagnation_distance_m = _q / (2.0 * math.pi * _denom)
+
     # --- Step 7: write FlatGeobuf in EPSG:4326 --------------------------------
     gdf = gpd.GeoDataFrame(features_props, geometry=features_geom, crs="EPSG:4326")
 
@@ -3633,6 +3796,19 @@ def postprocess_capture_zone(
         travel_time_years=actual_tiers,
         isochrone_areas_km2=isochrone_areas_km2,
         particle_count=particle_count,
+        pathline_count=pathline_count,
+        gradient_source=gradient_source or "demo_west_east",
+        gradient_magnitude=(
+            float(gradient_magnitude) if gradient_magnitude else None
+        ),
+        gradient_azimuth_deg=(
+            float(gradient_azimuth_deg) if gradient_azimuth_deg is not None else None
+        ),
+        stagnation_distance_m=stagnation_distance_m,
+        capture_width_m=capture_width_m,
+        well_capture_allocation=well_capture_allocation,
+        transient=bool(transient),
+        river_cell_count=int(river_cell_count or 0),
     )
 
 
@@ -4708,4 +4884,366 @@ def postprocess_saltwater_intrusion(
     # contaminate the contract boundary.
     object.__setattr__(result, "_chart_payload", chart_payload)
 
+    return result
+
+
+# --------------------------------------------------------------------------- #
+# vadose_transport (UZF+UZT unsaturated-zone breakthrough) - ADR 0228
+# --------------------------------------------------------------------------- #
+
+
+def _resolve_vadose_obs_path(run_outputs_uri: str) -> Path:
+    """Locate the UZT breakthrough obs csv (``*.uzt.obs.csv``) from a run output.
+
+    vadose_transport is LOCAL-ONLY (the FLAT dual-model deck is tiny + fast; the
+    Batch path is never used), so the live-evidence path always passes a local
+    dir / ``file://``. gs:// and s3:// are handled defensively for symmetry with
+    ``_resolve_ucn_path``: the specific obs filename is not known ahead of the
+    read, so the cloud branches fetch the whole prefix is not supported here -
+    the caller passes a local dir.
+
+    Raises ``PostprocessMODFLOWError("VADOSE_OUTPUT_READ_FAILED")`` when no obs
+    csv is found under the run output location.
+    """
+    p = Path(run_outputs_uri.replace("file://", ""))
+    if p.is_file() and p.name.endswith(".uzt.obs.csv"):
+        return p
+    if p.is_dir():
+        hits = sorted(glob.glob(str(p / "**" / "*.uzt.obs.csv"), recursive=True))
+        if hits:
+            return Path(hits[0])
+    raise PostprocessMODFLOWError(
+        "VADOSE_OUTPUT_READ_FAILED",
+        message=f"no *.uzt.obs.csv breakthrough obs found under {run_outputs_uri}",
+        details={"run_outputs_uri": run_outputs_uri},
+    )
+
+
+def _read_vadose_breakthrough(
+    obs_path: Path,
+) -> tuple[list[float], list[float]]:
+    """Read (time_days, base_of_column_concentration) from the UZT obs csv.
+
+    The UZT observations block writes a two-column csv (``time`` + the named
+    ``UZBOT`` observation: the base-of-column concentration just above the water
+    table). Mirrors the read the committed adapter smoke pins
+    (``test_gwt_adapter_vadose_transport``). Returns two parallel lists.
+
+    Raises:
+        PostprocessMODFLOWError: ``VADOSE_OUTPUT_READ_FAILED`` on a read failure;
+            ``VADOSE_OUTPUT_EMPTY`` when the csv carries no rows / no conc column.
+    """
+    try:
+        import numpy as np  # type: ignore[import-not-found]
+    except Exception as exc:  # noqa: BLE001
+        raise PostprocessMODFLOWError(
+            "VADOSE_OUTPUT_READ_FAILED",
+            message=f"numpy not importable: {exc}",
+            details={"obs_path": str(obs_path)},
+        ) from exc
+    try:
+        obs = np.genfromtxt(str(obs_path), delimiter=",", names=True)
+    except Exception as exc:  # noqa: BLE001
+        raise PostprocessMODFLOWError(
+            "VADOSE_OUTPUT_READ_FAILED",
+            message=f"could not read UZT obs csv {obs_path}: {exc}",
+            details={"obs_path": str(obs_path)},
+        ) from exc
+    names = obs.dtype.names or ()
+    # The concentration column is the single named observation (UZBOT); pick the
+    # first non-time column so a future obs rename still resolves.
+    conc_col = next((n for n in names if n.lower() != "time"), None)
+    if "time" not in [n.lower() for n in names] or conc_col is None:
+        raise PostprocessMODFLOWError(
+            "VADOSE_OUTPUT_EMPTY",
+            message=f"UZT obs csv {obs_path} lacks a time + concentration column",
+            details={"obs_path": str(obs_path), "columns": list(names)},
+        )
+    time_key = next(n for n in names if n.lower() == "time")
+    t = np.atleast_1d(obs[time_key]).astype("float64")
+    c = np.atleast_1d(obs[conc_col]).astype("float64")
+    if t.size == 0 or c.size == 0:
+        raise PostprocessMODFLOWError(
+            "VADOSE_OUTPUT_EMPTY",
+            message=f"UZT obs csv {obs_path} carries no rows",
+            details={"obs_path": str(obs_path)},
+        )
+    return [float(x) for x in t], [float(x) for x in c]
+
+
+def _write_vadose_point_fgb(
+    spill_latlon: tuple[float, float],
+    *,
+    breakthrough_time_days: float,
+    peak_concentration: float,
+    vadose_thickness_m: float,
+    run_id: str,
+) -> Path:
+    """Write the vadose spill-site CONTEXT POINT FlatGeobuf in EPSG:4326.
+
+    ONE feature: a POINT at the spill ``(lat, lon)`` carrying the arrival time,
+    peak concentration, and vadose thickness as attributes, so the user sees
+    WHERE the 1D vadose column was evaluated. The geometry coordinate order is
+    (lon, lat) per GeoJSON/WKT.
+
+    Raises:
+        PostprocessMODFLOWError: ``VADOSE_WRITE_FAILED`` on any shapely /
+            geopandas / file-system error.
+    """
+    try:
+        import geopandas as gpd  # type: ignore[import-not-found]
+        from shapely.geometry import Point  # type: ignore[import-not-found]
+    except Exception as exc:  # noqa: BLE001
+        raise PostprocessMODFLOWError(
+            "VADOSE_WRITE_FAILED",
+            message=f"shapely / geopandas not importable for vadose FGB write: {exc}",
+            details={"run_id": run_id},
+        ) from exc
+    try:
+        pt = Point(float(spill_latlon[1]), float(spill_latlon[0]))
+        props = [{
+            "feature_type": "spill_site",
+            "breakthrough_time_days": float(breakthrough_time_days),
+            "peak_concentration": float(peak_concentration),
+            "vadose_thickness_m": float(vadose_thickness_m),
+            "run_id": run_id,
+        }]
+        gdf = gpd.GeoDataFrame(props, geometry=[pt], crs="EPSG:4326")
+        fgb_path = Path(
+            tempfile.NamedTemporaryFile(
+                suffix=f"_vadose_spill_{run_id}.fgb", delete=False
+            ).name
+        )
+        gdf.to_file(str(fgb_path), driver="FlatGeobuf", engine="pyogrio")
+        return fgb_path
+    except Exception as exc:  # noqa: BLE001
+        raise PostprocessMODFLOWError(
+            "VADOSE_WRITE_FAILED",
+            message=f"could not write vadose spill-site FlatGeobuf: {exc}",
+            details={"run_id": run_id},
+        ) from exc
+
+
+def _vadose_params_from_deck(deck_dir: str | None) -> dict[str, float]:
+    """Read spill lat/lon + thickness + infiltration conc from the DeckManifest.
+
+    The FLAT vadose staging writes the worker-contract manifest.json (no vadose
+    fields), so these are primarily threaded from the dispatch; this is the
+    best-effort fallback when a manifest with the fields is present. Missing keys
+    fall back to 0.0 so the caller can guard with ``or <default>``.
+    """
+    defaults: dict[str, float] = {
+        "spill_lat": 0.0, "spill_lon": 0.0,
+        "vadose_thickness_m": 0.0, "vadose_infiltration_conc": 0.0,
+    }
+    if not deck_dir:
+        return defaults
+    import json
+
+    manifest_path = Path(deck_dir) / "manifest.json"
+    if not manifest_path.exists():
+        return defaults
+    try:
+        with manifest_path.open() as f:
+            m = json.load(f)
+        for k in defaults:
+            if k in m:
+                defaults[k] = float(m.get(k) or 0.0)
+        return defaults
+    except Exception as exc:  # noqa: BLE001
+        logger.warning(
+            "_vadose_params_from_deck: could not read manifest from %s: %s",
+            manifest_path, exc,
+        )
+        return defaults
+
+
+def postprocess_vadose(
+    run_outputs_uri: str,
+    *,
+    run_id: str,
+    model_crs: str,
+    deck_dir: str | None = None,
+    runs_bucket: str | None = None,
+    spill_lat: float | None = None,
+    spill_lon: float | None = None,
+    vadose_thickness_m: float | None = None,
+    vadose_infiltration_conc: float | None = None,
+) -> VadoseBreakthroughLayerURI:
+    """Convert a UZF+UZT vadose_transport run into a ``VadoseBreakthroughLayerURI``.
+
+    Reads the base-of-column breakthrough obs csv (``*.uzt.obs.csv``: the UZT
+    concentration just above the water table, one value per saved transport step),
+    computes the ARRIVAL TIME (first crossing of half the infiltration
+    concentration - the headline scalar), writes a spill-site CONTEXT POINT
+    FlatGeobuf in EPSG:4326, uploads it, and returns the typed
+    ``VadoseBreakthroughLayerURI``.
+
+    Unlike every other MODFLOW archetype the PRIMARY product is the TIME-SERIES
+    CHART (breakthrough concentration vs. time), built via
+    ``build_vadose_breakthrough_chart`` and stashed as the runtime attribute
+    ``_chart_payload`` on the returned layer; the composer reads it via
+    ``getattr(layer, "_chart_payload", None)`` and emits it. The MAP element is a
+    thin spill-site point that geolocates WHERE the 1D vadose column was
+    evaluated (1D-column physics -> chart carries the physics).
+
+    Georegistration: the vadose deck is a 1-cell-plan vertical column. There is no
+    plan-view field to reproject; the spill ``(lat, lon)`` (threaded from the
+    dispatch / staging) locates the context point. ``model_crs`` is accepted for
+    signature compatibility but not used (no raster COG; the FGB is built directly
+    in EPSG:4326).
+
+    Args:
+        run_outputs_uri: the run output location (local dir / ``file://``) that
+            contains the UZT obs csv.
+        run_id: run identifier for the FlatGeobuf filename in the runs bucket.
+        model_crs: the deck's projected CRS (accepted for signature compat; unused).
+        deck_dir: optional deck directory for the manifest fallback.
+        runs_bucket: optional override for the runs bucket name.
+        spill_lat / spill_lon: the spill-site ``(lat, lon)`` in EPSG:4326, threaded
+            from the dispatch (``DeckStaging.spill_lat/lon``). Preferred over the
+            manifest fallback; sentinel zeros when neither is available (the
+            composer honesty gate should have supplied a real AOI upstream).
+        vadose_thickness_m: the vadose-column thickness the deck used, m (for
+            narration + the chart depth annotation); manifest fallback otherwise.
+        vadose_infiltration_conc: the tracer concentration in the infiltration (the
+            half-of-this breakthrough threshold + the chart rule); defaults to 1.0
+            (the demo unit tracer) when neither threaded nor on the manifest.
+
+    Returns:
+        ``VadoseBreakthroughLayerURI`` with ``layer_type='vector'``,
+        ``style_preset='contaminant_spill_point'``, the FGB ``uri``, the
+        breakthrough scalars (``breakthrough_time_days``, ``peak_concentration``,
+        ``vadose_thickness_m``), and the ``concentration_series`` +
+        ``time_series_days``. ``_chart_payload`` (a runtime attr) carries the
+        breakthrough chart.
+
+    Raises:
+        PostprocessMODFLOWError:
+          - ``VADOSE_OUTPUT_READ_FAILED`` -- obs csv not found / unreadable.
+          - ``VADOSE_OUTPUT_EMPTY`` -- obs csv has no rows / no conc column.
+          - ``VADOSE_WRITE_FAILED`` -- FlatGeobuf write or upload failed.
+    """
+    del model_crs  # no raster COG to reproject; accepted for signature compat only.
+
+    # --- Step 1: locate + read the UZT breakthrough obs csv -----------------
+    obs_path = _resolve_vadose_obs_path(run_outputs_uri)
+    times_days, conc_series = _read_vadose_breakthrough(obs_path)
+
+    # --- Step 2: resolve narration params (dispatch-threaded > manifest > default)
+    mparams = _vadose_params_from_deck(deck_dir)
+    lat = float(spill_lat) if spill_lat is not None else float(mparams["spill_lat"])
+    lon = float(spill_lon) if spill_lon is not None else float(mparams["spill_lon"])
+    thickness = (
+        float(vadose_thickness_m)
+        if vadose_thickness_m is not None and float(vadose_thickness_m) > 0.0
+        else (float(mparams["vadose_thickness_m"]) or 4.0)
+    )
+    infil_conc = (
+        float(vadose_infiltration_conc)
+        if vadose_infiltration_conc is not None and float(vadose_infiltration_conc) > 0.0
+        else (float(mparams["vadose_infiltration_conc"]) or 1.0)
+    )
+
+    # --- Step 3: breakthrough time = first crossing of half the source conc ---
+    threshold = 0.5 * infil_conc
+    arrival_days: float = 0.0
+    arrived = False
+    for t, c in zip(times_days, conc_series):
+        if c >= threshold:
+            arrival_days = float(t)
+            arrived = True
+            break
+    # Never crossed the half-source threshold within the horizon: report the
+    # arrival as 0.0 (the honesty floor uses the SERIES presence, not this
+    # scalar; the composer narrates non-arrival when peak < threshold).
+    peak_conc = float(conc_series[-1])
+
+    logger.info(
+        "postprocess_vadose run_id=%s obs=%s steps=%d arrival_days=%.4g arrived=%s "
+        "peak_conc=%.4g thickness_m=%.4g",
+        run_id, obs_path, len(conc_series), arrival_days, arrived, peak_conc, thickness,
+    )
+
+    # --- Step 4: spill-site context point (sentinel-guarded) ----------------
+    if lat == 0.0 and lon == 0.0:
+        logger.warning(
+            "postprocess_vadose run_id=%s: no spill lat/lon threaded; using sentinel "
+            "zeros (the composer honesty gate should have supplied a real AOI)",
+            run_id,
+        )
+    fgb_path = _write_vadose_point_fgb(
+        (lat, lon),
+        breakthrough_time_days=arrival_days,
+        peak_concentration=peak_conc,
+        vadose_thickness_m=thickness,
+        run_id=run_id,
+    )
+    # A tiny bbox around the point (deg) so the map has a non-degenerate extent.
+    d = 0.01
+    bbox_4326: tuple[float, float, float, float] = (
+        lon - d, lat - d, lon + d, lat + d,
+    )
+
+    try:
+        fgb_uri = _upload_fgb(
+            fgb_path, run_id, runs_bucket, fgb_filename="vadose_spill_site_4326.fgb"
+        )
+    except PostprocessMODFLOWError as exc:
+        raise PostprocessMODFLOWError(
+            "VADOSE_WRITE_FAILED",
+            message=exc.args[0] if exc.args else str(exc),
+            details=exc.details,
+        ) from exc
+
+    # --- Step 5: build the breakthrough chart (stash on the result) ---------
+    # Downsample the contract series to keep the layer envelope light (the chart
+    # builder caps its own rows independently); the arrival scalar is exact.
+    def _thin(seq: list[float], cap: int = 200) -> list[float]:
+        if len(seq) <= cap:
+            return seq
+        stride = max(1, len(seq) // cap)
+        return seq[::stride][:cap]
+
+    conc_thin = _thin(conc_series)
+    time_thin = _thin(times_days)
+    # keep the two series length-aligned after independent thinning
+    n = min(len(conc_thin), len(time_thin))
+    conc_thin, time_thin = conc_thin[:n], time_thin[:n]
+
+    chart_payload: dict[str, Any] | None = None
+    try:
+        from trid3nt_server.agent.tools.processing.charts_common import (
+            build_vadose_breakthrough_chart,
+        )
+
+        chart_payload = build_vadose_breakthrough_chart(
+            days=times_days,
+            concentration=conc_series,
+            infiltration_conc=infil_conc,
+            breakthrough_time_days=arrival_days if arrived else None,
+            vadose_thickness_m=thickness,
+            source_layer_uri=fgb_uri,
+        )
+    except Exception as exc:  # noqa: BLE001
+        logger.warning(
+            "postprocess_vadose: chart build failed (non-fatal): %s", exc
+        )
+
+    layer_id = f"vadose-breakthrough-{run_id}"
+    result = VadoseBreakthroughLayerURI(
+        layer_id=layer_id,
+        name="Vadose-zone tracer breakthrough (UZF+UZT unsaturated travel)",
+        layer_type="vector",
+        uri=fgb_uri,
+        style_preset=VADOSE_TRANSPORT_STYLE_PRESET,
+        role="primary",
+        bbox=bbox_4326,
+        breakthrough_time_days=arrival_days,
+        peak_concentration=peak_conc,
+        vadose_thickness_m=thickness,
+        concentration_series=conc_thin,
+        time_series_days=time_thin,
+    )
+    object.__setattr__(result, "_chart_payload", chart_payload)
     return result

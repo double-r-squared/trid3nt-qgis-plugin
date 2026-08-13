@@ -51,6 +51,10 @@ from trid3nt_contracts.modflow_contracts import (
 )
 from trid3nt_contracts.tool_registry import AtomicToolMetadata
 
+from trid3nt_server.agent.workflows.modflow._input_review import (
+    aquifer_k_review_entry,
+    review_modflow_entries,
+)
 from trid3nt_server.emission.layer_uri_emit import emit_layer_uri
 from trid3nt_server.emission.pipeline_emitter import (
     begin_substeps,
@@ -352,7 +356,7 @@ async def _emit_plume_chart(plumes: list[PlumeLayerURI]) -> None:
         },
         "width": "container",
     }
-    caption = " · ".join(
+    caption = " * ".join(
         f"{_species_name_from_layer(p)}: peak {float(getattr(p, 'max_concentration_mgl', 0.0)):.3g} mg/L, "
         f"{float(getattr(p, 'plume_area_km2', 0.0)):.3g} km^2"
         for p in plumes
@@ -382,6 +386,7 @@ async def model_contaminant_plume(
     porosity: float | None = None,
     duration_days: float | None = None,
     compute_class: str = "standard",
+    input_mode: str | None = None,
     pipeline_emitter: Any | None = None,
 ) -> ContaminantPlumeResult:
     """Compose spill point + contaminant(s) -> MODFLOW GWT -> plumes[] (>=1).
@@ -502,6 +507,26 @@ async def model_contaminant_plume(
             "coupling is recorded but not yet wired (independent transport)."
         ),
     }
+    # ADR 0223: structured aquifer-K provenance routed through gate_input_review,
+    # stamped onto each plume layer (the prose caveat stays on the summary).
+    _k_entry = aquifer_k_review_entry(
+        k_source=("user_supplied" if aquifer_k_ms is not None else "demo_default"),
+        k_ms=(aquifer_k_ms if aquifer_k_ms is not None else DEFAULT_AQUIFER_K_MS),
+        porosity=(porosity if porosity is not None else DEFAULT_POROSITY),
+        note=summary["demo_aquifer_caveat"],
+    )
+    _review = await review_modflow_entries(
+        tool_name="modflow_contaminant_plume", entries=[_k_entry],
+        params={"aquifer_k_ms": aquifer_k_ms, "porosity": porosity},
+        input_mode=input_mode,
+    )
+    if _review.cancelled:
+        raise ContaminantPlumeScenarioError(
+            f"contaminant-plume input review {_review.cancel_reason or 'not approved'}; "
+            "the plume was not finalized"
+        )
+    plumes = [p.model_copy(update={"synthetic_inputs": list(_review.entries)})
+              for p in plumes]
     logger.info(
         "contaminant_plume scenario complete location=%r n_plumes=%d",
         location_name,
@@ -544,10 +569,17 @@ async def modflow_contaminant_plume(
     porosity: float | None = None,
     duration_days: float | None = None,
     compute_class: str = "standard",
+    input_mode: str | None = None,
     # absorb LLM-invented kwargs.
     **_extra_ignored: Any,
 ) -> dict[str, Any]:
     """Model a groundwater contaminant plume (spill spread + peak concentration), single OR multi species.
+
+    Fidelity: MODFLOW 6 local planning-grade groundwater envelope (aquifer
+    K/porosity default to narrated demo values unless supplied), not a
+    calibrated regulatory delineation. Off-scope: surface-water inundation
+    flooding -> sfincs_flood; urban storm-sewer / pipe-network flooding ->
+    swmm_urban_flood.
 
     Builds a MODFLOW 6 model with ONE shared groundwater-flow field driving one
     solute-transport model per species, runs it, and produces one plume layer per
@@ -564,7 +596,7 @@ async def modflow_contaminant_plume(
           SEVERAL (species=[...]).
 
     Do NOT use this for:
-        - Surface-water / inundation flooding (SFINCS flood door).
+        - Surface-water / inundation flooding (use ``sfincs_flood``).
         - Contaminant entering groundwater ALONG a river (modflow_river_seepage).
         - Pumping drawdown / capture zone / dewatering (the other modflow_* templates).
 
@@ -610,6 +642,7 @@ async def modflow_contaminant_plume(
                 float(duration_days) if duration_days is not None else None
             ),
             compute_class=compute_class,
+            input_mode=input_mode,
             pipeline_emitter=None,
         )
     except ContaminantPlumeInputError as exc:

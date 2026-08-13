@@ -1,0 +1,9 @@
+fetch_lter_records:
+- get the long-term LTER stream discharge record for this watershed
+- read the EDI data package time series for this station
+- I need observed outlet discharge to grade a rainfall-runoff replication
+- fetch the Coweeta weir hourly discharge from the EDI portal
+- pull the long-term ecological station record by its package id
+- historical water level and discharge from the LTER hydrologic lab
+- give me the observed streamflow series to compare against my simulated hydrograph
+- environmental data initiative package entity as a parsed time series

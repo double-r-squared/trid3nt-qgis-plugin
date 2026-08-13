@@ -1,0 +1,10 @@
+# Template routing phrasings (engine templates are ordinary retrieval-pool tools).
+swmm_network_import:
+- import a real storm-drain / sewer GIS network into a SWMM model
+- build a SWMM model from a shapefile or GeoPackage of manholes and pipes
+- load the city's published storm-drain FeatureServer network and run a design storm
+- where does this imported sewer network surcharge and flood under a design storm
+- how much flow reaches the outfall in this storm-drain pipe network
+- bring my nodes and conduits GIS layers into a runnable SWMM dual-drainage model
+- model the real piped storm-sewer network (not the DEM-synthesized overland mesh)
+- import manhole and pipe GIS features and check pipe surcharge for a 10-year storm

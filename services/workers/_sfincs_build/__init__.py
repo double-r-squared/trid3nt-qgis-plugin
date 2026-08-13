@@ -13,4 +13,5 @@ from .deck import (  # noqa: F401
     build_sfincs_deck,
     forcing_spec_from_dict,
 )
+from .deck_quadtree import build_sfincs_quadtree_deck  # noqa: F401
 from .spec import validate_job_spec  # noqa: F401

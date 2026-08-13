@@ -1,0 +1,14 @@
+# Template routing phrasings (ADR 0196): walked into the main retrieval index
+# directly -- the engine templates are ordinary retrieval-pool tools.
+telemac_rain_on_grid:
+- rainfall-runoff on a watershed, how much runoff and peak discharge from a storm over the catchment
+- rain falls on the basin and floods the valley, simulate the flash flood from an intense storm
+- outlet hydrograph for a design storm falling on a delineated catchment, rain-on-grid overland flow
+- how does antecedent soil moisture (dry vs wet) change the runoff hydrograph from a storm
+- SCS curve-number rainfall-runoff on a real watershed with a flood-depth map at the outlet
+- a cloudburst over a steep mountain catchment, the runoff concentrates and floods downstream
+- peak flow and runoff volume at the basin outlet from a storm of a given intensity and duration
+- overland rainfall-runoff on a triangular mesh of the watershed interior, TELEMAC rain on grid
+- how much water runs off this drainage basin during a heavy rain event, curve number infiltration
+- multi-storm sequence over a watershed with soil-moisture recovery between storms, continuous rainfall-runoff
+- back-to-back storms on a basin, the second peak should be smaller because the soil dried out between them

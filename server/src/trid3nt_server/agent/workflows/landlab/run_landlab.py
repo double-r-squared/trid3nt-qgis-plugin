@@ -30,6 +30,27 @@ from pathlib import Path
 from typing import Any
 
 from trid3nt_contracts.landlab_contracts import LandlabRunArgs
+from trid3nt_contracts.tool_registry import ResolutionSpec
+
+#: DECLARED target_resolution_m for EVERY Landlab template (ADR 0225). Shared: all
+#: templates run the same fetch-DEM -> grid chain. The DEM is 3DEP-native (1-10 m US
+#: lidar via fetch_3dep_extra/fetch_dem), so the DATA floor is 10 m -- a finer grid
+#: resamples the same 10 m DEM and buys no terrain fidelity. No hard coarse ceiling:
+#: a coarser landscape-evolution grid is a legitimate cheaper run. Out-of-range
+#: (sub-10 m) is quoted back, never silently snapped. Lives here (the cycle-free base
+#: every template imports) and is re-exported by _composer_common.
+LANDLAB_RES_SPEC = ResolutionSpec(
+    param="target_resolution_m",
+    unit="m",
+    min_value=10.0,
+    native_hint="3DEP 1-10 m US lidar (fetch_dem); DEM resampled to this grid",
+    constraint_source="data",
+    rationale=(
+        "the raster grid is resampled from the 3DEP-native DEM (1-10 m lidar); a "
+        "target finer than the 10 m fallback native buys no terrain fidelity, coarser "
+        "is a valid cheaper landscape-evolution grid so no upper bound"
+    ),
+)
 
 logger = logging.getLogger("trid3nt_server.agent.workflows.landlab.run_landlab")
 
@@ -145,6 +166,89 @@ def build_landlab_build_spec(run_args: LandlabRunArgs) -> dict[str, Any]:
         # OverlandFlow parameters
         "rainfall_intensity_mm_hr": float(run_args.rainfall_intensity_mm_hr),
         "storm_duration_hr": float(run_args.storm_duration_hr),
+        # flow_accumulation parameters (flow_director arrives via advanced_physics
+        # and is merged from ``resolved`` below).
+        "depression_handler": str(
+            getattr(run_args, "depression_handler", "fill")
+        ),
+        "channel_threshold_cells": int(
+            getattr(run_args, "channel_threshold_cells", 100)
+        ),
+        # green_ampt_overland_flow parameters
+        "soil_hydraulic_conductivity_m_s": float(
+            getattr(run_args, "soil_hydraulic_conductivity_m_s", 1.0e-5)
+        ),
+        "initial_soil_moisture_content": float(
+            getattr(run_args, "initial_soil_moisture_content", 0.15)
+        ),
+        "green_ampt_soil_type": str(
+            getattr(run_args, "green_ampt_soil_type", "sandy loam")
+        ),
+        # landslide_storm_ensemble parameters (PrecipitationDistribution draws).
+        "mean_storm_duration_hr": float(
+            getattr(run_args, "mean_storm_duration_hr", 2.0)
+        ),
+        "mean_interstorm_duration_hr": float(
+            getattr(run_args, "mean_interstorm_duration_hr", 48.0)
+        ),
+        "mean_storm_depth_mm": float(getattr(run_args, "mean_storm_depth_mm", 15.0)),
+        "n_recharge_scenarios": int(getattr(run_args, "n_recharge_scenarios", 8)),
+        # overland_flow_timeseries snapshot cadence (seconds) + DEM conditioning.
+        "output_interval_s": float(getattr(run_args, "output_interval_s", 300.0)),
+        "condition_dem": bool(getattr(run_args, "condition_dem", True)),
+        # dem_pit_fill / lake_mapping fill mode + lake discrimination floors.
+        "fill_flat": bool(getattr(run_args, "fill_flat", True)),
+        "min_lake_depth_m": float(getattr(run_args, "min_lake_depth_m", 1.0)),
+        "min_lake_area_m2": float(getattr(run_args, "min_lake_area_m2", 10000.0)),
+        # channel_incision (detachment-limited stream-power evolution) parameters.
+        "k_bedrock": float(getattr(run_args, "k_bedrock", 1.0e-5)),
+        "m_sp": float(getattr(run_args, "m_sp", 0.5)),
+        "n_sp": float(getattr(run_args, "n_sp", 1.0)),
+        "uplift_rate_m_yr": float(getattr(run_args, "uplift_rate_m_yr", 1.0e-3)),
+        "incision_run_duration_yr": float(
+            getattr(run_args, "incision_run_duration_yr", 1.0e6)
+        ),
+        "incision_n_timesteps": int(
+            getattr(run_args, "incision_n_timesteps", 500)
+        ),
+        "hillslope_diffusivity_m2_yr": float(
+            getattr(run_args, "hillslope_diffusivity_m2_yr", 0.0)
+        ),
+        # chi_map (ChiFinder + SteepnessFinder) reference concavity.
+        "reference_concavity": float(
+            getattr(run_args, "reference_concavity", 0.5)
+        ),
+        # groundwater (GroundwaterDupuitPercolator) shared aquifer parameters.
+        "gw_hydraulic_conductivity_m_s": float(
+            getattr(run_args, "gw_hydraulic_conductivity_m_s", 1.0e-4)
+        ),
+        "gw_porosity": float(getattr(run_args, "gw_porosity", 0.3)),
+        "gw_aquifer_thickness_m": float(
+            getattr(run_args, "gw_aquifer_thickness_m", 20.0)
+        ),
+        "gw_recharge_mm_yr": float(getattr(run_args, "gw_recharge_mm_yr", 200.0)),
+        "gw_regularization_f": float(
+            getattr(run_args, "gw_regularization_f", 0.01)
+        ),
+        # groundwater_storm (transient storm-driven) parameters.
+        "gw_storm_aquifer_thickness_m": float(
+            getattr(run_args, "gw_storm_aquifer_thickness_m", 8.0)
+        ),
+        "gw_storm_mean_depth_mm": float(
+            getattr(run_args, "gw_storm_mean_depth_mm", 20.0)
+        ),
+        "gw_storm_mean_duration_hr": float(
+            getattr(run_args, "gw_storm_mean_duration_hr", 3.0)
+        ),
+        "gw_storm_mean_interstorm_hr": float(
+            getattr(run_args, "gw_storm_mean_interstorm_hr", 72.0)
+        ),
+        "gw_storm_total_days": float(
+            getattr(run_args, "gw_storm_total_days", 120.0)
+        ),
+        "gw_storm_random_seed": int(
+            getattr(run_args, "gw_storm_random_seed", 1234)
+        ),
     }
     # Merge the validated physics overrides (the chain reads flow_director /
     # overland_alpha / mannings_n). Absent => byte-identical.
@@ -315,7 +419,7 @@ def landlab_local_spec() -> Any:
         # Fold run_chain.py's typed result-block sidecar (landlab_result.json)
         # into completion.json's top-level "result" key -- mirrors the AWS
         # Batch entrypoint's completion.json shape exactly, so
-        # model_landslide_scenario._download_batch_landlab_outputs gets the
+        # model_landlab_susceptibility._download_batch_landlab_outputs gets the
         # worker's AUTHORITATIVE narration scalars (min_factor_of_safety in
         # particular is not recoverable from the probability field alone)
         # instead of silently falling back to a recomputed 0.0. A missing /

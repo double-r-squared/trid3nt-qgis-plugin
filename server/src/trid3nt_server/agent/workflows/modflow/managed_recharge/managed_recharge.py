@@ -1,10 +1,10 @@
-"""``model_mar_scenario``  -  MODFLOW managed-aquifer-recharge (MAR) composer.
+"""the composer  -  MODFLOW managed-aquifer-recharge (MAR) composer.
 
 The end-to-end higher-order workflow for the MODFLOW ``MAR``
 archetype: it turns a place (or AOI point) + an infiltration-basin footprint into
 a rendered groundwater-mounding layer  -  how high the water table rises under a
 recharge basin and how much water is banked. It mirrors the chain shape of
-``model_mine_dewatering_scenario`` (sibling footprint-driven archetype): the basin
+the composer (sibling footprint-driven archetype): the basin
 footprint is draped as RCH recharge cells over an unconfined transient water
 table, and the head RISE (mounding) IS the deliverable.
 
@@ -18,7 +18,7 @@ analysis  -  the standard MODFLOW MAR / infiltration-basin water-banking study):
         -> run_modflow_archetype_job (GWF transient RCH deck -> mf6 -> mounding)
         -> MoundingLayerURI (max_mounding_m + recharged_volume_m3)
 
-Invariants (same set as model_mine_dewatering_scenario):
+Invariants (same set as the composer):
 - **1 / 2 / 8: preserve** (typed numbers, deterministic composition, cancellable).
 - **9. No fabricated model inputs.** A ``MAR`` run with no basin footprint returns
   a typed ``USER_INPUT_REQUIRED`` failed envelope rather than inventing a basin  -
@@ -42,6 +42,10 @@ from trid3nt_contracts.modflow_contracts import (
 )
 from trid3nt_contracts.tool_registry import AtomicToolMetadata
 
+from trid3nt_server.agent.workflows.modflow._input_review import (
+    aquifer_k_review_entry,
+    gate_and_stamp_modflow_inputs,
+)
 from trid3nt_server.emission.pipeline_emitter import begin_substeps, current_emitter, emit_chart_payloads
 from trid3nt_server.agent.tools import register_tool
 from trid3nt_server.agent.workflows.modflow._template_card import TemplateCard
@@ -73,7 +77,7 @@ __all__ = [
 
 
 class MARResult(GraceModel):
-    """Return type for ``model_mar_scenario``.
+    """Return type for the composer.
 
     Bundles the mounding layer + the derived args + a narration summary dict.
     Invariant 1: every narrated number is a typed field  -  ``mounding_layer``
@@ -93,7 +97,7 @@ class MARResult(GraceModel):
 
 
 class MARScenarioError(RuntimeError):
-    """Base class for ``model_mar_scenario`` failures."""
+    """Base class for the composer failures."""
 
     error_code: str = "MAR_SCENARIO_ERROR"
     retryable: bool = False
@@ -155,7 +159,7 @@ async def _emit_mounding_chart(layer: MoundingLayerURI) -> None:
     chart = build_chart_payload(
         vega_lite_spec=spec,
         title="MAR mounding summary",
-        caption=" · ".join(caption_parts) or "managed aquifer recharge result",
+        caption=" * ".join(caption_parts) or "managed aquifer recharge result",
         source_layer_uri=getattr(layer, "uri", None),
     )
     await emit_chart_payloads(chart)
@@ -285,6 +289,21 @@ async def model_mar_scenario(
         layer.max_mounding_m,
         layer.recharged_volume_m3,
     )
+    # ADR 0223: structured aquifer-K provenance routed through gate_input_review,
+    # stamped onto the layer envelope (the prose caveat stays on the summary).
+    layer, _review = await gate_and_stamp_modflow_inputs(
+        tool_name="modflow_managed_recharge", layer=layer,
+        entries=[aquifer_k_review_entry(
+            k_source=("user_supplied" if aquifer_k_ms is not None else "demo_default"),
+            k_ms=(aquifer_k_ms if aquifer_k_ms is not None else DEFAULT_AQUIFER_K_MS),
+            porosity=porosity, note=summary["demo_aquifer_caveat"],
+        )],
+        params={"aquifer_k_ms": aquifer_k_ms, "porosity": porosity},
+    )
+    if _review.cancelled:
+        raise MARScenarioError(
+            f"managed-recharge input review {_review.cancel_reason or 'not approved'}"
+        )
     return MARResult(
         mounding_layer=layer, derived_params=derived, summary=summary
     )
@@ -334,6 +353,12 @@ async def modflow_managed_recharge(
     **_extra_ignored: Any,
 ) -> dict[str, Any]:
     """Model a managed-aquifer-recharge (MAR) groundwater mound under a basin.
+
+    Fidelity: MODFLOW 6 local planning-grade groundwater envelope (aquifer
+    K/porosity default to narrated demo values unless supplied), not a
+    calibrated regulatory delineation. Off-scope: surface-water inundation
+    flooding -> sfincs_flood; urban storm-sewer / pipe-network flooding ->
+    swmm_urban_flood.
 
     Builds a transient MODFLOW 6 groundwater-flow model with an unconfined water
     table and an RCH recharge package over the user-supplied infiltration-basin

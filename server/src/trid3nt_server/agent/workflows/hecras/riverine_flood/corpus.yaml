@@ -1,0 +1,14 @@
+# Template routing phrasings: the HEC-RAS 1D/2D riverine-flood capability
+# template (engine #11). Capability-named (ADR 0120); its V1 shipped geometry is
+# HEC's Muncie White River demonstration project. Walked into the main retrieval
+# index directly.
+hecras_riverine_flood:
+- run the HEC-RAS riverine flood model
+- hec-ras flood model
+- run HEC-RAS 1d 2d unsteady flow
+- 1d 2d river hydraulics simulation
+- refinement-grade riverine flood
+- scale up the inflow hydrograph and show the deeper wider 2D inundation
+- HEC-RAS refinement-grade 1D/2D riverine flood
+- what does the White River at Muncie flood look like at a higher flow
+- unsteady flow white river demonstration reach

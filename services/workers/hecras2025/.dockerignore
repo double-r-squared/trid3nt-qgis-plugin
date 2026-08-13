@@ -1,0 +1,8 @@
+# Keep the build context tiny -- the beta payload is fetched + SHA-verified in
+# the fetch stage, never shipped from the repo.
+__pycache__/
+*.pyc
+.pytest_cache/
+test_*.py
+fixtures/
+README.md

@@ -1,10 +1,10 @@
-"""``model_sustainable_yield_scenario``  -  MODFLOW pumping-drawdown composer.
+"""the composer  -  MODFLOW pumping-drawdown composer.
 
 The end-to-end higher-order workflow for the MODFLOW
 ``sustainable_yield`` archetype: it turns a place (or AOI point) + a pumping
 well (location + extraction rate) into a rendered drawdown-cone layer  -  the cone
 of depression a sustained extraction draws down around the well. It mirrors the
-chain shape of ``model_river_seepage_scenario`` and the point-spill
+chain shape of the composer and the point-spill
 groundwater-contamination composer, minus the contaminant: this is a GWF-only
 transient flow run, no solute transport.
 
@@ -55,6 +55,11 @@ from trid3nt_contracts.modflow_contracts import (
 )
 from trid3nt_contracts.tool_registry import AtomicToolMetadata
 
+from trid3nt_server.agent.workflows.modflow._input_review import (
+    aquifer_k_review_entry,
+    gate_and_stamp_modflow_inputs,
+)
+from trid3nt_server.emission.layer_uri_emit import emit_layer_uri
 from trid3nt_server.emission.pipeline_emitter import (
     begin_substeps,
     current_emitter,
@@ -85,7 +90,7 @@ __all__ = [
 
 
 class SustainableYieldResult(GraceModel):
-    """Return type for ``model_sustainable_yield_scenario``.
+    """Return type for the composer.
 
     Bundles the drawdown layer + the derived args + a narration summary dict.
     Invariant 1: every narrated number is a typed field  -  ``drawdown_layer``
@@ -138,7 +143,7 @@ class SubsidenceResult(GraceModel):
 
 
 class SustainableYieldScenarioError(RuntimeError):
-    """Base class for ``model_sustainable_yield_scenario`` failures."""
+    """Base class for the composer failures."""
 
     error_code: str = "SUSTAINABLE_YIELD_SCENARIO_ERROR"
     retryable: bool = False
@@ -151,7 +156,7 @@ class SustainableYieldInputError(SustainableYieldScenarioError):
 
 
 # --------------------------------------------------------------------------- #
-# Helpers (shared shape with model_river_seepage_scenario)
+# Helpers (shared shape with the composer)
 # --------------------------------------------------------------------------- #
 
 
@@ -238,6 +243,8 @@ async def model_sustainable_yield_scenario(
     river_inflow_m3_s: float | None = None,
     couple_subsidence: bool = False,
     inelastic_storage_override: float | None = None,
+    csub_delay_interbeds: bool = False,
+    csub_effective_stress: bool = False,
     compute_class: str = "standard",
     pipeline_emitter: Any | None = None,
 ) -> SustainableYieldResult | StreamDepletionResult | SubsidenceResult:
@@ -368,6 +375,8 @@ async def model_sustainable_yield_scenario(
             sim_years=sim_years,
             n_periods=n_periods,
             inelastic_storage_override=inelastic_storage_override,
+            csub_delay_interbeds=bool(csub_delay_interbeds),
+            csub_effective_stress=bool(csub_effective_stress),
             aquifer_overrides=_aquifer_overrides(
                 aquifer_k_ms, porosity, aquifer_sy, aquifer_ss
             ),
@@ -437,6 +446,20 @@ async def model_sustainable_yield_scenario(
         location_name,
         layer.max_drawdown_m,
     )
+    # ADR 0223: structured aquifer-K provenance through gate_input_review.
+    layer, _review = await gate_and_stamp_modflow_inputs(
+        tool_name="modflow_sustainable_yield", layer=layer,
+        entries=[aquifer_k_review_entry(
+            k_source=("user_supplied" if aquifer_k_ms is not None else "demo_default"),
+            k_ms=(aquifer_k_ms if aquifer_k_ms is not None else DEFAULT_AQUIFER_K_MS),
+            porosity=porosity, note=summary["demo_aquifer_caveat"],
+        )],
+        params={"aquifer_k_ms": aquifer_k_ms, "porosity": porosity},
+    )
+    if _review.cancelled:
+        raise SustainableYieldScenarioError(
+            f"sustainable-yield input review {_review.cancel_reason or 'not approved'}"
+        )
     return SustainableYieldResult(
         drawdown_layer=layer, derived_params=derived, summary=summary
     )
@@ -614,6 +637,22 @@ async def _run_stream_depletion(
         layer.depletion_fraction,
         layer.n_reaches,
     )
+    # ADR 0223: structured aquifer-K provenance through gate_input_review.
+    _sd_k = aquifer_overrides.get("aquifer_k_ms")
+    layer, _review = await gate_and_stamp_modflow_inputs(
+        tool_name="modflow_stream_depletion", layer=layer,
+        entries=[aquifer_k_review_entry(
+            k_source=("user_supplied" if _sd_k is not None else "demo_default"),
+            k_ms=(_sd_k if _sd_k is not None else DEFAULT_AQUIFER_K_MS),
+            porosity=aquifer_overrides.get("porosity"),
+            note=summary["demo_aquifer_caveat"],
+        )],
+        params={"aquifer_k_ms": _sd_k},
+    )
+    if _review.cancelled:
+        raise SustainableYieldScenarioError(
+            f"stream-depletion input review {_review.cancel_reason or 'not approved'}"
+        )
     return StreamDepletionResult(
         reach_layer=layer, derived_params=derived, summary=summary
     )
@@ -636,6 +675,8 @@ async def _run_subsidence(
     sim_years: float | None,
     n_periods: int | None,
     inelastic_storage_override: float | None,
+    csub_delay_interbeds: bool = False,
+    csub_effective_stress: bool = False,
     aquifer_overrides: dict[str, Any],
     compute_class: str,
     pipeline_emitter: Any | None,
@@ -665,6 +706,8 @@ async def _run_subsidence(
                 if inelastic_storage_override is not None
                 else None
             ),
+            csub_delay_interbeds=bool(csub_delay_interbeds),
+            csub_effective_stress=bool(csub_effective_stress),
             **aquifer_overrides,
         )
     except Exception as exc:  # noqa: BLE001 -- pydantic ValidationError
@@ -683,14 +726,12 @@ async def _run_subsidence(
     )
 
     # Emit the CONTEXT drawdown COG (the cone that drove the compaction) beside the
-    # primary subsidence bowl (the primary layer was already loaded by the
-    # run_modflow_archetype_job _maybe_emit; the context layer is stashed on the
-    # subsidence layer as a private attr by the postprocess). Best-effort.
+    # primary subsidence bowl (the primary layer is loaded by _run_archetype; the
+    # context layer is stashed on the subsidence layer as a private attr by the
+    # postprocess). Best-effort.
     drawdown_context = getattr(layer, "_drawdown_context", None)
     if drawdown_context is not None:
         try:
-            from trid3nt_server.emission.layer_uri_emit import emit_layer_uri
-
             emitter = current_emitter()
             emit_layer = emit_layer_uri(drawdown_context)
             if emitter is not None and emit_layer is not None:
@@ -711,6 +752,8 @@ async def _run_subsidence(
         "sim_years": sim_years,
         "n_periods": n_periods,
         "inelastic_storage_override": inelastic_storage_override,
+        "csub_delay_interbeds": bool(csub_delay_interbeds),
+        "csub_effective_stress": bool(csub_effective_stress),
     }
     summary = {
         "location_name": location_name,
@@ -720,6 +763,20 @@ async def _run_subsidence(
         "inelastic_fraction": layer.inelastic_fraction,
         "interbed_count": layer.interbed_count,
         "pumping_rate_m3_day": wel_q,
+        "csub_formulation": (
+            "EFFECTIVE_STRESS (geostatic sgm/sgs unit weights + specified "
+            "preconsolidation stress; demo-parameterized, ~0.4-0.5 of head-based)"
+            if csub_effective_stress
+            else "HEAD_BASED (initial head = preconsolidation; all drawdown -> "
+                 "inelastic compaction)"
+        ),
+        "csub_interbed_type": (
+            "DELAY interbed (finite consolidation diffusivity: compaction is "
+            "TIME-LAGGED and, at end-of-pumping, LESS than the equivalent no-delay "
+            "bed; ndelaycells + a low interbed vertical K are demo assumptions)"
+            if csub_delay_interbeds
+            else "no-delay interbed (consolidates instantly with head)"
+        ),
         "demo_aquifer_caveat": (
             f"Aquifer K={DEFAULT_AQUIFER_K_MS:g} m/s, porosity={DEFAULT_POROSITY:g}, "
             "and the CSUB interbed thickness + inelastic/elastic compaction "
@@ -740,6 +797,22 @@ async def _run_subsidence(
         layer.max_head_decline_m,
         layer.interbed_count,
     )
+    # ADR 0223: structured aquifer-K provenance through gate_input_review.
+    _sub_k = aquifer_overrides.get("aquifer_k_ms")
+    layer, _review = await gate_and_stamp_modflow_inputs(
+        tool_name="modflow_land_subsidence", layer=layer,
+        entries=[aquifer_k_review_entry(
+            k_source=("user_supplied" if _sub_k is not None else "demo_default"),
+            k_ms=(_sub_k if _sub_k is not None else DEFAULT_AQUIFER_K_MS),
+            porosity=aquifer_overrides.get("porosity"),
+            note=summary["demo_aquifer_caveat"],
+        )],
+        params={"aquifer_k_ms": _sub_k},
+    )
+    if _review.cancelled:
+        raise SustainableYieldScenarioError(
+            f"land-subsidence input review {_review.cancel_reason or 'not approved'}"
+        )
     return SubsidenceResult(
         subsidence_layer=layer, derived_params=derived, summary=summary
     )
@@ -804,6 +877,23 @@ async def _run_archetype(
                 ecode = result.get("error_code", ecode)
                 emsg = result.get("error_message", emsg)
             raise scenario_error(f"{ecode}: {emsg}")
+
+    # Load the primary archetype layer onto the map + Case. The thin workflow
+    # tool serializes the composer's typed ``*Result`` to a dict, and the server
+    # dispatch's ``add_loaded_layer`` gate fires ONLY on a bare-``LayerURI``
+    # return -- so a dict-returning composer must load its own headline layer.
+    # ``_maybe_emit`` above only routes through ``emit_tool_call`` (whose gate
+    # would load it) when a live ``pipeline_emitter`` is passed; the thin tools
+    # pass ``None``, so this is the seam every archetype (capture zone, wellhead,
+    # drawdown, dewatering, subsidence, ...) relies on to reach the map. Dedups
+    # by layer identity, so a caller that also loads it (or a re-run) is a no-op.
+    # Best-effort: a ``None`` emitter (direct-call / CI) or a dropped
+    # un-renderable layer no-ops.
+    emitter = current_emitter()
+    if emitter is not None:
+        emit_layer = emit_layer_uri(result)
+        if emit_layer is not None:
+            await emitter.add_loaded_layer(emit_layer)
     return result
 
 
@@ -850,11 +940,19 @@ async def modflow_sustainable_yield(
     river_inflow_m3_s: float | None = None,
     couple_subsidence: bool = False,
     inelastic_storage_override: float | None = None,
+    csub_delay_interbeds: bool = False,
+    csub_effective_stress: bool = False,
     compute_class: str = "standard",
     # absorb LLM-invented kwargs.
     **_extra_ignored: Any,
 ) -> dict[str, Any]:
     """Model a pumping well's drawdown cone, OR its impact on a river, OR the land subsidence it causes.
+
+    Fidelity: MODFLOW 6 local planning-grade groundwater envelope (aquifer
+    K/porosity default to narrated demo values unless supplied), not a
+    calibrated regulatory delineation. Off-scope: surface-water inundation
+    flooding -> sfincs_flood; urban storm-sewer / pipe-network flooding ->
+    swmm_urban_flood.
 
     Builds a MODFLOW 6 transient groundwater-flow model with a sustained
     extraction well at the user-supplied location + rate, runs it, and produces a
@@ -922,6 +1020,23 @@ async def modflow_sustainable_yield(
             Ssv (m^-1) for the CSUB interbed - the knob that sets the subsidence
             MAGNITUDE. A demo default (~2e-3) is applied when absent (narrated as a
             demo assumption). Only used when ``couple_subsidence=True``.
+        csub_delay_interbeds: CSUB formulation knob (only when
+            ``couple_subsidence=True``). When True the compressible interbed is a
+            DELAY interbed (finite consolidation diffusivity via ndelaycells + a low
+            interbed vertical K) so compaction is TIME-LAGGED: the bed keeps
+            consolidating after the head decline and, at end-of-pumping, has
+            compacted LESS than an equivalent no-delay bed. When False (default) the
+            bed consolidates instantly with head. ndelaycells + the interbed K are
+            demo assumptions (no site clay-profile fetcher), narrated as such.
+        csub_effective_stress: CSUB formulation knob (only when
+            ``couple_subsidence=True``). When True the run uses the EFFECTIVE_STRESS
+            formulation (geostatic sgm/sgs unit weights + a specified initial
+            preconsolidation stress) instead of the default HEAD_BASED formulation;
+            the two bracket the same subsidence scale (effective-stress typically
+            ~0.4-0.5 of head-based for the same stress path) as an
+            order-of-magnitude crosscheck. sgm/sgs are demo assumptions, narrated
+            as such. When False (default) HEAD_BASED with the initial head as the
+            preconsolidation head is used.
         compute_class: FR-CE-3 compute class. Default ``"standard"``.
 
     Returns:
@@ -960,6 +1075,8 @@ async def modflow_sustainable_yield(
                 if inelastic_storage_override is not None
                 else None
             ),
+            csub_delay_interbeds=bool(csub_delay_interbeds),
+            csub_effective_stress=bool(csub_effective_stress),
             compute_class=compute_class,
             pipeline_emitter=None,
         )

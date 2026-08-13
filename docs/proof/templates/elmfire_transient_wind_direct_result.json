@@ -1,0 +1,53 @@
+{
+  "layer_id": "fire-arrival-01KZBZA4CZQAZDDQ0ECY41Q6WV",
+  "name": "Fire arrival time (mid-run wind shift, transient schedule)",
+  "layer_type": "raster",
+  "uri": "s3://trid3nt-runs/01KZBZA4CZQAZDDQ0ECY41Q6WV/overviews/01KZBZBCB8CCY538GXB72157F7.tif",
+  "style_preset": "continuous_fire_arrival_hr",
+  "temporal": null,
+  "role": "primary",
+  "units": null,
+  "bbox": [
+    -98.54591371388737,
+    38.46406755300036,
+    -98.45408628611263,
+    38.53593244699964
+  ],
+  "legend": null,
+  "fallback_note": null,
+  "synthetic_inputs": [],
+  "crs_authid": null,
+  "burned_area_km2": 0.2988,
+  "fire_arrival_max_hr": 0.5046745808919271,
+  "max_flame_length_m": 2.6121417205810546,
+  "max_spread_rate_m_min": 42.51162374267578,
+  "duration_hours": 0.5,
+  "ignition_lonlat": [
+    -98.5,
+    38.5
+  ],
+  "swept_param": "wind_regime",
+  "swept_units": "constant|transient",
+  "response_metric": "burned_area_km2",
+  "response_units": "km2",
+  "sweep": [
+    {
+      "x": 0.0,
+      "y": 0.216
+    },
+    {
+      "x": 1.0,
+      "y": 0.2988
+    }
+  ],
+  "summary": {
+    "constant_burned_area_km2": 0.216,
+    "transient_burned_area_km2": 0.2988,
+    "burned_area_delta_km2": 0.08280000000000001,
+    "heading_shift_deg": 68.01380583684454,
+    "wind_dir_initial_deg": 270.0,
+    "wind_dir_shifted_deg": 180.0,
+    "shift_fraction": 0.5,
+    "fixed_wind_mph": 22.0
+  }
+}

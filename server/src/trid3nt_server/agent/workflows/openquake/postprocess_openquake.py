@@ -135,7 +135,7 @@ def parse_hazard_map_csv(text: str) -> tuple[list[tuple[float, float, float]], s
     for i, name in enumerate(cols):
         if i in (lon_idx, lat_idx):
             continue
-        if name in {"depth", "vs30", "z1pt0", "z2pt5"}:
+        if name in {"depth", "vs30", "z1pt0", "z2pt5", "custom_site_id", "site_id"}:
             continue
         val_idx = i
         break
@@ -582,13 +582,19 @@ def parse_hazard_curve_csv(text: str) -> dict[str, Any]:
     }
 
 
-def parse_uhs_csv(text: str) -> dict[str, Any]:
+def parse_uhs_csv(text: str, *, poe: float | None = None) -> dict[str, Any]:
     """Parse a UHS CSV into summary scalars (no LLM).
 
     OpenQuake's ``hazard_uhs-mean_*.csv`` carries a ``#`` banner, then a header
     ``lon,lat,depth,<poe>~SA(<period>),...`` (or ``~PGA``) and one row per site:
     the spectral acceleration at each period for the fixed PoE. We extract the
     period ladder + the MEAN SA across sites at each period.
+
+    A multi-PoE run (``poes = 0.1 0.02``) emits the SA columns for EVERY PoE
+    (``0.100000~SA(...)`` then ``0.020000~SA(...)``); mixing them would interleave
+    two spectra. We therefore select ONE PoE's columns: ``poe`` when given
+    (matched to the column prefix within tolerance), else the FIRST PoE prefix
+    seen (the primary). A single-PoE CSV is unaffected.
     """
     lines = [
         ln for ln in text.splitlines()
@@ -601,8 +607,37 @@ def parse_uhs_csv(text: str) -> dict[str, Any]:
     if not header:
         return {}
     cols = [c.strip() for c in header]
+
+    # Resolve the target PoE prefix: the requested ``poe`` (nearest match) or the
+    # first PoE prefix present. Columns are ``<poe>~<IMT>``; a column with no
+    # ``~`` prefix (legacy single-PoE export) has target_poe None => keep all.
+    prefixes: list[float] = []
+    for name in cols:
+        if "~" in name:
+            try:
+                prefixes.append(float(name.split("~", 1)[0]))
+            except ValueError:
+                continue
+    target_poe: float | None = None
+    if prefixes:
+        uniq = sorted(dict.fromkeys(prefixes))
+        if poe is not None:
+            target_poe = min(uniq, key=lambda p: abs(p - float(poe)))
+        else:
+            target_poe = prefixes[0]
+
+    def _poe_matches(name: str) -> bool:
+        if target_poe is None or "~" not in name:
+            return True
+        try:
+            return abs(float(name.split("~", 1)[0]) - target_poe) < 1e-6
+        except ValueError:
+            return True
+
     period_cols: list[tuple[int, float]] = []
     for i, name in enumerate(cols):
+        if not _poe_matches(name):
+            continue
         # column like "0.1~SA(0.2)" or "0.1~PGA" -> period 0.2 / 0.0.
         if "SA(" in name:
             try:

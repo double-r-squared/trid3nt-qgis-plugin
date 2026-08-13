@@ -929,6 +929,94 @@ def _upload_cog_to_runs_bucket(
     return dest
 
 
+def _native_mesh_source_uri(run_outputs_uri: str, netcdf_path: Path) -> str:
+    """The URI the QGIS plugin loads the native quadtree mesh layer from.
+
+    For an ``s3://`` run output the plugin stages the object (boto3) then opens
+    it through MDAL, so the mesh row carries the s3 uri of ``sfincs_map.nc`` --
+    the SAME object ``_resolve_run_output_to_local`` downloaded (mirrors that
+    prefix/.nc resolution exactly). For a local drive the already-local netcdf
+    path is handed straight through (``_add_mesh`` accepts an ``os.path.isfile``
+    uri on the headless/test path).
+    """
+    if run_outputs_uri.startswith("s3://"):
+        return (
+            run_outputs_uri
+            if run_outputs_uri.endswith(".nc")
+            else run_outputs_uri.rstrip("/") + "/sfincs_map.nc"
+        )
+    return str(netcdf_path)
+
+
+def _maybe_native_mesh_layer(
+    netcdf_path: Path, mesh_uri: str, run_id: str
+) -> LayerURI | None:
+    """Build the native quadtree UGRID mesh ``LayerURI`` when the SFINCS output
+    is a face-indexed quadtree netcdf; else ``None``.
+
+    A quadtree solve writes ``sfincs_map.nc`` as a UGRID mesh (fields on
+    ``nmesh2d_face``) which MDAL reads as a NATIVE mesh layer -- so the netcdf
+    itself is published as a ``layer_type="mesh"`` row carrying the deck's
+    projected CRS in ``crs_authid`` (MDAL reports an empty crs() for a SFINCS
+    quadtree grid, so the plugin sets it from this field). This is the
+    QGIS-native quadtree deliverable (ADR 0159): unlike the rasterized depth COG
+    (still produced as the primary layer) and the vector ``mesh.geojson``
+    preview, this row loads the real variable-resolution mesh.
+
+    A regular-grid output is NOT face-indexed -> returns ``None`` so the
+    regular-grid publish path is byte-identical (no mesh row appended). Never
+    raises -- a probe/read failure degrades to ``None`` (the depth answer stands;
+    the mesh preview is best-effort context).
+    """
+    try:
+        import xarray as xr  # type: ignore[import-not-found]
+
+        ds = xr.open_dataset(str(netcdf_path))
+    except Exception as exc:  # noqa: BLE001 -- best-effort preview; never fatal
+        logger.warning(
+            "postprocess_flood: native-mesh probe could not open %s (%s); "
+            "no mesh layer emitted.",
+            netcdf_path, exc,
+        )
+        return None
+    try:
+        if not _is_quadtree_output(ds):
+            return None
+        try:
+            crs_authid: str | None = _read_crs_from_dataset(ds)
+        except Exception:  # noqa: BLE001 -- unknown CRS -> plugin sets manually
+            crs_authid = None
+        n_faces: int | None = None
+        try:
+            if "nmesh2d_face" in set(getattr(ds, "dims", {})):
+                n_faces = int(ds.sizes.get("nmesh2d_face"))
+        except Exception:  # noqa: BLE001 -- cell count is cosmetic
+            n_faces = None
+    finally:
+        try:
+            ds.close()
+        except Exception:  # noqa: BLE001
+            pass
+
+    name = "SFINCS quadtree mesh"
+    if n_faces:
+        name = f"SFINCS quadtree mesh ({n_faces} cells)"
+    logger.info(
+        "postprocess_flood: native quadtree mesh layer run_id=%s faces=%s "
+        "crs=%s uri=%s",
+        run_id, n_faces, crs_authid, mesh_uri,
+    )
+    return LayerURI(
+        layer_id=f"sfincs-mesh-{run_id}",
+        name=name,
+        layer_type="mesh",
+        uri=mesh_uri,
+        style_preset="mesh_grid",
+        role="context",
+        crs_authid=crs_authid,
+    )
+
+
 def postprocess_flood(
     run_outputs_uri: str,
     *,
@@ -1038,10 +1126,22 @@ def postprocess_flood(
             )
         )
 
+    # --- Native quadtree mesh layer (ADR 0159) ---
+    # When the solve wrote a quadtree UGRID sfincs_map.nc, ALSO publish the
+    # netcdf itself as a layer_type="mesh" row (MDAL reads it natively). Appended
+    # AFTER the peak+frame raster layers; a regular-grid output appends nothing
+    # (byte-identical). The composer routes this row through publish_input_layer
+    # (NOT publish_layer -- a mesh is not a WMS raster).
+    mesh_layer = _maybe_native_mesh_layer(
+        netcdf_path, _native_mesh_source_uri(run_outputs_uri, netcdf_path), run_id
+    )
+    if mesh_layer is not None:
+        layers.append(mesh_layer)
+
     if len(layers) > 1:
         logger.info(
-            "postprocess_flood: emitted peak layer + %d time-step frames "
-            "(animation group) for run_id=%s",
+            "postprocess_flood: emitted peak layer + %d additional layers "
+            "(frames/mesh) for run_id=%s",
             len(layers) - 1,
             run_id,
         )

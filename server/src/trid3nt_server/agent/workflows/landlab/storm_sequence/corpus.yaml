@@ -1,0 +1,10 @@
+# Template routing phrasings: engine templates are ordinary retrieval-pool tools
+# walked into the main index.
+landlab_storm_sequence_generator:
+- generate a realistic multi-year storm sequence for this location
+- stochastic storm generator instead of one fixed design storm
+- draw a random storm interstorm sequence to drive an analysis
+- Poisson precipitation distribution storm series for this AOI
+- synthetic multi-year rainfall sequence and its statistics
+- storm depth duration intensity climatology generator
+- give me a drawn sequence of storms for this catchment

@@ -25,14 +25,18 @@ from pathlib import Path
 import pytest
 
 from services.workers.geoclaw.setrun_builder import (
+    FGMAX_MASK_FILENAME,
     GeoClawBuildSpec,
     GeoClawDeckError,
     build_geoclaw_deck,
+    fgmax_grid_geom,
     parse_build_spec,
     render_maketopo_dtopo,
     render_makefile,
     render_qinit_data,
     render_setrun_py,
+    render_storm_file,
+    resolve_storm_track,
 )
 
 _AOI = [-85.75, 29.55, -85.25, 30.20]  # Mexico Beach-ish demo box
@@ -65,6 +69,16 @@ def test_parse_valid_spec_fills_defaults():
     assert spec.output_frames == 24
     assert spec.amr_levels == 2
     assert spec.bbox == tuple(_AOI)
+
+
+def test_parse_rejects_unknown_top_level_field():
+    """ADR 0158: an unknown build_spec field errors loudly (the ADR 0148 lesson
+    was a stale image SILENTLY dropping unknown fields -- two knob templates
+    ran as no-ops). Never a silent drop."""
+    with pytest.raises(GeoClawDeckError) as ei:
+        parse_build_spec(_spec(typo_field_name=1.0))
+    assert ei.value.error_code == "GEOCLAW_SPEC_UNKNOWN_FIELDS"
+    assert "typo_field_name" in str(ei.value)
 
 
 def test_parse_rejects_bad_scenario():
@@ -196,8 +210,114 @@ def test_render_setrun_surge_has_neither_qinit_nor_dtopo():
     ast.parse(text)
     assert "qinit_data.qinit_type" not in text
     assert "dtopo_data.dtopofiles" not in text
-    # sea_level offset is the surge v0.1 fallback.
     assert "geo_data.sea_level = 1.5" in text
+
+
+# ===========================================================================
+# (surge) parametric-Holland wind + pressure forcing machinery.
+# ===========================================================================
+def _surge_spec(**over) -> dict:
+    base = {
+        "scenario": "surge",
+        "bbox": list(_AOI),
+        "topo_file": "topo.asc",
+        "sim_duration_s": 54000.0,
+        "t0_s": -43200.0,
+        "output_frames": 10,
+        "amr_levels": 2,
+        "wind_drag_law": "garratt",
+        "storm_track": [
+            [-43200.0, -85.6, 27.0, 45.0, 46000.0, 96000.0, 500000.0],
+            [0.0, -85.5, 29.8, 49.0, 46000.0, 95000.0, 500000.0],
+            [10800.0, -85.4, 31.0, 40.0, 46000.0, 96000.0, 500000.0],
+        ],
+    }
+    base.update(over)
+    return base
+
+
+def test_render_setrun_surge_wires_wind_and_pressure_forcing():
+    text = render_setrun_py(parse_build_spec(_surge_spec()))
+    ast.parse(text)
+    assert "surge_data = rundata.surge_data" in text
+    assert "surge_data.wind_forcing = True" in text
+    assert "surge_data.pressure_forcing = True" in text
+    assert "surge_data.storm_specification_type = 'holland80'" in text
+    assert "storm.storm" in text
+    # surge geo physics constants + the storm aux layout (3 shallow + 1 friction
+    # + 3 storm = 7) matching surge_data's default wind/pressure indices.
+    assert "geo_data.coriolis_forcing = True" in text
+    assert "clawdata.num_aux = 7" in text
+    assert 'amrdata.aux_type = ["center", "capacity", "yleft", "center", "center", "center", "center"]' in text
+    # the run opens BEFORE landfall (t0 < 0) so the storm spins up.
+    assert "clawdata.t0 = -43200.0" in text
+    assert "clawdata.tfinal = 10800.0" in text
+
+
+@pytest.mark.parametrize("law,code", [("none", 0), ("garratt", 1), ("powell", 2)])
+def test_render_setrun_surge_drag_law_selects_distinct_code(law, code):
+    text = render_setrun_py(parse_build_spec(_surge_spec(wind_drag_law=law)))
+    assert f"surge_data.drag_law = {code}" in text
+
+
+def test_parse_rejects_bad_drag_law():
+    with pytest.raises(GeoClawDeckError):
+        parse_build_spec(_surge_spec(wind_drag_law="quadratic"))
+
+
+def test_parse_rejects_nonascending_storm_track():
+    bad = _surge_spec(storm_track=[
+        [0.0, -85.5, 29.8, 45.0, 46000.0, 96000.0, 500000.0],
+        [-3600.0, -85.6, 27.0, 45.0, 46000.0, 96000.0, 500000.0],  # goes backwards
+    ])
+    with pytest.raises(GeoClawDeckError):
+        parse_build_spec(bad)
+
+
+def test_render_storm_file_geoclaw_format():
+    spec = parse_build_spec(_surge_spec())
+    txt = render_storm_file(spec)
+    lines = txt.splitlines()
+    assert int(lines[0]) == 3               # num_casts
+    assert lines[1].strip() == "0.0"        # time_offset (times are s from landfall)
+    assert lines[2].strip() == ""           # blank header line
+    rows = [r for r in lines[3:] if r.strip()]
+    assert len(rows) == 3
+    assert all(len(r.split()) == 7 for r in rows)  # 7 GeoClaw storm columns
+    # first data row is the earliest track point (t = -43200 s).
+    assert float(rows[0].split()[0]) == -43200.0
+
+
+def test_resolve_storm_track_synthesizes_demo_when_absent():
+    spec = parse_build_spec(_surge_spec(storm_track=[]))
+    track, is_synth = resolve_storm_track(spec)
+    assert is_synth is True
+    assert len(track) >= 2
+    # the demo track brackets the run window [t0, t0 + duration].
+    assert track[0][0] <= spec.t0_s
+    assert track[-1][0] >= spec.t0_s + spec.sim_duration_s
+    # a user track is passed through verbatim (not synthesized).
+    spec2 = parse_build_spec(_surge_spec())
+    track2, is_synth2 = resolve_storm_track(spec2)
+    assert is_synth2 is False
+    assert len(track2) == 3
+
+
+def test_surge_deck_stores_storm_file_and_drag_provenance(tmp_path: Path):
+    manifest = build_geoclaw_deck(_surge_spec(wind_drag_law="powell"), tmp_path)
+    assert "storm.storm" in manifest.files_written
+    assert (tmp_path / "storm.storm").exists()
+    assert "powell" in manifest.driver_descriptor
+
+
+def test_non_surge_scenarios_keep_three_aux_byte_layout():
+    # dam_break / tsunami keep the 3-aux shallow layout + t0 == 0 (byte-neutral).
+    for scen in ("dam_break", "tsunami"):
+        text = render_setrun_py(parse_build_spec(_spec(scenario=scen)))
+        assert "clawdata.num_aux = 3" in text
+        assert 'amrdata.aux_type = ["center", "capacity", "yleft"]' in text
+        assert "clawdata.t0 = 0.0" in text
+        assert "surge_data" not in text
 
 
 def test_render_setrun_amr_ratios_scale_with_levels():
@@ -245,6 +365,14 @@ def test_render_maketopo_dtopo_is_valid_python_and_uses_dtopotools():
     assert "from clawpack.geoclaw import dtopotools" in text
     assert "mw = 9.0" in text
     assert 'fault.dtopo.write("dtopo.tt3"' in text
+    # The Okada dtopo-authoring front (ADR 0226): the helper ALSO writes the
+    # final-time vertical deformation dZ as an ESRI-ASCII grid so postprocess can
+    # rasterize the coseismic uplift/subsidence PRODUCT (the "what deformation"
+    # answer). Assert the numpy import + the ESRI header + the north-first write.
+    assert "import numpy as _np" in text
+    assert 'open("deformation_dz.asc"' in text
+    assert "ncols %d" in text and "cellsize %.12f" in text
+    assert "fault.dtopo.dZ" in text
 
 
 # ===========================================================================
@@ -341,14 +469,24 @@ def test_build_tsunami_staged_dtopo_skips_maketopo(tmp_path: Path):
     assert "my_dtopo.tt3" in (tmp_path / "setrun.py").read_text()
 
 
-def test_build_surge_deck_writes_setrun_and_makefile_only(tmp_path: Path):
+def test_build_surge_deck_writes_setrun_makefile_and_storm_file(tmp_path: Path):
     manifest = build_geoclaw_deck(_spec(scenario="surge", sea_level_m=2.0), tmp_path)
     assert (tmp_path / "setrun.py").exists()
     assert (tmp_path / "Makefile").exists()
     assert not (tmp_path / "qinit.xyz").exists()
     assert not (tmp_path / "maketopo.py").exists()
-    # surge writes no scenario source file -- only the setrun.py + the Makefile.
-    assert manifest.files_written == ["setrun.py", "Makefile"]
+    # surge authors the parametric-Holland storm track file (no user track ->
+    # a synthetic demo track), alongside the setrun.py + the Makefile.
+    assert (tmp_path / "storm.storm").exists()
+    assert manifest.files_written == ["setrun.py", "Makefile", "storm.storm"]
+    # GeoClaw storm-file header: <num_casts>\n<time_offset>\n<blank>\n then rows.
+    storm_lines = (tmp_path / "storm.storm").read_text().splitlines()
+    n_casts = int(storm_lines[0])
+    assert n_casts >= 2  # a demo track has multiple forecast rows
+    assert storm_lines[1].strip() == "0.0"  # time_offset 0 -> times are s from landfall
+    data_rows = [r for r in storm_lines[3:] if r.strip()]
+    assert len(data_rows) == n_casts
+    assert all(len(r.split()) == 7 for r in data_rows)  # 7 GeoClaw storm columns
 
 
 def test_source_lonlat_overrides_centroid_in_qinit(tmp_path: Path):
@@ -521,8 +659,11 @@ def test_render_maketopo_uses_create_dtopo_xy_and_centroid_spec():
     spec = parse_build_spec(_spec(scenario="tsunami", source_magnitude=9.0))
     text = render_maketopo_dtopo(spec)
     ast.parse(text)
-    # the canonical GeoClaw helper, not a hand-rolled np.linspace box.
-    assert "fault.create_dtopo_xy(dx=1/60., buffer_size=2.0)" in text
+    # the canonical GeoClaw helper, not a hand-rolled np.linspace box; the
+    # single-subfault degrade rung pins dx=1/60 + a 2.0-deg buffer.
+    assert "fault.create_dtopo_xy(dx=_DTOPO_DX, buffer_size=_DTOPO_BUFFER)" in text
+    assert "_DTOPO_DX = 1/60." in text
+    assert "_DTOPO_BUFFER = 2.0" in text
     assert "np.linspace" not in text
     # coordinate_specification stays 'centroid' (Okada requires it).
     assert 'subfault.coordinate_specification = "centroid"' in text
@@ -533,7 +674,7 @@ def test_render_maketopo_defaults_print_non_site_specific_banner():
     spec = parse_build_spec(_spec(scenario="tsunami"))
     text = render_maketopo_dtopo(spec)
     ast.parse(text)
-    assert "NON-SITE-SPECIFIC synthetic source" in text
+    assert "NON-SITE-SPECIFIC synthetic" in text
     # the defaulted geometry uses the synthetic values.
     assert "subfault.strike = 0.0" in text
     assert "subfault.dip = 15.0" in text
@@ -558,7 +699,28 @@ def test_render_maketopo_threads_user_fault_geometry_no_banner():
     assert "subfault.dip = 20.0" in text
     assert "subfault.rake = 95.0" in text
     assert "subfault.depth = 12000.0" in text  # 12 km -> 12000 m
-    assert "NON-SITE-SPECIFIC synthetic source" not in text
+    assert "NON-SITE-SPECIFIC synthetic" not in text
+
+
+def test_render_maketopo_finite_fault_builds_multi_subfault():
+    # ADR 0226 finite-fault upgrade: a staged finite_fault_file switches the
+    # maketopo to the NATIVE CSVFault multi-subfault reader (measured inversion),
+    # NOT the single idealized rectangle. No synthetic banner on this rung.
+    spec = parse_build_spec(
+        _spec(scenario="tsunami", finite_fault_file="finite_fault.csv")
+    )
+    text = render_maketopo_dtopo(spec)
+    ast.parse(text)
+    assert "dtopotools.CSVFault()" in text
+    assert 'fault.read(\'finite_fault.csv\', coordinate_specification="centroid")' in text
+    assert "MEASURED finite-fault inversion source" in text
+    # the finite-fault footprint IS the fault -> a modest 0.5-deg buffer.
+    assert "_DTOPO_BUFFER = 0.5" in text
+    # NO single-subfault synthesis / no synthetic banner on the measured rung.
+    assert "NON-SITE-SPECIFIC synthetic" not in text
+    assert "dtopotools.SubFault()" not in text
+    # the shared deformation-product tail still fires (the "what deformation" answer).
+    assert "deformation_dz.asc" in text
 
 
 def test_render_maketopo_partial_fault_geometry_still_banners():
@@ -567,7 +729,7 @@ def test_render_maketopo_partial_fault_geometry_still_banners():
     text = render_maketopo_dtopo(spec)
     ast.parse(text)
     assert "subfault.strike = 180.0" in text  # user value
-    assert "NON-SITE-SPECIFIC synthetic source" in text
+    assert "NON-SITE-SPECIFIC synthetic" in text
     assert "dip" in text and "rake" in text and "depth" in text
 
 
@@ -581,3 +743,378 @@ def test_build_spec_additive_defaults_preserve_behaviour():
     assert spec.fault_dip_deg is None
     assert spec.fault_rake_deg is None
     assert spec.fault_depth_km is None
+
+
+# ===========================================================================
+# GeoClaw CAND-S knobs: explicit AMR regions + spatially-varying Manning.
+# ===========================================================================
+def test_amr_regions_appended_after_default_tiers():
+    """User AMR windows append to regiondata AFTER the engine default tiers and
+    the rendered setrun.py stays valid Python."""
+    win = {
+        "min_level": 3, "max_level": 3, "t_start_s": 0.0, "t_end_s": 1800.0,
+        "min_lon": -124.21, "max_lon": -124.18, "min_lat": 41.745, "max_lat": 41.77,
+    }
+    spec = parse_build_spec(
+        _spec(scenario="tsunami", amr_levels=3, amr_regions=[win],
+              domain_bbox=[-124.6, 41.6, -124.1, 41.85])
+    )
+    assert len(spec.amr_regions) == 1
+    txt = render_setrun_py(spec)
+    ast.parse(txt)
+    # 2 default tiers (propagation + AOI) + 1 explicit user window == 3 appends.
+    assert txt.count("regiondata.regions.append") == 3
+    assert "3, 3, 0.0, 1800.0, -124.21, -124.18, 41.745, 41.77" in txt
+
+
+def test_amr_regions_accepts_tuple_form_and_rejects_bad_level_order():
+    tup = [2, 4, 0.0, 600.0, -124.2, -124.18, 41.74, 41.76]
+    spec = parse_build_spec(_spec(amr_regions=[tup]))
+    assert spec.amr_regions[0][:2] == (2.0, 4.0)
+    with pytest.raises(GeoClawDeckError):
+        parse_build_spec(_spec(amr_regions=[[4, 2, 0.0, 600.0, -124.2, -124.18, 41.74, 41.76]]))
+    with pytest.raises(GeoClawDeckError):
+        parse_build_spec(_spec(amr_regions=[[3, 3, 0.0, 600.0]]))  # wrong arity
+
+
+def test_no_amr_regions_is_byte_identical_default():
+    """An empty amr_regions list keeps the 2 default region tiers (back-compat)."""
+    spec = parse_build_spec(_spec(scenario="tsunami", amr_levels=3,
+                                  domain_bbox=[-124.6, 41.6, -124.1, 41.85]))
+    txt = render_setrun_py(spec)
+    assert txt.count("regiondata.regions.append") == 2
+
+
+def test_banded_manning_emits_list_and_break():
+    spec = parse_build_spec(_spec(manning_coefficients=[0.015, 0.06], manning_break=[0.0]))
+    assert spec.manning_coefficients == [0.015, 0.06]
+    assert spec.manning_break == [0.0]
+    txt = render_setrun_py(spec)
+    ast.parse(txt)
+    assert "geo_data.manning_coefficient = [0.015, 0.06]" in txt
+    assert "geo_data.manning_break = [0.0]" in txt
+
+
+def test_scalar_manning_back_compat_unchanged():
+    """No manning_coefficients -> the single scalar coefficient path (no break)."""
+    spec = parse_build_spec(_spec(manning_n=0.033))
+    txt = render_setrun_py(spec)
+    assert "geo_data.manning_coefficient = 0.033" in txt
+    assert "manning_break" not in txt
+
+
+def test_banded_manning_rejects_bad_break_length_and_nonpositive():
+    with pytest.raises(GeoClawDeckError):
+        parse_build_spec(_spec(manning_coefficients=[0.02, 0.05], manning_break=[0.0, 1.0]))
+    with pytest.raises(GeoClawDeckError):
+        parse_build_spec(_spec(manning_coefficients=[0.02, -0.01], manning_break=[0.0]))
+    with pytest.raises(GeoClawDeckError):
+        parse_build_spec(_spec(manning_coefficients=[0.01, 0.02, 0.03], manning_break=[1.0, 0.0]))  # not ascending
+
+
+def test_banded_manning_form_matches_fortran_consumer_contract():
+    """The emitted geo_data.manning_coefficient list + manning_break must satisfy
+    EXACTLY what clawpack 5.14.0 consumes, so GeoClawData.write authors
+    ``geoclaw.data`` and the Fortran friction selector activate the banded form.
+
+    Fortran side (geoclaw/src/2d/shallow/geoclaw_module.f90 + src2.f90):
+      - GeoClawData.write raises unless len(manning_break) == len(coeffs) - 1, then
+        writes ``num_manning = len(coeffs)`` + the two lists.
+      - geoclaw_module allocates manning_break(num_manning), sets the TOP band to
+        +inf, reads the num_manning-1 breaks below it.
+      - src2 selects, per WET cell of topography B: ``do nman = num_manning,1,-1;
+        if (B < manning_break(nman)) coeff = manning_coefficient(nman)`` -- so a
+        single break at 0.0 gives coeff[0] offshore (B < 0) and coeff[1] onshore
+        (B >= 0). N coefficients therefore REQUIRE exactly N-1 breaks.
+
+    This test pins the RENDER form (clawpack-free) that makes that chain fire; the
+    live smoke (ADR 0147) confirms the banded run differs from the scalar run.
+    """
+    coeffs = [0.015, 0.06]  # [offshore B<0, onshore B>=0]
+    breaks = [0.0]          # split at the still-water datum
+    spec = parse_build_spec(
+        _spec(scenario="tsunami", manning_coefficients=coeffs, manning_break=breaks)
+    )
+    # parse keeps N coefficients + exactly N-1 breaks (the GeoClawData.write gate).
+    assert spec.manning_coefficients == coeffs
+    assert len(spec.manning_break) == len(spec.manning_coefficients) - 1
+    txt = render_setrun_py(spec)
+    ast.parse(txt)
+    # the deck assigns the LIST (not a scalar) -> num_manning = 2 in geoclaw.data.
+    assert "geo_data.manning_coefficient = [0.015, 0.06]" in txt
+    assert "geo_data.manning_break = [0.0]" in txt
+    # friction must be ON (else src2 never enters the selector) and unbounded in
+    # depth (friction applied to every wet cell).
+    assert "geo_data.friction_forcing = True" in txt
+    assert "geo_data.friction_depth = 1.0e6" in txt
+
+
+# ===========================================================================
+# AMR window governs refinement: the AOI ambient drops one level below a window
+# so an in-AOI window is demonstrably finer than its surroundings (ADR 0147).
+# ===========================================================================
+def test_amr_window_lowers_aoi_ambient_one_below_the_window():
+    """With an explicit window the AOI default region pins amr_levels-1 (ambient)
+    and the window pins its own (finer) level, so the window is NOT subsumed."""
+    win = {"min_level": 4, "max_level": 4, "t_start_s": 0.0, "t_end_s": 900.0,
+           "min_lon": -85.6, "max_lon": -85.5, "min_lat": 29.7, "max_lat": 29.8}
+    spec = parse_build_spec(
+        _spec(scenario="tsunami", amr_levels=4, amr_regions=[win],
+              domain_bbox=[-86.5, 28.9, -85.0, 30.5])
+    )
+    txt = render_setrun_py(spec)
+    ast.parse(txt)
+    # AOI default region pinned to the ambient level (amr_levels-1 == 3), NOT 4.
+    assert "rundata.regiondata.regions.append([3, 3, 0., 1800.0, -85.75, -85.25, 29.55, 30.2])" in txt
+    # the explicit window pins the finer level (4) over its box.
+    assert "4, 4, 0.0, 900.0, -85.6, -85.5, 29.7, 29.8" in txt
+    # amr_levels_max covers the finest window level.
+    assert "amrdata.amr_levels_max = 4" in txt
+    # fgmax monitors at the AOI ambient level (3) so the whole AOI is captured.
+    assert "fg.min_level_check = 3" in txt
+
+
+def test_amr_window_can_exceed_the_requested_finest_raising_max_levels():
+    """A window asking for a level BEYOND amr_levels raises amr_levels_max to cover
+    it (a bounded sub-box), while the AOI ambient stays amr_levels-1."""
+    win = {"min_level": 5, "max_level": 5, "t_start_s": 0.0, "t_end_s": 900.0,
+           "min_lon": -85.6, "max_lon": -85.5, "min_lat": 29.7, "max_lat": 29.8}
+    spec = parse_build_spec(
+        _spec(scenario="tsunami", amr_levels=3, amr_regions=[win],
+              domain_bbox=[-86.5, 28.9, -85.0, 30.5])
+    )
+    txt = render_setrun_py(spec)
+    ast.parse(txt)
+    # amr_levels_max raised to the window level (5); AOI ambient = amr_levels-1 (2).
+    assert "amrdata.amr_levels_max = 5" in txt
+    assert "rundata.regiondata.regions.append([2, 2, 0., 1800.0, -85.75, -85.25, 29.55, 30.2])" in txt
+    assert "5, 5, 0.0, 900.0, -85.6, -85.5, 29.7, 29.8" in txt
+
+
+def test_no_amr_window_keeps_aoi_at_the_requested_finest():
+    """No windows -> the AOI default region stays at amr_levels (byte-identical to
+    the pre-ADR-0147 deck) and amr_levels_max == amr_levels."""
+    spec = parse_build_spec(_spec(scenario="tsunami", amr_levels=3,
+                                  domain_bbox=[-86.5, 28.9, -85.0, 30.5]))
+    txt = render_setrun_py(spec)
+    ast.parse(txt)
+    assert "rundata.regiondata.regions.append([3, 3, 0., 1800.0, -85.75, -85.25, 29.55, 30.2])" in txt
+    assert "amrdata.amr_levels_max = 3" in txt
+    assert "fg.min_level_check = 3" in txt
+
+
+# ===========================================================================
+# GeoClaw CAND-S tail (ADR 0155): Lagrangian particle gauges + onshore fgmax.
+# ===========================================================================
+def test_lagrangian_particles_emit_gauges_and_per_gauge_gtype():
+    """Seeded particles become gtype='lagrangian' gauges (ids 100+); the coastal
+    gauge (id 1) is absent from the gtype dict -> stays stationary."""
+    spec = parse_build_spec(
+        _spec(scenario="tsunami", lagrangian_particles=[[-85.5, 29.8], [-85.45, 29.82]])
+    )
+    assert spec.lagrangian_particles == [(-85.5, 29.8), (-85.45, 29.82)]
+    txt = render_setrun_py(spec)
+    ast.parse(txt)
+    # the stationary coastal gauge (id 1) is still emitted.
+    assert "rundata.gaugedata.gauges.append([1, " in txt
+    # two Lagrangian particle gauges, ids 100 and 101.
+    assert "rundata.gaugedata.gauges.append([100, -85.5, 29.8, 0., 1.e10])" in txt
+    assert "rundata.gaugedata.gauges.append([101, -85.45, 29.82, 0., 1.e10])" in txt
+    # a per-gauge gtype dict marks ONLY the particle gauges lagrangian.
+    assert "rundata.gaugedata.gtype = {100: 'lagrangian', 101: 'lagrangian'}" in txt
+
+
+def test_no_lagrangian_particles_is_byte_identical_default():
+    """No particles -> no gtype dict, no extra gauges (byte-identical deck)."""
+    spec = parse_build_spec(_spec(scenario="tsunami"))
+    txt = render_setrun_py(spec)
+    assert "gaugedata.gtype" not in txt
+    assert "gauges.append([100," not in txt
+
+
+def test_fgmax_mask_onshore_emits_point_style_4_and_xy_fname():
+    """fgmax_mask='onshore' -> point_style=4 referencing the topotype-3 mask file,
+    NOT the point_style=2 uniform grid."""
+    spec = parse_build_spec(_spec(scenario="tsunami", amr_levels=3, fgmax_mask="onshore"))
+    assert spec.fgmax_mask == "onshore"
+    txt = render_setrun_py(spec)
+    ast.parse(txt)
+    assert "fg.point_style = 4" in txt
+    assert f"fg.xy_fname = {FGMAX_MASK_FILENAME!r}" in txt
+    assert "fg.point_style = 2" not in txt
+    assert "rundata.fgmax_data.num_fgmax_val = 2" in txt
+    assert "fg.min_level_check = 3" in txt
+    assert "fg.arrival_tol = 0.01" in txt
+
+
+def test_fgmax_mask_full_is_byte_identical_point_style_2():
+    """Default fgmax_mask='full' keeps the point_style=2 uniform grid (unchanged)."""
+    spec_full = parse_build_spec(_spec(scenario="tsunami", amr_levels=3))
+    spec_default = parse_build_spec(_spec(scenario="tsunami", amr_levels=3))
+    assert spec_full.fgmax_mask == "full"
+    txt = render_setrun_py(spec_default)
+    assert "fg.point_style = 2" in txt
+    assert "point_style = 4" not in txt
+    assert FGMAX_MASK_FILENAME not in txt
+
+
+def test_fgmax_grid_geom_dx_matches_emitted_point_style_2_grid():
+    """The shared fgmax_grid_geom dx (used by the entrypoint onshore-mask builder)
+    equals the dx_fine the point_style=2 setrun emits -- so the onshore mask lands
+    on the SAME grid as the full grid (common cells match)."""
+    spec = parse_build_spec(
+        _spec(scenario="tsunami", amr_levels=3, domain_bbox=[-86.5, 28.9, -85.0, 30.5])
+    )
+    geom = fgmax_grid_geom(spec)
+    txt = render_setrun_py(spec)
+    # extract the emitted `dx_fine = <value>` from the point_style=2 block.
+    line = next(l for l in txt.splitlines() if "dx_fine =" in l and "AOI ambient" in l)
+    emitted_dx = float(line.split("dx_fine =")[1].split("#")[0].strip())
+    assert abs(geom["dx"] - emitted_dx) < 1e-15
+    assert geom["nx"] >= 2 and geom["ny"] >= 2
+
+
+def test_parse_rejects_bad_fgmax_mask_and_bad_particles():
+    with pytest.raises(GeoClawDeckError):
+        parse_build_spec(_spec(fgmax_mask="sideways"))
+    with pytest.raises(GeoClawDeckError):
+        parse_build_spec(_spec(lagrangian_particles=[[-85.5]]))  # not a 2-tuple
+    with pytest.raises(GeoClawDeckError):
+        parse_build_spec(_spec(lagrangian_particles="nope"))
+
+
+def test_cand_s_tail_additive_defaults_preserve_behaviour():
+    spec = parse_build_spec({"bbox": _AOI, "topo_file": "t.asc"})
+    assert spec.lagrangian_particles == []
+    assert spec.fgmax_mask == "full"
+    assert spec.fgout_frames == 0
+
+
+# ===========================================================================
+# (fgout) SMOOTH fixed-grid animation frames.
+# ===========================================================================
+def test_render_setrun_no_fgout_block_by_default():
+    """A spec without fgout_frames emits NO fgout block -- byte-identical to a
+    pre-fgout deck (the additive-off invariant)."""
+    for scen in ("dam_break", "tsunami", "surge"):
+        over = {"scenario": scen}
+        if scen == "surge":
+            over = _surge_spec()
+        text = render_setrun_py(parse_build_spec(_spec(**over) if scen != "surge" else over))
+        assert "fgout_tools" not in text
+        assert "fgout_data.fgout_grids" not in text
+
+
+def test_render_setrun_tsunami_emits_fgout_block_when_frames_set():
+    spec = parse_build_spec(_spec(scenario="tsunami", fgout_frames=20))
+    text = render_setrun_py(spec)
+    ast.parse(text)
+    assert "from clawpack.geoclaw import fgout_tools" in text
+    assert "rundata.fgout_data.fgout_grids" in text
+    assert "fgout.point_style = 2" in text
+    assert "fgout.output_format = 'ascii'" in text
+    assert "fgout.nout = 20" in text
+    assert "fgout.fgno = 1" in text
+
+
+def test_render_setrun_surge_emits_fgout_block_when_frames_set():
+    text = render_setrun_py(parse_build_spec(_surge_spec(fgout_frames=8)))
+    ast.parse(text)
+    assert "fgout_tools" in text
+    assert "fgout.nout = 8" in text
+    # tend/tstart follow the surge window (t0 < 0 .. t0 + duration).
+    assert "fgout.tstart = -43200.0" in text
+
+
+def test_render_setrun_dam_break_never_emits_fgout_even_with_frames():
+    """dam_break has no coastal-animation concept; fgout is tsunami/surge only."""
+    text = render_setrun_py(parse_build_spec(_spec(scenario="dam_break", fgout_frames=12)))
+    assert "fgout_tools" not in text
+
+
+def test_fgout_grid_shares_fgmax_resolution():
+    """The fgout uniform grid uses the AOI-ambient dx (same as fgmax) so the two
+    monitors share a resolution."""
+    spec = parse_build_spec(_spec(scenario="tsunami", amr_levels=3, fgout_frames=10))
+    geom = fgmax_grid_geom(spec)
+    text = render_setrun_py(spec)
+    gnx_line = next(l for l in text.splitlines() if l.strip().startswith("fgout.nx ="))
+    gnx = int(gnx_line.split("=")[1].strip())
+    # nx from AOI span / dx_fgmax (fgmax grid geom dx), within one cell of fgmax nx.
+    assert abs(gnx - geom["nx"]) <= 1
+
+
+def test_parse_rejects_negative_fgout_frames():
+    with pytest.raises(GeoClawDeckError):
+        parse_build_spec(_spec(fgout_frames=-1))
+
+
+# --------------------------------------------------------------------------- #
+# Thacker paraboloid-basin V&V deck (ADR 0187) -- spec-5, Cartesian, frictionless.
+# --------------------------------------------------------------------------- #
+def _thacker_spec(**over):
+    base = {
+        "scenario": "thacker", "bbox": [-1.6, -1.6, 1.6, 1.6], "topo_file": "topo.asc",
+        "sim_duration_s": 5.6, "output_frames": 20, "amr_levels": 3,
+        "base_num_cells": [60, 60],
+        "bowl_a_m": 1.0, "bowl_h0_m": 0.1, "bowl_eta_amp": 0.5,
+    }
+    base.update(over)
+    return base
+
+
+def test_thacker_parse_requires_bowl_params():
+    from services.workers.geoclaw.setrun_builder import parse_build_spec, GeoClawDeckError
+    import pytest
+    with pytest.raises(GeoClawDeckError):
+        parse_build_spec(_thacker_spec(bowl_a_m=None))
+    with pytest.raises(GeoClawDeckError):
+        parse_build_spec(_thacker_spec(bowl_eta_amp=1.5))  # out of (0,1)
+    spec = parse_build_spec(_thacker_spec())
+    assert spec.scenario == "thacker"
+    assert spec.bowl_a_m == 1.0 and spec.bowl_h0_m == 0.1 and spec.bowl_eta_amp == 0.5
+
+
+def test_bowl_params_rejected_for_geographic_scenario():
+    from services.workers.geoclaw.setrun_builder import parse_build_spec, GeoClawDeckError
+    import pytest
+    raw = {"scenario": "tsunami", "bbox": [-124.3, 41.7, -124.1, 41.8],
+           "topo_file": "topo.asc", "bowl_a_m": 1.0}
+    with pytest.raises(GeoClawDeckError):
+        parse_build_spec(raw)
+
+
+def test_thacker_setrun_is_cartesian_frictionless_walled():
+    from services.workers.geoclaw.setrun_builder import parse_build_spec, render_setrun_py
+    sr = render_setrun_py(parse_build_spec(_thacker_spec()))
+    assert "geo_data.coordinate_system = 1" in sr
+    assert "clawdata.capa_index = 0" in sr
+    assert "clawdata.num_aux = 1" in sr
+    assert "geo_data.friction_forcing = False" in sr
+    assert sr.count('= "wall"') == 4  # all four boundaries closed
+    assert "qinit_data.qinit_type = 4" in sr
+    assert 'topo_data.topofiles.append([1, "topo.asc"])' in sr
+    assert "gauges.append([1, 0.0, 0.0" in sr  # center gauge
+    # NO offshore/fgmax/fgout machinery in a thacker deck.
+    assert "fgmax" not in sr and "fgout" not in sr and "coordinate_system = 2" not in sr
+
+
+def test_thacker_deck_writes_topo_and_qinit_matching_analytic(tmp_path):
+    from services.workers.geoclaw.setrun_builder import build_geoclaw_deck
+    from trid3nt_contracts.geoclaw_thacker import thacker_bed_elevation, thacker_eta
+    m = build_geoclaw_deck(_thacker_spec(), tmp_path)
+    assert "topo.asc" in m.files_written and "qinit.xyz" in m.files_written
+
+    def _nearest(fn, tx, ty):
+        best, bz, bd = None, None, 1e18
+        for ln in (tmp_path / fn).read_text().splitlines():
+            x, y, z = (float(v) for v in ln.split())
+            d = (x - tx) ** 2 + (y - ty) ** 2
+            if d < bd:
+                bd, best, bz = d, (x, y), z
+        return bz
+
+    # topo == paraboloid bed; qinit == analytic t=0 surface (center + off-center).
+    assert abs(_nearest("topo.asc", 0, 0) - thacker_bed_elevation(0, 0, 1.0, 0.1)) < 1e-6
+    assert abs(_nearest("qinit.xyz", 0, 0) - thacker_eta(0, 0, 0, 1.0, 0.1, 0.5)) < 1e-6
+    assert abs(_nearest("qinit.xyz", 0.5, 0) - thacker_eta(0.5, 0, 0, 1.0, 0.1, 0.5)) < 2e-3

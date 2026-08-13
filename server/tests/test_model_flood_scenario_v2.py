@@ -321,6 +321,14 @@ def test_netamt_magnitude_lands_in_deck() -> None:
 
 def test_observed_forcing_zero_magnitude_rejected() -> None:
     """A zero/None observed magnitude raises FORCING_OUT_OF_RANGE (Invariant 7)."""
+    # Re-fetch at call time: a prior test's importlib.reload of sfincs_builder
+    # (see test_sfincs_autoscale.py / test_sfincs_spiderweb.py's pattern) rebinds
+    # this class, so the module-top import above can be stale by the time this
+    # runs.
+    from trid3nt_server.agent.workflows.sfincs.sfincs_builder import (
+        SFINCSSetupError,
+    )
+
     forcing_zero = ForcingSpec(
         forcing_type="pluvial_observed",
         duration_hours=24.0,

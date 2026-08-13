@@ -106,6 +106,7 @@ __all__ = [
     "SFINCS_THREAD_EXP",
     "SFINCS_MIN_CELL_CAP",
     "SFINCS_COMPUTE_CLASS_VCPUS",
+    "SFINCS_TREF",
 ]
 
 logger = logging.getLogger("trid3nt_server.agent.workflows.sfincs.sfincs_builder")
@@ -179,7 +180,7 @@ os.environ.setdefault("CPL_VSIL_CURL_CHUNK_SIZE", "1048576")  # 1 MiB
 # On the agent venv (pandas 2.2.3) these still exist but emit FutureWarning; on
 # any pandas>=3.0 they raise ``AttributeError: 'RangeIndex' object has no
 # attribute 'is_integer'`` deep inside the surge/river forcing path -- exactly
-# the forcing path the COASTAL SFINCS North Star needs. The kickoff forbids
+# the forcing path the coastal SFINCS surge run needs. The kickoff forbids
 # editing the installed package and a hard ``pandas<2.0`` pin would fight the
 # rest of the stack, so we GUARD in OUR code: re-attach the removed methods to
 # ``pandas.Index`` (idempotent; a no-op where they already exist) delegating to
@@ -231,6 +232,14 @@ def _install_pandas_set_forcing_1d_guard() -> bool:
 
 
 _PANDAS_GUARD_OK = _install_pandas_set_forcing_1d_guard()
+
+
+#: The SFINCS deck reference time (``sfincs.inp:tref``) every deck build uses --
+#: hoisted to module scope (was a local inside ``_generate_hydromt_yaml_config``)
+#: so any forcing-schedule emitter that needs to convert a "seconds since sim
+#: start" offset into an absolute timestamp (e.g. the wind timeseries CSV) uses
+#: the SAME reference instant, not a re-derived one.
+SFINCS_TREF: datetime = datetime(2026, 1, 1, 0, 0, 0)
 
 
 # --------------------------------------------------------------------------- #
@@ -294,7 +303,7 @@ class SFINCSSetupError(RuntimeError):
 class WaterlevelForcing:
     """Surge / tide water-level boundary forcing (SFINCS ``bzs``).
 
-    COASTAL SFINCS North Star: the surge / tide hydrograph the boundary cells
+    Coastal SFINCS: the surge / tide hydrograph the boundary cells
     are driven with. Two ways the deck can ingest it, mirroring
     ``SfincsModel.setup_waterlevel_forcing(timeseries=..., locations=...)`` /
     ``geodataset=...``:
@@ -328,7 +337,7 @@ class DischargeForcing:
     """River-inflow discharge boundary forcing (SFINCS ``dis``).
 
     Fluvial / compound-flood coupling: the river-discharge hydrograph
-    (``fetch_noaa_nwm_streamflow`` / ``fetch_cama_flood_discharge``) injected at
+    (``fetch_noaa_nwm_streamflow``) injected at
     the points where rivers enter the domain.
 
     ORDER MATTERS (hydromt-sfincs contract): ``setup_river_inflow`` must run
@@ -357,19 +366,34 @@ class DischargeForcing:
 
 @dataclass(frozen=True)
 class WindForcing:
-    """Wind forcing -- uniform (``setup_wind_forcing``) or gridded.
+    """Wind forcing -- uniform constant, uniform SCHEDULE, or gridded.
 
-    - Uniform: ``magnitude`` (m/s) + ``direction`` (deg, where the wind comes
-      FROM; 0=N, 90=E) → ``setup_wind_forcing(magnitude=, direction=)``. This is
-      the quick storm-wind paddle for the coastal demo.
+    - Uniform constant: ``magnitude`` (m/s) + ``direction`` (deg, where the
+      wind comes FROM; 0=N, 90=E) → ``setup_wind_forcing(magnitude=,
+      direction=)``. This is the quick storm-wind paddle for the coastal demo.
+    - Uniform SCHEDULE: ``timeseries`` -- an ordered list of ``(t_s,
+      magnitude_mps, direction_deg)`` tuples (``t_s`` = seconds elapsed since
+      the deck's ``tref``, i.e. sim-start) → written to a tabulated CSV
+      (``_write_wind_timeseries_csv``) and passed to
+      ``setup_wind_forcing(timeseries=<path>)`` per the live
+      ``SfincsModel.setup_wind_forcing`` signature (``timeseries=None,
+      magnitude=None, direction=None`` -- ``timeseries`` reads
+      ``data_catalog.get_dataframe(..., parse_dates=True, index_col=0)``,
+      datetime index + mag/dir columns in that order). A domain-scale
+      screening run with a ramping/veering storm wind (e.g. 10 m/s from 270
+      ramping to 25 m/s from 180) is the target use case. Takes precedence
+      over ``magnitude``/``direction`` when set; a ``None`` timeseries leaves
+      the constant path byte-identical.
     - Gridded: ``grid_uri`` (a netCDF with ``wind10_u`` / ``wind10_v`` over
       ``time,y,x``) → ``setup_wind_forcing_from_grid(wind=)`` for a real
-      spatially-varying wind field (e.g. ERA5 / HRRR).
+      spatially-varying wind field (e.g. ERA5 / HRRR). Takes precedence over
+      both uniform paths when set.
     """
 
     magnitude: float | None = None
     direction: float | None = None
     grid_uri: str | None = None
+    timeseries: list[tuple[float, float, float]] | None = None
     provenance: dict[str, Any] = field(default_factory=dict)
 
 
@@ -468,7 +492,7 @@ class ForcingSpec:
     Star extends it with the surge / tide / discharge / wind / pressure members
     below, populated from the forcing fetchers
     (``fetch_gtsm_tide_surge`` / ``fetch_noaa_coops_tides`` /
-    ``fetch_noaa_nwm_streamflow`` / ``fetch_cama_flood_discharge`` / ERA5); the
+    ``fetch_noaa_nwm_streamflow`` / ERA5); the
     shape is intentionally open enough to grow.
 
     Surge / compound-flood members (all optional; ``None`` → that forcing block
@@ -583,7 +607,7 @@ class BuildOptions:
     - ``enable_subgrid`` -- emit a ``setup_subgrid`` block. Subgrid tables let
       SFINCS run on a COARSE computational grid while still resolving local
       topography + roughness at sub-pixel resolution -- the standard way to get
-      an urban-flood-around-buildings estimate cheaply (the COASTAL North Star's
+      an urban-flood-around-buildings estimate cheaply (the coastal case's
       "rough urban flood" ask). Default ``False`` (v0.1 pluvial decks stay on
       the plain ``setup_dep`` + ``setup_manning_roughness`` path).
     - ``subgrid_nr_subgrid_pixels`` -- sub-pixels per computational cell in the
@@ -994,6 +1018,48 @@ def _write_hydromt_reclass_table_csv(
     return out_path
 
 
+def _write_wind_timeseries_csv(
+    timeseries: list[tuple[float, float, float]],
+    tref: datetime,
+    out_path: Path,
+) -> Path:
+    """Write a uniform wind SCHEDULE to a ``setup_wind_forcing(timeseries=)`` CSV.
+
+    ``SfincsModel.setup_wind_forcing`` reads its ``timeseries`` kwarg via
+    ``data_catalog.get_dataframe(timeseries, time_tuple=(tstart, tstop),
+    parse_dates=True, index_col=0)`` -- an absolute-datetime index in the first
+    column, magnitude (m/s) in the second, direction (deg, FROM) in the third
+    (the column ORDER hydromt hardcodes onto ``["mag", "dir"]`` regardless of
+    header text -- see ``hydromt_sfincs.sfincs.SfincsModel.setup_wind_forcing``).
+
+    Each ``(t_s, magnitude_mps, direction_deg)`` row's ``t_s`` is seconds
+    elapsed since the deck's ``tref`` (sim-start); this converts it to an
+    absolute timestamp so the row lands inside the ``get_model_time()``
+    ``(tstart, tstop)`` window ``setup_wind_forcing`` filters against.
+
+    Args:
+        timeseries: ordered ``[(t_s, magnitude_mps, direction_deg), ...]``.
+        tref: the deck's reference time (``SFINCS_TREF``).
+        out_path: destination path inside the per-build temp dir.
+
+    Returns:
+        ``out_path`` for convenience.
+    """
+    with out_path.open("w", encoding="utf-8", newline="") as fh:
+        writer = csv.writer(fh)
+        writer.writerow(["time", "mag", "dir"])
+        for t_s, magnitude_mps, direction_deg in timeseries:
+            ts = tref + timedelta(seconds=float(t_s))
+            writer.writerow(
+                [
+                    ts.strftime("%Y-%m-%d %H:%M:%S"),
+                    float(magnitude_mps),
+                    float(direction_deg),
+                ]
+            )
+    return out_path
+
+
 def _default_setup_uri(bbox: tuple[float, float, float, float]) -> str:
     """Compose a default object-store URI for the SFINCS setup manifest JSON.
 
@@ -1173,6 +1239,31 @@ def _compute_active_mask_bounds(dem_read_path: str) -> tuple[float, float, bool]
         _MASK_ELEV_BUFFER_M,
     )
     return zmin, zmax, True
+
+
+def _mask_bounds_provenance(
+    adaptive: bool, zmin: float | None, zmax: float | None
+) -> dict[str, Any]:
+    """Structured active-mask elevation-window provenance for the run envelope.
+
+    ADR 0223: ``adaptive`` False means the DEM elevation range was unreadable and a
+    WIDE FALLBACK window was used (may activate cells a real DEM range would
+    exclude); ``note`` is populated ONLY in that degraded case so the composer can
+    surface a labeled warning instead of the flag being discarded to an ``.inp``
+    comment + log line.
+    """
+    return {
+        "adaptive": bool(adaptive),
+        "zmin": zmin,
+        "zmax": zmax,
+        "note": (
+            None if adaptive else
+            "DEM elevation range unreadable; the SFINCS active-cell mask used a "
+            "WIDE FALLBACK elevation window instead of the DEM-derived adaptive "
+            "window -- the active domain may include cells a real DEM range would "
+            "exclude. Treat the inundation extent as a wide screening bound."
+        ),
+    }
 
 
 # --------------------------------------------------------------------------- #
@@ -1710,6 +1801,7 @@ def suggest_sfincs_resolution_from_bbox(
 def _emit_surge_forcing_blocks(
     components: list[str],
     forcing: ForcingSpec,
+    build_dir: Path | str | None = None,
 ) -> None:
     """Append the COASTAL SFINCS surge / discharge / wind / pressure YAML blocks.
 
@@ -1723,8 +1815,9 @@ def _emit_surge_forcing_blocks(
        boundary. The inflow step (rivers / hydrography) ALWAYS precedes the
        discharge-series step (HydroMT contract: inflow makes the ``src`` points,
        discharge attaches the series). Order is load-bearing.
-    3. ``setup_wind_forcing`` (uniform mag/dir) OR ``setup_wind_forcing_from_grid``
-       (gridded netCDF).
+    3. ``setup_wind_forcing`` (uniform constant mag/dir, OR a uniform
+       ``timeseries`` SCHEDULE materialised via ``_write_wind_timeseries_csv``)
+       OR ``setup_wind_forcing_from_grid`` (gridded netCDF).
     4. ``setup_pressure_forcing_from_grid`` (gridded MSL pressure netCDF).
 
     Every input URI is staged to a local path via ``_stage_gcs_local`` first
@@ -1733,6 +1826,11 @@ def _emit_surge_forcing_blocks(
     All steps funnel surge/discharge series through
     ``set_forcing_1d``, which the module-level pandas guard keeps callable on
     pandas >= 3.0.
+
+    ``build_dir`` is the per-build temp directory (``build_sfincs_model``'s
+    ``tmp``) a wind ``timeseries`` SCHEDULE's generated CSV is written into --
+    ``None`` (e.g. direct unit-test calls of ``_generate_hydromt_yaml_config``)
+    falls back to the system temp dir.
     """
     # --- 0. Water-level BOUNDARY CELLS (msk=2) along the seaward active edge ---
     # CRITICAL: ``setup_mask_active`` only marks ACTIVE cells (msk=1); it does
@@ -1821,12 +1919,26 @@ def _emit_surge_forcing_blocks(
         )
         components.append("  merge: true  # breach point-source merges with river dis")
 
-    # --- 3. Wind (uniform OR gridded) ---
+    # --- 3. Wind (gridded, OR uniform SCHEDULE, OR uniform constant) ---
     wind = forcing.wind
     if wind is not None:
         if wind.grid_uri:
             components.append("setup_wind_forcing_from_grid:")
             components.append(f"  wind: '{_stage_gcs_local(wind.grid_uri)}'")
+        elif wind.timeseries:
+            # Uniform wind SCHEDULE: materialise the (t_s, mag, dir) rows to a
+            # tabulated CSV (absolute timestamps off SFINCS_TREF) and hand
+            # setup_wind_forcing its ``timeseries`` path -- the SAME uniform
+            # windfile SFINCS ingests, just time-varying instead of a constant
+            # two-row bracket. The constant magnitude/direction path below is
+            # untouched (byte-identical) whenever ``timeseries`` is unset.
+            _wind_dir = Path(build_dir) if build_dir is not None else Path(tempfile.gettempdir())
+            _wind_dir.mkdir(parents=True, exist_ok=True)
+            _wind_csv = _write_wind_timeseries_csv(
+                wind.timeseries, SFINCS_TREF, _wind_dir / "sfincs_wind_timeseries.csv"
+            )
+            components.append("setup_wind_forcing:")
+            components.append(f"  timeseries: '{_wind_csv.as_posix()}'")
         elif wind.magnitude is not None and wind.direction is not None:
             components.append("setup_wind_forcing:")
             components.append(f"  magnitude: {wind.magnitude}  # m/s")
@@ -1932,9 +2044,10 @@ def _emit_physics_config(
     ``key = value`` line in sfincs.inp), so each resolved physics override lands
     directly in the deck. ``physics`` is the dict resolved by
     ``physics_registry.validate_and_resolve_physics('sfincs', overrides)`` (keys
-    a subset of advection/theta/alpha/huthresh/coriolis_latitude/wind_drag). The
-    caller appends these AFTER the existing crs/tref/tstart/tstop/dtout lines but
-    still inside the same ``setup_config:`` block, so they merge into one dict.
+    a subset of advection/theta/alpha/huthresh/coriolis_latitude/wind_drag/
+    wind_drag_curve). The caller appends these AFTER the existing
+    crs/tref/tstart/tstop/dtout lines but still inside the same
+    ``setup_config:`` block, so they merge into one dict.
 
     Key mapping (deck_target):
       - advection/theta/alpha/huthresh -> the same sfincs.inp key verbatim.
@@ -1943,6 +2056,10 @@ def _emit_physics_config(
       - wind_drag (cd > 0)             -> a flat ``cdval: [cd,cd,cd]`` curve with
         ``cdnrb: 3`` (physics_registry FIX -- cdwnd is the speed-breakpoint axis,
         cdval is the coefficients). cd == 0 keeps the SFINCS default formula.
+      - wind_drag_curve (>=2 (wind_mps, cd) pairs) -> a custom ``cdnrb:
+        len(curve)`` / ``cdwnd: [...]`` / ``cdval: [...]`` breakpoint curve --
+        mutually exclusive with ``wind_drag`` (raises
+        ``SFINCSSetupError("WIND_DRAG_CURVE_CONFLICT")`` if both resolve).
 
     ``infiltration.constant_mm_per_hr`` (a bare scalar with no raster/lulc) is
     ALSO emitted here as ``qinf: <v>`` -- the only setup_config-routed loss term
@@ -1957,12 +2074,39 @@ def _emit_physics_config(
         for key in ("theta", "alpha", "huthresh"):
             if key in physics:
                 components.append(f"  {key}: {float(physics[key])}")
+        # Horizontal eddy viscosity: `viscosity` (0/1) toggles the momentum-
+        # diffusion term; `nuvisc` (m2/s) sets its coefficient (only meaningful
+        # with viscosity=1). Both ride the setup_config passthrough verbatim.
+        if "viscosity" in physics:
+            components.append(f"  viscosity: {int(physics['viscosity'])}")
+        if "nuvisc" in physics:
+            components.append(f"  nuvisc: {float(physics['nuvisc'])}")
         # Coriolis: a latitude float -> sfincs.inp:latitude (the constant-f plane).
         if "coriolis_latitude" in physics:
             components.append(f"  latitude: {float(physics['coriolis_latitude'])}")
-        # Wind drag: a constant cd > 0 -> a flat cdval [cd,cd,cd] curve (cdnrb=3).
+        # Wind drag: EITHER a constant cd > 0 (flat cdval [cd,cd,cd], cdnrb=3)
+        # OR a custom multi-point breakpoint curve (wind_drag_curve) -- BOTH
+        # target the same sfincs.inp cdnrb/cdwnd/cdval keys, so setting both
+        # is ambiguous (Invariant 7: no silent overwrite/last-key-wins).
         cd = physics.get("wind_drag")
-        if cd is not None and float(cd) > 0.0:
+        cd_curve = physics.get("wind_drag_curve")
+        if cd_curve is not None and cd is not None and float(cd) > 0.0:
+            raise SFINCSSetupError(
+                "WIND_DRAG_CURVE_CONFLICT",
+                message=(
+                    "wind_drag (flat constant-cd curve) and wind_drag_curve "
+                    "(custom breakpoint curve) both target sfincs.inp "
+                    "cdnrb/cdwnd/cdval -- set exactly one."
+                ),
+                details={"wind_drag": cd, "wind_drag_curve": cd_curve},
+            )
+        if cd_curve is not None:
+            winds = [float(w) for w, _ in cd_curve]
+            vals = [float(v) for _, v in cd_curve]
+            components.append(f"  cdnrb: {len(cd_curve)}")
+            components.append(f"  cdwnd: [{', '.join(str(w) for w in winds)}]")
+            components.append(f"  cdval: [{', '.join(str(v) for v in vals)}]")
+        elif cd is not None and float(cd) > 0.0:
             cd_f = float(cd)
             components.append("  cdnrb: 3")
             components.append("  cdwnd: [0.0, 28.0, 50.0]")
@@ -1987,6 +2131,7 @@ def _generate_hydromt_yaml_config(
     river_local_path: str | None,
     forcing: ForcingSpec,
     mapping_csv_path: str,
+    build_dir: Path | str | None = None,
 ) -> str:
     """Compose a HydroMT-SFINCS YAML build config string.
 
@@ -2053,6 +2198,11 @@ def _generate_hydromt_yaml_config(
 
     Returns the YAML as a string. Test code parses it back; the production
     runtime writes it to a temp file and points HydroMT at it.
+
+    ``build_dir`` is forwarded to ``_emit_surge_forcing_blocks`` -- the
+    per-build temp dir a wind ``timeseries`` SCHEDULE CSV is staged into
+    (``None`` falls back to the system temp dir; direct unit-test callers
+    omit it).
     """
     crs = options.crs
     grid_res = options.grid_resolution_m
@@ -2067,11 +2217,10 @@ def _generate_hydromt_yaml_config(
     # arithmetic), NOT a whole-day rounding: anchoring tstop to the real
     # requested hours makes SFINCS run exactly the forcing window, so the
     # rising surge limb marches the front inland across frames.
-    _SFINCS_TREF = datetime(2026, 1, 1, 0, 0, 0)
     _sim_hours = max(1.0, float(options.simulation_hours))
-    _tstop_dt = _SFINCS_TREF + timedelta(hours=_sim_hours)
-    components.append(f'  tref: "{_SFINCS_TREF.strftime("%Y%m%d %H%M%S")}"')
-    components.append(f'  tstart: "{_SFINCS_TREF.strftime("%Y%m%d %H%M%S")}"')
+    _tstop_dt = SFINCS_TREF + timedelta(hours=_sim_hours)
+    components.append(f'  tref: "{SFINCS_TREF.strftime("%Y%m%d %H%M%S")}"')
+    components.append(f'  tstart: "{SFINCS_TREF.strftime("%Y%m%d %H%M%S")}"')
     components.append(f'  tstop: "{_tstop_dt.strftime("%Y%m%d %H%M%S")}"')
     # --- Map-output cadence (flood-animation Phase 1, engine-agnostic) ---
     # ``dtout`` / ``dtmaxout`` are native sfincs.inp parameters (seconds) that
@@ -2229,7 +2378,7 @@ def _generate_hydromt_yaml_config(
     # ORDER MATTERS: ``setup_river_inflow`` MUST precede ``setup_discharge_forcing``
     # -- the former establishes the ``src`` discharge points (and trims boundary
     # cells the river crosses); the latter attaches the time series to them.
-    _emit_surge_forcing_blocks(components, forcing)
+    _emit_surge_forcing_blocks(components, forcing, build_dir=build_dir)
     # --- Precip forcing emission (uniform netamt magnitude) ---
     #
     # Two upstream paths converge on the same SFINCS ``setup_precip_forcing``
@@ -2451,11 +2600,34 @@ def build_sfincs_model(
     # elevation range + native resolution); the same staged path is reused by
     # the YAML emitter below. Degrades gracefully (bbox-area fallback) if the
     # DEM can't be read; NEVER produces a degenerate/empty grid.
+    # ADR 0223: compute the active-mask elevation bounds ONCE and CAPTURE whether
+    # they are the DEM-derived adaptive window or the WIDE FALLBACK used when the
+    # DEM elevation range cannot be read. _generate_hydromt_yaml_config recomputes
+    # the same bounds for the deck (its .inp comment); here we thread the flag into
+    # the run envelope (ModelSetup.parameters.mask_bounds) so a wide-fallback mask
+    # -- which can activate cells a real DEM range would exclude -- surfaces to the
+    # user as a labeled degrade, not merely an .inp comment + agent.log line.
+    mask_adaptive: bool = True
+    mask_zmin: float | None = None
+    mask_zmax: float | None = None
+    try:
+        _dem_for_mask = _stage_gcs_local(dem_uri)
+        mask_zmin, mask_zmax, mask_adaptive = _compute_active_mask_bounds(_dem_for_mask)
+    except Exception as exc:  # noqa: BLE001 -- provenance read must never break the build
+        # Staging itself failed; the deck build would hit the same read and fall
+        # back too, so record the conservative wide-fallback signal.
+        logger.warning(
+            "mask-bounds provenance read failed (%s); recording wide-fallback "
+            "in the run envelope (conservative)", exc)
+        mask_adaptive = False
+
     autoscale_result: GridAutoscaleResult | None = None
     if opts.autoscale_grid:
         try:
             dem_staged = _stage_gcs_local(dem_uri)
-            mask_zmin, mask_zmax, _adaptive = _compute_active_mask_bounds(dem_staged)
+            if mask_zmin is None or mask_zmax is None:
+                mask_zmin, mask_zmax, mask_adaptive = _compute_active_mask_bounds(
+                    dem_staged)
             autoscale_result = autoscale_grid_resolution(
                 dem_staged,
                 bbox,
@@ -2543,6 +2715,10 @@ def build_sfincs_model(
             river_local_path=river_geometry_uri,
             forcing=forcing,
             mapping_csv_path=str(reclass_csv_path),
+            # A wind ``timeseries`` SCHEDULE's CSV is staged inside the SAME
+            # per-build temp dir as the deck itself -- cleaned up automatically
+            # when the ``with tempfile.TemporaryDirectory()`` block exits.
+            build_dir=tmp,
         )
         yaml_path.write_text(yaml_text, encoding="utf-8")
         try:
@@ -2728,6 +2904,11 @@ def build_sfincs_model(
             "forcing_type": forcing.forcing_type,
             "forcing_provenance": dict(forcing.provenance),
             "river_geometry_uri": river_geometry_uri,
+            # ADR 0223: active-mask elevation-window provenance. ``adaptive`` False
+            # means the DEM range was unreadable and a WIDE FALLBACK window was used
+            # (may activate cells a real DEM range would exclude) -- the composer
+            # lifts this into a labeled envelope note so the degrade is not silent.
+            "mask_bounds": _mask_bounds_provenance(mask_adaptive, mask_zmin, mask_zmax),
             # autoscale provenance - feeds the solve-telemetry record
             # so the cap can be re-tuned from logged (cells, vCPU, time) data.
             "compute_class": opts.compute_class,

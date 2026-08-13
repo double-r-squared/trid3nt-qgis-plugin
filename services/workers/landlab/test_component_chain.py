@@ -311,3 +311,226 @@ def test_landslide_chain_sets_documented_fields(monkeypatch):
     assert 0.0 <= res.mean_probability_of_failure <= 1.0
     # the deterministic FoS field came along.
     assert "factor_of_safety_field" in res.extra
+
+
+# ===========================================================================
+# (3) flow_accumulation chain — REAL landlab chain (gated on the dep).
+# ADR 0122 hazard-easy-four #1: drainage area + channel network + routing comp.
+# ===========================================================================
+@_REQUIRES_LANDLAB
+def test_flow_accumulation_chain_in_memory():
+    """The REAL FlowAccumulator chain: drainage-area field, channel-network
+    secondary, and a 3-director routing comparison in ``extra``."""
+    dem = _tilted_dem(n=24)
+    res = run_component_chain(
+        dem,
+        resolution_m=30.0,
+        build_spec={
+            "analysis": "flow_accumulation",
+            "flow_director": "D8",
+            "depression_handler": "fill",
+            "channel_threshold_cells": 30,
+        },
+    )
+    assert res.analysis == "flow_accumulation"
+    assert res.output_field_name == "drainage_area"
+    field = np.asarray(res.field)
+    assert field.shape == dem.shape
+    da = field[np.isfinite(field)]
+    assert da.size > 0
+    # the largest accumulated area is >= a single cell (900 m^2).
+    assert float(np.max(da)) >= 900.0
+    # channel-network secondary is present + boolean-ish.
+    assert "channel_network" in res.secondary_fields
+    # routing comparison ran all 3 directors.
+    rc = res.extra["routing_comparison"]
+    assert {r["flow_director"] for r in rc} == {"D8", "Dinf", "MFD"}
+    for r in rc:
+        assert 0.0 <= r["channelized_area_fraction"] <= 1.0
+        assert r["max_drainage_area_km2"] >= 0.0
+    # narration scalars carried in extra.
+    assert res.extra["max_drainage_area_km2"] >= 0.0
+    assert 0.0 <= res.extra["channelized_area_fraction"] <= 1.0
+
+
+@_REQUIRES_LANDLAB
+def test_flow_accumulation_priority_flood_and_determinism():
+    """priority_flood depression handling routes every director; two identical
+    runs produce a byte-identical drainage-area field (determinism, Invariant 1)."""
+    dem = _tilted_dem(n=20)
+    spec = {
+        "analysis": "flow_accumulation",
+        "flow_director": "MFD",
+        "depression_handler": "priority_flood",
+        "channel_threshold_cells": 25,
+    }
+    r1 = run_component_chain(dem, resolution_m=30.0, build_spec=dict(spec))
+    r2 = run_component_chain(dem, resolution_m=30.0, build_spec=dict(spec))
+    f1 = np.nan_to_num(np.asarray(r1.field), nan=-1.0)
+    f2 = np.nan_to_num(np.asarray(r2.field), nan=-1.0)
+    assert np.array_equal(f1, f2)
+    assert r1.extra["flow_director"] == "MFD"
+
+
+# ===========================================================================
+# (4) green_ampt_overland_flow chain -- REAL landlab chain (gated on the dep).
+# ADR 0123 hazard-easy-four continuation #1: infiltration-vs-runoff partition.
+# ===========================================================================
+@_REQUIRES_LANDLAB
+def test_green_ampt_partition_and_conservation():
+    """The REAL Green-Ampt + OverlandFlow chain: infiltration-depth field +
+    runoff-depth secondary + a partition that respects the storm total."""
+    dem = _tilted_dem(n=24)
+    res = run_component_chain(
+        dem,
+        resolution_m=30.0,
+        build_spec={
+            "analysis": "green_ampt_overland_flow",
+            "rainfall_intensity_mm_hr": 90.0,
+            "storm_duration_hr": 0.5,
+            "soil_hydraulic_conductivity_m_s": 1e-5,
+            "initial_soil_moisture_content": 0.15,
+            "green_ampt_soil_type": "sandy loam",
+        },
+    )
+    assert res.analysis == "green_ampt_overland_flow"
+    assert res.output_field_name == "soil_water_infiltration__depth"
+    infil = np.asarray(res.field)
+    assert infil.shape == dem.shape
+    assert "runoff_depth" in res.secondary_fields
+    e = res.extra
+    # storm total is the 90 mm/hr x 0.5 h = 45 mm design storm.
+    assert abs(e["total_rainfall_mm"] - 45.0) < 1e-6
+    # partition fractions are in [0, 1] and sum to <= 1 (some water may pond).
+    assert 0.0 <= e["infiltrated_fraction"] <= 1.0
+    assert 0.0 <= e["runoff_fraction"] <= 1.0
+    assert e["infiltrated_fraction"] + e["runoff_fraction"] <= 1.0 + 1e-6
+    # mean infiltration + runoff never exceed the storm total (conservation).
+    assert e["mean_infiltration_mm"] <= 45.0 + 1e-6
+    assert e["n_steps"] >= 1
+
+
+@_REQUIRES_LANDLAB
+def test_green_ampt_conductivity_monotonicity_and_determinism():
+    """A HIGHER saturated conductivity infiltrates MORE (less runoff); two
+    identical runs produce a byte-identical infiltration field (Invariant 1)."""
+    dem = _tilted_dem(n=20)
+
+    def _run(k):
+        return run_component_chain(
+            dem,
+            resolution_m=30.0,
+            build_spec={
+                "analysis": "green_ampt_overland_flow",
+                "rainfall_intensity_mm_hr": 90.0,
+                "storm_duration_hr": 0.5,
+                "soil_hydraulic_conductivity_m_s": k,
+            },
+        )
+
+    lo = _run(1e-6)
+    hi = _run(3e-5)
+    assert hi.extra["infiltrated_fraction"] > lo.extra["infiltrated_fraction"]
+    # determinism: re-run of the low-K case is byte-identical.
+    lo2 = _run(1e-6)
+    f1 = np.nan_to_num(np.asarray(lo.field), nan=-1.0)
+    f2 = np.nan_to_num(np.asarray(lo2.field), nan=-1.0)
+    assert np.array_equal(f1, f2)
+
+
+# ===========================================================================
+# (5) groundwater_steady / groundwater_storm chains -- REAL landlab chains
+# (gated on the dep). ADR 0214: GroundwaterDupuitPercolator water table +
+# seepage + baseflow (mass-conservation V&V) and storm-driven recession.
+# ===========================================================================
+@_REQUIRES_LANDLAB
+def test_groundwater_steady_fields_and_mass_conservation():
+    """The REAL steady GroundwaterDupuitPercolator chain: depth-to-water primary
+    + water-table + seepage secondaries + the tutorial's mass-conservation V&V."""
+    dem = _tilted_dem(n=24)
+    res = run_component_chain(
+        dem,
+        resolution_m=30.0,
+        build_spec={
+            "analysis": "groundwater_steady",
+            "gw_hydraulic_conductivity_m_s": 1e-4,
+            "gw_porosity": 0.3,
+            "gw_aquifer_thickness_m": 15.0,
+            "gw_recharge_mm_yr": 300.0,
+            "gw_steady_max_steps": 300,
+        },
+    )
+    assert res.analysis == "groundwater_steady"
+    assert res.output_field_name == "depth_to_water"
+    dtw = np.asarray(res.field)
+    assert dtw.shape == dem.shape
+    # depth to water is non-negative where finite.
+    assert np.nanmin(dtw) >= -1e-9
+    assert "water_table_elevation" in res.secondary_fields
+    e = res.extra
+    # the mass-conservation gate: |rel error| < 1% (the V&V acceptance).
+    assert abs(e["mass_balance_rel_error"]) < 0.01
+    assert e["baseflow_discharge_m3s"] >= 0.0
+    assert 0.0 <= e["seeping_area_fraction"] <= 1.0
+    assert e["n_steps"] >= 1
+
+
+@_REQUIRES_LANDLAB
+def test_groundwater_steady_recharge_monotonicity_and_determinism():
+    """MORE recharge => a SHALLOWER mean water table (smaller depth-to-water);
+    two identical runs produce a byte-identical field (Invariant 1)."""
+    dem = _tilted_dem(n=20)
+
+    def _run(recharge):
+        return run_component_chain(
+            dem,
+            resolution_m=30.0,
+            build_spec={
+                "analysis": "groundwater_steady",
+                "gw_recharge_mm_yr": recharge,
+                "gw_aquifer_thickness_m": 15.0,
+                "gw_steady_max_steps": 300,
+            },
+        )
+
+    lo = _run(100.0)
+    hi = _run(600.0)
+    # higher recharge raises the water table -> smaller mean depth-to-water.
+    assert hi.extra["mean_depth_to_water_m"] < lo.extra["mean_depth_to_water_m"]
+    # determinism: re-run of the low-recharge case is byte-identical.
+    lo2 = _run(100.0)
+    f1 = np.nan_to_num(np.asarray(lo.field), nan=-1.0)
+    f2 = np.nan_to_num(np.asarray(lo2.field), nan=-1.0)
+    assert np.array_equal(f1, f2)
+
+
+@_REQUIRES_LANDLAB
+def test_groundwater_storm_hydrograph_and_conservation():
+    """The REAL storm-driven chain: peak-seepage primary + a baseflow hydrograph
+    + the transient mass-conservation V&V + a fitted recession timescale."""
+    dem = _tilted_dem(n=20)
+    res = run_component_chain(
+        dem,
+        resolution_m=30.0,
+        build_spec={
+            "analysis": "groundwater_storm",
+            "gw_storm_aquifer_thickness_m": 6.0,
+            "gw_storm_mean_depth_mm": 20.0,
+            "gw_storm_total_days": 90.0,
+        },
+    )
+    assert res.analysis == "groundwater_storm"
+    assert res.output_field_name == "peak_seepage_specific_discharge"
+    assert np.asarray(res.field).shape == dem.shape
+    e = res.extra
+    # transient mass-conservation gate: |rel error| < 1%.
+    assert abs(e["mass_balance_rel_error"]) < 0.01
+    # a hydrograph with >= 2 points and a non-negative peak discharge.
+    assert isinstance(e["hydrograph"], list) and len(e["hydrograph"]) >= 2
+    assert e["peak_baseflow_m3s"] >= 0.0
+    assert e["recession_timescale_days"] >= 0.0
+    assert e["n_storms"] >= 1
+    # JSON-safety of the extra block (the entrypoint folds it verbatim).
+    import json
+
+    json.dumps(e)

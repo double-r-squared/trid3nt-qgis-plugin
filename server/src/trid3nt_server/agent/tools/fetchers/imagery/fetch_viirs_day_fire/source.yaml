@@ -1,0 +1,128 @@
+schema_version: v1
+name: fetch_viirs_day_fire
+source_class: viirs_satellite
+shape: animation_frames
+error_prefix: VIIRS_DAY_FIRE
+input_error_suffix: INPUT_INVALID
+empty_error_suffix: EMPTY
+
+docstring: |
+  Build a VIIRS Day Fire JPSS polar animation (ordered per-overpass RGB COGs) over a multi-day window.
+
+  **What it does:** Pulls the ready-made CIRA Polar SLIDER VIIRS Day Fire RGB
+  imagery (sat=jpss) for an AOI over a multi-day UTC window and returns an
+  ORDERED list of per-OVERPASS EPSG:4326 RGB COGs -- one frame per polar pass,
+  DAY-only by default, each labelled with its REAL irregular UTC pass time.
+  This is how you RECREATE a CIRA-style multi-day VIIRS Day Fire animation (the
+  polar analogue of ``fetch_goes_animation``): the imagery + irregular polar
+  cadence are the exact product the CIRA loops are made from. The Day Fire RGB
+  shows thermal-red fire over a near-true-color land/veg/smoke base, so the
+  fire pops against a near-black sea (ideal for an offshore AOI like the
+  Channel Islands).
+
+  **When to use:**
+  - "Recreate the JPSS / VIIRS Day Fire animation over this 4-day window",
+    "animate the fire day-by-day from the polar satellites", "VIIRS Day Fire
+    passes over the Channel Islands".
+  - Any MULTI-DAY polar (LEO) fire timelapse, especially offshore AOIs where
+    VIIRS 375 m beats the edge-of-good-geometry GOES sector.
+
+  **When NOT to use:**
+  - An intra-day GEOSTATIONARY 5-minute loop (use ``fetch_goes_animation``).
+  - Active-fire pixel detections (``fetch_firms_active_fire``) -- though that is
+    the same VIIRS instrument and co-registers as a hot-pixel overlay.
+  - Fire perimeters (``fetch_nifc_fire_perimeters``).
+
+  **Parameters:**
+  - ``bbox`` (tuple): ``(min_lon, min_lat, max_lon, max_lat)`` EPSG:4326.
+    Required.
+  - ``satellite`` (str, default ``"all"``): ``"all"`` (the merged SLIDER jpss
+    pass set), or ``"suomi-npp"`` / ``"noaa-20"`` / ``"noaa-21"`` (the SLIDER
+    jpss index does not tag the per-pass bird, so a specific value records the
+    requested filter in the frame label; use FIRMS for true per-detection
+    satellite attribution).
+  - ``product`` (str, default ``"day_fire"``): the VIIRS Day Fire RGB.
+  - ``sector`` (str, default ``"conus"``): SLIDER jpss sector slug.
+  - ``start_utc`` / ``end_utc`` (str): ISO-8601 UTC window bounds
+    (e.g. ``"2026-05-15T20:47:00Z"`` .. ``"2026-05-19T22:01:00Z"``). When
+    omitted, the most-recent 4 days are used.
+  - ``day_only`` (bool, default True): keep only DAYTIME passes (Day Fire is a
+    daytime product; night passes are black).
+
+  **Returns:** an ORDERED ``list[LayerURI]`` (ascending UTC). Each is a 3-band
+  uint8 RGB COG (``layer_type="raster"``, ``role="context"``,
+  ``style_preset="viirs_day_fire_animation"``, same ``bbox``) whose ``name`` is
+  ``"VIIRS Day Fire step <N> <ISO> (<SAT>)"`` -- the scrubber-group contract:
+  ``step <N>`` is the monotonic frame value the web parser keys on (the
+  irregular polar-pass ISO alone is not a recognized token), and the ISO pass
+  time is the per-frame display label. Frames are NOT evenly spaced; the labels
+  carry the real pass times.
+
+  NOTE: georeferencing is the approximate SLIDER sector-extent mapping (the
+  JPSS polar remap has no published projection -- approximate only); the
+  imagery + irregular cadence are the real CIRA product. A pass with no imagery
+  over the AOI is skipped; a run that produced NO frames raises a typed error
+  (honesty floor).
+
+  **Cross-tool dependencies:**
+  - Upstream: ``fetch_wfigs_incident`` (resolve the offshore island by NAME ->
+    AOI bbox + the window floor).
+  - Pairs with: ``fetch_firms_active_fire`` (same VIIRS instrument; the hot
+    pixels co-register with the Day Fire red pixels) + ``fetch_nifc_fire_perimeters``.
+  - Driven by: the frame-animation playground recipe
+    (docs/playbooks/frame-animation-recipe.md Recipe A).
+
+# The CIRA Polar SLIDER tile substrate the frames hooks build URLs against; documentary.
+endpoints:
+  slider:
+    url: https://rammb-slider.cira.colostate.edu/data/imagery/
+
+params:
+  bbox:
+    type: bbox
+    required: true
+    quantize: round_6dp
+  satellite:
+    type: str
+    default: all
+  product:
+    type: str
+    default: day_fire
+  sector:
+    type: str
+    default: conus
+  start_utc:
+    type: str
+    schema_optional: true
+  end_utc:
+    type: str
+    schema_optional: true
+  day_only:
+    type: bool
+    default: true
+
+hooks:
+  frames_plan: viirs_day_fire.frames_plan
+  frame_bytes: viirs_day_fire.frame_bytes
+
+normalize:
+  crs: EPSG:4326
+
+output:
+  layer_type: raster
+  ext: tif
+  role: context
+  style_preset: viirs_day_fire_animation
+  emit_bbox: true
+
+cache:
+  ttl_class: dynamic-1h
+
+payload_estimate:
+  model: bbox_area
+  floor_mb: 0.05
+  mb_per_sq_deg: 2.0
+
+caveats:
+  - Georeferencing is the approximate SLIDER sector-extent mapping (the JPSS polar remap has no published projection); the imagery + irregular cadence are the real CIRA product.
+  - A pass with no imagery over the AOI is skipped; a run that produced NO frames raises a typed VIIRS_DAY_FIRE_EMPTY error (honesty floor).

@@ -1,0 +1,131 @@
+# Router source spec (ADR 0203) -- NOAA AORC v1.1 hourly precipitation.
+# Record shape (pure-record path): the aorc_precip.build_record hook owns the
+# public-bucket Zarr socket (anonymous s3fs) and returns the AOI-mean hyetograph
+# + accumulation, a bare JSON dict (not a renderable layer). It is the pre-2020
+# / any-historical-year precipitation forcing MRMS (>= 2020-10) cannot reach.
+schema_version: v1
+
+name: fetch_aorc_precip
+source_class: aorc_precip
+error_prefix: AORC_PRECIP
+shape: record
+
+endpoints:
+  # The public AWS Open Data bucket (NODD). The hook owns the s3fs socket; this
+  # endpoint records the data home for provenance (min_length=1 requires it).
+  data:
+    url: s3://noaa-nws-aorc-v1-1-1km
+auth:
+  mode: none
+  user_agent: trid3nt_default
+
+params:
+  bbox:
+    type: bbox
+    required: true
+    quantize: round_6dp
+  start_date:
+    type: iso_date
+    required: true
+    min_date: "1979-02-01"
+  end_date:
+    type: iso_date
+    required: true
+    max_range_days: 92
+
+gates:
+  conus_only: true
+  # Bound the windowed Zarr read: an AOI-mean hyetograph is a small-basin forcing
+  # series, so a modest bbox keeps the streamed chunk volume in check.
+  max_bbox_deg2: 2.0
+
+hooks:
+  record: aorc_precip.build_record
+
+normalize:
+  crs: EPSG:4326
+  units: mm
+  quantity: precipitation
+
+output:
+  layer_type: record
+  ext: json
+  style_preset: none
+  emit_bbox: false
+
+cache:
+  ttl_class: static-30d
+
+# The returned record is the hyetograph series (n_hours floats), a small JSON
+# payload that scales with the window length -- never a bulk raster. per_station
+# with tiny coefficients tracks that (area * days) growth without ever warning.
+payload_estimate:
+  model: per_station
+  stations_per_sq_deg: 1.0
+  kb_per_station_per_day: 1.0
+  overhead_kb: 4.0
+  floor_mb: 0.02
+  ceil_mb: 2.0
+
+caveats:
+  - "AORC v1.1: ~800 m (30 arc-second) hourly CONUS precip (APCP_surface, mm), 1979-02 to ~10 days ago; NOT real-time."
+  - "Complements fetch_mrms_qpe (MRMS QPE Pass2 starts ~2020-10): AORC is the pre-2020 / any-historical-year forcing."
+  - "Returns an AOI-MEAN hyetograph (a rain-on-grid forcing series), not a spatial raster; a large bbox x long window is a slow streamed read."
+fallback: [fetch_mrms_qpe, fetch_era5_reanalysis]
+
+# corpus lifted from sibling corpus.yaml.
+
+docstring: |
+  NOAA AORC v1.1 historical hourly precipitation -- the AOI-mean hyetograph forcing series for any CONUS year since 1979.
+
+  **What it does:** Opens the public NOAA Analysis of Record for Calibration
+  (AORC) v1.1 per-year Zarr store on AWS (anonymous), selects the request bbox and
+  hour window, and averages the ~800 m (30 arc-second) hourly total precipitation
+  (``APCP_surface``, mm) over the AOI into a HYETOGRAPH: the hourly precip series
+  plus the window accumulation. AORC spans 1979-02 to ~10 days before present, so
+  it is the historical precipitation forcing for events BEFORE the MRMS archive
+  (which begins ~2020-10).
+
+  **When to use:**
+  - Rain-on-grid / rainfall-runoff FORCING for a historical storm on a small
+    basin: the AOI-mean hyetograph is the standard spatially-uniform precip input
+    for a watershed hydrologic/hydraulic run (e.g. calibrating an outlet-discharge
+    replication against a gauge record from 2014-2019).
+  - "How much rain fell over <basin> during the <year> storm, hour by hour?" for
+    any CONUS location and any year 1979-present.
+  - Pre-2020 precipitation where ``fetch_mrms_qpe`` has no coverage.
+  - A globally-consistent, gauge-and-analysis-blended hourly precip record used to
+    drive the National Water Model retrospective (AORC is that forcing).
+
+  **When NOT to use:**
+  - Real-time / recent (< ~10 days) precipitation -- AORC runs a ~10-day
+    publication lag; use ``fetch_mrms_qpe`` (CONUS, ~2 h latency, gauge-corrected)
+    or ``fetch_hrrr_forecast``.
+  - A SPATIAL precipitation raster / map layer -- this returns an AOI-MEAN series
+    (a forcing hyetograph), not a gridded field; for a gauge-corrected accumulation
+    COG use ``fetch_mrms_qpe``.
+  - Non-CONUS precipitation -- AORC v1.1 (1 km) is CONUS; use
+    ``fetch_era5_reanalysis`` (global, 27 km).
+  - Design-storm return periods -- use ``lookup_precip_return_period`` (Atlas 14).
+
+  **Parameters:**
+  - ``bbox`` (list[float]): ``(min_lon, min_lat, max_lon, max_lat)`` EPSG:4326, the
+    AOI averaged into the hyetograph. Must intersect CONUS; capped at 2.0 deg^2 (a
+    forcing series is a small-basin query).
+  - ``start_date`` (str): ISO ``YYYY-MM-DD`` inclusive. Coverage floor 1979-02-01.
+  - ``end_date`` (str): ISO ``YYYY-MM-DD`` inclusive (window ends at that day's
+    23:00). Capped at 92 days from ``start_date``.
+
+  **Returns:** a JSON dict with ``variable`` (``APCP_surface``), ``units`` (``mm``),
+  ``bbox``, ``start`` / ``end``, ``n_hours``, ``n_cells``, ``times`` (ISO hourly),
+  ``precip_mm`` (the AOI-mean hyetograph), ``total_mm`` (window accumulation),
+  ``peak_mm_per_hr`` + ``peak_time``, and ``cell_accumulation_mm`` (per-cell window
+  total min/max/mean). Cached ``static-30d``.
+
+  **Cross-tool dependencies:**
+  - Pairs with: ``fetch_lter_records`` (an observed outlet-discharge series to grade
+    a rain-on-grid replication AORC forces) and ``fetch_usgs_nwis_gauges``.
+  - Consumed by: rain-on-grid composers (the TELEMAC / hydrologic forcing series)
+    and per-basin runoff analysis in the code_exec playground.
+  - Alternative: ``fetch_mrms_qpe`` (CONUS, >= 2020-10, gauge-corrected raster),
+    ``fetch_era5_reanalysis`` (global, 27 km).

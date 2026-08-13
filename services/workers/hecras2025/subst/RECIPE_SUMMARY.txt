@@ -1,0 +1,41 @@
+HEC-RAS 2025 LINUX NATIVE-SUBSTITUTION EXPERIMENT -- result summary (ADR 0129)
+
+PER-NATIVE SUBSTITUTION:
+  GDAL   : apt libgdal 3.6.2 -> GDAL INITIALIZED but createterrain FAILED on
+           entrypoint CSharp_OSGeofGDAL_OpenShared__SWIG_1 (HEC binding is 3.11+
+           AND carries custom overloads/entrypoints stock GDAL lacks).
+           conda-forge GDAL 3.11.5 + 4 SWIG C# wraps + a 2-line alias shim
+           (OpenShared/Open overload) -> healthcheck exit 0, GDAL 3.11.5 init OK.
+  HDF5   : apt libhdf5 1.10.8 (system) AND conda libhdf5 -> H5.Bindings writes/reads
+           the consolidated project .h5 (terrain h5 produced, readable schema).
+  SQLite : SQLitePCLRaw.lib.e_sqlite3 2.1.10 linux-x64 libe_sqlite3.so beside app -> OK.
+  DSS    : NOT required by any meshing verb (never dlopened).
+  RasNativeParallel (solver kernel, closed win-x64): NEVER reached by a meshing verb.
+           Only Utility.Math.x86.dll P/Invokes it (Cdecl, 13 fns) on the SOLVE path.
+
+PER-VERB RESULT (substituted GDAL 3.11.5 + HDF5 + SQLite):
+  healthcheck  : EXIT 0  (was exit 3 on probe) -- GDAL reproj + 100% compute pass.
+  createterrain: EXIT 0  -- reproj check, tile export + overviews, terrain .h5 (5221 B)
+                 + intermediate .tif written. COMPLETES.
+  mesh         : EXIT 0  -- init GDAL, Computing Mesh, Saving Geometry. RUNS clean
+                 (seeded by the terrain CoreLayer h5; no real 2D flow-area geometry
+                 available to author a meaningful mesh -- input-limited, NOT native-limited).
+  prepare      : EXIT 255 -- "Could not parse source" INPUT gate (needs a valid .ras
+                 project/plan; none exists to seed). Passes GDAL init; no native wall.
+
+GDAL BINDING COVERAGE (stock GDAL 3.11.5 SWIG C# wraps vs HEC managed P/Invokes):
+  required entrypoints = 1826 ; stock-3.11.5 covers 1737 ; missing 89
+    - 8   = GDAL Algorithm API additions (3.12+)
+    - 81  = HEC CUSTOM binding additions (see below) -- a customized GDAL C# fork
+  HEC custom (not in stock GDAL, cannot be reproduced from public GDAL source):
+    OpenShared/Open overloads (aliasable), Band arithmetic (BinaryOpBand, IfThenElse,
+    Max/Min/MeanOfNBands, UnaryOp), ComputedBand, GDsCFastGetExtent, Dataset_GetExtent/
+    GetExtentWGS84LongLat/AsMDArray, plus assorted CPLE_/DCAP_/GFT_ constants.
+  MESHING PATH (createterrain+mesh) needed ONLY the OpenShared overload from that
+  custom set -> aliasable -> both verbs complete. The deep custom band-algebra /
+  ComputedBand entrypoints were NOT exercised by createterrain+mesh.
+
+VERDICT: meshing does NOT require the Windows-only solver kernel. createterrain WORKS
+on Linux today; mesh RUNS; prepare is INPUT-gated (not native-gated). Remaining
+unknown: prepare's property-table stage may touch the deeper HEC-custom band binding
+(untested -- no project seed). NOT confirmed impossible -> owned preprocessor NOT forced.

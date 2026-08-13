@@ -266,17 +266,22 @@ PROGRESS_TERMINAL: int = 100
 #: no-op, so the composer-name value here wins.
 SOLVER_WORKFLOW_REGISTRY: dict[str, str] = {
     "sfincs": "model_flood_scenario",
+    # QUADTREE build+solve dispatch (variable-resolution coastal deck authored
+    # by cht_sfincs inside the worker image). Distinct from ``"sfincs"`` (the
+    # regular-grid pre-built-deck volume-mount path); the LocalSolverSpec is
+    # registered by workflows.sfincs.flood.quadtree_dispatch at import.
+    "sfincs-quadtree": "model_flood_scenario",
     # NEW engines (parallel lanes) - orchestrator-wired per the lane
     # handoff. GeoClaw's value supersedes its own import-time ``setdefault``
     # (static literal wins).
-    "geoclaw": "model_dambreak_geoclaw_scenario",
-    "openquake": "model_seismic_hazard_scenario",
-    "landlab": "model_landslide_scenario",
+    "geoclaw": "model_geoclaw_inundation",
+    "openquake": "model_openquake_psha",
+    "landlab": "model_landlab_susceptibility",
     # SWAN Phase 1: standalone spectral nearshore wave-field engine. Composer name
     # (supersedes run_swan.register_swan_solver's import-time setdefault; the
     # static literal here is evaluated first, so the setdefault is a no-op and
     # this consistent composer name wins).
-    "swan": "model_wave_scenario",
+    "swan": "model_swan_wave_field",
     # canopy-height ML-inference tool (Meta HighResCanopyHeight on CPU). It is
     # NOT a numerical engine -- it is a compute-heavy ML-inference tool that runs
     # on the SAME local-docker substrate the physics engines use. The agent
@@ -1274,7 +1279,7 @@ def _run_solver_local_docker(
 #
 # Maps solver name -> callable returning a LocalSolverSpec. The callable form
 # (factory, not a pre-built spec) avoids circular imports: each workflow module
-# (run_swmm, run_landlab, model_seismic_hazard_scenario) registers itself at
+# (run_swmm, run_landlab, model_openquake_psha) registers itself at
 # import time via register_local_solver_spec(); the factory is only CALLED
 # inside _run_solver_local_docker, by which time the module is fully loaded.
 #
@@ -1291,7 +1296,7 @@ def register_local_solver_spec(solver: str, factory: Any) -> None:
     """Register a per-solver LocalSolverSpec factory for the local-docker backend.
 
     Call at module import time from each workflow module that owns a pip-only
-    engine (e.g. ``run_swmm``, ``run_landlab``, ``model_seismic_hazard_scenario``).
+    engine (e.g. ``run_swmm``, ``run_landlab``, ``model_openquake_psha``).
     The factory is a zero-arg callable returning a fresh ``LocalSolverSpec``
     instance (deferred construction avoids circular imports -- the solver module
     is partially loaded when it first registers). Idempotent: a second call with

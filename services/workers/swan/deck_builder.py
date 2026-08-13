@@ -87,6 +87,17 @@ __all__ = [
 OUTPUT_MAT_FILENAME: str = "swan_out.mat"
 INPUT_FILENAME: str = "INPUT"
 
+#: Time-varying storm-boundary series (TPAR) file for a NONSTATIONARY storm-
+#: evolution run. Written by author_deck ONLY when the build_spec carries a
+#: boundary_timeseries; referenced by BOUNDSPEC SIDE ... CONSTANT FILE.
+TPAR_FILENAME: str = "storm_boundary.tpar"
+
+#: SWAN nonstationary reference date. SWAN needs full ISO date-time strings
+#: (YYYYMMDD.HHMMSS) for a multi-day (24-48 h storm) run - the relative
+#: HHMMSS.sss form overflows past 24 h. A fixed epoch keeps the deck
+#: self-contained (the wave field is relative-time; the calendar is cosmetic).
+_SWAN_REF_DATE: str = "20170101"
+
 #: The SWAN *case name* the entrypoint hands to ``swanrun -input <SWN_CASENAME>``.
 #: The TU Delft ``swanrun`` launcher APPENDS ``.swn`` to this argument: it looks
 #: for ``<SWN_CASENAME>.swn``, copies it to the file literally named ``INPUT``,
@@ -111,6 +122,24 @@ _VALID_OUTPUT_QUANTITIES: frozenset[str] = frozenset(
 
 _VALID_SIDES: frozenset[str] = frozenset({"N", "S", "E", "W"})
 
+#: Wind-input growth formulations (SWAN 41.51 GEN command). "westhuysen" (default),
+#: "komen", "janssen" are GEN3 sub-formulations; "gen1"/"gen2" select the first-/
+#: second-generation growth. Note: the GEN formulation only shapes WIND-INPUT
+#: growth, so on a boundary-forced-only run (no wind_file) the choice has little
+#: effect on the field -- it is exercised meaningfully with a wind grid.
+_VALID_GEN_FORMULATIONS: frozenset[str] = frozenset(
+    {"westhuysen", "komen", "janssen", "gen1", "gen2"}
+)
+#: Whitecapping deep-water dissipation schemes (WCAPPING command). None keeps the
+#: GEN3 built-in default pairing; "ab" = Alves-Banner (2003); "komen" = Komen (1984).
+_VALID_WHITECAP_SCHEMES: frozenset[str] = frozenset({"ab", "komen"})
+#: DIA quadruplet integration methods (QUADRUPL [iquad]); 3 = fully-explicit DIA
+#: per iteration, recommended with ambient currents; 2 = SWAN default.
+_VALID_IQUAD: frozenset[int] = frozenset({1, 2, 3, 8})
+#: Triad biphase parametrizations (TRIAD DCTA ... BIPHASE). "eldeberky" (default
+#: field value urcrit=0.63); "dewit" (lpar averaging).
+_VALID_TRIAD_BIPHASE: frozenset[str] = frozenset({"eldeberky", "dewit"})
+
 #: SWAN's exception (NaN / dry / no-data) value -- written via SET; the postprocess
 #: masks cells equal to it. A large sentinel SWAN uses for cells with no result.
 SWAN_EXCEPTION_VALUE: float = -999.0
@@ -121,6 +150,65 @@ SWAN_EXCEPTION_VALUE: float = -999.0
 #: EVERY bottom cell is below this, the whole grid is inactive and SWAN no-ops
 #: ("Normal end of run", no swan_out.mat) -- the all-dry signature.
 SWAN_DEPMIN_M: float = 0.05
+
+#: PARSER VERSION -- bump whenever a build_spec top-level field is added,
+#: renamed, or retired. Named in the strict-field error so a stale worker
+#: image is distinguishable from a genuinely-malformed caller (ADR 0158).
+_PARSER_VERSION = "swan-spec-3"
+
+#: Every top-level build_spec field ``parse_build_spec`` reads. No legacy /
+#: envelope-only fields exist here -- ``manifest.get("build_spec")`` is the
+#: pure spec dict (run_id / inputs / outputs live as SIBLING manifest keys),
+#: so an unknown key is always a genuine typo or a stale/dropped composer field.
+_KNOWN_SPEC_FIELDS = frozenset(
+    {
+        "mode",
+        "bbox",
+        "bottom_file",
+        "mx",
+        "my",
+        "n_dir",
+        "n_freq",
+        "freq_low_hz",
+        "freq_high_hz",
+        "boundary",
+        "wind_file",
+        "friction",
+        "breaking",
+        "triads",
+        "gen_formulation",
+        "whitecapping",
+        "quad_iquad",
+        "breaking_alpha",
+        "breaking_gamma",
+        "friction_cfjon",
+        "triad_biphase",
+        "triad_urcrit",
+        "triad_lpar",
+        "sim_duration_s",
+        "time_step_s",
+        "output_frames",
+        "boundary_timeseries",
+        "output_quantities",
+    }
+)
+
+
+def _reject_unknown_spec_fields(raw: dict[str, Any]) -> None:
+    """Raise loudly if ``raw`` carries a top-level key ``parse_build_spec`` never
+    reads (ADR 0158 -- the ADR 0148 lesson: a stale image silently dropped
+    unknown build_spec fields and two registered knob templates ran as no-ops).
+    """
+    unknown = sorted(set(raw) - _KNOWN_SPEC_FIELDS)
+    if unknown:
+        raise SwanDeckError(
+            "SWAN_SPEC_UNKNOWN_FIELDS",
+            f"build_spec carries unknown field(s) {unknown} that parser "
+            f"{_PARSER_VERSION} does not read -- this SILENTLY no-ops the "
+            f"intended knob(s) rather than applying them. Either the caller has "
+            f"a typo, or the worker image is stale (rebuild it -- ADR 0148). "
+            f"Known fields: {sorted(_KNOWN_SPEC_FIELDS)}.",
+        )
 
 
 class SwanDeckError(RuntimeError):
@@ -167,10 +255,29 @@ class SwanBuildSpec:
     friction: bool = True
     breaking: bool = True
     triads: bool = True
+    # physics-scheme knobs (SWAN 41.51). Defaults reproduce the pre-knob deck
+    # byte-for-byte: gen_formulation="westhuysen" -> "GEN3 WESTHUYSEN",
+    # friction_cfjon=0.067 -> "FRICTION JONSWAP CONSTANT 0.067", breaking
+    # 1.0/0.73 -> "BREAKING CONSTANT 1.0 0.73", whitecapping/triad_biphase/
+    # quad_iquad unset -> the same implicit-default lines as before.
+    gen_formulation: str = "westhuysen"  # westhuysen|komen|janssen|gen1|gen2
+    whitecapping: str | None = None      # None|ab|komen (None = GEN3 built-in)
+    quad_iquad: int | None = None        # None|1|2|3|8 (None = SWAN default 2)
+    breaking_alpha: float = 1.0
+    breaking_gamma: float = 0.73
+    friction_cfjon: float = 0.067
+    triad_biphase: str | None = None     # None|eldeberky|dewit (None = bare TRIAD)
+    triad_urcrit: float = 0.63
+    triad_lpar: float = 0.0
     # nonstationary timing.
     sim_duration_s: float = 10800.0
     time_step_s: float = 600.0
     output_frames: int = 24
+    # TIME-VARYING storm boundary (nonstationary only). A sequence of
+    # (t_sec, hs_m, tp_s, dir_deg, spread_deg) rows written to a TPAR file so the
+    # offshore forcing BUILDS to a peak then DECAYS over the run - genuine storm
+    # evolution. None (default) keeps the CONSTANT-boundary deck byte-identical.
+    boundary_timeseries: tuple[tuple[float, float, float, float, float], ...] | None = None
     # output.
     output_quantities: tuple[str, ...] = DEFAULT_OUTPUT_QUANTITIES
 
@@ -210,6 +317,7 @@ def parse_build_spec(raw: dict[str, Any]) -> SwanBuildSpec:
         raise SwanDeckError(
             "SWAN_SPEC_INVALID", f"build_spec must be a JSON object, got {type(raw)}"
         )
+    _reject_unknown_spec_fields(raw)
 
     mode = str(raw.get("mode") or "stationary").strip().lower()
     if mode not in {"stationary", "nonstationary"}:
@@ -317,6 +425,44 @@ def parse_build_spec(raw: dict[str, Any]) -> SwanBuildSpec:
             "SWAN_SPEC_INVALID", f"output_frames must be >= 1, got {output_frames}"
         )
 
+    # TIME-VARYING storm boundary (nonstationary only): list of
+    # [t_sec, hs, tp, dir, spread] rows. Validated + coerced to a tuple of
+    # 5-float tuples, sorted by time. None/absent -> the constant-boundary deck.
+    bts_raw = raw.get("boundary_timeseries")
+    boundary_timeseries: tuple[tuple[float, float, float, float, float], ...] | None = None
+    if bts_raw:
+        if mode != "nonstationary":
+            raise SwanDeckError(
+                "SWAN_SPEC_INVALID",
+                "boundary_timeseries requires mode='nonstationary'",
+            )
+        if not isinstance(bts_raw, (list, tuple)) or len(bts_raw) < 2:
+            raise SwanDeckError(
+                "SWAN_SPEC_INVALID",
+                f"boundary_timeseries must be >= 2 rows, got {bts_raw!r}",
+            )
+        rows: list[tuple[float, float, float, float, float]] = []
+        for r in bts_raw:
+            if not isinstance(r, (list, tuple)) or len(r) != 5:
+                raise SwanDeckError(
+                    "SWAN_SPEC_INVALID",
+                    f"each boundary_timeseries row must be "
+                    f"[t_sec, hs, tp, dir, spread], got {r!r}",
+                )
+            t_sec, hs_r, tp_r, dir_r, dd_r = (float(x) for x in r)
+            if hs_r <= 0.0 or tp_r <= 0.0 or dd_r <= 0.0:
+                raise SwanDeckError(
+                    "SWAN_SPEC_INVALID",
+                    f"boundary_timeseries hs/tp/spread must be > 0, got {r!r}",
+                )
+            if not (0.0 <= dir_r < 360.0):
+                raise SwanDeckError(
+                    "SWAN_SPEC_INVALID",
+                    f"boundary_timeseries dir must be in [0,360), got {dir_r}",
+                )
+            rows.append((t_sec, hs_r, tp_r, dir_r, dd_r))
+        boundary_timeseries = tuple(sorted(rows, key=lambda x: x[0]))
+
     quants_raw = raw.get("output_quantities") or list(DEFAULT_OUTPUT_QUANTITIES)
     if not isinstance(quants_raw, (list, tuple)) or not quants_raw:
         raise SwanDeckError(
@@ -340,6 +486,53 @@ def parse_build_spec(raw: dict[str, Any]) -> SwanBuildSpec:
     wind_file = raw.get("wind_file")
     wind_file = str(wind_file).strip() if wind_file else None
 
+    # --- Physics-scheme knobs (all optional; defaults reproduce the prior deck). --
+    gen_formulation = str(raw.get("gen_formulation") or "westhuysen").strip().lower()
+    if gen_formulation not in _VALID_GEN_FORMULATIONS:
+        raise SwanDeckError(
+            "SWAN_SPEC_INVALID",
+            f"gen_formulation must be one of {sorted(_VALID_GEN_FORMULATIONS)}, "
+            f"got {gen_formulation!r}",
+        )
+    whitecapping_raw = raw.get("whitecapping")
+    whitecapping = str(whitecapping_raw).strip().lower() if whitecapping_raw else None
+    if whitecapping is not None and whitecapping not in _VALID_WHITECAP_SCHEMES:
+        raise SwanDeckError(
+            "SWAN_SPEC_INVALID",
+            f"whitecapping must be one of {sorted(_VALID_WHITECAP_SCHEMES)} or null, "
+            f"got {whitecapping!r}",
+        )
+    quad_iquad_raw = raw.get("quad_iquad")
+    quad_iquad = int(quad_iquad_raw) if quad_iquad_raw is not None else None
+    if quad_iquad is not None and quad_iquad not in _VALID_IQUAD:
+        raise SwanDeckError(
+            "SWAN_SPEC_INVALID",
+            f"quad_iquad must be one of {sorted(_VALID_IQUAD)} or null, got {quad_iquad}",
+        )
+    breaking_alpha = _num("breaking_alpha", 1.0)
+    breaking_gamma = _num("breaking_gamma", 0.73)
+    if breaking_alpha <= 0.0 or not (0.0 < breaking_gamma < 2.0):
+        raise SwanDeckError(
+            "SWAN_SPEC_INVALID",
+            f"require breaking_alpha > 0 and 0 < breaking_gamma < 2, got "
+            f"({breaking_alpha}, {breaking_gamma})",
+        )
+    friction_cfjon = _num("friction_cfjon", 0.067)
+    if friction_cfjon <= 0.0:
+        raise SwanDeckError(
+            "SWAN_SPEC_INVALID", f"friction_cfjon must be > 0, got {friction_cfjon}"
+        )
+    triad_biphase_raw = raw.get("triad_biphase")
+    triad_biphase = str(triad_biphase_raw).strip().lower() if triad_biphase_raw else None
+    if triad_biphase is not None and triad_biphase not in _VALID_TRIAD_BIPHASE:
+        raise SwanDeckError(
+            "SWAN_SPEC_INVALID",
+            f"triad_biphase must be one of {sorted(_VALID_TRIAD_BIPHASE)} or null, "
+            f"got {triad_biphase!r}",
+        )
+    triad_urcrit = _num("triad_urcrit", 0.63)
+    triad_lpar = _num("triad_lpar", 0.0)
+
     return SwanBuildSpec(
         mode=mode,
         bbox=bbox,  # type: ignore[arg-type]
@@ -359,9 +552,19 @@ def parse_build_spec(raw: dict[str, Any]) -> SwanBuildSpec:
         friction=bool(raw.get("friction", True)),
         breaking=bool(raw.get("breaking", True)),
         triads=bool(raw.get("triads", True)),
+        gen_formulation=gen_formulation,
+        whitecapping=whitecapping,
+        quad_iquad=quad_iquad,
+        breaking_alpha=breaking_alpha,
+        breaking_gamma=breaking_gamma,
+        friction_cfjon=friction_cfjon,
+        triad_biphase=triad_biphase,
+        triad_urcrit=triad_urcrit,
+        triad_lpar=triad_lpar,
         sim_duration_s=sim_duration_s,
         time_step_s=time_step_s,
         output_frames=output_frames,
+        boundary_timeseries=boundary_timeseries,
         output_quantities=tuple(quants),
     )
 
@@ -381,6 +584,34 @@ def _grid_geometry(spec: SwanBuildSpec) -> dict[str, float]:
         "xlenc": max_lon - min_lon,
         "ylenc": max_lat - min_lat,
     }
+
+
+def _swan_iso_time(seconds: float) -> str:
+    """Seconds-from-epoch -> a SWAN ISO time string ``YYYYMMDD.HHMMSS`` on the
+    fixed ``_SWAN_REF_DATE`` epoch. Used for COMPUTE NONSTATIONARY / BLOCK OUTPUT
+    / TPAR times so a 24-48 h storm run carries valid multi-day timestamps
+    (the old relative HHMMSS.sss form silently overflowed past 24 h)."""
+    import datetime as _dt
+
+    base = _dt.datetime.strptime(_SWAN_REF_DATE, "%Y%m%d")
+    t = base + _dt.timedelta(seconds=float(seconds))
+    return t.strftime("%Y%m%d.%H%M%S")
+
+
+def render_tpar(spec: SwanBuildSpec) -> str | None:
+    """Render the TPAR time-varying boundary file text from
+    ``spec.boundary_timeseries`` (a sequence of ``(t_sec, hs, tp, dir, spread)``
+    rows), or ``None`` when no series is set. SWAN TPAR format: the ``TPAR``
+    header then one ``<isotime> <Hs> <Per> <Dir> <dd>`` row per time."""
+    series = getattr(spec, "boundary_timeseries", None)
+    if not series:
+        return None
+    rows = ["TPAR"]
+    for row in series:
+        t_sec, hs, tp, bdir, dd = (float(row[0]), float(row[1]), float(row[2]),
+                                   float(row[3]), float(row[4]))
+        rows.append(f"{_swan_iso_time(t_sec)} {hs:.3f} {tp:.3f} {bdir:.2f} {dd:.2f}")
+    return "\n".join(rows) + "\n"
 
 
 def render_swn_command_file(spec: SwanBuildSpec) -> str:
@@ -479,60 +710,121 @@ def render_swn_command_file(spec: SwanBuildSpec) -> str:
         )
         lines.append(f"READINP WIND 1.0 '{spec.wind_file}' 1 0 FREE")
 
-    # Physics. GEN3 = third-generation wind input + whitecapping (deep water).
-    lines.append("GEN3 WESTHUYSEN")
-    if not wind_enabled:
+    # Physics -- wind-input growth formulation. GEN3 (third-generation: wind input
+    # + whitecapping) is the operational default; "gen1"/"gen2" select the first-/
+    # second-generation growth. Only GEN3 carries whitecapping + quadruplets.
+    gf = spec.gen_formulation
+    is_gen3 = gf in ("westhuysen", "komen", "janssen")
+    if gf == "gen1":
+        lines.append("GEN1")
+    elif gf == "gen2":
+        lines.append("GEN2")
+    elif gf == "komen":
+        lines.append("GEN3 KOMEN")
+    elif gf == "janssen":
+        lines.append("GEN3 JANSSEN")
+    else:
+        lines.append("GEN3 WESTHUYSEN")
+    # Whitecapping deep-water dissipation scheme (GEN3 only). Unset keeps the GEN3
+    # built-in pairing; "ab" = Alves-Banner, "komen" = classical Komen.
+    if is_gen3 and spec.whitecapping == "ab":
+        lines.append("WCAPPING AB")
+    elif is_gen3 and spec.whitecapping == "komen":
+        lines.append("WCAPPING KOMEN")
+    if not wind_enabled and is_gen3:
         # SWAN ABORTS at error level 3 on quadruplets + ZERO wind ("not recommended
         # to use quadruplets in combination with zero wind conditions" -> "No start
         # of computation"). Quadruplet nonlinear interactions model wind-sea growth,
         # which is irrelevant for a pure boundary-forced swell with no wind forcing,
-        # so disable them when no ERA5 wind field is supplied (keep them when it is).
+        # so disable them when no wind field is supplied (keep them when it is).
         lines.append("OFF QUAD")
+    elif wind_enabled and is_gen3 and spec.quad_iquad is not None:
+        # DIA integration method for the quadruplets (iquad=3 = fully-explicit DIA
+        # per iteration, recommended under strong ambient currents).
+        lines.append(f"QUADRUPL {int(spec.quad_iquad)}")
     if spec.friction:
-        # JONSWAP bottom friction (depth-induced), default coefficient.
-        lines.append("FRICTION JONSWAP CONSTANT 0.067")
+        # JONSWAP semi-empirical bottom friction (depth-induced); cfjon is the
+        # regional calibration coefficient (0.067 swell / 0.038 wind-sea / 0.019
+        # smoother Gulf-of-Mexico-type beds per the SWAN manual).
+        lines.append(f"FRICTION JONSWAP CONSTANT {spec.friction_cfjon:.4f}")
     if spec.breaking:
-        # Depth-induced breaking (Battjes-Janssen), default gamma.
-        lines.append("BREAKING CONSTANT 1.0 0.73")
+        # Depth-induced breaking (Battjes-Janssen), constant breaker index gamma.
+        lines.append(
+            f"BREAKING CONSTANT {spec.breaking_alpha:.3f} {spec.breaking_gamma:.3f}"
+        )
     if spec.triads:
-        # Triad (three-wave) nonlinear interactions (shallow water).
-        lines.append("TRIAD")
+        # Triad (three-wave) nonlinear interactions (shallow water). Bare TRIAD
+        # keeps the DCTA default; an explicit biphase parametrization tunes the
+        # phase-coupling for the site's Ursell-number regime.
+        if spec.triad_biphase == "eldeberky":
+            lines.append(
+                f"TRIAD DCTA 4.4 0.66667 COLL BIPHASE ELDEBERKY {spec.triad_urcrit:.3f}"
+            )
+        elif spec.triad_biphase == "dewit":
+            lines.append(
+                f"TRIAD DCTA 4.4 0.66667 COLL BIPHASE DEWIT {spec.triad_lpar:.3f}"
+            )
+        else:
+            lines.append("TRIAD")
 
     # Parametric offshore boundary: JONSWAP shape + a CONSTANT PAR side spec.
     #   BOUND SHAPE JONSWAP PEAK DSPR DEGREES
     #   BOUNDSPEC SIDE <side> CONSTANT PAR <hs> <per> <dir> <dd>
     lines.append("BOUND SHAPE JONSWAP PEAK DSPR DEGREES")
     side_word = {"N": "N", "S": "S", "E": "E", "W": "W"}[spec.boundary_side]
-    lines.append(
-        f"BOUNDSPEC SIDE {side_word} CONSTANT PAR "
-        f"{spec.boundary_hs_m:.3f} {spec.boundary_tp_s:.3f} "
-        f"{spec.boundary_dir_deg:.2f} {spec.boundary_spread_deg:.2f}"
-    )
+    if spec.mode == "nonstationary" and getattr(spec, "boundary_timeseries", None):
+        # TIME-VARYING storm boundary: a build-peak-decay Hs series drives genuine
+        # 24-48 h storm EVOLUTION (not a constant spin-up). SWAN reads the offshore
+        # parametric boundary from a TPAR file (written by author_deck).
+        lines.append(
+            f"BOUNDSPEC SIDE {side_word} CONSTANT FILE '{TPAR_FILENAME}' 1"
+        )
+    else:
+        lines.append(
+            f"BOUNDSPEC SIDE {side_word} CONSTANT PAR "
+            f"{spec.boundary_hs_m:.3f} {spec.boundary_tp_s:.3f} "
+            f"{spec.boundary_dir_deg:.2f} {spec.boundary_spread_deg:.2f}"
+        )
+
+    # NONSTATIONARY propagation scheme: the default higher-order (S&L / SORDUP)
+    # scheme is CFL-restricted and SWAN ABORTS (error level 2, "inadvisable to
+    # use the higher order scheme for nonstationary computation with CFL greater
+    # than 10") on a time-marching storm at a normal time step. PROP BSBT is
+    # SWAN's unconditionally-stable first-order backward-space-backward-time
+    # scheme, the recommended nonstationary propagation (more diffusive but
+    # robust). Stationary runs keep the default higher-order scheme.
+    if spec.mode == "nonstationary":
+        lines.append("PROP BSBT")
 
     # Gridded output BLOCK over the whole computational grid -> a Matlab file the
     # postprocess reads. NOHEADER keeps it a plain array per quantity; LAYOUT 3 is
-    # the standard ordering.
+    # the standard ordering. In NONSTATIONARY mode the BLOCK MUST carry an OUTPUT
+    # <tbeg> <delt> <unit> clause or SWAN writes NO per-frame dumps (a silent gap
+    # the pre-ADR-0190 deck had). The output cadence is set so ~output_frames
+    # dumps span the run.
     quant_str = " ".join(spec.output_quantities)
-    lines.append(
-        f"BLOCK 'COMPGRID' NOHEADER '{OUTPUT_MAT_FILENAME}' LAYOUT 3 {quant_str}"
-    )
+    if spec.mode == "nonstationary":
+        out_delt = max(spec.sim_duration_s / max(int(spec.output_frames), 1), spec.time_step_s)
+        lines.append(
+            f"BLOCK 'COMPGRID' NOHEADER '{OUTPUT_MAT_FILENAME}' LAYOUT 3 {quant_str} "
+            f"OUTPUT {_swan_iso_time(0.0)} {out_delt:.1f} SEC"
+        )
+    else:
+        lines.append(
+            f"BLOCK 'COMPGRID' NOHEADER '{OUTPUT_MAT_FILENAME}' LAYOUT 3 {quant_str}"
+        )
 
     # Compute + stop.
     if spec.mode == "nonstationary":
-        # COMPUTE NONSTATIONARY <tstart> <dt> <unit> <tstop>. SWAN time strings
-        # are ISO-like; we use a relative seconds-from-zero convention via SEC
-        # unit so the deck is self-contained (no absolute calendar dependency).
-        n_steps = int(spec.output_frames)
-        # tbegin=0, tend=sim_duration; dt set so we get ~output_frames dumps.
+        # COMPUTE NONSTATIONARY <tbegc> <deltc> <unit> <tendc>. tbegc/tendc are
+        # full ISO date-time strings (YYYYMMDD.HHMMSS) so a multi-day storm run
+        # carries valid timestamps (the old bare-seconds tendc was malformed --
+        # it overflowed the HHMMSS field past 24 h). deltc is the compute step.
         lines.append(
             "COMPUTE NONSTATIONARY "
-            f"000000.000 {spec.time_step_s:.1f} SEC "
-            f"{spec.sim_duration_s:.1f}"
+            f"{_swan_iso_time(0.0)} {spec.time_step_s:.1f} SEC "
+            f"{_swan_iso_time(spec.sim_duration_s)}"
         )
-        # NOTE: per-frame BLOCK dumps are emitted by SWAN at each compute step
-        # when the BLOCK is inside the COMPUTE window; n_steps is carried in the
-        # manifest for the postprocess frame-selection cap.
-        _ = n_steps
     else:
         # STATIONARY mode: the SWAN manual is explicit -- "if the SWAN mode is
         # stationary, then only the command COMPUTE should be given here (no
@@ -643,11 +935,22 @@ def build_swan_deck(
     (deck / spec.bottom_file).write_text(bottom_text, encoding="utf-8")
     written.append(spec.bottom_file)
 
+    # The TIME-VARYING storm boundary (TPAR), when a boundary_timeseries is set.
+    tpar_text = render_tpar(spec)
+    if tpar_text is not None:
+        (deck / TPAR_FILENAME).write_text(tpar_text, encoding="utf-8")
+        written.append(TPAR_FILENAME)
+
     wind_enabled = spec.wind_file is not None
+    _phys = f"gen={spec.gen_formulation} gamma={spec.breaking_gamma:.2f} cfjon={spec.friction_cfjon:.3f}"
+    if spec.whitecapping:
+        _phys += f" wcap={spec.whitecapping}"
+    if spec.triad_biphase:
+        _phys += f" biphase={spec.triad_biphase}"
     driver = (
         f"{spec.mode} wave field Hs={spec.boundary_hs_m:.1f} m "
         f"Tp={spec.boundary_tp_s:.1f} s dir={spec.boundary_dir_deg:.0f} deg "
-        f"side={spec.boundary_side}"
+        f"side={spec.boundary_side} [{_phys}]"
         + (" + ERA5 wind (GEN3)" if wind_enabled else " (boundary-forced only)")
     )
 

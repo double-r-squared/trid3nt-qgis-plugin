@@ -1,0 +1,256 @@
+.FF.............FF...................................................... [  1%]
+........................................................................ [  3%]
+........................................................................ [  4%]
+........................................................................ [  6%]
+........................................................................ [  7%]
+........................................................................ [  9%]
+........................................................................ [ 10%]
+........................................................................ [ 12%]
+........................................................................ [ 13%]
+........................................................................ [ 15%]
+........................................................................ [ 16%]
+........................................................................ [ 18%]
+........................................................................ [ 19%]
+........................................................................ [ 21%]
+........................................................................ [ 22%]
+........................................................................ [ 24%]
+........................................................................ [ 25%]
+........................................................................ [ 27%]
+........................................................................ [ 28%]
+........................................................................ [ 30%]
+........................................................................ [ 31%]
+........................................................................ [ 33%]
+........................................................................ [ 34%]
+........................................................................ [ 36%]
+........................................................................ [ 37%]
+........................................................................ [ 39%]
+........................................................................ [ 40%]
+........................................................................ [ 42%]
+........................................................................ [ 43%]
+........................................................................ [ 45%]
+........................................................................ [ 46%]
+........................................................................ [ 48%]
+........................................................................ [ 49%]
+........................................................................ [ 51%]
+........................................................................ [ 52%]
+........................................................................ [ 54%]
+........................................................................ [ 55%]
+........................................................................ [ 57%]
+........................................................................ [ 58%]
+........................................................................ [ 60%]
+........................................................................ [ 61%]
+........................................................................ [ 63%]
+........................................................................ [ 64%]
+........................................................................ [ 66%]
+........................................................................ [ 67%]
+........................................................................ [ 69%]
+........................................................................ [ 70%]
+........................................................................ [ 72%]
+........................................................................ [ 73%]
+........................................................................ [ 75%]
+........................................................................ [ 76%]
+........................................................................ [ 78%]
+........................................................................ [ 79%]
+..............................................x......................... [ 81%]
+........................................................................ [ 82%]
+.............................................s.......................... [ 84%]
+........................................................................ [ 85%]
+........................................................................ [ 87%]
+........................................................................ [ 88%]
+........................................................................ [ 90%]
+........................................................................ [ 91%]
+........................................................................ [ 93%]
+........................................................................ [ 94%]
+........................................................................ [ 96%]
+...................................................s.................... [ 97%]
+........................................................................ [ 99%]
+........................................                                 [100%]
+=================================== FAILURES ===================================
+____________ test_gate_emits_fetch_granularity_block[fetch_dem-dem] ____________
+
+tool_name = 'fetch_dem', engine = 'dem'
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize(
+        "tool_name,engine",
+        [("fetch_dem", "dem"), ("fetch_topobathy", "topobathy")],
+    )
+    async def test_gate_emits_fetch_granularity_block(tool_name: str, engine: str) -> None:
+        from trid3nt_server import server
+        from trid3nt_server.agent.gates.cards import solver_confirm
+    
+        ws, state = _FakeWS(), _FakeState()
+        approver = asyncio.create_task(_drive_decision(server, "proceed"))
+        should_run, _ = await server._gate_on_solver_confirm(  # type: ignore[arg-type]
+            ws, state, tool_name, _fetch_params()
+        )
+        await approver
+    
+        assert should_run is True
+        card = next(e for e in ws.sent if e.get("type") == "tool-payload-warning")
+        g = card["payload"]["granularity"]
+        assert g is not None
+        assert g["engine"] == engine
+        assert g["resolution_param"] == "resolution_m"
+>       assert g["compute_class"] == "fetch"
+E       AssertionError: assert 'local' == 'fetch'
+E         
+E         - fetch
+E         + local
+
+server/tests/test_fetch_resolution_gate.py:137: AssertionError
+______ test_gate_emits_fetch_granularity_block[fetch_topobathy-topobathy] ______
+
+tool_name = 'fetch_topobathy', engine = 'topobathy'
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize(
+        "tool_name,engine",
+        [("fetch_dem", "dem"), ("fetch_topobathy", "topobathy")],
+    )
+    async def test_gate_emits_fetch_granularity_block(tool_name: str, engine: str) -> None:
+        from trid3nt_server import server
+        from trid3nt_server.agent.gates.cards import solver_confirm
+    
+        ws, state = _FakeWS(), _FakeState()
+        approver = asyncio.create_task(_drive_decision(server, "proceed"))
+        should_run, _ = await server._gate_on_solver_confirm(  # type: ignore[arg-type]
+            ws, state, tool_name, _fetch_params()
+        )
+        await approver
+    
+        assert should_run is True
+        card = next(e for e in ws.sent if e.get("type") == "tool-payload-warning")
+        g = card["payload"]["granularity"]
+        assert g is not None
+        assert g["engine"] == engine
+        assert g["resolution_param"] == "resolution_m"
+>       assert g["compute_class"] == "fetch"
+E       AssertionError: assert 'local' == 'fetch'
+E         
+E         - fetch
+E         + local
+
+server/tests/test_fetch_resolution_gate.py:137: AssertionError
+_______ test_fetch_gate_compute_label_deployment_aware[aws-batch-fetch] ________
+
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x7fc465687e60>
+backend = 'aws-batch', expected_compute_class = 'fetch'
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize(
+        "backend,expected_compute_class",
+        [
+            ("local-docker", "local"),
+            ("aws-batch", "fetch"),
+            ("", "fetch"),  # unset/empty -> the cloud default, unchanged
+        ],
+    )
+    async def test_fetch_gate_compute_label_deployment_aware(
+        monkeypatch, backend: str, expected_compute_class: str
+    ) -> None:
+        from trid3nt_server import server
+    
+        if backend:
+            monkeypatch.setenv("TRID3NT_SOLVER_BACKEND", backend)
+        else:
+            monkeypatch.delenv("TRID3NT_SOLVER_BACKEND", raising=False)
+    
+        ws, state = _FakeWS(), _FakeState()
+        approver = asyncio.create_task(_drive_decision(server, "proceed"))
+        should_run, _ = await server._gate_on_solver_confirm(  # type: ignore[arg-type]
+            ws, state, "fetch_dem", _fetch_params()
+        )
+        await approver
+    
+        assert should_run is True
+        card = next(e for e in ws.sent if e.get("type") == "tool-payload-warning")
+        g = card["payload"]["granularity"]
+>       assert g["compute_class"] == expected_compute_class
+E       AssertionError: assert 'local' == 'fetch'
+E         
+E         - fetch
+E         + local
+
+server/tests/test_fetch_resolution_gate.py:387: AssertionError
+____________ test_fetch_gate_compute_label_deployment_aware[-fetch] ____________
+
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x7fc4656859a0>
+backend = '', expected_compute_class = 'fetch'
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize(
+        "backend,expected_compute_class",
+        [
+            ("local-docker", "local"),
+            ("aws-batch", "fetch"),
+            ("", "fetch"),  # unset/empty -> the cloud default, unchanged
+        ],
+    )
+    async def test_fetch_gate_compute_label_deployment_aware(
+        monkeypatch, backend: str, expected_compute_class: str
+    ) -> None:
+        from trid3nt_server import server
+    
+        if backend:
+            monkeypatch.setenv("TRID3NT_SOLVER_BACKEND", backend)
+        else:
+            monkeypatch.delenv("TRID3NT_SOLVER_BACKEND", raising=False)
+    
+        ws, state = _FakeWS(), _FakeState()
+        approver = asyncio.create_task(_drive_decision(server, "proceed"))
+        should_run, _ = await server._gate_on_solver_confirm(  # type: ignore[arg-type]
+            ws, state, "fetch_dem", _fetch_params()
+        )
+        await approver
+    
+        assert should_run is True
+        card = next(e for e in ws.sent if e.get("type") == "tool-payload-warning")
+        g = card["payload"]["granularity"]
+>       assert g["compute_class"] == expected_compute_class
+E       AssertionError: assert 'local' == 'fetch'
+E         
+E         - fetch
+E         + local
+
+server/tests/test_fetch_resolution_gate.py:387: AssertionError
+=============================== warnings summary ===============================
+tests/test_hydrology_primitives.py: 4 warnings
+tests/test_model_debris_flow.py: 18 warnings
+  /home/nate/Documents/trid3nt-local/venvs/agent/lib/python3.12/site-packages/pysheds/sgrid.py:904: DeprecationWarning: `in1d` is deprecated. Use `np.isin` instead.
+    invalid_cells = ~np.in1d(fdir.ravel(), dirmap).reshape(fdir.shape)
+
+tests/test_model_debris_flow.py::test_full_pipeline_synthetic
+tests/test_model_debris_flow.py::test_full_pipeline_synthetic
+tests/test_model_debris_flow.py::test_dnbr_severity_input
+tests/test_model_debris_flow.py::test_dnbr_severity_input
+  /home/nate/Documents/trid3nt-local/venvs/agent/lib/python3.12/site-packages/pysheds/sgrid.py:1821: DeprecationWarning: `in1d` is deprecated. Use `np.isin` instead.
+    invalid_cells = ~np.in1d(fdir.ravel(), dirmap).reshape(fdir.shape)
+
+tests/test_model_debris_flow.py::test_full_pipeline_synthetic
+tests/test_model_debris_flow.py::test_dnbr_severity_input
+  /home/nate/Documents/trid3nt-local/venvs/agent/lib/python3.12/site-packages/pysheds/sgrid.py:1923: DeprecationWarning: `in1d` is deprecated. Use `np.isin` instead.
+    invalid_cells = ~np.in1d(fdir.ravel(), dirmap).reshape(fdir.shape)
+
+tests/test_model_debris_flow.py::test_full_pipeline_synthetic
+tests/test_model_debris_flow.py::test_dnbr_severity_input
+  /home/nate/Documents/trid3nt-local/venvs/agent/lib/python3.12/site-packages/pysheds/sgrid.py:1424: DeprecationWarning: `in1d` is deprecated. Use `np.isin` instead.
+    invalid_cells = ~np.in1d(fdir.ravel(), dirmap).reshape(fdir.shape)
+
+tests/test_modflow_archetypes.py::test_postprocess_dewatering_from_real_run
+tests/test_modflow_archetypes.py::test_postprocess_budget_partition_from_real_run
+  /home/nate/Documents/trid3nt-local/venvs/agent/lib/python3.12/site-packages/flopy/utils/binaryfile/__init__.py:1269: RuntimeWarning: overflow encountered in scalar multiply
+    nbytes = nrow * ncol * nlay * realtype_nbytes
+
+tests/test_modflow_archetypes.py::test_postprocess_dewatering_from_real_run
+tests/test_modflow_archetypes.py::test_postprocess_budget_partition_from_real_run
+  /home/nate/Documents/trid3nt-local/venvs/agent/lib/python3.12/site-packages/flopy/utils/binaryfile/__init__.py:1008: RuntimeWarning: overflow encountered in scalar multiply
+    self.nnodes = self.nlay * self.nrow * self.ncol
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+=========================== short test summary info ============================
+FAILED server/tests/test_fetch_resolution_gate.py::test_gate_emits_fetch_granularity_block[fetch_dem-dem]
+FAILED server/tests/test_fetch_resolution_gate.py::test_gate_emits_fetch_granularity_block[fetch_topobathy-topobathy]
+FAILED server/tests/test_fetch_resolution_gate.py::test_fetch_gate_compute_label_deployment_aware[aws-batch-fetch]
+FAILED server/tests/test_fetch_resolution_gate.py::test_fetch_gate_compute_label_deployment_aware[-fetch]
+4 failed, 4785 passed, 2 skipped, 1 xfailed, 34 warnings in 111.47s (0:01:51)

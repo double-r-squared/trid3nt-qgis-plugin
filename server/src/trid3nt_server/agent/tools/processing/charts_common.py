@@ -42,6 +42,7 @@ __all__ = [
     "build_reach_profile_chart",
     "build_saltwater_wedge_chart",
     "build_head_series_chart",
+    "build_hydrograph_overlay_chart",
 ]
 
 logger = logging.getLogger("trid3nt_server.agent.tools.processing.charts_common")
@@ -514,6 +515,85 @@ def build_uhs_chart(
         created_turn_id=created_turn_id,
     )
 
+def build_hazard_quantile_band_chart(
+    *,
+    imls_g: list[float],
+    mean_poe: list[float],
+    q05_poe: list[float],
+    q50_poe: list[float],
+    q95_poe: list[float],
+    imt: str,
+    investigation_time_years: float,
+    n_realizations: int | None = None,
+    logic_tree_label: str | None = None,
+    source_layer_uri: str | None = None,
+    created_turn_id: str | None = None,
+) -> dict[str, Any] | None:
+    """Log-log hazard curve with the 5/50/95 epistemic quantile band.
+
+    Renders the mean hazard curve (solid) plus a shaded 5th-95th percentile band
+    and the median (50th), the epistemic spread across the logic-tree
+    realizations. All arrays come from ``postprocess_openquake`` parsing of the
+    OpenQuake mean + ``quantile_curve-{0.05,0.5,0.95}`` CSV exports - no LLM. The
+    band is an ``area`` layer between ``q05_poe`` and ``q95_poe`` on the shared
+    IML ladder; log scales drop any non-positive point. Returns ``None`` when the
+    mean series is empty / mismatched."""
+    if not imls_g or not mean_poe or len(imls_g) != len(mean_poe):
+        return None
+
+    # Four line series (mean + 5/50/95 quantiles) grouped by a color field -- the
+    # 5th and 95th lines are the envelope of the epistemic spread across the
+    # logic-tree realizations. Lines (not an area band) so the chart-dock line
+    # interpreter renders every series natively with a legend.
+    series_arrays = (
+        ("q95", q95_poe),
+        ("mean", mean_poe),
+        ("q50 (median)", q50_poe),
+        ("q05", q05_poe),
+    )
+    rows: list[dict[str, Any]] = []
+    for series, arr in series_arrays:
+        if not arr or len(arr) != len(imls_g):
+            continue
+        for x, p in zip(imls_g, arr):
+            # log scales reject <= 0; keep only positive, plottable points.
+            if float(x) > 0.0 and float(p) > 0.0:
+                rows.append({"iml": float(x), "poe": float(p), "series": series})
+    if not rows:
+        return None
+
+    inv_label = (
+        f"{int(round(investigation_time_years))}yr"
+        if investigation_time_years and investigation_time_years > 0
+        else "the investigation time"
+    )
+    spec = {
+        "title": f"Seismic hazard curve with 5/50/95 logic-tree spread - {imt}",
+        "data": {"values": rows},
+        "mark": {"type": "line", "point": True, "tooltip": True},
+        "encoding": {
+            "x": {"field": "iml", "type": "quantitative",
+                  "scale": {"type": "log"}, "title": f"{imt} (g)"},
+            "y": {"field": "poe", "type": "quantitative",
+                  "scale": {"type": "log"}, "title": f"Mean PoE in {inv_label}"},
+            "color": {"field": "series", "type": "nominal", "title": "series"},
+        },
+        "width": "container",
+    }
+    rlz_txt = f" · {int(n_realizations):,} realizations" if n_realizations else ""
+    lt_txt = f" · {logic_tree_label}" if logic_tree_label else ""
+    caption = (
+        f"Mean {imt} hazard curve with the 5th/50th/95th percentile epistemic "
+        f"spread across logic-tree realizations over {inv_label}{rlz_txt}{lt_txt}"
+    )
+    return build_chart_payload(
+        vega_lite_spec=spec,
+        title=f"Hazard curve 5/50/95 spread - {imt}",
+        caption=caption,
+        source_layer_uri=source_layer_uri,
+        created_turn_id=created_turn_id,
+    )
+
 def build_budget_partition_chart(
     *,
     budget_partition_m3_day: dict[str, float],
@@ -693,6 +773,86 @@ def build_subsidence_timeseries_chart(
     return build_chart_payload(
         vega_lite_spec=spec,
         title="Ground subsidence over time",
+        caption=caption,
+        source_layer_uri=source_layer_uri,
+        created_turn_id=created_turn_id,
+    )
+
+def build_vadose_breakthrough_chart(
+    *,
+    days: list[float],
+    concentration: list[float],
+    infiltration_conc: float,
+    breakthrough_time_days: float | None = None,
+    vadose_thickness_m: float | None = None,
+    source_layer_uri: str | None = None,
+    created_turn_id: str | None = None,
+) -> dict[str, Any] | None:
+    """Build the UZT vadose breakthrough concentration-vs-time chart (ADR 0228).
+
+    ``concentration`` is the base-of-column tracer concentration (just above the
+    water table), one value per saved transport step - the real UZT obs series the
+    postprocess parsed. ``days`` is the matching elapsed-time axis. The curve is a
+    sharp advective front (MF6 has no unsaturated dispersion), rising from 0 to the
+    infiltration concentration once the tracer transits the vadose column. A
+    horizontal rule marks the half-source (0.5 * infiltration_conc) breakthrough
+    threshold. Returns ``None`` when fewer than 2 points (a single point is not a
+    breakthrough curve). Capped at ``_MAX_ROWS`` with a uniform stride.
+    """
+    if not concentration or len(concentration) < 2:
+        return None
+    xs = list(days) if days and len(days) == len(concentration) else list(
+        range(len(concentration))
+    )
+    rows = [
+        {"days": float(x), "concentration": float(v)}
+        for x, v in zip(xs, concentration)
+    ]
+    if len(rows) > _MAX_ROWS:
+        stride = max(1, len(rows) // _MAX_ROWS)
+        rows = rows[::stride][:_MAX_ROWS]
+    threshold = 0.5 * float(infiltration_conc)
+    layers: list[dict[str, Any]] = [
+        {
+            "data": {"values": rows},
+            "mark": {"type": "line", "point": True, "tooltip": True},
+            "encoding": {
+                "x": {"field": "days", "type": "quantitative", "title": "elapsed days"},
+                "y": {
+                    "field": "concentration",
+                    "type": "quantitative",
+                    "title": "base-of-column concentration",
+                },
+            },
+        },
+        {
+            "data": {"values": [{"thr": threshold}]},
+            "mark": {"type": "rule", "strokeDash": [4, 4], "color": "#C0392B"},
+            "encoding": {"y": {"field": "thr", "type": "quantitative"}},
+        },
+    ]
+    spec = {
+        "title": "Vadose-zone tracer breakthrough at the water table",
+        "layer": layers,
+        "width": "container",
+    }
+    depth_note = (
+        f" through {float(vadose_thickness_m):.3g} m of vadose zone"
+        if vadose_thickness_m
+        else ""
+    )
+    arr_note = (
+        f"arrival {float(breakthrough_time_days):.3g} d"
+        if breakthrough_time_days is not None
+        else "no half-source arrival within the horizon"
+    )
+    caption = (
+        f"{len(rows)} steps · {arr_note}{depth_note} "
+        "(purely-advective UZF+UZT front; dashed rule = half-source threshold)"
+    )
+    return build_chart_payload(
+        vega_lite_spec=spec,
+        title="Vadose-zone tracer breakthrough at the water table",
         caption=caption,
         source_layer_uri=source_layer_uri,
         created_turn_id=created_turn_id,
@@ -1125,6 +1285,108 @@ def build_head_series_chart(
         f"{len(rows)} steps · {caption_label} · range {swing:.3g} m "
         f"(min {vmin:.3g} -> max {vmax:.3g})"
     )
+    return build_chart_payload(
+        vega_lite_spec=spec,
+        title=title,
+        caption=caption,
+        source_layer_uri=source_layer_uri,
+        created_turn_id=created_turn_id,
+    )
+
+def build_hydrograph_overlay_chart(
+    *,
+    times: list[float] | list[str],
+    computed: list[float | None],
+    observed: list[float | None] | None = None,
+    x_title: str = "elapsed hours",
+    y_title: str = "discharge (m3/s)",
+    title: str = "Computed vs observed hydrograph",
+    computed_label: str = "computed",
+    observed_label: str = "observed",
+    nse: float | None = None,
+    r2: float | None = None,
+    source_layer_uri: str | None = None,
+    created_turn_id: str | None = None,
+) -> dict[str, Any] | None:
+    """Overlay a computed hydrograph against an observed one (rain-on-grid V&V).
+
+    The computed-vs-observed discharge overlay the rain-on-grid validation
+    protocol (Godara et al. 2024) reports: two colour-split line series on a
+    shared time axis. ``times`` is the shared x axis -- numeric (elapsed hours,
+    quantitative) or ISO8601 strings (temporal). ``computed`` is the simulated
+    outlet-discharge series (required); ``observed`` is the gauge series
+    (optional -- when absent or all-null the chart is computed-only, still a
+    valid single-series hydrograph). ``nse`` / ``r2`` (from
+    ``nash_sutcliffe_efficiency`` / ``pearson_r2``) are folded into the caption
+    when supplied; the chart never recomputes them.
+
+    Honesty floor: returns ``None`` when the computed series has fewer than 2
+    finite points aligned with ``times`` (a single point is not a hydrograph).
+    Non-finite / mismatched-length samples are dropped, never fabricated.
+    """
+    n = min(len(times), len(computed))
+    xs_raw = list(times)[:n]
+    numeric_x = all(isinstance(x, (int, float)) and not isinstance(x, bool) for x in xs_raw)
+    x_type = "quantitative" if numeric_x else "temporal"
+
+    def _series_rows(values: list[Any] | None, label: str) -> list[dict[str, Any]]:
+        if not values:
+            return []
+        rows: list[dict[str, Any]] = []
+        for i in range(min(n, len(values))):
+            v = values[i]
+            try:
+                fv = float(v)
+            except (TypeError, ValueError):
+                continue
+            if not math.isfinite(fv):
+                continue
+            x = float(xs_raw[i]) if numeric_x else str(xs_raw[i])
+            rows.append({"t": x, "discharge": fv, "series": label})
+        return rows
+
+    computed_rows = _series_rows(list(computed), computed_label)
+    if len(computed_rows) < 2:
+        return None
+    observed_rows = _series_rows(list(observed) if observed else None, observed_label)
+    rows = computed_rows + observed_rows
+    if len(rows) > _MAX_ROWS:
+        # Uniform per-series stride so both series survive the wire-size cap.
+        keep: list[dict[str, Any]] = []
+        for label_rows in (computed_rows, observed_rows):
+            if not label_rows:
+                continue
+            stride = max(1, len(label_rows) // (_MAX_ROWS // 2))
+            keep.extend(label_rows[::stride])
+        rows = keep
+
+    spec = {
+        "title": title,
+        "data": {"values": rows},
+        "mark": {"type": "line", "point": True, "tooltip": True},
+        "encoding": {
+            "x": {"field": "t", "type": x_type, "title": x_title},
+            "y": {"field": "discharge", "type": "quantitative", "title": y_title},
+            "color": {"field": "series", "type": "nominal", "title": "series"},
+        },
+        "width": "container",
+    }
+
+    comp_peak = max(r["discharge"] for r in computed_rows)
+    skill_txt = ""
+    if nse is not None:
+        skill_txt += f" · NSE {nse:.3f}"
+    if r2 is not None:
+        skill_txt += f" · R2 {r2:.3f}"
+    if observed_rows:
+        obs_peak = max(r["discharge"] for r in observed_rows)
+        caption = (
+            f"computed (peak {comp_peak:.3g}) vs observed (peak {obs_peak:.3g}) "
+            f"{y_title}{skill_txt}"
+        )
+    else:
+        caption = f"computed outlet hydrograph · peak {comp_peak:.3g} {y_title}{skill_txt}"
+
     return build_chart_payload(
         vega_lite_spec=spec,
         title=title,

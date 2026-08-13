@@ -1,0 +1,188 @@
+# Router source spec (FETCHER FINALE ENDGAME, ADR 0112): the fetch_noaa_nwm_streamflow
+# fold -- THE LAST coded data-fetcher. Twin: fetch_noaa_nwm_streamflow.py, a MULTI-SOURCE
+# COMPOSITE (ADR 0069 STOP): resolve the NWM S3 channel_rt key -> download the whole-object
+# netCDF -> an xarray {feature_id: streamflow} LOOKUP DICT + an NLDI 5x5-grid spatial sample
+# (25 point-snap reqs) -> COMIDs + per-reach NLDI geometry (up to 500 reqs) + a feature_id
+# JOIN -> a point FlatGeobuf. Folds onto a library_delegate VECTOR source: the delegate
+# (nwm_streamflow.read) OWNS the S3 netCDF read, the NLDI sampling rounds, AND the in-delegate
+# join -- ordinary delegate socket I/O (topobathy/storm_tracks precedent, ADR 0110/0111), not
+# a new executor phase. The join is plain in-process computation; each NLDI probe is an
+# independent best-effort request (no transport coalescing/retry semantics needed), so the
+# delegate shape hits no wall (the ADR 0056 bar rejects new machinery for one source).
+# Fetch-time provenance (the resolved NWM reference time + reach count + NLDI sample stats)
+# rides the ADR 0110 channel.
+schema_version: v1
+name: fetch_noaa_nwm_streamflow
+source_class: nwm_streamflow
+error_prefix: NWM_STREAMFLOW
+shape: vector-fgb
+supports_global_query: false
+endpoints:
+  # Documentary (the delegate owns the socket): the NOAA NWM public S3 bucket + USGS NLDI.
+  # The executor never fetches these; nwm_streamflow.read does.
+  nwm_pds:
+    url: https://noaa-nwm-pds.s3.amazonaws.com
+  nldi:
+    url: https://api.water.usgs.gov/nldi
+auth:
+  mode: none
+  user_agent: trid3nt/0.1 (Hazard Modeling Agent; https://github.com/double-r-squared/trid3nt-qgis-plugin;
+    agent@trid3nt.dev)
+params:
+  bbox:
+    type: bbox
+    required: true
+    quantize: round_6dp
+  product:
+    type: enum
+    values:
+    - analysis_assim
+    - short_range
+    default: analysis_assim
+  valid_time:
+    type: str
+    schema_optional: true
+  forecast_hour:
+    type: int
+    default: 0
+    min: 0
+    max: 18
+ingest:
+  access: library_delegate
+  delegate:
+    library: nwm_streamflow_composite
+    timeout_s: 600.0
+  # Honest-empty header schema (the delegate raises a typed EMPTY before returning an
+  # empty feature list, so this only pins the FGB column order for the join output).
+  properties:
+  - feature_id
+  - streamflow_cms
+  - valid_time
+  - product
+hooks:
+  delegate: nwm_streamflow.read
+  delegate_validate: nwm_streamflow.validate
+  envelope: nwm_streamflow.envelope
+normalize:
+  crs: EPSG:4326
+  units: m^3/s
+output:
+  layer_type: vector
+  ext: fgb
+  role: primary
+  style_preset: nwm_streamflow
+  emit_bbox: true
+  result_model: NWMStreamflowLayerURI
+  provenance: true
+cache:
+  ttl_class: dynamic-1h
+payload_estimate:
+  model: per_feature
+  features_per_sq_deg: 100.0
+  kb_per_feature: 0.1
+  floor_mb: 0.01
+caveats:
+- NOAA National Water Model channel_rt streamflow (the operational CONUS hydrologic forecast,
+  ~2.7M NHDPlus reaches at hourly cadence) joined to NHDPlus reach geometry via a USGS NLDI
+  5x5-grid bbox sample. Emits one Point per matched reach centroid carrying feature_id +
+  streamflow_cms (m^3/s) + valid_time + product.
+- 'Honest-empty (never a fabricated layer): NWM_STREAMFLOW_EMPTY (no NHDPlus COMID snapped
+  inside the bbox 5x5 grid -- offshore / ungauged) / NWM_STREAMFLOW_NOT_AVAILABLE (the
+  requested cycle is not published -- a gap, a future date, or outside the ~30-day bucket
+  retention window).'
+- CONUS-only (supports_global_query=False); a bbox must intersect (-130, 20, -60, 55) or
+  NWM_STREAMFLOW_INPUT_ERROR is raised.
+corpus:
+- what are current river discharge rates along the Mississippi?
+- show me NWM streamflow for the Caloosahatchee right now
+- how high is the river flowing in this watershed?
+- I need real-time discharge for SFINCS fluvial boundary forcing
+- fetch streamflow forecast for all rivers in this bbox
+- show me the National Water Model output for this flood event
+- what is the current streamflow in cubic meters per second for this basin?
+- I need upstream hydrograph for the compound flood model
+docstring: |-
+  Fetch NOAA National Water Model streamflow as a point FlatGeobuf.
+
+  Use this when: the agent needs gridded river discharge as fluvial-boundary
+  forcing for a compound-flood model run (composes with ``run_sfincs`` and
+  similar engines that ask for upstream hydrographs), as a real-time
+  discharge overlay for a hazard-event narrative
+  ("how high is the Caloosahatchee flowing right now?"), or as a contextual
+  river-network display for a CONUS hydrology query. NWM is the NOAA
+  operational hydrologic forecast and the canonical CONUS streamflow source
+  (~2.7M NHDPlus reaches at ~hourly cadence).
+
+  Do NOT use this for: gauge-based observed point streamflow at a USGS
+  station (use ``fetch_usgs_nwis_gauges`` -- NWIS, the actual instrument
+  record); river-reach polylines without flow values (use
+  ``fetch_river_geometry`` -- NHDPlus HR); precipitation forcing (use ``fetch_mrms_qpe`` for
+  radar/gauge QPE or ``lookup_precip_return_period`` for Atlas 14 design
+  storms); flood-extent rasters (NWM does not publish inundation directly -- use ``run_sfincs`` with NWM forcing).
+
+  Params:
+      bbox: ``(min_lon, min_lat, max_lon, max_lat)`` in EPSG:4326. Required -- NWM is CONUS-only, supports_global_query=False. The bbox MUST
+          intersect ``(-130, 20, -60, 55)`` or
+          ``NWMStreamflowInputError`` is raised. Typical scales:
+          - Watershed (~1° × 1°): ~50-200 reaches returned
+          - Regional (~5° × 5°): up to _MAX_REACHES=500 (hard cap)
+          Example for Fort Myers / Caloosahatchee:
+          ``(-82.0, 26.4, -81.7, 26.7)``.
+      product: One of:
+          - ``"analysis_assim"`` (default): real-time analysis cycle,
+            streamflow at the cycle hour (no forecast). Best for "what is
+            the river doing right now" queries and historical reconstructions.
+          - ``"short_range"``: 18-hour deterministic forecast initialized
+            from the named cycle; pair with ``forecast_hour`` 1-18 to pick
+            the forecast lead time.
+      valid_time: Optional ISO-8601 UTC timestamp
+          (e.g. ``"2025-01-01T12:00:00Z"``). When None, fetches the latest
+          available cycle in the bucket (~30-day retention). For
+          ``short_range``, valid_time = cycle + forecast_hour, so the cycle
+          file is computed as ``valid_time - forecast_hour``.
+      forecast_hour: Forecast lead in hours, 1-18 for ``short_range``;
+          ignored for ``analysis_assim`` (always 0). Default 0.
+
+  Returns:
+      ``LayerURI`` pointing at a FlatGeobuf in the cache bucket:
+      ``s3://trid3nt-cache/cache/dynamic-1h/nwm_streamflow/<key>.fgb``
+      - ``layer_type="vector"``, ``role="primary"``,
+        ``style_preset="nwm_streamflow"``, ``units="m^3/s"``.
+      - Geometry: Point at each NHDPlus reach centroid (LineString midpoint
+        from NLDI), EPSG:4326.
+      - Properties per feature: ``feature_id`` (int, NHDPlus v2.1 COMID),
+        ``streamflow_cms`` (float, m^3/s), ``valid_time`` (ISO-8601 UTC),
+        ``product``. The ``feature_id`` is the join key downstream composers
+        use to map to NHDPlus reach polylines (via
+        ``fetch_river_geometry``) -- this tool emits point centroids so the
+        layer renders standalone as a discharge map.
+
+  Cache: ``ttl_class="dynamic-1h"``, ``source_class="nwm_streamflow"``.
+  Cache key is SHA-256 of
+  ``(bbox-rounded-6dp, product, valid_time-iso-or-LATEST, forecast_hour)``
+  so identical-bbox/hour calls hit the same FlatGeobuf.
+
+  Cross-tool dependencies:
+      - Composes WITH: ``run_sfincs`` (fluvial forcing),
+        ``fetch_river_geometry`` (downstream NHDPlus polyline join via
+        ``feature_id``), ``publish_layer`` (display on the map).
+      - Composes ALONGSIDE: ``fetch_mrms_qpe`` (precip forcing),
+        ``fetch_usgs_nwis_gauges`` (NWIS point gauge cross-check),
+        ``fetch_administrative_boundaries`` (watershed framing).
+      - Upstream data sources: NOAA NWM (s3://noaa-nwm-pds) + USGS NLDI
+        (api.water.usgs.gov/nldi) for the geometry join.
+
+  Errors:
+      - ``NWMStreamflowInputError``: bad bbox / product / valid_time /
+        forecast_hour (retryable=False).
+      - ``NWMStreamflowUpstreamError``: S3 / NLDI network failure or
+        netCDF parse error (retryable=True).
+      - ``NWMStreamflowNotAvailableError``: requested cycle not published
+        (gap, future, outside ~30-day retention) (retryable=False).
+      - ``NWMStreamflowEmptyError``: NLDI returned no COMIDs in the bbox
+        (offshore or no rivers in the 5x5 grid) (retryable=False).
+
+  Tier-1 free. No API key. ``supports_global_query=False``.
+  OQ-A3-NWM-GEOMETRY-JOIN: v0.1 uses an NLDI 5×5-grid bbox sample for
+  geometry discovery; a future iteration could ship the NWM RouteLink table
+  as a static-30d-cached lookup to avoid the per-call NLDI round-trips.

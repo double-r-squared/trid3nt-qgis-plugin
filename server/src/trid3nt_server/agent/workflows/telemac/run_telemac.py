@@ -5,7 +5,7 @@ backend so ``run_solver(solver='telemac_river_dye', ...)`` under
 ``TRID3NT_SOLVER_BACKEND=local-docker`` dispatches to the
 ``trid3nt-local/telemac:latest`` worker image -- exactly like the
 SFINCS/GeoClaw/SWAN local specs. This module carries ONLY the seam (P2); the
-LLM-facing ``run_telemac`` tool + the ``model_river_dye_release_scenario``
+LLM-facing ``run_telemac`` tool + the ``model_telemac_river_dye``
 composer are P4.
 
 Structural clone of ``run_geoclaw.geoclaw_local_spec`` /
@@ -68,6 +68,9 @@ _COMPLETION_METRIC_KEYS: tuple[str, ...] = (
     "nptfr",
     "reach_name",
     "seed_comid",
+    # wind-stress forcing echo (present only when a wind run was requested).
+    "wind_speed_mps",
+    "wind_dir_from_deg",
     "utm_epsg",
     "centerline_length_m",
     "lb_order",
@@ -83,6 +86,10 @@ _COMPLETION_METRIC_KEYS: tuple[str, ...] = (
     "preview_geojson",
     "bank_source",
     "bank_width_mean_m",
+    # leg 1 banks gate: fold the worker's typed banks-unavailable signal into the
+    # completion so run_result carries it (the composer also reads it directly).
+    "error_code",
+    "assumed_channel_width_m",
 )
 
 

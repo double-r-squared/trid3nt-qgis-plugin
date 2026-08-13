@@ -1,0 +1,11 @@
+modflow_vadose_transport:
+  - how long until a surface spill reaches the groundwater
+  - vadose zone travel time to the water table
+  - unsaturated zone contaminant breakthrough curve
+  - how long for a spill to leach down to the aquifer
+  - tracer travel time through the soil to groundwater
+  - nitrate leaching from the surface to the water table
+  - time for infiltrating contaminant to reach groundwater
+  - depth to water table travel time for a surface release
+  - unsaturated zone solute transport arrival time
+  - when will a surface spill contaminate the aquifer below

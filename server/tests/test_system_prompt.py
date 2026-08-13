@@ -61,7 +61,7 @@ def test_system_prompt_forbids_ending_at_precursor() -> None:
 def test_system_prompt_carries_named_tool_example() -> None:
     """A2 prompt must include at least one geocode → fetch_* → narrate example."""
     # NEXRAD + Florida is the canonical worked example.
-    assert "fetch_nexrad_reflectivity" in SYSTEM_PROMPT
+    assert "show_nexrad_radar" in SYSTEM_PROMPT
     assert "geocode_location" in SYSTEM_PROMPT
     # And the WDPA Big Cypress example that anchored the baseline finding.
     assert "fetch_wdpa_protected_areas" in SYSTEM_PROMPT
@@ -168,13 +168,37 @@ def test_system_prompt_keeps_always_narrate_section() -> None:
 
 
 def test_system_prompt_still_routes_flood_modeling() -> None:
-    """job-0154 routing instruction (flood → run_sfincs) survives."""
-    assert "run_sfincs" in SYSTEM_PROMPT
+    """Flood routing survives door dissolution (ADR 0094): the prompt now names
+    the sfincs_flood template directly, not a run_sfincs door."""
+    assert "sfincs_flood" in SYSTEM_PROMPT
+    assert "run_sfincs" not in SYSTEM_PROMPT
 
 
 def test_system_prompt_still_forbids_fabricated_numbers() -> None:
     """job-0154 anti-fabrication guard survives the amendment."""
     assert "Never fabricate numbers" in SYSTEM_PROMPT
+
+
+def test_system_prompt_forbids_inventing_physical_inputs() -> None:
+    """Provenance-chain wave (ADR 0106): the general ask-dont-invent rule for
+    physical MODEL INPUTS (distinct from narrating result numbers) must be
+    present -- the model asks the user for a physical parameter it cannot fetch or
+    derive, and names demo-default vs site-derived provenance in its narration."""
+    assert "Never invent PHYSICAL MODEL INPUTS" in SYSTEM_PROMPT
+    assert "synthetic_inputs" in SYSTEM_PROMPT
+    assert "demo defaults versus site-derived" in SYSTEM_PROMPT
+
+
+def test_system_prompt_has_input_review_instruction() -> None:
+    """Two-mode input gate (ADR 0107): the prompt must instruct the agent how to
+    handle a user-gated INPUT REVIEW card -- present the resolved input table,
+    collect edits, confirm before running."""
+    assert "INPUT REVIEW card" in SYSTEM_PROMPT
+    assert "param = value [basis, source]" in SYSTEM_PROMPT
+    # "Do not run the solver until the user has approved" -- fragment avoids the
+    # source line-wrap between "has" and "approved".
+    flat = " ".join(SYSTEM_PROMPT.split())
+    assert "Do not run the solver until the user has approved" in flat
 
 
 # ---------------------------------------------------------------------------
@@ -235,16 +259,18 @@ def test_system_prompt_says_full_state_name_accepted() -> None:
 
 
 def test_system_prompt_has_groundwater_spill_routing_section() -> None:
-    """Prompt must carry the engine-door groundwater/MODFLOW routing (door-model)."""
+    """Prompt must carry the groundwater/MODFLOW routing. Door dissolution
+    (ADR 0094): templates are called DIRECTLY, no run_modflow door / concierge."""
     assert "Groundwater / MODFLOW routing" in SYSTEM_PROMPT
-    # engine-door model: call the run_modflow door first, then select-then-call.
-    assert "run_modflow DOOR FIRST" in SYSTEM_PROMPT
-    assert "SELECT-THEN-CALL" in SYSTEM_PROMPT
+    assert "modflow_contaminant_plume" in SYSTEM_PROMPT
+    # the door concierge is gone -- no run_modflow door, no SELECT-THEN-CALL step.
+    assert "run_modflow DOOR" not in SYSTEM_PROMPT
+    assert "SELECT-THEN-CALL" not in SYSTEM_PROMPT
 
 
 def test_system_prompt_routes_parameterized_spill_to_modflow_contaminant_plume() -> None:
     """A parameterized spill (location + contaminant + rate + duration) routes to
-    modflow_contaminant_plume (via the door), passing spill_location_latlon as a
+    modflow_contaminant_plume directly, passing spill_location_latlon as a
     2-element [lat, lon] array."""
     flat = " ".join(SYSTEM_PROMPT.split())
     assert "call modflow_contaminant_plume with" in flat
@@ -252,18 +278,22 @@ def test_system_prompt_routes_parameterized_spill_to_modflow_contaminant_plume()
     assert "spill_location_latlon as a 2-element [lat, lon] array" in flat
 
 
-def test_system_prompt_keeps_article_path_off_parameterized_spill() -> None:
-    """The news-article path must NOT be used for parameterized spills; it needs
-    a volume in gallons/liters/barrels/tons."""
-    assert "Do NOT use\nrun_model_groundwater_contamination_scenario" in SYSTEM_PROMPT
+def test_system_prompt_never_invents_contamination_forcing() -> None:
+    """Composer dissolution (ADR 0105): the standalone news-ingest composer is
+    gone; the prompt must keep the Invariant-9 never-invent rule so the model
+    extracts (never fabricates) the spill forcing from the article/user."""
     flat = " ".join(SYSTEM_PROMPT.split())
+    assert "NEVER INVENT a contamination parameter" in flat
+    assert "Invariant 9" in SYSTEM_PROMPT
     assert "gallons / liters / barrels / tons" in flat
 
 
 def test_system_prompt_still_routes_modflow_groundwater() -> None:
-    """modflow_contaminant_plume + the article-ingest tool both remain named in the prompt."""
+    """modflow_contaminant_plume stays named; the news-article path is now a
+    model-composed chain (web_fetch -> extract -> modflow_contaminant_plume)."""
     assert "modflow_contaminant_plume" in SYSTEM_PROMPT
-    assert "run_model_groundwater_contamination_scenario" in SYSTEM_PROMPT
+    assert "web_fetch" in SYSTEM_PROMPT
+    assert "NEWS ARTICLE" in SYSTEM_PROMPT
 
 
 # ---------------------------------------------------------------------------

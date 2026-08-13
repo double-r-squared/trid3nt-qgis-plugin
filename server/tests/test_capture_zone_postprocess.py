@@ -188,3 +188,75 @@ def test_capture_zone_data_driven_fallback_when_no_tiers(_prt_dir: Path) -> None
     # here), so they are NOT the canonical [1, 5, 10] request.
     assert layer.travel_time_years
     assert layer.capture_zone_area_km2 > 0.0
+
+
+def _write_multiwell_track(csv_path: Path) -> None:
+    """Synthetic 2-well PRT track CSV: boundnames 'W0_P{n}' + 'W1_P{n}' (mf6 upper)."""
+    t_days = [100.0, 800.0, 2000.0, 3500.0]
+    rows = ["kper,kstp,imdl,iprp,irpt,ilay,icell,izone,istatus,ireason,trelease,t,x,y,z,name"]
+    irpt = 0
+    # Well 0 near _WELL_LOCAL; well 1 offset +600 m east -- distinct hulls.
+    for k, (ox, oy) in enumerate([(0.0, 0.0), (600.0, -400.0)]):
+        for p in range(6):
+            a = 2.0 * math.pi * p / 6.0
+            for t in t_days:
+                frac = t / 3500.0
+                x = _WELL_LOCAL_X + ox - frac * 1500.0 + 25.0 * math.cos(a)
+                y = _WELL_LOCAL_Y + oy + 25.0 * math.sin(a)
+                rows.append(
+                    f"1,1,0,1,{irpt},0,0,0,0,1,0.0,{t},{x:.3f},{y:.3f},25.0,W{k}_P{p}"
+                )
+            irpt += 1
+    csv_path.write_text("\n".join(rows) + "\n")
+
+
+def test_capture_zone_multiwell_allocation(tmp_path: Path, monkeypatch) -> None:
+    """A multi-well track allocates particles per well (ADR 0215 item 1)."""
+    csv = tmp_path / "prtmodel.trk.csv"
+    _write_multiwell_track(csv)
+    monkeypatch.setattr(
+        pp, "_upload_fgb", lambda local_fgb, run_id, runs_bucket, **kw: f"file://{local_fgb}"
+    )
+    east, north = _well_utm()
+    layer = postprocess_capture_zone(
+        str(tmp_path),
+        run_id="cz-multiwell",
+        model_crs=f"EPSG:{_UTM_EPSG}",
+        deck_dir=str(tmp_path),
+        xoffset_m=east - _WELL_LOCAL_X,
+        yoffset_m=north - _WELL_LOCAL_Y,
+        model_utm_epsg=_UTM_EPSG,
+        tier_years=[1.0, 5.0, 10.0],
+        well_specs=[
+            {"name": "M-1", "lat": _WELL_LAT, "lon": _WELL_LON, "rate_m3_day": -1600.0},
+            {"name": "M-2", "lat": _WELL_LAT, "lon": _WELL_LON, "rate_m3_day": -800.0},
+        ],
+        transient=True,
+        river_cell_count=42,
+    )
+    alloc = layer.well_capture_allocation
+    assert set(alloc.keys()) == {"M-1", "M-2"}, alloc
+    assert alloc["M-1"]["particle_count"] == 6
+    assert alloc["M-2"]["particle_count"] == 6
+    assert alloc["M-1"]["capture_area_km2"] > 0.0
+    assert layer.transient is True
+    assert layer.river_cell_count == 42
+
+
+def test_capture_zone_single_well_no_allocation(_prt_dir: Path) -> None:
+    """A single-well run leaves the allocation empty (byte-identical to part 1)."""
+    east, north = _well_utm()
+    layer = postprocess_capture_zone(
+        str(_prt_dir),
+        run_id="cz-single",
+        model_crs=f"EPSG:{_UTM_EPSG}",
+        deck_dir=str(_prt_dir),
+        xoffset_m=east - _WELL_LOCAL_X,
+        yoffset_m=north - _WELL_LOCAL_Y,
+        model_utm_epsg=_UTM_EPSG,
+        tier_years=[1.0, 5.0, 10.0],
+        well_specs=[{"name": "only", "lat": _WELL_LAT, "lon": _WELL_LON, "rate_m3_day": -800.0}],
+    )
+    assert layer.well_capture_allocation == {}
+    assert layer.transient is False
+    assert layer.river_cell_count == 0

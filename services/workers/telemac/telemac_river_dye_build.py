@@ -77,6 +77,32 @@ class ReachConfig:
     friction_coefficient: float = None  # type: ignore[assignment]
     velocity_diffusivity: float = None  # type: ignore[assignment]
     tracer_diffusivity: float = None    # type: ignore[assignment]
+    # WIND-STRESS FORCING (TELEMAC-2D wind term). wind_speed_mps default 0.0
+    # leaves the deck byte-identical: author_deck emits NO wind block and WIND
+    # stays NO. A positive speed activates a spatially/temporally CONSTANT wind
+    # (OPTION FOR WIND = 1): the deck sets WIND = YES + WIND VELOCITY ALONG X/Y
+    # (resolved from speed + a meteorological FROM-direction into UTM x=east /
+    # y=north components) + COEFFICIENT OF WIND INFLUENCE (gaia/t2d dico default
+    # 1.55E-6 unless overridden) + THRESHOLD DEPTH FOR WIND = 1 m (wind not
+    # applied on drying margins). Sustained wind sets up a free-surface slope /
+    # drives circulation on a wide reach, embayment or lake. Keywords pinned
+    # against telemac2d.dico v9.0 (WIND/OPTION FOR WIND/WIND VELOCITY ALONG X,Y/
+    # COEFFICIENT OF WIND INFLUENCE/THRESHOLD DEPTH FOR WIND).
+    wind_speed_mps: float = 0.0         # sustained wind speed (0 -> no wind)
+    wind_dir_from_deg: float = 0.0      # meteorological: direction wind blows FROM
+    wind_drag_coef: float = None        # type: ignore[assignment]  # None -> dico default
+    # DISTRIBUTED ON-MESH RAINFALL / EVAPORATION forcing (TELEMAC-2D native
+    # source term). Default None leaves the deck byte-identical: author_deck
+    # emits NO rain block and RAIN OR EVAPORATION stays absent (= NO). A set
+    # value activates a spatially-uniform, temporally-constant water flux applied
+    # at EVERY wet mesh node (distinct from the inflow-boundary hydrograph): the
+    # deck sets RAIN OR EVAPORATION = YES + RAIN OR EVAPORATION IN MM PER DAY =
+    # <value>. TELEMAC's single signed keyword: POSITIVE = rainfall (adds water,
+    # raises stage, wets tidal flats), NEGATIVE = evaporation (removes water).
+    # The rate is a real gridMET storm total (mm/day) resolved by the composer,
+    # or a user override. Keyword pinned against telemac2d.dico v9.0 (RAIN OR
+    # EVAPORATION / RAIN OR EVAPORATION IN MM PER DAY).
+    rain_or_evap_mm_per_day: float = None  # type: ignore[assignment]  # None -> no rain block
     # FINITE SPILL PULSE (realism default): a mid-reach point source injects dye
     # for a short window then stops, so the slug TRAVELS downstream and dilutes
     # rather than the old continuous upstream-inflow injection saturating the
@@ -104,10 +130,14 @@ class ReachConfig:
     # Absent (the common case) the release coords seed as before.
     seed_release_lon: float = None      # type: ignore[assignment]
     seed_release_lat: float = None      # type: ignore[assignment]
-    # real-bank meshing: "auto" samples USGS NHDArea river polygons for
+    # EXPLICIT bank source (NATE oceanmesh-wave leg 1 - no inexplicit mesh-source
+    # fallbacks): "nhd_area" (default) samples USGS NHDArea river polygons for
     # per-station left/right bank offsets (mesh follows the REAL river);
-    # "constant" keeps the legacy fixed-width ribbon.
-    bank_source: str = "auto"
+    # "constant_ribbon" uses the assumed constant channel width. On the nhd_area
+    # path with NO NHDArea coverage the worker raises BanksUnavailableError (a
+    # typed gate) rather than silently ribboning - the DEM_FALLBACK_GATE pattern.
+    # Legacy manifest spellings map: "auto" -> nhd_area, "constant" -> constant_ribbon.
+    bank_source: str = "nhd_area"
     # wrong-watercourse fix: when the prompt NAMES the river, re-seed
     # onto the NAMED GNIS mainstem before the NLDI position-snap. A raw
     # geocode-point snap near a confluence (Longview = Columbia x Cowlitz)
@@ -153,7 +183,47 @@ class ReachConfig:
     grain_size_um: float = 200.0        # suspended d50 in microns (fine sand)
     sediment_density: float = 2650.0    # grain density kg/m3 (quartz)
     sediment_type: str = "sand"         # sand|silt|mud (narration + grain hint)
+    # GAIA v2 ERODIBLE-BED MORPHODYNAMICS (bedload scour/deposition). erodible_bed
+    # False (default) leaves the v1 SUPPLY-LIMITED suspended path byte-identical
+    # (LAYERS INITIAL THICKNESS = 0, SUSPENSION on, BED LOAD off - only the pulse
+    # deposits). erodible_bed True flips write_gaia_deck to the v2 recipe: a real
+    # erodible bed stock (LAYERS INITIAL THICKNESS = bed_thickness_m), BED LOAD FOR
+    # ALL SANDS = YES with a Shields-based bed-load transport formula
+    # (bedload_formula, default 1 = Meyer-Peter-Mueller), SUSPENSION off, and a
+    # MORPHOLOGICAL FACTOR (morphological_factor) that amplifies bed evolution per
+    # hydraulic step. Under a flood hydrograph the bed then SCOURS (negative CUMUL
+    # BED EVOL) below a contraction/steepening and re-deposits where the flow
+    # slackens - the "where does the bed scour and where does it re-deposit"
+    # question. On the T2D side the bedload path appends NO suspended tracer (the
+    # dye stays the sole hydraulic-companion tracer), so the coupling adds only the
+    # COUPLING WITH / GAIA STEERING FILE lines - no tracer widening. Keywords pinned
+    # against gaia.dico v9.0 (LAYERS INITIAL THICKNESS / BED LOAD FOR ALL SANDS /
+    # BED-LOAD TRANSPORT FORMULA FOR ALL SANDS / MORPHOLOGICAL FACTOR).
     erodible_bed: bool = False          # v2 flag - v1 forces supply-limited
+    bed_thickness_m: float = 5.0        # v2 erodible bed stock depth (LAYERS INITIAL THICKNESS)
+    bedload_formula: int = 1            # v2 BED-LOAD TRANSPORT FORMULA (1=Meyer-Peter-Mueller)
+    morphological_factor: float = 10.0  # v2 MORPHOLOGICAL FACTOR (bed-evolution amplification)
+    # WAQTEL O2 "do_sag" class (mutually exclusive with oil/decay/sediment): the
+    # dissolved-oxygen SAG below a permitted discharge (US TMDL/permit question).
+    # author_deck couples WAQTEL with WATER QUALITY PROCESS = 2 (the O2 module),
+    # which appends THREE tracers after the dye: DISSOLVED O2, ORGANIC LOAD (=
+    # ultimate CBOD as an O2 equivalent) and NH4 LOAD (nametrac_waqtel order,
+    # PINNED by the 2026-08-07 in-image smoke). The reach is modeled STARTING at
+    # the fully-mixed discharge: the mixed CBOD + DO ride in at the INFLOW
+    # boundary (PRESCRIBED TRACERS VALUES, boundary-major per lb_order), decay
+    # downstream (k1) consuming O2, and reaeration (k2) recovers it -- the classic
+    # Streeter-Phelps profile (in-image V&V: 0.011 mg/L at the sag minimum vs the
+    # 1925 closed form when P=R=BEN=k44=0, constant k2/Cs, T=20C). The dye tracer
+    # stays as an inert conservative-dilution reference. write_waqtel_o2 writes
+    # the O2 steering file; the defaults leave every non-do_sag run byte-identical.
+    do_sag_bod_mgl: float = 20.0        # fully-mixed inflow CBOD (organic load) mg/L
+    do_sag_upstream_do_mgl: float = 9.0 # DO carried in at the inflow mg/L
+    do_sat_mgl: float = 9.0             # O2 SATURATION DENSITY CS mg/L (temp-dependent)
+    do_water_temp_c: float = 20.0       # WATER TEMPERATURE for the O2 kinetics
+    do_k1_per_day: float = 0.3          # K1 deoxygenation d^-1 (realistic default)
+    do_k2_per_day: float = 0.9          # K2 reaeration d^-1 (constant-k2 default)
+    do_k2_formula: int = 0              # FORMK2: 0=constant K2, 1=TVA .. 5=combined
+    do_standard_mgl: float = 5.0        # WQ DO standard (chart reference line only)
     n_drogues: int = 100                # slick particle count (oil class)
     drogues_period_s: int = 60          # particle snapshot cadence, seconds
     # release AFTER the startup transient: constant-depth init drains shallow
@@ -167,6 +237,60 @@ class ReachConfig:
     graphic_period: int = 200
     min_bed_slope: float = 3.0e-4       # enforced gentle downstream slope floor
     max_bed_slope: float = 6.0e-3
+    # RAIN-ON-GRID (ADR 0196). mode="rain_on_grid" routes the worker to the RoG
+    # pipeline (rog_build) instead of the channel-dye pipeline: a rain-fed
+    # delineated-watershed TIN (staged by the agent-side mesh_acquisition step as
+    # watershed_slf, UTM metres, BOTTOM = bed) solves with a distributed CN
+    # infiltration + per-NLCD Manning + a free-exit outlet at the pour point. The
+    # per-node CN2/Manning fields are staged as node_cn2_file/node_manning_file
+    # (one value per line, mesh-node order); runoff_path ("native" constant-rain
+    # SCS-CN vs "preprocessing" net-excess rain) is chosen by the agent-side
+    # select_runoff_path and threaded here so the deck author writes the matching
+    # branch. rain_intensity_mm_per_hr + rain_duration_s define the constant
+    # design storm (native path); curve_number is the uniform-CN override (else
+    # the NLCD-distributed field is used); amc_condition is the SCS antecedent
+    # moisture class (1 dry / 2 normal / 3 wet); observed_gauge_id wires the
+    # USGS-NWIS NSE/R2 overlay. Defaults leave every non-RoG (channel-dye) run
+    # byte-identical: mode="river_dye" is the historical path.
+    mode: str = "river_dye"
+    watershed_slf: str = ""             # staged BOTTOM SELAFIN basename (RoG mesh)
+    runoff_path: str = "native"         # native | preprocessing
+    curve_number: float = None          # type: ignore[assignment]  # uniform CN2 override
+    amc_condition: int = 2              # SCS antecedent moisture: 1 dry / 2 norm / 3 wet
+    initial_abstraction_option: int = 1  # OPTION FOR INITIAL ABSTRACTION RATIO (1=0.2, 2=0.05)
+    rain_intensity_mm_per_hr: float = 25.0   # constant design-storm intensity (native)
+    rain_duration_s: float = None       # type: ignore[assignment]  # rain-on window (defaults to duration_s)
+    rain_hyetograph_mm: list = None     # type: ignore[assignment]  # per-step net rain (preprocessing)
+    # TIME-VARYING native hyetograph (ADR 0206): a list of [t_end_s, gross_mm]
+    # blocks (gross rainfall per interval, t from 0). When set, the RoG worker
+    # stages a per-case FORTRAN FILE flipping the engine's hardcoded RAINDEF=1
+    # to RAINDEF=3 and writes the block file as FORMATTED DATA FILE 1, so the
+    # native SCS-CN model runs per-timestep on the REAL hyetograph (the fix for
+    # the constant-rain peak-timing lag). Empty/None -> the constant design-storm
+    # native path (rain_intensity_mm_per_hr) is used, byte-identical to before.
+    rain_hyetograph_blocks: list = None  # type: ignore[assignment]
+    # CONTINUOUS SOIL-MOISTURE STORE (ADR 0213). When soil_store is True and a
+    # rain_hyetograph_blocks GROSS series is set, the worker transforms the gross
+    # hyetograph into a NET rainfall-excess hyetograph through a Michel et al.
+    # (2005) continuous SCS-CN production store (level V, capacity S, recovery
+    # timescale tau), then feeds that net series to the engine through a uniform
+    # CN=100 pass-through (the engine adds no further abstraction). This replaces
+    # the static per-event curve number with a dynamic antecedent STATE: the
+    # store fills during rain and drains between storms over recovery_h, so a
+    # single parameter set carries antecedent wetness a static CN cannot. S is the
+    # calibration knob (soil_store_capacity_mm), recovery_h the drying-timescale
+    # lever, init_mm the initial level V0 (from the antecedent-precipitation
+    # spin-up the agent computes). None/False -> the static-CN native paths above
+    # run unchanged.
+    soil_store: bool = False
+    soil_store_capacity_mm: float = None  # type: ignore[assignment]  # S (max retention)
+    soil_store_recovery_h: float = None   # type: ignore[assignment]  # tau (drying timescale)
+    soil_store_init_mm: float = None      # type: ignore[assignment]  # V0 (initial store level)
+    node_cn2_file: str = ""             # staged per-node CN2 field basename
+    node_manning_file: str = ""         # staged per-node Manning field basename
+    outlet_lonlat: tuple = None         # type: ignore[assignment]  # pour-point (lon, lat)
+    n_outlet_nodes: int = 6             # ring nodes marked as the free-exit outlet
+    observed_gauge_id: str = ""         # USGS NWIS gauge for NSE/R2 (composer wiring)
     workdir: str = field(default_factory=lambda: os.path.dirname(os.path.abspath(__file__)))
 
 
@@ -239,6 +363,85 @@ def _named_flowline_seed(
                 if d2 < best_d2:
                     best_d2, best = d2, (float(v[0]), float(v[1]))
     return best
+
+
+def _mainstem_flowline_seed(
+    lon: float,
+    lat: float,
+    search_deg: float = 0.05,
+    max_reseed_km: float = 6.0,
+) -> tuple[float, float] | None:
+    """Re-seed a NAME-FREE reach onto the dominant nearby mainstem, or None.
+
+    When no ``river_name`` disambiguates the reach, the bare position-snap
+    (``_snap_comid``) lands on whatever NHDFlowline is geometrically nearest;
+    at a confluence that is often a short low-order tributary stub (live:
+    Longview = Columbia x Cowlitz snapped a 292 m order-3 stub). This queries
+    NHDPlus_HR layer 3 within ``search_deg`` of the seed and prefers the
+    highest ``streamorde`` channel, tie-broken by ``totdasqkm`` (total upstream
+    drainage) then proximity -- but ONLY when that mainstem STRICTLY outranks
+    the nearest flowline and its nearest vertex is within ``max_reseed_km``
+    (bounded so a genuine small-creek study is never yanked onto a distant
+    river). Fail-OPEN: any error / no improvement returns None and the caller
+    keeps the raw position-snap (honest degrade).
+    """
+    env = json.dumps({
+        "xmin": lon - search_deg, "ymin": lat - search_deg,
+        "xmax": lon + search_deg, "ymax": lat + search_deg,
+        "spatialReference": {"wkid": 4326},
+    })
+    q = urllib.parse.urlencode({
+        "f": "geojson", "where": "1=1",
+        "geometry": env, "geometryType": "esriGeometryEnvelope",
+        "inSR": 4326, "outSR": 4326,
+        "spatialRel": "esriSpatialRelIntersects",
+        "outFields": "gnis_name,streamorde,totdasqkm",
+        "returnGeometry": "true",
+        "maxAllowableOffset": 0.0005, "resultRecordCount": 500,
+    })
+    try:
+        fc = json.loads(_http_get(f"{_NHDPLUS_HR}/3/query?{q}", timeout=45.0))
+    except Exception as exc:  # noqa: BLE001 -- network fail-open to raw seed
+        LOG.warning("mainstem-seed query failed (%s) - raw seed kept", exc)
+        return None
+    # (streamorde, totdasqkm, dist_deg, (vx, vy)) per flowline.
+    cands: list[tuple[int, float, float, tuple[float, float]]] = []
+    for feat in fc.get("features") or []:
+        p = feat.get("properties") or {}
+        geom = feat.get("geometry") or {}
+        lines = (
+            [geom.get("coordinates")]
+            if geom.get("type") == "LineString"
+            else geom.get("coordinates") or []
+        )
+        best_d2 = float("inf")
+        best_v: tuple[float, float] | None = None
+        for line in lines:
+            for v in line or []:
+                d2 = (v[0] - lon) ** 2 + (v[1] - lat) ** 2
+                if d2 < best_d2:
+                    best_d2, best_v = d2, (float(v[0]), float(v[1]))
+        if best_v is None:
+            continue
+        order = int(p.get("streamorde") or 0)
+        drainage = float(p.get("totdasqkm") or 0.0)
+        cands.append((order, drainage, best_d2 ** 0.5, best_v))
+    if not cands:
+        return None
+    nearest = min(cands, key=lambda c: c[2])
+    # Mainstem = highest order, then most drainage, then nearest.
+    mainstem = max(cands, key=lambda c: (c[0], c[1], -c[2]))
+    reseed_km = mainstem[2] * 111.0
+    if mainstem[0] <= nearest[0] or reseed_km > max_reseed_km:
+        # The nearest flowline is already the (equal-)dominant channel, or the
+        # only mainstem lies beyond the re-seed radius -- keep the raw seed.
+        return None
+    LOG.info(
+        "mainstem re-seed: nearest order %d vs mainstem order %d "
+        "(drainage %.0f km2) at %.2f km -> re-seeding",
+        nearest[0], mainstem[0], mainstem[1], reseed_km,
+    )
+    return mainstem[3]
 
 
 def _stitch_flowlines(features) -> list[tuple[float, float]]:
@@ -353,6 +556,19 @@ def fetch_river_centerline(cfg: ReachConfig):
                 "named-flowline re-seed %r found nothing - raw seed kept",
                 cfg.river_name,
             )
+    else:
+        # No river_name to disambiguate: prefer the dominant nearby mainstem
+        # over the bare nearest-flowline snap, so a seed near a confluence does
+        # not land on a short low-order tributary stub (ADR 0104 Bug-1
+        # reach-selection residual; ADR 0108). Fail-open to the raw seed.
+        main = _mainstem_flowline_seed(seed_lon, seed_lat)
+        if main is not None:
+            LOG.info(
+                "mainstem re-seed (no river_name): (%.5f,%.5f) -> (%.5f,%.5f)",
+                seed_lon, seed_lat, main[0], main[1],
+            )
+            seed_lon, seed_lat = main
+            seed_kind = f"{seed_kind}-mainstem"
     comid = _snap_comid(seed_lon, seed_lat)
     url = f"{_NLDI}/comid/{comid}/navigation/{cfg.nav_direction}/flowlines?distance={cfg.distance_km}"
     fc = json.loads(_http_get(url))
@@ -421,6 +637,109 @@ def process_centerline(ll: np.ndarray, cfg: ReachConfig):
 # ---------------------------------------------------------------------------
 # 2b. real river banks from USGS NHDArea polygons
 # ---------------------------------------------------------------------------
+class BanksUnavailableError(RuntimeError):
+    """The nhd_area bank source could not produce real banks for this reach.
+
+    NATE oceanmesh-wave leg 1 (no inexplicit mesh-source fallbacks): on the
+    default ``bank_source="nhd_area"`` path, when NO NHDArea water polygon covers
+    the reach (empty fetch / too little sampled water / fetch error) the worker
+    does NOT silently substitute the constant-width ribbon. It raises THIS typed
+    error so the server surfaces a ``TELEMAC_BANKS_UNAVAILABLE`` gate naming the
+    explicit retry ``bank_source="constant_ribbon"`` + the assumed channel width -
+    the DEM_FALLBACK_GATE pattern for a mesh-geometry source.
+    """
+
+    def __init__(self, assumed_channel_width_m: float) -> None:
+        self.assumed_channel_width_m = float(assumed_channel_width_m)
+        super().__init__(
+            "no USGS NHDArea water polygon covers this reach on the nhd_area bank "
+            "source, so real per-station banks could not be sampled. No bank "
+            "geometry was substituted automatically. Retry with "
+            f'bank_source="constant_ribbon" to mesh an assumed constant '
+            f"{self.assumed_channel_width_m:g} m channel-width ribbon instead."
+        )
+
+
+class ReachDegenerateError(RuntimeError):
+    """The reach geometry is degenerate: the channel is wider than the reach is
+    long (or nearly so), so the offset bank curves fold and gmsh's mesh
+    generator busy-loops (live: Longview WA snapped to a 292 m NHDFlowline stub
+    with the 500 m default width -> generate(2) ran 32+ min in C).
+
+    Gated BEFORE meshing (the 0091 gate pattern, never a hang, never a silent
+    bad mesh): a typed, retryable error naming the corrective args - a longer
+    ``reach_length_km``, an explicit ``river_name`` (re-seeds onto the named
+    mainstem instead of a short tributary stub), or
+    ``bank_source="constant_ribbon"`` with a smaller ``channel_width_m``.
+    """
+
+    def __init__(
+        self,
+        reach_length_m: float,
+        channel_width_m: float,
+    ) -> None:
+        self.reach_length_m = float(reach_length_m)
+        self.channel_width_m = float(channel_width_m)
+        aspect = (self.reach_length_m / self.channel_width_m
+                  if self.channel_width_m > 0 else 0.0)
+        self.aspect_ratio = round(aspect, 3)
+        super().__init__(
+            f"reach geometry is degenerate: a {self.reach_length_m:.0f} m reach "
+            f"with a {self.channel_width_m:.0f} m channel width (length/width "
+            f"aspect {aspect:.2f} < {_MIN_REACH_ASPECT:g}) - the banks fold and "
+            "the mesh generator cannot converge. Retry with a longer "
+            "reach_length_km, an explicit river_name (re-seeds onto the named "
+            'mainstem, not a short stub), or bank_source="constant_ribbon" with '
+            "a smaller channel_width_m."
+        )
+
+
+#: Minimum reach length / channel width. Below this the offset banks fold and
+#: gmsh busy-loops; gate it as ReachDegenerateError before meshing.
+_MIN_REACH_ASPECT: float = 2.0
+
+#: Hard wall-clock deadline (s) for the whole channel-mesh build in its killable
+#: child process. ``TELEMAC_MESH_TIMEOUT_S`` (env) overrides. A C busy-loop in
+#: gmsh cannot swallow the SIGKILL the parent delivers at this deadline (the old
+#: in-process SIGALRM demonstrably could not preempt it).
+_MESH_WALLCLOCK_TIMEOUT_S: float = 300.0
+
+
+def _centerline_length_m(cl: "np.ndarray") -> float:
+    """Arc length (metres) of the projected centerline polyline."""
+    if cl is None or len(cl) < 2:
+        return 0.0
+    seg = np.diff(np.asarray(cl, dtype=float)[:, :2], axis=0)
+    return float(np.hypot(seg[:, 0], seg[:, 1]).sum())
+
+
+def _effective_channel_width_m(cfg: "ReachConfig") -> float:
+    """The width the mesh will actually offset the banks by (metres).
+
+    On the nhd_area path with sampled ``bank_offsets`` the effective width is the
+    mean left+right offset; otherwise the assumed ``channel_width_m``."""
+    offsets = getattr(cfg, "bank_offsets", None)
+    if offsets is not None:
+        try:
+            left_off, right_off = offsets
+            w = float(np.mean(left_off)) + float(np.mean(right_off))
+            if w > 0:
+                return w
+        except Exception:  # noqa: BLE001 -- fall back to the assumed width
+            pass
+    return float(getattr(cfg, "channel_width_m", 0.0))
+
+
+def validate_reach_geometry(cl: "np.ndarray", cfg: "ReachConfig") -> None:
+    """Raise :class:`ReachDegenerateError` when the channel is wider than the
+    reach is long (aspect < ``_MIN_REACH_ASPECT``) - the pre-mesh sanity gate
+    that turns the live gmsh hang into a fast typed error."""
+    reach_len = _centerline_length_m(cl)
+    width = _effective_channel_width_m(cfg)
+    if width > 0 and reach_len > 0 and (reach_len / width) < _MIN_REACH_ASPECT:
+        raise ReachDegenerateError(reach_len, width)
+
+
 _NHDAREA_URL = (
     "https://hydro.nationalmap.gov/arcgis/rest/services/NHDPlus_HR/"
     "MapServer/8/query"
@@ -430,10 +749,19 @@ _NHDAREA_URL = (
 def fetch_bank_polygons(bbox4326, timeout=30.0):
     """NHDArea water polygons intersecting ``bbox4326`` (lonlat) as a list of
     (exterior_ring, [hole_rings]) lonlat arrays. None on ANY failure/empty -
-    the caller falls back to the constant-width ribbon (honest degrade)."""
+    on the nhd_area path the caller raises BanksUnavailableError (no inexplicit
+    ribbon fallback)."""
     import json as _json
+    import os as _os
     import urllib.parse
     import urllib.request
+
+    # Test seam (leg 1 forced-empty gate drive): force an empty NHDArea response
+    # so the nhd_area banks gate can be exercised on a reach that does have
+    # coverage. Env-gated only; the live path is untouched when unset.
+    if _os.environ.get("TRID3NT_TELEMAC_FORCE_BANKS_EMPTY"):
+        LOG.warning("fetch_bank_polygons: FORCED empty (TRID3NT_TELEMAC_FORCE_BANKS_EMPTY)")
+        return None
 
     params = urllib.parse.urlencode({
         "geometry": ",".join(f"{v:.6f}" for v in bbox4326),
@@ -772,25 +1100,24 @@ def build_channel_mesh(cl: np.ndarray, cfg: ReachConfig):
     inflow/outflow node sets (P0 gotchas 1-3, 7).
     """
     import gmsh
-    import signal
+
+    # PRE-MESH GATE: refuse a degenerate reach (channel wider than the reach is
+    # long) before gmsh can busy-loop on folded banks - a fast typed error, not
+    # a 32-min hang (the guarded caller also validates in-parent before forking).
+    validate_reach_geometry(cl, cfg)
 
     offsets = getattr(cfg, "bank_offsets", None)
     left, right = _offset_banks(cl, cfg.channel_width_m, offsets)
-    # gmsh-hang hardening (live: wide-river banks hung generate(2) for 18+ min
-    # silently; a 50 km reach did the same earlier). Bound the WHOLE build with
-    # SIGALRM (single-threaded worker) -> honest MESH_BUILD_TIMEOUT. Also dump
-    # the exact geometry first so a failing case is reproducible offline.
+    # The WHOLE build runs inside a killable child process (build_channel_mesh_
+    # guarded) with a hard wall-clock SIGKILL - the real watchdog, since a gmsh
+    # C busy-loop cannot be preempted by an in-process signal. Dump the exact
+    # geometry first so a failing case is reproducible offline.
     try:
         np.savez(str(Path(cfg.workdir) / "banks_debug.npz"),
                  cl=cl, left=left, right=right)
     except Exception:  # noqa: BLE001 -- debug dump is best-effort
         pass
 
-    def _gmsh_timeout(_sig, _frm):
-        raise TimeoutError("MESH_BUILD_TIMEOUT: gmsh exceeded 240 s")
-
-    signal.signal(signal.SIGALRM, _gmsh_timeout)
-    signal.alarm(240)
     # gotcha 7: if banks self-intersect at a bend, smooth harder until simple
     tries = 0
     while not _banks_valid(left, right) and tries < 6:
@@ -804,7 +1131,6 @@ def build_channel_mesh(cl: np.ndarray, cfg: ReachConfig):
         left, right = _offset_banks(cl, cfg.channel_width_m, offsets)
         tries += 1
     if not _banks_valid(left, right):
-        signal.alarm(0)
         raise RuntimeError(
             "MESH_BANKS_INVALID: bank offset curves still self-intersect "
             "after smoothing retries - refusing to mesh a folded channel"
@@ -944,7 +1270,6 @@ def build_channel_mesh(cl: np.ndarray, cfg: ReachConfig):
             tri_tags = en.reshape(-1, 3).astype(np.int64)
     if tri_tags is None or len(tri_tags) == 0:
         gmsh.finalize()
-        signal.alarm(0)
         raise RuntimeError(
             "MESH_BUILD_EMPTY: gmsh generated no triangles (bad hole/boundary "
             f"geometry? islands={len(island_rings)})"
@@ -963,7 +1288,6 @@ def build_channel_mesh(cl: np.ndarray, cfg: ReachConfig):
     in_nodes = pg_nodes(g_in)
     out_nodes = pg_nodes(g_out)
     gmsh.finalize()
-    signal.alarm(0)
 
     # coincident-node guard
     from scipy.spatial import cKDTree
@@ -1034,6 +1358,116 @@ def build_channel_mesh(cl: np.ndarray, cfg: ReachConfig):
                 water_coverage_frac=(round(float(water_coverage), 4)
                                      if domain is not None else None),
                 banks_ok=banks_ok, smooth_tries=tries, centerline=cl)
+
+
+class MeshBuildTimeout(RuntimeError):
+    """The channel-mesh build exceeded its wall-clock deadline and was killed.
+
+    The hard watchdog (a gmsh C busy-loop cannot be preempted by an in-process
+    signal, so the whole build runs in a killable child process that the parent
+    SIGKILLs at the deadline). Names the same corrective retries as the
+    degenerate-reach gate so the user has a path forward, never a silent hang."""
+
+    def __init__(self, timeout_s: float) -> None:
+        self.timeout_s = float(timeout_s)
+        super().__init__(
+            f"channel-mesh build exceeded the {self.timeout_s:.0f}s wall-clock "
+            "deadline and was terminated. This usually means a near-degenerate "
+            "reach geometry. Retry with a longer reach_length_km, an explicit "
+            'river_name, or bank_source="constant_ribbon" with a smaller '
+            "channel_width_m."
+        )
+
+
+def _mesh_build_child(cl: np.ndarray, cfg: "ReachConfig", result_path: str) -> None:
+    """Child-process target: run build_channel_mesh, pickle the result/exception.
+
+    gmsh state stays in this short-lived process so a fresh import per build has
+    no stale global state, and the parent can SIGKILL a C busy-loop cleanly."""
+    import pickle
+
+    try:
+        mesh = build_channel_mesh(cl, cfg)
+        payload = {"status": "ok", "mesh": mesh}
+    except ReachDegenerateError as exc:
+        payload = {"status": "degenerate",
+                   "reach_length_m": exc.reach_length_m,
+                   "channel_width_m": exc.channel_width_m}
+    except BaseException as exc:  # noqa: BLE001 -- serialize ANY failure honestly
+        payload = {"status": "error", "message": f"{type(exc).__name__}: {exc}"}
+    with open(result_path, "wb") as fh:
+        pickle.dump(payload, fh)
+
+
+def build_channel_mesh_guarded(
+    cl: np.ndarray,
+    cfg: "ReachConfig",
+    *,
+    timeout_s: float | None = None,
+):
+    """build_channel_mesh under a HARD wall-clock watchdog (Bug 1b).
+
+    Validates the reach geometry in-parent (fast typed ReachDegenerateError, no
+    fork), then runs the gmsh build in a killable child process. On the deadline
+    the child's whole process group is SIGKILLed - preempting a gmsh C busy-loop
+    the old in-process SIGALRM could not - and MeshBuildTimeout is raised."""
+    import multiprocessing as mp
+    import os as _os
+    import pickle
+    import signal as _signal
+    import tempfile
+
+    if timeout_s is None:
+        env = os.environ.get("TELEMAC_MESH_TIMEOUT_S")
+        timeout_s = float(env) if env else _MESH_WALLCLOCK_TIMEOUT_S
+
+    # Fast fail without forking / importing gmsh.
+    validate_reach_geometry(cl, cfg)
+
+    ctx = mp.get_context("fork")
+    fd, result_path = tempfile.mkstemp(prefix="mesh_result_", suffix=".pkl",
+                                       dir=str(cfg.workdir))
+    _os.close(fd)
+    proc = ctx.Process(target=_mesh_build_child, args=(cl, cfg, result_path))
+    proc.start()
+    proc.join(timeout_s)
+    if proc.is_alive():
+        # SIGKILL the whole group (C busy-loop ignores SIGTERM); then reap.
+        try:
+            _os.killpg(_os.getpgid(proc.pid), _signal.SIGKILL)
+        except (ProcessLookupError, PermissionError, OSError):
+            proc.kill()
+        proc.join(10)
+        try:
+            _os.unlink(result_path)
+        except OSError:
+            pass
+        raise MeshBuildTimeout(timeout_s)
+
+    try:
+        with open(result_path, "rb") as fh:
+            payload = pickle.load(fh)
+    except Exception as exc:  # noqa: BLE001 -- no/partial result == child crash
+        raise RuntimeError(
+            f"MESH_BUILD_FAILED: mesh child exited {proc.exitcode} without a "
+            f"result ({type(exc).__name__}: {exc})"
+        ) from exc
+    finally:
+        try:
+            _os.unlink(result_path)
+        except OSError:
+            pass
+
+    status = payload.get("status")
+    if status == "ok":
+        return payload["mesh"]
+    if status == "degenerate":
+        raise ReachDegenerateError(
+            payload["reach_length_m"], payload["channel_width_m"]
+        )
+    raise RuntimeError(
+        f"MESH_BUILD_FAILED: {payload.get('message', 'mesh child failed')}"
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -1428,6 +1862,56 @@ def write_waqtel_decay(cfg, workdir: str) -> str:
     return WAQTEL_FILENAME
 
 
+def write_waqtel_o2(cfg, workdir: str) -> str:
+    """Author the WAQTEL steering file for the O2 module (WATER QUALITY PROCESS 2).
+
+    The dissolved-oxygen SAG kinetics. Every English keyword name is verified vs
+    the in-image waqtel.dico (v9.0). To reproduce the Streeter-Phelps closed form
+    the eutrophication/benthic O2 sources are zeroed (BENTHIC DEMAND, PHOTOSYNTHESIS
+    P, VEGETAL RESPIRATION R = 0) and nitrification is off (K4 = 0), leaving only
+    first-order deoxygenation (K1) balanced by surface reaeration (K2). FORMULA FOR
+    COMPUTING K2 = 0 uses the CONSTANT reaeration coefficient K22 (the S-P k2); a
+    non-zero formula (1 TVA .. 5 combined) computes k2 from the modeled U/H instead.
+    FORMULA FOR COMPUTING CS = 0 uses the CONSTANT saturation O2SATU (the S-P Cs),
+    set from a temperature-dependent value upstream. WATER SALINITY = 0 (freshwater
+    river; salinity only matters when CS is computed). Returns the steering filename
+    written into ``workdir``; every line respects the DAMOCLES 72-char clamp.
+    """
+    k1 = float(getattr(cfg, "do_k1_per_day", 0.3))
+    k2 = float(getattr(cfg, "do_k2_per_day", 0.9))
+    formk2 = int(getattr(cfg, "do_k2_formula", 0))
+    cs = float(getattr(cfg, "do_sat_mgl", 9.0))
+    temp = float(getattr(cfg, "do_water_temp_c", 20.0))
+    lines = [
+        "/------------------------------------------------------------------/",
+        "/  WAQTEL O2 steering - dissolved-oxygen sag (process 2)",
+        f"/  k1={k1:g} d^-1  k2={k2:g} d^-1 (FORMK2={formk2})  Cs={cs:g} T={temp:g}C",
+        "/------------------------------------------------------------------/",
+        f"WATER TEMPERATURE                             = {temp:g}",
+        "WATER SALINITY                                = 0.",
+        f"CONSTANT OF DEGRADATION OF ORGANIC LOAD K1    = {k1:g}",
+        "CONSTANT OF NITRIFICATION KINETIC K4          = 0.",
+        f"FORMULA FOR COMPUTING K2                      = {formk2}",
+        f"K2 REAERATION COEFFICIENT                     = {k2:g}",
+        "FORMULA FOR COMPUTING CS                      = 0",
+        f"O2 SATURATION DENSITY OF WATER (CS)           = {cs:g}",
+        "BENTHIC DEMAND                                = 0.",
+        "PHOTOSYNTHESIS P                              = 0.",
+        "VEGETAL RESPIRATION R                         = 0.",
+    ]
+    clamped = [ln[:72] if len(ln) > 72 else ln for ln in lines]
+    over = [ln for ln in clamped if len(ln) > 72]
+    if over:
+        LOG.warning("waqtel O2 steering lines still >72 chars after clamp: %r",
+                    over[:3])
+    path = os.path.join(workdir, WAQTEL_FILENAME)
+    with open(path, "w") as f:
+        f.write("\n".join(clamped) + "\n")
+    LOG.info("waqtel O2 steering authored: k1=%g k2=%g formk2=%d Cs=%g -> %s",
+             k1, k2, formk2, cs, WAQTEL_FILENAME)
+    return WAQTEL_FILENAME
+
+
 #: the worker-authored GAIA steering file (its own DAMOCLES-parsed .cas, same
 #: 72-char line limit) named in the t2d cas via GAIA STEERING FILE, and the GAIA
 #: result SELAFIN carrying CUMUL BED EVOL (deposition). Both ship as outputs.
@@ -1464,30 +1948,65 @@ def write_gaia_deck(cfg, slf_name: str, cli_name: str, workdir: str) -> str:
     # d50 in METRES from microns; floored so a bogus value cannot zero the grain.
     d50_m = max(float(getattr(cfg, "grain_size_um", 200.0)), 1.0) * 1.0e-6
     density = float(getattr(cfg, "sediment_density", 2650.0))
-    lines = [
-        "/------------------------------------------------------------------/",
-        "/  GAIA steering - ONE suspended NCO class, supply-limited bed",
-        "/  (LAYERS INITIAL THICKNESS = 0 -> only the injected pulse deposits)",
-        f"/  type={str(getattr(cfg, 'sediment_type', 'sand'))[:8]} "
-        f"d50={d50_m*1e6:g}um conc={conc_kgm3:g}kg/m3",
-        "/------------------------------------------------------------------/",
-        f"GEOMETRY FILE                   = {os.path.basename(slf_name)}",
-        f"BOUNDARY CONDITIONS FILE        = {os.path.basename(cli_name)}",
-        f"RESULTS FILE                    = {GAIA_RESULT_FILENAME}",
-        "VARIABLES FOR GRAPHIC PRINTOUTS = 'B,E'",
-        "CLASSES TYPE OF SEDIMENT        = NCO",
-        f"CLASSES SEDIMENT DIAMETERS      = {d50_m:g}",
-        f"CLASSES SEDIMENT DENSITY        = {density:g}",
-        "CLASSES INITIAL FRACTION        = 1.",
-        "CLASSES SETTLING VELOCITIES     = -9.",
-        "SUSPENSION FOR ALL SANDS        = YES",
-        "BED LOAD FOR ALL SANDS          = NO",
-        "SUSPENSION TRANSPORT FORMULA FOR ALL SANDS = 3",
-        "LAYERS INITIAL THICKNESS        = 0.",
-        "SCHEME FOR ADVECTION OF SUSPENDED SEDIMENTS = 1",
-        f"SUSPENDED SEDIMENTS CONCENTRATION VALUES AT THE SOURCES = {conc_kgm3:g}",
-        "MASS-BALANCE                    = YES",
-    ]
+    if bool(getattr(cfg, "erodible_bed", False)):
+        # v2 ERODIBLE-BED MORPHODYNAMICS: a real erodible bed stock + active bedload
+        # transport, so the bed SCOURS (negative CUMUL BED EVOL) where the flow
+        # steepens and re-deposits where it slackens. SUSPENSION is OFF (pure
+        # bedload morphodynamics -> a clean scour/deposition signal and NO suspended
+        # tracer appended to T2D, so the dye stays the sole hydraulic companion).
+        # MORPHOLOGICAL FACTOR amplifies the bed change per hydraulic step so a
+        # short demo hydrograph produces a readable scour depth. Keywords pinned
+        # against gaia.dico v9.0. LAYERS INITIAL THICKNESS carries per-layer stock;
+        # one generous layer keeps the whole reach erodible over the demo.
+        bed_thick = max(float(getattr(cfg, "bed_thickness_m", 5.0)), 0.01)
+        formula = int(getattr(cfg, "bedload_formula", 1) or 1)
+        mofac = max(float(getattr(cfg, "morphological_factor", 10.0)), 1.0)
+        lines = [
+            "/------------------------------------------------------------------/",
+            "/  GAIA steering - v2 ERODIBLE BED, bedload morphodynamics (scour)",
+            f"/  type={str(getattr(cfg, 'sediment_type', 'sand'))[:8]} "
+            f"d50={d50_m*1e6:g}um bed={bed_thick:g}m icf={formula} mofac={mofac:g}",
+            "/------------------------------------------------------------------/",
+            f"GEOMETRY FILE                   = {os.path.basename(slf_name)}",
+            f"BOUNDARY CONDITIONS FILE        = {os.path.basename(cli_name)}",
+            f"RESULTS FILE                    = {GAIA_RESULT_FILENAME}",
+            "VARIABLES FOR GRAPHIC PRINTOUTS = 'B,E'",
+            "CLASSES TYPE OF SEDIMENT        = NCO",
+            f"CLASSES SEDIMENT DIAMETERS      = {d50_m:g}",
+            f"CLASSES SEDIMENT DENSITY        = {density:g}",
+            "CLASSES INITIAL FRACTION        = 1.",
+            "SUSPENSION FOR ALL SANDS        = NO",
+            "BED LOAD FOR ALL SANDS          = YES",
+            f"BED-LOAD TRANSPORT FORMULA FOR ALL SANDS = {formula}",
+            f"LAYERS INITIAL THICKNESS        = {bed_thick:g}",
+            f"MORPHOLOGICAL FACTOR            = {mofac:g}",
+            "MASS-BALANCE                    = YES",
+        ]
+    else:
+        lines = [
+            "/------------------------------------------------------------------/",
+            "/  GAIA steering - ONE suspended NCO class, supply-limited bed",
+            "/  (LAYERS INITIAL THICKNESS = 0 -> only the injected pulse deposits)",
+            f"/  type={str(getattr(cfg, 'sediment_type', 'sand'))[:8]} "
+            f"d50={d50_m*1e6:g}um conc={conc_kgm3:g}kg/m3",
+            "/------------------------------------------------------------------/",
+            f"GEOMETRY FILE                   = {os.path.basename(slf_name)}",
+            f"BOUNDARY CONDITIONS FILE        = {os.path.basename(cli_name)}",
+            f"RESULTS FILE                    = {GAIA_RESULT_FILENAME}",
+            "VARIABLES FOR GRAPHIC PRINTOUTS = 'B,E'",
+            "CLASSES TYPE OF SEDIMENT        = NCO",
+            f"CLASSES SEDIMENT DIAMETERS      = {d50_m:g}",
+            f"CLASSES SEDIMENT DENSITY        = {density:g}",
+            "CLASSES INITIAL FRACTION        = 1.",
+            "CLASSES SETTLING VELOCITIES     = -9.",
+            "SUSPENSION FOR ALL SANDS        = YES",
+            "BED LOAD FOR ALL SANDS          = NO",
+            "SUSPENSION TRANSPORT FORMULA FOR ALL SANDS = 3",
+            "LAYERS INITIAL THICKNESS        = 0.",
+            "SCHEME FOR ADVECTION OF SUSPENDED SEDIMENTS = 1",
+            f"SUSPENDED SEDIMENTS CONCENTRATION VALUES AT THE SOURCES = {conc_kgm3:g}",
+            "MASS-BALANCE                    = YES",
+        ]
     # DAMOCLES hard 72-char line limit (identical to author_deck's clamp): every
     # line is defensively sliced; comments are safe, the data lines are short by
     # construction (the keyword above is the longest at 55 + a small number).
@@ -1597,20 +2116,49 @@ def author_deck(cfg, mesh, slf, cli, res, cas_path, lb_order, bed):
     """
     bed_outflow = bed["bed_top_m"] - bed["bed_drop_m"]
     outflow_stage = bed_outflow + cfg.init_depth_m
+    is_do_sag = str(getattr(cfg, "substance_class", "tracer")).lower() == "do_sag"
     q = []; elev = []; tracer = []
     for role in lb_order:
         if role == "inflow":
             q.append(f"{cfg.inflow_q_m3s}")
             elev.append("0.0")
-            tracer.append("0.0")     # clean flow -- dye enters via the point source
+            if is_do_sag:
+                # WAQTEL O2 appends DISSOLVED O2, ORGANIC LOAD, NH4 LOAD after the
+                # dye tracer (boundary-major PRESCRIBED, tr.f IRANK order): the
+                # fully-mixed discharge rides in here (DO + CBOD), the dye stays 0.
+                tracer += ["0.0",
+                           f"{float(cfg.do_sag_upstream_do_mgl):g}",
+                           f"{float(cfg.do_sag_bod_mgl):g}", "0.0"]
+            else:
+                tracer.append("0.0")   # clean flow -- dye enters via the point source
         else:  # outflow: prescribe a downstream stage = bed + target depth
             q.append("0.0")
             elev.append(f"{outflow_stage:.3f}")
-            tracer.append("0.0")
+            if is_do_sag:
+                tracer += ["0.0", "0.0", "0.0", "0.0"]   # exit boundary: free
+            else:
+                tracer.append("0.0")
 
     sx, sy, snode = spill_point(mesh, cfg)
-    src_path = os.path.join(os.path.dirname(os.path.abspath(cas_path)), SOURCES_FILENAME)
-    write_sources_pulse(src_path, cfg)
+    # do_sag models the reach STARTING at the fully-mixed discharge: the CBOD + DO
+    # ride in at the INFLOW boundary (PRESCRIBED TRACERS VALUES), so there is NO
+    # point-source dye pulse. Omitting the SOURCES FILE + source keywords avoids a
+    # single-tracer source array colliding with the O2 module's 4 tracers.
+    if not is_do_sag:
+        src_path = os.path.join(os.path.dirname(os.path.abspath(cas_path)),
+                                SOURCES_FILENAME)
+        write_sources_pulse(src_path, cfg)
+        sources_file_line = f"SOURCES FILE                    = {SOURCES_FILENAME}\n"
+        sources_block = (
+            "MAXIMUM NUMBER OF SOURCES        = 20\n"
+            f"ABSCISSAE OF SOURCES             = {sx:.3f}\n"
+            f"ORDINATES OF SOURCES             = {sy:.3f}\n"
+            "WATER DISCHARGE OF SOURCES       = 0.0\n"
+            "VALUES OF THE TRACERS AT THE SOURCES = 0.0\n"
+        )
+    else:
+        sources_file_line = ""
+        sources_block = ""
 
     # TELEMAC-PHYS-1 constitutive-physics literals. SAFETY INVARIANT: when the
     # ReachConfig override is None (unset) the deck emits the EXACT historical
@@ -1634,6 +2182,61 @@ def author_deck(cfg, mesh, slf, cli, res, cas_path, lb_order, bed):
     _tracer_diff = "1.E-1" if cfg.tracer_diffusivity is None \
         else _cas_real(cfg.tracer_diffusivity)
 
+    # WIND-STRESS FORCING (constant OPTION FOR WIND = 1). Emitted ONLY when
+    # wind_speed_mps > 0; unset (0.0) leaves the deck byte-identical (no WIND
+    # lines). The meteorological FROM-direction is resolved into velocity
+    # components pointing in the direction the wind BLOWS TOWARD, in the mesh's
+    # UTM frame (x=easting, y=northing): wind FROM north (0 deg) drives water
+    # southward (wy<0), wind FROM west (270 deg) drives it eastward (wx>0).
+    import math as _math
+    _wind_speed = float(getattr(cfg, "wind_speed_mps", 0.0) or 0.0)
+    if _wind_speed > 0.0:
+        _th = _math.radians(float(getattr(cfg, "wind_dir_from_deg", 0.0) or 0.0))
+        _wx = -_wind_speed * _math.sin(_th)   # FROM-dir -> blows TOWARD
+        _wy = -_wind_speed * _math.cos(_th)
+        _cd = getattr(cfg, "wind_drag_coef", None)
+        _cd_line = "" if _cd is None else \
+            f"COEFFICIENT OF WIND INFLUENCE   = {_cas_real(_cd)}\n"
+        wind_block = (
+            "WIND                            = YES\n"
+            "OPTION FOR WIND                 = 1\n"
+            f"{_cd_line}"
+            f"WIND VELOCITY ALONG X           = {_cas_real(_wx)}\n"
+            f"WIND VELOCITY ALONG Y           = {_cas_real(_wy)}\n"
+            "THRESHOLD DEPTH FOR WIND        = 1.\n"
+        )
+    else:
+        wind_block = ""
+
+    # DISTRIBUTED ON-MESH RAINFALL / EVAPORATION. Emitted ONLY when
+    # rain_or_evap_mm_per_day is set (non-None); unset leaves the deck
+    # byte-identical (no RAIN lines, RAIN OR EVAPORATION absent = NO). The
+    # native TELEMAC-2D source term applies a uniform water flux at every wet
+    # node - independent of the inflow-boundary hydrograph (q above). Signed:
+    # positive = rain (water in), negative = evaporation (water out).
+    _rain_rate = getattr(cfg, "rain_or_evap_mm_per_day", None)
+    if _rain_rate is not None:
+        # When RAIN is active AND tracers exist, TELEMAC-2D (DAMOCLES) REQUIRES
+        # the rainwater tracer concentration (keyword VALUES OF TRACERS IN THE
+        # RAIN / MNEMO TRAIN) with one value per tracer - omitting it aborts with
+        # "GIVE AS MANY VALUES AS TRACERS". Rainwater carries ZERO dye / sediment
+        # (a clean-rain default). Tracer count: do_sag = 4 (dye + DO + CBOD +
+        # NH4), sediment (GAIA) = 2 (dye + suspended class), else 1 (dye).
+        _subst = str(getattr(cfg, "substance_class", "tracer")).lower()
+        # sediment: v1 SUSPENSION appends a 2nd tracer (dye + suspended class); v2
+        # ERODIBLE bedload appends none (dye only). do_sag = 4 (dye + DO + CBOD + NH4).
+        _sed_suspended = _subst == "sediment" and not bool(
+            getattr(cfg, "erodible_bed", False))
+        _n_tracers = 4 if _subst == "do_sag" else (2 if _sed_suspended else 1)
+        _train = ";".join(["0."] * _n_tracers)
+        rain_block = (
+            "RAIN OR EVAPORATION             = YES\n"
+            f"RAIN OR EVAPORATION IN MM PER DAY = {_cas_real(float(_rain_rate))}\n"
+            f"VALUES OF TRACERS IN THE RAIN   = {_train}\n"
+        )
+    else:
+        rain_block = ""
+
     cas = f"""/-------------------------------------------------------------------/
 /  TELEMAC-2D  P1 REAL RIVER DYE  -  {cfg.name}
 /  Mesh from NHDPlus flowlines (Gmsh, tagged physical groups) -> rank IPOBO.
@@ -1646,8 +2249,7 @@ def author_deck(cfg, mesh, slf, cli, res, cas_path, lb_order, bed):
 GEOMETRY FILE                   = {os.path.basename(slf)}
 BOUNDARY CONDITIONS FILE        = {os.path.basename(cli)}
 RESULTS FILE                    = {os.path.basename(res)}
-SOURCES FILE                    = {SOURCES_FILENAME}
-/
+{sources_file_line}/
 TITLE : '{cfg.name} REAL RIVER DYE PULSE'
 VARIABLES FOR GRAPHIC PRINTOUTS = 'U,V,H,S,B,T1'
 GRAPHIC PRINTOUT PERIOD         = {cfg.graphic_period}
@@ -1662,16 +2264,11 @@ INITIAL DEPTH                   = {cfg.init_depth_m:.3f}
 PRESCRIBED FLOWRATES            = {';'.join(q)}
 PRESCRIBED ELEVATIONS           = {';'.join(elev)}
 /
-MAXIMUM NUMBER OF SOURCES        = 20
-ABSCISSAE OF SOURCES             = {sx:.3f}
-ORDINATES OF SOURCES             = {sy:.3f}
-WATER DISCHARGE OF SOURCES       = 0.0
-VALUES OF THE TRACERS AT THE SOURCES = 0.0
-/
+{sources_block}/
 LAW OF BOTTOM FRICTION          = {_fric_law}
 FRICTION COEFFICIENT            = {_fric_coef}
 VELOCITY DIFFUSIVITY            = {_vel_diff}
-/
+{wind_block}{rain_block}/
 EQUATIONS                       = 'SAINT-VENANT FE'
 TREATMENT OF THE LINEAR SYSTEM  = 2
 TYPE OF ADVECTION               = 1;5
@@ -1754,6 +2351,32 @@ COEFFICIENT FOR DIFFUSION OF TRACERS     = {_tracer_diff}
             "WATER QUALITY PROCESS           = 17\n"
         )
 
+    if is_do_sag:
+        # WAQTEL O2 class (mutually exclusive with oil/decay/sediment): couple
+        # WAQTEL with WATER QUALITY PROCESS = 2 (the O2 module). nametrac_waqtel
+        # appends THREE tracers after the dye - DISSOLVED O2 (T2), ORGANIC LOAD /
+        # CBOD (T3), NH4 LOAD (T4) - so the deck must (a) OUTPUT them (add T2,T3,T4
+        # to the graphic printouts) and (b) size INITIAL VALUES OF TRACERS to the
+        # FOUR tracers (the single-value default only covers the dye). PRESCRIBED
+        # TRACERS VALUES is already widened to 4-per-boundary in the lb_order loop
+        # above (the mixed CBOD + DO ride in at the inflow). The O2 kinetics
+        # (k1/k2/Cs) live in the steering file. In-image V&V (2026-08-07): the
+        # sag reproduces the Streeter-Phelps 1925 closed form to 0.011 mg/L.
+        write_waqtel_o2(cfg, os.path.dirname(os.path.abspath(cas_path)))
+        cas = cas.replace(
+            "VARIABLES FOR GRAPHIC PRINTOUTS = 'U,V,H,S,B,T1'",
+            "VARIABLES FOR GRAPHIC PRINTOUTS = 'U,V,H,S,B,T1,T2,T3,T4'")
+        cas = cas.replace(
+            "INITIAL VALUES OF TRACERS       = 0.",
+            "INITIAL VALUES OF TRACERS       = 0.;"
+            f"{float(cfg.do_sag_upstream_do_mgl):g};0.;0.")
+        cas += (
+            "/\n"
+            "COUPLING WITH                   = 'WAQTEL'\n"
+            f"WAQTEL STEERING FILE            = {WAQTEL_FILENAME}\n"
+            "WATER QUALITY PROCESS           = 2\n"
+        )
+
     if str(getattr(cfg, "substance_class", "tracer")).lower() == "sediment":
         # GAIA v1 sediment class (mutually exclusive with oil/decay): couple GAIA
         # internally to TELEMAC-2D. In-image smoke (2026-07-19) PINNED the wiring:
@@ -1773,17 +2396,24 @@ COEFFICIENT FOR DIFFUSION OF TRACERS     = {_tracer_diff}
         # (author_gaia_deck clamps its own file; these three t2d lines are short).
         write_gaia_deck(cfg, os.path.basename(slf), os.path.basename(cli),
                         os.path.dirname(os.path.abspath(cas_path)))
-        # add T2 (the appended gaia suspended tracer) to the graphic printouts
-        cas = cas.replace(
-            "VARIABLES FOR GRAPHIC PRINTOUTS = 'U,V,H,S,B,T1'",
-            "VARIABLES FOR GRAPHIC PRINTOUTS = 'U,V,H,S,B,T1,T2'")
-        # widen PRESCRIBED TRACERS VALUES to (dye + gaia class) x n_liquid_bounds
-        # zeros (clean boundaries - dye + sediment both enter via the point source
-        # / gaia source keyword, never the open boundaries).
-        n_tr_vals = 2 * max(len(lb_order), 1)
-        cas = cas.replace(
-            "PRESCRIBED TRACERS VALUES       = " + ";".join(tracer),
-            "PRESCRIBED TRACERS VALUES       = " + ";".join(["0."] * n_tr_vals))
+        if not bool(getattr(cfg, "erodible_bed", False)):
+            # v1 SUPPLY-LIMITED SUSPENSION: GAIA appends its ONE suspended class as
+            # a SECOND t2d tracer, so the deck must OUTPUT it (add T2) and size
+            # PRESCRIBED TRACERS VALUES for BOTH tracers x every liquid boundary.
+            cas = cas.replace(
+                "VARIABLES FOR GRAPHIC PRINTOUTS = 'U,V,H,S,B,T1'",
+                "VARIABLES FOR GRAPHIC PRINTOUTS = 'U,V,H,S,B,T1,T2'")
+            # widen PRESCRIBED TRACERS VALUES to (dye + gaia class) x n_liquid_bounds
+            # zeros (clean boundaries - dye + sediment both enter via the point
+            # source / gaia source keyword, never the open boundaries).
+            n_tr_vals = 2 * max(len(lb_order), 1)
+            cas = cas.replace(
+                "PRESCRIBED TRACERS VALUES       = " + ";".join(tracer),
+                "PRESCRIBED TRACERS VALUES       = " + ";".join(["0."] * n_tr_vals))
+        # else: v2 ERODIBLE-BED bedload path appends NO suspended tracer (SUSPENSION
+        # FOR ALL SANDS = NO), so the dye stays the sole t2d tracer - the deck's
+        # single-tracer graphic printouts + PRESCRIBED TRACERS VALUES are already
+        # correct. Only the GAIA coupling lines below are added.
         cas += (
             "/\n"
             "COUPLING WITH                   = 'GAIA'\n"

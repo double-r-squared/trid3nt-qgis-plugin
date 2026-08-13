@@ -1,4 +1,4 @@
-"""Unit tests for the SFINCS forcing ADAPTER (P0 — COASTAL SFINCS North Star).
+"""Unit tests for the SFINCS forcing ADAPTER (P0 -- coastal SFINCS).
 
 The adapter (``trid3nt_server.agent.workflows.sfincs.sfincs_forcing_adapter``) is the seam that
 turns the forcing FETCHER outputs (GTSM / CO-OPS water-level FlatGeobufs, NWM
@@ -49,7 +49,7 @@ from trid3nt_server.agent.workflows.sfincs.sfincs_forcing_adapter import (
     reanchor_to_tref,
 )
 
-# A coastal AOI near Mexico Beach, FL (the COASTAL SFINCS North Star geography).
+# A coastal AOI near Mexico Beach, FL (the coastal SFINCS geography).
 _MEXICO_BEACH_BBOX = (-85.45, 29.92, -85.38, 29.98)
 
 # Hurricane Michael era — real event time the fetchers carry (proves re-anchoring).

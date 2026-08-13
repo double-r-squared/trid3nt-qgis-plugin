@@ -1,0 +1,11 @@
+# Template routing phrasings (door dissolution): walked into the main retrieval
+# index directly -- an ordinary retrieval-pool tool.
+swan_stationary_snapshot_batch:
+- give me nearshore wave conditions at several times during the storm without a full run
+- batch of stationary SWAN snapshots through a storm build up and decay
+- discrete SWAN wave fields at several instants of an event
+- sample the wave height at several times through the storm cheaply
+- run SWAN at several offshore Hs levels to see the surf zone evolve
+- stationary snapshot sequence of significant wave height over this coast
+- wave conditions at multiple design sea states for one coastline
+- how do the nearshore waves change as the offshore storm rises and falls

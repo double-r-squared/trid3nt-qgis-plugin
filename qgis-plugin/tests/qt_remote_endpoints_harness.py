@@ -20,11 +20,8 @@ Checks:
   3. no advertised endpoints + the DEFAULT ``local_url`` -> the derived http
      base is byte-identical to the old hardcoded default
      (``http://127.0.0.1:8766``) -- the "localhost default unchanged" bar.
-  4. REMOTE mode is untouched: ``_effective_http_base`` still routes through
-     ``case_export.ws_url_to_http_base(remote_url)`` regardless of any
-     advertised value stashed from a prior LOCAL connect.
-  5. token passthrough: ``settings.effective_token()`` now rides the pasted
-     token in LOCAL mode too (previously always "").
+  4. token passthrough: ``settings.effective_token()`` rides the optional
+     shared tailnet token (empty/OFF by default).
 
 Exits 0 and prints REMOTE-ENDPOINTS-OK; raises (nonzero) on any failed check.
 """
@@ -47,7 +44,7 @@ QCoreApplication.setApplicationName("trid3nt-remote-endpoints-harness")
 
 app = QApplication(sys.argv)
 
-from trid3nt.plugin_settings import MODE_REMOTE, PluginSettings  # noqa: E402
+from trid3nt.plugin_settings import PluginSettings  # noqa: E402
 from trid3nt.ui.dock import Trid3ntDock  # noqa: E402
 
 
@@ -107,23 +104,14 @@ if dock._effective_http_base() != "http://127.0.0.1:8766":
         f"{dock._effective_http_base()!r} != http://127.0.0.1:8766"
     )
 
-# ---- 4. REMOTE mode is untouched by any stashed advertisement -------------- #
-dock.settings.mode = MODE_REMOTE
-dock.settings.remote_url = "wss://cloud.example.com/ws"
-# A prior LOCAL connect's advertisement must never leak into the remote path.
-dock._advertised_http_base = "http://100.64.0.5:8766"
-if dock._effective_http_base() != "https://cloud.example.com":
-    _fail(f"remote mode leaked a local advertisement: {dock._effective_http_base()!r}")
-dock.settings.mode = "local"  # restore for the next check
-
-# ---- 5. token passthrough: LOCAL mode no longer blanks the token ----------- #
+# ---- 4. token passthrough: the optional shared tailnet token rides through - #
 fresh_settings = PluginSettings()
 fresh_settings.token = "tailnet-shared-secret"
 if fresh_settings.mode != "local":
-    _fail(f"expected default mode local, got {fresh_settings.mode!r}")
+    _fail(f"expected mode local (migration seam), got {fresh_settings.mode!r}")
 if fresh_settings.effective_token() != "tailnet-shared-secret":
     _fail(
-        "LOCAL mode must ride the optional shared token now, got "
+        "the optional shared token must ride effective_token(), got "
         f"{fresh_settings.effective_token()!r}"
     )
 # Unset (default OFF) still rides through cleanly as "".

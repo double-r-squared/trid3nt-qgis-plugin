@@ -9,6 +9,7 @@ import re
 from typing import Dict, List, Optional, Tuple
 
 from qgis.PyQt.QtCore import Qt, QTimer
+from qgis.PyQt.QtGui import QColor, QSyntaxHighlighter, QTextCharFormat
 from qgis.PyQt.QtWidgets import (
     QComboBox,
     QFrame,
@@ -32,6 +33,7 @@ from ._style import (
     _THINKING_BLOCK_STYLE,
     _THINKING_TOGGLE_STYLE,
 )
+from ..net.run_invocation import RUN_PREFIX, is_run_prefix
 from ..net.trid3nt_client import PipelineStep
 
 
@@ -321,6 +323,32 @@ class _WrapLabel(QLabel):
         self._sync_min_height()
 
 
+class _RunPrefixHighlighter(QSyntaxHighlighter):
+    """Colours the leading anchored ``!run`` token blue (ADR 0114).
+
+    The blue signal fires on EXACTLY the same predicate as the parse-first
+    routing (``is_run_prefix``), so the highlight can never disagree with where
+    the message goes. Only the FIRST block (line) is considered and only when
+    that block is anchored -- a mid-sentence ``!run`` stays uncoloured, matching
+    the routing immunity. Leading whitespace is honoured so the coloured token
+    tracks the literal ``!run`` characters.
+    """
+
+    _BLUE = QColor("#2f81f7")  # the web/accent blue, legible on light+dark
+
+    def highlightBlock(self, text: str) -> None:  # noqa: N802 -- Qt name
+        # Only the composer's first block can carry the anchored token.
+        if self.currentBlock().blockNumber() != 0:
+            return
+        if not is_run_prefix(text):
+            return
+        start = len(text) - len(text.lstrip())
+        fmt = QTextCharFormat()
+        fmt.setForeground(self._BLUE)
+        fmt.setFontWeight(75)  # bold-ish, so the signal reads at a glance
+        self.setFormat(start, len(RUN_PREFIX), fmt)
+
+
 class _ChatInput(QPlainTextEdit):
     """Item A (qgis-ux-batch 2026-07-19): the composer input -- a MULTI-LINE
     auto-growing field (was a one-line QLineEdit that clipped long prompts, so
@@ -350,6 +378,10 @@ class _ChatInput(QPlainTextEdit):
         self.document().documentLayout().documentSizeChanged.connect(
             self._adjust_height
         )
+        # ADR 0114: colour the leading ``!run`` token blue while the composer is
+        # anchored as a direct invocation (same predicate as parse-first
+        # routing). Held on self so it is not GC'd.
+        self._run_highlighter = _RunPrefixHighlighter(self.document())
         self._adjust_height()
 
     def keyPressEvent(self, event) -> None:  # noqa: N802 -- Qt-mandated name
@@ -558,9 +590,8 @@ class _ErrorFold(QWidget):
     Consecutive red error lines (e.g. the per-layer "MinIO fetch failed ...
     -- skipped" notes a case-open rehydrate emits) collapse into a single
     inline "ERRORS (N)" toggle row, collapsed by default, expanding IN PLACE
-    to the wrapped lines -- the exact ChartsPanel collapse affordance (a flat
-    checkable QPushButton header toggling a body widget, charts.py), kept in
-    the error red. The fold lives INLINE in the notes area, in chat scroll
+    to the wrapped lines -- a flat checkable QPushButton header toggling a body
+    widget, kept in the error red. The fold lives INLINE in the notes area, in chat scroll
     order -- never moved to a panel.
 
     N == 1 renders as the plain wrapped red line with NO toggle chrome

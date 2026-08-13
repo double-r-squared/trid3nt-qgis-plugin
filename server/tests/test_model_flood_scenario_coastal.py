@@ -1,5 +1,5 @@
-"""Unit tests for the COASTAL-AOI branch in ``model_flood_scenario`` (SFINCS
-North Star P1 — fetch_topobathy wire seam).
+"""Unit tests for the COASTAL-AOI branch in ``model_flood_scenario`` (coastal
+SFINCS -- fetch_topobathy wire seam).
 
 The workflow routes the terrain fetch through ``fetch_topobathy`` (a SEAMLESS
 land-plus-seafloor DEM merging USGS 3DEP land with NOAA NCEI CUDEM bathymetry)
@@ -28,8 +28,8 @@ from unittest.mock import patch
 
 import pytest
 
-from trid3nt_server.agent.tools.fetchers.ocean.fetch_topobathy.fetch_topobathy import (
-    TopobathyResult,
+from trid3nt_contracts.execution import TopobathyResult
+from trid3nt_server.agent.tools.fetchers._router.hooks.topobathy import (
     TopobathyUpstreamError,
 )
 from trid3nt_server.agent.workflows.sfincs.flood.flood import (
@@ -50,7 +50,7 @@ from trid3nt_contracts.execution import ExecutionHandle, LayerURI, ModelSetup, R
 # Test domains
 # --------------------------------------------------------------------------- #
 
-# Coastal AOI — Florida panhandle / Mexico Beach (the SFINCS North Star demo).
+# Coastal AOI -- Florida panhandle / Mexico Beach (the coastal SFINCS reference).
 _COASTAL_BBOX = (-85.75, 29.55, -85.25, 30.20)
 # Inland AOI — Idaho (Case 3; no coast, pure pluvial).
 _INLAND_BBOX = (-116.30, 43.55, -116.10, 43.70)
@@ -253,6 +253,17 @@ def _patched_chain(
         module="test_offline_stub",
     )
 
+    # data-router fold (ADR 0085): fetch_gtsm_tide_surge is now a promoted spec-driven
+    # tool resolved via TOOL_REGISTRY[name].fn -- stub it the same way as CO-OPS above.
+    def _gtsm_offline(**_kw):  # noqa: ANN003
+        raise RuntimeError("offline test - no live GTSM")
+
+    _gtsm_stub = RegisteredTool(
+        metadata=_TR["fetch_gtsm_tide_surge"].metadata,
+        fn=_gtsm_offline,
+        module="test_offline_stub",
+    )
+
     # data-router fold (ADR 0074): fetch_river_geometry is likewise a promoted
     # spec-driven tool resolved via TOOL_REGISTRY[name].fn, not a twin module
     # import -- stub it the same way as the CO-OPS seam above.
@@ -305,10 +316,7 @@ def _patched_chain(
         # test - stub both so the ladder degrades to the parametric
         # design-storm surge (rung 3, key-free and fully offline).
         patch.dict(_TR, {"fetch_noaa_coops_tides": _coops_stub}),
-        patch(
-            "trid3nt_server.agent.tools.fetchers.ocean.fetch_gtsm_tide_surge.fetch_gtsm_tide_surge.fetch_gtsm_tide_surge",
-            side_effect=RuntimeError("offline test - no live GTSM"),
-        ),
+        patch.dict(_TR, {"fetch_gtsm_tide_surge": _gtsm_stub}),
     )
 
 

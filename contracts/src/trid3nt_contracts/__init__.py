@@ -61,13 +61,16 @@ from .common import (
     BBox,
     EngineRunArgsMixin,
     GraceModel,
+    InputBasis,
     Lat,
     Lon,
+    SyntheticInput,
     TemporalMode,
     TimeRange,
     ULIDStr,
     new_ulid,
     now_utc,
+    render_assumptions_line,
 )
 from .geoclaw_contracts import GeoClawDepthLayerURI, GeoClawRunArgs
 from .modflow_contracts import (
@@ -84,6 +87,7 @@ from .modflow_contracts import (
     SaltwaterWedgeLayerURI,
     SeepageLayerURI,
     SpeciesSpec,
+    VadoseBreakthroughLayerURI,
 )
 from .publish_manifest import (
     MANIFEST_SCHEMA_VERSION,
@@ -154,6 +158,8 @@ __all__ = [
     "CaptureZoneLayerURI",
     # MODFLOW Wave-5 variable-density saltwater intrusion layer (saltwater_intrusion)
     "SaltwaterWedgeLayerURI",
+    # MODFLOW ADR 0228 UZF+UZT vadose-zone breakthrough layer (vadose_transport)
+    "VadoseBreakthroughLayerURI",
     # SWMM quasi-2D urban-flood contracts (sprint-16 P1)
     "SWMMRunArgs",
     "SWMMDepthLayerURI",
@@ -186,6 +192,9 @@ __all__ = [
     "TimeRange",
     "TemporalMode",
     "EngineRunArgsMixin",
+    "InputBasis",
+    "SyntheticInput",
+    "render_assumptions_line",
     "new_ulid",
     "now_utc",
 ]

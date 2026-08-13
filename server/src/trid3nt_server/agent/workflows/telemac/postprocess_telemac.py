@@ -1,4 +1,4 @@
-"""TELEMAC-2D river-dye run-output postprocessing (river-dye North Star).
+"""TELEMAC-2D river-dye run-output postprocessing (river-dye reference scenario).
 
 ``postprocess_telemac(slf_path, *, run_id, utm_epsg, ...) -> (layers, metrics)``
 reads a solved TELEMAC-2D result SELAFIN (``r2d_river.slf``), extracts the DYE
@@ -39,8 +39,10 @@ from typing import Any
 
 from trid3nt_contracts.telemac_contracts import (
     TELEMAC_BED_EVOLUTION_STYLE_PRESET,
+    TELEMAC_DO_STYLE_PRESET,
     TELEMAC_DYE_STYLE_PRESET,
     TELEMAC_WSE_STYLE_PRESET,
+    TelemacDoLayerURI,
     TelemacDyeLayerURI,
     TelemacSedimentLayerURI,
     TelemacWseLayerURI,
@@ -56,10 +58,12 @@ __all__ = [
     "postprocess_telemac",
     "postprocess_telemac_deposition",
     "postprocess_telemac_wse",
+    "postprocess_telemac_do",
     "read_selafin",
     "TELEMAC_DYE_STYLE_PRESET",
     "TELEMAC_BED_EVOLUTION_STYLE_PRESET",
     "TELEMAC_WSE_STYLE_PRESET",
+    "TELEMAC_DO_STYLE_PRESET",
     "TELEMAC_DYE_WET_MGL",
     "TELEMAC_TARGET_GROUND_RES_M",
     "TELEMAC_WSE_WET_DEPTH_M",
@@ -157,14 +161,16 @@ def read_selafin(path: str | Path) -> dict[str, Any]:
     title trailer. Returns::
 
         {"title": str, "varnames": [str], "npoin": int, "nelem": int,
-         "x": ndarray(npoin), "y": ndarray(npoin),
+         "x": ndarray(npoin), "y": ndarray(npoin), "ikle": ndarray(nelem, ndp),
          "times": ndarray(nframes),
          "data": {varname: ndarray(nframes, npoin)}}
 
-    Only the variable NAMES + node coords + per-frame values are needed here (we
-    never touch IKLE for the raster path -- scattered-node interpolation is
-    enough), but IKLE/IPOBO records are still consumed to keep the byte cursor
-    aligned. Pure numpy; validated against a real solved ``r2d_river.slf``.
+    The raster path uses only the variable NAMES + node coords + per-frame values
+    (scattered-node interpolation), but the REAL element connectivity ``ikle``
+    (0-based triangles) is returned so mesh-faithful renders can triangulate the
+    channel along its true elements rather than an unconstrained Delaunay of the
+    node cloud (which bridges river bends into a spurious fan). IPOBO is consumed
+    for cursor alignment. Pure numpy; validated against a real solved ``r2d_river.slf``.
     """
     import numpy as np
 
@@ -188,7 +194,10 @@ def read_selafin(path: str | Path) -> dict[str, Any]:
             _read_record(fh)
 
         nelem, npoin, ndp, _ = struct.unpack(">4i", _read_record(fh))
-        _read_record(fh)  # IKLE (nelem*ndp int32) -- consumed, not used here
+        # IKLE (nelem*ndp int32): the element connectivity, 1-based in SELAFIN.
+        # Return it 0-based so a mesh-faithful render triangulates real elements.
+        ikle = (np.frombuffer(_read_record(fh), dtype=">i4").astype("int64")
+                .reshape(nelem, ndp) - 1)
         _read_record(fh)  # IPOBO (npoin int32)    -- consumed, not used here
         x = np.frombuffer(_read_record(fh), dtype=fdtype).astype("float64")
         y = np.frombuffer(_read_record(fh), dtype=fdtype).astype("float64")
@@ -222,6 +231,7 @@ def read_selafin(path: str | Path) -> dict[str, Any]:
         "nelem": int(nelem),
         "x": x,
         "y": y,
+        "ikle": ikle,
         "times": np.asarray(times, dtype="float64"),
         "data": {v: (np.vstack(a) if a else np.empty((0, npoin))) for v, a in data.items()},
     }
@@ -609,8 +619,16 @@ def postprocess_telemac_deposition(
     worker_sed_metrics: dict[str, Any] | None = None,
     runs_bucket: str | None = None,
     target_ground_res_m: float = TELEMAC_TARGET_GROUND_RES_M,
+    erodible: bool = False,
 ) -> tuple[list[TelemacSedimentLayerURI], dict[str, Any]]:
-    """Rasterize the GAIA final CUMUL BED EVOL field into ONE deposition COG.
+    """Rasterize the GAIA final CUMUL BED EVOL field into ONE bed-evolution COG.
+
+    ``erodible=False`` (v1 supply-limited): renders only the positive DEPOSITION
+    tongue (nothing erodes) and errors if nothing deposited. ``erodible=True`` (v2
+    morphodynamics): renders the SIGNED bed change - SCOUR (negative) and
+    DEPOSITION (positive) - on the diverging ramp centered on 0, reports
+    ``max_scour_mm`` beside ``max_deposition_mm``, and is valid as long as the bed
+    moved either way.
 
     Reads ``gaia_river.slf`` (the GAIA result), picks the CUMUL BED EVOL variable
     (mnemonic ``E``; the in-image smoke confirmed it is present in METRES), takes
@@ -673,6 +691,11 @@ def postprocess_telemac_deposition(
     node_final_mm = evol[-1] * 1000.0          # final cumulative bed change, mm
     dep_only_mm = np.where(node_final_mm > 0.0, node_final_mm, 0.0)
     max_dep_mm = float(dep_only_mm.max()) if dep_only_mm.size else 0.0
+    # v2 erodible-bed morphodynamics: the SCOUR limb is the point of the run, so
+    # the deepest scour (most-negative bed change, reported as a positive mm depth)
+    # is measured beside the deposition peak.
+    scour_only_mm = np.where(node_final_mm < 0.0, -node_final_mm, 0.0)
+    max_scour_mm = float(scour_only_mm.max()) if scour_only_mm.size else 0.0
 
     from pyproj import Transformer
 
@@ -681,7 +704,17 @@ def postprocess_telemac_deposition(
     lon = np.asarray(lon)
     lat = np.asarray(lat)
 
-    if max_dep_mm <= 0.0:
+    if erodible:
+        # SCOUR + DEPOSITION both matter: valid unless the bed did not move at all.
+        if max_dep_mm <= 0.0 and max_scour_mm <= 0.0:
+            raise PostprocessTelemacError(
+                "TELEMAC_OUTPUT_EMPTY",
+                message=f"no bed evolution anywhere in {slf.name} "
+                f"(erodible-bed run neither scoured nor deposited measurably)",
+                details={"max_deposition_mm": max_dep_mm,
+                         "max_scour_mm": max_scour_mm},
+            )
+    elif max_dep_mm <= 0.0:
         raise PostprocessTelemacError(
             "TELEMAC_OUTPUT_EMPTY",
             message=f"no bed deposition anywhere in {slf.name} "
@@ -697,17 +730,25 @@ def postprocess_telemac_deposition(
     shape = _grid_shape(bbox, target_ground_res_m)
     clip_dist_deg = 1.5 * max(
         (bbox[2] - bbox[0]) / shape[1], (bbox[3] - bbox[1]) / shape[0])
-    # rasterize the DEPOSITION (positive mm) field; erosion/zero -> NaN so the
-    # diverging ramp reads the tongue cleanly (v1 is supply-limited: near all
-    # signal is deposition). wet_floor tiny so a mm-scale tongue is not clipped.
     try:
-        grid = _rasterize_nodes_to_grid(
-            lon, lat, dep_only_mm, bbox, shape, clip_dist_deg,
-            wet_floor=max(1e-4, 0.02 * max_dep_mm))
+        if erodible:
+            # rasterize the SIGNED bed change (scour negative / deposition
+            # positive) with wet_floor -1e30 so NO node is value-masked - the
+            # diverging ramp centered on 0 reads scour (blue) AND deposition (red).
+            grid = _rasterize_nodes_to_grid(
+                lon, lat, node_final_mm, bbox, shape, clip_dist_deg,
+                wet_floor=-1e30)
+        else:
+            # v1 supply-limited: rasterize the DEPOSITION (positive mm) field;
+            # erosion/zero -> NaN so the diverging ramp reads the tongue cleanly.
+            # wet_floor tiny so a mm-scale tongue is not clipped.
+            grid = _rasterize_nodes_to_grid(
+                lon, lat, dep_only_mm, bbox, shape, clip_dist_deg,
+                wet_floor=max(1e-4, 0.02 * max_dep_mm))
     except Exception as exc:  # noqa: BLE001
         raise PostprocessTelemacError(
             "TELEMAC_OUTPUT_READ_FAILED",
-            message=f"deposition rasterization failed: {exc}",
+            message=f"bed-evolution rasterization failed: {exc}",
         ) from exc
 
     from rasterio.transform import from_bounds
@@ -746,22 +787,47 @@ def postprocess_telemac_deposition(
     _net = wsm.get("sediment_net_bed_mass_kg")
     deposited_mass_kg = max(float(_net), 0.0) if _net is not None else None
     deposit_fraction = wsm.get("sediment_deposit_fraction")
-    # diverging legend centered on 0; range = the deposition peak (symmetric so
-    # the rdbu midpoint is 0 bed change). mm units.
-    vext = round(max(max_dep_mm, 1e-3), 4)
+    # diverging legend centered on 0 (rdbu midpoint = 0 bed change), mm units. For
+    # the erodible signed field the range is symmetric on the LARGER limb but capped
+    # at the 99th percentile of |bed change| so a single inflow-boundary bedload
+    # pile-up node does not wash the interior scour/deposition pattern off the ramp.
+    if erodible:
+        both = np.abs(node_final_mm)
+        robust = float(np.percentile(both, 99)) if both.size else 0.0
+        vext = round(max(min(max(max_dep_mm, max_scour_mm), max(robust, 1e-3)),
+                         1e-3), 4)
+    else:
+        vext = round(max(max_dep_mm, 1e-3), 4)
     legend = LegendKey(
         kind="continuous", colormap="rdbu", vmin=-vext, vmax=vext, units="mm",
-        label="Bed evolution / deposition (mm)",
+        label="Bed evolution (mm): scour < 0 < deposition"
+        if erodible else "Bed evolution / deposition (mm)",
     )
-    honesty = (
-        "Event-scale deposition (mm), not annual morphology: a supply-limited "
-        "GAIA run (bed initial thickness 0) - only the injected sediment pulse "
-        "can deposit, nothing erodes. Grain size is a demo default / user "
-        "override (no site bed-composition fetcher exists), not a site measurement."
-    )
+    if erodible:
+        honesty = (
+            "Event-scale bed evolution (mm) under active bedload morphodynamics "
+            "(Meyer-Peter-Mueller family), amplified by a MORPHOLOGICAL FACTOR - a "
+            "planning-grade scour/deposition PATTERN, not a calibrated scour depth. "
+            "Scour is negative bed change, deposition positive, on a diverging ramp "
+            "centered at 0. A localized bedload pile-up at the sediment inflow "
+            "boundary is a known GAIA artifact (capped off the diverging ramp). "
+            "Grain size is a demo default / user override (no site bed-composition "
+            "fetcher exists)."
+        )
+        layer_name = f"Bed evolution / scour ({reach_name})"
+        layer_id = f"telemac-bed-evolution-{run_id}"
+    else:
+        honesty = (
+            "Event-scale deposition (mm), not annual morphology: a supply-limited "
+            "GAIA run (bed initial thickness 0) - only the injected sediment pulse "
+            "can deposit, nothing erodes. Grain size is a demo default / user "
+            "override (no site bed-composition fetcher exists), not a site measurement."
+        )
+        layer_name = f"Sediment deposition ({reach_name})"
+        layer_id = f"telemac-sediment-deposition-{run_id}"
     layer = TelemacSedimentLayerURI(
-        layer_id=f"telemac-sediment-deposition-{run_id}",
-        name=f"Sediment deposition ({reach_name})",
+        layer_id=layer_id,
+        name=layer_name,
         layer_type="raster",
         uri=uri,
         style_preset=TELEMAC_BED_EVOLUTION_STYLE_PRESET,
@@ -773,12 +839,14 @@ def postprocess_telemac_deposition(
         deposited_mass_kg=deposited_mass_kg,
         deposit_fraction=deposit_fraction,
         max_deposition_mm=round(max_dep_mm, 4),
+        max_scour_mm=round(max_scour_mm, 4) if erodible else None,
         grain_size_um=wsm.get("grain_size_um"),
         sediment_type=wsm.get("sediment_type"),
     )
     metrics: dict[str, Any] = {
         "evol_var": evol_var.strip(),
         "max_deposition_mm": round(max_dep_mm, 4),
+        "max_scour_mm": round(max_scour_mm, 4) if erodible else None,
         "deposited_mass_kg": deposited_mass_kg,
         "deposit_fraction": deposit_fraction,
         "npoin": int(mesh["npoin"]),
@@ -1143,4 +1211,274 @@ def postprocess_telemac_wse(
         run_id, surf_var.strip(), wse_max, wse_peak_time_s, int(finite.sum()),
         int(x.size), int(times.size), mesh_epsg, uri,
     )
+    return [layer], metrics
+
+
+# --------------------------------------------------------------------------- #
+# WAQTEL O2: the dissolved-oxygen SAG - steady-state DO COG + the sag curve.
+# --------------------------------------------------------------------------- #
+#: DISSOLVED O2 / ORGANIC LOAD variable names WAQTEL's O2 module writes (nametrac
+#: strings, pinned by the 2026-08-07 in-image smoke).
+_DO_VAR_KEYS: tuple[str, ...] = ("DISSOLVED O2", "O2 DISSOUS", "DISSOLVED OXYGEN")
+_BOD_VAR_KEYS: tuple[str, ...] = ("ORGANIC LOAD", "CHARGE ORGANIQUE")
+
+
+def _downstream_coordinate(x, y, centerline_utm=None):
+    """Per-node DOWNSTREAM distance (m) + a label for how it was derived.
+
+    With ``centerline_utm`` (an ordered [(x,y), ...] polyline) each node is
+    projected to the nearest centerline segment and assigned that segment's
+    cumulative arc length - the true along-reach distance. Without it, the nodes
+    are projected onto their PRINCIPAL FLOW AXIS (PCA first component), which is
+    exact for a straight channel (the S-P V&V) and a labelled approximation for a
+    gently sinuous reach. Returns ``(s_m ndarray, label)``.
+    """
+    import numpy as np
+
+    x = np.asarray(x, dtype=float)
+    y = np.asarray(y, dtype=float)
+    if centerline_utm is not None and len(centerline_utm) >= 2:
+        cl = np.asarray(centerline_utm, dtype=float)
+        seg = np.hypot(np.diff(cl[:, 0]), np.diff(cl[:, 1]))
+        cum = np.concatenate([[0.0], np.cumsum(seg)])
+        s = np.zeros(x.size)
+        for i in range(x.size):
+            ax = cl[:-1, 0]; ay = cl[:-1, 1]
+            bx = cl[1:, 0]; by = cl[1:, 1]
+            dx = bx - ax; dy = by - ay
+            L2 = dx * dx + dy * dy
+            t = np.clip(((x[i] - ax) * dx + (y[i] - ay) * dy) / np.maximum(L2, 1e-9), 0.0, 1.0)
+            px = ax + t * dx; py = ay + t * dy
+            d2 = (px - x[i]) ** 2 + (py - y[i]) ** 2
+            k = int(np.argmin(d2))
+            s[i] = cum[k] + t[k] * seg[k]
+        return s - s.min(), "along-centerline arc length"
+    # PCA principal axis
+    cx = x - x.mean(); cy = y - y.mean()
+    cov = np.cov(np.vstack([cx, cy]))
+    w, v = np.linalg.eigh(cov)
+    axis = v[:, int(np.argmax(w))]
+    s = cx * axis[0] + cy * axis[1]
+    # orient so the far end is positive (downstream = increasing s)
+    if s.max() + s.min() < 0:
+        s = -s
+    return s - s.min(), "principal-flow-axis projection (straight-line proxy)"
+
+
+def postprocess_telemac_do(
+    slf_path: str | Path,
+    *,
+    run_id: str,
+    utm_epsg: int,
+    reach_name: str = "river",
+    saturation_mgl: float = 9.0,
+    upstream_do_mgl: float | None = None,
+    bod_upstream_mgl: float | None = None,
+    standard_mgl: float = 5.0,
+    centerline_utm: list | None = None,
+    n_sag_bins: int = 60,
+    runs_bucket: str | None = None,
+    target_ground_res_m: float = TELEMAC_TARGET_GROUND_RES_M,
+    _output_dir: str | None = None,
+) -> tuple[list[TelemacDoLayerURI], dict[str, Any]]:
+    """Rasterize a WAQTEL O2 sag run into a steady-state DISSOLVED-O2 COG + curve.
+
+    Reads ``slf_path`` (``r2d_river.slf``), takes the STEADY-STATE (last frame)
+    DISSOLVED O2 field (the worst-case sag for a continuous discharge), reprojects
+    the mesh nodes ``utm_epsg`` -> EPSG:4326, rasterizes the DO field onto an
+    adaptive 4326 grid clipped to the channel, writes + uploads ONE COG
+    (``telemac_do_field.tif``) and returns ``([TelemacDoLayerURI], metrics)``. It
+    also bins DO + CBOD by downstream distance into the along-reach SAG CURVE the
+    dock chart plots against the DO standard, and computes the sag minimum + its
+    location (Invariant 1 - typed, never invented).
+
+    ``_output_dir`` (TEST/offline hook): when set the COG is written locally and
+    its path returned instead of uploading (mirrors ``postprocess_telemac_wse``).
+    """
+    try:
+        import numpy as np
+        from pyproj import Transformer  # noqa: F401
+    except Exception as exc:  # noqa: BLE001
+        raise PostprocessTelemacError(
+            "TELEMAC_DEPENDENCY_MISSING",
+            message=f"numpy/pyproj unavailable for TELEMAC DO postprocess: {exc}",
+        ) from exc
+
+    slf = Path(slf_path)
+    try:
+        mesh = read_selafin(slf)
+    except Exception as exc:  # noqa: BLE001
+        raise PostprocessTelemacError(
+            "TELEMAC_OUTPUT_READ_FAILED",
+            message=f"could not parse SELAFIN {slf.name}: {exc}",
+            details={"slf": str(slf)},
+        ) from exc
+
+    import numpy as np
+
+    do_var = _pick_named_var(mesh["varnames"], _DO_VAR_KEYS, "\x00")
+    if do_var is None or mesh["data"].get(do_var) is None or mesh["data"][do_var].size == 0:
+        raise PostprocessTelemacError(
+            "TELEMAC_OUTPUT_EMPTY",
+            message=f"no DISSOLVED O2 tracer / no time steps in {slf.name} "
+            f"(vars={mesh['varnames']}) - is this a WAQTEL O2 (do_sag) run?",
+            details={"slf": str(slf), "varnames": mesh["varnames"]},
+        )
+    bod_var = _pick_named_var(mesh["varnames"], _BOD_VAR_KEYS, "\x00")
+
+    do = np.asarray(mesh["data"][do_var])          # (nframes, npoin) mg/L
+    times = np.asarray(mesh["times"])
+    x_utm = np.asarray(mesh["x"]); y_utm = np.asarray(mesh["y"])
+    do_field = do[-1]                               # steady-state (last frame)
+    bod_field = (np.asarray(mesh["data"][bod_var])[-1]
+                 if bod_var is not None and mesh["data"].get(bod_var) is not None
+                 and mesh["data"][bod_var].size else None)
+
+    # wet mask so dry nodes never paint a DO value
+    depth_var = _pick_named_var(mesh["varnames"], _DEPTH_VAR_KEYS, "H")
+    if depth_var is not None and mesh["data"].get(depth_var) is not None \
+            and mesh["data"][depth_var].size:
+        wet = np.asarray(mesh["data"][depth_var])[-1] > TELEMAC_WSE_WET_DEPTH_M
+    else:
+        wet = np.ones(x_utm.size, dtype=bool)
+    if not wet.any():
+        raise PostprocessTelemacError(
+            "TELEMAC_OUTPUT_EMPTY",
+            message=f"no wet node in {slf.name} (dry solve?)",
+        )
+
+    # --- the along-reach sag curve (DO + CBOD binned by downstream distance) --- #
+    s_m, s_label = _downstream_coordinate(x_utm[wet], y_utm[wet], centerline_utm)
+    do_w = do_field[wet]
+    bod_w = bod_field[wet] if bod_field is not None else None
+    nb = max(int(n_sag_bins), 8)
+    edges = np.linspace(0.0, float(s_m.max()) if s_m.max() > 0 else 1.0, nb + 1)
+    ctr = 0.5 * (edges[:-1] + edges[1:])
+    idx = np.clip(np.digitize(s_m, edges) - 1, 0, nb - 1)
+    curve_x, curve_do, curve_bod = [], [], []
+    for b in range(nb):
+        m = idx == b
+        if not m.any():
+            continue
+        curve_x.append(float(ctr[b]))
+        curve_do.append(float(np.mean(do_w[m])))
+        curve_bod.append(float(np.mean(bod_w[m])) if bod_w is not None else 0.0)
+    if len(curve_x) < 3:
+        raise PostprocessTelemacError(
+            "TELEMAC_OUTPUT_EMPTY",
+            message=f"DO sag curve degenerate ({len(curve_x)} bins) in {slf.name}",
+        )
+    do_arr = np.asarray(curve_do)
+    sag_i = int(do_arr.argmin())
+    do_min = float(do_arr[sag_i])
+    do_min_dist = float(curve_x[sag_i])
+    do_up = float(upstream_do_mgl) if upstream_do_mgl is not None else float(curve_do[0])
+    violates = bool(do_min < float(standard_mgl))
+
+    # --- rasterize the steady-state DO field onto a 4326 grid ----------------- #
+    from pyproj import Transformer
+    back = Transformer.from_crs(int(utm_epsg), 4326, always_xy=True)
+    lon, lat = back.transform(x_utm, y_utm)
+    lon = np.asarray(lon); lat = np.asarray(lat)
+    # mask dry nodes to NaN so the raster only covers the wetted channel
+    do_masked = np.where(wet, do_field, np.nan)
+    finite = np.isfinite(do_masked)
+    lon_f = lon[finite]; lat_f = lat[finite]; do_f = do_masked[finite]
+
+    pad = 0.0009
+    bbox = (float(lon_f.min() - pad), float(lat_f.min() - pad),
+            float(lon_f.max() + pad), float(lat_f.max() + pad))
+    shape = _grid_shape(bbox, target_ground_res_m)
+    clip_dist_deg = 1.5 * max((bbox[2] - bbox[0]) / shape[1], (bbox[3] - bbox[1]) / shape[0])
+    try:
+        # wet_floor very negative: DO (0..Cs mg/L) must NOT be value-masked; the
+        # wet/dry decision was already made per node.
+        grid = _rasterize_nodes_to_grid(
+            lon_f, lat_f, do_f, bbox, shape, clip_dist_deg, wet_floor=-1e30)
+    except Exception as exc:  # noqa: BLE001
+        raise PostprocessTelemacError(
+            "TELEMAC_OUTPUT_READ_FAILED", message=f"DO rasterization failed: {exc}")
+
+    from rasterio.transform import from_bounds
+    transform = from_bounds(bbox[0], bbox[1], bbox[2], bbox[3], shape[1], shape[0])
+    try:
+        cog = cog_io.write_cog_4326_from_grid(
+            grid, src_crs="EPSG:4326", src_transform=transform, reproject=False,
+            crs_roundtrip_guard=True, dst_suffix="_telemac_do_4326.tif")
+    except CogIoError as exc:
+        raise _reraise_cogio(exc) from exc
+
+    try:
+        if _output_dir is not None:
+            import shutil
+            uri = os.path.join(_output_dir, f"telemac_do_field_{run_id}.tif")
+            shutil.copyfile(cog, uri)
+        else:
+            uri = cog_io.upload_cog(
+                cog, run_id, runs_bucket, dest_filename="telemac_do_field.tif",
+                content_type="image/tiff", gs_backend="fsspec",
+                gs_fallback_to_file=False, runs_bucket_default=RUNS_BUCKET_DEFAULT,
+                log_label="TELEMAC DO COG")
+    except CogIoError as exc:
+        raise _reraise_cogio(exc) from exc
+    finally:
+        cog_io.safe_unlink(cog)
+
+    legend = LegendKey(
+        kind="continuous", colormap="rdylbu",
+        vmin=round(min(do_min, float(standard_mgl)), 3),
+        vmax=round(max(float(saturation_mgl), float(np.nanmax(do_f))), 3),
+        units="mg/L", label="Dissolved oxygen (mg/L)")
+    honesty = (
+        f"Steady-state DO field (last of {int(times.size)} frame(s)); downstream "
+        f"distance by {s_label}. Streeter-Phelps O2 kinetics on an idealized "
+        f"planar channel bed (screening/permit grade, not a calibrated study)."
+        + (f" Sag min {do_min:.2f} mg/L VIOLATES the {standard_mgl:g} mg/L "
+           "standard." if violates else
+           f" Sag min {do_min:.2f} mg/L meets the {standard_mgl:g} mg/L standard.")
+    )
+    layer = TelemacDoLayerURI(
+        layer_id=f"telemac-do-field-{run_id}",
+        name=f"Dissolved oxygen sag ({reach_name})",
+        layer_type="raster", uri=uri, style_preset=TELEMAC_DO_STYLE_PRESET,
+        role="primary", units="mg/L", bbox=bbox, legend=legend,
+        fallback_note=honesty,
+        do_min_mgl=round(do_min, 4),
+        do_min_distance_m=round(do_min_dist, 1),
+        do_upstream_mgl=round(do_up, 4),
+        do_saturation_mgl=round(float(saturation_mgl), 4),
+        do_standard_mgl=round(float(standard_mgl), 4),
+        do_violates_standard=violates,
+        bod_upstream_mgl=(round(float(bod_upstream_mgl), 4)
+                          if bod_upstream_mgl is not None else
+                          (round(float(curve_bod[0]), 4) if curve_bod else None)),
+        sag_curve_distance_m=[round(v, 1) for v in curve_x],
+        sag_curve_do_mgl=[round(v, 4) for v in curve_do],
+        sag_curve_bod_mgl=[round(v, 4) for v in curve_bod],
+    )
+    metrics: dict[str, Any] = {
+        "do_var": do_var.strip(),
+        "bod_var": bod_var.strip() if bod_var else None,
+        "do_min_mgl": round(do_min, 4),
+        "do_min_distance_m": round(do_min_dist, 1),
+        "do_upstream_mgl": round(do_up, 4),
+        "do_saturation_mgl": round(float(saturation_mgl), 4),
+        "do_standard_mgl": round(float(standard_mgl), 4),
+        "do_violates_standard": violates,
+        "n_frames": int(times.size),
+        "npoin": int(mesh["npoin"]),
+        "nelem": int(mesh["nelem"]),
+        "utm_epsg": int(utm_epsg),
+        "bbox": list(bbox),
+        "crs": "EPSG:4326",
+        "downstream_coord": s_label,
+        "sag_curve_distance_m": [round(v, 1) for v in curve_x],
+        "sag_curve_do_mgl": [round(v, 4) for v in curve_do],
+        "sag_curve_bod_mgl": [round(v, 4) for v in curve_bod],
+        "honesty_label": honesty,
+    }
+    logger.info(
+        "postprocess_telemac_do run_id=%s do_var=%s do_min=%.3g mg/L at %.0fm "
+        "violates=%s n_frames=%d -> %s",
+        run_id, do_var.strip(), do_min, do_min_dist, violates, int(times.size), uri)
     return [layer], metrics

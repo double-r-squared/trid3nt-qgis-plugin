@@ -140,3 +140,245 @@ been written yet but I don't want you to forget it.")
   outcomes over WS (HTTP status + provider messages). Closes the
   render-failure blind spot (layer-poison class); strengthens the honesty
   floor at the client edge. Standalone, no pool dependency.
+
+## 2026-08-03 - Loud, user-gated cross-dataset fallbacks (NATE)
+Split fallback classes: same-data mirrors (identical dataset, different host)
+may fail over silently; CROSS-DATASET substitution (different resolution or
+measurement method, e.g. fetch_dem 3DEP 1-10m lidar -> Copernicus GLO-30 30m
+radar) must be loud and user-gated - silent substitution degrades map integrity
+while looking like success. Mechanism: honest typed error naming the substitute
+as the suggested retry arg (source enum), through the tool-retry loop so the
+agent narrates the tradeoff (the #154 granularity-gate pattern). Consequence:
+gating fetch_dem's auto-ladder dissolves its biggest fold blocker (ADR 0090
+cross-tool provenance restamp) and simplifies topobathy's fallback_warning
+field (ADR 0089). Blast radius: 8 nested terrain consumers (flood, topobathy,
+contours, elmfire, geoclaw, swmm, landslide) would pause-and-ask mid-scenario
+instead of silently degrading - lands as its own gated wave with the flood
+canary, not a rider.
+
+## 2026-08-03 - Charts window: TUFLOW Viewer pattern + template output accounting (NATE)
+Charts never surface inline in chat. They get their own window: a
+TUFLOW-Viewer-like dock - horizontal, at the BOTTOM of the app window,
+interactive maps/displays linked to the canvas (click a feature -> its
+plot; scrubber/time integration). The charts button STAYS in chat and
+clicking it SHOWS/raises the window (entry point, not container).
+Plugin work item: replace the collapsible "Charts (N)" panel under the
+message list (ui/charts.py) with a bottom-area QDockWidget the chat
+button toggles. Paired template rule: every template accounts for its
+output shape (map raster / graph / both) and its graphs are more-or-less
+COPIED from the cited published example (modflow6-examples is chart-rich)
+- a template wave without its example's charts is incomplete.
+
+## 2026-08-03 - USER TOOL BUILDER (NATE, tabbed for later integration)
+A tool-builder feature: create custom tools on the side to fill gaps in
+the tool surface. The feature captures EVERYTHING a regular tool needs
+(registration metadata, docstring w/ front-loaded routing block, corpus
+queries, typed errors, payload estimate, cache class) so a user-authored
+tool is a first-class citizen. Authoring shapes: ask the AI to build it,
+or import one. Custom tools live in separate "user" subfolders under the
+tools/workflows trees. They REUSE existing components: call fetchers
+(TOOL_REGISTRY / route()), trigger popup cards for user input (the
+INPUT_REQUIRED gate seam), emit charts/layers via the standard envelopes.
+STATUS: idea only - do NOT build the feature yet. IMMEDIATE deliverable:
+custom-authoring documentation living at the tool/workflow dirs (a
+docs/authoring/custom-user-tools.md + README pointers in the trees)
+describing the full tool contract + reusable seams, written AFTER the
+door dissolution (it must document the post-dissolve structure).
+
+## 2026-08-05 - Real-lakes ensemble recipe (NATE + orchestrator discussion)
+"Where are the real lakes" is a data-composition question, not a Landlab
+question: reconcile (1) fetch_nhd_waterbodies polygons (authoritative),
+(2) satellite-observed water (NDWI / JRC Global Surface Water occurrence
+- a GSW source.yaml would be a cheap router addition), (3)
+landlab_lake_mapping closed basins (potential impoundments only; existing
+pools are flat in the DEM and invisible by construction). Ship as a
+documented playground recipe first; promote to a composed template with
+per-lake provenance (mapped / observed / potential) only if it earns it.
+Landlab chains themselves need NO change - fill-and-route treats real
+lakes and noise pits identically BY DESIGN and that is correct for
+routing; the discrepancy only ever mattered at the reporting boundary.
+
+## 2026-08-05 - Drawn-geometry supply path for gated spatial knobs (NATE)
+Spatial knobs the model must not place blindly (AMR refinement windows,
+mesh refine_regions, future drawn structures like walls/dams) should be
+suppliable by DRAWING in the QGIS plugin (rectangle/polygon on canvas)
+-> arrives as basis=user input through the input-review gate, replacing
+the model's prompt_interpreted proposal. Server-side gate wiring for
+geoclaw amr_regions lands with ADR 0147; the plugin draw affordance +
+WS plumbing is the follow-on leg. Pairs with the mesh layer's
+refine_regions component and the user-drawn-structures ideas.
+
+## 2026-08-05 - GeoClaw eta (wave anomaly) product layer (NATE, via Clawpack gallery)
+The canonical Clawpack plots color sea-surface ANOMALY (eta, diverging
+blue-white-red about 0) - far more legible for wave propagation than
+depth. Candidate product addition: emit eta frames (h+B - sea_level)
+alongside the depth frames for the tsunami templates, styled with a
+diverging ramp in QGIS, feeding the time-animation norm (wave arc
+visibly propagating on the scrubber). Proof-side the style is already
+adopted (ADR 0147 wave); this idea is the EMITTED-LAYER half.
+General norm captured in memory: where an engine has a canonical
+published plot style, proofs replicate IT rather than improvising.
+
+## 2026-08-05 - geoclaw-landspill engine candidate (NATE)
+barbagroup/geoclaw-landspill (JOSS, BSD-3): GeoClaw fork for pipeline-
+rupture oil overland flow (point sources, Darcy-Weisbach, evaporation,
+temp-dependent viscosity, inland-waterbody contact). Engine-ADJACENT
+landing: rides the existing geoclaw worker/docker pattern, fetch_dem
+3DEP, fetch_nhd_waterbodies; completes the hazmat class as the surface
+complement to the MODFLOW-GWT plume track. Published-first sources:
+JOSS paper (verify) + bundled cases (utah-flat-maya). Natural chart:
+volume ledger (spilled/evaporated/on-land/in-waterbody) over time.
+Awaiting NATE roadmap placement.
+
+## 2026-08-05 - Strict worker spec parsers (from the ADR 0148 lesson)
+Every services/workers/<engine> build-spec parser should HARD-ERROR on
+unknown fields instead of silently ignoring them. The stale geoclaw
+image silently dropped manning_coefficients/amr_regions and two
+registered knob templates ran as no-ops. A strict parse would have
+failed the very first live smoke with a loud unknown-field error.
+Sweep candidate: all worker parse_build_spec/parse_* entry points +
+a shared strict-parse helper.
+
+## 2026-08-06 - Offline-suite hermeticity: mock the Atlas-14 lookup
+NOAA PFDS went down (301 to /cgi-bin/new/ + 503) and 9 "offline" tests
+failed (test_urban_flood_publish_offloop x7 +
+test_swmm_two_card_sim_observability x2) because they exercise the
+LIVE lookup_precip_return_period path. Follow-on: monkeypatch the
+design-storm lookup in those tests (the honest-gate behavior itself
+already has dedicated coverage); sweep for other live-endpoint
+dependencies in the offline suite. Also: when NOAA settles, check
+whether the /cgi-bin/hdsc/new/ -> /cgi-bin/new/ redirect is permanent
+and update _ATLAS14_PFDS_URL at the source.
+
+## 2026-08-06 - Real quadtree run to replace the fixture mesh proof (NATE)
+The ADR 0159 native-mesh proof used a HAND-BUILT UGRID fixture (the
+cht deck-builder worker image is absent locally, only stock
+sfincs-cpu) - its haphazard block placement is fixture authorship,
+not generator output. Owed: build/stage the cht_sfincs quadtree
+worker image locally, run one real quadtree flood (2:1-balanced
+refinement from composer criteria), regenerate the mesh proof from
+the genuine sfincs_map.nc, and confirm the MDAL load in QGIS
+(NATE's visual). Until then the proof folder's quadtree mesh image
+is labeled a schema fixture.
+
+## 2026-08-06 - Order-dependent SFINCSSetupError reload flake (0162 finding)
+test_sfincs_autoscale.py's importlib.reload rebinds SFINCSSetupError,
+breaking pytest.raises in LATER files holding a stale top-of-file
+import (test_model_flood_scenario.py / _v2.py affected; the
+re-fetch-at-call-time pattern in test_sfincs_spiderweb.py is the
+fix). Sweep candidate when convenient.
+
+## 2026-08-06 - Layer-emission audit (NATE norm)
+NATE norm: emitted layers = map-app citizens; proofs must be
+georeferenced map renders, and validation-fixture templates whose
+deliverable is a chart/scalar should NOT emit orphan local-unit
+rasters. AUDIT candidate: sweep the registered templates for
+non-georeferenced layer emissions (modflow package_validation cases,
+schism transport_validation, any local-unit fixture COGs) and either
+(a) drop the layer emission in favor of charts/scalars, or (b) add a
+real-AOI georeferenced mode (the 0165 capture-zone pattern). Run when
+a lane frees.
+AUDITED 2026-08-07 (ADR 0180): swept all 68 registered templates. NO
+strict orphan exists - the norm was already upheld. The two named
+suspects (modflow_package_validation, schism_transport_validation) and
+every fixture/validation/comparison/schematic-deck template are
+chart/scalar-only with NO map layer (10 carry explicit "no map layer"
+docstrings); every map-emitting template is real-AOI georeferenced
+(bbox/latlon/geocode/deck-projection/transect). Two ADJACENT follow-ups
+left for NATE's call, NOT chased: (1) elmfire_verification_elliptical_
+replication publishes an idealized constant-fuel ToA COG at a FIXED demo
+center (Kansas -98.5/38.5) - georeferenced so not a strict orphan, but
+its true deliverable is the RMSE/correlation scalar + ellipse-overlay
+chart; option-(a) drop is a return-type/contract change -> NATE rules.
+(2) postprocess_modflow._write_reprojected_cog SILENTLY falls back to
+Affine.identity() (null-island) when the deck can't load, inconsistent
+with modflow_mesh which SKIPS on geo=None; harden to a loud typed error
+(or the same skip) in a modflow-hardening job WITH the MODFLOW canary.
+
+## 2026-08-06 - Wellhead-protection track: REEVAL flag (NATE)
+Nothing wrong - NATE wants CONTINUED DEVELOPMENT of the capture-zone/
+wellhead surface (ADRs 0163/0165/0166). Candidate next rungs:
+transient pumping schedules + multi-well interference, heterogeneous
+K (SSURGO/aquifer-property data instead of uniform defaults), kriged
+potentiometric surface over the 3-point plane fit (more wells = real
+curvature), NHD river as a head-dependent boundary (river capture
+fraction), backward-in-time contaminant source attribution, and the
+permit-grade checklist (what a state wellhead-protection submission
+actually requires). Revisit when NATE picks it up.
+
+## 2026-08-06 - "Hazard" vocabulary audit (NATE identity correction)
+TRID3NT = GENERAL GEOSPATIAL INTELLIGENCE, not a hazard workbench.
+Audit queued: the hazard_modeling primary category (misnamed for
+terrain diagnostics, validation gates, ecology-class tools), "hazard"
+phrasing in docstrings/corpus/board section framing, and category
+taxonomy generally - rename to question-class-honest names (the
+template-capability-naming norm applied to categories). Also reframes
+the scope calls: Landlab ecology/biogeography/tidal + MODFLOW GWE
+geothermal are in-scope coverage, priority TBD by NATE.
+
+## 2026-08-08 - Mesh as optional user-supplied precondition (NATE design)
+Mesh creation = explicit user prompts via the standalone mesh tool
+(watershed-then-mesh lives HERE, never auto-guessed inside model
+templates). Model templates gain precondition polymorphism: if a
+mesh artifact exists in the case -> USER GATE "use this mesh?";
+accepted -> engine consumes it; declined/absent -> existing
+AOI-bounded mesh authoring unchanged. Rationale: delineating within
+a bbox reproduces the cut-off problem + complexity in a bbox-first
+design. Basis ranking: user mesh > drawn box > geocoded AOI (same
+seam family as DrawnGeometry + input-review gates). Orchestrator
+addition, NATE-unruled: the gate validates engine compatibility
+(format/CRS/open-boundary needs per SCHISM/TELEMAC/SWAN) and
+honestly declines mismatches rather than force-fitting; standalone
+tool keeps emitting all engine formats per mesh to make acceptance
+the common case. Build AFTER mesh v2 (ADR 0193) lands + NATE
+validates alignment.
+
+## 2026-08-12 - Procedural pipeline LIBRARY (NATE design sketch, no build yet - NOT a DSL: library code like OpenCV, plain well-named functions composed in ordinary Python)
+A thin abstraction over the existing seams making templates read as
+chained verbs: load (fetchers, cached+provenance) -> gate (the
+reusable envelope gates: input-review/payload/mesh) -> simulate
+(run_solver dispatch) -> plot (publish_layer + LayerURI + emitter
+as ONE explicit required call; charts likewise). Rationale from
+evidence: today plot is three seams + an ambient emitter, and that
+ambiguity produced real latent bugs (the modflow archetype family
+never plotting its map; pipeline_emitter=None bypasses; dict-vs-
+LayerURI auto-load). The DSL formalizes what composers already do
+informally - load-before-plot becomes structural, gates become
+composable pieces (already true), templates become extendable
+recipes. NATE: 'I liked it to be procedural... build all the
+pieces of the pipeline flexible so we can make more with the same
+features.' Candidate shape: a small module wrapping the seams, one
+template ported as the demonstration, adopted opportunistically.
+
+## 2026-08-12 - Zero-dependency chart rendering (NATE: why aren't libs included?)
+QGIS plugins have NO dependency mechanism; matplotlib is compiled
+(unvendorable); QGIS 4 stopped bundling it. 0.3.9 = detect-and-guide
+(the ecosystem best practice). Two zero-dep options if wanted later:
+(a) QPainter-native chart widget (always available, real rewrite);
+(b) server-rendered PNG degrade - client reports no-matplotlib, the
+chart card arrives as an image (server always has mpl; fits the
+loud-degrade doctrine; loses interactivity, keeps the data visible).
+
+## 2026-08-12 - Universal target_resolution_m (DISCUSSION OPEN, do not build)
+NATE design state: universal OPTIONAL knob named target_resolution_m
+(decided: target = intent, not fact) on all gridded-data tools,
+contract-level (shared field + sweep enforcement + generic
+discoverability). Resolution model (NATE 2026-08-12 final discussion shape): NOT
+rungs but two sources + one propagation rule - (1) EXPLICIT
+(basis=user): target_resolution_m passed at any signature (workflows
+expose the knob like any tool) and INHERITED by all inner calls
+(fetch/mesh/solve) unless overridden deeper; workflows NEVER
+hardcode their own resolution, they conduct the user's downward
+(the surge TIN bug = the anti-pattern: a private inner resolution
+ignoring the passed one). (2) SETTINGS (the single bottom layer, NATE
+2026-08-12 refinement): settings.default_resolution = a declared
+global value ('native' declarable) OR 'auto' = our autoscaling
+method as the user's CHOSEN policy - autoscale is never an imposed
+fallback, always a settings selection (reconciles the #154
+suggestion+override ruling: even the automatic path traces to an
+explicit user decision). Provenance records the resolving rung
+(basis=user / workflow / settings(<value>|auto)). Open Qs: settings
+location (server config vs QGIS-side), the inheritance MECHANISM (how inner calls receive the outer value - context object vs param forwarding; previews the pipeline LIBRARY). Vector
+fetchers keep separate explicit levers. NATE: discuss MORE after the
+0229 code walkthrough - "while I'm all for generics, templates, and
+meta programming I want to know before I go."

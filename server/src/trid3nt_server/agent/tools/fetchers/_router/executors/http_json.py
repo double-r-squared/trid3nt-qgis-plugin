@@ -18,7 +18,7 @@ from typing import Any
 
 from trid3nt_contracts.source_spec import SourceSpec
 
-from ..errors import router_input_error, router_upstream_error
+from ..errors import router_empty_error, router_input_error, router_upstream_error
 from ..hooks import RequestPlan, resolve_hook
 from ..transport import TransportError, get_bytes, get_client, post_bytes
 from .vector_fgb import features_to_fgb_bytes
@@ -208,8 +208,38 @@ def fetch_bodies(spec: SourceSpec, params: dict[str, Any]) -> list[bytes]:
     return [_get(spec, plan) for plan in plans]
 
 
+def _execute_parse_fallback(spec: SourceSpec, params: dict[str, Any]) -> bytes:
+    """PARSE-driven data-source fallback chain (ADR 0085): first non-empty parse wins.
+
+    Unlike ``endpoint_fallback`` (a first-HTTP-SUCCESS mirror chain), this walks the
+    build hook's ORDERED plans, parses EACH fetched body on its own, and stops at the
+    first plan whose parse yields >= 1 feature -- the USGS NWIS IV WaterML-JSON primary
+    -> Site-service RDB fallback (a 404/empty IV body is a parse-empty, not a transport
+    failure, so it degrades to the Site plan). When EVERY plan yields empty the source's
+    honest typed EMPTY error is raised (the twin's NO_STATIONS gate) INSTEAD of an empty
+    header-only FGB -- a hard no-data answer, never a fabricated success layer. The parse
+    hook sees one body at a time (``bodies=[body]``) and self-detects the payload shape.
+    No-op unless the spec declares ``ingest.http_source.parse_fallback``.
+    """
+    build = resolve_hook(spec.hooks.build_request)  # type: ignore[union-attr]
+    parse = resolve_hook(spec.hooks.parse_response)  # type: ignore[union-attr]
+    plans = build(spec, params)
+    for plan in plans:
+        body = _get(spec, plan)
+        features = parse(spec, params, [body])
+        if features:
+            return features_to_fgb_bytes(features, spec, params)
+    raise router_empty_error(
+        spec.error_code_prefix,
+        f"no records from any of the {len(plans)} source endpoint(s) in scope",
+        spec.empty_error_suffix,
+    )
+
+
 def execute(spec: SourceSpec, params: dict[str, Any]) -> bytes:
     """Fetch via the hooks and serialize the parsed features to FGB (the fetch_fn body)."""
+    if ((spec.ingest or {}).get("http_source") or {}).get("parse_fallback"):
+        return _execute_parse_fallback(spec, params)
     bodies = fetch_bodies(spec, params)
     parse = resolve_hook(spec.hooks.parse_response)  # type: ignore[union-attr]
     features = parse(spec, params, bodies)

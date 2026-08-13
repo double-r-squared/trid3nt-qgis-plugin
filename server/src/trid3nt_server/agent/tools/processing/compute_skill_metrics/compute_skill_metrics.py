@@ -56,6 +56,8 @@ from trid3nt_server.agent.tools import register_tool
 
 __all__ = [
     "compute_skill_metrics",
+    "nash_sutcliffe_efficiency",
+    "pearson_r2",
     "SkillMetricsError",
     "SkillMetricsInputError",
     "SkillMetricsNoDataError",
@@ -174,6 +176,77 @@ def _import_spotpy_objectivefunctions() -> Any:
             "server/pyproject.toml."
         ) from exc
     return sof
+
+
+# ---------------------------------------------------------------------------
+# Paper-exact hydrograph-validation primitives (shared, importable). The two
+# metrics the rain-on-grid validation protocol (Godara, Bruland and Alfredsen
+# 2024, Front. Water 6:1384205) reports for a computed-vs-observed discharge
+# hydrograph: NSE (eq 14) and the Pearson coefficient of determination R2
+# (eq 13). Both delegate to spotpy.objectivefunctions (the V&V build contract
+# forbids bespoke metric math); spotpy implements exactly the paper equations.
+# Usable from the code_exec playground and imported directly by validation
+# templates; the compute_skill_metrics tool above is the full paired-table
+# scoring surface, these are the two bare scalars.
+# ---------------------------------------------------------------------------
+
+
+def _finite_pairs(
+    observed: Any, simulated: Any
+) -> tuple[np.ndarray, np.ndarray]:
+    """Coerce two aligned series to float and drop any non-finite pair.
+
+    Raises ``SkillMetricsInputError`` on a length mismatch; returns the paired
+    finite ``(obs, sim)`` arrays (possibly length 0 -- the caller decides how a
+    short/empty sample degrades).
+    """
+    obs_all = _to_float_array(list(observed))
+    sim_all = _to_float_array(list(simulated))
+    if obs_all.shape[0] != sim_all.shape[0]:
+        raise SkillMetricsInputError(
+            f"observed (len={obs_all.shape[0]}) and simulated "
+            f"(len={sim_all.shape[0]}) must be the same length."
+        )
+    keep = np.isfinite(obs_all) & np.isfinite(sim_all)
+    return obs_all[keep], sim_all[keep]
+
+
+def nash_sutcliffe_efficiency(observed: Any, simulated: Any) -> float | None:
+    """Nash-Sutcliffe Efficiency over a paired observed/simulated series (eq 14).
+
+    ``NSE = 1 - sum((O_i - S_i)^2) / sum((O_i - Obar)^2)`` where ``O`` = observed,
+    ``S`` = simulated, ``Obar`` = mean observed (Godara et al. 2024 eq 14). The
+    math is ``spotpy.objectivefunctions.nashsutcliffe`` (no bespoke
+    reimplementation, per the V&V build contract); spotpy computes exactly this
+    expression. Non-finite pairs are dropped first. Returns ``None`` -- never a
+    fabricated number -- when fewer than 2 usable pairs remain or the observed
+    series has zero variance (the denominator is undefined).
+    """
+    obs, sim = _finite_pairs(observed, simulated)
+    if obs.shape[0] < 2 or float(np.var(obs)) == 0.0:
+        return None
+    sof = _import_spotpy_objectivefunctions()
+    with np.errstate(divide="ignore", invalid="ignore"):
+        return _clean(sof.nashsutcliffe(obs, sim))
+
+
+def pearson_r2(observed: Any, simulated: Any) -> float | None:
+    """Pearson coefficient of determination R2 over a paired series (eq 13).
+
+    ``R2 = [sum((O_i - Obar)(S_i - Sbar))]^2 / [sum((O_i - Obar)^2) *
+    sum((S_i - Sbar)^2)]`` -- the SQUARE of the Pearson correlation coefficient
+    (Godara et al. 2024 eq 13). The math is
+    ``spotpy.objectivefunctions.rsquared`` (correlation-coefficient squared; no
+    bespoke reimplementation). Non-finite pairs are dropped first. Returns
+    ``None`` when fewer than 2 usable pairs remain or either series has zero
+    variance (the correlation is undefined).
+    """
+    obs, sim = _finite_pairs(observed, simulated)
+    if obs.shape[0] < 2 or float(np.var(obs)) == 0.0 or float(np.var(sim)) == 0.0:
+        return None
+    sof = _import_spotpy_objectivefunctions()
+    with np.errstate(divide="ignore", invalid="ignore"):
+        return _clean(sof.rsquared(obs, sim))
 
 
 # ---------------------------------------------------------------------------

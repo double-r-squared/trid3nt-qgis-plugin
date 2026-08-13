@@ -1,5 +1,5 @@
 """Tests for ``push_layer.py`` -- bidirectional layer push (the reverse seam
-of ``case_export.py``'s open-in-QGIS).
+of layer materialization).
 
 No QGIS required (pure request-builder/parser tests, mirroring
 ``test_milestone3.py``'s ``TestRemoteDownload`` pattern): a small

@@ -1,7 +1,7 @@
 """Direct Landlab landslide-susceptibility invocation for trid3nt-local proof.
 
 Bypasses the LLM/agent chat layer -- calls the deterministic Landlab workflow
-(``model_landslide_scenario``) directly. The workflow runs the FULL local chain:
+(``model_landlab_susceptibility``) directly. The workflow runs the FULL local chain:
   fetch_dem (USGS 3DEP 1m -> 10m fallback)
   -> stage_landlab_manifest (DEM + build_spec -> MinIO)
   -> run_solver('landlab') with TRID3NT_SOLVER_BACKEND=local-docker
@@ -103,7 +103,7 @@ log.info("pre-run MinIO run prefixes: %s", sorted(pre_prefixes))
 # ---------------------------------------------------------------------------
 
 try:
-    from trid3nt_server.agent.workflows.landlab.model_landslide_scenario.model_landslide_scenario import model_landslide_scenario
+    from trid3nt_server.agent.workflows.landlab.susceptibility.susceptibility import model_landlab_susceptibility
     from trid3nt_contracts.landlab_contracts import LandlabRunArgs
 except ImportError as exc:
     log.error("import failed -- is PYTHONPATH set? %s", exc)
@@ -112,7 +112,7 @@ except ImportError as exc:
 
 async def _run():
     log.info(
-        "invoking model_landslide_scenario bbox=%s analysis=%s res=%.1fm n_mc=%d",
+        "invoking model_landlab_susceptibility bbox=%s analysis=%s res=%.1fm n_mc=%d",
         BBOX, ANALYSIS, TARGET_RESOLUTION_M, N_MONTE_CARLO,
     )
     run_args = LandlabRunArgs(
@@ -121,7 +121,7 @@ async def _run():
         target_resolution_m=TARGET_RESOLUTION_M,
         n_monte_carlo=N_MONTE_CARLO,
     )
-    result = await model_landslide_scenario(run_args, compute_class="small")
+    result = await model_landlab_susceptibility(run_args, compute_class="small")
     return result
 
 

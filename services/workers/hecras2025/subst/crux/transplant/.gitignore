@@ -1,0 +1,10 @@
+# proprietary HEC-RAS 2025 beta DLLs (staged from the image at reproduce time; never commit)
+dll/
+# .NET build outputs
+out_*/
+obj/
+bin/
+# transient probe transcripts
+scratch_*.txt
+# regenerable binary fixtures (rebuilt from the Muncie plan HDF by extract/export)
+meshgen_in/*.f64

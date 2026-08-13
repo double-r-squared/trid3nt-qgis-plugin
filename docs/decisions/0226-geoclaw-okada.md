@@ -1,0 +1,186 @@
+# ADR 0226 - GeoClaw Okada seafloor-deformation product + real-event tsunami source
+
+Status: Accepted
+Date: 2026-08-11
+
+## Context
+
+ADR 0185 STOPPED the Okada-dtopo front (module-coverage-board rows #18/#19,
+"dtopo sources") behind a recipe: the tsunami CONSUMPTION path already existed
+(`geoclaw_inundation(tsunami_dtopo_uri=)` threads a dtopo; the worker's
+`render_maketopo_dtopo` synthesizes a single-subfault Okada dtopo from
+`source_magnitude` + the user-gated fault geometry), but two things were missing to
+make "given an earthquake, what seafloor deformation does Okada predict and what
+tsunami does it drive" a first-class QUESTION CLASS:
+
+1. the seafloor-DEFORMATION field itself was never surfaced as a product -- the
+   worker wrote `dtopo.tt3` purely as solver input and discarded it, so the direct
+   answer to "what deformation" was invisible; and
+2. the Okada source could only be driven by hand-typed `source_lonlat` +
+   `source_magnitude`, never pinned to a NAMED real earthquake.
+
+## Decision
+
+Land the Okada front as COMPOSITION + a run PRODUCT on the existing GeoClaw
+inundation surface (NOT a new template, NOT a new standalone primitive):
+
+### 1. Seafloor-deformation PRODUCT (the "what deformation" answer)
+
+- Worker (`services/workers/geoclaw/setrun_builder.render_maketopo_dtopo`): after
+  writing `dtopo.tt3`, the generated `maketopo.py` ALSO writes the final-time
+  vertical deformation dZ as an ESRI-ASCII grid `deformation_dz.asc` (EPSG:4326,
+  north-first, over the Okada source box) and prints its dZ min/max. Pure text write
+  (no gdal) from `fault.dtopo.dZ[-1]` -- verified shape `(ntime, ny, nx)` indexed
+  `[lat, lon]` against clawpack `dtopotools`.
+- The deformation artifacts (`deformation_dz.asc` + `dtopo.tt3` + `maketopo.py`)
+  are added to BOTH the worker `DEFAULT_OUTPUT_GLOBS` AND -- load-bearing -- the
+  composer's `GEOCLAW_OUTPUT_GLOBS` (`run_geoclaw.py`), which is the AUTHORITATIVE
+  manifest `outputs` list the worker honors over its own default. (The first live
+  smoke uploaded no deformation because only the worker default carried it; the
+  manifest list overrode it.)
+- Agent-side postprocess (`postprocess_geoclaw.build_geoclaw_deformation_layer`):
+  reads `deformation_dz.asc`, writes a SIGNED EPSG:4326 COG, uploads it, and returns
+  a `LayerURI` (name "Seafloor deformation (Okada)", role context, units meters,
+  bbox = the offshore Okada source box) + `{max_uplift_m, max_subsidence_m}`. The
+  composer emits it through the render chokepoint (`publish_layer`) and stamps the
+  modeled coseismic extremes onto the peak layer's `source_note` (a determinism-
+  boundary provenance string). Best-effort: absent on dam_break / surge / a staged
+  dtopo -> the depth answer stands unchanged.
+- Style: a new `diverging_seafloor_deformation` preset (`-5,5`, `rdbu`) in
+  `publish_layer._TITILER_STYLE_REGISTRY` -- a diverging ramp centered on 0 so the
+  dipole reads blue=subsidence / white=0 / red=uplift, matching the signed
+  river-seepage / bed-evolution precedent.
+
+  The live path is AGENT-SIDE `postprocess_geoclaw` (the worker fast-path module
+  `_geoclaw_postprocess` is NOT in the geoclaw image -- the Dockerfile copies only
+  `services/workers/geoclaw/` -- so `read_publish_manifest` returns None and the
+  agent postprocess runs). The deformation product therefore lives agent-side; the
+  worker fast-path was deliberately left untouched (enabling it for geoclaw is an
+  unrelated architecture change with regression risk).
+
+### 2. Real-event tsunami source (`earthquake_source`)
+
+- `server/.../geoclaw/earthquake_source.py`: `resolve_earthquake_source(region,
+  min_magnitude, start/end)` reuses `fetch_usgs_earthquakes` (offline-first repo
+  driver -- never a bespoke FDSN call): geocode the seismic region -> a search bbox,
+  query FDSN, read the produced FGB, and pick the LARGEST-Mw event (`select_largest_event`,
+  a pure selector; a magnitude tie breaks toward the shallower = more tsunamigenic).
+- `geoclaw_inundation` gains `earthquake_source` (+ `earthquake_min_magnitude`,
+  `earthquake_start_date/end_date`). When set it forces scenario "tsunami" and drives
+  the Okada source from the REAL catalog epicenter -> `source_lonlat`, focal depth ->
+  `fault_depth_km`, Mw -> `source_magnitude`. Threaded into
+  `geoclaw_tsunami_gauge_timeseries` via the shared `model_geoclaw_inundation`.
+
+### Provenance / honesty (the source-parameter story)
+
+Epicenter, focal DEPTH, and Mw are REAL USGS ComCat values (`basis="fetched"`). The
+fault MECHANISM (strike/dip/rake) is NOT in the FDSN summary feed, so it is DERIVED
+-- a shallow subduction-interface THRUST assumption (dip 15 deg, rake 90 deg), strike
+left to the worker's synthetic default -- surfaced as a LOUD `basis="derived"`
+provenance entry ("the Okada seafloor deformation is MODELED, not an observed field")
+unless the user supplies `fault_*`. The deformation raster's `fallback_note` and the
+peak `source_note` both label it modeled.
+
+## Consequence
+
+- +0 registered tools / templates: a knob (`earthquake_source`) + a run PRODUCT
+  (deformation raster) on the existing `geoclaw_inundation`, not a new door. Registry
+  pin + EXPECTED_TEMPLATES UNCHANGED. The four offline slices reproduce the exact-SIX
+  baseline from repo root.
+- No strict-parser bump: the deformation emission is scenario-gated (tsunami
+  synthetic Okada), not a new build_spec field -- `geoclaw-spec-5` unchanged. The
+  worker image was rebuilt for the `maketopo.py` deformation-write + glob change,
+  provenance-checked (deformation writer + numpy import baked in), and live-smoked.
+- `earthquake_min_magnitude` is a magnitude floor, NOT a resolution knob -- the 0225
+  declared-resolution sweep passes without a ResolutionSpec.
+
+## Amendment 2026-08-11 -- FINITE-FAULT upgrade (measured-inversion rung)
+
+NATE reviewed the single-subfault Okada deformation proof: the band "looks like a
+straight line" -- correct, it IS one idealized rectangle. This amendment upgrades the
+tsunami source to REAL published slip and turns the deferred #18 fold below into
+landed work.
+
+### The fallback ladder (data-source fallback norm, now three rungs)
+
+1. MEASURED finite-fault inversion (new top rung) -- for a real ComCat event the
+   composer fetches the event's USGS **finite-fault product** and drives a
+   MULTI-subfault Okada dtopo from the published inverted slip.
+2. DERIVED single-subfault scaling synthesis (the prior path, now explicitly the
+   degrade rung) -- one Wells & Coppersmith rectangle from Mw, LOUDLY labeled
+   `basis="derived"`, used ONLY when the event has no finite-fault product.
+3. Honest typed error on an unreachable/unparseable product that IS present.
+
+### What landed
+
+- `server/.../geoclaw/finite_fault.py`: `parse_fsp` (PURE parse of the SRCMOD-style
+  `complete_inversion.fsp`: header `STRK`/`DIP` + `Dx`/`Dz` subfault dims + the
+  per-subfault LAT/LON/Z/SLIP/RAKE data rows -> a normalized `FiniteFaultModel` of
+  N `FiniteFaultPatch`); `fetch_finite_fault_model` (the ComCat products I/O boundary:
+  event-detail -> the `finite-fault` product -> download `complete_inversion.fsp`,
+  monkeypatchable `_http_get`); `to_csvfault_text` (serializes the patches in clawpack
+  `dtopotools.CSVFault` column format). Basis-verified live: the 2021 M8.2 Chignik
+  event `ak0219neiszm` carries TWO finite-fault products (`ak0219neiszm_1` = 396
+  subfaults, `_2` = 294 subfaults); the selector prefers the most-recently-updated.
+  Product cited:
+  `https://earthquake.usgs.gov/product/finite-fault/ak0219neiszm_1/us/1635188938271/complete_inversion.fsp`.
+- Worker (`setrun_builder.render_maketopo_dtopo`): a `finite_fault_file` build_spec
+  field (parser bumped `geoclaw-spec-5` -> `geoclaw-spec-6`) switches maketopo to the
+  NATIVE `dtopotools.CSVFault().read(coordinate_specification="centroid")` reader ->
+  an N-subfault `Fault` -> the SAME `dtopo.tt3` + `deformation_dz.asc` product tail.
+  The single-subfault synthesis is unchanged as the degrade rung.
+- Composer + contract: `GeoClawRunArgs.finite_fault_uri` + `finite_fault_footprint`;
+  the tool wrapper fetches the finite-fault model on an `earthquake_source` resolve,
+  stages the CSV (`stage_finite_fault_csv`), and stamps `basis="measured_inversion"`
+  provenance naming the product URL (a new `InputBasis` member, grouped site-derived).
+  When present it SUPERSEDES the derived subduction-interface `fault_mechanism` label.
+  The composer sizes the computational domain to ENCLOSE the rupture footprint and
+  SKIPS the single-point offshore relocation (the patches are at real coordinates).
+
+### Re-proof (the canonical proof is now the real-slip one)
+
+- `docs/proof/templates/geoclaw_okada_deformation.png` OVERWRITTEN: the REAL Chignik
+  finite-fault deformation (`ak0219neiszm_1`, 396 subfaults) over Esri World Imagery
+  (EPSG:3857) -- a concentrated, asymmetric red-uplift lobe (max +0.735 m) flanked by
+  a broad blue subsidence field (min -0.389 m), visibly NOT a bar.
+  `geoclaw_okada_deformation_synthetic.png` keeps the single-subfault sibling (one
+  straight N-S bar, +2.34 / -1.00 m) for contrast. Driver:
+  `scripts/proof_geoclaw_okada_finite_fault.py`.
+- Live path (`scripts/drive_geoclaw_finite_fault_chignik.py`, local-docker): resolve
+  -> finite-fault fetch (294-subfault `_2`) -> CSV stage -> domain enclosure -> worker
+  multi-subfault dtopo assembled -> solve dispatched. The run-up SOLVE was refused by
+  the pre-existing `GEOCLAW_BATHYMETRY_FLAT` guard: the topobathy fetched over the
+  6.5-deg rupture-enclosing Alaska domain came back land-only (min -35 m, 0 % below
+  -5 m) -- the deep Pacific bathymetry never reached the solver. This is a
+  topobathy-over-large-domain limitation, NOT a finite-fault defect; the finite-fault
+  ingestion + multi-subfault dtopo + deformation product (the run-up's physical
+  driver) are proven.
+
+### Scoped follow-ups
+
+- **Scenario geometry (Slab2)**: for a SCENARIO (Cascadia-class) source that is not a
+  named event, follow the real USGS Slab2 subduction-interface geometry (public grids)
+  -- a strike-varying multi-segment fault along the trench beats the straight
+  rectangle. Recipe: fetch the Slab2 `dep`/`str`/`dip` grids for the zone, tile the
+  interface into subfaults, distribute a target-Mw slip (taper), reuse the SAME
+  `to_csvfault_text` -> `finite_fault_file` seam. DEFERRED (Slab2 grid ingestion is
+  heavy); the finite-fault leg landed first per the honest-scope directive.
+- **Topobathy over a large rupture-enclosing domain**: the flat-ocean guard fires when
+  the enclosing domain outgrows the topobathy composite's deep-water coverage. The
+  finite-fault run-up leg is bathymetry-gated until this is addressed (a coarse global
+  GEBCO/ETOPO deep-water base laid UNDER the domain regardless of AOI, or a
+  domain-cropping strategy that keeps the near-AOI slip + a deep column).
+
+## Not done / future folds
+
+- #18 `multi_subfault_dtopo_from_finite_fault_model` -- LANDED (see the 2026-08-11
+  finite-fault amendment above). `fetch_finite_fault_model` (USGS ComCat `.fsp` ->
+  a normalized N-subfault table) + a `dtopotools.CSVFault` of N subfaults now drive
+  the measured-inversion rung. The single-subfault Okada + real-event source landed
+  earlier was its prerequisite front.
+- V&V against the NGDC/NCEI runup catalog (a calibrated hindcast) -- this landing is
+  planning-grade (MODELED Okada from catalog Mw + an assumed interface mechanism),
+  never a validated tide-gauge hindcast.
+- A dedicated `deformation_only` cheap mode (author the dtopo + emit the deformation
+  raster WITHOUT the run-up solve) if an independent "just show me the Okada field"
+  question class appears.

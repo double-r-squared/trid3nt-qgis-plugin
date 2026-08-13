@@ -33,7 +33,7 @@ from typing import Any, Literal
 from pydantic import Field, model_validator
 
 from .common import GraceModel
-from .tool_registry import TTLClass
+from .tool_registry import ResolutionSpec, TTLClass
 
 __all__ = [
     "SourceShape",
@@ -49,6 +49,7 @@ __all__ = [
     "CacheSpec",
     "PayloadEstimateSpec",
     "HookSpec",
+    "DispatchSpec",
     "SourceSpec",
 ]
 
@@ -65,6 +66,7 @@ SourceShape = Literal[
     "vector-fgb",
     "station-timeseries-fgb",
     "record",
+    "animation_frames",
 ]
 
 #: Auth mode (contract sec 1.1 ``auth.mode``). ``none`` = keyless public;
@@ -292,6 +294,17 @@ class OutputSpec(GraceModel):
     #: envelope path). Validated as a resolvable hook at load. Default (None) = the
     #: LayerURI is always returned (strict no-op for every prior spec).
     variant_by_emptiness: str | None = None
+    #: FETCH-TIME PROVENANCE CHANNEL (ADR 0110). When True, ``route()`` binds a
+    #: :class:`ProvenanceRecorder` around the fetch so the delegate/executor can
+    #: ``record_provenance({...})`` a small typed dict during a NON-cached fetch;
+    #: the cache persists it as a ``<key>.provenance.json`` sibling of the artifact
+    #: and REPLAYS it on a cache hit, and the router hands it to the ``hooks.envelope``
+    #: hook so a result-model field that is FETCH-TIME provenance (which of a
+    #: multi-source composite's legs painted the merge -- unrecoverable from the final
+    #: bytes) survives every cache path. Requires ``hooks.envelope`` (the consumer).
+    #: Default False = no recorder, no sidecar, byte-identical to before (strict
+    #: no-op for every prior spec).
+    provenance: bool = False
     #: Keep attribute-only (NULL-geometry) features in the emitted FGB instead of
     #: dropping them (chained-resolution mode, ADR 0063). The nws_alerts_conus twin
     #: preserves alerts whose zone references could not be resolved as NULL-geometry
@@ -514,6 +527,45 @@ class HookSpec(GraceModel):
     #: walk) neither expresses. No prior spec declares it (strict no-op).
     pre_resolve: str | None = None
 
+    #: POST-ARRAY PER-BAND COLORMAP (raster-modes wave, ADR 0086). ``(spec, params)
+    #: -> dict[int, tuple[int, int, int, int]]``. A ``raster-cog`` source whose
+    #: rendered palette is a PURE function of a request param (the jrc-gsw per-band
+    #: occurrence/recurrence/seasonality/change ramp, computed from ``band`` alone --
+    #: never reads the fetched array, does no I/O) names this hook. The
+    #: ``stac_continuous_mosaic`` serializer bakes the returned GDAL ``{value:(r,g,b,
+    #: a)}`` table into the emitted uint8 COG's band-1 palette via the existing
+    #: ``array_to_cog_bytes(colormap=...)`` seam -- NOT a declarative colormap DSL
+    #: (the ramp is computed math, one consumer). PURE: it only computes over the
+    #: params. No prior spec declares it (strict no-op: the serializer bakes no
+    #: palette unless the spec names the hook).
+    colormap: str | None = None
+
+    #: FRAMES-LIST pre-loop RESOLVE (animation wave 1, ADR 0087). ``(spec, params)
+    #: -> list[FramePlan]``. A ``shape: animation_frames`` source (an ordered
+    #: per-timestamp animation that returns ``list[LayerURI]``, not one layer) names
+    #: this hook: it does the pre-loop timestamp-index fetch + window + subsample +
+    #: (optional) filter and returns the ORDERED list of per-frame plans -- each a
+    #: :class:`FramePlan` carrying the frame's ``cache_params`` (the read_through
+    #: cache key, byte-identical to the twin's per-frame params), the scrubber
+    #: NAME-TOKEN (the monotonic ``step <N>`` / ISO the plugin ``group_frame_layers``
+    #: keys on), the ``layer_id``, and the AOI ``bbox``. Raises the source's typed
+    #: EMPTY error when the window matches no frames (honesty floor). No prior spec
+    #: declares it (strict no-op).
+    frames_plan: str | None = None
+
+    #: FRAMES-LIST per-frame COG BUILDER (animation wave 1, ADR 0087). ``(spec,
+    #: params, frame: FramePlan) -> bytes``. The ``shape: animation_frames``
+    #: executor's per-frame ``read_through`` fetch_fn: builds ONE frame's raster
+    #: bytes (the CIRA SLIDER tile-stitch mosaic -> EPSG:4326 COG, or a post-stitch
+    #: blend). It may perform the frame's own tile I/O (the ``_satellite_slider``
+    #: substrate owns the stitch socket, the sanctioned per-frame impurity, like the
+    #: library_delegate). Raises :class:`FrameDegraded` to signal a graceful per-frame
+    #: skip (a transparent / off-swath / upstream-failed frame the executor records
+    #: and drops, never a silent gap); the executor's honesty floor raises the typed
+    #: EMPTY error only when EVERY frame degrades. Pairs with ``frames_plan``. No
+    #: prior spec declares it (strict no-op).
+    frame_bytes: str | None = None
+
     #: TRANSPORT-STATUS classification (keyed/misc wave, ADR 0071).
     #: ``(spec, status: int | None, body: str | None) -> RouterError | None``. The
     #: http_json transport collapses every non-2xx to a retryable UPSTREAM error;
@@ -525,6 +577,49 @@ class HookSpec(GraceModel):
     #: default. No I/O (the status/body are already fetched). No prior spec declares
     #: it (strict no-op: the default upstream mapping is unchanged).
     classify_status: str | None = None
+
+
+class DispatchSpec(GraceModel):
+    """A spec-declared, SINGLE-TARGET pre-flight cross-sibling dispatch (ADR 0097).
+
+    The FIRST tool-composes-tool seam: for ONE declared param value the router
+    SHORT-CIRCUITS ``route()`` and serves the request from a NAMED sibling
+    registered tool, returning THAT tool's result VERBATIM (its own
+    ``source_class`` cache prefix, its own ``layer_id`` / ``name`` -- NO re-cache
+    under this spec, NO double-fetch). The motivating case is
+    ``fetch_dem(source="copernicus")`` returning ``fetch_copernicus_dem``'s layer
+    byte-for-byte (the twin's ``TOOL_REGISTRY["fetch_copernicus_dem"].fn(bbox=...)``).
+
+    The seam is DELIBERATELY NARROW (the atomic-tools doctrine avoids
+    tool-composes-tool; this is the one sanctioned exception, gated to NATE):
+
+    - ONE target per condition (``to`` is a single string, not a list).
+    - SPEC-DECLARED only: ``to`` / ``equals_any`` are literals -- never a
+      hook-computed target.
+    - NO CHAINS: a dispatched target must not itself declare a ``dispatch`` block
+      (the router refuses a chain at dispatch time, so the returned result is
+      always exactly one sibling's verbatim output).
+    - PRE-FLIGHT ONLY: evaluated on the RAW request params BEFORE validation /
+      gates / cache / fetch (byte-identical to the twin, which dispatched first
+      thing on the raw ``source`` arg with zero prior validation).
+    """
+
+    #: The request param whose value triggers the dispatch (``source``).
+    param: str = Field(min_length=1)
+    #: The param values (post-normalize) that MATCH this condition. The twin's
+    #: copernicus alias set: ``[copernicus, cop-dem-glo-30, glo-30, glo30,
+    #: copernicus_glo30]``.
+    equals_any: list[str] = Field(min_length=1)
+    #: How to normalize the raw param value before the ``equals_any`` membership
+    #: check. ``lower_strip`` reproduces the twin's ``source.strip().lower()``;
+    #: ``none`` compares verbatim.
+    normalize: Literal["lower_strip", "none"] = "lower_strip"
+    #: The SINGLE sibling registered-tool name to dispatch to (``fetch_copernicus_dem``).
+    to: str = Field(min_length=1)
+    #: ``target_arg -> this-spec raw param name`` map for the dispatched call. The
+    #: twin passes only ``bbox=bbox`` -> ``{bbox: bbox}``. The RAW (unvalidated)
+    #: value is forwarded; the target validates it under its own contract.
+    pass_args: dict[str, str] = Field(default_factory=dict)
 
 
 # --------------------------------------------------------------------------- #
@@ -603,6 +698,10 @@ class SourceSpec(GraceModel):
     # --- tier-3 hooks: named pure fns for the ONE irreducible step (ADR 0056) ---
     hooks: HookSpec | None = None
 
+    # --- cross-sibling pre-flight dispatch (ADR 0097): one param value -> serve
+    # --- a named sibling tool's result verbatim (fetch_dem source="copernicus"). --
+    dispatch: list[DispatchSpec] = Field(default_factory=list)
+
     # --- named transform: two-source JOIN-on-key (census, sec 2.5) ---
     join: dict[str, Any] | None = None
 
@@ -617,6 +716,14 @@ class SourceSpec(GraceModel):
     # --- honesty: caveats + fallback chain ---
     caveats: list[str] = Field(default_factory=list)
     fallback: list[str] = Field(default_factory=list)
+
+    # --- declared DATA-native resolutions (ADR 0225, two-layer truth) ---
+    # A source's native cell / tier facts live HERE (with the fetcher), so the
+    # payload/input-review gate card can QUOTE them ("data native 3DEP 10 m") next to
+    # a solver's declared range. Synthesized onto the tool's
+    # ``AtomicToolMetadata.resolution_specs`` (constraint_source='data'). Default () =
+    # a source with no granularity-bearing param (the common case).
+    resolution_declarations: tuple[ResolutionSpec, ...] = Field(default=())
 
     # --- retrieval phrasings (verbatim from the twin's corpus.yaml) ---
     corpus: list[str] = Field(default_factory=list)
@@ -657,6 +764,23 @@ class SourceSpec(GraceModel):
             raise ValueError(
                 f"output.layer_type=record requires shape=record; got {self.shape!r}"
             )
+        # animation_frames shape (ADR 0087) <-> raster frames + the two frames hooks.
+        # It returns list[LayerURI] (ordered per-timestamp), so it emits raster tif
+        # frames and MUST declare both the pre-loop frames_plan and the per-frame
+        # frame_bytes builder (the router has nothing else to resolve the frame set /
+        # build a frame).
+        if self.shape == "animation_frames":
+            if self.output.layer_type != "raster":
+                raise ValueError(
+                    f"shape=animation_frames requires output.layer_type=raster; "
+                    f"got {self.output.layer_type!r}"
+                )
+            fp = self.hooks.frames_plan if self.hooks is not None else None
+            fb = self.hooks.frame_bytes if self.hooks is not None else None
+            if not (fp and fb):
+                raise ValueError(
+                    "shape=animation_frames requires hooks.frames_plan + hooks.frame_bytes"
+                )
         # A join transform only makes sense over a vector base shape.
         if self.join is not None and self.shape != "vector-fgb":
             raise ValueError(

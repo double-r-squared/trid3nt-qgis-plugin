@@ -3,7 +3,7 @@
 A separate template from ``modflow_capture_zone`` because capture_zone and
 wellhead_protection answer DIFFERENT questions - general zone-of-contribution
 vs EPA fixed-travel-time WHPA tiers - even though they share the
-``model_capture_zone_scenario`` composer + ``CaptureZoneLayerURI`` carrier.
+the composer composer + ``CaptureZoneLayerURI`` carrier.
 
 This template reuses the ``modflow_capture_zone`` composer with
 ``archetype="wellhead_protection"`` (EPA WHPA framing + default [2, 5, 10] yr
@@ -66,11 +66,23 @@ async def modflow_wellhead_protection(
     n_particles: int = 16,
     aquifer_k_ms: float | None = None,
     porosity: float | None = None,
+    # ADR 0215: multi-well WELLFIELD + transient + NHD RIV boundaries.
+    wells: list[Any] | None = None,
+    transient: bool = False,
+    sim_years: float | None = None,
+    n_periods: int | None = None,
+    use_nhd_river_boundaries: bool = False,
     compute_class: str = "standard",
     # absorb LLM-invented kwargs.
     **_extra_ignored: Any,
 ) -> dict[str, Any]:
     """Delineate an EPA-style wellhead protection area (WHPA) for a pumping well.
+
+    Fidelity: MODFLOW 6 local planning-grade groundwater envelope (aquifer
+    K/porosity default to narrated demo values unless supplied), not a
+    calibrated regulatory delineation. Off-scope: surface-water inundation
+    flooding -> sfincs_flood; urban storm-sewer / pipe-network flooding ->
+    swmm_urban_flood.
 
     Identical machinery to ``modflow_capture_zone`` but uses EPA WHPA
     fixed-travel-time framing and default tiers of [2, 5, 10] years (the EPA
@@ -129,6 +141,11 @@ async def modflow_wellhead_protection(
             archetype="wellhead_protection",
             aquifer_k_ms=aquifer_k_ms,
             porosity=porosity,
+            wells=wells,
+            transient=bool(transient),
+            sim_years=sim_years,
+            n_periods=n_periods,
+            use_nhd_river_boundaries=bool(use_nhd_river_boundaries),
             compute_class=compute_class,
             pipeline_emitter=None,
         )

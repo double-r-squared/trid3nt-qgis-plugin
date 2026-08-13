@@ -1,0 +1,45 @@
+########## RUN A: 8x8 mesh ##########
+[crux] Initializing GDAL...
+[crux] GDAL initialized OK
+[crux] Loading elevation terrain: /work/elev.h5
+[crux] Terrain valid extent: (500000,4440000 -> 500320,4439680)
+[crux] Loading nvalue terrain: /work/nvalue.h5
+[crux] terrain.SamplePoints probe: [112.8, 111.2, 114.4]
+[crux] nvalue.SamplePoints probe: [0.06, 0.06, 0.06]
+[crux] Building mesh from extent 8x8
+[crux] Mesh (inset) extent: (500032,4439968 -> 500288,4439712)
+[crux] Mesh cells=64 faces=144
+[crux] opts SampledPointsPerCell=1000 BinsPerCell=256 SampledPointsPerFace=100
+[crux] >>> CALLING MeshPropertyTables.ComputeFrom (the prepare subgrid step) <<<
+[crux] ComputeFrom returned. Result=True
+[crux] TABLES BUILT:
+[crux]   CellTableStart.len=64
+[crux]   CellTableCount.len=64
+[crux]   FaceTableStart.len=144
+[crux]   FaceTableCount.len=144
+[crux]   CellVolumeTable.len=768
+[crux]   CellElevationTable.len=768
+[crux]   FaceElevationTable.len=2115
+[crux]   FaceAreaTable.len=2115
+[crux]   cell0 table start=0 count=11
+[crux]     cell0[0] vol=0 elev=102.4
+[crux]     cell0[1] vol=20.178993 elev=102.69063
+[crux]     cell0[2] vol=48.709293 elev=102.887505
+[crux]     cell0[3] vol=69.12804 elev=102.981255
+[crux]     cell0[4] vol=135.30414 elev=103.19688
+[crux]     cell0[5] vol=212.06424 elev=103.38438
+[crux]   face0 table start=0 count=15
+[crux]     face0[0] elev=103.3 area=0
+[crux]     face0[1] elev=103.310005 area=0.076832
+[crux]     face0[2] elev=103.31766 area=0.13569976
+[crux]     face0[3] elev=103.32532 area=0.19460504
+[crux]     face0[4] elev=103.34063 area=0.31252813
+[crux]     face0[5] elev=103.371254 area=0.5488245
+[crux] VERDICT: property-table computation completed without EntryPointNotFound.
+
+########## RUN B: 16x16 mesh (robustness) ##########
+[crux] Mesh cells=256 faces=544
+[crux] ComputeFrom returned. Result=True
+[crux]   CellVolumeTable.len=1315
+[crux]   FaceAreaTable.len=6086
+[crux] VERDICT: property-table computation completed without EntryPointNotFound.

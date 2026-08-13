@@ -1,11 +1,22 @@
-# TEMPLATE tier (engine-door refactor): phrasings for sfincs_flood. NOT merged
-# into the main retrieval index; the run_sfincs door surfaces this template via
-# gate expansion (select-then-call). Carried verbatim from the migrated
-# run_model_flood_scenario corpus entries.
+# Template routing phrasings for sfincs_flood -- the default flood engine and the
+# always-on flood entry point (HOT_SET). Door dissolution (ADR 0094): walked into
+# the main retrieval index directly. Generic + coastal-surge phrasings keep the
+# default flood engine ahead of the flood-data fetchers on an unscoped "model the
+# flood" ask; the system-prompt ladder routes urban / dam-break / wave asks off it.
 sfincs_flood:
+- model flooding
+- model the flood
+- flood modeling
+- simulate a flood
+- model the flooding here
+- model the flood for this area
 - simulate flood inundation depth for this AOI
+- how deep will the flood water get at this location
 - run the SFINCS flood solve for a design-storm return period
+- model the hurricane storm surge coming in from the coast
 - coastal storm-surge inundation with bathymetry and waves
+- riverine and pluvial watershed flood inundation over a county
 - compound flood: surge plus river discharge plus rainfall
 - route the flood around building footprints (urban obstacles)
 - named-hurricane surge inundation via a parametric spiderweb wind field
+- run a SFINCS flood with a uniform constant infiltration loss rate qinf

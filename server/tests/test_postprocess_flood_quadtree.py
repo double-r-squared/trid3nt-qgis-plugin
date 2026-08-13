@@ -41,7 +41,7 @@ from trid3nt_server.agent.workflows.sfincs.postprocess_sfincs import (  # noqa: 
 )
 
 
-# Mexico Beach UTM zone 16N (matches the coastal North Star deck CRS).
+# Mexico Beach UTM zone 16N (matches the coastal SFINCS deck CRS).
 _UTM16N = "EPSG:32616"
 # A bbox over the Mexico Beach panhandle (EPSG:4326).
 _BBOX = (-85.45, 29.93, -85.38, 29.98)
@@ -456,6 +456,86 @@ def test_write_verified_cog_depth_on_real_schema(tmp_path: Path) -> None:
         assert _BBOX[1] <= lat1 <= _BBOX[3] + 0.05
     finally:
         cog.unlink(missing_ok=True)
+
+
+# --------------------------------------------------------------------------- #
+# ADR 0159: native quadtree mesh LayerURI (layer_type="mesh") deliverable
+# --------------------------------------------------------------------------- #
+
+
+def test_native_mesh_source_uri_s3_prefix_and_file() -> None:
+    """The mesh row's uri mirrors ``_resolve_run_output_to_local``'s prefix/.nc
+    resolution for s3, and hands a local drive its netcdf path straight through."""
+    from trid3nt_server.agent.workflows.sfincs.postprocess_sfincs import (
+        _native_mesh_source_uri,
+    )
+
+    local = Path("/tmp/whatever/sfincs_map.nc")
+    # s3 prefix -> append /sfincs_map.nc
+    assert (
+        _native_mesh_source_uri("s3://runs/abc", local)
+        == "s3://runs/abc/sfincs_map.nc"
+    )
+    # s3 .nc -> unchanged
+    assert (
+        _native_mesh_source_uri("s3://runs/abc/sfincs_map.nc", local)
+        == "s3://runs/abc/sfincs_map.nc"
+    )
+    # local -> the netcdf path itself (plugin reads via os.path.isfile)
+    assert _native_mesh_source_uri("file:///tmp/x", local) == str(local)
+
+
+def test_maybe_native_mesh_layer_quadtree(tmp_path: Path) -> None:
+    """A quadtree UGRID netcdf yields a layer_type='mesh' row carrying the deck's
+    projected CRS in crs_authid + the face count in the name + role='context'."""
+    from trid3nt_server.agent.workflows.sfincs.postprocess_sfincs import (
+        _maybe_native_mesh_layer,
+    )
+
+    ds, _ = _make_real_schema_quadtree_ds(side=8)
+    nc = tmp_path / "sfincs_map.nc"
+    ds.to_netcdf(nc)
+    layer = _maybe_native_mesh_layer(nc, str(nc), run_id="RID1")
+    assert layer is not None
+    assert layer.layer_type == "mesh"
+    assert layer.role == "context"
+    assert layer.crs_authid == "EPSG:32616"
+    assert layer.uri == str(nc)
+    assert layer.layer_id == "sfincs-mesh-RID1"
+    assert "quadtree mesh" in layer.name
+    assert "64 cells" in layer.name  # 8 x 8 faces
+
+
+def test_maybe_native_mesh_layer_none_for_regular_grid(tmp_path: Path) -> None:
+    """A regular-grid output is NOT face-indexed -> no mesh row (byte-identical
+    regular-grid publish path)."""
+    import xarray as xr
+
+    from trid3nt_server.agent.workflows.sfincs.postprocess_sfincs import (
+        _maybe_native_mesh_layer,
+    )
+
+    ds = xr.Dataset(
+        {"hmax": xr.DataArray(np.zeros((1, 4, 5)), dims=["timemax", "n", "m"])},
+        coords={
+            "x": xr.DataArray(np.arange(5, dtype="float64"), dims=["m"]),
+            "y": xr.DataArray(np.arange(4, dtype="float64"), dims=["n"]),
+        },
+    )
+    nc = tmp_path / "sfincs_map.nc"
+    ds.to_netcdf(nc)
+    assert _maybe_native_mesh_layer(nc, str(nc), run_id="RID2") is None
+
+
+def test_maybe_native_mesh_layer_unreadable_returns_none(tmp_path: Path) -> None:
+    """A missing / unreadable netcdf degrades to None (never raises -- the depth
+    answer stands, the mesh preview is best-effort)."""
+    from trid3nt_server.agent.workflows.sfincs.postprocess_sfincs import (
+        _maybe_native_mesh_layer,
+    )
+
+    missing = tmp_path / "does_not_exist.nc"
+    assert _maybe_native_mesh_layer(missing, str(missing), run_id="RID3") is None
 
 
 def test_read_face_coords_handles_fill_and_out_of_range(tmp_path: Path) -> None:

@@ -1,0 +1,9 @@
+swmm_wwtp_detention_ponds:
+- run the published SWMM detention pond storage routing example
+- show how detention ponds drain through their outlet weirs over time
+- demonstrate stage-storage detention pond routing in SWMM
+- run the UV plant with detention ponds SWMM example and chart the pond stages
+- storage node drain-down demonstration with weir outlets in SWMM
+- how do the detention ponds recede in the cited SWMM storage example
+- published complex storage-routing SWMM deck with detention basins
+- show pond water surface stage recession for the detention pond example

@@ -9,7 +9,7 @@ depth) WITHOUT any live network fetch:
     build_and_stage_swmm_deck (build_swmm_mesh, P2)
       -> run_swmm_local (pyswmm IN-PROCESS, the dev primary path, P4)
       -> postprocess_swmm (rasterize node depths -> peak + frames, P3)
-      -> model_urban_flood_swmm composer (peak returned + frames emitted
+      -> model_swmm_urban_flood composer (peak returned + frames emitted
          out-of-band via a fake emitter)
       -> swmm_urban_flood tool (SWMMRunArgs coercion + typed-error surface)
 
@@ -103,7 +103,7 @@ def test_swmm_urban_flood_obstacles_alias_does_not_trip_params_invalid(monkeypat
         # tool maps it to an error dict, but we only assert on the run_args.
         raise RT.UrbanFloodWorkflowError("URBAN_STUB", "stub: no solve in unit test")
 
-    monkeypatch.setattr(RT, "model_urban_flood_swmm", _fake_composer)
+    monkeypatch.setattr(RT, "model_swmm_urban_flood", _fake_composer)
 
     out = asyncio.run(
         RT.swmm_urban_flood(
@@ -134,7 +134,7 @@ def test_swmm_urban_flood_bogus_building_representation_is_params_invalid(monkey
         reached["composer"] = True
         raise AssertionError("composer must not be reached for a bogus param")
 
-    monkeypatch.setattr(RT, "model_urban_flood_swmm", _fake_composer)
+    monkeypatch.setattr(RT, "model_swmm_urban_flood", _fake_composer)
 
     out = asyncio.run(
         RT.swmm_urban_flood(
@@ -243,8 +243,8 @@ pyswmm = pytest.importorskip("pyswmm")
 rasterio = pytest.importorskip("rasterio")
 
 from trid3nt_contracts.swmm_contracts import SWMMDepthLayerURI, SWMMRunArgs  # noqa: E402
-from trid3nt_server.agent.workflows.swmm.model_urban_flood_swmm.model_urban_flood_swmm import (  # noqa: E402
-    model_urban_flood_swmm,
+from trid3nt_server.agent.workflows.swmm.urban_flood.urban_flood import (  # noqa: E402
+    model_swmm_urban_flood,
 )
 from trid3nt_server.agent.workflows.swmm.run_swmm import (  # noqa: E402
     build_and_stage_swmm_deck,
@@ -364,7 +364,7 @@ def _titiler_template(layer_uri: str) -> str:
 
 
 def _patch_publish_layer(monkeypatch, calls: list | None = None):  # noqa: ANN001
-    """Stub model_urban_flood_swmm.publish_layer to the TiTiler template shape.
+    """Stub model_swmm_urban_flood.publish_layer to the TiTiler template shape.
 
     The peak + each frame are published through this seam; without the stub the
     composer would hit the real (absent) QGIS worker, publish would fail, and the
@@ -379,7 +379,7 @@ def _patch_publish_layer(monkeypatch, calls: list | None = None):  # noqa: ANN00
         return _titiler_template(layer_uri)
 
     monkeypatch.setattr(
-        "trid3nt_server.agent.workflows.swmm.model_urban_flood_swmm.model_urban_flood_swmm.publish_layer", _pub
+        "trid3nt_server.agent.workflows.swmm.urban_flood.urban_flood.publish_layer", _pub
     )
 
 
@@ -514,7 +514,7 @@ def test_full_local_chain_emits_peak_plus_frames(synthetic_inputs, monkeypatch):
             mass_balance_tolerance_pct=100.0,
         )
         peak = asyncio.run(
-            model_urban_flood_swmm(
+            model_swmm_urban_flood(
                 run_args,
                 dem_path=dem_path,
                 building_footprints=footprints,
@@ -547,7 +547,7 @@ def test_full_local_chain_emits_peak_plus_frames(synthetic_inputs, monkeypatch):
     assert not peak.uri.startswith("s3://") and not peak.uri.startswith("gs://")
 
     # --- emitted layers partition: mesh context layer(s) + the depth frames ----
-    # NATE task #156: model_urban_flood_swmm now emits a quasi-2D computational
+    # NATE task #156: model_swmm_urban_flood now emits a quasi-2D computational
     # "mesh_grid" CONTEXT vector layer via add_loaded_layer right after the deck
     # build (before the depth frames), so fake.loaded_layers carries that mesh
     # layer ALONGSIDE the SWMMDepthLayerURI depth frames. The depth FRAMES are
@@ -651,15 +651,15 @@ def test_tool_wrapper_drives_full_chain(synthetic_inputs, monkeypatch):
     # Stub the composer's DEM + buildings acquisition to the synthetic inputs so
     # the tool path needs no live fetch.
     monkeypatch.setattr(
-        "trid3nt_server.agent.workflows.swmm.model_urban_flood_swmm.model_urban_flood_swmm._fetch_dem_for_urban",
+        "trid3nt_server.agent.workflows.swmm.urban_flood.urban_flood._fetch_dem_for_urban",
         lambda bbox: (dem_path, "synthetic"),
     )
     monkeypatch.setattr(
-        "trid3nt_server.agent.workflows.swmm.model_urban_flood_swmm.model_urban_flood_swmm._fetch_buildings_for_urban",
+        "trid3nt_server.agent.workflows.swmm.urban_flood.urban_flood._fetch_buildings_for_urban",
         lambda bbox: footprints,
     )
     monkeypatch.setattr(
-        "trid3nt_server.agent.workflows.swmm.model_urban_flood_swmm.model_urban_flood_swmm._atlas14_total_depth_mm",
+        "trid3nt_server.agent.workflows.swmm.urban_flood.urban_flood._atlas14_total_depth_mm",
         lambda bbox, rp, dur: 120.0,
     )
 
@@ -704,7 +704,7 @@ def test_batch_lane_returns_populated_peak_envelope(synthetic_inputs, monkeypatc
     import asyncio
 
     from trid3nt_server.agent.tools.simulation.solver import solver as _solver
-    from trid3nt_server.agent.workflows.swmm.model_urban_flood_swmm import model_urban_flood_swmm as M
+    from trid3nt_server.agent.workflows.swmm.urban_flood import urban_flood as M
     from trid3nt_server.agent.workflows.swmm.run_swmm import run_swmm_local
 
     dem_path, footprints, barriers = synthetic_inputs
@@ -861,7 +861,7 @@ def test_batch_lane_returns_populated_peak_envelope(synthetic_inputs, monkeypatc
         _solve_and_stash()
 
         peak = asyncio.run(
-            model_urban_flood_swmm(
+            model_swmm_urban_flood(
                 run_args,
                 dem_path=dem_path,
                 building_footprints=footprints,

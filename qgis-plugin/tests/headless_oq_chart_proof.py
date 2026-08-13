@@ -1,6 +1,6 @@
 """Live proof: OpenQuake result parity -- opening the kept PSHA case must
-surface its persisted hazard-curve chart in the dock's Charts panel
-(live-feedback 2026-07-13).
+surface its persisted hazard-curve chart in the bottom Charts window
+(live-feedback 2026-07-13; charts-window 2026-08-04).
 
 Loads the REAL plugin inside a real (offscreen) QgsApplication -- same
 pattern as ``headless_case_switch_proof.py`` -- connects to the LIVE local
@@ -10,14 +10,15 @@ agent on ``ws://127.0.0.1:8765``, opens the kept acceptance case
 whose chart is persisted server-side (chart_id 01KXD9Q34VPR9C5AJ40DX8MN4M),
 and asserts:
 
-  1. the case-open replay populates the Charts panel: visible, count >= 1,
-     the persisted chart_id is current;
+  1. the case-open replay lazily builds the bottom Charts window + rebuilds
+     its list: count >= 1, the persisted chart_id is current, the chat
+     "Charts (N)" button reflects the count;
   2. the render is the real hazard curve: 1 line series with 19 IML
      vertices, the dashed 10%-in-50yr design rule (legend label), log-log
      axes, PGA axis titles;
   3. the case's web-parity caption ("474 sites") rides along;
   4. NO chart widget landed in the chat message list (clutter rule);
-  5. switching AWAY to a chart-less case clears/hides the panel.
+  5. switching AWAY to a chart-less case clears the window + resets the button.
 
 Grabs the dock with the chart visible to docs/proof/98-qgis-oq-chart.png
 (offscreen QWidget grab -- widget-layout proof, not pixel-parity vs live
@@ -189,31 +190,33 @@ print(f"[proof] settled after connect: case={dock._case_id}", flush=True)
 # --------------------------------------------------------------------------- #
 
 dock.select_case(OQ_CASE, OQ_CASE_TITLE)
-pump(25, lambda: dock._case_id == OQ_CASE and dock.charts_panel.count > 0)
+pump(25, lambda: dock._case_id == OQ_CASE
+      and dock._charts_window is not None and dock._charts_window.count > 0)
 pump(3)  # trailing queued events (notes/zoom) settle
 
 check("PSHA case bound", dock._case_id == OQ_CASE, str(dock._case_id))
+# Charts-window 2026-08-04: the case-open replay lazily builds the bottom
+# ChartsWindow + rebuilds its list from the persisted SessionChartRecords.
+window = dock._charts_window
 check(
-    "Charts panel populated on case-open replay",
-    dock.charts_panel.count >= 1,
-    f"count={dock.charts_panel.count}",
+    "Charts window built + populated on case-open replay",
+    window is not None and window.count >= 1,
+    f"count={window.count if window else 'no window'}",
 )
-# isVisibleTo(dock), not isVisible(): the offscreen main window is never
-# shown, so absolute visibility is False for every descendant regardless
-# of the panel's own state -- isVisibleTo isolates the panel's flags.
-check("Charts panel visible", dock.charts_panel.isVisibleTo(dock))
 check(
     "persisted chart is current",
-    dock.charts_panel.current_chart_id() == OQ_CHART_ID,
-    str(dock.charts_panel.current_chart_id()),
+    window.current_chart_id() == OQ_CHART_ID,
+    str(window.current_chart_id()),
 )
+# The chat button reflects the count (the window is invited open by the
+# button, not force-shown on case open).
 check(
-    "toggle reads Charts (N)",
-    dock.charts_panel.toggle.text() == f"Charts ({dock.charts_panel.count})",
-    dock.charts_panel.toggle.text(),
+    "chat button reads Charts (N)",
+    dock.charts_btn.text() == f"Charts ({window.count})",
+    dock.charts_btn.text(),
 )
 
-s = dock.charts_panel.last_render_summary or {}
+s = window.last_render_summary or {}
 print(f"[proof] render summary: {s}", flush=True)
 check("hazard curve line series", s.get("lines") == 1 and s.get("series") == 1, str(s))
 check("19 IML vertices", s.get("points") == 19, str(s.get("points")))
@@ -224,8 +227,7 @@ check(
     "10% in 50yr" in (s.get("legend_labels") or []),
     str(s.get("legend_labels")),
 )
-axes = getattr(dock.charts_panel._card, "figure", None)
-axes = axes.axes if axes is not None else []
+axes = window._figure.axes if window._figure is not None else []
 check(
     "PGA axis titles",
     bool(axes) and axes[0].get_xlabel() == "PGA (g)"
@@ -234,28 +236,26 @@ check(
 )
 check(
     "web-parity caption (474 sites)",
-    "474 sites" in dock.charts_panel.caption_label.text(),
-    dock.charts_panel.caption_label.text()[:80],
+    "474 sites" in window.caption_label.text(),
+    window.caption_label.text()[:80],
 )
 
 # Clutter rule: no matplotlib canvas inside the chat message list.
-card_cls = type(dock.charts_panel._card)
+card_cls = type(window._canvas)
 in_chat = dock.messages_host.findChildren(card_cls)
 check("no chart widget in chat message list", not in_chat, str(len(in_chat)))
 
-# -- screenshot: the dock with the chart visible --------------------------- #
+# -- screenshot: the bottom charts window with the chart visible ----------- #
 os.makedirs(os.path.dirname(PROOF_PNG), exist_ok=True)
-dock.charts_panel.toggle.setChecked(True)
-dock.charts_panel._toggle_body()
+window.setVisible(True)
+window.resize(760, 320)
 pump(1)
-dock.resize(460, 900)
-pump(1)
-dock.grab().save(PROOF_PNG)
+window.grab().save(PROOF_PNG)
 print(f"[proof] screenshot: {PROOF_PNG}", flush=True)
 check("screenshot written", os.path.exists(PROOF_PNG))
 
 # --------------------------------------------------------------------------- #
-# Switch away to a chart-less case -- the panel must clear + hide
+# Switch away to a chart-less case -- the window's list must clear
 # --------------------------------------------------------------------------- #
 
 dock.select_case(OTHER_CASE, OTHER_CASE_TITLE)
@@ -263,10 +263,9 @@ pump(20, lambda: dock._case_id == OTHER_CASE)
 pump(3)
 check("other case bound", dock._case_id == OTHER_CASE, str(dock._case_id))
 check(
-    "charts panel cleared on switch to chart-less case",
-    dock.charts_panel.count == 0 and not dock.charts_panel.isVisibleTo(dock),
-    f"count={dock.charts_panel.count} "
-    f"visible={dock.charts_panel.isVisibleTo(dock)}",
+    "charts window cleared on switch to chart-less case",
+    dock._charts_window.count == 0 and dock.charts_btn.text() == "Charts (0)",
+    f"count={dock._charts_window.count} button={dock.charts_btn.text()}",
 )
 
 # --------------------------------------------------------------------------- #

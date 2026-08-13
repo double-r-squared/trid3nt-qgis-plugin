@@ -1,0 +1,42 @@
+=== FRESH-TOPOLOGY SOLVE  rundir=/run ===
+[1] RasGeomPreprocess (fake-reach 1D; preserves the carved 2D tables)
+  $ RasGeomPreprocess -> exit=0 finished=True
+    Finished Processing Geometry
+[2] RasUnsteady (2D subgrid solve on the FRESH tessellation)
+  $ RasUnsteady -> exit=174 finished=False
+---- STDOUT tail ----
+FONT= BOLD
+
+Performing Unsteady Flow Simulation  HEC-RAS 6.6 September 2024
+FONT= NORMAL
+ PROGRESS=    .1000000
+LABEL= Reading Data
+ PROGRESS=    .2000000
+ PROGRESS=    .3000000
+LABEL= Initializing
+Custom Read/Flags
+
+SOFT_LINK
+
+ PROGRESS=     .000000
+LABEL= Reading 2D Area(s)
+
+---- STDERR tail ----
+sh: 1: wmic: not found
+forrtl: severe (174): SIGSEGV, segmentation fault occurred
+Image              PC                Routine            Line        Source             
+RasUnsteady        000000000147C28A  Unknown               Unknown  Unknown
+libc.so.6          00007FE3C204BDF0  Unknown               Unknown  Unknown
+RasUnsteady        0000000000916319  read_un_q2d_bc_           833  Read_UN_Q2D_BC.for
+RasUnsteady        0000000000909939  read_un_q2d_              844  Read_UN_Q2D.for
+RasUnsteady        00000000008780EF  read_un_                  126  Read_UN.for
+RasUnsteady        000000000070E292  snetreal2_                175  Snetreal2.for
+RasUnsteady        0000000000970933  unetreal_                  75  Unetreal.for
+RasUnsteady        000000000096F56E  unet_start_               144  Unet_start.for
+RasUnsteady        0000000000964724  MAIN__                     70  Unet.for
+RasUnsteady        000000000040C422  Unknown               Unknown  Unknown
+libc.so.6          00007FE3C2035CA8  Unknown               Unknown  Unknown
+libc.so.6          00007FE3C2035D65  __libc_start_main     Unknown  Unknown
+RasUnsteady        000000000040C32E  Unknown               Unknown  Unknown
+
+FAIL: RasUnsteady did not finish cleanly

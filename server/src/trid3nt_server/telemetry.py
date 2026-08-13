@@ -453,7 +453,7 @@ def load_tool_call_records(
 # ``retrieve_visible_tools`` WITHOUT changing the catalog the model actually
 # sees (the model still sees the full registry). We log that would-be set so a
 # recall@k measurement (tool_catalog_http.build_telemetry_summary) can compare
-# it against the tools the LLM actually dispatched that turn, per North-Star
+# it against the tools the LLM actually dispatched that turn, per solver
 # flow. recall = |dispatched-llm-tools that WERE in the retrieved set| /
 # |dispatched-llm-tools|.
 #
@@ -717,7 +717,7 @@ def record_solve_telemetry(record: dict) -> dict:
     """Write ONE SOLVE-completion telemetry record (structured log + JSONL).
 
     The record is built by the composer (see
-    ``model_flood_scenario`` / ``model_urban_flood_swmm``) by MERGING the Batch
+    ``model_flood_scenario`` / ``model_swmm_urban_flood``) by MERGING the Batch
     compute meta (``solver._capture_batch_compute_meta`` -- instance + timing) with
     the mesh size descriptor + solver + terminal status + run/case/session ids.
     This writer stamps a ``record_type="solve"`` discriminator and a ``ts`` when

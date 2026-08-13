@@ -7,7 +7,7 @@ ISOLATION with run_solver / boto3 / network MOCKED:
 
 1. **Composer arg-assembly** — ``assemble_build_spec`` maps OpenQuakeRunArgs onto
    the worker build_spec dict (no I/O). (no OpenQuake needed)
-2. **Composer dispatch (mocked)** — ``model_seismic_hazard_scenario`` stages the
+2. **Composer dispatch (mocked)** — ``model_openquake_psha`` stages the
    build_spec, dispatches via a MOCKED run_solver/wait_for_completion, downloads
    a synthetic hazard CSV via a MOCKED S3 read, and postprocesses to a
    SeismicHazardLayerURI — asserting the typed scalars + that publish is skipped
@@ -31,7 +31,7 @@ from trid3nt_contracts.openquake_contracts import (
     OpenQuakeRunArgs,
     SeismicHazardLayerURI,
 )
-from trid3nt_server.agent.workflows.openquake.model_seismic_hazard_scenario.model_seismic_hazard_scenario import (
+from trid3nt_server.agent.workflows.openquake.psha.psha import (
     OPENQUAKE_SOLVER_NAME,
     assemble_build_spec,
 )
@@ -198,8 +198,8 @@ def test_postprocess_openquake_empty_csv_raises():
 # (2) Composer dispatch — run_solver / wait_for_completion / S3 MOCKED.
 # ===========================================================================
 @pytest.mark.asyncio
-async def test_model_seismic_hazard_scenario_mocked_dispatch(monkeypatch):
-    import trid3nt_server.agent.workflows.openquake.model_seismic_hazard_scenario.model_seismic_hazard_scenario as comp
+async def test_model_openquake_psha_mocked_dispatch(monkeypatch):
+    import trid3nt_server.agent.workflows.openquake.psha.psha as comp
 
     args = OpenQuakeRunArgs(bbox=_BBOX)
 
@@ -293,7 +293,7 @@ async def test_model_seismic_hazard_scenario_mocked_dispatch(monkeypatch):
 
     monkeypatch.setattr(comp, "postprocess_openquake", _fake_postprocess)
 
-    layer = await comp.model_seismic_hazard_scenario(args, compute_class="standard")
+    layer = await comp.model_openquake_psha(args, compute_class="standard")
 
     assert isinstance(layer, SeismicHazardLayerURI)
     assert layer.layer_id == "seismic-hazard-BATCHRID"

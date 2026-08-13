@@ -580,6 +580,51 @@ def test_registered_tool_returns_layer_uri_with_correct_shape(tmp_path) -> None:
     assert result.legend.vmin == 0.0 and result.legend.vmax == 4.0
     assert result.legend.units == "damage_state"
     assert result.legend.classes is not None and len(result.legend.classes) == 5
+    # ADR 0223 (audit #8): the template surface carries a structured asset-inventory
+    # provenance entry. An EXPLICIT inventory is user-basis (no synthetic-asset
+    # default claim).
+    asset_si = [e for e in result.synthetic_inputs if e.param == "asset_inventory"]
+    assert len(asset_si) == 1
+    assert asset_si[0].basis == "user"
+
+
+def test_autofetch_mode_labels_synthetic_asset_inventory(tmp_path, monkeypatch) -> None:
+    """ADR 0223 (audit #8): AUTO-FETCH mode (bbox, no assets_uri) stamps a
+    structured SyntheticInput at the template surface flagging the synthetic
+    building-density inventory with HAZUS class-default replacement values."""
+    from trid3nt_server.agent.workflows.pelicun.damage_assessment import damage_assessment as mod
+
+    bbox = (-82.0, 26.0, -81.0, 27.0)
+    raster_path = str(tmp_path / "hazard.tif")
+    _write_synthetic_flood_cog(
+        raster_path, bbox, west_depth_m=0.5, east_depth_m=2.5, res=32
+    )
+    assets_path = str(tmp_path / "auto_assets.fgb")
+    _write_synthetic_assets_fgb(assets_path, bbox, asset_lonlats=[(-81.5, 26.5)])
+
+    # Stub the building-density auto-fetch to the synthetic assets file, and the
+    # cache shim to run the pipeline against it.
+    monkeypatch.setattr(mod, "_autofetch_building_assets", lambda _bbox, _cell: assets_path)
+
+    def fake_read_through(metadata, params, ext, fetch_fn, **kw):
+        data = fetch_fn()
+        from types import SimpleNamespace
+        return SimpleNamespace(
+            uri="gs://test-cache/pelicun_damage/static-30d/auto.fgb", data=data, hit=False)
+
+    with mock.patch.object(mod, "read_through", fake_read_through):
+        result = pelicun_damage_assessment(
+            hazard_raster_uri=raster_path,
+            bbox=bbox,
+            fragility_set="hazus_flood_v6",
+            realization_count=25,
+        )
+
+    asset_si = [e for e in result.synthetic_inputs if e.param == "asset_inventory"]
+    assert len(asset_si) == 1
+    assert asset_si[0].basis == "derived"
+    assert "HAZUS class default" in (asset_si[0].note or "")
+    assert "building-density" in asset_si[0].value
 
 
 def test_damage_state_legend_is_graduated_ds_mean_choropleth() -> None:

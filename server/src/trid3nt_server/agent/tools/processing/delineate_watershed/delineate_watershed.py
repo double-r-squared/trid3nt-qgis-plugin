@@ -23,10 +23,8 @@ from trid3nt_contracts.tool_registry import AtomicToolMetadata
 from trid3nt_server.agent.tools import register_tool
 from trid3nt_server.agent.tools.processing._hydrology_common import (
     HydrologyAoiTooLargeError,
-    HydrologyDependencyError,
     HydrologyInputError,
     HydrologyPrimitivesError,
-    HydrologyUpstreamError,
     _ENGINE_NOTE,
     _MAX_AOI_DEG,
     _condition_dem,
@@ -35,6 +33,7 @@ from trid3nt_server.agent.tools.processing._hydrology_common import (
     _stage_uri_local,
     _validate_bbox,
     _write_geojson,
+    snap_and_delineate_index_space,
 )
 
 __all__ = [
@@ -241,66 +240,36 @@ def delineate_watershed(
         dem_path = _stage_dem(q_bbox, dem_uri, tmpdir, notes)
         grid, fdir, acc = _condition_dem(dem_path)
 
-        # Snap the pour point to the nearest flow line (>= snap_cells).
+        # Coarse snap: move the pour point onto the nearest flow line
+        # (>= snap_cells upslope). Handles a pour point clicked well off any
+        # channel; the fine window-refine + INDEX-space trace below is what makes
+        # the delineation alignment-invariant (a coordinate-space catchment can
+        # collapse to a 1-cell sliver on some grid alignments).
         acc_arr = np.asarray(acc)
         snapped = _snap_to_stream(acc_arr, grid.affine, lon, lat, snap_cells)
         if snapped is not None:
-            x_snap, y_snap = snapped
+            seed_lon, seed_lat = snapped
             notes.append(
                 f"Pour point snapped to the nearest cell with >= "
-                f"{snap_cells} upslope cells: ({x_snap:.6f}, {y_snap:.6f})."
+                f"{snap_cells} upslope cells: ({seed_lon:.6f}, {seed_lat:.6f})."
             )
         else:
-            x_snap, y_snap = lon, lat
+            seed_lon, seed_lat = lon, lat
             notes.append(
                 f"No cell reaches the {snap_cells}-cell snap threshold; using "
                 "the raw pour point (the AOI may be too small or too flat)."
             )
 
-        try:
-            catch = grid.catchment(
-                x=x_snap,
-                y=y_snap,
-                fdir=fdir,
-                xytype="coordinate",
-                # numpy-typed for the same NEP-50 reason as _condition_dem.
-                nodata_out=np.bool_(False),
-            )
-        except Exception as exc:  # noqa: BLE001
-            raise HydrologyUpstreamError(
-                f"pysheds catchment delineation failed: {exc}"
-            ) from exc
-        mask = np.asarray(catch, dtype=bool)
-        cell_count = int(mask.sum())
+        mask, polygon, (x_snap, y_snap), cell_count = snap_and_delineate_index_space(
+            grid, fdir, acc, seed_lon, seed_lat
+        )
         if cell_count == 0:
             raise EmptyWatershedError(
                 f"The pour point {(lon, lat)} produced an EMPTY catchment -- "
                 "it likely sits on the AOI edge or off the flow grid. Move the "
                 "pour point onto the channel or enlarge the bbox."
             )
-
-        # Polygonize the catchment mask.
-        try:
-            from rasterio import features as rio_features
-            from shapely.geometry import mapping, shape
-            from shapely.ops import unary_union
-        except ImportError as exc:
-            raise HydrologyDependencyError(
-                f"rasterio/shapely unavailable: {exc}"
-            ) from exc
-        try:
-            geoms = [
-                shape(geom)
-                for geom, val in rio_features.shapes(
-                    mask.astype(np.uint8), mask=mask, transform=grid.affine
-                )
-                if val == 1
-            ]
-            polygon = unary_union(geoms)
-        except Exception as exc:  # noqa: BLE001
-            raise HydrologyUpstreamError(
-                f"polygonizing the catchment mask failed: {exc}"
-            ) from exc
+        from shapely.geometry import mapping
 
         area_km2 = cell_count * _cell_area_km2(grid)
         # Honest truncation caveat when the basin touches the AOI edge.

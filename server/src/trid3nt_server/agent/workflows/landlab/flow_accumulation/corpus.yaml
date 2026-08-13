@@ -1,0 +1,10 @@
+# Template routing phrasings (ADR 0122, hazard-easy-four #1): walked into the
+# main retrieval index directly -- engine templates are ordinary retrieval-pool tools.
+landlab_flow_accumulation:
+- compute flow accumulation and drainage area across this watershed DEM
+- where does drainage area concentrate on this terrain (FlowAccumulator)
+- extract the channel network from this DEM by a drainage-area threshold
+- how much does the flow-routing algorithm (D8 vs D-infinity vs MFD) change the flow paths
+- route flow over the DEM with priority-flood depression handling and map contributing area
+- drainage-area raster plus channel network over this catchment
+- compare D8 and multiple-flow-direction routing on a real watershed

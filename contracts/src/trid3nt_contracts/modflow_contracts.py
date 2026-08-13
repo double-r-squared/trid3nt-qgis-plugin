@@ -37,11 +37,11 @@ Design notes
 
 from __future__ import annotations
 
-from typing import Literal
+from typing import Any, Literal
 
 from pydantic import Field, field_validator
 
-from .common import EngineRunArgsMixin, GraceModel
+from .common import EngineRunArgsMixin, GraceModel, SyntheticInput
 from .execution import LayerURI
 
 # Streambed defaults for the RIV head-dependent river<->aquifer flux package
@@ -59,6 +59,7 @@ DEFAULT_STREAMBED_THICKNESS_M: float = 1.0  # streambed (M) for K-derived conduc
 __all__ = [
     "MODFLOWRunArgs",
     "SpeciesSpec",
+    "WellSpec",
     "MultiSpeciesPlumeResult",
     "PlumeLayerURI",
     "SeepageLayerURI",
@@ -72,11 +73,20 @@ __all__ = [
     "SaltwaterWedgeLayerURI",
     "StreamReachLayerURI",
     "SubsidenceLayerURI",
+    "VadoseBreakthroughLayerURI",
+    "ModflowValidationResult",
     "DEFAULT_STREAMBED_CONDUCTANCE_M2_DAY",
     "DEFAULT_STREAMBED_THICKNESS_M",
     "DEFAULT_AQUIFER_SY",
     "DEFAULT_AQUIFER_SS",
     "DEFAULT_WETLAND_SY",
+    "DEFAULT_VADOSE_THICKNESS_M",
+    "DEFAULT_VADOSE_THTR",
+    "DEFAULT_VADOSE_THTS",
+    "DEFAULT_VADOSE_EPS",
+    "DEFAULT_VADOSE_INFILTRATION_CONC",
+    "DEFAULT_VADOSE_INFILTRATION_RATE_M_DAY",
+    "DEFAULT_VADOSE_VKS_M_DAY",
 ]
 
 
@@ -92,6 +102,21 @@ DEFAULT_POROSITY: float = 0.3  # effective porosity, dimensionless
 # steady + the byte-identical conservative-tracer deck). Demo values, narrated.
 DEFAULT_AQUIFER_SY: float = 0.2  # specific yield (drainable porosity), dimensionless
 DEFAULT_AQUIFER_SS: float = 1e-5  # specific storage (1/m), confined-aquifer demo value
+
+# Vadose-transport (UZT) demo defaults (ADR 0228). The unsaturated-zone solute
+# question ("surface spill -> how long to reach groundwater") is a purely-advective
+# vertical travel-time problem (MF6 has NO unsaturated dispersion). These parameterize
+# the UZF Brooks-Corey water-content column + the infiltration forcing. All are demo
+# values narrated as labeled assumptions (no site soil-hydraulics fetcher in v1); the
+# ARRIVAL TIME scales with vadose_thickness_m and the unsaturated flux, so the
+# composer narrates them, never as site precision.
+DEFAULT_VADOSE_THICKNESS_M: float = 4.0  # depth to water table (vadose-column thickness), m
+DEFAULT_VADOSE_THTR: float = 0.05  # Brooks-Corey residual water content (thtr)
+DEFAULT_VADOSE_THTS: float = 0.35  # Brooks-Corey saturated water content (thts, porosity)
+DEFAULT_VADOSE_EPS: float = 4.0  # Brooks-Corey exponent (eps)
+DEFAULT_VADOSE_INFILTRATION_CONC: float = 1.0  # tracer concentration in infiltration (unit)
+DEFAULT_VADOSE_INFILTRATION_RATE_M_DAY: float = 0.01  # surface infiltration flux, m/day
+DEFAULT_VADOSE_VKS_M_DAY: float = 0.1  # saturated vertical K of the unsat medium, m/day
 
 # Wetland-hydroperiod specific-yield default (sprint-18 Wave-2 wetland_hydroperiod
 # archetype). The seasonal water-table response under a recharging wetland is
@@ -156,6 +181,45 @@ class SpeciesSpec(GraceModel):
     sorption_kd: float | None = Field(default=None, ge=0.0)
     decay_per_day: float | None = Field(default=None, ge=0.0)
     parent: str | None = None
+
+
+class WellSpec(GraceModel):
+    """One pumping well in a multi-well WHPA / capture-zone WELLFIELD (ADR 0215).
+
+    WHPA practice (US EPA 440/6-87-010; USGS modflow6-examples ex-prt-mp7-p03 for
+    transient PRT) delineates capture zones for a WELLFIELD of several wells, each
+    with its own extraction rate, not a single well. ``MODFLOWRunArgs.wells``
+    carries the field; the adapter emits ONE MF6 WEL record per snapped well cell
+    and releases a particle ring around EACH well so the postprocess can allocate
+    which well captures which particles.
+
+    Use this when:
+        Building one entry of ``MODFLOWRunArgs.wells`` for a multi-well
+        ``capture_zone`` / ``wellhead_protection`` run.
+
+    Do NOT use this for:
+        A single well (leave ``wells`` None and use the top-level
+        ``well_location_latlon`` + ``pumping_rate_m3_day`` -- byte-identical to
+        the pre-wellfield deck).
+
+    Fields:
+        lon: well longitude, EPSG:4326 (-180..180). Lon-first here (a WellSpec is
+            a lon/lat point per the NHD/BBox convention, NOT the lat-first
+            ``well_location_latlon`` tuple).
+        lat: well latitude, EPSG:4326 (-90..90).
+        rate_m3_day: sustained extraction rate as a POSITIVE magnitude, m^3/day
+            (> 0). The adapter applies the MF6 WEL sign internally (a negative
+            discharge removes water from the cell), so the caller passes a
+            positive number, exactly like ``pumping_rate_m3_day``.
+        name: OPTIONAL human label for the well (e.g. "Municipal-3"), carried into
+            the per-well allocation output for narration. None => the adapter
+            labels the well by its index ("well_0", "well_1", ...).
+    """
+
+    lon: float = Field(ge=-180.0, le=180.0)
+    lat: float = Field(ge=-90.0, le=90.0)
+    rate_m3_day: float = Field(gt=0.0)
+    name: str | None = None
 
 
 class MODFLOWRunArgs(EngineRunArgsMixin):
@@ -378,6 +442,7 @@ class MODFLOWRunArgs(EngineRunArgsMixin):
             "saltwater_intrusion",
             "stream_depletion",
             "land_subsidence",
+            "vadose_transport",
         ]
         | None
     ) = None
@@ -498,6 +563,121 @@ class MODFLOWRunArgs(EngineRunArgsMixin):
             "applied (narrated as a demo assumption). Must be > 0."
         ),
     )
+    csub_delay_interbeds: bool = Field(
+        default=False,
+        description=(
+            "CSUB formulation knob (ADR 0228): when True the compressible interbed "
+            "is a DELAY interbed (cdelay='delay' + ndelaycells + a LOW interbed "
+            "vertical K) -> finite consolidation diffusivity, so compaction is "
+            "TIME-LAGGED (the interbed keeps consolidating after the head decline, "
+            "and at end-of-pumping it has compacted LESS than an equivalent no-delay "
+            "bed). When False (the default) the interbed is a no-delay bed that "
+            "consolidates instantly with head (byte-identical to the v1 deck). "
+            "Ignored unless archetype == 'land_subsidence'."
+        ),
+    )
+    csub_effective_stress: bool = Field(
+        default=False,
+        description=(
+            "CSUB formulation knob (ADR 0228): when True the CSUB package uses the "
+            "EFFECTIVE_STRESS formulation (geostatic sgm/sgs unit weights + a "
+            "specified initial preconsolidation stress) instead of the default "
+            "HEAD_BASED formulation. The two formulations bracket the same "
+            "subsidence scale (an order-of-magnitude crosscheck; effective-stress "
+            "typically ~0.4-0.5 of head-based for the same stress path). When False "
+            "(the default) HEAD_BASED is used with the initial head as the "
+            "preconsolidation head (byte-identical to the v1 deck). Ignored unless "
+            "archetype == 'land_subsidence'. Both knobs are demo-parameterized "
+            "(sgm/sgs/ndelaycells are labeled assumptions -- no site clay-profile "
+            "fetcher exists; narrate as demo values, never site precision)."
+        ),
+    )
+
+    # --- vadose_transport: UZF+UZT unsaturated-zone solute travel (ADR 0228) - #
+    # "A tracer/contaminant is spilled at the LAND SURFACE -- how long until it
+    # reaches the water table, and at what concentration?" A MODFLOW-6 UZF
+    # unsaturated-flow column (a vertical ivertcon chain of Brooks-Corey cells)
+    # coupled to a UZT transport package keyed to the UZF flows (flow_package_name),
+    # solved as a DUAL-model GWF+GWT simulation (dual IMS, GWF first). The deliverable
+    # is the ARRIVAL TIME at the water table + a breakthrough concentration series --
+    # NOT a saturated plume footprint (the deck, deliverable, and question all differ
+    # from modflow_contaminant_plume, so it is a distinct archetype, not a plume knob).
+    # Transport is purely ADVECTIVE (MF6 has no unsaturated dispersion; matches
+    # modflow6-examples ex-gwt-uzt-2d). The spill point reuses ``spill_location_latlon``.
+    # All fields below are OPTIONAL demo-defaulted (no site soil-hydraulics fetcher in
+    # v1 -- the arrival time is set by these, so the composer narrates them as demo
+    # assumptions, never site precision). When ``archetype`` is NOT "vadose_transport"
+    # they are ignored (additive; other decks byte-identical).
+    vadose_thickness_m: float | None = Field(
+        default=None,
+        gt=0.0,
+        description=(
+            "Depth to the water table at the spill point (the unsaturated-zone / "
+            "vadose-column thickness), m -- the tracer must transit this before "
+            "reaching groundwater, so the ARRIVAL TIME scales with it (the headline "
+            "physics). When None the adapter applies a ~4 m demo default (narrated as "
+            "a demo assumption; a real run reads it from a depth-to-water source). > 0."
+        ),
+    )
+    vadose_thtr: float = Field(
+        default=DEFAULT_VADOSE_THTR,
+        ge=0.0,
+        lt=1.0,
+        description=(
+            "Brooks-Corey RESIDUAL water content (thtr) of the unsaturated medium, "
+            "dimensionless -- the irreducible moisture the UZF column retains. Demo "
+            "default 0.05 (narrated as a demo soil-hydraulics assumption). In [0, 1)."
+        ),
+    )
+    vadose_thts: float = Field(
+        default=DEFAULT_VADOSE_THTS,
+        gt=0.0,
+        le=1.0,
+        description=(
+            "Brooks-Corey SATURATED water content (thts, the porosity) of the "
+            "unsaturated medium, dimensionless. Demo default 0.35 (narrated as a demo "
+            "soil-hydraulics assumption). Must exceed vadose_thtr. In (0, 1]."
+        ),
+    )
+    vadose_eps: float = Field(
+        default=DEFAULT_VADOSE_EPS,
+        gt=0.0,
+        description=(
+            "Brooks-Corey EXPONENT (eps) of the unsaturated water-content function, "
+            "dimensionless -- controls how sharply relative conductivity falls as the "
+            "medium dries. Demo default 4.0 (narrated as a demo assumption). > 0."
+        ),
+    )
+    vadose_infiltration_conc: float = Field(
+        default=DEFAULT_VADOSE_INFILTRATION_CONC,
+        ge=0.0,
+        description=(
+            "Tracer concentration carried in the surface infiltration (the UZT "
+            "INFILTRATION-term concentration), in the contaminant's units. Demo "
+            "default 1.0 (a unit tracer; the breakthrough curve is then a fraction of "
+            "the source concentration). >= 0."
+        ),
+    )
+    vadose_infiltration_rate_m_day: float = Field(
+        default=DEFAULT_VADOSE_INFILTRATION_RATE_M_DAY,
+        gt=0.0,
+        description=(
+            "Surface infiltration flux applied at the top UZF cell (the UZF finf), "
+            "m/day -- the water that carries the tracer down the vadose column. Demo "
+            "default 0.01 m/day (narrated as a demo assumption; a real run reads it "
+            "from a recharge/precipitation source). Faster infiltration -> earlier "
+            "arrival. Must be > 0."
+        ),
+    )
+    vadose_vks_m_day: float = Field(
+        default=DEFAULT_VADOSE_VKS_M_DAY,
+        gt=0.0,
+        description=(
+            "Saturated vertical hydraulic conductivity of the unsaturated medium (the "
+            "UZF vks), m/day. Demo default 0.1 m/day (narrated as a demo assumption). "
+            "Bounds the UZF column's downward flux capacity. Must be > 0."
+        ),
+    )
 
     # --- multi_species: N-species solute transport (Wave-3) ----------------- #
     # An optional list of per-species transport specs. When None (the default)
@@ -606,6 +786,99 @@ class MODFLOWRunArgs(EngineRunArgsMixin):
             "travel-time tier (e.g. max(capture_zone_travel_time_years) * 1.5). "
             "Set explicitly to override the auto-derived limit (e.g. to cap runtime "
             "for a large domain). Must be > 0."
+        ),
+    )
+    regional_gradient_x: float | None = Field(
+        default=None,
+        description=(
+            "East-component (m/m) of the DEM-derived regional water-table gradient "
+            "for the capture_zone / wellhead_protection PRT deck, in the model-UTM "
+            "frame (x=east, y=north). The composer estimates (x, y) from a planar "
+            "fit of the fetched DEM over the AOI footprint (the shallow water table "
+            "as a subdued replica of surface topography -- a screening approximation, "
+            "not a measured potentiometric surface). The CHD boundary imposes a "
+            "planar head field oriented to this vector so groundwater flows "
+            "down-gradient and the capture zone extends up-gradient toward recharge. "
+            "When None (paired with regional_gradient_y) the adapter falls back to "
+            "the legacy hardcoded west->east demo gradient."
+        ),
+    )
+    regional_gradient_y: float | None = Field(
+        default=None,
+        description=(
+            "North-component (m/m) of the DEM-derived regional water-table gradient "
+            "(see regional_gradient_x). Both components must be supplied together to "
+            "enable georeferenced-gradient mode; either None => demo west->east."
+        ),
+    )
+
+    # --- multi-well WELLFIELD + transient + NHD RIV + kriged IC (ADR 0215) ---- #
+    # The wellhead-reeval part-2 upgrades to the capture_zone / wellhead_protection
+    # PRT path. ALL optional/defaulted -> additive; a run-args with none of them is
+    # byte-identical to the single-well steady demo deck (part 1).
+    wells: list[WellSpec] | None = Field(
+        default=None,
+        description=(
+            "Multi-well WELLFIELD for the capture_zone / wellhead_protection PRT "
+            "deck (US EPA 440/6-87-010; modflow6-examples ex-prt-mp7-p03). Each "
+            "WellSpec is a lon/lat point + a POSITIVE extraction rate (m^3/day) + "
+            "an optional name. The adapter emits ONE MF6 WEL record per snapped "
+            "well cell and releases a particle ring around EACH well; the "
+            "postprocess allocates which well captures which particles. When None "
+            "(the default) the deck uses the SINGLE ``well_location_latlon`` + "
+            "``pumping_rate_m3_day`` (byte-identical to the pre-wellfield deck). "
+            "Ignored for non-PRT archetypes (additive)."
+        ),
+    )
+    capture_zone_transient: bool = Field(
+        default=False,
+        description=(
+            "When True the capture_zone / wellhead_protection GWF solve is "
+            "TRANSIENT (a steady spin-up period 0 + N transient storage periods "
+            "via the GwfSto specific-yield/storage term), and the PRT tracks "
+            "particles backward through the per-period REVERSED budget so the "
+            "1/5/10-yr isochrones reflect the TIME-EVOLVING flow field a pumping "
+            "wellfield induces (US EPA 440/6-87-010; USGS ex-prt-mp7-p03 for "
+            "transient PRT). The transient schedule reuses ``sim_years`` / "
+            "``n_periods`` (the sustainable_yield transient knobs) with "
+            "``aquifer_sy`` / ``aquifer_ss`` storage. When False (the default) the "
+            "GWF solve is a single steady period (byte-identical to part 1). "
+            "Ignored for non-PRT archetypes (additive)."
+        ),
+    )
+    river_reaches: list[list[tuple[float, float]]] | None = Field(
+        default=None,
+        description=(
+            "NHD river-reach boundaries for the capture_zone / wellhead_protection "
+            "PRT deck (ADR 0215 item 4). Each reach is an ordered polyline of "
+            "``(lon, lat)`` vertices (lon-first, EPSG:4326) as returned by "
+            "``fetch_river_geometry`` / NLDI. The adapter rasterizes each reach "
+            "onto the model grid and drapes a RIV head-dependent boundary on the "
+            "traversed cells; the RIV stage is sampled from the kriged water-table "
+            "surface at each reach cell (``starting_head_by_cell``), the "
+            "conductance is a documented streambed default, and the perimeter CHD "
+            "ring is retained where no NHD feature bounds the domain. When None "
+            "(the default) no RIV cells are added and the demo/DEM CHD ring alone "
+            "orients the flow field (byte-identical to part 1). Ignored for "
+            "non-PRT archetypes (additive)."
+        ),
+    )
+    starting_head_by_cell: list[list[float]] | None = Field(
+        default=None,
+        description=(
+            "Per-cell initial head (IC ``strt``) for the capture_zone / "
+            "wellhead_protection GWF grid, one row per model row (north-first, "
+            "flopy convention) x one value per column, in the deck's LOCAL datum "
+            "(m; the PRT grid runs top=50 m / bottom=0 m). The composer samples "
+            "the shared kriged/trend water-table surface (ADR 0215 seam 2, "
+            "``water_table_interp.interpolate_water_table``) at each cell centre "
+            "and re-references it about the deck datum so the interior IC carries "
+            "the measured water-table CURVATURE a single gradient plane cannot "
+            "(the kriged per-cell IC, ADR 0215 item 3). This matters for the "
+            "TRANSIENT solve (the initial condition before pumping). When None "
+            "(the default) the IC is the uniform aquifer-top head (byte-identical "
+            "to part 1). Must be shape nrow x ncol when supplied. Ignored for "
+            "non-PRT archetypes (additive)."
         ),
     )
 
@@ -1040,6 +1313,104 @@ class CaptureZoneLayerURI(LayerURI):
             "positions were clipped to valid grid cells."
         ),
     )
+    # --- georeferenced-mode narration scalars (ADDITIVE; default-safe) --------- #
+    # Populated when the capture zone runs in DEM-gradient georeferenced mode; the
+    # legacy synthetic path leaves them at their defaults so existing constructions
+    # and tests remain valid.
+    pathline_count: int = Field(
+        default=0,
+        ge=0,
+        description=(
+            "Number of backtracked particle PATHLINES emitted as LineString features "
+            "in the FlatGeobuf (one per released particle that tracked >= 2 vertices). "
+            "The pathline fan is the primary legibility element of the capture-zone "
+            "render -- it shows which land the well draws from. 0 => no pathlines "
+            "emitted (legacy hull-only path)."
+        ),
+    )
+    gradient_source: str = Field(
+        default="demo_west_east",
+        description=(
+            "Provenance of the regional gradient driving the flow field, best-basis "
+            "first: 'measured_heads' (a potentiometric plane fit to recent USGS "
+            "observed well water levels -- the real measured water table), 'dem' "
+            "(DEM-derived planar water-table proxy when measured wells are too few / "
+            "degenerate), or 'demo_west_east' (last-resort hardcoded west->east "
+            "screening gradient). The agent narrates this so the user knows whether "
+            "the zone orientation reflects measured heads, site topography, or a "
+            "placeholder direction."
+        ),
+    )
+    gradient_magnitude: float | None = Field(
+        default=None,
+        description=(
+            "Magnitude of the regional water-table gradient used (m/m). In "
+            "'measured_heads' mode this is the fitted potentiometric-plane slope over "
+            "the observed wells; in 'dem' mode the planar-fit topographic slope (a "
+            "screening proxy for the hydraulic gradient), clamped to a plausible "
+            "aquifer range."
+        ),
+    )
+    gradient_azimuth_deg: float | None = Field(
+        default=None,
+        description=(
+            "Compass azimuth (deg CW from north) the groundwater FLOWS toward "
+            "(down-gradient). The capture zone extends in the opposite (up-gradient) "
+            "direction. None when the gradient is degenerate/flat."
+        ),
+    )
+    stagnation_distance_m: float | None = Field(
+        default=None,
+        description=(
+            "Down-gradient stagnation-point distance from the well (m), Grubb "
+            "analytic x0 = Q / (2*pi*K*b*i) for a uniform-flow capture zone. A "
+            "screening sanity ballpark against the PRT-delineated envelope (K/b/i "
+            "are the demo/DEM aquifer params, so treat as order-of-magnitude)."
+        ),
+    )
+    capture_width_m: float | None = Field(
+        default=None,
+        description=(
+            "Far-field capture-zone width (m), Grubb analytic B = Q / (K*b*i). The "
+            "maximum cross-gradient width the well captures far up-gradient; a "
+            "screening sanity ballpark against the PRT-delineated envelope."
+        ),
+    )
+    # --- multi-well allocation (ADR 0215; ADDITIVE, default-safe) -------------- #
+    well_capture_allocation: dict[str, Any] = Field(
+        default_factory=dict,
+        description=(
+            "Per-well capture allocation for a multi-well WELLFIELD run: which well "
+            "captured which particles (US EPA 440/6-87-010 wellfield WHPA). Keys "
+            "are the well labels (WellSpec.name or 'well_0', 'well_1', ...); each "
+            "value is a dict carrying that well's ``particle_count`` (particles "
+            "released around it that tracked), ``capture_area_km2`` (convex hull of "
+            "its own backtracked pathlines), ``rate_m3_day``, and its (lat, lon). "
+            "Empty {} for a single-well run (the legacy path). The agent narrates "
+            "the allocation so the user sees each well's zone of contribution."
+        ),
+    )
+    transient: bool = Field(
+        default=False,
+        description=(
+            "True when the capture zone was delineated on a TRANSIENT flow field "
+            "(steady spin-up + storage periods, per-period reversed PRT budget) so "
+            "the isochrones reflect the time-evolving wellfield drawdown (ADR 0215 "
+            "item 1); False for the single steady-period demo (part 1). Narrated so "
+            "the user knows whether the zones evolved with pumping time."
+        ),
+    )
+    river_cell_count: int = Field(
+        default=0,
+        ge=0,
+        description=(
+            "Number of NHD RIV head-dependent boundary cells draped onto the grid "
+            "from ``MODFLOWRunArgs.river_reaches`` (ADR 0215 item 4). 0 => no NHD "
+            "reaches bounded the domain (the demo/DEM CHD ring alone oriented the "
+            "flow field). Narrated so the user knows a real river boundary "
+            "constrained the capture zone."
+        ),
+    )
 
 
 class SaltwaterWedgeLayerURI(LayerURI):
@@ -1342,3 +1713,157 @@ class SubsidenceLayerURI(LayerURI):
             "Number of CSUB interbeds draped over the pumped footprint (>= 1)."
         ),
     )
+
+
+class VadoseBreakthroughLayerURI(LayerURI):
+    """A ``LayerURI`` for the UZT vadose-transport breakthrough result (ADR 0228).
+
+    The headline output of the ``"vadose_transport"`` archetype: a MODFLOW-6
+    UZF+UZT unsaturated-zone column tracks a tracer spilled at the LAND SURFACE as
+    it transits the vadose zone to the water table. Unlike every other MODFLOW
+    archetype the PRIMARY product is a TIME SERIES, not a plan-view field: the
+    breakthrough concentration curve at the base of the vadose column (just above
+    the water table) and the ARRIVAL TIME (first crossing of half the infiltration
+    concentration). The MAP element is a spill-site CONTEXT POINT
+    (``layer_type='vector'``): a FlatGeobuf point at ``spill_location_latlon``
+    carrying the arrival time + peak concentration as feature attributes, so the
+    user sees WHERE the vadose column was evaluated. The chart carries the physics.
+
+    Transport is purely ADVECTIVE (MF6 has no unsaturated dispersion; matches
+    modflow6-examples ex-gwt-uzt-2d), so the breakthrough is a sharp advective
+    front whose timing is set by the vadose thickness and the unsaturated flux.
+
+    IMPORTANT PRECISION CAVEAT -- the vadose thickness, the Brooks-Corey water-
+    content parameters, the infiltration rate, and the unsaturated vertical K are
+    DEMO DEFAULTS with no site soil-hydraulics fetcher (v1). Treat the arrival time
+    as a qualitative screening estimate, NOT a calibrated contaminant-transport
+    forecast. The agent must narrate this caveat (invariant 1, FR-AS-7).
+
+    Extends ``LayerURI`` field-for-field so it maps onto ``map-command load-layer``
+    with no translation. Adds the structured numbers the agent narrates so the LLM
+    cites typed fields, never invents them (invariant 1, FR-AS-7):
+
+        breakthrough_time_days: time from the surface spill to the tracer reaching
+            the water table, days (>= 0) -- the FIRST time the base-of-column
+            concentration crosses half the infiltration concentration. The headline
+            scalar. NaN/None-guarded to a finite value (>= 0); a tracer that never
+            arrived within the simulated horizon is narrated separately.
+        peak_concentration: the base-of-column tracer concentration at the end of
+            the simulation (>= 0), in the contaminant's units -- the arriving
+            concentration at the water table (1.0 for a purely-advective unit
+            tracer that fully broke through).
+        vadose_thickness_m: the depth-to-water-table the column represented, m
+            (> 0) -- the travel distance the arrival time is measured across.
+        concentration_series: the breakthrough concentration at the base of the
+            vadose column, one value per saved transport step (the curve the dock
+            chart plots against ``time_series_days``). >= 1 value.
+        time_series_days: the saved transport times, days (one per
+            ``concentration_series`` value; strictly increasing).
+
+    ``layer_type`` defaults to ``'vector'`` (a FlatGeobuf spill-site context point);
+    the base contract's format vocabulary is inherited unchanged.
+    """
+
+    layer_type: Literal["raster", "vector"] = "vector"
+
+    breakthrough_time_days: float = Field(
+        ge=0.0,
+        description=(
+            "Time from the surface spill to the tracer reaching the water table, "
+            "days (>= 0) -- the first crossing of half the infiltration "
+            "concentration at the base of the vadose column. The headline scalar."
+        ),
+    )
+    peak_concentration: float = Field(
+        ge=0.0,
+        description=(
+            "Base-of-column tracer concentration at the end of the simulation "
+            "(>= 0), in the contaminant's units -- the concentration arriving at "
+            "the water table (1.0 for a fully-broken-through unit tracer)."
+        ),
+    )
+    vadose_thickness_m: float = Field(
+        gt=0.0,
+        description=(
+            "Depth to the water table the vadose column represented, m (> 0) -- the "
+            "travel distance the breakthrough_time_days is measured across."
+        ),
+    )
+    concentration_series: list[float] = Field(
+        min_length=1,
+        description=(
+            "Breakthrough concentration at the base of the vadose column, one value "
+            "per saved transport step -- the curve the dock chart plots against "
+            "time_series_days."
+        ),
+    )
+    time_series_days: list[float] = Field(
+        min_length=1,
+        description=(
+            "Saved transport times, days (one per concentration_series value, "
+            "strictly increasing). The x-axis of the breakthrough chart."
+        ),
+    )
+
+
+class ModflowValidationResult(GraceModel):
+    """Typed result of a MODFLOW package-VALIDATION case (ADR 0153).
+
+    NOT a ``LayerURI``: each case authors a SMALL SYNTHETIC benchmark deck
+    (a 200-cell channel, a 21x21 two-aquifer stub, a two-block barrier) whose
+    coordinates are SCHEMATIC (local model units, not lon/lat) and runs the mf6
+    binary to reproduce a PUBLISHED or ANALYTICAL reference. The product is the
+    computed-vs-reference CHART plus the typed scalars the agent cites - there is
+    NO georeferenced map layer. The case exercises a specific MF6 package
+    (NPF-Newton drying/rewetting, MAW cross-aquifer, HFB barrier) so the module
+    coverage of that package is demonstrated against a known answer.
+
+    Fields:
+        case: the validation case run (``newton_dry_rewet`` / ``maw_crossaquifer``
+            / ``hfb_barrier``).
+        question: the one-line question this case answers.
+        package: the MF6 package under test (e.g. "GWF-NPF (Newton)", "GWF-MAW",
+            "GWF-HFB").
+        computed_value: the mf6-computed quantity compared to the reference (the
+            MAW well head, the barrier flux, or None when the case is a
+            qualitative solver-robustness contrast).
+        reference_value: the analytical / published reference the computed value
+            is checked against (None when qualitative).
+        reference_label: what the reference is (e.g. "Sokol (1963) transmissivity-
+            weighted analytical well level", "HYDCHR barrier-conductance flux").
+        reference_source: the published/docs citation the case replicates.
+        delta: ``abs(computed - reference)`` when both are set, else None.
+        relative_error: ``delta / abs(reference)`` when meaningful, else None.
+        validated: True iff the case met its acceptance criterion (delta within
+            ``tolerance``, or the solver-robustness contrast held).
+        tolerance: the acceptance tolerance applied to ``delta`` /
+            ``relative_error`` (case-specific; 0.0 for a qualitative case).
+        metrics: case-specific extra scalars - all real parsed mf6 outputs (e.g.
+            per-grid barrier flux, Newton-vs-standard dry-cell counts, aquifer
+            transmissivities).
+        chart_titles: the titles of the computed-vs-reference chart(s) emitted.
+        demonstration_note: the LOUD honesty label - a synthetic package
+            benchmark on a schematic deck, not a georeferenced site study.
+        schematic_only: always True (no georeferenced layer).
+        basis: "synthetic" - the decks are authored small benchmark models.
+        synthetic_inputs: structured provenance (the synthetic-deck basis + the
+            published/docs reference the case replicates).
+    """
+
+    case: str
+    question: str = ""
+    package: str = ""
+    computed_value: float | None = None
+    reference_value: float | None = None
+    reference_label: str = ""
+    reference_source: str = ""
+    delta: float | None = None
+    relative_error: float | None = None
+    validated: bool = False
+    tolerance: float = 0.0
+    metrics: dict[str, Any] = Field(default_factory=dict)
+    chart_titles: list[str] = Field(default_factory=list)
+    demonstration_note: str = ""
+    schematic_only: bool = True
+    basis: str = "synthetic"
+    synthetic_inputs: list[SyntheticInput] = Field(default_factory=list)

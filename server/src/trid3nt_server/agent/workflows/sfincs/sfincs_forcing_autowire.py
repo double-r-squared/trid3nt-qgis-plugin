@@ -200,11 +200,11 @@ def _build_surge_forcing_members(
 ]:
     """Translate the workflow ``surge_forcing`` dict into typed ``ForcingSpec`` members.
 
-    The COASTAL SFINCS North Star couples surge / tide / discharge / wind /
+    Coastal SFINCS couples surge / tide / discharge / wind /
     pressure forcing into the SFINCS deck. The workflow caller (or a future
     fetcher-plumbing step that materialises ``fetch_gtsm_tide_surge`` /
-    ``fetch_noaa_coops_tides`` / ``fetch_noaa_nwm_streamflow`` /
-    ``fetch_cama_flood_discharge`` hydrographs to CSV + locations) supplies a
+    ``fetch_noaa_coops_tides`` / ``fetch_noaa_nwm_streamflow``
+    hydrographs to CSV + locations) supplies a
     nested dict::
 
         {
@@ -213,7 +213,8 @@ def _build_surge_forcing_members(
           "discharge":  {"timeseries_uri": ..., "locations_uri": ...,
                           "rivers_uri": ..., "hydrography_uri": ...,
                           "river_upa_km2": ...},
-          "wind":       {"magnitude": ..., "direction": ...} | {"grid_uri": ...},
+          "wind":       {"magnitude": ..., "direction": ...} | {"grid_uri": ...}
+                        | {"timeseries": [(t_s, magnitude_mps, direction_deg), ...]},
           "pressure":   {"grid_uri": ..., "fill_value": ...},
         }
 
@@ -263,15 +264,24 @@ def _build_surge_forcing_members(
     )
 
     wd_raw = _sub("wind")
+    # ADR 0162: ``timeseries`` -- a uniform wind SCHEDULE (ordered list of
+    # ``(t_s, magnitude_mps, direction_deg)``) -- is a THIRD wind path
+    # alongside the constant magnitude/direction pair and the gridded
+    # grid_uri. Passed straight through to ``WindForcing.timeseries``;
+    # ``_emit_surge_forcing_blocks`` resolves the precedence (grid > schedule
+    # > constant).
+    wd_timeseries = wd_raw.get("timeseries") or None
     wind = (
         WindForcing(
             magnitude=wd_raw.get("magnitude"),
             direction=wd_raw.get("direction"),
             grid_uri=wd_raw.get("grid_uri"),
+            timeseries=wd_timeseries,
         )
         if wd_raw
         and (
             wd_raw.get("grid_uri")
+            or wd_timeseries
             or (wd_raw.get("magnitude") is not None and wd_raw.get("direction") is not None)
         )
         else None
@@ -314,8 +324,8 @@ def _resolve_surge_forcing_from_fetchers(
     - ``waterlevel.fetch_uri`` (or ``fgb_uri``) -- a GTSM / CO-OPS FlatGeobuf to
       adapt into bzs files. Optional ``offset`` / ``buffer_m`` pass through.
     - ``discharge.fetch_uri`` (or ``fgb_uri``) -- an NWM FlatGeobuf to adapt into
-      dis files. Optional ``cama_cog_uri`` instead → sample the CaMa COG.
-      ``rivers_uri`` / ``hydrography_uri`` / ``river_upa_km2`` pass through.
+      dis files. ``rivers_uri`` / ``hydrography_uri`` / ``river_upa_km2`` pass
+      through.
 
     A sub-dict that ALREADY carries ``timeseries_uri`` / ``geodataset_uri`` is
     left untouched (the pre-materialised path -- backward compatible). Returns the
@@ -331,7 +341,6 @@ def _resolve_surge_forcing_from_fetchers(
     if not surge_forcing:
         return surge_forcing
     from trid3nt_server.agent.workflows.sfincs.sfincs_forcing_adapter import (
-        discharge_forcing_from_cama_cog,
         discharge_forcing_from_fgb,
         waterlevel_forcing_from_fgb,
     )
@@ -362,7 +371,6 @@ def _resolve_surge_forcing_from_fetchers(
     dq = surge_forcing.get("discharge")
     if isinstance(dq, dict):
         dq_fetch = dq.get("fetch_uri") or dq.get("fgb_uri")
-        cama_uri = dq.get("cama_cog_uri")
         already = dq.get("timeseries_uri") or dq.get("geodataset_uri")
         if dq_fetch and not already:
             # UNIT WIRING (Invariant-7 silent-wrong-physics guard): SFINCS dis is
@@ -388,20 +396,6 @@ def _resolve_surge_forcing_from_fetchers(
                     DataSource(
                         name="River-discharge forcing (USGS/NWM → SFINCS dis)",
                         uri=str(dq_fetch),
-                        accessed_at=datetime.now(timezone.utc),
-                    )
-                )
-        elif cama_uri and not already:
-            out["discharge"] = discharge_forcing_from_cama_cog(
-                cama_uri,
-                bbox,
-                window_hours=window_hours,
-            )
-            if data_sources is not None:
-                data_sources.append(
-                    DataSource(
-                        name="River-discharge forcing (CaMa-Flood → SFINCS dis)",
-                        uri=str(cama_uri),
                         accessed_at=datetime.now(timezone.utc),
                     )
                 )
@@ -687,8 +681,9 @@ def _autowire_coastal_surge_forcing(
 
     # --- 2) FALLBACK: GTSM tide+surge (global, needs a CDS key) ------------- #
     try:
-        from trid3nt_server.agent.tools.fetchers.ocean.fetch_gtsm_tide_surge.fetch_gtsm_tide_surge import fetch_gtsm_tide_surge
+        from trid3nt_server.agent.tools import TOOL_REGISTRY  # local: keep top imports lean
 
+        fetch_gtsm_tide_surge = TOOL_REGISTRY["fetch_gtsm_tide_surge"].fn  # spec-driven (ADR 0085)
         layer = fetch_gtsm_tide_surge(
             bbox, start_date=start_date, end_date=end_date
         )
@@ -834,7 +829,11 @@ def _resolve_spiderweb_forcing(
     """
     import os as _os
 
-    from trid3nt_server.agent.tools.fetchers.weather.fetch_storm_tracks.fetch_storm_tracks import fetch_storm_tracks
+    # fetch_storm_tracks FOLDED to a spec-driven surface (ADR 0111): resolve the promoted
+    # router closure from the registry (keyword-only), the standard fold re-point.
+    from trid3nt_server.agent.tools import TOOL_REGISTRY
+
+    fetch_storm_tracks = TOOL_REGISTRY["fetch_storm_tracks"].fn
     from trid3nt_server.agent.workflows.sfincs.sfincs_builder import _stage_gcs_local
     from trid3nt_server.agent.workflows.sfincs import sfincs_spiderweb as _spw
 
@@ -939,7 +938,11 @@ def _resolve_building_obstacle_uri(
         from trid3nt_server.agent.tools import TOOL_REGISTRY  # local: keep top imports lean
 
         fetch_buildings = TOOL_REGISTRY["fetch_buildings"].fn
-        layer = fetch_buildings(bbox, source="osm")
+        # Keyword-only: the post-fold registry closure takes ZERO positional
+        # args, so a positional bbox raised TypeError this except swallowed ->
+        # SFINCS silently ran with no building obstacles (same defect class as
+        # the SWMM composer's fetch calls).
+        layer = fetch_buildings(bbox=bbox, source="osm")
         uri = getattr(layer, "uri", None)
         if uri:
             data_sources.append(
@@ -1011,9 +1014,12 @@ def _autowire_river_discharge_forcing(
 
     # --- 1) PRIMARY: NOAA NWM streamflow (key-free, CONUS) ------------------ #
     try:
-        from trid3nt_server.agent.tools.fetchers.hydrology.fetch_noaa_nwm_streamflow.fetch_noaa_nwm_streamflow import fetch_noaa_nwm_streamflow
+        # Seam-1 registry closure (ADR 0112 fold): fetch_noaa_nwm_streamflow is now the
+        # spec-driven router tool under its twin name; resolve it via TOOL_REGISTRY (never
+        # a module internal, which no longer exists). Keyword-only, envelope unchanged.
+        from trid3nt_server.agent.tools import TOOL_REGISTRY
 
-        layer = fetch_noaa_nwm_streamflow(bbox)
+        layer = TOOL_REGISTRY["fetch_noaa_nwm_streamflow"].fn(bbox=bbox)
         uri = getattr(layer, "uri", None)
         if uri:
             if data_sources is not None:
@@ -1049,8 +1055,9 @@ def _autowire_river_discharge_forcing(
     try:
         import math as _math
 
-        from trid3nt_server.agent.tools.fetchers.hydrology.fetch_usgs_nwis_gauges.fetch_usgs_nwis_gauges import fetch_usgs_nwis_gauges
+        from trid3nt_server.agent.tools import TOOL_REGISTRY  # local: keep top imports lean
 
+        fetch_usgs_nwis_gauges = TOOL_REGISTRY["fetch_usgs_nwis_gauges"].fn  # spec-driven (ADR 0085)
         period_days = max(1, int(_math.ceil(win_hr / 24.0)))
         layer = fetch_usgs_nwis_gauges(bbox=bbox, period=f"P{period_days}D")
         uri = getattr(layer, "uri", None)

@@ -41,6 +41,7 @@ __all__ = [
     "ErrorCode",
     # client -> agent (A.3)
     "ResearchMode",
+    "DrawnGeometry",
     "UserMessagePayload",
     "CancelPayload",
     "ConfirmResponsePayload",
@@ -207,6 +208,36 @@ ResearchMode = Literal["research", "deep_research"]
 ToolChoiceMode = Literal["auto", "ask"]
 
 
+class DrawnGeometry(GraceModel):
+    """A user-drawn geometry attached to a ``user-message`` (ADR 0159).
+
+    ONE rectangle for now -- the QGIS dock 'Draw region' rubber-band tool. Rides
+    ``UserMessagePayload.drawn_geometry`` exactly as the canvas AOI rides
+    ``aoi_bbox``: a per-turn STRUCTURED spatial knob (distinct from the analysis
+    AOI) that composer input-review gates consume as ``basis="user"`` -- e.g. the
+    geoclaw ``amr_regions`` refinement window. The ``geometry_type`` discriminator
+    leaves room for a polygon-editor follow-on; only ``"rectangle"`` is wired
+    today. ``bbox`` is EPSG:4326 ``[min_lon, min_lat, max_lon, max_lat]`` -- the
+    same element order + ordering rules as every other bbox carrier.
+    """
+
+    geometry_type: Literal["rectangle"] = "rectangle"
+    bbox: list[float]
+
+    @field_validator("bbox")
+    @classmethod
+    def _validate_drawn_bbox(cls, value: list[float]) -> list[float]:
+        """Exactly 4 floats in ``common.BBox`` EPSG:4326 order."""
+        if len(value) != 4:
+            raise ValueError(
+                "drawn_geometry.bbox must be [min_lon, min_lat, max_lon, "
+                f"max_lat] (exactly 4 floats), got {len(value)}: {value!r}"
+            )
+        min_lon, min_lat, max_lon, max_lat = value
+        _validate_bbox((min_lon, min_lat, max_lon, max_lat))
+        return [float(v) for v in value]
+
+
 class UserMessagePayload(GraceModel):
     """``user-message`` (A.3): user-submitted text input."""
 
@@ -260,6 +291,15 @@ class UserMessagePayload(GraceModel):
     # (see ``ToolCandidatesPayload``); consent gates are unaffected either
     # way (``ToolChoiceMode`` docstring).
     tool_choice_mode: ToolChoiceMode | None = None
+    # User-drawn geometry for THIS turn (ADR 0159): the QGIS dock 'Draw region'
+    # rubber-band rectangle, attached to the next message exactly as ``aoi_bbox``
+    # carries the canvas AOI. Distinct from ``aoi_bbox`` (the analysis extent):
+    # this is a sub-region KNOB a composer input-review gate consumes as
+    # ``basis="user"`` (e.g. geoclaw ``amr_regions``). ``None`` / absent (web
+    # client, older QGIS client, or nothing drawn) preserves the prior behavior
+    # exactly -- the composer falls back to its model-derived proposal. Cleared
+    # client-side on send (one rectangle, one turn).
+    drawn_geometry: DrawnGeometry | None = None
 
     @field_validator("aoi_bbox")
     @classmethod

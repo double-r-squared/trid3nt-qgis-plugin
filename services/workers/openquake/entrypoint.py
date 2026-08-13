@@ -233,6 +233,11 @@ def _materialize_deck(build_spec: dict, cwd: Path) -> dict[str, str]:
         fname = deck.filenames[logical]
         (cwd / fname).write_text(text, encoding="utf-8")
         written[logical] = fname
+    # Epistemic competing-source-model decks carry extra source_model_*.xml files
+    # (keyed by on-disk filename); write each next to the canonical four.
+    for fname, text in (deck.extra_files or {}).items():
+        (cwd / fname).write_text(text, encoding="utf-8")
+        written[fname] = fname
     LOG.info("rendered OpenQuake deck into %s: %s", cwd, sorted(written.values()))
     return written
 

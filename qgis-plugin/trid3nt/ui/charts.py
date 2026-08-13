@@ -1,10 +1,10 @@
-"""Charts surface for the TRID3NT dock (live-feedback 2026-07-13, OpenQuake
-result parity).
+"""The pure Vega-Lite -> matplotlib chart renderer for the TRID3NT plugin
+(live-feedback 2026-07-13, OpenQuake result parity; charts-window 2026-08-04).
 
 The web UI renders the agent's ``chart-emission`` payloads (Vega-Lite v5
 specs -- contracts ``chart_contracts.ChartEmissionPayload``) as inline chart
-cards; the QGIS dock surfaced layers only, so an OpenQuake PSHA case lost its
-"Seismic hazard curve - PGA" chart entirely. This module closes that gap:
+cards; the QGIS plugin renders the same payloads with the small interpreter
+below:
 
 * ``parse_chart_payload`` / spec helpers -- defensive, pure-python handling
   of the wire payload (chart_id + title + caption + vega_lite_spec).
@@ -13,10 +13,11 @@ cards; the QGIS dock surfaced layers only, so an OpenQuake PSHA case lost its
   dashed rule reference lines, bar, rect/heatmap) onto a matplotlib Figure.
   It is NOT a general Vega renderer; unknown marks are skipped and counted,
   never crashed on -- a malformed persisted spec must not break a case open.
-* ``ChartsPanel`` -- the dock widget: a collapsible "Charts (N)" panel pinned
-  under the message list (the probe-panel pattern, BUG 3b precedent), with
-  prev/next paging across the case's charts. Charts NEVER land in the chat
-  message list (NATE's clutter rule).
+
+The interactive surface that HOSTS ``render_spec`` is ``charts_window
+.ChartsWindow`` -- the bottom-docked TUFLOW-Viewer-style window (NATE
+charts-window directive 2026-08-04). This module is the renderer only; it
+carries no Qt widgets of its own.
 
 Rendering choice (researched 2026-07-13): matplotlib ``FigureCanvasQTAgg``
 embedded in the dock. Debian QGIS 3.40 ships matplotlib (3.10) in the same
@@ -26,45 +27,141 @@ free -- the hazard curve is log-log, which pure-QPainter code would have to
 hand-roll. GEM's IRMT plugin was rejected (not installed, its viewer is
 coupled to OQ-engine NRML outputs, not our Vega payloads); a server-side PNG
 render was rejected (server change + restart + flood smoke for zero offline
-benefit). matplotlib import is GUARDED: when absent the panel degrades to an
-honest text card (title + caption + why), never a crash.
+benefit). matplotlib import is GUARDED: when absent the window degrades to a
+guided fix panel -- see ``charts_window.MissingMatplotlibPanel`` -- never a
+crash. QGIS 4's macOS/Windows bundles dropped matplotlib (QGIS 3 shipped
+it); the guard + panel below are what makes that survivable offline.
+
+The fix is PER-OS (NATE ground truth, live-verified, supersedes every
+earlier console/PYTHONPATH attempt): Linux and Windows QGIS pythons have
+pip, so ``linux_install_command`` / ``windows_install_command`` below are
+plain ``pip install`` one-liners. macOS QGIS 4's bundled python has NO pip
+module at all ("No module named pip") -- nothing installs into it, so
+``mac_wheel_recipe`` instead downloads prebuilt wheels with the system
+python3 (a pure downloader) and unzips them straight into the QGIS
+profile's own ``python/`` dir, which is already on QGIS's ``sys.path``.
+Nothing here is ever run in-process by the plugin -- every command is for
+the user to paste into a real terminal; see ``install_dependencies.py``.
 """
 
 from __future__ import annotations
 
-from typing import Any, Dict, List, Optional
+import math
+from typing import Any, Dict, List, Optional, Sequence
 
-from qgis.PyQt.QtCore import Qt
-from qgis.PyQt.QtWidgets import (
-    QHBoxLayout,
-    QLabel,
-    QPushButton,
-    QSizePolicy,
-    QToolButton,
-    QVBoxLayout,
-    QWidget,
-)
+from .. import install_dependencies
 
 # -- guarded matplotlib import (see module docstring) ------------------------ #
 # ``Figure`` + a Qt canvas class, no pyplot (pyplot owns global backend state
 # we must not fight QGIS for). backend_qtagg resolves its binding via the
 # already-imported qgis.PyQt (PyQt5); backend_qt5agg is the pre-3.5 fallback.
+# The check itself is cheap (one import attempt) and CACHED via
+# ``_MATPLOTLIB_CHECKED`` -- every chart-emission frame and every dock open
+# calls ``matplotlib_available()``, so a repeated failing import must not
+# re-walk sys.path on each one. matplotlib picked up post-install shows up on
+# the next QGIS restart (fresh module cache) -- no in-process cache-bust is
+# needed.
+Figure = None  # type: ignore[assignment]
+FigureCanvasQTAgg = None  # type: ignore[assignment]
 _MATPLOTLIB_ERROR: Optional[str] = None
-try:  # noqa: SIM105
-    from matplotlib.figure import Figure
+_MATPLOTLIB_CHECKED = False
 
-    try:
-        from matplotlib.backends.backend_qtagg import FigureCanvasQTAgg
-    except ImportError:  # older matplotlib
-        from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg
-except Exception as _exc:  # noqa: BLE001 -- absence is a supported state
-    Figure = None  # type: ignore[assignment]
-    FigureCanvasQTAgg = None  # type: ignore[assignment]
-    _MATPLOTLIB_ERROR = f"{type(_exc).__name__}: {_exc}"
+
+def _do_matplotlib_check() -> None:
+    global Figure, FigureCanvasQTAgg, _MATPLOTLIB_ERROR, _MATPLOTLIB_CHECKED
+    try:  # noqa: SIM105
+        from matplotlib.figure import Figure as _Figure
+
+        try:
+            from matplotlib.backends.backend_qtagg import (
+                FigureCanvasQTAgg as _Canvas,
+            )
+        except ImportError:  # older matplotlib
+            from matplotlib.backends.backend_qt5agg import (
+                FigureCanvasQTAgg as _Canvas,
+            )
+        Figure = _Figure
+        FigureCanvasQTAgg = _Canvas
+        _MATPLOTLIB_ERROR = None
+    except Exception as _exc:  # noqa: BLE001 -- absence is a supported state
+        Figure = None
+        FigureCanvasQTAgg = None
+        _MATPLOTLIB_ERROR = f"{type(_exc).__name__}: {_exc}"
+    _MATPLOTLIB_CHECKED = True
 
 
 def matplotlib_available() -> bool:
+    if not _MATPLOTLIB_CHECKED:
+        _do_matplotlib_check()
     return _MATPLOTLIB_ERROR is None
+
+
+def matplotlib_error() -> Optional[str]:
+    """The cached import failure string, or None once available. Always
+    forces the (cached) check first so a caller that never called
+    ``matplotlib_available()`` still gets an answer."""
+    matplotlib_available()
+    return _MATPLOTLIB_ERROR
+
+
+# --------------------------------------------------------------------------- #
+# Per-OS "how do I get matplotlib" command builders. Pure (no Qt, no
+# subprocess) -- the panel's Copy action and the tests both call through
+# these. Every value is re-exported from ``install_dependencies`` (one
+# source of truth shared with the standalone script); this module only
+# wraps them under the panel's established names.
+# --------------------------------------------------------------------------- #
+
+
+def linux_install_command(pip_names: Sequence[str] = ("matplotlib",)) -> str:
+    """Linux one-liner -- QGIS runs under the SYSTEM python3 there, which
+    already has pip, so this is the plain literal command: no interpreter
+    to derive or probe."""
+    return f"python3 -m pip install {' '.join(pip_names)}"
+
+
+def windows_install_command(
+    pip_names: Sequence[str] = ("matplotlib",),
+    exec_prefix: Optional[str] = None,
+    executable: Optional[str] = None,
+) -> str:
+    """Windows one-liner -- the OSGeo4W python.exe pip ships with
+    (exec_prefix-derived, verified real on disk before being shown; an
+    honest 'could not locate' sentence, never a fabricated path, when it
+    can't be verified)."""
+    python_exe = install_dependencies.windows_python_executable(
+        exec_prefix, executable
+    )
+    if python_exe.startswith("could not locate"):
+        return python_exe
+    quoted = f'"{python_exe}"' if " " in python_exe else python_exe
+    return f"{quoted} -m pip install {' '.join(pip_names)}"
+
+
+def mac_wheel_recipe(
+    pip_names: Sequence[str] = ("matplotlib",),
+    python_version: Optional[str] = None,
+    platform_tag: Optional[str] = None,
+    profile_python: Optional[str] = None,
+) -> str:
+    """NATE's verified macOS recipe (RULING -- QGIS 4's bundled python has
+    NO pip module at all, live-verified: 'No module named pip'; there is
+    no interpreter here to install into). The SYSTEM python3 downloads
+    prebuilt wheels (``pip download --only-binary``, never touching QGIS's
+    own interpreter) and they are unzipped straight into ``<profile>/
+    python`` -- already on QGIS's ``sys.path``. Every value is
+    runtime-derived: python-version from this process's own
+    ``sys.version_info``, the platform tag from ``platform.machine()``,
+    the profile path from ``install_dependencies``'s own file location.
+    Delegates entirely to ``install_dependencies.mac_wheel_recipe`` (one
+    source of truth)."""
+    return install_dependencies.mac_wheel_recipe(
+        pip_names,
+        python_version,
+        platform_tag,
+        profile_python,
+        file=install_dependencies.__file__,
+    )
 
 
 # Default series colors (matplotlib tab10 order) for color-field grouping.
@@ -72,8 +169,6 @@ _SERIES_COLORS = [
     "#1f77b4", "#ff7f0e", "#2ca02c", "#d62728", "#9467bd",
     "#8c564b", "#e377c2", "#7f7f7f", "#bcbd22", "#17becf",
 ]
-
-_CANVAS_HEIGHT = 260  # px -- one chart card, dock-width
 
 
 # --------------------------------------------------------------------------- #
@@ -151,9 +246,15 @@ def _is_log(channel: dict) -> bool:
 
 
 def _as_float(value: Any) -> Optional[float]:
+    """A plottable float, or None. Rejects bools AND non-finite (NaN/inf) --
+    a persisted spec carrying NaN/inf must not reach the matplotlib axis: it
+    poisons the auto-range into a degenerate (non-finite) extent, and the same
+    degenerate extent is what feeds a native precision computation elsewhere.
+    Non-finite points are dropped, exactly like non-numeric ones."""
     if isinstance(value, bool) or not isinstance(value, (int, float)):
         return None
-    return float(value)
+    v = float(value)
+    return v if math.isfinite(v) else None
 
 
 # --------------------------------------------------------------------------- #
@@ -219,13 +320,16 @@ def render_spec(figure, spec: dict) -> Dict[str, Any]:
 
     title = spec_title(spec)
     if title:
-        ax.set_title(title, fontsize=9)
+        ax.set_title(title, fontsize=9, pad=4)
     handles, labels = ax.get_legend_handles_labels()
     if labels:
         summary["legend_labels"] = list(labels)
         ax.legend(fontsize=7, framealpha=0.6)
     try:
-        figure.tight_layout()
+        # pad=0.3 (default 1.08) -- the axes title is already small; the
+        # plot area, not whitespace above it, should dominate the dock
+        # (NATE chart-chrome feedback).
+        figure.tight_layout(pad=0.3)
     except Exception:  # noqa: BLE001 -- tight_layout can fail on odd extents
         pass
     return summary
@@ -368,197 +472,3 @@ def _draw_scatter(ax, rows, xf, yf, view) -> None:
         ax.scatter(xs, ys, c=cs, cmap="viridis", s=12)
     else:
         ax.scatter(xs, ys, color=_SERIES_COLORS[0], s=12)
-
-
-# --------------------------------------------------------------------------- #
-# ChartsPanel -- the dock's pinned, collapsible charts surface
-# --------------------------------------------------------------------------- #
-
-
-class ChartsPanel(QWidget):
-    """Collapsible "Charts (N)" panel pinned under the message list.
-
-    Mirrors the probe panel (BUG 3b, live-feedback 2026-07-12): charts show
-    HERE, never as chat widgets, so a case with many charts cannot flood the
-    conversation. One chart is visible at a time; prev/next page through the
-    case's charts (newest shown first on arrival). Hidden until the bound
-    case has at least one chart; ``clear()`` on every case switch -- charts
-    are per-Case state exactly like probe output.
-
-    The dock owns wiring: ``set_charts`` on the case-open replay
-    (``session_state.charts``), ``add_chart`` on a live ``chart-emission``
-    frame (de-duped by chart_id -- a tool re-emit repaints, never
-    duplicates), ``clear`` from ``_clear_messages``.
-    """
-
-    def __init__(self, toggle_style: str = "", block_style: str = "", parent=None):
-        super().__init__(parent)
-        self._charts: List[dict] = []
-        self._index = 0
-        self._block_style = block_style
-        #: Render summary of the currently shown chart (``render_spec``
-        #: output, or ``{"fallback": True}`` without matplotlib) -- the
-        #: offscreen harness asserts series/rule/scale counts on it.
-        self.last_render_summary: Optional[Dict[str, Any]] = None
-
-        lay = QVBoxLayout(self)
-        lay.setContentsMargins(0, 0, 0, 0)
-        lay.setSpacing(0)
-
-        header = QHBoxLayout()
-        header.setContentsMargins(0, 0, 0, 0)
-        self.toggle = QPushButton("Charts (0)")
-        self.toggle.setFlat(True)
-        self.toggle.setCheckable(True)
-        self.toggle.setChecked(True)  # expanded when a chart first lands
-        if toggle_style:
-            self.toggle.setStyleSheet(toggle_style)
-        self.toggle.clicked.connect(self._toggle_body)
-        header.addWidget(self.toggle, 1)
-        self.prev_btn = QToolButton()
-        self.prev_btn.setText("<")
-        self.prev_btn.setAutoRaise(True)
-        self.prev_btn.clicked.connect(lambda: self._step(-1))
-        header.addWidget(self.prev_btn)
-        self.pos_label = QLabel("")
-        if toggle_style:
-            self.pos_label.setStyleSheet(toggle_style)
-        header.addWidget(self.pos_label)
-        self.next_btn = QToolButton()
-        self.next_btn.setText(">")
-        self.next_btn.setAutoRaise(True)
-        self.next_btn.clicked.connect(lambda: self._step(1))
-        header.addWidget(self.next_btn)
-        lay.addLayout(header)
-
-        self.body = QWidget()
-        self._body_lay = QVBoxLayout(self.body)
-        self._body_lay.setContentsMargins(0, 0, 0, 2)
-        self._body_lay.setSpacing(2)
-        self._card: Optional[QWidget] = None  # the canvas / fallback label
-        self.caption_label = QLabel("")
-        self.caption_label.setWordWrap(True)
-        self.caption_label.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
-        if block_style:
-            self.caption_label.setStyleSheet(block_style)
-        self.caption_label.setVisible(False)
-        self._body_lay.addWidget(self.caption_label)
-        lay.addWidget(self.body)
-
-        self.setVisible(False)
-
-    # -- public state ------------------------------------------------------- #
-
-    @property
-    def count(self) -> int:
-        return len(self._charts)
-
-    def current_chart_id(self) -> Optional[str]:
-        if 0 <= self._index < len(self._charts):
-            return self._charts[self._index].get("chart_id")
-        return None
-
-    # -- dock-facing API ------------------------------------------------------ #
-
-    def set_charts(self, payloads: list) -> int:
-        """Replace-all for the case-open replay (``session_state.charts``,
-        persisted oldest-first). Shows the NEWEST chart. Returns the count
-        of usable charts."""
-        self._charts = []
-        seen = set()
-        for raw in payloads or []:
-            chart = parse_chart_payload(raw)
-            if chart is None or chart["chart_id"] in seen:
-                continue
-            seen.add(chart["chart_id"])
-            self._charts.append(chart)
-        self._index = max(0, len(self._charts) - 1)
-        self._refresh()
-        return len(self._charts)
-
-    def add_chart(self, payload: Any) -> bool:
-        """One live ``chart-emission`` frame. De-dupes on chart_id (a
-        re-emit re-shows the existing entry). Returns True when a NEW chart
-        was added."""
-        chart = parse_chart_payload(payload)
-        if chart is None:
-            return False
-        for i, existing in enumerate(self._charts):
-            if existing.get("chart_id") == chart["chart_id"]:
-                self._index = i
-                self._refresh()
-                return False
-        self._charts.append(chart)
-        self._index = len(self._charts) - 1
-        # A live chart is the turn's headline output -- surface it expanded.
-        self.toggle.setChecked(True)
-        self._refresh()
-        return True
-
-    def clear(self) -> None:
-        """Case switch: charts are per-Case state (ITEM B discipline)."""
-        self._charts = []
-        self._index = 0
-        self._refresh()
-
-    # -- internals ------------------------------------------------------------ #
-
-    def _toggle_body(self) -> None:
-        self.body.setVisible(self.toggle.isChecked())
-
-    def _step(self, delta: int) -> None:
-        if not self._charts:
-            return
-        self._index = max(0, min(len(self._charts) - 1, self._index + delta))
-        self._refresh()
-
-    def _refresh(self) -> None:
-        n = len(self._charts)
-        self.setVisible(n > 0)
-        self.toggle.setText(f"Charts ({n})")
-        paging = n > 1
-        self.prev_btn.setVisible(paging)
-        self.next_btn.setVisible(paging)
-        self.pos_label.setVisible(paging)
-        if paging:
-            self.pos_label.setText(f"{self._index + 1}/{n}")
-            self.prev_btn.setEnabled(self._index > 0)
-            self.next_btn.setEnabled(self._index < n - 1)
-        self.body.setVisible(self.toggle.isChecked() and n > 0)
-        if self._card is not None:
-            self._body_lay.removeWidget(self._card)
-            self._card.deleteLater()
-            self._card = None
-        self.last_render_summary = None
-        if n == 0:
-            self.caption_label.setVisible(False)
-            return
-        chart = self._charts[self._index]
-        self._card = self._build_card(chart)
-        self._body_lay.insertWidget(0, self._card)
-        caption = chart.get("caption")
-        self.caption_label.setText(caption if isinstance(caption, str) else "")
-        self.caption_label.setVisible(bool(caption))
-
-    def _build_card(self, chart: dict) -> QWidget:
-        """The rendered chart widget -- a matplotlib canvas, or the honest
-        text fallback when matplotlib is unavailable in this QGIS python."""
-        if not matplotlib_available():
-            self.last_render_summary = {"fallback": True}
-            fallback = QLabel(
-                f"{chart.get('title') or chart.get('chart_id')}\n"
-                f"(chart not rendered: matplotlib unavailable -- "
-                f"{_MATPLOTLIB_ERROR})"
-            )
-            fallback.setWordWrap(True)
-            if self._block_style:
-                fallback.setStyleSheet(self._block_style)
-            return fallback
-        figure = Figure(figsize=(4.0, _CANVAS_HEIGHT / 100.0), dpi=100)
-        canvas = FigureCanvasQTAgg(figure)
-        canvas.setFixedHeight(_CANVAS_HEIGHT)
-        canvas.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
-        spec = chart.get("vega_lite_spec") or {}
-        self.last_render_summary = render_spec(figure, spec)
-        canvas.draw()
-        return canvas

@@ -1222,14 +1222,15 @@ def test_composer_arg_assembly_and_dispatch(tmp_path: Path):
     run_solver call carries solver='geoclaw' + the staged manifest_uri."""
     import asyncio
 
-    from trid3nt_server.agent.workflows.geoclaw.model_dambreak_geoclaw_scenario import model_dambreak_geoclaw_scenario as comp
+    from trid3nt_server.agent.workflows.geoclaw.inundation import inundation as comp
     from trid3nt_server.agent.workflows.geoclaw.run_geoclaw import GeoClawStaging
 
     run_args = GeoClawRunArgs(bbox=_AOI, scenario="dam_break", output_frames=4)
 
     captured: dict = {}
 
-    def _fake_stage(ra, *, dem_uri, run_id=None, dtopo_uri=None, surge_uri=None,
+    def _fake_stage(ra, *, dem_uri, run_id=None, dtopo_uri=None,
+                    finite_fault_uri=None, surge_uri=None,
                     extra_dem_uris=None, base_num_cells=(40, 40),
                     domain_bbox=None, source_lonlat_override=None,
                     amr_levels_override=None):
@@ -1288,7 +1289,7 @@ def test_composer_arg_assembly_and_dispatch(tmp_path: Path):
     # they must be patched at the SOURCE module, not on the composer module.
     from trid3nt_server.agent.tools.simulation.solver import solver as solver_mod
 
-    with patch.object(comp, "_fetch_topo_for_geoclaw", lambda b, **k: "s3://cache/topo.tif"), \
+    with patch.object(comp, "_fetch_topo_for_geoclaw", lambda b, **k: ("s3://cache/topo.tif", "topobathy (CUDEM 1/9\" + ETOPO 2022 seamless)")), \
          patch.object(comp, "stage_geoclaw_manifest", _fake_stage), \
          patch.object(solver_mod, "run_solver", _fake_run_solver), \
          patch.object(solver_mod, "wait_for_completion", _fake_wait), \
@@ -1300,7 +1301,7 @@ def test_composer_arg_assembly_and_dispatch(tmp_path: Path):
          patch.object(comp, "_publish_peak_layer", _fake_publish), \
          patch.object(comp, "current_emitter", lambda: None), \
          patch.object(comp, "drive_live_solve_progress", _amock(None)):
-        peak = asyncio.run(comp.model_dambreak_geoclaw_scenario(run_args))
+        peak = asyncio.run(comp.model_geoclaw_inundation(run_args))
 
     assert isinstance(peak, GeoClawDepthLayerURI)
     assert peak.uri == "https://tiles/peak.png"

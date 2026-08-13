@@ -82,10 +82,8 @@ EXPENSIVE_SCENARIO_TOOLS: dict[str, str] = {
     # engine-door refactor (SFINCS slice): the SFINCS flood template that mints
     # the flood-depth layer (the run_sfincs door executes no solve).
     "sfincs_flood": "flood-depth",
-    "run_model_nws_flood_event_scenario": "flood-depth",
     # engine-door refactor: run_modflow_job folded into modflow_contaminant_plume.
     "modflow_contaminant_plume": "plume",
-    "run_model_groundwater_contamination_scenario": "plume",
     # P4: the quasi-2D PySWMM urban-flood engine mints a peak depth
     # layer id ``swmm-depth-peak-<run_id>`` (same depth family as SFINCS).
     # engine-door refactor (SWMM slice): re-keyed run_swmm_urban_flood ->

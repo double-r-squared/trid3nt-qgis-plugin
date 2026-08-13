@@ -1,0 +1,18 @@
+# Template routing phrasings: the SCHISM+WWM two-way wave-current coupling
+# archetype (engine #12 second archetype, ADR 0126/0129). Walked into the main
+# retrieval index directly.
+schism_coupled_waves:
+- coupled wave-current simulation
+- SCHISM WWM coupled waves
+- two-way wave and current coupling nearshore
+- nearshore wave transformation shoaling and breaking
+- run a coupled wave-current model
+- spectral waves coupled to a hydrodynamic model
+- significant wave height on an unstructured coastal mesh
+- wave-current interaction with SCHISM
+- Duck FRF wave validation case
+- cross-shore significant wave height transect
+- refinement-grade coupled nearshore wave modeling
+- max significant wave height surface from a coupled model
+- simulate wave shoaling to the beach with SCHISM WWM
+- GOTM turbulence coupled wave-current solve

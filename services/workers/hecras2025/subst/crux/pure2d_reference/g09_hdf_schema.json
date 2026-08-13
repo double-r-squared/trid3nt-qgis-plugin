@@ -1,0 +1,322 @@
+{
+  "source": "HEC Example_Projects_6_6 BaldEagleDamBrk.g09.hdf (pure-2D BaldEagleCr; sha ea239b50...)",
+  "groups": {
+    "Geometry/Boundary Condition Lines": {
+      "datasets": {
+        "Attributes": {
+          "shape": [
+            3
+          ],
+          "dtype": "[('Name', 'S32'), ('SA-2D', 'S16'), ('Type', 'S8'), ('Length', '<f4')]"
+        },
+        "External Faces": {
+          "shape": [
+            28
+          ],
+          "dtype": "[('BC Line ID', '<i4'), ('Face Index', '<i4'), ('FP Start Index', '<i4'), ('FP End Index', '<i4'), ('Station Start', '<f4'), ('Station End', '<f4')]"
+        },
+        "Polyline Info": {
+          "shape": [
+            3,
+            4
+          ],
+          "dtype": "int32"
+        },
+        "Polyline Parts": {
+          "shape": [
+            3,
+            2
+          ],
+          "dtype": "int32"
+        },
+        "Polyline Points": {
+          "shape": [
+            8,
+            2
+          ],
+          "dtype": "float64"
+        }
+      },
+      "attrs": {}
+    },
+    "Geometry/2D Flow Areas": {
+      "datasets": {
+        "Attributes": {
+          "shape": [
+            1
+          ],
+          "dtype": "[('Name', 'S16'), ('Mann', '<f4'), ('Multiple Face Mann n', 'u1'), ('Cell Vol Tol', '<f4'), ('Cell Min Area Fraction', '<f4'), ('Face Profile Tol', '<f4'), ('Face Area Tol', '<f4'), ('Face Conv Ratio', '<f4'), ('Laminar Depth', '<f4'), ('Spacing dx', '<f4'), ('Spacing dy', '<f4'), ('Shift dx', '<f4'), ('Shift dy', '<f4'), ('Cell Count', '<i4')]"
+        },
+        "Cell Info": {
+          "shape": [
+            1,
+            2
+          ],
+          "dtype": "int32"
+        },
+        "Cell Points": {
+          "shape": [
+            18066,
+            2
+          ],
+          "dtype": "float64"
+        },
+        "Polygon Info": {
+          "shape": [
+            1,
+            4
+          ],
+          "dtype": "int32"
+        },
+        "Polygon Parts": {
+          "shape": [
+            1,
+            2
+          ],
+          "dtype": "int32"
+        },
+        "Polygon Points": {
+          "shape": [
+            537,
+            2
+          ],
+          "dtype": "float64"
+        }
+      },
+      "attrs": {}
+    },
+    "Geometry/2D Flow Areas/BaldEagleCr": {
+      "datasets": {
+        "Cells Center Coordinate": {
+          "shape": [
+            19597,
+            2
+          ],
+          "dtype": "float64"
+        },
+        "Cells Center Manning's n": {
+          "shape": [
+            19597
+          ],
+          "dtype": "float32"
+        },
+        "Cells Face and Orientation Info": {
+          "shape": [
+            19597,
+            2
+          ],
+          "dtype": "int32"
+        },
+        "Cells Face and Orientation Values": {
+          "shape": [
+            75188,
+            2
+          ],
+          "dtype": "int32"
+        },
+        "Cells FacePoint Indexes": {
+          "shape": [
+            19597,
+            7
+          ],
+          "dtype": "int32"
+        },
+        "Cells Minimum Elevation": {
+          "shape": [
+            19597
+          ],
+          "dtype": "float32"
+        },
+        "Cells Surface Area": {
+          "shape": [
+            19597
+          ],
+          "dtype": "float32"
+        },
+        "Cells Volume Elevation Info": {
+          "shape": [
+            19597,
+            2
+          ],
+          "dtype": "int32"
+        },
+        "Cells Volume Elevation Values": {
+          "shape": [
+            636950,
+            2
+          ],
+          "dtype": "float32"
+        },
+        "FacePoints Cell Index Values": {
+          "shape": [
+            76719
+          ],
+          "dtype": "int32"
+        },
+        "FacePoints Cell Info": {
+          "shape": [
+            19529,
+            2
+          ],
+          "dtype": "int32"
+        },
+        "FacePoints Coordinate": {
+          "shape": [
+            19529,
+            2
+          ],
+          "dtype": "float64"
+        },
+        "FacePoints Face and Orientation Info": {
+          "shape": [
+            19529,
+            2
+          ],
+          "dtype": "int32"
+        },
+        "FacePoints Face and Orientation Values": {
+          "shape": [
+            75188,
+            2
+          ],
+          "dtype": "int32"
+        },
+        "FacePoints Is Perimeter": {
+          "shape": [
+            19529
+          ],
+          "dtype": "int32"
+        },
+        "Faces Area Elevation Info": {
+          "shape": [
+            37594,
+            2
+          ],
+          "dtype": "int32"
+        },
+        "Faces Area Elevation Values": {
+          "shape": [
+            435145,
+            4
+          ],
+          "dtype": "float32"
+        },
+        "Faces Cell Indexes": {
+          "shape": [
+            37594,
+            2
+          ],
+          "dtype": "int32"
+        },
+        "Faces FacePoint Indexes": {
+          "shape": [
+            37594,
+            2
+          ],
+          "dtype": "int32"
+        },
+        "Faces Low Elevation Centroid": {
+          "shape": [
+            37594
+          ],
+          "dtype": "float32"
+        },
+        "Faces Minimum Elevation": {
+          "shape": [
+            37594
+          ],
+          "dtype": "float32"
+        },
+        "Faces NormalUnitVector and Length": {
+          "shape": [
+            37594,
+            3
+          ],
+          "dtype": "float32"
+        },
+        "Faces Perimeter Info": {
+          "shape": [
+            37594,
+            2
+          ],
+          "dtype": "int32"
+        },
+        "Faces Perimeter Values": {
+          "shape": [
+            800,
+            2
+          ],
+          "dtype": "float64"
+        },
+        "Perimeter": {
+          "shape": [
+            537,
+            2
+          ],
+          "dtype": "float64"
+        }
+      },
+      "attrs": {
+        "Cell Average Size": 63656.63671875,
+        "Cell Maximum Index": 9064,
+        "Cell Maximum Size": 205597.9375,
+        "Cell Minimum Size": 3001.450927734375,
+        "Cell Volume Tolerance": 0.009999999776482582,
+        "Data Date": "10Apr2019 14:18:36",
+        "Extents": [
+          1965981.77456347,
+          2084790.1384913,
+          289578.11400543,
+          371007.582554372
+        ],
+        "Face Area Conveyance Ratio": 0.019999999552965164,
+        "Face Area Elevation Tolerance": 0.009999999776482582,
+        "Face Profile Tolerance": 0.009999999776482582,
+        "Infiltration Date Last Modified": "11MAR2022 13:59:51",
+        "Infiltration File Date": "11MAR2022 13:59:51",
+        "Infiltration Filename": ".\\Soils Data\\Infiltration.hdf",
+        "Infiltration Layername": "Infiltration",
+        "Infiltration Override Table Hash": "(32,)",
+        "Land Cover Date Last Modified": "11MAR2022 13:45:08",
+        "Land Cover File Date": "11MAR2022 13:45:08",
+        "Land Cover Filename": ".\\Land Classification\\LandCover.hdf",
+        "Land Cover Layername": "LandCover",
+        "Manning's n": 0.03999999910593033,
+        "Percent Impervious Date Last Modified": "11MAR2022 13:45:08",
+        "Percent Impervious File Date": "11MAR2022 13:45:08",
+        "Percent Impervious Filename": ".\\Land Classification\\LandCover.hdf",
+        "Percent Impervious Layername": "LandCover",
+        "Property Tables LC Hash": "(32,)",
+        "Property Tables Last Computed": "11MAR2022 14:00:19",
+        "Terrain File Date": "09FEB2015 08:26:58",
+        "Terrain Filename": ".\\Terrain\\Terrain50.hdf",
+        "Version": "1.0"
+      }
+    }
+  },
+  "bc_line_attributes_rows": [
+    {
+      "Name": "DSNormalDepth",
+      "SA-2D": "BaldEagleCr",
+      "Type": "External",
+      "Length_ft": 1801.3033447265625
+    },
+    {
+      "Name": "DS2NormalD",
+      "SA-2D": "BaldEagleCr",
+      "Type": "External",
+      "Length_ft": 2633.9326171875
+    },
+    {
+      "Name": "Upstream Inflow",
+      "SA-2D": "BaldEagleCr",
+      "Type": "External",
+      "Length_ft": 2533.638671875
+    }
+  ],
+  "external_faces_count_per_bcline": {
+    "0": 7,
+    "1": 12,
+    "2": 9
+  }
+}

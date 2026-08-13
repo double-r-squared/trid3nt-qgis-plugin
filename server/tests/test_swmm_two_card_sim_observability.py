@@ -26,7 +26,7 @@ from trid3nt_contracts.swmm_contracts import SWMMDepthLayerURI, SWMMRunArgs
 import trid3nt_server.agent.tools.simulation.solver.solver as solver_mod
 from trid3nt_server.emission import pipeline_emitter as pe
 from trid3nt_server.emission.pipeline_emitter import PipelineEmitter
-from trid3nt_server.agent.workflows.swmm.model_urban_flood_swmm import model_urban_flood_swmm as M
+from trid3nt_server.agent.workflows.swmm.urban_flood import urban_flood as M
 
 
 # --------------------------------------------------------------------------- #
@@ -99,6 +99,11 @@ def _install_offbox_chain(monkeypatch, *, job_id: str, run_result: Any):
     monkeypatch.setattr(M, "build_and_stage_swmm_deck", lambda *a, **k: staging)
     # Off-box lane: is_local_mode False -> run_solver / wait_for_completion path.
     monkeypatch.setattr(M, "is_local_mode", lambda: False)
+    # OFFLINE-SUITE HERMETICITY (ADR 0158): run_args carries no explicit
+    # total_rain_depth_mm, so Step 3 of the composer calls the LIVE Atlas-14
+    # lookup unless stubbed -- a fixed known depth so this test never touches
+    # the network / NOAA outage risk.
+    monkeypatch.setattr(M, "_atlas14_total_depth_mm", lambda bbox, rp, dur: 120.0)
     monkeypatch.setattr(M, "stage_swmm_manifest", lambda stg: "s3://runs/RID/manifest.json")
 
     handle = _FakeHandle(job_id)
@@ -162,7 +167,7 @@ def test_swmm_offbox_emits_dispatch_and_compute_cards(monkeypatch):
     try:
         run_args = SWMMRunArgs(bbox=(-88.0, 36.0, -87.99, 36.01))
         peak = asyncio.run(
-            M.model_urban_flood_swmm(
+            M.model_swmm_urban_flood(
                 run_args,
                 dem_path="/tmp/synthetic.tif",  # skip the DEM fetch
                 building_footprints=None,
@@ -210,7 +215,7 @@ def test_swmm_offbox_routes_terminal_failed_to_sim_card(monkeypatch):
         run_args = SWMMRunArgs(bbox=(-88.0, 36.0, -87.99, 36.01))
         with pytest.raises(Exception):  # noqa: B017 — SWMMWorkflowError on non-complete
             asyncio.run(
-                M.model_urban_flood_swmm(
+                M.model_swmm_urban_flood(
                     run_args,
                     dem_path="/tmp/synthetic.tif",
                     building_footprints=None,

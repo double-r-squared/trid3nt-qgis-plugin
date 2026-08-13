@@ -255,28 +255,19 @@ def _full_registry_floor(floor: set[str]) -> set[str]:
         logger.warning(
             "tool_retrieval: full-registry import failed on fail-open", exc_info=True
         )
-    # Engine-door refactor: even on the FAIL-OPEN dump, keep tier=template out
-    # of the visible set so a cold/faulted index does not re-leak every engine
-    # template into the pool. Templates reach the turn ONLY via their door's
-    # gate expansion; any that were already surfaced live in ``floor`` (the
-    # Case's accrued allowed set) and are preserved by the union below.
-    # The data-router fold's promoted spec-driven tools register as ordinary
-    # tier="general" entries under the twin names, so they appear in this
-    # non-template set with no special-casing (the env-gated experiment
-    # substitution retired once promotion became the default).
-    # tier="catalog" (catalog-surfacing experiment, arm-flagged) is dropped here
-    # alongside templates so a fail-open dump never re-leaks the pool-excluded
-    # spec-served sources; any already surfaced live in ``floor``. No tool carries
-    # tier="catalog" in the DEFAULT config, so this is a no-op unless an arm is set.
-    # tier="internal" (an absorbed in-process seam, e.g. fetch_copernicus_dem) is
-    # dropped identically: registry-resolvable but never model-facing.
-    non_template = {
+    # Door dissolution (ADR 0094): engine templates (tier=template) are ordinary
+    # retrieval-pool members, so the FAIL-OPEN dump INCLUDES them. Only
+    # tier="catalog" (catalog-surfacing experiment, arm-flagged; no tool carries
+    # it in the DEFAULT config) and tier="internal" (an absorbed in-process seam,
+    # e.g. fetch_copernicus_dem -- registry-resolvable but never model-facing)
+    # stay out of the visible set.
+    visible = {
         name
         for name, entry in TOOL_REGISTRY.items()
         if getattr(entry.metadata, "tier", "general")
-        not in ("template", "catalog", "internal")
+        not in ("catalog", "internal")
     }
-    return non_template | floor
+    return visible | floor
 
 
 def retrieve_visible_tools(

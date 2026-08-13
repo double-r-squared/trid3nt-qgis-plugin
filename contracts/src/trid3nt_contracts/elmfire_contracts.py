@@ -68,6 +68,8 @@ __all__ = [
     "ELMFIRE_SPREAD_RATE_STYLE_PRESET",
     "ElmfireRunArgs",
     "FireSpreadLayerURI",
+    "ElmfireEllipseVerificationLayerURI",
+    "ElmfireSensitivityLayerURI",
 ]
 
 #: The three-value dead/live fuel-moisture scenario dial (see module docstring
@@ -312,3 +314,63 @@ class FireSpreadLayerURI(LayerURI):
     max_spread_rate_m_min: float | None = Field(default=None, ge=0.0)
     duration_hours: float = Field(gt=0.0)
     ignition_lonlat: tuple[float, float] | None = None
+
+
+class ElmfireEllipseVerificationLayerURI(FireSpreadLayerURI):
+    """The ELMFIRE constant-wind flat-terrain elliptical-VERIFICATION result.
+
+    Extends ``FireSpreadLayerURI`` (the time-of-arrival raster is the primary
+    layer) with the verification triple + Richards-ellipse geometry the agent
+    narrates about the calibration check (Invariant 1 -- typed fields, never
+    free-generated). Under constant fuel + uniform wind + flat terrain the fire
+    perimeter from a point ignition is a closed-form ellipse; these fields report
+    how well the numerical level-set perimeter matches it:
+
+        rmse_m: RMSE of the numerical perimeter from the Richards ellipse, m.
+        err_fraction: RMSE / ellipse semi-major axis, dimensionless (>= 0).
+        correlation: perimeter-vs-ellipse radial correlation, in [-1, 1].
+        corr_class: the graded quality ("excellent"/"good"/"fair"/"poor").
+        length_to_width_ratio: the observed ellipse length:width ratio (>= 1).
+        tolerance: the fractional pass tolerance err_fraction was gated on.
+        passed: err_fraction <= tolerance AND the perimeter did not touch the
+            domain edge.
+    """
+
+    rmse_m: float = Field(ge=0.0)
+    err_fraction: float = Field(ge=0.0)
+    correlation: float = Field(ge=-1.0, le=1.0)
+    corr_class: str
+    length_to_width_ratio: float = Field(ge=0.0)
+    tolerance: float = Field(ge=0.0)
+    passed: bool
+
+
+class ElmfireSensitivityLayerURI(FireSpreadLayerURI):
+    """A one-parameter ELMFIRE sensitivity SWEEP result (constant flat deck).
+
+    Extends ``FireSpreadLayerURI`` (the primary layer is the time-of-arrival
+    raster of the sweep's representative -- most-elongated / most-spread -- run)
+    with the swept response the agent narrates (Invariant 1 -- typed fields, never
+    free-generated). One knob is swept across ``sweep`` points on an otherwise
+    ALL-CONSTANT flat deck (no LANDFIRE/DEM fetch), isolating that knob's effect:
+
+        swept_param: the knob name swept (e.g. "wind_speed_mph",
+            "live_herbaceous_moisture_pct", "wind_fluctuation_member").
+        swept_units: the swept knob's units (e.g. "mph", "percent", "member").
+        response_metric: the measured response (e.g. "length_to_width_ratio",
+            "burned_area_km2").
+        response_units: the response units (e.g. "ratio", "km2", "m/min").
+        sweep: the per-point ``[{"x": <knob value>, "y": <response>, ...}, ...]``
+            list (ascending in ``x``) backing the sensitivity chart -- each point
+            is one solved constant-deck run.
+        summary: template-specific derived scalars (e.g. the binding wind of a
+            length:width ceiling, the ensemble mean/spread of a wind-fluctuation
+            sweep) -- each a plain float the agent may narrate.
+    """
+
+    swept_param: str
+    swept_units: str
+    response_metric: str
+    response_units: str
+    sweep: list[dict[str, float]] = Field(default_factory=list)
+    summary: dict[str, float] = Field(default_factory=dict)

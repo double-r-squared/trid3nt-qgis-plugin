@@ -1,9 +1,9 @@
 """Push-layer support -- PURE PYTHON (no PyQGIS / PyQt imports) except the ONE
 QGIS-only export helper at the bottom.
 
-Bidirectional layer push (the reverse seam of ``case_export.py``'s
-open-in-QGIS): the user's ACTIVE QGIS layer (vector or raster) is sent INTO
-the current case as a first-class input layer, via the agent's HTTP listener
+Bidirectional layer push (the reverse seam of layer materialization): the
+user's ACTIVE QGIS layer (vector or raster) is sent INTO the current case as a
+first-class input layer, via the agent's HTTP listener
 (``tool_catalog_http.py``, default ``http://127.0.0.1:8766``):
 
     1. POST /api/ingest-layer-file?filename=<name>  (raw request-body upload;
@@ -61,7 +61,7 @@ class PushLayerRequestError(Exception):
 def _http_error_detail(exc: urllib.error.HTTPError) -> str:
     """The server's own ``{"error": ...}`` message, prefixed with the HTTP
     status so a 404 vs 413 is distinguishable at a glance. Mirrors
-    ``case_export._http_error_detail``."""
+    ``probe._http_error_detail``."""
     detail = ""
     try:
         payload = json.loads(exc.read().decode("utf-8", "replace"))
@@ -79,7 +79,7 @@ def upload_layer_bytes(
     ``data`` as the raw request body -> the staged ``s3://`` object URI.
 
     Blocking -- the caller runs this OFF the UI thread (see ``_PushLayerTask``
-    in ``dock.py``, mirroring ``_ExportTask``).
+    in ``net/tasks.py``).
     """
     if not data:
         raise PushLayerRequestError("nothing to upload -- the exported file is empty")

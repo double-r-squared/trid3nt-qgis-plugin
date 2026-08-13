@@ -1,0 +1,55 @@
+{
+  "layer_id": "fire-arrival-01KZBZEKTYGGR9SMDN70BHV1QK",
+  "name": "Fire arrival time (crown-fire initiation sweep)",
+  "layer_type": "raster",
+  "uri": "s3://trid3nt-runs/01KZBZEKTYGGR9SMDN70BHV1QK/overviews/01KZBZJB7KCAV8SJ7XTMP2JT6Y.tif",
+  "style_preset": "continuous_fire_arrival_hr",
+  "temporal": null,
+  "role": "primary",
+  "units": null,
+  "bbox": [
+    -98.54591371388737,
+    38.46406755300036,
+    -98.45408628611263,
+    38.53593244699964
+  ],
+  "legend": null,
+  "fallback_note": null,
+  "synthetic_inputs": [],
+  "crs_authid": null,
+  "burned_area_km2": 0.6192,
+  "fire_arrival_max_hr": 0.5016663614908854,
+  "max_flame_length_m": 17.86372240905762,
+  "max_spread_rate_m_min": 76.2,
+  "duration_hours": 0.5,
+  "ignition_lonlat": [
+    -98.5,
+    38.5
+  ],
+  "swept_param": "critical_canopy_cover",
+  "swept_units": "fraction",
+  "response_metric": "active_crown_area_km2",
+  "response_units": "km2",
+  "sweep": [
+    {
+      "x": 0.3,
+      "y": 0.6192
+    },
+    {
+      "x": 0.525,
+      "y": 0.6192
+    },
+    {
+      "x": 0.75,
+      "y": 0.0
+    }
+  ],
+  "summary": {
+    "canopy_cover_fraction": 0.6,
+    "max_crowning_critical_cover": 0.525,
+    "min_threshold": 0.3,
+    "max_threshold": 0.75,
+    "max_active_crown_area_km2": 0.6192,
+    "fixed_wind_mph": 25.0
+  }
+}

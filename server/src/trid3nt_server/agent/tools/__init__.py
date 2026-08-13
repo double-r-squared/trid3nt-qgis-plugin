@@ -222,14 +222,17 @@ def clear_registry_for_tests() -> None:
 # ---------------------------------------------------------------------------
 
 # -- fetchers/weather --
-from .fetchers.weather.fetch_glm_lightning import fetch_glm_lightning  # noqa: E402,F401
+# fetch_glm_lightning: animation_frames fold (ADR 0092) -- twin DELETED, now spec-driven
+# (source.yaml + glm.frames_plan/frame_bytes hooks; default output = a frames list), auto-
+# registered by _register_router_specs() below; no eager twin import.
 # fetch_hrrr_forecast + fetch_hrrr_smoke: HRRR-Zarr library-delegate fold (ADR 0083)
 # -- twins DELETED, now spec-driven (source.yaml + hrrr.resolve_cycle/read/validate
 # delegate hooks: s3fs cycle-walk delegate_resolve + Zarr open -> LCC->4326 reproject
 # + clip + forecast hypot(u,v)); auto-registered by _register_router_specs() below.
 # fetch_mrms_qpe: weather/GRIB fold (ADR 0069) -- twin DELETED, now spec-driven
 # (source.yaml + mrms_qpe hooks: S3-listed key resolve -> grib_object whole-object COG).
-from .fetchers.weather.fetch_nexrad_reflectivity import fetch_nexrad_reflectivity  # noqa: E402,F401
+# show_nexrad_radar (a DISPLAY tool, NOT a fetcher: composes a live WMS GetMap URL,
+# transfers no bytes) is imported from the -- display -- group below.
 # fetch_nws_alerts_conus: data-router fold chained-resolution mode (ADR 0063) -- twin
 # DELETED, now spec-driven (source.yaml + nws_alerts_conus hooks: single /alerts/active
 # GET + per-alert zone-polygon enrichment), registered by _register_router_specs() below.
@@ -239,22 +242,31 @@ from .fetchers.weather.fetch_nexrad_reflectivity import fetch_nexrad_reflectivit
 # fetch_storm_events_db: data-router fold (ADR 0064) -- twin DELETED, now spec-driven
 # (source.yaml + storm_events_db hooks: directory-index resolve -> newest bulk-CSV URL,
 # then bulk gzip-CSV point decode), registered by _register_router_specs() below.
-from .fetchers.weather.fetch_storm_tracks import fetch_storm_tracks  # noqa: E402,F401
+# fetch_storm_tracks FOLDED to a spec-driven surface (ADR 0111): its source.yaml +
+# storm_tracks library-delegate hooks (historical IBTrACS + active NHC incl. the binary
+# forecast-zip secondary-enrichment round) are promoted by register_specs_from_tree;
+# the StormTracks*Error twins live in _router/hooks/storm_tracks.py. No eager twin import.
 
 # -- fetchers/hydrology --
-from .fetchers.hydrology.fetch_cama_flood_discharge import fetch_cama_flood_discharge  # noqa: E402,F401
 # V&V wave (ADR 0021, lane C): observed flood-validation data fetchers.
 # fetch_flood_extent_observation FOLDED to a spec-driven surface (ADR 0082): its
 # source.yaml + categorical_tile_grid mode is promoted by register_specs_from_tree.
 # fetch_high_water_marks FOLDED to a spec-driven surface (ADR 0073): its source.yaml
 # + usgs_stn_hwm hooks register at import via register_specs_from_tree (envelope hook).
-from .fetchers.hydrology.fetch_jrc_global_surface_water import fetch_jrc_global_surface_water  # noqa: E402,F401
+# fetch_jrc_global_surface_water FOLDED to a spec-driven surface (ADR 0086): its
+# source.yaml + the stac_continuous_mosaic access mode + the jrc_global_surface_water
+# colormap hook register at import via register_specs_from_tree (twin DELETED).
 # fetch_nhd_waterbodies: data-router fold phase-2 wave-2 -- twin DELETED, now
 # spec-driven (source.yaml + router), registered by _register_router_specs() below.
 # fetch_nhdplus_nldi_navigate: data-router fold phase-2 wave-3 (ADR 0040) -- twin
 # DELETED, now spec-driven (source.yaml + dataretrieval-delegating router),
 # registered by _register_router_specs() below.
-from .fetchers.hydrology.fetch_noaa_nwm_streamflow import fetch_noaa_nwm_streamflow  # noqa: E402,F401
+# fetch_noaa_nwm_streamflow FOLDED to a spec-driven surface (ADR 0112, THE FETCHER-FINALE
+# ENDGAME -- the LAST coded data-fetcher): its source.yaml + the nwm_streamflow.* library-
+# delegate hooks (the S3 channel_rt netCDF read -> {feature_id: streamflow} lookup + the NLDI
+# 5x5 spatial sample -> COMIDs + per-reach geometry + JOIN -> point FGB, over the fetch-time
+# provenance channel) register at import via register_specs_from_tree; the NWMStreamflow*Error
+# twins live in _router/hooks/nwm_streamflow.py. No eager twin import.
 # fetch_nws_river_forecast: data-router fold chained-resolution mode (ADR 0063) -- twin
 # DELETED, now spec-driven (source.yaml + nws_river_forecast hooks: gauges-by-bbox / single
 # detail + bounded per-gauge threshold/stageflow enrichment), registered below.
@@ -262,13 +274,15 @@ from .fetchers.hydrology.fetch_noaa_nwm_streamflow import fetch_noaa_nwm_streamf
 # spec-driven (source.yaml + overpass_river build_request/parse_response hooks over the
 # http_json endpoint_fallback mirror chain); the vestigial NHDPlus HR HUC4 leg was
 # dropped (NATE-decided). Auto-registered by _register_router_specs() below.
-from .fetchers.hydrology.fetch_usgs_nwis_gauges import fetch_usgs_nwis_gauges  # noqa: E402,F401
+# fetch_usgs_nwis_gauges: CDS-era flood-seam fold (ADR 0085) -- twin DELETED, now
+# spec-driven (source.yaml + parse_fallback IV->Site + usgs_nwis hooks), auto-registered.
 # fetch_usgs_water_quality: data-router fold phase-2 wave-3 (ADR 0040) -- twin
 # DELETED, now spec-driven (source.yaml + dataretrieval-delegating router),
 # registered by _register_router_specs() below.
 
 # -- fetchers/ocean --
-from .fetchers.ocean.fetch_gtsm_tide_surge import fetch_gtsm_tide_surge  # noqa: E402,F401
+# fetch_gtsm_tide_surge: CDS library_delegate fold (ADR 0085) -- twin DELETED, now
+# spec-driven (source.yaml + cds.gtsm_read), auto-registered via _register_router_specs().
 # fetch_noaa_coops_currents: data-router fold phase-2 wave-4 (ADR 0045) -- twin
 # DELETED, now spec-driven (source.yaml + the station snapshot router mode),
 # registered by _register_router_specs() below.
@@ -282,7 +296,10 @@ from .fetchers.ocean.fetch_gtsm_tide_surge import fetch_gtsm_tide_surge  # noqa:
 # registered by _register_router_specs() below.
 # fetch_noaa_sst: quick-folds wave (ADR 0079) -- twin DELETED, now spec-driven
 # (source.yaml + the raster_cog griddap access mode), registered by _register_router_specs().
-from .fetchers.ocean.fetch_topobathy import fetch_topobathy  # noqa: E402,F401
+# fetch_topobathy: coastal topo-bathymetry fold (ADR 0110) -- twin DELETED, now
+# spec-driven (source.yaml + the topobathy.* library-delegate hooks over the 4-leg
+# UTM composite + the fetch-time provenance channel), registered by
+# _register_router_specs() below.
 
 # -- fetchers/terrain --
 # fetch_3dep_extra: library-delegate raster fold (ADR 0075) -- twin DELETED, now
@@ -291,17 +308,26 @@ from .fetchers.ocean.fetch_topobathy import fetch_topobathy  # noqa: E402,F401
 # auto-registered by _register_router_specs() below.
 # fetch_copernicus_dem: fetcher-fold wave-8 -- twin DELETED, now spec-driven
 # (source.yaml + router stac_float), registered by _register_router_specs() below.
-from .fetchers.terrain.fetch_dem import fetch_dem  # noqa: E402,F401
+# fetch_dem FOLDED to a spec-driven surface (ADR 0097): its source.yaml +
+# library_delegate py3dep hooks + the source="copernicus" cross-sibling dispatch
+# is promoted by register_specs_from_tree; no eager twin import.
 # fetch_esri_landcover_10m: data-router fold pilot -- twin DELETED, now spec-driven
 # (source.yaml + router), registered by _register_router_specs() below.
 # fetch_landcover FOLDED to a spec-driven surface (ADR 0082): its source.yaml +
 # wcs_getcoverage mode + sidecar envelope is promoted by register_specs_from_tree.
 
 # -- fetchers/imagery --
-from .fetchers.imagery.fetch_goes_active_fire import fetch_goes_active_fire  # noqa: E402,F401
-from .fetchers.imagery.fetch_goes_animation import fetch_goes_animation  # noqa: E402,F401
-from .fetchers.imagery.fetch_goes_archive_animation import fetch_goes_archive_animation  # noqa: E402,F401
-from .fetchers.imagery.fetch_goes_satellite import fetch_goes_satellite  # noqa: E402,F401
+# fetch_goes_animation + fetch_goes_blend_animation FOLDED to spec-driven surfaces
+# (ADR 0087); fetch_goes_archive_animation + fetch_goes_active_fire FOLDED (ADR 0088):
+# source.yaml + shape: animation_frames + goes_archive.frames_plan / frame_bytes over
+# the shared imagery._goes_archive_core substrate (netcdf_cf_object per-frame mode),
+# auto-registered by register_specs_from_tree. The substrate lives on in
+# imagery/_goes_archive_core.py (no registered tool).
+# fetch_goes_satellite FOLDED to a spec-driven surface (ADR 0111): its source.yaml +
+# goes_satellite library-delegate raster hooks (most-recent MCMIPC read + 15-min
+# valid_time cache rounding) are promoted by register_specs_from_tree; the shared
+# satellite-identifier / S3 substrate lives on in imagery/_goes_common.py (no registered
+# tool). No eager twin import.
 # fetch_landsat_imagery / fetch_naip / fetch_sentinel2_truecolor: STAC-composite wave
 # (ADR 0080) -- twins DELETED, now spec-driven (source.yaml + raster_cog
 # stac_multi_asset_rgb: N reflectance assets + QA/SCL mask + joint 2/98 stretch /
@@ -310,12 +336,15 @@ from .fetchers.imagery.fetch_goes_satellite import fetch_goes_satellite  # noqa:
 # tool auto-registers via register_specs_from_tree (SLIDER availability + cadence index).
 # fetch_sentinel1_sar: quick-folds wave (ADR 0079) -- twin DELETED, now spec-driven
 # (source.yaml + raster_cog stac_float + coverage-select + log10_db), auto-registered.
-from .fetchers.imagery.fetch_viirs_day_fire import fetch_viirs_day_fire  # noqa: E402,F401
+# fetch_viirs_day_fire FOLDED to a spec-driven surface (ADR 0087): source.yaml +
+# shape: animation_frames + viirs_day_fire.frames_plan / frame_bytes (JPSS polar
+# day-pass SLIDER stitch), auto-registered by register_specs_from_tree.
 
 # -- fetchers/climate --
 # fetch_chirps_precipitation: data-router fold phase-2 wave-9 (ADR 0055) -- twin
 # DELETED, now spec-driven (source.yaml + gzip_object), auto-registered.
-from .fetchers.climate.fetch_era5_reanalysis import fetch_era5_reanalysis  # noqa: E402,F401
+# fetch_era5_reanalysis: CDS library_delegate fold (ADR 0085) -- twin DELETED, now
+# spec-driven (source.yaml + cds.era5_read), auto-registered via _register_router_specs().
 # fetch_gridmet: data-router fold pilot -- twin DELETED, now spec-driven
 # (source.yaml + router), registered by _register_router_specs() below.
 # fetch_modis_lst: data-router fold phase-2 wave-7 (ADR 0053) -- twin DELETED, now
@@ -367,7 +396,9 @@ from .fetchers.climate.lookup_precip_return_period import lookup_precip_return_p
 # DELETED, now spec-driven (source.yaml + overpass build_request/parse_response
 # hooks over the http_json endpoint_fallback mirror chain), auto-registered by
 # _register_router_specs() below.
-from .fetchers.socioeconomic.fetch_population import fetch_population  # noqa: E402,F401
+# fetch_population: WorldPop library_delegate raster fold (ADR 0092) -- twin DELETED, now
+# spec-driven (source.yaml + worldpop.validate/read hooks); the half-built ACS leg dropped
+# (fetch_census_acs serves tract population), auto-registered below; no eager twin import.
 # fetch_usace_nsi: data-router fold tier-3 hooks (ADR 0061) -- twin DELETED, now
 # spec-driven (source.yaml + usace_nsi build_request/parse_response hooks + the
 # RequestPlan POST transport extension), registered by _register_router_specs() below.
@@ -416,7 +447,10 @@ from .fetchers.socioeconomic.geocode_location import geocode_location  # noqa: E
 # -- fetchers/soil --
 # fetch_gcn250_curve_numbers: fetcher-fold wave-8 -- twin DELETED, now spec-driven
 # (source.yaml + router direct_window), registered by _register_router_specs() below.
-from .fetchers.soil.fetch_soilgrids import fetch_soilgrids  # noqa: E402,F401
+# fetch_soilgrids FOLDED to a spec-driven surface (ADR 0086): its source.yaml + the
+# projected_vrt_window access mode (Homolosine VRT windowed in the source projection +
+# native->4326 bilinear reproject + per-property Int16 scale) register at import via
+# register_specs_from_tree (twin DELETED).
 # fetch_statsgo_soils: library-delegate raster fold (ADR 0074) -- twin DELETED, now
 # spec-driven (source.yaml + pfdf_statsgo delegate/validate hooks over the generic
 # library_delegate mode); auto-registered by _register_router_specs() below.
@@ -432,6 +466,10 @@ from .fetchers.soil.fetch_soilgrids import fetch_soilgrids  # noqa: E402,F401
 from .fetchers._router.registration import register_specs_from_tree as _register_router_specs  # noqa: E402,F401
 
 _register_router_specs()
+
+# -- display (live map overlays that compose a service URL, transferring no data
+# bytes -- NOT fetchers) --
+from .display.show_nexrad_radar.show_nexrad_radar import show_nexrad_radar  # noqa: E402,F401
 
 # -- processing (compute / clip / extract / vector-edit / charts) --
 from .processing.clip_raster_to_polygon import clip_raster_to_polygon  # noqa: E402,F401
@@ -504,7 +542,7 @@ from .simulation.pelicun.postprocess_pelicun import postprocess_pelicun  # noqa:
 # workflows/pelicun/damage_assessment/ (imported below), with a bbox AUTO-FETCH
 # input mode (assets_uri absent + bbox -> auto-fetch a building-density
 # inventory). The run_pelicun door lists + gate-expands it. postprocess_pelicun
-# (above) + compute_impact_envelope (below) STAY general.
+# (above) STAYS general.
 # SWAN: swan_wave_field is the TEMPLATE (engine="swan", tier="template")
 # registered in workflows/swan/wave_field/wave_field.py (imported below); the
 # run_swan door lists + gate-expands it.
@@ -519,20 +557,13 @@ from .simulation.sfincs.set_sfincs_parameters import set_sfincs_parameters  # no
 from .simulation.swmm.set_swmm_parameters import set_swmm_parameters  # noqa: E402,F401
 from .simulation.telemac.set_telemac_parameters import set_telemac_parameters  # noqa: E402,F401 - relocated beside the run_telemac door (engine-door refactor, TELEMAC slice); stays tier=general
 from .simulation.solver import solver  # noqa: E402,F401
-# -- engine doors (engine-door refactor: read-only concierge that lists +
-# gate-expands its engine's tier=template members; executes nothing). MODFLOW
-# pilot. Registry-driven: adding a template folder tagged engine+tier=template
-# makes it appear in the door's listing with zero door changes.
-from .simulation.modflow.run_modflow.run_modflow import run_modflow  # noqa: E402,F401
-from .simulation.geoclaw.run_geoclaw.run_geoclaw import run_geoclaw  # noqa: E402,F401 - GeoClaw run-up door (engine-door refactor, GEOCLAW slice)
-from .simulation.sfincs.run_sfincs.run_sfincs import run_sfincs  # noqa: E402,F401 - SFINCS flood door (engine-door refactor, SFINCS slice)
-from .simulation.swmm.run_swmm.run_swmm import run_swmm  # noqa: E402,F401 - SWMM urban-drainage door (engine-door refactor, SWMM slice)
-from .simulation.telemac.run_telemac.run_telemac import run_telemac  # noqa: E402,F401 - TELEMAC river-transport door (engine-door refactor, TELEMAC slice; reuses the freed run_telemac name)
-from .simulation.swan.run_swan.run_swan import run_swan  # noqa: E402,F401 - SWAN nearshore-wave door (engine-door refactor, SWAN slice)
-from .simulation.landlab.run_landlab.run_landlab import run_landlab  # noqa: E402,F401 - Landlab surface-process door (engine-door refactor, LANDLAB slice)
-from .simulation.openquake.run_openquake.run_openquake import run_openquake  # noqa: E402,F401 - OpenQuake seismic-hazard door (engine-door refactor, OPENQUAKE slice)
-from .simulation.elmfire.run_elmfire.run_elmfire import run_elmfire  # noqa: E402,F401 - ELMFIRE wildfire-spread door (engine-door refactor, ELMFIRE slice)
-from .simulation.pelicun.run_pelicun.run_pelicun import run_pelicun  # noqa: E402,F401 - Pelicun damage/loss door (engine-door refactor, PELICUN slice)
+# -- engine templates (door dissolution, ADR 0094): the 10 engine "door"
+# concierge tools were DELETED. Each engine's tier=template members are ordinary
+# retrieval-pool tools now, registered by their own @register_tool below (the
+# workflow-composer block). Templates are callable DIRECTLY -- no concierge, no
+# gate expansion. The solver-seam modules under workflows/<engine>/run_<engine>.py
+# (WorkflowError classes, solver specs) are UNRELATED to the deleted doors and
+# stay; the templates import them.
 
 # -- discovery (dataset/tool retrieval) --
 # NOTE: search_data_catalog / fetch_from_catalog / qgis_discovery register at
@@ -542,6 +573,12 @@ from .simulation.pelicun.run_pelicun.run_pelicun import run_pelicun  # noqa: E40
 # 191 after ADR 0019 added search_spatial_functions here).
 from .search.search_tools import search_tools  # noqa: E402,F401
 from .search.search_spatial_functions import search_spatial_functions  # noqa: E402,F401
+# ESRI Living Atlas (ADR 0117): a scoped search over the harvested catalog + a
+# generic fetch bridge. Registered here (in-process) so both surface in the tool
+# retrieval index for their corpus queries (unlike the daemon-startup catalog
+# tools). The two harvested YAML catalogs are DATA, not code.
+from .search.search_living_atlas import search_living_atlas  # noqa: E402,F401
+from .search.fetch_living_atlas_layer import fetch_living_atlas_layer  # noqa: E402,F401
 
 # -- meta (web fetch, code exec, passthroughs, case utilities) --
 from .meta.code_exec_tool import code_exec_tool  # noqa: E402,F401
@@ -567,7 +604,6 @@ from .publish_layer import publish_layer as _publish_layer_reg  # noqa: E402,F40
 # the 12-category registry meta-tools. Comments preserved from the original
 # registration list.
 # ---------------------------------------------------------------------------
-from ..workflows.pelicun.compute_impact_envelope import compute_impact_envelope as _compute_impact_envelope_workflow  # noqa: E402,F401 - P3: registers compute_impact_envelope (composes NSI/MS → Pelicun → postprocess into one envelope tool)
 # MODFLOW templates (engine="modflow", tier="template"), one folder per
 # template under workflows/modflow/<template>/<template>.py; EXCLUDED from the
 # default retrieval pool, surfaced only by the run_modflow door's gate
@@ -585,56 +621,268 @@ from ..workflows.modflow.wetland_hydroperiod.wetland_hydroperiod import modflow_
 from ..workflows.modflow.capture_zone.capture_zone import modflow_capture_zone as _modflow_capture_zone  # noqa: E402,F401 - PRT capture zone
 from ..workflows.modflow.wellhead_protection.wellhead_protection import modflow_wellhead_protection as _modflow_wellhead_protection  # noqa: E402,F401 - EPA WHPA (split from capture_zone; shared composer)
 from ..workflows.modflow.saltwater_intrusion.saltwater_intrusion import modflow_saltwater_intrusion as _modflow_saltwater_intrusion  # noqa: E402,F401 - BUY variable-density Henry-style wedge
+from ..workflows.modflow.vadose_transport.vadose_transport import modflow_vadose_transport as _modflow_vadose_transport  # noqa: E402,F401 - ADR 0228 UZF+UZT unsaturated-zone breakthrough
+from ..workflows.modflow.package_validation.package_validation import modflow_package_validation as _modflow_package_validation  # noqa: E402,F401 - NEW capability (ADR 0153, GWF-NPF Newton / GWF-MAW / GWF-HFB package V&V benchmarks) (engine=modflow, tier=template)
 # swmm_urban_flood TEMPLATE (engine="swmm", tier="template"), one folder under
 # workflows/swmm/urban_flood/; EXCLUDED from the default retrieval pool,
-# surfaced only by the run_swmm door's gate expansion. model_urban_flood_swmm
-# stays the internal engine surface the template calls.
+# surfaced only by the run_swmm door's gate expansion. The composer chain
+# (model_swmm_urban_flood) is inlined in the template module.
 from ..workflows.swmm.urban_flood.urban_flood import swmm_urban_flood as _swmm_urban_flood  # noqa: E402,F401 - RENAME of run_swmm_urban_flood (engine=swmm, tier=template)
+# swmm_network_import TEMPLATE (engine="swmm", tier="template"), one folder under
+# workflows/swmm/network_import/. A DISTINCT capability: imports a REAL municipal
+# storm-drain GIS network (nodes + conduits) into a runnable SWMM model - the
+# dual-drainage MINOR system, the practice-verification's #1-ranked gap over the
+# DEM-synthesized overland mesh. The composer (model_swmm_network_import) is inlined.
+from ..workflows.swmm.network_import.network_import import swmm_network_import as _swmm_network_import  # noqa: E402,F401 - NEW capability (ADR 0124, SWMM network family #1) (engine=swmm, tier=template)
+# swmm_dual_drainage_coupling TEMPLATE (engine="swmm", tier="template"), one
+# folder under workflows/swmm/dual_drainage/. The DEFINING dual-drainage feature:
+# the overland MAJOR-system mesh EXCHANGES flow with the imported piped MINOR
+# system (row #1's machinery) at inlets. The composer (model_swmm_dual_drainage)
+# is inlined.
+from ..workflows.swmm.dual_drainage.dual_drainage import swmm_dual_drainage_coupling as _swmm_dual_drainage_coupling  # noqa: E402,F401 - NEW capability (ADR 0124, SWMM network family #2) (engine=swmm, tier=template)
+# Published-deck runner family (ADR 0128): three THIN templates over the shared
+# deck-runner core (agent/mesh/swmm_deck_runner.py + workflows/swmm/deck_runner/).
+# Each ingests a CITED, PUBLISHED openswmm.org example .inp deck (fetched at
+# runtime from the pinned public source; NOT baked - author-posted, redistribution
+# unclear), runs it VERBATIM through the headless swmm5_run solver, and charts the
+# deck-relevant outputs. The decks are the cited examples' SCHEMATIC networks (no
+# georeferenced map); each carries a capability the mesh-builder/GIS-parser cannot
+# produce: LID controls, storage routing, and PID/RTC control rules.
+from ..workflows.swmm.deck_lid_wq.deck_lid_wq import swmm_lid_raingarden_wq as _swmm_lid_raingarden_wq  # noqa: E402,F401 - NEW capability (ADR 0128, published-deck runner: LID rain-garden WQ) (engine=swmm, tier=template)
+from ..workflows.swmm.deck_detention_ponds.deck_detention_ponds import swmm_wwtp_detention_ponds as _swmm_wwtp_detention_ponds  # noqa: E402,F401 - NEW capability (ADR 0128, published-deck runner: storage-routing detention ponds) (engine=swmm, tier=template)
+from ..workflows.swmm.deck_pid_pump.deck_pid_pump import swmm_pump_pid_rtc as _swmm_pump_pid_rtc  # noqa: E402,F401 - NEW capability (ADR 0128, published-deck runner: PID pump RTC) (engine=swmm, tier=template)
+# ADR 0151 SWMM mechanism-COMPARISON templates: small synthetic decks that vary
+# ONE knob across variants and overlay the compared series (CHARTS + typed scalars,
+# no georeferenced map). Cover the 12 SWMM CAND-S board rows as knobs.
+from ..workflows.swmm.subcatchment_runoff_comparison.subcatchment_runoff_comparison import swmm_subcatchment_runoff_comparison as _swmm_subcatchment_runoff_comparison  # noqa: E402,F401 - NEW capability (ADR 0151, infiltration-method + pre/post-development runoff) (engine=swmm, tier=template)
+from ..workflows.swmm.node_hydraulics_comparison.node_hydraulics_comparison import swmm_node_hydraulics_comparison as _swmm_node_hydraulics_comparison  # noqa: E402,F401 - NEW capability (ADR 0151, outlet-structure family / flow diversion / surcharge-ponding) (engine=swmm, tier=template)
+from ..workflows.swmm.wetwell_pump_control_comparison.wetwell_pump_control_comparison import swmm_wetwell_pump_control_comparison as _swmm_wetwell_pump_control_comparison  # noqa: E402,F401 - NEW capability (ADR 0151, wet-well pump curve + duty/standby + multi-condition RTC) (engine=swmm, tier=template)
+from ..workflows.swmm.lid_performance_comparison.lid_performance_comparison import swmm_lid_performance_comparison as _swmm_lid_performance_comparison  # noqa: E402,F401 - NEW capability (ADR 0151, green roof / rain barrel vs rooftop disconnect / vegetative swale) (engine=swmm, tier=template)
+from ..workflows.swmm.wq_buildup_washoff_comparison.wq_buildup_washoff_comparison import swmm_wq_buildup_washoff_comparison as _swmm_wq_buildup_washoff_comparison  # noqa: E402,F401 - NEW capability (ADR 0151, curb-length vs area buildup + EMC vs exp washoff) (engine=swmm, tier=template)
+# swmm_rdii_rtk_unit_hydrograph (ADR 0190 row 4): RTK triangular unit-hydrograph
+# RDII (rainfall-derived inflow+infiltration) at a node vs direct runoff; closed
+# form validated against the native SWMM 5 [HYDROGRAPHS]/[RDII] engine. tier=template.
+from ..workflows.swmm.rdii_rtk.rdii_rtk import swmm_rdii_rtk_unit_hydrograph as _swmm_rdii_rtk_unit_hydrograph  # noqa: E402,F401 - RTK unit-hydrograph RDII
+# swmm_snowmelt_degree_day (ADR 0218 board rows swmm_snowmelt_degree_day +
+# swmm_snow_removal_plowing): Snow Pack [SNOWPACKS] + degree-day melt on a
+# subcatchment; rain-on-snow winter flood driver charted snowmelt-vs-rain-only,
+# with the snow-removal/plowing REMOVAL block as a knob. Chart-first validation
+# class (RDII precedent), host-side pyswmm, no worker image. tier=template.
+from ..workflows.swmm.snowmelt_degree_day.snowmelt_degree_day import swmm_snowmelt_degree_day as _swmm_snowmelt_degree_day  # noqa: E402,F401 - Snow Pack degree-day melt (engine=swmm, tier=template)
+# swmm_aquifer_baseflow_to_node (ADR 0218 board row swmm_aquifer_baseflow_to_node):
+# the [GROUNDWATER] two-zone aquifer under a pervious subcatchment contributing
+# baseflow to a drainage node BETWEEN storms; charted with-GW vs no-GW. The SWMM
+# analogue of the Landlab groundwater / RoG return-flow theme. tier=template.
+from ..workflows.swmm.aquifer_baseflow.aquifer_baseflow import swmm_aquifer_baseflow_to_node as _swmm_aquifer_baseflow_to_node  # noqa: E402,F401 - two-zone aquifer baseflow (engine=swmm, tier=template)
 # telemac_river_dye TEMPLATE (engine="telemac", tier="template"), one folder
 # under workflows/telemac/river_dye/; EXCLUDED from the default retrieval
-# pool, surfaced only by the run_telemac door's gate expansion.
-# model_river_dye_release_scenario stays the internal engine surface the
-# template calls; workflows/telemac/run_telemac.py is the local solve seam
+# pool, surfaced only by the run_telemac door's gate expansion. The composer
+# chain (model_telemac_river_dye) is inlined in the template module;
+# workflows/telemac/run_telemac.py is the local solve seam
 # (the door holds the run_telemac name; the template submits the solver).
 from ..workflows.telemac.river_dye.river_dye import telemac_river_dye as _telemac_river_dye  # noqa: E402,F401 - NAME FLIP of run_telemac (engine=telemac, tier=template)
+# telemac_do_sag TEMPLATE (engine="telemac", tier="template"), workflows/telemac/
+# do_sag/: the WAQTEL O2 dissolved-oxygen sag (US TMDL/permit). Reuses the
+# river_dye reach-seeding + solve via model_telemac_river_dye(do_sag_config=...);
+# WATER QUALITY PROCESS = 2, V&V to Streeter-Phelps 0.011 mg/L (ADR 0169).
+from ..workflows.telemac.do_sag.do_sag import telemac_do_sag as _telemac_do_sag  # noqa: E402,F401 - WAQTEL O2 front (engine=telemac, tier=template)
+# telemac_rain_on_grid TEMPLATE (engine="telemac", tier="template"), workflows/
+# telemac/rain_on_grid/: SCS-CN rainfall-runoff on a delineated watershed (ADR
+# 0196). Composes acquire_watershed_mesh + NLCD-distributed CN/Manning + the
+# native constant-storm SCS-CN worker deck (mode=rain_on_grid) -> outlet
+# hydrograph + peak-depth COG. Live V&V: Coweeta Creek NC (docs/proof/templates).
+from ..workflows.telemac.rain_on_grid.rain_on_grid import telemac_rain_on_grid as _telemac_rain_on_grid  # noqa: E402,F401 - RoG front (engine=telemac, tier=template)
+# generate_mesh (ADR 0200): the standalone mesh builder. Promotes the ADR 0193
+# watershed + ADR 0194 coastal water-edge sandbox meshers behind ONE tool (mode
+# inferred from inputs); emits an MDAL .2dm display layer + a durable mesh artifact
+# (facts + solver geometries) a model template discovers via the precondition gate.
+from ..workflows.mesh.generate_mesh.generate_mesh import generate_mesh as _generate_mesh  # noqa: E402,F401 - mesh domain primitive (tier=general)
+# hecras_riverine_flood TEMPLATE (engine="hecras", tier="template"), engine #11,
+# one folder under workflows/hecras/riverine_flood/. TEMPLATE-FIRST: reparameterizes
+# HEC's shipped Muncie White River (IN) demonstration deck (frozen geometry, scaled
+# unsteady flow forcing). The composer chain (model_hecras_riverine_flood) is inlined
+# in the template module; workflows/hecras/run_hecras.py is the local solve seam.
+from ..workflows.hecras.riverine_flood.riverine_flood import hecras_riverine_flood as _hecras_riverine_flood  # noqa: E402,F401 - engine #11 (engine=hecras, tier=template)
+# hecras_levee_breach TEMPLATE (engine="hecras", tier="template"), engine #11 second
+# archetype (ADR 0125): the SAME frozen Muncie White River geometry, whose 2D
+# Interior Area is a LEVEED protected floodplain -- toggles the deck's lateral-
+# structure breach (levee fails -> floods; holds -> valid dry success). Composer
+# inlined in the module; the local solve seam is shared (workflows/hecras/run_hecras.py).
+from ..workflows.hecras.levee_breach.levee_breach import hecras_levee_breach as _hecras_levee_breach  # noqa: E402,F401 - engine #11 second archetype (engine=hecras, tier=template)
+# hecras_flood_2d TEMPLATE (engine="hecras", tier="template"), engine #11 third
+# archetype (ADR 0140 promotion): unlike the two Muncie templates, this AUTHORS the
+# 2D mesh + terrain subgrid tables for a GENUINELY-NEW user AOI (fetch_dem -> the
+# hecras2025-authoring worker image: AuthorMesh topology + ComputeFrom tables) then
+# solves the composed deck through run_solver (the M3-gate no-archetype path).
+from ..workflows.hecras.flood_2d.flood_2d import hecras_flood_2d as _hecras_flood_2d  # noqa: E402,F401 - engine #11 third archetype (engine=hecras, tier=template)
+# schism_tidal_hydro TEMPLATE (engine="schism", tier="template"), engine #12,
+# one folder under workflows/schism/tidal_hydro/. Barotropic tidal hydrodynamics
+# on an unstructured coastal mesh (ADR 0118): the QuarterAnnulus verification case
+# OR an oceanmesh coastal_tin. The composer chain (model_schism_tidal_hydro) is
+# inlined in the template module; workflows/schism/run_schism.py is the local solve seam.
+from ..workflows.schism.tidal_hydro.tidal_hydro import schism_tidal_hydro as _schism_tidal_hydro  # noqa: E402,F401 - engine #12 (engine=schism, tier=template)
+# schism_coupled_waves TEMPLATE (engine="schism", tier="template"), engine #12
+# second archetype (ADR 0126/0129): SCHISM+WWM two-way wave-current coupling on the
+# bundled Duck NC FRF validation case, with the GOTM k-epsilon closure (the
+# pschism_WWM_GOTM_TVD-VL variant). The composer chain (model_schism_coupled_waves)
+# is inlined in the template module.
+from ..workflows.schism.coupled_waves.coupled_waves import schism_coupled_waves as _schism_coupled_waves  # noqa: E402,F401 - engine #12 second archetype (engine=schism, tier=template)
+# schism_transport_validation TEMPLATE (engine="schism", tier="template"), ADR 0156
+# SCHISM CAND-S: transport-scheme numerical-mixing V&V (Test_HeatConsv upwind-vs-TVD
+# + Test_GEN_MassConsv conservative-tracer mass conservation) on the hydro-core
+# binary; the composer chain (model_schism_transport_validation) is inlined.
+from ..workflows.schism.transport_validation.transport_validation import schism_transport_validation as _schism_transport_validation  # noqa: E402,F401 - ADR 0156 SCHISM CAND-S transport V&V (engine=schism, tier=template)
+# schism_baroclinic_circulation TEMPLATE (engine="schism", tier="template"), ADR 0189
+# - density-driven 3D baroclinic estuary circulation + stratification (ibc=0, SZ
+# vgrid, river source, salinity gradient) on the hydro-core binary; the composer
+# chain (model_schism_baroclinic_circulation) is inlined.
+from ..workflows.schism.baroclinic_circulation.baroclinic_circulation import schism_baroclinic_circulation as _schism_baroclinic_circulation  # noqa: E402,F401 - ADR 0189 SCHISM 3D baroclinic template (engine=schism, tier=template)
+# schism_pahm_surge TEMPLATE (engine="schism", tier="template"), ADR 0217:
+# parametric hurricane storm surge -- a best track -> a standalone Holland-1980
+# sflux wind/pressure field (nws=2) -> barotropic surge on a coastal TIN (peak
+# surge COG + track overlay + gauge hydrograph). The composer chain
+# (model_schism_pahm_surge) is inlined.
+from ..workflows.schism.pahm_surge.pahm_surge import schism_pahm_surge as _schism_pahm_surge  # noqa: E402,F401 - ADR 0217 SCHISM PaHM storm-surge template (engine=schism, tier=template)
 # geoclaw_inundation TEMPLATE (engine="geoclaw", tier="template"), one folder
 # under workflows/geoclaw/inundation/; EXCLUDED from the default retrieval
-# pool, surfaced only by the run_geoclaw door's gate expansion.
-# model_dambreak_geoclaw_scenario stays the internal engine surface the
-# template calls.
+# pool, surfaced only by the run_geoclaw door's gate expansion. The composer
+# chain (model_geoclaw_inundation) is inlined in the template module.
 from ..workflows.geoclaw.inundation.inundation import geoclaw_inundation as _geoclaw_inundation  # noqa: E402,F401 - RENAME of run_geoclaw_inundation (engine=geoclaw, tier=template)
+# geoclaw_tsunami_gauge_timeseries TEMPLATE (engine="geoclaw", tier="template"), a
+# DISTINCT capability (coastal gauge water-level time series), one folder under
+# workflows/geoclaw/gauge_timeseries/; surfaced by the run_geoclaw door's gate
+# expansion. Rides the inundation composer (model_geoclaw_inundation, emit_gauge_series).
+from ..workflows.geoclaw.gauge_timeseries.gauge_timeseries import geoclaw_tsunami_gauge_timeseries as _geoclaw_tsunami_gauge_timeseries  # noqa: E402,F401 - NEW capability (ADR 0123, hazard-easy-four continuation #3) (engine=geoclaw, tier=template)
+# geoclaw_amr_refinement_regions TEMPLATE (engine="geoclaw", tier="template"), one
+# folder under workflows/geoclaw/amr_regions/: explicit lat/lon/time AMR region
+# control (region-based flagging). Rides the inundation composer.
+from ..workflows.geoclaw.amr_regions.amr_regions import geoclaw_amr_refinement_regions as _geoclaw_amr_refinement_regions  # noqa: E402,F401 - GeoClaw CAND-S SWE+AMR knob (engine=geoclaw, tier=template)
+# geoclaw_regional_manning_friction TEMPLATE (engine="geoclaw", tier="template"), one
+# folder under workflows/geoclaw/regional_manning/: spatially-varying (banded)
+# Manning bottom-friction. Rides the inundation composer.
+from ..workflows.geoclaw.regional_manning.regional_manning import geoclaw_regional_manning_friction as _geoclaw_regional_manning_friction  # noqa: E402,F401 - GeoClaw CAND-S SWE+AMR knob (engine=geoclaw, tier=template)
+# geoclaw_storm_surge TEMPLATE (engine="geoclaw", tier="template"), one folder
+# under workflows/geoclaw/storm_surge/: parametric-Holland tropical-cyclone storm
+# surge (wind + pressure forcing from a storm track, selectable wind drag law).
+# Rides the inundation composer. ADR 0168.
+from ..workflows.geoclaw.storm_surge.storm_surge import geoclaw_storm_surge as _geoclaw_storm_surge  # noqa: E402,F401 - GeoClaw storm-surge front (engine=geoclaw, tier=template)
+# geoclaw_thacker_validation TEMPLATE (engine="geoclaw", tier="template"), one
+# folder under workflows/geoclaw/thacker_validation/: a synthetic, non-geographic
+# V&V of the wet-dry SWE+AMR solver vs Thacker's 1981 exact paraboloid-basin
+# solution (DEM-free composer branch; chart+scalars only). ADR 0187.
+from ..workflows.geoclaw.thacker_validation.thacker_validation import geoclaw_thacker_validation as _geoclaw_thacker_validation  # noqa: E402,F401 - GeoClaw SWE+AMR analytic V&V (engine=geoclaw, tier=template)
 # swan_wave_field TEMPLATE (engine="swan", tier="template"), one folder under
 # workflows/swan/wave_field/; EXCLUDED from the default retrieval pool,
-# surfaced only by the run_swan door's gate expansion. model_wave_scenario
-# stays the internal engine surface the template calls.
+# surfaced only by the run_swan door's gate expansion. The composer chain
+# (model_swan_wave_field) is inlined in the template module.
 from ..workflows.swan.wave_field.wave_field import swan_wave_field as _swan_wave_field  # noqa: E402,F401 - RENAME of run_swan_waves (engine=swan, tier=template)
+from ..workflows.swan.physics_sensitivity_sweep.physics_sensitivity_sweep import swan_physics_sensitivity_sweep as _swan_physics_sensitivity_sweep  # noqa: E402,F401 - SWAN CAND-S: physics-scheme A-vs-B sensitivity sweep (GEN/WCAPPING/QUADRUPL/BREAKING/FRICTION/TRIAD knobs)
+from ..workflows.swan.stationary_snapshot_batch.stationary_snapshot_batch import swan_stationary_snapshot_batch as _swan_stationary_snapshot_batch  # noqa: E402,F401 - SWAN CAND-S: batch of stationary snapshots sampling a storm event (MODE)
 # landlab_susceptibility TEMPLATE (engine="landlab", tier="template"), one
 # folder under workflows/landlab/susceptibility/; EXCLUDED from the default
-# retrieval pool, surfaced only by the run_landlab door's gate expansion.
-# model_landslide_scenario stays the internal engine surface the template
-# calls; workflows/landlab/run_landlab.py is the distinct solver build/stage
+# retrieval pool, surfaced only by the run_landlab door's gate expansion. The
+# composer chain (model_landlab_susceptibility) is inlined in the template
+# module; workflows/landlab/run_landlab.py is the distinct solver build/stage
 # seam.
 from ..workflows.landlab.susceptibility.susceptibility import landlab_susceptibility as _landlab_susceptibility  # noqa: E402,F401 - RENAME of run_landlab_susceptibility (engine=landlab, tier=template)
+# landlab_flow_accumulation TEMPLATE (engine="landlab", tier="template"), a
+# DISTINCT capability (drainage area + channel network + routing comparison), one
+# folder under workflows/landlab/flow_accumulation/; surfaced by the run_landlab
+# door's gate expansion. The composer (model_landlab_flow_accumulation) is inlined.
+from ..workflows.landlab.flow_accumulation.flow_accumulation import landlab_flow_accumulation as _landlab_flow_accumulation  # noqa: E402,F401 - NEW capability (ADR 0122, hazard-easy-four #1) (engine=landlab, tier=template)
+# landlab_green_ampt_overland_flow TEMPLATE (engine="landlab", tier="template"), a
+# DISTINCT capability (infiltration-vs-runoff storm partition), one folder under
+# workflows/landlab/green_ampt/; surfaced by the run_landlab door's gate
+# expansion. The composer (model_landlab_green_ampt_overland_flow) is inlined.
+from ..workflows.landlab.green_ampt.green_ampt import landlab_green_ampt_overland_flow as _landlab_green_ampt_overland_flow  # noqa: E402,F401 - NEW capability (ADR 0123, hazard-easy-four continuation #1) (engine=landlab, tier=template)
+# Landlab diagnostic TEMPLATES (engine="landlab", tier="template"), each a DISTINCT
+# capability, one folder under workflows/landlab/; walked into the main retrieval
+# index. Composers (model_landlab_*) are inlined in each template module.
+from ..workflows.landlab.landslide_storm_ensemble.storm_ensemble import landlab_landslide_storm_ensemble as _landlab_landslide_storm_ensemble  # noqa: E402,F401 - storm/recharge-ensemble landslide susceptibility sweep
+from ..workflows.landlab.overland_flow_timeseries.overland_timeseries import landlab_overland_flow_timeseries as _landlab_overland_flow_timeseries  # noqa: E402,F401 - time-stepped overland-flow depth animation
+from ..workflows.landlab.dem_conditioning.dem_conditioning import landlab_dem_conditioning as _landlab_dem_conditioning  # noqa: E402,F401 - DEM pit-fill conditioning depth
+from ..workflows.landlab.lake_mapping.lake_mapping import landlab_lake_mapping as _landlab_lake_mapping  # noqa: E402,F401 - lake extent + depth mapping
+from ..workflows.landlab.hacks_law.hacks_law import landlab_hacks_law_scaling as _landlab_hacks_law_scaling  # noqa: E402,F401 - Hack's-law basin length-area scaling diagnostic
+from ..workflows.landlab.hand_wetness.hand_wetness import landlab_hand_wetness as _landlab_hand_wetness  # noqa: E402,F401 - Height Above Nearest Drainage wetness proxy
+from ..workflows.landlab.channel_incision.channel_incision import landlab_channel_incision_steady_state as _landlab_channel_incision_steady_state  # noqa: E402,F401 - ADR 0184: detachment-limited stream-power incision to steady state + slope-area V&V
+from ..workflows.landlab.chi_map.chi_map import landlab_channel_steepness_chi_map as _landlab_channel_steepness_chi_map  # noqa: E402,F401 - ADR 0184: chi index + channel steepness (ksn) knickpoint diagnostic
+from ..workflows.landlab.storm_sequence.storm_sequence import landlab_storm_sequence_generator as _landlab_storm_sequence_generator  # noqa: E402,F401 - ADR 0184: stochastic storm-sequence forcing generator (PrecipitationDistribution)
+from ..workflows.landlab.groundwater_water_table.groundwater_water_table import landlab_groundwater_water_table as _landlab_groundwater_water_table  # noqa: E402,F401 - ADR 0214: GroundwaterDupuitPercolator steady-state water table + seepage + baseflow (mass-conservation V&V)
+from ..workflows.landlab.groundwater_storm_recession.groundwater_storm_recession import landlab_groundwater_storm_recession as _landlab_groundwater_storm_recession  # noqa: E402,F401 - ADR 0214: GroundwaterDupuitPercolator storm-driven seepage/baseflow hydrograph + recession
 # openquake_psha TEMPLATE (engine="openquake", tier="template"), one folder
 # under workflows/openquake/psha/; EXCLUDED from the default retrieval pool,
-# surfaced only by the run_openquake door's gate expansion.
-# model_seismic_hazard_scenario stays the internal engine surface the
-# template calls.
+# surfaced only by the run_openquake door's gate expansion. The composer chain
+# (model_openquake_psha) is inlined in the template module.
 from ..workflows.openquake.psha.psha import openquake_psha as _openquake_psha  # noqa: E402,F401 - RENAME of run_seismic_hazard_psha (engine=openquake, tier=template)
+# OpenQuake scenario ground-motion-field + earthquake secondary-perils TEMPLATES
+# (engine="openquake", tier="template"; ADR 0164). scenario_gmf runs the
+# in-process oq scenario calculator (single rupture + JB2009-correlated GMFs) and
+# maps the mean + across-realization spread; secondary_perils rides that GMF and
+# applies the openquake.sep liquefaction (Zhu 2015) + Newmark landslide (Jibson)
+# screens over fetched terrain covariates.
+from ..workflows.openquake.scenario_gmf.scenario_gmf import openquake_scenario_gmf as _openquake_scenario_gmf  # noqa: E402,F401
+from ..workflows.openquake.secondary_perils.secondary_perils import openquake_secondary_perils as _openquake_secondary_perils  # noqa: E402,F401
+# OpenQuake disaggregation + event-based-PSHA TEMPLATES (engine="openquake",
+# tier="template"; ADR 0182). Both run the installed oq engine locally as a
+# composer subprocess (the offline lane): disaggregation decomposes a site's
+# hazard into the dominant magnitude-distance-epsilon scenario; event_based
+# samples a synthetic earthquake catalogue, maps the event-based hazard, and
+# cross-checks the back-derived curve against classical PSHA.
+from ..workflows.openquake.disaggregation.disaggregation import openquake_disaggregation as _openquake_disaggregation  # noqa: E402,F401
+from ..workflows.openquake.event_based.event_based import openquake_event_based as _openquake_event_based  # noqa: E402,F401
 # elmfire_fire_spread TEMPLATE (engine="elmfire", tier="template"), one
 # folder under workflows/elmfire/fire_spread/; EXCLUDED from the default
-# retrieval pool, surfaced only by the run_elmfire door's gate expansion.
-# model_fire_spread_scenario stays the internal engine surface the template
-# calls; workflows/elmfire/run_elmfire.py is the distinct solver build/stage
+# retrieval pool, surfaced only by the run_elmfire door's gate expansion. The
+# composer chain (model_elmfire_fire_spread) is inlined in the template
+# module; workflows/elmfire/run_elmfire.py is the distinct solver build/stage
 # seam.
 from ..workflows.elmfire.fire_spread.fire_spread import elmfire_fire_spread as _elmfire_fire_spread  # noqa: E402,F401 - RENAME of model_fire_spread (engine=elmfire, tier=template)
+# elmfire_verification_elliptical_replication TEMPLATE (engine="elmfire",
+# tier="template"), a DISTINCT capability (the constant-wind flat-terrain
+# elliptical-spread verification / calibration anchor), one folder under
+# workflows/elmfire/verification/; surfaced by the run_elmfire door's gate expansion.
+from ..workflows.elmfire.verification.verification import elmfire_verification_elliptical_replication as _elmfire_verification_elliptical_replication  # noqa: E402,F401 - NEW capability (ADR 0123, hazard-easy-four continuation #2) (engine=elmfire, tier=template)
+# ELMFIRE CAND-S sensitivity sweep templates (constant flat deck, one knob each):
+# each sweeps a &SIMULATOR / &INPUTS knob across a small ladder and returns an
+# ElmfireSensitivityLayerURI. tier=template, engine=elmfire.
+from ..workflows.elmfire.sensitivity.ltw_ceiling.ltw_ceiling import elmfire_length_to_width_ceiling_sensitivity as _elmfire_length_to_width_ceiling_sensitivity  # noqa: E402,F401 - MAX_LOW length:width ceiling sweep
+from ..workflows.elmfire.sensitivity.wind_fluctuation.wind_fluctuation import elmfire_wind_fluctuation_randomization as _elmfire_wind_fluctuation_randomization  # noqa: E402,F401 - WIND_FLUCTUATIONS deterministic-vs-randomized sweep
+from ..workflows.elmfire.sensitivity.live_moisture.live_moisture import elmfire_live_fuel_moisture_sensitivity as _elmfire_live_fuel_moisture_sensitivity  # noqa: E402,F401 - live herbaceous/woody moisture override sweep
+# ELMFIRE transient/multi-band weather-deck templates (ADR 0161, front A): a
+# synthetic time-varying weather schedule (NUM_METEOROLOGY_TIMES>1 + DT_METEOROLOGY
+# interpolation) drives a mid-run wind shift and a dead-fuel moisture-recovery
+# interpolation-cadence sweep. tier=template, engine=elmfire.
+from ..workflows.elmfire.transient.wind_schedule.wind_schedule import elmfire_transient_wind_schedule_spread as _elmfire_transient_wind_schedule_spread  # noqa: E402,F401 - mid-run wind-shift redirection vs constant wind
+from ..workflows.elmfire.transient.dead_fuel_interp.dead_fuel_interp import elmfire_dead_fuel_moisture_interpolation_frequency_control as _elmfire_dead_fuel_moisture_interpolation_frequency_control  # noqa: E402,F401 - DT_INTERPOLATE_M1/M10/M100 accuracy-vs-cost sweep
+# ELMFIRE crown-fire family (ADR 0161, front B): a folded crown template sweeping
+# the surface-to-crown initiation boundary (CRITICAL_CANOPY_COVER) or the Cruz
+# active-crown spread-rate ceiling (CROWN_FIRE_SPREAD_RATE_LIMIT) on a canopied
+# deck. tier=template, engine=elmfire.
+from ..workflows.elmfire.crown.crown_fire import elmfire_crown_fire_initiation_threshold_sweep as _elmfire_crown_fire_initiation_threshold_sweep  # noqa: E402,F401 - crown-fire initiation + Cruz-rate-ceiling folded sweep
+# ELMFIRE initial-attack POC (ADR 0190 row 2): the Hirsch 1998 closed-form
+# probability of containment (fire size + head-fire intensity + attack delay).
+# CLOSED-FORM validation class (no engine run, chart/scalars). tier=template.
+from ..workflows.elmfire.initial_attack.initial_attack import elmfire_initial_attack_containment_probability as _elmfire_initial_attack_containment_probability  # noqa: E402,F401 - Hirsch POC closed form
 # pelicun_damage_assessment TEMPLATE (engine="pelicun", tier="template")
 # under workflows/pelicun/damage_assessment/; EXCLUDED from the default
 # retrieval pool, surfaced only by the run_pelicun door's gate expansion. Its
 # bbox AUTO-FETCH input mode covers the buildings-composer path (one tool,
-# two input modes). compute_impact_envelope (a compute_* composer) and
-# postprocess_pelicun STAY general, NOT templates.
+# two input modes). postprocess_pelicun STAYS general, NOT a template.
 from ..workflows.pelicun.damage_assessment.damage_assessment import pelicun_damage_assessment as _pelicun_damage_assessment  # noqa: E402,F401 - FOLD of run_pelicun_damage_assessment + run_pelicun_with_buildings (engine=pelicun, tier=template; explicit assets_uri OR bbox auto-fetch)
+# pelicun Assessment-API validation / sensitivity TEMPLATES (engine="pelicun",
+# tier="template"): idealized domain-free checks that drive pelicun's real
+# assessment.Assessment pipeline on synthetic inputs and emit distribution /
+# curve charts (no hazard raster, no map). Each is a distinct question class.
+from ..workflows.pelicun.closed_form_validation.closed_form_validation import pelicun_closed_form_validation as _pelicun_closed_form_validation  # noqa: E402,F401 - Monte-Carlo vs analytic closed form (damage-state probability + loss-function identity)
+from ..workflows.pelicun.mixed_fragility_loss.mixed_fragility_loss import pelicun_mixed_fragility_loss_assessment as _pelicun_mixed_fragility_loss_assessment  # noqa: E402,F401 - mixed fragility+loss-function assessment + EDP correlation spread
+from ..workflows.pelicun.replacement_threshold_sweep.replacement_threshold_sweep import pelicun_replacement_threshold_override_sweep as _pelicun_replacement_threshold_override_sweep  # noqa: E402,F401 - RID-triggered irreparable/replacement threshold sweep (RID inferred from PID)
+from ..workflows.pelicun.flood_foundation_depth_damage.flood_foundation_depth_damage import pelicun_flood_foundation_depth_damage_sweep as _pelicun_flood_foundation_depth_damage_sweep  # noqa: E402,F401 - HAZUS flood depth-damage curve sensitivity to foundation type
+# pelicun DL_calculation-driven TEMPLATES (engine="pelicun", tier="template") on
+# the _dl_calculation CLI harness (tempdir + serialized cwd + to_thread): a full
+# HAZUS earthquake building DL run (auto-populated building type) and the HAZUS EQ
+# v5.1-vs-v6.1 dataset comparison.
+from ..workflows.pelicun.hazus_seismic_dl_run.hazus_seismic_dl_run import pelicun_hazus_seismic_dl_run as _pelicun_hazus_seismic_dl_run  # noqa: E402,F401 - HAZUS earthquake building DL_calculation run with auto-populated building type
+from ..workflows.pelicun.hazus_eq_version_comparison.hazus_eq_version_comparison import pelicun_hazus_eq_version_comparison as _pelicun_hazus_eq_version_comparison  # noqa: E402,F401 - HAZUS earthquake v5.1-vs-v6.1 damage/loss dataset comparison
 
 
 # the 12-category registry + the two meta-tools

@@ -1,7 +1,8 @@
-"""Tests for the 12-category registry + meta-tools (Wave 4.10 job-B5).
+"""Tests for the 13-category registry + meta-tools (Wave 4.10 job-B5;
+taxonomy audited to question-class-honest ids in ADR 0177).
 
 Coverage:
-- ``CATEGORIES`` enumerates exactly the 12 specified ids.
+- ``CATEGORIES`` enumerates exactly the 13 audited ids.
 - Every primary-mapped tool name appears in ``TOOL_REGISTRY`` once the full
   startup import path has run.
 - Every registered tool has exactly one primary category (after eager init).
@@ -46,11 +47,13 @@ def _ensure_full_registry() -> set[str]:
 # ---------------------------------------------------------------------------
 
 
-def test_twelve_categories_registered() -> None:
-    """The spec calls for exactly 12 categories."""
-    assert len(CATEGORIES) == 12
+def test_thirteen_categories_registered() -> None:
+    """Vocabulary audit (ADR 0177): hazard_modeling renamed to
+    simulation_modeling + a model_validation split -> 13 question-class
+    categories."""
+    assert len(CATEGORIES) == 13
     ids = [c.id for c in CATEGORIES]
-    assert len(set(ids)) == 12, "category ids must be unique"
+    assert len(set(ids)) == 13, "category ids must be unique"
 
 
 def test_categories_have_required_fields() -> None:
@@ -66,9 +69,10 @@ def test_categories_have_required_fields() -> None:
 
 
 def test_expected_category_ids_present() -> None:
-    """The 12 ids must match the kickoff list verbatim."""
+    """The 13 ids must match the audited (ADR 0177) taxonomy verbatim."""
     expected = {
-        "hazard_modeling",
+        "simulation_modeling",
+        "model_validation",
         "weather_atmosphere",
         "hydrology",
         "terrain_elevation",
@@ -98,15 +102,14 @@ def test_every_registered_tool_has_a_primary_category() -> None:
     excludes them.
     """
     registered = _ensure_full_registry()
-    # engine-door refactor: tier=template tools are pool-excluded and surfaced
-    # only by their door's gate expansion, so they are INTENTIONALLY not in
-    # PRIMARY_CATEGORY (categorizing one would re-leak it into the retrieval pool).
-    # tier=internal (an absorbed in-process seam, e.g. fetch_copernicus_dem) is
-    # excluded identically -- pool-hidden, so no category membership.
+    # Door dissolution (ADR 0094): tier=template tools ARE categorized now (they
+    # are ordinary retrieval-pool members), so they must appear in PRIMARY_CATEGORY
+    # like any tool. Only tier=internal (an absorbed in-process seam, e.g.
+    # fetch_copernicus_dem) is pool-hidden and carries no category membership.
     from trid3nt_server.agent.tools import TOOL_REGISTRY as _reg
     _pool_excluded = {
         n for n, e in _reg.items()
-        if getattr(e.metadata, "tier", "general") in ("template", "internal")
+        if getattr(e.metadata, "tier", "general") in ("internal",)
     }
     mapped = (
         set(PRIMARY_CATEGORY.keys())
@@ -151,18 +154,18 @@ def test_cross_listing_known_tools_appear_in_both_categories() -> None:
     """Pelicun and USACE NSI cross-list into damage_assessment."""
     _ensure_full_registry()
     damage_members = set(tools_for_category("damage_assessment"))
-    # engine-door refactor (PELICUN slice): the run_pelicun DOOR carries the
-    # category membership; its pelicun_* templates are pool-EXCLUDED (no membership).
+    # Door dissolution (ADR 0094): the pelicun_damage_assessment template carries
+    # the category membership directly (its deleted door carried it before).
     assert {
-        "run_pelicun",
+        "pelicun_damage_assessment",
         "fetch_usace_nsi",
     }.issubset(damage_members)
-    assert "pelicun_damage_assessment" not in damage_members, (
-        "pelicun templates must NOT carry category membership (door-surfaced only)"
+    assert "run_pelicun" not in damage_members, (
+        "the run_pelicun door was dissolved (ADR 0094)"
     )
     # Their primary categories still claim them too.
-    hazard_members = set(tools_for_category("hazard_modeling"))
-    assert "run_pelicun" in hazard_members
+    sim_members = set(tools_for_category("simulation_modeling"))
+    assert "pelicun_damage_assessment" in sim_members
     landuse_members = set(tools_for_category("land_cover_development"))
     assert "fetch_usace_nsi" in landuse_members
 
@@ -172,12 +175,12 @@ def test_cross_listing_known_tools_appear_in_both_categories() -> None:
 # ---------------------------------------------------------------------------
 
 
-def test_list_categories_returns_twelve_shaped_entries() -> None:
+def test_list_categories_returns_thirteen_shaped_entries() -> None:
     """``list_categories()`` returns the spec-shape ``{categories: [...]}``."""
     result = list_categories()
     assert "categories" in result
     cats = result["categories"]
-    assert len(cats) == 12
+    assert len(cats) == 13
     for entry in cats:
         assert set(entry.keys()) == {"id", "name", "description"}
         assert isinstance(entry["id"], str)
@@ -229,7 +232,7 @@ def test_list_tools_in_category_unknown_category_raises() -> None:
     assert exc.value.error_code == "UNKNOWN_CATEGORY"
     assert exc.value.retryable is False
     # The hint includes the valid ids.
-    assert "hazard_modeling" in exc.value.valid_ids
+    assert "simulation_modeling" in exc.value.valid_ids
 
 
 def test_list_tools_in_category_is_registered() -> None:
@@ -293,7 +296,7 @@ def test_hot_set_contains_required_anchors() -> None:
         "fetch_dem",
         "fetch_nws_alerts_conus",
         "fetch_nws_event",
-        "run_sfincs",
+        "sfincs_flood",
         "code_exec_request",
         "compute_layer_bounds",
         "request_spatial_input",

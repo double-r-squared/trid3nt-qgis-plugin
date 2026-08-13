@@ -1,6 +1,6 @@
 """P4 tests for the TELEMAC river-dye LLM surface: the ``telemac_river_dye``
 template (engine-door refactor, TELEMAC slice - was ``run_telemac``, now the
-door owns that name) + the ``model_river_dye_release_scenario`` composer.
+door owns that name) + the ``model_telemac_river_dye`` composer.
 
 Exercised in ISOLATION with geocode / fetch_river_geometry / run_solver / boto3 /
 postprocess / publish all MOCKED (no network, no docker, no TELEMAC). These pin:
@@ -83,9 +83,9 @@ def test_telemac_river_dye_registered_as_engine_template():
     assert entry.metadata.tier == "template"
     assert entry.metadata.cacheable is False
     assert entry.metadata.ttl_class == "live-no-cache"
-    # the door owns the run_telemac name and executes nothing.
-    door = TOOL_REGISTRY.get("run_telemac")
-    assert door is not None and door.metadata.tier == "door"
+    # Door dissolution (ADR 0094): the run_telemac door is DELETED; telemac_river_dye
+    # is a standalone retrieval-pool template.
+    assert TOOL_REGISTRY.get("run_telemac") is None
 
 
 # ===========================================================================
@@ -97,6 +97,30 @@ def test_tool_rejects_invalid_bbox():
     out = asyncio.run(telemac_river_dye(bbox="not,a,bbox"))
     assert out["status"] == "error"
     assert out["error_code"] == "TELEMAC_PARAMS_INVALID"
+
+
+def test_domain_extent_clamp_labels_when_it_binds():
+    """ADR 0223 (audit #9): an out-of-window domain-extent value is clamped AND a
+    labeled note is returned so the guardrail is visible on the envelope; an
+    in-range value passes through with no note."""
+    from trid3nt_server.agent.workflows.telemac.river_dye.river_dye import (
+        _clamp_domain_extent,
+    )
+
+    # a 50 km reach binds the clamp -> clamped value + a naming note.
+    val, note = _clamp_domain_extent(
+        50.0, valid_lo=0.5, valid_hi=15.0, clamp_lo=0.5, clamp_hi=8.0,
+        name="reach_length_km", unit="km")
+    assert val == 8.0
+    assert note is not None
+    assert "reach_length_km 50" in note and "clamped" in note
+
+    # an in-range value passes through unlabeled.
+    val2, note2 = _clamp_domain_extent(
+        6.0, valid_lo=0.5, valid_hi=15.0, clamp_lo=0.5, clamp_hi=8.0,
+        name="reach_length_km", unit="km")
+    assert val2 == 6.0
+    assert note2 is None
 
 
 def test_tool_rejects_neither_location_nor_bbox():
@@ -119,16 +143,16 @@ def test_tool_rejects_both_location_and_bbox():
 # (3) Composer input validation.
 # ===========================================================================
 def test_composer_requires_exactly_one_of_location_or_bbox():
-    from trid3nt_server.agent.workflows.telemac.model_river_dye_release_scenario.model_river_dye_release_scenario import (
+    from trid3nt_server.agent.workflows.telemac.river_dye.river_dye import (
         TelemacDyeScenarioInputError,
-        model_river_dye_release_scenario,
+        model_telemac_river_dye,
     )
 
     with pytest.raises(TelemacDyeScenarioInputError):
-        asyncio.run(model_river_dye_release_scenario())  # neither
+        asyncio.run(model_telemac_river_dye())  # neither
     with pytest.raises(TelemacDyeScenarioInputError):
         asyncio.run(
-            model_river_dye_release_scenario(location="X", bbox=_AOI)  # both
+            model_telemac_river_dye(location="X", bbox=_AOI)  # both
         )
 
 
@@ -161,6 +185,14 @@ def _install_composer_mocks(comp, solver_mod, captured: dict):
         captured["seed_uri"] = uri
         return (-114.31, 42.58)  # a mid-reach point on the Snake
 
+    def _fake_discharge(seed_lon, seed_lat, explicit):
+        # Carrier discharge wiring (NWM) is mocked: return a real-looking value
+        # so the composer reaches staging exactly as before this leg.
+        captured["discharge_seed"] = (seed_lon, seed_lat)
+        if explicit is not None:
+            return (float(explicit), "user-supplied")
+        return (312.0, "NOAA NWM (mock)")
+
     def _fake_stage(reach, run_tag):
         captured["reach"] = reach
         captured["run_tag"] = run_tag
@@ -184,14 +216,19 @@ def _install_composer_mocks(comp, solver_mod, captured: dict):
             "dye_peak_time_s": 420.0,
         }
 
-    def _fake_publish(raw_peak, run_id, location_name, reach_name):
+    def _fake_publish(raw_peak, *args, **kwargs):
+        # _publish_peak_layer grew mesh_* / substance / bank_source / synthetic
+        # params; accept them all so the mock tracks the real signature by shape.
         captured["published"] = True
+        captured["publish_substance"] = kwargs.get("substance", (
+            args[6] if len(args) > 6 else None))
         return raw_peak.model_copy(update={"uri": "https://tiles/dye_peak.png"})
 
     return patch.multiple(
         comp,
         _registry_fn=_fake_registry_fn,
         _river_seed_from_geometry=_fake_seed,
+        _resolve_reach_discharge=_fake_discharge,
         _stage_manifest=_fake_stage,
         mint_dispatch_and_sim_cards=_amock(None),
         route_sim_terminal=_amock(None),
@@ -208,7 +245,7 @@ def _install_composer_mocks(comp, solver_mod, captured: dict):
 def test_composer_geocode_dispatch_and_manifest_overrides():
     from unittest.mock import patch  # noqa: F401 (used via _install)
 
-    from trid3nt_server.agent.workflows.telemac.model_river_dye_release_scenario import model_river_dye_release_scenario as comp
+    from trid3nt_server.agent.workflows.telemac.river_dye import river_dye as comp
     from trid3nt_server.agent.tools.simulation.solver import solver as solver_mod
 
     captured: dict = {}
@@ -217,7 +254,7 @@ def test_composer_geocode_dispatch_and_manifest_overrides():
     )
     with cm_multi, cm_solver, cm_wait, cm_bind:
         peak = asyncio.run(
-            comp.model_river_dye_release_scenario(
+            comp.model_telemac_river_dye(
                 location="Twin Falls, Idaho",
                 spill_fraction=0.4,
                 spill_duration_s=600.0,
@@ -261,7 +298,7 @@ def test_composer_geocode_dispatch_and_manifest_overrides():
 def test_composer_reuses_prefetched_river_geometry_uri():
     """When a river_geometry_uri is supplied the composer reuses it for the seed
     and does NOT call fetch_river_geometry (the live post-fetch routing path)."""
-    from trid3nt_server.agent.workflows.telemac.model_river_dye_release_scenario import model_river_dye_release_scenario as comp
+    from trid3nt_server.agent.workflows.telemac.river_dye import river_dye as comp
     from trid3nt_server.agent.tools.simulation.solver import solver as solver_mod
 
     captured: dict = {}
@@ -271,7 +308,7 @@ def test_composer_reuses_prefetched_river_geometry_uri():
     provided = "s3://trid3nt-cache/cache/static-30d/river_geometry/prefetched.fgb"
     with cm_multi, cm_solver, cm_wait, cm_bind:
         peak = asyncio.run(
-            comp.model_river_dye_release_scenario(
+            comp.model_telemac_river_dye(
                 location="Twin Falls, Idaho",
                 river_geometry_uri=provided,
             )
@@ -285,7 +322,7 @@ def test_composer_reuses_prefetched_river_geometry_uri():
 def test_composer_falls_back_to_centroid_when_no_river_seed():
     """When river-seed extraction returns None the composer seeds the geocoded
     centroid (the worker NLDI-snaps it) -- honest degrade, never a dead-end."""
-    from trid3nt_server.agent.workflows.telemac.model_river_dye_release_scenario import model_river_dye_release_scenario as comp
+    from trid3nt_server.agent.workflows.telemac.river_dye import river_dye as comp
     from trid3nt_server.agent.tools.simulation.solver import solver as solver_mod
 
     captured: dict = {}
@@ -299,7 +336,7 @@ def test_composer_falls_back_to_centroid_when_no_river_seed():
         comp, "_river_seed_from_geometry", lambda uri: None
     ):
         peak = asyncio.run(
-            comp.model_river_dye_release_scenario(location="Twin Falls, Idaho")
+            comp.model_telemac_river_dye(location="Twin Falls, Idaho")
         )
     assert isinstance(peak, TelemacDyeLayerURI)
     # Seed fell back to the geocoded centroid.
@@ -322,7 +359,7 @@ def test_tool_happy_path_returns_layer():
 
     from unittest.mock import patch
 
-    with patch.object(tool_mod, "model_river_dye_release_scenario", _fake_composer):
+    with patch.object(tool_mod, "model_telemac_river_dye", _fake_composer):
         out = asyncio.run(tool_mod.telemac_river_dye(location="Twin Falls, Idaho"))
     assert isinstance(out, TelemacDyeLayerURI)
     assert out.dye_cmax_mgl == pytest.approx(97.3)
@@ -330,7 +367,7 @@ def test_tool_happy_path_returns_layer():
 
 def test_tool_maps_composer_error_to_typed_dict():
     from trid3nt_server.agent.workflows.telemac.river_dye import river_dye as tool_mod
-    from trid3nt_server.agent.workflows.telemac.model_river_dye_release_scenario.model_river_dye_release_scenario import (
+    from trid3nt_server.agent.workflows.telemac.river_dye.river_dye import (
         TelemacDyeScenarioError,
     )
 
@@ -339,7 +376,130 @@ def test_tool_maps_composer_error_to_typed_dict():
 
     from unittest.mock import patch
 
-    with patch.object(tool_mod, "model_river_dye_release_scenario", _boom):
+    with patch.object(tool_mod, "model_telemac_river_dye", _boom):
         out = asyncio.run(tool_mod.telemac_river_dye(location="Twin Falls, Idaho"))
     assert out["status"] == "error"
     assert out["error_code"] == "TELEMAC_DYE_RUN_FAILED"
+
+
+# ===========================================================================
+# (7) ADR 0216 false-green fix: the erodible-bed / GAIA single gate.
+#     An armed erodible bed (explicit knob OR scour/erosion/bedload phrasing)
+#     MUST route to the sediment class so the erodible_bed flag and the
+#     substance_class gate cannot diverge into a plain tracer solve that only
+#     LOOKS morphodynamic (accepts an erodible bed + publishes layers, couples
+#     no GAIA). The old bug: substance='scour' fell through classify to 'tracer'
+#     while _scour_hint independently auto-armed erodible_bed=True.
+# ===========================================================================
+@pytest.mark.parametrize("s", [
+    "scour", "bed scour below the weir", "erosion", "bed erosion",
+    "erodible bed", "bedload", "bed load transport", "bed degradation",
+    "channel aggradation", "mobile bed morphodynamics", "bed lowering",
+    "morphological change",
+])
+def test_scour_phrasing_classifies_as_sediment(s):
+    from trid3nt_server.agent.workflows.telemac.river_dye.river_dye import (
+        classify_substance,
+    )
+
+    cls, payload = classify_substance(s)
+    # scour/erosion/bedload phrasing routes to the GAIA sediment class (was the
+    # false-green: it fell through to 'tracer').
+    assert cls == "sediment", (s, cls)
+    assert isinstance(payload, dict) and payload.get("grain_size", 0) > 0.0
+
+
+def test_sediment_and_tracer_regression_unchanged():
+    # the scour keyword branch must not shadow the existing classes.
+    from trid3nt_server.agent.workflows.telemac.river_dye.river_dye import (
+        classify_substance,
+    )
+
+    assert classify_substance("dye") == ("tracer", None)
+    assert classify_substance("water") == ("tracer", None)
+    assert classify_substance("oil")[0] == "oil"
+    assert classify_substance("sewage")[0] == "decay"
+    assert classify_substance("sand")[0] == "sediment"
+    assert classify_substance("oily scour")[0] == "oil"      # oil still wins
+    assert classify_substance("sewage erosion")[0] == "decay"  # decay still wins
+
+
+def test_tool_auto_arms_erodible_bed_for_scour_phrasing():
+    # The tool arms erodible_bed=True from scour phrasing (no explicit knob) AND
+    # forwards the substance - the pair that must not diverge downstream.
+    from trid3nt_server.agent.workflows.telemac.river_dye import river_dye as tool_mod
+    from unittest.mock import patch
+
+    captured: dict = {}
+
+    async def _cap(**kwargs):
+        captured.update(kwargs)
+        return _fake_peak("TELERID", "reach")
+
+    with patch.object(tool_mod, "model_telemac_river_dye", _cap):
+        out = asyncio.run(tool_mod.telemac_river_dye(
+            location="Twin Falls, Idaho", substance="scour below the weir"))
+    assert isinstance(out, TelemacDyeLayerURI)
+    assert captured["erodible_bed"] is True
+    assert "scour" in captured["substance"]
+
+
+def test_composer_scour_prompt_routes_sediment_and_arms_gaia():
+    # END-TO-END tool -> composer for a pure scour prompt (no erodible_bed knob):
+    # the staged manifest reach MUST carry substance_class='sediment' (so the
+    # worker author_deck couples GAIA) AND erodible_bed=True (the v2 path). The
+    # old bug staged NO substance_class (a tracer solve) - the false green.
+    from trid3nt_server.agent.workflows.telemac.river_dye import river_dye as comp
+    from trid3nt_server.agent.tools.simulation.solver import solver as solver_mod
+
+    captured: dict = {}
+    cm_multi, cm_solver, cm_wait, cm_bind = _install_composer_mocks(
+        comp, solver_mod, captured
+    )
+    with cm_multi, cm_solver, cm_wait, cm_bind:
+        peak = asyncio.run(comp.telemac_river_dye(
+            location="Twin Falls, Idaho", substance="scour below the weir"))
+    assert isinstance(peak, TelemacDyeLayerURI)
+    reach = captured["reach"]
+    assert reach["substance_class"] == "sediment"   # NOT tracer (the bug)
+    assert reach["erodible_bed"] is True             # GAIA v2 erodible-bed armed
+
+
+@pytest.mark.parametrize("subst", ["dye", "water", "red dye", "some chemical"])
+def test_composer_erodible_bed_forces_sediment_over_any_tracer(subst):
+    # IMPOSSIBLE-DIVERGENCE: erodible_bed=True with a plain tracer substance can
+    # NEVER stage a tracer-classified run - it is forced to the sediment/GAIA
+    # class by construction, so the two gates cannot disagree.
+    from trid3nt_server.agent.workflows.telemac.river_dye import river_dye as comp
+    from trid3nt_server.agent.tools.simulation.solver import solver as solver_mod
+
+    captured: dict = {}
+    cm_multi, cm_solver, cm_wait, cm_bind = _install_composer_mocks(
+        comp, solver_mod, captured
+    )
+    with cm_multi, cm_solver, cm_wait, cm_bind:
+        peak = asyncio.run(comp.model_telemac_river_dye(
+            location="Twin Falls, Idaho", substance=subst, erodible_bed=True))
+    assert isinstance(peak, TelemacDyeLayerURI)
+    reach = captured["reach"]
+    assert reach["substance_class"] == "sediment"
+    assert reach["erodible_bed"] is True
+
+
+def test_composer_never_stages_erodible_tracer_invariant():
+    # Direct proof of the honesty-floor invariant: for a matrix of substances,
+    # an armed erodible bed always stages the sediment class (never tracer).
+    from trid3nt_server.agent.workflows.telemac.river_dye import river_dye as comp
+    from trid3nt_server.agent.tools.simulation.solver import solver as solver_mod
+
+    for subst in ("dye", "scour", "oil", "sewage", "sand"):
+        captured: dict = {}
+        cm_multi, cm_solver, cm_wait, cm_bind = _install_composer_mocks(
+            comp, solver_mod, captured
+        )
+        with cm_multi, cm_solver, cm_wait, cm_bind:
+            asyncio.run(comp.model_telemac_river_dye(
+                location="Twin Falls, Idaho", substance=subst, erodible_bed=True))
+        reach = captured["reach"]
+        assert not (reach.get("erodible_bed") and
+                    reach.get("substance_class") != "sediment"), (subst, reach)

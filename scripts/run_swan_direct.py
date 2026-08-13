@@ -1,7 +1,7 @@
 """Direct SWAN nearshore wave simulation invocation for trid3nt-local proof.
 
 Bypasses the LLM/agent chat layer -- calls the deterministic SWAN workflow
-(model_wave_scenario) directly via the tool wrapper. The workflow runs:
+(model_swan_wave_field) directly via the tool wrapper. The workflow runs:
   fetch_topobathy (topobathy DEM for the nearshore AOI)
   -> stage_swan_manifest (build_spec + DEM reference to MinIO)
   -> run_solver('swan', local-docker: trid3nt-local/swan:latest)
@@ -109,7 +109,7 @@ log.info("pre-run MinIO run prefixes: %s", sorted(pre_prefixes))
 # ---------------------------------------------------------------------------
 
 try:
-    from trid3nt_server.agent.workflows.swan.model_wave_scenario.model_wave_scenario import model_wave_scenario
+    from trid3nt_server.agent.workflows.swan.wave_field.wave_field import model_swan_wave_field
     from trid3nt_contracts.swan_contracts import SwanRunArgs, SwanWaveBoundary
 except ImportError as exc:
     log.error("import failed -- is PYTHONPATH set? %s", exc)
@@ -118,7 +118,7 @@ except ImportError as exc:
 
 async def _run():
     log.info(
-        "invoking model_wave_scenario bbox=%s mode=%s",
+        "invoking model_swan_wave_field bbox=%s mode=%s",
         BBOX, MODE,
     )
     # Huntington Beach is on the California Pacific coast: open ocean is to the
@@ -137,7 +137,7 @@ async def _run():
         bbox=BBOX,
         boundary=boundary,
     )
-    result = await model_wave_scenario(run_args)
+    result = await model_swan_wave_field(run_args)
     return result
 
 

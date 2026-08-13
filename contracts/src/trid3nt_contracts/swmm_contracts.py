@@ -49,7 +49,7 @@ from typing import Any, Literal
 
 from pydantic import Field, field_validator
 
-from .common import BBox, EngineRunArgsMixin, GraceModel
+from .common import BBox, EngineRunArgsMixin, GraceModel, SyntheticInput
 from .execution import LayerURI
 
 __all__ = [
@@ -68,6 +68,11 @@ __all__ = [
     "SWMMRunArgs",
     "SWMMDepthLayerURI",
     "SWMMPollutantLayerURI",
+    "SWMMNetworkLayerURI",
+    "SWMMDualDrainageLayerURI",
+    "SWMMDeckRunResult",
+    "SWMMComparisonVariant",
+    "SWMMComparisonResult",
 ]
 
 
@@ -468,6 +473,87 @@ class SWMMDepthLayerURI(LayerURI):
         return _validate_barrier_feature_collection(value)
 
 
+class SWMMNetworkLayerURI(LayerURI):
+    """A ``LayerURI`` for an IMPORTED municipal storm-drain network + its
+    hydraulic response to a design storm (the dual-drainage MINOR system).
+
+    Extends ``LayerURI`` field-for-field (so it maps onto ``map-command
+    load-layer`` with no translation, same as every other layer) and carries the
+    typed network + response scalars the agent narrates (invariant 1 / FR-AS-7 -
+    the LLM cites these fields, never invents a pipe count or a peak flow). The
+    layer itself is a VECTOR (nodes as points carrying max-HGL / flooded, conduits
+    as lines carrying surcharge) - a piped network's natural render.
+
+    Fields:
+        n_junctions: imported junction (manhole/inlet) node count (>= 0).
+        n_conduits: imported conduit (pipe) count (>= 0).
+        n_outfalls: imported / inferred outfall node count (>= 1).
+        total_pipe_length_m: summed conduit length, m (>= 0).
+        peak_outfall_flow_cms: peak discharge summed across outfalls, m^3/s (>= 0).
+        total_outfall_volume_m3: cumulative volume delivered to outfalls, m^3 (>= 0).
+        n_flooded_nodes: nodes that surcharged above their rim (flooded), count.
+        n_surcharged_conduits: conduits that ran full/surcharged, count.
+        max_node_hgl_m: peak hydraulic-grade-line elevation across nodes, m.
+        continuity_error_pct: the .rpt Flow Routing Continuity error (%), the
+            mass-balance honesty readout.
+        n_inverts_filled: nodes whose invert was gap-filled (DEM/slope-walk) -
+            the labeled-degrade count (>= 0); a large value means a low-confidence
+            network geometry.
+        n_topology_snapped: conduit endpoints snapped to a nearest node because
+            the GIS carried no explicit from/to topology (>= 0).
+        network_source: a short human label for where the network came from
+            (a user upload, an ArcGIS FeatureServer, or a synthesized fallback).
+    """
+
+    n_junctions: int = Field(ge=0)
+    n_conduits: int = Field(ge=0)
+    n_outfalls: int = Field(ge=0)
+    total_pipe_length_m: float = Field(ge=0.0)
+    peak_outfall_flow_cms: float = Field(ge=0.0)
+    total_outfall_volume_m3: float = Field(ge=0.0)
+    n_flooded_nodes: int = Field(ge=0)
+    n_surcharged_conduits: int = Field(ge=0)
+    max_node_hgl_m: float = 0.0
+    continuity_error_pct: float = 0.0
+    n_inverts_filled: int = Field(default=0, ge=0)
+    n_topology_snapped: int = Field(default=0, ge=0)
+    network_source: str = ""
+
+
+class SWMMDualDrainageLayerURI(SWMMDepthLayerURI):
+    """A ``LayerURI`` for a COUPLED dual-drainage run - the overland MAJOR system
+    (surface depth raster, inherited) EXCHANGING flow with the imported piped
+    MINOR system at inlets. The practice-verification's defining "both halves".
+
+    The primary layer is the OVERLAND peak-depth raster (inherits
+    ``max_depth_m`` / ``flooded_area_km2`` / ``n_buildings_affected``); a pipe
+    network vector is emitted alongside as context. Adds the MINOR-system +
+    coupling scalars the agent narrates (invariant 1):
+
+        n_pipe_junctions / n_pipe_conduits / n_pipe_outfalls: the imported piped
+            network's node/link/outfall counts (>= 0).
+        n_inlets: surface<->sewer coupling links wired (catchbasins/inlets) - the
+            count that makes the run dual drainage (>= 0).
+        pipe_peak_outfall_flow_cms: peak discharge summed across PIPE outfalls,
+            m^3/s - the minor system's captured, routed flow (>= 0).
+        n_pipe_flooded_nodes: pipe junctions that surcharged above their rim,
+            pushing water back to the surface (>= 0).
+        n_pipe_surcharged_conduits: pipes that ran full/surcharged (>= 0).
+        n_inverts_filled / n_topology_snapped: the imported network's
+            labeled-degrade counts (>= 0).
+    """
+
+    n_pipe_junctions: int = Field(default=0, ge=0)
+    n_pipe_conduits: int = Field(default=0, ge=0)
+    n_pipe_outfalls: int = Field(default=0, ge=0)
+    n_inlets: int = Field(default=0, ge=0)
+    pipe_peak_outfall_flow_cms: float = Field(default=0.0, ge=0.0)
+    n_pipe_flooded_nodes: int = Field(default=0, ge=0)
+    n_pipe_surcharged_conduits: int = Field(default=0, ge=0)
+    n_inverts_filled: int = Field(default=0, ge=0)
+    n_topology_snapped: int = Field(default=0, ge=0)
+
+
 class SWMMPollutantLayerURI(LayerURI):
     """A ``LayerURI`` for a SWMM per-cell peak washoff-CONCENTRATION raster, plus
     the typed water-quality narration scalars.
@@ -507,3 +593,149 @@ class SWMMPollutantLayerURI(LayerURI):
     peak_outfall_conc: float = Field(ge=0.0)
     washoff_mass_fraction: float | None = None
     wq_continuity_error_pct: float | None = None
+
+
+class SWMMDeckRunResult(GraceModel):
+    """The typed result of running a CITED, PUBLISHED SWMM ``.inp`` deck (ADR 0128).
+
+    NOT a ``LayerURI``: the cited textbook decks carry SCHEMATIC coordinates (local
+    model units, not lon/lat), so the runner emits CHARTS (hydrographs / stage
+    recession / control tracking / pollutographs) as the primary product and does
+    NOT fabricate a georeferenced map layer. This carrier holds the typed scalars
+    the agent narrates (invariant 1 / FR-AS-7 - the LLM cites these fields, never
+    invents a peak flow or a pond stage) plus the LOUD demonstration-honesty
+    citation (the deck is the cited example's network, NOT a user AOI).
+
+    Fields:
+        deck_id: the internal cited-deck id.
+        deck_title: the published example's title (verbatim citation).
+        deck_author: the named author of the published deck.
+        deck_source: the hosting collection label.
+        deck_url: the pinned public source URL the deck was fetched from.
+        capabilities: the published capabilities this deck demonstrates (LID,
+            storage-routing, PID/RTC) - why it is a distinct template.
+        forcing: what drove the run - "rainfall" / "initial_storage" /
+            "dry_weather_flow".
+        flow_units: the deck's FLOW_UNITS ("CFS" / "CMS" / ...) - the unit the
+            headline scalars are reported in (so a CFS deck is never mislabeled CMS).
+        continuity_error_pct: the .rpt Flow-Routing Continuity error (%), the
+            mass-balance honesty readout.
+        n_nodes / n_links / n_subcatchments: the deck's object counts (>= 0).
+        peak_outfall_flow: peak discharge summed across outfalls, in flow_units
+            (>= 0).
+        max_node_depth: peak node depth over the run, deck depth units (>= 0).
+        n_flooded_nodes / n_surcharged_conduits: surcharge tallies (>= 0).
+        headline: a small dict of the deck-specific headline numbers the chart
+            visualizes (e.g. the LID with/without runoff pair, the PID target vs
+            achieved wet-well depth) - all real parsed outputs.
+        chart_titles: the titles of the charts emitted for this run (the agent
+            references these instead of describing an absent map layer).
+        demonstration_note: the LOUD honesty label - this is the cited example's
+            network, schematic (not georeferenced), a demonstration not a site study.
+        schematic_only: always True for a published-deck run (no georeferenced
+            layer) - the client suppresses any zoom-to / layer-load expectation.
+        synthetic_inputs: structured provenance (the published deck basis + every
+            override labeled).
+        rain_scale: the applied rainfall multiplier (1.0 = the published storm).
+    """
+
+    deck_id: str
+    deck_title: str
+    deck_author: str
+    deck_source: str
+    deck_url: str
+    capabilities: list[str] = Field(default_factory=list)
+    forcing: str
+    flow_units: str = ""
+    continuity_error_pct: float = 0.0
+    n_nodes: int = Field(default=0, ge=0)
+    n_links: int = Field(default=0, ge=0)
+    n_subcatchments: int = Field(default=0, ge=0)
+    peak_outfall_flow: float = Field(default=0.0, ge=0.0)
+    max_node_depth: float = Field(default=0.0, ge=0.0)
+    n_flooded_nodes: int = Field(default=0, ge=0)
+    n_surcharged_conduits: int = Field(default=0, ge=0)
+    headline: dict[str, Any] = Field(default_factory=dict)
+    chart_titles: list[str] = Field(default_factory=list)
+    demonstration_note: str = ""
+    schematic_only: bool = True
+    synthetic_inputs: list[SyntheticInput] = Field(default_factory=list)
+    rain_scale: float = 1.0
+
+
+class SWMMComparisonVariant(GraceModel):
+    """One knob-variant's parsed scalars in a SWMM mechanism-COMPARISON run.
+
+    Every field is a real parsed solver output (invariant 1) - the agent narrates
+    these, it never invents a peak or a load.
+
+    Fields:
+        label: the knob value this variant realizes (e.g. "Horton",
+            "post-development", "duty/standby staged", "green roof").
+        continuity_error_pct: this variant's Flow-Routing Continuity error (%).
+        peak_value: peak of the variant's primary charted series (runoff /
+            depth / flow / concentration), in ``SWMMComparisonResult.series_units``.
+        peak_time_min: minutes-from-start at which ``peak_value`` occurs (>= 0).
+        total_value: an integrated / summary quantity when meaningful (e.g. total
+            runoff volume, total washoff load); 0.0 when not computed.
+        max_node_depth: peak node depth over the run (>= 0).
+        n_flooded_nodes / n_surcharged_conduits: surcharge tallies (>= 0).
+        extra: family-specific scalars (e.g. per-pump run-fraction, per-outlet
+            split share) - all real parsed outputs.
+    """
+
+    label: str
+    continuity_error_pct: float = 0.0
+    peak_value: float = 0.0
+    peak_time_min: float = Field(default=0.0, ge=0.0)
+    total_value: float = 0.0
+    max_node_depth: float = Field(default=0.0, ge=0.0)
+    n_flooded_nodes: int = Field(default=0, ge=0)
+    n_surcharged_conduits: int = Field(default=0, ge=0)
+    extra: dict[str, Any] = Field(default_factory=dict)
+
+
+class SWMMComparisonResult(GraceModel):
+    """The typed result of a SWMM mechanism-COMPARISON template.
+
+    NOT a ``LayerURI``: the comparison runs SMALL SYNTHETIC decks (a single
+    subcatchment / a wet-well / a pond-outlet stub) whose coordinates are
+    SCHEMATIC (local model units, not lon/lat). The product is the OVERLAY CHART
+    that visually demonstrates the knob (method A vs B vs C in one figure) plus
+    the typed per-variant scalars the agent cites. There is NO georeferenced map
+    layer - the ``basis`` is an honestly-labeled synthetic mechanism demonstration.
+
+    Fields:
+        comparison_kind: the mechanism class compared (e.g.
+            "infiltration_method", "outlet_structure", "pump_control",
+            "lid_type", "wq_buildup_washoff").
+        knob_name: the varied knob's name (what the LLM would change).
+        knob_values: the ordered knob values compared (one per variant).
+        flow_units: the decks' FLOW_UNITS ("CFS" / "CMS") - the unit context.
+        series_units: the unit of ``variant.peak_value`` (e.g. "CFS", "ft",
+            "mg/L") so a runoff peak is never mislabeled a depth.
+        variants: the per-knob-value parsed scalars.
+        headline: a small dict of the comparison's headline facts the chart
+            visualizes (e.g. the peak-runoff spread across methods, the
+            LID runoff reduction) - all real parsed outputs.
+        chart_titles: the titles of the overlay chart(s) emitted.
+        demonstration_note: the LOUD honesty label - a synthetic mechanism
+            comparison on schematic decks, not a georeferenced site study.
+        schematic_only: always True (no georeferenced layer).
+        basis: "synthetic" - the decks are authored small mechanism networks.
+        synthetic_inputs: structured provenance (the synthetic-deck basis + the
+            published mechanism source each variant realizes).
+    """
+
+    comparison_kind: str
+    knob_name: str
+    knob_values: list[str] = Field(default_factory=list)
+    flow_units: str = ""
+    series_units: str = ""
+    variants: list[SWMMComparisonVariant] = Field(default_factory=list)
+    headline: dict[str, Any] = Field(default_factory=dict)
+    chart_titles: list[str] = Field(default_factory=list)
+    demonstration_note: str = ""
+    schematic_only: bool = True
+    basis: str = "synthetic"
+    synthetic_inputs: list[SyntheticInput] = Field(default_factory=list)
