@@ -1152,6 +1152,77 @@ def run_artemis_pipeline(
     return metrics
 
 
+class Telemac3dManifestUnknownFieldsError(ValueError):
+    """manifest.json['stratified'] carries a key ``Telemac3dConfig`` has no field for."""
+
+
+#: TELEMAC-3D PARSER VERSION (ADR 0241) -- bump on a Telemac3dConfig field
+#: addition/rename/retirement OR a 3D worker-output-contract change, because it
+#: doubles as the telemac3d worker-image/behavior provenance marker the
+#: image-staleness law (ADR 0148) keys off. -1 is the initial 3D stratified leg
+#: (three question classes stratification/wind_circulation/salt_wedge + the NOAA
+#: Great Lakes real-bathy path for the two closed-basin modes).
+_TELEMAC3D_PARSER_VERSION = "telemac3d-strat-1"
+
+
+def _telemac3d_config(data_dir: Path, overrides: dict[str, Any]) -> Any:
+    """Build a ``Telemac3dConfig`` from manifest['stratified'], rejecting unknown keys.
+
+    Same strict-unknown-field gate as ``_reach_config`` / ``_tomawac_config`` /
+    ``_artemis_config`` (ADR 0158): an unknown key raises loudly rather than
+    silently no-opping the intended 3D knob (the ADR 0148 stale-image failure
+    mode). ``workdir`` is pinned to the mounted data dir.
+    """
+    from telemac3d_build import Telemac3dConfig  # noqa: WPS433 -- worker payload
+
+    import dataclasses
+
+    valid = {f.name for f in dataclasses.fields(Telemac3dConfig)}
+    clean: dict[str, Any] = {}
+    unknown: list[str] = []
+    for key, value in (overrides or {}).items():
+        if key in ("workdir", "mode"):
+            continue  # workdir pinned; 'mode' is a routing key, not a field
+        if key in valid:
+            clean[key] = value
+        else:
+            unknown.append(key)
+    if unknown:
+        raise Telemac3dManifestUnknownFieldsError(
+            f"manifest.json['stratified'] carries unknown field(s) {sorted(unknown)} "
+            f"that parser {_TELEMAC3D_PARSER_VERSION} does not read -- this SILENTLY "
+            f"no-ops the intended 3D knob(s) rather than applying them. Either the "
+            f"caller has a typo, or the worker image is stale (rebuild it -- ADR "
+            f"0148). Known Telemac3dConfig fields: {sorted(valid)}."
+        )
+    if "bbox" in clean and clean["bbox"] is not None:
+        clean["bbox"] = tuple(float(v) for v in clean["bbox"])
+    clean["workdir"] = str(data_dir)
+    return Telemac3dConfig(**clean)
+
+
+def run_telemac3d_pipeline(
+    data_dir: Path, stratified_overrides: dict[str, Any], run_id: str | None
+) -> dict[str, Any]:
+    """Run the TELEMAC-3D stratified pipeline (ADR 0241) in ``data_dir``.
+
+    Authors + solves ONE 3D field (one of the three question classes:
+    stratification / wind_circulation / salt_wedge) through the baked telemac3d
+    binary and writes the 3D result SELAFIN + the single-frame surface/bottom
+    layers + metrics into the mounted rundir; the agent-side postprocess
+    rasterizes the surface/bottom fields to 4326 COGs. ``correct_end`` gates
+    status exactly like the wave / agitation paths.
+    """
+    import telemac3d_build as T  # noqa: WPS433 -- 3D worker payload
+
+    tcfg = _telemac3d_config(data_dir, stratified_overrides)
+    LOG.info("telemac3d stratified: mode=%s bathy=%s wind=%.1f m/s from %s nplan=%s bbox=%s",
+             tcfg.flow_mode, tcfg.bathy_source, tcfg.wind_speed_mps,
+             tcfg.wind_dir_from_deg, tcfg.nplan, tcfg.bbox)
+    metrics = T.solve(tcfg, str(data_dir), run_id=run_id)
+    return metrics
+
+
 def _build_argv_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(
         prog="trid3nt-telemac-entrypoint",
@@ -1190,6 +1261,7 @@ def main(argv: list[str] | None = None) -> int:
     mesh_only = False
     wave_overrides: dict[str, Any] | None = None
     agitation_overrides: dict[str, Any] | None = None
+    stratified_overrides: dict[str, Any] | None = None
     try:
         if manifest_path.exists():
             manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
@@ -1198,6 +1270,7 @@ def main(argv: list[str] | None = None) -> int:
             reach_overrides = manifest.get("reach") or {}
             wave_overrides = manifest.get("wave")
             agitation_overrides = manifest.get("agitation")
+            stratified_overrides = manifest.get("stratified")
             run_id = run_id or manifest.get("run_id")
             mesh_only = bool(manifest.get("mesh_only"))
         else:
@@ -1213,6 +1286,37 @@ def main(argv: list[str] | None = None) -> int:
         return 2
 
     import telemac_river_dye_build as B  # noqa: WPS433 -- for the typed banks gate
+
+    # ADR 0241: a manifest['stratified'] block routes to the TELEMAC-3D
+    # stratified / 3D-hydrodynamics pipeline (telemac3d_build) through the baked
+    # telemac3d binary -- entirely separate from the channel-dye / RoG / TOMAWAC /
+    # ARTEMIS legs (no shared config).
+    if stratified_overrides is not None:
+        import telemac3d_build as T  # noqa: WPS433 -- 3D worker payload
+        try:
+            metrics = run_telemac3d_pipeline(data_dir, stratified_overrides, run_id)
+        except (Telemac3dManifestUnknownFieldsError, T.Telemac3dInputError) as exc:
+            LOG.warning("telemac3d input gate: %s", exc)
+            _write_metrics(data_dir, {
+                "status": "error",
+                "correct_end": False,
+                "error_code": getattr(exc, "error_code", "TELEMAC3D_PARAMS_INVALID"),
+                "error": str(exc),
+            })
+            return 5
+        except Exception as exc:  # noqa: BLE001 -- typed metrics error
+            LOG.exception("telemac3d pipeline failed")
+            _write_metrics(data_dir, {
+                "status": "error",
+                "correct_end": False,
+                "error": f"{type(exc).__name__}: {exc}",
+            })
+            return 1
+        _write_metrics(data_dir, metrics)
+        ok = bool(metrics.get("correct_end"))
+        LOG.info("trid3nt-telemac3d worker done status=%s correct_end=%s wall_s=%s",
+                 metrics.get("status"), ok, metrics.get("wall_s"))
+        return 0 if ok else 1
 
     # ADR 0237: a manifest['agitation'] block routes to the ARTEMIS phase-resolving
     # harbour-agitation pipeline (artemis_build) through the baked artemis binary --

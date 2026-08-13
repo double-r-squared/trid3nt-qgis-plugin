@@ -28,13 +28,25 @@ __all__ = [
     "TELEMAC_DO_STYLE_PRESET",
     "TELEMAC_WAVE_STYLE_PRESET",
     "TELEMAC_AGITATION_STYLE_PRESET",
+    "TELEMAC3D_STRATIFICATION_STYLE_PRESET",
     "TelemacDyeLayerURI",
     "TelemacSedimentLayerURI",
     "TelemacWseLayerURI",
     "TelemacDoLayerURI",
     "TelemacWaveLayerURI",
     "ArtemisAgitationLayerURI",
+    "Telemac3dLayerURI",
 ]
+
+#: Style preset for the TELEMAC-3D stratified / 3D-hydrodynamics surface (or
+#: bottom) field raster (ADR 0241). A DISTINCT continuous key so
+#: ``export_case_to_qgis._MESH_SIBLING_BY_STYLE_PRESET`` maps it to the TELEMAC-3D
+#: result SELAFIN mesh sibling for the full-column animation without colliding
+#: with the dye/WSE/DO/wave/agitation presets. The COG variable differs by mode
+#: (temperature C / velocity m/s / salinity psu), so the layer ALWAYS carries a
+#: data-driven ``legend`` and the preset is purely the mesh-sibling routing key
+#: (additive / legend-drives-render, same as the other TELEMAC layers).
+TELEMAC3D_STRATIFICATION_STYLE_PRESET: str = "continuous_stratified_flow"
 
 #: Style preset for the ARTEMIS agitation-coefficient (Kd = Hs/H0) raster (ADR
 #: 0237). A DISTINCT continuous key so it never collides with the TOMAWAC Hs
@@ -372,5 +384,65 @@ class ArtemisAgitationLayerURI(LayerURI):
     response_off_resonance: float | None = Field(default=None, ge=0.0)
     wave_mode: str | None = Field(default=None)
     wave_period_s: float | None = Field(default=None, ge=0.0)
+    mesh_size_m: float | None = Field(default=None, gt=0.0)
+    mesh_resolution_label: str | None = Field(default=None)
+
+
+class Telemac3dLayerURI(LayerURI):
+    """A ``LayerURI`` for a TELEMAC-3D stratified / 3D-hydrodynamics field (ADR 0241).
+
+    The three-dimensional baroclinic analogue of the 2D TELEMAC layers: TELEMAC-3D
+    solves the 3D (hydrostatic / non-hydrostatic) Navier-Stokes equations with
+    active-tracer (temperature / salinity) density coupling over sigma layers - the
+    vertical structure a 2D depth-averaging cannot resolve. The primary artifact is
+    a SURFACE-layer field COG (temperature / velocity / salinity by mode) plus a
+    BOTTOM-layer companion; the discriminating 3D signature is carried in the scalar
+    fields the agent cites rather than invents (invariant 1, FR-AS-7):
+
+        stratification_metric: the headline discriminating magnitude (>= 0) -
+            top-to-bottom temperature difference (stratification), surface-minus-
+            bottom velocity magnitude (wind_circulation), or gravity-current front
+            speed (salt_wedge). Nonzero == the 3D structure a 2D model misses.
+        flow_mode: the question class (stratification / wind_circulation /
+            salt_wedge).
+        variable_label / variable_units: what the surface/bottom COG shows.
+        stratification_dt: OPTIONAL persisting top-to-bottom temperature diff, C
+            (stratification mode) - the thermocline strength.
+        u_surface / u_bottom / depth_avg_u: OPTIONAL vertical-velocity structure,
+            m/s (wind_circulation) - surface downwind (+), bottom upwind (-),
+            depth-average ~0 (the two-layer wind gyre a 2D model returns as ~0
+            everywhere).
+        front_speed_mps / benjamin_speed_mps: OPTIONAL measured vs analytic
+            gravity-current front speed, m/s (salt_wedge).
+        surface_value_mean / bottom_value_mean: OPTIONAL mean of the primary
+            variable at the surface vs bottom layer.
+        nplan: OPTIONAL number of sigma planes (the 3D degree of freedom).
+        non_hydrostatic: OPTIONAL whether the non-hydrostatic solver was used.
+        wind_speed_mps: OPTIONAL sustained wind speed the run was forced with
+            (m/s, >= 0).
+        mesh_size_m: OPTIONAL horizontal grid node spacing (m, > 0).
+        mesh_resolution_label: OPTIONAL human label for the resolution choice.
+
+    ``layer_type`` is ``"raster"`` (the surface-field COG); the full-column
+    evolution plays from the TELEMAC-3D result SELAFIN mesh sibling that
+    ``export_case_to_qgis`` discovers via ``TELEMAC3D_STRATIFICATION_STYLE_PRESET``.
+    The raster carries a data-driven ``legend``.
+    """
+
+    stratification_metric: float = Field(ge=0.0)
+    flow_mode: str | None = Field(default=None)
+    variable_label: str | None = Field(default=None)
+    variable_units: str | None = Field(default=None)
+    stratification_dt: float | None = Field(default=None)
+    u_surface: float | None = Field(default=None)
+    u_bottom: float | None = Field(default=None)
+    depth_avg_u: float | None = Field(default=None)
+    front_speed_mps: float | None = Field(default=None, ge=0.0)
+    benjamin_speed_mps: float | None = Field(default=None, ge=0.0)
+    surface_value_mean: float | None = Field(default=None)
+    bottom_value_mean: float | None = Field(default=None)
+    nplan: int | None = Field(default=None, ge=0)
+    non_hydrostatic: bool | None = Field(default=None)
+    wind_speed_mps: float | None = Field(default=None, ge=0.0)
     mesh_size_m: float | None = Field(default=None, gt=0.0)
     mesh_resolution_label: str | None = Field(default=None)

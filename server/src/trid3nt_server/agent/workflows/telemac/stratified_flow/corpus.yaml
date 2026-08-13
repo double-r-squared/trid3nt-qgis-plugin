@@ -1,0 +1,17 @@
+# Template routing phrasings (ADR 0241): the TELEMAC-3D stratified /
+# 3D-hydrodynamics engine is an ordinary retrieval-pool member (door dissolution,
+# ADR 0094). Three question classes (stratification / wind_circulation /
+# salt_wedge) share ONE tool, so the phrasings span all three.
+telemac3d_stratified_flow:
+- does this lake stratify and hold its thermocline or does it turn over
+- thermal stratification and vertical temperature structure in a deep lake
+- warm surface epilimnion over a cold hypolimnion, does the wind mix it away
+- lake turnover and thermocline erosion under a sustained wind
+- the 3D vertical velocity structure a 2D depth-averaged model cannot resolve
+- wind-driven circulation in a closed basin, surface downwind and bottom return flow
+- surface versus bottom current opposition in a wind-driven lake
+- salt wedge and density-driven salinity intrusion in an estuary
+- density-driven bottom gravity current from a dense saline column
+- run a TELEMAC-3D baroclinic stratified-flow field for this lake or basin
+- how strong is the density stratification in this water body
+- non-hydrostatic 3D hydrodynamics with active temperature and salinity tracers

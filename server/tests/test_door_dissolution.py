@@ -48,6 +48,7 @@ EXPECTED_TEMPLATES = {
     "telemac_river_dye",
     "telemac_do_sag",
     "tomawac_wave_field",
+    "telemac3d_stratified_flow",
     "artemis_harbor_agitation",  # ADR 0237: ARTEMIS phase-resolving harbour-agitation (diffraction/resonance/shoal; Great Lakes real-bathy live V&V)
     "telemac_rain_on_grid",  # ADR 0196: SCS-CN rainfall-runoff on a delineated watershed (Coweeta Creek NC live V&V)
     "hecras_riverine_flood",  # engine #11 (ADR 0109; renamed ADR 0120): HEC-RAS riverine-flood template (v1 geometry: Muncie)

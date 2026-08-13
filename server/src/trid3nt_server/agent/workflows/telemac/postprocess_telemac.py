@@ -38,6 +38,7 @@ from pathlib import Path
 from typing import Any
 
 from trid3nt_contracts.telemac_contracts import (
+    TELEMAC3D_STRATIFICATION_STYLE_PRESET,
     TELEMAC_AGITATION_STYLE_PRESET,
     TELEMAC_BED_EVOLUTION_STYLE_PRESET,
     TELEMAC_DO_STYLE_PRESET,
@@ -45,6 +46,7 @@ from trid3nt_contracts.telemac_contracts import (
     TELEMAC_WAVE_STYLE_PRESET,
     TELEMAC_WSE_STYLE_PRESET,
     ArtemisAgitationLayerURI,
+    Telemac3dLayerURI,
     TelemacDoLayerURI,
     TelemacDyeLayerURI,
     TelemacSedimentLayerURI,
@@ -65,6 +67,7 @@ __all__ = [
     "postprocess_telemac_do",
     "postprocess_tomawac",
     "postprocess_artemis",
+    "postprocess_telemac3d",
     "read_selafin",
     "TELEMAC_WAVE_STYLE_PRESET",
     "TELEMAC_AGITATION_STYLE_PRESET",
@@ -1876,3 +1879,263 @@ def postprocess_artemis(
 #: (its coordinates are in local metres, no real georeferencing) so the raster
 #: still renders on the map -- mirrors the WSE local-frame placeholder pattern.
 _LOCAL_FRAME_EPSG: int = 3857
+
+
+# --------------------------------------------------------------------------- #
+# TELEMAC-3D stratified / 3D-hydrodynamics (surface + bottom layer COGs, 0241).
+# --------------------------------------------------------------------------- #
+def _rasterize_t3d_field(
+    slf_path, *, run_id, utm_epsg, dest_filename, dst_suffix, log_label,
+    runs_bucket, target_ground_res_m,
+):
+    """Read a single-frame re-emitted 2D SELAFIN (surface OR bottom layer),
+    rasterize its one field to a 4326 (or local-frame placeholder) COG, upload it,
+    and return ``(uri, bbox, node_min, node_max, node_mean)``. NO value masking
+    (temperature / velocity can be negative and valid) -- only NaN-clipped."""
+    import numpy as np
+
+    slf = Path(slf_path)
+    try:
+        mesh = read_selafin(slf)
+    except Exception as exc:  # noqa: BLE001
+        raise PostprocessTelemacError(
+            "TELEMAC_OUTPUT_READ_FAILED",
+            message=f"could not parse TELEMAC-3D layer SELAFIN {slf.name}: {exc}",
+            details={"slf": str(slf)},
+        ) from exc
+
+    varnames = mesh["varnames"]
+    fvar = None
+    for v in varnames:                                  # the single re-emitted var
+        if mesh["data"].get(v) is not None and mesh["data"][v].size:
+            fvar = v
+            break
+    if fvar is None:
+        raise PostprocessTelemacError(
+            "TELEMAC_OUTPUT_EMPTY",
+            message=f"no field in {slf.name} (vars={varnames})",
+            details={"slf": str(slf), "varnames": varnames},
+        )
+    node_vals = np.asarray(mesh["data"][fvar])[-1]      # single frame
+    x = np.asarray(mesh["x"])
+    y = np.asarray(mesh["y"])
+    finite = np.isfinite(node_vals)
+    if not finite.any():
+        raise PostprocessTelemacError(
+            "TELEMAC_OUTPUT_EMPTY",
+            message=f"TELEMAC-3D layer {slf.name} carried no finite values",
+            details={"slf": str(slf)},
+        )
+    node_min = float(np.nanmin(node_vals[finite]))
+    node_max = float(np.nanmax(node_vals[finite]))
+    node_mean = float(np.nanmean(node_vals[finite]))
+
+    if utm_epsg is not None:
+        # real-bathy path: reproject the mesh nodes UTM -> 4326 here and write the
+        # COG directly in 4326 (already-4326 direct path, guard on).
+        from pyproj import Transformer
+        back = Transformer.from_crs(int(utm_epsg), 4326, always_xy=True)
+        lon, lat = back.transform(x, y)
+        lon = np.asarray(lon)
+        lat = np.asarray(lat)
+        src_crs = "EPSG:4326"
+        reproject = False
+        guard = True
+        pad = 0.0009
+        bbox = (float(lon.min() - pad), float(lat.min() - pad),
+                float(lon.max() + pad), float(lat.max() + pad))
+        shape = _grid_shape(bbox, target_ground_res_m)
+        clip_dist = 2.0 * max((bbox[2] - bbox[0]) / shape[1],
+                              (bbox[3] - bbox[1]) / shape[0])
+    else:
+        # idealized path: the coords are LOCAL METRES with no real georeferencing.
+        # Treat them as the placeholder projected frame (EPSG:3857) + WARP to 4326
+        # so the COG carries valid lon/lat bounds (a small placeholder box) and
+        # still renders on the map -- mirrors the WSE/ARTEMIS local-frame intent
+        # but via the reproject path (a direct-write would tag local metres as
+        # 4326 and trip the projected-coordinate guard).
+        lon, lat = x, y                                 # local metres
+        src_crs = f"EPSG:{_LOCAL_FRAME_EPSG}"
+        reproject = True
+        guard = False
+        pad = max(2.0, float(target_ground_res_m))
+        bbox = (float(lon.min() - pad), float(lat.min() - pad),
+                float(lon.max() + pad), float(lat.max() + pad))
+        nn = _nn_spacing_m(x, y)
+        res_loc = max(float(target_ground_res_m), nn * 0.5)
+        w_m = bbox[2] - bbox[0]
+        h_m = bbox[3] - bbox[1]
+        ncols = min(max(int(round(w_m / res_loc)), TELEMAC_MIN_PX_PER_SIDE), TELEMAC_MAX_PX_PER_SIDE)
+        nrows = min(max(int(round(h_m / res_loc)), TELEMAC_MIN_PX_PER_SIDE), TELEMAC_MAX_PX_PER_SIDE)
+        shape = (nrows, ncols)
+        clip_dist = 2.0 * nn
+
+    try:
+        grid = _rasterize_nodes_to_grid(
+            lon, lat, node_vals, bbox, shape, clip_dist, wet_floor=-1e30)
+    except Exception as exc:  # noqa: BLE001
+        raise PostprocessTelemacError(
+            "TELEMAC_OUTPUT_READ_FAILED",
+            message=f"TELEMAC-3D field rasterization failed: {exc}",
+        ) from exc
+
+    from rasterio.transform import from_bounds
+
+    transform = from_bounds(bbox[0], bbox[1], bbox[2], bbox[3], shape[1], shape[0])
+    try:
+        cog = cog_io.write_cog_4326_from_grid(
+            grid, src_crs=src_crs, src_transform=transform,
+            reproject=reproject, crs_roundtrip_guard=guard, dst_suffix=dst_suffix,
+        )
+    except CogIoError as exc:
+        raise _reraise_cogio(exc) from exc
+    try:
+        uri = cog_io.upload_cog(
+            cog, run_id, runs_bucket, dest_filename=dest_filename,
+            content_type="image/tiff", gs_backend="fsspec",
+            gs_fallback_to_file=False, runs_bucket_default=RUNS_BUCKET_DEFAULT,
+            log_label=log_label,
+        )
+    except CogIoError as exc:
+        raise _reraise_cogio(exc) from exc
+    finally:
+        cog_io.safe_unlink(cog)
+    return uri, bbox, node_min, node_max, node_mean
+
+
+def postprocess_telemac3d(
+    surface_slf_path: str | Path,
+    bottom_slf_path: str | Path,
+    *,
+    run_id: str,
+    utm_epsg: int | None,
+    worker_metrics: dict[str, Any] | None = None,
+    reach_name: str = "stratified_flow",
+    flow_mode: str = "stratification",
+    runs_bucket: str | None = None,
+    target_ground_res_m: float = 40.0,
+) -> tuple[list[Telemac3dLayerURI], dict[str, Any]]:
+    """Rasterize the TELEMAC-3D surface + bottom layers into two COGs.
+
+    Reads the two single-frame re-emitted 2D SELAFINs (``t3d_surface.slf`` /
+    ``t3d_bottom.slf`` the worker writes from the 3D result's top / bed sigma
+    planes), rasterizes each to a COG (real-bathy reproject ``utm_epsg`` -> 4326,
+    or the local-metres placeholder frame for the idealized path), and returns
+    ``([surface_layer, bottom_layer], metrics)``. The discriminating scalar
+    fields (stratification_dt / u_surface / u_bottom / front_speed_mps / ...)
+    come from ``worker_metrics`` (computed off the full 3D column in the worker -
+    the agent venv has no TELEMAC), folded onto BOTH layers so the agent narrates
+    typed numbers (invariant 1). The full-column time evolution plays from the
+    TELEMAC-3D result SELAFIN mesh sibling via ``TELEMAC3D_STRATIFICATION_STYLE_PRESET``.
+
+    Honesty floor (invariant 1): every 3D scalar is plain arithmetic over the
+    SELAFIN field -- no LLM. The COG carries an idealized/screening label.
+
+    Raises ``PostprocessTelemacError`` on any read / rasterize / COG failure.
+    """
+    try:
+        import numpy as np  # noqa: F401
+        from pyproj import Transformer  # noqa: F401
+    except Exception as exc:  # noqa: BLE001
+        raise PostprocessTelemacError(
+            "TELEMAC_DEPENDENCY_MISSING",
+            message=f"numpy/pyproj unavailable for TELEMAC-3D postprocess: {exc}",
+        ) from exc
+
+    wm = dict(worker_metrics or {})
+    units = wm.get("variable_units") or ""
+    var_label = wm.get("variable_label") or "Surface field"
+    metric = float(wm.get("stratification_metric") or 0.0)
+
+    s_uri, s_bbox, s_min, s_max, s_mean = _rasterize_t3d_field(
+        surface_slf_path, run_id=run_id, utm_epsg=utm_epsg,
+        dest_filename="telemac3d_surface.tif", dst_suffix="_t3d_surface.tif",
+        log_label="TELEMAC-3D surface COG", runs_bucket=runs_bucket,
+        target_ground_res_m=target_ground_res_m)
+    b_uri, b_bbox, b_min, b_max, b_mean = _rasterize_t3d_field(
+        bottom_slf_path, run_id=run_id, utm_epsg=utm_epsg,
+        dest_filename="telemac3d_bottom.tif", dst_suffix="_t3d_bottom.tif",
+        log_label="TELEMAC-3D bottom COG", runs_bucket=runs_bucket,
+        target_ground_res_m=target_ground_res_m)
+
+    # shared diverging/continuous legend over the combined surface+bottom range so
+    # the two layers read on ONE ramp (the surface-vs-bottom contrast is the point).
+    lo = round(min(s_min, b_min), 5)
+    hi = round(max(s_max, b_max), 5)
+    if hi <= lo:
+        hi = lo + 1e-3
+    # a signed field (velocity) reads on a diverging ramp centered on 0; a strictly
+    # positive field (temperature / salinity) reads on a sequential ramp.
+    signed = lo < 0.0 < hi
+    colormap = "rdbu" if signed else "viridis"
+    vext = round(max(abs(lo), abs(hi)), 5)
+    legend_common = dict(units=units or None, label=f"{var_label} ({units})" if units else var_label)
+
+    honesty = (
+        "TELEMAC-3D 3D-hydrodynamics screening: the surface + bottom layers of a "
+        f"{flow_mode} field (the vertical structure a 2D depth-averaging cannot "
+        "resolve). A planning-grade idealized/prescribed-forcing field, not a "
+        "calibrated site study."
+    )
+
+    def _mk(uri, bbox, role, is_surface, node_mean):
+        if signed:
+            legend = LegendKey(kind="continuous", colormap=colormap,
+                               vmin=-vext, vmax=vext, **legend_common)
+        else:
+            legend = LegendKey(kind="continuous", colormap=colormap,
+                               vmin=lo, vmax=hi, **legend_common)
+        which = "Surface" if is_surface else "Bottom"
+        return Telemac3dLayerURI(
+            layer_id=f"telemac3d-{'surface' if is_surface else 'bottom'}-{run_id}",
+            name=f"{which} {var_label.split(' ', 1)[-1] if ' ' in var_label else var_label} ({reach_name})",
+            layer_type="raster",
+            uri=uri,
+            style_preset=TELEMAC3D_STRATIFICATION_STYLE_PRESET,
+            role=role,
+            units=units or None,
+            bbox=bbox,
+            legend=legend,
+            fallback_note=honesty,
+            stratification_metric=metric,
+            flow_mode=flow_mode,
+            variable_label=var_label,
+            variable_units=units or None,
+            stratification_dt=wm.get("stratification_dt"),
+            u_surface=wm.get("u_surface"),
+            u_bottom=wm.get("u_bottom"),
+            depth_avg_u=wm.get("depth_avg_u"),
+            front_speed_mps=wm.get("front_speed_mps"),
+            benjamin_speed_mps=wm.get("benjamin_speed_mps"),
+            surface_value_mean=wm.get("surface_value_mean"),
+            bottom_value_mean=wm.get("bottom_value_mean"),
+            nplan=wm.get("nplan"),
+            non_hydrostatic=wm.get("non_hydrostatic"),
+            wind_speed_mps=wm.get("wind_speed_mps"),
+            mesh_size_m=wm.get("dx_m"),
+            mesh_resolution_label=(
+                f"{'real NOAA lake bathy' if utm_epsg is not None else 'idealized'} "
+                f"grid {wm.get('dx_m', target_ground_res_m):g} m x {wm.get('nplan', '?')} planes"
+                + (" (coarsened under node budget)" if wm.get("coarsened") else "")),
+        )
+
+    surface_layer = _mk(s_uri, s_bbox, "primary", True, s_mean)
+    bottom_layer = _mk(b_uri, b_bbox, "context", False, b_mean)
+
+    metrics: dict[str, Any] = {
+        "flow_mode": flow_mode,
+        "stratification_metric": metric,
+        "variable_label": var_label,
+        "variable_units": units,
+        "surface_value_range": [s_min, s_max],
+        "bottom_value_range": [b_min, b_max],
+        "utm_epsg": utm_epsg,
+        "surface_bbox": list(s_bbox),
+        "honesty_label": honesty,
+    }
+    logger.info(
+        "postprocess_telemac3d run_id=%s mode=%s metric=%.4g surf=[%.3g,%.3g] "
+        "bot=[%.3g,%.3g] -> %s , %s",
+        run_id, flow_mode, metric, s_min, s_max, b_min, b_max, s_uri, b_uri,
+    )
+    return [surface_layer, bottom_layer], metrics

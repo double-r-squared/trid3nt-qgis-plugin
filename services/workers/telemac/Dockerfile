@@ -173,6 +173,35 @@ E._artemis_config(__import__('pathlib').Path('/data'), {'wave_mode': 'diffractio
     && rm -f /tmp/artemis_strict_field_check.log \
     && echo "artemis strict-field gate OK: unknown agitation key raised (ADR 0158)"
 
+# TELEMAC-3D stratified leg build-time smoke (ADR 0241): telemac3d_build +
+# entrypoint import cleanly, a Telemac3dConfig maps from a synthetic
+# manifest['stratified'] override (no network / no solve), AND an unknown 3D key
+# raises loudly (ADR 0158 strict field gate -- the ADR 0148 stale-image lesson
+# applied to the 3D parser). Also asserts the baked telemac3d binary + the
+# telemac3d.dico + the telemac3d source tree (for the FORTRAN FILE user routine)
+# are present -- the pivotal ADR 0241 finding the leg rides on.
+RUN python -c "import sys; sys.path.insert(0, '/opt/trid3nt/services/workers/telemac'); \
+import telemac3d_build as T; import entrypoint as E; \
+cfg = E._telemac3d_config(__import__('pathlib').Path('/data'), {'flow_mode': 'wind_circulation', 'nplan': 11}); \
+assert cfg.flow_mode == 'wind_circulation' and cfg.nplan == 11 and cfg.workdir == '/data'; \
+print('telemac3d worker import + Telemac3dConfig map OK:', cfg.name)" \
+    && (python -c "import sys; sys.path.insert(0, '/opt/trid3nt/services/workers/telemac'); \
+import entrypoint as E; \
+E._telemac3d_config(__import__('pathlib').Path('/data'), {'flow_mode': 'stratification', 'bogus_3d_key': 1})" \
+        > /tmp/telemac3d_strict_field_check.log 2>&1; echo "exit=$?" >> /tmp/telemac3d_strict_field_check.log) \
+    && grep -q "^exit=1$" /tmp/telemac3d_strict_field_check.log \
+    && grep -q "Telemac3dManifestUnknownFieldsError" /tmp/telemac3d_strict_field_check.log \
+    && rm -f /tmp/telemac3d_strict_field_check.log \
+    && echo "telemac3d strict-field gate OK: unknown 3D key raised (ADR 0158)" \
+    && python -c "import shutil, os; \
+assert shutil.which('telemac3d.py'), 'telemac3d.py not on PATH'; \
+ht=os.environ.get('HOMETEL',''); \
+dico=os.path.join(ht,'sources','telemac3d','telemac3d.dico'); \
+src=os.path.join(ht,'sources','telemac3d'); \
+assert os.path.exists(dico), 'telemac3d.dico missing: '+dico; \
+assert os.path.isdir(src), 'telemac3d sources missing: '+src; \
+print('telemac3d binary + dico + sources present (ADR 0241 substrate baked)')"
+
 # One-shot solver: the activation entrypoint (_entrypoint.sh) sources the base
 # env (HOMETEL/SYSTELCFG/PATH -> telemac2d.py), then execs the worker. CMD is
 # the default argv; the launcher appends nothing (telemac_args=[]) so the

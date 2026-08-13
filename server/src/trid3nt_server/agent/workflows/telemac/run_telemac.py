@@ -397,3 +397,97 @@ def register_artemis_solver() -> None:
 
 
 register_artemis_solver()
+
+
+# --------------------------------------------------------------------------- #
+# TELEMAC-3D stratified / 3D-hydrodynamics solver (ADR 0241) -- SAME worker
+# image, a manifest['stratified'] block routing the entrypoint to the telemac3d
+# pipeline through the baked telemac3d binary. A DISTINCT solver name so the run
+# listing / showcase separates a 3D stratified field from a wave / agitation /
+# river-dye run and the completion carries 3D-specific keys.
+# --------------------------------------------------------------------------- #
+TELEMAC3D_SOLVER_NAME: str = "telemac3d_strat"
+
+#: 3D metrics keys folded into completion.json.
+_STRAT_COMPLETION_METRIC_KEYS: tuple[str, ...] = (
+    "correct_end", "flow_mode", "bathy_source", "result_slf",
+    "surface_field_slf", "bottom_field_slf", "npoin", "nelem", "nplan",
+    "utm_epsg", "stratification_metric", "variable_label", "variable_units",
+    "stratification_dt", "stratification_dt_init", "u_surface", "u_bottom",
+    "depth_avg_u", "front_speed_mps", "benjamin_speed_mps", "front_ratio",
+    "non_hydrostatic", "surface_value_mean", "bottom_value_mean",
+    "wind_speed_mps", "dx_m", "depth_max_m", "depth_mean_m", "coarsened",
+    "n_wet_nodes", "wall_s", "error_code",
+)
+
+
+def _classify_strat_exit(
+    rundir: Path, exit_code: int
+) -> tuple[str, int, str | None, dict[str, Any]]:
+    """Resolve 3D-run status from telemac_metrics.json (dye classify analogue)."""
+    metrics: dict[str, Any] = {}
+    metrics_path = rundir / _METRICS_FILENAME
+    try:
+        if metrics_path.exists():
+            loaded = json.loads(metrics_path.read_text(encoding="utf-8"))
+            if isinstance(loaded, dict):
+                metrics = loaded
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("telemac3d classify_exit: metrics read failed %s: %s", metrics_path, exc)
+    extra: dict[str, Any] = {
+        k: metrics[k] for k in _STRAT_COMPLETION_METRIC_KEYS if k in metrics
+    }
+    correct_end = bool(metrics.get("correct_end"))
+    if exit_code != 0:
+        status = "error"
+        error: str | None = (
+            metrics.get("error") or f"telemac3d_strat exited with non-zero code {exit_code}")
+    elif metrics and not correct_end:
+        status, exit_code = "error", 2
+        error = metrics.get("error") or "TELEMAC-3D did not reach CORRECT END OF RUN"
+    else:
+        status, exit_code, error = "ok", 0, None
+    return status, exit_code, error, extra
+
+
+def telemac3d_local_spec() -> "Any":
+    """Build the TELEMAC-3D ``LocalSolverSpec`` -- same image + volume mount as the
+    river-dye/tomawac/artemis specs (identical build_argv), a 3D classify_exit."""
+    import os
+    from trid3nt_server.agent.tools.simulation.solver.solver import LOCAL_DOCKER_WORKFLOW_NAME, LocalSolverSpec
+
+    image = os.environ.get("TRID3NT_TELEMAC_IMAGE") or DEFAULT_TELEMAC_IMAGE
+
+    def build_argv(run_id: str, rundir: Path, args: list[str]) -> list[str]:
+        return [
+            "docker", "run", "--rm", "--name", run_id,
+            "-v", f"{rundir}:/data", "-w", "/data", image, *args,
+        ]
+
+    return LocalSolverSpec(
+        solver=TELEMAC3D_SOLVER_NAME,
+        workflow_name=LOCAL_DOCKER_WORKFLOW_NAME,
+        args_key="telemac_args",
+        build_argv=build_argv,
+        stdout_name="telemac3d.stdout",
+        stderr_name="telemac3d.stderr",
+        stdout_uri_field="telemac3d_stdout_uri",
+        stderr_uri_field="telemac3d_stderr_uri",
+        exec_kind="docker",
+        classify_exit=_classify_strat_exit,
+    )
+
+
+def register_telemac3d_solver() -> None:
+    """Register ``'telemac3d_strat'`` in the solver + local-spec registries."""
+    from trid3nt_server.agent.tools.simulation.solver.solver import (
+        LOCAL_DOCKER_WORKFLOW_NAME,
+        SOLVER_WORKFLOW_REGISTRY,
+        register_local_solver_spec,
+    )
+
+    SOLVER_WORKFLOW_REGISTRY.setdefault(TELEMAC3D_SOLVER_NAME, LOCAL_DOCKER_WORKFLOW_NAME)
+    register_local_solver_spec(TELEMAC3D_SOLVER_NAME, telemac3d_local_spec)
+
+
+register_telemac3d_solver()

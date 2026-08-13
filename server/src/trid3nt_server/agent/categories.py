@@ -388,6 +388,7 @@ PRIMARY_CATEGORY: dict[str, str] = {
     "telemac_river_dye": "simulation_modeling",
     "tomawac_wave_field": "simulation_modeling",
     "artemis_harbor_agitation": "simulation_modeling",
+    "telemac3d_stratified_flow": "simulation_modeling",
     "telemac_do_sag": "simulation_modeling",
     "telemac_rain_on_grid": "simulation_modeling",
     # Standalone mesh builder (ADR 0200): a model DOMAIN primitive that feeds every
@@ -753,6 +754,11 @@ SECONDARY_CATEGORIES: dict[str, tuple[str, ...]] = {
     "tomawac_wave_field": ("coastal",),
     # ARTEMIS harbour-agitation is a coastal / harbour-engineering question class.
     "artemis_harbor_agitation": ("coastal",),
+    # TELEMAC-3D stratified flow spans simulation_modeling (it runs the telemac3d
+    # solver) AND hydrology (lake/reservoir thermal stratification + turnover is a
+    # limnology question reached from the water lane); a Great Lakes AOI also sits
+    # in the coastal lane.
+    "telemac3d_stratified_flow": ("hydrology", "coastal"),
     # The SWAN sensitivity-sweep + snapshot-batch templates share the coastal
     # cross-listing (both run the SWAN nearshore solver over a coastal AOI).
     "swan_physics_sensitivity_sweep": ("coastal",),

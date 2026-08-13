@@ -73,6 +73,7 @@ _NEWPORT_OR = [-124.15, 44.45, -123.95, 44.80]         # ADR 0230 Slab2 Cascadia
 _GALVESTON = [-95.2, 29.0, -94.2, 29.8]                # ADR 0168 surge shelf
 _PLATTE = [40.905, -98.42]                              # ADR 0165/0166 well (lat, lon)
 _GRAND_ISLAND_REACH = [40.857, -98.412]                 # ADR 0215 Wood River reach AOI (lat, lon)
+_DESCHUTES_MAUPIN = [-121.145, 45.160, -121.035, 45.205]  # ADR 0239 real river spotting barrier (lower Deschutes, OR)
 
 
 @dataclass
@@ -101,6 +102,18 @@ SHOWCASE: list[Showcase] = [
              "ADR 0190 row 2 ELMFIRE Hirsch (1998) initial-attack probability of "
              "containment closed form: POC vs attack delay across head-fire "
              "intensities (no engine run; chart + scalars).", 120),
+    Showcase("elmfire_spot_fire_barrier_crossing",
+             {"mode": "real", "bbox": _DESCHUTES_MAUPIN,
+              "ignition_lonlat": [-121.115, 45.182],
+              "mean_spotting_distance_m": 60.0, "nembers": 30, "pign_pct": 100.0,
+              "wind_speed_mph": 35.0, "wind_dir_deg": 270.0, "duration_hours": 6.0,
+              "cellsize_m": 30.0, "compute_class": "standard"},
+             "ADR 0239 (real-data mode, CANONICAL): does ember spotting carry a real "
+             "wildfire across a REAL RIVER (lower Deschutes nr Maupin, OR - LANDFIRE "
+             "water class, non-burnable) that the contiguous front cannot cross? Real "
+             "LANDFIRE fuels + 3DEP DEM (slope/aspect drive spread), spotting OFF vs ON "
+             "on the same warp; river width + far-side burned area measured off the ToA "
+             "grid. Honest physics (the river may HOLD - no forced jump).", 900),
     Showcase("modflow_package_validation", {"case": "maw_crossaquifer"},
              "ADR 0153 MODFLOW package validation, MAW cross-aquifer fixture", 300),
     Showcase("modflow_package_validation", {"case": "sfr_stream_depletion"},
@@ -508,6 +521,37 @@ SHOWCASE: list[Showcase] = [
              "spectral field; prescribed monochromatic incident wave, not a "
              "calibrated hindcast.",
              600, title_suffix="marquette-breakwater-diffraction"),
+    # -- TELEMAC-3D (3D baroclinic hydrodynamics; real Great Lakes bathy) -----
+    Showcase("telemac3d_stratified_flow",
+             {"bbox": [-87.9, 47.2, -87.1, 47.7], "flow_mode": "wind_circulation",
+              "wind_speed_mps": 12.0, "nplan": 15, "target_resolution_m": 2500.0,
+              "sim_duration_hours": 3.0},
+             "ADR 0241 TELEMAC-3D three-dimensional baroclinic Navier-Stokes: "
+             "WIND-DRIVEN vertical circulation on REAL Lake Superior lake-datum "
+             "bathymetry (NOAA NGDC DEM_all; depths to ~320 m, 513 wet nodes, 15 "
+             "sigma planes). Physics asserts (proof norm #9, THE 3D-vs-2D "
+             "discriminant): under a steady 12 m/s wind the mid-basin vertical "
+             "velocity profile OPPOSES with depth - surface downwind (u ~ +0.048 "
+             "m/s) over a bottom upwind return flow (u ~ -0.019 m/s), depth-average "
+             "~0 - the two-layer wind gyre a 2D depth-averaged model returns as "
+             "~zero velocity everywhere. Refinement-grade 3D tier; prescribed steady "
+             "wind (no met-forcing fetcher), not a calibrated hindcast.",
+             600, title_suffix="lake-superior-wind-circulation"),
+    Showcase("telemac3d_stratified_flow",
+             {"bbox": [-87.9, 47.2, -87.1, 47.7], "flow_mode": "stratification",
+              "wind_speed_mps": 0.0, "nplan": 15, "thermocline_depth_m": 25.0,
+              "target_resolution_m": 2500.0, "sim_duration_hours": 4.0},
+             "ADR 0241 TELEMAC-3D thermal STRATIFICATION on REAL Lake Superior "
+             "lake-datum bathymetry (NOAA NGDC DEM_all; depths to ~320 m, 15 sigma "
+             "planes, DENSITY LAW 1 freshwater rho max near 4 C). Physics asserts: "
+             "a calm lake KEEPS a warm-over-cold vertical structure - the persisting "
+             "top-to-bottom temperature difference is nonzero (~3 C, surface ~18 C "
+             "over bottom ~16 C) and the vertical temperature PROFILE (the "
+             "discriminant a 2D depth-averaged model has no representation of) shows "
+             "the epilimnion over the hypolimnion. The stratified 3D water column "
+             "the AED2 lake-ecology STOP requires; prescribed warm-over-cold column "
+             "(no met-forcing fetcher), not a calibrated hindcast.",
+             600, title_suffix="lake-superior-stratification"),
     # -- HEC-RAS (bundled Muncie deck; cheap 1D/2D) --------------------------
     Showcase("hecras_flood_2d",
              {"bbox": [-98.115, 29.975, -98.083, 30.000], "target_peak_cfs": 15000,

@@ -709,6 +709,14 @@ from ..workflows.telemac.wave_field.wave_field import tomawac_wave_field as _tom
 # through the baked artemis binary; the phase-resolving complement to the TOMAWAC
 # spectral tier.
 from ..workflows.telemac.agitation.agitation import artemis_harbor_agitation as _artemis_harbor_agitation  # noqa: E402,F401 - ARTEMIS agitation front (engine=telemac, tier=template)
+# telemac3d_stratified_flow TEMPLATE (engine="telemac", tier="template"),
+# workflows/telemac/stratified_flow/: the TELEMAC-3D three-dimensional baroclinic
+# Navier-Stokes engine (ADR 0241) - the one genuinely NEW solver leg in the family.
+# ONE question-class tool, three modes (stratification / wind_circulation /
+# salt_wedge); real Great Lakes lake-datum bathymetry (thermal / wind modes) or an
+# idealized closed basin. Physics proven through the baked telemac3d binary; the 3D
+# refinement tier that unblocks the AED2 lake-ecology + dune-migration STOPs.
+from ..workflows.telemac.stratified_flow.stratified_flow import telemac3d_stratified_flow as _telemac3d_stratified_flow  # noqa: E402,F401 - TELEMAC-3D stratified front (engine=telemac, tier=template)
 # generate_mesh (ADR 0200): the standalone mesh builder. Promotes the ADR 0193
 # watershed + ADR 0194 coastal water-edge sandbox meshers behind ONE tool (mode
 # inferred from inputs); emits an MDAL .2dm display layer + a durable mesh artifact

@@ -1,10 +1,13 @@
 # ADR 0241 - TELEMAC-3D stratified/3D-hydrodynamics engine leg: local-first physics proof + productionization recipe
 
-Status: Physics PROVEN local-first (in-image, through the baked telemac3d
-binary, all TELEMAC-3D board question classes, discriminating 3D-vs-2D /
-stratified-vs-mixed pairs per proof norm #9). NOT productionized: no registered
-LLM tool, no worker composer, no entrypoint mode, no image rebuild. Registration
-recipe documented below. Board rows stay CAND (annotated PHYSICS-PROVEN).
+Status: COMPLETE 2026-08-13 (wave 2 productionization landed - see "## Completion"
+below). Physics PROVEN local-first (wave 1), then the registered engine leg built
++ live: worker `telemac3d_build.py` + composer `telemac3d_stratified_flow` +
+entrypoint `manifest['stratified']` mode + solver `telemac3d_strat` + image
+rebuild with build-time smoke; three discriminants reproduce through the baked
+copy; LIVE over Lake Superior (real NOAA lake-datum bathy) through the daemon.
+Board TELEMAC-3D rows -> LANDED/COVERED. Both blocked STOPs (AED2 lake ecology,
+coastal dune migration) drop to SINGLE-blocker.
 Date: 2026-08-13
 
 ## Context
@@ -208,3 +211,76 @@ build on the two-wave rhythm (this ADR is wave 1). Wave 2:
   vendoring/wiring wave away" - recorded on their board rows.
 - Board TELEMAC-3D rows annotated PHYSICS-PROVEN (not COVERED - no registered
   tool yet), per the two-wave rhythm.
+
+## Completion (wave 2) - COMPLETE 2026-08-13
+
+The productionization layer is BUILT and LIVE. The registered engine leg mirrors
+the tomawac (0236) / artemis (0237) completions structurally.
+
+- **Worker leg + composer**: `services/workers/telemac/telemac3d_build.py`
+  promotes the sandbox verbatim (all 8 gotchas baked); `Telemac3dConfig` +
+  `solve()` dispatch by `flow_mode` (stratification / wind_circulation /
+  salt_wedge). The worker reduces the 3D result to surface + bottom single-frame
+  2D SELAFINs (the artemis re-emit pattern) + computes the discriminant scalars +
+  the vertical-profile chart off the full 3D column. Entrypoint routes a
+  `manifest['stratified']` block -> `run_telemac3d_pipeline`; strict parser
+  `telemac3d-strat-1` + typed `Telemac3dManifestUnknownFieldsError` rejection.
+  A NOAA Great Lakes real-bathy path (all-wet clamp to `min_depth_m`) serves the
+  stratification / wind modes; salt_wedge stays idealized (analytic lock-exchange
+  V&V; a real estuary needs a tidal liquid boundary).
+  Agent-side `postprocess_telemac3d` (in `postprocess_telemac.py`) rasterizes the
+  surface (primary) + bottom (context) layers to two 4326 (real) / placeholder-
+  frame (idealized) COGs, folding the worker's typed discriminant scalars onto
+  the `Telemac3dLayerURI` (invariant 1). Composer tool `telemac3d_stratified_flow`
+  (engine=telemac, tier=template): target_resolution_m + 0225 ResolutionSpec +
+  0232 grid coarsen; LOUD labeled defaults through the 0231 input-review gate.
+- **Registration**: corpus.yaml (12 phrasings, model-free retrieval top-8 on all
+  4 probe prompts) + categories (`simulation_modeling` primary, `hydrology` +
+  `coastal` cross-list) + EXPECTED_TEMPLATES 250->251. Solver `telemac3d_strat`
+  registered in both registries. `Telemac3dLayerURI` +
+  `TELEMAC3D_STRATIFICATION_STYLE_PRESET` contracts. Image rebuilt with a
+  build-time smoke (Telemac3dConfig map + strict-gate + telemac3d binary/dico/
+  sources presence).
+- **Through-image mode solves** (the three discriminants reproduce through the
+  baked copy, ncsize=1):
+  - salt_wedge: hydrostatic front 0.1710 m/s vs non-hydrostatic 0.1755 m/s
+    (non-hydro FASTER - the dam-break-3D fidelity rung).
+  - wind_circulation (idealized): u_surface +0.043 / u_bottom -0.040 /
+    depth-avg +0.0003 (~0) - the two-layer wind gyre.
+  - stratification (idealized calm): dT_final 6.25 C (from 10 C IC - the
+    thermocline persists).
+- **LIVE at a real US lake (Lake Superior, NOAA lake-datum bathy, depths to
+  ~320 m, UTM 16N, 15 sigma planes)** through the daemon, seeded via the product
+  `!run` path (`scripts/seed_showcase_cases.py --only telemac3d`, 2 Cases, each
+  publishing surface + bottom COGs):
+  - wind_circulation @ 12 m/s: mid-basin vertical U OPPOSES with depth -
+    u_surface ~ +0.048 / u_bottom ~ -0.019 m/s, depth-avg ~0 (the 3D-vs-2D
+    discriminant over REAL bathymetry).
+  - stratification calm: persisting surface-vs-bottom temperature structure
+    (surface ~18 C over bottom ~16 C, dT ~3 C) + the vertical-profile chart.
+  HONEST FINDING (baked into the showcase notes): over a 320 m-deep lake the
+  calm-vs-windy pair does NOT discriminate in a short sim - a 14 m/s wind cannot
+  overturn a 320 m column in hours (calm dT 3.03 vs windy 3.32, physically
+  correct). The calm-vs-windy DESTRUCTION discriminant lives in the SHALLOW
+  idealized basin (dT 6.25 calm); over a deep real lake the discriminant is the
+  persisting stratification + the vertical profile (a structure a 2D
+  depth-averaged model has no representation of). The flood canary is unaffected
+  (additive leg, no shared seam touched).
+
+Board TELEMAC-3D rows -> LANDED / COVERED (registered tool + live proof).
+
+## STOP-unlock accounting (updated 2026-08-13)
+
+Both STOPs this substrate named are now **single-blocker** (the 3D-path blocker
+is fully removed by the registered leg, not just physics-proven):
+
+- **`aed2_lake_ecology_coupling`** (ADR 0234): the "no TELEMAC-3D worker path"
+  blocker is GONE (a registered stratified-3D lake leg exists,
+  `libwaqtel4telemac3d.so` baked). SINGLE remaining blocker: vendor the aed2.nml
+  + phyto/zoo/pathogen/bivalve config decks + a shipped-deck-runner, then wire
+  WAQTEL-3D + AED2 onto the stratification deck.
+- **`coastal_dune_migration_3d_coupling`** (ADR 0240): the "no 3D hydrodynamic
+  deck author" blocker is GONE (registered 3D author + `libgaia4telemac3d.so`
+  baked). SINGLE remaining blocker: a marine/estuary domain + wave-current
+  residual forcing (TOMAWAC 0236 supplies the wave side) coupling GAIA (LANDED
+  2D) to the 3D residual flow.

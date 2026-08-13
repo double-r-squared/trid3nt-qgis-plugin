@@ -1,0 +1,5 @@
+"""TELEMAC-3D stratified / 3D-hydrodynamics engine template (ADR 0241)."""
+from trid3nt_server.agent.workflows.telemac.stratified_flow.stratified_flow import (  # noqa: F401
+    model_telemac3d_stratified_flow,
+    telemac3d_stratified_flow,
+)
