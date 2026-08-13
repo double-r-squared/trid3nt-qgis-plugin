@@ -107,9 +107,9 @@ TEMPLATE_CARD = TemplateCard(
     knobs=(
         "spill_fraction, spill_duration_s, dye_concentration_mgl, "
         "reach_length_km, sim_duration_s, source_q_m3s, channel_width_m, "
-        "substance (dye / oil / sewage / sediment / scour), mesh_resolution, "
+        "substance (dye / oil / sewage / sediment / scour / graded), mesh_resolution, "
         "decay_half_life_hours, grain_size_um, erodible_bed, bed_thickness_m, "
-        "bedload_formula, morphological_factor, friction_coefficient, "
+        "bedload_formula, morphological_factor, sediment_gradation, friction_coefficient, "
         "rainfall_mm_per_day, rainfall_gridmet_window, evaporation_mm_per_day"
     ),
 )
@@ -182,6 +182,7 @@ async def telemac_river_dye(
     bed_thickness_m: float | None = None,
     bedload_formula: int | None = None,
     morphological_factor: float | None = None,
+    sediment_gradation: list | str | None = None,
     friction_coefficient: float | None = None,
     friction_law: int | None = None,
     velocity_diffusivity: float | None = None,
@@ -333,6 +334,19 @@ async def telemac_river_dye(
             per hydraulic step so a short demo hydrograph yields a readable scour
             depth. Default 10; clamped [1, 100]. Higher = more bed change (a
             speed-up lever, not a physical rate).
+        sediment_gradation: OPTIONAL - GAIA MULTI-CLASS GRADED SEDIMENT for the
+            "how does a MIXTURE of grain sizes SORT / segregate (vs a single
+            representative size)" question. Pass a preset name
+            ("graded_sand" / "poorly_sorted" / "sand_gravel_bimodal" /
+            "fine_coarse_sand") OR an explicit list of [d50_um, fraction] pairs
+            (e.g. [[100,0.34],[400,0.33],[1000,0.33]]); >= 2 classes required.
+            A graded mix forces an erodible (mobile) bed; the classes have
+            different mobility so the bed ARMORS in scour zones (surface D50
+            rises) and FINES in deposition zones - the run reports the surface
+            D50 spread (min/max/range um) as the sorting signature. Also
+            auto-arms from prompts naming "graded / mixed-grain / sorting /
+            armoring / bimodal" sediment. Demo mixes, never a measured site
+            sieve curve (no bed-composition fetcher exists).
         friction_coefficient: OPTIONAL ADVANCED lever - bed roughness
             (Strickler Ks). Leave unset for demo default (33); clamped
             [10, 90]. Set only from a site-specific user value.
@@ -648,6 +662,23 @@ async def telemac_river_dye(
                     "using default (1=Meyer-Peter-Mueller)", bedload_formula)
                 bedload_formula = None
 
+    # GAIA v3 MULTI-CLASS GRADED SEDIMENT (ADR 0240). A gradation is armed by an
+    # explicit sediment_gradation (a preset name OR a list of [d50_um, fraction]
+    # pairs) OR by grading vocabulary (graded / mixed-grain / sorting / armoring /
+    # bimodal) in the substance/contaminant. A graded mix needs a MOBILE bed to
+    # sort, so arming a gradation forces erodible_bed=True (the composer also forces
+    # the sediment class). The default mix when a grading word is named with no
+    # explicit list is GRADATION_PRESETS['graded_sand'] (a fine/med/coarse sand-
+    # gravel mix - an honest demo gradation, never a measured site sieve curve).
+    _grad_hint = any(w in substance for w in GRADATION_KEYWORDS) or (
+        contaminant and any(w in str(contaminant).lower()
+                            for w in GRADATION_KEYWORDS))
+    sediment_gradation = resolve_gradation(sediment_gradation)
+    if sediment_gradation is None and _grad_hint:
+        sediment_gradation = list(GRADATION_PRESETS["graded_sand"])
+    if sediment_gradation:
+        erodible_bed = True  # a graded mix sorts only on a mobile (erodible) bed
+
     # TELEMAC-PHYS-1 constitutive-physics overrides (advanced / demo-default
     # levers). Coerce + CLAMP to the physics_registry ranges here so a set value
     # never errors the call (matches this tool's defensive style); the workflow
@@ -714,6 +745,7 @@ async def telemac_river_dye(
             bed_thickness_m=bed_thickness_m,
             bedload_formula=bedload_formula,
             morphological_factor=morphological_factor,
+            sediment_gradation=sediment_gradation,
             friction_coefficient=friction_coefficient,
             friction_law=friction_law,
             velocity_diffusivity=velocity_diffusivity,
@@ -961,6 +993,75 @@ SCOUR_KEYWORDS: tuple[str, ...] = (
 )
 
 
+#: GRADED / MIXED-GRAIN vocabulary - the words that mean "a mixture of several
+#: grain sizes that SORTS and segregates" (ADR 0240 GAIA v3 multi-class). Naming
+#: any of these routes to the sediment class AND auto-arms a default gradation +
+#: erodible_bed (a graded mix needs a mobile bed to sort). Distinct from
+#: SCOUR_KEYWORDS: scour is single-grain bed lowering; grading is multi-class
+#: differential mobility -> armoring / downstream fining.
+GRADATION_KEYWORDS: tuple[str, ...] = (
+    "graded", "gradation", "mixed grain", "mixed-grain", "multi-grain",
+    "multigrain", "multi-class", "multiclass", "grain size distribution",
+    "grain-size distribution", "sorting", "segregat", "armor", "armour",
+    "poorly sorted", "well sorted", "well graded", "well-graded", "bimodal",
+    "fining", "sediment mixture", "grain mixture",
+)
+
+#: Named demo gradations (d50 in microns, initial fraction) - honest demo mixes,
+#: never a measured site sieve curve (no bed-composition fetcher exists). The
+#: worker renormalizes fractions + clamps d50 to [5, 2000] um. Default when a
+#: grading word is named with no explicit list: ``graded_sand``.
+GRADATION_PRESETS: dict[str, list[list[float]]] = {
+    "graded_sand": [[100.0, 0.34], [400.0, 0.33], [1000.0, 0.33]],
+    "poorly_sorted": [[80.0, 0.4], [300.0, 0.3], [1200.0, 0.3]],
+    "sand_gravel_bimodal": [[200.0, 0.5], [1800.0, 0.5]],
+    "fine_coarse_sand": [[120.0, 0.5], [800.0, 0.5]],
+}
+
+
+def resolve_gradation(spec: list | str | None) -> list[list[float]] | None:
+    """Coerce a sediment_gradation arg to a clean [[d50_um, fraction], ...] list.
+
+    Accepts a preset NAME (a GRADATION_PRESETS key), an explicit list of
+    [d50_um, fraction] pairs (or {'d50_um','fraction'} dicts), or None. Invalid /
+    empty specs return None (single-class path). A surviving list of >= 2 classes
+    is what arms the multi-class deck; a 1-class list collapses to None (nothing
+    to sort). d50 is clamped to [5, 2000] um; fractions floored at 0 (the worker
+    renormalizes). The agent-side mirror of the worker ``_normalize_gradation`` so
+    the tool and the deck author agree on what counts as a usable gradation.
+    """
+    if spec is None:
+        return None
+    if isinstance(spec, str):
+        key = spec.strip().lower().replace(" ", "_")
+        pairs = GRADATION_PRESETS.get(key)
+        if pairs is None:
+            return None
+        spec = pairs
+    out: list[list[float]] = []
+    try:
+        items = list(spec)
+    except TypeError:
+        return None
+    for item in items:
+        try:
+            if isinstance(item, dict):
+                um = float(item.get("d50_um"))
+                fr = float(item.get("fraction", 0.0))
+            else:
+                um = float(item[0])
+                fr = float(item[1])
+        except (TypeError, ValueError, IndexError, KeyError):
+            continue
+        if not (um > 0.0) or fr < 0.0:
+            continue
+        out.append([min(max(um, 5.0), 2000.0), fr])
+    if len(out) < 2:
+        return None
+    out.sort(key=lambda p: p[0])
+    return out[:6]
+
+
 def classify_substance(substance: str) -> tuple[str, str | dict[str, float] | None]:
     """Route a substance string to a TELEMAC substance class + its payload.
 
@@ -991,6 +1092,11 @@ def classify_substance(substance: str) -> tuple[str, str | dict[str, float] | No
     # diverge. Defaults to non-cohesive sand (a demo d50 the grain_size_um param
     # overrides).
     if any(w in s for w in SCOUR_KEYWORDS):
+        return "sediment", {"type": "sand", "grain_size": 200.0}
+    # GRADED / MIXED-GRAIN phrasing (a mixture that sorts) is also the sediment
+    # class - the GAIA v3 multi-class path. Routed off the SAME vocabulary the
+    # tool uses to auto-arm sediment_gradation, so the gates cannot diverge.
+    if any(w in s for w in GRADATION_KEYWORDS):
         return "sediment", {"type": "sand", "grain_size": 200.0}
     return "tracer", None
 
@@ -1851,6 +1957,7 @@ async def model_telemac_river_dye(
     bed_thickness_m: float | None = None,
     bedload_formula: int | None = None,
     morphological_factor: float | None = None,
+    sediment_gradation: list | None = None,
     *,
     release_seeds_reach: bool | None = None,
     seed_release_lon: float | None = None,
@@ -2067,6 +2174,14 @@ async def model_telemac_river_dye(
     # gnis_name mainstem (confluence disambiguation, Columbia-proven).
     river_name = _named_watercourse(location or location_name) or ""
     substance_class, substance_payload = classify_substance(substance)
+    # GAIA v3 MULTI-CLASS GRADED SEDIMENT (ADR 0240): a resolved gradation of
+    # >= 2 grain classes is a graded-sediment SORTING run. It rides the erodible-
+    # bed coupling (a mix sorts only on a MOBILE bed), so it forces erodible_bed
+    # True here too - a raw dispatch straight to this workflow (bypassing the tool
+    # arm) still routes correctly, keeping the erodible/sediment gates in lock-step.
+    sediment_gradation = resolve_gradation(sediment_gradation)
+    if sediment_gradation:
+        erodible_bed = True
     # SINGLE SOURCE OF TRUTH for the erodible-bed / GAIA gate (ADR 0216
     # false-green fix). An armed erodible bed - an explicit erodible_bed knob OR
     # the scour/erosion/bedload auto-arm in telemac_river_dye - IS a GAIA
@@ -2220,7 +2335,13 @@ async def model_telemac_river_dye(
             **({"bedload_formula": int(bedload_formula)}
                if erodible_bed and bedload_formula is not None else {}),
             **({"morphological_factor": float(morphological_factor)}
-               if erodible_bed and morphological_factor is not None else {})}
+               if erodible_bed and morphological_factor is not None else {}),
+            # GAIA v3 multi-class graded sediment: the resolved [[d50_um,frac],...]
+            # gradation rides the manifest ONLY when >= 2 classes survived, flipping
+            # write_gaia_deck to the multi-class bedload (sorting) deck. Absent (the
+            # single-class case) leaves the deck byte-identical.
+            **({"sediment_gradation": sediment_gradation}
+               if sediment_gradation else {})}
            if substance_class == "sediment" else {}),
         # WAQTEL O2 do_sag class: the fully-mixed discharge (CBOD + DO) rides in at
         # the inflow (author_deck O2 branch omits the dye point source entirely).
@@ -2500,6 +2621,17 @@ async def model_telemac_river_dye(
                 "deposited_mass_kg": _dep,
                 "deposit_fraction": worker_sed.get("sediment_deposit_fraction"),
                 "max_deposition_mm": worker_sed.get("sediment_max_deposition_mm"),
+                # GAIA v3 multi-class SORTING (ADR 0240): the surface-D50 spread
+                # the worker measured off the MEAN DIAMETER field (None on a
+                # single-class run). Folded onto the peak so the agent narrates
+                # the sorting signature (Invariant 1 - measured, never invented).
+                "sediment_n_classes": worker_sed.get("sediment_n_classes"),
+                "sediment_surface_d50_min_um":
+                    worker_sed.get("sediment_surface_d50_min_um"),
+                "sediment_surface_d50_max_um":
+                    worker_sed.get("sediment_surface_d50_max_um"),
+                "sediment_surface_d50_range_um":
+                    worker_sed.get("sediment_surface_d50_range_um"),
             })
             if gaia_path:
                 async with substep(emitter, "postprocess_telemac"):

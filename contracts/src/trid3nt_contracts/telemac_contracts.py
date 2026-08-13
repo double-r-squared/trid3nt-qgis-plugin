@@ -186,6 +186,16 @@ class TelemacDyeLayerURI(LayerURI):
     # GAIA v2 erodible-bed only: deepest bed SCOUR magnitude (mm, >= 0). None on
     # the v1 supply-limited path and every non-sediment run.
     max_scour_mm: float | None = Field(default=None, ge=0.0)
+    # GAIA v3 multi-class graded-sediment SORTING scalars (ADR 0240): the spread
+    # of the SURFACE mean grain size (um) after the bed sorts - the bed armors in
+    # scour zones (D50 up) and fines in deposits (D50 down). Populated ONLY for a
+    # multi-class (>= 2 grain classes) run; None on single-class / non-sediment.
+    # A single class is uniform by construction (range 0), so a nonzero range IS
+    # the sorting signature the agent narrates (Invariant 1 - from the field).
+    sediment_n_classes: int | None = Field(default=None, ge=2)
+    sediment_surface_d50_min_um: float | None = Field(default=None, ge=0.0)
+    sediment_surface_d50_max_um: float | None = Field(default=None, ge=0.0)
+    sediment_surface_d50_range_um: float | None = Field(default=None, ge=0.0)
 
 
 class TelemacDoLayerURI(LayerURI):

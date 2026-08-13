@@ -170,7 +170,11 @@ class TelemacManifestUnknownFieldsError(ValueError):
 #: in-worker-sampled bed as bed_bathymetry.tif (a 4326 COG) + records the bed_cog /
 #: bed_cog_min_m / bed_cog_max_m keys in telemac_metrics.json so the composer
 #: surfaces the river bed bathymetry as a role=context input.
-_PARSER_VERSION = "telemac-reach-7"
+#: -8 adds the ADR 0240 GAIA v3 multi-class graded-sediment field
+#: (sediment_gradation: >=2 (d50_um, fraction) classes -> a multi-class bedload
+#: deck with Egiazaroff hiding, so the bed SORTS/armors; the run reports the
+#: surface D50 spread as the sorting honesty-floor number).
+_PARSER_VERSION = "telemac-reach-8"
 
 
 def _reach_config(data_dir: Path, reach_overrides: dict[str, Any]) -> Any:
@@ -635,6 +639,29 @@ def run_pipeline(
                     cy = float((gy[mmask] * dep[mmask]).sum() / dep[mmask].sum())
                     sediment_stats["sediment_deposit_centroid_dist_m"] = round(
                         float(np.hypot(cx - sx, cy - sy)), 1)
+            # GAIA v3 MULTI-CLASS SORTING signature (ADR 0240): the surface MEAN
+            # DIAMETER field spread. A single-class bed is uniform (range ~0 -
+            # sorting is structurally impossible); a graded mix armors in scour
+            # zones (D50 up) and fines in deposition zones (D50 down), so the
+            # min/max/range in um is the Invariant-1 sorting number the agent
+            # narrates. Emitted only when a gradation of >= 2 classes ran.
+            grad = B._normalize_gradation(getattr(cfg, "sediment_gradation", ()))
+            if len(grad) >= 2:
+                d50v = [v for v in gf.varnames
+                        if "DIAMETER" in v.upper()
+                        or v.strip().upper().startswith("D50")]
+                if d50v:
+                    dd = np.asarray(gf.get_data_value(d50v[0], len(gf.times) - 1))
+                    dd = dd[np.isfinite(dd) & (dd > 0)]
+                    if dd.size:
+                        um = dd * 1.0e6
+                        sediment_stats["sediment_n_classes"] = len(grad)
+                        sediment_stats["sediment_surface_d50_min_um"] = round(
+                            float(um.min()), 1)
+                        sediment_stats["sediment_surface_d50_max_um"] = round(
+                            float(um.max()), 1)
+                        sediment_stats["sediment_surface_d50_range_um"] = round(
+                            float(um.max() - um.min()), 1)
             gf.close()
             # deposit fraction: net bed mass (kg) / injected (kg), clamped [0,1].
             net = sediment_stats.get("sediment_net_bed_mass_kg")

@@ -107,3 +107,49 @@ def test_gaia_v2_bed_thickness_floored(tmp_path, thick, expected):
     B.write_gaia_deck(cfg, "river.slf", "river.cli", str(tmp_path))
     deck = _read(tmp_path / B.GAIA_STEERING_FILENAME)
     assert f"LAYERS INITIAL THICKNESS        = {expected}" in deck
+
+
+# --- ADR 0240: GAIA v3 multi-class graded sediment (grain sorting) ---------- #
+
+def test_normalize_gradation_renormalizes_sorts_and_caps():
+    # renormalizes weights to sum 1, sorts fine->coarse, drops <2-class specs
+    g = B._normalize_gradation([[400, 1.0], [100, 1.0], [1000, 2.0]])
+    assert [um for um, _ in g] == [100.0, 400.0, 1000.0]  # sorted
+    assert abs(sum(fr for _, fr in g) - 1.0) < 1e-9        # renormalized
+    assert B._normalize_gradation([[200, 1.0]]) == []      # 1 class -> single-path
+    assert B._normalize_gradation([]) == []
+    # d50 clamp to [5,2000] um
+    g2 = B._normalize_gradation([[3, 0.5], [5000, 0.5]])
+    assert [um for um, _ in g2] == [5.0, 2000.0]
+
+
+def test_gaia_v3_multiclass_deck_emits_sorted_classes(tmp_path):
+    cfg = B.ReachConfig(substance_class="sediment", erodible_bed=True,
+                        bed_thickness_m=5.0, bedload_formula=1,
+                        morphological_factor=20.0,
+                        sediment_gradation=[[100.0, 0.3333], [400.0, 0.3333],
+                                            [1200.0, 0.3334]],
+                        workdir=str(tmp_path))
+    B.write_gaia_deck(cfg, "river.slf", "river.cli", str(tmp_path))
+    deck = _read(tmp_path / B.GAIA_STEERING_FILENAME)
+    # multi-class arrays (3 NCO classes, semicolon-separated)
+    assert "CLASSES TYPE OF SEDIMENT        = NCO;NCO;NCO" in deck
+    assert "CLASSES SEDIMENT DIAMETERS      = 0.0001;0.0004;0.0012" in deck
+    assert "CLASSES INITIAL FRACTION        = 0.3333;0.3333;0.3334" in deck
+    # Egiazaroff hiding + bedload (sorting mechanism), D50 output var
+    assert "HIDING FACTOR FORMULA           = 1" in deck
+    assert "BED LOAD FOR ALL SANDS          = YES" in deck
+    assert "SUSPENSION FOR ALL SANDS        = NO" in deck
+    assert "D50" in deck  # surface mean-diameter output = sorting signature
+    # DAMOCLES 72-char clamp holds even with the widened arrays
+    assert all(len(ln) <= 72 for ln in deck.splitlines())
+
+
+def test_gaia_single_class_gradation_falls_back(tmp_path):
+    # a 1-class gradation is not a mixture -> single-class deck (no CLASSES arrays)
+    cfg = B.ReachConfig(substance_class="sediment", erodible_bed=True,
+                        sediment_gradation=[[300.0, 1.0]], workdir=str(tmp_path))
+    B.write_gaia_deck(cfg, "river.slf", "river.cli", str(tmp_path))
+    deck = _read(tmp_path / B.GAIA_STEERING_FILENAME)
+    assert "NCO;NCO" not in deck
+    assert "HIDING FACTOR FORMULA" not in deck

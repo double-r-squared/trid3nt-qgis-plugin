@@ -203,6 +203,23 @@ class ReachConfig:
     bed_thickness_m: float = 5.0        # v2 erodible bed stock depth (LAYERS INITIAL THICKNESS)
     bedload_formula: int = 1            # v2 BED-LOAD TRANSPORT FORMULA (1=Meyer-Peter-Mueller)
     morphological_factor: float = 10.0  # v2 MORPHOLOGICAL FACTOR (bed-evolution amplification)
+    # GAIA v3 MULTI-CLASS GRADED SEDIMENT (mixed-grain sorting / segregation).
+    # sediment_gradation is a list of (d50_um, initial_fraction) pairs. When it
+    # carries >= 2 classes, write_gaia_deck emits a MULTI-CLASS non-cohesive
+    # bedload deck: several CLASSES SEDIMENT DIAMETERS / CLASSES INITIAL FRACTION
+    # with an Egiazaroff HIDING FACTOR FORMULA (=1) and an active layer (GAIA
+    # auto-arms multilayer stratification with >1 class). Under a flood the coarse
+    # and fine classes have DIFFERENT mobility (Meyer-Peter-Mueller transport
+    # scales with grain size), so the bed SORTS: fines winnow out of scour zones
+    # (the surface armors -> MEAN DIAMETER rises) and settle in deposition zones
+    # (surface fines) - the "how does a mixture of grain sizes segregate vs a
+    # single representative size" question. Rides the SAME erodible-bed coupling as
+    # v2 (SUSPENSION off, no suspended tracer appended, dye stays sole companion);
+    # the composer forces erodible_bed=True whenever a gradation is armed. Empty
+    # tuple (default) leaves every single-class run byte-identical. Keywords pinned
+    # in-image against gaia.dico v9.0 (CLASSES SEDIMENT DIAMETERS/INITIAL FRACTION/
+    # TYPE OF SEDIMENT arrays, HIDING FACTOR FORMULA=1 Egiazaroff, D50 output var).
+    sediment_gradation: tuple = ()      # v3 [(d50_um, fraction), ...] >=2 -> multi-class
     # WAQTEL O2 "do_sag" class (mutually exclusive with oil/decay/sediment): the
     # dissolved-oxygen SAG below a permitted discharge (US TMDL/permit question).
     # author_deck couples WAQTEL with WATER QUALITY PROCESS = 2 (the O2 module),
@@ -2034,6 +2051,45 @@ GAIA_STEERING_FILENAME = "gaia_river.cas"
 GAIA_RESULT_FILENAME = "gaia_river.slf"
 
 
+def _normalize_gradation(raw) -> list[tuple[float, float]]:
+    """Coerce a sediment_gradation spec to a clean [(d50_um, fraction), ...] list.
+
+    Accepts a list/tuple of (d50_um, fraction) pairs (JSON round-trips them as
+    2-lists) or of {'d50_um':.., 'fraction':..} dicts. Each d50 is clamped to
+    [5, 2000] um (silt .. coarse sand, the single-class band); non-positive or
+    unparseable entries drop. Fractions are floored at 0 and RENORMALIZED to sum
+    to 1 (so a caller can pass raw weights); classes are sorted fine->coarse and
+    capped at 6 (GAIA's cost grows per class - a demo gradation, not a full sieve
+    curve). Returns [] when fewer than 2 valid classes survive (a single class is
+    not a mixture), so the caller keeps the single-class path.
+    """
+    out: list[tuple[float, float]] = []
+    for item in (raw or ()):
+        try:
+            if isinstance(item, dict):
+                um = float(item.get("d50_um"))
+                fr = float(item.get("fraction", 0.0))
+            else:
+                um = float(item[0])
+                fr = float(item[1])
+        except (TypeError, ValueError, IndexError, KeyError):
+            continue
+        if not (um > 0.0) or fr < 0.0:
+            continue
+        um = min(max(um, 5.0), 2000.0)
+        out.append((um, fr))
+    if len(out) < 2:
+        return []                       # a single class is not a mixture
+    out.sort(key=lambda p: p[0])
+    out = out[:6]
+    total = sum(fr for _, fr in out)
+    if total <= 0.0:
+        # no usable fractions -> equal split so the mix is still valid
+        eq = 1.0 / len(out)
+        return [(um, eq) for um, _ in out]
+    return [(um, fr / total) for um, fr in out]
+
+
 def write_gaia_deck(cfg, slf_name: str, cli_name: str, workdir: str) -> str:
     """Author the GAIA steering file for ONE supply-limited suspended class.
 
@@ -2063,7 +2119,47 @@ def write_gaia_deck(cfg, slf_name: str, cli_name: str, workdir: str) -> str:
     # d50 in METRES from microns; floored so a bogus value cannot zero the grain.
     d50_m = max(float(getattr(cfg, "grain_size_um", 200.0)), 1.0) * 1.0e-6
     density = float(getattr(cfg, "sediment_density", 2650.0))
-    if bool(getattr(cfg, "erodible_bed", False)):
+    gradation = _normalize_gradation(getattr(cfg, "sediment_gradation", ()))
+    if len(gradation) >= 2:
+        # v3 MULTI-CLASS GRADED SEDIMENT: several non-cohesive size classes share
+        # one erodible bed. Meyer-Peter-Mueller transport differs by grain size and
+        # the Egiazaroff HIDING FACTOR (formula 1) couples the classes, so under a
+        # flood the bed SORTS: fines winnow out of the high-shear thalweg (surface
+        # armors, MEAN DIAMETER rises) and settle in slack water (surface fines).
+        # SUSPENSION is OFF (pure bedload -> a clean sorting signal + NO suspended
+        # tracer appended to T2D, same coupling as the v2 single-class scour path).
+        # The D50 output var (surface mean diameter) carries the armoring/sorting
+        # signature - constant for a single class, spatially varying here.
+        bed_thick = max(float(getattr(cfg, "bed_thickness_m", 5.0)), 0.01)
+        formula = int(getattr(cfg, "bedload_formula", 1) or 1)
+        mofac = max(float(getattr(cfg, "morphological_factor", 10.0)), 1.0)
+        diams = ";".join(f"{um * 1.0e-6:g}" for um, _ in gradation)
+        fracs = ";".join(f"{fr:g}" for _, fr in gradation)
+        types = ";".join("NCO" for _ in gradation)
+        dens = ";".join(f"{density:g}" for _ in gradation)
+        d50_list = "/".join(f"{um:g}" for um, _ in gradation)
+        lines = [
+            "/------------------------------------------------------------------/",
+            "/  GAIA steering - v3 MULTI-CLASS GRADED bedload (grain sorting)",
+            f"/  {len(gradation)} classes d50um={d50_list[:40]} hiding=Egiazaroff",
+            "/------------------------------------------------------------------/",
+            f"GEOMETRY FILE                   = {os.path.basename(slf_name)}",
+            f"BOUNDARY CONDITIONS FILE        = {os.path.basename(cli_name)}",
+            f"RESULTS FILE                    = {GAIA_RESULT_FILENAME}",
+            "VARIABLES FOR GRAPHIC PRINTOUTS = 'B,E,D50'",
+            f"CLASSES TYPE OF SEDIMENT        = {types}",
+            f"CLASSES SEDIMENT DIAMETERS      = {diams}",
+            f"CLASSES SEDIMENT DENSITY        = {dens}",
+            f"CLASSES INITIAL FRACTION        = {fracs}",
+            "SUSPENSION FOR ALL SANDS        = NO",
+            "BED LOAD FOR ALL SANDS          = YES",
+            f"BED-LOAD TRANSPORT FORMULA FOR ALL SANDS = {formula}",
+            "HIDING FACTOR FORMULA           = 1",
+            f"LAYERS INITIAL THICKNESS        = {bed_thick:g}",
+            f"MORPHOLOGICAL FACTOR            = {mofac:g}",
+            "MASS-BALANCE                    = YES",
+        ]
+    elif bool(getattr(cfg, "erodible_bed", False)):
         # v2 ERODIBLE-BED MORPHODYNAMICS: a real erodible bed stock + active bedload
         # transport, so the bed SCOURS (negative CUMUL BED EVOL) where the flow
         # steepens and re-deposits where it slackens. SUSPENSION is OFF (pure
