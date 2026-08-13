@@ -128,9 +128,17 @@ ENV CLAW=/opt/clawpack-src \
 
 # COPY the worker package (entrypoint + setrun_builder) onto a stable runtime
 # path. Build context is the repo root (mirrors the SFINCS/MODFLOW/SWMM context);
-# paths below are relative to repo root.
+# paths below are relative to repo root. ALSO copy the postprocess + shared
+# raster-postprocess packages the entrypoint imports at solve-end
+# (``from services.workers._geoclaw_postprocess import run_geoclaw_postprocess``,
+# which itself imports ``services.workers._raster_postprocess``) -- without
+# these the import silently fails inside the entrypoint's non-fatal try/except
+# and NO publish_manifest / scratch reap ever runs (mirrors the sfincs/modflow
+# Dockerfiles' ``_raster_postprocess`` copy).
 RUN mkdir -p /opt/trid3nt/services/workers/geoclaw
 COPY services/workers/geoclaw/ /opt/trid3nt/services/workers/geoclaw/
+COPY services/workers/_geoclaw_postprocess/ /opt/trid3nt/services/workers/_geoclaw_postprocess/
+COPY services/workers/_raster_postprocess/ /opt/trid3nt/services/workers/_raster_postprocess/
 
 # WORKDIR controls where GeoClaw writes its scratch _output/ before the
 # entrypoint uploads it. /opt/trid3nt/work is a writable scratch dir; the

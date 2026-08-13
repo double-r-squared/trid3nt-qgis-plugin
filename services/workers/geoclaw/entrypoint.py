@@ -850,10 +850,12 @@ def main(argv: list[str] | None = None) -> int:
         stdout_uri = _upload(stdout_path, _runs_uri(run_id, "geoclaw.stdout"))
         stderr_uri = _upload(stderr_path, _runs_uri(run_id, "geoclaw.stderr"))
 
+        output_rels: list[str] = []
         for path in _expand_outputs(list(outputs), scratch):
             rel = path.relative_to(scratch).as_posix()
             uri = _upload(path, _runs_uri(run_id, rel))
             output_uris.append(uri)
+            output_rels.append(rel)
 
         exit_code = rc
         status = "ok" if rc == 0 else "error"
@@ -872,6 +874,43 @@ def main(argv: list[str] | None = None) -> int:
                 if pp.status == "ok" and pp.manifest is not None:
                     publish_manifest_uri = _write_publish_manifest(run_id, pp.manifest)
                     LOG.info("geoclaw postprocess ok: publish_manifest_uri=%s", publish_manifest_uri)
+
+                    # Retention (docs/decisions/0233-runs-retention.md): reap the
+                    # RAW SOLVER SCRATCH just uploaded above -- ONLY reached on a
+                    # successful postprocess (a failed run keeps its scratch for
+                    # debugging). Best-effort: a reap failure never fails the run.
+                    try:
+                        from services.workers._geoclaw_postprocess import (
+                            GEOCLAW_SCRATCH_KEEP_PATTERNS,
+                            GEOCLAW_SCRATCH_PATTERNS,
+                        )
+                        from services.workers._raster_postprocess.retention import (
+                            reap_run_scratch,
+                        )
+
+                        def _delete_scratch(rel: str) -> None:
+                            scheme, bucket, key = _split_object_uri(_runs_uri(run_id, rel))
+                            if scheme == "s3":
+                                _s3_client().delete_object(Bucket=bucket, Key=key)
+                            else:
+                                _gcs_client().bucket(bucket).blob(key).delete()
+
+                        reap = reap_run_scratch(
+                            _delete_scratch,
+                            run_id,
+                            output_rels,
+                            GEOCLAW_SCRATCH_PATTERNS,
+                            keep_patterns=GEOCLAW_SCRATCH_KEEP_PATTERNS,
+                        )
+                        if reap["deleted"]:
+                            reaped_uris = {_runs_uri(run_id, rel) for rel in reap["deleted"]}
+                            output_uris = [u for u in output_uris if u not in reaped_uris]
+                        LOG.info(
+                            "geoclaw scratch reap: deleted=%d errors=%d",
+                            len(reap["deleted"]), len(reap["errors"]),
+                        )
+                    except Exception as reap_exc:  # noqa: BLE001 -- hygiene, never fatal
+                        LOG.warning("geoclaw scratch reap failed (non-fatal): %s", reap_exc)
                 else:
                     error_code = pp.error_code
                     LOG.warning("geoclaw postprocess honesty gate: %s %s", pp.error_code, pp.error_message)

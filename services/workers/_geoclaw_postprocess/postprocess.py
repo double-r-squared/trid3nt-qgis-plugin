@@ -49,6 +49,28 @@ _PEAK_COG: str = "geoclaw_depth_peak.tif"
 _FRAME_COG_TMPL: str = "geoclaw_depth_frame_{n:02d}.tif"
 
 
+# --------------------------------------------------------------------------- #
+# Retention: raw solver scratch reaped from the runs prefix after a SUCCESSFUL
+# postprocess (docs/decisions/0233-runs-retention.md). GeoClaw persists ~7.7 GB
+# of AMR ``fort.q*`` frames per run that nothing downstream ever re-reads once
+# the depth COGs above are written -- the proven XMinioStorageFull offender.
+# ``gauge*.txt`` is EXCLUDED (the gauge time-series tool reads it later); no
+# pattern here can ever match a published artifact (.tif/.json/.fgb/.png all
+# fall outside ``_output/`` or use extensions these globs don't cover).
+# --------------------------------------------------------------------------- #
+GEOCLAW_SCRATCH_PATTERNS: tuple[str, ...] = (
+    "_output/fort.q*",
+    "_output/fort.t*",
+    "_output/fort.b*",
+    "_output/fort.a*",
+    "_output/*.data",
+    "_output/*.txt",
+)
+GEOCLAW_SCRATCH_KEEP_PATTERNS: tuple[str, ...] = (
+    "_output/gauge*.txt",
+)
+
+
 @dataclass
 class GeoClawPostprocessResult:
     """What the entrypoint folds into completion.json + writes as the manifest."""
