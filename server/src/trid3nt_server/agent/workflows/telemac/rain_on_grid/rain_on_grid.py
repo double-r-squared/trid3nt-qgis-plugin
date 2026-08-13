@@ -290,8 +290,13 @@ async def model_telemac_rain_on_grid(
     await _surface_watershed_mesh_inputs(mesh, str(location or "watershed"))
 
     # --- Stage 3: NLCD -> per-node CN2 + Manning ---------------------------- #
-    node_cn2, node_manning = await asyncio.to_thread(
+    node_cn2, node_manning, nlcd_uri = await asyncio.to_thread(
         _sample_node_fields, mesh, aoi, curve_number)
+
+    # ADR 0231: surface the fetched NLCD land cover (the per-node CN2/Manning the
+    # infiltration derives from) as a role=context input. Rides the cache COG
+    # (categorical palette embedded); best-effort -- never fails the run.
+    await _surface_landcover_input(nlcd_uri, str(location or "watershed"))
 
     # --- Stage 4: rain forcing + runoff-path decision (in the envelope) ------ #
     # A real MRMS/AORC window -> the TRUE time-varying hyetograph drives the
@@ -444,7 +449,12 @@ def _guess_utm_epsg(lonlat: tuple[float, float]) -> int:
 
 
 def _sample_node_fields(mesh: Any, aoi: tuple, curve_number: float | None):
-    """NLCD sampled at the mesh nodes -> (CN2, Manning) per node (sandbox parity)."""
+    """NLCD sampled at the mesh nodes -> (CN2, Manning, nlcd_s3_uri) per node.
+
+    Also returns the fetched NLCD land-cover ``s3://`` uri so the composer can
+    surface it as a role=context input (ADR 0231) -- the per-node CN2/Manning the
+    infiltration derives from come from THIS layer, so it must not stay hidden.
+    """
     import numpy as np
 
     from trid3nt_server.agent.tools import TOOL_REGISTRY
@@ -462,9 +472,10 @@ def _sample_node_fields(mesh: Any, aoi: tuple, curve_number: float | None):
         read_object_bytes_s3(lc_uri) if str(lc_uri).startswith("s3://")
         else Path(lc_uri).read_bytes())
     nlcd = [int(round(v)) for v in _sample_raster_at_nodes(tmp, points_ll)]
-    return assemble_node_fields(
+    node_cn2, node_manning = assemble_node_fields(
         node_nlcd=nlcd, uniform_cn=curve_number, slopes_m_per_m=None,
         steep_slope_correction=False)
+    return node_cn2, node_manning, (str(lc_uri) if lc_uri else None)
 
 
 def _fetch_hyetograph_blocks(aoi, window: str, sim_s_hint: float):
@@ -684,6 +695,32 @@ async def _surface_watershed_mesh_inputs(mesh: Any, label: str) -> None:
             ),
             role="context",
         )
+
+
+async def _surface_landcover_input(nlcd_uri: str | None, label: str) -> None:
+    """BEST-EFFORT: surface the fetched NLCD land cover as a role=context input.
+
+    The per-node CN2 / Manning fields the rain-on-grid infiltration solve derives
+    come from THIS NLCD raster (ADR 0231 -- no hidden data layers). Rides the
+    fetched cache COG (categorical palette embedded); NEVER raises.
+    """
+    if not nlcd_uri:
+        return
+    from trid3nt_contracts import new_ulid
+    from trid3nt_server.emission.layer_uri_emit import publish_raster_input_cog
+    from trid3nt_server.emission.pipeline_emitter import current_emitter
+
+    emitter = current_emitter()
+    if emitter is None:
+        return
+    await publish_raster_input_cog(
+        emitter,
+        cog_uri=str(nlcd_uri),
+        layer_id=f"input-landcover-{new_ulid()}",
+        name=f"Input: land cover ({label}, NLCD 2021 30 m)",
+        style_preset="categorical_landcover",
+        role="context",
+    )
 
 
 async def _publish_full_results_mesh(

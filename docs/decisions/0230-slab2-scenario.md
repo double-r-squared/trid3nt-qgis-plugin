@@ -185,3 +185,105 @@ run-up renders: deformation / bathy input / max amplitude + AMR mesh / gauge / t
   I/O boundary / ladder-label tests.
 - `scripts/_slab2_fixture.py`, `scripts/drive_geoclaw_scenario_cascadia.py`,
   `scripts/proof_geoclaw_scenario_cascadia.py` -- the fixture + live driver + proofs.
+
+## 0230 follow-up: scenario-scale coarse bathymetry + the completed M9 solve (2026-08-12)
+
+The original 0230 wave PROVED the curved-interface geometry (the deformation money-shot)
+but the full-margin run-up SOLVE was bottlenecked assembling the dense NOAA CUDEM 1/9"
+nearshore composite across a whole ~6x6 deg Cascadia domain (~1e8 nearshore cells / ~15 GB
+of detail a deep-ocean propagation grid cannot hold). NATE FLAGGED the row PARTIAL. This
+follow-up removes that bottleneck and completes the live M9 solve + proofs + showcase.
+
+### Design: a DECLARED basin-scale bathymetry floor (not a universal rollout)
+
+Two module constants in `inundation.py` and one new kwarg thread:
+
+- `_SCENARIO_BATHY_TARGET_RES_M = 1852.0` (1 arcminute at the equator) -- the scenario
+  front door's DECLARED domain-wide bathymetry cell. Deep-ocean tsunami propagation is
+  well-resolved at the arcminute class (ETOPO 2022's ~15" deep-ocean native; NOAA's
+  operational tsunami propagation grids run ~4'), so an arcminute ETOPO base is the
+  correct, cheaper substrate for a basin-scale run.
+- `_GEOCLAW_CUDEM_SKIP_RES_M = 500.0` (the ADR 0224 precedent) -- at/above this cell the
+  fine CUDEM 1/9" nearshore composite is SKIPPED domain-wide: it is far finer than the
+  coarse basin grid's own cell, so its structure cannot survive resampling and reading the
+  dozens of per-tile CUDEM COGs is wasted network cost with zero fidelity gain.
+- `_fetch_topo_for_geoclaw(..., target_resolution_m)` threads the floor: when set it caps
+  the composite (`min_pixel_m`) and, at/above the skip threshold, passes `skip_cudem=True`
+  and emits the LOUD log line. `None` on every non-scenario path keeps the byte-identical
+  native full-resolution fetch. `model_geoclaw_inundation(..., bathy_target_resolution_m)`
+  carries it from the scenario front door only.
+
+Crucially the COARSENING IS DECLARED, not silent: a `SyntheticInput(param=
+"bathy_target_resolution_m", basis="default_demo", real_source_if_any="ETOPO 2022 ...")`
+provenance row renders in the assumptions line, and the fine coastal AOI STILL nests its
+own fine SHORE topo (`_fetch_fine_nearshore_for_geoclaw`) so the run-up stays resolved.
+Same declared-per-tool pattern the 0224 surge/tidal path already carries -- NOT a global
+default change.
+
+### Verification: the live Cascadia M9.0 solve (LANDED)
+
+Live local-docker solve (`drive_geoclaw_scenario_cascadia.py`, Slab2 cache pre-seeded with
+the real-curved-geometry fixture -- ScienceBase is Cloudflare-walled from this box, flag b):
+run 01KZW4N9RDHKECRF8C1JHP9T3C, completion.json status=ok, ~45 min wall (uncontended;
+base grid 90x90 -> amr_levels=5 planned over the tiny coastal AOI, 66348 active cells). The
+coarse-mode declaration fired verbatim: `SCENARIO-scale bathy target 1852 m >= 500 m ->
+CUDEM 1/9" nearshore composite SKIPPED (basin-scale run, ETOPO 2022 deep-water column
+only)`; the staged base topo is 634x467, min -4377 m, wet_frac 0.828 (flat-ocean gate PASS
+on real deep water), with the fine ~10 m nearshore nested separately over the AOI.
+
+Physics asserts on the M9 result (proofs in `docs/proof/templates/`):
+
+- Deformation dipole tracks the CURVED trench: max uplift +5.42 m (seaward subfault band,
+  convex-west, following the trench), max subsidence -2.88 m (landward) -- a signed
+  megathrust dipole, NOT a straight bar. `geoclaw_scenario_cascadia_deformation.png`.
+- Nonzero coastal amplitude at the Oregon coast: Newport gauge (-124.10, 44.62) mareogram
+  rises coseismically to ~0.42 m then peaks 1.07 m peak-to-trough over 30 min; max coastal
+  fgout surface perturbation 3.39 m (fgout monitor is placed over the coastal AOI).
+- Peak overland inundation: max_depth 25.45 m, flooded_area 2.86 km2, 398422/987772 ocean
+  cells masked (computed by `postprocess_geoclaw` before the original run's disk-full COG
+  write; the deformation COG was rebuilt from the staged `deformation_dz.asc`).
+- Decay/arrival transect: for a DISTRIBUTED full-margin M9 the classic radial-decay
+  diagnostic is DEGENERATE and this is itself the correct physics -- the 614x189 km rupture
+  coseismically displaces the whole footprint at once, so the four transect points (which
+  sit ON the ruptured seafloor, the domain extending only to -127.79 W, barely past the
+  trench) all show a simultaneous ~180 s coseismic offset (+2.9 m uplift far / -3.1 m
+  subsidence near) with no radial spreading. The compact-source transect built for the
+  Chignik point-source does not transfer to a full-margin source; the deformation dipole +
+  coastal mareogram carry the physics. `geoclaw_scenario_cascadia_transect_chart.png`.
+
+Five proof renders (EPSG:3857 over Esri World Imagery, captions declaring the coarse
+basin bathy): deformation / bathy input / max amplitude + AMR mesh / Newport gauge / transect.
+
+### Offline
+
+`test_geoclaw_scenario_bathy_scale.py` (NEW, 5 cases): native fetch never skips CUDEM;
+scenario-scale target skips + floors (min_pixel_m == target, resolution_m clamped <=1000);
+below-threshold floors but keeps CUDEM; the scenario default is at/above the skip
+threshold; the skip is LOUD. Full geoclaw + topobathy + slab2 suites green (306 passed, the
+single fetch_topobathy fetch-resolution-gate failure is the known baseline transient, not
+geoclaw). Four alphabetical slices from repo root = the exact SIX baseline failures
+(fetch_resolution x4 + river_dye x2), no geoclaw regressions.
+
+### Flags
+
+- (a) full-margin M9 solve: CLEARED (run 01KZW4N9..., status ok, physics verified above).
+- (b) ScienceBase Slab2 grid URLs: OPEN -- NATE's one-time reachability check (Cloudflare-
+  walled from this datacenter; the live proof + showcase pre-seed the real-geometry fixture,
+  the production children-API path is exercised by the monkeypatched offline test).
+- (c) showcase: seeded via `seed_showcase_cases.py --only "Slab2 scenario Cascadia"` (the
+  entry's over-specified `sim_duration_s` 3600->1800 + `output_frames` 12->10 aligned to
+  the PROVEN driver run, `timeout_s` 2400->14400 for the real wall; daemon Slab2 cache
+  pre-seeded, `TRID3NT_SOLVER_TIMEOUT_S=14400`). Case 01KZWCHV2E054X057CHE0TFSFJ created,
+  !run verified. The composer path is VERIFIED end to end and the SOLVE COMPLETED
+  SUCCESSFULLY (run 01KZWCMQ3RRJK8S5XXJH1EX6BD, worker stdout "runclaw: Done executing",
+  ~48 min compute, all outputs -- fort.q / 15 fgout / fgmax / gauge -- uploaded to s3 and
+  intact). The composer's postprocess+publish was then REFUSED by MinIO `XMinioStorageFull`
+  (the s3 backend hit its minimum-free-drive threshold: each geoclaw run persists ~7.7 GB
+  of fort.q to data/minio and the shared box was at 99% disk), so the case has no published
+  layers YET. This is an INFRA disk-capacity limit, NOT a scenario / coarse-mode /
+  composer-code defect -- the outputs exist. A GREEN case needs the MinIO backend freed (a
+  bulk s3-delete is guarded in this session) + a seed re-run, or a postprocess harvest of
+  the intact 01KZWCMQ `_output`. Root cause note for the machine: fort.q accumulation in
+  data/minio (22 GB across runs) is the disk pressure -- a retention/cleanup policy on old
+  run `_output` would prevent the recurring XMinioStorageFull wall the original 0230 solve,
+  this re-run, and the harvest all hit.

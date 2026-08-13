@@ -351,7 +351,7 @@ SHOWCASE: list[Showcase] = [
              {"bbox": _NEWPORT_OR, "scenario_fault": "Cascadia",
               "scenario_magnitude": 9.0, "scenario_epicenter_lonlat": [-125.5, 45.0],
               "target_resolution_m": 25000.0, "coastal_gauge_lonlat": [-124.10, 44.62],
-              "sim_duration_s": 3600, "amr_levels": 2, "output_frames": 12,
+              "sim_duration_s": 1800, "amr_levels": 2, "output_frames": 10,
               "fgout_frames": 15, "compute_class": "standard"},
              "ADR 0230 Slab2 SCENARIO tsunami: a HYPOTHETICAL full-margin Cascadia M9.0 "
              "rupture -- NOT a real event. scenario_fault='Cascadia' takes the REAL USGS "
@@ -363,7 +363,7 @@ SHOWCASE: list[Showcase] = [
              "bar. dtopo -> the ADR 0229 deep-water column -> GeoClaw solve -> a coastal "
              "mareogram at Newport, Oregon. Provenance basis=scenario_slab2, LOUDLY a "
              "scenario ('hypothetical rupture on real published geometry, NOT a real "
-             "event') -- never confusable with the measured-inversion Chignik case.", 2400,
+             "event') -- never confusable with the measured-inversion Chignik case.", 14400,
              title_suffix="Slab2 scenario Cascadia M9"),
     # -- SWAN nonstationary storm evolution (ADR 0190 row 3) -----------------
     Showcase("swan_wave_field",

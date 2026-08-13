@@ -164,7 +164,7 @@ def _patch_dem_fetch(monkeypatch, dem_path: str) -> None:
     import trid3nt_server.agent.workflows.swmm.urban_flood.urban_flood as mu
 
     monkeypatch.setattr(
-        mu, "_fetch_dem_for_urban", lambda bbox: (dem_path, "synthetic")
+        mu, "_fetch_dem_for_urban", lambda bbox, uri_sink=None: (dem_path, "synthetic")
     )
 
 
@@ -365,7 +365,7 @@ async def test_suggestion_exception_fails_open(monkeypatch) -> None:
     from trid3nt_server import server
     import trid3nt_server.agent.workflows.swmm.urban_flood.urban_flood as mu
 
-    def _boom(bbox):
+    def _boom(bbox, uri_sink=None):
         raise RuntimeError("DEM fetch exploded")
 
     monkeypatch.setattr(mu, "_fetch_dem_for_urban", _boom)

@@ -66,9 +66,15 @@ async def _main():
         scenario_epicenter_lonlat=_EPI,
         target_resolution_m=25000.0,
         coastal_gauge_lonlat=_GAUGE,
-        sim_duration_s=3600.0,
+        # 1800 s (30 min sim): the near-coast Cascadia source puts the wave on the
+        # Oregon coast within ~10-20 min, so the coastal gauge peak + the near-field
+        # offshore decay/arrival transect are fully captured; a longer sim only adds
+        # far-field oscillation the amplitude deliverables do not need. The wall cost
+        # is the geometric AMR depth (a tiny coastal AOI inside the 6x6 deg full-margin
+        # domain forces ~5 refinement levels), NOT the (now coarse) basin bathy.
+        sim_duration_s=1800.0,
         amr_levels=2,
-        output_frames=12,
+        output_frames=10,
         fgout_frames=15,
         compute_class="standard",
     )

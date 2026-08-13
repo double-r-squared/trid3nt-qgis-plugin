@@ -2381,6 +2381,15 @@ async def model_telemac_river_dye(
     _run_metrics = await asyncio.to_thread(_read_run_metrics, batch_run_id)
     _bank_provenance = str(_run_metrics.get("bank_source") or "constant_ribbon")
 
+    # ADR 0231: surface the in-worker-sampled river bed bathymetry as a
+    # role=context input. The bed is fetched + fitted INSIDE the worker
+    # (fetch_dem_bed), so the composer has no uri until the worker uploads its
+    # sampled bed COG + records the key here (the worker-envelope seam). Best-
+    # effort: publish_raster_input_cog never raises, so a missing/failed bed COG
+    # never voids the solve. Covers every substance class (do_sag returns below).
+    await _surface_bed_bathymetry_input(
+        emitter, _run_metrics, batch_run_id, reach_name)
+
     # --- WAQTEL O2 do_sag: DISSOLVED-O2 field COG + sag curve (early return) --- #
     if do_sag_config is not None:
         do_layer = await _postprocess_and_publish_do_sag(
@@ -2880,6 +2889,62 @@ async def _surface_river_geometry_input(
         bbox=None,
     )
     return await publish_input_layer(emitter, layer, role="context")
+
+
+#: DEM-source label for the bed-COG provenance name (the worker records which DEM
+#: rung actually sampled the bed in telemac_metrics.json['bed_cog_source']).
+_BED_DEM_SOURCE_LABELS: dict[str, str] = {
+    "cop-dem-glo-30": "Copernicus GLO-30",
+    "usgs-3dep": "USGS 3DEP",
+}
+
+
+async def _surface_bed_bathymetry_input(
+    emitter: Any,
+    run_metrics: dict[str, Any],
+    run_id: str,
+    reach_name: str,
+) -> bool:
+    """BEST-EFFORT: surface the in-worker-sampled river bed bathymetry (ADR 0231).
+
+    fetch_dem_bed samples + fits the bed INSIDE the worker container (no emitter,
+    no uri agent-side), so the honest surfacing path is the worker-envelope seam:
+    the worker writes the bed it solved on as ``bed_bathymetry.tif`` (a 4326 COG)
+    next to the result and records ``bed_cog`` in telemac_metrics.json. Here we
+    ride that object through ``publish_raster_input_cog`` (NO re-upload) as a
+    role=context input, provenance (the DEM rung) in the name. NEVER raises -- the
+    seam is best-effort end to end, so a missing/failed bed COG never voids the
+    solve. Generalizes: any future in-worker fetch surfaces this same way.
+    """
+    if emitter is None:
+        return False
+    bed_cog = run_metrics.get("bed_cog")
+    if not bed_cog:
+        return False  # worker did not write one (older image / write failed)
+    try:
+        from trid3nt_server.emission.layer_uri_emit import publish_raster_input_cog
+        from trid3nt_server.agent.tools.simulation.solver.solver import _get_runs_bucket
+
+        source = str(run_metrics.get("bed_cog_source") or "")
+        source_label = _BED_DEM_SOURCE_LABELS.get(source, "3DEP/Copernicus")
+        cog_uri = f"s3://{_get_runs_bucket()}/{run_id}/{bed_cog}"
+        return await publish_raster_input_cog(
+            emitter,
+            cog_uri=cog_uri,
+            layer_id=f"input-river-bed-{new_ulid()}",
+            name=(
+                f"Input: river bed bathymetry ({_slug(reach_name)}, "
+                f"{source_label}-sampled, in-worker)"
+            ),
+            style_preset="continuous_dem",
+            role="context",
+        )
+    except Exception as exc:  # noqa: BLE001 - input surfacing is NEVER fatal
+        logger.warning(
+            "_surface_bed_bathymetry_input: non-fatal failure (bed input absent; "
+            "the solve is unaffected): %s", exc,
+        )
+        return False
 
 
 # --------------------------------------------------------------------------- #

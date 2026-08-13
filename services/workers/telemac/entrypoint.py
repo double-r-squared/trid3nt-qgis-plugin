@@ -89,6 +89,7 @@ DEFAULT_OUTPUTS = [
     "t2d_river.waqtel",    # decay class: the WAQTEL steering file (forcing evidence)
     "gaia_river.slf",      # sediment class: GAIA result (CUMUL BED EVOL deposition)
     "gaia_river.cas",      # sediment class: the GAIA steering file (evidence)
+    "bed_bathymetry.tif",  # ADR 0231: the in-worker-sampled river bed as a 4326 COG
 ]
 
 #: Metrics filename the ``LocalSolverSpec.classify_exit`` reads from the rundir.
@@ -150,15 +151,22 @@ class TelemacManifestUnknownFieldsError(ValueError):
     """manifest.json['reach'] carries a key ``ReachConfig`` has no field for."""
 
 
-#: PARSER VERSION -- bump on a ReachConfig field addition/rename/retirement.
+#: PARSER VERSION -- bump on a ReachConfig field addition/rename/retirement OR a
+#: worker-output-contract change (a new uploaded artifact + result-envelope key),
+#: because the version doubles as the worker-image/behavior provenance marker the
+#: image-staleness law keys off (a stale image is caught by a drifted version).
 #: Named in the strict-field error (ADR 0158). -3 added the ADR 0196
 #: rain-on-grid fields; -4 added the ADR 0206 time-varying native hyetograph
 #: field (rain_hyetograph_blocks); -5 adds the ADR 0213 continuous
 #: soil-moisture-store fields (soil_store, soil_store_capacity_mm,
 #: soil_store_recovery_h, soil_store_init_mm); -6 adds the GAIA v2 erodible-bed
 #: morphodynamics fields (erodible_bed toggles bedload scour; bed_thickness_m,
-#: bedload_formula, morphological_factor tune the erodible stock + transport law).
-_PARSER_VERSION = "telemac-reach-6"
+#: bedload_formula, morphological_factor tune the erodible stock + transport law);
+#: -7 marks the ADR 0231 worker-output contract: the run now writes the
+#: in-worker-sampled bed as bed_bathymetry.tif (a 4326 COG) + records the bed_cog /
+#: bed_cog_min_m / bed_cog_max_m keys in telemac_metrics.json so the composer
+#: surfaces the river bed bathymetry as a role=context input.
+_PARSER_VERSION = "telemac-reach-7"
 
 
 def _reach_config(data_dir: Path, reach_overrides: dict[str, Any]) -> Any:
@@ -467,6 +475,18 @@ def run_pipeline(
     mesh["bed_z"] = Z  # oil release snaps to the local thalweg (deepest node)
     LOG.info("dem bed: %s", bed)
 
+    # 4b. ADR 0231: write the in-worker-sampled bed as a small 4326 COG so the
+    # composer can surface the river bed bathymetry as a role=context input.
+    # Best-effort: a bed-COG hiccup NEVER voids a CORRECT END solve.
+    bed_cog_meta: dict[str, Any] = {}
+    try:
+        bed_cog_meta = B.write_bed_cog(
+            mesh, Z, cfg, tr, str(data_dir / B.BED_COG_FILENAME))
+        bed_cog_meta["bed_cog_source"] = bed.get("dem_source")
+        LOG.info("bed COG written: %s", bed_cog_meta)
+    except Exception as exc:  # noqa: BLE001 -- input surfacing is never fatal
+        LOG.warning("bed COG write failed (non-fatal, bed input absent): %s", exc)
+
     # project the user-picked release point (lonlat) into the mesh UTM
     # so spill_point can honor it (validated there within 2 channel widths).
     if getattr(cfg, "release_lon", None) is not None \
@@ -678,6 +698,10 @@ def run_pipeline(
         "enforced_slope": bed.get("enforced_slope"),
         "bed_drop_m": bed.get("bed_drop_m"),
         "reach_len_m": bed.get("reach_len_m"),
+        # ADR 0231: the in-worker-sampled bed COG key (+ its finite range) so the
+        # composer surfaces the river bed bathymetry as a role=context input.
+        # Empty dict when the best-effort write failed (bed input simply absent).
+        **bed_cog_meta,
         "wall_s": wall_s,
     }
 

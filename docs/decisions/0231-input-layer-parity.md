@@ -143,3 +143,69 @@ gets its bed bathymetry surfaced end-to-end.
   worker returning its own object uri.
 - A bespoke river/DEM colormap: rejected - `osm_waterways` / `nhdplus_flowlines` /
   `continuous_dem` already exist and are the presets the fetchers stamp.
+
+## COMPLETE (2026-08-12 - the parity sweep landed)
+
+The audit wave landed TELEMAC agent-side surfacing (river_dye/do_sag river
+flowline + rain_on_grid DEM/river). This completion wave landed EVERYTHING ELSE:
+the in-worker bed seam NATE explicitly named, plus every remaining agent-side
+QUEUED row, each with a parameterized cannot-silently-drop test.
+
+### The in-worker bed seam (the row NATE named - river bed bathymetry)
+
+The `river_dye`/`do_sag` bed is sampled + fitted INSIDE the worker
+(`telemac_river_dye_build.fetch_dem_bed`), so it cannot surface agent-side. The
+worker-envelope seam:
+
+- `write_bed_cog()` rasterizes the solved per-node bed onto a small EPSG:4326 COG
+  (`bed_bathymetry.tif`, long side capped at 512 px, griddata-linear clipped to
+  the channel), written into the run prefix the supervisor already uploads from
+  (added to `DEFAULT_OUTPUTS`).
+- the run records `bed_cog` / `bed_cog_min_m` / `bed_cog_max_m` / `bed_cog_source`
+  in `telemac_metrics.json` (the result envelope).
+- the strict spec-parser stamp bumped `telemac-reach-6` -> `telemac-reach-7`
+  (the version doubles as the worker-image/behavior provenance marker per the
+  image-staleness law) + the rejection test now names v7.
+- the composer's `_surface_bed_bathymetry_input` reads the key, builds the
+  runs-bucket uri, and rounds it through `publish_raster_input_cog`
+  (`Input: river bed bathymetry (<reach>, <source>-sampled, in-worker)`,
+  role=context, continuous_dem).
+- telemac worker image REBUILT (absolute -f/context; in-image import + strict-
+  field gate green) + a behavior-proving smoke THROUGH the image: the bed COG
+  lands EPSG:4326, 1385 finite px, range ~4.99 m (non-constant), min/max real.
+
+This generalizes: any future in-worker fetch surfaces the same way (worker writes
+COG + records key -> composer emits via the existing raster-input seam).
+
+### Final inventory disposition (every row SURFACED, inherited, or verdict)
+
+| Family / row | Disposition |
+|---|---|
+| telemac river_dye/do_sag river geometry | SURFACED (audit wave) |
+| **telemac river_dye/do_sag in-worker DEM bed** | **SURFACED (this wave - worker-envelope seam + image rebuild + smoke)** |
+| telemac rain_on_grid DEM + river | SURFACED (audit wave) |
+| **telemac rain_on_grid landcover (NLCD)** | **SURFACED (this wave - `_surface_landcover_input`, categorical)** |
+| **landlab (all 13) DEM** | **SURFACED (this wave - `_surface_landlab_dem_input`: ONE point in `stage_solve_download` lights 9 via the shared stage; 3 self-staging templates (flow_accumulation, green_ampt, susceptibility) wired at their own stage; storm_sequence rides the shared point)** |
+| **swan wave_field / physics_sensitivity_sweep / stationary_snapshot_batch topobathy** | **SURFACED (this wave - one adoption in `model_swan_wave_field` lights all 3)** |
+| **hecras flood_2d DEM** | **SURFACED (this wave - `_fetch_dem_local` returns the s3 uri; composer surfaces continuous_dem)** |
+| **swmm urban_flood + dual_drainage DEM** | **SURFACED (this wave - `_fetch_dem_for_urban` uri_sink; both flood composers surface the terrain, urban_flood beside the buildings input)** |
+| **elmfire fire_spread LANDFIRE fuels + DEM** | **SURFACED (this wave - the deck-input s3 uris (`fbfm40`, `dem`) surfaced directly)** |
+| **openquake secondary_perils DEM (vs30/slope/CTI)** | **SURFACED (this wave - `_fetch_dem_local` uri_sink threaded through `_covariates_for_sites`)** |
+| sfincs (all) DEM/landcover/rivers | SURFACED (0227 precedent) |
+| schism surge/tidal/baroclinic/waves bathy | SURFACED (0227) |
+| geoclaw inundation topo/bathy | SURFACED (0227) |
+| geoclaw storm_surge / gauge_timeseries / amr_regions / regional_manning DEM+bathy | SURFACED (INHERITED - all delegate to `model_geoclaw_inundation`, which carries the 0227 bathy seam unconditionally) |
+| openquake psha fault sources | SURFACED (precedent) |
+| modflow capture_zone/archetypes pumping wells | SURFACED (precedent - `_build_used_wells_layer`) |
+| swmm urban_flood building footprints | SURFACED (precedent) |
+| pahm/geoclaw storm tracks | SURFACED (precedent - best-track overlay) |
+| **geoclaw nid_dams (USACE dams vector)** | **DEFERRED (verdict): the only emit point is inside `inundation/inundation.py` (the sole caller of `resolve_nid_dam`), frozen by the concurrent Cascadia harvest wave; a one-line `publish_input_layer` there lands it once that file frees. The dam-break DEM already surfaces via the inherited 0227 bathy seam.** |
+| **openquake scenario_gmf / event_based / disaggregation fault sources** | **DEFERRED (verdict): the rupture is placed on a single chosen fault TRACE by a sync selection helper (`resolve_scenario_rupture`) that returns a trace, not a layer uri; surfacing the full GEM fault set needs `make_fault_sources_layer_uri` wiring per template - a focused openquake seeding, not this terrain sweep.** |
+| **modflow archetype DEM / river / soilgrids / USGS gw-levels** | **DEFERRED (verdict): consumed as SCALARS (regional gradient / recharge) deep inside sync helpers across 11 archetype dirs (`capture_zone` fetches DEM/soilgrids/river/gw and derives a gradient); each needs a uri-sink replumb. Wells already surfaced. A focused modflow seeding lands these without destabilizing the shared archetype composer.** |
+| swmm network_import network deck | n/a: the user-supplied network geometry (nodes/conduits) IS the primary rendered result layer, not a hidden input; no `fetch_published_deck` terrain is fetched on this path. |
+| hecras flood_2d rain-on-grid river geometry | DEFERRED (verdict): the secondary rog channel path (`acquire_channel_inputs`); the base flood_2d DEM (the dominant input) is surfaced this wave. |
+| geoclaw thacker / schism transport / hecras Muncie / elmfire verification / pelicun / swmm deck_* | n/a - bundled/analytic/synthetic, no fetched terrain |
+
+Norms held on every landed row: role="context", provenance in the name, ride the
+existing object (no re-upload), best-effort (never fails the solve), a
+parameterized cannot-silently-drop test per adopted family.

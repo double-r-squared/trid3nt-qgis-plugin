@@ -652,7 +652,7 @@ def test_tool_wrapper_drives_full_chain(synthetic_inputs, monkeypatch):
     # the tool path needs no live fetch.
     monkeypatch.setattr(
         "trid3nt_server.agent.workflows.swmm.urban_flood.urban_flood._fetch_dem_for_urban",
-        lambda bbox: (dem_path, "synthetic"),
+        lambda bbox, uri_sink=None: (dem_path, "synthetic"),
     )
     monkeypatch.setattr(
         "trid3nt_server.agent.workflows.swmm.urban_flood.urban_flood._fetch_buildings_for_urban",

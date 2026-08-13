@@ -363,6 +363,14 @@ async def model_landlab_flow_accumulation(
             stage_landlab_manifest, run_args, dem_path=local_dem_path, run_id=rid
         )
 
+    # ADR 0231: surface the staged DEM as a role=context input (this template
+    # stages its own DEM rather than routing through _composer_common's shared
+    # stage_solve_download). Best-effort -- never fails the solve.
+    from trid3nt_server.agent.workflows.landlab._composer_common import (
+        _surface_landlab_dem_input,
+    )
+    await _surface_landlab_dem_input(current_emitter(), staging.dem_uri, dem_source)
+
     # --- Step 3: dispatch through the generic solver seam ---
     async with substep(current_emitter(), "run_solver"):
         handle = run_solver(

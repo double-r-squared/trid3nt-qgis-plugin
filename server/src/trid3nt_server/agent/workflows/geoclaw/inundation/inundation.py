@@ -162,6 +162,25 @@ _SCENARIO_TILING_RES_SPEC = ResolutionSpec(
     ),
 )
 
+#: ADR 0230 follow-up -- the SCENARIO-scale bathymetry target cell (metres). A
+#: basin-scale scenario (a full-margin Slab2 rupture encloses a ~6x6 deg domain)
+#: has no use for the fine NOAA CUDEM 1/9" (~3 m) nearshore composite: pulling the
+#: 90 dense CUDEM tiles that intersect a full Cascadia margin is ~1e8 cells / ~15 GB
+#: of nearshore detail that a deep-ocean propagation grid cannot hold. Deep-water
+#: tsunami propagation is well-resolved at the ARCMINUTE class (ETOPO 2022's ~15"
+#: deep-ocean native; NOAA's operational tsunami propagation grids run ~4'), so a
+#: ~1 arcminute (~1852 m at the equator) ETOPO base is the correct, cheaper substrate.
+#: This is a DECLARED scenario default (basis recorded in provenance), NOT a universal
+#: rollout -- the same per-tool pattern the surge/tidal path already carries (0224);
+#: a caller may override it via the composer's bathy_target_resolution_m thread.
+_SCENARIO_BATHY_TARGET_RES_M = 1852.0  # 1 arcminute at the equator
+
+#: ADR 0224 precedent: at/above this cell the fine CUDEM 1/9" nearshore composite is
+#: SKIPPED -- it is coarser than the global ETOPO 2022 15" base's own ~450 m native
+#: cell, so CUDEM's fine structure cannot survive resampling onto the coarse grid and
+#: reading dozens of per-tile CUDEM COGs is wasted network cost with zero fidelity gain.
+_GEOCLAW_CUDEM_SKIP_RES_M = 500.0
+
 _GEOCLAW_INUNDATION_METADATA = AtomicToolMetadata(
     name="geoclaw_inundation",
     ttl_class="live-no-cache",
@@ -372,6 +391,10 @@ async def geoclaw_inundation(
     # carries a USGS finite-fault product.
     finite_fault_uri: str | None = None
     finite_fault_footprint: tuple[float, float, float, float] | None = None
+    # ADR 0230 follow-up: a DECLARED basin-scale bathymetry cell floor, set ONLY by
+    # the Slab2 SCENARIO front door (a full-margin rupture domain has no use for the
+    # fine CUDEM nearshore composite). None on every other path -> the native fetch.
+    bathy_target_resolution_m: float | None = None
     # provenance-chain wave: structured per-input provenance for the physically
     # dominant source parameters. Built alongside the prose ``dam_source_note`` and
     # threaded onto the returned layer so the agent narrates demo-vs-fetched.
@@ -530,6 +553,11 @@ async def geoclaw_inundation(
         _scenario_l = "tsunami"
         source_magnitude = float(scenario_magnitude)
         effective_source_lonlat = _epi if _epi is not None else _scn_model.centroid_lonlat
+        # ADR 0230 follow-up: a full-margin scenario domain is basin-scale -- floor
+        # the domain-wide bathymetry to the ~1 arcminute ETOPO deep-water class and
+        # skip the fine CUDEM nearshore composite (the fine coastal AOI still nests
+        # its own fine SHORE topo). Declared, not a universal rollout.
+        bathy_target_resolution_m = _SCENARIO_BATHY_TARGET_RES_M
         try:
             finite_fault_uri = await asyncio.to_thread(
                 stage_finite_fault_csv, to_csvfault_text(_scn_model)
@@ -561,6 +589,21 @@ async def geoclaw_inundation(
                 "size uses Strasser et al. (2010) interface scaling and the slip is a "
                 "Tukey-tapered distribution normalized to the target moment. The Okada "
                 "deformation is MODELED."
+            ),
+        ))
+        provenance.append(SyntheticInput(
+            param="bathy_target_resolution_m",
+            value=round(float(bathy_target_resolution_m), 1),
+            units="m",
+            basis="default_demo",
+            real_source_if_any="ETOPO 2022 (NCEI, ~15 arcsec deep-ocean native)",
+            note=(
+                f"DECLARED basin-scale bathymetry floor (~1 arcminute) for the "
+                f"full-margin scenario domain: deep-ocean tsunami propagation is "
+                f"well-resolved at the arcminute class, so the fine CUDEM 1/9\" "
+                f"nearshore composite is SKIPPED domain-wide (it cannot survive "
+                f"resampling onto the coarse grid). The coastal AOI still nests its "
+                f"own fine SHORE topo for the run-up. Overridable."
             ),
         ))
         logger.info(
@@ -782,6 +825,7 @@ async def geoclaw_inundation(
             dam_source_note=dam_source_note,
             synthetic_inputs=provenance,
             emit_particle_tracks=bool(run_args.lagrangian_particles),
+            bathy_target_resolution_m=bathy_target_resolution_m,
         )
         logger.info(
             "geoclaw_inundation complete layer_id=%s scenario=%s "
@@ -876,6 +920,7 @@ def _fetch_topo_for_geoclaw(
     bbox: tuple[float, float, float, float],
     *,
     force_bathy_base: bool = False,
+    target_resolution_m: float | None = None,
 ) -> tuple[str, str]:
     """Fetch a topo/bathy DEM for the AOI; return ``(s3_uri, source_label)``.
 
@@ -894,6 +939,16 @@ def _fetch_topo_for_geoclaw(
     the FULL (offshore-extended) domain -- guaranteeing the open-ocean portion is
     genuinely-negative bathymetry rather than a flat land-DEM fill.
 
+    ``target_resolution_m`` (ADR 0230 follow-up): a DECLARED bathymetry cell floor
+    for a basin-scale acquisition. When set it floors the composite (``min_pixel_m``)
+    so a coarse domain fetches a light COG, and -- at/above ``_GEOCLAW_CUDEM_SKIP_RES_M``
+    (the 0224 threshold) -- SKIPS the fine CUDEM 1/9" nearshore composite LOUDLY (its
+    fine structure cannot survive resampling onto a coarse basin grid, and pulling the
+    per-tile COGs is wasted cost). ``None`` keeps the native full-resolution fetch
+    (byte-identical to the pre-follow-up default). The scenario front door supplies
+    the basin-scale default; a fine coastal AOI still nests its own fine SHORE topo
+    separately (``_fetch_fine_nearshore_for_geoclaw``), so the run-up stays resolved.
+
     Returns the DEM cache/runs ``s3://`` URI (staged BY REFERENCE - the worker
     downloads it directly). Raises ``GeoClawComposerError`` only when BOTH fail.
     """
@@ -903,13 +958,36 @@ def _fetch_topo_for_geoclaw(
 
     fetch_dem = TOOL_REGISTRY["fetch_dem"].fn
 
+    topo_kw: dict[str, Any] = {"force_bathy_base": force_bathy_base}
+    label = "topobathy (CUDEM 1/9\" + ETOPO 2022 seamless)"
+    if target_resolution_m is not None:
+        # min_pixel_m is the OUTPUT-grid FLOOR (no upper bound) -- it coarsens the
+        # whole composite to the basin cell. resolution_m only sets the 3DEP LAND-leg
+        # spacing and is capped at the fetch_topobathy spec max (1000 m); a coarse
+        # basin run wants the land leg at its coarsest, so clamp rather than exceed it.
+        topo_kw["min_pixel_m"] = float(target_resolution_m)
+        topo_kw["resolution_m"] = int(min(float(target_resolution_m), 1000.0))
+        if float(target_resolution_m) >= _GEOCLAW_CUDEM_SKIP_RES_M:
+            topo_kw["skip_cudem"] = True
+            logger.info(
+                "fetch_topobathy: SCENARIO-scale bathy target %.0f m >= %.0f m -> "
+                "CUDEM 1/9\" nearshore composite SKIPPED (basin-scale run, ETOPO 2022 "
+                "deep-water column only); the fine nearshore is nested separately over "
+                "the coastal AOI",
+                target_resolution_m, _GEOCLAW_CUDEM_SKIP_RES_M,
+            )
+            label = (
+                f"topobathy (ETOPO 2022 deep-water column, CUDEM skipped @ "
+                f"~{target_resolution_m:.0f} m scenario scale)"
+            )
+
     try:
-        layer = fetch_topobathy(bbox, force_bathy_base=force_bathy_base)
+        layer = fetch_topobathy(bbox, **topo_kw)
         uri = getattr(layer, "uri", None) or (
             layer.get("uri") if isinstance(layer, dict) else None
         )
         if uri:
-            return str(uri), "topobathy (CUDEM 1/9\" + ETOPO 2022 seamless)"
+            return str(uri), label
     except Exception as exc:  # noqa: BLE001 - fall through to fetch_dem
         logger.info(
             "fetch_topobathy failed (%s); falling back to fetch_dem(10m)", exc
@@ -1106,6 +1184,7 @@ async def model_geoclaw_inundation(
     synthetic_inputs: list[SyntheticInput] | None = None,
     emit_gauge_series: bool = False,
     emit_particle_tracks: bool = False,
+    bathy_target_resolution_m: float | None = None,
 ) -> GeoClawDepthLayerURI:
     """Compose the full GeoClaw shallow-water inundation chain end-to-end (Batch).
 
@@ -1121,6 +1200,11 @@ async def model_geoclaw_inundation(
         dam_source_note: optional provenance string (dam-break: the resolved NID
             dam name + height, or a user-supplied note) stamped onto the returned
             layer's ``source_note`` so the agent narrates where the dam came from.
+        bathy_target_resolution_m: optional DECLARED bathymetry cell floor (m) for a
+            basin-scale acquisition (ADR 0230). The Slab2 SCENARIO front door supplies
+            the ~1 arcminute basin default so the full-margin domain topo fetch floors
+            to a coarse ETOPO deep-water column and SKIPS the fine CUDEM nearshore
+            composite (LOUDLY); ``None`` keeps the native full-resolution fetch.
 
     Returns:
         The PEAK ``GeoClawDepthLayerURI`` (role ``"primary"``, name ``"Peak flood
@@ -1190,6 +1274,7 @@ async def model_geoclaw_inundation(
                 _fetch_topo_for_geoclaw,
                 fetch_bbox,
                 force_bathy_base=_force_bathy_base,
+                target_resolution_m=bathy_target_resolution_m,
             )
     else:
         resolved_dem_uri = dem_uri

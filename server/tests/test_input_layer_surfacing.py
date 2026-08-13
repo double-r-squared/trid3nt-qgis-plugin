@@ -866,4 +866,195 @@ async def test_rain_on_grid_supplied_mesh_no_uris_is_noop():
         await rog._surface_watershed_mesh_inputs(_FakeWatershedMesh(), "X")
     finally:
         _CURRENT_EMITTER.reset(token)
+
+
+# ===========================================================================
+# ADR 0231: the in-worker river bed bathymetry (the row NATE explicitly named).
+# The worker samples + fits the bed inside the container and writes it as a 4326
+# COG (bed_bathymetry.tif) + records bed_cog in telemac_metrics.json; the composer
+# rides that object through publish_raster_input_cog as a role=context input.
+# ===========================================================================
+@pytest.mark.asyncio
+async def test_river_dye_surfaces_in_worker_bed_bathymetry_as_context(monkeypatch):
+    """The bed COG the worker recorded in the result envelope reaches the emitter
+    as a role="context" continuous_dem raster with a provenance name (cannot
+    silently drop the in-worker bed NATE asked to visualize)."""
+    from trid3nt_server.agent.tools.simulation.solver import solver as solver_mod
+
+    monkeypatch.setattr(solver_mod, "_get_runs_bucket", lambda: "test-runs")
+    emitter = _emitter()
+
+    def _mock_publish_layer(layer_uri, layer_id, style_preset, name=None, **kw):  # noqa: ANN001
+        assert layer_uri == "s3://test-runs/RID/bed_bathymetry.tif"
+        return layer_uri  # raw s3 COG passes the emit guardrail (plugin /vsicurl/)
+
+    with patch(_PUBLISH_LAYER_TARGET, side_effect=_mock_publish_layer):
+        ok = await river_dye._surface_bed_bathymetry_input(
+            emitter,
+            {"bed_cog": "bed_bathymetry.tif", "bed_cog_source": "usgs-3dep"},
+            "RID",
+            "Snake River near Twin Falls, Idaho",
+        )
+
+    assert ok is True
+    assert len(emitter._loaded_layers) == 1
+    row = emitter._loaded_layers[0]
+    assert row.role == "context"
+    assert row.layer_type == "raster"
+    assert row.style_preset == "continuous_dem"
+    assert row.uri == "s3://test-runs/RID/bed_bathymetry.tif"
+    assert row.name.startswith("Input: river bed bathymetry (")
+    assert "USGS 3DEP" in row.name
+    assert row.layer_id.startswith("input-river-bed-")
+
+
+@pytest.mark.asyncio
+async def test_river_dye_bed_bathymetry_absent_key_and_none_emitter_noop():
+    """No bed_cog key in the envelope (older image / write failed) surfaces
+    nothing; a None emitter is a no-op -- both NEVER raise."""
+    assert await river_dye._surface_bed_bathymetry_input(
+        None, {"bed_cog": "bed_bathymetry.tif"}, "RID", "X"
+    ) is False
+    emitter = _emitter()
+    ok = await river_dye._surface_bed_bathymetry_input(emitter, {}, "RID", "X")
+    assert ok is False
     assert emitter._loaded_layers == []
+    assert emitter._loaded_layers == []
+
+
+# ===========================================================================
+# ADR 0231 broad adoption -- per-family cannot-silently-drop pins.
+# ===========================================================================
+@pytest.mark.asyncio
+async def test_landlab_surfaces_staged_dem_as_context(monkeypatch):
+    """The ONE _composer_common adoption that lights all 13 Landlab templates:
+    the staged DEM reaches the emitter as a role=context continuous_dem raster."""
+    import trid3nt_server.agent.workflows.landlab._composer_common as cc
+
+    emitter = _emitter()
+
+    def _mock_publish_layer(layer_uri, layer_id, style_preset, name=None, **kw):  # noqa: ANN001
+        return layer_uri  # raw s3 COG passes the guardrail
+
+    with patch(_PUBLISH_LAYER_TARGET, side_effect=_mock_publish_layer):
+        ok = await cc._surface_landlab_dem_input(
+            emitter, "s3://cache/landlab_setup/RID/dem.tif", "USGS 3DEP 1m LiDAR")
+
+    assert ok is True
+    row = emitter._loaded_layers[0]
+    assert row.role == "context" and row.layer_type == "raster"
+    assert row.style_preset == "continuous_dem"
+    assert row.name == "Input: DEM (USGS 3DEP 1m LiDAR)"
+    assert row.layer_id.startswith("input-dem-")
+
+
+@pytest.mark.asyncio
+async def test_landlab_dem_none_uri_and_emitter_noop(monkeypatch):
+    """No DEM uri / no emitter -> nothing surfaced; NEVER raises."""
+    import trid3nt_server.agent.workflows.landlab._composer_common as cc
+
+    assert await cc._surface_landlab_dem_input(None, "s3://x/d.tif", "src") is False
+    emitter = _emitter()
+    assert await cc._surface_landlab_dem_input(emitter, None, "src") is False
+    assert emitter._loaded_layers == []
+
+
+@pytest.mark.asyncio
+async def test_telemac_rog_surfaces_nlcd_landcover_as_context(monkeypatch):
+    """rain_on_grid surfaces the fetched NLCD land cover (the per-node CN2/Manning
+    the infiltration derives from) as a role=context categorical input."""
+    import trid3nt_server.agent.workflows.telemac.rain_on_grid.rain_on_grid as rog
+
+    emitter = _emitter()
+    token = _CURRENT_EMITTER.set(emitter)
+
+    def _mock_publish_layer(layer_uri, layer_id, style_preset, name=None, **kw):  # noqa: ANN001
+        return layer_uri
+
+    try:
+        with patch(_PUBLISH_LAYER_TARGET, side_effect=_mock_publish_layer):
+            await rog._surface_landcover_input(
+                "s3://cache/nlcd/otto.tif", "Otto, North Carolina")
+    finally:
+        _CURRENT_EMITTER.reset(token)
+
+    row = emitter._loaded_layers[0]
+    assert row.role == "context" and row.layer_type == "raster"
+    assert row.style_preset == "categorical_landcover"
+    assert row.name.startswith("Input: land cover (")
+
+
+@pytest.mark.asyncio
+async def test_telemac_rog_landcover_none_uri_noop():
+    """No NLCD uri -> nothing surfaced (best-effort), no raise."""
+    import trid3nt_server.agent.workflows.telemac.rain_on_grid.rain_on_grid as rog
+
+    emitter = _emitter()
+    token = _CURRENT_EMITTER.set(emitter)
+    try:
+        await rog._surface_landcover_input(None, "X")
+    finally:
+        _CURRENT_EMITTER.reset(token)
+    assert emitter._loaded_layers == []
+
+
+def test_swmm_fetch_dem_invokes_uri_sink(monkeypatch):
+    """SWMM _fetch_dem_for_urban feeds the fetched DEM s3 uri to uri_sink (so the
+    composer surfaces the terrain) -- cannot silently drop the DEM."""
+    import trid3nt_server.agent.workflows.swmm.urban_flood.urban_flood as uf
+    from trid3nt_server.agent.tools import TOOL_REGISTRY
+
+    class _Layer:
+        uri = "s3://cache/dem/urban.tif"
+
+    class _Entry:
+        fn = staticmethod(lambda **kw: _Layer())
+
+    monkeypatch.setitem(TOOL_REGISTRY, "fetch_3dep_extra", _Entry())
+    monkeypatch.setattr(uf, "_localize_to_dem_path", lambda uri: "/tmp/dem.tif")
+    captured: list[str] = []
+    path, source = uf._fetch_dem_for_urban((-1.0, -1.0, 1.0, 1.0), captured.append)
+    assert captured == ["s3://cache/dem/urban.tif"]
+    assert path == "/tmp/dem.tif"
+
+
+def test_swmm_fetch_dem_none_sink_is_noop(monkeypatch):
+    """A None uri_sink (every legacy caller) never errors -- byte-identical."""
+    import trid3nt_server.agent.workflows.swmm.urban_flood.urban_flood as uf
+    from trid3nt_server.agent.tools import TOOL_REGISTRY
+
+    class _Layer:
+        uri = "s3://cache/dem/urban.tif"
+
+    class _Entry:
+        fn = staticmethod(lambda **kw: _Layer())
+
+    monkeypatch.setitem(TOOL_REGISTRY, "fetch_3dep_extra", _Entry())
+    monkeypatch.setattr(uf, "_localize_to_dem_path", lambda uri: "/tmp/dem.tif")
+    path, source = uf._fetch_dem_for_urban((-1.0, -1.0, 1.0, 1.0))  # no sink
+    assert path == "/tmp/dem.tif"
+
+
+def test_openquake_secondary_perils_fetch_dem_invokes_uri_sink(monkeypatch):
+    """secondary_perils _fetch_dem_local feeds the fetched DEM s3 uri to uri_sink
+    (the vs30/slope/CTI covariates derive from it) -- cannot silently drop."""
+    import trid3nt_server.agent.workflows.openquake.secondary_perils.secondary_perils as sp
+    from trid3nt_server.agent.tools import TOOL_REGISTRY
+
+    class _Layer:
+        uri = "s3://cache/dem/sep.tif"
+
+    class _Entry:
+        fn = staticmethod(lambda **kw: _Layer())
+
+    monkeypatch.setitem(TOOL_REGISTRY, "fetch_copernicus_dem", _Entry())
+    monkeypatch.setattr(
+        sp, "read_object_bytes_s3", lambda uri: b"", raising=False)
+    # patch the cache import target too (imported lazily inside the function)
+    import trid3nt_server.agent.tools.cache as cache_mod
+    monkeypatch.setattr(cache_mod, "read_object_bytes_s3", lambda uri: b"tiff")
+    import os, tempfile
+    tmpdir = tempfile.mkdtemp()
+    captured: list[str] = []
+    sp._fetch_dem_local((-1.0, -1.0, 1.0, 1.0), tmpdir, captured.append)
+    assert captured == ["s3://cache/dem/sep.tif"]

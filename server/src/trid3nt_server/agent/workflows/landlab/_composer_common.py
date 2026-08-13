@@ -61,6 +61,7 @@ __all__ = [
     "emit_zoom_to",
     "emit_landlab_chart",
     "cleanup_solve",
+    "_surface_landlab_dem_input",
 ]
 
 
@@ -135,6 +136,12 @@ async def stage_solve_download(
             stage_landlab_manifest, run_args, dem_path=local_dem_path, run_id=rid
         )
 
+    # ADR 0231: surface the staged DEM as a role=context input. This is the ONE
+    # agent-side adoption point that lights ALL 13 Landlab templates (every one
+    # routes its DEM through this shared stage). Rides the staged s3:// COG (no
+    # re-upload); best-effort -- never fails the solve.
+    await _surface_landlab_dem_input(emitter, staging.dem_uri, dem_source)
+
     # --- Step 3: dispatch through the generic solver seam ---
     async with substep(current_emitter(), "run_solver"):
         handle = run_solver(
@@ -192,6 +199,32 @@ async def stage_solve_download(
         result_block=result_block,
         secondary_cogs=secondary_cogs,
         batch_out_dir=batch_out_dir,
+    )
+
+
+async def _surface_landlab_dem_input(
+    emitter: Any, dem_uri: str | None, dem_source: str
+) -> bool:
+    """BEST-EFFORT: surface the staged DEM as a role=context input (ADR 0231).
+
+    Every Landlab template derives its terrain analysis from this ONE fetched DEM
+    (fetch_3dep_extra 1 m -> fetch_dem 10 m fallback, staged to the cache bucket),
+    so it is a load-bearing fetched input that must surface, not a hidden layer.
+    Rides the staged s3:// COG through publish_raster_input_cog; provenance (the
+    DEM rung) in the name. NEVER raises. Called ONCE here -> all 13 templates.
+    """
+    if emitter is None or not dem_uri:
+        return False
+    from trid3nt_contracts import new_ulid
+    from trid3nt_server.emission.layer_uri_emit import publish_raster_input_cog
+
+    return await publish_raster_input_cog(
+        emitter,
+        cog_uri=dem_uri,
+        layer_id=f"input-dem-{new_ulid()}",
+        name=f"Input: DEM ({dem_source})",
+        style_preset="continuous_dem",
+        role="context",
     )
 
 

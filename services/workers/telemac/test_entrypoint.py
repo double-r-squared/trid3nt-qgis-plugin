@@ -67,9 +67,9 @@ def test_reach_config_rejects_unknown_keys(tmp_path):
         })
 
 
-def test_parser_version_is_reach_6():
-    """ADR 0216: the GAIA v2 erodible-bed morphodynamics fields bump the parser stamp."""
-    assert E._PARSER_VERSION == "telemac-reach-6"
+def test_parser_version_is_reach_7():
+    """ADR 0231: the in-worker bed-COG output contract bumps the parser stamp."""
+    assert E._PARSER_VERSION == "telemac-reach-7"
 
 
 def test_reach_config_accepts_erodible_bed_fields(tmp_path):
@@ -117,10 +117,56 @@ def test_reach_config_accepts_rog_fields(tmp_path):
     assert cfg.observed_gauge_id == "02086500"
 
 
-def test_reach_config_rejects_unknown_key_names_v6(tmp_path):
-    """A bogus reach key raises naming the CURRENT parser version (telemac-reach-6)."""
-    with pytest.raises(E.TelemacManifestUnknownFieldsError, match="telemac-reach-6"):
+def test_reach_config_rejects_unknown_key_names_v7(tmp_path):
+    """A bogus reach key raises naming the CURRENT parser version (telemac-reach-7)."""
+    with pytest.raises(E.TelemacManifestUnknownFieldsError, match="telemac-reach-7"):
         E._reach_config(tmp_path, {"bogus_rog_field": 1, "mode": "rain_on_grid"})
+
+
+def test_default_outputs_include_bed_cog():
+    """ADR 0231: the supervisor uploads the in-worker bed COG so the composer can
+    surface the river bed bathymetry as a role=context input."""
+    assert "bed_bathymetry.tif" in E.DEFAULT_OUTPUTS
+
+
+def test_write_bed_cog_nonconstant_and_finite(tmp_path):
+    """ADR 0231 behavior: write_bed_cog rasterizes the solved bed to a small 4326
+    COG whose valid pixels are FINITE and NON-CONSTANT (a real sloped bed, never a
+    flat placeholder). Mirrors the in-image smoke assertion, offline on a
+    synthetic sloped mesh so it runs without TELEMAC."""
+    np = pytest.importorskip("numpy")
+    pytest.importorskip("scipy")
+    rasterio = pytest.importorskip("rasterio")
+    pyproj = pytest.importorskip("pyproj")
+    import telemac_river_dye_build as B
+
+    # a synthetic UTM 10N reach: a 60 m-wide x ~1 km ribbon sloping downstream.
+    tr = pyproj.Transformer.from_crs(4326, 32610, always_xy=True)
+    n_along, n_across = 40, 5
+    xs = np.linspace(500_000.0, 501_000.0, n_along)      # 1 km downstream (UTM x)
+    ys = np.linspace(4_000_000.0, 4_000_060.0, n_across)  # 60 m across (UTM y)
+    gx, gy = np.meshgrid(xs, ys)
+    X = gx.ravel()
+    Y = gy.ravel()
+    # bed drops 5 m over the km (a real, non-constant slope)
+    Z = 100.0 - 5.0 * (X - 500_000.0) / 1000.0
+
+    class _Cfg:
+        pass
+
+    meta = B.write_bed_cog({"X": X, "Y": Y}, Z, _Cfg(),
+                           tr, str(tmp_path / B.BED_COG_FILENAME))
+    cog = tmp_path / B.BED_COG_FILENAME
+    assert cog.exists(), "bed COG was not written"
+    assert meta["bed_cog"] == B.BED_COG_FILENAME
+    # finite + non-constant range (the sloped bed, not a flat sentinel)
+    assert meta["bed_cog_max_m"] > meta["bed_cog_min_m"] + 1.0
+    with rasterio.open(cog) as src:
+        assert src.crs.to_epsg() == 4326
+        band = src.read(1, masked=True)
+        vals = band.compressed()
+        assert vals.size > 0 and np.isfinite(vals).all()
+        assert float(vals.max()) - float(vals.min()) > 1.0  # non-constant
 
 
 def test_main_bad_manifest_writes_typed_error(tmp_path, monkeypatch):

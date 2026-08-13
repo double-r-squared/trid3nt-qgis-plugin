@@ -662,6 +662,20 @@ async def model_swan_wave_field(
         resolved_dem_uri = dem_uri
     logger.info("model_swan_wave_field: DEM=%s", resolved_dem_uri)
 
+    # ADR 0231: surface the fetched topo/bathy DEM (the seabed SWAN propagates
+    # waves over) as a role=context input. Lights all 3 SWAN templates (wave_field
+    # directly; the sweep + snapshot batch route through this composer). Rides the
+    # fetched s3:// COG; best-effort -- never fails the solve.
+    from trid3nt_server.emission.layer_uri_emit import publish_raster_input_cog
+    await publish_raster_input_cog(
+        emitter,
+        cog_uri=resolved_dem_uri,
+        layer_id=f"input-bathymetry-{run_id}",
+        name="Input: topo/bathy DEM (seamless coastal, fetch_topobathy)",
+        style_preset="continuous_dem",
+        role="context",
+    )
+
     # --- Step 2: stage the build_spec manifest + DEM reference --------------
     async with substep(emitter, "stage_swan_manifest"):
         staging = await asyncio.to_thread(

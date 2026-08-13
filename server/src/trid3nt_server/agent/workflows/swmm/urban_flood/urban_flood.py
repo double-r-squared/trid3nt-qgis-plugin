@@ -504,6 +504,7 @@ def _localize_to_dem_path(uri: str) -> str:
 
 def _fetch_dem_for_urban(
     bbox: tuple[float, float, float, float],
+    uri_sink: Any = None,
 ) -> tuple[str, str]:
     """Fetch a DEM for the AOI: try ``fetch_3dep_extra`` 1 m first, fall back to
     ``fetch_dem`` 10 m (the data-source fallback norm: primary -> fallback,
@@ -511,8 +512,20 @@ def _fetch_dem_for_urban(
 
     Returns ``(local_dem_path, source_label)``. Raises
     ``UrbanFloodWorkflowError("SWMM_DEM_FETCH_FAILED")`` only when BOTH fail.
+
+    ``uri_sink`` (ADR 0231, non-breaking): an optional callable invoked with the
+    fetched DEM's ``s3://`` COG uri so the composer can surface the terrain as a
+    role=context input WITHOUT re-fetching. Default None (a no-op) keeps every
+    existing caller byte-identical.
     """
     from trid3nt_server.agent.tools import TOOL_REGISTRY
+
+    def _sink(uri: Any) -> None:
+        if uri_sink is not None and uri:
+            try:
+                uri_sink(str(uri))
+            except Exception:  # noqa: BLE001 - surfacing is never fatal
+                pass
 
     # fetch_3dep_extra (ADR 0075) + fetch_dem (ADR 0097) are spec-driven tools:
     # resolve through the registry seam (keyword-only) rather than deleted twins.
@@ -525,6 +538,7 @@ def _fetch_dem_for_urban(
     # this except would swallow -> silent permanent 10 m degrade (the live bug).
     try:
         layer = fetch_3dep_extra(bbox=bbox, resolution="1 meter")
+        _sink(layer.uri)
         return _localize_to_dem_path(layer.uri), "USGS 3DEP 1m LiDAR"
     except Exception as exc:  # noqa: BLE001 - fall through to the 10 m fallback
         logger.warning(
@@ -536,6 +550,7 @@ def _fetch_dem_for_urban(
     # Fallback: 10 m 3DEP (the canonical default).
     try:
         layer = fetch_dem(bbox=bbox, resolution_m=10)
+        _sink(layer.uri)
         return _localize_to_dem_path(layer.uri), "USGS 3DEP 10m"
     except Exception as exc:  # noqa: BLE001
         raise UrbanFloodWorkflowError(
@@ -936,10 +951,14 @@ async def model_swmm_urban_flood(
     )
     begin_substeps(emitter, _planned_substeps)
 
+    # ADR 0231: capture the fetched DEM's s3 COG uri (via a non-breaking sink) so
+    # the composer can surface the terrain the mesh was built on as a role=context
+    # input, without re-fetching.
+    _dem_s3: list[str] = []
     if dem_path is None:
         async with substep(emitter, "fetch_3dep_extra"):
             local_dem_path, dem_source = await asyncio.to_thread(
-                _fetch_dem_for_urban, bbox
+                _fetch_dem_for_urban, bbox, _dem_s3.append
             )
     else:
         local_dem_path, dem_source = dem_path, "supplied"
@@ -1123,6 +1142,20 @@ async def model_swmm_urban_flood(
                 "model_swmm_urban_flood: buildings input emit failed "
                 "(non-fatal): %s",
                 exc,
+            )
+
+        # ADR 0231: surface the fetched DEM (the terrain the overland mesh was
+        # built on) as a role=context input. Rides the fetched cache COG (no
+        # re-upload); best-effort -- never fails the solve.
+        if _dem_s3:
+            from trid3nt_server.emission.layer_uri_emit import publish_raster_input_cog
+            await publish_raster_input_cog(
+                emitter,
+                cog_uri=_dem_s3[0],
+                layer_id=f"input-dem-{staging.run_id}",
+                name=f"Input: DEM ({dem_source}, fetch_dem)",
+                style_preset="continuous_dem",
+                role="context",
             )
 
         # --- Auto vertical scaling per case ----------------

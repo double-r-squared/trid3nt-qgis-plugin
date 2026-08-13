@@ -1697,6 +1697,121 @@ def _project_s(X, Y, cl):
 
 
 # ---------------------------------------------------------------------------
+# 4b. Bed-bathymetry COG (ADR 0231 in-worker input surfacing)
+# ---------------------------------------------------------------------------
+# The bed is sampled + fitted INSIDE this worker (fetch_dem_bed), so the composer
+# has no emitter/uri for it -- the honest way to surface NATE's "if there is a
+# river bed bathymetry I want it visualized" is for the worker to write the bed it
+# actually solved on as a small EPSG:4326 COG next to the result and record its
+# key in the result envelope; the composer then rounds it through
+# publish_raster_input_cog as a role=context input. This generalizes: any future
+# in-worker fetch surfaces the same way (write COG + record key -> composer emits).
+#: pixel budget for the bed COG (kept SMALL -- it is a spot-check backdrop, not an
+#: analysis raster; the reach is long+thin so we cap the long side, not total).
+BED_COG_MAX_PX_PER_SIDE: int = 512
+BED_COG_MIN_PX_PER_SIDE: int = 16
+#: filename the supervisor uploads + the composer keys off (recorded in metrics).
+BED_COG_FILENAME: str = "bed_bathymetry.tif"
+
+
+def write_bed_cog(mesh: dict, Z, cfg: "ReachConfig", tr, path: str) -> dict:
+    """Rasterize the solved bed elevations ``Z`` (mesh nodes) to a small 4326 COG.
+
+    Reprojects the mesh nodes UTM -> EPSG:4326, linearly interpolates the per-node
+    bed elevation onto a modest regular grid clipped to the channel footprint
+    (nearest-node distance, so griddata does not paint the whole convex hull), and
+    writes a tiled COG carrying the bed the TELEMAC solve actually ran on. Returns
+    a metrics dict (``bed_cog`` filename + ``bed_cog_min_m`` / ``bed_cog_max_m`` /
+    ``bed_cog_px``). Raises on any failure -- the caller wraps it best-effort so a
+    bed-COG hiccup never voids a CORRECT END solve.
+    """
+    import math
+
+    import numpy as np
+    import rasterio
+    from rasterio.transform import from_bounds
+    from scipy.interpolate import griddata
+    from scipy.spatial import cKDTree
+    from pyproj import Transformer
+
+    X, Y = np.asarray(mesh["X"], dtype=float), np.asarray(mesh["Y"], dtype=float)
+    z = np.asarray(Z, dtype=float)
+    back = Transformer.from_crs(tr.target_crs, 4326, always_xy=True)
+    lon, lat = back.transform(X, Y)
+    lon = np.asarray(lon, dtype=float)
+    lat = np.asarray(lat, dtype=float)
+    finite = np.isfinite(lon) & np.isfinite(lat) & np.isfinite(z)
+    if finite.sum() < 3:
+        raise RuntimeError("bed COG: fewer than 3 finite mesh nodes to rasterize")
+    lon, lat, z = lon[finite], lat[finite], z[finite]
+
+    min_lon, max_lon = float(lon.min()), float(lon.max())
+    min_lat, max_lat = float(lat.min()), float(lat.max())
+    # size the grid so the LONG side hits the pixel cap (a long thin reach), the
+    # short side scaled to keep square-ish ground pixels, both clamped to a sane
+    # floor -- keeps the COG small (a spot-check backdrop).
+    span_lon = max(max_lon - min_lon, 1e-9)
+    span_lat = max(max_lat - min_lat, 1e-9)
+    mean_lat = 0.5 * (min_lat + max_lat)
+    w_m = span_lon * 111_320.0 * max(math.cos(math.radians(mean_lat)), 1e-6)
+    h_m = span_lat * 111_320.0
+    if w_m >= h_m:
+        ncols = BED_COG_MAX_PX_PER_SIDE
+        nrows = int(round(BED_COG_MAX_PX_PER_SIDE * h_m / max(w_m, 1e-9)))
+    else:
+        nrows = BED_COG_MAX_PX_PER_SIDE
+        ncols = int(round(BED_COG_MAX_PX_PER_SIDE * w_m / max(h_m, 1e-9)))
+    nrows = int(np.clip(nrows, BED_COG_MIN_PX_PER_SIDE, BED_COG_MAX_PX_PER_SIDE))
+    ncols = int(np.clip(ncols, BED_COG_MIN_PX_PER_SIDE, BED_COG_MAX_PX_PER_SIDE))
+
+    gdx, gdy = span_lon / ncols, span_lat / nrows
+    xc = min_lon + (np.arange(ncols) + 0.5) * gdx
+    yc = max_lat - (np.arange(nrows) + 0.5) * gdy  # north -> south (COG row 0 = N)
+    gx, gy = np.meshgrid(xc, yc)
+    pts = np.column_stack([lon, lat])
+    grid = griddata(pts, z, (gx, gy), method="linear")
+    grid = np.asarray(grid, dtype="float32")
+    # clip to the channel: a cell whose nearest node is > ~1.5 mean-cell away is
+    # outside the meshed reach -> nodata (never paint the convex hull).
+    tree = cKDTree(pts)
+    dist, _ = tree.query(np.column_stack([gx.ravel(), gy.ravel()]), k=1)
+    clip = 1.5 * float(max(gdx, gdy))
+    grid[(dist.reshape(nrows, ncols) > clip)] = np.nan
+    grid[~np.isfinite(grid)] = np.nan
+    if not np.isfinite(grid).any():
+        raise RuntimeError("bed COG: grid is entirely nodata after clipping")
+
+    nodata = -9999.0
+    out = np.where(np.isfinite(grid), grid, nodata).astype("float32")
+    transform = from_bounds(min_lon, min_lat, max_lon, max_lat, ncols, nrows)
+    profile = dict(
+        driver="COG", dtype="float32", count=1, height=nrows, width=ncols,
+        crs="EPSG:4326", transform=transform, nodata=nodata,
+        compress="deflate", blocksize=256,
+    )
+    if os.path.exists(path):
+        os.remove(path)
+    try:
+        with rasterio.open(path, "w", **profile) as dst:
+            dst.write(out, 1)
+    except Exception:  # noqa: BLE001 -- some rasterio builds lack the COG driver
+        # Fall back to a tiled GTiff (publish_layer re-tiles it anyway); still a
+        # valid georeferenced raster the plugin can read.
+        profile.update(driver="GTiff", tiled=True, blockxsize=256, blockysize=256)
+        profile.pop("blocksize", None)
+        with rasterio.open(path, "w", **profile) as dst:
+            dst.write(out, 1)
+
+    finite_vals = grid[np.isfinite(grid)]
+    return {
+        "bed_cog": os.path.basename(path),
+        "bed_cog_min_m": round(float(finite_vals.min()), 3),
+        "bed_cog_max_m": round(float(finite_vals.max()), 3),
+        "bed_cog_px": [int(nrows), int(ncols)],
+    }
+
+
+# ---------------------------------------------------------------------------
 # 5. SELAFIN geometry + boundary conditions (from P0)
 # ---------------------------------------------------------------------------
 def write_slf(mesh, Z, path):
