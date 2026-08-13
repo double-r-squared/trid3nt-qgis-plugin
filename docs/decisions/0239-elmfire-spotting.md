@@ -117,3 +117,90 @@ E2E through the unchanged image).
 - The crown-fire-triggered ember spotting row (Crown section, `crown_fire_triggered_ember_spotting`)
   is now UNBLOCKED (both crown + spotting exist) but not built here - a clean follow-up
   (drop the surface-fire path, set `CROWN_FIRE_SPOTTING_PERCENT` on a canopied deck).
+
+---
+
+## AMENDMENT (2026-08-13) - the REAL-DATA river-barrier mode (the canonical demo)
+
+NATE ruling (verbatim intent): the synthetic constant-fuel spotting deck is fine as
+physics V&V but "just plain incorrect" as a real-world demo - and rendering a
+synthetic deck over real basemap imagery IMPLIED a realism it lacked. The real
+experiment: a fire meeting "a river mesh to act as a breaker ... the way it would be
+used in real life", with ELMFIRE taking a real DEM (slope/aspect drive spread).
+
+### Decision
+
+`elmfire_spot_fire_barrier_crossing` gains a `mode` selector; the question class is
+UNCHANGED (does ember spotting cross a barrier the contiguous front cannot?).
+
+- `mode="real"` (NEW DEFAULT, the canonical entry): fetch REAL LANDFIRE FBFM40 +
+  cbh/cbd/cc/ch + a USGS 3DEP DEM (with computed slope/aspect) over the caller's
+  bbox - the SAME fetch path as `elmfire_fire_spread` (0231 parity). The barrier is a
+  REAL RIVER: the LANDFIRE water class (FBFM40 code 98), which renders NON-BURNABLE
+  (zero ROS), so the contiguous surface front stops at the near bank. The deck is
+  built + solved TWICE on the SAME warp (spotting OFF then ON) - only the `&SPOTTING`
+  namelist group differs, so the barrier + terrain are the identical landscape across
+  the pair.
+- `mode="verification"` (the former single mode): the constant flat grass deck with a
+  synthetic NB1 strip; ASSERTS the clean OFF~0 / ON>0 discriminant. KEPT - a still-
+  valid V&V path (delete-dont-disable does not apply). Both modes documented.
+
+### The honest-verdict change (no assertion in real mode)
+
+The verification mode hard-asserts the jump (`off <= 1e-3 < on`, honesty floor). The
+REAL mode does NOT: per the ruling, "the river holds even with spotting" at a
+realistic width is a VALID finding. The composer reports the physics - `break_jumped`
+is 1 only when embers cleared a river the contiguous front could not, else the
+verdict is `held` (or `inconclusive`); it never tunes inputs to force a crossing. An
+`off_side_leaks` flag fires (honestly) if the OFF run put fire on the far side (the
+contiguous fire flowed AROUND the river ends - the chosen reach did not fully
+separate), so a confounded discriminant is surfaced rather than hidden.
+
+### The river-split measurement (Invariant 1: measured off the grid)
+
+`measure_river_split` (pure, unit-tested offline) splits burned cells relative to the
+river read from the warped `fbfm40` grid:
+
+1. Downwind is the +col (wind FROM the west) or -col (from the east) axis; a wind that
+   is not E-W-dominant is rejected (a N-S river must be the CROSS-wind barrier).
+2. Per raster row, the river crossing is the water run (>= 2 cells wide, skipping lone
+   warped specks) nearest DOWNWIND of the ignition column; its near/far banks + width
+   are recorded.
+3. The river's contiguous cross-wind band around the ignition row is found (bridging
+   <= 2-row warp-thinned bends); `river_width_m` = median run width x cellsize.
+4. head fire = burned cells upwind of the near bank; far-side = burned cells downwind
+   of the far bank, both summed WITHIN the band (so fire looping around the river ends
+   outside the band is not miscounted as a jump). `river_band_coverage` reports how
+   much of the domain height the band spans.
+
+The river width is stated from the grid; the run guards that the head fire actually
+reached the river (`head_area_km2 > 0`) before reporting a verdict.
+
+### Consequence / surface
+
+- `render_namelist(spotting_extra=)` already existed; `build_deck(..., spotting_extra=)`
+  + `build_elmfire_deck(..., spotting_extra=)` now thread it onto the REAL-DATA deck
+  (typed Python kwarg, NOT a dict-spec field - byte-identical when unset; the 26+1
+  deck_builder golden tests stay green). NO worker-image rebuild (deck is server-side).
+- `mode="real"` requires bbox + a user ignition UPWIND of the river (FIRE_IGNITION_
+  REQUIRED otherwise, like `elmfire_fire_spread`); surfaces the fetched fuels (river =
+  water class) + DEM as role=context inputs (0231).
+- New offline test `server/tests/test_elmfire_river_barrier_split.py` (7 cases) +
+  `test_build_deck_spotting_extra_threads_to_namelist` lock the math + the pass-through.
+- Showcase canonical entry = the real river case; the toy stays as the verification.
+
+### Live numbers (real river, through the baked image)
+
+PENDING a LANDFIRE upstream outage (2026-08-13): during this build every LANDFIRE
+host (`lfps.usgs.gov`, `landfire.gov`, `edcintl.cr.usgs.gov`) was unreachable (SSL
+handshake timeout) while 3DEP (`elevation.nationalmap.gov`), ESRI imagery, and GitHub
+all returned 200 - a LANDFIRE-specific outage, not a general network fault. The fuels
+fetch is hard-required (no synthetic substitute - that is the toy this amendment
+replaces), so the live real-river OFF/ON pair + its river-width/verdict numbers +
+QGIS-true proofs are produced by `scripts/proof_elmfire_river_barrier.py` (which
+auto-selects the widest grass-banked reach among Deschutes/John Day/Sacramento
+candidates and auto-places the ignition upwind) once LANDFIRE recovers. The
+verification (synthetic V&V) path was re-run LIVE through the unchanged image after
+the refactor and is byte-for-byte the original discriminant: spotting OFF far-side =
+0.0 km2, ON = 13.9041 km2 (15449 spot cells), `break_jumped=1` - proving the OFF/ON
+spotting machinery + the refactor are intact.

@@ -914,7 +914,12 @@ def compose_manifest(
 # --------------------------------------------------------------------------- #
 
 
-def build_deck(spec: dict, deck_dir: str | Path) -> dict:
+def build_deck(
+    spec: dict,
+    deck_dir: str | Path,
+    *,
+    spotting_extra: dict[str, str] | None = None,
+) -> dict:
     """Build a run-ready ELMFIRE deck directory from ``spec``.
 
     Steps: validate spec -> compute the ONE target grid -> localize + warp
@@ -922,6 +927,12 @@ def build_deck(spec: dict, deck_dir: str | Path) -> dict:
     + adj/phi -> HARD-ASSERT grid identity across all 15 rasters -> project
     ignitions (in-domain assert) -> render ``elmfire.data`` -> write
     ``deck_manifest.json``. Returns the manifest dict.
+
+    ``spotting_extra`` (the typed Python namelist-knob path, NOT a dict-spec
+    field -- see ``_KNOWN_SPEC_FIELDS``) emits a whole ``&SPOTTING`` group
+    (:func:`render_namelist`); unset (default) reproduces the base no-spotting
+    deck byte-for-byte. This is the REAL-DATA spotting surface: the same fetched
+    LANDFIRE/DEM warp with the ``&SPOTTING`` group toggled OFF vs ON.
 
     Every failure mode is a typed :class:`ElmfireDeckError` subclass — a deck
     that returns from this function is co-registered, complete and runnable::
@@ -983,6 +994,7 @@ def build_deck(spec: dict, deck_dir: str | Path) -> dict:
         duration_s=spec["duration_s"],
         dt_s=spec["time"]["dt_s"],
         dtdump_s=spec["time"]["dtdump_s"],
+        spotting_extra=spotting_extra,
     )
     (inputs_dir / "elmfire.data").write_text(namelist)
 

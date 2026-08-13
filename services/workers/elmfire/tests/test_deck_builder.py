@@ -447,6 +447,28 @@ _WEATHER = {
 }
 
 
+def test_build_deck_spotting_extra_threads_to_namelist(source_rasters, tmp_path) -> None:
+    """The real-data spotting surface: ``build_deck(..., spotting_extra=)`` emits a
+    &SPOTTING group; unset stays byte-identical (no group)."""
+    off = db.build_deck(_make_spec(source_rasters), tmp_path / "deck_off")  # noqa: F841
+    off_txt = (tmp_path / "deck_off" / "inputs" / "elmfire.data").read_text()
+    assert "&SPOTTING" not in off_txt
+
+    db.build_deck(
+        _make_spec(source_rasters),
+        tmp_path / "deck_on",
+        spotting_extra={
+            "ENABLE_SPOTTING": ".TRUE.",
+            "MEAN_SPOTTING_DIST_MIN": "25.0000",
+            "MEAN_SPOTTING_DIST_MAX": "25.0000",
+        },
+    )
+    on_txt = (tmp_path / "deck_on" / "inputs" / "elmfire.data").read_text()
+    assert "&SPOTTING" in on_txt
+    assert "ENABLE_SPOTTING = .TRUE." in on_txt
+    assert "MEAN_SPOTTING_DIST_MIN = 25.0000" in on_txt
+
+
 def test_render_namelist_constant_defaults_unchanged() -> None:
     """The default (constant) render carries DT_METEOROLOGY=3600.0, no MONTE_CARLO
     group, no TARGET_CFL, no time-control extras (byte-identical intent)."""

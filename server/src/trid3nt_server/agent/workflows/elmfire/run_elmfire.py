@@ -349,6 +349,8 @@ def build_elmfire_deck(
     run_args: ElmfireRunArgs,
     inputs: dict[str, str],
     deck_dir: str | Path,
+    *,
+    spotting_extra: dict[str, str] | None = None,
 ) -> dict[str, Any]:
     """Build the run-ready deck via the deck builder; return its manifest.
 
@@ -357,11 +359,15 @@ def build_elmfire_deck(
     ignition outside domain, ...) are re-raised as
     :class:`ElmfireWorkflowError` PRESERVING the deck builder's ``error_code``
     so the honest-failure taxonomy survives the module boundary.
+
+    ``spotting_extra`` threads a whole ``&SPOTTING`` namelist group onto the
+    REAL-DATA deck (the same fetched LANDFIRE/DEM warp, spotting OFF vs ON) --
+    the typed Python knob path, byte-identical when unset (no dict-spec field).
     """
     db = load_deck_builder()
     spec = build_elmfire_deck_spec(run_args, inputs)
     try:
-        return db.build_deck(spec, deck_dir)
+        return db.build_deck(spec, deck_dir, spotting_extra=spotting_extra)
     except db.ElmfireDeckError as exc:
         raise ElmfireWorkflowError(
             getattr(exc, "error_code", "ELMFIRE_DECK_ERROR"), str(exc)

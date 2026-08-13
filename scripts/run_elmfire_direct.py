@@ -90,17 +90,34 @@ async def _run():
             domain_km=8.0,
         )
     if WHICH == "spotting":
+        # REAL-DATA river-barrier demo (mode=real, the canonical entry): a real reach
+        # where a real river crosses the E-W wind axis in grass/shrub fire country.
+        # AOI finalized from the live LANDFIRE fetch (river renders as the water class).
         from trid3nt_server.agent.workflows.elmfire.spotting.spotting import (
             elmfire_spot_fire_barrier_crossing as fn,
         )
         return await fn(
+            mode="real",
+            bbox=[-121.145, 45.160, -121.035, 45.205],   # lower Deschutes nr Maupin, OR
+            ignition_lonlat=[-121.115, 45.182],          # UPWIND (west) of the river
+            mean_spotting_distance_m=60.0, nembers=30, pign_pct=100.0,
+            wind_speed_mph=35.0, wind_dir_deg=270.0, duration_hours=6.0,
+            cellsize_m=30.0, compute_class="standard",
+        )
+    if WHICH == "spotting_verify":
+        # VERIFICATION (synthetic constant deck) - the physics V&V path.
+        from trid3nt_server.agent.workflows.elmfire.spotting.spotting import (
+            elmfire_spot_fire_barrier_crossing as fn,
+        )
+        return await fn(
+            mode="verification",
             mean_spotting_distance_m=25.0, nembers=20, pign_pct=100.0,
             wind_speed_mph=25.0, wind_dir_deg=270.0, duration_hours=4.0,
             cellsize_m=30.0,
         )
     raise SystemExit(
-        f"unknown template {WHICH!r} "
-        "(ltw|wind|moisture|transient_wind|dead_fuel_interp|crown_init|crown_ceiling|spotting)"
+        f"unknown template {WHICH!r} (ltw|wind|moisture|transient_wind|"
+        "dead_fuel_interp|crown_init|crown_ceiling|spotting|spotting_verify)"
     )
 
 
