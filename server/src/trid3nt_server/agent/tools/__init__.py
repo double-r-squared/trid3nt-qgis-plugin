@@ -875,6 +875,11 @@ from ..workflows.elmfire.fire_spread.fire_spread import elmfire_fire_spread as _
 # elliptical-spread verification / calibration anchor), one folder under
 # workflows/elmfire/verification/; surfaced by the run_elmfire door's gate expansion.
 from ..workflows.elmfire.verification.verification import elmfire_verification_elliptical_replication as _elmfire_verification_elliptical_replication  # noqa: E402,F401 - NEW capability (ADR 0123, hazard-easy-four continuation #2) (engine=elmfire, tier=template)
+# elmfire_crown_fire_active_ros_verification TEMPLATE (engine="elmfire",
+# tier="template"): the twin of the elliptical verification for the crown-fire
+# regime -- an uncapped active-crown deck's numerical head spread rate vs the Cruz
+# (2005) closed-form active crown-fire ROS (the exact-solution regression gate).
+from ..workflows.elmfire.verification.crown_ros import elmfire_crown_fire_active_ros_verification as _elmfire_crown_fire_active_ros_verification  # noqa: E402,F401 - Cruz (2005) crown-fire ROS V&V (engine=elmfire, tier=template)
 # ELMFIRE CAND-S sensitivity sweep templates (constant flat deck, one knob each):
 # each sweeps a &SIMULATOR / &INPUTS knob across a small ladder and returns an
 # ElmfireSensitivityLayerURI. tier=template, engine=elmfire.

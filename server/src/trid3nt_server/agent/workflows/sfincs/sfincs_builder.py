@@ -87,6 +87,7 @@ __all__ = [
     "WindForcing",
     "PressureForcing",
     "InfiltrationForcing",
+    "StructureSpec",
     "BuildOptions",
     "build_sfincs_model",
     "validate_nlcd_vintage_against_mapping",
@@ -581,6 +582,41 @@ class ForcingSpec:
 
 
 @dataclass(frozen=True)
+class StructureSpec:
+    """A hydraulic structure line burned into the SFINCS deck via
+    ``SfincsModel.setup_structures`` -- a WEIR/levee (overtopping crest) or a
+    THIN DAM (an infinitely-thin no-flow barrier between adjacent cells).
+
+    hydromt_sfincs 1.2.2 ``setup_structures(structures, stype, dep, buffer, dz,
+    merge)`` writes a native ``sfincs.weir`` / ``sfincs.thd`` the
+    ``deltares/sfincs-cpu`` binary consumes via the ``weirfile`` / ``thdfile``
+    sfincs.inp keywords. A weir crest can be sampled from the model bed as
+    ``dep + dz`` (the DEM-DERIVED-CREST path -- a levee raised ``dz`` m above the
+    terrain it sits on) so the crest tracks the ground under the line.
+
+    - ``geometry_uri`` -- a local / ``s3://`` geofile (GeoJSON / FlatGeobuf) of
+      the structure centerline(s) as LineString features; staged to a local path
+      before hydromt reads it. Multiple line features of the SAME ``stype`` may
+      share one file (they become one structure layer via ``merge=True``).
+    - ``stype`` -- ``"weir"`` (levee / weir crest that overtops at its crest
+      elevation) or ``"thd"`` (thin dam -- a hard no-flow wall between cells,
+      needs no crest elevation).
+    - ``dz`` -- WEIR ONLY: the crest is sampled as ``dep`` (the model bed) plus
+      this height in metres (the DEM-DERIVED-CREST raise). An UN-FETCHABLE
+      engineering value -- the composer input-review-gates a weir with no ``dz``
+      and no per-vertex ``z`` rather than fabricating a crest.
+    - ``par1`` -- WEIR ONLY: the weir discharge coefficient (baked into the
+      geometry ``par1`` column; hydromt defaults 0.6 when absent).
+    """
+
+    geometry_uri: str
+    stype: str  # "weir" | "thd"
+    dz: float | None = None
+    par1: float | None = None
+    provenance: dict[str, Any] = field(default_factory=dict)
+
+
+@dataclass(frozen=True)
 class BuildOptions:
     """Knobs ``build_sfincs_model`` exposes for engine-internal tuning.
 
@@ -654,6 +690,15 @@ class BuildOptions:
     # present key into the setup_config passthrough -> sfincs.inp. ``None`` (the
     # default) emits nothing, so a deck without overrides is byte-identical.
     advanced_physics: dict[str, Any] | None = None
+    # HYDRAULIC STRUCTURES -- weir/levee (overtopping crest) + thin-dam (no-flow
+    # barrier) lines burned into the deck via ``setup_structures`` (sfincs.weir /
+    # sfincs.thd). ``()`` (default) emits NO ``setup_structures`` block, so a deck
+    # without structures is byte-identical. A single WEIR-or-THD block is emitted
+    # (yaml duplicate-key safety -- one ``setup_structures`` key per deck); a run
+    # supplies at most one ``StructureSpec`` (its geometry file may hold many
+    # same-type lines). A weir samples its crest from the staged DEM (``dep``)
+    # plus ``dz`` -- the DEM-derived-crest path.
+    structures: tuple[StructureSpec, ...] = ()
 
 
 # --------------------------------------------------------------------------- #
@@ -1981,6 +2026,45 @@ def _emit_surge_forcing_blocks(
         # sfincs.inp:qinf inside the setup_config block (_emit_physics_config).
 
 
+def _emit_structures_config(
+    components: list[str],
+    options: BuildOptions,
+    dem_read_path: str,
+) -> None:
+    """Append a single ``setup_structures`` YAML block (weir OR thin dam).
+
+    Emits ONE structure block only (the first ``options.structures`` entry):
+    ``yaml.safe_load`` collapses duplicate mapping keys, so two
+    ``setup_structures:`` blocks would silently drop the first -- a run therefore
+    carries at most one ``StructureSpec`` (its geofile may hold many same-type
+    lines). No-op (byte-identical deck) when ``options.structures`` is empty.
+
+    A weir samples its crest from the model bed: ``dep`` points at the SAME
+    staged DEM ``setup_dep`` uses, and ``dz`` raises the crest that many metres
+    above the terrain under the line (the DEM-derived-crest path). A thin dam
+    needs no crest -- only the barrier line.
+    """
+    if not options.structures:
+        return
+    st = options.structures[0]
+    stype = str(st.stype).strip().lower()
+    if stype not in ("weir", "thd"):
+        raise SFINCSSetupError(
+            "STRUCTURE_TYPE_INVALID",
+            message=f"structure stype must be 'weir' or 'thd'; got {st.stype!r}",
+            details={"stype": st.stype},
+        )
+    struct_read_path = _stage_gcs_local(st.geometry_uri)
+    components.append("setup_structures:")
+    components.append(f"  structures: '{struct_read_path}'")
+    components.append(f"  stype: '{stype}'")
+    if stype == "weir":
+        # DEM-derived crest: sample the model bed (the same staged DEM) + dz.
+        components.append(f"  dep: '{dem_read_path}'")
+        if st.dz is not None:
+            components.append(f"  dz: {float(st.dz)}")
+
+
 def _emit_spiderweb_config(
     components: list[str],
     forcing: ForcingSpec,
@@ -2364,6 +2448,12 @@ def _generate_hydromt_yaml_config(
                 f"  datasets_riv: [{{ centerlines: '{building_read_path}', "
                 "rivwth: 5, rivdph: -3 }]  # OSM footprints as raised obstacles"
             )
+    # --- HYDRAULIC STRUCTURES -- weir/levee (overtopping crest) OR thin dam
+    # (no-flow barrier). Emitted ONLY when ``options.structures`` is set; a weir
+    # crest is sampled as the staged DEM bed + dz (DEM-derived crest). No-op /
+    # byte-identical when no structure is supplied. Placed AFTER manning/subgrid
+    # (the bed the crest samples must be built) and BEFORE forcing.
+    _emit_structures_config(components, options, dem_read_path)
     # --- COASTAL SFINCS -- surge / tide / discharge / wind / pressure forcing ---
     #
     # HISTORICAL NOTE: for the v0.1 PLUVIAL deck ``setup_river_inflow``

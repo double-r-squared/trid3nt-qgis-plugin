@@ -3,7 +3,7 @@
 Covers the two arm prerequisites + the identity gate:
 
 - DEFAULT config (no arm flag): the 27 spec-served sources stay tier="general",
-  ambient-declarable; registry == 254 (+1 ADR 0252 landlab_normal_fault_scarp_evolution NormalFault tectonic-forcing landscape-evolution template) (+1 ADR 0251 culvert_embankment_flow HEC-RAS 2025 2D culvert-through-embankment template) (+1 ADR 0247 pelicun_hazus_lifeline_seismic_dl_run HAZUS EQ lifeline-network bridge/pipe/substation template) (+1 ADR 0241 telemac3d_stratified_flow TELEMAC-3D three-dimensional baroclinic stratified-flow template) (+1 ADR 0239 elmfire_spot_fire_barrier_crossing ELMFIRE ember-spotting barrier-jump template) (+1 ADR 0237 artemis_harbor_agitation ARTEMIS phase-resolving harbour-agitation template) (+1 ADR 0236 tomawac_wave_field TOMAWAC spectral-wave template) (+2 ADR 0235 modflow_thermal_plume + modflow_thermal_storage GWE heat-transport templates) (+1 ADR 0228 modflow_vadose_transport UZF+UZT unsaturated-zone breakthrough) (+2 ADR 0218 swmm_snowmelt_degree_day + swmm_aquifer_baseflow_to_node) (+1 ADR 0217 schism_pahm_surge) (+2 ADR 0214 landlab_groundwater_water_table +
+  ambient-declarable; registry == 255 (+1 ADR 0256 elmfire_crown_fire_active_ros_verification Cruz-2005 active crown-fire ROS exact-solution regression gate) (+1 ADR 0252 landlab_normal_fault_scarp_evolution NormalFault tectonic-forcing landscape-evolution template) (+1 ADR 0251 culvert_embankment_flow HEC-RAS 2025 2D culvert-through-embankment template) (+1 ADR 0247 pelicun_hazus_lifeline_seismic_dl_run HAZUS EQ lifeline-network bridge/pipe/substation template) (+1 ADR 0241 telemac3d_stratified_flow TELEMAC-3D three-dimensional baroclinic stratified-flow template) (+1 ADR 0239 elmfire_spot_fire_barrier_crossing ELMFIRE ember-spotting barrier-jump template) (+1 ADR 0237 artemis_harbor_agitation ARTEMIS phase-resolving harbour-agitation template) (+1 ADR 0236 tomawac_wave_field TOMAWAC spectral-wave template) (+2 ADR 0235 modflow_thermal_plume + modflow_thermal_storage GWE heat-transport templates) (+1 ADR 0228 modflow_vadose_transport UZF+UZT unsaturated-zone breakthrough) (+2 ADR 0218 swmm_snowmelt_degree_day + swmm_aquifer_baseflow_to_node) (+1 ADR 0217 schism_pahm_surge) (+2 ADR 0214 landlab_groundwater_water_table +
   landlab_groundwater_storm_recession GroundwaterDupuitPercolator templates;
   +2 ADR 0203 fetch_aorc_precip + fetch_lter_records;
   +1 generate_mesh mesh builder ADR 0200;
@@ -127,7 +127,7 @@ def _os_environ() -> dict:
 def test_default_config_identity():
     r = _run_arm(None)
     assert r["arm"] is None
-    assert r["registry_size"] == 254  # ADR 0251 +culvert_embankment_flow (HEC-RAS 2D culvert-through-embankment); ADR 0247 +pelicun_hazus_lifeline_seismic_dl_run
+    assert r["registry_size"] == 255  # ADR 0251 +culvert_embankment_flow (HEC-RAS 2D culvert-through-embankment); ADR 0247 +pelicun_hazus_lifeline_seismic_dl_run
     assert r["n_specs"] == 97  # ADR 0112 +nwm_streamflow (fetcher finale); ADR 0203 +fetch_aorc_precip +fetch_lter_records
     # They stay ambient (tier=general) and IN the declarable pool.
     assert r["gridmet_tier"] == "general"
@@ -145,7 +145,7 @@ def test_default_config_identity():
 def test_arm2_specs_leave_pool_but_stay_indexed():
     r = _run_arm("2")
     assert r["arm"] == "2"
-    assert r["registry_size"] == 254  # ADR 0251 +culvert_embankment_flow; ADR 0247 +lifeline template; registry does NOT shrink, only the pool does
+    assert r["registry_size"] == 255  # ADR 0251 +culvert_embankment_flow; ADR 0247 +lifeline template; registry does NOT shrink, only the pool does
     assert r["gridmet_tier"] == "catalog"
     assert r["any_spec_in_declarable"] is False  # every spec leaves the ambient pool
     # -57, not -58: fetch_copernicus_dem is tier="internal" (wave-11 absorption into
@@ -175,7 +175,7 @@ def test_arm2_specs_leave_pool_but_stay_indexed():
 def test_arm1_signature_and_pool():
     r = _run_arm("1")
     assert r["arm"] == "1"
-    assert r["registry_size"] == 254  # ADR 0251 +culvert_embankment_flow (HEC-RAS 2D culvert-through-embankment); ADR 0247 +pelicun_hazus_lifeline_seismic_dl_run
+    assert r["registry_size"] == 255  # ADR 0251 +culvert_embankment_flow (HEC-RAS 2D culvert-through-embankment); ADR 0247 +pelicun_hazus_lifeline_seismic_dl_run
     assert r["gridmet_tier"] == "catalog"
     assert r["any_spec_in_declarable"] is False
     assert r["gridmet_in_index"] is True
@@ -262,7 +262,7 @@ def test_arm3_specs_leave_pool_and_source_param():
     composed fetcher's real dispatch path)."""
     r = _run_arm("3")
     assert r["arm"] == "3"
-    assert r["registry_size"] == 254  # ADR 0251 +culvert_embankment_flow; ADR 0247 +lifeline template; registry does NOT shrink, only the pool does
+    assert r["registry_size"] == 255  # ADR 0251 +culvert_embankment_flow; ADR 0247 +lifeline template; registry does NOT shrink, only the pool does
     assert r["gridmet_tier"] == "catalog"
     assert r["any_spec_in_declarable"] is False  # every spec leaves the ambient pool
     # -70, not -71: fetch_copernicus_dem is tier="internal" (already out of the pool).

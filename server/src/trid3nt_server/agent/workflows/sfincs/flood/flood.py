@@ -176,6 +176,7 @@ from trid3nt_server.agent.workflows.sfincs.sfincs_builder import (
     # + telemetry (the worker re-does the DEM-active autoscale for real).
     _extract_unique_nlcd_classes,
     _to_vsigs,
+    StructureSpec,
     build_sfincs_model,
     suggest_sfincs_resolution_from_bbox,
     validate_nlcd_vintage_against_mapping,
@@ -268,6 +269,47 @@ from trid3nt_server.agent.workflows.sfincs.sfincs_forcing_autowire import (  # n
 
 
 
+def _write_structure_geojson(
+    structure_lines: list[list[list[float]]],
+    stype: str,
+    par1: float | None = None,
+) -> str:
+    """Write user-drawn/pushed structure lines to an EPSG:4326 LineString GeoJSON.
+
+    Returns the local path (consumed by ``build_sfincs_model`` -> hydromt
+    ``setup_structures``). Each inner list is one polyline of ``(lon, lat)``
+    vertices; a weir's ``par1`` discharge coefficient is baked into each feature
+    when supplied (hydromt defaults 0.6 when absent). Raises ``WorkflowError``
+    if a line has fewer than two vertices (a structure needs a segment).
+    """
+    features = []
+    for i, line in enumerate(structure_lines):
+        coords = [[float(lon), float(lat)] for lon, lat in line]
+        if len(coords) < 2:
+            raise WorkflowError(
+                "STRUCTURE_GEOMETRY_INVALID",
+                f"structure line {i} needs >= 2 vertices; got {len(coords)}",
+            )
+        props: dict[str, Any] = {"name": f"structure_{i}"}
+        if stype == "weir" and par1 is not None:
+            props["par1"] = float(par1)
+        features.append(
+            {"type": "Feature", "properties": props,
+             "geometry": {"type": "LineString", "coordinates": coords}}
+        )
+    fc = {
+        "type": "FeatureCollection",
+        "crs": {"type": "name",
+                "properties": {"name": "urn:ogc:def:crs:EPSG::4326"}},
+        "features": features,
+    }
+    out_dir = _staging_dir_local()
+    out_path = _os_path_join(out_dir, f"sfincs_structures_{new_ulid()}.geojson")
+    with open(out_path, "w", encoding="utf-8") as fh:
+        json.dump(fc, fh)
+    return out_path
+
+
 # --------------------------------------------------------------------------- #
 # The workflow itself
 # --------------------------------------------------------------------------- #
@@ -313,6 +355,16 @@ async def model_flood_scenario(
     tsunami: bool = False,
     tsunami_wave_height_m: float | None = None,
     tsunami_period_min: float | None = None,
+    # HYDRAULIC STRUCTURES -- a weir/levee (overtopping crest) or a thin-dam
+    # (no-flow barrier) line burned into the deck. Geometry from user-drawn /
+    # pushed lines (``structure_lines``, lon/lat vertices) OR a prior geofile
+    # (``structure_uri``). A weir crest is DEM-derived (terrain + ``structure_
+    # crest_dz_m``); the raise is un-fetchable so a weir with no dz is USER-GATED.
+    # All None/default -> no structure block (byte-identical pluvial deck).
+    structure_lines: list[list[list[float]]] | None = None,
+    structure_uri: str | None = None,
+    structure_type: str = "weir",
+    structure_crest_dz_m: float | None = None,
     # SPIDERWEB (2026-07-19): parametric hurricane wind+pressure via a Delft3D
     # .spw. Any of these implies coastal + the spiderweb wind path; mutually
     # exclusive with the ``wind`` param (typed input error, never silent).
@@ -659,6 +711,80 @@ async def model_flood_scenario(
             return_period_years=return_period_yr,
             duration_hours=float(duration_hr),
             grid_resolution_m=grid_resolution_m,
+        )
+    # --- HYDRAULIC STRUCTURE resolution + USER-INPUT gate ---
+    # A structure line (drawn/pushed ``structure_lines`` or a ``structure_uri``
+    # geofile) is burned into the deck as a weir/levee (overtopping crest) or a
+    # thin dam (no-flow barrier). A WEIR crest is a real engineering value we do
+    # NOT fabricate: a weir with no ``structure_crest_dz_m`` returns a typed
+    # USER_INPUT_REQUIRED gate (the DEM-derived crest = terrain + dz needs the
+    # raise). A thin dam needs no crest. ``structure_member`` stays None on a
+    # plain run (byte-identical deck).
+    structure_member: StructureSpec | None = None
+    _has_structure = bool(structure_lines) or bool(structure_uri)
+    if _has_structure:
+        _stype = str(structure_type or "weir").strip().lower()
+        if _stype not in ("weir", "thd"):
+            return _build_failed_envelope(
+                bbox=resolved_bbox,
+                project_id=proj_id,
+                session_id=sess_id,
+                error_code="STRUCTURE_TYPE_INVALID",
+                error_detail=(
+                    "structure_type must be 'weir' (overtopping levee/weir crest) "
+                    f"or 'thd' (thin-dam no-flow barrier); got {structure_type!r}."
+                ),
+                workflow_name=workflow_name,
+                data_sources=data_sources,
+                forcing=None,
+                solver_run_ids=solver_run_ids,
+                return_period_years=return_period_yr,
+                duration_hours=float(duration_hr),
+                grid_resolution_m=grid_resolution_m,
+            )
+        if _stype == "weir" and structure_crest_dz_m is None:
+            logger.info(
+                "model_flood_scenario: weir structure without structure_crest_dz_m "
+                "-- returning USER_INPUT_REQUIRED (no fabricated crest height)."
+            )
+            return _build_failed_envelope(
+                bbox=resolved_bbox,
+                project_id=proj_id,
+                session_id=sess_id,
+                error_code="USER_INPUT_REQUIRED",
+                error_detail=(
+                    "A weir / levee needs its crest raise above the terrain "
+                    "(structure_crest_dz_m, metres) -- please supply it; the "
+                    "DEM-derived crest (terrain + dz) is not fabricated. Use "
+                    "structure_type='thd' for a no-flow thin dam (no crest needed)."
+                ),
+                workflow_name=workflow_name,
+                data_sources=data_sources,
+                forcing=None,
+                solver_run_ids=solver_run_ids,
+                return_period_years=return_period_yr,
+                duration_hours=float(duration_hr),
+                grid_resolution_m=grid_resolution_m,
+            )
+        _geom_uri = structure_uri or _write_structure_geojson(
+            structure_lines or [], _stype
+        )
+        structure_member = StructureSpec(
+            geometry_uri=_geom_uri,
+            stype=_stype,
+            dz=(float(structure_crest_dz_m) if _stype == "weir" else None),
+            provenance={"source": "structure_uri" if structure_uri else "drawn_lines"},
+        )
+        data_sources.append(
+            DataSource(
+                name=(
+                    f"Hydraulic structure ({_stype}"
+                    + (f", crest +{structure_crest_dz_m} m" if _stype == "weir" else "")
+                    + ")"
+                ),
+                uri=_geom_uri,
+                accessed_at=datetime.now(timezone.utc),
+            )
         )
     # SPIDERWEB (2026-07-19): storm (parametric hurricane) XOR the wind param.
     # Both would double-count the wind driver -> typed input error, never silent
@@ -1404,6 +1530,9 @@ async def model_flood_scenario(
             # alpha / huthresh / coriolis_latitude / wind_drag) -> setup_config
             # block. None/{} -> no physics override (byte-identical pluvial deck).
             advanced_physics=(_resolved_physics or None),
+            # HYDRAULIC STRUCTURE (weir/levee OR thin dam) burned via
+            # setup_structures. () on a plain run (byte-identical deck).
+            structures=((structure_member,) if structure_member is not None else ()),
         )
         # ``build_sfincs_model`` is SYNCHRONOUS with no overall timeout
         # (sfincs_builder GDAL VSI cache/timeout is per-read only). Run it off
@@ -2325,6 +2454,13 @@ async def sfincs_flood(
     tsunami: bool = False,
     tsunami_wave_height_m: float | None = None,
     tsunami_period_min: float | None = None,
+    # HYDRAULIC STRUCTURES -- weir/levee (overtopping crest) or thin dam (no-flow
+    # barrier). Geometry from drawn/pushed lines or a geofile URI; a weir needs a
+    # crest raise (USER-GATED). Default None -> no structure (byte-identical).
+    structure_lines: list[list[list[float]]] | None = None,
+    structure_uri: str | None = None,
+    structure_type: str = "weir",
+    structure_crest_dz_m: float | None = None,
     # SPIDERWEB (2026-07-19): parametric hurricane wind+pressure via a Delft3D
     # .spw. Any of these implies coastal + the spiderweb wind path; mutually
     # exclusive with ``wind`` (typed STORM_WIND_CONFLICT, never silent).
@@ -2509,6 +2645,26 @@ async def sfincs_flood(
         tsunami_wave_height_m: tsunami peak wave height (m, user-supplied).
             Default ``None``.
         tsunami_period_min: tsunami period (min); defaults to ~15 min. ``None``.
+        structure_lines: OPTIONAL hydraulic-structure geometry -- a list of
+            polylines, each a list of ``(lon, lat)`` vertices (user-drawn or
+            pushed lines), burned into the deck as a WEIR/levee (an overtopping
+            crest that blocks flow until water rises above it) or a THIN DAM (a
+            hard no-flow wall between cells). Use for prompts like "add a levee
+            along this line", "put a floodwall here", "how does this dike change
+            the flooding". Pair with ``structure_type`` + (for a weir)
+            ``structure_crest_dz_m``. ``None`` (default) -> no structure.
+        structure_uri: OPTIONAL -- a prior geofile URI (GeoJSON / FlatGeobuf of
+            LineString features) used verbatim as the structure geometry instead
+            of ``structure_lines``. ``None`` (default).
+        structure_type: ``"weir"`` (default -- an overtopping levee/weir whose
+            crest = terrain + ``structure_crest_dz_m``) or ``"thd"`` (a thin dam,
+            an infinitely-thin no-flow barrier that needs NO crest height). Use
+            ``"thd"`` for a solid wall / closed barrier; ``"weir"`` for a levee
+            or dike that can be overtopped.
+        structure_crest_dz_m: WEIR ONLY -- the crest raise in METRES above the
+            terrain under the line (the DEM-derived crest). USER-GATED: a weir
+            with no dz returns a typed USER_INPUT_REQUIRED (the crest is not
+            fabricated). Ignored for a thin dam. ``None`` (default).
         storm_name: NAMED historical hurricane / tropical cyclone (e.g.
             ``"Michael"``). With ``storm_season`` it resolves the IBTrACS best
             track via ``fetch_storm_tracks`` and builds a parametric Holland
@@ -2592,6 +2748,11 @@ async def sfincs_flood(
         tsunami=tsunami,
         tsunami_wave_height_m=tsunami_wave_height_m,
         tsunami_period_min=tsunami_period_min,
+        # HYDRAULIC STRUCTURES (weir/levee + thin dam) threaded through.
+        structure_lines=structure_lines,
+        structure_uri=structure_uri,
+        structure_type=structure_type,
+        structure_crest_dz_m=structure_crest_dz_m,
         # SPIDERWEB (2026-07-19): parametric hurricane wind+pressure.
         storm_name=storm_name,
         storm_season=storm_season,

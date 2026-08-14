@@ -1,0 +1,37 @@
+{
+  "layer_id": "fire-arrival-01M00PNSM36HJTK7DM5FWRGKC7",
+  "name": "Fire arrival time (active crown-fire ROS verification)",
+  "layer_type": "raster",
+  "uri": "s3://trid3nt-runs/01M00PNSM36HJTK7DM5FWRGKC7/overviews/01M00PQ1D5W7T8G8ME06BTA32S.tif",
+  "style_preset": "continuous_fire_arrival_hr",
+  "temporal": null,
+  "role": "primary",
+  "units": null,
+  "bbox": [
+    -98.56887057083105,
+    38.446101329500536,
+    -98.43112942916895,
+    38.553898670499464
+  ],
+  "legend": null,
+  "fallback_note": null,
+  "synthetic_inputs": [],
+  "crs_authid": null,
+  "burned_area_km2": 0.9468,
+  "fire_arrival_max_hr": 0.4011636013454861,
+  "max_flame_length_m": 22.278256439208985,
+  "max_spread_rate_m_min": 123.15536645507814,
+  "duration_hours": 0.4,
+  "ignition_lonlat": [
+    -98.5,
+    38.5
+  ],
+  "numerical_ros_m_min": 123.75,
+  "cruz_ros_m_min": 123.15535293314156,
+  "rel_error": 0.004828430536683727,
+  "tolerance": 0.15,
+  "passed": true,
+  "wind_speed_mph": 20.0,
+  "cbd_kg_m3": 0.18,
+  "effm_pct": 3.0
+}

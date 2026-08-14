@@ -69,6 +69,7 @@ __all__ = [
     "ElmfireRunArgs",
     "FireSpreadLayerURI",
     "ElmfireEllipseVerificationLayerURI",
+    "ElmfireCrownRosVerificationLayerURI",
     "ElmfireSensitivityLayerURI",
 ]
 
@@ -343,6 +344,40 @@ class ElmfireEllipseVerificationLayerURI(FireSpreadLayerURI):
     length_to_width_ratio: float = Field(ge=0.0)
     tolerance: float = Field(ge=0.0)
     passed: bool
+
+
+class ElmfireCrownRosVerificationLayerURI(FireSpreadLayerURI):
+    """The ELMFIRE ACTIVE-crown-fire rate-of-spread VERIFICATION result.
+
+    Extends ``FireSpreadLayerURI`` (the time-of-arrival raster is the primary
+    layer) with the Cruz-et-al.-(2005) closed-form crown-fire-ROS check
+    (Invariant 1 -- typed fields, never free-generated). On an UNCAPPED,
+    fully-active crown deck (constant fuel + uniform wind + flat terrain + a
+    uniform canopy) the numerical level-set head fire spreads at the Cruz active
+    crown-fire rate of spread; these fields report how closely the numerical head
+    ROS reproduces that closed form:
+
+        numerical_ros_m_min: the numerical HEAD rate of spread (head extent /
+            duration), metres/minute (>= 0).
+        cruz_ros_m_min: the Cruz (2005) active-crown closed-form ROS evaluated at
+            the deck's own inputs, metres/minute (>= 0).
+        rel_error: |numerical - cruz| / cruz, dimensionless (>= 0).
+        tolerance: the fractional pass tolerance rel_error was gated on.
+        passed: rel_error <= tolerance AND the perimeter did not touch the domain
+            edge (an edge-touching front truncates the head extent -> invalid).
+        wind_speed_mph / cbd_kg_m3 / effm_pct: the echoed closed-form inputs (the
+            20-ft wind, canopy bulk density, and fine dead-fuel moisture) so the
+            verification is self-describing.
+    """
+
+    numerical_ros_m_min: float = Field(ge=0.0)
+    cruz_ros_m_min: float = Field(ge=0.0)
+    rel_error: float = Field(ge=0.0)
+    tolerance: float = Field(ge=0.0)
+    passed: bool
+    wind_speed_mph: float = Field(ge=0.0)
+    cbd_kg_m3: float = Field(ge=0.0)
+    effm_pct: float = Field(ge=0.0)
 
 
 class ElmfireSensitivityLayerURI(FireSpreadLayerURI):

@@ -20,3 +20,7 @@ sfincs_flood:
 - route the flood around building footprints (urban obstacles)
 - named-hurricane surge inundation via a parametric spiderweb wind field
 - run a SFINCS flood with a uniform constant infiltration loss rate qinf
+- add a levee or floodwall along this line and model how it changes the flooding
+- how much does this dike or embankment protect the area from flooding
+- put a weir crest across the channel and model overtopping
+- add a thin dam no-flow barrier and see where the water is redirected

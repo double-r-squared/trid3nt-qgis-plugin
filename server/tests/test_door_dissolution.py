@@ -88,6 +88,7 @@ EXPECTED_TEMPLATES = {
     "landlab_groundwater_water_table",  # ADR 0214 Landlab groundwater: GroundwaterDupuitPercolator steady-state water table + seepage + baseflow (mass-conservation V&V)
     "landlab_groundwater_storm_recession",  # ADR 0214 Landlab groundwater: storm-driven seepage/baseflow hydrograph + aquifer recession timescale
     "elmfire_verification_elliptical_replication",  # ADR 0123 continuation #2: constant-wind elliptical-spread verification
+    "elmfire_crown_fire_active_ros_verification",  # ADR 0256: Cruz (2005) active crown-fire ROS exact-solution regression gate
     "geoclaw_tsunami_gauge_timeseries",  # ADR 0123 continuation #3: coastal gauge water-level time series
     "geoclaw_amr_refinement_regions",  # GeoClaw CAND-S: explicit lat/lon/time AMR region control
     "geoclaw_regional_manning_friction",  # GeoClaw CAND-S: spatially-varying banded Manning friction

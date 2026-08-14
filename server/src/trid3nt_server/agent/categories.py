@@ -363,6 +363,7 @@ PRIMARY_CATEGORY: dict[str, str] = {
     # correctness gate -> model_validation; cross-lists to fire +
     # simulation_modeling below.
     "elmfire_verification_elliptical_replication": "model_validation",
+    "elmfire_crown_fire_active_ros_verification": "model_validation",
     "elmfire_length_to_width_ceiling_sensitivity": "simulation_modeling",
     "elmfire_wind_fluctuation_randomization": "simulation_modeling",
     "elmfire_live_fuel_moisture_sensitivity": "simulation_modeling",
@@ -907,6 +908,7 @@ SECONDARY_CATEGORIES: dict[str, tuple[str, ...]] = {
     "geoclaw_thacker_validation": ("simulation_modeling",),
     "pelicun_closed_form_validation": ("damage_assessment",),
     "elmfire_verification_elliptical_replication": ("fire", "simulation_modeling"),
+    "elmfire_crown_fire_active_ros_verification": ("fire", "simulation_modeling"),
     "elmfire_initial_attack_containment_probability": ("fire", "simulation_modeling"),
     # Run diagnostics (mass balance / convergence / instability) operate ON a
     # run and are the correctness read-out, so they cross-list to model_validation.

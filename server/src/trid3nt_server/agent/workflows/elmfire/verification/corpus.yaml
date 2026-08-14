@@ -8,3 +8,10 @@ elmfire_verification_elliptical_replication:
 - regression gate comparing the fire front to the Richards ellipse within tolerance
 - validate wildfire spread rate and perimeter shape against the exact ellipse
 - constant fuel uniform wind verification of the level-set fire model
+elmfire_crown_fire_active_ros_verification:
+- verify the crown fire spread rate against the Cruz 2005 closed form
+- validate the active crown-fire rate of spread on a uniform canopied deck
+- ELMFIRE crown-fire calibration check: numerical head rate vs the Cruz analytic
+- regression gate comparing the active crown-fire rate to the Cruz exact solution
+- does the numerical active crown fire head rate match the closed-form crown ROS
+- constant wind uniform canopy verification of the crown-fire spread-rate model
