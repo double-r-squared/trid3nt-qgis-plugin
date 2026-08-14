@@ -207,6 +207,8 @@ class Driver
         if (mode == "culvertdemo")
             return CulvertDemo(args[1],
                                args.Length > 2 && (args[2] == "1" || args[2] == "culvert"));
+        if (mode == "culvertreach")
+            return CulvertReach(args[1]);
         return Rain(args.Length > 1 ? args[1] : "/probe/rain",
                     args.Length > 2 ? float.Parse(args[2]) : 100f);
     }
@@ -443,6 +445,131 @@ class Driver
             $"\"barrel_x\":{barrelX},\"us_y\":{usY},\"ds_y\":{dsY}," +
             $"\"invert\":{invert},\"diameter\":{diameter},\"width\":{W},\"height\":{H}}}");
         Console.WriteLine("[drv] culvertdemo done");
+        return 0;
+    }
+
+    // -- ADR 0251 Stage-2 PRODUCT leg: culvert-through-embankment on a REAL-terrain deck --
+    // Generalizes CulvertDemo to a spec.json-driven path (the worker's culvert_reach leg
+    // calls this): a structured 2D area (inflow BC on the top wall, tailwater stage on the
+    // bottom wall -- StructChannel, the proven external-BC channel) whose exported synthetic
+    // Terrain.tif the HOST overwrites with the reprojected real DEM (the road embankment IS
+    // in the 3DEP lidar). The culvert barrel + its BarrelProperties + OpeningProperties are
+    // authored from the spec's `culvert` block (present => the A case; absent => the ridge-
+    // blocked B case) exactly as the seam-proven CulvertDemo authors them, so
+    // InitializeDriver_Culverts wires `new Culvert(...)` into the solve. STRICT spec: any
+    // unknown key (top-level or in `culvert`) hard-errors (no silent-drop; parser version 2).
+    static readonly HashSet<string> _CulvertReachKeys = new HashSet<string> {
+        "out_dir", "nx", "ny", "cell_size", "manning_n", "dt_s", "sim_seconds",
+        "report_every", "ramp_seconds", "inflow_cms", "tailwater_stage", "diffusion",
+        "parser_version", "culvert",
+    };
+    static readonly HashSet<string> _CulvertBlockKeys = new HashSet<string> {
+        "barrel", "us_invert", "ds_invert", "rise", "span", "shape", "mannings",
+        "opening_type", "k_in", "k_out",
+    };
+
+    static void RequireKnownKeys(JsonElement obj, HashSet<string> known, string where)
+    {
+        foreach (var prop in obj.EnumerateObject())
+            if (!known.Contains(prop.Name))
+                throw new Exception($"culvertreach spec: unknown key '{prop.Name}' in {where} " +
+                                    $"(strict parser v2; known: {string.Join(",", known)})");
+    }
+
+    static int CulvertReach(string specPath)
+    {
+        using var doc = JsonDocument.Parse(File.ReadAllText(specPath));
+        var s = doc.RootElement;
+        RequireKnownKeys(s, _CulvertReachKeys, "root");
+        string outDir = s.GetProperty("out_dir").GetString();
+        bool withCulvert = s.TryGetProperty("culvert", out var cvBlock)
+                           && cvBlock.ValueKind == JsonValueKind.Object;
+
+        var p = new StructChannel {
+            CellsWide = s.GetProperty("nx").GetInt32(),
+            CellsTall = s.GetProperty("ny").GetInt32(),
+            CellSize = s.GetProperty("cell_size").GetDouble(),
+            RampSeconds = s.TryGetProperty("ramp_seconds", out var rs) ? rs.GetDouble() : 300.0,
+            NValue = (float)s.GetProperty("manning_n").GetDouble(),
+            Slope = 0.0,
+            DownstreamStage = s.GetProperty("tailwater_stage").GetDouble(),
+            UpstreamFlow = s.GetProperty("inflow_cms").GetDouble(),
+            SolveDt = s.GetProperty("dt_s").GetDouble(),
+            SolveDuration = s.GetProperty("sim_seconds").GetDouble(),
+            ReportFrequency = s.GetProperty("report_every").GetInt32(),
+        };
+        double W = p.CellsWide * p.CellSize;
+        double H = p.CellsTall * p.CellSize;
+        Console.WriteLine($"[drv] culvertreach dir={outDir} culvert={withCulvert} basin={W}x{H}m " +
+                          $"inflow={p.UpstreamFlow}m3/s tailwater={p.DownstreamStage}m " +
+                          $"grid={p.CellsWide}x{p.CellsTall} cell={p.CellSize} dt={p.SolveDt} dur={p.SolveDuration}");
+
+        try { SyntheticTestCases.Save(p, outDir); Console.WriteLine("[drv] Save() completed"); }
+        catch (Exception e) { Console.WriteLine("[drv] Save() aborted (known terrain bug): " + e.Message); }
+
+        string ras = Directory.GetFiles(outDir, "*.ras").First();
+        var project = new Project(ras);
+        var geom = project.Geometries.First();
+        var area = geom.FlowAreaLayer.First();
+        Console.WriteLine($"[drv] reopened {Path.GetFileName(ras)} area='{area.Name}' " +
+                          $"cells={area.Mesh?.CellCount} geomfile={Path.GetFileName(geom.Filename)}");
+
+        if (withCulvert)
+        {
+            RequireKnownKeys(cvBlock, _CulvertBlockKeys, "culvert");
+            var bl = cvBlock.GetProperty("barrel");
+            if (bl.GetArrayLength() != 4)
+                throw new Exception("culvertreach spec: culvert.barrel must be [x0,y0,x1,y1] (local SI m)");
+            double x0 = bl[0].GetDouble(), y0 = bl[1].GetDouble();
+            double x1 = bl[2].GetDouble(), y1 = bl[3].GetDouble();
+            double usInvert = cvBlock.GetProperty("us_invert").GetDouble();
+            double dsInvert = cvBlock.GetProperty("ds_invert").GetDouble();
+            double rise = cvBlock.GetProperty("rise").GetDouble();
+            double span = cvBlock.GetProperty("span").GetDouble();
+            double mannings = cvBlock.TryGetProperty("mannings", out var mn) ? mn.GetDouble() : 0.013;
+            double kIn = cvBlock.TryGetProperty("k_in", out var ki) ? ki.GetDouble() : 0.5;
+            double kOut = cvBlock.TryGetProperty("k_out", out var ko) ? ko.GetDouble() : 1.0;
+            string shapeStr = cvBlock.TryGetProperty("shape", out var sh) ? sh.GetString() : "Circle";
+            string openStr = cvBlock.TryGetProperty("opening_type", out var op) ? op.GetString()
+                             : "ConcretePipeCulvert_SquareEdgeWithHeadwall";
+            if (!Enum.TryParse<BarrelShape>(shapeStr, out var shape))
+                throw new Exception($"culvertreach spec: unknown barrel shape '{shapeStr}' " +
+                                    $"(valid: {string.Join(",", Enum.GetNames(typeof(BarrelShape)))})");
+            if (!Enum.TryParse<BarrelOpeningType>(openStr, out var openType)
+                || openType == BarrelOpeningType.Custom || openType == BarrelOpeningType.None)
+                throw new Exception($"culvertreach spec: unrecognized opening_type '{openStr}' " +
+                                    "(inlet-control chart/scale required; Custom/None hard-fail)");
+
+            var opening = new OpeningProperties {
+                Name = "Opening1", OpeningType = openType, KIn = kIn, KOut = kOut };
+            geom.OpeningPropertiesLayer.Add(opening);
+            var barrelProps = new BarrelProperties {
+                Name = "Barrel1", Shape = shape, Rise = rise, Span = span, Mannings = mannings };
+            geom.BarrelPropertiesLayer.Add(barrelProps);
+            var barrel = new CulvertBarrel {
+                Name = "Culvert1",
+                Polyline = new Polyline(new List<Point> { new Point(x0, y0), new Point(x1, y1) }),
+                BarrelPropertyName = "Barrel1",
+                UpstreamOpeningName = "Opening1", DownstreamOpeningName = "Opening1",
+                UpstreamInvert = usInvert, DownstreamInvert = dsInvert,
+            };
+            geom.CulvertBarrelLayer.Add(barrel);
+            geom.Save();
+            Console.WriteLine($"[drv] culvert added: barrel=({x0},{y0})->({x1},{y1}) " +
+                              $"shape={shape} rise={rise} span={span} n={mannings} " +
+                              $"invert={usInvert}/{dsInvert} opening={openType} kin={kIn} kout={kOut}; " +
+                              $"barrels={geom.CulvertBarrelLayer.Count} saved {geom.Filename}");
+        }
+        else
+        {
+            Console.WriteLine("[drv] no culvert authored (blocked-embankment B case)");
+        }
+
+        var proj2 = SyntheticTestCases.CreateSyntheticTestCase(p, out _, out _, out _, out _);
+        var surf = Path.Combine(outDir, "Surface Layers");
+        Directory.CreateDirectory(surf);
+        foreach (NValueLayer nv in proj2.NValues) nv.SaveAs(Path.Combine(surf, nv.Name + ".h5"));
+        Console.WriteLine("[drv] culvertreach done");
         return 0;
     }
 

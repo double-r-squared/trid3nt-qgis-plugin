@@ -400,6 +400,7 @@ PRIMARY_CATEGORY: dict[str, str] = {
     "hecras_riverine_flood": "simulation_modeling",
     "hecras_levee_breach": "simulation_modeling",
     "hecras_flood_2d": "simulation_modeling",
+    "culvert_embankment_flow": "simulation_modeling",
     "schism_tidal_hydro": "simulation_modeling",
     "schism_coupled_waves": "simulation_modeling",
     "schism_baroclinic_circulation": "simulation_modeling",

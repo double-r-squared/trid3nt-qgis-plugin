@@ -142,6 +142,73 @@ landing a half-tested version would violate the honesty floor + the image-stalen
 - Offline registry spot slices GREEN: `test_catalog_surfacing` (registry 252),
   `test_door_dissolution` (`EXPECTED_TEMPLATES` unchanged).
 
+## Stage-2 productionization -- LANDED (2026-08-13)
+
+The deferred Stage-2 wave (worker leg + composer template + real US site) is DONE. The
+seam is now a registered product.
+
+**Worker leg.** `Driver.cs` gained a `culvertreach` mode -- the spec.json-driven
+generalization of `culvertdemo` (strict parser v2: any unknown key, top-level or in the
+`culvert` block, hard-errors; `synthdrv.dll` rebuilt from
+`/home/nate/hecras_probe2025/driver`, provenance-checked (`CulvertReach`/`_CulvertReachKeys`
+strings in the dll, md5 1ab8e0ce...), and live-smoked THROUGH `hecras2025-authoring:latest`:
+authors `/Geometry/Culverts/{Barrels,Barrel Types,Opening Types}`, strict parser rejects a
+`bogus_key`). It authors the barrel + BarrelProperties + OpeningProperties from the manifest
+fields (barrel polyline in local SI m, US/DS invert, rise/span, shape, Manning, opening
+type/K in/out) on a StructChannel inflow deck whose terrain the host overwrites with the real
+DEM. The Python leg is
+`services/workers/hecras2025/subst/crux/freshtopo/culvert_reach_pipeline.py`: reproject 3DEP
+to a local SI grid (reusing `rog2025_pipeline.prepare_local_terrain`), orient the reach down
+the y-axis, DERIVE the embankment band (detrended cross-stream-minimum local anomaly) + the
+channel thalweg + the barrel endpoints (on-channel per-row argmin) + inverts (endpoint-cell
+minimum + margin, clearing `Barrel_*InvertBelowCell`), author the A (barrel) and B (no barrel)
+decks, prepare + solve both on the CPU, extract the A/B discriminant + a depth COG.
+
+**Composer.** `culvert_embankment_flow` (engine=hecras, tier=template) -- question class, not
+a place. The un-fetchable barrel engineering (diameter/opening-type/K in/out/Manning) goes
+through the input-review gate with labeled defaults (1.0 m circular pipe,
+SquareEdgeWithHeadwall, KIn 0.5/KOut 1.0, n 0.013). Inputs surface via the emit-on-fetch seam
+(`fetch_dem(purpose=terrain)` + `fetch_river_geometry(purpose=reach)`). Registry 252 -> 253;
+`categories.py` + `tools/__init__.py` + `test_catalog_surfacing` (x4 pins + tally) +
+`test_door_dissolution` `EXPECTED_TEMPLATES` + co-located `corpus.yaml` all updated;
+`retrieve_visible_tools(prompt, None, 8)` HITs top-8 on 6 natural prompts.
+
+**Live E2E (real US site).** North Fork Salt Creek x Green Valley Road, Brown County IN
+(lon -86.2883, lat 39.1893; a real NHD reach + a named road crossing tagged `culvert=yes` in
+OSM, framed via a road-over-stream crossing finder). Real 3DEP terrain, real reach.
+Present-vs-absent A/B (2 solves, 21 s):
+
+| case | barrel | upstream max depth | upstream storage rate | verdict |
+|---|---|---|---|---|
+| B blocked | absent  | 2.316 m | 2.00 m3/s | traps the full inflow (embankment blocks) |
+| A pass    | present | 1.705 m | 0.784 m3/s | barrel conveys 1.22 m3/s under the road |
+
+`max|A-B|` final-step per-cell depth = **0.613 m** (barrel LIVE); upstream ponding relieved
+0.611 m; the barrel conveys **1.216 m3/s** (B traps 2.0, A traps 0.784). `moves_water=TRUE` --
+the must-move-water gate PASSES on the real site.
+
+**The embankment (honest).** The North Fork Salt Creek road fill is ~0.9 m in the lidar and
+the road (~10 m) is narrower than the 20 m screening cell, so the mesh road cell's subgrid
+captures the buried channel pixel and never blocks (the pure-real B leaks ~0.22 of 0.5 m3/s in
+an early probe). Per the Stage-2 scope ("burn a raised band where the DEM is under-resolved"),
+the `auto_seal` mode raises a 1-cell crest cap at the REAL road centerline (widened >= one mesh
+cell) so the blocked case genuinely ponds -- disclosed in the result (`embankment_basis`) and
+the layer note. `embankment_mode=real_terrain` uses the lidar fill as-is for a tall real fill
+(dam-road / causeway) that already blocks at the mesh scale. The reach + terrain + road
+location are all real; only the crest cap is synthesized, and only because the sub-cell fill
+under-resolves at screening resolution.
+
+**Proof.** `docs/proof/templates/culvert_embankment_flow_ab.png` -- the WITH-culvert (A) vs
+BLOCKED (B) depth pair over ESRI World Imagery with the structured 2D mesh wireframe + the
+barrel (red) crossing the embankment band (orange) at the real Green Valley Road crossing.
+
+**Screening constraint (recipe for the next site).** The structured-grid inflow is on the top
+wall, so the reach must run roughly along a domain axis (the leg flips N/S automatically). A
+strongly-slanted reach (North Fork Salt is 159 deg) drifts across a narrow box, so the AOI is
+framed valley-wide and the inflow sheets -- decisive ponding needs the flow to reach quasi-
+steady at the embankment (a pipe-matched inflow + the crest seal, as here). General reach
+rotation + a channel-concentrated inflow BC are the follow-on for tighter real-site fidelity.
+
 ## Reproducibility
 
 Build: `scripts/sandbox/hecras/managed_solve/REPRODUCE.md` (the `culvertdemo` mode rides the same

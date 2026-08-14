@@ -740,6 +740,13 @@ from ..workflows.hecras.levee_breach.levee_breach import hecras_levee_breach as 
 # hecras2025-authoring worker image: AuthorMesh topology + ComputeFrom tables) then
 # solves the composed deck through run_solver (the M3-gate no-archetype path).
 from ..workflows.hecras.flood_2d.flood_2d import hecras_flood_2d as _hecras_flood_2d  # noqa: E402,F401 - engine #11 third archetype (engine=hecras, tier=template)
+# culvert_embankment_flow TEMPLATE (engine="hecras", tier="template"), engine #11 fourth
+# archetype (ADR 0251 Stage 2): authors a culvert barrel + BarrelProperties +
+# OpeningProperties on a real-reach 2D deck (fetched 3DEP terrain) and runs the
+# present-vs-absent A/B on the HEC-RAS 2025 managed CPU engine -- the ONE 2D structure
+# the beta wires into the solve (InitializeDriver_Culverts). The barrel conveys reach
+# flow the road embankment otherwise blocks (live-proven, North Fork Salt Creek IN).
+from ..workflows.hecras.culvert_embankment_flow.culvert_embankment_flow import culvert_embankment_flow as _culvert_embankment_flow  # noqa: E402,F401 - engine #11 fourth archetype (engine=hecras, tier=template)
 # schism_tidal_hydro TEMPLATE (engine="schism", tier="template"), engine #12,
 # one folder under workflows/schism/tidal_hydro/. Barotropic tidal hydrodynamics
 # on an unstructured coastal mesh (ADR 0118): the QuarterAnnulus verification case

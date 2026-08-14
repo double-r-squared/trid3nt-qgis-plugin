@@ -54,6 +54,7 @@ EXPECTED_TEMPLATES = {
     "hecras_riverine_flood",  # engine #11 (ADR 0109; renamed ADR 0120): HEC-RAS riverine-flood template (v1 geometry: Muncie)
     "hecras_levee_breach",  # engine #11 second archetype (ADR 0125): HEC-RAS levee-breach template (v1 geometry: Muncie leveed floodplain)
     "hecras_flood_2d",  # engine #11 third archetype (ADR 0140): HEC-RAS fresh-AOI 2D flood (headless-authored geometry from a fetched DEM)
+    "culvert_embankment_flow",  # engine #11 fourth archetype (ADR 0251 Stage 2): HEC-RAS 2025 2D culvert-through-embankment A/B (barrel conveys reach flow the road blocks; InitializeDriver_Culverts wired)
     "schism_tidal_hydro",  # engine #12 (ADR 0118): SCHISM barotropic tidal template
     "schism_coupled_waves",  # engine #12 second archetype (ADR 0131): SCHISM+WWM+GOTM coupled-wave template (Duck FRF)
     "schism_transport_validation",  # SCHISM CAND-S (ADR 0156): transport-scheme numerical-mixing + mass-conservation V&V (Test_HeatConsv / Test_GEN_MassConsv)
