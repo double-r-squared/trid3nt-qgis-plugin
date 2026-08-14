@@ -111,7 +111,7 @@ _VALID_SCENARIOS = {"dam_break", "tsunami", "surge", "thacker"}
 #: renamed, or retired. Named in the strict-field error so a stale worker
 #: image (which silently dropped unknown fields before ADR 0158) is
 #: distinguishable from a genuinely-malformed caller.
-_PARSER_VERSION = "geoclaw-spec-6"
+_PARSER_VERSION = "geoclaw-spec-7"
 
 #: Gravitational acceleration (m/s^2) the Thacker deck uses. Kept in lockstep with
 #: ``trid3nt_contracts.geoclaw_thacker.THACKER_GRAVITY`` (the agent-side analytic
@@ -167,6 +167,10 @@ _KNOWN_SPEC_FIELDS = frozenset(
         "bowl_a_m",
         "bowl_h0_m",
         "bowl_eta_amp",
+        "bouss_equations",
+        "bouss_min_depth",
+        "bouss_min_level",
+        "bouss_max_level",
     }
 )
 
@@ -282,6 +286,18 @@ class GeoClawBuildSpec:
     bowl_a_m: float | None = None
     bowl_h0_m: float | None = None
     bowl_eta_amp: float | None = None
+    # Boussinesq (SGN) dispersive solver (num_eqn=5, implicit PETSc/MPI solve).
+    # bouss_equations: 0=SWE (non-dispersive, the byte-identical default), 1=Madsen-
+    # Sorensen, 2=SGN (Serre-Green-Naghdi, recommended). >0 selects the num_eqn=5
+    # bouss executable (Makefile.bouss + PETSc) so deep-water tsunami propagation
+    # carries the dispersive trailing wave train SWE cannot resolve; the correction
+    # is applied only in water deeper than bouss_min_depth (shallow/run-up cells stay
+    # on the robust SWE solver) and only on AMR levels in [bouss_min_level,
+    # bouss_max_level]. bouss_min_depth in METERS. Requires the PETSc-enabled image.
+    bouss_equations: int = 0
+    bouss_min_depth: float = 10.0
+    bouss_min_level: int = 1
+    bouss_max_level: int = 10
 
 
 @dataclass
@@ -301,6 +317,9 @@ class DeckManifest:
     sim_duration_s: float
     files_written: list[str] = field(default_factory=list)
     driver_descriptor: str = ""
+    # >0 when the SGN/MS Boussinesq (num_eqn=5) executable was authored -- the
+    # entrypoint reads this to inject the PETSc/MPI env into the make subprocess.
+    bouss_equations: int = 0
 
 
 def parse_build_spec(raw: dict[str, Any]) -> GeoClawBuildSpec:
@@ -657,6 +676,37 @@ def parse_build_spec(raw: dict[str, Any]) -> GeoClawBuildSpec:
             f"scenario='thacker', not scenario={scenario!r}",
         )
 
+    # --- Boussinesq (SGN) dispersive solver knobs. bouss_equations selects the
+    # num_eqn=5 executable when > 0; the depth/level knobs are only meaningful then.
+    bouss_equations = _int("bouss_equations", 0)
+    if bouss_equations not in (0, 1, 2):
+        raise GeoClawDeckError(
+            "GEOCLAW_SPEC_INVALID",
+            "bouss_equations must be 0 (SWE), 1 (Madsen-Sorensen) or 2 (SGN), "
+            f"got {bouss_equations}",
+        )
+    bouss_min_depth = _num("bouss_min_depth", 10.0)
+    bouss_min_level = _int("bouss_min_level", 1)
+    bouss_max_level = _int("bouss_max_level", 10)
+    if bouss_equations != 0:
+        if scenario == "thacker":
+            raise GeoClawDeckError(
+                "GEOCLAW_SPEC_INVALID",
+                "bouss_equations > 0 is not supported for scenario='thacker' "
+                "(the closed-basin planar V&V deck has its own renderer)",
+            )
+        if bouss_min_depth <= 0.0:
+            raise GeoClawDeckError(
+                "GEOCLAW_SPEC_INVALID",
+                f"bouss_min_depth must be > 0, got {bouss_min_depth}",
+            )
+        if bouss_min_level < 1 or bouss_max_level < bouss_min_level:
+            raise GeoClawDeckError(
+                "GEOCLAW_SPEC_INVALID",
+                "require 1 <= bouss_min_level <= bouss_max_level, got "
+                f"min={bouss_min_level}, max={bouss_max_level}",
+            )
+
     return GeoClawBuildSpec(
         scenario=scenario,
         bbox=bbox,  # type: ignore[arg-type]
@@ -699,6 +749,10 @@ def parse_build_spec(raw: dict[str, Any]) -> GeoClawBuildSpec:
         bowl_a_m=bowl_a_m,
         bowl_h0_m=bowl_h0_m,
         bowl_eta_amp=bowl_eta_amp,
+        bouss_equations=bouss_equations,
+        bouss_min_depth=bouss_min_depth,
+        bouss_min_level=bouss_min_level,
+        bouss_max_level=bouss_max_level,
     )
 
 
@@ -1559,6 +1613,30 @@ def render_setrun_py(spec: GeoClawBuildSpec) -> str:
     num_aux_val = len(aux_type_list)
     aux_type_str = "[" + ", ".join(f'"{t}"' for t in aux_type_list) + "]"
 
+    # --- Boussinesq (SGN) dispersive solver block --------------------------------
+    # bouss_equations > 0 lifts num_eqn 3 -> 5 and emits a BoussData block: the
+    # implicit SGN/MS dispersive correction, applied only where water is deeper than
+    # bouss_min_depth (shallow/run-up cells stay on SWE) and only on AMR levels in
+    # [bouss_min_level, bouss_max_level]. bouss_solver=3 selects PETSc (the image's
+    # MPI sparse solve). SWE (the default) emits NO block -> byte-identical deck.
+    is_bouss = int(spec.bouss_equations) > 0
+    num_eqn_val = 5 if is_bouss else 3
+    bouss_block = ""
+    if is_bouss:
+        bouss_block = (
+            "    # --- Boussinesq (SGN/MS) dispersive solver (num_eqn=5, PETSc) ---\n"
+            "    from clawpack.geoclaw.data import BoussData\n"
+            "    rundata.add_data(BoussData(), 'bouss_data')\n"
+            f"    rundata.bouss_data.bouss_equations = {int(spec.bouss_equations)!r}"
+            "    # 0=SWE, 1=Madsen-Sorensen, 2=SGN\n"
+            f"    rundata.bouss_data.bouss_min_depth = {float(spec.bouss_min_depth)!r}"
+            "    # switch to SWE in shallower water\n"
+            f"    rundata.bouss_data.bouss_min_level = {int(spec.bouss_min_level)!r}\n"
+            f"    rundata.bouss_data.bouss_max_level = {int(spec.bouss_max_level)!r}\n"
+            "    rundata.bouss_data.bouss_solver = 3       # 1=GMRES, 2=Pardiso, 3=PETSc\n"
+            "    rundata.bouss_data.bouss_tstart = 0.\n\n"
+        )
+
     # --- GAP1 fgmax: monitor max depth + speed + arrival time over the AOI ---
     # Emitted for tsunami and surge (the inundation scenarios) - the fgmax output
     # backs the max-inundation depth layer + the arrival_time_s narration. NOT
@@ -1774,7 +1852,7 @@ def setrun(claw_pkg="geoclaw"):
     clawdata.num_cells[0] = {nx!r}
     clawdata.num_cells[1] = {ny!r}
 
-    clawdata.num_eqn = 3
+    clawdata.num_eqn = {num_eqn_val!r}
     clawdata.num_aux = {num_aux_val!r}
     clawdata.capa_index = 2
 
@@ -1823,7 +1901,7 @@ def setrun(claw_pkg="geoclaw"):
     amrdata.regrid_buffer_width = 2
     amrdata.verbosity_regrid = 0
 
-{regions_block}{gauges_block}{fgmax_block}{fgout_block}{qinit_block}{dtopo_block}{surge_block}    return rundata
+{regions_block}{gauges_block}{fgmax_block}{fgout_block}{qinit_block}{dtopo_block}{surge_block}{bouss_block}    return rundata
 
 
 def setgeo(rundata):
@@ -1886,6 +1964,8 @@ def render_makefile(spec: GeoClawBuildSpec) -> str:
     PURE string render -- unit-testable with NO clawpack import. $(CLAW) is
     resolved at run time from the image env (set in the Dockerfile).
     """
+    if int(spec.bouss_equations) > 0:
+        return _render_bouss_makefile()
     # The GeoClaw 2d shallow modules come from Makefile.geoclaw's COMMON_MODULES,
     # but the rpn2/rpt2 Riemann solvers are per-application SOURCES that the
     # canonical example Makefiles list explicitly (Makefile.geoclaw does NOT add
@@ -1933,6 +2013,86 @@ CLAWMAKE = $(CLAW)/clawutil/src/Makefile.common
 # Pull in the GeoClaw 2d shallow module/source lists (COMMON_MODULES /
 # COMMON_SOURCES) ...
 include $(CLAW)/geoclaw/src/2d/shallow/Makefile.geoclaw
+
+# ... then the common rules, which define the `.output` target make runs.
+include $(CLAWMAKE)
+'''
+
+
+def _render_bouss_makefile() -> str:
+    """Render the per-application Makefile for the Boussinesq (num_eqn=5) variant.
+
+    Mirrors the canonical clawpack/geoclaw/examples/bouss/*/Makefile: instead of
+    Makefile.geoclaw it includes ``Makefile.bouss`` (which lists the FULL bouss
+    source set -- amrclaw + shallow + bouss + the rpn2/rpt2 Riemann solvers -- so
+    SOURCES stays EMPTY here; re-listing riemann would double-compile it into a
+    duplicate-symbol link error). FC is the MPI Fortran wrapper (CLAW_MPIFC), and
+    the PETSc include/link flags come from pkg-config against $(PETSC_DIR). The
+    hard ``ifndef`` guards match Makefile.bouss's: the entrypoint sets PETSC_DIR /
+    PETSC_OPTIONS / CLAW_MPIEXEC / CLAW_MPIFC (from the image env) for the make
+    subprocess, so a missing one fails loudly rather than silently building SWE.
+    """
+    return '''# Auto-generated by the GeoClaw worker (setrun_builder._render_bouss_makefile).
+# Boussinesq (SGN/Madsen-Sorensen) variant -- num_eqn=5, implicit PETSc+MPI solve.
+# Do NOT hand-edit -- regenerate from the build_spec.
+
+ifndef CLAW
+  $(error CLAW is not set -- export CLAW=<clawpack install root> before make)
+endif
+ifndef PETSC_DIR
+  $(error PETSC_DIR not set -- the Boussinesq solver requires PETSc >= 3.20)
+endif
+ifndef PETSC_OPTIONS
+  $(error PETSC_OPTIONS must be declared as an environment variable)
+endif
+ifndef CLAW_MPIEXEC
+  $(error CLAW_MPIEXEC must be declared as an environment variable)
+endif
+ifndef CLAW_MPIFC
+  $(error CLAW_MPIFC must be declared as an environment variable)
+endif
+
+CLAW_PKG = geoclaw
+EXE = xgeoclaw
+SETRUN_FILE = setrun.py
+OUTDIR = _output
+SETPLOT_FILE = setplot.py
+PLOTDIR = _plots
+
+# MPI Fortran wrapper (over-rules any FC in the env), and MPI-rank launch count.
+FC = ${CLAW_MPIFC}
+BOUSS_MPI_PROCS ?= 2
+RUNEXE = "${CLAW_MPIEXEC} -n ${BOUSS_MPI_PROCS}"
+
+# PETSc compile/link flags (as in the canonical bouss example Makefile): the
+# includes + -DHAVE_PETSC gate petsc_driver.f90, and pkg-config resolves the
+# solver library set. PETSC_ARCH is empty for a conda/package-manager PETSc.
+PETSC_INCLUDE = $(PETSC_DIR)/include $(PETSC_DIR)/$(PETSC_ARCH)/include
+INCLUDE += $(PETSC_INCLUDE)
+PETSC_LFLAGS = $(shell PKG_CONFIG_PATH=$(PETSC_DIR)/$(PETSC_ARCH)/lib/pkgconfig pkg-config --libs-only-L --libs-only-l PETSc)
+
+FFLAGS ?= -O2 -fopenmp -std=legacy -ffree-line-length-none
+FFLAGS += -DHAVE_PETSC
+LFLAGS += $(PETSC_LFLAGS) -fopenmp
+
+# Makefile.bouss provides the FULL source set (amrclaw + shallow + bouss + the
+# rpn2/rpt2 Riemann solvers) so no custom MODULES/SOURCES are listed here.
+MODULES = \\
+
+SOURCES = \\
+
+EXCLUDE_MODULES = \\
+
+EXCLUDE_SOURCES = \\
+
+BOUSSLIB = $(CLAW)/geoclaw/src/2d/bouss
+AMRLIB = $(CLAW)/amrclaw/src/2d
+GEOLIB = $(CLAW)/geoclaw/src/2d/shallow
+
+CLAWMAKE = $(CLAW)/clawutil/src/Makefile.common
+
+# The bouss source list (COMMON_MODULES / COMMON_SOURCES) ...
+include $(BOUSSLIB)/Makefile.bouss
 
 # ... then the common rules, which define the `.output` target make runs.
 include $(CLAWMAKE)
@@ -2012,6 +2172,14 @@ def build_geoclaw_deck(build_spec_raw: dict[str, Any], deck_dir: Any) -> DeckMan
             f"landfall at {_centroid(spec)}, window t0={spec.t0_s:.0f}s)"
         )
 
+    if int(spec.bouss_equations) > 0:
+        _bnames = {1: "Madsen-Sorensen", 2: "SGN"}
+        driver += (
+            f"; Boussinesq {_bnames.get(int(spec.bouss_equations), '?')} dispersive "
+            f"(num_eqn=5, bouss_min_depth={spec.bouss_min_depth:.0f} m, "
+            f"levels {spec.bouss_min_level}-{spec.bouss_max_level}, PETSc)"
+        )
+
     manifest = DeckManifest(
         scenario=spec.scenario,
         bbox=spec.bbox,
@@ -2021,6 +2189,7 @@ def build_geoclaw_deck(build_spec_raw: dict[str, Any], deck_dir: Any) -> DeckMan
         sim_duration_s=spec.sim_duration_s,
         files_written=written,
         driver_descriptor=driver,
+        bouss_equations=int(spec.bouss_equations),
     )
     # Persist the manifest alongside the deck for provenance / debugging.
     (deck / "deck_manifest.json").write_text(
@@ -2034,6 +2203,7 @@ def build_geoclaw_deck(build_spec_raw: dict[str, Any], deck_dir: Any) -> DeckMan
                 "sim_duration_s": manifest.sim_duration_s,
                 "files_written": manifest.files_written,
                 "driver_descriptor": manifest.driver_descriptor,
+                "bouss_equations": manifest.bouss_equations,
             },
             indent=2,
         ),

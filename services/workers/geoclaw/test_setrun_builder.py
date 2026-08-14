@@ -1118,3 +1118,67 @@ def test_thacker_deck_writes_topo_and_qinit_matching_analytic(tmp_path):
     assert abs(_nearest("topo.asc", 0, 0) - thacker_bed_elevation(0, 0, 1.0, 0.1)) < 1e-6
     assert abs(_nearest("qinit.xyz", 0, 0) - thacker_eta(0, 0, 0, 1.0, 0.1, 0.5)) < 1e-6
     assert abs(_nearest("qinit.xyz", 0.5, 0) - thacker_eta(0.5, 0, 0, 1.0, 0.1, 0.5)) < 2e-3
+
+
+# ===========================================================================
+# Boussinesq (SGN) dispersive variant — num_eqn=5 + Makefile.bouss + PETSc.
+# ===========================================================================
+def test_bouss_sgn_deck_sets_num_eqn5_and_boussdata():
+    from services.workers.geoclaw.setrun_builder import render_setrun_py, render_makefile
+
+    spec = parse_build_spec(
+        _spec(
+            scenario="tsunami",
+            bouss_equations=2,
+            bouss_min_depth=20.0,
+            bouss_min_level=1,
+            bouss_max_level=3,
+        )
+    )
+    sr = render_setrun_py(spec)
+    ast.parse(sr)  # still valid Python
+    assert "clawdata.num_eqn = 5" in sr
+    assert "BoussData" in sr and "bouss_equations = 2" in sr
+    assert "bouss_min_depth = 20.0" in sr
+    assert "bouss_max_level = 3" in sr
+    assert "bouss_solver = 3" in sr  # PETSc
+    mk = render_makefile(spec)
+    assert "Makefile.bouss" in mk and "Makefile.geoclaw" not in mk
+    assert "HAVE_PETSC" in mk and "CLAW_MPIFC" in mk
+
+
+def test_swe_default_stays_num_eqn3_and_no_bouss_block():
+    from services.workers.geoclaw.setrun_builder import render_setrun_py, render_makefile
+
+    spec = parse_build_spec(_spec(scenario="tsunami"))
+    sr = render_setrun_py(spec)
+    assert "clawdata.num_eqn = 3" in sr and "BoussData" not in sr
+    mk = render_makefile(spec)
+    assert "Makefile.geoclaw" in mk and "Makefile.bouss" not in mk
+
+
+def test_bouss_full_deck_manifest_and_makefile(tmp_path):
+    from services.workers.geoclaw.setrun_builder import build_geoclaw_deck
+
+    m = build_geoclaw_deck(
+        _spec(scenario="tsunami", bouss_equations=2, bouss_min_depth=15.0), tmp_path
+    )
+    assert m.bouss_equations == 2
+    assert "Makefile.bouss" in (tmp_path / "Makefile").read_text()
+    dm = json.loads((tmp_path / "deck_manifest.json").read_text())
+    assert dm["bouss_equations"] == 2
+
+
+@pytest.mark.parametrize(
+    "over",
+    [
+        {"bouss_equations": 3},  # out of {0,1,2}
+        {"scenario": "thacker", "bowl_a_m": 1e6, "bowl_h0_m": 100.0,
+         "bowl_eta_amp": 0.1, "bouss_equations": 2},  # thacker incompatible
+        {"bouss_equations": 2, "bouss_min_level": 5, "bouss_max_level": 2},  # min>max
+        {"bouss_equations": 2, "bouss_min_depth": 0.0},  # depth must be > 0
+    ],
+)
+def test_bouss_invalid_specs_rejected(over):
+    with pytest.raises(GeoClawDeckError):
+        parse_build_spec(_spec(**over))

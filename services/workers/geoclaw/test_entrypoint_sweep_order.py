@@ -42,7 +42,7 @@ def test_postprocess_runs_before_sweep_and_reap_runs_after(tmp_path, monkeypatch
     monkeypatch.setattr(ep, "_author_deck", lambda build_spec, cwd: _fake_deck_manifest())
     monkeypatch.setattr(
         ep, "_run_geoclaw",
-        lambda cwd: (0, tmp_path / "stdout.log", tmp_path / "stderr.log"),
+        lambda cwd, bouss=False: (0, tmp_path / "stdout.log", tmp_path / "stderr.log"),
     )
     (tmp_path / "stdout.log").write_text("ok")
     (tmp_path / "stderr.log").write_text("")
@@ -120,7 +120,7 @@ def test_reap_never_runs_when_postprocess_gate_fails(tmp_path, monkeypatch) -> N
     monkeypatch.setattr(ep, "_author_deck", lambda build_spec, cwd: _fake_deck_manifest())
     monkeypatch.setattr(
         ep, "_run_geoclaw",
-        lambda cwd: (0, tmp_path / "stdout.log", tmp_path / "stderr.log"),
+        lambda cwd, bouss=False: (0, tmp_path / "stdout.log", tmp_path / "stderr.log"),
     )
     (tmp_path / "stdout.log").write_text("ok")
     (tmp_path / "stderr.log").write_text("")

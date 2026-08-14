@@ -275,6 +275,15 @@ def build_geoclaw_build_spec(
         spec["finite_fault_file"] = finite_fault_dest
     if run_args.scenario == "surge" and surge_dest is not None:
         spec["surge_forcing_file"] = surge_dest
+    # --- Boussinesq (SGN) dispersive propagation --------------------------------
+    # Thread the num_eqn=5 dispersive knobs ONLY when engaged (>0), so a default
+    # (SWE) run stays byte-identical. The worker rejects it for thacker + validates
+    # the depth/level band; here we only forward what the user gated on.
+    if int(getattr(run_args, "bouss_equations", 0)) > 0:
+        spec["bouss_equations"] = int(run_args.bouss_equations)
+        spec["bouss_min_depth"] = float(run_args.bouss_min_depth)
+        spec["bouss_min_level"] = int(run_args.bouss_min_level)
+        spec["bouss_max_level"] = int(run_args.bouss_max_level)
     # --- Storm surge parametric-Holland forcing (scenario="surge") ------------
     # Thread the storm track (as the 7-tuple rows the worker's render_storm_file
     # consumes), the wind-stress drag law, and the run-window start t0_s. The

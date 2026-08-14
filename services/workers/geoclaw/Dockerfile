@@ -42,6 +42,51 @@
 # (both the pip install AND the source tarball, kept lockstep). The source
 # tarball is SHA256-pinned below (the digest analogue for a non-image asset).
 
+# --- Stage 1: PETSc + MPI for the Boussinesq (SGN) dispersive variant --------
+# The bouss xgeoclaw (num_eqn=5) solves an implicit SGN sparse system every step
+# via PETSc + MPI -- absent from the base image, so the num_eqn=5 executable
+# cannot link without them. PETSc >=3.20 is MANDATORY: clawpack 5.14's
+# petsc_driver.f90 references PetscViewerASCIIStdoutSetFileUnit (added in PETSc
+# 3.20); Debian's packaged 3.18 compiles every object but FAILS at link with an
+# "undefined reference". conda-forge ships PETSc 3.25 + mpich prebuilt, so this
+# stage installs that env and the runtime stage copies ONLY the resolved env
+# (the micromamba package-tarball cache under $MAMBA_ROOT_PREFIX never reaches
+# the final image -- the multi-stage hygiene win). gfortran+make stay in the env
+# because a bouss deck COMPILES per-run (like the shallow path), against the
+# conda-built libgfortran/libpetsc ABI, so mpif90's backend compiler must match.
+FROM python:3.11-slim-bookworm AS petscbuild
+
+ENV DEBIAN_FRONTEND=noninteractive \
+    MAMBA_ROOT_PREFIX=/opt/mamba
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends curl bzip2 ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
+
+# Pinned micromamba (the digest-discipline analogue for the conda toolchain).
+ARG MICROMAMBA_VERSION=2.9.0-0
+RUN curl -fsSL \
+      "https://github.com/mamba-org/micromamba-releases/releases/download/${MICROMAMBA_VERSION}/micromamba-linux-64" \
+      -o /usr/local/bin/micromamba \
+    && chmod +x /usr/local/bin/micromamba
+
+RUN micromamba create -y -p /opt/petscenv -c conda-forge \
+        "petsc>=3.20" mpich gfortran make pkg-config \
+    && micromamba clean -a -y \
+    && test -f /opt/petscenv/lib/pkgconfig/petsc.pc \
+    && PATH=/opt/petscenv/bin:$PATH mpif90 --version >/dev/null
+
+# Runtime hygiene: keep the libs + compiler (a bouss solve compiles + links +
+# runs against them), drop what a solve never reads -- docs, man/info pages, test
+# suites, pyc caches. NOTE: static archives (*.a) are DELIBERATELY kept: the
+# runtime bouss link pulls libgcc.a / libgfortran.a etc, so purging them breaks
+# the compile ("cannot find -lgcc"). Only never-read metadata is removed here.
+RUN rm -rf /opt/petscenv/share/doc /opt/petscenv/share/man \
+           /opt/petscenv/share/info /opt/petscenv/share/gtk-doc \
+           /opt/petscenv/conda-meta \
+    && find /opt/petscenv -depth -type d -name '__pycache__' -exec rm -rf {} + \
+    && find /opt/petscenv -depth -type d -name 'tests' -path '*site-packages*' -exec rm -rf {} +
+
+
 FROM python:3.11-slim-bookworm AS runtime
 
 LABEL org.opencontainers.image.title="trid3nt-geoclaw-solver" \
@@ -125,6 +170,53 @@ RUN mkdir -p "$CLAW_SRC" \
 # PYTHONPATH -- CLAW is ONLY the Fortran/Makefile build root.
 ENV CLAW=/opt/clawpack-src \
     FC=gfortran
+
+# --- PETSc + MPI env for the Boussinesq (SGN) variant ------------------------
+# Copy ONLY the resolved conda env from the builder (no micromamba, no package
+# cache). A bouss deck's Makefile (render_makefile, bouss branch) sets
+# FC=$(CLAW_MPIFC)=mpif90, includes Makefile.bouss, and links -lpetsc; these
+# four vars satisfy Makefile.bouss's hard `ifndef` guards. mpiexec/mpif90 are
+# bare names -- the entrypoint prepends /opt/petscenv/bin to PATH ONLY for a
+# bouss make subprocess, so the conda `gfortran` in that dir NEVER shadows the
+# system gfortran the shallow path compiles with (protecting the unchanged
+# shallow lane). MPIR_CVAR_CH4_NETMOD=ofi + FI_PROVIDER=tcp force mpich onto
+# libfabric/tcp instead of UCX: UCX's iface-port-speed probe divides by a
+# zero link speed in a network-less container, and gfortran's FP-trap turns that
+# benign op into a fatal SIGFPE at MPI_Init -- the ofi/tcp path avoids it.
+COPY --from=petscbuild /opt/petscenv /opt/petscenv
+ENV PETSC_DIR=/opt/petscenv \
+    PETSC_ARCH= \
+    PETSC_OPTIONS="-options_file /opt/clawpack-src/geoclaw/examples/bouss/petscMPIoptions" \
+    CLAW_MPIEXEC=mpiexec \
+    CLAW_MPIFC=mpif90 \
+    BOUSS_MPI_PROCS=2 \
+    OMP_NUM_THREADS=2 \
+    MPIR_CVAR_CH4_NETMOD=ofi \
+    FI_PROVIDER=tcp
+
+# Build-time PROOF the num_eqn=5 bouss executable compiles + links + provenance
+# in THIS image (the ADR 0246 STOP was "cannot compile in-image"). Uses the
+# shipped radial_flat example (the board's own smoke row). Fails the BUILD -- not
+# a solve -- if PETSc/MPI regress.
+#
+# CRITICAL cleanup: the bouss compile uses the CONDA gfortran and writes .o/.mod
+# into the SHARED $CLAW source tree (amrclaw / geoclaw/shallow) -- the same
+# modules the SHALLOW (non-bouss) path compiles with the SYSTEM gfortran. Leaving
+# them would make a later shallow solve fail ("regions_module.mod created by a
+# different version of GNU Fortran"). So after proving the link we STRIP every
+# build artifact from the tree: each ephemeral one-deck container then compiles
+# its own path from a clean tree with its own compiler (the original per-run
+# model; no baked cross-compiler cache).
+RUN set -e; \
+    cd "$CLAW/geoclaw/examples/bouss/radial_flat"; \
+    PATH=/opt/petscenv/bin:$PATH make new 2>&1 | tail -3; \
+    test -x ./xgeoclaw; \
+    nm ./xgeoclaw | grep -q '__bouss_module_MOD_' && echo "BOUSS num_eqn=5 SYMBOLS OK"; \
+    ldd ./xgeoclaw | grep -q 'libpetsc' && echo "PETSC LINK OK"; \
+    grep -q 'clawdata.num_eqn = 5' setrun.py && echo "num_eqn=5 DECK OK"; \
+    rm -f ./xgeoclaw ./*.o ./*.mod; \
+    find "$CLAW" \( -name '*.o' -o -name '*.mod' \) -delete; \
+    echo "source tree cleaned of build artifacts (both lanes compile fresh)"
 
 # COPY the worker package (entrypoint + setrun_builder) onto a stable runtime
 # path. Build context is the repo root (mirrors the SFINCS/MODFLOW/SWMM context);

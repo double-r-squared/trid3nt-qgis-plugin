@@ -436,6 +436,26 @@ class GeoClawRunArgs(GraceModel):
     # the storm track (its earliest time). Ignored for dam_break / tsunami (t0=0).
     surge_t0_s: float | None = None
 
+    # --- Boussinesq (SGN) dispersive solver -------------------------------------
+    # GeoClaw's num_eqn=5 Boussinesq variant adds frequency dispersion to the
+    # shallow-water solve: the phase speed depends on wavelength, so a wave packet
+    # separates into a rank-ordered TRAILING WAVE TRAIN that the non-dispersive SWE
+    # solver cannot reproduce. This matters for DEEP-WATER TSUNAMI PROPAGATION over
+    # long distances (the leading wave sheds a dispersive tail); it is NOT a
+    # run-up/inundation refinement -- the correction is applied ONLY where water is
+    # deeper than ``bouss_min_depth`` (shallow/run-up cells stay on robust SWE).
+    # Requires the PETSc-enabled worker image (an implicit MPI sparse solve every
+    # step -- materially slower than SWE, so reserve it for propagation questions).
+    #   bouss_equations: 0=SWE (default, non-dispersive), 1=Madsen-Sorensen,
+    #                    2=SGN (Serre-Green-Naghdi, recommended). Only meaningful for
+    #                    scenario in {tsunami, dam_break, surge}; reject for thacker.
+    #   bouss_min_depth: depth (m) below which cells revert to SWE (default 10 m).
+    #   bouss_min_level/bouss_max_level: AMR level band the correction applies on.
+    bouss_equations: int = Field(default=0, ge=0, le=2)
+    bouss_min_depth: float = Field(default=10.0, gt=0.0)
+    bouss_min_level: int = Field(default=1, ge=1)
+    bouss_max_level: int = Field(default=10, ge=1)
+
     @field_validator("storm_track")
     @classmethod
     def _validate_storm_track(

@@ -397,3 +397,16 @@ def test_bowl_alias_normalizes_to_thacker():
     a = GeoClawRunArgs(bbox=(-1.6, -1.6, 1.6, 1.6), scenario="parabolic_bowl",
                        bowl_a_m=1.0, bowl_h0_m=0.1, bowl_eta_amp=0.5)
     assert a.scenario == "thacker"
+
+
+def test_bouss_defaults_neutral_and_bounds():
+    """Boussinesq knobs default to SWE (0) + accept the SGN band; out-of-range rejected."""
+    from trid3nt_contracts.geoclaw_contracts import GeoClawRunArgs
+    d = GeoClawRunArgs(bbox=BBOX)
+    assert d.bouss_equations == 0 and d.bouss_min_depth == 10.0
+    a = GeoClawRunArgs(bbox=BBOX, scenario="tsunami", bouss_equations=2,
+                       bouss_min_depth=20.0, bouss_min_level=1, bouss_max_level=3)
+    assert a.bouss_equations == 2 and a.bouss_max_level == 3
+    for bad in ({"bouss_equations": 3}, {"bouss_min_depth": 0.0}, {"bouss_min_level": 0}):
+        with pytest.raises(ValidationError):
+            GeoClawRunArgs(bbox=BBOX, scenario="tsunami", **bad)

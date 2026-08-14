@@ -586,7 +586,7 @@ def _generate_fgmax_mask(scratch: Path, build_spec: dict) -> None:
     )
 
 
-def _run_geoclaw(cwd: Path) -> tuple[int, Path, Path]:
+def _run_geoclaw(cwd: Path, bouss: bool = False) -> tuple[int, Path, Path]:
     """Author-then-solve GeoClaw headless in ``cwd``; capture stdout/stderr.
 
     Runs, in order, inside ``cwd``:
@@ -594,6 +594,12 @@ def _run_geoclaw(cwd: Path) -> tuple[int, Path, Path]:
       2. ``make .output`` (Clawpack's standard headless solve target) which
          compiles the GeoClaw Fortran (if needed) and runs the solver, writing
          fort.q frames under ``_output/``.
+
+    ``bouss`` (the deck authored a num_eqn=5 Boussinesq Makefile): prepend the
+    conda PETSc env's bin to PATH for the make subprocess ONLY, so its ``mpif90``
+    (and the ``gfortran`` backend it wraps) resolve for the implicit SGN link/run.
+    That dir is deliberately kept OFF the global image PATH so its ``gfortran``
+    never shadows the system compiler the shallow (non-bouss) path builds with.
 
     GeoClaw ships an ``$CLAW`` Makefile machinery; the ``.output`` rule lives in
     ``$(CLAW)/clawutil/src/Makefile.common`` and is only usable once a
@@ -612,6 +618,12 @@ def _run_geoclaw(cwd: Path) -> tuple[int, Path, Path]:
     stdout_path = cwd / "geoclaw.stdout"
     stderr_path = cwd / "geoclaw.stderr"
 
+    solve_env = os.environ.copy()
+    if bouss:
+        petsc_bin = "/opt/petscenv/bin"
+        solve_env["PATH"] = petsc_bin + os.pathsep + solve_env.get("PATH", "")
+        LOG.info("geoclaw: Boussinesq deck -- prepended %s to solve PATH", petsc_bin)
+
     out_fh = stdout_path.open("wb")
     err_fh = stderr_path.open("wb")
     rc = 0
@@ -624,6 +636,7 @@ def _run_geoclaw(cwd: Path) -> tuple[int, Path, Path]:
                 cwd=str(cwd),
                 stdout=out_fh,
                 stderr=err_fh,
+                env=solve_env,
                 check=False,
             )
             if proc.returncode != 0:
@@ -640,6 +653,7 @@ def _run_geoclaw(cwd: Path) -> tuple[int, Path, Path]:
             cwd=str(cwd),
             stdout=out_fh,
             stderr=err_fh,
+            env=solve_env,
             check=False,
         )
         rc = proc.returncode
@@ -844,7 +858,9 @@ def main(argv: list[str] | None = None) -> int:
             deck_manifest.driver_descriptor,
         )
 
-        rc, stdout_path, stderr_path = _run_geoclaw(scratch)
+        rc, stdout_path, stderr_path = _run_geoclaw(
+            scratch, bouss=int(getattr(deck_manifest, "bouss_equations", 0)) > 0
+        )
 
         # Always upload stdout/stderr so the run produces evidence.
         stdout_uri = _upload(stdout_path, _runs_uri(run_id, "geoclaw.stdout"))
