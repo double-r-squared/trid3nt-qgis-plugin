@@ -231,3 +231,49 @@ new `make_struct_fig.py` and `make_culvert_realsite_fig.py` under
 `scripts/sandbox/hecras/managed_solve/`; all numbers recomputed live from the same result HDFs,
 unchanged). Norm, stated once for the family: **field proofs render filled cells (pcolormesh on
 the solver's cell grid) or the published depth COG, never cell-center scatter.**
+
+## Resolution re-proof -- 10 m (2026-08-14, no code changed)
+
+Same site (North Fork Salt Creek x Green Valley Road, Brown County IN), same bbox,
+DEM, barrel spec (1.0 m circular pipe, SquareEdgeWithHeadwall, KIn 0.5/KOut 1.0),
+`embankment_mode=auto_seal` (1.5 m crest cap), `inflow_cms=2.0`, `sim_hours=2.5` --
+re-run through `culvert_reach_pipeline.run_culvert_reach` at `cell_size=10` m, the
+finest the `culvert_embankment_flow` template's resolution band supports
+(`_MIN_RES_M=10.0`; the template default is 20 m, not 25 m -- corrected here).
+Both A (barrel) and B (blocked) solved on the CPU, prepare+solve through
+`hecras2025-authoring:latest`.
+
+| metric | 20 m (default) | 10 m (finest) | delta |
+|---|---|---|---|
+| mesh | 27x43 = 1,161 cells | 54x86 = 4,644 cells | 4.0x cells |
+| solve wall time (A+B) | 21.0 s | 56.8 s | 2.7x |
+| upstream max depth A (barrel) | 1.705 m | 1.626 m | -0.079 m |
+| upstream max depth B (blocked) | 2.316 m | 2.250 m | -0.066 m |
+| upstream storage rate A | 0.784 m3/s | 0.689 m3/s | -0.096 |
+| upstream storage rate B | 2.000 m3/s | 2.000 m3/s | 0.000 |
+| ponding relieved (B max - A max) | 0.611 m | 0.625 m | +0.014 m |
+| storage relieved (conveyed) | 1.216 m3/s | 1.312 m3/s | +0.096 m3/s |
+| max\|A-B\| final depth | 0.613 m | 0.630 m | +0.017 m |
+| moves_water | TRUE | TRUE | unchanged |
+
+**The discriminant survives refinement and gets slightly SHARPER, not weaker.**
+`max|A-B|` rises marginally (0.613 -> 0.630 m); the barrel-conveyed discharge
+rises (1.216 -> 1.312 m3/s, +8%); ponding relieved rises (0.611 -> 0.625 m). Both
+resolutions land inside noise of each other (single-digit-percent), NOT the
+qualitative flip the mission brief flagged as a risk (the sub-cell crest-fill
+issue the auto_seal cap exists to correct). The crest cap is a fixed-height burn
+(1.5 m) applied to whichever road cell the finer mesh selects at the real
+centerline, so it continues to force a genuine block at 10 m the same way it did
+at 20 m -- `embankment_basis` is unchanged ("burned 1-cell crest cap ... sub-cell
+fill under-resolves at screening mesh") at both resolutions. The 4.6x finer
+upstream/downstream cell sampling (2,538/2,106 cells at 10 m vs 621/513 at 20 m)
+resolves the channel plan-form (meander) visibly better in the proof figure but
+does not change the ponding-vs-conveyance story the A/B/C is built to show.
+
+Proof: `docs/proof/templates/culvert_embankment_flow_ab.png` re-rendered in place
+as a 2x2 panel (10 m top row, 20 m bottom row, same A/B layout, both filled-cell
+per the proof-norms addendum above) -- side-by-side tells the resolution story
+better than a single swap. No other file in `docs/proof/templates/` touched.
+Repro: `venvs/agent/bin/python -c "import culvert_reach_pipeline as cr; cr.run_culvert_reach('<dem.tif>', '<workdir>', cell_size=10.0, bbox4326=[-86.2905,39.1858,-86.2861,39.1928], inflow_cms=2.0, tailwater_depth_m=0.3, sim_hours=2.5, manning_n=0.045, rise_span_m=1.0, min_embank_m=0.6, seal_embankment_m=1.5)"`
+(sys.path needs `services/workers/hecras2025/subst/crux/freshtopo`). No registry/
+board change -- a resolution re-proof, not a new capability.
