@@ -913,6 +913,7 @@ from ..workflows.pelicun.flood_foundation_depth_damage.flood_foundation_depth_da
 # v5.1-vs-v6.1 dataset comparison.
 from ..workflows.pelicun.hazus_seismic_dl_run.hazus_seismic_dl_run import pelicun_hazus_seismic_dl_run as _pelicun_hazus_seismic_dl_run  # noqa: E402,F401 - HAZUS earthquake building DL_calculation run with auto-populated building type
 from ..workflows.pelicun.hazus_eq_version_comparison.hazus_eq_version_comparison import pelicun_hazus_eq_version_comparison as _pelicun_hazus_eq_version_comparison  # noqa: E402,F401 - HAZUS earthquake v5.1-vs-v6.1 damage/loss dataset comparison
+from ..workflows.pelicun.hazus_lifeline_seismic_dl_run.hazus_lifeline_seismic_dl_run import pelicun_hazus_lifeline_seismic_dl_run as _pelicun_hazus_lifeline_seismic_dl_run  # noqa: E402,F401 - HAZUS earthquake lifeline-network (bridge/pipe/substation) DL_calculation run with auto-populated component
 
 
 # the 12-category registry + the two meta-tools

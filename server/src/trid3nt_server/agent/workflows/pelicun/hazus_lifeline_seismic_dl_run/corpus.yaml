@@ -1,0 +1,13 @@
+pelicun_hazus_lifeline_seismic_dl_run:
+- run a HAZUS earthquake damage assessment for a lifeline network asset
+- seismic damage and loss for a highway bridge under ground shaking
+- earthquake damage state distribution for an electric power substation
+- HAZUS potable water pipe seismic repair rate leaks and breaks
+- classify a HAZUS bridge type and run the transportation network loss model
+- how badly does a substation get damaged in an earthquake by PGA
+- run pelicun DL_calculation for a transportation bridge water pipe or power substation
+- estimate bridge repair cost and repair time under HAZUS earthquake transportation
+- expected pipe repairs per km from PGV ground shaking and permanent ground deformation
+- lifeline network seismic fragility bridge pipe substation HAZUS auto populated component
+- damage to critical infrastructure bridges and substations from an earthquake
+- what is the collapse probability of a highway bridge under spectral acceleration

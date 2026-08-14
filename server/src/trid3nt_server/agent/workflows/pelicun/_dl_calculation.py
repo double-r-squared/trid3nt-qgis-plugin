@@ -48,6 +48,27 @@ __all__ = [
 _CWD_LOCK = threading.Lock()
 
 
+def _auto_populate_with_options(original: Any) -> Any:
+    """Wrap pelicun's ``auto_populate`` so the returned ``DL`` config always has an
+    ``Options`` dict.
+
+    pelicun merges the harness-injected assessment ``Options`` (Seed, SampleSize)
+    into ``config_ap['DL']['Options']`` by direct key access; an auto-pop script
+    that returns a ``DL`` block without that key crashes the merge. The bundled
+    water and power lifeline scripts do exactly that, so this shim adds an empty
+    ``Options`` dict when the auto-pop leaves one out.
+    """
+
+    def _wrapped(*args: Any, **kwargs: Any) -> Any:
+        config_ap, comp = original(*args, **kwargs)
+        dl = config_ap.get("DL") if isinstance(config_ap, dict) else None
+        if isinstance(dl, dict):
+            dl.setdefault("Options", {})
+        return config_ap, comp
+
+    return _wrapped
+
+
 class DLCalculationError(RuntimeError):
     """A pelicun DL_calculation harness run failed.
 
@@ -76,6 +97,13 @@ class DLCalculationResult:
             ``CMP_QNT.csv``) -- the building type the AIM attributes mapped to.
         demand_sample: the parsed ``DEM_sample.json`` (the realized EDP sample;
             with ``coupled_edp`` it reproduces the input demand).
+        damage_state_probs: per-component damage-state probabilities parsed from the
+            damage sample -- ``{component: {ds_index: probability}}`` where ds 0 is
+            undamaged. Empty unless the run was requested with ``detailed_results``
+            (lifeline network assets, whose loss summary carries no repair figures).
+        expected_component_quantity: per-component expected damaged quantity summed
+            over damage states and locations (Hazus pipe repair counts: leaks +
+            breaks). Empty unless ``detailed_results`` was requested.
         seed: the injected Monte-Carlo seed.
         realizations: the requested sample size.
     """
@@ -86,6 +114,8 @@ class DLCalculationResult:
     auto_populated_config: dict[str, Any]
     component_assignment: list[str]
     demand_sample: dict[str, Any]
+    damage_state_probs: dict[str, dict[int, float]]
+    expected_component_quantity: dict[str, float]
     seed: int
     realizations: int
 
@@ -95,6 +125,64 @@ def _read_json(path: str) -> dict[str, Any]:
         return json.load(fh)
 
 
+def _read_zip_csv(zip_path: str) -> Any:
+    """Read the single CSV member of a pelicun output zip (``DMG_sample.zip``)."""
+    import io
+    import zipfile
+
+    import pandas as pd
+
+    with zipfile.ZipFile(zip_path) as zf:
+        member = next(n for n in zf.namelist() if n.endswith(".csv"))
+        return pd.read_csv(io.BytesIO(zf.read(member)), index_col=0)
+
+
+def _summarize_damage_sample(
+    tmp_dir: str,
+) -> tuple[dict[str, dict[int, float]], dict[str, float]]:
+    """Parse ``DMG_sample.zip`` into per-component damage-state probabilities.
+
+    The damage sample columns are ``<component>-<loc>-<dir>-<ds>`` with a 0/1
+    quantity per realization (damage states are mutually exclusive per component
+    block, so exactly one ds column is 1). Returns ``(damage_state_probs,
+    expected_component_quantity)``: the first maps each component to
+    ``{ds_index: P(component in ds)}`` averaged over its locations/directions; the
+    second maps each component to its expected damaged quantity summed over damage
+    states >= 1 and over locations (the Hazus pipe repair count -- leaks + breaks).
+    """
+    import numpy as np
+    import pandas as pd
+
+    zip_path = os.path.join(tmp_dir, "DMG_sample.zip")
+    if not os.path.isfile(zip_path):
+        return {}, {}
+    df = _read_zip_csv(zip_path)
+    # per (component, ds) accumulate mean probability and expected quantity
+    ds_means: dict[str, dict[int, list[float]]] = {}
+    exp_qty: dict[str, float] = {}
+    for col in df.columns:
+        parts = str(col).rsplit("-", 3)
+        if len(parts) != 4:
+            continue
+        cmp_id, _loc, _dir, ds_str = parts
+        try:
+            ds = int(ds_str)
+        except ValueError:
+            continue
+        series = pd.to_numeric(df[col], errors="coerce").dropna()
+        if series.empty:
+            continue
+        mean_qty = float(series.mean())
+        ds_means.setdefault(cmp_id, {}).setdefault(ds, []).append(mean_qty)
+        if ds >= 1:
+            exp_qty[cmp_id] = exp_qty.get(cmp_id, 0.0) + mean_qty
+    damage_state_probs: dict[str, dict[int, float]] = {
+        cmp_id: {ds: float(np.mean(vals)) for ds, vals in sorted(per_ds.items())}
+        for cmp_id, per_ds in ds_means.items()
+    }
+    return damage_state_probs, exp_qty
+
+
 def run_dl_calculation(
     *,
     aim_config: dict[str, Any],
@@ -102,6 +190,7 @@ def run_dl_calculation(
     realizations: int,
     seed: int,
     coupled_edp: bool = True,
+    detailed_results: bool = False,
 ) -> DLCalculationResult:
     """Run pelicun DL_calculation on ``aim_config`` + ``demand_csv_path``, isolated.
 
@@ -121,6 +210,7 @@ def run_dl_calculation(
     try:
         import pelicun  # noqa: F401
         from pelicun.base import LoggerRegistry
+        from pelicun.tools import DL_calculation as _dl_module
         from pelicun.tools.DL_calculation import run_pelicun
     except ImportError as exc:
         raise DLCalculationError(
@@ -148,8 +238,19 @@ def run_dl_calculation(
         with _CWD_LOCK:
             initial_cwd = os.getcwd()
             logger_snapshot = list(LoggerRegistry._loggers)
+            original_auto_populate = _dl_module.auto_populate
             try:
                 os.chdir(tmp)
+                # The injected assessment ``Options`` (Seed + SampleSize) are merged
+                # by DL_calculation into ``config_ap['DL']['Options']`` via direct
+                # key access -- but the bundled water/power lifeline auto-pop scripts
+                # return a ``DL`` block without an ``Options`` key (only buildings and
+                # transportation include one), so that merge raises ``KeyError:
+                # 'Options'``. Guarantee the key exists post-auto-pop so the Seed lands
+                # (reproducibility holds for every asset class). Safe under the lock:
+                # the patch is process-global but every DL run is serialized here.
+                _dl_module.auto_populate = _auto_populate_with_options(
+                    original_auto_populate)
                 run_pelicun(
                     demand_file="response.csv",
                     config_path=cfg_name,
@@ -157,11 +258,12 @@ def run_dl_calculation(
                     coupled_edp=bool(coupled_edp),
                     realizations=int(realizations),
                     auto_script_path="",
-                    detailed_results=False,
-                    output_format=None,
+                    detailed_results=bool(detailed_results),
+                    output_format="csv" if detailed_results else None,
                     custom_model_dir=None,
                 )
             finally:
+                _dl_module.auto_populate = original_auto_populate
                 os.chdir(initial_cwd)
                 # Drop any file-backed loggers this run registered so they do not
                 # dangle at the (about-to-be-deleted) tempdir log path.
@@ -185,6 +287,12 @@ def run_dl_calculation(
         dem_path = os.path.join(tmp, "DEM_sample.json")
         if os.path.isfile(dem_path):
             demand_sample = _read_json(dem_path)
+        damage_state_probs: dict[str, dict[int, float]] = {}
+        expected_component_quantity: dict[str, float] = {}
+        if detailed_results:
+            damage_state_probs, expected_component_quantity = (
+                _summarize_damage_sample(tmp)
+            )
         output_files = sorted(
             name for name in os.listdir(tmp)
             if os.path.isfile(os.path.join(tmp, name))
@@ -200,6 +308,8 @@ def run_dl_calculation(
             auto_populated_config=auto_populated_config,
             component_assignment=component_assignment,
             demand_sample=demand_sample,
+            damage_state_probs=damage_state_probs,
+            expected_component_quantity=expected_component_quantity,
             seed=int(seed),
             realizations=int(realizations),
         )

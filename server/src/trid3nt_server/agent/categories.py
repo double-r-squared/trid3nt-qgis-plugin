@@ -321,6 +321,9 @@ PRIMARY_CATEGORY: dict[str, str] = {
     # (auto-populated building type) + HAZUS EQ v5.1-vs-v6.1 dataset comparison.
     "pelicun_hazus_seismic_dl_run": "damage_assessment",
     "pelicun_hazus_eq_version_comparison": "damage_assessment",
+    # HAZUS EQ lifeline-network DL run (transportation bridge / potable-water pipe /
+    # electric-power substation), lifeline_class knob over the three DLML libraries.
+    "pelicun_hazus_lifeline_seismic_dl_run": "damage_assessment",
     "geoclaw_inundation": "simulation_modeling",
     "openquake_psha": "simulation_modeling",
     "openquake_scenario_gmf": "simulation_modeling",

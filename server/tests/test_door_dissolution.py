@@ -103,6 +103,7 @@ EXPECTED_TEMPLATES = {
     "pelicun_flood_foundation_depth_damage_sweep",  # pelicun CAND-S: HAZUS flood depth-damage sensitivity to foundation type
     "pelicun_hazus_seismic_dl_run",  # pelicun DL_calculation harness (ADR 0160): auto-populated HAZUS EQ building damage+loss run
     "pelicun_hazus_eq_version_comparison",  # pelicun DL_calculation harness front (ADR 0160): HAZUS EQ v5.1-vs-v6.1 dataset comparison
+    "pelicun_hazus_lifeline_seismic_dl_run",  # pelicun DL_calculation harness (ADR 0247): auto-populated HAZUS EQ lifeline-network (bridge/pipe/substation) damage+loss run
     "modflow_asr",
     "modflow_capture_zone",
     "modflow_contaminant_plume",
