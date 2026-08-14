@@ -135,6 +135,42 @@ HYDRAULICALLY INERT: WITH-vs-WITHOUT the final `Cell Depth` field is bit-identic
 engine weir/gate/pump bridge is unimplemented in this beta. The one drivable 2D structure
 is the Culvert. Proof: `docs/proof/templates/hecras_structure_2d_seam_probe_ab.png`.
 
+## 2D culvert-through-embankment probe -- A/B/C (ADR 0251)
+
+`Driver.cs` gained a `culvertdemo` mode -- the culvert follow-on ADR 0250 named (the Culvert is
+the ONE 2D structure the beta wires into the compute). It authors a `CulvertBarrel` +
+`BarrelProperties` (circular, 2 m rise/span, Manning 0.013) + `OpeningProperties`
+(SquareEdgeWithHeadwall = chart/scale 1:1, KIn 0.5 / KOut 1.0) onto the geometry
+(`geometry.{CulvertBarrelLayer,BarrelPropertiesLayer,OpeningPropertiesLayer}.Add` -> persisted to
+`/Geometry/Culverts/{Barrels,Barrel Types,Opening Types}`). The **embankment ridge** is a raised
+terrain band the host burns into `Terrains/Terrain.tif` AFTER authoring (`raise_ridge.py`, reads
+the band from the driver-emitted `culvert_probe.json`). Inflow 4 m3/s so the barrel can pass it at
+a modest head. Run the A/B/C via `run_culvert_abc.sh` (wipes case dirs, authors all three, burns
+the ridge on B+A, prepares + solves all three), then `make_culvert_fig.py`:
+
+    dotnet synthdrv.dll culvertdemo /probe/cv_free  0     # C: no ridge, no culvert
+    dotnet synthdrv.dll culvertdemo /probe/cv_block 0     # B: ridge, no culvert
+    dotnet synthdrv.dll culvertdemo /probe/cv_pass  1     # A: ridge + culvert
+    # host: raise_ridge.py on cv_block + cv_pass (6 m band at y=[140,160])
+    for CASE in cv_free cv_block cv_pass; do
+      RAS=$(ls /probe/$CASE/*.ras|head -1); mkdir -p /probe/${CASE}_r2r
+      dotnet ras.dll prepare -s "$RAS" -o /probe/${CASE}_r2r -f
+      dotnet ras.dll solve "$(ls /probe/${CASE}_r2r/*.r2r.h5|head -1)" /probe/${CASE}_result.h5 --solver CPU -f
+    done
+
+RESULT (ADR 0251): the culvert seam is FULLY LIVE and moves water (contrast the ADR 0250 weir,
+bit-identical inert). Final-step upstream mean depth C=1.001 m (free) < A=1.521 m (culvert) <
+B=4.933 m (ponds); `max|A-B|=3.413 m`. Mass balance is the downstream-arrival proof: upstream
+storage rate B +3.73 m3/s (traps the inflow -- ridge blocks the surface) vs A +0.035 m3/s
+(quasi-steady -- the barrel conveys the 4 m3/s inflow under the ridge). Root cause (decompiled):
+`Ras.Layers.Geometry.InitializeDriver_Culverts` does `new Culvert(barrel.Name, barrel.Polyline)`
+and copies every barrel/opening field (invert, length, shape, rise/span, Manning, K in/out, inlet
+chart/scale) into the solve. Proof:
+`docs/proof/templates/hecras_culvert_embankment_flow_seam_probe_abc.png`. Stage-2 productionization
+(worker leg on `rog2025_pipeline` + composer template/knob + real NHD/3DEP US crossing) is scoped
+in ADR 0251. Host reproduction scripts live beside this file:
+`raise_ridge.py`, `run_culvert_abc.sh`, `make_culvert_fig.py` (they operate on a probe host dir P).
+
 ## v6 migration path (alternative authoring, for a real catchment)
     dotnet migrate.dll project -s "<Muncie.prj>" -d /probe/muncie2025 --force
 Migration carries geometry+terrain+2D but leaves the plan's Terrain / NValue / BC

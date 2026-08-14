@@ -1,0 +1,154 @@
+# ADR 0251 - HEC-RAS 2025 2D culvert-through-embankment seam: PROVEN LIVE. The one drivable 2D structure ADR 0250 named (the Culvert, via CulvertBarrelLayer) authors, prepares, solves, AND moves water: a barrel through a raised terrain embankment passes flow that the ridge otherwise blocks. The A/B/C is DECISIVE and POSITIVE (unlike the weir A/B of ADR 0250, which was bit-identical inert). Stage-1 seam proof LANDED in the sandbox harness; productionization (worker leg + composer template + real US site) is a well-scoped separate wave, deferred with a precise recipe.
+
+Date: 2026-08-13
+Status: accepted
+Continues: ADR 0250 (the 2D structure-authoring seam: the beta wires ONLY the Culvert into
+the compute -- `InitializeComputeDriver` -> `InitializeDriver_Culverts` -> `new Culvert(...)`
+from `CulvertBarrelLayer`; authored weirs/gates/pumps are silently inert). ADR 0250's precise
+follow-on item (2) was: "author a `CulvertBarrelLayer` barrel + `BarrelPropertiesLayer` +
+`OpeningPropertiesLayer` over an embankment terrain ridge, then A/B present-vs-absent." This
+ADR EXECUTES that and reports the result.
+
+## What was built (prototype, LANDED)
+
+`Driver.cs` gained a `culvertdemo` mode. It reuses the ADR 0250 `StructChannel` inflow channel
+(60 x 300 m, 6 x 30 uniform 10 m cells, ramped inflow at the top wall, 1.0 m tailwater stage at
+the bottom, flat terrain) and -- with the culvert flag -- authors the full 2025 culvert surface
+onto the geometry (the three associated layers `InitializeDriver_Culverts` consumes):
+
+- `OpeningProperties` "Opening1": `OpeningType=ConcretePipeCulvert_SquareEdgeWithHeadwall`
+  (`[ChartScale(1,1)]`, a recognized inlet-control chart/scale -- `Custom`/`None` hard-fail per
+  `SetOpeningProps`), `KIn=0.5`, `KOut=1.0` -> `geometry.OpeningPropertiesLayer.Add`.
+- `BarrelProperties` "Barrel1": `Shape=Circle`, `Rise=Span=2.0` m, `Mannings=0.013` ->
+  `geometry.BarrelPropertiesLayer.Add`.
+- `CulvertBarrel` "Culvert1": `Polyline` (30,175)->(30,125) crossing UNDER the ridge (endpoints
+  land on channel-bed cells, not ridge cells), `BarrelPropertyName="Barrel1"`,
+  `UpstreamOpeningName=DownstreamOpeningName="Opening1"`, `UpstreamInvert=DownstreamInvert=0.0`
+  (at the bed = cell minimum elevation) -> `geometry.CulvertBarrelLayer.Add`.
+
+then `geometry.Save()` persists them to the HDF groups `/Geometry/Culverts/Barrels`,
+`/Geometry/Culverts/Barrel Types`, `/Geometry/Culverts/Opening Types` (re-opening the project
+via `new Project(<.ras>)` after the known beta terrain-dir Save bug, then re-saving the geometry
+-- the same proven sequence as ADR 0250's `structdemo`). The **embankment ridge** is a raised
+terrain band the host writes into `Terrains/Terrain.tif` AFTER authoring (a full-width y-band at
+`y=[140,160]` raised to 6.0 m, `raise_ridge.py`); the barrel geometry the host must match is
+emitted to `culvert_probe.json` (single source of truth). Inflow is sized to 4 m3/s so the barrel
+can pass it at a modest head: WITH the culvert the system reaches quasi-steady, WITHOUT it the
+upstream ponds toward the 6 m crest (it never overtops within the 9000 s sim, so the culvert is
+the ONLY outlet).
+
+The authoring plumbing works end-to-end through `hecras2025-authoring:latest` (id afb76f3ccd00):
+`ras prepare -s <.ras> -o <r2r>` INGESTS the barrel (completes, no rejection) and
+`ras solve <r2r> <out> --solver CPU` COMPLETES on the culvert-carrying deck.
+
+## The finding (DECISIVE, POSITIVE -- the culvert MOVES WATER)
+
+The A/B/C trio is the discriminator. Final-step per-cell depth, upstream (y>160) vs downstream
+(y<140) of the ridge, plus the upstream mass balance:
+
+| case | ridge | culvert | US mean depth | US dV/dt (m3/s) | verdict |
+|---|---|---|---|---|---|
+| C free  | absent  | absent  | 1.001 | -0.000 | flows freely, no ponding |
+| B block | 6 m     | absent  | 4.933 | +3.733 | ponds upstream, unbounded (traps ~inflow) |
+| A pass  | 6 m     | present | 1.521 | +0.035 | quasi-steady -- barrel conveys the inflow |
+
+- `max|A - B|` over the final-step per-cell depth field = **3.413 m** (the culvert is emphatically
+  LIVE; contrast the ADR 0250 weir A/B = 0.00000000 m, bit-identical inert).
+- **US mean depth: C=1.001 < A=1.521 < B=4.933** -- A is strictly between C and B (the culvert
+  relieves the ponding the ridge causes, but not to the free-flow level: it passes flow at a head).
+- **Mass balance = the downstream-arrival proof.** The ridge blocks the surface, so the ONLY
+  upstream exit is the barrel. In B the upstream storage rises at +3.73 m3/s (~= the 4 m3/s inflow,
+  trapped -- nowhere to go). In A the upstream storage is quasi-steady (+0.035 m3/s), so the
+  4 m3/s inflow is EXITING upstream via the barrel and ARRIVING downstream (where the tailwater BC
+  removes it -- downstream depth is pinned by that BC and cannot show arrival as depth, so
+  conservation is the correct arrival metric). The barrel conveys ~3.70 m3/s (B traps 3.73, A
+  traps 0.035).
+
+The `must-measurably-move-water` gate (ADR 0143) PASSES. Proof figure:
+`docs/proof/templates/hecras_culvert_embankment_flow_seam_probe_abc.png` (three plan-view depth
+maps + the upstream ponding-vs-steady time series + the mass-balance bars; synthetic seam-probe
+labeling per the ADR 0250 precedent -- NOT yet a real-site validation case).
+
+### Root cause the effect is real (decompiled, IN-IMAGE, `Ras.Core.dll`)
+
+`Ras.Layers.Geometry.InitializeDriver_Culverts` is the wired layer->engine converter: for each
+`CulvertBarrel` it does `new Culvert(barrel.Name, barrel.Polyline)` and copies the full physics
+into `CulvertPhysProps` -- `InvertUS/DS`, `Length` (from `Polyline.Length`), `Shape`
+(`EngineShape`: Circle->Circular / Box / Ellipse), `FullRise`/`Span`, `Mann`, entrance/exit loss
+(`usOpeningProps.KIn`/`KOut`), and the inlet-control chart/scale via
+`ChartScaleHelpers.TryParametrize(chart, scale)` (`SetOpeningProps`) -- then
+`computeDriver.HydraulicStructures.AddHydraulicStructure(culvert)`.
+`IdentifyStructureCellsAndFaces(GlobalMesh)` then pairs the barrel endpoints to mesh cells/faces
+headless. Every field the barrel/opening properties carry lands in the solve; the A/B/C confirms
+the kernel then conveys flow. This is the exact path ADR 0250 identified as the one live one.
+
+## Decision
+
+**Stage-1 seam proof LANDED (Driver `culvertdemo` mode + the A/B/C evidence); 0 new registered
+tools, 0 new templates, 0 image rebuild, 0 parser bump.** The one code landed is the sandbox
+`culvertdemo` mode + host `raise_ridge.py`/`run_culvert_abc.sh`/`make_culvert_fig.py`
+(reproduction tooling, ~110 C# LOC + ~90 Python LOC, NOT registered product). Registry stays
+**252**; `EXPECTED_TEMPLATES` unchanged.
+
+**Stage-2 productionization is DEFERRED as a well-scoped separate wave** (below). The seam proof
+is the load-bearing deliverable: it converts ADR 0250's decompile-level prediction ("the Culvert
+is the one drivable 2D structure") into an empirical, water-moving A/B/C. Productionizing responsibly
+(image/dll rebuild + live-smoke-through-the-image + a real US embankment/culvert site + the 4-slice
+test law + a QGIS-true real-site render) is genuinely a new build front, not a same-wave increment;
+landing a half-tested version would violate the honesty floor + the image-staleness law.
+
+## Precise Stage-2 follow-on scope (grounded in the actual seams)
+
+1. **Worker authoring leg.** The worker's `services/workers/hecras2025/subst/crux/freshtopo/
+   rog2025_pipeline.py` already runs THIS `synthdrv.dll` (built from this `Driver.cs`) via the
+   `realrog` mode over a real DEM. Add a `culvert` authoring path: a new `culvertreach` (or extend
+   `realrog`) mode that authors a `CulvertBarrel` + `BarrelProperties` + `OpeningProperties` on the
+   real-terrain deck, parameterized by (barrel polyline in local SI m, US/DS invert, Rise/Span,
+   Shape, Manning n, OpeningType/KIn/KOut). Rebuild `synthdrv.dll` (the worker mounts it at runtime
+   -- `cp /probe/synthdrv.dll .` -- so no full authoring-image rebuild, but the dll IS the staleness
+   surface: rebuild + a through-dll live smoke is mandatory).
+2. **The embankment.** At a real road/levee crossing the embankment is usually ALREADY in the 3DEP
+   DEM; where it is not (or is under-resolved), burn a raised polyline band into the terrain (the
+   `raise_ridge.py` idea generalized to an arbitrary embankment centerline + crest + width). The
+   barrel endpoints must snap to channel-bed cells either side of the ridge (validation
+   `Barrel_UpstreamInvertBelowCell` hard-errors if an invert is below the cell minimum elevation).
+3. **Composer surface.** A small template `culvert_embankment_flow` (question class: "how does flow
+   route through a culvert under a road/levee embankment vs the blocked case", NOT a place name) OR
+   a `culvert` knob on `hecras_flood_2d`. The barrel engineering params (diameter/rise-span, invert,
+   opening type, entrance/exit loss) are un-fetchable -> the input-review gate with labeled defaults
+   (e.g. circular 2 ft-to-metric default, SquareEdgeWithHeadwall, KIn 0.5 / KOut 1.0). Input layers
+   (reach via NHD, DEM via 3DEP) through the emit-on-fetch seam (`purpose=` on router fetches).
+4. **Registry bookkeeping** (only when a tool/template registers): `categories.py` + `tools/__init__.py`
+   + `test_catalog_surfacing` pins (registry 252 -> 253) + `test_door_dissolution` `EXPECTED_TEMPLATES`
+   + a co-located `corpus.yaml` + a model-free `retrieve_visible_tools(prompt, None, 8)` top-8 check.
+5. **Live E2E + validation.** A real US road-embankment/culvert crossing on a real reach (US-cases
+   /paper-first: cite a documented crossing to NATE first), discriminating present-vs-absent pair +
+   the must-move-water gate, QGIS-true render (ESRI World Imagery + mesh overlay) to
+   `docs/proof/templates/`.
+
+## Consequences
+
+- Coded-tools metric: 0 tools added, 0 LOC in server/worker/registry (sandbox + docs only).
+  Registry 252 -> 252; `EXPECTED_TEMPLATES` unchanged.
+- Evidence (in-image, live): authored `/Geometry/Culverts/{Barrels,Barrel Types,Opening Types}`
+  round-trip; `ras prepare` + `ras solve --solver CPU` COMPLETE on the culvert-carrying deck;
+  `max|A-B|=3.413 m` (culvert LIVE); US mean C=1.001 < A=1.521 < B=4.933 (A strictly between);
+  upstream mass balance B +3.73 m3/s (trapped) vs A +0.035 m3/s (conveyed) -- downstream arrival by
+  conservation. `InitializeDriver_Culverts` copies every barrel/opening field into the solve.
+- Proof: `docs/proof/templates/hecras_culvert_embankment_flow_seam_probe_abc.png` (synthetic
+  seam-probe A/B/C; a real-site render is a Stage-2 deliverable).
+- Board: HEC-RAS `### Structures` gains a `culvert_embankment_flow_2d_seam` row = SEAM-PROVEN
+  (this ADR); the weir/gate/pump rows stay STOP (ADR 0250 beta gap).
+- Offline registry spot slices GREEN: `test_catalog_surfacing` (registry 252),
+  `test_door_dissolution` (`EXPECTED_TEMPLATES` unchanged).
+
+## Reproducibility
+
+Build: `scripts/sandbox/hecras/managed_solve/REPRODUCE.md` (the `culvertdemo` mode rides the same
+SDK-image build). Author + embankment + A/B/C:
+`dotnet synthdrv.dll culvertdemo /probe/cv_free 0` (C), `... /probe/cv_block 0` (B),
+`... /probe/cv_pass 1` (A); `raise_ridge.py` on cv_block + cv_pass; then `ras prepare` +
+`ras solve --solver CPU` on each; compare final `Cell Depth` upstream/downstream + the upstream
+storage rate. Orchestration: `run_culvert_abc.sh`; figure: `make_culvert_fig.py`. Decompile:
+`local/ilspy:9`, `DOTNET_ROLL_FORWARD=Major`; the wired bridge is
+`Ras.Layers.Geometry.InitializeDriver_Culverts` in `Ras.Core.dll`.

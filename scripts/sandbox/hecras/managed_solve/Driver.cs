@@ -9,6 +9,7 @@ using Ras.Layers.BoundaryConditions;
 using Ras.Engine;
 using Ras.Hydraulics;
 using Ras.Hydraulics.Structures;
+using Ras.Hydraulics.Culverts;
 using Geospatial.Vectors;
 using Geospatial.PairedData;
 using Geospatial.GDALAssist;
@@ -203,6 +204,9 @@ class Driver
             return StructDemo(args[1],
                               args.Length > 2 && (args[2] == "1" || args[2] == "weir"),
                               args.Length > 3 ? double.Parse(args[3]) : 2.0);
+        if (mode == "culvertdemo")
+            return CulvertDemo(args[1],
+                               args.Length > 2 && (args[2] == "1" || args[2] == "culvert"));
         return Rain(args.Length > 1 ? args[1] : "/probe/rain",
                     args.Length > 2 ? float.Parse(args[2]) : 100f);
     }
@@ -346,6 +350,99 @@ class Driver
         Directory.CreateDirectory(surf);
         foreach (NValueLayer nv in proj2.NValues) nv.SaveAs(Path.Combine(surf, nv.Name + ".h5"));
         Console.WriteLine("[drv] structdemo done");
+        return 0;
+    }
+
+    // -- ADR 0251 culvert-through-embankment authoring (the ONE drivable 2D structure) --
+    // The 2025 beta wires ONLY the Culvert into the compute (ADR 0250:
+    // InitializeComputeDriver -> InitializeDriver_Culverts -> new Culvert(barrel.Name,
+    // barrel.Polyline) from CulvertBarrelLayer, reading BarrelProperties + OpeningProperties
+    // associations). This mode authors a CulvertBarrel + its BarrelProperties + its
+    // OpeningProperties on the geometry so the barrel passes flow UNDER an embankment ridge.
+    // The ridge itself is a raised terrain band the host writes into Terrains/Terrain.tif
+    // AFTER authoring (a culvert only matters if there IS an embankment to pass flow under);
+    // the barrel geometry the host must match is emitted to culvert_probe.json.
+    // A/B/C discriminator: (C) no ridge flows freely, (B) ridge no culvert ponds upstream,
+    // (A) ridge + culvert passes flow through (upstream depth between B and C, DS arrival).
+    static int CulvertDemo(string outDir, bool withCulvert)
+    {
+        var p = new StructChannel {
+            CellsWide = 6, CellsTall = 30, CellSize = 10.0,
+            RampSeconds = 300.0, NValue = 0.03f, Slope = 0.0,
+            DownstreamStage = 1.0, UpstreamFlow = 4.0,
+            SolveDt = 2.0, SolveDuration = 9000.0, ReportFrequency = 20
+        };
+        double W = p.CellsWide * p.CellSize;   // 60 m
+        double H = p.CellsTall * p.CellSize;   // 300 m
+        // Ridge band + barrel geometry -- the SINGLE source of truth (host reads the JSON).
+        // Inflow is at the TOP wall (high y = upstream); tailwater at the BOTTOM (y=0).
+        // Inflow is sized so the barrel can pass it at a modest head: WITH the culvert the
+        // system reaches quasi-steady (low upstream head), WITHOUT it upstream ponds toward
+        // the 6 m crest (never overtops within the sim, so the culvert is the ONLY outlet).
+        double ridgeY0 = 140.0, ridgeY1 = 160.0, ridgeElev = 6.0;
+        double barrelX = W / 2.0;                 // channel centre
+        double usY = 175.0, dsY = 125.0;          // barrel spans the ridge, ends on bed cells
+        double invert = 0.0, diameter = 2.0;      // circular, invert at bed (cell min 0.0)
+        Console.WriteLine($"[drv] culvertdemo dir={outDir} culvert={withCulvert} basin={W}x{H}m " +
+                          $"inflow={p.UpstreamFlow} tailwater={p.DownstreamStage} " +
+                          $"ridge=[{ridgeY0},{ridgeY1}]@{ridgeElev} barrel=({barrelX},{usY})->({barrelX},{dsY}) diam={diameter}");
+
+        try { SyntheticTestCases.Save(p, outDir); Console.WriteLine("[drv] Save() completed"); }
+        catch (Exception e) { Console.WriteLine("[drv] Save() aborted (known terrain bug): " + e.Message); }
+
+        string ras = Directory.GetFiles(outDir, "*.ras").First();
+        var project = new Project(ras);
+        var geom = project.Geometries.First();
+        var area = geom.FlowAreaLayer.First();
+        string areaName = area.Name;
+        Console.WriteLine($"[drv] reopened {Path.GetFileName(ras)} area='{areaName}' " +
+                          $"cells={area.Mesh?.CellCount} geomfile={Path.GetFileName(geom.Filename)}");
+
+        if (withCulvert)
+        {
+            var opening = new OpeningProperties {
+                Name = "Opening1",
+                OpeningType = BarrelOpeningType.ConcretePipeCulvert_SquareEdgeWithHeadwall,
+                KIn = 0.5, KOut = 1.0,
+            };
+            geom.OpeningPropertiesLayer.Add(opening);
+            var barrelProps = new BarrelProperties {
+                Name = "Barrel1",
+                Shape = BarrelShape.Circle,
+                Rise = diameter, Span = diameter,
+                Mannings = 0.013,
+            };
+            geom.BarrelPropertiesLayer.Add(barrelProps);
+            var barrel = new CulvertBarrel {
+                Name = "Culvert1",
+                Polyline = new Polyline(new List<Point> {
+                    new Point(barrelX, usY), new Point(barrelX, dsY) }),
+                BarrelPropertyName = "Barrel1",
+                UpstreamOpeningName = "Opening1",
+                DownstreamOpeningName = "Opening1",
+                UpstreamInvert = invert, DownstreamInvert = invert,
+            };
+            geom.CulvertBarrelLayer.Add(barrel);
+            geom.Save();
+            Console.WriteLine($"[drv] culvert added: barrels={geom.CulvertBarrelLayer.Count} " +
+                              $"barrelTypes={geom.BarrelPropertiesLayer.Count} " +
+                              $"openings={geom.OpeningPropertiesLayer.Count}, saved {geom.Filename}");
+        }
+        else
+        {
+            Console.WriteLine("[drv] no culvert authored");
+        }
+
+        var proj2 = SyntheticTestCases.CreateSyntheticTestCase(p, out _, out _, out _, out _);
+        var surf = Path.Combine(outDir, "Surface Layers");
+        Directory.CreateDirectory(surf);
+        foreach (NValueLayer nv in proj2.NValues) nv.SaveAs(Path.Combine(surf, nv.Name + ".h5"));
+
+        File.WriteAllText(Path.Combine(outDir, "culvert_probe.json"),
+            $"{{\"ridge_y0\":{ridgeY0},\"ridge_y1\":{ridgeY1},\"ridge_elev\":{ridgeElev}," +
+            $"\"barrel_x\":{barrelX},\"us_y\":{usY},\"ds_y\":{dsY}," +
+            $"\"invert\":{invert},\"diameter\":{diameter},\"width\":{W},\"height\":{H}}}");
+        Console.WriteLine("[drv] culvertdemo done");
         return 0;
     }
 
