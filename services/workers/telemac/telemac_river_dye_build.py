@@ -220,6 +220,46 @@ class ReachConfig:
     # in-image against gaia.dico v9.0 (CLASSES SEDIMENT DIAMETERS/INITIAL FRACTION/
     # TYPE OF SEDIMENT arrays, HIDING FACTOR FORMULA=1 Egiazaroff, D50 output var).
     sediment_gradation: tuple = ()      # v3 [(d50_um, fraction), ...] >=2 -> multi-class
+    # NESTOR DREDGING (ADR 0254) -- a dig/dump rule layered ONTO the GAIA v2
+    # erodible-bed morphodynamics base. dredging False (default) leaves every
+    # sediment run byte-identical (no NESTOR keywords, no action/polygon files).
+    # dredging True arms the in-image-precompiled NESTOR module (libnestor4*.so):
+    # write_gaia_deck adds NESTOR : YES + NESTOR ACTION FILE + NESTOR POLYGON FILE
+    # (+ NESTOR SURFACE REFERENCE FILE for the criterion mode) to the GAIA steering,
+    # and the worker authors NESTOR's own-format action + polygon (+ surface-ref)
+    # files. The action-file grammar is pinned against the in-image compiled fortran
+    # (sources/nestor/readdigactions.f + readpolygons.f + isactioncompletelydefined.f):
+    #   * blocks ACTION..ENDACTION, comment '/', terminator ENDFILE, top-level RESTART;
+    #   * KeyWord = value lines (ParseSteerLine splits on '='), dates yyyy.mm.dd-hh:mm:ss;
+    #   * field/polygon names carry a 3-digit numeral prefix ("001_channel").
+    # NESTOR requires a real erodible bed stock (it digs ZF through the GAIA active
+    # layer) and non-cohesive sand only (NSAND==NSICLA), so dredging FORCES the v2
+    # erodible-bed path. Two modes:
+    #   * "scheduled" (Dig_by_time): remove dredge_volume_m3 from the dredge zone over
+    #     [start,end]; if dredge_disposal, place the spoil in the disposal zone
+    #     (Dump_by_time). Minimal keywords -> the robust primary discriminator.
+    #   * "criterion" (Dig_by_criterion): dig only where the silted bed rises above
+    #     (design grade - dredge_crit_depth_m) down to (design grade - dredge_dig_depth_m),
+    #     at dredge_rate_m_per_s; needs a NESTOR SURFACE REFERENCE FILE carrying the
+    #     design navigation grade as cross-section profiles bracketing the zone.
+    # Zone geometry + volumes/rates are un-fetchable engineering -> surfaced through
+    # the input-review gate with labeled defaults; the worker builds channel-spanning
+    # UTM boxes from the centerline when explicit polygons are absent.
+    dredging: bool = False              # arm NESTOR dig/dump on the erodible-bed base
+    dredge_mode: str = "scheduled"      # scheduled (Dig_by_time) | criterion (Dig_by_criterion)
+    dredge_station_frac: float = 0.5    # along-channel position of the dredge box (0=up,1=down)
+    dredge_zone_len_m: float = None     # type: ignore[assignment]  # box along-channel length (None -> 2x width)
+    dredge_zone_utm: tuple = ()         # explicit dig-field polygon [(x,y),...] UTM (overrides the box)
+    disposal_zone_utm: tuple = ()       # explicit dump-field polygon [(x,y),...] UTM
+    dredge_disposal: bool = False       # scheduled: also place the spoil in a disposal zone
+    dredge_disposal_station_frac: float = 0.85  # along-channel position of the disposal box
+    dredge_volume_m3: float = 4000.0    # scheduled Dig_by_time target dredged volume (m3)
+    dredge_start_frac: float = 0.15     # scheduled: dig-window start as fraction of the sim
+    dredge_end_frac: float = 0.95       # scheduled: dig-window end as fraction of the sim
+    dredge_crit_depth_m: float = 0.3    # criterion CritDepth: siltation tolerance above grade (m)
+    dredge_dig_depth_m: float = 1.5     # criterion DigDepth: dig target below design grade (m)
+    dredge_rate_m_per_s: float = 5.0e-4  # criterion DigRate: vertical dig rate (m per second)
+    dredge_design_grade_m: float = None  # type: ignore[assignment]  # criterion design nav grade (m); None -> auto
     # WAQTEL O2 "do_sag" class (mutually exclusive with oil/decay/sediment): the
     # dissolved-oxygen SAG below a permitted discharge (US TMDL/permit question).
     # author_deck couples WAQTEL with WATER QUALITY PROCESS = 2 (the O2 module),
@@ -2120,6 +2160,7 @@ def write_gaia_deck(cfg, slf_name: str, cli_name: str, workdir: str) -> str:
     d50_m = max(float(getattr(cfg, "grain_size_um", 200.0)), 1.0) * 1.0e-6
     density = float(getattr(cfg, "sediment_density", 2650.0))
     gradation = _normalize_gradation(getattr(cfg, "sediment_gradation", ()))
+    dredging = bool(getattr(cfg, "dredging", False))
     if len(gradation) >= 2:
         # v3 MULTI-CLASS GRADED SEDIMENT: several non-cohesive size classes share
         # one erodible bed. Meyer-Peter-Mueller transport differs by grain size and
@@ -2159,7 +2200,7 @@ def write_gaia_deck(cfg, slf_name: str, cli_name: str, workdir: str) -> str:
             f"MORPHOLOGICAL FACTOR            = {mofac:g}",
             "MASS-BALANCE                    = YES",
         ]
-    elif bool(getattr(cfg, "erodible_bed", False)):
+    elif bool(getattr(cfg, "erodible_bed", False)) or dredging:
         # v2 ERODIBLE-BED MORPHODYNAMICS: a real erodible bed stock + active bedload
         # transport, so the bed SCOURS (negative CUMUL BED EVOL) where the flow
         # steepens and re-deposits where it slackens. SUSPENSION is OFF (pure
@@ -2218,6 +2259,29 @@ def write_gaia_deck(cfg, slf_name: str, cli_name: str, workdir: str) -> str:
             f"SUSPENDED SEDIMENTS CONCENTRATION VALUES AT THE SOURCES = {conc_kgm3:g}",
             "MASS-BALANCE                    = YES",
         ]
+    if dredging:
+        # NESTOR dig/dump coupling (ADR 0254): enable the precompiled module and
+        # name its own-format input files. Keywords pinned against gaia.dico v9.0
+        # (NESTOR logical INDEX 25; NESTOR ACTION/POLYGON/SURFACE REFERENCE FILE).
+        # The action + polygon (+ surface-ref) files are authored by
+        # write_nestor_decks into the same workdir.
+        # the surface reference file is MANDATORY for ANY action: Write_Node_Info
+        # (called on every dig/dump to log the affected nodes) computes each node's
+        # km chainage via Set_by_Profiles_Values_for, which hard-errors on a missing
+        # NESTOR SURFACE REFERENCE FILE -- so it is emitted in BOTH modes (criterion
+        # additionally reads the design grade z from it).
+        nlines = [
+            "/  NESTOR dredging (dig/dump on the erodible bed)",
+            "NESTOR                          = YES",
+            f"NESTOR ACTION FILE              = {NESTOR_ACTION_FILENAME}",
+            f"NESTOR POLYGON FILE             = {NESTOR_POLYGON_FILENAME}",
+            f"NESTOR SURFACE REFERENCE FILE   = {NESTOR_SURFACE_REF_FILENAME}",
+        ]
+        # insert before the trailing MASS-BALANCE line so the file stays tidy
+        if lines and lines[-1].startswith("MASS-BALANCE"):
+            lines = lines[:-1] + nlines + [lines[-1]]
+        else:
+            lines += nlines
     # DAMOCLES hard 72-char line limit (identical to author_deck's clamp): every
     # line is defensively sliced; comments are safe, the data lines are short by
     # construction (the keyword above is the longest at 55 + a small number).
@@ -2232,6 +2296,323 @@ def write_gaia_deck(cfg, slf_name: str, cli_name: str, workdir: str) -> str:
     LOG.info("gaia sediment steering authored: d50=%gum density=%g conc=%gkg/m3 "
              "-> %s", d50_m * 1e6, density, conc_kgm3, GAIA_STEERING_FILENAME)
     return GAIA_STEERING_FILENAME
+
+
+# ---------------------------------------------------------------------------
+# NESTOR dredging deck authoring (ADR 0254)
+# ---------------------------------------------------------------------------
+# NESTOR reads three own-format ASCII files, named in the GAIA steering via the
+# NESTOR ACTION FILE / NESTOR POLYGON FILE / NESTOR SURFACE REFERENCE FILE
+# keywords (gaia.dico v9.0, SUBMIT SINACT/SINPOL/SINREF). The grammar below is
+# pinned to the in-image compiled fortran the baked libnestor4*.so builds from
+# (sources/nestor/): readdigactions.f, readpolygons.f, isactioncompletelydefined.f,
+# datestringtoseconds.f, set_by_profiles_values_for.f. Coordinates are in the mesh
+# CRS (local UTM metres) since NESTOR's inside-polygon test runs on mesh XY.
+NESTOR_ACTION_FILENAME = "nestor.act"
+NESTOR_POLYGON_FILENAME = "nestor.pol"
+NESTOR_SURFACE_REF_FILENAME = "nestor.ref"
+#: the deterministic time origin the worker stamps into the t2d deck (ORIGINAL
+#: DATE OF TIME / ORIGINAL HOUR OF TIME) so NESTOR action-file absolute dates map
+#: to sim seconds through DateStringToSeconds (seconds since MARDAT/MARTIM).
+NESTOR_TIME_ORIGIN = (2024, 1, 1, 0, 0, 0)
+#: the three-numeral-prefixed field names (readdigactions/readpolygons demand a
+#: ThreeDigitsNumeral prefix); the polygon NAME and the action FieldDig/FieldDump
+#: are matched on the first three numerals. ThreeDigitsNumeral additionally
+#: requires the FIRST digit be 1-9 (>= 100, in-image pin) -- a leading 0 is
+#: rejected -- so the ids start at 101/102, not 001/002.
+_NESTOR_DIG_FIELD = "101_channel"
+_NESTOR_DUMP_FIELD = "102_spoil"
+
+
+def _nestor_time_str(offset_s: float) -> str:
+    """Format sim-seconds offset as NESTOR's yyyy.mm.dd-hh:mm:ss (exactly 19 ch).
+
+    DateStringToSeconds reads seconds since the ORIGINAL DATE/HOUR OF TIME origin
+    (MARDAT/MARTIM); the worker stamps NESTOR_TIME_ORIGIN into the deck, so an
+    offset in sim seconds maps to an absolute date the parser accepts.
+    """
+    import datetime as _dt
+    base = _dt.datetime(*NESTOR_TIME_ORIGIN)
+    t = base + _dt.timedelta(seconds=float(offset_s))
+    return t.strftime("%Y.%m.%d-%H:%M:%S")
+
+
+def _channel_box_utm(mesh, cfg, station_frac: float,
+                     length_m: float, width_m: float) -> list[tuple[float, float]]:
+    """A channel-spanning rectangle in UTM around one centerline station.
+
+    Picks the centerline vertex nearest ``station_frac`` of the arc length, takes
+    the local along-channel tangent, and returns the 4 corners of a box
+    length_m (along) x width_m (across) centred there. Used to build a dredge or
+    disposal zone when no explicit polygon is supplied.
+    """
+    cl = np.asarray(mesh["centerline"], dtype=float)
+    seg = np.diff(cl, axis=0)
+    arc = np.concatenate([[0.0], np.cumsum(np.hypot(seg[:, 0], seg[:, 1]))])
+    total = float(arc[-1]) if arc[-1] > 0 else 1.0
+    target = max(0.0, min(1.0, float(station_frac))) * total
+    i = int(np.argmin(np.abs(arc - target)))
+    c = cl[i]
+    j = min(i + 1, len(cl) - 1)
+    k = max(i - 1, 0)
+    tan = cl[j] - cl[k]
+    n = float(np.hypot(tan[0], tan[1]))
+    if n < 1e-9:
+        tvec = np.array([1.0, 0.0])
+    else:
+        tvec = tan / n
+    perp = np.array([-tvec[1], tvec[0]])
+    hl, hw = length_m / 2.0, width_m / 2.0
+    corners = [
+        c - hl * tvec - hw * perp,
+        c + hl * tvec - hw * perp,
+        c + hl * tvec + hw * perp,
+        c - hl * tvec + hw * perp,
+    ]
+    return [(float(p[0]), float(p[1])) for p in corners]
+
+
+def _dredge_zones_utm(mesh, cfg):
+    """Resolve (dig_polygon, dump_polygon_or_None) in UTM for the NESTOR run.
+
+    Explicit dredge_zone_utm / disposal_zone_utm win (gate-supplied geometry);
+    otherwise a channel-spanning box is built from the centerline at the
+    configured station fraction. The dredge box length defaults to 2x the channel
+    width; its width spans the full channel (1.4x the nominal width so it fully
+    brackets the wetted section).
+    """
+    width = float(getattr(cfg, "channel_width_m", 60.0)) * 1.4
+    length = getattr(cfg, "dredge_zone_len_m", None)
+    length = float(length) if length else 2.0 * float(getattr(cfg, "channel_width_m", 60.0))
+    dig = list(getattr(cfg, "dredge_zone_utm", ()) or ())
+    if len(dig) < 3:
+        dig = _channel_box_utm(mesh, cfg, getattr(cfg, "dredge_station_frac", 0.5),
+                               length, width)
+    dump = None
+    explicit_dump = list(getattr(cfg, "disposal_zone_utm", ()) or ())
+    want_dump = bool(getattr(cfg, "dredge_disposal", False)) or len(explicit_dump) >= 3
+    if want_dump:
+        if len(explicit_dump) >= 3:
+            dump = explicit_dump
+        else:
+            dump = _channel_box_utm(
+                mesh, cfg, getattr(cfg, "dredge_disposal_station_frac", 0.85),
+                length, width)
+    return dig, dump
+
+
+def write_nestor_polygon_file(dig_poly, dump_poly, workdir: str) -> str:
+    """Author NESTOR's polygon file (readpolygons.f format).
+
+    One block per zone: a ``NAME <id>_name`` line (3-digit numeral prefix,
+    checked by ThreeDigitsNumeral) then the vertex ``x y`` lines (two reals,
+    read free-format); the file MUST end with a bare ``ENDFILE`` line (no
+    trailing blanks) or the reader errors on unexpected EOF. Coordinates are
+    mesh UTM metres. Comment lines start with '#' or '/'.
+    """
+    lines = ["# NESTOR polygon file - dredge/dump zones (mesh UTM metres)"]
+    lines.append(f"NAME {_NESTOR_DIG_FIELD}")
+    for x, y in dig_poly:
+        lines.append(f"{x:.3f} {y:.3f}")
+    if dump_poly:
+        lines.append(f"NAME {_NESTOR_DUMP_FIELD}")
+        for x, y in dump_poly:
+            lines.append(f"{x:.3f} {y:.3f}")
+    lines.append("ENDFILE")
+    path = os.path.join(workdir, NESTOR_POLYGON_FILENAME)
+    with open(path, "w") as f:
+        f.write("\n".join(lines) + "\n")
+    LOG.info("nestor polygon file authored: dig=%d pts dump=%s -> %s",
+             len(dig_poly), (f"{len(dump_poly)} pts" if dump_poly else "none"),
+             NESTOR_POLYGON_FILENAME)
+    return NESTOR_POLYGON_FILENAME
+
+
+def write_nestor_action_file(cfg, workdir: str, has_dump: bool) -> str:
+    """Author NESTOR's action file (readdigactions.f grammar).
+
+    A top-level ``RESTART = NO`` (the reader hard-errors on its absence) then one
+    ``ACTION``..``ENDACTION`` block, terminated by ``ENDFILE``. Keyword=value
+    lines only; the keyword set + per-ActionType required fields are pinned to
+    isactioncompletelydefined.f. Two modes:
+
+    * scheduled -> ActionType = Dig_by_time (needs TimeStart/TimeEnd/FieldDig/
+      DigVolume); an optional FieldDump (no DumpRate) makes NESTOR place the dug
+      spoil over the same window (DumpMode 10, Dump_by_time).
+    * criterion -> ActionType = Dig_by_criterion (needs TimeStart/TimeEnd/
+      TimeRepeat/FieldDig/DigRate/CritDepth/DigDepth/MinVolume/MinVolumeRadius/
+      ReferenceLevel); ReferenceLevel = GRID reads the design grade from the
+      NESTOR SURFACE REFERENCE FILE.
+    """
+    dur = float(getattr(cfg, "duration_s", 3600.0))
+    mode = str(getattr(cfg, "dredge_mode", "scheduled")).lower()
+    t0 = _nestor_time_str(max(0.0, float(getattr(cfg, "dredge_start_frac", 0.15))) * dur)
+    t1 = _nestor_time_str(min(1.0, float(getattr(cfg, "dredge_end_frac", 0.95))) * dur)
+    lines = [
+        "/ NESTOR action file - channel maintenance dredging (ADR 0254)",
+        f"/ mode={mode}",
+        # RESTART is read as a Fortran LOGICAL (READ(valueStr,*) Restart), so the
+        # value MUST be a Fortran logical literal (F/.FALSE.), NOT DAMOCLES YES/NO.
+        "RESTART = F",
+        "ACTION",
+    ]
+    if mode == "criterion":
+        # Dig_by_criterion: trigger where the silted bed rises within CritDepth of
+        # the design grade; dig down to DigDepth below grade at DigRate. TimeRepeat
+        # re-arms the closed loop across the run so re-siltation is re-dredged.
+        rate = max(float(getattr(cfg, "dredge_rate_m_per_s", 5.0e-4)), 1.0e-9)
+        crit = float(getattr(cfg, "dredge_crit_depth_m", 0.3))
+        dig_depth = float(getattr(cfg, "dredge_dig_depth_m", 1.5))
+        repeat = max(dur / 4.0, 1.0)
+        lines += [
+            f"  ActionType      = Dig_by_criterion",
+            f"  FieldDig        = {_NESTOR_DIG_FIELD}",
+            f"  TimeStart       = {t0}",
+            f"  TimeEnd         = {t1}",
+            f"  TimeRepeat      = {repeat:g}",
+            f"  DigRate         = {rate:g}",
+            f"  CritDepth       = {crit:g}",
+            f"  DigDepth        = {dig_depth:g}",
+            f"  MinVolume       = 0.",
+            f"  MinVolumeRadius = 0.",
+            # SECTIONS keeps refZ as the design grade interpolated from the NESTOR
+            # SURFACE REFERENCE FILE profiles (Set_by_Profiles); GRID would instead
+            # demand a gridded ZRL field NESTOR does not have here.
+            f"  ReferenceLevel  = SECTIONS",
+        ]
+        if has_dump:
+            lines.append(f"  FieldDump       = {_NESTOR_DUMP_FIELD}")
+            lines.append(f"  DumpRate        = {rate:g}")
+    else:
+        vol = max(float(getattr(cfg, "dredge_volume_m3", 4000.0)), 1.0)
+        lines += [
+            f"  ActionType      = Dig_by_time",
+            f"  FieldDig        = {_NESTOR_DIG_FIELD}",
+            f"  TimeStart       = {t0}",
+            f"  TimeEnd         = {t1}",
+            f"  DigVolume       = {vol:g}",
+        ]
+        if has_dump:
+            # FieldDump with no DumpRate -> DumpMode 10 (Dump_by_time): the dug
+            # spoil is placed into the disposal field over the same window.
+            lines.append(f"  FieldDump       = {_NESTOR_DUMP_FIELD}")
+    lines += ["ENDACTION", "ENDFILE"]
+    path = os.path.join(workdir, NESTOR_ACTION_FILENAME)
+    with open(path, "w") as f:
+        f.write("\n".join(lines) + "\n")
+    LOG.info("nestor action file authored: mode=%s window=[%s,%s] dump=%s -> %s",
+             mode, t0, t1, has_dump, NESTOR_ACTION_FILENAME)
+    return NESTOR_ACTION_FILENAME
+
+
+def write_nestor_surface_ref_file(cfg, mesh, workdir: str) -> str:
+    """Author NESTOR's surface reference file (set_by_profiles_values_for.f format).
+
+    Format: >= 2 cross-section profile lines, each ``x1 y1 z1 x2 y2 z2 km``
+    (7 reals), terminated by a line starting ``END``. At each field node NESTOR
+    interpolates refZ + km between the two bracketing profiles, so EVERY field
+    node (dig AND dump, anywhere on the reach) must lie between two profiles and
+    consecutive profiles must stay < 90 deg apart. The worker lays a fence of
+    channel-crossing profiles at every few centerline stations spanning the whole
+    reach (full-width, so all across-channel nodes are bracketed), each carrying
+    the constant design navigation grade z. The end profiles are nudged just
+    beyond the reach so the extreme nodes are enclosed too.
+    """
+    grade = float(getattr(cfg, "dredge_design_grade_m", None) or 0.0)
+    cl = np.asarray(mesh["centerline"], dtype=float)
+    # generous half-width so the profiles fully bracket the field polygons across
+    # the channel (fields span ~0.7x channel width; use 2x the width per side).
+    half_w = max(float(getattr(cfg, "channel_width_m", 60.0)) * 2.0, 30.0)
+    seg = np.diff(cl, axis=0)
+    arc = np.concatenate([[0.0], np.cumsum(np.hypot(seg[:, 0], seg[:, 1]))])
+    total = float(arc[-1]) or 1.0
+    # sample ~1 profile every ~half the channel width along the reach (>= 3), so
+    # consecutive profiles are near-parallel (small angle) even on a bend.
+    step = max(int(len(cl) // max(int(total / max(half_w, 1.0)) + 2, 3)), 1)
+    idxs = list(range(0, len(cl), step))
+    if idxs[-1] != len(cl) - 1:
+        idxs.append(len(cl) - 1)
+    lines = ["# NESTOR surface reference file - design navigation grade profiles"]
+    for k, i in enumerate(idxs):
+        c = cl[i]
+        j = min(i + 1, len(cl) - 1)
+        p = max(i - 1, 0)
+        tan = cl[j] - cl[p]
+        nrm = float(np.hypot(tan[0], tan[1])) or 1.0
+        tvec = tan / nrm
+        perp = np.array([-tvec[1], tvec[0]])
+        # nudge the two end profiles outward so the extreme nodes are enclosed
+        push = 0.0
+        if i == 0:
+            push = -5.0
+        elif i == len(cl) - 1:
+            push = 5.0
+        c2 = c + push * tvec
+        a = c2 - half_w * perp
+        b = c2 + half_w * perp
+        km = float(arc[i] / total)
+        lines.append(
+            f"{a[0]:.3f} {a[1]:.3f} {grade:.3f} "
+            f"{b[0]:.3f} {b[1]:.3f} {grade:.3f} {km:.5f}")
+    lines.append("END")
+    path = os.path.join(workdir, NESTOR_SURFACE_REF_FILENAME)
+    with open(path, "w") as f:
+        f.write("\n".join(lines) + "\n")
+    LOG.info("nestor surface reference file authored: %d profiles grade=%.3f m -> %s",
+             len(idxs), grade, NESTOR_SURFACE_REF_FILENAME)
+    return NESTOR_SURFACE_REF_FILENAME
+
+
+def write_nestor_decks(cfg, mesh, workdir: str) -> dict:
+    """Author all NESTOR input files for a dredging run; return the emitted names.
+
+    Resolves the dig/dump zones (explicit UTM polygons or channel boxes), writes
+    the polygon file, the action file, and -- criterion mode only -- the surface
+    reference file carrying the design grade (auto-resolved from the dig-zone mean
+    bed when not supplied). Returns {'action','polygon','surface_ref'|None,
+    'has_dump'} for the GAIA-steering keyword wiring.
+    """
+    dig_poly, dump_poly = _dredge_zones_utm(mesh, cfg)
+    has_dump = dump_poly is not None
+    write_nestor_polygon_file(dig_poly, dump_poly, workdir)
+    write_nestor_action_file(cfg, workdir, has_dump)
+    # the surface reference file is MANDATORY in both modes (Write_Node_Info needs
+    # it for km chainage); resolve the design grade from the mean bed over the dig
+    # zone when the caller left it unset -- criterion digs to grade - DigDepth,
+    # scheduled ignores refZ but the file must still parse (7 reals per profile).
+    if getattr(cfg, "dredge_design_grade_m", None) is None:
+        Z = mesh.get("Z")
+        Z = np.asarray(Z, dtype=float) if Z is not None else None
+        if Z is None and mesh.get("bed_z") is not None:
+            Z = np.asarray(mesh["bed_z"], dtype=float)
+        X = np.asarray(mesh["X"], dtype=float)
+        grade = None
+        if Z is not None:
+            inside = _points_in_poly(X, np.asarray(mesh["Y"], dtype=float),
+                                     np.asarray(dig_poly, dtype=float))
+            if inside.any():
+                grade = float(np.mean(Z[inside]))
+            else:
+                grade = float(np.mean(Z))
+        cfg.dredge_design_grade_m = grade if grade is not None else 0.0
+    surface_ref = write_nestor_surface_ref_file(cfg, mesh, workdir)
+    return dict(action=NESTOR_ACTION_FILENAME, polygon=NESTOR_POLYGON_FILENAME,
+                surface_ref=surface_ref, has_dump=has_dump)
+
+
+def _points_in_poly(X, Y, poly) -> "np.ndarray":
+    """Boolean mask of mesh nodes inside a convex/simple polygon (ray casting)."""
+    px = poly[:, 0]
+    py = poly[:, 1]
+    n = len(poly)
+    inside = np.zeros(len(X), dtype=bool)
+    j = n - 1
+    for i in range(n):
+        cond = ((py[i] > Y) != (py[j] > Y)) & (
+            X < (px[j] - px[i]) * (Y - py[i]) / (py[j] - py[i] + 1e-30) + px[i])
+        inside ^= cond
+        j = i
+    return inside
 
 
 # M2-spike-proven oil steering parameters (oilspill.f reader format). Fractions
@@ -2630,6 +3011,19 @@ COEFFICIENT FOR DIFFUSION OF TRACERS     = {_tracer_diff}
             "COUPLING WITH                   = 'GAIA'\n"
             f"GAIA STEERING FILE              = {GAIA_STEERING_FILENAME}\n"
         )
+        if bool(getattr(cfg, "dredging", False)):
+            # NESTOR dredging (ADR 0254): author the action + polygon (+ surface-
+            # reference) files and stamp a deterministic time origin so the action-
+            # file absolute dates (yyyy.mm.dd-hh:mm:ss) map to sim seconds through
+            # NESTOR's DateStringToSeconds (seconds since MARDAT/MARTIM). GAIA
+            # inherits MARDAT/MARTIM from TELEMAC-2D in coupled mode.
+            write_nestor_decks(cfg, mesh,
+                               os.path.dirname(os.path.abspath(cas_path)))
+            y, mo, d, hh, mm, ss = NESTOR_TIME_ORIGIN
+            cas += (
+                f"ORIGINAL DATE OF TIME           = {y};{mo};{d}\n"
+                f"ORIGINAL HOUR OF TIME           = {hh};{mm};{ss}\n"
+            )
 
     # DAMOCLES hard 72-char line limit: one over-long line (e.g. a long
     # geocoded reach name in a comment or the TITLE) derails the parser into

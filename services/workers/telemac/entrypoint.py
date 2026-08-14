@@ -94,6 +94,9 @@ DEFAULT_OUTPUTS = [
     "agit_field.slf",      # agitation class: single-frame WAVE HEIGHT field -> Kd COG
     "art_agit.cas",        # agitation class: the ARTEMIS steering deck (evidence)
     "bc_agit.cli",         # agitation class: boundary conditions (evidence)
+    "nestor.act",          # dredging (ADR 0254): NESTOR action file (dig/dump rule, evidence)
+    "nestor.pol",          # dredging: NESTOR polygon file (dredge/dump zones, evidence)
+    "nestor.ref",          # dredging (criterion): NESTOR surface reference (design grade, evidence)
 ]
 
 #: Metrics filename the ``LocalSolverSpec.classify_exit`` reads from the rundir.
@@ -174,7 +177,14 @@ class TelemacManifestUnknownFieldsError(ValueError):
 #: (sediment_gradation: >=2 (d50_um, fraction) classes -> a multi-class bedload
 #: deck with Egiazaroff hiding, so the bed SORTS/armors; the run reports the
 #: surface D50 spread as the sorting honesty-floor number).
-_PARSER_VERSION = "telemac-reach-8"
+#: -9 adds the ADR 0254 NESTOR dredging fields (dredging arms the precompiled
+#: NESTOR module on the erodible-bed base: dredge_mode scheduled|criterion,
+#: zone geometry dredge_zone_utm/disposal_zone_utm/dredge_station_frac/
+#: dredge_zone_len_m/dredge_disposal[_station_frac], and the dig/dump numbers
+#: dredge_volume_m3/dredge_start_frac/dredge_end_frac/dredge_crit_depth_m/
+#: dredge_dig_depth_m/dredge_rate_m_per_s/dredge_design_grade_m); the dig/dump bed
+#: change surfaces through the existing GAIA CUMUL BED EVOL deposition map + summary.
+_PARSER_VERSION = "telemac-reach-9"
 
 
 def _reach_config(data_dir: Path, reach_overrides: dict[str, Any]) -> Any:

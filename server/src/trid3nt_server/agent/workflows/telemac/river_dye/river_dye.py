@@ -109,7 +109,9 @@ TEMPLATE_CARD = TemplateCard(
         "reach_length_km, sim_duration_s, source_q_m3s, channel_width_m, "
         "substance (dye / oil / sewage / sediment / scour / graded), mesh_resolution, "
         "decay_half_life_hours, grain_size_um, erodible_bed, bed_thickness_m, "
-        "bedload_formula, morphological_factor, sediment_gradation, friction_coefficient, "
+        "bedload_formula, morphological_factor, sediment_gradation, "
+        "dredging, dredge_mode (scheduled/criterion), dredge_volume_m3, "
+        "dredge_disposal, dredge_crit_depth_m, dredge_dig_depth_m, friction_coefficient, "
         "rainfall_mm_per_day, rainfall_gridmet_window, evaporation_mm_per_day"
     ),
 )
@@ -183,6 +185,12 @@ async def telemac_river_dye(
     bedload_formula: int | None = None,
     morphological_factor: float | None = None,
     sediment_gradation: list | str | None = None,
+    dredging: bool | None = None,
+    dredge_mode: str | None = None,
+    dredge_volume_m3: float | None = None,
+    dredge_disposal: bool | None = None,
+    dredge_crit_depth_m: float | None = None,
+    dredge_dig_depth_m: float | None = None,
     friction_coefficient: float | None = None,
     friction_law: int | None = None,
     velocity_diffusivity: float | None = None,
@@ -347,6 +355,27 @@ async def telemac_river_dye(
             auto-arms from prompts naming "graded / mixed-grain / sorting /
             armoring / bimodal" sediment. Demo mixes, never a measured site
             sieve curve (no bed-composition fetcher exists).
+        dredging: OPTIONAL - NESTOR CHANNEL-MAINTENANCE DREDGING for the "without
+            maintenance the navigable channel silts up; a dig rule holds the
+            depth" question. Layers an engineered dig/dump rule onto the GAIA
+            erodible-bed morphodynamics (forces the sediment class + erodible
+            bed). Auto-arms from prompts naming "dredge / maintenance dredging /
+            channel maintenance / spoil disposal / shoaling / silting". The
+            dredge/disposal zone geometry + volumes/rates are labeled-default
+            engineering inputs (input-review gate); the worker builds a
+            channel-spanning dredge box at mid-reach by default.
+        dredge_mode: OPTIONAL - dredging rule: "scheduled" (default; remove
+            dredge_volume_m3 over a time window - the standard maintenance cycle)
+            or "criterion" (dig only where the silted bed rises within
+            dredge_crit_depth_m of the design grade, down to dredge_dig_depth_m
+            below it - a critical-elevation-triggered dig/dump loop).
+        dredge_volume_m3: OPTIONAL scheduled-mode target dredged volume (m3);
+            labeled default 4000. dredge_disposal True also places the spoil in a
+            downstream disposal zone (dredge-and-dump spoil placement).
+        dredge_crit_depth_m / dredge_dig_depth_m: OPTIONAL criterion-mode
+            siltation tolerance above grade / dig target below grade (m).
+        dredge_disposal: OPTIONAL - also place the dug spoil in a downstream
+            disposal zone (Dump); default False (dredge-only).
         friction_coefficient: OPTIONAL ADVANCED lever - bed roughness
             (Strickler Ks). Leave unset for demo default (33); clamped
             [10, 90]. Set only from a site-specific user value.
@@ -679,6 +708,38 @@ async def telemac_river_dye(
     if sediment_gradation:
         erodible_bed = True  # a graded mix sorts only on a mobile (erodible) bed
 
+    # NESTOR DREDGING (ADR 0254). Dredging layers a dig/dump rule onto the GAIA
+    # erodible-bed morphodynamics: without maintenance the navigable channel silts
+    # up; the dig rule holds the depth. Armed by an explicit dredging=True OR by
+    # dredging vocabulary (dredge / dredging / maintenance dredging / spoil /
+    # disposal / shoaling) in the substance/contaminant. NESTOR digs a real bed
+    # stock and needs non-cohesive sand, so dredging FORCES the sediment class +
+    # erodible_bed=True. dredge_mode selects the rule: "scheduled" (remove a target
+    # volume over a window) or "criterion" (dig only where the silted bed rises
+    # within a tolerance of the design grade). Zone geometry + volumes/rates are
+    # un-fetchable engineering surfaced through the input-review gate with the
+    # worker's labeled defaults; an explicit value overrides. dredge_disposal also
+    # places the spoil in a downstream disposal zone.
+    _dredge_hint = any(w in substance for w in DREDGE_KEYWORDS) or (
+        contaminant and any(w in str(contaminant).lower() for w in DREDGE_KEYWORDS))
+    if dredging is None:
+        dredging = bool(_dredge_hint)
+    else:
+        dredging = bool(dredging)
+    if dredging:
+        # NESTOR digs a real (mobile) bed stock -> erodible_bed=True, which the
+        # model's single-source-of-truth gate cascades into the sediment/GAIA class
+        # (so classification can never diverge from the morphodynamics run).
+        erodible_bed = True
+    _dm = str(dredge_mode or "scheduled").lower()
+    if _dm not in ("scheduled", "criterion"):
+        _dm = "scheduled"
+    dredge_mode = _dm
+    dredge_volume_m3 = _pos_float(dredge_volume_m3, 1.0, 1.0e7)
+    dredge_crit_depth_m = _pos_float(dredge_crit_depth_m, 0.01, 20.0)
+    dredge_dig_depth_m = _pos_float(dredge_dig_depth_m, 0.05, 30.0)
+    dredge_disposal = bool(dredge_disposal) if dredge_disposal is not None else False
+
     # TELEMAC-PHYS-1 constitutive-physics overrides (advanced / demo-default
     # levers). Coerce + CLAMP to the physics_registry ranges here so a set value
     # never errors the call (matches this tool's defensive style); the workflow
@@ -746,6 +807,12 @@ async def telemac_river_dye(
             bedload_formula=bedload_formula,
             morphological_factor=morphological_factor,
             sediment_gradation=sediment_gradation,
+            dredging=dredging,
+            dredge_mode=dredge_mode,
+            dredge_volume_m3=dredge_volume_m3,
+            dredge_disposal=dredge_disposal,
+            dredge_crit_depth_m=dredge_crit_depth_m,
+            dredge_dig_depth_m=dredge_dig_depth_m,
             friction_coefficient=friction_coefficient,
             friction_law=friction_law,
             velocity_diffusivity=velocity_diffusivity,
@@ -1005,6 +1072,18 @@ GRADATION_KEYWORDS: tuple[str, ...] = (
     "grain-size distribution", "sorting", "segregat", "armor", "armour",
     "poorly sorted", "well sorted", "well graded", "well-graded", "bimodal",
     "fining", "sediment mixture", "grain mixture",
+)
+
+#: DREDGING vocabulary (ADR 0254 NESTOR) - words that mean "mechanically maintain
+#: a navigable channel against siltation". Naming any of these auto-arms the NESTOR
+#: dig/dump rule on the GAIA erodible-bed base (and thus the sediment class +
+#: erodible_bed). Distinct from SCOUR/GRADATION: dredging is an ENGINEERED
+#: intervention (dig/dump), not a natural transport process.
+DREDGE_KEYWORDS: tuple[str, ...] = (
+    "dredg", "maintenance dredging", "channel maintenance", "spoil",
+    "disposal placement", "shoaling", "navigation channel depth",
+    "keep the channel", "maintain the channel", "silt up", "silting",
+    "infill the channel", "dig and dump", "dig-and-dump",
 )
 
 #: Named demo gradations (d50 in microns, initial fraction) - honest demo mixes,
@@ -1958,6 +2037,12 @@ async def model_telemac_river_dye(
     bedload_formula: int | None = None,
     morphological_factor: float | None = None,
     sediment_gradation: list | None = None,
+    dredging: bool = False,
+    dredge_mode: str = "scheduled",
+    dredge_volume_m3: float | None = None,
+    dredge_disposal: bool = False,
+    dredge_crit_depth_m: float | None = None,
+    dredge_dig_depth_m: float | None = None,
     *,
     release_seeds_reach: bool | None = None,
     seed_release_lon: float | None = None,
@@ -2339,7 +2424,21 @@ async def model_telemac_river_dye(
             # write_gaia_deck to the multi-class bedload (sorting) deck. Absent (the
             # single-class case) leaves the deck byte-identical.
             **({"sediment_gradation": sediment_gradation}
-               if sediment_gradation else {})}
+               if sediment_gradation else {}),
+            # NESTOR DREDGING (ADR 0254): layered onto the erodible-bed base ONLY
+            # when armed. dredging=True adds the dig/dump rule (mode + the set
+            # engineering numbers ride; unset ones use the worker's labeled
+            # defaults surfaced through the input-review gate). Absent when not
+            # dredging, so every non-dredging sediment run is byte-identical.
+            **({"dredging": True, "dredge_mode": str(dredge_mode or "scheduled"),
+                "dredge_disposal": bool(dredge_disposal),
+                **({"dredge_volume_m3": float(dredge_volume_m3)}
+                   if dredge_volume_m3 is not None else {}),
+                **({"dredge_crit_depth_m": float(dredge_crit_depth_m)}
+                   if dredge_crit_depth_m is not None else {}),
+                **({"dredge_dig_depth_m": float(dredge_dig_depth_m)}
+                   if dredge_dig_depth_m is not None else {})}
+               if dredging else {})}
            if substance_class == "sediment" else {}),
         # WAQTEL O2 do_sag class: the fully-mixed discharge (CBOD + DO) rides in at
         # the inflow (author_deck O2 branch omits the dye point source entirely).
