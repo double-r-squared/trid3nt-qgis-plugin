@@ -1243,6 +1243,74 @@ def run_telemac3d_pipeline(
     return metrics
 
 
+class CoastalManifestUnknownFieldsError(ValueError):
+    """manifest.json['coastal'] carries a key ``CoastalConfig`` has no field for."""
+
+
+#: COASTAL PARSER VERSION -- bump on a CoastalConfig field
+#: addition/rename/retirement OR a coastal worker-output-contract change; doubles
+#: as the coastal-tidal worker-image/behavior provenance marker (ADR 0148/0259).
+_COASTAL_PARSER_VERSION = "coastal-tidal-1"
+
+
+def _coastal_config(data_dir: Path, overrides: dict[str, Any]) -> Any:
+    """Build a ``CoastalConfig`` from manifest['coastal'], rejecting unknown keys.
+
+    Same strict-unknown-field gate as ``_reach_config`` / ``_tomawac_config``
+    (ADR 0158): an unknown key raises loudly rather than silently no-opping the
+    intended coastal knob (the ADR 0148 stale-image failure mode). ``workdir`` is
+    not a CoastalConfig field (solve takes it as an argument); 'mode' is the
+    routing key, not a field.
+    """
+    from telemac_coastal_build import CoastalConfig  # noqa: WPS433 -- worker payload
+
+    import dataclasses
+
+    valid = {f.name for f in dataclasses.fields(CoastalConfig)}
+    clean: dict[str, Any] = {}
+    unknown: list[str] = []
+    for key, value in (overrides or {}).items():
+        if key in ("workdir", "mode"):
+            continue
+        if key in valid:
+            clean[key] = value
+        else:
+            unknown.append(key)
+    if unknown:
+        raise CoastalManifestUnknownFieldsError(
+            f"manifest.json['coastal'] carries unknown field(s) {sorted(unknown)} "
+            f"that parser {_COASTAL_PARSER_VERSION} does not read -- this SILENTLY "
+            f"no-ops the intended coastal knob(s) rather than applying them. Either "
+            f"the caller has a typo, or the worker image is stale (rebuild it -- "
+            f"ADR 0148). Known CoastalConfig fields: {sorted(valid)}."
+        )
+    if "bbox" in clean and clean["bbox"] is not None:
+        clean["bbox"] = tuple(float(v) for v in clean["bbox"])
+    return CoastalConfig(**clean)
+
+
+def run_coastal_pipeline(
+    data_dir: Path, coastal_overrides: dict[str, Any], run_id: str | None
+) -> dict[str, Any]:
+    """Run the coastal tidal/surge inundation pipeline (ADR 0259) in ``data_dir``.
+
+    Authors + solves ONE coastal open-water TELEMAC-2D domain (real NOAA
+    topobathy, one seaward liquid boundary forced by a NOAA CO-OPS / GTSM water-
+    level series via the LIQUID BOUNDARIES FILE) through the baked telemac2d
+    binary and writes the result SELAFIN + the bed COG + metrics into the mounted
+    rundir. ``correct_end`` gates status exactly like the wave / 3D paths.
+    """
+    import telemac_coastal_build as C  # noqa: WPS433 -- coastal worker payload
+
+    ccfg = _coastal_config(data_dir, coastal_overrides)
+    n_series = len(ccfg.water_level_series or [])
+    LOG.info("coastal tidal/surge: bathy=%s ocean_edge=%s series_pts=%s "
+             "dur=%s bbox=%s", ccfg.bathy_source, ccfg.ocean_edge, n_series,
+             ccfg.duration_s, ccfg.bbox)
+    metrics = C.solve(ccfg, str(data_dir), run_id=run_id)
+    return metrics
+
+
 def _build_argv_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(
         prog="trid3nt-telemac-entrypoint",
@@ -1282,6 +1350,7 @@ def main(argv: list[str] | None = None) -> int:
     wave_overrides: dict[str, Any] | None = None
     agitation_overrides: dict[str, Any] | None = None
     stratified_overrides: dict[str, Any] | None = None
+    coastal_overrides: dict[str, Any] | None = None
     try:
         if manifest_path.exists():
             manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
@@ -1291,6 +1360,7 @@ def main(argv: list[str] | None = None) -> int:
             wave_overrides = manifest.get("wave")
             agitation_overrides = manifest.get("agitation")
             stratified_overrides = manifest.get("stratified")
+            coastal_overrides = manifest.get("coastal")
             run_id = run_id or manifest.get("run_id")
             mesh_only = bool(manifest.get("mesh_only"))
         else:
@@ -1306,6 +1376,37 @@ def main(argv: list[str] | None = None) -> int:
         return 2
 
     import telemac_river_dye_build as B  # noqa: WPS433 -- for the typed banks gate
+
+    # ADR 0259: a manifest['coastal'] block routes to the coastal tidal/surge
+    # inundation pipeline (telemac_coastal_build) through the baked telemac2d
+    # binary -- a coastal open-water domain with one seaward liquid boundary
+    # forced by a LIQUID BOUNDARIES FILE; separate from every other leg.
+    if coastal_overrides is not None:
+        import telemac_coastal_build as C  # noqa: WPS433 -- coastal worker payload
+        try:
+            metrics = run_coastal_pipeline(data_dir, coastal_overrides, run_id)
+        except (CoastalManifestUnknownFieldsError, C.CoastalInputError) as exc:
+            LOG.warning("coastal input gate: %s", exc)
+            _write_metrics(data_dir, {
+                "status": "error",
+                "correct_end": False,
+                "error_code": getattr(exc, "error_code", "COASTAL_PARAMS_INVALID"),
+                "error": str(exc),
+            })
+            return 5
+        except Exception as exc:  # noqa: BLE001 -- typed metrics error
+            LOG.exception("coastal pipeline failed")
+            _write_metrics(data_dir, {
+                "status": "error",
+                "correct_end": False,
+                "error": f"{type(exc).__name__}: {exc}",
+            })
+            return 1
+        _write_metrics(data_dir, metrics)
+        ok = bool(metrics.get("correct_end"))
+        LOG.info("trid3nt-coastal worker done status=%s correct_end=%s wall_s=%s",
+                 metrics.get("status"), ok, metrics.get("wall_s"))
+        return 0 if ok else 1
 
     # ADR 0241: a manifest['stratified'] block routes to the TELEMAC-3D
     # stratified / 3D-hydrodynamics pipeline (telemac3d_build) through the baked
