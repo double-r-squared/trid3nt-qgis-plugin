@@ -19,6 +19,21 @@ X,Y=xy[:,0],xy[:,1]
 us=Y>y1+1e-6; ds=Y<y0-1e-6
 A_cell=100.0; dt_rep=40.0
 
+# Regular structured mesh (StructChannel: 60x300 m, 10 m cells -> 6x30). Render each
+# wet cell as its FILLED footprint (pcolormesh on the cell grid), never cell-center
+# scatter dots -- honest coarseness, no interpolation across the 10 m cells.
+CELL=10.0
+NX,NY=6,30
+x_edges=np.arange(NX+1)*CELL
+y_edges=np.arange(NY+1)*CELL
+col=np.clip((X/CELL).astype(int),0,NX-1)
+row=np.clip((Y/CELL).astype(int),0,NY-1)
+
+def to_grid(d):
+    g=np.full((NY,NX),np.nan)
+    g[row,col]=d
+    return g
+
 cases=[("C  no embankment\n(no ridge, no culvert)","cv_free"),
        ("B  embankment only\n(ridge, no culvert)","cv_block"),
        ("A  embankment + culvert\n(ridge + barrel)","cv_pass")]
@@ -40,7 +55,9 @@ fig.suptitle("HEC-RAS 2025 managed engine -- 2D culvert-through-embankment seam 
 # top row: plan-view depth maps
 for i,(label,c) in enumerate(cases):
     ax=fig.add_subplot(gs[0,i])
-    sc=ax.scatter(X,Y,c=depth[c],s=210,marker="s",cmap="viridis",vmin=0,vmax=vmax)
+    grid=to_grid(depth[c])
+    sc=ax.pcolormesh(x_edges,y_edges,np.ma.masked_invalid(grid),cmap="viridis",
+                      vmin=0,vmax=vmax,shading="flat",edgecolors="white",linewidth=0.3)
     # ridge band (only B,C... draw on ridge cases)
     if c!="cv_free":
         ax.add_patch(Rectangle((-3,y0),66,y1-y0,facecolor="saddlebrown",alpha=0.35,zorder=1))

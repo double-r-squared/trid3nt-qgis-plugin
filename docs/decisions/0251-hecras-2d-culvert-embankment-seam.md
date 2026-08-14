@@ -219,3 +219,15 @@ SDK-image build). Author + embankment + A/B/C:
 storage rate. Orchestration: `run_culvert_abc.sh`; figure: `make_culvert_fig.py`. Decompile:
 `local/ilspy:9`, `DOTNET_ROLL_FORWARD=Major`; the wired bridge is
 `Ras.Layers.Geometry.InitializeDriver_Culverts` in `Ras.Core.dll`.
+
+## Proof-norms addendum (2026-08-14, render fix, no physics changed)
+
+NATE caught three proof figures in this family (`hecras_structure_2d_seam_probe_ab.png`,
+`hecras_culvert_embankment_flow_seam_probe_abc.png`, `culvert_embankment_flow_ab.png`)
+rendering the solver's per-cell depths as cell-center scatter dots / gappy bars instead of
+filled cell footprints on the structured mesh grid -- the same render-lie class the marina
+griddata precedent (ADR 0237) named. Fixed in place (`make_culvert_fig.py` scatter->pcolormesh;
+new `make_struct_fig.py` and `make_culvert_realsite_fig.py` under
+`scripts/sandbox/hecras/managed_solve/`; all numbers recomputed live from the same result HDFs,
+unchanged). Norm, stated once for the family: **field proofs render filled cells (pcolormesh on
+the solver's cell grid) or the published depth COG, never cell-center scatter.**
