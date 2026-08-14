@@ -709,9 +709,21 @@ def build_pump_control() -> ComparisonBuild:
 # --------------------------------------------------------------------------- #
 # Family 4: LID performance comparison (Rows 10/11/12).
 # --------------------------------------------------------------------------- #
-LID_TYPES = ("green_roof", "vegetative_swale", "rainbarrel_vs_disconnect")
+LID_TYPES = (
+    "green_roof",
+    "vegetative_swale",
+    "rainbarrel_vs_disconnect",
+    "infiltration_vs_permeable_pavement",
+)
 
 # LID control blocks (short type codes; version-verified layer stacks).
+# Layer field order per the EPA SWMM5 Reference Manual Vol.III (LID) tables:
+#   SURFACE  = StorHt VegFrac Rough Slope Xslope
+#   PAVEMENT = Thick VoidRatio FracImperv Perm Clog [Regen Regen]
+#   SOIL     = Thick Por FC WP Ksat Kslope Suct
+#   STORAGE  = Thick VoidRatio Seepage Clog
+#   DRAIN    = Coeff Expon Offset Delay [hOpen hClose]
+#   DRAINMAT = Thick VoidFrac Rough
 _LID_CONTROLS = {
     "green_roof": (
         "[LID_CONTROLS]\nGR1  GR\n"
@@ -729,15 +741,36 @@ _LID_CONTROLS = {
     "vegetative_swale": (
         "[LID_CONTROLS]\nVS1  VS\n"
         "VS1  SURFACE  12  0.0  0.24  2.0  5\n", "VS1"),
+    # Infiltration trench (IT): open gravel trench, NO underdrain -- empties ONLY
+    # by native-soil seepage (Seepage 0.5 in/hr), so it removes captured runoff
+    # from the system (volume reduction).
+    "infiltration_trench": (
+        "[LID_CONTROLS]\nIT1  IT\n"
+        "IT1  SURFACE  6  0.0  0.1  1.0  5\n"
+        "IT1  STORAGE  36  0.75  0.5  0\n", "IT1"),
+    # Permeable pavement (PP): pavers over gravel WITH an underdrain pipe over a
+    # nearly-lined subgrade (Seepage 0.1 in/hr). The pipe returns most captured
+    # water to the outlet -- PP attenuates the PEAK but reduces little volume, the
+    # discriminating contrast against the infiltration trench on the same footprint.
+    "permeable_pavement": (
+        "[LID_CONTROLS]\nPP1  PP\n"
+        "PP1  SURFACE  1  0.0  0.01  1.0  5\n"
+        "PP1  PAVEMENT  6  0.15  0.0  100  0  0  0\n"
+        "PP1  STORAGE  12  0.75  0.1  0\n"
+        "PP1  DRAIN  1.5  0.5  0  0\n", "PP1"),
 }
 # LID_USAGE row: Subcatch LID Number Area Width InitSat FromImp ToPerv. FromImp
 # (7th field) routes that % of the subcatchment's IMPERVIOUS runoff onto the LID -
 # the lever that makes storage/drain LIDs (barrel, disconnect) treat roof runoff.
+# IT and PP share the SAME footprint (Area 9000, FromImp 70) so the only variable
+# is the internal layer stack / drainage path.
 _LID_USAGE = {
     "green_roof": "S1  GR1  1  18000  0  0  0  0",
     "rain_barrel": "S1  RB1  25  90  0  0  45  0",
     "rooftop_disconnect": "S1  RD1  1  12000  60  0  70  0",
     "vegetative_swale": "S1  VS1  1  12000  60  0  70  0",
+    "infiltration_trench": "S1  IT1  1  9000  60  0  70  0",
+    "permeable_pavement": "S1  PP1  1  9000  60  0  70  0",
 }
 
 
@@ -761,8 +794,12 @@ def _lid_deck(*, lid_key: str | None, storm: str) -> str:
 
 
 def build_lid_performance(lid_type: str) -> ComparisonBuild:
-    """Rows 10 (green roof), 11 (rain barrel vs rooftop disconnect), 12 (veg swale)
-    - runoff with vs without a LID control on one subcatchment + storm."""
+    """Runoff with vs without a LID control on one subcatchment + storm.
+
+    ``lid_type`` selects the mechanism: ``green_roof`` (detention), ``vegetative_swale``
+    (conveyance), ``rainbarrel_vs_disconnect`` (storage vs disconnection), or
+    ``infiltration_vs_permeable_pavement`` (a 3-way baseline/IT/PP contrast on one
+    footprint -- infiltration removes volume, permeable pavement attenuates the peak)."""
     if lid_type == "rainbarrel_vs_disconnect":
         variants = (
             Variant("no LID (baseline)", _lid_deck(lid_key=None, storm=_DESIGN_STORM),
@@ -781,6 +818,25 @@ def build_lid_performance(lid_type: str) -> ComparisonBuild:
         )
         source = "openswmm.org LID references + EPA SWMM5 LID layer table"
         knob_vals = ("no LID (baseline)", "rain barrel", "rooftop disconnection")
+    elif lid_type == "infiltration_vs_permeable_pavement":
+        variants = (
+            Variant("no LID (baseline)", _lid_deck(lid_key=None, storm=_DESIGN_STORM),
+                    (("runoff", "subcatchment", "S1"),)),
+            Variant("infiltration trench", _lid_deck(lid_key="infiltration_trench", storm=_DESIGN_STORM),
+                    (("runoff", "subcatchment", "S1"),)),
+            Variant("permeable pavement", _lid_deck(lid_key="permeable_pavement", storm=_DESIGN_STORM),
+                    (("runoff", "subcatchment", "S1"),)),
+        )
+        title = "Runoff on one footprint: baseline vs infiltration trench vs permeable pavement"
+        caption = (
+            "The same gravel-sub-base footprint under one design storm: an infiltration "
+            "trench (open gravel, no underdrain -> empties by native-soil seepage, removing "
+            "volume) vs permeable pavement (pavers + underdrain over a near-lined subgrade "
+            "-> returns most captured water, attenuating the peak not the volume). "
+            "EPA SWMM5 Reference Manual Vol.III LID layer tables."
+        )
+        source = "EPA SWMM5 Reference Manual Vol.III (LID controls) - IT + PP layer tables"
+        knob_vals = ("no LID (baseline)", "infiltration trench", "permeable pavement")
     elif lid_type in ("green_roof", "vegetative_swale"):
         pretty = "green roof" if lid_type == "green_roof" else "vegetative swale"
         variants = (

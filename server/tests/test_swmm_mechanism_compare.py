@@ -35,6 +35,7 @@ _BUILDS = [
     (core.build_lid_performance, ("green_roof",)),
     (core.build_lid_performance, ("rainbarrel_vs_disconnect",)),
     (core.build_lid_performance, ("vegetative_swale",)),
+    (core.build_lid_performance, ("infiltration_vs_permeable_pavement",)),
     (core.build_wq_buildup_washoff, ("normalization",)),
     (core.build_wq_buildup_washoff, ("washoff",)),
 ]
@@ -79,6 +80,27 @@ def test_knob_is_demonstrated(build_fn, args):
     else:
         peaks = {round(sv.primary_peak, 4) for sv in solved}
         assert len(peaks) >= 2, f"{build.comparison_kind}: knob not demonstrated {peaks}"
+
+
+def test_infiltration_vs_permeable_pavement_discriminates_volume_and_peak():
+    """The IT-vs-PP mode encodes the textbook contrast on one footprint: the
+    infiltration trench (native seepage, no underdrain) REMOVES volume, while
+    permeable pavement (underdrain over a near-lined subgrade) attenuates the PEAK
+    but returns most captured water -> IT volume << PP volume, and both peaks are
+    below baseline."""
+    build = core.build_lid_performance("infiltration_vs_permeable_pavement")
+    solved = {sv.variant.label: sv for sv in core.solve_variants(build)}
+    base = solved["no LID (baseline)"]
+    it = solved["infiltration trench"]
+    pp = solved["permeable pavement"]
+    # both LIDs cut the peak below baseline
+    assert it.primary_peak < base.primary_peak
+    assert pp.primary_peak < base.primary_peak
+    # infiltration trench removes volume; permeable pavement does not
+    assert it.total_value < 0.5 * base.total_value, "IT should roughly halve volume or better"
+    assert pp.total_value > 0.7 * base.total_value, "PP underdrain returns most volume"
+    # the two LIDs are genuinely distinct (a real discriminating pair, not a re-label)
+    assert abs(it.primary_peak - pp.primary_peak) > 0.05
 
 
 def test_composer_returns_typed_schematic_result():
