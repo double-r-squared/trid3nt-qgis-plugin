@@ -7,7 +7,10 @@ using Ras.Synthetics;
 using Ras.Layers;
 using Ras.Layers.BoundaryConditions;
 using Ras.Engine;
+using Ras.Hydraulics;
+using Ras.Hydraulics.Structures;
 using Geospatial.Vectors;
+using Geospatial.PairedData;
 using Geospatial.GDALAssist;
 
 // ADR 0209 -- 2025 managed-engine rain-on-grid authoring.
@@ -168,6 +171,24 @@ class RealTerrainRoG : Ras.Synthetics.BasicRectangleParams
     }
 }
 
+// Inflow channel for the ADR 0249 structure A/B. Same physics as InOutPlanarParams
+// (ramped inflow at the top wall, constant tailwater stage at the bottom) but the BC
+// lines PROTRUDE past the mesh corners so TryIdentifyInternalExternal classes them
+// EXTERNAL -- the base 0.01/0.99 inset lines are seen as INTERNAL, and a Stage BC on an
+// internal line is rejected ("only Flow is supported for internal boundary conditions").
+class StructChannel : InOutPlanarParams
+{
+    public override List<BoundaryConditionLine> GetBCLines(Ras.Layers.BoundaryCondition bc)
+    {
+        Extent ext = CreateMesh().Extent;
+        Polyline up = Polyline.FromSegment(ext.TopWall.Scale(-0.05, 1.05));
+        Polyline dn = Polyline.FromSegment(ext.BottomWall.Scale(-0.05, 1.05));
+        BoundaryConditionLine upBC = GetUpstreamBC(bc, up); upBC.Name = "Upstream";
+        BoundaryConditionLine dnBC = GetDownstreamBC(bc, dn); dnBC.Name = "Downstream";
+        return new List<BoundaryConditionLine> { upBC, dnBC };
+    }
+}
+
 class Driver
 {
     static int Main(string[] args)
@@ -178,6 +199,10 @@ class Driver
             return RealRog(args[1]);
         if (mode == "meshprobe")
             return MeshProbe(args[1]);
+        if (mode == "structdemo")
+            return StructDemo(args[1],
+                              args.Length > 2 && (args[2] == "1" || args[2] == "weir"),
+                              args.Length > 3 ? double.Parse(args[3]) : 2.0);
         return Rain(args.Length > 1 ? args[1] : "/probe/rain",
                     args.Length > 2 ? float.Parse(args[2]) : 100f);
     }
@@ -248,6 +273,79 @@ class Driver
                           $"rate={rate}mm/hr outlet={p.OutletEdge} dt={p.SolveDt} dur={p.SolveDuration} " +
                           $"refine={(p.RefineDir != null ? p.RefineDir : "off")}");
         AuthorWithPrecip(p, outDir, rate);
+        return 0;
+    }
+
+    // -- ADR 0249 2D hydraulic-structure authoring (weir across a 2D channel) -----
+    // A discriminating A/B: the SAME inflow channel WITH vs WITHOUT an internal weir.
+    // The weir is authored as a Ras.Hydraulics.Structure (centerline Polyline crossing
+    // the flow path + a StationElevation crest) added to the geometry's StructureLayer.
+    // The engine derives the structure-to-cell/face pairing itself at prepare time
+    // (HydraulicStructureCollection.IdentifyStructureCellsAndFaces) -- the caller
+    // supplies NO pairing tables. Reuses the proven Save() terrain roundtrip: Save()
+    // exports the terrain + writes geometry/BC/plans (throwing the known terrain-dir
+    // bug before NValue, caught), then the project is re-opened, the weir injected into
+    // the on-disk geometry, geom.Save() persists /Geometry/Structures, and the NValue
+    // layer is written into Surface Layers (mirrors AuthorWithPrecip).
+    static int StructDemo(string outDir, bool withWeir, double crestElev)
+    {
+        var p = new StructChannel {
+            CellsWide = 6, CellsTall = 30, CellSize = 10.0,
+            RampSeconds = 300.0, NValue = 0.03f, Slope = 0.0,
+            DownstreamStage = 1.0, UpstreamFlow = 120.0,
+            SolveDt = 2.0, SolveDuration = 6000.0, ReportFrequency = 20
+        };
+        double W = p.CellsWide * p.CellSize;
+        double H = p.CellsTall * p.CellSize;
+        Console.WriteLine($"[drv] structdemo dir={outDir} weir={withWeir} crest={crestElev} " +
+                          $"basin={W}x{H}m inflow={p.UpstreamFlow} tailwater={p.DownstreamStage}");
+
+        try { SyntheticTestCases.Save(p, outDir); Console.WriteLine("[drv] Save() completed"); }
+        catch (Exception e) { Console.WriteLine("[drv] Save() aborted (known terrain bug): " + e.Message); }
+
+        string ras = Directory.GetFiles(outDir, "*.ras").First();
+        var project = new Project(ras);
+        var geom = project.Geometries.First();
+        var area = geom.FlowAreaLayer.First();
+        string areaName = area.Name;
+        Console.WriteLine($"[drv] reopened {Path.GetFileName(ras)} area='{areaName}' " +
+                          $"cells={area.Mesh?.CellCount} geomfile={Path.GetFileName(geom.Filename)}");
+
+        if (withWeir)
+        {
+            double ymid = H / 2.0;
+            var pl = new Polyline(new List<Point> { new Point(0.0, ymid), new Point(W, ymid) });
+            var crest = new StationElevationProfile(
+                new double[] { 0.0, W }, new double[] { crestElev, crestElev });
+            var st = new Structure {
+                Polyline = pl,
+                StationElevation = crest,
+                WeirWidth = 3.0f,
+                UpstreamSlope = 1.0f,
+                DownstreamSlope = 1.0f,
+                LWVelocityInto2D = false,
+            };
+            st.ID.Type = StructureType.Connection;
+            st.ID.ConnectionName = "Weir1";
+            st.UpstreamConnection = new StructureConnection {
+                Type = StructureConnectionType.FlowArea, ConnectedElementName = areaName };
+            st.DownstreamConnection = new StructureConnection {
+                Type = StructureConnectionType.FlowArea, ConnectedElementName = areaName };
+            geom.StructureLayer.Add(st);
+            geom.Save();
+            Console.WriteLine($"[drv] weir added: crest={crestElev} across y={ymid}, " +
+                              $"structures={geom.StructureLayer.Count}, saved {geom.Filename}");
+        }
+        else
+        {
+            Console.WriteLine("[drv] baseline (no structure)");
+        }
+
+        var proj2 = SyntheticTestCases.CreateSyntheticTestCase(p, out _, out _, out _, out _);
+        var surf = Path.Combine(outDir, "Surface Layers");
+        Directory.CreateDirectory(surf);
+        foreach (NValueLayer nv in proj2.NValues) nv.SaveAs(Path.Combine(surf, nv.Name + ".h5"));
+        Console.WriteLine("[drv] structdemo done");
         return 0;
     }
 

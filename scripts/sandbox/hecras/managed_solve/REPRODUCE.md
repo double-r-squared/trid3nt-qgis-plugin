@@ -105,6 +105,36 @@ the same `realrog` -> prepare -> solve path runs on the graded mesh. Coweeta (22
 (peak 5.7->4.9 h, max vel 5.7->6.8 m/s) vs the uniform 60 m mesh. Knob:
 `hecras_flood_2d(..., channel_refinement=<target channel cell size m>)`, default OFF.
 
+## 2D hydraulic-structure authoring probe -- weir A/B (ADR 0250)
+
+`Driver.cs` gained a `structdemo` mode. It authors an inflow channel
+(`StructChannel : InOutPlanarParams`, 60x300 m, 120-unit ramped inflow at the top wall,
+1.0 m tailwater at the bottom, flat terrain) and -- with the weir flag -- constructs a
+`Ras.Hydraulics.Structure` (centerline `Polyline` (0,150)->(60,150) crossing the flow path
++ a `StationElevationProfile` crest at 2.0 m + `StructureConnection` naming the 2D area),
+adds it to `geometry.StructureLayer`, and `geometry.Save()`s it (re-opening the project via
+`new Project(<.ras>)` after the known terrain-dir Save bug, then re-saving the geometry).
+
+    dotnet synthdrv.dll structdemo /probe/struct_base 0        # baseline, no structure
+    dotnet synthdrv.dll structdemo /probe/struct_weir 1 2.0    # weir, crest 2.0 m
+    for CASE in struct_base struct_weir; do
+      RAS=$(ls /probe/$CASE/*.ras|head -1); mkdir -p /probe/${CASE}_r2r
+      dotnet ras.dll prepare -s "$RAS" -o /probe/${CASE}_r2r -f
+      R2R=$(ls /probe/${CASE}_r2r/*.r2r.h5|head -1)
+      dotnet ras.dll solve "$R2R" /probe/${CASE}_result.h5 --solver CPU -f
+    done
+
+RESULT (ADR 0250): the authoring seam is HALF-live. The structure persists to
+`/Geometry/Structures` (Attributes + Centerline + Station Elevation round-trip) and BOTH
+`ras prepare` and `ras solve` COMPLETE on the structure-carrying deck -- but the weir is
+HYDRAULICALLY INERT: WITH-vs-WITHOUT the final `Cell Depth` field is bit-identical
+(max|B-A|=0.0) and the crest-line `Face Minimum Elevation` is unchanged (0.0). Root cause
+(decompiled): `Ras.Layers.Geometry.InitializeComputeDriver` wires ONLY
+`InitializeDriver_Culverts` (`new Culvert(` from `CulvertBarrelLayer`); `new Weir(`/
+`new Gate(`/`new Pump(` are absent from every shipped assembly, so the StructureLayer->
+engine weir/gate/pump bridge is unimplemented in this beta. The one drivable 2D structure
+is the Culvert. Proof: `docs/proof/templates/hecras_structure_2d_seam_probe_ab.png`.
+
 ## v6 migration path (alternative authoring, for a real catchment)
     dotnet migrate.dll project -s "<Muncie.prj>" -d /probe/muncie2025 --force
 Migration carries geometry+terrain+2D but leaves the plan's Terrain / NValue / BC
