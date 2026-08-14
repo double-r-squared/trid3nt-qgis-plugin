@@ -1,88 +1,106 @@
 # MODFLOW 6 solver worker (sprint-13 / MOD-1 / FR-CE-1 / job-0220).
 #
-# Builds the runtime image for the MODFLOW 6 Cloud Run Job. Unlike the SFINCS
-# worker (a thin layer over the upstream Deltares image), MODFLOW 6 has no
-# maintained official Docker image matching the USGS release train, so we
-# build from python:3.11-slim and install the version-pinned USGS binary
-# explicitly with SHA-256 verification (design doc § 1). The entrypoint shim
-# performs the GCS-IN -> mf6-RUN -> GCS-OUT envelope every solver invocation
-# needs; we do NOT modify the mf6 binary.
+# Builds the runtime image for the MODFLOW 6 solver. Unlike the SFINCS worker (a
+# thin layer over the upstream Deltares image), MODFLOW 6 has no maintained
+# official Docker image matching the USGS release train, so we install the
+# version-pinned USGS binaries explicitly with SHA-256 verification.
 #
-# Base-image choice (design doc § 1 + § "Decisions Made"):
-#   python:3.11-slim (Debian Bookworm slim). Python is a first-class runtime
-#   requirement here — the agent-side postprocess uses FloPy/rasterio and the
-#   container's build-verification needs Python — whereas SFINCS needed no
-#   Python at run time so it kept the upstream Ubuntu base. Bookworm's pip 23+
-#   enforces PEP 668, so we install Python deps into a venv at
-#   /opt/trid3nt/.venv (matches the infra/worker/Dockerfile venv discipline)
-#   rather than using --break-system-packages.
+# Two-stage build (ADR 0258 container hygiene): a `binaries` stage carries the
+# download/verify/extract toolchain (curl + unzip) and fetches the SHA-pinned
+# USGS mf6 6.7.0 + gridgen 1.0.02 binaries; the runtime stage COPYs only the
+# resolved binaries in, so curl/unzip never ship in the runtime image. The
+# heavy layer (the flopy/rasterio/numpy venv) dominates size either way, but the
+# split keeps the download toolchain out of the shipped image.
 #
-# MODFLOW binary version pin (design doc § 1, § 9 OQ-MOD-1):
-#   MODFLOW 6.7.0 — the combined GWF + GWT + PRT binary `mf6` from the USGS GitHub
-#   release zip. The design doc cited the asset name `mf6.0_linux.zip`; the
-#   ACTUAL release asset is `mf6.7.0_linux.zip` and the canonical
-#   MODFLOW-USGS/modflow6 repo path 301-redirects to MODFLOW-ORG/modflow6.
-#   Both deviations are documented in report.md § Deviations. We pin the SHA-256
-#   of the zip (verified on the host smoke run, 2026-06-09) and verify it
-#   before extraction; -fL follows the canonical->ORG redirect.
+# Base-image choice: python:3.11-slim (Debian Bookworm slim). Python is a
+# first-class runtime requirement here -- the deck builder + postprocess use
+# FloPy/rasterio, and flopy's Gridgen wrapper shells out to the `gridgen` binary
+# at deck-build time. Bookworm's pip 23+ enforces PEP 668, so Python deps install
+# into a venv at /opt/trid3nt/.venv rather than --break-system-packages.
 #
-# Image digest discipline (mirror of services/workers/sfincs/Dockerfile +
-# infra/sfincs.tf): after `make modflow-build` Cloud Build logs the resolved
-# AR image digest; record it in infra/modflow.tf's `modflow_image_digest`
-# local so `tofu plan` stays an honest source of truth for what's deployed.
+# MODFLOW binary version pin: MODFLOW 6.7.0 -- the combined GWF + GWT + PRT binary
+# `mf6` from the USGS GitHub release zip. The release asset is `mf6.7.0_linux.zip`
+# and the canonical MODFLOW-USGS/modflow6 repo path 301-redirects to
+# MODFLOW-ORG/modflow6. We pin the SHA-256 of the zip and verify it before
+# extraction; -fL follows the canonical->ORG redirect.
 #
-# No Artifact Registry pull-through cache at v0.1 — same reasoning as the
-# SFINCS Dockerfile: build frequency is low (~1/week max); if Docker Hub /
-# GitHub rate limits bite, a one-line FROM/URL change points to an AR mirror.
+# gridgen version pin (ADR 0258): USGS gridgen 1.0.02 (public domain, MODFLOW-ORG
+# /gridgen release v1.0.02, linux.zip). flopy.utils.gridgen.Gridgen shells out to
+# this executable at DISV/DISU build time to refine a base structured grid into a
+# vertex (DISV) grid around drawn polygons + wells -- the quad-refinement the PRT
+# backward capture-zone rows need. Absent until this ADR (ADR 0246 sweep-2 STOP:
+# `which gridgen` = none in-image blocked every DISV/DISU path). triangle (the
+# unstructured-Voronoi companion) is NOT installed: the quad-refined DISV path
+# uses gridgen polygon refinement only, no Delaunay triangulation.
 
-FROM python:3.11-slim
+# --- Stage 1: binary acquisition (download toolchain, discarded) ----------
+FROM python:3.11-slim AS binaries
 
-LABEL org.opencontainers.image.title="trid3nt-modflow-solver" \
-      org.opencontainers.image.source="https://github.com/double-r-squared/trid3nt-qgis-plugin" \
-      org.opencontainers.image.description="MODFLOW 6 (mf6 6.7.0) solver runtime (Cloud Run Job). Reads a FloPy-generated GWF+GWT deck from s3://trid3nt-cache/, runs mf6, writes heads/concentration outputs + completion manifest to s3://trid3nt-runs/<run_id>/." \
-      org.opencontainers.image.licenses="MIT"
-
-# MODFLOW 6.7.0 Linux release pin (ADR 0215). The zip ships statically
-# linked binaries (mf6, libmf6.so, mf5to6, zbud6) — no Fortran runtime apt
-# package is required at run time.
-# mf6 6.7.0 (ADR 0215): the PRT capture-zone / wellhead_protection workflow REQUIRES
-# 6.7.0 -- the PRP EXTEND_TRACKING + COORDINATE_CHECK_METHOD options (and the
-# transient per-period reversed-budget FMI) do NOT exist in 6.5.0, which rejected
-# the deck with "UNKNOWN PRP OPTION: EXTEND_TRACKING". 6.7.0 is also the binary the
-# EC2 local-exec supervisor (run_modflow.py) + the offline dev box already run, so
-# the image now matches the production binary the deck builder is tested against.
-# SHA-256 verified from the GitHub release asset digest (2026-08-10) before the pin.
-ARG MF6_VERSION=6.7.0
-ARG MF6_ZIP_URL=https://github.com/MODFLOW-ORG/modflow6/releases/download/6.7.0/mf6.7.0_linux.zip
-ARG MF6_ZIP_SHA256=f83e743bac1b3009836a44e6e4aa4b4c522ac2e2c7d291e280db47f68353ebdc
-# USGS naming is inconsistent: the release zip + its top-level dir are both
-# `mf6.7.0_linux` (the leading "6." is dropped), even though `mf6 --version`
-# reports "6.7.0". So MF6_ZIP_DIR is pinned separately from MF6_VERSION rather than
-# derived (`mf6.${MF6_VERSION}_linux` would wrongly expand to `mf6.6.7.0_linux`).
-ARG MF6_ZIP_DIR=mf6.7.0_linux
-
-# --- System deps (single layer) ------------------------------------------
-# ca-certificates (HTTPS), curl (binary download), unzip (mf6 zip extract).
-# libexpat1: rasterio's manylinux wheel dlopen()s libexpat.so.1 at import
-# (GDAL's XML/GML driver chain) but does NOT bundle it; python:3.11-slim ships
-# no expat, so `import rasterio` fails with
-# `ImportError: libexpat.so.1: cannot open shared object file` unless we add it
-# (caught at build time by the venv import smoke — job-0240 first build).
 RUN apt-get update \
     && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
         ca-certificates \
         curl \
         unzip \
-        libexpat1 \
     && rm -rf /var/lib/apt/lists/*
 
-# --- Python venv + deps (single layer, design doc § 3) -------------------
-# venv at /opt/trid3nt/.venv to sidestep PEP 668 on Bookworm. flopy is needed
-# by the agent-side deck builder + postprocess (and for in-container
-# verification); the entrypoint object-store envelope is SCHEME-AWARE
-# (google-cloud-storage drives gs://; boto3 drives s3:// on AWS Batch — the
-# job-0289 boto3-not-s3fs lesson, mirroring the SFINCS worker image);
-# numpy/rasterio back the postprocess COG conversion.
+# mf6 6.7.0 (ADR 0215): the PRT capture-zone / wellhead_protection workflow REQUIRES
+# 6.7.0 -- the PRP EXTEND_TRACKING + COORDINATE_CHECK_METHOD options (and the
+# transient per-period reversed-budget FMI) do NOT exist in 6.5.0. 6.7.0 is also the
+# binary the local-exec supervisor (run_modflow.py) already runs, so the image
+# matches the production binary the deck builder is tested against. SHA-256 verified
+# from the GitHub release asset digest before the pin.
+ARG MF6_ZIP_URL=https://github.com/MODFLOW-ORG/modflow6/releases/download/6.7.0/mf6.7.0_linux.zip
+ARG MF6_ZIP_SHA256=f83e743bac1b3009836a44e6e4aa4b4c522ac2e2c7d291e280db47f68353ebdc
+# USGS naming is inconsistent: the release zip + its top-level dir are both
+# `mf6.7.0_linux` (the leading "6." is dropped), even though `mf6 --version`
+# reports "6.7.0".
+ARG MF6_ZIP_DIR=mf6.7.0_linux
+RUN curl -fL "$MF6_ZIP_URL" -o /tmp/mf6.zip \
+    && echo "${MF6_ZIP_SHA256}  /tmp/mf6.zip" | sha256sum -c - \
+    && unzip -o /tmp/mf6.zip "${MF6_ZIP_DIR}/bin/mf6" "${MF6_ZIP_DIR}/bin/libmf6.so" -d /tmp/mf6_extracted \
+    && install -D -m 755 "/tmp/mf6_extracted/${MF6_ZIP_DIR}/bin/mf6" /out/mf6 \
+    && install -D -m 755 "/tmp/mf6_extracted/${MF6_ZIP_DIR}/bin/libmf6.so" /out/libmf6.so
+
+# gridgen 1.0.02 (ADR 0258): dedicated MODFLOW-ORG/gridgen release, single-binary
+# linux.zip. SHA-256 verified before extraction. The binary is dynamically linked
+# against libstdc++.so.6 + libgcc_s.so.1 (added to the runtime apt layer below).
+ARG GRIDGEN_ZIP_URL=https://github.com/MODFLOW-ORG/gridgen/releases/download/v1.0.02/linux.zip
+ARG GRIDGEN_ZIP_SHA256=d45bc3378f6bc5767f5a5ab7f102c5cc4624d24bad772422762e33d9aca09302
+RUN curl -fL "$GRIDGEN_ZIP_URL" -o /tmp/gridgen.zip \
+    && echo "${GRIDGEN_ZIP_SHA256}  /tmp/gridgen.zip" | sha256sum -c - \
+    && unzip -o /tmp/gridgen.zip gridgen -d /tmp/gridgen_extracted \
+    && install -D -m 755 /tmp/gridgen_extracted/gridgen /out/gridgen
+
+# --- Stage 2: runtime -----------------------------------------------------
+FROM python:3.11-slim
+
+LABEL org.opencontainers.image.title="trid3nt-modflow-solver" \
+      org.opencontainers.image.source="https://github.com/double-r-squared/trid3nt-qgis-plugin" \
+      org.opencontainers.image.description="MODFLOW 6 (mf6 6.7.0) + gridgen 1.0.02 solver runtime. Builds a FloPy GWF/GWT/PRT deck (structured or gridgen-refined DISV), runs mf6, writes heads/concentration/pathline outputs + completion manifest." \
+      org.opencontainers.image.licenses="MIT"
+
+# --- Runtime system deps (single layer) ----------------------------------
+# ca-certificates (HTTPS for pip + boto3), libexpat1 (rasterio's manylinux wheel
+# dlopen()s libexpat.so.1 -- GDAL's XML/GML chain -- but does not bundle it),
+# libstdc++6 + libgcc-s1 (the gridgen binary links them dynamically). No curl/unzip:
+# the binaries arrive pre-fetched from the `binaries` stage.
+RUN apt-get update \
+    && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
+        ca-certificates \
+        libexpat1 \
+        libstdc++6 \
+        libgcc-s1 \
+    && rm -rf /var/lib/apt/lists/*
+
+# --- Python venv + deps (single layer) -----------------------------------
+# venv at /opt/trid3nt/.venv to sidestep PEP 668 on Bookworm. flopy backs the
+# deck builder + postprocess (and the gridgen wrapper); the entrypoint object-store
+# envelope is scheme-aware (boto3 drives s3:// / MinIO); numpy/rasterio back the
+# postprocess COG conversion; pyproj backs the CRS reprojection. geopandas +
+# shapely are REQUIRED by flopy 3.10's flopy.utils.gridgen.Gridgen.build() -- it
+# constructs the refined-grid intersection through geopandas geometry ops, so a
+# gridgen-refined DISV deck cannot build without them (ADR 0258; matches the
+# server venvs/agent which already ships geopandas 1.x + shapely 2.x).
 ENV VENV=/opt/trid3nt/.venv
 RUN python3 -m venv "$VENV" \
     && "$VENV/bin/pip" install --no-cache-dir --upgrade pip \
@@ -93,38 +111,29 @@ RUN python3 -m venv "$VENV" \
         "numpy>=1.26,<3" \
         "rasterio>=1.3,<2" \
         "pyproj>=3.6,<4" \
-    && "$VENV/bin/python" -c "import flopy, numpy, rasterio, boto3, pyproj; from google.cloud import storage; print('python deps import OK — flopy', flopy.__version__)"
+        "geopandas>=1,<2" \
+        "shapely>=2,<3" \
+        "pyshp>=2.3,<3" \
+    && "$VENV/bin/python" -c "import flopy, numpy, rasterio, boto3, pyproj, geopandas, shapely, shapefile; from google.cloud import storage; print('python deps import OK -- flopy', flopy.__version__, 'geopandas', geopandas.__version__, 'pyshp', shapefile.__version__)"
 
-# venv on PATH so `python3`/`pip` resolve to the venv for all later layers
-# and at run time.
+# venv on PATH so `python3`/`pip` resolve to the venv for all later layers.
 ENV PATH="$VENV/bin:$PATH"
 
-# --- MODFLOW binary download + verify + install (single layer) -----------
-# Pinned-SHA verify BEFORE extraction (design doc § 3.4). -fL follows the
-# MODFLOW-USGS -> MODFLOW-ORG canonical redirect. We install only the `mf6`
-# binary + its shared lib to /usr/local/bin (mf5to6/zbud6 are not used by the
-# GWF+GWT demo path).
-RUN curl -fL "$MF6_ZIP_URL" -o /tmp/mf6.zip \
-    && echo "${MF6_ZIP_SHA256}  /tmp/mf6.zip" | sha256sum -c - \
-    && unzip -o /tmp/mf6.zip "${MF6_ZIP_DIR}/bin/mf6" "${MF6_ZIP_DIR}/bin/libmf6.so" -d /tmp/mf6_extracted \
-    && install -m 755 "/tmp/mf6_extracted/${MF6_ZIP_DIR}/bin/mf6" /usr/local/bin/mf6 \
-    && install -m 755 "/tmp/mf6_extracted/${MF6_ZIP_DIR}/bin/libmf6.so" /usr/local/lib/libmf6.so \
-    && rm -rf /tmp/mf6.zip /tmp/mf6_extracted \
-    && mf6 --version
+# --- COPY the SHA-pinned USGS binaries from the builder stage -------------
+COPY --from=binaries /out/mf6 /usr/local/bin/mf6
+COPY --from=binaries /out/libmf6.so /usr/local/lib/libmf6.so
+COPY --from=binaries /out/gridgen /usr/local/bin/gridgen
 
 # --- COPY entrypoint + fixtures ------------------------------------------
-# Build context is the repo root (see infra/modflow/cloudbuild.yaml); paths
-# below are relative to repo root.
+# Build context is the repo root; paths below are relative to repo root.
 RUN mkdir -p /opt/trid3nt/services/workers/modflow
 COPY services/workers/modflow/ /opt/trid3nt/services/workers/modflow/
 
 # --- COPY the shared offload substrate packages --------------------------
-# Heavy-compute offload (reports/design/heavy-compute-offload-2026-07-02.md):
-# the --build-spec-uri path imports the agent-import-free job_spec contract
+# The --build-spec-uri path imports the agent-import-free job_spec contract
 # (_modflow_build), the plume postprocess (_modflow_postprocess), and the shared
 # raster manifest/upload helpers (_raster_postprocess). All are PEP-420 namespace
-# subpackages under services/workers/ (no __init__ at services/ level). Mirrors
-# the SFINCS worker image's _raster_postprocess + _sfincs_build COPYs.
+# subpackages under services/workers/ (no __init__ at services/ level).
 RUN mkdir -p /opt/trid3nt/services/workers/_raster_postprocess \
     && mkdir -p /opt/trid3nt/services/workers/_modflow_build \
     && mkdir -p /opt/trid3nt/services/workers/_modflow_postprocess
@@ -140,37 +149,33 @@ WORKDIR /opt/trid3nt
 ENV PYTHONPATH=/opt/trid3nt \
     PYTHONUNBUFFERED=1 \
     TRID3NT_MF6_BIN=/usr/local/bin/mf6 \
+    TRID3NT_GRIDGEN_BIN=/usr/local/bin/gridgen \
     TRID3NT_MF6_SCRATCH=/opt/trid3nt/work
 
-# Runtime config. GCP is decommissioned: on AWS, MODFLOW runs the mf6 binary
-# directly via the agent's local-exec supervisor (run_modflow.py) — there is NO
-# Batch/Cloud-Run job-def for MODFLOW. This image is KEPT only as the SHA-pinned
-# record of the USGS mf6 6.7.0 install the EC2 box reuses; its GCS-only entrypoint
-# is effectively retired. The bucket defaults below are pinned to the AWS S3
-# names for honesty (inert on the live local-exec path).
-#   TRID3NT_CACHE_BUCKET  — source bucket (FloPy deck + manifest under modflow/<run_id>/).
-#   TRID3NT_RUNS_BUCKET   — destination bucket for outputs (<run_id>/completion.json).
-#   TRID3NT_RUN_ID        — the run ID under which outputs land (set per run).
-#   TRID3NT_MANIFEST_URI  — URI of the JSON setup manifest the entrypoint reads.
+# MODFLOW runs the mf6 binary directly via the local-exec supervisor (run_modflow.py)
+# on the box, or through this image on the local-docker seam. The bucket defaults
+# below are inert on the live local-exec path.
 ENV TRID3NT_CACHE_BUCKET=trid3nt-cache \
     TRID3NT_RUNS_BUCKET=trid3nt-runs \
     TRID3NT_RUN_ID="" \
     TRID3NT_MANIFEST_URI=""
 
-# Build-time smoke (mirror of the SFINCS Dockerfile build-time assert): the
-# mf6 binary exists + runs, and the entrypoint module imports cleanly. Catches
-# a path shift or import mistake at build time instead of at Cloud Run exec.
+# Build-time smoke: the mf6 + gridgen binaries exist + run (provenance), and the
+# entrypoint + offload substrate + adapter import cleanly. Catches a path shift or
+# import mistake at build time instead of at exec.
 RUN test -x /usr/local/bin/mf6 \
     && mf6 --version \
     && echo "mf6 binary OK at /usr/local/bin/mf6" \
+    && test -x /usr/local/bin/gridgen \
+    && gridgen 2>&1 | grep -q "GRIDGEN Version 1.0.02" \
+    && echo "gridgen 1.0.02 binary OK at /usr/local/bin/gridgen" \
     && python3 -c "from services.workers.modflow.entrypoint import main; print('entrypoint import OK')" \
     && python3 -c "from services.workers._modflow_build import validate_job_spec, build_deck_kwargs_from_spec; print('modflow_build (offload) substrate import OK')" \
     && python3 -c "from services.workers._modflow_postprocess import run_plume_postprocess; from services.workers._raster_postprocess import manifest, upload; print('modflow_postprocess substrate import OK')" \
-    && python3 -c "from services.workers.modflow import gwt_adapter; print('gwt_adapter (build) import OK — has build_modflow_deck:', hasattr(gwt_adapter, 'build_modflow_deck'))"
+    && python3 -c "from services.workers.modflow import gwt_adapter; print('gwt_adapter (build) import OK -- has build_modflow_deck:', hasattr(gwt_adapter, 'build_modflow_deck'), '-- gridgen_available:', gwt_adapter.gridgen_available())"
 
-# ENTRYPOINT runs this image as a one-shot solver Job. CMD is empty so Cloud
-# Run Job task args feed straight through as argv to the module; env-var
-# fallbacks (TRID3NT_RUN_ID, TRID3NT_MANIFEST_URI) are parsed by the entrypoint
-# if no CLI flags are passed (mirror of the SFINCS pattern).
+# ENTRYPOINT runs this image as a one-shot solver Job. CMD is empty so task args
+# feed straight through as argv; env-var fallbacks (TRID3NT_RUN_ID,
+# TRID3NT_MANIFEST_URI) are parsed by the entrypoint if no CLI flags are passed.
 ENTRYPOINT ["python3", "-m", "services.workers.modflow.entrypoint"]
 CMD []
