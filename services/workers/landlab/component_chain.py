@@ -240,6 +240,8 @@ def run_component_chain(
         return _run_hand(dem, resolution_m, build_spec)
     if analysis == "channel_incision":
         return _run_channel_incision(dem, resolution_m, build_spec)
+    if analysis == "normal_fault":
+        return _run_normal_fault(dem, resolution_m, build_spec)
     if analysis == "chi_map":
         return _run_chi_map(dem, resolution_m, build_spec)
     if analysis == "groundwater_steady":
@@ -251,7 +253,7 @@ def run_component_chain(
         "'landslide_probability', 'overland_flow', 'flow_accumulation', "
         "'green_ampt_overland_flow', 'landslide_storm_ensemble', "
         "'overland_flow_timeseries', 'dem_pit_fill', 'lake_mapping', "
-        "'hacks_law', 'hand', 'channel_incision', 'chi_map', "
+        "'hacks_law', 'hand', 'channel_incision', 'normal_fault', 'chi_map', "
         "'groundwater_steady', 'groundwater_storm')"
     )
 
@@ -1803,6 +1805,154 @@ def _run_channel_incision(
             "fit_r2": fit_r2,
             "n_channel_nodes": n_chan,
             "scatter": scatter,
+        },
+        secondary_fields=secondary,
+    )
+
+
+# --------------------------------------------------------------------------- #
+# normal_fault: tectonic-forcing landscape evolution. A NormalFault imposes a
+# spatially-VARIABLE throw (footwall uplift) as the driver instead of the
+# spatially-UNIFORM rock uplift of channel_incision; FastscapeEroder +
+# LinearDiffuser degrade the growing scarp and cut the footwall drainage.
+# --------------------------------------------------------------------------- #
+def _run_normal_fault(
+    dem: Any, resolution_m: float, spec: dict[str, Any]
+) -> ChainResult:
+    """Normal-fault throw history on a real DEM -> scarp + footwall drainage.
+
+    Reuses the detachment-limited stream-power LEM loop (FlowAccumulator +
+    FastscapeEroder + optional LinearDiffuser) but swaps the uniform rock uplift
+    of ``channel_incision`` for a Landlab ``NormalFault``: the footwall is
+    uplifted at ``fault_throw_rate_m_yr`` each step (dip-projected), the hanging
+    wall is not, so a fault scarp grows and the erosion components degrade it and
+    incise the footwall drainage network.
+
+    The fault strikes E-W across the domain at ``fault_position_frac`` of the
+    N-S extent (a labeled demo geometry - a real fault trace is a scenario
+    input, not a fetchable datum). The PRIMARY field is the evolved topographic
+    elevation; the SECONDARY is the cumulative fault throw (footwall-only), the
+    tectonic forcing made visible.
+    """
+    import numpy as np
+    from landlab.components import (  # type: ignore
+        FastscapeEroder,
+        FlowAccumulator,
+        LinearDiffuser,
+        NormalFault,
+    )
+
+    grid, nodata_mask, z = _build_grid(dem, resolution_m)
+    nrows, ncols = np.asarray(dem).shape
+
+    K = float(spec.get("k_bedrock", 1.0e-5))
+    m_sp = float(spec.get("m_sp", 0.5))
+    n_sp = float(spec.get("n_sp", 1.0))
+    throw_rate = float(spec.get("fault_throw_rate_m_yr", 1.0e-3))
+    dip_deg = float(spec.get("fault_dip_deg", 60.0))
+    pos_frac = float(spec.get("fault_position_frac", 0.5))
+    total_yr = float(spec.get("incision_run_duration_yr", 1.0e6))
+    n_steps = max(int(spec.get("incision_n_timesteps", 500)), 1)
+    diffusivity = float(spec.get("hillslope_diffusivity_m2_yr", 0.1))
+    threshold_cells = max(int(spec.get("channel_threshold_cells", 100)), 1)
+    cell_area = float(resolution_m) ** 2
+    threshold_m2 = threshold_cells * cell_area
+    dt = total_yr / float(n_steps)
+
+    # E-W fault trace at pos_frac of the N-S extent (grid coords, metres).
+    x = np.asarray(grid.x_of_node, dtype="float64")
+    y = np.asarray(grid.y_of_node, dtype="float64")
+    xmin, xmax = float(x.min()), float(x.max())
+    ymin, ymax = float(y.min()), float(y.max())
+    y_fault = ymin + max(0.0, min(1.0, pos_frac)) * (ymax - ymin)
+
+    nf = NormalFault(
+        grid,
+        faulted_surface="topographic__elevation",
+        fault_throw_rate_through_time=(
+            ("time", [0.0, total_yr]),
+            ("rate", [throw_rate, throw_rate]),
+        ),
+        fault_dip_angle=dip_deg,
+        fault_trace=(("x1", xmin), ("y1", y_fault), ("x2", xmax), ("y2", y_fault)),
+        include_boundaries=False,
+    )
+    faulted = np.asarray(nf.faulted_nodes, dtype=bool)
+
+    fa = FlowAccumulator(
+        grid, flow_director="D8", depression_finder="DepressionFinderAndRouter"
+    )
+    sp = FastscapeEroder(grid, K_sp=K, m_sp=m_sp, n_sp=n_sp)
+    ld = (
+        LinearDiffuser(grid, linear_diffusivity=diffusivity)
+        if diffusivity > 0.0
+        else None
+    )
+    for _ in range(n_steps):
+        nf.run_one_step(dt)
+        fa.run_one_step()
+        if ld is not None:
+            ld.run_one_step(dt)
+        sp.run_one_step(dt)
+
+    core = grid.core_nodes
+    is_core = np.zeros(grid.number_of_nodes, dtype=bool)
+    is_core[core] = True
+    drainage = np.asarray(grid.at_node["drainage_area"], dtype="float64")
+    slope = np.asarray(grid.at_node["topographic__steepest_slope"], dtype="float64")
+    zf = np.asarray(z, dtype="float64")
+
+    # Cumulative dip-projected throw imposed on the footwall over the run.
+    total_throw_m = throw_rate * total_yr / np.sin(np.deg2rad(dip_deg))
+    # Footwall vs hanging-wall relief at the end (core nodes only).
+    fw = faulted & is_core
+    hw = (~faulted) & is_core
+    footwall_mean = float(zf[fw].mean()) if np.any(fw) else 0.0
+    hangingwall_mean = float(zf[hw].mean()) if np.any(hw) else 0.0
+    footwall_relief_m = footwall_mean - hangingwall_mean
+    # Footwall drainage network (channels developed on the uplifted block).
+    fw_chan = fw & (drainage >= threshold_m2) & (slope > 0.0)
+    n_fw_chan = int(np.count_nonzero(fw_chan))
+
+    # Evolved elevation (primary) + cumulative-throw secondary, NaN-masked.
+    elev = zf.reshape(nrows, ncols).copy()
+    elev[nodata_mask] = np.nan
+
+    throw_flat = np.full(grid.number_of_nodes, np.nan, dtype="float64")
+    throw_flat[faulted] = float(total_throw_m)
+    throw_field = throw_flat.reshape(nrows, ncols)
+    throw_field[nodata_mask] = np.nan
+    secondary: dict[str, Any] = {}
+    if np.any(np.isfinite(throw_field)):
+        secondary["fault_throw"] = throw_field
+
+    LOG.info(
+        "landlab normal_fault: T=%.0f yr steps=%d throw_rate=%.3e m/yr dip=%.0f "
+        "total_throw=%.1f m footwall_relief=%.1f m n_fw_chan=%d faulted_frac=%.3f",
+        total_yr, n_steps, throw_rate, dip_deg, total_throw_m, footwall_relief_m,
+        n_fw_chan, float(faulted.mean()),
+    )
+    return ChainResult(
+        field=elev,
+        analysis="normal_fault",
+        unstable_area_fraction=0.0,
+        min_factor_of_safety=0.0,
+        mean_probability_of_failure=0.0,
+        output_field_name="topographic__elevation",
+        extra={
+            "fault_throw_rate_m_yr": throw_rate,
+            "fault_dip_deg": dip_deg,
+            "fault_position_frac": pos_frac,
+            "total_throw_m": float(total_throw_m),
+            "footwall_relief_m": float(footwall_relief_m),
+            "footwall_mean_elev_m": footwall_mean,
+            "hangingwall_mean_elev_m": hangingwall_mean,
+            "n_footwall_channel_nodes": n_fw_chan,
+            "faulted_node_fraction": float(faulted.mean()),
+            "run_duration_yr": total_yr,
+            "n_timesteps": n_steps,
+            "k_bedrock": K,
+            "hillslope_diffusivity_m2_yr": diffusivity,
         },
         secondary_fields=secondary,
     )

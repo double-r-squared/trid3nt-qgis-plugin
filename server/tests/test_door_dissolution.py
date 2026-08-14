@@ -82,6 +82,7 @@ EXPECTED_TEMPLATES = {
     "landlab_hacks_law_scaling",  # Landlab CAND-S: Hack's-law basin length-area scaling diagnostic
     "landlab_hand_wetness",  # Landlab CAND-S: Height Above Nearest Drainage wetness proxy
     "landlab_channel_incision_steady_state",  # ADR 0184 Landlab shortlist: detachment-limited stream-power incision to steady state + slope-area V&V
+    "landlab_normal_fault_scarp_evolution",  # ADR 0252 Landlab tectonics: NormalFault tectonic-forcing landscape evolution (scarp + footwall drainage)
     "landlab_channel_steepness_chi_map",  # ADR 0184 Landlab shortlist: ChiFinder + SteepnessFinder chi/ksn knickpoint diagnostic
     "landlab_storm_sequence_generator",  # ADR 0184 Landlab shortlist: PrecipitationDistribution stochastic storm-sequence forcing generator
     "landlab_groundwater_water_table",  # ADR 0214 Landlab groundwater: GroundwaterDupuitPercolator steady-state water table + seepage + baseflow (mass-conservation V&V)

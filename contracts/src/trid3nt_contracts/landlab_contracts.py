@@ -95,6 +95,7 @@ __all__ = [
     "LandlabHacksLawLayerURI",
     "LandlabHandLayerURI",
     "LandlabChannelIncisionLayerURI",
+    "LandlabNormalFaultLayerURI",
     "LandlabChiMapLayerURI",
     "LandlabStormSequenceLayerURI",
     "LandlabGroundwaterLayerURI",
@@ -173,6 +174,7 @@ LandlabAnalysis = Literal[
     "hacks_law",
     "hand",
     "channel_incision",
+    "normal_fault",
     "chi_map",
     "storm_sequence",
     "groundwater_steady",
@@ -241,6 +243,12 @@ DEFAULT_UPLIFT_RATE_M_YR: float = 1.0e-3  # rock uplift, m/yr (1 mm/yr)
 DEFAULT_INCISION_RUN_DURATION_YR: float = 1.0e6  # total simulated time, yr
 DEFAULT_INCISION_N_TIMESTEPS: int = 500  # Fastscape steps (implicit, large dt ok)
 DEFAULT_HILLSLOPE_DIFFUSIVITY_M2_YR: float = 0.0  # pure-fluvial by default
+
+# normal_fault (NormalFault tectonic forcing) demo defaults. Labeled demo
+# forcing, NOT site-measured slip rates.
+DEFAULT_FAULT_THROW_RATE_M_YR: float = 1.0e-3  # footwall throw rate (1 mm/yr)
+DEFAULT_FAULT_DIP_DEG: float = 60.0  # typical normal-fault dip
+DEFAULT_FAULT_POSITION_FRAC: float = 0.5  # mid-domain E-W trace
 
 # chi_map (ChiFinder + SteepnessFinder) demo default reference concavity.
 DEFAULT_REFERENCE_CONCAVITY: float = 0.5  # classic theta ~0.45-0.5
@@ -444,6 +452,19 @@ class LandlabRunArgs(EngineRunArgsMixin):
     hillslope_diffusivity_m2_yr: float = Field(
         default=DEFAULT_HILLSLOPE_DIFFUSIVITY_M2_YR, ge=0.0
     )
+
+    # --- normal_fault (NormalFault tectonic-forcing landscape evolution) ---
+    #: Footwall throw rate driving the fault scarp, m/yr (demo default 1e-3 =
+    #: 1 mm/yr). Labeled demo forcing, not a site-measured slip rate (>= 0; 0
+    #: is the no-fault control). Reuses incision_run_duration_yr /
+    #: incision_n_timesteps / k_bedrock / hillslope_diffusivity_m2_yr.
+    fault_throw_rate_m_yr: float = Field(default=DEFAULT_FAULT_THROW_RATE_M_YR, ge=0.0)
+    #: Fault dip angle from horizontal, degrees (0, 90]. Throw is dip-projected;
+    #: demo default 60 (a typical normal-fault dip).
+    fault_dip_deg: float = Field(default=DEFAULT_FAULT_DIP_DEG, gt=0.0, le=90.0)
+    #: N-S position of the E-W-striking demo fault trace as a fraction of the
+    #: domain extent, dimensionless in [0, 1] (demo default 0.5 = mid-domain).
+    fault_position_frac: float = Field(default=DEFAULT_FAULT_POSITION_FRAC, ge=0.0, le=1.0)
 
     # --- groundwater (GroundwaterDupuitPercolator) shared aquifer parameters ---
     #: Saturated hydraulic conductivity K, m/s (> 0). Demo default (permeable
@@ -956,6 +977,38 @@ class LandlabChannelIncisionLayerURI(LayerURI):
 
     #: Input provenance: the DEM is REAL; the uplift/erodibility forcing is a
     #: labeled demo scenario (SyntheticInput). None preserves prior behaviour.
+    source_note: str | None = Field(default=None)
+
+
+class LandlabNormalFaultLayerURI(LayerURI):
+    """A ``LayerURI`` for the normal-fault tectonic-forcing landscape evolution,
+    plus the fault-scarp narration scalars.
+
+    The primary raster is the EVOLVED topographic elevation (a real AOI DEM
+    evolved under a labeled demo normal-fault throw history + stream-power
+    erosion + hillslope diffusion); the cumulative fault throw (footwall-only)
+    is a companion raster showing the tectonic forcing. Adds the structured
+    numbers the agent narrates (typed fields, never invented):
+
+        total_throw_m: cumulative dip-projected footwall throw over the run (m).
+        footwall_relief_m: end-of-run mean elevation of the footwall minus the
+            hanging wall (the scarp relief, m).
+        n_footwall_channel_nodes: number of channel nodes developed on the
+            uplifted footwall (the footwall drainage network).
+        fault_throw_rate_m_yr: the demo throw-rate forcing (m/yr).
+        fault_dip_deg: the fault dip angle (degrees).
+        run_duration_yr: the total simulated evolution time (yr).
+
+    ``layer_type`` for the evolved-elevation field is ``"raster"``.
+    """
+
+    total_throw_m: float = Field(ge=0.0)
+    footwall_relief_m: float = Field(default=0.0)
+    n_footwall_channel_nodes: int = Field(ge=0)
+    fault_throw_rate_m_yr: float = Field(ge=0.0)
+    fault_dip_deg: float = Field(gt=0.0, le=90.0)
+    run_duration_yr: float = Field(gt=0.0)
+
     source_note: str | None = Field(default=None)
 
 

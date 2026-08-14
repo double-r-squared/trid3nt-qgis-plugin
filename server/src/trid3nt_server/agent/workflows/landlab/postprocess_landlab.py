@@ -34,6 +34,7 @@ from typing import Any
 from trid3nt_contracts.execution import LayerURI
 from trid3nt_contracts.landlab_contracts import (
     LandlabChannelIncisionLayerURI,
+    LandlabNormalFaultLayerURI,
     LandlabChiMapLayerURI,
     LandlabDemConditioningLayerURI,
     LandlabFlowAccumulationLayerURI,
@@ -63,6 +64,7 @@ __all__ = [
     "postprocess_landlab_hacks_law",
     "postprocess_landlab_hand",
     "postprocess_landlab_channel_incision",
+    "postprocess_landlab_normal_fault",
     "postprocess_landlab_chi_map",
     "postprocess_landlab_groundwater",
     "postprocess_landlab_groundwater_storm",
@@ -88,6 +90,7 @@ __all__ = [
     "LAKE_DEPTH_STYLE_PRESET",
     "HAND_STYLE_PRESET",
     "EVOLVED_ELEVATION_STYLE_PRESET",
+    "FAULT_THROW_STYLE_PRESET",
     "CHANNEL_STEEPNESS_STYLE_PRESET",
     "CHI_STYLE_PRESET",
     "DEPTH_TO_WATER_STYLE_PRESET",
@@ -145,6 +148,11 @@ HAND_STYLE_PRESET: str = "continuous_flood_depth"
 #: The channel-incision evolved-elevation primary is a terrain-elevation field
 #: (m), so it reuses the existing ``continuous_dem`` terrain preset.
 EVOLVED_ELEVATION_STYLE_PRESET: str = "continuous_dem"
+
+#: The normal-fault cumulative-throw context raster is a footwall uplift
+#: magnitude (m), so it reuses the ``continuous_flood_depth`` sequential ramp
+#: (a monotonic magnitude field). A dedicated throw ramp is a NAMED RESIDUAL.
+FAULT_THROW_STYLE_PRESET: str = "continuous_flood_depth"
 
 #: Normalized channel steepness (ksn) reuses the ``continuous_slope`` ylorrd
 #: "steeper = hotter" ramp (ksn IS a slope-normalized steepness). A dedicated ksn
@@ -1996,6 +2004,104 @@ def postprocess_landlab_channel_incision(
         "theta_an=%.4f K_in=%.3e K_rec=%.3e r2=%.4f ksn_raster=%s uri=%s",
         run_id, fitted, analytical, k_input, k_recovered, fit_r2,
         len(layers) > 1, uri,
+    )
+    return layers, metrics
+
+
+# --------------------------------------------------------------------------- #
+# normal_fault postprocess: evolved-elevation raster (scarp) + cumulative-throw
+# context raster (footwall forcing).
+# --------------------------------------------------------------------------- #
+def postprocess_landlab_normal_fault(
+    field_cog_path: str | Path,
+    *,
+    run_id: str,
+    result: dict[str, Any] | None = None,
+    throw_cog_path: str | Path | None = None,
+    runs_bucket: str | None = None,
+) -> tuple[list[LayerURI], dict[str, Any]]:
+    """Reproject the evolved-elevation COG + emit the fault-scarp layers.
+
+    Returns ``(layers, metrics)`` where ``layers[0]`` is the evolved-elevation
+    ``LandlabNormalFaultLayerURI`` (role ``"primary"``) carrying the scarp, and
+    ``layers[1:]`` the cumulative-throw context raster (footwall forcing) when
+    present. ``metrics`` carries the fault-scarp narration scalars.
+    """
+    src = Path(field_cog_path)
+    _field = _read_field_array(src)
+    block = (result or {}).get("normal_fault") if isinstance(result, dict) else None
+    block = block if isinstance(block, dict) else {}
+
+    total_throw = max(0.0, _pick_from_block(block, "total_throw_m", 0.0))
+    footwall_relief = _pick_from_block(block, "footwall_relief_m", 0.0)
+    n_fw_chan = int(_pick_from_block(block, "n_footwall_channel_nodes", 0.0))
+    throw_rate = max(0.0, _pick_from_block(block, "fault_throw_rate_m_yr", 0.0))
+    dip_deg = _pick_from_block(block, "fault_dip_deg", 60.0)
+    dip_deg = dip_deg if 0.0 < dip_deg <= 90.0 else 60.0
+    run_dur = _pick_from_block(block, "run_duration_yr", 1.0e6)
+    run_dur = run_dur if run_dur > 0.0 else 1.0e6
+
+    dst_cog, bbox = _reproject_field_cog_4326(src)
+    try:
+        uri = _upload_cog_to_runs_bucket(
+            dst_cog, run_id, runs_bucket, dest_filename="landlab_evolved_elevation.tif"
+        )
+    finally:
+        _safe_unlink(dst_cog)
+
+    primary = LandlabNormalFaultLayerURI(
+        layer_id=f"landlab-normal-fault-{run_id}",
+        name="Evolved topography (normal-fault scarp)",
+        layer_type="raster",
+        uri=uri,
+        style_preset=EVOLVED_ELEVATION_STYLE_PRESET,
+        role="primary",
+        units="meters",
+        bbox=bbox,
+        total_throw_m=total_throw,
+        footwall_relief_m=footwall_relief,
+        n_footwall_channel_nodes=max(n_fw_chan, 0),
+        fault_throw_rate_m_yr=throw_rate,
+        fault_dip_deg=dip_deg,
+        run_duration_yr=run_dur,
+    )
+    layers: list[LayerURI] = [primary]
+
+    if throw_cog_path is not None and Path(throw_cog_path).exists():
+        dst_throw, _tb = _reproject_field_cog_4326(Path(throw_cog_path))
+        try:
+            throw_uri = _upload_cog_to_runs_bucket(
+                dst_throw, run_id, runs_bucket, dest_filename="landlab_fault_throw.tif"
+            )
+        finally:
+            _safe_unlink(dst_throw)
+        layers.append(
+            LayerURI(
+                layer_id=f"landlab-fault-throw-{run_id}",
+                name="Cumulative fault throw (footwall)",
+                layer_type="raster",
+                uri=throw_uri,
+                style_preset=FAULT_THROW_STYLE_PRESET,
+                role="context",
+                units="meters",
+                bbox=bbox,
+            )
+        )
+
+    metrics = {
+        "analysis": "normal_fault",
+        "crs": "EPSG:4326",
+        "total_throw_m": total_throw,
+        "footwall_relief_m": footwall_relief,
+        "n_footwall_channel_nodes": n_fw_chan,
+        "fault_throw_rate_m_yr": throw_rate,
+        "fault_dip_deg": dip_deg,
+        "run_duration_yr": run_dur,
+    }
+    logger.info(
+        "postprocess_landlab_normal_fault run_id=%s total_throw=%.1f m "
+        "footwall_relief=%.1f m n_fw_chan=%d throw_raster=%s uri=%s",
+        run_id, total_throw, footwall_relief, n_fw_chan, len(layers) > 1, uri,
     )
     return layers, metrics
 
