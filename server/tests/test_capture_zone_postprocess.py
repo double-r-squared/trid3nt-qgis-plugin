@@ -138,6 +138,48 @@ def test_capture_zone_honours_requested_tiers(_prt_dir: Path) -> None:
     assert a1 <= a5 <= a10
 
 
+def test_capture_zone_pathlines_own_layer(_prt_dir: Path) -> None:
+    """The backtracked pathlines surface as their OWN context vector layer.
+
+    Input-parity doctrine (NATE catch): the hull polygon alone hides which
+    trajectories delineated it. postprocess must (a) attach a ``pathlines_layer``
+    (role='context', layer_type='vector') carrying one polyline per particle, and
+    (b) NOT bury those polylines inside the polygon FGB. Both are pinned so an
+    emitter-drop of the pathlines can never be silent.
+    """
+    import geopandas as gpd
+
+    east, north = _well_utm()
+    layer = postprocess_capture_zone(
+        str(_prt_dir),
+        run_id="cz-pathlines",
+        model_crs=f"EPSG:{_UTM_EPSG}",
+        deck_dir=str(_prt_dir),
+        xoffset_m=east - _WELL_LOCAL_X,
+        yoffset_m=north - _WELL_LOCAL_Y,
+        model_utm_epsg=_UTM_EPSG,
+        tier_years=[1.0, 5.0, 10.0],
+    )
+    # (a) the polygon layer STILL ships + counts its pathlines.
+    assert layer.capture_zone_area_km2 > 0.0
+    assert layer.pathline_count == 8  # the synthetic track has 8 particles
+    # (b) a distinct context vector layer carries the fan.
+    pl = layer.pathlines_layer
+    assert pl is not None, "pathlines were not surfaced as their own layer"
+    assert pl.layer_type == "vector"
+    assert pl.role == "context"
+    assert "Pathlines" in pl.name and "8 particles" in pl.name
+    # (c) the pathlines FGB holds exactly the polyline features, one per particle.
+    pl_gdf = gpd.read_file(pl.uri.replace("file://", ""), engine="pyogrio")
+    assert len(pl_gdf) == 8
+    assert set(pl_gdf["feature_type"].unique()) == {"pathline"}
+    assert set(pl_gdf.geometry.geom_type.unique()) == {"LineString"}
+    # (d) the polygon FGB carries NO pathline features (moved out to their layer).
+    poly_gdf = gpd.read_file(layer.uri.replace("file://", ""), engine="pyogrio")
+    assert "pathline" not in set(poly_gdf["feature_type"].unique())
+    assert set(poly_gdf["feature_type"].unique()) == {"outer_envelope", "isochrone"}
+
+
 def test_wellhead_protection_tiers_distinct(_prt_dir: Path) -> None:
     """A wellhead_protection request keeps the EPA [2, 5, 10] tiers (not [1,5,10])."""
     east, north = _well_utm()

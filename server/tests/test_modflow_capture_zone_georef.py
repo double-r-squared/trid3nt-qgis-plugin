@@ -262,11 +262,17 @@ def test_postprocess_emits_pathlines_and_grubb(_prt_dir: Path) -> None:
     assert layer.stagnation_distance_m == pytest.approx(
         expected_width / (2.0 * math.pi), rel=1e-6
     )
-    # The FGB actually contains 'pathline' LineString features at the well lon/lat.
+    # The polygon FGB carries the hull features; the pathlines now live in their
+    # OWN context layer (input-parity doctrine -- surfaced beside the hull, not
+    # buried inside its FGB).
     gdf = gpd.read_file(layer.uri.replace("file://", ""))
     kinds = set(gdf["feature_type"])
-    assert "pathline" in kinds and "outer_envelope" in kinds and "isochrone" in kinds
-    lines = gdf[gdf["feature_type"] == "pathline"]
+    assert "outer_envelope" in kinds and "isochrone" in kinds
+    assert "pathline" not in kinds
+    pl = layer.pathlines_layer
+    assert pl is not None and pl.role == "context" and pl.layer_type == "vector"
+    lines = gpd.read_file(pl.uri.replace("file://", ""))
+    assert set(lines["feature_type"]) == {"pathline"}
     assert len(lines) == 8
     assert lines.geometry.iloc[0].geom_type == "LineString"
     # Lands near the real well (not the equator).

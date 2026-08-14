@@ -826,6 +826,19 @@ class MODFLOWRunArgs(EngineRunArgsMixin):
             "flow fields. Bounds: [4, 256]."
         ),
     )
+    grid_type: Literal["structured", "disv_quadrefined"] = Field(
+        default="structured",
+        description=(
+            "Discretization for the capture_zone / wellhead_protection GWF+PRT "
+            "grid (ADR 0258). 'structured' (default) is the uniform 41x41 / 100 m "
+            "DIS grid. 'disv_quadrefined' builds a gridgen 3-level quad-refined "
+            "DISV vertex grid around the well (12.5 m finest cell) that RESOLVES "
+            "the pumping cone of depression the 100 m structured grid smears -- a "
+            "higher-fidelity delineation near the well. The DISV leg supports the "
+            "single-well steady capture zone only (transient / multi-well / NHD-RIV "
+            "raise a typed error) and needs the host/image gridgen binary."
+        ),
+    )
     prt_max_tracking_years: float | None = Field(
         default=None,
         gt=0.0,
@@ -1424,6 +1437,19 @@ class CaptureZoneLayerURI(LayerURI):
             "The pathline fan is the primary legibility element of the capture-zone "
             "render -- it shows which land the well draws from. 0 => no pathlines "
             "emitted (legacy hull-only path)."
+        ),
+    )
+    pathlines_layer: LayerURI | None = Field(
+        default=None,
+        description=(
+            "The backtracked PRT pathline fan surfaced as its OWN vector layer "
+            "(role='context'): one polyline feature per released particle, its "
+            "up-gradient trajectory from the well screen to its capture origin. "
+            "Distinct from the convex-hull polygon this class carries so the "
+            "modeled intermediate data is visible on the map (input-parity "
+            "doctrine: all visualizable intermediate data surfaces). None when no "
+            "particle tracked >= 2 vertices (degenerate solve). The composer "
+            "publishes this alongside the capture-zone polygon on every run."
         ),
     )
     gradient_source: str = Field(

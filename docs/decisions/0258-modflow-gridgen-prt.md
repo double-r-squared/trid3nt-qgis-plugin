@@ -95,3 +95,86 @@ coarse): `docs/proof/templates/modflow_capture_zone_disv_quadrefined_prt.png`.
 
 Image-only landing (binary + through-image physics proof); no production code
 changed.
+
+## Product port (2026-08-14 append) -- `grid_type='disv_quadrefined'` knob LIVE
+
+The scoped follow-on named in the Consequence is DONE. The DISV capture zone is a
+`grid_type` KNOB on the existing `modflow_capture_zone` / `modflow_wellhead_protection`
+template -- registry UNCHANGED at 255, no new tool.
+
+### Code
+
+- `services/workers/modflow/gwt_adapter.py`
+  - `_build_disv_capture_zone_deck` (new): gridgen refines a `DISV_REFINE_HALF_WIDTH_M`
+    (300 m) square around the well through `DISV_REFINE_LEVEL` (3) quadtree levels on
+    the 41x41 / 100 m base grid -> `ModflowGwfdisv` (via `_build_disv_gridprops` +
+    `_build_gwf_disv`). CHD perimeter (planar georeferenced OR demo west->east) and the
+    WEL are placed on cell2d indices (`gwf.modelgrid.intersect`), not (row, col). The
+    `get_gridprops_disv()` dict + the well cell2d ride the in-memory `DeckManifest`
+    (`disv_gridprops` / `disv_well_cell2d` / `disv_ncpl` / `disv_min_cell_edge_m`).
+  - `_build_prt_capture_zone_deck` gained a `grid_type` param + an early DISV branch
+    (single-well STEADY only; transient / multi-well / NHD-RIV on DISV raise a typed
+    ValueError -- honest STOP, never a silently-degraded structured run). The old
+    ARBITRARY drawn `refine_regions` path (ADR 0099 M2, whose CHD/WEL were never ported
+    to DISV) now raises directing to the knob (the gridgen binary being present would
+    otherwise build a DISV grid under structured boundary code = a WRONG deck).
+  - `build_and_run_prt_from_gwf` gained a `ModflowPrtdisv` leg: when the deck carries
+    DISV gridprops it rebuilds the identical VertexGrid and intersects each release-ring
+    point to its own (possibly finer) cell2d. postprocess is grid-agnostic (it reads
+    x/y from the trk.csv), so the hull + pathline georef are unchanged.
+  - `GRIDGEN_EXE` is now `os.environ.get("TRID3NT_GRIDGEN_BIN", "gridgen")`, mirroring
+    the `TRID3NT_MF6_BIN` pattern (agent-side deck build runs in venvs/agent where
+    gridgen is not on PATH; the image ships it on PATH).
+- `grid_type` threads: composer (`model_capture_zone_scenario` / `modflow_capture_zone`)
+  -> `MODFLOWRunArgs.grid_type` (Literal['structured','disv_quadrefined']) -> the
+  staged GWF build (`build_and_stage_modflow_deck`) AND the PRT-phase deck
+  reconstruction (`run_modflow_archetype_tool`) -- both must build the SAME grid.
+
+### Host gridgen provisioning (`TRID3NT_GRIDGEN_BIN`)
+
+The SHA-pinned USGS gridgen 1.0.02 linux binary
+(`MODFLOW-ORG/gridgen` v1.0.02 `linux.zip`, SHA-256
+`d45bc3378f6bc5767f5a5ab7f102c5cc4624d24bad772422762e33d9aca09302` -- the same pin
+the image uses) is installed to `bin/gridgen` (mode 755) and `TRID3NT_GRIDGEN_BIN=
+.../bin/gridgen` is added to `.env.local`, mirroring `TRID3NT_MF6_BIN`. In-place
+probe: `GRIDGEN Version 1.0.02`, libstdc++/libgcc resolve, `gridgen_available()` True.
+
+### Product-path E2E (both grid_types, same well/AOI)
+
+Direct-call through the PRODUCT code (`build_modflow_deck` -> mf6 ->
+`build_and_run_prt_from_gwf` -> `postprocess_capture_zone`) at a real High Plains /
+Ogallala setting (near Garden City, KS), 24 particles, tiers [1, 5, 10] yr:
+
+| metric               | structured | disv_quadrefined |
+|----------------------|-----------|------------------|
+| ncpl                 | 1681      | 4216             |
+| min cell edge        | 100 m     | 12.5 m           |
+| well-cell head       | 48.99 m   | 48.04 m          |
+| pathlines            | 24        | 24               |
+| capture hull         | 1.572 km2 | 1.666 km2        |
+
+DISCRIMINANT (ADR 0258): the refined 12.5 m cell at the pumping node RESOLVES a
+~0.95 m deeper cone-of-depression drawdown (well-cell head 48.04 m) that the 100 m
+cell SMEARS by averaging over its footprint (48.99 m). (With a strong regional
+gradient the GLOBAL head_min is pinned at the downgradient boundary corner for both
+grids, so the cone discriminant is read AT the well cell -- the direct, honest
+metric.) Both grid_types publish the hull polygon + the pathline fan as its own
+context layer. Proof (filled head cells + mesh wireframe + pathline polylines +
+hull polygon, structured vs DISV):
+`docs/proof/templates/modflow_capture_zone_grid_type_knob_prt.png`.
+
+### Bundled: pathline layer surfacing (NATE catch)
+
+Independent of DISV, the backtracked PRT pathlines now surface as their OWN vector
+layer (role='context', "Pathlines: backward PRT (N particles)") on EVERY capture_zone
+run -- `CaptureZoneLayerURI` gained a `pathlines_layer` field, `postprocess_capture_zone`
+writes a separate `capture_zone_pathlines_4326.fgb` (the LineStrings moved OUT of the
+hull FGB), and the composer publishes it via `publish_input_layer` beside the polygon
+(input-parity doctrine: the hull alone hid which trajectories delineated it). Offline
+pins guard both-published + emitter-drop-not-silent.
+
+### `prt_backward_lateral_boundary_injection_wells`
+
+Still BUILD (image-unblocked): now that the DISV+PRT product surface exists, it is an
+additional archetype/knob (irregular active-domain + lateral IWEL boundary) on this
+surface, sequenced after this knob.

@@ -55,6 +55,7 @@ from trid3nt_contracts.modflow_contracts import (
     ThermalPlumeLayerURI,
     VadoseBreakthroughLayerURI,
 )
+from trid3nt_contracts.execution import LayerURI
 
 from trid3nt_server.agent.workflows.shared import cog_io
 from trid3nt_server.agent.workflows.shared.cog_io import CogIoError
@@ -98,6 +99,7 @@ __all__ = [
     "ASR_STYLE_PRESET",
     "HYDROPERIOD_STYLE_PRESET",
     "CAPTURE_ZONE_STYLE_PRESET",
+    "PRT_PATHLINE_STYLE_PRESET",
     "SALTWATER_INTRUSION_STYLE_PRESET",
     "SUBSIDENCE_STYLE_PRESET",
     "VADOSE_TRANSPORT_STYLE_PRESET",
@@ -188,6 +190,14 @@ HYDROPERIOD_STYLE_PRESET: str = "continuous_hydroperiod_m"
 #: inline-GeoJSON path (``pipeline_emitter.add_loaded_layer`` via
 #: ``_read_vector_uri_as_geojson``) renders it over WS.
 CAPTURE_ZONE_STYLE_PRESET: str = "capture_zone"
+
+#: Vector style preset for the backtracked PRT pathline fan (its OWN context
+#: layer, distinct from the capture-zone polygon). One polyline per particle,
+#: the up-gradient trajectory from the well screen to its capture origin. The
+#: pathlines surface the modeled intermediate data (input-parity doctrine) so a
+#: dropped emitter cannot hide the physics behind an opaque hull. Rendered via
+#: the inline-GeoJSON vector path (``publish_layer`` is RASTER-ONLY).
+PRT_PATHLINE_STYLE_PRESET: str = "prt_pathline"
 
 #: Vector style preset for the saltwater intrusion transect + toe point.
 #: Two features in one FlatGeobuf: a LINE (coastal transect A->B) and a POINT
@@ -4016,10 +4026,15 @@ def postprocess_capture_zone(
     # --- Step 6b: per-particle backtracked pathlines (LineString features) ----
     # The pathline fan is the primary legibility element of the capture-zone
     # render: each line is one particle's up-gradient trajectory from the well
-    # screen back to its capture origin (the geoclaw particle-track emission
-    # pattern). Group the track rows by particle id, order by elapsed |t|, and
-    # build a LineString in LOCAL coords, then shift+reproject to EPSG:4326.
+    # screen back to its capture origin. It is surfaced as its OWN vector layer
+    # (role='context', a separate FlatGeobuf below) so the modeled intermediate
+    # data is visible on the map beside the opaque convex hull -- the input-parity
+    # doctrine (all visualizable intermediate data surfaces; a dropped emitter can
+    # never silently hide the physics). Group the track rows by particle id, order
+    # by elapsed |t|, build a LineString in LOCAL coords, then shift+reproject.
     pathline_count = 0
+    pathline_geom: list[Any] = []
+    pathline_props: list[dict[str, Any]] = []
     if {"iprp", "irpt"}.issubset(df.columns):
         for (_iprp, _irpt), grp in df.groupby(["iprp", "irpt"], sort=True):
             g = grp.sort_values("ttravel_years")
@@ -4030,9 +4045,10 @@ def postprocess_capture_zone(
             line_local = LineString(list(zip(xs, ys)))
             line_4326 = _shift_and_reproject(line_local)
             t_max_line = float(g["ttravel_years"].max())
-            features_geom.append(line_4326)
-            features_props.append({
+            pathline_geom.append(line_4326)
+            pathline_props.append({
                 "feature_type": "pathline",
+                "particle_id": int(_irpt),
                 "travel_time_years": round(t_max_line, 4),
                 "area_km2": None,
             })
@@ -4112,11 +4128,50 @@ def postprocess_capture_zone(
     # --- Step 8: upload to runs bucket ---------------------------------------
     fgb_uri = _upload_fgb(fgb_path, run_id, runs_bucket)
 
+    # --- Step 8b: pathline fan -> its OWN context vector layer ----------------
+    # Write the per-particle polylines to a SEPARATE FlatGeobuf + LayerURI so the
+    # backtracked pathlines reach the map as a distinct, legible layer (not buried
+    # inside the hull polygon's FGB where the capture-zone fill hides them). The
+    # composer publishes this via publish_input_layer(role='context'). A write /
+    # upload failure here is non-fatal -- the polygon still ships -- but the count
+    # stays pinned on the polygon layer so a silent drop is detectable.
+    pathlines_layer: LayerURI | None = None
+    if pathline_geom:
+        try:
+            pl_gdf = gpd.GeoDataFrame(
+                pathline_props, geometry=pathline_geom, crs="EPSG:4326"
+            )
+            pl_fgb_path = Path(
+                tempfile.NamedTemporaryFile(
+                    suffix="_capture_zone_pathlines_4326.fgb", delete=False
+                ).name
+            )
+            pl_gdf.to_file(str(pl_fgb_path), driver="FlatGeobuf", engine="pyogrio")
+            pl_uri = _upload_fgb(
+                pl_fgb_path, run_id, runs_bucket,
+                fgb_filename="capture_zone_pathlines_4326.fgb",
+            )
+            pathlines_layer = LayerURI(
+                layer_id=f"capture-zone-pathlines-{run_id}",
+                name=f"Pathlines: backward PRT ({pathline_count} particles)",
+                layer_type="vector",
+                uri=pl_uri,
+                style_preset=PRT_PATHLINE_STYLE_PRESET,
+                role="context",
+                bbox=None,
+            )
+        except Exception as exc:  # noqa: BLE001 -- pathline layer is best-effort
+            logger.warning(
+                "postprocess_capture_zone run_id=%s pathline layer write failed "
+                "(non-fatal, polygon still ships): %s", run_id, exc,
+            )
+            pathlines_layer = None
+
     logger.info(
         "postprocess_capture_zone run_id=%s outer_area_km2=%.4g "
-        "tiers=%s iso_areas=%s particles=%d uri=%s",
+        "tiers=%s iso_areas=%s particles=%d pathlines=%d uri=%s",
         run_id, outer_area_km2, actual_tiers, isochrone_areas_km2,
-        particle_count, fgb_uri,
+        particle_count, pathline_count, fgb_uri,
     )
 
     layer_id = f"capture-zone-{run_id}"
@@ -4133,6 +4188,7 @@ def postprocess_capture_zone(
         isochrone_areas_km2=isochrone_areas_km2,
         particle_count=particle_count,
         pathline_count=pathline_count,
+        pathlines_layer=pathlines_layer,
         gradient_source=gradient_source or "demo_west_east",
         gradient_magnitude=(
             float(gradient_magnitude) if gradient_magnitude else None

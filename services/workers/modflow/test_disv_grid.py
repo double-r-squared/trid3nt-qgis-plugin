@@ -116,9 +116,11 @@ def test_gridgen_error_names_image_condition() -> None:
 # --- capture_zone deck seam: refine_regions -> honest STOP -------------------
 
 
-def test_capture_zone_with_refine_regions_stops_at_binary(tmp_path) -> None:
-    """Drawn refine_region on capture_zone attempts DISV -> STOPs at the binary
-    (no partial deck), proving the opt-in seam is wired end-to-end."""
+def test_capture_zone_with_refine_regions_routes_to_grid_type(tmp_path) -> None:
+    """Drawn refine_region on the structured branch is a typed error directing to
+    grid_type='disv_quadrefined' (ADR 0258). The gridgen binary is now provisioned,
+    so the DISV grid would build -- but the structured CHD/WEL use (row, col), so a
+    DISV grid here is a WRONG deck; the ported knob is the supported DISV path."""
     ring = [
         [-81.875, 26.635],
         [-81.865, 26.635],
@@ -126,7 +128,7 @@ def test_capture_zone_with_refine_regions_stops_at_binary(tmp_path) -> None:
         [-81.875, 26.645],
         [-81.875, 26.635],
     ]
-    with pytest.raises(ga.GridgenUnavailableError):
+    with pytest.raises(ValueError, match="disv_quadrefined"):
         ga.build_modflow_deck(
             workdir=tmp_path,
             archetype="capture_zone",
@@ -153,7 +155,54 @@ def test_capture_zone_default_still_dis(tmp_path) -> None:
         porosity=0.25,
     )
     assert deck.archetype == "capture_zone"
+    assert deck.grid_type == "structured"
     # DIS file present, no DISV.
     dis_files = [f for f in deck.files if f.endswith(".dis")]
     disv_files = [f for f in deck.files if f.endswith(".disv")]
     assert dis_files and not disv_files
+
+
+@pytest.mark.skipif(
+    not ga.gridgen_available(), reason="gridgen binary not provisioned (TRID3NT_GRIDGEN_BIN)"
+)
+def test_capture_zone_grid_type_disv_builds_refined_vertex_grid(tmp_path) -> None:
+    """grid_type='disv_quadrefined' builds a gridgen-refined DISV deck (ADR 0258).
+
+    Pins the ported knob: a .disv file (not .dis), the refined ncpl exceeds the
+    41x41 base, the finest cell is 12.5 m (3 levels on 100 m), and the manifest
+    carries the in-memory gridprops + well cell2d the PRT phase rebuilds from.
+    """
+    deck = ga.build_modflow_deck(
+        workdir=tmp_path,
+        archetype="capture_zone",
+        spill_location_latlon=(37.975, -100.87),
+        well_location_latlon=(37.972, -100.868),
+        contaminant="n/a",
+        release_rate_kg_s=0.0,
+        duration_days=0.0,
+        aquifer_k_ms=1e-4,
+        porosity=0.25,
+        pumping_rate_m3_day=1200.0,
+        n_particles=24,
+        grid_type="disv_quadrefined",
+    )
+    assert deck.grid_type == "disv_quadrefined"
+    assert deck.prt_present is True
+    disv_files = [f for f in deck.files if f.endswith(".disv")]
+    dis_files = [f for f in deck.files if f.endswith(".dis")]
+    assert disv_files and not dis_files
+    assert deck.disv_ncpl > deck.nrow * deck.ncol  # refinement added cells
+    assert deck.disv_min_cell_edge_m == 12.5
+    assert deck.disv_gridprops is not None
+    assert deck.disv_well_cell2d >= 0
+    # single-well steady only: transient / multi-well raise.
+    with pytest.raises(ValueError, match="disv_quadrefined"):
+        ga.build_modflow_deck(
+            workdir=tmp_path / "t",
+            archetype="capture_zone",
+            spill_location_latlon=(37.975, -100.87),
+            well_location_latlon=(37.972, -100.868),
+            contaminant="n/a", release_rate_kg_s=0.0, duration_days=0.0,
+            aquifer_k_ms=1e-4, porosity=0.25,
+            grid_type="disv_quadrefined", capture_zone_transient=True,
+        )

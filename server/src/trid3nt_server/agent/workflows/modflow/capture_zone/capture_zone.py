@@ -866,6 +866,7 @@ async def model_capture_zone_scenario(
     travel_time_years: list[float] | None = None,
     n_particles: int = 16,
     archetype: str = "capture_zone",
+    grid_type: str = "structured",
     aquifer_k_ms: float | None = None,
     porosity: float | None = None,
     use_measured_heads: bool = True,
@@ -1215,6 +1216,7 @@ async def model_capture_zone_scenario(
             release_rate_kg_s=1.0,   # ignored when archetype is set
             duration_days=1.0,       # ignored when archetype is set
             archetype=archetype,
+            grid_type=grid_type,
             well_location_latlon=(wlat, wlon),
             capture_zone_travel_time_years=tiers,
             n_particles=int(n_particles),
@@ -1265,6 +1267,17 @@ async def model_capture_zone_scenario(
                 pipeline_emitter or current_emitter(), wells_layer, role="context"
             )
             measured_meta["wells_layer_uri"] = wells_layer.uri
+
+    # Surface the backtracked PRT pathline fan as its OWN context layer beside the
+    # convex-hull polygon (input-parity doctrine: all visualizable intermediate
+    # data reaches the map -- the hull alone hides which trajectories delineated
+    # it). postprocess built the separate FlatGeobuf + LayerURI; publish it here
+    # exactly like the gradient wells (best-effort; never fails the solve).
+    pathlines_layer = getattr(layer, "pathlines_layer", None)
+    if pathlines_layer is not None:
+        await publish_input_layer(
+            pipeline_emitter or current_emitter(), pathlines_layer, role="context"
+        )
 
     layer_grad_source = getattr(layer, "gradient_source", gradient_source)
     layer_grad_mag = getattr(layer, "gradient_magnitude", gradient_magnitude)
@@ -1341,6 +1354,9 @@ async def model_capture_zone_scenario(
         "isochrone_areas_km2": iso_areas,
         "particle_count": layer.particle_count,
         "pathline_count": getattr(layer, "pathline_count", 0),
+        "pathlines_layer_uri": (
+            pathlines_layer.uri if pathlines_layer is not None else None
+        ),
         "gradient_source": layer_grad_source,
         "gradient_magnitude_m_per_m": layer_grad_mag,
         "gradient_azimuth_deg": layer_grad_az,
@@ -1413,7 +1429,7 @@ TEMPLATE_CARD = TemplateCard(
         "(backward particle tracking isochrones)"
     ),
     required_inputs=["location (or aoi_latlon)", "well_location_latlon"],
-    knobs="travel_time_years, n_particles, aquifer_k_ms, porosity",
+    knobs="travel_time_years, n_particles, grid_type, aquifer_k_ms, porosity",
 )
 
 
@@ -1440,6 +1456,7 @@ async def modflow_capture_zone(
     well_location_latlon: tuple[float, float] | list[float] | None = None,
     travel_time_years: list[float] | None = None,
     n_particles: int = 16,
+    grid_type: str = "structured",
     aquifer_k_ms: float | None = None,
     porosity: float | None = None,
     # ADR 0215: multi-well WELLFIELD + transient + NHD RIV boundaries.
@@ -1492,6 +1509,10 @@ async def modflow_capture_zone(
         travel_time_years: list of isochrone cutoffs in years. Default [1, 5, 10].
         n_particles: particles released around the well screen (default 16; range
             4..256). More = denser pathline fan = more representative shape.
+        grid_type: 'structured' (default, uniform 100 m grid) or 'disv_quadrefined'
+            (a gridgen 3-level quad-refined DISV vertex grid around the well, 12.5 m
+            finest cell) that resolves the pumping cone the structured grid smears
+            (ADR 0258; single-well steady only, needs the gridgen binary).
         aquifer_k_ms / porosity: optional demo-aquifer overrides.
         compute_class: FR-CE-3 compute class. Default ``'standard'``. PRT
             archetypes run LOCAL-ONLY (fast; Batch is not used).
@@ -1519,6 +1540,7 @@ async def modflow_capture_zone(
             ),
             n_particles=int(n_particles),
             archetype="capture_zone",
+            grid_type=grid_type,
             aquifer_k_ms=aquifer_k_ms,
             porosity=porosity,
             wells=wells,

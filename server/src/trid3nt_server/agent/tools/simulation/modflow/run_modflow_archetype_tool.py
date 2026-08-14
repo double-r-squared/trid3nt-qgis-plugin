@@ -331,6 +331,9 @@ async def run_modflow_archetype_job(
                 workdir=Path(staging.local_deck_dir).parent / "prt_manifest",
                 write=False,
                 archetype=archetype,
+                # ADR 0258: rebuild the SAME grid (structured | disv_quadrefined)
+                # the staged GWF used so the PRT DISV grid matches its GWF field.
+                grid_type=getattr(run_args, "grid_type", "structured"),
                 well_location_latlon=run_args.well_location_latlon,
                 pumping_rate_m3_day=getattr(run_args, "pumping_rate_m3_day", None),
                 aquifer_sy=getattr(run_args, "aquifer_sy", None),

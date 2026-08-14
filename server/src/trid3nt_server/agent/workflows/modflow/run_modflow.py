@@ -1075,6 +1075,10 @@ def build_and_stage_modflow_deck(
     if archetype is not None:
         archetype_kwargs = dict(
             archetype=archetype,
+            # ADR 0258: capture_zone grid_type knob (structured | disv_quadrefined).
+            # The STAGED GWF grid MUST match the PRT-phase grid (rebuilt in the
+            # archetype tool from the same run_args), so it is threaded here too.
+            grid_type=getattr(run_args, "grid_type", "structured"),
             well_location_latlon=getattr(run_args, "well_location_latlon", None),
             pumping_rate_m3_day=getattr(run_args, "pumping_rate_m3_day", None),
             aquifer_sy=getattr(run_args, "aquifer_sy", None),
