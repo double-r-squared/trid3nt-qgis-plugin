@@ -11,11 +11,16 @@ I/O here (a supervisor uploads /data); netCDF -> COG postprocess is the landing.
 manifest.json::
 
     {
-      "variant": "hydro" | "full" | "wwm", # baked executable (default hydro):
+      "variant": "hydro" | "full" | "wwm" | "icm" | "sed",
+                                          # baked executable (default hydro):
                                           #   hydro = pschism_TVD-VL (bare core)
                                           #   full  = the full-monty WWM_COSINE_...
                                           #   wwm   = pschism_WWM_GOTM_TVD-VL
                                           #           (targeted WWM+GOTM coupled waves)
+                                          #   icm   = pschism_ICM_TVD-VL
+                                          #           (targeted USE_ICM water quality)
+                                          #   sed   = pschism_SED_TVD-VL
+                                          #           (targeted USE_SED sediment transport)
       "ncompute": 3,                     # compute ranks (default 3)
       "nscribe": 2,                      # scribe I/O ranks (default 2; >= # out vars)
       "timeout_s": 3600,
@@ -81,6 +86,10 @@ def _resolve_exe(variant: str) -> Path:
     # more-specific glob -- never the shared pschism_WWM_* prefix.
     if variant == "wwm":
         cands = sorted(BIN_DIR.glob("pschism_WWM_GOTM_*"))
+    elif variant == "icm":
+        cands = sorted(BIN_DIR.glob("pschism_ICM_*"))
+    elif variant == "sed":
+        cands = sorted(BIN_DIR.glob("pschism_SED_*"))
     elif variant == "full":
         cands = sorted(BIN_DIR.glob("pschism_WWM_COSINE_*")) or sorted(
             BIN_DIR.glob("pschism_WWM_*")

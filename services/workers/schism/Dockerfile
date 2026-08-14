@@ -159,10 +159,39 @@ RUN mkdir -p /src/schism/build_wwmgotm \
     && make -j"$(nproc)" pschism 2>&1 | tail -3 \
     && ls bin/pschism_WWM_GOTM_TVD-VL
 
+# targeted ICM-only water-quality binary (ADR 0242/0260): USE_ICM alone -> the
+# eutrophication solver WITHOUT the full-monty's every-other-module namelist
+# demand. cmake names the exe pschism_ICM_TVD-VL. A clean single-module ICM V&V
+# (nutrient loading -> chlorophyll/DO) runs on this WITHOUT sediment.nml/
+# cosine.nml/fib. Selected via the entrypoint "icm" variant.
+RUN cat > /src/ICM.cmake <<'EOF'
+set(USE_ICM ON CACHE BOOLEAN "" FORCE)
+EOF
+RUN mkdir -p /src/schism/build_icm \
+    && cd /src/schism/build_icm \
+    && cmake -C /src/COMPILERS.cmake -C /src/ICM.cmake /src/schism/src > cfg.log 2>&1 \
+    && make -j"$(nproc)" pschism 2>&1 | tail -3 \
+    && ls bin/pschism_ICM_TVD-VL
+
+# targeted SED-only sediment-transport binary (ADR 0242/0260): USE_SED alone ->
+# the CSTMS multi-class transport + Exner morphology solver WITHOUT the
+# full-monty's every-other-module namelist demand. cmake names the exe
+# pschism_SED_TVD-VL. Selected via the entrypoint "sed" variant.
+RUN cat > /src/SED.cmake <<'EOF'
+set(USE_SED ON CACHE BOOLEAN "" FORCE)
+EOF
+RUN mkdir -p /src/schism/build_sed \
+    && cd /src/schism/build_sed \
+    && cmake -C /src/COMPILERS.cmake -C /src/SED.cmake /src/schism/src > cfg.log 2>&1 \
+    && make -j"$(nproc)" pschism 2>&1 | tail -3 \
+    && ls bin/pschism_SED_TVD-VL
+
 RUN mkdir -p /opt/schism/bin \
     && cp /src/schism/build_full/bin/pschism_WWM_COSINE_* /opt/schism/bin/ \
     && cp /src/schism/build_hydro/bin/pschism_TVD-VL /opt/schism/bin/ \
     && cp /src/schism/build_wwmgotm/bin/pschism_WWM_GOTM_TVD-VL /opt/schism/bin/ \
+    && cp /src/schism/build_icm/bin/pschism_ICM_TVD-VL /opt/schism/bin/ \
+    && cp /src/schism/build_sed/bin/pschism_SED_TVD-VL /opt/schism/bin/ \
     && strip /opt/schism/bin/pschism_* \
     && ls -la /opt/schism/bin/
 
@@ -212,6 +241,10 @@ WORKDIR /data
 RUN /opt/schism/bin/pschism_TVD-VL -v \
     && /opt/schism/bin/pschism_WWM_COSINE_ICM_FIB_SED_ANALYSIS_PREC_EVAP_PAHM_HA_MARSH_GEN_AGE_TVD-VL -v \
     && /opt/schism/bin/pschism_WWM_GOTM_TVD-VL -v \
+    && /opt/schism/bin/pschism_ICM_TVD-VL -v \
+    && /opt/schism/bin/pschism_SED_TVD-VL -v \
+    && ! ( ldd /opt/schism/bin/pschism_ICM_TVD-VL 2>&1 | grep -i "not found" ) \
+    && ! ( ldd /opt/schism/bin/pschism_SED_TVD-VL 2>&1 | grep -i "not found" ) \
     && ! ( ldd /opt/schism/bin/pschism_WWM_GOTM_TVD-VL 2>&1 | grep -i "not found" ) \
     && ! ( ldd /opt/schism/bin/pschism_TVD-VL 2>&1 | grep -i "not found" ) \
     && python3 -c "import sys; sys.path.insert(0,'/opt/trid3nt/services/workers/schism'); import schism_gr3; print('gr3 bridge import OK')" \

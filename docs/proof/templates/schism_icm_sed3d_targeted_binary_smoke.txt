@@ -1,0 +1,79 @@
+SCHISM ICM + SED3D targeted-binary smoke (ADR 0260) -- 2026-08-14
+=================================================================
+Follows ADR 0242 (SUBSTRATE-CHARACTERIZED / STOP-RECIPE): the modules compiled
+but ONLY in the full-monty binary, which unconditionally demands every module's
+namelist. This wave BAKED the targeted-variant binaries the 0242 recipe named and
+drove one clean single-module case per family through the image.
+
+--- (1) targeted binaries baked into trid3nt-local/schism:latest -----------------
+Dockerfile ICM.cmake (USE_ICM only) + SED.cmake (USE_SED only) legs added; the
+full-monty compile already builds these flags green so each is a demonstrated
+subset (low risk). cmake names the exe from the enabled-module tag:
+
+$ docker run --rm --entrypoint ls trid3nt-local/schism:latest -la /opt/schism/bin/
+  pschism_TVD-VL                                          (hydro core)
+  pschism_ICM_TVD-VL                            <-- NEW   (USE_ICM only)
+  pschism_SED_TVD-VL                            <-- NEW   (USE_SED only)
+  pschism_WWM_GOTM_TVD-VL                                 (targeted coupled waves)
+  pschism_WWM_COSINE_ICM_FIB_SED_..._TVD-VL              (full-monty)
+
+Provenance: pschism_ICM_* proves USE_ICM=ON compiled ALONE; pschism_SED_* proves
+USE_SED=ON ALONE (SCHISM's own cmake module-tag naming). Both report:
+  schism develop / git hash 4d350e4   (pinned v5.11.0 commit
+  4d350e49481c625002ee2bf7d7fca32777f53c65)
+Build-time smoke (all five -v + ldd clean + QuarterAnnulus analytical gate) PASS
+through the image. entrypoint.py "icm"/"sed" variants baked + resolve verified:
+  sed -> pschism_SED_TVD-VL ; icm -> pschism_ICM_TVD-VL.
+
+--- (2) SED3D multiclass suspended transport -- SOLVES ---------------------------
+Deck: author_baroclinic_estuary_deck (idealized Galveston Bay channel, 3D SZ
+vgrid, ibc=0, itr_met=3, M2 tidal boundary + 1200 m3/s river source) + sediment.nml
+(2 classes: fine Sd50 0.12mm/Wsed 1.06mm/s/tau_ce 0.15Pa, coarse 1.2mm/28.65mm/s/
+0.60Pa; Nbed=1, sed_morph=0, suspended_load=1, bedload=1) + bedthick.ic (2 m) +
+bed_frac_[1,2].ic (0.5/0.5) + param.nml sed_class=2, flag_ic(5)=0 (zero suspended
+IC -> source-driven), iof_sed(19,20,21) + msource.th carrying 0.2 kg/m3 river SSC
+per class + bctides tracer flag appended.
+Run: pschism_SED_TVD-VL, 2 compute + 9 scribe, sim 0.5 day -> "Run completed
+successfully". Discriminating pair (column-max surface concentration):
+  fine  sedConcentration_1  max 0.0196 kg/m3
+  coarse sedConcentration_2 max 0.0065 kg/m3   ratio 3.03
+Identical forcing; only the settling velocity differs -> fine stays suspended,
+coarse settles near the source. sed_morph=1 (morphodynamic) variant ALSO solves
+to completion (same binary + imorphogrid.gr3). Proof:
+docs/proof/templates/schism_sed3d_multiclass_settling.png
+
+--- (3) ICM eutrophication core -- SOLVES ----------------------------------------
+Deck: same baroclinic base + full v5.11.0 sample icm.nml (17 core vars, all
+namelist groups present: MARCO/CORE/SFM/ZB/PH_ICM/SAV/VEG/BAG/ERO) with iRad=1
+(radiation from file, NOT sflux) + a minimal ICM_rad.th.nc (1D time_series 40
+E/m2/day, scalar time_step 3600 s) + param.nml flag_ic(7)=0 (cold start via wqc0),
+iof_icm_core(1,2,3,10,11,15,17) + msource.th carrying the 17 ICM river inflow
+concentrations + bctides tracer flag appended.
+Run: pschism_ICM_TVD-VL, 2 compute + 11 scribe -> "Run completed successfully".
+Discriminating pair LOAD (river NH4 3.0 / NO3 1.5 / PO4 0.3 g/m3) vs NO-LOAD
+(background 0.05 / 0.05 / 0.01), column-max:
+              NO-LOAD      LOAD      ratio
+  NH4 (g/m3)  0.025        1.048     42.0
+  NO3 (g/m3)  0.054        0.552     10.3
+  PO4 (g/m3)  0.053        0.136      2.6
+  DOX min     10.265       10.256    (slightly lower DO under load; short 0.5-day
+                                      run -- directionally correct oxygen demand)
+A downstream nutrient plume appears ONLY under load. Proof:
+docs/proof/templates/schism_icm_eutrophication_load.png
+
+--- Recipe CORRECTIONS discovered in execution (ADR 0249->0250 precedent) --------
+* Erate must be a Fortran double literal (1.600000d-03), not %e+d0 ("1.6e-03d0"
+  = "Bad data for namelist object erate").
+* Scribed I/O: nscribe MUST be >= the number of scribed output variables
+  (elev+T+S+iof_sed/iof_icm), else "INIT: Too few scribes". The entrypoint default
+  (nscribe=2) is too low for a module deck -- a landed template must size nscribe.
+* ICM iRad=0 hard-requires ihconsv=1 + nws=2 (sflux). iRad=1 + a tiny
+  ICM_rad.th.nc is the cheap radiation source that keeps the deck sflux-free.
+* Suspension is SOURCE-DRIVEN on the idealized channel: the tidal+river bottom
+  stress is sub-critical, so bed erosion yields ~0; injecting river SSC (msource)
+  makes the settling discriminator (fine vs coarse) the physics on show.
+* bctides.in needs ONE extra per-module tracer-type flag (0 = no boundary input)
+  appended to the open-boundary flag line for the compiled SED/ICM module.
+
+Drivers (offline, no MinIO/daemon): scripts/smoke_schism_sed.py,
+scripts/smoke_schism_icm.py, scripts/proof_schism_icm_sed3d.py.
