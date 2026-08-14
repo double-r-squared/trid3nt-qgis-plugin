@@ -511,8 +511,11 @@ class ForcingSpec:
       configures (``"pluvial_synthetic"`` → uniform rainfall hyetograph from
       an Atlas 14 design storm; ``"pluvial_observed"`` → uniform rainfall
       hyetograph from an OBSERVED precip raster (v2, area-mean
-      netamt fallback); ``"storm_surge"`` → wind/pressure/water-level series;
-      future).
+      netamt fallback); ``"surge_only"`` → NO ``setup_precip_forcing`` block at
+      all (a storm-surge inundation deck with zero rainfall -- the surge/tide/
+      discharge members carry the flood; build_sfincs_model requires at least one
+      such driver, Invariant 7); ``"storm_surge"`` → wind/pressure/water-level
+      series; future).
     - ``precip_inches`` -- total depth from Atlas 14 (design-storm path).
     - ``duration_hours`` -- design-storm / accumulation duration (Atlas 14 row
       for ``pluvial_synthetic``; the precip-raster accumulation window for
@@ -2607,6 +2610,21 @@ def build_sfincs_model(
     opts = options or BuildOptions()
 
     # --- Forcing sanity ---
+    # SURGE-ONLY deck (rainfall lever set to "none"): no precip block is emitted,
+    # so the flood MUST be driven by a surge/tide/discharge/breach/wind member.
+    # A surge-only run with no such driver would author a deck with zero forcing
+    # (a silent no-flood answer) -- reject it as FORCING_OUT_OF_RANGE (Invariant
+    # 7), never a fabricated-empty deck.
+    if forcing.forcing_type == "surge_only" and not forcing.has_surge_forcing():
+        raise SFINCSSetupError(
+            "FORCING_OUT_OF_RANGE",
+            message=(
+                "surge-only forcing (rainfall=none) requires a surge / tide / "
+                "discharge / wind driver; none present -- a deck with no rainfall "
+                "and no surge boundary would produce no flood."
+            ),
+            details={"forcing": forcing.__dict__},
+        )
     if (
         forcing.forcing_type == "pluvial_synthetic"
         and (forcing.precip_inches is None or forcing.precip_inches <= 0)

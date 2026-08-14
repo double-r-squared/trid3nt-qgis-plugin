@@ -24,3 +24,5 @@ sfincs_flood:
 - how much does this dike or embankment protect the area from flooding
 - put a weir crest across the channel and model overtopping
 - add a thin dam no-flow barrier and see where the water is redirected
+- storm surge inundation without rainfall (surge only, no design storm)
+- model coastal surge flooding with rain turned off to isolate the surge

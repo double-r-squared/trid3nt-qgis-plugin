@@ -322,6 +322,13 @@ async def model_flood_scenario(
     return_period_yr: int = 100,
     duration_hr: int = 24,
     compute_class: str = "medium",
+    # RAIN LEVER: "design_storm" (default, byte-identical) emits the
+    # return-period Atlas-14 design-storm precipitation; "none" builds a
+    # SURGE-ONLY deck (no rainfall) so a storm-surge inundation question is
+    # answerable without co-occurring rain wetting the whole domain / both sides
+    # of a barrier. Surge-only requires a surge/tide/discharge driver (coastal /
+    # river / breach / storm), else a typed failed envelope (Invariant 7).
+    rainfall: str = "design_storm",
     forcing_raster_uri: str | None = None,
     surge_forcing: dict[str, Any] | None = None,
     enable_subgrid: bool = False,
@@ -404,6 +411,16 @@ async def model_flood_scenario(
         duration_hr: design-storm duration in hours. Atlas 14 publishes a
             fixed row set; 24 hr is the v0.1 default.
         compute_class: FR-CE-3 compute class. Default ``"medium"``.
+        rainfall: rain-source lever. ``"design_storm"`` (default) emits the
+            return-period Atlas-14 design-storm precipitation (behavior
+            UNCHANGED). ``"none"`` builds a SURGE-ONLY deck (no
+            ``setup_precip_forcing`` block) so a storm-surge inundation question
+            is answered without co-occurring rainfall wetting the whole domain /
+            both sides of a hydraulic structure. Surge-only requires a
+            surge/tide/discharge driver (``coastal`` / ``river`` / ``breach`` /
+            storm); a surge-only run with no driver returns a typed
+            RAINFALL-mode / FORCING_OUT_OF_RANGE failed envelope (Invariant 7).
+            Mutually exclusive with ``forcing_raster_uri``.
         forcing_raster_uri: optional ``gs://...`` (or local) URI of an
             OBSERVED accumulated-precip raster (v2, Case 3). When
             set, the workflow SKIPS the ``lookup_precip_return_period`` Atlas
@@ -564,6 +581,12 @@ async def model_flood_scenario(
     solver_run_ids: list[str] = []
     grid_resolution_m = 30.0  # NFR-P-4 default; sec 4 immediate
 
+    # RAIN LEVER normalization. "design_storm" (default) keeps the design-storm
+    # precip path; "none" builds a surge-only deck (no precip block). Validated
+    # against the resolved bbox below (a typed failed envelope, never a silent
+    # coercion).
+    rainfall_mode = str(rainfall or "design_storm").strip().lower()
+
     logger.info(
         "model_flood_scenario start bbox=%s location_query=%r event_id=%r "
         "return_period_yr=%s duration_hr=%s compute_class=%s "
@@ -656,6 +679,50 @@ async def model_flood_scenario(
                 uri=f"nominatim:{geocode_result.get('osm_type','')}/{geocode_result.get('osm_id','')}",
                 accessed_at=datetime.now(timezone.utc),
             )
+        )
+
+    # --- RAIN LEVER validation ---
+    # Only two modes are legal; an unknown value is quoted back (never silently
+    # coerced). Surge-only is mutually exclusive with an observed precip raster
+    # (a rain forcing) -- passing both is a contradiction, so it is a loud typed
+    # error rather than a silent precedence.
+    if rainfall_mode not in ("design_storm", "none"):
+        return _build_failed_envelope(
+            bbox=resolved_bbox,
+            project_id=proj_id,
+            session_id=sess_id,
+            error_code="RAINFALL_MODE_INVALID",
+            error_detail=(
+                "rainfall must be 'design_storm' (return-period design-storm "
+                f"precip) or 'none' (surge-only, no rainfall); got {rainfall!r}."
+            ),
+            workflow_name=workflow_name,
+            data_sources=data_sources,
+            forcing=None,
+            solver_run_ids=solver_run_ids,
+            return_period_years=return_period_yr,
+            duration_hours=float(duration_hr),
+            grid_resolution_m=grid_resolution_m,
+        )
+    if rainfall_mode == "none" and forcing_raster_uri is not None:
+        return _build_failed_envelope(
+            bbox=resolved_bbox,
+            project_id=proj_id,
+            session_id=sess_id,
+            error_code="RAINFALL_MODE_INVALID",
+            error_detail=(
+                "rainfall='none' (surge-only) is mutually exclusive with "
+                "forcing_raster_uri (an observed precipitation forcing) -- pass "
+                "exactly one rain source, or omit forcing_raster_uri for a "
+                "surge-only deck."
+            ),
+            workflow_name=workflow_name,
+            data_sources=data_sources,
+            forcing=None,
+            solver_run_ids=solver_run_ids,
+            return_period_years=return_period_yr,
+            duration_hours=float(duration_hr),
+            grid_resolution_m=grid_resolution_m,
         )
 
     # ---: USER-INPUT honesty gates (never fabricate magnitudes) ---
@@ -989,7 +1056,22 @@ async def model_flood_scenario(
                 exc,
             )
             river_layer = None
-        if forcing_raster_uri is not None:
+        if rainfall_mode == "none":
+            # --- SURGE-ONLY branch (rainfall lever = "none") ---
+            # No precip lookup, no ``setup_precip_forcing`` block: the flood is
+            # driven purely by the surge/tide/discharge boundary auto-wired
+            # downstream. ``precip_inches`` / ``precip_magnitude_mm_per_hr`` stay
+            # None. The envelope ForcingSummary is the contract "storm_surge"
+            # literal (the deck-side ForcingSpec.forcing_type is "surge_only").
+            forcing_summary = ForcingSummary(
+                forcing_type="storm_surge",
+                source=(
+                    "Surge-only run (rainfall=none): storm-surge inundation with "
+                    "NO design-storm precipitation"
+                ),
+                parameters={"rainfall": "none"},
+            )
+        elif forcing_raster_uri is not None:
             # --- v2: OBSERVED-precip forcing branch (Case 3) ---
             # Compute the AREA-MEAN accumulated precip over the model domain
             # and convert to a uniform SFINCS netamt rate (mm/hr). ``duration_hr``
@@ -1435,7 +1517,23 @@ async def model_flood_scenario(
                 "advection": 1,
                 "coriolis_latitude": _aoi_centre_lat,
             }
-        if forcing_raster_uri is not None:
+        if rainfall_mode == "none":
+            # SURGE-ONLY deck: forcing_type carries no precip; the surge/tide/
+            # discharge/breach/wind members drive the flood. build_sfincs_model
+            # hard-errors (FORCING_OUT_OF_RANGE) if none of them is present.
+            forcing_spec = ForcingSpec(
+                forcing_type="surge_only",
+                duration_hours=float(duration_hr),
+                waterlevel=_wl,
+                discharge=_dq,
+                breach=breach_member,
+                wind=_wind,
+                pressure=_press,
+                wind_spiderweb=spiderweb_member,
+                infiltration=infiltration_member,
+                provenance=dict(forcing_summary.parameters if forcing_summary else {}),
+            )
+        elif forcing_raster_uri is not None:
             # Observed-precip netamt path: carry the pre-computed magnitude.
             forcing_spec = ForcingSpec(
                 forcing_type="pluvial_observed",
@@ -2426,6 +2524,13 @@ async def sfincs_flood(
     return_period_yr: int = 100,
     duration_hr: int = 24,
     compute_class: str = "medium",
+    # RAIN LEVER: "design_storm" (default, byte-identical) emits the
+    # return-period Atlas-14 design-storm precipitation; "none" builds a
+    # SURGE-ONLY deck (no rainfall) so a storm-surge inundation question is
+    # answerable without co-occurring rain wetting the whole domain / both sides
+    # of a barrier. Surge-only requires a surge/tide/discharge driver (coastal /
+    # river / breach / storm), else a typed failed envelope (Invariant 7).
+    rainfall: str = "design_storm",
     forcing_raster_uri: str | None = None,
     surge_forcing: dict[str, Any] | None = None,
     enable_subgrid: bool = False,
@@ -2542,6 +2647,13 @@ async def sfincs_flood(
             durations 5-min through 60-day. Default 24.
             (Alias ``duration_hr`` is accepted for backward compat.)
         compute_class: FR-CE-3 compute class. Default ``"medium"``.
+        rainfall: rain-source lever -- ``"design_storm"`` (default) forces the
+            deck with the return-period Atlas-14 design storm; ``"none"`` builds
+            a SURGE-ONLY deck with NO rainfall (a "storm-surge inundation without
+            rainfall" question), so surge alone drives the flood. Surge-only
+            needs a surge driver (``coastal`` / ``river`` / ``breach_point`` /
+            ``storm_name``); a surge-only run with no driver returns a typed
+            failed envelope. Mutually exclusive with ``forcing_raster_uri``.
         forcing_raster_uri: optional ``s3://...`` URI of an OBSERVED
             accumulated-precipitation raster (e.g. an MRMS QPE COG from
             ``fetch_mrms_qpe``). When provided, the workflow forces SFINCS
@@ -2723,6 +2835,7 @@ async def sfincs_flood(
         return_period_yr=return_period_yr,
         duration_hr=duration_hr,
         compute_class=compute_class,
+        rainfall=rainfall,
         forcing_raster_uri=forcing_raster_uri,
         surge_forcing=surge_forcing,
         enable_subgrid=enable_subgrid,

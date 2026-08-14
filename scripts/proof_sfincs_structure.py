@@ -1,8 +1,11 @@
-"""Proof for the SFINCS hydraulic-structure knob (ADR 0256): present-vs-absent
-discriminating pair. Reads the two published depth COGs from the structure smoke
-(docs/proof/sfincs_structure_smoke_result.json) and renders plain | thin-dam |
-difference as FILLED cells (ADR 0251) over the Esri World Imagery basemap with the
-thin-dam line drawn, so the barrier's ponding/redirection reads on the map.
+"""Proof for the SFINCS thin-dam SURGE-ONLY protected-side demonstration
+(ADR 0256, 2nd addendum -- the rain lever). Reads the two published depth COGs
+from the surge-only smoke (docs/proof/sfincs_surge_only_smoke_result.json) and
+renders A (no dam) | B (thin dam) | difference as FILLED cells (ADR 0251) over
+the Esri World Imagery basemap with the shore-parallel thin-dam line drawn in
+cyan. With rainfall="none" the ONLY water is the surge from the sea, so the
+protected (landward/north) side floods in A and stays DRY in B -- the textbook
+levee signature (no co-occurring rain trapped behind the line).
 """
 
 from __future__ import annotations
@@ -22,12 +25,14 @@ from matplotlib.colors import Normalize, TwoSlopeNorm
 from PIL import Image
 from pyproj import Transformer
 from rasterio.io import MemoryFile
-from rasterio.warp import Resampling, calculate_default_transform, reproject, transform_bounds
+from rasterio.warp import Resampling, calculate_default_transform, reproject
 
 REPO = str(Path(__file__).parent.parent)
 OUT = REPO + "/docs/proof/templates"
 Path(OUT).mkdir(parents=True, exist_ok=True)
-SMOKE = json.loads(Path(REPO + "/docs/proof/sfincs_structure_smoke_result.json").read_text())
+SMOKE = json.loads(
+    Path(REPO + "/docs/proof/sfincs_surge_only_smoke_result.json").read_text()
+)
 TILE_URL = "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}"
 TO_3857 = Transformer.from_crs("EPSG:4326", "EPSG:3857", always_xy=True)
 TO_4326 = Transformer.from_crs("EPSG:3857", "EPSG:4326", always_xy=True)
@@ -80,7 +85,6 @@ def _read_3857(uri):
 
 plain, ext_p = _read_3857(SMOKE["plain_uri"])
 thd, ext_t = _read_3857(SMOKE["thd_uri"])
-# put thd on the plain grid for the difference
 thd_on_p = np.full_like(plain, np.nan)
 from rasterio.transform import from_bounds as _fb
 ph, pw = plain.shape
@@ -93,42 +97,63 @@ reproject(source=thd, destination=thd_on_p, src_transform=tt, src_crs="EPSG:3857
 diff = np.where(np.isfinite(plain) | np.isfinite(thd_on_p),
                 np.nan_to_num(thd_on_p) - np.nan_to_num(plain), np.nan)
 
-# frame the AOI
 aoi = SMOKE["aoi"]
 w3, s3 = TO_3857.transform(aoi[0], aoi[1]); e3, n3 = TO_3857.transform(aoi[2], aoi[3])
 mxx = max(e3 - w3, n3 - s3) * 0.06
 bw, bs = TO_4326.transform(w3 - mxx, s3 - mxx); be, bn = TO_4326.transform(e3 + mxx, n3 + mxx)
 bm, bmext = _basemap(bw, bs, be, bn, 14)
-line = SMOKE["structure_line"]
-lx = [TO_3857.transform(p[0], p[1])[0] for p in line]
-ly = [TO_3857.transform(p[0], p[1])[1] for p in line]
+# Levee-district barrier: a south shore-parallel line + west/east return walls
+# (a U open to the high north edge). Draw every segment in Web-Mercator; the run
+# extends the walls a little past the north frame edge to tie into high ground.
+def _seg_3857(seg):
+    xs, ys = zip(*[TO_3857.transform(lon, lat) for lon, lat in seg])
+    return list(xs), list(ys)
+structure_segments = SMOKE.get("structure_lines") or [SMOKE["south_line"]]
+dam_lat = SMOKE["dam_lat"]
 
-vmax = float(np.nanpercentile(np.concatenate([plain[np.isfinite(plain)], thd_on_p[np.isfinite(thd_on_p)]]), 99))
-dmax = float(np.nanpercentile(np.abs(diff[np.isfinite(diff)]), 99.5)) or 0.5
+# Cap the depth scale at a coastal-flood-relevant 8 m (deep near-shore surge
+# cells saturate) and the diff scale at the observed protected-side max so the
+# dry-out signal is legible.
+vmax = 8.0
+dmax = max(float(SMOKE.get("protected_plain_max_depth_m") or 0.0), 0.5)
 
 fig, axes = plt.subplots(1, 3, figsize=(16.5, 6.4), dpi=115)
 panels = [
-    (plain, ext_p, "A) plain (no structure)", Normalize(0, vmax), "inferno", "flood depth (m)"),
-    (thd_on_p, ext_p, "B) with thin dam (no-flow barrier)", Normalize(0, vmax), "inferno", "flood depth (m)"),
+    (plain, ext_p, "A) no dam (surge-only)", Normalize(0, vmax), "inferno", "flood depth (m, capped 8 m)"),
+    (thd_on_p, ext_p, "B) with thin dam (surge-only)", Normalize(0, vmax), "inferno", "flood depth (m, capped 8 m)"),
     (diff, ext_p, "B - A (thin dam effect)", TwoSlopeNorm(0, -dmax, dmax), "RdBu_r", "depth change (m)"),
 ]
 for ax, (data, ext, title, norm, cmap, clab) in zip(axes, panels):
     ax.imshow(bm, extent=bmext, origin="upper")
     im = ax.imshow(data, extent=ext, origin="upper", cmap=cmap, norm=norm, alpha=0.9, zorder=3)
-    ax.plot(lx, ly, color="#00e5ff", lw=2.4, zorder=5, label="thin dam")
+    for seg in structure_segments:
+        sx, sy = _seg_3857(seg)
+        ax.plot(sx, sy, color="#00e5ff", lw=2.4, zorder=5)
     ax.plot([w3, e3, e3, w3, w3], [s3, s3, n3, n3, s3], color="white", lw=1.2, zorder=4)
     ax.set_xlim(w3 - mxx, e3 + mxx); ax.set_ylim(s3 - mxx, n3 + mxx)
     ax.set_xticks([]); ax.set_yticks([]); ax.set_title(title, fontsize=11)
     fig.colorbar(im, ax=ax, fraction=0.046, pad=0.02).set_label(clab, fontsize=9)
 
-cap = (f"SFINCS thin-dam (thd) no-flow barrier, present vs absent. Chattanooga TN "
-       f"~4 km AOI, {SMOKE.get('structure_type')} across the domain (cyan line), 100-yr / 3-h design "
-       f"storm rain-on-grid. The barrier blocks lateral flow -> max depth diff "
-       f"{SMOKE['max_abs_depth_diff_m']:.2f} m, {SMOKE['n_cells_diff_gt_5cm']} cells changed >5 cm "
-       f"(plain max {SMOKE['plain_max_depth_m']:.2f} m -> thd max {SMOKE['thd_max_depth_m']:.2f} m). "
-       f"Filled cells over Esri World Imagery.")
-fig.text(0.5, 0.03, cap, ha="center", fontsize=8.6, wrap=True)
-fig.subplots_adjust(bottom=0.12, top=0.94, wspace=0.08)
+_ap = SMOKE.get('protected_plain_wet_cells', 0)
+_bp = SMOKE.get('protected_thd_wet_cells', 0)
+_red = 100.0 * (1.0 - _bp / max(1, _ap))
+cap = (
+    f"SFINCS thin-dam (thd) levee district, present vs absent, SURGE-ONLY "
+    f"(rainfall=none -- the rain lever; no design-storm precip, so surge from the sea is the ONLY water). "
+    f"{SMOKE.get('location')} ~{(aoi[2]-aoi[0])*85:.1f}x{(aoi[3]-aoi[1])*111:.1f} km AOI, coastal "
+    f"{SMOKE.get('return_period_yr')}-yr / {SMOKE.get('duration_hr')}-hr design-storm surge (deterministic parametric "
+    f"water-level boundary). The barrier (cyan) is a shore-parallel line just inland of the permanent Gulf/channel "
+    f"waterline with WEST + EAST return walls tied to the high north edge (a U open to high ground) -- the low side "
+    f"edges are also surge inlets, so a bare shore-parallel line would be flanked; the return walls are how real levee "
+    f"districts prevent it. PROTECTED DISTRICT (inside the enclosure, dry land only -- permanent deep water excluded): "
+    f"A floods {_ap} cells (mean {SMOKE.get('protected_plain_mean_depth_m',0):.2f} m, max "
+    f"{SMOKE.get('protected_plain_max_depth_m',0):.2f} m) -> B collapses to {_bp} cells ({_red:.0f}% drier; the few "
+    f"residual cells sit at the wall corners). No leak at the walls (B near-wall max "
+    f"{SMOKE.get('protected_thd_edge_max_depth_m',0):.2f} m <= interior {SMOKE.get('protected_thd_mid_max_depth_m',0):.2f} m). "
+    f"Filled cells over Esri World Imagery; deep near-shore surge cells saturate the 8 m depth scale."
+)
+fig.text(0.5, 0.005, cap, ha="center", fontsize=7.4, wrap=True)
+fig.subplots_adjust(bottom=0.19, top=0.94, wspace=0.08)
 outp = f"{OUT}/sfincs_flood_hydraulic_structure_weir_thd.png"
 fig.savefig(outp, dpi=115)
 plt.close(fig)
