@@ -1,8 +1,8 @@
-"""Drawn ``FeatureCollection`` -> engine inputs (FR-WC-16 -> FR-AS-10).
+"""Drawn ``FeatureCollection`` -> engine inputs.
 
-This is the AGENT-side consumer of the FR-WC-16 drawn output. The canonical
+This is the AGENT-side consumer of the drawn output. The canonical
 role vocabulary + structural parser now live in the mesh authoring layer at
-:mod:`trid3nt_server.agent.mesh.spatial_roles` (ADR 0099, mesh wave M2) so a
+:mod:`trid3nt_server.agent.mesh.spatial_roles` so a
 wall / breach / refine-region / aoi-clip means the same thing to every engine.
 This module is the backward-compatible ADAPTER over that shared parser: it keeps
 the ``ParsedSpatialInput`` shape + the ``parse_spatial_input_features`` entry
@@ -52,7 +52,7 @@ class ParsedSpatialInput:
         line_coords: the FIRST neutral ``line`` feature's vertices, or ``None``.
         n_lines / n_walls / n_flap_gates: counts.
 
-    Generalized roles (ADR 0099, surfaced for every engine):
+    Generalized roles (surfaced for every engine):
         breach_points: ``[[lon, lat], ...]`` interior breach sources
             (SFINCS/GeoClaw ``breach_point``).
         refine_regions: ``[{"polygon", "target_size_m", "bbox"}]`` mesh sizing.

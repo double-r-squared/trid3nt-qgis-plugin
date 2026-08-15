@@ -266,7 +266,7 @@ CATEGORIES: tuple[CategorySpec, ...] = (
 
 PRIMARY_CATEGORY: dict[str, str] = {
     # ---- 1. simulation_modeling --------------------------------------------
-    # Door dissolution (ADR 0094): the 10 engine "door" concierge tools were
+    # The 10 engine "door" concierge tools were
     # DELETED. Each engine's tier=template members are ordinary retrieval-pool
     # tools now and carry their OWN category membership (categorizing a template
     # no longer re-leaks anything -- there is no pool exclusion). Most templates
@@ -328,7 +328,7 @@ PRIMARY_CATEGORY: dict[str, str] = {
     "openquake_psha": "simulation_modeling",
     "openquake_scenario_gmf": "simulation_modeling",
     "openquake_secondary_perils": "simulation_modeling",
-    # ADR 0182 shortlist batch: hazard disaggregation (which M-R-eps scenario
+    # Hazard disaggregation (which M-R-eps scenario
     # dominates a site's hazard) + event-based / stochastic PSHA (synthetic
     # catalogue + classical convergence check). Distinct oq calculators, run in
     # the local subprocess lane; both model_validation-adjacent but filed under
@@ -397,7 +397,7 @@ PRIMARY_CATEGORY: dict[str, str] = {
     "telemac3d_stratified_flow": "simulation_modeling",
     "telemac_do_sag": "simulation_modeling",
     "telemac_rain_on_grid": "simulation_modeling",
-    # Standalone mesh builder (ADR 0200): a model DOMAIN primitive that feeds every
+    # Standalone mesh builder: a model DOMAIN primitive that feeds every
     # unstructured solver (TELEMAC/SCHISM/SWAN) -- filed with the engines it serves.
     "generate_mesh": "simulation_modeling",
     "hecras_riverine_flood": "simulation_modeling",
@@ -431,11 +431,11 @@ PRIMARY_CATEGORY: dict[str, str] = {
     "compute_canopy_height": "simulation_modeling",
     "run_solver": "simulation_modeling",
     "wait_for_completion": "simulation_modeling",
-    # V&V wave (ADR 0021, lane A): the per-engine run-diagnostics dispatcher
+    # The per-engine run-diagnostics dispatcher
     # operates directly ON a run (mass balance / convergence / instability),
     # so it sits beside run_solver / wait_for_completion.
     "read_run_diagnostics": "simulation_modeling",
-    # V&V wave (ADR 0021, lane D): derive-not-mutate parameter setters
+    # Derive-not-mutate parameter setters
     # operate directly ON a staged engine deck/setup -- filed beside the
     # solver seam they feed.
     "set_sfincs_parameters": "simulation_modeling",
@@ -491,7 +491,7 @@ PRIMARY_CATEGORY: dict[str, str] = {
     "lookup_precip_return_period": "hydrology",
     "fetch_gcn250_curve_numbers": "hydrology",
     "fetch_statsgo_soils": "hydrology",
-    # V&V wave (ADR 0021, lane C): observed flood-validation data, siblings
+    # Observed flood-validation data, siblings
     # of fetch_usgs_nwis_gauges / fetch_sentinel1_sar in the hydrology lane.
     "fetch_high_water_marks": "hydrology",
     "fetch_flood_extent_observation": "hydrology",
@@ -596,7 +596,7 @@ PRIMARY_CATEGORY: dict[str, str] = {
     # listed to model_validation below (its primary use is MODFLOW head
     # calibration against observed wells -- a correctness check).
     "compute_model_residuals": "geographic_primitives",
-    # V&V wave (ADR 0021, lanes B + C): model-vs-observation skill/pairing
+    # Model-vs-observation skill/pairing
     # analysis primitives, siblings of compute_model_residuals above (same
     # "analysis primitive over model+obs" lane). Cross-listed to
     # model_validation below (their headline use validates a model run).
@@ -606,7 +606,7 @@ PRIMARY_CATEGORY: dict[str, str] = {
     # fast layer-extent + fit-the-map tool. Replaces the
     # sandbox bbox-math anti-pattern and drives the zoom-to map-command.
     "compute_layer_bounds": "geographic_primitives",
-    # FR-AS-10 / FR-WC-16: pause-the-turn and ask the user to DRAW on the map
+    # Pause-the-turn and ask the user to DRAW on the map
     # (AOI + tagged flood walls / flap gates, or a point/bbox pick). The drawn
     # barriers feed swmm_urban_flood; cross-cutting view/input action.
     "request_spatial_input": "geographic_primitives",
@@ -736,8 +736,8 @@ SECONDARY_CATEGORIES: dict[str, tuple[str, ...]] = {
     # belongs to news_events too: it is a canonical "what event is happening"
     # ingest source the demoted aggregate_claims news role re-homes onto.
     "fetch_nws_event": ("news_events",),
-    # Door dissolution (ADR 0094): the pelicun_damage_assessment template carries
-    # the secondary damage_assessment membership directly (its deleted door did before).
+    # The pelicun_damage_assessment template carries
+    # the secondary damage_assessment membership directly.
     "pelicun_damage_assessment": ("damage_assessment",),
     "fetch_usace_nsi": ("damage_assessment",),
     # habitat-impact batch (2026-07-20): the affected-habitats analysis is PRIMARY
@@ -748,20 +748,20 @@ SECONDARY_CATEGORIES: dict[str, tuple[str, ...]] = {
     # engine-door refactor: run_model_contamination_affected_fields is CUT (the
     # zonal field-analysis half re-homed to a playground recipe); its secondary
     # cross-listing is removed with it.
-    # composer dissolution (ADR 0105): the Case 2 groundwater news-ingest composer
+    # The groundwater news-ingest composer
     # and the Case 3 live-alert flood composer are DELETED - the model composes the
     # fetch -> engine-template chain itself, so there is no standalone tool to
     # cross-list here.
     # SWAN spans simulation_modeling (it runs the SWAN spectral solver) AND coastal
     # (it is THE defensible nearshore wave-field tool -- a user reaches it from the
     # coastal lane to compare against SFINCS+SnapWave on the same case).
-    # Door dissolution (ADR 0094): the swan_wave_field template carries the
-    # coastal cross-listing directly (its deleted door did before).
+    # The swan_wave_field template carries the
+    # coastal cross-listing directly.
     "swan_wave_field": ("coastal",),
     "tomawac_wave_field": ("coastal",),
     # ARTEMIS harbour-agitation is a coastal / harbour-engineering question class.
     "artemis_harbor_agitation": ("coastal",),
-    # Coastal tidal/surge inundation (ADR 0259) is a coastal question class (it
+    # Coastal tidal/surge inundation is a coastal question class (it
     # floods a shoreline from a CO-OPS gauge series) cross-listed into the coastal
     # lane alongside its simulation_modeling primary.
     "coastal_tidal_surge": ("coastal",),
@@ -808,7 +808,7 @@ SECONDARY_CATEGORIES: dict[str, tuple[str, ...]] = {
     # modeling engine) and materially belongs to fire (post-wildfire process,
     # reached from the MTBS / NIFC / FIRMS lane).
     "model_debris_flow": ("fire",),
-    # Door dissolution (ADR 0094): the elmfire_fire_spread template is PRIMARY
+    # The elmfire_fire_spread template is PRIMARY
     # simulation_modeling and cross-lists to fire (fire-behavior modeling, reached
     # from the LANDFIRE / NIFC / FIRMS wildfire lane).
     "elmfire_fire_spread": ("fire",),
@@ -882,13 +882,13 @@ SECONDARY_CATEGORIES: dict[str, tuple[str, ...]] = {
     # calibration against observed wells -- a correctness check -- so it
     # materially belongs to the model_validation lane too.
     "compute_model_residuals": ("model_validation",),
-    # V&V wave (ADR 0021, section 4.1): PRIMARY geographic_primitives
+    # PRIMARY geographic_primitives
     # (analysis primitives over model+obs); their headline use validates a
     # model run, so they materially belong to model_validation too.
     "compute_skill_metrics": ("model_validation",),
     "compute_flood_extent_skill": ("model_validation",),
     "extract_model_at_observations": ("model_validation",),
-    # V&V wave (ADR 0021, section 4.1): PRIMARY hydrology (observed flood
+    # PRIMARY hydrology (observed flood
     # data fetchers); materially belong to model_validation too (the
     # validation input a flood-engine run is scored against).
     "fetch_high_water_marks": ("model_validation",),
@@ -925,9 +925,8 @@ SECONDARY_CATEGORIES: dict[str, tuple[str, ...]] = {
 # Picked to span the most-common entry points to a session:
 #
 # - sfincs_flood (SFINCS flood template) - the top-level flood entry point a
-#   user is likely to invoke first (door dissolution, ADR 0094: the template is
-#   the always-on flood hot-path directly; the deleted run_sfincs door held this
-#   slot before).
+#   user is likely to invoke first: the template is
+#   the always-on flood hot-path directly.
 # - geocode_location, fetch_dem, fetch_nws_alerts_conus, fetch_nws_event -
 #   the most commonly cited "before you can do anything else" tools
 # (fetch_nws_event added - see inline comment).
@@ -972,7 +971,7 @@ HOT_SET_TOOLS: frozenset[str] = frozenset(
         # sandbox for bbox math when compute_layer_bounds isn't in the allowed
         # set (the failure mode).
         "compute_layer_bounds",
-        # FR-AS-10 / FR-WC-16: request_spatial_input is a cross-cutting user-
+        # request_spatial_input is a cross-cutting user-
         # input action the agent invokes at any point ("let me draw the flood
         # walls"). Same hot-set rationale as code_exec_request / compute_layer_
         # bounds - it must be reachable WITHOUT a category-open round-trip so the

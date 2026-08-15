@@ -1,6 +1,6 @@
 """Pending user-interaction registries for the WebSocket server.
 
-Extracted from the monolith in server-refactor wave 3 (ADR 0263). Three
+Three
 independent request/response gates, all sharing the same shape: a module-level
 dict keyed by an unguessable-ULID ``request_id`` tagged with the owning
 ``session_id``, so a reply arriving on a sibling WebSocket connection of the
@@ -36,13 +36,13 @@ logger = logging.getLogger("trid3nt_server.server")
 
 
 # --------------------------------------------------------------------------- #
-# ADR 0018 -- pending tool-choice registry: keyed by the unguessable ULID
+# Pending tool-choice registry: keyed by the unguessable ULID
 # request_id + owning session_id, so a reply arriving on a sibling WebSocket
 # connection of the same session still resolves the paused turn.
 # --------------------------------------------------------------------------- #
 
 # --------------------------------------------------------------------------- #
-# ADR 0018 -- pending tool-choice registry: module-level, keyed by the
+# Pending tool-choice registry: module-level, keyed by the
 # unguessable ULID request_id + owning session_id, so a reply arriving on a
 # sibling WebSocket connection of the same session still resolves the paused
 # turn.

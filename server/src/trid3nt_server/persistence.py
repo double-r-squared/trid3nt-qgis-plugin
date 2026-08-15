@@ -1,4 +1,4 @@
-"""Thin typed wrapper over the persistence MCP surface (FR-AS-4).
+"""Thin typed wrapper over the persistence MCP surface.
 
 Agent code calls ``Persistence.upsert_case(case_dataclass)``; this module
 issues logical ``insert-one`` / ``update-one`` / ``find-one`` / ``find`` calls
@@ -50,13 +50,13 @@ import os
 
 DEFAULT_DATABASE = os.environ.get("TRID3NT_MONGO_DB", "trid3nt_dev")
 
-# Collection names -- pinned by Appendix D nomenclature (D.2 ``projects`` for
-# Cases, D.6 ``sessions`` for chat history, D.13 ``users`` for the
-# forward-looking Auth track stub, D.14 ``secrets`` for §F.3 per-Case keys).
-CASES_COLLECTION = "projects"  # FR-MP-5/-6: Case <-> projects 1:1
-CHAT_COLLECTION = "case_chat_messages"  # per-turn message log (FR-MP-6)
-SESSIONS_COLLECTION = "sessions"  # D.6 -- agent's own session records
-USERS_COLLECTION = "users"  # D.13 (Auth/Users track stub)
+# Collection names -- pinned nomenclature: "projects" for Cases, "sessions"
+# for chat history, "users" for the forward-looking Auth track stub,
+# "secrets" for per-Case keys.
+CASES_COLLECTION = "projects"  # Case <-> projects 1:1
+CHAT_COLLECTION = "case_chat_messages"  # per-turn message log
+SESSIONS_COLLECTION = "sessions"  # agent's own session records
+USERS_COLLECTION = "users"  # Auth/Users track stub
 
 
 # --------------------------------------------------------------------------- #
@@ -133,7 +133,7 @@ class Persistence:
         self._mcp = mcp_client
         self._db = database
 
-    # ----- Cases (FR-MP-6) ------------------------------------------------- #
+    # ----- Cases --------------------------------------------------------- #
 
     async def get_case(self, case_id: str) -> CaseSummary | None:
         """Find one Case by id. Returns ``None`` if not found.
@@ -214,7 +214,7 @@ class Persistence:
         the wire ``CaseSummary``.
         """
         body = case.model_dump(mode="json")
-        body["_id"] = case.case_id  # the ``_id`` primary key (FR-MP-5)
+        body["_id"] = case.case_id  # the ``_id`` primary key
         if owner_user_id:
             body["user_id"] = owner_user_id
         await self._mcp.call_tool(
@@ -230,13 +230,13 @@ class Persistence:
         return case
 
     # ------------------------------------------------------------------ #
-    # ADR 0014: per-Case short layer-handle map (storage-only field)
+    # Per-Case short layer-handle map (storage-only field)
     # ------------------------------------------------------------------ #
 
     async def set_case_layer_handles(
         self, case_id: str, handles: dict[str, str]
     ) -> None:
-        """Persist a Case's ``{L<n>: uri}`` short-handle map (ADR 0014).
+        """Persist a Case's ``{L<n>: uri}`` short-handle map.
 
         Storage-only ``layer_handles`` field on the cases doc -- the
         ``last_active_case_id`` pattern: ``CaseSummary`` deliberately does
@@ -261,7 +261,7 @@ class Persistence:
     async def get_case_layer_handles(
         self, case_id: str
     ) -> dict[str, str] | None:
-        """Read back the persisted ``{L<n>: uri}`` map (ADR 0014).
+        """Read back the persisted ``{L<n>: uri}`` map.
 
         Tolerant: a missing Case / absent field / malformed shape yields
         ``None`` and the registry degrades to fresh minting. Only
@@ -292,7 +292,7 @@ class Persistence:
         """List the user's LIVE Cases (``status="active"`` only).
 
         The ``projects`` collection schema does not yet carry a ``user_id``
-        field (FR-MP-5 was specified pre-Auth); we pass the filter anyway --
+        field yet (it was specified pre-Auth); we pass the filter anyway --
         once the Auth/Users track adds the field the query starts narrowing,
         until then it returns the full Case list for the deployment.
 
@@ -383,12 +383,12 @@ class Persistence:
             },
         )
 
-    # ----- Chat history + session state (FR-MP-6 rehydration) ------------- #
+    # ----- Chat history + session state (rehydration) --------------------- #
 
     async def append_chat_message(self, msg: CaseChatMessage) -> None:
         """Append one persisted chat exchange to a Case's history.
 
-        Per FR-AS-8 the chat-message collection is the agent's own session
+        The chat-message collection is the agent's own session
         record (it is per-turn replay material, not a solver result), so this
         write is NOT a confirmation trigger -- the caller does not need to
         gate it. The carveout is enforced at the confirmation-hook layer.
@@ -448,7 +448,7 @@ class Persistence:
         )
 
     async def get_session_state(self, case_id: str) -> CaseSessionState:
-        """Hydrate the rehydration envelope for a Case (FR-MP-6 resume).
+        """Hydrate the rehydration envelope for a Case (resume).
 
         Joins the Case header (``CaseSummary``) with its ordered chat history
         from ``CHAT_COLLECTION``. ``loaded_layers`` / ``pipeline_history`` /
@@ -539,7 +539,7 @@ class Persistence:
     # The ``sessions`` document is the TTL-cleaned activity header (D.6 +
     # ``SESSIONS_TTL``): who/when, which Cases were touched, and the
     # append-only ``charts`` array that chart-emission ``$push``es onto. Chat
-    # content canonically lives in ``case_chat_messages`` (FR-MP-6);
+    # content canonically lives in ``case_chat_messages``;
     # ``SessionDocument.chat_history`` stays empty at v0.1 so the two stores
     # never diverge.
 
@@ -809,7 +809,7 @@ class Persistence:
 # The file-backed shim is the LIVE persistence substrate on this stack. It
 # satisfies the same ``MCPClientProtocol`` surface a cloud MCP client would, so
 # ``Persistence`` doesn't need to know which substrate it is talking to, and
-# can be bound at startup either way (FR-AS-4).
+# can be bound at startup either way.
 #
 # Storage: ``~/.trid3nt/dev_persistence/<database>/<collection>.json``, one
 # JSON file per collection (dict mapping ``_id`` -> document). Atomicity: a

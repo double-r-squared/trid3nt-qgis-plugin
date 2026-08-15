@@ -71,7 +71,7 @@ MAX_PROBE_LAYERS = 40
 
 
 # ---------------------------------------------------------------------------
-# Typed errors (FR-AS-11) -- mirrors query_point_hazard's error shape.
+# Typed errors -- mirrors query_point_hazard's error shape.
 # ---------------------------------------------------------------------------
 
 

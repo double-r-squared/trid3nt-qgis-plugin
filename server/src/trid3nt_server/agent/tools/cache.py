@@ -1,7 +1,7 @@
-"""FR-DC-3 cache shim — read-through / write-on-miss with content-addressed keys.
+"""Cache shim — read-through / write-on-miss with content-addressed keys.
 
 This module owns the agent-side cache shim that mediates every external-API
-atomic-tool fetch (FR-CE-8). The shim is the SOLE writer of the ``cache/``
+atomic-tool fetch. The shim is the SOLE writer of the ``cache/``
 prefix on the production cache bucket provisioned:
 
     s3://<cache-bucket>/cache/<ttl-class>/<source-class>/<hash>.<ext>
@@ -9,13 +9,11 @@ prefix on the production cache bucket provisioned:
 (the bucket is ``CACHE_BUCKET`` below, overridable via ``TRID3NT_CACHE_BUCKET``
 -- locally that points at the MinIO ``trid3nt-cache`` bucket)
 
-Note the layout follows the LIVE substrate, NOT the FR-DC-1
-literal (``cache/<source-class>/<hash>.<ext>``). nested TTL class
-above source class so the bucket's GCS Object Lifecycle Management policy
-can run on FOUR rules forever instead of one-per-source-class. The
-``OQ-INFRA-31-FR-DC-1`` schema-pushback proposes the matching SRS amendment.
+Note the layout nests TTL class above source class (not source class
+above TTL class) so the bucket's GCS Object Lifecycle Management policy
+can run on FOUR rules forever instead of one-per-source-class.
 
-Cache-key derivation (FR-DC-3):
+Cache-key derivation:
 
     key = sha256(source_id || canonical_params_json || ttl_bucket_vintage)[:32]
 
@@ -29,16 +27,17 @@ Cache-key derivation (FR-DC-3):
   - ``live-no-cache`` -> ``"live"`` placeholder (read_through short-circuits
     so the key never lands in GCS, but compute_cache_key remains pure).
 
-Deduplication (FR-DC-4):
+Deduplication:
 The content-addressed key guarantees two callers asking for the same input
 produce the same path. No explicit lock is needed — last-writer-wins on
 simultaneous misses produces byte-identical artifacts because the key
 already factored in everything that would differ.
 
-Cancellation (Invariant 8):
+Cancellation:
 ``read_through`` is a blocking I/O call. It must be invoked from a context
-that the agent's WebSocket cancel chain (server.py M1 handler) can cancel
-via ``asyncio.CancelledError``. Do NOT introduce a separate cancel mechanism.
+that the agent's WebSocket cancel chain (server.py's message handler) can
+cancel via ``asyncio.CancelledError``. Do NOT introduce a separate cancel
+mechanism.
 """
 
 from __future__ import annotations
@@ -84,7 +83,7 @@ CACHE_KEY_HEX_LEN = 32
 def _canonicalize_params(params: dict[str, Any]) -> str:
     """Deterministic JSON serialization of the params dict.
 
-    Rules (FR-DC-3 canonicalized_params):
+    Rules (canonicalized_params):
     - Sort keys.
     - Omit ``None`` values (treat-as-default).
     - No whitespace ('separators=(",", ":")' for compactness + determinism).
@@ -143,16 +142,17 @@ def compute_cache_key(
     *,
     now: datetime | None = None,
 ) -> str:
-    """Compute the content-addressed cache key per FR-DC-3.
+    """Compute the content-addressed cache key.
 
     Args:
         source_id: stable identifier for the upstream data source (often the
             ``source_class`` from the tool's ``AtomicToolMetadata``, possibly
             with sub-source detail like ``"atcf:IAN"``).
         params: the call parameters affecting the response. Caller is
-            expected to have pre-quantized bbox / date ranges per the
-            domain-specific rules in §3.9 / FR-DC-3.
-        ttl_class: one of the four FR-DC-2 classes.
+            expected to have pre-quantized bbox / date ranges (source-native
+            resolution for bbox, TTL bucket boundary for dates) before
+            handing params to this function.
+        ttl_class: one of the four TTL classes.
         now: time of fetch (default: now UTC). Tests pin this for determinism
             across runs.
 
@@ -174,7 +174,7 @@ def cache_path(source_class: str, ttl_class: TTLClass, key: str, ext: str) -> st
     Matches the LIVE bucket layout:
         ``cache/<ttl-class>/<source-class>/<key>.<ext>``
 
-    NOT the FR-DC-1 literal (``cache/<source-class>/<hash>.<ext>``); see
+    NOT the flat ``cache/<source-class>/<hash>.<ext>`` layout; see
     module docstring for the rationale (4-rule lifecycle policy at scale).
     """
     ext_clean = ext.lstrip(".")
@@ -182,7 +182,7 @@ def cache_path(source_class: str, ttl_class: TTLClass, key: str, ext: str) -> st
 
 
 def is_cacheable(metadata: AtomicToolMetadata) -> bool:
-    """Wrap the FR-DC-6 enumeration check.
+    """Wrap the cacheable/TTL-class consistency check.
 
     A tool is cacheable iff ``metadata.cacheable`` is True AND its TTL class
     is not ``"live-no-cache"``. The ``AtomicToolMetadata`` model_validator
@@ -203,7 +203,7 @@ def is_cacheable(metadata: AtomicToolMetadata) -> bool:
 # COG carries no per-source attribution, and on a cache HIT ``read_through`` never
 # calls ``fetch_fn`` (the executor that would recompute those facts does not run).
 #
-# This is the general, MINIMAL channel that closes that gap (ADR 0110): during a
+# This is the general, MINIMAL channel that closes that gap: during a
 # NON-cached fetch the executor/delegate records a small typed provenance dict via
 # :func:`record_provenance`; ``read_through`` persists it as a SIBLING object next
 # to the cached artifact (``<key>.provenance.json``); on EVERY return (fresh OR a
@@ -281,7 +281,7 @@ class ReadThroughResult:
             ``live-no-cache`` reads which deliberately do not persist.
         data: the artifact bytes (from the cache hit or freshly fetched).
         hit: True if the response came from the cache, False if fetched.
-        provenance: the fetch-time provenance dict (ADR 0110) when a
+        provenance: the fetch-time provenance dict when a
             :class:`ProvenanceRecorder` was passed -- the SAME dict on a fresh
             fetch or a cache-hit replay -- else ``None``.
     """
@@ -340,7 +340,7 @@ def read_object_bytes_s3(uri: str) -> bytes:
 
 
 def _read_sidecar_s3(s3: Any, bucket: str, obj_key: str) -> dict[str, Any] | None:
-    """Best-effort read of the provenance sidecar next to ``obj_key`` (ADR 0110).
+    """Best-effort read of the provenance sidecar next to ``obj_key``.
 
     Returns the parsed dict, or ``None`` when absent / unreadable -- an object
     cached before the channel existed simply has no sidecar, so the envelope hook
@@ -358,7 +358,7 @@ def _read_sidecar_s3(s3: Any, bucket: str, obj_key: str) -> dict[str, Any] | Non
 
 
 def _write_sidecar_s3(s3: Any, bucket: str, obj_key: str, provenance: dict[str, Any]) -> None:
-    """Best-effort write of the provenance sidecar next to ``obj_key`` (ADR 0110)."""
+    """Best-effort write of the provenance sidecar next to ``obj_key``."""
     try:
         s3.put_object(
             Bucket=bucket,
@@ -387,7 +387,7 @@ def _read_through_s3(
     fetch-fresh-uncached. S3 TTL eviction is a bucket lifecycle rule, so no
     per-object customTime is written.
 
-    When a :class:`ProvenanceRecorder` is passed (ADR 0110) the fetch-time
+    When a :class:`ProvenanceRecorder` is passed, the fetch-time
     provenance rides alongside the artifact: on a HIT it is replayed from the
     ``<key>.provenance.json`` sidecar; on a MISS the recorder is bound around
     ``fetch_fn`` (so the delegate's :func:`record_provenance` fills it) and the
@@ -446,11 +446,11 @@ def read_through(
 ) -> ReadThroughResult:
     """Read-through / write-on-miss shim for one atomic-tool fetch.
 
-    Flow per FR-DC-3:
+    Flow:
 
     1. If ``metadata.cacheable`` is False / ``ttl_class == "live-no-cache"``:
        always miss; invoke ``fetch_fn``; do NOT write; return with
-       ``uri=None``, ``hit=False``. This honors FR-DC-6.
+       ``uri=None``, ``hit=False``.
     2. Otherwise: compute cache key + path. Look up
        ``s3://<bucket>/<cache_path>``. If present, return the URI + bytes.
        The bucket lifecycle policy handles eviction so presence == valid.
@@ -458,7 +458,7 @@ def read_through(
        fresh bytes to S3 via boto3; return URI + bytes. TTL eviction is a
        bucket lifecycle rule, so no per-object expiry metadata is written.
     4. On ``fetch_fn`` failure: do NOT write a sentinel; re-raise so the
-       agent surface (FR-AS-11) can decide whether to retry, clarify, or
+       agent surface can decide whether to retry, clarify, or
        fall back.
 
     Args:
@@ -474,7 +474,7 @@ def read_through(
             ``metadata.source_class``. Pass an override for sub-source detail
             like ``"atcf:IAN"``.
         force_refresh: if True, bypass the cache lookup and always invoke
-            ``fetch_fn`` (FR-DC-6 ``cache=false`` per-call opt-in). The
+            ``fetch_fn`` (the ``cache=false`` per-call opt-in). The
             fresh response is still written through.
         storage_client: legacy/no-op parameter retained for backward
             compatibility with the many tool call sites that thread a
@@ -495,7 +495,7 @@ def read_through(
     bucket = os.environ.get("TRID3NT_CACHE_BUCKET") or bucket or CACHE_BUCKET
     source_id = source_id or (metadata.source_class or metadata.name)
 
-    # FR-DC-6 short-circuit: uncacheable tools never touch the bucket. The
+    # Uncacheable-tools short-circuit: they never touch the bucket. The
     # provenance recorder still binds around the fetch so an uncacheable source can
     # populate result-model fields (no sidecar persisted -- nothing to replay).
     if not is_cacheable(metadata):

@@ -1,6 +1,6 @@
 """Environment-knob configuration helpers for the WebSocket server.
 
-Extracted from the monolith in server-refactor wave 1 (ADR 0261). Every helper
+Every helper
 here is a pure ``env -> value`` reader with no session coupling: read LIVE (not
 an import-time snapshot) unless noted, fail-safe to the documented default on a
 malformed value, and honor the ``TRID3NT_*`` env idiom so a live regression can
@@ -117,7 +117,7 @@ def _env_flag(name: str, default: bool = True) -> bool:
 
 
 def _ambiguity_margin_threshold() -> float:
-    """ADR 0018 measured-ambiguity threshold (``TRID3NT_AMBIGUITY_MARGIN``).
+    """Measured-ambiguity threshold (``TRID3NT_AMBIGUITY_MARGIN``).
 
     RELATIVE top-1 vs top-2 retrieval-score margin under which AUTO mode still
     surfaces the tool-candidates card. Calibration: RRF fused scores are

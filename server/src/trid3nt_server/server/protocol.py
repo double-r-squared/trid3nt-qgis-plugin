@@ -1,5 +1,4 @@
-"""Session-connection registry -- the serve-wiring plumbing (server-refactor
-wave 4, ADR 0264).
+"""Session-connection registry -- the serve-wiring plumbing.
 
 The per-session live-socket registry and the session-supersede reap: the
 cleanly-separable slice of the daemon's connection plumbing. Self-contained
@@ -10,7 +9,7 @@ names so the handler's ``_register_session_connection`` /
 ``_SESSION_WS_CONNECTIONS`` read resolve unchanged; the package facade re-exposes
 them at ``trid3nt_server.server.<name>``.
 
-Deliberately NOT here (entangled, flagged in ADR 0264 for the session/turn wave):
+Deliberately NOT here (entangled with the session/turn wave):
 the WS handler (``_make_handler``) and ``run_server`` -- the connection loop is
 inseparable from ``SessionState`` and the ``_SESSION_LIVE_TURNS`` registry, both
 owned by the session wave -- and ``inflight_turn_count`` (reads

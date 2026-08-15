@@ -77,7 +77,7 @@ __all__ = [
     "make_sfincs_mesh_layer_uri",
     "regular_grid_outline_feature_collection",
     "make_grid_outline_layer_uri",
-    # M2 GENERALIZE (ADR 0099)
+    # Generalized drawn-role vocabulary
     "DrawnRoles",
     "SpatialRoleError",
     "parse_drawn_roles",

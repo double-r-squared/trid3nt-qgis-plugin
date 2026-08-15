@@ -1,8 +1,8 @@
 """PipelineEmitter -- real pipeline-state + session-state emission (M4).
 
 Owns the current ``PipelineSnapshot`` for one session and broadcasts a fresh
-``pipeline-state`` envelope on every step state transition (Appendix A.4 +
-A.7 replace-not-reconcile). Also owns the session-scoped ``loaded_layers``
+``pipeline-state`` envelope on every step state transition (full-snapshot
+replace-not-reconcile). Also owns the session-scoped ``loaded_layers``
 accumulator and re-emits ``session-state`` whenever a tool returns a
 ``LayerURI``.
 
@@ -10,28 +10,28 @@ Closes **OQ-T-28-SIM-WS-BOUNDARY**: the M3 client
 PipelineStrip + cancel button can now be driven by the real agent path
 instead of the ``window.__grace2Inject*`` dev seam.
 
-Cross-cutting principles (per CLAUDE.md + agents/AGENTS.md):
+Cross-cutting principles:
 
-- **Replace-not-reconcile (Appendix A.7) -- structurally enforced.** Every
+- **Replace-not-reconcile -- structurally enforced.** Every
   emission carries the full current ``PipelineSnapshot`` / ``SessionState``.
   This class has NO ``merge``/``update_partial``/``apply_delta`` helper --
   the only public mutators are state-transition methods that build the new
   snapshot in place and emit it. Tests guarantee that the wire envelope
   carries the wholesale current state, never a delta.
-- **Invariant 1 (Determinism boundary): preserves.** ``progress_percent``
+- **Determinism boundary: preserves.** ``progress_percent``
   is workflow-attributed (passed in by the caller), never an LLM estimate;
   the emission path itself does not invoke Gemini.
-- **Invariant 8 (Cancellation is first-class): extends.** The existing M1
+- **Cancellation is first-class: extends.** The existing
   cancel chain (``server.py`` ``inflight_task.cancel()`` →
   ``asyncio.CancelledError``) propagates into the tool-call wrapper, which
   catches it and calls ``mark_cancelled``. The cancelled step persists in
   the snapshot; a fresh ``pipeline-state`` is emitted with the step's
   ``state == "cancelled"`` (yellow chip), distinct from ``failed`` (red).
-- **FR-CE-8 / D.6 field discipline:** ``progress_percent``
+- **Field discipline:** ``progress_percent``
   populated only when the tool reports it (atomic tools usually leave it
   ``None``); ``error_code`` + ``error_message`` populated only on
   ``failed``. No fabrication.
-- **Open-set SCREAMING_SNAKE_CASE error codes (Appendix A.6):** registered
+- **Open-set SCREAMING_SNAKE_CASE error codes:** registered
   via the module-level ``ErrorCodeRegistry``. Adding a new code is a single-
   line addition. Schema validation is shape-only (pydantic
   ``_validate_error_code_shape`` on ``PipelineStepSummary``).
@@ -137,7 +137,7 @@ def current_turn_case() -> str | None:
 
 
 # --------------------------------------------------------------------------- #
-# Per-turn drawn-geometry binding (ADR 0159)
+# Per-turn drawn-geometry binding
 # --------------------------------------------------------------------------- #
 #
 # The dock's 'Draw region' rubber-band rectangle rides ``user-message`` as
@@ -188,7 +188,7 @@ _CURRENT_EMITTER: contextvars.ContextVar["PipelineEmitter | None"] = (
 
 #: The name of the TOP-LEVEL tool ``emit_tool_call`` is currently dispatching.
 #: Bound alongside ``_CURRENT_EMITTER`` for the lifetime of one invocation so the
-#: emit-on-fetch router seam (ADR 0244) can tell its two calling modes apart: a
+#: emit-on-fetch router seam can tell its two calling modes apart: a
 #: DIRECT chat fetch is dispatched AS the tool (``dispatched_tool_name()`` == the
 #: fetcher's own name -> the tool-wrapper already emits the returned LayerURI, so
 #: the seam stays silent), whereas an IN-COMPOSER bare fetch runs nested under a
@@ -511,13 +511,13 @@ def _classify_tool_return(result: Any) -> tuple[str, str, str] | None:
 
 
 # --------------------------------------------------------------------------- #
-# Error-code registry (Appendix A.6 open set, SCREAMING_SNAKE_CASE)
+# Error-code registry (open set, SCREAMING_SNAKE_CASE)
 # --------------------------------------------------------------------------- #
 
 
 class ErrorCodeRegistry:
     """Tracks the open-set SCREAMING_SNAKE_CASE error codes the emitter knows
-    about. Per A.6 the set is OPEN -- new codes can be registered at runtime.
+    about. The set is OPEN -- new codes can be registered at runtime.
 
     The registry exists so tests and the orchestrator audit can enumerate the
     currently-known set and so a typo at a ``mark_failed`` call site surfaces
@@ -525,8 +525,8 @@ class ErrorCodeRegistry:
     ``PipelineStepSummary`` field validator already enforces the regex shape
     at schema-construction time (``_validate_error_code_shape``).
 
-    TENTATIVE per kickoff: in M6 we may tighten to a closed ``Literal[...]``;
-    for now the open set matches Decision G / A.6 prose.
+    TENTATIVE: we may later tighten to a closed ``Literal[...]``;
+    for now the set stays open.
     """
 
     def __init__(self, initial: list[str] | None = None) -> None:
@@ -1021,11 +1021,11 @@ class PipelineEmitter:
       (``current_pipeline`` set whenever a pipeline is running, plus the
       accumulated ``loaded_layers`` and chat history).
 
-    Replace-not-reconcile (Appendix A.7) is structurally enforced: every
+    Replace-not-reconcile is structurally enforced: every
     ``_emit_*`` call serializes the FULL current snapshot.
     """
 
-    #: Maximum length of an error_message (D.6 cap). Schema enforces; we
+    #: Maximum length of an error_message. Schema enforces; we
     #: truncate defensively at the emitter to keep call sites simple.
     ERROR_MESSAGE_MAX_LEN = 512
 
@@ -1081,12 +1081,12 @@ class PipelineEmitter:
         self._loaded_layers: list[ProjectLayerSummary] = []
 
         #: The asyncio loop this emitter is bracketed on -- captured by
-        #: ``emit_tool_call`` so the emit-on-fetch router seam (ADR 0244) can drive
+        #: ``emit_tool_call`` so the emit-on-fetch router seam can drive
         #: its async input-surfacing coroutine from the worker thread an off-loaded
         #: sync fetcher runs in. ``None`` until the first ``emit_tool_call``.
         self._bound_loop: "asyncio.AbstractEventLoop | None" = None
 
-        #: Session-level dedup of already-surfaced input uris (ADR 0244): a fetched
+        #: Session-level dedup of already-surfaced input uris: a fetched
         #: input is surfaced ONCE per session even if several composers re-fetch it.
         self._emitted_input_uris: set[str] = set()
 
@@ -1979,7 +1979,7 @@ class PipelineEmitter:
             role=layer.role,
             temporal=layer.temporal is not None,
             legend=_legend,
-            # Mesh CRS (ADR 0118): carry the LayerURI's crs_authid onto the WS
+            # Mesh CRS: carry the LayerURI's crs_authid onto the WS
             # row so the plugin's _add_mesh can setCrs() an MDAL mesh whose
             # native crs() is empty. None for raster/vector (byte-for-byte
             # unchanged).
@@ -2286,7 +2286,7 @@ class PipelineEmitter:
         # exactly once, even on cancellation / exception paths.
         token = _CURRENT_EMITTER.set(self)
         # Bind the dispatched tool name + capture the running loop so the
-        # emit-on-fetch router seam (ADR 0244) can (a) tell a direct fetch
+        # emit-on-fetch router seam can (a) tell a direct fetch
         # dispatch from an in-composer nested fetch and (b) drive its async
         # input-surfacing coroutine back onto THIS loop from the worker thread a
         # sync fetcher is off-loaded to.
@@ -2390,7 +2390,7 @@ class PipelineEmitter:
     def _classify_exception(self, exc: Exception) -> tuple[str, str]:
         """Map a tool exception to an ``(error_code, error_message)`` pair.
 
-        Open-set per Appendix A.6 -- extend the registry + this map as new
+        Open-set -- extend the registry + this map as new
         failure modes land. Deliberately conservative: ambiguous shapes
         bucket into ``INTERNAL_ERROR`` rather than fabricate a more specific
         code.
@@ -2609,7 +2609,7 @@ class PipelineEmitter:
         """Emit ONE arbitrary typed envelope on this session's sink.
 
         Public seam for gates that ride the pause/resume spine from OUTSIDE the
-        emitter's pipeline-step vocabulary (ADR 0107's in-tool input-review gate
+        emitter's pipeline-step vocabulary (the in-tool input-review gate
         sends a ``tool-payload-warning`` this way). Same framing as ``_send``:
         stamps the session + owning Case so the web routes it to the right
         stream.

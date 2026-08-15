@@ -1,4 +1,4 @@
-"""Per-region mesh sizing from drawn ``refine_region`` polygons (ADR 0099, M2).
+"""Per-region mesh sizing from drawn ``refine_region`` polygons.
 
 The mesh authoring layer's GENERATE-stage refinement input. A drawn
 ``refine_region`` polygon carries an optional ``target_size_m`` (finer than the

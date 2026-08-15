@@ -20,7 +20,7 @@ up a real socket.
 
 Invariants this module is responsible for:
 
-- **Decision F (wire isolation).** No credential ever persists; the ack
+- **Wire isolation.** No credential ever persists; the ack
   carries only ``user_id`` / ``is_anonymous`` / ``tier``.
 - **Decision 10 (canonical id).** The owner id is the fixed local-user
   constant.
@@ -290,7 +290,7 @@ def build_auth_ack(
     """Construct the ``auth-ack`` envelope payload for a resolved AuthResult.
 
     Mirrors only the fields the H.5 ack surfaces -- never any credential
-    (Decision F wire isolation). The client uses this to drive its
+    (wire isolation). The client uses this to drive its
     sticky-anonymous logic.
 
     ``endpoints`` (remote-daemon access, 2026-07) is the optional

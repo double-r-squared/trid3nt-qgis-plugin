@@ -168,7 +168,7 @@ def _spatial_response_to_result(
         }
         if parsed.aoi_bbox is not None:
             result["aoi_bbox"] = list(parsed.aoi_bbox)
-        # Generalized drawn roles (ADR 0099) -- surfaced so the LLM can pass them
+        # Generalized drawn roles -- surfaced so the LLM can pass them
         # to whichever engine composer accepts them (SFINCS/GeoClaw breach_point,
         # the MODFLOW DISV / TELEMAC refine_region sizing, breaklines, boundaries).
         if parsed.breach_points:

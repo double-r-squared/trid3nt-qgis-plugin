@@ -1,6 +1,6 @@
 """Raster style / publish-preset helpers for the WebSocket server.
 
-Extracted from the monolith in server-refactor wave 3 (ADR 0263). Pure
+Pure
 predicates + a preset resolver for the ``publish_layer`` wrap-site: default a
 re-published flood/depth COG that arrives with an EMPTY ``style_preset`` to
 ``continuous_flood_depth`` (an empty preset makes QGIS fall back to viridis and

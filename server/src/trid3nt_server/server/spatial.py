@@ -1,9 +1,9 @@
 """Bbox / AOI helpers and the spatial pending-input registries.
 
-Extracted from the monolith in server-refactor wave 3 (ADR 0263). Two groups:
+Two groups:
 (1) pure bbox/AOI coercion + turn zoom-to accumulator helpers (finite-4-tuple
 guard, camera-snap dedupe) that never touch session state; and (2) the
-session-scoped region-choice and spatial-input (FR-AS-10 request_spatial_input)
+session-scoped region-choice and spatial-input (``request_spatial_input``)
 pending registries -- the same register/pop/resolve owner-checked shape as the
 interaction gates, fail-open on timeout so an unanswered picker never hangs the
 turn. The heavier drawn-geometry handlers (``_emit_spatial_input_and_wait``,
@@ -169,10 +169,10 @@ def _resolve_pending_region_choice(
 
 
 # --------------------------------------------------------------------------- #
-# Session-scoped pending-SPATIAL-INPUT registry (FR-AS-10 request_spatial_input)
+# Session-scoped pending-SPATIAL-INPUT registry (request_spatial_input)
 # --------------------------------------------------------------------------- #
 #
-# Mirrors ``_PENDING_REGION_CHOICES`` exactly, but for the FR-WC-16 urban
+# Mirrors ``_PENDING_REGION_CHOICES`` exactly, but for the urban
 # vector-draw flow: when the LLM (or the urban-flood flow) calls
 # ``request_spatial_input``, the dispatch coroutine emits a
 # ``spatial-input-request`` envelope (point / bbox / vector_draw) and pauses on a

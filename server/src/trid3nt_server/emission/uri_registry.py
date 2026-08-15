@@ -20,7 +20,7 @@ lowered the rate; this module removes the failure mode architecturally:
   3. unknown but *close* to a registered URI (same basename, ≥12-char hash
      prefix, layer_id-as-basename, or unique same-directory candidate)
      → substitute + WARNING (the mangle classes above);
-  4. unknown with no plausible match    → ADR 0014: object-store URIs
+  4. unknown with no plausible match    → object-store URIs
      (``gs://`` / ``s3://``) and display-only faces (WMS / tile-template
      URLs with no recoverable data URI) raise a typed retryable error
      (``URI_HANDLE_UNRESOLVED``) that TELLS the model which handles exist,
@@ -28,7 +28,7 @@ lowered the rate; this module removes the failure mode architecturally:
      strings (external http(s) links, local paths, opaque tokens) still
      FAIL OPEN -- user-supplied sources are never blocked.
 
-ADR 0014 (layer handles, not URIs): alongside the ``layer_id`` handles above,
+Layer handles, not URIs: alongside the ``layer_id`` handles above,
 the registry mints SHORT per-case handles (``L1``, ``L2``, ...) the moment a
 record gains a data URI. The emit seam (server.py) rewrites the LLM-facing
 function_response so the model only ever sees ``L<n>`` where a registered URI
@@ -136,14 +136,14 @@ RESOLVABLE_URI_PARAMS: frozenset[str] = frozenset(
     }
 )
 
-#: ADR 0014: params whose VALUES are handle/URI mappings (not a single string).
+#: Params whose VALUES are handle/URI mappings (not a single string).
 #: ``code_exec_request.layer_refs`` is ``{var_name: layer_uri}`` (values may
 #: also be LISTS of URIs); every string value resolves through the same
 #: four-branch machinery as the flat ``*_uri`` params above. ``layer_uris`` is
 #: the documented alias the LLM sometimes uses.
 NESTED_REF_PARAMS: frozenset[str] = frozenset({"layer_refs", "layer_uris"})
 
-#: ADR 0014: the short per-case layer-handle shape the registry mints at the
+#: The short per-case layer-handle shape the registry mints at the
 #: emit seam (``L1``, ``L2``, ...). Case-insensitive on resolve (``l3`` works);
 #: leading zeros normalize (``L07`` == ``L7``).
 SHORT_HANDLE_RE = re.compile(r"^[Ll](\d+)$")
@@ -191,7 +191,7 @@ _DEM_CONSUMING_TOOLS: frozenset[str] = frozenset(
 class UriResolutionError(RuntimeError):
     """An LLM-supplied URI param matched nothing the session ever produced.
 
-    ``error_code`` / ``retryable`` follow the FR-AS-11 typed-exception
+    ``error_code`` / ``retryable`` follow the typed-exception
     convention so ``summarize_tool_result`` renders the structured envelope
     and Gemini retries with a handle instead of re-inventing a path.
     """
@@ -240,7 +240,7 @@ def _is_gs(value: str) -> bool:
 def _is_object_store(value: str) -> bool:
     """True for the object-store schemes this stack (or its legacy) mints.
 
-    ADR 0014: these are exactly the shapes the LLM historically hallucinated
+    These are exactly the shapes the LLM historically hallucinated
     (gs:// on the legacy cloud, s3:// on the local MinIO stack) -- an UNKNOWN
     one in a layer-consuming param is a typed reject, never a pass-through.
     """
@@ -376,7 +376,7 @@ class SessionUriRegistry:
     _pending_announcements: OrderedDict[str, str] = field(
         default_factory=OrderedDict
     )
-    # ADR 0014: short per-case layer handles (``L<n>``). Minted monotonically
+    # Short per-case layer handles (``L<n>``). Minted monotonically
     # the moment a record gains a DATA uri; persisted with the Case (see
     # server._persist_case_layer_handles) so a reconnect/reopen resolves the
     # SAME handles the LLM already saw. ``_short_to_uri`` keys are canonical
@@ -445,12 +445,12 @@ class SessionUriRegistry:
             for u in (evicted.uri, evicted.wms_url):
                 if u and self._uri_to_handle.get(u) == evicted_handle:
                     self._uri_to_handle.pop(u, None)
-            # ADR 0014: short handles deliberately SURVIVE record eviction --
+            # Short handles deliberately SURVIVE record eviction --
             # an already-announced L<n> must keep resolving for the life of
             # the Case (the map is tiny: two strings per layer).
 
     # ------------------------------------------------------------------ #
-    # ADR 0014 -- short per-case layer handles (L<n>)
+    # Short per-case layer handles (L<n>)
     # ------------------------------------------------------------------ #
 
     def _mint_short(self, uri: str) -> str | None:
@@ -526,7 +526,7 @@ class SessionUriRegistry:
         self._shorts_dirty = False
 
     def rewrite_result_for_llm(self, node: Any) -> Any:
-        """ADR 0014 emit seam: registered URIs -> short handles, LLM-only.
+        """Emit seam: registered URIs -> short handles, LLM-only.
 
         Returns a REWRITTEN COPY of ``node`` (a function_response summary)
         in which every registered layer URI face (the data COG *and* its
@@ -642,7 +642,7 @@ class SessionUriRegistry:
         if not value:
             return
         norm = _normalize_gs(value)
-        # ADR 0014: s3:// joins gs:// -- the local stack (MinIO) mints s3://
+        # s3:// joins gs:// -- the local stack (MinIO) mints s3://
         # object keys (run frames, model_setup artifacts, published COGs);
         # they must register so verbatim echoes dual-accept, mangles fuzzy-
         # match, and the emit rewrite can hand the LLM a short handle.
@@ -683,7 +683,7 @@ class SessionUriRegistry:
     def clear(self) -> None:
         """Drop every registered handle/URI/pending-announcement.
 
-        ADR 0014: the short-handle map + its counter clear too -- shorts are
+        The short-handle map + its counter clear too -- shorts are
         PER-CASE state; a case-switch reseeds them from the new Case's
         persisted map (``replace_from_layers(short_handles=...)``).
         """
@@ -711,7 +711,7 @@ class SessionUriRegistry:
         layers, mirroring the emitter's ``reset_loaded_layers`` (replace, not
         reconcile -- the same rule applied here too).
 
-        ADR 0014: ``short_handles`` is the Case's PERSISTED ``{L<n>: uri}``
+        ``short_handles`` is the Case's PERSISTED ``{L<n>: uri}``
         map -- imported BEFORE the layer seed so already-announced handles
         keep their numbers and fresh layers mint PAST the persisted maximum.
         """
@@ -744,7 +744,7 @@ class SessionUriRegistry:
             return params
         out = dict(params)
         for name, value in params.items():
-            # ADR 0014: nested handle/URI mappings (code_exec layer_refs) --
+            # Nested handle/URI mappings (code_exec layer_refs) --
             # every string VALUE resolves; keys (variable names) untouched.
             if name in NESTED_REF_PARAMS and isinstance(value, dict):
                 resolved_refs = self._resolve_ref_mapping(tool_name, name, value)
@@ -829,7 +829,7 @@ class SessionUriRegistry:
                 raise UriResolutionError(param_name, value, self._inventory_text(tool_name))
             return v
 
-        # Branch 2b (ADR 0014) -- a SHORT layer handle (L<n>, case-insensitive).
+        # Branch 2b -- a SHORT layer handle (L<n>, case-insensitive).
         # The desired steady state after the emit rewrite: the LLM passes the
         # short handle it was shown; an UNKNOWN short handle is a typed reject
         # carrying the real inventory so the retry self-corrects.
@@ -905,7 +905,7 @@ class SessionUriRegistry:
         if substituted is not None:
             return substituted
 
-        # Branch 4 (ADR 0014) -- unknown object-store URI with no plausible
+        # Branch 4 -- unknown object-store URI with no plausible
         # match where a LAYER is expected: TYPED REJECT. The session never
         # produced this path, so passing it through can only 404 downstream
         # (or worse, read the wrong object) -- raising here with the handle
@@ -915,7 +915,7 @@ class SessionUriRegistry:
         # branch 1 -- so old cases keep working via the dual-accept.)
         logger.warning(
             "uri_registry[%s]: rejecting unregistered object-store uri "
-            "%s.%s=%r (ADR 0014)",
+            "%s.%s=%r",
             self.session_id,
             tool_name,
             param_name,
@@ -1069,7 +1069,7 @@ class SessionUriRegistry:
                 "flood-depth raster, fetch_usace_nsi for building assets)."
             )
         def _one(r: UriRecord) -> str:
-            # ADR 0014: lead with the short handle when one exists so the
+            # Lead with the short handle when one exists so the
             # retry passes ``L<n>`` (the cheapest, unmangleable form).
             short = self._uri_to_short.get(r.uri) if r.uri else None
             base = f"{r.handle} (from {r.tool_name or 'unknown'})"

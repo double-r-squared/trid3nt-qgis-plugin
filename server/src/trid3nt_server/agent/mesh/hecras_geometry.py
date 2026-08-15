@@ -2,34 +2,34 @@
 
 Mesh-layer wave M3 (SIGNED spec: docs/specs/mesh-layer-extraction.md; the write
 seam the spec named as ``hecras_geometry``). This module delivers the READ/preview
-half. The WRITE half -- once STOPPED under the ADR 0100 premise -- is now UNLOCKED
-and lives in ``services/workers/hecras2025/hecras_geometry_writer.py`` (ADR 0132
-OI-2). See below for why the block was lifted.
+half. The WRITE half lives in
+``services/workers/hecras2025/hecras_geometry_writer.py``. See below for why
+that write path is unblocked.
 
-WHY THE ADR-0100 WRITE-BLOCK NO LONGER HOLDS. The 2026-08-03 M3 finding was that a
+WHY A FROM-SCRATCH 2D FLOW AREA IS VIABLE. The original constraint was that a
 from-scratch 2D flow area is INSUFFICIENT because "nothing on the Linux stack
 computes the subgrid property tables" -- each cell carries a terrain-sampled
 volume<->elevation table and each face an area/WP<->elevation table, ``RasUnsteady``
 reads them in ``Subroutine READBathymetry`` and cannot run without them, and
 ``RasGeomPreprocess`` does NOT rebuild the 2D subgrid tables (it rebuilds only the
 1D cross-section conveyance). At the time those tables were only authorable by the
-Windows RASMapperLib DLLs. Two later results removed exactly that premise:
+Windows RASMapperLib DLLs. Two results removed exactly that premise:
 
-  * ADR 0130 -- ``MeshPropertyTables.ComputeFrom`` (the HEC-RAS 2025 beta compute
+  * ``MeshPropertyTables.ComputeFrom`` (the HEC-RAS 2025 beta compute
     path) computes the cell/face subgrid tables HEADLESS ON LINUX under substituted
     open-source GDAL/HDF5. So the tables ARE now Linux-computable.
-  * ADR 0132 (Q3 + the validated addendum) -- the PRODUCTION 6.x solver CONSUMES 2D
+  * The PRODUCTION 6.x solver CONSUMES 2D
     subgrid tables written by an EXTERNAL (h5py) writer and reproduces the Muncie
     baseline (dWSE 0.008 ft); the 2025-computed VALUES match the 6.x GUI ground
-    truth (cell-volume corr 0.99988). And ADR 0133 built the fresh-group geometry
-    writer and solved a WRITER-AUTHORED /Geometry/2D Flow Areas group to the
+    truth (cell-volume corr 0.99988). A fresh-group geometry
+    writer solved a WRITER-AUTHORED /Geometry/2D Flow Areas group to the
     baseline bit-identically (dWSE 0.00000 ft, product path).
 
   So a writer-authored 2D flow area (topology from the 2025 ``Mesh``, subgrid
   tables from ``ComputeFrom``) is NO LONGER dead code -- the Linux stack computes
   the tables and the 6.x solver consumes them.
 
-WHAT REMAINS GATED (ADR 0133 triage): a genuinely-NEW-AOI PURE-2D deck also needs
+WHAT REMAINS GATED: a genuinely-NEW-AOI PURE-2D deck also needs
 the plan-skeleton / boundary forcing stanzas (``.pNN``/``.bNN``/``.xNN`` 2D-BC-line
 or precipitation blocks), which the in-repo combined-1D/2D Muncie reference does not
 carry; those await a pure-2D reference deck (ledgered). The reader/preview half

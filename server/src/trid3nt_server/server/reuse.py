@@ -1,4 +1,4 @@
-"""Scenario/fetch reuse short-circuit shim (server-refactor wave 4, ADR 0264).
+"""Scenario/fetch reuse short-circuit shim.
 
 The reuse *decision* logic (the scenario-index + fetched-layer lookups and the
 short-circuit branches) lives inline in ``_core._invoke_tool_via_emitter``,

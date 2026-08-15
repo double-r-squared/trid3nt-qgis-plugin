@@ -1,30 +1,28 @@
-"""Appendix-A WebSocket server (FR-AS-5, Appendix A core subset for M1/job-0015).
+"""The core WebSocket server.
 
-Implements the M1 hello-world subset of Appendix A:
+Wire envelope routing:
 
-  client -> agent (A.3):
+  client -> agent:
     - session-resume          -> session-state
     - user-message            -> agent-message-chunk* (terminal done=True)
-    - cancel                  -> pipeline-state(cancelled) within NFR-R-3 30s
+    - cancel                  -> pipeline-state(cancelled) within a 30s budget
 
-  agent -> client (A.4):
+  agent -> client:
     - session-state           initial replay on session-resume
     - agent-message-chunk     streamed deltas + terminal frame
     - pipeline-state          for cancel; also a one-step "thinking" snapshot
-    - error                   A.6 codes
+    - error                   typed error codes
 
 Every wire envelope is validated through ``trid3nt_contracts.ws.Envelope`` --
-NEVER hand-roll JSON. Per Invariant 8 cancellation is first-class: any
+NEVER hand-roll JSON. Cancellation is first-class: any
 in-flight Gemini stream is cancelled via asyncio task cancellation; the LLM
 side of the chain completes within 30s. Cloud Workflows ``terminate`` is the
-v0.2/M5 side of the chain (no solver yet in M1).
+solver-dispatch side of the chain.
 
-FR-WC-15 ``research_mode``: pass-through pinned. For job-0015 v0.1 the field is
+``research_mode``: pass-through pinned. The field is
 logged and forwarded as-is -- there is no second pipeline strategy yet.
 
-OQ-1 (Cloud Run WS vs Agent Engine) -- see report's Open Questions section.
-
-Module of record for the ``trid3nt_server.server`` package (ADR 0261). This is
+Module of record for the ``trid3nt_server.server`` package. This is
 the monolith body mid-refactor: it shrinks wave by wave as regions extract into
 sibling modules (already done: ``errors``, ``config``). The package ``__init__``
 proxies every attribute read/write here so importers and tests see the SAME
@@ -249,10 +247,10 @@ from ..agent.categories import (
 from ..agent.gates.circuit_breaker import CircuitBreakerError, ToolCircuitBreaker
 from ..agent.gates.tool_gating import BenchBlockedError
 
-# Auth-token envelope (Appendix H.5 connect handshake).
+# Auth-token envelope (connect handshake).
 from trid3nt_contracts.auth import AuthTokenEnvelope
 
-# Wave-1 extractions (ADR 0261): the typed error taxonomy and the env-knob
+# The typed error taxonomy and the env-knob
 # config helpers now live in sibling package modules. Imported here by NAME so
 # bare-global references below AND monkeypatch targets on
 # ``trid3nt_server.server.<name>`` (proxied through the package facade to this
@@ -279,7 +277,7 @@ from .config import (
     _tool_retrieval_mode,
 )
 
-# Wave-3 extractions (ADR 0263): pending-interaction registries, raster-style
+# Pending-interaction registries, raster-style
 # helpers, and bbox/AOI + spatial pending-input registries now live in sibling
 # package modules. Imported here by NAME so bare-global references below AND
 # monkeypatch targets on ``trid3nt_server.server.<name>`` resolve as before.
@@ -326,7 +324,7 @@ from .spatial import (
     _resolve_pending_spatial_input,
 )
 
-# Wave-4 extractions (ADR 0264): the reuse short-circuit shim, the low-coupling
+# The reuse short-circuit shim, the low-coupling
 # tool-dispatch helpers (progress accounting, gate-expander name sets,
 # terminal-composer classification), and the session-connection registry now
 # live in sibling package modules. Imported here by NAME so bare-global
@@ -356,7 +354,7 @@ from .protocol import (
     session_connection_count,
 )
 
-# Finale extractions (ADR 0265): the per-session state layer (the SessionState
+# The per-session state layer (the SessionState
 # dataclass + the session-scoped active-Case / anon-id registries) and the turn
 # wire plumbing (envelope construction + session-safe send primitives) now live
 # in sibling package modules. Imported here by NAME so bare-global references
@@ -392,14 +390,14 @@ logger = logging.getLogger("trid3nt_server.server")
 
 
 # ---------------------------------------------------------------------------
-# Stage 3 (ADR 0017 mechanisms 3-5 + ADR 0018) -- harness-absorbs-prompt
+# Harness-absorbs-prompt
 # config seams. Every mechanism ships with an env kill-switch so a live
 # regression can be flipped off without a code change (the TRID3NT_* idiom).
 # ---------------------------------------------------------------------------
 
 
 def _session_routing_mode(state: "SessionState") -> str:
-    """ADR 0018 routing-visibility mode for this session: 'auto' | 'ask'.
+    """Routing-visibility mode for this session: 'auto' | 'ask'.
 
     A per-session setting (the ``session-config`` envelope's ``mode`` field)
     wins; else the ``TRID3NT_MODE`` env default; else 'auto'. Gates are NEVER
@@ -415,7 +413,7 @@ def _session_routing_mode(state: "SessionState") -> str:
 #: Max candidates surfaced on one tool-candidates card (avoid flooding).
 _TOOL_CANDIDATES_MAX = 4
 
-#: Turn-loop-invariant continuation nudge (ADR 0017 mechanism 4). ONE per
+#: Turn-loop-invariant continuation nudge. ONE per
 #: turn, injected as a user-role content when a turn (a) terminates with tool
 #: results but zero assistant text since the last tool round, or (b) only ever
 #: geocoded while the user asked for data/analysis.
@@ -443,7 +441,7 @@ def _asks_for_data_or_analysis(user_text: Any) -> bool:
     return bool(isinstance(user_text, str) and _DATA_INTENT_RE.search(user_text))
 
 
-#: ADR 0018 analysis-flow stages, in pipeline order. The wave label derivation
+#: Analysis-flow stages, in pipeline order. The wave label derivation
 #: (``_stage_label_for_candidates``) tie-breaks toward the EARLIEST stage so a
 #: multi-step turn reads as a forward march acquisition -> ... -> visualization.
 _STAGE_ORDER: tuple[str, ...] = (
@@ -455,8 +453,8 @@ _STAGE_ORDER: tuple[str, ...] = (
 
 
 def _stage_label_for_tool(tool_name: str) -> str:
-    """Coarse analysis-flow stage for ONE tool name (ADR 0018:
-    acquisition -> preprocessing -> analysis -> visualization).
+    """Coarse analysis-flow stage for ONE tool name
+    (acquisition -> preprocessing -> analysis -> visualization).
 
     Category definitions: acquisition = fetchers (fetch_/geocode_/discover_/
     catalog_/search_); preprocessing = processing/clip (clip_/merge_/fill_/cut_/
@@ -487,7 +485,7 @@ def _stage_label_for_tool(tool_name: str) -> str:
 def _stage_label_for_candidates(ranked: list[tuple[str, float]]) -> str:
     """Derive one wave ``stage_label`` from the TOP candidates' categories.
 
-    ADR 0018 wave completion: a single top tool is a brittle signal for a
+    Wave completion: a single top tool is a brittle signal for a
     round's stage (the rank-1 pick may be an outlier). Instead we aggregate the
     categories of the top ``_TOOL_CANDIDATES_MAX`` candidates and pick the
     PLURALITY stage, tie-broken toward the earliest pipeline stage so a
@@ -556,7 +554,7 @@ def _union_pinned_tool(
     """Union a user-pinned tool into the allowed set + visible registry.
 
     Shared by the pre-turn tool-candidates gate and the per-round ASK-mode
-    waves (ADR 0018): a pinned tool must be BOTH in the allowed set (post-hoc
+    waves: a pinned tool must be BOTH in the allowed set (post-hoc
     validation) AND in the retrieval-visible registry (so the declaration is
     built and the model can actually call it). Returns the registry to use --
     a NEW dict when the pin widened it, else the same object (so callers can
@@ -571,11 +569,11 @@ def _union_pinned_tool(
 
 
 # ---------------------------------------------------------------------------
-# Routing-layer typed exceptions (FR-AS-11 surface).
+# Routing-layer typed exceptions.
 #
 # These live here rather than in a shared exceptions module because they are
 # raised exclusively inside ``_invoke_tool_via_emitter`` -- the server-side
-# routing layer. They follow the same FR-AS-11 contract as the tool-level
+# routing layer. They follow the same typed-exception contract as the tool-level
 # typed exceptions (``WDPAError``, ``HRSLError``, etc.): ``error_code`` is a
 # SCREAMING_SNAKE_CASE string and ``retryable`` is False for both (the LLM
 # cannot retry its way out of a missing tool registration; it must revise its
@@ -588,7 +586,7 @@ def _union_pinned_tool(
 # ---------------------------------------------------------------------------
 
 
-# Tools whose dispatch is a consequence (a solver run, FR-AS-8 / Invariant 9)
+# Tools whose dispatch is a consequence (a solver run)
 # and MUST pass a parameter-confirmation gate on the LLM path. The gate runs
 # the composer's PURE extraction to build the confirm card, blocks on the
 # same pending_payload_warnings future seam as payload-warning/code-exec,
@@ -684,7 +682,7 @@ FETCH_CONFIRM_TOOLS: set[str] = {
 # the session matches, since the client can open multiple WebSocket
 # connections per browser session. Shared by every confirmation gate --
 # payload warning, code-exec, solver-confirm, and the in-tool input-review gate
-# (ADR 0107). The registry + its accessors live in ``agent.gates.pending`` so
+# The registry + its accessors live in ``agent.gates.pending`` so
 # an in-tool gate (which cannot import ``server`` at module load) rides the SAME
 # spine; re-imported here so ``server._PENDING_CONFIRMATIONS`` stays that dict.
 from ..agent.gates.pending import (  # noqa: E402
@@ -696,7 +694,7 @@ from ..agent.gates.pending import (  # noqa: E402
 
 
 # App-level Persistence singleton. The MongoDB Atlas MCP server is the
-# LLM-facing DB path (FR-AS-4, Decision F); ``Persistence`` wraps it with a
+# LLM-facing DB path; ``Persistence`` wraps it with a
 # typed surface (CaseSummary / User / SecretRecord / CaseChatMessage). Bound
 # at startup if ``TRID3NT_MONGO_MCP_URL`` is set or a stdio MCP config
 # resolves; otherwise stays ``None`` and callers fall back to in-memory
@@ -1069,7 +1067,7 @@ async def _maybe_emit_tool_candidates(
     user_text: str,
     exclude_tools: "set[str] | None" = None,
 ) -> tuple[str | None, list[str]]:
-    """ADR 0018: surface the retrieval-ranked tool candidates BEFORE dispatch.
+    """Surface the retrieval-ranked tool candidates BEFORE dispatch.
 
     Fires when the session mode is ``ask``, OR in ``auto`` when the top-1 vs
     top-2 retrieval-score margin is under the measured-ambiguity threshold
@@ -1097,7 +1095,7 @@ async def _maybe_emit_tool_candidates(
 
     ranked = retrieve_ranked_tools(user_text, k=8)
     if exclude_tools:
-        # ADR 0018 wave semantics: drop this turn's already-dispatched tools so
+        # Wave semantics: drop this turn's already-dispatched tools so
         # each subsequent ASK-mode round's wave advances the stage label
         # (acquisition -> preprocessing -> analysis -> visualization) instead of
         # re-offering the same acquisition picks every round.
@@ -1397,7 +1395,7 @@ async def _stream_model_reply(
     # bedrock_adapter (after tools), so subsetting the dict here preserves it.
     #
     # DEFAULT declarable set: the full registry MINUS tier=catalog/internal
-    # (never the raw TOOL_REGISTRY). Door dissolution (ADR 0094): engine
+    # (never the raw TOOL_REGISTRY). Engine
     # templates are ordinary members of this default set now -- callable
     # directly, no concierge. See _default_declarable_registry.
     _retrieval_registry = _default_declarable_registry()
@@ -1477,7 +1475,7 @@ async def _stream_model_reply(
             )
             # FAIL-OPEN to the tier-filtered default (NOT raw TOOL_REGISTRY):
             # drops only tier=catalog/internal. Engine templates are ordinary
-            # members here (door dissolution, ADR 0094). See
+            # members here. See
             # _default_declarable_registry.
             _retrieval_registry = _default_declarable_registry()
 
@@ -1562,7 +1560,7 @@ async def _stream_model_reply(
                 exc_info=True,
             )
 
-    # ADR 0018: auto/ask tool-candidates gate. May PAUSE here (bounded --
+    # Auto/ask tool-candidates gate. May PAUSE here (bounded --
     # see _tool_choice_timeout_s) awaiting the user's tool-choice. A pinned
     # tool is unioned into the visible registry + allowed set BEFORE
     # declarations are built so the model can actually call it. Any fault
@@ -1619,7 +1617,7 @@ async def _stream_model_reply(
         logger.debug("per-turn case-state note build failed", exc_info=True)
     contents = build_contents_from_history(user_text, turn_history_for_contents)
 
-    # ADR 0018 (Stage 3): feed the tool-candidates outcome into the model
+    # Feed the tool-candidates outcome into the model
     # context -- the pin directive ("Use the tool 'X'"), the user's free-text
     # clarification, or the timeout proceed-autonomously note. Appended AFTER
     # the user message so the model reads the ask, then the user's routing
@@ -1743,7 +1741,7 @@ async def _stream_model_reply(
             # later reactive retry).
             _compaction_step_id: str | None = None
 
-            # ADR 0018 wave semantics: in ASK mode, surface a pre-dispatch
+            # Wave semantics: in ASK mode, surface a pre-dispatch
             # tool-candidates WAVE before EACH subsequent round (round 1 is covered
             # by the pre-loop emission above). Excluding this turn's
             # already-dispatched tools advances the stage label so a multi-step
@@ -2132,7 +2130,7 @@ async def _stream_model_reply(
                 # below routes them through summarize_tool_result(error=...) -- a
                 # structured {status: "error", error_code: str, retryable: bool}
                 # envelope Gemini can distinguish from "tool ran and returned nothing"
-                # (FR-AS-11).
+                # (a typed error).
                 dispatch_error: BaseException | None = None
                 result: Any = None
                 # CRISP-END (NATE 2026-06-29): set True iff THIS call is a
@@ -2158,7 +2156,7 @@ async def _stream_model_reply(
                     result = await _invoke_tool_via_emitter(
                         websocket, state, call.name, call.args
                     )
-                    # FR-AS-10 / FR-WC-16: request_spatial_input PAUSES the turn awaiting a
+                    # request_spatial_input PAUSES the turn awaiting a
                     # user-drawn FeatureCollection. The catalog tool returns the
                     # SPATIAL_INPUT_SENTINEL_KEY sentinel (it has no websocket access);
                     # here -- where the live socket + the session future registry ARE
@@ -2377,7 +2375,7 @@ async def _stream_model_reply(
                     call.name, result, error=dispatch_error
                 )
                 _uri_reg = get_uri_registry(state.session_id)
-                # ADR 0014 EMIT SEAM: the LLM-facing function_response shows SHORT
+                # EMIT SEAM: the LLM-facing function_response shows SHORT
                 # layer handles (L<n>) wherever a registered layer URI would appear --
                 # the single biggest hallucination surface (~30 tokens per raw URI
                 # echo). ONLY this LLM surface changes: the plugin-bound wire envelopes
@@ -3313,7 +3311,7 @@ async def _replay_active_case_layers(state: SessionState) -> None:
 
 
 # --------------------------------------------------------------------------- #
-# Connect-handshake (Appendix H.5 + H.3)
+# Connect-handshake
 # --------------------------------------------------------------------------- #
 
 
@@ -3362,7 +3360,7 @@ async def _handle_auth_token(
 ) -> None:
     """Process the client's ``auth-token`` envelope and emit ``auth-ack``.
 
-    Per Appendix H.5:
+    Per the connect-handshake contract:
 
     1. Validate the payload through ``AuthTokenEnvelope``.
     2. Call ``authenticate_token`` -> resolves to a ``User`` via Persistence
@@ -3419,8 +3417,8 @@ async def _handle_auth_token(
         _set_session_anon_id(state.session_id, result.user.user_id)
 
     _bind_auth_result(state, result)
-    await _touch_session_record(state)  # D.6 heartbeat (job-0203 / M4)
-    # REMOTE-DAEMON ACCESS (2026-07): advertise the sibling endpoints derived
+    await _touch_session_record(state)  # session heartbeat
+    # REMOTE-DAEMON ACCESS: advertise the sibling endpoints derived
     # from THIS connection's local address (so a tailnet client learns the
     # data + HTTP bases automatically) plus any env override.
     endpoints = derive_advertised_endpoints(_connection_local_host(websocket))
@@ -3463,7 +3461,7 @@ async def _touch_session_record(
     ``expires_at`` advance (TTL driver per ``SESSIONS_TTL``), the active
     Case lands in ``project_ids``. Fired on auth bind, Case open/create,
     and every persisted chat turn -- none of these touches is a confirmable
-    write (FR-AS-8 session-record carveout).
+    write (the session-record carveout).
 
     Best-effort: a persistence hiccup is logged at WARNING and never
     reaches the caller.
@@ -3594,7 +3592,7 @@ async def _ensure_auth_handshake(
     if result.is_anonymous:
         _set_session_anon_id(state.session_id, result.user.user_id)
     _bind_auth_result(state, result)
-    await _touch_session_record(state)  # D.6 heartbeat (job-0203 / M4)
+    await _touch_session_record(state)  # session heartbeat
     endpoints = derive_advertised_endpoints(_connection_local_host(websocket))
     ack = build_auth_ack(result, endpoints=endpoints)
     try:
@@ -3610,7 +3608,7 @@ async def _ensure_auth_handshake(
 
 
 # --------------------------------------------------------------------------- #
-# Case lifecycle handlers (FR-MP-6)
+# Case lifecycle handlers
 # --------------------------------------------------------------------------- #
 
 #: OPEN-8: the last-emitted case-list content digest PER SESSION (not
@@ -3817,7 +3815,7 @@ async def _sync_case_context(
         # place the layer_id -> uri association survives). REPLACE, not
         # additive-seed -- this IS a case-switch point; an additive seed would
         # leak the previous Case's handles/URIs into this Case's resolution.
-        # ADR 0014: also restores the Case's persisted L<n> short-handle map.
+        # Also restores the Case's persisted L<n> short-handle map.
         await _seed_registry_for_case(
             state, current, session_state.loaded_layers
         )
@@ -3982,7 +3980,7 @@ async def _handle_case_command(
     state: SessionState,
     cmd: CaseCommandEnvelopePayload,
 ) -> None:
-    """Dispatch one ``case-command`` (FR-MP-6 Case lifecycle).
+    """Dispatch one ``case-command`` (Case lifecycle).
 
     Commands:
 
@@ -3991,7 +3989,7 @@ async def _handle_case_command(
       the fresh (empty) session state, then refresh ``case-list``.
     - ``select`` -- load the persisted ``CaseSessionState`` and emit
       ``case-open`` with the full rehydration (chat history, loaded
-      layers, pipeline history -- per FR-MP-6 chat-replay default).
+      layers, pipeline history -- the chat-replay default).
     - ``rename`` -- update ``CaseSummary.title``, persist, emit
       ``case-list`` updated.
     - ``archive`` -- soft-archive via ``Persistence.archive_case``, emit
@@ -4001,8 +3999,8 @@ async def _handle_case_command(
       user BEFORE firing this command; the server does not double-confirm.
 
     Errors surface as ``error`` envelopes with ``error_code=INTERNAL_ERROR``
-    (the case-lifecycle commands are NOT a confirmation trigger per
-    FR-AS-8; only solver runs and non-session-collection Mongo writes are).
+    (the case-lifecycle commands are NOT a confirmation trigger;
+    only solver runs and non-session-collection Mongo writes are).
     """
     p = get_persistence()
     if p is None:
@@ -4011,7 +4009,7 @@ async def _handle_case_command(
             state.session_id,
             "INTERNAL_ERROR",
             "case-command requires Persistence; the agent service was started "
-            "without TRID3NT_MONGO_MCP_STDIO=1 and cannot satisfy FR-MP-6.",
+            "without TRID3NT_MONGO_MCP_STDIO=1 and cannot satisfy Case persistence.",
         )
         return
 
@@ -4440,7 +4438,7 @@ async def _auto_create_case_from_root(
 
     Deliberately NOT the ``case-command(create)`` reset path: the in-flight
     message IS the Case's first turn, so the per-connection LLM context
-    (``chat_history``) and the FR-FR-3 ``turn_count`` are left untouched.
+    (``chat_history``) and the ``turn_count`` are left untouched.
 
     Returns the new ``case_id``, or ``None`` when Persistence is unbound or
     the upsert fails -- the M1 stateless path keeps working either way.
@@ -5150,7 +5148,7 @@ async def _persist_chat_turn(
     is logged but not raised -- chat persistence is a side-effect, not the
     happy path of message delivery.
 
-    Per FR-AS-8 / Decision F the chat-message collection is part of the
+    The chat-message collection is part of the
     agent's own session record (it is per-turn replay material, not a
     solver result), so this write does NOT pause for user approval.
 
@@ -6418,7 +6416,7 @@ def _ensure_emitter(websocket: ServerConnection, state: SessionState) -> None:
     """Bind a ``PipelineEmitter`` to this session if one isn't already.
 
     The emitter's sink is the WebSocket ``send`` -- every transition method
-    writes one envelope on the wire (Appendix A.7 replace-not-reconcile)."""
+    writes one envelope on the wire (replace-not-reconcile)."""
     if state.emitter is not None:
         return
 
@@ -6524,7 +6522,7 @@ async def _maybe_handle_credential_error(
     - ``None`` when the error is NOT credential-shaped, the tool already
       prompted this turn (one-prompt-per-tool-per-turn guard), or the user
       declined / the gate timed out. The caller then re-raises the original
-      error so it flows through the normal typed-error surface (FR-AS-11) and
+      error so it flows through the normal typed-error surface and
       the LLM narrates the failure honestly.
 
     Two paths:
@@ -6843,7 +6841,7 @@ async def _maybe_handle_region_choice(
 
 
 # --------------------------------------------------------------------------- #
-# FR-AS-10: request_spatial_input -- pause the turn, await the drawn geometry.
+# request_spatial_input -- pause the turn, await the drawn geometry.
 # --------------------------------------------------------------------------- #
 #
 # Mirrors the region-choice pause/resume seam (``_emit_region_choice_and_wait``).
@@ -7194,7 +7192,7 @@ _ALWAYS_OFFLOAD_SYNC_TOOLS = frozenset(
         # (feedback_no_sync_blocking_on_asyncio_loop). Escalated by the
         # tools-session (tool-retrieval kickoff #6).
         "fetch_glm_lightning",
-        # ADR 0203 record fetchers: heavy SYNC I/O in the record hook. fetch_aorc_precip
+        # Record fetchers: heavy SYNC I/O in the record hook. fetch_aorc_precip
         # opens a public AORC Zarr year store (anonymous s3fs) and streams the windowed
         # AOI-mean over multi-second network reads; fetch_lter_records downloads and parses
         # a multi-MB EDI data entity through the DataONE mirror. Emit-free bodies (the
@@ -7411,7 +7409,7 @@ async def _invoke_tool_via_emitter(
     through this wrapper so that:
 
     - the per-session ``PipelineEmitter`` auto-creates a step,
-    - emits ``pipeline-state`` on every state transition (Appendix A.7),
+    - emits ``pipeline-state`` on every state transition (replace-not-reconcile),
     - re-emits ``session-state`` whenever the tool returns a ``LayerURI``,
     - propagates ``asyncio.CancelledError`` (Invariant 8) and classifies
       arbitrary exceptions into the open-set A.6 error-code registry.
@@ -7427,7 +7425,6 @@ async def _invoke_tool_via_emitter(
         # can distinguish "tool ran and returned nothing" from "tool name was
         # never registered". function_response IS the signal Gemini reads
         # between turns -- the _send_error side-channel is not needed here.
-        # (FR-AS-3, FR-AS-11.)
         raise ToolNotFoundError(tool_name, list(TOOL_REGISTRY))
     entry = TOOL_REGISTRY[tool_name]
 
@@ -7525,7 +7522,7 @@ async def _invoke_tool_via_emitter(
         # envelope ({status: "error", error_code:
         # "PAYLOAD_WARNING_CANCELLED", retryable: False}) instead of
         # {"status": "no_result"}, which it cannot interpret. retryable=False
-        # because the user explicitly cancelled. (FR-AS-11.)
+        # because the user explicitly cancelled.
         raise PayloadWarningCancelledError(tool_name)
 
     # code_exec_request confirm gate: running arbitrary Python is a
@@ -7568,7 +7565,7 @@ async def _invoke_tool_via_emitter(
     # gate AND the reuse guard so both see canonicalized param names.
     params = normalize_args(tool_name, params, entry.fn)
 
-    # ADR 0017: bbox AUTO-FILL. A tool whose signature REQUIRES a bbox-like
+    # bbox AUTO-FILL. A tool whose signature REQUIRES a bbox-like
     # param ('bbox' / 'aoi_bbox') that the model OMITTED gets it injected
     # here -- precedence: explicit arg > active canvas AOI > Case bbox.
     # Explicit model args are NEVER overridden (the pinned-AOI snap below
@@ -7739,8 +7736,8 @@ async def _invoke_tool_via_emitter(
         state, case_id=turn_case_id, tool_name=tool_name, params=params
     )
 
-    # Confirmation-before-consequence for solver composers (Invariant 9 /
-    # FR-AS-8). The LLM-supplied ``confirmed`` is STRIPPED first -- the gate
+    # Confirmation-before-consequence for solver composers.
+    # The LLM-supplied ``confirmed`` is STRIPPED first -- the gate
     # is server-owned; only an explicit user "proceed" injects it. SKIPPED on
     # a reuse short-circuit (``_ReuseEntry``) -- there is no solver to
     # confirm. The gate also fires for the heavy raster FETCHERS
@@ -8083,7 +8080,7 @@ async def _invoke_tool_via_emitter(
     # dispatch.
     uri_registry.register_tool_result(tool_name, result)
 
-    # ADR 0014: persist the freshly-minted short-handle map (L<n> -> uri) WITH
+    # Persist the freshly-minted short-handle map (L<n> -> uri) WITH
     # the Case so a reconnect / Case reopen resolves the SAME handles the LLM
     # already saw. No-op when nothing new was minted; best-effort (never
     # breaks the dispatch).
@@ -8502,7 +8499,7 @@ async def _emit_auto_publish_failure(
 async def _persist_case_layer_handles(
     state: SessionState, *, case_id: str | None
 ) -> None:
-    """ADR 0014: persist the session registry's short-handle map to the Case.
+    """Persist the session registry's short-handle map to the Case.
 
     Writes the ``{L<n>: uri}`` map as a storage-only ``layer_handles`` field
     on the cases doc (see ``Persistence.set_case_layer_handles``) so a
@@ -8532,7 +8529,7 @@ async def _persist_case_layer_handles(
 async def _seed_registry_for_case(
     state: SessionState, case_id: str | None, loaded_layers: Any
 ) -> None:
-    """ADR 0014: reset the URI registry to a Case AND restore its handle map.
+    """Reset the URI registry to a Case AND restore its handle map.
 
     The single reseed path for every case-open / case-switch / resume call
     site: replace-not-merge from the Case's persisted ``loaded_layers`` (the
@@ -8558,7 +8555,7 @@ async def _seed_registry_for_case(
 
 
 def _set_active_aoi_from_payload(state: SessionState, raw: Any) -> None:
-    """ADR 0017: bind/clear the session's active canvas AOI.
+    """Bind/clear the session's active canvas AOI.
 
     Called when a ``user-message`` payload carries the ``aoi_bbox`` key
     (``[min_lon, min_lat, max_lon, max_lat]`` EPSG:4326, ``None`` when no AOI
@@ -8592,7 +8589,7 @@ def _set_active_aoi_from_payload(state: SessionState, raw: Any) -> None:
 
 
 def _set_drawn_geometry_from_payload(state: SessionState, raw: Any) -> None:
-    """ADR 0159: bind/clear the turn's user-drawn geometry.
+    """Bind/clear the turn's user-drawn geometry.
 
     Called when a ``user-message`` payload carries the ``drawn_geometry`` key
     (``{"geometry_type": "rectangle", "bbox": [min_lon, min_lat, max_lon,
@@ -8960,7 +8957,7 @@ async def _maybe_emit_mode2_candidate(
 
     Best-effort: a classifier or send failure is logged but never raised -- the
     caller already returned the tool result and we will not let a side-effect
-    take down a perfectly good ``web_fetch`` invocation (FR-AS-7 boundary).
+    take down a perfectly good ``web_fetch`` invocation (a side-effect isolation boundary).
     """
     import json as _json
 
@@ -9005,7 +9002,7 @@ def _parse_invoke_directive(text: str) -> tuple[str, dict] | None:
     Used by the M4 live-evidence harness to drive real tool invocations
     end-to-end through the registry + emitter. NOT the LLM tool-call path --
     that lands when Gemini-side function-calling is wired (M4 follow-up).
-    The directive shape is debug-only; intentionally not in Appendix A.
+    The directive shape is debug-only; intentionally not part of the wire protocol.
     """
     if not text.startswith("/invoke "):
         return None
@@ -9029,7 +9026,7 @@ def _parse_invoke_directive(text: str) -> tuple[str, dict] | None:
 
 
 # --------------------------------------------------------------------------- #
-# Dispatch wrappers with chat persistence (FR-MP-6)
+# Dispatch wrappers with chat persistence
 # --------------------------------------------------------------------------- #
 
 
@@ -9063,7 +9060,7 @@ async def _dispatch_model_turn_and_persist(
     # envelope this turn emits (chunks, pipeline-state, session-state, …)
     # carries Envelope.case_id and the web routes it to the right stream.
     bind_turn_case(turn_case_id)
-    # ADR 0159: bind this turn's user-drawn geometry so composer gates read it
+    # Bind this turn's user-drawn geometry so composer gates read it
     # (current_turn_drawn_geometry) as a basis="user" spatial knob.
     bind_turn_drawn_geometry(state.drawn_geometry)
     # Per-turn object capture: a concurrent turn (or Case switch) re-points
@@ -9220,7 +9217,7 @@ async def _dispatch_tool_and_persist(
     (``PayloadWarningCancelledError``) are also caught so the manual surface
     sees the cancellation reason explicitly instead of disappearing.
 
-    Honesty-floor FIX (ADR 0198): the two named catches above cover ONLY the
+    Honesty-floor fix: the two named catches above cover ONLY the
     routing failures; every OTHER typed tool exception (``MeshAcquisitionError``,
     ``TelemacRainOnGridError``, ``HydrologyAoiTooLargeError``, ...) also has no
     awaiter on this ``asyncio.create_task`` path -- pre-fix it escaped as an
@@ -9236,8 +9233,8 @@ async def _dispatch_tool_and_persist(
     """
     # Entry-time Case capture -- see _dispatch_model_turn_and_persist.
     turn_case_id = _turn_case_id(state)
-    bind_turn_case(turn_case_id)  # job-0277: envelope tagging
-    bind_turn_drawn_geometry(state.drawn_geometry)  # ADR 0159
+    bind_turn_case(turn_case_id)  # envelope tagging
+    bind_turn_drawn_geometry(state.drawn_geometry)
     try:
         try:
             await _invoke_tool_via_emitter(
@@ -9342,7 +9339,7 @@ async def _handle_dev_tool_invoke(
     state: SessionState,
     payload_dict: dict,
 ) -> None:
-    """Server handler for the ``!run`` direct tool invocation (ADR 0114).
+    """Server handler for the ``!run`` direct tool invocation.
 
     The plugin parses ``!run <tool>(...)`` CLIENT-side and sends a structured
     ``dev-tool-invoke {name, args, case_id, raw_text?}``. This runs the named
@@ -9456,7 +9453,7 @@ async def _handle_secret_add(
     written to ``credentials.resolver`` keyed by ``session_id -> provider``; it
     is NEVER persisted, echoed back, or logged.
 
-    Per FR-AS-8 this is NOT a confirmation trigger -- the user typing the key
+    This is NOT a confirmation trigger -- the user typing the key
     into the plugin form IS the confirmation.
     """
     if not envelope.key_value:
@@ -9613,7 +9610,7 @@ async def _handle_layer_delete(
         )
 
     # Emit the refreshed session-state. Map.tsx removes the now-absent layer
-    # from MapLibre via replace-not-reconcile (Appendix A.7). session-state is
+    # from MapLibre via replace-not-reconcile. session-state is
     # session-scoped fan-out on the client, so every connection of this
     # session converges on the new loaded_layers list.
     await state.emitter.emit_session_state()
@@ -9638,7 +9635,7 @@ async def _handle_layer_delete(
 # kills the active tab). Single asyncio loop, one process -> a plain dict/set
 # mutated from coroutine context needs no lock. The value-set is keyed by the
 # connection object so a re-register is a no-op; an empty bucket is pruned so
-# the dict cannot grow unbounded. See ADR 0027 (session durability).
+# the dict cannot grow unbounded (session durability).
 
 #: Application close code for a prior socket reaped because a newer connection
 #: of the SAME session resumed. 4xxx is the WebSocket spec's reserved
@@ -9741,7 +9738,7 @@ def _make_handler(settings: ModelSettings):
                 # Dispatch on message type. Every payload is re-validated
                 # through its concrete trid3nt_contracts model.
                 try:
-                    # Appendix H.5/H.3: the auth-token envelope is the
+                    # The auth-token envelope is the
                     # connect-handshake. Anything else, before the handshake
                     # completes, trips the anonymous fallback inline so
                     # ``SessionState.authenticated_user_id`` is bound before
@@ -9769,7 +9766,7 @@ def _make_handler(settings: ModelSettings):
 
                     elif msg_type == "user-message":
                         um = UserMessagePayload.model_validate(payload_dict)
-                        # ADR 0017 (Lane S): structured canvas AOI. Read the
+                        # Structured canvas AOI. Read the
                         # optional ``aoi_bbox`` DEFENSIVELY off the raw
                         # payload dict -- the UserMessagePayload contract field
                         # lands in the client lane; this seam works the moment
@@ -9781,7 +9778,7 @@ def _make_handler(settings: ModelSettings):
                             _set_active_aoi_from_payload(
                                 state, payload_dict.get("aoi_bbox")
                             )
-                        # ADR 0159: the dock's 'Draw region' rubber-band
+                        # The dock's 'Draw region' rubber-band
                         # rectangle. Same key-present semantics as aoi_bbox: a
                         # value SETS the drawn geometry, an explicit null CLEARS
                         # it, an absent key leaves the prior state (no-op for
@@ -9790,7 +9787,7 @@ def _make_handler(settings: ModelSettings):
                             _set_drawn_geometry_from_payload(
                                 state, payload_dict.get("drawn_geometry")
                             )
-                        # ADR 0018: routing-visibility mode, carried as the
+                        # Routing-visibility mode, carried as the
                         # user-message's ``tool_choice_mode`` field. Read
                         # defensively off the raw dict; a set value updates
                         # the session's sticky mode, absent/None leaves the
@@ -9803,7 +9800,7 @@ def _make_handler(settings: ModelSettings):
                             "ask",
                         ):
                             state.routing_mode = _tcm.strip().lower()
-                        # FR-FR-3: check the turn cap BEFORE dispatching.
+                        # Check the turn cap BEFORE dispatching.
                         # Increment first so "26th turn" fires on turn_count ==
                         # MAX_TURNS_PER_SESSION + 1. Sessions that already hit
                         # the cap are refused on every subsequent user-message
@@ -9931,7 +9928,7 @@ def _make_handler(settings: ModelSettings):
                         )
 
                     elif msg_type == "dev-tool-invoke":
-                        # !run direct tool invocation (ADR 0114): the plugin
+                        # !run direct tool invocation: the plugin
                         # parsed ``!run <tool>(...)`` client-side and sent
                         # structured {name, args}. Runs the registry closure
                         # OUTSIDE the LLM loop through the SAME emission +
@@ -9948,7 +9945,7 @@ def _make_handler(settings: ModelSettings):
                         )
 
                     elif msg_type == "case-command":
-                        # Case lifecycle dispatch (FR-MP-6). The
+                        # Case lifecycle dispatch. The
                         # envelope is validated through the pydantic model
                         # so an unknown command raises ValidationError and
                         # surfaces TOOL_PARAMS_INVALID via the outer block
@@ -9976,7 +9973,7 @@ def _make_handler(settings: ModelSettings):
                         # key VALUE over this seam (connect-time per provider, or
                         # on a credential-request retry). The value lands in the
                         # in-memory resolver session cache; never persisted or
-                        # echoed back (Decision F wire isolation).
+                        # echoed back (wire isolation from persisted state).
                         sa = SecretAddEnvelopePayload.model_validate(
                             payload_dict
                         )
@@ -10014,7 +10011,7 @@ def _make_handler(settings: ModelSettings):
                         if cancel_task is not None and not cancel_task.done():
                             cancel_task.cancel()
                             # Wait briefly so the cancel completes deterministically
-                            # within NFR-R-3 (30s budget). The pipeline-state
+                            # within a 30s budget. The pipeline-state
                             # cancelled frame is emitted from inside the task's
                             # CancelledError branch.
                             try:
@@ -10067,7 +10064,7 @@ def _make_handler(settings: ModelSettings):
                         # the user saves/declines a requested credential -- the
                         # tool retries (provided=True) or re-raises the
                         # original typed error (provided=False). Carries NO
-                        # key material (Decision F); the key itself was saved
+                        # key material; the key itself was saved
                         # via ``secret-add`` on its own envelope path.
                         try:
                             cp = (
@@ -10139,7 +10136,7 @@ def _make_handler(settings: ModelSettings):
                         )
 
                     elif msg_type == "spatial-input-response":
-                        # FR-AS-10 / FR-WC-16: the user finished (or cancelled)
+                        # The user finished (or cancelled)
                         # the terra-draw surface. Resolve the paused
                         # request_spatial_input future so the dispatch coroutine
                         # parses the drawn FeatureCollection into engine-ready
@@ -10152,7 +10149,7 @@ def _make_handler(settings: ModelSettings):
                                 )
                             )
                         except ValidationError as ve:
-                            # FR-WC-16 untagged-barrier mismatch (the critical
+                            # Untagged-barrier mismatch (the critical
                             # correctness fix): the reply ARRIVED but failed
                             # structural validation (e.g. a barrier feature
                             # missing barrier_type). The user-facing notification
@@ -10218,7 +10215,7 @@ def _make_handler(settings: ModelSettings):
                         )
 
                     elif msg_type == "tool-choice":
-                        # ADR 0018: the user's reply to a pending
+                        # The user's reply to a pending
                         # ``tool-candidates`` card, parsed defensively as a
                         # loose dict (until the typed contracts model lands).
                         # Resolves the paused turn's future -- may arrive on a
@@ -10285,7 +10282,7 @@ def _make_handler(settings: ModelSettings):
                         )
 
                     elif msg_type == "session-config":
-                        # ADR 0018 (Stage 3): per-session settings. Currently
+                        # Per-session settings. Currently
                         # the routing-visibility ``mode`` ('auto' | 'ask') --
                         # read DEFENSIVELY off the raw dict (the contracts
                         # lane declares the typed model). Unknown fields are

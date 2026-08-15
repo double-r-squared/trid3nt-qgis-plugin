@@ -1,4 +1,4 @@
-"""``trid3nt_server.server`` package (server-refactor wave 1, ADR 0261).
+"""``trid3nt_server.server`` package.
 
 The monolith body now lives in :mod:`._core` and shrinks wave by wave as
 regions extract into sibling modules (:mod:`.errors`, :mod:`.config`, ... more

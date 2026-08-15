@@ -1,6 +1,6 @@
 """Typed error taxonomy for the WebSocket server dispatch path.
 
-Extracted from the monolith in server-refactor wave 1 (ADR 0261). These are
+These are
 pure exception types: each carries an ``error_code`` (a wire code / marker) and
 a ``retryable`` flag that ``summarize_tool_result`` harvests so a gate refusal
 reaches the model as a structured function_response and the turn completes
@@ -112,7 +112,7 @@ class CodeExecApprovalTimeoutError(RuntimeError):
 class SolverConfirmationCancelledError(RuntimeError):
     """Raised when a solver confirm gate denies the dispatch.
 
-    A solver run is a consequence (FR-AS-8 / Invariant 9): the user must
+    A solver run is a consequence: the user must
     approve the derived forcing parameters before the model executes. Cancel,
     timeout, and disconnect all fail closed. ``retryable=False`` so the model
     narrates the decline honestly instead of re-dispatching the same run.
@@ -138,7 +138,7 @@ class SpatialInputInvalidResponseError(Exception):
     the pending future by ``_fail_pending_spatial_input`` so the awaiting
     dispatch coroutine returns IN-BAND immediately instead of blocking until
     ``default_timeout_seconds`` then degrading to ``SPATIAL_INPUT_TIMEOUT``
-    (the FR-WC-16 untagged-barrier mismatch).
+    (the untagged-barrier mismatch).
     """
 
     def __init__(self, error_code: str, error_message: str) -> None:

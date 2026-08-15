@@ -7,7 +7,7 @@ lifecycle absorptions land in later waves). One seam lives here:
   (``cases.ingest_user_layer``) -- the reverse seam: bring a plugin-pushed
   vector/raster INTO a case as a first-class input layer. (A case's layers are
   RESTORED to the plugin over the WS case-open replay and STREAM in place from
-  the object store via GDAL ``/vsicurl/`` -- ADR 0116 -- so there is no
+  the object store via GDAL ``/vsicurl/`` so there is no
   server-side materialize/download seam.)
 
 Only the callables whose names do NOT collide with a submodule name are

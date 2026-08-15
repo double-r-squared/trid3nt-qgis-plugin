@@ -99,7 +99,7 @@ _KINDS = (_VECTOR_KIND, _RASTER_KIND)
 
 
 # --------------------------------------------------------------------------- #
-# Typed errors (SCREAMING_SNAKE_CASE error_code per FR-AS-11)
+# Typed errors (SCREAMING_SNAKE_CASE error_code)
 # --------------------------------------------------------------------------- #
 
 

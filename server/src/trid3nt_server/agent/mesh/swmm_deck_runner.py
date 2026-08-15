@@ -15,7 +15,7 @@ scalars - never a georeferenced map layer. Every number the agent narrates comes
 from the typed result the postprocess computed (invariant 1); nothing is
 free-generated.
 
-Sourcing (ADR 0128): the author-posted decks are fetched AT RUNTIME from the
+Sourcing: the author-posted decks are fetched AT RUNTIME from the
 pinned public source page (redistribution of a named author's forum deck is not a
 license we can assume, so we do NOT bake the deck into the repo). The public
 topic page renders the full deck inline; the runner extracts it deterministically.
@@ -127,7 +127,7 @@ class PublishedDeck:
     note: str = ""
 
 
-#: The cited decks landed by ADR 0128 (openswmm.org example models). Fetched at
+#: The cited decks (openswmm.org example models). Fetched at
 #: runtime from ``source_url``; NOT baked (author-posted, redistribution unclear).
 PUBLISHED_DECKS: dict[str, PublishedDeck] = {
     "lid_raingarden_wq": PublishedDeck(

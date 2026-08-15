@@ -64,7 +64,7 @@ class SandboxCloudModeUnavailable(RuntimeError):
     (:func:`run_sandbox_local`), which reads the child's stdout directly and
     returns a complete result envelope synchronously.
 
-    ``error_code`` / ``retryable`` follow the FR-AS-11 typed-exception convention
+    ``error_code`` / ``retryable`` follow the typed-exception convention
     so ``summarize_tool_result`` surfaces a structured function_response to the
     model (narrate the limitation honestly; do NOT retry an identical cloud
     dispatch — there is none).
@@ -79,7 +79,7 @@ class SandboxResultNotFound(RuntimeError):
 
     Retained as an importable typed error after the GCP decommission removed the
     Cloud Logging result readback that originally raised it. ``retryable=True`` is
-    preserved for back-compat with the FR-AS-11 typed-exception convention; the
+    preserved for back-compat with the typed-exception convention; the
     agent must NOT re-DISPATCH code on this error (that would double-run a
     user-confirmed snippet).
     """

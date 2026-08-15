@@ -1,4 +1,4 @@
-"""Package-validation engine core for the MODFLOW V&V templates (ADR 0153).
+"""Package-validation engine core for the MODFLOW V&V templates.
 
 Where the archetype composers build a place-based demo aquifer and render a map
 layer, this core authors SMALL SYNTHETIC BENCHMARK decks that isolate a single
@@ -36,8 +36,8 @@ Five cases, each exercising a package no archetype composer exposes:
   excursion). Both are checked against the Grubb (1993) uniform-flow capture-zone
   analytical (stagnation x_s = Q/(2*pi*U), width W = Q/U). The ``direction`` /
   ``n_particles`` knobs select the tracking direction shown and the release-ring
-  size. Native PRT ships in mf6 6.7.0 - no MODPATH 7 install is needed (the
-  ADR 0153 STOP was moot); an EXACT PRT-vs-MODPATH7 cross-tool match remains a
+  size. Native PRT ships in mf6 6.7.0 - no MODPATH 7 install is needed; an
+  EXACT PRT-vs-MODPATH7 cross-tool match remains a
   future recipe (install mp7, run both off the same GWF output).
 
 - ``henry_saltwater`` (GWF-BUY + GWT): the classic Henry (1964) coastal
@@ -722,8 +722,8 @@ def _solve_hfb_barrier() -> SolvedValidation:
 # (ModflowPrt + ModflowEms) tracks particles FORWARD from the inflow boundary
 # (pathlines + travel times; the captured band width -> W) and BACKWARD from the
 # well through the reversed flow field (the capture zone; the max down-gradient
-# excursion -> x_s). Both are checked against Grubb, so - unlike the ADR 0153
-# STOP, which had no numeric reference for the 3-layer ex-prt-mp7-p01 system -
+# excursion -> x_s). Both are checked against Grubb -- unlike an earlier
+# approach, which had no numeric reference for the 3-layer ex-prt-mp7-p01 system --
 # this case is validated NUMERICALLY, not just qualitatively.
 # --------------------------------------------------------------------------- #
 

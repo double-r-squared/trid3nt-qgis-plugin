@@ -62,7 +62,7 @@ def _admin_boundaries_fgb_bytes(
     """Fetch TIGER admin-boundary FGB bytes in-process (no cache / no publish).
 
     Runs the promoted ``fetch_administrative_boundaries`` router source's executor
-    directly (ADR 0067: zip_vector whole-object extract-read-filter) -- the
+    directly (zip_vector whole-object extract-read-filter) -- the
     in-process counterpart to the published tool the twin's ``_fetch_admin_boundaries_bytes``
     used to be. Validates + quantizes the params exactly as the tool does.
     """

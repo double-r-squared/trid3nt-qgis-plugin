@@ -39,13 +39,11 @@ from trid3nt_contracts.user import User
 
 def _fresh_user(
     *,
-    firebase_uid: str | None = "firebase-abc-123",
     email: str | None = "natealmanza3@gmail.com",
     display_name: str | None = "Nate Almanza",
 ) -> User:
     return User(
         user_id=new_ulid(),
-        firebase_uid=firebase_uid,
         email=email,
         display_name=display_name,
         created_at=datetime(2026, 6, 8, 12, 0, 0, tzinfo=timezone.utc),
@@ -83,7 +81,7 @@ def test_user_roundtrip_idempotent() -> None:
 def test_user_defaults_minimal_construction() -> None:
     """Only ``user_id`` + ``created_at`` are required; everything else defaults.
 
-    The Auth/Users track tightens this (e.g. requires ``firebase_uid`` once
+    The Auth/Users track tightens this (e.g. required a firebase identity once
     Identity Platform lands); the stub keeps the surface permissive so the
     persistence layer can write partial records during dev.
     """
@@ -91,7 +89,7 @@ def test_user_defaults_minimal_construction() -> None:
         user_id=new_ulid(),
         created_at=datetime(2026, 6, 8, 12, 0, 0, tzinfo=timezone.utc),
     )
-    assert u.firebase_uid is None
+    assert not hasattr(u, "firebase_uid")
     assert u.email is None
     assert u.display_name is None
     assert u.is_active is True

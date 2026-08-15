@@ -1,12 +1,12 @@
 """Shared drawn-geometry ROLE vocabulary + parser for the mesh authoring layer.
 
-Every engine that lets the user draw spatial input (FR-WC-16 terra-draw ->
-FR-AS-10 ``request_spatial_input`` -> a role-tagged GeoJSON ``FeatureCollection``)
+Every engine that lets the user draw spatial input (terra-draw ->
+``request_spatial_input`` -> a role-tagged GeoJSON ``FeatureCollection``)
 routes that drawing through ONE canonical role vocabulary defined here, so a
 wall, a breach point, a refine region or an AOI clip means the same thing to
 SWMM, SFINCS, GeoClaw, TELEMAC and MODFLOW. This is the mesh layer's DOMAIN
-stage (ADR 0098 spec: "user-drawn structures enter HERE, once, for every
-engine").
+stage: "user-drawn structures enter HERE, once, for every
+engine".
 
 Canonical roles (``properties.role`` on each drawn ``Feature``):
 

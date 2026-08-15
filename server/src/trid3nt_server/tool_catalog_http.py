@@ -11,7 +11,7 @@ Exposes two read-only JSON endpoints:
 Why a dedicated HTTP endpoint when the rest of the agent talks WebSockets?
 
 - The catalog is a **discovery surface** for human users browsing what the
-  agent can do. It is not part of the chat envelope contract (Appendix A) --
+  agent can do. It is not part of the chat envelope contract --
   it does not stream, does not maintain session state, and does not require
   an authenticated user. A plain HTTP GET is the right shape.
 - The catalog payload is small (~71 tools × ~1.5 KB each ≈ 100 KB) and
@@ -337,7 +337,7 @@ _SHADOW_RECORD_TYPE = "tool_retrieval_shadow"
 #: attributed to a flow when it dispatched one of these (the recall@k per-flow
 #: breakdown the kickoff asks for: SWMM / SFINCS / MODFLOW).
 _FLOW_BY_SOLVER_TOOL: dict[str, str] = {
-    # Door dissolution (ADR 0094): the engine templates are the flow anchors
+    # Engine templates are the flow anchors
     # directly (the run_<engine> doors were deleted).
     "swmm_urban_flood": "SWMM",
     "sfincs_flood": "SFINCS",
@@ -1248,7 +1248,7 @@ def _read_tags_from_sidecars(fid: str) -> dict[str, Any] | None:
         import boto3
 
         from .agent.tools.cache import CACHE_BUCKET, cache_path
-        # fetch_buildings folded to the router (ADR 0084): the sidecar identity
+        # fetch_buildings is folded to the router: the sidecar identity
         # (source_class / ttl / .tags.json ext) now lives in the promoted spec, not a
         # coded twin. Read it from the spec, falling back to the load-bearing literals
         # so a cold spec registry never breaks the enrich read.

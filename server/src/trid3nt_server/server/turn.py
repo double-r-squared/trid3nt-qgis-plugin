@@ -1,5 +1,5 @@
 """Turn wire plumbing -- the envelope construction + session-safe send
-primitives the turn engine emits through (server-refactor finale, ADR 0265).
+primitives the turn engine emits through.
 
 The leaf transport layer every turn/gate/handler path uses to reach the wire:
 build a typed ``Envelope`` (``_new_envelope``), send it across the captured
@@ -26,7 +26,7 @@ bound to the ``_gate_wait_timeout`` source-inspection seam that
 credential/region/spatial emit-wait gates that stay in ``_core`` -- so the gate
 family is not cleanly separable. The driver's dense orchestration (it calls
 ~30 ``_core``-resident persist/emit/dispatch helpers) would force a
-``_core`` <-> ``turn`` import cycle. See ADR 0265 for the full rationale.
+``_core`` <-> ``turn`` import cycle.
 """
 
 from __future__ import annotations

@@ -7,7 +7,7 @@ duplicated heuristic.
 Closed three-way discriminator over the EXISTING error taxonomy -- conservative
 by design, no fetcher rewrites:
 
-- ``"agent"``    -- upstream 4xx-arg/429/5xx/timeout: every typed FR-AS-11
+- ``"agent"``    -- upstream 4xx-arg/429/5xx/timeout: every typed
   tool exception (declares an ``error_code``), plus the untyped transient/
   arg-shape primitives ``adapter._classify_error`` already treats as an
   agent-visible retry signal (``TimeoutError`` / ``ConnectionError`` /
@@ -100,7 +100,7 @@ def classify_actionability(tool_name: str, error: BaseException) -> Actionabilit
         if is_credential_shaped_error(tool_name, error):
             return "user"
 
-        # 3. Any OTHER typed FR-AS-11 tool exception (declares its own
+        # 3. Any OTHER typed tool exception (declares its own
         #    error_code) -- the existing agent-visible retry surface.
         code_attr = getattr(error, "error_code", None)
         if isinstance(code_attr, str) and code_attr:

@@ -2,7 +2,7 @@
 
 Extracted from ``server`` so BOTH the transport-coupled gate orchestration
 (``server._gate_on_solver_confirm`` / ``_gate_on_code_exec`` /
-``_maybe_gate_on_payload_warning``) AND the in-tool input-review gate (ADR 0107,
+``_maybe_gate_on_payload_warning``) AND the in-tool input-review gate (
 ``agent.gates.input_review``) register their block-and-wait futures into the SAME
 dict the inbound ``tool-payload-confirmation`` handler resolves. The registry is
 process-global (keyed by the unguessable ULID ``warning_id`` / ``code_exec_id``)

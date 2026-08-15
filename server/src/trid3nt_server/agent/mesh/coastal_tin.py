@@ -1,5 +1,4 @@
-"""coastal_tin -- the server-side oceanmesh coastal-TIN component (mesh wave,
-oceanmesh leg, ADR 0101).
+"""coastal_tin -- the server-side oceanmesh coastal-TIN component.
 
 Thin M1/M2-paradigm component: it composes the OceanMesh2D sizing-function SPEC +
 inputs (shoreline + optional DEM + edge bounds + which sizing functions), dispatches

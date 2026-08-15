@@ -45,7 +45,7 @@ with NO registered provider returns ``False`` (the server narrates honestly --
 it cannot request a key for an unknown provider -- and never fabricates one).
 
 Invariant 9 (no cost theater): no quota / cost / spend field anywhere here.
-Decision F (wire isolation): this registry carries NO key material -- only the
+Wire isolation: this registry carries NO key material -- only the
 metadata needed to ASK for a key. The raw key always rides the ``secret-add``
 transport and is read back from the vault by the tool's ``_resolve_*_key``.
 """
@@ -285,7 +285,7 @@ _CREDENTIAL_TEXT_PHRASES: tuple[str, ...] = (
 def _error_code_is_credential_shaped(error_code: object) -> bool:
     """True when ``error_code`` (a string) matches a credential pattern.
 
-    Matches a code ending in ``_AUTH_ERROR`` / ``_MISSING_KEY`` (the FR-AS-11
+    Matches a code ending in ``_AUTH_ERROR`` / ``_MISSING_KEY`` (the typed-error
     typed-error convention every keyed tool follows) OR containing any of the
     generic credential substrings (``API_KEY`` / ``APIKEY`` / ``UNAUTHORIZED``
     / ``FORBIDDEN``).

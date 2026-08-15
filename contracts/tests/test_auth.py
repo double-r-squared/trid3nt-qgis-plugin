@@ -13,7 +13,7 @@ Coverage:
 5. ``test_auth_token_oversized_token_rejected`` — 8KB upper bound.
 6. ``test_auth_ack_envelope_roundtrip`` — JSON round-trip stability.
 7. ``test_auth_ack_envelope_anonymous_default_tier_free`` — anonymous
-   fallback ack defaults to ``tier="free"`` and ``firebase_uid=None``.
+   fallback ack defaults to ``tier="free"`` and no firebase identity (local single-user).
 8. ``test_auth_ack_message_type_pinned`` — kebab-case ``auth-ack``.
 9. ``test_auth_ack_invariant9_no_cost_fields`` — Invariant 9: no cost /
    spend / quota / billing fields.
@@ -43,7 +43,6 @@ from trid3nt_contracts.common import new_ulid
 def _ack(**overrides) -> AuthAckEnvelope:
     base = {
         "user_id": new_ulid(),
-        "firebase_uid": "firebase-uid-abc-123",
         "is_anonymous": False,
         "tier": "free",
     }
@@ -143,10 +142,9 @@ def test_auth_ack_envelope_anonymous_default_tier_free() -> None:
     """Anonymous-fallback ack: no firebase_uid, anonymous=True, tier=free."""
     ack = AuthAckEnvelope(
         user_id=new_ulid(),
-        firebase_uid=None,
         is_anonymous=True,
     )
-    assert ack.firebase_uid is None
+    assert not hasattr(ack, "firebase_uid")
     assert ack.is_anonymous is True
     assert ack.tier == "free"
 
@@ -192,7 +190,6 @@ def test_auth_ack_invalid_tier_rejected() -> None:
     with pytest.raises(ValidationError):
         AuthAckEnvelope(
             user_id=new_ulid(),
-            firebase_uid="x",
             tier="ultra",  # type: ignore[arg-type]
         )
 

@@ -12,10 +12,9 @@ submodules (``passthroughs``, ``fetchers``, etc.). The
 populated without binding the WebSocket port; ``make run-agent`` continues
 to start the server normally.
 
-FR-CE-8 fail-fast: any tool whose ``AtomicToolMetadata`` is misconfigured
-(e.g. ``cacheable=True`` with ``ttl_class="live-no-cache"``) raises a
-``pydantic.ValidationError`` at import time and prevents the agent service
-from starting.
+A tool whose ``AtomicToolMetadata`` is misconfigured (e.g. ``cacheable=True``
+with ``ttl_class="live-no-cache"``) raises a ``pydantic.ValidationError`` at
+import time and prevents the agent service from starting.
 """
 
 from __future__ import annotations
@@ -28,7 +27,7 @@ from logging.handlers import RotatingFileHandler
 from pathlib import Path
 
 # ---------------------------------------------------------------------------
-# FR-FR-3: agent-side max-turns cap -- cheap insurance.
+# Agent-side max-turns cap -- cheap insurance.
 #
 # ``MAX_TURNS_PER_SESSION`` is the maximum number of user-message / tool-call
 # turns allowed before the agent refuses further dispatch and emits a
@@ -36,7 +35,7 @@ from pathlib import Path
 #
 # Override via the ``TRID3NT_MAX_TURNS_PER_SESSION`` environment variable for
 # ops flexibility (e.g. set to 0 to disable -- sentinel value; or raise for
-# long sessions during demos). TENTATIVE default 25 per OQ-FR-1.
+# long sessions during demos). Default 25.
 # ---------------------------------------------------------------------------
 MAX_TURNS_PER_SESSION: int = int(os.environ.get("TRID3NT_MAX_TURNS_PER_SESSION", "25"))
 
@@ -57,35 +56,29 @@ def _import_tools_registry() -> int:
     similarly imports ``qgis_discovery`` so the 2 QGIS-algorithm
     discovery atomic tools (``list_qgis_algorithms`` +
     ``describe_qgis_algorithm``) register at startup. Together with
-    ``passthroughs.qgis_process`` they complete the FR-AS-9 Level 1a
+    ``passthroughs.qgis_process`` they complete the Level 1a
     capability-discovery loop.
 
     imports ``solver`` so the 2 solver-dispatch atomic tools
     (``run_solver`` + ``wait_for_completion``) register at startup. These
-    are FR-DC-6 uncacheable (``cacheable=False``, ``ttl_class="live-no-cache"``,
+    are uncacheable (``cacheable=False``, ``ttl_class="live-no-cache"``,
     ``source_class="solver_dispatch"``) -- they drive solver
     executions of the SFINCS substrate.
 
-    imports ``workflows.sfincs.flood.flood`` so the M5 capstone
+    imports ``workflows.sfincs.flood.flood`` so the capstone
     workflow's thin atomic-tool wrapper (the ``sfincs_flood`` engine template) is
     registered alongside the atomic tools it composes. The workflow itself
-    is deterministic Python (FR-TA-1, Decision G); the wrapper exists so the
+    is deterministic Python; the wrapper exists so the
     LLM sees a single invocable tool that triggers the whole chain.
     """
     from .agent import tools  # noqa: F401 -- side-effect: registers atomic tools
     # register the 4 data-fetch atomic tools (FROZEN __init__.py).
     from .agent.tools.fetchers.climate.lookup_precip_return_period import lookup_precip_return_period  # noqa: F401
-    # fetch_river_geometry: Overpass-family river fold (ADR 0074) -- twin DELETED, now
-    # spec-driven; auto-registered by the router spec tree walk, no eager twin import.
-    # fetch_buildings: sidecar-write fold (ADR 0084) -- twin DELETED, now spec-driven
-    # (promoted by register_specs_from_tree at agent.tools import); no eager twin import.
-    # fetch_population: WorldPop library_delegate raster fold (ADR 0092) -- twin DELETED,
-    # now spec-driven; auto-registered by register_specs_from_tree at agent.tools import.
+    # fetch_river_geometry, fetch_buildings, fetch_population: spec-driven,
+    # auto-registered by the router spec tree walk; no eager twin import.
     from .agent.tools.fetchers.socioeconomic.geocode_location import geocode_location  # noqa: F401
-    # fetch_dem is spec-driven (ADR 0097): promoted by register_specs_from_tree at
-    # agent.tools import; no eager twin import.
-    # fetch_landcover is spec-driven (ADR 0082): promoted by register_specs_from_tree
-    # at agent.tools import; no eager twin import.
+    # fetch_dem, fetch_landcover: spec-driven, promoted by
+    # register_specs_from_tree at agent.tools import; no eager twin import.
     # register the 2 QGIS discovery atomic tools.
     from .agent.tools.search.qgis_discovery import qgis_discovery  # noqa: F401
     # register run_solver + wait_for_completion (M5 substrate).
@@ -103,27 +96,24 @@ def _import_tools_registry() -> int:
     from .agent.tools.processing.compute_slope import compute_slope  # noqa: F401
     # register compute_aspect (gdaldem aspect; Horn + ZevenbergenThorne; zero_for_flat flag).
     from .agent.tools.processing.compute_aspect import compute_aspect  # noqa: F401
-    # register clip_raster_to_polygon (rasterio.mask; polygon OR bbox clip; folded
+    # register clip_raster_to_polygon (rasterio.mask; polygon OR bbox clip; folds
     # in clip_raster_to_bbox). compute_zonal_statistics demoted to the code_exec
     # playground (docs/playbooks/zonal-statistics-recipe.md).
     from .agent.tools.processing.clip_raster_to_polygon import clip_raster_to_polygon  # noqa: F401
-    # fetch_administrative_boundaries: data-router fold zip/multi-file wave (ADR 0067)
-    # -- twin DELETED, now spec-driven (zip_vector extract executor + FIPS planner),
-    # registered via register_specs_from_tree (agent.tools import above).
+    # fetch_administrative_boundaries: spec-driven (zip_vector extract executor +
+    # FIPS planner), registered via register_specs_from_tree (agent.tools import above).
     # register compute_hillshade (gdaldem hillshade; 5 style presets; swiss_double multiply-blend).
     from .agent.tools.processing.compute_hillshade import compute_hillshade  # noqa: F401
     # register web_fetch (generic web-page ingest with 4 extraction modes).
     from .agent.tools.search.web_fetch import web_fetch  # noqa: F401
-    # fetch_inaturalist_observations + fetch_gbif_occurrences: data-router fold
-    # chained-resolution mode (ADR 0063) -- twins DELETED, spec-driven (resolve-then-fetch
-    # hooks), registered via register_specs_from_tree.
-    # fetch_storm_events_db: data-router fold (ADR 0064) -- twin DELETED, now spec-driven
-    # (directory-index resolve -> bulk gzip-CSV point decode), registered via register_specs_from_tree.
-    # fetch_nws_event: data-router fold tier-3 hooks (ADR 0061) -- twin DELETED, now
-    # spec-driven (source.yaml + nws_event hooks), registered via register_specs_from_tree.
-    # fetch_nws_alerts_conus: data-router fold chained-resolution mode (ADR 0063) --
-    # twin DELETED, spec-driven (single /alerts/active GET + zone-polygon enrichment),
+    # fetch_inaturalist_observations + fetch_gbif_occurrences: spec-driven
+    # (resolve-then-fetch hooks), registered via register_specs_from_tree.
+    # fetch_storm_events_db: spec-driven (directory-index resolve -> bulk
+    # gzip-CSV point decode), registered via register_specs_from_tree.
+    # fetch_nws_event: spec-driven (source.yaml + nws_event hooks),
     # registered via register_specs_from_tree.
+    # fetch_nws_alerts_conus: spec-driven (single /alerts/active GET +
+    # zone-polygon enrichment), registered via register_specs_from_tree.
     # aggregate_claims_across_sources DEMOTED to an importable library (no longer
     # an LLM-facing tool); model_groundwater imports its private extractors. News
     # ingest re-homes onto web_fetch / fetch_nws_event / fetch_storm_events_db.
@@ -133,40 +123,34 @@ def _import_tools_registry() -> int:
     from .agent.tools.processing.extract_landcover_class import extract_landcover_class  # noqa: F401
     # register compute_building_density (MS Global ML Building Footprints density raster).
     from .agent.tools.processing.compute_building_density import compute_building_density  # noqa: F401
-    # fetch_roads_osm + fetch_overpass_pois: Overpass-family fold (ADR 0070) -- twins
-    # DELETED, now spec-driven (source.yaml + overpass hooks), auto-registered by the
-    # router spec tree walk; no eager twin import here.
-    # -> engine-door refactor (PELICUN slice): the pelicun_damage_assessment
-    # TEMPLATE (was run_pelicun_damage_assessment) now lives under
+    # fetch_roads_osm + fetch_overpass_pois: spec-driven (source.yaml +
+    # overpass hooks), auto-registered by the router spec tree walk; no eager
+    # twin import here.
+    # the pelicun_damage_assessment TEMPLATE lives under
     # workflows/pelicun/damage_assessment/; import it so it registers at daemon startup.
     from .agent.workflows.pelicun.damage_assessment.damage_assessment import pelicun_damage_assessment  # noqa: F401
     # register show_nexrad_radar (display tool: composes an Iowa Mesonet NEXRAD WMS URL).
     from .agent.tools.display.show_nexrad_radar.show_nexrad_radar import show_nexrad_radar  # noqa: F401
-    # fetch_goes_satellite FOLDED to a spec-driven surface (ADR 0111): auto-registered by
+    # fetch_goes_satellite: spec-driven, auto-registered by
     # register_specs_from_tree (goes_satellite library-delegate raster hooks); no eager import.
-    # fetch_mrms_qpe: weather/GRIB fold (ADR 0069) -- twin DELETED, now spec-driven
-    # (S3-listed key resolve -> grib_object whole-object COG), via register_specs_from_tree.
-    # fetch_hrsl_population: data-router fold phase-2 wave-9 (ADR 0055) -- twin
-    # DELETED, now spec-driven (source.yaml + multi_url VRT fan-out), registered
-    # by register_specs_from_tree() via the agent.tools import above.
-    # fetch_firms_active_fire: quick-folds wave (ADR 0079) -- twin DELETED, now spec-driven
-    # (source.yaml + firms_active_fire hooks), auto-registered via register_specs_from_tree().
-    # fetch_landfire_fuels: data-router fold phase-2 wave-7 (ADR 0053) -- twin
-    # DELETED, now spec-driven (source.yaml + imageserver_export), auto-registered.
-    # fetch_gcn250_curve_numbers: data-router fold phase-2 wave-8 (ADR 0054) --
-    # twin DELETED, now spec-driven (source.yaml + direct_window skip-HEAD),
-    # registered by register_specs_from_tree() via the agent.tools import above.
-    # fetch_mtbs_burn_severity + fetch_nifc_fire_perimeters: data-router fold
-    # phase-2 wave-2 -- twins DELETED, now spec-driven (source.yaml + router),
-    # registered by register_specs_from_tree() via agent.tools import (no eager
-    # module import here).
+    # fetch_mrms_qpe: spec-driven (S3-listed key resolve -> grib_object
+    # whole-object COG), via register_specs_from_tree.
+    # fetch_hrsl_population: spec-driven (source.yaml + multi_url VRT
+    # fan-out), registered by register_specs_from_tree() via the agent.tools import above.
+    # fetch_firms_active_fire: spec-driven (source.yaml + firms_active_fire
+    # hooks), auto-registered via register_specs_from_tree().
+    # fetch_landfire_fuels: spec-driven (source.yaml + imageserver_export), auto-registered.
+    # fetch_gcn250_curve_numbers: spec-driven (source.yaml + direct_window
+    # skip-HEAD), registered by register_specs_from_tree() via the agent.tools import above.
+    # fetch_mtbs_burn_severity + fetch_nifc_fire_perimeters: spec-driven
+    # (source.yaml + router), registered by register_specs_from_tree() via
+    # agent.tools import (no eager module import here).
     # register fetch_ebird_observations (Cornell Lab eBird Tier-2 recent sightings; per-Case secret_ref).
     # register fetch_iucn_red_list_range (IUCN Red List Tier-2 species range info fetcher; per-Case secret_ref).
-    # fetch_movebank_tracks: keyed CSV http_json fold (ADR 0077) -- twin DELETED, now
-    # spec-driven (source.yaml + movebank_tracks hooks), auto-registered via register_specs_from_tree().
-    # fetch_era5_reanalysis + fetch_gtsm_tide_surge: CDS library_delegate fold (ADR 0085)
-    # -- twins DELETED, now spec-driven (source.yaml + cds hooks), auto-registered via
-    # register_specs_from_tree().
+    # fetch_movebank_tracks: spec-driven (source.yaml + movebank_tracks
+    # hooks), auto-registered via register_specs_from_tree().
+    # fetch_era5_reanalysis + fetch_gtsm_tide_surge: spec-driven (source.yaml
+    # + cds hooks), auto-registered via register_specs_from_tree().
 
     return len(tools.TOOL_REGISTRY)
 

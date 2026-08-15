@@ -1,5 +1,5 @@
 """Tool-dispatch machinery: progress accounting, gate-expander name sets, and
-terminal-composer classification (server-refactor wave 4, ADR 0264).
+terminal-composer classification.
 
 The low-coupling, session-free helpers the dispatch loop leans on: the
 loop-watchdog progress witness (``_dispatch_made_progress`` +
@@ -10,7 +10,7 @@ the terminal-composer classifier. Each reads only the tool registry / contracts
 re-imports every name so its bare-global references resolve unchanged and the
 package facade re-exposes them at ``trid3nt_server.server.<name>``.
 
-Deliberately NOT here (entangled, flagged in ADR 0264 for a later wave): the
+Deliberately NOT here (entangled -- flagged for a later extraction): the
 user-decision gate coroutines (``_maybe_gate_on_payload_warning``,
 ``_gate_on_code_exec``, ``_gate_on_solver_confirm``, ``_gate_with_turn_memory``)
 -- they emit on the websocket via ``_core``'s send/envelope plumbing
@@ -150,7 +150,7 @@ def _tool_search_tool_names() -> frozenset[str]:
 def _default_declarable_registry() -> dict[str, Any]:
     """The DEFAULT per-turn declarable tool set.
 
-    Door dissolution (ADR 0094): engine templates (``sfincs_flood``,
+    Engine templates (``sfincs_flood``,
     ``modflow_*``, ``openquake_psha``, ...) are ordinary retrieval-pool members
     and are declarable by default like any tool -- the deleted engine doors no
     longer gate them. Only ``catalog`` (catalog-surfacing experiment, arm-flagged;
@@ -177,7 +177,8 @@ def _gate_expander_tool_names() -> frozenset[str]:
     A call to one of these expands the turn's visible gate with the tool names
     its result names (``results[].tool_name``). See
     ``_tool_names_from_search_result`` for the extraction and the dispatch
-    post-processing for the union + cap. Door dissolution (ADR 0094) removed the
+    post-processing for the union + cap. Templates are now ordinary registry
+    members -- there is no separate "door" concierge layer removing the
     engine-door gate-expanders; templates are ordinary retrieval-pool tools now.
     """
     return _tool_search_tool_names()

@@ -1,4 +1,4 @@
-"""Per-Case ``.qgs`` lazy-init helpers (FR-MP-6).
+"""Per-Case ``.qgs`` lazy-init helpers.
 
 This module is the single home for the lazy-init policy that resolves
 rather than every Case mutating a single

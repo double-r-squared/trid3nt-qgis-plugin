@@ -22,7 +22,7 @@ sit on the path. A ``None`` return means "no key here" -- the fetcher then falls
 to its own env path and, absent a key, raises its typed auth error, which the
 credential-request flow acts on.
 
-Wire isolation (Decision F): the cache holds raw key material only in process
+Wire isolation: the cache holds raw key material only in process
 memory for the session's lifetime; it is never persisted, logged, or echoed on
 any reply envelope.
 """

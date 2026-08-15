@@ -10,7 +10,7 @@ from/to attributes OR endpoint-snapping when the GIS carries no topology (the
 common real case), and a design-storm loading so the imported network actually
 routes flow to its outfall.
 
-Honest v1 scope + the labeled-degrade doctrine (ADR 0106):
+Honest v1 scope + the labeled-degrade doctrine:
   - Node/conduit ATTRIBUTES are read with a flexible, alias-aware field resolver
     (``invert_elev`` / ``InvertElev`` / ``IE`` / ``Geom1`` / ``DIAMETER`` ...),
     because no two municipal schemas agree on field names.

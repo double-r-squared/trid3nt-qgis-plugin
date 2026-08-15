@@ -541,8 +541,8 @@ Example: user asks "fetch population in Miami-Dade County"
      polygon_uri=<admin_boundaries_uri>) →
   5. Publish the clipped raster.
 
-REUSE BEFORE RE-RUN — HARD RULE (CRITICAL, NON-NEGOTIABLE — job-0326,
-NATE 2026-06-16, supersedes every softer reuse clause below):
+REUSE BEFORE RE-RUN — HARD RULE (CRITICAL, NON-NEGOTIABLE,
+supersedes every softer reuse clause below):
 Before you call ANY expensive simulation (sfincs_flood,
 modflow_contaminant_plume, swmm_urban_flood, pelicun_*), ANY fetch_*,
 or ANY compute_*, you MUST FIRST check the "[Case state]" note for the
@@ -577,7 +577,7 @@ short-circuits an obviously-redundant expensive re-run and returns the
 existing layer with a "reused_existing" / "not re-run" note: when you see that
 note, narrate from the existing layer; do not attempt the run again.
 
-Scope discipline (CRITICAL — job-0255, Stage 3 live finding):
+Scope discipline (CRITICAL):
 Run consequential tools (solvers like sfincs_flood /
 modflow_contaminant_plume, and layer-producing workflows) ONLY in service of the
 user's CURRENT request. Never start a solver the user did not ask for in
@@ -763,7 +763,7 @@ URI; the server resolves the handle to the stored data. Fetched and computed
 layers reach the user's map automatically. If you omit a bbox argument, it is
 auto-filled from the user's active map extent or the case area.
 
-Location fidelity (CRITICAL — job-0274, live finding):
+Location fidelity (CRITICAL):
 Every request stands alone for WHERE. Always geocode the location named in
 the user's MOST RECENT message and derive the bbox from THAT result. NEVER
 reuse a bbox, coordinates, DEM handle, or layer handle from an earlier turn
@@ -1197,7 +1197,7 @@ def build_tool_declarations(
     """Build Gemini ``FunctionDeclaration`` objects from the TOOL_REGISTRY.
 
     Uses ``FunctionDeclaration.from_callable_with_api_option`` so the
-    docstring discipline enforced at registration time (FR-AS-3 "Use this
+    docstring discipline enforced at registration time ("Use this
     when:" / "Do NOT use this for:" / param/return descriptions) is the
     sole source of Gemini's tool-selection signal -- the same text that a
     human reviewer sees is exactly what Gemini reasons over.
@@ -1243,7 +1243,7 @@ def build_tool_declarations(
                 genai_types.FunctionDeclaration(
                     name=name,
                     # 1 000 chars captures "Use this when:" + "Do NOT" + "Params:"
-                    # sections from well-documented tools (FR-AS-3 discipline).
+                    # sections from well-documented tools.
                     description=doc[:1000],
                 )
             )
@@ -2278,7 +2278,7 @@ def summarize_tool_result(
     * Errors become
       ``{"status": "error", "error_code": str, "message": str, "retryable": bool, "error_type": str}``.
       ``error_code`` + ``retryable`` are harvested from the tool's typed
-      exception class (FR-AS-11 surface) when present, else derived
+      exception class when present, else derived
       from the exception class name / runtime kind via ``_classify_error``.
       Gemini reads this and either retries with corrected args, calls a
       different tool, or narrates the failure honestly. The

@@ -330,7 +330,7 @@ async def emit_tool_call_event(
             when ``dispatch_error`` was set in the call loop.
         latency_ms: Wall-clock elapsed time from dispatch to result, in
             milliseconds (float precision).
-        error_code: A.6 / FR-AS-11 error code string when ``success=False``;
+        error_code: typed error code string when ``success=False``;
             ``None`` on success or when unavailable.
         retry_attempt: Zero-based retry counter.  ``0`` for the first (or
             only) attempt; ``1`` for the first retry, etc.

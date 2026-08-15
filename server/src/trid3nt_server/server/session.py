@@ -1,5 +1,5 @@
 """Per-session state layer -- the ``SessionState`` dataclass and the
-session-scoped registries it is backed by (server-refactor finale, ADR 0265).
+session-scoped registries it is backed by.
 
 The split NATE named: state is separated from behavior. ``SessionState`` is a
 plain ``@dataclass`` of per-connection fields plus one lifecycle accessor (the
@@ -148,11 +148,11 @@ def _apply_session_anon_hint(
 @dataclass
 class SessionState:
     """Per-session in-memory state. M1 keeps everything in-process; Mongo-backed
-    session restore (NFR-R-2) lands when the LLM-facing DB seam is wired.
+    session restore lands when the LLM-facing DB seam is wired.
 
     Owns the per-session ``PipelineEmitter``, which owns the current
     ``PipelineSnapshot`` + ``loaded_layers`` accumulator and broadcasts real
-    ``pipeline-state`` / ``session-state`` envelopes (Appendix A.7
+    ``pipeline-state`` / ``session-state`` envelopes (replace-not-reconcile
     replace-not-reconcile). ``current_pipeline_id`` / ``current_pipeline_steps``
     stay as the M1 mirror for the LLM-streaming reply path (which doesn't go
     through the emitter -- there are no tool calls there)."""
@@ -173,7 +173,7 @@ class SessionState:
     # always correct.
     inflight_tasks: dict[str, asyncio.Task] = field(default_factory=dict)
     emitter: PipelineEmitter | None = None
-    # FR-FR-3: per-session turn counter.  Increments on every
+    # Per-session turn counter.  Increments on every
     # user-message dispatch (model stream or /invoke directive). When
     # turn_count > MAX_TURNS_PER_SESSION the agent refuses further dispatch
     # and emits a ``session-state(status="max_turns_reached")`` envelope.
@@ -201,12 +201,12 @@ class SessionState:
     # re-fetched, starving the sim/fetch reuse short-circuits of an AOI anchor).
     # ``None`` is legitimate (no active Case, or a Case with no recorded bbox).
     case_bbox: Any = None
-    # ADR 0017: the session's ACTIVE canvas AOI -- structured ``aoi_bbox``
+    # The session's ACTIVE canvas AOI -- structured ``aoi_bbox``
     # ([min_lon, min_lat, max_lon, max_lat], EPSG:4326) set/cleared by
     # ``_set_active_aoi_from_payload``. Read by dispatch-time bbox auto-fill:
     # explicit arg > active AOI > case bbox. ``None`` = no drawn AOI.
     active_aoi_bbox: list[float] | None = None
-    # ADR 0159: the turn's user-DRAWN geometry (the QGIS dock 'Draw region'
+    # The turn's user-DRAWN geometry (the QGIS dock 'Draw region'
     # rubber-band rectangle) as ``{"geometry_type": "rectangle", "bbox": [...] }``
     # (EPSG:4326). Set/cleared per user-message by ``_set_drawn_geometry_from_payload``
     # and bound into a per-task ContextVar so composer gates read it as a
@@ -214,7 +214,7 @@ class SessionState:
     # drawn. Distinct from ``active_aoi_bbox`` (the analysis extent): a drawn
     # region is a sub-region knob, not the AOI.
     drawn_geometry: dict | None = None
-    # ADR 0018 (Stage 3): per-session routing-visibility mode ('auto' | 'ask').
+    # Per-session routing-visibility mode ('auto' | 'ask').
     # Set by the ``session-config`` envelope's ``mode`` field; ``None`` falls
     # back to the TRID3NT_MODE env default (see _session_routing_mode). Governs
     # tool-selection VISIBILITY only -- consent gates are never mode-dependent.
@@ -259,7 +259,7 @@ class SessionState:
     # binding via ``_turn_case_id``, never the live ``active_case_id``, which
     # a mid-stream ``case-command(select)`` can re-point mid-turn.
     current_turn_case_id: str | None = None
-    # Per-connection authenticated user context (SRS Appendix H.5).
+    # Per-connection authenticated user context.
     #
     # Populated by the connect-handshake (``_perform_auth_handshake``) after
     # the ``auth-token`` envelope verifies (or after the 5-second anonymous

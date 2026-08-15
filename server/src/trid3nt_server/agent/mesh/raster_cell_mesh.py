@@ -88,7 +88,7 @@ if TYPE_CHECKING:  # annotation-only; the runtime import is lazy (see below).
 
 # NOTE: swmm_hyetograph lives in agent/workflows/swmm/ while this module lives in
 # agent/mesh/, and agent/workflows/swmm/ imports back from agent/mesh/ -- a
-# package-level import cycle (ADR 0098). The hyetograph symbol is therefore
+# package-level import cycle. The hyetograph symbol is therefore
 # imported LAZILY inside build_swmm_mesh rather than at module top, so importing
 # either package first cannot dead-lock on a half-initialised sibling. The
 # ``HyetographResult`` annotation stays a string (from __future__ annotations),
@@ -126,7 +126,7 @@ __all__ = [
 # re-export (real consumers import it from ``workflows.shared.manning`` directly),
 # and importing ``workflows.shared.manning`` at module top forced the heavy
 # ``workflows`` package __init__ -- the agent/mesh <-> agent/workflows import
-# cycle (ADR 0098) that broke direct imports of this relocated module. Removed.
+# cycle that broke direct imports of this relocated module. Removed.
 
 # Default overland Manning n when no NLCD raster is supplied (matches the spike
 # / the contracts default). Used for the synthetic-AOI proof and as a fallback.
@@ -973,7 +973,7 @@ def build_swmm_mesh(
     # Mechanical last-resort ONLY for a DIRECT build_swmm_mesh call (tests /
     # low-level callers). The urban-flood composer NEVER reaches this default:
     # it sources total_rain_depth_mm from NOAA Atlas-14 and STOPS with a typed
-    # SWMM_PRECIP_LOOKUP_FAILED gate when the lookup fails (ADR 0091). Not a
+    # SWMM_PRECIP_LOOKUP_FAILED gate when the lookup fails. Not a
     # site-calibrated depth - a labeled fallback for the bare builder surface.
     total_rain_depth_mm: float = 120.0,
     storm_duration_hr: float = 6.0,
@@ -1102,7 +1102,7 @@ def build_swmm_mesh(
 
     # --- nested design-storm hyetograph (P1 builder) ---
     # Lazy import: breaks the agent/mesh <-> agent/workflows/swmm package cycle
-    # (ADR 0098) -- resolved at call time, never at module import.
+    # resolved at call time, never at module import.
     from trid3nt_server.agent.workflows.swmm.swmm_hyetograph import (
         build_nested_hyetograph,
     )

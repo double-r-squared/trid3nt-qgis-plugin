@@ -1,4 +1,4 @@
-"""Two-mode INPUT_REQUIRED review gate -- the shared helper templates call (ADR 0107).
+"""Two-mode INPUT_REQUIRED review gate -- the shared helper templates call.
 
 NATE's flagship review-before-run feature has TWO run modes:
 
@@ -21,7 +21,7 @@ resolved provenance (rendered into ``recommendation`` so the plugin's existing
 card shows it with NO new UI, plus the structured ``synthetic_inputs`` field for
 narration), and ``server``'s ``_PENDING_CONFIRMATIONS`` block-and-wait +
 ``tool-payload-confirmation`` resume path handle it unchanged. The mode lever is
-shared with the mesh preview gate (ADR 0099): ``user_gated`` also turns the mesh
+shared with the mesh preview gate: ``user_gated`` also turns the mesh
 preview gate ON for regular grids.
 
 An in-tool gate cannot import ``server`` at module load (circular), so the helper
@@ -234,7 +234,7 @@ async def gate_input_review(
     max_rounds: int = _DEFAULT_MAX_ROUNDS,
     ttl_seconds: int = _DEFAULT_TTL_SECONDS,
 ) -> ReviewOutcome:
-    """Present resolved inputs for review before solver dispatch (ADR 0107).
+    """Present resolved inputs for review before solver dispatch.
 
     ``mode``: the per-run lever (``auto`` / ``user_gated`` / None -> session
     default). ``entries``: the resolved ``SyntheticInput`` provenance. ``params``:

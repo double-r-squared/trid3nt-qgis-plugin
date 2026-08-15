@@ -1,6 +1,6 @@
-"""Shared mesh preview/approve gate (ADR 0099, mesh wave M2).
+"""Shared mesh preview/approve gate.
 
-NATE signed (2026-08-03): the mesh preview/approve gate defaults ON for tin
+The mesh preview/approve gate defaults ON for tin
 paradigms (TELEMAC precedent) and is per-run-mode (USER-GATED) for regular
 grids. This component makes that ONE decision + envelope for every engine, so
 TELEMAC, SWMM, SFINCS, SWAN and MODFLOW share a single approve-mesh gate instead
@@ -69,7 +69,7 @@ def default_gate_mode(paradigm: str) -> GateMode:
 def mesh_gate_should_fire(paradigm: str, mode: GateMode | None = None) -> bool:
     """Whether the preview/approve gate fires for ``paradigm`` under ``mode``.
 
-    ``mode`` is the SAME run-mode lever as the ADR 0107 input-review gate: an
+    ``mode`` is the SAME run-mode lever as the in-tool input-review gate: an
     explicit ``"user_gated"`` (a per-run ``input_mode`` threaded here) fires the
     gate for EVERY paradigm, including regular grids. ``mode=None`` resolves to
     :func:`default_gate_mode` (tin=ON / regular=OFF); a regular grid then ALSO

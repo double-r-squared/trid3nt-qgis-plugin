@@ -698,10 +698,10 @@ def _accepted_params(fn: Callable[..., Any]) -> tuple[set[str], bool]:
 
 
 # --------------------------------------------------------------------------- #
-# ADR 0017 (structured AOI slice) -- dispatch-time bbox auto-fill
+# Structured AOI slice -- dispatch-time bbox auto-fill
 # --------------------------------------------------------------------------- #
 
-#: Param names treated as "bbox-like" for the ADR 0017 auto-fill. Only
+#: Param names treated as "bbox-like" for the auto-fill. Only
 #: REQUIRED (no-default) signature params auto-fill -- an optional bbox means
 #: the tool has its own semantics for "absent" and the server must not guess.
 _BBOX_AUTOFILL_PARAMS: frozenset[str] = frozenset({"bbox", "aoi_bbox"})
@@ -731,7 +731,7 @@ def autofill_missing_bbox(
     active_aoi: Any = None,
     case_bbox: Any = None,
 ) -> dict[str, Any]:
-    """Fill a REQUIRED bbox-like param the model OMITTED (ADR 0017 slice 2).
+    """Fill a REQUIRED bbox-like param the model OMITTED.
 
     The canvas AOI is a structured field: the client stamps ``aoi_bbox`` on
     the user-message payload, the server stores it as the session's active
@@ -752,8 +752,7 @@ def autofill_missing_bbox(
       * Pure function: returns a fresh dict when it fires, the original
         otherwise; never raises.
 
-    One log line fires per filled param (the ADR 0017 observability
-    contract) naming the source that won.
+    One log line fires per filled param naming the source that won.
     """
     try:
         sig = inspect.signature(fn)
@@ -798,7 +797,7 @@ def autofill_missing_bbox(
 
 
 # --------------------------------------------------------------------------- #
-# Fuzzy enum-arg correction (ADR 0017 guard c)
+# Fuzzy enum-arg correction
 # --------------------------------------------------------------------------- #
 # A string arg that fails a ``Literal[...]`` schema ("truecolour" for
 # Literal["truecolor", "ndvi"], "Flood-Depth" for "flood_depth") would
@@ -1107,7 +1106,7 @@ def normalize_args(
             )
             out["bbox"] = coerced
 
-    # Step 4c (Stage 3, ADR 0017 guard c): fuzzy enum-arg correction. A string
+    # Fuzzy enum-arg correction. A string
     # value that misses its param's Literal choices by a near-miss (typo /
     # case / separator) is difflib-corrected (cutoff 0.8) with a log line;
     # anything below the cutoff keeps the normal typed-error path.

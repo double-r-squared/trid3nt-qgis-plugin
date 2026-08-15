@@ -29,7 +29,7 @@ Wire points (server.py):
     - In the exception handler after ``_invoke_tool_via_emitter`` fails:
         state.circuit_breaker.record_failure(call.name)
 
-``CircuitBreakerError`` follows the same FR-AS-11 typed-exception contract as
+``CircuitBreakerError`` follows the same typed-exception contract as
 ``ToolNotFoundError`` and every ``fetch_*`` error class: ``error_code`` is a
 SCREAMING_SNAKE_CASE string, ``retryable=False`` (the LLM cannot retry its way
 out of a cooldown).  ``summarize_tool_result`` in ``adapter.py`` harvests these
@@ -101,7 +101,7 @@ def _get_cooldown_s() -> float:
 
 
 # ---------------------------------------------------------------------------
-# Typed exception (FR-AS-11 contract)
+# Typed exception
 # ---------------------------------------------------------------------------
 
 

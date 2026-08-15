@@ -423,7 +423,7 @@ def _bound_result_descriptor(descriptor: dict[str, Any]) -> dict[str, Any]:
     a multi-megabyte JSON-native string, a giant nested list/dict, or a huge
     repr. Truncation is HONEST: the returned descriptor always carries
     ``truncated=true`` and an ``original_bytes`` count so the agent narrates the
-    truncation truthfully (Decision H / Invariant 1 — never fabricate a complete
+    truncation truthfully (never fabricate a complete
     result from a truncated one).
 
     Strategy by kind:
