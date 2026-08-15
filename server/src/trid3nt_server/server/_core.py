@@ -282,6 +282,53 @@ from .config import (
     _tool_retrieval_mode,
 )
 
+# Wave-3 extractions (ADR 0263): pending-interaction registries, raster-style
+# helpers, and bbox/AOI + spatial pending-input registries now live in sibling
+# package modules. Imported here by NAME so bare-global references below AND
+# monkeypatch targets on ``trid3nt_server.server.<name>`` resolve as before.
+from .styles import (
+    _DEFAULT_FLOOD_DEPTH_STYLE_PRESET,
+    _FLOOD_DEPTH_STYLE_TOKENS,
+    _is_droppable_object_store_raster,
+    _is_flood_depth_cog,
+    _resolve_publish_wrap_style_preset,
+)
+from .interactions import (
+    _CATALOG_OFFER_MAX,
+    _PENDING_CATALOG_OFFERS,
+    _PENDING_CREDENTIALS,
+    _PENDING_TOOL_CHOICES,
+    _complete_catalog_entry,
+    _handle_catalog_addition_response,
+    _pop_pending_catalog_offer,
+    _pop_pending_credential,
+    _pop_pending_tool_choice,
+    _probe_catalog_endpoint,
+    _probe_catalog_endpoint_sync,
+    _prune_catalog_offers,
+    _register_pending_catalog_offer,
+    _register_pending_credential,
+    _register_pending_tool_choice,
+    _resolve_pending_credential,
+    _resolve_pending_tool_choice,
+    _slug,
+)
+from .spatial import (
+    _aoi_zoom_to_bbox,
+    _coerce_bbox4,
+    _fail_pending_spatial_input,
+    _is_finite_bbox4,
+    _last_zoom_to_bbox,
+    _PENDING_REGION_CHOICES,
+    _PENDING_SPATIAL_INPUTS,
+    _pop_pending_region_choice,
+    _pop_pending_spatial_input,
+    _register_pending_region_choice,
+    _register_pending_spatial_input,
+    _resolve_pending_region_choice,
+    _resolve_pending_spatial_input,
+)
+
 logger = logging.getLogger("trid3nt_server.server")
 
 # Confirmation triggers (FR-AS-8). Empty for M1: solver runs and non-session
@@ -448,57 +495,6 @@ def _geocode_drift_note(
     return None
 
 
-# --------------------------------------------------------------------------- #
-# ADR 0018 -- pending tool-choice registry: module-level, keyed by the
-# unguessable ULID request_id + owning session_id, so a reply arriving on a
-# sibling WebSocket connection of the same session still resolves the paused
-# turn.
-# --------------------------------------------------------------------------- #
-
-_PENDING_TOOL_CHOICES: dict[str, tuple[str, "asyncio.Future"]] = {}
-
-
-def _register_pending_tool_choice(
-    session_id: str, request_id: str, fut: "asyncio.Future"
-) -> None:
-    _PENDING_TOOL_CHOICES[request_id] = (session_id, fut)
-
-
-def _pop_pending_tool_choice(request_id: str) -> None:
-    _PENDING_TOOL_CHOICES.pop(request_id, None)
-
-
-def _resolve_pending_tool_choice(session_id: str, payload: Any) -> bool:
-    """Complete the pending tool-candidates gate for ``payload['request_id']``.
-
-    The payload is a LOOSE dict on purpose -- the contracts lane declares the
-    ``tool-choice`` model; until integration we parse defensively. Returns
-    True when a live future was resolved.
-    """
-    if not isinstance(payload, dict):
-        return False
-    request_id = payload.get("request_id")
-    if not isinstance(request_id, str) or not request_id:
-        return False
-    entry = _PENDING_TOOL_CHOICES.get(request_id)
-    if entry is None:
-        return False
-    owner_session, fut = entry
-    if owner_session != session_id:
-        logger.warning(
-            "tool-choice request_id=%s owned by session=%s but resolved-by=%s; "
-            "ignoring",
-            request_id,
-            owner_session,
-            session_id,
-        )
-        return False
-    if fut.done():
-        return False
-    fut.set_result(dict(payload))
-    return True
-
-
 def _union_pinned_tool(
     pinned: str | None,
     retrieval_registry: dict,
@@ -519,322 +515,6 @@ def _union_pinned_tool(
             retrieval_registry = dict(retrieval_registry)
             retrieval_registry[pinned] = TOOL_REGISTRY[pinned]
     return retrieval_registry
-
-
-# ---------------------------------------------------------------------------
-# Mode 2 offer-to-add -- pending catalog-offer registry (FR-DS-* Mode 2).
-#
-# The ``mode2-candidate`` emission is FIRE-AND-FORGET: it never blocks the turn
-# (unlike the tool-choice gate, so there is no future to await). Instead we
-# stash the candidate keyed by its ``candidate_id`` -- which the plugin card
-# echoes back as the ``catalog-addition-response.request_id`` -- so a later
-# positive reply can draft the full catalog entry from the original candidate.
-#
-# BOUNDED, like every card: offers expire after a TTL and the registry is
-# capped, so an offer the user never answers cannot leak (proceeds, never
-# hangs). Session-scoped + unguessable-ULID keyed, mirroring the tool-choice
-# registry so a reply on a sibling connection of the same session still
-# resolves. Overlay write + probe run OFF the loop (asyncio.to_thread).
-# ---------------------------------------------------------------------------
-
-#: request_id -> (owner_session_id, candidate wire-dict, monotonic_expiry).
-_PENDING_CATALOG_OFFERS: dict[str, tuple[str, dict, float]] = {}
-
-#: Cap on outstanding offers; the oldest is dropped when the bound is hit.
-_CATALOG_OFFER_MAX = 64
-
-
-def _prune_catalog_offers(now: float | None = None) -> None:
-    """Drop expired pending offers (called on every register / pop)."""
-    now = time.monotonic() if now is None else now
-    expired = [
-        rid for rid, (_s, _c, exp) in _PENDING_CATALOG_OFFERS.items() if exp <= now
-    ]
-    for rid in expired:
-        _PENDING_CATALOG_OFFERS.pop(rid, None)
-
-
-def _register_pending_catalog_offer(
-    session_id: str, request_id: str, candidate: dict
-) -> None:
-    """Stash a mode2 candidate so a later positive reply can draft its entry."""
-    _prune_catalog_offers()
-    # Insertion-ordered dict -> the first key is the oldest offer.
-    while len(_PENDING_CATALOG_OFFERS) >= _CATALOG_OFFER_MAX:
-        oldest = next(iter(_PENDING_CATALOG_OFFERS), None)
-        if oldest is None:
-            break
-        _PENDING_CATALOG_OFFERS.pop(oldest, None)
-    _PENDING_CATALOG_OFFERS[request_id] = (
-        session_id,
-        dict(candidate),
-        time.monotonic() + _catalog_offer_ttl_s(),
-    )
-
-
-def _pop_pending_catalog_offer(session_id: str, request_id: str) -> dict | None:
-    """Remove + return the candidate for ``request_id`` (owner-checked).
-
-    Returns ``None`` when the offer is unknown / expired, or when a DIFFERENT
-    session claims it (refused loudly -- mirrors ``_resolve_pending_tool_choice``).
-    A None here is NOT fatal: a self-contained ``edited_catalog_entry`` on the
-    reply can still be completed without the original candidate.
-    """
-    _prune_catalog_offers()
-    entry = _PENDING_CATALOG_OFFERS.get(request_id)
-    if entry is None:
-        return None
-    owner, candidate, _exp = entry
-    if owner != session_id:
-        logger.warning(
-            "catalog-addition-response request_id=%s owned by session=%s but "
-            "resolved-by=%s; ignoring",
-            request_id,
-            owner,
-            session_id,
-        )
-        return None
-    _PENDING_CATALOG_OFFERS.pop(request_id, None)
-    return candidate
-
-
-def _slug(text: str | None) -> str:
-    """Lowercase kebab slug for a derived catalog id (``weather.gov`` -> ``weather-gov``)."""
-    s = re.sub(r"[^a-z0-9]+", "-", (text or "").lower()).strip("-")
-    return s or "source"
-
-
-def _probe_catalog_endpoint_sync(url: str) -> "ProbeFindings":
-    """Cheap best-effort conformity probe for a Mode 2 candidate URL.
-
-    Fills the ``ProbeFindings`` axes we can observe from a single bounded HEAD
-    (with a ranged-GET fallback for servers that reject HEAD): content type,
-    last-modified, range support. DEGRADES HONESTLY -- any failure returns an
-    empty ``ProbeFindings`` (all None) rather than fabricating a finding. Runs
-    OFF the event loop (called via ``asyncio.to_thread``).
-    """
-    from trid3nt_contracts.ws import ProbeFindings
-
-    try:
-        import requests
-
-        resp = requests.head(url, timeout=5.0, allow_redirects=True)
-        if resp.status_code >= 400 or not (resp.headers or {}):
-            resp = requests.get(
-                url, timeout=5.0, stream=True, headers={"Range": "bytes=0-0"}
-            )
-        headers = resp.headers or {}
-        ct = headers.get("Content-Type") or headers.get("content-type")
-        lm = headers.get("Last-Modified") or headers.get("last-modified")
-        ar = headers.get("Accept-Ranges") or headers.get("accept-ranges")
-        supports_range = (
-            isinstance(ar, str) and "bytes" in ar.lower()
-        ) or resp.status_code == 206
-        return ProbeFindings(
-            content_type=(
-                ct.split(";")[0].strip() if isinstance(ct, str) and ct else None
-            ),
-            last_modified_header=lm if isinstance(lm, str) and lm else None,
-            supports_range_requests=supports_range or None,
-        )
-    except Exception:  # noqa: BLE001 -- honest degrade, never fabricate
-        logger.info(
-            "catalog probe failed url=%s -- degrading to empty ProbeFindings",
-            url,
-            exc_info=True,
-        )
-        return ProbeFindings()
-
-
-async def _probe_catalog_endpoint(url: str | None) -> "ProbeFindings | None":
-    """Bounded async wrapper for ``_probe_catalog_endpoint_sync`` (never raises)."""
-    from trid3nt_contracts.ws import ProbeFindings
-
-    if not isinstance(url, str) or not url:
-        return None
-    try:
-        return await asyncio.wait_for(
-            asyncio.to_thread(_probe_catalog_endpoint_sync, url), timeout=8.0
-        )
-    except Exception:  # noqa: BLE001 -- probe is best-effort
-        return ProbeFindings()
-
-
-def _complete_catalog_entry(
-    base: Any, candidate: dict | None, findings: "ProbeFindings | None"
-) -> Any:
-    """Draft + complete a full ``CatalogEntry`` for the user-overlay catalog.
-
-    Sources, in precedence order: the user's ``edited_catalog_entry`` (a
-    ``SuggestedCatalogEntry``), then the originating mode2 ``candidate`` dict,
-    then the conformity ``findings``, then honest defaults. Returns a validated
-    ``CatalogEntry`` (status ``"active"`` -- in the single-user local build the
-    user's acceptance IS the curator approval), or ``None`` when no endpoint
-    URL is derivable (the one field we refuse to fabricate).
-    """
-    from trid3nt_contracts.catalog import CatalogEntry
-    from urllib.parse import urlparse
-
-    cand = candidate or {}
-
-    def _b(attr: str) -> Any:
-        return getattr(base, attr, None) if base is not None else None
-
-    urls: list[str] = []
-    if base is not None and _b("urls"):
-        urls = [u for u in _b("urls") if isinstance(u, str) and u]
-    if not urls and isinstance(cand.get("url"), str) and cand["url"]:
-        urls = [cand["url"]]
-    if not urls:
-        return None  # no endpoint -> cannot honestly draft an entry.
-    url = urls[0]
-    host = (urlparse(url).hostname or "").lower()
-
-    entry_id = _b("id") or f"user-{_slug(host or 'source')}-{new_ulid()[-8:].lower()}"
-    name = (
-        _b("name")
-        or (cand.get("title") if isinstance(cand.get("title"), str) else None)
-        or host
-        or entry_id
-    )
-    description = (
-        _b("description")
-        or f"User-added source via Mode 2 catalog addition ({host or url})."
-    )
-    access_tier = (
-        _b("access_tier")
-        or (findings.access_tier_inferred if findings is not None else None)
-        or 3
-    )
-    # credential_tier: draft ONLY as tier 1 (key-free). Tier >= 2 requires an
-    # api_key_secret_ref we do not have at draft time; downgrading keeps the
-    # entry valid against the CatalogEntry cross-field rule (honest, not a shim).
-    ttl_class = _b("ttl_class") or "semi-static-7d"
-    source_class = (
-        _b("source_class")
-        or (
-            cand.get("suggested_tool_kind")
-            if isinstance(cand.get("suggested_tool_kind"), str)
-            else None
-        )
-        or "user_added"
-    )
-    license_txt = (
-        _b("license_claim")
-        or (findings.license_observed if findings is not None else None)
-        or "Unknown (user-proposed, unverified)"
-    )
-    how_to_use = (
-        _b("how_to_use")
-        or (
-            f"User-proposed endpoint {url}. Fetch via web_fetch or the generic "
-            "OGC/HTTP adapters; verify the response shape before relying on it."
-        )
-    )
-    citation = (
-        f"{name} -- {host or url} (user-proposed via Mode 2, added "
-        f"{now_utc().date().isoformat()})"
-    )
-    try:
-        return CatalogEntry(
-            id=entry_id,
-            name=name,
-            description=description,
-            urls=urls,
-            access_tier=access_tier,
-            credential_tier=1,
-            ttl_class=ttl_class,
-            source_class=source_class,
-            license=license_txt,
-            citation=citation,
-            vintage=None,
-            last_verified=now_utc().isoformat(),
-            status="active",
-            how_to_use=how_to_use,
-            api_key_secret_ref=None,
-        )
-    except Exception:  # noqa: BLE001 -- surface the honest failure, no shim
-        logger.warning(
-            "catalog completion: could not build a valid CatalogEntry id=%r",
-            entry_id,
-            exc_info=True,
-        )
-        return None
-
-
-async def _handle_catalog_addition_response(
-    websocket: ServerConnection,
-    state: SessionState,
-    car: "CatalogAdditionResponsePayload",
-) -> None:
-    """Mode 2 offer-to-add completion (the server half of the loop).
-
-    On ACCEPT: draft + complete the entry (edited entry / candidate / probe),
-    APPEND it to the user-overlay catalog, and reset the catalog cache so
-    ``search_data_catalog`` finds it on the very next load. On REJECT / cancel:
-    just resolve (drop) the pending offer. Best-effort -- never raises into the
-    message loop; a probe / append fault degrades honestly and logs.
-    """
-    candidate = _pop_pending_catalog_offer(state.session_id, car.request_id)
-
-    if car.cancelled or car.decision != "accept":
-        logger.info(
-            "catalog-addition-response resolved session=%s request_id=%s "
-            "decision=%s cancelled=%s (offer dropped)",
-            state.session_id,
-            car.request_id,
-            car.decision,
-            car.cancelled,
-        )
-        return
-
-    base = car.edited_catalog_entry
-    if base is None and candidate is None:
-        logger.warning(
-            "catalog-addition-response accept with NO pending offer and NO "
-            "edited entry session=%s request_id=%s -- cannot draft; ignored",
-            state.session_id,
-            car.request_id,
-        )
-        return
-
-    url_for_probe: str | None = None
-    if base is not None and base.urls:
-        url_for_probe = base.urls[0]
-    elif candidate and isinstance(candidate.get("url"), str):
-        url_for_probe = candidate["url"]
-    findings = await _probe_catalog_endpoint(url_for_probe)
-
-    entry = _complete_catalog_entry(base, candidate, findings)
-    if entry is None:
-        logger.warning(
-            "catalog-addition-response accept could not complete a valid entry "
-            "session=%s request_id=%s",
-            state.session_id,
-            car.request_id,
-        )
-        return
-
-    try:
-        from ..agent.tools.search.catalog_common import append_user_catalog_entry
-
-        await asyncio.to_thread(append_user_catalog_entry, entry)
-    except Exception:  # noqa: BLE001 -- append fault must not break the loop
-        logger.exception(
-            "catalog-addition-response overlay append failed session=%s id=%s",
-            state.session_id,
-            entry.id,
-        )
-        return
-
-    logger.info(
-        "catalog-addition-response ACCEPTED session=%s request_id=%s appended "
-        "catalog id=%s url=%s",
-        state.session_id,
-        car.request_id,
-        entry.id,
-        entry.urls[0],
-    )
 
 
 # ---------------------------------------------------------------------------
@@ -939,71 +619,6 @@ FETCH_CONFIRM_TOOLS: set[str] = {
     "fetch_topobathy",
     "fetch_landcover",
 }
-
-#: job duplicate-flood-layer (SAFETY NET): tokens that mark a FLOOD / DEPTH COG
-#: (vs terrain / land-cover / plume / generic rasters). Used at the publish_layer
-#: wrap-site so a re-publish of a flood-depth COG that arrives with an EMPTY
-#: style_preset is defaulted to ``continuous_flood_depth`` (white->blue->green)
-#: instead of "" -- an empty preset makes QGIS fall back to viridis and paints
-#: a redundant styleless flood layer (the exact duplicate-flood-layer symptom).
-#: Token-boundary matched (not substring) so e.g. ``demo`` never trips ``dem``.
-_FLOOD_DEPTH_STYLE_TOKENS: frozenset[str] = frozenset(
-    {"flood", "depth", "inundation", "floodepth"}
-)
-_DEFAULT_FLOOD_DEPTH_STYLE_PRESET: str = "continuous_flood_depth"
-
-
-def _is_flood_depth_cog(layer_uri: str, layer_id: str) -> bool:
-    """True when the resolved URI or layer_id tokenizes to a FLOOD/DEPTH raster.
-
-    Token-boundary matching on non-alphanumerics so ``flood-depth-peak-<run_id>``
-    and a ``.../flood_depth_peak.tif`` URI both match, while ``demo``/``dem`` do
-    not. Conservative: an unrecognized raster returns False (keeps the existing
-    empty-preset / QGIS-default behavior for non-flood rasters)."""
-    import re as _re
-
-    tokens = set(_re.split(r"[^a-z0-9]+", f"{layer_uri} {layer_id}".lower()))
-    return bool(tokens & _FLOOD_DEPTH_STYLE_TOKENS)
-
-
-def _resolve_publish_wrap_style_preset(
-    *, style_preset: str | None, layer_uri: str, layer_id: str
-) -> str:
-    """Style preset for the publish_layer wrap-site LayerURI (job
-    duplicate-flood-layer SAFETY NET).
-
-    Honors an explicit non-empty ``style_preset`` (the LLM / tool asked for it).
-    When it resolves EMPTY, default a flood/depth COG to
-    ``continuous_flood_depth`` so a redundant re-publish is never styleless
-    (which QGIS renders as viridis). Non-flood rasters keep ``""`` (QGIS
-    default) exactly as before -- terrain auto-scales, paletted COGs use
-    their embedded color table."""
-    preset = (style_preset or "").strip()
-    if preset:
-        return preset
-    if _is_flood_depth_cog(layer_uri, layer_id):
-        return _DEFAULT_FLOOD_DEPTH_STYLE_PRESET
-    return ""
-
-
-def _is_droppable_object_store_raster(value: Any) -> bool:
-    """True iff ``value`` is exactly the LayerURI class ``emit_layer_uri`` DROPS.
-
-    The deterministic auto-publish targets precisely the LayerURIs that
-    ``layer_uri_emit.emit_layer_uri`` refuses to deliver: a RENDERABLE
-    RASTER carrying a raw object-store uri (``s3://`` / ``gs://``), which
-    MapLibre cannot fetch. Those must be converted to an http(s) tile URL
-    via publish_layer before they can render. A vector (inline-GeoJSON path),
-    an http(s)-uri raster (already renderable), or any non-LayerURI return
-    is NOT a candidate. ``PlumeLayerURI`` / ``SeepageLayerURI`` are LayerURI
-    subclasses, so ``isinstance(..., LayerURI)`` covers them.
-    """
-    if not isinstance(value, LayerURI):
-        return False
-    if value.layer_type != "raster":
-        return False
-    uri = value.uri or ""
-    return uri.startswith("s3://") or uri.startswith("gs://")
 
 
 #: Result keys that mark a dispatch as having PRODUCED a real artifact -- a
@@ -1229,297 +844,6 @@ from ..agent.gates.pending import (  # noqa: E402
     _register_pending_confirmation,
     _resolve_pending_confirmation,
 )
-
-
-# --------------------------------------------------------------------------- #
-# Session-scoped pending-CREDENTIAL registry
-# --------------------------------------------------------------------------- #
-#
-# Mirrors ``_PENDING_CONFIRMATIONS`` (the payload-warning / code-exec / solver
-# gate registry) but for the credential-request flow: when a keyed tool
-# dispatch hits a missing/invalid credential the dispatch coroutine pauses on
-# a future keyed by the credential ``request_id``, having emitted a
-# ``credential-request`` envelope. The inbound ``credential-provided``
-# handler (which may arrive on a different WebSocket connection of the same
-# session) resolves the future, and the paused dispatch retries the tool
-# (which now reads the freshly-pushed session-cache key). Tagged with the
-# owning session_id so a cross-session credential-provided is refused.
-_PENDING_CREDENTIALS: dict[str, tuple[str, asyncio.Future]] = {}
-
-
-def _register_pending_credential(
-    session_id: str, request_id: str, fut: "asyncio.Future"
-) -> None:
-    _PENDING_CREDENTIALS[request_id] = (session_id, fut)
-
-
-def _pop_pending_credential(request_id: str) -> None:
-    _PENDING_CREDENTIALS.pop(request_id, None)
-
-
-def _resolve_pending_credential(
-    session_id: str, provided: "CredentialProvidedEnvelopePayload"
-) -> bool:
-    """Complete the pending credential future for ``provided.request_id``.
-
-    Returns True when a live future was resolved. False when the request_id is
-    unknown/already-resolved, or when the answering session is not the owner
-    (refused loudly -- the request_id is an unguessable ULID, but the string
-    compare is cheap defense-in-depth, matching ``_resolve_pending_confirmation``).
-    """
-    entry = _PENDING_CREDENTIALS.get(provided.request_id)
-    if entry is None:
-        return False
-    owner_session, fut = entry
-    if owner_session != session_id:
-        logger.warning(
-            "credential-provided REFUSED: session=%s is not the owner "
-            "(owner=%s) for request_id=%s",
-            session_id,
-            owner_session,
-            provided.request_id,
-        )
-        return False
-    if fut.done():
-        _PENDING_CREDENTIALS.pop(provided.request_id, None)
-        return False
-    fut.set_result(provided)
-    _PENDING_CREDENTIALS.pop(provided.request_id, None)
-    return True
-
-
-# --------------------------------------------------------------------------- #
-# job AGENT-AOI-RESIDUAL (#159): turn zoom-to accumulator helpers
-# --------------------------------------------------------------------------- #
-def _is_finite_bbox4(bbox: Any) -> bool:
-    """True iff ``bbox`` is a 4-tuple/list of finite real numbers.
-
-    Guards the LayerURI floored-bbox append so a None / wrong-length /
-    NaN / inf bbox never lands a bad zoom-to in ``current_turn_map_commands``.
-    """
-    if not isinstance(bbox, (tuple, list)) or len(bbox) != 4:
-        return False
-    for v in bbox:
-        if isinstance(v, bool) or not isinstance(v, (int, float)):
-            return False
-        if not math.isfinite(float(v)):
-            return False
-    return True
-
-
-def _coerce_bbox4(value: Any) -> tuple[float, float, float, float] | None:
-    """Coerce ``value`` into a finite 4-float bbox tuple, else ``None``.
-
-    Shared by the LANE-C AOI-pin + fetch-default helpers. Tolerates list/tuple of
-    4 numbers; rejects strings, wrong lengths, and non-finite values (so a bad
-    extent never becomes a pinned AOI or a forced fetch bbox).
-    """
-    if not _is_finite_bbox4(value):
-        return None
-    return (float(value[0]), float(value[1]), float(value[2]), float(value[3]))
-
-
-def _aoi_zoom_to_bbox(
-    result: Any, current_turn_map_commands: list[dict]
-) -> tuple[float, float, float, float] | None:
-    """Return the bbox the camera should snap to for a tool ``result``.
-
-    Fires whenever an AOI/bbox is established, not only on a
-    ``geocode_location`` result -- the user giving coordinates directly skips
-    geocode, so without this the map never moved to "where we are" until a
-    downstream layer with a bbox landed.
-
-    Prefers a top-level ``bbox``, falling back to ``aoi_bbox`` (the
-    request_spatial_input / draw result shape). Returns ``None`` when:
-      - ``result`` is not a dict, or carries no finite 4-number extent, OR
-      - the extent equals the turn's LAST zoom-to bbox (dedupe: a chain of
-        bbox-bearing tools over the SAME AOI must not re-snap repeatedly).
-    Pure + side-effect-free so the caller owns the emit + accumulator append.
-    """
-    if not isinstance(result, dict):
-        return None
-    raw = result.get("bbox")
-    if not _is_finite_bbox4(raw):
-        raw = result.get("aoi_bbox")
-    aoi = _coerce_bbox4(raw)
-    if aoi is None:
-        return None
-    last = _last_zoom_to_bbox(current_turn_map_commands)
-    if last is not None and list(aoi) == list(last):
-        return None  # already snapped to this exact AOI this turn.
-    return aoi
-
-
-def _last_zoom_to_bbox(commands: list[dict]) -> list | None:
-    """Return the bbox of the most-recent ``zoom-to`` entry, else None.
-
-    Mirrors the web ``extractLastZoomTo`` newest-first walk so the dedupe
-    here compares against the SAME bbox the client would replay.
-    """
-    for cmd in reversed(commands):
-        if isinstance(cmd, dict) and cmd.get("command") == "zoom-to":
-            args = cmd.get("args")
-            if isinstance(args, dict):
-                bbox = args.get("bbox")
-                if isinstance(bbox, (tuple, list)):
-                    return list(bbox)
-            return None
-    return None
-
-
-# --------------------------------------------------------------------------- #
-# Session-scoped pending-REGION-CHOICE registry (region-disambiguation picker)
-# --------------------------------------------------------------------------- #
-#
-# Mirrors ``_PENDING_CREDENTIALS`` exactly, but for the region-choice flow: when
-# a ``geocode_location`` result comes back as a state-bbox-fallback snap, the
-# dispatch coroutine emits a ``region-choice-request`` envelope (whole-state
-# default + candidate counties) and pauses on a future keyed by the choice
-# ``request_id``. The inbound ``region-choice-provided`` handler (which may
-# arrive on a DIFFERENT WebSocket connection of the same session -- StrictMode
-# double-mount / reconnect) resolves the future, and the paused dispatch either
-# narrows the geocode bbox to the picked region or keeps the whole-state bbox.
-# Fail-open: on timeout / no client the whole-state bbox (already the geocode
-# result) is used unchanged so the automated path never blocks. Tagged with the
-# owning session_id so a cross-session region-choice-provided is refused.
-_PENDING_REGION_CHOICES: dict[str, tuple[str, asyncio.Future]] = {}
-
-
-def _register_pending_region_choice(
-    session_id: str, request_id: str, fut: "asyncio.Future"
-) -> None:
-    _PENDING_REGION_CHOICES[request_id] = (session_id, fut)
-
-
-def _pop_pending_region_choice(request_id: str) -> None:
-    _PENDING_REGION_CHOICES.pop(request_id, None)
-
-
-def _resolve_pending_region_choice(
-    session_id: str, provided: "RegionChoiceProvidedEnvelopePayload"
-) -> bool:
-    """Complete the pending region-choice future for ``provided.request_id``.
-
-    Returns True when a live future was resolved. False when the request_id is
-    unknown/already-resolved, or when the answering session is not the owner
-    (refused loudly -- mirrors ``_resolve_pending_credential``).
-    """
-    entry = _PENDING_REGION_CHOICES.get(provided.request_id)
-    if entry is None:
-        return False
-    owner_session, fut = entry
-    if owner_session != session_id:
-        logger.warning(
-            "region-choice-provided REFUSED: session=%s is not the owner "
-            "(owner=%s) for request_id=%s",
-            session_id,
-            owner_session,
-            provided.request_id,
-        )
-        return False
-    if fut.done():
-        _PENDING_REGION_CHOICES.pop(provided.request_id, None)
-        return False
-    fut.set_result(provided)
-    _PENDING_REGION_CHOICES.pop(provided.request_id, None)
-    return True
-
-
-# --------------------------------------------------------------------------- #
-# Session-scoped pending-SPATIAL-INPUT registry (FR-AS-10 request_spatial_input)
-# --------------------------------------------------------------------------- #
-#
-# Mirrors ``_PENDING_REGION_CHOICES`` exactly, but for the FR-WC-16 urban
-# vector-draw flow: when the LLM (or the urban-flood flow) calls
-# ``request_spatial_input``, the dispatch coroutine emits a
-# ``spatial-input-request`` envelope (point / bbox / vector_draw) and pauses on a
-# future keyed by the request ``request_id``. The inbound
-# ``spatial-input-response`` handler (which may arrive on a DIFFERENT WebSocket
-# connection of the same session -- StrictMode double-mount / reconnect) resolves
-# the future with the drawn ``FeatureCollection`` (or a cancellation). Tagged
-# with the owning session_id so a cross-session response is refused. Fail-open:
-# on timeout / no client the gate resolves to ``None`` and the caller surfaces a
-# typed "no geometry drawn" result (honest -- never a fabricated AOI/barriers).
-_PENDING_SPATIAL_INPUTS: dict[str, tuple[str, asyncio.Future]] = {}
-
-
-def _register_pending_spatial_input(
-    session_id: str, request_id: str, fut: "asyncio.Future"
-) -> None:
-    _PENDING_SPATIAL_INPUTS[request_id] = (session_id, fut)
-
-
-def _pop_pending_spatial_input(request_id: str) -> None:
-    _PENDING_SPATIAL_INPUTS.pop(request_id, None)
-
-
-def _resolve_pending_spatial_input(
-    session_id: str, response: "SpatialInputResponsePayload"
-) -> bool:
-    """Complete the pending spatial-input future for ``response.request_id``.
-
-    Returns True when a live future was resolved. False when the request_id is
-    unknown/already-resolved, or when the answering session is not the owner
-    (refused loudly -- mirrors ``_resolve_pending_region_choice``).
-    """
-    entry = _PENDING_SPATIAL_INPUTS.get(response.request_id)
-    if entry is None:
-        return False
-    owner_session, fut = entry
-    if owner_session != session_id:
-        logger.warning(
-            "spatial-input-response REFUSED: session=%s is not the owner "
-            "(owner=%s) for request_id=%s",
-            session_id,
-            owner_session,
-            response.request_id,
-        )
-        return False
-    if fut.done():
-        _PENDING_SPATIAL_INPUTS.pop(response.request_id, None)
-        return False
-    fut.set_result(response)
-    _PENDING_SPATIAL_INPUTS.pop(response.request_id, None)
-    return True
-
-
-def _fail_pending_spatial_input(
-    session_id: str,
-    request_id: str,
-    error_code: str,
-    error_message: str,
-) -> bool:
-    """Fail the pending spatial-input future for ``request_id`` with a typed error.
-
-    Used when an inbound ``spatial-input-response`` cannot be parsed/validated
-    (e.g. a barrier feature missing ``barrier_type``). Resolves the future
-    EAGERLY via ``set_exception`` so the awaiting ``request_spatial_input`` turn
-    wakes immediately with a typed error result rather than hanging until the
-    read TTL expires. Returns True when a live future was failed; False when the
-    request_id is unknown/already-resolved, or the answering session is not the
-    owner (refused loudly -- mirrors ``_resolve_pending_spatial_input``).
-    """
-    entry = _PENDING_SPATIAL_INPUTS.get(request_id)
-    if entry is None:
-        return False
-    owner_session, fut = entry
-    if owner_session != session_id:
-        logger.warning(
-            "spatial-input-response (invalid) REFUSED: session=%s is not the "
-            "owner (owner=%s) for request_id=%s",
-            session_id,
-            owner_session,
-            request_id,
-        )
-        return False
-    if fut.done():
-        _PENDING_SPATIAL_INPUTS.pop(request_id, None)
-        return False
-    fut.set_exception(
-        SpatialInputInvalidResponseError(error_code, error_message)
-    )
-    _PENDING_SPATIAL_INPUTS.pop(request_id, None)
-    return True
 
 
 # App-level Persistence singleton. The MongoDB Atlas MCP server is the
