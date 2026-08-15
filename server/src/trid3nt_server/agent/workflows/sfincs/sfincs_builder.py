@@ -44,7 +44,7 @@ Cross-cutting principles in force (per AGENTS.md + engine.md):
   ``error_code="LULC_MAPPING_MISMATCH"`` and the unmapped class set + vintage
   year so the agent surface can render a meaningful failure rather than
   dispatching a broken model to the solver.
-- **Decision K (minimal parameter surface): preserves.** The signature exposes
+- **(minimal parameter surface): preserves.** The signature exposes
   intent + irreducible inputs only (URIs of upstream atomic-tool outputs, bbox,
   options). Manning's mapping CSV vintage, grid resolution, CRS -- all derived
   inside.
@@ -126,7 +126,7 @@ logger = logging.getLogger("trid3nt_server.agent.workflows.sfincs.sfincs_builder
 # ``rioxarray.open_rasterio`` → ``gcsfs``. The gcsfs backend on the agent
 # venv is unstable under HydroMT's concurrent open/close pattern and
 # segfaults inside the cyfunction destructor -- taking the agent process
-# down with it (NFR-R-1 breach).
+# down with it (1 breach).
 #
 # The cure is to keep gcsfs out of the read path entirely: rasterio ships
 # GDAL with a native ``/vsigs/`` virtual filesystem that talks GCS via
@@ -155,7 +155,7 @@ logger = logging.getLogger("trid3nt_server.agent.workflows.sfincs.sfincs_builder
 # mean a caller can override (e.g. ``GDAL_NUM_THREADS=4`` for a CPU-bound
 # local raster job) by setting the env BEFORE importing the workflow.
 os.environ.setdefault("GDAL_NUM_THREADS", "1")
-# Modest VSI cache + timeout for transient GCS hiccups (FR-DT-2 cache is
+# Modest VSI cache + timeout for transient GCS hiccups (cache is
 # external; this is the per-read pace inside GDAL).
 os.environ.setdefault("GDAL_HTTP_TIMEOUT", "60")
 os.environ.setdefault("GDAL_HTTP_MAX_RETRY", "3")
@@ -624,10 +624,10 @@ class BuildOptions:
     """Knobs ``build_sfincs_model`` exposes for engine-internal tuning.
 
     The workflow caller populates these from defaults -- never user-input -- per
-    Decision K. Surfaces:
+    . Surfaces:
 
     - ``grid_resolution_m`` -- SFINCS grid spacing. Defaults to 30 m to match
-      NLCD native + NFR-P-4 (≤200 km² at 30 m).
+      NLCD native + (≤200 km² at 30 m).
     - ``simulation_hours`` -- total simulation length (storm duration + spin-up).
     - ``crs`` -- projected CRS the model grid is built in. SFINCS runs in a
       projected metric CRS; we use EPSG:3857 (Web Mercator) as a generic
@@ -636,7 +636,7 @@ class BuildOptions:
        (TENTATIVE: EPSG:3857 for v0.1 smoke).
     - ``output_setup_uri`` -- explicit override for the staged deck's gs:// URI.
       When ``None`` we derive one inside the cache bucket.
-    - ``compute_class`` -- FR-CE-3 compute class the solve will run on; feeds the
+    - ``compute_class`` -- compute class the solve will run on; feeds the
       autoscale cap sizing (vCPU → cell cap via the perf model). The workflow
       passes the same class it hands ``run_solver``. Provenance only otherwise.
     - ``autoscale_grid`` -- when ``True`` (default), ``build_sfincs_model`` snaps
@@ -881,7 +881,7 @@ def _rasterio_open_with_retry(read_path: str, *, max_attempts: int = 3):
     generic ``RuntimeError`` / ``OSError`` -- programming errors
     (TypeError, ValueError on the path string) escape immediately.
 
-    NFR-R-1: external-API resilience -- segfault root cause (gcsfs) is
+    external-API resilience -- segfault root cause (gcsfs) is
     avoided structurally by the ``/vsigs/`` swap; this wrapper handles
     the remaining transient layer.
     """
@@ -1294,7 +1294,7 @@ def _mask_bounds_provenance(
 ) -> dict[str, Any]:
     """Structured active-mask elevation-window provenance for the run envelope.
 
-    ADR 0223: ``adaptive`` False means the DEM elevation range was unreadable and a
+    ``adaptive`` False means the DEM elevation range was unreadable and a
     WIDE FALLBACK window was used (may activate cells a real DEM range would
     exclude); ``note`` is populated ONLY in that degraded case so the composer can
     surface a labeled warning instead of the flag being discarded to an ``.inp``
@@ -1419,7 +1419,7 @@ SFINCS_THREAD_EXP: float = _env_float("TRID3NT_SFINCS_THREAD_EXP", 0.85)
 SFINCS_PERF_REF_VCPU: float = _env_float("TRID3NT_SFINCS_PERF_REF_VCPU", 8.0)
 
 #: Resolution ladder (metres) the autoscaler snaps UP through. 30 m is the
-#: NLCD-native NFR-P-4 baseline; 200 m is the coarsest rung we will ever solve
+#: NLCD-native baseline; 200 m is the coarsest rung we will ever solve
 #: at (a 200 m flood grid is coarse but still meaningful for a regional AOI,
 #: and is the floor against degenerate over-coarsening). Env:
 #: ``TRID3NT_SFINCS_RES_LADDER`` (comma-separated).
@@ -1455,7 +1455,7 @@ def resolve_solve_vcpus(compute_class: str = "medium") -> int:
 
     ``TRID3NT_SFINCS_SOLVE_VCPUS`` (if set) wins outright -- it lets a redeploy on
     a bigger always-on box re-size the cap without a code change. Otherwise map
-    the FR-CE-3 ``compute_class`` through ``SFINCS_COMPUTE_CLASS_VCPUS`` (default
+    the ``compute_class`` through ``SFINCS_COMPUTE_CLASS_VCPUS`` (default
     8 -- the current EC2 box).
     """
     env_v = os.environ.get("TRID3NT_SFINCS_SOLVE_VCPUS")
@@ -1661,8 +1661,8 @@ def autoscale_grid_resolution(
         zmin/zmax: the ``setup_mask_active`` elevation window - the
             same window the solve will actually mask to, so the estimate counts
             the cells SFINCS will really solve, not the raw bbox.
-        compute_class: FR-CE-3 class → vCPU via ``resolve_solve_vcpus``.
-        base_resolution_m: the finest resolution to consider (NFR-P-4 30 m).
+        compute_class: class → vCPU via ``resolve_solve_vcpus``.
+        base_resolution_m: the finest resolution to consider (4 30 m).
 
     Returns:
         ``GridAutoscaleResult`` with the chosen resolution + the estimate +
@@ -2242,7 +2242,7 @@ def _generate_hydromt_yaml_config(
         ``(region: dict, res: float = 100, crs: Union[str, int] = "utm", ...)``.
         We pass ``region: {bbox: [...]}`` + ``res``; ``crs`` left at the
         ``"utm"`` default so HydroMT picks the appropriate UTM zone for the
-        bbox (Decision K: minimal parameter surface, derive inside).
+        bbox (minimal parameter surface, derive inside).
       * setup_dep -- DEM/topobathy ingest. Live sig:
         ``(datasets_dep: List[dict], buffer_cells: int = 0, interp_method:
         str = "linear")``. We pass ``datasets_dep: [{elevtn: <path>}]``.
@@ -2708,7 +2708,7 @@ def build_sfincs_model(
     # elevation range + native resolution); the same staged path is reused by
     # the YAML emitter below. Degrades gracefully (bbox-area fallback) if the
     # DEM can't be read; NEVER produces a degenerate/empty grid.
-    # ADR 0223: compute the active-mask elevation bounds ONCE and CAPTURE whether
+    # compute the active-mask elevation bounds ONCE and CAPTURE whether
     # they are the DEM-derived adaptive window or the WIDE FALLBACK used when the
     # DEM elevation range cannot be read. _generate_hydromt_yaml_config recomputes
     # the same bounds for the deck (its .inp comment); here we thread the flag into
@@ -2750,7 +2750,7 @@ def build_sfincs_model(
                 )
         except Exception as exc:  # noqa: BLE001 -- autoscale must never break the build
             # A failed autoscale falls back to the caller-provided resolution
-            # (NFR-P-4 30 m default) -- the build proceeds, just without the cap.
+            # (4 30 m default) -- the build proceeds, just without the cap.
             logger.warning(
                 "autoscale: grid autoscale failed (%s); proceeding at "
                 "grid_resolution_m=%.1f",
@@ -2768,7 +2768,7 @@ def build_sfincs_model(
             "HYDROMT_UNAVAILABLE",
             message=(
                 f"hydromt_sfincs not importable: {exc}; agent runtime must "
-                "include the dep (job-0040 SFINCS container bundles it per "
+                "include the dep (SFINCS container bundles it per "
                 "OQ-4 §4)."
             ),
             details={"import_error": str(exc)},
@@ -2837,7 +2837,7 @@ def build_sfincs_model(
             # ``_parse_steps``. Parse with ``yaml.safe_load`` here so the dict
             # the v1.x API documents is what reaches ``SfincsModel.build``.
             # Malformed YAML at this seam surfaces as ``HYDROMT_BUILD_FAILED``
-            # via the broad except below (FR-FR-2 substrate-integrity routing).
+            # via the broad except below (substrate-integrity routing).
             opt_dict = yaml.safe_load(yaml_text)
             model = SfincsModel(root=str(tmp / "deck"), mode="w")
             # ``SfincsModel.build`` is the v1.x entrypoint; v2 RC changes to
@@ -3012,7 +3012,7 @@ def build_sfincs_model(
             "forcing_type": forcing.forcing_type,
             "forcing_provenance": dict(forcing.provenance),
             "river_geometry_uri": river_geometry_uri,
-            # ADR 0223: active-mask elevation-window provenance. ``adaptive`` False
+            # active-mask elevation-window provenance. ``adaptive`` False
             # means the DEM range was unreadable and a WIDE FALLBACK window was used
             # (may activate cells a real DEM range would exclude) -- the composer
             # lifts this into a labeled envelope note so the degrade is not silent.

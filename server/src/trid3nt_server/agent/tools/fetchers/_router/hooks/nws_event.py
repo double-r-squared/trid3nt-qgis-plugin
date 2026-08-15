@@ -11,8 +11,8 @@ zone-only alerts pyogrio cannot write). Transport / retry / cache / FGB serializ
 The twin's ``area`` accepted a bbox tuple too (converted to a point center), but
 the tool schema collapses ``str | tuple`` to ``str`` (adapter
 _simplify_annotation), so the bbox-tuple path was already unreachable from the
-agent; the hook carries the STRING canonicalization only (documented divergence,
-ADR 0061). Empty result -> a header-only FGB (the twin's behaviour), never an
+agent; the hook carries the STRING canonicalization only (documented divergence).
+Empty result -> a header-only FGB (the twin's behaviour), never an
 honest-empty typed error.
 """
 

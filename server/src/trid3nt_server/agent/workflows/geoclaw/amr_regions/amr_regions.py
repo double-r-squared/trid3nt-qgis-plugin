@@ -142,13 +142,13 @@ async def geoclaw_amr_refinement_regions(
         manning_n: single global friction coefficient (default 0.025).
         sea_level_m: still-water datum (default 0.0).
         compute_class: compute class (default "standard").
-        input_mode: ADR 0107 review lever ("auto"|"user_gated"; None -> session
+        input_mode: review lever ("auto"|"user_gated"; None -> session
             default). In "user_gated" the resolved windows are presented for review
             BEFORE the solve; in "auto" they ride the assumptions block labeled.
         window_basis: provenance class for the windows ("prompt_interpreted" when the
             model derived the box from the prompt, "user" when explicit coordinates /
             a drawn geometry were supplied). A user-drawn region bound to the turn
-            (the QGIS dock 'Draw region' rubber-band, ADR 0159) OVERRIDES the model
+            (the QGIS dock 'Draw region' rubber-band) OVERRIDES the model
             proposal here -- it replaces ``amr_regions`` with one finest-level window
             over the whole sim and forces "user". The LLM-derived path defaults to
             "prompt_interpreted" so an invented window is visible for review.
@@ -167,7 +167,7 @@ async def geoclaw_amr_refinement_regions(
                 "(min_lon, min_lat, max_lon, max_lat) in EPSG:4326."
             ),
         }
-    # --- ADR 0159 draw-a-geometry supply path -------------------------------- #
+    # --- draw-a-geometry supply path -------------------------------- #
     # A user-drawn region (the QGIS dock 'Draw region' rubber-band, bound to this
     # turn as ``drawn_geometry``) OVERRIDES the model's prompt-interpreted window
     # proposal: build ONE refinement window from its bbox at the finest level
@@ -231,7 +231,7 @@ async def geoclaw_amr_refinement_regions(
             "error_message": f"invalid amr_regions window: {exc}",
         }
 
-    # --- ADR 0107 input-review gate: the AMR windows are the consequential,
+    # --- input-review gate: the AMR windows are the consequential,
     # model-invented input on this template (they place WHERE the mesh refines), so
     # they must ride the review gate -- the LLM cannot silently invent window
     # placement. Each resolved window is a provenance entry; ``window_basis`` marks

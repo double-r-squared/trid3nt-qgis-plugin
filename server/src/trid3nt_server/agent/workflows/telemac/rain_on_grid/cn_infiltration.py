@@ -284,14 +284,14 @@ def node_curve_numbers(
 # (a single CONSTANT rain intensity). The installed source, however, already
 # implements a block-type time-varying hyetograph under RAINDEF=3 (reading
 # FORMATTED DATA FILE 1) -- so a per-case FORTRAN FILE that flips that one
-# parameter (ADR 0206, staged by the worker) unlocks the native model on a REAL
+# parameter (staged by the worker) unlocks the native model on a REAL
 # hyetograph without an image rebuild. The template picks per run:
 #   * CONSTANT-intensity rain (a design storm: one rate over a duration) -> the
 #     NATIVE model (RAINFALL-RUNOFF MODEL=1 + ANTECEDENT MOISTURE CONDITIONS +
 #     the FORMATTED DATA FILE 2 per-node CN2 field). Infiltration is the
 #     engine's own SCS-CN, spatially variable via the CN map.
 #   * TIME-VARYING rain (an hourly MRMS/AORC hyetograph) -> the NATIVE
-#     TIME-VARYING path ("native_hyetograph", ADR 0206): the gross hourly
+# TIME-VARYING path ("native_hyetograph"): the gross hourly
 #     hyetograph is staged as FORMATTED DATA FILE 1 and the engine's own SCS-CN
 #     applies the abstraction per-timestep on the real intensity structure
 #     (RAINDEF=3). This resolves the hydrograph SHAPE the constant-rain path
@@ -308,7 +308,7 @@ class RunoffPathDecision:
     ``path`` is ``"native"`` (constant design storm; RAINFALL-RUNOFF MODEL=1 +
     FORMATTED DATA FILE 2 CN2 map) or ``"native_hyetograph"`` (a real
     time-varying gross hyetograph driving the native SCS-CN per-timestep via the
-    RAINDEF=3 FORTRAN FILE, ADR 0206). ``time_varying`` is the driving fact.
+    RAINDEF=3 FORTRAN FILE). ``time_varying`` is the driving fact.
     Both fields ride into the run envelope so the narration is honest about how
     infiltration was handled.
     """
@@ -326,7 +326,7 @@ def select_runoff_path(
     """Pick the runoff path automatically from the rain forcing shape.
 
     A ``hyetograph_mm`` with two or more DISTINCT non-zero increments is
-    time-varying -> ``"native_hyetograph"`` (RAINDEF=3 FORTRAN FILE; ADR 0206).
+    time-varying -> ``"native_hyetograph"`` (RAINDEF=3 FORTRAN FILE).
     A single constant intensity (a design storm, or a hyetograph that is
     effectively one flat rate) -> ``"native"``. Exactly one of ``hyetograph_mm``
     / ``constant_intensity_mm_per_hr`` should be given; supplying neither is an

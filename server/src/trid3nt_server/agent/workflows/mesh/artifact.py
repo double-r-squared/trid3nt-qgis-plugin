@@ -1,4 +1,4 @@
-"""Case-scoped mesh artifact record + discovery seam (ADR 0200).
+"""Case-scoped mesh artifact record + discovery seam.
 
 A mesh built by the standalone ``generate_mesh`` tool is TWO things in one case:
 

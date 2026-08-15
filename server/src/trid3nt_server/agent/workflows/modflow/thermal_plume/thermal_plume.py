@@ -1,4 +1,4 @@
-"""MODFLOW GWE heat-transport composers (ADR 0235) - the geothermal leg.
+"""MODFLOW GWE heat-transport composers - the geothermal leg.
 
 Two LLM-facing question-class tools ride ONE ``gwe_thermal`` archetype (the heat
 twin of ``modflow_contaminant_plume``), a GWF+GWE dual-model deck coupled through
@@ -13,7 +13,7 @@ TEMPERATURE mapped by the GWE SSM onto the energy-transport source:
     for AQUIFER THERMAL ENERGY STORAGE. Primary deliverable: the per-cycle
     recovery-efficiency CHART (how much stored heat the well recovers each cycle).
 
-DISTINCTNESS CALL (ADR 0235 completion): two thin tools over ONE shared archetype +
+DISTINCTNESS CALL (completion): two thin tools over ONE shared archetype +
 postprocess, NOT one tool with a mode knob. Justification mirrors the
 ``capture_zone`` / ``wellhead_protection`` precedent (two registered tools over one
 shared PRT archetype + ``postprocess_capture_zone``, differing only in framing +
@@ -388,7 +388,7 @@ async def compose_thermal_scenario(
         mode, location_name, peak_excess, peak_abs, recovery,
     )
 
-    # ADR 0223: structured thermal demo-default provenance through the review gate,
+    # structured thermal demo-default provenance through the review gate,
     # stamped onto the layer envelope (the prose caveat stays on the summary).
     layer, _review = await gate_and_stamp_modflow_inputs(
         tool_name=(
@@ -507,14 +507,14 @@ async def modflow_thermal_plume(
             None -> 2.5 W/(m*degC) demo default.
         duration_days: plume-transport horizon, days. None -> 120 d.
         aquifer_k_ms / porosity: aquifer hydraulics (demo defaults when None).
-        compute_class: FR-CE-3 compute class. This archetype runs LOCAL-ONLY.
+        compute_class: compute class. This archetype runs LOCAL-ONLY.
 
     Returns:
         On success: a ``ThermalScenarioResult`` JSON dict with ``thermal_layer`` (a
         ``ThermalPlumeLayerURI`` carrying the temperature scalars), ``derived_params``,
         and ``summary``. On a recoverable failure (incl. a missing site) a typed error.
 
-    FR-DC-6: ``cacheable=False`` + ``ttl_class="live-no-cache"`` +
+    ``cacheable=False`` + ``ttl_class="live-no-cache"`` +
     ``source_class="workflow_dispatch"``  -  the cache shim is NOT invoked.
     """
     aoi = _coerce_optional_latlon(aoi_latlon)
@@ -643,7 +643,7 @@ async def modflow_thermal_storage(
         thermal_conductivity_solid_wmc: aquifer-grain thermal conductivity, W/(m*degC).
             None -> 2.5 W/(m*degC) demo default (higher -> more thermal loss -> lower recovery).
         aquifer_k_ms / porosity: aquifer hydraulics (demo defaults when None).
-        compute_class: FR-CE-3 compute class. This archetype runs LOCAL-ONLY.
+        compute_class: compute class. This archetype runs LOCAL-ONLY.
 
     Returns:
         On success: a ``ThermalScenarioResult`` JSON dict with ``thermal_layer`` (a
@@ -651,7 +651,7 @@ async def modflow_thermal_storage(
         ``recovery_efficiency_series``), ``derived_params``, and ``summary``. On a
         recoverable failure (incl. a missing site or n_cycles) a typed error.
 
-    FR-DC-6: ``cacheable=False`` + ``ttl_class="live-no-cache"`` +
+    ``cacheable=False`` + ``ttl_class="live-no-cache"`` +
     ``source_class="workflow_dispatch"``  -  the cache shim is NOT invoked.
     """
     aoi = _coerce_optional_latlon(aoi_latlon)

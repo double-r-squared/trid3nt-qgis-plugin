@@ -192,7 +192,7 @@ async def sfincs_advanced_numerical_physics_knobs(
             (set both equal for spatially-uniform; leave unset for the per-cell
             NLCD-reclass default).
         return_period_yr / duration_hr: the design-storm forcing (as ``sfincs_flood``).
-        input_mode: run-mode lever (ADR 0107). ``"user_gated"`` reviews the resolved
+        input_mode: run-mode lever. ``"user_gated"`` reviews the resolved
             solver settings before the solve; ``"auto"`` (default) proceeds labeled.
 
     Returns:
@@ -202,7 +202,7 @@ async def sfincs_advanced_numerical_physics_knobs(
         On failure: dict with ``status="error"`` + ``error_code`` + ``error_message``
         (an out-of-range/unknown knob returns ``ADVANCED_PHYSICS_INVALID``).
 
-    FR-DC-6: ``cacheable=False``, ``ttl_class="live-no-cache"``,
+    ``cacheable=False``, ``ttl_class="live-no-cache"``,
     ``source_class="workflow_dispatch"``.
     """
     # --- Build the overrides dict from the non-None knobs. -------------------- #
@@ -231,7 +231,7 @@ async def sfincs_advanced_numerical_physics_knobs(
         location_query, bbox_t, resolved, input_mode,
     )
 
-    # --- The input-review gate (ADR 0107): the solver-settings delta is the ---- #
+    # --- The input-review gate: the solver-settings delta is the ---- #
     # --- physically-dominant, otherwise-buried input. Surface it as structured -- #
     # --- provenance so a numerical-scheme choice is never mistaken for the base. -#
     if resolved:

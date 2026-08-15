@@ -169,7 +169,7 @@ async def landlab_flow_accumulation(
             multiple of the grid cell area (contributing cells; default 100).
         target_resolution_m: grid cell size, m (default 30).
         compute_class: compute class (default "standard").
-        input_mode: run-mode lever (ADR 0107). "user_gated" presents the resolved
+        input_mode: run-mode lever. "user_gated" presents the resolved
             routing / depression / threshold knobs for review before the solve;
             "auto" (default) proceeds with them labeled.
 

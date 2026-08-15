@@ -1,4 +1,4 @@
-"""Engine template ``swmm_lid_performance_comparison`` (ADR 0151).
+"""Engine template ``swmm_lid_performance_comparison``.
 
 A THIN composer over the shared mechanism-comparison runner. Runs one synthetic
 subcatchment + design storm with vs without a LID control and overlays the runoff

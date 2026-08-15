@@ -173,7 +173,7 @@ async def hecras_levee_breach(
         target_peak_cfs: OPTIONAL alternative to ``flow_scale`` -- a target PEAK
             inflow discharge in cfs (the worker derives the multiplier from the
             baseline peak). Overrides ``flow_scale``.
-        input_mode: run-mode lever (ADR 0107). ``"user_gated"`` presents the
+        input_mode: run-mode lever. ``"user_gated"`` presents the
             resolved breach/flow forcing + the frozen-geometry note for review
             before the solve; ``"auto"`` (default) proceeds with them labeled.
 
@@ -187,7 +187,7 @@ async def hecras_levee_breach(
         valid DRY layer (``wet_cell_count == 0``), not an error.
         On failure: dict with ``status="error"`` + ``error_code`` + ``error_message``.
 
-    FR-DC-6: ``cacheable=False``, ``ttl_class="live-no-cache"``,
+    ``cacheable=False``, ``ttl_class="live-no-cache"``,
     ``source_class="workflow_dispatch"`` -- cache shim not invoked.
     """
     # --- arg hardening (defensive; mirrors the other engine templates) -------- #
@@ -382,7 +382,7 @@ async def model_hecras_levee_breach(
     emitter = current_emitter()
     begin_substeps(emitter, 3)  # run_solver + postprocess + publish
 
-    # --- Stage 1: the input-review gate (ADR 0107) ---------------------------- #
+    # --- Stage 1: the input-review gate ---------------------------- #
     peak_est = (target_peak_cfs if target_peak_cfs is not None
                 else _MUNCIE_BASELINE_PEAK_CFS * flow_scale)
     review_entries: list[SyntheticInput] = [
@@ -587,7 +587,7 @@ async def _maybe_emit_inflow_chart(
     Every point is the real Event Conditions hydrograph time scaled by the run's
     flow multiplier (invariant 1 -- never synthesized). Non-blocking. The breach
     scenario is captioned; the breach-vs-holds protected-side DEPTH comparison is the
-    cross-run artifact (see ADR 0125 acceptance)."""
+    cross-run artifact (see acceptance)."""
     if not hasattr(emitter, "emit_chart"):
         return
     series = metrics.get("inflow_hydrograph") or []

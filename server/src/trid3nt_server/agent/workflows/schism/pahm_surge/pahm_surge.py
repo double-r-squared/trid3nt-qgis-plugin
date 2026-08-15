@@ -1,4 +1,4 @@
-"""Engine template ``schism_pahm_surge`` -- parametric hurricane STORM SURGE (ADR 0217).
+"""Engine template ``schism_pahm_surge`` -- parametric hurricane STORM SURGE.
 
 SCHISM's barotropic storm-surge archetype: given a hurricane BEST TRACK (central
 pressure, max wind, radius of maximum wind along the track), what peak storm-surge
@@ -6,11 +6,11 @@ water-level response does a US coast see? The forcing is a STANDALONE parametric
 Holland-1980 wind/pressure field authored as SCHISM ``sflux`` atmospheric inputs
 (``nws=2``) and solved on the CLEAN hydro-core binary (``pschism_TVD-VL``) -- the
 honest, no-rebuild PaHM route for OUR image (the baked full-monty ``USE_PAHM``
-binary demands every module namelist, ADR 0115; ``sflux`` is a SCHISM CORE feature).
+binary demands every module namelist; ``sflux`` is a SCHISM CORE feature).
 See ``holland_sflux`` for the physics + the PaHM-vs-standalone decision.
 
-Deliverable: a PEAK storm-surge elevation surface clipped to the AOI + COG (ADR
-0116), the best track overlaid as a labeled vector, and a coastal gauge-point surge
+Deliverable: a PEAK storm-surge elevation surface clipped to the AOI + COG,
+the best track overlaid as a labeled vector, and a coastal gauge-point surge
 HYDROGRAPH. Every surge number the agent narrates comes from the typed
 ``SchismElevationLayerURI`` fields the postprocess computed (invariant 1).
 
@@ -73,7 +73,7 @@ _M_PER_DEG_LAT = 110_540.0
 #: coast, HURDAT2 fixes (UTC) relative to base_date 2008-09-12 06Z. (lon, lat,
 #: pres_mb, wind_kt, rmw_nmi) -- Ike was a large storm (RMW ~50 nmi); landfall near
 #: Galveston ~09/13 07Z. Published-first anchor (the same storm the geoclaw
-#: surge template uses, ADR 0168).
+#: surge template uses).
 PUBLISHED_IKE_TRACK: tuple[tuple[float, float, float, float, float], ...] = (
     # time_hr, lon, lat, pres_mb, wind_kt, rmw_nmi
     (0.0, -91.5, 26.6, 948.0, 95.0, 50.0),
@@ -121,7 +121,7 @@ _SURGE_TIN_CELL_FLOOR_M = _SURGE_RES_MIN_M  # 25 m
 #: screening-scale solve rather than an unbounded refinement.
 _SURGE_TIN_DIM_MAX_FINE = 80
 
-#: DECLARED resolution range (ADR 0225). The [25, 1000] m window mirrors
+#: DECLARED resolution range. The [25, 1000] m window mirrors
 #: fetch_topobathy's own resolution_m bounds (DATA-native: below 25 m a screening
 #: barotropic surge gains no fidelity; above 1000 m the fetcher rejects). Default
 #: None = NATIVE (resolution doctrine R-A). An explicit out-of-window ask is QUOTED
@@ -409,7 +409,7 @@ async def schism_pahm_surge(
         resolution_m: the bathymetry-fetch grid resolution (metres), a USER LEVER.
             Supported 25-1000 m (data-native, fetch_topobathy); data native CUDEM
             1/9" ~3 m nearshore / ETOPO ~450 m offshore. Out-of-range asks are quoted
-            the range (typed error), never silently snapped (ADR 0225). Default
+            the range (typed error), never silently snapped. Default
             ``None`` -> NATIVE bathymetry; the ~AOI autoscale is only the coarsening
             HINT the payload gate quotes. An explicit in-range value always wins and
             is honored even when it implies a large fetch -- oversized requests trip
@@ -427,7 +427,7 @@ async def schism_pahm_surge(
         (``SCHISM_BATHYMETRY_UNAVAILABLE`` when real bathymetry could not be
         fetched and ``allow_synthetic_domain`` was not set).
 
-    FR-DC-6: ``cacheable=False``, ``ttl_class="live-no-cache"``,
+    ``cacheable=False``, ``ttl_class="live-no-cache"``,
     ``source_class="workflow_dispatch"``.
     """
     if open_boundary_side not in ("south", "north", "east", "west"):
@@ -696,14 +696,14 @@ async def model_schism_pahm_surge(
     # composite, 12000 px guard); the autoscaled cell is only the COARSENING HINT the
     # payload gate quotes, never a silent coarsen. An explicit value is honored as-is.
     autoscale = _autoscale_surge_domain(bbox)
-    # ADR 0225: an explicit out-of-declared-range resolution_m is QUOTED BACK as a
+    # an explicit out-of-declared-range resolution_m is QUOTED BACK as a
     # typed error (the [25, 1000] m range + native hint), never silently clamped. The
     # native default (None) is in-range by construction. An in-range fine ask remains
     # subject to the self-labeling node-budget ceiling below.
     if resolution_m is not None and not _SURGE_RES_SPEC.contains(float(resolution_m)):
         # Out of the declared range -> compose all three layers in the ONE quote-back
-        # card (ADR 0225 item 4): the solver/data range + the data-native hint (on the
-        # spec) + the MEASURED payload of the requested cell (ADR 0224 sampled
+        # card (item 4): the solver/data range + the data-native hint (on the
+        # spec) + the MEASURED payload of the requested cell (sampled
         # estimator, computed only on this cold error path, not the in-range hot path).
         _est = _surge_payload_estimate(bbox, float(resolution_m))
         _measured = f"{float(resolution_m):.0f} m grid ~{_fmt_mb(_est.mb)} ({_est.kind})"
@@ -990,7 +990,7 @@ def _synthetic_shelf_depths(points, bbox, open_side: str):
 
 
 async def _surge_mesh_gate(input_mode):
-    """Offer a case mesh to the surge solve (ADR 0212); None -> the internal TIN."""
+    """Offer a case mesh to the surge solve; None -> the internal TIN."""
     try:
         from trid3nt_server.agent.workflows.schism.tidal_hydro.tidal_hydro import (
             _schism_mesh_precondition_gate,

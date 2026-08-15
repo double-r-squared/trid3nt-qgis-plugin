@@ -1,4 +1,4 @@
-"""dataretrieval-delegating executor (ADR 0040, phase-2 wave-3).
+"""dataretrieval-delegating executor (phase-2 wave-3).
 
 The USGS water-data family folds by DELEGATING to the official USGS
 ``dataretrieval`` client (PyPI, agency-maintained) instead of raw HTTP + our

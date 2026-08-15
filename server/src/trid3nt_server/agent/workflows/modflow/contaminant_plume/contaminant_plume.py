@@ -507,7 +507,7 @@ async def model_contaminant_plume(
             "coupling is recorded but not yet wired (independent transport)."
         ),
     }
-    # ADR 0223: structured aquifer-K provenance routed through gate_input_review,
+    # structured aquifer-K provenance routed through gate_input_review,
     # stamped onto each plume layer (the prose caveat stays on the summary).
     _k_entry = aquifer_k_review_entry(
         k_source=("user_supplied" if aquifer_k_ms is not None else "demo_default"),
@@ -613,7 +613,7 @@ async def modflow_contaminant_plume(
             invented (ask the user what was released if absent).
         aquifer_k_ms / porosity: optional demo-aquifer overrides.
         duration_days: optional transport duration (days). Demo default if None.
-        compute_class: FR-CE-3 compute class. Default ``"standard"``.
+        compute_class: compute class. Default ``"standard"``.
 
     Returns:
         On success: a JSON dict with ``plumes`` (a list of one ``PlumeLayerURI``
@@ -623,7 +623,7 @@ async def modflow_contaminant_plume(
         (incl. a missing / empty / sourceless contaminant) the tool returns a
         typed error the agent narrates honestly - it never fabricates a contaminant.
 
-    FR-DC-6: ``cacheable=False`` + ``ttl_class="live-no-cache"`` +
+    ``cacheable=False`` + ``ttl_class="live-no-cache"`` +
     ``source_class="workflow_dispatch"`` - the cache shim is NOT invoked.
     """
     point = _coerce_optional_latlon(spill_location_latlon)

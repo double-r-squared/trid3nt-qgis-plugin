@@ -62,7 +62,7 @@ logger = logging.getLogger("trid3nt_server.agent.tools.meta.compose_case_report.
 
 
 # ---------------------------------------------------------------------------
-# Typed errors (FR-AS-11).
+# Typed errors.
 # ---------------------------------------------------------------------------
 
 
@@ -273,7 +273,7 @@ async def compose_case_report(
     INSIDE the report as honest "statistics unavailable" rows (and in the
     counts); they never fabricate numbers.
 
-    **Errors (FR-AS-11):** ``CaseReportInputError`` (no case identifiable),
+    **Errors:** ``CaseReportInputError`` (no case identifiable),
     ``CaseReportNotFoundError`` (case missing / persistence unreachable).
     """
     resolved_case = resolve_case_id(case_id, CaseReportInputError)

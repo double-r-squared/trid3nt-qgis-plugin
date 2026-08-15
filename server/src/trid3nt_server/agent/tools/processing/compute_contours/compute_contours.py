@@ -9,7 +9,7 @@ The result is a vector contour layer -- ``LineString`` features each carrying an
 ``elev`` (elevation, metres) attribute -- at a fixed contour INTERVAL. It is
 emitted as a FlatGeobuf in EPSG:4326 so the QGIS plugin renders it natively
 as a line layer (``style_preset="contours"``). The artifact is stored
-under the FR-DC-3 cache shim at:
+under the cache shim at:
 
     ``s3://trid3nt-cache/cache/static-30d/contours/<key>.fgb``
 
@@ -29,7 +29,7 @@ derived from the DEM relief so any AOI yields ~10 - 20 readable contours: roughl
 interval is never 0 or negative.
 
 **Cache key** is derived from ``(dem_uri, interval_m)`` -- both materially affect
-the output geometry (FR-DC-3).
+the output geometry.
 
 **Implementation flow (cache miss):**
 
@@ -45,12 +45,12 @@ the output geometry (FR-DC-3).
 **Cross-cutting invariants:**
 
 - **Invariant 2 (Deterministic workflows): preserves.** Zero LLM calls.
-- **FR-DC-6 (cacheable): honors.** ``cacheable=True``, ``ttl_class="static-30d"``,
+- **(cacheable): honors.** ``cacheable=True``, ``ttl_class="static-30d"``,
   ``source_class="contours"`` -- DEM-derived output is stable for the lifetime of
   the cached DEM (same TTL class as the other terrain ``compute_*`` tools).
-- **NFR-R-1 (resilience): preserves.** ``subprocess.run`` failures surface as
+- **(resilience): preserves.** ``subprocess.run`` failures surface as
   ``ContourComputeError`` (typed, never unhandled exception); DEM-acquisition
-  errors are let through for the agent FR-AS-11 surface to handle.
+  errors are let through for the agent surface to handle.
 """
 
 from __future__ import annotations
@@ -81,7 +81,7 @@ logger = logging.getLogger("trid3nt_server.agent.tools.processing.compute_contou
 
 
 def fetch_dem(**kwargs):
-    """Registry-closure indirection for the folded ``fetch_dem`` (ADR 0097).
+    """Registry-closure indirection for the folded ``fetch_dem``.
 
     ``fetch_dem`` is now a spec-driven router tool; this module-level shim resolves
     it through ``TOOL_REGISTRY`` at call time and preserves the module-attribute
@@ -101,7 +101,7 @@ class ContourComputeError(RuntimeError):
     """Raised when ``gdal_contour`` fails or the DEM cannot be fetched.
 
     ``error_code`` carries a SCREAMING_SNAKE_CASE code surfaced in the
-    pipeline strip / function_response envelope (NFR-R-1 typed-error
+    pipeline strip / function_response envelope (typed-error
     requirement).
 
     Codes:
@@ -373,7 +373,7 @@ def _resolve_dem_uri(
             "NO_DEM_INPUT",
             "compute_contours requires either dem_uri or bbox; neither given.",
         )
-    # Reuse fetch_dem -- the shared DEM-acquisition path (do not reinvent). ADR 0097:
+    # Reuse fetch_dem -- the shared DEM-acquisition path (do not reinvent).
     # fetch_dem is spec-driven, resolved through the module-level registry closure.
     dem_layer = fetch_dem(bbox=bbox)
     assert dem_layer.uri is not None, "fetch_dem must return a uri"

@@ -17,7 +17,7 @@ This is the SWAN analogue of ``geoclaw_inundation`` (GeoClaw) /
 TEMPLATE tagged ``engine="swan", tier="template"`` - EXCLUDED from the default
 retrieval pool and surfaced only by the ``run_swan`` door's gate expansion
 (SELECT-THEN-CALL). Like the other templates it declares ``cacheable=False`` +
-``ttl_class="live-no-cache"`` + ``source_class="workflow_dispatch"`` (FR-DC-6 -
+``ttl_class="live-no-cache"`` + ``source_class="workflow_dispatch"`` (
 workflow exposure surface; never touches the cache shim).
 
 SWAN is BATCH-ONLY (the GPL Fortran lives in the worker container image, never in
@@ -70,7 +70,7 @@ from trid3nt_server.agent.workflows.swan.run_swan import (
 from trid3nt_server.agent.workflows.shared.solve_progress import drive_live_solve_progress
 from trid3nt_server.emission.layer_uri_emit import emit_layer_uri
 def fetch_topobathy(bbox: Any = None, **kwargs: Any):
-    """Registry-closure indirection for the folded ``fetch_topobathy`` (ADR 0110):
+    """Registry-closure indirection for the folded ``fetch_topobathy``:
     a module-level, patchable shim (the swan-chain tests patch this attribute). The
     promoted router closure is ``**kwargs``-only, so the positional ``bbox`` is
     mapped to the keyword the closure expects."""
@@ -627,7 +627,7 @@ async def model_swan_wave_field(
             fetches it (``fetch_topobathy`` -> ``fetch_dem`` fallback). Tests pass
             a synthetic URI to skip the fetch.
         run_id: optional ULID; minted by the staging step if absent.
-        compute_class: FR-CE-3 compute class for the Batch sizing.
+        compute_class: compute class for the Batch sizing.
         cleanup_outputs: when True, the downloaded output dir is removed after
             postprocess (the COGs were already uploaded).
 
@@ -662,7 +662,7 @@ async def model_swan_wave_field(
         resolved_dem_uri = dem_uri
     logger.info("model_swan_wave_field: DEM=%s", resolved_dem_uri)
 
-    # ADR 0231: surface the fetched topo/bathy DEM (the seabed SWAN propagates
+    # surface the fetched topo/bathy DEM (the seabed SWAN propagates
     # waves over) as a role=context input. Lights all 3 SWAN templates (wave_field
     # directly; the sweep + snapshot batch route through this composer). Rides the
     # fetched s3:// COG; best-effort -- never fails the solve.

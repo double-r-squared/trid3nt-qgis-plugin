@@ -1,4 +1,4 @@
-"""raws_weather hooks (chained-resolution mode, ADR 0063/0065): Iowa Mesonet RAWS
+"""raws_weather hooks (chained-resolution mode/0065): Iowa Mesonet RAWS
 fire-weather stations.
 
 The nested station x day observation shape folds onto the EXISTING resolve + enrich

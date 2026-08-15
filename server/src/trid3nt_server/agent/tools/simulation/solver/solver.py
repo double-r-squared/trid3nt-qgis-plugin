@@ -4,39 +4,39 @@ This module registers two atomic tools that drive the solver-execution
 substrate. Dispatch is a local container run (``local-docker``) or a
 direct-binary run (``local-exec``) on this machine, selected per solver by its
 ``LocalSolverSpec`` exec spec -- ``solver_backend()`` unconditionally returns
-``local-docker``. Together they implement the **FR-TA-2 solver-dispatch
+``local-docker``. Together they implement the **solver-dispatch
 surface**:
 
     - ``run_solver(solver, model_setup_uri, compute_class="medium")
        -> ExecutionHandle`` -- submits a solver run on the active backend.
       Currently only ``solver="sfincs"`` is supported; other values raise
-      ``SolverNotRegisteredError`` (FR-TA-2).
+      ``SolverNotRegisteredError``.
 
     - ``wait_for_completion(handle, poll_interval_s=10, timeout_s=1800)
        -> RunResult`` -- polls the run backing ``handle`` every
       ``poll_interval_s`` seconds, emits a ``pipeline-state`` progress update
       on every poll via ``PipelineEmitter.update_progress`` (the opt-in seam
-       surfaced for M5+ solvers), and on success reads
+      surfaced for M5+ solvers), and on success reads
       ``completion.json`` from the runs bucket and returns a populated
       ``RunResult``. On failure or cancellation the matching terminal
       ``RunResult`` is returned.
 
-Both tools are uncacheable-by-construction per FR-DC-6 (solver dispatchers
-are explicitly enumerated): ``cacheable=False``, ``ttl_class="live-no-cache"``,
+Both tools are uncacheable-by-construction (solver dispatchers are explicitly
+enumerated): ``cacheable=False``, ``ttl_class="live-no-cache"``,
 ``source_class="solver_dispatch"``. They never touch the cache shim.
 
 Cross-cutting principles (per CLAUDE.md + agents/AGENTS.md):
 
 - **Invariant 1 (Determinism boundary): preserves.** Progress estimation is
   a wall-clock linear ramp keyed off ``handle.submitted_at`` and the
-  NFR-P-4 target (900 s for ``≤15 min``) -- not an LLM estimate. The ramp
+  target (900 s for ``≤15 min``) -- not an LLM estimate. The ramp
   is clamped at 95% until the Workflow returns SUCCEEDED (then jumps to
   100%) so we never falsely advertise completion.
 
 - **Invariant 2 (Deterministic workflows): preserves.** ``run_solver`` is a
   thin solver dispatch (local container / direct binary);
   no LLM in the dispatch. The deterministic step graph (stage → invoke →
-  read completion) is owned by the backend. FR-CE-2.
+  read completion) is owned by the backend.
 
 - **Invariant 8 (Cancellation is first-class): the headline.** Cancel chain
   end-to-end:
@@ -53,7 +53,7 @@ Cross-cutting principles (per CLAUDE.md + agents/AGENTS.md):
                 -> wait_for_completion re-raises CancelledError so
                     emit_tool_call's mark_cancelled branch fires
 
-  FR-AS-6 / NFR-R-3 30s budget. The backend handler terminates the run
+  30s budget. The backend handler terminates the run
   *before* re-raising the ``CancelledError`` so the kill is initiated
   atomically with the local cancel.
 
@@ -61,7 +61,7 @@ Cross-cutting principles (per CLAUDE.md + agents/AGENTS.md):
   through ``PipelineEmitter.update_progress(step_id, ...)``, which already
   builds the full snapshot per A.7. We never hand-roll a partial frame.
 
-- **FR-DC-6 (uncacheable enumeration): preserves.** Both tools declare
+- **Uncacheable (enumeration): preserves.** Both tools declare
   ``cacheable=False`` + ``ttl_class="live-no-cache"`` + a new source class
   ``"solver_dispatch"``. The kickoff explicitly enumerates them.
 
@@ -218,15 +218,15 @@ logger = logging.getLogger("trid3nt_server.agent.tools.simulation.solver.solver"
 # --------------------------------------------------------------------------- #
 
 
-#: Target run-time budget for ≤200 km² at 30m per NFR-P-4 (15 min).
+#: Target run-time budget for ≤200 km² at 30m (15 min).
 #: Progress is wall-clock linear in (now - submitted_at) / target.
 NFR_P_4_TARGET_SECONDS: float = 900.0
 
-#: Default poll cadence -- matches NFR-P-4 ≤15-min budget granularity (≥9 polls).
+#: Default poll cadence -- matches the ≤15-min budget granularity (≥9 polls).
 DEFAULT_POLL_INTERVAL_S: int = 10
 
 #: Default overall timeout (30 min -- mirrors the Cloud Run Job task_timeout
-#: gives 2× headroom over NFR-P-4). Env-overridable via
+#: gives 2× headroom over the target budget). Env-overridable via
 #: ``TRID3NT_SOLVER_TIMEOUT_S`` so a legitimately long run (a large coastal
 #: quadtree + SnapWave solve exceeds the 30-min pluvial budget this constant was
 #: sized for) can be given more headroom on the box WITHOUT touching the call
@@ -311,7 +311,7 @@ LOCAL_EXEC_WORKFLOW_NAME: str = "local-exec"
 #: compute_class → {vcpus, mem (MiB), OMP_NUM_THREADS} sizing map (buckets:
 #: 4/8/16/32 vCPU at ~2 GB/vCPU → 8/16/32/64 Gi; OMP threads == vCPU). The
 #: solver-confirm card reads this to show the sized tier. Aliased the same way
-#: ``_COMPUTE_CLASS_ALIAS`` maps FR-CE-3 names onto the schema literal, so
+#: ``_COMPUTE_CLASS_ALIAS`` maps names onto the schema literal, so
 #: ``medium`` (== standard) resolves to the 8-vCPU bucket.
 #:
 #: ``xlarge`` is the higher-powered vertical-scale tier (auto vertical scaling
@@ -342,7 +342,7 @@ DEFAULT_LOCAL_RUNS_DIR: str = "/opt/trid3nt/runs"
 DEFAULT_SFINCS_IMAGE: str = "deltares/sfincs-cpu:latest"
 
 #: Budget for the ``docker kill`` subprocess on cancel -- comfortably inside
-#: the ≤30 s Invariant-8 / NFR-R-3 envelope.
+#: the ≤30 s cancellation-budget envelope.
 DOCKER_KILL_TIMEOUT_S: float = 25.0
 
 
@@ -377,12 +377,12 @@ def solve_progress_vcpus(
 
 #: Map the kickoff-named compute classes (small/medium/large) onto the
 #: ``ExecutionHandle.ComputeClass`` literal contract
-#: (``Literal["small", "standard", "large", "gpu"]``). FR-CE-3 names the
-#: middle class ``medium`` but the schema-side contract chose ``standard``;
+#: (``Literal["small", "standard", "large", "gpu"]``). This alias map names
+#: the middle class ``medium`` but the schema-side contract chose ``standard``;
 #: rather than break the kickoff parameter surface we pin a mapping here.
 _COMPUTE_CLASS_ALIAS: dict[str, str] = {
     "small": "small",
-    "medium": "standard",  # FR-CE-3 medium == schema-side standard
+    "medium": "standard",  # medium == schema-side standard
     "standard": "standard",
     "large": "large",
     "xlarge": "xlarge",  # higher-powered vertical-scale tier (48 vCPU / 96 GiB)
@@ -478,7 +478,7 @@ def select_compute_class(estimated_elements: int | float | None) -> str:
     Returns:
         One of ``"small"`` / ``"standard"`` / ``"large"`` / ``"xlarge"`` -- a key
         present in ``COMPUTE_CLASS_SIZING`` and ``_COMPUTE_CLASS_ALIAS``
-        (the compute-class sizing table + FR-CE-3 alias map).
+        (the compute-class sizing table + alias map).
     """
     try:
         n = float(estimated_elements)  # type: ignore[arg-type]
@@ -601,7 +601,7 @@ def _get_s3_client() -> Any:
     except Exception as exc:  # noqa: BLE001
         raise SolverDispatchError(
             f"boto3 not importable: {exc}; the local-docker solver backend "
-            "requires boto3 for S3 staging/upload (job-0291)."
+            "requires boto3 for S3 staging/upload."
         ) from exc
     return boto3.client("s3", region_name=os.environ.get("AWS_REGION", "us-west-2"))
 
@@ -632,7 +632,7 @@ def _get_local_runs_bucket() -> str:
     if not bucket:
         raise SolverDispatchError(
             "TRID3NT_RUNS_BUCKET must be set when TRID3NT_SOLVER_BACKEND="
-            "local-docker (no GCP-named default on AWS; job-0291)."
+            "local-docker (no GCP-named default on AWS)."
         )
     return bucket
 
@@ -868,7 +868,7 @@ def _write_local_completion(
     ``services/workers/modflow/entrypoint.py``; the SFINCS defaults are
     byte-identical.
 
-    V&V wave (ADR 0021): ``solver`` is the lowercase engine identifier
+    V&V wave: ``solver`` is the lowercase engine identifier
     (``run.spec.solver``) recorded so ``read_run_diagnostics`` can resolve the
     engine directly instead of inferring it from the stdout field name. It is
     inserted immediately after ``exit_code`` (before the spec's ``extra`` fold;
@@ -1047,7 +1047,7 @@ def launch_local_solver(
             ``modflow/<run_id>/`` BEFORE submit, so its run_id must flow
             through -- GCP parity with the ``{run_id, manifest_uri}`` workflow
             argument). Minted fresh when ``None`` (the SFINCS path).
-        compute_class: FR-CE-3 class, alias-mapped onto the schema literal.
+        compute_class: class, alias-mapped onto the schema literal.
     """
     if not (
         model_setup_uri.startswith("s3://")
@@ -1567,7 +1567,7 @@ def run_solver(
     ``cancel`` envelope -- the cancel chain reaches the run automatically via
     ``wait_for_completion``'s cancel handler); polling a running execution
     (use ``wait_for_completion``); inspecting a completed run's outputs
-    (those land in ``RunResult.output_uri`` per FR-CE-4).
+    (those land in ``RunResult.output_uri``).
 
     Params:
         solver: lowercase solver identifier. v0.1 supports ``"sfincs"``
@@ -1578,7 +1578,7 @@ def run_solver(
             input URIs inside are resolved by scheme. The
             ``model_flood_scenario`` workflow composes this from the atomic
             tool substrate.
-        compute_class: FR-CE-3 compute class -- selects the sizing bucket
+        compute_class: compute class -- selects the sizing bucket
             (small/standard/large/xlarge/gpu). Default ``"medium"``.
 
     Returns:
@@ -1588,7 +1588,7 @@ def run_solver(
         ``workflow_name`` pins the backend (``local-docker`` / ``local-exec``)
         so ``wait_for_completion`` routes correctly.
 
-    FR-DC-6: This tool is uncacheable-by-construction (solver dispatch is
+    This tool is uncacheable-by-construction (solver dispatch is
     explicitly enumerated). The cache shim is NOT invoked.
 
     Invariant 8 (cancellation): the returned handle carries everything
@@ -1708,9 +1708,9 @@ async def wait_for_completion(
             ``workflow_name`` field pins the backend (``local-docker`` /
             ``local-exec``) so the poll routes correctly.
         poll_interval_s: seconds between completion polls. Default 10s --
-            matches NFR-P-4 <=15-min budget granularity (>=9 polls per run).
+            matches the <=15-min budget granularity (>=9 polls per run).
         timeout_s: hard ceiling. Defaults to 1800 s (30 min -- gives 2×
-            headroom over NFR-P-4). On timeout the tool returns
+            headroom over the target budget). On timeout the tool returns
             ``RunResult{status="failed", error_code="SOLVER_TIMEOUT"}``
             and best-effort cancels the run.
 
@@ -1722,13 +1722,13 @@ async def wait_for_completion(
         ``"failed"`` carries the error code/message; ``"cancelled"``
         carries a ``cancellation_reason``.
 
-    FR-DC-6: This tool is uncacheable-by-construction. The cache shim is
+    This tool is uncacheable-by-construction. The cache shim is
     NOT invoked.
 
     Invariant 8 (cancellation): when the M1 WS cancel chain raises
     ``asyncio.CancelledError`` inside this coroutine's poll-sleep, the
     backend handler terminates the live container before
-    re-raising so cancellation is initiated within ≤30 s per NFR-R-3.
+    re-raising so cancellation is initiated within ≤30 s.
     """
     if poll_interval_s < 0:
         raise SolverDispatchError(

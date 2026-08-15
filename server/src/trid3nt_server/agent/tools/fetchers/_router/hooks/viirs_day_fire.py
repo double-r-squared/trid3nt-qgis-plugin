@@ -1,4 +1,4 @@
-"""viirs_day_fire frames hooks (ADR 0087): the JPSS/VIIRS Day Fire polar animation.
+"""viirs_day_fire frames hooks: the JPSS/VIIRS Day Fire polar animation.
 
 Folds fetch_viirs_day_fire onto the frames-list output shape (shape:
 animation_frames). The router owns the per-frame read_through loop + honesty floor +

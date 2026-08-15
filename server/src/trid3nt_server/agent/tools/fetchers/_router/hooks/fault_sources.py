@@ -1,4 +1,4 @@
-"""fault_sources hooks (finisher-mechanisms wave, ADR 0081): GEM active faults.
+"""fault_sources hooks (finisher-mechanisms wave): GEM active faults.
 
 The irreducible steps the declarative surface cannot carry, all PURE:
 - ``build_request`` -- ONE GET of the whole-world GEM GAF harmonized GeoJSON

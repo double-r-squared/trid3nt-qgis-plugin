@@ -39,7 +39,7 @@ logger = logging.getLogger("trid3nt_server.agent.tools.search.catalog_common")
 class CatalogNotFoundError(RuntimeError):
     """The requested catalog entry id was not found in the v0.1 YAML catalog.
 
-    Carries an ``error_code="CATALOG_ENTRY_NOT_FOUND"`` for the FR-AS-11 typed-
+    Carries an ``error_code="CATALOG_ENTRY_NOT_FOUND"`` for the typed-
     error surface. Not retryable — a missing entry id is a configuration error
     rather than a transient failure.
     """
@@ -88,7 +88,7 @@ def user_catalog_path() -> Path:
 
 # In-memory catalog cache (lazy-loaded, refreshed at process restart). v0.1
 # only — when D.11 ``catalog_entries`` is populated, this becomes a Mongo
-# read at the FR-DC-2 ``semi-static-7d`` cadence.
+# read at the ``semi-static-7d`` cadence.
 _CATALOG_CACHE: list[CatalogEntry] | None = None
 
 def _parse_last_verified(raw: Any) -> str:

@@ -1,9 +1,9 @@
-"""glm frames hooks (ADR 0092): GOES GLM group-energy-density point-gridding.
+"""glm frames hooks: GOES GLM group-energy-density point-gridding.
 
 Folds fetch_glm_lightning onto shape: animation_frames. The DEFAULT output is now
 an ORDERED ``list[LayerURI]`` of group-energy-density (GED) frames -- the
 single-accumulation case is a ONE-frame list, and ``accumulation_window_s`` fans a
-window into N scrubber-steppable frames (ADR 0088 STOP dissolved: the frames-list
+window into N scrubber-steppable frames (STOP dissolved: the frames-list
 shape carries the single-vs-list variant for free, the single case is just N=1).
 
 The router owns the per-frame read_through loop + honesty floor + LayerURI emission;
@@ -379,7 +379,7 @@ def frames_plan(spec: SourceSpec, params: dict[str, Any]) -> list[FramePlan]:
     """Split the window into accumulation buckets -> ordered per-frame plans.
 
     Single mode (``accumulation_window_s`` unset) yields ONE bucket (the whole
-    window) -> a one-frame list, the new default contract (ADR 0092). No network.
+    window) -> a one-frame list, the new default contract. No network.
     """
     sc, sfx = spec.error_code_prefix, spec.input_error_suffix
     q_bbox = _round_bbox(params["bbox"])

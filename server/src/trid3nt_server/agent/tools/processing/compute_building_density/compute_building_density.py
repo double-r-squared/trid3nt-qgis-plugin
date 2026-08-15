@@ -43,7 +43,7 @@ Codified lesson (geographic correctness):
     pixels in the same COG -- not merely that the COG round-trips bytes.
     See ``tests/test_compute_building_density.py::test_geographic_correctness_*``.
 
-FR-TA-2: atomic tool, returns ``LayerURI``. FR-CE-8 / FR-DC-3/4: routed through
+atomic tool, returns ``LayerURI``. Routed through
 ``read_through`` so identical ``(bbox, cell_size_m, source)`` calls reuse the
 cached COG. Tier-1 free (no API key required).
 """
@@ -74,7 +74,7 @@ logger = logging.getLogger("trid3nt_server.agent.tools.processing.compute_buildi
 
 
 # ---------------------------------------------------------------------------
-# Error types (FR-AS-11 typed-error surface).
+# Error types (typed-error surface).
 # ---------------------------------------------------------------------------
 
 

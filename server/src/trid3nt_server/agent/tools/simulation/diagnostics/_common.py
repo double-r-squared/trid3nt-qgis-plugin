@@ -1,4 +1,4 @@
-"""Shared internals for the ``read_run_diagnostics`` dispatcher (V&V wave, ADR 0021).
+"""Shared internals for the ``read_run_diagnostics`` dispatcher (V&V wave).
 
 Holds the typed-error surface, the normalized per-engine parser return type
 (``EngineDiagnostics``), and the artifact-access seam (``RunArtifacts``) that
@@ -31,7 +31,7 @@ __all__ = [
 
 
 # --------------------------------------------------------------------------- #
-# Typed errors (FR-AS-11 convention: class attrs ``error_code`` + ``retryable``)
+# Typed errors (convention: class attrs ``error_code`` + ``retryable``)
 # --------------------------------------------------------------------------- #
 
 

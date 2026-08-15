@@ -34,17 +34,17 @@ Output shape (returned as dict; also persisted as JSON blob in the cache):
 
 Robots.txt: NOT honored in v0.1 (a future revision adds a per-host robots cache + allow-check).
 
-Typed errors (FR-AS-11):
+Typed errors:
     - ``WebFetchInputError(retryable=False)`` -- bad URL (no scheme, malformed)
       or unknown extract mode.
     - ``WebFetchUpstreamError(retryable=True)`` -- 5xx, timeout, connect error,
       or JSON decode failure on ``extract="json"``.
 
-External-API resilience (NFR-R-1): per-call timeout, single re-raise on
+External-API resilience: per-call timeout, single re-raise on
 fetch failure (no sentinel writes -- see ``read_through``). The agent
-FR-AS-11 surface decides retry/clarify/fallback.
+surface decides retry/clarify/fallback.
 
-FR-TA-3 docstring discipline: the public ``web_fetch`` carries "Use this when"
+docstring discipline: the public ``web_fetch`` carries "Use this when"
 and "Do NOT use this for" sections so the FunctionTool surface is
 self-describing to Gemini.
 """
@@ -75,7 +75,7 @@ logger = logging.getLogger("trid3nt_server.agent.tools.search.web_fetch.web_fetc
 
 
 # ---------------------------------------------------------------------------
-# Typed errors (FR-AS-11).
+# Typed errors.
 # ---------------------------------------------------------------------------
 
 

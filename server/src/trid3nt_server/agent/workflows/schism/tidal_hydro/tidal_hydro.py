@@ -1,5 +1,5 @@
 """Engine template ``schism_tidal_hydro`` -- SCHISM barotropic tidal hydrodynamics
-(cross-scale coastal core; engine #12 landing, ADR 0118).
+(cross-scale coastal core; engine #12 landing).
 
 The LLM-facing exposure of SCHISM's refinement-grade cross-scale coastal solver,
 scoped to the ONE archetype that needs NO external forcing legs: a BAROTROPIC
@@ -9,12 +9,12 @@ sources:
   * ``bundled_quarterannulus`` -- SCHISM's own Test_QuarterAnnulus verification
     case (Lynch & Gray analytical M2 tidal channel). The staged deck is the
     spike's proven-green fixture; the deliverable is the analytical RMSE/amplitude
-    VERIFICATION at the station point (ADR 0115 re-proven through the product
+    VERIFICATION at the station point (re-proven through the product
     path). An idealized, NON-GEOGRAPHIC mesh.
   * ``coastal_tin`` -- an oceanmesh ``coastal_tin`` TIN for a real US coastal AOI,
     bathymetry sampled from fetch_topobathy/fetch_dem onto the TIN nodes (the
     ``tin_to_hgrid`` bridge), a constituent tidal boundary. The deliverable is a
-    max water-surface elevation surface CLIPPED to the AOI + COG (ADR 0116) + the
+    max water-surface elevation surface CLIPPED to the AOI + COG + the
     mesh preview + a station elevation-timeseries chart.
 
 Determinism boundary (invariant 1): every elevation/RMSE number the agent narrates
@@ -179,7 +179,7 @@ async def schism_tidal_hydro(
         sim_days: run length in days (default 5; the verification is 5 d).
         open_boundary_side: which TIN side is the open (seaward) tidal boundary
             (``south|north|east|west``; default ``south``).
-        input_mode: run-mode lever (ADR 0107). ``"user_gated"`` reviews the tidal
+        input_mode: run-mode lever. ``"user_gated"`` reviews the tidal
             forcing + mesh basis (and previews the TIN mesh) before solving.
 
     Returns:
@@ -191,7 +191,7 @@ async def schism_tidal_hydro(
         numbers only -- invariant 1).
         On failure: dict with ``status="error"`` + ``error_code`` + ``error_message``.
 
-    FR-DC-6: ``cacheable=False``, ``ttl_class="live-no-cache"``,
+    ``cacheable=False``, ``ttl_class="live-no-cache"``,
     ``source_class="workflow_dispatch"``.
     """
     from trid3nt_contracts.schism_contracts import SCHISM_CONSTITUENTS, SCHISM_MESH_SOURCES
@@ -353,7 +353,7 @@ def _parse_hgrid_nodes_cells(gr3_text: str) -> tuple[Any, Any, Any]:
 async def _schism_mesh_precondition_gate(
     input_mode: str | None,
 ) -> tuple[tuple[Any, Any, Any] | None, str | None, str | None]:
-    """Offer this case's SCHISM mesh to the coastal_tin tidal solve (ADR 0212).
+    """Offer this case's SCHISM mesh to the coastal_tin tidal solve.
 
     Returns ``(supplied_mesh | None, open_boundary_side | None, note | None)``: a
     parsed ``(points_lonlat, tris, depths_down)`` tuple when a case mesh was
@@ -452,7 +452,7 @@ async def model_schism_tidal_hydro(
         n_elements_grid = deck_info["n_elements"]
         ncompute, nscribe = 3, 2
 
-    # --- Stage 2: the input-review gate (ADR 0107) ---------------------------- #
+    # --- Stage 2: the input-review gate ---------------------------- #
     review = await gate_input_review(
         tool_name="schism_tidal_hydro", mode=input_mode, entries=review_entries,
         params={"mesh_source": mesh_source, "tidal_amplitude_m": tidal_amplitude_m,
@@ -586,7 +586,7 @@ async def _build_coastal_tin_deck(
     shoreline shapefile, or a bathymetry raster) is unavailable -- an honest
     typed error, never a silent dead-end.
     """
-    # 0. Precondition gate (ADR 0212): if this case holds a SCHISM-compatible mesh
+    # 0. Precondition gate: if this case holds a SCHISM-compatible mesh
     # (built explicitly by generate_mesh with an open boundary), offer to solve on
     # it -- real shoreline + real sampled bathymetry replace the internal oceanmesh
     # TIN, the tidal boundary re-keyed to the mesh's open side. Accepted -> the
@@ -665,7 +665,7 @@ async def _build_coastal_tin_deck(
         raise SchismScenarioError(
             SCHISM_SOLVE_FAILED,
             "the mesh worker did not emit coastal_tin_mesh.npz (raw nodes/cells) -- "
-            "rebuild trid3nt-local/mesh:latest with the ADR 0118 additive change",
+            "rebuild trid3nt-local/mesh:latest with the additive change",
         )
     import numpy as np
     mesh = np.load(mesh_npz)
@@ -760,7 +760,7 @@ async def _fetch_bathymetry_cog(
     (local_path, source_label).
 
     The fetched bathymetry is auto-surfaced as a role=context Case input by the
-    emit-on-fetch router seam (ADR 0244) -- the ``purpose="bathymetry"`` fetch
+    emit-on-fetch router seam -- the ``purpose="bathymetry"`` fetch
     below carries the semantic name -- so the caller no longer threads the COG
     uri back out to surface it by hand.
 

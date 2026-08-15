@@ -1,8 +1,8 @@
-"""storm_events_db hooks (chained-resolution mode, ADR 0064): NOAA Storm Events DB
+"""storm_events_db hooks (chained-resolution mode): NOAA Storm Events DB
 bulk-gzip-CSV behind an HTML directory index.
 
 The bulk-file-behind-an-index shape retired here reuses the EXISTING resolve phase
-(ADR 0063) -- no new machinery. The index-scrape is the PHASE-R resolve: the router
+ -- no new machinery. The index-scrape is the PHASE-R resolve: the router
 GETs the NCEI directory listing (``resolve_build``), and ``resolve_parse`` regex-scrapes
 it for the window's year(s), picks the newest processed-date file per year, and merges
 the resolved bulk-CSV URL(s) into ``params`` (pure regex over a router-fetched body,

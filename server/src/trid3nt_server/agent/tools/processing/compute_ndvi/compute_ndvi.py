@@ -30,7 +30,7 @@ Honesty (data-source fallback norm): if NO Sentinel-2 scene intersects the bbox
 in the window (or none under the cloud threshold), a typed
 ``NDVINoImageryError`` is raised  --  never a fabricated layer.
 
-FR-CE-8 / FR-DC-3/4: routed through ``read_through`` so identical
+Routed through ``read_through`` so identical
 ``(bbox, start, end, max_cloud_cover)`` calls reuse the cached NDVI COG in the
 ``static-30d`` / ``ndvi`` cache prefix.
 
@@ -67,7 +67,7 @@ logger = logging.getLogger("trid3nt_server.agent.tools.processing.compute_ndvi.c
 
 
 # ---------------------------------------------------------------------------
-# Error types (FR-AS-11 typed-error surface).
+# Error types (typed-error surface).
 # ---------------------------------------------------------------------------
 
 

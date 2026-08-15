@@ -1,7 +1,7 @@
 """Build a SCENARIO earthquake source from the USGS Slab2 subduction-interface
-geometry -- the ADR 0230 SCENARIO rung of the earthquake-source ladder.
+geometry -- the SCENARIO rung of the earthquake-source ladder.
 
-The ladder (ADR 0226 established the top two rungs):
+The ladder (established the top two rungs):
 
   1. MEASURED finite-fault inversion   -- a REAL named ComCat event -> its published
      USGS finite-fault product (``finite_fault.py``). ``basis="measured_inversion"``.
@@ -27,7 +27,7 @@ The output is a ``FiniteFaultModel`` (the SAME normalized N-subfault table
 GeoClawRunArgs contract change -- a scenario is just another way to fill
 ``finite_fault_uri`` + ``finite_fault_footprint``.
 
-Source truths (declared per ADR 0225; the URLs are basis-verified against the Slab2
+Source truths (the URLs are basis-verified against the Slab2
 data release DOI 10.5066/F7PV6JNV -- Hayes et al. 2018, "Slab2, a comprehensive
 subduction zone geometry model", Science 362:58-61):
   * ScienceBase parent item ``5aa1b00ee4b0b1c392e86467`` carries one CHILD item per
@@ -402,7 +402,7 @@ def fetch_slab2_grids(zone_name: str, *, _http_get_fn: Any = None) -> Slab2Grids
 
 
 # ---------------------------------------------------------------------------
-# Scaling laws + moment budget (all cited; see module docstring + ADR 0230)
+# Scaling laws + moment budget (all cited; see module docstring)
 # ---------------------------------------------------------------------------
 
 def strasser_interface_dimensions(mw: float) -> tuple[float, float, float]:

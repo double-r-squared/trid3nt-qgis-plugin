@@ -1,4 +1,4 @@
-"""admin_boundaries hooks (ADR 0067): the TIGER/Line ZIP URL planner.
+"""admin_boundaries hooks: the TIGER/Line ZIP URL planner.
 
 The one irreducible per-source step for the ``zip_vector`` executor: turn a
 ``(level, bbox)`` request into the TIGER/Line 2024 ZIP URL(s) to fetch. Nationwide

@@ -44,7 +44,7 @@ HECRAS_SOLVER_NAME: str = "hecras_riverine_flood"
 #: + logs read the capability honestly. Both map to the same LocalSolverSpec build.
 HECRAS_LEVEE_BREACH_SOLVER_NAME: str = "hecras_levee_breach"
 
-#: The fresh-AOI 2D-flood template's solver identifier (ADR 0140 promotion). The
+#: The fresh-AOI 2D-flood template's solver identifier (promotion). The
 #: SAME worker image, but the manifest carries a COMPOSED deck as ``inputs`` (no
 #: baked archetype): the entrypoint's M3-gate path (``plan_hdf`` + ``geom_suffix``,
 #: no archetype) runs RasGeomPreprocess + RasUnsteady on the staged fresh-authored

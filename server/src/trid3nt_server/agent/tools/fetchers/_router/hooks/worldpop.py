@@ -1,4 +1,4 @@
-"""worldpop raster-delegate hooks (ADR 0092): WorldPop whole-object-download-then-window.
+"""worldpop raster-delegate hooks: WorldPop whole-object-download-then-window.
 
 Folds fetch_population's WorldPop raster leg onto the ``library_delegate`` raster
 mode. The WorldPop server returns HTTP 200 (full body) for range requests instead of
@@ -10,7 +10,7 @@ crs)`` for the shared COG writer -- byte-for-byte the twin's
 ``_fetch_worldpop_population_bytes`` fetch body, minus the twin's manual COG rewrite
 (the router's ``array_to_cog_bytes`` owns serialization).
 
-The ACS (Census B01003) leg the twin also carried is DROPPED at this fold (ADR 0092,
+The ACS (Census B01003) leg the twin also carried is DROPPED at this fold (,
 NATE flag-not-copy): it was half-built (geometry=None follow-up + heuristic FIPS
 tables) and Census tract population is served by the dedicated ``fetch_census_acs``
 tool. An ``acs_*`` (or any non-worldpop) dataset now fails the ``validate`` gate with
@@ -81,8 +81,8 @@ def _worldpop_year_from_dataset(spec: SourceSpec, dataset: str) -> int:
 
     Raises the source's typed input error (pre-cache) when the token is not a
     ``worldpop_*`` dataset, the suffix is non-numeric, or the year falls outside
-    the published Global_2000_2020 window. An ``acs_*`` dataset (the dropped leg,
-    ADR 0092) lands here as an unsupported-dataset input error.
+    the published Global_2000_2020 window. An ``acs_*`` dataset (the dropped leg)
+    lands here as an unsupported-dataset input error.
     """
     sc = spec.error_code_prefix
     sfx = spec.input_error_suffix

@@ -16,7 +16,7 @@ This is the OpenQuake analogue of ``swmm_urban_flood`` (SWMM) /
 ``engine="openquake", tier="template"`` - EXCLUDED from the default retrieval
 pool and surfaced only by the ``run_openquake`` door's gate expansion
 (SELECT-THEN-CALL). Like the other templates it declares ``cacheable=False`` +
-``ttl_class="live-no-cache"`` + ``source_class="workflow_dispatch"`` (FR-DC-6 -
+``ttl_class="live-no-cache"`` + ``source_class="workflow_dispatch"`` (
 workflow exposure surface; never touches the cache shim). Confirmation before
 consequence (Invariant 9 - a solver run) is enforced by the server confirmation
 hook around this template (SOLVER_CONFIRM_TOOLS keys on ``openquake_psha``).
@@ -178,8 +178,8 @@ async def openquake_psha(
     Pelicun earthquake damage assessment. Builds a classical-PSHA OpenQuake deck
     over a site grid; when a REAL active fault (GEM Global Active Faults)
     intersects the AOI it builds a physics-based fault source (hazard peaks on
-    the trace), else falls back to a synthetic Gutenberg-Richter area source (ADR
-    0223 recorded exemption: an area source is STANDARD PSHA distributed-seismicity
+    the trace), else falls back to a synthetic Gutenberg-Richter area source (a
+    recorded exemption: an area source is STANDARD PSHA distributed-seismicity
     methodology for unmapped-fault regions, always labeled, not fabricated data --
     so unlike the surge/scenario demo paths it is NOT opt-in-gated) -- the returned
     ``source_model_kind`` ("real-fault"/"synthetic-area") must be narrated HONESTLY,
@@ -234,7 +234,7 @@ async def openquake_psha(
         uniform_hazard_spectra: also export the Uniform Hazard Spectrum (spectral
             acceleration vs period at the target PoE) alongside the map + curve.
         compute_class: default "standard".
-        input_mode: run-mode lever (ADR 0107). ``"user_gated"`` presents the
+        input_mode: run-mode lever. ``"user_gated"`` presents the
             reference Vs30 for review before the solve; ``"auto"`` (default)
             proceeds with it labeled.
 
@@ -245,7 +245,7 @@ async def openquake_psha(
         On failure: ``{"status": "error", "error_code", "error_message"}``.
         Not cached (``cacheable=False``).
 
-    FR-DC-6: ``cacheable=False``, ``ttl_class="live-no-cache"``,
+    ``cacheable=False``, ``ttl_class="live-no-cache"``,
     ``source_class="workflow_dispatch"`` -- cache shim not invoked.
     """
     if bbox is None:
@@ -292,7 +292,7 @@ async def openquake_psha(
             "error_message": f"invalid OpenQuake run arguments: {exc}",
         }
 
-    # --- ADR 0107 two-mode input gate: the reference Vs30 is a physically
+    # --- two-mode input gate: the reference Vs30 is a physically
     # dominant site condition with no fetcher yet -- label the 760 rock default
     # (or a user value) and, in user_gated mode, present it for review before the
     # (consequential Batch) PSHA solve. auto (session default) + headless proceed.
@@ -502,7 +502,7 @@ def assemble_build_spec(
         "site_grid_spacing_km": grid_km,
         "max_distance_km": float(run_args.max_distance_km),
         "gmpe": run_args.gmpe,
-        # ADR 0107: the reference Vs30 (default 760 rock) rides to the worker
+        # the reference Vs30 (default 760 rock) rides to the worker
         # deck; a user-supplied value overrides the demo default byte-for-byte.
         "reference_vs30_value": float(getattr(run_args, "reference_vs30_ms", 760.0)),
         "a_value": float(run_args.a_value),
@@ -578,7 +578,7 @@ def resolve_fault_sources(
     Only the caller's malformed bbox would surface upstream (already validated by
     ``OpenQuakeRunArgs``), so in practice this always returns cleanly.
 
-    ADR 0223 RECORDED EXEMPTION (provenance audit R1): unlike the surge/scenario
+    RECORDED EXEMPTION (provenance audit R1): unlike the surge/scenario
     synthetic paths, the auto area-source fallback is NOT gated behind an opt-in.
     A Gutenberg-Richter AREA SOURCE is standard PSHA methodology -- the accepted way
     to model distributed background seismicity where active faults are unmapped or
@@ -589,7 +589,7 @@ def resolve_fault_sources(
     here -- the transparency obligation is met by the (strengthened) label, not by
     stopping the run.
     """
-    # fetch_fault_sources is now spec-driven (ADR 0081): resolve the router closure
+    # fetch_fault_sources is now spec-driven: resolve the router closure
     # off the registry seam (TOOL_REGISTRY[name].fn) and catch the router's typed
     # FetchError base -- byte-identical A.6 codes (FAULT_SOURCES_*), zero twin import.
     from trid3nt_server.agent.tools import TOOL_REGISTRY
@@ -644,7 +644,7 @@ def resolve_fault_sources(
         )
         return faults, note
 
-    # Empty AOI -> honest synthetic fallback (ADR 0223 recorded exemption: an area
+    # Empty AOI -> honest synthetic fallback (recorded exemption: an area
     # source is standard PSHA methodology, always labeled, not a silent fabrication).
     detail = (
         str(fetch_note) if fetch_note
@@ -1422,7 +1422,7 @@ async def model_openquake_psha(
 
     Args:
         run_args: the validated ``OpenQuakeRunArgs``.
-        compute_class: FR-CE-3 compute class for the Batch sizing bucket.
+        compute_class: compute class for the Batch sizing bucket.
             Default ``"standard"`` (OpenQuake is RAM-hungry, so it should size up
             for a larger site grid).
 
@@ -1485,7 +1485,7 @@ async def model_openquake_psha(
 
     # The resolved fault traces surface automatically as a role=context input:
     # ``fetch_fault_sources`` returns a renderable ``FaultSourcesResult`` (vector),
-    # so the emit-on-fetch router seam (ADR 0244) publishes it when fetched nested
+    # so the emit-on-fetch router seam publishes it when fetched nested
     # in this composer (purpose="fault sources" carries the name). No hand-built
     # surfacing here -- the render declaration IS the intent.
 

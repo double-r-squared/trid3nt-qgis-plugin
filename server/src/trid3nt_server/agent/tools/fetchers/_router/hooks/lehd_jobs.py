@@ -1,4 +1,4 @@
-"""LEHD LODES join VALUES-hook (trigger wave, ADR 0084): the gzip-CSV values leg.
+"""LEHD LODES join VALUES-hook (trigger wave): the gzip-CSV values leg.
 
 The census-tract choropleth JOIN (TIGERweb geometry LEFT-JOIN a per-tract value on
 11-digit GEOID) is the ``transforms/join`` shape, but its built-in values leg speaks

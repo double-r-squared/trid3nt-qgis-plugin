@@ -1,10 +1,10 @@
-"""SCHISM case-deck authoring for the ``tidal_hydro`` archetype (ADR 0118).
+"""SCHISM case-deck authoring for the ``tidal_hydro`` archetype.
 
 Two mesh sources, one barotropic tidal deck:
 
   * ``bundled_quarterannulus`` -- STAGE the bundled Test_QuarterAnnulus fixture
-    deck verbatim (the verification case whose green gate the spike proved,
-    ADR 0115): hgrid.gr3 + vgrid.in + param.nml + bctides.in + drag.gr3 +
+    deck verbatim (the verification case whose green gate the spike proved):
+    hgrid.gr3 + vgrid.in + param.nml + bctides.in + drag.gr3 +
     station.in + the analytical reference ForPlot_ana_elev.dat.
   * ``coastal_tin`` -- AUTHOR a deck for a supplied oceanmesh TIN: the
     ``tin_to_hgrid`` bridge (the worker's proven pure-numpy converter) turns
@@ -142,7 +142,7 @@ _WWM_KEEP_IOF_HYDRO: frozenset[int] = frozenset({1})
 
 
 def wwm_duck_fixture_dir() -> Path:
-    """Resolve the repo's bundled Test_WWM_Duck fixture directory (ADR 0126/0129)."""
+    """Resolve the repo's bundled Test_WWM_Duck fixture directory."""
     here = Path(__file__).resolve()
     for parent in here.parents:
         cand = parent / "services" / "workers" / "schism" / "fixtures" / "wwm_duck"
@@ -212,7 +212,7 @@ def _transform_wwm_input_parametric(
 
 
 def _transform_wwm_param(param_text: str, *, sim_hours: float) -> str:
-    """Apply the ADR 0126 1d staging transforms to the pristine Duck param.nml.
+    """Apply the 1d staging transforms to the pristine Duck param.nml.
 
     Deterministic + line-oriented (a test asserts idempotence): strip the three
     master-only namelist vars the v5.11.0 binary does not declare
@@ -256,13 +256,13 @@ def stage_wwm_duck_deck(
 ) -> tuple[list[Path], int, int]:
     """Stage the bundled Duck deck (transformed) into ``dest_dir`` for the coupled run.
 
-    Copies the pristine fixture verbatim, then applies the in-code ADR 0126
+    Copies the pristine fixture verbatim, then applies the in-code
     transforms (``_transform_wwm_param`` + the two file-name reconciliations GOTM/
     WWM hardcode) so the deck runs on ``pschism_WWM_GOTM_TVD-VL``. Returns
     ``(deck_files, ncompute, nscribe)`` -- 4 compute + 4 scribe (the proven spike
     layout; >= the 3 trimmed output variables).
 
-    ``wave_forcing`` (ADR 0189, the parametric-spectrum row) switches the WWM open
+    ``wave_forcing`` (the parametric-spectrum row) switches the WWM open
     boundary from the bundled non-parametric observed spectrum to a PRESCRIBED
     parametric JONSWAP spectrum. When provided it must carry
     ``{hs_m, tp_s, dir_deg, spread_deg}`` -- the four offshore-spectrum knobs -- and
@@ -450,7 +450,7 @@ def stage_transport_scheme_deck(
 
 
 # --------------------------------------------------------------------------- #
-# baroclinic_circulation archetype (ADR 0189): density-driven 3D estuary.
+# baroclinic_circulation archetype: density-driven 3D estuary.
 # --------------------------------------------------------------------------- #
 #: SCHISM output vars the baroclinic estuary deck scribes: elevation (2D) +
 #: salinity + temperature + depth-avg velocity (3D) -> nscribe must be >= this.
@@ -714,7 +714,7 @@ def author_baroclinic_estuary_deck(
     template's synthetic_inputs), NOT a surveyed estuary -- the calibrated
     Columbia-River CORIE 28-day 3D run is the NATE-gated validation.
 
-    ``supplied_mesh`` (ADR 0208 precondition gate): when given as
+    ``supplied_mesh`` (precondition gate): when given as
     ``(points_lonlat (N,2), tris (M,3) 0-based, depths_positive_down (N,))`` -- a
     user mesh accepted by the precondition gate -- it REPLACES the idealized lattice
     (real shoreline + real sampled bathymetry). The salinity IC gradient, river
@@ -959,7 +959,7 @@ def _author_bctides(
     iettype=3 (harmonic elevation from the listed constituents), ifltype=0 (no
     normal-velocity forcing -- a pure tidal elevation boundary). Every open node
     gets the same amplitude/phase (a screening tidal forcing; a per-node
-    FES2014/TPXO field is the sign-off candidates' upgrade, ADR 0115 4a). Mirrors
+    FES2014/TPXO field is the sign-off candidates' upgrade 4a). Mirrors
     the QA fixture's block layout.
     """
     if open_node_count <= 0:
@@ -1043,7 +1043,7 @@ def author_coastal_tin_deck(
     mesh/boundary fault (the honest-failure surface).
 
     Geometry source: either ``points``/``cells``/``depths`` (the oceanmesh TIN +
-    node-sampled bathymetry) OR ``supplied_mesh`` (ADR 0212 precondition gate) as
+    node-sampled bathymetry) OR ``supplied_mesh`` (precondition gate) as
     ``(points_lonlat (N,2), tris (M,3) 0-based, depths_positive_down (N,))`` -- a
     user mesh accepted by the gate REPLACES the internal TIN (real shoreline + real
     sampled bathymetry). The tidal open boundary is re-keyed to ``open_boundary_side``
@@ -1130,7 +1130,7 @@ def author_coastal_tin_deck(
 
 
 # --------------------------------------------------------------------------- #
-# PaHM surge archetype (ADR 0217): parametric Holland-1980 wind/pressure sflux
+# PaHM surge archetype: parametric Holland-1980 wind/pressure sflux
 # forcing on a georeferenced coastal TIN, hydro-core binary (nws=2, ics=2).
 # --------------------------------------------------------------------------- #
 
@@ -1169,7 +1169,7 @@ def _author_bctides_stillwater(open_node_count: int) -> str:
     No tidal frequencies -- the boundary is a flat, time-invariant sea surface so
     the ONLY driver of any elevation change is the storm's wind/pressure sflux
     field. This is the behavior-proving surge setup: a nonzero peak elevation MUST
-    come from the forcing, never from a tide (the ADR 0217 physics assertion).
+    come from the forcing, never from a tide (the physics assertion).
     """
     if open_node_count <= 0:
         raise SchismDeckError(

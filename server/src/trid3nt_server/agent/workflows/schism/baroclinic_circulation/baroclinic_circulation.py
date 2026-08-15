@@ -1,5 +1,5 @@
 """Engine template ``schism_baroclinic_circulation`` -- density-driven 3D estuary
-circulation + stratification (SCHISM engine #12, ADR 0189/0126).
+circulation + stratification (SCHISM engine #12/0126).
 
 The LLM-facing exposure of SCHISM's 3D BAROCLINIC pathway (ibc=0): the semi-implicit
 unstructured-grid hydro core run in three dimensions with the T/S density field
@@ -16,7 +16,7 @@ bathymetry), NOT a surveyed estuary -- it proves the 3D baroclinic pathway execu
 end-to-end and emits a physically-sane stratified field, it is NOT a calibrated
 site study. The published-case validation (SCHISM Test_CORIE, the Columbia River
 estuary 28-day 3D baroclinic hindcast vs ADCP/CTD stations) is the NATE-gated heavy
-live drive (ADR 0126 sec 2), recorded as pending in ADR 0189.
+live drive (sec 2), recorded as pending in.
 
 Determinism boundary (invariant 1): every salinity / stratification number the agent
 narrates comes from the typed ``SchismBaroclinicLayerURI`` fields the postprocess
@@ -174,7 +174,7 @@ async def schism_baroclinic_circulation(
         ocean_side: which mesh edge is the seaward (tidal + salty) boundary
             ("south"|"north"|"east"|"west"; default "south"). The river source sits
             on the opposite (landward) edge.
-        input_mode: run-mode lever (ADR 0107). "user_gated" reviews the resolved
+        input_mode: run-mode lever. "user_gated" reviews the resolved
             forcing + coarse-geometry basis before solving; "auto" (default)
             proceeds labeled.
 
@@ -187,7 +187,7 @@ async def schism_baroclinic_circulation(
         ``sim_days`` (narrate these typed numbers only -- invariant 1).
         On failure: dict with ``status="error"`` + ``error_code`` + ``error_message``.
 
-    FR-DC-6: ``cacheable=False``, ``ttl_class="live-no-cache"``,
+    ``cacheable=False``, ``ttl_class="live-no-cache"``,
     ``source_class="workflow_dispatch"``.
     """
     try:
@@ -439,7 +439,7 @@ def _parse_hgrid_nodes_cells(gr3_text: str) -> tuple[Any, Any, Any]:
 async def _schism_mesh_precondition_gate(
     input_mode: str | None,
 ) -> tuple[tuple[Any, Any, Any] | None, str | None, str | None]:
-    """Offer this case's SCHISM mesh to the baroclinic solve (ADR 0208).
+    """Offer this case's SCHISM mesh to the baroclinic solve.
 
     Returns ``(supplied_mesh | None, ocean_side | None, note | None)``: a parsed
     ``(points_lonlat, tris, depths_down)`` tuple when a case mesh was discovered,
@@ -503,7 +503,7 @@ async def model_schism_baroclinic_circulation(
 
     aoi_bbox, aoi_label, aoi_basis = _resolve_bbox(location_query, bbox)
 
-    # Precondition gate (ADR 0208): if this case holds a SCHISM-compatible mesh
+    # Precondition gate: if this case holds a SCHISM-compatible mesh
     # (built explicitly by generate_mesh with an open boundary), offer to solve on
     # it -- real shoreline + real bathymetry replace the idealized lattice.
     # Accepted -> the supplied-mesh path; declined/absent/incompatible -> the

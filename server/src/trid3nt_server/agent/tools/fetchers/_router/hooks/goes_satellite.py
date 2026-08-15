@@ -1,9 +1,9 @@
-"""GOES ABI single-band imagery delegate hooks (ADR 0111): the ``fetch_goes_satellite`` fold.
+"""GOES ABI single-band imagery delegate hooks: the ``fetch_goes_satellite`` fold.
 
 ``fetch_goes_satellite`` folds onto the router as a ``library_delegate`` RASTER source
 (``ingest.access: library_delegate``): the delegate owns the S3-listing + netCDF socket
 and returns ``(array, transform, crs)`` for the shared COG writer, exactly the dem /
-topobathy raster-delegate pattern. It is a THIRD GOES access surface (ADR 0088) distinct
+topobathy raster-delegate pattern. It is a THIRD GOES access surface distinct
 from the archive per-frame builder: a SINGLE-band float32 PHYSICAL-units COG with
 most-recent-frame semantics (no window) and a 15-minute ``valid_time`` cache rounding.
 The bespoke body the declarative surface cannot express lives here as four hooks:
@@ -18,11 +18,11 @@ The bespoke body the declarative surface cannot express lives here as four hooks
   * ``goes_satellite.read`` (delegate) -- list the most-recent MCMIPC key, download the
     netCDF, apply the per-band CF scale/offset, reproject to EPSG:4326 over the bbox, and
     return ``(array, transform, crs)`` for the shared COG writer. RECORDS the fetch-time
-    scan provenance (satellite + scan-time, ADR 0110) -- the scan-time is UNRECOVERABLE
+    scan provenance (satellite + scan-time) -- the scan-time is UNRECOVERABLE
     from the COG on a cache hit, so the channel is what makes it durable.
   * ``goes_satellite.envelope`` -- the twin's exact ``goes-{sat}-{band}-{lon}-{lat}``
     layer_id + the ``GOES Satellite -- <label> (<SAT>)`` name (the display em-dash is
-    preserved byte-identical for parity, ADR 0111 note) + the scan provenance replay.
+    preserved byte-identical for parity note) + the scan provenance replay.
 
 The GOES typed errors are the shared ``_goes_common`` classes (base ``FetchError``, so
 ``library_delegate.invoke`` passes the pinned ``error_code`` through unchanged).
@@ -444,10 +444,10 @@ def envelope_goes_satellite(
     data: bytes | None,
     provenance: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
-    """Override layer_id + name to the twin's exact forms + the scan provenance (ADR 0110).
+    """Override layer_id + name to the twin's exact forms + the scan provenance.
 
     The display em-dash (U+2014) in the twin's name is preserved BYTE-IDENTICAL for
-    parity (ADR 0111 note; the source file itself stays ASCII via the escape).
+    parity (note; the source file itself stays ASCII via the escape).
     """
     band = str(params.get("band", "visible"))
     satellite = _normalize_satellite(str(params.get("satellite", "goes-19")))

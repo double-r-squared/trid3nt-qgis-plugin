@@ -1,6 +1,6 @@
-"""``generate_mesh`` mode=hecras -- build a channel-refined HEC-RAS RoG mesh (ADR 0211).
+"""``generate_mesh`` mode=hecras -- build a channel-refined HEC-RAS RoG mesh.
 
-The refined-mesh machinery of ADR 0210 (graded seeds + breaklines, previously reachable
+The refined-mesh machinery of (graded seeds + breaklines, previously reachable
 ONLY as the ``channel_refinement`` knob embedded in a ``hecras_flood_2d`` rain-on-grid
 run) is here made a STANDALONE user act: this builds a channel-refined HEC-RAS cell mesh
 into the case, a human inspects the wireframe in QGIS, and a later ``hecras_flood_2d`` RoG
@@ -88,8 +88,8 @@ def build_and_record_hecras_mesh(
             catchment_geojson=catchment_geojson, flowlines_path=flowlines_path,
             background_m=float(background_m), channel_m=float(channel_m))
     except Rog2025Error as exc:
-        # HEC's <= 8-sides-per-cell acceptance is fragile on a large seed cloud (ADR
-        # 0210); an unrealizable cloud is a HONEST typed error, not a raw crash.
+        # HEC's <= 8-sides-per-cell acceptance is fragile on a large seed cloud;
+        # an unrealizable cloud is a HONEST typed error, not a raw crash.
         raise GenerateMeshError(
             "GENERATE_MESH_HECRAS_MESH_UNREALIZED",
             f"the channel-refined HEC-RAS mesh did not realize a valid cell mesh for "

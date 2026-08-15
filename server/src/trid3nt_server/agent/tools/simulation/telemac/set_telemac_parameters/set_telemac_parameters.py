@@ -11,7 +11,7 @@ values back. The ``.cas`` references its mesh (``GEOMETRY FILE``) and boundary
 whole containing directory (the "child case dir") -- the child deck stays
 runnable. See ``docs/validation/build-contract.md`` section 3.4 for the
 SetterEnvelope shape and ``_setter_envelope.py`` for the shared copy-on-write /
-bounds / publish machinery this module composes (ADR 0022).
+bounds / publish machinery this module composes.
 
 v1 KNOBS: ``friction_law`` (LAW OF BOTTOM FRICTION -- 2=Chezy, 3=Strickler,
 4=Manning) and the global ``friction_coefficient`` (FRICTION COEFFICIENT).

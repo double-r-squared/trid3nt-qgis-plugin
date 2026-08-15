@@ -31,7 +31,7 @@ Reuse (do NOT reinvent): the even-subsample frame selector
 ``_select_frame_time_indices`` (MAX_FLOOD_FRAMES=24), the ``NODATA_DEPTH_M=0.05``
 wet threshold, the ``continuous_flood_depth`` style preset, and the
 ``RUNS_BUCKET_DEFAULT`` from ``postprocess_flood``. The honesty floor
-(Invariant 1 / FR-AS-7): the depth scalars are computed with plain arithmetic
+(Invariant 1): the depth scalars are computed with plain arithmetic
 from the depth grid -- no LLM anywhere; the agent narrates the typed fields, never
 invents them.
 
@@ -980,8 +980,8 @@ def make_geoclaw_mesh_layer_uri(
     Mirrors ``make_hecras_mesh_layer_uri``: writes ``mesh.geojson`` to the durable
     runs bucket at ``s3://<runs_bucket>/<run_id>/mesh.geojson`` and returns a
     ``style_preset="mesh_grid"``, ``role="context"``, ``bbox=None`` vector LayerURI
-    (the mesh must not fight the flood camera) carrying ``crs_authid="EPSG:4326"``
-    (ADR 0118). Grid lines are a LineString FeatureCollection, so the renderable
+    (the mesh must not fight the flood camera) carrying ``crs_authid="EPSG:4326"``.
+    Grid lines are a LineString FeatureCollection, so the renderable
     QGIS type is a VECTOR (QgsVectorLayer draws the raw black grid); the row still
     rides the mesh-preview protocol (mesh_grid preset + context role + crs_authid).
 
@@ -1101,7 +1101,7 @@ def build_geoclaw_mesh_layer(
 
 
 # --------------------------------------------------------------------------- #
-# Okada seafloor-deformation PRODUCT (the ADR 0226 Okada-dtopo front).
+# Okada seafloor-deformation PRODUCT (the Okada-dtopo front).
 # --------------------------------------------------------------------------- #
 #: Signed vertical seafloor deformation (m): uplift(+)/subsidence(-) -> a diverging
 #: rdbu ramp centered on 0 (publish_layer pins the symmetric rescale so the dipole

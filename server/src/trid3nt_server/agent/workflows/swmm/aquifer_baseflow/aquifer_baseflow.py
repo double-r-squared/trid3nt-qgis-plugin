@@ -4,8 +4,8 @@ How much steady BASEFLOW does a shallow unconfined aquifer beneath a pervious
 subcatchment contribute to a receiving drainage node BETWEEN storms, and how does
 adding that groundwater pathway reshape the node's total hydrograph versus surface
 runoff alone? This is the SWMM analogue of the subsurface return-flow theme that
-the Landlab GroundwaterDupuitPercolator templates (ADR 0214) and the TELEMAC
-rain-on-grid recession tail (ADR 0213) approach from the surface-hydrology side:
+the Landlab GroundwaterDupuitPercolator templates and the TELEMAC
+rain-on-grid recession tail approach from the surface-hydrology side:
 a slow, sustained groundwater discharge that keeps a channel flowing after the
 storm runoff has drained -- WITHOUT overclaiming a shared solver (these are
 independent engines answering the same question class).
@@ -36,7 +36,7 @@ Citations (NATE-verified template source):
     two-object structure (Aquifer spans subcatchments; Groundwater is per
     subcatchment) and the flow-coefficient editor.
 
-Chart-first validation class (the RDII template precedent, ADR 0190): the
+Chart-first validation class (the RDII template precedent): the
 deliverable is CHARTS (node hydrograph with-GW vs no-GW + the baseflow recession)
 plus typed scalars, no georeferenced raster. Host-side pyswmm, no worker image.
 

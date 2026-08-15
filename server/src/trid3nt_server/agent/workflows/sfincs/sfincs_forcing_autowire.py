@@ -264,7 +264,7 @@ def _build_surge_forcing_members(
     )
 
     wd_raw = _sub("wind")
-    # ADR 0162: ``timeseries`` -- a uniform wind SCHEDULE (ordered list of
+    # ``timeseries`` -- a uniform wind SCHEDULE (ordered list of
     # ``(t_s, magnitude_mps, direction_deg)``) -- is a THIRD wind path
     # alongside the constant magnitude/direction pair and the gridded
     # grid_uri. Passed straight through to ``WindForcing.timeseries``;
@@ -683,7 +683,7 @@ def _autowire_coastal_surge_forcing(
     try:
         from trid3nt_server.agent.tools import TOOL_REGISTRY  # local: keep top imports lean
 
-        fetch_gtsm_tide_surge = TOOL_REGISTRY["fetch_gtsm_tide_surge"].fn  # spec-driven (ADR 0085)
+        fetch_gtsm_tide_surge = TOOL_REGISTRY["fetch_gtsm_tide_surge"].fn  # spec-driven
         layer = fetch_gtsm_tide_surge(
             bbox, start_date=start_date, end_date=end_date
         )
@@ -829,7 +829,7 @@ def _resolve_spiderweb_forcing(
     """
     import os as _os
 
-    # fetch_storm_tracks FOLDED to a spec-driven surface (ADR 0111): resolve the promoted
+    # fetch_storm_tracks FOLDED to a spec-driven surface: resolve the promoted
     # router closure from the registry (keyword-only), the standard fold re-point.
     from trid3nt_server.agent.tools import TOOL_REGISTRY
 
@@ -1014,7 +1014,7 @@ def _autowire_river_discharge_forcing(
 
     # --- 1) PRIMARY: NOAA NWM streamflow (key-free, CONUS) ------------------ #
     try:
-        # Seam-1 registry closure (ADR 0112 fold): fetch_noaa_nwm_streamflow is now the
+        # Seam-1 registry closure (fold): fetch_noaa_nwm_streamflow is now the
         # spec-driven router tool under its twin name; resolve it via TOOL_REGISTRY (never
         # a module internal, which no longer exists). Keyword-only, envelope unchanged.
         from trid3nt_server.agent.tools import TOOL_REGISTRY
@@ -1057,7 +1057,7 @@ def _autowire_river_discharge_forcing(
 
         from trid3nt_server.agent.tools import TOOL_REGISTRY  # local: keep top imports lean
 
-        fetch_usgs_nwis_gauges = TOOL_REGISTRY["fetch_usgs_nwis_gauges"].fn  # spec-driven (ADR 0085)
+        fetch_usgs_nwis_gauges = TOOL_REGISTRY["fetch_usgs_nwis_gauges"].fn  # spec-driven
         period_days = max(1, int(_math.ceil(win_hr / 24.0)))
         layer = fetch_usgs_nwis_gauges(bbox=bbox, period=f"P{period_days}D")
         uri = getattr(layer, "uri", None)

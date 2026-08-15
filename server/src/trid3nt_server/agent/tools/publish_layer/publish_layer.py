@@ -43,10 +43,10 @@ the cloud strip - ``cache.storage_scheme()`` is pinned to ``"s3"``.
 
 **Cross-cutting principles:**
 
-- **FR-DC-6 (uncacheable enumeration): preserves.** Side-effect tool;
+- **Uncacheable (side-effect tool).**
   ``cacheable=False``, ``ttl_class="live-no-cache"``,
   ``source_class="publish_layer"``.
-- **NFR-R-1 (resilience):** failures surface as typed ``PublishLayerError``
+- **Resilience:** failures surface as typed ``PublishLayerError``
   (not unhandled exceptions); style/legend/overview probes fail OPEN so a
   publish is never blocked by a best-effort enhancement.
 """
@@ -432,7 +432,7 @@ _QGIS_STYLE_REGISTRY: dict[str, tuple[str, str]] = {
     # validates instead of silently falling back to the percentile default.
     "continuous_subsidence_cm": ("0,50", "inferno"),  # ground compaction (cm, +down)
     "continuous_hydroperiod_m": ("0,5", "viridis"),  # seasonal water-table range
-    # MODFLOW GWE heat transport (ADR 0235): the temperature COG renders the peak
+    # MODFLOW GWE heat transport: the temperature COG renders the peak
     # temperature EXCESS above the undisturbed aquifer in degC (a warm plume /
     # ATES charged footprint). A sequential "hot" inferno ramp over a 0..40 degC
     # band reads as heat (0 = ambient/cool, bright = the injection well core).
@@ -723,7 +723,7 @@ def _resolve_qgis_style_params(
                     logger.info(
                         "publish_layer (style) %s carries an embedded band-1 "
                         "color table - leaving style_params empty so QGIS "
-                        "colorizes from the palette (job-0324)",
+                        "colorizes from the palette",
                         layer_uri,
                     )
                     return ""
@@ -2005,7 +2005,7 @@ def publish_layer(
             raster URI). ``error_code`` carries a SCREAMING_SNAKE_CASE code
             for the pipeline strip.
 
-    FR-DC-6: uncacheable-by-construction (side-effect tool that registers
+    Uncacheable-by-construction (side-effect tool that registers
     per-Case layer state). Cache shim NOT invoked.
 
     Invariant 4 (Rendering): this tool IS the publish bridge -- the

@@ -1,4 +1,4 @@
-"""animation_frames executor (ADR 0087): the FRAMES-LIST output shape.
+"""animation_frames executor: the FRAMES-LIST output shape.
 
 Selected when a spec declares ``shape: animation_frames``. Unlike every other
 executor (which returns ONE ``bytes`` body the ``route()`` read_through caches into
@@ -85,7 +85,7 @@ def execute(
                 name=frame.name,
                 layer_type=spec.output.layer_type,
                 uri=result.uri,
-                # A frame MAY override the spec-level preset (ADR 0088: the archive
+                # A frame MAY override the spec-level preset (the archive
                 # source's per-band goes_rgb_animation vs goes_fire_hotspots_rgba);
                 # None falls back to the spec preset (no-op for single-preset sources).
                 style_preset=frame.style_preset or spec.output.style_preset,

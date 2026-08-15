@@ -3,7 +3,7 @@
 Reads a gridded source to a CRS-tagged single-band COG. Three sub-modes keyed by
 ``ingest.access``:
   - ``opendap``       xarray subset + time_reduce collapse  (gridmet)
-  - ``direct_window`` httpx-transport windowed read of a known COG/VRT (ADR-0044)
+  - ``direct_window`` httpx-transport windowed read of a known COG/VRT
   - ``stac_search``   pystac-client search + windowed reproject (esri, single tile)
 
 Emits ``nodata=nan``, north-up (no lat sortby -- the gridmet orientation lesson
@@ -167,7 +167,7 @@ def fetch_source_array(spec: SourceSpec, params: dict[str, Any]) -> tuple[Any, A
     if access == "stac_float":
         return _stac_float_to_array(spec, params)
     if access == "library_delegate":
-        # ADR 0074: the delegate hook owns the library socket and returns
+        # the delegate hook owns the library socket and returns
         # (array, transform, crs); the constrained invoke wrapper (declared
         # timeout + telemetry + upstream-error backstop) is the impurity boundary.
         from . import library_delegate
@@ -252,7 +252,7 @@ def _opendap_to_array(spec: SourceSpec, params: dict[str, Any]) -> tuple[Any, An
 def _direct_window_to_array(spec: SourceSpec, params: dict[str, Any]) -> tuple[Any, Any, Any]:
     """Windowed read of a known COG/VRT through the httpx transport (direct-window).
 
-    Reads via the coalescing/parallel range opener (ADR-0044) -- GDAL never
+    Reads via the coalescing/parallel range opener -- GDAL never
     networks -- so the transport surfaces a typed status: a missing object (404 /
     S3 NoSuchKey) maps to the typed EMPTY frame (the twins' no-coverage semantics),
     403/AccessDenied to an auth-class upstream error, 429/5xx to a retryable
@@ -339,8 +339,8 @@ def _direct_window_to_array(spec: SourceSpec, params: dict[str, Any]) -> tuple[A
 # single-URL opener serves ONE object, so a multi-tile .vrt read returns all-NaN
 # (it re-serves the VRT bytes for every sub-tile open); this mode resolves the
 # member tiles, windows the intersecting ones through the SAME transport opener,
-# and mosaics them into the requested window (ADR-0047's highest-leverage enabler,
-# ADR 0055). Member discovery is pluggable (``mode: vrt`` today) so a future
+# and mosaics them into the requested window (the highest-leverage enabler).
+# Member discovery is pluggable (``mode: vrt`` today) so a future
 # declared-tile-grid source reuses the identical windowed-mosaic read path.
 # --------------------------------------------------------------------------- #
 
@@ -437,7 +437,7 @@ def _resolve_multi_url_members(spec: SourceSpec, params: dict[str, Any]) -> tupl
 
 
 def _multi_url_to_array(spec: SourceSpec, params: dict[str, Any]) -> tuple[Any, Any, Any]:
-    """VRT fan-out windowed mosaic read (ADR 0055; hrsl_population).
+    """VRT fan-out windowed mosaic read (; hrsl_population).
 
     Windows the mosaic to ``bbox`` (outward integer-pixel rounding, the twin's
     window math), reads each INTERSECTING member's sub-window through the coalescing
@@ -531,7 +531,7 @@ def _multi_url_to_array(spec: SourceSpec, params: dict[str, Any]) -> tuple[Any, 
 
 # --------------------------------------------------------------------------- #
 # projected_vrt_window: a VRT mosaic in a NON-4326 projected CRS (SoilGrids'
-# Interrupted Goode Homolosine 250 m grid, ADR 0086). Unlike multi_url (which
+# Interrupted Goode Homolosine 250 m grid). Unlike multi_url (which
 # windows a 4326 VRT directly and returns the native array), this transform_bounds
 # the 4326 bbox INTO the source CRS (densified), windows the native grid (the twin's
 # floor/ceil + pad), reads the intersecting members through the SAME coalescing
@@ -674,7 +674,7 @@ def _projected_vrt_window_to_array(spec: SourceSpec, params: dict[str, Any]) -> 
 # gzip_object: a whole-object GET of a date-templated ``.tif.gz``, gunzip, in-
 # memory open + window. A gzip stream is NOT a byte-servable COG (no windowable
 # layout), so the whole-object cost is accepted and gated honestly by the payload
-# estimator; ``bbox=None`` reads the full grid (supports_global_query). ADR 0055,
+# estimator; ``bbox=None`` reads the full grid (supports_global_query).,
 # chirps_precipitation.
 # --------------------------------------------------------------------------- #
 
@@ -729,7 +729,7 @@ def _resolve_gzip_url(spec: SourceSpec, params: dict[str, Any], go: dict[str, An
 
 
 def _gzip_object_to_array(spec: SourceSpec, params: dict[str, Any]) -> tuple[Any, Any, Any]:
-    """Whole-object GET + gunzip + in-memory window (ADR 0055; chirps_precipitation).
+    """Whole-object GET + gunzip + in-memory window (; chirps_precipitation).
 
     Reads the whole ``.tif.gz`` through the transport (accepting the whole-object
     cost -- a gzip stream is not windowed-servable), gunzips, opens in memory, and
@@ -809,16 +809,16 @@ def _gzip_object_to_array(spec: SourceSpec, params: dict[str, Any]) -> tuple[Any
 # decode (the GRIB driver needs a real path -- a MemoryFile cannot host its
 # tabular index -- so the bytes land in a tempfile), a source-grid bbox window,
 # a sentinel->nodata collapse, and a conditional reproject to EPSG:4326. The
-# gzip_object precedent (ADR 0055) at GRIB scale: GRIB is whole-object by nature
+# gzip_object precedent at GRIB scale: GRIB is whole-object by nature
 # (no byte-range windowing), so the whole-object cost is accepted + payload-gated,
 # and the decode receiving whole bytes is pure. The S3-listed key is resolved
-# pre-cache-key by the resolve phase (mrms_qpe hooks, ADR 0069) and merged into
+# pre-cache-key by the resolve phase (mrms_qpe hooks) and merged into
 # params, so this mode only reads params[key_param] and never lists. NOAA MRMS QPE.
 # --------------------------------------------------------------------------- #
 
 
 def _grib_object_to_array(spec: SourceSpec, params: dict[str, Any]) -> tuple[Any, Any, Any]:
-    """Whole-object GRIB GET + gunzip + windowed decode + sentinel-nodata (ADR 0069).
+    """Whole-object GRIB GET + gunzip + windowed decode + sentinel-nodata.
 
     Reproduces the MRMS twin ``_grib2_to_geotiff`` value-for-value: read band 1 as
     float32, collapse the source sentinels (``sentinel_equals`` list + ``sentinel_below``
@@ -1115,9 +1115,9 @@ def _griddap_to_array(spec: SourceSpec, params: dict[str, Any]) -> tuple[Any, An
 # ZIP objects, each wrapping ONE DEFLATE-compressed .tif member (GHS-POP tiles).
 # A DEFLATE member is not windowable by a byte range (decoding forces a near-whole
 # member transfer), so the honest shape is a WHOLE-OBJECT GET of each intersecting
-# tile's ZIP (the shared ``get_zip`` step, ADR 0067), an in-memory member read, a
+# tile's ZIP (the shared ``get_zip`` step), an in-memory member read, a
 # per-tile window, and a NaN-nodata merge -- value-identical to the twin's
-# ``/vsizip//vsicurl/`` windowed read (same member bytes, same window math). ADR 0067.
+# ``/vsizip//vsicurl/`` windowed read (same member bytes, same window math)..
 # --------------------------------------------------------------------------- #
 
 
@@ -1149,7 +1149,7 @@ def _tile_grid_tiles(
 
 
 def _fixed_tile_grid_to_array(spec: SourceSpec, params: dict[str, Any]) -> tuple[Any, Any, Any]:
-    """Whole-object per-tile ZIP GET + in-memory member window + NaN merge (ADR 0067).
+    """Whole-object per-tile ZIP GET + in-memory member window + NaN merge.
 
     For each intersecting grid tile: ``get_zip`` the tile's ZIP object through the
     shared transport, read the named DEFLATE ``.tif`` member into a MemoryFile, and
@@ -1278,12 +1278,12 @@ def _fixed_tile_grid_to_array(spec: SourceSpec, params: dict[str, Any]) -> tuple
 # auto-coarsen (merged into params before the cache key). The GET runs through the
 # shared ogc adapter (the twin's Tier-2 WCS seam), the ONE sanctioned socket for this
 # mode. ``execute`` bakes the source's embedded palette into the serialized COG. MRLC
-# NLCD (ADR 0082).
+# NLCD.
 # --------------------------------------------------------------------------- #
 
 
 def _wcs_getcoverage_to_array(spec: SourceSpec, params: dict[str, Any]) -> tuple[Any, Any, Any, dict | None, float | None]:
-    """WCS 1.0.0 GetCoverage GET + NLCD background(0)->nodata remap (ADR 0082).
+    """WCS 1.0.0 GetCoverage GET + NLCD background(0)->nodata remap.
 
     Returns ``(array uint8, transform, crs, colormap|None, nodata)``. The MRLC WCS
     embedded color table maps class 0 (Background / no-coverage: open ocean,
@@ -1370,12 +1370,12 @@ def _wcs_getcoverage_to_array(spec: SourceSpec, params: dict[str, Any]) -> tuple
 # grid of per-tile direct-GET GeoTIFFs (NASA LANCE MCDWD flood tiles), each a
 # uint8 class raster (NOT zip-wrapped, NOT continuous). The first-valid-wins uint8
 # mosaic + embedded palette variant of ``fixed_tile_grid`` (continuous NaN-merge)
-# ADR 0077 named: per-10-deg-tile GeoTIFF -> nearest-window -> FIRST-VALID uint8
+# named: per-10-deg-tile GeoTIFF -> nearest-window -> FIRST-VALID uint8
 # mosaic. The (year, doy) drive the per-tile URL and are resolved pre-cache-key by
 # the ``pre_resolve`` dir-walk hook (merged into params). ``execute`` serializes
 # the returned uint8 array with the declarative palette (nodata transparent). A
 # missing tile (404) is a coverage gap (skip); an all-nodata mosaic -> typed EMPTY.
-# NASA LANCE MCDWD_L3_F3_NRT (ADR 0082).
+# NASA LANCE MCDWD_L3_F3_NRT.
 # --------------------------------------------------------------------------- #
 
 
@@ -1430,7 +1430,7 @@ def _ctg_read_tile_window(
 
 
 def _categorical_tile_grid_to_array(spec: SourceSpec, params: dict[str, Any]) -> tuple[Any, Any, Any]:
-    """Direct-GET per-tile categorical GeoTIFF + first-valid uint8 mosaic (ADR 0082).
+    """Direct-GET per-tile categorical GeoTIFF + first-valid uint8 mosaic.
 
     For each covering h/v tile: GET the ``{archive}/{year}/{doy}/{fname}`` object
     through the shared transport (404 -> skip, a coverage gap), reproject-window its
@@ -1531,7 +1531,7 @@ def _imageserver_export_bytes(spec: SourceSpec, params: dict[str, Any]) -> bytes
     Returns the server's ready GeoTIFF body UNCHANGED (the twins did no
     reserialization -- the exportImage response IS the cached artifact), so the
     router's output is value-identical to the hand-written twin. The transport
-    owns the socket (ADR-0044); GDAL only parses the returned bytes for the
+    owns the socket; GDAL only parses the returned bytes for the
     all-nodata gate. A JSON error envelope / non-TIFF body -> typed UPSTREAM;
     an all-nodata raster (bbox outside coverage) -> typed EMPTY.
     """
@@ -1619,11 +1619,11 @@ def _imageserver_export_bytes(spec: SourceSpec, params: dict[str, Any]) -> bytes
 # mapserver_export: an ArcGIS MapServer ``/export`` returning a SERVER-SYMBOLIZED
 # PNG32 (a baked color scheme, not raw values), georeferenced client-side into a
 # 4-band RGBA COG so publish_layer renders the baked symbology directly (no
-# colormap, no style-registry row). The transport owns the socket (ADR-0044);
+# colormap, no style-registry row). The transport owns the socket;
 # PIL/GDAL only decode the returned image. A fully-transparent export (a bbox with
 # no coverage at that level) is a VALID transparent overlay, never a fabricated
 # layer AND never a typed EMPTY (the twin's honesty floor: the layer appears and
-# renders nothing). NOAA OCM SLR Viewer conf_* / marsh_* siblings (ADR 0059/0068).
+# renders nothing). NOAA OCM SLR Viewer conf_* / marsh_* siblings.
 # --------------------------------------------------------------------------- #
 
 
@@ -1646,7 +1646,7 @@ def _mapserver_export_grid(
 
 
 def _mapserver_export_rgba_bytes(spec: SourceSpec, params: dict[str, Any]) -> bytes:
-    """MapServer ``/export`` PNG32 -> georeferenced 4-band RGBA COG bytes (ADR 0068).
+    """MapServer ``/export`` PNG32 -> georeferenced 4-band RGBA COG bytes.
 
     Resolves the service name from a request param (the SLR level -> conf_*/marsh_*
     service), fetches the server-rendered PNG over the bbox through the shared
@@ -1727,7 +1727,7 @@ def _pc_sign_two_tier(spec: SourceSpec, href: str, collection: str) -> str:
     The MODIS/Copernicus blob accounts (``modiseuwest`` / ``elevationeuwest``) are
     NOT authorized by the per-collection token, so the storage-account-aware per-
     href ``/api/sas/v1/sign`` endpoint is primary; on any failure fall back to the
-    shared per-collection token path. The transport owns the socket (ADR-0044).
+    shared per-collection token path. The transport owns the socket.
     """
     from ...imagery import _pc_stac
     from ..transport import get_bytes, get_client
@@ -1750,8 +1750,8 @@ def _pc_sign_two_tier(spec: SourceSpec, href: str, collection: str) -> str:
 def _aoi_coverage(item: Any, aoi: Any) -> float:
     """Fraction of ``aoi`` covered by ``item.geometry`` (0.0 on bad geometry).
 
-    The coverage-fraction leg shared by the ``coverage`` scene-select (sentinel1_sar,
-    ADR 0079) and the multi-asset RGB composite rank (ADR 0080).
+    The coverage-fraction leg shared by the ``coverage`` scene-select (sentinel1_sar)
+    and the multi-asset RGB composite rank.
     """
     from shapely.geometry import shape
 
@@ -1958,7 +1958,7 @@ def _stac_float_to_array(spec: SourceSpec, params: dict[str, Any]) -> tuple[Any,
 
 
 # --------------------------------------------------------------------------- #
-# stac_multi_asset_rgb: a baked RGB composite from PC STAC (ADR 0080). ONE mode
+# stac_multi_asset_rgb: a baked RGB composite from PC STAC. ONE mode
 # serving fetch_landsat_imagery (true/false-color + thermal LST), fetch_sentinel2_
 # truecolor and fetch_naip. Per item it reads N single-band RGB assets (or N bands
 # of ONE multi-band asset) + an optional QA/SCL mask asset, scales to physical
@@ -1967,7 +1967,7 @@ def _stac_float_to_array(spec: SourceSpec, params: dict[str, Any]) -> tuple[Any,
 # or a raw-uint8 passthrough into a 3-band photometric-RGB uint8 COG (publish_layer
 # multiband passthrough). Scene selection is a declarative cloud-cover query +
 # platform filter + a coverage/cloud rank. STRICT no-op for the stac_float specs (a
-# distinct access mode). ADR 0080.
+# distinct access mode)..
 # --------------------------------------------------------------------------- #
 
 
@@ -2238,7 +2238,7 @@ def _rgb_cog_bytes(rgb: Any, transform: Any, crs: Any) -> bytes:
 
 def _stac_multi_asset_rgb_to_array(spec: SourceSpec, params: dict[str, Any]) -> tuple[Any, Any, Any]:
     """Search -> rank -> read RGB (+mask) assets -> scale/mask/render -> 3-band uint8
-    RGB ``(array, transform, "EPSG:4326")`` (ADR 0080). ``execute`` serializes it via
+    RGB ``(array, transform, "EPSG:4326")``. ``execute`` serializes it via
     :func:`_rgb_cog_bytes` (photometric-RGB passthrough), NOT the float COG path."""
     import rasterio
 
@@ -2379,7 +2379,7 @@ def _read_tile_window(spec: SourceSpec, signed_href: str,
 
     Reuses the esri twin ``_read_tile_window`` verbatim (reproject, nearest,
     nodata read-back). Local paths (cached/test COGs) open directly; remote https
-    hrefs read through the httpx transport (ADR-0044: the transport owns the
+    hrefs read through the httpx transport (the transport owns the
     socket, GDAL parses only -- the /vsicurl/ residual the ingest-transport
     decision named). Returns ``(uint8 (H,W), colormap|None)``.
     """
@@ -2493,7 +2493,7 @@ def _stac_to_array(spec: SourceSpec, params: dict[str, Any]) -> tuple[Any, Any, 
 
 
 # --------------------------------------------------------------------------- #
-# stac_continuous_mosaic: a CONTINUOUS-value uint8 STAC mosaic (ADR 0086). Unlike
+# stac_continuous_mosaic: a CONTINUOUS-value uint8 STAC mosaic. Unlike
 # stac_search (categorical, Resampling.nearest, a single static mosaic.nodata, the
 # token-based sas sign) this reads each intersecting item's band-1 through the
 # two-tier PC REST /sign endpoint with BILINEAR resampling into a uint8 window with
@@ -2618,7 +2618,7 @@ def execute(spec: SourceSpec, params: dict[str, Any]) -> bytes:
         # a 4-band RGBA COG (noaa_slr conf_*/marsh_* overlays).
         return _mapserver_export_rgba_bytes(spec, params)
     if access == "stac_multi_asset_rgb":
-        # ADR 0080: a baked 3-band uint8 photometric-RGB COG (the imagery trio); the
+        # a baked 3-band uint8 photometric-RGB COG (the imagery trio); the
         # RGB serializer is distinct from the float NaN-nodata path below.
         rgb, transform, crs = _stac_multi_asset_rgb_to_array(spec, params)
         try:
@@ -2636,7 +2636,7 @@ def execute(spec: SourceSpec, params: dict[str, Any]) -> bytes:
             arr, transform, crs, nodata=nodata, dtype=dtype, colormap=colormap
         )
     if access == "stac_continuous_mosaic":
-        # ADR 0086: a continuous-value uint8 STAC mosaic (bilinear + per-band nodata
+        # a continuous-value uint8 STAC mosaic (bilinear + per-band nodata
         # + two-tier PC REST /sign) with the PURE per-band colormap (hooks.colormap)
         # baked into the band-1 palette -- value-identical to the jrc-gsw twin's COG.
         arr, transform, crs, nodata = _stac_continuous_mosaic(spec, params)
@@ -2649,7 +2649,7 @@ def execute(spec: SourceSpec, params: dict[str, Any]) -> bytes:
             arr, transform, crs, nodata=float(nodata), dtype="uint8", colormap=colormap
         )
     if access == "categorical_tile_grid":
-        # ADR 0082: a uint8 categorical first-valid mosaic + the declarative palette
+        # a uint8 categorical first-valid mosaic + the declarative palette
         # baked into a 256-entry band-1 color table (nodata index transparent) --
         # value-identical to the twin's ``_fetch_flood_extent_cog_bytes`` COG.
         g = (spec.ingest or {}).get("categorical_tile_grid", {})
@@ -2661,7 +2661,7 @@ def execute(spec: SourceSpec, params: dict[str, Any]) -> bytes:
             arr, transform, crs, nodata=nodata, dtype="uint8", colormap=colormap
         )
     if access == "wcs_getcoverage":
-        # ADR 0082: WCS 1.0.0 GetCoverage categorical NLCD -> background(0)->nodata
+        # WCS 1.0.0 GetCoverage categorical NLCD -> background(0)->nodata
         # remap -> palette COG (the source's embedded band-1 color table preserved,
         # nodata transparent) -- the twin's paletted, overview-carrying landcover COG.
         arr, transform, crs, colormap, nodata = _wcs_getcoverage_to_array(spec, params)

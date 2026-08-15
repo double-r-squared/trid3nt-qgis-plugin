@@ -1,4 +1,4 @@
-"""Shared composer for the CITED-PUBLISHED-DECK SWMM templates (ADR 0128).
+"""Shared composer for the CITED-PUBLISHED-DECK SWMM templates.
 
 The three published-deck templates (``swmm_lid_raingarden_wq``,
 ``swmm_wwtp_detention_ponds``, ``swmm_pump_pid_rtc``) are THIN composers binding a
@@ -166,7 +166,7 @@ async def model_published_deck(
         deck_id: key into ``PUBLISHED_DECKS``.
         rain_scale: rainfall multiplier (only honored for a rain-forced deck;
             ignored with a labeled note otherwise).
-        input_mode: ADR 0107 lever (reserved; the deck is a fixed published
+        input_mode: lever (reserved; the deck is a fixed published
             example, so there is no site input to gate - the labeled demonstration
             note is always surfaced).
 

@@ -1,6 +1,6 @@
 """Watershed mesh acquisition for the TELEMAC-2D rain-on-grid template.
 
-Promotes the ADR 0193 watershed-first mesher into an importable TEMPLATE STEP:
+Promotes the watershed-first mesher into an importable TEMPLATE STEP:
 delineate the catchment at a pour point, pull the river network inside it,
 triangulate the catchment interior refined by distance-to-river (the authentic
 OceanMesh2D engine in the GPL-isolated ``trid3nt-local/mesh:latest`` image),
@@ -60,7 +60,7 @@ __all__ = [
 #: venv or the (Apache) TELEMAC image -- it runs mounted, standalone.
 DEFAULT_MESH_IMAGE: str = "trid3nt-local/mesh:latest"
 
-#: In-container mesher lifted from the ADR 0193 sandbox (mounted, not imported).
+#: In-container mesher lifted from the sandbox (mounted, not imported).
 _MESH_INCONTAINER = (
     "scripts/sandbox/oceanmesh/_mesh_watershed_incontainer.py"
 )
@@ -74,7 +74,7 @@ _OUTLET_SNAP_SEARCH_CELLS: int = 8
 #: Minimum delineated catchment size (D8 cells) before the result is treated as a
 #: degenerate sliver. A pour point that does not sit on the catchment channel, or
 #: an AOI that does not contain the upstream basin, delineates a handful of cells
-#: (the ADR 0196 live bug: 20 cells / 0.018 km^2); meshing + solving that is a
+#: (the live bug: 20 cells / 0.018 km^2); meshing + solving that is a
 #: silent dead-end, so we fail LOUD with a typed AOI/pour-point-mismatch error.
 _MIN_CATCHMENT_CELLS: int = 50
 
@@ -140,7 +140,7 @@ def build_mesh_config(
 ) -> dict[str, Any]:
     """Assemble the ``mesh_config.json`` the in-container mesher reads.
 
-    Mirrors the ADR 0193 sandbox contract exactly (catchment exterior + river
+    Mirrors the sandbox contract exactly (catchment exterior + river
     sizing points + edge-length band + gradation), so the SAME
     ``_mesh_watershed_incontainer.py`` runs unchanged. Validates the edge band
     and the boubox ring so a degenerate request fails HERE, not deep in gmsh.
@@ -178,7 +178,7 @@ def catchment_exterior_and_river_coords(
     The exterior of the LARGEST catchment polygon (simplified to the min edge
     length) is the oceanmesh domain; the flowline vertices clipped INSIDE the
     catchment are the distance-to-river sizing source. Lifted verbatim from the
-    ADR 0193 sandbox so the mesh is identical to the proven Coweeta build.
+    sandbox so the mesh is identical to the proven Coweeta build.
     """
     from shapely.geometry import MultiPolygon
 
@@ -532,7 +532,7 @@ def use_supplied_mesh_2dm(
     """Adopt a user/case mesh END TO END: read the ``.2dm`` nodes so the CN/Manning
     node-field sampler works, and point the solve at the existing ``.slf``.
 
-    The precondition-gate consumption path (ADR 0200): a mesh already built in the
+    The precondition-gate consumption path: a mesh already built in the
     case (by ``generate_mesh``) is solved on DIRECTLY -- no fresh delineation. The
     UTM ``.2dm`` nodes are reprojected back to lon/lat so NLCD sampling is
     identical to the built path, and ``slf_path`` (the bathymetric SELAFIN) is the
@@ -629,7 +629,7 @@ def _resolve_bare_earth_dem(
     stays on the natively-geographic Copernicus). If 3DEP is unavailable for the
     AOI the cross-dataset fallback to Copernicus is LOUD (a logged warning + a
     typed note appended to ``notes`` for the envelope), per the data-source
-    fallback norm -- never a silent surface-model swap. ADR 0223 (audit #7): the
+    fallback norm -- never a silent surface-model swap. (audit #7): the
     labeling is UNCONDITIONAL -- if the caller passes no ``notes`` sink, the
     canopy-inclusive swap RAISES (``MESH_BED_DEM_CROSS_DATASET_FALLBACK``) rather
     than being ingested silently, so the label cannot be bypassed by the call
@@ -658,7 +658,7 @@ def _resolve_bare_earth_dem(
             "unavailable for this AOI; used Copernicus GLO-30 instead. That "
             "is a SURFACE model (canopy-inclusive), so bed elevations under "
             "forest may be biased high.")
-        # UNCONDITIONAL LABELING (ADR 0223): a cross-dataset canopy swap must never
+        # UNCONDITIONAL LABELING: a cross-dataset canopy swap must never
         # be ingested silently. With an envelope sink, record it; WITHOUT one, fail
         # loudly rather than let the DSM bias the mesh bed under forest cover -- the
         # label cannot be bypassed by a caller passing notes=None.
@@ -700,7 +700,7 @@ def _sample_raster_at_nodes(raster_path: Path, points_lonlat: Any) -> Any:
 def _write_bottom_selafin(path: str, points_m: Any, cells: Any, z: Any) -> str:
     """Write a single-variable (BOTTOM) SELAFIN geometry (sandbox writer, lifted).
 
-    Byte-for-byte the ADR 0193 ``selafin_io.write_selafin`` format so the mesh
+    Byte-for-byte the ``selafin_io.write_selafin`` format so the mesh
     round-trips through MDAL / TELEMAC identically, but authored HERE (the
     sandbox module is not on the agent import path)."""
     import struct

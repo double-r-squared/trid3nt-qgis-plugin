@@ -1,6 +1,6 @@
 """Engine template ``schism_coupled_waves`` -- SCHISM+WWM two-way wave-current
 coupling on the Duck NC FRF validation geometry (engine #12 second archetype,
-ADR 0126/0129).
+0129).
 
 The LLM-facing exposure of SCHISM's REFINEMENT-GRADE coupled wave-current solve:
 the semi-implicit unstructured-grid hydro core two-way coupled to WWM-III spectral
@@ -67,7 +67,7 @@ _DUCK_NOTE: str = (
 )
 
 
-#: The parametric-forcing fidelity note (ADR 0189): the geometry is the Duck FRF
+#: The parametric-forcing fidelity note: the geometry is the Duck FRF
 #: validation mesh but the boundary is a PRESCRIBED sea state, not the observed event.
 _PARAMETRIC_NOTE_TMPL: str = (
     "REFINEMENT-GRADE COUPLED WAVE-CURRENT run on the Duck NC FRF mesh (SCHISM hydro "
@@ -213,7 +213,7 @@ async def schism_coupled_waves(
             (default 4.0 -- the full published case; the wave field spins up within
             the first hour, so a shorter window is a cheaper smoke). Clamped
             (0.5, 4.0].
-        input_mode: run-mode lever (ADR 0107). ``"user_gated"`` reviews the coupled
+        input_mode: run-mode lever. ``"user_gated"`` reviews the coupled
             forcing + published-fixture basis before solving; ``"auto"`` (default)
             proceeds labeled.
         significant_wave_height_m: offshore boundary Hs (m). Setting ANY of the four
@@ -238,7 +238,7 @@ async def schism_coupled_waves(
         invariant 1).
         On failure: dict with ``status="error"`` + ``error_code`` + ``error_message``.
 
-    FR-DC-6: ``cacheable=False``, ``ttl_class="live-no-cache"``,
+    ``cacheable=False``, ``ttl_class="live-no-cache"``,
     ``source_class="workflow_dispatch"``.
     """
     try:
@@ -403,7 +403,7 @@ async def model_schism_coupled_waves(
                        note="coupled-run window within the 4-hour published case"),
     ]
 
-    # --- Stage 2: the input-review gate (ADR 0107) ---------------------------- #
+    # --- Stage 2: the input-review gate ---------------------------- #
     review = await gate_input_review(
         tool_name="schism_coupled_waves", mode=input_mode, entries=review_entries,
         params={"sim_hours": sim_hours},

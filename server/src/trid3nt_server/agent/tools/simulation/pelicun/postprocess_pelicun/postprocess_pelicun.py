@@ -3,7 +3,7 @@
 This tool consumes the FlatGeobuf returned by ``pelicun_damage_assessment``
 (a per-asset damage layer) and produces an aggregate ``ImpactEnvelope`` -
 the portfolio-level damage / loss / population summary defined in
-``trid3nt_contracts.impact_envelope`` (SRS Appendix B.6c, Decision N).
+``trid3nt_contracts.impact_envelope``.
 
 It is a **pure aggregation** step - it does NOT re-invoke Pelicun, sample new
 hazard values, or make any network calls beyond the S3 read of the damage
@@ -82,7 +82,7 @@ logger = logging.getLogger("trid3nt_server.agent.tools.simulation.pelicun.postpr
 
 
 # ---------------------------------------------------------------------------
-# Error types (FR-AS-11 / NFR-R-1 typed-error surface).
+# Error types (typed-error surface).
 # ---------------------------------------------------------------------------
 
 
@@ -90,7 +90,7 @@ class PelicunPostprocessError(RuntimeError):
     """Base class for ``postprocess_pelicun`` failures.
 
     ``error_code`` maps to the WebSocket A.6 error frame; ``retryable`` guides
-    FR-AS-11 retry logic.
+    retry logic.
     """
 
     error_code: str = "POSTPROCESS_PELICUN_ERROR"

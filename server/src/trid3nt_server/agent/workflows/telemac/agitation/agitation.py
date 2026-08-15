@@ -1,9 +1,9 @@
 """Engine template ``artemis_harbor_agitation`` - ARTEMIS phase-resolving
-elliptic mild-slope (Berkhoff) wave-agitation engine (ADR 0237).
+elliptic mild-slope (Berkhoff) wave-agitation engine.
 
 The LLM-facing exposure of TELEMAC's ARTEMIS harbour-agitation solver: the
 phase-RESOLVING refinement-grade complement to TOMAWAC's phase-averaged spectral
-tier (ADR 0236) on the fidelity ladder. ONE question-class tool with THREE modes
+tier on the fidelity ladder. ONE question-class tool with THREE modes
 (the board's six ARTEMIS rows collapse to three distinct question classes):
 
   * ``diffraction`` - a breakwater / structure shelters a berthing area; the
@@ -118,7 +118,7 @@ def _classify_mode(text: str | None, explicit: str | None) -> str:
     return "diffraction"
 
 
-#: DECLARED target_resolution_m range (ADR 0225). The elliptic solve is heavier
+#: DECLARED target_resolution_m range. The elliptic solve is heavier
 #: than TOMAWAC's spectral march, so a tighter node budget: the finest the real
 #: grid authors is ~20 m (GRID_H_FLOOR_M in the worker); a large AOI coarsens.
 _ARTEMIS_RES_SPEC = ResolutionSpec(
@@ -243,7 +243,7 @@ async def artemis_harbor_agitation(
         bathy_source: ``"auto"`` (default - a Great Lakes AOI uses real NOAA
             lake-datum bathymetry, else an idealized analytic domain labeled as
             such) | ``"noaa_greatlakes"`` | ``"idealized"``.
-        compute_class: FR-CE-3 compute class. Default ``"medium"``.
+        compute_class: compute class. Default ``"medium"``.
         input_mode: ``"user_gated"`` reviews the resolved forcing before the solve;
             ``"auto"`` (default) proceeds labeled.
 
@@ -446,7 +446,7 @@ def _fetch_osm_breakwaters(aoi: tuple[float, float, float, float]) -> list[list[
 
 def _stage_breakwater_fgb(polylines, run_tag: str, name: str):
     """Write the surveyed breakwater polylines to a FlatGeobuf in the cache bucket
-    and return a context ``LayerURI`` (role=context) for input-parity (ADR 0231).
+    and return a context ``LayerURI`` (role=context) for input-parity.
     BEST-EFFORT: returns None on any failure (input surfacing is never fatal)."""
     try:
         import geopandas as gpd
@@ -534,7 +534,7 @@ async def model_artemis_harbor_agitation(
     surveyed breakwater auto-fetched from OSM (or a driver-supplied
     ``breakwater_polylines``; a schematic only if OSM has none); otherwise an
     idealized analytic domain (labeled). Stages the ``agitation`` manifest, the
-    surveyed structure surfaces as a context layer (ADR 0231), dispatches run_solver
+    surveyed structure surfaces as a context layer, dispatches run_solver
     (solver=artemis_agitation), downloads the single-frame agitation field, and
     postprocesses it to a Kd 4326 COG.
     """
@@ -787,7 +787,7 @@ async def model_artemis_harbor_agitation(
     # context layer (best-effort, never fatal). This fetch needs the OSM way
     # POLYLINE geometry (meshed as a thin barrier), which the router's only
     # general overpass source collapses to centroids -- so it stays a bare-OSM
-    # router-bypass, surfaced here explicitly + sweep-allowlisted (ADR 0244 S3).
+    # router-bypass, surfaced here explicitly + sweep-allowlisted (S3).
     if real_polylines:
         from trid3nt_server.emission.layer_uri_emit import publish_input_layer
         bw_layer = await asyncio.to_thread(
@@ -795,7 +795,7 @@ async def model_artemis_harbor_agitation(
         if bw_layer is not None:
             await publish_input_layer(emitter, bw_layer, role="context")
 
-    # in-worker bed input (ADR 0244 S3): the NOAA lake-datum bed is sampled inside
+    # in-worker bed input (S3): the NOAA lake-datum bed is sampled inside
     # the solver container (no agent-side router fetch), so the composer rides the
     # bed COG the worker recorded through publish_raster_input_cog. Best-effort;
     # only the real-bathy diffraction path writes one (metrics.bed_cog present).

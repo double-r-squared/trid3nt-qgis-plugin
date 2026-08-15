@@ -1,14 +1,14 @@
-"""Standalone mesh builder ``generate_mesh`` (ADR 0200).
+"""Standalone mesh builder ``generate_mesh``.
 
 Mesh creation is an EXPLICIT user act -- one tool that turns a domain into a
 computational mesh a solver (or QGIS) can consume, with the mode INFERRED from the
 inputs and the resolution exposed as user levers (the granularity norm):
 
-  * a POUR POINT (or ``mesh_mode="watershed"``) -> the ADR 0193 watershed-first
+  * a POUR POINT (or ``mesh_mode="watershed"``) -> the watershed-first
     mesher: delineate the catchment, refine by distance-to-river, project to UTM,
     sample the bed -> a bathymetric SELAFIN (the whole catchment is the domain, so
     the AOI never cookie-cuts the mesh mid-hillslope); and
-  * a COASTAL AOI (or ``mesh_mode="coastal"``) -> the ADR 0194 water-edge mesher:
+  * a COASTAL AOI (or ``mesh_mode="coastal"``) -> the water-edge mesher:
     the OSM-coastline + NHD water polygon is the domain, refined by distance-to-
     shore + wavelength-to-depth (the real shoreline, not a bbox).
 
@@ -73,7 +73,7 @@ class GenerateMeshError(RuntimeError):
         self.error_code = error_code
 
 
-#: DECLARED edge-length ranges (ADR 0225). Both are SOLVER (mesh-generator)
+#: DECLARED edge-length ranges. Both are SOLVER (mesh-generator)
 #: constraints with a practical 5 m floor: a finer edge reliably trips HEC-RAS's
 #: <= 8-sides-per-cell acceptance on any non-trivial AOI (and over-refines a TELEMAC/
 #: SCHISM TIN). There is NO fixed coarse ceiling -- the true realizability is
@@ -160,8 +160,8 @@ async def generate_mesh(
     bound the cell/triangle size (for ``hecras`` these ARE the channel + hillslope
     target cell sizes -- e.g. 22 / 90 m); ``grade`` limits coarsening. Both edges are
     declared >=5 m (mesh/solver); a finer ask is quoted the floor + the AOI-dependent
-    <=8-sides-per-cell acceptance (a typed build error), never silently snapped (ADR
-    0225). US-only.
+    <=8-sides-per-cell acceptance (a typed build error), never silently snapped.
+    US-only.
 
     SCHISM readiness: a COASTAL mesh built with an ``open_boundary_side`` also emits a
     SCHISM hgrid.gr3 (seaward OPEN boundary). Without it (or for a watershed mesh)
@@ -242,7 +242,7 @@ async def model_generate_mesh(
 
     mode = _infer_mode(mesh_mode, pp, aoi, engine)
 
-    # HEC-RAS channel-refined rain-on-grid cell mesh (ADR 0211): a distinct build +
+    # HEC-RAS channel-refined rain-on-grid cell mesh: a distinct build +
     # artifact (graded seed cloud + breaklines + local terrain frame, meshprobe-
     # validated), consumed by hecras_flood_2d RoG via the precondition gate.
     if mode == "hecras_rog":
@@ -314,7 +314,7 @@ async def model_generate_mesh(
 #   area_km2, outlet_lonlat|None, open_boundary_info, local_slf, sizing sources.
 # --------------------------------------------------------------------------- #
 def _build_watershed(pp, aoi, rundir, min_edge, max_edge, grade) -> dict[str, Any]:
-    """Reuse the proven ``acquire_watershed_mesh`` (ADR 0196) as the watershed
+    """Reuse the proven ``acquire_watershed_mesh`` as the watershed
     provider -- the catchment IS the domain, refined by distance-to-river."""
     import numpy as np
 
@@ -343,11 +343,11 @@ def _build_watershed(pp, aoi, rundir, min_edge, max_edge, grade) -> dict[str, An
 
 
 def _build_coastal(aoi, rundir, min_edge, max_edge, grade) -> dict[str, Any]:
-    """Water-edge provider (ADR 0194): mesh the OSM+NHD water polygon interior.
+    """Water-edge provider: mesh the OSM+NHD water polygon interior.
 
     Reuses the proven sandbox ``water_edge`` + the isolated in-container water-edge
     mesher. LIVE (needs the mesh image, network, topobathy); the watershed path is
-    the ADR 0200 live-proof case, so this shares the exact same container seam."""
+    the live-proof case, so this shares the exact same container seam."""
     import sys
 
     import numpy as np

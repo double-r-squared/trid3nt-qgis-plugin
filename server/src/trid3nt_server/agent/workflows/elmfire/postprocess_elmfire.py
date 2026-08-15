@@ -562,7 +562,7 @@ def postprocess_elmfire(
 
 
 # --------------------------------------------------------------------------- #
-# Elliptical-verification (ADR 0123): compare the numerical ToA perimeter to the
+# Elliptical-verification: compare the numerical ToA perimeter to the
 # closed-form Richards (1990) ellipse implied by its own head/flank/back rates.
 # Under constant fuel + uniform wind + flat terrain the fire perimeter from a
 # point ignition is an ellipse; this measures how well the level-set solver's

@@ -277,7 +277,7 @@ async def model_sustainable_yield_scenario(
             when both None).
         aquifer_k_ms / porosity / aquifer_sy / aquifer_ss: optional demo-aquifer
             overrides (narrated as demo defaults).
-        compute_class: FR-CE-3 compute class.
+        compute_class: compute class.
         pipeline_emitter: optional PipelineEmitter for live progress cards.
 
     Returns:
@@ -446,7 +446,7 @@ async def model_sustainable_yield_scenario(
         location_name,
         layer.max_drawdown_m,
     )
-    # ADR 0223: structured aquifer-K provenance through gate_input_review.
+    # structured aquifer-K provenance through gate_input_review.
     layer, _review = await gate_and_stamp_modflow_inputs(
         tool_name="modflow_sustainable_yield", layer=layer,
         entries=[aquifer_k_review_entry(
@@ -637,7 +637,7 @@ async def _run_stream_depletion(
         layer.depletion_fraction,
         layer.n_reaches,
     )
-    # ADR 0223: structured aquifer-K provenance through gate_input_review.
+    # structured aquifer-K provenance through gate_input_review.
     _sd_k = aquifer_overrides.get("aquifer_k_ms")
     layer, _review = await gate_and_stamp_modflow_inputs(
         tool_name="modflow_stream_depletion", layer=layer,
@@ -797,7 +797,7 @@ async def _run_subsidence(
         layer.max_head_decline_m,
         layer.interbed_count,
     )
-    # ADR 0223: structured aquifer-K provenance through gate_input_review.
+    # structured aquifer-K provenance through gate_input_review.
     _sub_k = aquifer_overrides.get("aquifer_k_ms")
     layer, _review = await gate_and_stamp_modflow_inputs(
         tool_name="modflow_land_subsidence", layer=layer,
@@ -1037,7 +1037,7 @@ async def modflow_sustainable_yield(
             order-of-magnitude crosscheck. sgm/sgs are demo assumptions, narrated
             as such. When False (default) HEAD_BASED with the initial head as the
             preconsolidation head is used.
-        compute_class: FR-CE-3 compute class. Default ``"standard"``.
+        compute_class: compute class. Default ``"standard"``.
 
     Returns:
         On success: a ``SustainableYieldResult`` JSON dict with the
@@ -1047,7 +1047,7 @@ async def modflow_sustainable_yield(
         (incl. a missing well/rate) the tool returns a typed error the agent
         narrates honestly  -  it never fabricates a well.
 
-    FR-DC-6: ``cacheable=False`` + ``ttl_class="live-no-cache"`` +
+    ``cacheable=False`` + ``ttl_class="live-no-cache"`` +
     ``source_class="workflow_dispatch"``  -  the cache shim is NOT invoked.
     """
     aoi = _coerce_optional_latlon(aoi_latlon)

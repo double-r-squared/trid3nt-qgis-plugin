@@ -1,4 +1,4 @@
-"""wfigs_incident record hooks (ADR 0076): NIFC/WFIGS named-incident lookup.
+"""wfigs_incident record hooks: NIFC/WFIGS named-incident lookup.
 
 The proof-by-migration for the record-return output shape. The source resolves a
 NAMED wildland-fire incident to an authoritative point + padded AOI bbox + discovery

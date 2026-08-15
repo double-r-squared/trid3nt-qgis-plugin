@@ -1,5 +1,5 @@
 """Resolve a REAL earthquake (USGS ComCat / FDSN) into GeoClaw tsunami-source
-parameters -- the ADR 0226 Okada-dtopo front's real-event front door.
+parameters -- the Okada-dtopo front's real-event front door.
 
 The tsunami question class is "given an earthquake, what seafloor deformation does
 Okada predict and what tsunami does it drive". The worker already synthesizes a

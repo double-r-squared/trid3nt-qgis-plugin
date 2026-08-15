@@ -621,7 +621,7 @@ def build_spiderweb_from_fixes(
         raise SpiderwebError(
             f"spw window [{0.0:.0f},{span_min:.0f}] min does not overlap the "
             f"deck window [0,{deck_min:.0f}] min by more than one step "
-            f"({step_min:.0f} min) - wind would clip out (job-0248 class). "
+            f"({step_min:.0f} min) - wind would clip out (class). "
             f"Widen duration_hr or the landfall window."
         )
     # --- landfall-inside-deck assert (the #1 hazard) --------------------------

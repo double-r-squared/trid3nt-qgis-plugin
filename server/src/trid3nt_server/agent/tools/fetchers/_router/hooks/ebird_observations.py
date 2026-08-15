@@ -1,4 +1,4 @@
-"""ebird_observations hooks (keyed http_json multi-URL + classify_status, ADR 0065/0071):
+"""ebird_observations hooks (keyed http_json multi-URL + classify_status/0071):
 Cornell Lab eBird recent-observations, keyed.
 
 eBird exposes only radius queries around a ``(lat,lng)`` point (no bbox), so ``build_request``

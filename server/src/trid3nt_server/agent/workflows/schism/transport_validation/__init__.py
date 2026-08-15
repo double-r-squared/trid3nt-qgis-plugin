@@ -1,1 +1,1 @@
-"""SCHISM transport-scheme numerical-mixing validation template (ADR 0156)."""
+"""SCHISM transport-scheme numerical-mixing validation template."""

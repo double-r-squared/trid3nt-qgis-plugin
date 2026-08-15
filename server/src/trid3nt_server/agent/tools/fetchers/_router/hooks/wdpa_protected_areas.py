@@ -1,7 +1,7 @@
-"""wdpa_protected_areas hooks (tier-3 chained-resolution mode, ADR 0063/0066): WDPA
+"""wdpa_protected_areas hooks (tier-3 chained-resolution mode/0066): WDPA
 protected-area polygons, offset-paged.
 
-The wave-11 deferral (ADR 0059) was two bespoke steps the declarative param surface
+The wave-11 deferral was two bespoke steps the declarative param surface
 could not carry: a designation alias-normalizer that RAISES on an unknown token (vs
 ParamSpec.aliases which passes through), and a POST-fetch fail-loud when the filter
 emptied a non-empty result (the "goes18 vs goes-18" silent-mismatch guard). Both are

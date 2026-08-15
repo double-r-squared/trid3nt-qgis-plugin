@@ -48,7 +48,7 @@ Honesty (data-source fallback norm)
   surface narrates an honest "no open water detected" rather than emitting an
   empty layer that reads as success.
 
-FR-CE-8 / FR-DC-3/4: routed through ``read_through`` so identical
+Routed through ``read_through`` so identical
 ``(bbox, window, threshold, cloud, min_area)`` calls reuse the cached water FGB
 in the ``static-30d`` / ``digitize_water_body`` cache prefix.
 
@@ -86,7 +86,7 @@ logger = logging.getLogger("trid3nt_server.agent.tools.processing.digitize_water
 
 
 # ---------------------------------------------------------------------------
-# Error types (FR-AS-11 typed-error surface).
+# Error types (typed-error surface).
 # ---------------------------------------------------------------------------
 
 

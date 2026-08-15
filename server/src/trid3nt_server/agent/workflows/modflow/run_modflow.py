@@ -579,7 +579,7 @@ def resolve_river_reaches_lonlat(
     """Resolve a river-geometry artifact to a list of ``(lon, lat)`` reach polylines.
 
     The MULTI-reach analogue of ``resolve_river_polyline_lonlat`` for the NHD RIV
-    capture-zone boundary (ADR 0215 item 4): every LineString reach in the
+    capture-zone boundary (item 4): every LineString reach in the
     artifact is returned (downsampled) so the adapter can drape the whole reach
     network onto the grid as RIV cells, not just the single longest flowline.
     Returns the reaches longest-first, capped at ``max_reaches``. NEVER raises on
@@ -797,7 +797,7 @@ def _build_and_stage_vadose_transport(
 ) -> DeckStaging:
     """Build a vadose_transport deck (dual GWF+GWT UZF+UZT column) - FLAT layout.
 
-    ADR 0228: the vadose deck's UZT package carries an OBS6 FILEIN reference (the
+    the vadose deck's UZT package carries an OBS6 FILEIN reference (the
     base-of-column breakthrough obs) whose bare filename mf6 resolves relative to
     the run CWD. The gwf/ + gwt/ subdir reorg (``_reorganize_into_subdirs``) does
     NOT rewrite package-internal FILEIN tokens, so the reorg'd deck fails to open
@@ -878,7 +878,7 @@ def _build_and_stage_gwe_thermal(
     run_id: str | None = None,
     workdir: str | Path | None = None,
 ) -> DeckStaging:
-    """Build a gwe_thermal deck (dual GWF+GWE heat transport) - FLAT layout (ADR 0235).
+    """Build a gwe_thermal deck (dual GWF+GWE heat transport) - FLAT layout.
 
     The gwe_thermal deck's second model is a GWE energy-transport model named
     ``gwe_model`` (NOT ``gwt_model``) coupled through a ``GWF6-GWE6`` exchange. The
@@ -955,7 +955,7 @@ def _build_and_stage_gwe_thermal(
 def _wellfield_dicts(wells: Any) -> list[dict[str, Any]] | None:
     """Normalize ``run_args.wells`` (WellSpec objects or JSON dicts) to adapter dicts.
 
-    The adapter's capture_zone WELLFIELD path (ADR 0215) takes a list of
+    The adapter's capture_zone WELLFIELD path takes a list of
     ``{lon, lat, rate_m3_day, name}`` dicts. ``run_args.wells`` may be WellSpec
     pydantic models (in-process) or plain dicts (after a JSON job_spec round-trip);
     both normalize here. Returns None for an empty/absent field (the single-well
@@ -1021,13 +1021,13 @@ def build_and_stage_modflow_deck(
     if getattr(run_args, "archetype", None) == "multi_species":
         return _build_and_stage_multi_species(run_args, run_id=rid, workdir=workdir)
 
-    # ADR 0228: vadose_transport (dual GWF+GWT UZF+UZT column) stages FLAT too -
+    # vadose_transport (dual GWF+GWT UZF+UZT column) stages FLAT too -
     # its UZT OBS6 FILEIN reference does not survive the gwf/+gwt/ subdir reorg
     # (the reorg rewrites namefile tokens, not package-internal FILEIN paths).
     if getattr(run_args, "archetype", None) == "vadose_transport":
         return _build_and_stage_vadose_transport(run_args, run_id=rid, workdir=workdir)
 
-    # ADR 0235: gwe_thermal (dual GWF+GWE heat transport) stages FLAT too - its
+    # gwe_thermal (dual GWF+GWE heat transport) stages FLAT too - its
     # second model is ``gwe_model`` (not ``gwt_model``), so the gwf/+gwt/ subdir
     # reorg would orphan the GWE files + the GWF6-GWE6 exchange. LOCAL-ONLY.
     if getattr(run_args, "archetype", None) == "gwe_thermal":
@@ -1075,7 +1075,7 @@ def build_and_stage_modflow_deck(
     if archetype is not None:
         archetype_kwargs = dict(
             archetype=archetype,
-            # ADR 0258: capture_zone grid_type knob (structured | disv_quadrefined).
+            # capture_zone grid_type knob (structured | disv_quadrefined).
             # The STAGED GWF grid MUST match the PRT-phase grid (rebuilt in the
             # archetype tool from the same run_args), so it is threaded here too.
             grid_type=getattr(run_args, "grid_type", "structured"),
@@ -1134,7 +1134,7 @@ def build_and_stage_modflow_deck(
                 run_args, "csub_interbed_thick_frac", None
             ),
             csub_cg_ske_m=getattr(run_args, "csub_cg_ske_m", None),
-            # ADR 0228 CSUB formulation knobs (delay interbeds + effective-stress);
+            # CSUB formulation knobs (delay interbeds + effective-stress);
             # bool flags, ignored unless archetype == "land_subsidence".
             csub_delay_interbeds=bool(getattr(run_args, "csub_delay_interbeds", False)),
             csub_effective_stress=bool(getattr(run_args, "csub_effective_stress", False)),
@@ -1142,7 +1142,7 @@ def build_and_stage_modflow_deck(
             # Both None => the PRT deck falls back to the demo west->east CHD.
             regional_gradient_x=getattr(run_args, "regional_gradient_x", None),
             regional_gradient_y=getattr(run_args, "regional_gradient_y", None),
-            # --- capture_zone WELLFIELD + transient + NHD RIV + kriged IC (ADR 0215) #
+            # --- capture_zone WELLFIELD + transient + NHD RIV + kriged IC #
             # All default to the single-well steady demo path when unset.
             wells=_wellfield_dicts(getattr(run_args, "wells", None)),
             capture_zone_transient=bool(
@@ -1150,7 +1150,7 @@ def build_and_stage_modflow_deck(
             ),
             river_reaches=getattr(run_args, "river_reaches", None),
             starting_head_by_cell=getattr(run_args, "starting_head_by_cell", None),
-            # --- ADR 0235: gwe_thermal heat-transport forcing (demo-defaulted) - #
+            # --- gwe_thermal heat-transport forcing (demo-defaulted) - #
             # Ignored unless archetype == "gwe_thermal"; reuses the shared
             # injection_rate_m3_day / n_cycles fields above.
             gwe_mode=getattr(run_args, "gwe_mode", None),
@@ -1463,7 +1463,7 @@ def _run_args_to_deck_kwargs(run_args: MODFLOWRunArgs) -> dict[str, Any]:
             "csub_sse_elastic_m",
             "csub_interbed_thick_frac",
             "csub_cg_ske_m",
-            # ADR 0235: gwe_thermal heat-transport forcing (demo-defaulted).
+            # gwe_thermal heat-transport forcing (demo-defaulted).
             "gwe_mode",
             "injection_temperature_c",
             "ambient_temperature_c",

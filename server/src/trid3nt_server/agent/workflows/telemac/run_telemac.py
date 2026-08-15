@@ -217,7 +217,7 @@ register_telemac_local_spec()
 
 
 # --------------------------------------------------------------------------- #
-# TOMAWAC spectral-wave solver (ADR 0236) -- SAME worker image, a manifest['wave']
+# TOMAWAC spectral-wave solver -- SAME worker image, a manifest['wave']
 # block routing the entrypoint to the tomawac pipeline through the baked tomawac
 # binary. A DISTINCT solver name so the run listing / showcase separates a wave
 # field from a river-dye run and the completion carries wave-specific keys.
@@ -307,7 +307,7 @@ register_tomawac_solver()
 
 
 # --------------------------------------------------------------------------- #
-# ARTEMIS phase-resolving harbour-agitation solver (ADR 0237) -- SAME worker
+# ARTEMIS phase-resolving harbour-agitation solver -- SAME worker
 # image, a manifest['agitation'] block routing the entrypoint to the artemis
 # pipeline through the baked artemis binary. A DISTINCT solver name so the run
 # listing / showcase separates a harbour-agitation field from a wave / river-dye
@@ -400,7 +400,7 @@ register_artemis_solver()
 
 
 # --------------------------------------------------------------------------- #
-# TELEMAC-3D stratified / 3D-hydrodynamics solver (ADR 0241) -- SAME worker
+# TELEMAC-3D stratified / 3D-hydrodynamics solver -- SAME worker
 # image, a manifest['stratified'] block routing the entrypoint to the telemac3d
 # pipeline through the baked telemac3d binary. A DISTINCT solver name so the run
 # listing / showcase separates a 3D stratified field from a wave / agitation /
@@ -494,7 +494,7 @@ register_telemac3d_solver()
 
 
 # --------------------------------------------------------------------------- #
-# COASTAL tidal/surge inundation solver (ADR 0259) -- SAME worker image, a
+# COASTAL tidal/surge inundation solver -- SAME worker image, a
 # manifest['coastal'] block routing the entrypoint to the coastal pipeline
 # (telemac_coastal_build) through the baked telemac2d binary -- an open-water
 # domain with ONE seaward liquid boundary forced by a LIQUID BOUNDARIES FILE.

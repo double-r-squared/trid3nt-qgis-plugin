@@ -1,4 +1,4 @@
-"""nws_alerts_conus hooks (chained-resolution mode, ADR 0063): NWS active alerts +
+"""nws_alerts_conus hooks (chained-resolution mode): NWS active alerts +
 per-alert zone-polygon enrichment.
 
 The main fetch is a single ``/alerts/active`` GET (nationwide, or ``?area=<state>``);

@@ -16,8 +16,8 @@ laid in lon/lat), so unlike the MODFLOW UTM plume there is no reprojection step.
 
 Reuse (do NOT reinvent): the COG-write profile + ``_cog_bbox_4326`` zoom-to +
 ``_dispatch_publish_layer`` non-fatal publish pattern from ``postprocess_modflow``
-(adapted for an already-EPSG:4326 site lattice). The honesty floor (Invariant 1 /
-FR-AS-7): the hazard scalars are computed with plain arithmetic from the site
+(adapted for an already-EPSG:4326 site lattice). The honesty floor (Invariant 1):
+the hazard scalars are computed with plain arithmetic from the site
 values -- no LLM anywhere; the agent narrates the typed fields, never invents them.
 
 Tier separation (Invariant 5): the COG lands in the runs bucket (scheme-aware via

@@ -136,7 +136,7 @@ async def swmm_dual_drainage_coupling(
         inlet_opening_m: catchbasin/inlet capture opening, m (default 0.6) - the
             labeled surface<->sewer coupling size.
         compute_class: compute class (default "standard").
-        input_mode: run-mode lever (ADR 0107).
+        input_mode: run-mode lever.
 
     Returns:
         On success: ``SWMMDualDrainageLayerURI`` - the overland peak-depth raster

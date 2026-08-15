@@ -1,4 +1,4 @@
-"""http_json executor (ADR 0056): the tier-3 hook-driven point-event fetch path.
+"""http_json executor: the tier-3 hook-driven point-event fetch path.
 
 Selected when a spec declares ``hooks.build_request``. The engine owns the
 transport (the shared pooled client + retry authority), the paging LOOP, and the
@@ -152,14 +152,14 @@ def _fetch_paged(spec: SourceSpec, params: dict[str, Any], build: Any, paging: d
 
 
 def _fetch_constant_cache(spec: SourceSpec, plans: list[RequestPlan], cc: dict[str, Any]) -> list[bytes]:
-    """Fetch each plan through an INNER constant-key ``read_through`` (ADR 0081).
+    """Fetch each plan through an INNER constant-key ``read_through``.
 
     The two-tier cache: a source whose bespoke body is "download ONE big
     whole-world file once, then filter it per-AOI in the parse hook" (the GEM GAF
     10.6 MB harmonized GeoJSON) declares ``ingest.constant_cache``. The plan bytes
     are cached under a CONSTANT key (``{"file": cc.file_id}``, independent of the
     AOI), so distinct AOIs share one cached download -- the naive-fold per-AOI
-    re-download regression (ADR 0077) is impossible. The OUTER ``read_through`` in
+    re-download regression is impossible. The OUTER ``read_through`` in
     ``route()`` still caches the small AOI-filtered FGB per AOI. No-op unless the
     spec declares ``constant_cache``.
     """
@@ -190,7 +190,7 @@ def fetch_bodies(spec: SourceSpec, params: dict[str, Any]) -> list[bytes]:
     (the Overpass 3-mirror fallback, the spec fallback-chain); the default fetches
     every plan and joins them at parse (a static multi-endpoint set).
 
-    ``ingest.constant_cache`` (ADR 0081) wraps the plan fetch in an INNER
+    ``ingest.constant_cache`` wraps the plan fetch in an INNER
     constant-key ``read_through`` so a whole-world source file is downloaded once
     and re-filtered per AOI (the two-tier cache) instead of re-downloaded per AOI.
     """
@@ -209,7 +209,7 @@ def fetch_bodies(spec: SourceSpec, params: dict[str, Any]) -> list[bytes]:
 
 
 def _execute_parse_fallback(spec: SourceSpec, params: dict[str, Any]) -> bytes:
-    """PARSE-driven data-source fallback chain (ADR 0085): first non-empty parse wins.
+    """PARSE-driven data-source fallback chain: first non-empty parse wins.
 
     Unlike ``endpoint_fallback`` (a first-HTTP-SUCCESS mirror chain), this walks the
     build hook's ORDERED plans, parses EACH fetched body on its own, and stops at the

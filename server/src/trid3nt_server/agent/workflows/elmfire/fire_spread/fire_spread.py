@@ -14,7 +14,7 @@ engine TEMPLATE tagged ``engine="elmfire", tier="template"`` - EXCLUDED from the
 default retrieval pool and surfaced only by the ``run_elmfire`` door's gate
 expansion (SELECT-THEN-CALL). Like the other templates it declares
 ``cacheable=False`` + ``ttl_class="live-no-cache"`` +
-``source_class="workflow_dispatch"`` (FR-DC-6 - workflow exposure surface;
+``source_class="workflow_dispatch"`` (workflow exposure surface;
 never touches the cache shim). Confirmation before consequence (Invariant 9 -
 a solver run) is enforced by the server solver-confirm gate around this template
 (``SOLVER_CONFIRM_TOOLS`` keys on ``elmfire_fire_spread``): the user sees the
@@ -502,7 +502,7 @@ async def model_elmfire_fire_spread(
         run_args: the validated ``ElmfireRunArgs`` (AOI + ignition + scenario
             weather + duration). The ignition point is REQUIRED by contract.
         run_id: optional pre-minted ULID (minted at staging when absent).
-        compute_class: FR-CE-3 compute class; auto-scaled UP from the deck
+        compute_class: compute class; auto-scaled UP from the deck
             cell count, never silently downgraded below the caller's choice.
         cleanup_outputs: when True the temp deck dir + any temp download dir
             are removed after postprocess (COGs already uploaded). A LOCAL

@@ -38,7 +38,7 @@ Temperature forcing for the live demonstration is REAL hourly ASOS/METAR air
 temperature (fetch_asos_metar ``tmpf``) at a snowbelt station; the default
 forcing is a representative Buffalo NY rain-on-snow event (cited climatology).
 
-Chart-first validation class (the RDII template precedent, ADR 0190): the
+Chart-first validation class (the RDII template precedent): the
 deliverable is CHARTS (SWE series + runoff hydrograph snowmelt-vs-rain-only) plus
 typed scalars, no georeferenced raster. Host-side pyswmm, no worker image.
 

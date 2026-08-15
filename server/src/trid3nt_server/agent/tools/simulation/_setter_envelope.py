@@ -66,7 +66,7 @@ logger = logging.getLogger("trid3nt_server.agent.tools.simulation.param_setters"
 
 
 # --------------------------------------------------------------------------- #
-# Typed errors (FR-AS-11 convention: error_code + retryable class attrs).
+# Typed errors (convention: error_code + retryable class attrs).
 # --------------------------------------------------------------------------- #
 
 

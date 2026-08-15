@@ -1,4 +1,4 @@
-"""Overpass-family hooks (ADR 0070): OSM tagged-feature fetch via Overpass QL.
+"""Overpass-family hooks: OSM tagged-feature fetch via Overpass QL.
 
 The one irreducible per-source step is a PURE pair: build the Overpass QL (a
 params -> query string function) and decode the Overpass JSON ``elements`` into
@@ -406,11 +406,11 @@ def parse_response_pois(
 
 
 # --------------------------------------------------------------------------- #
-# fetch_river_geometry -- waterway ways -> bbox-clipped LineStrings (ADR 0074).
+# fetch_river_geometry -- waterway ways -> bbox-clipped LineStrings.
 #
 # The river fold's PRIMARY (and, post-0074, ONLY) source: an OSM Overpass
 # waterway query. The vestigial NHDPlus HR HUC4 FileGDB-zip fallback leg was
-# DELETED per NATE's 2026-08-01 decision (ADR 0074): its 8-envelope bbox->HUC4
+# DELETED per NATE's 2026-08-01 decision: its 8-envelope bbox->HUC4
 # heuristic + ~144 MB region download was effectively never reached (OSM is the
 # reliable global primary). Same textbook build_request + parse_response pair as
 # the roads member, but a ``waterway`` regex with a selectable class vocabulary.

@@ -1,7 +1,7 @@
-"""epa_frs_facilities hooks (tier-3 http_json mode, ADR 0056/0066): EPA regulated-facility
+"""epa_frs_facilities hooks (tier-3 http_json mode/0066): EPA regulated-facility
 points by program, multi-layer UNION.
 
-The wave-11 deferral (ADR 0059) was a 5-layer fan-out UNION plus a Superfund geometry
+The wave-11 deferral was a 5-layer fan-out UNION plus a Superfund geometry
 synthesized from LAT/LON attribute columns. Both fold onto the EXISTING multi-plan
 build_request/parse_response path with ZERO new machinery: ``build_request`` expands the
 facility_program enum into the ordered layer set (the "frs" union = 5 point layers, a
@@ -11,7 +11,7 @@ superfund -> point-from-LAT/LON synthesis), stamps program/label, and unions.
 
 Single-page per layer (no next_page) caps each layer at the server maxRecordCount (2000)
 where the twin paged to 20000/layer -- a realistic small-AOI query is value-identical; a
-dense state-scale bbox truncates earlier (ADR 0066 divergence, advisory payload gate warns
+dense state-scale bbox truncates earlier (divergence, advisory payload gate warns
 first). All I/O stays router-owned.
 """
 

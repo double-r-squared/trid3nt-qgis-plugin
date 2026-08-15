@@ -1,4 +1,4 @@
-"""``fetch_jrc_global_surface_water`` colormap hook (raster-modes wave, ADR 0086).
+"""``fetch_jrc_global_surface_water`` colormap hook (raster-modes wave).
 
 The ONE irreducible per-source step for the jrc-gsw fold: a per-band GDAL color
 table that is a PURE function of the ``band`` param (never reads the fetched array,

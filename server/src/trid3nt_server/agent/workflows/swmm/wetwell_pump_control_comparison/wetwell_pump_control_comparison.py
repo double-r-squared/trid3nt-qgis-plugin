@@ -1,4 +1,4 @@
-"""Engine template ``swmm_wetwell_pump_control_comparison`` (ADR 0151).
+"""Engine template ``swmm_wetwell_pump_control_comparison``.
 
 A THIN composer over the shared mechanism-comparison runner. One synthetic wet
 well with three pumps under one inflow, comparing pump CONTROL schemes: a fixed

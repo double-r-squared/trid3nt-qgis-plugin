@@ -58,7 +58,7 @@ logger = logging.getLogger("trid3nt_server.agent.tools.processing.compute_flood_
 
 
 # ---------------------------------------------------------------------------
-# Error types (FR-AS-11 typed-error surface).
+# Error types (typed-error surface).
 # ---------------------------------------------------------------------------
 
 
@@ -397,7 +397,7 @@ def compute_flood_extent_skill(
     ranges from the literature -- context only, never a pass/fail),
     ``notes``.
 
-    **Errors (FR-AS-11):** ``FloodExtentSkillInputError`` (unreadable
+    **Errors:** ``FloodExtentSkillInputError`` (unreadable
     inputs, missing CRS, bad threshold); ``FloodExtentSkillNoOverlapError``
     (zero valid overlapping pixels between model and benchmark);
     ``FloodExtentSkillUpstreamError`` (staging / reproject / rasterize

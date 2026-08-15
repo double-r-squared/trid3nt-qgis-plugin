@@ -1,4 +1,4 @@
-"""snotel_snow hooks (chained-resolution mode, ADR 0063/0065): NRCS SNOTEL/SCAN
+"""snotel_snow hooks (chained-resolution mode/0065): NRCS SNOTEL/SCAN
 snow stations (AWDB REST).
 
 The batched-snapshot shape folds onto the EXISTING main-fetch + enrich phases, zero

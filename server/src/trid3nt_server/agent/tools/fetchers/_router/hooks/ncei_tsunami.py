@@ -1,4 +1,4 @@
-"""ncei_tsunami hooks (ADR 0056): NCEI Global Historical Tsunami DB -> point features.
+"""ncei_tsunami hooks: NCEI Global Historical Tsunami DB -> point features.
 
 The irreducible step: the NCEI hazard-service request (mode-selected endpoint,
 year-window resolution + validation, bbox lat/lon params, page number) and the

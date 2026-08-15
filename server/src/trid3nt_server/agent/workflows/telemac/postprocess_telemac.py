@@ -18,7 +18,7 @@ time animation is played from the SELAFIN mesh SIBLING that
 ``_MESH_SIBLING_BY_STYLE_PRESET`` maps this style preset to ``r2d_river.slf``).
 No per-frame COGs are written -- the mesh already carries every frame.
 
-Honesty floor (invariant 1 / FR-AS-7): the dye scalars are computed with plain
+Honesty floor (invariant 1): the dye scalars are computed with plain
 arithmetic from the SELAFIN tracer field -- no LLM anywhere. The COG carries an
 "idealized bed plane + prescribed-dispersion" label so a demo release is never
 read as a calibrated site study.
@@ -1500,7 +1500,7 @@ def postprocess_telemac_do(
 
 
 # --------------------------------------------------------------------------- #
-# TOMAWAC significant-wave-height (Hs) - the spectral-wave COG (ADR 0236).
+# TOMAWAC significant-wave-height (Hs) - the spectral-wave COG.
 # --------------------------------------------------------------------------- #
 #: Hs (m) below which a wet node is treated as "flat water" for the extent
 #: metrics / detection floor. Tiny absolute floor separates a real wave field
@@ -1681,7 +1681,7 @@ def postprocess_tomawac(
 
 
 # --------------------------------------------------------------------------- #
-# ARTEMIS harbour agitation (Kd = Hs/H0) - the phase-resolving COG (ADR 0237).
+# ARTEMIS harbour agitation (Kd = Hs/H0) - the phase-resolving COG.
 # --------------------------------------------------------------------------- #
 #: Kd (agitation coefficient) below which a wet node is treated as "flat water"
 #: for the detection floor. Tiny absolute floor separates a real agitation field
@@ -2175,7 +2175,7 @@ def postprocess_telemac3d(
 
 
 # --------------------------------------------------------------------------- #
-# Coastal tidal/surge (ADR 0259): the PEAK-INUNDATION-DEPTH COG + flooded area.
+# Coastal tidal/surge: the PEAK-INUNDATION-DEPTH COG + flooded area.
 # --------------------------------------------------------------------------- #
 def postprocess_coastal(
     slf_path: str | Path,

@@ -1,5 +1,5 @@
 """Ingest a USGS finite-fault product (ComCat) into a normalized N-subfault table
--- the ADR 0226 finite-fault UPGRADE to the Okada-dtopo front.
+-- the finite-fault UPGRADE to the Okada-dtopo front.
 
 The single-subfault Okada synthesis (``earthquake_source`` + the worker's synthetic
 ``maketopo``) renders as ONE idealized rectangle -- a straight uplift bar. A REAL

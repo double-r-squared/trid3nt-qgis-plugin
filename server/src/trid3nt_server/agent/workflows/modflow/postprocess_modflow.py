@@ -18,7 +18,7 @@ This is the MODFLOW analogue of ``postprocess_flood``. Differences:
   * The output is reprojected to EPSG:4326 so the plume COG aligns with the
     client's MapLibre basemap exactly like every other published raster.
 
-Determinism boundary (Invariant 1 / Decision H / FR-AS-7): ``PlumeLayerURI``
+Determinism boundary (Invariant 1 /): ``PlumeLayerURI``
 carries ``max_concentration_mgl`` + ``plume_area_km2`` as typed numbers the
 agent narrates - never free-generated. This module computes them from the
 concentration array with plain arithmetic; no LLM anywhere.
@@ -125,7 +125,7 @@ PLUME_DETECTION_FLOOR_MGL: float = 0.001
 GWT_UCN_FILENAME: str = "gwt_model.ucn"
 
 #: GWE temperature output filename the GWE OC package writes (gwt_adapter's
-#: gwe_thermal deck; text=TEMPERATURE). ADR 0235.
+#: gwe_thermal deck; text=TEMPERATURE)..
 GWE_UCN_FILENAME: str = "gwe_model.ucn"
 
 #: TiTiler style preset for the GWE heat-transport temperature-excess COG (degC).
@@ -133,7 +133,7 @@ GWE_UCN_FILENAME: str = "gwe_model.ucn"
 TEMPERATURE_STYLE_PRESET: str = "continuous_temperature_c"
 
 #: Temperature EXCESS floor (degC) below which a cell is NOT counted as a thermal
-#: plume (masked to NaN in the render COG). ADR 0235.
+#: plume (masked to NaN in the render COG)..
 THERMAL_DETECTION_FLOOR_C: float = 0.1
 
 #: multi_species: the per-species GWT OC writes ``gwt_<species>.ucn``
@@ -3204,7 +3204,7 @@ def postprocess_wetland_hydroperiod(
 
 
 # --------------------------------------------------------------------------- #
-# GWE heat-transport postprocess (gwe_thermal archetype family, ADR 0235)
+# GWE heat-transport postprocess (gwe_thermal archetype family)
 #
 # The heat twin of ``postprocess_modflow`` (the plume path): reads the GWE
 # ``gwe_model.ucn`` TEMPERATURE history, renders the peak-over-time temperature
@@ -3397,7 +3397,7 @@ def postprocess_gwe_thermal(
     runs_bucket: str | None = None,
     publish: bool = True,
 ) -> ThermalPlumeLayerURI:
-    """Convert a GWE heat-transport run into a ``ThermalPlumeLayerURI`` (ADR 0235).
+    """Convert a GWE heat-transport run into a ``ThermalPlumeLayerURI``.
 
     Reads the GWE ``gwe_model.ucn`` TEMPERATURE history, renders the peak-over-time
     temperature EXCESS above the undisturbed aquifer as a COG, uploads +
@@ -4054,7 +4054,7 @@ def postprocess_capture_zone(
             })
             pathline_count += 1
 
-    # --- Step 6b': per-well capture allocation (ADR 0215 item 1) --------------
+    # --- Step 6b': per-well capture allocation (item 1) --------------
     # For a multi-well WELLFIELD the particle boundname is "W{k}_P{n}" (mf6
     # UPPERCASES it), so the leading well index k allocates which well captured
     # which particles. Each well's zone is the convex hull of ITS OWN backtracked
@@ -5280,7 +5280,7 @@ def postprocess_saltwater_intrusion(
 
 
 # --------------------------------------------------------------------------- #
-# vadose_transport (UZF+UZT unsaturated-zone breakthrough) - ADR 0228
+# vadose_transport (UZF+UZT unsaturated-zone breakthrough) -
 # --------------------------------------------------------------------------- #
 
 

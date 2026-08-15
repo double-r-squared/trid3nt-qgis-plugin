@@ -66,7 +66,7 @@ async def modflow_wellhead_protection(
     n_particles: int = 16,
     aquifer_k_ms: float | None = None,
     porosity: float | None = None,
-    # ADR 0215: multi-well WELLFIELD + transient + NHD RIV boundaries.
+    # multi-well WELLFIELD + transient + NHD RIV boundaries.
     wells: list[Any] | None = None,
     transient: bool = False,
     sim_years: float | None = None,
@@ -113,7 +113,7 @@ async def modflow_wellhead_protection(
         travel_time_years: list of isochrone cutoffs in years. Default [2, 5, 10].
         n_particles: particles released around the well screen (default 16).
         aquifer_k_ms / porosity: optional demo-aquifer overrides.
-        compute_class: FR-CE-3 compute class. Default ``'standard'``. PRT
+        compute_class: compute class. Default ``'standard'``. PRT
             archetypes run LOCAL-ONLY (fast; Batch is not used).
 
     Returns:
@@ -124,7 +124,7 @@ async def modflow_wellhead_protection(
         (incl. a missing well) the tool returns a typed error the agent narrates
         honestly -- it never fabricates a well.
 
-    FR-DC-6: ``cacheable=False`` + ``ttl_class="live-no-cache"`` +
+    ``cacheable=False`` + ``ttl_class="live-no-cache"`` +
     ``source_class="workflow_dispatch"``  -  the cache shim is NOT invoked.
     """
     aoi = _coerce_optional_latlon(aoi_latlon)

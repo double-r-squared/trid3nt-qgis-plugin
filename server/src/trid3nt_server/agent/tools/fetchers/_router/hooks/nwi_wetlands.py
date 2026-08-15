@@ -1,14 +1,14 @@
-"""nwi_wetlands hooks (tier-3 chained-resolution mode, ADR 0063/0066): USFWS National
+"""nwi_wetlands hooks (tier-3 chained-resolution mode/0066): USFWS National
 Wetlands Inventory polygons, offset-paged.
 
-The wave-11 deferral (ADR 0059) was three bespoke steps: the WAF-required browser
+The wave-11 deferral was three bespoke steps: the WAF-required browser
 header trio, the table-prefix-strip / first-wins property normalizer, and a same-URL
 geojson->esri-json format fallback. All three fold onto the EXISTING hooks with ZERO
 new machinery: ``build_request`` sets the WAF headers on the RequestPlan and builds the
 geojson query, ``next_page`` does offset paging (stop on a short page /
 exceededTransferLimit), ``parse_response`` runs the prefix-strip first-wins normalizer.
 The same-URL esri fallback is NOT reproduced (the live host serves geojson with the WAF
-headers, and the twin's fallback ring decode was never byte-parity -- ADR 0066 divergence).
+headers, and the twin's fallback ring decode was never byte-parity -- divergence).
 All I/O stays router-owned.
 """
 

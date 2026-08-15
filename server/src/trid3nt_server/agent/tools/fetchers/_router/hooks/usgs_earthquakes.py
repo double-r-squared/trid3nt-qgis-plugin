@@ -1,4 +1,4 @@
-"""usgs_earthquakes hooks (ADR 0056): USGS FDSN Event GeoJSON -> point features.
+"""usgs_earthquakes hooks: USGS FDSN Event GeoJSON -> point features.
 
 The one irreducible step the declarative surface cannot carry: the FDSN request
 construction (a bespoke relative-window resolution + magnitude/window validation,

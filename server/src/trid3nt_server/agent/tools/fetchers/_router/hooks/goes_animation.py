@@ -1,4 +1,4 @@
-"""goes_animation frames hooks (ADR 0087): the GOES SLIDER-stitch animation.
+"""goes_animation frames hooks: the GOES SLIDER-stitch animation.
 
 Folds fetch_goes_animation + fetch_goes_blend_animation onto the frames-list output
 shape (shape: animation_frames). The router owns the per-frame read_through loop +

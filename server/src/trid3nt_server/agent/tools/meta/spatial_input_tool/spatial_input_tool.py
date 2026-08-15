@@ -1,4 +1,4 @@
-"""Atomic tool ``request_spatial_input`` -- FR-AS-10 / FR-WC-16 urban vector-draw.
+"""Atomic tool ``request_spatial_input`` -- urban vector-draw.
 
 The LLM-facing surface that PAUSES the turn and asks the user to DRAW on the map
 (a terra-draw surface in the client): an area of interest, structural flood
@@ -21,7 +21,7 @@ geometry. This mirrors the ``geocode_location`` -> region-choice interception
 pattern. The sentinel key is kept in lock-step with
 ``server.SPATIAL_INPUT_SENTINEL_KEY``.
 
-FR-DC-6: ``cacheable=False`` + ``ttl_class="live-no-cache"`` +
+``cacheable=False`` + ``ttl_class="live-no-cache"`` +
 ``source_class="workflow_dispatch"`` -- an interactive gate, never cached.
 """
 

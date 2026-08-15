@@ -18,7 +18,7 @@ engine TEMPLATE tagged ``engine="telemac", tier="template"`` - EXCLUDED from the
 default retrieval pool and surfaced only by the ``run_telemac`` door's gate
 expansion (SELECT-THEN-CALL). Like the other templates it declares
 ``cacheable=False`` + ``ttl_class="live-no-cache"`` +
-``source_class="workflow_dispatch"`` (FR-DC-6 - workflow exposure surface; never
+``source_class="workflow_dispatch"`` (workflow exposure surface; never
 touches the cache shim). Confirmation before consequence (Invariant 9 - a solver
 run) is enforced by the server confirmation hook around this template (the
 approve-mesh gate, keyed on ``telemac_river_dye``), not re-implemented here.
@@ -56,7 +56,7 @@ def _clamp_domain_extent(
     value: float, *, valid_lo: float, valid_hi: float,
     clamp_lo: float, clamp_hi: float, name: str, unit: str,
 ) -> tuple[float, str | None]:
-    """Clamp a domain-extent value to the modelable window (ADR 0223, audit #9).
+    """Clamp a domain-extent value to the modelable window (audit #9).
 
     A value INSIDE ``[valid_lo, valid_hi]`` passes through unchanged (``note``
     None); an out-of-range value is clamped to ``[clamp_lo, clamp_hi]`` and a
@@ -117,7 +117,7 @@ TEMPLATE_CARD = TemplateCard(
 )
 
 
-#: DECLARED mesh_resolution_m range (ADR 0225). SOLVER floor MESH_H_FLOOR_M (3 m):
+#: DECLARED mesh_resolution_m range. SOLVER floor MESH_H_FLOOR_M (3 m):
 #: the finest edge the mesh builder authors regardless of ask; below it a screening
 #: dye plume gains nothing. No fixed coarse ceiling -- the node-budget floor coarsens
 #: a long reach WITHIN this declaration (self-labeled), and the effective edge stays
@@ -414,7 +414,7 @@ async def telemac_river_dye(
             that window and uses the domain-mean daily rate (mm/day) as the
             rainfall forcing - a REAL observed storm total, not a guess.
             Supersedes ``rainfall_mm_per_day`` when set.
-        compute_class: FR-CE-3 compute class. Default ``"medium"``.
+        compute_class: compute class. Default ``"medium"``.
         bank_source: river-bank geometry source. ``"nhd_area"`` (default) meshes
             REAL banks sampled from USGS NHDArea water polygons; when NO NHDArea
             polygon covers the reach the tool RAISES the typed retryable
@@ -424,7 +424,7 @@ async def telemac_river_dye(
             ``"constant_ribbon"`` to mesh the assumed ``channel_width_m`` ribbon
             directly (labeled as an assumption in the result). Do NOT default to
             constant_ribbon to dodge the gate: real banks are more faithful.
-        input_mode: run-mode lever (ADR 0107). ``"user_gated"`` presents the
+        input_mode: run-mode lever. ``"user_gated"`` presents the
             resolved carrier discharge + bank source for review before the solve;
             ``"auto"`` (default) proceeds with them labeled.
 
@@ -437,7 +437,7 @@ async def telemac_river_dye(
         On failure: dict with ``status="error"`` + ``error_code`` +
         ``error_message`` (no layer).
 
-    FR-DC-6: ``cacheable=False``, ``ttl_class="live-no-cache"``,
+    ``cacheable=False``, ``ttl_class="live-no-cache"``,
     ``source_class="workflow_dispatch"`` - cache shim not invoked.
     """
     coerced_bbox: tuple[float, float, float, float] | None = None
@@ -547,7 +547,7 @@ async def telemac_river_dye(
         )
         compute_class = "medium"
 
-    # ADR 0223 (audit #9): the domain-extent guardrails below are defensible
+    # (audit #9): the domain-extent guardrails below are defensible
     # (a 50 km reach live-hung gmsh) but were silent. Record each clamp that BINDS
     # so it surfaces as a labeled envelope note instead of only agent.log.
     _domain_clamps: list[str] = []
@@ -691,7 +691,7 @@ async def telemac_river_dye(
                     "using default (1=Meyer-Peter-Mueller)", bedload_formula)
                 bedload_formula = None
 
-    # GAIA v3 MULTI-CLASS GRADED SEDIMENT (ADR 0240). A gradation is armed by an
+    # GAIA v3 MULTI-CLASS GRADED SEDIMENT. A gradation is armed by an
     # explicit sediment_gradation (a preset name OR a list of [d50_um, fraction]
     # pairs) OR by grading vocabulary (graded / mixed-grain / sorting / armoring /
     # bimodal) in the substance/contaminant. A graded mix needs a MOBILE bed to
@@ -708,7 +708,7 @@ async def telemac_river_dye(
     if sediment_gradation:
         erodible_bed = True  # a graded mix sorts only on a mobile (erodible) bed
 
-    # NESTOR DREDGING (ADR 0254). Dredging layers a dig/dump rule onto the GAIA
+    # NESTOR DREDGING. Dredging layers a dig/dump rule onto the GAIA
     # erodible-bed morphodynamics: without maintenance the navigable channel silts
     # up; the dig rule holds the depth. Armed by an explicit dredging=True OR by
     # dredging vocabulary (dredge / dredging / maintenance dredging / spoil /
@@ -1061,7 +1061,7 @@ SCOUR_KEYWORDS: tuple[str, ...] = (
 
 
 #: GRADED / MIXED-GRAIN vocabulary - the words that mean "a mixture of several
-#: grain sizes that SORTS and segregates" (ADR 0240 GAIA v3 multi-class). Naming
+#: grain sizes that SORTS and segregates" (GAIA v3 multi-class). Naming
 #: any of these routes to the sediment class AND auto-arms a default gradation +
 #: erodible_bed (a graded mix needs a mobile bed to sort). Distinct from
 #: SCOUR_KEYWORDS: scour is single-grain bed lowering; grading is multi-class
@@ -1074,7 +1074,7 @@ GRADATION_KEYWORDS: tuple[str, ...] = (
     "fining", "sediment mixture", "grain mixture",
 )
 
-#: DREDGING vocabulary (ADR 0254 NESTOR) - words that mean "mechanically maintain
+#: DREDGING vocabulary (NESTOR) - words that mean "mechanically maintain
 #: a navigable channel against siltation". Naming any of these auto-arms the NESTOR
 #: dig/dump rule on the GAIA erodible-bed base (and thus the sediment class +
 #: erodible_bed). Distinct from SCOUR/GRADATION: dredging is an ENGINEERED
@@ -2199,7 +2199,7 @@ async def model_telemac_river_dye(
         discharge_note, seed_lon, seed_lat,
     )
 
-    # --- ADR 0107 two-mode input gate: review-before-run -----------------------
+    # --- two-mode input gate: review-before-run -----------------------
     # The carrier discharge (real NWM or user) governs dilution and is the
     # physically-dominant reviewable input; present it (with the bank source) for
     # review/adjust before the expensive TELEMAC solve in user_gated mode. auto
@@ -2257,7 +2257,7 @@ async def model_telemac_river_dye(
     # gnis_name mainstem (confluence disambiguation, Columbia-proven).
     river_name = _named_watercourse(location or location_name) or ""
     substance_class, substance_payload = classify_substance(substance)
-    # GAIA v3 MULTI-CLASS GRADED SEDIMENT (ADR 0240): a resolved gradation of
+    # GAIA v3 MULTI-CLASS GRADED SEDIMENT: a resolved gradation of
     # >= 2 grain classes is a graded-sediment SORTING run. It rides the erodible-
     # bed coupling (a mix sorts only on a MOBILE bed), so it forces erodible_bed
     # True here too - a raw dispatch straight to this workflow (bypassing the tool
@@ -2265,7 +2265,7 @@ async def model_telemac_river_dye(
     sediment_gradation = resolve_gradation(sediment_gradation)
     if sediment_gradation:
         erodible_bed = True
-    # SINGLE SOURCE OF TRUTH for the erodible-bed / GAIA gate (ADR 0216
+    # SINGLE SOURCE OF TRUTH for the erodible-bed / GAIA gate (
     # false-green fix). An armed erodible bed - an explicit erodible_bed knob OR
     # the scour/erosion/bedload auto-arm in telemac_river_dye - IS a GAIA
     # morphodynamics run, so it MUST route through the sediment class. Otherwise
@@ -2425,7 +2425,7 @@ async def model_telemac_river_dye(
             # single-class case) leaves the deck byte-identical.
             **({"sediment_gradation": sediment_gradation}
                if sediment_gradation else {}),
-            # NESTOR DREDGING (ADR 0254): layered onto the erodible-bed base ONLY
+            # NESTOR DREDGING: layered onto the erodible-bed base ONLY
             # when armed. dredging=True adds the dig/dump rule (mode + the set
             # engineering numbers ride; unset ones use the worker's labeled
             # defaults surfaced through the input-review gate). Absent when not
@@ -2599,7 +2599,7 @@ async def model_telemac_river_dye(
     _run_metrics = await asyncio.to_thread(_read_run_metrics, batch_run_id)
     _bank_provenance = str(_run_metrics.get("bank_source") or "constant_ribbon")
 
-    # ADR 0231: surface the in-worker-sampled river bed bathymetry as a
+    # surface the in-worker-sampled river bed bathymetry as a
     # role=context input. The bed is fetched + fitted INSIDE the worker
     # (fetch_dem_bed), so the composer has no uri until the worker uploads its
     # sampled bed COG + records the key here (the worker-envelope seam). Best-
@@ -2669,7 +2669,7 @@ async def model_telemac_river_dye(
             ),
         ),
     ]
-    # ADR 0223 (audit #9): if a domain-extent guardrail bound (in the tool's
+    # (audit #9): if a domain-extent guardrail bound (in the tool's
     # arg-hardening, threaded here), surface it as a labeled provenance entry (R2
     # transparency) rather than only a log line.
     if domain_clamp_notes:
@@ -2718,7 +2718,7 @@ async def model_telemac_river_dye(
                 "deposited_mass_kg": _dep,
                 "deposit_fraction": worker_sed.get("sediment_deposit_fraction"),
                 "max_deposition_mm": worker_sed.get("sediment_max_deposition_mm"),
-                # GAIA v3 multi-class SORTING (ADR 0240): the surface-D50 spread
+                # GAIA v3 multi-class SORTING: the surface-D50 spread
                 # the worker measured off the MEAN DIAMETER field (None on a
                 # single-class run). Folded onto the peak so the agent narrates
                 # the sorting signature (Invariant 1 - measured, never invented).
@@ -3085,7 +3085,7 @@ async def _surface_bed_bathymetry_input(
     run_id: str,
     reach_name: str,
 ) -> bool:
-    """BEST-EFFORT: surface the in-worker-sampled river bed bathymetry (ADR 0231).
+    """BEST-EFFORT: surface the in-worker-sampled river bed bathymetry.
 
     fetch_dem_bed samples + fits the bed INSIDE the worker container (no emitter,
     no uri agent-side), so the honest surfacing path is the worker-envelope seam:

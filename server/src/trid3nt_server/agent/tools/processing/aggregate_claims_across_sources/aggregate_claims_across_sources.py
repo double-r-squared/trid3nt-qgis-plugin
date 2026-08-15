@@ -35,7 +35,7 @@ capped at 0.99 regardless of how many sources agree (we never claim certainty
 from agreement alone, since systematic source-bias / shared upstream wire
 services can drive false agreement).
 
-Typed errors (FR-AS-11):
+Typed errors:
     - ``ClaimAggError(retryable=False)`` -- bad input shape (non-list sources,
       missing required keys, unknown claim target).
 
@@ -46,7 +46,7 @@ This tool DOES NOT emit geometry; it returns a structured claims dict. The
 bbox is deferred to a downstream ``geocode_event_location`` call, per engine.md
 scope). A round-trip-only acceptance check is therefore sufficient for v0.1.
 
-FR-TA-3 docstring discipline applies to the public ``aggregate_claims_across_sources``.
+docstring discipline applies to the public ``aggregate_claims_across_sources``.
 """
 
 from __future__ import annotations
@@ -68,7 +68,7 @@ logger = logging.getLogger("trid3nt_server.agent.tools.processing.aggregate_clai
 
 
 # ---------------------------------------------------------------------------
-# Typed errors (FR-AS-11).
+# Typed errors.
 # ---------------------------------------------------------------------------
 
 

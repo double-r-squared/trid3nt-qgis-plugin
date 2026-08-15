@@ -44,7 +44,7 @@ Invariants:
 PRECISION CAVEAT (Invariant 1): the polygon is the CONVEX HULL of discrete
 backtracked pathlines on a structured 100 m rectilinear grid with DEMO aquifer
 parameters, NOT a calibrated regulatory wellhead protection area. The agent must
-narrate this caveat when presenting the layer (FR-AS-7).
+narrate this caveat when presenting the layer.
 """
 
 from __future__ import annotations
@@ -753,7 +753,7 @@ def _aquifer_k_caveat(
 
 
 # --------------------------------------------------------------------------- #
-# Kriged per-cell starting head (ADR 0215 item 3)
+# Kriged per-cell starting head (item 3)
 # --------------------------------------------------------------------------- #
 
 
@@ -763,7 +763,7 @@ def _build_kriged_starting_head(
     """Sample the kriged/trend water-table surface at each PRT cell centre.
 
     Returns the ``starting_head_by_cell`` (nrow x ncol, north-first) the worker
-    writes as the GWF IC (ADR 0215 item 3). The surface's local east/north frame
+    writes as the GWF IC (item 3). The surface's local east/north frame
     is anchored at ``(wlat, wlon)`` (the ``_usable_well_heads`` origin); each cell
     centre is converted to that frame with the same equirectangular formula, the
     surface is sampled, and the field is RE-REFERENCED about the domain-centre
@@ -873,7 +873,7 @@ async def model_capture_zone_scenario(
     measured_recency_years: float = MEASURED_RECENCY_YEARS,
     use_dem_gradient: bool = True,
     use_soil_k: bool = True,
-    # --- multi-well WELLFIELD + transient + NHD RIV + kriged IC (ADR 0215) ---- #
+    # --- multi-well WELLFIELD + transient + NHD RIV + kriged IC ---- #
     wells: list[Any] | None = None,
     transient: bool = False,
     sim_years: float | None = None,
@@ -923,7 +923,7 @@ async def model_capture_zone_scenario(
             (a near-surface soil PROXY, narrated loudly, never presented as
             measured aquifer K). A soil fetch/sample failure falls back (loud) to
             the demo default K. Ignored when ``aquifer_k_ms`` is supplied.
-        compute_class: FR-CE-3 compute class. NOTE: PRT archetypes are
+        compute_class: compute class. NOTE: PRT archetypes are
             LOCAL-ONLY (fast; the Batch path is never used).
         pipeline_emitter: optional PipelineEmitter for live progress cards.
 
@@ -942,7 +942,7 @@ async def model_capture_zone_scenario(
             f"'wellhead_protection'; got {archetype!r}."
         )
 
-    # --- Normalize the WELLFIELD (ADR 0215): ``wells`` (list of WellSpec-like
+    # --- Normalize the WELLFIELD: ``wells`` (list of WellSpec-like
     # objects/dicts) is the multi-well path; the single ``well_location_latlon``
     # is the back-compat path. When wells are supplied the primary well seeds the
     # legacy field so the honesty gate + AOI defaults still hold.
@@ -1163,7 +1163,7 @@ async def model_capture_zone_scenario(
             if porosity is None:
                 eff_porosity = pk.porosity
 
-    # --- Kriged per-cell IC (ADR 0215 item 3) --------------------------------- #
+    # --- Kriged per-cell IC (item 3) --------------------------------- #
     # Sample the kriged/trend water-table surface at each PRT cell centre so the
     # GWF IC carries the measured water-table CURVATURE (matters for the transient
     # solve). Only when a surface was fitted (measured-heads success); otherwise
@@ -1174,7 +1174,7 @@ async def model_capture_zone_scenario(
             _build_kriged_starting_head, wt_surface, lat, lon, wlat, wlon
         )
 
-    # --- NHD river boundaries (ADR 0215 item 4) ------------------------------- #
+    # --- NHD river boundaries (item 4) ------------------------------- #
     # Fetch the NHD flowline network around the AOI and drape it as RIV cells. A
     # fetch/read failure degrades LOUDLY to the CHD ring alone (never fails the
     # solve). ``fetch_river_geometry`` returns a flowline artifact the shared
@@ -1222,7 +1222,7 @@ async def model_capture_zone_scenario(
             n_particles=int(n_particles),
             regional_gradient_x=grad_x,
             regional_gradient_y=grad_y,
-            # ADR 0215: multi-well WELLFIELD + transient + NHD RIV + kriged IC.
+            # multi-well WELLFIELD + transient + NHD RIV + kriged IC.
             wells=(well_dicts or None),
             capture_zone_transient=bool(transient),
             sim_years=sim_years,
@@ -1378,7 +1378,7 @@ async def model_capture_zone_scenario(
             k_source, eff_k, eff_porosity, soil_k_meta
         ),
     }
-    # ADR 0223: promote the aquifer-K + regional-gradient prose caveats to
+    # promote the aquifer-K + regional-gradient prose caveats to
     # structured SyntheticInput review entries routed through gate_input_review, so
     # the demo defaults are machine-readable on the layer envelope (and reviewable
     # in user_gated sessions). The prose caveats stay on ``summary`` unchanged.
@@ -1459,7 +1459,7 @@ async def modflow_capture_zone(
     grid_type: str = "structured",
     aquifer_k_ms: float | None = None,
     porosity: float | None = None,
-    # ADR 0215: multi-well WELLFIELD + transient + NHD RIV boundaries.
+    # multi-well WELLFIELD + transient + NHD RIV boundaries.
     wells: list[Any] | None = None,
     transient: bool = False,
     sim_years: float | None = None,
@@ -1512,9 +1512,9 @@ async def modflow_capture_zone(
         grid_type: 'structured' (default, uniform 100 m grid) or 'disv_quadrefined'
             (a gridgen 3-level quad-refined DISV vertex grid around the well, 12.5 m
             finest cell) that resolves the pumping cone the structured grid smears
-            (ADR 0258; single-well steady only, needs the gridgen binary).
+            (; single-well steady only, needs the gridgen binary).
         aquifer_k_ms / porosity: optional demo-aquifer overrides.
-        compute_class: FR-CE-3 compute class. Default ``'standard'``. PRT
+        compute_class: compute class. Default ``'standard'``. PRT
             archetypes run LOCAL-ONLY (fast; Batch is not used).
 
     Returns:
@@ -1525,7 +1525,7 @@ async def modflow_capture_zone(
         (incl. a missing well) the tool returns a typed error the agent narrates
         honestly -- it never fabricates a well.
 
-    FR-DC-6: ``cacheable=False`` + ``ttl_class="live-no-cache"`` +
+    ``cacheable=False`` + ``ttl_class="live-no-cache"`` +
     ``source_class="workflow_dispatch"``  -  the cache shim is NOT invoked.
     """
     aoi = _coerce_optional_latlon(aoi_latlon)

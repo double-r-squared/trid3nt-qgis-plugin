@@ -69,7 +69,7 @@ logger = logging.getLogger("trid3nt_server.agent.tools.processing.compute_skill_
 
 
 # ---------------------------------------------------------------------------
-# Error types (FR-AS-11 typed-error surface).
+# Error types (typed-error surface).
 # ---------------------------------------------------------------------------
 
 
@@ -599,7 +599,7 @@ def compute_skill_metrics(
     ``RMSE / (max(obs)-min(obs))`` (not a percent); the Anderson-Woessner
     ``<0.10`` band means RMSE within 10% of the observed head range.
 
-    **Errors (FR-AS-11):** ``SkillMetricsInputError`` (no selector given,
+    **Errors:** ``SkillMetricsInputError`` (no selector given,
     mismatched array lengths, unresolvable column); ``SkillMetricsNoDataError``
     (zero usable paired samples after dropping non-finite entries);
     ``SkillMetricsUpstreamError`` (S3 download / table read failed);

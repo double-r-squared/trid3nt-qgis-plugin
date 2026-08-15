@@ -1,11 +1,11 @@
-"""fetch_lter_records hooks (ADR 0203): LTER / EDI environmental data records.
+"""fetch_lter_records hooks: LTER / EDI environmental data records.
 
 A generic reader for the long-term ecological / hydrologic station records the US
 LTER network publishes on the Environmental Data Initiative (EDI) repository. Given
 a PASTA package id (e.g. ``knb-lter-cwt.3037/19``) and an optional entity selector,
 it returns a parsed time-series dict for one CSV/TSV data entity of the package.
 
-ACCESS (ADR 0202): EDI's native PASTA REST API returns HTTP 403 anonymously from
+ACCESS: EDI's native PASTA REST API returns HTTP 403 anonymously from
 this environment. The identical EML metadata + data objects are mirrored PUBLICLY
 by DataONE (``cn.dataone.org/cn/v2/resolve/<encoded-PASTA-PID>``), which redirects
 to the member-node copy; a credentialed EDI pull would hit the identical bytes. So

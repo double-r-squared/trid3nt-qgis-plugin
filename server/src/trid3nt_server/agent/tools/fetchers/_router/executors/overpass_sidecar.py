@@ -1,4 +1,4 @@
-"""overpass_sidecar executor (trigger wave, ADR 0084): vector FGB + a tags SIDECAR.
+"""overpass_sidecar executor (trigger wave): vector FGB + a tags SIDECAR.
 
 The router is read-through-ONLY; fetch_buildings needs the ONE sanctioned side write:
 a ``.tags.json`` object keyed off the SAME cache key as the ``.fgb`` (the full OSM tag

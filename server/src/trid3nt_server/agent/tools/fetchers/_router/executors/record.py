@@ -1,4 +1,4 @@
-"""Record-return executor (ADR 0076): the bare-JSON-dict output shape.
+"""Record-return executor: the bare-JSON-dict output shape.
 
 Selected when a spec declares ``shape: record`` / ``output.layer_type: record``.
 The source's result is a STRUCTURED DICT (a discovery record, a summary), NOT a

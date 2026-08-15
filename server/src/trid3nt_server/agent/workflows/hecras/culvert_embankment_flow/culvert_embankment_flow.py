@@ -1,10 +1,10 @@
 """Engine template ``culvert_embankment_flow`` -- HEC-RAS 2D culvert through a road/levee
-embankment (ADR 0251 Stage 2).
+embankment (Stage 2).
 
-The productionization of the ADR 0250/0251 2D-structure seam: the Culvert is the ONE
+The productionization of the 2D-structure seam: the Culvert is the ONE
 2D hydraulic structure the HEC-RAS 2025 managed beta wires into the compute
 (``InitializeDriver_Culverts`` -> ``new Culvert(...)`` copies every barrel/opening
-field into the solve; authored weirs/gates/pumps are silently inert, ADR 0250). This
+field into the solve; authored weirs/gates/pumps are silently inert). This
 template AUTHORS a culvert barrel + its BarrelProperties + OpeningProperties on a
 real-reach 2D deck (real 3DEP terrain, the road embankment IN the lidar) and runs the
 present-vs-absent A/B: WITHOUT the barrel the embankment blocks the reach and ponds it
@@ -16,7 +16,7 @@ Backend: ``services/workers/hecras2025/subst/crux/freshtopo/culvert_reach_pipeli
 FIDELITY (loud, NATE no-hand-wave): the SOLVE is the 2025 managed CPU shallow-water
 engine (beta); the culvert physics is the wired ``InitializeDriver_Culverts`` path
 (inlet-control chart/scale + entrance/exit loss + barrel Manning + inverts), proven to
-MOVE WATER (ADR 0251 seam-probe max|A-B|=3.4 m; the ADR 0250 weir A/B was 0.0, inert).
+MOVE WATER (seam-probe max|A-B|=3.4 m; the weir A/B was 0.0, inert).
 SCREENING-grade. The barrel engineering params (diameter, invert, opening type,
 entrance/exit loss, Manning) are UN-FETCHABLE -> they go through the input-review gate
 with labeled defaults, never invented silently. ASCII only.
@@ -104,7 +104,7 @@ _OPENING_TYPES = (
 _FIDELITY_NOTE: str = (
     "HEC-RAS 2025 MANAGED engine (beta) 2D culvert-through-embankment: a barrel authored "
     "on a real-reach deck (fetched 3DEP terrain), prepared + solved on the CPU. The culvert "
-    "physics is the wired InitializeDriver_Culverts path (proven to move water, ADR 0251 "
+    "physics is the wired InitializeDriver_Culverts path (proven to move water "
     "seam-probe). Present-vs-absent A/B: the embankment blocks + ponds the reach without the "
     "barrel; the barrel conveys it under the road. SCREENING-grade; barrel engineering is "
     "labeled (input-review gate), not measured."
@@ -170,7 +170,7 @@ async def culvert_embankment_flow(
     embankment", "route reach flow under a road/levee with a culvert". Authors a culvert
     barrel on a real-reach 2D deck (fetched 3DEP terrain, the road embankment in the
     lidar) and runs the present-vs-absent A/B on the HEC-RAS 2025 managed CPU engine --
-    the ONE 2D structure the beta wires into the solve (ADR 0250/0251). For open-floodplain
+    the ONE 2D structure the beta wires into the solve. For open-floodplain
     flooding (no structure) use ``hecras_flood_2d``; for storm-drain pipe networks use
     ``swmm_urban_flood``.
 

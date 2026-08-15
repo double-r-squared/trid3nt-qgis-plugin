@@ -191,7 +191,7 @@ async def landlab_green_ampt_overland_flow(
         green_ampt_soil_type: soil texture class (default "sandy loam").
         target_resolution_m: grid cell size, m (default 30).
         compute_class: compute class (default "standard").
-        input_mode: run-mode lever (ADR 0107). "user_gated" presents the resolved
+        input_mode: run-mode lever. "user_gated" presents the resolved
             triggering rainfall + demo soil block for review before the solve;
             "auto" (default) proceeds with them labeled.
 

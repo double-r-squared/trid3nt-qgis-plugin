@@ -104,7 +104,7 @@ GEOCLAW_OUTPUT_GLOBS: list[str] = [
     "_output/fgout*.t*",
     "_output/fgout*.b*",
     "deck_manifest.json",
-    # Okada seafloor-deformation source (tsunami synthetic Okada, ADR 0226): the
+    # Okada seafloor-deformation source (tsunami synthetic Okada): the
     # final-time dZ ESRI-ASCII the composer rasterizes into the coseismic-
     # deformation PRODUCT, plus the dtopo/maketopo provenance the run keeps. This
     # manifest list is AUTHORITATIVE (it overrides the worker's DEFAULT_OUTPUT_GLOBS),
@@ -118,8 +118,8 @@ GEOCLAW_OUTPUT_GLOBS: list[str] = [
     # as the deformation artifacts above: this list replaces the worker's
     # DEFAULT_OUTPUT_GLOBS (which does carry "*.tif"), so without this entry the
     # postprocess COGs are silently never uploaded even though
-    # publish_manifest.json already references their cog_uris (ADR 0233
-    # rebuild-smoke finding, run 01KZWT7J3T0V95E8HF0E5S8XHF).
+    # publish_manifest.json already references their cog_uris
+    # (rebuild-smoke finding, run 01KZWT7J3T0V95E8HF0E5S8XHF).
     "*.tif",
 ]
 

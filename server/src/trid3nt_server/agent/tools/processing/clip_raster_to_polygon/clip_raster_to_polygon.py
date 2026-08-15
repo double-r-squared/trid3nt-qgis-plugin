@@ -22,7 +22,7 @@ memory rule). Typical compositions::
         target_crs="EPSG:3857",
     )
 
-The result is a clipped GeoTIFF stored under the FR-DC-3 cache shim at::
+The result is a clipped GeoTIFF stored under the cache shim at::
 
     s3://trid3nt-cache/cache/static-30d/clip_raster_polygon/<key>.tif
 
@@ -45,10 +45,10 @@ nodata_outside)`` -- all four parameters materially affect the output pixels.
 **Cross-cutting invariants:**
 
 - **Invariant 2 (Deterministic workflows): preserves.** Zero LLM calls.
-- **FR-DC-6 (cacheable): honors.** ``cacheable=True``,
+- **(cacheable): honors.** ``cacheable=True``,
   ``ttl_class="static-30d"``, ``source_class="clip_raster_polygon"`` -- clip of
   a static raster + static polygon is stable.
-- **NFR-R-1 (resilience): preserves.** Failures surface as
+- **(resilience): preserves.** Failures surface as
   ``ClipRasterPolygonError`` (typed, never unhandled exception).
 - **CRS hygiene end-to-end:** polygon is reprojected to the raster's native
   CRS before masking; output preserves the source raster CRS.
@@ -83,7 +83,7 @@ class ClipRasterPolygonError(RuntimeError):
     """Raised when polygon-clip fails or inputs cannot be fetched/opened.
 
     ``error_code`` carries a SCREAMING_SNAKE_CASE code surfaced in the
-    pipeline strip (NFR-R-1 typed-error requirement).
+    pipeline strip (typed-error requirement).
 
     Codes:
     - ``RASTER_OPEN_FAILED`` -- could not open raster_uri with rasterio.

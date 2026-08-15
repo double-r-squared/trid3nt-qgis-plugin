@@ -1,10 +1,10 @@
 """Parametric Holland-1980 hurricane wind/pressure fields as SCHISM sflux inputs.
 
-The honest, feasible PaHM route for OUR worker image (ADR 0217). The baked
+The honest, feasible PaHM route for OUR worker image. The baked
 full-monty binary (``pschism_WWM_COSINE_..._PAHM_...``) carries ``USE_PAHM``, but a
 full-monty run unconditionally initializes EVERY compiled tracer module and so
 demands every module namelist (icm.nml, sediment.nml, cosine.nml, fib.nml,
-marsh, ...) -- the documented ADR 0115 friction that led to the targeted binaries.
+marsh, ...) -- the documented friction that led to the targeted binaries.
 There is no targeted PaHM-only binary in the image. Rather than rebuild a fourth
 binary, this authors STANDALONE parametric wind/pressure fields (Holland 1980) as
 the ``sflux/`` atmospheric-forcing inputs the CLEAN hydro-core binary

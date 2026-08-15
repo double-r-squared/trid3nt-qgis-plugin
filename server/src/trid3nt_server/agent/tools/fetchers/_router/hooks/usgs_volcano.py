@@ -1,4 +1,4 @@
-"""usgs_volcano hooks (ADR 0056): USGS HANS volcano alerts -> point features.
+"""usgs_volcano hooks: USGS HANS volcano alerts -> point features.
 
 The irreducible step: a TWO-endpoint static request (the alert list keyed by vnum
 + the geographic list keyed by vnum) that the parse hook inner-joins on vnum, then

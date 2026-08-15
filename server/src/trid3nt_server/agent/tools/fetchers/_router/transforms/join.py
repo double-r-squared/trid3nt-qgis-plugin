@@ -56,7 +56,7 @@ def select_variable(spec: SourceSpec, params: dict[str, Any]) -> tuple[str, dict
     """
     join_block = spec.join or {}
     variables = (join_block.get("values") or {}).get("variables") or {}
-    # variable_param (ADR 0084): the request param carrying the variable/segment name
+    # variable_param: the request param carrying the variable/segment name
     # (default "variable"; lehd_jobs names it "segment"). No-op for census (default).
     variable_param = join_block.get("variable_param", "variable")
     requested = params.get(variable_param)
@@ -71,7 +71,7 @@ def select_variable(spec: SourceSpec, params: dict[str, Any]) -> tuple[str, dict
     if low in variables:
         return low, dict(variables[low])
     # Raw ACS estimate-code passthrough (full fidelity, NATE-chosen). allow_raw_code
-    # (ADR 0084) gates it OFF for a closed-vocabulary source (lehd segments), whose
+    # gates it OFF for a closed-vocabulary source (lehd segments), whose
     # unknown value must raise the twin's plain enum error. Default True = census.
     if join_block.get("allow_raw_code", True) and is_raw_passthrough_code(key):
         code = key.upper()
@@ -143,7 +143,7 @@ def join_on_key(
     key_field = geom_cfg.get("key_field", "GEOID")
     keep = geom_cfg.get("keep", [])
     units = var_spec.get("units")
-    # value_field (ADR 0084): the property carrying the variable/segment label
+    # value_field: the property carrying the variable/segment label
     # (default "variable"; lehd_jobs -> "segment"). extra_props: static param-echo
     # columns ({prop: {param: <name>}}) the twin stamps beyond the join (lehd year).
     # Both default to census's exact schema (no-op).
@@ -208,7 +208,7 @@ def fetch_values(
 
     join_block = spec.join or {}
     values_cfg = join_block.get("values") or {}
-    # values_hook (ADR 0084): a source whose values leg is NOT the census Data-API
+    # values_hook: a source whose values leg is NOT the census Data-API
     # (lehd's per-state bulk gzip-CSV) declares a pure plan+parse hook pair. The
     # transport (the plan GETs) + honesty stay router-owned here; the hooks only
     # build the requests and decode the bytes. No-op for census (no values_hook).
@@ -251,7 +251,7 @@ def _fetch_values_via_hook(
     params: dict[str, Any],
     vhook: dict[str, Any],
 ) -> dict[str, dict[str, float | None]]:
-    """Values leg via the declared plan+parse hooks; router owns the I/O (ADR 0084).
+    """Values leg via the declared plan+parse hooks; router owns the I/O.
 
     ``plan(spec, scope_keys, var_spec, params) -> [(scope_key, RequestPlan)]`` is pure;
     the transport GETs each plan (a whole-object gzip, best-effort skipped on failure so

@@ -1,10 +1,10 @@
-"""mrms_qpe hooks (grib_object + resolve phase, ADR 0069): NOAA MRMS MultiSensor
+"""mrms_qpe hooks (grib_object + resolve phase): NOAA MRMS MultiSensor
 QPE gauge-corrected precipitation, a whole-object ``.grib2.gz`` behind an S3 key.
 
 The MRMS key is discovered by an S3 list-objects walk -- ``latest`` (newest file in
 the most-recent date directory) or a targeted ``valid_time`` (the nearest-earlier
 published hour within a 24 h walkback). Both fit the SINGLE-round resolve phase
-(ADR 0063/0064): ``resolve_build`` emits the candidate list-object probes (all return
+: ``resolve_build`` emits the candidate list-object probes (all return
 HTTP 200 with-or-without the key, never a 404), the router GETs them, and
 ``resolve_parse`` scrapes the ``<Key>`` set + picks the resolved key, merging it into
 ``params`` PRE-cache-key. The main fetch is the ``grib_object`` raster access mode
@@ -39,7 +39,7 @@ _ACCUM_ALIAS_MAP: dict[str, str] = {
 #: number of trailing date directories the latest walk lists (Pass2 lags ~2 h, so
 #: the newest file is within today or yesterday UTC); the twin lists ALL date
 #: prefixes then the newest date's files -- listing the last two date dirs + picking
-#: the max key resolves the identical latest file in the normal case (ADR 0069 (a)).
+#: the max key resolves the identical latest file in the normal case ((a)).
 _LATEST_DATE_DIRS = 2
 
 #: targeted-mode walkback ceiling (hours), the twin's 24 h nearest-earlier probe.

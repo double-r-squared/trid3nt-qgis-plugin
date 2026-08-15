@@ -1,9 +1,9 @@
-"""openfema_disasters hooks (chained-resolution mode, ADR 0064): FEMA disaster
+"""openfema_disasters hooks (chained-resolution mode): FEMA disaster
 declarations aggregated per county, joined to Census TIGERweb county polygons.
 
 Two ratchets retired at once here:
 1. OFFSET paging ($skip/$top, stop-on-short-page) -- the ``next_page`` hook reuses
-   the ADR 0063 offset-paging primitive (gbif's sibling): one combined OData query
+   the offset-paging primitive (gbif's sibling): one combined OData query
    over the selector's states, paged to a short page / a row cap.
 2. ATTRIBUTE-FEED <- BOUNDARY-SERVICE FIPS join -- the PHASE-E enrichment: the
    declarations are the attribute feed; ``enrich_plan`` emits one TIGERweb county
@@ -11,7 +11,7 @@ Two ratchets retired at once here:
    aggregate onto its county polygon by the 5-digit GEOID (bbox-clipping the
    selector path). This is the enrich shape, NOT ``transforms/join.py`` (that
    transform is geometry-first single-value choropleth; openfema is
-   attributes-first multi-field aggregate -- see ADR 0064 for why they diverge).
+   attributes-first multi-field aggregate -- the shapes diverge on purpose).
 
 All I/O (both round-trip families, the paging loop, the deduped/bounded/best-effort
 county-geometry loop, retry, cache, FGB serialize, LayerURI) stays router-owned;
@@ -41,7 +41,7 @@ _TIGER_COUNTY_URL = (
 #: OpenFEMA page size ($top); pages by $skip until a short page or the row cap.
 _PAGE_SIZE = 1000
 #: Safety cap on total declaration rows pulled over the combined query (the twin's
-#: per-state cap; the combined-query cap is total, flagged in ADR 0064).
+#: per-state cap; the combined-query cap is total).
 _MAX_ROWS = 12000
 
 #: 2-letter USPS code -> 2-digit FIPS state code (50 states + DC + 5 territories).

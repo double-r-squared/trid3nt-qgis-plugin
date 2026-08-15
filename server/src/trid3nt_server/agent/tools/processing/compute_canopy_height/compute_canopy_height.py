@@ -42,7 +42,7 @@ Truthfulness floor: a canopy-height raster is a MODEL ESTIMATE (Tolan et al. MAE
 and a non-complete solve NEVER reads as success.
 
 Determinism boundary (Invariant 1): the tool stages + dispatches + publishes; no
-LLM call anywhere. FR-DC-6: ``cacheable=False`` + ``ttl_class="live-no-cache"`` +
+LLM call anywhere. ``cacheable=False`` + ``ttl_class="live-no-cache"`` +
 ``source_class="workflow_dispatch"`` -- the cache shim is NOT invoked (it
 dispatches a real solver run, like the other solver dispatchers).
 """
@@ -583,7 +583,7 @@ async def _fetch_naip_rgb_uri(bbox: tuple[float, float, float, float]) -> str:
     NAIP is the CONUS sub-metre RGB source (the data-source fallback norm:
     NAIP -> [future Maxar] -> honest typed error). Reuses the existing
     ``fetch_naip`` tool via the registry seam (folded to a spec-driven surface,
-    ADR 0080; its output is an s3:// cache COG handle). ``fetch_naip`` is
+    ; its output is an s3:// cache COG handle). ``fetch_naip`` is
     synchronous (a cached read-through) so it runs off the loop.
     """
     from trid3nt_server.agent.tools import TOOL_REGISTRY

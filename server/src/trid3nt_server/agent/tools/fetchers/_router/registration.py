@@ -146,7 +146,7 @@ def promoted_signature(spec: SourceSpec) -> tuple[inspect.Signature, dict[str, A
         inspect.Parameter("_extra_ignored", inspect.Parameter.VAR_KEYWORD, annotation=Any)
     ]
     annotations["_extra_ignored"] = Any
-    # An animation_frames source returns an ordered list[LayerURI] (ADR 0087); every
+    # An animation_frames source returns an ordered list[LayerURI]; every
     # other shape returns a single LayerURI / record dict. The return annotation is
     # cosmetic to the inputSchema (built from params) but kept honest so the promoted
     # signature reads like the twin's ``-> list[LayerURI]``.
@@ -184,7 +184,7 @@ def _estimator_module(spec: SourceSpec) -> str:
 
 
 def _validate_hooks(spec: SourceSpec) -> None:
-    """Assert every ``hooks.*`` name the spec declares resolves at load (ADR 0056).
+    """Assert every ``hooks.*`` name the spec declares resolves at load.
 
     The hook contract is a name-string reference; a typo or a deleted hook must
     fail LOUDLY at registration, not silently at first call. Importing
@@ -207,14 +207,14 @@ def _validate_hooks(spec: SourceSpec) -> None:
                     f"spec {spec.name!r} references unknown hook {point}={name!r}"
                 )
 
-    # variant_by_emptiness (ADR 0081): the emptiness-switch hook name must resolve.
+    # variant_by_emptiness: the emptiness-switch hook name must resolve.
     vbe = spec.output.variant_by_emptiness
     if vbe and not has_hook(vbe):
         raise HookResolutionError(
             f"spec {spec.name!r} references unknown variant_by_emptiness hook {vbe!r}"
         )
 
-    # record shape (ADR 0076): a record source MUST declare hooks.record (the router
+    # record shape: a record source MUST declare hooks.record (the router
     # has nothing else to shape the dict); a delegate_resolve pairs with a delegate.
     if spec.output.layer_type == "record":
         record_hook = spec.hooks.record if spec.hooks is not None else None
@@ -227,7 +227,7 @@ def _validate_hooks(spec: SourceSpec) -> None:
             f"spec {spec.name!r}: hooks.delegate_resolve requires hooks.delegate"
         )
 
-    # animation_frames shape (ADR 0087): a frames-list source MUST declare both
+    # animation_frames shape: a frames-list source MUST declare both
     # frames_plan (pre-loop resolve) and frame_bytes (per-frame COG builder); the
     # executor has nothing else to resolve the frame set / build a frame.
     if spec.shape == "animation_frames":
@@ -239,7 +239,7 @@ def _validate_hooks(spec: SourceSpec) -> None:
                 f"hooks.frames_plan + hooks.frame_bytes"
             )
 
-    # result_model (ADR 0073): if the spec names a LayerURI-subclass result model
+    # result_model: if the spec names a LayerURI-subclass result model
     # it must resolve, and it pairs with an envelope hook (each is meaningless
     # without the other). Fail LOUD per-spec at load, never silently at first call.
     from trid3nt_contracts.execution import LAYER_RESULT_MODELS
@@ -257,7 +257,7 @@ def _validate_hooks(spec: SourceSpec) -> None:
             f"declared together (got result_model={result_model!r}, envelope={envelope!r})"
         )
 
-    # provenance channel (ADR 0110): the fetch-time provenance is delivered to the
+    # provenance channel: the fetch-time provenance is delivered to the
     # envelope hook, so a spec that declares output.provenance MUST declare an
     # envelope hook to consume it (else the recorded dict has nowhere to land).
     if spec.output.provenance and not envelope:
@@ -319,13 +319,13 @@ def register_spec(spec: SourceSpec) -> str:
         payload_mb_estimator_name="estimate_payload_mb",
         open_world_hint=True,
         tier=tier,
-        # ADR 0075: propagate output.auto_publish so the server dispatch wrapper
+        # propagate output.auto_publish so the server dispatch wrapper
         # renders (or suppresses) the raster exactly as it did for the twin's
         # metadata flag. Default True = the terminal-product behaviour for every
         # prior spec (none set output.auto_publish); an INTERMEDIATE raster spec
         # (fetch_3dep_extra) sets it False to opt out of the automatic render.
         auto_publish=spec.output.auto_publish,
-        # ADR 0225: DATA-native resolution declarations ride from the spec onto the
+        # DATA-native resolution declarations ride from the spec onto the
         # metadata so the gate card can quote them (two-layer truth: data facts here).
         resolution_specs=spec.resolution_declarations,
     )

@@ -40,10 +40,10 @@ This tool replaces both failure modes:
 
 - **Invariant 1 (Determinism boundary): preserves.** Pure geopandas/rasterio
   bbox extraction; no LLM, no estimate. The emitted bbox is workflow-attributed.
-- **FR-DC-6 (cacheable): honors.** ``cacheable=False`` /
+- **(cacheable): honors.** ``cacheable=False`` /
   ``ttl_class="live-no-cache"`` -- the tool has a side effect (it drives the map
   view) and is sub-second, so caching is both wrong and pointless.
-- **FR-AS-11 (typed errors): honors.** Every failure raises
+- **(typed errors): honors.** Every failure raises
   ``ComputeLayerBoundsError`` with a SCREAMING_SNAKE_CASE ``error_code``.
 """
 
@@ -69,7 +69,7 @@ logger = logging.getLogger("trid3nt_server.agent.tools.processing.compute_layer_
 
 
 # ---------------------------------------------------------------------------
-# Error class (FR-AS-11 typed errors)
+# Error class (typed errors)
 # ---------------------------------------------------------------------------
 
 
@@ -77,7 +77,7 @@ class ComputeLayerBoundsError(RuntimeError):
     """Raised when layer-bounds computation fails.
 
     ``error_code`` carries a SCREAMING_SNAKE_CASE code surfaced in the pipeline
-    strip / function_response (FR-AS-11 typed-error requirement).
+    strip / function_response (typed-error requirement).
 
     Codes:
     - ``UNKNOWN_LAYER_URI`` -- uri is neither an s3:// URI nor a readable
@@ -97,7 +97,7 @@ class ComputeLayerBoundsError(RuntimeError):
 
 # ---------------------------------------------------------------------------
 # Metadata -- NOT cacheable: this tool has a side effect (drives the map view)
-# and is sub-second. live-no-cache is the FR-DC-6-consistent declaration.
+# and is sub-second. live-no-cache is the uncacheable-consistent declaration.
 # ---------------------------------------------------------------------------
 
 _COMPUTE_LAYER_BOUNDS_METADATA = AtomicToolMetadata(

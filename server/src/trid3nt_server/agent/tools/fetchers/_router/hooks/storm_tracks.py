@@ -1,7 +1,7 @@
-"""Hurricane / tropical-cyclone track delegate hooks (ADR 0111): the ``fetch_storm_tracks`` fold.
+"""Hurricane / tropical-cyclone track delegate hooks: the ``fetch_storm_tracks`` fold.
 
 ``fetch_storm_tracks`` folds onto the router as a ``library_delegate`` VECTOR source
-carrying BOTH of its modes under one name. The decisive blocker ADR 0090 named was the
+carrying BOTH of its modes under one name. The decisive blocker named was the
 ACTIVE mode's second fetch round: a BINARY zip-shapefile (the NHC forecast-track GIS
 product) that must be extracted + read via geopandas + reprojected -- I/O inside what
 would be a PURE enrich hook, which no chained-resolution phase carries. The fold
@@ -23,7 +23,7 @@ bespoke body lives here as the delegate:
     point features); ACTIVE resolves NHC CurrentStorms.json then, per storm, fetches
     the ``forecastTrack.zipFile`` binary, extracts ``*_pts.shp`` to a tempdir, reads it
     via geopandas, and reprojects to EPSG:4326. Returns GeoJSON features for the shared
-    ``vector_fgb`` serializer, and RECORDS the fetch-time mode provenance (ADR 0110).
+    ``vector_fgb`` serializer, and RECORDS the fetch-time mode provenance.
   * ``storm_tracks.envelope`` -- the twin's exact ``storm-tracks-{seed}`` layer_id +
     ``Storm tracks - <mode> (<scope>)`` name, plus the mode / storm-attribution
     provenance read back from the channel (declared defaults on a pre-channel cache
@@ -31,7 +31,7 @@ bespoke body lives here as the delegate:
 
 The ``StormTracks*Error`` classes live HERE (their stable importable home now that the
 coded twin is deleted). Their base is ``FetchError`` so ``library_delegate.invoke``
-passes them through unchanged (its ``except FetchError: raise`` passthrough, ADR 0097),
+passes them through unchanged (its ``except FetchError: raise`` passthrough),
 preserving the pinned ``error_code`` through the delegate wrapper.
 """
 
@@ -77,8 +77,8 @@ __all__ = [
 
 
 # ---------------------------------------------------------------------------
-# Error types (FR-AS-11 typed-error surface). Base = FetchError so the pinned
-# error_code survives library_delegate.invoke's passthrough (ADR 0097).
+# Error types (typed-error surface). Base = FetchError so the pinned
+# error_code survives library_delegate.invoke's passthrough.
 # ---------------------------------------------------------------------------
 
 
@@ -590,7 +590,7 @@ def _fetch_forecast_track_points(
 ) -> list[dict[str, Any]]:
     """Best-effort: NHC 5-day forecast-track zipped shapefile -> point records.
 
-    This is the BINARY-SECONDARY-ENRICHMENT round (ADR 0090/0111): the delegate
+    This is the BINARY-SECONDARY-ENRICHMENT round: the delegate
     fetches the ``forecastTrack`` zip, extracts ``*_pts.shp`` to a tempdir, and reads
     it via geopandas + reproject -- I/O the delegate socket sanctions. Any failure
     returns ``[]`` (the caller degrades to current-position-only, never fabricates).
@@ -917,7 +917,7 @@ def resolve_storm_tracks(spec: Any, params: dict[str, Any]) -> dict[str, Any]:
 def read_storm_tracks(
     spec: Any, params: dict[str, Any], *, timeout_s: float
 ) -> list[dict[str, Any]]:
-    """Fetch storm tracks (both modes); RECORD mode provenance (ADR 0110); return features."""
+    """Fetch storm tracks (both modes); RECORD mode provenance; return features."""
     bbox = params.get("bbox")
     resolved_bbox = tuple(float(v) for v in bbox) if bbox is not None else None
     name_canon = params.get("storm_name")
@@ -959,7 +959,7 @@ def envelope_storm_tracks(
     data: bytes | None,
     provenance: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
-    """Build the twin's exact layer_id / name + the mode-provenance fields (ADR 0110)."""
+    """Build the twin's exact layer_id / name + the mode-provenance fields."""
     active_only = bool(params.get("active_only", False))
     name_canon = params.get("storm_name")
     if isinstance(name_canon, str):

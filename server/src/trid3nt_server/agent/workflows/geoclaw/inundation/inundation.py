@@ -16,7 +16,7 @@ registered engine TEMPLATE tagged ``engine="geoclaw", tier="template"`` -
 EXCLUDED from the default retrieval pool and surfaced only by the ``run_geoclaw``
 door's gate expansion (SELECT-THEN-CALL). Like the other templates it declares
 ``cacheable=False`` + ``ttl_class="live-no-cache"`` +
-``source_class="workflow_dispatch"`` (FR-DC-6 - workflow exposure surface; never
+``source_class="workflow_dispatch"`` (workflow exposure surface; never
 touches the cache shim).
 
 GeoClaw is CONTAINER-ONLY (the Clawpack Fortran lives in the worker container
@@ -143,7 +143,7 @@ TEMPLATE_CARD = TemplateCard(
 )
 
 
-#: ADR 0230: the Slab2 SCENARIO subfault-tiling patch size. The finer floor is the
+#: the Slab2 SCENARIO subfault-tiling patch size. The finer floor is the
 #: Slab2 grid native spacing (~0.05 deg ~ 5 km) -- a tiling finer than the interface
 #: grid buys no geometry fidelity; coarser is a valid cheaper (fewer-subfault) tiling,
 #: so no upper bound. Named per the NATE convention (any resolution-class param =
@@ -161,7 +161,7 @@ _SCENARIO_TILING_RES_SPEC = ResolutionSpec(
     ),
 )
 
-#: ADR 0230 follow-up -- the SCENARIO-scale bathymetry target cell (metres). A
+#: follow-up -- the SCENARIO-scale bathymetry target cell (metres). A
 #: basin-scale scenario (a full-margin Slab2 rupture encloses a ~6x6 deg domain)
 #: has no use for the fine NOAA CUDEM 1/9" (~3 m) nearshore composite: pulling the
 #: 90 dense CUDEM tiles that intersect a full Cascadia margin is ~1e8 cells / ~15 GB
@@ -174,7 +174,7 @@ _SCENARIO_TILING_RES_SPEC = ResolutionSpec(
 #: a caller may override it via the composer's bathy_target_resolution_m thread.
 _SCENARIO_BATHY_TARGET_RES_M = 1852.0  # 1 arcminute at the equator
 
-#: ADR 0224 precedent: at/above this cell the fine CUDEM 1/9" nearshore composite is
+#: precedent: at/above this cell the fine CUDEM 1/9" nearshore composite is
 #: SKIPPED -- it is coarser than the global ETOPO 2022 15" base's own ~450 m native
 #: cell, so CUDEM's fine structure cannot survive resampling onto the coarse grid and
 #: reading dozens of per-tile CUDEM COGs is wasted network cost with zero fidelity gain.
@@ -308,7 +308,7 @@ async def geoclaw_inundation(
             slip-weighted rupture centroid.
         target_resolution_m: OPTIONAL Slab2 scenario subfault patch edge (m,
             default 20000). Declared range >= 5000 m (Slab2 grid ~5 km native);
-            a finer ask is quoted back (ADR 0225).
+            a finer ask is quoted back.
         surge_forcing_uri: optional sea-surface hydrograph CSV.
         output_frames: animation frame count (default 24).
         amr_levels: AMR refinement levels (default 2).
@@ -339,7 +339,7 @@ async def geoclaw_inundation(
             fort.q output). The peak-depth layer is unchanged. Try ~12-24 for a
             fluid run-up animation. 0 keeps the fort.q-frame animation.
         compute_class: compute class (default "standard").
-        input_mode: run-mode lever (ADR 0107). ``"user_gated"`` presents the
+        input_mode: run-mode lever. ``"user_gated"`` presents the
             resolved inputs (dam height/location, magnitude, window) for review
             before the solver launches; ``"auto"`` (default, or the session
             default) proceeds with the inputs labeled.
@@ -351,7 +351,7 @@ async def geoclaw_inundation(
         On failure: ``{"status": "error", "error_code", "error_message"}``.
         Not cached (``cacheable=False``).
 
-    FR-DC-6: ``cacheable=False``, ``ttl_class="live-no-cache"``,
+    ``cacheable=False``, ``ttl_class="live-no-cache"``,
     ``source_class="workflow_dispatch"`` -- cache shim not invoked.
     """
     # --- Validate + coerce into the GeoClawRunArgs contract -----------------
@@ -385,12 +385,12 @@ async def geoclaw_inundation(
     effective_source_lonlat = source_lonlat
     effective_dam_depth = dam_break_depth_m
     dam_source_note: str | None = None
-    # ADR 0226 finite-fault upgrade: a resolved measured-inversion source (staged
+    # finite-fault upgrade: a resolved measured-inversion source (staged
     # CSV + rupture footprint), threaded into the run_args when the ComCat event
     # carries a USGS finite-fault product.
     finite_fault_uri: str | None = None
     finite_fault_footprint: tuple[float, float, float, float] | None = None
-    # ADR 0230 follow-up: a DECLARED basin-scale bathymetry cell floor, set ONLY by
+    # follow-up: a DECLARED basin-scale bathymetry cell floor, set ONLY by
     # the Slab2 SCENARIO front door (a full-margin rupture domain has no use for the
     # fine CUDEM nearshore composite). None on every other path -> the native fetch.
     bathy_target_resolution_m: float | None = None
@@ -400,7 +400,7 @@ async def geoclaw_inundation(
     provenance: list[SyntheticInput] = []
     _scenario_l = str(scenario).strip().lower()
 
-    # --- Real-event tsunami source (ADR 0226): resolve a named seismic region to
+    # --- Real-event tsunami source: resolve a named seismic region to
     # the LARGEST USGS ComCat event and drive the Okada source from its REAL
     # epicenter / focal depth / Mw. Forces the tsunami scenario. The mechanism
     # (strike/dip/rake) stays DERIVED (subduction-interface thrust) unless the user
@@ -499,7 +499,7 @@ async def geoclaw_inundation(
             (_ff_model.provenance_label if finite_fault_uri else "none (single-subfault)"),
         )
 
-    # --- SCENARIO tsunami source (ADR 0230): a HYPOTHETICAL rupture on the REAL USGS
+    # --- SCENARIO tsunami source: a HYPOTHETICAL rupture on the REAL USGS
     # Slab2 subduction-interface geometry. Unlike earthquake_source (a named real
     # catalog event), scenario_fault answers "what if <zone> ruptures at M<x>" -- there
     # is NO measured slip to fetch, so the geometry is the published Slab2 dep/str/dip
@@ -521,7 +521,7 @@ async def geoclaw_inundation(
             }
         try:
             # None (the module default subfault size) is always in-range; an
-            # out-of-declared-range ask is quoted back (ADR 0225).
+            # out-of-declared-range ask is quoted back.
             enforce_resolution(_SCENARIO_TILING_RES_SPEC, target_resolution_m)
         except Exception as exc:  # noqa: BLE001 - ResolutionOutOfRangeError -> typed
             return {
@@ -552,7 +552,7 @@ async def geoclaw_inundation(
         _scenario_l = "tsunami"
         source_magnitude = float(scenario_magnitude)
         effective_source_lonlat = _epi if _epi is not None else _scn_model.centroid_lonlat
-        # ADR 0230 follow-up: a full-margin scenario domain is basin-scale -- floor
+        # follow-up: a full-margin scenario domain is basin-scale -- floor
         # the domain-wide bathymetry to the ~1 arcminute ETOPO deep-water class and
         # skip the fine CUDEM nearshore composite (the fine coastal AOI still nests
         # its own fine SHORE topo). Declared, not a universal rollout.
@@ -711,7 +711,7 @@ async def geoclaw_inundation(
         # tsunami / surge ignore dam_break_depth_m; give the contract its default.
         effective_dam_depth = 10.0
 
-    # --- ADR 0107 two-mode input gate: review-before-run -----------------------
+    # --- two-mode input gate: review-before-run -----------------------
     # Inputs are RESOLVED (NID dam or user values / tsunami source); in
     # user_gated mode present them for review/adjust BEFORE the consequential
     # solver dispatch, and stamp exactly the reviewed entries so what-was-approved
@@ -762,7 +762,7 @@ async def geoclaw_inundation(
                 kwargs["source_lonlat"] = (float(sl[0]), float(sl[1]))
         if tsunami_dtopo_uri:
             kwargs["tsunami_dtopo_uri"] = str(tsunami_dtopo_uri)
-        # Finite-fault measured-inversion source (ADR 0226): staged CSV + rupture
+        # Finite-fault measured-inversion source: staged CSV + rupture
         # footprint. Ignored when a prescribed dtopo was given (a staged dtopo wins).
         if finite_fault_uri and not tsunami_dtopo_uri:
             kwargs["finite_fault_uri"] = str(finite_fault_uri)
@@ -934,7 +934,7 @@ def _fetch_topo_for_geoclaw(
     the FULL (offshore-extended) domain -- guaranteeing the open-ocean portion is
     genuinely-negative bathymetry rather than a flat land-DEM fill.
 
-    ``target_resolution_m`` (ADR 0230 follow-up): a DECLARED bathymetry cell floor
+    ``target_resolution_m`` (follow-up): a DECLARED bathymetry cell floor
     for a basin-scale acquisition. When set it floors the composite (``min_pixel_m``)
     so a coarse domain fetches a light COG, and -- at/above ``_GEOCLAW_CUDEM_SKIP_RES_M``
     (the 0224 threshold) -- SKIPS the fine CUDEM 1/9" nearshore composite LOUDLY (its
@@ -947,7 +947,7 @@ def _fetch_topo_for_geoclaw(
     Returns the DEM cache/runs ``s3://`` URI (staged BY REFERENCE - the worker
     downloads it directly). Raises ``GeoClawComposerError`` only when BOTH fail.
     """
-    # ADR 0097: fetch_dem is spec-driven -- resolve the promoted closure (keyword-only).
+    # fetch_dem is spec-driven -- resolve the promoted closure (keyword-only).
     from trid3nt_server.agent.tools import TOOL_REGISTRY
     from trid3nt_server.agent.tools import TOOL_REGISTRY as _TR; fetch_topobathy = lambda bbox=None, **_kw: _TR["fetch_topobathy"].fn(bbox=bbox, **_kw)
 
@@ -1189,14 +1189,14 @@ async def model_geoclaw_inundation(
             fetches it (``fetch_topobathy`` -> ``fetch_dem`` fallback). Tests pass
             a synthetic URI to skip the fetch.
         run_id: optional ULID; minted by the staging step if absent.
-        compute_class: FR-CE-3 compute class for the Batch sizing.
+        compute_class: compute class for the Batch sizing.
         cleanup_outputs: when True, the downloaded fort.q output dir is removed
             after postprocess (the COGs were already uploaded).
         dam_source_note: optional provenance string (dam-break: the resolved NID
             dam name + height, or a user-supplied note) stamped onto the returned
             layer's ``source_note`` so the agent narrates where the dam came from.
         bathy_target_resolution_m: optional DECLARED bathymetry cell floor (m) for a
-            basin-scale acquisition (ADR 0230). The Slab2 SCENARIO front door supplies
+            basin-scale acquisition. The Slab2 SCENARIO front door supplies
             the ~1 arcminute basin default so the full-margin domain topo fetch floors
             to a coarse ETOPO deep-water column and SKIPS the fine CUDEM nearshore
             composite (LOUDLY); ``None`` keeps the native full-resolution fetch.
@@ -1737,7 +1737,7 @@ async def model_geoclaw_inundation(
             build_geoclaw_mesh_layer, out_dir, run_id=staging.run_id
         )
 
-        # --- Okada seafloor-deformation PRODUCT (ADR 0226) --------------------
+        # --- Okada seafloor-deformation PRODUCT --------------------
         # For a tsunami synthetic-Okada run, rasterize the final-time dZ the worker
         # wrote (deformation_dz.asc) into a SIGNED uplift/subsidence COG -- the
         # direct answer to "what seafloor deformation does this quake drive". Built
@@ -1831,7 +1831,7 @@ async def model_geoclaw_inundation(
     if mesh_layer is not None:
         await publish_input_layer(emitter, mesh_layer, role="context")
 
-    # --- Step 6d: surface the Okada seafloor-deformation raster (ADR 0226) -----
+    # --- Step 6d: surface the Okada seafloor-deformation raster -----
     # A SIGNED raster COG, so it rides the render chokepoint (publish_layer) to get
     # its diverging tile URL + data-driven legend before add_loaded_layer. Its bbox
     # is the OFFSHORE Okada source box (distinct from the AOI coast). Never fatal.
@@ -2107,7 +2107,7 @@ def _is_geoclaw_output_key(base: str) -> bool:
     ``fgout_frames > 0``), the coastal ``gaugeNNNNN.txt`` time series (the
     gauge-timeseries template reads it; the plain inundation path ignores it), AND
     the tsunami Okada ``deformation_dz.asc`` (the final-time seafloor dZ the
-    postprocess rasterizes into the coseismic-deformation PRODUCT, ADR 0226)."""
+    postprocess rasterizes into the coseismic-deformation PRODUCT)."""
     return (
         base.startswith("fort.")
         or base.startswith("fgout")

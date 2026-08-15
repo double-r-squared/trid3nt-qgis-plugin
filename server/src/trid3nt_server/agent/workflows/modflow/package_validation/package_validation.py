@@ -1,4 +1,4 @@
-"""Engine template ``modflow_package_validation`` (ADR 0153).
+"""Engine template ``modflow_package_validation``.
 
 A THIN composer over the shared package-validation engine core. Five synthetic
 MF6 benchmark cases selected by ``case``, each exercising a package no archetype

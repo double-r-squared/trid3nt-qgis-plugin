@@ -203,7 +203,7 @@ def search_data_catalog(
         Empty list when no entries match -- the LLM should escalate to Mode 2
         (offer-catalog-addition) per §F.1.2 prose.
 
-    FR-DC-2 / FR-CE-8: registered with ``ttl_class="semi-static-7d"``,
+    Registered with ``ttl_class="semi-static-7d"``,
     ``source_class="search_data_catalog"``, ``cacheable=True``. The cache key
     incorporates topic + bbox + filter so repeat searches dedup.
     """

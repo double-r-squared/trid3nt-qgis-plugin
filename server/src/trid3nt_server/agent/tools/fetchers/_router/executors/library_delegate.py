@@ -1,4 +1,4 @@
-"""Generic library-delegate executor (ADR 0074, generalizing ADR 0040).
+"""Generic library-delegate executor.
 
 Some sources' maintained LIBRARY owns discovery AND the socket (pfdf's USGS TNM /
 STATSGO readers, the HRRR-Zarr fsspec/xarray store) -- so the router cannot build
@@ -19,7 +19,7 @@ impurity in the hook contract -- a hook that owns a socket -- so it is CONSTRAIN
     no HTTP status for a library socket, so ``classify_status`` does not apply --
     the hook owns the taxonomy, this wrapper is the backstop.
 
-The dataretrieval delegate (ADR 0040) is the vector precedent this generalizes; it
+The dataretrieval delegate is the vector precedent this generalizes; it
 keeps its own module (``dataretrieval_delegate``) for its service-dispatch shape,
 routed by the legacy ``ingest.delegate.library == 'dataretrieval'`` selector. A new
 generic delegate declares ``hooks.delegate`` (+ optional ``hooks.delegate_validate``)
@@ -64,7 +64,7 @@ def pre_validate(spec: SourceSpec, params: dict[str, Any]) -> None:
 
 
 def resolve(spec: SourceSpec, params: dict[str, Any]) -> dict[str, Any]:
-    """Run the socketed pre-cache-key resolve (``hooks.delegate_resolve``, ADR 0076).
+    """Run the socketed pre-cache-key resolve (``hooks.delegate_resolve``).
 
     The delegate sibling of the chained-resolution resolve phase, for a source whose
     cycle/key resolution walks a LIBRARY socket (HRRR-Zarr's s3fs cycle walk). Runs
@@ -92,7 +92,7 @@ def resolve(spec: SourceSpec, params: dict[str, Any]) -> dict[str, Any]:
     except FetchError:
         # Any typed FetchError the hook already raised -- a RouterError's A.6
         # class OR a source-specific FetchError subclass carrying a pinned
-        # error_code (fetch_dem's Dem*Error twins, ADR 0097) -- propagates
+        # error_code (fetch_dem's Dem*Error twins) -- propagates
         # UNCHANGED so its exact typed code survives. Only a NON-FetchError
         # library exception hits the generic upstream backstop below.
         raise
@@ -136,7 +136,7 @@ def invoke(spec: SourceSpec, params: dict[str, Any]) -> Any:
     try:
         return hook(spec, params, timeout_s=timeout_s)
     except FetchError:
-        # PASSTHROUGH (ADR 0097): the hook already raised a typed FetchError --
+        # PASSTHROUGH: the hook already raised a typed FetchError --
         # either a RouterError (its twin-identical A.6 input/empty/upstream
         # mapping) OR a source-specific FetchError subclass carrying a PINNED
         # error_code the router must not clobber (fetch_dem's DemPartialCoverageError

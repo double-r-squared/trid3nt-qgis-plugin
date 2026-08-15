@@ -11,9 +11,9 @@ This module implements the **M5 capstone composition**:
       -> run_solver(sfincs, model_setup_uri)
       -> wait_for_completion(handle)
       -> postprocess_flood
-      -> AssessmentEnvelope (Flood subtype, Appendix B.4)
+      -> AssessmentEnvelope (Flood subtype.4)
 
-Per Decision G + FR-TA-1, this workflow is **deterministic Python composition**
+Per +, this workflow is **deterministic Python composition**
 -- there is no LLM in the chain. The workflow returns a typed
 ``AssessmentEnvelope`` whose ``flood: FloodPayload`` subtype carries the
 narration metrics.
@@ -30,7 +30,7 @@ LLM exposure (workflow-as-atomic-tool-wrapper pattern):
 
 The wrapper forwards verbatim to the composer and returns the
 envelope's ``model_dump(mode="json")`` (a dict -- the LLM tool surface doesn't
-need the pydantic instance). The wrapper carries the FR-DC-6 ``cacheable=False``
+need the pydantic instance). The wrapper carries the ``cacheable=False``
 flag because workflows are uncacheable (the whole point is the dispatch +
 solver run + envelope build, never the cached return).
 
@@ -97,7 +97,7 @@ from trid3nt_server.agent.tools.fetchers.socioeconomic.geocode_location.geocode_
 
 
 def fetch_dem(**kwargs):
-    """Registry-closure indirection for the folded ``fetch_dem`` (ADR 0097).
+    """Registry-closure indirection for the folded ``fetch_dem``.
 
     ``fetch_dem`` is now a spec-driven router tool (no coded module); this
     module-level shim resolves it through ``TOOL_REGISTRY`` at call time and
@@ -110,7 +110,7 @@ def fetch_dem(**kwargs):
 
 
 def fetch_landcover(*args: Any, **kwargs: Any):
-    """fetch_landcover is spec-driven (ADR 0082): the twin was deleted, so this thin
+    """fetch_landcover is spec-driven: the twin was deleted, so this thin
     module-level indirection resolves the promoted router closure off the registry by
     name. Kept as a patchable module symbol for the flood-scenario consumer tests. It
     returns a LandcoverResult (a LayerURI subclass carrying the nlcd_vintage_year
@@ -121,7 +121,7 @@ def fetch_landcover(*args: Any, **kwargs: Any):
 
 
 def fetch_topobathy(bbox: Any = None, **kwargs: Any):
-    """Registry-closure indirection for the folded ``fetch_topobathy`` (ADR 0110).
+    """Registry-closure indirection for the folded ``fetch_topobathy``.
 
     ``fetch_topobathy`` is now a spec-driven router tool (no coded module); this
     module-level shim resolves it through ``TOOL_REGISTRY`` at call time and
@@ -391,7 +391,7 @@ async def model_flood_scenario(
     ``SFINCSSetupError("LULC_MAPPING_MISMATCH")`` on vintage mismatch),
     dispatches ``run_solver(sfincs, ...)``, awaits ``wait_for_completion``,
     postprocesses the run's NetCDF to a flood-depth COG, and returns a
-    typed ``AssessmentEnvelope`` Flood subtype (Appendix B.4).
+    typed ``AssessmentEnvelope`` Flood subtype (.4).
 
     On internal failure (fetch error, NLCD gate firing, SFINCS dispatch
     failure, SOLVER_FAILED, postprocess error), returns a typed
@@ -410,7 +410,7 @@ async def model_flood_scenario(
             ``{1, 2, 5, 10, 25, 50, 100, 200, 500, 1000}``. Default 100.
         duration_hr: design-storm duration in hours. Atlas 14 publishes a
             fixed row set; 24 hr is the v0.1 default.
-        compute_class: FR-CE-3 compute class. Default ``"medium"``.
+        compute_class: compute class. Default ``"medium"``.
         rainfall: rain-source lever. ``"design_storm"`` (default) emits the
             return-period Atlas-14 design-storm precipitation (behavior
             UNCHANGED). ``"none"`` builds a SURGE-ONLY deck (no
@@ -483,7 +483,7 @@ async def model_flood_scenario(
         quadtree: coastal SFINCS -- build the deck as a VARIABLE-RESOLUTION
             QUADTREE grid (coarse offshore -> fine at the coast + any drawn
             ``refine_region`` polygons) instead of a uniform regular grid, then
-            solve + postprocess it (M4 / ADR 0113). hydromt_sfincs CANNOT author a
+            solve + postprocess it (M4). hydromt_sfincs CANNOT author a
             quadtree from scratch (its ``setup_grid`` carries a ``# TODO
             gdf_refinement`` and ``setup_dep`` raises ``NotImplementedError`` for
             quadtree in every released version), so the authoring uses Deltares'
@@ -524,7 +524,7 @@ async def model_flood_scenario(
         wind: optional uniform-constant / uniform-SCHEDULE / gridded WIND
             forcing -- ``{"magnitude": <m/s>, "direction": <deg-from>}`` OR
             ``{"timeseries": [(t_s, magnitude_mps, direction_deg), ...]}``
-            (ADR 0162; ``t_s`` = seconds since sim-start, e.g. a ramping/
+            (; ``t_s`` = seconds since sim-start, e.g. a ramping/
             veering storm wind) OR ``{"grid_uri": <nc>}`` (user/ERA5 supplied,
             never fabricated). When set, defaults ``advanced_physics`` to
             ``{"advection": 1}`` (the registry exposes ``coriolis_latitude`` +
@@ -579,7 +579,7 @@ async def model_flood_scenario(
     sess_id = session_id or new_ulid()
     data_sources: list[DataSource] = []
     solver_run_ids: list[str] = []
-    grid_resolution_m = 30.0  # NFR-P-4 default; sec 4 immediate
+    grid_resolution_m = 30.0  # default; sec 4 immediate
 
     # RAIN LEVER normalization. "design_storm" (default) keeps the design-storm
     # precip path; "none" builds a surge-only deck (no precip block). Validated
@@ -608,8 +608,8 @@ async def model_flood_scenario(
     # testable signal off the existing workflow inputs -- no geometry/coastline
     # lookup needed. When False, the DEM fetch stays on ``fetch_dem`` exactly as
     # the v0.1 land/pluvial path (regression-critical).
-    # ``quadtree`` (the cht_sfincs variable-resolution coastal deck-build, M4 /
-    # ADR 0113) is a coastal-only path -- it needs the merged topo-bathymetry
+    # ``quadtree`` (the cht_sfincs variable-resolution coastal deck-build)
+    # is a coastal-only path -- it needs the merged topo-bathymetry
     # surface for the nearshore bed -- so it implies coastal regardless of the
     # explicit flag.
     # scenario-coverage couplings. A ``compound`` run is BOTH a
@@ -656,7 +656,7 @@ async def model_flood_scenario(
         duration_hr,
     )
 
-    # --- Step 0: bbox resolution (Decision K; bbox-direct wins precedence) ---
+    # --- Step 0: bbox resolution (; bbox-direct wins precedence) ---
     # audit #5: ``_resolve_bbox`` calls ``geocode_location`` -> a SYNC
     # ``requests.get`` to Nominatim (up to ~15s) plus a sync S3 cache read.
     # Run it off the loop so it cannot stall the WS keepalive while geocoding.
@@ -912,7 +912,7 @@ async def model_flood_scenario(
     # counts as ONE substep (it runs as a single off-loop ``_fetcher_chain`` under
     # one timeout budget -- see below), then build + solve + postprocess + publish.
     # The quadtree (coastal) path builds the variable-resolution deck inside the
-    # worker image (cht_sfincs, ADR 0113) and solves it in the same build+solve
+    # worker image (cht_sfincs) and solves it in the same build+solve
     # container substep. The plan is best-effort + re-declarable; ``begin_substeps``
     # no-ops when no
     # emitter is bound (the verify/CI direct-call path) and degrades to label-only
@@ -1032,7 +1032,7 @@ async def model_flood_scenario(
         # the hard dependency when v0.2 river-inflow (real ATCF surge) lands.
         river_layer: LayerURI | None
         try:
-            # Registry seam (ADR 0074): fetch_river_geometry is now a spec-driven
+            # Registry seam: fetch_river_geometry is now a spec-driven
             # router tool (OSM Overpass waterways), resolved by name rather than a
             # direct twin import (the twin was deleted with the NHDPlus HR leg).
             from trid3nt_server.agent.tools import TOOL_REGISTRY as _TR
@@ -1051,7 +1051,7 @@ async def model_flood_scenario(
             logger.warning(
                 "model_flood_scenario: fetch_river_geometry failed for bbox=%s "
                 "(%s) -- proceeding WITHOUT river geometry (pluvial deck does not "
-                "use river inflow; job-0055/job-0307).",
+                "use river inflow).",
                 resolved_bbox,
                 exc,
             )
@@ -1649,7 +1649,7 @@ async def model_flood_scenario(
         # it no-ops, and the run_solver step targets the quadtree spec.
         quadtree_manifest_uri: str | None = None
         if quadtree:
-            # ADR 0225: a sub-floor quadtree base cell is QUOTED BACK (typed error),
+            # a sub-floor quadtree base cell is QUOTED BACK (typed error),
             # never silently snapped. Only the quadtree path reads this knob.
             enforce_resolution(_SFINCS_QUADTREE_RES_SPEC, float(quadtree_base_resolution_m))
             async with substep(emitter, "build_sfincs_model"):
@@ -1736,7 +1736,7 @@ async def model_flood_scenario(
         _built_res = getattr(model_setup, "grid_resolution_m", None)
         if _built_res:
             grid_resolution_m = float(_built_res)
-        # ADR 0223: surface a wide-fallback active-mask degrade (DEM elevation
+        # surface a wide-fallback active-mask degrade (DEM elevation
         # range unreadable) that build_sfincs_model recorded on the ModelSetup, so
         # it is no longer only an .inp comment + agent.log line. Non-adaptive means
         # the active domain may include cells a real DEM range would exclude.
@@ -2226,7 +2226,7 @@ async def model_flood_scenario(
         # emitter so the web SequenceScrubber group forms, WITHOUT changing the tool's
         # single-LayerURI return shape (no re-publish trip in summarize_tool_result).
         primary_layers = [lyr for lyr in layers if lyr.role == "primary"]
-        # ADR 0159: the native quadtree mesh row (layer_type="mesh") is emitted
+        # the native quadtree mesh row (layer_type="mesh") is emitted
         # via publish_input_layer (MDAL-native, NOT a WMS raster) -- pull it OUT
         # of the frame set so it never takes the publish_layer raster path.
         mesh_layers = [lyr for lyr in layers if lyr.layer_type == "mesh"]
@@ -2304,10 +2304,10 @@ async def model_flood_scenario(
                     logger.warning(
                         "publish_layer failed for layer_id=%s error_code=%s (%s) -- "
                         "DROPPING the primary flood-depth layer from the emitted set "
-                        "(job-0254 sec 1): a raw gs:// uri never renders in MapLibre, so "
+                        "(sec 1): a raw gs:// uri never renders in MapLibre, so "
                         "we do NOT fall back to it. The envelope's metrics/provenance "
                         "remain intact and the failure is narrated honestly; the "
-                        "retry-on-failure loop (job-0177) can re-attempt publish.",
+                        "retry-on-failure loop can re-attempt publish.",
                         layer_id_for_wms,
                         exc.error_code,
                         exc,
@@ -2395,7 +2395,7 @@ async def model_flood_scenario(
                 len(frame_layers),
             )
 
-        # --- Step 9c: native quadtree mesh preview (ADR 0159) ---
+        # --- Step 9c: native quadtree mesh preview ---
         # A quadtree solve appends a layer_type="mesh" row (the UGRID
         # sfincs_map.nc the QGIS plugin loads via MDAL). It is surfaced through
         # the mesh-preview seam (publish_input_layer, role="context", bbox=None)
@@ -2486,7 +2486,7 @@ TEMPLATE_CARD = TemplateCard(
 )
 
 
-#: DECLARED quadtree base-resolution range (ADR 0225). ``quadtree_base_resolution_m``
+#: DECLARED quadtree base-resolution range. ``quadtree_base_resolution_m``
 #: is the COARSEST offshore cell; the coast band refines to base/2^coast_refine_level
 #: at the shoreline. A SOLVER floor of 10 m: finer than the DEM/topobathy native
 #: (3DEP 10 m) buys no data fidelity for the offshore base, and the coast refinement
@@ -2603,7 +2603,7 @@ async def sfincs_flood(
     7. ``run_solver(model_setup)`` -- dispatches the SFINCS solve to the
        local Docker solver backend.
     8. ``wait_for_completion(run_id)`` -- polls until SUCCEEDED or FAILED;
-       emits progress events per FR-WC-12.
+       emits progress events per.
     9. ``postprocess_flood(run_outputs_uri)`` -> ``publish_layer(flood_depth_cog)``
        -- extracts peak depth COG, uploads to the runs bucket, and publishes
        it as an ``s3://`` COG the QGIS plugin renders natively.
@@ -2646,7 +2646,7 @@ async def sfincs_flood(
         duration_hours: design-storm duration in hours. Atlas 14 publishes
             durations 5-min through 60-day. Default 24.
             (Alias ``duration_hr`` is accepted for backward compat.)
-        compute_class: FR-CE-3 compute class. Default ``"medium"``.
+        compute_class: compute class. Default ``"medium"``.
         rainfall: rain-source lever -- ``"design_storm"`` (default) forces the
             deck with the return-period Atlas-14 design storm; ``"none"`` builds
             a SURGE-ONLY deck with NO rainfall (a "storm-surge inundation without
@@ -2699,7 +2699,7 @@ async def sfincs_flood(
             (no ``surge_forcing`` needed); set it only when the sea is involved.
         quadtree: set ``True`` for a VARIABLE-RESOLUTION coastal mesh -- coarse
             offshore, fine at the shoreline (and inside any drawn refine region) --
-            authored by cht_sfincs in the GPL-isolated worker (M4 / ADR 0113).
+            authored by cht_sfincs in the GPL-isolated worker (M4).
             Implies ``coastal=True``. Default ``False`` (uniform regular grid).
         output_interval_min: optional animation frame spacing in minutes (coastal
             runs default fine; pluvial stays hourly). Leave unset unless asked.
@@ -2806,13 +2806,13 @@ async def sfincs_flood(
 
         On failure (partial-failure envelope with empty layers): the
         AssessmentEnvelope serialized as a dict so the LLM can narrate the
-        error. The dict carries the Appendix B.4 Flood subtype shape with the
+        error. The dict carries the.4 Flood subtype shape with the
         error code threaded into ``flood.metrics.solver_version`` as
         ``"failed:<ERROR_CODE>"``.
 
-    FR-DC-6: This wrapper declares ``cacheable=False`` +
+    This wrapper declares ``cacheable=False`` +
     ``ttl_class="live-no-cache"`` + ``source_class="workflow_dispatch"`` (a new
-    FR-DC-6 source class for the workflow exposure surface -- same shape as
+    source class for the workflow exposure surface -- same shape as
     ``solver_dispatch``).
 
     Cross-tool dependencies:

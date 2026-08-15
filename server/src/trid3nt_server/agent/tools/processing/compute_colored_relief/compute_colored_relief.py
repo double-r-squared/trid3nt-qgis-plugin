@@ -4,8 +4,8 @@ Color-tints a DEM by elevation using one of four built-in ramp presets. The
 result is a single-band-per-channel RGB GeoTIFF (3-band) cached under
 ``cache/static-30d/colored_relief/<key>.tif`` in the project cache bucket.
 
-FR-TA-2: atomic tool, returns ``LayerURI``.
-FR-CE-8 / FR-DC-3/4: routed through ``read_through`` so identical
+atomic tool, returns ``LayerURI``.
+Routed through ``read_through`` so identical
 ``(dem_uri, ramp)`` calls reuse the cached artifact.
 
 ``gdaldem color-relief`` is already present in the deployment environment
@@ -19,7 +19,7 @@ The tool uses ``nv`` (no-data) rows at the top of the ramp file to keep
 ``gdaldem``'s no-data pixels transparent so they don't paint black over the
 flood layer.
 
-FR-TA-3 docstring discipline: one-sentence summary, "Use this when:",
+docstring discipline: one-sentence summary, "Use this when:",
 "Do NOT use this for:", full param + return descriptions.
 """
 
@@ -55,7 +55,7 @@ logger = logging.getLogger("trid3nt_server.agent.tools.processing.compute_colore
 class ColoredReliefError(RuntimeError):
     """Raised when color-relief computation fails.
 
-    ``error_code`` is stable for FR-AS-11 mapping; ``retryable`` is False
+    ``error_code`` is stable for mapping; ``retryable`` is False
     because failures are almost always a missing binary or a corrupt DEM.
     """
 

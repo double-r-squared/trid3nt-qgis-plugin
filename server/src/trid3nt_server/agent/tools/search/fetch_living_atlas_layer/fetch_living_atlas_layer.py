@@ -4,8 +4,8 @@ A generic bridge from a harvested catalog entry (or a raw ArcGIS service URL) to
 published bytes. It builds a DYNAMIC ``SourceSpec`` per call from the entry's
 service type and hands it to the router's ``route()`` -- which is registry-free and
 spec-driven, so the ad-hoc spec rides EVERYTHING for free: param validation, the
-payload gate, typed errors, ``read_through`` caching, and LayerURI emission (ADR
-0117). No pre-registration; no bespoke transport.
+payload gate, typed errors, ``read_through`` caching, and LayerURI emission.
+No pre-registration; no bespoke transport.
 
 Service-type -> router mode:
   - Image Service   -> raster-cog / imageserver_export (exportImage GeoTIFF)

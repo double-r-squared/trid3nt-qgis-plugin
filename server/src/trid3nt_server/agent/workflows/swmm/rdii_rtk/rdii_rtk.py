@@ -192,7 +192,7 @@ def build_rtk_rdii_inp(
     ts = "\n".join(ts_rows)
     end_h = int(math.ceil(sim_hours))
     return f"""[TITLE]
-RTK RDII cross-check (ADR 0190 row 4)
+RTK RDII cross-check (row 4)
 
 [OPTIONS]
 FLOW_UNITS CFS

@@ -1,6 +1,6 @@
 """Engine template ``hecras_flood_2d`` -- HEC-RAS 2D flood on a GENUINELY-NEW AOI.
 
-The promotion of the ADR 0136-0139 authoring chain (ADR 0140): unlike
+The promotion of the authoring chain: unlike
 ``hecras_riverine_flood`` (which reparameterizes HEC's FROZEN shipped Muncie
 geometry), this template AUTHORS the 2D mesh + terrain-sampled subgrid tables for a
 place the user names, then solves it with the production HEC-RAS 6.6 engines. The
@@ -19,7 +19,7 @@ backend is the proven ``flood2d_pipeline`` chain:
 FIDELITY (loud, NATE no-hand-wave): the SOLVE is the refinement-grade production
 6.x solver; the GEOMETRY is authored by the HEC-RAS 2025 AuthorMesh path, validated
 end-to-end (the transplant-path: subgrid tables 0.99988 corr / writer dWSE 0.0 /
-topology bijection, ADR 0132/0139). It is SCREENING-grade until broader per-AOI
+topology bijection). It is SCREENING-grade until broader per-AOI
 V&V. For a FAST screening flood use ``sfincs_flood``; for pluvial/precipitation
 forcing on this engine, that is the OI-D residual (not yet wired). ASCII only.
 """
@@ -81,10 +81,10 @@ _MIN_RES_M: float = 20.0
 _MAX_RES_M: float = 200.0
 _DEFAULT_RES_M: float = 60.0
 
-#: DECLARED resolution range (ADR 0225). The 20-200 m window is a SOLVER constraint
+#: DECLARED resolution range. The 20-200 m window is a SOLVER constraint
 #: (the HEC-RAS 2025 AuthorMesh subgrid-table path): finer overwhelms subgrid-table
 #: authoring for a screening solve, coarser drops the channel. Out-of-range asks are
-#: QUOTED BACK (typed error), never silently clamped -- the ADR 0223 labeled-snap is
+#: QUOTED BACK (typed error), never silently clamped -- the labeled-snap is
 #: upgraded to the full ruling here. In-range requests may still autoscale-coarsen for
 #: the soft cell cap (a labeled ``derived`` note, not a silent snap).
 _RES_SPEC = ResolutionSpec(
@@ -235,7 +235,7 @@ async def hecras_flood_2d(
             OI-D residual).
         resolution_m: the 2D cell size (m). Supported 20-200 m (mesh/solver); data
             native 3DEP 10 m. Out-of-range asks are quoted the range (typed error),
-            never silently snapped (ADR 0225). An in-range value may auto-coarsen for
+            never silently snapped. An in-range value may auto-coarsen for
             the soft cell cap (labeled derived note); overridable.
         sim_hours: unsteady window length (hours); default 24.
         inlet_edge / outlet_edge: OPTIONAL compass overrides ("n"/"s"/"e"/"w") for
@@ -305,7 +305,7 @@ async def hecras_flood_2d(
         resolution_m = float(resolution_m)
     except (TypeError, ValueError):
         resolution_m = _DEFAULT_RES_M
-    # ADR 0225: an out-of-declared-range resolution_m is QUOTED BACK as a typed error
+    # an out-of-declared-range resolution_m is QUOTED BACK as a typed error
     # (the range + native hint), never silently clamped. An in-range value may still
     # autoscale-coarsen within the range (labeled derived note).
     try:
@@ -457,7 +457,7 @@ def _fetch_dem_local(bbox: list[float]) -> tuple[str, str]:
     """Fetch the AOI DEM (seam-1) and download it to a local temp GeoTIFF.
 
     Returns ``(local_path, s3_uri)`` -- the s3 uri rides the cache COG so the
-    composer can surface the fetched terrain as a role=context input (ADR 0231).
+    composer can surface the fetched terrain as a role=context input.
     """
     from trid3nt_server.agent.tools import TOOL_REGISTRY
 
@@ -474,14 +474,14 @@ def _fetch_dem_local(bbox: list[float]) -> tuple[str, str]:
 
 
 def acquire_channel_inputs(bbox: list[float], workdir: str, pour_point=None):
-    """Delineated catchment + channel network for the AOI (ADR 0210/0211 refined mesh).
+    """Delineated catchment + channel network for the AOI (refined mesh).
 
     Reuses the TELEMAC rain-on-grid acquisition: an explicit ``pour_point`` (lon,lat)
     is the drainage outlet when given (the user-named catchment outlet); otherwise it
     is the lowest-elevation DEM cell in the bbox. The catchment is delineated there and
     the channel network is ``fetch_river_geometry``. Returns ``(catchment_geojson_path,
     flowlines_path)`` or ``(None, None)`` on any failure -- the caller then degrades to
-    the uniform mesh honestly. Shared with ``generate_mesh`` mode=hecras (ADR 0211)."""
+    the uniform mesh honestly. Shared with ``generate_mesh`` mode=hecras."""
     import json as _json
 
     try:
@@ -803,7 +803,7 @@ _ROG_FIDELITY_NOTE: str = (
     "structured 2D area over the fetched terrain, prepared + solved on the CPU. "
     "RAIN-ONLY -- the 2025 beta exposes NO infiltration layer, so this is gross "
     "rainfall (an upper-bound runoff, no SCS-CN loss). Screening-grade; validated on "
-    "the Coweeta Creek Godara-2024 envelope (25 mm/hr x 6 h). ADR 0209."
+    "the Coweeta Creek Godara-2024 envelope (25 mm/hr x 6 h).."
 )
 
 
@@ -819,12 +819,12 @@ async def model_hecras_flood_2d_rog(
     resolution_basis: str = "derived",
     resolution_note: str | None = None,
 ) -> HecrasDepthLayerURI | dict[str, Any]:
-    """Rain-on-grid on the HEC-RAS 2025 managed engine -> peak-depth COG (ADR 0209/0210).
+    """Rain-on-grid on the HEC-RAS 2025 managed engine -> peak-depth COG.
 
     fetch DEM -> author + prepare + solve on the 2025 CPU engine (rog2025_pipeline,
     mounted-driver, no worker-image rebuild) -> rasterize max depth to a 4326 COG ->
     publish. Rain-only (no infiltration in the beta). ``channel_refinement`` (a target
-    channel cell size, m) authors the paper-style GRADED mesh (ADR 0210) instead of the
+    channel cell size, m) authors the paper-style GRADED mesh instead of the
     uniform grid -- it needs the delineated catchment + channel network, acquired for the
     AOI; if acquisition fails it degrades to the uniform mesh with a note."""
     import sys
@@ -835,7 +835,7 @@ async def model_hecras_flood_2d_rog(
     eq_key = str(equation_set or "").strip().lower()
     diffusion = eq_key != "full_swe"
 
-    # --- ADR 0211: consume a pre-built HEC-RAS mesh from the case, if one exists + the
+    # --- consume a pre-built HEC-RAS mesh from the case, if one exists + the
     # user accepts. A generate_mesh mode=hecras artifact carries the graded seeds +
     # breaklines + local terrain frame; the gate offers it (labeled default USE), and
     # an accepted mesh is re-realized + solved directly (no fresh delineation / seeding
@@ -876,7 +876,7 @@ async def model_hecras_flood_2d_rog(
         SyntheticInput(param="infiltration", value="none (rain-only)", basis="derived",
                        note="the 2025 beta has no infiltration layer -- gross rainfall, upper-bound runoff"),
     ]
-    # ADR 0223 (audit #6): surface the resolution basis, incl. the supported-range
+    # (audit #6): surface the resolution basis, incl. the supported-range
     # clamp when it bound (unless a channel-refined/consumed case mesh defines the
     # field, in which case the uniform resolution is not the operative granularity).
     if not consumed and not channel_refinement:

@@ -1,7 +1,7 @@
-"""Copernicus CDS library-delegate hooks (ADR 0085): ERA5 + GTSM.
+"""Copernicus CDS library-delegate hooks: ERA5 + GTSM.
 
 The CDS/``cdsapi`` client owns the request-poll-download socket, so both CDS
-sources fold onto the ``library_delegate`` executor (ADR 0074): the router keeps
+sources fold onto the ``library_delegate`` executor: the router keeps
 params / gates / stamps / cache / typed-errors, and these hooks own the ONE
 sanctioned impurity -- the ``cdsapi.Client.retrieve`` call under a declared
 wall-clock timeout (``ingest.delegate.timeout_s``). Two sources share this module:

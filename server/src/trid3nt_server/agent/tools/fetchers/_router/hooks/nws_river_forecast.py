@@ -1,4 +1,4 @@
-"""nws_river_forecast hooks (chained-resolution mode, ADR 0063): NWS/NWPS river
+"""nws_river_forecast hooks (chained-resolution mode): NWS/NWPS river
 forecast gauges + bounded per-gauge threshold / stageflow enrichment.
 
 The main fetch is a gauges-by-bbox list GET (or a single-gauge detail GET when

@@ -1,4 +1,4 @@
-"""pfdf raster-delegate hooks (ADR 0074): USGS readers whose library owns the socket.
+"""pfdf raster-delegate hooks: USGS readers whose library owns the socket.
 
 pfdf (the USGS post-fire debris-flow toolkit) ships maintained readers for the USGS
 TNM 3DEP DEM and the STATSGO soils COG collection -- each owns discovery + the
@@ -151,7 +151,7 @@ def read_3dep(spec: SourceSpec, params: dict[str, Any], *, timeout_s: float) -> 
     else -> the backstop UPSTREAM (raised by the invoke wrapper). The pfdf ``Raster``
     is read directly into ``(array, affine, crs)`` -- the statsgo array path -- rather
     than the twin's save -> rioxarray-reopen -> re-encode (the same array / CRS /
-    nodata; ADR 0074 divergence class). No all-NaN empty gate: the twin had none for
+    nodata; divergence class). No all-NaN empty gate: the twin had none for
     3DEP (pfdf's NoTNMProductsError is the only empty signal).
     """
     sc = spec.error_code_prefix

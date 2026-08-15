@@ -33,7 +33,7 @@ Service flavors supported (per §F.1.1 Tier 2):
   ``service_type`` argument, not by URL sniffing.
 
 Routes through ``read_through`` so identical params dedup at the cache.
-External-API resilience (NFR-R-1) per the established pattern: per-call
+External-API resilience per the established pattern: per-call
 timeout (default 120s; configurable), single re-raise on failure as
 ``UpstreamAPIError``, no sentinel on failure.
 
@@ -96,7 +96,7 @@ class OGCAdapterError(RuntimeError):
     Carries ``error_code="UPSTREAM_API_ERROR"`` and ``retryable=True`` to
     match the ``data_fetch.FetchError`` taxonomy -- call sites that wrap the
     adapter behind a registered atomic tool re-raise as ``UpstreamAPIError``
-    so the agent's FR-AS-11 surface sees a single typed failure mode.
+    so the agent's surface sees a single typed failure mode.
     """
 
     error_code: str = "UPSTREAM_API_ERROR"
@@ -338,7 +338,7 @@ def fetch_ogc_layer(
             opt into finer/coarser output without hard-coding pixel counts.
             Ignored when explicit ``width_px``/``height_px`` are given, or for
             vector (WFS / MapServer query) service types.
-        timeout_s: request timeout (NFR-R-1).
+        timeout_s: request timeout.
         user_agent: override the descriptive User-Agent header.
         extra_params: extra query parameters merged after the default set
             (rare -- catalog-specific knobs like ``f=json`` overrides).

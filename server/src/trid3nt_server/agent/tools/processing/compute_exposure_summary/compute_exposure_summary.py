@@ -70,7 +70,7 @@ logger = logging.getLogger("trid3nt_server.agent.tools.processing.compute_exposu
 
 
 # ---------------------------------------------------------------------------
-# Typed errors (FR-AS-11).
+# Typed errors.
 # ---------------------------------------------------------------------------
 
 
@@ -165,7 +165,7 @@ def _fetch_population_layer(
 ) -> Any:
     """WorldPop raster ``LayerURI`` for ``bbox`` (the fetch_population seam).
 
-    Resolves via the registry so the WorldPop leg's spec-driven fold (ADR 0092)
+    Resolves via the registry so the WorldPop leg's spec-driven fold
     is called through its promoted closure -- the same repoint the buildings seam
     uses. It reads only ``.uri`` as a raster (WorldPop is a single-band COG).
     """

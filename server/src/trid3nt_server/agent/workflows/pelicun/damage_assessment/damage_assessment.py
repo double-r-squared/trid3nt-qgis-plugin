@@ -77,7 +77,7 @@ COG (``s3://trid3nt-runs/01KTJX71NKGDMXB9TN0DV75JWK/flood_depth_peak_0086.tif``)
 + Fort Myers place polygons from ``fetch_administrative_boundaries(level='place', bbox=...)``
 -> FlatGeobuf with populated ``ds_mean``/``repair_cost_mean`` per asset.
 
-FR-TA-2 / FR-AS-3 / FR-CE-8 / FR-DC-3/4 invariants honored as documented in
+/ / / 4 invariants honored as documented in
 the per-section comments below.
 """
 
@@ -122,7 +122,7 @@ logger = logging.getLogger("trid3nt_server.agent.workflows.pelicun.damage_assess
 
 
 # ---------------------------------------------------------------------------
-# Error types (FR-AS-11 / NFR-R-1 typed-error surface).
+# Error types (/ typed-error surface).
 # ---------------------------------------------------------------------------
 
 
@@ -130,7 +130,7 @@ class PelicunDamageError(RuntimeError):
     """Base class for ``pelicun_damage_assessment`` failures.
 
     ``error_code`` maps to the WebSocket A.6 error frame emitted by the
-    agent surface; ``retryable`` guides FR-AS-11 retry logic.
+    agent surface; ``retryable`` guides retry logic.
     """
 
     error_code: str = "PELICUN_DAMAGE_ERROR"
@@ -184,7 +184,7 @@ class PelicunWithBuildingsError(RuntimeError):
     """Raised when the AUTO-FETCH (building-density) input mode fails.
 
     ``error_code`` / ``retryable`` mirror the atomic-tool error surface so the
-    agent routes it to the WebSocket A.6 error frame (FR-AS-11 / NFR-R-1). For
+    agent routes it to the WebSocket A.6 error frame . For
     the specific error subclass (e.g. a building-density upstream failure)
     inspect ``__cause__``.
     """
@@ -930,7 +930,7 @@ def _download_uri_to_local(uri: str, suffix: str, storage_client: Any | None = N
                     mapped = f"s3://{runs_bucket}/{run_id}/{fname}"
                     logger.warning(
                         "hazard URI was a WMS GetMap URL; reverse-mapped "
-                        "LAYERS=%s -> %s (job-0255 guard)",
+                        "LAYERS=%s -> %s (guard)",
                         layer_id,
                         mapped,
                     )
@@ -957,7 +957,7 @@ def _download_uri_to_local(uri: str, suffix: str, storage_client: Any | None = N
                     repaired = "/".join(parts[-2:])
                     logger.warning(
                         "s3:// download failed for %r; retrying suffix-repaired "
-                        "path s3://%s/%s (LLM path-mangle guard, job-0253)",
+                        "path s3://%s/%s (LLM path-mangle guard)",
                         uri,
                         bucket_name,
                         repaired,
@@ -1532,7 +1532,7 @@ def pelicun_damage_assessment(
             component_types=component_types,
             realization_count=realization_count,
         )
-        # ADR 0223 (audit #8): fold the synthetic-asset provenance up to the
+        # (audit #8): fold the synthetic-asset provenance up to the
         # TEMPLATE surface. Auto-fetch mode has no explicit inventory -> a synthetic
         # building-density point inventory with HAZUS class-DEFAULT replacement
         # values (what postprocess_pelicun flags via n_default_rv). Stamp that as a

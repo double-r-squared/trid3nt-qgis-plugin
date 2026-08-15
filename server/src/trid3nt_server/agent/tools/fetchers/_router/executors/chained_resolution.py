@@ -1,4 +1,4 @@
-"""chained_resolution executor (ADR 0063): resolve-then-fetch + bounded per-item
+"""chained_resolution executor: resolve-then-fetch + bounded per-item
 detail enrichment -- the promotion of the hook-ratchet's 4x MANDATORY-REVIEW pattern.
 
 ONE mode, two composable phases; a source declares only the phase(s) it needs. The
@@ -108,7 +108,7 @@ def _fetch_main(spec: SourceSpec, params: dict[str, Any]) -> list[bytes]:
     if not (spec.hooks and spec.hooks.next_page):
         return bodies
     nxt = resolve_hook(spec.hooks.next_page)
-    # tolerate_page_error (ADR 0066): a cursor-paged source over a flaky ArcGIS
+    # tolerate_page_error: a cursor-paged source over a flaky ArcGIS
     # cluster (fema_nfhl 500s unpredictably on later cursor pages) opts in to
     # treating a NON-first-page upstream failure as "cursor exhausted -> partial",
     # matching the twin's documented resilience. The first page always propagates

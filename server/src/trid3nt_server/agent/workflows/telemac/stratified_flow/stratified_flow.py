@@ -1,5 +1,5 @@
 """Engine template ``telemac3d_stratified_flow`` - TELEMAC-3D stratified /
-3D-hydrodynamics engine (ADR 0241).
+3D-hydrodynamics engine.
 
 The LLM-facing exposure of TELEMAC's three-dimensional (hydrostatic /
 non-hydrostatic) Navier-Stokes solver with active-tracer (temperature / salinity)
@@ -11,7 +11,7 @@ tool with THREE modes (the board's TELEMAC-3D rows):
                            lake (the lake-turnover question); the discriminating
                            pair is calm (keeps the thermocline) vs windy (mixes it
                            away). The stratified 3D column the AED2 lake-ecology
-                           coupling (ADR 0234 STOP) requires.
+                           coupling (STOP) requires.
   * ``wind_circulation`` - the vertical velocity structure a steady wind builds in
                            a closed basin (surface downwind, bottom upwind return
                            flow, depth-integrated ~0). THE 3D-vs-2D discriminant (a
@@ -132,7 +132,7 @@ def _classify_mode(text: str | None, explicit: str | None) -> str:
     return "stratification"
 
 
-#: DECLARED target_resolution_m range (ADR 0225). A 3D solve is heavy (NPOIN2 *
+#: DECLARED target_resolution_m range. A 3D solve is heavy (NPOIN2 *
 #: NPLAN nodes), so a coarse horizontal budget: GRID_H_FLOOR_M=400 m is the finest
 #: the real grid authors; a large lake is coarsened under GRID_NODE_CAP.
 _TELEMAC3D_RES_SPEC = ResolutionSpec(
@@ -260,7 +260,7 @@ async def telemac3d_stratified_flow(
         bathy_source: ``"auto"`` (default - a Great Lakes AOI uses real NOAA
             lake-datum bathymetry, else an idealized basin labeled as such) |
             ``"noaa_greatlakes"`` | ``"idealized"``.
-        compute_class: FR-CE-3 compute class. Default ``"medium"``.
+        compute_class: compute class. Default ``"medium"``.
         input_mode: ``"user_gated"`` reviews the resolved forcing before the solve;
             ``"auto"`` (default) proceeds labeled.
 

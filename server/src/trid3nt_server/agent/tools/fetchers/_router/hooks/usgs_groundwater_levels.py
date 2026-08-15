@@ -1,4 +1,4 @@
-"""usgs_groundwater_levels hooks (chained_resolution enrich, ADR 0063/0071): USGS
+"""usgs_groundwater_levels hooks (chained_resolution enrich/0071): USGS
 Water Data OGC API groundwater monitoring wells + their latest water-level.
 
 The twin's primary+best-effort-enrichment shape folds onto the EXISTING enrich phase:

@@ -76,7 +76,7 @@ _RASTER_EXTS = {".tif", ".tiff", ".img", ".vrt", ".nc"}
 _VECTOR_EXTS = {".fgb", ".geojson", ".gpkg", ".shp", ".json", ".gml", ".kml"}
 
 # ---------------------------------------------------------------------------
-# Error type (NFR-R-1 typed-error surface)
+# Error type (typed-error surface)
 # ---------------------------------------------------------------------------
 
 
@@ -84,7 +84,7 @@ class ChartToolError(RuntimeError):
     """Raised when a chart-generation tool cannot produce a chart.
 
     ``error_code`` carries a SCREAMING_SNAKE_CASE code consumed by
-    ``summarize_tool_result`` (FR-AS-11 retry surface):
+    ``summarize_tool_result`` (retry surface):
 
     - ``LAYER_OPEN_FAILED``  - raster/vector layer could not be opened.
     - ``DOWNLOAD_FAILED``    - S3/local read for the layer URI failed.
@@ -788,7 +788,7 @@ def build_vadose_breakthrough_chart(
     source_layer_uri: str | None = None,
     created_turn_id: str | None = None,
 ) -> dict[str, Any] | None:
-    """Build the UZT vadose breakthrough concentration-vs-time chart (ADR 0228).
+    """Build the UZT vadose breakthrough concentration-vs-time chart.
 
     ``concentration`` is the base-of-column tracer concentration (just above the
     water table), one value per saved transport step - the real UZT obs series the
@@ -1231,7 +1231,7 @@ def build_ates_recovery_chart(
     source_layer_uri: str | None = None,
     created_turn_id: str | None = None,
 ) -> dict[str, Any] | None:
-    """Build the ATES recovery-efficiency-vs-cycle bar chart (ADR 0235).
+    """Build the ATES recovery-efficiency-vs-cycle bar chart.
 
     The PRIMARY deliverable of the ``gwe_thermal`` ``ates`` mode: one recovery
     efficiency per seasonal inject/recover cycle (the fraction of the injected

@@ -189,7 +189,7 @@ async def model_river_seepage_scenario(
         along_river_source: place the contaminant SRC along the reach (True,
             the seepage source) vs at the spill point (False).
         aquifer_k_ms / porosity: optional demo-aquifer overrides.
-        compute_class: FR-CE-3 compute class.
+        compute_class: compute class.
         pipeline_emitter: optional PipelineEmitter for live progress cards.
 
     Returns:
@@ -267,7 +267,7 @@ async def model_river_seepage_scenario(
 
     # --- Stage 3: (optional) fetch a DEM for streambed sampling ---
     dem_uri: str | None = None
-    # ADR 0223: when the caller explicitly requested a real streambed DEM and the
+    # when the caller explicitly requested a real streambed DEM and the
     # fetch fails, the run continues on a DEMO streambed -- but that cross-request
     # degrade must be LABELED (a specific "your requested DEM was unavailable"
     # review entry), not merely logged. Captured here, surfaced at the return.
@@ -366,7 +366,7 @@ async def model_river_seepage_scenario(
         seepage.river_cell_count,
     )
 
-    # ADR 0223: structured provenance through gate_input_review. Always the
+    # structured provenance through gate_input_review. Always the
     # aquifer-K entry; when the caller REQUESTED a real streambed DEM that failed,
     # a specific labeled streambed-basis entry (not just the standing generic
     # caveat) so the cross-request degrade is visible on the envelope.
@@ -522,7 +522,7 @@ async def modflow_river_seepage(
         fetch_dem_for_streambed: also fetch a DEM for streambed elevation
             (default False - demo streambed otherwise).
         aquifer_k_ms / porosity: optional demo-aquifer overrides.
-        compute_class: FR-CE-3 compute class. Default ``"standard"``.
+        compute_class: compute class. Default ``"standard"``.
 
     Returns:
         A JSON dict (``RiverSeepageResult.model_dump(mode="json")``) with the
@@ -532,7 +532,7 @@ async def modflow_river_seepage(
         ``summary`` narration dict. On a recoverable failure the tool raises a
         typed error the agent narrates honestly.
 
-    FR-DC-6: ``cacheable=False`` + ``ttl_class="live-no-cache"`` +
+    ``cacheable=False`` + ``ttl_class="live-no-cache"`` +
     ``source_class="workflow_dispatch"`` - the cache shim is NOT invoked.
     """
     point: tuple[float, float] | None = None

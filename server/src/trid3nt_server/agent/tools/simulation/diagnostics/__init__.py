@@ -1,4 +1,4 @@
-"""``read_run_diagnostics`` -- ONE engine-diagnostics dispatcher (V&V wave, ADR 0021).
+"""``read_run_diagnostics`` -- ONE engine-diagnostics dispatcher (V&V wave).
 
 Reads a completed simulation run's retained diagnostics files and returns ONE
 normalized health envelope, regardless of engine. The LLM never picks an

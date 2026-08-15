@@ -15,7 +15,7 @@ This is the SWMM analogue of ``modflow_contaminant_plume`` (MODFLOW) and
 ``engine="swmm", tier="template"`` - EXCLUDED from the default retrieval pool
 and surfaced only by the ``run_swmm`` door's gate expansion (SELECT-THEN-CALL).
 Like the other templates it declares ``cacheable=False`` +
-``ttl_class="live-no-cache"`` + ``source_class="workflow_dispatch"`` (FR-DC-6 -
+``ttl_class="live-no-cache"`` + ``source_class="workflow_dispatch"`` (
 workflow exposure surface; never touches the cache shim). Confirmation before
 consequence (Invariant 9 - a solver run) is enforced by the server confirmation
 hook around this tool (the granularity gate), not re-implemented here.
@@ -217,13 +217,13 @@ async def swmm_urban_flood(
         washoff_model: ``"exp"`` (default, buildup-driven first-flush) or
             ``"emc"`` (fixed event-mean concentration, no first flush); only
             meaningful with ``pollutants`` set.
-        compute_class: FR-CE-3 compute class. Default ``"standard"``.
+        compute_class: compute class. Default ``"standard"``.
         enable_autoscale: True (default) lets the adaptive-mesh budget
             COARSEN ``target_resolution_m`` so a large AOI fits the cell
             cap. False honours ``target_resolution_m`` exactly -- set only
             by the server-side granularity gate; LLMs should leave
             unset.
-        input_mode: run-mode lever (ADR 0107). ``"user_gated"`` presents the
+        input_mode: run-mode lever. ``"user_gated"`` presents the
             resolved rainfall forcing + demo drainage/Manning for review before
             the solve; ``"auto"`` (default) proceeds with them labeled.
 
@@ -237,7 +237,7 @@ async def swmm_urban_flood(
         On failure: dict with ``status="error"`` + ``error_code`` +
         ``error_message`` (no layer).
 
-    FR-DC-6: ``cacheable=False``, ``ttl_class="live-no-cache"``,
+    ``cacheable=False``, ``ttl_class="live-no-cache"``,
     ``source_class="workflow_dispatch"`` -- cache shim not invoked.
     """
     # --- Validate + coerce into the SWMMRunArgs contract --------------------
@@ -514,7 +514,7 @@ def _fetch_dem_for_urban(
     """
     from trid3nt_server.agent.tools import TOOL_REGISTRY
 
-    # fetch_3dep_extra (ADR 0075) + fetch_dem (ADR 0097) are spec-driven tools:
+    # fetch_3dep_extra + fetch_dem are spec-driven tools:
     # resolve through the registry seam (keyword-only) rather than deleted twins.
     fetch_3dep_extra = TOOL_REGISTRY["fetch_3dep_extra"].fn
     fetch_dem = TOOL_REGISTRY["fetch_dem"].fn
@@ -702,10 +702,10 @@ def _atlas14_total_depth_mm(
     Returns the total storm depth in mm, or ``None`` on lookup failure. A ``None``
     no longer silently falls through to a baked builder default - the caller
     raises a typed ``SWMM_PRECIP_LOOKUP_FAILED`` gate naming ``total_rain_depth_mm``
-    as the explicit-param retry (ADR 0091 gated-fallback pattern).
+    as the explicit-param retry (gated-fallback pattern).
     """
     # Seam-1: resolve the registered fetcher via TOOL_REGISTRY, never a module
-    # internal (ADR 0069 spec-driven surface).
+    # internal (spec-driven surface).
     from trid3nt_server.agent.tools import TOOL_REGISTRY
 
     lookup_precip_return_period = TOOL_REGISTRY["lookup_precip_return_period"].fn
@@ -801,7 +801,7 @@ async def model_swmm_urban_flood(
             footprints; when ``dem_path`` IS supplied, footprints are used as
             given (tests control them explicitly).
         run_id: optional ULID; minted by the staging step if absent.
-        compute_class: FR-CE-3 compute class (carried for provenance; the LOCAL
+        compute_class: compute class (carried for provenance; the LOCAL
             lane runs in-process regardless).
         cleanup_deck: when True, the scratch deck dir is removed after
             postprocess (the COGs were already uploaded). Tests pass False to
@@ -924,7 +924,7 @@ async def model_swmm_urban_flood(
                 run_args.storm_duration_hr,
             )
         else:
-            # ADR 0091 gated-fallback: the design-storm lookup failed and the
+            # gated-fallback: the design-storm lookup failed and the
             # user supplied no explicit depth. Do NOT silently revert to the
             # builder's baked 120 mm - STOP and name total_rain_depth_mm (mm) as
             # the explicit-param retry so the rainfall forcing is never fabricated.
@@ -939,7 +939,7 @@ async def model_swmm_urban_flood(
                 ),
             )
 
-    # --- ADR 0107 two-mode input gate: review-before-run -----------------------
+    # --- two-mode input gate: review-before-run -----------------------
     # Rainfall forcing is resolved (Atlas-14 or user); present it (+ the demo
     # drainage-network + flat Manning) for review/adjust before the heavy deck
     # build + solve in user_gated mode. auto (session default) + headless proceed
@@ -1672,7 +1672,7 @@ def _publish_peak_layer(
             "layer_id=%s error_code=%s (%s) - returning the unpublished peak. "
             "Its raw s3:// uri never renders, so the dispatch guardrail drops it "
             "from the map; the depth metrics still narrate honestly and the "
-            "retry-on-failure loop (job-0177) can re-attempt publish.",
+            "retry-on-failure loop can re-attempt publish.",
             layer_id_for_pub,
             exc.error_code,
             exc,

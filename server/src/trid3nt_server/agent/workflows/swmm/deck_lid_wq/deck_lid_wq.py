@@ -1,5 +1,5 @@
 """Engine template ``swmm_lid_raingarden_wq`` - run a CITED published SWMM deck
-demonstrating rain-garden LID + buildup/washoff water quality (ADR 0128).
+demonstrating rain-garden LID + buildup/washoff water quality.
 
 A THIN composer over the shared published-deck runner
 (``workflows/swmm/deck_runner``). Binds the cited openswmm.org example "A Very
@@ -84,7 +84,7 @@ async def swmm_lid_raingarden_wq(
     Params:
         rain_scale: multiply the published design storm's hyetograph by this factor
             (1.0 = the example's own storm, unchanged). Same profile, scaled depth.
-        input_mode: reserved ADR 0107 lever; the labeled demonstration note is
+        input_mode: reserved lever; the labeled demonstration note is
             always surfaced (the deck is a fixed published example).
 
     Returns:

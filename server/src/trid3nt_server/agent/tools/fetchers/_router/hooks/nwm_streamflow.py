@@ -1,15 +1,15 @@
-"""NOAA National Water Model streamflow delegate hooks (ADR 0112): the ``fetch_noaa_nwm_streamflow`` fold.
+"""NOAA National Water Model streamflow delegate hooks: the ``fetch_noaa_nwm_streamflow`` fold.
 
 THE FETCHER-FINALE ENDGAME (the LAST coded data-fetcher). ``fetch_noaa_nwm_streamflow``
-is a MULTI-SOURCE COMPOSITE (ADR 0069's STOP): resolve the NWM S3 channel_rt key ->
+is a MULTI-SOURCE COMPOSITE: resolve the NWM S3 channel_rt key ->
 download the whole-object netCDF -> an xarray ``{feature_id: streamflow}`` LOOKUP DICT
 + an NLDI 5x5-grid spatial sample (25 point-snap requests) -> COMIDs + per-reach NLDI
-geometry (up to 500 requests) + a ``feature_id`` JOIN -> a point FlatGeobuf. ADR 0069
+geometry (up to 500 requests) + a ``feature_id`` JOIN -> a point FlatGeobuf.
 STOP-RULED a fold because "no router MODE fetches-a-lookup-dict + spatially-samples-a-2nd
 -API + joins". The finale resolves that: the composite is expressed as ORDINARY delegate
-socket I/O (the topobathy / storm_tracks precedent, ADR 0110 / 0111) -- the delegate hook
+socket I/O (the topobathy / storm_tracks precedent) -- the delegate hook
 OWNS the S3 read, the NLDI sampling rounds, AND the in-delegate join, exactly as the twin
-did. No new executor machinery is added for one source (the ADR 0056 bar); the join is
+did. No new executor machinery is added for one source (the bar); the join is
 plain in-process computation, and each NLDI probe is an independent best-effort request
 (no transport-layer coalescing/retry semantics the delegate cannot reach), so the delegate
 shape hits NO wall. ``fetch_noaa_nwm_streamflow`` folds onto a ``library_delegate`` VECTOR
@@ -26,7 +26,7 @@ source (``shape: vector-fgb``, ``ingest.access: library_delegate``):
     geometry -> point GeoJSON features (props ``feature_id`` / ``streamflow_cms`` /
     ``valid_time`` / ``product``, the SFINCS-adapter + river_dye consumed shape) for the
     shared ``vector_fgb`` serializer, and RECORD the fetch-time provenance (the resolved
-    NWM reference time + reach count + NLDI sample stats) via the ADR 0110 channel.
+    NWM reference time + reach count + NLDI sample stats) via the channel.
   * ``nwm_streamflow.envelope`` -- the twin's exact ``nwm-streamflow-{product}-{seed}``
     layer_id + ``NWM streamflow -- <product> (<latest|valid_time>[ +fNNN])`` name (seed
     recomputed deterministically from the validated params) plus the reference-time /
@@ -35,7 +35,7 @@ source (``shape: vector-fgb``, ``ingest.access: library_delegate``):
 
 The ``NWMStreamflow*Error`` classes live HERE (their stable importable home now that the
 coded twin is deleted). Their base is ``FetchError`` so ``library_delegate.invoke`` passes
-them through unchanged (its ``except FetchError: raise`` passthrough, ADR 0097), preserving
+them through unchanged (its ``except FetchError: raise`` passthrough), preserving
 the pinned ``error_code`` (``NWM_STREAMFLOW_INPUT_ERROR`` / ``_UPSTREAM_ERROR`` /
 ``_NOT_AVAILABLE`` / ``_EMPTY``) through the delegate wrapper.
 """
@@ -78,8 +78,8 @@ __all__ = [
 
 
 # ---------------------------------------------------------------------------
-# Error types (FR-AS-11 typed-error surface). Base = FetchError so the pinned
-# error_code survives library_delegate.invoke's passthrough (ADR 0097).
+# Error types (typed-error surface). Base = FetchError so the pinned
+# error_code survives library_delegate.invoke's passthrough.
 # ---------------------------------------------------------------------------
 
 
@@ -493,7 +493,7 @@ def _fetch_nwm_features(
     """End-to-end: NWM channel_rt + NLDI bbox sample -> (GeoJSON point features,
     resolved valid_time, discovered-COMID count).
 
-    OWNS every network round (the sanctioned delegate socket impurity, ADR 0074):
+    OWNS every network round (the sanctioned delegate socket impurity):
     resolve + download the netCDF, parse the {feature_id: streamflow} lookup, sample
     the 5x5 NLDI grid, fetch reach geometry, and JOIN in-process. Honest-empty is a
     typed ``NWMStreamflowEmptyError`` (no fabricated layer), never a header-only FGB.
@@ -626,7 +626,7 @@ def validate_nwm_streamflow(spec: Any, params: dict[str, Any]) -> None:
 def read_nwm_streamflow(
     spec: Any, params: dict[str, Any], *, timeout_s: float
 ) -> list[dict[str, Any]]:
-    """Own the NWM+NLDI composite; RECORD fetch-time provenance (ADR 0110); return features."""
+    """Own the NWM+NLDI composite; RECORD fetch-time provenance; return features."""
     bbox = tuple(float(v) for v in params["bbox"])
     product = str(params.get("product", "analysis_assim"))
     forecast_hour = int(params.get("forecast_hour", 0) or 0)
@@ -660,7 +660,7 @@ def envelope_nwm_streamflow(
     data: bytes | None,
     provenance: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
-    """Build the twin's exact layer_id / name + the fetch-time provenance (ADR 0110)."""
+    """Build the twin's exact layer_id / name + the fetch-time provenance."""
     product = str(params.get("product", "analysis_assim"))
     forecast_hour = int(params.get("forecast_hour", 0) or 0)
     valid_time = params.get("valid_time")

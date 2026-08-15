@@ -1,4 +1,4 @@
-"""Atomic tool ``compute_slope`` - terrain slope raster from DEM (FR-CE-8, FR-DC).
+"""Atomic tool ``compute_slope`` - terrain slope raster from DEM.
 
 This module registers one atomic tool that computes a slope raster from a DEM
 by wrapping GDAL's ``gdaldem slope`` command:
@@ -6,13 +6,13 @@ by wrapping GDAL's ``gdaldem slope`` command:
     ``compute_slope(dem_uri, output_unit, algorithm) → LayerURI``
 
 The result is a single-band GeoTIFF (units: degrees or percent rise/run) in the
-same CRS and grid as the input DEM, stored under the FR-DC-3 cache shim at:
+same CRS and grid as the input DEM, stored under the cache shim at:
 
     ``s3://trid3nt-cache/cache/static-30d/slope/<key>.tif``
 
 **Cache key** is derived from ``(dem_uri, output_unit, algorithm)`` -- all three
 parameters materially affect the output pixels, so all three participate in
-cache-key derivation (FR-DC-3).
+cache-key derivation.
 
 **Implementation flow (cache miss):**
 
@@ -28,12 +28,12 @@ cache-key derivation (FR-DC-3).
 **Cross-cutting invariants:**
 
 - **Invariant 2 (Deterministic workflows): preserves.** Zero LLM calls.
-- **FR-DC-6 (cacheable): honors.** ``cacheable=True``, ``ttl_class="static-30d"``,
+- **(cacheable): honors.** ``cacheable=True``, ``ttl_class="static-30d"``,
   ``source_class="slope"`` -- DEM-derived output is stable for the lifetime of
   the cached DEM.
-- **NFR-R-1 (resilience): preserves.** gdaldem failures surface as
+- **(resilience): preserves.** gdaldem failures surface as
   ``SlopeComputeError`` (typed, never unhandled exception); DEM read
-  errors are let through for the agent FR-AS-11 surface to handle.
+  errors are let through for the agent surface to handle.
 """
 
 from __future__ import annotations
@@ -71,7 +71,7 @@ class SlopeComputeError(RuntimeError):
     """Raised when ``gdaldem slope`` fails or the DEM cannot be fetched.
 
     ``error_code`` carries a SCREAMING_SNAKE_CASE code surfaced in the
-    pipeline strip (NFR-R-1 typed-error requirement).
+    pipeline strip (typed-error requirement).
 
     Codes:
     - ``GDALDEM_UNAVAILABLE`` -- ``gdaldem`` binary not found on PATH.

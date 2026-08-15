@@ -176,7 +176,7 @@ async def model_saltwater_intrusion_scenario(
             boundary, m^3/day. When None the adapter auto-derives a
             Henry-representative flux from the transect geometry + aquifer K.
         aquifer_k_ms / porosity: optional demo-aquifer overrides.
-        compute_class: FR-CE-3 compute class. NOTE: saltwater_intrusion is
+        compute_class: compute class. NOTE: saltwater_intrusion is
             LOCAL-ONLY (the Henry demo grid is small + fast; Batch is not used).
         pipeline_emitter: optional PipelineEmitter for live progress cards.
 
@@ -313,7 +313,7 @@ async def model_saltwater_intrusion_scenario(
         intrusion_m,
         layer.seaward_salinity_ppt,
     )
-    # ADR 0223: structured aquifer-K provenance routed through gate_input_review,
+    # structured aquifer-K provenance routed through gate_input_review,
     # stamped onto the layer envelope (the prose caveat stays on the summary).
     layer, _review = await gate_and_stamp_modflow_inputs(
         tool_name="modflow_saltwater_intrusion", layer=layer,
@@ -421,7 +421,7 @@ async def modflow_saltwater_intrusion(
         freshwater_inflow_m3_day: inland freshwater inflow, m^3/day. None -> adapter
             auto-derives from geometry + aquifer K.
         aquifer_k_ms / porosity: optional demo-aquifer overrides.
-        compute_class: FR-CE-3 compute class. Default ``"standard"``. This archetype
+        compute_class: compute class. Default ``"standard"``. This archetype
             runs LOCAL-ONLY (the Henry demo grid is small + fast; Batch is not used).
 
     Returns:
@@ -432,7 +432,7 @@ async def modflow_saltwater_intrusion(
         On a recoverable failure (incl. a missing transect) the tool returns a
         typed error the agent narrates honestly -- it never fabricates a transect.
 
-    FR-DC-6: ``cacheable=False`` + ``ttl_class="live-no-cache"`` +
+    ``cacheable=False`` + ``ttl_class="live-no-cache"`` +
     ``source_class="workflow_dispatch"``  -  the cache shim is NOT invoked.
     """
     aoi = _coerce_optional_latlon(aoi_latlon)

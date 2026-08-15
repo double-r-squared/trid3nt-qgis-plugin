@@ -36,7 +36,7 @@ rather than reading as a successful modeled layer.
 Determinism boundary (Invariant 1): every narrated number is a typed
 ``PlumeLayerURI`` field the postprocess computed  -  never free-generated.
 
-FR-DC-6: ``cacheable=False`` + ``ttl_class="live-no-cache"`` +
+``cacheable=False`` + ``ttl_class="live-no-cache"`` +
 ``source_class="workflow_dispatch"``  -  the cache shim is NOT invoked.
 """
 
@@ -110,7 +110,7 @@ async def run_modflow_multi_species_job(
     Args:
         run_args: the assembled run args (``archetype="multi_species"`` +
             ``species``).
-        compute_class: FR-CE-3 compute class.
+        compute_class: compute class.
 
     Returns:
         On success: ``MultiSpeciesPlumeResult`` (one ``PlumeLayerURI`` per species).

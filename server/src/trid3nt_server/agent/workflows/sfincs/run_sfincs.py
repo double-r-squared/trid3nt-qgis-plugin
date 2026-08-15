@@ -307,7 +307,7 @@ def _resolve_bbox(
     """Resolve the bbox via direct param or via ``geocode_location``.
 
     Precedence per the kickoff TENTATIVE: bbox-direct wins when both are
-    given (matches the "intent + irreducible inputs" Decision K -- bbox IS
+    given (matches the "intent + irreducible inputs" -- bbox IS
     the irreducible input; geocode is a convenience).
 
     Returns:

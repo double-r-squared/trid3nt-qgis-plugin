@@ -319,7 +319,7 @@ def _fetch_from_catalog_entry(entry_id: str, params: dict[str, Any] | None = Non
     and needs the actual layer bytes -- generic dispatcher routes by the
     entry's ``access_tier``: Tier 1 (STAC+COG), Tier 2 (OGC service), Tier 3
     (HTTPS+Range), Tier 4 (region+clip). The dispatched bytes are written
-    through the FR-DC-3 cache and surfaced as a LayerURI.
+    through the cache and surfaced as a LayerURI.
 
     Do NOT use this for: discovering candidate sources (use ``search_data_catalog``);
     direct-bbox raster retrieval where a dedicated fetcher already exists
@@ -358,10 +358,10 @@ def _fetch_from_catalog_entry(entry_id: str, params: dict[str, Any] | None = Non
         - ``entry_id``: the catalog id (echo).
         - ``access_tier``: the dispatched tier (1/2/3/4).
         - ``source_class``: the entry's source_class (for downstream routing).
-        - ``citation``: the entry's citation string (NFR-L-3 provenance).
+        - ``citation``: the entry's citation string (provenance).
         - ``last_verified``: the entry's curator-vetted UTC timestamp.
 
-    FR-DC-3 / FR-CE-8: registered with ``ttl_class="static-30d"``,
+    Registered with ``ttl_class="static-30d"``,
     ``source_class="fetch_from_catalog"``, ``cacheable=True``. The cache key is the
     entry id + params; identical fetches dedup.
     """

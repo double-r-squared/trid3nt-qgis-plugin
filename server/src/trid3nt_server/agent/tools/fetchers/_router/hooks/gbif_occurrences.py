@@ -1,4 +1,4 @@
-"""gbif_occurrences hooks (chained-resolution mode, ADR 0063): GBIF species points.
+"""gbif_occurrences hooks (chained-resolution mode): GBIF species points.
 
 Two irreducible steps the declarative surface cannot carry:
 1. RESOLVE (name -> taxonKey): a ``species/match`` GET whose EXACT-match gate the

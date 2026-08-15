@@ -1,5 +1,5 @@
 """Engine template ``swmm_pump_pid_rtc`` - run a CITED published SWMM deck
-demonstrating a PID real-time-control (RTC) rule on a pump (ADR 0128).
+demonstrating a PID real-time-control (RTC) rule on a pump.
 
 A THIN composer over the shared published-deck runner. Binds the cited
 openswmm.org example "Example - PID Control for a Pump" (Robert Dickinson, on the
@@ -79,7 +79,7 @@ async def swmm_pump_pid_rtc(
     pump-control SWMM example.
 
     Params:
-        input_mode: reserved ADR 0107 lever; the labeled demonstration note is
+        input_mode: reserved lever; the labeled demonstration note is
             always surfaced.
 
     Returns:

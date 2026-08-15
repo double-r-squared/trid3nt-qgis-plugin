@@ -344,7 +344,7 @@ async def model_elmfire_crown_fire(
                 simulator_extra=sim_extra,
                 # DUMP_CROWN_FIRE only: the per-cell crown-fire type raster. NOTE
                 # DUMP_CROWN_FIRE_AREA segfaults this ELMFIRE build's fire-size-stats
-                # postprocess (ADR 0161 sub-STOP); the active-crown area is derived
+                # postprocess (sub-STOP); the active-crown area is derived
                 # from the per-cell raster instead.
                 outputs_extra={"DUMP_CROWN_FIRE": ".TRUE."},
                 dt_s=_CROWN_SIMULATION_DT_S,

@@ -6,7 +6,7 @@ any auxiliary flux/water-level products HydroMT-SFINCS emits), extracts the
 peak flood depth field, converts it to a Cloud-Optimized GeoTIFF, uploads to
 GCS, and returns a typed ``LayerURI`` pointing at the COG.
 
-Output format set is fixed by FR-CE-4 + FR-QS-3: rasters COG; vectors
+Output format set is fixed by + rasters COG; vectors
 FlatGeobuf/GeoParquet -- produced identically by engine, consumed identically
 by QGIS Server + web. The postprocess output here is one COG (flood depth at
 peak); future workflows may emit additional layers (flood velocity,
@@ -203,7 +203,7 @@ def _orient_array_for_cog(arr: Any, ds: Any) -> Any:
         ):
             logger.info(
                 "postprocess_flood: transposing depth array shape %s — x-dim (%s,n=%d) "
-                "is in rows; expected (y_rows=%d, x_cols=%d). Rotation fix (job-0071).",
+                "is in rows; expected (y_rows=%d, x_cols=%d). Rotation fix.",
                 arr.shape, _x_dim, _n_x, _n_y, _n_x,
             )
             arr = arr.T
@@ -959,7 +959,7 @@ def _maybe_native_mesh_layer(
     itself is published as a ``layer_type="mesh"`` row carrying the deck's
     projected CRS in ``crs_authid`` (MDAL reports an empty crs() for a SFINCS
     quadtree grid, so the plugin sets it from this field). This is the
-    QGIS-native quadtree deliverable (ADR 0159): unlike the rasterized depth COG
+    QGIS-native quadtree deliverable: unlike the rasterized depth COG
     (still produced as the primary layer) and the vector ``mesh.geojson``
     preview, this row loads the real variable-resolution mesh.
 
@@ -1126,7 +1126,7 @@ def postprocess_flood(
             )
         )
 
-    # --- Native quadtree mesh layer (ADR 0159) ---
+    # --- Native quadtree mesh layer ---
     # When the solve wrote a quadtree UGRID sfincs_map.nc, ALSO publish the
     # netcdf itself as a layer_type="mesh" row (MDAL reads it natively). Appended
     # AFTER the peak+frame raster layers; a regular-grid output appends nothing

@@ -72,7 +72,7 @@ def _build_channel_rankings(
     """The 3 sync ranking channels (BM25 + local dense + name-substring) over
     the CACHED discover index, as rank lists of tool indices.
 
-    Split out of ``_discover_topk`` (Stage 3, ADR 0017/0018) so the scored
+    Split out of ``_discover_topk`` (Stage 3) so the scored
     variant ``retrieve_ranked_tools`` fuses the SAME channels -- the visible-set
     and the ambiguity-margin paths can never drift apart. Pure CPU; never
     builds the index.
@@ -199,7 +199,7 @@ def retrieve_ranked_tools(
     """Ranked ``(tool_name, rrf_score)`` list for one turn's query (Stage 3).
 
     The SCORED face of the same 3-channel RRF ranking ``retrieve_visible_tools``
-    uses -- feeds (a) the openai-provider top-k tool gating and (b) the ADR 0018
+    uses -- feeds (a) the openai-provider top-k tool gating and (b) the
     ambiguity signal (top-1 vs top-2 margin). Scores are the raw RRF fusion
     values (rank-derived, NOT probabilities; only their ordering + relative
     margin are meaningful).
@@ -255,7 +255,7 @@ def _full_registry_floor(floor: set[str]) -> set[str]:
         logger.warning(
             "tool_retrieval: full-registry import failed on fail-open", exc_info=True
         )
-    # Door dissolution (ADR 0094): engine templates (tier=template) are ordinary
+    # Door dissolution: engine templates (tier=template) are ordinary
     # retrieval-pool members, so the FAIL-OPEN dump INCLUDES them. Only
     # tier="catalog" (catalog-surfacing experiment, arm-flagged; no tool carries
     # it in the DEFAULT config) and tier="internal" (an absorbed in-process seam,

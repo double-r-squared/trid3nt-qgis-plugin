@@ -181,7 +181,7 @@ async def model_mine_dewatering_scenario(
             default applied when None.
         well_pumping_rate_m3_day: optional supplemental sump WEL (m^3/day).
         aquifer_k_ms / porosity: optional demo-aquifer overrides.
-        compute_class: FR-CE-3 compute class.
+        compute_class: compute class.
         pipeline_emitter: optional PipelineEmitter for live progress cards.
 
     Returns:
@@ -264,7 +264,7 @@ async def model_mine_dewatering_scenario(
         layer.dewatering_rate_m3_day,
         layer.drain_cell_count,
     )
-    # ADR 0223: structured aquifer-K provenance routed through gate_input_review,
+    # structured aquifer-K provenance routed through gate_input_review,
     # stamped onto the layer envelope (the prose caveat stays on the summary).
     layer, _review = await gate_and_stamp_modflow_inputs(
         tool_name="modflow_mine_dewatering", layer=layer,
@@ -358,7 +358,7 @@ async def modflow_mine_dewatering(
         drain_conductance_m2_day: per-cell DRN conductance. Demo default if None.
         well_pumping_rate_m3_day: optional supplemental sump WEL (m^3/day).
         aquifer_k_ms / porosity: optional demo-aquifer overrides.
-        compute_class: FR-CE-3 compute class. Default ``"standard"``.
+        compute_class: compute class. Default ``"standard"``.
 
     Returns:
         On success: a ``MineDewateringResult`` JSON dict with the
@@ -368,7 +368,7 @@ async def modflow_mine_dewatering(
         a missing pit) the tool returns a typed error the agent narrates honestly
          -  it never fabricates a pit.
 
-    FR-DC-6: ``cacheable=False`` + ``ttl_class="live-no-cache"`` +
+    ``cacheable=False`` + ``ttl_class="live-no-cache"`` +
     ``source_class="workflow_dispatch"``  -  the cache shim is NOT invoked.
     """
     aoi = _coerce_optional_latlon(aoi_latlon)

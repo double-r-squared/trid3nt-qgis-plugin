@@ -2,8 +2,8 @@
 
 This module registers ``qgis_process``: a pass-through to the PyQGIS worker
 invocation path (AWS docker stage-then-mount). Solver dispatch is
-uncacheable-by-construction per FR-DC-6 -- results land under
-``gs://<bucket>/runs/<run_id>/`` per FR-CE-4, not under ``cache/``.
+uncacheable-by-construction -- results land under
+``gs://<bucket>/runs/<run_id>/``, not under ``cache/``.
 
 The tool declares:
 
@@ -11,7 +11,7 @@ The tool declares:
     cacheable = False
     source_class = None  # uncacheable; no bucket prefix
 
-per FR-DC-6's "Solver dispatchers and their result fetches" enumeration entry.
+as a "Solver dispatchers and their result fetches" enumeration entry.
 """
 
 from __future__ import annotations
@@ -108,7 +108,7 @@ def set_worker_submitter(submitter: Any) -> None:
 
 
 # ---------------------------------------------------------------------------
-# qgis_process RUN substrate (Decision Q).
+# qgis_process RUN substrate.
 #
 # Execution mirrors the SFINCS solver's local-docker stage-then-mount pattern:
 # stage s3:// input params into a host rundir, mount it into the trid3nt-qgis
@@ -258,7 +258,7 @@ def qgis_process(
     Use this when: the agent needs to run a QGIS Processing algorithm
     (vector / raster / GDAL / GRASS / SAGA / plugin) that maps to one
     discovered via ``list_qgis_algorithms`` / ``describe_qgis_algorithm``.
-    Outputs persist under ``s3://<bucket>/runs/<run_id>/`` per FR-CE-4.
+    Outputs persist under ``s3://<bucket>/runs/<run_id>/``.
 
     Heavy on-box execution is DISABLED by default: unless the operator has
     set ``TRID3NT_QGIS_ONBOX_DOCKER=on``, this call returns an honest typed
@@ -283,7 +283,7 @@ def qgis_process(
         "QGIS_PROCESSING_OFFLOADED", retryable: False, did_run: False,
         message}``.
 
-    FR-DC-6: This tool is uncacheable-by-construction (solver / dispatcher
+    This tool is uncacheable-by-construction (solver / dispatcher
     outputs live under ``runs/`` not ``cache/``); the cache shim is
     deliberately bypassed.
     """

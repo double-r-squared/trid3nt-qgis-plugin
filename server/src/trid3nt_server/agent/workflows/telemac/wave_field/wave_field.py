@@ -1,5 +1,5 @@
 """Engine template ``tomawac_wave_field`` - TOMAWAC spectral (phase-averaged)
-wave engine (ADR 0236).
+wave engine.
 
 The LLM-facing exposure of TELEMAC's TOMAWAC third-generation wave-action solver:
 the refinement-grade complement to SFINCS/SnapWave coastal screening (fidelity
@@ -116,7 +116,7 @@ def _classify_mode(text: str | None, explicit: str | None) -> str:
     return "fetch_growth"
 
 
-#: DECLARED target_resolution_m range (ADR 0225). Grid floor GRID_H_FLOOR_M (150 m
+#: DECLARED target_resolution_m range. Grid floor GRID_H_FLOOR_M (150 m
 #: in the worker); a large lake is coarsened under the node budget (self-labeled).
 _TOMAWAC_RES_SPEC = ResolutionSpec(
     param="target_resolution_m",
@@ -239,7 +239,7 @@ async def tomawac_wave_field(
         bathy_source: ``"auto"`` (default - a Great Lakes AOI uses real NOAA
             lake-datum bathymetry, else an idealized basin labeled as such) |
             ``"noaa_greatlakes"`` | ``"idealized"``.
-        compute_class: FR-CE-3 compute class. Default ``"medium"``.
+        compute_class: compute class. Default ``"medium"``.
         input_mode: ``"user_gated"`` reviews the resolved forcing before the solve;
             ``"auto"`` (default) proceeds labeled.
 
@@ -649,7 +649,7 @@ async def model_tomawac_wave_field(
             except PublishLayerError as exc:
                 logger.warning("tomawac publish_layer failed (%s) - unpublished COG", exc)
 
-    # in-worker bed input (ADR 0244 S3): the NOAA lake-datum bed is sampled inside
+    # in-worker bed input (S3): the NOAA lake-datum bed is sampled inside
     # the solver container (no agent-side router fetch), so the composer rides the
     # bed COG the worker recorded through publish_raster_input_cog. Best-effort;
     # only the real-bathy path writes one (metrics.bed_cog present).

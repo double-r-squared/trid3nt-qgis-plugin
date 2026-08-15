@@ -27,7 +27,7 @@ computational grid), so -- unlike GeoClaw's AMR patches or SFINCS's quadtree fac
 ``(my, mx)`` grid we drop straight onto an EPSG:4326 COG over the bbox (simpler
 than the AMR / quadtree cases).
 
-Honesty floor (Invariant 1 / FR-AS-7): the wave scalars are computed with plain
+Honesty floor (Invariant 1): the wave scalars are computed with plain
 arithmetic from the Hs / period / direction grids -- no LLM anywhere; the agent
 narrates the typed fields, never invents them. A SWAN run that produced an empty /
 all-calm wave field raises ``SWAN_OUTPUT_EMPTY`` -- it NEVER publishes a

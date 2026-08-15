@@ -1,4 +1,4 @@
-"""Atomic tool ``compute_impervious_surface`` - NLCD impervious-fraction raster (FR-CE-8, FR-DC).
+"""Atomic tool ``compute_impervious_surface`` - NLCD impervious-fraction raster.
 
 This module registers one atomic tool that computes an impervious-surface
 fraction raster (float32, range 0.0-1.0) from either:
@@ -36,12 +36,12 @@ Cache layout:
 
 - **Invariant 2 (Deterministic workflows): preserves.** Zero LLM calls; pure
   numpy reclass + scale via rasterio.
-- **FR-DC-6 (cacheable): honors.** ``cacheable=True``,
+- **(cacheable): honors.** ``cacheable=True``,
   ``ttl_class="static-30d"``, ``source_class="impervious"`` -- output is stable
   for the lifetime of the cached upstream NLCD raster.
 - **CRS hygiene (engine.md domain discipline):** the output preserves the input
   CRS verbatim (no reprojection); the transform / size / nodata are propagated.
-- **NFR-R-1 (resilience):** failures surface as ``ImperviousSurfaceError`` with
+- **(resilience):** failures surface as ``ImperviousSurfaceError`` with
   typed ``error_code``; S3-read errors and rasterio-open errors are wrapped.
 
 **Codified lesson check:** the input/output share grid + transform +
@@ -81,7 +81,7 @@ class ImperviousSurfaceError(RuntimeError):
     """Raised when impervious-surface computation fails.
 
     ``error_code`` carries a SCREAMING_SNAKE_CASE code surfaced in the
-    pipeline strip (NFR-R-1 typed-error requirement).
+    pipeline strip (typed-error requirement).
 
     Codes:
     - ``RASTER_OPEN_FAILED`` -- rasterio could not open the input.

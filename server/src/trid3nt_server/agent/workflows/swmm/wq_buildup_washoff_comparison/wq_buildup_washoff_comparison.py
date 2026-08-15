@@ -1,4 +1,4 @@
-"""Engine template ``swmm_wq_buildup_washoff_comparison`` (ADR 0151).
+"""Engine template ``swmm_wq_buildup_washoff_comparison``.
 
 A THIN composer over the shared mechanism-comparison runner. Runs one synthetic
 subcatchment + design storm and overlays the TSS pollutographs across a

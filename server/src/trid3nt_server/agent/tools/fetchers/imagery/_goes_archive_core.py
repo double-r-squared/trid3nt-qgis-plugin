@@ -1,4 +1,4 @@
-"""GOES raw-MCMIPC archive SUBSTRATE (ADR 0088): the netcdf_cf_object per-frame
+"""GOES raw-MCMIPC archive SUBSTRATE: the netcdf_cf_object per-frame
 core shared by the folded fetch_goes_archive_animation + fetch_goes_active_fire
 specs (via hooks/goes_archive.py) and by fetch_glm_lightning. Holds the S3 window
 listing, the CF scale/offset netCDF band read + reproject, the Fire-Temperature /
@@ -65,7 +65,7 @@ logger = logging.getLogger("trid3nt_server.agent.tools.fetchers.imagery._goes_ar
 
 
 # ---------------------------------------------------------------------------
-# Error types (FR-AS-11 typed-error surface).
+# Error types (typed-error surface).
 # ---------------------------------------------------------------------------
 
 

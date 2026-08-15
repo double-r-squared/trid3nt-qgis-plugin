@@ -12,8 +12,8 @@ carrying the typed narration scalars.
 
 Reuse (do NOT reinvent): the COG reproject-to-4326 + CRS round-trip guard pattern
 from ``postprocess_swmm`` (the MapLibre basemap is EPSG:4326/web-mercator, so the
-metric-CRS worker field must be warped). The honesty floor (Invariant 1 /
-FR-AS-7): the narration scalars are the worker's deterministically-computed
+metric-CRS worker field must be warped). The honesty floor (Invariant 1):
+the narration scalars are the worker's deterministically-computed
 ``result`` block (unstable-area fraction / min FoS / mean PoF) — no LLM anywhere;
 the agent narrates the typed fields, never invents them. The scalars are
 recomputed from the field as a fallback when the worker result block is absent

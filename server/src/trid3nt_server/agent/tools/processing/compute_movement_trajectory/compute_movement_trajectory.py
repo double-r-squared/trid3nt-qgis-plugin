@@ -1,4 +1,4 @@
-"""Atomic tool ``compute_movement_trajectory`` -- movement metrics from track POINTS (FR-TA-2, FR-CE-8).
+"""Atomic tool ``compute_movement_trajectory`` -- movement metrics from track POINTS.
 
 This module registers one atomic tool that turns a layer of timestamped animal /
 vehicle / asset track POINTS into an annotated movement-trajectory vector:
@@ -46,7 +46,7 @@ tool raises ``MovementTrajectoryError("INSUFFICIENT_POINTS", ...)`` rather than
 emitting an empty layer that reads as success -- a flat-out honest typed error
 per the data-source-fallback norm.
 
-**Cache.** Result FlatGeobuf cached under the FR-DC-3 shim at
+**Cache.** Result FlatGeobuf cached under the shim at
 ``cache/static-30d/movement_trajectory/<key>.fgb``, keyed on
 ``(points_uri, individual_id_field, timestamp_field)``. ``static-30d`` because a
 given input point layer is immutable for the life of its own cache entry.
@@ -55,9 +55,9 @@ given input point layer is immutable for the life of its own cache entry.
 
 - **Invariant 2 (Deterministic workflows): preserves.** Pure pyproj + numpy +
   geopandas pipeline; zero LLM calls.
-- **FR-DC-6 (cacheable): honors.** ``cacheable=True``, ``ttl_class="static-30d"``,
+- **(cacheable): honors.** ``cacheable=True``, ``ttl_class="static-30d"``,
   ``source_class="movement_trajectory"``.
-- **NFR-R-1 (resilience): preserves.** Every failure surfaces as a typed
+- **(resilience): preserves.** Every failure surfaces as a typed
   ``MovementTrajectoryError`` with a SCREAMING_SNAKE_CASE ``error_code``; no
   silent dead-end and no empty-success.
 """
@@ -88,7 +88,7 @@ logger = logging.getLogger("trid3nt_server.agent.tools.processing.compute_moveme
 
 
 # ---------------------------------------------------------------------------
-# Error class (NFR-R-1 typed-error surface)
+# Error class (typed-error surface)
 # ---------------------------------------------------------------------------
 
 
@@ -596,7 +596,7 @@ def _build_trajectory_fgb(
 
 
 # ---------------------------------------------------------------------------
-# Payload estimator (FR-DC-9 chat-warning gate)
+# Payload estimator (chat-warning gate)
 # ---------------------------------------------------------------------------
 
 #: A LineString segment FlatGeobuf feature with ~12 scalar attrs is small;

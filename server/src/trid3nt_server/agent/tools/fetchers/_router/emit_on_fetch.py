@@ -1,4 +1,4 @@
-"""Emit-on-fetch: surface a fetched INPUT as a role=context layer (ADR 0244).
+"""Emit-on-fetch: surface a fetched INPUT as a role=context layer.
 
 The single seam that closes the IN-COMPOSER visualization gap. A spec's RENDER
 DECLARATION (it returns a renderable ``LayerURI`` -- a raster COG or a vector
@@ -122,7 +122,7 @@ def maybe_emit_input_on_fetch(
     visualize: Any,
     purpose: str | None,
 ) -> None:
-    """Surface ``layer`` as a role=context input IFF in composer mode (ADR 0244).
+    """Surface ``layer`` as a role=context input IFF in composer mode.
 
     Called from ``route()`` right after a successful LayerURI build. No-op (and
     NEVER raises) unless every gate passes: an emitter is bound, this is NOT the

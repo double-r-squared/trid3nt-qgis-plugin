@@ -1,5 +1,5 @@
 """Engine template ``telemac_rain_on_grid`` -- TELEMAC-2D rainfall-runoff on a
-delineated watershed (ADR 0196; SCS-CN infiltration, ADR 0195).
+delineated watershed (; SCS-CN infiltration).
 
 The LLM-facing exposure of the TELEMAC-2D rain-on-grid engine: a design storm
 falls on a REAL delineated catchment (not a river reach), infiltrates by the SCS
@@ -11,7 +11,7 @@ sibling of the surface-transport ``telemac_river_dye`` and the coastal
 
 Pipeline (deterministic, composed here):
   1. resolve the AOI + pour point (geocode a place, or an explicit bbox + point);
-  2. ``acquire_watershed_mesh`` (ADR 0196 Decision 1) -- delineate the catchment,
+  2. ``acquire_watershed_mesh`` (Decision 1) -- delineate the catchment,
      mesh its interior refined by distance-to-river, project to UTM, write the
      BOTTOM SELAFIN (a user mesh slots in via ``use_supplied_mesh``);
   3. ``fetch_landcover`` (NLCD) sampled at the mesh nodes -> per-node CN2 +
@@ -20,7 +20,7 @@ Pipeline (deterministic, composed here):
      because the engine branch is compiled off);
   4. ``select_runoff_path`` -- constant design storm -> the NATIVE SCS-CN model
      (RAINFALL-RUNOFF MODEL=1 + FORMATTED DATA FILE 2 CN2 map + AMC); a real
-     MRMS/AORC ``mrms_window`` -> the NATIVE TIME-VARYING path (ADR 0206): the
+     MRMS/AORC ``mrms_window`` -> the NATIVE TIME-VARYING path: the
      gross hourly hyetograph drives the SCS-CN per-timestep via a per-case
      RAINDEF=3 FORTRAN FILE (FORMATTED DATA FILE 1), resolving the hydrograph
      SHAPE the constant-rain build could not (no engine rebuild);
@@ -29,16 +29,16 @@ Pipeline (deterministic, composed here):
   6. ``postprocess_telemac_wse`` rasterizes the peak WATER DEPTH to a COG; the
      outlet hydrograph + runoff volume + continuity ride in the metrics;
   7. the full-results SELAFIN (``r2d_rog.slf`` -- all frames, all variables) is
-     published as a ``layer_type="mesh"`` case layer alongside the depth COG (ADR
-     0208), so QGIS/MDAL animates it natively with the temporal controller.
+     published as a ``layer_type="mesh"`` case layer alongside the depth COG,
+     so QGIS/MDAL animates it natively with the temporal controller.
 
 Registered ``engine="telemac", tier="template"``, ``cacheable=False`` +
-``ttl_class="live-no-cache"`` + ``source_class="workflow_dispatch"`` (FR-DC-6,
-mirroring ``telemac_river_dye``). TELEMAC is LOCAL-DOCKER / worker-image only, so
+``ttl_class="live-no-cache"`` + ``source_class="workflow_dispatch"``
+(mirroring ``telemac_river_dye``). TELEMAC is LOCAL-DOCKER / worker-image only, so
 the composer always dispatches through ``run_solver``.
 
 Applicability envelope (Godara, Bruland and Alfredsen 2024, Front. Water
-6:1384205 -- ADR 0195): rain-on-grid reproduces SINGLE-STORM flash-flood events
+6:1384205): rain-on-grid reproduces SINGLE-STORM flash-flood events
 (~10-20 h) in small steep catchments. Multi-peak / sustained rain-on-snow is NOT
 reproduced (infiltrated water is permanently lost, no subsurface return flow ->
 inter-peak baseflow is missed). TELEMAC-2D's triangular mesh is stable on steep
@@ -114,7 +114,7 @@ async def telemac_rain_on_grid(
     infiltration (per-node CN from NLCD land cover) on a delineated catchment
     meshed from a real 3DEP DEM; planning-grade single-storm flash-flood demo, not
     a calibrated rainfall-runoff model. Single-storm ~10-20 h events only (no
-    baseflow / no snow). ``soil_store`` (ADR 0213) swaps the static curve number
+    baseflow / no snow). ``soil_store`` swaps the static curve number
     for a continuous soil-moisture store, which recovers antecedent capacity
     BETWEEN storms -- it fixes the multi-peak second-peak overshoot a static CN
     exhausts on (Ball Creek: +116% -> -11%) and sharpens single-event shape +
@@ -153,7 +153,7 @@ async def telemac_rain_on_grid(
         storm_duration_hr: rain-on duration (h).
         sim_duration_hr: total sim length (h); defaults to storm_duration_hr.
         soil_store: continuous soil-moisture store instead of the static CN
-            (ADR 0213); requires ``mrms_window`` (needs the real hyetograph +
+            requires ``mrms_window`` (needs the real hyetograph +
             antecedent). Recommended for MULTI-STORM windows.
         soil_store_capacity_mm: store retention capacity S (mm), the calibration
             knob (larger = less runoff); required when ``soil_store``.
@@ -211,7 +211,7 @@ async def model_telemac_rain_on_grid(
     amc = _AMC.get(str(antecedent_moisture).strip().lower(), 2)
 
     # Fail fast on soil-store misconfiguration BEFORE any mesh/network work
-    # (ADR 0213): the store needs the real hyetograph + its antecedent history
+    #: the store needs the real hyetograph + its antecedent history
     # (mrms_window) and a retention capacity to calibrate against.
     if soil_store:
         if not mrms_window:
@@ -230,7 +230,7 @@ async def model_telemac_rain_on_grid(
     # The pour point is resolved FIRST: when it is supplied the analysis AOI is
     # derived FROM it (a generous catchment-containing buffer), never from the
     # geocoded place bbox. A place bbox names a TOWN and need not contain the
-    # UPSTREAM catchment (ADR 0196 live bug: 'Otto, NC' delineated a 20-cell
+    # UPSTREAM catchment (live bug: 'Otto, NC' delineated a 20-cell
     # sliver because the town box clipped the Coweeta catchment mid-hillslope).
     if isinstance(pour_point, str):
         pour_point = coerce_bbox_value(pour_point)
@@ -258,14 +258,14 @@ async def model_telemac_rain_on_grid(
 
     # --- Stage 2: acquire the watershed mesh -------------------------------- #
     # Provenance line stamped onto the result when a case mesh was consumed or a
-    # mismatched one was skipped (ADR 0200 precondition gate).
+    # mismatched one was skipped (precondition gate).
     mesh_gate_note: str | None = None
     if mesh_uri:
         mesh = MA.use_supplied_mesh(
             mesh_path=mesh_uri, pour_point=pp,
             utm_epsg=int(_guess_utm_epsg(pp)), outlet_lonlat=pp)
     else:
-        # Precondition gate (ADR 0200): if this case already holds an engine-
+        # Precondition gate: if this case already holds an engine-
         # compatible mesh (built explicitly by generate_mesh), offer to solve on
         # it instead of delineating a fresh one. Accepted -> the supplied-mesh
         # path; declined/absent/incompatible -> the delineation below, unchanged.
@@ -290,7 +290,7 @@ async def model_telemac_rain_on_grid(
 
     # --- Stage 4: rain forcing + runoff-path decision (in the envelope) ------ #
     # A real MRMS/AORC window -> the TRUE time-varying hyetograph drives the
-    # native SCS-CN per-timestep (ADR 0206 native_hyetograph path). Otherwise the
+    # native SCS-CN per-timestep (native_hyetograph path). Otherwise the
     # constant design storm is used (the historical native path). The design-storm
     # knobs stay for un-dated / hypothetical storms.
     hyeto_blocks: list | None = None
@@ -302,7 +302,7 @@ async def model_telemac_rain_on_grid(
         decision = select_runoff_path(hyetograph_mm=hyeto_series)
         sim_s = sim_from_hyeto
         if soil_store:
-            # ADR 0213: continuous store instead of static CN. Spin up the
+            # continuous store instead of static CN. Spin up the
             # initial store level V0 from the real antecedent precipitation, so
             # the antecedent wetness is dynamic STATE (the whole point). The
             # capacity/window preconditions were validated up front.
@@ -344,7 +344,7 @@ async def model_telemac_rain_on_grid(
 
 
 async def _mesh_precondition_gate(pp, rundir):
-    """Offer this case's mesh to the rain-on-grid solve (ADR 0200).
+    """Offer this case's mesh to the rain-on-grid solve.
 
     Returns ``(WatershedMesh | None, note | None)``: a fully-populated
     ``WatershedMesh`` when a case mesh was discovered, engine-compatible, and
@@ -442,7 +442,7 @@ def _sample_node_fields(mesh: Any, aoi: tuple, curve_number: float | None):
     """NLCD sampled at the mesh nodes -> (CN2, Manning, nlcd_s3_uri) per node.
 
     Also returns the fetched NLCD land-cover ``s3://`` uri so the composer can
-    surface it as a role=context input (ADR 0231) -- the per-node CN2/Manning the
+    surface it as a role=context input -- the per-node CN2/Manning the
     infiltration derives from come from THIS layer, so it must not stay hidden.
     """
     import numpy as np
@@ -504,7 +504,7 @@ def _spin_up_soil_v0(aoi, window: str, capacity_mm: float, recovery_h: float,
     the Michel-2005 production store forward over the REAL antecedent AORC hourly
     precipitation (from V=0). V0 IS the integrated antecedent wetness the store
     carries into the event -- the dynamic-state initialization that replaces a
-    per-event AMC/CN choice (ADR 0213). Same store dynamics as the worker's
+    per-event AMC/CN choice. Same store dynamics as the worker's
     ``soil_moisture_excess`` so the spin-up and the run are one continuous model.
     """
     import datetime as _dt
@@ -592,11 +592,11 @@ async def _stage_solve_postprocess(
     if observed_gauge_id:
         reach["observed_gauge_id"] = str(observed_gauge_id)
     if hyetograph_blocks:
-        # ADR 0206: the gross hourly hyetograph drives the native SCS-CN
+        # the gross hourly hyetograph drives the native SCS-CN
         # per-timestep (RAINDEF=3 FORTRAN FILE staged worker-side).
         reach["rain_hyetograph_blocks"] = hyetograph_blocks
     if soil_params:
-        # ADR 0213: the continuous soil-moisture store transforms the gross
+        # the continuous soil-moisture store transforms the gross
         # hyetograph to net excess worker-side (uniform CN=100 pass-through).
         reach.update(soil_params)
     manifest = {
@@ -631,7 +631,7 @@ async def _stage_solve_postprocess(
         raise TelemacRainOnGridError(
             "TELEMAC_ROG_NO_LAYER",
             "postprocess produced no depth layer (dry catchment?).")
-    # ADR 0208 (NATE full-results ask): publish the full-results SELAFIN
+    # (NATE full-results ask): publish the full-results SELAFIN
     # (r2d_rog.slf -- ALL frames, ALL variables) as a case mesh layer alongside the
     # peak-depth COG, so QGIS/MDAL animates it with the temporal controller.
     await _publish_full_results_mesh(

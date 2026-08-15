@@ -1,10 +1,10 @@
-"""fema_nfhl_zones hooks (tier-3 chained-resolution mode, ADR 0063/0066): FEMA NFHL
+"""fema_nfhl_zones hooks (tier-3 chained-resolution mode/0066): FEMA NFHL
 regulatory flood-zone polygons, OBJECTID-cursor paged.
 
-The wave-11 deferral (ADR 0059) was OBJECTID-cursor pagination: the NFHL endpoint
+The wave-11 deferral was OBJECTID-cursor pagination: the NFHL endpoint
 500s on ``resultOffset>0`` against a bbox-filtered selection, so the twin walks an
 ``OBJECTID>watermark`` cursor instead. That cursor IS a ``next_page`` variant -- the
-pure offset/endOfRecords loop control the declarative pager cannot express (ADR 0063)
+pure offset/endOfRecords loop control the declarative pager cannot express
 -- so it folds onto the EXISTING chained-resolution ``next_page`` hook with ZERO new
 machinery: ``build_request`` builds page 1 (``OBJECTID>0`` + the sfha/zone server
 filter), ``next_page`` advances the cursor to the page's max OBJECTID (stop on a short
@@ -12,7 +12,7 @@ page), ``parse_response`` projects to the regulatory-zone semantic columns.
 
 sfha_only (``SFHA_TF='T'``) and zone_filter (``FLD_ZONE IN (...)``) are applied
 SERVER-side in the where clause (the twin filtered zone_filter client-side; the feature
-SET is value-identical -- ADR 0066 divergence). All I/O stays router-owned.
+SET is value-identical -- divergence). All I/O stays router-owned.
 """
 
 from __future__ import annotations

@@ -11,7 +11,7 @@ declarative bbox validation does not carry. Transport (the shared POST path) /
 retry / cache / FGB serialize / LayerURI stay router-owned.
 
 The POST body shape is expressed via ``RequestPlan(method="POST", json_body=...)``
-(the tier-3 transport extension, ADR 0061); the hook stays pure (it DESCRIBES the
+(the tier-3 transport extension); the hook stays pure (it DESCRIBES the
 request, the router owns the socket). Empty result -> a header-only FGB (a bbox
 over open water is legitimate), never an honest-empty typed error.
 """

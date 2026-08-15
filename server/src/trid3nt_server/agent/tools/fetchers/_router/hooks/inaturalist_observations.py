@@ -1,4 +1,4 @@
-"""inaturalist_observations hooks (chained-resolution mode, ADR 0063): iNat points.
+"""inaturalist_observations hooks (chained-resolution mode): iNat points.
 
 Same shape as gbif: RESOLVE a taxon name -> id via ``/v1/taxa`` (pre-cache, so name
 and id collapse; a digit ``taxon_id`` skips the round trip), then the ``/v1/observations``

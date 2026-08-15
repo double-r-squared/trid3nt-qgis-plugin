@@ -1,4 +1,4 @@
-"""Coastal topo-bathymetry delegate hooks (ADR 0110): the ``fetch_topobathy`` fold.
+"""Coastal topo-bathymetry delegate hooks: the ``fetch_topobathy`` fold.
 
 ``fetch_topobathy`` folds onto the router as a ``library_delegate`` raster source.
 It is NOT a single-source raster read but a 4-leg UTM-precedence COMPOSITE (NOAA
@@ -13,7 +13,7 @@ shared EPSG:32616 grid + a per-tile NAVD88 datum gate. The heterogeneous discove
   * ``topobathy.read`` (delegate) -- the 4-leg select + datum gate + merge -> the
     composite ``(array, transform, crs)`` for the shared COG writer. It ALSO records
     the FETCH-TIME provenance (which legs painted the merge) via the provenance
-    channel (ADR 0110), so the four ``TopobathyResult`` fields survive a cache hit.
+    channel, so the four ``TopobathyResult`` fields survive a cache hit.
   * ``topobathy.envelope`` -- the twin's exact ``topobathy-...`` layer_id / name and
     the four provenance fields read back from the channel (declared defaults when a
     pre-channel cache object has no sidecar -- byte-identical to the twin's own
@@ -22,9 +22,9 @@ shared EPSG:32616 grid + a per-tile NAVD88 datum gate. The heterogeneous discove
 The four fetch-time provenance fields are FETCH-TIME provenance -- which of the four
 heterogeneous sources painted the merge -- and are NOT recoverable from the final
 single-band float32 COG; the provenance channel (bytes + a cache-replayable sidecar)
-is exactly the general capability that unblocks this fold (ADR 0089 -> 0110).
+is exactly the general capability that unblocks this fold.
 
-LOUD-FALLBACK NORM (ADR 0091 follow-up row, applied in the fold rather than
+LOUD-FALLBACK NORM (follow-up row, applied in the fold rather than
 preserved): the 3DEP land leg's SILENT swallow becomes a LABELED ``land_absent``
 degrade (a provenance entry + ``fallback_warning``), and the CUDEM -> ETOPO
 proceed-and-warn is verified to reach the envelope on every path. Topobathy is NOT
@@ -33,8 +33,8 @@ labeling (not a pause-and-ask gate) is the agreed treatment for this consumer.
 
 The ``TopobathyError`` classes live HERE (their stable importable home now that the
 coded twin is deleted). Their base is ``FetchError`` so ``library_delegate.invoke``
-passes them through unchanged (its ``except FetchError: raise`` passthrough, ADR
-0097), preserving the pinned ``error_code`` through the delegate wrapper.
+passes them through unchanged (its ``except FetchError: raise`` passthrough),
+preserving the pinned ``error_code`` through the delegate wrapper.
 """
 
 from __future__ import annotations
@@ -75,8 +75,8 @@ __all__ = [
 
 
 # ---------------------------------------------------------------------------
-# Error types (FR-AS-11 typed-error surface). Base = FetchError so the pinned
-# error_code survives library_delegate.invoke's passthrough (ADR 0097).
+# Error types (typed-error surface). Base = FetchError so the pinned
+# error_code survives library_delegate.invoke's passthrough.
 # ---------------------------------------------------------------------------
 
 
@@ -84,7 +84,7 @@ class TopobathyError(FetchError):
     """Base class for fetch_topobathy failures.
 
     ``error_code`` maps to the WebSocket A.6 error frame emitted by the agent
-    surface. ``retryable`` guides FR-AS-11 retry/clarify/fallback logic.
+    surface. ``retryable`` guides retry/clarify/fallback logic.
     """
 
     error_code: str = "TOPOBATHY_ERROR"
@@ -644,7 +644,7 @@ def _classify_vertical_datum(
 
 
 # ---------------------------------------------------------------------------
-# 3DEP land DEM (REUSE fetch_dem via the registry closure -- seam-1, ADR 0097).
+# 3DEP land DEM (REUSE fetch_dem via the registry closure -- seam-1).
 # ---------------------------------------------------------------------------
 
 
@@ -853,11 +853,11 @@ def _apply_vertical_offset(vsicurl_path: str, offset_m: float) -> str:
     return out
 
 
-#: Deep-water rung (ADR 0229): the 3DEP land DEM returns a FLAT ~0 m fill over open
+#: Deep-water rung: the 3DEP land DEM returns a FLAT ~0 m fill over open
 #: water (no bathymetry -- 3DEP is a bare-earth LAND product), and it sits at HIGHER
 #: composite precedence than the ETOPO global topo-bathy base. Over a rupture/basin-
 #: scale offshore domain (a finite-fault tsunami) that 0 m ocean fill CLOBBERS the
-#: ETOPO deep column, flattening the sea to land-only (the ADR 0226 Chignik land-only
+#: ETOPO deep column, flattening the sea to land-only (the Chignik land-only
 #: refusal: raw min -68 m, 0 % below -5 m, from a genuine ETOPO base of min -6438 m,
 #: 87 % below -5 m). When a caller forces the ETOPO bathy base ON (``force_bathy_base``
 #: -- the offshore/tsunami intent), the 3DEP land leg must contribute ONLY genuine
@@ -1208,7 +1208,7 @@ def _select_and_merge(
 ) -> tuple[Any, Any, str, dict[str, Any]]:
     """Run the 4-leg discovery + datum gate + merge; return ``(array, transform,
     crs, provenance)``. ``provenance`` carries the four TopobathyResult fields plus
-    the LABELED loud-degrade warnings (ADR 0110 / the 0091 follow-up).
+    the LABELED loud-degrade warnings.
 
     ``skip_cudem`` drops the fine NOAA CUDEM 1/9" nearshore composite (and its
     per-tile network reads) -- a SCREENING caller (e.g. a coarse surge TIN) that
@@ -1296,7 +1296,7 @@ def _select_and_merge(
     # surge (its 0 m ocean fill would clobber the ETOPO negative bathy over water).
     land_local = None if skip_land else _fetch_3dep_land_to_file(bbox, resolution_m)
     land_absent = land_local is None
-    # Deep-water rung (ADR 0229): when the ETOPO bathy base is forced ON (the
+    # Deep-water rung: when the ETOPO bathy base is forced ON (the
     # offshore/tsunami intent), the 3DEP land leg contributes ONLY genuine emergent
     # terrain -- its flat ~0 m ocean fill is masked so the ETOPO full-column deep
     # bathy shows through offshore instead of being clobbered to land-only. Onshore
@@ -1414,7 +1414,7 @@ def read_topobathy(
     spec: Any, params: dict[str, Any], *, timeout_s: float
 ) -> tuple[Any, Any, Any]:
     """Fetch + merge the coastal topo-bathymetry composite; RECORD the fetch-time
-    provenance (ADR 0110) and return ``(array, transform, crs)`` for the shared COG
+    provenance and return ``(array, transform, crs)`` for the shared COG
     writer. The provenance dict (which legs painted the merge + the labeled
     degrades) reaches ``topobathy.envelope`` via the channel."""
     bbox = tuple(float(v) for v in params["bbox"])
@@ -1455,7 +1455,7 @@ def envelope_topobathy(
     provenance: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """Build the TopobathyResult fields: the twin's exact layer_id / name plus the
-    four FETCH-TIME provenance fields read back from the channel (ADR 0110).
+    four FETCH-TIME provenance fields read back from the channel.
 
     ``provenance`` is None for a cache object written before the channel existed (no
     sidecar); the declared defaults (bathymetry_present=True, no warning, counts 0)

@@ -1,5 +1,5 @@
 """Engine template ``coastal_tidal_surge`` - TELEMAC-2D coastal tidal/surge
-inundation (ADR 0259).
+inundation.
 
 The LLM-facing exposure of the coastal open-water TELEMAC-2D substrate: how far
 does an OBSERVED or PREDICTED coastal water-level series flood a stretch of
@@ -12,7 +12,7 @@ boundary stage rises. The discriminant (proof-norm #9): a storm-surge series
 tide (``series_type="prediction"``) over the SAME domain.
 
 The tide series is fetched through the ROUTER (``fetch_noaa_coops_tides``) so the
-emit-on-fetch seam (ADR 0244) surfaces the gauge as a role=context input; the
+emit-on-fetch seam surfaces the gauge as a role=context input; the
 composer reads the station's inline ``time_series_csv``, re-bases it to t=0, and
 authors the ``manifest['coastal']`` water-level series. The LOCAL-DOCKER solve
 dispatches through the shared ``run_solver`` seam (solver=telemac_coastal, the
@@ -76,7 +76,7 @@ class CoastalTidalSurgeError(RuntimeError):
 _SERIES_TYPES = ("observed", "prediction")
 
 #: LOUD labeled demo defaults: the validated Apalachicola Bay / Hurricane Michael
-#: case (ADR 0259). Used only when the caller supplies neither an AOI nor a
+#: case. Used only when the caller supplies neither an AOI nor a
 #: window; narrated as demo defaults, never observations.
 DEFAULT_STATION = "8728690"                      # Apalachicola, FL (CO-OPS)
 DEFAULT_BBOX = (-85.02, 29.69, -84.90, 29.80)    # coastal strip spanning the shore
@@ -99,7 +99,7 @@ def _classify_series_type(text: str | None, explicit: str | None) -> str:
     return "observed"
 
 
-#: DECLARED target_resolution_m range (ADR 0225). The coastal grid floor is
+#: DECLARED target_resolution_m range. The coastal grid floor is
 #: GRID_H_FLOOR_M (20 m in the worker); a wide bbox is coarsened under the node
 #: budget (self-labeled). A screening inundation field gains nothing finer.
 _COASTAL_RES_SPEC = ResolutionSpec(
@@ -216,7 +216,7 @@ async def coastal_tidal_surge(
         time_step_s: solver time step (s). Default 20.
         bathy_source: ``noaa_demall`` (real topobathy, default) or ``synthetic``
             (an analytic plane beach - deterministic offline path).
-        compute_class: FR-CE-3 compute class. Default ``"medium"``.
+        compute_class: compute class. Default ``"medium"``.
         input_mode: ``"user_gated"`` reviews the resolved window/station/datum
             before the solve; ``"auto"`` (default) proceeds labeled.
 
@@ -776,7 +776,7 @@ async def model_coastal_tidal_surge(
             except PublishLayerError as exc:
                 logger.warning("coastal publish_layer failed (%s) - unpublished COG", exc)
 
-    # in-worker bed input (ADR 0244 S3): the NOAA DEM_all bed is sampled INSIDE the
+    # in-worker bed input (S3): the NOAA DEM_all bed is sampled INSIDE the
     # solver container (no agent-side router fetch), so the composer rides the bed
     # COG the worker recorded through the shared helper. Best-effort; only the
     # real-bathy path writes one (metrics.bed_cog present).

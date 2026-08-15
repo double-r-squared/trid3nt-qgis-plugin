@@ -1,4 +1,4 @@
-"""climate_normals hooks (chained_resolution enrich, ADR 0063/0071): NOAA NCEI
+"""climate_normals hooks (chained_resolution enrich/0071): NOAA NCEI
 1991-2020 U.S. Climate Normals as station points.
 
 The twin's two-stage shape folds onto the EXISTING enrich phase with zero new

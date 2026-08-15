@@ -1,5 +1,5 @@
 """Engine template ``swmm_wwtp_detention_ponds`` - run a CITED published SWMM deck
-demonstrating stage-storage detention ponds + weir/orifice storage routing (ADR 0128).
+demonstrating stage-storage detention ponds + weir/orifice storage routing.
 
 A THIN composer over the shared published-deck runner. Binds the cited
 openswmm.org example "UV Plant with Detention Ponds" (Rob James): storage
@@ -80,7 +80,7 @@ async def swmm_wwtp_detention_ponds(
     SWMM example.
 
     Params:
-        input_mode: reserved ADR 0107 lever; the labeled demonstration note is
+        input_mode: reserved lever; the labeled demonstration note is
             always surfaced.
 
     Returns:

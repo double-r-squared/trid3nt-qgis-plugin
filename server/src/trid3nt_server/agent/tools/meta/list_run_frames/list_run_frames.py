@@ -44,7 +44,7 @@ logger = logging.getLogger("trid3nt_server.agent.tools.meta.list_run_frames.list
 
 
 class ListRunFramesError(RuntimeError):
-    """Raised when the frame listing cannot be produced (FR-AS-11 typed error).
+    """Raised when the frame listing cannot be produced (typed error).
 
     Codes:
     - ``MISSING_RUN_ID`` — no ``run_id`` was supplied.

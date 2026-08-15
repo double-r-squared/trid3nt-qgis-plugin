@@ -1,4 +1,4 @@
-"""fetch_aorc_precip record hook (ADR 0203): NOAA AORC v1.1 hourly precipitation.
+"""fetch_aorc_precip record hook: NOAA AORC v1.1 hourly precipitation.
 
 The Analysis Of Record for Calibration (AORC) v1.1 is a ~800 m (30 arc-second)
 gridded, hourly CONUS weather record spanning 1979-02 to ~10 days before present,

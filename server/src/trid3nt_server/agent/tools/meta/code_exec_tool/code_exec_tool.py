@@ -4,7 +4,7 @@ This is the LLM-facing entry point to the egress-denied Python sandbox
 (``infra/python-sandbox/``). It lets the agent run **ad-hoc Python over
 layers already on the map** — "compute the 95th-percentile flood depth over the
 city polygon", "cross-tabulate damage by land-cover class" — when no existing
-atomic tool fits, then narrate the structured result (Decision H / Invariant 1).
+atomic tool fits, then narrate the structured result.
 
 The mandatory user-confirm gate (reused, not reinvented)
 --------------------------------------------------------
@@ -36,16 +36,16 @@ status + the result descriptor + bounded stdout tail, NEVER the full payload) AN
 the full result payload under ``_code_exec_result`` so ``server.py`` emits the
 ``code-exec-result`` envelope (the chart-emission detect-and-emit precedent).
 
-Determinism boundary (Invariant 1 / Decision H / FR-AS-7)
+Determinism boundary
 ---------------------------------------------------------
 Every number the agent narrates from a sandbox run is the structured ``result``
 descriptor the deterministic sandbox computed, fed back as the function_response —
 never free-text. No cost field anywhere (Invariant 9): the only quantitative
 fields are ``duration_s`` (a latency) and ``truncated`` (an honesty flag).
 
-Caching: ``ttl_class="live-no-cache"`` (FR-DC-6 uncacheable-by-construction —
+Caching: ``ttl_class="live-no-cache"`` (uncacheable-by-construction —
 each run is a fresh interactive computation), so ``cacheable=False`` and
-``source_class`` is omitted (the FR-DC-6 cross-field rule).
+``source_class`` is omitted (the cross-field rule).
 """
 
 from __future__ import annotations
@@ -93,7 +93,7 @@ class CodeExecConfirmationRequired(RuntimeError):
     surfaces only if the gate is somehow bypassed (a coding error) or a direct
     caller forgets the flag.
 
-    ``error_code`` / ``retryable`` follow the FR-AS-11 typed-exception
+    ``error_code`` / ``retryable`` follow the typed-exception
     convention. ``retryable=False``: the LLM cannot retry its way past a missing
     user approval; the gate must run.
     """
@@ -186,7 +186,7 @@ def summarize_code_exec_for_llm(payload: CodeExecResultPayload) -> dict[str, Any
     """Build the COMPACT function_response Gemini sees (never the full payload).
 
     Carries the status, the structured ``result`` descriptor (the numbers the
-    LLM narrates — Decision H), a short stdout tail, the ``truncated`` honesty
+    LLM narrates), a short stdout tail, the ``truncated`` honesty
     flag, and the duration. Deliberately omits the wire payload's larger
     stdout/stderr fields and the envelope plumbing — the LLM narrates from
     ``result``, not from raw logs."""
@@ -322,7 +322,7 @@ def code_exec_request(
         # On a genuine readback failure (envelope not ingested in time, or the
         # logging client can't be built) it raises a typed error — we convert
         # that to an HONEST error envelope (never a fabricated result) so the
-        # agent narrates the limitation truthfully (Invariant 1 / Decision H).
+        # agent narrates the limitation truthfully.
         try:
             envelope = sandbox_runner.read_sandbox_result(dispatch)
         except (

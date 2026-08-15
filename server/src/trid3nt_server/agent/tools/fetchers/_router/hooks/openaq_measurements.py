@@ -1,4 +1,4 @@
-"""openaq_measurements hooks (chained-resolution mode, ADR 0063/0065): OpenAQ v3
+"""openaq_measurements hooks (chained-resolution mode/0065): OpenAQ v3
 global air-quality latest measurements (keyed).
 
 The paginated-locations + per-location-latest + sensor->parameter join shape folds onto

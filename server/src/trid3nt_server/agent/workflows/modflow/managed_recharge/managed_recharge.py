@@ -198,7 +198,7 @@ async def model_mar_scenario(
             applied by the adapter when None.
         n_periods: explicit transient period override (alternative to months).
         aquifer_k_ms / porosity / aquifer_sy: optional demo-aquifer overrides.
-        compute_class: FR-CE-3 compute class.
+        compute_class: compute class.
         pipeline_emitter: optional PipelineEmitter for live progress cards.
 
     Returns:
@@ -289,7 +289,7 @@ async def model_mar_scenario(
         layer.max_mounding_m,
         layer.recharged_volume_m3,
     )
-    # ADR 0223: structured aquifer-K provenance routed through gate_input_review,
+    # structured aquifer-K provenance routed through gate_input_review,
     # stamped onto the layer envelope (the prose caveat stays on the summary).
     layer, _review = await gate_and_stamp_modflow_inputs(
         tool_name="modflow_managed_recharge", layer=layer,
@@ -385,7 +385,7 @@ async def modflow_managed_recharge(
         recharge_months: months the basin floods (>= 1). Demo default if None.
         n_periods: explicit transient period override.
         aquifer_k_ms / porosity / aquifer_sy: optional demo-aquifer overrides.
-        compute_class: FR-CE-3 compute class. Default ``"standard"``.
+        compute_class: compute class. Default ``"standard"``.
 
     Returns:
         On success: a ``MARResult`` JSON dict with the ``mounding_layer`` (a
@@ -395,7 +395,7 @@ async def modflow_managed_recharge(
         returns a typed error the agent narrates honestly  -  it never fabricates a
         basin.
 
-    FR-DC-6: ``cacheable=False`` + ``ttl_class="live-no-cache"`` +
+    ``cacheable=False`` + ``ttl_class="live-no-cache"`` +
     ``source_class="workflow_dispatch"``  -  the cache shim is NOT invoked.
     """
     aoi = _coerce_optional_latlon(aoi_latlon)

@@ -1,9 +1,9 @@
-"""SCHISM local-docker solve seam (engine #12 landing, ADR 0118).
+"""SCHISM local-docker solve seam (engine #12 landing).
 
 Wires the ``schism_tidal_hydro`` archetype into the shared local-docker solve
 backend so ``run_solver(solver='schism_tidal_hydro', ...)`` dispatches to the
-``trid3nt-local/schism:latest`` worker image (SCHISM v5.11.0 hydro-core, ADR
-0115). Structural clone of ``run_hecras`` / ``run_telemac``:
+``trid3nt-local/schism:latest`` worker image (SCHISM v5.11.0 hydro-core).
+Structural clone of ``run_hecras`` / ``run_telemac``:
 
   1. **VOLUME-MOUNT build_argv (SFINCS/TELEMAC/HEC-RAS-canonical).** The launcher
      stages the manifest + the GENERATED case files (``hgrid.gr3`` / ``vgrid.in``
@@ -39,17 +39,17 @@ logger = logging.getLogger("trid3nt.workflows.run_schism")
 #: ``SOLVER_WORKFLOW_REGISTRY`` (presence gate) and ``LOCAL_SOLVER_SPEC_REGISTRY``.
 SCHISM_SOLVER_NAME: str = "schism_tidal_hydro"
 
-#: The coupled-waves solver identifier (ADR 0126/0129). Same worker image, the
+#: The coupled-waves solver identifier. Same worker image, the
 #: ``wwm`` executable variant (pschism_WWM_GOTM_TVD-VL). Registered alongside so
 #: ``run_solver(solver='schism_coupled_waves', ...)`` resolves the same local-docker
 #: spec.
 SCHISM_WAVE_SOLVER_NAME: str = "schism_coupled_waves"
 
-#: The baroclinic-circulation solver identifier (ADR 0189). Same worker image, the
+#: The baroclinic-circulation solver identifier. Same worker image, the
 #: ``hydro`` executable variant (pschism_TVD-VL) run in 3D baroclinic mode (ibc=0).
 SCHISM_BAROCLINIC_SOLVER_NAME: str = "schism_baroclinic_circulation"
 
-#: The PaHM storm-surge solver identifier (ADR 0217). Same worker image, the
+#: The PaHM storm-surge solver identifier. Same worker image, the
 #: ``hydro`` executable variant (pschism_TVD-VL) with nws=2 sflux atmospheric
 #: forcing (parametric Holland-1980 wind/pressure fields).
 SCHISM_SURGE_SOLVER_NAME: str = "schism_pahm_surge"
@@ -137,7 +137,7 @@ def schism_local_spec(solver_name: str = SCHISM_SOLVER_NAME) -> "Any":
 
     Parametrized by ``solver_name`` so both the tidal-hydro and coupled-waves
     solvers share the ONE worker image (they differ only by the manifest
-    ``variant`` the entrypoint selects, ADR 0126)."""
+    ``variant`` the entrypoint selects)."""
     from trid3nt_server.agent.tools.simulation.solver.solver import (
         LOCAL_DOCKER_WORKFLOW_NAME,
         LocalSolverSpec,

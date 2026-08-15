@@ -1,8 +1,8 @@
-"""QGIS capability discovery atomic tools — Level 1a (FR-AS-9, FR-TA-2).
+"""QGIS capability discovery atomic tools — Level 1a.
 
 This module registers the two algorithm-discovery tools that, together with
 the ``qgis_process`` pass-through (``passthroughs.py``), implement
-the *capability discovery Level 1a* loop described in SRS FR-AS-9::
+the *capability discovery Level 1a* loop:
 
     list_qgis_algorithms  →  describe_qgis_algorithm  →  qgis_process
 
@@ -12,7 +12,7 @@ chosen candidate, then invoke it. With 1000+ algorithms across native QGIS +
 GDAL + GRASS + SAGA providers, exhaustively wrapping the catalog is
 out-of-scope; the discovery loop is the substitute.
 
-Both tools are cacheable under the FR-DC-2 ``static-30d`` class with
+Both tools are cacheable under the ``static-30d`` class with
 ``source_class="qgis_algorithms_catalog"``. The catalog rarely changes — only
 on a QGIS install / container image rebuild (~1× per quarter at most). When
 the QGIS substrate rotates, the lifecycle policy will evict the
@@ -36,7 +36,7 @@ TTL choice
 ----------
 
 ``static-30d`` for both tools — the algorithm catalog changes only on a
-QGIS install / container image rebuild (FR-DC-2 boundary: "static-30d for
+QGIS install / container image rebuild (boundary: "static-30d for
 upstream catalogs that change on a quarterly or longer rhythm").
 
 Return shapes (kickoff: dicts with documented keys, no new pydantic models)
@@ -74,10 +74,10 @@ Invariants honored
   honors the ``timeout_s`` argument and raises ``subprocess.TimeoutExpired``
   which propagates through the agent's WebSocket cancel chain. No separate
   cancel mechanism is introduced.
-* **FR-CE-8 (fail-fast registration):** ``@register_tool`` validates the
+* **(fail-fast registration):** ``@register_tool`` validates the
   metadata at import time; an invalid registration raises before the agent
   service starts.
-* **FR-AS-9 Level 1a:** this module completes the discovery triple alongside
+* **Level 1a:** this module completes the discovery triple alongside
   ``passthroughs.qgis_process``.
 """
 
@@ -108,7 +108,7 @@ __all__ = [
 
 logger = logging.getLogger("trid3nt_server.agent.tools.search.qgis_discovery.qgis_discovery")
 
-#: Max results returned per ``list_qgis_algorithms`` call (FR-TA-2 prose:
+#: Max results returned per ``list_qgis_algorithms`` call (prose:
 #: "returns at most ~50 results per call to keep responses focused").
 MAX_LIST_RESULTS = 50
 
@@ -337,8 +337,8 @@ _DESCRIBE_METADATA = AtomicToolMetadata(
 # Subprocess invocation seam.
 #
 # We deliberately do NOT import the submitter binding at module load — the
-# binding is set at agent service startup via ``set_worker_submitter`` (job-
-# 0032 DI seam) and may be unbound during tests. Import at call time so test
+# binding is set at agent service startup via ``set_worker_submitter`` (a DI
+# seam) and may be unbound during tests. Import at call time so test
 # fixtures can swap it.
 # ---------------------------------------------------------------------------
 
@@ -348,7 +348,7 @@ def _get_worker_submitter():
 
     Imported lazily so tests can swap it without import-order coupling. Raises
     ``RuntimeError`` if the binding is unset (an unbound submitter is a
-    configuration error, surfaced fast per FR-CE-8).
+    configuration error, surfaced fast (fail-fast registration).
     """
     from trid3nt_server.agent.tools.meta.passthroughs import passthroughs
 
@@ -678,7 +678,7 @@ def list_qgis_algorithms(
     Use this when: the agent's typed-wrapper tools (``run_storm_surge_flood``,
     ``clip_to_basin``, etc.) don't cover the user's request and the agent
     needs to discover a candidate Processing algorithm to chain through
-    ``qgis_process``. Implements FR-AS-9 Level 1a (capability discovery) when
+    ``qgis_process``. Implements Level 1a (capability discovery) when
     paired with ``describe_qgis_algorithm`` and ``qgis_process``.
 
     Do NOT use this for: finding the right pre-wired typed wrapper (use the
@@ -711,7 +711,7 @@ def list_qgis_algorithms(
     Returns:
         A list of ``QGISAlgorithmSummary`` dicts (``algorithm_id``, ``name``,
         ``provider``, ``brief_description``). Capped at ``MAX_LIST_RESULTS``
-        (50) per FR-TA-2 prose; the ranking is "matching entries first,
+        (50) per prose; the ranking is "matching entries first,
         sorted by provider then algorithm_id".
 
     Caching:
@@ -808,7 +808,7 @@ def describe_qgis_algorithm(algorithm_id: str, **_extra_ignored: Any) -> QGISAlg
     Use this when: ``list_qgis_algorithms`` surfaced a candidate algorithm
     id and the agent now needs to know its parameter names, types,
     acceptable values, and outputs in order to construct a valid
-    ``qgis_process`` call. Implements the middle hop of FR-AS-9 Level 1a.
+    ``qgis_process`` call. Implements the middle hop of Level 1a.
 
     Do NOT use this for: enumerating algorithms (use
     ``list_qgis_algorithms``); invoking the algorithm (use

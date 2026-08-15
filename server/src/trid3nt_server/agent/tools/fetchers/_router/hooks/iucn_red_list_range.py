@@ -1,4 +1,4 @@
-"""iucn_red_list_range hooks (keyed http_json single-GET + classify_status, ADR 0065/0071):
+"""iucn_red_list_range hooks (keyed http_json single-GET + classify_status/0071):
 IUCN Red List species assessment, keyed.
 
 ``build_request`` validates the species name + region, resolves the key (kwarg -> str secret_ref

@@ -71,7 +71,7 @@ def synthesize_metadata(spec: SourceSpec) -> AtomicToolMetadata:
         supports_global_query=spec.supports_global_query,
         payload_mb_estimator_name="estimate_payload_mb",
         open_world_hint=True,
-        # ADR 0225: data-native resolution declarations ride from the spec onto the
+        # data-native resolution declarations ride from the spec onto the
         # metadata so the gate card can quote them (two-layer truth: data facts here).
         resolution_specs=spec.resolution_declarations,
     )
@@ -108,7 +108,7 @@ def synthesize_payload_estimator(spec: SourceSpec) -> Callable[..., float]:
         return v if pe.ceil_mb is None else min(v, pe.ceil_mb)
 
     def _bbox_area_coeff(kw: dict[str, Any]) -> float:
-        # mb_per_sq_deg_by_param (ADR 0075): a per-param coefficient table for the
+        # mb_per_sq_deg_by_param: a per-param coefficient table for the
         # bbox_area model (fetch_3dep_extra per-resolution 5/500/5000/1/200). The
         # resolved param value keys the map; absent -> default -> scalar -> 0.01.
         # No-op when unset (returns the scalar coefficient).
@@ -225,7 +225,7 @@ def validate_params(spec: SourceSpec, raw: dict[str, Any]) -> dict[str, Any]:
             # allowed-set check, echoing the normalized key (no-op when unset).
             if getattr(pspec, "lowercase", False) and isinstance(value, str):
                 value = value.strip().lower()
-            # enum alias table (ADR 0080): a known alias maps to the canonical value
+            # enum alias table: a known alias maps to the canonical value
             # BEFORE the allowed-set check, echoing the canonical key (landsat
             # band_combo accepts rgb/natural/cir/lst/... aliases). No-op when unset
             # (no prior enum param declares aliases).
@@ -504,15 +504,15 @@ def _apply_gates(spec: SourceSpec, params: dict[str, Any]) -> None:
 def select_executor(spec: SourceSpec) -> Callable[[SourceSpec, dict[str, Any]], bytes]:
     """Return the ``(spec, params) -> bytes`` closure for the spec's shape/transform."""
     # A spec-declared library delegation wins over the shape dispatch. Two forms:
-    #  - GENERIC library_delegate (ADR 0074): a spec names ``hooks.delegate`` (a
+    #  - GENERIC library_delegate: a spec names ``hooks.delegate`` (a
     #    registered hook that calls a maintained library owning discovery+socket and
     #    returns arrays/frames). A raster spec routes through raster_cog (its
     #    fetch_source_array calls the delegate for the array); a vector spec routes
     #    through the generic library_delegate.execute (features -> FGB).
-    #  - LEGACY dataretrieval (ADR 0040): ``ingest.delegate.library == 'dataretrieval'``
+    #  - LEGACY dataretrieval: ``ingest.delegate.library == 'dataretrieval'``
     #    with a service dispatch, kept on its own module.
     # No-op for every prior spec (none declare hooks.delegate or ingest.delegate).
-    # Record-return path (ADR 0076): a ``shape: record`` source produces a bare
+    # Record-return path: a ``shape: record`` source produces a bare
     # JSON dict, not a LayerURI. It wins over every layer executor below (its
     # build_request hook is the PURE plan builder feeding the record dict-shaper,
     # NOT the http_json vector path). No-op for every prior spec (none are record).
@@ -527,14 +527,14 @@ def select_executor(spec: SourceSpec) -> Callable[[SourceSpec, dict[str, Any]], 
     if (spec.ingest or {}).get("delegate"):
         from .executors import dataretrieval_delegate
         return dataretrieval_delegate.execute
-    # zip_vector path (ADR 0067): a source publishing a ZIP-wrapped multi-file vector
+    # zip_vector path: a source publishing a ZIP-wrapped multi-file vector
     # member (TIGER shapefile-ZIP) routes to the whole-object extract-read-filter
     # executor. Its build_request hook is the PURE URL planner, so this MUST win over
     # the http_json hooks.build_request branch below. No-op for every prior spec.
     if (spec.ingest or {}).get("zip_vector"):
         from .executors import zip_vector
         return zip_vector.execute
-    # Chained-resolution path (ADR 0063): a spec that declares an offset-paging
+    # Chained-resolution path: a spec that declares an offset-paging
     # (next_page) or per-item detail-enrichment (enrich_plan) hook routes to the
     # chained_resolution executor (resolve-then-fetch + bounded enrichment over the
     # shared transport). The pure name->id resolve phase (resolve_build only) still
@@ -543,7 +543,7 @@ def select_executor(spec: SourceSpec) -> Callable[[SourceSpec, dict[str, Any]], 
     if spec.hooks is not None and (spec.hooks.next_page or spec.hooks.enrich_plan):
         from .executors import chained_resolution
         return chained_resolution.execute
-    # Sidecar-write path (trigger wave, ADR 0084): an overpass source that ALSO writes
+    # Sidecar-write path (trigger wave): an overpass source that ALSO writes
     # ONE declared sidecar object next to the .fgb (fetch_buildings' tags.json). Routes
     # to the overpass_sidecar executor (build_request QL + a (features, tags) parse +
     # the constrained side write). MUST win over the http_json build_request branch
@@ -551,7 +551,7 @@ def select_executor(spec: SourceSpec) -> Callable[[SourceSpec, dict[str, Any]], 
     if (spec.ingest or {}).get("sidecar_write"):
         from .executors import overpass_sidecar
         return overpass_sidecar.execute
-    # Tier-3 hook-driven path (ADR 0056): a spec that names a build_request hook
+    # Tier-3 hook-driven path: a spec that names a build_request hook
     # routes to the http_json executor (source-specific request + parse via named
     # pure hooks). No-op for every prior spec (none declare hooks).
     if spec.hooks is not None and spec.hooks.build_request:
@@ -636,7 +636,7 @@ def build_layer_uri(spec: SourceSpec, params: dict[str, Any], uri: str) -> Layer
         style_preset = (sbp.get("map") or {}).get(
             params.get(sbp.get("param")), style_preset
         )
-    # role_by_param (ADR 0080): MAP a param value to the LayerURI role (landsat
+    # role_by_param: MAP a param value to the LayerURI role (landsat
     # thermal LST -> primary, RGB composites -> context); a value absent from the
     # map falls back to the static role. No-op when unset.
     role = spec.output.role
@@ -656,7 +656,7 @@ def build_layer_uri(spec: SourceSpec, params: dict[str, Any], uri: str) -> Layer
 
 
 def try_dispatch(spec: SourceSpec, raw_params: dict[str, Any]) -> Any:
-    """Cross-sibling PRE-FLIGHT dispatch (ADR 0097). Returns the sibling tool's
+    """Cross-sibling PRE-FLIGHT dispatch. Returns the sibling tool's
     result verbatim on a match, else the ``_NO_DISPATCH`` sentinel.
 
     For ONE declared ``spec.dispatch`` condition whose ``param`` value matches, the
@@ -667,7 +667,7 @@ def try_dispatch(spec: SourceSpec, raw_params: dict[str, Any]) -> Any:
     ``TOOL_REGISTRY["fetch_copernicus_dem"].fn(bbox=bbox)`` leg: it forwards only
     the ``pass_args``-mapped RAW params and re-caches NOTHING under this spec.
 
-    Constraints enforced (the seam is deliberately narrow, ADR 0097):
+    Constraints enforced (the seam is deliberately narrow):
       * ONE target per condition (``d.to`` is a single name);
       * SPEC-DECLARED (``d.to`` / ``d.equals_any`` are literals);
       * NO CHAINS -- a target that itself declares ``dispatch`` is refused here, so
@@ -694,7 +694,7 @@ def try_dispatch(spec: SourceSpec, raw_params: dict[str, Any]) -> Any:
             raise router_upstream_error(
                 spec.error_code_prefix,
                 f"dispatch target {d.to!r} itself declares a dispatch block; "
-                "cross-sibling dispatch chains are forbidden (ADR 0097)",
+                "cross-sibling dispatch chains are forbidden",
             )
         entry = TOOL_REGISTRY.get(d.to)
         if entry is None:
@@ -711,9 +711,9 @@ def route(
     spec: SourceSpec, raw_params: dict[str, Any]
 ) -> LayerURI | dict[str, Any] | list[LayerURI]:
     """The engine: validate -> gate -> dispatch -> cache -> emit LayerURI (or a
-    record dict for a ``shape: record`` source, ADR 0076, or an ordered
-    ``list[LayerURI]`` for a ``shape: animation_frames`` source, ADR 0087)."""
-    # Emit-on-fetch control kwargs (ADR 0244): router-level, so EVERY spec inherits
+    record dict for a ``shape: record`` source, or an ordered
+    ``list[LayerURI]`` for a ``shape: animation_frames`` source)."""
+    # Emit-on-fetch control kwargs: router-level, so EVERY spec inherits
     # them via the promoted signature's ``**_extra_ignored`` absorber. Popped here
     # so they never reach validation / the cache key -- ``visualize=False`` (probe
     # fetch) suppresses the in-composer input surfacing; ``purpose`` contributes one
@@ -721,7 +721,7 @@ def route(
     raw_params = dict(raw_params)
     _visualize = raw_params.pop("visualize", None)
     _purpose = raw_params.pop("purpose", None)
-    # Cross-sibling PRE-FLIGHT dispatch (ADR 0097): before ANY validation / gate /
+    # Cross-sibling PRE-FLIGHT dispatch: before ANY validation / gate /
     # cache / fetch, a declared ``source``-value condition may serve the request
     # from a named sibling tool and return its result verbatim (fetch_dem
     # source="copernicus" -> fetch_copernicus_dem's layer, byte-identical).
@@ -730,7 +730,7 @@ def route(
         return dispatched
     metadata = synthesize_metadata(spec)
     params = validate_params(spec, raw_params)
-    # Frames-list output shape (ADR 0087): an animation source returns an ORDERED
+    # Frames-list output shape: an animation source returns an ORDERED
     # list[LayerURI] (one cache entry + one layer per timestamp), so the executor
     # owns the per-frame read_through loop -- there is no single top-level
     # read_through / LayerURI. It wins over every layer executor below. No-op for
@@ -743,27 +743,27 @@ def route(
     # a bad request raises pre-cache / pre-network -- indistinguishable from the
     # twin (which validates in its body before read_through). No-op otherwise.
     if spec.hooks is not None and spec.hooks.delegate:
-        # ADR 0074 generic library delegate: run the source-specific pre-cache
+        # generic library delegate: run the source-specific pre-cache
         # input gate (hooks.delegate_validate) before read_through. No-op when unset.
         from .executors import library_delegate
         library_delegate.pre_validate(spec, params)
     elif (spec.ingest or {}).get("delegate"):
         from .executors import dataretrieval_delegate
         dataretrieval_delegate.pre_validate(spec, params)
-    # Socketed pre-cache-key delegate resolve (ADR 0076): the HRRR-Zarr s3fs cycle
+    # Socketed pre-cache-key delegate resolve: the HRRR-Zarr s3fs cycle
     # walk resolves the published cycle BEFORE read_through so the resolved cycle
     # merges into params and enters the cache key (a cycle=None request would else
     # compute a non-deterministic key). No-op unless the spec declares it.
     if spec.hooks is not None and spec.hooks.delegate_resolve:
         from .executors import library_delegate
         params = {**params, **library_delegate.resolve(spec, params)}
-    # Chained-resolution PHASE R (ADR 0063): resolve a name -> id BEFORE read_through
+    # Chained-resolution PHASE R: resolve a name -> id BEFORE read_through
     # so the resolved id enters the cache key (a name query and its id query collapse
     # to one entry). Does the round-1 I/O; no-op unless the spec declares resolve_build.
     if spec.hooks is not None and spec.hooks.resolve_build:
         from .executors import chained_resolution
         params = chained_resolution.pre_resolve(spec, params)
-    # Generic pre-cache-key resolve (ADR 0082): a source whose cache key depends on a
+    # Generic pre-cache-key resolve: a source whose cache key depends on a
     # value resolved over the shared HTTP transport (the LANCE MCDWD year->doy dir-walk
     # for a date=None latest request) names a pure-ish pre_resolve hook. Runs BEFORE
     # read_through so the resolved value enters the cache key (a non-deterministic key
@@ -773,7 +773,7 @@ def route(
         params = {**params, **resolve_hook(spec.hooks.pre_resolve)(spec, params)}
     executor = select_executor(spec)
 
-    # Record-return path (ADR 0076): a ``shape: record`` source caches its JSON dict
+    # Record-return path: a ``shape: record`` source caches its JSON dict
     # bytes and returns the parsed dict envelope -- no LayerURI. The honesty floor is
     # intact: the record executor raises the source's typed empty/upstream errors (so
     # read_through never writes a fabricated-success sentinel), and the returned dict
@@ -788,7 +788,7 @@ def route(
         assert result.data is not None, "record source is cacheable; data must be set"
         return json.loads(result.data.decode("utf-8"))
 
-    # Fetch-time provenance channel (ADR 0110): a spec that declares
+    # Fetch-time provenance channel: a spec that declares
     # output.provenance rides a recorder through read_through so the delegate's
     # record_provenance() is persisted as a sidecar (fresh) and replayed from it
     # (cache hit); the recorded dict reaches the envelope hook below. No-op
@@ -802,7 +802,7 @@ def route(
         provenance=recorder,
     )
     assert result.uri is not None, "router source is cacheable; uri must be set"
-    # variant_by_emptiness (ADR 0081): a source whose non-empty path is a
+    # variant_by_emptiness: a source whose non-empty path is a
     # renderable LayerURI but whose empty-AOI degrade is a bare record dict + typed
     # note (fetch_fault_sources' honesty gate: a zero-fault AOI is NEVER given a
     # layer). When the produced vector FGB is feature-empty the named hook returns
@@ -813,7 +813,7 @@ def route(
         from .hooks import resolve_hook
         return resolve_hook(vbe)(spec, params)
     layer = build_layer_uri(spec, params, result.uri)
-    # bbox_from_features (ADR 0056): stamp the camera bbox from the emitted vector
+    # bbox_from_features: stamp the camera bbox from the emitted vector
     # features' extent (point-event fetchers auto-zoom to the events). Read from
     # the produced FGB (result.data is populated on cache hit + miss), so the
     # stamp is consistent across cache paths. No-op when unset.
@@ -822,7 +822,7 @@ def route(
         extent = _extent_from_fgb(result.data, float(bff.get("pad", 0.1)))
         if extent is not None:
             layer = layer.model_copy(update={"bbox": extent})
-    # envelope hook (ADR 0073): a source returning a LayerURI SUBCLASS with
+    # envelope hook: a source returning a LayerURI SUBCLASS with
     # business fields computed POST-serialize names a pure envelope hook +
     # output.result_model. The hook receives the assembled layer + produced bytes
     # and returns the extra fields; the router builds the named subclass. The
@@ -831,7 +831,7 @@ def route(
     # to success or re-point the layer. No-op when unset.
     if spec.hooks is not None and spec.hooks.envelope:
         layer = _apply_envelope(spec, params, layer, result.data, result.provenance)
-    # Emit-on-fetch (ADR 0244): when this fetch ran NESTED inside a composer (not
+    # Emit-on-fetch: when this fetch ran NESTED inside a composer (not
     # as its own direct dispatch), surface the fetched data as a role=context input
     # so the engine's terrain / rivers / land cover are visible. Best-effort; never
     # fails the fetch. A direct chat dispatch is skipped (the wrapper emits it).
@@ -860,10 +860,10 @@ def _apply_envelope(
     (no I/O). Protected identity keys (``uri`` / ``layer_type``) are stripped from
     the hook's return so it can only enrich, never flip the honesty floor.
 
-    ``provenance`` (ADR 0110): the fetch-time provenance dict (fresh or cache-hit
+    ``provenance``: the fetch-time provenance dict (fresh or cache-hit
     replay) is passed to a hook that DECLARES a ``provenance`` parameter, so a
     result model whose fields are fetch-time provenance survives every cache path.
-    A hook without that parameter (every ADR-0073 envelope hook) is called with the
+    A hook without that parameter (every envelope hook) is called with the
     original 4-arg signature -- strictly additive, no existing hook changes.
     """
     import inspect

@@ -243,7 +243,7 @@ def fetch_elmfire_inputs(
     """
     from trid3nt_server.agent.tools.processing.compute_aspect.compute_aspect import compute_aspect
     from trid3nt_server.agent.tools.processing.compute_slope.compute_slope import compute_slope
-    # fetch_landfire_fuels + fetch_dem (ADR 0097) are spec-driven promoted tools:
+    # fetch_landfire_fuels + fetch_dem are spec-driven promoted tools:
     # resolve them through the registry seam (keyword-only), not direct twin imports.
     from trid3nt_server.agent.tools import TOOL_REGISTRY
 

@@ -1,4 +1,4 @@
-"""Engine template ``swmm_subcatchment_runoff_comparison`` (ADR 0151).
+"""Engine template ``swmm_subcatchment_runoff_comparison``.
 
 A THIN composer over the shared mechanism-comparison runner. Runs ONE synthetic
 subcatchment under ONE design storm across a knob and overlays the runoff

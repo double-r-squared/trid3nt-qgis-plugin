@@ -1,4 +1,4 @@
-"""USGS 3DEP DEM delegate hooks (ADR 0097): the ``fetch_dem`` fold.
+"""USGS 3DEP DEM delegate hooks: the ``fetch_dem`` fold.
 
 ``fetch_dem`` folds onto the router as a ``library_delegate`` raster source: the
 maintained ``py3dep`` library owns 3DEP discovery + the socket, so the router
@@ -24,13 +24,13 @@ cannot express lives here as four hooks:
     ``{source_class}-{variable}``; this is the only naming override seam).
 
 The ``source="copernicus"`` leg is NOT here -- it is the spec's cross-sibling
-``dispatch`` block (ADR 0097), served verbatim from ``fetch_copernicus_dem``
+``dispatch`` block, served verbatim from ``fetch_copernicus_dem``
 before this pipeline runs.
 
 The ``Dem*Error`` twins live HERE (their stable importable home now that the
 coded ``fetch_dem`` module is deleted): they are ``UpstreamAPIError`` subclasses
 carrying PINNED ``error_code``s, and ``library_delegate.invoke`` passes any
-``FetchError`` through unchanged (ADR 0097) so those codes survive the delegate
+``FetchError`` through unchanged so those codes survive the delegate
 wrapper verbatim.
 """
 
@@ -68,7 +68,7 @@ __all__ = [
 
 
 # --------------------------------------------------------------------------- #
-# Typed DEM errors (the stable home after the coded twin's deletion, ADR 0097).
+# Typed DEM errors (the stable home after the coded twin's deletion).
 # --------------------------------------------------------------------------- #
 
 
@@ -280,7 +280,7 @@ def _fetch_3dep_dem_array(
     ``DemPartialCoverageError`` when the returned raster materially under-covers the
     requested bbox. The array is nodata-masked to NaN (the pfdf_3dep pattern) so the
     shared COG writer serializes NaN-nodata; the EPSG:5070 array / transform / CRS
-    are re-encoded by ``array_to_cog_bytes`` (the accepted ADR 0074 divergence class,
+    are re-encoded by ``array_to_cog_bytes`` (the accepted divergence class,
     same array / CRS / nodata as the twin's ``rio.to_raster`` COG).
     """
     try:
@@ -480,7 +480,7 @@ def read_dem(spec: SourceSpec, params: dict[str, Any], *, timeout_s: float) -> t
       * pinned source="3dep" -> a plain suggesting UpstreamAPIError (no fallback);
       * auto -> DemAutoFallbackGateError (loud, user-gated cross-dataset swap).
     Every raised error is a ``FetchError`` so ``library_delegate.invoke`` passes its
-    pinned code through unchanged (ADR 0097).
+    pinned code through unchanged.
     """
     bbox = tuple(float(v) for v in params["bbox"])
     resolution_m = int(params["resolution_m"])

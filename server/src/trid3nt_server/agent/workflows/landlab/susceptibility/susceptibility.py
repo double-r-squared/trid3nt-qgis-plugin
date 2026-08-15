@@ -16,7 +16,7 @@ This is the Landlab analogue of ``swmm_urban_flood`` (SWMM),
 ``engine="landlab", tier="template"`` - EXCLUDED from the default retrieval pool
 and surfaced only by the ``run_landlab`` door's gate expansion
 (SELECT-THEN-CALL). Like the other templates it declares ``cacheable=False`` +
-``ttl_class="live-no-cache"`` + ``source_class="workflow_dispatch"`` (FR-DC-6 -
+``ttl_class="live-no-cache"`` + ``source_class="workflow_dispatch"`` (
 workflow exposure surface; never touches the cache shim).
 
 Landlab runs OFF-BOX ONLY in a local Docker solver container (the same
@@ -245,7 +245,7 @@ async def landlab_susceptibility(
         rainfall_return_period_yr: design-storm return period (years) for
             the Atlas-14 triggering-rainfall lookup (default 100).
         compute_class: compute class (default "standard").
-        input_mode: run-mode lever (ADR 0107). ``"user_gated"`` presents the
+        input_mode: run-mode lever. ``"user_gated"`` presents the
             resolved triggering rainfall + demo soil block for review before
             the solve; ``"auto"`` (default) proceeds with them labeled.
 
@@ -256,7 +256,7 @@ async def landlab_susceptibility(
         On failure: ``{"status": "error", "error_code", "error_message"}``.
         Not cached (``cacheable=False``).
 
-    FR-DC-6: ``cacheable=False``, ``ttl_class="live-no-cache"``,
+    ``cacheable=False``, ``ttl_class="live-no-cache"``,
     ``source_class="workflow_dispatch"`` -- cache shim not invoked.
     """
     if bbox is None:
@@ -378,7 +378,7 @@ async def landlab_susceptibility(
             note="no SSURGO/POLARIS soil fetcher yet; not site-calibrated",
         ))
 
-    # --- ADR 0107 two-mode input gate: review-before-run -----------------------
+    # --- two-mode input gate: review-before-run -----------------------
     # The triggering forcing (Atlas-14 rainfall/recharge) + demo soil block are
     # resolved; user_gated mode presents them for review/adjust before the solve.
     _review = await gate_input_review(
@@ -610,7 +610,7 @@ def _fetch_dem_for_landslide(
     only when BOTH fail."""
     from trid3nt_server.agent.tools import TOOL_REGISTRY
 
-    # fetch_3dep_extra (ADR 0075) + fetch_dem (ADR 0097) are spec-driven tools:
+    # fetch_3dep_extra + fetch_dem are spec-driven tools:
     # resolve through the registry seam (keyword-only) rather than deleted twins.
     fetch_3dep_extra = TOOL_REGISTRY["fetch_3dep_extra"].fn
     fetch_dem = TOOL_REGISTRY["fetch_dem"].fn
@@ -769,7 +769,7 @@ async def model_landlab_susceptibility(
             it (``fetch_3dep_extra`` 1 m -> ``fetch_dem`` 10 m fallback) from
             ``run_args.bbox``. Tests pass a synthetic GeoTIFF to skip the fetch.
         run_id: optional ULID; minted by ``new_ulid`` if absent.
-        compute_class: FR-CE-3 compute class for the Batch dispatch.
+        compute_class: compute class for the Batch dispatch.
         source_note: optional input-provenance string (triggering rainfall =
             Atlas-14 design storm; soil block = demo defaults) stamped onto the
             returned layer's ``source_note`` for honest narration.

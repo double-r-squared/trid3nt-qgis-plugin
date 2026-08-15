@@ -1,4 +1,4 @@
-"""zip_vector executor (ADR 0067): whole-object ZIP of a multi-file vector member.
+"""zip_vector executor: whole-object ZIP of a multi-file vector member.
 
 A source that publishes its vectors as a ZIP-wrapped multi-file sidecar set (a
 TIGER/Line shapefile: .shp + .dbf + .shx + .prj; an NHDPlus FileGDB directory)

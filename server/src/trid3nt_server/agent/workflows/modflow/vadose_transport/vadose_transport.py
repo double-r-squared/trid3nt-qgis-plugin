@@ -1,4 +1,4 @@
-"""the composer - MODFLOW UZF+UZT vadose-transport composer (ADR 0228).
+"""the composer - MODFLOW UZF+UZT vadose-transport composer.
 
 The end-to-end higher-order workflow for the MODFLOW ``vadose_transport``
 archetype: it turns a surface spill site (a place name or an AOI point) into a
@@ -182,7 +182,7 @@ async def model_vadose_transport_scenario(
         vadose_vks_m_day: saturated vertical K of the unsaturated medium, m/day.
         contaminant: the solute label for narration (the transport is a conservative
             advective tracer regardless).
-        compute_class: FR-CE-3 compute class. vadose_transport is LOCAL-ONLY.
+        compute_class: compute class. vadose_transport is LOCAL-ONLY.
         pipeline_emitter: optional PipelineEmitter for live progress cards.
 
     Returns:
@@ -335,7 +335,7 @@ async def model_vadose_transport_scenario(
         "thickness_m=%.4g arrived=%s",
         location_name, arrival, peak, thickness_m, arrived,
     )
-    # ADR 0223: structured soil-hydraulics provenance through gate_input_review,
+    # structured soil-hydraulics provenance through gate_input_review,
     # stamped onto the layer envelope (the prose caveat stays on the summary).
     layer, _review = await gate_and_stamp_modflow_inputs(
         tool_name="modflow_vadose_transport", layer=layer,
@@ -454,7 +454,7 @@ async def modflow_vadose_transport(
         vadose_thtr / vadose_thts / vadose_eps: Brooks-Corey demo soil hydraulics.
         vadose_vks_m_day: unsaturated saturated-vertical-K demo default.
         contaminant: solute label for narration (transport is a conservative tracer).
-        compute_class: FR-CE-3 compute class. This archetype runs LOCAL-ONLY.
+        compute_class: compute class. This archetype runs LOCAL-ONLY.
 
     Returns:
         On success: a ``VadoseTransportResult`` JSON dict with the
@@ -465,7 +465,7 @@ async def modflow_vadose_transport(
         missing spill site) the tool returns a typed error the agent narrates
         honestly -- it never fabricates a spill location.
 
-    FR-DC-6: ``cacheable=False`` + ``ttl_class="live-no-cache"`` +
+    ``cacheable=False`` + ``ttl_class="live-no-cache"`` +
     ``source_class="workflow_dispatch"``  -  the cache shim is NOT invoked.
     """
     aoi = _coerce_optional_latlon(aoi_latlon)

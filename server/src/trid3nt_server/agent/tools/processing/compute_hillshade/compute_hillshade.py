@@ -1,4 +1,4 @@
-"""Atomic tool ``compute_hillshade`` - hillshade raster from DEM (FR-CE-8, FR-DC).
+"""Atomic tool ``compute_hillshade`` - hillshade raster from DEM.
 
 This module registers one atomic tool that computes a hillshade raster from a DEM
 by wrapping GDAL's ``gdaldem hillshade`` command:
@@ -6,7 +6,7 @@ by wrapping GDAL's ``gdaldem hillshade`` command:
     ``compute_hillshade(dem_uri, style, algorithm, azimuth, altitude, z_factor) → LayerURI``
 
 The result is a single-band GeoTIFF in the same CRS and grid as the input DEM,
-stored under the FR-DC-3 cache shim at:
+stored under the cache shim at:
 
     ``s3://trid3nt-cache/cache/static-30d/hillshade/<key>.tif``
 
@@ -24,7 +24,7 @@ stored under the FR-DC-3 cache shim at:
 - ``"smooth"`` -- Horn algorithm + ZevenbergenThorne smoothing flag; smoother results
   on rough terrain.
 
-**Cache key** is derived from ``(dem_uri, style, algorithm, azimuth, altitude, z_factor)`` -- all six parameters materially affect the output pixels (FR-DC-3).
+**Cache key** is derived from ``(dem_uri, style, algorithm, azimuth, altitude, z_factor)`` -- all six parameters materially affect the output pixels.
 
 **Implementation flow (cache miss):**
 
@@ -44,12 +44,12 @@ stored under the FR-DC-3 cache shim at:
 **Cross-cutting invariants:**
 
 - **Invariant 2 (Deterministic workflows): preserves.** Zero LLM calls.
-- **FR-DC-6 (cacheable): honors.** ``cacheable=True``, ``ttl_class="static-30d"``,
+- **(cacheable): honors.** ``cacheable=True``, ``ttl_class="static-30d"``,
   ``source_class="hillshade"`` -- DEM-derived output is stable for the lifetime of
   the cached DEM.
-- **NFR-R-1 (resilience): preserves.** gdaldem failures surface as
+- **(resilience): preserves.** gdaldem failures surface as
   ``HillshadeComputeError`` (typed, never unhandled exception); DEM read errors
-  are let through for the agent FR-AS-11 surface to handle.
+  are let through for the agent surface to handle.
 """
 
 from __future__ import annotations
@@ -87,7 +87,7 @@ class HillshadeComputeError(RuntimeError):
     """Raised when ``gdaldem hillshade`` fails or the DEM cannot be fetched.
 
     ``error_code`` carries a SCREAMING_SNAKE_CASE code surfaced in the
-    pipeline strip (NFR-R-1 typed-error requirement).
+    pipeline strip (typed-error requirement).
 
     Codes:
     - ``GDALDEM_UNAVAILABLE`` -- ``gdaldem`` binary not found on PATH.
@@ -168,7 +168,7 @@ def _ensure_output_crs_matches_dem(dem_path: str, output_path: str) -> None:
             dst.crs = dem_crs
         logger.warning(
             "compute_hillshade: output CRS degraded to %r (gdaldem ran without "
-            "proj.db?); re-stamped from DEM as %r (job-0257)",
+            "proj.db?); re-stamped from DEM as %r",
             str(out_crs),
             str(dem_crs),
         )
@@ -530,7 +530,7 @@ def compute_hillshade(
         "swiss_double", the pre-blended composite). Single-band uint8
         (0-255), same CRS/grid as the input DEM.
 
-    FR-CE-8: routed through ``read_through`` -- identical
+    routed through ``read_through`` -- identical
     ``(dem_uri, style, algorithm, azimuth, altitude, z_factor)`` reuses the
     cached hillshade (30-day TTL).
 

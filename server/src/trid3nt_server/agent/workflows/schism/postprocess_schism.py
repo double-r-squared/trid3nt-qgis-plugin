@@ -1,4 +1,4 @@
-"""SCHISM barotropic-tidal run-output postprocessing (engine #12 landing, ADR 0118).
+"""SCHISM barotropic-tidal run-output postprocessing (engine #12 landing).
 
 ``postprocess_schism(out2d_path, out2d_uri, *, run_id, ...) -> (layers, metrics)``
 reads a scribed SCHISM ``out2d_*.nc`` (UGRID: per-node surface ``elevation`` time
@@ -7,16 +7,16 @@ time) water-surface elevation at each node, and produces:
 
   * ``layers[0]`` -- the max water-surface ELEVATION COG (``SchismElevationLayerURI``,
     role primary). For a GEOREFERENCED run (coastal_tin, lon/lat nodes) it is an
-    EPSG:4326 grid CLIPPED to the mesh AOI (THE ADR 0116 contract: never a raw
+    EPSG:4326 grid CLIPPED to the mesh AOI (THE contract: never a raw
     continental netCDF layer). For the IDEALIZED QuarterAnnulus verification mesh
     (planar non-geographic coords) it is a native-frame GeoTIFF with a LOUD
     non-geographic note -- the real QA deliverable is the analytical RMSE gate.
-  * ``layers[1]`` -- the MESH preview (``layer_type="mesh"``, ADR 0118): the out2d
+  * ``layers[1]`` -- the MESH preview (``layer_type="mesh"``): the out2d
     UGRID netCDF itself, which the plugin opens via MDAL (``QgsMeshLayer``); the
-    ONE format the live materializer STAGES (ADR 0116). ``crs_authid`` carries the
+    ONE format the live materializer STAGES. ``crs_authid`` carries the
     explicit CRS MDAL needs.
 
-Honesty floor (invariant 1 / FR-AS-7): every elevation scalar is plain arithmetic
+Honesty floor (invariant 1): every elevation scalar is plain arithmetic
 from the netCDF -- no LLM. ``h5py``/``netCDF4``/``rasterio``/``pyproj`` are
 lazy-imported so this module stays offline-suite-safe.
 """
@@ -68,7 +68,7 @@ SCHISM_TARGET_GROUND_RES_M: float = 60.0
 _MIN_PX_PER_SIDE: int = 128
 _MAX_PX_PER_SIDE: int = 2500
 
-#: DECLARED output-artifact resolution cap (ADR 0225). Unlike a solver-input
+#: DECLARED output-artifact resolution cap. Unlike a solver-input
 #: resolution, this bounds the DISPLAY COG's pixel dimensions -- a payload/display
 #: guardrail, not a simulation-granularity cap. Now OVERRIDABLE (postprocess_schism's
 #: ``max_px_per_side`` raises it) rather than a hard silent ceiling. Declared here so
@@ -93,7 +93,7 @@ _NODE_X_CANDS = ("SCHISM_hgrid_node_x", "SCHISM_hgrid_node_lon", "x", "longitude
 _NODE_Y_CANDS = ("SCHISM_hgrid_node_y", "SCHISM_hgrid_node_lat", "y", "latitude")
 _ELEV_CANDS = ("elevation", "elev")
 _FACE_CANDS = ("SCHISM_hgrid_face_nodes", "element", "face_nodes")
-#: WWM scribed-IO variable names (ADR 0126 -- pinned from the proven spike out2d).
+#: WWM scribed-IO variable names (- pinned from the proven spike out2d).
 _HS_CANDS = ("sigWaveHeight", "WWM_1", "hs")
 _TP_CANDS = ("peakPeriod", "WWM_9", "tp")
 
@@ -192,7 +192,7 @@ def _adaptive_grid(
 ) -> tuple[int, int]:
     """Pick ``(width_px, height_px)`` for the elevation COG.
 
-    ``max_px_per_side`` (ADR 0225) is the OUTPUT-ARTIFACT resolution cap -- an
+    ``max_px_per_side`` is the OUTPUT-ARTIFACT resolution cap -- an
     overridable ceiling on the COG's pixel dimensions, not a simulation-granularity
     cap. ``None`` -> the declared ``_MAX_PX_PER_SIDE`` default; a caller may raise it
     for a finer display raster (the "optional override" the render-cap declaration
@@ -352,7 +352,7 @@ def postprocess_schism(
 
     layers: list[LayerURI] = [elev_layer]
 
-    # --- the UGRID mesh preview (layer_type="mesh", ADR 0116/0118) ------------
+    # --- the UGRID mesh preview (layer_type="mesh"/0118) ------------
     mesh_layer = LayerURI(
         layer_id=f"schism-mesh-{run_id}",
         name=f"SCHISM mesh ({data['n_nodes']} nodes)",
@@ -469,7 +469,7 @@ def verify_against_analytical(
 
 
 # --------------------------------------------------------------------------- #
-# transport-scheme validation (ADR 0156): numerical-mixing + mass conservation.
+# transport-scheme validation: numerical-mixing + mass conservation.
 # --------------------------------------------------------------------------- #
 def read_transport_temperature(temp_nc_path: str | Path) -> dict[str, Any]:
     """Read the scribed ``temperature`` netCDF into per-time mixing/mass series.
@@ -595,7 +595,7 @@ def compare_transport_schemes(
 
 
 # --------------------------------------------------------------------------- #
-# coupled_waves archetype (SCHISM+WWM+GOTM, ADR 0126/0129): Hs/Tp postprocess.
+# coupled_waves archetype (SCHISM+WWM+GOTM/0129): Hs/Tp postprocess.
 # --------------------------------------------------------------------------- #
 def read_out2d_waves(out2d_path: str | Path) -> dict[str, Any]:
     """Read node coords + peak/mean Hs and peak Tp from a scribed WWM out2d netCDF.
@@ -1019,7 +1019,7 @@ def verify_cross_shore_waves(
 
 
 # --------------------------------------------------------------------------- #
-# baroclinic_circulation archetype (ADR 0189): 3D estuary stratification.
+# baroclinic_circulation archetype: 3D estuary stratification.
 # --------------------------------------------------------------------------- #
 def read_salinity_stratification(
     salt_nc_path: str | Path, out2d_path: str | Path | None = None,

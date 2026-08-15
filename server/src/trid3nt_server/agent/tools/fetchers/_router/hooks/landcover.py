@@ -1,4 +1,4 @@
-"""landcover hooks (landcover + flood-extent wave, ADR 0082): NLCD via MRLC WCS.
+"""landcover hooks (landcover + flood-extent wave): NLCD via MRLC WCS.
 
 The irreducible per-source steps the declarative wcs_getcoverage access mode
 cannot carry, both PURE (no I/O):

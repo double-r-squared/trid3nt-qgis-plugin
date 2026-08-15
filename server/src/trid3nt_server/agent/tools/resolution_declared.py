@@ -1,12 +1,11 @@
-"""Declared-resolution enforcement (ADR 0225, NATE's clamp ruling).
+"""Declared-resolution enforcement (NATE's clamp ruling).
 
 The schema (:class:`trid3nt_contracts.tool_registry.ResolutionSpec`) is the
 machine-readable DECLARATION of the resolutions a tool can actually run. This module
 is the BEHAVIOUR that rides it: a request outside the declared range is QUOTED BACK
 (the range + native hint + optional measured cost) and raised as a typed error --
-never silently snapped to an undeclared value. It replaces the labeled-snap that ADR
-0223 added at the clamp sites with the full ruling ("out-of-range asks get the
-declared range quoted back, never a silent coercion").
+never silently snapped to an undeclared value: out-of-range asks get the declared
+range quoted back, never a silent coercion.
 
 Two-layer truth (established architecture): a DATA-native bound lives with the fetcher
 (``constraint_source="data"``), a SOLVER bound lives with the template
@@ -34,7 +33,7 @@ __all__ = [
 
 
 class ResolutionOutOfRangeError(ValueError):
-    """A resolution request outside a tool's DECLARED range (ADR 0225).
+    """A resolution request outside a tool's DECLARED range.
 
     Carries the :class:`ResolutionSpec` and the requested value, and a wire-typed
     :class:`ToolInputError` (``code="INVALID_ARG"``) whose message is the quote-back
@@ -137,13 +136,13 @@ def resolve_resolution(
 ) -> ResolvedResolution:
     """Resolve a resolution ask to ``(value, basis, note)`` -- the ONE resolve seam.
 
-    The consolidation of the per-template ``_resolution_with_basis`` pattern (ADR 0232):
-    a resolution knob is ENFORCED against its declared range, optionally autoscale-
+    The consolidation of the per-template ``_resolution_with_basis`` pattern: a
+    resolution knob is ENFORCED against its declared range, optionally autoscale-
     coarsened within that range for tractability, and labeled with a uniform basis.
 
     Steps:
       1. ENFORCE: with a ``spec``, an out-of-declared-range ``requested`` is QUOTED BACK
-         (:class:`ResolutionOutOfRangeError`, the ADR 0225 typed card; ``measured`` folds
+         (:class:`ResolutionOutOfRangeError`, the typed card; ``measured`` folds
          a cost line in). ``requested=None`` is in-range by construction.
       2. SEED: the candidate is the caller's ``requested``, else the passed ``default``
          (the tool's native/default resolution; ``None`` stays ``None`` -- forward native).

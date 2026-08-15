@@ -12,7 +12,7 @@ Fidelity: a controlled ALL-CONSTANT flat grass deck (single fuel model, flat
 terrain), the ONLY time-varying input being the synthetic wind schedule - NOT a
 real reanalysis forcing (gridMET/HRRR ingestion is a later front). Data: NO
 LANDFIRE/DEM fetch. The synthetic wind schedule is a model-invented input and
-rides the ADR 0107 input-review gate (basis default_demo) - never silently
+rides the input-review gate (basis default_demo) - never silently
 mistaken for observed weather.
 
 Determinism boundary (Invariant 1): the constant / transient burned areas and the
@@ -188,7 +188,7 @@ async def elmfire_transient_wind_schedule_spread(
             "error_message": "shift_fraction must be strictly between 0 and 1",
         }
 
-    # --- ADR 0107 input-review gate: the synthetic wind schedule is the
+    # --- input-review gate: the synthetic wind schedule is the
     # consequential, model-invented input (it decides WHEN and HOW the wind
     # redirects the fire), so it rides the review gate labeled default_demo.
     entries = [

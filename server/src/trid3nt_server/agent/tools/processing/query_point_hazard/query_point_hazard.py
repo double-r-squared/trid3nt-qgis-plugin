@@ -52,7 +52,7 @@ logger = logging.getLogger("trid3nt_server.agent.tools.processing.query_point_ha
 
 
 # ---------------------------------------------------------------------------
-# Typed errors (FR-AS-11).
+# Typed errors.
 # ---------------------------------------------------------------------------
 
 

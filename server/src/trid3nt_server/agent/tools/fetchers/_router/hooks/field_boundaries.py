@@ -1,12 +1,12 @@
-"""FTW/fiboa field-boundary delegate hooks (ADR 0083): geopandas owns the pushdown socket.
+"""FTW/fiboa field-boundary delegate hooks: geopandas owns the pushdown socket.
 
 fetch_field_boundaries reads PUBLISHED agricultural field-boundary GeoParquet from
 Source Cooperative over an fsspec HTTPS handle, with CRS-aware GeoParquet 1.1 row-group
 bbox PUSHDOWN happening INSIDE ``geopandas.read_parquet(fh, bbox=...)`` -- the parquet
 reader issues its own HTTP range requests to prune row groups. That is a maintained
 LIBRARY owning discovery + the socket (the pfdf / HRRR-Zarr pattern), so it folds onto
-the VECTOR ``library_delegate`` mode: the ADR 0070 "needs a new pushdown TRANSPORT"
-STOP is refuted -- the pushdown is not a router transport, it lives in geopandas, which
+the VECTOR ``library_delegate`` mode: the "needs a new pushdown TRANSPORT"
+concern is refuted -- the pushdown is not a router transport, it lives in geopandas, which
 this delegate hook legitimately owns (the sanctioned impurity).
 
 Two hooks:

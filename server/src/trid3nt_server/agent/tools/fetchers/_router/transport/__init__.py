@@ -1,6 +1,6 @@
 """Router remote-FILE transport: one httpx-based module owning every socket and
 
-every error for remote COG reads (ingest-transport decision, ADR-0044). Pooled
+every error for remote COG reads (ingest-transport decision). Pooled
 client, 1 MiB coalescing + parallel range opener, HEAD pre-flight typed errors,
 one retry authority, and the GDAL C-frame exception bridge live here; executors
 call ``open_windowed_cog`` and map the typed ``Transport*`` errors into the A.6

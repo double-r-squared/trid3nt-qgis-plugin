@@ -1,4 +1,4 @@
-"""Shared MODFLOW archetype input-review helpers (ADR 0223).
+"""Shared MODFLOW archetype input-review helpers.
 
 The MODFLOW archetype family (capture_zone, river_seepage, contaminant_plume,
 saltwater_intrusion, managed_recharge, mine_dewatering, regional_water_budget,
@@ -9,7 +9,7 @@ machine-readable and never ran through the ``gate_input_review`` review surface,
 so a session in ``user_gated`` mode could not review/override the demo defaults.
 
 This module promotes that prose to STRUCTURED ``SyntheticInput`` review entries and
-routes them through ``gate_input_review`` (ADR 0107), matching the surge / hecras /
+routes them through ``gate_input_review``, matching the surge / hecras /
 swmm templates. The caveat strings become the entry ``note``s -- the prose is kept
 on the summary (backward compatible) AND mirrored as structured provenance stamped
 onto the returned layer's ``synthetic_inputs``.
@@ -86,7 +86,7 @@ def vadose_soil_review_entries(
     vks_m_day: float,
     note: str,
 ) -> list["SyntheticInput"]:
-    """Build the structured vadose-transport soil-hydraulics provenance entries (ADR 0228).
+    """Build the structured vadose-transport soil-hydraulics provenance entries.
 
     The unsaturated arrival time is set by the vadose thickness (depth to water
     table) + the Brooks-Corey water-content parameters + the infiltration flux --
@@ -141,7 +141,7 @@ def thermal_demo_review_entries(
     conductivity_user_supplied: bool,
     note: str,
 ) -> list["SyntheticInput"]:
-    """Build the structured GWE thermal-property provenance entries (ADR 0235).
+    """Build the structured GWE thermal-property provenance entries.
 
     The heat-transport field is set by the undisturbed aquifer temperature, the
     injected-water temperature, and the aquifer thermal conductivities/heat

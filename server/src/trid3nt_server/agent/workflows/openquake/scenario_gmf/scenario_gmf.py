@@ -266,7 +266,7 @@ async def openquake_scenario_gmf(
             "error_message": str(exc),
         }
 
-    # ADR 0107 input-review gate: the rupture geometry + magnitude are the
+    # input-review gate: the rupture geometry + magnitude are the
     # physically dominant, prompt-interpreted scenario inputs -> label them and,
     # in user_gated mode, present them for review before the solve.
     _entries = [

@@ -2,7 +2,7 @@
 how coarsening the dead-fuel-moisture interpolation cadence trades accuracy for
 cost on a transient moisture-recovery deck.
 
-A distinct question CLASS (per the capability-naming rule), and the ADR 0142 STOP
+A distinct question CLASS (per the capability-naming rule), and the STOP
 that was a no-op on constant decks: on a TRANSIENT deck whose dead fuel moisture
 recovers (rises) over the run, ELMFIRE re-interpolates the 1/10/100-hour dead-fuel
 moisture rasters from the bracketing meteorology bands every DT_INTERPOLATE_M1 /
@@ -19,7 +19,7 @@ deviation from the finest (reference) cadence is the interpolation-cadence error
 Fidelity: a controlled flat grass deck; the only time-varying input is the
 synthetic dead-fuel moisture-recovery schedule (multi-band, interpolated) - NOT a
 real reanalysis forcing. Data: NO LANDFIRE/DEM fetch. The synthetic schedule rides
-the ADR 0107 input-review gate (basis default_demo).
+the input-review gate (basis default_demo).
 
 Determinism boundary (Invariant 1): every burned area comes from the typed
 ``ElmfireSensitivityLayerURI`` fields the sweep measured - never free-generated.

@@ -74,7 +74,7 @@ logger = logging.getLogger(
 
 
 # ---------------------------------------------------------------------------
-# Error types (FR-AS-11 typed-error surface).
+# Error types (typed-error surface).
 # ---------------------------------------------------------------------------
 
 
@@ -503,7 +503,7 @@ def _fetch_ground_dem(
     silent mismatched pairing). Patched in offline tests -- the committed suite
     never calls the live 3DEP/GLO-30 fetch.
     """
-    # ADR 0097: fetch_dem is spec-driven -- resolve the promoted closure (keyword-only).
+    # fetch_dem is spec-driven -- resolve the promoted closure (keyword-only).
     from trid3nt_server.agent.tools import TOOL_REGISTRY
 
     fetch_dem = TOOL_REGISTRY["fetch_dem"].fn
@@ -1428,7 +1428,7 @@ def extract_model_at_observations(
     (always populated), ``flags`` (e.g. ``negative_depth`` points -- kept, never
     clamped), ``notes``.
 
-    **Errors (FR-AS-11):** ``PairingInputError`` (bad/unreadable inputs, no
+    **Errors:** ``PairingInputError`` (bad/unreadable inputs, no
     observed field, unrecognized quantity); ``PairingDatumMismatchError``
     (unreconciled vertical datums); ``PairingQuantityMismatchError`` (model
     quantity vs observed quantity cross elevation-vs-depth with no ground

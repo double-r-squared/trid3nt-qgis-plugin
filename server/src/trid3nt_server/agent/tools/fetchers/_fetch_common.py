@@ -2,7 +2,7 @@
 ``data_fetch`` module): the typed fetch-error hierarchy
 (``FetchError`` / ``UpstreamAPIError`` / ``BboxInvalidError``), the Nominatim
 usage-policy User-Agent, and the bbox validation / resolution-quantization
-helpers every fetcher pre-applies before handing params to the FR-DC-3 cache
+helpers every fetcher pre-applies before handing params to the cache
 shim (engine-side quantize).
 
 Tool-specific error subclasses (``GeocodeNoMatchError``, ``DemPartialCoverageError``,
@@ -22,15 +22,15 @@ __all__ = [
 
 
 # ---------------------------------------------------------------------------
-# Error codes registered by this module (FR-AS-11 typed-error surface).
+# Error codes registered by this module (typed-error surface).
 # ---------------------------------------------------------------------------
 #
 # These RuntimeError subclasses carry a stable ``error_code`` for the
 # WebSocket A.6 error frame the agent surface emits when a fetch fails. They
 # are caught nowhere inside this module — the ``read_through`` contract is
 # "re-raise on fetcher failure; no sentinel" — so server-side error handling
-# (server.py M1) maps them to A.6 codes via the agent's error surface (job-
-# 0035 lands the mapping; for now they bubble up).
+# (server.py M1) maps them to A.6 codes via the agent's error surface
+# (mapping not yet landed; for now they bubble up).
 
 
 class FetchError(RuntimeError):
@@ -70,7 +70,7 @@ _DEFAULT_USER_AGENT = (
 )
 
 # ---------------------------------------------------------------------------
-# bbox helpers (FR-DC-3: engine-side quantize).
+# bbox helpers (engine-side quantize).
 # ---------------------------------------------------------------------------
 
 

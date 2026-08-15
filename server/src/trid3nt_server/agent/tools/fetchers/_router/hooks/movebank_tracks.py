@@ -1,4 +1,4 @@
-"""movebank_tracks hooks (movebank finish wave, keyed http_json CSV, ADR 0071/0073/0077):
+"""movebank_tracks hooks (movebank finish wave, keyed http_json CSV/0073/0077):
 Movebank animal-tracking direct-read, keyed with COMPOSITE Basic-Auth creds.
 
 Movebank rejects unauthenticated requests, so ``build_request`` resolves a

@@ -1,4 +1,4 @@
-"""flood_extent_observation hooks (landcover + flood-extent wave, ADR 0082).
+"""flood_extent_observation hooks (landcover + flood-extent wave).
 
 The irreducible per-source steps the declarative categorical_tile_grid access
 mode cannot carry:

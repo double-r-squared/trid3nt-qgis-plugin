@@ -104,7 +104,7 @@ logger = logging.getLogger("trid3nt_server.agent.tools.simulation.model_debris_f
 
 
 # ---------------------------------------------------------------------------
-# Error types (FR-AS-11 typed-error surface).
+# Error types (typed-error surface).
 # ---------------------------------------------------------------------------
 
 
@@ -112,7 +112,7 @@ class DebrisFlowError(RuntimeError):
     """Base class for model_debris_flow failures.
 
     ``error_code`` maps to the WebSocket A.6 error frame emitted by the agent
-    surface. ``retryable`` guides FR-AS-11 retry/clarify/fallback logic.
+    surface. ``retryable`` guides retry/clarify/fallback logic.
     """
 
     error_code: str = "DEBRIS_FLOW_ERROR"
@@ -569,7 +569,7 @@ def _load_kf(
         return kf
 
     try:
-        # Registry seam (ADR 0074): fetch_statsgo_soils is now a spec-driven
+        # Registry seam: fetch_statsgo_soils is now a spec-driven
         # library-delegate router tool (pfdf), resolved by name (twin deleted).
         from trid3nt_server.agent.tools import TOOL_REGISTRY
         fetch_statsgo_soils = TOOL_REGISTRY["fetch_statsgo_soils"].fn

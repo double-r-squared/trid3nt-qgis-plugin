@@ -17,7 +17,7 @@ It is the foundation the dual-drainage overland<->pipe coupling builds on.
 Determinism (invariant 1): every number the agent narrates comes from the typed
 ``SWMMNetworkLayerURI`` scalars the postprocess computed - never free-generated.
 The network geometry is REAL (user upload / public GIS); missing attributes are
-gap-filled with LABELED demo defaults (the labeled-degrade doctrine, ADR 0106).
+gap-filled with LABELED demo defaults (the labeled-degrade doctrine).
 """
 
 from __future__ import annotations
@@ -148,8 +148,8 @@ async def swmm_network_import(
         rain_interval_min: hyetograph timestep, minutes (> 0). Default 5.
         fill_missing_inverts_from_dem: True (default) fetches a DEM to interpolate
             missing node inverts; False slope-walks them from known inverts only.
-        compute_class: FR-CE-3 compute class. Default "standard".
-        input_mode: run-mode lever (ADR 0107). "user_gated" presents the resolved
+        compute_class: compute class. Default "standard".
+        input_mode: run-mode lever. "user_gated" presents the resolved
             rainfall + the labeled gap-fills for review before the solve; "auto"
             (default) proceeds with them labeled.
 
@@ -410,7 +410,7 @@ async def model_swmm_network_import(
         emitter, inferred_bbox, return_period_yr, storm_duration_hr, total_rain_depth_mm
     )
 
-    # --- ADR 0107 input review: rainfall + the labeled gap-fills ---
+    # --- input review: rainfall + the labeled gap-fills ---
     _review = await gate_input_review(
         tool_name="swmm_network_import", mode=input_mode,
         entries=[

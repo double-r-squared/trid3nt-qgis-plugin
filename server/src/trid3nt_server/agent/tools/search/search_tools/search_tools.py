@@ -31,7 +31,7 @@ Index is built lazily at first call and cached at module level. Subsequent
 calls within the same Python process reuse the cached BM25 instance and
 dense-vector matrix. Reset for tests via ``_reset_index_for_tests()``.
 
-FR-TA-2 / FR-AS-3: registered with ``ttl_class="static-30d"``,
+Registered with ``ttl_class="static-30d"``,
 ``source_class="search_tools"``, ``cacheable=False`` -- the routing
 output depends on the live registry contents and synthetic-corpus file,
 both of which are import-time-frozen, but caching the result through the
@@ -87,7 +87,7 @@ logger = logging.getLogger("trid3nt_server.agent.tools.search.search_tools.searc
 
 
 # ---------------------------------------------------------------------------
-# Error types (FR-AS-11 typed-error surface).
+# Error types (typed-error surface).
 # ---------------------------------------------------------------------------
 
 
@@ -176,9 +176,9 @@ class _DiscoverIndex:
     - ``backend_name``: identifier for the dense backend
       (``"sentence_transformers"`` / ``"vertex"`` / ``"hashed"`` / ``None``).
     - ``tiers``: per-tool routing tier (``"general"`` / ``"template"``), parallel
-      to ``tool_names``. Read by ``_lexical_reinforcement``. Post door dissolution
-      (ADR 0094) engine templates index as ordinary pool members; tier=internal
-      is the only tier still withheld from the index.
+      to ``tool_names``. Read by ``_lexical_reinforcement``. Engine templates
+      index as ordinary pool members; tier=internal is the only tier still
+      withheld from the index.
     """
 
     def __init__(
@@ -409,7 +409,7 @@ def _compose_corpus_from_tree() -> dict[str, list[str]]:
 
     Walks every co-located ``tools/**/corpus.yaml`` (one per atomic tool folder)
     AND every ``workflows/**/corpus.yaml`` (one per engine template -- door
-    dissolution, ADR 0094: templates are ordinary retrieval-pool members now, so
+    dissolution: templates are ordinary retrieval-pool members now, so
     their phrasings must reach the index just like any tool's), then merges the
     residual ``data/tool_query_corpus.yaml`` (tools registered outside either
     tree). Flat composition -- no tier semantics.
@@ -612,7 +612,7 @@ def _build_index(
 
     for name in sorted(snapshot.keys()):
         entry = snapshot[name]
-        # Door dissolution (ADR 0094): engine templates (tier=template) join the
+        # Door dissolution: engine templates (tier=template) join the
         # default retrieval pool and index HERE alongside general tools -- their
         # natural practitioner phrasings (workflows/**/corpus.yaml) do the routing
         # the deleted engine doors used to. tier=internal (an absorbed in-process
@@ -1208,7 +1208,7 @@ async def search_tools(
     so an LLM that fires the tool with a degenerate ``query=""`` doesn't
     surface a hard error mid-conversation.
 
-    FR-CE-8: registered with ``ttl_class="live-no-cache"``, ``cacheable=False`` -- the routing call is sub-millisecond CPU and the result depends on the
+    Registered with ``ttl_class="live-no-cache"``, ``cacheable=False`` -- the routing call is sub-millisecond CPU and the result depends on the
     LLM-supplied query verbatim, so caching would be wasteful.
     """
     if not isinstance(query, str):

@@ -758,16 +758,15 @@ def geocode_location(query: str, **_extra_ignored: Any) -> dict[str, Any]:
       ``run_sfincs``) to resolve a user-supplied location string before
       fetching DEM/landcover.
 
-    FR-CE-8: The fetch is routed through ``read_through`` so two identical
+    The fetch is routed through ``read_through`` so two identical
     queries within the same hourly window reuse the cached response. The
-    cache class is ``"dynamic-1h"`` per FR-DC-2 active-state-ish (geocoding
+    cache class is ``"dynamic-1h"`` per active-state-ish (geocoding
     answers DO change as Nominatim's OSM index updates, but on a slower
     cadence than hourly).
 
-    Side effect: per FR-TA-2 §"Location-resolved emission" / FR-AS-7, the
-    agent surface emits a ``location-resolved`` WebSocket message when this
-    tool returns so the client auto-snaps the map. The emission seam is
-    in the agent's server.py M1 module.
+    Side effect: the agent surface emits a ``location-resolved`` WebSocket
+    message when this tool returns so the client auto-snaps the map. The
+    emission seam is in the agent's server.py module.
 
     Nominatim usage policy: User-Agent is sent on every request; the
     ``dynamic-1h`` cache class naturally throttles repeat queries (one

@@ -1,4 +1,4 @@
-"""Atomic tool ``extract_landcover_class`` - NLCD binary-mask extractor (FR-TA-2, FR-CE-8, FR-DC).
+"""Atomic tool ``extract_landcover_class`` - NLCD binary-mask extractor (, FR-DC).
 
 This module registers one atomic tool that filters an NLCD landcover raster to a
 set of requested class codes and returns a binary mask raster:
@@ -8,7 +8,7 @@ set of requested class codes and returns a binary mask raster:
 The result is a single-band uint8 GeoTIFF where pixels matching any of the
 requested NLCD class codes are 1, other valid pixels are 0, and nodata pixels
 are preserved as 255. The output is LZW-compressed and is stored under the
-FR-DC-3 cache shim at:
+cache shim at:
 
     ``s3://trid3nt-cache/cache/static-30d/landcover_class/<key>.tif``
 
@@ -49,10 +49,10 @@ and is reserved for a future-vintage opt-in.
   ``LayerURI`` with provenance metadata; no LLM-generated numbers.
 - **Invariant 2 (Deterministic workflows): preserves.** Pure rasterio + numpy
   pipeline, no LLM calls, deterministic given inputs.
-- **FR-DC-6 (cacheable): honors.** ``cacheable=True``, ``ttl_class="static-30d"``,
+- **(cacheable): honors.** ``cacheable=True``, ``ttl_class="static-30d"``,
   ``source_class="landcover_class"`` -- a binary mask of a static NLCD COG is
   stable for the 30-day window.
-- **NFR-R-1 (resilience): preserves.** Read / parse failures surface as
+- **(resilience): preserves.** Read / parse failures surface as
   ``LandcoverClassError`` (typed; never an unhandled exception).
 - **Geographic-correctness check (codified lesson):** the live test asserts
   that the mask aligns with the known geography of the source raster -- a pixel
@@ -99,7 +99,7 @@ class LandcoverClassError(RuntimeError):
     """Raised when extract_landcover_class cannot read / process the input.
 
     ``error_code`` carries a SCREAMING_SNAKE_CASE code surfaced in the
-    pipeline strip (NFR-R-1 typed-error requirement).
+    pipeline strip (typed-error requirement).
 
     Codes:
     - ``CLASSES_EMPTY`` -- ``classes`` argument was empty.

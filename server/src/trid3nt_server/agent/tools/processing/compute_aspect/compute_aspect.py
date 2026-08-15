@@ -1,4 +1,4 @@
-"""Atomic tool ``compute_aspect`` - terrain aspect raster from DEM (FR-CE-8, FR-DC).
+"""Atomic tool ``compute_aspect`` - terrain aspect raster from DEM.
 
 This module registers one atomic tool that computes an aspect raster from a DEM
 by wrapping GDAL's ``gdaldem aspect`` command:
@@ -7,13 +7,13 @@ by wrapping GDAL's ``gdaldem aspect`` command:
 
 The result is a single-band GeoTIFF (compass direction 0–360°; 0=N, 90=E,
 180=S, 270=W) in the same CRS and grid as the input DEM, stored under the
-FR-DC-3 cache shim at:
+cache shim at:
 
     ``s3://trid3nt-cache/cache/static-30d/aspect/<key>.tif``
 
 **Cache key** is derived from ``(dem_uri, algorithm, zero_for_flat)`` — all
 three parameters materially affect the output pixels, so all three participate
-in cache-key derivation (FR-DC-3).
+in cache-key derivation.
 
 **Implementation flow (cache miss):**
 
@@ -30,12 +30,12 @@ in cache-key derivation (FR-DC-3).
 **Cross-cutting invariants:**
 
 - **Invariant 2 (Deterministic workflows): preserves.** Zero LLM calls.
-- **FR-DC-6 (cacheable): honors.** ``cacheable=True``, ``ttl_class="static-30d"``,
+- **(cacheable): honors.** ``cacheable=True``, ``ttl_class="static-30d"``,
   ``source_class="aspect"`` — DEM-derived output is stable for the lifetime of
   the cached DEM.
-- **NFR-R-1 (resilience): preserves.** gdaldem failures surface as
+- **(resilience): preserves.** gdaldem failures surface as
   ``AspectComputeError`` (typed, never unhandled exception); DEM read
-  errors are let through for the agent FR-AS-11 surface to handle.
+  errors are let through for the agent surface to handle.
 """
 
 from __future__ import annotations
@@ -73,7 +73,7 @@ class AspectComputeError(RuntimeError):
     """Raised when ``gdaldem aspect`` fails or the DEM cannot be fetched.
 
     ``error_code`` carries a SCREAMING_SNAKE_CASE code surfaced in the
-    pipeline strip (NFR-R-1 typed-error requirement).
+    pipeline strip (typed-error requirement).
 
     Codes:
     - ``GDALDEM_UNAVAILABLE`` — ``gdaldem`` binary not found on PATH.

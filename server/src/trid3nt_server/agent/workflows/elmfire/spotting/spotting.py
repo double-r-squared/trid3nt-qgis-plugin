@@ -665,7 +665,7 @@ async def model_elmfire_river_barrier_crossing(
     """The REAL-DATA river-barrier spotting composer (OFF vs ON, honest verdict).
 
     Fetches LANDFIRE fuels + a 3DEP DEM ONCE over the AOI, surfaces the fuels + DEM
-    inputs (ADR 0231) so the river corridor is visible, builds + solves the deck
+    inputs so the river corridor is visible, builds + solves the deck
     TWICE (spotting OFF then ON on the SAME warp), measures the river width + the
     far-side burned area off the ToA raster within the river's cross-wind shadow,
     publishes the spotting-ON ToA COG, and emits the OFF-vs-ON chart. Reports the

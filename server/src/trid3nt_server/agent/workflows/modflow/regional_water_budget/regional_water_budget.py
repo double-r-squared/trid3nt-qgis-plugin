@@ -135,7 +135,7 @@ async def model_regional_water_budget_scenario(
         zone_partition: optional zone-split scheme (e.g.
             ``"upgradient_downgradient"``). None = whole-domain budget only.
         aquifer_k_ms / porosity: optional demo-aquifer overrides.
-        compute_class: FR-CE-3 compute class.
+        compute_class: compute class.
         pipeline_emitter: optional PipelineEmitter for live progress cards.
 
     Returns:
@@ -224,7 +224,7 @@ async def model_regional_water_budget_scenario(
         location_name,
         sorted(layer.budget_partition_m3_day),
     )
-    # ADR 0223: this archetype previously carried NO structured aquifer-K
+    # this archetype previously carried NO structured aquifer-K
     # provenance -- add a machine-readable SyntheticInput routed through
     # gate_input_review so the demo hydrogeology is labeled on the envelope.
     _k_note = (
@@ -320,7 +320,7 @@ async def modflow_regional_water_budget(
         zone_partition: optional zone-split scheme (e.g.
             ``"upgradient_downgradient"``). None = whole-domain budget.
         aquifer_k_ms / porosity: optional demo-aquifer overrides.
-        compute_class: FR-CE-3 compute class. Default ``"standard"``.
+        compute_class: compute class. Default ``"standard"``.
 
     Returns:
         On success: a ``RegionalWaterBudgetResult`` JSON dict with the
@@ -329,7 +329,7 @@ async def modflow_regional_water_budget(
         the ``derived_params``, and the ``summary``. On a recoverable failure the
         tool returns a typed error the agent narrates honestly.
 
-    FR-DC-6: ``cacheable=False`` + ``ttl_class="live-no-cache"`` +
+    ``cacheable=False`` + ``ttl_class="live-no-cache"`` +
     ``source_class="workflow_dispatch"``  -  the cache shim is NOT invoked.
     """
     aoi = _coerce_optional_latlon(aoi_latlon)

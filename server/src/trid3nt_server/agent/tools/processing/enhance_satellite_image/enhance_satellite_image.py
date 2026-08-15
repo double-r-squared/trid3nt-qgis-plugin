@@ -64,9 +64,9 @@ band 4 is carried through as alpha.)
 Cross-cutting invariants:
 - Invariant 2 (Deterministic workflows): preserves - zero LLM calls; the output
   is fully determined by the input pixels + the toggles/params.
-- FR-DC-6 (cacheable): honors - ``cacheable=True``, ``ttl_class="static-30d"``,
+- (cacheable): honors - ``cacheable=True``, ``ttl_class="static-30d"``,
   ``source_class="enhanced"``; the polished COG is a pure function of its inputs.
-- NFR-R-1 (resilience): preserves - every failure surfaces as a typed
+- (resilience): preserves - every failure surfaces as a typed
   ``EnhanceSatelliteImageError`` with a SCREAMING_SNAKE_CASE ``error_code``.
 - No-sync-on-the-loop: the tool is dispatched through the agent's standard
   to_thread offload path like every other rasterio/numpy compute tool.
@@ -113,7 +113,7 @@ class EnhanceSatelliteImageError(RuntimeError):
     """Raised when image enhancement fails or the input is not RGB imagery.
 
     ``error_code`` carries a SCREAMING_SNAKE_CASE code surfaced in the pipeline
-    strip (NFR-R-1 typed-error requirement). ``retryable`` follows the FR-AS-11
+    strip (typed-error requirement). ``retryable`` follows the
     convention so ``summarize_tool_result`` renders the envelope and the LLM can
     decide retry/clarify/fallback.
 

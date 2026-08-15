@@ -1,5 +1,5 @@
 """Engine template ``schism_transport_validation`` -- SCHISM transport-scheme
-numerical-mixing V&V (ADR 0156).
+numerical-mixing V&V.
 
 Advects a temperature FRONT (a conservative scalar) across the idealized
 QuarterAnnulus tidal channel TWICE on the hydro-core binary through the identical
@@ -157,7 +157,7 @@ async def schism_transport_validation(
         chart + a variance/mass-over-time chart.
         On failure: dict with ``status="error"`` + ``error_code`` + ``error_message``.
 
-    FR-DC-6: ``cacheable=False``, ``ttl_class="live-no-cache"``,
+    ``cacheable=False``, ``ttl_class="live-no-cache"``,
     ``source_class="workflow_dispatch"``.
     """
     try:

@@ -1,4 +1,4 @@
-"""goes_archive frames hooks (ADR 0088): the netcdf_cf_object per-frame mode.
+"""goes_archive frames hooks: the netcdf_cf_object per-frame mode.
 
 Folds fetch_goes_archive_animation + fetch_goes_active_fire onto shape:
 animation_frames. The router owns the per-frame read_through loop + honesty floor +

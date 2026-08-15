@@ -80,7 +80,7 @@ logger = logging.getLogger("trid3nt_server.agent.tools.processing.compute_model_
 
 
 # ---------------------------------------------------------------------------
-# Error types (FR-AS-11 typed-error surface).
+# Error types (typed-error surface).
 # ---------------------------------------------------------------------------
 
 
@@ -286,7 +286,7 @@ def _fetch_observations_from_bbox(
     """
     import geopandas as gpd
 
-    # fetch_usgs_groundwater_levels is spec-driven (ADR 0071); resolve its raw FGB
+    # fetch_usgs_groundwater_levels is spec-driven; resolve its raw FGB
     # bytes via the in-process router seam (get_spec + validate_params + executor,
     # no cache/publish round trip) -- the admin_boundaries re-point precedent.
     from trid3nt_server.agent.tools.fetchers._router import router
@@ -618,7 +618,7 @@ def compute_model_residuals(
     ``small_n_caveat`` (True when ``n_points < 3`` -- stats are still
     returned, just flagged as not statistically meaningful) / ``notes``.
 
-    **Errors (FR-AS-11):** ``ResidualsInputError`` (bad/unreadable inputs, no
+    **Errors:** ``ResidualsInputError`` (bad/unreadable inputs, no
     selector given, unresolvable ``observed_value_field``);
     ``ResidualsNoObservationsError`` (zero observation points loaded, or none
     fall inside the raster's footprint); ``ResidualsAllNodataError`` (points

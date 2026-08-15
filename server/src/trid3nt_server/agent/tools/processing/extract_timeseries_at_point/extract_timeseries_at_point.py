@@ -67,7 +67,7 @@ logger = logging.getLogger("trid3nt_server.agent.tools.processing.extract_timese
 
 
 # ---------------------------------------------------------------------------
-# Typed errors (FR-AS-11).
+# Typed errors.
 # ---------------------------------------------------------------------------
 
 

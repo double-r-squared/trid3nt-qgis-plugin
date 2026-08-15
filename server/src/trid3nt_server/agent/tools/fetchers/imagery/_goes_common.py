@@ -1,4 +1,4 @@
-"""GOES ABI shared SUBSTRATE (ADR 0111): the satellite-identifier normalizer + the
+"""GOES ABI shared SUBSTRATE: the satellite-identifier normalizer + the
 public-S3 listing / download primitives the whole GOES family shares.
 
 Relocated here from the deleted ``fetch_goes_satellite`` coded twin (which folded onto
@@ -7,7 +7,7 @@ tool and NO dependency on the router / read_through / slider stitch, so they liv
 this leaf substrate and every GOES consumer imports FROM here:
 ``hooks/goes_satellite`` (the fold), ``_goes_archive_core`` (the animation substrate),
 and ``hooks/goes_archive`` / ``hooks/goes_animation`` / ``hooks/glm`` (the frame hooks).
-This mirrors the ADR 0088 move that relocated the archive-animation twin's body into
+This mirrors the move that relocated the archive-animation twin's body into
 ``_goes_archive_core``. ASCII only.
 """
 
@@ -49,7 +49,7 @@ __all__ = [
 
 
 # ---------------------------------------------------------------------------
-# Typed errors (NFR-R-1 typed-error surface). Shared across the GOES family.
+# Typed errors (typed-error surface). Shared across the GOES family.
 # ---------------------------------------------------------------------------
 
 
@@ -57,10 +57,10 @@ class GOESError(FetchError):
     """Base class for GOES satellite failures.
 
     ``error_code`` maps to the WebSocket A.6 error frame emitted by the
-    agent surface. ``retryable`` guides FR-AS-11 retry logic. Base is
+    agent surface. ``retryable`` guides retry logic. Base is
     ``FetchError`` (still a ``RuntimeError``, so ``isinstance`` holds) so the
     pinned ``error_code`` survives ``library_delegate.invoke``'s passthrough
-    (ADR 0097) when the ``fetch_goes_satellite`` delegate raises it.
+    when the ``fetch_goes_satellite`` delegate raises it.
     """
 
     error_code: str = "GOES_SATELLITE_ERROR"

@@ -12,7 +12,7 @@ catalog by two declarations.
 How it works:
 
 1. ``layer_refs`` maps ``{alias: layer handle}``. The parameter is NAMED
-   ``layer_refs`` deliberately: the ADR-0014 dispatch seam
+   ``layer_refs`` deliberately: the dispatch seam
    (``SessionUriRegistry.resolve_params`` -> ``NESTED_REF_PARAMS``) already
    resolves every string VALUE of a ``layer_refs`` dict from an ``L<n>`` /
    layer_id handle to the exact storage URI before the tool body runs - the
@@ -31,7 +31,7 @@ How it works:
    best-effort blocklist.
 4. Results are capped at ``_ROW_CAP`` rows and returned with columns + a
    compact LLM-facing summary. Bad SQL surfaces the DuckDB error message
-   VERBATIM in a typed error so the FR-AS-11 retry loop can self-correct.
+   VERBATIM in a typed error so the retry loop can self-correct.
 5. RESULT MATERIALIZATION: a "show me all X in Y" query PAINTS a layer rather
    than just tabulating. When the SELECT result carries a geometry column and
    more than zero rows, the TOOL (not the model's SQL - the read-only
@@ -42,7 +42,7 @@ How it works:
    ``SpatialQueryLayerURI`` - a ``LayerURI`` subclass (the
    ``FloodDepthDamageLayerURI`` pattern) carrying the compact row summary +
    a small row preview. ``isinstance(result, LayerURI)`` holds, so the
-   ADR-0014 dispatch seam mints an ``L<n>`` handle and the emit seam paints
+   dispatch seam mints an ``L<n>`` handle and the emit seam paints
    the layer. Geometry-less or empty results keep the v1 tabular dict.
    Export path: DuckDB ``COPY ... TO ... WITH (FORMAT gdal, DRIVER
    'FlatGeobuf')`` first, geopandas/pyogrio fallback when the gdal write
@@ -155,7 +155,7 @@ _WORD_RE = re.compile(r"[A-Za-z_][A-Za-z0-9_]*")
 
 
 # ---------------------------------------------------------------------------
-# Typed error (NFR-R-1 / FR-AS-11 surface)
+# Typed error (resilience surface)
 # ---------------------------------------------------------------------------
 
 
@@ -489,7 +489,7 @@ class SpatialQueryLayerURI(LayerURI):
 
     Returned INSTEAD of the tabular dict when the SELECT result carries a
     geometry column and >0 rows. Extends ``LayerURI`` field-for-field (the
-    ``FloodDepthDamageLayerURI`` pattern) so the ADR-0014 dispatch seam mints
+    ``FloodDepthDamageLayerURI`` pattern) so the dispatch seam mints
     an ``L<n>`` handle for the layer and the emit seam paints it, while the
     LLM narrates from typed fields:
 

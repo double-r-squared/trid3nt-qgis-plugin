@@ -1,4 +1,4 @@
-"""HRRR-Zarr delegate hooks (ADR 0083): the fsspec/xarray Zarr store owns the socket.
+"""HRRR-Zarr delegate hooks: the fsspec/xarray Zarr store owns the socket.
 
 The NOAA HRRR / HRRR-Smoke forecast is published as a nested Zarr store on the
 University of Utah CHPC S3 mirror (``hrrrzarr``). fsspec + xarray own the store

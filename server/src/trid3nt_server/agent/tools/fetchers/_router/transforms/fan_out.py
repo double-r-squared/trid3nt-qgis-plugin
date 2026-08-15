@@ -1,4 +1,4 @@
-"""Declarative fan-out transform (contract sec 2, phase-2 wave-6 ADR 0052).
+"""Declarative fan-out transform.
 
 A named transform WRAPPING the vector-fgb executor for the multi-query-per-value
 shape: a ``float_list`` param drives one query PER value against a per-value

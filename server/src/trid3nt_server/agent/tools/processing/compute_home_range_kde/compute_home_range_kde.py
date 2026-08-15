@@ -17,7 +17,7 @@ carries the planimetric ``area_km2`` of that isopleth.
 so the points are reprojected to the local UTM zone (metres) before the KDE; the
 isopleth polygons are reprojected back to EPSG:4326 for the inline-GeoJSON vector
 render path (one ``Polygon``/``MultiPolygon`` per isopleth, ``style_preset=
-"home_range_kde"``). The artifact is a FlatGeobuf stored under the FR-DC-3 cache
+"home_range_kde"``). The artifact is a FlatGeobuf stored under the cache
 shim:
 
     ``s3://<cache-bucket>/cache/static-30d/home_range_kde/<key>.fgb``
@@ -38,7 +38,7 @@ shim:
    polygon. Area is computed in the projected CRS (km^2).
 7. Reproject the isopleth polygons to EPSG:4326 and serialise to FlatGeobuf.
 
-**Honest-empty / typed errors (NFR-R-1 / FR-AS-11).** Too-few points (below the
+**Honest-empty / typed errors.** Too-few points (below the
 KDE minimum, or a degenerate co-linear / single-location set that yields a
 singular covariance) surface as a typed ``HomeRangeKDEError(TOO_FEW_POINTS)`` -- never a fabricated polygon. Bad isopleth percentiles, an empty input layer, and
 unreadable inputs each get their own typed code.
@@ -47,9 +47,9 @@ unreadable inputs each get their own typed code.
 
 - **Invariant 2 (Deterministic workflows): preserves.** Zero LLM calls; the KDE
   is seeded only by the input geometry (Scott's rule is deterministic).
-- **FR-DC-6 (cacheable): honors.** ``cacheable=True``, ``ttl_class="static-30d"``,
+- **(cacheable): honors.** ``cacheable=True``, ``ttl_class="static-30d"``,
   ``source_class="home_range_kde"`` -- derived from immutable historic tracks.
-- **NFR-R-1 (resilience): preserves.** Every failure path raises a typed
+- **(resilience): preserves.** Every failure path raises a typed
   ``HomeRangeKDEError`` with a SCREAMING_SNAKE_CASE ``error_code``.
 
 Pairs with ``fetch_movebank_tracks`` (supplies ``points_uri``) and
@@ -80,7 +80,7 @@ logger = logging.getLogger("trid3nt_server.agent.tools.processing.compute_home_r
 
 
 # ---------------------------------------------------------------------------
-# Typed error (NFR-R-1 / FR-AS-11)
+# Typed error
 # ---------------------------------------------------------------------------
 
 
@@ -136,7 +136,7 @@ _MIN_GRID = 32
 
 
 # ---------------------------------------------------------------------------
-# Payload estimator (FR-DC-9 chat-warning gate)
+# Payload estimator (chat-warning gate)
 # ---------------------------------------------------------------------------
 
 

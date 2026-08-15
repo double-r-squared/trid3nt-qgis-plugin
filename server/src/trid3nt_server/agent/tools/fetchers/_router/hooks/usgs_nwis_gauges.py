@@ -1,4 +1,4 @@
-"""USGS NWIS stream-gauge hooks (ADR 0085): the last flood-seam twin fold.
+"""USGS NWIS stream-gauge hooks: the last flood-seam twin fold.
 
 fetch_usgs_nwis_gauges has two blockers the declarative surface could not carry,
 both resolved here as PURE hooks over the ``http_json`` parse_fallback executor:

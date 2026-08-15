@@ -100,7 +100,7 @@ _VEGA_LITE_V5_SCHEMA = "https://vega.github.io/schema/vega-lite/v5.json"
 
 
 # ---------------------------------------------------------------------------
-# Error type (NFR-R-1 typed-error surface)
+# Error type (typed-error surface)
 # ---------------------------------------------------------------------------
 
 
@@ -108,7 +108,7 @@ class CrossSectionError(RuntimeError):
     """Raised when ``compute_cross_section`` cannot produce a profile.
 
     ``error_code`` carries a SCREAMING_SNAKE_CASE code consumed by
-    ``summarize_tool_result`` (FR-AS-11 retry surface):
+    ``summarize_tool_result`` (retry surface):
 
     - ``LINE_INVALID``        -- ``line`` is not a usable LineString (wrong shape,
       < 2 distinct vertices, non-numeric coordinates).

@@ -1,4 +1,4 @@
-"""Engine template ``swmm_node_hydraulics_comparison`` (ADR 0151).
+"""Engine template ``swmm_node_hydraulics_comparison``.
 
 A THIN composer over the shared mechanism-comparison runner. Three schematic
 node-hydraulics comparisons selected by ``scenario``: ``outlet_family`` (transverse

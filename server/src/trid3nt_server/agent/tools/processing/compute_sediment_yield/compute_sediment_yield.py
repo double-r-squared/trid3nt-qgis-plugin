@@ -88,7 +88,7 @@ logger = logging.getLogger("trid3nt_server.agent.tools.processing.compute_sedime
 
 
 # ---------------------------------------------------------------------------
-# Error types (FR-AS-11 typed-error surface).
+# Error types (typed-error surface).
 # ---------------------------------------------------------------------------
 
 
@@ -477,7 +477,7 @@ def _load_k(
         notes.append(f"K-factor from caller-supplied k_uri ({k_uri}).")
         return k
     try:
-        # Registry seam (ADR 0074): fetch_statsgo_soils is now a spec-driven
+        # Registry seam: fetch_statsgo_soils is now a spec-driven
         # library-delegate router tool (pfdf), resolved by name (twin deleted).
         from trid3nt_server.agent.tools import TOOL_REGISTRY
         fetch_statsgo_soils = TOOL_REGISTRY["fetch_statsgo_soils"].fn

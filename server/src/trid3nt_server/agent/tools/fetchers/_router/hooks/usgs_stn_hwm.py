@@ -1,4 +1,4 @@
-"""usgs_stn_hwm hooks (ADR 0073): USGS STN flood high-water marks + envelope.
+"""usgs_stn_hwm hooks: USGS STN flood high-water marks + envelope.
 
 The irreducible steps the declarative surface cannot carry:
 - ``resolve_build`` / ``resolve_parse`` -- resolve a named flood EVENT to its STN

@@ -62,7 +62,7 @@ TEMPLATE_CARD = TemplateCard(
 )
 
 
-#: DECLARED mesh_resolution_m range (ADR 0225). Same TELEMAC mesh-builder machinery
+#: DECLARED mesh_resolution_m range. Same TELEMAC mesh-builder machinery
 #: as telemac_river_dye: SOLVER floor 3 m (MESH_H_FLOOR_M), a long reach coarsened
 #: under the node budget (self-labeled), no fixed coarse ceiling. Out-of-range
 #: (sub-3 m) explicit ask quoted back, never silently snapped.

@@ -75,7 +75,7 @@ logger = logging.getLogger("trid3nt_server.agent.tools.processing.compute_flood_
 
 
 # ---------------------------------------------------------------------------
-# Error types (FR-AS-11 typed-error surface).
+# Error types (typed-error surface).
 # ---------------------------------------------------------------------------
 
 
@@ -274,7 +274,7 @@ def _load_assets(
                 "depth raster (clip_raster_to_polygon) and re-run per tile."
             )
         try:
-            # fetch_usace_nsi is spec-driven (data-router fold, ADR 0061); resolve
+            # fetch_usace_nsi is spec-driven (data-router fold); resolve
             # the promoted router closure by name (the twin module is deleted).
             from trid3nt_server.agent.tools import TOOL_REGISTRY
 

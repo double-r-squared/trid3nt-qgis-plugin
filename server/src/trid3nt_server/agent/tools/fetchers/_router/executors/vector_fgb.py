@@ -397,7 +397,7 @@ def features_to_fgb_bytes(
     features = apply_ingest_transforms(features, spec, params)
 
     crs = spec.normalize.crs
-    # keep_null_geometry (ADR 0063): preserve attribute-only rows (nws_alerts_conus
+    # keep_null_geometry: preserve attribute-only rows (nws_alerts_conus
     # unresolvable-zone alerts) instead of dropping NULL-geometry features. Default
     # off = the byte-identical drop-null path for every prior spec.
     keep_null = bool(getattr(spec.output, "keep_null_geometry", False))

@@ -1,7 +1,7 @@
-"""slider_timestamps record hooks (ADR 0078): CIRA/RAMMB SLIDER availability index.
+"""slider_timestamps record hooks: CIRA/RAMMB SLIDER availability index.
 
 Folds the fetch_slider_timestamps twin onto the record-return output shape
-(ADR 0076) as a LIVE-NO-CACHE source: one GET of the SLIDER ``latest_times.json``
+ as a LIVE-NO-CACHE source: one GET of the SLIDER ``latest_times.json``
 availability index, parsed + enriched into the availability + cadence dict the
 frame-animation recipe stands on. The router owns the transport + the live-no-cache
 short-circuit (no cache write: the index turns over every few minutes). These PURE

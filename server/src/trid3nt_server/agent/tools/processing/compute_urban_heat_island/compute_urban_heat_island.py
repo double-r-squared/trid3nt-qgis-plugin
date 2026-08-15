@@ -66,7 +66,7 @@ logger = logging.getLogger("trid3nt_server.agent.tools.processing.compute_urban_
 
 
 # ---------------------------------------------------------------------------
-# Error types (FR-AS-11 typed-error surface).
+# Error types (typed-error surface).
 # ---------------------------------------------------------------------------
 
 

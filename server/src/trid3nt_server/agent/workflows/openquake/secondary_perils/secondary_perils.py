@@ -460,7 +460,7 @@ def _fetch_dem_local(
     """Fetch the AOI DEM and stage it locally; return the local COG path.
 
     The fetched DEM (the vs30/slope/CTI covariate substrate) is auto-surfaced as
-    a role=context input by the emit-on-fetch router seam (ADR 0244); the
+    a role=context input by the emit-on-fetch router seam; the
     ``purpose="terrain"`` fetch carries the name.
     """
     from trid3nt_server.agent.tools import TOOL_REGISTRY

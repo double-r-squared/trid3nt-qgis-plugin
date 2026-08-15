@@ -38,8 +38,8 @@ reprojected to EPSG:4326, like ``postprocess_modflow._write_reprojected_cog``,
 since the MapLibre basemap is web-mercator/4326), the even-subsample frame
 selector ``_select_frame_time_indices`` (MAX_FLOOD_FRAMES=24), the
 ``NODATA_DEPTH_M=0.05`` wet threshold, and the
-``continuous_flood_depth`` style preset. The honesty floor (Invariant 1 /
-FR-AS-7): the depth scalars are computed with plain arithmetic from the depth
+``continuous_flood_depth`` style preset. The honesty floor (Invariant 1):
+the depth scalars are computed with plain arithmetic from the depth
 grid — no LLM anywhere; the agent narrates the typed fields, never invents them.
 
 Tier separation (Invariant 5): the COG lands in the runs bucket (scheme-aware

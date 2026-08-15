@@ -167,7 +167,7 @@ async def model_asr_scenario(
         injection_months / recovery_months / n_cycles: cycle schedule controls.
             Demo defaults applied by the adapter when None.
         aquifer_k_ms / porosity / aquifer_sy: optional demo-aquifer overrides.
-        compute_class: FR-CE-3 compute class.
+        compute_class: compute class.
         pipeline_emitter: optional PipelineEmitter for live progress cards.
 
     Returns:
@@ -218,7 +218,7 @@ async def model_asr_scenario(
     # provenance-chain wave: structure the demo-aquifer caveat. Each aquifer knob
     # the caller left unset fell to a demo default, NOT site hydrogeology; a knob
     # the user supplied is user-provenance. The inject/recover rates are user
-    # inputs (reviewable). Built BEFORE the solve so the ADR 0107 gate can present
+    # inputs (reviewable). Built BEFORE the solve so the gate can present
     # + adjust them (what-was-approved == what-ran).
     provenance: list[SyntheticInput] = [
         SyntheticInput(param="injection_rate_m3_day", value=round(inj, 3),
@@ -248,7 +248,7 @@ async def model_asr_scenario(
                 param=_pname, basis="default_demo", note="demo cycle-schedule default",
             ))
 
-    # --- ADR 0107 two-mode input gate: review-before-run -----------------------
+    # --- two-mode input gate: review-before-run -----------------------
     # user_gated mode presents the resolved ASR inputs (rates + aquifer/schedule
     # defaults) for review/adjust BEFORE the MODFLOW solve; auto (session default)
     # + headless direct-call proceed with them labeled.
@@ -424,8 +424,8 @@ async def modflow_asr(
         recovery_rate_m3_day: recovery rate, POSITIVE magnitude (m^3/day). REQUIRED.
         injection_months / recovery_months / n_cycles: cycle schedule controls.
         aquifer_k_ms / porosity / aquifer_sy: optional demo-aquifer overrides.
-        compute_class: FR-CE-3 compute class. Default ``"standard"``.
-        input_mode: run-mode lever (ADR 0107). ``"user_gated"`` presents the
+        compute_class: compute class. Default ``"standard"``.
+        input_mode: run-mode lever. ``"user_gated"`` presents the
             resolved inputs (inject/recover rates, aquifer + cycle defaults) for
             review before the solve; ``"auto"`` (default) proceeds labeled.
 
@@ -437,7 +437,7 @@ async def modflow_asr(
         tool returns a typed error the agent narrates honestly  -  it never
         fabricates a well.
 
-    FR-DC-6: ``cacheable=False`` + ``ttl_class="live-no-cache"`` +
+    ``cacheable=False`` + ``ttl_class="live-no-cache"`` +
     ``source_class="workflow_dispatch"``  -  the cache shim is NOT invoked.
     """
     aoi = _coerce_optional_latlon(aoi_latlon)

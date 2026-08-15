@@ -1,6 +1,6 @@
 """Shared in-worker bed-bathymetry input surfacing for the TELEMAC wave modules.
 
-The emit-on-fetch router seam (ADR 0244) surfaces every AGENT-SIDE router fetch of
+The emit-on-fetch router seam surfaces every AGENT-SIDE router fetch of
 renderable data, but a bed sampled INSIDE a solver container never touches
 ``route()``. The ARTEMIS (agitation) + TOMAWAC (wave_field) workers write the
 lake-datum bed they solved on as ``bed_bathymetry.tif`` (a 4326 COG) next to the

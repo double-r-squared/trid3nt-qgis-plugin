@@ -1,4 +1,4 @@
-"""OSM buildings hooks (trigger wave, ADR 0084): Overpass polygon fetch + tags leg.
+"""OSM buildings hooks (trigger wave): Overpass polygon fetch + tags leg.
 
 fetch_buildings folds onto the Overpass mode (``build_request`` POST-per-mirror QL +
 a polygon decode), but its irreducible extra is a click-to-enrich TAGS SIDECAR: the

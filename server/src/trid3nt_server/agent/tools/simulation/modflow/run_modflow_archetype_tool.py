@@ -51,7 +51,7 @@ the adapter (surfaced here as a typed error envelope).
 Determinism boundary (Invariant 1): every narrated number comes from the typed
 LayerURI fields the postprocess computed  -  never free-generated.
 
-FR-DC-6: ``cacheable=False`` + ``ttl_class="live-no-cache"`` +
+``cacheable=False`` + ``ttl_class="live-no-cache"`` +
 ``source_class="workflow_dispatch"``  -  the cache shim is NOT invoked.
 """
 
@@ -145,7 +145,7 @@ ARCHETYPE_POSTPROCESS: dict[str, Any] = {
     # ground subsidence in cm (a positive scalar; the > 0 empty-result floor
     # applies).
     "land_subsidence": (postprocess_subsidence, "max_subsidence_cm"),
-    # ADR 0228: UZF+UZT vadose-zone breakthrough (LOCAL-ONLY; FLAT dual-model
+    # UZF+UZT vadose-zone breakthrough (LOCAL-ONLY; FLAT dual-model
     # deck, kept OFF the offload table). The deliverable is the base-of-column
     # breakthrough SERIES (chart-primary), so the headline is the
     # concentration_series presence, not a positive scalar (in _NON_SCALAR_HEADLINES
@@ -153,7 +153,7 @@ ARCHETYPE_POSTPROCESS: dict[str, Any] = {
     # yet crossed the half-source threshold (honest non-arrival narrated by the
     # composer), so the > 0 scalar floor would wrongly reject a slow column.
     "vadose_transport": (postprocess_vadose, "concentration_series"),
-    # ADR 0235: GWE heat transport (both injection_plume + ates modes ride this
+    # GWE heat transport (both injection_plume + ates modes ride this
     # one postprocess). The honesty headline is the peak temperature EXCESS above
     # ambient (a positive scalar; the > 0 floor applies to BOTH modes -- an ates
     # run's charged footprint always heats before recovery draws it down). The
@@ -208,7 +208,7 @@ async def run_modflow_archetype_job(
     Args:
         run_args: the assembled MODFLOW run args with ``archetype`` set and the
             per-archetype geometry fields populated.
-        compute_class: FR-CE-3 compute class (ignored for PRT archetypes).
+        compute_class: compute class (ignored for PRT archetypes).
 
     Returns:
         On success: the archetype's headline LayerURI subtype (a ``LayerURI`` so
@@ -331,7 +331,7 @@ async def run_modflow_archetype_job(
                 workdir=Path(staging.local_deck_dir).parent / "prt_manifest",
                 write=False,
                 archetype=archetype,
-                # ADR 0258: rebuild the SAME grid (structured | disv_quadrefined)
+                # rebuild the SAME grid (structured | disv_quadrefined)
                 # the staged GWF used so the PRT DISV grid matches its GWF field.
                 grid_type=getattr(run_args, "grid_type", "structured"),
                 well_location_latlon=run_args.well_location_latlon,
@@ -346,7 +346,7 @@ async def run_modflow_archetype_job(
                 ),
                 regional_gradient_x=getattr(run_args, "regional_gradient_x", None),
                 regional_gradient_y=getattr(run_args, "regional_gradient_y", None),
-                # ADR 0215: the WELLFIELD + transient + NHD RIV + kriged IC MUST be
+                # the WELLFIELD + transient + NHD RIV + kriged IC MUST be
                 # reconstructed identically here so the PRT phase reads the same
                 # prt_well_cells (release rings) + reversed per-period budget the
                 # staged GWF deck produced.
@@ -412,7 +412,7 @@ async def run_modflow_archetype_job(
             _pp_kwargs["pumping_rate_m3_day"] = abs(
                 float(getattr(_deck, "pumping_rate_m3_day", 0.0) or 0.0)
             )
-            # ADR 0215: per-well allocation + transient + NHD RIV narration. The
+            # per-well allocation + transient + NHD RIV narration. The
             # per-well specs (name/lat/lon/rate, deck index order) come from the
             # in-memory manifest so the postprocess can label which well captured
             # which particles from the "W{k}_" boundname prefix.

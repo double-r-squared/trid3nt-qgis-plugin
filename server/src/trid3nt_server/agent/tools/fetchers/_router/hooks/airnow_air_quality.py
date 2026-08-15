@@ -1,4 +1,4 @@
-"""airnow_air_quality hooks (tier-3 http_json, ADR 0056/0065): EPA AirNow current-hour
+"""airnow_air_quality hooks (tier-3 http_json/0065): EPA AirNow current-hour
 AQI observations (keyed).
 
 A single bounded-box GET folds onto the EXISTING http_json main-fetch path, zero new

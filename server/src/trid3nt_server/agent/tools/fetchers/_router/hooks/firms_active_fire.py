@@ -1,4 +1,4 @@
-"""firms_active_fire hooks (quick-folds wave, keyed CSV http_json, ADR 0079):
+"""firms_active_fire hooks (quick-folds wave, keyed CSV http_json):
 NASA FIRMS active-fire / thermal-anomaly detections, keyed by a MAP_KEY.
 
 FIRMS carries the key IN THE URL PATH (not a header), so ``build_request`` resolves

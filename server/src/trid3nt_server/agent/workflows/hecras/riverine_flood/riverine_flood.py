@@ -168,7 +168,7 @@ async def hecras_riverine_flood(
             inflow discharge in cfs. The worker derives the multiplier from the
             baseline peak, so a user (or a USGS-gauge / NWM peak) can pin the
             forcing to a real discharge. Overrides ``flow_scale``.
-        input_mode: run-mode lever (ADR 0107). ``"user_gated"`` presents the
+        input_mode: run-mode lever. ``"user_gated"`` presents the
             resolved flow forcing + the frozen-geometry note for review before the
             solve; ``"auto"`` (default) proceeds with them labeled.
 
@@ -181,7 +181,7 @@ async def hecras_riverine_flood(
         ``fallback_note``.
         On failure: dict with ``status="error"`` + ``error_code`` + ``error_message``.
 
-    FR-DC-6: ``cacheable=False``, ``ttl_class="live-no-cache"``,
+    ``cacheable=False``, ``ttl_class="live-no-cache"``,
     ``source_class="workflow_dispatch"`` -- cache shim not invoked.
     """
     # --- arg hardening (defensive; mirrors the other engine templates) -------- #
@@ -372,7 +372,7 @@ async def model_hecras_riverine_flood(
     emitter = current_emitter()
     begin_substeps(emitter, 3)  # run_solver + postprocess + publish
 
-    # --- Stage 1: the input-review gate (ADR 0107) ---------------------------- #
+    # --- Stage 1: the input-review gate ---------------------------- #
     # The physically dominant, otherwise-buried input is the FLOW forcing (the
     # multiplier or the derived peak) + the frozen-geometry basis. Surface both as
     # structured provenance so a demo default is never mistaken for a site study.

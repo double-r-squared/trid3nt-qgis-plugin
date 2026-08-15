@@ -66,9 +66,9 @@ overlay fill of 255 → factor 1.0).
 
 Cross-cutting invariants:
 - Invariant 2 (Deterministic workflows): preserves -- zero LLM calls.
-- FR-DC-6 (cacheable): honors -- ``cacheable=True``, ``ttl_class="static-30d"``,
+- (cacheable): honors -- ``cacheable=True``, ``ttl_class="static-30d"``,
   ``source_class="blended"``; the composite is fully determined by its inputs.
-- NFR-R-1 (resilience): preserves -- every failure surfaces as a typed
+- (resilience): preserves -- every failure surfaces as a typed
   ``BlendedCompositeError`` with a SCREAMING_SNAKE_CASE ``error_code``.
 """
 
@@ -105,8 +105,8 @@ class BlendedCompositeError(RuntimeError):
     """Raised when raster blending fails or an input cannot be fetched.
 
     ``error_code`` carries a SCREAMING_SNAKE_CASE code surfaced in the
-    pipeline strip (NFR-R-1 typed-error requirement). ``retryable`` follows the
-    FR-AS-11 convention so ``summarize_tool_result`` renders the envelope.
+    pipeline strip (typed-error requirement). ``retryable`` follows the
+    convention so ``summarize_tool_result`` renders the envelope.
 
     Codes:
     - ``BASE_DOWNLOAD_FAILED`` -- the base layer URI could not be staged.
@@ -528,7 +528,7 @@ def compute_blended_composite(
         uncovered by the overlay keep the base color). Pass to
         ``publish_layer``. layer_id/name derived like "Shaded <base>".
 
-    FR-CE-8: routed through ``read_through`` -- identical
+    routed through ``read_through`` -- identical
     ``(base_layer_uri, overlay_layer_uri, blend_mode, overlay_opacity)``
     calls reuse the cached composite (30-day TTL).
 

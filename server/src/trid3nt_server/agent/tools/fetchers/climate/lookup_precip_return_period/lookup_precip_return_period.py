@@ -59,9 +59,9 @@ class PrecipForcingUnavailableError(FetchError):
 #
 #   * NWS HDSC publishes the Precipitation Frequency Data Server (PFDS) as a
 #     point-query CSV endpoint at ``hdsc.nws.noaa.gov/cgi-bin/new/
-#     fe_text_mean.csv?lat=&lon=&data=depth&units=english&series=pds`` (ADR
-#     0158: the ORIGINAL ``/cgi-bin/hdsc/new/`` path 301-redirects here --
-#     live-reverified 2026-08-06 -- pointed at the final URL directly).
+#     fe_text_mean.csv?lat=&lon=&data=depth&units=english&series=pds`` (the
+#     ORIGINAL ``/cgi-bin/hdsc/new/`` path 301-redirects here -- pointed at
+#     the final URL directly).
 #     Live probe at (lat=26.6, lon=-81.9) -- Fort Myers FL -- returned an HTTP
 #     200 with a 1598-byte CSV: header rows naming "NOAA Atlas 14 Volume 9
 #     Version 2" + "Project area: Southeastern States", then a matrix of
@@ -85,7 +85,7 @@ _LOOKUP_PRECIP_RETURN_PERIOD_METADATA = AtomicToolMetadata(
     cacheable=True,
 )
 
-# ADR 0158: NWS HDSC retired /cgi-bin/hdsc/new/ in favor of /cgi-bin/new/ (live-
+# NWS HDSC retired /cgi-bin/hdsc/new/ in favor of /cgi-bin/new/ (live-
 # verified 2026-08-06: the old path 301-redirects to the new one). Point at the
 # final URL directly to save the extra round trip; ``requests.get`` still
 # follows redirects by default (allow_redirects=True, untouched below), so a
@@ -420,7 +420,7 @@ def _fetch_atlas2_precip_bytes(
     duration_label = _pick_duration_label(duration_hours)
     row_depths = [round(_depth_at(ari), 3) for ari in _ATLAS14_ARI_YEARS]
     body_lines = [
-        "NOAA Atlas 2 (Western US) -- design-storm fallback (job-0327)",
+        "NOAA Atlas 2 (Western US) -- design-storm fallback",
         f"Project area: {region}",
         f"{duration_label}:, " + ",".join(f"{d:.3f}" for d in row_depths),
     ]
@@ -470,7 +470,7 @@ def lookup_precip_return_period(
     ``hdsc.nws.noaa.gov/cgi-bin/new/fe_text_mean.csv``, parses the returned
     duration × ARI matrix, and returns the requested depth in inches. Input
     coordinates are snapped to Atlas 14's 1/120° (~30 arc-second) grid before
-    the cache key is computed (FR-DC-4 dedup). This is a point query, not a
+    the cache key is computed (dedup). This is a point query, not a
     raster -- it returns a scalar dict, not a ``LayerURI``. Tier-1 free, no
     API key, CONUS + Puerto Rico / US Virgin Islands only.
 
@@ -528,10 +528,10 @@ def lookup_precip_return_period(
     - Pair with: ``fetch_gcn250_curve_numbers`` or NLCD-derived CNs when
       converting depth → runoff volume via SCS CN method.
 
-    FR-CE-8: Routed through ``read_through`` with ``ttl_class="static-30d"``;
+    Routed through ``read_through`` with ``ttl_class="static-30d"``;
     cache key = SHA-256 of ``(lat-quantized, lon-quantized, return_period_years,
     duration_label)`` -- snapping ensures callers within the same 30 arc-second
-    cell dedup (FR-DC-4).
+    cell dedup.
     """
     if not isinstance(location, (tuple, list)) or len(location) != 2:
         raise BboxInvalidError(

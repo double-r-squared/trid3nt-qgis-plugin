@@ -1,4 +1,4 @@
-"""Mesh precondition gate -- "use this case's mesh?" (ADR 0200).
+"""Mesh precondition gate -- "use this case's mesh?".
 
 NATE's precondition-polymorphism design: mesh creation is an EXPLICIT user act
 (the standalone ``generate_mesh`` tool), never auto-guessed inside a model
@@ -14,7 +14,7 @@ that already exists in the active case:
   * no case mesh -> return ``None``; the template authors its own mesh as before.
 
 The gate rides the EXACT ``tool-payload-warning`` / pending-confirmation spine the
-input-review gate (ADR 0107) uses -- no new WS event, no new envelope, no plugin
+input-review gate uses -- no new WS event, no new envelope, no plugin
 change. Its semantics differ in ONE way: a decline here means "build a fresh mesh"
 (the run continues), NOT "cancel the run". In AUTO mode (session default) or a
 headless direct-call with no live emitter it applies the labeled default (USE the

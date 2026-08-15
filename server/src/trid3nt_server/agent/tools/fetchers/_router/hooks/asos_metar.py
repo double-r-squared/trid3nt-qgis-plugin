@@ -1,4 +1,4 @@
-"""asos_metar hooks (chained-resolution mode, ADR 0063/0065): Iowa State IEM
+"""asos_metar hooks (chained-resolution mode/0065): Iowa State IEM
 ASOS/METAR station observations.
 
 The station-observations shape folds onto the EXISTING resolve phase + main fetch,

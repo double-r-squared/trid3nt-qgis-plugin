@@ -1,5 +1,5 @@
 """Whole-object ZIP fetch -- the ONE shared step for the multi-file / DEFLATE-member
-family (ADR 0067).
+family.
 
 A ZIP member that is DEFLATE-compressed (GHSL tiles) or part of a multi-file
 sidecar set (TIGER shapefile: .shp/.dbf/.shx/.prj, an NHDPlus FileGDB directory)

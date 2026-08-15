@@ -15,7 +15,7 @@ flow-area MESH-preview vector layer (``layers[1]``, ``role="context"``,
 ``mesh_grid``) so the modeled domain renders beside the result (the M1/M2/M3 mesh
 paradigm; render-mesh-in-proofs norm).
 
-Honesty floor (invariant 1 / FR-AS-7): every depth scalar is computed with plain
+Honesty floor (invariant 1): every depth scalar is computed with plain
 arithmetic from the HDF -- no LLM anywhere. The COG carries a LOUD
 demonstration-geometry label so a Muncie what-if is never read as a user-AOI study.
 

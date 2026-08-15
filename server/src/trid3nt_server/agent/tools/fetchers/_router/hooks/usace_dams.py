@@ -1,8 +1,8 @@
-"""usace_dams hooks (tier-3 chained-resolution mode, ADR 0063/0066): USACE National
-Inventory of Dams points, offset-paged, KEYED (missing-key parity, ADR 0065).
+"""usace_dams hooks (tier-3 chained-resolution mode/0066): USACE National
+Inventory of Dams points, offset-paged, KEYED (missing-key parity).
 
-The wave-11 deferral (ADR 0059) was a credential-gated dual-endpoint with a non-maskable
-auth error + list IN() filters. Both fold onto the EXISTING hooks under the ADR 0065
+The wave-11 deferral was a credential-gated dual-endpoint with a non-maskable
+auth error + list IN filters. Both fold onto the EXISTING hooks under the
 keyed-source rule (never register a real key; the keyless path is the parity surface):
 ``build_request`` resolves the token (kwarg -> str secret_ref -> ``TRID3NT_USACE_NID_TOKEN``
 env), normalizes the hazard_potential / state / min_height filters into an ``IN (...)`` /
@@ -13,7 +13,7 @@ one irreducible pure step), and builds the page-1 query; ``next_page`` does offs
 KEYLESS path (no token resolves) -> the PUBLIC ESRI Living Atlas mirror -> byte-parity
 provable. The AUTHORITATIVE endpoint + the non-maskable auth-card path + the
 authoritative->mirror non-auth fallback are only reachable WITH a token, which this wave
-never registers: they are honestly BLOCKED-ON-KEY (ADR 0066 divergence), not blocked-on-mode.
+never registers: they are honestly BLOCKED-ON-KEY (divergence), not blocked-on-mode.
 All I/O stays router-owned.
 """
 

@@ -34,7 +34,7 @@ Determinism boundary (Invariant 1): every narrated number comes from the typed
 ``SeepageLayerURI`` / ``PlumeLayerURI`` fields the postprocess computed — never
 free-generated.
 
-FR-DC-6: ``cacheable=False`` + ``ttl_class="live-no-cache"`` +
+``cacheable=False`` + ``ttl_class="live-no-cache"`` +
 ``source_class="workflow_dispatch"`` — the cache shim is NOT invoked.
 """
 
