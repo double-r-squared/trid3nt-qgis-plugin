@@ -29,6 +29,7 @@ __all__ = [
     "TELEMAC_WAVE_STYLE_PRESET",
     "TELEMAC_AGITATION_STYLE_PRESET",
     "TELEMAC3D_STRATIFICATION_STYLE_PRESET",
+    "TELEMAC_COASTAL_DEPTH_STYLE_PRESET",
     "TelemacDyeLayerURI",
     "TelemacSedimentLayerURI",
     "TelemacWseLayerURI",
@@ -36,7 +37,16 @@ __all__ = [
     "TelemacWaveLayerURI",
     "ArtemisAgitationLayerURI",
     "Telemac3dLayerURI",
+    "TelemacCoastalLayerURI",
 ]
+
+#: Style preset for the coastal tidal/surge PEAK-INUNDATION-DEPTH raster (ADR
+#: 0259). A DISTINCT continuous key so ``export_case_to_qgis`` maps it to the
+#: coastal result SELAFIN mesh sibling (``res_coastal.slf``) for the rising-tide
+#: animation without colliding with the dye/WSE/wave/agitation/3D presets. The
+#: layer carries a data-driven ``legend`` so the real depth range renders
+#: (additive / legend-drives-render, same as the other TELEMAC layers).
+TELEMAC_COASTAL_DEPTH_STYLE_PRESET: str = "continuous_coastal_inundation_depth"
 
 #: Style preset for the TELEMAC-3D stratified / 3D-hydrodynamics surface (or
 #: bottom) field raster (ADR 0241). A DISTINCT continuous key so
@@ -444,5 +454,60 @@ class Telemac3dLayerURI(LayerURI):
     nplan: int | None = Field(default=None, ge=0)
     non_hydrostatic: bool | None = Field(default=None)
     wind_speed_mps: float | None = Field(default=None, ge=0.0)
+    mesh_size_m: float | None = Field(default=None, gt=0.0)
+    mesh_resolution_label: str | None = Field(default=None)
+
+
+class TelemacCoastalLayerURI(LayerURI):
+    """A ``LayerURI`` for a TELEMAC-2D coastal tidal/surge PEAK-INUNDATION-DEPTH
+    field (ADR 0259).
+
+    The storm-tide analogue of the other TELEMAC layers: an open-water coastal
+    domain (real NOAA DEM_all topobathy) with ONE seaward liquid boundary driven
+    in time by a NOAA CO-OPS / GTSM water-level series through the LIQUID
+    BOUNDARIES FILE (SL(1)); SAINT-VENANT + TIDAL FLATS wetting/drying floods the
+    low coast as the boundary stage rises. The primary artifact is the per-node
+    MAX-over-time WATER DEPTH (peak inundation depth) COG. Extends ``LayerURI``
+    field-for-field and adds the storm-tide scalars the agent cites rather than
+    invents (invariant 1, FR-AS-7):
+
+        peak_depth_m: peak water depth anywhere in the domain over the run, m
+            (>= 0) -- the deepest inundation the tide/surge produced.
+        flooded_land_km2: newly-inundated LAND area, km^2 (>= 0) -- mesh cells
+            dry at t0 (bed above the initial water line) but wet at peak stage.
+            This is THE discriminant: a surge series floods far more land than the
+            calm astronomical tide over the SAME domain.
+        wet_area_km2: OPTIONAL total wetted area at peak stage, km^2 (>= 0).
+        peak_wl_m: OPTIONAL peak free-surface water level over wet nodes, m
+            (the crest stage reached).
+        sl_peak_m: OPTIONAL peak boundary forcing SL(1) the run was driven with,
+            m -- the ocean water level the agent narrates, never invents.
+        series_type: which series drove the boundary (``observed`` storm surge /
+            ``prediction`` astronomical tide) -- the A/B question class.
+        series_datum / datum_offset_m: OPTIONAL tide-series vertical datum label
+            (e.g. ``"MLLW"``) + the labeled offset applied to reconcile it with
+            the DEM (sea-level) datum -- never invented, always surfaced.
+        station_id / station_name: OPTIONAL CO-OPS station the series came from.
+        ocean_edge: OPTIONAL which bbox edge carried the seaward boundary.
+        mesh_size_m: OPTIONAL grid node spacing (m, > 0) the solve used.
+        mesh_resolution_label: OPTIONAL human label for the resolution choice.
+
+    ``layer_type`` is ``"raster"`` (the peak-depth COG); the rising-tide animation
+    plays from the coastal result SELAFIN mesh sibling that ``export_case_to_qgis``
+    discovers via ``TELEMAC_COASTAL_DEPTH_STYLE_PRESET``. The raster carries a
+    data-driven ``legend``.
+    """
+
+    peak_depth_m: float = Field(ge=0.0)
+    flooded_land_km2: float = Field(ge=0.0)
+    wet_area_km2: float | None = Field(default=None, ge=0.0)
+    peak_wl_m: float | None = Field(default=None)
+    sl_peak_m: float | None = Field(default=None)
+    series_type: str | None = Field(default=None)
+    series_datum: str | None = Field(default=None)
+    datum_offset_m: float | None = Field(default=None)
+    station_id: str | None = Field(default=None)
+    station_name: str | None = Field(default=None)
+    ocean_edge: str | None = Field(default=None)
     mesh_size_m: float | None = Field(default=None, gt=0.0)
     mesh_resolution_label: str | None = Field(default=None)

@@ -393,6 +393,7 @@ PRIMARY_CATEGORY: dict[str, str] = {
     "telemac_river_dye": "simulation_modeling",
     "tomawac_wave_field": "simulation_modeling",
     "artemis_harbor_agitation": "simulation_modeling",
+    "coastal_tidal_surge": "simulation_modeling",
     "telemac3d_stratified_flow": "simulation_modeling",
     "telemac_do_sag": "simulation_modeling",
     "telemac_rain_on_grid": "simulation_modeling",
@@ -760,6 +761,10 @@ SECONDARY_CATEGORIES: dict[str, tuple[str, ...]] = {
     "tomawac_wave_field": ("coastal",),
     # ARTEMIS harbour-agitation is a coastal / harbour-engineering question class.
     "artemis_harbor_agitation": ("coastal",),
+    # Coastal tidal/surge inundation (ADR 0259) is a coastal question class (it
+    # floods a shoreline from a CO-OPS gauge series) cross-listed into the coastal
+    # lane alongside its simulation_modeling primary.
+    "coastal_tidal_surge": ("coastal",),
     # TELEMAC-3D stratified flow spans simulation_modeling (it runs the telemac3d
     # solver) AND hydrology (lake/reservoir thermal stratification + turnover is a
     # limnology question reached from the water lane); a Great Lakes AOI also sits

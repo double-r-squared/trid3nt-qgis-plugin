@@ -50,6 +50,7 @@ EXPECTED_TEMPLATES = {
     "tomawac_wave_field",
     "telemac3d_stratified_flow",
     "artemis_harbor_agitation",  # ADR 0237: ARTEMIS phase-resolving harbour-agitation (diffraction/resonance/shoal; Great Lakes real-bathy live V&V)
+    "coastal_tidal_surge",  # ADR 0259: TELEMAC-2D coastal tidal/surge inundation (observed surge vs astronomical prediction; CO-OPS series through the LIQUID BOUNDARIES FILE; Apalachicola/Michael 220x live V&V)
     "telemac_rain_on_grid",  # ADR 0196: SCS-CN rainfall-runoff on a delineated watershed (Coweeta Creek NC live V&V)
     "hecras_riverine_flood",  # engine #11 (ADR 0109; renamed ADR 0120): HEC-RAS riverine-flood template (v1 geometry: Muncie)
     "hecras_levee_breach",  # engine #11 second archetype (ADR 0125): HEC-RAS levee-breach template (v1 geometry: Muncie leveed floodplain)

@@ -118,3 +118,60 @@ peak-inundation field to a COG through the postprocess/publish_layer path
 corpus.yaml, retrieve_visible_tools) and the four-slice law. The harmonic-tidal
 path (TPXO/FES constituents) remains STOP (no constituent fetcher); the CO-OPS /
 GTSM stage-series path is the shipped substrate.
+
+## Follow-on landed (2026-08-14): the registered `coastal_tidal_surge` composer
+
+The scoped productionization above shipped. `tidal_storm_surge_boundary_forcing`
+-> LANDED.
+
+Built (agent side, no worker image change - the image already baked the
+substrate):
+
+- `TelemacCoastalLayerURI` + `TELEMAC_COASTAL_DEPTH_STYLE_PRESET`
+  (`telemac_contracts.py`): the typed peak-inundation-depth layer carrying
+  `peak_depth_m` / `flooded_land_km2` / `wet_area_km2` / `sl_peak_m` /
+  `series_type` / datum + station provenance (invariant 1 - the agent narrates
+  these, never free-generates).
+- `postprocess_coastal` (`postprocess_telemac.py`): reads `res_coastal.slf`, takes
+  the per-node MAX-over-time WATER DEPTH masked to wet nodes, adds back the UTM
+  origin (the coastal SELAFIN carries LOCAL mesh coordinates - `domain_bbox` is
+  required to georeference, mirroring the build's bed COG), reprojects to 4326,
+  rasterizes to `coastal_depth_max.tif`, and folds in the worker's flooded-LAND
+  km^2.
+- `telemac_coastal` solver (`run_telemac.py`): the coastal `LocalSolverSpec` +
+  `_classify_coastal_exit` (same image + volume-mount as the wave/3D legs), a
+  DISTINCT solver name so the run listing separates a coastal run.
+- `coastal_tidal_surge` composer template (`workflows/telemac/coastal_tidal_surge/`):
+  ONE question-class tool, two series types (`observed` storm surge /
+  `prediction` astronomical tide). Fetches the CO-OPS series THROUGH the router
+  (`fetch_noaa_coops_tides`, `purpose=` declared so the emit-on-fetch seam
+  surfaces the gauge as a role=context input), reads the picked station's inline
+  `time_series_csv` -> the `manifest['coastal']` water-level series, dispatches
+  the LOCAL-DOCKER solve, postprocesses to the depth COG, and surfaces the
+  in-worker NOAA bed COG via the shared `_bed_input` helper (no new emission call
+  site - the ADR 0244 allowlist is unchanged). Window / station / datum ride the
+  input-review gate with labeled defaults (the Apalachicola / Michael demo case).
+
+Registry pins: `categories.py` (simulation_modeling + coastal cross-list),
+`tools/__init__.py`, `test_catalog_surfacing` (255 -> 256, x4 + tally),
+`test_door_dissolution` EXPECTED_TEMPLATES, co-located `corpus.yaml`
+(model-free `retrieve_visible_tools` 10/10 top-8).
+
+## Live evidence (through the REGISTERED tool)
+
+`TOOL_REGISTRY["coastal_tidal_surge"].fn` direct-call driver, Apalachicola Bay
+bbox (-85.02,29.69,-84.90,29.80), CO-OPS 8728690, the Hurricane Michael window,
+real NOAA series through the router:
+
+- A = OBSERVED surge (run `01M01A20GC64RFGSQE47E4FPZ6`): status=ok, ocean SL(1)
+  peak 2.645 m -> flooded LAND 14.51 km^2, peak depth 9.33 m; the depth COG
+  publishes + georeferences onto the AOI (bbox `[-85.021, 29.687, -84.899,
+  29.803]`).
+- B = astronomical PREDICTION (run `01M01A45PYQAX69VV12M2HKP3K`): SL(1) peak
+  0.414 m -> flooded LAND 0.00 km^2.
+
+The observed surge floods the low marsh the calm astronomical tide leaves dry -
+the 220x-class discriminant reproduced through the product path (the SL(1) peaks
+2.645 / 0.414 m match the substrate proof exactly). Proof:
+`docs/proof/templates/coastal_tidal_surge.png` (ESRI World Imagery + mesh
+wireframe + filled peak-inundation-depth cells, A vs B).

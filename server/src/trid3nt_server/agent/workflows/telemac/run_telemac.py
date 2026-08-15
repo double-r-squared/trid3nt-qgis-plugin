@@ -491,3 +491,98 @@ def register_telemac3d_solver() -> None:
 
 
 register_telemac3d_solver()
+
+
+# --------------------------------------------------------------------------- #
+# COASTAL tidal/surge inundation solver (ADR 0259) -- SAME worker image, a
+# manifest['coastal'] block routing the entrypoint to the coastal pipeline
+# (telemac_coastal_build) through the baked telemac2d binary -- an open-water
+# domain with ONE seaward liquid boundary forced by a LIQUID BOUNDARIES FILE.
+# A DISTINCT solver name so the run listing / showcase separates a coastal
+# tidal/surge run from every other leg and the completion carries coastal keys.
+# --------------------------------------------------------------------------- #
+TELEMAC_COASTAL_SOLVER_NAME: str = "telemac_coastal"
+
+#: Coastal metrics keys folded into completion.json.
+_COASTAL_COMPLETION_METRIC_KEYS: tuple[str, ...] = (
+    "correct_end", "mode", "result_slf", "geometry_slf", "cli", "cas",
+    "npoin", "nelem", "nx", "ny", "utm_epsg", "dx_m", "coarsened",
+    "ocean_edge", "n_ocean_nodes", "n_wet_nodes", "depth_max_m", "topo_max_m",
+    "bathy_source", "init_wl_m", "duration_s", "series_datum", "datum_offset_m",
+    "liqbnd_file", "liqbnd_rows", "liqbnd_col", "sl_min_m", "sl_max_m", "t_end_s",
+    "bed_cog", "bed_cog_source", "ntimestep", "peak_wl_max_m", "final_wl_max_m",
+    "flooded_land_km2", "wet_peak_km2", "n_newly_flooded_nodes", "wall_s",
+    "error_code",
+)
+
+
+def _classify_coastal_exit(
+    rundir: Path, exit_code: int
+) -> tuple[str, int, str | None, dict[str, Any]]:
+    """Resolve coastal-run status from telemac_metrics.json (dye classify analogue)."""
+    metrics: dict[str, Any] = {}
+    metrics_path = rundir / _METRICS_FILENAME
+    try:
+        if metrics_path.exists():
+            loaded = json.loads(metrics_path.read_text(encoding="utf-8"))
+            if isinstance(loaded, dict):
+                metrics = loaded
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("coastal classify_exit: metrics read failed %s: %s", metrics_path, exc)
+    extra: dict[str, Any] = {
+        k: metrics[k] for k in _COASTAL_COMPLETION_METRIC_KEYS if k in metrics
+    }
+    correct_end = bool(metrics.get("correct_end"))
+    if exit_code != 0:
+        status = "error"
+        error: str | None = (
+            metrics.get("error") or f"telemac_coastal exited with non-zero code {exit_code}")
+    elif metrics and not correct_end:
+        status, exit_code = "error", 2
+        error = metrics.get("error") or "TELEMAC-2D coastal did not reach CORRECT END OF RUN"
+    else:
+        status, exit_code, error = "ok", 0, None
+    return status, exit_code, error, extra
+
+
+def coastal_local_spec() -> "Any":
+    """Build the COASTAL ``LocalSolverSpec`` -- same image + volume mount as the
+    river-dye/tomawac/artemis/3D specs (identical build_argv), a coastal classify_exit."""
+    import os
+    from trid3nt_server.agent.tools.simulation.solver.solver import LOCAL_DOCKER_WORKFLOW_NAME, LocalSolverSpec
+
+    image = os.environ.get("TRID3NT_TELEMAC_IMAGE") or DEFAULT_TELEMAC_IMAGE
+
+    def build_argv(run_id: str, rundir: Path, args: list[str]) -> list[str]:
+        return [
+            "docker", "run", "--rm", "--name", run_id,
+            "-v", f"{rundir}:/data", "-w", "/data", image, *args,
+        ]
+
+    return LocalSolverSpec(
+        solver=TELEMAC_COASTAL_SOLVER_NAME,
+        workflow_name=LOCAL_DOCKER_WORKFLOW_NAME,
+        args_key="telemac_args",
+        build_argv=build_argv,
+        stdout_name="coastal.stdout",
+        stderr_name="coastal.stderr",
+        stdout_uri_field="coastal_stdout_uri",
+        stderr_uri_field="coastal_stderr_uri",
+        exec_kind="docker",
+        classify_exit=_classify_coastal_exit,
+    )
+
+
+def register_coastal_solver() -> None:
+    """Register ``'telemac_coastal'`` in the solver + local-spec registries."""
+    from trid3nt_server.agent.tools.simulation.solver.solver import (
+        LOCAL_DOCKER_WORKFLOW_NAME,
+        SOLVER_WORKFLOW_REGISTRY,
+        register_local_solver_spec,
+    )
+
+    SOLVER_WORKFLOW_REGISTRY.setdefault(TELEMAC_COASTAL_SOLVER_NAME, LOCAL_DOCKER_WORKFLOW_NAME)
+    register_local_solver_spec(TELEMAC_COASTAL_SOLVER_NAME, coastal_local_spec)
+
+
+register_coastal_solver()

@@ -42,12 +42,14 @@ from trid3nt_contracts.telemac_contracts import (
     TELEMAC3D_STRATIFICATION_STYLE_PRESET,
     TELEMAC_AGITATION_STYLE_PRESET,
     TELEMAC_BED_EVOLUTION_STYLE_PRESET,
+    TELEMAC_COASTAL_DEPTH_STYLE_PRESET,
     TELEMAC_DO_STYLE_PRESET,
     TELEMAC_DYE_STYLE_PRESET,
     TELEMAC_WAVE_STYLE_PRESET,
     TELEMAC_WSE_STYLE_PRESET,
     ArtemisAgitationLayerURI,
     Telemac3dLayerURI,
+    TelemacCoastalLayerURI,
     TelemacDoLayerURI,
     TelemacDyeLayerURI,
     TelemacSedimentLayerURI,
@@ -69,6 +71,7 @@ __all__ = [
     "postprocess_tomawac",
     "postprocess_artemis",
     "postprocess_telemac3d",
+    "postprocess_coastal",
     "read_selafin",
     "TELEMAC_WAVE_STYLE_PRESET",
     "TELEMAC_AGITATION_STYLE_PRESET",
@@ -2169,3 +2172,230 @@ def postprocess_telemac3d(
         run_id, flow_mode, metric, s_min, s_max, b_min, b_max, s_uri, b_uri,
     )
     return [surface_layer, bottom_layer], metrics
+
+
+# --------------------------------------------------------------------------- #
+# Coastal tidal/surge (ADR 0259): the PEAK-INUNDATION-DEPTH COG + flooded area.
+# --------------------------------------------------------------------------- #
+def postprocess_coastal(
+    slf_path: str | Path,
+    *,
+    run_id: str,
+    utm_epsg: int,
+    domain_bbox: Sequence[float],
+    reach_name: str = "coast",
+    worker_metrics: dict[str, Any] | None = None,
+    runs_bucket: str | None = None,
+    target_ground_res_m: float = 30.0,
+) -> tuple[list[TelemacCoastalLayerURI], dict[str, Any]]:
+    """Rasterize a solved COASTAL result into ONE peak-inundation-DEPTH COG.
+
+    The storm-tide analogue of :func:`postprocess_tomawac`: reads ``slf_path``
+    (``res_coastal.slf``), takes the per-node MAX-over-time WATER DEPTH (peak
+    inundation depth) masked to wet nodes, reprojects the mesh ``utm_epsg`` ->
+    EPSG:4326, rasterizes onto an adaptive 4326 grid clipped to the wet domain,
+    writes + uploads ONE COG (``coastal_depth_max.tif``), and returns
+    ``([TelemacCoastalLayerURI], metrics)``. The rising-tide animation plays from
+    the coastal result SELAFIN mesh sibling ``export_case_to_qgis`` discovers via
+    ``TELEMAC_COASTAL_DEPTH_STYLE_PRESET``.
+
+    The coastal worker writes LOCAL (origin-shifted) mesh coordinates into the
+    result SELAFIN, so ``domain_bbox`` (the 4326 AOI the domain was built over) is
+    REQUIRED to recover the UTM origin ``(min easting, min northing)`` added back
+    before the ``utm_epsg`` -> 4326 reprojection -- exactly as the coastal build
+    georeferences its bed. Without it the COG would land at the UTM false-origin.
+
+    The flooded-LAND discriminant (newly-inundated area, km^2) is computed inside
+    the worker (dry-at-t0 land that goes wet at peak stage) and folded in from
+    ``worker_metrics`` -- the A/B storm-surge-vs-calm-tide signal. Honesty floor
+    (invariant 1): every depth/area scalar is plain arithmetic over the field --
+    no LLM.
+
+    Raises ``PostprocessTelemacError`` on any read / rasterize / COG failure.
+    """
+    try:
+        import numpy as np
+        from pyproj import Transformer  # noqa: F401
+    except Exception as exc:  # noqa: BLE001
+        raise PostprocessTelemacError(
+            "TELEMAC_DEPENDENCY_MISSING",
+            message=f"numpy/pyproj unavailable for coastal postprocess: {exc}",
+        ) from exc
+
+    slf = Path(slf_path)
+    try:
+        mesh = read_selafin(slf)
+    except Exception as exc:  # noqa: BLE001
+        raise PostprocessTelemacError(
+            "TELEMAC_OUTPUT_READ_FAILED",
+            message=f"could not parse SELAFIN {slf.name}: {exc}",
+            details={"slf": str(slf)},
+        ) from exc
+
+    import numpy as np
+
+    depth_var = _pick_named_var(mesh["varnames"], _DEPTH_VAR_KEYS, "H")
+    if depth_var is None or mesh["data"].get(depth_var) is None \
+            or mesh["data"][depth_var].size == 0:
+        raise PostprocessTelemacError(
+            "TELEMAC_OUTPUT_EMPTY",
+            message=f"no WATER DEPTH variable / no time steps in {slf.name} "
+            f"(vars={mesh['varnames']})",
+            details={"slf": str(slf), "varnames": mesh["varnames"]},
+        )
+
+    depth = np.asarray(mesh["data"][depth_var])          # (nframes, npoin), metres
+    times = np.asarray(mesh["times"])
+    x_utm = np.asarray(mesh["x"])
+    y_utm = np.asarray(mesh["y"])
+
+    # per-node peak inundation depth over ONLY the wet frames; never-wet -> NaN.
+    import warnings
+
+    wet = depth > TELEMAC_WSE_WET_DEPTH_M
+    masked = np.where(wet, depth, np.nan)
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore", category=RuntimeWarning)
+        node_peak = np.nanmax(masked, axis=0) if masked.shape[0] else np.full(
+            x_utm.size, np.nan)
+    finite = np.isfinite(node_peak)
+    if not finite.any():
+        raise PostprocessTelemacError(
+            "TELEMAC_OUTPUT_EMPTY",
+            message=f"no wet node in {slf.name}: WATER DEPTH never exceeded "
+            f"{TELEMAC_WSE_WET_DEPTH_M} m anywhere (dry solve?)",
+            details={"slf": str(slf), "wet_depth_m": TELEMAC_WSE_WET_DEPTH_M},
+        )
+    peak_depth = float(np.nanmax(node_peak[finite]))
+
+    from pyproj import Transformer
+
+    # the coastal SELAFIN carries LOCAL (0-origin) mesh coordinates; add back the
+    # UTM origin (min easting/northing over the AOI corners, matching the build)
+    # before reprojecting, else the COG lands at the UTM false-origin.
+    if not (domain_bbox is not None and len(domain_bbox) == 4):
+        raise PostprocessTelemacError(
+            "TELEMAC_OUTPUT_READ_FAILED",
+            message="coastal postprocess needs the 4326 domain_bbox to georeference "
+            "the local-coordinate mesh.",
+        )
+    fwd = Transformer.from_crs(4326, int(utm_epsg), always_xy=True)
+    cx0, cy0 = fwd.transform(float(domain_bbox[0]), float(domain_bbox[1]))
+    cx1, cy1 = fwd.transform(float(domain_bbox[2]), float(domain_bbox[3]))
+    x_org, y_org = min(cx0, cx1), min(cy0, cy1)
+    back = Transformer.from_crs(int(utm_epsg), 4326, always_xy=True)
+    lon, lat = back.transform(x_utm + x_org, y_utm + y_org)
+    lon = np.asarray(lon)
+    lat = np.asarray(lat)
+
+    pad = 0.0009
+    bbox = (
+        float(lon.min() - pad), float(lat.min() - pad),
+        float(lon.max() + pad), float(lat.max() + pad),
+    )
+    shape = _grid_shape(bbox, target_ground_res_m)
+    clip_dist_deg = 2.0 * max(
+        (bbox[2] - bbox[0]) / shape[1], (bbox[3] - bbox[1]) / shape[0])
+    try:
+        # only wet nodes carry a finite depth; wet_floor keeps the shallow rim.
+        grid = _rasterize_nodes_to_grid(
+            lon[finite], lat[finite], node_peak[finite], bbox, shape,
+            clip_dist_deg, wet_floor=TELEMAC_WSE_WET_DEPTH_M)
+    except Exception as exc:  # noqa: BLE001
+        raise PostprocessTelemacError(
+            "TELEMAC_OUTPUT_READ_FAILED",
+            message=f"coastal depth rasterization failed: {exc}",
+        ) from exc
+
+    from rasterio.transform import from_bounds
+
+    transform = from_bounds(bbox[0], bbox[1], bbox[2], bbox[3], shape[1], shape[0])
+    try:
+        cog = cog_io.write_cog_4326_from_grid(
+            grid, src_crs="EPSG:4326", src_transform=transform,
+            reproject=False, crs_roundtrip_guard=True,
+            dst_suffix="_coastal_depth_4326.tif",
+        )
+    except CogIoError as exc:
+        raise _reraise_cogio(exc) from exc
+    try:
+        uri = cog_io.upload_cog(
+            cog, run_id, runs_bucket,
+            dest_filename="coastal_depth_max.tif",
+            content_type="image/tiff", gs_backend="fsspec",
+            gs_fallback_to_file=False, runs_bucket_default=RUNS_BUCKET_DEFAULT,
+            log_label="TELEMAC coastal depth COG",
+        )
+    except CogIoError as exc:
+        raise _reraise_cogio(exc) from exc
+    finally:
+        cog_io.safe_unlink(cog)
+
+    wm = worker_metrics or {}
+    flooded_land_km2 = float(wm.get("flooded_land_km2") or 0.0)
+    wet_area_km2 = wm.get("wet_peak_km2")
+    peak_wl_m = wm.get("peak_wl_max_m")
+    sl_peak_m = wm.get("sl_max_m")
+    series_type = wm.get("series_type")
+    ocean_edge = wm.get("ocean_edge")
+
+    vmax = round(max(peak_depth, TELEMAC_WSE_WET_DEPTH_M), 4)
+    legend = LegendKey(
+        kind="continuous", colormap="YlGnBu", vmin=0.0, vmax=vmax, units="m",
+        label="Peak inundation depth (m)",
+    )
+    honesty = (
+        "Coastal tidal/surge inundation (TELEMAC-2D SAINT-VENANT + TIDAL FLATS): "
+        "peak WATER DEPTH over the run, an open-water domain driven at the seaward "
+        "boundary by a NOAA CO-OPS / GTSM water-level series through the LIQUID "
+        "BOUNDARIES FILE. A planning-grade inundation screening (real topobathy + "
+        "observed stage), not a calibrated hindcast; the tide datum is reconciled "
+        "to the DEM by a labeled offset."
+    )
+    layer = TelemacCoastalLayerURI(
+        layer_id=f"telemac-coastal-depth-{run_id}",
+        name=f"Peak inundation depth ({reach_name})",
+        layer_type="raster",
+        uri=uri,
+        style_preset=TELEMAC_COASTAL_DEPTH_STYLE_PRESET,
+        role="primary",
+        units="m",
+        bbox=bbox,
+        legend=legend,
+        fallback_note=honesty,
+        peak_depth_m=round(peak_depth, 4),
+        flooded_land_km2=round(flooded_land_km2, 5),
+        wet_area_km2=round(float(wet_area_km2), 5) if wet_area_km2 is not None else None,
+        peak_wl_m=round(float(peak_wl_m), 4) if peak_wl_m is not None else None,
+        sl_peak_m=round(float(sl_peak_m), 4) if sl_peak_m is not None else None,
+        series_type=series_type,
+        series_datum=wm.get("series_datum"),
+        datum_offset_m=wm.get("datum_offset_m"),
+        station_id=wm.get("station_id"),
+        station_name=wm.get("station_name"),
+        ocean_edge=ocean_edge,
+        mesh_size_m=wm.get("dx_m"),
+        mesh_resolution_label=(
+            f"real NOAA DEM_all topobathy grid {wm.get('dx_m', target_ground_res_m):g} m"
+            + (" (coarsened under node budget)" if wm.get("coarsened") else "")),
+    )
+    metrics: dict[str, Any] = {
+        "depth_var": depth_var.strip(),
+        "peak_depth_m": round(peak_depth, 4),
+        "flooded_land_km2": round(flooded_land_km2, 5),
+        "n_frames": int(times.size),
+        "n_wet_nodes": int(finite.sum()),
+        "npoin": int(mesh["npoin"]),
+        "nelem": int(mesh["nelem"]),
+        "utm_epsg": int(utm_epsg),
+        "bbox": list(bbox),
+        "crs": "EPSG:4326",
+        "honesty_label": honesty,
+    }
+    logger.info(
+        "postprocess_coastal run_id=%s depth_var=%s peak_depth=%.4g m "
+        "flooded_land=%.4g km^2 n_wet=%d/%d -> %s",
+        run_id, depth_var.strip(), peak_depth, flooded_land_km2,
+        int(finite.sum()), int(x_utm.size), uri,
+    )
+    return [layer], metrics

@@ -709,6 +709,14 @@ from ..workflows.telemac.wave_field.wave_field import tomawac_wave_field as _tom
 # through the baked artemis binary; the phase-resolving complement to the TOMAWAC
 # spectral tier.
 from ..workflows.telemac.agitation.agitation import artemis_harbor_agitation as _artemis_harbor_agitation  # noqa: E402,F401 - ARTEMIS agitation front (engine=telemac, tier=template)
+# coastal_tidal_surge TEMPLATE (engine="telemac", tier="template"), workflows/
+# telemac/coastal_tidal_surge/: the coastal tidal/surge inundation front (ADR
+# 0259). ONE question-class tool, two series types (observed storm surge /
+# astronomical prediction); a real-topobathy open-water domain with ONE seaward
+# liquid boundary driven by a NOAA CO-OPS series through the LIQUID BOUNDARIES
+# FILE. Physics proven through the baked telemac2d binary (Apalachicola / Michael
+# 220x); the storm-tide complement to the SFINCS coastal screening.
+from ..workflows.telemac.coastal_tidal_surge.coastal_tidal_surge import coastal_tidal_surge as _coastal_tidal_surge  # noqa: E402,F401 - coastal tidal/surge front (engine=telemac, tier=template)
 # telemac3d_stratified_flow TEMPLATE (engine="telemac", tier="template"),
 # workflows/telemac/stratified_flow/: the TELEMAC-3D three-dimensional baroclinic
 # Navier-Stokes engine (ADR 0241) - the one genuinely NEW solver leg in the family.
