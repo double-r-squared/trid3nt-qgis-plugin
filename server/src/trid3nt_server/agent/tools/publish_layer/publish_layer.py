@@ -1164,16 +1164,14 @@ def _benign_vector_noop(layer_uri: str, layer_id: str) -> str:
 #            published layer must outlive cache eviction).
 #   key    : ``case-data/<case_id>/<layer_id>.geojson``
 #   asset  : the returned ``s3://<runs_bucket>/case-data/<case_id>/<layer_id>.geojson``
-#            URI - the DISPLAY face (resolved to a served/pre-signed URL by the
-#            cold-view path, exactly like the case-view snapshot).
+#            URI - the DISPLAY face the QGIS plugin reads for the vector layer.
 #   faces  : observe_published_layer(layer_id, gcs_uri=<s3 .fgb DATA>,
 #            wms_url=<s3 .geojson DISPLAY>) - the GeoJSON never displaces the
 #            data uri (mirrors the raster tile-template / WMS branches).
 # --------------------------------------------------------------------------- #
 
 #: Object-key prefix for durable per-Case vector GeoJSON assets in the runs
-#: bucket. Single seam so this writer and the (future) cold-view materializer
-#: name the object identically. Mirrors ``persistence.CASE_VIEWS_PREFIX``.
+#: bucket. Single seam so the writer and any reader name the object identically.
 DURABLE_CASE_DATA_PREFIX: str = "case-data"
 
 

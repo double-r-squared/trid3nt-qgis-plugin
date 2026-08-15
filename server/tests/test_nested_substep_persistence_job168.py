@@ -4,7 +4,7 @@ The live nested sub-step cards (commit 256a587) surface a composer's internal
 atomic-tool calls (``fetch_*`` / deck build / ``run_solver`` / ``postprocess_*`` /
 ``publish_layer``) as CHILD rows under the top-level workflow card, driven by
 wire-only ``pipeline-state`` envelopes. Those were LOST on Case reopen and on the
-box-off cold view. This suite proves the remaining work: the children now PERSIST
+reopen. This suite proves the remaining work: the children now PERSIST
 and replay READ-ONLY exactly like every other Case datum.
 
 Drives the REAL server seams (no Gemini, no Playwright) against file-backed
@@ -15,9 +15,6 @@ persistence:
   ``children`` survive a ``get_session_state`` round-trip (warm reopen);
 - the parent's own tool-io (raw_args / function_response) is unchanged and the
   children ride alongside it;
-- the BOX-OFF COLD VIEW: ``build_case_view_snapshot`` (the exact dict the
-  signer-Lambda hands a cold browser from S3) carries the SAME children, additive
-  JSON, no re-execution;
 - a FAILED parent still nests its children (a successful fetch then a failed
   solve);
 - a plain tool with NO substeps persists ``children == None`` (every pre-task-168
@@ -35,7 +32,6 @@ from trid3nt_server.persistence import make_file_persistence
 from trid3nt_server.emission.pipeline_emitter import current_emitter, substep, begin_substeps
 from trid3nt_server.agent.tools import RegisteredTool
 from trid3nt_contracts.case import (
-    CaseChatMessage,
     CaseCommandEnvelopePayload,
     PersistedSubStepRecord,
     ToolCardRecord,
@@ -199,44 +195,6 @@ async def test_complete_parent_persists_ordered_children(
 # --------------------------------------------------------------------------- #
 # 2. BOX-OFF COLD VIEW: the case-view snapshot carries the children unchanged.
 # --------------------------------------------------------------------------- #
-
-
-@pytest.mark.asyncio
-async def test_cold_view_snapshot_carries_children(
-    file_persistence, composer_ok_tool
-) -> None:
-    """The serverless box-off path signs a URL for the case-view snapshot that
-    ``build_case_view_snapshot`` materializes to S3. That snapshot embeds the
-    SAME ``get_session_state`` chat history, so the persisted children ride it
-    READ-ONLY (additive JSON; the signer Lambda is a pure pass-through)."""
-    ws = FakeWS()
-    state = server.SessionState(session_id=new_ulid())
-    case_id = await _create_case(ws, state)
-
-    await server._invoke_tool_via_emitter(
-        ws, state, COMPOSER_OK, {"bbox": [-82.0, 26.0, -81.0, 27.0]}
-    )
-
-    snapshot = await file_persistence.build_case_view_snapshot(case_id)
-    ss = snapshot["session_state"]
-    chat = ss["chat_history"]
-    tool_rows = [m for m in chat if m["role"] == "tool"]
-    assert len(tool_rows) == 1
-    card = tool_rows[0]["tool_card"]
-    assert card["state"] == "complete"
-    children = card["children"]
-    assert [c["tool_name"] for c in children] == ["fetch_topobathy", "run_solver"]
-    assert children[1]["state"] == "failed"
-    assert children[1]["error_code"]
-
-    # The cold snapshot is byte-equivalent to the warm reopen for the children
-    # (no re-execution, no shape drift): re-validate it as a CaseChatMessage.
-    rebuilt = CaseChatMessage.model_validate(tool_rows[0])
-    assert rebuilt.tool_card is not None
-    assert [c.tool_name for c in rebuilt.tool_card.children] == [
-        "fetch_topobathy",
-        "run_solver",
-    ]
 
 
 # --------------------------------------------------------------------------- #

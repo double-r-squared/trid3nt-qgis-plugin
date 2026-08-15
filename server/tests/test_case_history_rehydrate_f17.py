@@ -404,84 +404,34 @@ def test_case_open_unbound_persistence_keeps_clean_slate() -> None:
 
 
 # --------------------------------------------------------------------------- #
-# cold-raster fix: a pure case-OPEN must materialize the cold snapshot
+# case-view snapshot machinery is CHOPPED (ADR 0266): a case-OPEN rehydrates
+# from the persisted store + WS replay, never from a cold S3 snapshot. Guard
+# the absence so the write-for-an-absent-reader machinery does not creep back.
 # --------------------------------------------------------------------------- #
 
 
-def test_case_open_writes_case_view_snapshot(
-    _persistence_bound: Persistence, monkeypatch: pytest.MonkeyPatch
+def test_case_open_writes_no_case_view_snapshot(
+    _persistence_bound: Persistence,
 ) -> None:
-    """A successful ``_emit_case_open`` fires a best-effort case-view snapshot
-    (+ thin manifest) write for the OPENED Case.
+    """A case-OPEN neither invokes nor requires any case-view snapshot writer.
 
-    The cold view (box asleep) fetches the presigned ``case-views/{id}.json``
-    snapshot; before this fix a pure OPEN wrote none, so a freshly-opened Case's
-    rasters could not paint until a later mutation. We mock the two persisters
-    and assert each is called once with the opened ``case_id``. The production
-    calls are fire-and-forget (``asyncio.create_task``), so we drive the open in
-    an async test and yield the loop a couple of times to let the detached tasks
-    run before asserting.
+    The snapshot/manifest persisters served the retired browser cold-view (box
+    asleep); the QGIS-only local product rebuilds a reopened Case from the
+    persisted store + WS replay. Assert the symbols are gone AND a real open
+    still rehydrates chat history with no snapshot machinery in the loop.
     """
     import trid3nt_server.server as server
 
-    p = _persistence_bound
-    case = _case_with_layers()
-    _seed_case(p, case, [_msg(case.case_id, "user", "model the flood", seq=0)])
-
-    snap_calls: list[str | None] = []
-    manifest_calls: list[str | None] = []
-
-    async def _fake_snapshot(state, *, case_id=None):  # noqa: ANN001, ANN202
-        snap_calls.append(case_id)
-
-    async def _fake_manifest(state, *, case_id=None):  # noqa: ANN001, ANN202
-        manifest_calls.append(case_id)
-
-    monkeypatch.setattr(server, "_persist_case_view_snapshot", _fake_snapshot)
-    monkeypatch.setattr(server, "_persist_case_manifest", _fake_manifest)
-
-    async def _drive() -> None:
-        state = SessionState(session_id=new_ulid())
-        await _emit_case_open(MockWebSocket(), state, case.case_id)
-        # The snapshot + manifest are detached via asyncio.create_task so the
-        # open never blocks on the Dynamo+S3 round-trips; yield the loop so the
-        # background tasks run before we assert.
-        for _ in range(3):
-            await asyncio.sleep(0)
-
-    asyncio.run(_drive())
-
-    assert snap_calls == [case.case_id]
-    assert manifest_calls == [case.case_id]
-
-
-def test_case_open_snapshot_failure_does_not_break_open(
-    _persistence_bound: Persistence, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    """The snapshot write is best-effort: even if the persister raises (it
-    should not - both swallow their own errors - but defend the contract), the
-    open still completes and rehydrates chat history normally."""
-    import trid3nt_server.server as server
+    assert not hasattr(server, "_persist_case_view_snapshot")
+    assert not hasattr(server, "_persist_case_manifest")
 
     p = _persistence_bound
     case = _case_with_layers()
     _seed_case(p, case, [_msg(case.case_id, "user", "model the flood", seq=0)])
 
-    async def _boom_snapshot(state, *, case_id=None):  # noqa: ANN001, ANN202
-        raise RuntimeError("S3 down")
-
-    async def _boom_manifest(state, *, case_id=None):  # noqa: ANN001, ANN202
-        raise RuntimeError("S3 down")
-
-    monkeypatch.setattr(server, "_persist_case_view_snapshot", _boom_snapshot)
-    monkeypatch.setattr(server, "_persist_case_manifest", _boom_manifest)
-
     async def _drive() -> None:
         state = SessionState(session_id=new_ulid())
-        # The open itself must NOT raise - the persisters are detached.
         await _emit_case_open(MockWebSocket(), state, case.case_id)
-        for _ in range(3):
-            await asyncio.sleep(0)
         # The open still did its real work: chat history rehydrated.
         assert any(
             h.get("text") == "model the flood" for h in state.chat_history

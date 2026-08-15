@@ -166,7 +166,7 @@ def test_case_create_with_valid_bbox_persists_and_seeds_aoi(
     )
     asyncio.run(_handle_case_command(ws, state, cmd))
 
-    # Persisted on the Case (flows into snapshot/manifest via upsert_case).
+    # Persisted on the Case via upsert_case.
     case = asyncio.run(_persistence_bound.get_case(state.active_case_id))
     assert case is not None
     assert list(case.bbox) == bbox
@@ -665,97 +665,3 @@ def test_integration_e2e_case_flow(_persistence_bound: Persistence) -> None:
     contents = sorted(m["content"] for m in history)
     assert contents == sorted(["model the flooding", "[invoked publish_layer]"])
 
-
-# --------------------------------------------------------------------------- #
-# #165 data-island: thin manifest dual-write at Case mutations
-# --------------------------------------------------------------------------- #
-
-
-def test_create_dual_writes_manifest_alongside_snapshot() -> None:
-    """A Case create writes BOTH a snapshot and a thin manifest to S3.
-
-    DUAL-WRITE invariant: the manifest lands at the SAME mutation call-site as
-    the snapshot, at ``case-manifests/{case_id}.json``, validating as a
-    ``CaseManifest``. The snapshot path is unchanged.
-    """
-    from trid3nt_server.persistence import case_manifest_key, case_view_snapshot_key
-    from trid3nt_contracts.case import CaseManifest
-
-    saved = get_persistence()
-    mock = MockMCPClient()
-    p = Persistence(mock)
-    snapshot_puts: list = []
-    manifest_puts: list = []
-
-    async def _snap_put(self, key, body, metadata=None):
-        snapshot_puts.append((key, body, metadata))
-
-    async def _manifest_put(self, key, body, metadata=None):
-        manifest_puts.append((key, body, metadata))
-
-    # Patch the production S3 puts so no real boto3 call is made; capture both.
-    orig_snap = Persistence._default_s3_put_case_view
-    orig_man = Persistence._default_s3_put_case_manifest
-    Persistence._default_s3_put_case_view = _snap_put  # type: ignore[assignment]
-    Persistence._default_s3_put_case_manifest = _manifest_put  # type: ignore[assignment]
-    set_persistence(p)
-    try:
-        ws = MockWebSocket()
-        state = _fresh_state()
-        state.authenticated_user_id = new_ulid()
-        asyncio.run(
-            _handle_case_command(
-                ws, state, CaseCommandEnvelopePayload(
-                    command="create", args={"title": "Dual-write case"}
-                )
-            )
-        )
-        case_id = state.active_case_id
-        assert case_id is not None
-
-        # BOTH writers fired at the create mutation.
-        assert len(snapshot_puts) == 1
-        assert len(manifest_puts) == 1
-
-        snap_key, _snap_body, _snap_meta = snapshot_puts[0]
-        man_key, man_body, _man_meta = manifest_puts[0]
-        assert snap_key == case_view_snapshot_key(case_id)
-        assert man_key == case_manifest_key(case_id)
-
-        # The manifest body validates as a CaseManifest carrying the title.
-        manifest = CaseManifest.model_validate(json.loads(man_body.decode("utf-8")))
-        assert manifest.case_id == case_id
-        assert manifest.title == "Dual-write case"
-    finally:
-        Persistence._default_s3_put_case_view = orig_snap  # type: ignore[assignment]
-        Persistence._default_s3_put_case_manifest = orig_man  # type: ignore[assignment]
-        set_persistence(saved)
-
-
-def test_persist_case_manifest_noop_without_active_case() -> None:
-    """``_persist_case_manifest`` is a no-op with no Case bound (never raises)."""
-    from trid3nt_server.server import _persist_case_manifest
-
-    saved = get_persistence()
-    mock = MockMCPClient()
-    set_persistence(Persistence(mock))
-    try:
-        state = _fresh_state()
-        state.active_case_id = None
-        # No case_id arg, no active case -> short-circuits, returns None.
-        assert asyncio.run(_persist_case_manifest(state)) is None
-    finally:
-        set_persistence(saved)
-
-
-def test_persist_case_manifest_noop_without_persistence() -> None:
-    """``_persist_case_manifest`` is a no-op with no Persistence bound."""
-    from trid3nt_server.server import _persist_case_manifest
-
-    saved = get_persistence()
-    set_persistence(None)
-    try:
-        state = _fresh_state()
-        assert asyncio.run(_persist_case_manifest(state, case_id=new_ulid())) is None
-    finally:
-        set_persistence(saved)

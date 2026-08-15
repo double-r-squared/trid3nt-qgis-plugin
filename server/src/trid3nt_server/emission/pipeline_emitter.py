@@ -1288,35 +1288,6 @@ class PipelineEmitter:
         """Return a defensive shallow copy of the current loaded_layers list."""
         return list(self._loaded_layers)
 
-    @property
-    def inline_geojson_by_layer_id(self) -> dict[str, dict[str, Any]]:
-        """Return a defensive shallow copy of the inline-GeoJSON side-table.
-
-        The materialized case-view snapshot
-        written to S3 on every mutation needs the inline vector GeoJSON so a
-        cold view (agent box OFF) paints vectors. That side-table is in-memory
-        only on this emitter (``add_loaded_layer`` / ``reinline_vector_layers``
-        populate it; ``emit_session_state`` merges it onto the wire). Exposing a
-        read-only copy lets ``server._persist_case_view_snapshot`` source the
-        SAME GeoJSON the live ``session-state`` carries, so the snapshot is
-        byte-identical to the live ``case-open`` payload plus inline vectors.
-        Keyed by ``layer_id``; values are GeoJSON FeatureCollection dicts.
-        """
-        return {k: v for k, v in self._inline_geojson_by_layer_id.items()}
-
-    @property
-    def density_meta_by_layer_id(self) -> dict[str, Any]:
-        """Return a defensive shallow copy of the dense-vector tag side-table.
-
-        Companion to ``inline_geojson_by_layer_id`` -- ``emit_session_state``
-        stamps each layer's ``DensifyMeta.as_wire_tag()`` alongside the inline
-        GeoJSON, so the materialized snapshot replicates that merge to stay
-        byte-identical to the live wire. Keyed by ``layer_id``; values are the
-        opaque ``DensifyMeta`` objects (the snapshot writer calls
-        ``as_wire_tag()`` defensively, matching ``emit_session_state``).
-        """
-        return {k: v for k, v in self._density_meta_by_layer_id.items()}
-
     def reset_loaded_layers(self, layers: list[dict] | None) -> None:
         """Replace the in-memory ``_loaded_layers`` from a persisted snapshot.
 
