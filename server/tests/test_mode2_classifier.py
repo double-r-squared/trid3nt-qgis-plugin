@@ -6,9 +6,8 @@ Coverage:
     - ``.gov`` + JSON-LD → ``Mode2Candidate``, confidence ≥ 0.6.
     - ``.edu`` + data-download link → ``Mode2Candidate``, ``suggested_tool_kind == "fetcher"``.
     - 5 patterns → confidence cap at 0.95.
-    - job-0203 (M4): the JSONL audit writer is GONE (remove-don't-shim) —
-      Mode-2 audit routes through ``Persistence.append_audit`` at the
-      server call site (see ``test_mode2_audit_mcp.py``).
+    - the mode-2 audit sink is GONE (no reader): neither the JSONL writer nor
+      the ``audit_log`` collection writer survives.
     - ``.mil`` + OpenAPI link → ``suggested_tool_kind == "endpoint"``.
     - Malformed page dict (missing url / non-dict) → ``None``.
     - Snippet truncates to ≤ 280 chars.
@@ -136,18 +135,21 @@ def test_confidence_caps_at_0_95() -> None:
     assert candidate.confidence == pytest.approx(0.95)
 
 
-def test_jsonl_audit_writer_removed() -> None:
-    """job-0203 (M4) remove-don't-shim: the bespoke JSONL writer is gone.
+def test_audit_sink_removed() -> None:
+    """The mode-2 audit sink is gone entirely (severed consumer).
 
-    Mode-2 audit events route through ``Persistence.append_audit`` (the
-    MongoDB MCP ``audit_log`` collection) at the server.py call site —
-    covered by ``test_mode2_audit_mcp.py``. A reappearing file writer
-    here means the migration regressed.
+    Neither the bespoke JSONL writer (``append_audit_log`` /
+    ``default_audit_log_path``) nor the successor ``audit_log`` collection
+    writer survives -- no reader ever consumed the stream, so emitted
+    candidates are only logged in-process. Absence guard: a reappearing sink
+    means the chop regressed.
     """
     import trid3nt_server.agent.gates.mode2_classifier as m2
+    from trid3nt_server.persistence import Persistence
 
     assert not hasattr(m2, "append_audit_log")
     assert not hasattr(m2, "default_audit_log_path")
+    assert not hasattr(Persistence, "append_audit")
 
 
 def test_mil_with_openapi_link_suggests_endpoint() -> None:

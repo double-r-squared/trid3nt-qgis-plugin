@@ -1,31 +1,23 @@
-"""#147 ephemeral-cases + reconnect-resync PRIMITIVES (DORMANT until wired).
+"""Durable-Case persistence + old-shape ``expires_at`` tolerance.
 
-These tests cover the back-compat persistence + emitter primitives added for
-the #147 track. Every primitive defaults to current behavior; these tests pin
-both the new opt-in behavior AND the byte-identical legacy default:
+Cases are durable: ``upsert_case`` writes NO ``expires_at`` TTL stamp (the
+ephemeral-Case TTL machinery was removed -- no local reader/reaper ever acted
+on it). What remains under test:
 
-- ``test_upsert_case_ephemeral_writes_future_numeric_expires_at`` — an
-  ephemeral Case lands a NUMERIC epoch ``expires_at`` in the future (the
-  DynamoDB-native TTL attr, NOT the ISO string sessions use).
-- ``test_upsert_case_default_writes_no_expires_at`` — the default (and authed)
-  call shape writes NO ``expires_at`` (durable forever).
-- ``test_upsert_case_authed_byte_identical_to_legacy`` — an authed upsert
-  (``ephemeral`` omitted) writes the EXACT same stored doc as before the kwarg
-  existed (no ``expires_at`` leaks in).
-- ``test_touch_case_advances_expires_at`` — ``touch_case`` slides the numeric
-  TTL window forward on an existing ephemeral Case.
-- ``test_touch_case_uses_explicit_ttl_seconds`` — an explicit ``ttl_seconds``
-  is honored over the default ``CASES_ANON_TTL_SECONDS``.
-- ``test_doc_to_case_summary_drops_expires_at`` — the storage-only TTL stamp
-  NEVER reaches the wire ``CaseSummary``.
-- ``test_get_case_never_surfaces_expires_at`` — end-to-end read path proof.
-- ``test_seed_chat_history_carries_into_next_snapshot`` — a seeded chat
-  history shows up in the next ``emit_session_state`` snapshot.
-- ``test_seed_chat_history_defensive_copy`` — seeding takes a copy; later
-  mutation of the caller's list does not bleed into the emitter mirror.
+- ``test_upsert_case_writes_no_expires_at`` -- a Case upsert never stamps a TTL.
+- ``test_upsert_case_authed_byte_identical_to_legacy`` -- the stored doc is
+  ``model_dump(mode='json')`` + ``_id`` + (when owned) ``user_id`` and nothing
+  else.
+- ``test_doc_to_case_summary_drops_stale_expires_at`` -- a LEGACY stored doc
+  that still carries ``expires_at`` reads back fine; the storage-only key never
+  reaches the wire ``CaseSummary``.
+- ``test_get_case_tolerates_legacy_expires_at`` -- end-to-end old-shape proof:
+  a doc seeded with ``expires_at`` on disk is read back without crashing and
+  never surfaces the key.
+- ``test_seed_chat_history_*`` -- the reconnect-resync emitter primitive.
 
-All Case tests run against the file-backed Persistence substrate so the raw
-stored document (with ``expires_at``) can be inspected on disk.
+Case tests run against the file-backed Persistence substrate so the raw stored
+document can be inspected on disk.
 """
 
 from __future__ import annotations
@@ -45,7 +37,6 @@ from trid3nt_server.persistence import (
 from trid3nt_server.emission.pipeline_emitter import PipelineEmitter
 from trid3nt_contracts import new_ulid, now_utc
 from trid3nt_contracts.case import CaseSummary
-from trid3nt_contracts.collections import CASES_ANON_TTL_SECONDS
 
 
 # --------------------------------------------------------------------------- #
@@ -53,7 +44,7 @@ from trid3nt_contracts.collections import CASES_ANON_TTL_SECONDS
 # --------------------------------------------------------------------------- #
 
 
-def _fresh_case(title: str = "Anonymous scratch flood scenario") -> CaseSummary:
+def _fresh_case(title: str = "Scratch flood scenario") -> CaseSummary:
     return CaseSummary(
         case_id=new_ulid(),
         title=title,
@@ -86,56 +77,25 @@ class _CapturingSink:
 
 
 # --------------------------------------------------------------------------- #
-# upsert_case: ephemeral vs durable (default)
+# upsert_case: durable (no TTL stamp)
 # --------------------------------------------------------------------------- #
 
 
-def test_upsert_case_ephemeral_writes_future_numeric_expires_at(tmp_path: Path) -> None:
-    """ephemeral=True stamps a NUMBER epoch expires_at in the future."""
-    p = Persistence(FileMCPClient(base_dir=tmp_path))
-    case = _fresh_case()
-    before = int(now_utc().timestamp())
-
-    asyncio.run(p.upsert_case(case, ephemeral=True))
-
-    doc = _raw_doc(tmp_path, case.case_id)
-    assert "expires_at" in doc, "ephemeral Case must carry an expires_at TTL stamp"
-    exp = doc["expires_at"]
-    # DynamoDB-native TTL needs a NUMBER epoch, NOT the ISO string sessions use.
-    assert isinstance(exp, int), f"expires_at must be a numeric epoch, got {type(exp)!r}"
-    assert not isinstance(exp, bool)
-    # In the future by roughly the configured window.
-    assert exp >= before + CASES_ANON_TTL_SECONDS - 5
-    assert exp <= int(now_utc().timestamp()) + CASES_ANON_TTL_SECONDS + 5
-
-
-def test_upsert_case_default_writes_no_expires_at(tmp_path: Path) -> None:
-    """The default (ephemeral omitted) writes NO expires_at — durable forever."""
+def test_upsert_case_writes_no_expires_at(tmp_path: Path) -> None:
+    """A Case upsert never stamps a TTL -- Cases are durable forever."""
     p = Persistence(FileMCPClient(base_dir=tmp_path))
     case = _fresh_case()
 
     asyncio.run(p.upsert_case(case))
 
     doc = _raw_doc(tmp_path, case.case_id)
-    assert "expires_at" not in doc, "default upsert must NOT write a TTL stamp"
-
-
-def test_upsert_case_explicit_non_ephemeral_writes_no_expires_at(tmp_path: Path) -> None:
-    """ephemeral=False is identical to the default — no TTL stamp."""
-    p = Persistence(FileMCPClient(base_dir=tmp_path))
-    case = _fresh_case()
-
-    asyncio.run(p.upsert_case(case, ephemeral=False))
-
-    doc = _raw_doc(tmp_path, case.case_id)
-    assert "expires_at" not in doc
+    assert "expires_at" not in doc, "upsert must NOT write a TTL stamp"
 
 
 def test_upsert_case_authed_byte_identical_to_legacy(tmp_path: Path) -> None:
-    """An authed upsert (ephemeral omitted) is byte-identical to the legacy doc.
+    """The stored doc is ``model_dump(mode='json')`` + ``_id`` + ``user_id``.
 
-    The legacy stored doc was ``model_dump(mode='json')`` + ``_id`` + (when
-    owned) ``user_id`` — and NOTHING else. The new kwarg must not perturb it.
+    Nothing else -- no ``expires_at`` and no other storage-only field leaks in.
     """
     p = Persistence(FileMCPClient(base_dir=tmp_path))
     case = _fresh_case()
@@ -147,72 +107,22 @@ def test_upsert_case_authed_byte_identical_to_legacy(tmp_path: Path) -> None:
     expected = case.model_dump(mode="json")
     expected["_id"] = case.case_id
     expected["user_id"] = owner
-    assert doc == expected, "authed upsert doc drifted from the legacy shape"
+    assert doc == expected, "stored doc drifted from the expected shape"
 
 
 # --------------------------------------------------------------------------- #
-# touch_case: slide the TTL window
+# Old-shape tolerance: a legacy ``expires_at`` never reaches the wire
 # --------------------------------------------------------------------------- #
 
 
-def test_touch_case_advances_expires_at(tmp_path: Path) -> None:
-    """touch_case moves the numeric expires_at forward on an existing Case."""
-    p = Persistence(FileMCPClient(base_dir=tmp_path))
-    case = _fresh_case()
-
-    # Seed an ephemeral Case with a short window so a touch with the default
-    # (7-day) window is unambiguously larger.
-    asyncio.run(p.upsert_case(case, ephemeral=True, owner_user_id=None))
-    # Overwrite expires_at with a stale, near value to make the advance obvious.
-    asyncio.run(p.touch_case(case.case_id, ttl_seconds=10))
-    stale = _raw_doc(tmp_path, case.case_id)["expires_at"]
-
-    asyncio.run(p.touch_case(case.case_id))  # default = CASES_ANON_TTL_SECONDS
-    advanced = _raw_doc(tmp_path, case.case_id)["expires_at"]
-
-    assert isinstance(advanced, int)
-    assert advanced > stale, "touch_case must slide the TTL window forward"
-    assert advanced >= int(now_utc().timestamp()) + CASES_ANON_TTL_SECONDS - 5
-
-
-def test_touch_case_uses_explicit_ttl_seconds(tmp_path: Path) -> None:
-    """An explicit ttl_seconds overrides the default window."""
-    p = Persistence(FileMCPClient(base_dir=tmp_path))
-    case = _fresh_case()
-    asyncio.run(p.upsert_case(case, ephemeral=True))
-
-    custom_ttl = 12345
-    before = int(now_utc().timestamp())
-    asyncio.run(p.touch_case(case.case_id, ttl_seconds=custom_ttl))
-
-    exp = _raw_doc(tmp_path, case.case_id)["expires_at"]
-    assert before + custom_ttl - 5 <= exp <= int(now_utc().timestamp()) + custom_ttl + 5
-
-
-def test_touch_case_swallows_errors(tmp_path: Path) -> None:
-    """touch_case is fire-and-forget: a backend hiccup never raises."""
-
-    class _BoomMCP:
-        async def call_tool(self, *_a: Any, **_k: Any) -> Any:
-            raise RuntimeError("simulated backend failure")
-
-    p = Persistence(_BoomMCP())
-    # Must not raise even though the underlying call_tool blows up.
-    asyncio.run(p.touch_case("nonexistent-case"))
-
-
-# --------------------------------------------------------------------------- #
-# Read path: expires_at must NEVER reach the wire CaseSummary
-# --------------------------------------------------------------------------- #
-
-
-def test_doc_to_case_summary_drops_expires_at() -> None:
-    """_doc_to_case_summary strips the storage-only expires_at TTL stamp."""
+def test_doc_to_case_summary_drops_stale_expires_at() -> None:
+    """_doc_to_case_summary strips a stored ``expires_at`` (storage-only)."""
     case = _fresh_case()
     doc = case.model_dump(mode="json")
     doc["_id"] = case.case_id
     doc["user_id"] = new_ulid()
-    doc["expires_at"] = int(now_utc().timestamp()) + CASES_ANON_TTL_SECONDS
+    # Legacy TTL stamp still present on an old-shape record.
+    doc["expires_at"] = int(now_utc().timestamp()) + 604800
 
     summary = Persistence._doc_to_case_summary(doc)
     dumped = summary.model_dump(mode="json")
@@ -220,18 +130,35 @@ def test_doc_to_case_summary_drops_expires_at() -> None:
     assert not hasattr(summary, "expires_at")
 
 
-def test_get_case_never_surfaces_expires_at(tmp_path: Path) -> None:
-    """End-to-end: an ephemeral Case read back carries no expires_at on the wire."""
+def test_get_case_tolerates_legacy_expires_at(tmp_path: Path) -> None:
+    """End-to-end: a doc carrying a legacy ``expires_at`` reads back cleanly."""
     p = Persistence(FileMCPClient(base_dir=tmp_path))
     case = _fresh_case()
-    asyncio.run(p.upsert_case(case, ephemeral=True))
 
-    # The raw stored doc DOES carry the TTL stamp ...
+    # Seed an OLD-SHAPE stored doc directly: the persisted record still carries
+    # a numeric ``expires_at`` TTL stamp from before the chop.
+    body = case.model_dump(mode="json")
+    body["_id"] = case.case_id
+    body["expires_at"] = int(now_utc().timestamp()) + 604800
+    asyncio.run(
+        p._mcp.call_tool(
+            "update-one",
+            {
+                "database": DEFAULT_DATABASE,
+                "collection": CASES_COLLECTION,
+                "filter": {"_id": case.case_id},
+                "update": {"$set": body},
+                "upsert": True,
+            },
+        )
+    )
+    # The raw stored doc DOES carry the legacy TTL stamp ...
     assert "expires_at" in _raw_doc(tmp_path, case.case_id)
 
-    # ... but the wire CaseSummary read path does NOT.
+    # ... but the wire CaseSummary read path tolerates + drops it (no crash).
     fetched = asyncio.run(p.get_case(case.case_id))
     assert fetched is not None
+    assert fetched.case_id == case.case_id
     assert "expires_at" not in fetched.model_dump(mode="json")
 
 

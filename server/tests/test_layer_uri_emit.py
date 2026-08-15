@@ -11,11 +11,8 @@ Coverage:
       - raster + empty uri     -> DROP (return None) [nothing to fetch]
       - vector + gs:// / s3:// (inline-GeoJSON path, job-0175) -> PASS (identity)
       - vector + http(s)       -> PASS (identity)
-  * ``SIGNED_URLS`` dormant scaffold — default false; ``true`` logs a WARNING
-    referencing Decision 11 and is otherwise byte-identical (no behavior change).
   * Byte-identity: a passed-through LayerURI is the SAME object (no copy / no
-    field mutation), so envelope payloads are byte-identical when SIGNED_URLS
-    is absent.
+    field mutation), so envelope payloads are byte-identical.
 """
 
 from __future__ import annotations
@@ -25,11 +22,7 @@ import logging
 import pytest
 from trid3nt_contracts.execution import LayerURI
 
-from trid3nt_server.emission.layer_uri_emit import (
-    SIGNED_URLS_ENV,
-    emit_layer_uri,
-    signed_urls_enabled,
-)
+from trid3nt_server.emission.layer_uri_emit import emit_layer_uri
 
 
 def _layer(layer_type: str, uri: str, layer_id: str = "L1") -> LayerURI:
@@ -119,68 +112,6 @@ def test_vsigs_and_local_raster_pass_through() -> None:
     seam must not over-block."""
     assert emit_layer_uri(_layer("raster", "/vsigs/bucket/x.tif")) is not None
     assert emit_layer_uri(_layer("raster", "/tmp/local.tif")) is not None
-
-
-# --------------------------------------------------------------------------- #
-# SIGNED_URLS dormant scaffold (Decision 11)
-# --------------------------------------------------------------------------- #
-
-
-def test_signed_urls_default_false(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.delenv(SIGNED_URLS_ENV, raising=False)
-    assert signed_urls_enabled() is False
-
-
-@pytest.mark.parametrize("val", ["true", "True", "TRUE", "1", "yes", "YES"])
-def test_signed_urls_truthy_values(
-    monkeypatch: pytest.MonkeyPatch, val: str
-) -> None:
-    monkeypatch.setenv(SIGNED_URLS_ENV, val)
-    assert signed_urls_enabled() is True
-
-
-@pytest.mark.parametrize("val", ["false", "0", "no", "", "  ", "off", "maybe"])
-def test_signed_urls_falsy_values(
-    monkeypatch: pytest.MonkeyPatch, val: str
-) -> None:
-    monkeypatch.setenv(SIGNED_URLS_ENV, val)
-    assert signed_urls_enabled() is False
-
-
-def test_signed_urls_true_is_byte_identical_noop(
-    monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
-) -> None:
-    """SIGNED_URLS=true is DORMANT: it logs a WARNING referencing Decision 11
-    but changes NO emission behavior — a passed-through layer is byte-identical
-    to the flag-absent case (same object, same dumped payload)."""
-    layer = _layer("raster", "https://qgis.run.app/wms?LAYERS=flood")
-
-    monkeypatch.delenv(SIGNED_URLS_ENV, raising=False)
-    out_absent = emit_layer_uri(layer)
-
-    monkeypatch.setenv(SIGNED_URLS_ENV, "true")
-    with caplog.at_level(logging.WARNING, logger="trid3nt_server.emission.layer_uri_emit"):
-        out_true = emit_layer_uri(layer)
-
-    # Identical object and identical serialized payload (byte-identical wire).
-    assert out_absent is layer
-    assert out_true is layer
-    assert out_absent.model_dump(mode="json") == out_true.model_dump(mode="json")
-
-    # A WARNING was logged referencing Decision 11 (no-op signal).
-    msgs = "\n".join(r.getMessage() for r in caplog.records)
-    assert "Decision 11" in msgs
-    assert SIGNED_URLS_ENV in msgs
-
-
-def test_signed_urls_true_still_drops_raster_gs(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    """The guardrail still applies under SIGNED_URLS=true (dormant): a raw
-    gs:// raster is still dropped, because no direct-fetch surface exists to
-    sign for yet (Decision 11)."""
-    monkeypatch.setenv(SIGNED_URLS_ENV, "true")
-    assert emit_layer_uri(_layer("raster", "gs://b/x.tif")) is None
 
 
 def test_warning_logged_on_drop(caplog: pytest.LogCaptureFixture) -> None:

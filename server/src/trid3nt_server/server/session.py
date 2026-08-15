@@ -270,7 +270,6 @@ class SessionState:
     # handshake completion; never ``None`` after handshake.
     authenticated_user_id: str | None = None
     is_anonymous: bool = True
-    firebase_uid: str | None = None
     tier: str = "free"
     auth_handshake_complete: bool = False
     # The web's keepalive (ws.ts) sends an empty ``session-resume`` envelope

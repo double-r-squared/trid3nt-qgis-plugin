@@ -26,18 +26,12 @@ retry-on-failure loop can act). Everything else passes untouched:
   * vector + ``gs://`` / ``s3://`` (inline-GeoJSON path) -> PASS
     (do NOT break it)
   * vector + ``http(s)`` -> PASS
-
-``SIGNED_URLS`` (Decision 11) is a dormant placeholder env var for a future
-direct-fetch feature; when set, this seam does NOTHING beyond logging a loud
-WARNING -- emissions are byte-identical to ``SIGNED_URLS`` absent. Default is
-``false`` and production ships with the flag absent/false.
 """
 
 from __future__ import annotations
 
 import asyncio
 import logging
-import os
 from typing import TYPE_CHECKING
 
 from trid3nt_contracts.execution import LayerURI
@@ -51,22 +45,7 @@ __all__ = [
     "emit_layer_uri",
     "publish_input_layer",
     "publish_raster_input_cog",
-    "signed_urls_enabled",
 ]
-
-# Env var name for the dormant direct-fetch / signed-URL scaffold (Decision 11).
-SIGNED_URLS_ENV = "SIGNED_URLS"
-
-
-def signed_urls_enabled() -> bool:
-    """Read the dormant ``SIGNED_URLS`` flag (default ``False``).
-
-    Accepts ``"true"`` / ``"1"`` / ``"yes"`` (case-insensitive) as truthy. The
-    flag is DORMANT in v0.1: even when truthy it changes no emission behavior --
-    see the module docstring and Decision 11.
-    """
-    raw = os.environ.get(SIGNED_URLS_ENV, "")
-    return raw.strip().lower() in {"true", "1", "yes"}
 
 
 def emit_layer_uri(layer: LayerURI) -> LayerURI | None:
@@ -90,24 +69,7 @@ def emit_layer_uri(layer: LayerURI) -> LayerURI | None:
           as inline GeoJSON; the uri is read server-side by the
           emitter and never fetched by the client. Do NOT break this path.
         * Anything with an ``http(s)`` uri (a WMS/tile URL) -> PASS.
-
-    ``SIGNED_URLS`` (dormant): when set truthy, a WARNING is logged and behavior
-    is otherwise UNCHANGED (byte-identical emission). See the module docstring
-    and Decision 11 -- the natural consumer is a future direct-fetch feature whose
-    signing lives in the client (scout Architecture A), not here.
     """
-    if signed_urls_enabled():
-        # DORMANT: no direct-fetch surface exists to sign for (Decision 11).
-        # Log loudly and fall through to identity behavior so emissions stay
-        # byte-identical to the flag-absent case.
-        logger.warning(
-            "%s=true but no direct-fetch surface exists to sign for — no-op "
-            "(see Decision 11 in reports/sprints/sprint-13-5-decisions.md). "
-            "layer_id=%s passes through unchanged.",
-            SIGNED_URLS_ENV,
-            layer.layer_id,
-        )
-
     uri = layer.uri or ""
 
     # The guardrail: renderable raster + a genuinely un-renderable uri -> drop.

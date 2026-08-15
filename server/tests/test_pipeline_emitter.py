@@ -788,20 +788,18 @@ async def test_emit_tool_call_stamps_duration_end_to_end(
 
 
 # --------------------------------------------------------------------------- #
-# job-0254 §3 — byte-identical emission when SIGNED_URLS is absent
+# job-0254 §3 — the emission seam is a no-op for a passing layer
 # --------------------------------------------------------------------------- #
 
 
 @pytest.mark.asyncio
 async def test_emit_byte_identical_with_seam_for_passing_layers(
-    session_id: str, monkeypatch: pytest.MonkeyPatch,
+    session_id: str,
 ) -> None:
     """For a PASSING layer (WMS raster), routing through the seam in
     ``emit_tool_call`` produces a ``session-state`` payload byte-identical to
-    calling ``add_loaded_layer`` directly (pre-seam path). SIGNED_URLS absent
-    must be a true no-op on the wire."""
-    monkeypatch.delenv("SIGNED_URLS", raising=False)
-
+    calling ``add_loaded_layer`` directly (pre-seam path) -- the seam is a true
+    no-op on the wire for a passing layer."""
     layer = LayerURI(
         layer_id="dem_1",
         name="Demo DEM",
@@ -829,47 +827,10 @@ async def test_emit_byte_identical_with_seam_for_passing_layers(
     ]
     direct_loaded = direct_session[-1]["payload"]["loaded_layers"]
 
-    # The loaded_layers wire dicts are byte-identical (seam is a no-op for a
-    # passing layer when SIGNED_URLS is absent).
+    # The loaded_layers wire dicts are byte-identical (the seam is a no-op for
+    # a passing layer).
     assert seam_loaded == direct_loaded
     assert seam_loaded[0]["uri"] == "https://qgis.run.app/wms?LAYERS=dem_1"
-
-
-@pytest.mark.asyncio
-async def test_emit_byte_identical_under_signed_urls_true(
-    session_id: str, monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    """SIGNED_URLS=true is dormant: the emitted ``session-state.loaded_layers``
-    payload is identical to SIGNED_URLS absent (only a WARNING is logged)."""
-    layer = LayerURI(
-        layer_id="dem_2",
-        name="Demo DEM 2",
-        layer_type="raster",
-        uri="https://qgis.run.app/wms?LAYERS=dem_2",
-        style_preset="dem-default",
-    )
-
-    monkeypatch.delenv("SIGNED_URLS", raising=False)
-    sink_absent = _CapturingSink()
-    em_absent = PipelineEmitter(session_id=session_id, sink=sink_absent)
-    await em_absent.emit_tool_call(
-        name="Fetch DEM", tool_name="fetch_dem", invoke=lambda: layer
-    )
-    absent_loaded = [
-        f for f in sink_absent.frames if f["type"] == "session-state"
-    ][-1]["payload"]["loaded_layers"]
-
-    monkeypatch.setenv("SIGNED_URLS", "true")
-    sink_true = _CapturingSink()
-    em_true = PipelineEmitter(session_id=session_id, sink=sink_true)
-    await em_true.emit_tool_call(
-        name="Fetch DEM", tool_name="fetch_dem", invoke=lambda: layer
-    )
-    true_loaded = [
-        f for f in sink_true.frames if f["type"] == "session-state"
-    ][-1]["payload"]["loaded_layers"]
-
-    assert absent_loaded == true_loaded
 
 
 # --------------------------------------------------------------------------- #

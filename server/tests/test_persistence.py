@@ -12,8 +12,7 @@ Coverage:
 - ``test_delete_case_sets_status`` — delete sets status="deleted".
 - ``test_append_chat_message_and_hydrate_session`` — chat append +
   ``get_session_state`` re-hydrates.
-- ``test_user_round_trip`` — upsert + get_user_by_firebase_uid.
-- ``test_append_audit_writes_log_entry`` — audit append produces an insert.
+- ``test_user_round_trip`` — upsert + get_user_by_id.
 - ``test_live_mcp_write_then_read_or_skip`` — live integration with the
   MongoDB MCP server when ``TRID3NT_MONGO_MCP_STDIO=1``; else surfaces the
   OQ-0115-MCP-NOT-PROVISIONED skip.
@@ -28,7 +27,6 @@ from datetime import datetime, timezone
 import pytest
 
 from trid3nt_server.persistence import (
-    AUDIT_COLLECTION,
     CASES_COLLECTION,
     CHAT_COLLECTION,
     USERS_COLLECTION,
@@ -79,7 +77,7 @@ class MockMCPClient:
             elif upsert and target_id:
                 store[target_id] = {**set_, "_id": target_id}
             elif filt:
-                # Update by other criteria (e.g., firebase_uid)
+                # Update by a non-_id filter (first match wins).
                 for doc in store.values():
                     if all(doc.get(k) == v for k, v in filt.items()):
                         doc.update(set_)
@@ -166,7 +164,6 @@ def _fresh_chat_message(case_id: str, *, role="user") -> CaseChatMessage:
 def _fresh_user_record() -> User:
     return User(
         user_id=new_ulid(),
-        firebase_uid="firebase-abc-123",
         email="natealmanza3@gmail.com",
         display_name="Nate Almanza",
         created_at=datetime(2026, 6, 8, 12, 0, 0, tzinfo=timezone.utc),
@@ -310,13 +307,13 @@ def test_session_state_for_missing_case_returns_tombstone() -> None:
 
 
 def test_user_round_trip() -> None:
-    """upsert_user then get_user_by_firebase_uid returns equal model."""
+    """upsert_user then get_user_by_id returns equal model."""
     mock = MockMCPClient()
     p = Persistence(mock)
     user = _fresh_user_record()
 
     asyncio.run(p.upsert_user(user))
-    fetched = asyncio.run(p.get_user_by_firebase_uid("firebase-abc-123"))
+    fetched = asyncio.run(p.get_user_by_id(user.user_id))
     assert fetched is not None
     assert fetched.user_id == user.user_id
     assert fetched.email == "natealmanza3@gmail.com"
@@ -332,31 +329,37 @@ def test_user_round_trip() -> None:
 def test_user_lookup_returns_none_when_missing() -> None:
     mock = MockMCPClient()
     p = Persistence(mock)
-    assert asyncio.run(p.get_user_by_firebase_uid("never-existed")) is None
+    assert asyncio.run(p.get_user_by_id("never-existed")) is None
 
 
-# --------------------------------------------------------------------------- #
-# Audit
-# --------------------------------------------------------------------------- #
-
-
-def test_append_audit_writes_log_entry() -> None:
-    """``append_audit`` produces an insert-one to the audit_log collection."""
+def test_get_user_by_id_tolerates_stale_firebase_uid_key() -> None:
+    """An OLD-SHAPE user row carrying the retired ``firebase_uid`` key loads
+    without crashing: ``get_user_by_id`` filters to the known User fields
+    before ``model_validate``, so the dropped IdP-sub carrier never reaches the
+    ``extra="forbid"`` contract."""
     mock = MockMCPClient()
+    uid = new_ulid()
+    # Seed the store directly with a legacy document shape (pre-chop the field
+    # was persisted on every user row).
+    mock._store[USERS_COLLECTION] = {
+        uid: {
+            "_id": uid,
+            "schema_version": "v1",
+            "user_id": uid,
+            "firebase_uid": "legacy-idp-sub-value",
+            "email": None,
+            "display_name": None,
+            "created_at": "2026-06-08T12:00:00Z",
+            "is_active": True,
+            "prefs": {},
+            "is_anonymous": True,
+        }
+    }
     p = Persistence(mock)
-
-    asyncio.run(p.append_audit(
-        "case_created",
-        {"case_id": new_ulid(), "actor": "user"},
-    ))
-
-    inserts = [(n, a) for n, a in mock.calls if n == "insert-one"
-               and a.get("collection") == AUDIT_COLLECTION]
-    assert len(inserts) == 1
-    doc = inserts[0][1]["document"]
-    assert doc["event_type"] == "case_created"
-    assert "ts" in doc
-    assert doc["payload"]["actor"] == "user"
+    fetched = asyncio.run(p.get_user_by_id(uid))
+    assert fetched is not None
+    assert fetched.user_id == uid
+    assert not hasattr(fetched, "firebase_uid")
 
 
 # --------------------------------------------------------------------------- #

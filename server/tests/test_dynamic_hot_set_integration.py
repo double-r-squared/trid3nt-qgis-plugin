@@ -42,7 +42,6 @@ def test_bind_auth_result_sets_user_id_on_allowed_set():
     mock_result = MagicMock()
     mock_result.user.user_id = "firebase-uid-abc123"
     mock_result.is_anonymous = False
-    mock_result.firebase_uid = "firebase-uid-abc123"
     mock_result.tier = "standard"
 
     _bind_auth_result(state, mock_result)

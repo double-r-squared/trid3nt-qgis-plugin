@@ -26,8 +26,8 @@ Invariants this module is responsible for:
 - **Invariant 9 (no cost theater).** No cost / spend / quota fields on either
   envelope. ``tier`` is a capability claim, not a cost surface (Appendix H.4).
 - **Decision F (wire isolation).** The raw token NEVER appears in
-  ``AuthAckEnvelope`` — the agent verifies + discards; only the resolved
-  ``user_id`` + ``firebase_uid`` + ``tier`` flow back to the client.
+  ``AuthAckEnvelope`` — the agent discards it; only the resolved
+  ``user_id`` + ``tier`` flow back to the client.
 - **Forward-compat via additive growth.** New tier-claim fields,
   organization_id, roles[] all land additively when the enterprise SKU
   upgrade ships (Appendix H.4).
@@ -137,7 +137,7 @@ class AuthTokenEnvelope(GraceModel):
       explicitly signed in anonymously). The agent does NOT trust this hint
       blindly — verification flows from the JWT claims.
     - Empty / missing ``token`` triggers the anonymous-fallback path
-      (server creates ephemeral User without firebase_uid).
+      (server resolves an anonymous User with no IdP binding).
 
     Decision F: the raw token is consumed by the agent and discarded after
     verification — it is NEVER persisted (Mongo) and NEVER re-emitted on the
@@ -177,26 +177,18 @@ class AuthTokenEnvelope(GraceModel):
 class AuthAckEnvelope(GraceModel):
     """``auth-ack`` (agent → client): confirmation of the resolved identity.
 
-    Sent exactly once per WebSocket connect, after the agent has either:
+    Sent exactly once per WebSocket connect. TRID3NT is a local single-user
+    product with no identity provider: every connection resolves to the one
+    fixed local user (``is_anonymous=True``). The client learns its
+    ``user_id`` for the session — every subsequent envelope is implicitly
+    scoped to this user.
 
-    1. Verified a Firebase ID token and resolved (or auto-provisioned) the
-       matching ``UserDocument`` — ``is_anonymous=False``,
-       ``firebase_uid`` set.
-    2. Fallen through to the anonymous-fallback path (no token, invalid
-       token, or 5-second token-arrival timeout) — ``is_anonymous=True``,
-       ``firebase_uid=None``.
-
-    Either way the client now knows its authenticated ``user_id`` for the
-    session — every subsequent envelope is implicitly scoped to this user.
-
-    Wave 2 scope (job-0122):
+    Scope:
     - ``user_id`` is the ULID-shaped ``UserDocument._id`` (per Appendix H.2
       and the ``User`` contract).
-    - ``firebase_uid`` is the resolved Firebase UID (None on anonymous
-      fallback).
-    - ``is_anonymous`` mirrors the H.3 fallback path.
-    - ``tier`` is the H.4 capability claim, default ``"free"``. The web
-      client uses this to drive tier-gated UI without a second round-trip.
+    - ``is_anonymous`` is True for the local user.
+    - ``tier`` is the H.4 capability claim, default ``"free"``. The client
+      uses this to drive tier-gated UI without a second round-trip.
 
     Invariant 9: no cost / quota / spend field. ``tier`` is capability, not
     cost.
@@ -207,10 +199,7 @@ class AuthAckEnvelope(GraceModel):
     #: The resolved ``UserDocument._id`` (ULID) for this session.
     user_id: ULIDStr
 
-    #: The Firebase UID; ``None`` for anonymous-fallback users.
-    firebase_uid: str | None = Field(default=None, max_length=256)
-
-    #: True if this is an anonymous-fallback user (no Firebase verification).
+    #: True if this is an anonymous-fallback user (no identity provider).
     is_anonymous: bool = False
 
     #: H.4 tier capability claim. v0.1 default ``"free"``.

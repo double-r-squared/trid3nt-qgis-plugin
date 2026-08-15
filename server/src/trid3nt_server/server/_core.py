@@ -22,9 +22,6 @@ v0.2/M5 side of the chain (no solver yet in M1).
 FR-WC-15 ``research_mode``: pass-through pinned. For job-0015 v0.1 the field is
 logged and forwarded as-is -- there is no second pipeline strategy yet.
 
-FR-AS-8 confirmation hooks: scaffolded as ``CONFIRMATION_TRIGGERS`` (empty in
-M1). Session-record writes (Appendix D.6) are explicitly carved out per FR-AS-8.
-
 OQ-1 (Cloud Run WS vs Agent Engine) -- see report's Open Questions section.
 
 Module of record for the ``trid3nt_server.server`` package (ADR 0261). This is
@@ -393,12 +390,6 @@ from .turn import (
 
 logger = logging.getLogger("trid3nt_server.server")
 
-# Confirmation triggers (FR-AS-8). Empty for M1: solver runs and non-session
-# Mongo writes will populate this when those code paths land. Session-record
-# writes (Appendix D.6) are NOT a trigger -- that carveout is documented in
-# the report, not represented as data here.
-CONFIRMATION_TRIGGERS: set[str] = set()
-
 
 # ---------------------------------------------------------------------------
 # Stage 3 (ADR 0017 mechanisms 3-5 + ADR 0018) -- harness-absorbs-prompt
@@ -757,44 +748,6 @@ async def init_persistence_from_env() -> Persistence | None:
         return get_persistence()
     logger.info("Persistence singleton remains unbound (no backend configured)")
     return None
-
-
-#: Synthetic owner UID assigned to every pre-Auth Case (a Case written
-#: before the Auth track carried no ``user_id`` field). The one-time
-#: idempotent startup migration (``persistence.migrate_preauth_cases``)
-#: stamps these orphan Cases with this constant so they belong to a single
-#: synthetic owner instead of leaking to every user.
-#:
-#: Chosen as a fixed, non-ULID, obviously-synthetic sentinel so it is
-#: trivially greppable in logs / the persisted store and can never collide
-#: with a real ULID (26-char Crockford base32).
-MIGRATION_ANON_UID = "__preauth_migration_anon__"
-
-
-async def _run_preauth_case_migration() -> None:
-    """One-time idempotent pre-Auth case migration.
-
-    Calls ``Persistence.migrate_preauth_cases(MIGRATION_ANON_UID)`` if a
-    Persistence singleton is bound. Cases written before the Auth track had
-    no ``user_id`` field; this stamps them with the synthetic owner so each
-    Case is visible only to its owner.
-
-    Idempotent: the migration's filter is ``{"user_id": {"$exists": False}}``,
-    so a second startup matches nothing. Best-effort: a failure is logged at
-    WARNING and never aborts server startup (mirrors the Persistence-init and
-    session-touch postures).
-    """
-    p = get_persistence()
-    if p is None:
-        logger.info(
-            "pre-Auth case migration skipped: no Persistence singleton bound"
-        )
-        return
-    try:
-        n = await p.migrate_preauth_cases(MIGRATION_ANON_UID)
-        logger.info("pre-Auth case migration complete: %s case(s) stamped", n)
-    except Exception:  # noqa: BLE001 -- startup must not abort on migration
-        logger.warning("pre-Auth case migration failed (continuing)", exc_info=True)
 
 
 #: Strong references to fire-and-forget background tasks. ``asyncio.create_task``
@@ -3494,7 +3447,6 @@ def _bind_auth_result(state: SessionState, result: AuthResult) -> None:
     """
     state.authenticated_user_id = result.user.user_id
     state.is_anonymous = result.is_anonymous
-    state.firebase_uid = result.firebase_uid
     state.tier = result.tier
     state.auth_handshake_complete = True
     # Vestigial propagation - state.allowed_tool_set.user_id has no readers
@@ -3529,25 +3481,6 @@ async def _touch_session_record(
         logger.warning(
             "session-touch failed session=%s", state.session_id, exc_info=True
         )
-    # #147 ephemeral-cases ACTIVITY HEARTBEAT (LOAD-BEARING): an
-    # actively-used ANONYMOUS Case must NEVER be reaped.
-    # upsert_case(ephemeral=True) stamps a numeric TTL at CREATE time only;
-    # without sliding it forward on activity an anon Case would be swept one
-    # TTL window after creation regardless of use. This helper fires on
-    # auth bind, Case open/create, and every persisted chat turn -- exactly
-    # the activity signal -- so slide the Case TTL here too. Gated STRICTLY
-    # on is_anonymous: an authed Case carries no expires_at and stays
-    # durable forever.
-    if state.is_anonymous and active_case_id is not None:
-        try:
-            await p.touch_case(active_case_id)
-        except Exception:  # noqa: BLE001 -- side effect, never bubble up
-            logger.warning(
-                "case-touch failed session=%s case=%s",
-                state.session_id,
-                active_case_id,
-                exc_info=True,
-            )
 
 
 async def _persist_session_active_case(
@@ -4110,19 +4043,12 @@ async def _handle_case_command(
         )
         try:
             # Stamp the creator as owner so the Case is visible to them via
-            # ``list_cases_for_user``. ``authenticated_user_id`` is set by
-            # the auth handshake (real Firebase UID or the sticky-anonymous
-            # ULID in dev); None only on the M1 unbound-Persistence path.
-            #
-            # An ANONYMOUS (pre-Auth) session's Case is ephemeral -> a
-            # numeric TTL ``expires_at`` is stamped to mark abandoned scratch
-            # Cases (the ephemeral marker rides in the persisted record). An
-            # authed session (``is_anonymous`` False) passes ``ephemeral=False``
-            # -> no ``expires_at`` -> durable forever.
+            # ``list_cases_for_user``. ``authenticated_user_id`` is the fixed
+            # local user; None only on the unbound-Persistence path. Cases are
+            # durable -- no TTL stamp.
             await p.upsert_case(
                 case,
                 owner_user_id=state.authenticated_user_id,
-                ephemeral=state.is_anonymous,
             )
         except Exception as exc:  # noqa: BLE001
             logger.exception("case-command(create) upsert failed: %s", exc)
@@ -4533,15 +4459,10 @@ async def _auto_create_case_from_root(
     )
     try:
         # Stamp the creator as owner so the auto-created Case is visible to
-        # them via ``list_cases_for_user``.
-        #
-        # An anonymous root prompt mints an ephemeral Case (numeric TTL
-        # ``expires_at`` so abandoned scratch work is reaped); an authed
-        # session passes ``ephemeral=False`` -> durable forever.
+        # them via ``list_cases_for_user``. Cases are durable -- no TTL stamp.
         await p.upsert_case(
             case,
             owner_user_id=state.authenticated_user_id,
-            ephemeral=state.is_anonymous,
         )
     except Exception:  # noqa: BLE001 -- fall back to the stateless path
         logger.exception(
@@ -4816,7 +4737,7 @@ async def _pin_case_aoi_from_solve(
     if coerced is None or not case_id:
         return
     # Update the in-session anchor first -- it drives the fetch default below even
-    # if the persistence write fails (e.g. an anonymous/ephemeral Case).
+    # if the persistence write fails.
     state.case_bbox = list(coerced)
     p = get_persistence()
     if p is None:
@@ -5231,9 +5152,7 @@ async def _persist_chat_turn(
 
     Per FR-AS-8 / Decision F the chat-message collection is part of the
     agent's own session record (it is per-turn replay material, not a
-    solver result); the confirmation-hook carveout in
-    ``CONFIRMATION_TRIGGERS`` means this write does NOT pause for user
-    approval.
+    solver result), so this write does NOT pause for user approval.
 
     ``tool_card`` carries the typed ``ToolCardRecord`` for ``role="tool"``
     rows; ``layer_emissions`` overrides the default per-turn accumulator
@@ -9068,32 +8987,6 @@ async def _maybe_emit_mode2_candidate(
             candidate.candidate_id,
             envelope.to_wire_dict()["candidate"],
         )
-        # Mode-2 candidate audit (M4) routes through the MCP
-        # ``audit_log`` collection (D.15) -- the bespoke JSONL file writer
-        # was deleted (remove-don't-shim). When Persistence is unbound
-        # (explicit CI path) the event is logged-and-dropped, same policy
-        # as telemetry (M3) and chart persistence.
-        p_audit = get_persistence()
-        if p_audit is not None:
-            try:
-                await p_audit.append_audit(
-                    "mode2-candidate",
-                    {
-                        "session_id": state.session_id,
-                        "candidate": envelope.to_wire_dict()["candidate"],
-                    },
-                )
-            except Exception:  # noqa: BLE001 -- audit is best-effort
-                logger.warning(
-                    "mode2 audit write failed session=%s",
-                    state.session_id,
-                    exc_info=True,
-                )
-        else:
-            logger.debug(
-                "mode2 audit skipped (no Persistence bound) session=%s",
-                state.session_id,
-            )
         logger.info(
             "mode2-candidate session=%s url=%s confidence=%.2f patterns=%s",
             state.session_id,
@@ -10600,10 +10493,6 @@ async def run_server(host: str = "127.0.0.1", port: int | None = None) -> None:
         await init_persistence_from_env()
     except Exception as exc:  # noqa: BLE001 -- startup must not abort on MCP issues
         logger.warning("Persistence init failed (continuing without MCP): %s", exc)
-    # One-time idempotent migration: stamps every pre-Auth Case (no
-    # ``user_id``) with the MIGRATION_ANON_UID sentinel instead of leaking to
-    # every signed-in user. Best-effort -- a hiccup must not abort startup.
-    await _run_preauth_case_migration()
 
     # TOOL-RETRIEVAL INDEX WARM-AT-STARTUP: when retrieval is enabled
     # (shadow/enforce), build the discover index off-loop NOW instead of

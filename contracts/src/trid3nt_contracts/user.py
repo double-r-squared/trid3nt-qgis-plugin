@@ -1,10 +1,10 @@
 """User identity envelope (Auth/Users track stub, sprint-12-mega Wave 1.5).
 
-A User document represents an authenticated account. The shape lives
-here so the agent's persistence layer (job-0115) has a typed contract to
-``upsert_user`` / ``get_user_by_firebase_uid`` against ahead of the formal
-Auth/Users track (the 4-job schema/agent/web/infra sprint that lands Firebase
-Auth / Identity Platform wiring end-to-end).
+A User document represents an account. The shape lives here so the agent's
+persistence layer has a typed contract to ``upsert_user`` / ``get_user_by_id``
+against. In the local single-user build there is one fixed user; the multi-user
+Auth/Users track (Firebase / Identity Platform wiring) is not part of this
+build.
 
 This is a **forward-looking stub**: only the fields the persistence layer
 demands at Wave 1.5 are populated. The full Auth track will additively grow
@@ -23,7 +23,7 @@ Invariants this module is responsible for:
 SRS references:
 - Appendix D.6 (``sessions``) — the User contract is the per-user
   cross-Case parent of session records (a ``sessions`` document scopes to a
-  ``user_id`` + ``case_id``); job-0115 needs it for ``get_user_by_firebase_uid``.
+  ``user_id`` + ``case_id``).
 - §F.3 (per-Case secrets) — the ``case_id``-scoped ``SecretRecord``
   ultimately roots in a ``User`` once Auth lands; the ``user_id`` link is
   the join key.
@@ -52,12 +52,8 @@ class User(GraceModel):
     Fields:
 
     - ``user_id`` — ULID; the canonical id used by every join (Case ownership,
-      session scoping, per-user secrets). Generated server-side on first
-      successful Auth login.
-    - ``firebase_uid`` — the Firebase / Identity Platform UID this account is
-      bound to. Nullable so the contract supports the (non-MVP) local-dev /
-      service-account testing path that bypasses Firebase. The Auth track
-      flips this to required once the M6+ identity wiring lands.
+      session scoping, per-user secrets). In the local build this is the fixed
+      single-user constant.
     - ``email`` — verified email from the Auth provider. Optional (some
       providers ship no email by default; the Auth track gates this).
     - ``display_name`` — free-text display name (≤200 chars). Optional;
@@ -77,18 +73,13 @@ class User(GraceModel):
     schema_version: Literal["v1"] = "v1"
 
     user_id: ULIDStr
-    firebase_uid: str | None = Field(default=None, max_length=256)
     email: str | None = Field(default=None, max_length=320)  # RFC 5321 limit
     display_name: str | None = Field(default=None, max_length=200)
     created_at: UTCDatetime
     is_active: bool = True
     prefs: dict = Field(default_factory=dict)
-    # job-0172 Part C: distinguishes the H.3 anonymous-fallback Users from
-    # Firebase-verified Users. The client persists its assigned anonymous
-    # ``user_id`` in localStorage and replays it on every reconnect via the
-    # ``AuthTokenEnvelope.anonymous_user_id`` hint; the agent looks up that id
-    # here, confirms ``is_anonymous=True``, and re-binds the same User record
-    # rather than minting a fresh one. Default ``False`` so Firebase-verified
-    # Users (the existing path) are unaffected. (Decision F: this field never
-    # leaks the credential — anonymous Users have no credential to leak.)
+    # Marks an anonymous (no-IdP) User. In the local single-user build the one
+    # fixed user is provisioned with ``is_anonymous=True`` so the auth-ack keeps
+    # the client handshake unchanged. Default ``False`` (unchanged). (Decision F:
+    # an anonymous User has no credential to leak.)
     is_anonymous: bool = False

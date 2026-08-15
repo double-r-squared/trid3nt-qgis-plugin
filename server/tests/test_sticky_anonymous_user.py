@@ -98,11 +98,10 @@ async def test_anonymous_reuse_rejects_non_anonymous_record() -> None:
     client = FakeMCPClient()
     p = Persistence(client)
 
-    # Pre-seed a non-anonymous User record (legacy IdP-sub carrier populated).
+    # Pre-seed a non-anonymous User record.
     verified_id = new_ulid()
     verified = User(
         user_id=verified_id,
-        firebase_uid="firebase-uid-001",
         created_at=now_utc(),
         is_anonymous=False,
     )

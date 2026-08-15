@@ -35,12 +35,9 @@ on top. The two envelopes coexist; the lighter one feeds the heavier one.
 Audit log
 ~~~~~~~~~
 
-Every emitted candidate is appended to the MongoDB MCP ``audit_log``
-collection (D.15) via ``Persistence.append_audit("mode2-candidate", ...)``
-at the server.py call site (M4) - persistent across
-sessions so the user can later review "what did the classifier flag this
-week?" without scrolling back through chat. The earlier bespoke JSONL file
-writer was removed (remove-don't-shim).
+Emitted candidates are logged in-process at the server.py call site (one
+``mode2-candidate`` INFO line). There is deliberately NO persisted audit
+sink: nothing reads such a stream, so none is written.
 
 Inputs / outputs
 ~~~~~~~~~~~~~~~~
@@ -410,14 +407,5 @@ def classify_for_mode2(page_dict: dict[str, Any]) -> Mode2Candidate | None:
     )
 
 
-# ---------------------------------------------------------------------------
-# Audit log - REMOVED (M4, remove-don't-shim).
-#
-# The bespoke JSONL file writer (``append_audit_log`` +
-# ``default_audit_log_path``, ``~/.trid3nt/mode2_audit.log``) was the last
-# CRUD path bypassing MongoDB MCP. Mode-2 candidate audit events now route
-# through ``Persistence.append_audit("mode2-candidate", ...)`` at the
-# server.py call site — the ``audit_log`` collection (D.15) is the single
-# audit stream. On a dev box the file-backed substrate lands them in
-# ``~/.trid3nt/dev_persistence/<db>/audit_log.json``.
-# ---------------------------------------------------------------------------
+# No audit sink: mode-2 candidates are logged in-process at the server.py call
+# site only. Do NOT add a persisted audit stream here -- nothing reads one.

@@ -291,7 +291,7 @@ async def test_case_list_stable_across_reconnect_any_client_id() -> None:
         created_at=now_utc(),
         updated_at=now_utc(),
     )
-    await p.upsert_case(case, owner_user_id=first.user.user_id, ephemeral=True)
+    await p.upsert_case(case, owner_user_id=first.user.user_id)
 
     cases_before = await p.list_cases_for_user(first.user.user_id)
     assert [c.case_id for c in cases_before] == [case.case_id]
@@ -364,7 +364,6 @@ async def test_token_path_ignores_anon_registry_and_hint() -> None:
     assert filled is tok
     res = await authenticate_token(filled, p)
     assert res.is_anonymous is True
-    assert res.firebase_uid is None
     # The fixed local user -- neither the stray hint nor the registry id.
     assert res.user.user_id == LOCAL_SINGLE_USER_ID
     assert res.user.user_id != stray_hint
@@ -372,16 +371,12 @@ async def test_token_path_ignores_anon_registry_and_hint() -> None:
 
 
 # --------------------------------------------------------------------------- #
-# F1 (live-feedback 2026-07-09): TRID3NT local build -- ONE fixed local user.
-#
-# Local mode (TRID3NT_SOLVER_BACKEND=local-docker, the FilePersistence build)
-# has exactly one human, but each client (desktop browser, phone, QGIS plugin,
-# Playwright) presented its own sticky anonymous_user_id -- so every device
-# forked its own owner-scoped case list (log 2026-07-09 01:23:14 "hint ...
-# not found; minting fresh" -> count=0 on a box full of cases). The fix
-# collapses EVERY local-mode connection onto auth_handshake.LOCAL_SINGLE_USER_ID
-# and adopts stray cases (minted by the old per-client anon users) onto it.
-# These tests run on the REAL local substrate (FileMCPClient) for fidelity.
+# TRID3NT local build -- ONE fixed local user. Local mode
+# (TRID3NT_SOLVER_BACKEND=local-docker, the FilePersistence build) has exactly
+# one human, so EVERY connection collapses onto
+# auth_handshake.LOCAL_SINGLE_USER_ID regardless of the per-client
+# anonymous_user_id hint. These tests run on the REAL local substrate
+# (FileMCPClient) for fidelity.
 # --------------------------------------------------------------------------- #
 
 from trid3nt_server.credentials import auth_handshake
@@ -390,8 +385,6 @@ from trid3nt_server.persistence import FileMCPClient
 
 def _local_persistence(monkeypatch, tmp_path) -> Persistence:
     monkeypatch.setenv("TRID3NT_SOLVER_BACKEND", "local-docker")
-    # Re-arm the once-per-process adoption sweep for test isolation.
-    monkeypatch.setattr(auth_handshake, "_local_case_adoption_done", False)
     return Persistence(FileMCPClient(tmp_path))
 
 
@@ -432,30 +425,15 @@ async def test_local_mode_two_anon_ids_resolve_to_same_user(
     assert [c.case_id for c in listed] == [case.case_id]
 
 
-@pytest.mark.asyncio
-async def test_local_mode_adopts_stray_per_anon_user_cases(
-    monkeypatch, tmp_path
-) -> None:
-    """Pre-fix cases owned by per-client anonymous users (and legacy
-    owner-less cases) are adopted by the single local user on first auth."""
-    p = _local_persistence(monkeypatch, tmp_path)
+def test_stray_case_adoption_removed() -> None:
+    """Absence guard: the stray-case adoption sweep is gone (chop 4).
 
-    stray_a = _case("Phone Case")
-    stray_b = _case("Playwright Case")
-    orphan = _case("Pre-auth Case")
-    await p.upsert_case(stray_a, owner_user_id=new_ulid())
-    await p.upsert_case(stray_b, owner_user_id=new_ulid())
-    await p.upsert_case(orphan)  # no owner stamped at all
-
-    result = await authenticate_token(AuthTokenEnvelope(token=""), p)
-    assert result.user.user_id == auth_handshake.LOCAL_SINGLE_USER_ID
-
-    listed = await p.list_cases_for_user(auth_handshake.LOCAL_SINGLE_USER_ID)
-    assert {c.case_id for c in listed} == {
-        stray_a.case_id,
-        stray_b.case_id,
-        orphan.case_id,
-    }
+    Multi-user case-adoption was moot for a single-user product -- the
+    ``adopt_cases_to_user`` sweep and its once-per-process guard are deleted,
+    so a Case is simply created under and listed for the fixed local user.
+    """
+    assert not hasattr(Persistence, "adopt_cases_to_user")
+    assert not hasattr(auth_handshake, "_local_case_adoption_done")
 
 
 @pytest.mark.asyncio

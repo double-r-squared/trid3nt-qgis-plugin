@@ -61,13 +61,11 @@ def _clean_remote_env(monkeypatch: pytest.MonkeyPatch) -> None:
 def _make_auth_result(*, anonymous: bool = True) -> AuthResult:
     user = User(
         user_id=new_ulid(),
-        firebase_uid=None,
         created_at=now_utc(),
         is_anonymous=anonymous,
     )
     return AuthResult(
         user=user,
-        firebase_uid=None,
         is_anonymous=anonymous,
         tier="free",
     )

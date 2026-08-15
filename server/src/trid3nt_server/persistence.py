@@ -13,9 +13,8 @@ A cloud MCP-backed client implementing the same ``MCPClientProtocol`` drops in
 unchanged, but the local stack binds only the file backend.
 
 Supports ``CaseSummary`` round-trip (get/upsert/list/archive/delete),
-``CaseChatMessage`` append + ``CaseSessionState`` hydration, ``User``
-round-trip (``get_user_by_firebase_uid``/``upsert_user``), and
-``append_audit`` (fire-and-forget audit log line). API-key credentials no
+``CaseChatMessage`` append + ``CaseSessionState`` hydration, and ``User``
+round-trip (``get_user_by_id``/``upsert_user``). API-key credentials no
 longer persist here: the plugin brokers key values over the ``secret-add`` WS
 seam into the in-memory ``credentials.resolver`` session cache, with env vars
 the headless / dev floor.
@@ -23,16 +22,10 @@ the headless / dev floor.
 Containment: every storage call goes through
 ``mcp_client.call_tool("<mcp-method>", args)``, a single seam; callers pass
 typed ``GraceModel`` instances in and get typed instances out, and the
-``dict``-shape MCP transport is contained here. The session-record write
-carveout (Appendix D.6, FR-AS-8) is enforced at the confirmation-hook layer
-(``server.CONFIRMATION_TRIGGERS``), not here; persistence is the I/O
-substrate, the hook policy is per-call.
+``dict``-shape MCP transport is contained here. Persistence is the I/O
+substrate; any confirmation policy lives at the ``server.py`` call sites.
 
-Invariants: no quota/cost/spend fields on any record. A
-``sessions``-collection update (the
-agent's own session record) is not a confirmable write; a
-``runs``-collection insert is (Decision F + FR-AS-8); this module exposes
-both seams, ``server.py`` is responsible for confirmation routing.
+Invariants: no quota/cost/spend fields on any record.
 """
 
 from __future__ import annotations
@@ -40,7 +33,7 @@ from __future__ import annotations
 import logging
 from typing import Any, Protocol
 
-from trid3nt_contracts import new_ulid, now_utc
+from trid3nt_contracts import now_utc
 from trid3nt_contracts.case import (
     CaseChatMessage,
     CaseSessionState,
@@ -59,13 +52,11 @@ DEFAULT_DATABASE = os.environ.get("TRID3NT_MONGO_DB", "trid3nt_dev")
 
 # Collection names -- pinned by Appendix D nomenclature (D.2 ``projects`` for
 # Cases, D.6 ``sessions`` for chat history, D.13 ``users`` for the
-# forward-looking Auth track stub, D.14 ``secrets`` for §F.3 per-Case keys,
-# D.15 ``audit_log`` for the fire-and-forget audit stream).
+# forward-looking Auth track stub, D.14 ``secrets`` for §F.3 per-Case keys).
 CASES_COLLECTION = "projects"  # FR-MP-5/-6: Case <-> projects 1:1
 CHAT_COLLECTION = "case_chat_messages"  # per-turn message log (FR-MP-6)
 SESSIONS_COLLECTION = "sessions"  # D.6 -- agent's own session records
 USERS_COLLECTION = "users"  # D.13 (Auth/Users track stub)
-AUDIT_COLLECTION = "audit_log"  # fire-and-forget audit stream
 
 
 # --------------------------------------------------------------------------- #
@@ -197,7 +188,6 @@ class Persistence:
         case: CaseSummary,
         *,
         owner_user_id: str | None = None,
-        ephemeral: bool = False,
     ) -> CaseSummary:
         """Insert or update a Case. Returns the persisted ``CaseSummary``.
 
@@ -210,43 +200,23 @@ class Persistence:
         field (it is a UI denormalization), so ownership lives only at the
         storage layer -- the read path (``_doc_to_case_summary``) deliberately
         drops it. Without this, every newly-created Case would lack a
-        ``user_id`` and become invisible to ``list_cases_for_user`` now that
-        the ``$exists:false`` leak clause is gone. ``owner_user_id=None``
-        (the legacy / dev call shape) writes no owner -- those Cases are then
-        swept by the one-time ``migrate_preauth_cases`` startup step.
+        ``user_id`` and become invisible to ``list_cases_for_user``.
+        ``owner_user_id=None`` (the legacy / dev call shape) writes no owner.
 
         The owner is written under ``$set``, so re-upserting an existing Case
         with a fresh ``owner_user_id`` updates it; passing ``None`` never
         clears an already-stamped owner (the ``user_id`` key is simply absent
         from the ``$set``).
 
-        ephemeral-cases track: ``ephemeral=True`` (only ever passed for
-        ANONYMOUS / pre-Auth Cases) stamps a NUMERIC epoch-seconds
-        ``expires_at`` (``int(now + CASES_ANON_TTL_SECONDS)``) -- a RESERVED TTL
-        marker a TTL-capable backend can reap the Case with after the window.
-        The file backend does not reap; the field is written for forward
-        compat. Intentionally a Number attribute, NOT the ISO ``expires_at``
-        string the sessions collection uses (a numeric-epoch TTL index only
-        honours a number). ``expires_at`` is a storage-only field;
-        ``_doc_to_case_summary`` drops it so it NEVER reaches the wire
-        ``CaseSummary``.
-
-        ``ephemeral=False`` (the DEFAULT, and the only shape authed call-sites
-        ever use) writes NO ``expires_at`` at all -- authed Cases are durable
-        forever. This default is exactly byte-compatible with the prior
-        behaviour, so the new kwarg is dormant until a call-site opts in.
+        Cases are durable: no ``expires_at`` TTL stamp is written. A legacy Case
+        doc that still carries a stored ``expires_at`` reads back fine --
+        ``_doc_to_case_summary`` drops the storage-only key so it never reaches
+        the wire ``CaseSummary``.
         """
         body = case.model_dump(mode="json")
         body["_id"] = case.case_id  # the ``_id`` primary key (FR-MP-5)
         if owner_user_id:
             body["user_id"] = owner_user_id
-        if ephemeral:
-            from trid3nt_contracts.collections import CASES_ANON_TTL_SECONDS
-
-            # RESERVED numeric-epoch TTL marker (a TTL-capable backend requires
-            # a NUMBER, not the ISO string sessions use); the file backend does
-            # not reap. Authed Cases never reach here.
-            body["expires_at"] = int(now_utc().timestamp()) + CASES_ANON_TTL_SECONDS
         await self._mcp.call_tool(
             "update-one",
             {
@@ -318,95 +288,6 @@ class Persistence:
         }
         return out or None
 
-    async def migrate_preauth_cases(self, anon_uid: str) -> int:
-        """One-time, idempotent: stamp pre-Auth Cases with ``anon_uid``.
-
-        Cases written before
-        the Auth track carry no ``user_id`` field. The old
-        ``{"user_id": {"$exists": False}}`` clause in ``list_cases_for_user``
-        leaked every such Case to every signed-in user. This migration
-        assigns ``user_id = anon_uid`` (the ``MIGRATION_ANON_UID`` sentinel)
-        to every Case that lacks a ``user_id``, so a pre-Auth Case belongs to
-        one synthetic owner instead of leaking.
-
-        **Idempotent** by construction: the filter is
-        ``{"user_id": {"$exists": False}}``, so a second run matches nothing
-        (every Case now has a ``user_id``). Re-running is a safe no-op.
-
-        **Non-corrupting**: a single ``$set`` of one field via the logical
-        ``update-one`` (upsert=False) surface stamps the matching orphan Cases.
-        No other field is read, written, or removed; sessions and chat
-        histories are untouched (this method only ever writes the ``projects``
-        collection).
-
-        Returns the modified count when the backend reports one, else ``0``.
-        Best-effort on count parsing -- the migration's success is the absence
-        of orphans on the next run, not the returned integer.
-        """
-        raw = await self._mcp.call_tool(
-            "update-many",
-            {
-                "database": self._db,
-                "collection": CASES_COLLECTION,
-                "filter": {"user_id": {"$exists": False}},
-                "update": {"$set": {"user_id": anon_uid}},
-            },
-        )
-        # Best-effort: surface the modified count for the startup log. The
-        # real server returns a text/EJSON blob; the mock/file backends return
-        # a plain dict. Tolerate every shape.
-        modified = 0
-        payload = _unwrap_mcp_result(raw) if isinstance(raw, dict) else raw
-        if isinstance(payload, dict):
-            for k in ("modifiedCount", "modified_count", "nModified"):
-                v = payload.get(k)
-                if isinstance(v, int):
-                    modified = v
-                    break
-        logger.info(
-            "pre-Auth case migration: stamped %s orphan case(s) with user_id=%s",
-            modified,
-            anon_uid,
-        )
-        return modified
-
-    async def adopt_cases_to_user(self, user_id: str) -> int:
-        """Re-own EVERY case not already owned by ``user_id`` (local mode, F1).
-
-        TRID3NT local-build single-user seam (live-feedback 2026-07-09): the
-        old per-client anonymous users each minted their own cases, so the
-        case list forked per device. When local mode collapses auth onto the
-        one fixed local user (``auth_handshake.LOCAL_SINGLE_USER_ID``), this
-        sweep adopts the strays -- one ``update-many`` setting ``user_id`` on
-        every case doc whose owner differs (``$nin`` also matches a MISSING
-        ``user_id``, Mongo-faithful, so pre-auth orphans are adopted too).
-
-        Idempotent: after one run every case is owned by ``user_id`` and the
-        filter matches nothing. ONLY called from the local-mode auth path --
-        never wired on the cloud stack, where blanket adoption would be a
-        cross-tenant ownership transfer.
-
-        Returns the modified count when the backend reports one, else ``0``.
-        """
-        raw = await self._mcp.call_tool(
-            "update-many",
-            {
-                "database": self._db,
-                "collection": CASES_COLLECTION,
-                "filter": {"user_id": {"$nin": [user_id]}},
-                "update": {"$set": {"user_id": user_id}},
-            },
-        )
-        modified = 0
-        payload = _unwrap_mcp_result(raw) if isinstance(raw, dict) else raw
-        if isinstance(payload, dict):
-            for k in ("modifiedCount", "modified_count", "nModified"):
-                v = payload.get(k)
-                if isinstance(v, int):
-                    modified = v
-                    break
-        return modified
-
     async def list_cases_for_user(self, user_id: str) -> list[CaseSummary]:
         """List the user's LIVE Cases (``status="active"`` only).
 
@@ -421,10 +302,6 @@ class Persistence:
         filter still matches docs with no ``status`` field at all (pre-status
         records are live by definition: ``CaseSummary.status`` defaults to
         ``"active"``).
-
-        Orphan pre-Auth Cases (no ``user_id``) are stamped with the
-        ``MIGRATION_ANON_UID`` sentinel by the one-time startup migration
-        (``migrate_preauth_cases``), so a Case is visible only to its owner.
         """
         raw = await self._mcp.call_tool(
             "find",
@@ -774,51 +651,6 @@ class Persistence:
                 },
             )
 
-    async def touch_case(
-        self,
-        case_id: str,
-        *,
-        ttl_seconds: int | None = None,
-    ) -> None:
-        """Slide the TTL window on an EPHEMERAL (anonymous) Case.
-
-        Activity heartbeat for an anonymous Case: ``$set`` a fresh NUMERIC
-        epoch-seconds ``expires_at`` (``int(now) + ttl``) on the case doc so a
-        Case the user is actively working in is not reaped mid-session. Mirrors
-        :meth:`touch_session`, but stamps a Number epoch (a RESERVED TTL marker
-        for a TTL-capable backend), NOT the ISO string the sessions TTL index
-        uses.
-
-        Only ever called for anonymous Cases. Authed Cases carry no
-        ``expires_at`` and must stay durable forever -- server.py simply never
-        invokes ``touch_case`` for them (the kwarg defaults keep this dormant
-        until the call-site is wired).
-
-        ``ttl_seconds`` defaults to ``CASES_ANON_TTL_SECONDS``. Unlike
-        ``upsert_case``, this is a bare ``$set`` with NO ``upsert`` -- it only
-        slides an existing Case's window and never resurrects a reaped one.
-
-        Fire-and-forget discipline (same as ``touch_session`` / telemetry M3):
-        a persistence hiccup must never take down the user's turn, so any error
-        is swallowed and logged rather than raised.
-        """
-        from trid3nt_contracts.collections import CASES_ANON_TTL_SECONDS
-
-        ttl = ttl_seconds if ttl_seconds is not None else CASES_ANON_TTL_SECONDS
-        try:
-            expires_at = int(now_utc().timestamp()) + ttl
-            await self._mcp.call_tool(
-                "update-one",
-                {
-                    "database": self._db,
-                    "collection": CASES_COLLECTION,
-                    "filter": {"_id": case_id},
-                    "update": {"$set": {"expires_at": expires_at}},
-                },
-            )
-        except Exception:  # noqa: BLE001
-            logger.warning("touch_case failed for case_id=%s", case_id, exc_info=True)
-
     async def set_session_active_case(
         self, session_id: str, case_id: str | None
     ) -> None:
@@ -923,28 +755,6 @@ class Persistence:
 
     # ----- Users (Auth/Users track stub) ----------------------------------- #
 
-    async def get_user_by_firebase_uid(self, uid: str) -> User | None:
-        """Find a user by Firebase / Identity Platform UID."""
-        raw = await self._mcp.call_tool(
-            "find-one",
-            {
-                "database": self._db,
-                "collection": USERS_COLLECTION,
-                "filter": {"firebase_uid": uid},
-            },
-        )
-        doc = _unwrap_mcp_result(raw)
-        if not doc or not isinstance(doc, dict):
-            return None
-        normalized = {k: v for k, v in doc.items() if k != "_id"}
-        if "user_id" not in normalized and "_id" in doc:
-            normalized["user_id"] = doc["_id"]
-        try:
-            return User.model_validate(normalized)
-        except Exception:  # noqa: BLE001
-            logger.warning("malformed user doc for firebase_uid=%s", uid)
-            return None
-
     async def upsert_user(self, user: User) -> User:
         """Insert or update a user record."""
         body = user.model_dump(mode="json")
@@ -965,9 +775,8 @@ class Persistence:
         """Find a user by ULID. Returns ``None`` if not found.
 
         Part C: the anonymous-fallback path needs an id-based lookup
-        so a reconnecting browser can re-bind to the same ephemeral User via
-        the ``AuthTokenEnvelope.anonymous_user_id`` hint. Mirrors the shape
-        of ``get_user_by_firebase_uid`` so the call site stays symmetric.
+        so a reconnecting client can re-bind to the same User via the
+        ``AuthTokenEnvelope.anonymous_user_id`` hint.
         """
         raw = await self._mcp.call_tool(
             "find-one",
@@ -992,31 +801,6 @@ class Persistence:
         except Exception:  # noqa: BLE001
             logger.warning("malformed user doc for user_id=%s", user_id)
             return None
-
-    # ----- Audit log -------------------------------------------------------- #
-
-    async def append_audit(self, event_type: str, payload: dict) -> None:
-        """Append one fire-and-forget audit event.
-
-        Used by Decision M (claim provenance) and §F.3 catalog-amendment
-        audit. Best-effort: callers should NOT block their happy path on
-        this -- wrap in ``try/except`` at the call site if the audit write
-        failing would otherwise abort the user's action.
-        """
-        body = {
-            "_id": new_ulid(),
-            "event_type": event_type,
-            "ts": now_utc().isoformat().replace("+00:00", "Z"),
-            "payload": payload,
-        }
-        await self._mcp.call_tool(
-            "insert-one",
-            {
-                "database": self._db,
-                "collection": AUDIT_COLLECTION,
-                "document": body,
-            },
-        )
 
 
 # --------------------------------------------------------------------------- #
@@ -1286,7 +1070,7 @@ class FileMCPClient:
                     matched = 1
                     modified = 1
                 else:
-                    # Update by non-_id filter (e.g. firebase_uid). First match wins.
+                    # Update by a non-``_id`` filter. First match wins.
                     for doc in store.values():
                         if self._matches(doc, filt):
                             self._apply_update(doc, update, inserting=False)
@@ -1294,27 +1078,6 @@ class FileMCPClient:
                             modified = 1
                             break
                 await _asyncio.to_thread(self._atomic_write, path, store)
-                return {"matchedCount": matched, "modifiedCount": modified}
-
-        if name == "update-many":
-            # the pre-Auth case migration uses the
-            # real-server ``update-many`` surface directly (the translator
-            # passes it through). On the dev/file substrate there is no
-            # translator, so we honor it here: apply the update to EVERY
-            # matching doc. No upsert (the migration never upserts).
-            async with lock:
-                store = await _asyncio.to_thread(self._read_store, path)
-                filt = args.get("filter", {})
-                update = args.get("update", {})
-                matched = 0
-                modified = 0
-                for doc in store.values():
-                    if self._matches(doc, filt):
-                        self._apply_update(doc, update, inserting=False)
-                        matched += 1
-                        modified += 1
-                if modified:
-                    await _asyncio.to_thread(self._atomic_write, path, store)
                 return {"matchedCount": matched, "modifiedCount": modified}
 
         if name == "find-one":
@@ -1444,5 +1207,4 @@ __all__ = [
     "CHAT_COLLECTION",
     "SESSIONS_COLLECTION",
     "USERS_COLLECTION",
-    "AUDIT_COLLECTION",
 ]

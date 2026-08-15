@@ -1,28 +1,27 @@
 """Unit + integration tests for ``trid3nt_server.credentials.auth_handshake`` (local build).
 
-The local build has NO token verification (no identity provider): every
-connection resolves through the anonymous path (H.3) or, in local-docker
-mode, the ONE fixed local user. Coverage:
+The local build has NO token verification and no identity provider:
+``solver_backend()`` is hardwired to ``local-docker``, so EVERY connection --
+any token, any ``anonymous_user_id`` hint -- resolves to the ONE fixed local
+user (``LOCAL_SINGLE_USER_ID``). Coverage:
 
-1. ``test_authenticate_token_nonempty_token_falls_back_anonymous`` -- a
-   presented token is ignored -> anonymous fallback.
-2. ``test_authenticate_token_empty_token_is_anonymous`` -- empty token
-   string -> anonymous fallback.
-3. ``test_authenticate_token_no_envelope_is_anonymous`` -- None envelope
-   -> anonymous fallback.
-4. ``test_anonymous_user_has_no_firebase_uid`` -- anonymous fallback user
-   has firebase_uid=None, is_active=True.
+1. ``test_authenticate_token_nonempty_token_resolves_local_user`` -- a
+   presented token is ignored -> the fixed local user.
+2. ``test_authenticate_token_empty_token_resolves_local_user`` -- empty token.
+3. ``test_authenticate_token_no_envelope_resolves_local_user`` -- None envelope.
+4. ``test_local_user_shape`` -- resolved user is anonymous, is_active=True.
 5. ``test_build_auth_ack_shape`` -- ack envelope mirrors AuthResult fields,
    no raw token leaks.
 6. ``test_persistence_unbound_returns_in_memory_user`` -- Persistence=None
-   path returns a fresh in-memory User without raising.
+   path returns an in-memory User without raising.
 7. Integration: ``test_server_connect_handshake_flow_with_mocks`` -- drives
    the full ``_handle_auth_token`` path through the server using mock
-   Persistence; asserts SessionState binding and the auth-ack envelope on
-   the wire.
+   Persistence; asserts SessionState binding and the auth-ack envelope.
 8. ``test_connection_context_retains_authenticated_user_id`` -- a second
    handshake call never rebinds a completed session.
 9. ``test_auth_envelope_contracts_round_trip`` -- wire-contract guard.
+10. ``test_non_local_mode_raises`` -- outside local single-user mode the
+    handshake fails LOUD (typed rejection), never silently resolves.
 """
 
 from __future__ import annotations
@@ -31,8 +30,11 @@ import json
 
 import pytest
 
+from trid3nt_server.credentials import auth_handshake
 from trid3nt_server.credentials.auth_handshake import (
+    LOCAL_SINGLE_USER_ID,
     AuthResult,
+    NonLocalAuthUnsupported,
     authenticate_token,
     build_auth_ack,
 )
@@ -106,67 +108,66 @@ def persistence() -> Persistence:
 
 
 @pytest.mark.asyncio
-async def test_authenticate_token_nonempty_token_falls_back_anonymous(
+async def test_authenticate_token_nonempty_token_resolves_local_user(
     persistence: Persistence,
 ) -> None:
-    """Anonymous fallback: ephemeral user created without firebase_uid."""
+    """A presented token is ignored -> the fixed local user."""
     result = await authenticate_token(
         AuthTokenEnvelope(token="any.jwt.like.string"), persistence
     )
 
     assert result.is_anonymous is True
-    assert result.firebase_uid is None
     assert result.tier == "free"
-    assert result.user.firebase_uid is None
+    assert result.user.user_id == LOCAL_SINGLE_USER_ID
     assert result.user.is_active is True
 
 
 # --------------------------------------------------------------------------- #
-# 2. Empty token -> anonymous
+# 2. Empty token -> local user
 # --------------------------------------------------------------------------- #
 
 
 @pytest.mark.asyncio
-async def test_authenticate_token_empty_token_is_anonymous(
+async def test_authenticate_token_empty_token_resolves_local_user(
     persistence: Persistence,
 ) -> None:
-    """Empty token string -> anonymous fallback."""
+    """Empty token string -> the fixed local user."""
     result = await authenticate_token(AuthTokenEnvelope(token=""), persistence)
     assert result.is_anonymous is True
+    assert result.user.user_id == LOCAL_SINGLE_USER_ID
 
 
 # --------------------------------------------------------------------------- #
-# 3. None envelope -> anonymous
+# 3. None envelope -> local user
 # --------------------------------------------------------------------------- #
 
 
 @pytest.mark.asyncio
-async def test_authenticate_token_no_envelope_is_anonymous(
+async def test_authenticate_token_no_envelope_resolves_local_user(
     persistence: Persistence,
 ) -> None:
-    """No envelope at all -> anonymous fallback."""
+    """No envelope at all -> the fixed local user."""
     result = await authenticate_token(None, persistence)
     assert result.is_anonymous is True
-    assert result.firebase_uid is None
+    assert result.user.user_id == LOCAL_SINGLE_USER_ID
 
 
 # --------------------------------------------------------------------------- #
-# 4. Anonymous user shape
+# 4. Local user shape
 # --------------------------------------------------------------------------- #
 
 
 @pytest.mark.asyncio
-async def test_anonymous_user_has_no_firebase_uid(
+async def test_local_user_shape(
     persistence: Persistence,
 ) -> None:
-    """Anonymous fallback User: firebase_uid=None, is_active=True."""
+    """Resolved local User: anonymous, is_active=True, no email."""
     result = await authenticate_token(None, persistence)
     u = result.user
-    assert u.firebase_uid is None
+    assert u.is_anonymous is True
     assert u.email is None
     assert u.is_active is True
-    # ULID discipline still holds.
-    assert len(u.user_id) == 26
+    assert u.user_id == LOCAL_SINGLE_USER_ID
 
 
 # --------------------------------------------------------------------------- #
@@ -179,19 +180,16 @@ def test_build_auth_ack_shape() -> None:
     uid = new_ulid()
     user = User(
         user_id=uid,
-        firebase_uid=None,
         created_at=now_utc(),
         is_anonymous=True,
     )
     result = AuthResult(
         user=user,
-        firebase_uid=None,
         is_anonymous=True,
         tier="free",
     )
     ack = build_auth_ack(result)
     assert ack.user_id == uid
-    assert ack.firebase_uid is None
     assert ack.is_anonymous is True
     assert ack.tier == "free"
 
@@ -210,14 +208,15 @@ def test_build_auth_ack_shape() -> None:
 
 @pytest.mark.asyncio
 async def test_persistence_unbound_returns_in_memory_user() -> None:
-    """Persistence=None -> fresh in-memory anonymous User (M1 fallback)."""
+    """Persistence=None -> in-memory local User, no raise."""
     result = await authenticate_token(AuthTokenEnvelope(token="x"), None)
     assert result.is_anonymous is True
-    assert result.user.firebase_uid is None
+    assert result.user.user_id == LOCAL_SINGLE_USER_ID
 
-    # Anonymous fallback with Persistence=None also works with no envelope.
+    # No envelope with Persistence=None also lands on the local user.
     result2 = await authenticate_token(None, None)
     assert result2.is_anonymous is True
+    assert result2.user.user_id == LOCAL_SINGLE_USER_ID
 
 
 # --------------------------------------------------------------------------- #
@@ -279,7 +278,6 @@ async def test_server_connect_handshake_flow_with_mocks() -> None:
     # SessionState was bound.
     assert state_a.authenticated_user_id is not None
     assert state_a.is_anonymous is True
-    assert state_a.firebase_uid is None
     assert state_a.tier == "free"
     assert state_a.auth_handshake_complete is True
 
@@ -290,20 +288,19 @@ async def test_server_connect_handshake_flow_with_mocks() -> None:
     assert ack_env["session_id"] == state_a.session_id
     payload = ack_env["payload"]
     assert payload["user_id"] == state_a.authenticated_user_id
-    assert payload["firebase_uid"] is None
+    assert "firebase_uid" not in payload
     assert payload["is_anonymous"] is True
     assert payload["tier"] == "free"
     # Decision F: no raw token on the wire.
     assert "token" not in payload
 
-    # Path B: implicit anonymous fallback on a fresh state -- no auth-token
-    # envelope ever arrives.
+    # Path B: implicit fallback on a fresh state -- no auth-token envelope
+    # ever arrives.
     state_b = SessionState(session_id=new_ulid())
     ws_b = _FakeWebSocket()
     await _ensure_auth_handshake(ws_b, state_b)  # type: ignore[arg-type]
 
     assert state_b.is_anonymous is True
-    assert state_b.firebase_uid is None
     assert state_b.auth_handshake_complete is True
     # Auth-ack emitted for the anonymous fallback path too.
     assert len(ws_b.sent) == 1
@@ -333,11 +330,9 @@ async def test_connection_context_retains_authenticated_user_id() -> None:
     result = AuthResult(
         user=User(
             user_id=fixed_user_id,
-            firebase_uid=None,
             created_at=now_utc(),
             is_anonymous=True,
         ),
-        firebase_uid=None,
         is_anonymous=True,
         tier="free",
     )
@@ -374,7 +369,6 @@ def test_auth_envelope_contracts_round_trip() -> None:
 
     ack = AuthAckEnvelope(
         user_id=new_ulid(),
-        firebase_uid=None,
         is_anonymous=True,
         tier="free",
     )
@@ -383,3 +377,26 @@ def test_auth_envelope_contracts_round_trip() -> None:
         mode="json"
     )
     assert c == d
+
+
+# --------------------------------------------------------------------------- #
+# 10. Non-local mode fails LOUD (typed rejection)
+# --------------------------------------------------------------------------- #
+
+
+@pytest.mark.asyncio
+async def test_non_local_mode_raises(
+    persistence: Persistence, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Outside local single-user mode the handshake raises a typed rejection.
+
+    Unreachable in the product (``solver_backend()`` is hardwired to
+    ``local-docker``), but the guard must fail LOUD rather than silently
+    resolve an unauthenticated identity -- the deleted cloud/multi-user
+    anonymous-provisioning branch.
+    """
+    monkeypatch.setattr(
+        auth_handshake, "_is_local_single_user_mode", lambda: False
+    )
+    with pytest.raises(NonLocalAuthUnsupported):
+        await authenticate_token(AuthTokenEnvelope(token=""), persistence)
