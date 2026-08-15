@@ -129,7 +129,7 @@ GWT_UCN_FILENAME: str = "gwt_model.ucn"
 GWE_UCN_FILENAME: str = "gwe_model.ucn"
 
 #: TiTiler style preset for the GWE heat-transport temperature-excess COG (degC).
-#: Registered in publish_layer._TITILER_STYLE_REGISTRY as ("0,40", "inferno").
+#: Registered in publish_layer._QGIS_STYLE_REGISTRY as ("0,40", "inferno").
 TEMPERATURE_STYLE_PRESET: str = "continuous_temperature_c"
 
 #: Temperature EXCESS floor (degC) below which a cell is NOT counted as a thermal
@@ -153,7 +153,7 @@ GWT_SINGLE_SPECIES_STEM: str = "gwt_model"
 GWF_CBC_FILENAME: str = "gwf_model.cbc"
 
 #: TiTiler style preset for the diverging gaining/losing river-seepage COG
-#: (J9). Registered in publish_layer._TITILER_STYLE_REGISTRY by the
+#: (J9). Registered in publish_layer._QGIS_STYLE_REGISTRY by the
 #: orchestrator's shared-appends merge as ("-2,2", "rdbu").
 SEEPAGE_STYLE_PRESET: str = "diverging_river_seepage"
 
@@ -168,7 +168,7 @@ DEWATERING_STYLE_PRESET: str = "continuous_dewatering_rate"
 #: TiTiler style preset for the MAR groundwater-mounding (head-RISE) COG.
 #: Mounding renders on a distinct BLUE (rising-water) ramp so
 #: it never reads like the red drawdown (declining-water) layer; the key is
-#: registered in publish_layer._TITILER_STYLE_REGISTRY and matches OUTPUT_QUANTITIES.
+#: registered in publish_layer._QGIS_STYLE_REGISTRY and matches OUTPUT_QUANTITIES.
 MOUNDING_STYLE_PRESET: str = "continuous_mounding_m"
 
 #: TiTiler style preset for the ASR representative-head COG.
@@ -179,7 +179,7 @@ ASR_STYLE_PRESET: str = "continuous_head_m"
 #: TiTiler style preset for the wetland-hydroperiod seasonal-head-range COG.
 #: The range is a non-negative magnitude (max minus min head
 #: over the transient periods); its dedicated key is registered in
-#: publish_layer._TITILER_STYLE_REGISTRY and matches OUTPUT_QUANTITIES.
+#: publish_layer._QGIS_STYLE_REGISTRY and matches OUTPUT_QUANTITIES.
 HYDROPERIOD_STYLE_PRESET: str = "continuous_hydroperiod_m"
 
 #: Vector style preset for the PRT backward-particle-tracking capture-zone polygon.
@@ -1791,7 +1791,7 @@ def _infer_grid_shape_from_cbc(cbc_path: Path) -> tuple[int, int]:
 #: GWF head filename the OC HEAD FILEOUT writes (gwt_adapter).
 GWF_HDS_FILENAME: str = "gwf_model.hds"
 
-#: continuous head / water-table style preset (publish_layer._TITILER_STYLE_REGISTRY).
+#: continuous head / water-table style preset (publish_layer._QGIS_STYLE_REGISTRY).
 HEAD_STYLE_PRESET: str = "continuous_head_m"
 
 #: MF6 inactive/dry-cell sentinel magnitude.

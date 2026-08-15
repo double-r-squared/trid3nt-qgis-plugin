@@ -1045,7 +1045,7 @@ def _publish_primary_layer(
     """Publish the primary susceptibility COG through publish_layer.
 
     Routes the raw s3:// COG through ``publish_layer`` (the
-    ``_resolve_titiler_style_params`` render seam) and returns a NEW
+    ``_resolve_qgis_style_params`` render seam) and returns a NEW
     ``LandlabSusceptibilityLayerURI`` carrying the published /tiles or WMS URL
     plus the narration scalars. On publish failure the raw layer is returned
     UNCHANGED: the dispatch-level ``emit_layer_uri`` guardrail then drops the

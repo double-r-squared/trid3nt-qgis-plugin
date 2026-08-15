@@ -11,7 +11,7 @@ defaulting to ``"standard"`` (8 vCPU). These tests prove:
 2. A large estimate -> a larger class; a small estimate -> ``"small"``.
 3. A missing / zero / None / NaN / non-numeric estimate -> the ``"standard"``
    fallback (NEVER raises — the dispatch can't crash on an absent estimate).
-4. The new higher tier ``"xlarge"`` resolves cleanly through ``_aws_batch_sizing``
+4. The new higher tier ``"xlarge"`` resolves cleanly through ``COMPUTE_CLASS_SIZING``
    (and is present in the alias map) — 48 vCPU / 96 GiB.
 5. ``model_flood_scenario`` passes the COMPUTED class (from the autoscale
    estimated_active_cells) to ``run_solver`` — not the caller's default.
@@ -30,7 +30,7 @@ from unittest.mock import patch
 import pytest
 
 from trid3nt_server.agent.tools.simulation.solver.solver import (
-    AWS_BATCH_COMPUTE_CLASS_SIZING,
+    COMPUTE_CLASS_SIZING,
     COMPUTE_CLASS_FALLBACK,
     COMPUTE_CLASS_LARGE_MAX_ELEMENTS,
     COMPUTE_CLASS_SMALL_MAX_ELEMENTS,
@@ -85,7 +85,7 @@ def test_ladder_is_monotonic_non_decreasing() -> None:
 def test_large_count_yields_larger_class_than_small_count() -> None:
     small = select_compute_class(5_000)          # tiny AOI
     big = select_compute_class(2_000_000)        # huge mesh
-    sizing = AWS_BATCH_COMPUTE_CLASS_SIZING
+    sizing = COMPUTE_CLASS_SIZING
     assert sizing[_COMPUTE_CLASS_ALIAS[small]]["vcpus"] == 4
     assert sizing[_COMPUTE_CLASS_ALIAS[big]]["vcpus"] == 48
     assert (
@@ -121,21 +121,21 @@ def test_numeric_string_estimate_is_coerced() -> None:
 
 
 def test_xlarge_tier_present_in_sizing_and_alias() -> None:
-    assert "xlarge" in AWS_BATCH_COMPUTE_CLASS_SIZING
+    assert "xlarge" in COMPUTE_CLASS_SIZING
     assert "xlarge" in _COMPUTE_CLASS_ALIAS
-    sizing = AWS_BATCH_COMPUTE_CLASS_SIZING["xlarge"]
+    sizing = COMPUTE_CLASS_SIZING["xlarge"]
     assert sizing["vcpus"] == 48
     assert sizing["mem_mib"] == 98304  # 96 GiB
     assert sizing["omp_threads"] == 48
     # gpu is unchanged (kept AS-IS per kickoff).
-    assert AWS_BATCH_COMPUTE_CLASS_SIZING["gpu"]["vcpus"] == 32
+    assert COMPUTE_CLASS_SIZING["gpu"]["vcpus"] == 32
 
 
 def test_select_then_size_round_trip() -> None:
     """The class select_compute_class returns always resolves in the sizing map."""
     for n in (1_000, 100_000, 500_000, 9_000_000):
         cls = select_compute_class(n)
-        sizing = AWS_BATCH_COMPUTE_CLASS_SIZING[_COMPUTE_CLASS_ALIAS[cls]]
+        sizing = COMPUTE_CLASS_SIZING[_COMPUTE_CLASS_ALIAS[cls]]
         assert sizing["vcpus"] in {4, 8, 16, 48}
 
 

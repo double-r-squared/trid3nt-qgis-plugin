@@ -1,7 +1,7 @@
 """Tests for ``tools.simulation.solver.solve_progress_vcpus`` (fingerprint audit A6).
 
 The single deployment-aware seam the workflow live solve-progress call sites
-use instead of reading ``AWS_BATCH_COMPUTE_CLASS_SIZING`` directly:
+use instead of reading ``COMPUTE_CLASS_SIZING`` directly:
 
 - **local-docker** lane -> ``os.cpu_count()`` (the host CPUs actually doing
   the solve; the web renders the local deployment with "CPU" wording). Never
@@ -22,7 +22,7 @@ import os
 import pytest
 
 from trid3nt_server.agent.tools.simulation.solver.solver import (
-    AWS_BATCH_COMPUTE_CLASS_SIZING,
+    COMPUTE_CLASS_SIZING,
     solve_progress_vcpus,
 )
 
@@ -80,9 +80,9 @@ def test_local_lane_none_when_cpu_count_indeterminate(monkeypatch):
 
 def test_dispatch_sizing_table_untouched(monkeypatch):
     """The Batch resourceRequirements table is never mutated by the seam."""
-    before = {k: dict(v) for k, v in AWS_BATCH_COMPUTE_CLASS_SIZING.items()}
+    before = {k: dict(v) for k, v in COMPUTE_CLASS_SIZING.items()}
     monkeypatch.setenv("TRID3NT_SOLVER_BACKEND", "local-docker")
     solve_progress_vcpus("standard")
     monkeypatch.setenv("TRID3NT_SOLVER_BACKEND", "aws-batch")
     solve_progress_vcpus("standard", cloud_vcpus=8)
-    assert AWS_BATCH_COMPUTE_CLASS_SIZING == before
+    assert COMPUTE_CLASS_SIZING == before

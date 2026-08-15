@@ -1,12 +1,11 @@
 """Solver dispatch atomic tools (M5 Stage C).
 
 This module registers two atomic tools that drive the solver-execution
-substrate. GCP Cloud Workflows AND the AWS Batch arm are both
-decommissioned (local-only slim): dispatch is a local container run
-(``local-docker``) or a direct-binary run (``local-exec``) on this machine,
-selected per solver by its ``LocalSolverSpec`` exec spec --
-``solver_backend()`` unconditionally returns ``local-docker``. Together they
-implement the **FR-TA-2 solver-dispatch surface**:
+substrate. Dispatch is a local container run (``local-docker``) or a
+direct-binary run (``local-exec``) on this machine, selected per solver by its
+``LocalSolverSpec`` exec spec -- ``solver_backend()`` unconditionally returns
+``local-docker``. Together they implement the **FR-TA-2 solver-dispatch
+surface**:
 
     - ``run_solver(solver, model_setup_uri, compute_class="medium")
        -> ExecutionHandle`` -- submits a solver run on the active backend.
@@ -35,7 +34,7 @@ Cross-cutting principles (per CLAUDE.md + agents/AGENTS.md):
   100%) so we never falsely advertise completion.
 
 - **Invariant 2 (Deterministic workflows): preserves.** ``run_solver`` is a
-  thin solver dispatch (local container / direct binary / AWS Batch submit);
+  thin solver dispatch (local container / direct binary);
   no LLM in the dispatch. The deterministic step graph (stage → invoke →
   read completion) is owned by the backend. FR-CE-2.
 
@@ -47,7 +46,7 @@ Cross-cutting principles (per CLAUDE.md + agents/AGENTS.md):
                 -> emit_tool_call CALLs invoke() which is our
                     wait_for_completion coroutine
                 -> wait_for_completion sees CancelledError in its poll
-                    sleep, terminates the live container / Batch job
+                    sleep, terminates the live container
                     (≤30 s, Invariant-8)
                 -> the supervisor writes the status="cancelled"
                     completion.json
@@ -85,12 +84,10 @@ Run id generation: the agent service generates a ULID per ``run_solver``
 call. The same id is used to compose the runs-bucket completion path
 (``s3://<runs_bucket>/<run_id>/completion.json``).
 
-Solver backend (local-only; batch decommissioned)
--------------------------------------------------
+Solver backend (local-only)
+---------------------------
 
-``local-docker`` is the ONLY backend (``solver_backend()`` is hardwired; the
-AWS Batch arm was removed and can be re-woven from git history without
-touching call sites):
+``local-docker`` is the ONLY backend (``solver_backend()`` is hardwired):
 
 - ``local-docker`` -- the S3-IN → sfincs → S3-OUT envelope lives INSIDE the
   agent (testable Python); the object store is whatever ``AWS_ENDPOINT_URL``
@@ -192,7 +189,7 @@ __all__ = [
     "solver_backend",
     "solve_progress_vcpus",
     "SOLVER_BACKEND_LOCAL_DOCKER",
-    "AWS_BATCH_COMPUTE_CLASS_SIZING",
+    "COMPUTE_CLASS_SIZING",
     "select_compute_class",
     "COMPUTE_CLASS_SMALL_MAX_ELEMENTS",
     "COMPUTE_CLASS_STANDARD_MAX_ELEMENTS",
@@ -311,22 +308,17 @@ LOCAL_DOCKER_WORKFLOW_NAME: str = "local-docker"
 #: of a container.
 LOCAL_EXEC_WORKFLOW_NAME: str = "local-exec"
 
-#: compute_class → {vcpus, mem (MiB), OMP_NUM_THREADS} sizing map (the kickoff
-#: instance buckets: 4/8/16/32 vCPU at ~2 GB/vCPU → 8/16/32/64 Gi; OMP threads
-#: == vCPU). Batch ``resourceRequirements`` take VCPU as a STRING count and
-#: MEMORY in MiB as a string. Aliased the same way ``_COMPUTE_CLASS_ALIAS``
-#: maps FR-CE-3 names onto the schema literal, so ``medium`` (== standard)
-#: resolves to the 8-vCPU bucket.
+#: compute_class → {vcpus, mem (MiB), OMP_NUM_THREADS} sizing map (buckets:
+#: 4/8/16/32 vCPU at ~2 GB/vCPU → 8/16/32/64 Gi; OMP threads == vCPU). The
+#: solver-confirm card reads this to show the sized tier. Aliased the same way
+#: ``_COMPUTE_CLASS_ALIAS`` maps FR-CE-3 names onto the schema literal, so
+#: ``medium`` (== standard) resolves to the 8-vCPU bucket.
 #:
-#: ``xlarge`` is the higher-powered vertical-scale tier (auto
-#: vertical scaling per case so a big AOI/mesh can grab MORE compute). 48 vCPU /
-#: 96 GiB at the 2 GB/vCPU ratio is a clean fit for a single c7i.12xlarge (48
-#: vCPU / 96 GiB) or m7i.12xlarge -- both real, SPOT-eligible, x86_64 instances
-#: in us-west-2 -- so the Batch CE can place the whole job on ONE box (no NUMA
-#: fragmentation across instances for the SFINCS/SWMM OpenMP solve). ``gpu`` is
-#: left AS-IS per kickoff (32 vCPU / 64 GiB) -- it is a distinct accelerator
-#: bucket, not part of the vCPU vertical ladder ``select_compute_class`` walks.
-AWS_BATCH_COMPUTE_CLASS_SIZING: dict[str, dict[str, int]] = {
+#: ``xlarge`` is the higher-powered vertical-scale tier (auto vertical scaling
+#: per case so a big AOI/mesh can grab MORE compute); ``gpu`` is a distinct
+#: accelerator bucket (32 vCPU / 64 GiB), not part of the vCPU vertical ladder
+#: ``select_compute_class`` walks.
+COMPUTE_CLASS_SIZING: dict[str, dict[str, int]] = {
     "small": {"vcpus": 4, "mem_mib": 8192, "omp_threads": 4},
     "standard": {"vcpus": 8, "mem_mib": 16384, "omp_threads": 8},
     "large": {"vcpus": 16, "mem_mib": 32768, "omp_threads": 16},
@@ -357,10 +349,9 @@ DOCKER_KILL_TIMEOUT_S: float = 25.0
 def solver_backend() -> str:
     """Return the active solver backend.
 
-    The AWS Batch arm has been removed (local-only slim); ``local-docker`` is
-    now the ONLY backend, so this unconditionally returns
-    ``SOLVER_BACKEND_LOCAL_DOCKER``. Retained as a stable seam so the batch arm
-    can be re-woven from git history without touching call sites.
+    ``local-docker`` is the ONLY backend, so this unconditionally returns
+    ``SOLVER_BACKEND_LOCAL_DOCKER``. Retained as a stable predicate seam the
+    local-single-user-mode and solver-confirm checks read.
     """
     return SOLVER_BACKEND_LOCAL_DOCKER
 
@@ -370,34 +361,18 @@ def solve_progress_vcpus(
     *,
     cloud_vcpus: int | None = None,
 ) -> int | None:
-    """Deployment-aware CPU count for the LIVE solve-progress readout (A6).
+    """Host CPU count for the LIVE solve-progress readout (A6).
 
-    Local-cloud fingerprint seam: this helper is the single seam the
-    workflow call sites use instead of reading
-    ``AWS_BATCH_COMPUTE_CLASS_SIZING`` directly, so the solve-progress card
-    always reports the CPU count for the backend that actually ran the
-    solve:
+    local-docker is the only solver backend, so the card reports
+    ``os.cpu_count()`` -- the host CPUs actually doing the solve (the
+    web/plugin render it with "CPU" wording, never "vCPU"). ``None`` if the
+    host count is indeterminate, so the card omits the segment entirely (no
+    fabrication). ``compute_class`` / ``cloud_vcpus`` are accepted for
+    call-site signature stability; they do not change the host count.
 
-    - **local-docker** -> ``os.cpu_count()`` (the host CPUs actually doing the
-      solve; the web/plugin render the local deployment's count with "CPU"
-      wording, never "vCPU"). ``None`` if the host count is indeterminate --
-      the card then omits the segment entirely (no fabrication).
-    - **aws-batch** (unset/default) -> ``cloud_vcpus`` when the caller already
-      resolved a count (e.g. the SFINCS autoscale provenance), else the
-      ``AWS_BATCH_COMPUTE_CLASS_SIZING[compute_class]["vcpus"]`` lookup
-      (``None`` for an unknown class).
-
-    Wording/telemetry only -- NEVER consulted for dispatch sizing (the Batch
-    ``resourceRequirements`` path reads the sizing table directly).
+    Wording/telemetry only -- NEVER consulted for dispatch sizing.
     """
-    if solver_backend() == SOLVER_BACKEND_LOCAL_DOCKER:
-        return os.cpu_count()
-    if cloud_vcpus is not None:
-        return int(cloud_vcpus)
-    if compute_class is None:
-        return None
-    tier_vcpus = AWS_BATCH_COMPUTE_CLASS_SIZING.get(compute_class, {}).get("vcpus")
-    return int(tier_vcpus) if tier_vcpus is not None else None
+    return os.cpu_count()
 
 
 #: Map the kickoff-named compute classes (small/medium/large) onto the
@@ -419,8 +394,7 @@ _COMPUTE_CLASS_ALIAS: dict[str, str] = {
 # Auto vertical scaling per case
 # --------------------------------------------------------------------------- #
 #
-# The Batch CE already right-sizes the EC2 instance per job + scales to zero; the
-# missing piece was the agent PICKING the right compute_class per case from the
+# select_compute_class PICKS the right compute_class per case from the
 # AOI/mesh size instead of always defaulting to "standard" (8 vCPU). The mesh
 # builders (sfincs_builder / swmm_mesh_builder) already estimate the active
 # ELEMENT count (cells); ``select_compute_class`` maps that estimate onto the
@@ -478,7 +452,7 @@ COMPUTE_CLASS_FALLBACK: str = "standard"
 
 
 def select_compute_class(estimated_elements: int | float | None) -> str:
-    """Pick the per-case Batch ``compute_class`` from the estimated ELEMENT count.
+    """Pick the per-case ``compute_class`` from the estimated ELEMENT count.
 
     Auto vertical scaling per case: the mesh builders already
     estimate the active-cell/element count; this maps that estimate onto the
@@ -503,7 +477,7 @@ def select_compute_class(estimated_elements: int | float | None) -> str:
 
     Returns:
         One of ``"small"`` / ``"standard"`` / ``"large"`` / ``"xlarge"`` -- a key
-        present in ``AWS_BATCH_COMPUTE_CLASS_SIZING`` and ``_COMPUTE_CLASS_ALIAS``
+        present in ``COMPUTE_CLASS_SIZING`` and ``_COMPUTE_CLASS_ALIAS``
         (the compute-class sizing table + FR-CE-3 alias map).
     """
     try:
@@ -546,8 +520,8 @@ class SolverNotRegisteredError(ValueError):
 
 
 class SolverDispatchError(RuntimeError):
-    """Raised when the backend dispatch (local container / direct binary /
-    AWS Batch submit) fails or the completion-manifest read fails. The
+    """Raised when the backend dispatch (local container / direct binary)
+    fails or the completion-manifest read fails. The
     agent's emitter classifier maps this to ``UPSTREAM_API_ERROR``. The
     ``error_code`` attribute carries the open-set A.6 code so a downstream
     wrapper can re-emit it verbatim."""
@@ -637,7 +611,7 @@ def _get_runs_bucket() -> str:
     (``TRID3NT_RUNS_BUCKET`` if set, else the AWS runs bucket).
 
     GCP is decommissioned: the default is the AWS S3 runs bucket. Production
-    sets ``TRID3NT_RUNS_BUCKET`` explicitly via systemd (see aws-batch RUNBOOK)."""
+    sets ``TRID3NT_RUNS_BUCKET`` explicitly via systemd."""
     if _RUNS_BUCKET is not None:
         return _RUNS_BUCKET
     return os.environ.get("TRID3NT_RUNS_BUCKET", "trid3nt-runs")
@@ -1564,7 +1538,7 @@ _RUN_SOLVER_METADATA = AtomicToolMetadata(
     _RUN_SOLVER_METADATA,
     # Annotations: readOnlyHint=False (submits a solver run that ultimately
     # writes output artifacts to the runs bucket), openWorldHint=False
-    # (local container / direct binary / AWS Batch -- no public external API),
+    # (local container / direct binary -- no public external API),
     # destructiveHint=False (writes go to a new runs/ prefix; no existing
     # state overwritten), idempotentHint=False (each call creates a new
     # run with a distinct run_id).
@@ -1646,10 +1620,9 @@ def run_solver(
             f"model_setup_uri must be a non-empty string; got {model_setup_uri!r}"
         )
 
-    # --- Backend seam: the AWS Batch arm has been removed (local-only slim);
-    # local-docker is the only backend, so dispatch is unconditional. The handle
-    # pins its backend (workflow_name=local-docker) so wait_for_completion routes
-    # correctly. The batch arm is preserved in git history for a future re-weave. ---
+    # --- Backend seam: local-docker is the only backend, so dispatch is
+    # unconditional. The handle pins its backend (workflow_name=local-docker) so
+    # wait_for_completion routes correctly. ---
     return _run_solver_local_docker(
         solver=solver,
         model_setup_uri=model_setup_uri,
@@ -1702,10 +1675,10 @@ async def _emit_progress(progress_percent: int) -> None:
     # Annotations: readOnlyHint=False (emits pipeline-state progress envelopes
     # as a side effect on every poll tick -- stateful even though it does not
     # write to the object store directly), openWorldHint=False (polls the S3
-    # completion.json + AWS Batch job status; no public external API),
+    # completion.json; no public external API),
     # destructiveHint=False (reads completion.json from the runs bucket; does
     # not overwrite anything), idempotentHint=False (each call emits progress
-    # events; cancellation path terminates the live container / Batch job).
+    # events; cancellation path terminates the live container).
     read_only_hint=False,
     open_world_hint=False,
     destructive_hint=False,
@@ -1754,7 +1727,7 @@ async def wait_for_completion(
 
     Invariant 8 (cancellation): when the M1 WS cancel chain raises
     ``asyncio.CancelledError`` inside this coroutine's poll-sleep, the
-    backend handler terminates the live container / Batch job before
+    backend handler terminates the live container before
     re-raising so cancellation is initiated within ≤30 s per NFR-R-3.
     """
     if poll_interval_s < 0:
@@ -1768,17 +1741,14 @@ async def wait_for_completion(
 
     # --- backend seam: a handle pins its backend (the handle's
     # workflow_name, not the env, decides -- env churn between submit and wait
-    # cannot mis-route the poll). ``local-docker`` / ``local-exec`` (
-    # MODFLOW direct-binary) share the S3 completion poll; ``aws-batch``
-    # polls the SAME S3 completion.json + consults
-    # batch.describe_jobs. GCP Cloud Workflows is decommissioned. ---
+    # cannot mis-route the poll). ``local-docker`` / ``local-exec`` (MODFLOW
+    # direct-binary) share the S3 completion poll. ---
     if handle.workflow_name in _LOCAL_WORKFLOW_NAMES:
         return await _wait_for_completion_local(handle, poll_interval_s, timeout_s)
 
     raise SolverDispatchError(
-        f"unsupported handle backend {handle.workflow_name!r}: the AWS Batch and "
-        "Cloud Workflows substrates are decommissioned; expected one of "
-        f"{_LOCAL_WORKFLOW_NAMES}."
+        f"unsupported handle backend {handle.workflow_name!r}: "
+        f"expected one of {_LOCAL_WORKFLOW_NAMES}."
     )
 
 

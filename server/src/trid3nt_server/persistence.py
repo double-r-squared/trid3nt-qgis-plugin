@@ -9,10 +9,8 @@ Live backend (local-first build): the file-backed twin ``FileMCPClient`` --
 a small JSON-document store that implements the same logical MCP surface with
 Mongo-faithful filter/update semantics. It is bound by
 ``main._maybe_bind_dev_persistence`` / ``server.init_persistence_from_env``.
-A cloud MCP-backed client (the original MongoDB Atlas path) implements the
-same ``MCPClientProtocol`` and drops in unchanged, but is dormant on this
-stack (``mcp.py`` and the DynamoDB backend were removed in the local-only
-slim; both are preserved in git history for a future cloud re-weave).
+A cloud MCP-backed client implementing the same ``MCPClientProtocol`` drops in
+unchanged, but the local stack binds only the file backend.
 
 Supports ``CaseSummary`` round-trip (get/upsert/list/archive/delete),
 ``CaseChatMessage`` append + ``CaseSessionState`` hydration, ``User``
@@ -1995,43 +1993,45 @@ def make_file_persistence(base_dir: _Path | None = None) -> Persistence:
 # Backend selection (local-only)
 # --------------------------------------------------------------------------- #
 #
-# The persistence backend is FILE-only in the local-first build. A cloud
-# DynamoDB backend once sat behind this same ``MCPClientProtocol`` seam
-# (``TRID3NT_PERSISTENCE_BACKEND=dynamodb``); it was removed in the local-only
-# slim (2026-07-21) and is preserved in git history for a future cloud re-weave.
-# ``make_persistence_for_backend`` now returns ``make_file_persistence``
-# unconditionally; the selection CALL lives in
-# ``main._maybe_bind_dev_persistence`` / ``server.init_persistence_from_env``
-# (NOT this file -- see the job's crossTrackChanges).
+# ``file`` is the ONLY persistence backend. ``TRID3NT_PERSISTENCE_BACKEND``
+# unset (or ``file``) binds the file backend; any other value is an explicit
+# request for an unsupported backend and raises a typed error naming ``file``.
 
-#: Env that selects the persistence backend. Re-exported from dynamo_backend so
-#: there is a single name; mirrored here for callers that only import
-#: persistence. Default keeps current (file) behavior.
+#: Env that selects the persistence backend. Unset defaults to ``file``.
 PERSISTENCE_BACKEND_ENV = "TRID3NT_PERSISTENCE_BACKEND"
 PERSISTENCE_BACKEND_FILE = "file"
+
+
+class UnsupportedPersistenceBackendError(RuntimeError):
+    """``TRID3NT_PERSISTENCE_BACKEND`` names a backend other than ``file``."""
 
 
 def resolve_persistence_backend() -> str:
     """Resolve the configured persistence backend name.
 
-    TRID3NT local-only build: persistence is file-backed, always. The cloud
-    DynamoDB backend was removed (preserved in git history) -- this now returns
-    ``"file"`` unconditionally. Retained as a function so the existing call
-    sites (``main._maybe_bind_dev_persistence`` logging) stay unchanged.
+    ``file`` is the only supported backend. An unset (or ``file``) env resolves
+    to ``file``; any other value raises ``UnsupportedPersistenceBackendError``
+    rather than silently falling back, so a stale cloud selection surfaces
+    loudly.
     """
+    selected = (os.environ.get(PERSISTENCE_BACKEND_ENV) or PERSISTENCE_BACKEND_FILE).strip().lower()
+    if selected != PERSISTENCE_BACKEND_FILE:
+        raise UnsupportedPersistenceBackendError(
+            f"{PERSISTENCE_BACKEND_ENV}={selected!r} is not supported. "
+            f"The only persistence backend is {PERSISTENCE_BACKEND_FILE!r}."
+        )
     return PERSISTENCE_BACKEND_FILE
 
 
 def make_persistence_for_backend(
     *, base_dir: _Path | None = None
 ) -> Persistence:
-    """Build the file-backed ``Persistence`` (TRID3NT local-only build).
+    """Build the file-backed ``Persistence``.
 
-    Always returns ``make_file_persistence``. The env-selected cloud backend
-    (DynamoDB) was removed; the selection CALL sites
-    (``main._maybe_bind_dev_persistence`` / ``server.init_persistence_from_env``)
-    keep using this so the file binding is honored consistently.
+    Validates the configured backend first (``resolve_persistence_backend``
+    raises on any non-``file`` selection), then returns ``make_file_persistence``.
     """
+    resolve_persistence_backend()
     return make_file_persistence(base_dir=base_dir)
 
 
@@ -2042,6 +2042,7 @@ __all__ = [
     "make_file_persistence",
     "make_persistence_for_backend",
     "resolve_persistence_backend",
+    "UnsupportedPersistenceBackendError",
     "is_dev_persistence_enabled",
     "DEFAULT_DATABASE",
     "DEV_PERSISTENCE_DIR_ENV",

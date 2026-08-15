@@ -1464,7 +1464,7 @@ async def model_swmm_urban_flood(
     # without publishing, the peak silently vanishes from the map and persists no
     # renderable loaded_layer (BREAK A). Mirror the SFINCS the composer
     # Step-9 publish-or-honest-drop path: route the peak COG through publish_layer
-    # (the _resolve_titiler_style_params render chokepoint) so it carries a
+    # (the _resolve_qgis_style_params render chokepoint) so it carries a
     # published /tiles or WMS URL before it is returned. The returned LayerURI's
     # dispatch-level emit_layer_uri seam then PASSES it (http(s) renders) and
     # persists it as a renderable primary loaded_layer.
@@ -1642,7 +1642,7 @@ def _publish_peak_layer(
     """Publish the PEAK depth COG through publish_layer (BREAK A render chokepoint).
 
     Routes the raw s3:// peak COG through ``publish_layer`` (the
-    ``_resolve_titiler_style_params`` render seam) and returns a NEW
+    ``_resolve_qgis_style_params`` render seam) and returns a NEW
     ``SWMMDepthLayerURI`` carrying the published /tiles or WMS URL plus the
     narration scalars + echoed barriers. On publish failure (e.g. QGIS-on-AWS not
     yet landed) the raw peak is returned UNCHANGED: the dispatch-level

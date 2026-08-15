@@ -170,6 +170,6 @@ def test_publish_modflow_quantities_emits_timeseries_and_head() -> None:
 
 
 def test_modflow_step3_style_presets_resolve() -> None:
-    from trid3nt_server.agent.tools.publish_layer.publish_layer import _TITILER_STYLE_REGISTRY
+    from trid3nt_server.agent.tools.publish_layer.publish_layer import _QGIS_STYLE_REGISTRY
 
-    assert pm.HEAD_STYLE_PRESET in _TITILER_STYLE_REGISTRY
+    assert pm.HEAD_STYLE_PRESET in _QGIS_STYLE_REGISTRY

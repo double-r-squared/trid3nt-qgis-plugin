@@ -90,7 +90,7 @@ __all__ = [
 
 #: Sequential style preset for the per-cell peak washoff-concentration COG (the
 #: single raster-styling seam; the actual TiTiler (rescale, colormap) lives in
-#: publish_layer._resolve_titiler_style_params under this key).
+#: publish_layer._resolve_qgis_style_params under this key).
 CONCENTRATION_STYLE_PRESET = "continuous_concentration"
 
 logger = logging.getLogger("trid3nt_server.agent.workflows.swmm.postprocess_swmm")

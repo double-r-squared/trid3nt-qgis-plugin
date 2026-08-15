@@ -15,7 +15,7 @@ ASCII only.
 from __future__ import annotations
 
 from trid3nt_server.agent.tools.publish_layer.publish_layer import (
-    _TITILER_STYLE_REGISTRY,
+    _QGIS_STYLE_REGISTRY,
     _infer_style_preset,
     _is_terrain_token_preset,
     _registry_style_params,
@@ -23,10 +23,10 @@ from trid3nt_server.agent.tools.publish_layer.publish_layer import (
 
 
 def test_new_presets_registered():
-    assert _TITILER_STYLE_REGISTRY["impervious_surface_pct"] == ("0,100", "reds")
-    assert _TITILER_STYLE_REGISTRY["population_density"] == ("0,250", "magma")
-    assert _TITILER_STYLE_REGISTRY["slope_angle_deg"] == ("0,60", "ylorrd")
-    assert _TITILER_STYLE_REGISTRY["aspect_compass_deg"] == ("0,360", "hsv")
+    assert _QGIS_STYLE_REGISTRY["impervious_surface_pct"] == ("0,100", "reds")
+    assert _QGIS_STYLE_REGISTRY["population_density"] == ("0,250", "magma")
+    assert _QGIS_STYLE_REGISTRY["slope_angle_deg"] == ("0,60", "ylorrd")
+    assert _QGIS_STYLE_REGISTRY["aspect_compass_deg"] == ("0,360", "hsv")
 
 
 def test_new_presets_resolve_to_expected_colormap():

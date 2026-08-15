@@ -8,7 +8,7 @@ unless the tile request carries an explicit ``&rescale=<lo>,<hi>`` and a
 EVERY other continuous preset fell through to ``style_params=""`` and the layer
 painted invisible.
 
-F51 routes the s3 branch through ``_resolve_titiler_style_params``:
+F51 routes the s3 branch through ``_resolve_qgis_style_params``:
 
   (a) flood + plume presets produce the SAME params as before (byte-for-byte);
   (b) an UNKNOWN continuous preset gets a non-empty band-stats rescale+colormap
@@ -36,7 +36,7 @@ from trid3nt_server.agent.tools.publish_layer.publish_layer import (
     _is_rgba_or_multiband,
     _is_terrain_token_preset,
     _registry_style_params,
-    _resolve_titiler_style_params,
+    _resolve_qgis_style_params,
     publish_layer,
 )
 
@@ -199,8 +199,8 @@ def test_wave_height_preset_resolves_to_cyan_ramp() -> None:
 
 
 def test_wave_height_preset_is_in_registry() -> None:
-    assert "continuous_wave_height" in pl._TITILER_STYLE_REGISTRY
-    assert pl._TITILER_STYLE_REGISTRY["continuous_wave_height"] == ("0,6", "gnbu")
+    assert "continuous_wave_height" in pl._QGIS_STYLE_REGISTRY
+    assert pl._QGIS_STYLE_REGISTRY["continuous_wave_height"] == ("0,6", "gnbu")
 
 
 def test_wave_height_distinct_from_flood_depth() -> None:
@@ -218,7 +218,7 @@ def test_flood_depth_byte_identical_after_wave_addition() -> None:
         _registry_style_params("continuous_flood_depth")
         == "&rescale=0,3&colormap_name=ylgnbu"
     )
-    assert pl._TITILER_STYLE_REGISTRY["continuous_flood_depth"] == ("0,3", "ylgnbu")
+    assert pl._QGIS_STYLE_REGISTRY["continuous_flood_depth"] == ("0,3", "ylgnbu")
 
 
 def test_resolve_wave_height_preset_wins_over_band_stats(
@@ -229,7 +229,7 @@ def test_resolve_wave_height_preset_wins_over_band_stats(
     monkeypatch.setattr(
         MOD, "_read_raster_bytes", lambda uri: _continuous_geotiff_bytes(0.0, 6.0)
     )
-    out = _resolve_titiler_style_params("continuous_wave_height", "s3://b/wave.tif")
+    out = _resolve_qgis_style_params("continuous_wave_height", "s3://b/wave.tif")
     assert out == "&rescale=0,6&colormap_name=gnbu"
 
 
@@ -241,13 +241,13 @@ def test_resolve_flood_preset_does_not_read_or_rescale_differently(
     monkeypatch.setattr(
         MOD, "_read_raster_bytes", lambda uri: _continuous_geotiff_bytes()
     )
-    out = _resolve_titiler_style_params("continuous_flood_depth", "s3://b/f.tif")
+    out = _resolve_qgis_style_params("continuous_flood_depth", "s3://b/f.tif")
     assert out == "&rescale=0,3&colormap_name=ylgnbu"
 
 
 def test_resolve_plume_preset_unchanged(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(MOD, "_read_raster_bytes", lambda uri: None)
-    out = _resolve_titiler_style_params(
+    out = _resolve_qgis_style_params(
         "continuous_plume_concentration", "s3://b/p.tif"
     )
     assert out == "&rescale=0,10&colormap_name=reds"
@@ -333,7 +333,7 @@ def test_resolve_unknown_preset_uses_band_stats(monkeypatch: pytest.MonkeyPatch)
     monkeypatch.setattr(
         MOD, "_read_raster_bytes", lambda uri: _continuous_geotiff_bytes(0.0, 30.0)
     )
-    out = _resolve_titiler_style_params("gridmet_vs_unknown", "s3://b/x.tif")
+    out = _resolve_qgis_style_params("gridmet_vs_unknown", "s3://b/x.tif")
     assert out != ""
     assert out.startswith("&rescale=")
     assert out.endswith("&colormap_name=viridis")
@@ -346,10 +346,10 @@ def test_resolve_smoke_preset_uses_band_stats(monkeypatch: pytest.MonkeyPatch) -
         "_read_raster_bytes",
         lambda uri: _continuous_geotiff_bytes(1e-9, 1e-6),
     )
-    out = _resolve_titiler_style_params("hrrr_smoke_near_surface", "s3://b/smoke.tif")
+    out = _resolve_qgis_style_params("hrrr_smoke_near_surface", "s3://b/smoke.tif")
     assert out.startswith("&rescale=")
     assert out.endswith("&colormap_name=viridis")
-    assert out != pl._TITILER_SAFE_DEFAULT  # real stats, not the fallback floor
+    assert out != pl._QGIS_STYLE_SAFE_DEFAULT  # real stats, not the fallback floor
 
 
 # --------------------------------------------------------------------------- #
@@ -364,7 +364,7 @@ def test_resolve_paletted_cog_emits_no_rescale(monkeypatch: pytest.MonkeyPatch) 
         MOD, "_read_raster_bytes", lambda uri: _paletted_geotiff_bytes()
     )
     # Even with a preset that WOULD normally rescale, the palette guard wins.
-    out = _resolve_titiler_style_params("categorical_landcover", "s3://b/nlcd.tif")
+    out = _resolve_qgis_style_params("categorical_landcover", "s3://b/nlcd.tif")
     assert out == ""
 
 
@@ -375,7 +375,7 @@ def test_resolve_paletted_cog_overrides_registry_match(
     monkeypatch.setattr(
         MOD, "_read_raster_bytes", lambda uri: _paletted_geotiff_bytes()
     )
-    out = _resolve_titiler_style_params("precipitation_mm", "s3://b/weird.tif")
+    out = _resolve_qgis_style_params("precipitation_mm", "s3://b/weird.tif")
     assert out == ""
 
 
@@ -387,8 +387,8 @@ def test_resolve_paletted_cog_overrides_registry_match(
 def test_resolve_safe_default_when_bytes_none(monkeypatch: pytest.MonkeyPatch) -> None:
     """Unknown preset + unreadable bytes -> the SAFE non-empty default."""
     monkeypatch.setattr(MOD, "_read_raster_bytes", lambda uri: None)
-    out = _resolve_titiler_style_params("totally_unknown_preset", "s3://b/gone.tif")
-    assert out == pl._TITILER_SAFE_DEFAULT
+    out = _resolve_qgis_style_params("totally_unknown_preset", "s3://b/gone.tif")
+    assert out == pl._QGIS_STYLE_SAFE_DEFAULT
     assert out == "&rescale=0,1&colormap_name=viridis"
     assert out != ""
 
@@ -402,8 +402,8 @@ def test_resolve_all_nan_uses_safe_default(monkeypatch: pytest.MonkeyPatch) -> N
     monkeypatch.setattr(
         MOD, "_read_raster_bytes", lambda uri: _all_nan_geotiff_bytes()
     )
-    out = _resolve_titiler_style_params("unknown_xyz", "s3://b/nan.tif")
-    assert out == pl._TITILER_SAFE_DEFAULT
+    out = _resolve_qgis_style_params("unknown_xyz", "s3://b/nan.tif")
+    assert out == pl._QGIS_STYLE_SAFE_DEFAULT
 
 
 def test_band_percentile_widens_single_value_range() -> None:
@@ -484,7 +484,7 @@ def test_resolve_continuous_dem_emits_no_rescale(
     monkeypatch.setattr(
         MOD, "_read_raster_bytes", lambda uri: _continuous_geotiff_bytes(100.0, 2500.0)
     )
-    out = _resolve_titiler_style_params("continuous_dem", "s3://b/dem.tif")
+    out = _resolve_qgis_style_params("continuous_dem", "s3://b/dem.tif")
     assert out == ""
 
 
@@ -502,7 +502,7 @@ def test_resolve_terrain_composer_presets_emit_no_rescale(
     monkeypatch.setattr(
         MOD, "_read_raster_bytes", lambda uri: _continuous_geotiff_bytes(0.0, 255.0)
     )
-    out = _resolve_titiler_style_params(preset, "s3://b/shade.tif")
+    out = _resolve_qgis_style_params(preset, "s3://b/shade.tif")
     assert out == ""
 
 
@@ -511,10 +511,10 @@ def test_resolve_slope_aspect_presets_emit_colormap(monkeypatch: pytest.MonkeyPa
     monkeypatch.setattr(
         MOD, "_read_raster_bytes", lambda uri: _continuous_geotiff_bytes(0.0, 60.0)
     )
-    assert _resolve_titiler_style_params(
+    assert _resolve_qgis_style_params(
         "slope_angle_deg", "s3://b/cache/static-30d/slope/x.tif"
     ) == "&rescale=0,60&colormap_name=ylorrd"
-    assert _resolve_titiler_style_params(
+    assert _resolve_qgis_style_params(
         "aspect_compass_deg", "s3://b/cache/static-30d/aspect/x.tif"
     ) == "&rescale=0,360&colormap_name=hsv"
 
@@ -538,7 +538,7 @@ def test_resolve_rgba_cog_emits_no_rescale_even_with_nonterrain_preset(
     DIRECTLY — '' even when the preset is a NON-terrain string that would
     otherwise hit the band-stats fallback and corrupt the colors."""
     monkeypatch.setattr(MOD, "_read_raster_bytes", lambda uri: _rgba_geotiff_bytes(4))
-    out = _resolve_titiler_style_params(
+    out = _resolve_qgis_style_params(
         "some_unknown_composite_preset", "s3://b/composite.tif"
     )
     assert out == ""
@@ -548,7 +548,7 @@ def test_resolve_3band_cog_emits_no_rescale(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.setattr(MOD, "_read_raster_bytes", lambda uri: _rgba_geotiff_bytes(3))
-    out = _resolve_titiler_style_params("unknown_xyz", "s3://b/rgb.tif")
+    out = _resolve_qgis_style_params("unknown_xyz", "s3://b/rgb.tif")
     assert out == ""
 
 
@@ -558,7 +558,7 @@ def test_resolve_colored_relief_composite_no_rescale(
     """End-to-end resolver: a colored-relief RGBA COG with a terrain preset is
     doubly protected (RGBA guard AND terrain-token guard) -> ''."""
     monkeypatch.setattr(MOD, "_read_raster_bytes", lambda uri: _rgba_geotiff_bytes(4))
-    out = _resolve_titiler_style_params("colored_relief", "s3://b/relief.tif")
+    out = _resolve_qgis_style_params("colored_relief", "s3://b/relief.tif")
     assert out == ""
 
 
@@ -583,7 +583,7 @@ def test_weather_scalars_still_get_registry_params_after_fix(
     monkeypatch.setattr(
         MOD, "_read_raster_bytes", lambda uri: _continuous_geotiff_bytes(0.0, 50.0)
     )
-    out = _resolve_titiler_style_params(preset, "s3://b/weather.tif")
+    out = _resolve_qgis_style_params(preset, "s3://b/weather.tif")
     assert out == expected
     assert out != ""
 
@@ -604,7 +604,7 @@ def test_precipitable_water_resolves_to_band_stats(
     monkeypatch.setattr(
         MOD, "_read_raster_bytes", lambda uri: _continuous_geotiff_bytes(5.0, 60.0)
     )
-    out = _resolve_titiler_style_params("precipitable_water", "s3://b/pwat.tif")
+    out = _resolve_qgis_style_params("precipitable_water", "s3://b/pwat.tif")
     assert out != ""
     assert "blues" not in out
     assert out.endswith("&colormap_name=viridis")
@@ -628,7 +628,7 @@ def test_nlcd_paletted_still_no_rescale_after_fix(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.setattr(MOD, "_read_raster_bytes", lambda uri: _paletted_geotiff_bytes())
-    out = _resolve_titiler_style_params("categorical_landcover", "s3://b/nlcd.tif")
+    out = _resolve_qgis_style_params("categorical_landcover", "s3://b/nlcd.tif")
     assert out == ""
 
 

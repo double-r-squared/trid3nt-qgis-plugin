@@ -1,25 +1,23 @@
-"""Gemini-only containment layer (Domain Discipline: agent.md).
+"""google-genai IR containment + provider-dispatch seam.
 
-Every Gemini- / google-genai-specific construct lives here. The server.py and
-mcp.py modules call into this module with Gemini-naive shapes (strings,
-async-iterators of strings). This is **containment, not abstraction** -- no
-``LLMProvider`` protocol, no provider branches, no Bedrock/Strands shapes.
-FR-AS-1: Gemini-only. The deferred multi-provider future (§5) is not
-foreclosed cheaply because the seam exists, but no abstraction is paid for now.
+The ``google.genai.types`` package is the load-bearing intermediate
+representation (``Content`` / ``Part`` / ``FunctionCall`` / ``FunctionDeclaration``
+builders) every provider adapter shares. This module owns those genai-typed
+shapes and the multi-turn function_call -> function_response loop; the actual
+model call is delegated at ``stream_events_with_contents`` to the provider
+adapter selected by ``MODEL_PROVIDER`` (bedrock default; openai / scripted).
+The legacy raw google-genai / Vertex ``generate_content_stream`` client path is
+decommissioned and removed -- an unsupported ``MODEL_PROVIDER`` raises
+``UnsupportedModelProviderError`` rather than silently emitting an empty turn.
 
 Model selection:
   ``TRID3NT_GEMINI_MODEL`` env override, defaulting to ``DEFAULT_VERTEX_MODEL``
-  below. Gemini 3 (``gemini-3-pro*``) is not yet GA on Vertex for this
-  project; ``gemini-2.5-pro`` is the current best stable. When Gemini 3 lands
-  on Vertex this constant -- and the env override path -- flips with no other
-  code change.
-
-Auth: ADC via ``GOOGLE_GENAI_USE_VERTEXAI=True`` + ``GOOGLE_CLOUD_PROJECT`` +
-``GOOGLE_CLOUD_LOCATION``. No API key path. (substrate.)
+  below, resolves only the display/telemetry label; the active provider
+  resolves the real model it calls.
 
 ``stream_events`` passes the tool catalog (``FunctionDeclaration`` from each
-registered tool's callable + docstring) plus a focused system prompt to
-``generate_content_stream``, then demultiplexes each chunk into either a
+registered tool's callable + docstring) plus a focused system prompt to the
+provider adapter, then demultiplexes each chunk into either a
 ``TextDeltaEvent`` or a ``FunctionCallEvent`` so the server can dispatch the
 tool through the registry. The live text path is
 ``stream_events_with_contents`` -> dispatch.
@@ -1258,32 +1256,31 @@ def build_tool_declarations(
 
 @dataclass(frozen=True)
 class ModelSettings:
-    """Resolved Gemini configuration (env-derived; no implicit fallbacks)."""
+    """Resolved model configuration.
+
+    Only ``model`` is live -- it is the display/telemetry model id surfaced
+    when the active provider does not resolve its own (scripted/replay). The
+    ``project`` / ``location`` / ``use_vertex`` fields are inert carriers (the
+    provider adapters open their own client at the boundary); they default so a
+    caller need only supply ``model``.
+    """
 
     model: str
-    project: str
-    location: str
-    use_vertex: bool
+    project: str = ""
+    location: str = ""
+    use_vertex: bool = False
 
 
 def load_settings() -> ModelSettings:
-    """Resolve Gemini settings from the environment.
+    """Resolve model settings from the environment.
 
-    Required env (substrate):
-    - ``GOOGLE_GENAI_USE_VERTEXAI=True``
-    - ``GOOGLE_CLOUD_PROJECT`` (no default -- the GCP project is gone;
-      this dormant Vertex path requires it set explicitly)
-    - ``GOOGLE_CLOUD_LOCATION`` (default: ``us-central1``)
-
-    Optional:
-    - ``TRID3NT_GEMINI_MODEL`` (default: ``DEFAULT_VERTEX_MODEL``)
+    - ``TRID3NT_GEMINI_MODEL`` (default: ``DEFAULT_VERTEX_MODEL``) -- the
+      display/telemetry model id. The active provider (bedrock/openai) resolves
+      the real model it calls; this is only the fallback label for the
+      scripted/replay path.
     """
     return ModelSettings(
         model=os.environ.get("TRID3NT_GEMINI_MODEL", DEFAULT_VERTEX_MODEL),
-        project=os.environ.get("GOOGLE_CLOUD_PROJECT", ""),
-        location=os.environ.get("GOOGLE_CLOUD_LOCATION", "us-central1"),
-        use_vertex=os.environ.get("GOOGLE_GENAI_USE_VERTEXAI", "True").lower()
-        in ("true", "1", "yes"),
     )
 
 

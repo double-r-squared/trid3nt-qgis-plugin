@@ -20,7 +20,7 @@ legend/style fields, so the publish emits the raw ``s3://`` URI itself:
    OR - when ``TRID3NT_QGIS_WMS_BASE`` is exported - a styled QGIS Server
    WMS GetMap face.
 3. Rasters: enforce COG overviews (F33; auto-translate when missing),
-   resolve styling via ``_resolve_titiler_style_params`` (F51 - THE render
+   resolve styling via ``_resolve_qgis_style_params`` (F51 - THE render
    chokepoint: categorical/RGBA/terrain passthroughs, then the typed preset
    registry, then band-stats percentile fallback, then a safe default;
    the resolver math is UNCHANGED - only its output destination moved from
@@ -28,9 +28,9 @@ legend/style fields, so the publish emits the raw ``s3://`` URI itself:
    legend keyed by the ``s3://`` uri the envelope will carry, and register
    the layer via ``observe_published_layer``.
 
-TiTiler EXIT (2026-07): the tool no longer mints
-``{tile_base}/cog/tiles/WebMercatorQuad/{z}/{x}/{y}`` XYZ templates and no
-longer reads ``TRID3NT_TILE_SERVER_BASE``. Old persisted cases still carry
+QGIS-native rendering: the tool mints no
+``{tile_base}/cog/tiles/WebMercatorQuad/{z}/{x}/{y}`` XYZ templates and reads
+no ``TRID3NT_TILE_SERVER_BASE``. Old persisted cases still carry
 legacy tile-template URIs; a re-publish of one is UNWRAPPED to its embedded
 ``url=`` s3 COG (the ``open_case_in_qgis._unwrap_tile_template`` trick)
 and flows through the normal raster path, and the plugin unwraps legacy
@@ -283,25 +283,25 @@ def _infer_style_preset(layer_uri: str, layer_id: str) -> str:
 
 
 # --------------------------------------------------------------------------- #
-# F51: TiTiler style resolver (AWS s3 branch)
+# F51: QGIS style resolver (s3 branch)
 #
-# On the AWS deployment rasters publish through TiTiler, which reads the COG
-# directly and renders a single-band float32 raster as PER-TILE-AUTOSCALED
-# GRAYSCALE unless the tile request carries an explicit ``&rescale=<lo>,<hi>``
-# and ``&colormap_name=<name>``. Before F51 only ``continuous_flood_depth`` and
+# A single-band float32 raster renders as AUTOSCALED GRAYSCALE unless the
+# resolved style-params carry an explicit ``&rescale=<lo>,<hi>`` and
+# ``&colormap_name=<name>`` (the rio-tiler string the QGIS plugin parses into
+# vmin/vmax/colormap). Before F51 only ``continuous_flood_depth`` and
 # ``continuous_plume_concentration`` got params (a 2-entry if/elif) - every
 # OTHER continuous preset (precip / temperature / wind / drought / fuel
 # moisture / satellite) fell through to ``style_params=""`` and rendered
 # invisible / washed-out.
 #
-# ``_resolve_titiler_style_params`` is the single resolution point. CRITICAL
+# ``_resolve_qgis_style_params`` is the single resolution point. CRITICAL
 # guards run FIRST so rasters that are ALREADY colorized are never corrupted by
 # a single-band rescale/colormap (the HIGH-severity terrain/RGBA regression a
 # rescale would otherwise introduce):
 #   - categorical / paletted COG (NLCD land cover) -> "" (embedded GDAL color
 # table wins);
 #   - RGB(A) / multiband COG (colored relief, blended landcover + hillshade
-#     composite - NATE's Toutle demo) -> "" (TiTiler renders the baked colors
+#     composite - NATE's Toutle demo) -> "" (QGIS renders the baked colors
 #     directly);
 #   - terrain-token preset/URI (continuous_dem / hillshade / slope / aspect /
 #     relief / terrain / elevation) -> "" (grayscale terrain auto-scales, RGBA
@@ -317,7 +317,7 @@ def _infer_style_preset(layer_uri: str, layer_id: str) -> str:
 
 #: Exact preset / variable key -> (rescale "lo,hi", colormap_name). Physically
 #: correct band + colormap per family. KEEP flood/plume byte-for-byte.
-_TITILER_STYLE_REGISTRY: dict[str, tuple[str, str]] = {
+_QGIS_STYLE_REGISTRY: dict[str, tuple[str, str]] = {
     # Hydrology (UNCHANGED - pre-F51 behavior pinned by tests).
     "continuous_flood_depth": ("0,3", "ylgnbu"),
     "continuous_plume_concentration": ("0,10", "reds"),
@@ -396,7 +396,7 @@ _TITILER_STYLE_REGISTRY: dict[str, tuple[str, str]] = {
     # imperiled-species importance is strictly positive (low->high); a ylgn ramp
     # over a typical richness band reads as a biodiversity hotspot map.
     # (NAIP RGB is a multiband COG -- handled by the RGBA/multiband passthrough
-    # in _resolve_titiler_style_params, NOT a single-band registry entry, so
+    # in _resolve_qgis_style_params, NOT a single-band registry entry, so
     # "naip_rgb" is intentionally absent here.)
     "ndvi": ("-1,1", "rdylgn"),
     "mobi_biodiversity": ("0,40", "ylgn"),
@@ -493,7 +493,7 @@ _TITILER_STYLE_REGISTRY: dict[str, tuple[str, str]] = {
 
 #: Safe non-empty default - never let a continuous raster fall through to an
 #: empty ``style_params`` (which gives stock per-tile grayscale autoscale).
-_TITILER_SAFE_DEFAULT = "&rescale=0,1&colormap_name=viridis"
+_QGIS_STYLE_SAFE_DEFAULT = "&rescale=0,1&colormap_name=viridis"
 
 
 def _sediment_yield_log_style_params() -> str:
@@ -501,7 +501,7 @@ def _sediment_yield_log_style_params() -> str:
 
     RUSLE annual soil loss spans orders of magnitude (0.01 .. 1000+ t/ha/yr),
     so a linear ``&rescale`` would paint everything below the worst gullies as
-    one flat color. Instead we emit a TiTiler/rio-tiler INTERVAL colormap
+    one flat color. Instead we emit a rio-tiler INTERVAL colormap
     (``[[[min, max], [r, g, b, a]], ...]``) whose class breaks are the
     log-spaced 1/5/10/50/100/500 t/ha/yr table owned by
     ``compute_sediment_yield.SEDIMENT_YIELD_LOG_CLASSES`` (single source of
@@ -540,7 +540,7 @@ def _registry_style_params(preset: str) -> str | None:
     if key == "sediment_yield_t_ha_yr":
         return _sediment_yield_log_style_params()
     # 1. Exact match.
-    hit = _TITILER_STYLE_REGISTRY.get(key)
+    hit = _QGIS_STYLE_REGISTRY.get(key)
     if hit is not None:
         rescale, cmap = hit
         return f"&rescale={rescale}&colormap_name={cmap}"
@@ -585,7 +585,7 @@ def _band1_percentile_rescale(raster_bytes: bytes | None) -> str | None:
     with a perceptually-uniform ``viridis`` ramp. Returns ``None`` when the
     bytes are missing, unreadable, or band 1 has NO finite values - callers
     degrade to the SAFE default. Single-value / tiny-range bands are widened so
-    ``rescale`` is never a zero-width interval (which TiTiler rejects).
+    ``rescale`` is never a zero-width interval (which QGIS rejects).
     """
     if not raster_bytes:
         return None
@@ -613,7 +613,7 @@ def _band1_percentile_rescale(raster_bytes: bytes | None) -> str | None:
     if not (lo == lo and hi == hi):  # NaN guard (paranoia)
         return None
     if hi <= lo:
-        # Single-value / zero-width: widen around the value so TiTiler accepts
+        # Single-value / zero-width: widen around the value so QGIS accepts
         # a non-degenerate range. Use a relative pad, with an absolute floor.
         pad = max(abs(lo) * 0.01, 1e-6)
         lo, hi = lo - pad, hi + pad
@@ -621,14 +621,14 @@ def _band1_percentile_rescale(raster_bytes: bytes | None) -> str | None:
 
 
 def _is_rgba_or_multiband(raster_bytes: bytes | None) -> bool:
-    """True if the COG is RGB(A)/multiband - TiTiler renders it DIRECTLY.
+    """True if the COG is RGB(A)/multiband - QGIS renders it DIRECTLY.
 
     Reads the in-hand COG bytes via a rasterio ``MemoryFile`` and reports True
     when band count >= 3 OR any band's color interpretation is one of
     Red/Green/Blue/Alpha. Such rasters (colored relief, blended landcover +
     hillshade composites) are already colorized: a single-band ``&rescale`` +
     ``&colormap_name`` would corrupt them, so the resolver returns ``""`` (empty
-    style_params = TiTiler passthrough) for them, exactly as the pre-F51 path
+    style_params = QGIS passthrough) for them, exactly as the pre-F51 path
     did. Best-effort: returns False on any read failure so a real single-band
     scalar still gets its rescale.
     """
@@ -676,18 +676,18 @@ def _is_terrain_token_preset(style_preset: str | None, layer_uri: str) -> bool:
     return bool(tokens & _TERRAIN_STYLE_TOKENS)
 
 
-def _resolve_titiler_style_params(
+def _resolve_qgis_style_params(
     style_preset: str | None, layer_uri: str
 ) -> str:
-    """Resolve TiTiler ``&rescale=..&colormap_name=..`` for the s3 publish path.
+    """Resolve the ``&rescale=..&colormap_name=..`` style-params string (parsed by the QGIS plugin) for the s3 publish path.
 
     Resolution order (F51, hardened by the terrain/RGBA regression fix):
 
     1. CATEGORICAL GUARD - if the COG carries an embedded band-1 GDAL color
-       table (NLCD land cover etc.), return ``""`` so TiTiler colorizes from the
+       table (NLCD land cover etc.), return ``""`` so QGIS colorizes from the
        EMBEDDED palette and is NEVER washed out by a rescale.
     2. RGBA / MULTIBAND PASSTHROUGH - if the COG is RGB(A) / >=3 bands (colored
-       relief, blended landcover + hillshade composite), return ``""``: TiTiler
+       relief, blended landcover + hillshade composite), return ``""``: QGIS
        renders the baked colors directly; a single-band rescale/colormap would
        CORRUPT it. This covers NATE's Toutle landcover+hillshade composite
        regardless of preset.
@@ -721,8 +721,8 @@ def _resolve_titiler_style_params(
             with MemoryFile(raster_bytes) as mem, mem.open() as src:
                 if _read_band1_colormap(src) is not None:
                     logger.info(
-                        "publish_layer (titiler) %s carries an embedded band-1 "
-                        "color table - leaving style_params empty so TiTiler "
+                        "publish_layer (style) %s carries an embedded band-1 "
+                        "color table - leaving style_params empty so QGIS "
                         "colorizes from the palette (job-0324)",
                         layer_uri,
                     )
@@ -732,14 +732,14 @@ def _resolve_titiler_style_params(
                 "palette probe skipped (%s: %s)", type(exc).__name__, exc
             )
 
-    # 2. RGBA / multiband composite -> NO rescale (TiTiler renders directly).
+    # 2. RGBA / multiband composite -> NO rescale (QGIS renders directly).
     #    Colored relief + blended landcover/hillshade composites are already
     #    colorized; a single-band rescale/colormap would corrupt them. Pre-F51
     #    these published with EMPTY style_params and rendered correctly.
     if _is_rgba_or_multiband(raster_bytes):
         logger.info(
-            "publish_layer (titiler) %s is RGB(A)/multiband - leaving "
-            "style_params empty so TiTiler renders the baked colors directly "
+            "publish_layer (style) %s is RGB(A)/multiband - leaving "
+            "style_params empty so QGIS renders the baked colors directly "
             "(no single-band rescale/colormap)",
             layer_uri,
         )
@@ -750,7 +750,7 @@ def _resolve_titiler_style_params(
     #    pre-F51. ``continuous_dem`` tokenizes to include ``dem`` -> matches.
     if _is_terrain_token_preset(style_preset, layer_uri):
         logger.info(
-            "publish_layer (titiler) preset=%r uri=%s is a TERRAIN-family raster "
+            "publish_layer (style) preset=%r uri=%s is a TERRAIN-family raster "
             "- leaving style_params empty (grayscale/RGBA terrain renders "
             "correctly with no rescale)",
             style_preset,
@@ -771,12 +771,12 @@ def _resolve_titiler_style_params(
 
     # 6. Safe, NEVER-empty default.
     logger.info(
-        "publish_layer (titiler) no registry/stats match for preset=%r uri=%s - "
+        "publish_layer (style) no registry/stats match for preset=%r uri=%s - "
         "using safe default rescale",
         style_preset,
         layer_uri,
     )
-    return _TITILER_SAFE_DEFAULT
+    return _QGIS_STYLE_SAFE_DEFAULT
 
 
 def style_params_from_band_stats(
@@ -788,11 +788,11 @@ def style_params_from_band_stats(
     p98: float | None = None,
     layer_uri: str = "",
 ) -> str:
-    """Resolve TiTiler ``&rescale=..&colormap_name=..`` WITHOUT a COG download.
+    """Resolve the ``&rescale=..&colormap_name=..`` style-params string (parsed by the QGIS plugin) WITHOUT a COG download.
 
     The register-only fast path (SFINCS postprocess offload, Phase 4): the worker
     precomputes ``band_stats`` per COG, so the agent resolves the SAME style
-    params ``_resolve_titiler_style_params`` would, but from the manifest stats
+    params ``_resolve_qgis_style_params`` would, but from the manifest stats
     instead of re-reading the COG. Resolution order mirrors that function exactly:
 
     1. CATEGORICAL passthrough (``is_categorical``) -> ``""`` (embedded palette
@@ -810,7 +810,7 @@ def style_params_from_band_stats(
     # 1. Categorical / paletted -> embedded palette wins.
     if is_categorical:
         return ""
-    # 2. RGBA / multiband composite -> TiTiler renders baked colors directly.
+    # 2. RGBA / multiband composite -> QGIS renders baked colors directly.
     if is_rgba:
         return ""
     # 3. Terrain-family preset/URI -> grayscale/RGBA terrain renders directly.
@@ -829,14 +829,14 @@ def style_params_from_band_stats(
                 lo, hi = lo - pad, hi + pad
             return f"&rescale={lo:g},{hi:g}&colormap_name=viridis"
     # 6. Safe, NEVER-empty default.
-    return _TITILER_SAFE_DEFAULT
+    return _QGIS_STYLE_SAFE_DEFAULT
 
 
 # --------------------------------------------------------------------------- #
 # Data-driven legend KEY (NATE: "the color gradient/key must come FROM THE DATA
 # when we fetch the map -- it MUST mean something").
 #
-# The legend is derived DIRECTLY from the resolved TiTiler style_params string
+# The legend is derived DIRECTLY from the resolved style_params string
 # (the SAME ``&rescale=lo,hi&colormap_name=name`` the raster render uses), so the
 # legend range and the painted raster range AGREE by construction -- there is no
 # second, separately-computed range to drift. For pinned-registry presets that is
@@ -852,7 +852,7 @@ def style_params_from_band_stats(
 
 #: Module-level side-table of the most-recent published-raster ``LegendKey``
 #: keyed by the layer's ENVELOPE uri - the raw ``s3://`` COG the atomic
-#: ``publish_layer`` returns (TiTiler exit); the register-only manifest seam
+#: ``publish_layer`` returns (QGIS-native); the register-only manifest seam
 #: keys by the same raw ``cog_uri``, so both producers share one key shape.
 #: ``publish_layer`` returns a bare URI string, so the server wrap-site
 #: rebuilds a ``LayerURI`` from it WITHOUT a legend; the pipeline emitter's
@@ -1077,7 +1077,7 @@ def pop_legend_for_uri(display_uri: str) -> "LegendKey | None":
     return _LAST_LEGEND_BY_URI.get(display_uri)
 
 
-# NOTE (TiTiler exit, 2026-07): ``build_titiler_tile_url`` - the legacy TiTiler
+# NOTE: ``build_titiler_tile_url`` - the legacy
 # XYZ tile-TEMPLATE mint (``{base}/cog/tiles/WebMercatorQuad/{z}/{x}/{y}.png
 # ?url=<cog>&rescale=..``) - was DELETED once its last importer
 # (``workflows.register_published_manifest``) swapped to emitting the raw
@@ -1354,7 +1354,7 @@ def _read_band1_colormap(src) -> dict | None:
     """Return the band-1 palette color table (``{idx: (r,g,b,a)}``) or ``None``.
 
     NLCD land cover (and other categorical rasters) ship a single-band
-    palette-index COG with an EMBEDDED GDAL color table; TiTiler colorizes from
+    palette-index COG with an EMBEDDED GDAL color table; QGIS colorizes from
     it. The F33 overview-enforcement re-write must carry that table forward or
     the layer renders solid grey. rasterio raises ``ValueError`` when
     band 1 has no color table - the normal case for continuous rasters (DEM,
@@ -1375,7 +1375,7 @@ def _apply_band1_colormap(dst, cmap: dict | None) -> None:
 
     No-op when ``cmap`` is ``None`` (non-paletted raster - never fabricate a
     color table). Otherwise writes the table on band 1 and marks band 1's color
-    interpretation ``palette`` so TiTiler treats the integer pixels as indices.
+    interpretation ``palette`` so QGIS treats the integer pixels as indices.
     """
     if cmap is None:
         return
@@ -1532,11 +1532,11 @@ def _overview_factors(width: int, height: int) -> list[int]:
 
     For small rasters (max dimension < 512px) the 256px floor produces an empty
     list, so _build_cog_with_overviews_rasterio skips overview generation and the
-    COG stays overview-free. TiTiler then computes minzoom == maxzoom for tiny
+    COG stays overview-free. QGIS then computes minzoom == maxzoom for tiny
     COGs, and MapLibre silently renders nothing at the default CONUS zoom.
 
     Fix: always include at least factor=2, even if the 256px floor is never met.
-    A single factor-2 overview (64-75px) is sufficient for TiTiler to lower its
+    A single factor-2 overview (64-75px) is sufficient for QGIS to lower its
     minzoom and for MapLibre to overzoom the tiles at any zoom level.
     """
     factors: list[int] = []
@@ -1547,7 +1547,7 @@ def _overview_factors(width: int, height: int) -> list[int]:
         if len(factors) >= 8:  # safety cap
             break
     # Always add factor=2 even when the image is already smaller than 512px so
-    # TiTiler gets at least one overview level for tiny rasters.
+    # QGIS gets at least one overview level for tiny rasters.
     if not factors:
         factors = [2]
     return factors
@@ -1630,7 +1630,7 @@ def _ensure_raster_has_overviews(layer_uri: str) -> str:
     """Guarantee the published raster is a COG WITH overviews (F33).
 
     A no-overview COG renders SPOTTY (per-strip range requests time out cold;
-    QGIS Server / TiTiler can't downsample for low zooms), so before a raster's
+    QGIS can't downsample for low zooms), so before a raster's
     tile template / WMS face is ever registered, validate the source COG has
     overviews. When missing, auto-translate to a tiled+overview COG (reusing
     ``compute_hillshade._translate_to_cog``, with a rasterio fallback), write it
@@ -2059,14 +2059,14 @@ def publish_layer(
     if name:
         logger.info("publish_layer: name=%r layer_id=%r", name, layer_id)
 
-    # TiTiler EXIT (2026-07): rasters publish as their raw s3:// COG URI -
+    # QGIS-native rendering: rasters publish as their raw s3:// COG URI -
     # the QGIS plugin (the only client) opens the COG directly via GDAL
     # /vsicurl/ and styles it from the envelope legend. No tile server, no
     # TRID3NT_TILE_SERVER_BASE, no XYZ template mint. The COG itself is the
     # published artifact; no .qgs mutation, no worker round-trip.
     #
     # LEGACY republish (was the IDEMPOTENT guard):
-    # old persisted cases (and pre-swap composer registrations) carry TiTiler
+    # old persisted cases (and pre-swap composer registrations) carry legacy
     # tile-TEMPLATE display URLs. A re-publish of one is NOT an error - UNWRAP
     # the embedded ``url=`` s3 COG (the same trick
     # ``_uri_util._unwrap_tile_template`` uses) and flow it through
@@ -2098,7 +2098,7 @@ def publish_layer(
     # that ALREADY rendered inline via their producing fetch tool's GeoJSON
     # (``add_loaded_layer`` path). Pre-F32 this RAISED a typed
     # terminal error → a scary red "Publishing layer… failed" card on a
-    # layer the user can already see, AND TiTiler cannot read a FlatGeobuf
+    # layer the user can already see, AND QGIS cannot read a FlatGeobuf
     # as a raster so wrapping it in a /cog tile template mints HANGING tiles
     # that freeze the map. F32: return a BENIGN, non-error result instead -
     # no raise (the step completes GREEN), no tile template, no
@@ -2178,7 +2178,7 @@ def publish_layer(
             retryable=True,
         )
     # F33: a no-overview COG renders SPOTTY (per-strip range requests time
-    # out cold; TiTiler can't downsample for low zooms), so validate the COG
+    # out cold; QGIS can't downsample for low zooms), so validate the COG
     # has overviews and auto-translate to a tiled+overview COG before
     # minting the tile template. Fail-open (publishes as-is) on any error.
     layer_uri = _ensure_raster_has_overviews(layer_uri)
@@ -2186,8 +2186,8 @@ def publish_layer(
     # F51: Style -> render params. The resolver math is UNCHANGED (the render
     # chokepoint + honesty floor); only where its output LANDS moved - the
     # ``&rescale=..&colormap_name=..`` string no longer rides a tile-URL query
-    # (TiTiler exit), it feeds the stashed LEGEND the plugin renders from.
-    # _resolve_titiler_style_params is the single resolution point:
+    # (QGIS-native), it feeds the stashed LEGEND the plugin renders from.
+    # _resolve_qgis_style_params is the single resolution point:
     #   - flood depths keep the blue ramp over 0-3 m; plume concentrations
     # keep the red ramp over 0-10 mg/L (byte-for-byte);
     #   - precip / temperature / wind / drought / fuel-moisture / satellite
@@ -2203,7 +2203,7 @@ def publish_layer(
     effective_preset = style_preset
     if effective_preset is None or effective_preset == "auto":
         effective_preset = _infer_style_preset(layer_uri, layer_id)
-    style_params = _resolve_titiler_style_params(effective_preset, layer_uri)
+    style_params = _resolve_qgis_style_params(effective_preset, layer_uri)
     # DATA-DRIVEN LEGEND: derive the render KEY from the SAME resolved
     # style_params (so the legend range equals the painted range by
     # construction) and stash it keyed by the ENVELOPE uri - the raw s3://
@@ -2235,7 +2235,7 @@ def publish_layer(
     )
     # register the published layer in the session URI registry so
     # the ``flood-depth-peak-<id>``-style handle resolves to a consumable
-    # DATA uri for downstream tools (Pelicun, zonal stats). With the TiTiler
+    # DATA uri for downstream tools (Pelicun, zonal stats). Under QGIS-native rendering the
     # exit there is no separate display face: the raw s3:// COG IS both the
     # data uri and the envelope uri the plugin renders.
     observe_published_layer(layer_id, gcs_uri=layer_uri)

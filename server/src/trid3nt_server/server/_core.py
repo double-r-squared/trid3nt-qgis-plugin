@@ -944,7 +944,7 @@ FETCH_CONFIRM_TOOLS: set[str] = {
 #: (vs terrain / land-cover / plume / generic rasters). Used at the publish_layer
 #: wrap-site so a re-publish of a flood-depth COG that arrives with an EMPTY
 #: style_preset is defaulted to ``continuous_flood_depth`` (white->blue->green)
-#: instead of "" -- an empty preset makes TiTiler fall back to viridis and paints
+#: instead of "" -- an empty preset makes QGIS fall back to viridis and paints
 #: a redundant styleless flood layer (the exact duplicate-flood-layer symptom).
 #: Token-boundary matched (not substring) so e.g. ``demo`` never trips ``dem``.
 _FLOOD_DEPTH_STYLE_TOKENS: frozenset[str] = frozenset(
@@ -975,8 +975,8 @@ def _resolve_publish_wrap_style_preset(
     Honors an explicit non-empty ``style_preset`` (the LLM / tool asked for it).
     When it resolves EMPTY, default a flood/depth COG to
     ``continuous_flood_depth`` so a redundant re-publish is never styleless
-    (which TiTiler renders as viridis). Non-flood rasters keep ``""`` (QGIS /
-    TiTiler default) exactly as before -- terrain auto-scales, paletted COGs use
+    (which QGIS renders as viridis). Non-flood rasters keep ``""`` (QGIS
+    default) exactly as before -- terrain auto-scales, paletted COGs use
     their embedded color table."""
     preset = (style_preset or "").strip()
     if preset:
@@ -1559,17 +1559,16 @@ def set_persistence(p: Persistence | None) -> None:
 async def init_persistence_from_env() -> Persistence | None:
     """Resolve a ``Persistence`` instance from environment configuration.
 
-    GCP is decommissioned: the live MongoDB-MCP (Atlas) bootstrap is GONE
-    (``mcp.py`` deleted -- it depended on GCP Secret Manager for the SRV and the
-    ``mongodb-mcp-server`` stdio subprocess). On AWS the prod persistence is
-    DynamoDB or the file backend, bound by ``main._maybe_bind_dev_persistence``
-    / ``dynamo_backend.make_persistence_for_backend`` before this runs.
+    The live MongoDB-MCP (Atlas) bootstrap is GONE (``mcp.py`` deleted). The
+    persistence backend is file-backed, bound by
+    ``main._maybe_bind_dev_persistence`` /
+    ``persistence.make_persistence_for_backend`` before this runs.
 
     This method does NOT clear a pre-bound singleton; it preserves whatever the
     startup path already bound. Returns the ``Persistence`` instance or ``None``.
     """
     # This method does NOT clear a pre-bound singleton. The agent
-    # startup path (``main._maybe_bind_dev_persistence`` / DynamoDB binding)
+    # startup path (``main._maybe_bind_dev_persistence``)
     # may have already bound a ``Persistence``; we preserve it.
     if get_persistence() is not None:
         logger.info("Persistence singleton already bound; retained")
@@ -1653,9 +1652,9 @@ async def _run_coldview_backfill() -> None:
 
     Best-effort by contract (same posture as ``_run_preauth_case_migration``):
     no Persistence binding short-circuits; the per-Case writers each swallow
-    their own S3/Dynamo errors and return ``False`` (never raise), so one bad
+    their own persistence errors and return ``False`` (never raise), so one bad
     Case can never abort the sweep or server startup. Bounded per-Case
-    concurrency via a semaphore so the sweep does not burst the S3/Dynamo
+    concurrency via a semaphore so the sweep does not burst the persistence
     round-trips. Toggle off via ``TRID3NT_COLDVIEW_BACKFILL=0``.
     """
     if not _COLDVIEW_BACKFILL_ENABLED:
@@ -5664,7 +5663,7 @@ async def _emit_case_open(
     # cold face is warm immediately.
     #
     # FIRE-AND-FORGET (mirrors the turn-close site): create_task so the
-    # Dynamo+S3 round-trips never sit on the open -> rehydrate path, and
+    # persistence round-trips never sit on the open -> rehydrate path, and
     # both persisters swallow their own errors (best-effort), so the
     # detached task can never break the open. The snapshot sources inline
     # vectors from the emitter only when target_case == open_case, and this
@@ -5766,10 +5765,10 @@ async def _handle_case_command(
             # ULID in dev); None only on the M1 unbound-Persistence path.
             #
             # An ANONYMOUS (pre-Auth) session's Case is ephemeral -> a
-            # numeric TTL ``expires_at`` is stamped so DynamoDB reaps
-            # abandoned scratch Cases. An authed session (``is_anonymous``
-            # False) passes ``ephemeral=False`` -> no ``expires_at`` ->
-            # durable forever.
+            # numeric TTL ``expires_at`` is stamped to mark abandoned scratch
+            # Cases (the ephemeral marker rides in the persisted record). An
+            # authed session (``is_anonymous`` False) passes ``ephemeral=False``
+            # -> no ``expires_at`` -> durable forever.
             await p.upsert_case(
                 case,
                 owner_user_id=state.authenticated_user_id,
@@ -9633,7 +9632,7 @@ async def _invoke_tool_via_emitter(
         # True-color / satellite tools return list[LayerURI] (fetch_goes_
         # animation, fetch_goes_archive_animation, fetch_goes_active_fire,
         # fetch_glm_lightning, fetch_viirs_day_fire). add_loaded_layer dedups
-        # by COG-identity (TiTiler url= param), NOT by layer_id, so two
+        # by COG-identity (the COG source uri), NOT by layer_id, so two
         # layers sharing a source-derived id both persist and collide on
         # delete-by-id. Re-stamp every LayerURI element with a fresh ULID,
         # passing non-LayerURI elements through, and PRESERVE the sequence
@@ -9793,7 +9792,7 @@ async def _invoke_tool_via_emitter(
         if turn_case_id and state.emitter is not None:
             # DURABILITY (layer-publish-survives-disconnect, 2026-06-23): run the
             # layer persist UNDER A SHIELD so a cancellation of the (possibly
-            # detached) turn cannot interrupt the DynamoDB write of a fully-
+            # detached) turn cannot interrupt the persistence write of a fully-
             # computed layer. A bare ``await`` here is cancel-fragile: a
             # same-stream re-prompt supersede / stop / any cancel re-raises the
             # pending CancelledError at the persist's first suspension point and
@@ -9836,7 +9835,7 @@ async def _invoke_tool_via_emitter(
             # DURABILITY: the snapshot + manifest are the COLD-view faces of the
             # same just-persisted layer -- they take the SAME shield so a cancel
             # in this finally cannot leave the cold faces stale-empty while the
-            # Dynamo record carries the layer (or vice versa).
+            # persistence record carries the layer (or vice versa).
             try:
                 await _run_to_completion_shielded(
                     _persist_case_view_snapshot(state, case_id=turn_case_id)
@@ -10013,7 +10012,7 @@ async def _invoke_tool_via_emitter(
             # machinery announces it exactly as composer layers are
             # announced.
             #
-            # TiTiler exit (QGIS-native swap): publish_layer now returns the
+            # QGIS-native rendering: publish_layer returns the
             # raw s3:// COG uri for rasters (the plugin reads it via
             # /vsicurl/), so s3:// joins http(s) as a SUCCESS shape here.
             if isinstance(result, str) and result.startswith(
@@ -10055,7 +10054,7 @@ async def _invoke_tool_via_emitter(
                             # re-publish of a FLOOD/DEPTH COG carries an empty
                             # style_preset, default it to continuous_flood_depth
                             # so the layer is never styleless (= viridis). Non-
-                            # flood rasters keep "" (QGIS/TiTiler default).
+                            # flood rasters keep "" (QGIS default).
                             style_preset=_resolved_style_preset,
                         )
                     )
@@ -10122,12 +10121,12 @@ async def _run_to_completion_shielded(coro: Awaitable[Any]) -> None:
     """Await ``coro`` so it COMPLETES even if the surrounding task is cancelled.
 
     DURABILITY (layer-publish-survives-disconnect): the per-tool dispatch
-    ``finally`` persists the completed layer accumulator to DynamoDB. That
+    ``finally`` persists the completed layer accumulator to the persistence backend. That
     ``finally`` runs on EVERY exit path -- including ``asyncio.CancelledError``
     (a same-stream re-prompt supersede, the stop button, or any cancel that
     reaches the detached turn). A bare ``await persist(...)`` in a ``finally``
     is NOT safe under cancellation: the first real suspension point inside the
-    persist re-raises the pending ``CancelledError``, so the DynamoDB write is
+    persist re-raises the pending ``CancelledError``, so the persistence write is
     SKIPPED and a fully-computed layer is lost (live 2026-06-23: SFINCS run
     01KVSTC80F wrote 100+ COGs to S3 but the Case persisted 0 layers after a
     transient WS drop during the ~9-min solve).
@@ -10152,7 +10151,7 @@ async def _run_to_completion_shielded(coro: Awaitable[Any]) -> None:
                 raise
             # Parent was cancelled but the shielded write is NOT cancelled.
             # Remember the cancel, and keep waiting on the still-running write
-            # (the next loop awaits the same shielded task) so the DynamoDB write
+            # (the next loop awaits the same shielded task) so the persistence write
             # COMPLETES before the cancel propagates. If the write already
             # finished, the next ``await shield(task)`` returns immediately.
             cancelled = True
@@ -10206,7 +10205,7 @@ async def _auto_publish_droppable_raster(
     )
 
     try:
-        # publish_layer is synchronous (polls TiTiler / PyQGIS); run it OFF the
+        # publish_layer is synchronous (polls PyQGIS); run it OFF the
         # event loop so it cannot stall the WS heartbeat. The server wrapper
         # normally resolves the case-scoped .qgs for publish_layer; here we pass
         # case_id straight through so the same per-Case routing applies inside
@@ -11149,7 +11148,7 @@ async def _dispatch_model_turn_and_persist(
             # turn close. Captures chat-only turns the layer-publish path never
             # touches, and refreshes the cold view's chat replay. Best-effort
             # (swallows S3 errors) so it cannot break turn teardown.
-            # A1 FIX 5 (latency): fire-and-forget so the snapshot's Dynamo+S3
+            # A1 FIX 5 (latency): fire-and-forget so the snapshot's persistence
             # round-trips never sit on the turn-close (-> resume) path (the
             # snapshot never raises, so the detached task leaks no exception).
             _t = asyncio.create_task(

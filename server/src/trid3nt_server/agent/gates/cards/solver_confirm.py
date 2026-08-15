@@ -1024,7 +1024,7 @@ async def _build_swmm_granularity_envelope(params: dict) -> tuple[Any, Any, str]
     from trid3nt_contracts.swmm_contracts import SWMMRunArgs
     from ...tool_arg_normalizer import coerce_bbox_value
     from ...tools.simulation.solver.solver import (
-        AWS_BATCH_COMPUTE_CLASS_SIZING,
+        COMPUTE_CLASS_SIZING,
         select_compute_class,
     )
     from ...workflows.swmm.urban_flood.urban_flood import (
@@ -1079,8 +1079,8 @@ async def _build_swmm_granularity_envelope(params: dict) -> tuple[Any, Any, str]
         spot_label = None
     else:
         compute_class = select_compute_class(auto.estimated_active_cells)
-        sizing = AWS_BATCH_COMPUTE_CLASS_SIZING.get(
-            compute_class, AWS_BATCH_COMPUTE_CLASS_SIZING["standard"]
+        sizing = COMPUTE_CLASS_SIZING.get(
+            compute_class, COMPUTE_CLASS_SIZING["standard"]
         )
         spot_label = f"Spot-eligible ({compute_class})"
     vcpus = int(sizing.get("vcpus", 1)) or 1
