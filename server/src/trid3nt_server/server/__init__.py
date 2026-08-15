@@ -26,8 +26,11 @@ from . import _core
 # else the sibling's internal reference never observes the patch. The facade
 # propagates writes to every extraction module that defines the name.
 from . import config as _config
+from . import dispatch as _dispatch
 from . import errors as _errors
 from . import interactions as _interactions
+from . import protocol as _protocol
+from . import reuse as _reuse
 from . import spatial as _spatial
 from . import styles as _styles
 
@@ -37,6 +40,9 @@ _EXTRACTION_MODULES = (
     _interactions,
     _spatial,
     _styles,
+    _reuse,
+    _dispatch,
+    _protocol,
 )
 
 

@@ -329,6 +329,36 @@ from .spatial import (
     _resolve_pending_spatial_input,
 )
 
+# Wave-4 extractions (ADR 0264): the reuse short-circuit shim, the low-coupling
+# tool-dispatch helpers (progress accounting, gate-expander name sets,
+# terminal-composer classification), and the session-connection registry now
+# live in sibling package modules. Imported here by NAME so bare-global
+# references below AND monkeypatch targets on ``trid3nt_server.server.<name>``
+# resolve as before.
+from .reuse import _ReuseEntry
+from .dispatch import (
+    _DELIVERABLE_COMPLETE_DIRECTIVE,
+    _DISCOVERY_EXPAND_CAP,
+    _EMPTY_COMPLETION_NUDGE,
+    _EMPTY_COMPLETION_RETRY_CAP,
+    _POST_DELIVERABLE_WRAPUP_ROUNDS,
+    _PROGRESS_RESULT_KEYS,
+    _default_declarable_registry,
+    _dispatch_made_progress,
+    _gate_expander_tool_names,
+    _is_terminal_composer,
+    _tool_names_from_search_result,
+    _tool_search_tool_names,
+)
+from .protocol import (
+    SESSION_SUPERSEDED_CLOSE_CODE,
+    _SESSION_WS_CONNECTIONS,
+    _deregister_session_connection,
+    _reap_prior_session_connections,
+    _register_session_connection,
+    session_connection_count,
+)
+
 logger = logging.getLogger("trid3nt_server.server")
 
 # Confirmation triggers (FR-AS-8). Empty for M1: solver runs and non-session
@@ -619,210 +649,6 @@ FETCH_CONFIRM_TOOLS: set[str] = {
     "fetch_topobathy",
     "fetch_landcover",
 }
-
-
-#: Result keys that mark a dispatch as having PRODUCED a real artifact -- a
-#: published / registered layer, a stored object, a feature set. Used by the
-#: loop-watchdog progress witness: a round that produces one of these is
-#: ADVANCING the Case (a new layer/handle appears) even if the model
-#: pathologically repeats the same call, so it is allowed to run to the step
-#: cap / loop-exhausted envelope rather than being watchdog-aborted. A
-#: bare-ack wedge shape (``{"ok": True}`` re-issued forever) carries none of
-#: these and so loads the no-progress streak.
-_PROGRESS_RESULT_KEYS: tuple[str, ...] = (
-    "layer_id",
-    "wms_url",
-    "uri",
-    "layer_uri",
-    "feature_count",
-)
-
-
-def _dispatch_made_progress(result: Any) -> bool:
-    """True iff a single tool dispatch produced a real artifact.
-
-    A ``LayerURI`` return (any subclass) is always progress -- a renderable
-    layer was produced. A dict carrying a layer/handle/feature signal
-    (:data:`_PROGRESS_RESULT_KEYS`) is progress. Everything else -- a bare ack
-    (``{"ok": True}``), ``None``, a primitive, an empty dict -- is NOT progress:
-    that is the no-op-repeat shape the watchdog must catch.
-    """
-    if isinstance(result, LayerURI):
-        return True
-    if isinstance(result, dict):
-        return any(
-            result.get(k) not in (None, "", [], {})
-            for k in _PROGRESS_RESULT_KEYS
-        )
-    return False
-
-
-#: How many CONSECUTIVE no-progress model rounds we tolerate AFTER a
-#: terminal composer has delivered its artifact before concluding the turn
-#: cleanly. Symptom without this: a SFINCS flood publishes its depth layer
-#: and the model, having nothing left to do, keeps emitting unproductive
-#: function calls until it trips ``MAX_TURN_ITERATIONS`` and emits a
-#: (harmless but sloppy) ``loop_exhausted`` frame. Once the deliverable is
-#: in hand we (a) stamp the composer's function_response with a one-time
-#: wrap-up directive so a well-behaved model just summarizes and stops, and
-#: (b) keep this small safety budget: if the model spins
-#: ``_POST_DELIVERABLE_WRAPUP_ROUNDS`` rounds in a row without producing
-#: anything new, we conclude the turn cleanly instead of letting it run to
-#: the cap. A round that produces genuine follow-up work
-#: (``_dispatch_made_progress``) RESETS the streak, so legitimate
-#: multi-deliverable flows are never cut off. This is NOT the runaway
-#: guard: a turn that never produced a terminal deliverable still runs to
-#: the cap / watchdog exactly as before.
-_POST_DELIVERABLE_WRAPUP_ROUNDS: int = 2
-
-#: The one-time wrap-up directive stamped onto a terminal composer's
-#: function_response the moment it delivers (see ``_is_terminal_composer``).
-_DELIVERABLE_COMPLETE_DIRECTIVE: str = (
-    "DELIVERABLE COMPLETE: this run produced its primary result and any "
-    "layers are already published to the user's map. Unless the user "
-    "explicitly asked for ADDITIONAL analysis beyond this, do NOT call more "
-    "tools -- give a brief (1-3 sentence) final summary of what was produced "
-    "and stop. Calling further tools now will not improve the answer."
-)
-
-#: EMPTY-COMPLETION RETRY: the local qwen3 model occasionally returns a
-#: round with ZERO tool calls AND ZERO non-whitespace text. This is NOT
-#: context overflow (that is the compaction/clip guard) -- the model has
-#: room and simply emits nothing. The loop RETRIES the round with a
-#: corrective user-role nudge appended (production tool-runner pattern:
-#: OpenAI tool-runner / LangChain retry-with-nudge, not a blind resend),
-#: BOUNDED by this cap so an always-empty model can never loop forever
-#: (same safety discipline as the loop watchdog). Scoped to the LOCAL
-#: (MODEL_PROVIDER=openai) path only -- a legitimately empty Bedrock round
-#: must NOT change.
-_EMPTY_COMPLETION_RETRY_CAP: int = 2
-
-#: The corrective user-role nudge appended to ``contents`` before a retried
-#: empty round (OPEN-16). Plain instruction -- either act (tool) or answer;
-#: never another empty message.
-_EMPTY_COMPLETION_NUDGE: str = (
-    "Your previous response was empty. Either call the appropriate tool to "
-    "fulfill the request, or reply with your answer. Do not return an empty "
-    "message."
-)
-
-#: DISCOVERY-EXPANDS-GATE (task 2): the max number of NEW tool names the
-#: tool-search tool's results may add to a turn's visible gate, summed across
-#: the whole turn. Bounds the widening so a chatty search cannot re-expand the
-#: gate back toward the full catalog it was meant to trim.
-_DISCOVERY_EXPAND_CAP: int = 8
-
-
-def _tool_search_tool_names() -> frozenset[str]:
-    """The registered name(s) of the tool-search (data-discovery) tool.
-
-    Resolved by REGISTRY LOOKUP off the discovery module's own registration
-    metadata (``search_tools``, formerly ``discover_dataset``) rather than a
-    hardcoded literal, so the parallel rename lands transparently. Any legacy
-    alias still present in the live registry is also honored. Never raises: a
-    resolution fault yields the empty set (the expand simply no-ops).
-    """
-    names: set[str] = set()
-    try:
-        from ..agent.tools.search.search_tools.search_tools import _SEARCH_TOOLS_METADATA
-
-        if getattr(_SEARCH_TOOLS_METADATA, "name", None):
-            names.add(_SEARCH_TOOLS_METADATA.name)
-    except Exception:  # noqa: BLE001 -- module shape drift must not break dispatch
-        logger.debug("discovery-expand: search_tools metadata lookup failed",
-                     exc_info=True)
-    for _legacy in ("discover_dataset",):
-        if _legacy in TOOL_REGISTRY:
-            names.add(_legacy)
-    return frozenset(names)
-
-
-def _default_declarable_registry() -> dict[str, Any]:
-    """The DEFAULT per-turn declarable tool set.
-
-    Door dissolution (ADR 0094): engine templates (``sfincs_flood``,
-    ``modflow_*``, ``openquake_psha``, ...) are ordinary retrieval-pool members
-    and are declarable by default like any tool -- the deleted engine doors no
-    longer gate them. Only ``catalog`` (catalog-surfacing experiment, arm-flagged;
-    no tool carries it in the DEFAULT config) and ``internal`` (an absorbed
-    in-process seam, e.g. fetch_copernicus_dem folded into fetch_dem --
-    registry-resolvable but never declared to the model) are withheld.
-
-    Resolved by REGISTRY LOOKUP (never a literal). Mirrors the pool-side filter
-    in ``tools.search.tool_retrieval`` (fail-open dump) so the
-    default-declaration path and the retrieval pool stay identical.
-    """
-    _reg = {
-        name: entry
-        for name, entry in TOOL_REGISTRY.items()
-        if getattr(entry.metadata, "tier", "general")
-        not in ("catalog", "internal")
-    }
-    return _reg
-
-
-def _gate_expander_tool_names() -> frozenset[str]:
-    """The gate-expanders: the tool-search (data-discovery) tool(s).
-
-    A call to one of these expands the turn's visible gate with the tool names
-    its result names (``results[].tool_name``). See
-    ``_tool_names_from_search_result`` for the extraction and the dispatch
-    post-processing for the union + cap. Door dissolution (ADR 0094) removed the
-    engine-door gate-expanders; templates are ordinary retrieval-pool tools now.
-    """
-    return _tool_search_tool_names()
-
-
-def _tool_names_from_search_result(result: Any) -> list[str]:
-    """Extract the ranked tool names from a gate-expander result payload.
-
-    ``search_tools`` returns ``{"results": [{"tool_name": <name>, ...}, ...]}``.
-    Returns the names in listing order (best first), de-duplicated. Tolerant of a
-    malformed / partial shape -- a non-conforming entry is skipped, never raised
-    on.
-    """
-    if not isinstance(result, dict):
-        return []
-    rows = result.get("results")
-    if not isinstance(rows, list):
-        return []
-    out: list[str] = []
-    seen: set[str] = set()
-    for row in rows:
-        if not isinstance(row, dict):
-            continue
-        name = row.get("tool_name")
-        if isinstance(name, str) and name and name not in seen:
-            seen.add(name)
-            out.append(name)
-    return out
-
-
-def _is_terminal_composer(tool_name: str) -> bool:
-    """True iff ``tool_name`` is a top-level run-a-model composer.
-
-    A terminal composer is a ``run_*`` workflow-dispatch tool (the
-    ``run_model_*`` / ``run_*_job`` / ``swmm_urban_flood`` /
-    ``openquake_psha`` family) -- the deliverable-producing entry
-    points whose successful return IS the answer the user asked for. Helper
-    workflow-dispatch tools that merely compute an intermediate
-    (``compute_cross_section``, ``request_spatial_input``, ...) are
-    deliberately EXCLUDED by the ``run_`` prefix: drawing geometry or computing
-    a profile is mid-pipeline, not a turn-ending deliverable.
-    """
-    entry = TOOL_REGISTRY.get(tool_name)
-    if entry is None:
-        return False
-    # Engine TEMPLATES carry deliverable-producing
-    # names that do NOT start with ``run_`` (``modflow_contaminant_plume`` et al.).
-    # A completed template IS a turn-ending deliverable, so ALSO latch any
-    # tier="template" workflow-dispatch tool - otherwise the crisp-end wrap-up +
-    # post-deliverable idle reset never fire and the turn spins to the loop cap.
-    is_workflow_dispatch = (
-        getattr(entry.metadata, "source_class", None) == "workflow_dispatch"
-    )
-    is_template = getattr(entry.metadata, "tier", "general") == "template"
-    return is_workflow_dispatch and (tool_name.startswith("run_") or is_template)
 
 
 # --------------------------------------------------------------------------- #
@@ -6109,30 +5935,6 @@ def _maybe_default_solver_bbox_to_pinned_aoi(
     return new_params
 
 
-@dataclass
-class _ReuseEntry:
-    """A drop-in ``RegisteredTool``-shaped shim for the reuse short-circuit.
-
-    Carries the real tool's ``metadata`` (so the tool card / telemetry label
-    is unchanged) but a ``fn`` that returns the EXISTING layer instead of
-    launching the solver. ``_invoke_tool_via_emitter`` swaps the registry
-    entry for this so the SAME ``emit_tool_call`` LayerURI gate fires with
-    the reused layer.
-    """
-
-    metadata: Any
-    layer: LayerURI
-
-    @property
-    def fn(self) -> Any:
-        layer = self.layer
-
-        def _return_existing(**_ignored: Any) -> LayerURI:
-            return layer
-
-        return _return_existing
-
-
 async def _finalize_segment(
     websocket: ServerConnection,
     state: SessionState,
@@ -10949,102 +10751,6 @@ async def _handle_layer_delete(
 #: Application close code for a prior socket reaped because a newer connection
 #: of the SAME session resumed. 4xxx is the WebSocket spec's reserved
 #: application range; the client treats it like any other close.
-SESSION_SUPERSEDED_CLOSE_CODE = 4408
-
-_SESSION_WS_CONNECTIONS: "dict[str, set[ServerConnection]]" = {}
-
-
-def _register_session_connection(
-    session_id: str, websocket: "ServerConnection"
-) -> None:
-    """Record ``websocket`` as a live connection of ``session_id`` (idempotent).
-
-    Called once the connection's ``session_id`` is known (first inbound
-    envelope routed through ``_handle_session_resume`` / the handler). Set
-    semantics make a re-register a no-op.
-    """
-    if not session_id:
-        return
-    _SESSION_WS_CONNECTIONS.setdefault(session_id, set()).add(websocket)
-
-
-def _deregister_session_connection(
-    session_id: str, websocket: "ServerConnection"
-) -> None:
-    """Drop ``websocket`` from ``session_id``'s live-connection set.
-
-    Called from the handler ``finally`` on EVERY exit path. ``discard`` never
-    raises; an emptied bucket is pruned so the registry cannot grow unbounded.
-    """
-    if not session_id:
-        return
-    bucket = _SESSION_WS_CONNECTIONS.get(session_id)
-    if bucket is None:
-        return
-    bucket.discard(websocket)
-    if not bucket:
-        _SESSION_WS_CONNECTIONS.pop(session_id, None)
-
-
-def session_connection_count(session_id: str) -> int:
-    """Number of live connections currently tracked for ``session_id``.
-
-    Surfaced for tests (and post-mortem) so the per-session reap can be asserted
-    directly. NEVER negative; 0 for an unknown session.
-    """
-    return len(_SESSION_WS_CONNECTIONS.get(session_id, ()))
-
-
-async def _reap_prior_session_connections(
-    session_id: str, keeper: "ServerConnection"
-) -> int:
-    """Proactively close every PRIOR socket of ``session_id`` except ``keeper``.
-
-    Called on each session-resume handshake. The ``keeper`` (the resuming
-    connection) is excluded by object identity FIRST so its own live socket is
-    never closed. Returns the number of prior sockets closed; best-effort, a
-    close that raises is swallowed and the stale socket is dropped from the
-    registry either way so the count cannot wedge.
-    """
-    # Reap DISABLED: the eager per-session reap is incompatible with the
-    # dual-socket design (2 sockets per session share a session_id) - it closed
-    # the legitimate sibling and killed its mid-stream turn with 4408. Re-enable
-    # ONLY with a policy that preserves the dual-socket pair and never closes a
-    # socket whose session has an in-flight turn/solve. _register_session_connection
-    # stays (cheap, useful); the code below is retained for that re-enable.
-    return 0
-    bucket = _SESSION_WS_CONNECTIONS.get(session_id)
-    if not bucket:
-        return 0
-    # Snapshot + exclude the keeper by identity BEFORE any close so we can never
-    # target the resuming connection's own live socket.
-    priors = [c for c in bucket if c is not keeper]
-    reaped = 0
-    for prior in priors:
-        # Drop from the registry first so a re-entrant reap (a near-simultaneous
-        # resume) cannot double-target the same stale socket.
-        bucket.discard(prior)
-        try:
-            await prior.close(
-                code=SESSION_SUPERSEDED_CLOSE_CODE,
-                reason="superseded by a newer session connection",
-            )
-            reaped += 1
-        except Exception:  # noqa: BLE001 - best-effort; never break the resume
-            # The prior socket is already closing/closed; still count it gone.
-            reaped += 1
-    if not bucket:
-        _SESSION_WS_CONNECTIONS.pop(session_id, None)
-    if reaped:
-        logger.info(
-            "session-resume reaped %d prior socket(s) session=%s remaining=%d",
-            reaped,
-            session_id,
-            session_connection_count(session_id),
-        )
-    return reaped
-
-
 def inflight_turn_count() -> int:
     """Number of in-flight turns detached from a (possibly-dead) connection.
 
