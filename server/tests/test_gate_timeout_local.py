@@ -60,7 +60,7 @@ def test_every_gate_wait_site_uses_the_seam():
     """
     import inspect
 
-    src = inspect.getsource(server)
+    src = inspect.getsource(server._core)
     for bare in (
         "timeout=warning_payload.ttl_seconds",
         "timeout=CODE_EXEC_CONFIRM_TIMEOUT_SECONDS",

@@ -1,7 +1,7 @@
 """BUG 3 + BUG 4b — terminal closing narration + terminal-failure replay card.
 
 Two server-side fixes, both driving the REAL ``_stream_model_reply`` /
-``_dispatch_gemini_and_persist`` seams (no Gemini, no Playwright) against
+``_dispatch_model_turn_and_persist`` seams (no Gemini, no Playwright) against
 file-backed persistence:
 
 BUG 3 (missing closing narration): after a long tool/solve completes the turn
@@ -88,7 +88,7 @@ def _agent_chunks(ws):
 
 
 async def _drive_real_stream(ws, state, fake_stream):
-    """Drive REAL ``_stream_model_reply`` via ``_dispatch_gemini_and_persist``
+    """Drive REAL ``_stream_model_reply`` via ``_dispatch_model_turn_and_persist``
     with a mocked ``stream_events_with_contents`` (``fake_stream``)."""
     from unittest.mock import patch
 
@@ -99,7 +99,7 @@ async def _drive_real_stream(ws, state, fake_stream):
     )
     with patch.object(agent_server, "build_tool_declarations", return_value=[]), \
          patch.object(agent_server, "stream_events_with_contents", fake_stream):
-        await agent_server._dispatch_gemini_and_persist(
+        await agent_server._dispatch_model_turn_and_persist(
             ws, state, settings, "do the thing", "research"
         )
 

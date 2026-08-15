@@ -3,7 +3,7 @@
 User-verified bug: reopening a Case replayed ONLY the user's own messages.
 Two root causes:
 
-1. ``_dispatch_gemini_and_persist`` persisted the agent turn with
+1. ``_dispatch_model_turn_and_persist`` persisted the agent turn with
    ``content=""`` — the streamed deltas were never accumulated, so the web
    replay (rightly) rendered nothing for agent turns.
 2. Tool dispatches persisted NO replayable record at all — the inline tool
@@ -27,7 +27,7 @@ both the file-backed dev substrate and the MockMCPClient:
 - the user-turn persist path is byte-shape unchanged;
 - Gemini-free E2E: one full simulated turn (user msg -> tool dispatch ->
   narration) through ``_prepare_user_turn`` + ``_invoke_tool_via_emitter`` +
-  ``_dispatch_gemini_and_persist`` against file persistence, then the
+  ``_dispatch_model_turn_and_persist`` against file persistence, then the
   rehydration envelope replays the complete ordered stream.
 """
 
@@ -150,7 +150,7 @@ async def test_agent_narration_persists_and_replays(file_persistence) -> None:
     orig = server._stream_model_reply
     server._stream_model_reply = fake_stream
     try:
-        await server._dispatch_gemini_and_persist(ws, state, None, "hi agent", "off")
+        await server._dispatch_model_turn_and_persist(ws, state, None, "hi agent", "off")
     finally:
         server._stream_model_reply = orig
 
@@ -181,7 +181,7 @@ async def test_agent_narration_persists_even_when_stream_dies(
     server._stream_model_reply = dying_stream
     try:
         with pytest.raises(RuntimeError):
-            await server._dispatch_gemini_and_persist(ws, state, None, "x", "off")
+            await server._dispatch_model_turn_and_persist(ws, state, None, "x", "off")
     finally:
         server._stream_model_reply = orig
 
@@ -210,7 +210,7 @@ async def test_no_agent_row_when_stream_dies_with_nothing_said(
     server._stream_model_reply = instant_death
     try:
         with pytest.raises(RuntimeError):
-            await server._dispatch_gemini_and_persist(ws, state, None, "x", "off")
+            await server._dispatch_model_turn_and_persist(ws, state, None, "x", "off")
     finally:
         server._stream_model_reply = orig
 
@@ -571,7 +571,7 @@ async def test_e2e_full_turn_replays_complete_stream(
     """One simulated turn through the REAL seams: ``_prepare_user_turn``
     (user persist) -> fake Gemini stream that narrates, dispatches a real
     registry tool via ``_invoke_tool_via_emitter``, narrates again ->
-    ``_dispatch_gemini_and_persist`` terminal persist. The rehydration
+    ``_dispatch_model_turn_and_persist`` terminal persist. The rehydration
     envelope must replay user -> tool -> agent, in order, with content."""
     ws = FakeWS()
     state = server.SessionState(session_id=new_ulid())
@@ -590,7 +590,7 @@ async def test_e2e_full_turn_replays_complete_stream(
     orig = server._stream_model_reply
     server._stream_model_reply = fake_stream
     try:
-        await server._dispatch_gemini_and_persist(
+        await server._dispatch_model_turn_and_persist(
             ws, state, None, "fetch the data", "off"
         )
     finally:
@@ -624,7 +624,7 @@ from trid3nt_server.agent.adapters.adapter import (  # noqa: E402 — grouped wi
 
 
 async def _drive_real_stream(ws, state, turn_events):
-    """Drive the REAL _stream_model_reply (via _dispatch_gemini_and_persist)
+    """Drive the REAL _stream_model_reply (via _dispatch_model_turn_and_persist)
     with a mocked ``stream_events_with_contents`` yielding ``turn_events`` —
     a list of per-turn event lists. Uses the REAL ``_invoke_tool_via_emitter``
     so tool-card rows persist mid-turn (the whole point of the interleave)."""
@@ -643,7 +643,7 @@ async def _drive_real_stream(ws, state, turn_events):
     )
     with patch.object(agent_server, "build_tool_declarations", return_value=[]), \
          patch.object(agent_server, "stream_events_with_contents", _fake_stream):
-        await agent_server._dispatch_gemini_and_persist(
+        await agent_server._dispatch_model_turn_and_persist(
             ws, state, settings, "two segments two tools", "research"
         )
 

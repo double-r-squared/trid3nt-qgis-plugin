@@ -267,7 +267,7 @@ def _function_named(tree: ast.Module, name: str) -> ast.AsyncFunctionDef:
 
 
 def test_run_server_fires_backfill_as_tracked_background_task() -> None:
-    src = Path(server.__file__).read_text(encoding="utf-8")
+    src = Path(server._core.__file__).read_text(encoding="utf-8")
     tree = ast.parse(src)
     fn = _function_named(tree, "run_server")
 

@@ -182,7 +182,7 @@ def test_root_prompt_layer_attribution_lands_in_new_case(
 
     # Simulate the turn's tool side-effects: a layer emission lands in the
     # per-turn accumulator, then the agent reply persists (the
-    # _dispatch_gemini_and_persist finally-block path).
+    # _dispatch_model_turn_and_persist finally-block path).
     state.current_turn_layer_ids = ["flood-depth-fort-myers"]
     asyncio.run(
         _persist_chat_turn(

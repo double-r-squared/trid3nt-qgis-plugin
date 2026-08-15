@@ -26,6 +26,12 @@ FR-AS-8 confirmation hooks: scaffolded as ``CONFIRMATION_TRIGGERS`` (empty in
 M1). Session-record writes (Appendix D.6) are explicitly carved out per FR-AS-8.
 
 OQ-1 (Cloud Run WS vs Agent Engine) -- see report's Open Questions section.
+
+Module of record for the ``trid3nt_server.server`` package (ADR 0261). This is
+the monolith body mid-refactor: it shrinks wave by wave as regions extract into
+sibling modules (already done: ``errors``, ``config``). The package ``__init__``
+proxies every attribute read/write here so importers and tests see the SAME
+surface the single ``server.py`` module exposed.
 """
 
 from __future__ import annotations
@@ -101,9 +107,9 @@ from trid3nt_contracts.ws import (
 #: out-of-enum code that must be surfaced as a ``[MARKER]`` on INTERNAL_ERROR.
 _VALID_ERROR_CODES: frozenset[str] = frozenset(get_args(ErrorCode))
 
-from .main import MAX_TURNS_PER_SESSION
+from ..main import MAX_TURNS_PER_SESSION
 
-from .agent.gates.runaway_guard import (
+from ..agent.gates.runaway_guard import (
     ABORT_LOOP_WATCHDOG,
     ABORT_STEP_CAP,
     ABORT_WALL_CLOCK,
@@ -113,7 +119,7 @@ from .agent.gates.runaway_guard import (
     step_cap_for_model,
 )
 
-from .agent.adapters.adapter import (
+from ..agent.adapters.adapter import (
     CompactionCompleteEvent,
     CompactionStartEvent,
     FunctionCallEvent,
@@ -139,7 +145,7 @@ from .agent.adapters.adapter import (
     summarize_tool_result,
     classify_result_usable,
 )
-from .credentials.auth_handshake import (
+from ..credentials.auth_handshake import (
     AuthResult,
     authenticate_token,
     build_auth_ack,
@@ -147,27 +153,27 @@ from .credentials.auth_handshake import (
     get_auth_token_timeout_s,
     verify_access_token,
 )
-from .case_lifecycle import CaseLifecycleError, ensure_case_qgs
-from .agent.gates.context_budget import (
+from ..case_lifecycle import CaseLifecycleError, ensure_case_qgs
+from ..agent.gates.context_budget import (
     FABRICATION_CAVEAT,
     ContextWindowExceededError,
     build_context_window_abort_note,
     looks_like_fabricated_action_claim,
 )
-from .credentials.credential_registry import (
+from ..credentials.credential_registry import (
     CredentialProvider,
     generic_provider_for_tool,
     is_credential_error,
     is_credential_shaped_error,
     provider_for_tool,
 )
-from .emission.layer_uri_emit import emit_layer_uri
-from .agent.gates.mode2_classifier import (
+from ..emission.layer_uri_emit import emit_layer_uri
+from ..agent.gates.mode2_classifier import (
     Mode2CandidateEnvelope,
     classify_for_mode2,
 )
-from .persistence import Persistence
-from .emission.pipeline_emitter import (
+from ..persistence import Persistence
+from ..emission.pipeline_emitter import (
     _FLOOD_FRAME_NAME_RE,
     PipelineEmitter,
     _json_for_tool_io,
@@ -177,27 +183,27 @@ from .emission.pipeline_emitter import (
     current_turn_case,
     mint_compaction_card,
 )
-from .credentials.resolver import (
+from ..credentials.resolver import (
     resolve_credential,
     set_session_credential,
 )
-from .telemetry import (
+from ..telemetry import (
     compute_args_hash,
     emit_shadow_selection_event,
     emit_tool_call_event,
     emit_turn_telemetry,
 )
-from .agent.tool_arg_normalizer import (
+from ..agent.tool_arg_normalizer import (
     autofill_missing_bbox,
     coerce_bbox_value,
     normalize_args,
 )
-from .emission.uri_registry import (
+from ..emission.uri_registry import (
     activate_registry,
     deactivate_registry,
     get_uri_registry,
 )
-from .scenario_reuse import (
+from ..scenario_reuse import (
     bbox_encloses,
     bbox_equivalent,
     fetched_kind_for_tool,
@@ -206,11 +212,11 @@ from .scenario_reuse import (
     scenario_signature,
     scenario_type_for_tool,
 )
-from .agent.gates.spatial_input import (
+from ..agent.gates.spatial_input import (
     SpatialInputParseError,
     parse_spatial_input_features,
 )
-from .agent.gates.cards import (
+from ..agent.gates.cards import (
     _build_credential_request_payload,
     _build_fetch_resolution_envelope,
     _build_fire_confirm_envelope,
@@ -232,22 +238,49 @@ from .agent.gates.cards import (
     _spatial_response_to_result,
     _LANDCOVER_DEFAULT_RES_M,
 )
-from .agent.tools import TOOL_REGISTRY
-from .agent.tools.processing.charts_common import is_chart_emission_result
-from .agent.tools.meta.code_exec_tool.code_exec_tool import (
+from ..agent.tools import TOOL_REGISTRY
+from ..agent.tools.processing.charts_common import is_chart_emission_result
+from ..agent.tools.meta.code_exec_tool.code_exec_tool import (
     CODE_EXEC_RESULT_KEY,
     is_code_exec_result,
 )
-from .agent.categories import (
+from ..agent.categories import (
     AllowedToolSet,
     OutOfAllowedSetError,
     validate_function_call,
 )
-from .agent.gates.circuit_breaker import CircuitBreakerError, ToolCircuitBreaker
-from .agent.gates.tool_gating import BenchBlockedError
+from ..agent.gates.circuit_breaker import CircuitBreakerError, ToolCircuitBreaker
+from ..agent.gates.tool_gating import BenchBlockedError
 
 # Auth-token envelope (Appendix H.5 connect handshake).
 from trid3nt_contracts.auth import AuthTokenEnvelope
+
+# Wave-1 extractions (ADR 0261): the typed error taxonomy and the env-knob
+# config helpers now live in sibling package modules. Imported here by NAME so
+# bare-global references below AND monkeypatch targets on
+# ``trid3nt_server.server.<name>`` (proxied through the package facade to this
+# module) resolve exactly as the monolith's did.
+from .errors import (
+    CodeExecApprovalTimeoutError,
+    CodeExecConfirmationCancelledError,
+    PayloadWarningCancelledError,
+    SolverConfirmationCancelledError,
+    SpatialInputInvalidResponseError,
+    ToolNotFoundError,
+)
+from .config import (
+    CODE_EXEC_APPROVAL_TIMEOUT_DEFAULT_S,
+    CODE_EXEC_CONFIRM_TIMEOUT_SECONDS,
+    _TOOL_RETRIEVAL_MODE,
+    _TOOL_RETRIEVAL_VALID_MODES,
+    _ambiguity_margin_threshold,
+    _catalog_offer_ttl_s,
+    _code_exec_approval_timeout_s,
+    _env_flag,
+    _tool_choice_timeout_s,
+    _tool_retrieval_k,
+    _tool_retrieval_mode,
+)
 
 logger = logging.getLogger("trid3nt_server.server")
 
@@ -257,113 +290,12 @@ logger = logging.getLogger("trid3nt_server.server")
 # the report, not represented as data here.
 CONFIRMATION_TRIGGERS: set[str] = set()
 
-# ---------------------------------------------------------------------------
-# Tool-retrieval mode (tool-retrieval kickoff -- orchestrator half).
-#
-# Three modes, read once at import time following the TRID3NT_SYNC_TOOL_OFFLOAD
-# env idiom (NO code change to flip):
-#
-#   off     (DEFAULT) -- the catalog is the FULL flat registry, untouched. This
-#                        is BYTE-IDENTICAL to the pre-feature behavior: no
-#                        retrieval is even computed, no shadow record is logged.
-#   shadow            -- compute the WOULD-BE-visible set via
-#                        retrieve_visible_tools and LOG it as shadow telemetry,
-#                        but STILL build declarations over the FULL registry.
-#                        ZERO behavior change (the model sees all tools); the
-#                        log feeds the recall@k dashboard.
-#   enforce           -- subset TOOL_REGISTRY to the visible set BEFORE building
-#                        declarations (and UNION the visible set into the Case's
-#                        monotonic AllowedToolSet so a once-visible tool never
-#                        leaves within a Case). Locked OFF on cloud until recall@k
-#                        proves >= 0.99/flow.
-#
-# K is the discover top-k for retrieve_visible_tools (default 25; the function
-# clamps to [1, MAX_K]).
-_TOOL_RETRIEVAL_VALID_MODES = frozenset({"off", "shadow", "enforce"})
-_TOOL_RETRIEVAL_MODE = (
-    os.environ.get("TRID3NT_TOOL_RETRIEVAL", "off").strip().lower()
-)
-if _TOOL_RETRIEVAL_MODE not in _TOOL_RETRIEVAL_VALID_MODES:
-    # Unknown value -> fail-safe to the no-op default (never silently enforce).
-    _TOOL_RETRIEVAL_MODE = "off"
-
-
-def _tool_retrieval_k() -> int:
-    """Resolve TRID3NT_TOOL_RETRIEVAL_K (default 25); fall back to the default on
-    any parse error. Read per-call so a test can override via the env without a
-    module reload."""
-    from .agent.tools.search.tool_retrieval import DEFAULT_K
-
-    raw = os.environ.get("TRID3NT_TOOL_RETRIEVAL_K")
-    if raw is None:
-        return DEFAULT_K
-    try:
-        return int(raw)
-    except (TypeError, ValueError):
-        return DEFAULT_K
-
-
-def _tool_retrieval_mode() -> str:
-    """Current tool-retrieval mode. Reads the env LIVE (not the import-time
-    snapshot) so a test / runtime flip is honored; unknown -> 'off' (fail-safe
-    to the no-op default, never silently enforce)."""
-    mode = os.environ.get("TRID3NT_TOOL_RETRIEVAL", "off").strip().lower()
-    return mode if mode in _TOOL_RETRIEVAL_VALID_MODES else "off"
-
-# The ``code_exec_request`` confirm gate validity window (seconds). Running
-# arbitrary Python is a deliberate user decision; on expiry the gate fails
-# closed (CONFIRMATION_TIMEOUT) and the sandbox does not run. The code-exec
-# gate itself no longer waits on this constant (see
-# ``_code_exec_approval_timeout_s``); it is retained because the credential /
-# region-choice / solver-confirm gates borrow it as their default wait window.
-CODE_EXEC_CONFIRM_TIMEOUT_SECONDS: int = int(
-    os.environ.get("TRID3NT_CODE_EXEC_CONFIRM_TIMEOUT", "300")
-)
-
-# Honest timeout on unanswered code-exec approvals: the code-exec gate gets its
-# OWN bounded approval window that applies in EVERY lane (deliberately bypassing
-# the F6 24h local override). When no confirmation envelope answers the card in
-# time, the gate raises the typed ``CodeExecApprovalTimeoutError`` so the LLM
-# receives a structured function_response, narrates honestly, and the TURN
-# COMPLETES. Read LIVE (not an import-time snapshot) so runtime flips are honored.
-CODE_EXEC_APPROVAL_TIMEOUT_DEFAULT_S: float = 180.0
-
-
-def _code_exec_approval_timeout_s() -> float:
-    """Effective approval-wait window (seconds) for the code-exec confirm gate.
-
-    Env override ``TRID3NT_CODE_EXEC_APPROVAL_TIMEOUT_S``; default 180s.
-    Malformed / non-positive values fall back to the default (never an
-    unbounded or zero wait).
-    """
-    raw = os.environ.get("TRID3NT_CODE_EXEC_APPROVAL_TIMEOUT_S")
-    if raw is None:
-        return CODE_EXEC_APPROVAL_TIMEOUT_DEFAULT_S
-    try:
-        value = float(raw)
-    except (TypeError, ValueError):
-        return CODE_EXEC_APPROVAL_TIMEOUT_DEFAULT_S
-    if value <= 0:
-        return CODE_EXEC_APPROVAL_TIMEOUT_DEFAULT_S
-    return value
-
 
 # ---------------------------------------------------------------------------
 # Stage 3 (ADR 0017 mechanisms 3-5 + ADR 0018) -- harness-absorbs-prompt
 # config seams. Every mechanism ships with an env kill-switch so a live
 # regression can be flipped off without a code change (the TRID3NT_* idiom).
 # ---------------------------------------------------------------------------
-
-
-def _env_flag(name: str, default: bool = True) -> bool:
-    """Boolean env flag, read LIVE: '0'/'off'/'false'/'no' -> False,
-    '1'/'on'/'true'/'yes' -> True, unset/unknown -> ``default``."""
-    raw = (os.environ.get(name) or "").strip().lower()
-    if raw in ("0", "off", "false", "no"):
-        return False
-    if raw in ("1", "on", "true", "yes"):
-        return True
-    return default
 
 
 def _session_routing_mode(state: "SessionState") -> str:
@@ -378,46 +310,6 @@ def _session_routing_mode(state: "SessionState") -> str:
         return mode
     env = (os.environ.get("TRID3NT_MODE") or "auto").strip().lower()
     return env if env in ("auto", "ask") else "auto"
-
-
-def _ambiguity_margin_threshold() -> float:
-    """ADR 0018 measured-ambiguity threshold (``TRID3NT_AMBIGUITY_MARGIN``).
-
-    RELATIVE top-1 vs top-2 retrieval-score margin under which AUTO mode still
-    surfaces the tool-candidates card. Calibration: RRF fused scores are
-    rank-compressed -- a tool that is rank-1 on every channel beats a
-    consistent rank-2 by only ~1.6% relative, while a genuine cross-channel
-    tie (each of two tools rank-1 somewhere) lands well under ~1%. The 0.01
-    default therefore fires ONLY on genuine channel disagreement, not on any
-    consistently-ordered ranking. ``0`` disables ambiguity asks entirely (the
-    kill switch; ask mode is unaffected). Malformed -> default.
-    """
-    raw = os.environ.get("TRID3NT_AMBIGUITY_MARGIN")
-    if raw is None:
-        return 0.01
-    try:
-        value = float(raw)
-    except (TypeError, ValueError):
-        return 0.01
-    return max(0.0, value)
-
-
-def _tool_choice_timeout_s() -> float:
-    """Bounded wait (seconds) for a ``tool-choice`` reply to the
-    ``tool-candidates`` card (``TRID3NT_TOOL_CHOICE_TIMEOUT_S``, default 45).
-
-    Deliberately BYPASSES the F6 24h local-lane ``_gate_wait_timeout``
-    override (the code-exec-gate precedent): an unanswered picker must
-    degrade to autonomous routing, never hang the turn.
-    """
-    raw = os.environ.get("TRID3NT_TOOL_CHOICE_TIMEOUT_S")
-    if raw is None:
-        return 45.0
-    try:
-        value = float(raw)
-    except (TypeError, ValueError):
-        return 45.0
-    return value if value > 0 else 45.0
 
 
 #: Max candidates surfaced on one tool-candidates card (avoid flooding).
@@ -650,23 +542,6 @@ _PENDING_CATALOG_OFFERS: dict[str, tuple[str, dict, float]] = {}
 
 #: Cap on outstanding offers; the oldest is dropped when the bound is hit.
 _CATALOG_OFFER_MAX = 64
-
-
-def _catalog_offer_ttl_s() -> float:
-    """Bounded offer validity (``TRID3NT_CATALOG_OFFER_TTL_S``, default 600s).
-
-    Mirrors the ``offer-catalog-addition`` contract's 10-minute default -- the
-    user is reading + sanity-checking provenance. Malformed / non-positive ->
-    default.
-    """
-    raw = os.environ.get("TRID3NT_CATALOG_OFFER_TTL_S")
-    if raw is None:
-        return 600.0
-    try:
-        value = float(raw)
-    except (TypeError, ValueError):
-        return 600.0
-    return value if value > 0 else 600.0
 
 
 def _prune_catalog_offers(now: float | None = None) -> None:
@@ -941,7 +816,7 @@ async def _handle_catalog_addition_response(
         return
 
     try:
-        from .agent.tools.search.catalog_common import append_user_catalog_entry
+        from ..agent.tools.search.catalog_common import append_user_catalog_entry
 
         await asyncio.to_thread(append_user_catalog_entry, entry)
     except Exception:  # noqa: BLE001 -- append fault must not break the loop
@@ -978,124 +853,6 @@ async def _handle_catalog_addition_response(
 # a full structured error envelope to the model -- the same shape as any
 # ``fetch_*`` / ``compute_*`` typed exception.
 # ---------------------------------------------------------------------------
-
-
-class ToolNotFoundError(RuntimeError):
-    """Raised when ``_invoke_tool_via_emitter`` receives a tool name that is
-    not registered in ``TOOL_REGISTRY``.
-
-    ``retryable=False``: Gemini cannot retry its way to a registration it
-    invented -- it must revise its call (use a different tool, narrate that
-    it cannot help, or ask for clarification).
-
-    The ``valid_tools`` attribute carries the first 20 registered names so
-    the Gemini function-response payload gives the LLM a correction hint
-    without blowing the response character budget.
-    """
-
-    error_code: str = "TOOL_NOT_FOUND"
-    retryable: bool = False
-
-    def __init__(self, tool_name: str, valid_tools: list[str]) -> None:
-        # Limit to first 20 names to stay within _FUNCTION_RESPONSE_CHAR_BUDGET.
-        hint = valid_tools[:20]
-        super().__init__(
-            f"tool {tool_name!r} not in TOOL_REGISTRY; "
-            f"valid tools (first 20): {hint}"
-        )
-        self.tool_name = tool_name
-        self.valid_tools = hint
-
-
-class PayloadWarningCancelledError(RuntimeError):
-    """Raised when the payload-warning gate skips dispatch because the user
-    chose ``cancel`` or the gate timed out.
-
-    ``retryable=False``: the user explicitly declined; Gemini should narrate
-    the cancellation honestly and not re-issue the same call without narrower
-    scope.
-    """
-
-    error_code: str = "PAYLOAD_WARNING_CANCELLED"
-    retryable: bool = False
-
-    def __init__(self, tool_name: str) -> None:
-        super().__init__(
-            f"tool {tool_name!r} dispatch cancelled via payload-warning gate "
-            "(user chose 'cancel' or gate timed out)"
-        )
-        self.tool_name = tool_name
-
-
-class CodeExecConfirmationCancelledError(RuntimeError):
-    """Raised when the ``code_exec_request`` confirm gate denies the run
-    because the user chose ``cancel`` or the gate timed out.
-
-    Running arbitrary Python is a consequential action; the gate fails closed.
-    ``retryable=False``: the user explicitly declined to run THIS code -- Gemini
-    should narrate the decline honestly and not re-issue the identical snippet
-    without the user changing course.
-    """
-
-    error_code: str = "CODE_EXEC_CANCELLED"
-    retryable: bool = False
-
-    def __init__(self, code_exec_id: str) -> None:
-        super().__init__(
-            f"code_exec_request {code_exec_id!r} cancelled at the confirm gate "
-            "(user chose 'cancel' or gate timed out); the sandbox did not run"
-        )
-        self.code_exec_id = code_exec_id
-
-
-class CodeExecApprovalTimeoutError(RuntimeError):
-    """Raised when the ``code-exec-request`` approval card was never answered.
-
-    Distinct from :class:`CodeExecConfirmationCancelledError` (an explicit
-    user decision): here NOBODY answered the card within the approval
-    window -- e.g. a client with no handler for the envelope leaves the
-    parked tool call waiting forever.
-
-    ``retryable=False``: re-issuing the identical snippet would just park on
-    another unanswered card; the LLM should narrate that the approval card was
-    not answered and let the user decide how to proceed. ``summarize_tool_result``
-    harvests ``error_code`` + ``retryable`` so this reaches the LLM as a
-    structured function_response and the turn completes.
-    """
-
-    error_code: str = "CODE_EXEC_APPROVAL_TIMEOUT"
-    retryable: bool = False
-
-    def __init__(self, code_exec_id: str, timeout_s: float) -> None:
-        super().__init__(
-            f"code_exec_request {code_exec_id!r} approval card was not answered "
-            f"within {timeout_s:.0f}s (no confirmation arrived from the user "
-            "interface); the sandbox did not run. Tell the user their approval "
-            "was required but never received, and do not re-issue the identical "
-            "snippet unless they ask to retry."
-        )
-        self.code_exec_id = code_exec_id
-        self.timeout_s = timeout_s
-
-
-class SolverConfirmationCancelledError(RuntimeError):
-    """Raised when a solver confirm gate denies the dispatch.
-
-    A solver run is a consequence (FR-AS-8 / Invariant 9): the user must
-    approve the derived forcing parameters before the model executes. Cancel,
-    timeout, and disconnect all fail closed. ``retryable=False`` so Gemini
-    narrates the decline honestly instead of re-dispatching the same run.
-    """
-
-    error_code: str = "SOLVER_CONFIRMATION_CANCELLED"
-    retryable: bool = False
-
-    def __init__(self, tool_name: str) -> None:
-        super().__init__(
-            f"{tool_name} declined at the parameter-confirmation gate "
-            "(user chose 'cancel' or the gate timed out); the solver did not run"
-        )
-        self.tool_name = tool_name
 
 
 # Tools whose dispatch is a consequence (a solver run, FR-AS-8 / Invariant 9)
@@ -1352,7 +1109,7 @@ def _tool_search_tool_names() -> frozenset[str]:
     """
     names: set[str] = set()
     try:
-        from .agent.tools.search.search_tools.search_tools import _SEARCH_TOOLS_METADATA
+        from ..agent.tools.search.search_tools.search_tools import _SEARCH_TOOLS_METADATA
 
         if getattr(_SEARCH_TOOLS_METADATA, "name", None):
             names.add(_SEARCH_TOOLS_METADATA.name)
@@ -1466,7 +1223,7 @@ def _is_terminal_composer(tool_name: str) -> bool:
 # (ADR 0107). The registry + its accessors live in ``agent.gates.pending`` so
 # an in-tool gate (which cannot import ``server`` at module load) rides the SAME
 # spine; re-imported here so ``server._PENDING_CONFIRMATIONS`` stays that dict.
-from .agent.gates.pending import (  # noqa: E402
+from ..agent.gates.pending import (  # noqa: E402
     _PENDING_CONFIRMATIONS,
     _pop_pending_confirmation,
     _register_pending_confirmation,
@@ -1724,24 +1481,6 @@ def _resolve_pending_spatial_input(
     fut.set_result(response)
     _PENDING_SPATIAL_INPUTS.pop(response.request_id, None)
     return True
-
-
-class SpatialInputInvalidResponseError(Exception):
-    """A spatial-input-response arrived but failed structural validation.
-
-    Carries the typed error the paused ``request_spatial_input`` turn surfaces
-    to the LLM (honesty floor: a malformed reply degrades to a typed error, NOT
-    a silent success and NOT a hung turn that drains the read TTL). Raised into
-    the pending future by ``_fail_pending_spatial_input`` so the awaiting
-    dispatch coroutine returns IN-BAND immediately instead of blocking until
-    ``default_timeout_seconds`` then degrading to ``SPATIAL_INPUT_TIMEOUT``
-    (the FR-WC-16 untagged-barrier mismatch).
-    """
-
-    def __init__(self, error_code: str, error_message: str) -> None:
-        super().__init__(error_message)
-        self.error_code = error_code
-        self.error_message = error_message
 
 
 def _fail_pending_spatial_input(
@@ -2042,7 +1781,7 @@ _ROOT_STREAM_KEY = "__root__"
 #: Per-task narration-list registry. ``_stream_model_reply`` registers its
 #: turn's narration list under the running asyncio task (in the synchronous
 #: prefix, so crash/cancel still leaves the entry) and
-#: ``_dispatch_gemini_and_persist`` pops it in its finally -- the wrapper then
+#: ``_dispatch_model_turn_and_persist`` pops it in its finally -- the wrapper then
 #: joins THIS turn's list even when a concurrent turn has re-pointed
 #: ``state.current_turn_narration``. Weak keys: an entry whose task was
 #: never popped (direct stream callers) vanishes with the task, no leak.
@@ -2054,7 +1793,7 @@ _TURN_NARRATION_BY_TASK: "weakref.WeakKeyDictionary[asyncio.Task, list[str]]" = 
 #: list backing the currently open narration segment (received text not yet
 #: finalized). On each finalize the in-loop code ``.clear()``s this same
 #: list object (never rebinds it) so the wrapper always reads the live open
-#: buffer. ``_dispatch_gemini_and_persist`` pops it in its finally and
+#: buffer. ``_dispatch_model_turn_and_persist`` pops it in its finally and
 #: persists the un-finalized remainder as the tail row, so no narration is
 #: lost and finalized segments are never double-persisted.
 _TURN_OPEN_SEGMENT_BY_TASK: "weakref.WeakKeyDictionary[asyncio.Task, list[str]]" = (
@@ -2418,13 +2157,13 @@ class SessionState:
     # Per-turn narration accumulator. ``_stream_model_reply`` resets it at
     # stream start and appends every ``TextDeltaEvent`` delta (across all
     # loop iterations -- they share one ``message_id`` bubble on the wire).
-    # ``_dispatch_gemini_and_persist`` joins it at turn close and persists
+    # ``_dispatch_model_turn_and_persist`` joins it at turn close and persists
     # the agent's narration as a ``CaseChatMessage(role="agent")`` so a Case
     # reopen replays what the agent actually said.
     current_turn_narration: list[str] = field(default_factory=list)
     # BUG 1 (post-OPEN-14 acceptance rerun): set by the ``except
     # ContextWindowExceededError`` handler in ``_stream_model_reply`` when a
-    # turn aborts on a clipped prompt. ``_dispatch_gemini_and_persist``'s
+    # turn aborts on a clipped prompt. ``_dispatch_model_turn_and_persist``'s
     # finally reads + clears it and appends the text to whichever partial-
     # narration row it is about to persist, so the reader sees the abort
     # verdict in the SAME chat row as the (unverified) streamed text, not
@@ -3022,7 +2761,7 @@ async def _maybe_emit_tool_candidates(
     if mode != "ask" and threshold <= 0.0:
         return None, []
 
-    from .agent.tools.search.tool_retrieval import retrieve_ranked_tools
+    from ..agent.tools.search.tool_retrieval import retrieve_ranked_tools
 
     ranked = retrieve_ranked_tools(user_text, k=8)
     if exclude_tools:
@@ -3286,7 +3025,7 @@ async def _stream_model_reply(
     # ignores ``client``. The decommissioned Vertex generate path (the only
     # consumer of a prebuilt google-genai client) is removed. Provider resolved
     # once here and reused by the cache guard below.
-    from .agent.adapters.bedrock_adapter import model_provider as _model_provider
+    from ..agent.adapters.bedrock_adapter import model_provider as _model_provider
 
     _provider = _model_provider()
     # #225 per-model telemetry: resolve the EFFECTIVE model that actually
@@ -3299,10 +3038,10 @@ async def _stream_model_reply(
     # the turn, so fall back to the raw selection.
     try:
         if _provider == "openai":
-            from .agent.adapters import openai_adapter as _oa  # noqa: WPS433
+            from ..agent.adapters import openai_adapter as _oa  # noqa: WPS433
             _effective_model = _oa.openai_model(bedrock_model)
         elif _provider == "bedrock":
-            from .agent.adapters.bedrock_adapter import bedrock_model_id as _bmid  # noqa: WPS433
+            from ..agent.adapters.bedrock_adapter import bedrock_model_id as _bmid  # noqa: WPS433
             _effective_model = bedrock_model or _bmid()
         else:
             _effective_model = bedrock_model
@@ -3333,7 +3072,7 @@ async def _stream_model_reply(
     _retrieval_mode = _tool_retrieval_mode()
     if _retrieval_mode in ("shadow", "enforce"):
         try:
-            from .agent.tools.search.tool_retrieval import retrieve_visible_tools
+            from ..agent.tools.search.tool_retrieval import retrieve_visible_tools
 
             _retrieval_k = _tool_retrieval_k()
             _visible = retrieve_visible_tools(
@@ -3420,14 +3159,14 @@ async def _stream_model_reply(
     # cold index / empty ranking / any fault.
     if _provider == "openai":
         try:
-            from .agent.gates.tool_gating import (
+            from ..agent.gates.tool_gating import (
                 WIDEN_K,
                 gate_tool_registry,
                 gating_topk,
                 gating_widen_threshold,
                 should_widen_for_poor_fit,
             )
-            from .agent.tools.search.tool_retrieval import retrieve_ranked_tools
+            from ..agent.tools.search.tool_retrieval import retrieve_ranked_tools
 
             _gate_k = gating_topk()
             if _gate_k > 0:
@@ -8285,7 +8024,7 @@ async def _gate_on_solver_confirm(
         used_real_clamp = False
         if swmm_dem_path:
             try:
-                from .agent.mesh.raster_cell_mesh import (
+                from ..agent.mesh.raster_cell_mesh import (
                     clamp_swmm_resolution_to_real_cap,
                 )
 
@@ -9478,7 +9217,7 @@ async def _invoke_tool_via_emitter(
     # still surfaces as a (failed) pipeline step while ``entry.fn`` is never
     # reached -- airtight before any fetch.
     if state.bench_block_config is not None:
-        from .agent.gates.tool_gating import BenchBlockedError, bench_block_decision
+        from ..agent.gates.tool_gating import BenchBlockedError, bench_block_decision
 
         _bench_class = bench_block_decision(state.bench_block_config, tool_name)
         if _bench_class is not None:
@@ -9819,7 +9558,7 @@ async def _invoke_tool_via_emitter(
     if tool_name == "publish_layer" and not params.get("layer_id"):
         _pl_uri = params.get("layer_uri")
         if isinstance(_pl_uri, str) and _pl_uri:
-            from .agent.tools.publish_layer.publish_layer import derive_layer_id as _derive_layer_id
+            from ..agent.tools.publish_layer.publish_layer import derive_layer_id as _derive_layer_id
 
             params = dict(params)
             params["layer_id"] = _derive_layer_id(_pl_uri, uri_registry)
@@ -10298,7 +10037,7 @@ async def _invoke_tool_via_emitter(
                     # name (params carries it even though publish_layer's own
                     # signature only uses it for logging), else the resolved
                     # style_preset, else the published URI's path segment.
-                    from .agent.tools.publish_layer.publish_layer import derive_readable_layer_name
+                    from ..agent.tools.publish_layer.publish_layer import derive_readable_layer_name
 
                     _layer_name = derive_readable_layer_name(
                         params.get("name"),
@@ -11115,7 +10854,7 @@ async def _persist_chart_record(state: SessionState, payload: dict) -> None:
             ChartEmissionPayload,
             SessionChartRecord,
         )
-        from .persistence import DEFAULT_DATABASE, SESSIONS_COLLECTION
+        from ..persistence import DEFAULT_DATABASE, SESSIONS_COLLECTION
 
         # Charts are turn-scoped emissions -- key them by the Case
         # that OWNS the turn, not whatever Case is visible at write time.
@@ -11257,7 +10996,7 @@ def _parse_invoke_directive(text: str) -> tuple[str, dict] | None:
 # --------------------------------------------------------------------------- #
 
 
-async def _dispatch_gemini_and_persist(
+async def _dispatch_model_turn_and_persist(
     websocket: ServerConnection,
     state: SessionState,
     settings: ModelSettings,
@@ -11266,7 +11005,7 @@ async def _dispatch_gemini_and_persist(
     bedrock_model: str | None = None,
     show_thinking: bool = False,
 ) -> None:
-    """Stream Gemini reply, then persist the agent's reply to the active Case.
+    """Stream the model reply, then persist the agent's reply to the active Case.
 
     Wraps ``_stream_model_reply`` so the Case chat-history append happens
     after the stream completes (the streamed text is the canonical
@@ -11478,7 +11217,7 @@ async def _dispatch_tool_and_persist(
     upstream-provider error carries its own code out honestly and is NOT
     relabelled as an internal failure.
     """
-    # Entry-time Case capture -- see _dispatch_gemini_and_persist.
+    # Entry-time Case capture -- see _dispatch_model_turn_and_persist.
     turn_case_id = _turn_case_id(state)
     bind_turn_case(turn_case_id)  # job-0277: envelope tagging
     bind_turn_drawn_geometry(state.drawn_geometry)  # ADR 0159
@@ -11560,7 +11299,7 @@ async def _dispatch_tool_and_persist(
                 case_id=turn_case_id,
             )
         # C2: end-of-turn idle signal for the /invoke directive path too -- same
-        # rationale as _dispatch_gemini_and_persist. Best-effort.
+        # rationale as _dispatch_model_turn_and_persist. Best-effort.
         await _emit_turn_complete(
             websocket, state, pipeline_id=state.current_turn_pipeline_id
         )
@@ -12224,7 +11963,7 @@ def _make_handler(settings: ModelSettings):
                         # returns a notice we log; the turn then runs on the default
                         # rather than crashing.
                         if um.model_id is not None:
-                            from .agent.adapters.bedrock_adapter import (
+                            from ..agent.adapters.bedrock_adapter import (
                                 resolve_selected_model as _resolve_selected_model,
                             )
 
@@ -12249,7 +11988,7 @@ def _make_handler(settings: ModelSettings):
                             )
                         else:
                             task = asyncio.create_task(
-                                _dispatch_gemini_and_persist(
+                                _dispatch_model_turn_and_persist(
                                     websocket,
                                     state,
                                     settings,
@@ -12654,7 +12393,7 @@ def _make_handler(settings: ModelSettings):
                             # dict=arm, null/false=disarm). Bench-only -- a
                             # normal client never sends this key.
                             if "bench_tool_block" in payload_dict:
-                                from .agent.gates.tool_gating import parse_bench_block_config
+                                from ..agent.gates.tool_gating import parse_bench_block_config
 
                                 _bench_cfg = parse_bench_block_config(payload_dict)
                                 state.bench_block_config = _bench_cfg
@@ -12804,14 +12543,14 @@ async def run_server(host: str = "127.0.0.1", port: int | None = None) -> None:
     # Vertex/Gemini settings defaults. Under MODEL_PROVIDER=openai this prints
     # the OpenAI model; under bedrock the Bedrock model id; scripted/replay/fake
     # or the retained-dormant vertex seam fall back to the settings model.
-    from .agent.adapters.bedrock_adapter import (
+    from ..agent.adapters.bedrock_adapter import (
         model_provider as _active_model_provider,
         bedrock_model_id as _active_bedrock_model_id,
     )
 
     _active_provider = _active_model_provider()
     if _active_provider == "openai":
-        from .agent.adapters import openai_adapter as _active_oa
+        from ..agent.adapters import openai_adapter as _active_oa
         _active_model = _active_oa.openai_model(None)
     elif _active_provider == "bedrock":
         _active_model = _active_bedrock_model_id()
@@ -12862,7 +12601,7 @@ async def run_server(host: str = "127.0.0.1", port: int | None = None) -> None:
     if _tool_retrieval_mode() != "off":
         async def _warm_discover_index() -> None:
             try:
-                from .agent.tools.search.search_tools import search_tools as _dd_warm
+                from ..agent.tools.search.search_tools import search_tools as _dd_warm
                 await asyncio.to_thread(_dd_warm._get_index)
                 logger.info("tool_retrieval: discover index warmed at startup")
             except Exception:  # noqa: BLE001 -- warm is best-effort
@@ -12879,7 +12618,7 @@ async def run_server(host: str = "127.0.0.1", port: int | None = None) -> None:
     # Wave 4.10 C1: best-effort mount of the catalog HTTP listener.
     http_server = None
     try:
-        from .tool_catalog_http import serve_catalog_http
+        from ..tool_catalog_http import serve_catalog_http
 
         http_server = await serve_catalog_http(host=host)
     except Exception:  # noqa: BLE001 -- discovery surface, never blocks WS
@@ -12960,7 +12699,7 @@ __all__ = [
     # Turn-start Case binding (cross-Case contamination fix).
     "_turn_case_id",
     "_dispatch_tool_and_persist",
-    "_dispatch_gemini_and_persist",
+    "_dispatch_model_turn_and_persist",
     # Auto-create Case from the Cases root.
     "_auto_create_case_from_root",
     "_emit_auto_case_open",

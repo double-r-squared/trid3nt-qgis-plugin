@@ -112,7 +112,7 @@ __all__ = [
 # Per-turn Case binding for envelope tagging
 # --------------------------------------------------------------------------- #
 #
-# The dispatch wrappers (server._dispatch_gemini_and_persist /
+# The dispatch wrappers (server._dispatch_model_turn_and_persist /
 # _dispatch_tool_and_persist) bind the turn's pinned Case into this
 # ContextVar at task entry. EVERY envelope constructed inside the turn --
 # server._new_envelope AND PipelineEmitter._send -- reads it and stamps

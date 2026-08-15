@@ -198,7 +198,7 @@ def test_publish_site_awaits_snapshot_not_create_task() -> None:
     (the box-stop-raced detach that left ``case-views/{case_id}.json`` stale).
     Parsing the AST locks the durability so a future refactor cannot silently
     re-detach the layer-publish write."""
-    src = Path(server.__file__).read_text(encoding="utf-8")
+    src = Path(server._core.__file__).read_text(encoding="utf-8")
     tree = ast.parse(src)
     fn = _function_named(tree, "_invoke_tool_via_emitter")
 
@@ -226,14 +226,14 @@ def test_publish_site_awaits_snapshot_not_create_task() -> None:
 
 
 def test_turn_close_snapshot_stays_detached_and_is_drained() -> None:
-    """The turn-close site (``_dispatch_gemini_and_persist``) MAY stay
+    """The turn-close site (``_dispatch_model_turn_and_persist``) MAY stay
     fire-and-forget -- it refreshes chat, not the layer set -- and is covered by
     the shutdown drain rather than an inline await. This asserts the
     detach is INTENTIONAL there (so a reviewer does not mistake it for the
     publish-site regression) while the drain helper exists to flush it."""
-    src = Path(server.__file__).read_text(encoding="utf-8")
+    src = Path(server._core.__file__).read_text(encoding="utf-8")
     tree = ast.parse(src)
-    turn_close = _function_named(tree, "_dispatch_gemini_and_persist")
+    turn_close = _function_named(tree, "_dispatch_model_turn_and_persist")
     # The turn-close site detaches (acceptable: drained on shutdown).
     assert _snapshot_create_task_calls(turn_close), (
         "expected the turn-close site to detach its chat-refresh snapshot "

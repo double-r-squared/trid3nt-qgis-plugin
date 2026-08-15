@@ -114,6 +114,6 @@ async def test_dispatch_wrapper_binds_turn_case(monkeypatch) -> None:
     state.active_case_id = case
     state.current_turn_case_id = case
     await asyncio.create_task(
-        server._dispatch_gemini_and_persist(FakeWS(), state, None, "hi", "off")
+        server._dispatch_model_turn_and_persist(FakeWS(), state, None, "hi", "off")
     )
     assert observed == [case]

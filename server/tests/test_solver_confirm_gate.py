@@ -589,7 +589,7 @@ def test_gate_decisions_this_turn_reset_at_new_dispatch() -> None:
 
     import trid3nt_server.server as server_mod
 
-    src = inspect.getsource(server_mod)
+    src = inspect.getsource(server_mod._core)
     assert "state.gate_decisions_this_turn = {}" in src
 
 

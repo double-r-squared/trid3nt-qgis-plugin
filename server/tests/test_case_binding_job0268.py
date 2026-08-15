@@ -108,7 +108,7 @@ async def test_narration_stays_in_owning_case_on_midstream_switch(
     assert state.current_turn_case_id == case_a
 
     task = asyncio.create_task(
-        server._dispatch_gemini_and_persist(ws, state, None, "flood in A", "off")
+        server._dispatch_model_turn_and_persist(ws, state, None, "flood in A", "off")
     )
     await asyncio.sleep(0.05)  # stream mid-flight, accumulator full
 
@@ -203,7 +203,7 @@ async def test_new_turn_repin_does_not_steal_old_turn_narration(
 
     await server._prepare_user_turn(ws, state, "old turn in A")
     old_task = asyncio.create_task(
-        server._dispatch_gemini_and_persist(ws, state, None, "old turn in A", "off")
+        server._dispatch_model_turn_and_persist(ws, state, None, "old turn in A", "off")
     )
     await asyncio.sleep(0.05)  # old turn entry-capture done, stream parked
 
@@ -273,7 +273,7 @@ async def test_auto_created_case_receives_full_stream(
             st.chat_history.append({"role": "user", "text": user_text})
 
         monkeypatch.setattr(server, "_stream_model_reply", fake_stream)
-        await server._dispatch_gemini_and_persist(
+        await server._dispatch_model_turn_and_persist(
             ws, state, None, "model the flood in fort myers", "off"
         )
     finally:

@@ -156,7 +156,7 @@ async def test_cross_case_turn_survives_new_root_prompt(
     await server._prepare_user_turn(ws, state, "model the flood in A")
     key_a = state.current_turn_case_id or server._ROOT_STREAM_KEY
     task_a = asyncio.create_task(
-        server._dispatch_gemini_and_persist(ws, state, None, "model the flood in A", "off")
+        server._dispatch_model_turn_and_persist(ws, state, None, "model the flood in A", "off")
     )
     state.inflight_tasks[key_a] = task_a
     await asyncio.sleep(0.05)
@@ -196,7 +196,7 @@ async def test_same_case_reprompt_replaces_turn(file_persistence, monkeypatch) -
     await server._prepare_user_turn(ws, state, "first ask")
     key = state.current_turn_case_id or server._ROOT_STREAM_KEY
     task1 = asyncio.create_task(
-        server._dispatch_gemini_and_persist(ws, state, None, "first ask", "off")
+        server._dispatch_model_turn_and_persist(ws, state, None, "first ask", "off")
     )
     state.inflight_tasks[key] = task1
     await asyncio.sleep(0.05)
@@ -241,7 +241,7 @@ async def test_concurrent_turns_keep_narration_isolated(
     monkeypatch.setattr(server, "_stream_model_reply", stream_a)
     await server._prepare_user_turn(ws, state, "turn A")
     task_a = asyncio.create_task(
-        server._dispatch_gemini_and_persist(ws, state, None, "turn A", "off")
+        server._dispatch_model_turn_and_persist(ws, state, None, "turn A", "off")
     )
     await asyncio.sleep(0.05)
 
@@ -256,7 +256,7 @@ async def test_concurrent_turns_keep_narration_isolated(
 
     monkeypatch.setattr(server, "_stream_model_reply", stream_b)
     await server._prepare_user_turn(ws, state, "turn B")
-    await server._dispatch_gemini_and_persist(ws, state, None, "turn B", "off")
+    await server._dispatch_model_turn_and_persist(ws, state, None, "turn B", "off")
     case_b = state.active_case_id
     assert case_b and case_b != case_a
 
