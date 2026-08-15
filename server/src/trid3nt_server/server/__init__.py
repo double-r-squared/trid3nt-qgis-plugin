@@ -31,8 +31,10 @@ from . import errors as _errors
 from . import interactions as _interactions
 from . import protocol as _protocol
 from . import reuse as _reuse
+from . import session as _session
 from . import spatial as _spatial
 from . import styles as _styles
+from . import turn as _turn
 
 _EXTRACTION_MODULES = (
     _errors,
@@ -43,6 +45,8 @@ _EXTRACTION_MODULES = (
     _reuse,
     _dispatch,
     _protocol,
+    _session,
+    _turn,
 )
 
 

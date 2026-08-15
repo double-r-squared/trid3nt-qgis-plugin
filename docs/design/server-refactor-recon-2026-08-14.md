@@ -71,3 +71,42 @@ green at every step; SessionState last (biggest, most coupled). Naming
 sweep + dead-comment sweep can ride ANY wave touching a region (hygiene
 norm), but the rename of the core dispatcher should land in the FIRST
 wave so the vocabulary stops propagating.
+
+## END-STATE (2026-08-14, after ADR 0261-0265)
+
+The series landed in five waves; the map the recon promised, as it ended.
+`server.py` (12,979 lines, one module) is now the `server/` package:
+
+| Module | LOC | Holds |
+|---|---|---|
+| `_core.py` | 11,074 | the turn engine + the WS connection loop (below) |
+| `interactions.py` | 465 | tool-choice / catalog-offer / credential pending registries (0263) |
+| `turn.py` | 425 | turn wire plumbing: envelope build + session-safe send + terminal/heartbeat frames (0265) |
+| `session.py` | 384 | the STATE layer: `SessionState` dataclass + session-scoped active-Case / anon-id registries (0265) |
+| `spatial.py` | 265 | bbox/AOI helpers + region-choice / spatial-input pending registries (0263) |
+| `dispatch.py` | 235 | session-free dispatch helpers: progress accounting, gate-expander name sets (0264) |
+| `config.py` | 173 | env-knob helpers (0261) |
+| `errors.py` | 147 | typed error taxonomy (0261) |
+| `protocol.py` | 122 | session-connection registry (0264) |
+| `styles.py` | 85 | publish-wrap raster-styling seam (0263) |
+| `__init__.py` | 83 | the facade (read-proxy + monkeypatch-write propagation to `_EXTRACTION_MODULES`) |
+| `reuse.py` | 43 | the `_ReuseEntry` registry shim (0264) |
+
+The recon called `SessionState` "~4,700 lines, the core extraction problem."
+That was a mis-count: the DATACLASS is 237 lines (fields + one property); the
+rest were module-level `def f(state, ...)` turn/dispatch functions -- state and
+behavior were co-located, never fused, so there was no method->function rewrite
+to do (see ADR 0265).
+
+`_core` did NOT reach zero, by design ("a clean connection module beats a broken
+zero"). It retains two coupled, non-mechanically-separable regions: (1) the turn
+ENGINE -- `_stream_model_reply`, `_dispatch_model_turn_and_persist`,
+`_invoke_tool_via_emitter`, all user-decision gates + the `_gate_wait_timeout`
+source-inspection seam (shared across turn AND credential/region/spatial gates),
+and the emit/case/auth/resume/persist helpers; (2) the WS connection loop --
+`_make_handler`, `run_server`, `_LiveTurn` + the `_SESSION_LIVE_TURNS`
+detached-turn registry. The engine is blocked by the shared gate-wait seam plus
+a driver<->helper import cycle; the loop is inseparable from `SessionState` +
+the live-turn registry it drives on every connect/disconnect/cancel. Both are
+flagged in ADR 0265 for a future pass -- when the gate-wait seam is untangled
+they join `turn.py`.
